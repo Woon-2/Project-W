@@ -40,6 +40,7 @@ add_executable(client)
 target_sources(client
     PRIVATE
         src/main.cpp
+        src/app.cpp include/app.hpp
 )
 
 include(auto_configure)
