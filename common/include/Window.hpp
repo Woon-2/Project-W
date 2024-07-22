@@ -28,11 +28,23 @@ concept Win32Char = contains<T, CHAR, WCHAR>;
 namespace Win32
 {
 
+/**
+ * @brief Exception class for Windows API
+ * @details call what() to get error message, type() to get exception type
+ * @code
+ * try {
+ *     // some Windows API call
+ * } catch (const WindowException& e) {
+ *     MessageBoxA(nullptr, e.what(), e.type(), MB_OK | MB_ICONEXCLAMATION);
+ * }
+ * @endcode
+ */
 class WindowException : public Woon2Exception
 {
 public:
     WindowException( int lineNum, const char* fileStr,
         HRESULT hr ) NOEXCEPT;
+
 
     const char* what() const NOEXCEPT override;
     const char* type() const NOEXCEPT override;

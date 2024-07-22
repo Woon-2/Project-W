@@ -466,5 +466,19 @@ FodyWeavers.xsd
 
 # End of https://www.toptal.com/developers/gitignore/api/cmake,visualstudio,visualstudiocode,c++
 
+# Ignore Doxygen configuration files if customized
+*.doxyfile
+
+# Ignore Doxygen generated log files
+*.log
+
+# Ignore Doxygen generated tag files
+*.tag
+
+# Ignore Doxygen generated man pages
+*.3
+
 build/*
 .vscode/*
+Doxyfile.in
+docs/*
