@@ -1,6 +1,5 @@
 #include "Window.hpp"
 #include <vector>
-#include <memory>
 
 class App {
 public:
@@ -11,5 +10,5 @@ public:
     int run();
 
 private:
-    std::vector< std::unique_ptr<MyWindow> > windows_;
+    MyWindow window_;
 };

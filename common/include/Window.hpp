@@ -32,16 +32,16 @@ class WindowException : public Woon2Exception
 {
 public:
     WindowException( int lineNum, const char* fileStr,
-        HRESULT hr ) noexcept;
+        HRESULT hr ) NOEXCEPT;
 
-    const char* what() const noexcept override;
-    const char* type() const noexcept override;
+    const char* what() const NOEXCEPT override;
+    const char* type() const NOEXCEPT override;
 
-    HRESULT errorCode() const noexcept;
-    const std::string errorStr() const noexcept;
+    HRESULT errorCode() const NOEXCEPT;
+    const std::string errorStr() const NOEXCEPT;
 
     static const std::string
-        translateErrorCode( HRESULT hr ) noexcept;
+        translateErrorCode( HRESULT hr ) NOEXCEPT;
 
 private:
     HRESULT hr_;
@@ -57,7 +57,7 @@ struct WndFrame
     int width;
     int height;
 
-    operator RECT() const noexcept {
+    operator RECT() const NOEXCEPT {
         return RECT{x, y, x + width, y + height};
     }
 };
@@ -106,7 +106,7 @@ class MsgHandler : public IMsgHandler
 public:
     using MyWindow = Wnd;
 
-    MsgHandler(Wnd& wnd) noexcept
+    MsgHandler(Wnd& wnd) NOEXCEPT
         : window_(wnd)
     {}
     MsgHandler(const MsgHandler&) = delete;
@@ -118,8 +118,8 @@ public:
     virtual std::optional<LRESULT> operator()(const Message& msg) = 0;
 
 protected:
-    const Wnd& window() const noexcept { return window_; }
-    Wnd& window() noexcept { return window_; }
+    const Wnd& window() const NOEXCEPT { return window_; }
+    Wnd& window() NOEXCEPT { return window_; }
 
 private:
     Wnd& window_;
@@ -151,16 +151,14 @@ public:
 
     friend MyTraits;
 
-    Window() requires false;
+    Window()
+        : title_(), frame_(), msgHandlers_(), hWnd_(nullptr) {}
+
     ~Window() requires canDestroy<Traits, HWND>
     { 
         close();
     }
 
-    template <class ... Args>
-    requires canRegist<Traits, HINSTANCE>
-        && canCreate<Traits, HINSTANCE, Window<Traits>*, Args...>
-    Window(Args&& ... args);
     Window(const Window&) requires false;
     Window(Window&&) requires false;
     Window& operator=(const Window&) = delete;
@@ -178,20 +176,20 @@ public:
         }
     }
 
-    static void setHInst(HINSTANCE hInstance) noexcept
+    static void setHInst(HINSTANCE hInstance) NOEXCEPT
     { hInst = hInstance; }
-    static HINSTANCE getHInst() noexcept { return hInst; }
+    static HINSTANCE getHInst() NOEXCEPT { return hInst; }
     void msgLoop();
     std::optional<int> processMessages();
 
-    HWND nativeHandle() const noexcept { return hWnd_; }
+    HWND nativeHandle() const NOEXCEPT { return hWnd_; }
     //=====================================================
-    // auto& msgHandlers() noexcept { return msgHandlers_; }
-    // const auto& msgHandlers() const noexcept { return msgHandlers_; }
+    // auto& msgHandlers() NOEXCEPT { return msgHandlers_; }
+    // const auto& msgHandlers() const NOEXCEPT { return msgHandlers_; }
     void addMsgHandler(int index, std::unique_ptr<IMsgHandler>&& msgHandler);
     void removeMsgHandler(int index);
     //=====================================================
-    MyStringView title() const noexcept { return title_; }
+    MyStringView title() const NOEXCEPT { return title_; }
     void setTitle(const MyString& windowTitle)
     {
         title_ = windowTitle;
@@ -248,7 +246,7 @@ public:
     using MyString = std::basic_string<MyChar>;
     using MyStringView = std::basic_string_view<MyChar>;
 
-    static constexpr const MyStringView clsName() noexcept
+    static constexpr const MyStringView clsName() NOEXCEPT
     {
         if constexpr ( std::is_same_v<MyChar, CHAR> ) {
             return "WT";
@@ -257,7 +255,7 @@ public:
             return L"WT";
         }
     }
-    static constexpr const MyStringView defWndName() noexcept
+    static constexpr const MyStringView defWndName() NOEXCEPT
     {
         if constexpr ( std::is_same_v<MyChar, CHAR> ) {
             return "Window";
@@ -266,7 +264,7 @@ public:
             return L"Window";
         }
     }
-    static constexpr const WndFrame defWndFrame() noexcept
+    static constexpr const WndFrame defWndFrame() NOEXCEPT
     {
         return WndFrame{ .x=200, .y=200, .width=800, .height=600 };
     }

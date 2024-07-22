@@ -45,16 +45,6 @@ template <class Traits>
 template <class ... Args>
 requires canRegist< Traits, HINSTANCE >
     && canCreate< Traits, HINSTANCE, Window<Traits>*, Args... >
-Window<Traits>::Window(Args&& ... args)
-    : title_{}, msgHandlers_{}, hWnd_{nullptr}
-{
-    open(std::forward<Args>(args)...);
-}
-
-template <class Traits>
-template <class ... Args>
-requires canRegist< Traits, HINSTANCE >
-    && canCreate< Traits, HINSTANCE, Window<Traits>*, Args... >
 void Window<Traits>::open(Args&& ... args)
 {
     close();

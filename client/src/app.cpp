@@ -1,20 +1,19 @@
 #include "app.hpp"
 
 App::App(HINSTANCE hInstance)
-    : windows_() {
+    : window_() {
     MyWindow::setHInst(hInstance);
 }
 
 int App::run() {
-    windows_.emplace_back(std::make_unique<MyWindow>());
-    auto& wnd = *windows_.back();
-    wnd.setTitle("project-W client");
-    wnd.show(SW_SHOW);
+    window_.open();
+    window_.setTitle("project-W client");
+    window_.show(SW_SHOW);
 
-    wnd.addMsgHandler(10000, std::make_unique< Win32::BasicMsgHandler<MyWindow> >(wnd));
+    window_.addMsgHandler(10000, std::make_unique< Win32::BasicMsgHandler<MyWindow> >(window_));
 
     for(;;) {
-        if (auto returnCode = wnd.processMessages()) {
+        if (auto returnCode = window_.processMessages()) {
             return returnCode.value();
         }
     }
