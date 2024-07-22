@@ -58,4 +58,28 @@ function(auto_configure TARGET_NAME ACCESS_MODIFIER)
         )
     endif()
 
+    target_compile_definitions("${TARGET_NAME}"
+        ${ACCESS_MODIFIER}
+            $<$<CONFIG:Debug>:DEBUG>
+            $<$<CONFIG:Release>:NDEBUG>
+    )
+
+    target_compile_definitions("${TARGET_NAME}"
+        ${ACCESS_MODIFIER}
+            
+    )
+
+    target_compile_options("${TARGET_NAME}"
+    ${ACCESS_MODIFIER}
+        $<IF:$<BOOL:${BUILD_SHARED_LIBS}>,
+            $<IF:$<CONFIG:Release>,/MD,/MDd>, # Multi-threaded & Dynamic libraries
+            $<IF:$<CONFIG:Release>,/MT,/MTd> # Multi-threaded & Static libraries
+        >
+    )
+
+    target_compile_definitions("${TARGET_NAME}"
+        ${ACCESS_MODIFIER}
+            NOEXCEPT=noexcept
+    )
+
 endfunction()
