@@ -30,7 +30,7 @@ namespace Win32
 
 /**
  * @brief Exception class for Windows API
- * @details call what() to get error message, type() to get exception type
+ * @details call WindowException::what to get error message, WindowException::type to get exception type
  * @code
  * try {
  *     // some Windows API call
@@ -46,12 +46,39 @@ public:
         HRESULT hr ) NOEXCEPT;
 
 
+    /**
+     * @brief Get the error message.
+     * @return `const char*`  the error message.
+     * @see WindowException
+     */
     const char* what() const NOEXCEPT override;
+    /**
+     * @brief Get the exception type.
+     * @return `const char*`  the exception type.
+     * @see WindowException
+     */
     const char* type() const NOEXCEPT override;
 
+    /**
+     * @brief Get the error code retreived from API function(`HRESULT`).
+     * @return `HRESULT`  the error code.
+     * @see WindowException
+     */
     HRESULT errorCode() const NOEXCEPT;
+    /**
+     * @brief Get the error message as `std::string`.     
+     * It calls WindowException::translateErrorCode function to translate the error code to the human-readable error message.
+     * @return `std::string`  the error message.
+     * @see WindowException
+     */
     const std::string errorStr() const NOEXCEPT;
 
+    /**
+     * @brief Translate the error code to the human-readable error message.
+     * @param hr  the error code to translate.
+     * @return `const std::string`  the error message.
+     * @see WindowException
+     */
     static const std::string
         translateErrorCode( HRESULT hr ) NOEXCEPT;
 
@@ -106,12 +133,68 @@ concept canUnregist = requires (Args&& ... args) {
     Traits::unregist( std::forward<Args>(args)... );
 };
 
+/**
+ * @brief Interface for message handlers, since base class exist, do not directly inherit from this class.
+ * @see MsgHandler
+ */
 class IMsgHandler {
 public:
     virtual ~IMsgHandler() {}
     virtual std::optional<LRESULT> operator()(const Message& msg) = 0;
 };
 
+/**
+ * @brief
+ * A base class template for message handlers.    
+ * Inherit from this class to create a message handler    
+ * and override the MsgHandler::operator()(const Message& msg) to handle messages.    
+ * @tparam Wnd  the window class that this message handler is for.
+ * @details
+ * message handlers are called in the order by their index,    
+ * which is set by Window::addMsgHandler.   
+ * 
+ * Multiple message handlers cooperate to handle messages with chain of responsibility pattern.    
+ * Each message handler should proccess the message if it is in interest of the handler.    
+ * And each message handler can decide whether to pass the message to the next handler or not.   
+ * returning `std::nullopt` means the message handler passes the message to the next handler.    
+ * Otherwise, it means the message handler has processed the message and the handler chain should stop.    
+ * If message handler chain reaches the end, the default window procedure will handle the message.
+ *     
+ * Following code is an example of message handler.    
+ * @code{.cpp}
+ * template <class Wnd>
+ * class SampleMsgHandler : public MsgHandler<Wnd> {
+ * public:
+ *     using MsgHandler<Wnd>::window;
+ * 
+ *     SampleMsgHandler(Wnd& wnd)
+ *         : MsgHandler<Wnd>(wnd) {}
+ * 
+ *     std::optional<LRESULT> operator()(const Message& msg) override;
+ * };
+ * 
+ * template <class Wnd>
+ * std::optional<LRESULT> SampleMsgHandler<Wnd>::operator()(
+ *     const Message& msg
+ * ) {
+ *     switch (msg.type) {
+ *     case WM_CLOSE:
+ *         PostMessageA(window().nativeHandle(), WM_DESTROY, 0, 0);
+ *         window().close();
+ *         return 0;
+ *
+ *     case WM_DESTROY:
+ *         PostQuitMessage(0);
+ *         return 0;
+ *
+ *     default: return {};
+ *     }
+ * }
+ * @endcode
+ * 
+ * @see Window    
+ * Message
+ */
 template <class Wnd>
 class MsgHandler : public IMsgHandler
 {
@@ -127,6 +210,16 @@ public:
     MsgHandler& operator=(MsgHandler&&) = delete;
     virtual ~MsgHandler() {}
 
+    /**
+     * @brief Override this function to handle a message.
+     * @param msg  the message to handle.
+     * @return `std::optional<LRESULT>`     
+     * return `std::nullopt` if the handler wants to pass through the message to the next handler,    
+     * otherwise return the result of the message handling.
+     * @see
+     * Message    
+     * MsgHandler
+     */
     virtual std::optional<LRESULT> operator()(const Message& msg) = 0;
 
 protected:
@@ -137,6 +230,16 @@ private:
     Wnd& window_;
 };
 
+/**
+ * @brief
+ * A basic sample message handler that handles WM_CLOSE and WM_DESTROY messages.     
+ * This class is for demonstration purpose.     
+ * 
+ * It terminates application when the window is destroyed via sending WM_QUIT on WM_DESTROY.
+ * @tparam Wnd  the window class that this message handler is for.
+ * 
+ * @see MsgHandler
+ */
 template <class Wnd>
 class BasicMsgHandler : public MsgHandler<Wnd>
 {
@@ -145,12 +248,49 @@ public:
     using MyChar = typename Wnd::MyChar;
 
     BasicMsgHandler(Wnd& wnd)
-        : MsgHandler<Wnd>(wnd)
-    {}
+        : MsgHandler<Wnd>(wnd) {}
 
     std::optional<LRESULT> operator()(const Message& msg) override;
 };
 
+
+/**
+ * @brief
+ * A class template for Win32 window.    
+ * Win32's window Class part is encapsulated in the `Traits`,      
+ * and the window Instance part is encapsulated in this class.
+ * @tparam Traits  the traits class that encapsulates Win32's window Class part.
+ * @details
+ * `Traits` should have the 5 following static member functions:
+ * - static void regist(HINSTANCE hInst);
+ * - static void unregist(HINSTANCE hInst);
+ * - static HWND create(HINSTANCE hInst, Window<Traits>* pWnd, ...);
+ * - static void destroy(HWND hWnd);
+ * - static void show(HWND hWnd, int nCmdShow);
+ * 
+ * When the Window is created, it is not opened yet.    
+ * To open the window, call Window::open with the arguments that the `Traits::create` requires.    
+ * (You can define additional custom arguments on ... part of the `Traits::create`.)    
+ * Window::open registers a Win32 window class through `Traits::register` if it is not registered yet.     
+ * And it passes the arguments to the `Traits::create` function     
+ * with insertion of the proper `HINSTANCE` and Window object's pointer as the foremost arguments.
+ * 
+ * To make the Window object visible, call Window::show function with the `nCmdShow`(`SW_SHOW`) argument.
+ * 
+ * @code{.cpp}
+ * Window<BasicWindowTraits> wnd;
+ * wnd.open();
+ * wnd.show(SW_SHOW);
+ * 
+ * wnd.msgLoop();
+ * // wnd.close(); // automatically called on the Window's destructor if the window is not closed.
+ * @endcode
+ * 
+ * You can add your own message handlers arbitrarily by calling Window::addMsgHandler.    
+ * If no message handler is configured, Win32's default window procedure will handle all messages.
+ * 
+ * @see MsgHandler
+ */
 template <class Traits>
 class Window
 {
@@ -176,6 +316,9 @@ public:
     Window& operator=(const Window&) = delete;
     Window& operator=(Window&&) = delete;
 
+    /**
+     * @brief Open the window.
+     */
     template <class ... Args>
     requires canRegist<Traits, HINSTANCE>
         && canCreate<Traits, HINSTANCE, Window<Traits>*, Args...>
@@ -198,6 +341,9 @@ public:
     //=====================================================
     // auto& msgHandlers() NOEXCEPT { return msgHandlers_; }
     // const auto& msgHandlers() const NOEXCEPT { return msgHandlers_; }
+    /**
+     * @brief Add a message handler.
+     */
     void addMsgHandler(int index, std::unique_ptr<IMsgHandler>&& msgHandler);
     void removeMsgHandler(int index);
     //=====================================================
