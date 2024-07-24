@@ -117,15 +117,15 @@ std::optional<int> Window<Traits>::processMessages()
 }
 
 template<class Traits>
-inline void Window<Traits>::addMsgHandler(int index, std::unique_ptr<IMsgHandler>&& msgHandler)
+void Window<Traits>::addMsgHandler(int index, std::unique_ptr<IMsgHandler>&& msgHandler)
 {
     msgHandlers_.try_emplace(index, std::move(msgHandler));
 }
 
 template<class Traits>
-inline void Window<Traits>::removeMsgHandler(int index)
+[[maybe_unused]] bool Window<Traits>::removeMsgHandler(int index)
 {
-    msgHandlers_.erase(index);
+    return static_cast<bool>( msgHandlers_.erase(index) );
 }
 
 template <class Traits>
