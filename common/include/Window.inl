@@ -66,12 +66,23 @@ void Window<Traits>::msgLoop()
     BOOL result;
 
     try {
-
-        while ( ( result = GetMessageW(&msg, nativeHandle(), 0, 0) ) > 0 ) {
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
+        if constexpr ( std::is_same_v<MyChar, CHAR> ) {
+            result = GetMessageA(&msg, nativeHandle(), 0, 0);
+        }
+        else /* WCHAR */ {
+            result = GetMessageW(&msg, nativeHandle(), 0, 0);
         }
 
+        while ( result > 0 ) {
+            TranslateMessage(&msg);
+            
+            if constexpr ( std::is_same_v<MyChar, CHAR> ) {
+                DispatchMessageA(&msg);
+            }
+            else /* WCHAR */ {
+                DispatchMessageW(&msg);
+            }
+        }
     }
     catch (const WindowException& e) {
         MessageBoxA(nullptr, e.what(), "Window Exception",
