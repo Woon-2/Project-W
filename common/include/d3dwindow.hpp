@@ -15,6 +15,10 @@ namespace gfx {
 // TODO: make fullscreen toggle
 template <class Traits>
 class D3DWindow : public Win32::Window<Traits> {
+protected:
+    wrl::ComPtr<IDXGISwapChain1> pSwapChain_;
+    RECT clientRect_;
+
 public:
     using Win32::Window<Traits>::nativeHandle;
 
@@ -64,10 +68,6 @@ public:
     void present() {
         pSwapChain_->Present(1, 0);
     }
-
-private:
-    wrl::ComPtr<IDXGISwapChain1> pSwapChain_;
-    RECT clientRect_;
 };
 
 template <Win32::Win32Char T>

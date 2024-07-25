@@ -10,13 +10,19 @@
 
 #include <memory>
 
+#define ENABLE_D3D12_WINDOW
+
+#ifdef ENABLE_D3D12_WINDOW
+#include "d3dwindow.hpp"
+#endif  // ENABLE_D3D12_WINDOW
+
 namespace gfx {
 
 namespace wrl = Microsoft::WRL;
 
 namespace d3d12 {
 
-class D3D12Core : public ICore {
+class Core : public ICore {
 public:
     static void configDXFactory(wrl::ComPtr<IDXGIFactory4> factory) {
         spFactory = factory;
@@ -46,7 +52,9 @@ public:
 private:
     // TODO: make it return multiple adapters enumerated.
     wrl::ComPtr<IDXGIAdapter1> enumAdapters();
-    void createDevice(IDXGIAdapter1* adapter);
+    void createDevice(IDXGIAdapter1* pAdapter);
+    void createCommandQueueAndList(ID3D12Device* pDevice);
+    void buildRtvAndDsvHeaps(ID3D12Device* pDevice);
 
     static wrl::ComPtr<IDXGIFactory4> spFactory;
     static std::size_t sRtvHeapSize;
@@ -66,6 +74,15 @@ public:
 
     bool castableTo(const std::type_info& type) const override;
 };
+
+#ifdef ENABLE_D3D12_WINDOW
+template <class Traits>
+class Window : public D3DWindow<Traits>, public IRenderTarget {
+public:
+
+private:
+};
+#endif  // ENABLE_D3D12_WINDOW
 
 }   // namespace d3d12
 

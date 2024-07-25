@@ -4,9 +4,11 @@ namespace gfx {
 
 namespace d3d12 {
 
-void D3D12Core::init() {
+void Core::init() {
     auto adapter = enumAdapters();
     createDevice(adapter.Get());
+    createCommandQueueAndList(pDevice_.Get());
+    buildRtvAndDsvHeaps(pDevice_.Get());
 }
 
 wrl::ComPtr<IDXGIAdapter1> enumAdapters() {
@@ -41,7 +43,7 @@ wrl::ComPtr<IDXGIAdapter1> enumAdapters() {
     return pAdapter;
 }
 
-void D3D12Core::createDevice(IDXGIAdapter1* pAdapter) {
+void Core::createDevice(IDXGIAdapter1* pAdapter) {
 #ifdef ENABLE_DXGI_INFO
     auto pDebug = wrl::ComPtr<ID3D12Debug>();
     DX_THROW_FAILED(
@@ -56,9 +58,56 @@ void D3D12Core::createDevice(IDXGIAdapter1* pAdapter) {
     ) );
 }
 
-wrl::ComPtr<IDXGIFactory4> D3D12Core::spFactory = nullptr;
-std::size_t D3D12Core::sRtvHeapSize = 0;
-std::size_t D3D12Core::sDsvHeapSize = 0;
+void Core::createCommandQueueAndList(ID3D12Device* pDevice) {
+    auto qd = D3D12_COMMAND_QUEUE_DESC{
+        .Type = D3D12_COMMAND_LIST_TYPE_DIRECT,
+        .Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL,
+        .Flags = D3D12_COMMAND_QUEUE_FLAG_NONE,
+        .NodeMask = 0
+    };
+
+    DX_THROW_FAILED( pDevice->CreateCommandQueue(
+        &qd, __uuidof(ID3D12CommandQueue), &pCmdQ_
+    ) );
+
+    DX_THROW_FAILED( pDevice->CreateCommandAllocator(
+        D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), &pCmdAlloc_
+    ) );
+
+    DX_THROW_FAILED( pDevice->CreateCommandList(
+        0, D3D12_COMMAND_LIST_TYPE_DIRECT, pCmdAlloc_.Get(), nullptr, __uuidof(ID3D12GraphicsCommandList), &pCmdList_
+    ) );
+
+    DX_THROW_FAILED( pCmdList_->Close() );
+}
+
+void Core::buildRtvAndDsvHeaps(ID3D12Device* pDevice) {
+    auto rhd = D3D12_DESCRIPTOR_HEAP_DESC{
+        .Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+        .NumDescriptors = static_cast<UINT>(sRtvHeapSize),
+        .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+        .NodeMask = 0
+    };
+
+    DX_THROW_FAILED( pDevice->CreateDescriptorHeap(
+        &rhd, __uuidof(ID3D12DescriptorHeap), &pRtvHeap_
+    ) );
+    
+    auto dhd = D3D12_DESCRIPTOR_HEAP_DESC{
+        .Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
+        .NumDescriptors = static_cast<UINT>(sDsvHeapSize),
+        .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+        .NodeMask = 0
+    };
+
+    DX_THROW_FAILED( pDevice->CreateDescriptorHeap(
+        &dhd, __uuidof(ID3D12DescriptorHeap), &pDsvHeap_
+    ) );
+}
+
+wrl::ComPtr<IDXGIFactory4> Core::spFactory = nullptr;
+std::size_t Core::sRtvHeapSize = 0;
+std::size_t Core::sDsvHeapSize = 0;
 
 }   // namespace d3d12
 
