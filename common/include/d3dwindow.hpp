@@ -22,14 +22,6 @@ protected:
 public:
     using Win32::Window<Traits>::nativeHandle;
 
-    D3DWindow() = default;
-    virtual ~D3DWindow() = default;
-
-    D3DWindow(const D3DWindow&) = delete;
-    D3DWindow(D3DWindow&&) noexcept = delete;
-    D3DWindow& operator=(const D3DWindow&) = delete;
-    D3DWindow& operator=(D3DWindow&&) noexcept = delete;
-
     // TODO: consider enabling multisampling
     // TODO: consider multiple back buffers
     void createSwapchain(IDXGIFactory2* pFactory, void* pDevice) {

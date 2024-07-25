@@ -305,7 +305,7 @@ public:
     Window()
         : title_(), msgHandlers_(), hWnd_(nullptr) {}
 
-    ~Window() requires canDestroy<Traits, HWND>
+    virtual ~Window() requires canDestroy<Traits, HWND>
     { 
         close();
     }
