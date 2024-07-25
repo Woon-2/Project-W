@@ -71,3 +71,28 @@ target_link_libraries(win32
     PRIVATE
         common::woon2exception
 )
+
+# === gfx ===
+add_library(gfx
+    src/gfx.cpp include/gfx.hpp
+    src/gfxExcept.cpp include/gfxExcept.hpp
+    src/dxexcept.cpp include/dxexcept.hpp
+    src/d3d12core.cpp include/d3d12core.hpp
+    src/d3dwindow.cpp include/d3dwindow.hpp
+    include/dxtarget.hpp
+)
+
+add_library(common::gfx ALIAS gfx)
+
+auto_configure(gfx PRIVATE)
+
+target_include_directories(gfx
+    PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+
+target_link_libraries(gfx
+    PRIVATE
+        d3d12.lib
+        $<$<CONFIG:DEBUG>:dxguid.lib>
+)

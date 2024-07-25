@@ -1,3 +1,5 @@
+## Graphics
+
 ### Mesh
 - 리소스 파일을 부분적, 혹은 전체적으로 읽어들이는 기능을 포함 
   - Positions, Normals, Texture Coordinates, Tangents, Bitangents, Bounding Volume, Color, etc.
@@ -12,13 +14,8 @@
 - 절차적 생성을 지원하기 위한 방법 모색 필요
 
 ### Renderer
-- 사용할 Shader와 Root Signature, 인스턴스 개수 한계, Software Occlusion 설정
-- 리소스 종류와 Root Parameter 사이의 매핑 관리
-- Mesh와 Material, 기타 버퍼로부터 필요한 리소스를 쿼리해 Root Parameter에 바인드, 처리 후 draw call 수행
-  - 조합 가능한 단위 함수들을 protected로 구현해놓고, 순수 가상 함수를 두어 구현 클래스에서 그것들을 조합하여 렌더링하도록 구현
+- 사용할 Shader와 Root Signature, 인스턴스 개수 한계 설정
 
-### Graphics Pipeline
+### Pipelining
 
-### Entity Component System
-
-### Graphics Isolation
+## Entity Component System
