@@ -56,7 +56,7 @@ public:
     static void cleanup();
 
     static std::size_t size() NOEXCEPT {
-        return pInfoQ->GetNumStoredMessages(DXGI_DEBUG_ALL);
+        return spInfoQ->GetNumStoredMessages(DXGI_DEBUG_ALL);
     }
 
     static bool empty() NOEXCEPT {
@@ -64,12 +64,9 @@ public:
     }
 
 private:
-    static wrl::ComPtr<IDXGIInfoQueue> pInfoQ;
-    static wrl::ComPtr<IDXGIDebug1> pDebug;
+    static wrl::ComPtr<IDXGIInfoQueue> spInfoQ;
+    static wrl::ComPtr<IDXGIDebug1> spDebug;
 };
-
-wrl::ComPtr<IDXGIInfoQueue> DXInfoQueue::pInfoQ;
-wrl::ComPtr<IDXGIDebug1> DXInfoQueue::pDebug;
 
 class DXInfoQException : public Exception {
 public:
@@ -82,10 +79,7 @@ public:
 
 namespace detail {
 
-std::string makeHRDesc(HRESULT hr) {
-    return "[Error Code] " + std::to_string(hr) + "\n"
-        + "[Description] " + std::system_category().message(hr) + "\n";
-}
+std::string makeHRDesc(HRESULT hr);
 
 }   // namespace gfx::detail
 

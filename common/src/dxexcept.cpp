@@ -15,27 +15,27 @@ namespace gfx {
 
 void DXInfoQueue::init() {
     DXINFO_THROW_FAILED(
-        DXGIGetDebugInterface1(0, __uuidof(IDXGIDebug1), &pDebug)
+        DXGIGetDebugInterface1(0, __uuidof(IDXGIDebug1), &spDebug)
     );
     DXINFO_THROW_FAILED(
-        DXGIGetDebugInterface1(0, __uuidof(IDXGIInfoQueue), &pInfoQ)
+        DXGIGetDebugInterface1(0, __uuidof(IDXGIInfoQueue), &spInfoQ)
     );
 }
 
 void DXInfoQueue::dump(std::ostream& os) {
-    UINT64 msgCnt = pInfoQ->GetNumStoredMessages(DXGI_DEBUG_ALL);
+    UINT64 msgCnt = spInfoQ->GetNumStoredMessages(DXGI_DEBUG_ALL);
 
     for (UINT64 i = 0; i < msgCnt; ++i) {
         SIZE_T msgLen = 0u;
         DXINFO_THROW_FAILED(
-            pInfoQ->GetMessage(DXGI_DEBUG_ALL, i, nullptr, &msgLen)
+            spInfoQ->GetMessage(DXGI_DEBUG_ALL, i, nullptr, &msgLen)
         );
 
         auto bytes = std::vector<std::uint8_t>(msgLen);
         auto pMsg = reinterpret_cast<DXGI_INFO_QUEUE_MESSAGE*>(bytes.data());
         
         DXINFO_THROW_FAILED(
-            pInfoQ->GetMessage(DXGI_DEBUG_ALL, i, pMsg, &msgLen)
+            spInfoQ->GetMessage(DXGI_DEBUG_ALL, i, pMsg, &msgLen)
         );
 
         os << std::string_view(
@@ -46,8 +46,18 @@ void DXInfoQueue::dump(std::ostream& os) {
 
 void DXInfoQueue::cleanup() {
     DXINFO_THROW_FAILED(
-        pDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_ALL)
+        spDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_ALL)
     );
+}
+
+wrl::ComPtr<IDXGIInfoQueue> DXInfoQueue::spInfoQ;
+wrl::ComPtr<IDXGIDebug1> DXInfoQueue::spDebug;
+
+namespace detail {
+    std::string makeHRDesc(HRESULT hr) {
+        return "[Error Code] " + std::to_string(hr) + "\n"
+            + "[Description] " + std::system_category().message(hr) + "\n";
+    }
 }
 
 };  // namespace gfx

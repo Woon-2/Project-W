@@ -76,6 +76,7 @@ target_link_libraries(win32
 add_library(gfx
     src/gfx.cpp include/gfx.hpp
     src/gfxExcept.cpp include/gfxExcept.hpp
+    src/dxfactory.cpp include/dxfactory.hpp
     src/dxexcept.cpp include/dxexcept.hpp
     src/d3d12core.cpp include/d3d12core.hpp
     src/d3dwindow.cpp include/d3dwindow.hpp

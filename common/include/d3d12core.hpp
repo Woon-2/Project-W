@@ -4,7 +4,9 @@
 #include "gfx.hpp"
 
 #include <d3d12.h>
+#include "dxfactory.hpp"
 #include "dxtarget.hpp"
+#include "dxexcept.hpp"
 
 #include <memory>
 
@@ -16,7 +18,12 @@ namespace d3d12 {
 
 class D3D12Core : public ICore {
 public:
-    D3D12Core(IDXGIFactory7& factory, IDXGIAdapter4& adapter);
+    static void configDXFactory(wrl::ComPtr<IDXGIFactory4> factory) {
+        spFactory = factory;
+    }
+    static wrl::ComPtr<IDXGIFactory4> dxFactory() {
+        return spFactory;
+    }
 
     static void configRtvHeapSize(std::size_t size) {
         sRtvHeapSize = size;
@@ -37,6 +44,11 @@ public:
     std::unique_ptr<IRenderContext> createContext() override;
 
 private:
+    // TODO: make it return multiple adapters enumerated.
+    wrl::ComPtr<IDXGIAdapter1> enumAdapters();
+    void createDevice(IDXGIAdapter1* adapter);
+
+    static wrl::ComPtr<IDXGIFactory4> spFactory;
     static std::size_t sRtvHeapSize;
     static std::size_t sDsvHeapSize;
 
@@ -47,9 +59,6 @@ private:
     wrl::ComPtr<ID3D12DescriptorHeap> pRtvHeap_;
     wrl::ComPtr<ID3D12DescriptorHeap> pDsvHeap_;
 };
-
-std::size_t D3D12Core::sRtvHeapSize = 0;
-std::size_t D3D12Core::sDsvHeapSize = 0;
 
 class D3D12RenderContext : public IRenderContext {
 public:
