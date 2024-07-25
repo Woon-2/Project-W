@@ -13,7 +13,7 @@ const char* Woon2Exception::what() const noexcept
     auto oss = std::ostringstream();
     oss << type() << '\n'
         << metaStr() << '\n';
-    whatBuffer_ = oss.str();
+    whatBuffer_.insert(0, oss.str());
     return whatBuffer_.c_str();
 }
 

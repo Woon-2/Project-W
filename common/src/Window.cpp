@@ -7,8 +7,10 @@ namespace Win32
 
 WindowException::WindowException(int lineNum, const char* fileStr,
     HRESULT hr) noexcept
-    : Woon2Exception(lineNum, fileStr), hr_(hr)
-{}
+    : Woon2Exception(lineNum, fileStr), hr_(hr) {
+    whatBuffer_ += "[Error Code] " + std::to_string(errorCode()) + "\n"
+        "[Description] " + errorStr() + "\n";
+}
 
 const std::string WindowException::translateErrorCode(
     HRESULT hr ) noexcept
@@ -30,20 +32,6 @@ const std::string WindowException::translateErrorCode(
     LocalFree(pMsgBuf);
 
     return errorStr;
-}
-
-const char* WindowException::what() const noexcept  // overriden
-{
-    std::ostringstream oss{};
-
-    oss << type() << '\n';
-
-    oss << "[Error Code] " << errorCode() << '\n'
-        << "[Description] " << errorStr() << '\n'
-        << this->metaStr() << '\n';
-
-    whatBuffer_ = oss.str();
-    return whatBuffer_.c_str();
 }
 
 const char* WindowException::type() const noexcept // overriden

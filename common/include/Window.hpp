@@ -43,15 +43,9 @@ class WindowException : public Woon2Exception
 {
 public:
     WindowException( int lineNum, const char* fileStr,
-        HRESULT hr ) NOEXCEPT;
+        HRESULT hr
+    ) NOEXCEPT;
 
-
-    /**
-     * @brief Get the error message.
-     * @return `const char*`  the error message.
-     * @see WindowException
-     */
-    const char* what() const NOEXCEPT override;
     /**
      * @brief Get the exception type.
      * @return `const char*`  the exception type.
@@ -309,7 +303,7 @@ public:
      */
 
     Window()
-        : title_(), frame_(), msgHandlers_(), hWnd_(nullptr) {}
+        : title_(), msgHandlers_(), hWnd_(nullptr) {}
 
     ~Window() requires canDestroy<Traits, HWND>
     { 
@@ -489,7 +483,6 @@ private:
     static HINSTANCE hInst;
 
     MyString title_;
-    WndFrame frame_;
     std::map< int, std::unique_ptr<IMsgHandler> > msgHandlers_;
     HWND hWnd_;
 };
