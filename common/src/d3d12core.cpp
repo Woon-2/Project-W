@@ -105,6 +105,14 @@ void Core::buildRtvAndDsvHeaps(ID3D12Device* pDevice) {
     ) );
 }
 
+bool D3D12RenderContext::castableTo(RenderContextType contextType) const {
+    return contextType == RenderContextType::D3D12;
+}
+
+std::any D3D12RenderContext::cast(RenderContextType contextType) {
+    return pCmdList_;
+}
+
 wrl::ComPtr<IDXGIFactory4> Core::spFactory = nullptr;
 std::size_t Core::sRtvHeapSize = 0;
 std::size_t Core::sDsvHeapSize = 0;

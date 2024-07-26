@@ -24,6 +24,8 @@ namespace d3d12 {
 
 class Core : public ICore {
 public:
+    friend class D3D12RenderContext;
+
     static void configDXFactory(wrl::ComPtr<IDXGIFactory4> factory) {
         spFactory = factory;
     }
@@ -56,6 +58,10 @@ private:
     void createCommandQueueAndList(ID3D12Device* pDevice);
     void buildRtvAndDsvHeaps(ID3D12Device* pDevice);
 
+    wrl::ComPtr<ID3D12GraphicsCommandList> cmdList() NOEXCEPT {
+        return pCmdList_;
+    }
+
     static wrl::ComPtr<IDXGIFactory4> spFactory;
     static std::size_t sRtvHeapSize;
     static std::size_t sDsvHeapSize;
@@ -70,17 +76,27 @@ private:
 
 class D3D12RenderContext : public IRenderContext {
 public:
-    D3D12RenderContext(ID3D12Device& device, ID3D12CommandAllocator& cmdAlloc, ID3D12GraphicsCommandList& cmdList);
+    D3D12RenderContext(Core& core)
+        : pCmdList_(core.cmdList()) {}
 
-    bool castableTo(const std::type_info& type) const override;
+    bool castableTo(RenderContextType contextType) const override;
+    std::any cast(RenderContextType contextType) override;
+
+private:
+    wrl::ComPtr<ID3D12GraphicsCommandList> pCmdList_;
 };
 
 #ifdef ENABLE_D3D12_WINDOW
 template <class Traits>
 class Window : public D3DWindow<Traits>, public IRenderTarget {
 public:
+    void buildRtv(ID3D12Device& device, D3D12_CPU_DESCRIPTOR_HANDLE pFirstRtv);
+    void buildDsv(ID3D12Device& device, D3D12_CPU_DESCRIPTOR_HANDLE pFirstDsv);
 
+    bool castableTo(RenderContextType contextType) const override;
+    std::any cast(RenderContextType contextType) override;
 private:
+
 };
 #endif  // ENABLE_D3D12_WINDOW
 

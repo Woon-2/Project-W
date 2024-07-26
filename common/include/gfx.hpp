@@ -9,6 +9,24 @@
 #include "gfxExcept.hpp"
 
 namespace gfx {
+
+enum class RenderContextType {
+    // D3D11,
+    D3D12,
+    // Vulkan,
+    // OpenGL,
+    // Metal,
+    // Software,
+};
+
+enum class RenderTargetType {
+    // D3D11,
+    D3D12,
+    // Vulkan,
+    // OpenGL,
+    // Metal,
+    // Software,
+};
     
 class ICore {
 public:
@@ -35,24 +53,28 @@ public:
 
 class IRenderContext {
 public:
+    IRenderContext() = default;
     virtual ~IRenderContext() = 0;
     IRenderContext(const IRenderContext&) = default;
     IRenderContext(IRenderContext&&) noexcept = default;
     IRenderContext& operator=(const IRenderContext&) = default;
     IRenderContext& operator=(IRenderContext&&) noexcept = default;
 
-    virtual bool castableTo(const std::type_info& type) const = 0;
+    virtual bool castableTo(RenderContextType contextType) const = 0;
+    virtual std::any cast(RenderContextType contextType) = 0;
 };
 
 class IRenderTarget {
 public:
+    IRenderTarget() = default;
     virtual ~IRenderTarget() = default;
     IRenderTarget(const IRenderTarget&) = default;
     IRenderTarget(IRenderTarget&&) noexcept = default;
     IRenderTarget& operator=(const IRenderTarget&) = default;
     IRenderTarget& operator=(IRenderTarget&&) noexcept = default;
 
-    virtual bool castableTo(const std::type_info& type) const = 0;
+    virtual bool castableTo(RenderTargetType type) const = 0;
+    virtual std::any cast(RenderTargetType type) = 0;
 };
 
 // TODO: add global map to track Type and its string representation for debugging
