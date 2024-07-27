@@ -22,6 +22,7 @@ enum class RenderContextType {
 enum class RenderTargetType {
     // D3D11,
     D3D12,
+    D3D12_DEPTH
     // Vulkan,
     // OpenGL,
     // Metal,
@@ -75,6 +76,8 @@ public:
 
     virtual bool castableTo(RenderTargetType type) const = 0;
     virtual std::any cast(RenderTargetType type) = 0;
+    virtual void preRender() {}
+    virtual void postRender() {}
 };
 
 // TODO: add global map to track Type and its string representation for debugging
@@ -141,8 +144,8 @@ public:
 // renderer.render(scene, context, target);
 
 // renderer.render::
-// if (context.castableTo( typeid(gfx::d3d12::RenderContext) )) {
-//    auto d3d12Context = static_cast<gfx::d3d12::RenderContext&>(context);
+// if (context.castableTo( RenderContextType::D3D12 )) {
+//    auto d3d12Context = std::any_cast( context.cast(RenderContextType::D3D12) );
 //    d3d12SubRenderer.render(scene, d3d12Context, target);
 // }
 //

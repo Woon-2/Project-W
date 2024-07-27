@@ -9,6 +9,7 @@
 #include "dxexcept.hpp"
 
 #include <memory>
+#include <vector>
 
 #define ENABLE_D3D12_WINDOW
 
@@ -90,14 +91,143 @@ private:
 template <class Traits>
 class Window : public D3DWindow<Traits>, public IRenderTarget {
 public:
-    void buildRtv(ID3D12Device& device, D3D12_CPU_DESCRIPTOR_HANDLE pFirstRtv);
-    void buildDsv(ID3D12Device& device, D3D12_CPU_DESCRIPTOR_HANDLE pFirstDsv);
+    Window() : backBuffers_(2), depthBuffers_(1) {}
+    void buildRtv(ID3D12Device* pDevice, D3D12_CPU_DESCRIPTOR_HANDLE pFirstRtv);
+    void buildDsv(ID3D12Device* pDevice, D3D12_CPU_DESCRIPTOR_HANDLE pFirstDsv);
+    void createDepthBuffers(ID3D12Device* pDevice);
 
-    bool castableTo(RenderContextType contextType) const override;
-    std::any cast(RenderContextType contextType) override;
+    bool castableTo(RenderTargetType rentarType) const override;
+    std::any cast(RenderTargetType rentarType) override;
+    // TODO: CPU - GPU synchronization
+    void postRender() override {
+        this->present();
+    }
+
 private:
-
+    std::vector<wrl::ComPtr<ID3D12Resource>> backBuffers_;
+    std::vector<wrl::ComPtr<ID3D12Resource>> depthBuffers_;
+    D3D12_CPU_DESCRIPTOR_HANDLE pFirstRtv_;
+    D3D12_CPU_DESCRIPTOR_HANDLE pFirstDsv_;
 };
+
+// TODO: make D3DWindow's back buffer count modifiable, and reflect that in here. 
+template <class Traits>
+void Window<Traits>::buildRtv(ID3D12Device* pDevice, D3D12_CPU_DESCRIPTOR_HANDLE pFirstRtv) {
+    auto stride = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    
+    for (auto i = 0; i < 2u; ++i) {
+        this->pSwapChain_->GetBuffer(i, __uuidof(ID3D12Resource), &backBuffers_[i]);
+        this->pDevice->CreateRenderTargetView(backBuffers_[i].Get(), nullptr, pFirstRtv);
+        pFirstRtv.ptr += stride;
+    }
+
+    pFirstRtv_ = pFirstRtv;
+}
+
+// TODO: deal with multiple depth stencils.
+template <class Traits>
+void Window<Traits>::buildDsv(ID3D12Device* pDevice, D3D12_CPU_DESCRIPTOR_HANDLE pFirstDsv) {
+    pDevice->CreateDepthStencilView(depthBuffers_[0].Get(), nullptr, pFirstDsv);
+
+    pFirstDsv_ = pFirstDsv;
+}
+
+template <class Traits>
+void Window<Traits>::createDepthBuffers(ID3D12Device* pDevice) {
+    auto depthDesc = D3D12_RESOURCE_DESC{
+        .Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+        .Alignment = 0,
+        .Width = static_cast<UINT>(this->clientRect_.right - this->clientRect_.left),
+        .Height = static_cast<UINT>(this->clientRect_.bottom - this->clientRect_.top),
+        .DepthOrArraySize = 1,
+        .MipLevels = 1,
+        .Format = DXGI_FORMAT_D24_UNORM_S8_UINT,
+        .SampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
+        .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+        .Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
+    };
+
+    auto heapProp = D3D12_HEAP_PROPERTIES{
+        .Type = D3D12_HEAP_TYPE_DEFAULT,
+        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+        .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+        .CreationNodeMask = 0,
+        .VisibleNodeMask = 0
+    };
+
+    auto cv = D3D12_CLEAR_VALUE{
+        .Format = DXGI_FORMAT_D24_UNORM_S8_UINT,
+        .DepthStencil = { .Depth = 1.0f, .Stencil = 0u }
+    };
+
+    DX_THROW_FAILED( pDevice->CreateCommittedResource(
+        &heapProp, D3D12_HEAP_FLAG_NONE, &depthDesc, D3D12_RESOURCE_STATE_DEPTH_WRITE, &cv, __uuidof(ID3D12Resource), &depthBuffers_[0]
+    ) );
+}
+
+template <class Traits>
+bool Window<Traits>::castableTo(RenderTargetType rentarType) const {
+    return rentarType == RenderTargetType::D3D12;
+}
+
+template <class Traits>
+std::any Window<Traits>::cast(RenderTargetType rentarType) {
+    switch (rentarType) {
+    case RenderTargetType::D3D12:
+        return pFirstRtv_;
+    case RenderTargetType::D3D12_DEPTH:
+        return pFirstDsv_;
+    default:
+        throw GFX_EXCEPT("Cannot cast to the requested render target type.");
+    }
+}
+
+template <Win32::Win32Char T>
+struct BasicD3D12WTraits : public BasicD3DWTraits<T> {
+    using MyWindow = Window<BasicD3D12WTraits>;
+    using MyBase = BasicD3DWTraits<T>;
+    using MyChar = T;
+    using MyString = std::basic_string<MyChar>;
+    using MyStringView = std::basic_string_view<MyChar>;
+
+    static constexpr const MyStringView clsName() NOEXCEPT {
+        if constexpr (std::is_same_v<MyChar, CHAR>) {
+            return "D3DW";
+        }
+        else /* WCHAR */ {
+            return L"D3DW";
+        }
+    }
+
+    static HWND create(HINSTANCE hInst, MyWindow* pWnd, IDXGIFactory2* pFactory, void* pDevice) {
+        return create(hInst, pWnd, pFactory, pDevice, MyBase::defWndName(), MyBase::defWndFrame());
+    }
+
+    static HWND create( HINSTANCE hInst, MyWindow* pWnd, IDXGIFactory2* pFactory, void* pDevice,
+        MyStringView wndName
+    ) {
+        return create(hInst, pWnd, pFactory, pDevice, wndName, MyBase::defWndFrame());
+    }
+
+    static HWND create( HINSTANCE hInst, MyWindow* pWnd, IDXGIFactory2* pFactory, void* pDevice,
+        const Win32::WndFrame& wndFrame
+    ) {
+        return create(hInst, pWnd, pFactory, pDevice, MyBase::defWndName(), wndFrame);
+    }
+
+    static HWND create( HINSTANCE hInst, MyWindow* pWnd, IDXGIFactory2* pFactory, void* pDevice,
+        MyStringView wndName, const Win32::WndFrame& wndFrame
+    );
+};
+
+template <Win32::Win32Char T>
+HWND BasicD3D12WTraits<T>::create( HINSTANCE hInst, MyWindow* pWnd, IDXGIFactory2* pFactory, void* pDevice,
+    MyStringView wndName, const Win32::WndFrame& wndFrame
+) {
+    auto ret = BasicD3DWTraits<T>::create(hInst, pWnd, wndName, wndFrame);
+    pWnd->createDepthBuffers(static_cast<ID3D12Device*>(pDevice));
+}
+
 #endif  // ENABLE_D3D12_WINDOW
 
 }   // namespace d3d12
