@@ -105,6 +105,25 @@ void Core::buildRtvAndDsvHeaps(ID3D12Device* pDevice) {
     ) );
 }
 
+void Core::render(const IScene& scene, const IRenderer& renderer, IRenderTarget& target) {
+    auto context = D3D12RenderContext(*this);
+    renderer.render(scene, context, target);
+}
+
+std::unique_ptr<IRenderContext> Core::createContext() {
+    return std::make_unique<D3D12RenderContext>(*this);
+}
+
+void Core::cleanup() {
+    // the order of reset should be reversed from the order of creation. (the member layout order)
+    pDsvHeap_.Reset();
+    pRtvHeap_.Reset();
+    pCmdList_.Reset();
+    pCmdAlloc_.Reset();
+    pCmdQ_.Reset();
+    pDevice_.Reset();
+}
+
 bool D3D12RenderContext::castableTo(RenderContextType contextType) const {
     return contextType == RenderContextType::D3D12;
 }
