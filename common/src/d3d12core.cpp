@@ -9,6 +9,7 @@ void Core::init() {
     createDevice(adapter.Get());
     createCommandQueueAndList(pDevice_.Get());
     buildRtvAndDsvHeaps(pDevice_.Get());
+    createFenceAndEvent(pDevice_.Get());
 }
 
 wrl::ComPtr<IDXGIAdapter1> enumAdapters() {
@@ -105,9 +106,56 @@ void Core::buildRtvAndDsvHeaps(ID3D12Device* pDevice) {
     ) );
 }
 
+void Core::createFenceAndEvent(ID3D12Device* pDevice) {
+    DX_THROW_FAILED( pDevice->CreateFence(
+        0, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence), &pFence_
+    ) );
+
+    fenceEvent_ = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+    if (!fenceEvent_) {
+        DX_THROW_FAILED( HRESULT_FROM_WIN32(GetLastError()) );
+    }
+}
+
 void Core::render(const IScene& scene, const IRenderer& renderer, IRenderTarget& target) {
     auto context = D3D12RenderContext(*this);
     renderer.render(scene, context, target);
+}
+
+void Core::preRender() {
+    DX_THROW_FAILED( pCmdAlloc_->Reset() );
+    DX_THROW_FAILED( pCmdList_->Reset(pCmdAlloc_.Get(), nullptr) );
+}
+
+void Core::postRender() {
+    DX_THROW_FAILED( pCmdList_->Close() );
+
+    ID3D12CommandList* ppCmdLists[] = { pCmdList_.Get() };
+    DX_THROW_FAILED_VOID( pCmdQ_->ExecuteCommandLists(1, ppCmdLists) );
+
+    alterFence();
+}
+
+void Core::waitForGpu() {
+    ++fenceValues_[fenceIdx_];
+    DX_THROW_FAILED( pCmdQ_->Signal(pFence_.Get(), fenceValues_[fenceIdx_]) );
+
+    if (pFence_->GetCompletedValue() < fenceValues_[fenceIdx_]) {
+        DX_THROW_FAILED( pFence_->SetEventOnCompletion(fenceValues_[fenceIdx_], fenceEvent_) );
+        WaitForSingleObject(fenceEvent_, INFINITE);
+    }
+}
+
+void Core::alterFence() {
+    fenceIdx_ = (fenceIdx_ + 1) % fenceValues_.size();
+}
+
+void Core::alterFence(std::size_t idx) {
+    if (idx >= fenceValues_.size()) {
+        throw std::out_of_range("The index is out of range.");
+    }
+
+    fenceIdx_ = idx;
 }
 
 std::unique_ptr<IRenderContext> Core::createContext() {
@@ -116,12 +164,14 @@ std::unique_ptr<IRenderContext> Core::createContext() {
 
 void Core::cleanup() {
     // the order of reset should be reversed from the order of creation. (the member layout order)
+    pFence_.Reset();
     pDsvHeap_.Reset();
     pRtvHeap_.Reset();
     pCmdList_.Reset();
     pCmdAlloc_.Reset();
     pCmdQ_.Reset();
     pDevice_.Reset();
+
 }
 
 bool D3D12RenderContext::castableTo(RenderContextType contextType) const {

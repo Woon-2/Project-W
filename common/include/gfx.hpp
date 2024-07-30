@@ -39,6 +39,8 @@ public:
 
     virtual void init() = 0;
     virtual void render(const class IScene& scene, const class IRenderer& renderer, class IRenderTarget& target) = 0;
+    virtual void preRender() {}
+    virtual void postRender() {}
     virtual void cleanup() = 0;
     virtual std::unique_ptr< class IRenderContext > createContext() = 0;
 };
@@ -76,8 +78,8 @@ public:
 
     virtual bool castableTo(RenderTargetType type) const = 0;
     virtual std::any cast(RenderTargetType type) = 0;
-    virtual void preRender() {}
-    virtual void postRender() {}
+    virtual void preRender(IRenderContext& renderContext) {}
+    virtual void postRender(IRenderContext& renderContext) {}
 };
 
 // TODO: add global map to track Type and its string representation for debugging

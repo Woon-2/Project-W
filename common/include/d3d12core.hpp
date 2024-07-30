@@ -10,6 +10,7 @@
 
 #include <memory>
 #include <vector>
+#include <array>
 
 #define ENABLE_D3D12_WINDOW
 
@@ -49,8 +50,15 @@ public:
 
     void init() override;
     void render(const IScene& scene, const IRenderer& renderer, IRenderTarget& target) override;
+    void preRender() override;
+    void postRender() override;
     void cleanup() override;
+     
     std::unique_ptr<IRenderContext> createContext() override;
+
+    void waitForGpu();
+    void alterFence();
+    void alterFence(std::size_t idx);
 
 private:
     // TODO: make it return multiple adapters enumerated.
@@ -58,6 +66,7 @@ private:
     void createDevice(IDXGIAdapter1* pAdapter);
     void createCommandQueueAndList(ID3D12Device* pDevice);
     void buildRtvAndDsvHeaps(ID3D12Device* pDevice);
+    void createFenceAndEvent(ID3D12Device* pDevice);
 
     wrl::ComPtr<ID3D12GraphicsCommandList> cmdList() NOEXCEPT {
         return pCmdList_;
@@ -73,6 +82,10 @@ private:
     wrl::ComPtr<ID3D12GraphicsCommandList> pCmdList_;
     wrl::ComPtr<ID3D12DescriptorHeap> pRtvHeap_;
     wrl::ComPtr<ID3D12DescriptorHeap> pDsvHeap_;
+    wrl::ComPtr<ID3D12Fence> pFence_;
+    std::array<UINT64, 2> fenceValues_ = { 0, 0 };
+    HANDLE fenceEvent_ = nullptr;
+    std::size_t fenceIdx_ = 0;
 };
 
 class D3D12RenderContext : public IRenderContext {
@@ -99,7 +112,7 @@ public:
     bool castableTo(RenderTargetType rentarType) const override;
     std::any cast(RenderTargetType rentarType) override;
     // TODO: CPU - GPU synchronization
-    void postRender() override {
+    void postRender(IRenderContext& renderContext) override {
         this->present();
     }
 
