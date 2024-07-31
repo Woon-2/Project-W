@@ -241,7 +241,7 @@ void Window<Traits>::preRender(IRenderContext& renderContext) {
 }
 
 template <class Traits>
-void Window<Triats>::postRender(IRenderContext& renderContext) {
+void Window<Traits>::postRender(IRenderContext& renderContext) {
     auto pCmdList = std::any_cast<wrl::ComPtr<ID3D12GraphicsCommandList>>(
         renderContext.cast(RenderContextType::D3D12)
     );
