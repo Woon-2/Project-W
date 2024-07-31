@@ -112,6 +112,7 @@ public:
     bool castableTo(RenderTargetType rentarType) const override;
     std::any cast(RenderTargetType rentarType) override;
     // TODO: CPU - GPU synchronization
+    void preRender(IRenderContext& renderContext) override;
     void postRender(IRenderContext& renderContext) override {
         this->present();
     }
