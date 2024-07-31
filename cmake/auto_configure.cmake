@@ -7,7 +7,6 @@ function(auto_configure TARGET_NAME ACCESS_MODIFIER)
         target_compile_options("${TARGET_NAME}"
             ${ACCESS_MODIFIER}
                 /MP
-                $<IF:$<CONFIG:Debug>,/MDd,/MD>
                 $<IF:$<CONFIG:Debug>,/Od,/O2>
                 /W3
                 /Zc:preprocessor
