@@ -80,6 +80,7 @@ public:
     virtual std::any cast(RenderTargetType type) = 0;
     virtual void preRender(IRenderContext& renderContext) {}
     virtual void postRender(IRenderContext& renderContext) {}
+    virtual void clear(IRenderContext& renderContext) {}
 };
 
 // TODO: add global map to track Type and its string representation for debugging

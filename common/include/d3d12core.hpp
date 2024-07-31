@@ -104,7 +104,10 @@ private:
 template <class Traits>
 class Window : public D3DWindow<Traits>, public IRenderTarget {
 public:
-    Window() : backBuffers_(2), depthBuffers_(1) {}
+    Window()
+        : backBuffers_(2), depthBuffers_(1), pFirstRtv_(), pFirstDsv_(),
+        rtvStride_(0), dsvStride_(0) {}
+
     void buildRtv(ID3D12Device* pDevice, D3D12_CPU_DESCRIPTOR_HANDLE pFirstRtv);
     void buildDsv(ID3D12Device* pDevice, D3D12_CPU_DESCRIPTOR_HANDLE pFirstDsv);
     void createDepthBuffers(ID3D12Device* pDevice);
@@ -112,27 +115,28 @@ public:
     bool castableTo(RenderTargetType rentarType) const override;
     std::any cast(RenderTargetType rentarType) override;
     // TODO: CPU - GPU synchronization
+    void clear(IRenderContext& renderContext) override;
     void preRender(IRenderContext& renderContext) override;
-    void postRender(IRenderContext& renderContext) override {
-        this->present();
-    }
+    void postRender(IRenderContext& renderContext) override;
 
 private:
     std::vector<wrl::ComPtr<ID3D12Resource>> backBuffers_;
     std::vector<wrl::ComPtr<ID3D12Resource>> depthBuffers_;
     D3D12_CPU_DESCRIPTOR_HANDLE pFirstRtv_;
     D3D12_CPU_DESCRIPTOR_HANDLE pFirstDsv_;
+    UINT rtvStride_;
+    UINT dsvStride_;
 };
 
 // TODO: make D3DWindow's back buffer count modifiable, and reflect that in here. 
 template <class Traits>
 void Window<Traits>::buildRtv(ID3D12Device* pDevice, D3D12_CPU_DESCRIPTOR_HANDLE pFirstRtv) {
-    auto stride = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    rtvStride_ = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     
     for (auto i = 0; i < 2u; ++i) {
         this->pSwapChain_->GetBuffer(i, __uuidof(ID3D12Resource), &backBuffers_[i]);
         this->pDevice->CreateRenderTargetView(backBuffers_[i].Get(), nullptr, pFirstRtv);
-        pFirstRtv.ptr += stride;
+        pFirstRtv.ptr += rtvStride_;
     }
 
     pFirstRtv_ = pFirstRtv;
@@ -141,6 +145,8 @@ void Window<Traits>::buildRtv(ID3D12Device* pDevice, D3D12_CPU_DESCRIPTOR_HANDLE
 // TODO: deal with multiple depth stencils.
 template <class Traits>
 void Window<Traits>::buildDsv(ID3D12Device* pDevice, D3D12_CPU_DESCRIPTOR_HANDLE pFirstDsv) {
+    dsvStride_ = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+
     pDevice->CreateDepthStencilView(depthBuffers_[0].Get(), nullptr, pFirstDsv);
 
     pFirstDsv_ = pFirstDsv;
@@ -194,6 +200,64 @@ std::any Window<Traits>::cast(RenderTargetType rentarType) {
     default:
         throw GFX_EXCEPT("Cannot cast to the requested render target type.");
     }
+}
+
+template <class Traits>
+void Window<Traits>::clear(IRenderContext& renderContext) {
+    auto pCmdList = std::any_cast<wrl::ComPtr<ID3D12GraphicsCommandList>>(
+        renderContext.cast(RenderContextType::D3D12)
+    );
+
+    auto bufIdx = this->pSwapChain_->GetCurrentBackBufferIndex();
+    auto pRtv = D3D12_CPU_DESCRIPTOR_HANDLE{
+        .ptr = pFirstRtv_.ptr + bufIdx * rtvStride_
+    };
+
+    static constexpr float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
+
+    pCmdList->ClearRenderTargetView(pRtv, clearColor, 0, nullptr);
+
+    pCmdList->ClearDepthStencilView(pFirstDsv_, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0, nullptr);
+}
+
+template <class Traits>
+void Window<Traits>::preRender(IRenderContext& renderContext) {
+    auto pCmdList = std::any_cast<wrl::ComPtr<ID3D12GraphicsCommandList>>(
+        renderContext.cast(RenderContextType::D3D12)
+    );
+
+    const auto bar = D3D12_RESOURCE_BARRIER{
+        .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+        .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+        .Transition = D3D12_RESOURCE_TRANSITION_BARRIER{
+            .pResource = backBuffers_[this->pSwapChain_->GetCurrentBackBufferIndex()].Get(),
+            .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+            .StateBefore = D3D12_RESOURCE_STATE_PRESENT,
+            .StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET
+        }
+    };
+
+    pCmdList->ResourceBarrier(1, &bar);
+}
+
+template <class Traits>
+void Window<Triats>::postRender(IRenderContext& renderContext) {
+    auto pCmdList = std::any_cast<wrl::ComPtr<ID3D12GraphicsCommandList>>(
+        renderContext.cast(RenderContextType::D3D12)
+    );
+
+    const auto bar = D3D12_RESOURCE_BARRIER{
+        .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+        .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+        .Transition = D3D12_RESOURCE_TRANSITION_BARRIER{
+            .pResource = backBuffers_[this->pSwapChain_->GetCurrentBackBufferIndex()].Get(),
+            .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+            .StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET,
+            .StateAfter = D3D12_RESOURCE_STATE_PRESENT
+        }
+    };
+
+    pCmdList->ResourceBarrier(1, &bar);
 }
 
 template <Win32::Win32Char T>
