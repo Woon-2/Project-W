@@ -12,7 +12,7 @@ void Core::init() {
     createFenceAndEvent(pDevice_.Get());
 }
 
-wrl::ComPtr<IDXGIAdapter1> enumAdapters() {
+wrl::ComPtr<IDXGIAdapter1> Core::enumAdapters() {
     auto pAdapter = wrl::ComPtr<IDXGIAdapter1>();
     auto pFactory = DXFactory::get();
 
@@ -48,7 +48,7 @@ void Core::createDevice(IDXGIAdapter1* pAdapter) {
 #ifdef ENABLE_DXGI_INFO
     auto pDebug = wrl::ComPtr<ID3D12Debug>();
     DX_THROW_FAILED(
-        DXGIGetDebugInterface(__uuidof(ID3D12Debug), &pDebug)
+        D3D12GetDebugInterface(__uuidof(ID3D12Debug), &pDebug)
     );
 
     pDebug->EnableDebugLayer();

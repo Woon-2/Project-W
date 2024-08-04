@@ -8,8 +8,9 @@
 namespace Win32
 {
 template <class Wnd>
-std::optional<LRESULT> BasicMsgHandler<Wnd>::
-    operator()(const Message& msg) // overriden
+std::optional<LRESULT> BasicMsgHandler<Wnd>::operator()(
+    const Message& msg
+) // overriden
 {
     try {
         switch (msg.type) {
@@ -42,26 +43,55 @@ std::optional<LRESULT> BasicMsgHandler<Wnd>::
 }
 
 template <class Traits>
-template <class ... Args>
-requires canRegist< Traits, HINSTANCE >
-    && canCreate< Traits, HINSTANCE, Window<Traits>*, Args... >
-void Window<Traits>::open(Args&& ... args)
-{
+void Window<Traits>::open(MyStringView wndName, const WndFrame& wndFrame)
+    requires canRegist< Traits, HINSTANCE > {
     close();
 
-    if (!bRegist) [[unlikely]] {
-        Traits::regist( getHInst() );
-        bRegist = true;
-    }
+    registIfNot();
 
     // enclose this in the Win32 Window,
     // which makes getting Window object from Win32 window handle possible.
-    hWnd_ = Traits::create( getHInst(), this, std::forward<Args>(args)... );
+#define ARG_LISTS   \
+    /* .dwExStyle = */ 0, \
+    /* .lpClassName = */ BasicWindowTraits<MyChar>::clsName().data(),    \
+    /* .lpWindowName = */ wndName.data(), \
+    /* .dwStyle = */ WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,    \
+    /* .X = */ wndFrame.x,    \
+    /* .Y = */ wndFrame.y,    \
+    /* .nWidth = */ wndFrame.width,   \
+    /* .nHeight = */ wndFrame.height, \
+    /* .hWndParent = */ nullptr,   \
+    /* .hMenu = */ nullptr,    \
+    /* .hInstance = */ hInst, \
+    /* .lpParam = */ this
+
+    if constexpr (std::is_same_v<MyChar, CHAR>) {
+        hWnd_ = CreateWindowExA(ARG_LISTS);
+    }
+    else /* WCHAR */ {
+        hWnd_ = CreateWindowExW(ARG_LISTS);
+    }
+    
+    if (!hWnd_) [[unlikely]] {
+        throw WND_LAST_EXCEPT();
+    }
+
+#undef ARG_LISTS
+
+    auto tmp = RECT{};
+    GetWindowRect(hWnd_, &tmp);
+    frame_ = WndFrame{ .x = tmp.left, .y = tmp.top,
+        .width = tmp.right - tmp.left, .height = tmp.bottom - tmp.top
+    };
+
+    GetClientRect(hWnd_, &tmp);
+    client_ = WndClient{ .x = tmp.left, .y = tmp.top,
+        .width = tmp.right - tmp.left, .height = tmp.bottom - tmp.top
+    };
 }
 
 template <class Traits>
-void Window<Traits>::msgLoop()
-{
+void Window<Traits>::msgLoop() {
     MSG msg;
     BOOL result;
 
@@ -99,8 +129,7 @@ void Window<Traits>::msgLoop()
 }
 
 template <class Traits>
-std::optional<int> Window<Traits>::processMessages()
-{
+std::optional<int> Window<Traits>::processMessages() {
     MSG msg;
     while ( PeekMessageW(
         &msg, nativeHandle(), 0, 0, PM_REMOVE
@@ -117,8 +146,7 @@ std::optional<int> Window<Traits>::processMessages()
 }
 
 template<class Traits>
-void Window<Traits>::addMsgHandler(int index, std::unique_ptr<IMsgHandler>&& msgHandler)
-{
+void Window<Traits>::addMsgHandler(int index, std::unique_ptr<IMsgHandler>&& msgHandler) {
     msgHandlers_.try_emplace(index, std::move(msgHandler));
 }
 
@@ -129,9 +157,9 @@ template<class Traits>
 }
 
 template <class Traits>
-LRESULT Window<Traits>::wndProcSetupHandler(HWND hWnd, UINT type,
-    WPARAM wParam, LPARAM lParam)
-{
+LRESULT Window<Traits>::wndProcSetupHandler( HWND hWnd, UINT type,
+    WPARAM wParam, LPARAM lParam
+) {
     constexpr auto& defWindowProc = std::is_same_v<MyChar, CHAR> ?
         DefWindowProcA : DefWindowProcW;
 
@@ -167,9 +195,9 @@ LRESULT Window<Traits>::wndProcSetupHandler(HWND hWnd, UINT type,
 }
 
 template <class Traits>
-LRESULT Window<Traits>::wndProcCallHandler(HWND hWnd, UINT type,
-    WPARAM wParam, LPARAM lParam)
-{
+LRESULT Window<Traits>::wndProcCallHandler( HWND hWnd, UINT type,
+    WPARAM wParam, LPARAM lParam
+) {
     // fetch ptr to window stored for WinAPI-managed user data
     MyType* pWnd = nullptr;
 
@@ -206,8 +234,7 @@ LRESULT Window<Traits>::wndProcCallHandler(HWND hWnd, UINT type,
 }
 
 template <Win32Char CharT>
-void BasicWindowTraits<CharT>::regist(HINSTANCE hInst)
-{
+void BasicWindowTraits<CharT>::regist(HINSTANCE hInst) {
     using WndClass = std::conditional_t< std::is_same_v<MyChar, CHAR>,
         WNDCLASSEXA, WNDCLASSEXW >;
 
@@ -241,8 +268,7 @@ void BasicWindowTraits<CharT>::regist(HINSTANCE hInst)
 }
 
 template <Win32Char CharT>
-void BasicWindowTraits<CharT>::unregist(HINSTANCE hInst)
-{
+void BasicWindowTraits<CharT>::unregist(HINSTANCE hInst) {
     bool bFine = false;
 
     if constexpr ( std::is_same_v<MyChar, CHAR> ) {
@@ -255,65 +281,6 @@ void BasicWindowTraits<CharT>::unregist(HINSTANCE hInst)
     if (!bFine) [[unlikely]] {
         throw WND_LAST_EXCEPT();
     }
-}
-
-template <Win32Char CharT>
-HWND BasicWindowTraits<CharT>::create(HINSTANCE hInst, MyWindow* pWnd)
-{
-    return create( hInst, pWnd, defWndName(), defWndFrame() );
-}
-
-template <Win32Char CharT>
-HWND BasicWindowTraits<CharT>::create(HINSTANCE hInst, MyWindow* pWnd,
-    MyStringView wndName)
-{
-    return create( hInst, pWnd, std::move(wndName), defWndFrame() );
-}
-
-template <Win32Char CharT>
-HWND BasicWindowTraits<CharT>::create(HINSTANCE hInst, MyWindow* pWnd,
-    const WndFrame& wndFrame)
-{
-    return create( hInst, pWnd, defWndName(), wndFrame );
-}
-
-template <Win32Char CharT>
-HWND BasicWindowTraits<CharT>::create(HINSTANCE hInst, MyWindow* pWnd,
-    MyStringView wndName, const WndFrame& wndFrame)
-{
-    // additionally store pointer to Window,
-    // which makes getting Window object from Win32 window handle possible.
-
-    #define ARG_LISTS   \
-        /* .dwExStyle = */ 0, \
-        /* .lpClassName = */ clsName().data(),    \
-        /* .lpWindowName = */ wndName.data(), \
-        /* .dwStyle = */ WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,    \
-        /* .X = */ wndFrame.x,    \
-        /* .Y = */ wndFrame.y,    \
-        /* .nWidth = */ wndFrame.width,   \
-        /* .nHeight = */ wndFrame.height, \
-        /* .hWndParent = */ nullptr,   \
-        /* .hMenu = */ nullptr,    \
-        /* .hInstance = */ hInst, \
-        /* .lpParam = */ pWnd
-
-    HWND hWnd = nullptr;
-
-    if constexpr ( std::is_same_v<MyChar, CHAR> ) {
-        hWnd = CreateWindowExA(ARG_LISTS);
-    }
-    else /* WCHAR */ {
-        hWnd = CreateWindowExW(ARG_LISTS);
-    }
-
-    if (!hWnd) [[unlikely]] {
-        throw WND_LAST_EXCEPT();
-    }
-
-    return hWnd;
-
-    #undef ARG_LISTS
 }
 
 }   // namespace Win32

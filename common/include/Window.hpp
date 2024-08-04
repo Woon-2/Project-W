@@ -83,8 +83,7 @@ private:
 template <class T>
 concept Win32Char = contains<T, CHAR, WCHAR>;
 
-struct WndFrame
-{
+struct WndClient {
     int x;
     int y;
     int width;
@@ -94,6 +93,23 @@ struct WndFrame
         return RECT{x, y, x + width, y + height};
     }
 };
+
+struct WndFrame {
+    int x;
+    int y;
+    int width;
+    int height;
+
+    operator RECT() const NOEXCEPT {
+        return RECT{x, y, x + width, y + height};
+    }
+};
+
+inline const WndFrame makeFrameFromClient(const WndClient& client, DWORD ws, bool manued = false) NOEXCEPT {
+    auto tmp = static_cast<RECT>(client);
+    AdjustWindowRect(&tmp, ws, manued);
+    return WndFrame{tmp.left, tmp.top, tmp.right - tmp.left, tmp.bottom - tmp.top};
+}
 
 struct Message
 {
@@ -256,20 +272,26 @@ public:
  * @tparam Traits  the traits class that encapsulates Win32's window Class part.
  * @details
  * `Traits` should have the 5 following static member functions:
+ * - static constexpr const $<StringViewType> clsName();
  * - static void regist(HINSTANCE hInst);
  * - static void unregist(HINSTANCE hInst);
- * - static HWND create(HINSTANCE hInst, Window<Traits>* pWnd, ...);
  * - static void destroy(HWND hWnd);
  * - static void show(HWND hWnd, int nCmdShow);
  * 
  * When the Window is created, it is not opened yet.    
- * To open the window, call Window::open with the arguments that the `Traits::create` requires.    
- * (You can define additional custom arguments on ... part of the `Traits::create`.)    
- * Window::open registers a Win32 window class through `Traits::register` if it is not registered yet.     
- * And it passes the arguments to the `Traits::create` function     
- * with insertion of the proper `HINSTANCE` and Window object's pointer as the foremost arguments.
- * 
+ * To open the window, call Window::open.    
+ *     
+ * Window::open registers a Win32 window class through `Traits::register` if it is not registered yet.      
+ * If an inherited class need to define its own `open` function,    
+ * Window::close and Window::registIfNot should be called first to get the same behavior as this.    
+ *     
  * To make the Window object visible, call Window::show function with the `nCmdShow`(`SW_SHOW`) argument.
+ * 
+ * Internally, the Win32's `RegisterClassEx` part is called in the `Traits::regist`,    
+ * `CreateWindowEx` part is called in the Window::open,    
+ * `ShowWindow` part is called in the Window::show,    
+ * `UnregisterClass` part is called in the `Traits::unregist`,    
+ * and `DestroyWindow` part is called in the Window::close.    
  * 
  * @code{.cpp}
  * Window<BasicWindowTraits> wnd;
@@ -286,8 +308,7 @@ public:
  * @see MsgHandler
  */
 template <class Traits>
-class Window
-{
+class Window {
 public:
     using MyType = Window<Traits>;
     using MyTraits = Traits;
@@ -295,13 +316,37 @@ public:
     using MyString = std::basic_string<MyChar>;
     using MyStringView = std::basic_string_view<MyChar>;
 
+protected:
+    static constexpr const MyStringView defWndName() NOEXCEPT {
+        if constexpr (std::is_same_v<MyChar, CHAR>) {
+            return "Window";
+        }
+        else /* WCHAR */ {
+            return L"Window";
+        }
+    }
+
+    static constexpr const WndFrame defWndFrame() NOEXCEPT {
+        return WndFrame{ .x = 200, .y = 200, .width = 800, .height = 600 };
+    }
+
+    /**
+     * @brief Register the window class if it is not registered yet.
+     */
+    void registIfNot() requires canRegist< Traits, HINSTANCE > {
+        if (!bRegist) {
+            Traits::regist( getHInst() );
+            bRegist = true;
+        }
+    }
+
+public:
     friend MyTraits;
 
     /**
      * @brief Construct a new Window object.     
      * unless Window::open is called, the window is not created neither registered. 
      */
-
     Window()
         : title_(), msgHandlers_(), hWnd_(nullptr) {}
 
@@ -315,22 +360,23 @@ public:
     Window& operator=(const Window&) = delete;
     Window& operator=(Window&&) = delete;
 
+    void open() requires canRegist< Traits, HINSTANCE > {
+        open(defWndName(), defWndFrame());
+    }
+    void open(MyStringView wndName) requires canRegist< Traits, HINSTANCE > {
+        open(wndName, defWndFrame());
+    }
+    void open(const WndFrame& wndFrame) requires canRegist< Traits, HINSTANCE > {
+        open(defWndName(), wndFrame);
+    }
     /**
      * @brief Open the window.    
      * If the window is already opened, it closes the window first, then opens the window again.
-     * @tparam Args  the types of the custom arguments for the `Traits::create` function.
-     * @param args  the custom arguments for the `Traits::create` function.
-     * @details
-     * It calls Traits::create with the `hInst` and the `this` pointer of the Window object, and varadic custom arguments.    
-     * If Traits::regist is not called yet, it calls Traits::regist with the `hInst` that is set by Window::setHInst.    
-     * @see
-     * Window::setHInst
-     * Window::close
+     * @param wndName  the name of the window.
+     * @param wndFrame  the frame of the window.
+     * @see Window::close Window::registIfNot
      */
-    template <class ... Args>
-    requires canRegist<Traits, HINSTANCE>
-        && canCreate<Traits, HINSTANCE, Window<Traits>*, Args...>
-    void open(Args&& ... args);
+    void open(MyStringView wndName, const WndFrame& wndFrame) requires canRegist< Traits, HINSTANCE >;
 
     /**
      * @brief Close the window.
@@ -456,7 +502,10 @@ public:
     {
         Traits::show( nativeHandle(), nCmdShow );
     }
-    
+
+    const WndFrame& frame() const NOEXCEPT { return frame_; }
+    const WndClient& client() const NOEXCEPT { return client_; }
+
 private:
     static LRESULT CALLBACK wndProcSetupHandler(HWND hWnd, UINT type,
         WPARAM wParam, LPARAM lParam);
@@ -484,6 +533,8 @@ private:
 
     MyString title_;
     std::map< int, std::unique_ptr<IMsgHandler> > msgHandlers_;
+    WndFrame frame_;
+    WndClient client_;
     HWND hWnd_;
 };
 
@@ -505,28 +556,9 @@ public:
             return L"WT";
         }
     }
-    static constexpr const MyStringView defWndName() NOEXCEPT
-    {
-        if constexpr ( std::is_same_v<MyChar, CHAR> ) {
-            return "Window";
-        }
-        else /* WCHAR */ {
-            return L"Window";
-        }
-    }
-    static constexpr const WndFrame defWndFrame() NOEXCEPT
-    {
-        return WndFrame{ .x=200, .y=200, .width=800, .height=600 };
-    }
 
     static void regist(HINSTANCE hInst);
     static void unregist(HINSTANCE hInst);
-    static HWND create(HINSTANCE hInst, MyWindow* pWnd);
-    static HWND create(HINSTANCE hInst, MyWindow* pWnd, MyStringView wndName);
-    static HWND create(HINSTANCE hInst, MyWindow* pWnd,
-        const WndFrame& wndFrame);
-    static HWND create(HINSTANCE hInst, MyWindow* pWnd, MyStringView wndName,
-        const WndFrame& wndFrame);
     static void destroy(HWND hWnd)
     {
         auto bFine = DestroyWindow(hWnd);

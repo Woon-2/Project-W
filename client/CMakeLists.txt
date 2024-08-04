@@ -56,4 +56,5 @@ target_link_libraries(client
     PRIVATE
         common::woon2exception
         common::win32
+        common::gfx
 )

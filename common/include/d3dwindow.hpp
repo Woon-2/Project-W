@@ -16,18 +16,42 @@ namespace gfx {
 template <class Traits>
 class D3DWindow : public Win32::Window<Traits> {
 protected:
-    wrl::ComPtr<IDXGISwapChain1> pSwapChain_;
-    RECT clientRect_;
+    wrl::ComPtr<IDXGISwapChain3> pSwapChain_;
 
 public:
-    using Win32::Window<Traits>::nativeHandle;
+    using MyBase = Win32::Window<Traits>;
+    using MyChar = typename Traits::MyChar;
+    using MyString = typename Traits::MyString;
+    using MyStringView = typename Traits::MyStringView;
+    using MyBase::nativeHandle;
+    using MyBase::defWndName;
+    using MyBase::defWndFrame;
+
+    void open(IDXGIFactory2* pFactory, IUnknown* pDevice) {
+        open(pFactory, pDevice, defWndName());
+    }
+
+    void open(IDXGIFactory2* pFactory, IUnknown* pDevice, const Win32::WndFrame& wndFrame) {
+        open(pFactory, pDevice, defWndName(), wndFrame);
+    }
+
+    void open(IDXGIFactory2* pFactory, IUnknown* pDevice, MyStringView wndName) {
+        open(pFactory, pDevice, wndName, defWndFrame());
+    }
+
+    void open(IDXGIFactory2* pFactory, IUnknown* pDevice, MyStringView wndName, const Win32::WndFrame& wndFrame) {
+        MyBase::open(wndName, wndFrame);
+        createSwapchain(pFactory, pDevice);
+    }
 
     // TODO: consider enabling multisampling
     // TODO: consider multiple back buffers
-    void createSwapchain(IDXGIFactory2* pFactory, void* pDevice) {
-        auto scd = DXGI_SWAP_CHAIN_DESC1{
-            .Width = static_cast<UINT>( clientRect_.right - clientRect_.left ),
-            .Height = static_cast<UINT>( clientRect_.bottom - clientRect_.top ),
+    void createSwapchain(IDXGIFactory2* pFactory, IUnknown* pDevice) {
+        auto tmp = wrl::ComPtr<IDXGISwapChain1>();
+
+        const auto scd = DXGI_SWAP_CHAIN_DESC1{
+            .Width = static_cast<UINT>( this->client().width ),
+            .Height = static_cast<UINT>( this->client().height ),
             .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
             .Stereo = false,
             .SampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
@@ -39,7 +63,7 @@ public:
             .Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH
         };
 
-        auto scfd = DXGI_SWAP_CHAIN_FULLSCREEN_DESC{
+        const auto scfd = DXGI_SWAP_CHAIN_FULLSCREEN_DESC{
             .RefreshRate = DXGI_RATIONAL{ .Numerator = 60, .Denominator = 1 },
             .ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED,
             .Scaling = DXGI_MODE_SCALING_UNSPECIFIED,
@@ -49,8 +73,10 @@ public:
         // TODO: buffer index storing
         // TODO: back buffer render targets
         DX_THROW_FAILED( pFactory->CreateSwapChainForHwnd(
-            pDevice, nativeHandle(), &scd, &scfd, nullptr, &pSwapChain_
+            pDevice, nativeHandle(), &scd, &scfd, nullptr, &tmp
         ) );
+
+        DX_THROW_FAILED( tmp.As(&pSwapChain_) );
 
         DX_THROW_FAILED( pFactory->MakeWindowAssociation(
             nativeHandle(), DXGI_MWA_NO_ALT_ENTER 
@@ -78,14 +104,6 @@ struct BasicD3DWTraits {
         }
     }
 
-    static constexpr const MyStringView defWndName() NOEXCEPT {
-        return Win32::BasicWindowTraits<MyChar>::defWndName();
-    }
-
-    static constexpr const Win32::WndFrame defWndFrame() NOEXCEPT {
-        return Win32::BasicWindowTraits<MyChar>::defWndFrame();
-    }
-
     static void regist(HINSTANCE hInst) {
         return Win32::BasicWindowTraits<MyChar>::regist(hInst);
     }
@@ -93,26 +111,6 @@ struct BasicD3DWTraits {
     static void unregist(HINSTANCE hInst) {
         return Win32::BasicWindowTraits<MyChar>::unregist(hInst);
     }
-
-    static HWND create(HINSTANCE hInst, MyWindow* pWnd, IDXGIFactory2* pFactory, void* pDevice) {
-        return create(hInst, pWnd, pFactory, pDevice, defWndName(), defWndFrame());
-    }
-
-    static HWND create( HINSTANCE hInst, MyWindow* pWnd, IDXGIFactory2* pFactory, void* pDevice,
-        MyStringView wndName
-    ) {
-        return create(hInst, pWnd, pFactory, pDevice, wndName, defWndFrame());
-    }
-
-    static HWND create( HINSTANCE hInst, MyWindow* pWnd, IDXGIFactory2* pFactory, void* pDevice,
-        const Win32::WndFrame& wndFrame
-    ) {
-        return create(hInst, pWnd, pFactory, pDevice, defWndName(), wndFrame);
-    }
-
-    static HWND create( HINSTANCE hInst, MyWindow* pWnd, IDXGIFactory2* pFactory, void* pDevice,
-        MyStringView wndName, const Win32::WndFrame& wndFrame
-    );
 
     static void destroy(HWND hWnd) {
         Win32::BasicWindowTraits<MyChar>::destroy(hWnd);
@@ -122,13 +120,6 @@ struct BasicD3DWTraits {
         Win32::BasicWindowTraits<MyChar>::show(hWnd, nCmdShow);
     }
 };
-
-template <Win32::Win32Char T>
-HWND BasicD3DWTraits<T>::create( HINSTANCE hInst, MyWindow* pWnd, IDXGIFactory2* pFactory,
-    void* pDevice, MyStringView wndName, const Win32::WndFrame& wndFrame
-) {
-    pWnd->createSwapchain(pFactory, pDevice);
-}
 
 }   // namespace gfx
 

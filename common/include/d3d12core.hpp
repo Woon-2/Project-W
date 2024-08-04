@@ -27,6 +27,9 @@ namespace d3d12 {
 class Core : public ICore {
 public:
     friend class D3D12RenderContext;
+#ifdef ENABLE_D3D12_WINDOW
+    friend class WindowAttorney;
+#endif  // ENABLE_D3D12_WINDOW
 
     static void configDXFactory(wrl::ComPtr<IDXGIFactory4> factory) {
         spFactory = factory;
@@ -59,6 +62,14 @@ public:
     void waitForGpu();
     void alterFence();
     void alterFence(std::size_t idx);
+
+    D3D12_CPU_DESCRIPTOR_HANDLE rtvHeapStart() const NOEXCEPT {
+        return pRtvHeap_->GetCPUDescriptorHandleForHeapStart();
+    }
+
+    D3D12_CPU_DESCRIPTOR_HANDLE dsvHeapStart() const NOEXCEPT {
+        return pDsvHeap_->GetCPUDescriptorHandleForHeapStart();
+    }
 
 private:
     // TODO: make it return multiple adapters enumerated.
@@ -101,12 +112,79 @@ private:
 };
 
 #ifdef ENABLE_D3D12_WINDOW
+class WindowAttorney {
+public:
+    template <class Traits>
+    friend class Window;
+
+private:
+    static void* factory(Core& core) {
+        return core.spFactory.Get();
+    }
+
+    static void* cmdQ(Core& core) {
+        return core.pCmdQ_.Get();
+    }
+
+    static void* device(Core& core) {
+        return core.pDevice_.Get();
+    }
+};
+
 template <class Traits>
 class Window : public D3DWindow<Traits>, public IRenderTarget {
+protected:
+    void* getFactoryFromCore(Core& core) {
+        return WindowAttorney::factory(core);
+    }
+
+    void* getCmdQFromCore(Core& core) {
+        return WindowAttorney::cmdQ(core);
+    }
+
+    void* getDeviceFromCore(Core& core) {
+        return WindowAttorney::device(core);
+    }
+
 public:
+    template <Win32::Win32Char T>
+    friend struct BasicD3D12WTraits;
+
+    using MyBase = D3DWindow<Traits>;
+    using MyChar = typename Traits::MyChar;
+    using MyString = typename Traits::MyString;
+    using MyStringView = typename Traits::MyStringView;
+    using MyBase::nativeHandle;
+    using MyBase::defWndName;
+    using MyBase::defWndFrame;
+
     Window()
         : backBuffers_(2), depthBuffers_(1), pFirstRtv_(), pFirstDsv_(),
         rtvStride_(0), dsvStride_(0) {}
+
+    void open(Core& core) {
+        open(core, defWndName());
+    }
+
+    void open(Core& core, const Win32::WndFrame& wndFrame) {
+        open(core, defWndName(), wndFrame);
+    }
+
+    void open(Core& core, MyStringView wndName) {
+        open(core, wndName, defWndFrame());
+    }
+
+    // TODO: replace versioned type with type aliases
+    void open(Core& core, MyStringView wndName, const Win32::WndFrame& wndFrame) {
+        MyBase::open( static_cast<IDXGIFactory2*>( WindowAttorney::factory(core) ),
+            static_cast<ID3D12CommandQueue*>( WindowAttorney::cmdQ(core) ),
+            wndName, wndFrame
+        );
+        auto pDevice = static_cast<ID3D12Device*>( WindowAttorney::device(core) );
+        createDepthBuffers( pDevice );
+        buildRtv( pDevice, core.rtvHeapStart() );
+        buildDsv( pDevice, core.dsvHeapStart() );
+    }
 
     void buildRtv(ID3D12Device* pDevice, D3D12_CPU_DESCRIPTOR_HANDLE pFirstRtv);
     void buildDsv(ID3D12Device* pDevice, D3D12_CPU_DESCRIPTOR_HANDLE pFirstDsv);
@@ -135,7 +213,7 @@ void Window<Traits>::buildRtv(ID3D12Device* pDevice, D3D12_CPU_DESCRIPTOR_HANDLE
     
     for (auto i = 0; i < 2u; ++i) {
         this->pSwapChain_->GetBuffer(i, __uuidof(ID3D12Resource), &backBuffers_[i]);
-        this->pDevice->CreateRenderTargetView(backBuffers_[i].Get(), nullptr, pFirstRtv);
+        pDevice->CreateRenderTargetView(backBuffers_[i].Get(), nullptr, pFirstRtv);
         pFirstRtv.ptr += rtvStride_;
     }
 
@@ -157,8 +235,8 @@ void Window<Traits>::createDepthBuffers(ID3D12Device* pDevice) {
     auto depthDesc = D3D12_RESOURCE_DESC{
         .Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
         .Alignment = 0,
-        .Width = static_cast<UINT>(this->clientRect_.right - this->clientRect_.left),
-        .Height = static_cast<UINT>(this->clientRect_.bottom - this->clientRect_.top),
+        .Width = static_cast<UINT>(this->client().width),
+        .Height = static_cast<UINT>(this->client().height),
         .DepthOrArraySize = 1,
         .MipLevels = 1,
         .Format = DXGI_FORMAT_D24_UNORM_S8_UINT,
@@ -270,41 +348,13 @@ struct BasicD3D12WTraits : public BasicD3DWTraits<T> {
 
     static constexpr const MyStringView clsName() NOEXCEPT {
         if constexpr (std::is_same_v<MyChar, CHAR>) {
-            return "D3DW";
+            return "D3D12W";
         }
         else /* WCHAR */ {
-            return L"D3DW";
+            return L"D3D12W";
         }
     }
-
-    static HWND create(HINSTANCE hInst, MyWindow* pWnd, IDXGIFactory2* pFactory, void* pDevice) {
-        return create(hInst, pWnd, pFactory, pDevice, MyBase::defWndName(), MyBase::defWndFrame());
-    }
-
-    static HWND create( HINSTANCE hInst, MyWindow* pWnd, IDXGIFactory2* pFactory, void* pDevice,
-        MyStringView wndName
-    ) {
-        return create(hInst, pWnd, pFactory, pDevice, wndName, MyBase::defWndFrame());
-    }
-
-    static HWND create( HINSTANCE hInst, MyWindow* pWnd, IDXGIFactory2* pFactory, void* pDevice,
-        const Win32::WndFrame& wndFrame
-    ) {
-        return create(hInst, pWnd, pFactory, pDevice, MyBase::defWndName(), wndFrame);
-    }
-
-    static HWND create( HINSTANCE hInst, MyWindow* pWnd, IDXGIFactory2* pFactory, void* pDevice,
-        MyStringView wndName, const Win32::WndFrame& wndFrame
-    );
 };
-
-template <Win32::Win32Char T>
-HWND BasicD3D12WTraits<T>::create( HINSTANCE hInst, MyWindow* pWnd, IDXGIFactory2* pFactory, void* pDevice,
-    MyStringView wndName, const Win32::WndFrame& wndFrame
-) {
-    auto ret = BasicD3DWTraits<T>::create(hInst, pWnd, wndName, wndFrame);
-    pWnd->createDepthBuffers(static_cast<ID3D12Device*>(pDevice));
-}
 
 #endif  // ENABLE_D3D12_WINDOW
 

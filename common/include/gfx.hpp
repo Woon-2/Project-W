@@ -31,6 +31,7 @@ enum class RenderTargetType {
     
 class ICore {
 public:
+    ICore() = default;
     virtual ~ICore() = default;
     ICore(const ICore&) = default;
     ICore(ICore&&) noexcept = default;
