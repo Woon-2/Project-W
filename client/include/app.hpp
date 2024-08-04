@@ -1,4 +1,7 @@
-#include "d3d12core.hpp"
+#ifndef __APP_HPP
+#define __APP_HPP
+
+#include "game.hpp"
 
 #include <memory>
 
@@ -17,6 +20,9 @@ public:
     int run();
 
 private:
-    std::unique_ptr<gfx::ICore> gfx_;
     MyWindow window_;
+    std::unique_ptr<gfx::ICore> pGfx_;
+    std::unique_ptr<Game> pGame_;
 };
+
+#endif // __APP_HPP

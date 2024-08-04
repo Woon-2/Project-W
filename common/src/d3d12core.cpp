@@ -132,8 +132,6 @@ void Core::postRender() {
 
     ID3D12CommandList* ppCmdLists[] = { pCmdList_.Get() };
     DX_THROW_FAILED_VOID( pCmdQ_->ExecuteCommandLists(1, ppCmdLists) );
-
-    alterFence();
 }
 
 void Core::waitForGpu() {

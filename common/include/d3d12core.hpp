@@ -210,14 +210,13 @@ private:
 template <class Traits>
 void Window<Traits>::buildRtv(ID3D12Device* pDevice, D3D12_CPU_DESCRIPTOR_HANDLE pFirstRtv) {
     rtvStride_ = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    pFirstRtv_ = pFirstRtv;
     
     for (auto i = 0; i < 2u; ++i) {
         this->pSwapChain_->GetBuffer(i, __uuidof(ID3D12Resource), &backBuffers_[i]);
         pDevice->CreateRenderTargetView(backBuffers_[i].Get(), nullptr, pFirstRtv);
         pFirstRtv.ptr += rtvStride_;
     }
-
-    pFirstRtv_ = pFirstRtv;
 }
 
 // TODO: deal with multiple depth stencils.
@@ -295,9 +294,13 @@ void Window<Traits>::clear(IRenderContext& renderContext) {
 
     static constexpr float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
 
-    pCmdList->ClearRenderTargetView(pRtv, clearColor, 0, nullptr);
+    DX_THROW_FAILED_VOID( pCmdList->ClearRenderTargetView(
+        pRtv, clearColor, 0, nullptr
+    ) );
 
-    pCmdList->ClearDepthStencilView(pFirstDsv_, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0, nullptr);
+    DX_THROW_FAILED_VOID( pCmdList->ClearDepthStencilView(
+        pFirstDsv_, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0, nullptr
+    ) );
 }
 
 template <class Traits>

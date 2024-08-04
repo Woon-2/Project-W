@@ -41,6 +41,7 @@ target_sources(client
     PRIVATE
         src/main.cpp
         src/app.cpp include/app.hpp
+        src/game.cpp include/game.hpp
 )
 
 include(auto_configure)

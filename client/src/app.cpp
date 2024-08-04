@@ -6,7 +6,7 @@ App::App(HINSTANCE hInstance)
 }
 
 App::~App() {
-    gfx_->cleanup();
+    pGfx_->cleanup();
     gfx::DXFactory::cleanup();
 }
 
@@ -20,20 +20,24 @@ int App::run() {
     gfx::d3d12::Core::configDsvHeapSize(1);
     gfx::d3d12::Core::configDXFactory(gfx::DXFactory::get());
 
-    gfx_ = std::make_unique<gfx::d3d12::Core>();
+    pGfx_ = std::make_unique<gfx::d3d12::Core>();
+    pGfx_->init();
 
-    gfx_->init();
-
-    window_.open(static_cast<gfx::d3d12::Core&>(*gfx_));
+    window_.open(static_cast<gfx::d3d12::Core&>(*pGfx_));
     window_.setTitle("project-W client");
     window_.show(SW_SHOW);
 
     window_.addMsgHandler(10000, std::make_unique< Win32::BasicMsgHandler<MyWindow> >(window_));
 
+    pGame_ = std::make_unique<Game>(*pGfx_, window_);
+
     for(;;) {
         if (auto returnCode = window_.processMessages()) {
             return returnCode.value();
         }
+
+        pGame_->update();
+        pGame_->render();
     }
 
     } catch (const gfx::Exception& e) {
