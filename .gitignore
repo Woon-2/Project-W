@@ -480,5 +480,4 @@ FodyWeavers.xsd
 
 build/*
 .vscode/*
-Doxyfile.in
 docs/*
