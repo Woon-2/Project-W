@@ -272,7 +272,9 @@ template <class Traits>
 std::any Window<Traits>::cast(RenderTargetType rentarType) {
     switch (rentarType) {
     case RenderTargetType::D3D12:
-        return pFirstRtv_;
+        return D3D12_CPU_DESCRIPTOR_HANDLE{
+            .ptr = pFirstRtv_.ptr + this->pSwapChain_->GetCurrentBackBufferIndex() * rtvStride_
+        };   
     case RenderTargetType::D3D12_DEPTH:
         return pFirstDsv_;
     default:
