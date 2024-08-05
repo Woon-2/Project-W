@@ -83,6 +83,7 @@ add_library(gfx
     src/sampleRenderer.cpp include/sampleRenderer.hpp
     src/sampleScene.cpp include/sampleScene.hpp
     src/shader.cpp include/shader.hpp
+    src/rootPresets.cpp include/rootPresets.hpp
     include/dxtarget.hpp
 )
 

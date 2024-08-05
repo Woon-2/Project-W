@@ -11,6 +11,7 @@
 #include <memory>
 #include <vector>
 #include <array>
+#include <map>
 
 #define ENABLE_D3D12_WINDOW
 
@@ -30,6 +31,7 @@ public:
 #ifdef ENABLE_D3D12_WINDOW
     friend class WindowAttorney;
 #endif  // ENABLE_D3D12_WINDOW
+    using RootIdx = std::size_t;
 
     static void configDXFactory(wrl::ComPtr<IDXGIFactory4> factory) {
         spFactory = factory;
@@ -71,6 +73,28 @@ public:
         return pDsvHeap_->GetCPUDescriptorHandleForHeapStart();
     }
 
+    wrl::ComPtr<ID3D12RootSignature> root(RootIdx idx) const NOEXCEPT {
+        if (roots_.contains(idx)) {
+            return roots_.at(idx);
+        }
+        return nullptr;
+    }
+
+    wrl::ComPtr<ID3D12RootSignature> root(const IRenderer* pRenderer) const NOEXCEPT {
+        if (rootMap_.contains(pRenderer)) {
+            return root(rootMap_.at(pRenderer));
+        }
+        return nullptr;
+    }
+
+    void addRoot(RootIdx idx, ID3D12RootSignature* pRoot) {
+        roots_[idx] = pRoot;
+    }
+
+    void mapRoot(const IRenderer* pRenderer, RootIdx idx) {
+        rootMap_[pRenderer] = idx;
+    }
+
 private:
     // TODO: make it return multiple adapters enumerated.
     wrl::ComPtr<IDXGIAdapter1> enumAdapters();
@@ -87,6 +111,8 @@ private:
     static std::size_t sRtvHeapSize;
     static std::size_t sDsvHeapSize;
 
+    std::map<RootIdx, wrl::ComPtr<ID3D12RootSignature>> roots_;
+    std::map<const IRenderer*, RootIdx> rootMap_;
     wrl::ComPtr<ID3D12Device> pDevice_;
     wrl::ComPtr<ID3D12CommandQueue> pCmdQ_;
     wrl::ComPtr<ID3D12CommandAllocator> pCmdAlloc_;
