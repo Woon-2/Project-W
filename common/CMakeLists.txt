@@ -82,6 +82,7 @@ add_library(gfx
     src/d3dwindow.cpp include/d3dwindow.hpp
     src/sampleRenderer.cpp include/sampleRenderer.hpp
     src/sampleScene.cpp include/sampleScene.hpp
+    src/shader.cpp include/shader.hpp
     include/dxtarget.hpp
 )
 

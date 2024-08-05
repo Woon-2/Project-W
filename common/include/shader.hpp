@@ -1,0 +1,291 @@
+#ifndef __SHADER_HPP
+#define __SHADER_HPP
+
+#include "d3d12core.hpp"
+#include <d3dcompiler.h>
+
+#include <map>
+
+namespace gfx {
+
+namespace d3d12 {
+
+class Shader {
+public:
+    friend class ShaderBuilder;
+
+    enum class Type {
+        Vertex,
+        Pixel
+    };
+
+    struct Desc {
+        ID3D12RootSignature* pRootSignature;
+        D3D12_STREAM_OUTPUT_DESC streamOutput;
+        D3D12_BLEND_DESC blend;
+        UINT sampleMask;
+        D3D12_RASTERIZER_DESC RasterizerState;
+        D3D12_DEPTH_STENCIL_DESC DepthStencilState;
+        D3D12_INPUT_LAYOUT_DESC InputLayout;
+        D3D12_INDEX_BUFFER_STRIP_CUT_VALUE IBStripCutValue;
+        D3D12_PRIMITIVE_TOPOLOGY_TYPE PrimitiveTopologyType;
+        UINT NumRenderTargets;
+        DXGI_FORMAT RTVFormats[8];
+        DXGI_FORMAT DSVFormat;
+        DXGI_SAMPLE_DESC SampleDesc;
+        UINT NodeMask;
+        D3D12_CACHED_PIPELINE_STATE CachedPSO;
+        D3D12_PIPELINE_STATE_FLAGS Flags;
+    };
+
+    using Idx = int;
+
+    static D3D12_SHADER_BYTECODE loadCSO(const std::wstring& path) {
+        Microsoft::WRL::ComPtr<ID3DBlob> blob;
+        DX_THROW_FAILED( D3DReadFileToBlob(path.c_str(), &blob) );
+        return D3D12_SHADER_BYTECODE{ .pShaderBytecode = blob->GetBufferPointer(), .BytecodeLength = blob->GetBufferSize() };
+    }
+
+    void code(Type type, D3D12_SHADER_BYTECODE content) {
+        codes_[type] = content;
+    }
+    void make(ID3D12Device* pDevice, Idx idx, const Desc& desc);
+
+private:
+    std::map< Type, D3D12_SHADER_BYTECODE > codes_;
+    std::map< Idx, wrl::ComPtr<ID3D12PipelineState> > psos_;
+};
+
+class ShaderBuilder {
+protected:
+    Shader::Desc desc_;
+
+public:
+    ShaderBuilder() NOEXCEPT = default;
+    ShaderBuilder(const Shader::Desc& desc) NOEXCEPT : desc_(desc) {}
+
+    ShaderBuilder& code(Shader::Type type, D3D12_SHADER_BYTECODE content) {
+        codes_[type] = content;
+        return *this;
+    }
+
+    ShaderBuilder& rootSignature(ID3D12RootSignature* pRootSignature) NOEXCEPT {
+        desc_.pRootSignature = pRootSignature;
+        return *this;
+    }
+
+    ShaderBuilder& streamOutput(const D3D12_STREAM_OUTPUT_DESC& desc) NOEXCEPT {
+        desc_.streamOutput = desc;
+        return *this;
+    }
+
+    ShaderBuilder& blend(const D3D12_BLEND_DESC& desc) NOEXCEPT {
+        desc_.blend = desc;
+        return *this;
+    }
+
+    ShaderBuilder& sampleMask(UINT mask) NOEXCEPT {
+        desc_.sampleMask = mask;
+        return *this;
+    }
+
+    ShaderBuilder& rasterizer(const D3D12_RASTERIZER_DESC& desc) NOEXCEPT {
+        desc_.RasterizerState = desc;
+        return *this;
+    }
+
+    ShaderBuilder& depthStencil(const D3D12_DEPTH_STENCIL_DESC& desc) NOEXCEPT {
+        desc_.DepthStencilState = desc;
+        return *this;
+    }
+
+    ShaderBuilder& inputLayout(const D3D12_INPUT_LAYOUT_DESC& desc) NOEXCEPT {
+        desc_.InputLayout = desc;
+        return *this;
+    }
+    
+    ShaderBuilder& indexBufferStripCut(D3D12_INDEX_BUFFER_STRIP_CUT_VALUE value) NOEXCEPT {
+        desc_.IBStripCutValue = value;
+        return *this;
+    }
+
+    ShaderBuilder& primitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE type) NOEXCEPT {
+        desc_.PrimitiveTopologyType = type;
+        return *this;
+    }
+
+    ShaderBuilder& numRenderTargets(UINT num) NOEXCEPT {
+        desc_.NumRenderTargets = num;
+        return *this;
+    }
+
+    template <std::ranges::range R>
+        requires std::convertible_to<std::ranges::range_value_t<R>, DXGI_FORMAT>
+            && std::ranges::sized_range<R>
+    ShaderBuilder& rtvFormats(const R& formats) {
+        if (formats.size() > 8) {
+            throw std::invalid_argument("The number of render target formats must be less than or equal to 8.");
+        }
+
+        for (auto format : formats) {
+            desc_.RTVFormats[desc_.NumRenderTargets++] = format;
+        }
+        return *this;
+    }
+
+    ShaderBuilder& dsvFormat(DXGI_FORMAT format) NOEXCEPT {
+        desc_.DSVFormat = format;
+        return *this;
+    }
+
+    ShaderBuilder& sampleDesc(const DXGI_SAMPLE_DESC& desc) NOEXCEPT {
+        desc_.SampleDesc = desc;
+        return *this;
+    }
+
+    ShaderBuilder& nodeMask(UINT mask) NOEXCEPT {
+        desc_.NodeMask = mask;
+        return *this;
+    }
+
+    ShaderBuilder& cachedPso(const D3D12_CACHED_PIPELINE_STATE& pso) NOEXCEPT {
+        desc_.CachedPSO = pso;
+        return *this;
+    }
+
+    ShaderBuilder& flags(D3D12_PIPELINE_STATE_FLAGS flags) NOEXCEPT {
+        desc_.Flags = flags;
+        return *this;
+    }
+
+    void build(ID3D12Device* pDevice, Shader& shader, Shader::Idx idx) {
+        shader.codes_ = std::move(codes_);
+        shader.make(pDevice, idx, desc_);
+    }
+
+private:
+    std::map< Shader::Type, D3D12_SHADER_BYTECODE > codes_;
+};
+
+class SimpleShaderBuilder : private ShaderBuilder {
+public:
+    SimpleShaderBuilder() NOEXCEPT
+        : ShaderBuilder( Shader::Desc{
+            .blend = blendDesc(),
+            .sampleMask = UINT_MAX,
+            .RasterizerState = rasterizerDesc(),
+            .DepthStencilState = depthStencilDesc(),
+            .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE
+        } ) {}
+
+    SimpleShaderBuilder& wireframe() NOEXCEPT {
+        desc_.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
+        return *this;
+    }
+
+    SimpleShaderBuilder& solid() NOEXCEPT {
+        desc_.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+        return *this;
+    }
+
+    SimpleShaderBuilder& cullFront() NOEXCEPT {
+        desc_.RasterizerState.CullMode = D3D12_CULL_MODE_FRONT;
+        return *this;
+    }
+
+    SimpleShaderBuilder& cullBack() NOEXCEPT {
+        desc_.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
+        return *this;
+    }
+
+    SimpleShaderBuilder& cullNone() NOEXCEPT {
+        desc_.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+        return *this;
+    }
+
+    SimpleShaderBuilder& depthEnable() NOEXCEPT {
+        desc_.DepthStencilState.DepthEnable = true;
+        return *this;
+    }
+
+    SimpleShaderBuilder& depthDisable() NOEXCEPT {
+        desc_.DepthStencilState.DepthEnable = false;
+        return *this;
+    }
+
+    SimpleShaderBuilder& setRootSignature(ID3D12RootSignature* pRootSignature) NOEXCEPT {
+        ShaderBuilder::rootSignature(pRootSignature);
+        return *this;
+    }
+
+    void build(ID3D12Device* pDevice, Shader& shader, Shader::Idx idx) {
+        ShaderBuilder::build(pDevice, shader, idx);
+    }
+
+private:
+    D3D12_BLEND_DESC blendDesc() const NOEXCEPT {
+        return D3D12_BLEND_DESC{
+            .AlphaToCoverageEnable = false,
+            .IndependentBlendEnable = false,
+            .RenderTarget = {
+                D3D12_RENDER_TARGET_BLEND_DESC{
+                    .BlendEnable = false,
+                    .LogicOpEnable = false,
+                    .SrcBlend = D3D12_BLEND_ONE,
+                    .DestBlend = D3D12_BLEND_ZERO,
+                    .BlendOp = D3D12_BLEND_OP_ADD,
+                    .SrcBlendAlpha = D3D12_BLEND_ONE,
+                    .DestBlendAlpha = D3D12_BLEND_ZERO,
+                    .BlendOpAlpha = D3D12_BLEND_OP_ADD,
+                    .LogicOp = D3D12_LOGIC_OP_NOOP,
+                    .RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL
+                }
+            }
+        };
+    }
+
+    D3D12_RASTERIZER_DESC rasterizerDesc() const NOEXCEPT {
+        return D3D12_RASTERIZER_DESC{
+            .FillMode = D3D12_FILL_MODE_SOLID,
+            .CullMode = D3D12_CULL_MODE_BACK,
+            .FrontCounterClockwise = false,
+            .DepthBias = D3D12_DEFAULT_DEPTH_BIAS,
+            .DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP,
+            .SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS,
+            .DepthClipEnable = true,
+            .MultisampleEnable = false,
+            .AntialiasedLineEnable = false,
+            .ForcedSampleCount = 0,
+            .ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF
+        };
+    }
+
+    D3D12_DEPTH_STENCIL_DESC depthStencilDesc() const NOEXCEPT {
+        return D3D12_DEPTH_STENCIL_DESC{
+            .DepthEnable = true,
+            .DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
+            .DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+            .StencilEnable = false,
+            .StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK,
+            .StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK,
+            .FrontFace = D3D12_DEPTH_STENCILOP_DESC{
+                .StencilFailOp = D3D12_STENCIL_OP_KEEP,
+                .StencilDepthFailOp = D3D12_STENCIL_OP_KEEP,
+                .StencilPassOp = D3D12_STENCIL_OP_KEEP,
+                .StencilFunc = D3D12_COMPARISON_FUNC_NEVER
+            },
+            .BackFace = D3D12_DEPTH_STENCILOP_DESC{
+                .StencilFailOp = D3D12_STENCIL_OP_KEEP,
+                .StencilDepthFailOp = D3D12_STENCIL_OP_KEEP,
+                .StencilPassOp = D3D12_STENCIL_OP_KEEP,
+                .StencilFunc = D3D12_COMPARISON_FUNC_NEVER
+            }
+        };
+    }
+};
+
+} // namespace d3d12
+
+} // namespace gfx
+
+#endif  // __SHADER_HPP
