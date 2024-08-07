@@ -4,7 +4,9 @@ namespace gfx {
 
 namespace d3d12 {
 
-void Shader::make(ID3D12Device* pDevice, Idx idx, const Desc& desc) {
+void Shader::make(Core& core, Idx idx, const Desc& desc) {
+    auto pDevice = static_cast<ID3D12Device*>( DeviceFetcher::device(core) );
+
     auto psoDesc = D3D12_GRAPHICS_PIPELINE_STATE_DESC{
         .pRootSignature = desc.pRootSignature,
         .VS = codes_.at(Type::Vertex),

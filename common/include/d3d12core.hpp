@@ -31,6 +31,7 @@ public:
 #ifdef ENABLE_D3D12_WINDOW
     friend class WindowAttorney;
 #endif  // ENABLE_D3D12_WINDOW
+    friend class DeviceFetcher;
     using RootIdx = std::size_t;
 
     static void configDXFactory(wrl::ComPtr<IDXGIFactory4> factory) {
@@ -152,6 +153,13 @@ private:
         return core.pCmdQ_.Get();
     }
 
+    static void* device(Core& core) {
+        return core.pDevice_.Get();
+    }
+};
+
+class DeviceFetcher {
+public:
     static void* device(Core& core) {
         return core.pDevice_.Get();
     }

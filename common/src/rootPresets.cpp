@@ -5,7 +5,9 @@ namespace gfx {
 namespace d3d12 {
 
 namespace {
-    wrl::ComPtr<ID3D12RootSignature> rootPresetNull(ID3D12Device* pDevice) {
+    wrl::ComPtr<ID3D12RootSignature> rootPresetNull(Core& core) {
+        auto pDevice = static_cast<ID3D12Device*>( DeviceFetcher::device(core) );
+
         auto ret = wrl::ComPtr<ID3D12RootSignature>();
 
         auto desc = D3D12_ROOT_SIGNATURE_DESC{
@@ -34,10 +36,10 @@ namespace {
     }
 }
 
-wrl::ComPtr<ID3D12RootSignature> makeRootPreset(ID3D12Device* pDevice, RootPreset preset) {
+wrl::ComPtr<ID3D12RootSignature> makeRootPreset(Core& core, RootPreset preset) {
     switch (preset) {
     case RootPreset::Null:
-        return rootPresetNull(pDevice);
+        return rootPresetNull(core);
 
     default:
         throw std::runtime_error("Invalid RootPreset");

@@ -49,7 +49,7 @@ public:
     void code(Type type, D3D12_SHADER_BYTECODE content) {
         codes_[type] = content;
     }
-    void make(ID3D12Device* pDevice, Idx idx, const Desc& desc);
+    void make(Core& core, Idx idx, const Desc& desc);
 
 private:
     std::map< Type, D3D12_SHADER_BYTECODE > codes_;
@@ -158,9 +158,9 @@ public:
         return *this;
     }
 
-    void build(ID3D12Device* pDevice, Shader& shader, Shader::Idx idx) {
+    void build(Core& core, Shader& shader, Shader::Idx idx) {
         shader.codes_ = std::move(codes_);
-        shader.make(pDevice, idx, desc_);
+        shader.make(core, idx, desc_);
     }
 
 private:
@@ -218,8 +218,8 @@ public:
         return *this;
     }
 
-    void build(ID3D12Device* pDevice, Shader& shader, Shader::Idx idx) {
-        ShaderBuilder::build(pDevice, shader, idx);
+    void build(Core& core, Shader& shader, Shader::Idx idx) {
+        ShaderBuilder::build(core, shader, idx);
     }
 
 private:

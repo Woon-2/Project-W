@@ -3,6 +3,7 @@
 
 #include "d3d12core.hpp"
 
+
 namespace gfx {
 
 namespace d3d12 {
@@ -11,7 +12,7 @@ enum class RootPreset {
     Null
 };
 
-wrl::ComPtr<ID3D12RootSignature> makeRootPreset(ID3D12Device* pDevice, RootPreset preset);
+wrl::ComPtr<ID3D12RootSignature> makeRootPreset(Core& core, RootPreset preset);
 
 } // namespace d3d12
 
