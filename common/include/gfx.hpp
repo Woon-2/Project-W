@@ -125,6 +125,7 @@ private:
 
 class IScene {
 public:
+    IScene() = default;
     virtual ~IScene() = default;
     IScene(const IScene&) = default;
     IScene(IScene&&) noexcept = default;

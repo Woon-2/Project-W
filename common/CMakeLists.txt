@@ -84,7 +84,9 @@ add_library(gfx
     src/sampleScene.cpp include/sampleScene.hpp
     src/shader.cpp include/shader.hpp
     src/rootPresets.cpp include/rootPresets.hpp
+    src/d3d12res.cpp include/d3d12res.hpp
     include/dxtarget.hpp
+    include/gfxPrimitive.hpp
 )
 
 add_library(common::gfx ALIAS gfx)

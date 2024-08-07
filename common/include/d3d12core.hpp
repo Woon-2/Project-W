@@ -12,6 +12,7 @@
 #include <vector>
 #include <array>
 #include <map>
+#include <string>
 
 #define ENABLE_D3D12_WINDOW
 
@@ -33,6 +34,7 @@ public:
 #endif  // ENABLE_D3D12_WINDOW
     friend class DeviceFetcher;
     using RootIdx = std::size_t;
+    using UpBufIdx = std::string;
 
     static void configDXFactory(wrl::ComPtr<IDXGIFactory4> factory) {
         spFactory = factory;
@@ -88,12 +90,32 @@ public:
         return nullptr;
     }
 
-    void addRoot(RootIdx idx, ID3D12RootSignature* pRoot) {
-        roots_[idx] = pRoot;
+    void addRoot(RootIdx idx, wrl::ComPtr<ID3D12RootSignature> pRoot) {
+        roots_[idx] = std::move(pRoot);
     }
 
     void mapRoot(const IRenderer* pRenderer, RootIdx idx) {
-        rootMap_[pRenderer] = idx;
+        rootMap_[pRenderer] = std::move(idx);
+    }
+
+    void addTmpUpBuf(UpBufIdx idx, wrl::ComPtr<ID3D12Resource> pUpBuf = nullptr) {
+        upBufs_[idx] = std::move(pUpBuf);
+    }
+
+    void popTmpUpBuf(const UpBufIdx& idx) NOEXCEPT {
+        upBufs_.erase(idx);
+    }
+
+    void popTmpUpBufs() NOEXCEPT {
+        upBufs_.clear();
+    }
+
+    // TODO: more descriptive error message required.
+    wrl::ComPtr<ID3D12Resource>& tmpUpBuf(const UpBufIdx& idx) {
+        if (upBufs_.contains(idx)) {
+            return upBufs_.at(idx);
+        }
+        throw GFX_EXCEPT("The temporary upload buffer does not exist.");
     }
 
 private:
@@ -114,6 +136,7 @@ private:
 
     std::map<RootIdx, wrl::ComPtr<ID3D12RootSignature>> roots_;
     std::map<const IRenderer*, RootIdx> rootMap_;
+    std::map<UpBufIdx, wrl::ComPtr<ID3D12Resource>> upBufs_;
     wrl::ComPtr<ID3D12Device> pDevice_;
     wrl::ComPtr<ID3D12CommandQueue> pCmdQ_;
     wrl::ComPtr<ID3D12CommandAllocator> pCmdAlloc_;
@@ -298,7 +321,7 @@ void Window<Traits>::createDepthBuffers(ID3D12Device* pDevice) {
 
 template <class Traits>
 bool Window<Traits>::castableTo(RenderTargetType rentarType) const {
-    return rentarType == RenderTargetType::D3D12;
+    return rentarType == RenderTargetType::D3D12 || rentarType == RenderTargetType::D3D12_DEPTH;
 }
 
 template <class Traits>
