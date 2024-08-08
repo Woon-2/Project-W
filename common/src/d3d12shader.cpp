@@ -1,12 +1,10 @@
-#include "shader.hpp"
+#include "d3d12shader.hpp"
 
 namespace gfx {
 
 namespace d3d12 {
 
-void Shader::make(Core& core, Idx idx, const Desc& desc) {
-    auto pDevice = static_cast<ID3D12Device*>( DeviceFetcher::device(core) );
-
+void Shader::make(ID3D12Device* pDevice, Idx idx, const Desc& desc) {
     auto psoDesc = D3D12_GRAPHICS_PIPELINE_STATE_DESC{
         .pRootSignature = desc.pRootSignature,
         .VS = codes_.at(Type::Vertex),
@@ -32,6 +30,16 @@ void Shader::make(Core& core, Idx idx, const Desc& desc) {
 
     auto pPSO = wrl::ComPtr<ID3D12PipelineState>();
     DX_THROW_FAILED( pDevice->CreateGraphicsPipelineState(&psoDesc, __uuidof(ID3D12PipelineState), &pPSO) );
+
+    psos_[idx] = pPSO;
+}
+
+void Shader::bind(ID3D12GraphicsCommandList* pCmdList, Idx idx) const {
+    if (!psos_.contains(idx)) {
+        throw;  /*ShaderIdxNotFound("The shader index is not found.");*/
+    }
+
+    pCmdList->SetPipelineState(psos_.at(idx).Get());
 }
 
 } // namespace d3d12

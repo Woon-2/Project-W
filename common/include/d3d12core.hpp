@@ -3,6 +3,8 @@
 
 #include "gfx.hpp"
 
+#include "d3d12shader.hpp"
+
 #include <d3d12.h>
 #include "dxfactory.hpp"
 #include "dxtarget.hpp"
@@ -35,6 +37,7 @@ public:
     friend class DeviceFetcher;
     using RootIdx = std::size_t;
     using UpBufIdx = std::string;
+    using ShaderIdx = std::string;
 
     static void configDXFactory(wrl::ComPtr<IDXGIFactory4> factory) {
         spFactory = factory;
@@ -94,8 +97,8 @@ public:
         roots_[idx] = std::move(pRoot);
     }
 
-    void mapRoot(const IRenderer* pRenderer, RootIdx idx) {
-        rootMap_[pRenderer] = std::move(idx);
+    void mapRoot(const IRenderer& pRenderer, RootIdx idx) {
+        rootMap_[&pRenderer] = std::move(idx);
     }
 
     void addTmpUpBuf(UpBufIdx idx, wrl::ComPtr<ID3D12Resource> pUpBuf = nullptr) {
@@ -118,6 +121,25 @@ public:
         throw GFX_EXCEPT("The temporary upload buffer does not exist.");
     }
 
+    void addShader(ShaderIdx idx, Shader shader) {
+        shaders_[idx] = std::move(shader);
+    }
+
+    const Shader& shader(const ShaderIdx& idx) const {
+        if (shaders_.contains(idx)) {
+            return shaders_.at(idx);
+        }
+        throw GFX_EXCEPT("The shader does not exist.");
+    }
+
+    bool containsShader(const ShaderIdx& idx) const NOEXCEPT {
+        return shaders_.contains(idx);
+    }
+
+    void popShader(const ShaderIdx& idx) NOEXCEPT {
+        shaders_.erase(idx);
+    }
+
 private:
     // TODO: make it return multiple adapters enumerated.
     wrl::ComPtr<IDXGIAdapter1> enumAdapters();
@@ -137,6 +159,7 @@ private:
     std::map<RootIdx, wrl::ComPtr<ID3D12RootSignature>> roots_;
     std::map<const IRenderer*, RootIdx> rootMap_;
     std::map<UpBufIdx, wrl::ComPtr<ID3D12Resource>> upBufs_;
+    std::map<ShaderIdx, Shader> shaders_;
     wrl::ComPtr<ID3D12Device> pDevice_;
     wrl::ComPtr<ID3D12CommandQueue> pCmdQ_;
     wrl::ComPtr<ID3D12CommandAllocator> pCmdAlloc_;
@@ -152,13 +175,17 @@ private:
 class D3D12RenderContext : public IRenderContext {
 public:
     D3D12RenderContext(Core& core)
-        : pCmdList_(core.cmdList()) {}
+        : pCore_(&core) {}
 
     bool castableTo(RenderContextType contextType) const override;
     std::any cast(RenderContextType contextType) override;
 
+    const Shader& shader(const Core::ShaderIdx& idx) const {
+        return pCore_->shader(idx);
+    }
+
 private:
-    wrl::ComPtr<ID3D12GraphicsCommandList> pCmdList_;
+    Core* pCore_;
 };
 
 #ifdef ENABLE_D3D12_WINDOW
@@ -378,6 +405,30 @@ void Window<Traits>::preRender(IRenderContext& renderContext) {
     };
 
     pCmdList->ResourceBarrier(1, &bar);
+
+    // TODO: set proper viewport
+    D3D12_VIEWPORT tmpViewports[] = {
+        D3D12_VIEWPORT{
+            .TopLeftX = 0.0f,
+            .TopLeftY = 0.0f,
+            .Width = static_cast<float>(this->client().width),
+            .Height = static_cast<float>(this->client().height),
+            .MinDepth = 0.0f,
+            .MaxDepth = 1.0f
+        }
+    };
+
+    D3D12_RECT tmpScissorRects[] = {
+        D3D12_RECT{
+            .left = 0,
+            .top = 0,
+            .right = static_cast<LONG>(this->client().width),
+            .bottom = static_cast<LONG>(this->client().height)
+        }
+    };
+
+    pCmdList->RSSetViewports(1, tmpViewports);
+    pCmdList->RSSetScissorRects(1, tmpScissorRects);
 }
 
 template <class Traits>

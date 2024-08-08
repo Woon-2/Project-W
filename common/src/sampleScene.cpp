@@ -36,19 +36,16 @@ void SampleDrawable::buildRes(d3d12::Core& core, d3d12::D3D12RenderContext& ctx)
 }
 
 std::optional<const DrawInfo> SampleScene::getDrawInfo() const {
-    if (curIdx_ > ibIdx) {
+    if (drawn_) {
         return {};
     }
 
     auto ret = DrawInfo();
 
-    if (curIdx_ == vbIdx) {
-        ret.set(vbIdx, pDrawable_->vbView());
-    } else if (curIdx_ == ibIdx) {
-        ret.set(ibIdx, pDrawable_->ibView());
-    }
+    ret.set(vbIdx, pDrawable_->vbView());
+    ret.set(ibIdx, pDrawable_->ibView());
 
-    ++curIdx_;
+    drawn_ = true;
 
     return ret;
 }

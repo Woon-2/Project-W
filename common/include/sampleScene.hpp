@@ -44,7 +44,7 @@ public:
     static constexpr std::size_t ibIdx = 1;
 
     SampleScene(const SampleDrawable& drawable)
-        : pDrawable_(&drawable) {}
+        : pDrawable_(&drawable), drawn_(false) {}
 
     std::optional<const DrawInfo> getDrawInfo() const override;
 
@@ -52,7 +52,7 @@ private:
     void buildRes(d3d12::Core& core, d3d12::D3D12RenderContext& ctx);
 
     const SampleDrawable* pDrawable_;
-    mutable std::size_t curIdx_ = 0;
+    mutable bool drawn_;
 };
 
 } // namespace gfx

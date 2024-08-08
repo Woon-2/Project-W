@@ -50,7 +50,7 @@ class IRenderer {
 public:
     virtual ~IRenderer() = default;
 
-    virtual void init() = 0;
+    virtual void init(ICore& core) = 0;
     virtual void render(const class IScene& scene, class IRenderContext& renderContext, class IRenderTarget& target) const = 0;
     virtual void cleanup() = 0;
 };

@@ -1,10 +1,15 @@
 #ifndef __SHADER_HPP
 #define __SHADER_HPP
 
-#include "d3d12core.hpp"
+#include <d3d12.h>
+
 #include <d3dcompiler.h>
+#include "dxtarget.hpp"
+#include "dxexcept.hpp"
 
 #include <map>
+#include <filesystem>
+
 
 namespace gfx {
 
@@ -40,16 +45,21 @@ public:
 
     using Idx = int;
 
-    static D3D12_SHADER_BYTECODE loadCSO(const std::wstring& path) {
-        Microsoft::WRL::ComPtr<ID3DBlob> blob;
+    static wrl::ComPtr<ID3DBlob> loadCSO(const std::wstring& path) {
+        wrl::ComPtr<ID3DBlob> blob;
         DX_THROW_FAILED( D3DReadFileToBlob(path.c_str(), &blob) );
-        return D3D12_SHADER_BYTECODE{ .pShaderBytecode = blob->GetBufferPointer(), .BytecodeLength = blob->GetBufferSize() };
+        return blob;
+    }
+
+    static wrl::ComPtr<ID3DBlob> loadCSO(const std::filesystem::path& path) {
+        return loadCSO(path.wstring());
     }
 
     void code(Type type, D3D12_SHADER_BYTECODE content) {
         codes_[type] = content;
     }
-    void make(Core& core, Idx idx, const Desc& desc);
+    void make(ID3D12Device* pDevice, Idx idx, const Desc& desc);
+    void bind(ID3D12GraphicsCommandList* pCmdList, Idx idx) const;
 
 private:
     std::map< Type, D3D12_SHADER_BYTECODE > codes_;
@@ -158,9 +168,9 @@ public:
         return *this;
     }
 
-    void build(Core& core, Shader& shader, Shader::Idx idx) {
+    void build(ID3D12Device* pDevice, Shader& shader, Shader::Idx idx) {
         shader.codes_ = std::move(codes_);
-        shader.make(core, idx, desc_);
+        shader.make(pDevice, idx, desc_);
     }
 
 private:
@@ -177,6 +187,11 @@ public:
             .DepthStencilState = depthStencilDesc(),
             .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE
         } ) {}
+
+    SimpleShaderBuilder& code(Shader::Type type, D3D12_SHADER_BYTECODE content) {
+        ShaderBuilder::code(type, content);
+        return *this;
+    }
 
     SimpleShaderBuilder& wireframe() NOEXCEPT {
         desc_.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
@@ -218,8 +233,13 @@ public:
         return *this;
     }
 
-    void build(Core& core, Shader& shader, Shader::Idx idx) {
-        ShaderBuilder::build(core, shader, idx);
+    SimpleShaderBuilder& setInputLayout(const D3D12_INPUT_LAYOUT_DESC& desc) NOEXCEPT {
+        desc_.InputLayout = desc;
+        return *this;
+    }
+
+    void build(ID3D12Device* pDevice, Shader& shader, Shader::Idx idx) {
+        ShaderBuilder::build(pDevice, shader, idx);
     }
 
 private:

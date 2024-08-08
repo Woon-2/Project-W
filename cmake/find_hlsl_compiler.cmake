@@ -27,12 +27,12 @@ function(find_hlsl_compiler)
     endif()
 endfunction()
 
-function(compile_hlsl INPUT_HLSL_FILE OUTPUT_CSO_FILE SHADER_TYPE)
+function(compile_hlsl INPUT_HLSL_FILE OUTPUT_CSO_FILE SHADER_TYPE ENTRY_POINT)
     find_hlsl_compiler()
 
     add_custom_command(
         OUTPUT "${OUTPUT_CSO_FILE}"
-        COMMAND "${HLSL_COMPILER}" /T "${SHADER_TYPE}" /Fo "${OUTPUT_CSO_FILE}" "${INPUT_HLSL_FILE}"
+        COMMAND "${HLSL_COMPILER}" /E "${ENTRY_POINT}" /T "${SHADER_TYPE}" /Fo "${OUTPUT_CSO_FILE}" "${INPUT_HLSL_FILE}"
         DEPENDS "${INPUT_HLSL_FILE}"
     )
     set(HLSL_COMPILED_SHADERS "${HLSL_COMPILED_SHADERS};${OUTPUT_CSO_FILE}"

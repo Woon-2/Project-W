@@ -1,14 +1,18 @@
 #include "game.hpp"
+#include "rootPresets.hpp"
 
 Game::Game(gfx::ICore& gfx, MyWindow& wnd)
     : pGfx_(&gfx), pWnd_(&wnd), pRenderer_( std::make_unique<gfx::SampleRenderer>() ),
     pDrawable_() {
-    pRenderer_->init();
+    auto pd3d12Gfx = static_cast<gfx::d3d12::Core*>(&gfx);
+    pd3d12Gfx->addRoot(0, gfx::d3d12::makeRootPreset(*pd3d12Gfx, gfx::d3d12::RootPreset::Null));
+    pd3d12Gfx->mapRoot(*pRenderer_, 0);
+
+    pRenderer_->init(*pGfx_);
     auto pCtx = pGfx_->createContext();
 
     pGfx_->preRender();
 
-    auto pd3d12Gfx = static_cast<gfx::d3d12::Core*>(&gfx);
     pDrawable_ = std::make_unique<gfx::SampleDrawable>(*pd3d12Gfx, static_cast<gfx::d3d12::D3D12RenderContext&>(*pCtx));
     pGfx_->postRender();
 

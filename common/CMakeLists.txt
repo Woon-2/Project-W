@@ -73,6 +73,8 @@ target_link_libraries(win32
 )
 
 # === gfx ===
+configure_file(shaderPath.hpp.in "${CMAKE_CURRENT_SOURCE_DIR}/include/shaderPath.hpp" @ONLY)
+
 add_library(gfx
     src/gfx.cpp include/gfx.hpp
     src/gfxExcept.cpp include/gfxExcept.hpp
@@ -82,11 +84,12 @@ add_library(gfx
     src/d3dwindow.cpp include/d3dwindow.hpp
     src/sampleRenderer.cpp include/sampleRenderer.hpp
     src/sampleScene.cpp include/sampleScene.hpp
-    src/shader.cpp include/shader.hpp
+    src/d3d12shader.cpp include/d3d12shader.hpp
     src/rootPresets.cpp include/rootPresets.hpp
     src/d3d12res.cpp include/d3d12res.hpp
     include/dxtarget.hpp
     include/gfxPrimitive.hpp
+    include/shaderPath.hpp
 )
 
 add_library(common::gfx ALIAS gfx)
@@ -103,4 +106,5 @@ target_link_libraries(gfx
         d3d12.lib
         dxguid.lib
         dxgi.lib
+        D3DCompiler.lib
 )

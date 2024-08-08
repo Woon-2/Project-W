@@ -181,7 +181,7 @@ bool D3D12RenderContext::castableTo(RenderContextType contextType) const {
 }
 
 std::any D3D12RenderContext::cast(RenderContextType contextType) {
-    return pCmdList_;
+    return pCore_->cmdList();
 }
 
 wrl::ComPtr<IDXGIFactory4> Core::spFactory = nullptr;
