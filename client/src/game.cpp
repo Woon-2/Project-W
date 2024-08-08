@@ -1,21 +1,15 @@
 #include "game.hpp"
-#include "rootPresets.hpp"
+
+#include "mygfx.hpp"
 
 Game::Game(gfx::ICore& gfx, MyWindow& wnd)
-    : pGfx_(&gfx), pWnd_(&wnd), pRenderer_( std::make_unique<gfx::SampleRenderer>() ),
-    pDrawable_() {
+    : pGfx_(&gfx), pWnd_(&wnd), pDrawable_() {
     auto pd3d12Gfx = static_cast<gfx::d3d12::Core*>(&gfx);
-    pd3d12Gfx->addRoot(0, gfx::d3d12::makeRootPreset(*pd3d12Gfx, gfx::d3d12::RootPreset::Null));
-    pd3d12Gfx->mapRoot(*pRenderer_, 0);
-
-    pRenderer_->init(*pGfx_);
     auto pCtx = pGfx_->createContext();
 
     pGfx_->preRender();
-
     pDrawable_ = std::make_unique<gfx::SampleDrawable>(*pd3d12Gfx, static_cast<gfx::d3d12::D3D12RenderContext&>(*pCtx));
     pGfx_->postRender();
-
     pd3d12Gfx->waitForGpu();
     
     pDrawable_->completeInit(*pd3d12Gfx);
@@ -32,7 +26,9 @@ void Game::render() {
     pWnd_->clear(*pRenderContext);
 
     auto scene = gfx::SampleScene(*pDrawable_);
-    pGfx_->render(scene, *pRenderer_, *pWnd_);
+    pGfx_->render( scene, static_cast<MyGfx&>(*pGfx_).renderer(
+        MyGfx::Renderer::Sample
+    ), *pWnd_ );
     pWnd_->postRender(*pRenderContext);
     pGfx_->postRender();
 

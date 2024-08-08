@@ -3,7 +3,6 @@
 
 #include "d3d12core.hpp"
 
-
 namespace gfx {
 
 namespace d3d12 {

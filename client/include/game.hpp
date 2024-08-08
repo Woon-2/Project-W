@@ -4,7 +4,6 @@
 #include "d3d12core.hpp"
 
 #include "sampleScene.hpp"
-#include "sampleRenderer.hpp"
 
 #include <memory>
 
@@ -13,7 +12,7 @@ public:
     using MyWindow = gfx::d3d12::Window<gfx::d3d12::BasicD3D12WTraits<char>>;
 
     Game()
-        : pGfx_(), pWnd_(), pRenderer_(), pDrawable_() {}
+        : pGfx_(), pWnd_(), pDrawable_() {}
     
     Game(gfx::ICore& gfx, MyWindow& wnd);
 
@@ -26,7 +25,6 @@ private:
     gfx::ICore* pGfx_;
     MyWindow* pWnd_;
 
-    std::unique_ptr<gfx::IRenderer> pRenderer_;
     std::unique_ptr<gfx::SampleDrawable> pDrawable_;
 };
 

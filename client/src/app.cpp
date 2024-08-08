@@ -1,5 +1,7 @@
 #include "app.hpp"
 
+#include "mygfx.hpp"
+
 App::App(HINSTANCE hInstance)
     : window_() {
     MyWindow::setHInst(hInstance);
@@ -20,7 +22,7 @@ int App::run() {
     gfx::d3d12::Core::configDsvHeapSize(1);
     gfx::d3d12::Core::configDXFactory(gfx::DXFactory::get());
 
-    pGfx_ = std::make_unique<gfx::d3d12::Core>();
+    pGfx_ = std::make_unique<MyGfx>();
     pGfx_->init();
 
     window_.open(static_cast<gfx::d3d12::Core&>(*pGfx_));

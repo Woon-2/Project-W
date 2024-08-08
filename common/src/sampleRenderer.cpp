@@ -6,7 +6,7 @@
 namespace gfx {
 
 void SampleRenderer::init(ICore& core) {
-    if (typeid(core) != typeid(d3d12::Core)) {
+    if (auto tmp = dynamic_cast<d3d12::Core*>(&core); !tmp) {
         throw;  /*CoreTypeMismatch("The core type is mismatched.");*/
     }
     
