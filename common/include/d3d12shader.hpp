@@ -185,7 +185,11 @@ public:
             .sampleMask = UINT_MAX,
             .RasterizerState = rasterizerDesc(),
             .DepthStencilState = depthStencilDesc(),
-            .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE
+            .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+            .NumRenderTargets = 1u,
+            .RTVFormats = { DXGI_FORMAT_R8G8B8A8_UNORM },
+            .DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT,
+            .SampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u }
         } ) {}
 
     SimpleShaderBuilder& code(Shader::Type type, D3D12_SHADER_BYTECODE content) {
