@@ -3,6 +3,6 @@
 
 #include <filesystem>
 
-const auto compiledShaderPath = std::filesystem::path("C:/Users/PC/Desktop/zolzak/Project-W/build/shader");
+const auto compiledShaderPath = std::filesystem::path("C:/Users/PC/Desktop/zolzak/Project-W/build/client/shader");
 
 #endif  // __SHADERPATH_HPP

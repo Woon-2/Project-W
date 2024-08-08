@@ -107,4 +107,10 @@ target_link_libraries(gfx
         dxguid.lib
         dxgi.lib
         D3DCompiler.lib
+        assimp
+)
+
+target_include_directories(gfx
+    PUBLIC
+        "${ASSIMP_INCLUDE}"
 )

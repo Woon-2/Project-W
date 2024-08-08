@@ -8,6 +8,8 @@
 
 #include "gfxExcept.hpp"
 
+#include "assimp/Importer.hpp"
+
 namespace gfx {
 
 enum class RenderContextType {
