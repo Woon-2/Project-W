@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <ranges>
 #include <algorithm>
+#include <filesystem>
 
 namespace gfx {
 
@@ -45,6 +46,8 @@ private:
     VertexBuffer vb_;
     IndexCont ib_;
 };
+
+Mesh loadMesh(const std::filesystem::path& path);
 
 }   // namespace gfx
 
