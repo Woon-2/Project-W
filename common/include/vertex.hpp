@@ -74,9 +74,6 @@ public:
         data_(), properties_(0u), stride_(0u)
     {
         for (auto prop : { props... }) {
-            if (!other.contains(prop)) {
-                throw;  // TODO: add exception
-            }
             stride_ += other.propByteWidth(prop);
         }
 
@@ -87,16 +84,16 @@ public:
         (fetchProp(other, props, accOffset), ...);
     }
 
-    bool contains(Vertex::Properties prop) const {
+    bool contains(Vertex::Properties prop) const NOEXCEPT {
         return properties_ & prop;
     }
 
-    void configProperty(Vertex::Properties prop, offset_t offset) {
+    void configProperty(Vertex::Properties prop, offset_t offset) NOEXCEPT {
         offsets_[toIdx(prop)] = offset;
         properties_ = properties_ | prop;
     }
 
-    void configStride(std::size_t stride) {
+    void configStride(std::size_t stride) NOEXCEPT {
         stride_ = stride;
     }
 
@@ -109,19 +106,27 @@ public:
         std::memcpy(data_.data(), data, byteWidth);
     }
 
-    void* rawMem() {
+    void* rawMem() NOEXCEPT {
         return data_.data();
     }
 
-    std::size_t stride() const {
+    const void* rawMem() const NOEXCEPT {
+        return data_.data();
+    }
+
+    std::size_t stride() const NOEXCEPT {
         return stride_;
     }
 
-    std::size_t byteWidth() const {
+    std::size_t byteWidth() const NOEXCEPT {
         return data_.size();
     }
 
     std::size_t propByteWidth(Vertex::Properties prop) const {
+        if (!contains(prop)) {
+            throw;  // TODO: add exception
+        }
+
         auto propIdx = toIdx(prop);
         if (propIdx == Vertex::numProperties - 1) {
             return stride_ - offsets_[propIdx];
