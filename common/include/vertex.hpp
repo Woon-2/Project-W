@@ -42,7 +42,6 @@ public:
     void set(Properties prop, T&& val);
     void* operator[](Properties prop);
 
-
 private:
     std::uint8_t* pStart_;
     VertexBuffer* pBuf_;
@@ -201,7 +200,7 @@ void Vertex::set(Properties prop, T&& val) {
     std::memcpy(pStart_ + pBuf_->offsets_[pBuf_->toIdx(prop)], &val, sizeof(T));
 }
 
-void* Vertex::operator[](Properties prop) {
+inline void* Vertex::operator[](Properties prop) {
     return pStart_ + pBuf_->offsets_[pBuf_->toIdx(prop)];
 }
 
