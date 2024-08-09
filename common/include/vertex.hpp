@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <array>
+#include <concepts>
 
 #include <cstdint>
 #include <cstdlib>
@@ -57,6 +58,35 @@ public:
     static constexpr std::size_t invalidStride = -1;
     using offset_t = std::size_t;
 
+    VertexBuffer()
+        : offsets_{ invalidOffset, invalidOffset, invalidOffset, invalidOffset, invalidOffset, invalidOffset },
+        data_(), properties_(0u), stride_(invalidStride) {}
+
+    ~VertexBuffer() = default;
+    VertexBuffer(const VertexBuffer&) = default;
+    VertexBuffer(VertexBuffer&&) noexcept = default;
+    VertexBuffer& operator=(const VertexBuffer&) = default;
+    VertexBuffer& operator=(VertexBuffer&&) noexcept = default;
+
+    template < std::same_as<Vertex::Properties>... Props >
+    VertexBuffer(const VertexBuffer& other, Props... props)
+        : offsets_{ invalidOffset, invalidOffset, invalidOffset, invalidOffset, invalidOffset, invalidOffset },
+        data_(), properties_(0u), stride_(0u)
+    {
+        for (auto prop : { props... }) {
+            if (!other.contains(prop)) {
+                throw;  // TODO: add exception
+            }
+            stride_ += other.propByteWidth(prop);
+        }
+
+        data_.resize(stride_ * other.size());
+
+        offset_t accOffset = 0;
+
+        (fetchProp(other, props, accOffset), ...);
+    }
+
     bool contains(Vertex::Properties prop) const {
         return properties_ & prop;
     }
@@ -91,7 +121,15 @@ public:
         return data_.size();
     }
 
-    std::size_t numVertices() const {
+    std::size_t propByteWidth(Vertex::Properties prop) const {
+        auto propIdx = toIdx(prop);
+        if (propIdx == Vertex::numProperties - 1) {
+            return stride_ - offsets_[propIdx];
+        }
+        return offsets_[propIdx + 1] - offsets_[propIdx];
+    }
+
+    std::size_t size() const {
         return data_.size() / stride_;
     }
 
@@ -116,6 +154,8 @@ public:
 
 
 private:
+    void fetchProp(const VertexBuffer& other, Vertex::Properties prop, offset_t& accOffset);
+
     static constexpr std::size_t toIdx(Vertex::Properties prop) {
         switch (prop) {
         case Vertex::Properties::Position: return 0u;
