@@ -3,7 +3,7 @@
 namespace gfx {
 
 void VertexBuffer::constructProperty( Vertex::Properties prop, const std::uint8_t* data,
-    std::size_t elemByteWidth, std::size_t cnt
+    std::size_t elemByteWidth, std::size_t cnt, std::size_t stride
 ) {
     if (!contains(prop)) {
         throw;  // TODO: add exception
@@ -21,7 +21,7 @@ void VertexBuffer::constructProperty( Vertex::Properties prop, const std::uint8_
     data_.resize(stride_ * cnt);
 
     for (std::size_t i = 0; i < cnt; ++i) {
-        std::memcpy(data_.data() + i * stride_ + offset, data + i * elemByteWidth, elemByteWidth);
+        std::memcpy(data_.data() + i * stride_ + offset, data + i * stride, elemByteWidth);
     }
 }
 

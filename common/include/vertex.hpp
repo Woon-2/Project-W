@@ -98,7 +98,7 @@ public:
     }
 
     void constructProperty( Vertex::Properties prop, const std::uint8_t* data,
-        std::size_t elemByteWidth, std::size_t cnt
+        std::size_t propByteWidth, std::size_t cnt, std::size_t stride
     );
 
     void constructRawMem(const std::uint8_t* data, std::size_t byteWidth) {
@@ -156,7 +156,9 @@ public:
         return (*this)[idx];
     }
 
-
+    offset_t offset(Vertex::Properties prop) const {
+        return offsets_[toIdx(prop)];
+    }
 
 private:
     void fetchProp(const VertexBuffer& other, Vertex::Properties prop, offset_t& accOffset);
