@@ -485,3 +485,4 @@ extern/*
 !extern/CMakeLists.txt
 !extern/assimp/CMakeLists.txt
 !extern/zlib/CMakeLists.txt
+common/include/shaderPath.hpp
