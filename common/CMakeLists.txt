@@ -87,9 +87,12 @@ add_library(gfx
     src/d3d12shader.cpp include/d3d12shader.hpp
     src/rootPresets.cpp include/rootPresets.hpp
     src/d3d12res.cpp include/d3d12res.hpp
+    src/vertex.cpp include/vertex.hpp
+    src/mesh.cpp include/mesh.hpp
     include/dxtarget.hpp
     include/gfxPrimitive.hpp
     include/shaderPath.hpp
+    include/enumUtil.hpp
 )
 
 add_library(common::gfx ALIAS gfx)

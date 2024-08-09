@@ -8,10 +8,8 @@
 
 #include "gfxExcept.hpp"
 
-#include "assimp/Importer.hpp"
-
 namespace gfx {
-
+    
 enum class RenderContextType {
     // D3D11,
     D3D12,
