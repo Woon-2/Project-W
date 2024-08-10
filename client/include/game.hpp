@@ -10,15 +10,18 @@
 
 class Game {
 public:
+    static constexpr auto defLockFPS = 144.;
     using MyWindow = gfx::d3d12::Window<gfx::d3d12::BasicD3D12WTraits<char>>;
 
     Game()
-        : pGfx_(), pWnd_(), pDrawable_() {}
+        : timer_(), pGfx_(), pWnd_(), pDrawable_(), lockFPS_(defLockFPS) {}
     
     Game(gfx::ICore& gfx, MyWindow& wnd);
 
     void update();
     void render();
+    double fpsLock() const { return lockFPS_; }
+    double setFPSLock(double fps) { return lockFPS_ = fps; }
 
 private:
     void processInput();
@@ -27,6 +30,7 @@ private:
 
     gfx::ICore* pGfx_;
     MyWindow* pWnd_;
+    double lockFPS_;
 
     std::unique_ptr<gfx::SampleDrawable> pDrawable_;
 };
