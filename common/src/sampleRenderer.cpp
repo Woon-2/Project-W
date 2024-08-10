@@ -62,16 +62,11 @@ void SampleRenderer::D3D12Drawer::render( const IScene& scene, ID3D12GraphicsCom
     pCmdList->OMSetRenderTargets(1u, &rtvHandle, true, &dsvHandle);
 
     while (auto di = scene.getDrawInfo()) {
-        // TODO: decouple concrete draw info type with specific scene
-        auto vb = di.value().get<D3D12_VERTEX_BUFFER_VIEW>(SampleScene::vbIdx);
-        auto ib = di.value().get<D3D12_INDEX_BUFFER_VIEW>(SampleScene::ibIdx);
+        auto pMesh = di.value().get<const d3d12::Mesh*>(SampleScene::meshIdx);
 
         pCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        pCmdList->IASetVertexBuffers(0u, 1u, &vb);
-        pCmdList->IASetIndexBuffer(&ib);
-
-        // TODO: keep track of the counts somewhere
-        pCmdList->DrawIndexedInstanced(3u, 1u, 0u, 0u, 0u);
+        pMesh->bind(pCmdList);
+        pMesh->draw(pCmdList);
     }
 }
 

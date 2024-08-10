@@ -15,7 +15,7 @@ namespace gfx {
 
 namespace d3d12 {
 
-class InputLayout : private gfx::InputLayout {
+class InputLayout : public gfx::InputLayout {
 private:
     struct ElementAux {
         std::string semanticName;
@@ -38,6 +38,11 @@ public:
     }
 
     InputLayout(const gfx::InputLayout& il);
+
+    void configProperty(Vertex::Properties prop, VertexBuffer::offset_t offset) {
+        gfx::InputLayout::configProperty(prop, offset);
+        dispatchElem(Element{prop, offset});
+    }
 
     static void configPropertyAux( Vertex::Properties prop, std::string semanticName,
         std::uint32_t semanticIndex, DXGI_FORMAT format, std::uint32_t inputSlot

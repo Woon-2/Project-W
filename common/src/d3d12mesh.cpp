@@ -26,24 +26,20 @@ void Mesh::buildRes(Core& core, D3D12RenderContext& ctx) {
     core.addTmpUpBuf(vbUpIdx_);
     core.addTmpUpBuf(ibUpIdx_);
     // Vertex buffer
-    std::array<Position, 3> vertices = {
-        Position{0.0f, 0.5f, 0.0f},
-        Position{0.5f, -0.5f, 0.0f},
-        Position{-0.5f, -0.5f, 0.0f}
-    };
-    vb_ = d3d12::createDefBuf(core, ctx, vertices, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, core.tmpUpBuf(vbUpIdx_));
+    vb_ = d3d12::createDefBuf( core, ctx, vb().rawMem(), vb().byteWidth(),
+        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, core.tmpUpBuf(vbUpIdx_)
+    );
     vbView_[0] = D3D12_VERTEX_BUFFER_VIEW {
         .BufferLocation = vb_->GetGPUVirtualAddress(),
-        .SizeInBytes = static_cast<UINT>( sizeof(Position) * vertices.size() ),
-        .StrideInBytes = static_cast<UINT>( sizeof(Position) )
+        .SizeInBytes = static_cast<UINT>( vb().byteWidth() ),
+        .StrideInBytes = static_cast<UINT>( vb().stride() )
     };
 
     // Index buffer
-    std::array<UINT, 3> indices = {0, 1, 2};
-    ib_ = d3d12::createDefBuf(core, ctx, indices, D3D12_RESOURCE_STATE_INDEX_BUFFER, core.tmpUpBuf(ibUpIdx_));
+    ib_ = d3d12::createDefBuf(core, ctx, ib(), D3D12_RESOURCE_STATE_INDEX_BUFFER, core.tmpUpBuf(ibUpIdx_));
     ibView_ = D3D12_INDEX_BUFFER_VIEW {
         .BufferLocation = ib_->GetGPUVirtualAddress(),
-        .SizeInBytes = static_cast<UINT>( sizeof(UINT) * indices.size() ),
+        .SizeInBytes = static_cast<std::uint32_t>( ib().size() * sizeof(IndexCont::value_type) ),
         .Format = DXGI_FORMAT_R32_UINT
     };
 }

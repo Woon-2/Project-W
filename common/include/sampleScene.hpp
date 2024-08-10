@@ -5,6 +5,10 @@
 
 #include "gfxPrimitive.hpp"
 
+#include "d3d12mesh.hpp"
+#include "d3d12InputLayoutPresets.hpp"
+#include "resourcePath.hpp"
+
 #include <array>
 
 namespace gfx {
@@ -15,33 +19,22 @@ public:
     static constexpr std::size_t ibIdx = 1;
 
     SampleDrawable(d3d12::Core& core, d3d12::D3D12RenderContext& ctx)
-        : vbView_({}), ibView_({}) {
-        buildRes(core, ctx);
-    }
+        : mesh_( core, ctx, loadMesh(resourcePath/"models"/"Gun _obj"/"Gun.obj",
+            core.inputLayout( d3d12::inputLayoutName(InputLayoutPreset::Pos3) )
+        ), "Gun_vs", "Gun_ps" ) {}
 
     void completeInit(d3d12::Core& core);
 
-    const D3D12_VERTEX_BUFFER_VIEW vbView() const NOEXCEPT {
-        return vbView_[0];
-    }
-
-    const D3D12_INDEX_BUFFER_VIEW ibView() const NOEXCEPT {
-        return ibView_;
-    }
+    d3d12::Mesh& mesh() { return mesh_; }
+    const d3d12::Mesh& mesh() const { return mesh_; }
 
 private:
-    void buildRes(d3d12::Core& core, d3d12::D3D12RenderContext& ctx);
-
-    std::array<D3D12_VERTEX_BUFFER_VIEW, 1> vbView_;
-    D3D12_INDEX_BUFFER_VIEW ibView_;
-    wrl::ComPtr<ID3D12Resource> vb_;
-    wrl::ComPtr<ID3D12Resource> ib_;
+    d3d12::Mesh mesh_;
 };
 
 class SampleScene : public IScene {
 public:
-    static constexpr std::size_t vbIdx = 0;
-    static constexpr std::size_t ibIdx = 1;
+    static constexpr std::size_t meshIdx = 0;
 
     SampleScene(const SampleDrawable& drawable)
         : pDrawable_(&drawable), drawn_(false) {}
