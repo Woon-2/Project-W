@@ -96,11 +96,11 @@ public:
         stride_ = stride;
     }
 
-    void constructProperty( Vertex::Properties prop, const std::uint8_t* data,
+    void constructProperty( Vertex::Properties prop, const void* data,
         std::size_t propByteWidth, std::size_t cnt, std::size_t stride
     );
 
-    void constructRawMem(const std::uint8_t* data, std::size_t byteWidth) {
+    void constructRawMem(const void* data, std::size_t byteWidth) {
         data_.resize(byteWidth);
         std::memcpy(data_.data(), data, byteWidth);
     }

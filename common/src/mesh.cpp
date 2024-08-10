@@ -46,8 +46,7 @@ Mesh loadMesh(const std::filesystem::path& path) {
     if (mesh->HasPositions()) {
         vb.configProperty(Vertex::Properties::Position, accOffset);
         vb.constructProperty(Vertex::Properties::Position,
-            reinterpret_cast<const std::uint8_t*>( mesh->mVertices ),
-            sizeof(aiVector3D), mesh->mNumVertices, vb.stride()
+            mesh->mVertices, sizeof(aiVector3D), mesh->mNumVertices, vb.stride()
         );
         accOffset += sizeof(aiVector3D);
     }
@@ -55,8 +54,7 @@ Mesh loadMesh(const std::filesystem::path& path) {
     if (mesh->HasNormals()) {
         vb.configProperty(Vertex::Properties::Normal, accOffset);
         vb.constructProperty(Vertex::Properties::Normal,
-            reinterpret_cast<const std::uint8_t*>( mesh->mNormals ),
-            sizeof(aiVector3D), mesh->mNumVertices, vb.stride()
+            mesh->mNormals, sizeof(aiVector3D), mesh->mNumVertices, vb.stride()
         );
         accOffset += sizeof(aiVector3D);
     }
@@ -64,8 +62,7 @@ Mesh loadMesh(const std::filesystem::path& path) {
     if (mesh->HasVertexColors(0)) {
         vb.configProperty(Vertex::Properties::Color, accOffset);
         vb.constructProperty(Vertex::Properties::Color,
-            reinterpret_cast<const std::uint8_t*>( mesh->mColors[0] ),
-            sizeof(aiColor4D), mesh->mNumVertices, vb.stride()
+           mesh->mColors[0], sizeof(aiColor4D), mesh->mNumVertices, vb.stride()
         );
         accOffset += sizeof(aiColor4D);
     }
