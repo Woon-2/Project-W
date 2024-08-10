@@ -482,3 +482,5 @@ build/*
 .vscode/*
 docs/*
 common/include/shaderPath.hpp
+!extern/assimp/*
+!extern/zlib/*
