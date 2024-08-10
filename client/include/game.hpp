@@ -2,6 +2,7 @@
 #define __GAME_HPP
 
 #include "d3d12core.hpp"
+#include "Timer.h"
 
 #include "sampleScene.hpp"
 
@@ -21,6 +22,8 @@ public:
 
 private:
     void processInput();
+
+    Timer timer_;
 
     gfx::ICore* pGfx_;
     MyWindow* pWnd_;

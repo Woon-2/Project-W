@@ -25,7 +25,7 @@ int App::run() {
     pGfx_ = std::make_unique<MyGfx>();
     pGfx_->init();
 
-    window_.open(static_cast<gfx::d3d12::Core&>(*pGfx_));
+    window_.open(static_cast<gfx::d3d12::Core&>(*pGfx_), Win32::WndFrame{ 0, 0, 1920, 1080 });
     window_.setTitle("project-W client");
     window_.show(SW_SHOW);
 

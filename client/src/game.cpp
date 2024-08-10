@@ -17,6 +17,8 @@ Game::Game(gfx::ICore& gfx, MyWindow& wnd)
 
 void Game::update() {
     processInput();
+    timer_.update();
+    pWnd_->setTitle(timer_.str());
 }
 
 void Game::render() {
