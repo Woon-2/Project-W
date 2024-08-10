@@ -11,13 +11,15 @@ void Mesh::completeInit(Core& core) {
     core.popTmpUpBuf("SampleTriangleIB");
 }
 
-void Mesh::bind(D3D12RenderContext& ctx) const NOEXCEPT {
-    auto pCmdList = std::any_cast<wrl::ComPtr<ID3D12GraphicsCommandList>>(
-        ctx.cast(RenderContextType::D3D12)
-    );
+void Mesh::bind(ID3D12GraphicsCommandList* pCmdList) const {
+    DX_THROW_FAILED_VOID( pCmdList->IASetVertexBuffers(0, 1, vbView_.data()) );
+    DX_THROW_FAILED_VOID( pCmdList->IASetIndexBuffer(&ibView_) );
+}
 
-    pCmdList->IASetVertexBuffers(0, 1, vbView_.data());
-    pCmdList->IASetIndexBuffer(&ibView_);
+void Mesh::draw(ID3D12GraphicsCommandList* pCmdList) const {
+    DX_THROW_FAILED_VOID( pCmdList->DrawIndexedInstanced(
+        ib().size(), 1, 0, 0, 0
+    ) );
 }
 
 void Mesh::buildRes(Core& core, D3D12RenderContext& ctx) {

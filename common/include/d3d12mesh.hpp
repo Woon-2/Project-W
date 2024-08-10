@@ -27,7 +27,8 @@ public:
     }
 
     void completeInit(d3d12::Core& core);
-    void bind(d3d12::D3D12RenderContext& ctx) const NOEXCEPT;
+    void bind(ID3D12GraphicsCommandList* pCmdList) const;
+    void draw(ID3D12GraphicsCommandList* pCmdList) const;
 
 private:
     void buildRes(d3d12::Core& core, d3d12::D3D12RenderContext& ctx);
