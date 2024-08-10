@@ -1,6 +1,8 @@
 #ifndef __SHADER_HPP
 #define __SHADER_HPP
 
+#include "d3d12InputLayout.hpp"
+
 #include <d3d12.h>
 
 #include <d3dcompiler.h>
@@ -25,22 +27,22 @@ public:
     };
 
     struct Desc {
-        ID3D12RootSignature* pRootSignature;
+        wrl::ComPtr<ID3D12RootSignature> pRootSignature;
         D3D12_STREAM_OUTPUT_DESC streamOutput;
         D3D12_BLEND_DESC blend;
         UINT sampleMask;
-        D3D12_RASTERIZER_DESC RasterizerState;
-        D3D12_DEPTH_STENCIL_DESC DepthStencilState;
-        D3D12_INPUT_LAYOUT_DESC InputLayout;
-        D3D12_INDEX_BUFFER_STRIP_CUT_VALUE IBStripCutValue;
-        D3D12_PRIMITIVE_TOPOLOGY_TYPE PrimitiveTopologyType;
-        UINT NumRenderTargets;
-        DXGI_FORMAT RTVFormats[8];
-        DXGI_FORMAT DSVFormat;
-        DXGI_SAMPLE_DESC SampleDesc;
-        UINT NodeMask;
-        D3D12_CACHED_PIPELINE_STATE CachedPSO;
-        D3D12_PIPELINE_STATE_FLAGS Flags;
+        D3D12_RASTERIZER_DESC rasterizerState;
+        D3D12_DEPTH_STENCIL_DESC depthStencilState;
+        InputLayout inputLayout;
+        D3D12_INDEX_BUFFER_STRIP_CUT_VALUE ibStripCutValue;
+        D3D12_PRIMITIVE_TOPOLOGY_TYPE primitiveTopologyType;
+        UINT numRenderTargets;
+        DXGI_FORMAT rtvFormats[8];
+        DXGI_FORMAT dsvFormat;
+        DXGI_SAMPLE_DESC sampleDesc;
+        UINT nodeMask;
+        D3D12_CACHED_PIPELINE_STATE cachedPSO;
+        D3D12_PIPELINE_STATE_FLAGS flags;
     };
 
     using Idx = int;
@@ -55,15 +57,17 @@ public:
         return loadCSO(path.wstring());
     }
 
-    void code(Type type, D3D12_SHADER_BYTECODE content) {
-        codes_[type] = content;
+    void code(Type type, wrl::ComPtr<ID3DBlob> content) {
+        codes_[type] = std::move(content);
     }
     void make(ID3D12Device* pDevice, Idx idx, const Desc& desc);
     void bind(ID3D12GraphicsCommandList* pCmdList, Idx idx) const;
 
 private:
-    std::map< Type, D3D12_SHADER_BYTECODE > codes_;
+    std::map< Type, wrl::ComPtr<ID3DBlob> > codes_;
     std::map< Idx, wrl::ComPtr<ID3D12PipelineState> > psos_;
+    wrl::ComPtr<ID3D12RootSignature> pRoot_;
+    InputLayout inputLayout_;
 };
 
 class ShaderBuilder {
@@ -74,12 +78,12 @@ public:
     ShaderBuilder() NOEXCEPT = default;
     ShaderBuilder(const Shader::Desc& desc) NOEXCEPT : desc_(desc) {}
 
-    ShaderBuilder& code(Shader::Type type, D3D12_SHADER_BYTECODE content) {
-        codes_[type] = content;
+    ShaderBuilder& code(Shader::Type type, wrl::ComPtr<ID3DBlob> content) {
+        codes_[type] = std::move(content);
         return *this;
     }
 
-    ShaderBuilder& rootSignature(ID3D12RootSignature* pRootSignature) NOEXCEPT {
+    ShaderBuilder& root(wrl::ComPtr<ID3D12RootSignature> pRootSignature) NOEXCEPT {
         desc_.pRootSignature = pRootSignature;
         return *this;
     }
@@ -100,32 +104,37 @@ public:
     }
 
     ShaderBuilder& rasterizer(const D3D12_RASTERIZER_DESC& desc) NOEXCEPT {
-        desc_.RasterizerState = desc;
+        desc_.rasterizerState = desc;
         return *this;
     }
 
     ShaderBuilder& depthStencil(const D3D12_DEPTH_STENCIL_DESC& desc) NOEXCEPT {
-        desc_.DepthStencilState = desc;
+        desc_.depthStencilState = desc;
         return *this;
     }
 
-    ShaderBuilder& inputLayout(const D3D12_INPUT_LAYOUT_DESC& desc) NOEXCEPT {
-        desc_.InputLayout = desc;
+    ShaderBuilder& inputLayout(const InputLayout& il) {
+        desc_.inputLayout = il;
+        return *this;
+    }
+
+    ShaderBuilder& inputLayout(InputLayout&& il) {
+        desc_.inputLayout = std::move(il);
         return *this;
     }
     
     ShaderBuilder& indexBufferStripCut(D3D12_INDEX_BUFFER_STRIP_CUT_VALUE value) NOEXCEPT {
-        desc_.IBStripCutValue = value;
+        desc_.ibStripCutValue = value;
         return *this;
     }
 
     ShaderBuilder& primitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE type) NOEXCEPT {
-        desc_.PrimitiveTopologyType = type;
+        desc_.primitiveTopologyType = type;
         return *this;
     }
 
     ShaderBuilder& numRenderTargets(UINT num) NOEXCEPT {
-        desc_.NumRenderTargets = num;
+        desc_.numRenderTargets = num;
         return *this;
     }
 
@@ -138,43 +147,43 @@ public:
         }
 
         for (auto format : formats) {
-            desc_.RTVFormats[desc_.NumRenderTargets++] = format;
+            desc_.rtvFormats[desc_.numRenderTargets++] = format;
         }
         return *this;
     }
 
     ShaderBuilder& dsvFormat(DXGI_FORMAT format) NOEXCEPT {
-        desc_.DSVFormat = format;
+        desc_.dsvFormat = format;
         return *this;
     }
 
     ShaderBuilder& sampleDesc(const DXGI_SAMPLE_DESC& desc) NOEXCEPT {
-        desc_.SampleDesc = desc;
+        desc_.sampleDesc = desc;
         return *this;
     }
 
     ShaderBuilder& nodeMask(UINT mask) NOEXCEPT {
-        desc_.NodeMask = mask;
+        desc_.nodeMask = mask;
         return *this;
     }
 
     ShaderBuilder& cachedPso(const D3D12_CACHED_PIPELINE_STATE& pso) NOEXCEPT {
-        desc_.CachedPSO = pso;
+        desc_.cachedPSO = pso;
         return *this;
     }
 
     ShaderBuilder& flags(D3D12_PIPELINE_STATE_FLAGS flags) NOEXCEPT {
-        desc_.Flags = flags;
+        desc_.flags = flags;
         return *this;
     }
 
     void build(ID3D12Device* pDevice, Shader& shader, Shader::Idx idx) {
-        shader.codes_ = std::move(codes_);
+        shader.codes_ = codes_;
         shader.make(pDevice, idx, desc_);
     }
 
 private:
-    std::map< Shader::Type, D3D12_SHADER_BYTECODE > codes_;
+    std::map< Shader::Type, wrl::ComPtr<ID3DBlob> > codes_;
 };
 
 class SimpleShaderBuilder : private ShaderBuilder {
@@ -183,62 +192,67 @@ public:
         : ShaderBuilder( Shader::Desc{
             .blend = blendDesc(),
             .sampleMask = UINT_MAX,
-            .RasterizerState = rasterizerDesc(),
-            .DepthStencilState = depthStencilDesc(),
-            .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
-            .NumRenderTargets = 1u,
-            .RTVFormats = { DXGI_FORMAT_R8G8B8A8_UNORM },
-            .DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT,
-            .SampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u }
+            .rasterizerState = rasterizerDesc(),
+            .depthStencilState = depthStencilDesc(),
+            .primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+            .numRenderTargets = 1u,
+            .rtvFormats = { DXGI_FORMAT_R8G8B8A8_UNORM },
+            .dsvFormat = DXGI_FORMAT_D24_UNORM_S8_UINT,
+            .sampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u }
         } ) {}
 
-    SimpleShaderBuilder& code(Shader::Type type, D3D12_SHADER_BYTECODE content) {
-        ShaderBuilder::code(type, content);
+    SimpleShaderBuilder& code(Shader::Type type, wrl::ComPtr<ID3DBlob> content) {
+        ShaderBuilder::code(type, std::move(content));
         return *this;
     }
 
     SimpleShaderBuilder& wireframe() NOEXCEPT {
-        desc_.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
+        desc_.rasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
         return *this;
     }
 
     SimpleShaderBuilder& solid() NOEXCEPT {
-        desc_.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+        desc_.rasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
         return *this;
     }
 
     SimpleShaderBuilder& cullFront() NOEXCEPT {
-        desc_.RasterizerState.CullMode = D3D12_CULL_MODE_FRONT;
+        desc_.rasterizerState.CullMode = D3D12_CULL_MODE_FRONT;
         return *this;
     }
 
     SimpleShaderBuilder& cullBack() NOEXCEPT {
-        desc_.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
+        desc_.rasterizerState.CullMode = D3D12_CULL_MODE_BACK;
         return *this;
     }
 
     SimpleShaderBuilder& cullNone() NOEXCEPT {
-        desc_.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+        desc_.rasterizerState.CullMode = D3D12_CULL_MODE_NONE;
         return *this;
     }
 
     SimpleShaderBuilder& depthEnable() NOEXCEPT {
-        desc_.DepthStencilState.DepthEnable = true;
+        desc_.depthStencilState.DepthEnable = true;
         return *this;
     }
 
     SimpleShaderBuilder& depthDisable() NOEXCEPT {
-        desc_.DepthStencilState.DepthEnable = false;
+        desc_.depthStencilState.DepthEnable = false;
         return *this;
     }
 
-    SimpleShaderBuilder& setRootSignature(ID3D12RootSignature* pRootSignature) NOEXCEPT {
-        ShaderBuilder::rootSignature(pRootSignature);
+    SimpleShaderBuilder& setRoot(wrl::ComPtr<ID3D12RootSignature> pRootSignature) NOEXCEPT {
+        ShaderBuilder::root(pRootSignature);
         return *this;
     }
 
-    SimpleShaderBuilder& setInputLayout(const D3D12_INPUT_LAYOUT_DESC& desc) NOEXCEPT {
-        desc_.InputLayout = desc;
+    SimpleShaderBuilder& setInputLayout(const InputLayout& il) {
+        ShaderBuilder::inputLayout(il);
+        return *this;
+    }
+
+    SimpleShaderBuilder& setInputLayout(InputLayout&& il) {
+        ShaderBuilder::inputLayout(std::move(il));
         return *this;
     }
 

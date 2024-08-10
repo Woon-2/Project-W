@@ -30,6 +30,30 @@ public:
         stride_ = stride;
     }
 
+    std::size_t stride() const NOEXCEPT {
+        return stride_;
+    }
+
+    std::size_t elemCnt() const NOEXCEPT {
+        return elements_.size();
+    }
+
+    auto begin() const NOEXCEPT {
+        return elements_.begin();
+    }
+
+    auto begin() NOEXCEPT {
+        return elements_.begin();
+    }
+
+    auto end() const NOEXCEPT {
+        return elements_.end();
+    }
+
+    auto end() NOEXCEPT {
+        return elements_.end();
+    }
+
     friend VertexBuffer convert(const VertexBuffer& vb, const InputLayout& il);
 
 private:

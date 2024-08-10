@@ -42,7 +42,7 @@ wrl::ComPtr<ID3D12RootSignature> makeRootPreset(Core& core, RootPreset preset) {
         return rootPresetNull(core);
 
     default:
-        throw std::runtime_error("Invalid RootPreset");
+        throw GFX_EXCEPT("Invalid RootPreset");
     }  
 }
 

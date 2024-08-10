@@ -4,6 +4,14 @@ namespace gfx {
 
 namespace d3d12 {
 
+InputLayout::InputLayout(const gfx::InputLayout& il)
+    : gfx::InputLayout(il), elemDescs_() {
+    elemDescs_.reserve(il.elemCnt());
+    for (const auto& elem : il) {
+        dispatchElem(elem);
+    }
+}
+
 void InputLayout::configPropertyAux( Vertex::Properties prop, std::string semanticName,
     std::uint32_t semanticIndex, DXGI_FORMAT format, std::uint32_t inputSlot
 ) {

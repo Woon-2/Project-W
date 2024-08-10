@@ -67,13 +67,13 @@ set(COMPILED_SHADER_PATH "${CMAKE_CURRENT_BINARY_DIR}/shader" CACHE PATH
     "Write path to populate compiled shaders."
 )
 
-compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/sampleShader.hlsl"
-    "${COMPILED_SHADER_PATH}/sampleShader_vs.cso"
+compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/nullShader.hlsl"
+    "${COMPILED_SHADER_PATH}/nullShader_vs.cso"
     "vs_5_1"
     "VSMain"
 )
-compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/sampleShader.hlsl"
-    "${COMPILED_SHADER_PATH}/sampleShader_ps.cso"
+compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/nullShader.hlsl"
+    "${COMPILED_SHADER_PATH}/nullShader_ps.cso"
     "ps_5_1"
     "PSMain"
 )

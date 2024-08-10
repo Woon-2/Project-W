@@ -90,6 +90,10 @@ add_library(gfx
     src/d3d12mesh.cpp include/d3d12mesh.hpp
     src/inputLayout.cpp include/inputLayout.hpp
     src/d3d12InputLayout.cpp include/d3d12InputLayout.hpp
+    src/nullShader.cpp include/nullShader.hpp
+    src/inputLayoutPresets.cpp include/inputLayoutPresets.hpp
+    src/d3d12InputLayoutPresets.cpp include/d3d12InputLayoutPresets.hpp
+
     include/dxtarget.hpp
     include/gfxPrimitive.hpp
     include/shaderPath.hpp

@@ -2,6 +2,7 @@
 #include "sampleScene.hpp"
 
 #include "shaderPath.hpp"
+#include "nullShader.hpp"
 
 namespace gfx {
 
@@ -38,9 +39,9 @@ void SampleRenderer::render(const IScene& scene, IRenderContext& renderContext, 
 
     const auto& shader = static_cast<d3d12::D3D12RenderContext&>(
         renderContext
-    ).shader( SampleRenderer::shaderName() );
+    ).shader( d3d12::NullShader::shaderName() );
 
-    shader.bind(pCmdList.Get(), 12345);
+    shader.bind(pCmdList.Get(), 0);
 
     D3D12Drawer::render(scene, pCmdList.Get(), pTarget, pDepthTarget);
 }
@@ -48,43 +49,11 @@ void SampleRenderer::render(const IScene& scene, IRenderContext& renderContext, 
 void SampleRenderer::cleanup() {}
 
 void SampleRenderer::D3D12Drawer::init(SampleRenderer& renderer, d3d12::Core& core) {
-    if (core.containsShader(SampleRenderer::shaderName())) {
+    if (core.containsShader(d3d12::NullShader::shaderName())) {
         return;
     }
 
-    if (!core.containsRoot(rootName())) {
-        throw;  /*RootSignatureAlreadyExists("The root signature already exists.");*/
-    }
-
-    auto pRoot = core.root(rootName());
-
-    auto shader = d3d12::Shader();
-    auto shaderBuilder = d3d12::SimpleShaderBuilder();
-    shaderBuilder.setRootSignature(pRoot.Get());
-
-    auto vsBlob = d3d12::Shader::loadCSO(compiledShaderPath/L"sampleShader_vs.cso");
-    shaderBuilder.code( d3d12::Shader::Type::Vertex, D3D12_SHADER_BYTECODE{
-        .pShaderBytecode = vsBlob->GetBufferPointer(),
-        .BytecodeLength = vsBlob->GetBufferSize()
-    } );
-    auto psBlob = d3d12::Shader::loadCSO(compiledShaderPath/L"sampleShader_ps.cso");
-    shaderBuilder.code( d3d12::Shader::Type::Pixel, D3D12_SHADER_BYTECODE{
-        .pShaderBytecode = psBlob->GetBufferPointer(),
-        .BytecodeLength = psBlob->GetBufferSize()
-    } );
-
-    D3D12_INPUT_ELEMENT_DESC ieDescs[] = {
-        { "POSITION", 0u, DXGI_FORMAT_R32G32B32_FLOAT, 0u, 0u, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0u }
-    };
-
-    shaderBuilder.setInputLayout( D3D12_INPUT_LAYOUT_DESC{
-        .pInputElementDescs = ieDescs,
-        .NumElements = 1u
-    } );
-
-    shaderBuilder.build( static_cast<ID3D12Device*>( d3d12::DeviceFetcher::device(core) ), shader, 12345 );
-
-    core.addShader(SampleRenderer::shaderName(), std::move(shader));
+    core.addShader(d3d12::NullShader::shaderName(), d3d12::NullShader(core));
 }
 
 void SampleRenderer::D3D12Drawer::render( const IScene& scene, ID3D12GraphicsCommandList* pCmdList,

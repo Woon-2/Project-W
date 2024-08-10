@@ -10,14 +10,6 @@ namespace gfx {
 
 class SampleRenderer : public IRenderer {
 public:
-    static std::string rootName() {
-        return d3d12::rootName(d3d12::RootPreset::Null);
-    }
-
-    static constexpr std::string shaderName() {
-        return "sampleShader";
-    }
-
     void init(ICore& core) override;
     void render(const IScene& scene, IRenderContext& renderContext, IRenderTarget& target) const override;
     void cleanup() override;

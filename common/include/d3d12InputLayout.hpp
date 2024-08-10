@@ -25,15 +25,19 @@ private:
     };
 
 public:
+    using gfx::InputLayout::Element;
+
     InputLayout()
         : gfx::InputLayout(), elemDescs_() {}
 
     template < std::same_as<Element>... Elems >
     InputLayout(std::size_t stride, Elems... elems)
-        : InputLayout(stride, elems...), elemDescs_() {
+        : gfx::InputLayout(stride, elems...), elemDescs_() {
         elemDescs_.reserve(sizeof...(elems));
         dispatchElems(elems...);
     }
+
+    InputLayout(const gfx::InputLayout& il);
 
     static void configPropertyAux( Vertex::Properties prop, std::string semanticName,
         std::uint32_t semanticIndex, DXGI_FORMAT format, std::uint32_t inputSlot
