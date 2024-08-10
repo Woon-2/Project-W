@@ -43,6 +43,7 @@ target_sources(client
         src/app.cpp include/app.hpp
         src/game.cpp include/game.hpp
         src/mygfx.cpp include/mygfx.hpp
+        include/ecs.hpp
 )
 
 include(auto_configure)

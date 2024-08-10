@@ -1,0 +1,196 @@
+#ifndef __ECS_HPP
+#define __ECS_HPP
+
+#include <iostream>
+#include <bitset>
+#include <queue>
+#include <array>
+#include <map>
+#include <string>
+
+#include "ecsExcept.hpp"
+
+namespace ecs {
+
+	using Entity = std::int32_t;
+	using ComponentType = std::uint8_t;
+
+	const Entity MAX_ENTITIES = 1024;
+	const ComponentType MAX_COMPONENTS = 64;
+
+	using Signature = std::bitset<MAX_COMPONENTS>;
+
+	// 각 Entity에 해당할 시그니처 배열
+	std::array<Signature, MAX_ENTITIES> gSignature;
+
+	// 사용하지 않은 엔티티 아이디
+	std::queue<Entity> gAvailableEntities;
+	uint32_t gLivingEntityCount{};
+
+	static void ConfigEntity()
+	{
+		for (Entity entity = 0; entity < MAX_ENTITIES; ++entity)
+		{
+			gAvailableEntities.push(entity);
+		}
+	}
+
+	// 새로운 엔터티를 만듭니다.
+	static Entity CreateEntity()
+	{
+		if (gLivingEntityCount >= MAX_ENTITIES) {
+			throw ECS_EXCEPT("You can't create more entities than MAX_ENTITIES.");
+		}
+
+		// 큐의 앞에서 부터 번호를 부여한다.
+		Entity id = gAvailableEntities.front();
+		gAvailableEntities.pop();
+		++gLivingEntityCount;
+
+		return id;
+	}
+
+	static void DestroyEntity(const Entity entity)
+	{
+		if (entity >= MAX_ENTITIES)
+		{
+			throw ECS_EXCEPT("Entity out of Range");
+		}
+
+		// std::bitset::reset
+		gSignature[entity].reset();
+
+		// 제거한 아이디는 큐의 맨뒤로 보낸다.
+		gAvailableEntities.push(entity);
+		--gLivingEntityCount;
+	}
+
+	static void SetSignature(Entity entity, Signature signature)
+	{
+		if (entity >= MAX_ENTITIES)
+		{
+			throw ECS_EXCEPT("Entity out of Range");
+		}
+
+		gSignature[entity] = signature;
+	}
+
+	static Signature GetSignature(Entity entity)
+	{
+		if (entity >= MAX_ENTITIES)
+		{
+			throw ECS_EXCEPT("Entity out of Range");
+		}
+
+		return gSignature[entity];
+	}
+
+	class IComponentArray
+	{
+	public:
+		virtual ~IComponentArray() = default;
+		virtual void EntityDestroyed(Entity entity) = 0;
+	};
+
+	template <class Component>
+	class ComponentArray : public IComponentArray
+	{
+	public:
+		// Component 배열에 n번 엔티티로 삽입
+		void InsertData(Entity entity, Component component)
+		{
+			if (entityToIndexMap_.find(entity) != entityToIndexMap_.end())
+			{
+				throw ECS_EXCEPT("This Entity is already inserted into the ComponentArray.");
+			}
+
+			size_t newIndex = size_;
+			entityToIndexMap_[entity] = newIndex;
+			indexToEntityMap_[newIndex] = entity;
+			componentArray_[newIndex] = component;
+			++size_;
+		}
+
+		// 마지막 인덱스를 지우려는 인덱스쪽으로 덮어씌우고 마지막 인덱스를 erase
+		void RemoveData(Entity entity)
+		{
+			if (entityToIndexMap_.find(entity) == entityToIndexMap_.end())
+			{
+				throw ECS_EXCEPT("This Entity is not exist.");
+			}
+
+			size_t indexOfRemoveEntity = entityToIndexMap_[entity];
+			size_t indexOfLastElement = mSize - 1;
+			componentArray_[indexOfRemoveEntity] = componentArray_[indexOfLastElement];
+
+			Entity entityOfLastElement = indexToEntityMap_[indexOfLastElement];
+			entityToIndexMap_[entityOfLastElement] = indexOfRemoveEntity;
+			indexToEntityMap_[indexOfRemoveEntity] = entityOfLastElement;
+
+			entityToIndexMap_.erase(entity);
+			indexToEntityMap_.erase(indexOfLastElement);
+
+			--size_;
+		}
+
+		Component& GetData(Entity entity)
+		{
+			if (entityToIndexMap_.find(entity) != entityToIndexMap_.end())
+			{
+				throw ECS_EXCEPT("This Entity is not exist.");
+			}
+
+			return componentArray_[entityToIndexMap_[entity]];
+		}
+
+		void EntityDestroyed(Entity entity) override
+		{
+			if (entityToIndexMap_[entity].find() != entityToIndexMap_.end())
+			{
+				// Remove the entity's component if it existed
+				RemoveData(entity);
+			}
+		}
+
+	private:
+		std::array<Component, MAX_ENTITIES> componentArray_;
+		std::map<Entity, size_t> entityToIndexMap_;
+		std::map<size_t, Entity> indexToEntityMap_;
+		size_t size_;
+	};
+
+	// 타입 이름과 컴포넌트 타입을 매핑 ComponentType은 int임 gNextComponentType으로 인덱싱
+	std::map<std::string, ComponentType> gComponentTypes{};
+	// 타입 이름과 해당 타입의 배열(엔터티 배열을 가지고 있는)을 매핑 
+	std::map<std::string, std::shared_ptr<IComponentArray>> gComponentArrays{};
+	// 등록된 컴포넌트 정보
+	ComponentType gNextComponentType{};
+	// Component 타입의 배열을 반환해준다.
+	template <class Component>
+	std::shared_ptr<ComponentArray<Component>> GetComponentArray()
+	{
+		std::string typeName = typeid(Component).name();
+
+		assert(gComponentTypes.find(typeName) != gComponentTypes.end() && "Component not registered before use.");
+
+		return std::static_pointer_cast<ComponentArray<Component>>(gComponentArrays[typeName]);
+	}
+
+	template<class Component>
+	void RegisterComponent() {
+		std::string typeName = typeid(Component).name();
+
+		if (gComponentTypes[typeName].find() == gComponentTypes.end())
+		{
+			ECS_EXCEPT("This Component is already Registered.");
+		}
+
+		gComponentTypes.insert({typeName, gNextComponentType});
+		++gNextComponentType;
+	}
+
+	void foo();
+
+}	// namespace ecs
+
+#endif // !__ECS_HPP
