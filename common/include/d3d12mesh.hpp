@@ -30,6 +30,20 @@ public:
         buildRes(core, ctx);
     }
 
+    Mesh( d3d12::Core& core, d3d12::D3D12RenderContext& ctx, const gfx::Mesh& mesh,
+        Core::UpBufIdx vbUpIdx, Core::UpBufIdx ibUpIdx
+    ) : gfx::Mesh(mesh), vbView_(), ibView_(), vb_(), ib_(),
+        vbUpIdx_(vbUpIdx), ibUpIdx_(ibUpIdx) {
+        buildRes(core, ctx);
+    }
+
+    Mesh( d3d12::Core& core, d3d12::D3D12RenderContext& ctx, gfx::Mesh&& mesh,
+        Core::UpBufIdx vbUpIdx, Core::UpBufIdx ibUpIdx
+    ) : gfx::Mesh(std::move(mesh)), vbView_(), ibView_(), vb_(), ib_(),
+        vbUpIdx_(vbUpIdx), ibUpIdx_(ibUpIdx) {
+        buildRes(core, ctx);
+    }
+
     void completeInit(d3d12::Core& core);
     void bind(ID3D12GraphicsCommandList* pCmdList) const;
     void draw(ID3D12GraphicsCommandList* pCmdList) const;

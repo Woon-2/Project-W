@@ -79,4 +79,9 @@ Mesh loadMesh(const std::filesystem::path& path) {
     return Mesh(std::move(vb), std::move(ib));
 }
 
+Mesh loadMesh(const std::filesystem::path& path, const InputLayout& il) {
+    auto mesh = loadMesh(path);
+    return Mesh(convert(mesh.vb(), il), std::move(mesh.ib()));
+}
+
 }   // namespace gfx

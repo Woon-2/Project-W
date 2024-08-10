@@ -2,6 +2,7 @@
 #define __MESH_HPP
 
 #include "vertex.hpp"
+#include "inputLayout.hpp"
 
 #include <vector>
 #include <cstdint>
@@ -48,6 +49,7 @@ private:
 };
 
 Mesh loadMesh(const std::filesystem::path& path);
+Mesh loadMesh(const std::filesystem::path& path, const InputLayout& il);
 
 }   // namespace gfx
 
