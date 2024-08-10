@@ -15,14 +15,18 @@ namespace d3d12 {
 
 class Mesh : public gfx::Mesh {
 public:
-    Mesh(d3d12::Core& core, d3d12::D3D12RenderContext& ctx, VertexBuffer vb, IndexCont&& ib)
-        : gfx::Mesh(std::move(vb), std::move(ib)), vbView_(), ibView_(), vb_(), ib_() {
+    Mesh( d3d12::Core& core, d3d12::D3D12RenderContext& ctx, VertexBuffer vb, IndexCont&& ib,
+        Core::UpBufIdx vbUpIdx, Core::UpBufIdx ibUpIdx
+    ) : gfx::Mesh(std::move(vb), std::move(ib)), vbView_(), ibView_(), vb_(), ib_(),
+        vbUpIdx_(vbUpIdx), ibUpIdx_(ibUpIdx) {
         buildRes(core, ctx);
     }
 
     template <std::ranges::range R>
-    Mesh(d3d12::Core& core, d3d12::D3D12RenderContext& ctx, VertexBuffer vb, R&& ib)
-        : gfx::Mesh(std::move(vb), std::forward<R>(ib)), vbView_(), ibView_(), vb_(), ib_() {
+    Mesh( d3d12::Core& core, d3d12::D3D12RenderContext& ctx, VertexBuffer vb, R&& ib,
+        Core::UpBufIdx vbUpIdx, Core::UpBufIdx ibUpIdx
+    ) : gfx::Mesh(std::move(vb), std::forward<R>(ib)), vbView_(), ibView_(), vb_(), ib_(),
+        vbUpIdx_(vbUpIdx), ibUpIdx_(ibUpIdx) {
         buildRes(core, ctx);
     }
 
@@ -37,6 +41,8 @@ private:
     D3D12_INDEX_BUFFER_VIEW ibView_;
     wrl::ComPtr<ID3D12Resource> vb_;
     wrl::ComPtr<ID3D12Resource> ib_;
+    Core::UpBufIdx vbUpIdx_;
+    Core::UpBufIdx ibUpIdx_;
 };
 
 }   // namespace d3d12

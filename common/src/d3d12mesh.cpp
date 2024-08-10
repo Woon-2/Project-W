@@ -7,8 +7,8 @@ namespace gfx {
 namespace d3d12 {
 
 void Mesh::completeInit(Core& core) {
-    core.popTmpUpBuf("SampleTriangleVB");
-    core.popTmpUpBuf("SampleTriangleIB");
+    core.popTmpUpBuf(vbUpIdx_);
+    core.popTmpUpBuf(ibUpIdx_);
 }
 
 void Mesh::bind(ID3D12GraphicsCommandList* pCmdList) const {
@@ -23,8 +23,8 @@ void Mesh::draw(ID3D12GraphicsCommandList* pCmdList) const {
 }
 
 void Mesh::buildRes(Core& core, D3D12RenderContext& ctx) {
-    core.addTmpUpBuf("SampleTriangleVB");
-    core.addTmpUpBuf("SampleTriangleIB");
+    core.addTmpUpBuf(vbUpIdx_);
+    core.addTmpUpBuf(ibUpIdx_);
     // Vertex buffer
     std::array<Position, 3> vertices = {
         Position{0.0f, 0.5f, 0.0f},
