@@ -18,7 +18,7 @@ void Mesh::bind(ID3D12GraphicsCommandList* pCmdList) const {
 
 void Mesh::draw(ID3D12GraphicsCommandList* pCmdList) const {
     DX_THROW_FAILED_VOID( pCmdList->DrawIndexedInstanced(
-        ib().size(), 1, 0, 0, 0
+        static_cast<UINT>( ib().size() ), 1, 0, 0, 0
     ) );
 }
 
