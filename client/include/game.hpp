@@ -2,7 +2,7 @@
 #define __GAME_HPP
 
 #include "d3d12core.hpp"
-#include "Timer.h"
+#include "Timer.hpp"
 
 #include "sampleScene.hpp"
 
