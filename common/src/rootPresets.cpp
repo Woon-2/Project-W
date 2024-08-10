@@ -46,6 +46,16 @@ wrl::ComPtr<ID3D12RootSignature> makeRootPreset(Core& core, RootPreset preset) {
     }  
 }
 
+Core::RootIdx rootName(RootPreset preset) {
+    switch (preset) {
+    case RootPreset::Null:
+        return "NullRoot";
+
+    default:
+        throw GFX_EXCEPT("Invalid RootPreset");
+    }
+}
+
 } // namespace d3d12
 
 } // namespace gfx

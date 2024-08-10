@@ -2,6 +2,7 @@
 #define __SAMPLE_RENDERER_HPP
 
 #include "d3d12core.hpp"
+#include "rootPresets.hpp"
 
 #include <string>
 
@@ -9,8 +10,8 @@ namespace gfx {
 
 class SampleRenderer : public IRenderer {
 public:
-    static constexpr std::string rootName() {
-        return "sampleRoot";
+    static std::string rootName() {
+        return d3d12::rootName(d3d12::RootPreset::Null);
     }
 
     static constexpr std::string shaderName() {

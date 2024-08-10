@@ -12,6 +12,7 @@ enum class RootPreset {
 };
 
 wrl::ComPtr<ID3D12RootSignature> makeRootPreset(Core& core, RootPreset preset);
+Core::RootIdx rootName(RootPreset preset);
 
 } // namespace d3d12
 

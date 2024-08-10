@@ -7,7 +7,9 @@ void MyGfx::init() {
     pRenderer_ = std::make_unique<gfx::SampleRenderer>();
 
     gfx::d3d12::Core::init();
-    addRoot("sampleRoot", gfx::d3d12::makeRootPreset(*this, gfx::d3d12::RootPreset::Null));
+    addRoot( gfx::d3d12::rootName(gfx::d3d12::RootPreset::Null),
+        gfx::d3d12::makeRootPreset(*this, gfx::d3d12::RootPreset::Null)
+    );
 
     pRenderer_->init(*this);
 }
