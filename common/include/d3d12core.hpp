@@ -37,7 +37,7 @@ public:
 #endif  // ENABLE_D3D12_WINDOW
     friend class DeviceFetcher;
 
-    using RootIdx = std::size_t;
+    using RootIdx = std::string;
     using UpBufIdx = std::string;
     using ShaderIdx = std::string;
     using InputLayoutIdx = std::string;
@@ -83,25 +83,15 @@ public:
     }
 
     wrl::ComPtr<ID3D12RootSignature> root(RootIdx idx) const NOEXCEPT {
-        if (roots_.contains(idx)) {
-            return roots_.at(idx);
-        }
-        return nullptr;
-    }
-
-    wrl::ComPtr<ID3D12RootSignature> root(const IRenderer* pRenderer) const NOEXCEPT {
-        if (rootMap_.contains(pRenderer)) {
-            return root(rootMap_.at(pRenderer));
-        }
-        return nullptr;
+        return roots_.at(idx);
     }
 
     void addRoot(RootIdx idx, wrl::ComPtr<ID3D12RootSignature> pRoot) {
         roots_[idx] = std::move(pRoot);
     }
 
-    void mapRoot(const IRenderer& pRenderer, RootIdx idx) {
-        rootMap_[&pRenderer] = std::move(idx);
+    bool containsRoot(const RootIdx& idx) const NOEXCEPT {
+        return roots_.contains(idx);
     }
 
     void addTmpUpBuf(UpBufIdx idx, wrl::ComPtr<ID3D12Resource> pUpBuf = nullptr) {
@@ -154,19 +144,12 @@ public:
         throw GFX_EXCEPT("The input layout does not exist.");
     }
 
+    bool containsInputLayout(const InputLayoutIdx& idx) const NOEXCEPT {
+        return inputLayouts_.contains(idx);
+    }
+
     void popInputLayout(const InputLayoutIdx& idx) NOEXCEPT {
         inputLayouts_.erase(idx);
-    }
-
-    void mapInputLayout(const Shader& shader, const InputLayoutIdx& inputLayoutIdx) {
-        inputLayoutMap_[&shader] = inputLayoutIdx;
-    }
-
-    const InputLayout& inputLayout(const Shader& shader) const {
-        if (inputLayoutMap_.contains(&shader)) {
-            return inputLayout(inputLayoutMap_.at(&shader));
-        }
-        throw GFX_EXCEPT("The input layout does not exist.");
     }
 
 private:
@@ -186,11 +169,9 @@ private:
     static std::size_t sDsvHeapSize;
 
     std::map<RootIdx, wrl::ComPtr<ID3D12RootSignature>> roots_;
-    std::map<const IRenderer*, RootIdx> rootMap_;
     std::map<UpBufIdx, wrl::ComPtr<ID3D12Resource>> upBufs_;
     std::map<ShaderIdx, Shader> shaders_;
     std::map<InputLayoutIdx, InputLayout> inputLayouts_;
-    std::map<const Shader*, InputLayoutIdx> inputLayoutMap_;
     wrl::ComPtr<ID3D12Device> pDevice_;
     wrl::ComPtr<ID3D12CommandQueue> pCmdQ_;
     wrl::ComPtr<ID3D12CommandAllocator> pCmdAlloc_;

@@ -9,6 +9,10 @@ namespace gfx {
 
 class SampleRenderer : public IRenderer {
 public:
+    static constexpr std::string rootName() {
+        return "sampleRoot";
+    }
+
     static constexpr std::string shaderName() {
         return "sampleShader";
     }

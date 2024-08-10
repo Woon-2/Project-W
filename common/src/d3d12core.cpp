@@ -118,10 +118,6 @@ void Core::createFenceAndEvent(ID3D12Device* pDevice) {
 }
 
 void Core::render(const IScene& scene, const IRenderer& renderer, IRenderTarget& target) {
-    if (auto rootSig = root(&renderer)) {
-        pCmdList_->SetGraphicsRootSignature(rootSig.Get());
-    }
-
     auto context = D3D12RenderContext(*this);
     renderer.render(scene, context, target);
 }

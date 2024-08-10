@@ -52,11 +52,11 @@ void SampleRenderer::D3D12Drawer::init(SampleRenderer& renderer, d3d12::Core& co
         return;
     }
 
-    auto pRoot = core.root(&renderer);
-
-    if (!pRoot) {
-        throw;  /*RootSignatureNotFound("The root signature is not found.");*/
+    if (!core.containsRoot(rootName())) {
+        throw;  /*RootSignatureAlreadyExists("The root signature already exists.");*/
     }
+
+    auto pRoot = core.root(rootName());
 
     auto shader = d3d12::Shader();
     auto shaderBuilder = d3d12::SimpleShaderBuilder();
