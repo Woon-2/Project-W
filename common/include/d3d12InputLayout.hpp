@@ -25,6 +25,9 @@ private:
     };
 
 public:
+    InputLayout()
+        : gfx::InputLayout(), elemDescs_() {}
+
     template < std::same_as<Element>... Elems >
     InputLayout(std::size_t stride, Elems... elems)
         : InputLayout(stride, elems...), elemDescs_() {

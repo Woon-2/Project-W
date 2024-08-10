@@ -173,7 +173,6 @@ void Core::cleanup() {
     pCmdAlloc_.Reset();
     pCmdQ_.Reset();
     pDevice_.Reset();
-
 }
 
 bool D3D12RenderContext::castableTo(RenderContextType contextType) const {

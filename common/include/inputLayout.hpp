@@ -15,6 +15,9 @@ public:
         VertexBuffer::offset_t offset;
     };
 
+    InputLayout()
+        : elements_(), stride_(VertexBuffer::invalidStride) {}
+
     template < std::same_as<Element>... Elems >
     InputLayout(std::size_t stride, Elems... elems)
         : elements_(), stride_(stride) {

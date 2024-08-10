@@ -4,6 +4,7 @@
 #include "gfx.hpp"
 
 #include "d3d12shader.hpp"
+#include "d3d12InputLayout.hpp"
 
 #include <d3d12.h>
 #include "dxfactory.hpp"
@@ -35,9 +36,11 @@ public:
     friend class WindowAttorney;
 #endif  // ENABLE_D3D12_WINDOW
     friend class DeviceFetcher;
+
     using RootIdx = std::size_t;
     using UpBufIdx = std::string;
     using ShaderIdx = std::string;
+    using InputLayoutIdx = std::string;
 
     static void configDXFactory(wrl::ComPtr<IDXGIFactory4> factory) {
         spFactory = factory;
@@ -140,6 +143,32 @@ public:
         shaders_.erase(idx);
     }
 
+    void addInputLayout(InputLayoutIdx idx, InputLayout inputLayout) {
+        inputLayouts_[idx] = std::move(inputLayout);
+    }
+
+    const InputLayout& inputLayout(const InputLayoutIdx& idx) const {
+        if (inputLayouts_.contains(idx)) {
+            return inputLayouts_.at(idx);
+        }
+        throw GFX_EXCEPT("The input layout does not exist.");
+    }
+
+    void popInputLayout(const InputLayoutIdx& idx) NOEXCEPT {
+        inputLayouts_.erase(idx);
+    }
+
+    void mapInputLayout(const Shader& shader, const InputLayoutIdx& inputLayoutIdx) {
+        inputLayoutMap_[&shader] = inputLayoutIdx;
+    }
+
+    const InputLayout& inputLayout(const Shader& shader) const {
+        if (inputLayoutMap_.contains(&shader)) {
+            return inputLayout(inputLayoutMap_.at(&shader));
+        }
+        throw GFX_EXCEPT("The input layout does not exist.");
+    }
+
 private:
     // TODO: make it return multiple adapters enumerated.
     wrl::ComPtr<IDXGIAdapter1> enumAdapters();
@@ -160,6 +189,8 @@ private:
     std::map<const IRenderer*, RootIdx> rootMap_;
     std::map<UpBufIdx, wrl::ComPtr<ID3D12Resource>> upBufs_;
     std::map<ShaderIdx, Shader> shaders_;
+    std::map<InputLayoutIdx, InputLayout> inputLayouts_;
+    std::map<const Shader*, InputLayoutIdx> inputLayoutMap_;
     wrl::ComPtr<ID3D12Device> pDevice_;
     wrl::ComPtr<ID3D12CommandQueue> pCmdQ_;
     wrl::ComPtr<ID3D12CommandAllocator> pCmdAlloc_;
