@@ -481,7 +481,6 @@ FodyWeavers.xsd
 build/*
 .vscode/*
 docs/*
-extern/*
-!extern/CMakeLists.txt
-!extern/assimp/CMakeLists.txt
-!extern/zlib/CMakeLists.txt
+common/include/shaderPath.hpp
+!extern/assimp/*
+!extern/zlib/*

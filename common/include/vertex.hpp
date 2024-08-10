@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <array>
+#include <concepts>
 
 #include <cstdint>
 #include <cstdlib>
@@ -41,7 +42,6 @@ public:
     void set(Properties prop, T&& val);
     void* operator[](Properties prop);
 
-
 private:
     std::uint8_t* pStart_;
     VertexBuffer* pBuf_;
@@ -57,21 +57,47 @@ public:
     static constexpr std::size_t invalidStride = -1;
     using offset_t = std::size_t;
 
-    bool contains(Vertex::Properties prop) const {
+    VertexBuffer()
+        : offsets_{ invalidOffset, invalidOffset, invalidOffset, invalidOffset, invalidOffset, invalidOffset },
+        data_(), properties_(0u), stride_(invalidStride) {}
+
+    ~VertexBuffer() = default;
+    VertexBuffer(const VertexBuffer&) = default;
+    VertexBuffer(VertexBuffer&&) noexcept = default;
+    VertexBuffer& operator=(const VertexBuffer&) = default;
+    VertexBuffer& operator=(VertexBuffer&&) noexcept = default;
+
+    template < std::same_as<Vertex::Properties>... Props >
+    VertexBuffer(const VertexBuffer& other, Props... props)
+        : offsets_{ invalidOffset, invalidOffset, invalidOffset, invalidOffset, invalidOffset, invalidOffset },
+        data_(), properties_(0u), stride_(0u)
+    {
+        for (auto prop : { props... }) {
+            stride_ += other.propByteWidth(prop);
+        }
+
+        data_.resize(stride_ * other.size());
+
+        offset_t accOffset = 0;
+
+        (fetchProp(other, props, accOffset), ...);
+    }
+
+    bool contains(Vertex::Properties prop) const NOEXCEPT {
         return properties_ & prop;
     }
 
-    void configProperty(Vertex::Properties prop, offset_t offset) {
+    void configProperty(Vertex::Properties prop, offset_t offset) NOEXCEPT {
         offsets_[toIdx(prop)] = offset;
         properties_ = properties_ | prop;
     }
 
-    void configStride(std::size_t stride) {
+    void configStride(std::size_t stride) NOEXCEPT {
         stride_ = stride;
     }
 
     void constructProperty( Vertex::Properties prop, const std::uint8_t* data,
-        std::size_t elemByteWidth, std::size_t cnt
+        std::size_t propByteWidth, std::size_t cnt, std::size_t stride
     );
 
     void constructRawMem(const std::uint8_t* data, std::size_t byteWidth) {
@@ -79,19 +105,35 @@ public:
         std::memcpy(data_.data(), data, byteWidth);
     }
 
-    void* rawMem() {
+    void* rawMem() NOEXCEPT {
         return data_.data();
     }
 
-    std::size_t stride() const {
+    const void* rawMem() const NOEXCEPT {
+        return data_.data();
+    }
+
+    std::size_t stride() const NOEXCEPT {
         return stride_;
     }
 
-    std::size_t byteWidth() const {
+    std::size_t byteWidth() const NOEXCEPT {
         return data_.size();
     }
 
-    std::size_t numVertices() const {
+    std::size_t propByteWidth(Vertex::Properties prop) const {
+        if (!contains(prop)) {
+            throw;  // TODO: add exception
+        }
+
+        auto propIdx = toIdx(prop);
+        if (propIdx == Vertex::numProperties - 1) {
+            return stride_ - offsets_[propIdx];
+        }
+        return offsets_[propIdx + 1] - offsets_[propIdx];
+    }
+
+    std::size_t size() const {
         return data_.size() / stride_;
     }
 
@@ -113,9 +155,13 @@ public:
         return (*this)[idx];
     }
 
-
+    offset_t offset(Vertex::Properties prop) const {
+        return offsets_[toIdx(prop)];
+    }
 
 private:
+    void fetchProp(const VertexBuffer& other, Vertex::Properties prop, offset_t& accOffset);
+
     static constexpr std::size_t toIdx(Vertex::Properties prop) {
         switch (prop) {
         case Vertex::Properties::Position: return 0u;
@@ -154,7 +200,7 @@ void Vertex::set(Properties prop, T&& val) {
     std::memcpy(pStart_ + pBuf_->offsets_[pBuf_->toIdx(prop)], &val, sizeof(T));
 }
 
-void* Vertex::operator[](Properties prop) {
+inline void* Vertex::operator[](Properties prop) {
     return pStart_ + pBuf_->offsets_[pBuf_->toIdx(prop)];
 }
 
