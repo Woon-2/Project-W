@@ -84,3 +84,11 @@ include(configure_paths)
 gen_shader_path()
 
 add_dependencies(client hlsl)
+
+file(COPY "${PROJECT_SOURCE_DIR}/extern/assimp/assimp-vc143-mt.dll"
+    DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/Debug"
+)
+
+file(COPY "${PROJECT_SOURCE_DIR}/extern/assimp/assimp-vc143-mt.dll"
+    DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/Release"
+)
