@@ -1,4 +1,4 @@
-#include "Timer.h"
+#include "Timer.hpp"
 
 Timer::Timer() : frequency_({ 0 }), curCount_({ 0 }), prevCount_({ 0 }), accTime_(0), fps_(0), deltaTime_(0), callCount_(0)
 {
