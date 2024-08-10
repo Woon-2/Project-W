@@ -73,8 +73,6 @@ target_link_libraries(win32
 )
 
 # === gfx ===
-configure_file(shaderPath.hpp.in "${CMAKE_CURRENT_SOURCE_DIR}/include/shaderPath.hpp" @ONLY)
-
 add_library(gfx
     src/gfx.cpp include/gfx.hpp
     src/gfxExcept.cpp include/gfxExcept.hpp

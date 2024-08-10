@@ -80,4 +80,7 @@ compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/sampleShader.hlsl"
 
 add_hlsl_target("${HLSL_COMPILED_SHADERS}")
 
+include(configure_paths)
+gen_shader_path()
+
 add_dependencies(client hlsl)
