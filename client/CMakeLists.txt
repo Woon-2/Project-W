@@ -82,6 +82,5 @@ add_hlsl_target("${HLSL_COMPILED_SHADERS}")
 
 include(configure_paths)
 gen_shader_path()
-gen_resource_path()
 
 add_dependencies(client hlsl)

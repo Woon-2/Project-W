@@ -118,3 +118,6 @@ target_include_directories(gfx
     PUBLIC
         "${ASSIMP_INCLUDE}"
 )
+
+include(configure_paths)
+gen_resource_path()
