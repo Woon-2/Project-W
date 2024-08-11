@@ -31,7 +31,7 @@ public:
     Model(const std::string& name)
         : coordSys_(), children_(), meshes_(), name_(name) {}
 
-    std::string_view name() const {
+    std::string_view name() const NOEXCEPT {
         return name_;
     }
 
@@ -45,6 +45,10 @@ public:
 
     Model popChild(std::string_view name);
     const Model& child(std::string_view name) const;
+
+    Model& child(std::string_view name) {
+        return const_cast<Model&>( const_cast<const Model*>(this)->child(name) );
+    }
 
     void addMesh(const Mesh& mesh, const std::string& name) {
         meshes_.push_back({mesh, name});
@@ -73,12 +77,28 @@ public:
         coordSys_ = coordSys;
     }
 
-    const coord::System& coord() const {
+    const coord::System& coord() const NOEXCEPT {
         return coordSys_;
     }
 
-    coord::System& coord() {
+    coord::System& coord() NOEXCEPT {
         return coordSys_;
+    }
+
+    auto& children() NOEXCEPT {
+        return children_;
+    }
+
+    const auto& children() const NOEXCEPT {
+        return children_;
+    }
+
+    auto& meshes() NOEXCEPT {
+        return meshes_;
+    }
+
+    const auto& meshes() const NOEXCEPT {
+        return meshes_;
     }
 
 private:
