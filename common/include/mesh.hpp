@@ -18,6 +18,8 @@ class Mesh {
 public:
     using IndexCont = std::vector<std::uint32_t>;
 
+    Mesh() = default;
+
     template <std::ranges::range R>
     Mesh(VertexBuffer vb, R&& ib)
         : vb_(std::move(vb)), ib_(std::begin(ib), std::end(ib)) {}

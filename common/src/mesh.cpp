@@ -85,6 +85,8 @@ Mesh getFirstMeshFromAiNode(const aiNode* node, const aiScene* scene) {
     }
 
     throw std::runtime_error("No meshes found");
+
+    return Mesh();
 }
 
 Mesh getFirstMeshFromAiScene(const aiScene* scene) {
@@ -94,10 +96,6 @@ Mesh getFirstMeshFromAiScene(const aiScene* scene) {
 
     if (scene->mRootNode->mNumMeshes > 0) {
         return getFirstMeshFromAiNode(scene->mRootNode, scene);
-    }
-
-    for (auto i = 0u; i < scene->mRootNode->mNumChildren; ++i) {
-        return getFirstMeshFromAiNode(scene->mRootNode->mChildren[i], scene);
     }
 }
 
