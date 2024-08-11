@@ -26,7 +26,7 @@ void Mesh::buildRes(Core& core, D3D12RenderContext& ctx) {
     core.addTmpUpBuf(vbUpIdx_);
     core.addTmpUpBuf(ibUpIdx_);
     // Vertex buffer
-    vb_ = d3d12::createDefBuf( core, ctx, vb().rawMem(), vb().byteWidth(),
+    vb_ = d3d12::createDefBuf( core, ctx, vb().rawMem(), static_cast<std::uint32_t>( vb().byteWidth() ),
         D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, core.tmpUpBuf(vbUpIdx_)
     );
     vbView_[0] = D3D12_VERTEX_BUFFER_VIEW {
