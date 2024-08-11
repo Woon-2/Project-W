@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <concepts>
 
-
 #ifdef ASSIMP_MATH_UTIL
 #include "assimp/vector2.h"
 #include "assimp/vector3.h"
@@ -116,42 +115,42 @@ private:
     float val_;
 };
 
-Radian::Radian(Degree deg) __MathUtil_NOEXCEPT
+inline Radian::Radian(Degree deg) __MathUtil_NOEXCEPT
     : val_(static_cast<float>(deg) * pi / 180.f) {}
 
-Radian::operator Degree() const __MathUtil_NOEXCEPT {
+inline Radian::operator Degree() const __MathUtil_NOEXCEPT {
     return val_ * 180.f / pi;
 }
 
-Radian operator+(Radian lhs, Radian rhs) __MathUtil_NOEXCEPT {
+inline Radian operator+(Radian lhs, Radian rhs) __MathUtil_NOEXCEPT {
     return lhs += rhs;
 }
 
-Radian operator-(Radian lhs, Radian rhs) __MathUtil_NOEXCEPT {
+inline Radian operator-(Radian lhs, Radian rhs) __MathUtil_NOEXCEPT {
     return lhs -= rhs;
 }
 
-Radian operator*(Radian lhs, Radian rhs) __MathUtil_NOEXCEPT {
+inline Radian operator*(Radian lhs, Radian rhs) __MathUtil_NOEXCEPT {
     return lhs *= rhs;
 }
 
-Radian operator/(Radian lhs, Radian rhs) __MathUtil_NOEXCEPT {
+inline Radian operator/(Radian lhs, Radian rhs) __MathUtil_NOEXCEPT {
     return lhs /= rhs;
 }
 
-Degree operator+(Degree lhs, Degree rhs) __MathUtil_NOEXCEPT {
+inline Degree operator+(Degree lhs, Degree rhs) __MathUtil_NOEXCEPT {
     return lhs += rhs;
 }
 
-Degree operator-(Degree lhs, Degree rhs) __MathUtil_NOEXCEPT {
+inline Degree operator-(Degree lhs, Degree rhs) __MathUtil_NOEXCEPT {
     return lhs -= rhs;
 }
 
-Degree operator*(Degree lhs, Degree rhs) __MathUtil_NOEXCEPT {
+inline Degree operator*(Degree lhs, Degree rhs) __MathUtil_NOEXCEPT {
     return lhs *= rhs;
 }
 
-Degree operator/(Degree lhs, Degree rhs) __MathUtil_NOEXCEPT {
+inline Degree operator/(Degree lhs, Degree rhs) __MathUtil_NOEXCEPT {
     return lhs /= rhs;
 }
 
@@ -1336,47 +1335,47 @@ private:
 
 };
 
-const Quat XM_CALLCONV operator+(Quat lhs, Quat rhs) __MathUtil_NOEXCEPT {
+inline const Quat XM_CALLCONV operator+(Quat lhs, Quat rhs) __MathUtil_NOEXCEPT {
     return dx::XMVectorAdd(lhs.get(), rhs.get());
 }
 
-const Quat XM_CALLCONV operator-(Quat lhs, Quat rhs) __MathUtil_NOEXCEPT {
+inline const Quat XM_CALLCONV operator-(Quat lhs, Quat rhs) __MathUtil_NOEXCEPT {
     return dx::XMVectorSubtract(lhs.get(), rhs.get());
 }
 
-const Quat XM_CALLCONV operator*(Quat lhs, Quat rhs) __MathUtil_NOEXCEPT {
+inline const Quat XM_CALLCONV operator*(Quat lhs, Quat rhs) __MathUtil_NOEXCEPT {
     return dx::XMQuaternionMultiply(lhs.get(), rhs.get());
 }
 
-const Quat XM_CALLCONV operator/(Quat lhs, Quat rhs) __MathUtil_NOEXCEPT {
+inline const Quat XM_CALLCONV operator/(Quat lhs, Quat rhs) __MathUtil_NOEXCEPT {
     return dx::XMQuaternionMultiply(lhs.get(), dx::XMQuaternionInverse(rhs.get()));
 }
 
-const Quat XM_CALLCONV quatRPY(
+inline const Quat XM_CALLCONV quatRPY(
     Radian roll, Radian pitch, Radian yaw
 ) __MathUtil_NOEXCEPT {
     return dx::XMQuaternionRotationRollPitchYaw(pitch, yaw, roll);
 }
 
-const Quat XM_CALLCONV quatRotAxis(
+inline const Quat XM_CALLCONV quatRotAxis(
     dx::FXMVECTOR axis, Radian angle
 ) __MathUtil_NOEXCEPT {
     return dx::XMQuaternionRotationAxis(axis, angle);
 }
 
-const Quat XM_CALLCONV quatRotMat(
+inline const Quat XM_CALLCONV quatRotMat(
     dx::FXMMATRIX mat
 ) __MathUtil_NOEXCEPT {
     return dx::XMQuaternionRotationMatrix(mat);
 }
 
-const Quat XM_CALLCONV slerp(
+inline const Quat XM_CALLCONV slerp(
     Quat lhs, Quat rhs, float t
 ) __MathUtil_NOEXCEPT {
     return dx::XMQuaternionSlerp(lhs.get(), rhs.get(), t);
 }
 
-const Quat XM_CALLCONV squad(
+inline const Quat XM_CALLCONV squad(
     Quat q0, Quat q1, Quat a, Quat b, float t
 ) __MathUtil_NOEXCEPT {
     return dx::XMQuaternionSquad(q0.get(), q1.get(), a.get(), b.get(), t);
@@ -1507,11 +1506,11 @@ private:
 };
 
 #if defined(DXMATH_QUAT_UTIL) && defined(DXMATH_MAT_UTIL)
-NQuat::operator Mat<3, 3>() const __MathUtil_NOEXCEPT {
+inline NQuat::operator Mat<3, 3>() const __MathUtil_NOEXCEPT {
     return Mat<3, 3>(dx::XMMatrixRotationQuaternion(quat_));
 }
 
-NQuat::operator Mat<4, 4>() const __MathUtil_NOEXCEPT {
+inline NQuat::operator Mat<4, 4>() const __MathUtil_NOEXCEPT {
     return Mat<4, 4>(dx::XMMatrixRotationQuaternion(quat_));
 }
 #endif  // DXMATH_QUAT_UTIL && DXMATH_MAT_UTIL
@@ -1548,79 +1547,79 @@ Vec<D>& XM_CALLCONV Vec<D>::operator*=(Mat<D, D> rhs) __MathUtil_NOEXCEPT {
     return *this;
 }
 
-const Mat<3, 3> XM_CALLCONV scale(float xScl, float yScl, float zScl) __MathUtil_NOEXCEPT {
+inline const Mat<3, 3> XM_CALLCONV scale(float xScl, float yScl, float zScl) __MathUtil_NOEXCEPT {
     return dx::XMMatrixScaling(xScl, yScl, zScl);
 }
 
-const Mat<3, 3> XM_CALLCONV scale(Vec<3> vec) __MathUtil_NOEXCEPT {
+inline const Mat<3, 3> XM_CALLCONV scale(Vec<3> vec) __MathUtil_NOEXCEPT {
     return dx::XMMatrixScalingFromVector(vec.get());
 }
 
-const Mat<4, 4> XM_CALLCONV scaleH(Vec<3> vec) __MathUtil_NOEXCEPT {
+inline const Mat<4, 4> XM_CALLCONV scaleH(Vec<3> vec) __MathUtil_NOEXCEPT {
     return dx::XMMatrixScalingFromVector(vec.get());
 }
 
-const Mat<4, 4> XM_CALLCONV translate(float x, float y, float z) __MathUtil_NOEXCEPT {
+inline const Mat<4, 4> XM_CALLCONV translate(float x, float y, float z) __MathUtil_NOEXCEPT {
     return dx::XMMatrixTranslation(x, y, z);
 }
 
-const Mat<4, 4> XM_CALLCONV translate(Vec<3> vec) __MathUtil_NOEXCEPT {
+inline const Mat<4, 4> XM_CALLCONV translate(Vec<3> vec) __MathUtil_NOEXCEPT {
     return dx::XMMatrixTranslationFromVector(vec.get());
 }
 
-const Mat<3, 3> XM_CALLCONV rotate(Radian angle, float axisX, float axisY, float axisZ) __MathUtil_NOEXCEPT {
+inline const Mat<3, 3> XM_CALLCONV rotate(Radian angle, float axisX, float axisY, float axisZ) __MathUtil_NOEXCEPT {
     return dx::XMMatrixRotationAxis(dx::XMVectorSet(axisX, axisY, axisZ, 0.f), angle);
 }
 
-const Mat<3, 3> XM_CALLCONV rotate(Radian angle, Vec<3> axis) __MathUtil_NOEXCEPT {
+inline const Mat<3, 3> XM_CALLCONV rotate(Radian angle, Vec<3> axis) __MathUtil_NOEXCEPT {
     return dx::XMMatrixRotationAxis(axis.get(), angle);
 }
 
-const Mat<3, 3> XM_CALLCONV rotate(Radian angle, NVec<3> axis) __MathUtil_NOEXCEPT {
+inline const Mat<3, 3> XM_CALLCONV rotate(Radian angle, NVec<3> axis) __MathUtil_NOEXCEPT {
     return dx::XMMatrixRotationNormal(axis.get(), angle);
 }
 
-const Mat<3, 3> XM_CALLCONV rotate(Degree angle, float axisX, float axisY, float axisZ) __MathUtil_NOEXCEPT {
+inline const Mat<3, 3> XM_CALLCONV rotate(Degree angle, float axisX, float axisY, float axisZ) __MathUtil_NOEXCEPT {
     return rotate(static_cast<Radian>(angle), axisX, axisY, axisZ);
 }
 
-const Mat<3, 3> XM_CALLCONV rotate(Degree angle, Vec<3> axis) __MathUtil_NOEXCEPT {
+inline const Mat<3, 3> XM_CALLCONV rotate(Degree angle, Vec<3> axis) __MathUtil_NOEXCEPT {
     return rotate(static_cast<Radian>(angle), axis);
 }
 
-const Mat<3, 3> XM_CALLCONV rotate(Degree angle, NVec<3> axis) __MathUtil_NOEXCEPT {
+inline const Mat<3, 3> XM_CALLCONV rotate(Degree angle, NVec<3> axis) __MathUtil_NOEXCEPT {
     return rotate(static_cast<Radian>(angle), axis);
 }
 
-const Mat<3, 3> XM_CALLCONV rotateX(Radian angle) __MathUtil_NOEXCEPT {
+inline const Mat<3, 3> XM_CALLCONV rotateX(Radian angle) __MathUtil_NOEXCEPT {
     return dx::XMMatrixRotationX(angle);
 }
 
-const Mat<3, 3> XM_CALLCONV rotateX(Degree angle) __MathUtil_NOEXCEPT {
+inline const Mat<3, 3> XM_CALLCONV rotateX(Degree angle) __MathUtil_NOEXCEPT {
     return rotateX(static_cast<Radian>(angle));
 }
 
-const Mat<3, 3> XM_CALLCONV rotateY(Radian angle) __MathUtil_NOEXCEPT {
+inline const Mat<3, 3> XM_CALLCONV rotateY(Radian angle) __MathUtil_NOEXCEPT {
     return dx::XMMatrixRotationY(angle);
 }
 
-const Mat<3, 3> XM_CALLCONV rotateY(Degree angle) __MathUtil_NOEXCEPT {
+inline const Mat<3, 3> XM_CALLCONV rotateY(Degree angle) __MathUtil_NOEXCEPT {
     return rotateY(static_cast<Radian>(angle));
 }
 
-const Mat<3, 3> XM_CALLCONV rotateZ(Radian angle) __MathUtil_NOEXCEPT {
+inline const Mat<3, 3> XM_CALLCONV rotateZ(Radian angle) __MathUtil_NOEXCEPT {
     return dx::XMMatrixRotationZ(angle);
 }
 
-const Mat<3, 3> XM_CALLCONV rotateZ(Degree angle) __MathUtil_NOEXCEPT {
+inline const Mat<3, 3> XM_CALLCONV rotateZ(Degree angle) __MathUtil_NOEXCEPT {
     return rotateZ(static_cast<Radian>(angle));
 }
 
-const Mat<3, 3> XM_CALLCONV rotateRPY(Radian roll, Radian pitch, Radian yaw) __MathUtil_NOEXCEPT {
+inline const Mat<3, 3> XM_CALLCONV rotateRPY(Radian roll, Radian pitch, Radian yaw) __MathUtil_NOEXCEPT {
     return dx::XMMatrixRotationRollPitchYaw(pitch, yaw, roll);
 }
 
-const Mat<3, 3> XM_CALLCONV rotateRPY(Degree roll, Degree pitch, Degree yaw) __MathUtil_NOEXCEPT {
+inline const Mat<3, 3> XM_CALLCONV rotateRPY(Degree roll, Degree pitch, Degree yaw) __MathUtil_NOEXCEPT {
     return rotateRPY(
         static_cast<Radian>(roll),
         static_cast<Radian>(pitch),
@@ -1628,125 +1627,125 @@ const Mat<3, 3> XM_CALLCONV rotateRPY(Degree roll, Degree pitch, Degree yaw) __M
     );
 }
 
-const Mat<4, 4> XM_CALLCONV rotateH(Radian angle, float axisX, float axisY, float axisZ) __MathUtil_NOEXCEPT {
+inline const Mat<4, 4> XM_CALLCONV rotateH(Radian angle, float axisX, float axisY, float axisZ) __MathUtil_NOEXCEPT {
     return dx::XMMatrixRotationAxis(dx::XMVectorSet(axisX, axisY, axisZ, 0.f), angle);
 }
 
-const Mat<4, 4> XM_CALLCONV rotateH(Radian angle, Vec<3> axis) __MathUtil_NOEXCEPT {
+inline const Mat<4, 4> XM_CALLCONV rotateH(Radian angle, Vec<3> axis) __MathUtil_NOEXCEPT {
     return dx::XMMatrixRotationAxis(axis.get(), angle);
 }
 
-const Mat<4, 4> XM_CALLCONV rotateH(Radian angle, NVec<3> axis) __MathUtil_NOEXCEPT {
+inline const Mat<4, 4> XM_CALLCONV rotateH(Radian angle, NVec<3> axis) __MathUtil_NOEXCEPT {
     return dx::XMMatrixRotationNormal(axis.get(), angle);
 }
 
-const Mat<4, 4> XM_CALLCONV rotateH(Degree angle, float axisX, float axisY, float axisZ) __MathUtil_NOEXCEPT {
+inline const Mat<4, 4> XM_CALLCONV rotateH(Degree angle, float axisX, float axisY, float axisZ) __MathUtil_NOEXCEPT {
     return rotateH(static_cast<Radian>(angle), axisX, axisY, axisZ);
 }
 
-const Mat<4, 4> XM_CALLCONV rotateH(Degree angle, Vec<3> axis) __MathUtil_NOEXCEPT {
+inline const Mat<4, 4> XM_CALLCONV rotateH(Degree angle, Vec<3> axis) __MathUtil_NOEXCEPT {
     return rotateH(static_cast<Radian>(angle), axis);
 }
 
-const Mat<4, 4> XM_CALLCONV rotateH(Degree angle, NVec<3> axis) __MathUtil_NOEXCEPT {
+inline const Mat<4, 4> XM_CALLCONV rotateH(Degree angle, NVec<3> axis) __MathUtil_NOEXCEPT {
     return rotateH(static_cast<Radian>(angle), axis);
 }
 
-const Mat<4, 4> XM_CALLCONV rotateXH(Radian angle) __MathUtil_NOEXCEPT {
+inline const Mat<4, 4> XM_CALLCONV rotateXH(Radian angle) __MathUtil_NOEXCEPT {
     return dx::XMMatrixRotationX(angle);
 }
 
-const Mat<4, 4> XM_CALLCONV rotateXH(Degree angle) __MathUtil_NOEXCEPT {
+inline const Mat<4, 4> XM_CALLCONV rotateXH(Degree angle) __MathUtil_NOEXCEPT {
     return rotateXH(static_cast<Radian>(angle));
 }
 
-const Mat<4, 4> XM_CALLCONV rotateYH(Radian angle) __MathUtil_NOEXCEPT {
+inline const Mat<4, 4> XM_CALLCONV rotateYH(Radian angle) __MathUtil_NOEXCEPT {
     return dx::XMMatrixRotationY(angle);
 }
 
-const Mat<4, 4> XM_CALLCONV rotateYH(Degree angle) __MathUtil_NOEXCEPT {
+inline const Mat<4, 4> XM_CALLCONV rotateYH(Degree angle) __MathUtil_NOEXCEPT {
     return rotateYH(static_cast<Radian>(angle));
 }
 
-const Mat<4, 4> XM_CALLCONV rotateZH(Radian angle) __MathUtil_NOEXCEPT {
+inline const Mat<4, 4> XM_CALLCONV rotateZH(Radian angle) __MathUtil_NOEXCEPT {
     return dx::XMMatrixRotationZ(angle);
 }
 
-const Mat<4, 4> XM_CALLCONV rotateZH(Degree angle) __MathUtil_NOEXCEPT {
+inline const Mat<4, 4> XM_CALLCONV rotateZH(Degree angle) __MathUtil_NOEXCEPT {
     return rotateZH(static_cast<Radian>(angle));
 }
 
-const Mat<4, 4> XM_CALLCONV rotateRPYH(Radian roll, Radian pitch, Radian yaw) __MathUtil_NOEXCEPT {
+inline const Mat<4, 4> XM_CALLCONV rotateRPYH(Radian roll, Radian pitch, Radian yaw) __MathUtil_NOEXCEPT {
     return dx::XMMatrixRotationRollPitchYaw(pitch, yaw, roll);
 }
 
-const Mat<3, 3> XM_CALLCONV transpose(Mat<3, 3> mat) __MathUtil_NOEXCEPT {
+inline const Mat<3, 3> XM_CALLCONV transpose(Mat<3, 3> mat) __MathUtil_NOEXCEPT {
     return dx::XMMatrixTranspose(mat.get());
 }
 
-const Mat<4, 4> XM_CALLCONV transpose(Mat<4, 4> mat) __MathUtil_NOEXCEPT {
+inline const Mat<4, 4> XM_CALLCONV transpose(Mat<4, 4> mat) __MathUtil_NOEXCEPT {
     return dx::XMMatrixTranspose(mat.get());
 }
 
-const Mat<3, 3> XM_CALLCONV inverse(Mat<3, 3> mat) __MathUtil_NOEXCEPT {
+inline const Mat<3, 3> XM_CALLCONV inverse(Mat<3, 3> mat) __MathUtil_NOEXCEPT {
     return dx::XMMatrixInverse(nullptr, mat.get());
 }
 
-const Mat<3, 3> XM_CALLCONV inverse(Mat<3, 3> mat, float& outDet) __MathUtil_NOEXCEPT {
+inline const Mat<3, 3> XM_CALLCONV inverse(Mat<3, 3> mat, float& outDet) __MathUtil_NOEXCEPT {
     dx::XMVECTOR det;
     auto ret = dx::XMMatrixInverse(&det, mat.get());
     outDet = dx::XMVectorGetX(det);
     return ret;
 }
 
-const Mat<4, 4> XM_CALLCONV inverse(Mat<4, 4> mat) __MathUtil_NOEXCEPT {
+inline const Mat<4, 4> XM_CALLCONV inverse(Mat<4, 4> mat) __MathUtil_NOEXCEPT {
     return dx::XMMatrixInverse(nullptr, mat.get());
 }
 
-const Mat<4, 4> XM_CALLCONV inverse(Mat<4, 4> mat, float& outDet) __MathUtil_NOEXCEPT {
+inline const Mat<4, 4> XM_CALLCONV inverse(Mat<4, 4> mat, float& outDet) __MathUtil_NOEXCEPT {
     dx::XMVECTOR det;
     auto ret = dx::XMMatrixInverse(&det, mat.get());
     outDet = dx::XMVectorGetX(det);
     return ret;
 }
 
-const Mat<4, 4> XM_CALLCONV lookAt(
+inline const Mat<4, 4> XM_CALLCONV lookAt(
     Vec<3> eye, Vec<3> at, NVec<3> up
 ) __MathUtil_NOEXCEPT {
     return dx::XMMatrixLookAtLH(eye.get(), at.get(), up.get());
 }
 
-const Mat<4, 4> XM_CALLCONV ortho(
+inline const Mat<4, 4> XM_CALLCONV ortho(
     float width, float height, float nearZ, float farZ
 ) __MathUtil_NOEXCEPT {
     return dx::XMMatrixOrthographicLH(width, height, nearZ, farZ);
 }
 
-const Mat<4, 4> XM_CALLCONV ortho(
+inline const Mat<4, 4> XM_CALLCONV ortho(
     float left, float right, float bottom, float top, float nearZ, float farZ
 ) __MathUtil_NOEXCEPT {
     return dx::XMMatrixOrthographicOffCenterLH(left, right, bottom, top, nearZ, farZ);
 }
 
-const Mat<4, 4> XM_CALLCONV persp(
+inline const Mat<4, 4> XM_CALLCONV persp(
     float width, float height, float nearZ, float farZ
 ) __MathUtil_NOEXCEPT {
     return dx::XMMatrixPerspectiveLH(width, height, nearZ, farZ);
 }
 
-const Mat<4, 4> XM_CALLCONV persp(
+inline const Mat<4, 4> XM_CALLCONV persp(
     Radian fov, float aspect, float nearZ, float farZ
 ) __MathUtil_NOEXCEPT {
     return dx::XMMatrixPerspectiveFovLH(fov, aspect, nearZ, farZ);
 }
 
-const Mat<4, 4> XM_CALLCONV persp(
+inline const Mat<4, 4> XM_CALLCONV persp(
     Degree fov, float aspect, float nearZ, float farZ
 ) __MathUtil_NOEXCEPT {
     return persp(static_cast<Radian>(fov), aspect, nearZ, farZ);
 }
 
-const Mat<4, 4> XM_CALLCONV persp(
+inline const Mat<4, 4> XM_CALLCONV persp(
     float left, float right, float bottom, float top, float nearZ, float farZ
 ) __MathUtil_NOEXCEPT {
     return dx::XMMatrixPerspectiveOffCenterLH(left, right, bottom, top, nearZ, farZ);
