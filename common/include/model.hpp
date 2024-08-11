@@ -1,6 +1,8 @@
 #ifndef __MODEL_HPP
 #define __MODEL_HPP
 
+#define ASSIMP_MATH_UTIL
+
 #include "mesh.hpp"
 #include "inputLayout.hpp"
 

@@ -7,6 +7,14 @@
 #include <algorithm>
 #include <concepts>
 
+
+#ifdef ASSIMP_MATH_UTIL
+#include "assimp/vector2.h"
+#include "assimp/vector3.h"
+#include "assimp/matrix3x3.h"
+#include "assimp/matrix4x4.h"
+#endif
+
 namespace mu {
 
 inline constexpr auto pi = 3.1415926f;
@@ -203,6 +211,16 @@ public:
 
     template <std::size_t D2>
     Vec(NVec<D2> vec) __MathUtil_NOEXCEPT;
+
+#ifdef ASSIMP_MATH_UTIL
+    template <std::floating_point Fl>
+    Vec(aiVector2t<Fl> vec) __MathUtil_NOEXCEPT
+        : Vec(vec.x, vec.y) {}
+
+    template <std::floating_point Fl>
+    Vec(aiVector3t<Fl> vec) __MathUtil_NOEXCEPT
+        : Vec(vec.x, vec.y, vec.z) {}
+#endif  // ASSIMP_MATH_UTIL
 
     template <std::size_t D2, std::floating_point ... Fs>
         requires (D2 >= 1 && D2 < 4 && D > D2)
@@ -444,6 +462,16 @@ public:
             vec_ = dx::XMVectorSelect(vec_, dx::XMVectorSet(0.f, 0.f, 0.f, floats...), ctrl);
         }
     }
+
+#ifdef ASSIMP_MATH_UTIL
+    template <std::floating_point Fl>
+    NVec(aiVector2t<Fl> vec) __MathUtil_NOEXCEPT
+        : NVec(vec.x, vec.y) {}
+
+    template <std::floating_point Fl>
+    NVec(aiVector3t<Fl> vec) __MathUtil_NOEXCEPT
+        : NVec(vec.x, vec.y, vec.z) {}
+#endif // ASSIMP_MATH_UTIL
 
     dx::XMVECTOR& get() __MathUtil_NOEXCEPT {
         return vec_;
@@ -1384,6 +1412,32 @@ public:
         requires ( (R == 3 && C == 3) || (R == 4 && C == 4) )
         : mat_(dx::XMMatrixRotationQuaternion(nQuat.get())) {}
 #endif // DXMATH_QUAT_UTIL
+
+#ifdef ASSIMP_MATH_UTIL
+    Mat(const aiMatrix3x3& mat) __MathUtil_NOEXCEPT
+        : mat_( dx::XMLoadFloat3x3( reinterpret_cast<const dx::XMFLOAT3X3*>(&mat) ) ) {}
+
+    Mat(const aiMatrix4x4& mat) __MathUtil_NOEXCEPT
+        : mat_( dx::XMLoadFloat4x4( reinterpret_cast<const dx::XMFLOAT4X4*>(&mat) ) ) {}
+
+    template <std::floating_point Fl>
+    Mat(const aiMatrix3x3t<Fl>& mat) __MathUtil_NOEXCEPT
+        : mat_( dx::XMMatrixSet(
+            mat.a1, mat.a2, mat.a3, 0.f,
+            mat.b1, mat.b2, mat.b3, 0.f,
+            mat.c1, mat.c2, mat.c3, 0.f,
+            0.f, 0.f, 0.f, 1.f
+        ) ) {}
+
+    template <std::floating_point Fl>
+    Mat(const aiMatrix4x4t<Fl>& mat) __MathUtil_NOEXCEPT
+        : mat_( dx::XMMatrixSet(
+            mat.a1, mat.a2, mat.a3, mat.a4,
+            mat.b1, mat.b2, mat.b3, mat.b4,
+            mat.c1, mat.c2, mat.c3, mat.c4,
+            mat.d1, mat.d2, mat.d3, mat.d4
+        ) ) {}
+#endif  // ASSIMP_MATH_UTIL
 
     Mat& XM_CALLCONV operator+=(Mat rhs) __MathUtil_NOEXCEPT {
         using dx::operator+=;

@@ -37,6 +37,7 @@ void processAiNode(const aiNode* node, const aiScene* scene, Model& model) {
         model.addMesh( detail::getMeshFromAiNode(node, scene, i),
             scene->mMeshes[node->mMeshes[i]]->mName.C_Str()
         );
+        model.coord() << node->mTransformation;
     }
 
     for (auto i = 0u; i < node->mNumChildren; ++i) {
