@@ -6,6 +6,8 @@
 #include <map>
 #include <any>
 
+#include "generator.hpp"
+
 #include "gfxExcept.hpp"
 
 namespace gfx {
@@ -132,7 +134,7 @@ public:
     IScene& operator=(const IScene&) = default;
     IScene& operator=(IScene&&) noexcept = default;
 
-    virtual std::optional<const DrawInfo> getDrawInfo() const = 0;
+    virtual Generator<DrawInfo> iteration() const = 0;
 };
 
 }   // namespace gfx

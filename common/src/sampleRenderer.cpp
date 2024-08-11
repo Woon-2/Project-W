@@ -61,8 +61,8 @@ void SampleRenderer::D3D12Drawer::render( const IScene& scene, ID3D12GraphicsCom
 ) {
     pCmdList->OMSetRenderTargets(1u, &rtvHandle, true, &dsvHandle);
 
-    while (auto di = scene.getDrawInfo()) {
-        auto pMesh = di.value().get<const d3d12::Mesh*>(SampleScene::meshIdx);
+    for (auto di : scene.iteration()) {
+        auto pMesh = di.get<const d3d12::Mesh*>(SampleScene::meshIdx);
 
         pCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         pMesh->bind(pCmdList);

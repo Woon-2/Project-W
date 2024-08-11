@@ -28,11 +28,10 @@ private:
 
     Timer timer_;
 
+    std::unique_ptr<gfx::d3d12::Model> pDrawable_;
     gfx::ICore* pGfx_;
     MyWindow* pWnd_;
     double lockFPS_;
-
-    std::unique_ptr<gfx::SampleDrawable> pDrawable_;
 };
 
 #endif // __GAME_HPP
