@@ -72,6 +72,22 @@ target_link_libraries(win32
         common::woon2exception
 )
 
+# === math ===
+add_library(mu
+    src/coord.cpp include/coord.hpp
+    include/mathUtil.hpp
+)
+
+add_library(common::mu ALIAS mu)
+
+auto_configure(mu PRIVATE)
+
+target_include_directories(mu
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+
+
 # === gfx ===
 add_library(gfx
     src/gfx.cpp include/gfx.hpp
@@ -105,7 +121,7 @@ add_library(common::gfx ALIAS gfx)
 auto_configure(gfx PRIVATE)
 
 target_include_directories(gfx
-    PRIVATE
+    PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
@@ -116,6 +132,7 @@ target_link_libraries(gfx
         dxgi.lib
         D3DCompiler.lib
         assimp
+        common::mu
 )
 
 target_include_directories(gfx
