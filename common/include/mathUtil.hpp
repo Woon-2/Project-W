@@ -147,6 +147,12 @@ Degree operator/(Degree lhs, Degree rhs) __MathUtil_NOEXCEPT {
     return lhs /= rhs;
 }
 
+#if defined(DXMATH_VEC_UTIL) || defined(DXMATH_MAT_UTIL) || defined(DXMATH_QUAT_UTIL)
+#define MU_CALLCONV XM_CALLCONV
+#else
+#define MU_CALLCONV
+#endif
+
 #ifdef DXMATH_VEC_UTIL
 #include <DirectXMath.h>
 namespace dx = DirectX;

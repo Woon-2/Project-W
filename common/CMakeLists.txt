@@ -74,16 +74,16 @@ target_link_libraries(win32
 
 # === math ===
 add_library(mu
-    src/coord.cpp include/coord.hpp
-    include/mathUtil.hpp
+    INTERFACE
+        include/mathUtil.hpp
 )
 
 add_library(common::mu ALIAS mu)
 
-auto_configure(mu PRIVATE)
+auto_configure(mu INTERFACE)
 
 target_include_directories(mu
-    PUBLIC
+    INTERFACE
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
@@ -109,6 +109,7 @@ add_library(gfx
     src/nullShader.cpp include/nullShader.hpp
     src/inputLayoutPresets.cpp include/inputLayoutPresets.hpp
     src/d3d12InputLayoutPresets.cpp include/d3d12InputLayoutPresets.hpp
+    include/coord.hpp
 
     include/dxtarget.hpp
     include/gfxPrimitive.hpp
