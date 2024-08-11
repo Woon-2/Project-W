@@ -87,6 +87,21 @@ target_include_directories(mu
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
+# === coro ===
+add_library(coro
+    INTERFACE
+        include/generator.hpp
+)
+
+add_library(common::coro ALIAS coro)
+
+auto_configure(coro INTERFACE)
+
+target_include_directories(coro
+    INTERFACE
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+
 
 # === gfx ===
 add_library(gfx
@@ -123,6 +138,11 @@ add_library(common::gfx ALIAS gfx)
 
 auto_configure(gfx PRIVATE)
 
+target_compile_definitions(gfx
+    PRIVATE
+        NOMINMAX
+)
+
 target_include_directories(gfx
     PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
@@ -136,6 +156,7 @@ target_link_libraries(gfx
         D3DCompiler.lib
         assimp
         common::mu
+        common::coro
 )
 
 target_include_directories(gfx
