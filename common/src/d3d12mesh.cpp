@@ -6,7 +6,7 @@ namespace gfx {
 
 namespace d3d12 {
 
-void Mesh::completeInit(Core& core) {
+void Mesh::completeInit(Core& core) const {
     core.popTmpUpBuf(vbUpIdx_);
     core.popTmpUpBuf(ibUpIdx_);
 }

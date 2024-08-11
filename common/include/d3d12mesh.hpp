@@ -39,7 +39,7 @@ public:
         buildRes(core, ctx, mesh.vb(), mesh.ib());
     }
 
-    void completeInit(d3d12::Core& core);
+    void completeInit(d3d12::Core& core) const;
     void bind(ID3D12GraphicsCommandList* pCmdList) const;
     void draw(ID3D12GraphicsCommandList* pCmdList) const;
 
