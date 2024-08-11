@@ -90,13 +90,11 @@ Mesh getFirstMeshFromAiNode(const aiNode* node, const aiScene* scene) {
 }
 
 Mesh getFirstMeshFromAiScene(const aiScene* scene) {
-    if (scene->mNumMeshes == 0) {
+    if (scene->mRootNode->mNumMeshes == 0) {
         throw std::runtime_error("No meshes found");
     }
 
-    if (scene->mRootNode->mNumMeshes > 0) {
-        return getFirstMeshFromAiNode(scene->mRootNode, scene);
-    }
+    return getFirstMeshFromAiNode(scene->mRootNode, scene);
 }
 
 }   // namespace gfx::anonymus_namespace
