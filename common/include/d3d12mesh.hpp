@@ -13,35 +13,30 @@ namespace gfx {
 
 namespace d3d12 {
 
-class Mesh : public gfx::Mesh {
+class Mesh {
 public:
-    Mesh( d3d12::Core& core, d3d12::D3D12RenderContext& ctx, VertexBuffer vb, IndexCont&& ib,
+    using IndexCont = gfx::Mesh::IndexCont;
+
+    Mesh( d3d12::Core& core, d3d12::D3D12RenderContext& ctx, const VertexBuffer& vbuf, const IndexCont& ibuf,
         Core::UpBufIdx vbUpIdx, Core::UpBufIdx ibUpIdx
-    ) : gfx::Mesh(std::move(vb), std::move(ib)), vbView_(), ibView_(), vb_(), ib_(),
+    ) : vbView_(), ibView_(), vb_(), ib_(),
         vbUpIdx_(vbUpIdx), ibUpIdx_(ibUpIdx) {
-        buildRes(core, ctx);
+        buildRes(core, ctx, vbuf, ibuf);
     }
 
     template <std::ranges::range R>
-    Mesh( d3d12::Core& core, d3d12::D3D12RenderContext& ctx, VertexBuffer vb, R&& ib,
+    Mesh( d3d12::Core& core, d3d12::D3D12RenderContext& ctx, const VertexBuffer& vb, R&& ib,
         Core::UpBufIdx vbUpIdx, Core::UpBufIdx ibUpIdx
-    ) : gfx::Mesh(std::move(vb), std::forward<R>(ib)), vbView_(), ibView_(), vb_(), ib_(),
+    ) : vbView_(), ibView_(), vb_(), ib_(),
         vbUpIdx_(vbUpIdx), ibUpIdx_(ibUpIdx) {
-        buildRes(core, ctx);
+        buildRes(core, ctx, vb, IndexCont(std::begin(ib), std::end(ib)));
     }
 
     Mesh( d3d12::Core& core, d3d12::D3D12RenderContext& ctx, const gfx::Mesh& mesh,
         Core::UpBufIdx vbUpIdx, Core::UpBufIdx ibUpIdx
-    ) : gfx::Mesh(mesh), vbView_(), ibView_(), vb_(), ib_(),
+    ) : vbView_(), ibView_(), vb_(), ib_(),
         vbUpIdx_(vbUpIdx), ibUpIdx_(ibUpIdx) {
-        buildRes(core, ctx);
-    }
-
-    Mesh( d3d12::Core& core, d3d12::D3D12RenderContext& ctx, gfx::Mesh&& mesh,
-        Core::UpBufIdx vbUpIdx, Core::UpBufIdx ibUpIdx
-    ) : gfx::Mesh(std::move(mesh)), vbView_(), ibView_(), vb_(), ib_(),
-        vbUpIdx_(vbUpIdx), ibUpIdx_(ibUpIdx) {
-        buildRes(core, ctx);
+        buildRes(core, ctx, mesh.vb(), mesh.ib());
     }
 
     void completeInit(d3d12::Core& core);
@@ -49,7 +44,7 @@ public:
     void draw(ID3D12GraphicsCommandList* pCmdList) const;
 
 private:
-    void buildRes(d3d12::Core& core, d3d12::D3D12RenderContext& ctx);
+    void buildRes(d3d12::Core& core, d3d12::D3D12RenderContext& ctx, const VertexBuffer& vb, const IndexCont& ib);
 
     std::array<D3D12_VERTEX_BUFFER_VIEW, 1> vbView_;
     D3D12_INDEX_BUFFER_VIEW ibView_;
