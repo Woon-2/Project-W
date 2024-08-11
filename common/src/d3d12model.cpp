@@ -17,21 +17,12 @@ Model::Model( d3d12::Core& core, d3d12::D3D12RenderContext& ctx, const gfx::Mode
     }
 }
 
-void Model::bind(ID3D12GraphicsCommandList* pCmdList) const {
+void Model::completeInit(d3d12::Core& core) const {
     for (const auto& mesh : meshes_) {
-        mesh.mesh.bind(pCmdList);
+        mesh.mesh.completeInit(core);
     }
     for (const auto& child : children_) {
-        child.bind(pCmdList);
-    }
-}
-
-void Model::draw(ID3D12GraphicsCommandList* pCmdList) const {
-    for (const auto& mesh : meshes_) {
-        mesh.mesh.draw(pCmdList);
-    }
-    for (const auto& child : children_) {
-        child.draw(pCmdList);
+        child.completeInit(core);
     }
 }
 

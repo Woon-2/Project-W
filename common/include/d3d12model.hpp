@@ -31,8 +31,7 @@ public:
         Core::UpBufIdx vbUpIdx, Core::UpBufIdx ibUpIdx
     ) : Model(core, ctx, model, vbUpIdx, ibUpIdx, 0, 0) {}
 
-    void bind(ID3D12GraphicsCommandList* pCmdList) const;
-    void draw(ID3D12GraphicsCommandList* pCmdList) const;
+    void completeInit(d3d12::Core& core) const;
 
     std::string_view name() const NOEXCEPT {
         return name_;
