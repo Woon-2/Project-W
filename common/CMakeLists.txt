@@ -109,8 +109,10 @@ add_library(gfx
     src/nullShader.cpp include/nullShader.hpp
     src/inputLayoutPresets.cpp include/inputLayoutPresets.hpp
     src/d3d12InputLayoutPresets.cpp include/d3d12InputLayoutPresets.hpp
-    include/coord.hpp
+    src/model.cpp include/model.hpp
+    src/d3d12model.cpp include/d3d12model.hpp
 
+    include/coord.hpp
     include/dxtarget.hpp
     include/gfxPrimitive.hpp
     include/shaderPath.hpp

@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <filesystem>
 
+#include "assimp/scene.h"
+
 namespace gfx {
 
 class Mesh {
@@ -47,6 +49,10 @@ private:
     VertexBuffer vb_;
     IndexCont ib_;
 };
+
+namespace detail {
+Mesh getMeshFromAiNode(const aiNode* node, const aiScene* scene, unsigned int meshIdx);
+}   // namespace gfx::detail
 
 Mesh loadMesh(const std::filesystem::path& path);
 Mesh loadMesh(const std::filesystem::path& path, const InputLayout& il);

@@ -1,27 +1,16 @@
 #include "mesh.hpp"
 
 #include "assimp/Importer.hpp"
-#include "assimp/scene.h"
 #include "assimp/postprocess.h"
 
 namespace gfx {
 
-Mesh loadMesh(const std::filesystem::path& path) {
-    auto importer = Assimp::Importer();
+namespace detail {
 
-    auto flag = aiProcess_Triangulate | aiProcess_JoinIdenticalVertices
-        | aiProcess_MakeLeftHanded;
-
-    auto scene = importer.ReadFile(path.string(), flag);
-
-    if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
-        throw;  // TODO: add exception
-    }
-
+Mesh getMeshFromAiNode(const aiNode* node, const aiScene* scene, unsigned int meshIdx) {
+    auto mesh = scene->mMeshes[node->mMeshes[meshIdx]];
     auto vb = VertexBuffer();
     auto ib = Mesh::IndexCont();
-
-    auto mesh = scene->mMeshes[0];
 
     // calc stride
     auto stride = std::size_t(0);
@@ -77,6 +66,52 @@ Mesh loadMesh(const std::filesystem::path& path) {
     }
 
     return Mesh(std::move(vb), std::move(ib));
+}
+
+}   // namespace gfx::detail
+
+namespace {
+
+Mesh getFirstMeshFromAiNode(const aiNode* node, const aiScene* scene) {
+    for (auto i = 0u; i < node->mNumMeshes; ++i) {
+        auto mesh = scene->mMeshes[node->mMeshes[i]];
+        if (mesh->mNumFaces > 0) {
+            return detail::getMeshFromAiNode(node, scene, i);
+        }
+    }
+
+    for (auto i = 0u; i < node->mNumChildren; ++i) {
+        return getFirstMeshFromAiNode(node->mChildren[i], scene);
+    }
+
+    throw std::runtime_error("No meshes found");
+}
+
+Mesh getFirstMeshFromAiScene(const aiScene* scene) {
+    if (scene->mNumMeshes == 0) {
+        throw std::runtime_error("No meshes found");
+    }
+
+    if (scene->mRootNode->mNumMeshes > 0) {
+        return getFirstMeshFromAiNode(scene->mRootNode, scene);
+    }
+
+    for (auto i = 0u; i < scene->mRootNode->mNumChildren; ++i) {
+        return getFirstMeshFromAiNode(scene->mRootNode->mChildren[i], scene);
+    }
+}
+
+}   // namespace gfx::anonymus_namespace
+
+Mesh loadMesh(const std::filesystem::path& path) {
+    auto importer = Assimp::Importer();
+    auto scene = importer.ReadFile(path.string(), aiProcess_Triangulate | aiProcess_JoinIdenticalVertices);
+
+    if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
+        throw std::runtime_error("Failed to load mesh: " + path.string());
+    }
+
+    return getFirstMeshFromAiScene(scene);
 }
 
 Mesh loadMesh(const std::filesystem::path& path, const InputLayout& il) {
