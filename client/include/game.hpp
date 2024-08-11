@@ -5,6 +5,12 @@
 
 #include "sampleScene.hpp"
 
+#include "player.hpp"
+
+#include "keyboard.hpp"
+
+#include "inputSystem.hpp"
+
 #include <memory>
 
 class Game {
@@ -12,12 +18,19 @@ public:
     using MyWindow = gfx::d3d12::Window<gfx::d3d12::BasicD3D12WTraits<char>>;
 
     Game()
-        : pGfx_(), pWnd_(), pDrawable_() {}
+        : pGfx_(), pWnd_(), pDrawable_(), player_(), keyManager_(5) {}
     
     Game(gfx::ICore& gfx, MyWindow& wnd);
 
     void update();
     void render();
+
+private:
+    Player player_;
+    KeyBoard keyboard_;
+    KeyManager keyManager_;
+
+    InputSystem inputSystem_;
 
 private:
     void processInput();

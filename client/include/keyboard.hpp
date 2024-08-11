@@ -1,5 +1,5 @@
-#ifndef INPUTSYSTEM_H
-#define INPUTSYSTEM_H
+#ifndef __KEYBOARD_HPP
+#define __KEYBOARD_HPP
 
 #include <algorithm>
 #include <deque>
@@ -86,4 +86,4 @@ private:
 	int curFrame_;
 };
 
-#endif // !INPUTSYSTEM_H
+#endif // KEYBOARD_HPP

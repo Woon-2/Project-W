@@ -43,7 +43,11 @@ target_sources(client
         src/app.cpp include/app.hpp
         src/game.cpp include/game.hpp
         src/mygfx.cpp include/mygfx.hpp
-        include/ecs.hpp
+        src/ecs.cpp include/ecs.hpp
+        src/ecsExcept.cpp include/ecsExcept.hpp
+        src/player.cpp include/player.hpp
+        src/keyboard.cpp include/keyboard.hpp
+        src/inputSystem.cpp include/inputSystem.hpp
 )
 
 include(auto_configure)

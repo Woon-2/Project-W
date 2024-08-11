@@ -3,7 +3,7 @@
 #include "mygfx.hpp"
 
 Game::Game(gfx::ICore& gfx, MyWindow& wnd)
-    : pGfx_(&gfx), pWnd_(&wnd), pDrawable_() {
+    : pGfx_(&gfx), pWnd_(&wnd), pDrawable_(), player_(), keyManager_(5) {
     auto pd3d12Gfx = static_cast<gfx::d3d12::Core*>(&gfx);
     auto pCtx = pGfx_->createContext();
 
@@ -13,10 +13,32 @@ Game::Game(gfx::ICore& gfx, MyWindow& wnd)
     pd3d12Gfx->waitForGpu();
     
     pDrawable_->completeInit(*pd3d12Gfx);
+    
+    inputSystem_.init(keyboard_);
+
+    ecs::ConfigEntity();
+    ecs::RegisterComponent<PlayerController>();
+    ecs::RegisterComponent<Position>();
+
+    auto inputSystem_ =  ecs::RegisterSystem<InputSystem>();
+
+    ecs::Signature signature;
+    signature.set(ecs::GetComponentType<PlayerController>());
+    signature.set(ecs::GetComponentType<Position>());
+    ecs::SetSystemSignature<InputSystem>(signature);
+
+    player_.Init();
 }
 
 void Game::update() {
+    keyboard_.patchKeyState();
+    keyManager_.updateFrame(keyboard_);
+
     processInput();
+    
+    inputSystem_.update();
+
+    player_.printPos();
 }
 
 void Game::render() {
@@ -40,5 +62,9 @@ void Game::render() {
 }
 
 void Game::processInput() {
-
+   /* if (keyboard_.isKeyTap(Key::A))
+    {
+        Position& pos = ecs::GetComponent<Position>(player_.entityNumber_);
+        pos.x += 1.0;
+    }*/
 }
