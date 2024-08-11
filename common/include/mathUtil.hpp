@@ -60,8 +60,6 @@ public:
         return val_;
     }
 
-    operator Degree() const __MathUtil_NOEXCEPT;
-
 private:
     float val_;
 };
@@ -107,10 +105,6 @@ public:
         return val_;
     }
 
-    operator Radian() const __MathUtil_NOEXCEPT {
-        return val_ * pi / 180.f;
-    }
-
 private:
     float val_;
 };
@@ -118,8 +112,12 @@ private:
 inline Radian::Radian(Degree deg) __MathUtil_NOEXCEPT
     : val_(static_cast<float>(deg) * pi / 180.f) {}
 
-inline Radian::operator Degree() const __MathUtil_NOEXCEPT {
-    return val_ * 180.f / pi;
+inline Radian operator""_rad(long double val) __MathUtil_NOEXCEPT {
+    return Radian(static_cast<float>(val));
+}
+
+inline Degree operator""_deg(long double val) __MathUtil_NOEXCEPT {
+    return Degree(static_cast<float>(val));
 }
 
 inline Radian operator+(Radian lhs, Radian rhs) __MathUtil_NOEXCEPT {
@@ -363,10 +361,6 @@ public:
         return len2();
     }
 
-    template <std::size_t D2>
-        requires (D2 >= 1 && D2 <= 4)
-    operator NVec<D2>() const __MathUtil_NOEXCEPT;
-
     const Vec XM_CALLCONV operator-() const __MathUtil_NOEXCEPT {
         return Vec(dx::XMVectorNegate(vec_));
     }
@@ -578,12 +572,6 @@ template <std::size_t D> requires (D >= 1 && D <= 4)
 template <std::size_t D2>
 Vec<D>::Vec(NVec<D2> vec) __MathUtil_NOEXCEPT
     : vec_(vec.vec_) {}
-
-template <std::size_t D> requires (D >= 1 && D <= 4)
-template <std::size_t D2> requires (D2 >= 1 && D2 <= 4)
-Vec<D>::operator NVec<D2>() const __MathUtil_NOEXCEPT {
-    return NVec<D2>(vec_);
-}
 
 template <std::size_t D> requires (D >= 1 && D <= 4)
 Vec<D>& XM_CALLCONV Vec<D>::operator+=(NVec<D> rhs) __MathUtil_NOEXCEPT {
@@ -1261,9 +1249,6 @@ public:
     const dx::XMMATRIX XM_CALLCONV mat() const __MathUtil_NOEXCEPT {
         return dx::XMMatrixRotationQuaternion(quat_);
     }
-
-    operator Mat<3, 3>() const __MathUtil_NOEXCEPT;
-    operator Mat<4, 4>() const __MathUtil_NOEXCEPT;
 #endif  // DXMATH_MAT_UTIL
 
     operator dx::XMMATRIX() const __MathUtil_NOEXCEPT {
@@ -1504,16 +1489,6 @@ public:
 private:
     dx::XMMATRIX mat_;
 };
-
-#if defined(DXMATH_QUAT_UTIL) && defined(DXMATH_MAT_UTIL)
-inline NQuat::operator Mat<3, 3>() const __MathUtil_NOEXCEPT {
-    return Mat<3, 3>(dx::XMMatrixRotationQuaternion(quat_));
-}
-
-inline NQuat::operator Mat<4, 4>() const __MathUtil_NOEXCEPT {
-    return Mat<4, 4>(dx::XMMatrixRotationQuaternion(quat_));
-}
-#endif  // DXMATH_QUAT_UTIL && DXMATH_MAT_UTIL
 
 template <std::size_t R, std::size_t C>
 const Mat<R, C> XM_CALLCONV operator+(Mat<R, C> lhs, Mat<R, C> rhs) __MathUtil_NOEXCEPT {
