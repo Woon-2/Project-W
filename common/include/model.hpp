@@ -36,15 +36,14 @@ public:
     }
 
     void addChild(const Model& child) {
-        children_.push_back(&child);
+        children_.push_back(child);
     }
 
-    void popChild(std::string_view name) {
-        std::erase_if( children_, [&name](const Model* child) {
-            return child->name() == name;
-        } );
+    void addChild(Model&& child) {
+        children_.push_back(std::move(child));
     }
 
+    Model popChild(std::string_view name);
     const Model& child(std::string_view name) const;
 
     void addMesh(const Mesh& mesh, const std::string& name) {
@@ -63,12 +62,7 @@ public:
         meshes_.push_back({std::move(mesh), std::move(name)});
     }
 
-    void popMesh(std::string_view name) {
-        std::erase_if( meshes_, [&name](const NamedMesh& nm) {
-            return nm.name == name;
-        } );
-    }
-
+    Mesh popMesh(std::string_view name);
     const Mesh& mesh(std::string_view name) const;
 
     Mesh& mesh(std::string_view name) {
@@ -89,7 +83,7 @@ public:
 
 private:
     coord::System coordSys_;
-    std::vector<const Model*> children_;
+    std::vector<Model> children_;
     std::vector<NamedMesh> meshes_;
     std::string name_;
 };

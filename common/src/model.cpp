@@ -7,15 +7,15 @@
 namespace gfx {
 
 const Model& Model::child(std::string_view name) const {
-    auto it = std::find_if( children_.begin(), children_.end(), [&name](const Model* child) {
-        return child->name() == name;
+    auto it = std::find_if( children_.begin(), children_.end(), [&name](const Model& child) {
+        return child.name() == name;
     } );
 
     if (it == children_.end()) {
         throw std::runtime_error("Child not found");
     }
 
-    return **it;
+    return *it;
 }
 
 const Mesh& Model::mesh(std::string_view name) const {
@@ -28,6 +28,42 @@ const Mesh& Model::mesh(std::string_view name) const {
     }
 
     return it->mesh;
+}
+
+Model Model::popChild(std::string_view name) {
+    auto retPos = std::remove_if( children_.begin(), children_.end(),
+        [&name](const Model& child) {
+            return child.name() == name;
+        }
+    );
+
+    if (retPos == children_.end()) {
+        throw std::runtime_error("Child not found");
+    }
+
+    auto ret = std::move(*retPos);
+
+    children_.erase(retPos, children_.end());
+
+    return ret;
+}
+
+Mesh Model::popMesh(std::string_view name) {
+    auto retPos = std::remove_if( meshes_.begin(), meshes_.end(),
+        [&name](const NamedMesh& nm) {
+            return nm.name == name;
+        }
+    );
+
+    if (retPos == meshes_.end()) {
+        throw std::runtime_error("Mesh not found");
+    }
+
+    auto ret = std::move(retPos->mesh);
+
+    meshes_.erase(retPos, meshes_.end());
+
+    return ret;
 }
 
 namespace {
@@ -43,7 +79,7 @@ void processAiNode(const aiNode* node, const aiScene* scene, Model& model) {
     for (auto i = 0u; i < node->mNumChildren; ++i) {
         auto child = Model(node->mChildren[i]->mName.C_Str());
         processAiNode(node->mChildren[i], scene, child);
-        model.addChild(child);
+        model.addChild(std::move(child));
     }
 }
 
@@ -58,7 +94,7 @@ void processAiNode(const aiNode* node, const aiScene* scene, Model& model, const
     for (auto i = 0u; i < node->mNumChildren; ++i) {
         auto child = Model(node->mChildren[i]->mName.C_Str());
         processAiNode(node->mChildren[i], scene, child, il);
-        model.addChild(child);
+        model.addChild(std::move(child));
     }
 }
 
