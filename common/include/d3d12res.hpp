@@ -20,8 +20,8 @@ template <std::ranges::contiguous_range R>
 wrl::ComPtr<ID3D12Resource> createDefBuf( Core& core, D3D12RenderContext& ctx, const R& data,
     D3D12_RESOURCE_STATES state, wrl::ComPtr<ID3D12Resource>& pUploadBuf
 ) {
-    return createDefBuf( core, ctx, std::data(data), static_cast<UINT>( std::size(data) )
-        * sizeof(std::ranges::range_value_t<R>), state, pUploadBuf
+    return createDefBuf( core, ctx, std::data(data), static_cast<UINT>( std::size(data)
+        * sizeof(std::ranges::range_value_t<R>) ), state, pUploadBuf
     );
 }
 
