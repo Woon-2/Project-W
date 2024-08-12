@@ -9,9 +9,11 @@
 ### How to Build
 
 - cmake 3.18 버전 이상이 필요합니다.
+- 문서화를 빌드하기 위해선 doxygen이 필요합니다.
 - vscode의 터미널 혹은 Windows powershell에서 다음 두 명령어를 실행합니다.
+  - doxygen이 설치되지 않았다면 첫 번째 명령어의 `-D` 옵션을 설정할 시 빌드 오류가 발생합니다.
 
-> cmake -S. -Bbuild -DBUILD_DOXYGEN=ON -DDOXYGEN_RECURSIVE_CONFIG=ON
+> cmake -S. -Bbuild [-DBUILD_DOXYGEN=ON -DDOXYGEN_RECURSIVE_CONFIG=ON]
 
 > cmake --build build --config [Release|Debug]
 
@@ -24,4 +26,4 @@
 
 ### Documentation
 
-- 위와 동일한 빌드 절차를 거쳤다면, `docs/index.html`을 웹 브라우저로 열어서 문서화를 열람할 수 있습니다.
+- doxygen을 통해 문서화를 빌드하였다면 `docs/index.html`을 웹 브라우저로 열어서 문서화를 열람할 수 있습니다.
