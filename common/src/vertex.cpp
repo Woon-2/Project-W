@@ -1,5 +1,8 @@
 #include "Vertex.hpp"
 
+#include <ranges>
+#include <algorithm>
+
 namespace gfx {
 
 void VertexBuffer::constructProperty( Vertex::Properties prop, const void* data,
@@ -21,8 +24,8 @@ void VertexBuffer::constructProperty( Vertex::Properties prop, const void* data,
     data_.resize(stride_ * cnt);
 
     for (std::size_t i = 0; i < cnt; ++i) {
-        std::memcpy( data_.data() + i * stride_ + offset,
-            static_cast<const std::uint8_t*>(data) + i * stride, elemByteWidth
+        std::ranges::copy_n( static_cast<const std::uint8_t*>(data) + i * stride,
+            elemByteWidth, data_.begin() + i * stride_ + offset
         );
     }
 }
@@ -36,8 +39,8 @@ void VertexBuffer::fetchProp( const VertexBuffer& other, Vertex::Properties prop
     auto otherOff = other.offsets_[other.toIdx(prop)];
 
     for (std::size_t i = 0; i < other.size(); ++i) {
-        std::memcpy( data_.data() + i * stride_ + accOffset,
-            other.data_.data() + i * other.stride_ + otherOff, pbw
+        std::ranges::copy_n( other.data_.data() + i * other.stride_ + otherOff,
+            pbw, data_.begin() + i * stride_ + accOffset
         );
     }
 
