@@ -7,6 +7,9 @@
 
 #include "mathUtil.hpp"
 
+#include <utility>
+#include <vector>
+
 namespace gfx {
 
 namespace coord {
@@ -15,6 +18,72 @@ class System {
 public:
     System()
         : xform_(), parent_(nullptr) {}
+
+    System(const System& sys)
+        : xform_(sys.xform_), children_(sys.children_), parent_(sys.parent_) {
+        for (auto& child : children_) {
+            child->parent_ = this;
+        }
+
+        if (parent_) {
+            parent_->children_.push_back(this);
+        }
+    }
+
+    System& operator=(const System& sys) {
+        if (this == &sys) {
+            return *this;
+        }
+
+        xform_ = sys.xform_;
+        children_ = sys.children_;
+        parent_ = sys.parent_;
+
+        for (auto& child : children_) {
+            child->parent_ = this;
+        }
+
+        if (parent_) {
+            parent_->children_.push_back(this);
+        }
+
+        return *this;
+    }
+
+    System(System&& sys) noexcept
+        : xform_( std::move(sys.xform_) ),
+        children_( std::move(sys.children_) ),
+        parent_( std::exchange(sys.parent_, nullptr) ) {
+        for (auto& child : sys.children_) {
+            child->parent_ = this;
+        }
+
+        if (parent_) {
+            parent_->children_.push_back(this);
+            std::erase(parent_->children_, &sys);
+        }
+    }
+
+    System& operator=(System&& sys) noexcept {
+        if (this == &sys) {
+            return *this;
+        }
+
+        xform_ = std::move(sys.xform_);
+        children_ = std::move(sys.children_);
+        parent_ = std::exchange(sys.parent_, nullptr);
+
+        for (auto& child : sys.children_) {
+            child->parent_ = this;
+        }
+
+        if (parent_) {
+            parent_->children_.push_back(this);
+            std::erase(parent_->children_, &sys);
+        }
+
+        return *this;
+    }
 
     void setParent(const System* parent) {
         parent_ = parent;
@@ -43,7 +112,8 @@ public:
 
 private:
     mu::Mat4x4 xform_;
-    const System* parent_;
+    mutable std::vector<const System*> children_;
+    mutable const System* parent_;
 };
 
 class Pt3 {
