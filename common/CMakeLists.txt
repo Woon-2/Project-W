@@ -126,6 +126,8 @@ add_library(gfx
     src/d3d12InputLayoutPresets.cpp include/d3d12InputLayoutPresets.hpp
     src/model.cpp include/model.hpp
     src/d3d12model.cpp include/d3d12model.hpp
+    src/camera.cpp include/camera.hpp
+    src/d3d12scene.cpp include/d3d12scene.hpp
 
     include/coord.hpp
     include/dxtarget.hpp

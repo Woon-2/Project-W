@@ -1,5 +1,7 @@
 #include "game.hpp"
 
+#include "d3d12scene.hpp"
+
 #include "mygfx.hpp"
 
 #include "d3d12inputLayoutPresets.hpp"
@@ -11,7 +13,8 @@
 
 
 Game::Game(gfx::ICore& gfx, MyWindow& wnd)
-    : timer_(), pGfx_(&gfx), pWnd_(&wnd), pDrawable_(), lockFPS_(defLockFPS) {
+    : timer_(), baseCoordSys_(), camera_(baseCoordSys_),
+    pGfx_(&gfx), pWnd_(&wnd), pDrawable_(), lockFPS_(defLockFPS) {
     auto pd3d12Gfx = static_cast<gfx::d3d12::Core*>(&gfx);
     auto pCtx = pGfx_->createContext();
     auto pd3d12Ctx = static_cast<gfx::d3d12::D3D12RenderContext*>(pCtx.get());
@@ -55,7 +58,8 @@ void Game::render() {
     pWnd_->preRender(*pRenderContext);
     pWnd_->clear(*pRenderContext);
 
-    auto scene = gfx::SampleScene(*pDrawable_);
+    auto scene = gfx::d3d12::CameraScene(camera_);
+    scene.addModel( *pDrawable_ );
     pGfx_->render( scene, static_cast<MyGfx&>(*pGfx_).renderer(
          MyGfx::Renderer::Sample
     ), *pWnd_ );
