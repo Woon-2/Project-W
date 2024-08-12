@@ -22,13 +22,13 @@ class Degree;
 
 class Radian {
 public:
-    Radian() __MathUtil_NOEXCEPT
+    constexpr Radian() __MathUtil_NOEXCEPT
         : Radian(0.f) {}
 
-    Radian(float val) __MathUtil_NOEXCEPT
+    constexpr Radian(float val) __MathUtil_NOEXCEPT
         : val_(val) {}
 
-    Radian(Degree deg) __MathUtil_NOEXCEPT;
+    constexpr Radian(Degree deg) __MathUtil_NOEXCEPT;
 
     Radian& operator+=(Radian rhs) __MathUtil_NOEXCEPT {
         val_ += rhs.val_;
@@ -56,7 +56,7 @@ public:
 
     friend auto operator<=>(Radian lhs, Radian rhs) __MathUtil_NOEXCEPT = default;
 
-    operator float() const __MathUtil_NOEXCEPT {
+    constexpr operator float() const __MathUtil_NOEXCEPT {
         return val_;
     }
 
@@ -66,13 +66,13 @@ private:
 
 class Degree {
 public:
-    Degree() __MathUtil_NOEXCEPT
+    constexpr Degree() __MathUtil_NOEXCEPT
         : Degree(0.f) {}
 
-    Degree(float val) __MathUtil_NOEXCEPT
+    constexpr Degree(float val) __MathUtil_NOEXCEPT
         : val_(val) {}
 
-    Degree(Radian rad) __MathUtil_NOEXCEPT
+    constexpr Degree(Radian rad) __MathUtil_NOEXCEPT
         : val_(static_cast<float>(rad) * 180.f / pi) {}
 
     Degree& operator+=(Degree rhs) __MathUtil_NOEXCEPT {
@@ -101,7 +101,7 @@ public:
 
     friend auto operator<=>(Degree lhs, Degree rhs) __MathUtil_NOEXCEPT = default;
 
-    operator float() const __MathUtil_NOEXCEPT {
+    constexpr operator float() const __MathUtil_NOEXCEPT {
         return val_;
     }
 
@@ -109,14 +109,14 @@ private:
     float val_;
 };
 
-inline Radian::Radian(Degree deg) __MathUtil_NOEXCEPT
+inline constexpr Radian::Radian(Degree deg) __MathUtil_NOEXCEPT
     : val_(static_cast<float>(deg) * pi / 180.f) {}
 
-inline Radian operator""_rad(long double val) __MathUtil_NOEXCEPT {
+inline constexpr Radian operator""_rad(long double val) __MathUtil_NOEXCEPT {
     return Radian(static_cast<float>(val));
 }
 
-inline Degree operator""_deg(long double val) __MathUtil_NOEXCEPT {
+inline constexpr Degree operator""_deg(long double val) __MathUtil_NOEXCEPT {
     return Degree(static_cast<float>(val));
 }
 
