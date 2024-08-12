@@ -8,7 +8,7 @@
 
 #include "d3d12model.hpp"
 
-#include <memory>
+#include <vector>
 
 class Game {
 public:
@@ -17,7 +17,7 @@ public:
 
     Game()
         : timer_(), baseCoordSys_(), camera_(baseCoordSys_),
-        pGfx_(), pWnd_(), pDrawable_(), lockFPS_(defLockFPS) {}
+        pGfx_(), pWnd_(), models_(), lockFPS_(defLockFPS) {}
     
     Game(gfx::ICore& gfx, MyWindow& wnd);
 
@@ -33,7 +33,7 @@ private:
 
     gfx::coord::System baseCoordSys_;
     gfx::Camera camera_;
-    std::unique_ptr<gfx::d3d12::Model> pDrawable_;
+    std::vector<gfx::d3d12::Model> models_;
     gfx::ICore* pGfx_;
     MyWindow* pWnd_;
     double lockFPS_;
