@@ -485,3 +485,4 @@ common/include/shaderPath.hpp
 common/include/resourcePath.hpp
 !extern/assimp/*
 !extern/zlib/*
+!resource/*/*/*.obj
