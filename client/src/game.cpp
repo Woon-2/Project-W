@@ -23,7 +23,7 @@ Game::Game(gfx::ICore& gfx, MyWindow& wnd)
 
     pGfx_->preRender();
     pDrawable_ = std::make_unique<gfx::d3d12::Model>( *pd3d12Gfx, *pd3d12Ctx,
-        gfx::loadModel( resourcePath/"models"/"Gun _obj"/"Gun.obj",
+        gfx::loadModel( resourcePath/"models"/"AC Cobra"/"Shelby.obj",
             pd3d12Gfx->inputLayout( gfx::d3d12::inputLayoutName(gfx::InputLayoutPreset::Pos3) )
         ), "house_vb", "house_ib"
     );
@@ -32,7 +32,7 @@ Game::Game(gfx::ICore& gfx, MyWindow& wnd)
     
     pDrawable_->completeInit(*pd3d12Gfx);
 
-    camera_.coordSys() << mu::translate(0.f, 2.f, -5.f);
+    camera_.coordSys() << mu::translate(3.f, 4.f, -15.f);
     camera_.focus( gfx::coord::Pt3( baseCoordSys_, mu::Vec3(0.f, 0.f, 0.f) ) );
 }
 
