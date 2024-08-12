@@ -172,13 +172,17 @@ namespace ecs {
 	extern std::map<std::string, std::shared_ptr<IComponentArray>> gComponentArrays;
 	// 등록된 컴포넌트 정보
 	extern ComponentType gNextComponentType;
+
 	// Component 타입의 배열을 반환해준다.
 	template <class Component>
 	std::shared_ptr<ComponentArray<Component>> GetComponentArray()
 	{
 		std::string typeName = typeid(Component).name();
 		
-		assert(gComponentTypes.find(typeName) != gComponentTypes.end() && "Component not registered before use.");
+		if (gComponentTypes.find(typeName) == gComponentTypes.end())
+		{
+			throw ECS_EXCEPT("Component not registered before use.");
+		}
 
 		return std::static_pointer_cast<ComponentArray<Component>>(gComponentArrays[typeName]);
 	}
@@ -321,8 +325,6 @@ namespace ecs {
 			}
 		}
 	}
-
-	static void foo();
 
 }	// namespace ecs
 

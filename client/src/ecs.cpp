@@ -18,13 +18,4 @@ namespace ecs {
 
 	std::map<std::string, Signature> gSystemSignature{};
 	std::map<std::string, std::shared_ptr<System>> gSystems{};
-
-	namespace {
-		void internalFunction() {}
-	}
-
-	void foo() {
-		internalFunction();
-	}
-
 }
