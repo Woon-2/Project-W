@@ -10,6 +10,7 @@
 
 #include <vector>
 #include <string>
+#include <memory>
 
 namespace gfx {
 
@@ -29,7 +30,7 @@ private:
 public:
     Model( d3d12::Core& core, d3d12::D3D12RenderContext& ctx, const gfx::Model& model,
         Core::UpBufIdx vbUpIdx, Core::UpBufIdx ibUpIdx
-    ) : Model(core, ctx, model, vbUpIdx, ibUpIdx, 0, 0) {}
+    ) : Model(core, ctx, model, vbUpIdx, ibUpIdx, std::make_shared<std::size_t>(0), std::make_shared<std::size_t>(0)) {}
 
     void completeInit(d3d12::Core& core) const;
 
@@ -105,7 +106,8 @@ public:
 
 private:
     Model( d3d12::Core& core, d3d12::D3D12RenderContext& ctx, const gfx::Model& model,
-        Core::UpBufIdx vbUpIdx, Core::UpBufIdx ibUpIdx, std::size_t vbSerialIdx, std::size_t ibSerialIdx
+        Core::UpBufIdx vbUpIdx, Core::UpBufIdx ibUpIdx,
+        std::shared_ptr<std::size_t> pVbSerialIdx, std::shared_ptr<std::size_t> ibSerialIdx
     );
 
     Core::UpBufIdx serializeVbIdx(const Core::UpBufIdx& idx);
@@ -115,8 +117,8 @@ private:
     std::vector<Model> children_;
     std::vector<NamedMesh> meshes_;
     std::string name_;
-    std::size_t vbSerialIdx_;
-    std::size_t ibSerialIdx_;
+    std::shared_ptr<std::size_t> pVbSerialIdx_;
+    std::shared_ptr<std::size_t> pIbSerialIdx_;
 };
 
 }   // namespace gfx::d3d12

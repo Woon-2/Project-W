@@ -51,10 +51,10 @@ wrl::ComPtr<ID3D12RootSignature> rootPresetSolid(Core& core) {
             .Constants = D3D12_ROOT_CONSTANTS{
                 .ShaderRegister = 0u,
                 .RegisterSpace = 0u,
-                .Num32BitValues = 16u
+                .Num32BitValues = 20u
             },
-            .ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX
-        }
+            .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+        },
     };
 
     auto desc = D3D12_ROOT_SIGNATURE_DESC{
