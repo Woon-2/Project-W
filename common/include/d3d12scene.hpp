@@ -14,6 +14,12 @@ namespace d3d12 {
 
 class CameraScene : public gfx::CameraScene {
 public:
+    static constexpr std::size_t meshIdx = gfx::CameraScene::meshIdx;
+    static constexpr std::size_t worldIdx = gfx::CameraScene::worldIdx;
+    static constexpr std::size_t viewIdx = gfx::CameraScene::viewIdx;
+    static constexpr std::size_t projIdx = gfx::CameraScene::projIdx;
+    static constexpr std::size_t colorIdx = 4u;
+
     CameraScene(const Camera& camera)
         : gfx::CameraScene(camera) {}
 

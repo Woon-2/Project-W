@@ -66,12 +66,13 @@ void SampleRenderer::D3D12Drawer::render( const IScene& scene, ID3D12GraphicsCom
         auto world = di.get<const mu::Mat4x4>(d3d12::CameraScene::worldIdx);
         auto pView = di.get<const mu::Mat4x4*>(d3d12::CameraScene::viewIdx);
         auto pProj = di.get<const mu::Mat4x4*>(d3d12::CameraScene::projIdx);
+        auto color = di.get<const mu::Vec4>(d3d12::CameraScene::colorIdx);
 
         auto wvp = mu::transpose(world * (*pView) * (*pProj)).getXmf();
-        auto color = mu::Vec4(1.f, 1.f, 0.f, 1.f).getXmf();
+        auto c = color.getXmf();
         // TODO: make root parameter setting more flexible
         pCmdList->SetGraphicsRoot32BitConstants(0, 16, &wvp, 0);
-        pCmdList->SetGraphicsRoot32BitConstants(0, 4, &color, 16);
+        pCmdList->SetGraphicsRoot32BitConstants(0, 4, &c, 16);
 
         pCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         pMesh->bind(pCmdList);

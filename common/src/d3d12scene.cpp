@@ -21,6 +21,14 @@ Generator<DrawInfo> CameraScene::modelIteration(const d3d12::Model* pModel) cons
         drawInfo.set(meshIdx, &mesh.mesh);
         drawInfo.set(worldIdx, world);
         fillViewProj(drawInfo);
+
+        if (pModel->name() == "Cube") {
+            drawInfo.set(colorIdx, mu::Vec4(0.f, 1.f, 0.f, 1.f));
+        }
+        else {
+            drawInfo.set(colorIdx, mu::Vec4(1.f, 1.f, 0.f, 1.f));
+        }
+
         co_yield drawInfo;
     }
 
