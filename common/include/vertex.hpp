@@ -130,6 +130,10 @@ public:
         if (propIdx == Vertex::numProperties - 1) {
             return stride_ - offsets_[propIdx];
         }
+        if (offsets_[propIdx + 1] == invalidOffset) {
+            return stride_ - offsets_[propIdx];
+        }
+
         return offsets_[propIdx + 1] - offsets_[propIdx];
     }
 
