@@ -301,6 +301,28 @@ public:
         return vec_;
     }
 
+    float getXmf() const __MathUtil_NOEXCEPT requires (D == 1) {
+        return dx::XMVectorGetX(vec_);
+    }
+
+    const dx::XMFLOAT2 getXmf() const __MathUtil_NOEXCEPT requires (D == 2) {
+        dx::XMFLOAT2 ret;
+        dx::XMStoreFloat3(&ret, vec_);
+        return ret;
+    }
+
+    const dx::XMFLOAT3 getXmf() const __MathUtil_NOEXCEPT requires (D == 3) {
+        dx::XMFLOAT3 ret;
+        dx::XMStoreFloat3(&ret, vec_);
+        return ret;
+    }
+
+    const dx::XMFLOAT4 getXmf() const __MathUtil_NOEXCEPT requires (D == 4) {
+        dx::XMFLOAT4 ret;
+        dx::XMStoreFloat4(&ret, vec_);
+        return ret;
+    }
+
     float XM_CALLCONV x() const __MathUtil_NOEXCEPT {
         return dx::XMVectorGetX(vec_);
     }
@@ -472,6 +494,28 @@ public:
 
     const dx::XMVECTOR& get() const __MathUtil_NOEXCEPT {
         return vec_;
+    }
+
+    float getXmf() const __MathUtil_NOEXCEPT requires (D == 1) {
+        return dx::XMVectorGetX(vec_);
+    }
+
+    const dx::XMFLOAT2 getXmf() const __MathUtil_NOEXCEPT requires (D == 2) {
+        dx::XMFLOAT2 ret;
+        dx::XMStoreFloat3(&ret, vec_);
+        return ret;
+    }
+
+    const dx::XMFLOAT3 getXmf() const __MathUtil_NOEXCEPT requires (D == 3) {
+        dx::XMFLOAT3 ret;
+        dx::XMStoreFloat3(&ret, vec_);
+        return ret;
+    }
+
+    const dx::XMFLOAT4 getXmf() const __MathUtil_NOEXCEPT requires (D == 4) {
+        dx::XMFLOAT4 ret;
+        dx::XMStoreFloat4(&ret, vec_);
+        return ret;
     }
 
     float XM_CALLCONV x() const __MathUtil_NOEXCEPT {
@@ -1128,6 +1172,12 @@ public:
         return quat_;
     }
 
+    const dx::XMFLOAT4 getXmf() const __MathUtil_NOEXCEPT {
+        dx::XMFLOAT4 ret;
+        dx::XMStoreFloat4(&ret, quat_);
+        return ret;
+    }
+
     const Quat dual() const __MathUtil_NOEXCEPT {
         return Quat(dx::XMQuaternionConjugate(quat_));
     }
@@ -1261,6 +1311,12 @@ public:
 
     const dx::XMVECTOR& get() const __MathUtil_NOEXCEPT {
         return quat_;
+    }
+
+    const dx::XMFLOAT4 getXmf() const __MathUtil_NOEXCEPT {
+        dx::XMFLOAT4 ret;
+        dx::XMStoreFloat4(&ret, quat_);
+        return ret;
     }
 
     const NQuat dual() const __MathUtil_NOEXCEPT {
@@ -1478,6 +1534,22 @@ public:
 
     const dx::XMMATRIX& get() const __MathUtil_NOEXCEPT {
         return mat_;
+    }
+
+    const float getXmf() const __MathUtil_NOEXCEPT requires (R == 1 && C == 1) {
+        return dx::XMVectorGetX(mat_.r[0]);
+    }
+
+    const dx::XMFLOAT3X3 getXmf() const __MathUtil_NOEXCEPT requires (R == 3 && C == 3) {
+        dx::XMFLOAT3X3 ret;
+        dx::XMStoreFloat3x3(&ret, mat_);
+        return ret;
+    }
+
+    const dx::XMFLOAT4X4 getXmf() const __MathUtil_NOEXCEPT requires (R == 4 && C == 4) {
+        dx::XMFLOAT4X4 ret;
+        dx::XMStoreFloat4x4(&ret, mat_);
+        return ret;
     }
 
     const Mat XM_CALLCONV operator-() const __MathUtil_NOEXCEPT {
