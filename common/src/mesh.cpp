@@ -60,6 +60,12 @@ Mesh getMeshFromAiNode(const aiNode* node, const aiScene* scene, unsigned int me
     auto out = std::back_inserter(ib);
     for (std::size_t i = 0; i < mesh->mNumFaces; ++i) {
         auto face = mesh->mFaces[i];
+
+        if (face.mNumIndices != 3u) {
+            continue;
+        }
+
+
         for (std::size_t j = 0; j < face.mNumIndices; ++j) {
             *out++ = face.mIndices[j];
         }
@@ -101,7 +107,10 @@ Mesh getFirstMeshFromAiScene(const aiScene* scene) {
 
 Mesh loadMesh(const std::filesystem::path& path) {
     auto importer = Assimp::Importer();
-    auto scene = importer.ReadFile(path.string(), aiProcess_Triangulate | aiProcess_JoinIdenticalVertices);
+    auto scene = importer.ReadFile( path.string(), aiProcess_Triangulate
+        | aiProcess_JoinIdenticalVertices | aiProcess_ConvertToLeftHanded
+        | aiProcess_SortByPType    
+    );
 
     if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
         throw std::runtime_error("Failed to load mesh: " + path.string());

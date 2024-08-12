@@ -40,6 +40,7 @@ public:
     }
 
     void addChild(Model&& child) {
+        child.coord().setParent(&coordSys_);
         children_.push_back(std::move(child));
     }
 

@@ -84,6 +84,7 @@ void processAiNode(const aiNode* node, const aiScene* scene, Model& model) {
 }
 
 void processAiNode(const aiNode* node, const aiScene* scene, Model& model, const InputLayout& il) {
+    model.coord() << node->mTransformation;
     for (auto i = 0u; i < node->mNumMeshes; ++i) {
         auto tmpMesh = detail::getMeshFromAiNode(node, scene, i);
         model.addMesh( Mesh( convert(tmpMesh.vb(), il), std::move(tmpMesh.ib()) ),
@@ -104,7 +105,7 @@ Model loadModel(const std::filesystem::path& path) {
     auto importer = Assimp::Importer();
 
     auto flag = aiProcess_Triangulate | aiProcess_JoinIdenticalVertices
-        | aiProcess_MakeLeftHanded;
+        | aiProcess_ConvertToLeftHanded | aiProcess_SortByPType;
 
     auto scene = importer.ReadFile(path.string(), flag);
 
@@ -123,7 +124,7 @@ Model loadModel(const std::filesystem::path& path, const InputLayout& il) {
     auto importer = Assimp::Importer();
 
     auto flag = aiProcess_Triangulate | aiProcess_JoinIdenticalVertices
-        | aiProcess_MakeLeftHanded;
+        | aiProcess_ConvertToLeftHanded | aiProcess_SortByPType;
 
     auto scene = importer.ReadFile(path.string(), flag);
 
