@@ -26,17 +26,13 @@ public:
     Generator<DrawInfo> iteration() const override;
 
     void addModel(const d3d12::Model& model) {
-        models_.push_back(model);
-    }
-
-    void addModel(d3d12::Model&& model) {
-        models_.push_back(std::move(model));
+        models_.push_back(&model);
     }
 
 private:
     Generator<DrawInfo> modelIteration(const d3d12::Model* pModel) const;
 
-    std::vector<d3d12::Model> models_;
+    std::vector<const d3d12::Model*> models_;
 };
 
 }   // namespace d3d12

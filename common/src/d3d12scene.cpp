@@ -5,8 +5,8 @@ namespace gfx {
 namespace d3d12 {
 
 Generator<DrawInfo> CameraScene::iteration() const {
-    for (const auto& model : models_) {
-        auto mi = modelIteration(&model);
+    for (auto pModel : models_) {
+        auto mi = modelIteration(pModel);
         for (auto& drawInfo : mi) {
             co_yield std::move(drawInfo);
         }

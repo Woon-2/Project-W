@@ -54,7 +54,7 @@ public:
         : xform_( std::move(sys.xform_) ),
         children_( std::move(sys.children_) ),
         parent_( std::exchange(sys.parent_, nullptr) ) {
-        for (auto& child : sys.children_) {
+        for (auto& child : children_) {
             child->parent_ = this;
         }
 
