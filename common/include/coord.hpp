@@ -20,6 +20,10 @@ public:
         parent_ = parent;
     }
 
+    const System* parent() const {
+        return parent_;
+    }
+
     void MU_CALLCONV accXform(mu::Mat4x4 xform) {
         xform_ *= xform;
     }
