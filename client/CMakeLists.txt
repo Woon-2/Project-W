@@ -79,6 +79,17 @@ compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/nullShader.hlsl"
     "PSMain"
 )
 
+compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/solidShader.hlsl"
+    "${COMPILED_SHADER_PATH}/solidShader_vs.cso"
+    "vs_5_1"
+    "VSMain"
+)
+compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/solidShader.hlsl"
+    "${COMPILED_SHADER_PATH}/solidShader_ps.cso"
+    "ps_5_1"
+    "PSMain"
+)
+
 add_hlsl_target("${HLSL_COMPILED_SHADERS}")
 
 include(configure_paths)

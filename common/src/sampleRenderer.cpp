@@ -1,8 +1,8 @@
 #include "sampleRenderer.hpp"
-#include "sampleScene.hpp"
+#include "d3d12Scene.hpp"
 
 #include "shaderPath.hpp"
-#include "nullShader.hpp"
+#include "solidShader.hpp"
 
 namespace gfx {
 
@@ -39,7 +39,7 @@ void SampleRenderer::render(const IScene& scene, IRenderContext& renderContext, 
 
     const auto& shader = static_cast<d3d12::D3D12RenderContext&>(
         renderContext
-    ).shader( d3d12::NullShader::shaderName() );
+    ).shader( d3d12::SolidShader::shaderName() );
 
     shader.bind(pCmdList.Get(), 0);
 
@@ -49,11 +49,11 @@ void SampleRenderer::render(const IScene& scene, IRenderContext& renderContext, 
 void SampleRenderer::cleanup() {}
 
 void SampleRenderer::D3D12Drawer::init(SampleRenderer& renderer, d3d12::Core& core) {
-    if (core.containsShader(d3d12::NullShader::shaderName())) {
+    if (core.containsShader(d3d12::SolidShader::shaderName())) {
         return;
     }
 
-    core.addShader(d3d12::NullShader::shaderName(), d3d12::NullShader(core));
+    core.addShader(d3d12::SolidShader::shaderName(), d3d12::SolidShader(core));
 }
 
 void SampleRenderer::D3D12Drawer::render( const IScene& scene, ID3D12GraphicsCommandList* pCmdList,
@@ -62,7 +62,14 @@ void SampleRenderer::D3D12Drawer::render( const IScene& scene, ID3D12GraphicsCom
     pCmdList->OMSetRenderTargets(1u, &rtvHandle, true, &dsvHandle);
 
     for (auto di : scene.iteration()) {
-        auto pMesh = di.get<const d3d12::Mesh*>(SampleScene::meshIdx);
+        auto pMesh = di.get<const d3d12::Mesh*>(d3d12::CameraScene::meshIdx);
+        auto world = di.get<const mu::Mat4x4>(d3d12::CameraScene::worldIdx);
+        auto pView = di.get<const mu::Mat4x4*>(d3d12::CameraScene::viewIdx);
+        auto pProj = di.get<const mu::Mat4x4*>(d3d12::CameraScene::projIdx);
+
+        auto wvp = (world * (*pView) * (*pProj)).getXmf();
+        // TODO: make root parameter setting more flexible
+        pCmdList->SetGraphicsRoot32BitConstants(0, 16, &wvp, 0);
 
         pCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         pMesh->bind(pCmdList);

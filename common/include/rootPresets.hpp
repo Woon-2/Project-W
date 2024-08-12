@@ -8,7 +8,8 @@ namespace gfx {
 namespace d3d12 {
 
 enum class RootPreset {
-    Null
+    Null,
+    Solid
 };
 
 wrl::ComPtr<ID3D12RootSignature> makeRootPreset(Core& core, RootPreset preset);

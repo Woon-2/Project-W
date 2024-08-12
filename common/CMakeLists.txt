@@ -122,6 +122,7 @@ add_library(gfx
     src/inputLayout.cpp include/inputLayout.hpp
     src/d3d12InputLayout.cpp include/d3d12InputLayout.hpp
     src/nullShader.cpp include/nullShader.hpp
+    src/solidShader.cpp include/solidShader.hpp
     src/inputLayoutPresets.cpp include/inputLayoutPresets.hpp
     src/d3d12InputLayoutPresets.cpp include/d3d12InputLayoutPresets.hpp
     src/model.cpp include/model.hpp
