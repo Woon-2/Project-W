@@ -40,13 +40,13 @@ class Camera {
 public:
     friend CameraScene;
 
-    static constexpr auto defFov = 90.f;
+    static constexpr auto defFov = mu::Degree(90.f);
     static constexpr auto defAspect = 16.f / 9.f;
     static constexpr auto defNear = 0.1f;
     static constexpr auto defFar = 1000.f;
 
     struct Config {
-        float fov = defFov;
+        mu::Degree fov = defFov;
         float aspect = defAspect;
         float near = defNear;
         float far = defFar;
