@@ -69,11 +69,11 @@ Mesh Model::popMesh(std::string_view name) {
 namespace {
 
 void processAiNode(const aiNode* node, const aiScene* scene, Model& model) {
+    model.coord() << node->mTransformation;
     for (auto i = 0u; i < node->mNumMeshes; ++i) {
         model.addMesh( detail::getMeshFromAiNode(node, scene, i),
             scene->mMeshes[node->mMeshes[i]]->mName.C_Str()
         );
-        model.coord() << node->mTransformation;
     }
 
     for (auto i = 0u; i < node->mNumChildren; ++i) {
