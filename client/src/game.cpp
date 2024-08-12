@@ -31,13 +31,9 @@ Game::Game(gfx::ICore& gfx, MyWindow& wnd)
 }
 
 void Game::update() {
-    keyboard_.patchKeyState();
-    keyManager_.updateFrame(keyboard_);
-
     processInput();
     
     inputSystem_.update();
-
     player_.printPos();
 }
 
@@ -62,9 +58,6 @@ void Game::render() {
 }
 
 void Game::processInput() {
-   /* if (keyboard_.isKeyTap(Key::A))
-    {
-        Position& pos = ecs::GetComponent<Position>(player_.entityNumber_);
-        pos.x += 1.0;
-    }*/
+    keyboard_.patchKeyState();
+    keyManager_.updateFrame(keyboard_);
 }

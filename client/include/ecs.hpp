@@ -30,67 +30,14 @@ namespace ecs {
 	extern std::queue<Entity> gAvailableEntities;
 	extern uint32_t gLivingEntityCount;
 
-	static void ConfigEntity()
-	{
-		for (Entity entity = 0; entity < MAX_ENTITIES; ++entity)
-		{
-			gAvailableEntities.push(entity);
-		}
-	}
-
+	void ConfigEntity();
 	// 새로운 엔터티를 만듭니다.
-	static Entity CreateEntity()
-	{
-		if (gLivingEntityCount >= MAX_ENTITIES) {
-			throw ECS_EXCEPT("You can't create more entities than MAX_ENTITIES.");
-		}
+	Entity CreateEntity();
+	void DestroyEntity(const Entity entity);
 
-		// 큐의 앞에서 부터 번호를 부여한다.
-		if (gAvailableEntities.empty()) {
-			throw ECS_EXCEPT("Can't create Entity");
-		}
+	void SetSignature(Entity entity, Signature signature);
 
-		Entity id = gAvailableEntities.front();
-		gAvailableEntities.pop();
-		++gLivingEntityCount;
-
-		return id;
-	}
-
-	static void DestroyEntity(const Entity entity)
-	{
-		if (entity >= MAX_ENTITIES)
-		{
-			throw ECS_EXCEPT("Entity out of Range");
-		}
-
-		// std::bitset::reset
-		gSignature[entity].reset();
-
-		// 제거한 아이디는 큐의 맨뒤로 보낸다.
-		gAvailableEntities.push(entity);
-		--gLivingEntityCount;
-	}
-
-	static void SetSignature(Entity entity, Signature signature)
-	{
-		if (entity >= MAX_ENTITIES)
-		{
-			throw ECS_EXCEPT("Entity out of Range");
-		}
-
-		gSignature[entity] = signature;
-	}
-
-	static Signature GetSignature(Entity entity)
-	{
-		if (entity >= MAX_ENTITIES)
-		{
-			throw ECS_EXCEPT("Entity out of Range");
-		}
-
-		return gSignature[entity];
-	}
+	Signature GetSignature(Entity entity);
 
 	class IComponentArray
 	{
@@ -238,15 +185,7 @@ namespace ecs {
 		return GetComponentArray<Component>()->GetData(entity);
 	}
 
-	static void componentDestroyEntity(Entity entity)
-	{
-		for (auto const& pair : gComponentArrays)
-		{
-			auto const& component = pair.second;
-
-			component->EntityDestroyed(entity);
-		}
-	}
+	void componentDestroyEntity(Entity entity);
 
 	class System
 	{
@@ -285,46 +224,11 @@ namespace ecs {
 		gSystemSignature.insert({ typeName, signature });
 	}
 
-	static void systemDestroyEntity(Entity entity)
-	{
-		for (auto const& pair : gSystems)
-		{
-			auto const& system = pair.second;
+	void systemDestroyEntity(Entity entity);
 
-			system->entites_.erase(entity);
-		}
-	}
+	void SetEntity(std::string sysName, Entity entity);
 
-	static void SetEntity(std::string sysName, Entity entity)
-	{
-		auto entitySignature = GetSignature(entity);
-
-		if ((entitySignature & gSystemSignature[sysName]) == gSystemSignature[sysName])
-		{
-			gSystems[sysName]->entites_.insert(entity);
-		}
-	}
-
-	static void EntitySignatureChanged(Entity entity)
-	{
-		auto entitySignature = GetSignature(entity);
-
-		for (auto const& pair : gSystems)
-		{
-			auto const& type = pair.first;
-			auto const& system = pair.second;
-			auto const& systemSignature = gSystemSignature[type];
-
-			if ((entitySignature & systemSignature) == systemSignature)
-			{
-				system->entites_.insert(entity);
-			}
-			else
-			{
-				system->entites_.erase(entity);
-			}
-		}
-	}
+	void EntitySignatureChanged(Entity entity);
 
 }	// namespace ecs
 

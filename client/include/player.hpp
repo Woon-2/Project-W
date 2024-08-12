@@ -16,14 +16,12 @@ public:
 	Player() : entityNumber_(0) {}
 	void Init();
 
-	void setPosition(double x, double y, double z) {
-		auto& position = ecs::GetComponent<Position>(entityNumber_);
-		position.x += x;	
-		position.y = y;	
-		position.z = z;
-	}
-	void printPos() {
-		std::cout << "x : " << ecs::GetComponent<Position>(entityNumber_).x << std::endl;
+	void printPos() 
+	{
+		std::cout << "\033[2J\033[1;1H";
+
+		auto curPos = ecs::GetComponent<Position>(entityNumber_);
+		std::cout << "x : " << curPos.x << " y :" << curPos.y << std::endl;
 	}
 
 	ecs::Entity entityNumber_;
