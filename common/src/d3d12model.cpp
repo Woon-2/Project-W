@@ -7,7 +7,7 @@ namespace d3d12 {
 Model::Model( d3d12::Core& core, d3d12::D3D12RenderContext& ctx, const gfx::Model& model,
     Core::UpBufIdx vbUpIdx, Core::UpBufIdx ibUpIdx,
     std::shared_ptr<std::size_t> pVbSerialIdx, std::shared_ptr<std::size_t> pIbSerialIdx
-) : coordSys_(), meshes_(), children_(), name_(model.name()), pVbSerialIdx_(pVbSerialIdx), pIbSerialIdx_(pIbSerialIdx) {
+) : coordSys_(model.coord()), meshes_(), children_(), name_(model.name()), pVbSerialIdx_(pVbSerialIdx), pIbSerialIdx_(pIbSerialIdx) {
     for (const auto& [mesh, name] : model.meshes()) {
         meshes_.emplace_back( Mesh( core, ctx, mesh,
             serializeVbIdx(vbUpIdx), serializeIbIdx(ibUpIdx)
