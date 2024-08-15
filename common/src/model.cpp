@@ -69,7 +69,6 @@ Mesh Model::popMesh(std::string_view name) {
 namespace {
 
 void processAiNode(const aiNode* node, const aiScene* scene, Model& model) {
-    model.coord() << node->mTransformation;
     for (auto i = 0u; i < node->mNumMeshes; ++i) {
         model.addMesh( detail::getMeshFromAiNode(node, scene, i),
             scene->mMeshes[node->mMeshes[i]]->mName.C_Str()
@@ -79,23 +78,26 @@ void processAiNode(const aiNode* node, const aiScene* scene, Model& model) {
     for (auto i = 0u; i < node->mNumChildren; ++i) {
         auto child = Model(node->mChildren[i]->mName.C_Str());
         processAiNode(node->mChildren[i], scene, child);
-        model.addChild(std::move(child));
+        model.addChild(std::move(child), node->mChildren[i]->mTransformation);
     }
 }
 
 void processAiNode(const aiNode* node, const aiScene* scene, Model& model, const InputLayout& il) {
-    model.coord() << node->mTransformation;
     for (auto i = 0u; i < node->mNumMeshes; ++i) {
         auto tmpMesh = detail::getMeshFromAiNode(node, scene, i);
-        model.addMesh( Mesh( convert(tmpMesh.vb(), il), std::move(tmpMesh.ib()) ),
-            scene->mMeshes[node->mMeshes[i]]->mName.C_Str()
-        );
+        if (tmpMesh.vb().byteWidth() != 0 && tmpMesh.ib().size() != 0) {
+            model.addMesh( Mesh( convert(tmpMesh.vb(), il), std::move(tmpMesh.ib()) ),
+                scene->mMeshes[node->mMeshes[i]]->mName.C_Str()
+            );
+        }
     }
 
     for (auto i = 0u; i < node->mNumChildren; ++i) {
         auto child = Model(node->mChildren[i]->mName.C_Str());
         processAiNode(node->mChildren[i], scene, child, il);
-        model.addChild(std::move(child));
+        if (child.meshes().size() > 0) {
+            model.addChild(std::move(child), node->mChildren[i]->mTransformation);
+        }
     }
 }
 
