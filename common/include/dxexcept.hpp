@@ -98,7 +98,7 @@ namespace gfx {
  * Since the DXGI info queue is a global object, it is not thread-safe, and it has only static methods.
  * 
  * @note DXInfoQueue::init must be called before any DXGI objects are created,     
- * indicating that it has to precede even the creation of the ICore implementation.
+ * indicating that it has to precede even the creation of the ICore implementation or DXGI Factory.
  * 
  */
 class DXInfoQueue {
