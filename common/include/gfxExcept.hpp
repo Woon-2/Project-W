@@ -11,7 +11,7 @@
  */
 
 /**
- * @mainpage Exceptions
+ * @page page2 Exceptions
  * @brief Custom exceptions
  * 
  * - @ref GFX_EXCEPT(desc) "GFX_EXCEPT(desc)"

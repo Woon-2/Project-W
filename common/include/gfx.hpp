@@ -154,7 +154,7 @@ public:
      * @brief Check if the render context is castable to the given context type.
      * @param contextType The context type to check.
      * @return `true` if the render context is castable to the given context type, `false` otherwise.
-     * @see RenderContextType
+     * @see RenderContextType IRenderContext::cast
      */
     virtual bool castableTo(RenderContextType contextType) const = 0;
     /**

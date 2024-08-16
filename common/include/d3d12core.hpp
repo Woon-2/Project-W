@@ -23,12 +23,42 @@
 #include "d3dwindow.hpp"
 #endif  // ENABLE_D3D12_WINDOW
 
+/**
+ * @file d3d12core.hpp
+ */
+
 namespace gfx {
 
 namespace wrl = Microsoft::WRL;
 
+/**
+ * @brief The namespace for the D3D12 implementation of the GFX library.
+ * @see gfx
+ */
 namespace d3d12 {
 
+/**
+ * @brief The core class for the D3D12 implementation of the GFX library.     
+ * It is responsible for initializing the device, the command list & queue, and the descriptor heaps,    
+ * and for managing the root signatures, the shaders, the input layouts, and the temporary upload buffers.    
+ * 
+ * It has 4 maps each for root signatures, shaders, input layouts, and temporary upload buffers.     
+ * It is recommended to register the root signatures, the shaders, the input layouts, and the temporary upload buffers to Core,    
+ * and acquire them from Core when needed.    
+ * 
+ * Core::preRender does resetting the command list, and Core::postRender does closing the command list and executing it.    
+ * As Core::preRender and Core::postRender doesn't handle gpu-cpu synchronization,     
+ * it supports Core::waitForGpu and Core::alterFence for that purpose.    
+ * So, when you work with d3d12, ICore interface isn't sufficient at all, and you need to downcast it to the Core for gpu-cpu synchronization.     
+ * 
+ * Before initializing the Core, it is required to configure the DXGI Factory, the descriptor heaps' sizes.    
+ * They're considered as initialization parameters, and calling `config ~` static member functions considered as passing the arguments.
+ * 
+ * @note As Core manages the root signatures, the shaders, the input layouts, and the temporary upload buffers using std::map,     
+ * the key of them must be unique.
+ * 
+ * @see ICore
+ */
 class Core : public ICore {
 public:
     friend class D3D12RenderContext;
@@ -42,6 +72,12 @@ public:
     using ShaderIdx = std::string;
     using InputLayoutIdx = std::string;
 
+    /**
+     * @brief Configures the DXGI Factory.
+     * @param factory The DXGI Factory.
+     * @note The factory can be acquired through DXFactory.
+     * @see DXFactory Core::init
+     */
     static void configDXFactory(wrl::ComPtr<IDXGIFactory4> factory) {
         spFactory = factory;
     }
@@ -49,12 +85,22 @@ public:
         return spFactory;
     }
 
+    /**
+     * @brief Configures the size of the render target view heap.
+     * @param size The size of the render target view heap.
+     * @see Core::init
+     */
     static void configRtvHeapSize(std::size_t size) {
         sRtvHeapSize = size;
     }
     static std::size_t rtvHeapSize() {
         return sRtvHeapSize;
     }
+    /** 
+     * @brief Configures the size of the depth stencil view heap.
+     * @param size The size of the depth stencil view heap.
+     * @see Core::init
+     */
     static void configDsvHeapSize(std::size_t size) {
         sDsvHeapSize = size;
     }
@@ -62,16 +108,58 @@ public:
         return sDsvHeapSize;
     }
 
+    /**
+     * @brief Initializes the Core.    
+     * It creates the device, the command queue & list, the descriptor heaps, and the fence & event.
+     */
     void init() override;
+    /**
+     * @brief Renders the `scene` using the `renderer` to the `target`. 
+     * @param scene The scene to render.
+     * @param renderer The renderer to use.
+     * @param target The target to render to.
+     * @see IScene IRenderer IRenderTarget
+     */
     void render(const IScene& scene, const IRenderer& renderer, IRenderTarget& target) override;
+    /**
+     * @brief Prepares for rendering.    
+     * It resets the command list.
+     */
     void preRender() override;
+    /**
+     * @brief Finalizes the rendering.    
+     * It closes the command list and executes it.
+     */
     void postRender() override;
     void cleanup() override;
      
+    /**
+     * @brief Creates a render context for D3D12.
+     * @return `std::unique_ptr<IRenderContext>` The created render context.
+     * @see IRenderContext D3D12RenderContext
+     */
     std::unique_ptr<IRenderContext> createContext() override;
 
+    /**
+     * @brief Waits for the GPU to finish the work.    
+     * The caller thread will be blocked until the GPU finishes the work.
+     * @details It waits for the reaching of the current fence.
+     */
     void waitForGpu();
+    /**
+     * @brief Alters the fence.
+     * @details It just alters the fence index to next one and doesn't block the caller thread.    
+     * @note Currently there are two fences and the fence index is 0 or 1.
+     * @see Core::waitForGpu
+     */
     void alterFence();
+    /**
+     * @brief Alters the fence.
+     * @param idx The index of the fence.
+     * @details It just alters the fence index to the specified one and doesn't block the caller thread.    
+     * @note Currently there are two fences and the fence index is 0 or 1.
+     * @see Core::waitForGpu
+     */
     void alterFence(std::size_t idx);
 
     D3D12_CPU_DESCRIPTOR_HANDLE rtvHeapStart() const NOEXCEPT {
@@ -82,61 +170,136 @@ public:
         return pDsvHeap_->GetCPUDescriptorHandleForHeapStart();
     }
 
+    /**
+     * @brief Queries the root signature from the Core.
+     * @param idx The index of the root signature.
+     * @return `wrl::ComPtr<ID3D12RootSignature>` The root signature.
+     * @note The root signature for `idx` must be registered to the Core.
+     * @see Core::addRoot Core::containsRoot
+     */
     wrl::ComPtr<ID3D12RootSignature> root(RootIdx idx) const NOEXCEPT {
         return roots_.at(idx);
     }
-
+    /**
+     * @brief Registers a root signature to the Core.
+     * @param idx The index of the root signature, which becomes the key of the root signature.
+     * @param pRoot The root signature to register.
+     * @note The root signature for `pRoot` can be easily acquired via using root presets.     
+     * If you want your own root signature, you have to create it mannually.
+     * @see Core::root Core::containsRoot RootPreset makeRootPreset rootName
+     */
     void addRoot(RootIdx idx, wrl::ComPtr<ID3D12RootSignature> pRoot) {
         roots_[idx] = std::move(pRoot);
     }
-
+    /**
+     * @brief Queries whether the Core contains the root signature for the specified index.
+     * @param idx The index of the root signature.
+     * @return `bool` Whether the Core contains the root signature for the specified index.
+     */
     bool containsRoot(const RootIdx& idx) const NOEXCEPT {
         return roots_.contains(idx);
     }
-
+    /**
+     * @brief Registers a temporary upload buffer to the Core.
+     * @param idx The index of the temporary upload buffer, which becomes the key of the temporary upload buffer.
+     * @param pUpBuf The temporary upload buffer to register.
+     * @note The temporary upload buffer for `pUpBuf` can be easily acquired via using createUpBuf.
+     * @see Core::tmpUpBuf Core::popTmpUpBuf Core::popTmpUpBufs createUpBuf
+     */
     void addTmpUpBuf(UpBufIdx idx, wrl::ComPtr<ID3D12Resource> pUpBuf = nullptr) {
         upBufs_[idx] = std::move(pUpBuf);
     }
-
+    /**
+     * @brief Pops the temporary upload buffer for the specified index.     
+     * It is recommended to pop the temporary upload buffer if it's use is done to save memory.
+     * @param idx The index of the temporary upload buffer.
+     * @note The temporary upload buffer for `idx` must be registered to the Core.
+     * @see Core::addTmpUpBuf Core::popTmpUpBufs
+     */
     void popTmpUpBuf(const UpBufIdx& idx) NOEXCEPT {
         upBufs_.erase(idx);
     }
-
+    /**
+     * @brief Pops all the temporary upload buffers.
+     * @see Core::addTmpUpBuf Core::popTmpUpBuf
+     */
     void popTmpUpBufs() NOEXCEPT {
         upBufs_.clear();
     }
 
     // TODO: more descriptive error message required.
+    /**
+     * @brief Queries the temporary upload buffer for the specified index.
+     * @param idx The index of the temporary upload buffer.
+     * @return `wrl::ComPtr<ID3D12Resource>&` The temporary upload buffer.
+     * @note The temporary upload buffer for `idx` must be registered to the Core.
+     * @see Core::addTmpUpBuf Core::popTmpUpBuf
+     */
     wrl::ComPtr<ID3D12Resource>& tmpUpBuf(const UpBufIdx& idx) {
         if (upBufs_.contains(idx)) {
             return upBufs_.at(idx);
         }
         throw GFX_EXCEPT("The temporary upload buffer does not exist.");
     }
-
+    /**
+     * @brief Registers a Shader to the Core.
+     * @param idx The index of the Shader, which becomes the key of the Shader.
+     * @param shader The Shader to register.
+     * @note The Shader for `shader` can be easily acquired via using ShaderBuilder or SimpleShaderBuilder.
+     * @see Core::shader Core::popShader Core::containsShader Shader ShaderBuilder SimpleShaderBuilder
+     */
     void addShader(ShaderIdx idx, Shader shader) {
         shaders_[idx] = std::move(shader);
     }
-
+    /**
+     * @brief Queries the Shader for the specified index.
+     * @param idx The index of the Shader.
+     * @return `const Shader&` The Shader.
+     * @note The Shader for `idx` must be registered to the Core.
+     * @see Core::addShader Core::popShader Core::containsShader Shader
+     */
     const Shader& shader(const ShaderIdx& idx) const {
         if (shaders_.contains(idx)) {
             return shaders_.at(idx);
         }
         throw GFX_EXCEPT("The shader does not exist.");
     }
-
+    /**
+     * @brief Queries whether the Core contains the Shader for the specified index.
+     * @param idx The index of the Shader.
+     * @return `bool` Whether the Core contains the Shader for the specified index.
+     */
     bool containsShader(const ShaderIdx& idx) const NOEXCEPT {
         return shaders_.contains(idx);
     }
-
+    /**
+     * @brief Pops the Shader for the specified index.     
+     * @param idx The index of the Shader.
+     * @note The Shader for `idx` must be registered to the Core.
+     * @see Core::addShader Core::containsShader
+     */
     void popShader(const ShaderIdx& idx) NOEXCEPT {
         shaders_.erase(idx);
     }
-
+    /**
+     * @brief Registers an InputLayout to the Core.
+     * @param idx The index of the InputLayout, which becomes the key of the InputLayout.
+     * @param inputLayout The InputLayout to register.
+     * @note The InputLayout constructor is already quite handy, but it can be acquired easier via using input layout presets.
+     * @see Core::inputLayout Core::popInputLayout Core::containsInputLayout InputLayout     
+     * makeInputLayoutPreset inputLayoutName
+     */
     void addInputLayout(InputLayoutIdx idx, InputLayout inputLayout) {
         inputLayouts_[idx] = std::move(inputLayout);
     }
 
+    /**
+     * @brief Queries the InputLayout for the specified index.
+     * @param idx The index of the InputLayout.
+     * @return `const InputLayout&` The InputLayout.
+     * @note The InputLayout for `idx` must be registered to the Core.
+     * @see Core::addInputLayout Core::popInputLayout Core::containsInputLayout InputLayout
+     */
     const InputLayout& inputLayout(const InputLayoutIdx& idx) const {
         if (inputLayouts_.contains(idx)) {
             return inputLayouts_.at(idx);
@@ -144,10 +307,21 @@ public:
         throw GFX_EXCEPT("The input layout does not exist.");
     }
 
+    /**
+     * @brief Queries whether the Core contains the InputLayout for the specified index.
+     * @param idx The index of the InputLayout.
+     * @return `bool` Whether the Core contains the InputLayout for the specified index.
+     */
     bool containsInputLayout(const InputLayoutIdx& idx) const NOEXCEPT {
         return inputLayouts_.contains(idx);
     }
 
+    /**
+     * @brief Pops the InputLayout for the specified index.
+     * @param idx The index of the InputLayout.
+     * @note The InputLayout for `idx` must be registered to the Core.
+     * @see Core::addInputLayout Core::containsInputLayout
+     */
     void popInputLayout(const InputLayoutIdx& idx) NOEXCEPT {
         inputLayouts_.erase(idx);
     }
@@ -184,14 +358,42 @@ private:
     std::size_t fenceIdx_ = 0;
 };
 
+/**
+ * @brief The render context for D3D12.    
+ * It retreives `wrl::ComPtr<ID3D12GraphicsCommandList>` object through D3D12RenderContext::cast.    
+ * And it can be queried for a Shader through D3D12RenderContext::shader,     
+ * which is needed for renderer to bind the shader to the command list.
+ * @see IRenderContext RenderContextType Shader
+ */
 class D3D12RenderContext : public IRenderContext {
 public:
     D3D12RenderContext(Core& core)
         : pCore_(&core) {}
 
+    /**
+     * @brief Check if the render context is castable to the given context type.
+     * @param contextType The context type to check.
+     * @return `true` if `contextType` is RenderContextType::D3D12, `false` otherwise.
+     * @see RenderContextType D3D12RenderContext::cast
+     */
     bool castableTo(RenderContextType contextType) const override;
+    /**
+     * @brief Cast the render context to the given context type.
+     * @param contextType The context type to cast.
+     * @return `std::any` The casted object which contains `wrl::ComPtr<ID3D12GraphicsCommandList>`.
+     * @see RenderContextType D3D12RenderContext::castableTo
+     * @note `contextType` must be RenderContextType::D3D12.
+     */
     std::any cast(RenderContextType contextType) override;
 
+    /**
+     * @brief Queries the Shader for the specified index.
+     * @param idx The index of the Shader.
+     * @return `const Shader&` The Shader.
+     * @note The Shader for `idx` must be registered to the Core.
+     * @see Core::addShader Core::popShader Core::containsShader Shader
+     * @note The Shader for `idx` must be registered to the Core.
+     */
     const Shader& shader(const Core::ShaderIdx& idx) const {
         return pCore_->shader(idx);
     }
@@ -227,17 +429,48 @@ public:
     }
 };
 
+/**
+ * @brief The window for D3D12 which can be used as a render target.
+ * It is responsible for providing the render target views and the depth stencil views of swap chain's back buffers.    
+ * It builds the render target view and the depth stencil view on Core's corresponding heaps when Window::open is called.    
+ * 
+ * To acquire the render target view and the depth stencil view,     
+ * cast the window to RenderTargetType::D3D12 and RenderTargetType::D3D12_DEPTH, respectively.
+ * @details Window::preRender sets resource transition barrier from present to render target,    
+ * and set viewport and scissor rect.    
+ * 
+ * Window::postRender sets resource transition barrier from render target to present.
+ * @see IRenderTarget D3DWindow
+ */
 template <class Traits>
 class Window : public D3DWindow<Traits>, public IRenderTarget {
 protected:
+    /**
+     * @brief Get the DXGI factory object from the Core.
+     * @param core The Core.
+     * @return `void*` The DXGI factory object, safely castable to `IDXGIFactory4*`.
+     * @see DXFactory Core
+     */
     void* getFactoryFromCore(Core& core) {
         return WindowAttorney::factory(core);
     }
 
+    /**
+     * @brief Get the command queue object from the Core.
+     * @param core The Core.
+     * @return `void*` The command queue object, safely castable to `ID3D12CommandQueue*`.
+     * @see Core
+     */
     void* getCmdQFromCore(Core& core) {
         return WindowAttorney::cmdQ(core);
     }
 
+    /**
+     * @brief Get the device object from the Core.
+     * @param core The Core.
+     * @return `void*` The device object, safely castable to `ID3D12Device*`.
+     * @see Core
+     */
     void* getDeviceFromCore(Core& core) {
         return WindowAttorney::device(core);
     }
@@ -258,19 +491,52 @@ public:
         : backBuffers_(2), depthBuffers_(1), pFirstRtv_(), pFirstDsv_(),
         rtvStride_(0), dsvStride_(0) {}
 
+    /**
+     * @brief Opens the window with the default window name which specified in Win32::Window::defWndName    
+     * and default window frame which specified in Win32::Window::defWndFrame.
+     * @param core The Core.
+     * @details It builds render target views and depth stencil views on Core's corresponding heaps     
+     * using Window::createDepthBuffers, Window::buildRtv, and Window::buildDsv.
+     * @see D3DWindow::defWndName D3DWindow::createDepthBuffers D3DWindow::buildRtv D3DWindow::buildDsv
+     */
     void open(Core& core) {
         open(core, defWndName());
     }
-
+    /**
+     * @brief Opens the window with the specified window frame.     
+     * The window name becomes the default window name which specified in Win32::Window::defWndName.
+     * @param core The Core.
+     * @param wndFrame The window frame.
+     * @details It builds render target views and depth stencil views on Core's corresponding heaps     
+     * using Window::createDepthBuffers, Window::buildRtv, and Window::buildDsv.
+     * @see D3DWindow::createDepthBuffers D3DWindow::buildRtv D3DWindow::buildDsv
+     */
     void open(Core& core, const Win32::WndFrame& wndFrame) {
         open(core, defWndName(), wndFrame);
     }
-
+    /**
+     * @brief Opens the window with the specified window name.    
+     * The window frame becomes the default window frame which specified in Win32::Window::defWndFrame.
+     * @param core The Core.
+     * @param wndName The window name.
+     * @details It builds render target views and depth stencil views on Core's corresponding heaps     
+     * using Window::createDepthBuffers, Window::buildRtv, and Window::buildDsv.
+     * @see D3DWindow::createDepthBuffers D3DWindow::buildRtv D3DWindow::buildDsv
+     */
     void open(Core& core, MyStringView wndName) {
         open(core, wndName, defWndFrame());
     }
 
     // TODO: replace versioned type with type aliases
+    /**
+     * @brief Opens the window with the specified window name and frame.
+     * @param core The Core.
+     * @param wndName The window name.
+     * @param wndFrame The window frame.
+     * @details It builds render target views and depth stencil views on Core's corresponding heaps     
+     * using Window::createDepthBuffers, Window::buildRtv, and Window::buildDsv.
+     * @see D3DWindow::createDepthBuffers D3DWindow::buildRtv D3DWindow::buildDsv
+     */
     void open(Core& core, MyStringView wndName, const Win32::WndFrame& wndFrame) {
         MyBase::open( static_cast<IDXGIFactory2*>( WindowAttorney::factory(core) ),
             static_cast<ID3D12CommandQueue*>( WindowAttorney::cmdQ(core) ),
@@ -282,15 +548,58 @@ public:
         buildDsv( pDevice, core.dsvHeapStart() );
     }
 
+    /**
+     * @brief Builds render target views of the swap chain's back buffers on the Core's render target view heap region.    
+     * @param pDevice The device which is going to be used to create the render target views.
+     * @param pFirstRtv The first render target view which indicates the start of the core's objective render target view heap region.
+     */
     void buildRtv(ID3D12Device* pDevice, D3D12_CPU_DESCRIPTOR_HANDLE pFirstRtv);
+    /**
+     * @brief Builds depth stencil views for the swap chain's back buffers on the Core's depth stencil view heap region.
+     * @param pDevice The device which is going to be used to create the depth stencil views.
+     * @param pFirstDsv The first depth stencil view which indicates the start of the core's objective depth stencil view heap region.
+     */
     void buildDsv(ID3D12Device* pDevice, D3D12_CPU_DESCRIPTOR_HANDLE pFirstDsv);
+    /**
+     * @brief Creates depth buffers for the swap chain's back buffers internally.
+     * @param pDevice The device which is going to be used to create the depth buffers.
+     * @details It creates the depth buffer with the width and height of the client area of the window,    
+     * and the format of `DXGI_FORMAT_D24_UNORM_S8_UINT`.
+     * @see Win32::Window::client
+     */
     void createDepthBuffers(ID3D12Device* pDevice);
 
+    /**
+     * @brief Check if the render target is castable to the given render target type.
+     * @param rentarType The render target type to check.
+     * @return `true` if `rentarType` is RenderTargetType::D3D12 or RenderTargetType::D3D12_DEPTH, `false` otherwise.
+     * @see RenderTargetType
+     */
     bool castableTo(RenderTargetType rentarType) const override;
+    /**
+     * @brief Cast the render target to the given render target type.
+     * @param rentarType The render target type to cast.
+     * @return `std::any` The casted object which contains `D3D12_CPU_DESCRIPTOR_HANDLE` for either render target view or depth stencil view    
+     * depending on the `rentarType`.
+     * @see RenderTargetType
+     * @note `rentarType` must be RenderTargetType::D3D12 or RenderTargetType::D3D12_DEPTH.
+     */
     std::any cast(RenderTargetType rentarType) override;
     // TODO: CPU - GPU synchronization
     void clear(IRenderContext& renderContext) override;
+    /**
+     * @brief Sets the resource transition barrier from present to render target, and sets viewport and scissor rect.
+     * @param renderContext The render context.
+     * @see IRenderContext D3D12RenderContext
+     * @note `renderContext` must be D3D12RenderContext.
+     */
     void preRender(IRenderContext& renderContext) override;
+    /**
+     * @brief Sets the resource transition barrier from render target to present.
+     * @param renderContext The render context.
+     * @see IRenderContext D3D12RenderContext
+     * @note `renderContext` must be D3D12RenderContext.
+     */
     void postRender(IRenderContext& renderContext) override;
 
 private:
@@ -463,6 +772,12 @@ void Window<Traits>::postRender(IRenderContext& renderContext) {
     pCmdList->ResourceBarrier(1, &bar);
 }
 
+/**
+ * @brief The basic traits for D3D12 window.    
+ * Besides the BasicD3D12Traits functionalities, it provides the window class name.    
+ * If you need more functionalities from window traits, you can derive from this class.
+ * @see BasicD3DWTraits Window D3DWindow Win32::BasicWindowTraits
+ */
 template <Win32::Win32Char T>
 struct BasicD3D12WTraits : public BasicD3DWTraits<T> {
     using MyWindow = Window<BasicD3D12WTraits>;
@@ -471,6 +786,10 @@ struct BasicD3D12WTraits : public BasicD3DWTraits<T> {
     using MyString = std::basic_string<MyChar>;
     using MyStringView = std::basic_string_view<MyChar>;
 
+    /**
+     * @brief Get the window class name.
+     * @return `const MyStringView` The window class name `"D3D12W"`.
+     */
     static constexpr const MyStringView clsName() NOEXCEPT {
         if constexpr (std::is_same_v<MyChar, CHAR>) {
             return "D3D12W";
