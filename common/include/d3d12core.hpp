@@ -422,6 +422,10 @@ private:
     }
 };
 
+/**
+ * @brief A class for fetching the device object from the Core.     
+ * The friend-attorney pattern is applied.
+ */
 class DeviceFetcher {
 public:
     static void* device(Core& core) {
@@ -430,12 +434,13 @@ public:
 };
 
 /**
- * @brief The window for D3D12 which can be used as a render target.
+ * @brief A window for D3D12 which can be used as a render target.
  * It is responsible for providing the render target views and the depth stencil views of swap chain's back buffers.    
  * It builds the render target view and the depth stencil view on Core's corresponding heaps when Window::open is called.    
  * 
  * To acquire the render target view and the depth stencil view,     
  * cast the window to RenderTargetType::D3D12 and RenderTargetType::D3D12_DEPTH, respectively.
+ * @tparam Traits The traits class for the window.
  * @details Window::preRender sets resource transition barrier from present to render target,    
  * and set viewport and scissor rect.    
  * 
@@ -495,21 +500,18 @@ public:
      * @brief Opens the window with the default window name which specified in Win32::Window::defWndName    
      * and default window frame which specified in Win32::Window::defWndFrame.
      * @param core The Core.
-     * @details It builds render target views and depth stencil views on Core's corresponding heaps     
-     * using Window::createDepthBuffers, Window::buildRtv, and Window::buildDsv.
-     * @see D3DWindow::defWndName D3DWindow::createDepthBuffers D3DWindow::buildRtv D3DWindow::buildDsv
+     * @see Win32::Window::defWndName Win32::Window::defWndFrame    
+     * D3DWindow::createDepthBuffers D3DWindow::buildRtv D3DWindow::buildDsv
      */
     void open(Core& core) {
         open(core, defWndName());
     }
     /**
      * @brief Opens the window with the specified window frame.     
-     * The window name becomes the default window name which specified in Win32::Window::defWndName.
+     * The window name is set to the default window name which specified in Win32::Window::defWndName.
      * @param core The Core.
      * @param wndFrame The window frame.
-     * @details It builds render target views and depth stencil views on Core's corresponding heaps     
-     * using Window::createDepthBuffers, Window::buildRtv, and Window::buildDsv.
-     * @see D3DWindow::createDepthBuffers D3DWindow::buildRtv D3DWindow::buildDsv
+     * @see Win32::Window::defWndName D3DWindow::createDepthBuffers D3DWindow::buildRtv D3DWindow::buildDsv
      */
     void open(Core& core, const Win32::WndFrame& wndFrame) {
         open(core, defWndName(), wndFrame);
@@ -519,9 +521,7 @@ public:
      * The window frame becomes the default window frame which specified in Win32::Window::defWndFrame.
      * @param core The Core.
      * @param wndName The window name.
-     * @details It builds render target views and depth stencil views on Core's corresponding heaps     
-     * using Window::createDepthBuffers, Window::buildRtv, and Window::buildDsv.
-     * @see D3DWindow::createDepthBuffers D3DWindow::buildRtv D3DWindow::buildDsv
+     * @see Win32::Window::defWndFrame D3DWindow::createDepthBuffers D3DWindow::buildRtv D3DWindow::buildDsv
      */
     void open(Core& core, MyStringView wndName) {
         open(core, wndName, defWndFrame());
@@ -774,8 +774,9 @@ void Window<Traits>::postRender(IRenderContext& renderContext) {
 
 /**
  * @brief The basic traits for D3D12 window.    
- * Besides the BasicD3D12Traits functionalities, it provides the window class name.    
- * If you need more functionalities from window traits, you can derive from this class.
+ * Besides the BasicD3D12Traits functionalities, it provides the window class name for Window.    
+ * If you need customization from this class, you can derive from it and override the static member functions.
+ * @tparam `T` The character type.
  * @see BasicD3DWTraits Window D3DWindow Win32::BasicWindowTraits
  */
 template <Win32::Win32Char T>

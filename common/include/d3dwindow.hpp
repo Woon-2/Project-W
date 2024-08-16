@@ -9,10 +9,27 @@
 #include <string>
 #include <string_view>
 
+/**
+ * @file d3dwindow.hpp
+ */
+
 namespace gfx {
 
 // TODO: Store client rect
 // TODO: make fullscreen toggle
+/**
+ * @brief A window with a DirectX's swapchain.    
+ * It creates a swapchain when D3DWindow::open is called.    
+ * 
+ * The back buffers are created with the same size as the client area of the window.
+ * 
+ * D3DWindow::present presents the back buffer to the front buffer through the swapchain.     
+ * 
+ * `pSwapChain_`'s access level is protected to allow for more advanced usage for derived classes.
+ * @tparam Traits Traits class for the window.
+ * @note Currently only supports DXGI_FORMAT_R8G8B8A8_UNORM format and 2 back buffers,    
+ * and it doesn't support multisampling.
+ */
 template <class Traits>
 class D3DWindow : public Win32::Window<Traits> {
 protected:
@@ -27,18 +44,46 @@ public:
     using MyBase::defWndName;
     using MyBase::defWndFrame;
 
+    /**
+     * @brief Opens the window with the default window name which specified in Win32::Window::defWndName     
+     * and default window frame wich specified in Win32::Window::defWndFrame.    
+     * @param pFactory DXGI factory to create the swapchain.
+     * @param pDevice D3D device to create the swapchain.
+     * @see Win32::Window::defWndName win32::Window::defWndFrame D3DWindow::createSwapchain
+     */
     void open(IDXGIFactory2* pFactory, IUnknown* pDevice) {
         open(pFactory, pDevice, defWndName());
     }
-
+    /**
+     * @brief Opens the window with the specified window frame,    
+     * The window name is set to the default window name which specified in Win32::Window::defWndName.
+     * @param pFactory DXGI factory to create the swapchain.
+     * @param pDevice D3D device to create the swapchain.
+     * @param wndFrame The frame of the window.
+     * @see Win32::Window::defWndName D3DWindow::createSwapchain
+    */
     void open(IDXGIFactory2* pFactory, IUnknown* pDevice, const Win32::WndFrame& wndFrame) {
         open(pFactory, pDevice, defWndName(), wndFrame);
     }
-
+    /**
+     * @brief Opens the window with the specified window name,    
+     * The window frame is set to the default window frame which specified in Win32::Window::defWndFrame.
+     * @param pFactory DXGI factory to create the swapchain.
+     * @param pDevice D3D device to create the swapchain.
+     * @param wndName The name of the window.
+     * @see Win32::Window::defWndFrame D3DWindow::createSwapchain
+     */
     void open(IDXGIFactory2* pFactory, IUnknown* pDevice, MyStringView wndName) {
         open(pFactory, pDevice, wndName, defWndFrame());
     }
-
+    /**
+     * @brief Opens the window with the specified window name and frame.
+     * @param pFactory DXGI factory to create the swapchain.
+     * @param pDevice D3D device to create the swapchain.
+     * @param wndName The name of the window.
+     * @param wndFrame The frame of the window.
+     * @details After opening the window instance, it creates a swapchain via calling D3DWindow::createSwapchain.    
+     */
     void open(IDXGIFactory2* pFactory, IUnknown* pDevice, MyStringView wndName, const Win32::WndFrame& wndFrame) {
         MyBase::open(wndName, wndFrame);
         createSwapchain(pFactory, pDevice);
@@ -46,6 +91,23 @@ public:
 
     // TODO: consider enabling multisampling
     // TODO: consider multiple back buffers
+    /**
+     * @brief Creates a swapchain for the window internally.
+     * @param pFactory DXGI factory to create the swapchain.
+     * @param pDevice D3D device to create the swapchain.
+     * @details The swapchain is created with the following settings:
+     * The swapchain is created with the following settings:    
+     * - Width and height are set to the client area of the window.    
+     * - Format is DXGI_FORMAT_R8G8B8A8_UNORM.     
+     * - Stereo is false.    
+     * - Sample count is 1.    
+     * - Buffer usage is DXGI_USAGE_RENDER_TARGET_OUTPUT.    
+     * - Buffer count is 2.    
+     * - Scaling is DXGI_SCALING_NONE.    
+     * - Swap effect is DXGI_SWAP_EFFECT_FLIP_DISCARD.    
+     * - Alpha mode is DXGI_ALPHA_MODE_UNSPECIFIED.    
+     * - Flags is DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH.
+     */
     void createSwapchain(IDXGIFactory2* pFactory, IUnknown* pDevice) {
         auto tmp = wrl::ComPtr<IDXGISwapChain1>();
 
@@ -83,14 +145,25 @@ public:
         ) );
     }
 
+    /**
+     * @brief Presents the back buffer to the front buffer through the swapchain.
+     */
     void present() {
         pSwapChain_->Present(1, 0);
     }
 };
 
+/**
+ * @brief Traits class for D3DWindow.    
+ * Besides the Win32::BasicWindowTraits functionalities, it provides the window class name for D3DWindow.    
+ * If you need customization from this class, you can derive from it and override the static member functions.
+ * @tparam `T` The character type.
+ * @see Win32::BasicWindowTraits D3DWindow
+ */
 template <Win32::Win32Char T>
-struct BasicD3DWTraits {
+struct BasicD3DWTraits : public Win32::BasicWindowTraits<T> {
     using MyWindow = D3DWindow<BasicD3DWTraits>;
+    using MyBase = Win32::BasicWindowTraits<T>;
     using MyChar = T;
     using MyString = std::basic_string<MyChar>;
     using MyStringView = std::basic_string_view<MyChar>;
@@ -102,22 +175,6 @@ struct BasicD3DWTraits {
         else /* WCHAR */ {
             return L"D3DW";
         }
-    }
-
-    static void regist(HINSTANCE hInst) {
-        return Win32::BasicWindowTraits<MyChar>::regist(hInst);
-    }
-
-    static void unregist(HINSTANCE hInst) {
-        return Win32::BasicWindowTraits<MyChar>::unregist(hInst);
-    }
-
-    static void destroy(HWND hWnd) {
-        Win32::BasicWindowTraits<MyChar>::destroy(hWnd);
-    }
-
-    static void show(HWND hWnd, int nCmdShow) {
-        Win32::BasicWindowTraits<MyChar>::show(hWnd, nCmdShow);
     }
 };
 
