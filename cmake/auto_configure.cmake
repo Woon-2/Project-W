@@ -59,13 +59,8 @@ function(auto_configure TARGET_NAME ACCESS_MODIFIER)
 
     target_compile_definitions("${TARGET_NAME}"
         ${ACCESS_MODIFIER}
-            $<$<CONFIG:Debug>:DEBUG>
-            $<$<CONFIG:Release>:NDEBUG>
-    )
-
-    target_compile_definitions("${TARGET_NAME}"
-        ${ACCESS_MODIFIER}
-            
+            $<IF:$<CONFIG:Debug>,DEBUG,DEBUG=false>
+            $<IF:$<CONFIG:Release>,NDEBUG,NDEBUG=false>
     )
 
     target_compile_options("${TARGET_NAME}"
