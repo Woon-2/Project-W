@@ -1455,10 +1455,14 @@ public:
 
 #ifdef ASSIMP_MATH_UTIL
     Mat(const aiMatrix3x3& mat) __MathUtil_NOEXCEPT
-        : mat_( dx::XMLoadFloat3x3( reinterpret_cast<const dx::XMFLOAT3X3*>(&mat) ) ) {}
+        : mat_( dx::XMMatrixTranspose(
+        dx::XMLoadFloat3x3( reinterpret_cast<const dx::XMFLOAT3X3*>(&mat) )
+        ) ) {}
 
     Mat(const aiMatrix4x4& mat) __MathUtil_NOEXCEPT
-        : mat_( dx::XMLoadFloat4x4( reinterpret_cast<const dx::XMFLOAT4X4*>(&mat) ) ) {}
+        : mat_( dx::XMMatrixTranspose(
+            dx::XMLoadFloat4x4( reinterpret_cast<const dx::XMFLOAT4X4*>(&mat) )
+         ) ) {}
 
     template <std::floating_point Fl>
     Mat(const aiMatrix3x3t<Fl>& mat) __MathUtil_NOEXCEPT
