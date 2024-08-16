@@ -25,6 +25,9 @@ concept Win32Char = contains<T, CHAR, WCHAR>;
         throw WND_EXCEPT(hr)
 #define WND_LAST_EXCEPT() WND_EXCEPT( GetLastError() )
 
+/**
+ * @brief Namespace for a C++ wrapper library for Win32 API.
+ */
 namespace Win32
 {
 
@@ -503,7 +506,19 @@ public:
         Traits::show( nativeHandle(), nCmdShow );
     }
 
+    /**
+     * @brief Get the frame area of the window.    
+     * It is the area of the window including the border and title bar.
+     * @return `const WndFrame&`  the frame area of the window.
+     * @see WndFrame Window::client
+     */
     const WndFrame& frame() const NOEXCEPT { return frame_; }
+    /**
+     * @brief Get the client area of the window.    
+     * It is the area of the window excluding the border and title bar.
+     * @return `const WndClient&`  the client area of the window.
+     * @see WndClient Window::frame
+     */
     const WndClient& client() const NOEXCEPT { return client_; }
 
 private:
