@@ -147,6 +147,9 @@ public:
 
     /**
      * @brief Presents the back buffer to the front buffer through the swapchain.
+     * @details The back buffer is presented with the following settings:    
+     * - Sync interval is set to 1.    
+     * - Flags is set to 0.
      */
     void present() {
         pSwapChain_->Present(1, 0);
