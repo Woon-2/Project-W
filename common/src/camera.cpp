@@ -11,9 +11,14 @@ void CameraScene::fillViewProj(DrawInfo& drawInfo) const {
 }
 
 void Camera::updateView() {
-    const auto& parent = *coordSys_.parent();
+    auto pParent = coordSys_.parent();
 
-    auto up = coord::Vec3( coordSys_, mu::Vec3(0.f, 1.f, 0.f) );
+    if (!pParent) {
+        throw GFX_EXCEPT("Camera must have a parent coordinate system.");
+    }
+
+    auto up = coord::Vec3( &coordSys_, mu::Vec3(0.f, 1.f, 0.f) );
+    const auto& parent = *pParent;
 
     if (focused()) {
         view_ = mu::lookAt(

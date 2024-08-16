@@ -52,15 +52,19 @@ public:
         float far = defFar;
     };
 
+    Camera()
+        : Camera(coord::System(), Config()) {}
+
     Camera(const coord::System& baseCoordSys)
         : Camera(baseCoordSys, Config()) {}
+
+    Camera(const Config& config)
+        : Camera(coord::System(), config) {}
     
     Camera(const coord::System& baseCoordSys, const Config& config)
-        : coordSys_(), config_(config), proj_(
+        : coordSys_(baseCoordSys), config_(config), proj_(
             mu::persp(config_.fov, config_.aspect,config_.near, config_.far)
-        ), focusPos_(), lookDir_(baseCoordSys) {
-        coordSys_.setParent(&baseCoordSys);
-    }
+        ), focusPos_(), lookDir_(&baseCoordSys) {}
 
     const Config& config() const NOEXCEPT {
         return config_;
@@ -84,13 +88,18 @@ public:
     }
 
     coord::Pt3 pos() const {
-        return coord::Pt3(coordSys_, mu::Vec3(0.f, 0.f, 0.f));
+        return coord::Pt3(&coordSys_, mu::Vec3(0.f, 0.f, 0.f));
     }
 
     void focus(const coord::Pt3& target) {
         focusPos_ = target;
-        const auto& parent = *coordSys_.parent();
-        lookDir_ = coord::Vec3( parent, target.represent( parent ) - pos().represent( parent ) );
+        auto parent = coordSys_.parent();
+
+        if (!parent) {
+            throw GFX_EXCEPT("Camera must have a parent coordinate system.");
+        }
+
+        lookDir_ = coord::Vec3( parent, target.represent( *parent ) - pos().represent( *parent ) );
     }
 
     void unfocus() {
