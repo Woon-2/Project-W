@@ -140,25 +140,3 @@ public:
 }   // namespace gfx
 
 #endif // __GFX_HPP
-
-// auto core = gfx::d3d12::Core();
-// core.init();
-
-// auto renderer = gfx::BlinnPhongRenderer();
-// auto context = core.createContext();
-
-// core.render::
-// renderer.render(scene, context, target);
-
-// renderer.render::
-// if (context.castableTo( RenderContextType::D3D12 )) {
-//    auto d3d12Context = std::any_cast( context.cast(RenderContextType::D3D12) );
-//    d3d12SubRenderer.render(scene, d3d12Context, target);
-// }
-//
-// BlinnPhongRenderer::D3D12SubRenderer::render::
-// auto di = scene.getDrawInfo();
-// d3d12Context.SetVertexBuffers(0, 1, di[VB].cast<gfx::d3d12::VertexBufferView>());
-// d3d12Context.SetIndexBuffer(di.get<gfx::d3d12::IndexBufferView>(gfx::DrawInfo::IB));
-// d3d12Context.SetGraphicsRootConstantBufferView(RP_WVP, di[WVP].cast<gfx::d3d12::ConstantBufferView>());
-//
