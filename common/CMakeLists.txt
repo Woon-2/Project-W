@@ -129,8 +129,8 @@ add_library(gfx
     src/d3d12model.cpp include/d3d12model.hpp
     src/camera.cpp include/camera.hpp
     src/d3d12scene.cpp include/d3d12scene.hpp
-
-    include/coord.hpp
+    src/coord.cpp include/coord.hpp
+    
     include/dxtarget.hpp
     include/gfxPrimitive.hpp
     include/shaderPath.hpp

@@ -12,7 +12,7 @@ Generator<DrawInfo> SampleScene::iteration() const {
 }
 
 Generator<DrawInfo> SampleScene::modelIteration(const d3d12::Model* pModel) {
-    auto world = pModel->coord().totalXform();
+    auto world = pModel->coord().xform();
 
     for (const auto& mesh : pModel->meshes()) {
         auto drawInfo = DrawInfo();

@@ -9,6 +9,13 @@
 
 #include <utility>
 #include <vector>
+#include <memory>
+#include <type_traits>
+#include <stack>
+
+#include <cassert>
+
+#include "gfxExcept.hpp"
 
 namespace gfx {
 
@@ -17,165 +24,136 @@ namespace coord {
 class System {
 public:
     System()
-        : xform_(), parent_(nullptr) {}
+        : localXform_(), cachedTotalXform_(), children_(), parent_(nullptr) {}
 
-    System(const System& sys)
-        : xform_(sys.xform_), children_(sys.children_), parent_(sys.parent_) {
-        for (auto& child : children_) {
-            child->parent_ = this;
-        }
+    System(const System& sys);
+    System& operator=(const System& sys);
+    System(System&& sys) noexcept;
+    System& operator=(System&& sys) noexcept;
 
-        if (parent_) {
-            parent_->children_.push_back(this);
-        }
+    ~System();
+
+    void accXform(const mu::Mat4x4& xform) NOEXCEPT {
+        localXform_ *= xform;
     }
 
-    System& operator=(const System& sys) {
-        if (this == &sys) {
-            return *this;
-        }
-
-        xform_ = sys.xform_;
-        children_ = sys.children_;
-        parent_ = sys.parent_;
-
-        for (auto& child : children_) {
-            child->parent_ = this;
-        }
-
-        if (parent_) {
-            parent_->children_.push_back(this);
-        }
-
-        return *this;
+    mu::Mat4x4 MU_CALLCONV localXformTransposed() const NOEXCEPT {
+        return mu::transpose(localXform_);
     }
 
-    System(System&& sys) noexcept
-        : xform_( std::move(sys.xform_) ),
-        children_( std::move(sys.children_) ),
-        parent_( std::exchange(sys.parent_, nullptr) ) {
-        for (auto& child : children_) {
-            child->parent_ = this;
-        }
-
-        if (parent_) {
-            parent_->children_.push_back(this);
-            std::erase(parent_->children_, &sys);
-        }
+    const mu::Mat4x4& localXform() const NOEXCEPT {
+        return localXform_;
     }
 
-    System& operator=(System&& sys) noexcept {
-        if (this == &sys) {
-            return *this;
-        }
-
-        xform_ = std::move(sys.xform_);
-        children_ = std::move(sys.children_);
-        parent_ = std::exchange(sys.parent_, nullptr);
-
-        for (auto& child : sys.children_) {
-            child->parent_ = this;
-        }
-
-        if (parent_) {
-            parent_->children_.push_back(this);
-            std::erase(parent_->children_, &sys);
-        }
-
-        return *this;
+    const mu::Mat4x4& xform() const NOEXCEPT {
+        return cachedTotalXform_;
     }
 
-    void setParent(const System* parent) {
-        parent_ = parent;
-    }
+    void traverse(const mu::Mat4x4& parentXform = mu::Mat4x4()) NOEXCEPT;
+    void setParent(System* parent);
 
-    const System* parent() const {
+    const System* parent() const NOEXCEPT {
         return parent_;
     }
 
-    void MU_CALLCONV accXform(mu::Mat4x4 xform) {
-        xform_ *= xform;
+    void popChild(const System* child) {
+        std::erase_if( children_, [child](const auto& c) {
+            return c == child;
+        } );
     }
 
-    friend System& MU_CALLCONV operator<<(System& cs, mu::Mat4x4 xform) {
+    friend System& operator<<(System& cs, const mu::Mat4x4& xform) {
         cs.accXform(xform);
         return cs;
     }
 
-    mu::Mat4x4 MU_CALLCONV localXform() const {
-        return xform_;
-    }
-
-    mu::Mat4x4 MU_CALLCONV totalXform() const {
-        return parent_ ? parent_->totalXform() * xform_ : xform_;
-    }
-
 private:
-    mu::Mat4x4 xform_;
-    mutable std::vector<const System*> children_;
+    mu::Mat4x4 localXform_;
+    mu::Mat4x4 cachedTotalXform_;
+    std::vector<System*> children_;
     mutable const System* parent_;
 };
 
-class Pt3 {
-public:
-    Pt3(const System& sys) : pSys_(&sys), val_() {}
-    Pt3(const System& sys, mu::Vec3 val) : pSys_(&sys), val_(val) {}
-    Pt3(const System& sys, float x, float y, float z) : pSys_(&sys), val_(x, y, z) {}
+namespace detail {
 
-    mu::Vec3& get() { return val_; }
-    const mu::Vec3& get() const { return val_; }
-    void MU_CALLCONV set(mu::Vec3 val) { val_ = val; }
-    void MU_CALLCONV set(float x, float y, float z) { val_ = mu::Vec3(x, y, z); }
-    void MU_CALLCONV set(Pt3 pt) { val_ = pt.represent(*pSys_); }
-
-    mu::Vec3 MU_CALLCONV represent(const System& sys) const {
-        return mu::Vec4(val_, 1.f) * pSys_->totalXform() * mu::inverse(sys.totalXform());
-    }
-
-    mu::Vec3 MU_CALLCONV represent() const {
-        return val_;
-    }
-
-    void migrate(const System& sys) {
-        val_ = represent(sys);
-        pSys_ = &sys;
-    }
-
-private:
+// TODO: add noexcept expression macro
+template <class Conc>
+class CoordEntry {
+protected:
     const System* pSys_;
     mu::Vec3 val_;
+
+public:
+    CoordEntry(const System* pSys) noexcept(NDEBUG)
+        : pSys_(pSys), val_() {
+        assert(pSys != nullptr);
+    }
+
+    CoordEntry(const System* pSys, mu::Vec3 val) noexcept(NDEBUG)
+        : pSys_(pSys), val_(val) {
+        assert(pSys != nullptr);
+    }
+
+    CoordEntry(const System* pSys, float x, float y, float z) noexcept(NDEBUG)
+        : pSys_(pSys), val_(x, y, z) {
+        assert(pSys != nullptr);  
+    }
+
+    mu::Vec3& get() NOEXCEPT { return val_; }
+    const mu::Vec3& get() const NOEXCEPT { return val_; }
+    void set(const mu::Vec3& val) NOEXCEPT { val_ = val; }
+    void set(float x, float y, float z) NOEXCEPT { val_ = mu::Vec3(x, y, z); }
+
+    void MU_CALLCONV set(Conc other) NOEXCEPT {
+        val_ = other.represent(*pSys_);
+    }
+
+    const mu::Vec3 represent(const System& sys) const NOEXCEPT {
+        return static_cast<const Conc*>(this)->representImpl(sys);
+    }
+
+    const mu::Vec3 represent() const NOEXCEPT {
+        return static_cast<const Conc*>(this)->representImpl();
+    }
+
+    void migrate(const System* pSys) noexcept(NDEBUG) {
+        assert(pSys != nullptr);
+        val_ = represent(*pSys);
+        pSys_ = pSys;
+    }
 };
 
-class Vec3 {
+}   // namespace gfx::coord::detail
+
+class Pt3 : public detail::CoordEntry<Pt3> {
 public:
-    Vec3(const System& sys) : pSys_(&sys), val_() {}
-    Vec3(const System& sys, mu::Vec3 val) : pSys_(&sys), val_(val) {}
-    Vec3(const System& sys, float x, float y, float z) : pSys_(&sys), val_(x, y, z) {}
-
-    mu::Vec3& get() { return val_; }
-    const mu::Vec3& get() const { return val_; }
-    void MU_CALLCONV set(mu::Vec3 val) { val_ = val; }
-    void MU_CALLCONV set(float x, float y, float z) { val_ = mu::Vec3(x, y, z); }
-    void MU_CALLCONV set(Vec3 vec) { val_ = vec.represent(*pSys_); }
-
-    mu::Vec3 MU_CALLCONV represent(const System& sys) const {
-        return mu::Vec4(val_, 0.f) * pSys_->totalXform() * mu::inverse(sys.totalXform());
-    }
-
-    mu::Vec3 MU_CALLCONV represent() const {
-        return val_;
-    }
-
-    void migrate(const System& sys) {
-        val_ = represent(sys);
-        pSys_ = &sys;
-    }
+    friend class detail::CoordEntry<Pt3>;
+    using detail::CoordEntry<Pt3>::CoordEntry;
 
 private:
-    const System* pSys_;
-    mu::Vec3 val_;
+    mu::Vec3 MU_CALLCONV representImpl(const System& sys) const NOEXCEPT {
+        return mu::Vec4(val_, 1.f) * pSys_->xform() * mu::inverse(sys.xform());
+    }
+
+    mu::Vec3 MU_CALLCONV representImpl() const NOEXCEPT {
+        return val_;
+    }
 };
 
+class Vec3 : public detail::CoordEntry<Vec3> {
+public:
+    friend class detail::CoordEntry<Vec3>;
+    using detail::CoordEntry<Vec3>::CoordEntry;
+
+private:
+    mu::Vec3 MU_CALLCONV representImpl(const System& sys) const NOEXCEPT {
+        return mu::Vec4(val_, 0.f) * pSys_->xform() * mu::inverse(sys.xform());
+    }
+
+    mu::Vec3 MU_CALLCONV representImpl() const NOEXCEPT {
+        return val_;
+    }
+};
 
 }   // namespace coord
 

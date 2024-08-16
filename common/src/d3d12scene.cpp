@@ -14,7 +14,7 @@ Generator<DrawInfo> CameraScene::iteration() const {
 }
 
 Generator<DrawInfo> CameraScene::modelIteration(const d3d12::Model* pModel) const {
-    auto world = pModel->coord().totalXform();
+    auto world = pModel->coord().xform();
 
     for (const auto& mesh : pModel->meshes()) {
         auto drawInfo = DrawInfo();
