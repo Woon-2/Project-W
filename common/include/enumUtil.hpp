@@ -5,6 +5,26 @@
 #include <type_traits>
 
 /**
+ * @file enumUtil.hpp
+ */
+
+/**
+ * @page page3 Utility Macros
+ * @brief Set of utility macros
+ * 
+ * - @ref DEFINE_ENUM_LOGICAL_OP_ALL "DEFINE_ENUM_LOGICAL_OP_ALL"
+ * - @ref DEFINE_ENUM_COMPARE_OP_ALL "DEFINE_ENUM_COMPARE_OP_ALL"
+ * - @ref DEFINE_ENUM_INT_LOGICAL_OP "DEFINE_ENUM_INT_LOGICAL_OP"
+ * - @ref DEFINE_ENUM_BINARY_LOGICAL_OP "DEFINE_ENUM_BINARY_LOGICAL_OP"
+ * - @ref DEFINE_ENUM_INT_COMPARE_OP "DEFINE_ENUM_INT_COMPARE_OP"
+ * - @ref DEFINE_ENUM_BINARY_COMPARE_OP "DEFINE_ENUM_BINARY_COMPARE_OP"
+ * - @ref DEFINE_ENUM_BINARY_OP "DEFINE_ENUM_BINARY_OP"
+ * - @ref DEFINE_ENUM_INT_OP "DEFINE_ENUM_INT_OP"
+ * - @ref DEFINE_UNARY_OP "DEFINE_UNARY_OP"
+ */
+
+
+/**
  * @brief Define logical operators for all integral types and a specified enumeration type.
  * 
  * This macro defines logical operators (such as '&&' and '||') between the specified enumeration type 
