@@ -10,7 +10,15 @@ void InputLayout::configProperty(Vertex::Properties prop, VertexBuffer::offset_t
     elements_.insert(hole, Element{prop, offset});
 }
 
-
+/**
+ * @brief Converts a vertex buffer to another vertex buffer with the given input layout.
+ * @details Returning vertex buffer is re-configured to match the input layout,     
+ * and constructed with each properties in InputLayout iterating over the original vertex buffer.
+ * @param vb The vertex buffer to convert.
+ * @param il The input layout to convert to.
+ * @return VertexBuffer The converted vertex buffer.
+ * @see VertexBuffer InputLayout
+ */
 VertexBuffer convert(const VertexBuffer& vb, const InputLayout& il) {
     auto ret = VertexBuffer();
     ret.configStride(il.stride_);
