@@ -20,18 +20,19 @@ void Camera::updateView() {
     auto up = coord::Vec3( &coordSys_, mu::Vec3(0.f, 1.f, 0.f) );
     const auto& parent = *pParent;
 
+    auto repPos = pos().represent( parent );
+    auto repUp = up.represent( parent );
+
     if (focused()) {
-        view_ = mu::lookAt(
-            pos().represent( parent ),
-            focusPos_->represent( parent ),
-            up.represent( parent )
-        );
+        auto repAt = focusPos_->represent( parent );
+
+        view_ = mu::lookAt(repPos, repAt, repUp);
+
+        // to keep the look direction when the camera loses focus
+        lookDir_ = coord::Vec3( pParent, repAt - repPos );
     } else {
-        view_ = mu::lookAt(
-            pos().represent( parent ),
-            pos().represent( parent ) + lookDir_.represent( parent ),
-            up.represent( parent )
-        );
+        auto repAt = repPos + lookDir_.represent( parent );
+        view_ = mu::lookAt(repPos, repAt, repUp);
     }
 }
 

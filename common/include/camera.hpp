@@ -180,6 +180,7 @@ public:
      * @brief Focuses the camera on a target.
      * @note If the camera refocus on a different target or Camera::lookTo or Camera::unfocous is called,     
      * the camera loses focus on the target previously had.
+     * @note When camera loses focus, the camera keeps the look direction when it was focused.
      * @param target The target to focus on.
      * @see focused unfocus lookTo
      */
@@ -195,6 +196,7 @@ public:
     }
     /**
      * @brief Unfocus the camera.
+     * @note When camera loses focus, the camera keeps the look direction when it was focused.
      * @see focused focus lookTo
      */
     void unfocus() {
