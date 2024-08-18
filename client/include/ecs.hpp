@@ -13,44 +13,158 @@
 
 #include "ecsExcept.hpp"
 
-namespace ecs {
+/**
+ * @brief This is namespace for ecs ( Entity_Component_System )
+ * 
+ * Entity has a id.
+ * 
+ * Component is a **struct** or **class**.
+ * Component is assigned id as ComponentType.
+ * 
+ */
 
+namespace ecs {
+	/**
+	* @typedef Entity
+	* @brief A 32-bit integer type that represents an entity.
+	*/
 	using Entity = std::int32_t;
+	/**
+	* @typedef ComponentType
+	* @brief An 8-bit unsigned integer type that represents the component type.
+	* 
+	* 
+	*/
 	using ComponentType = std::uint8_t;
 
+	/**
+	* @var MAX_ENTITIES
+	* @brief Maximum number of entities that the system can manage.
+	*/
 	const Entity MAX_ENTITIES = 1024;
+	/**
+	* @var MAX_COMPONENTS
+	* @brief Maximum number of components that the system can manage.
+	*/
 	const ComponentType MAX_COMPONENTS = 64;
 
+	/**
+	* @typedef Signature
+	* @brief Bitset that represents the set of components assigned to an entity.
+	* 
+	* This bit set represents what components an entity has.
+	*/
 	using Signature = std::bitset<MAX_COMPONENTS>;
 
-	// 각 Entity에 해당할 시그니처 배열
+	/**
+	* @var gSignature
+	* @brief The array of signatures each entity has.
+	* 
+	* This array represents the component configuration of each entity managed by the system.
+	*/
 	extern std::array<Signature, MAX_ENTITIES> gSignature;
 
-	// 사용하지 않은 엔티티 아이디
+	/**
+	* @var gAvailableEntities
+	* @brief Queue that stores unused entity IDs.
+	* 
+	* This queue manages reusable entity IDs and is used when new entities are created.
+	*/
 	extern std::queue<Entity> gAvailableEntities;
+	/**
+	* @var gLivingEntityCount
+	* @brief Variables representing the number of entities currently active.
+	*/
 	extern uint32_t gLivingEntityCount;
 
+	/**
+	* @brief Configures the ECS environment for entity management.
+	* 
+	* Makes the queue ready to manage the entity.
+	*/
 	void ConfigEntity();
-	// 새로운 엔터티를 만듭니다.
+	/**
+	* @brief Creates a new entity.
+	* 
+	* Generates a new entity ID and returns it.
+	* 
+	* @return Entity The newly created entity ID.
+	*/
 	Entity CreateEntity();
+	/**
+	* @brief Destroys an entity.
+	* 
+	* Remove the specified entity from the ECS system, freeing up its resources.
+	* 
+	* @param entity The ID of the entity to destroy.
+	*/
 	void DestroyEntity(const Entity entity);
-
+	/**
+	* @brief Sets the signature for a given entity.
+	* 
+	* @code
+	* ecs::Signature signature;
+	* signature.set(ecs::GetComponentType<PlayerController>());
+	* signature.set(ecs::GetComponentType<Position>());
+	* ecs::SetSignature(entityNumber_, signature);
+	* @endcode
+	* 
+	* @param entity The ID of the entity.
+	* @param signature The signature to assign to the entity.
+	*/
 	void SetSignature(Entity entity, Signature signature);
-
+	/**
+	* @brief Retrieves the signature of a specified entity.
+	* 
+	* Returns the bitset signature that represents the components of the entity.
+	* 
+	* @param entity The ID of the entity.
+	* @return Signature The signature associated with the entity.
+	*/
 	Signature GetSignature(Entity entity);
 
+	/**
+	* @brief Abstract class for managing component arrays.
+	* 
+	* The base class for component arrays that provides an interface for handling entity destruction.
+	*/
 	class IComponentArray
 	{
 	public:
+		/**
+		* @brief Virtual destructor.
+		*/
 		virtual ~IComponentArray() = default;
+		/**
+		* @brief Handles the destruction of an entity.
+		* 
+		* When an entity is destroyed, this function is called to remove it from the component array.
+		* 
+		* @param entity The ID of the entity to destroy.
+		*/
 		virtual void EntityDestroyed(Entity entity) = 0;
 	};
 
+	/**
+	* @brief Template class for managing specific component arrays.
+	* 
+	* Manages arrays of specific component types and allows for insertion, removal, 
+	*	and retrieval of components associated with entities
+	* 
+	* @tparam Component The type of component to manage.
+	*/
 	template <class Component>
 	class ComponentArray : public IComponentArray
 	{
 	public:
-		// Component 배열에 n번 엔티티로 삽입
+		/**
+		* @brief Inserts a component for a specific entity.
+		* 
+		* Adds a component to the array, associating it with a specific entity.
+		* 
+		* @param entity The ID of the entity.
+		* @param component The component to insert.
+		*/
 		void InsertData(Entity entity, Component component)
 		{
 			if (entityToIndexMap_.find(entity) != entityToIndexMap_.end())
@@ -65,7 +179,18 @@ namespace ecs {
 			++size_;
 		}
 
-		// 마지막 인덱스를 지우려는 인덱스쪽으로 덮어씌우고 마지막 인덱스를 erase
+		/**
+		* @brief Removes a component associated with a specific entity.
+		* 
+		* Removes the component for a given entity, reorganizing the array if necessary.
+		* 
+		* reorganizing : Cover the index to be erased with the last index and clear the last index
+		* 
+		* if entity is deleted this function is called.
+		* so you don't need to call this.
+		* 
+		* @param entity The ID of the entity.
+		*/
 		void RemoveData(Entity entity)
 		{
 			if (entityToIndexMap_.find(entity) == entityToIndexMap_.end())
@@ -87,6 +212,18 @@ namespace ecs {
 			--size_;
 		}
 
+		/**
+		* @brief Retrieves the component associated with a specific entity.
+		* 
+		* Returns the component associated with the given entity ID.
+		* 
+		* For example, if you want specific player's position (position is component), call this. 
+		* 
+		* or call template function GetComponent()
+		* 
+		* @param entity The ID of the entity.
+		* @return Component& Reference to the component associated with the entity.
+		*/
 		Component& GetData(Entity entity)
 		{
 			if (entityToIndexMap_.find(entity) == entityToIndexMap_.end())
@@ -96,7 +233,13 @@ namespace ecs {
 
 			return componentArray_[entityToIndexMap_[entity]];
 		}
-
+		/**
+		* @brief Handles the destruction of an entity.
+		* 
+		* Removes the entity's component from the array if it exists.
+		* 
+		* @param entity The ID of the entity to destroy.
+		*/
 		void EntityDestroyed(Entity entity) override
 		{
 			if (entityToIndexMap_.find(entity) != entityToIndexMap_.end())
@@ -113,14 +256,34 @@ namespace ecs {
 		size_t size_;
 	};
 
-	// 타입 이름과 컴포넌트 타입을 매핑 ComponentType은 int임 gNextComponentType으로 인덱싱
+	/**
+	* @var gComponentTypes
+	* @brief Maps component type names to 'ComponentType' IDs.
+	* 
+	* This map is used to index component types using 'gNextComponentType'.
+	*/
 	extern std::map<std::string, ComponentType> gComponentTypes;
-	// 타입 이름과 해당 타입의 배열(엔터티 배열을 가지고 있는)을 매핑 
+	/**
+	* @var gComponentArrays
+	* @brief Maps component type names to arrays of components.
+	* 
+	* This map associates component types with their respective arrays that store the components associated with entities.
+	*/
 	extern std::map<std::string, std::shared_ptr<IComponentArray>> gComponentArrays;
-	// 등록된 컴포넌트 정보
+	/**
+	* @var gNextComponentType
+	* @brief The ID to be assigned to the next registered component type.
+	*/
 	extern ComponentType gNextComponentType;
 
-	// Component 타입의 배열을 반환해준다.
+	/**
+	* @brief Retrieves the component array for a specific component type.
+	* 
+	* Returns the array of components associated with the given component type.
+	* 
+	* @tparam Component The type of component to retrieve the array for.
+	* @return std::shared_ptr<ComponentArray<Component>> A shared pointer to the component array.
+	*/
 	template <class Component>
 	std::shared_ptr<ComponentArray<Component>> GetComponentArray()
 	{
@@ -133,7 +296,13 @@ namespace ecs {
 
 		return std::static_pointer_cast<ComponentArray<Component>>(gComponentArrays[typeName]);
 	}
-
+	/**
+	* @brief Registers a new component type.
+	* 
+	* This function registers a component type, allowing it to be used within the ECS.
+	* 
+	* @tparam Component The type of component to register.
+	*/
 	template<class Component>
 	void RegisterComponent() {
 		std::string typeName = typeid(Component).name();
@@ -149,7 +318,15 @@ namespace ecs {
 
 		++gNextComponentType;
 	}
-
+	/**
+	* @brief Retrieves the component type ID for a specific component.
+	* 
+	* Returns the 'ComponentType' ID associated with the given component type.
+	* Return values can be used to combine signatures.
+	* 
+	* @tparam Component The type of component to retrieve the ID for.
+	* @return ComponentType The ID of the component type.
+	*/
 	template<class Component>
 	ComponentType GetComponentType()
 	{
@@ -160,42 +337,96 @@ namespace ecs {
 			throw ECS_EXCEPT("Component not exit");
 		}
 
-		// 시그니처를 만들기 위해 반환됨.
 		return gComponentTypes[typeName];
 	}
 
-	// ComponentArray의 InsertData가 호출됨
+	/**
+	* @brief Adds a component to an entity.
+	* 
+	* Inserts a component into the array for the specified entity.
+	* 
+	* @tparam Component The type of component to add.
+	* @param entity The ID of entity.
+	* @param component The component to add.
+	*/
 	template<class Component>
 	void AddComponent(Entity entity, Component component)
 	{
 		GetComponentArray<Component>()->InsertData(entity, component);
 	}
-
-	// ComponentArray의 RemoveData가 호출됨
+	/**
+	* @brief Removes a component from a entity.
+	* 
+	* Removes the component associated with the specified entity from the component array.
+	* 
+	* @tparam Component The type of component to remove.
+	* @param entity The ID of the entity.
+	*/
 	template<class Component>
 	void RemoveComponent(Entity entity)
 	{
 		GetComponentArray<Component>()->RemoveData(entity);
 	}
-
-	// ComponentArray의 GetData가 호출됨
+	/**
+	* @Retrieves a component from an entity.
+	* 
+	* Returns the component associated with the specified entity.
+	* 
+	* @tparam Component The type of component to retrieve.
+	* @param entity The ID of the entity.
+	* @return Component& Reference to the component associated with the entity.
+	*/
 	template<class Component>
 	Component& GetComponent(Entity entity)
 	{
 		return GetComponentArray<Component>()->GetData(entity);
 	}
-
+	/**
+	* @brief Handles the destruction of an entity in the component.
+	* 
+	* Removes the entity from all relevant component arrays.
+	* 
+	* @param entity The ID of the entity to destroy.
+	*/
 	void componentDestroyEntity(Entity entity);
 
+	/**
+	* @brief Represents a system in the ECS framework.
+	* 
+	* Systems operate on entities with specific component signatures.
+	*/
 	class System
 	{
 	public:
+		/**
+		* @brief A set of entities that this system operates on.
+		*/
 		std::set<Entity> entites_;
 	};
 
+	/**
+	* @var gSystemSignature
+	* @brief Maps system type names to their component signatures.
+	* 
+	* This map associates systems with the signatures of components they operate on.
+	*/
 	extern std::map<std::string, Signature> gSystemSignature;
+	/**
+	* @var gSystems
+	* @brief Maps system type names to system instances.
+	* 
+	* This map stores the instances of systems registered in the ECS.
+	*/
 	extern std::map<std::string, std::shared_ptr<System>> gSystems;
 
+	/**
+	* @brief Registers a new system with the ECS.
+	* 
+	* This function registers a system type, creating an instance of it within the ECS.
+	* 
+	* @tparam Sys The type of system to register.
+	* @return std::shared_ptr<System> A shared pointer to the registered system instance.
+	*/
 	template<class Sys>
 	std::shared_ptr<System> RegisterSystem()
 	{
@@ -211,6 +442,14 @@ namespace ecs {
 		return system;
 	}
 
+	/**
+	* @brief Sets the component signature for a system.
+	* 
+	* Associates a component signature with a system, defining which entities it will operate on.
+	* 
+	* @tparam Sys The type of system.
+	* @param signature The signature to set for the system.
+	*/
 	template<class Sys>
 	void SetSystemSignature(Signature signature)
 	{
@@ -224,10 +463,30 @@ namespace ecs {
 		gSystemSignature.insert({ typeName, signature });
 	}
 
+	/**
+	* @brief Handles the destruction of and entity in the system.
+	* 
+	* Removes the entity from all relevant systems.
+	* 
+	* @param entity The ID of the entity to destroy.
+	*/
 	void systemDestroyEntity(Entity entity);
 
+	/**
+	* @brief Adds an entity to a specific system.
+	* 
+	* Assigns an entity to a system based on its name.
+	* 
+	* @param sysName The name of system.
+	* @param entity The ID of the entity to add.
+	*/
 	void SetEntity(std::string sysName, Entity entity);
 
+	/**
+	* @brief Updates the system when an entity's signature changes.
+	* 
+	* Ensures systems are updated when an entity's component configuration changes.
+	*/
 	void EntitySignatureChanged(Entity entity);
 
 }	// namespace ecs

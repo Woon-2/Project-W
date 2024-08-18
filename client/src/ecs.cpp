@@ -1,5 +1,9 @@
 #include "ecs.hpp"
 
+/**
+ * @brief This namespace is for ecs ( Entity Component System )
+ */
+
 namespace ecs {
 
 	// 각 Entity에 해당할 시그니처 배열
