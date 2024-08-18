@@ -7,6 +7,17 @@ namespace gfx {
 
 namespace d3d12 {
 
+/**
+ * @brief Creates a upload buffer which can upload data from the cpu to the gpu in D3D12, with initial data.    
+ * @tparam R The type of the range of the data to upload.
+ * @param core The D3D12 core object.
+ * @param data The range of the initial data.
+ * @details It creates the buffer with `CreateCommittedResource` function and the state of the buffer is `D3D12_RESOURCE_STATE_GENERIC_READ`.    
+ * The initial data's source memory region is acquired by `std::data`    
+ * and the byte width is acquired by `std::size` of the data multiplied by the size of the range value type.    
+ * The initial data is copied to the buffer with `ID3D12Resource::Map` and `ID3D12Resource::Unmap`.
+ * @see createDefBuf
+ */
 template <std::ranges::contiguous_range R>
     requires std::ranges::sized_range<R>
 wrl::ComPtr<ID3D12Resource> createUpBuf(Core& core, const R& data) {
@@ -14,7 +25,22 @@ wrl::ComPtr<ID3D12Resource> createUpBuf(Core& core, const R& data) {
         * sizeof(std::ranges::range_value_t<R>)
     );
 }
-
+/**
+ * @brief Creates a default buffer which can be read and written by the gpu in D3D12.
+ * @tparam R The type of the range of the initial data.
+ * @param core The D3D12 core object.
+ * @param ctx The D3D12 render context object.
+ * @param data The range of the initial data.
+ * @param state The state of the buffer after the initial upload is done.
+ * @param pUploadBuf The reference of upload buffer pointer,    
+ * this function creates an auxiliary upload buffer for the initial data upload.    
+ * The pointer to the upload buffer is stored in this reference.
+ * @details It creates the buffer with `CreateCommittedResource` function and the state of the buffer is `D3D12_RESOURCE_STATE_COMMON`.    
+ * @note It uploads the initial data from the cpu to the gpu with a auxiliary upload buffer created by createUpBuf.     
+ * As the upload buffer's data is copied to the default buffer by `ID3D12GraphicsCommandList::CopyData`,     
+ * the default buffer doesn't reach the specified state and have valid data until the command list is executed.
+ * @see createUpBuf
+ */
 template <std::ranges::contiguous_range R>
     requires std::ranges::sized_range<R>
 wrl::ComPtr<ID3D12Resource> createDefBuf( Core& core, D3D12RenderContext& ctx, const R& data,
@@ -24,10 +50,52 @@ wrl::ComPtr<ID3D12Resource> createDefBuf( Core& core, D3D12RenderContext& ctx, c
         * sizeof(std::ranges::range_value_t<R>) ), state, pUploadBuf
     );
 }
-
+/**
+ * @brief Creates a upload buffer which can upload data from the cpu to the gpu in D3D12.
+ * @param core The D3D12 core object.
+ * @param bytes The byte width of the buffer.
+ * @details It creates the buffer with `CreateCommittedResource` function. and the state of the buffer is `D3D12_RESOURCE_STATE_GENERIC_READ`.
+ * @see createDefBuf
+ */
 wrl::ComPtr<ID3D12Resource> createUpBuf(Core& core, UINT bytes);
+/**
+ * @brief Creates a upload buffer which can upload data from the cpu to the gpu in D3D12, with initial data.
+ * @param core The D3D12 core object.
+ * @param pData The pointer to the initial data.
+ * @param bytes The byte width of the initial data.
+ * @details It creates the buffer with `CreateCommittedResource` function. and the state of the buffer is `D3D12_RESOURCE_STATE_GENERIC_READ`.    
+ * The initial data is copied to the buffer with `ID3D12Resource::Map` and `ID3D12Resource::Unmap`.
+ * @see createUpBuf
+ */
 wrl::ComPtr<ID3D12Resource> createUpBuf(Core& core, const void* pData, UINT bytes);
+/**
+ * @brief Creates a default buffer which can be read and written by the gpu in D3D12, copying the initial data from the source buffer.
+ * @param core The D3D12 core object.
+ * @param ctx The D3D12 render context object.
+ * @param pSrcBuf The pointer to the source buffer.
+ * @param state The state of the buffer after the copy is done.
+ * @details It creates the buffer with `CreateCommittedResource` function. and the state of the buffer is `D3D12_RESOURCE_STATE_COMMON`.
+ * @note As the source buffer's data is copied to the default buffer by `ID3D12GraphicsCommandList::CopyData`,    
+ * the default buffer doesn't reach the specified state and have valid data until the command list is executed.
+ * @see createUpBuf
+ */
 wrl::ComPtr<ID3D12Resource> createDefBuf(Core& core, D3D12RenderContext& ctx, ID3D12Resource* pSrcBuf, D3D12_RESOURCE_STATES state);
+/**
+ * @brief Creates a default buffer which can be read and written by the gpu in D3D12.
+ * @param core The D3D12 core object.
+ * @param ctx The D3D12 render context object.
+ * @param pData The pointer to the initial data.
+ * @param bytes The byte width of the initial data.
+ * @param state The state of the buffer after the initial upload is done.
+ * @param pUploadBuf The reference of upload buffer pointer,    
+ * this function creates an auxiliary upload buffer for the initial data upload.    
+ * The pointer to the upload buffer is stored in this reference.
+ * @details It creates the buffer with `CreateCommittedResource` function. and the state of the buffer is `D3D12_RESOURCE_STATE_COMMON`.     
+ * @note It uploads the initial data from the cpu to the gpu with a auxiliary upload buffer created by createUpBuf.     
+ * As the upload buffer's data is copied to the default buffer by `ID3D12GraphicsCommandList::CopyData`,     
+ * the default buffer doesn't reach the specified state and have valid data until the command list is executed.
+ * @see createUpBuf
+ */
 wrl::ComPtr<ID3D12Resource> createDefBuf(Core& core, D3D12RenderContext& ctx, const void* pData, UINT bytes, D3D12_RESOURCE_STATES state, wrl::ComPtr<ID3D12Resource>& pUploadBuf);
 
 }   // namespace d3d12

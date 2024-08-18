@@ -204,7 +204,7 @@ public:
      * @param idx The index of the temporary upload buffer, which becomes the key of the temporary upload buffer.
      * @param pUpBuf The temporary upload buffer to register.
      * @note The temporary upload buffer for `pUpBuf` can be easily acquired via using createUpBuf.
-     * @see Core::tmpUpBuf Core::popTmpUpBuf Core::popTmpUpBufs createUpBuf
+     * @see Core::tmpUpBuf Core::popTmpUpBuf Core::popTmpUpBufs createUpBuf createDefBuf
      */
     void addTmpUpBuf(UpBufIdx idx, wrl::ComPtr<ID3D12Resource> pUpBuf = nullptr) {
         upBufs_[idx] = std::move(pUpBuf);
@@ -214,14 +214,14 @@ public:
      * It is recommended to pop the temporary upload buffer if it's use is done to save memory.
      * @param idx The index of the temporary upload buffer.
      * @note The temporary upload buffer for `idx` must be registered to the Core.
-     * @see Core::addTmpUpBuf Core::popTmpUpBufs
+     * @see Core::addTmpUpBuf Core::popTmpUpBufs createUpBuf createDefBuf
      */
     void popTmpUpBuf(const UpBufIdx& idx) NOEXCEPT {
         upBufs_.erase(idx);
     }
     /**
      * @brief Pops all the temporary upload buffers.
-     * @see Core::addTmpUpBuf Core::popTmpUpBuf
+     * @see Core::addTmpUpBuf Core::popTmpUpBuf createUpBuf createDefBuf
      */
     void popTmpUpBufs() NOEXCEPT {
         upBufs_.clear();
