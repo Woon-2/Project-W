@@ -31,8 +31,8 @@ System& System::operator=(const System& sys) {
 }
 
 System::System(System&& sys) noexcept
-    : localXform_(std::move(sys.localXform_)),
-    cachedTotalXform_(std::move(sys.cachedTotalXform_)),
+    : localXform_(std::exchange(sys.localXform_, {})),
+    cachedTotalXform_(std::exchange(sys.cachedTotalXform_, {})),
     children_(std::move(sys.children_)),
     parent_(std::exchange(sys.parent_, nullptr)) {
     for (auto& child : children_) {
