@@ -77,10 +77,18 @@ public:
 
     void addChild(const Model& child) {
         children_.push_back(child);
+        children_.back().coord().setParent(&coordSys_);
     }
 
     void addChild(Model&& child) {
         children_.push_back(std::move(child));
+        children_.back().coord().setParent(&coordSys_);
+    }
+
+    void MU_CALLCONV addChild(Model&& child, mu::Mat4x4 xform) {
+        children_.push_back(std::move(child));
+        children_.back().coord().setParent(&coordSys_);
+        children_.back().coord() << xform;
     }
 
     Model popChild(std::string_view name);

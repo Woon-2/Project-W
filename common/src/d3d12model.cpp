@@ -16,8 +16,7 @@ Model::Model( d3d12::Core& core, d3d12::D3D12RenderContext& ctx, const gfx::Mode
     for (const auto& child : model.children()) {
 
         auto mod = Model(core, ctx, child, vbUpIdx, ibUpIdx, pVbSerialIdx_, pIbSerialIdx_);
-        children_.push_back(std::move(mod));
-        children_.back().coord().setParent(&coordSys_);
+        addChild(std::move(mod));
     }
 }
 

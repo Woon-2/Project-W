@@ -72,7 +72,7 @@ public:
      * @param xform The transformation matrix.
      * @see Model::popChild Model::child coord::System::setParent
      */
-    void addChild(Model&& child, mu::Mat4x4 xform) {
+    void MU_CALLCONV addChild(Model&& child, mu::Mat4x4 xform) {
         children_.push_back(std::move(child));
         children_.back().coord().setParent(&coordSys_);
         children_.back().coord() << xform;
