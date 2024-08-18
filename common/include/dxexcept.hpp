@@ -28,6 +28,8 @@ using namespace std::literals;
 
 #include <system_error>
 
+#include "config.hpp"
+
 /**
  * @file dxexcept.hpp
  */

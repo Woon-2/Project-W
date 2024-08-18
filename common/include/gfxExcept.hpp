@@ -6,6 +6,8 @@
 
 #include "Woon2Exception.hpp"
 
+#include "config.hpp"
+
 /**
  * @file gfxExcept.hpp
  */

@@ -9,6 +9,8 @@
 #include <string>
 #include <string_view>
 
+#include "config.hpp"
+
 /**
  * @file d3dwindow.hpp
  */

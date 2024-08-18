@@ -12,6 +12,8 @@
 #include <map>
 #include <filesystem>
 
+#include "config.hpp"
+
 
 namespace gfx {
 

@@ -23,6 +23,8 @@
 #include "d3dwindow.hpp"
 #endif  // ENABLE_D3D12_WINDOW
 
+#include "config.hpp"
+
 /**
  * @file d3d12core.hpp
  */

@@ -13,6 +13,8 @@
 
 #include "Woon2Exception.hpp"
 
+#define WIN32_NOEXCEPT noexcept
+
 template <class T, class ... Args>
 concept contains = (std::same_as<T, Args> || ...);
 
@@ -47,28 +49,28 @@ class WindowException : public Woon2Exception
 public:
     WindowException( int lineNum, const char* fileStr,
         HRESULT hr
-    ) NOEXCEPT;
+    ) WIN32_NOEXCEPT;
 
     /**
      * @brief Get the exception type.
      * @return `const char*`  the exception type.
      * @see WindowException
      */
-    const char* type() const NOEXCEPT override;
+    const char* type() const WIN32_NOEXCEPT override;
 
     /**
      * @brief Get the error code retreived from API function(`HRESULT`).
      * @return `HRESULT`  the error code.
      * @see WindowException
      */
-    HRESULT errorCode() const NOEXCEPT;
+    HRESULT errorCode() const WIN32_NOEXCEPT;
     /**
      * @brief Get the error message as `std::string`.     
      * It calls WindowException::translateErrorCode function to translate the error code to the human-readable error message.
      * @return `std::string`  the error message.
      * @see WindowException
      */
-    const std::string errorStr() const NOEXCEPT;
+    const std::string errorStr() const WIN32_NOEXCEPT;
 
     /**
      * @brief Translate the error code to the human-readable error message.
@@ -77,7 +79,7 @@ public:
      * @see WindowException
      */
     static const std::string
-        translateErrorCode( HRESULT hr ) NOEXCEPT;
+        translateErrorCode( HRESULT hr ) WIN32_NOEXCEPT;
 
 private:
     HRESULT hr_;
@@ -92,7 +94,7 @@ struct WndClient {
     int width;
     int height;
 
-    operator RECT() const NOEXCEPT {
+    operator RECT() const WIN32_NOEXCEPT {
         return RECT{x, y, x + width, y + height};
     }
 };
@@ -103,12 +105,12 @@ struct WndFrame {
     int width;
     int height;
 
-    operator RECT() const NOEXCEPT {
+    operator RECT() const WIN32_NOEXCEPT {
         return RECT{x, y, x + width, y + height};
     }
 };
 
-inline const WndFrame makeFrameFromClient(const WndClient& client, DWORD ws, bool manued = false) NOEXCEPT {
+inline const WndFrame makeFrameFromClient(const WndClient& client, DWORD ws, bool manued = false) WIN32_NOEXCEPT {
     auto tmp = static_cast<RECT>(client);
     AdjustWindowRect(&tmp, ws, manued);
     return WndFrame{tmp.left, tmp.top, tmp.right - tmp.left, tmp.bottom - tmp.top};
@@ -214,7 +216,7 @@ class MsgHandler : public IMsgHandler
 public:
     using MyWindow = Wnd;
 
-    MsgHandler(Wnd& wnd) NOEXCEPT
+    MsgHandler(Wnd& wnd) WIN32_NOEXCEPT
         : window_(wnd)
     {}
     MsgHandler(const MsgHandler&) = delete;
@@ -236,8 +238,8 @@ public:
     virtual std::optional<LRESULT> operator()(const Message& msg) = 0;
 
 protected:
-    const Wnd& window() const NOEXCEPT { return window_; }
-    Wnd& window() NOEXCEPT { return window_; }
+    const Wnd& window() const WIN32_NOEXCEPT { return window_; }
+    Wnd& window() WIN32_NOEXCEPT { return window_; }
 
 private:
     Wnd& window_;
@@ -320,7 +322,7 @@ public:
     using MyStringView = std::basic_string_view<MyChar>;
 
 protected:
-    static constexpr const MyStringView defWndName() NOEXCEPT {
+    static constexpr const MyStringView defWndName() WIN32_NOEXCEPT {
         if constexpr (std::is_same_v<MyChar, CHAR>) {
             return "Window";
         }
@@ -329,7 +331,7 @@ protected:
         }
     }
 
-    static constexpr const WndFrame defWndFrame() NOEXCEPT {
+    static constexpr const WndFrame defWndFrame() WIN32_NOEXCEPT {
         return WndFrame{ .x = 200, .y = 200, .width = 800, .height = 600 };
     }
 
@@ -423,9 +425,9 @@ public:
      * @endcode
      * @see Window::open
      */
-    static void setHInst(HINSTANCE hInstance) NOEXCEPT
+    static void setHInst(HINSTANCE hInstance) WIN32_NOEXCEPT
     { hInst = hInstance; }
-    static HINSTANCE getHInst() NOEXCEPT { return hInst; }
+    static HINSTANCE getHInst() WIN32_NOEXCEPT { return hInst; }
 
     /**
      * @brief Run the message loop.
@@ -467,7 +469,7 @@ public:
      * @see Window::msgLoop
      */
     std::optional<int> processMessages();
-    HWND nativeHandle() const NOEXCEPT { return hWnd_; }
+    HWND nativeHandle() const WIN32_NOEXCEPT { return hWnd_; }
     /**
      * @brief Add a message handler with a specific index.    
      * If the message handler with the same index is already added, it does nothing.
@@ -485,7 +487,7 @@ public:
      * @see MsgHandler Window::addMsgHandler
      */
     [[maybe_unused]] bool removeMsgHandler(int index);
-    MyStringView title() const NOEXCEPT { return title_; }
+    MyStringView title() const WIN32_NOEXCEPT { return title_; }
     void setTitle(const MyString& windowTitle)
     {
         title_ = windowTitle;
@@ -512,14 +514,14 @@ public:
      * @return `const WndFrame&`  the frame area of the window.
      * @see WndFrame Window::client
      */
-    const WndFrame& frame() const NOEXCEPT { return frame_; }
+    const WndFrame& frame() const WIN32_NOEXCEPT { return frame_; }
     /**
      * @brief Get the client area of the window.    
      * It is the area of the window excluding the border and title bar.
      * @return `const WndClient&`  the client area of the window.
      * @see WndClient Window::frame
      */
-    const WndClient& client() const NOEXCEPT { return client_; }
+    const WndClient& client() const WIN32_NOEXCEPT { return client_; }
 
 private:
     static LRESULT CALLBACK wndProcSetupHandler(HWND hWnd, UINT type,
@@ -562,7 +564,7 @@ public:
     using MyString = std::basic_string<MyChar>;
     using MyStringView = std::basic_string_view<MyChar>;
 
-    static constexpr const MyStringView clsName() NOEXCEPT
+    static constexpr const MyStringView clsName() WIN32_NOEXCEPT
     {
         if constexpr ( std::is_same_v<MyChar, CHAR> ) {
             return "WT";

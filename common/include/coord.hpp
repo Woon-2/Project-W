@@ -17,6 +17,8 @@
 
 #include "gfxExcept.hpp"
 
+#include "config.hpp"
+
 namespace gfx {
 
 /**
@@ -216,7 +218,6 @@ private:
 
 namespace detail {
 
-// TODO: add noexcept expression macro
 /**
  * @brief A base class for coordinate primitives such as Pt3 and Vec3.     
  * It provides a common interface for the coordinate primitives to represent the coordinates in different coordinate systems.
@@ -238,7 +239,7 @@ public:
      * @brief Constructs a coordinate primitive with a base System.     
      * The value is default constructed.
      */
-    CoordEntry(const System* pSys) noexcept(NDEBUG)
+    CoordEntry(const System* pSys) NOEXCEPT_EXPR(NDEBUG)
         : pSys_(pSys), val_() {
         assert(pSys != nullptr);
     }
@@ -247,7 +248,7 @@ public:
      * @param pSys The base System of the coordinate primitive.
      * @param val The value of the coordinate primitive.
      */
-    CoordEntry(const System* pSys, mu::Vec3 val) noexcept(NDEBUG)
+    CoordEntry(const System* pSys, mu::Vec3 val) NOEXCEPT_EXPR(NDEBUG)
         : pSys_(pSys), val_(val) {
         assert(pSys != nullptr);
     }
@@ -258,7 +259,7 @@ public:
      * @param y The y-coordinate of the coordinate primitive.
      * @param z The z-coordinate of the coordinate primitive.
      */
-    CoordEntry(const System* pSys, float x, float y, float z) noexcept(NDEBUG)
+    CoordEntry(const System* pSys, float x, float y, float z) NOEXCEPT_EXPR(NDEBUG)
         : pSys_(pSys), val_(x, y, z) {
         assert(pSys != nullptr);  
     }
@@ -329,7 +330,7 @@ public:
      * with the coordinate in the base System and the transformation matrices of the two Systems.
      * @see coord::System
      */
-    void migrate(const System* pSys) noexcept(NDEBUG) {
+    void migrate(const System* pSys) NOEXCEPT_EXPR(NDEBUG) {
         assert(pSys != nullptr);
         val_ = represent(*pSys);
         pSys_ = pSys;

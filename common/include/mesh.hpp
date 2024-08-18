@@ -12,6 +12,8 @@
 
 #include "assimp/scene.h"
 
+#include "config.hpp"
+
 namespace gfx {
 
 /**

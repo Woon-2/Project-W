@@ -10,6 +10,8 @@
 
 #include "enumUtil.hpp"
 
+#include "config.hpp"
+
 namespace gfx {
 
 class VertexBuffer;

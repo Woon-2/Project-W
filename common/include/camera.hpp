@@ -6,6 +6,8 @@
 
 #include <optional>
 
+#include "config.hpp"
+
 // Undefine near and far macros from minwindef.h
 // It's annoying...
 #ifdef near

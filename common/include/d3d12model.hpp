@@ -12,6 +12,8 @@
 #include <string>
 #include <memory>
 
+#include "config.hpp"
+
 namespace gfx {
 
 namespace d3d12 {

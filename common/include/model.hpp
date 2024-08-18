@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <filesystem>
 
+#include "config.hpp"
+
 namespace gfx {
 
 /**

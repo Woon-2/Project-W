@@ -71,10 +71,4 @@ function(auto_configure TARGET_NAME ACCESS_MODIFIER)
             $<IF:$<CONFIG:Release>,/MT,/MTd> # Multi-threaded & Static libraries
         >
     )
-
-    target_compile_definitions("${TARGET_NAME}"
-        ${ACCESS_MODIFIER}
-            NOEXCEPT=noexcept
-    )
-
 endfunction()

@@ -11,6 +11,8 @@
 #include <cstdint>
 #include <map>
 
+#include "config.hpp"
+
 namespace gfx {
 
 namespace d3d12 {

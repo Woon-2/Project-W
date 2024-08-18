@@ -169,3 +169,5 @@ target_include_directories(gfx
 
 include(configure_paths)
 gen_resource_path()
+
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/config.hpp.in" "${CMAKE_CURRENT_SOURCE_DIR}/include/config.hpp")

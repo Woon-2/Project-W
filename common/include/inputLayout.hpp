@@ -6,6 +6,8 @@
 #include <concepts>
 #include <vector>
 
+#include "config.hpp"
+
 namespace gfx {
 
 /**
