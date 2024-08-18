@@ -25,6 +25,8 @@ int App::run() {
     pGfx_ = std::make_unique<MyGfx>();
     pGfx_->init();
 
+    gfx::DXFactory::cleanup();
+
     window_.open(static_cast<gfx::d3d12::Core&>(*pGfx_), Win32::WndFrame{ 0, 0, 1920, 1080 });
     window_.setTitle("project-W client");
     window_.show(SW_SHOW);
@@ -52,6 +54,9 @@ int App::run() {
         MessageBoxA(nullptr, "no details available",
             "Unknown Exception", MB_OK | MB_ICONEXCLAMATION);
     }
+
+    pGfx_->cleanup();
+    gfx::DXInfoQueue::cleanup();
 
     return 0;
 }
