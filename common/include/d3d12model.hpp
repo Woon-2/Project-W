@@ -75,56 +75,105 @@ public:
         return name_;
     }
 
+    /**
+     * @brief Adds a child model to the model.    
+     * The child model's coordinate system sets its parent to the caller model's coordinate system.
+     * @param child The child model to add.
+     * @see Model::popChild Model::child coord::System::setParent
+     */
     void addChild(const Model& child) {
         children_.push_back(child);
         children_.back().coord().setParent(&coordSys_);
     }
-
     void addChild(Model&& child) {
         children_.push_back(std::move(child));
         children_.back().coord().setParent(&coordSys_);
     }
-
+    /**
+     * @brief Adds a child model to the model with a transformation.    
+     * The child model's coordinate system sets its parent to the caller model's coordinate system,    
+     * and the transformation matrix is applied to the child model's local transformation.
+     * @param child The child model to add.
+     * @param xform The transformation matrix.
+     * @see Model::popChild Model::child coord::System::setParent
+     */
     void MU_CALLCONV addChild(Model&& child, mu::Mat4x4 xform) {
         children_.push_back(std::move(child));
         children_.back().coord().setParent(&coordSys_);
         children_.back().coord() << xform;
     }
-
+    /**
+     * @brief Pops a child model from the model via searching by name.
+     * @throws `std::runtime_error` If the child model is not found.
+     * @param name The name of the child model to remove.
+     * @return Model The popped child model.
+     * @see Model::addChild Model::child
+     */
     Model popChild(std::string_view name);
+    /**
+     * @brief Accesses a child model by name.
+     * @throws `std::runtime_error` If the child model is not found.
+     * @param name The name of the child model to access.
+     * @return const Model& A const reference to the child model.
+     * @see Model::popChild Model::addChild
+     */
     const Model& child(std::string_view name) const;
-
     Model& child(std::string_view name) {
         return const_cast<Model&>( const_cast<const Model*>(this)->child(name) );
     }
-
+    /**
+     * @brief Adds a mesh to the model with a name.
+     * @param mesh The mesh to add.
+     * @param name The name of the mesh.
+     * @note The name is used to identify the mesh.
+     * @see Model::popMesh Model::mesh
+     */
     void addMesh(const Mesh& mesh, const std::string& name) {
         meshes_.push_back({mesh, name});
     }
-
     void addMesh(Mesh&& mesh, const std::string& name) {
         meshes_.push_back({std::move(mesh), name});
     }
-
     void addMesh(const Mesh& mesh, std::string&& name) {
         meshes_.push_back({mesh, std::move(name)});
     }
-
     void addMesh(Mesh&& mesh, std::string&& name) {
         meshes_.push_back({std::move(mesh), std::move(name)});
     }
 
+    /**
+     * @brief Pops a mesh from the model via searching by name.
+     * @throws `std::runtime_error` If the mesh is not found.
+     * @param name The name of the mesh to remove.
+     * @return Mesh The popped mesh.
+     * @see Model::addMesh Model::mesh
+     */
     Mesh popMesh(std::string_view name);
+    /**
+     * @brief Accesses a mesh by name.
+     * @throws `std::runtime_error` If the mesh is not found.
+     * @param name The name of the mesh to access.
+     * @return const Mesh& A const reference to the mesh.
+     * @see Model::popMesh Model::addMesh
+     */
     const Mesh& mesh(std::string_view name) const;
-
     Mesh& mesh(std::string_view name) {
         return const_cast<Mesh&>( const_cast<const Model*>(this)->mesh(name) );
     }
 
+    /**
+     * @brief Sets the coordinate system of the model by copying the coordinate system.
+     * @param coordSys The coordinate system to set.
+     * @see coord::System
+     */
     void setCoord(const coord::System& coordSys) {
         coordSys_ = coordSys;
     }
-
+    /**
+     * @brief Accesses the coordinate system of the model.
+     * @return const coord::System& A const reference to the coordinate system.
+     * @see coord::System
+     */
     const coord::System& coord() const NOEXCEPT {
         return coordSys_;
     }
@@ -133,18 +182,25 @@ public:
         return coordSys_;
     }
 
+    /**
+     * @brief Get a reference to the children container of the model.     
+     * It is guaranteed that the children container satisfies std::ranges::range concept.
+     */
     auto& children() NOEXCEPT {
         return children_;
     }
-
     const auto& children() const NOEXCEPT {
         return children_;
     }
-
+    /**
+     * @brief Get a reference to the meshes container of the model.     
+     * It is guaranteed that the meshes container satisfies std::ranges::range concept.
+     * @note The contained meshes are wrappers of the Mesh es which is attached a name.    
+     * To access the Mesh, access to `mesh` member of the element of the container.
+     */
     auto& meshes() NOEXCEPT {
         return meshes_;
     }
-
     const auto& meshes() const NOEXCEPT {
         return meshes_;
     }

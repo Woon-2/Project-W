@@ -157,18 +157,25 @@ public:
         return coordSys_;
     }
 
+    /**
+     * @brief Get a reference to the children container of the model.     
+     * It is guaranteed that the children container satisfies std::ranges::range concept.
+     */
     auto& children() NOEXCEPT {
         return children_;
     }
-
     const auto& children() const NOEXCEPT {
         return children_;
     }
-
+    /**
+     * @brief Get a reference to the meshes container of the model.     
+     * It is guaranteed that the meshes container satisfies std::ranges::range concept.
+     * @note The contained meshes are wrappers of the Mesh es which is attached a name.    
+     * To access the Mesh, access to `mesh` member of the element of the container.
+     */
     auto& meshes() NOEXCEPT {
         return meshes_;
     }
-
     const auto& meshes() const NOEXCEPT {
         return meshes_;
     }
