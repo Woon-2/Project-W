@@ -17,15 +17,43 @@ namespace gfx {
 
 namespace d3d12 {
 
+/**
+ * @brief A class representing a shader in D3D12.    
+ * A Shader determines how the objects are rendered and given information is interpreted in the pipeline.     
+ * It stores several settings with user-provided indices, and can be bound as specific setting to the pipeline by the index.
+ * @details The shader codes are obtained from compiled shader object files (CSO) with the extension ".cso".    
+ * The static member function Shader::loadCSO is provided for loading CSO files.
+ * 
+ * The read codes are stored in the Shader instance via Shader::code,    
+ * and with a descriptor which can be considered as the setting of the shader including root signature, InputLayout, etc.,    
+ * The shader is created at an index through Shader::make.    
+ * 
+ * A Shader can be easily bound to the pipeline by calling Shader::bind with the index.     
+ * 
+ * Internally, it stores the compiled shader object files for each shader type,    
+ * and pipeline state objects (PSOs) for each index.
+ * @see Shader::Desc InputLayout ShaderBuilder SimpleShaderBuilder
+ */
 class Shader {
 public:
     friend class ShaderBuilder;
 
+    /**
+     * @brief Type of the shader.
+     * @details The shader can be either a vertex shader or a pixel shader currently.
+     */
     enum class Type {
         Vertex,
         Pixel
     };
 
+    /**
+     * @brief Descriptor for the shader.
+     * @details The descriptor contains all the settings for the shader,    
+     * including root signature, stream output, blend, rasterizer, depth stencil, input layout, etc.    
+     * @note As the shader requires a root signature, the root signature to use must be created before creating the shader.
+     * @see InputLayout ShaderBuilder SimpleShaderBuilder
+     */
     struct Desc {
         wrl::ComPtr<ID3D12RootSignature> pRootSignature;
         D3D12_STREAM_OUTPUT_DESC streamOutput;
@@ -47,20 +75,52 @@ public:
 
     using Idx = int;
 
+    /**
+     * @brief Loads a compiled shader object file (CSO) from filesystem.    
+     * @param path The path to the CSO file.
+     * @return wrl::ComPtr<ID3DBlob> The loaded CSO.
+     * @throw DXException if the loading fails.
+     * @see code
+     */
     static wrl::ComPtr<ID3DBlob> loadCSO(const std::wstring& path) {
         wrl::ComPtr<ID3DBlob> blob;
         DX_THROW_FAILED( D3DReadFileToBlob(path.c_str(), &blob) );
         return blob;
     }
-
+    /**
+     * @brief Loads a compiled shader object file (CSO) from filesystem.    
+     * @param path The path to the CSO file.
+     * @return wrl::ComPtr<ID3DBlob> The loaded CSO.
+     * @throw DXException if the loading fails.
+     * @see code
+     */
     static wrl::ComPtr<ID3DBlob> loadCSO(const std::filesystem::path& path) {
         return loadCSO(path.wstring());
     }
-
+    /**
+     * @brief Stores a compiled shader object as the byte code for the given type of shader.
+     * @param type The type of the shader.
+     * @param content The byte code of the shader.
+     * @see loadCSO
+     */
     void code(Type type, wrl::ComPtr<ID3DBlob> content) {
         codes_[type] = std::move(content);
     }
+    /**
+     * @brief Creates a shader at the given index with descriptor.
+     * @param pDevice The device to create the shader.
+     * @param idx The index of the shader.
+     * @param desc The descriptor for the shader.
+     * @throw DXException if the creation fails.
+     * @see bind
+     */
     void make(ID3D12Device* pDevice, Idx idx, const Desc& desc);
+    /**
+     * @brief Binds the shader to the pipeline with the given index.
+     * @param pCmdList The command list to bind the shader.
+     * @param idx The index of the shader.
+     * @see make
+     */
     void bind(ID3D12GraphicsCommandList* pCmdList, Idx idx) const;
 
 private:
@@ -70,8 +130,19 @@ private:
     InputLayout inputLayout_;
 };
 
+/**
+ * @brief A builder class for creating a shader with a descriptor.    
+ * It features as staging the settings to create a shader and reusing the settings for multiple shaders with little modification. 
+ * @note If your shaders has some pattern with the settings,    
+ * derive a class from ShaderBuilder and provide handy preset functions for the settings.
+ * @see Shader Shader::Desc SimpleShaderBuilder
+ */
 class ShaderBuilder {
 protected:
+    /**
+     * @brief Descriptor for the shader.    
+     * It can be directly modified by the derived class.
+     */
     Shader::Desc desc_;
 
 public:
@@ -186,6 +257,13 @@ private:
     std::map< Shader::Type, wrl::ComPtr<ID3DBlob> > codes_;
 };
 
+/**
+ * @brief A ShaderBuilder with simple presets that is commonly used.
+ * @details Back face culling, solid fill mode, and depth test are enabled by default with other default settings.
+ * @note It isn't sufficient to build a shader immediately from default constructed SimpleShaderBuilder.    
+ * The shader code, input layout, and root signature must be set before building the shader.
+ * @see ShaderBuilder Shader Shader::Desc
+ */
 class SimpleShaderBuilder : private ShaderBuilder {
 public:
     SimpleShaderBuilder() NOEXCEPT
