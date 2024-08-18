@@ -12,6 +12,14 @@ namespace gfx {
 
 namespace d3d12 {
 
+/**
+ * @brief A class representing a scene viewd by a camera in D3D12.    
+ * @details As implementing the IScene interface, it can be used in the render loop.     
+ * It constructs DrawInfo s with Mesh, world matrix, view matrix, and projection matrix,    
+ * (temporarily with color) and returns them in iteration.    
+ * 
+ * It can be adjusted view frustum culling and LOD later.
+ */
 class CameraScene : public gfx::CameraScene {
 public:
     static constexpr std::size_t meshIdx = gfx::CameraScene::meshIdx;
