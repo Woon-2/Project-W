@@ -16,11 +16,13 @@ class VertexBuffer;
 
 /**
  * @brief A view for a vertex in a vertex buffer.    
- * It provides a way to access the properties of a vertex.
+ * It provides a way to access the properties of a vertex.    
+ * It can be only created by VertexBuffer's Vertex accessors.
  * @see VertexBuffer
  */
 class Vertex {
 public:
+    friend class VertexBuffer;
     static constexpr std::size_t numProperties = 6u;
 
     /**
@@ -38,11 +40,6 @@ public:
         Bitangent = 0x10,
         Color = 0x20
     };
-
-    Vertex()
-        : pStart_(nullptr), pBuf_(nullptr) {}
-    Vertex(std::uint8_t* pStart, VertexBuffer* pBuf)
-        : pStart_(pStart), pBuf_(pBuf) {}
 
     /**
      * @brief Gets the property of the vertex.
@@ -89,6 +86,12 @@ public:
     void* operator[](Properties prop);
 
 private:
+    Vertex()
+        : pStart_(nullptr), pBuf_(nullptr) {}
+    Vertex(std::uint8_t* pStart, VertexBuffer* pBuf)
+        : pStart_(pStart), pBuf_(pBuf) {}
+
+
     std::uint8_t* pStart_;
     VertexBuffer* pBuf_;
 };
