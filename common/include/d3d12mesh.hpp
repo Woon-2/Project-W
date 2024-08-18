@@ -8,6 +8,7 @@
 #include "gfxPrimitive.hpp"
 
 #include <ranges>
+#include <utility>
 
 namespace gfx {
 
@@ -47,6 +48,65 @@ namespace d3d12 {
 class Mesh {
 public:
     using IndexCont = gfx::Mesh::IndexCont;
+
+    /**
+     * @brief Creates an empty mesh with no resources.
+     */
+    Mesh()
+        : vbView_{}, ibView_{}, vb_(), ib_(), vbUpIdx_{}, ibUpIdx_{} {}
+    /**
+     * @brief Copys other Mesh object.    
+     * As the D3D12 resources reside in D3D12 side and Mesh has just pointers to them,    
+     * the copy constructor doesn't create new resources, so waiting for the gpu and Mesh::completeInit is not needed for the copied mesh.
+     */
+    Mesh(const Mesh& other)
+        : vbView_(other.vbView_), ibView_(other.ibView_), vb_(other.vb_), ib_(other.ib_),
+        vbUpIdx_(), ibUpIdx_() {}
+    /**
+     * @brief Moves other Mesh object and invalidates the source Mesh object.    
+     */
+    Mesh(Mesh&& other) noexcept
+        : vbView_(std::exchange(other.vbView_, {})), ibView_(std::exchange(other.ibView_, {})),
+        vb_(std::move(other.vb_)), ib_(std::move(other.ib_)),
+        vbUpIdx_(std::move(other.vbUpIdx_)), ibUpIdx_(std::move(other.ibUpIdx_)) {}
+    /**
+     * @brief Copy-assigns other Mesh object.    
+     * As the D3D12 resources reside in D3D12 side and Mesh has just pointers to them,
+     * the copy assignment operator doesn't create new resources, so waiting for the gpu and Mesh::completeInit is not needed for the copied mesh.
+     * @details However, The release of the resources which was held before the assignment can take place if it was the last reference to the resources.
+     */
+    Mesh& operator=(const Mesh& other) {
+        if (this == &other) {
+            return *this;
+        }
+
+        vbView_ = other.vbView_;
+        ibView_ = other.ibView_;
+        vb_ = other.vb_;
+        ib_ = other.ib_;
+        vbUpIdx_ = other.vbUpIdx_;
+        ibUpIdx_ = other.ibUpIdx_;
+
+        return *this;
+    }
+    /**
+     * @brief Move-assigns other Mesh object and invalidates the source Mesh object.
+     * @details The release of the resources which was held before the assignment can take place if it was the last reference to the resources.
+     */
+    Mesh& operator=(Mesh&& other) noexcept {
+        if (this == &other) {
+            return *this;
+        }
+
+        vbView_ = std::exchange(other.vbView_, {});
+        ibView_ = std::exchange(other.ibView_, {});
+        vb_ = std::move(other.vb_);
+        ib_ = std::move(other.ib_);
+        vbUpIdx_ = std::move(other.vbUpIdx_);
+        ibUpIdx_ = std::move(other.ibUpIdx_);
+
+        return *this;
+    }
 
     /**
      * @brief Constructs a d3d12 mesh with a vertex buffer and an index buffer.     
