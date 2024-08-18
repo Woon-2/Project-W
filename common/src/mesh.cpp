@@ -16,11 +16,11 @@ Mesh getMeshFromAiNode(const aiNode* node, const aiScene* scene, unsigned int me
     auto stride = std::size_t(0);
 
     if (mesh->HasPositions()) {
-        stride += 16u;  // sizeof(aiVector3D) + padding
+        stride += sizeof(aiVector3D);
     }
 
     if (mesh->HasNormals()) {
-        stride += 16u;  // sizeof(aiVector3D) + padding
+        stride += sizeof(aiVector3D);
     }
 
     if (mesh->HasVertexColors(0)) {
@@ -37,7 +37,7 @@ Mesh getMeshFromAiNode(const aiNode* node, const aiScene* scene, unsigned int me
         vb.constructProperty(Vertex::Properties::Position,
             mesh->mVertices, sizeof(aiVector3D), mesh->mNumVertices, sizeof(aiVector3D)
         );
-        accOffset += 16u;   // sizeof(aiVector3D) + padding
+        accOffset += sizeof(aiVector3D);
     }
 
     if (mesh->HasNormals()) {
@@ -45,7 +45,7 @@ Mesh getMeshFromAiNode(const aiNode* node, const aiScene* scene, unsigned int me
         vb.constructProperty(Vertex::Properties::Normal,
             mesh->mNormals, sizeof(aiVector3D), mesh->mNumVertices, sizeof(aiVector3D)
         );
-        accOffset += 16u;   // sizeof(aiVector3D) + padding
+        accOffset += sizeof(aiVector3D);
     }
 
     if (mesh->HasVertexColors(0)) {
