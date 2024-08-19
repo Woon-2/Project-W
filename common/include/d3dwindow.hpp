@@ -27,7 +27,7 @@ namespace gfx {
  * 
  * D3DWindow::present presents the back buffer to the front buffer through the swapchain.     
  * 
- * `pSwapChain_`'s access level is protected to allow for more advanced usage for derived classes.
+ * `pSwapChain_`, `scd_`, and `scfd_`'s access level is protected to allow for more advanced usage for derived classes.
  * @tparam Traits Traits class for the window.
  * @note Currently only supports DXGI_FORMAT_R8G8B8A8_UNORM format and 2 back buffers,    
  * and it doesn't support multisampling.
@@ -35,7 +35,9 @@ namespace gfx {
 template <class Traits>
 class D3DWindow : public Win32::Window<Traits> {
 protected:
-    wrl::ComPtr<IDXGISwapChain3> pSwapChain_;
+    wrl::ComPtr<IDXGISwapChain3> pSwapChain_{};
+    DXGI_SWAP_CHAIN_DESC1 scd_{};
+    DXGI_SWAP_CHAIN_FULLSCREEN_DESC scfd_{};
 
 public:
     using MyBase = Win32::Window<Traits>;
@@ -46,15 +48,18 @@ public:
     using MyBase::defWndName;
     using MyBase::defWndFrame;
 
+    static constexpr std::size_t defBackBufCnt = 2u;
+
     /**
      * @brief Opens the window with the default window name which specified in Win32::Window::defWndName     
      * and default window frame wich specified in Win32::Window::defWndFrame.    
      * @param pFactory DXGI factory to create the swapchain.
      * @param pDevice D3D device to create the swapchain.
+     * @param backBufCnt The number of back buffers, the default value is D3DWindow::defBackBufCnt.
      * @see Win32::Window::defWndName win32::Window::defWndFrame D3DWindow::createSwapchain
      */
-    void open(IDXGIFactory2* pFactory, IUnknown* pDevice) {
-        open(pFactory, pDevice, defWndName());
+    void open(IDXGIFactory2* pFactory, IUnknown* pDevice, std::size_t backBufCnt = defBackBufCnt) {
+        open(pFactory, pDevice, defWndName(), backBufCnt);
     }
     /**
      * @brief Opens the window with the specified window frame,    
@@ -62,10 +67,13 @@ public:
      * @param pFactory DXGI factory to create the swapchain.
      * @param pDevice D3D device to create the swapchain.
      * @param wndFrame The frame of the window.
+     * @param backBufCnt The number of back buffers, the default value is D3DWindow::defBackBufCnt.
      * @see Win32::Window::defWndName D3DWindow::createSwapchain
     */
-    void open(IDXGIFactory2* pFactory, IUnknown* pDevice, const Win32::WndFrame& wndFrame) {
-        open(pFactory, pDevice, defWndName(), wndFrame);
+    void open( IDXGIFactory2* pFactory, IUnknown* pDevice, const Win32::WndFrame& wndFrame,
+        std::size_t backBufCnt = defBackBufCnt
+    ) {
+        open(pFactory, pDevice, defWndName(), wndFrame, backBufCnt);
     }
     /**
      * @brief Opens the window with the specified window name,    
@@ -73,10 +81,13 @@ public:
      * @param pFactory DXGI factory to create the swapchain.
      * @param pDevice D3D device to create the swapchain.
      * @param wndName The name of the window.
+     * @param backBufCnt The number of back buffers, the default value is D3DWindow::defBackBufCnt.
      * @see Win32::Window::defWndFrame D3DWindow::createSwapchain
      */
-    void open(IDXGIFactory2* pFactory, IUnknown* pDevice, MyStringView wndName) {
-        open(pFactory, pDevice, wndName, defWndFrame());
+    void open( IDXGIFactory2* pFactory, IUnknown* pDevice, MyStringView wndName,
+        std::size_t backBufCnt = defBackBufCnt
+    ) {
+        open(pFactory, pDevice, wndName, defWndFrame(), backBufCnt);
     }
     /**
      * @brief Opens the window with the specified window name and frame.
@@ -84,11 +95,14 @@ public:
      * @param pDevice D3D device to create the swapchain.
      * @param wndName The name of the window.
      * @param wndFrame The frame of the window.
+     * @param backBufCnt The number of back buffers, the default value is D3DWindow::defBackBufCnt.
      * @details After opening the window instance, it creates a swapchain via calling D3DWindow::createSwapchain.    
      */
-    void open(IDXGIFactory2* pFactory, IUnknown* pDevice, MyStringView wndName, const Win32::WndFrame& wndFrame) {
+    void open( IDXGIFactory2* pFactory, IUnknown* pDevice, MyStringView wndName,
+        const Win32::WndFrame& wndFrame, std::size_t backBufCnt = defBackBufCnt
+    ) {
         MyBase::open(wndName, wndFrame);
-        createSwapchain(pFactory, pDevice);
+        createSwapchain(pFactory, pDevice, backBufCnt);
     }
 
     // TODO: consider enabling multisampling
@@ -97,6 +111,7 @@ public:
      * @brief Creates a swapchain for the window internally.
      * @param pFactory DXGI factory to create the swapchain.
      * @param pDevice D3D device to create the swapchain.
+     * @param backBufCnt The number of back buffers.
      * @details The swapchain is created with the following settings:
      * The swapchain is created with the following settings:    
      * - Width and height are set to the client area of the window.    
@@ -104,30 +119,30 @@ public:
      * - Stereo is false.    
      * - Sample count is 1.    
      * - Buffer usage is DXGI_USAGE_RENDER_TARGET_OUTPUT.    
-     * - Buffer count is 2.    
+     * - Buffer count is backBufCnt.    
      * - Scaling is DXGI_SCALING_NONE.    
      * - Swap effect is DXGI_SWAP_EFFECT_FLIP_DISCARD.    
      * - Alpha mode is DXGI_ALPHA_MODE_UNSPECIFIED.    
      * - Flags is DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH.
      */
-    void createSwapchain(IDXGIFactory2* pFactory, IUnknown* pDevice) {
+    void createSwapchain(IDXGIFactory2* pFactory, IUnknown* pDevice, std::size_t backBufCnt = defBackBufCnt) {
         auto tmp = wrl::ComPtr<IDXGISwapChain1>();
 
-        const auto scd = DXGI_SWAP_CHAIN_DESC1{
+        scd_ = DXGI_SWAP_CHAIN_DESC1{
             .Width = static_cast<UINT>( this->client().width ),
             .Height = static_cast<UINT>( this->client().height ),
             .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
             .Stereo = false,
             .SampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
             .BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT,
-            .BufferCount = 2u,
+            .BufferCount = static_cast<UINT>(backBufCnt),
             .Scaling = DXGI_SCALING_NONE,
             .SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD,
             .AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED,
             .Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH
         };
 
-        const auto scfd = DXGI_SWAP_CHAIN_FULLSCREEN_DESC{
+        scfd_ = DXGI_SWAP_CHAIN_FULLSCREEN_DESC{
             .RefreshRate = DXGI_RATIONAL{ .Numerator = 60, .Denominator = 1 },
             .ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED,
             .Scaling = DXGI_MODE_SCALING_UNSPECIFIED,
@@ -137,7 +152,7 @@ public:
         // TODO: buffer index storing
         // TODO: back buffer render targets
         DX_THROW_FAILED( pFactory->CreateSwapChainForHwnd(
-            pDevice, nativeHandle(), &scd, &scfd, nullptr, &tmp
+            pDevice, nativeHandle(), &scd_, &scfd_, nullptr, &tmp
         ) );
 
         DX_THROW_FAILED( tmp.As(&pSwapChain_) );
@@ -155,6 +170,14 @@ public:
      */
     void present() {
         pSwapChain_->Present(1, 0);
+    }
+
+    /**
+     * @brief Returns the number of back buffers.
+     * @return `std::size_t` The number of back buffers.
+     */
+    std::size_t backBufCnt() const NOEXCEPT {
+        return scd_.BufferCount;
     }
 };
 

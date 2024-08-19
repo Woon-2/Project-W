@@ -565,38 +565,41 @@ public:
     using MyBase::defWndFrame;
 
     Window()
-        : backBuffers_(2), depthBuffers_(1), pFirstRtv_(), pFirstDsv_(),
+        : backBuffers_(), depthBuffers_(1), pFirstRtv_(), pFirstDsv_(),
         rtvStride_(0), dsvStride_(0) {}
 
     /**
      * @brief Opens the window with the default window name which specified in Win32::Window::defWndName    
      * and default window frame which specified in Win32::Window::defWndFrame.
      * @param core The Core.
+     * @param backBufCnt The number of back buffers, the default value is D3DWindow::defBackBufCnt.
      * @see Win32::Window::defWndName Win32::Window::defWndFrame    
      * D3DWindow::createDepthBuffers D3DWindow::buildRtv D3DWindow::buildDsv
      */
-    void open(Core& core) {
-        open(core, defWndName());
+    void open(Core& core, std::size_t backBufCnt = MyBase::defBackBufCnt) {
+        open(core, defWndName(), backBufCnt);
     }
     /**
      * @brief Opens the window with the specified window frame.     
      * The window name is set to the default window name which specified in Win32::Window::defWndName.
      * @param core The Core.
      * @param wndFrame The window frame.
+     * @param backBufCnt The number of back buffers, the default value is D3DWindow::defBackBufCnt.
      * @see Win32::Window::defWndName D3DWindow::createDepthBuffers D3DWindow::buildRtv D3DWindow::buildDsv
      */
-    void open(Core& core, const Win32::WndFrame& wndFrame) {
-        open(core, defWndName(), wndFrame);
+    void open(Core& core, const Win32::WndFrame& wndFrame, std::size_t backBufCnt = MyBase::defBackBufCnt) {
+        open(core, defWndName(), wndFrame, backBufCnt);
     }
     /**
      * @brief Opens the window with the specified window name.    
      * The window frame becomes the default window frame which specified in Win32::Window::defWndFrame.
      * @param core The Core.
      * @param wndName The window name.
+     * @param backBufCnt The number of back buffers, the default value is D3DWindow::defBackBufCnt.
      * @see Win32::Window::defWndFrame D3DWindow::createDepthBuffers D3DWindow::buildRtv D3DWindow::buildDsv
      */
-    void open(Core& core, MyStringView wndName) {
-        open(core, wndName, defWndFrame());
+    void open(Core& core, MyStringView wndName, std::size_t backBufCnt = MyBase::defBackBufCnt) {
+        open(core, wndName, defWndFrame(), backBufCnt);
     }
 
     // TODO: replace versioned type with type aliases
@@ -605,18 +608,20 @@ public:
      * @param core The Core.
      * @param wndName The window name.
      * @param wndFrame The window frame.
+     * @param backBufCnt The number of back buffers, the default value is D3DWindow::defBackBufCnt.
      * @details It builds render target views and depth stencil views on Core's corresponding heaps     
      * using Window::createDepthBuffers, Window::buildRtv, and Window::buildDsv.
      * @see D3DWindow::createDepthBuffers D3DWindow::buildRtv D3DWindow::buildDsv
      */
-    void open(Core& core, MyStringView wndName, const Win32::WndFrame& wndFrame) {
+    void open(Core& core, MyStringView wndName, const Win32::WndFrame& wndFrame, std::size_t backBufCnt = MyBase::defBackBufCnt) {
+        backBuffers_.resize(backBufCnt);
         MyBase::open( static_cast<IDXGIFactory2*>( WindowAttorney::factory(core) ),
             static_cast<ID3D12CommandQueue*>( WindowAttorney::cmdQ(core) ),
-            wndName, wndFrame
+            wndName, wndFrame, backBufCnt
         );
         auto pDevice = static_cast<ID3D12Device*>( WindowAttorney::device(core) );
         createDepthBuffers( pDevice );
-        buildRtv( pDevice, core.rtvHeapStart() );
+        buildRtv( pDevice, core.rtvHeapStart(), backBufCnt );
         buildDsv( pDevice, core.dsvHeapStart() );
     }
 
@@ -624,8 +629,9 @@ public:
      * @brief Builds render target views of the swap chain's back buffers on the Core's render target view heap region.    
      * @param pDevice The device which is going to be used to create the render target views.
      * @param pFirstRtv The first render target view which indicates the start of the core's objective render target view heap region.
+     * @param backBufCnt The number of back buffers, the default value is D3DWindow::defBackBufCnt.
      */
-    void buildRtv(ID3D12Device* pDevice, D3D12_CPU_DESCRIPTOR_HANDLE pFirstRtv);
+    void buildRtv(ID3D12Device* pDevice, D3D12_CPU_DESCRIPTOR_HANDLE pFirstRtv, std::size_t backBufCnt = MyBase::defBackBufCnt);
     /**
      * @brief Builds depth stencil views for the swap chain's back buffers on the Core's depth stencil view heap region.
      * @param pDevice The device which is going to be used to create the depth stencil views.
@@ -685,11 +691,13 @@ private:
 
 // TODO: make D3DWindow's back buffer count modifiable, and reflect that in here. 
 template <class Traits>
-void Window<Traits>::buildRtv(ID3D12Device* pDevice, D3D12_CPU_DESCRIPTOR_HANDLE pFirstRtv) {
+void Window<Traits>::buildRtv( ID3D12Device* pDevice,
+    D3D12_CPU_DESCRIPTOR_HANDLE pFirstRtv, std::size_t backBufCnt
+) {
     rtvStride_ = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     pFirstRtv_ = pFirstRtv;
     
-    for (auto i = 0; i < 2u; ++i) {
+    for (auto i = 0; i < backBufCnt; ++i) {
         this->pSwapChain_->GetBuffer(i, __uuidof(ID3D12Resource), &backBuffers_[i]);
         pDevice->CreateRenderTargetView(backBuffers_[i].Get(), nullptr, pFirstRtv);
         pFirstRtv.ptr += rtvStride_;
