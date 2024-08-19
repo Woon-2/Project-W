@@ -144,13 +144,15 @@ void Core::waitForGpu() {
     }
 }
 
-void Core::alterFence() {
+void Core::alterFence() NOEXCEPT {
     fenceIdx_ = (fenceIdx_ + 1) % fenceValues_.size();
 }
 
 void Core::alterFence(std::size_t idx) {
     if (idx >= fenceValues_.size()) {
-        throw std::out_of_range("The index is out of range.");
+        throw GFX_EXCEPT("The given fence index \""s + std::to_string(idx) + "\" is out of range.\n"s
+            "The valid range of the fence index is from 0 to "s + std::to_string(fenceValues_.size() - 1) + ".\n"s
+        );
     }
 
     fenceIdx_ = idx;

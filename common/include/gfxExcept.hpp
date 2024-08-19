@@ -17,7 +17,7 @@
  * @brief Custom exceptions
  * 
  * - @ref GFX_EXCEPT(desc) "GFX_EXCEPT(desc)"
- * - @ref GFX_INCOMPATIBLE_RC() "GFX_INCOMPATIBLE_RC()"
+ * - @ref GFX_EXCEPT_CLASS(exceptionClsName, ...) "GFX_EXCEPT_CLASS(exceptionClsName, ...)"
  */
 
 /**
@@ -27,11 +27,13 @@
  */
 #define GFX_EXCEPT(desc) gfx::Exception(__LINE__, __FILE__, desc)
 /**
- * @def GFX_INCOMPATIBLE_RC()
- * Constructs a gfx::IncompatibleRenderContext exception.
- * The line number and file name of it's call site are automatically included in the exception.
+ * @def GFX_EXCEPT_CLASS(exceptionClsName, ...)
+ * Constructs a specific exception class with the meta information(line, file) and varadic arguments.    
+ * The macro supposes the exception class to be in the gfx namespace.    
+ * If the exception class is in a nested namespace or class,     
+ * prepending the namespace or class name except for the gfx namespace is required.
  */
-#define GFX_INCOMPATIBLE_RC() gfx::IncompatibleRenderContext(__LINE__, __FILE__)
+#define GFX_EXCEPT_CLASS(exceptionClsName, ...) gfx::exceptionClsName(__LINE__, __FILE__, __VA_ARGS__)
 
 namespace gfx {
     /**

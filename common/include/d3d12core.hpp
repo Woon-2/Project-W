@@ -33,6 +33,8 @@ namespace gfx {
 
 namespace wrl = Microsoft::WRL;
 
+using namespace std::literals;
+
 /**
  * @brief The namespace for the D3D12 implementation of the GFX library.
  * @see gfx
@@ -62,6 +64,47 @@ namespace d3d12 {
  * @see ICore
  */
 class Core : public ICore {
+private:
+    class RootNotFound : public gfx::Exception {
+    public:
+        RootNotFound(int lineNum, const char* fileStr, std::string_view idx)
+            : gfx::Exception(lineNum, fileStr,
+                "The root signature with index \""s + idx.data() + "\" does not exist.\n"s
+                + "Please check if the root signature is registered to the Core.\n"s
+                + "or the root signature is already popped."s
+            ) {}
+    };
+
+    class UpBufIdxNotFound : public gfx::Exception {
+    public:
+        UpBufIdxNotFound(int lineNum, const char* fileStr, std::string_view idx)
+            : gfx::Exception(lineNum, fileStr,
+                "The temporary upload buffer with index \""s + idx.data() + "\" does not exist.\n"s
+                + "Please check if the temporary upload buffer is registered to the Core\n"s
+                + "or the temporary upload buffer is already popped."s
+            ) {}
+    };
+
+    class ShaderIdxNotFound : public gfx::Exception {
+    public:
+        ShaderIdxNotFound(int lineNum, const char* fileStr, std::string_view idx)
+            : gfx::Exception(lineNum, fileStr,
+                "The shader with index \""s + idx.data() + "\" does not exist.\n"s
+                + "Please check if the shader is registered to the Core.\n"s
+                + "or the shader is already popped."s
+            ) {}
+    };
+
+    class InputLayoutIdxNotFound : public gfx::Exception {
+    public:
+        InputLayoutIdxNotFound(int lineNum, const char* fileStr, std::string_view idx)
+            : gfx::Exception(lineNum, fileStr,
+                "The input layout with index \""s + idx.data() + "\" does not exist.\n"s
+                + "Please check if the input layout is registered to the Core.\n"s
+                + "or the input layout is already popped."s
+            ) {}
+    };
+
 public:
     friend class D3D12RenderContext;
 #ifdef ENABLE_D3D12_WINDOW
@@ -80,10 +123,10 @@ public:
      * @note The factory can be acquired through DXFactory.
      * @see DXFactory Core::init
      */
-    static void configDXFactory(wrl::ComPtr<IDXGIFactory4> factory) {
+    static void configDXFactory(wrl::ComPtr<IDXGIFactory4> factory) NOEXCEPT {
         spFactory = factory;
     }
-    static wrl::ComPtr<IDXGIFactory4> dxFactory() {
+    static wrl::ComPtr<IDXGIFactory4> dxFactory() NOEXCEPT {
         return spFactory;
     }
 
@@ -92,10 +135,10 @@ public:
      * @param size The size of the render target view heap.
      * @see Core::init
      */
-    static void configRtvHeapSize(std::size_t size) {
+    static void configRtvHeapSize(std::size_t size) NOEXCEPT {
         sRtvHeapSize = size;
     }
-    static std::size_t rtvHeapSize() {
+    static std::size_t rtvHeapSize() NOEXCEPT {
         return sRtvHeapSize;
     }
     /** 
@@ -103,16 +146,17 @@ public:
      * @param size The size of the depth stencil view heap.
      * @see Core::init
      */
-    static void configDsvHeapSize(std::size_t size) {
+    static void configDsvHeapSize(std::size_t size) NOEXCEPT {
         sDsvHeapSize = size;
     }
-    static std::size_t dsvHeapSize() {
+    static std::size_t dsvHeapSize() NOEXCEPT {
         return sDsvHeapSize;
     }
 
     /**
      * @brief Initializes the Core.    
      * It creates the device, the command queue & list, the descriptor heaps, and the fence & event.
+     * @throws DXException When the core creation fails.
      */
     void init() override;
     /**
@@ -126,11 +170,13 @@ public:
     /**
      * @brief Prepares for rendering.    
      * It resets the command list.
+     * @throws DXException When the command list reset fails.
      */
     void preRender() override;
     /**
      * @brief Finalizes the rendering.    
      * It closes the command list and executes it.
+     * @throws DXException When the command list close or execute fails.
      */
     void postRender() override;
     void cleanup() override;
@@ -146,6 +192,7 @@ public:
      * @brief Waits for the GPU to finish the work.    
      * The caller thread will be blocked until the GPU finishes the work.
      * @details It waits for the reaching of the current fence.
+     * @throws DXException When the fence signal or event on completion fails.
      */
     void waitForGpu();
     /**
@@ -154,10 +201,11 @@ public:
      * @note Currently there are two fences and the fence index is 0 or 1.
      * @see Core::waitForGpu
      */
-    void alterFence();
+    void alterFence() NOEXCEPT;
     /**
      * @brief Alters the fence.
      * @param idx The index of the fence.
+     * @throws gfx::Exception When the fence index is invalid.
      * @details It just alters the fence index to the specified one and doesn't block the caller thread.    
      * @note Currently there are two fences and the fence index is 0 or 1.
      * @see Core::waitForGpu
@@ -176,11 +224,15 @@ public:
      * @brief Queries the root signature from the Core.
      * @param idx The index of the root signature.
      * @return `wrl::ComPtr<ID3D12RootSignature>` The root signature.
+     * @throws gfx::Exception When the root signature for the specified index is not found.
      * @note The root signature for `idx` must be registered to the Core.
      * @see Core::addRoot Core::containsRoot
      */
-    wrl::ComPtr<ID3D12RootSignature> root(RootIdx idx) const NOEXCEPT {
-        return roots_.at(idx);
+    wrl::ComPtr<ID3D12RootSignature> root(RootIdx idx) const {
+        if (auto pos = roots_.find(idx); pos != roots_.end()) {
+            return pos->second;
+        }
+        throw GFX_EXCEPT_CLASS(d3d12::Core::RootNotFound, idx);
     }
     /**
      * @brief Registers a root signature to the Core.
@@ -215,11 +267,17 @@ public:
      * @brief Pops the temporary upload buffer for the specified index.     
      * It is recommended to pop the temporary upload buffer if it's use is done to save memory.
      * @param idx The index of the temporary upload buffer.
+     * @throws gfx::Exception When the temporary upload buffer for the specified index is not found.
      * @note The temporary upload buffer for `idx` must be registered to the Core.
      * @see Core::addTmpUpBuf Core::popTmpUpBufs createUpBuf createDefBuf
      */
-    void popTmpUpBuf(const UpBufIdx& idx) NOEXCEPT {
-        upBufs_.erase(idx);
+    void popTmpUpBuf(const UpBufIdx& idx) {
+        if (auto pos = upBufs_.find(idx); pos != upBufs_.end()) {
+            upBufs_.erase(pos);
+            return;
+        }
+
+        throw GFX_EXCEPT_CLASS(d3d12::Core::UpBufIdxNotFound, idx);
     }
     /**
      * @brief Pops all the temporary upload buffers.
@@ -229,11 +287,11 @@ public:
         upBufs_.clear();
     }
 
-    // TODO: more descriptive error message required.
     /**
      * @brief Queries the temporary upload buffer for the specified index.
      * @param idx The index of the temporary upload buffer.
      * @return `wrl::ComPtr<ID3D12Resource>&` The temporary upload buffer.
+     * @throws gfx::Exception When the temporary upload buffer for the specified index is not found.
      * @note The temporary upload buffer for `idx` must be registered to the Core.
      * @see Core::addTmpUpBuf Core::popTmpUpBuf
      */
@@ -241,7 +299,7 @@ public:
         if (upBufs_.contains(idx)) {
             return upBufs_.at(idx);
         }
-        throw GFX_EXCEPT("The temporary upload buffer does not exist.");
+        throw GFX_EXCEPT_CLASS(d3d12::Core::UpBufIdxNotFound, idx);
     }
     /**
      * @brief Registers a Shader to the Core.
@@ -257,6 +315,7 @@ public:
      * @brief Queries the Shader for the specified index.
      * @param idx The index of the Shader.
      * @return `const Shader&` The Shader.
+     * @throws gfx::Exception When the Shader for the specified index is not found.
      * @note The Shader for `idx` must be registered to the Core.
      * @see Core::addShader Core::popShader Core::containsShader Shader
      */
@@ -264,7 +323,7 @@ public:
         if (shaders_.contains(idx)) {
             return shaders_.at(idx);
         }
-        throw GFX_EXCEPT("The shader does not exist.");
+        throw GFX_EXCEPT_CLASS(d3d12::Core::ShaderIdxNotFound, idx);
     }
     /**
      * @brief Queries whether the Core contains the Shader for the specified index.
@@ -277,11 +336,16 @@ public:
     /**
      * @brief Pops the Shader for the specified index.     
      * @param idx The index of the Shader.
+     * @throws gfx::Exception When the Shader for the specified index is not found.
      * @note The Shader for `idx` must be registered to the Core.
      * @see Core::addShader Core::containsShader
      */
-    void popShader(const ShaderIdx& idx) NOEXCEPT {
-        shaders_.erase(idx);
+    void popShader(const ShaderIdx& idx) {
+        if (auto pos = shaders_.find(idx); pos != shaders_.end()) {
+            shaders_.erase(pos);
+            return;
+        }
+        throw GFX_EXCEPT_CLASS(d3d12::Core::ShaderIdxNotFound, idx);
     }
     /**
      * @brief Registers an InputLayout to the Core.
@@ -299,6 +363,7 @@ public:
      * @brief Queries the InputLayout for the specified index.
      * @param idx The index of the InputLayout.
      * @return `const InputLayout&` The InputLayout.
+     * @throws gfx::Exception When the InputLayout for the specified index is not found.
      * @note The InputLayout for `idx` must be registered to the Core.
      * @see Core::addInputLayout Core::popInputLayout Core::containsInputLayout InputLayout
      */
@@ -306,7 +371,7 @@ public:
         if (inputLayouts_.contains(idx)) {
             return inputLayouts_.at(idx);
         }
-        throw GFX_EXCEPT("The input layout does not exist.");
+        throw GFX_EXCEPT_CLASS(d3d12::Core::InputLayoutIdxNotFound, idx);
     }
 
     /**
@@ -321,11 +386,16 @@ public:
     /**
      * @brief Pops the InputLayout for the specified index.
      * @param idx The index of the InputLayout.
+     * @throws gfx::Exception When the InputLayout for the specified index is not found.
      * @note The InputLayout for `idx` must be registered to the Core.
      * @see Core::addInputLayout Core::containsInputLayout
      */
-    void popInputLayout(const InputLayoutIdx& idx) NOEXCEPT {
-        inputLayouts_.erase(idx);
+    void popInputLayout(const InputLayoutIdx& idx) {
+        if (auto pos = inputLayouts_.find(idx); pos != inputLayouts_.end()) {
+            inputLayouts_.erase(pos);
+            return;
+        }
+        throw GFX_EXCEPT_CLASS(d3d12::Core::InputLayoutIdxNotFound, idx);
     }
 
 private:
