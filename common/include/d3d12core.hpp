@@ -614,15 +614,11 @@ public:
      * @see D3DWindow::createDepthBuffers D3DWindow::buildRtv D3DWindow::buildDsv
      */
     void open(Core& core, MyStringView wndName, const Win32::WndFrame& wndFrame, std::size_t backBufCnt = MyBase::defBackBufCnt) {
-        backBuffers_.resize(backBufCnt);
         MyBase::open( static_cast<IDXGIFactory2*>( WindowAttorney::factory(core) ),
             static_cast<ID3D12CommandQueue*>( WindowAttorney::cmdQ(core) ),
             wndName, wndFrame, backBufCnt
         );
-        auto pDevice = static_cast<ID3D12Device*>( WindowAttorney::device(core) );
-        createDepthBuffers( pDevice );
-        buildRtv( pDevice, core.rtvHeapStart(), backBufCnt );
-        buildDsv( pDevice, core.dsvHeapStart() );
+        init(core);
     }
 
     /**
@@ -681,6 +677,36 @@ public:
     void postRender(IRenderContext& renderContext) override;
 
 private:
+    void preResizeBuffers(ICore& core) override {
+        auto pd3d12Core = dynamic_cast<Core*>(&core);
+        if (!pd3d12Core) {
+            throw GFX_EXCEPT("The Core is not D3D12.");
+        }
+
+        backBuffers_.clear();
+        depthBuffers_.clear();
+    }
+
+    void postResizeBuffers(ICore& core) override {
+        auto pd3d12Core = dynamic_cast<Core*>(&core);
+        if (!pd3d12Core) {
+            throw GFX_EXCEPT("The Core is not D3D12.");
+        }
+
+        init(*pd3d12Core);
+    }
+
+    void init(Core& core) {
+        auto pDevice = static_cast<ID3D12Device*>( WindowAttorney::device(core) );
+
+        backBuffers_.resize( this->backBufCnt() );
+        depthBuffers_.resize( 1 );
+
+        createDepthBuffers( pDevice );
+        buildRtv( pDevice, core.rtvHeapStart(), backBuffers_.size() );
+        buildDsv( pDevice, core.dsvHeapStart() );
+    }
+
     std::vector<wrl::ComPtr<ID3D12Resource>> backBuffers_;
     std::vector<wrl::ComPtr<ID3D12Resource>> depthBuffers_;
     D3D12_CPU_DESCRIPTOR_HANDLE pFirstRtv_;

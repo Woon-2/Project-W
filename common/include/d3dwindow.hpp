@@ -38,6 +38,7 @@ protected:
     wrl::ComPtr<IDXGISwapChain3> pSwapChain_{};
     DXGI_SWAP_CHAIN_DESC1 scd_{};
     DXGI_SWAP_CHAIN_FULLSCREEN_DESC scfd_{};
+    bool fullScreen_{ false };
 
 public:
     using MyBase = Win32::Window<Traits>;
@@ -136,7 +137,7 @@ public:
             .SampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
             .BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT,
             .BufferCount = static_cast<UINT>(backBufCnt),
-            .Scaling = DXGI_SCALING_NONE,
+            .Scaling = DXGI_SCALING_STRETCH,
             .SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD,
             .AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED,
             .Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH
@@ -179,6 +180,68 @@ public:
     std::size_t backBufCnt() const NOEXCEPT {
         return scd_.BufferCount;
     }
+
+    bool fullScreen() const NOEXCEPT {
+        return fullScreen_;
+    }
+
+    bool windowed() const NOEXCEPT {
+        return !fullScreen_;
+    }
+
+    void setFullScreen(ICore& core) {
+        if ( fullScreen_ ) {
+            return;
+        }
+
+        pSwapChain_->SetFullscreenState(true, nullptr);
+
+        auto md = DXGI_MODE_DESC {
+            .Width = scd_.Width,
+            .Height = scd_.Height,
+            .RefreshRate = scfd_.RefreshRate,
+            .Format = scd_.Format,
+            .ScanlineOrdering = scfd_.ScanlineOrdering,
+            .Scaling = scfd_.Scaling
+        };
+
+        pSwapChain_->ResizeTarget(&md);
+
+        preResizeBuffers(core);
+        pSwapChain_->ResizeBuffers(scd_.BufferCount, scd_.Width, scd_.Height, scd_.Format, scd_.Flags);
+        postResizeBuffers(core);
+
+        fullScreen_ = true;
+    }
+
+    void setWindowed(ICore& core) {
+        if ( !fullScreen_ ) {
+            return;
+        }
+
+        pSwapChain_->SetFullscreenState(false, nullptr);
+
+        auto md = DXGI_MODE_DESC {
+            .Width = scd_.Width,
+            .Height = scd_.Height,
+            .RefreshRate = scfd_.RefreshRate,
+            .Format = scd_.Format,
+            .ScanlineOrdering = scfd_.ScanlineOrdering,
+            .Scaling = scfd_.Scaling
+        };
+
+        pSwapChain_->ResizeTarget(&md);
+
+        preResizeBuffers(core);
+        pSwapChain_->ResizeBuffers(scd_.BufferCount, scd_.Width, scd_.Height, scd_.Format, scd_.Flags);
+        postResizeBuffers(core);
+
+        fullScreen_ = false;
+    }
+
+private:
+    virtual void preResizeBuffers(ICore& core) = 0;
+    virtual void postResizeBuffers(ICore& core) = 0;
 };
 
 /**

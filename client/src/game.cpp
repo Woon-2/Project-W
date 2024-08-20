@@ -108,5 +108,12 @@ void Game::render() {
 }
 
 void Game::processInput() {
-
+    if (GetAsyncKeyState(VK_F9) & 0x8000) {
+        if (pWnd_->fullScreen()) {
+            pWnd_->setWindowed(*pGfx_);
+        }
+        else {
+            pWnd_->setFullScreen(*pGfx_);
+        }
+    }
 }
