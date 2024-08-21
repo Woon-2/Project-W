@@ -5,6 +5,7 @@
 #include <string_view>
 
 #include "Woon2Exception.hpp"
+#include "config.hpp"
 
 #define ECS_EXCEPT(desc) ecs::Exception(__LINE__, __FILE__, desc)
 
