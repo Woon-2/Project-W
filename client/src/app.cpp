@@ -10,6 +10,7 @@ App::App(HINSTANCE hInstance)
 App::~App() {
     pGfx_->cleanup();
     gfx::DXFactory::cleanup();
+    gfx::DXInfoQueue::cleanup();
 }
 
 int App::run() {
@@ -54,9 +55,6 @@ int App::run() {
         MessageBoxA(nullptr, "no details available",
             "Unknown Exception", MB_OK | MB_ICONEXCLAMATION);
     }
-
-    pGfx_->cleanup();
-    gfx::DXInfoQueue::cleanup();
 
     return 0;
 }
