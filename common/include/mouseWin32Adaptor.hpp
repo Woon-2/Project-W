@@ -1,73 +1,44 @@
-#ifndef __MOUSE_HANDLER_HPP
-#define __MOUSE_HANDLER_HPP
+#ifndef __MouseWin32Adaptor_HPP
+#define __MouseWin32Adaptor_HPP
 
-#include "Window.hpp"
 #include "mouse.hpp"
+#include "Window.hpp"
 
-#include <sstream>
+#include <vector>
+#include <cstdint>
+
+namespace ic {
+
+namespace Win32 {
 
 template <class Wnd>
-class MouseMsgHandler : public Win32::MsgHandler<Wnd>{
+class MouseMsgHandler : public ::Win32::MsgHandler<Wnd>{
 public:
-    using Win32::MsgHandler<Wnd>::window;
+    using ::Win32::MsgHandler<Wnd>::window;
     using MyWindow = Wnd;
     using MyChar = typename MyWindow::MyChar;
-    using MyMouse = ic::Mouse;
-    using MyMouseMsgAPI = ic::MouseMsgAPI;
+    using MyMouse = Mouse;
+    using MyMouseMsgAPI = MouseMsgAPI;
     using MyString = std::basic_string<MyChar>;
 
-    MouseMsgHandler(MyWindow& wnd, MyMouse* pMouse) NOEXCEPT
-        : Win32::MsgHandler<MyWindow>(wnd), pMouse_(pMouse) {}
+    MouseMsgHandler(MyWindow& wnd, MyMouse* pMouse)
+        : ::Win32::MsgHandler<MyWindow>(wnd), pMouse_(pMouse) {
+        auto rid = RAWINPUTDEVICE{
+            .usUsagePage = 0x01,    // Generic Desktop Controls
+            .usUsage = 0x02,    // Mouse
+            .dwFlags = 0,
+            .hwndTarget = nullptr   // NULL for the whole system
+        };
+
+        if ( !RegisterRawInputDevices(&rid, 1, sizeof(rid)) ) {
+            throw WND_LAST_EXCEPT();
+        }
+    }
 
     std::optional<LRESULT> operator()(
-        const Win32::Message& msg
+        const ::Win32::Message& msg
     ) override {
-        while (!pMouse_->empty()) {
-            const auto e = pMouse_->read();
-            std::ostringstream oss;
-
-            switch(e->type().value()) {
-            case ic::Mouse::Event::Type::Move:
-                oss << "Mouse Position: (" << e->pos().x << ", " << e->pos().y << ")";
-                window().setTitle(oss.str());
-                break;
-
-            case ic::Mouse::Event::Type::LPress:
-                window().setTitle("LPress");
-                break;
-
-            case ic::Mouse::Event::Type::LRelease:
-                window().setTitle("LRelease");
-                break;
-
-            case ic::Mouse::Event::Type::MPress:
-                window().setTitle("MPress");
-                break;
-
-            case ic::Mouse::Event::Type::MRelease:
-                window().setTitle("MRelease");
-                break;
-
-            case ic::Mouse::Event::Type::RPress:
-                window().setTitle("RPress");
-                break;
-
-            case ic::Mouse::Event::Type::RRelease:
-                window().setTitle("RRelease");
-                break;
-
-            case ic::Mouse::Event::Type::WheelUp:
-                window().setTitle("WheelUp");
-                break;
-
-            case ic::Mouse::Event::Type::WheelDown:
-                window().setTitle("WheelDown");
-                break;
-
-            default:
-                break;
-            }
-        }
+        static auto sRawInputBuffer = std::vector<std::uint8_t>(256);
 
         auto pt = makePoint(msg.lParam);
 
@@ -122,6 +93,36 @@ public:
             );
             return 0;
 
+        case WM_INPUT: {
+            auto size = UINT{};
+
+            if ( GetRawInputData(
+                reinterpret_cast<HRAWINPUT>(msg.lParam),
+                RID_INPUT, nullptr, &size, sizeof(RAWINPUTHEADER)
+            ) == -1) {
+                throw WND_LAST_EXCEPT();
+            }
+
+            if (size > sRawInputBuffer.size()) {
+                sRawInputBuffer.resize(size);
+            }
+
+            if (GetRawInputData(
+                reinterpret_cast<HRAWINPUT>(msg.lParam),
+                RID_INPUT, sRawInputBuffer.data(), &size, sizeof(RAWINPUTHEADER)
+            ) != size) {
+                throw WND_LAST_EXCEPT();
+            }
+
+            auto& ri = reinterpret_cast<const RAWINPUT&>(*sRawInputBuffer.data());
+            if (ri.header.dwType == RIM_TYPEMOUSE) {
+                MyMouseMsgAPI::onRaw(*pMouse_, Mouse::RawDelta{
+                    ri.data.mouse.lLastX, ri.data.mouse.lLastY
+                } );
+            }
+            return 0;
+        }
+
         default:
             break;
         }
@@ -129,8 +130,8 @@ public:
         return {};
     }
 private:
-    static ic::Mouse::Point makePoint(LPARAM lParam) {
-        return ic::Mouse::Point{
+    static Mouse::Point makePoint(LPARAM lParam) {
+        return Mouse::Point{
             static_cast<short>(
                 (static_cast<unsigned int>(lParam)) & 0xffff
             ),
@@ -140,7 +141,7 @@ private:
         };
     }
 
-    bool insideClient(ic::Mouse::Point pt) NOEXCEPT {
+    bool insideClient(Mouse::Point pt) NOEXCEPT {
         auto client = window().client();
 
         auto cx = static_cast<decltype(pt.x)>(client.x);
@@ -156,4 +157,8 @@ private:
     MyMouse* pMouse_;
 };
 
-#endif // __MOUSE_HANDLER_HPP
+}   // namespace ic::Win32
+
+}   // namespace ic
+
+#endif // __MouseWin32Adaptor_HPP

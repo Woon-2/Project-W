@@ -105,6 +105,7 @@ target_include_directories(coro
 # === input ===
 add_library(input
     src/mouse.cpp include/mouse.hpp
+    include/mouseWin32Adaptor.hpp
     
     include/config.hpp
 )

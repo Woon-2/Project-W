@@ -1,6 +1,6 @@
 #include "game.hpp"
 
-#include "mouseHandler.hpp"
+#include "mouseWin32Adaptor.hpp"
 
 #include "d3d12scene.hpp"
 
@@ -20,7 +20,7 @@ Game::Game(gfx::ICore& gfx, MyWindow& wnd, ic::Mouse& mouse)
         .near = 0.1f, .far = 1000.f
     }), pGfx_(&gfx), pWnd_(&wnd), pMouse_(&mouse), models_(), lockFPS_(defLockFPS) {
 
-    pWnd_->addMsgHandler(0, std::make_unique<MouseMsgHandler<MyWindow>>(*pWnd_, pMouse_));
+    pWnd_->addMsgHandler(0, std::make_unique<ic::Win32::MouseMsgHandler<MyWindow>>(*pWnd_, pMouse_));
 
     auto pd3d12Gfx = static_cast<gfx::d3d12::Core*>(&gfx);
     auto pCtx = pGfx_->createContext();
@@ -117,6 +117,53 @@ void Game::processInput() {
         }
         else {
             pWnd_->setFullScreen(*pGfx_);
+        }
+    }
+
+    while (!pMouse_->empty()) {
+        const auto e = pMouse_->read();
+        std::ostringstream oss;
+
+        switch(e->type().value()) {
+        case ic::Mouse::Event::Type::Move:
+            oss << "Mouse Position: (" << e->pos().x << ", " << e->pos().y << ")";
+            pWnd_->setTitle(oss.str());
+            break;
+
+        case ic::Mouse::Event::Type::LPress:
+            pWnd_->setTitle("LPress");
+            break;
+
+        case ic::Mouse::Event::Type::LRelease:
+            pWnd_->setTitle("LRelease");
+            break;
+
+        case ic::Mouse::Event::Type::MPress:
+            pWnd_->setTitle("MPress");
+            break;
+
+        case ic::Mouse::Event::Type::MRelease:
+            pWnd_->setTitle("MRelease");
+            break;
+
+        case ic::Mouse::Event::Type::RPress:
+            pWnd_->setTitle("RPress");
+            break;
+
+        case ic::Mouse::Event::Type::RRelease:
+            pWnd_->setTitle("RRelease");
+            break;
+
+        case ic::Mouse::Event::Type::WheelUp:
+            pWnd_->setTitle("WheelUp");
+            break;
+
+        case ic::Mouse::Event::Type::WheelDown:
+            pWnd_->setTitle("WheelDown");
+            break;
+
+        default:
+            break;
         }
     }
 }

@@ -3,19 +3,26 @@
 
 #include <optional>
 #include <queue>
+#include <vector>
+
+#include <cstdint>
 
 #include "config.hpp"
 
 namespace ic {
 
 class Mouse {
-public:
-    friend class MouseMsgAPI;
-
-    struct Point {
+private:
+    struct Data2D {
         int x;
         int y;
     };
+
+public:
+    friend class MouseMsgAPI;
+
+    using Point = Data2D;
+    using RawDelta = Point;
 
     class Event {
     public:
@@ -29,15 +36,16 @@ public:
             WheelUp,
             WheelDown,
             Move,
+            RawDelta,
             Enter,
             Leave
         };
 
         Event() NOEXCEPT
-            : type_(), pos_{0, 0} {}
+            : type_(), data_{0, 0} {}
 
-        Event(Type typeVal, Point posVal) NOEXCEPT
-            : type_(typeVal), pos_(posVal) {}
+        Event(Type typeVal, const Data2D& val) NOEXCEPT
+            : type_(typeVal), data_(val) {}
 
         bool moved() const NOEXCEPT {
             return valid()
@@ -102,12 +110,16 @@ public:
             return type_;
         }
 
-        const Point pos() const NOEXCEPT {
-            return pos_;
+        const Point& pos() const NOEXCEPT {
+            return data_;
+        }
+
+        const RawDelta& rawDelta() const NOEXCEPT {
+            return data_;
         }
 
     private:
-        Point pos_;
+        Data2D data_;
         std::optional<Type> type_;
     };
 
@@ -192,6 +204,11 @@ private:
         trimBuf();
     }
 
+    void onRaw(RawDelta delta) {
+        buf_.emplace( Event::Type::RawDelta, delta );
+        trimBuf();
+    }
+
     void onMouseWheel(Point pos, int wheelDelta);
     void onEnter(Point pos);
     void onLeave(Point pos);
@@ -246,6 +263,10 @@ public:
 
     static void onLeave(Mouse& mouse, Mouse::Point pos) {
         mouse.onLeave(pos);
+    }
+
+    static void onRaw(Mouse& mouse, Mouse::RawDelta delta) {
+        mouse.onRaw(delta);
     }
 };
 

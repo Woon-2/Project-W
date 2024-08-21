@@ -21,7 +21,7 @@ concept contains = (std::same_as<T, Args> || ...);
 template <class T>
 concept Win32Char = contains<T, CHAR, WCHAR>;
 
-#define WND_EXCEPT(hr) Win32::WindowException(__LINE__, __FILE__, (hr))
+#define WND_EXCEPT(hr) ::Win32::WindowException(__LINE__, __FILE__, (hr))
 #define WND_THROW_FAILED(hrcall)    \
     if ( HRESULT hr = (hrcall); hr < 0 ) \
         throw WND_EXCEPT(hr)
