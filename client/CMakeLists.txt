@@ -43,9 +43,14 @@ target_sources(client
         src/app.cpp include/app.hpp
         src/game.cpp include/game.hpp
         src/mygfx.cpp include/mygfx.hpp
-        src/Timer.cpp include/Timer.hpp
-
         include/testInput.hpp
+        src/ecs.cpp include/ecs.hpp
+        src/ecsExcept.cpp include/ecsExcept.hpp
+        src/player.cpp include/player.hpp
+        src/keyboard.cpp include/keyboard.hpp
+        src/inputSystem.cpp include/inputSystem.hpp
+        
+        src/Timer.cpp include/Timer.hpp
 )
 
 include(auto_configure)

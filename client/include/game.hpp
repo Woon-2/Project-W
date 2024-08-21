@@ -10,7 +10,14 @@
 
 #include "d3d12model.hpp"
 
+#include "player.hpp"
+
+#include "keyboard.hpp"
+
+#include "inputSystem.hpp"
+
 #include <vector>
+#include <memory>
 
 class Game {
 public:
@@ -19,7 +26,8 @@ public:
 
     Game()
         : timer_(), baseCoordSys_(), camera_(baseCoordSys_),
-        pGfx_(), pWnd_(), pMouse_(), models_(), lockFPS_(defLockFPS) {}
+        pGfx_(), pWnd_(), pMouse_(), models_(), lockFPS_(defLockFPS),
+        player_(), keyManager_(5) {}
     
     Game(gfx::ICore& gfx, MyWindow& wnd, ic::Mouse& mouse);
 
@@ -27,6 +35,13 @@ public:
     void render();
     double fpsLock() const { return lockFPS_; }
     double setFPSLock(double fps) { return lockFPS_ = fps; }
+
+private:
+    Player player_;
+    KeyBoard keyboard_;
+    KeyManager keyManager_;
+
+    InputSystem inputSystem_;
 
 private:
     void processInput();
