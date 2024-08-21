@@ -14,9 +14,9 @@ public:
     ~App();
 
     App(const App&) = delete;
-    App(App&&) noexcept = default;
+    App(App&&) noexcept = delete;
     App& operator=(const App&) = delete;
-    App& operator=(App&&) noexcept = default;
+    App& operator=(App&&) noexcept = delete;
 
     int run();
 
