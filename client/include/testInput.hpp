@@ -24,13 +24,32 @@ public:
     ) override {
         auto pWnd = static_cast<MyWindow*>( &window() );
 
-        if (msg.type == WM_KEYDOWN) {
+        switch (msg.type) {
+        case WM_KEYDOWN:
             handleKeyDown(pWnd, msg.wParam);
             return 0;
-        }
-        else if (msg.type == WM_KEYUP) {
+
+        case WM_KEYUP:
             handleKeyUp(pWnd, msg.wParam);
             return 0;
+
+        case WM_ACTIVATE:
+            if (msg.wParam & WA_ACTIVE) {
+                confineCursor(pWnd);
+            }
+            else {
+                pMouse_->freeCursor();
+            }
+            return 0;
+
+        case WM_LBUTTONDOWN:
+            if (!pMouse_->cursorConfined()) {
+                confineCursor(pWnd);
+            }
+            return 0;
+
+        default:
+            break;
         }
 
         return {};
@@ -44,9 +63,7 @@ private:
                 pMouse_->freeCursor();
             }
             else {
-                auto clRect = pWnd->client();
-                ::MapWindowPoints(pWnd->nativeHandle(), nullptr, reinterpret_cast<POINT*>(&clRect), 2);
-                pMouse_->confineCursor(&clRect);
+                confineCursor(pWnd);
             }
             break;
 
@@ -75,6 +92,12 @@ private:
 
     void handleKeyUp(MyWindow* pWnd, WPARAM wParam) {
 
+    }
+
+    void confineCursor(MyWindow* pWnd) {
+        auto clRect = pWnd->client();
+        ::MapWindowPoints(pWnd->nativeHandle(), nullptr, reinterpret_cast<POINT*>(&clRect), 2);
+        pMouse_->confineCursor(&clRect);
     }
 
     ic::Mouse* pMouse_;
