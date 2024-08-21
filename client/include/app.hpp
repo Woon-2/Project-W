@@ -2,6 +2,7 @@
 #define __APP_HPP
 
 #include "game.hpp"
+#include "mouse.hpp"
 
 #include <memory>
 
@@ -21,6 +22,7 @@ public:
 
 private:
     MyWindow window_;
+    ic::Mouse mouse_;
     std::unique_ptr<gfx::ICore> pGfx_;
     std::unique_ptr<Game> pGame_;
 };

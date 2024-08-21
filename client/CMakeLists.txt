@@ -44,6 +44,7 @@ target_sources(client
         src/game.cpp include/game.hpp
         src/mygfx.cpp include/mygfx.hpp
         src/Timer.cpp include/Timer.hpp
+        include/mouseHandler.hpp
 )
 
 include(auto_configure)
@@ -60,6 +61,7 @@ target_link_libraries(client
         common::woon2exception
         common::win32
         common::gfx
+        common::input
 )
 
 include(find_hlsl_compiler)

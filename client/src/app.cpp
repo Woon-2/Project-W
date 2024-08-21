@@ -33,7 +33,7 @@ int App::run() {
 
     window_.addMsgHandler(10000, std::make_unique< Win32::BasicMsgHandler<MyWindow> >(window_));
 
-    pGame_ = std::make_unique<Game>(*pGfx_, window_);
+    pGame_ = std::make_unique<Game>(*pGfx_, window_, mouse_);
 
     for(;;) {
         if (auto returnCode = window_.processMessages()) {

@@ -1,5 +1,7 @@
 #include "game.hpp"
 
+#include "mouseHandler.hpp"
+
 #include "d3d12scene.hpp"
 
 #include "mygfx.hpp"
@@ -12,11 +14,14 @@
 #include <thread>
 
 
-Game::Game(gfx::ICore& gfx, MyWindow& wnd)
+Game::Game(gfx::ICore& gfx, MyWindow& wnd, ic::Mouse& mouse)
     : timer_(), baseCoordSys_(), camera_(gfx::Camera::Config{
         .fov = 90.f, .aspect = wnd.client().width / static_cast<float>(wnd.client().height),
         .near = 0.1f, .far = 1000.f
-    }), pGfx_(&gfx), pWnd_(&wnd), models_(), lockFPS_(defLockFPS) {
+    }), pGfx_(&gfx), pWnd_(&wnd), pMouse_(&mouse), models_(), lockFPS_(defLockFPS) {
+
+    pWnd_->addMsgHandler(0, std::make_unique<MouseMsgHandler<MyWindow>>(*pWnd_, pMouse_));
+
     auto pd3d12Gfx = static_cast<gfx::d3d12::Core*>(&gfx);
     auto pCtx = pGfx_->createContext();
     auto pd3d12Ctx = static_cast<gfx::d3d12::D3D12RenderContext*>(pCtx.get());
@@ -55,8 +60,6 @@ Game::Game(gfx::ICore& gfx, MyWindow& wnd)
     camera_.coordSys().setParent(&baseCoordSys_);
     camera_.coordSys() << mu::translate(0.f, 100.f, -1000.f);
     camera_.focus( gfx::coord::Pt3( &baseCoordSys_, mu::Vec3(0.f, 0.f, 0.f) ) );
-
-    std::cout << "yeah\n";
 }
 
 void Game::update() {
@@ -70,7 +73,7 @@ void Game::update() {
         std::this_thread::sleep_for( std::chrono::duration<double>(restFrameTime) );
     }
 
-    pWnd_->setTitle(timer_.str());
+    // pWnd_->setTitle(timer_.str());
 
     camera_.updateView();
     baseCoordSys_.traverse();

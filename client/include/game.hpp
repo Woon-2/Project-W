@@ -1,6 +1,8 @@
 #ifndef __GAME_HPP
 #define __GAME_HPP
 
+#include "mouse.hpp"
+
 #include "d3d12core.hpp"
 #include "Timer.hpp"
 #include "camera.hpp"
@@ -17,9 +19,9 @@ public:
 
     Game()
         : timer_(), baseCoordSys_(), camera_(baseCoordSys_),
-        pGfx_(), pWnd_(), models_(), lockFPS_(defLockFPS) {}
+        pGfx_(), pWnd_(), pMouse_(), models_(), lockFPS_(defLockFPS) {}
     
-    Game(gfx::ICore& gfx, MyWindow& wnd);
+    Game(gfx::ICore& gfx, MyWindow& wnd, ic::Mouse& mouse);
 
     void update();
     void render();
@@ -36,6 +38,7 @@ private:
     std::vector<gfx::d3d12::Model> models_;
     gfx::ICore* pGfx_;
     MyWindow* pWnd_;
+    ic::Mouse* pMouse_;
     double lockFPS_;
 };
 

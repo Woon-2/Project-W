@@ -102,6 +102,22 @@ target_include_directories(coro
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
+# === input ===
+add_library(input
+    src/mouse.cpp include/mouse.hpp
+    
+    include/config.hpp
+)
+
+add_library(common::input ALIAS input)
+
+auto_configure(input PRIVATE)
+
+target_include_directories(input
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+
 
 # === gfx ===
 add_library(gfx
