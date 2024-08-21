@@ -1,6 +1,7 @@
 #include "game.hpp"
 
 #include "mouseWin32Adaptor.hpp"
+#include "testInput.hpp"
 
 #include "d3d12scene.hpp"
 
@@ -21,6 +22,7 @@ Game::Game(gfx::ICore& gfx, MyWindow& wnd, ic::Mouse& mouse)
     }), pGfx_(&gfx), pWnd_(&wnd), pMouse_(&mouse), models_(), lockFPS_(defLockFPS) {
 
     pWnd_->addMsgHandler(0, std::make_unique<ic::Win32::MouseMsgHandler<MyWindow>>(*pWnd_, pMouse_));
+    pWnd_->addMsgHandler(1, std::make_unique<TestInputHandler<MyWindow>>(*pWnd_, *pMouse_, *pGfx_));
 
     auto pd3d12Gfx = static_cast<gfx::d3d12::Core*>(&gfx);
     auto pCtx = pGfx_->createContext();
@@ -111,35 +113,6 @@ void Game::render() {
 }
 
 void Game::processInput() {
-    if (GetAsyncKeyState(VK_F7 & 0x8000)) {
-        if (pMouse_->cursorConfined()) {
-            pMouse_->freeCursor();
-        }
-        else {
-            auto clRect = pWnd_->client();
-            ::MapWindowPoints(pWnd_->nativeHandle(), nullptr, reinterpret_cast<POINT*>(&clRect), 2);
-            pMouse_->confineCursor(&clRect);
-        }
-    }
-
-    if (GetAsyncKeyState(VK_F8) & 0x8000) {
-        if (pMouse_->cursorShown()) {
-            pMouse_->hideCursor();
-        }
-        else {
-            pMouse_->showCursor();
-        }
-    }
-
-    if (GetAsyncKeyState(VK_F9) & 0x8000) {
-        if (pWnd_->fullScreen()) {
-            pWnd_->setWindowed(*pGfx_);
-        }
-        else {
-            pWnd_->setFullScreen(*pGfx_);
-        }
-    }
-
     while (!pMouse_->empty()) {
         const auto e = pMouse_->read();
         std::ostringstream oss;

@@ -44,6 +44,8 @@ target_sources(client
         src/game.cpp include/game.hpp
         src/mygfx.cpp include/mygfx.hpp
         src/Timer.cpp include/Timer.hpp
+
+        include/testInput.hpp
 )
 
 include(auto_configure)
