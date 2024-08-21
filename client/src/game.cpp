@@ -111,6 +111,26 @@ void Game::render() {
 }
 
 void Game::processInput() {
+    if (GetAsyncKeyState(VK_F7 & 0x8000)) {
+        if (pMouse_->cursorConfined()) {
+            pMouse_->freeCursor();
+        }
+        else {
+            auto clRect = pWnd_->client();
+            ::MapWindowPoints(pWnd_->nativeHandle(), nullptr, reinterpret_cast<POINT*>(&clRect), 2);
+            pMouse_->confineCursor(&clRect);
+        }
+    }
+
+    if (GetAsyncKeyState(VK_F8) & 0x8000) {
+        if (pMouse_->cursorShown()) {
+            pMouse_->hideCursor();
+        }
+        else {
+            pMouse_->showCursor();
+        }
+    }
+
     if (GetAsyncKeyState(VK_F9) & 0x8000) {
         if (pWnd_->fullScreen()) {
             pWnd_->setWindowed(*pGfx_);

@@ -128,8 +128,12 @@ public:
         wheelThreshold_(wheelThresholdVal), wheelDeltaCarry_(),
         bInWindow_(false) {};
 
+    virtual ~Mouse() = default;
+
     Mouse(const Mouse&) = delete;
     Mouse& operator=(const Mouse&) = delete;
+    Mouse(Mouse&&) = default;
+    Mouse& operator=(Mouse&&) = default;
     
     const std::optional<Event> read() NOEXCEPT;
     const std::optional<Event> peek() const NOEXCEPT {
@@ -167,6 +171,14 @@ public:
     bool inWindow() const NOEXCEPT {
         return bInWindow_;
     }
+
+    virtual void setPos(const Point& pt) {}
+    virtual void hideCursor() {}
+    virtual void showCursor() {}
+    virtual void confineCursor(void* param) {}
+    virtual void freeCursor() {}
+    virtual bool cursorShown() const { return true; }
+    virtual bool cursorConfined() const { return false; }
 
 private:
     void onMouseMove(Point pos) {

@@ -2,13 +2,13 @@
 #define __APP_HPP
 
 #include "game.hpp"
-#include "mouse.hpp"
 
 #include <memory>
 
 class App {
 public:
     using MyWindow = gfx::d3d12::Window<gfx::d3d12::BasicD3D12WTraits<char>>;
+    using MyMouse = ic::Win32::Mouse;
 
     App(HINSTANCE hInstance);
     ~App();
@@ -22,7 +22,7 @@ public:
 
 private:
     MyWindow window_;
-    ic::Mouse mouse_;
+    MyMouse mouse_;
     std::unique_ptr<gfx::ICore> pGfx_;
     std::unique_ptr<Game> pGame_;
 };

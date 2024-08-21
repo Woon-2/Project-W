@@ -11,18 +11,60 @@ namespace ic {
 
 namespace Win32 {
 
+class Mouse : public ic::Mouse {
+public:
+    void setPos(const Point& pt) override {
+        SetCursorPos(pt.x, pt.y);
+    }
+
+    void hideCursor() override {
+        while (ShowCursor(false) >= 0)
+            ;
+        cursorShown_ = false;
+    }
+
+    void showCursor() override {
+        while (ShowCursor(true) < 0)
+            ;
+        cursorShown_ = true;
+    }
+
+    void confineCursor(void* pScreenRect) override {
+        auto& screenRect = *static_cast<const RECT*>(pScreenRect);
+        ClipCursor(&screenRect);
+        cursorConfined_ = true;
+    }
+
+    void freeCursor() override {
+        ClipCursor(nullptr);
+        cursorConfined_ = false;
+    }
+
+    bool cursorShown() const override {
+        return cursorShown_;
+    }
+
+    bool cursorConfined() const override {
+        return cursorConfined_;
+    }
+
+private:
+    bool cursorShown_ = true;
+    bool cursorConfined_ = false;
+};
+
 template <class Wnd>
 class MouseMsgHandler : public ::Win32::MsgHandler<Wnd>{
 public:
     using ::Win32::MsgHandler<Wnd>::window;
     using MyWindow = Wnd;
     using MyChar = typename MyWindow::MyChar;
-    using MyMouse = Mouse;
+    using MyMouse = ic::Mouse;
     using MyMouseMsgAPI = MouseMsgAPI;
     using MyString = std::basic_string<MyChar>;
 
     MouseMsgHandler(MyWindow& wnd, MyMouse* pMouse)
-        : ::Win32::MsgHandler<MyWindow>(wnd), pMouse_(pMouse) {
+        : ::Win32::MsgHandler<MyWindow>(wnd), pMouse_(pMouse), cursorEnabled_(true) {
         auto rid = RAWINPUTDEVICE{
             .usUsagePage = 0x01,    // Generic Desktop Controls
             .usUsage = 0x02,    // Mouse
@@ -155,6 +197,7 @@ private:
     }
 
     MyMouse* pMouse_;
+    bool cursorEnabled_;
 };
 
 }   // namespace ic::Win32

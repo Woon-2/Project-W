@@ -1,7 +1,7 @@
 #ifndef __GAME_HPP
 #define __GAME_HPP
 
-#include "mouse.hpp"
+#include "mouseWin32Adaptor.hpp"
 
 #include "d3d12core.hpp"
 #include "Timer.hpp"

@@ -3,7 +3,7 @@
 #include "mygfx.hpp"
 
 App::App(HINSTANCE hInstance)
-    : window_() {
+    : window_(), mouse_(), pGfx_(), pGame_() {
     MyWindow::setHInst(hInstance);
 }
 
