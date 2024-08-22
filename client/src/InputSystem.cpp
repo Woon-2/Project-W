@@ -2,15 +2,12 @@
 
 #include "player.hpp"
 
-#include "keyboard.hpp"
-
-void InputSystem::init(KeyBoard& keyboard)
-{
-	keyboard_ = &keyboard;
-}
+#include "keyboardXX.hpp"
 
 void InputSystem::update()
 {
+	pKeyboard_->patchKeyState();
+
 	auto& system = ecs::gSystems[typeid(InputSystem).name()];
 
 
@@ -19,6 +16,6 @@ void InputSystem::update()
 		auto& controller = ecs::GetComponent<PlayerController>(entity);
 		auto& position = ecs::GetComponent<Position>(entity);
 
-		controller.processInput(position, keyboard_->GetKeyStates());
+		controller.processInput(position, pKeyboard_);
 	}
 }

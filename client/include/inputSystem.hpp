@@ -1,35 +1,27 @@
 #ifndef __INPUTSYSTEM_HPP
 #define __INPUTSYSTEM_HPP
 
-#include "keyboard.hpp"
+#include "keyboardXX.hpp"
 #include "player.hpp"
 
 class PlayerController
 {
 public:
-    void processInput(Position& position, const char keyStates[KEY_COUNT])
+    void processInput(Position& position, ic::Keyboard* pKeyboard)
     {
-        if (keyStates[(int)Key::A] == (char)KeyState::Tap ||
-            keyStates[(int)Key::A] == (char)KeyState::Hold)
-        {
+        if (pKeyboard->pressed('A')) {
             position.x -= 0.5;
         }
 
-        if (keyStates[(int)Key::D] == (char)KeyState::Tap ||
-            keyStates[(int)Key::D] == (char)KeyState::Hold)
-        {
+        if (pKeyboard->pressed('D')) {
             position.x += 0.5;
         }
 
-        if (keyStates[(int)Key::W] == (char)KeyState::Tap ||
-            keyStates[(int)Key::W] == (char)KeyState::Hold)
-        {
+        if (pKeyboard->pressed('W')) {
             position.y -= 0.5;
         }
 
-        if (keyStates[(int)Key::S] == (char)KeyState::Tap ||
-            keyStates[(int)Key::S] == (char)KeyState::Hold)
-        {
+        if (pKeyboard->pressed('S')) {
             position.y += 0.5;
         }
     }
@@ -38,11 +30,13 @@ public:
 class InputSystem
 {
 public:
-    void init(KeyBoard& keyboard);
+    InputSystem() : pKeyboard_(nullptr) {}
+    InputSystem(ic::Keyboard& keyboard) : pKeyboard_(&keyboard) {}
+
 	void update();
 
 private:
-	KeyBoard* keyboard_;
+	ic::Keyboard* pKeyboard_;
 };
 
 #endif // !__INPUTSYSTEM_HPP

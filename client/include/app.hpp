@@ -9,6 +9,7 @@ class App {
 public:
     using MyWindow = gfx::d3d12::Window<gfx::d3d12::BasicD3D12WTraits<char>>;
     using MyMouse = ic::Win32::Mouse;
+    using MyKeyboard = ic::Win32::Keyboard;
 
     App(HINSTANCE hInstance);
     ~App();
@@ -23,6 +24,7 @@ public:
 private:
     MyWindow window_;
     MyMouse mouse_;
+    MyKeyboard keyboard_;
     std::unique_ptr<gfx::ICore> pGfx_;
     std::unique_ptr<Game> pGame_;
 };

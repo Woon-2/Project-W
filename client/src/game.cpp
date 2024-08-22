@@ -15,11 +15,12 @@
 #include <thread>
 
 
-Game::Game(gfx::ICore& gfx, MyWindow& wnd, ic::Mouse& mouse)
+Game::Game(gfx::ICore& gfx, MyWindow& wnd, ic::Mouse& mouse, ic::Keyboard& keyboard)
     : timer_(), baseCoordSys_(), camera_(gfx::Camera::Config{
         .fov = 90.f, .aspect = wnd.client().width / static_cast<float>(wnd.client().height),
         .near = 0.1f, .far = 1000.f
-    }), pGfx_(&gfx), pWnd_(&wnd), pMouse_(&mouse), models_(), lockFPS_(defLockFPS), player_(), keyManager_(5) {
+    }), models_(), inputSystem_(keyboard), pGfx_(&gfx), pWnd_(&wnd),
+    pMouse_(&mouse), lockFPS_(defLockFPS), player_() {
 
     pWnd_->addMsgHandler(0, std::make_unique<TestInputHandler<MyWindow>>(*pWnd_, *pMouse_, *pGfx_));
     pWnd_->addMsgHandler(1, std::make_unique<ic::Win32::MouseMsgHandler<MyWindow>>(*pWnd_, pMouse_));
@@ -41,11 +42,6 @@ Game::Game(gfx::ICore& gfx, MyWindow& wnd, ic::Mouse& mouse)
 
     models_.push_back(std::move(car));
 
-    // models_.emplace_back( *pd3d12Gfx, *pd3d12Ctx,
-    //     gfx::loadModel( resourcePath/"models"/"AC Cobra"/"Shelby.obj",
-    //         pd3d12Gfx->inputLayout( gfx::d3d12::inputLayoutName(gfx::InputLayoutPreset::Pos3) )
-    //     ), "car_vb", "car_ib"
-    // );
     models_.emplace_back( *pd3d12Gfx, *pd3d12Ctx,
         gfx::loadModel( resourcePath/"models"/"box"/"box.obj",
             pd3d12Gfx->inputLayout( gfx::d3d12::inputLayoutName(gfx::InputLayoutPreset::Pos3) )
@@ -62,14 +58,12 @@ Game::Game(gfx::ICore& gfx, MyWindow& wnd, ic::Mouse& mouse)
     camera_.coordSys().setParent(&baseCoordSys_);
     camera_.coordSys() << mu::translate(0.f, 100.f, -1000.f);
     camera_.focus( gfx::coord::Pt3( &baseCoordSys_, mu::Vec3(0.f, 0.f, 0.f) ) );
-    
-    inputSystem_.init(keyboard_);
 
     ecs::ConfigEntity();
     ecs::RegisterComponent<PlayerController>();
     ecs::RegisterComponent<Position>();
 
-    auto inputSystem_ =  ecs::RegisterSystem<InputSystem>();
+    auto inputSystem_ = ecs::RegisterSystem<InputSystem>();
 
     ecs::Signature signature;
     signature.set(ecs::GetComponentType<PlayerController>());
@@ -95,7 +89,6 @@ void Game::update() {
     camera_.updateView();
     baseCoordSys_.traverse();
     
-    inputSystem_.update();
     player_.printPos();
 }
 
@@ -178,6 +171,5 @@ void Game::processInput() {
         }
     }
     
-    keyboard_.patchKeyState();
-    keyManager_.updateFrame(keyboard_);
+    inputSystem_.update();
 }

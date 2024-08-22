@@ -47,7 +47,6 @@ target_sources(client
         src/ecs.cpp include/ecs.hpp
         src/ecsExcept.cpp include/ecsExcept.hpp
         src/player.cpp include/player.hpp
-        src/keyboard.cpp include/keyboard.hpp
         src/inputSystem.cpp include/inputSystem.hpp
         
         src/Timer.cpp include/Timer.hpp

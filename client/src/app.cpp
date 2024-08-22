@@ -3,7 +3,7 @@
 #include "mygfx.hpp"
 
 App::App(HINSTANCE hInstance)
-    : window_(), mouse_(), pGfx_(), pGame_() {
+    : window_(), mouse_(), keyboard_(), pGfx_(), pGame_() {
     MyWindow::setHInst(hInstance);
 }
 
@@ -34,7 +34,7 @@ int App::run() {
 
     window_.addMsgHandler(10000, std::make_unique< Win32::BasicMsgHandler<MyWindow> >(window_));
 
-    pGame_ = std::make_unique<Game>(*pGfx_, window_, mouse_);
+    pGame_ = std::make_unique<Game>(*pGfx_, window_, mouse_, keyboard_);
 
     for(;;) {
         if (auto returnCode = window_.processMessages()) {

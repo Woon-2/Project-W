@@ -2,6 +2,7 @@
 #define __GAME_HPP
 
 #include "mouseWin32Adaptor.hpp"
+#include "keyboardWin32Adaptor.hpp"
 
 #include "d3d12core.hpp"
 #include "Timer.hpp"
@@ -11,8 +12,6 @@
 #include "d3d12model.hpp"
 
 #include "player.hpp"
-
-#include "keyboard.hpp"
 
 #include "inputSystem.hpp"
 
@@ -26,10 +25,10 @@ public:
 
     Game()
         : timer_(), baseCoordSys_(), camera_(baseCoordSys_),
-        pGfx_(), pWnd_(), pMouse_(), models_(), lockFPS_(defLockFPS),
-        player_(), keyManager_(5) {}
+        models_(), inputSystem_(), pGfx_(), pWnd_(), pMouse_(),
+        lockFPS_(defLockFPS), player_() {}
     
-    Game(gfx::ICore& gfx, MyWindow& wnd, ic::Mouse& mouse);
+    Game(gfx::ICore& gfx, MyWindow& wnd, ic::Mouse& mouse, ic::Keyboard& keyboard);
 
     void update();
     void render();
@@ -37,24 +36,18 @@ public:
     double setFPSLock(double fps) { return lockFPS_ = fps; }
 
 private:
-    Player player_;
-    KeyBoard keyboard_;
-    KeyManager keyManager_;
-
-    InputSystem inputSystem_;
-
-private:
     void processInput();
 
     Timer timer_;
-
     gfx::coord::System baseCoordSys_;
     gfx::Camera camera_;
     std::vector<gfx::d3d12::Model> models_;
+    InputSystem inputSystem_;
     gfx::ICore* pGfx_;
     MyWindow* pWnd_;
     ic::Mouse* pMouse_;
     double lockFPS_;
+    Player player_;
 };
 
 #endif // __GAME_HPP

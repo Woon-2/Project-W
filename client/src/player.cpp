@@ -1,7 +1,5 @@
 #include "player.hpp"
 
-#include "keyboard.hpp"
-
 #include "inputSystem.hpp"
 
 void Player::Init()

@@ -107,6 +107,7 @@ target_include_directories(coro
 add_library(input
     src/mouse.cpp include/mouse.hpp
     src/keyboardXX.cpp include/keyboardXX.hpp
+    src/keyboardWin32Adaptor.cpp include/keyboardWin32Adaptor.hpp
     include/mouseWin32Adaptor.hpp
     
     include/config.hpp
