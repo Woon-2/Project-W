@@ -91,6 +91,7 @@ target_include_directories(mu
 add_library(coro
     INTERFACE
         include/generator.hpp
+        include/resumable.hpp
 )
 
 add_library(common::coro ALIAS coro)
@@ -105,6 +106,7 @@ target_include_directories(coro
 # === input ===
 add_library(input
     src/mouse.cpp include/mouse.hpp
+    src/keyboardXX.cpp include/keyboardXX.hpp
     include/mouseWin32Adaptor.hpp
     
     include/config.hpp
@@ -117,6 +119,12 @@ auto_configure(input PRIVATE)
 target_include_directories(input
     PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+
+target_link_libraries(input
+    PRIVATE
+        common::win32
+        common::coro
 )
 
 
