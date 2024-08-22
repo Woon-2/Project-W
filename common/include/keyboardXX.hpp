@@ -38,8 +38,8 @@ using namespace std::literals;
 
 class Keyboard {
 public:
-    static constexpr auto press = 0x8000u;
-    static constexpr auto toggle = 0x0001u;
+    static constexpr auto press = 0x80u;
+    static constexpr auto toggle = 0x01u;
 
     Keyboard()
         : states_( 0x100u, 0 ) {}
