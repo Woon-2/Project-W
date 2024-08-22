@@ -9,7 +9,8 @@ namespace d3d12 {
 
 enum class RootPreset {
     Null,
-    Solid
+    Solid,
+    Unified
 };
 
 wrl::ComPtr<ID3D12RootSignature> makeRootPreset(Core& core, RootPreset preset);
