@@ -21,54 +21,10 @@ Game::Game(gfx::ICore& gfx, MyWindow& wnd, ic::Mouse& mouse, ic::Keyboard& keybo
         .near = 0.1f, .far = 1000.f
     }), models_(), inputSystem_(keyboard), pGfx_(&gfx), pWnd_(&wnd),
     pMouse_(&mouse), lockFPS_(defLockFPS), player_() {
-
-    pWnd_->addMsgHandler(0, std::make_unique<TestInputHandler<MyWindow>>(*pWnd_, *pMouse_, *pGfx_));
-    pWnd_->addMsgHandler(1, std::make_unique<ic::Win32::MouseMsgHandler<MyWindow>>(*pWnd_, pMouse_));
-
-    auto pd3d12Gfx = static_cast<gfx::d3d12::Core*>(&gfx);
-    auto pCtx = pGfx_->createContext();
-    auto pd3d12Ctx = static_cast<gfx::d3d12::D3D12RenderContext*>(pCtx.get());
-
-    pGfx_->preRender();
-
-    auto mod = gfx::loadModel( resourcePath / "models" / "AC Cobra" / "Shelby.fbx",
-        pd3d12Gfx->inputLayout(gfx::d3d12::inputLayoutName(gfx::InputLayoutPreset::Pos3))
-    );
-
-    auto car = gfx::d3d12::Model( *pd3d12Gfx, *pd3d12Ctx, mod, "car_vb", "car_ib" );
-
-    car.coord().setParent(&baseCoordSys_);
-    car.coord() << mu::rotateY(mu::Degree(90.f));
-
-    models_.push_back(std::move(car));
-
-    models_.emplace_back( *pd3d12Gfx, *pd3d12Ctx,
-        gfx::loadModel( resourcePath/"models"/"box"/"box.obj",
-            pd3d12Gfx->inputLayout( gfx::d3d12::inputLayoutName(gfx::InputLayoutPreset::Pos3) )
-        ), "box_vb", "box_ib"
-    );
-
-    pGfx_->postRender();
-    pd3d12Gfx->waitForGpu();
-
-    for (auto& model : models_) {
-        model.completeInit(*pd3d12Gfx);
-    }
-
-    camera_.coordSys().setParent(&baseCoordSys_);
-    camera_.coordSys() << mu::translate(0.f, 100.f, -1000.f);
-    camera_.focus( gfx::coord::Pt3( &baseCoordSys_, mu::Vec3(0.f, 0.f, 0.f) ) );
-
-    ecs::ConfigEntity();
-    ecs::RegisterComponent<PlayerController>();
-    ecs::RegisterComponent<Position>();
-
-    auto inputSystem_ = ecs::RegisterSystem<InputSystem>();
-
-    ecs::Signature signature;
-    signature.set(ecs::GetComponentType<PlayerController>());
-    signature.set(ecs::GetComponentType<Position>());
-    ecs::SetSystemSignature<InputSystem>(signature);
+    setupWndMsgHandlers();
+    loadAssets();
+    setupCamera();
+    initECS();
 
     player_.Init();
 }
@@ -172,4 +128,60 @@ void Game::processInput() {
     }
     
     inputSystem_.update();
+}
+
+void Game::setupWndMsgHandlers() {
+    pWnd_->addMsgHandler(0, std::make_unique<TestInputHandler<MyWindow>>(*pWnd_, *pMouse_, *pGfx_));
+    pWnd_->addMsgHandler(1, std::make_unique<ic::Win32::MouseMsgHandler<MyWindow>>(*pWnd_, pMouse_));
+}
+
+void Game::loadAssets() {
+    auto pd3d12Gfx = static_cast<gfx::d3d12::Core*>(pGfx_);
+    auto pCtx = pGfx_->createContext();
+    auto pd3d12Ctx = static_cast<gfx::d3d12::D3D12RenderContext*>(pCtx.get());
+
+    pGfx_->preRender();
+
+    auto mod = gfx::loadModel( resourcePath / "models" / "AC Cobra" / "Shelby.fbx",
+        pd3d12Gfx->inputLayout(gfx::d3d12::inputLayoutName(gfx::InputLayoutPreset::Pos3))
+    );
+
+    auto car = gfx::d3d12::Model( *pd3d12Gfx, *pd3d12Ctx, mod, "car_vb", "car_ib" );
+
+    car.coord().setParent(&baseCoordSys_);
+    car.coord() << mu::rotateY(mu::Degree(90.f));
+
+    models_.push_back(std::move(car));
+
+    models_.emplace_back( *pd3d12Gfx, *pd3d12Ctx,
+        gfx::loadModel( resourcePath/"models"/"box"/"box.obj",
+            pd3d12Gfx->inputLayout( gfx::d3d12::inputLayoutName(gfx::InputLayoutPreset::Pos3) )
+        ), "box_vb", "box_ib"
+    );
+
+    pGfx_->postRender();
+    pd3d12Gfx->waitForGpu();
+
+    for (auto& model : models_) {
+        model.completeInit(*pd3d12Gfx);
+    }
+}
+
+void Game::setupCamera() {
+    camera_.coordSys().setParent(&baseCoordSys_);
+    camera_.coordSys() << mu::translate(0.f, 100.f, -1000.f);
+    camera_.focus( gfx::coord::Pt3( &baseCoordSys_, mu::Vec3(0.f, 0.f, 0.f) ) );
+}
+
+void Game::initECS() {
+    ecs::ConfigEntity();
+    ecs::RegisterComponent<PlayerController>();
+    ecs::RegisterComponent<Position>();
+
+    auto inputSystem_ = ecs::RegisterSystem<InputSystem>();
+
+    ecs::Signature signature;
+    signature.set(ecs::GetComponentType<PlayerController>());
+    signature.set(ecs::GetComponentType<Position>());
+    ecs::SetSystemSignature<InputSystem>(signature);
 }

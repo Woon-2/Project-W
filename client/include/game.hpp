@@ -36,7 +36,11 @@ public:
     double setFPSLock(double fps) { return lockFPS_ = fps; }
 
 private:
+    void setupWndMsgHandlers();
     void processInput();
+    void loadAssets();
+    void setupCamera();
+    void initECS();
 
     Timer timer_;
     gfx::coord::System baseCoordSys_;
