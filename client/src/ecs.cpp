@@ -56,6 +56,9 @@ namespace ecs {
 			throw ECS_EXCEPT("Entity out of Range");
 		}
 
+		componentDestroyEntity(entity);
+		systemDestroyEntity(entity);
+
 		// std::bitset::reset
 		gSignature[entity].reset();
 
