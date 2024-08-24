@@ -1,0 +1,63 @@
+#ifndef __ShaderRes_HPP
+#define __ShaderRes_HPP
+
+#define DXMATH_VEC_UTIL
+#define DXMATH_MAT_UTIL
+#define DXMATH_QUAT_UTIL
+
+#include "mathUtil.hpp"
+#include <cstdint>
+
+namespace gfx {
+
+namespace d3d12 {
+
+namespace sr {
+
+struct BasicPFD {
+    dx::XMFLOAT4 gcGlobalAmbientLight;
+    std::uint32_t gLightCnt;
+    dx::XMFLOAT3 padding;
+};
+
+struct BasicPID {
+    dx::XMFLOAT4X4 wv;
+    dx::XMFLOAT4X4 wvp;
+    dx::XMFLOAT3X4 normalXform; // use 3x4 matrix to avoid padding
+    std::uint32_t matIdx;
+    dx::XMFLOAT3 padding;
+};
+
+struct BasicPDD {
+    std::uint32_t gInstanceIndex;
+    std::uint32_t padding[3];
+};
+
+struct PhongMaterial {
+    dx::XMFLOAT4 ambient;
+    dx::XMFLOAT4 diffuse;
+    dx::XMFLOAT4 specular; // a = power
+    dx::XMFLOAT4 emmisive;
+};
+
+struct PhongLight {
+    dx::XMFLOAT4 ambient;
+    dx::XMFLOAT4 diffuse;
+    dx::XMFLOAT4 specular;
+    dx::XMFLOAT3 posV;
+    float falloff;
+    dx::XMFLOAT3 dirV;
+    float cosTheta;
+    dx::XMFLOAT3 atten;
+    float cosPhi;
+    std::int32_t type;
+    dx::XMFLOAT3 padding;
+};
+
+}   // namespace gfx::d3d12::sr
+
+}   // namespace gfx::d3d12
+
+}   // namespace gfx
+
+#endif // __ShaderRes_HPP

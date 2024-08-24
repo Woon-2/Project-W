@@ -128,6 +128,20 @@ target_link_libraries(input
         common::coro
 )
 
+# === memory ===
+add_library(mem
+    src/alignMem.cpp include/alignMem.hpp
+)
+
+add_library(common::mem ALIAS mem)
+
+auto_configure(mem PRIVATE)
+
+target_include_directories(mem
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+
 
 # === gfx ===
 add_library(gfx
@@ -149,6 +163,7 @@ add_library(gfx
     src/d3d12InputLayout.cpp include/d3d12InputLayout.hpp
     src/nullShader.cpp include/nullShader.hpp
     src/solidShader.cpp include/solidShader.hpp
+    src/ntShader.cpp include/ntShader.hpp
     src/inputLayoutPresets.cpp include/inputLayoutPresets.hpp
     src/d3d12InputLayoutPresets.cpp include/d3d12InputLayoutPresets.hpp
     src/model.cpp include/model.hpp
@@ -156,6 +171,7 @@ add_library(gfx
     src/camera.cpp include/camera.hpp
     src/d3d12scene.cpp include/d3d12scene.hpp
     src/coord.cpp include/coord.hpp
+    src/shaderRes.cpp include/shaderRes.hpp
     
     include/dxtarget.hpp
     include/gfxPrimitive.hpp
@@ -186,6 +202,7 @@ target_link_libraries(gfx
         assimp
         common::mu
         common::coro
+        common::mem
 )
 
 target_include_directories(gfx
