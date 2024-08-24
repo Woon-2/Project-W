@@ -14,6 +14,11 @@
 #include "assimp/matrix4x4.h"
 #endif
 
+#if defined(DXMATH_VEC_UTIL) || defined(DXMATH_MAT_UTIL) || defined(DXMATH_QUAT_UTIL)
+#include <DirectXMath.h>
+namespace dx = DirectX;
+#endif
+
 namespace mu {
 
 inline constexpr auto pi = 3.1415926f;
@@ -159,9 +164,6 @@ inline Degree operator/(Degree lhs, Degree rhs) __MathUtil_NOEXCEPT {
 #endif
 
 #ifdef DXMATH_VEC_UTIL
-#include <DirectXMath.h>
-namespace dx = DirectX;
-
 template <std::size_t D>
     requires (D >= 1 && D <= 4)
 class NVec;
