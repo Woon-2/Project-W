@@ -6,7 +6,15 @@
 
 #include "d3d12model.hpp"
 
+#include "mathUtil.hpp"
+#include "shaderRes.hpp"
+#include "drawInfo.hpp"
+
+#include "generator.hpp"
+
 #include <vector>
+#include <ranges>
+#include <span>
 
 namespace gfx {
 
@@ -22,25 +30,55 @@ namespace d3d12 {
  */
 class CameraScene : public gfx::CameraScene {
 public:
-    static constexpr std::size_t meshIdx = gfx::CameraScene::meshIdx;
-    static constexpr std::size_t worldIdx = gfx::CameraScene::worldIdx;
-    static constexpr std::size_t viewIdx = gfx::CameraScene::viewIdx;
-    static constexpr std::size_t projIdx = gfx::CameraScene::projIdx;
-    static constexpr std::size_t colorIdx = 4u;
+    enum class DIType {
+        Mesh,
+        PID,
+        PDD,
+        PFD,
+        Light,
+        Material
+    };
+
+    static constexpr std::size_t typeIdx = 0u;
+    static constexpr std::size_t meshIdx = 1u;
+    static constexpr std::size_t PIDIdx = 2u;
+    static constexpr std::size_t PDDIdx = 3u;
+    static constexpr std::size_t PFDIdx = 4u;
+    static constexpr std::size_t lightIdx = 5u;
+    static constexpr std::size_t materialIdx = 6u;
 
     CameraScene(const Camera& camera)
         : gfx::CameraScene(camera) {}
 
     Generator<DrawInfo> iteration() const override;
 
-    void addModel(const d3d12::Model& model) {
-        models_.push_back(&model);
+    void addFragment(Fragment&& fragment) {
+        fragments_.push_back(std::move(fragment));
+    }
+
+    template <std::ranges::range R>
+    void addFragments(R&& fragments) {
+        fragments_.insert(std::end(fragments_), std::begin(fragments), std::end(fragments));
+    }
+
+    void setFragments(std::vector<Fragment>&& fragments) {
+        fragments_ = std::move(fragments);
+    }
+
+    void addLight(sr::PhongLight* pLight) {
+        lights_.push_back(pLight);
+    }
+
+    void addMaterial(sr::PhongMaterial* pMaterial) {
+        materials_.push_back(pMaterial);
     }
 
 private:
-    Generator<DrawInfo> modelIteration(const d3d12::Model* pModel) const;
+    Generator<DrawInfo> fragmentIteration(const Fragment& fragment) const;
 
-    std::vector<const d3d12::Model*> models_;
+    std::vector<Fragment> fragments_;
+    std::vector<sr::PhongLight*> lights_;
+    std::vector<sr::PhongMaterial*> materials_;
 };
 
 }   // namespace d3d12
@@ -48,3 +86,5 @@ private:
 }   // namespace gfx
 
 #endif // __D3D12_SCENE_HPP
+
+// 

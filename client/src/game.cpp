@@ -64,7 +64,7 @@ void Game::render() {
     // TODO: camera_->makeScene(world);
     auto scene = gfx::d3d12::CameraScene(camera_);
     for (auto& model : models_) {
-        scene.addModel(model);
+        // scene.addModel(model);
     }
     pGfx_->render( scene, static_cast<MyGfx&>(*pGfx_).renderer(
          MyGfx::Renderer::Sample

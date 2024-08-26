@@ -5,11 +5,6 @@ namespace gfx {
 CameraScene::CameraScene(const Camera& camera)
     : view_(camera.view()), proj_(camera.proj()) {}
 
-void CameraScene::fillViewProj(DrawInfo& drawInfo) const {
-    drawInfo.set(viewIdx, &view_);
-    drawInfo.set(projIdx, &proj_);
-}
-
 void Camera::updateView() {
     auto pParent = coordSys_.parent();
 

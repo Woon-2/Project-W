@@ -172,11 +172,13 @@ add_library(gfx
     src/d3d12scene.cpp include/d3d12scene.hpp
     src/coord.cpp include/coord.hpp
     src/shaderRes.cpp include/shaderRes.hpp
+    src/drawInfo.cpp include/drawInfo.hpp
     
     include/dxtarget.hpp
     include/gfxPrimitive.hpp
     include/shaderPath.hpp
     include/enumUtil.hpp
+    include/dxMathUtil.hpp
 )
 
 add_library(common::gfx ALIAS gfx)

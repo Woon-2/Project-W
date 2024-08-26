@@ -190,6 +190,8 @@ public:
      */
     void draw(ID3D12GraphicsCommandList* pCmdList) const;
 
+    void draw(ID3D12GraphicsCommandList* pCmdList, std::uint32_t instanceCount) const;
+
 private:
     void buildRes(d3d12::Core& core, d3d12::D3D12RenderContext& ctx, const VertexBuffer& vb, const IndexCont& ib);
 

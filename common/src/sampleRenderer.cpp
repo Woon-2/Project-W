@@ -11,7 +11,7 @@ void SampleRenderer::init(ICore& core) {
         throw;  /*CoreTypeMismatch("The core type is mismatched.");*/
     }
     
-    D3D12Drawer::init(*this, static_cast<d3d12::Core&>(core));
+    drawer_.init(*this, static_cast<d3d12::Core&>(core));
 }
 
 // TODO: write the exception classes
@@ -43,7 +43,7 @@ void SampleRenderer::render(const IScene& scene, IRenderContext& renderContext, 
 
     shader.bind(pCmdList.Get(), 0);
 
-    D3D12Drawer::render(scene, pCmdList.Get(), pTarget, pDepthTarget);
+    drawer_.render(scene, pCmdList.Get(), pTarget, pDepthTarget);
 }
 
 void SampleRenderer::cleanup() {}
@@ -54,29 +54,101 @@ void SampleRenderer::D3D12Drawer::init(SampleRenderer& renderer, d3d12::Core& co
     }
 
     core.addShader(d3d12::SolidShader::shaderName(), d3d12::SolidShader(core));
+
+    resPerFrameData_ = d3d12::createUpBuf(core, static_cast<UINT>( sizeof(d3d12::sr::BasicPFD) ));
+    resPerDrawcallData_ = d3d12::createUpBuf(core, static_cast<UINT>( sizeof(d3d12::sr::BasicPDD) ));
+    resPerInstanceData_ = d3d12::createUpBuf(core, static_cast<UINT>( sizeof(d3d12::sr::BasicPID) * maxInstances ));
+    resMaterials_ = d3d12::createUpBuf(core, static_cast<UINT>( sizeof(d3d12::sr::PhongMaterial) * maxMaterials ));
+    resLights_ = d3d12::createUpBuf(core, static_cast<UINT>( sizeof(d3d12::sr::PhongLight) * maxLights ));
+
+    resPerFrameData_->Map(0, nullptr, reinterpret_cast<void**>(&pPFD_));
+    resPerDrawcallData_->Map(0, nullptr, reinterpret_cast<void**>(&pPDD_));
+    resPerInstanceData_->Map(0, nullptr, reinterpret_cast<void**>(&pPID_));
+    resMaterials_->Map(0, nullptr, reinterpret_cast<void**>(&pMats_));
+    resLights_->Map(0, nullptr, reinterpret_cast<void**>(&pLights_));
 }
 
 void SampleRenderer::D3D12Drawer::render( const IScene& scene, ID3D12GraphicsCommandList* pCmdList,
     D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle, D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle
-) {
+) const {
     pCmdList->OMSetRenderTargets(1u, &rtvHandle, true, &dsvHandle);
+    pCmdList->SetGraphicsRootShaderResourceView(0, resPerInstanceData_->GetGPUVirtualAddress());
+    pCmdList->SetGraphicsRootShaderResourceView(1, resMaterials_->GetGPUVirtualAddress());
+    pCmdList->SetGraphicsRootShaderResourceView(2, resLights_->GetGPUVirtualAddress());
+    pCmdList->SetGraphicsRootConstantBufferView(3, resPerDrawcallData_->GetGPUVirtualAddress());
+    pCmdList->SetGraphicsRootConstantBufferView(4, resPerFrameData_->GetGPUVirtualAddress());
+
+    auto lightCnt = 0u;
+    auto materialCnt = 0u;
+    const d3d12::Mesh* pMesh = nullptr;
+    auto instanceCnt = 0u;
 
     for (auto di : scene.iteration()) {
-        auto pMesh = di.get<const d3d12::Mesh*>(d3d12::CameraScene::meshIdx);
-        auto world = di.get<const mu::Mat4x4>(d3d12::CameraScene::worldIdx);
-        auto pView = di.get<const mu::Mat4x4*>(d3d12::CameraScene::viewIdx);
-        auto pProj = di.get<const mu::Mat4x4*>(d3d12::CameraScene::projIdx);
-        auto color = di.get<const mu::Vec4>(d3d12::CameraScene::colorIdx);
+        auto type = di.get<d3d12::CameraScene::DIType>(d3d12::CameraScene::typeIdx);
 
-        auto wvp = mu::transpose(world * (*pView) * (*pProj)).getXmf();
-        auto c = color.getXmf();
-        // TODO: make root parameter setting more flexible
-        pCmdList->SetGraphicsRoot32BitConstants(0, 16, &wvp, 0);
-        pCmdList->SetGraphicsRoot32BitConstants(0, 4, &c, 16);
+        switch (type) {
+        case d3d12::CameraScene::DIType::Light: {
+            auto lights = di.get<std::span<d3d12::sr::PhongLight>>(d3d12::CameraScene::lightIdx);
 
-        pCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        pMesh->bind(pCmdList);
-        pMesh->draw(pCmdList);
+            for (const auto& light : lights) {
+                pLights_[lightCnt++] = light;
+                if (lightCnt == maxLights) {
+                    break;
+                }
+            }
+            break;
+        }
+
+        case d3d12::CameraScene::DIType::Material: {
+            auto materials = di.get<std::span<d3d12::sr::PhongMaterial>>(d3d12::CameraScene::materialIdx);
+
+            for (const auto& material : materials) {
+                pMats_[materialCnt++] = material;
+                if (materialCnt == maxMaterials) {
+                    break;
+                }
+            }
+            break;
+        }
+
+        case d3d12::CameraScene::DIType::Mesh: {
+            pMesh = di.get<const d3d12::Mesh*>(d3d12::CameraScene::meshIdx);
+            pMesh->bind(pCmdList);
+            break;
+        }
+
+        case d3d12::CameraScene::DIType::PID: {
+            auto pids = di.get<std::span<d3d12::sr::BasicPID>>(d3d12::CameraScene::PIDIdx);
+
+            for (const auto& pid : pids) {
+                pPID_[instanceCnt++] = pid;
+                if (instanceCnt == maxInstances) {
+                    break;
+                }
+            }
+            break;
+        }
+
+        case d3d12::CameraScene::DIType::PFD: {
+            auto pfd = di.get<d3d12::sr::BasicPFD>(d3d12::CameraScene::PFDIdx);
+
+            *pPFD_ = pfd;
+            break;
+        }
+
+        case d3d12::CameraScene::DIType::PDD: {
+            auto pdd = di.get<d3d12::sr::BasicPDD>(d3d12::CameraScene::PDDIdx);
+
+            *pPDD_ = pdd;
+            pPFD_->lightCnt = lightCnt;
+
+            pMesh->draw(pCmdList, instanceCnt);
+            break;
+        }
+
+        default:
+            throw std::runtime_error("Invalid DrawInfo type.");
+        };
     }
 }
 

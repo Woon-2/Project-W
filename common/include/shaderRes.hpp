@@ -15,8 +15,8 @@ namespace d3d12 {
 namespace sr {
 
 struct BasicPFD {
-    dx::XMFLOAT4 gcGlobalAmbientLight;
-    std::uint32_t gLightCnt;
+    dx::XMFLOAT4 globalAmbientLight;
+    std::uint32_t lightCnt;
     dx::XMFLOAT3 padding;
 };
 
@@ -29,7 +29,7 @@ struct BasicPID {
 };
 
 struct BasicPDD {
-    std::uint32_t gInstanceIndex;
+    std::uint32_t instanceIndex;
     std::uint32_t padding[3];
 };
 

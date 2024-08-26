@@ -48,14 +48,12 @@ public:
     CameraScene(const class Camera& camera);
 
 protected:
-    /**
-     * @brief Fills the view and projection matrices in the DrawInfo.
-     * @param drawInfo The reference of the DrawInfo to fill the view and projection matrices.
-     * @details It fills the view matrix in the CameraScene::viewIdx and the projection matrix in the CameraScene::projIdx of the DrawInfo.
-     * @note It's recommended to call this function in the IScene::iteration function of the derived class.
-     * @see Camera IScene::iteration
-     */
-    void fillViewProj(DrawInfo& drawInfo) const;
+    mu::Mat4x4 MU_CALLCONV view() const {
+        return view_;
+    }
+    mu::Mat4x4 MU_CALLCONV proj() const {
+        return proj_;
+    }
 
 private:
     mu::Mat4x4 view_;
