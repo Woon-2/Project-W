@@ -194,7 +194,11 @@ public:
      * @details It waits for the reaching of the current fence.
      * @throws DXException When the fence signal or event on completion fails.
      */
-    void waitForGpu();
+    void waitGpu();
+
+    void waitGpu(std::size_t fenceIdx);
+    void signalGpu(std::size_t fenceIdx);
+
     /**
      * @brief Alters the fence.
      * @details It just alters the fence index to next one and doesn't block the caller thread.    
@@ -783,7 +787,7 @@ std::any Window<Traits>::cast(RenderTargetType rentarType) {
     switch (rentarType) {
     case RenderTargetType::D3D12:
         return D3D12_CPU_DESCRIPTOR_HANDLE{
-            .ptr = pFirstRtv_.ptr + this->pSwapChain_->GetCurrentBackBufferIndex() * rtvStride_
+            .ptr = pFirstRtv_.ptr + this->chosenBackBufIdx() * rtvStride_
         };   
     case RenderTargetType::D3D12_DEPTH:
         return pFirstDsv_;
@@ -798,7 +802,7 @@ void Window<Traits>::clear(IRenderContext& renderContext) {
         renderContext.cast(RenderContextType::D3D12)
     );
 
-    auto bufIdx = this->pSwapChain_->GetCurrentBackBufferIndex();
+    auto bufIdx = this->chosenBackBufIdx();
     auto pRtv = D3D12_CPU_DESCRIPTOR_HANDLE{
         .ptr = pFirstRtv_.ptr + bufIdx * rtvStride_
     };
@@ -824,7 +828,7 @@ void Window<Traits>::preRender(IRenderContext& renderContext) {
         .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
         .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
         .Transition = D3D12_RESOURCE_TRANSITION_BARRIER{
-            .pResource = backBuffers_[this->pSwapChain_->GetCurrentBackBufferIndex()].Get(),
+            .pResource = backBuffers_[this->chosenBackBufIdx()].Get(),
             .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
             .StateBefore = D3D12_RESOURCE_STATE_PRESENT,
             .StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET
@@ -868,7 +872,7 @@ void Window<Traits>::postRender(IRenderContext& renderContext) {
         .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
         .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
         .Transition = D3D12_RESOURCE_TRANSITION_BARRIER{
-            .pResource = backBuffers_[this->pSwapChain_->GetCurrentBackBufferIndex()].Get(),
+            .pResource = backBuffers_[this->chosenBackBufIdx()].Get(),
             .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
             .StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET,
             .StateAfter = D3D12_RESOURCE_STATE_PRESENT

@@ -20,7 +20,8 @@ Game::Game(gfx::ICore& gfx, MyWindow& wnd, ic::Mouse& mouse, ic::Keyboard& keybo
         .fov = 90.f, .aspect = wnd.client().width / static_cast<float>(wnd.client().height),
         .near = 0.1f, .far = 1000.f
     }), models_(), inputSystem_(keyboard), pGfx_(&gfx), pWnd_(&wnd),
-    pMouse_(&mouse), lockFPS_(defLockFPS), player_() {
+    pMouse_(&mouse), renderFunc_(&Game::initialRender), lockFPS_(defLockFPS), player_(),
+    curFenceIdx_(0), prevFenceIdx_(1u) {
     setupWndMsgHandlers();
     loadAssets();
     setupCamera();
@@ -49,6 +50,10 @@ void Game::update() {
 }
 
 void Game::render() {
+    (this->*renderFunc_)();
+}
+
+void Game::initialRender() {
     const auto expectedFrameTime = 1. / lockFPS_;
 
     // skip rendering if the frame time is too long
@@ -58,6 +63,7 @@ void Game::render() {
 
     auto pRenderContext = pGfx_->createContext();
     pGfx_->preRender();
+    pWnd_->chooseBackBufIdx(curFenceIdx_);
     pWnd_->preRender(*pRenderContext);
     pWnd_->clear(*pRenderContext);
 
@@ -73,10 +79,44 @@ void Game::render() {
     pGfx_->postRender();
 
     auto pd3d12Gfx_ = static_cast<gfx::d3d12::Core*>(pGfx_);
-    pd3d12Gfx_->waitForGpu();
+    pd3d12Gfx_->signalGpu(curFenceIdx_);
+    std::swap(curFenceIdx_, prevFenceIdx_);
+
+    renderFunc_ = &Game::regularRender;
+}
+
+void Game::regularRender() {
+    const auto expectedFrameTime = 1. / lockFPS_;
+
+    // skip rendering if the frame time is too long
+    if (timer_.GetDT() > expectedFrameTime * 2.) {
+        return;
+    }
+
+    auto pRenderContext = pGfx_->createContext();
+    pGfx_->preRender();
+    pWnd_->chooseBackBufIdx(curFenceIdx_);
+    pWnd_->preRender(*pRenderContext);
+    pWnd_->clear(*pRenderContext);
+
+    // TODO: camera_->makeScene(world);
+    auto scene = gfx::d3d12::CameraScene(camera_);
+    for (auto& model : models_) {
+        // scene.addModel(model);
+    }
+    pGfx_->render( scene, static_cast<MyGfx&>(*pGfx_).renderer(
+         MyGfx::Renderer::Sample
+    ), *pWnd_ );
+    pWnd_->postRender(*pRenderContext);
+    pGfx_->postRender();
+
+    auto pd3d12Gfx_ = static_cast<gfx::d3d12::Core*>(pGfx_);
+    pd3d12Gfx_->signalGpu(curFenceIdx_);
+    pd3d12Gfx_->waitGpu(prevFenceIdx_);
+
     pWnd_->present();
-    pd3d12Gfx_->alterFence();
-    pd3d12Gfx_->waitForGpu();
+
+    std::swap(curFenceIdx_, prevFenceIdx_);
 }
 
 void Game::processInput() {
@@ -160,7 +200,7 @@ void Game::loadAssets() {
     );
 
     pGfx_->postRender();
-    pd3d12Gfx->waitForGpu();
+    pd3d12Gfx->waitGpu();
 
     for (auto& model : models_) {
         model.completeInit(*pd3d12Gfx);

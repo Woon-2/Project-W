@@ -134,7 +134,7 @@ void Core::postRender() {
     DX_THROW_FAILED_VOID( pCmdQ_->ExecuteCommandLists(1, ppCmdLists) );
 }
 
-void Core::waitForGpu() {
+void Core::waitGpu() {
     ++fenceValues_[fenceIdx_];
     DX_THROW_FAILED( pCmdQ_->Signal(pFence_.Get(), fenceValues_[fenceIdx_]) );
 
@@ -142,6 +142,30 @@ void Core::waitForGpu() {
         DX_THROW_FAILED( pFence_->SetEventOnCompletion(fenceValues_[fenceIdx_], fenceEvent_) );
         WaitForSingleObject(fenceEvent_, INFINITE);
     }
+}
+
+void Core::waitGpu(std::size_t fenceIdx) {
+    if (fenceIdx >= fenceValues_.size()) {
+        throw GFX_EXCEPT("The given fence index \""s + std::to_string(fenceIdx) + "\" is out of range.\n"s
+            "The valid range of the fence index is from 0 to "s + std::to_string(fenceValues_.size() - 1) + ".\n"s
+        );
+    }
+
+    if (pFence_->GetCompletedValue() < fenceValues_[fenceIdx]) {
+        DX_THROW_FAILED( pFence_->SetEventOnCompletion(fenceValues_[fenceIdx], fenceEvent_) );
+        WaitForSingleObject(fenceEvent_, INFINITE);
+    }
+}
+
+void Core::signalGpu(std::size_t fenceIdx) {
+    if (fenceIdx >= fenceValues_.size()) {
+        throw GFX_EXCEPT("The given fence index \""s + std::to_string(fenceIdx) + "\" is out of range.\n"s
+            "The valid range of the fence index is from 0 to "s + std::to_string(fenceValues_.size() - 1) + ".\n"s
+        );
+    }
+
+    ++fenceValues_[fenceIdx];
+    DX_THROW_FAILED( pCmdQ_->Signal(pFence_.Get(), fenceValues_[fenceIdx]) );
 }
 
 void Core::alterFence() NOEXCEPT {

@@ -22,11 +22,13 @@ class Game {
 public:
     static constexpr auto defLockFPS = 144.;
     using MyWindow = gfx::d3d12::Window<gfx::d3d12::BasicD3D12WTraits<char>>;
+    using RenderFunc = void (Game::*)();
 
     Game()
         : timer_(), baseCoordSys_(), camera_(baseCoordSys_),
         models_(), inputSystem_(), pGfx_(), pWnd_(), pMouse_(),
-        lockFPS_(defLockFPS), player_() {}
+        renderFunc_(&Game::initialRender), lockFPS_(defLockFPS), player_(),
+        curFenceIdx_(0), prevFenceIdx_(1u) {}
     
     Game(gfx::ICore& gfx, MyWindow& wnd, ic::Mouse& mouse, ic::Keyboard& keyboard);
 
@@ -41,6 +43,8 @@ private:
     void loadAssets();
     void setupCamera();
     void initECS();
+    void initialRender();
+    void regularRender();
 
     Timer timer_;
     gfx::coord::System baseCoordSys_;
@@ -50,8 +54,11 @@ private:
     gfx::ICore* pGfx_;
     MyWindow* pWnd_;
     ic::Mouse* pMouse_;
+    RenderFunc renderFunc_;
     double lockFPS_;
     Player player_;
+    std::size_t curFenceIdx_;
+    std::size_t prevFenceIdx_;
 };
 
 #endif // __GAME_HPP

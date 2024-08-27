@@ -102,7 +102,7 @@ Generator<DrawInfo> CameraScene::fragmentIteration(const Fragment& fragment) con
         .instanceIndex = baseInstIdx
     } );
     
-    baseInstIdx += fragment.worlds.size();
+    baseInstIdx += static_cast<std::uint32_t>( fragment.worlds.size() );
 
     co_yield std::move(pddInfo);
 }

@@ -8,6 +8,7 @@
 
 #include <string>
 #include <string_view>
+#include <optional>
 
 #include "config.hpp"
 
@@ -239,9 +240,25 @@ public:
         fullScreen_ = false;
     }
 
+    void chooseBackBufIdx(std::size_t idx) NOEXCEPT {
+        chosenBackBufIdx_ = idx;
+    }
+
+    void resetChosenBackBufIdx() NOEXCEPT {
+        chosenBackBufIdx_.reset();
+    }
+
+    std::size_t chosenBackBufIdx() const NOEXCEPT {
+        return chosenBackBufIdx_.value_or(
+            pSwapChain_->GetCurrentBackBufferIndex()
+        );
+    }
+
 private:
     virtual void preResizeBuffers(ICore& core) = 0;
     virtual void postResizeBuffers(ICore& core) = 0;
+
+    std::optional< std::size_t > chosenBackBufIdx_;
 };
 
 /**
