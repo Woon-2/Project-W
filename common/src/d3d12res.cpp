@@ -110,12 +110,31 @@ wrl::ComPtr<ID3D12Resource> createDefBuf( Core& core, D3D12RenderContext& ctx,
     return ret;
 }
 
-
 wrl::ComPtr<ID3D12Resource> createDefBuf( Core& core, D3D12RenderContext& ctx, const void* pData,
     UINT bytes, D3D12_RESOURCE_STATES state, wrl::ComPtr<ID3D12Resource>& pUploadBuf
 ) {
     pUploadBuf = createUpBuf(core, pData, bytes);
     return createDefBuf(core, ctx, pUploadBuf.Get(), state);
+}
+
+GpuMappedRes::GpuMappedRes(Core& core, UINT bytes, std::size_t duplicateCnt)
+    : datas_() {
+    for (std::size_t i = 0; i < duplicateCnt; ++i) {
+        MyPair pair;
+        pair.pRes = createUpBuf(core, bytes);
+        pair.pRes->Map(0, nullptr, &pair.pData);
+        datas_.push_back(std::move(pair));
+    }
+}
+
+GpuMappedRes::GpuMappedRes(Core& core, const void* pData, UINT bytes, std::size_t duplicateCnt)
+    : datas_() {
+    for (std::size_t i = 0; i < duplicateCnt; ++i) {
+        MyPair pair;
+        pair.pRes = createUpBuf(core, pData, bytes);
+        pair.pRes->Map(0, nullptr, &pair.pData);
+        datas_.push_back(std::move(pair));
+    }
 }
 
 }   // namespace d3d12

@@ -3,6 +3,9 @@
 
 #include "d3d12core.hpp"
 
+#include <vector>
+#include <cstdlib>
+
 namespace gfx {
 
 namespace d3d12 {
@@ -97,6 +100,36 @@ wrl::ComPtr<ID3D12Resource> createDefBuf(Core& core, D3D12RenderContext& ctx, ID
  * @see createUpBuf
  */
 wrl::ComPtr<ID3D12Resource> createDefBuf(Core& core, D3D12RenderContext& ctx, const void* pData, UINT bytes, D3D12_RESOURCE_STATES state, wrl::ComPtr<ID3D12Resource>& pUploadBuf);
+
+class GpuMappedRes {
+private:
+    struct MyPair {
+        wrl::ComPtr<ID3D12Resource> pRes;
+        void* pData; 
+    };
+
+public:
+    GpuMappedRes(Core& core, UINT bytes, std::size_t duplicateCnt = 1);
+    GpuMappedRes(Core& core, const void* pData, UINT bytes, std::size_t duplicateCnt = 1);
+
+    template <std::ranges::contiguous_range R>
+        requires std::ranges::sized_range<R>
+    GpuMappedRes(Core& core, const R& data, std::size_t duplicateCnt = 1)
+        : GpuMappedRes(core, std::data(data), std::size(data)
+            * sizeof(std::ranges::range_value_t<R>), duplicateCnt
+        ) {}
+
+    const D3D12_GPU_VIRTUAL_ADDRESS gpuAddress(std::size_t idx = 0) const {
+        return datas_[idx].pRes->GetGPUVirtualAddress();
+    }
+
+    void upload(Core& core, const void* pData, UINT bytes, std::size_t idx = 0) {
+        std::memcpy(datas_[idx].pData, pData, bytes);
+    }
+
+private:
+    std::vector<MyPair> datas_;
+};
 
 }   // namespace d3d12
 
