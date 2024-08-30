@@ -173,6 +173,7 @@ add_library(gfx
     src/coord.cpp include/coord.hpp
     src/shaderRes.cpp include/shaderRes.hpp
     src/drawInfo.cpp include/drawInfo.hpp
+    src/renderProtocol.cpp include/renderProtocol.hpp
     
     include/dxtarget.hpp
     include/gfxPrimitive.hpp

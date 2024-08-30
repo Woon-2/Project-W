@@ -23,6 +23,10 @@ public:
 
     Generator<DrawInfo> iteration() const override;
 
+    rp::Protocol protocol() const override {
+        return rp::Protocol::SomeProtocol;
+    }
+
 private:
     static Generator<DrawInfo> modelIteration(const d3d12::Model* pModel);
 

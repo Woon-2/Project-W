@@ -43,7 +43,21 @@ void SampleRenderer::render(const IScene& scene, IRenderContext& renderContext, 
 
     shader.bind(pCmdList.Get(), 0);
 
-    drawer_.render(scene, pCmdList.Get(), pTarget, pDepthTarget);
+    // æ¿¿Ã∂˚ «¡∑Œ≈‰ƒ› ∫Ò±≥
+    assert(static_cast<const d3d12::CameraScene&>(scene).protocol() == protocol_);
+
+    switch (protocol_)
+    {
+    case gfx::rp::Protocol::PhongInstancingNT:
+        drawer_.phongInstancingNT(scene, pCmdList.Get(), pTarget, pDepthTarget);
+        break;
+
+    case gfx::rp::Protocol::SomeProtocol:
+        break;
+    default:
+
+        break;
+    }
 }
 
 void SampleRenderer::cleanup() {}
@@ -68,9 +82,12 @@ void SampleRenderer::D3D12Drawer::init(SampleRenderer& renderer, d3d12::Core& co
     resLights_->Map(0, nullptr, reinterpret_cast<void**>(&pLights_));
 }
 
-void SampleRenderer::D3D12Drawer::render( const IScene& scene, ID3D12GraphicsCommandList* pCmdList,
+void SampleRenderer::D3D12Drawer::phongInstancingNT( const IScene& scene, ID3D12GraphicsCommandList* pCmdList,
     D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle, D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle
 ) const {
+    // æ¿¿Ã∂˚ «¡∑Œ≈‰ƒ› ∫Ò±≥
+    assert(static_cast<const d3d12::CameraScene&>(scene).protocol() == protocol_);
+
     pCmdList->OMSetRenderTargets(1u, &rtvHandle, true, &dsvHandle);
     pCmdList->SetGraphicsRootShaderResourceView(0, resPerInstanceData_->GetGPUVirtualAddress());
     pCmdList->SetGraphicsRootShaderResourceView(1, resMaterials_->GetGPUVirtualAddress());
@@ -84,11 +101,11 @@ void SampleRenderer::D3D12Drawer::render( const IScene& scene, ID3D12GraphicsCom
     auto instanceCnt = 0u;
 
     for (auto di : scene.iteration()) {
-        auto type = di.get<d3d12::CameraScene::DIType>(d3d12::CameraScene::typeIdx);
+        auto type = di.get<rp::DIType>(rp::PhongInstancingNT::typeIdx);
 
         switch (type) {
-        case d3d12::CameraScene::DIType::Light: {
-            auto lights = di.get<std::span<d3d12::sr::PhongLight>>(d3d12::CameraScene::lightIdx);
+        case rp::DIType::Light: {
+            auto lights = di.get<std::span<rp::PhongInstancingNT::LightType>>(rp::PhongInstancingNT::lightIdx);
 
             for (const auto& light : lights) {
                 pLights_[lightCnt++] = light;
@@ -99,8 +116,8 @@ void SampleRenderer::D3D12Drawer::render( const IScene& scene, ID3D12GraphicsCom
             break;
         }
 
-        case d3d12::CameraScene::DIType::Material: {
-            auto materials = di.get<std::span<d3d12::sr::PhongMaterial>>(d3d12::CameraScene::materialIdx);
+        case rp::DIType::Material: {
+            auto materials = di.get<std::span<rp::PhongInstancingNT::MaterialType>>(rp::PhongInstancingNT::materialIdx);
 
             for (const auto& material : materials) {
                 pMats_[materialCnt++] = material;
@@ -111,14 +128,14 @@ void SampleRenderer::D3D12Drawer::render( const IScene& scene, ID3D12GraphicsCom
             break;
         }
 
-        case d3d12::CameraScene::DIType::Mesh: {
-            pMesh = di.get<const d3d12::Mesh*>(d3d12::CameraScene::meshIdx);
+        case rp::DIType::Mesh: {
+            pMesh = di.get<const d3d12::Mesh*>(rp::PhongInstancingNT::meshIdx);
             pMesh->bind(pCmdList);
             break;
         }
 
-        case d3d12::CameraScene::DIType::PID: {
-            auto pids = di.get<std::span<d3d12::sr::BasicPID>>(d3d12::CameraScene::PIDIdx);
+        case rp::DIType::PID: {
+            auto pids = di.get<std::span<rp::PhongInstancingNT::PIDType>>(rp::PhongInstancingNT::PDDIdx);
 
             for (const auto& pid : pids) {
                 pPID_[instanceCnt++] = pid;
@@ -129,15 +146,15 @@ void SampleRenderer::D3D12Drawer::render( const IScene& scene, ID3D12GraphicsCom
             break;
         }
 
-        case d3d12::CameraScene::DIType::PFD: {
-            auto pfd = di.get<d3d12::sr::BasicPFD>(d3d12::CameraScene::PFDIdx);
+        case rp::DIType::PFD: {
+            auto pfd = di.get<rp::PhongInstancingNT::PFDType>(rp::PhongInstancingNT::PFDIdx);
 
             *pPFD_ = pfd;
             break;
         }
 
-        case d3d12::CameraScene::DIType::PDD: {
-            auto pdd = di.get<d3d12::sr::BasicPDD>(d3d12::CameraScene::PDDIdx);
+        case rp::DIType::PDD: {
+            auto pdd = di.get<rp::PhongInstancingNT::PDDType>(rp::PhongInstancingNT::PDDIdx);
 
             *pPDD_ = pdd;
             pPFD_->lightCnt = lightCnt;
