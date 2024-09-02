@@ -49,7 +49,7 @@ template <std::ranges::contiguous_range R>
 wrl::ComPtr<ID3D12Resource> createDefBuf( Core& core, D3D12RenderContext& ctx, const R& data,
     D3D12_RESOURCE_STATES state, wrl::ComPtr<ID3D12Resource>& pUploadBuf
 ) {
-    return createDefBuf( core, ctx, std::data(data), static_cast<UINT>( std::size(data)
+    return createDefBuf( core, ctx, std::data(data), static_cast<UINT64>( std::size(data)
         * sizeof(std::ranges::range_value_t<R>) ), state, pUploadBuf
     );
 }
@@ -60,7 +60,7 @@ wrl::ComPtr<ID3D12Resource> createDefBuf( Core& core, D3D12RenderContext& ctx, c
  * @details It creates the buffer with `CreateCommittedResource` function. and the state of the buffer is `D3D12_RESOURCE_STATE_GENERIC_READ`.
  * @see createDefBuf
  */
-wrl::ComPtr<ID3D12Resource> createUpBuf(Core& core, UINT bytes);
+wrl::ComPtr<ID3D12Resource> createUpBuf(Core& core, UINT64 bytes);
 /**
  * @brief Creates a upload buffer which can upload data from the cpu to the gpu in D3D12, with initial data.
  * @param core The D3D12 core object.
@@ -70,7 +70,8 @@ wrl::ComPtr<ID3D12Resource> createUpBuf(Core& core, UINT bytes);
  * The initial data is copied to the buffer with `ID3D12Resource::Map` and `ID3D12Resource::Unmap`.
  * @see createUpBuf
  */
-wrl::ComPtr<ID3D12Resource> createUpBuf(Core& core, const void* pData, UINT bytes);
+wrl::ComPtr<ID3D12Resource> createUpBuf(Core& core, const void* pData, UINT64 bytes);
+wrl::ComPtr<ID3D12Resource> createDefBuf(Core& core, UINT64 bytes, D3D12_RESOURCE_STATES state);
 /**
  * @brief Creates a default buffer which can be read and written by the gpu in D3D12, copying the initial data from the source buffer.
  * @param core The D3D12 core object.
@@ -83,6 +84,7 @@ wrl::ComPtr<ID3D12Resource> createUpBuf(Core& core, const void* pData, UINT byte
  * @see createUpBuf
  */
 wrl::ComPtr<ID3D12Resource> createDefBuf(Core& core, D3D12RenderContext& ctx, ID3D12Resource* pSrcBuf, D3D12_RESOURCE_STATES state);
+wrl::ComPtr<ID3D12Resource> createDefBuf(Core& core, D3D12RenderContext& ctx, ID3D12Resource* pSrcBuf, UINT64 offset, UINT64 bytes, D3D12_RESOURCE_STATES state);
 /**
  * @brief Creates a default buffer which can be read and written by the gpu in D3D12.
  * @param core The D3D12 core object.
@@ -99,7 +101,7 @@ wrl::ComPtr<ID3D12Resource> createDefBuf(Core& core, D3D12RenderContext& ctx, ID
  * the default buffer doesn't reach the specified state and have valid data until the command list is executed.
  * @see createUpBuf
  */
-wrl::ComPtr<ID3D12Resource> createDefBuf(Core& core, D3D12RenderContext& ctx, const void* pData, UINT bytes, D3D12_RESOURCE_STATES state, wrl::ComPtr<ID3D12Resource>& pUploadBuf);
+wrl::ComPtr<ID3D12Resource> createDefBuf(Core& core, D3D12RenderContext& ctx, const void* pData, UINT64 bytes, D3D12_RESOURCE_STATES state, wrl::ComPtr<ID3D12Resource>& pUploadBuf);
 
 class GpuMappedRes {
 private:
@@ -109,8 +111,8 @@ private:
     };
 
 public:
-    GpuMappedRes(Core& core, UINT bytes, std::size_t duplicateCnt = 1);
-    GpuMappedRes(Core& core, const void* pData, UINT bytes, std::size_t duplicateCnt = 1);
+    GpuMappedRes(Core& core, UINT64 bytes, std::size_t duplicateCnt = 1);
+    GpuMappedRes(Core& core, const void* pData, UINT64 bytes, std::size_t duplicateCnt = 1);
 
     template <std::ranges::contiguous_range R>
         requires std::ranges::sized_range<R>
