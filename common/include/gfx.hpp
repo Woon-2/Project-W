@@ -178,6 +178,9 @@ public:
      * @see RenderContextType
      */
     virtual std::any cast(RenderContextType contextType) = 0;
+
+    virtual void preRender() {}
+    virtual void postRender() {}
 };
 
 /**

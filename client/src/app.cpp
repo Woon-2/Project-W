@@ -19,7 +19,7 @@ int App::run() {
     gfx::DXInfoQueue::init();
     gfx::DXFactory::init();
 
-    gfx::d3d12::Core::configRtvHeapSize(2);
+    gfx::d3d12::Core::configRtvHeapSize(3);
     gfx::d3d12::Core::configDsvHeapSize(1);
     gfx::d3d12::Core::configDXFactory(gfx::DXFactory::get());
 
@@ -28,7 +28,7 @@ int App::run() {
 
     gfx::DXFactory::cleanup();
 
-    window_.open(static_cast<gfx::d3d12::Core&>(*pGfx_), Win32::WndFrame{ 0, 0, 1920, 1080 });
+    window_.open(static_cast<gfx::d3d12::Core&>(*pGfx_), Win32::WndFrame{ 0, 0, 1920, 1080 }, 3u);
     window_.setTitle("project-W client");
     window_.show(SW_SHOW);
 

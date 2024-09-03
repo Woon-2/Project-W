@@ -63,7 +63,7 @@ void Game::initialRender() {
 
     auto pRenderContext = pGfx_->createContext();
     pGfx_->preRender();
-    pWnd_->chooseBackBufIdx(curFenceIdx_);
+    pRenderContext->preRender();
     pWnd_->preRender(*pRenderContext);
     pWnd_->clear(*pRenderContext);
 
@@ -72,10 +72,11 @@ void Game::initialRender() {
     for (auto& model : models_) {
         // scene.addModel(model);
     }
-    pGfx_->render( scene, static_cast<MyGfx&>(*pGfx_).renderer(
-         MyGfx::Renderer::Sample
-    ), *pWnd_ );
+    // pGfx_->render( scene, static_cast<MyGfx&>(*pGfx_).renderer(
+    //      MyGfx::Renderer::Sample
+    // ), *pWnd_ );
     pWnd_->postRender(*pRenderContext);
+    pRenderContext->postRender();
     pGfx_->postRender();
 
     auto pd3d12Gfx_ = static_cast<gfx::d3d12::Core*>(pGfx_);
@@ -95,7 +96,7 @@ void Game::regularRender() {
 
     auto pRenderContext = pGfx_->createContext();
     pGfx_->preRender();
-    pWnd_->chooseBackBufIdx(curFenceIdx_);
+    pRenderContext->preRender();
     pWnd_->preRender(*pRenderContext);
     pWnd_->clear(*pRenderContext);
 
@@ -104,10 +105,11 @@ void Game::regularRender() {
     for (auto& model : models_) {
         // scene.addModel(model);
     }
-    pGfx_->render( scene, static_cast<MyGfx&>(*pGfx_).renderer(
-         MyGfx::Renderer::Sample
-    ), *pWnd_ );
+    // pGfx_->render( scene, static_cast<MyGfx&>(*pGfx_).renderer(
+    //      MyGfx::Renderer::Sample
+    // ), *pWnd_ );
     pWnd_->postRender(*pRenderContext);
+    pRenderContext->postRender();
     pGfx_->postRender();
 
     auto pd3d12Gfx_ = static_cast<gfx::d3d12::Core*>(pGfx_);
@@ -181,6 +183,7 @@ void Game::loadAssets() {
     auto pd3d12Ctx = static_cast<gfx::d3d12::D3D12RenderContext*>(pCtx.get());
 
     pGfx_->preRender();
+    pCtx->preRender();
 
     auto mod = gfx::loadModel( resourcePath / "models" / "AC Cobra" / "Shelby.fbx",
         pd3d12Gfx->inputLayout(gfx::d3d12::inputLayoutName(gfx::InputLayoutPreset::Pos3))
@@ -199,6 +202,7 @@ void Game::loadAssets() {
         ), "box_vb", "box_ib"
     );
 
+    pCtx->postRender();
     pGfx_->postRender();
     pd3d12Gfx->waitGpu();
 

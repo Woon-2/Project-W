@@ -8,7 +8,6 @@
 
 #include <string>
 #include <string_view>
-#include <optional>
 
 #include "config.hpp"
 
@@ -50,7 +49,7 @@ public:
     using MyBase::defWndName;
     using MyBase::defWndFrame;
 
-    static constexpr std::size_t defBackBufCnt = 2u;
+    static constexpr std::size_t defBackBufCnt = 3u;
 
     /**
      * @brief Opens the window with the default window name which specified in Win32::Window::defWndName     
@@ -240,25 +239,9 @@ public:
         fullScreen_ = false;
     }
 
-    void chooseBackBufIdx(std::size_t idx) NOEXCEPT {
-        chosenBackBufIdx_ = idx;
-    }
-
-    void resetChosenBackBufIdx() NOEXCEPT {
-        chosenBackBufIdx_.reset();
-    }
-
-    std::size_t chosenBackBufIdx() const NOEXCEPT {
-        return chosenBackBufIdx_.value_or(
-            pSwapChain_->GetCurrentBackBufferIndex()
-        );
-    }
-
 private:
     virtual void preResizeBuffers(ICore& core) = 0;
     virtual void postResizeBuffers(ICore& core) = 0;
-
-    std::optional< std::size_t > chosenBackBufIdx_;
 };
 
 /**

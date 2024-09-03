@@ -16,6 +16,7 @@
 #include <array>
 #include <map>
 #include <string>
+#include <list>
 
 #define ENABLE_D3D12_WINDOW
 
@@ -40,6 +41,37 @@ using namespace std::literals;
  * @see gfx
  */
 namespace d3d12 {
+
+class CmdListPool {
+public:
+    struct Element {
+        wrl::ComPtr<ID3D12GraphicsCommandList> pCmdList;
+        wrl::ComPtr<ID3D12CommandAllocator> pCmdAlloc;
+    };
+
+    CmdListPool() = default;
+    CmdListPool(ID3D12Device* pDevice, D3D12_COMMAND_LIST_TYPE type, std::size_t size);
+    const Element fetch();
+
+    void push(Element&& elem) {
+        cmdLists_.push_back(std::move(elem.pCmdList));
+        cmdAllocs_.push_back(std::move(elem.pCmdAlloc));
+    }
+
+    void push(const Element& elem) {
+        cmdLists_.push_back(elem.pCmdList);
+        cmdAllocs_.push_back(elem.pCmdAlloc);
+    }
+
+    void clear() {
+        cmdLists_.clear();
+        cmdAllocs_.clear();
+    }
+
+private:
+    std::list<wrl::ComPtr<ID3D12GraphicsCommandList>> cmdLists_;
+    std::list<wrl::ComPtr<ID3D12CommandAllocator>> cmdAllocs_;
+};
 
 /**
  * @brief The core class for the D3D12 implementation of the GFX library.     
@@ -406,12 +438,20 @@ private:
     // TODO: make it return multiple adapters enumerated.
     wrl::ComPtr<IDXGIAdapter1> enumAdapters();
     void createDevice(IDXGIAdapter1* pAdapter);
-    void createCommandQueueAndList(ID3D12Device* pDevice);
+    void createCommandQueueAndLists(ID3D12Device* pDevice);
     void buildRtvAndDsvHeaps(ID3D12Device* pDevice);
     void createFenceAndEvent(ID3D12Device* pDevice);
 
-    wrl::ComPtr<ID3D12GraphicsCommandList> cmdList() NOEXCEPT {
-        return pCmdList_;
+    const CmdListPool::Element fetchCmdList() {
+        return gfxCmdListPool_.fetch();
+    }
+
+    void pushCmdList(CmdListPool::Element elem) {
+        gfxCmdListPool_.push(std::move(elem));
+    }
+
+    wrl::ComPtr<ID3D12CommandQueue> cmdQ() const NOEXCEPT {
+        return pCmdQ_;
     }
 
     static wrl::ComPtr<IDXGIFactory4> spFactory;
@@ -422,10 +462,9 @@ private:
     std::map<UpBufIdx, wrl::ComPtr<ID3D12Resource>> upBufs_;
     std::map<ShaderIdx, Shader> shaders_;
     std::map<InputLayoutIdx, InputLayout> inputLayouts_;
+    CmdListPool gfxCmdListPool_;
     wrl::ComPtr<ID3D12Device> pDevice_;
     wrl::ComPtr<ID3D12CommandQueue> pCmdQ_;
-    wrl::ComPtr<ID3D12CommandAllocator> pCmdAlloc_;
-    wrl::ComPtr<ID3D12GraphicsCommandList> pCmdList_;
     wrl::ComPtr<ID3D12DescriptorHeap> pRtvHeap_;
     wrl::ComPtr<ID3D12DescriptorHeap> pDsvHeap_;
     wrl::ComPtr<ID3D12Fence> pFence_;
@@ -444,7 +483,15 @@ private:
 class D3D12RenderContext : public IRenderContext {
 public:
     D3D12RenderContext(Core& core)
-        : pCore_(&core) {}
+        : pCore_(&core), pCmdList_(), pCmdAlloc_(), pCmdQ_(core.cmdQ()) {
+        auto pair = core.fetchCmdList();
+        pCmdList_ = std::move(pair.pCmdList);
+        pCmdAlloc_ = std::move(pair.pCmdAlloc);
+    }
+
+    ~D3D12RenderContext() {
+        pCore_->pushCmdList({ std::move(pCmdList_), std::move(pCmdAlloc_) });
+    }
 
     /**
      * @brief Check if the render context is castable to the given context type.
@@ -474,8 +521,14 @@ public:
         return pCore_->shader(idx);
     }
 
+    void preRender() override;
+    void postRender() override;
+
 private:
     Core* pCore_;
+    wrl::ComPtr<ID3D12GraphicsCommandList> pCmdList_;
+    wrl::ComPtr<ID3D12CommandAllocator> pCmdAlloc_;
+    wrl::ComPtr<ID3D12CommandQueue> pCmdQ_;
 };
 
 #ifdef ENABLE_D3D12_WINDOW
@@ -560,6 +613,8 @@ public:
     template <Win32::Win32Char T>
     friend struct BasicD3D12WTraits;
 
+    static const std::array<float, 4> clearColor;
+
     using MyBase = D3DWindow<Traits>;
     using MyChar = typename Traits::MyChar;
     using MyString = typename Traits::MyString;
@@ -569,8 +624,9 @@ public:
     using MyBase::defWndFrame;
 
     Window()
-        : backBuffers_(), depthBuffers_(1), pFirstRtv_(), pFirstDsv_(),
-        rtvStride_(0), dsvStride_(0) {}
+        : backBuffers_(), offscreenBuffers_(), depthBuffers_(1),
+        postRenderFunc_(&Window<Traits>::initialPostRender), pFirstRtv_(), pFirstDsv_(),
+        rtvIdx_(0), rtvStride_(0), dsvStride_(0) {}
 
     /**
      * @brief Opens the window with the default window name which specified in Win32::Window::defWndName    
@@ -638,6 +694,7 @@ public:
      * @param pFirstDsv The first depth stencil view which indicates the start of the core's objective depth stencil view heap region.
      */
     void buildDsv(ID3D12Device* pDevice, D3D12_CPU_DESCRIPTOR_HANDLE pFirstDsv);
+    void createRTBuffers(ID3D12Device* pDevice);
     /**
      * @brief Creates depth buffers for the swap chain's back buffers internally.
      * @param pDevice The device which is going to be used to create the depth buffers.
@@ -681,6 +738,11 @@ public:
     void postRender(IRenderContext& renderContext) override;
 
 private:
+    using PostRenderFunc = void(Window<Traits>::*)(ID3D12GraphicsCommandList*);
+
+    void initialPostRender(ID3D12GraphicsCommandList* pCmdList);
+    void regularPostRender(ID3D12GraphicsCommandList* pCmdList);
+
     void preResizeBuffers(ICore& core) override {
         auto pd3d12Core = dynamic_cast<Core*>(&core);
         if (!pd3d12Core) {
@@ -704,17 +766,22 @@ private:
         auto pDevice = static_cast<ID3D12Device*>( WindowAttorney::device(core) );
 
         backBuffers_.resize( this->backBufCnt() );
+        offscreenBuffers_.resize( this->backBufCnt() );
         depthBuffers_.resize( 1 );
 
+        createRTBuffers( pDevice );
         createDepthBuffers( pDevice );
         buildRtv( pDevice, core.rtvHeapStart(), backBuffers_.size() );
         buildDsv( pDevice, core.dsvHeapStart() );
     }
 
     std::vector<wrl::ComPtr<ID3D12Resource>> backBuffers_;
+    std::vector<wrl::ComPtr<ID3D12Resource>> offscreenBuffers_;
     std::vector<wrl::ComPtr<ID3D12Resource>> depthBuffers_;
+    PostRenderFunc postRenderFunc_;
     D3D12_CPU_DESCRIPTOR_HANDLE pFirstRtv_;
     D3D12_CPU_DESCRIPTOR_HANDLE pFirstDsv_;
+    std::size_t rtvIdx_;
     UINT rtvStride_;
     UINT dsvStride_;
 };
@@ -728,8 +795,7 @@ void Window<Traits>::buildRtv( ID3D12Device* pDevice,
     pFirstRtv_ = pFirstRtv;
     
     for (auto i = 0; i < backBufCnt; ++i) {
-        this->pSwapChain_->GetBuffer(i, __uuidof(ID3D12Resource), &backBuffers_[i]);
-        pDevice->CreateRenderTargetView(backBuffers_[i].Get(), nullptr, pFirstRtv);
+        pDevice->CreateRenderTargetView(offscreenBuffers_[i].Get(), nullptr, pFirstRtv);
         pFirstRtv.ptr += rtvStride_;
     }
 }
@@ -742,6 +808,49 @@ void Window<Traits>::buildDsv(ID3D12Device* pDevice, D3D12_CPU_DESCRIPTOR_HANDLE
     pDevice->CreateDepthStencilView(depthBuffers_[0].Get(), nullptr, pFirstDsv);
 
     pFirstDsv_ = pFirstDsv;
+}
+
+template <class Traits>
+void Window<Traits>::createRTBuffers(ID3D12Device* pDevice) {
+    // create back buffer resources
+    for (auto i = 0u; i < backBuffers_.size(); ++i) {
+        this->pSwapChain_->GetBuffer(i, __uuidof(ID3D12Resource), &backBuffers_[i]);
+    }
+
+    // create offscreen buffer resources
+    for (auto i = 0u; i < offscreenBuffers_.size(); ++i) {
+        auto backBufDesc = backBuffers_[i]->GetDesc();
+
+        auto offscreenDesc = D3D12_RESOURCE_DESC{
+            .Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+            .Alignment = 0,
+            .Width = backBufDesc.Width,
+            .Height = backBufDesc.Height,
+            .DepthOrArraySize = 1,
+            .MipLevels = 1,
+            .Format = backBufDesc.Format,
+            .SampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },   // backBufDesc.SampleDesc?
+            .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+            .Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
+        };
+
+        auto heapProp = D3D12_HEAP_PROPERTIES{
+            .Type = D3D12_HEAP_TYPE_DEFAULT,
+            .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+            .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+            .CreationNodeMask = 0,
+            .VisibleNodeMask = 0
+        };
+
+        const auto cv = D3D12_CLEAR_VALUE{
+            .Format = backBufDesc.Format,
+            .Color = { clearColor[0], clearColor[1], clearColor[2], clearColor[3] }
+        };
+
+        DX_THROW_FAILED( pDevice->CreateCommittedResource(
+            &heapProp, D3D12_HEAP_FLAG_NONE, &offscreenDesc, D3D12_RESOURCE_STATE_RENDER_TARGET, &cv, __uuidof(ID3D12Resource), &offscreenBuffers_[i]
+        ) );
+    }
 }
 
 template <class Traits>
@@ -787,7 +896,7 @@ std::any Window<Traits>::cast(RenderTargetType rentarType) {
     switch (rentarType) {
     case RenderTargetType::D3D12:
         return D3D12_CPU_DESCRIPTOR_HANDLE{
-            .ptr = pFirstRtv_.ptr + this->chosenBackBufIdx() * rtvStride_
+            .ptr = pFirstRtv_.ptr + rtvIdx_ * rtvStride_
         };   
     case RenderTargetType::D3D12_DEPTH:
         return pFirstDsv_;
@@ -802,15 +911,13 @@ void Window<Traits>::clear(IRenderContext& renderContext) {
         renderContext.cast(RenderContextType::D3D12)
     );
 
-    auto bufIdx = this->chosenBackBufIdx();
+    auto bufIdx = rtvIdx_;
     auto pRtv = D3D12_CPU_DESCRIPTOR_HANDLE{
         .ptr = pFirstRtv_.ptr + bufIdx * rtvStride_
     };
 
-    static constexpr float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
-
     DX_THROW_FAILED_VOID( pCmdList->ClearRenderTargetView(
-        pRtv, clearColor, 0, nullptr
+        pRtv, clearColor.data(), 0, nullptr
     ) );
 
     DX_THROW_FAILED_VOID( pCmdList->ClearDepthStencilView(
@@ -823,19 +930,6 @@ void Window<Traits>::preRender(IRenderContext& renderContext) {
     auto pCmdList = std::any_cast<wrl::ComPtr<ID3D12GraphicsCommandList>>(
         renderContext.cast(RenderContextType::D3D12)
     );
-
-    const auto bar = D3D12_RESOURCE_BARRIER{
-        .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-        .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
-        .Transition = D3D12_RESOURCE_TRANSITION_BARRIER{
-            .pResource = backBuffers_[this->chosenBackBufIdx()].Get(),
-            .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
-            .StateBefore = D3D12_RESOURCE_STATE_PRESENT,
-            .StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET
-        }
-    };
-
-    pCmdList->ResourceBarrier(1, &bar);
 
     // TODO: set proper viewport
     D3D12_VIEWPORT tmpViewports[] = {
@@ -868,19 +962,74 @@ void Window<Traits>::postRender(IRenderContext& renderContext) {
         renderContext.cast(RenderContextType::D3D12)
     );
 
-    const auto bar = D3D12_RESOURCE_BARRIER{
+    (this->*postRenderFunc_)(pCmdList.Get());
+}
+
+template <class Traits>
+void Window<Traits>::initialPostRender(ID3D12GraphicsCommandList *pCmdList) {
+    rtvIdx_ = (rtvIdx_ + 1) % offscreenBuffers_.size();
+    postRenderFunc_ = &Window<Traits>::regularPostRender;
+}
+
+template <class Traits>
+void Window<Traits>::regularPostRender(ID3D12GraphicsCommandList *pCmdList) {
+    auto curBackBufIdx = this->pSwapChain_->GetCurrentBackBufferIndex();
+
+    // set current back buffer as copy destination
+    auto bar = D3D12_RESOURCE_BARRIER{
         .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
         .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
         .Transition = D3D12_RESOURCE_TRANSITION_BARRIER{
-            .pResource = backBuffers_[this->chosenBackBufIdx()].Get(),
+            .pResource = backBuffers_[curBackBufIdx].Get(),
             .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
-            .StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET,
-            .StateAfter = D3D12_RESOURCE_STATE_PRESENT
+            .StateBefore = D3D12_RESOURCE_STATE_PRESENT,
+            .StateAfter = D3D12_RESOURCE_STATE_COPY_DEST
         }
     };
 
     pCmdList->ResourceBarrier(1, &bar);
+
+    // set offscren buffer as copy source
+    bar.Transition = D3D12_RESOURCE_TRANSITION_BARRIER{
+        .pResource = offscreenBuffers_[rtvIdx_].Get(),
+        .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+        .StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET,
+        .StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE
+    };
+
+    pCmdList->ResourceBarrier(1, &bar);
+
+    // perform copy
+    pCmdList->CopyResource(
+        backBuffers_[curBackBufIdx].Get(),
+        offscreenBuffers_[rtvIdx_].Get()
+    );
+
+    // reset current back buffer as present
+    bar.Transition = D3D12_RESOURCE_TRANSITION_BARRIER{
+        .pResource = backBuffers_[curBackBufIdx].Get(),
+        .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+        .StateBefore = D3D12_RESOURCE_STATE_COPY_DEST,
+        .StateAfter = D3D12_RESOURCE_STATE_PRESENT
+    };
+
+    pCmdList->ResourceBarrier(1, &bar);
+
+    // reset offscreen buffer as render target
+    bar.Transition = D3D12_RESOURCE_TRANSITION_BARRIER{
+        .pResource = offscreenBuffers_[rtvIdx_].Get(),
+        .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+        .StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE,
+        .StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET
+    };
+
+    pCmdList->ResourceBarrier(1, &bar);
+
+    rtvIdx_ = (rtvIdx_ + 1) % offscreenBuffers_.size();
 }
+
+template <class Traits>
+const std::array<float, 4> Window<Traits>::clearColor = { 0.0f, 0.2f, 0.4f, 1.0f };
 
 /**
  * @brief The basic traits for D3D12 window.    

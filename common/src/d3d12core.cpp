@@ -4,10 +4,42 @@ namespace gfx {
 
 namespace d3d12 {
 
+CmdListPool::CmdListPool(ID3D12Device* pDevice, D3D12_COMMAND_LIST_TYPE type, std::size_t size)
+    : cmdLists_(), cmdAllocs_() {
+    for (std::size_t i = 0; i < size; ++i) {
+        wrl::ComPtr<ID3D12CommandAllocator> pCmdAlloc;
+        DX_THROW_FAILED( pDevice->CreateCommandAllocator(
+            type, __uuidof(ID3D12CommandAllocator), &pCmdAlloc
+        ) );
+        cmdAllocs_.push_back(std::move(pCmdAlloc));
+    }
+
+    for (auto& cmdAlloc : cmdAllocs_) {
+        wrl::ComPtr<ID3D12GraphicsCommandList> pCmdList;
+        DX_THROW_FAILED( pDevice->CreateCommandList(
+            0, type, cmdAlloc.Get(), nullptr, __uuidof(ID3D12GraphicsCommandList), &pCmdList
+        ) );
+        pCmdList->Close();
+        cmdLists_.push_back(std::move(pCmdList));
+    }
+}
+
+const CmdListPool::Element CmdListPool::fetch() {
+    auto elem = Element{
+        .pCmdList = std::move(cmdLists_.front()),
+        .pCmdAlloc = std::move(cmdAllocs_.front())
+    };
+
+    cmdLists_.pop_front();
+    cmdAllocs_.pop_front();
+
+    return elem;
+}
+
 void Core::init() {
     auto adapter = enumAdapters();
     createDevice(adapter.Get());
-    createCommandQueueAndList(pDevice_.Get());
+    createCommandQueueAndLists(pDevice_.Get());
     buildRtvAndDsvHeaps(pDevice_.Get());
     createFenceAndEvent(pDevice_.Get());
 }
@@ -59,7 +91,7 @@ void Core::createDevice(IDXGIAdapter1* pAdapter) {
     ) );
 }
 
-void Core::createCommandQueueAndList(ID3D12Device* pDevice) {
+void Core::createCommandQueueAndLists(ID3D12Device* pDevice) {
     auto qd = D3D12_COMMAND_QUEUE_DESC{
         .Type = D3D12_COMMAND_LIST_TYPE_DIRECT,
         .Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL,
@@ -71,15 +103,10 @@ void Core::createCommandQueueAndList(ID3D12Device* pDevice) {
         &qd, __uuidof(ID3D12CommandQueue), &pCmdQ_
     ) );
 
-    DX_THROW_FAILED( pDevice->CreateCommandAllocator(
-        D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), &pCmdAlloc_
-    ) );
-
-    DX_THROW_FAILED( pDevice->CreateCommandList(
-        0, D3D12_COMMAND_LIST_TYPE_DIRECT, pCmdAlloc_.Get(), nullptr, __uuidof(ID3D12GraphicsCommandList), &pCmdList_
-    ) );
-
-    DX_THROW_FAILED( pCmdList_->Close() );
+    // Currently the maximum command list size is same as the RTV heap size,
+    // as the frame pipelining requires command lists for each frame.
+    // If the requirement changes, maybe due to multithreading or etc., the command list size should be adjusted.
+    gfxCmdListPool_ = CmdListPool(pDevice, D3D12_COMMAND_LIST_TYPE_DIRECT, rtvHeapSize());
 }
 
 void Core::buildRtvAndDsvHeaps(ID3D12Device* pDevice) {
@@ -122,17 +149,9 @@ void Core::render(const IScene& scene, const IRenderer& renderer, IRenderTarget&
     renderer.render(scene, context, target);
 }
 
-void Core::preRender() {
-    DX_THROW_FAILED( pCmdAlloc_->Reset() );
-    DX_THROW_FAILED( pCmdList_->Reset(pCmdAlloc_.Get(), nullptr) );
-}
+void Core::preRender() {}
 
-void Core::postRender() {
-    DX_THROW_FAILED( pCmdList_->Close() );
-
-    ID3D12CommandList* ppCmdLists[] = { pCmdList_.Get() };
-    DX_THROW_FAILED_VOID( pCmdQ_->ExecuteCommandLists(1, ppCmdLists) );
-}
+void Core::postRender() {}
 
 void Core::waitGpu() {
     ++fenceValues_[fenceIdx_];
@@ -187,14 +206,25 @@ std::unique_ptr<IRenderContext> Core::createContext() {
 }
 
 void Core::cleanup() {
+    for (std::size_t i = 0; i < fenceValues_.size(); ++i) {
+        signalGpu(i);
+        waitGpu(i);
+    }
+
     // the order of reset should be reversed from the order of creation. (the member layout order)
+    fenceIdx_ = 0;
+    fenceEvent_ = nullptr;
+    fenceValues_ = { 0, 0 };
     pFence_.Reset();
     pDsvHeap_.Reset();
     pRtvHeap_.Reset();
-    pCmdList_.Reset();
-    pCmdAlloc_.Reset();
     pCmdQ_.Reset();
     pDevice_.Reset();
+    gfxCmdListPool_.clear();
+    inputLayouts_.clear();
+    shaders_.clear();
+    upBufs_.clear();
+    roots_.clear();
 }
 
 bool D3D12RenderContext::castableTo(RenderContextType contextType) const {
@@ -202,7 +232,19 @@ bool D3D12RenderContext::castableTo(RenderContextType contextType) const {
 }
 
 std::any D3D12RenderContext::cast(RenderContextType contextType) {
-    return pCore_->cmdList();
+    return pCmdList_;
+}
+
+void D3D12RenderContext::preRender() {
+    DX_THROW_FAILED( pCmdAlloc_->Reset() );
+    DX_THROW_FAILED( pCmdList_->Reset(pCmdAlloc_.Get(), nullptr) );
+}
+
+void D3D12RenderContext::postRender() {
+    DX_THROW_FAILED( pCmdList_->Close() );
+
+    ID3D12CommandList* ppCmdLists[] = { pCmdList_.Get() };
+    DX_THROW_FAILED_VOID( pCmdQ_->ExecuteCommandLists(1, ppCmdLists) );
 }
 
 wrl::ComPtr<IDXGIFactory4> Core::spFactory = nullptr;
