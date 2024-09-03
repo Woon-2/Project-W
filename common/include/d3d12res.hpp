@@ -5,6 +5,9 @@
 
 #include <vector>
 #include <cstdlib>
+#include <ranges>
+#include <algorithm>
+#include <concepts>
 
 namespace gfx {
 
@@ -106,13 +109,38 @@ wrl::ComPtr<ID3D12Resource> createDefBuf(Core& core, D3D12RenderContext& ctx, co
 class GpuMappedRes {
 private:
     struct MyPair {
-        wrl::ComPtr<ID3D12Resource> pRes;
+        D3D12_GPU_VIRTUAL_ADDRESS gpuAddr;
         void* pData; 
     };
 
 public:
-    GpuMappedRes(Core& core, UINT64 bytes, std::size_t duplicateCnt = 1);
-    GpuMappedRes(Core& core, const void* pData, UINT64 bytes, std::size_t duplicateCnt = 1);
+    template <std::ranges::range R>
+        requires std::same_as< std::ranges::range_value_t<R>, wrl::ComPtr<ID3D12Resource> >
+    GpuMappedRes( Core& core, UINT64 bytes, R& ppResources,
+        std::size_t duplicateCnt = 1
+    );
+
+    template <std::ranges::range R>
+        requires std::same_as< std::ranges::range_value_t<R>, wrl::ComPtr<ID3D12Resource> >
+    GpuMappedRes( Core& core, const void* pData, UINT64 bytes,
+        R& resources, std::size_t duplicateCnt = 1
+    );
+
+    template <std::ranges::contiguous_range R1, std::ranges::range R2>
+        requires std::ranges::sized_range<R1>
+            && std::same_as< std::ranges::range_value_t<R2>, wrl::ComPtr<ID3D12Resource> >
+    GpuMappedRes( Core& core, const R1& data, R2& resources, std::size_t duplicateCnt = 1 )
+        : GpuMappedRes( core, std::data(data), std::size(data)
+            * sizeof(std::ranges::range_value_t<R1>), resources, duplicateCnt
+        ) {}
+    
+
+    GpuMappedRes( Core& core, UINT64 bytes, wrl::ComPtr<ID3D12Resource>* ppResources,
+        std::size_t duplicateCnt = 1
+    );
+    GpuMappedRes( Core& core, const void* pData, UINT64 bytes,
+        wrl::ComPtr<ID3D12Resource>* ppResources, std::size_t duplicateCnt = 1
+    );
 
     template <std::ranges::contiguous_range R>
         requires std::ranges::sized_range<R>
@@ -122,7 +150,7 @@ public:
         ) {}
 
     const D3D12_GPU_VIRTUAL_ADDRESS gpuAddress(std::size_t idx = 0) const {
-        return datas_[idx].pRes->GetGPUVirtualAddress();
+        return datas_[idx].gpuAddr;
     }
 
     void upload(Core& core, const void* pData, UINT bytes, std::size_t idx = 0) {
@@ -132,6 +160,42 @@ public:
 private:
     std::vector<MyPair> datas_;
 };
+
+template <std::ranges::range R>
+    requires std::same_as< std::ranges::range_value_t<R>, wrl::ComPtr<ID3D12Resource> >
+GpuMappedRes::GpuMappedRes( Core& core, UINT64 bytes, R& resources,
+    std::size_t duplicateCnt
+) {
+    auto it = std::begin(resources);
+    
+    for (std::size_t i = 0; i < duplicateCnt; ++i) {
+        MyPair pair;
+        *it = createUpBuf(core, bytes);
+        auto readRange = D3D12_RANGE{};
+        (*it)->Map(0, &readRange, &pair.pData);
+        pair.gpuAddr = (*it)->GetGPUVirtualAddress();
+        datas_.push_back(std::move(pair));
+        ++it;
+    }
+}
+
+template <std::ranges::range R>
+    requires std::same_as< std::ranges::range_value_t<R>, wrl::ComPtr<ID3D12Resource> >
+GpuMappedRes::GpuMappedRes( Core& core, const void* pData, UINT64 bytes,
+    R& resources, std::size_t duplicateCnt
+) {
+    auto it = std::begin(resources);
+    
+    for (std::size_t i = 0; i < duplicateCnt; ++i) {
+        MyPair pair;
+        *it = createUpBuf(core, pData, bytes);
+        auto readRange = D3D12_RANGE{};
+        (*it)->Map(0, &readRange, &pair.pData);
+        pair.gpuAddr = (*it)->GetGPUVirtualAddress();
+        datas_.push_back(std::move(pair));
+        ++it;
+    }
+}
 
 }   // namespace d3d12
 

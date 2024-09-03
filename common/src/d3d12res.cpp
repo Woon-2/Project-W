@@ -138,22 +138,28 @@ wrl::ComPtr<ID3D12Resource> createDefBuf( Core& core, D3D12RenderContext& ctx, c
     return createDefBuf(core, ctx, pUploadBuf.Get(), state);
 }
 
-GpuMappedRes::GpuMappedRes(Core& core, UINT64 bytes, std::size_t duplicateCnt)
-    : datas_() {
+GpuMappedRes::GpuMappedRes( Core& core, UINT64 bytes, wrl::ComPtr<ID3D12Resource>* ppResources,
+    std::size_t duplicateCnt
+) : datas_() {
     for (std::size_t i = 0; i < duplicateCnt; ++i) {
         MyPair pair;
-        pair.pRes = createUpBuf(core, bytes);
-        pair.pRes->Map(0, nullptr, &pair.pData);
+        ppResources[i] = createUpBuf(core, bytes);
+        auto readRange = D3D12_RANGE{};
+        ppResources[i]->Map(0, &readRange, &pair.pData);
+        pair.gpuAddr = ppResources[i]->GetGPUVirtualAddress();
         datas_.push_back(std::move(pair));
     }
 }
 
-GpuMappedRes::GpuMappedRes(Core& core, const void* pData, UINT64 bytes, std::size_t duplicateCnt)
-    : datas_() {
+GpuMappedRes::GpuMappedRes( Core& core, const void* pData, UINT64 bytes,
+    wrl::ComPtr<ID3D12Resource>* ppResources, std::size_t duplicateCnt
+) : datas_() {
     for (std::size_t i = 0; i < duplicateCnt; ++i) {
         MyPair pair;
-        pair.pRes = createUpBuf(core, pData, bytes);
-        pair.pRes->Map(0, nullptr, &pair.pData);
+        ppResources[i] = createUpBuf(core, pData, bytes);
+        auto readRange = D3D12_RANGE{};
+        ppResources[i]->Map(0, &readRange, &pair.pData);
+        pair.gpuAddr = ppResources[i]->GetGPUVirtualAddress();
         datas_.push_back(std::move(pair));
     }
 }
