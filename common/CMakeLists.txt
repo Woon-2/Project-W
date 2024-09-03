@@ -155,6 +155,7 @@ add_library(gfx
     src/sampleScene.cpp include/sampleScene.hpp
     src/d3d12shader.cpp include/d3d12shader.hpp
     src/rootPresets.cpp include/rootPresets.hpp
+    src/d3d12resLow.cpp include/d3d12resLow.hpp
     src/d3d12res.cpp include/d3d12res.hpp
     src/vertex.cpp include/vertex.hpp
     src/mesh.cpp include/mesh.hpp

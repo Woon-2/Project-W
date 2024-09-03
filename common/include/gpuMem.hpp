@@ -1,7 +1,7 @@
 #ifndef __GpuMem_HPP
 #define __GpuMem_HPP
 
-#include "d3d12res.hpp"
+#include "d3d12resLow.hpp"
 
 #include <list>
 
@@ -14,6 +14,13 @@ public:
     GpuMemPool(Core& core, D3D12RenderContext& ctx, std::size_t blockSize, std::size_t blockCount);
 
     D3D12_GPU_VIRTUAL_ADDRESS allocate();
+    D3D12_GPU_VIRTUAL_ADDRESS allocate(std::size_t bytes) {
+        if (bytes > blockSize_) {
+            throw std::runtime_error("Requested size is too large");
+        }
+
+        return allocate();
+    }
     void deallocate(D3D12_GPU_VIRTUAL_ADDRESS addr);
     D3D12_GPU_VIRTUAL_ADDRESS construct_at( D3D12RenderContext& ctx, D3D12_GPU_VIRTUAL_ADDRESS addr,
         ID3D12Resource* pSrcBuf
@@ -55,8 +62,15 @@ public:
     UploadMemPool(Core& core, D3D12RenderContext& ctx, std::size_t blockSize, std::size_t blockCount);
 
     D3D12_GPU_VIRTUAL_ADDRESS allocate();
+    D3D12_GPU_VIRTUAL_ADDRESS allocate(std::size_t bytes) {
+        if (bytes > blockSize_) {
+            throw std::runtime_error("Requested size is too large");
+        }
+
+        return allocate();
+    }
     void deallocate(D3D12_GPU_VIRTUAL_ADDRESS addr);
-    D3D12_GPU_VIRTUAL_ADDRESS construct_at( Core& core, D3D12RenderContext& ctx, D3D12_GPU_VIRTUAL_ADDRESS addr,
+    D3D12_GPU_VIRTUAL_ADDRESS construct_at( D3D12RenderContext& ctx, D3D12_GPU_VIRTUAL_ADDRESS addr,
         const void* pData, std::size_t bytes
     );
     template <std::ranges::contiguous_range R>
@@ -66,6 +80,8 @@ public:
     ) {
         return construct_at(addr, std::data(data), std::size(data) * sizeof(std::ranges::range_value_t<R>));
     }
+
+    void* map(D3D12_GPU_VIRTUAL_ADDRESS addr, const D3D12_RANGE& readRange = D3D12_RANGE{});
 
 private:
     void checkAddressValidity(D3D12_GPU_VIRTUAL_ADDRESS addr);

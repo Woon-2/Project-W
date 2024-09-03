@@ -120,7 +120,7 @@ void UploadMemPool::deallocate(D3D12_GPU_VIRTUAL_ADDRESS addr) {
     freeList_.push_back(addr);
 }
 
-D3D12_GPU_VIRTUAL_ADDRESS UploadMemPool::construct_at( Core& core, D3D12RenderContext& ctx,
+D3D12_GPU_VIRTUAL_ADDRESS UploadMemPool::construct_at( D3D12RenderContext& ctx,
     D3D12_GPU_VIRTUAL_ADDRESS addr, const void* pData, std::size_t bytes
 ) {
     auto pCmdList = std::any_cast< wrl::ComPtr<ID3D12GraphicsCommandList> >(
@@ -128,6 +128,9 @@ D3D12_GPU_VIRTUAL_ADDRESS UploadMemPool::construct_at( Core& core, D3D12RenderCo
     );
 
     checkAddressValidity(addr);
+    if (bytes > blockSize_) {
+        throw std::runtime_error("Data is too large");
+    }
 
     std::uint8_t* pMappedData = nullptr;
 
@@ -142,7 +145,18 @@ D3D12_GPU_VIRTUAL_ADDRESS UploadMemPool::construct_at( Core& core, D3D12RenderCo
     return addr;
 }
 
-void UploadMemPool::checkAddressValidity(D3D12_GPU_VIRTUAL_ADDRESS addr) {
+void *UploadMemPool::map(D3D12_GPU_VIRTUAL_ADDRESS addr, const D3D12_RANGE& readRange) {
+    checkAddressValidity(addr);
+
+    std::uint8_t* pMappedData = nullptr;
+
+    DX_THROW_FAILED( buffer_->Map(0, &readRange, reinterpret_cast<void**>(&pMappedData)) );
+
+    return pMappedData + (addr - head_);
+}
+
+void UploadMemPool::checkAddressValidity(D3D12_GPU_VIRTUAL_ADDRESS addr)
+{
     if (addr < head_ || addr >= head_ + blockSize_ * blockCount_) {
         throw std::runtime_error("Invalid address");
     }
