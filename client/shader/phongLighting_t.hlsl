@@ -12,13 +12,15 @@ struct Material
 {
     Texture2D diffuseMap;
     Texture2D specularMap;
+    float shininess;
 };
 
 struct Light
 {
     float4 ambient;
     float4 diffuse;
-    float4 specular;
+    float3 specular;
+    float shininess;
     float3 posV;
     float falloff;
     float3 dirV;
@@ -35,23 +37,22 @@ StructuredBuffer<Light> gLights : register(t2);
 
 SamplerState gSample : register(s0);
 
-float4 dirLight(uint lightIdx, uint matIdx, float3 posVNormalized, float3 normalV) {
+float4 dirLight(uint lightIdx, uint matIdx, float3 posVNormalized, float3 normalV, float2 tex) {
     float3 toLight = -gLights[lightIdx].dirV;
     float diffused = max(0.f, dot(normalV, toLight));
     float specular = 0.f;
-    
-    if (diffused > 0.f && gLights[lightIdx].specular.a > 0.f) {
+            
+    if (diffused > 0.f && gLights[lightIdx].shininess > 0.f) {
         float3 reflected = reflect(-toLight, normalV);
-        specular = pow(max(0.f, dot(reflected, -posVNormalized)), gMaterials[matIdx].specular.a);
+        specular = pow(max(0.f, dot(reflected, -posVNormalized)), gMaterials[matIdx].specularMap.Sample(gSample, tex));
     }
-
-    
-    return gMaterials[matIdx].ambient * gLights[lightIdx].ambient +
-        gMaterials[matIdx].diffuseMap.sample(gSam0, u, v) * gLights[lightIdx].diffuse * diffused +
-        gMaterials[matIdx].specularMap.sample(gSam0, u, v) * gLights[lightIdx].specular * specular;
+        
+    return gMaterials[matIdx].diffuseMap.Sample(gSample, tex) * gLights[lightIdx].ambient +
+        gMaterials[matIdx].diffuseMap.Sample(gSample, tex) * gLights[lightIdx].diffuse * diffused +
+        gMaterials[matIdx].specularMap.Sample(gSample, tex) * float4(gLights[lightIdx].specular, 1.f) * specular;
 }
 
-float4 pointLight(uint lightIdx, uint matIdx, float3 posV, float3 posVNormalized, float3 normalV) {
+float4 pointLight(uint lightIdx, uint matIdx, float3 posV, float3 posVNormalized, float3 normalV, float2 tex) {
     float3 toLight = gLights[lightIdx].posV - posV;
     float dist = length(toLight);
     toLight /= dist;
@@ -59,18 +60,18 @@ float4 pointLight(uint lightIdx, uint matIdx, float3 posV, float3 posVNormalized
     float diffused = max(0.f, dot(normalV, toLight));
     float specular = 0.f;
 
-    if (diffused > 0.f && gLights[lightIdx].specular.a > 0.f) {
+    if (diffused > 0.f && gLights[lightIdx].shininess > 0.f) {
         float3 reflected = reflect(-toLight, normalV);
-        specular = pow(max(0.f, dot(reflected, -posVNormalized)), gMaterials[matIdx].specular.a);
+        specular = pow(max(0.f, dot(reflected, -posVNormalized)), gMaterials[matIdx].specularMap.Sample(gSample, tex));
     }
 
-    return ( gMaterials[matIdx].ambient * gLights[lightIdx].ambient +
-        gMaterials[matIdx].diffuseMap.sample(gSam0, u, v) * gLights[lightIdx].diffuse * diffused +
-        gMaterials[matIdx].specularMap.sample(gSam0, u, v) * gLights[lightIdx].specular * specular
+    return (gMaterials[matIdx].diffuseMap.Sample(gSample, tex) * gLights[lightIdx].ambient +
+        gMaterials[matIdx].diffuseMap.Sample(gSample, tex) * gLights[lightIdx].diffuse * diffused +
+        gMaterials[matIdx].specularMap.Sample(gSample, tex) * float4(gLights[lightIdx].specular, 1.f) * specular
     ) * atten;
 }
 
-float4 spotLight(uint lightIdx, uint matIdx, float3 posV, float3 posVNormalized, float3 normalV) {
+float4 spotLight(uint lightIdx, uint matIdx, float3 posV, float3 posVNormalized, float3 normalV, float2 tex) {
     float3 toLight = gLights[lightIdx].posV - posV;
     float dist = length(toLight);
     toLight /= dist;
@@ -78,9 +79,9 @@ float4 spotLight(uint lightIdx, uint matIdx, float3 posV, float3 posVNormalized,
     float diffused = max(0.f, dot(normalV, toLight));
     float specular = 0.f;
     
-    if (diffused > 0.f && gLights[lightIdx].specular.a > 0.f) {
+    if (diffused > 0.f && gLights[lightIdx].shininess > 0.f) {
         float3 reflected = reflect(-toLight, normalV);
-        specular = pow(max(0.f, dot(reflected, -posVNormalized)), gMaterials[matIdx].specular.a);
+        specular = pow(max(0.f, dot(reflected, -posVNormalized)), gMaterials[matIdx].specularMap.Sample(gSample, tex));
     }
 
     float cosChi = max(dot(-toLight, gLights[lightIdx].dirV), 0.f);
@@ -93,32 +94,32 @@ float4 spotLight(uint lightIdx, uint matIdx, float3 posV, float3 posVNormalized,
         gLights[lightIdx].falloff
     );
 
-    return ( gMaterials[matIdx].ambient * gLights[lightIdx].ambient +
-        gMaterials[matIdx].diffuseMap.sample(gSam0, u, v) * gLights[lightIdx].diffuse * diffused +
-        gMaterials[matIdx].specularMap.sample(gSam0, u, v) * gLights[lightIdx].specular * specular
+    return (gMaterials[matIdx].diffuseMap.Sample(gSample, tex) * gLights[lightIdx].ambient +
+        gMaterials[matIdx].diffuseMap.Sample(gSample, tex) * gLights[lightIdx].diffuse * diffused +
+        gMaterials[matIdx].specularMap.Sample(gSample, tex) * float4(gLights[lightIdx].specular, 1.f) * specular
     ) * atten * coneAtten;
 }
 
-float4 Lighting(float3 posV, float3 normalV, uint matIdx) {
-    float4 color = gMaterials[matIdx].ambient * gcGlobalAmbientLight + gMaterials[matIdx].emmisive;
+float4 Lighting(float3 posV, float3 normalV, uint matIdx, float2 tex) {
+    float4 color = gMaterials[matIdx].diffuseMap.Sample(gSample, tex) * gcGlobalAmbientLight;
 
     for (uint i = 0; i < gLightCnt; ++i) {
         float3 posVNormalized = normalize(posV);
 
         switch (gLights[i].type) {
             case LIGHT_TYPE_DIRECTIONAL:
-                color += dirLight(i, matIdx, posVNormalized, normalV);
+                color += dirLight(i, matIdx, posVNormalized, normalV, tex);
                 break;
             case LIGHT_TYPE_POINT:
-                color += pointLight(i, matIdx, posV, posVNormalized, normalV);
+                color += pointLight(i, matIdx, posV, posVNormalized, normalV, tex);
                 break;
             case LIGHT_TYPE_SPOT:
-                color += spotLight(i, matIdx, posV, posVNormalized, normalV);
+                color += spotLight(i, matIdx, posV, posVNormalized, normalV, tex);
                 break;
         }
     }
 
-    color.a = gMaterials[matIdx].diffuse.a;
+    color.a = gMaterials[matIdx].diffuseMap.Sample(gSample, tex);
 
     return color;
 }
