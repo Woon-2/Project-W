@@ -25,7 +25,22 @@ const InputLayout makeInputLayoutPreset(InputLayoutPreset preset) {
                 .offset = 12u,
             }
         );
-
+    case InputLayoutPreset::Pos3Norm3Tex2:
+        return InputLayout(32u,
+            InputLayout::Element{
+                .prop = Vertex::Properties::Position,
+                .offset = 0u,
+            },
+            InputLayout::Element{
+                .prop = Vertex::Properties::Normal,
+                .offset = 12u,
+            },
+            InputLayout::Element{
+                .prop = Vertex::Properties::TexCoord,
+                .offset = 24u,
+            }
+        );
+    
     default:
         throw GFX_EXCEPT("Invalid InputLayoutPreset");
     }

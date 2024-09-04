@@ -7,7 +7,8 @@ namespace gfx {
 
 enum class InputLayoutPreset {
     Pos3,
-    Pos3Norm3
+    Pos3Norm3,
+    Pos3Norm3Tex2
 };
 
 const InputLayout makeInputLayoutPreset(InputLayoutPreset preset);

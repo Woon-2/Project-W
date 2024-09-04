@@ -143,6 +143,79 @@ wrl::ComPtr<ID3D12RootSignature> rootPresetUnified(Core& core) {
     return ret;
 }
 
+wrl::ComPtr<ID3D12RootSignature> rootPresetUnified1(Core& core) {
+    auto textureSrvRange = D3D12_DESCRIPTOR_RANGE{
+        .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+        .NumDescriptors = static_cast<UINT>(-1),
+        .BaseShaderRegister = 1u,
+        .RegisterSpace = 0u,
+        .OffsetInDescriptorsFromTableStart = 0
+    };    
+
+    auto params = std::array<D3D12_ROOT_PARAMETER, 5>{
+        D3D12_ROOT_PARAMETER{
+            .ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV,
+            .Descriptor = D3D12_ROOT_DESCRIPTOR{
+                .ShaderRegister = 0u,
+                .RegisterSpace = 0u
+            },
+            .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+        },
+        D3D12_ROOT_PARAMETER{
+            .ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV,
+            .DescriptorTable = D3D12_ROOT_DESCRIPTOR_TABLE {
+                .NumDescriptorRanges = 1u,
+                .pDescriptorRanges = &textureSrvRange
+            },
+            .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+        },
+        D3D12_ROOT_PARAMETER{
+            .ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV,
+            .Descriptor = D3D12_ROOT_DESCRIPTOR{
+                .ShaderRegister = 2u,
+                .RegisterSpace = 0u
+            },
+            .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+        },
+        D3D12_ROOT_PARAMETER{
+            .ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV,
+            .Descriptor = D3D12_ROOT_DESCRIPTOR{
+                .ShaderRegister = 0u,
+                .RegisterSpace = 0u
+            },
+            .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+        },
+        D3D12_ROOT_PARAMETER{
+            .ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV,
+            .Descriptor = D3D12_ROOT_DESCRIPTOR{
+                .ShaderRegister = 1u,
+                .RegisterSpace = 0u
+            },
+            .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+        },
+    };
+
+    auto desc = D3D12_ROOT_SIGNATURE_DESC{
+        .NumParameters = static_cast<UINT>(params.size()),
+        .pParameters = params.data(),
+        .NumStaticSamplers = 0,
+        .pStaticSamplers = nullptr,
+        .Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
+    };
+
+    auto blob = serializeRoot(desc);
+
+    auto pDevice = static_cast<ID3D12Device*>(DeviceFetcher::device(core));
+    auto ret = wrl::ComPtr<ID3D12RootSignature>();
+
+    DX_THROW_FAILED(pDevice->CreateRootSignature(
+        0, blob->GetBufferPointer(), blob->GetBufferSize(),
+        __uuidof(ID3D12RootSignature), &ret
+    ));
+
+    return ret;
+}
+
 }   // namespace gfx::d3d12::<unnamed>
 
 wrl::ComPtr<ID3D12RootSignature> makeRootPreset(Core& core, RootPreset preset) {
@@ -155,6 +228,9 @@ wrl::ComPtr<ID3D12RootSignature> makeRootPreset(Core& core, RootPreset preset) {
 
     case RootPreset::Unified:
         return rootPresetUnified(core);
+
+    case RootPreset::Unified1:
+        return rootPresetUnified1(core);
 
     default:
         throw GFX_EXCEPT("Invalid RootPreset");
