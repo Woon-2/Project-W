@@ -175,6 +175,7 @@ add_library(gfx
     src/shaderRes.cpp include/shaderRes.hpp
     src/drawInfo.cpp include/drawInfo.hpp
     src/gpuMem.cpp include/gpuMem.hpp
+    src/renderProtocol.cpp include/renderProtocol.hpp
     
     include/dxtarget.hpp
     include/gfxPrimitive.hpp

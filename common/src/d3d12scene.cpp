@@ -2,6 +2,8 @@
 
 #include "dxMathUtil.hpp"
 
+#include "renderProtocol.hpp"
+
 #include <ranges>
 #include <algorithm>
 #include <iterator>
@@ -23,8 +25,8 @@ Generator<DrawInfo> CameraScene::iteration() const {
         [](auto pLight) { return *pLight; }
     ), std::back_inserter(tmpLightBuffer) );
 
-    lightInfo.set(typeIdx, DIType::Light);
-    lightInfo.set(lightIdx, std::span(tmpLightBuffer));
+    lightInfo.set(rp::PhongInstancingNT::typeIdx, rp::DIType::Light);
+    lightInfo.set(rp::PhongInstancingNT::lightIdx, std::span(tmpLightBuffer));
 
     co_yield std::move(lightInfo);
 
@@ -36,16 +38,16 @@ Generator<DrawInfo> CameraScene::iteration() const {
         [](auto pMaterial) { return *pMaterial; }
     ), std::back_inserter(tmpMaterialBuffer) );
 
-    materialInfo.set(typeIdx, DIType::Material);
-    materialInfo.set(materialIdx, std::span(tmpMaterialBuffer));
+    materialInfo.set(rp::PhongInstancingNT::typeIdx,  rp::DIType::Material);
+    materialInfo.set(rp::PhongInstancingNT::materialIdx, std::span(tmpMaterialBuffer));
 
     co_yield std::move(materialInfo);
 
 
     auto pfdInfo = DrawInfo();
     
-    pfdInfo.set( typeIdx, DIType::PFD );
-    pfdInfo.set( PFDIdx, sr::BasicPFD {
+    pfdInfo.set(rp::PhongInstancingNT::typeIdx, rp::DIType::PFD );
+    pfdInfo.set(rp::PhongInstancingNT::PFDIdx, sr::BasicPFD {
         .globalAmbientLight = { 0.1f, 0.1f, 0.1f, 1.f } // ,
         // .lightCnt = static_cast<std::uint32_t>( lights_.size() )
     } );
@@ -65,8 +67,8 @@ Generator<DrawInfo> CameraScene::fragmentIteration(const Fragment& fragment) con
 
     auto meshInfo = DrawInfo();
 
-    meshInfo.set(typeIdx, DIType::Mesh);
-    meshInfo.set(meshIdx, fragment.pMesh);
+    meshInfo.set(rp::PhongInstancingNT::typeIdx, rp::DIType::Mesh);
+    meshInfo.set(rp::PhongInstancingNT::meshIdx, fragment.pMesh);
 
     co_yield std::move(meshInfo);
 
@@ -89,16 +91,16 @@ Generator<DrawInfo> CameraScene::fragmentIteration(const Fragment& fragment) con
         }
     ), std::back_inserter(pidBuffer) );
 
-    pidInfo.set(typeIdx, DIType::PID);
-    pidInfo.set(PIDIdx, std::span(pidBuffer));
+    pidInfo.set(rp::PhongInstancingNT::typeIdx, rp::DIType::PID);
+    pidInfo.set(rp::PhongInstancingNT::PIDIdx, std::span(pidBuffer));
 
     co_yield std::move(pidInfo);
 
 
     auto pddInfo = DrawInfo();
 
-    pddInfo.set(typeIdx, DIType::PDD);
-    pddInfo.set(PDDIdx, sr::BasicPDD {
+    pddInfo.set(rp::PhongInstancingNT::typeIdx, rp::DIType::PDD);
+    pddInfo.set(rp::PhongInstancingNT::PDDIdx, sr::BasicPDD {
         .instanceIndex = baseInstIdx
     } );
     

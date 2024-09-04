@@ -10,10 +10,8 @@ cbuffer PerFrameData : register(b1)
 
 struct Material
 {
-    float4 ambient;
-    float4 diffuse;
-    float4 specular;    // a = power
-    float4 emmisive;
+    Texture2D diffuseMap;
+    Texture2D specularMap;
 };
 
 struct Light
@@ -32,7 +30,10 @@ struct Light
 };
 
 StructuredBuffer<Material> gMaterials : register(t1);
+
 StructuredBuffer<Light> gLights : register(t2);
+
+SamplerState gSample : register(s0);
 
 float4 dirLight(uint lightIdx, uint matIdx, float3 posVNormalized, float3 normalV) {
     float3 toLight = -gLights[lightIdx].dirV;
@@ -43,10 +44,11 @@ float4 dirLight(uint lightIdx, uint matIdx, float3 posVNormalized, float3 normal
         float3 reflected = reflect(-toLight, normalV);
         specular = pow(max(0.f, dot(reflected, -posVNormalized)), gMaterials[matIdx].specular.a);
     }
-    gMaterials[matIdx].sample(gSam0, u, v)
+
+    
     return gMaterials[matIdx].ambient * gLights[lightIdx].ambient +
-        gMaterials[matIdx].diffuse * gLights[lightIdx].diffuse * diffused +
-        gMaterials[matIdx].specular * gLights[lightIdx].specular * specular;
+        gMaterials[matIdx].diffuseMap.sample(gSam0, u, v) * gLights[lightIdx].diffuse * diffused +
+        gMaterials[matIdx].specularMap.sample(gSam0, u, v) * gLights[lightIdx].specular * specular;
 }
 
 float4 pointLight(uint lightIdx, uint matIdx, float3 posV, float3 posVNormalized, float3 normalV) {
@@ -63,8 +65,8 @@ float4 pointLight(uint lightIdx, uint matIdx, float3 posV, float3 posVNormalized
     }
 
     return ( gMaterials[matIdx].ambient * gLights[lightIdx].ambient +
-        gMaterials[matIdx].diffuse * gLights[lightIdx].diffuse * diffused +
-        gMaterials[matIdx].specular * gLights[lightIdx].specular * specular
+        gMaterials[matIdx].diffuseMap.sample(gSam0, u, v) * gLights[lightIdx].diffuse * diffused +
+        gMaterials[matIdx].specularMap.sample(gSam0, u, v) * gLights[lightIdx].specular * specular
     ) * atten;
 }
 
@@ -92,8 +94,8 @@ float4 spotLight(uint lightIdx, uint matIdx, float3 posV, float3 posVNormalized,
     );
 
     return ( gMaterials[matIdx].ambient * gLights[lightIdx].ambient +
-        gMaterials[matIdx].diffuse * gLights[lightIdx].diffuse * diffused +
-        gMaterials[matIdx].specular * gLights[lightIdx].specular * specular
+        gMaterials[matIdx].diffuseMap.sample(gSam0, u, v) * gLights[lightIdx].diffuse * diffused +
+        gMaterials[matIdx].specularMap.sample(gSam0, u, v) * gLights[lightIdx].specular * specular
     ) * atten * coneAtten;
 }
 

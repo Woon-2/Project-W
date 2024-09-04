@@ -16,6 +16,8 @@
 #include <ranges>
 #include <span>
 
+#include "RenderProtocol.hpp"
+
 namespace gfx {
 
 namespace d3d12 {
@@ -30,23 +32,6 @@ namespace d3d12 {
  */
 class CameraScene : public gfx::CameraScene {
 public:
-    enum class DIType {
-        Mesh,
-        PID,
-        PDD,
-        PFD,
-        Light,
-        Material
-    };
-
-    static constexpr std::size_t typeIdx = 0u;
-    static constexpr std::size_t meshIdx = 1u;
-    static constexpr std::size_t PIDIdx = 2u;
-    static constexpr std::size_t PDDIdx = 3u;
-    static constexpr std::size_t PFDIdx = 4u;
-    static constexpr std::size_t lightIdx = 5u;
-    static constexpr std::size_t materialIdx = 6u;
-
     CameraScene(const Camera& camera)
         : gfx::CameraScene(camera) {}
 
@@ -73,12 +58,18 @@ public:
         materials_.push_back(pMaterial);
     }
 
+    rp::Protocol protocol() const override {
+        return protocol_;
+    }
+
 private:
     Generator<DrawInfo> fragmentIteration(const Fragment& fragment) const;
 
     std::vector<Fragment> fragments_;
     std::vector<sr::PhongLight*> lights_;
     std::vector<sr::PhongMaterial*> materials_;
+
+    rp::Protocol protocol_;
 };
 
 }   // namespace d3d12
