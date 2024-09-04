@@ -248,6 +248,9 @@ Core::RootIdx rootName(RootPreset preset) {
     case RootPreset::Unified:
         return "UnifiedRoot";
 
+    case RootPreset::Unified1:
+        return "UnifiedRoot1";
+
     default:
         throw GFX_EXCEPT("Invalid RootPreset");
     }
