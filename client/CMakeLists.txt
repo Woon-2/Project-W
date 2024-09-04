@@ -115,6 +115,24 @@ compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/ntShader.hlsl"
     /D INCLUDE_phongLighting
 )
 
+compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/tShader.hlsl"
+    "${COMPILED_SHADER_PATH}/tShader_vs.cso"
+    "vs_5_1"
+    "VSMain"
+    /D INCLUDE_drawcallIdxOnly
+    /D INCLUDE_basicInstancing
+    /D INCLUDE_phongLighting
+)
+
+compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/tShader.hlsl"
+    "${COMPILED_SHADER_PATH}/tShader_ps.cso"
+    "ps_5_1"
+    "PSMain"
+    /D INCLUDE_drawcallIdxOnly
+    /D INCLUDE_basicInstancing
+    /D INCLUDE_phongLighting
+)
+
 add_hlsl_target("${HLSL_COMPILED_SHADERS}")
 
 include(configure_paths)

@@ -20,11 +20,11 @@ namespace d3d12 {
         }
 
         static Core::RootIdx rootName() {
-            return d3d12::rootName(RootPreset::Unified);
+            return d3d12::rootName(RootPreset::Unified1);
         }
 
         static Core::InputLayoutIdx inputLayoutName() {
-            return d3d12::inputLayoutName(InputLayoutPreset::Pos3Norm3);
+            return d3d12::inputLayoutName(InputLayoutPreset::Pos3Norm3Tex2);
         }
 	};
 
