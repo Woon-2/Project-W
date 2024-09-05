@@ -80,7 +80,7 @@ wrl::ComPtr<ID3D12RootSignature> rootPresetSolid(Core& core) {
 
 wrl::ComPtr<ID3D12RootSignature> rootPresetUnified(Core& core) {
     auto params = std::array<D3D12_ROOT_PARAMETER, 5>{
-        D3D12_ROOT_PARAMETER{
+        D3D12_ROOT_PARAMETER{   // Per Instance Data
             .ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV,
             .Descriptor = D3D12_ROOT_DESCRIPTOR{
                 .ShaderRegister = 0u,
@@ -88,7 +88,7 @@ wrl::ComPtr<ID3D12RootSignature> rootPresetUnified(Core& core) {
             },
             .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
         },
-        D3D12_ROOT_PARAMETER{
+        D3D12_ROOT_PARAMETER{   // Materials
             .ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV,
             .Descriptor = D3D12_ROOT_DESCRIPTOR{
                 .ShaderRegister = 1u,
@@ -96,7 +96,7 @@ wrl::ComPtr<ID3D12RootSignature> rootPresetUnified(Core& core) {
             },
             .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
         },
-        D3D12_ROOT_PARAMETER{
+        D3D12_ROOT_PARAMETER{   // Lights
             .ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV,
             .Descriptor = D3D12_ROOT_DESCRIPTOR{
                 .ShaderRegister = 2u,
@@ -104,7 +104,7 @@ wrl::ComPtr<ID3D12RootSignature> rootPresetUnified(Core& core) {
             },
             .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
         },
-        D3D12_ROOT_PARAMETER{
+        D3D12_ROOT_PARAMETER{   // Per Draw call Data
             .ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV,
             .Descriptor = D3D12_ROOT_DESCRIPTOR{
                 .ShaderRegister = 0u,
@@ -112,7 +112,7 @@ wrl::ComPtr<ID3D12RootSignature> rootPresetUnified(Core& core) {
             },
             .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
         },
-        D3D12_ROOT_PARAMETER{
+        D3D12_ROOT_PARAMETER{   // Per Frame Data
             .ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV,
             .Descriptor = D3D12_ROOT_DESCRIPTOR{
                 .ShaderRegister = 1u,
@@ -148,12 +148,12 @@ wrl::ComPtr<ID3D12RootSignature> rootPresetUnified1(Core& core) {
         .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
         .NumDescriptors = static_cast<UINT>(-1),
         .BaseShaderRegister = 1u,
-        .RegisterSpace = 0u,
+        .RegisterSpace = 1u,
         .OffsetInDescriptorsFromTableStart = 0
     };    
 
-    auto params = std::array<D3D12_ROOT_PARAMETER, 5>{
-        D3D12_ROOT_PARAMETER{
+    auto params = std::array<D3D12_ROOT_PARAMETER, 6>{
+        D3D12_ROOT_PARAMETER{   // Per Instance Data
             .ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV,
             .Descriptor = D3D12_ROOT_DESCRIPTOR{
                 .ShaderRegister = 0u,
@@ -161,7 +161,15 @@ wrl::ComPtr<ID3D12RootSignature> rootPresetUnified1(Core& core) {
             },
             .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
         },
-        D3D12_ROOT_PARAMETER{
+        D3D12_ROOT_PARAMETER{   // Materials
+            .ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV,
+            .Descriptor = D3D12_ROOT_DESCRIPTOR{
+                .ShaderRegister = 1u,
+                .RegisterSpace = 0u
+            },
+            .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+        },
+        D3D12_ROOT_PARAMETER{   // Material Textures
             .ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV,
             .DescriptorTable = D3D12_ROOT_DESCRIPTOR_TABLE {
                 .NumDescriptorRanges = 1u,
@@ -169,7 +177,7 @@ wrl::ComPtr<ID3D12RootSignature> rootPresetUnified1(Core& core) {
             },
             .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
         },
-        D3D12_ROOT_PARAMETER{
+        D3D12_ROOT_PARAMETER{   // Lights
             .ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV,
             .Descriptor = D3D12_ROOT_DESCRIPTOR{
                 .ShaderRegister = 2u,
@@ -177,7 +185,7 @@ wrl::ComPtr<ID3D12RootSignature> rootPresetUnified1(Core& core) {
             },
             .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
         },
-        D3D12_ROOT_PARAMETER{
+        D3D12_ROOT_PARAMETER{   // Per Draw call Data
             .ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV,
             .Descriptor = D3D12_ROOT_DESCRIPTOR{
                 .ShaderRegister = 0u,
@@ -185,7 +193,7 @@ wrl::ComPtr<ID3D12RootSignature> rootPresetUnified1(Core& core) {
             },
             .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
         },
-        D3D12_ROOT_PARAMETER{
+        D3D12_ROOT_PARAMETER{   // Per Frame Data
             .ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV,
             .Descriptor = D3D12_ROOT_DESCRIPTOR{
                 .ShaderRegister = 1u,
