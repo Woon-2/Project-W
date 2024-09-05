@@ -40,6 +40,7 @@ VS_OUTPUT VSMain(VS_INPUT input) {
     output.normalV = mul( input.normal,
         getInstanceData(input.instID).normalXform
     );
+    output.tex = input.tex;
     output.instID = input.instID;
 
     return output;
