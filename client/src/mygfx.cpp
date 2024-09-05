@@ -15,7 +15,7 @@ void MyGfx::init() {
         gfx::d3d12::makeRootPreset(*this, gfx::d3d12::RootPreset::Solid)
     );
 
-    gfx::d3d12::configInputLayoutAux(gfx::InputLayoutPreset::Pos3);
+    gfx::d3d12::configInputLayoutAux(gfx::Vertex::Properties::Position);
     addInputLayout( gfx::d3d12::inputLayoutName(gfx::InputLayoutPreset::Pos3),
         gfx::makeInputLayoutPreset(gfx::InputLayoutPreset::Pos3)
     );
