@@ -31,23 +31,10 @@ private:
         static constexpr std::size_t maxMaterials = 100u;
 
         void init( SampleRenderer& renderer, d3d12::Core& core );
-        void cleanup();
-        void phongInstancingNT( const IScene& scene, ID3D12GraphicsCommandList* pCmdList,
+        void cleanup() {}
+        void phongInstancingNT( const IScene& scene, d3d12::Shader& shader, ID3D12GraphicsCommandList* pCmdList,
             D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle, D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle
         ) const;
-
-    private:
-        wrl::ComPtr<ID3D12Resource> resPerFrameData_;
-        wrl::ComPtr<ID3D12Resource> resPerDrawcallData_;
-        wrl::ComPtr<ID3D12Resource> resPerInstanceData_;
-        wrl::ComPtr<ID3D12Resource> resMaterials_;
-        wrl::ComPtr<ID3D12Resource> resLights_;
-
-        mutable d3d12::sr::BasicPFD* pPFD_;
-        mutable d3d12::sr::BasicPDD* pPDD_;
-        mutable d3d12::sr::BasicPID* pPID_;
-        mutable d3d12::sr::PhongMaterial* pMats_;
-        mutable d3d12::sr::PhongLight* pLights_;
     };
 
     D3D12Drawer drawer_;
