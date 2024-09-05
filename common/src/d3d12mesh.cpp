@@ -22,9 +22,10 @@ void Mesh::draw(ID3D12GraphicsCommandList* pCmdList) const {
     ) );
 }
 
-void Mesh::draw(ID3D12GraphicsCommandList* pCmdList, std::uint32_t instanceCount) const {
+void Mesh::draw(ID3D12GraphicsCommandList* pCmdList, std::size_t instanceCount) const {
     DX_THROW_FAILED_VOID( pCmdList->DrawIndexedInstanced(
-        static_cast<UINT>( ibView_.SizeInBytes / sizeof(IndexCont::value_type) ), instanceCount, 0, 0, 0
+        static_cast<UINT>( ibView_.SizeInBytes / sizeof(IndexCont::value_type) ),
+        static_cast<UINT>( instanceCount ), 0, 0, 0
     ) );
 }
 
