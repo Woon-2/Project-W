@@ -122,8 +122,7 @@ compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/tShader.hlsl"
     /D INCLUDE_drawcallIdxOnly
     /D INCLUDE_basicInstancing
     /D INCLUDE_phongLighting
-    /D TEX2D_SPACE=space1
-    /D TEXCUBE_SPACE=space2
+    /D MAT_SPACE=space1
     /enable_unbounded_descriptor_tables
 )
 
@@ -134,8 +133,7 @@ compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/tShader.hlsl"
     /D INCLUDE_drawcallIdxOnly
     /D INCLUDE_basicInstancing
     /D INCLUDE_phongLighting
-    /D TEX2D_SPACE=space1
-    /D TEXCUBE_SPACE=space2
+    /D MAT_SPACE=space1
     /enable_unbounded_descriptor_tables
 )
 
