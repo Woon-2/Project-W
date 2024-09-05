@@ -355,7 +355,7 @@ public:
      * @note The Shader for `idx` must be registered to the Core.
      * @see Core::addShader Core::popShader Core::containsShader Shader
      */
-    const Shader& shader(const ShaderIdx& idx) const {
+    Shader& shader(const ShaderIdx& idx) {
         if (shaders_.contains(idx)) {
             return shaders_.at(idx);
         }
@@ -517,7 +517,7 @@ public:
      * @see Core::addShader Core::popShader Core::containsShader Shader
      * @note The Shader for `idx` must be registered to the Core.
      */
-    const Shader& shader(const Core::ShaderIdx& idx) const {
+    Shader& shader(const Core::ShaderIdx& idx) const {
         return pCore_->shader(idx);
     }
 
