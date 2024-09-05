@@ -65,8 +65,12 @@ public:
         return datas_[idx].gpuAddr;
     }
 
-    void upload(Core& core, const void* pData, UINT bytes, std::size_t idx = 0) {
+    void upload(const void* pData, std::size_t bytes, std::size_t idx = 0) {
         std::memcpy(datas_[idx].pData, pData, bytes);
+    }
+
+    void uploadRegion(const void* pData, std::size_t bytes, std::size_t dstOffset, std::size_t idx = 0) {
+        std::memcpy( static_cast<std::uint8_t*>( datas_[idx].pData ) + dstOffset, pData, bytes );
     }
 
 private:
