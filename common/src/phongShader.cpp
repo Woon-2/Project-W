@@ -30,6 +30,24 @@ PhongShaderNT::PhongShaderNT(Core& core, const Config& config, std::size_t dupli
     builder.wireframe().build(pDevice, *this, 1u);
 }
 
+void PhongShaderNT::setRootParams(ID3D12GraphicsCommandList* pCmdList, size_t frameIdx) const {
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootShaderResourceView(
+        0, resPerInstanceData_.gpuAddress(frameIdx)
+    ) );
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootShaderResourceView(
+        1, resMaterials_.gpuAddress(frameIdx)
+    ) );
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootShaderResourceView(
+        2, resLights_.gpuAddress(frameIdx)
+    ) );
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootConstantBufferView(
+        3, resPerDrawcallData_.gpuAddress(frameIdx)
+    ) );
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootConstantBufferView(
+        4, resPerFrameData_.gpuAddress(frameIdx)
+    ) );
+}
+
 PhongShader::PhongShader(Core &core, const Config &config, std::size_t duplicationCnt) 
     : Shader(),
     internalResArr_(5, std::ranges::range_value_t<decltype(internalResArr_)>(duplicationCnt)),
@@ -52,6 +70,27 @@ PhongShader::PhongShader(Core &core, const Config &config, std::size_t duplicati
 
     builder.setInputLayout(il).setRoot(pRoot).build(pDevice, *this, 0u);
     builder.wireframe().build(pDevice, *this, 1u);
+}
+
+void PhongShader::setRootParams(ID3D12GraphicsCommandList* pCmdList, size_t frameIdx) const {
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootShaderResourceView(
+        0, resPerInstanceData_.gpuAddress(frameIdx)
+    ) );
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootShaderResourceView(
+        1, resMaterials_.gpuAddress(frameIdx)
+    ) );
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootDescriptorTable(
+        2, texSrvStart_
+    ) );
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootShaderResourceView(
+        3, resLights_.gpuAddress(frameIdx)
+    ) );
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootConstantBufferView(
+        4, resPerDrawcallData_.gpuAddress(frameIdx)
+    ) );
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootConstantBufferView(
+        5, resPerFrameData_.gpuAddress(frameIdx)
+    ) );
 }
 
 }   // namespace gfx::d3d12

@@ -162,6 +162,7 @@ add_library(gfx
     src/d3d12mesh.cpp include/d3d12mesh.hpp
     src/inputLayout.cpp include/inputLayout.hpp
     src/d3d12InputLayout.cpp include/d3d12InputLayout.hpp
+    src/d3d12Drawers.cpp include/d3d12Drawers.hpp
     src/nullShader.cpp include/nullShader.hpp
     src/solidShader.cpp include/solidShader.hpp
     src/ntShader.cpp include/ntShader.hpp

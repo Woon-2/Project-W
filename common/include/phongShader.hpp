@@ -40,6 +40,8 @@ public:
         return d3d12::inputLayoutName(InputLayoutPreset::Pos3Norm3);
     }
 
+    void setRootParams(ID3D12GraphicsCommandList* pCmdList, size_t frameIdx = 0) const;
+
     GpuMappedRes& pfd() NOEXCEPT { return resPerFrameData_; }
     GpuMappedRes& pdd() NOEXCEPT { return resPerDrawcallData_; }
     GpuMappedRes& pid() NOEXCEPT { return resPerInstanceData_; }
@@ -85,6 +87,8 @@ public:
     static Core::InputLayoutIdx inputLayoutName() NOEXCEPT {
         return d3d12::inputLayoutName(InputLayoutPreset::Pos3Norm3Tex2);
     }
+
+    void setRootParams(ID3D12GraphicsCommandList* pCmdList, size_t frameIdx = 0) const;
 
     GpuMappedRes& pfd() NOEXCEPT { return resPerFrameData_; }
     GpuMappedRes& pdd() NOEXCEPT { return resPerDrawcallData_; }
