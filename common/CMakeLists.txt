@@ -178,6 +178,7 @@ add_library(gfx
     src/drawInfo.cpp include/drawInfo.hpp
     src/gpuMem.cpp include/gpuMem.hpp
     src/renderProtocol.cpp include/renderProtocol.hpp
+    src/d3d12texture.cpp include/d3d12texture.hpp
     
     include/dxtarget.hpp
     include/gfxPrimitive.hpp
@@ -207,6 +208,8 @@ target_link_libraries(gfx
         dxgi.lib
         D3DCompiler.lib
         assimp
+        ddsLoader
+        wicLoader
         common::mu
         common::coro
         common::mem
@@ -215,6 +218,7 @@ target_link_libraries(gfx
 target_include_directories(gfx
     PUBLIC
         "${ASSIMP_INCLUDE}"
+        "${TEXLOADER_INCLUDE}"
 )
 
 include(configure_paths)
