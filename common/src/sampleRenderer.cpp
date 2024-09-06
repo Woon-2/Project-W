@@ -101,10 +101,6 @@ void SampleRenderer::D3D12Drawer::phongInstancingNT( const IScene& scene, d3d12:
     for (auto di : scene.iteration()) {
         auto type = di.get<rp::DIType>(rp::PhongInstancingNT::typeIdx);
 
-        // [0, 0, 0, 0, 0, 0, 0]
-        // [1, 0, 0, 0, 0, 0, 0]
-        // [2, 0, 0, 0, 0, 0, 0]
-
         switch (type) {
         case rp::DIType::Light: {
             auto lights = di.get<std::span<Light>>(rp::PhongInstancingNT::lightIdx);
