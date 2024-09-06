@@ -87,12 +87,15 @@ public:
         return ret;
     }
 
-    void push(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc);
-    void push(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_RENDER_TARGET_VIEW_DESC& rtvDesc);
-    void push(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc);
-    void push(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_UNORDERED_ACCESS_VIEW_DESC& uavDesc);
-    void push(ID3D12Device* pDevice, const D3D12_CONSTANT_BUFFER_VIEW_DESC& cbvDesc);
-    void push(ID3D12Device* pDevice, const D3D12_SAMPLER_DESC& samplerDesc);
+    void pushSrv(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc);
+    void pushSrv(ID3D12Device* pDevice, ID3D12Resource* pRes);
+    void pushRtv(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_RENDER_TARGET_VIEW_DESC& rtvDesc);
+    void pushRtv(ID3D12Device* pDevice, ID3D12Resource* pRes);
+    void pushDsv(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc);
+    void pushDsv(ID3D12Device* pDevice, ID3D12Resource* pRes);
+    void pushUav(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_UNORDERED_ACCESS_VIEW_DESC& uavDesc);
+    void pushCbv(ID3D12Device* pDevice, const D3D12_CONSTANT_BUFFER_VIEW_DESC& cbvDesc);
+    void pushSam(ID3D12Device* pDevice, const D3D12_SAMPLER_DESC& samplerDesc);
 
     ID3D12DescriptorHeap* get() const NOEXCEPT {
         return pHeap_.Get();
@@ -197,6 +200,7 @@ public:
     using UpBufIdx = std::string;
     using ShaderIdx = std::string;
     using InputLayoutIdx = std::string;
+    using DescHeapIdx = std::string;
 
     /**
      * @brief Configures the DXGI Factory.
@@ -211,34 +215,11 @@ public:
         return spFactory;
     }
 
-    /**
-     * @brief Configures the size of the render target view heap.
-     * @param size The size of the render target view heap.
-     * @see Core::init
-     */
-    static void configRtvHeapSize(std::size_t size) NOEXCEPT {
-        sRtvHeapSize = size;
+    static void configCmdListPoolSize(std::size_t size) NOEXCEPT {
+        sCmdListPoolSize = size;
     }
-    static std::size_t rtvHeapSize() NOEXCEPT {
-        return sRtvHeapSize;
-    }
-    /** 
-     * @brief Configures the size of the depth stencil view heap.
-     * @param size The size of the depth stencil view heap.
-     * @see Core::init
-     */
-    static void configDsvHeapSize(std::size_t size) NOEXCEPT {
-        sDsvHeapSize = size;
-    }
-    static std::size_t dsvHeapSize() NOEXCEPT {
-        return sDsvHeapSize;
-    }
-
-    static void configCommonHeapSize(std::size_t size) NOEXCEPT {
-        sCommonHeapSize = size;
-    }
-    static std::size_t commonHeapSize() NOEXCEPT {
-        return sCommonHeapSize;
+    static std::size_t cmdListPoolSize() NOEXCEPT {
+        return sCmdListPoolSize;
     }
 
     /**
@@ -303,22 +284,6 @@ public:
      * @see Core::waitForGpu
      */
     void alterFence(std::size_t idx);
-
-    D3D12_CPU_DESCRIPTOR_HANDLE rtvHeapStart() const NOEXCEPT {
-        return pRtvHeap_->GetCPUDescriptorHandleForHeapStart();
-    }
-
-    D3D12_CPU_DESCRIPTOR_HANDLE dsvHeapStart() const NOEXCEPT {
-        return pDsvHeap_->GetCPUDescriptorHandleForHeapStart();
-    }
-
-    D3D12_CPU_DESCRIPTOR_HANDLE commonHeapCpuStart() const NOEXCEPT {
-        return pCommonHeap_->GetCPUDescriptorHandleForHeapStart();
-    }
-
-    D3D12_GPU_DESCRIPTOR_HANDLE commonHeapGpuStart() const NOEXCEPT {
-        return pCommonHeap_->GetGPUDescriptorHandleForHeapStart();
-    }
 
     /**
      * @brief Queries the root signature from the Core.
@@ -401,16 +366,15 @@ public:
         }
         throw GFX_EXCEPT_CLASS(d3d12::Core::UpBufIdxNotFound, idx);
     }
-    /**
-     * @brief Registers a Shader to the Core.
-     * @param idx The index of the Shader, which becomes the key of the Shader.
-     * @param shader The Shader to register.
-     * @note The Shader for `shader` can be easily acquired via using ShaderBuilder or SimpleShaderBuilder.
-     * @see Core::shader Core::popShader Core::containsShader Shader ShaderBuilder SimpleShaderBuilder
-     */
-    void addShader(ShaderIdx idx, Shader shader) {
+
+    void addShader(ShaderIdx idx, const Shader& shader) {
+        shaders_[idx] = shader;
+    }
+
+    void addShader(ShaderIdx idx, Shader&& shader) {
         shaders_[idx] = std::move(shader);
     }
+
     /**
      * @brief Queries the Shader for the specified index.
      * @param idx The index of the Shader.
@@ -498,12 +462,38 @@ public:
         throw GFX_EXCEPT_CLASS(d3d12::Core::InputLayoutIdxNotFound, idx);
     }
 
+    void addDescHeap(DescHeapIdx idx, const DescriptorHeap& heap) {
+        descriptorHeaps_[idx] = heap;
+    }
+
+    void addDescHeap(DescHeapIdx idx, DescriptorHeap&& heap) {
+        descriptorHeaps_[idx] = std::move(heap);
+    }
+
+    DescriptorHeap& descHeap(const DescHeapIdx& idx) {
+        if (descriptorHeaps_.contains(idx)) {
+            return descriptorHeaps_.at(idx);
+        }
+        throw GFX_EXCEPT("DescriptorHeap not found.");
+    }
+
+    void popDescHeap(const DescHeapIdx& idx) {
+        if (auto pos = descriptorHeaps_.find(idx); pos != descriptorHeaps_.end()) {
+            descriptorHeaps_.erase(pos);
+            return;
+        }
+        throw GFX_EXCEPT("DescriptorHeap not found.");
+    }
+
+    bool containsDescHeap(const DescHeapIdx& idx) const NOEXCEPT {
+        return descriptorHeaps_.contains(idx);
+    }
+
 private:
     // TODO: make it return multiple adapters enumerated.
     wrl::ComPtr<IDXGIAdapter1> enumAdapters();
     void createDevice(IDXGIAdapter1* pAdapter);
     void createCommandQueueAndLists(ID3D12Device* pDevice);
-    void buildDescHeaps(ID3D12Device* pDevice);
     void createFenceAndEvent(ID3D12Device* pDevice);
 
     const CmdListPool::Element fetchCmdList() {
@@ -519,20 +509,16 @@ private:
     }
 
     static wrl::ComPtr<IDXGIFactory4> spFactory;
-    static std::size_t sRtvHeapSize;
-    static std::size_t sDsvHeapSize;
-    static std::size_t sCommonHeapSize;
+    static std::size_t sCmdListPoolSize;
 
+    CmdListPool gfxCmdListPool_;
     std::map<RootIdx, wrl::ComPtr<ID3D12RootSignature>> roots_;
     std::map<UpBufIdx, wrl::ComPtr<ID3D12Resource>> upBufs_;
     std::map<ShaderIdx, Shader> shaders_;
     std::map<InputLayoutIdx, InputLayout> inputLayouts_;
-    CmdListPool gfxCmdListPool_;
+    std::map<DescHeapIdx, DescriptorHeap> descriptorHeaps_;
     wrl::ComPtr<ID3D12Device> pDevice_;
     wrl::ComPtr<ID3D12CommandQueue> pCmdQ_;
-    wrl::ComPtr<ID3D12DescriptorHeap> pRtvHeap_;
-    wrl::ComPtr<ID3D12DescriptorHeap> pDsvHeap_;
-    wrl::ComPtr<ID3D12DescriptorHeap> pCommonHeap_;
     wrl::ComPtr<ID3D12Fence> pFence_;
     std::array<UINT64, 2> fenceValues_ = { 0, 0 };
     HANDLE fenceEvent_ = nullptr;
@@ -679,6 +665,9 @@ public:
     template <Win32::Win32Char T>
     friend struct BasicD3D12WTraits;
 
+    static const Core::DescHeapIdx offscreenHeapIdx;
+    static const Core::DescHeapIdx offscreenDepthHeapIdx;
+
     static const std::array<float, 4> clearColor;
 
     using MyBase = D3DWindow<Traits>;
@@ -747,19 +736,8 @@ public:
         init(core);
     }
 
-    /**
-     * @brief Builds render target views of the swap chain's back buffers on the Core's render target view heap region.    
-     * @param pDevice The device which is going to be used to create the render target views.
-     * @param pFirstRtv The first render target view which indicates the start of the core's objective render target view heap region.
-     * @param backBufCnt The number of back buffers, the default value is D3DWindow::defBackBufCnt.
-     */
-    void buildRtv(ID3D12Device* pDevice, D3D12_CPU_DESCRIPTOR_HANDLE pFirstRtv, std::size_t backBufCnt = MyBase::defBackBufCnt);
-    /**
-     * @brief Builds depth stencil views for the swap chain's back buffers on the Core's depth stencil view heap region.
-     * @param pDevice The device which is going to be used to create the depth stencil views.
-     * @param pFirstDsv The first depth stencil view which indicates the start of the core's objective depth stencil view heap region.
-     */
-    void buildDsv(ID3D12Device* pDevice, D3D12_CPU_DESCRIPTOR_HANDLE pFirstDsv);
+    void buildRtv(Core& core, std::size_t backBufCnt = MyBase::defBackBufCnt);
+    void buildDsv(Core& core);
     void createRTBuffers(ID3D12Device* pDevice);
     /**
      * @brief Creates depth buffers for the swap chain's back buffers internally.
@@ -837,8 +815,8 @@ private:
 
         createRTBuffers( pDevice );
         createDepthBuffers( pDevice );
-        buildRtv( pDevice, core.rtvHeapStart(), backBuffers_.size() );
-        buildDsv( pDevice, core.dsvHeapStart() );
+        buildRtv( core, backBuffers_.size() );
+        buildDsv( core );
     }
 
     std::vector<wrl::ComPtr<ID3D12Resource>> backBuffers_;
@@ -854,26 +832,36 @@ private:
 
 // TODO: make D3DWindow's back buffer count modifiable, and reflect that in here. 
 template <class Traits>
-void Window<Traits>::buildRtv( ID3D12Device* pDevice,
-    D3D12_CPU_DESCRIPTOR_HANDLE pFirstRtv, std::size_t backBufCnt
-) {
-    rtvStride_ = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-    pFirstRtv_ = pFirstRtv;
+void Window<Traits>::buildRtv(Core& core, std::size_t backBufCnt) {
+    auto pDevice = static_cast<ID3D12Device*>( WindowAttorney::device(core) );
+
+    if (core.containsDescHeap(offscreenHeapIdx)) {
+        core.popDescHeap(offscreenHeapIdx);
+    }
+
+    core.addDescHeap(offscreenHeapIdx, DescriptorHeap( pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, backBufCnt ));
     
+    auto& heap = core.descHeap(offscreenHeapIdx);
+
     for (auto i = 0; i < backBufCnt; ++i) {
-        pDevice->CreateRenderTargetView(offscreenBuffers_[i].Get(), nullptr, pFirstRtv);
-        pFirstRtv.ptr += rtvStride_;
+        heap.pushRtv(pDevice, offscreenBuffers_[i].Get());
     }
 }
 
 // TODO: deal with multiple depth stencils.
 template <class Traits>
-void Window<Traits>::buildDsv(ID3D12Device* pDevice, D3D12_CPU_DESCRIPTOR_HANDLE pFirstDsv) {
-    dsvStride_ = pDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+void Window<Traits>::buildDsv(Core& core) {
+    auto pDevice = static_cast<ID3D12Device*>( WindowAttorney::device(core) );
 
-    pDevice->CreateDepthStencilView(depthBuffers_[0].Get(), nullptr, pFirstDsv);
+    if (core.containsDescHeap(offscreenDepthHeapIdx)) {
+        core.popDescHeap(offscreenDepthHeapIdx);
+    }
 
-    pFirstDsv_ = pFirstDsv;
+    core.addDescHeap(offscreenDepthHeapIdx, DescriptorHeap( pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1 ));
+
+    auto& heap = core.descHeap(offscreenDepthHeapIdx);
+
+    heap.pushDsv(pDevice, depthBuffers_[0].Get());
 }
 
 template <class Traits>
@@ -1096,6 +1084,11 @@ void Window<Traits>::regularPostRender(ID3D12GraphicsCommandList *pCmdList) {
 
 template <class Traits>
 const std::array<float, 4> Window<Traits>::clearColor = { 0.0f, 0.2f, 0.4f, 1.0f };
+
+template <class Traits>
+const Core::DescHeapIdx Window<Traits>::offscreenHeapIdx = "Offscreen"s;
+template <class Traits>
+const Core::DescHeapIdx Window<Traits>::offscreenDepthHeapIdx = "Depth"s;
 
 /**
  * @brief The basic traits for D3D12 window.    
