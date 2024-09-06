@@ -201,8 +201,18 @@ target_include_directories(gfx
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
+find_package(directx-headers REQUIRED PATHS "${CMAKE_CURRENT_SOURCE_DIR}/share/directx-headers/cmake")
+
+if(directx-headers_FOUND)
+    message(STATUS "Found DirectX-Headers: ${directx-headers_DIR}")
+else()
+    message(FATAL_ERROR "Could not find DirectX-Headers")
+endif()
+
 target_link_libraries(gfx
     PRIVATE
+        Microsoft::DirectX-Headers
+        Microsoft::DirectX-Guids
         d3d12.lib
         dxguid.lib
         dxgi.lib
@@ -219,6 +229,7 @@ target_include_directories(gfx
     PUBLIC
         "${ASSIMP_INCLUDE}"
         "${TEXLOADER_INCLUDE}"
+        "${D3D12_INCLUDE}"
 )
 
 include(configure_paths)

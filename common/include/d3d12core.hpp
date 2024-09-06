@@ -6,7 +6,9 @@
 #include "d3d12shader.hpp"
 #include "d3d12InputLayout.hpp"
 
-#include <d3d12.h>
+#include <directx/d3dx12.h>
+#include <directx/d3d12.h>
+
 #include "dxfactory.hpp"
 #include "dxtarget.hpp"
 #include "dxexcept.hpp"
