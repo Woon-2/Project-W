@@ -34,7 +34,7 @@ struct PhongInstancingNT {
     using PDDType = d3d12::sr::BasicPDD;
     using PFDType = d3d12::sr::BasicPFD;
     using LightType = d3d12::sr::PhongLight;
-    using MaterialType = d3d12::sr::PhongMaterial;
+    using MaterialType = d3d12::sr::PhongMaterialNT;
 };
 
 }   // namespace gfx::rp
