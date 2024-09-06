@@ -263,8 +263,12 @@ public:
         return pDsvHeap_->GetCPUDescriptorHandleForHeapStart();
     }
 
-    D3D12_CPU_DESCRIPTOR_HANDLE commonHeapStart() const NOEXCEPT {
+    D3D12_CPU_DESCRIPTOR_HANDLE commonHeapCpuStart() const NOEXCEPT {
         return pCommonHeap_->GetCPUDescriptorHandleForHeapStart();
+    }
+
+    D3D12_GPU_DESCRIPTOR_HANDLE commonHeapGpuStart() const NOEXCEPT {
+        return pCommonHeap_->GetGPUDescriptorHandleForHeapStart();
     }
 
     /**
