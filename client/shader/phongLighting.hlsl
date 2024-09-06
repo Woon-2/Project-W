@@ -43,7 +43,7 @@ float4 dirLight(uint lightIdx, uint matIdx, float3 posVNormalized, float3 normal
         float3 reflected = reflect(-toLight, normalV);
         specular = pow(max(0.f, dot(reflected, -posVNormalized)), gMaterials[matIdx].specular.a);
     }
-    gMaterials[matIdx].sample(gSam0, u, v)
+
     return gMaterials[matIdx].ambient * gLights[lightIdx].ambient +
         gMaterials[matIdx].diffuse * gLights[lightIdx].diffuse * diffused +
         gMaterials[matIdx].specular * gLights[lightIdx].specular * specular;
