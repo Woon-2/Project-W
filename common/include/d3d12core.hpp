@@ -75,6 +75,53 @@ private:
     std::list<wrl::ComPtr<ID3D12CommandAllocator>> cmdAllocs_;
 };
 
+class DescriptorHeap {
+public:
+    DescriptorHeap()
+        : pHeap_(), type_(D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES), size_(0), capacity_(0), stride_(0) {}
+    DescriptorHeap(ID3D12Device* pDevice, D3D12_DESCRIPTOR_HEAP_TYPE type, std::size_t capacity, bool shaderVisible = false);
+
+    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle(std::size_t idx = 0) const NOEXCEPT {
+        auto ret = gpuStart_;
+        ret.ptr += idx * stride_;
+        return ret;
+    }
+
+    void push(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc);
+    void push(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_RENDER_TARGET_VIEW_DESC& rtvDesc);
+    void push(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc);
+    void push(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_UNORDERED_ACCESS_VIEW_DESC& uavDesc);
+    void push(ID3D12Device* pDevice, const D3D12_CONSTANT_BUFFER_VIEW_DESC& cbvDesc);
+    void push(ID3D12Device* pDevice, const D3D12_SAMPLER_DESC& samplerDesc);
+
+    ID3D12DescriptorHeap* get() const NOEXCEPT {
+        return pHeap_.Get();
+    }
+
+    std::size_t size() const NOEXCEPT {
+        return size_;
+    }
+
+    D3D12_DESCRIPTOR_HEAP_TYPE type() const NOEXCEPT {
+        return type_;
+    }
+
+private:
+    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle(std::size_t idx = 0) const NOEXCEPT {
+        auto ret = cpuStart_;
+        ret.ptr += idx * stride_;
+        return ret;
+    }
+
+    wrl::ComPtr<ID3D12DescriptorHeap> pHeap_;
+    D3D12_CPU_DESCRIPTOR_HANDLE cpuStart_;
+    D3D12_GPU_DESCRIPTOR_HANDLE gpuStart_;
+    std::size_t size_;
+    std::size_t capacity_;
+    std::size_t stride_;
+    D3D12_DESCRIPTOR_HEAP_TYPE type_;
+};
+
 /**
  * @brief The core class for the D3D12 implementation of the GFX library.     
  * It is responsible for initializing the device, the command list & queue, and the descriptor heaps,    

@@ -36,6 +36,85 @@ const CmdListPool::Element CmdListPool::fetch() {
     return elem;
 }
 
+DescriptorHeap::DescriptorHeap( ID3D12Device* pDevice, D3D12_DESCRIPTOR_HEAP_TYPE type,
+    std::size_t capacity, bool shaderVisible
+) : pHeap_(), cpuStart_(), gpuStart_(), size_(0), capacity_(capacity), stride_{}, type_(type) {
+    auto desc = D3D12_DESCRIPTOR_HEAP_DESC{
+        .Type = type,
+        .NumDescriptors = static_cast<UINT>(capacity),
+        .Flags = shaderVisible ? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+        .NodeMask = 0
+    };
+
+    DX_THROW_FAILED( pDevice->CreateDescriptorHeap(
+        &desc, __uuidof(ID3D12DescriptorHeap), &pHeap_
+    ) );
+
+    stride_ = pDevice->GetDescriptorHandleIncrementSize(type);
+    cpuStart_ = pHeap_->GetCPUDescriptorHandleForHeapStart();
+    gpuStart_ = pHeap_->GetGPUDescriptorHandleForHeapStart();
+}
+
+void DescriptorHeap::push(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc) {
+    if (type_ != D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV) {
+        throw GFX_EXCEPT("The descriptor heap type is not CBV_SRV_UAV."s);
+    }
+
+    DX_THROW_FAILED_VOID( pDevice->CreateShaderResourceView(
+        pRes, &srvDesc, cpuHandle(size_++)
+    ) );
+}
+
+void DescriptorHeap::push(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_RENDER_TARGET_VIEW_DESC& rtvDesc) {
+    if (type_ != D3D12_DESCRIPTOR_HEAP_TYPE_RTV) {
+        throw GFX_EXCEPT("The descriptor heap type is not RTV."s);
+    }
+
+    DX_THROW_FAILED_VOID( pDevice->CreateRenderTargetView(
+        pRes, &rtvDesc, cpuHandle(size_++)
+    ) );
+}
+
+void DescriptorHeap::push(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc) {
+    if (type_ != D3D12_DESCRIPTOR_HEAP_TYPE_DSV) {
+        throw GFX_EXCEPT("The descriptor heap type is not DSV."s);
+    }
+
+    DX_THROW_FAILED_VOID( pDevice->CreateDepthStencilView(
+        pRes, &dsvDesc, cpuHandle(size_++)
+    ) );
+}
+
+void DescriptorHeap::push(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_UNORDERED_ACCESS_VIEW_DESC& uavDesc) {
+    if (type_ != D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV) {
+        throw GFX_EXCEPT("The descriptor heap type is not CBV_SRV_UAV."s);
+    }
+
+    DX_THROW_FAILED_VOID( pDevice->CreateUnorderedAccessView(
+        pRes, nullptr, &uavDesc, cpuHandle(size_++)
+    ) );
+}
+
+void DescriptorHeap::push(ID3D12Device* pDevice, const D3D12_CONSTANT_BUFFER_VIEW_DESC& cbvDesc) {
+    if (type_ != D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV) {
+        throw GFX_EXCEPT("The descriptor heap type is not CBV_SRV_UAV."s);
+    }
+
+    DX_THROW_FAILED_VOID( pDevice->CreateConstantBufferView(
+        &cbvDesc, cpuHandle(size_++)
+    ) );
+}
+
+void DescriptorHeap::push(ID3D12Device* pDevice, const D3D12_SAMPLER_DESC& samplerDesc) {
+    if (type_ != D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV) {
+        throw GFX_EXCEPT("The descriptor heap type is not CBV_SRV_UAV."s);
+    }
+
+    DX_THROW_FAILED_VOID( pDevice->CreateSampler(
+        &samplerDesc, cpuHandle(size_++)
+    ) );
+}
+
 void Core::init() {
     auto adapter = enumAdapters();
     createDevice(adapter.Get());
@@ -263,6 +342,6 @@ std::size_t Core::sRtvHeapSize = 0;
 std::size_t Core::sDsvHeapSize = 0;
 std::size_t Core::sCommonHeapSize = 0;
 
-}   // namespace d3d12
+} // namespace d3d12
 
 }   // namespace gfx
