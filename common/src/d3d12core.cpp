@@ -40,7 +40,7 @@ void Core::init() {
     auto adapter = enumAdapters();
     createDevice(adapter.Get());
     createCommandQueueAndLists(pDevice_.Get());
-    buildRtvAndDsvHeaps(pDevice_.Get());
+    buildDescHeaps(pDevice_.Get());
     createFenceAndEvent(pDevice_.Get());
 }
 
@@ -109,7 +109,7 @@ void Core::createCommandQueueAndLists(ID3D12Device* pDevice) {
     gfxCmdListPool_ = CmdListPool(pDevice, D3D12_COMMAND_LIST_TYPE_DIRECT, rtvHeapSize());
 }
 
-void Core::buildRtvAndDsvHeaps(ID3D12Device* pDevice) {
+void Core::buildDescHeaps(ID3D12Device* pDevice) {
     auto rhd = D3D12_DESCRIPTOR_HEAP_DESC{
         .Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
         .NumDescriptors = static_cast<UINT>(sRtvHeapSize),
@@ -130,6 +130,17 @@ void Core::buildRtvAndDsvHeaps(ID3D12Device* pDevice) {
 
     DX_THROW_FAILED( pDevice->CreateDescriptorHeap(
         &dhd, __uuidof(ID3D12DescriptorHeap), &pDsvHeap_
+    ) );
+
+    auto chd = D3D12_DESCRIPTOR_HEAP_DESC{
+        .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+        .NumDescriptors = static_cast<UINT>(sCommonHeapSize),
+        .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+        .NodeMask = 0
+    };
+
+    DX_THROW_FAILED( pDevice->CreateDescriptorHeap(
+        &chd, __uuidof(ID3D12DescriptorHeap), &pCommonHeap_
     ) );
 }
 
@@ -250,6 +261,7 @@ void D3D12RenderContext::postRender() {
 wrl::ComPtr<IDXGIFactory4> Core::spFactory = nullptr;
 std::size_t Core::sRtvHeapSize = 0;
 std::size_t Core::sDsvHeapSize = 0;
+std::size_t Core::sCommonHeapSize = 0;
 
 }   // namespace d3d12
 

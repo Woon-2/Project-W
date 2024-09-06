@@ -185,6 +185,13 @@ public:
         return sDsvHeapSize;
     }
 
+    static void configCommonHeapSize(std::size_t size) NOEXCEPT {
+        sCommonHeapSize = size;
+    }
+    static std::size_t commonHeapSize() NOEXCEPT {
+        return sCommonHeapSize;
+    }
+
     /**
      * @brief Initializes the Core.    
      * It creates the device, the command queue & list, the descriptor heaps, and the fence & event.
@@ -254,6 +261,10 @@ public:
 
     D3D12_CPU_DESCRIPTOR_HANDLE dsvHeapStart() const NOEXCEPT {
         return pDsvHeap_->GetCPUDescriptorHandleForHeapStart();
+    }
+
+    D3D12_CPU_DESCRIPTOR_HANDLE commonHeapStart() const NOEXCEPT {
+        return pCommonHeap_->GetCPUDescriptorHandleForHeapStart();
     }
 
     /**
@@ -439,7 +450,7 @@ private:
     wrl::ComPtr<IDXGIAdapter1> enumAdapters();
     void createDevice(IDXGIAdapter1* pAdapter);
     void createCommandQueueAndLists(ID3D12Device* pDevice);
-    void buildRtvAndDsvHeaps(ID3D12Device* pDevice);
+    void buildDescHeaps(ID3D12Device* pDevice);
     void createFenceAndEvent(ID3D12Device* pDevice);
 
     const CmdListPool::Element fetchCmdList() {
@@ -457,6 +468,7 @@ private:
     static wrl::ComPtr<IDXGIFactory4> spFactory;
     static std::size_t sRtvHeapSize;
     static std::size_t sDsvHeapSize;
+    static std::size_t sCommonHeapSize;
 
     std::map<RootIdx, wrl::ComPtr<ID3D12RootSignature>> roots_;
     std::map<UpBufIdx, wrl::ComPtr<ID3D12Resource>> upBufs_;
@@ -467,6 +479,7 @@ private:
     wrl::ComPtr<ID3D12CommandQueue> pCmdQ_;
     wrl::ComPtr<ID3D12DescriptorHeap> pRtvHeap_;
     wrl::ComPtr<ID3D12DescriptorHeap> pDsvHeap_;
+    wrl::ComPtr<ID3D12DescriptorHeap> pCommonHeap_;
     wrl::ComPtr<ID3D12Fence> pFence_;
     std::array<UINT64, 2> fenceValues_ = { 0, 0 };
     HANDLE fenceEvent_ = nullptr;
