@@ -45,7 +45,7 @@ struct PhongMaterial {
     std::uint32_t specularMapIdx;
     float shininess;
     float padding;
-}
+};
 
 struct PhongLight {
     dx::XMFLOAT4 ambient;
