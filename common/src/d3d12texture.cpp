@@ -1,6 +1,6 @@
 #include "d3d12texture.hpp"
 
-#include "dxtarget.hpp"
+#include "d3d12resLow.hpp"
 #include "dxexcept.hpp"
 
 #include <memory>
@@ -11,15 +11,60 @@ namespace gfx {
 
 namespace d3d12 {
 
-void Texture::load(Core& core, const std::filesystem::path& path) {
+void Texture::load( Core& core, D3D12RenderContext& ctx,
+    const std::filesystem::path& path, D3D12_RESOURCE_STATES initialState
+) {
     if (path.extension() == ".dds") {
-        loadDDS(core, path);
+        loadDDS(core, ctx, path, initialState);
     } else {
-        loadWIC(core, path);
+        loadWIC(core, ctx, path, initialState);
     }
+
+    auto pCmdList = std::any_cast<wrl::ComPtr<ID3D12GraphicsCommandList>>(
+        ctx.cast(RenderContextType::D3D12)
+    );
+
+    auto bar = D3D12_RESOURCE_BARRIER{
+        .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+        .Transition = {
+            .pResource = res_.Get(),
+            .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+            .StateBefore = D3D12_RESOURCE_STATE_COPY_DEST,
+            .StateAfter = initialState
+        }
+    };
+
+    pCmdList->ResourceBarrier(1, &bar);
+
+    // dangerous:
+    // It does not wait for the gpu to finish the command list.
+    // So, If the created SRV is used before the command list is executed,
+    // it will cause an error.
+
+    desc_ = res_->GetDesc();
+
+    auto pDevice = static_cast<ID3D12Device*>( DeviceFetcher::device(core) );
+
+    if (!core.containsDescHeap(texSrvHeapIdx)) {
+        core.addDescHeap( texSrvHeapIdx,
+            DescriptorHeap( pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 123u, true )
+        );
+    }
+
+    auto& texSrvHeap = core.descHeap(texSrvHeapIdx);
+
+    texSrvHeap.pushSrv( pDevice, res_.Get() );  // temporary
+    gpuHandle_ = texSrvHeap.gpuHandle( texSrvHeap.size() - 1 );
 }
 
-void Texture::loadDDS(Core& core, const std::filesystem::path& path) {
+void Texture::loadDDS( Core& core, D3D12RenderContext& ctx,
+    const std::filesystem::path& path, D3D12_RESOURCE_STATES initialState
+) {
+    auto pCmdList = std::any_cast<wrl::ComPtr<ID3D12GraphicsCommandList>>(
+        ctx.cast(RenderContextType::D3D12)
+    );
+    auto pDevice = static_cast<ID3D12Device*>( DeviceFetcher::device(core) );
+
     auto ddsData = std::unique_ptr<std::uint8_t[]>();
     auto subresources = std::vector<D3D12_SUBRESOURCE_DATA>();
     auto alphaMode = dx::DDS_ALPHA_MODE_UNKNOWN;
@@ -38,20 +83,60 @@ void Texture::loadDDS(Core& core, const std::filesystem::path& path) {
         &blsCubemap
     ) );
 
-    auto heapPropDesc = D3D12_HEAP_PROPERTIES{
-        .Type = D3D12_HEAP_TYPE_UPLOAD,
-        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
-        .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
-        .CreationNodeMask = 0,
-        .VisibleNodeMask = 0
+    auto requiredBytes = GetRequiredIntermediateSize(res_.Get(), 0, static_cast<UINT>( subresources.size() ));
+
+    auto uploadBuf = createUpBuf(core, requiredBytes);
+    
+    UpdateSubresources( pCmdList.Get(), res_.Get(), uploadBuf.Get(),
+        0, 0, static_cast<UINT>( subresources.size() ), subresources.data()
+    );
+
+    auto bar = D3D12_RESOURCE_BARRIER{
+        .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+        .Transition = {
+            .pResource = res_.Get(),
+            .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+            .StateBefore = D3D12_RESOURCE_STATE_COPY_DEST,
+            .StateAfter = initialState
+        }
     };
 
-    auto requiredBytes = GetRequiredIntermediateSize(res_.Get(), 0, static_cast<UINT>( subresources.size() ));
+    pCmdList->ResourceBarrier(1, &bar);
+
+    desc_ = res_->GetDesc();
 }
 
-void Texture::loadWIC(Core& core, const std::filesystem::path& path) {
+void Texture::loadWIC( Core& core, D3D12RenderContext& ctx,
+    const std::filesystem::path& path, D3D12_RESOURCE_STATES initialState
+) {
+    auto pCmdList = std::any_cast<wrl::ComPtr<ID3D12GraphicsCommandList>>(
+        ctx.cast(RenderContextType::D3D12)
+    );
 
+    auto wicData = std::unique_ptr<std::uint8_t[]>();
+    auto subresource = D3D12_SUBRESOURCE_DATA();
+
+    DX_THROW_FAILED( DirectX::LoadWICTextureFromFileEx(
+        static_cast<ID3D12Device*>( DeviceFetcher::device(core) ),
+        path.wstring().c_str(),
+        0,
+        D3D12_RESOURCE_FLAG_NONE,
+        dx::WIC_LOADER_DEFAULT,
+        &res_,
+        wicData,
+        subresource
+    ) );
+
+    auto requiredBytes = GetRequiredIntermediateSize(res_.Get(), 0, 1u);
+
+    auto uploadBuf = createUpBuf(core, requiredBytes);
+    
+    UpdateSubresources( pCmdList.Get(), res_.Get(), uploadBuf.Get(),
+        0, 0, 1u, &subresource
+    );
 }
+
+const Core::DescHeapIdx Texture::texSrvHeapIdx = "TexSrv"s;
 
 }   // namespace gfx::d3d12
 

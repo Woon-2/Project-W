@@ -14,19 +14,27 @@ namespace d3d12 {
 
 class Texture {
 public:
-    Texture() NOEXCEPT
-        : desc_{}, res_(), cpuHandle_{}, gpuHandle_{} {}
+    static const Core::DescHeapIdx texSrvHeapIdx;
 
-    void load(Core& core, const std::filesystem::path& path);
+    Texture() NOEXCEPT
+        : desc_{}, res_(), gpuHandle_{} {}
+
+    void load( Core& core, D3D12RenderContext& ctx, const std::filesystem::path& path,
+        D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+    );
+
+    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle() const NOEXCEPT { return gpuHandle_; }
 
 private:
-    void loadDDS(Core& core, const std::filesystem::path& path);
-    void loadWIC(Core& core, const std::filesystem::path& path);
-
+    void loadDDS( Core& core, D3D12RenderContext& ctx, const std::filesystem::path& path,
+        D3D12_RESOURCE_STATES initialState
+    );
+    void loadWIC( Core& core, D3D12RenderContext& ctx, const std::filesystem::path& path,
+        D3D12_RESOURCE_STATES initialState
+    );
+    
     D3D12_RESOURCE_DESC desc_;
     wrl::ComPtr<ID3D12Resource> res_;
-
-    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle_;
     D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle_;
 };
 
