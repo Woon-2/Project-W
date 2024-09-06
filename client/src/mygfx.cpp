@@ -2,10 +2,10 @@
 
 #include "rootPresets.hpp"
 #include "d3d12InputLayoutPresets.hpp"
-#include "sampleRenderer.hpp"
+#include "phongRenderer.hpp"
 
 void MyGfx::init() {
-    pRenderer_ = std::make_unique<gfx::SampleRenderer>();
+    pRenderer_ = std::make_unique<gfx::PhongRendererNT>();
 
     gfx::d3d12::Core::init();
     addRoot( gfx::d3d12::rootName(gfx::d3d12::RootPreset::Null),

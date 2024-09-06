@@ -151,7 +151,7 @@ add_library(gfx
     src/dxexcept.cpp include/dxexcept.hpp
     src/d3d12core.cpp include/d3d12core.hpp
     src/d3dwindow.cpp include/d3dwindow.hpp
-    src/sampleRenderer.cpp include/sampleRenderer.hpp
+    src/phongRenderer.cpp include/phongRenderer.hpp
     src/sampleScene.cpp include/sampleScene.hpp
     src/d3d12shader.cpp include/d3d12shader.hpp
     src/rootPresets.cpp include/rootPresets.hpp
