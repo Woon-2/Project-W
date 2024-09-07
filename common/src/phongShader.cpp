@@ -1,5 +1,7 @@
 #include "phongShader.hpp"
 
+#include "d3d12texture.hpp"
+
 #include <ranges>
 
 namespace gfx {
@@ -56,9 +58,17 @@ PhongShader::PhongShader(Core &core, const Config &config, std::size_t duplicati
     resPerInstanceData_(core, sizeof(d3d12::sr::BasicPID), internalResArr_[2]),
     resMaterials_(core, sizeof(d3d12::sr::PhongMaterial), internalResArr_[3]),
     resLights_(core, sizeof(d3d12::sr::PhongLight), internalResArr_[4]),
+    texSrvStart_(),
     maxInstances_(config.maxInstances),
     maxMaterials_(config.maxMaterials),
     maxLights_(config.maxLights) {
+
+    if ( !core.containsDescHeap(Texture::texSrvHeapIdx) ) {
+        throw GFX_EXCEPT("[Description] Texture descriptor heap not found.");
+    }
+
+    texSrvStart_ = core.descHeap(Texture::texSrvHeapIdx).gpuHandle();
+
     auto builder = SimpleShaderBuilder();
     builder.code(Type::Vertex, loadCSO(compiledShaderPath / "tShader_vs.cso"));
     builder.code(Type::Pixel, loadCSO(compiledShaderPath / "tShader_ps.cso"));
