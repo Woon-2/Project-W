@@ -1,4 +1,4 @@
-function(config_win32 targetName accessModifier)
+function(define_win32_lighten_macros targetName accessModifier)
     target_compile_definitions(${targetName}
     ${accessModifier}
         UNICODE _UNICODE
@@ -41,11 +41,14 @@ function(config_win32 targetName accessModifier)
         # https://learn.microsoft.com/en-us/windows/win32/winprog/enabling-strict
         STRICT
     )
+endfunction()
+
+function(config_win32 targetName accessModifier)
+    define_win32_lighten_macros(${targetName} ${accessModifier})
 
     target_link_options(${targetName}
     ${accessModifier}
         $<IF:$<CONFIG:Debug>,/SUBSYSTEM:CONSOLE,/SUBSYSTEM:WINDOWS>
         "/ENTRY:WinMainCRTStartup"
     )
-
 endfunction()

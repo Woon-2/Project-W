@@ -36,7 +36,7 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
 endif()
 
 include(auto_configure)
-include(win32app_configuration)
+include(win32_configuration)
 
 # === woon2exception ===
 add_library(woon2exception
@@ -211,8 +211,7 @@ endif()
 
 target_link_libraries(gfx
     PRIVATE
-        Microsoft::DirectX-Headers
-        Microsoft::DirectX-Guids
+        DirectX::d3dx12
         d3d12.lib
         dxguid.lib
         dxgi.lib
