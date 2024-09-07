@@ -485,4 +485,6 @@ common/include/shaderPath.hpp
 common/include/resourcePath.hpp
 !extern/assimp/*
 !extern/zlib/*
+!extern/d3dx12/lib/*
+!extern/texLoader/*
 !resource/*/*/*.obj
