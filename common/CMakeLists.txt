@@ -201,7 +201,7 @@ target_include_directories(gfx
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
-find_package(directx-headers REQUIRED PATHS "${CMAKE_CURRENT_SOURCE_DIR}/share/directx-headers/cmake")
+find_package(directx-headers REQUIRED PATHS "${DIRECTX_CONFIG_PATH}")
 
 if(directx-headers_FOUND)
     message(STATUS "Found DirectX-Headers: ${directx-headers_DIR}")
