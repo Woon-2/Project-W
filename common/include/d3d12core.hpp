@@ -105,6 +105,10 @@ public:
         return size_;
     }
 
+    std::size_t stride() const NOEXCEPT {
+        return stride_;
+    }
+
     D3D12_DESCRIPTOR_HEAP_TYPE type() const NOEXCEPT {
         return type_;
     }

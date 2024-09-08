@@ -179,6 +179,7 @@ add_library(gfx
     src/gpuMem.cpp include/gpuMem.hpp
     src/renderProtocol.cpp include/renderProtocol.hpp
     src/d3d12texture.cpp include/d3d12texture.hpp
+    src/d3d12material.cpp include/d3d12material.hpp
     
     include/dxtarget.hpp
     include/gfxPrimitive.hpp
