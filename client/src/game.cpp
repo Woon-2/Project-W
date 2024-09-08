@@ -185,22 +185,16 @@ void Game::loadAssets() {
     pGfx_->preRender();
     pCtx->preRender();
 
-    auto mod = gfx::loadModel( resourcePath / "models" / "AC Cobra" / "Shelby.fbx",
-        pd3d12Gfx->inputLayout(gfx::d3d12::inputLayoutName(gfx::InputLayoutPreset::Pos3))
+    auto mod = gfx::loadModel( resourcePath / "models" / "Gun _obj" / "Gun.obj",
+        pd3d12Gfx->inputLayout(gfx::d3d12::inputLayoutName(gfx::InputLayoutPreset::Pos3Norm3Tex2))
     );
 
-    auto car = gfx::d3d12::Model( *pd3d12Gfx, *pd3d12Ctx, mod, "car_vb", "car_ib" );
+    auto gun = gfx::d3d12::Model( *pd3d12Gfx, *pd3d12Ctx, mod, "gun_vb", "gun_ib" );
 
-    car.coord().setParent(&baseCoordSys_);
-    car.coord() << mu::rotateY(mu::Degree(90.f));
+    gun.coord().setParent(&baseCoordSys_);
+    gun.coord() << mu::rotateY(mu::Degree(90.f));
 
-    models_.push_back(std::move(car));
-
-    models_.emplace_back( *pd3d12Gfx, *pd3d12Ctx,
-        gfx::loadModel( resourcePath/"models"/"box"/"box.obj",
-            pd3d12Gfx->inputLayout( gfx::d3d12::inputLayoutName(gfx::InputLayoutPreset::Pos3) )
-        ), "box_vb", "box_ib"
-    );
+    models_.push_back(std::move(gun));
 
     pCtx->postRender();
     pGfx_->postRender();

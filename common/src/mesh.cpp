@@ -3,6 +3,8 @@
 #include "assimp/Importer.hpp"
 #include "assimp/postprocess.h"
 
+#include <iostream>
+
 namespace gfx {
 
 namespace detail {
@@ -21,6 +23,10 @@ Mesh getMeshFromAiNode(const aiNode* node, const aiScene* scene, unsigned int me
 
     if (mesh->HasNormals()) {
         stride += sizeof(aiVector3D);
+    }
+
+    if (mesh->HasTextureCoords(0)) {
+        stride += sizeof(aiVector2D);
     }
 
     if (mesh->HasVertexColors(0)) {
@@ -46,6 +52,14 @@ Mesh getMeshFromAiNode(const aiNode* node, const aiScene* scene, unsigned int me
             mesh->mNormals, sizeof(aiVector3D), mesh->mNumVertices, sizeof(aiVector3D)
         );
         accOffset += sizeof(aiVector3D);
+    }
+
+    if (mesh->HasTextureCoords(0)) {
+        vb.configProperty(Vertex::Properties::TexCoord, accOffset);
+        vb.constructProperty(Vertex::Properties::TexCoord,
+            mesh->mTextureCoords[0], sizeof(aiVector2D), mesh->mNumVertices, sizeof(aiVector3D)
+        );
+        accOffset += sizeof(aiVector2D);
     }
 
     if (mesh->HasVertexColors(0)) {
