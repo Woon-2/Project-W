@@ -1,6 +1,7 @@
 #include "rootPresets.hpp"
 
 #include <array>
+#include <limits>
 
 namespace gfx {
 
@@ -203,11 +204,27 @@ wrl::ComPtr<ID3D12RootSignature> rootPresetUnified1(Core& core) {
         },
     };
 
+    auto samplerDesc = D3D12_STATIC_SAMPLER_DESC{
+        .Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+        .AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+        .AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+        .AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+        .MipLODBias = 0.0f,
+        .MaxAnisotropy = 0,
+        .ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER,
+        .BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK,
+        .MinLOD = 0.0f,
+        .MaxLOD = std::numeric_limits<float>::max(),
+        .ShaderRegister = 0u,
+        .RegisterSpace = 0u,
+        .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+    };
+
     auto desc = D3D12_ROOT_SIGNATURE_DESC{
         .NumParameters = static_cast<UINT>(params.size()),
         .pParameters = params.data(),
-        .NumStaticSamplers = 0,
-        .pStaticSamplers = nullptr,
+        .NumStaticSamplers = 1u,
+        .pStaticSamplers = &samplerDesc,
         .Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
     };
 
