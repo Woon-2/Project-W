@@ -366,11 +366,7 @@ public:
         throw GFX_EXCEPT_CLASS(d3d12::Core::UpBufIdxNotFound, idx);
     }
 
-    void addShader(ShaderIdx idx, const Shader& shader) {
-        shaders_[idx] = shader;
-    }
-
-    void addShader(ShaderIdx idx, Shader&& shader) {
+    void addShader(ShaderIdx idx, std::unique_ptr<Shader>&& shader) {
         shaders_[idx] = std::move(shader);
     }
 
@@ -384,7 +380,7 @@ public:
      */
     Shader& shader(const ShaderIdx& idx) {
         if (shaders_.contains(idx)) {
-            return shaders_.at(idx);
+            return *shaders_.at(idx);
         }
         throw GFX_EXCEPT_CLASS(d3d12::Core::ShaderIdxNotFound, idx);
     }
@@ -514,7 +510,7 @@ private:
     CmdListPool gfxCmdListPool_;
     std::map<RootIdx, wrl::ComPtr<ID3D12RootSignature>> roots_;
     std::map<UpBufIdx, wrl::ComPtr<ID3D12Resource>> upBufs_;
-    std::map<ShaderIdx, Shader> shaders_;
+    std::map<ShaderIdx, std::unique_ptr<Shader>> shaders_;
     std::map<InputLayoutIdx, InputLayout> inputLayouts_;
     std::map<DescHeapIdx, DescriptorHeap> descriptorHeaps_;
     wrl::ComPtr<ID3D12Device> pDevice_;

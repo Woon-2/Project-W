@@ -78,6 +78,13 @@ public:
 
     using Idx = int;
 
+    Shader() NOEXCEPT = default;
+    virtual ~Shader() = default;
+    Shader(const Shader&) = default;
+    Shader(Shader&&) noexcept = default;
+    Shader& operator=(const Shader&) = default;
+    Shader& operator=(Shader&&) noexcept = default;
+
     /**
      * @brief Loads a compiled shader object file (CSO) from filesystem.    
      * @param path The path to the CSO file.

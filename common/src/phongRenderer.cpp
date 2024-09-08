@@ -5,6 +5,8 @@
 #include "d3d12Scene.hpp"
 #include "d3d12Drawers.hpp"
 
+#include <memory>
+
 namespace gfx {
 
 void PhongRendererNT::init(ICore& core) {
@@ -68,7 +70,7 @@ void PhongRendererNT::D3D12Drawer::init(PhongRendererNT& renderer, d3d12::Core& 
     }
 
     core.addShader(d3d12::PhongShaderNT::shaderName(),
-        d3d12::PhongShaderNT(core,
+        std::make_unique<d3d12::PhongShaderNT>( core,
             d3d12::PhongShaderNT::Config{},
             renderer.dupCnt_    
         )
@@ -99,7 +101,7 @@ void PhongRenderer::D3D12Drawer::init(PhongRenderer& renderer, d3d12::Core& core
     }
 
     core.addShader(d3d12::PhongShader::shaderName(),
-        d3d12::PhongShader(core,
+        std::make_unique<d3d12::PhongShader>( core,
             d3d12::PhongShader::Config{},
             renderer.dupCnt_    
         )
