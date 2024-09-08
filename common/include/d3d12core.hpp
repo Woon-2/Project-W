@@ -78,14 +78,11 @@ private:
 class DescriptorHeap {
 public:
     DescriptorHeap()
-        : pHeap_(), type_(D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES), size_(0), capacity_(0), stride_(0) {}
+        : pHeap_(), cpuStart_(), gpuStart_(), type_(D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES), size_(0), capacity_(0), stride_(0), shaderVisible_(false) {}
     DescriptorHeap(ID3D12Device* pDevice, D3D12_DESCRIPTOR_HEAP_TYPE type, std::size_t capacity, bool shaderVisible = false);
 
-    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle(std::size_t idx = 0) const NOEXCEPT {
-        auto ret = gpuStart_;
-        ret.ptr += idx * stride_;
-        return ret;
-    }
+    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle(std::size_t idx = 0) const;
+    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle(std::size_t idx = 0) const;
 
     void pushSrv(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc);
     void pushSrv(ID3D12Device* pDevice, ID3D12Resource* pRes);
@@ -96,10 +93,6 @@ public:
     void pushUav(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_UNORDERED_ACCESS_VIEW_DESC& uavDesc);
     void pushCbv(ID3D12Device* pDevice, const D3D12_CONSTANT_BUFFER_VIEW_DESC& cbvDesc);
     void pushSam(ID3D12Device* pDevice, const D3D12_SAMPLER_DESC& samplerDesc);
-
-    ID3D12DescriptorHeap* get() const NOEXCEPT {
-        return pHeap_.Get();
-    }
 
     std::size_t size() const NOEXCEPT {
         return size_;
@@ -114,12 +107,6 @@ public:
     }
 
 private:
-    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle(std::size_t idx = 0) const NOEXCEPT {
-        auto ret = cpuStart_;
-        ret.ptr += idx * stride_;
-        return ret;
-    }
-
     wrl::ComPtr<ID3D12DescriptorHeap> pHeap_;
     D3D12_CPU_DESCRIPTOR_HANDLE cpuStart_;
     D3D12_GPU_DESCRIPTOR_HANDLE gpuStart_;
@@ -127,6 +114,7 @@ private:
     std::size_t capacity_;
     std::size_t stride_;
     D3D12_DESCRIPTOR_HEAP_TYPE type_;
+    bool shaderVisible_;
 };
 
 /**
@@ -850,6 +838,8 @@ void Window<Traits>::buildRtv(Core& core, std::size_t backBufCnt) {
     for (auto i = 0; i < backBufCnt; ++i) {
         heap.pushRtv(pDevice, offscreenBuffers_[i].Get());
     }
+
+    pFirstRtv_ = heap.cpuHandle();
 }
 
 // TODO: deal with multiple depth stencils.
@@ -866,6 +856,8 @@ void Window<Traits>::buildDsv(Core& core) {
     auto& heap = core.descHeap(offscreenDepthHeapIdx);
 
     heap.pushDsv(pDevice, depthBuffers_[0].Get());
+
+    pFirstDsv_ = heap.cpuHandle();
 }
 
 template <class Traits>

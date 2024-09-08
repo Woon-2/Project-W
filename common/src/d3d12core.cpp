@@ -38,7 +38,7 @@ const CmdListPool::Element CmdListPool::fetch() {
 
 DescriptorHeap::DescriptorHeap( ID3D12Device* pDevice, D3D12_DESCRIPTOR_HEAP_TYPE type,
     std::size_t capacity, bool shaderVisible
-) : pHeap_(), cpuStart_(), gpuStart_(), size_(0), capacity_(capacity), stride_{}, type_(type) {
+) : pHeap_(), cpuStart_(), gpuStart_(), size_(0), capacity_(capacity), stride_{}, type_(type), shaderVisible_(shaderVisible) {
     auto desc = D3D12_DESCRIPTOR_HEAP_DESC{
         .Type = type,
         .NumDescriptors = static_cast<UINT>(capacity),
@@ -52,7 +52,41 @@ DescriptorHeap::DescriptorHeap( ID3D12Device* pDevice, D3D12_DESCRIPTOR_HEAP_TYP
 
     stride_ = pDevice->GetDescriptorHandleIncrementSize(type);
     cpuStart_ = pHeap_->GetCPUDescriptorHandleForHeapStart();
-    gpuStart_ = pHeap_->GetGPUDescriptorHandleForHeapStart();
+    if (shaderVisible) {
+        gpuStart_ = pHeap_->GetGPUDescriptorHandleForHeapStart();
+    }
+}
+
+D3D12_GPU_DESCRIPTOR_HANDLE DescriptorHeap::gpuHandle(std::size_t idx) const {
+    if (!pHeap_) {
+        throw GFX_EXCEPT("The descriptor heap is not initialized.");
+    }
+
+    if (!shaderVisible_) {
+        throw GFX_EXCEPT("The descriptor heap is not shader visible.");
+    }
+
+    if (idx >= size_) {
+        throw GFX_EXCEPT("The index is out of range.");
+    }
+
+    auto ret = gpuStart_;
+    ret.ptr += idx * stride_;
+    return ret;
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE DescriptorHeap::cpuHandle(std::size_t idx) const {
+    if (!pHeap_) {
+        throw GFX_EXCEPT("The descriptor heap is not initialized.");
+    }
+
+    if (idx >= size_) {
+        throw GFX_EXCEPT("The index is out of range.");
+    }
+
+    auto ret = cpuStart_;
+    ret.ptr += idx * stride_;
+    return ret;
 }
 
 void DescriptorHeap::pushSrv(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc) {
