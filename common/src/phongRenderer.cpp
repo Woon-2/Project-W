@@ -54,6 +54,9 @@ void PhongRendererNT::forwardToD3D12Drawer( const IScene& scene, IRenderContext&
     ).shader( d3d12::PhongShaderNT::shaderName() );
 
     shader.bind(pCmdList.Get(), 0);
+
+    pCmdList->OMSetRenderTargets(1u, &pTarget, true, &pDepthTarget);
+
     d3d12Drawer_.draw(scene, shader, pCmdList.Get());
 }
 
@@ -131,7 +134,7 @@ void PhongRenderer::forwardToD3D12Drawer( const IScene& scene, IRenderContext& r
 
     shader.bind(pCmdList.Get(), 0);
 
-    pCmdList->OMSetRenderTargets(1, &pTarget, true, &pDepthTarget);
+    pCmdList->OMSetRenderTargets(1u, &pTarget, true, &pDepthTarget);
 
     d3d12Drawer_.draw(scene, shader, pCmdList.Get());
 }
