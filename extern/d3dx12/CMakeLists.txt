@@ -45,9 +45,8 @@ message(STATUS "Configuring ${CMAKE_PROJECT_NAME}(v${CMAKE_PROJECT_VERSION})..."
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 add_library(d3dx12
-    STATIC
-        src/d3dx12_property_format_table.cpp
-        src/dxguids.cpp
+    src/d3dx12_property_format_table.cpp
+    src/dxguids.cpp
 )
 
 add_library(DirectX::d3dx12 ALIAS d3dx12)
@@ -60,7 +59,7 @@ define_win32_lighten_macros(d3dx12 PRIVATE)
 
 target_include_directories(d3dx12
     PUBLIC
-        include
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
 set(D3D12_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/include"

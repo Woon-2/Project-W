@@ -201,14 +201,6 @@ target_include_directories(gfx
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
-find_package(directx-headers REQUIRED PATHS "${DIRECTX_CONFIG_PATH}")
-
-if(directx-headers_FOUND)
-    message(STATUS "Found DirectX-Headers: ${directx-headers_DIR}")
-else()
-    message(FATAL_ERROR "Could not find DirectX-Headers")
-endif()
-
 target_link_libraries(gfx
     PRIVATE
         DirectX::d3dx12
