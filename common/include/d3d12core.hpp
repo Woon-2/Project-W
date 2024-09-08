@@ -844,6 +844,7 @@ void Window<Traits>::buildRtv(Core& core, std::size_t backBufCnt) {
     }
 
     pFirstRtv_ = heap.cpuHandle();
+    rtvStride_ = static_cast<UINT>( heap.stride() );
 }
 
 // TODO: deal with multiple depth stencils.
@@ -862,6 +863,7 @@ void Window<Traits>::buildDsv(Core& core) {
     heap.pushDsv(pDevice, depthBuffers_[0].Get());
 
     pFirstDsv_ = heap.cpuHandle();
+    dsvStride_ = static_cast<UINT>( heap.stride() );
 }
 
 template <class Traits>

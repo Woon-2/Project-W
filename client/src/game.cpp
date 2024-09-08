@@ -14,6 +14,9 @@
 #include <chrono>
 #include <thread>
 
+#include "phongShader.hpp"
+
+using namespace std::literals;
 
 Game::Game(gfx::ICore& gfx, MyWindow& wnd, ic::Mouse& mouse, ic::Keyboard& keyboard)
     : timer_(), baseCoordSys_(), camera_(gfx::Camera::Config{
@@ -41,7 +44,7 @@ void Game::update() {
         std::this_thread::sleep_for( std::chrono::duration<double>(restFrameTime) );
     }
 
-    // pWnd_->setTitle(timer_.str());
+    pWnd_->setTitle(timer_.str());
 
     camera_.updateView();
     baseCoordSys_.traverse();
@@ -60,6 +63,10 @@ void Game::initialRender() {
     if (timer_.GetDT() > expectedFrameTime * 2.) {
         return;
     }
+
+    static_cast<gfx::d3d12::PhongShaderNT&>( 
+        static_cast<MyGfx&>(*pGfx_).shader( gfx::d3d12::PhongShaderNT::shaderName() )
+    ).setFrame(curFenceIdx_);
 
     auto pRenderContext = pGfx_->createContext();
     pGfx_->preRender();
@@ -93,6 +100,10 @@ void Game::regularRender() {
     if (timer_.GetDT() > expectedFrameTime * 2.) {
         return;
     }
+
+    static_cast<gfx::d3d12::PhongShaderNT&>( 
+        static_cast<MyGfx&>(*pGfx_).shader( gfx::d3d12::PhongShaderNT::shaderName() )
+    ).setFrame(curFenceIdx_);
 
     auto pRenderContext = pGfx_->createContext();
     pGfx_->preRender();
@@ -198,6 +209,7 @@ void Game::loadAssets() {
 
     pCtx->postRender();
     pGfx_->postRender();
+    pd3d12Gfx->signalGpu();
     pd3d12Gfx->waitGpu();
 
     for (auto& model : models_) {

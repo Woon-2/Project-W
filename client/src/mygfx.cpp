@@ -6,7 +6,7 @@
 #include "phongRenderer.hpp"
 
 void MyGfx::init() {
-    pRenderer_ = std::make_unique<gfx::PhongRendererNT>();
+    pRenderer_ = std::make_unique<gfx::PhongRendererNT>(2u);
 
     gfx::d3d12::Core::init();
     addRoot( gfx::d3d12::rootName(gfx::d3d12::RootPreset::Unified),

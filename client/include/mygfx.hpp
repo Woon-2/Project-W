@@ -6,7 +6,7 @@
 class MyGfx : public gfx::d3d12::Core {
 public:
     enum class Renderer {
-        Sample
+        PhongNT
     };
 
     void init() override;
