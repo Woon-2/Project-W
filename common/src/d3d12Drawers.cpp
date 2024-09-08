@@ -28,7 +28,7 @@ void illuminanceDrawImpl(const IScene& scene, ConcreteShader& shader, ID3D12Grap
 
         switch (type) {
         case rp::DIType::Light: {
-            auto lights = di.get<std::span<Light>>(RenderProtocol::lightIdx);
+            auto lights = di.get<const RenderProtocol::FLightType&>(RenderProtocol::lightIdx);
             auto cnt = std::min(ConcreteShader::defMaxLights - lightCnt, lights.size());
             shader.lights().uploadRegion( lights.data(), cnt * sizeof(Light), lightCnt * sizeof(Light) );
             lightCnt += cnt;
@@ -36,7 +36,7 @@ void illuminanceDrawImpl(const IScene& scene, ConcreteShader& shader, ID3D12Grap
         }
 
         case rp::DIType::Material: {
-            auto materials = di.get<std::span<Material>>(RenderProtocol::materialIdx);
+            auto materials = di.get<const RenderProtocol::FMaterialType&>(RenderProtocol::materialIdx);
             auto cnt = std::min(ConcreteShader::defMaxMaterials - materialCnt, materials.size());
             shader.materials().uploadRegion(materials.data(), cnt * sizeof(Material), materialCnt * sizeof(Material));
             materialCnt += cnt;
@@ -50,7 +50,7 @@ void illuminanceDrawImpl(const IScene& scene, ConcreteShader& shader, ID3D12Grap
         }
 
         case rp::DIType::PID: {
-            auto pids = di.get<std::span<PID>>(RenderProtocol::PIDIdx);
+            auto pids = di.get<const RenderProtocol::FPIDType&>(RenderProtocol::PIDIdx);
             auto cnt = std::min(ConcreteShader::defMaxInstances - instanceCnt, pids.size());
             shader.pid().uploadRegion(pids.data(), cnt * sizeof(PID), instanceCnt * sizeof(PID));
             instanceCnt += cnt;
@@ -58,12 +58,12 @@ void illuminanceDrawImpl(const IScene& scene, ConcreteShader& shader, ID3D12Grap
         }
 
         case rp::DIType::PFD: {
-            pfd = di.get<PFD>(RenderProtocol::PFDIdx);
+            pfd = di.get<const RenderProtocol::FPFDType&>(RenderProtocol::PFDIdx);
             break;
         }
 
         case rp::DIType::PDD: {
-            auto pdd = di.get<PDD>(RenderProtocol::PDDIdx);
+            auto pdd = di.get<const RenderProtocol::FPDDType&>(RenderProtocol::PDDIdx);
             pfd.lightCnt = static_cast<std::uint32_t>( lightCnt );
 
             shader.pdd().upload(&pdd, sizeof(PDD));

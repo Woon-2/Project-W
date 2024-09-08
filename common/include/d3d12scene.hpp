@@ -5,6 +5,7 @@
 #include "d3d12core.hpp"
 
 #include "d3d12model.hpp"
+#include "d3d12material.hpp"
 
 #include "mathUtil.hpp"
 #include "shaderRes.hpp"
@@ -33,7 +34,8 @@ namespace d3d12 {
 class CameraScene : public gfx::CameraScene {
 public:
     CameraScene(const Camera& camera)
-        : gfx::CameraScene(camera) {}
+        : gfx::CameraScene(camera), fragments_(), lights_(), materials_(),
+        protocol_(rp::Protocol::PhongInstancing) /* temporarilly fixed protocol */ {}
 
     Generator<DrawInfo> iteration() const override;
 
@@ -50,11 +52,11 @@ public:
         fragments_ = std::move(fragments);
     }
 
-    void addLight(sr::PhongLight* pLight) {
+    void addLight(const sr::PhongLight* pLight) {
         lights_.push_back(pLight);
     }
 
-    void addMaterial(sr::PhongMaterial* pMaterial) {
+    void addMaterial(const Material* pMaterial) {
         materials_.push_back(pMaterial);
     }
 
@@ -63,11 +65,12 @@ public:
     }
 
 private:
-    Generator<DrawInfo> fragmentIteration(const Fragment& fragment) const;
+    Generator<DrawInfo> phongInstancingIteration() const;
+    Generator<DrawInfo> phongInstancingNTIteration() const;
 
     std::vector<Fragment> fragments_;
-    std::vector<sr::PhongLight*> lights_;
-    std::vector<sr::PhongMaterial*> materials_;
+    std::vector<const sr::PhongLight*> lights_;
+    std::vector<const Material*> materials_;
 
     rp::Protocol protocol_;
 };

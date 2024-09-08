@@ -32,6 +32,27 @@ void Material::pushTexture(Core& core, Properties prop, Texture&& tex) {
     textures_.try_emplace(prop, TextureIndexed{std::move(tex), idx});
 }
 
+bool Material::canSupport(rp::Protocol protocol) const {
+    switch(protocol) {
+    case rp::Protocol::PhongInstancingNT: {
+        auto ret = constants_.type() == typeid(rp::PhongInstancingNT::MaterialType);
+        return ret;
+    }
+
+    case rp::Protocol::PhongInstancing: {
+        auto ret = constants_.type() == typeid(float);
+        ret = ret && textures_.contains(Properties::Diffuse);
+        ret = ret && textures_.contains(Properties::Specular);
+        return ret;
+    }
+
+    default:
+        throw std::runtime_error("Undefined protocol");
+    }
+
+    return false;
+}
+
 std::any Material::as(rp::Protocol protocol) const {
     switch (protocol) {
     case rp::Protocol::PhongInstancingNT:
@@ -39,7 +60,7 @@ std::any Material::as(rp::Protocol protocol) const {
     case rp::Protocol::PhongInstancing:
         return asPhongInstancing();
     default:
-        throw std::runtime_error("Unsupported protocol");
+        throw std::runtime_error("Undefined protocol");
     }
 
     return {};
@@ -70,4 +91,4 @@ rp::PhongInstancingNT::MaterialType Material::asPhongInstancingNT() const
 
 }   // namespace gfx::d3d12
 
-}   // namespace gfx
+} // namespace gfx

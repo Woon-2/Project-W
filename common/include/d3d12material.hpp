@@ -62,6 +62,7 @@ public:
     const std::any& constants() const NOEXCEPT { return constants_; }
     void writeConstants(std::any&& constants) NOEXCEPT { constants_ = std::move(constants); }
 
+    bool canSupport(rp::Protocol protocol) const;
     std::any as(rp::Protocol protocol) const;
 
 private:

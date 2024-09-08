@@ -3,6 +3,8 @@
 
 #include "shaderRes.hpp"
 
+#include <vector>
+
 namespace gfx {
 
 namespace rp {
@@ -23,6 +25,7 @@ enum class DIType {
 };
 
 struct PhongInstancingNT {
+    static constexpr Protocol protocol = Protocol::PhongInstancingNT;
     static constexpr std::size_t typeIdx = 0u;
     static constexpr std::size_t meshIdx = 1u;
     static constexpr std::size_t PIDIdx = 2u;
@@ -36,9 +39,16 @@ struct PhongInstancingNT {
     using PFDType = d3d12::sr::BasicPFD;
     using LightType = d3d12::sr::PhongLight;
     using MaterialType = d3d12::sr::PhongMaterialNT;
+
+    using FPIDType = std::vector<PIDType>;
+    using FPDDType = PDDType;
+    using FPFDType = PFDType;
+    using FLightType = std::vector<LightType>;
+    using FMaterialType = std::vector<MaterialType>;
 };
 
 struct PhongInstancing {
+    static constexpr Protocol protocol = Protocol::PhongInstancing;
     static constexpr std::size_t typeIdx = 0u;
     static constexpr std::size_t meshIdx = 1u;
     static constexpr std::size_t PIDIdx = 2u;
@@ -52,6 +62,12 @@ struct PhongInstancing {
     using PFDType = d3d12::sr::BasicPFD;
     using LightType = d3d12::sr::PhongLight;
     using MaterialType = d3d12::sr::PhongMaterial;
+
+    using FPIDType = std::vector<PIDType>;
+    using FPDDType = PDDType;
+    using FPFDType = PFDType;
+    using FLightType = std::vector<LightType>;
+    using FMaterialType = std::vector<MaterialType>;
 };
 
 }   // namespace gfx::rp
