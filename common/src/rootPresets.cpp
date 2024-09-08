@@ -211,7 +211,7 @@ wrl::ComPtr<ID3D12RootSignature> rootPresetUnified1(Core& core) {
         .AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER,
         .MipLODBias = 0.0f,
         .MaxAnisotropy = 0,
-        .ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER,
+        .ComparisonFunc = D3D12_COMPARISON_FUNC_NONE,
         .BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK,
         .MinLOD = 0.0f,
         .MaxLOD = std::numeric_limits<float>::max(),
