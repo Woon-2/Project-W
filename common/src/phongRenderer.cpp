@@ -67,7 +67,12 @@ void PhongRendererNT::D3D12Drawer::init(PhongRendererNT& renderer, d3d12::Core& 
         return;
     }
 
-    core.addShader(d3d12::PhongShaderNT::shaderName(), d3d12::PhongShaderNT(core));
+    core.addShader(d3d12::PhongShaderNT::shaderName(),
+        d3d12::PhongShaderNT(core,
+            d3d12::PhongShaderNT::Config{},
+            renderer.dupCnt_    
+        )
+    );
 }
 
 void PhongRendererNT::D3D12Drawer::draw( const IScene& scene, d3d12::Shader& shader,
@@ -93,7 +98,12 @@ void PhongRenderer::D3D12Drawer::init(PhongRenderer& renderer, d3d12::Core& core
         return;
     }
 
-    core.addShader(d3d12::PhongShader::shaderName(), d3d12::PhongShader(core));
+    core.addShader(d3d12::PhongShader::shaderName(),
+        d3d12::PhongShader(core,
+            d3d12::PhongShader::Config{},
+            renderer.dupCnt_    
+        )
+    );
 }
 
 void PhongRenderer::render(const IScene& scene, IRenderContext& renderContext, IRenderTarget& target) const {

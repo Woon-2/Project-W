@@ -18,7 +18,7 @@ PhongShaderNT::PhongShaderNT(Core& core, const Config& config, std::size_t dupli
     resLights_(core, sizeof(d3d12::sr::PhongLight), internalResArr_[4]),
     maxInstances_(config.maxInstances),
     maxMaterials_(config.maxMaterials),
-    maxLights_(config.maxLights) {
+    maxLights_(config.maxLights), frameIdx_(0u) {
     auto builder = SimpleShaderBuilder();
     builder.code(Type::Vertex, loadCSO(compiledShaderPath / "ntShader_vs.cso"));
     builder.code(Type::Pixel, loadCSO(compiledShaderPath / "ntShader_ps.cso"));
@@ -32,21 +32,21 @@ PhongShaderNT::PhongShaderNT(Core& core, const Config& config, std::size_t dupli
     builder.wireframe().build(pDevice, *this, 1u);
 }
 
-void PhongShaderNT::setRootParams(ID3D12GraphicsCommandList* pCmdList, size_t frameIdx) const {
+void PhongShaderNT::setRootParams(ID3D12GraphicsCommandList* pCmdList) const {
     DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootShaderResourceView(
-        0, resPerInstanceData_.gpuAddress(frameIdx)
+        0u, resPerInstanceData_.gpuAddress(frameIdx_)
     ) );
     DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootShaderResourceView(
-        1, resMaterials_.gpuAddress(frameIdx)
+        1u, resMaterials_.gpuAddress(frameIdx_)
     ) );
     DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootShaderResourceView(
-        2, resLights_.gpuAddress(frameIdx)
+        2u, resLights_.gpuAddress(frameIdx_)
     ) );
     DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootConstantBufferView(
-        3, resPerDrawcallData_.gpuAddress(frameIdx)
+        3u, resPerDrawcallData_.gpuAddress(frameIdx_)
     ) );
     DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootConstantBufferView(
-        4, resPerFrameData_.gpuAddress(frameIdx)
+        4u, resPerFrameData_.gpuAddress(frameIdx_)
     ) );
 }
 
@@ -84,22 +84,22 @@ PhongShader::PhongShader(Core &core, const Config &config, std::size_t duplicati
 
 void PhongShader::setRootParams(ID3D12GraphicsCommandList* pCmdList, size_t frameIdx) const {
     DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootShaderResourceView(
-        0, resPerInstanceData_.gpuAddress(frameIdx)
+        0u, resPerInstanceData_.gpuAddress(frameIdx)
     ) );
     DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootShaderResourceView(
-        1, resMaterials_.gpuAddress(frameIdx)
+        1u, resMaterials_.gpuAddress(frameIdx)
     ) );
     DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootDescriptorTable(
-        2, texSrvStart_
+        2u, texSrvStart_
     ) );
     DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootShaderResourceView(
-        3, resLights_.gpuAddress(frameIdx)
+        3u, resLights_.gpuAddress(frameIdx)
     ) );
     DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootConstantBufferView(
-        4, resPerDrawcallData_.gpuAddress(frameIdx)
+        4u, resPerDrawcallData_.gpuAddress(frameIdx)
     ) );
     DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootConstantBufferView(
-        5, resPerFrameData_.gpuAddress(frameIdx)
+        5u, resPerFrameData_.gpuAddress(frameIdx)
     ) );
 }
 

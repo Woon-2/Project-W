@@ -15,6 +15,9 @@ namespace gfx {
 
 class PhongRendererNT : public IRenderer {
 public:
+    PhongRendererNT(std::size_t dupCnt = 1u)
+        : dupCnt_(dupCnt), protocol_(rp::Protocol::PhongInstancingNT), d3d12Drawer_() {}
+
     void init(ICore& core) override;
     void render(const IScene& scene, IRenderContext& renderContext, IRenderTarget& target) const override;
     void cleanup() override;
@@ -37,12 +40,16 @@ private:
 
     void forwardToD3D12Drawer( const IScene& scene, IRenderContext& renderContext, IRenderTarget& target ) const;
 
-    D3D12Drawer d3d12Drawer_;
+    std::size_t dupCnt_;
     rp::Protocol protocol_;
+    D3D12Drawer d3d12Drawer_;
 };
 
 class PhongRenderer : public IRenderer {
 public:
+    PhongRenderer(std::size_t dupCnt = 1u)
+        : dupCnt_(dupCnt), protocol_(rp::Protocol::PhongInstancing), d3d12Drawer_() {}
+
     void init(ICore& core) override;
     void render(const IScene& scene, IRenderContext& renderContext, IRenderTarget& target) const override;
     void cleanup() override;
@@ -65,8 +72,9 @@ private:
 
     void forwardToD3D12Drawer( const IScene& scene, IRenderContext& renderContext, IRenderTarget& target ) const;
 
-    D3D12Drawer d3d12Drawer_;
+    std::size_t dupCnt_;
     rp::Protocol protocol_;
+    D3D12Drawer d3d12Drawer_;
 };
 
 } // namespace gfx

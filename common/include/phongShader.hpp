@@ -40,7 +40,19 @@ public:
         return d3d12::inputLayoutName(InputLayoutPreset::Pos3Norm3);
     }
 
-    void setRootParams(ID3D12GraphicsCommandList* pCmdList, size_t frameIdx = 0) const;
+    // TODO: make interface standard or base class
+    // If we gonna make interface standard, we need to add requires expression on d3d12 drawers.
+    void setRootParams(ID3D12GraphicsCommandList* pCmdList) const;
+    std::size_t dupCnt() const NOEXCEPT { return internalResArr_[0].size(); }
+    std::size_t frameIdx() const NOEXCEPT { return frameIdx_; }
+    void setFrame(std::size_t frameIdx) NOEXCEPT( NDEBUG ) {
+    #if !NDEBUG
+        if (frameIdx >= dupCnt()) {
+            throw std::out_of_range("Frame index out of range");
+        }
+    #endif
+        frameIdx_ = frameIdx;
+    }
 
     GpuMappedRes& pfd() NOEXCEPT { return resPerFrameData_; }
     GpuMappedRes& pdd() NOEXCEPT { return resPerDrawcallData_; }
@@ -57,9 +69,10 @@ private:
     GpuMappedRes resMaterials_;
     GpuMappedRes resLights_;
 
-    size_t maxInstances_;
-    size_t maxMaterials_;
-    size_t maxLights_;
+    std::size_t maxInstances_;
+    std::size_t maxMaterials_;
+    std::size_t maxLights_;
+    std::size_t frameIdx_;
 };
 
 class PhongShader : public Shader {
@@ -107,9 +120,10 @@ private:
     GpuMappedRes resLights_;
     D3D12_GPU_DESCRIPTOR_HANDLE texSrvStart_;
 
-    size_t maxInstances_;
-    size_t maxMaterials_;
-    size_t maxLights_;
+    std::size_t maxInstances_;
+    std::size_t maxMaterials_;
+    std::size_t maxLights_;
+    std::size_t frameIdx_;
 };
 
 
