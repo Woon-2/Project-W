@@ -54,7 +54,7 @@ void PhongRendererNT::forwardToD3D12Drawer( const IScene& scene, IRenderContext&
     ).shader( d3d12::PhongShaderNT::shaderName() );
 
     shader.bind(pCmdList.Get(), 0);
-    d3d12Drawer_.draw(scene, shader, pCmdList.Get(), pTarget, pDepthTarget);
+    d3d12Drawer_.draw(scene, shader, pCmdList.Get());
 }
 
 void PhongRendererNT::cleanup() {}
@@ -67,8 +67,8 @@ void PhongRendererNT::D3D12Drawer::init(PhongRendererNT& renderer, d3d12::Core& 
     core.addShader(d3d12::PhongShaderNT::shaderName(), d3d12::PhongShaderNT(core));
 }
 
-void PhongRendererNT::D3D12Drawer::draw( const IScene& scene, d3d12::Shader& shader, ID3D12GraphicsCommandList* pCmdList,
-    D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle, D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle
+void PhongRendererNT::D3D12Drawer::draw( const IScene& scene, d3d12::Shader& shader,
+    ID3D12GraphicsCommandList* pCmdList
 ) const {
     assert(dynamic_cast<d3d12::PhongShaderNT*>(&shader) != nullptr);
     d3d12::illuminanceDraw( scene, rp::PhongInstancingNT{},
@@ -130,13 +130,16 @@ void PhongRenderer::forwardToD3D12Drawer( const IScene& scene, IRenderContext& r
     ).shader( d3d12::PhongShader::shaderName() );
 
     shader.bind(pCmdList.Get(), 0);
-    d3d12Drawer_.draw(scene, shader, pCmdList.Get(), pTarget, pDepthTarget);
+
+    pCmdList->OMSetRenderTargets(1, &pTarget, true, &pDepthTarget);
+
+    d3d12Drawer_.draw(scene, shader, pCmdList.Get());
 }
 
 void PhongRenderer::cleanup() {}
 
-void PhongRenderer::D3D12Drawer::draw( const IScene& scene, d3d12::Shader& shader, ID3D12GraphicsCommandList* pCmdList,
-    D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle, D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle
+void PhongRenderer::D3D12Drawer::draw( const IScene& scene, d3d12::Shader& shader,
+    ID3D12GraphicsCommandList* pCmdList
 ) const {
     assert(dynamic_cast<d3d12::PhongShader*>(&shader) != nullptr);
     d3d12::illuminanceDraw( scene, rp::PhongInstancing{},

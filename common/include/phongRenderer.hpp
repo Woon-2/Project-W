@@ -30,11 +30,9 @@ private:
         static constexpr std::size_t maxLights = 100u;
         static constexpr std::size_t maxMaterials = 100u;
 
-        void init( PhongRendererNT& renderer, d3d12::Core& core );
+        void init(PhongRendererNT& renderer, d3d12::Core& core);
         void cleanup() {}
-        void draw( const IScene& scene, d3d12::Shader& shader, ID3D12GraphicsCommandList* pCmdList,
-            D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle, D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle
-        ) const;
+        void draw(const IScene& scene, d3d12::Shader& shader, ID3D12GraphicsCommandList* pCmdList) const;
     };
 
     void forwardToD3D12Drawer( const IScene& scene, IRenderContext& renderContext, IRenderTarget& target ) const;
@@ -60,11 +58,9 @@ private:
         static constexpr std::size_t maxLights = 100u;
         static constexpr std::size_t maxMaterials = 100u;
 
-        void init( PhongRenderer& renderer, d3d12::Core& core );
+        void init(PhongRenderer& renderer, d3d12::Core& core);
         void cleanup() {}
-        void draw( const IScene& scene, d3d12::Shader& shader, ID3D12GraphicsCommandList* pCmdList,
-            D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle, D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle
-        ) const;
+        void draw(const IScene& scene, d3d12::Shader& shader, ID3D12GraphicsCommandList* pCmdList) const;
     };
 
     void forwardToD3D12Drawer( const IScene& scene, IRenderContext& renderContext, IRenderTarget& target ) const;
