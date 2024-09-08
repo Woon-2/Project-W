@@ -214,6 +214,13 @@ public:
         return sCmdListPoolSize;
     }
 
+    static void configFenceCnt(std::size_t cnt) NOEXCEPT {
+        sFenceCnt = cnt;
+    }
+    static std::size_t fenceCnt() NOEXCEPT {
+        return sFenceCnt;
+    }
+
     /**
      * @brief Initializes the Core.    
      * It creates the device, the command queue & list, the descriptor heaps, and the fence & event.
@@ -256,8 +263,8 @@ public:
      * @throws DXException When the fence signal or event on completion fails.
      */
     void waitGpu();
-
     void waitGpu(std::size_t fenceIdx);
+    void signalGpu();
     void signalGpu(std::size_t fenceIdx);
 
     /**
@@ -502,6 +509,7 @@ private:
 
     static wrl::ComPtr<IDXGIFactory4> spFactory;
     static std::size_t sCmdListPoolSize;
+    static std::size_t sFenceCnt;
 
     CmdListPool gfxCmdListPool_;
     std::map<RootIdx, wrl::ComPtr<ID3D12RootSignature>> roots_;
@@ -511,9 +519,9 @@ private:
     std::map<DescHeapIdx, DescriptorHeap> descriptorHeaps_;
     wrl::ComPtr<ID3D12Device> pDevice_;
     wrl::ComPtr<ID3D12CommandQueue> pCmdQ_;
-    wrl::ComPtr<ID3D12Fence> pFence_;
-    std::array<UINT64, 2> fenceValues_ = { 0, 0 };
-    HANDLE fenceEvent_ = nullptr;
+    std::vector< wrl::ComPtr<ID3D12Fence> > fences_;
+    std::vector<UINT64> fenceValues_;
+    std::vector<HANDLE> fenceEvents_;
     std::size_t fenceIdx_ = 0;
 };
 

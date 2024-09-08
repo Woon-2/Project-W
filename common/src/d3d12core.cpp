@@ -252,13 +252,23 @@ void Core::createCommandQueueAndLists(ID3D12Device* pDevice) {
 }
 
 void Core::createFenceAndEvent(ID3D12Device* pDevice) {
-    DX_THROW_FAILED( pDevice->CreateFence(
-        0, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence), &pFence_
-    ) );
+    if (!fenceCnt()) {
+        throw GFX_EXCEPT("The fence count is zero.");
+    }
 
-    fenceEvent_ = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-    if (!fenceEvent_) {
-        DX_THROW_FAILED( HRESULT_FROM_WIN32(GetLastError()) );
+    fences_ = std::vector<wrl::ComPtr<ID3D12Fence>>(fenceCnt());
+    fenceValues_ = std::vector<std::uint64_t>(fenceCnt(), 0);
+    fenceEvents_ = std::vector<HANDLE>(fenceCnt());
+
+    for (std::size_t i = 0; i < fenceCnt(); ++i) {
+        DX_THROW_FAILED( pDevice->CreateFence(
+            0, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence), &fences_[i]
+        ) );
+
+        fenceEvents_[i] = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+        if (!fenceEvents_[i]) {
+            DX_THROW_FAILED( HRESULT_FROM_WIN32(GetLastError()) );
+        }
     }
 }
 
@@ -272,12 +282,13 @@ void Core::preRender() {}
 void Core::postRender() {}
 
 void Core::waitGpu() {
-    ++fenceValues_[fenceIdx_];
-    DX_THROW_FAILED( pCmdQ_->Signal(pFence_.Get(), fenceValues_[fenceIdx_]) );
+    auto& pFence = fences_[fenceIdx_];
+    auto& fenceValue = fenceValues_[fenceIdx_];
+    auto& fenceEvent = fenceEvents_[fenceIdx_];
 
-    if (pFence_->GetCompletedValue() < fenceValues_[fenceIdx_]) {
-        DX_THROW_FAILED( pFence_->SetEventOnCompletion(fenceValues_[fenceIdx_], fenceEvent_) );
-        WaitForSingleObject(fenceEvent_, INFINITE);
+    if (pFence->GetCompletedValue() < fenceValue) {
+        DX_THROW_FAILED( pFence->SetEventOnCompletion(fenceValue, fenceEvent) );
+        WaitForSingleObject(fenceEvent, INFINITE);
     }
 }
 
@@ -288,10 +299,22 @@ void Core::waitGpu(std::size_t fenceIdx) {
         );
     }
 
-    if (pFence_->GetCompletedValue() < fenceValues_[fenceIdx]) {
-        DX_THROW_FAILED( pFence_->SetEventOnCompletion(fenceValues_[fenceIdx], fenceEvent_) );
-        WaitForSingleObject(fenceEvent_, INFINITE);
+    auto& pFence = fences_[fenceIdx];
+    auto& fenceValue = fenceValues_[fenceIdx];
+    auto& fenceEvent = fenceEvents_[fenceIdx];
+
+    if (pFence->GetCompletedValue() < fenceValue) {
+        DX_THROW_FAILED( pFence->SetEventOnCompletion(fenceValue, fenceEvent) );
+        WaitForSingleObject(fenceEvent, INFINITE);
     }
+}
+
+void Core::signalGpu() {
+    auto& pFence = fences_[fenceIdx_];
+    auto& fenceValue = fenceValues_[fenceIdx_];
+
+    ++fenceValue;
+    DX_THROW_FAILED( pCmdQ_->Signal(pFence.Get(), fenceValue) );
 }
 
 void Core::signalGpu(std::size_t fenceIdx) {
@@ -301,8 +324,11 @@ void Core::signalGpu(std::size_t fenceIdx) {
         );
     }
 
-    ++fenceValues_[fenceIdx];
-    DX_THROW_FAILED( pCmdQ_->Signal(pFence_.Get(), fenceValues_[fenceIdx]) );
+    auto& pFence = fences_[fenceIdx];
+    auto& fenceValue = fenceValues_[fenceIdx];
+
+    ++fenceValue;
+    DX_THROW_FAILED( pCmdQ_->Signal(pFence.Get(), fenceValue) );
 }
 
 void Core::alterFence() NOEXCEPT {
@@ -331,16 +357,17 @@ void Core::cleanup() {
 
     // the order of reset should be reversed from the order of creation. (the member layout order)
     fenceIdx_ = 0;
-    fenceEvent_ = nullptr;
-    fenceValues_ = { 0, 0 };
-    pFence_.Reset();
+    fenceEvents_.clear();
+    fenceValues_.clear();
+    fences_.clear();
     pCmdQ_.Reset();
     pDevice_.Reset();
-    gfxCmdListPool_.clear();
+    descriptorHeaps_.clear();
     inputLayouts_.clear();
     shaders_.clear();
     upBufs_.clear();
     roots_.clear();
+    gfxCmdListPool_.clear();
 }
 
 bool D3D12RenderContext::castableTo(RenderContextType contextType) const {
@@ -365,6 +392,7 @@ void D3D12RenderContext::postRender() {
 
 wrl::ComPtr<IDXGIFactory4> Core::spFactory = nullptr;
 std::size_t Core::sCmdListPoolSize = 3u;
+std::size_t Core::sFenceCnt = 3u;
 
 } // namespace d3d12
 
