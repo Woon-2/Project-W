@@ -21,7 +21,7 @@
 
 class Game {
 public:
-    static constexpr auto defLockFPS = 144.;
+    static constexpr auto defLockFPS = 600.;
     using MyWindow = gfx::d3d12::Window<gfx::d3d12::BasicD3D12WTraits<char>>;
     using RenderFunc = void (Game::*)();
 

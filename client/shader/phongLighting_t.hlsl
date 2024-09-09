@@ -2,6 +2,8 @@
 #define LIGHT_TYPE_POINT 1
 #define LIGHT_TYPE_SPOT 2
 
+#include "textures.hlsl"
+
 cbuffer PerFrameData : register(b1)
 {
     float4 gcGlobalAmbientLight;
@@ -10,9 +12,10 @@ cbuffer PerFrameData : register(b1)
 
 struct Material
 {
-    Texture2D diffuseMap;
-    Texture2D specularMap;
+    uint diffuseMapIdx;
+    uint specularMapIdx;
     float shininess;
+    float padding;
 };
 
 struct Light
@@ -44,12 +47,12 @@ float4 dirLight(uint lightIdx, uint matIdx, float3 posVNormalized, float3 normal
             
     if (diffused > 0.f && gLights[lightIdx].shininess > 0.f) {
         float3 reflected = reflect(-toLight, normalV);
-        specular = pow(max(0.f, dot(reflected, -posVNormalized)), gMaterials[matIdx].specularMap.Sample(gSample, tex));
+        specular = pow(max(0.f, dot(reflected, -posVNormalized)), gMaterials[matIdx].shininess);
     }
         
-    return gMaterials[matIdx].diffuseMap.Sample(gSample, tex) * gLights[lightIdx].ambient +
-        gMaterials[matIdx].diffuseMap.Sample(gSample, tex) * gLights[lightIdx].diffuse * diffused +
-        gMaterials[matIdx].specularMap.Sample(gSample, tex) * float4(gLights[lightIdx].specular, 1.f) * specular;
+    return gTex2DLUT[ gMaterials[matIdx].diffuseMapIdx ].Sample(gSample, tex) * gLights[lightIdx].ambient +
+        gTex2DLUT[ gMaterials[matIdx].diffuseMapIdx ].Sample(gSample, tex) * gLights[lightIdx].diffuse * diffused +
+        gTex2DLUT[ gMaterials[matIdx].specularMapIdx ].Sample(gSample, tex) * float4(gLights[lightIdx].specular, 1.f) * specular;
 }
 
 float4 pointLight(uint lightIdx, uint matIdx, float3 posV, float3 posVNormalized, float3 normalV, float2 tex) {
@@ -62,12 +65,12 @@ float4 pointLight(uint lightIdx, uint matIdx, float3 posV, float3 posVNormalized
 
     if (diffused > 0.f && gLights[lightIdx].shininess > 0.f) {
         float3 reflected = reflect(-toLight, normalV);
-        specular = pow(max(0.f, dot(reflected, -posVNormalized)), gMaterials[matIdx].specularMap.Sample(gSample, tex));
+        specular = pow(max(0.f, dot(reflected, -posVNormalized)), gMaterials[matIdx].shininess);
     }
 
-    return (gMaterials[matIdx].diffuseMap.Sample(gSample, tex) * gLights[lightIdx].ambient +
-        gMaterials[matIdx].diffuseMap.Sample(gSample, tex) * gLights[lightIdx].diffuse * diffused +
-        gMaterials[matIdx].specularMap.Sample(gSample, tex) * float4(gLights[lightIdx].specular, 1.f) * specular
+    return (gTex2DLUT[ gMaterials[matIdx].diffuseMapIdx ].Sample(gSample, tex) * gLights[lightIdx].ambient +
+        gTex2DLUT[ gMaterials[matIdx].diffuseMapIdx ].Sample(gSample, tex) * gLights[lightIdx].diffuse * diffused +
+        gTex2DLUT[ gMaterials[matIdx].specularMapIdx ].Sample(gSample, tex) * float4(gLights[lightIdx].specular, 1.f) * specular
     ) * atten;
 }
 
@@ -81,7 +84,7 @@ float4 spotLight(uint lightIdx, uint matIdx, float3 posV, float3 posVNormalized,
     
     if (diffused > 0.f && gLights[lightIdx].shininess > 0.f) {
         float3 reflected = reflect(-toLight, normalV);
-        specular = pow(max(0.f, dot(reflected, -posVNormalized)), gMaterials[matIdx].specularMap.Sample(gSample, tex));
+        specular = pow(max(0.f, dot(reflected, -posVNormalized)), gMaterials[matIdx].shininess);
     }
 
     float cosChi = max(dot(-toLight, gLights[lightIdx].dirV), 0.f);
@@ -94,14 +97,14 @@ float4 spotLight(uint lightIdx, uint matIdx, float3 posV, float3 posVNormalized,
         gLights[lightIdx].falloff
     );
 
-    return (gMaterials[matIdx].diffuseMap.Sample(gSample, tex) * gLights[lightIdx].ambient +
-        gMaterials[matIdx].diffuseMap.Sample(gSample, tex) * gLights[lightIdx].diffuse * diffused +
-        gMaterials[matIdx].specularMap.Sample(gSample, tex) * float4(gLights[lightIdx].specular, 1.f) * specular
+    return (gTex2DLUT[ gMaterials[matIdx].diffuseMapIdx ].Sample(gSample, tex) * gLights[lightIdx].ambient +
+        gTex2DLUT[ gMaterials[matIdx].diffuseMapIdx ].Sample(gSample, tex) * gLights[lightIdx].diffuse * diffused +
+        gTex2DLUT[ gMaterials[matIdx].specularMapIdx ].Sample(gSample, tex) * float4(gLights[lightIdx].specular, 1.f) * specular
     ) * atten * coneAtten;
 }
 
 float4 Lighting(float3 posV, float3 normalV, uint matIdx, float2 tex) {
-    float4 color = gMaterials[matIdx].diffuseMap.Sample(gSample, tex) * gcGlobalAmbientLight;
+    float4 color = gTex2DLUT[ gMaterials[matIdx].diffuseMapIdx ].Sample(gSample, tex) * gcGlobalAmbientLight;
 
     for (uint i = 0; i < gLightCnt; ++i) {
         float3 posVNormalized = normalize(posV);
@@ -119,7 +122,7 @@ float4 Lighting(float3 posV, float3 normalV, uint matIdx, float2 tex) {
         }
     }
 
-    color.a = gMaterials[matIdx].diffuseMap.Sample(gSample, tex);
+    color.a = gTex2DLUT[ gMaterials[matIdx].diffuseMapIdx ].Sample(gSample, tex).a;
 
     return color;
 }

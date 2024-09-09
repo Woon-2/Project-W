@@ -19,8 +19,7 @@ int App::run() {
     gfx::DXInfoQueue::init();
     gfx::DXFactory::init();
 
-    gfx::d3d12::Core::configRtvHeapSize(3);
-    gfx::d3d12::Core::configDsvHeapSize(1);
+    // gfx::d3d12::Core::configCmdListPoolSize(3u);
     gfx::d3d12::Core::configDXFactory(gfx::DXFactory::get());
 
     pGfx_ = std::make_unique<MyGfx>();

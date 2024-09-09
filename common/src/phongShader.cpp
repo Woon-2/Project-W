@@ -1,15 +1,24 @@
 #include "phongShader.hpp"
 
+#include "d3d12texture.hpp"
+
 #include <ranges>
 
-gfx::d3d12::PhongShaderNT::PhongShaderNT(Core& core, std::size_t duplicationCnt) : Shader(),
+namespace gfx {
+
+namespace d3d12 {
+
+PhongShaderNT::PhongShaderNT(Core& core, const Config& config, std::size_t duplicationCnt)
+    : Shader(),
     internalResArr_(5, std::ranges::range_value_t<decltype(internalResArr_)>(duplicationCnt)),
     resPerFrameData_(core, sizeof(d3d12::sr::BasicPFD) , internalResArr_[0]),
     resPerDrawcallData_(core, sizeof(d3d12::sr::BasicPDD), internalResArr_[1]),
     resPerInstanceData_(core, sizeof(d3d12::sr::BasicPID), internalResArr_[2]),
-    resMaterials_(core, sizeof(d3d12::sr::PhongMaterial), internalResArr_[3]),
-    resLights_(core, sizeof(d3d12::sr::PhongLight), internalResArr_[4])
-{
+    resMaterials_(core, sizeof(d3d12::sr::PhongMaterialNT), internalResArr_[3]),
+    resLights_(core, sizeof(d3d12::sr::PhongLight), internalResArr_[4]),
+    maxInstances_(config.maxInstances),
+    maxMaterials_(config.maxMaterials),
+    maxLights_(config.maxLights), frameIdx_(0u) {
     auto builder = SimpleShaderBuilder();
     builder.code(Type::Vertex, loadCSO(compiledShaderPath / "ntShader_vs.cso"));
     builder.code(Type::Pixel, loadCSO(compiledShaderPath / "ntShader_ps.cso"));
@@ -22,3 +31,78 @@ gfx::d3d12::PhongShaderNT::PhongShaderNT(Core& core, std::size_t duplicationCnt)
     builder.setInputLayout(il).setRoot(pRoot).build(pDevice, *this, 0u);
     builder.wireframe().build(pDevice, *this, 1u);
 }
+
+void PhongShaderNT::setRootParams(ID3D12GraphicsCommandList* pCmdList) const {
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootShaderResourceView(
+        0u, resPerInstanceData_.gpuAddress(frameIdx_)
+    ) );
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootShaderResourceView(
+        1u, resMaterials_.gpuAddress(frameIdx_)
+    ) );
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootShaderResourceView(
+        2u, resLights_.gpuAddress(frameIdx_)
+    ) );
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootConstantBufferView(
+        3u, resPerDrawcallData_.gpuAddress(frameIdx_)
+    ) );
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootConstantBufferView(
+        4u, resPerFrameData_.gpuAddress(frameIdx_)
+    ) );
+}
+
+PhongShader::PhongShader(Core &core, const Config &config, std::size_t duplicationCnt) 
+    : Shader(),
+    internalResArr_(5, std::ranges::range_value_t<decltype(internalResArr_)>(duplicationCnt)),
+    resPerFrameData_(core, sizeof(d3d12::sr::BasicPFD), internalResArr_[0]),
+    resPerDrawcallData_(core, sizeof(d3d12::sr::BasicPDD), internalResArr_[1]),
+    resPerInstanceData_(core, sizeof(d3d12::sr::BasicPID), internalResArr_[2]),
+    resMaterials_(core, sizeof(d3d12::sr::PhongMaterial), internalResArr_[3]),
+    resLights_(core, sizeof(d3d12::sr::PhongLight), internalResArr_[4]),
+    texSrvStart_(),
+    maxInstances_(config.maxInstances),
+    maxMaterials_(config.maxMaterials),
+    maxLights_(config.maxLights) {
+
+    if ( !core.containsDescHeap(Texture::texSrvHeapIdx) ) {
+        throw GFX_EXCEPT("[Description] Texture descriptor heap not found.");
+    }
+
+    texSrvStart_ = core.descHeap(Texture::texSrvHeapIdx).gpuHandle();
+
+    auto builder = SimpleShaderBuilder();
+    builder.code(Type::Vertex, loadCSO(compiledShaderPath / "tShader_vs.cso"));
+    builder.code(Type::Pixel, loadCSO(compiledShaderPath / "tShader_ps.cso"));
+
+    auto pRoot = core.root(rootName());
+    auto pDevice = static_cast<ID3D12Device*>(DeviceFetcher::device(core));
+
+    const auto& il = core.inputLayout(inputLayoutName());
+
+    builder.setInputLayout(il).setRoot(pRoot).build(pDevice, *this, 0u);
+    builder.wireframe().build(pDevice, *this, 1u);
+}
+
+void PhongShader::setRootParams(ID3D12GraphicsCommandList* pCmdList, size_t frameIdx) const {
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootShaderResourceView(
+        0u, resPerInstanceData_.gpuAddress(frameIdx)
+    ) );
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootShaderResourceView(
+        1u, resMaterials_.gpuAddress(frameIdx)
+    ) );
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootDescriptorTable(
+        2u, texSrvStart_
+    ) );
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootShaderResourceView(
+        3u, resLights_.gpuAddress(frameIdx)
+    ) );
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootConstantBufferView(
+        4u, resPerDrawcallData_.gpuAddress(frameIdx)
+    ) );
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootConstantBufferView(
+        5u, resPerFrameData_.gpuAddress(frameIdx)
+    ) );
+}
+
+}   // namespace gfx::d3d12
+
+}   // namespace gfx

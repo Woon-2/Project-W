@@ -3,7 +3,8 @@
 
 #include "d3d12InputLayout.hpp"
 
-#include <d3d12.h>
+#include "directx/d3dx12.h"
+#include "directx/d3d12.h"
 
 #include <d3dcompiler.h>
 #include "dxtarget.hpp"
@@ -76,6 +77,13 @@ public:
     };
 
     using Idx = int;
+
+    Shader() NOEXCEPT = default;
+    virtual ~Shader() = default;
+    Shader(const Shader&) = default;
+    Shader(Shader&&) noexcept = default;
+    Shader& operator=(const Shader&) = default;
+    Shader& operator=(Shader&&) noexcept = default;
 
     /**
      * @brief Loads a compiled shader object file (CSO) from filesystem.    

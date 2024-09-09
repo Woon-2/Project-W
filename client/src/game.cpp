@@ -14,6 +14,9 @@
 #include <chrono>
 #include <thread>
 
+#include "phongShader.hpp"
+
+using namespace std::literals;
 
 Game::Game(gfx::ICore& gfx, MyWindow& wnd, ic::Mouse& mouse, ic::Keyboard& keyboard)
     : timer_(), baseCoordSys_(), camera_(gfx::Camera::Config{
@@ -41,7 +44,7 @@ void Game::update() {
         std::this_thread::sleep_for( std::chrono::duration<double>(restFrameTime) );
     }
 
-    // pWnd_->setTitle(timer_.str());
+    pWnd_->setTitle(timer_.str());
 
     camera_.updateView();
     baseCoordSys_.traverse();
@@ -60,6 +63,10 @@ void Game::initialRender() {
     if (timer_.GetDT() > expectedFrameTime * 2.) {
         return;
     }
+
+    static_cast<gfx::d3d12::PhongShaderNT&>( 
+        static_cast<MyGfx&>(*pGfx_).shader( gfx::d3d12::PhongShaderNT::shaderName() )
+    ).setFrame(curFenceIdx_);
 
     auto pRenderContext = pGfx_->createContext();
     pGfx_->preRender();
@@ -93,6 +100,10 @@ void Game::regularRender() {
     if (timer_.GetDT() > expectedFrameTime * 2.) {
         return;
     }
+
+    static_cast<gfx::d3d12::PhongShaderNT&>( 
+        static_cast<MyGfx&>(*pGfx_).shader( gfx::d3d12::PhongShaderNT::shaderName() )
+    ).setFrame(curFenceIdx_);
 
     auto pRenderContext = pGfx_->createContext();
     pGfx_->preRender();
@@ -186,25 +197,20 @@ void Game::loadAssets() {
     pGfx_->preRender();
     pCtx->preRender();
 
-    auto mod = gfx::loadModel( resourcePath / "models" / "AC Cobra" / "Shelby.fbx",
-        pd3d12Gfx->inputLayout(gfx::d3d12::inputLayoutName(gfx::InputLayoutPreset::Pos3))
+    auto mod = gfx::loadModel( resourcePath / "models" / "Gun _obj" / "Gun.obj",
+        pd3d12Gfx->inputLayout(gfx::d3d12::inputLayoutName(gfx::InputLayoutPreset::Pos3Norm3Tex2))
     );
 
-    auto car = gfx::d3d12::Model( *pd3d12Gfx, *pd3d12Ctx, mod, "car_vb", "car_ib" );
+    auto gun = gfx::d3d12::Model( *pd3d12Gfx, *pd3d12Ctx, mod, "gun_vb", "gun_ib" );
 
-    car.coord().setParent(&baseCoordSys_);
-    car.coord() << mu::rotateY(mu::Degree(90.f));
+    gun.coord().setParent(&baseCoordSys_);
+    gun.coord() << mu::rotateY(mu::Degree(90.f));
 
-    models_.push_back(std::move(car));
-
-    models_.emplace_back( *pd3d12Gfx, *pd3d12Ctx,
-        gfx::loadModel( resourcePath/"models"/"box"/"box.obj",
-            pd3d12Gfx->inputLayout( gfx::d3d12::inputLayoutName(gfx::InputLayoutPreset::Pos3) )
-        ), "box_vb", "box_ib"
-    );
+    models_.push_back(std::move(gun));
 
     pCtx->postRender();
     pGfx_->postRender();
+    pd3d12Gfx->signalGpu();
     pd3d12Gfx->waitGpu();
 
     for (auto& model : models_) {

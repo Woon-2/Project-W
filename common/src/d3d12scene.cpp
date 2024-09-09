@@ -13,100 +13,176 @@ namespace gfx {
 
 namespace d3d12 {
 
+namespace {
+
+    template <class RenderProtocol>
+    Generator<DrawInfo> iterationImpl(const auto& lights, const auto& materials, const auto& fragments, const mu::Mat4x4& view, const mu::Mat4x4& proj);
+    template <class RenderProtocol>
+    Generator<DrawInfo> fragmentIteration(const auto& fragment, const mu::Mat4x4& view, const mu::Mat4x4& proj, auto& baseInstIdx);
+    rp::PhongInstancing::PIDType genPID(rp::PhongInstancing, std::uint32_t matIdx, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj);
+    rp::PhongInstancingNT::PIDType genPID(rp::PhongInstancingNT, std::uint32_t matIdx, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj);
+
+    template <class RenderProtocol>
+    Generator<DrawInfo> iterationImpl(const auto& lights, const auto& materials, const auto& fragments, const mu::Mat4x4& view, const mu::Mat4x4& proj) {
+        // As it is expected to be not too many lights,
+        // store seperated light or material's pointers in a vector
+        // which gives more light or material management flexibility.
+
+        using LightType = RenderProtocol::LightType;
+        using FLightType = RenderProtocol::FLightType;
+
+        auto lightInfo = DrawInfo();
+
+        auto tmpLightBuffer = FLightType();
+        std::ranges::copy( lights | std::views::transform(
+            [](auto pLight) { return *pLight; }
+        ), std::back_inserter(tmpLightBuffer) );
+
+        lightInfo.set(RenderProtocol::typeIdx, rp::DIType::Light);
+        lightInfo.set(RenderProtocol::lightIdx, std::move(tmpLightBuffer));
+
+        co_yield std::move(lightInfo);
+
+        using MaterialType = RenderProtocol::MaterialType;
+        using FMaterialType = RenderProtocol::FMaterialType;
+
+        auto materialInfo = DrawInfo();
+
+        auto tmpMaterialBuffer = FMaterialType();
+        std::ranges::copy( materials | std::views::transform(
+            [](auto pMaterial) { return std::any_cast<MaterialType>(
+                pMaterial->as(RenderProtocol::protocol)
+            ); }
+        ), std::back_inserter(tmpMaterialBuffer) );
+
+        materialInfo.set(RenderProtocol::typeIdx, rp::DIType::Material);
+        materialInfo.set(RenderProtocol::materialIdx, std::move(tmpMaterialBuffer));
+
+        co_yield std::move(materialInfo);
+
+        using PFDType = RenderProtocol::PFDType;
+        using FPFDType = RenderProtocol::FPFDType;
+
+        auto pfdInfo = DrawInfo();
+
+        pfdInfo.set(RenderProtocol::typeIdx, rp::DIType::PFD);
+        pfdInfo.set(RenderProtocol::PFDIdx, PFDType {
+            .globalAmbientLight = { 0.1f, 0.1f, 0.1f, 1.f } // ,
+            // .lightCnt = static_cast<std::uint32_t>( lights.size() )
+        } );
+
+        co_yield std::move(pfdInfo);
+
+        auto baseInstIdx = 0u;
+
+        for (const auto& fragment : fragments) {
+            auto fi = fragmentIteration<RenderProtocol>(fragment, view, proj, baseInstIdx);
+            for (auto& drawInfo : fi) {
+                co_yield std::move(drawInfo);
+            }
+        }
+    }
+
+    template <class RenderProtocol>
+    Generator<DrawInfo> fragmentIteration(const auto& fragment, const mu::Mat4x4& view, const mu::Mat4x4& proj, auto& baseInstIdx) {
+        auto meshInfo = DrawInfo();
+
+        meshInfo.set(RenderProtocol::typeIdx, rp::DIType::Mesh);
+        meshInfo.set(RenderProtocol::meshIdx, fragment.pMesh);
+
+        co_yield std::move(meshInfo);
+
+        using PIDType = RenderProtocol::PIDType;
+        using FPIDType = RenderProtocol::FPIDType;
+
+        auto pidInfo = DrawInfo();
+
+        auto pidBuffer = FPIDType();
+        // replace reserve with reserve_if_possible later
+        // to support various type of containers
+        pidBuffer.reserve( fragment.worlds.size() );
+
+        std::ranges::copy( fragment.worlds | std::views::transform(
+            [&view, &proj, matIdx = fragment.matIdx](const auto& world) {
+                return genPID(RenderProtocol{}, matIdx, world, view, proj);
+            }
+        ), std::back_inserter(pidBuffer) );
+
+        pidInfo.set(RenderProtocol::typeIdx, rp::DIType::PID);
+        pidInfo.set(RenderProtocol::PIDIdx, std::move(pidBuffer));
+
+        co_yield std::move(pidInfo);
+
+        using PDDType = RenderProtocol::PDDType;
+        using FPDDType = RenderProtocol::FPDDType;
+
+        auto pddInfo = DrawInfo();
+
+        pddInfo.set(RenderProtocol::typeIdx, rp::DIType::PDD);
+        pddInfo.set(RenderProtocol::PDDIdx, FPDDType{
+            .instanceIndex = baseInstIdx
+        } );
+        
+        baseInstIdx += static_cast<std::uint32_t>( fragment.worlds.size() );
+
+        co_yield std::move(pddInfo);
+    }
+
+    rp::PhongInstancing::PIDType genPID(rp::PhongInstancing, std::uint32_t matIdx, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj) {
+        return rp::PhongInstancing::PIDType{
+            .wv = (world * view).getXmf(),
+            .wvp = (world * view * proj).getXmf(),
+            .normalXform = dx::convertMat<dx::XMFLOAT3X4>(
+                mu::transpose(mu::inverse(world)).get()
+            ),
+            .matIdx = matIdx
+        };
+    }
+
+    rp::PhongInstancingNT::PIDType genPID(rp::PhongInstancingNT, std::uint32_t matIdx, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj) {
+        return rp::PhongInstancingNT::PIDType{
+            .wv = (world * view).getXmf(),
+            .wvp = (world * view * proj).getXmf(),
+            .normalXform = dx::convertMat<dx::XMFLOAT3X4>(
+                mu::transpose(mu::inverse(world)).get()
+            ),
+            .matIdx = matIdx
+        };
+    }
+}   // namespace gfx::d3d12::<anonymous>
+
 Generator<DrawInfo> CameraScene::iteration() const {
-    // As it is expected to be not too many lights,
-    // store seperated light or material's pointers in a vector
-    // which gives more light or material management flexibility.
-
-    auto lightInfo = DrawInfo();
-
-    auto tmpLightBuffer = std::vector<sr::PhongLight>();
-    std::ranges::copy( lights_ | std::views::transform(
-        [](auto pLight) { return *pLight; }
-    ), std::back_inserter(tmpLightBuffer) );
-
-    lightInfo.set(rp::PhongInstancingNT::typeIdx, rp::DIType::Light);
-    lightInfo.set(rp::PhongInstancingNT::lightIdx, std::span(tmpLightBuffer));
-
-    co_yield std::move(lightInfo);
-
-
-    auto materialInfo = DrawInfo();
-
-    auto tmpMaterialBuffer = std::vector<sr::PhongMaterial>();
-    std::ranges::copy( materials_ | std::views::transform(
-        [](auto pMaterial) { return *pMaterial; }
-    ), std::back_inserter(tmpMaterialBuffer) );
-
-    materialInfo.set(rp::PhongInstancingNT::typeIdx,  rp::DIType::Material);
-    materialInfo.set(rp::PhongInstancingNT::materialIdx, std::span(tmpMaterialBuffer));
-
-    co_yield std::move(materialInfo);
-
-
-    auto pfdInfo = DrawInfo();
-    
-    pfdInfo.set(rp::PhongInstancingNT::typeIdx, rp::DIType::PFD );
-    pfdInfo.set(rp::PhongInstancingNT::PFDIdx, sr::BasicPFD {
-        .globalAmbientLight = { 0.1f, 0.1f, 0.1f, 1.f } // ,
-        // .lightCnt = static_cast<std::uint32_t>( lights_.size() )
-    } );
-
-    co_yield std::move(pfdInfo);
-
-    for (const auto& fragment : fragments_) {
-        auto fi = fragmentIteration(fragment);
-        for (auto& drawInfo : fi) {
+    switch (protocol_) {
+    case rp::Protocol::PhongInstancing: {
+        auto coro = phongInstancingIteration();
+        for (auto& drawInfo : coro) {
             co_yield std::move(drawInfo);
         }
+        break;
+    }
+
+    case rp::Protocol::PhongInstancingNT: {
+        auto coro = phongInstancingNTIteration();
+        for (auto& drawInfo : coro) {
+            co_yield std::move(drawInfo);
+        }
+        break;
+    }
     }
 }
 
-Generator<DrawInfo> CameraScene::fragmentIteration(const Fragment& fragment) const {
-    auto baseInstIdx = 0u;
+Generator<DrawInfo> CameraScene::phongInstancingIteration() const {
+    auto coro = iterationImpl<rp::PhongInstancing>(lights_, materials_, fragments_, view(), proj());
+    for (auto& drawInfo : coro) {
+        co_yield std::move(drawInfo);
+    }
+}
 
-    auto meshInfo = DrawInfo();
-
-    meshInfo.set(rp::PhongInstancingNT::typeIdx, rp::DIType::Mesh);
-    meshInfo.set(rp::PhongInstancingNT::meshIdx, fragment.pMesh);
-
-    co_yield std::move(meshInfo);
-
-
-    auto pidInfo = DrawInfo();
-
-    std::vector<sr::BasicPID> pidBuffer;
-    pidBuffer.reserve( fragment.worlds.size() );
-
-    std::ranges::copy( fragment.worlds | std::views::transform(
-        [this](const auto& world) {
-            return sr::BasicPID {
-                .wv = (world * view()).getXmf(),
-                .wvp = (world * view() * proj()).getXmf(),
-                .normalXform = dx::convertMat<dx::XMFLOAT3X4>(
-                    mu::transpose(mu::inverse(world)).get()
-                ),
-                .matIdx = 0u    // temporary
-            };
-        }
-    ), std::back_inserter(pidBuffer) );
-
-    pidInfo.set(rp::PhongInstancingNT::typeIdx, rp::DIType::PID);
-    pidInfo.set(rp::PhongInstancingNT::PIDIdx, std::span(pidBuffer));
-
-    co_yield std::move(pidInfo);
-
-
-    auto pddInfo = DrawInfo();
-
-    pddInfo.set(rp::PhongInstancingNT::typeIdx, rp::DIType::PDD);
-    pddInfo.set(rp::PhongInstancingNT::PDDIdx, sr::BasicPDD {
-        .instanceIndex = baseInstIdx
-    } );
-    
-    baseInstIdx += static_cast<std::uint32_t>( fragment.worlds.size() );
-
-    co_yield std::move(pddInfo);
+Generator<DrawInfo> CameraScene::phongInstancingNTIteration() const {
+    auto coro = iterationImpl<rp::PhongInstancingNT>(lights_, materials_, fragments_, view(), proj());
+    for (auto& drawInfo : coro) {
+        co_yield std::move(drawInfo);
+    }
 }
 
 }   // namespace d3d12

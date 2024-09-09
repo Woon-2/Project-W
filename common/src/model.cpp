@@ -85,6 +85,13 @@ void processAiNode(const aiNode* node, const aiScene* scene, Model& model) {
 void processAiNode(const aiNode* node, const aiScene* scene, Model& model, const InputLayout& il) {
     for (auto i = 0u; i < node->mNumMeshes; ++i) {
         auto tmpMesh = detail::getMeshFromAiNode(node, scene, i);
+
+        for (const auto& elem : il) {
+            if (!tmpMesh.vb().contains(elem.prop)) {
+                throw std::runtime_error("Input layout mismatch");
+            }
+        }
+
         if (tmpMesh.vb().byteWidth() != 0 && tmpMesh.ib().size() != 0) {
             model.addMesh( Mesh( convert(tmpMesh.vb(), il), std::move(tmpMesh.ib()) ),
                 scene->mMeshes[node->mMeshes[i]]->mName.C_Str()

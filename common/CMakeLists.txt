@@ -36,7 +36,7 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
 endif()
 
 include(auto_configure)
-include(win32app_configuration)
+include(win32_configuration)
 
 # === woon2exception ===
 add_library(woon2exception
@@ -151,7 +151,7 @@ add_library(gfx
     src/dxexcept.cpp include/dxexcept.hpp
     src/d3d12core.cpp include/d3d12core.hpp
     src/d3dwindow.cpp include/d3dwindow.hpp
-    src/sampleRenderer.cpp include/sampleRenderer.hpp
+    src/phongRenderer.cpp include/phongRenderer.hpp
     src/sampleScene.cpp include/sampleScene.hpp
     src/d3d12shader.cpp include/d3d12shader.hpp
     src/rootPresets.cpp include/rootPresets.hpp
@@ -162,6 +162,7 @@ add_library(gfx
     src/d3d12mesh.cpp include/d3d12mesh.hpp
     src/inputLayout.cpp include/inputLayout.hpp
     src/d3d12InputLayout.cpp include/d3d12InputLayout.hpp
+    src/d3d12Drawers.cpp include/d3d12Drawers.hpp
     src/nullShader.cpp include/nullShader.hpp
     src/solidShader.cpp include/solidShader.hpp
     src/ntShader.cpp include/ntShader.hpp
@@ -177,6 +178,8 @@ add_library(gfx
     src/drawInfo.cpp include/drawInfo.hpp
     src/gpuMem.cpp include/gpuMem.hpp
     src/renderProtocol.cpp include/renderProtocol.hpp
+    src/d3d12texture.cpp include/d3d12texture.hpp
+    src/d3d12material.cpp include/d3d12material.hpp
     
     include/dxtarget.hpp
     include/gfxPrimitive.hpp
@@ -201,11 +204,14 @@ target_include_directories(gfx
 
 target_link_libraries(gfx
     PRIVATE
+        DirectX::d3dx12
         d3d12.lib
         dxguid.lib
         dxgi.lib
         D3DCompiler.lib
         assimp
+        ddsLoader
+        wicLoader
         common::mu
         common::coro
         common::mem
@@ -214,6 +220,8 @@ target_link_libraries(gfx
 target_include_directories(gfx
     PUBLIC
         "${ASSIMP_INCLUDE}"
+        "${TEXLOADER_INCLUDE}"
+        "${D3D12_INCLUDE}"
 )
 
 include(configure_paths)

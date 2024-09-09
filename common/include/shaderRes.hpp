@@ -33,11 +33,18 @@ struct BasicPDD {
     std::uint32_t padding[3];
 };
 
-struct PhongMaterial {
+struct PhongMaterialNT {
     dx::XMFLOAT4 ambient;
     dx::XMFLOAT4 diffuse;
     dx::XMFLOAT4 specular; // a = power
     dx::XMFLOAT4 emmisive;
+};
+
+struct PhongMaterial {
+    std::uint32_t diffuseMapIdx;
+    std::uint32_t specularMapIdx;
+    float shininess;
+    float padding;
 };
 
 struct PhongLight {
