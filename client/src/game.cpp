@@ -19,7 +19,7 @@ Game::Game(gfx::ICore& gfx, MyWindow& wnd, ic::Mouse& mouse, ic::Keyboard& keybo
     : timer_(), baseCoordSys_(), camera_(gfx::Camera::Config{
         .fov = 90.f, .aspect = wnd.client().width / static_cast<float>(wnd.client().height),
         .near = 0.1f, .far = 1000.f
-    }), models_(), inputSystem_(keyboard), pGfx_(&gfx), pWnd_(&wnd),
+    }), models_(), /*inputSystem_(keyboard),*/ physicsSystem_(keyboard), pGfx_(&gfx), pWnd_(&wnd),
     pMouse_(&mouse), renderFunc_(&Game::initialRender), lockFPS_(defLockFPS), player_(),
     curFenceIdx_(0), prevFenceIdx_(1u) {
     setupWndMsgHandlers();
@@ -169,7 +169,8 @@ void Game::processInput() {
         }
     }
     
-    inputSystem_.update();
+    // inputSystem_.update();
+    physicsSystem_.update(timer_.GetDT());
 }
 
 void Game::setupWndMsgHandlers() {
@@ -219,13 +220,27 @@ void Game::setupCamera() {
 
 void Game::initECS() {
     ecs::ConfigEntity();
-    ecs::RegisterComponent<PlayerController>();
     ecs::RegisterComponent<Position>();
+    ecs::RegisterComponent<PlayerController>();
+    ecs::RegisterComponent<Rigidbody>();
 
-    auto inputSystem_ = ecs::RegisterSystem<InputSystem>();
+    // auto inputSystem_ = ecs::RegisterSystem<InputSystem>();
+    auto physicsSystem_ = ecs::RegisterSystem<PhysicsSystem>();
 
-    ecs::Signature signature;
-    signature.set(ecs::GetComponentType<PlayerController>());
-    signature.set(ecs::GetComponentType<Position>());
-    ecs::SetSystemSignature<InputSystem>(signature);
+    //{
+    //    ecs::Signature signature;
+    //    signature.set(ecs::GetComponentType<PlayerController>());
+    //    signature.set(ecs::GetComponentType<Position>());
+    //    ecs::SetSystemSignature<InputSystem>(signature);
+    //}
+
+    {
+        ecs::Signature signature;
+        signature.set(ecs::GetComponentType<Position>());
+        signature.set(ecs::GetComponentType<PlayerController>());
+        signature.set(ecs::GetComponentType<Rigidbody>());
+        ecs::SetSystemSignature<PhysicsSystem>(signature);
+    }
+
+    
 }

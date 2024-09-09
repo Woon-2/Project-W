@@ -14,6 +14,7 @@
 #include "player.hpp"
 
 #include "inputSystem.hpp"
+#include "physicsSystem.hpp"
 
 #include <vector>
 #include <memory>
@@ -26,7 +27,7 @@ public:
 
     Game()
         : timer_(), baseCoordSys_(), camera_(baseCoordSys_),
-        models_(), inputSystem_(), pGfx_(), pWnd_(), pMouse_(),
+        models_(),/* inputSystem_() ,*/ physicsSystem_(), pGfx_(), pWnd_(), pMouse_(),
         renderFunc_(&Game::initialRender), lockFPS_(defLockFPS), player_(),
         curFenceIdx_(0), prevFenceIdx_(1u) {}
     
@@ -50,7 +51,8 @@ private:
     gfx::coord::System baseCoordSys_;
     gfx::Camera camera_;
     std::vector<gfx::d3d12::Model> models_;
-    InputSystem inputSystem_;
+    // InputSystem inputSystem_;
+    PhysicsSystem physicsSystem_;
     gfx::ICore* pGfx_;
     MyWindow* pWnd_;
     ic::Mouse* pMouse_;

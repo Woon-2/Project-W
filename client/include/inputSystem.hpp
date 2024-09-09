@@ -4,27 +4,12 @@
 #include "keyboardXX.hpp"
 #include "player.hpp"
 
+class Rigidbody;
+
 class PlayerController
 {
 public:
-    void processInput(Position& position, ic::Keyboard* pKeyboard)
-    {
-        if (pKeyboard->pressed('A')) {
-            position.x -= 0.5;
-        }
-
-        if (pKeyboard->pressed('D')) {
-            position.x += 0.5;
-        }
-
-        if (pKeyboard->pressed('W')) {
-            position.y -= 0.5;
-        }
-
-        if (pKeyboard->pressed('S')) {
-            position.y += 0.5;
-        }
-    }
+    void processInput(Rigidbody& rb, ic::Keyboard* pKeyboard);
 };
 
 class InputSystem
