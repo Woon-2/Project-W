@@ -48,6 +48,9 @@ target_sources(client
         src/ecsExcept.cpp include/ecsExcept.hpp
         src/player.cpp include/player.hpp
         src/inputSystem.cpp include/inputSystem.hpp
+        src/assetSystem.cpp include/assetSystem.hpp
+        src/assetMap.cpp include/assetMap.hpp
+        src/cmodel.cpp include/cmodel.hpp
         
         src/Timer.cpp include/Timer.hpp
 )

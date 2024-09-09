@@ -19,23 +19,36 @@ public:
     Texture() NOEXCEPT
         : desc_{}, res_(), gpuHandle_{} {}
 
+    Texture( Core& core, D3D12RenderContext& ctx, const std::filesystem::path& path,
+        Core::UpBufIdx upIdx,
+        D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+    ) : Texture() {
+        load(core, ctx, path, upIdx, initialState);
+    }
+
     void load( Core& core, D3D12RenderContext& ctx, const std::filesystem::path& path,
+        Core::UpBufIdx upIdx,
         D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
     );
+
+    void completeInit(Core& core) const {
+        core.popTmpUpBuf(upIdx_);
+    }
 
     D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle() const NOEXCEPT { return gpuHandle_; }
 
 private:
     void loadDDS( Core& core, D3D12RenderContext& ctx, const std::filesystem::path& path,
-        D3D12_RESOURCE_STATES initialState
+        Core::UpBufIdx&& upIdx, D3D12_RESOURCE_STATES initialState
     );
     void loadWIC( Core& core, D3D12RenderContext& ctx, const std::filesystem::path& path,
-        D3D12_RESOURCE_STATES initialState
+        Core::UpBufIdx&& upIdx, D3D12_RESOURCE_STATES initialState
     );
     
     D3D12_RESOURCE_DESC desc_;
     wrl::ComPtr<ID3D12Resource> res_;
     D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle_;
+    Core::UpBufIdx upIdx_;
 };
 
 }
