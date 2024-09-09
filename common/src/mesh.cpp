@@ -135,6 +135,13 @@ Mesh loadMesh(const std::filesystem::path& path) {
 
 Mesh loadMesh(const std::filesystem::path& path, const InputLayout& il) {
     auto mesh = loadMesh(path);
+
+    for (const auto& elem : il) {
+        if (!mesh.contains(elem.prop)) {
+            throw std::runtime_error("The requested input layout is not supported by the mesh");
+        }
+    }
+
     return Mesh(convert(mesh.vb(), il), std::move(mesh.ib()));
 }
 
