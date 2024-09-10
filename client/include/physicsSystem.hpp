@@ -17,16 +17,17 @@ public:
 
 	void MU_CALLCONV addForce(mu::Vec3 force) NOEXCEPT;
 
-	void MU_CALLCONV updateRigid(float dt, mu::Vec3& position) NOEXCEPT;
+	void MU_CALLCONV updateRigid(float dt, mu::Vec3& position, float friction) NOEXCEPT;
 
 	void MU_CALLCONV setPosition(mu::Vec3 pos) NOEXCEPT { position_ = pos; }
 
+	const mu::Vec3 MU_CALLCONV deltaPosition() const NOEXCEPT { return position_ - oldPosition_; }
 	const mu::Vec3 MU_CALLCONV force() const NOEXCEPT { return force_; }
 	const mu::Vec3 MU_CALLCONV velocity() const NOEXCEPT { return velocity_; }
 	float mass() const NOEXCEPT { return mass_; }
 
 private:
-	void updateForce(float dt, mu::Vec3& position) NOEXCEPT;
+	void updateForce(float dt, mu::Vec3& position, float friction) NOEXCEPT;
 	void updateAngular(float dt) NOEXCEPT;
 
 private:
@@ -39,7 +40,8 @@ private:
 	mu::Vec3 angMomentum_; // L
 	mu::Vec3 torque_; // t
 	mu::Vec3 force_;
-	mu::Vec3 position_;
+	mu::Vec3 position_;	// curPosition
+	mu::Vec3 oldPosition_;
 	mu::Vec3 size_;
 	std::array<mu::Vec3, 8> corner_;
 	
