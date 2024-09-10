@@ -19,6 +19,8 @@
 #include <vector>
 #include <memory>
 
+#include "gun.hpp"
+
 class Game {
 public:
     static constexpr auto defLockFPS = 600.;
@@ -27,7 +29,7 @@ public:
 
     Game()
         : timer_(), baseCoordSys_(), camera_(baseCoordSys_),
-        models_(),/* inputSystem_() ,*/ physicsSystem_(), pGfx_(), pWnd_(), pMouse_(),
+        guns_(),/* inputSystem_() ,*/ physicsSystem_(), pGfx_(), pWnd_(), pMouse_(),
         renderFunc_(&Game::initialRender), lockFPS_(defLockFPS), player_(),
         curFenceIdx_(0), prevFenceIdx_(1u) {}
     
@@ -46,12 +48,12 @@ private:
     void initECS();
     void initialRender();
     void regularRender();
+    void processNetwork();
 
     Timer timer_;
     gfx::coord::System baseCoordSys_;
     gfx::Camera camera_;
-    std::vector<gfx::d3d12::Model> models_;
-    // InputSystem inputSystem_;
+    std::vector<Gun> guns_;
     PhysicsSystem physicsSystem_;
     gfx::ICore* pGfx_;
     MyWindow* pWnd_;

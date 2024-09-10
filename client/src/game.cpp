@@ -22,7 +22,7 @@ Game::Game(gfx::ICore& gfx, MyWindow& wnd, ic::Mouse& mouse, ic::Keyboard& keybo
     : timer_(), baseCoordSys_(), camera_(gfx::Camera::Config{
         .fov = 90.f, .aspect = wnd.client().width / static_cast<float>(wnd.client().height),
         .near = 0.1f, .far = 1000.f
-    }), models_(), /*inputSystem_(keyboard),*/ physicsSystem_(keyboard), pGfx_(&gfx), pWnd_(&wnd),
+    }), guns_(), /*inputSystem_(keyboard),*/ physicsSystem_(keyboard), pGfx_(&gfx), pWnd_(&wnd),
     pMouse_(&mouse), renderFunc_(&Game::initialRender), lockFPS_(defLockFPS), player_(),
     curFenceIdx_(0), prevFenceIdx_(1u) {
     setupWndMsgHandlers();
@@ -76,9 +76,7 @@ void Game::initialRender() {
 
     // TODO: camera_->makeScene(world);
     auto scene = gfx::d3d12::CameraScene(camera_);
-    for (auto& model : models_) {
-        // scene.addModel(model);
-    }
+
     // pGfx_->render( scene, static_cast<MyGfx&>(*pGfx_).renderer(
     //      MyGfx::Renderer::Sample
     // ), *pWnd_ );
@@ -113,9 +111,7 @@ void Game::regularRender() {
 
     // TODO: camera_->makeScene(world);
     auto scene = gfx::d3d12::CameraScene(camera_);
-    for (auto& model : models_) {
-        // scene.addModel(model);
-    }
+
     // pGfx_->render( scene, static_cast<MyGfx&>(*pGfx_).renderer(
     //      MyGfx::Renderer::Sample
     // ), *pWnd_ );
@@ -191,31 +187,7 @@ void Game::setupWndMsgHandlers() {
 
 void Game::loadAssets() {
     auto pd3d12Gfx = static_cast<gfx::d3d12::Core*>(pGfx_);
-    auto pCtx = pGfx_->createContext();
-    auto pd3d12Ctx = static_cast<gfx::d3d12::D3D12RenderContext*>(pCtx.get());
-
-    pGfx_->preRender();
-    pCtx->preRender();
-
-    auto mod = gfx::loadModel( resourcePath / "models" / "Gun _obj" / "Gun.obj",
-        pd3d12Gfx->inputLayout(gfx::d3d12::inputLayoutName(gfx::InputLayoutPreset::Pos3Norm3Tex2))
-    );
-
-    auto gun = gfx::d3d12::Model( *pd3d12Gfx, *pd3d12Ctx, mod, "gun_vb", "gun_ib" );
-
-    gun.coord().setParent(&baseCoordSys_);
-    gun.coord() << mu::rotateY(mu::Degree(90.f));
-
-    models_.push_back(std::move(gun));
-
-    pCtx->postRender();
-    pGfx_->postRender();
-    pd3d12Gfx->signalGpu();
-    pd3d12Gfx->waitGpu();
-
-    for (auto& model : models_) {
-        model.completeInit(*pd3d12Gfx);
-    }
+    Gun::loadAssets(*pd3d12Gfx, curFenceIdx_);
 }
 
 void Game::setupCamera() {
