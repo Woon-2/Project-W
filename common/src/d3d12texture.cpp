@@ -134,9 +134,9 @@ void Texture::loadWIC( Core& core, D3D12RenderContext& ctx,
     auto requiredBytes = GetRequiredIntermediateSize(res_.Get(), 0, 1u);
 
     auto uploadBuf = createUpBuf(core, requiredBytes);
-    core.addTmpUpBuf(std::move(upIdx_), std::move(uploadBuf));
+    core.addTmpUpBuf(upIdx_, std::move(uploadBuf));
     
-    UpdateSubresources( pCmdList.Get(), res_.Get(), uploadBuf.Get(),
+    UpdateSubresources( pCmdList.Get(), res_.Get(), core.tmpUpBuf(upIdx_).Get(),
         0, 0, 1u, &subresource
     );
 }

@@ -111,7 +111,10 @@ Mesh getFirstMeshFromAiNode(const aiNode* node, const aiScene* scene) {
 
 Mesh getFirstMeshFromAiScene(const aiScene* scene) {
     if (scene->mRootNode->mNumMeshes == 0) {
-        throw std::runtime_error("No meshes found");
+        if (scene->mRootNode->mChildren[0]->mNumMeshes == 0) {
+            throw std::runtime_error("No meshes found");
+        }
+        return getFirstMeshFromAiNode(scene->mRootNode->mChildren[0], scene);
     }
 
     return getFirstMeshFromAiNode(scene->mRootNode, scene);
