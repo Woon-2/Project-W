@@ -25,22 +25,22 @@ void PlayerController::processInput(Rigidbody& rb, ic::Keyboard* pKeyboard)
 {    
     if (pKeyboard->pressed('A')) {
         // position.x -= 0.5;
-        rb.addForce((-0.5, 0.0, 0.0));
+        rb.addForce(mu::Vec3(-25.0f, 0.0f, 0.0f));
     }
 
     if (pKeyboard->pressed('D')) {
         // position.x += 0.5;
-        rb.addForce((+0.5, 0.0, 0.0));
+        rb.addForce(mu::Vec3(+25.0f, 0.0f, 0.0f));
     }
 
     if (pKeyboard->pressed('W')) {
         // position.z -= 0.5;
-        rb.addForce((0.0, 0.0, -0.5));
+        rb.addForce(mu::Vec3(0.0f, 0.0f, -25.0f));
     }
 
     if (pKeyboard->pressed('S')) {
         // position.z += 0.5;
-        rb.addForce((0.0, 0.0, 0.5));
+        rb.addForce({ 0.0f, 0.0f, 25.0f });
     }
     
 }
