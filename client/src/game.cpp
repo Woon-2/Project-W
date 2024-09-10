@@ -181,7 +181,7 @@ void Game::processInput() {
     }
     
     // inputSystem_.update();
-    physicsSystem_.update(timer_.GetDT());
+    physicsSystem_.update(static_cast<float>(timer_.GetDT()));
 }
 
 void Game::setupWndMsgHandlers() {
