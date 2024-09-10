@@ -51,8 +51,8 @@ target_sources(client
         src/assetSystem.cpp include/assetSystem.hpp
         src/assetMap.cpp include/assetMap.hpp
         src/cmodel.cpp include/cmodel.hpp
-        
         src/Timer.cpp include/Timer.hpp
+        src/gun.cpp include/gun.hpp
 )
 
 include(auto_configure)
