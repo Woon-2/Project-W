@@ -224,6 +224,26 @@ target_include_directories(gfx
         "${D3D12_INCLUDE}"
 )
 
+# === net ===
+add_library(net
+    src/net.cpp include/net.hpp
+)
+
+add_library(common::net ALIAS net)
+
+auto_configure(net PRIVATE)
+
+target_link_libraries(net
+    PRIVATE
+        common::woon2exception
+        ws2_32.lib
+)
+
+target_include_directories(net
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+
 include(configure_paths)
 gen_resource_path()
 

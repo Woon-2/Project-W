@@ -40,7 +40,6 @@ add_executable(server)
 target_sources(server
     PRIVATE
         src/main.cpp
-        src/net.cpp include/net.hpp
 )
 
 include(auto_configure)
@@ -55,5 +54,6 @@ target_include_directories(server
 target_link_libraries(server
     PRIVATE
         common::woon2exception
+        common::net
         ws2_32.lib
 )

@@ -48,6 +48,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 add_subdirectory(extern)
 add_subdirectory(common)
 add_subdirectory(client)
+add_subdirectory(server)
 
 include(doxy)
 add_doxygen("${PROJECT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/docs")
