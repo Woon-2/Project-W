@@ -1228,6 +1228,12 @@ private:
     dx::XMVECTOR quat_;
 };
 
+#ifdef DXMATH_MAT_UTIL
+template <std::size_t R, std::size_t C>
+    requires (R >= 1 && R <= 4) && (C >= 1 && C <= 4)
+class Mat;
+#endif // DXMATH_MAT_UTIL
+
 class NQuat {
 private:
     struct NoNormalize_t {};
@@ -1298,14 +1304,17 @@ public:
     }
 
 #ifdef DXMATH_MAT_UTIL
+    const Mat<3, 3> XM_CALLCONV mat3() const __MathUtil_NOEXCEPT;
+    const Mat<4, 4> XM_CALLCONV mat4() const __MathUtil_NOEXCEPT;
+
     const dx::XMMATRIX XM_CALLCONV mat() const __MathUtil_NOEXCEPT {
         return dx::XMMatrixRotationQuaternion(quat_);
     }
-#endif  // DXMATH_MAT_UTIL
 
     operator dx::XMMATRIX() const __MathUtil_NOEXCEPT {
         return dx::XMMatrixRotationQuaternion(quat_);
     }
+#endif  // DXMATH_MAT_UTIL
 
     dx::XMVECTOR& get() __MathUtil_NOEXCEPT {
         return quat_;
@@ -1803,6 +1812,16 @@ inline const Mat<4, 4> XM_CALLCONV persp(
 ) __MathUtil_NOEXCEPT {
     return dx::XMMatrixPerspectiveOffCenterLH(left, right, bottom, top, nearZ, farZ);
 }
+
+#ifdef DXMATH_QUAT_UTIL
+inline const Mat<3, 3> XM_CALLCONV NQuat::mat3() const __MathUtil_NOEXCEPT {
+    return dx::XMMatrixRotationQuaternion(quat_);
+}
+
+inline const Mat<4, 4> XM_CALLCONV NQuat::mat4() const __MathUtil_NOEXCEPT {
+    return dx::XMMatrixRotationQuaternion(quat_);
+}
+#endif  // DXMATH_QUAT_UTIL
 
 using Mat1x1 = Mat<1, 1>;
 using Mat1x2 = Mat<1, 2>;
