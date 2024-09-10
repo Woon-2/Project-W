@@ -65,6 +65,12 @@ public:
     bool canSupport(rp::Protocol protocol) const;
     std::any as(rp::Protocol protocol) const;
 
+    void completeInit(Core& core) {
+        for (auto& [key, tex] : textures_) {
+            tex.tex.completeInit(core);
+        }
+    }
+
 private:
     rp::PhongInstancing::MaterialType asPhongInstancing() const;
     rp::PhongInstancingNT::MaterialType asPhongInstancingNT() const;

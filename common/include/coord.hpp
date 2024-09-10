@@ -146,6 +146,9 @@ public:
     const mu::Mat4x4& localXform() const NOEXCEPT {
         return localXform_;
     }
+    void MU_CALLCONV setLocalXform(mu::Mat4x4 xform) NOEXCEPT {
+        localXform_ = xform;
+    }
     /**
      * @brief Gets the total transformation matrix.
      * @return `const mu::Mat4x4&` The reference of the total transformation matrix.
