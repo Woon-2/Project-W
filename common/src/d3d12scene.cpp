@@ -130,8 +130,8 @@ namespace {
 
     rp::PhongInstancing::PIDType genPID(rp::PhongInstancing, std::uint32_t matIdx, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj) {
         return rp::PhongInstancing::PIDType{
-            .wv = (world * view).getXmf(),
-            .wvp = (world * view * proj).getXmf(),
+            .wv = mu::transpose(world * view).getXmf(),
+            .wvp = mu::transpose(world * view * proj).getXmf(),
             .normalXform = dx::convertMat<dx::XMFLOAT3X4>(
                 mu::transpose(mu::inverse(world)).get()
             ),
@@ -141,8 +141,8 @@ namespace {
 
     rp::PhongInstancingNT::PIDType genPID(rp::PhongInstancingNT, std::uint32_t matIdx, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj) {
         return rp::PhongInstancingNT::PIDType{
-            .wv = (world * view).getXmf(),
-            .wvp = (world * view * proj).getXmf(),
+            .wv = mu::transpose(world * view).getXmf(),
+            .wvp = mu::transpose(world * view * proj).getXmf(),
             .normalXform = dx::convertMat<dx::XMFLOAT3X4>(
                 mu::transpose(mu::inverse(world)).get()
             ),

@@ -20,4 +20,10 @@ void Player::Init()
 	ecs::SetSignature(entityNumber_, signature);
 	
 	ecs::SetEntity(typeid(PhysicsSystem).name(), entityNumber_);
+
+	ecs::GetComponent<Rigidbody>(entityNumber_).setPosition(mu::Vec3(
+		static_cast<float>(position.x),
+		static_cast<float>(position.y),
+		static_cast<float>(position.z)
+	));
 }

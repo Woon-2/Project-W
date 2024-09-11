@@ -17,7 +17,7 @@ public:
 
 	void MU_CALLCONV addForce(mu::Vec3 force) NOEXCEPT;
 
-	void MU_CALLCONV updateRigid(float dt, mu::Vec3& position, float friction) NOEXCEPT;
+	void MU_CALLCONV updateRigid(float dt, float friction) NOEXCEPT;
 
 	void MU_CALLCONV setPosition(mu::Vec3 pos) NOEXCEPT { position_ = pos; }
 
@@ -27,7 +27,7 @@ public:
 	float mass() const NOEXCEPT { return mass_; }
 
 private:
-	void updateForce(float dt, mu::Vec3& position, float friction) NOEXCEPT;
+	void updateForce(float dt, float friction) NOEXCEPT;
 	void updateAngular(float dt) NOEXCEPT;
 
 private:

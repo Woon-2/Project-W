@@ -50,6 +50,11 @@ public:
         curFenceIdx_(0), prevFenceIdx_(1u), networkID_(-1) {}
     
     Game(gfx::ICore& gfx, MyWindow& wnd, ic::Mouse& mouse, ic::Keyboard& keyboard);
+    Game(const Game&) = default;
+	Game(Game&&) noexcept = default;
+	Game& operator=(const Game&) = default;
+	Game& operator=(Game&&) noexcept = default;
+    ~Game();
 
     void update();
     void render();

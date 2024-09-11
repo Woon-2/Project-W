@@ -23,24 +23,26 @@ void InputSystem::update()
 
 void PlayerController::processInput(Rigidbody& rb, ic::Keyboard* pKeyboard)
 {    
+    constexpr auto step = 3.f;
+
     if (pKeyboard->pressed('A')) {
         // position.x -= 0.5;
-        rb.addForce(mu::Vec3(-25.0f, 0.0f, 0.0f));
+        rb.addForce(mu::Vec3(-step, 0.0f, 0.0f));
     }
 
     if (pKeyboard->pressed('D')) {
         // position.x += 0.5;
-        rb.addForce(mu::Vec3(+25.0f, 0.0f, 0.0f));
+        rb.addForce(mu::Vec3(+step, 0.0f, 0.0f));
     }
 
     if (pKeyboard->pressed('W')) {
         // position.z -= 0.5;
-        rb.addForce(mu::Vec3(0.0f, 0.0f, -25.0f));
+        rb.addForce(mu::Vec3(0.0f, 0.0f, step));
     }
 
     if (pKeyboard->pressed('S')) {
         // position.z += 0.5;
-        rb.addForce({ 0.0f, 0.0f, 25.0f });
+        rb.addForce({ 0.0f, 0.0f, -step });
     }
     
 }

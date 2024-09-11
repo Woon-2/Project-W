@@ -115,6 +115,9 @@ void init(net::TcpSocket& recvUninitSock) {
 int main() { 
     using Clock = std::chrono::high_resolution_clock;
 
+	gUninitializedClients.reserve(10u);
+    gSessionClients.reserve(10u);
+
     try {
 
     net::initNet();
@@ -180,6 +183,7 @@ int main() {
             if ( ( *reinterpret_cast<UpdateClientPacket*>(&buffer) ).type == PACKET_TYPE::UPDATE ) {
                 auto& obj = ( *reinterpret_cast<UpdateClientPacket*>(&buffer) ).obj;
                 std::memcpy(&gWorld.obj[ gSock2WorldIdxMap.at(client) ], &obj, sizeof(obj));
+                std::cout << "client update packet received!\n";
             }
 
             // log.back().push_back(std::string(buffer, byteRecv));
@@ -194,7 +198,7 @@ int main() {
             char buffer[maxPacketSize];
             auto byteRecv = client->recv(buffer, maxPacketSize);
 
-            if ( ( *reinterpret_cast<UpdateClientPacket*>(&buffer) ).type == PACKET_TYPE::LEAVE ) {
+            if ( ( *reinterpret_cast<LeavePacket*>(&buffer) ).type == PACKET_TYPE::LEAVE ) {
                 auto id = gSock2WorldIdxMap.at(client);
                 gWorld.obj[id].active = false;
                 
@@ -222,6 +226,11 @@ int main() {
 
         system("cls");
         std::cout << std::chrono::duration_cast< std::chrono::duration<float, std::milli> >( Clock::now() - tp ) << " elapsed.\n";
+        for (auto i = 0; i < 10; ++i) {
+            if (gWorld.obj[i].active) {
+                std::cout << "(x, y, z): " << gWorld.obj[i].x << ", " << gWorld.obj[i].y << ", " << gWorld.obj[i].z << '\n';
+            }
+        }
     }
 
     } catch (const net::Exception& e) {

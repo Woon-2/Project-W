@@ -16,16 +16,18 @@ void MU_CALLCONV Rigidbody::addForce(mu::Vec3 force) NOEXCEPT
 	force_ += force;
 }
 
-void MU_CALLCONV Rigidbody::updateRigid(float dt, mu::Vec3& position, float friction) NOEXCEPT
+void MU_CALLCONV Rigidbody::updateRigid(float dt, float friction) NOEXCEPT
 {
-	updateForce(dt, position, friction);
+	updateForce(dt, friction);
 	updateAngular(dt);
 }
 
-void Rigidbody::updateForce(float dt, mu::Vec3& position, float friction) NOEXCEPT
+void Rigidbody::updateForce(float dt, float friction) NOEXCEPT
 {
+	oldPosition_ = position_;
+
 	// 선운동량과 위치
-	position += momentum_ / mass_ * dt;
+	position_ += momentum_ / mass_ * dt;
 	momentum_ += force_ * dt;
 
 	// 속도 계산
@@ -39,14 +41,14 @@ void Rigidbody::updateForce(float dt, mu::Vec3& position, float friction) NOEXCE
 	velocity_ += (frictionForce / mass_) * dt;	// 가속도 적용
 
 	// 속도가 아주 작을 경우 속도를 0으로 설정
-	if (velocity_.len() < 0.1f) {
+	static constexpr auto epsilon = 0.0002f;
+	if (velocity_.len() < epsilon) {
 		velocity_ = mu::Vec3(0.0f, 0.0f, 0.0f); // 속도를 0으로 설정
 		momentum_ = mu::Vec3(0.0f, 0.0f, 0.0f); // 운동량도 0으로 설정
 	}
 
 	// 힘을 다 사용했으므로 초기화
 	force_ = mu::Vec3(0.0f, 0.0f, 0.0f);
-	oldPosition_ = position;
 
 	// 체크용 코드
 	{
@@ -77,11 +79,9 @@ void PhysicsSystem::update(float deltaTime)
 		auto& pos = ecs::GetComponent<Position>(entity);
 		auto& controller = ecs::GetComponent<PlayerController>(entity);
 
-		mu::Vec3 position{ static_cast<float>(pos.x), static_cast<float>(pos.y), static_cast<float>(pos.z) };
-
 		controller.processInput(rb, pKeyboard_);
 
-		rb.updateRigid(deltaTime, position, 0.8f);
+		rb.updateRigid(deltaTime, 1.5f);
 		// rb.setPosition(position);
 	}
 }

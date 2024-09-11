@@ -75,6 +75,13 @@ Game::Game(gfx::ICore& gfx, MyWindow& wnd, ic::Mouse& mouse, ic::Keyboard& keybo
     player_.Init();
 }
 
+Game::~Game() {
+	std::array<char, 1> buffer;
+	buffer[0] = static_cast<char>(PACKET_TYPE::LEAVE);
+	net::disNonb(socket_);
+	socket_.send(buffer.data(), buffer.size());
+}
+
 void Game::update() {
     processNetwork();
     processInput();
@@ -92,8 +99,8 @@ void Game::update() {
     camera_.updateView();
 
     auto& playerRigidBody =  ecs::GetComponent<Rigidbody>(player_.entityNumber_);
-    const auto& playerOldPos = ecs::GetComponent<Position>(player_.entityNumber_);
-    auto playerDeltaPos = playerRigidBody.deltaPosition();
+    const auto playerOldPos = ecs::GetComponent<Position>(player_.entityNumber_);
+    const auto playerDeltaPos = playerRigidBody.deltaPosition();
     guns_[networkID_].coord() << mu::translate(playerDeltaPos);
 
     for (std::size_t i = 0; i < guns_.size(); ++i) {
@@ -103,15 +110,12 @@ void Game::update() {
         }
     }
 
-    baseCoordSys_.traverse();
+    auto& playerPos = ecs::GetComponent<Position>(player_.entityNumber_);
+	playerPos.x = playerOldPos.x + playerDeltaPos.x();
+	playerPos.y = playerOldPos.y + playerDeltaPos.y();
+	playerPos.z = playerOldPos.z + playerDeltaPos.z();
 
-    playerRigidBody.setPosition( mu::Vec4(
-            static_cast<float>( playerOldPos.x ),
-            static_cast<float>( playerOldPos.y ),
-            static_cast<float>( playerOldPos.z ),
-            1.f
-        ) * guns_[networkID_].coord().xform()
-    );
+    baseCoordSys_.traverse();
     
     player_.printPos();
 }
@@ -310,7 +314,7 @@ void Game::loadAssets() {
 
 void Game::setupCamera() {
     camera_.coordSys().setParent(&baseCoordSys_);
-    camera_.coordSys() << mu::translate(0.f, 5.f, -10.f);
+    camera_.coordSys() << mu::translate(0.f, 1.f, -10.f);
     camera_.focus( gfx::coord::Pt3( &baseCoordSys_, mu::Vec3(0.f, 0.f, 0.f) ) );
 }
 
@@ -347,16 +351,20 @@ void Game::processNetwork() {
     
     auto bytes = socket_.recvUc(buffer.data(), maxPacketSize);
 
-    switch (reinterpret_cast<PACKET_TYPE&>(buffer[0])) {
+	if (bytes == 0) {
+		return;
+	}
+
+    switch (reinterpret_cast<const PACKET_TYPE&>(buffer[0])) {
     case PACKET_TYPE::HELLO: {
         auto pPacket = reinterpret_cast<HelloServerPacket*>(buffer.data());
         networkID_ = pPacket->id;
-        world_.obj[networkID_].active = true;
+        std::memcpy(&world_, &pPacket->world, sizeof(world_));
         break;
     }
 
     case PACKET_TYPE::UPDATE: {
-        if (networkID_ == -1) {
+        if (networkID_ == static_cast<std::uint32_t>(-1)) {
             return; // ignore updates until we get our ID
         }
 
