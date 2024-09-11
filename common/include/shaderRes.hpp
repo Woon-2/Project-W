@@ -48,6 +48,10 @@ struct PhongMaterial {
 };
 
 struct PhongLight {
+    static constexpr std::int32_t kTypeDirectional = 0;
+    static constexpr std::int32_t kTypePoint = 1;
+    static constexpr std::int32_t kTypeSpot = 2;
+
     dx::XMFLOAT4 ambient;
     dx::XMFLOAT4 diffuse;
     dx::XMFLOAT4 specular;

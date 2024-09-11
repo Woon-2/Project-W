@@ -20,6 +20,7 @@ public:
     static void loadAssets(gfx::d3d12::Core& core, std::size_t fenceIdx = 0u);
     void MU_CALLCONV update(mu::Vec3 pos, mu::NQuat rot);
     mu::Mat4x4 MU_CALLCONV world() const { return coord_.xform(); }
+    gfx::coord::System& coord() { return coord_; }
 
 private:
     gfx::coord::System coord_;

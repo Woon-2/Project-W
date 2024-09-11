@@ -58,6 +58,32 @@ DescriptorHeap::DescriptorHeap( ID3D12Device* pDevice, D3D12_DESCRIPTOR_HEAP_TYP
 }
 
 D3D12_GPU_DESCRIPTOR_HANDLE DescriptorHeap::gpuHandle(std::size_t idx) const {
+    if (idx >= size_) {
+        throw GFX_EXCEPT("The index is out of range.");
+    }
+
+    return gpuHandleUninit(idx);
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE DescriptorHeap::cpuHandle(std::size_t idx) const {
+    if (idx >= size_) {
+        throw GFX_EXCEPT("The index is out of range.");
+    }
+    
+    return cpuHandleUninit(idx);
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE DescriptorHeap::cpuHandleUninit(std::size_t idx) const {
+    if (!pHeap_) {
+        throw GFX_EXCEPT("The descriptor heap is not initialized.");
+    }
+
+    auto ret = cpuStart_;
+    ret.ptr += idx * stride_;
+    return ret;
+}
+
+D3D12_GPU_DESCRIPTOR_HANDLE DescriptorHeap::gpuHandleUninit(std::size_t idx) const {
     if (!pHeap_) {
         throw GFX_EXCEPT("The descriptor heap is not initialized.");
     }
@@ -66,25 +92,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE DescriptorHeap::gpuHandle(std::size_t idx) const {
         throw GFX_EXCEPT("The descriptor heap is not shader visible.");
     }
 
-    if (idx >= size_) {
-        throw GFX_EXCEPT("The index is out of range.");
-    }
-
     auto ret = gpuStart_;
-    ret.ptr += idx * stride_;
-    return ret;
-}
-
-D3D12_CPU_DESCRIPTOR_HANDLE DescriptorHeap::cpuHandle(std::size_t idx) const {
-    if (!pHeap_) {
-        throw GFX_EXCEPT("The descriptor heap is not initialized.");
-    }
-
-    if (idx >= size_) {
-        throw GFX_EXCEPT("The index is out of range.");
-    }
-
-    auto ret = cpuStart_;
     ret.ptr += idx * stride_;
     return ret;
 }
@@ -272,9 +280,8 @@ void Core::createFenceAndEvent(ID3D12Device* pDevice) {
     }
 }
 
-void Core::render(const IScene& scene, const IRenderer& renderer, IRenderTarget& target) {
-    auto context = D3D12RenderContext(*this);
-    renderer.render(scene, context, target);
+void Core::render(IRenderContext& ctx, const IScene& scene, const IRenderer& renderer, IRenderTarget& target) {
+    renderer.render(scene, ctx, target);
 }
 
 void Core::preRender() {}

@@ -83,6 +83,8 @@ public:
 
     D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle(std::size_t idx = 0) const;
     D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle(std::size_t idx = 0) const;
+    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandleUninit(std::size_t idx = 0) const;
+    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandleUninit(std::size_t idx = 0) const;
 
     void pushSrv(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc);
     void pushSrv(ID3D12Device* pDevice, ID3D12Resource* pRes);
@@ -93,6 +95,10 @@ public:
     void pushUav(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_UNORDERED_ACCESS_VIEW_DESC& uavDesc);
     void pushCbv(ID3D12Device* pDevice, const D3D12_CONSTANT_BUFFER_VIEW_DESC& cbvDesc);
     void pushSam(ID3D12Device* pDevice, const D3D12_SAMPLER_DESC& samplerDesc);
+
+    void set(ID3D12GraphicsCommandList* pCmdList) {
+        DX_THROW_FAILED_VOID(pCmdList->SetDescriptorHeaps(1u, pHeap_.GetAddressOf()));
+    }
 
     std::size_t size() const NOEXCEPT {
         return size_;
@@ -234,7 +240,7 @@ public:
      * @param target The target to render to.
      * @see IScene IRenderer IRenderTarget
      */
-    void render(const IScene& scene, const IRenderer& renderer, IRenderTarget& target) override;
+    void render(IRenderContext& ctx, const IScene& scene, const IRenderer& renderer, IRenderTarget& target) override;
     /**
      * @brief Prepares for rendering.    
      * It resets the command list.

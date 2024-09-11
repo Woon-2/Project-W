@@ -18,22 +18,65 @@
 
 using namespace std::literals;
 
+enum class PACKET_TYPE : std::uint8_t {
+    HELLO,
+    UPDATE,
+    LEAVE
+};
+
+#pragma pack(push, 1)
+
+struct HelloClientPacket {
+    PACKET_TYPE type;
+};
+
+struct HelloServerPacket {
+    PACKET_TYPE type;
+    std::uint32_t id;
+    World world;
+};
+
+struct UpdateClientPacket {
+    PACKET_TYPE type;
+    World::Obj obj;
+};
+
+struct UpdateServerPacket {
+    PACKET_TYPE type;
+    World world;
+};
+
+struct LeavePacket {
+    PACKET_TYPE type;
+};
+
+#pragma pack(pop)
+
 Game::Game(gfx::ICore& gfx, MyWindow& wnd, ic::Mouse& mouse, ic::Keyboard& keyboard)
-    : timer_(), baseCoordSys_(), camera_(gfx::Camera::Config{
+    : world_{}, timer_(), baseCoordSys_(), camera_(gfx::Camera::Config{
         .fov = 90.f, .aspect = wnd.client().width / static_cast<float>(wnd.client().height),
         .near = 0.1f, .far = 1000.f
-    }), guns_(), /*inputSystem_(keyboard),*/ physicsSystem_(keyboard), pGfx_(&gfx), pWnd_(&wnd),
+    }), guns_(), /*inputSystem_(keyboard),*/ physicsSystem_(keyboard), socket_(), pGfx_(&gfx), pWnd_(&wnd),
     pMouse_(&mouse), renderFunc_(&Game::initialRender), lockFPS_(defLockFPS), player_(),
-    curFenceIdx_(0), prevFenceIdx_(1u) {
+    curFenceIdx_(0), prevFenceIdx_(1u), networkID_(-1) {
+    socket_.connect(net::SockAddr(net::Ipv4Addr(), net::Port(55555u)));
+    net::enNonb(socket_);
+
+    std::array<char, 1> buffer;
+    buffer[0] = static_cast<char>(PACKET_TYPE::HELLO);
+    socket_.sendUc(buffer.data(), buffer.size());
+
     setupWndMsgHandlers();
     loadAssets();
     setupCamera();
     initECS();
+    initLights();
 
     player_.Init();
 }
 
 void Game::update() {
+    processNetwork();
     processInput();
     timer_.update();
 
@@ -47,7 +90,28 @@ void Game::update() {
     pWnd_->setTitle(timer_.str());
 
     camera_.updateView();
+
+    auto& playerRigidBody =  ecs::GetComponent<Rigidbody>(player_.entityNumber_);
+    const auto& playerOldPos = ecs::GetComponent<Position>(player_.entityNumber_);
+    auto playerDeltaPos = playerRigidBody.deltaPosition();
+    guns_[networkID_].coord() << mu::translate(playerDeltaPos);
+
+    for (std::size_t i = 0; i < guns_.size(); ++i) {
+        if (i != networkID_) [[likely]] {
+            const auto& obj = world_.obj[i];
+            guns_[i].update( mu::Vec3( obj.x, obj.y, obj.z ), mu::NQuat() );
+        }
+    }
+
     baseCoordSys_.traverse();
+
+    playerRigidBody.setPosition( mu::Vec4(
+            static_cast<float>( playerOldPos.x ),
+            static_cast<float>( playerOldPos.y ),
+            static_cast<float>( playerOldPos.z ),
+            1.f
+        ) * guns_[networkID_].coord().xform()
+    );
     
     player_.printPos();
 }
@@ -64,8 +128,8 @@ void Game::initialRender() {
         return;
     }
 
-    static_cast<gfx::d3d12::PhongShaderNT&>( 
-        static_cast<MyGfx&>(*pGfx_).shader( gfx::d3d12::PhongShaderNT::shaderName() )
+    static_cast<gfx::d3d12::PhongShader&>( 
+        static_cast<MyGfx&>(*pGfx_).shader( gfx::d3d12::PhongShader::shaderName() )
     ).setFrame(curFenceIdx_);
 
     auto pRenderContext = pGfx_->createContext();
@@ -77,9 +141,34 @@ void Game::initialRender() {
     // TODO: camera_->makeScene(world);
     auto scene = gfx::d3d12::CameraScene(camera_);
 
-    // pGfx_->render( scene, static_cast<MyGfx&>(*pGfx_).renderer(
-    //      MyGfx::Renderer::Sample
-    // ), *pWnd_ );
+    auto worlds = std::vector<mu::Mat4x4>{};
+    worlds.reserve(guns_.size());
+
+    for (std::size_t i = 0; i < guns_.size(); ++i) {
+        if (world_.obj[i].active) {
+            const auto& obj = world_.obj[i];
+            worlds.push_back( guns_[i].world() );
+        }
+    }
+
+    scene.addFragment(
+        gfx::d3d12::Fragment{
+            .pMesh = &Gun::sMesh,
+            .worlds = worlds,
+            .matIdx = 0
+        }
+    );
+
+    scene.addMaterial(&Gun::sMaterial);
+
+    for (const auto& light : lights_) {
+        scene.addLight(&light);
+    }
+    
+     pGfx_->render( *pRenderContext, scene, static_cast<MyGfx&>(*pGfx_).renderer(
+         MyGfx::Renderer::Phong
+     ), *pWnd_ );
+
     pWnd_->postRender(*pRenderContext);
     pRenderContext->postRender();
     pGfx_->postRender();
@@ -99,8 +188,8 @@ void Game::regularRender() {
         return;
     }
 
-    static_cast<gfx::d3d12::PhongShaderNT&>( 
-        static_cast<MyGfx&>(*pGfx_).shader( gfx::d3d12::PhongShaderNT::shaderName() )
+    static_cast<gfx::d3d12::PhongShader&>( 
+        static_cast<MyGfx&>(*pGfx_).shader( gfx::d3d12::PhongShader::shaderName() )
     ).setFrame(curFenceIdx_);
 
     auto pRenderContext = pGfx_->createContext();
@@ -112,9 +201,34 @@ void Game::regularRender() {
     // TODO: camera_->makeScene(world);
     auto scene = gfx::d3d12::CameraScene(camera_);
 
-    // pGfx_->render( scene, static_cast<MyGfx&>(*pGfx_).renderer(
-    //      MyGfx::Renderer::Sample
-    // ), *pWnd_ );
+    auto worlds = std::vector<mu::Mat4x4>{};
+    worlds.reserve(guns_.size());
+
+    for (std::size_t i = 0; i < guns_.size(); ++i) {
+        if (world_.obj[i].active) {
+            const auto& obj = world_.obj[i];
+            worlds.push_back( guns_[i].world() );
+        }
+    }
+
+    scene.addFragment(
+        gfx::d3d12::Fragment{
+            .pMesh = &Gun::sMesh,
+            .worlds = worlds,
+            .matIdx = 0
+        }
+    );
+
+    scene.addMaterial(&Gun::sMaterial);
+
+    for (const auto& light : lights_) {
+        scene.addLight(&light);
+    }
+    
+     pGfx_->render( *pRenderContext, scene, static_cast<MyGfx&>(*pGfx_).renderer(
+         MyGfx::Renderer::Phong
+     ), *pWnd_ );
+
     pWnd_->postRender(*pRenderContext);
     pRenderContext->postRender();
     pGfx_->postRender();
@@ -188,11 +302,15 @@ void Game::setupWndMsgHandlers() {
 void Game::loadAssets() {
     auto pd3d12Gfx = static_cast<gfx::d3d12::Core*>(pGfx_);
     Gun::loadAssets(*pd3d12Gfx, curFenceIdx_);
+    
+    for (std::size_t i = 0; i < 10u; ++i) {
+        guns_.emplace_back(&baseCoordSys_);
+    }
 }
 
 void Game::setupCamera() {
     camera_.coordSys().setParent(&baseCoordSys_);
-    camera_.coordSys() << mu::translate(0.f, 100.f, -1000.f);
+    camera_.coordSys() << mu::translate(0.f, 5.f, -10.f);
     camera_.focus( gfx::coord::Pt3( &baseCoordSys_, mu::Vec3(0.f, 0.f, 0.f) ) );
 }
 
@@ -221,4 +339,72 @@ void Game::initECS() {
     }
 
     
+}
+
+void Game::processNetwork() {
+    static constexpr auto maxPacketSize = 400u;
+    std::array<char, maxPacketSize> buffer;
+    
+    auto bytes = socket_.recvUc(buffer.data(), maxPacketSize);
+
+    switch (reinterpret_cast<PACKET_TYPE&>(buffer[0])) {
+    case PACKET_TYPE::HELLO: {
+        auto pPacket = reinterpret_cast<HelloServerPacket*>(buffer.data());
+        networkID_ = pPacket->id;
+        world_.obj[networkID_].active = true;
+        break;
+    }
+
+    case PACKET_TYPE::UPDATE: {
+        if (networkID_ == -1) {
+            return; // ignore updates until we get our ID
+        }
+
+        auto pPacket = reinterpret_cast<UpdateServerPacket*>(buffer.data());
+        std::memcpy(&world_, &pPacket->world, sizeof(world_));
+        break;
+    }
+
+    default:
+        break;
+    }
+
+    auto& playerPos = ecs::GetComponent<Position>(player_.entityNumber_);
+    world_.obj[networkID_].x = static_cast<float>( playerPos.x );
+    world_.obj[networkID_].y = static_cast<float>( playerPos.y );
+    world_.obj[networkID_].z = static_cast<float>( playerPos.z );
+
+    auto updatePacket = UpdateClientPacket{
+        .type = PACKET_TYPE::UPDATE,
+        .obj = world_.obj[networkID_]
+    };
+
+    std::memset(buffer.data(), 0, buffer.size());
+    std::memcpy(buffer.data(), &updatePacket, sizeof(updatePacket));
+
+    socket_.sendUc(buffer.data(), sizeof(updatePacket));
+}
+
+void Game::initLights() {
+    lights_.push_back( gfx::d3d12::sr::PhongLight{
+        .ambient = dx::XMFLOAT4{ 0.51f, 0.54f, 0.57f, 1.f },
+        .diffuse = dx::XMFLOAT4{ 0.54f, 0.56f, 0.58f, 1.f },
+        .specular = dx::XMFLOAT4{ 0.25f, 0.25f, 0.25f, 1.f },
+        .falloff = 1.f,
+        .dirV = dx::XMFLOAT3{ -0.1f, -0.6f, 0.4f },
+        .type = gfx::d3d12::sr::PhongLight::kTypeDirectional
+    } );
+
+    lights_.push_back( gfx::d3d12::sr::PhongLight{
+        .ambient = dx::XMFLOAT4{ 0.f, 0.f, 0.f, 1.f },
+        .diffuse = dx::XMFLOAT4{ 0.15f, 0.3f, 0.65f, 1.f },
+        .specular = dx::XMFLOAT4{ 0.1f, 0.15f, 0.2f, 0.f },
+        .posV = dx::XMFLOAT3{ -50.f, 20.f, -5.f },
+        .falloff = 8.f,
+        .dirV = dx::XMFLOAT3{ 0.f, 0.f, 1.f },
+        .cosTheta = std::cos( static_cast<float>( mu::Radian( mu::Degree(25.f) ) ) ),
+        .atten = dx::XMFLOAT3{ 1.f, 0.045f, 0.0075f },
+        .cosPhi = std::cos( static_cast<float>( mu::Radian( mu::Degree(60.f) ) ) ),
+        .type = gfx::d3d12::sr::PhongLight::kTypeSpot
+    } );
 }

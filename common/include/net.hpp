@@ -201,6 +201,7 @@ public:
 
     ~SocketBase() {
         if (open_) {
+            // shutdown(sock_, SD_BOTH);
             closesocket(sock_);
         }
     }
@@ -416,7 +417,7 @@ private:
     static SOCKET createNativeSocket() {
         auto ret = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         if (ret == INVALID_SOCKET) {
-            throw NET_LAST_EXCEPT("Failed to create UDP socket"sv);
+            throw NET_LAST_EXCEPT("Failed to create TCP socket"sv);
         }
         return ret;
     }

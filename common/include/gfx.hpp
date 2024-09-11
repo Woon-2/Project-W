@@ -85,7 +85,7 @@ public:
      * @note Unlike other arguments, target must be compatible with the core.
      * @see IScene IRenderer IRenderTarget
      */
-    virtual void render(const class IScene& scene, const class IRenderer& renderer, class IRenderTarget& target) = 0;
+    virtual void render(class IRenderContext& ctx, const class IScene& scene, const class IRenderer& renderer, class IRenderTarget& target) = 0;
     /**
      * @brief Perform any operations before rendering.    
      * It is designed to be used for gpu-cpu synchronization and communication, such as updating constant buffers, executing command lists, etc.

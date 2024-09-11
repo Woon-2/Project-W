@@ -10,12 +10,15 @@
 #include <list>
 #include <cstdint>
 #include <cstdlib>
+#include <chrono>
 
 inline constexpr auto maxPacketSize = 400u;
 
 std::vector<net::TcpSocket> gUninitializedClients;
 std::vector<net::TcpSocket> gSessionClients;
 static std::uint32_t gId = 0u;
+
+using namespace std::literals;
 
 struct World {
     struct Obj {
@@ -110,6 +113,8 @@ void init(net::TcpSocket& recvUninitSock) {
 }
 
 int main() { 
+    using Clock = std::chrono::high_resolution_clock;
+
     try {
 
     net::initNet();
@@ -117,11 +122,14 @@ int main() {
     sock.bind(net::SockAddr(net::Ipv4Addr(), net::Port(55555u)));
     sock.listen(10u);
 
-    auto log = std::vector< std::vector<std::string> >();
+    // auto log = std::vector< std::vector<std::string> >();
 
     while (sock.active()) {
-        log.emplace_back();
-        log.back().reserve(gUninitializedClients.size());
+
+        auto tp = Clock::now();
+
+        // log.emplace_back();
+        // log.back().reserve(gUninitializedClients.size());
 
         if (!gIdPool.empty()) {
             net::enNonb(sock);
@@ -141,13 +149,9 @@ int main() {
         auto readable = std::vector<net::TcpSocket*>{};
         readable.reserve(uninitSocksView.size());
 
-        net::select<decltype(readable)>(uninitSocksView, {}, {}, readable, {}, {}, {});
+        net::select<decltype(readable)>(uninitSocksView, {}, {}, readable, {}, {}, 2ms);
 
         for (auto client : readable) {
-            if (client == &sock) {
-                continue;
-            }
-
             char buffer[maxPacketSize];
             auto byteRecv = client->recv(buffer, maxPacketSize);
 
@@ -155,9 +159,9 @@ int main() {
                 init(*client);
             }
 
-            log.back().push_back(std::string(buffer, byteRecv));
+            // log.back().push_back(std::string(buffer, byteRecv));
 
-            std::cout << log.back().back() << '\n';
+            // std::cout << log.back().back() << '\n';
         }
 
         auto sessionSocksView = std::vector<net::TcpSocket*>{};
@@ -167,7 +171,7 @@ int main() {
 
         readable.clear();
 
-        net::select<decltype(readable)>(sessionSocksView, {}, {}, readable, {}, {}, {});
+        net::select<decltype(readable)>(sessionSocksView, {}, {}, readable, {}, {}, 2ms);
 
         for (auto client : readable) {
             char buffer[maxPacketSize];
@@ -178,14 +182,13 @@ int main() {
                 std::memcpy(&gWorld.obj[ gSock2WorldIdxMap.at(client) ], &obj, sizeof(obj));
             }
 
-            log.back().push_back(std::string(buffer, byteRecv));
+            // log.back().push_back(std::string(buffer, byteRecv));
 
-            std::cout << log.back().back() << '\n';
+            // std::cout << log.back().back() << '\n';
         }
 
         readable.clear();
-
-        net::select<decltype(readable)>(sessionSocksView, {}, {}, readable, {}, {}, {});
+        net::select<decltype(readable)>(sessionSocksView, {}, {}, readable, {}, {}, 2ms);
 
         for (auto client : readable) {
             char buffer[maxPacketSize];
@@ -201,9 +204,9 @@ int main() {
                 gSessionClients.erase(std::find(gSessionClients.begin(), gSessionClients.end(), *client));
             }
 
-            log.back().push_back(std::string(buffer, byteRecv));
+            // log.back().push_back(std::string(buffer, byteRecv));
 
-            std::cout << log.back().back() << '\n';
+            // std::cout << log.back().back() << '\n';
         }
         
         auto packet = UpdateServerPacket{
@@ -216,6 +219,9 @@ int main() {
             client.sendUc(&packet, sizeof(packet));
             net::disNonb(client);
         }
+
+        system("cls");
+        std::cout << std::chrono::duration_cast< std::chrono::duration<float, std::milli> >( Clock::now() - tp ) << " elapsed.\n";
     }
 
     } catch (const net::Exception& e) {

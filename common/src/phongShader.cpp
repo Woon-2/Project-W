@@ -59,6 +59,7 @@ PhongShader::PhongShader(Core &core, const Config &config, std::size_t duplicati
     resMaterials_(core, sizeof(d3d12::sr::PhongMaterial), internalResArr_[3]),
     resLights_(core, sizeof(d3d12::sr::PhongLight), internalResArr_[4]),
     texSrvStart_(),
+    pTexSrvHeap_(nullptr),
     maxInstances_(config.maxInstances),
     maxMaterials_(config.maxMaterials),
     maxLights_(config.maxLights) {
@@ -67,7 +68,8 @@ PhongShader::PhongShader(Core &core, const Config &config, std::size_t duplicati
         throw GFX_EXCEPT("[Description] Texture descriptor heap not found.");
     }
 
-    texSrvStart_ = core.descHeap(Texture::texSrvHeapIdx).gpuHandle();
+    texSrvStart_ = core.descHeap(Texture::texSrvHeapIdx).gpuHandleUninit();
+    pTexSrvHeap_ = &core.descHeap(Texture::texSrvHeapIdx);
 
     auto builder = SimpleShaderBuilder();
     builder.code(Type::Vertex, loadCSO(compiledShaderPath / "tShader_vs.cso"));
@@ -83,6 +85,10 @@ PhongShader::PhongShader(Core &core, const Config &config, std::size_t duplicati
 }
 
 void PhongShader::setRootParams(ID3D12GraphicsCommandList* pCmdList, size_t frameIdx) const {
+    // temporary
+    pCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    pTexSrvHeap_->set(pCmdList);
+
     DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootShaderResourceView(
         0u, resPerInstanceData_.gpuAddress(frameIdx)
     ) );

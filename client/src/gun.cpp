@@ -23,9 +23,11 @@ void Gun::loadAssets(gfx::d3d12::Core& core, std::size_t fenceIdx) {
 
     sMaterial = gfx::d3d12::Material( core,
         std::views::single( gfx::d3d12::Material::Properties::Diffuse ),
-        std::views::single( gfx::d3d12::Texture(core, *pCtx, resourcePath/"models/Gun _obj/Gun.png", "gun") ),
+        std::views::single( gfx::d3d12::Texture(core, *pCtx, resourcePath/"models/Gun _obj/Gun.png", "gunD") ),
         shininess
     );
+    auto tmpTex = gfx::d3d12::Texture(core, *pCtx, resourcePath / "models/Gun _obj/Gun.png", "gunS");
+
 
     pCtx->postRender();
     core.postRender();
@@ -35,6 +37,11 @@ void Gun::loadAssets(gfx::d3d12::Core& core, std::size_t fenceIdx) {
 
     sMesh.completeInit(core);
     sMaterial.completeInit(core);
+    tmpTex.completeInit(core);
+
+    sMaterial.pushTexture(core, gfx::d3d12::Material::Properties::Specular,
+        std::move(tmpTex)
+    );
 }
 
 void MU_CALLCONV Gun::update(mu::Vec3 pos, mu::NQuat rot) {

@@ -145,13 +145,22 @@ wrl::ComPtr<ID3D12RootSignature> rootPresetUnified(Core& core) {
 }
 
 wrl::ComPtr<ID3D12RootSignature> rootPresetUnified1(Core& core) {
-    auto textureSrvRange = D3D12_DESCRIPTOR_RANGE{
-        .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
-        .NumDescriptors = static_cast<UINT>(-1),
-        .BaseShaderRegister = 1u,
-        .RegisterSpace = 1u,
-        .OffsetInDescriptorsFromTableStart = 0
-    };    
+    D3D12_DESCRIPTOR_RANGE textureSrvRanges[2] = {
+        D3D12_DESCRIPTOR_RANGE{
+            .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+            .NumDescriptors = static_cast<UINT>(-1),
+            .BaseShaderRegister = 1u,
+            .RegisterSpace = 1u,
+            .OffsetInDescriptorsFromTableStart = 0
+        },
+        D3D12_DESCRIPTOR_RANGE{
+            .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+            .NumDescriptors = static_cast<UINT>(-1),
+            .BaseShaderRegister = 1u,
+            .RegisterSpace = 2u,
+            .OffsetInDescriptorsFromTableStart = 0
+        }
+    };
 
     auto params = std::array<D3D12_ROOT_PARAMETER, 6>{
         D3D12_ROOT_PARAMETER{   // Per Instance Data
@@ -171,10 +180,10 @@ wrl::ComPtr<ID3D12RootSignature> rootPresetUnified1(Core& core) {
             .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
         },
         D3D12_ROOT_PARAMETER{   // Material Textures
-            .ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV,
+            .ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE ,
             .DescriptorTable = D3D12_ROOT_DESCRIPTOR_TABLE {
-                .NumDescriptorRanges = 1u,
-                .pDescriptorRanges = &textureSrvRange
+                .NumDescriptorRanges = 2u,
+                .pDescriptorRanges = textureSrvRanges
             },
             .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
         },

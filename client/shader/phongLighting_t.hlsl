@@ -34,7 +34,7 @@ struct Light
     float3 padding;
 };
 
-StructuredBuffer<Material> gMaterials : register(t1);
+StructuredBuffer<Material> gMaterials : register(t1, space0);
 
 StructuredBuffer<Light> gLights : register(t2);
 

@@ -5,12 +5,15 @@
 App::App(HINSTANCE hInstance)
     : window_(), mouse_(), keyboard_(), pGfx_(), pGame_() {
     MyWindow::setHInst(hInstance);
+    net::initNet();
 }
 
 App::~App() {
+    pGame_.reset();
     pGfx_->cleanup();
     gfx::DXFactory::cleanup();
     gfx::DXInfoQueue::cleanup();
+    net::relNet();
 }
 
 int App::run() {

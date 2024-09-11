@@ -72,6 +72,7 @@ target_link_libraries(client
         common::win32
         common::gfx
         common::input
+        common::net
 )
 
 include(find_hlsl_compiler)
@@ -127,7 +128,6 @@ compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/tShader.hlsl"
     /D INCLUDE_drawcallIdxOnly
     /D INCLUDE_basicInstancing
     /D INCLUDE_phongLighting
-    /D MAT_SPACE=space1
     /enable_unbounded_descriptor_tables
 )
 
@@ -138,7 +138,6 @@ compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/tShader.hlsl"
     /D INCLUDE_drawcallIdxOnly
     /D INCLUDE_basicInstancing
     /D INCLUDE_phongLighting
-    /D MAT_SPACE=space1
     /enable_unbounded_descriptor_tables
 )
 

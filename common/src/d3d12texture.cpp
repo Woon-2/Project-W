@@ -62,6 +62,8 @@ void Texture::loadDDS( Core& core, D3D12RenderContext& ctx,
     const std::filesystem::path& path, Core::UpBufIdx&& upIdx,
     D3D12_RESOURCE_STATES initialState
 ) {
+    upIdx_ = std::move(upIdx);
+
     auto pCmdList = std::any_cast<wrl::ComPtr<ID3D12GraphicsCommandList>>(
         ctx.cast(RenderContextType::D3D12)
     );
@@ -88,7 +90,7 @@ void Texture::loadDDS( Core& core, D3D12RenderContext& ctx,
     auto requiredBytes = GetRequiredIntermediateSize(res_.Get(), 0, static_cast<UINT>( subresources.size() ));
 
     auto uploadBuf = createUpBuf(core, requiredBytes);
-    core.addTmpUpBuf(std::move(upIdx_), std::move(uploadBuf));
+    core.addTmpUpBuf(upIdx_, std::move(uploadBuf));
     
     UpdateSubresources( pCmdList.Get(), res_.Get(), uploadBuf.Get(),
         0, 0, static_cast<UINT>( subresources.size() ), subresources.data()
@@ -113,6 +115,8 @@ void Texture::loadWIC( Core& core, D3D12RenderContext& ctx,
     const std::filesystem::path& path, Core::UpBufIdx&& upIdx,
     D3D12_RESOURCE_STATES initialState
 ) {
+    upIdx_ = std::move(upIdx);
+
     auto pCmdList = std::any_cast<wrl::ComPtr<ID3D12GraphicsCommandList>>(
         ctx.cast(RenderContextType::D3D12)
     );

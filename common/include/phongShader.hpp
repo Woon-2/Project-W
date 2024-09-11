@@ -102,6 +102,16 @@ public:
     }
 
     void setRootParams(ID3D12GraphicsCommandList* pCmdList, size_t frameIdx = 0) const;
+    std::size_t dupCnt() const NOEXCEPT { return internalResArr_[0].size(); }
+    std::size_t frameIdx() const NOEXCEPT { return frameIdx_; }
+    void setFrame(std::size_t frameIdx) NOEXCEPT(NDEBUG) {
+    #if !NDEBUG
+        if (frameIdx >= dupCnt()) {
+            throw std::out_of_range("Frame index out of range");
+        }
+    #endif
+        frameIdx_ = frameIdx;
+    }
 
     GpuMappedRes& pfd() NOEXCEPT { return resPerFrameData_; }
     GpuMappedRes& pdd() NOEXCEPT { return resPerDrawcallData_; }
@@ -119,6 +129,7 @@ private:
     GpuMappedRes resMaterials_;
     GpuMappedRes resLights_;
     D3D12_GPU_DESCRIPTOR_HANDLE texSrvStart_;
+    DescriptorHeap* pTexSrvHeap_;   // temporary
 
     std::size_t maxInstances_;
     std::size_t maxMaterials_;
