@@ -18,54 +18,13 @@
 
 using namespace std::literals;
 
-enum class PACKET_TYPE : std::uint8_t {
-    HELLO,
-    UPDATE,
-    LEAVE
-};
-
-#pragma pack(push, 1)
-
-struct HelloClientPacket {
-    PACKET_TYPE type;
-};
-
-struct HelloServerPacket {
-    PACKET_TYPE type;
-    std::uint32_t id;
-    World world;
-};
-
-struct UpdateClientPacket {
-    PACKET_TYPE type;
-    World::Obj obj;
-};
-
-struct UpdateServerPacket {
-    PACKET_TYPE type;
-    World world;
-};
-
-struct LeavePacket {
-    PACKET_TYPE type;
-};
-
-#pragma pack(pop)
-
 Game::Game(gfx::ICore& gfx, MyWindow& wnd, ic::Mouse& mouse, ic::Keyboard& keyboard)
-    : world_{}, timer_(), baseCoordSys_(), camera_(gfx::Camera::Config{
+    : timer_(), baseCoordSys_(), camera_(gfx::Camera::Config{
         .fov = 90.f, .aspect = wnd.client().width / static_cast<float>(wnd.client().height),
         .near = 0.1f, .far = 1000.f
-    }), guns_(), /*inputSystem_(keyboard),*/ physicsSystem_(keyboard), socket_(), pGfx_(&gfx), pWnd_(&wnd),
+    }), /*inputSystem_(keyboard),*/ physicsSystem_(keyboard), pGfx_(&gfx), pWnd_(&wnd),
     pMouse_(&mouse), renderFunc_(&Game::initialRender), lockFPS_(defLockFPS), player_(),
-    curFenceIdx_(0), prevFenceIdx_(1u), networkID_(-1) {
-    socket_.connect(net::SockAddr(net::Ipv4Addr(), net::Port(55555u)));
-    net::enNonb(socket_);
-
-    std::array<char, 1> buffer;
-    buffer[0] = static_cast<char>(PACKET_TYPE::HELLO);
-    socket_.sendUc(buffer.data(), buffer.size());
-
+    curFenceIdx_(0), prevFenceIdx_(1u) {
     setupWndMsgHandlers();
     loadAssets();
     setupCamera();
@@ -73,13 +32,6 @@ Game::Game(gfx::ICore& gfx, MyWindow& wnd, ic::Mouse& mouse, ic::Keyboard& keybo
     initLights();
 
     player_.Init();
-}
-
-Game::~Game() {
-	std::array<char, 1> buffer;
-	buffer[0] = static_cast<char>(PACKET_TYPE::LEAVE);
-	net::disNonb(socket_);
-	socket_.send(buffer.data(), buffer.size());
 }
 
 void Game::update() {
@@ -101,14 +53,6 @@ void Game::update() {
     auto& playerRigidBody =  ecs::GetComponent<Rigidbody>(player_.entityNumber_);
     const auto playerOldPos = ecs::GetComponent<Position>(player_.entityNumber_);
     const auto playerDeltaPos = playerRigidBody.deltaPosition();
-    guns_[networkID_].coord() << mu::translate(playerDeltaPos);
-
-    for (std::size_t i = 0; i < guns_.size(); ++i) {
-        if (i != networkID_) [[likely]] {
-            const auto& obj = world_.obj[i];
-            guns_[i].update( mu::Vec3( obj.x, obj.y, obj.z ), mu::NQuat() );
-        }
-    }
 
     auto& playerPos = ecs::GetComponent<Position>(player_.entityNumber_);
 	playerPos.x = playerOldPos.x + playerDeltaPos.x();
@@ -144,24 +88,6 @@ void Game::initialRender() {
 
     // TODO: camera_->makeScene(world);
     auto scene = gfx::d3d12::CameraScene(camera_);
-
-    auto worlds = std::vector<mu::Mat4x4>{};
-    worlds.reserve(guns_.size());
-
-    for (std::size_t i = 0; i < guns_.size(); ++i) {
-        if (world_.obj[i].active) {
-            const auto& obj = world_.obj[i];
-            worlds.push_back( guns_[i].world() );
-        }
-    }
-
-    scene.addFragment(
-        gfx::d3d12::Fragment{
-            .pMesh = &Gun::sMesh,
-            .worlds = worlds,
-            .matIdx = 0
-        }
-    );
 
     scene.addMaterial(&Gun::sMaterial);
 
@@ -204,24 +130,6 @@ void Game::regularRender() {
 
     // TODO: camera_->makeScene(world);
     auto scene = gfx::d3d12::CameraScene(camera_);
-
-    auto worlds = std::vector<mu::Mat4x4>{};
-    worlds.reserve(guns_.size());
-
-    for (std::size_t i = 0; i < guns_.size(); ++i) {
-        if (world_.obj[i].active) {
-            const auto& obj = world_.obj[i];
-            worlds.push_back( guns_[i].world() );
-        }
-    }
-
-    scene.addFragment(
-        gfx::d3d12::Fragment{
-            .pMesh = &Gun::sMesh,
-            .worlds = worlds,
-            .matIdx = 0
-        }
-    );
 
     scene.addMaterial(&Gun::sMaterial);
 
@@ -306,10 +214,6 @@ void Game::setupWndMsgHandlers() {
 void Game::loadAssets() {
     auto pd3d12Gfx = static_cast<gfx::d3d12::Core*>(pGfx_);
     Gun::loadAssets(*pd3d12Gfx, curFenceIdx_);
-    
-    for (std::size_t i = 0; i < 10u; ++i) {
-        guns_.emplace_back(&baseCoordSys_);
-    }
 }
 
 void Game::setupCamera() {
@@ -346,51 +250,7 @@ void Game::initECS() {
 }
 
 void Game::processNetwork() {
-    static constexpr auto maxPacketSize = 400u;
-    std::array<char, maxPacketSize> buffer;
-    
-    auto bytes = socket_.recvUc(buffer.data(), maxPacketSize);
-
-	if (bytes == 0) {
-		return;
-	}
-
-    switch (reinterpret_cast<const PACKET_TYPE&>(buffer[0])) {
-    case PACKET_TYPE::HELLO: {
-        auto pPacket = reinterpret_cast<HelloServerPacket*>(buffer.data());
-        networkID_ = pPacket->id;
-        std::memcpy(&world_, &pPacket->world, sizeof(world_));
-        break;
-    }
-
-    case PACKET_TYPE::UPDATE: {
-        if (networkID_ == static_cast<std::uint32_t>(-1)) {
-            return; // ignore updates until we get our ID
-        }
-
-        auto pPacket = reinterpret_cast<UpdateServerPacket*>(buffer.data());
-        std::memcpy(&world_, &pPacket->world, sizeof(world_));
-        break;
-    }
-
-    default:
-        break;
-    }
-
-    auto& playerPos = ecs::GetComponent<Position>(player_.entityNumber_);
-    world_.obj[networkID_].x = static_cast<float>( playerPos.x );
-    world_.obj[networkID_].y = static_cast<float>( playerPos.y );
-    world_.obj[networkID_].z = static_cast<float>( playerPos.z );
-
-    auto updatePacket = UpdateClientPacket{
-        .type = PACKET_TYPE::UPDATE,
-        .obj = world_.obj[networkID_]
-    };
-
-    std::memset(buffer.data(), 0, buffer.size());
-    std::memcpy(buffer.data(), &updatePacket, sizeof(updatePacket));
-
-    socket_.sendUc(buffer.data(), sizeof(updatePacket));
+    // TODO: implement network
 }
 
 void Game::initLights() {

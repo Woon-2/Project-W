@@ -1,8 +1,6 @@
 #ifndef __GAME_HPP
 #define __GAME_HPP
 
-#include "net.hpp"
-
 #include "mouseWin32Adaptor.hpp"
 #include "keyboardWin32Adaptor.hpp"
 
@@ -24,19 +22,6 @@
 #include "gun.hpp"
 #include "shaderRes.hpp"
 
-struct World {
-    struct Obj {
-        float x;
-        float y;
-        float z;
-        float ovx;
-        float ovy;
-        float ovz;
-        float os;
-        bool active = false;
-    } obj[10];
-};
-
 class Game {
 public:
     static constexpr auto defLockFPS = 600.;
@@ -44,17 +29,12 @@ public:
     using RenderFunc = void (Game::*)();
 
     Game()
-        : world_{}, timer_(), baseCoordSys_(), camera_(baseCoordSys_),
-        guns_(),/* inputSystem_() ,*/ physicsSystem_(), socket_(), pGfx_(), pWnd_(), pMouse_(),
+        : timer_(), baseCoordSys_(), camera_(baseCoordSys_),
+        /* inputSystem_() ,*/ physicsSystem_(), pGfx_(), pWnd_(), pMouse_(),
         renderFunc_(&Game::initialRender), lockFPS_(defLockFPS), player_(),
-        curFenceIdx_(0), prevFenceIdx_(1u), networkID_(-1) {}
+        curFenceIdx_(0), prevFenceIdx_(1u) {}
     
     Game(gfx::ICore& gfx, MyWindow& wnd, ic::Mouse& mouse, ic::Keyboard& keyboard);
-    Game(const Game&) = default;
-	Game(Game&&) noexcept = default;
-	Game& operator=(const Game&) = default;
-	Game& operator=(Game&&) noexcept = default;
-    ~Game();
 
     void update();
     void render();
@@ -72,14 +52,11 @@ private:
     void processNetwork();
     void initLights();
 
-    World world_;
     Timer timer_;
     gfx::coord::System baseCoordSys_;
     gfx::Camera camera_;
-    std::vector<Gun> guns_; 
     std::vector<gfx::d3d12::sr::PhongLight> lights_;
     PhysicsSystem physicsSystem_;
-    net::TcpSocket socket_;
     gfx::ICore* pGfx_;
     MyWindow* pWnd_;
     ic::Mouse* pMouse_;
@@ -88,7 +65,6 @@ private:
     Player player_;
     std::size_t curFenceIdx_;
     std::size_t prevFenceIdx_;
-    std::uint32_t networkID_;
 };
 
 #endif // __GAME_HPP
