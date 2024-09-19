@@ -9,15 +9,10 @@
 
 class Gun {
 public:
-    static gfx::d3d12::Mesh sMesh;
-    static gfx::d3d12::Material sMaterial;
-
     Gun(gfx::coord::System* pParentCoord)
-        : coord_(), mesh_(&sMesh), material_(&sMaterial) {
+        : coord_()/*, mesh_(&sMesh), material_(&sMaterial) */ {
         coord_.setParent(pParentCoord);
     }
-
-    static void loadAssets(gfx::d3d12::Core& core, std::size_t fenceIdx = 0u);
     void MU_CALLCONV update(mu::Vec3 pos, mu::NQuat rot);
     mu::Mat4x4 MU_CALLCONV world() const { return coord_.xform(); }
     gfx::coord::System& coord() { return coord_; }

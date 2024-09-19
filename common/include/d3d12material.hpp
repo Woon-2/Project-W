@@ -5,7 +5,9 @@
 
 #include "renderProtocol.hpp"
 
-#include <map>
+#include "enumUtil.hpp"
+
+#include <vector>
 #include <ranges>
 #include <algorithm>
 #include <cstdint>
@@ -18,11 +20,7 @@ namespace d3d12 {
 
 class Material {
 public:
-    // A struct for holding a texture and its index in the srv heap (for bindless resources)
-    struct TextureIndexed {
-        Texture tex;
-        std::uint32_t idx;
-    };
+    using TextureIdx = std::uint32_t;
 
     enum class Properties {
         Diffuse,
@@ -39,8 +37,8 @@ public:
 
     Material() = default;
     template <std::ranges::sized_range RProp, std::ranges::sized_range RTex>
-    Material(Core& core, RProp&& props, RTex&& texs, std::any&& constants = std::any{})
-        : textures_(), constants_(std::move(constants)) {
+    Material(Core& core, RProp&& props, const RTex& texs, std::any&& constants = std::any{})
+        : indices_(etoi(Properties::Max), TextureIdx(-1)), constants_(std::move(constants)) {
         assert(std::ranges::size(props) == std::ranges::size(texs));
 
         auto propIt = std::ranges::begin(props);
@@ -53,11 +51,7 @@ public:
     }
 
     void pushTexture(Core& core, Properties prop, const Texture& tex);
-    void pushTexture(Core& core, Properties prop, Texture&& tex);
-
-    const Texture& texture(Properties prop) const {
-        return textures_.at(prop).tex;
-    }
+    const TextureIdx idx(Properties prop) const;
 
     const std::any& constants() const NOEXCEPT { return constants_; }
     void writeConstants(std::any&& constants) NOEXCEPT { constants_ = std::move(constants); }
@@ -65,17 +59,15 @@ public:
     bool canSupport(rp::Protocol protocol) const;
     std::any as(rp::Protocol protocol) const;
 
-    void completeInit(Core& core) {
-        for (auto& [key, tex] : textures_) {
-            tex.tex.completeInit(core);
-        }
+private:
+    bool contains(Properties prop) const {
+        return indices_[etoi(prop)] != TextureIdx(-1);
     }
 
-private:
     rp::PhongInstancing::MaterialType asPhongInstancing() const;
     rp::PhongInstancingNT::MaterialType asPhongInstancingNT() const;
 
-    std::map<Properties, TextureIndexed> textures_;
+    std::vector<TextureIdx> indices_;
     std::any constants_;
 };
 

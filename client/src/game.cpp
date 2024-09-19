@@ -89,7 +89,7 @@ void Game::initialRender() {
     // TODO: camera_->makeScene(world);
     auto scene = gfx::d3d12::CameraScene(camera_);
 
-    scene.addMaterial(&Gun::sMaterial);
+    // scene.addMaterial(&Gun::sMaterial);
 
     for (const auto& light : lights_) {
         scene.addLight(&light);
@@ -131,7 +131,7 @@ void Game::regularRender() {
     // TODO: camera_->makeScene(world);
     auto scene = gfx::d3d12::CameraScene(camera_);
 
-    scene.addMaterial(&Gun::sMaterial);
+    // scene.addMaterial(&Gun::sMaterial);
 
     for (const auto& light : lights_) {
         scene.addLight(&light);
@@ -213,7 +213,7 @@ void Game::setupWndMsgHandlers() {
 
 void Game::loadAssets() {
     auto pd3d12Gfx = static_cast<gfx::d3d12::Core*>(pGfx_);
-    Gun::loadAssets(*pd3d12Gfx, curFenceIdx_);
+    // Gun::loadAssets(*pd3d12Gfx, curFenceIdx_);
 }
 
 void Game::setupCamera() {

@@ -5,7 +5,7 @@ namespace gfx {
 namespace d3d12 {
 
 void Material::pushTexture(Core& core, Properties prop, const Texture& tex) {
-    if (textures_.contains(prop)) {
+    if (contains(prop)) {
         throw std::runtime_error("Texture already exists for this property");
     }
 
@@ -15,21 +15,14 @@ void Material::pushTexture(Core& core, Properties prop, const Texture& tex) {
     auto texSrvAddr = tex.gpuHandle();
     auto idx = static_cast<std::uint32_t>( (texSrvAddr.ptr - texSrvHeapStart.ptr) / srvStride );
 
-    textures_.try_emplace(prop, TextureIndexed{tex, idx});
+    indices_[etoi(prop)] = idx;
 }
 
-void Material::pushTexture(Core& core, Properties prop, Texture&& tex) {
-    if (textures_.contains(prop)) {
-        throw std::runtime_error("Texture already exists for this property");
+const Material::TextureIdx Material::idx(Properties prop) const {
+    if (!contains(prop)) {
+        throw std::runtime_error("Texture not found for this property");
     }
-
-    auto& texSrvHeap = core.descHeap(Texture::texSrvHeapIdx);
-    auto texSrvHeapStart = texSrvHeap.gpuHandle();
-    auto srvStride = texSrvHeap.stride();
-    auto texSrvAddr = tex.gpuHandle();
-    auto idx = static_cast<std::uint32_t>( (texSrvAddr.ptr - texSrvHeapStart.ptr) / srvStride );
-
-    textures_.try_emplace(prop, TextureIndexed{std::move(tex), idx});
+    return indices_[etoi(prop)];
 }
 
 bool Material::canSupport(rp::Protocol protocol) const {
@@ -41,8 +34,8 @@ bool Material::canSupport(rp::Protocol protocol) const {
 
     case rp::Protocol::PhongInstancing: {
         auto ret = constants_.type() == typeid(float);
-        ret = ret && textures_.contains(Properties::Diffuse);
-        ret = ret && textures_.contains(Properties::Specular);
+        ret = ret && contains(Properties::Diffuse);
+        ret = ret && contains(Properties::Specular);
         return ret;
     }
 
@@ -70,10 +63,13 @@ rp::PhongInstancing::MaterialType Material::asPhongInstancing() const {
     if (constants_.type() != typeid(float)) {
         throw std::runtime_error("PhongInstancing render protocol's Material Auxiliary data must be of type float.");
     }
+    if (!contains(Properties::Diffuse) || !contains(Properties::Specular)) {
+        throw std::runtime_error("PhongInstancing render protocol's Material must have Diffuse and Specular textures.");
+    }
 
     auto ret = rp::PhongInstancing::MaterialType{
-        .diffuseMapIdx = textures_.at(Properties::Diffuse).idx,
-        .specularMapIdx = textures_.at(Properties::Specular).idx,
+        .diffuseMapIdx = indices_[etoi(Properties::Diffuse)],
+        .specularMapIdx = indices_[etoi(Properties::Specular)],
         .shininess = std::any_cast<float>(constants_)
     };
 
