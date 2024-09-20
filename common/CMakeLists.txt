@@ -180,6 +180,8 @@ add_library(gfx
     src/renderProtocol.cpp include/renderProtocol.hpp
     src/d3d12texture.cpp include/d3d12texture.hpp
     src/d3d12material.cpp include/d3d12material.hpp
+    src/assimpLoader.cpp include/assimpLoader.hpp
+    src/assimpLoaderD3d12.cpp include/assimpLoaderD3d12.hpp
     
     include/dxtarget.hpp
     include/gfxPrimitive.hpp

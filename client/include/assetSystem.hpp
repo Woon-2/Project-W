@@ -6,6 +6,7 @@
 #include "d3d12core.hpp"
 #include "d3d12model.hpp"
 #include "d3d12texture.hpp"
+#include "assimpLoaderD3d12.hpp"
 
 #include <map>
 #include <string>
@@ -26,7 +27,7 @@ private:
     void freeCtx();
 
     void loadTexture(const Key& key, const std::filesystem::path& path);
-    void loadModel(const Key& key, const std::filesystem::path& path);
+    void loadModel(const Key& key, const std::filesystem::path& path); 
 
     bool containsTexture(const Key& key) const { return textures_.contains(key); }
     bool containsModel(const Key& key) const { return models_.contains(key); }

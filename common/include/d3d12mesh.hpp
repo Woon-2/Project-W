@@ -53,7 +53,7 @@ public:
      * @brief Creates an empty mesh with no resources.
      */
     Mesh()
-        : vbView_{}, ibView_{}, vb_(), ib_(), vbUpIdx_{}, ibUpIdx_{} {}
+        : vbView_{}, ibView_{}, vb_(), ib_(), vub_(), iub_() {}
     /**
      * @brief Copys other Mesh object.    
      * As the D3D12 resources reside in D3D12 side and Mesh has just pointers to them,    
@@ -61,14 +61,13 @@ public:
      */
     Mesh(const Mesh& other)
         : vbView_(other.vbView_), ibView_(other.ibView_), vb_(other.vb_), ib_(other.ib_),
-        vbUpIdx_(), ibUpIdx_() {}
+        vub_(), iub_() {}
     /**
      * @brief Moves other Mesh object and invalidates the source Mesh object.    
      */
     Mesh(Mesh&& other) noexcept
         : vbView_(std::exchange(other.vbView_, {})), ibView_(std::exchange(other.ibView_, {})),
-        vb_(std::move(other.vb_)), ib_(std::move(other.ib_)),
-        vbUpIdx_(std::move(other.vbUpIdx_)), ibUpIdx_(std::move(other.ibUpIdx_)) {}
+        vb_(std::move(other.vb_)), ib_(std::move(other.ib_)), vub_(std::move(other.vub_)), iub_(std::move(other.iub_)) {}
     /**
      * @brief Copy-assigns other Mesh object.    
      * As the D3D12 resources reside in D3D12 side and Mesh has just pointers to them,
@@ -84,8 +83,6 @@ public:
         ibView_ = other.ibView_;
         vb_ = other.vb_;
         ib_ = other.ib_;
-        vbUpIdx_ = other.vbUpIdx_;
-        ibUpIdx_ = other.ibUpIdx_;
 
         return *this;
     }
@@ -102,8 +99,8 @@ public:
         ibView_ = std::exchange(other.ibView_, {});
         vb_ = std::move(other.vb_);
         ib_ = std::move(other.ib_);
-        vbUpIdx_ = std::move(other.vbUpIdx_);
-        ibUpIdx_ = std::move(other.ibUpIdx_);
+        vub_ = std::move(other.vub_);
+        iub_ = std::move(other.iub_);
 
         return *this;
     }
@@ -121,10 +118,9 @@ public:
      * @details It creates d3d12 resources internally and isn't in valid state until the gpu actually uploads the data.     
      * Look at the class details to be acknowledged about proper construction of the mesh.
      */
-    Mesh( d3d12::Core& core, d3d12::D3D12RenderContext& ctx, const VertexBuffer& vbuf, const IndexCont& ibuf,
-        Core::UpBufIdx vbUpIdx, Core::UpBufIdx ibUpIdx
-    ) : vbView_(), ibView_(), vb_(), ib_(),
-        vbUpIdx_(vbUpIdx), ibUpIdx_(ibUpIdx) {
+    Mesh( d3d12::Core& core, d3d12::D3D12RenderContext& ctx,
+        const VertexBuffer& vbuf, const IndexCont& ibuf
+    ) : vbView_(), ibView_(), vb_(), ib_(), vub_(), iub_() {
         buildRes(core, ctx, vbuf, ibuf);
     }
     /**
@@ -142,10 +138,8 @@ public:
      * @see VertexBuffer Core Core::addTmpUpBuf Core::popTmpUpBuf Core::popTmpUpBufs
      */
     template <std::ranges::range R>
-    Mesh( d3d12::Core& core, d3d12::D3D12RenderContext& ctx, const VertexBuffer& vb, R&& ib,
-        Core::UpBufIdx vbUpIdx, Core::UpBufIdx ibUpIdx
-    ) : vbView_(), ibView_(), vb_(), ib_(),
-        vbUpIdx_(vbUpIdx), ibUpIdx_(ibUpIdx) {
+    Mesh(d3d12::Core& core, d3d12::D3D12RenderContext& ctx, const VertexBuffer& vb, R&& ib)
+        : vbView_(), ibView_(), vb_(), ib_(), vub_(), iub_() {
         buildRes(core, ctx, vb, IndexCont(std::begin(ib), std::end(ib)));
     }
     /**
@@ -160,18 +154,12 @@ public:
      * Look at the class details to be acknowledged about proper construction of the mesh.
      * @see VertexBuffer Core Core::addTmpUpBuf Core::popTmpUpBuf Core::popTmpUpBufs
      */
-    Mesh( d3d12::Core& core, d3d12::D3D12RenderContext& ctx, const gfx::Mesh& mesh,
-        Core::UpBufIdx vbUpIdx, Core::UpBufIdx ibUpIdx
-    ) : vbView_(), ibView_(), vb_(), ib_(),
-        vbUpIdx_(vbUpIdx), ibUpIdx_(ibUpIdx) {
+    Mesh(d3d12::Core& core, d3d12::D3D12RenderContext& ctx, const gfx::Mesh& mesh)
+        : vbView_(), ibView_(), vb_(), ib_(), vub_(), iub_() {
         buildRes(core, ctx, mesh.vb(), mesh.ib());
     }
-    /**
-     * @brief Pops the temporary upload buffers used to upload the data to the GPU from the core.
-     * @param core The D3D12 core object.
-     * @see Core Core::addTmpUpBuf Core::popTmpUpBuf Core::popTmpUpBufs
-     */
-    void completeInit(d3d12::Core& core) const;
+
+    void completeInit();
 
     /**
      * @brief Binds the mesh to the graphics pipeline's input assembler stage.
@@ -199,8 +187,8 @@ private:
     D3D12_INDEX_BUFFER_VIEW ibView_;
     wrl::ComPtr<ID3D12Resource> vb_;
     wrl::ComPtr<ID3D12Resource> ib_;
-    Core::UpBufIdx vbUpIdx_;
-    Core::UpBufIdx ibUpIdx_;
+    wrl::ComPtr<ID3D12Resource> vub_;
+    wrl::ComPtr<ID3D12Resource> iub_;
 };
 
 }   // namespace d3d12

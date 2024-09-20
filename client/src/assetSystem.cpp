@@ -34,12 +34,12 @@ void AssetSystem::freeCtx() {
     pCore_->signalGpu(fenceIdx_);
     pCore_->waitGpu(fenceIdx_);
 
-    for (const auto& [key, tex] : textures_) {
-        tex.completeInit(*pCore_);
+    for (auto& [key, tex] : textures_) {
+        tex.completeInit();
     }
 
-    for (const auto& [key, model] : models_) {
-        model.completeInit(*pCore_);
+    for (auto& [key, model] : models_) {
+        model.completeInit();
     }
 
     pCtx_.reset();
@@ -54,7 +54,7 @@ void AssetSystem::loadTexture(const Key& key, const std::filesystem::path& path)
         throw std::runtime_error("Texture with key " + key + " already loaded");
     }
 
-    textures_.try_emplace(key, gfx::d3d12::Texture(*pCore_, *pCtx_, path, key));
+    textures_.try_emplace(key, gfx::d3d12::Texture(*pCore_, *pCtx_, path));
 }
 
 void AssetSystem::loadModel(const Key& key, const std::filesystem::path& path) {
@@ -66,9 +66,16 @@ void AssetSystem::loadModel(const Key& key, const std::filesystem::path& path) {
         throw std::runtime_error("Model with key " + key + " already loaded");
     }
 
-    models_.try_emplace( key, gfx::d3d12::Model( *pCore_, *pCtx_,
-        gfx::loadModel( path, gfx::makeInputLayoutPreset( gfx::InputLayoutPreset::Pos3Norm3Tex2 ) ),
-        key + "_vb", key + "_ib"
+    using Flag = gfx::d3d12::AssimpLoader::Flag;
+
+    auto loader = gfx::d3d12::AssimpLoader();
+
+    loader.load( path, Flag::triangulate | Flag::joinIdenticalVertices
+        | Flag::convertToLeftHanded | Flag::sortByPType
+    );
+
+    models_.try_emplace( key, loader.buildModel(
+        *pCore_, *pCtx_, gfx::makeInputLayoutPreset( gfx::InputLayoutPreset::Pos3Norm3Tex2 )
     ) );
 }
 

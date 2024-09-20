@@ -323,54 +323,6 @@ public:
     bool containsRoot(const RootIdx& idx) const NOEXCEPT {
         return roots_.contains(idx);
     }
-    /**
-     * @brief Registers a temporary upload buffer to the Core.
-     * @param idx The index of the temporary upload buffer, which becomes the key of the temporary upload buffer.
-     * @param pUpBuf The temporary upload buffer to register.
-     * @note The temporary upload buffer for `pUpBuf` can be easily acquired via using createUpBuf.
-     * @see Core::tmpUpBuf Core::popTmpUpBuf Core::popTmpUpBufs createUpBuf createDefBuf
-     */
-    void addTmpUpBuf(UpBufIdx idx, wrl::ComPtr<ID3D12Resource> pUpBuf = nullptr) {
-        upBufs_[idx] = std::move(pUpBuf);
-    }
-    /**
-     * @brief Pops the temporary upload buffer for the specified index.     
-     * It is recommended to pop the temporary upload buffer if it's use is done to save memory.
-     * @param idx The index of the temporary upload buffer.
-     * @throws gfx::Exception When the temporary upload buffer for the specified index is not found.
-     * @note The temporary upload buffer for `idx` must be registered to the Core.
-     * @see Core::addTmpUpBuf Core::popTmpUpBufs createUpBuf createDefBuf
-     */
-    void popTmpUpBuf(const UpBufIdx& idx) {
-        if (auto pos = upBufs_.find(idx); pos != upBufs_.end()) {
-            upBufs_.erase(pos);
-            return;
-        }
-
-        throw GFX_EXCEPT_CLASS(d3d12::Core::UpBufIdxNotFound, idx);
-    }
-    /**
-     * @brief Pops all the temporary upload buffers.
-     * @see Core::addTmpUpBuf Core::popTmpUpBuf createUpBuf createDefBuf
-     */
-    void popTmpUpBufs() NOEXCEPT {
-        upBufs_.clear();
-    }
-
-    /**
-     * @brief Queries the temporary upload buffer for the specified index.
-     * @param idx The index of the temporary upload buffer.
-     * @return `wrl::ComPtr<ID3D12Resource>&` The temporary upload buffer.
-     * @throws gfx::Exception When the temporary upload buffer for the specified index is not found.
-     * @note The temporary upload buffer for `idx` must be registered to the Core.
-     * @see Core::addTmpUpBuf Core::popTmpUpBuf
-     */
-    wrl::ComPtr<ID3D12Resource>& tmpUpBuf(const UpBufIdx& idx) {
-        if (upBufs_.contains(idx)) {
-            return upBufs_.at(idx);
-        }
-        throw GFX_EXCEPT_CLASS(d3d12::Core::UpBufIdxNotFound, idx);
-    }
 
     void addShader(ShaderIdx idx, std::unique_ptr<Shader>&& shader) {
         shaders_[idx] = std::move(shader);
@@ -515,7 +467,6 @@ private:
 
     CmdListPool gfxCmdListPool_;
     std::map<RootIdx, wrl::ComPtr<ID3D12RootSignature>> roots_;
-    std::map<UpBufIdx, wrl::ComPtr<ID3D12Resource>> upBufs_;
     std::map<ShaderIdx, std::unique_ptr<Shader>> shaders_;
     std::map<InputLayoutIdx, InputLayout> inputLayouts_;
     std::map<DescHeapIdx, DescriptorHeap> descriptorHeaps_;

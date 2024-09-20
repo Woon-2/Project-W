@@ -94,48 +94,6 @@ private:
     IndexCont ib_;
 };
 
-namespace detail {
-Mesh getMeshFromAiNode(const aiNode* node, const aiScene* scene, unsigned int meshIdx);
-}   // namespace gfx::detail
-
-/**
- * @brief Loads a mesh from a file.    
- * It is guaranteed that the mesh consists of triangles only.
- * @details It uses Assimp to load the mesh.    
- * The mesh is loaded with the following flags:    
- * - aiProcess_Triangulate    
- * - aiProcess_JoinIdenticalVertices    
- * - aiProcess_ConvertToLeftHanded    
- * - aiProcess_SortByPType    
- * 
- * By default, the vertex buffer's layout is as follows:    
- * - Vertex::Properties::Position (3D Position): offset 0    
- * - Vertex::Properties::Normal (3D Normal): offset 12    
- * - Vertex::Properties::Color (4D Color): offset 24    
- * If the mesh does not contain a property from above, the property is not loaded    
- * and the offset of following properties is decreased by the size of the property accordingly.
- * @param path Path to the file.
- * @return Mesh A mesh object.
- * @see Mesh loadModel
- */
-Mesh loadMesh(const std::filesystem::path& path);
-/**
- * @brief Loads a mesh from a file.    
- * It is guaranteed that the mesh consists of triangles only.    
- * The vertex buffer is converted to the specified input layout.
- * @details It uses Assimp to load the mesh.    
- * The mesh is loaded with the following flags:    
- * - aiProcess_Triangulate    
- * - aiProcess_JoinIdenticalVertices    
- * - aiProcess_ConvertToLeftHanded    
- * - aiProcess_SortByPType    
- * @param path Path to the file.
- * @param il Input layout.
- * @return Mesh A mesh object.
- * @see Mesh loadModel VertexBuffer InputLayout convert
- */
-Mesh loadMesh(const std::filesystem::path& path, const InputLayout& il);
-
 }   // namespace gfx
 
 #endif // __MESH_HPP

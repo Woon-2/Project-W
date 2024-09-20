@@ -372,7 +372,6 @@ void Core::cleanup() {
     descriptorHeaps_.clear();
     inputLayouts_.clear();
     shaders_.clear();
-    upBufs_.clear();
     roots_.clear();
     gfxCmdListPool_.clear();
 }

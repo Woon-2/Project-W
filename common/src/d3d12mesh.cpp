@@ -6,9 +6,9 @@ namespace gfx {
 
 namespace d3d12 {
 
-void Mesh::completeInit(Core& core) const {
-    core.popTmpUpBuf(vbUpIdx_);
-    core.popTmpUpBuf(ibUpIdx_);
+void Mesh::completeInit() {
+    vub_.Reset();
+    iub_.Reset();
 }
 
 void Mesh::bind(ID3D12GraphicsCommandList* pCmdList) const {
@@ -30,12 +30,9 @@ void Mesh::draw(ID3D12GraphicsCommandList* pCmdList, std::size_t instanceCount) 
 }
 
 void Mesh::buildRes(Core& core, D3D12RenderContext& ctx, const VertexBuffer& vbuf, const IndexCont& ibuf) {
-    core.addTmpUpBuf(vbUpIdx_);
-    core.addTmpUpBuf(ibUpIdx_);
     // Vertex buffer
-    vb_ = d3d12::createDefBuf( core, ctx, vbuf.rawMem(), static_cast<std::uint32_t>( vbuf.byteWidth() ),
-        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, core.tmpUpBuf(vbUpIdx_)
-    );
+    vub_ = createUpBuf( core, vbuf.rawMem(), vbuf.byteWidth() );
+    vb_ = createDefBuf( core, ctx, vub_.Get(), D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER );
     vbView_[0] = D3D12_VERTEX_BUFFER_VIEW {
         .BufferLocation = vb_->GetGPUVirtualAddress(),
         .SizeInBytes = static_cast<UINT>( vbuf.byteWidth() ),
@@ -43,10 +40,12 @@ void Mesh::buildRes(Core& core, D3D12RenderContext& ctx, const VertexBuffer& vbu
     };
 
     // Index buffer
-    ib_ = d3d12::createDefBuf(core, ctx, ibuf, D3D12_RESOURCE_STATE_INDEX_BUFFER, core.tmpUpBuf(ibUpIdx_));
+    const auto ibByteWidth = ibuf.size() * sizeof(IndexCont::value_type);
+    iub_ = createUpBuf( core, ibuf.data(), ibByteWidth );
+    ib_ = createDefBuf( core, ctx, iub_.Get(), D3D12_RESOURCE_STATE_INDEX_BUFFER );
     ibView_ = D3D12_INDEX_BUFFER_VIEW {
         .BufferLocation = ib_->GetGPUVirtualAddress(),
-        .SizeInBytes = static_cast<std::uint32_t>( ibuf.size() * sizeof(IndexCont::value_type) ),
+        .SizeInBytes = static_cast<std::uint32_t>( ibByteWidth ),
         .Format = DXGI_FORMAT_R32_UINT
     };
 }
