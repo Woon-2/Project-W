@@ -4,7 +4,7 @@ namespace gfx {
     
 namespace d3d12 {
 
-void Material::pushTexture(Core& core, Properties prop, const Texture& tex) {
+void Material::pushTexture(Core& core, Maps prop, const Texture& tex) {
     if (contains(prop)) {
         throw std::runtime_error("Texture already exists for this property");
     }
@@ -18,7 +18,7 @@ void Material::pushTexture(Core& core, Properties prop, const Texture& tex) {
     indices_[etoi(prop)] = idx;
 }
 
-const Material::TextureIdx Material::idx(Properties prop) const {
+const Material::TextureIdx Material::idx(Maps prop) const {
     if (!contains(prop)) {
         throw std::runtime_error("Texture not found for this property");
     }
@@ -28,14 +28,17 @@ const Material::TextureIdx Material::idx(Properties prop) const {
 bool Material::canSupport(rp::Protocol protocol) const {
     switch(protocol) {
     case rp::Protocol::PhongInstancingNT: {
-        auto ret = constants_.type() == typeid(rp::PhongInstancingNT::MaterialType);
+        auto ret = contains(Properties::DiffuseColor);
+        ret = ret && contains(Properties::SpecularColor);
+        ret = ret && contains(Properties::AmbientColor);
+        ret = ret && contains(Properties::EmissiveColor);
         return ret;
     }
 
     case rp::Protocol::PhongInstancing: {
-        auto ret = constants_.type() == typeid(float);
-        ret = ret && contains(Properties::Diffuse);
-        ret = ret && contains(Properties::Specular);
+        auto ret = contains(Properties::Shininess);
+        ret = ret && contains(Maps::Diffuse);
+        ret = ret && contains(Maps::Specular);
         return ret;
     }
 
@@ -60,17 +63,18 @@ std::any Material::as(rp::Protocol protocol) const {
 }
 
 rp::PhongInstancing::MaterialType Material::asPhongInstancing() const {
-    if (constants_.type() != typeid(float)) {
-        throw std::runtime_error("PhongInstancing render protocol's Material Auxiliary data must be of type float.");
-    }
-    if (!contains(Properties::Diffuse) || !contains(Properties::Specular)) {
-        throw std::runtime_error("PhongInstancing render protocol's Material must have Diffuse and Specular textures.");
+    if ( !contains(Maps::Diffuse) || !contains(Maps::Specular)
+        || !contains(Properties::Shininess)
+    ) {
+        throw std::runtime_error("PhongInstancing render protocol's Material must have "
+            "Diffuse and Specular textures and shininess property."
+        );
     }
 
     auto ret = rp::PhongInstancing::MaterialType{
-        .diffuseMapIdx = indices_[etoi(Properties::Diffuse)],
-        .specularMapIdx = indices_[etoi(Properties::Specular)],
-        .shininess = std::any_cast<float>(constants_)
+        .diffuseMapIdx = indices_[etoi(Maps::Diffuse)],
+        .specularMapIdx = indices_[etoi(Maps::Specular)],
+        .shininess = properties_[etoi(Properties::Shininess)].value().scalar
     };
 
     return ret;
@@ -78,11 +82,20 @@ rp::PhongInstancing::MaterialType Material::asPhongInstancing() const {
 
 rp::PhongInstancingNT::MaterialType Material::asPhongInstancingNT() const
 {
-    if ( constants_.type() != typeid( rp::PhongInstancingNT::MaterialType ) ) {
-        throw std::runtime_error("PhongInstancingNT render protocol's Material Auxiliary data must be of type PhongMaterialNT.");
+    if ( !contains(Properties::DiffuseColor) || !contains(Properties::SpecularColor)
+        || !contains(Properties::AmbientColor) || !contains(Properties::EmissiveColor)
+    ) {
+        throw std::runtime_error("PhongInstancingNT render protocol's Material must have "
+            "Diffuse, Specular, Ambient and Emissive colors."
+        );
     }
 
-    return std::any_cast<rp::PhongInstancingNT::MaterialType>( constants_ );
+    return rp::PhongInstancingNT::MaterialType{
+        .ambient = properties_[etoi(Properties::AmbientColor)].value().vec4.getXmf(),
+        .diffuse = properties_[etoi(Properties::DiffuseColor)].value().vec4.getXmf(),
+        .specular = properties_[etoi(Properties::SpecularColor)].value().vec4.getXmf(),
+        .emmisive = properties_[etoi(Properties::EmissiveColor)].value().vec4.getXmf()
+    };
 }
 
 }   // namespace gfx::d3d12
