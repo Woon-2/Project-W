@@ -60,6 +60,7 @@ private:
     }
 
     std::map<Key, gfx::d3d12::Texture> textures_;
+    std::map<std::filesystem::path, gfx::d3d12::AssimpLoader> assimpLoaders_;
     std::map<std::filesystem::path, const gfx::d3d12::Texture*> texPaths_;
     std::map<Key, gfx::d3d12::Model> models_;
     std::map<Key, gfx::d3d12::MaterialTree> matTrees_;

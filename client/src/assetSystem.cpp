@@ -44,6 +44,8 @@ void AssetSystem::freeCtx() {
     }
 
     pCtx_.reset();
+
+    assimpLoaders_.clear();
 }
 
 void AssetSystem::loadTexture(const Key& key, const std::filesystem::path& path) {
@@ -70,6 +72,14 @@ void AssetSystem::loadModel(const Key& key, const std::filesystem::path& path) {
 
     using Flag = gfx::d3d12::AssimpLoader::Flag;
 
+    if (auto loader = assimpLoaders_.find(path); loader != assimpLoaders_.end()) {
+        models_.try_emplace( key, loader->second.buildModel(
+            *pCore_, *pCtx_, gfx::makeInputLayoutPreset( gfx::InputLayoutPreset::Pos3Norm3Tex2 )
+        ) );
+
+        return;
+    }
+
     auto loader = gfx::d3d12::AssimpLoader();
 
     loader.load( path, Flag::triangulate | Flag::joinIdenticalVertices
@@ -79,6 +89,8 @@ void AssetSystem::loadModel(const Key& key, const std::filesystem::path& path) {
     models_.try_emplace( key, loader.buildModel(
         *pCore_, *pCtx_, gfx::makeInputLayoutPreset( gfx::InputLayoutPreset::Pos3Norm3Tex2 )
     ) );
+
+    assimpLoaders_.try_emplace( path, std::move(loader) );
 }
 
 void AssetSystem::loadMaterialTree(const Key& key, const std::filesystem::path& path) {
@@ -86,11 +98,18 @@ void AssetSystem::loadMaterialTree(const Key& key, const std::filesystem::path& 
         throw std::runtime_error("MaterialTree with key " + key + " already loaded");
     }
 
+    if (auto loader = assimpLoaders_.find(path); loader != assimpLoaders_.end()) {
+        matTrees_.try_emplace( key, loader->second.buildMaterialTree(*pCore_, texPaths_) );
+        return;
+    }
+
     auto loader = gfx::d3d12::AssimpLoader();
 
     loader.load(path, 0);
 
-    matTrees_.try_emplace( key, loader.buildMaterialTree(*pCore_, this->texPaths_) );
+    matTrees_.try_emplace( key, loader.buildMaterialTree(*pCore_, texPaths_) );
+
+    assimpLoaders_.try_emplace( path, std::move(loader) );
 }
 
 void AssetLinker::loadRequiredAssets(AssetSystem& assetSys) {
