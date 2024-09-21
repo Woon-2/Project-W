@@ -6,6 +6,7 @@
 #include "d3d12core.hpp"
 #include "d3d12model.hpp"
 #include "d3d12texture.hpp"
+#include "d3d12materialTree.hpp"
 #include "assimpLoaderD3d12.hpp"
 
 #include <map>
@@ -28,9 +29,11 @@ private:
 
     void loadTexture(const Key& key, const std::filesystem::path& path);
     void loadModel(const Key& key, const std::filesystem::path& path); 
+    void loadMaterialTree(const Key& key, const std::filesystem::path& path);
 
     bool containsTexture(const Key& key) const { return textures_.contains(key); }
     bool containsModel(const Key& key) const { return models_.contains(key); }
+    bool containsMaterialTree(const Key& key) const { return matTrees_.contains(key); }
 
     const gfx::d3d12::Texture* texture(const Key& key) const {
         if (auto it = textures_.find(key); it != textures_.end()) {
@@ -48,8 +51,18 @@ private:
         throw std::runtime_error("Model with key " + key + " not found");
     }
 
+    const gfx::d3d12::MaterialTree* materialTree(const Key& key) const {
+        if (auto it = matTrees_.find(key); it != matTrees_.end()) {
+            return &it->second;
+        }
+
+        throw std::runtime_error("MaterialTree with key " + key + " not found");
+    }
+
     std::map<Key, gfx::d3d12::Texture> textures_;
+    std::map<std::filesystem::path, const gfx::d3d12::Texture*> texPaths_;
     std::map<Key, gfx::d3d12::Model> models_;
+    std::map<Key, gfx::d3d12::MaterialTree> matTrees_;
     std::unique_ptr<gfx::d3d12::D3D12RenderContext> pCtx_;
     gfx::d3d12::Core* pCore_;
     std::size_t fenceIdx_;

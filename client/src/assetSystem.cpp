@@ -8,7 +8,8 @@
 #include <algorithm>
 
 AssetSystem::AssetSystem(gfx::d3d12::Core& core, std::size_t fenceIdx)
-    : textures_(), models_(), pCtx_(), pCore_(&core), fenceIdx_(fenceIdx) {
+    : textures_(), texPaths_(), models_(), matTrees_(),
+    pCtx_(), pCore_(&core), fenceIdx_(fenceIdx) {
 
 }
 
@@ -54,7 +55,8 @@ void AssetSystem::loadTexture(const Key& key, const std::filesystem::path& path)
         throw std::runtime_error("Texture with key " + key + " already loaded");
     }
 
-    textures_.try_emplace(key, gfx::d3d12::Texture(*pCore_, *pCtx_, path));
+    auto [it, _] = textures_.try_emplace(key, gfx::d3d12::Texture(*pCore_, *pCtx_, path));
+    texPaths_.try_emplace(path, &it->second);
 }
 
 void AssetSystem::loadModel(const Key& key, const std::filesystem::path& path) {
@@ -79,6 +81,18 @@ void AssetSystem::loadModel(const Key& key, const std::filesystem::path& path) {
     ) );
 }
 
+void AssetSystem::loadMaterialTree(const Key& key, const std::filesystem::path& path) {
+    if (matTrees_.contains(key)) {
+        throw std::runtime_error("MaterialTree with key " + key + " already loaded");
+    }
+
+    auto loader = gfx::d3d12::AssimpLoader();
+
+    loader.load(path, 0);
+
+    matTrees_.try_emplace( key, loader.buildMaterialTree(*pCore_, this->texPaths_) );
+}
+
 void AssetLinker::loadRequiredAssets(AssetSystem& assetSys) {
     for (auto id : requiredAssets_) {
         const auto& desc = detail::gAssetDescs[id];
@@ -92,6 +106,12 @@ void AssetLinker::loadRequiredAssets(AssetSystem& assetSys) {
         case AssetType::Texture:
             if (!assetSys.containsTexture(desc.key)) {
                 assetSys.loadTexture( desc.key, desc.path );
+            }
+            break;
+
+        case AssetType::MaterialTree:
+            if (!assetSys.containsMaterialTree(desc.key)) {
+                assetSys.loadMaterialTree( desc.key, desc.path );
             }
             break;
 

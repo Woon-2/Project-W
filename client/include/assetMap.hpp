@@ -14,6 +14,7 @@ enum class AssetType {
     Animation,
     Script,
     Level,
+    MaterialTree,
     AssetTypeCount
 };
 

@@ -30,9 +30,10 @@ public:
 
     enum class Maps {
         Diffuse,
-        Normal,
+        Ambient,
         Specular,
         Emissive,
+        Normal,
         Roughness,
         Metallic,
         AmbientOcclusion,
@@ -86,8 +87,6 @@ public:
         mu::Vec4 vec4;
         float scalar;
         MappingMode mappingMode;
-
-        Property() : scalar(0.f) {}
     };
 
     Material() = default;

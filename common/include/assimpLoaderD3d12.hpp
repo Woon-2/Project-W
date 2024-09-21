@@ -8,6 +8,11 @@
 #include "d3d12core.hpp"
 #include "d3d12mesh.hpp"
 #include "d3d12model.hpp"
+#include "d3d12texture.hpp"
+#include "d3d12materialTree.hpp"
+
+#include <map>
+#include <filesystem>
 
 namespace gfx {
 
@@ -15,6 +20,8 @@ namespace d3d12 {
 
 class AssimpLoader : public gfx::AssimpLoader {
 public:
+    using PathTexMap = std::map<std::filesystem::path, const Texture*>;
+
     Mesh buildMesh(Core& core, D3D12RenderContext& ctx) const {
         return buildMesh(core, ctx, scene()->mMeshes[0]);
     }
@@ -38,9 +45,20 @@ public:
         return model;
     }
 
+    Material buildMaterial(Core& core, const PathTexMap& pathTexmap) const {
+        return buildMaterial(core, pathTexmap, scene()->mMaterials[0]);
+    }
+    Material buildMaterial(Core& core, const PathTexMap& pathTexmap, const aiMaterial* material) const;
+    MaterialTree buildMaterialTree(Core& core, const PathTexMap& pathTexmap) const {
+        auto matTree = MaterialTree();
+        processAiNodeMaterial(core, pathTexmap, scene()->mRootNode, scene(), matTree);
+        return matTree;
+    }
+
 private:
     void processAiNode(Core& core, D3D12RenderContext& ctx, const aiNode* node, const aiScene* scene, Model& model) const;
     void processAiNode(Core& core, D3D12RenderContext& ctx, const aiNode* node, const aiScene* scene, Model& model, const gfx::InputLayout& inputLayout) const;
+    void processAiNodeMaterial(Core& core, const PathTexMap& pathTexmap, const aiNode* node, const aiScene* scene, MaterialTree& matTree) const;
 };
 
 }   // namespace gfx::d3d12
