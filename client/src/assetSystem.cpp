@@ -14,9 +14,13 @@ AssetSystem::AssetSystem(gfx::d3d12::Core& core, std::size_t fenceIdx)
 }
 
 void AssetSystem::loadAssets() {
-    for (auto entity : ecs::gSystems[typeid(AssetSystem).name()]->entites_) {
-        auto& assetLinker = ecs::GetComponent<AssetLinker>(entity);
-        assetLinker.loadRequiredAssets(*this);
+    for (auto& weakAL : components<AssetLinker>()) {
+        auto al = weakAL.lock();
+        if (!al) {
+            throw ECS_EXCEPT("AssetLinker component is not valid");
+        }
+
+        al->loadRequiredAssets(*this);
     }
 }
 
@@ -54,7 +58,7 @@ void AssetSystem::loadTexture(const Key& key, const std::filesystem::path& path)
     }
 
     if (textures_.contains(key)) {
-        throw std::runtime_error("Texture with key " + key + " already loaded");
+        return;
     }
 
     auto [it, _] = textures_.try_emplace(key, gfx::d3d12::Texture(*pCore_, *pCtx_, path));
@@ -67,7 +71,7 @@ void AssetSystem::loadModel(const Key& key, const std::filesystem::path& path) {
     }
 
     if (models_.contains(key)) {
-        throw std::runtime_error("Model with key " + key + " already loaded");
+        return;
     }
 
     using Flag = gfx::d3d12::AssimpLoader::Flag;
@@ -94,12 +98,12 @@ void AssetSystem::loadModel(const Key& key, const std::filesystem::path& path) {
 }
 
 void AssetSystem::loadMaterialTree(const Key& key, const std::filesystem::path& path) {
-    if (matTrees_.contains(key)) {
-        throw std::runtime_error("MaterialTree with key " + key + " already loaded");
-    }
-
     if (auto loader = assimpLoaders_.find(path); loader != assimpLoaders_.end()) {
         matTrees_.try_emplace( key, loader->second.buildMaterialTree(*pCore_, texPaths_) );
+        return;
+    }
+
+    if (matTrees_.contains(key)) {
         return;
     }
 
@@ -114,28 +118,24 @@ void AssetSystem::loadMaterialTree(const Key& key, const std::filesystem::path& 
 
 void AssetLinker::loadRequiredAssets(AssetSystem& assetSys) {
     for (auto id : requiredAssets_) {
-        const auto& desc = detail::gAssetDescs[id];
-        switch (desc.type) {
-        case AssetType::Model:
-            if (!assetSys.containsModel(desc.key)) {
+        const auto& descs = detail::gAssetDescs[id];
+        for (const auto& desc : descs) {
+            switch (desc.type) {
+            case AssetType::Model:
                 assetSys.loadModel( desc.key, desc.path );
-            }
-            break;
+                break;
 
-        case AssetType::Texture:
-            if (!assetSys.containsTexture(desc.key)) {
+            case AssetType::Texture:
                 assetSys.loadTexture( desc.key, desc.path );
-            }
-            break;
+                break;
 
-        case AssetType::MaterialTree:
-            if (!assetSys.containsMaterialTree(desc.key)) {
+            case AssetType::MaterialTree:
                 assetSys.loadMaterialTree( desc.key, desc.path );
-            }
-            break;
+                break;
 
-        default:
-            throw std::runtime_error("Asset type not supported");
+            default:
+                throw std::runtime_error("Asset type not supported");
+            }
         }
     }
 }

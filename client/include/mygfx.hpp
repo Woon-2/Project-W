@@ -2,6 +2,7 @@
 #define __MYGFX_HPP
 
 #include "d3d12core.hpp"
+#include "phongShader.hpp"
 
 class MyGfx : public gfx::d3d12::Core {
 public:
@@ -10,6 +11,11 @@ public:
     };
 
     void init() override;
+    void setFrame(std::size_t frameIdx) {
+        static_cast<gfx::d3d12::PhongShader&>(
+            shader(gfx::d3d12::PhongShader::shaderName())
+        ).setFrame(frameIdx);
+    }
 
     gfx::IRenderer& renderer(Renderer) const NOEXCEPT {
         return *pRenderer_;

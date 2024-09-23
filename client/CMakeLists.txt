@@ -43,8 +43,6 @@ target_sources(client
         src/app.cpp include/app.hpp
         src/game.cpp include/game.hpp
         src/mygfx.cpp include/mygfx.hpp
-        include/testInput.hpp
-        src/ecs.cpp include/ecs.hpp
         src/ecsExcept.cpp include/ecsExcept.hpp
         src/player.cpp include/player.hpp
         src/inputSystem.cpp include/inputSystem.hpp
@@ -52,10 +50,14 @@ target_sources(client
         src/assetMap.cpp include/assetMap.hpp
         src/cmodel.cpp include/cmodel.hpp
         src/physicsSystem.cpp include/physicsSystem.hpp
-
+        src/stage.cpp include/stage.hpp
         src/Timer.cpp include/Timer.hpp
-        src/gun.cpp include/gun.hpp
-)
+        src/ecs.cpp include/ecs.hpp
+        src/ccoord.cpp include/ccoord.hpp
+
+        include/testInput.hpp
+        include/systems.hpp
+        )
 
 include(auto_configure)
 

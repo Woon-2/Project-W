@@ -1,140 +1,73 @@
 #include "ecs.hpp"
 
-/**
- * @brief This namespace is for ecs ( Entity Component System )
- */
+#include <ranges>
+#include <algorithm>
 
 namespace ecs {
+    void init(const InitDesc& desc) {
+        Entity::init(desc.threadCnt, desc.entityPoolSize);
+        Component::init(desc.threadCnt * desc.entityPoolSize);
+    }
 
-	// 각 Entity에 해당할 시그니처 배열
-	std::array<Signature, MAX_ENTITIES> gSignature;
+    void Entity::init(std::size_t threadCnt, std::size_t entityPoolSize) {
+        sEntityPools.clear();
 
-	// 사용하지 않은 엔티티 아이디
-	std::queue<Entity> gAvailableEntities;
-	uint32_t gLivingEntityCount{};
+        std::ranges::generate_n( std::back_inserter(sEntityPools), threadCnt, [entityPoolSize]() {
+            auto pool = std::deque<ID>();
+            std::ranges::generate_n( std::back_inserter(pool), entityPoolSize, [n = 0]() mutable {
+                return n++;
+            } );
+            return pool;
+        } );
+    }
 
-	// 타입 이름과 컴포넌트 타입을 매핑 ComponentType은 int임 gNextComponentType으로 인덱싱
-	std::map<std::string, ComponentType> gComponentTypes{};
-	// 타입 이름과 해당 타입의 배열(엔터티 배열을 가지고 있는)을 매핑 
-	std::map<std::string, std::shared_ptr<IComponentArray>> gComponentArrays{};
-	// 등록된 컴포넌트 정보
-	ComponentType gNextComponentType{};
+    std::size_t Entity::poolIdx(std::thread::id threadId) {
+        if (sThreadMap.contains(threadId)) {
+            return sThreadMap[threadId];
+        }
+        else {
+            while (sLock.test_and_set(std::memory_order_acquire)) {
+                while (sLock.test(std::memory_order_relaxed)) {
+                    std::this_thread::yield();
+                }
+            }
 
-	std::map<std::string, Signature> gSystemSignature{};
-	std::map<std::string, std::shared_ptr<System>> gSystems{};
+            if (auto it = sThreadMap.find(threadId); it != sThreadMap.end()) {
+                sLock.clear(std::memory_order_release);
+                return it->second;
+            }
 
-	void ConfigEntity()
-	{
-		for (Entity entity = 0; entity < MAX_ENTITIES; ++entity)
-		{
-			gAvailableEntities.push(entity);
-		}
-	}
+            auto& ret = sThreadMap[threadId] = sThreadMap.size();
+            sLock.clear(std::memory_order_release);
+            return ret;
+        }
+    }
 
-	Entity CreateEntity()
-	{
-		if (gLivingEntityCount >= MAX_ENTITIES) {
-			throw ECS_EXCEPT("You can't create more entities than MAX_ENTITIES.");
-		}
+    Entity::ID Entity::fetch(std::thread::id threadId) {
+        auto idx = poolIdx(threadId);
+        ID id = sEntityPools[idx].front();
+        sEntityPools[idx].pop_front();
+        return id;
+    }
 
-		// 큐의 앞에서 부터 번호를 부여한다.
-		if (gAvailableEntities.empty()) {
-			throw ECS_EXCEPT("Can't create Entity");
-		}
+    std::vector<Entity::ID> Entity::fetch(std::thread::id threadId, std::size_t cnt) {
+        auto idx = poolIdx(threadId);
 
-		Entity id = gAvailableEntities.front();
-		gAvailableEntities.pop();
-		++gLivingEntityCount;
+        std::vector<ID> ids;
+        ids.reserve(cnt);
 
-		return id;
-	}
+        for (auto id : sEntityPools[idx] | std::views::take(cnt)) {
+            ids.push_back(id);
+        }
 
-	void DestroyEntity(const Entity entity)
-	{
-		if (entity >= MAX_ENTITIES)
-		{
-			throw ECS_EXCEPT("Entity out of Range");
-		}
+        sEntityPools[idx].erase(sEntityPools[idx].begin(), sEntityPools[idx].begin() + cnt);
 
-		componentDestroyEntity(entity);
-		systemDestroyEntity(entity);
+        return ids;
+    }
 
-		// std::bitset::reset
-		gSignature[entity].reset();
+    std::vector<std::deque<Entity::ID>> Entity::sEntityPools;
+    std::map<std::thread::id, std::size_t> Entity::sThreadMap;
+    std::atomic_flag Entity::sLock;
 
-		// 제거한 아이디는 큐의 맨뒤로 보낸다.
-		gAvailableEntities.push(entity);
-		--gLivingEntityCount;
-	}
-
-	void SetSignature(Entity entity, Signature signature)
-	{
-		if (entity >= MAX_ENTITIES)
-		{
-			throw ECS_EXCEPT("Entity out of Range");
-		}
-
-		gSignature[entity] = signature;
-	}
-
-	Signature GetSignature(Entity entity)
-	{
-		if (entity >= MAX_ENTITIES)
-		{
-			throw ECS_EXCEPT("Entity out of Range");
-		}
-
-		return gSignature[entity];
-	}
-
-	void componentDestroyEntity(Entity entity)
-	{
-		for (auto const& pair : gComponentArrays)
-		{
-			auto const& component = pair.second;
-
-			component->EntityDestroyed(entity);
-		}
-	}
-
-	void systemDestroyEntity(Entity entity)
-	{
-		for (auto const& pair : gSystems)
-		{
-			auto const& system = pair.second;
-
-			system->entites_.erase(entity);
-		}
-	}
-
-	void SetEntity(std::string sysName, Entity entity)
-	{
-		auto entitySignature = GetSignature(entity);
-
-		if ((entitySignature & gSystemSignature[sysName]) == gSystemSignature[sysName])
-		{
-			gSystems[sysName]->entites_.insert(entity);
-		}
-	}
-
-	void EntitySignatureChanged(Entity entity)
-	{
-		auto entitySignature = GetSignature(entity);
-
-		for (auto const& pair : gSystems)
-		{
-			auto const& type = pair.first;
-			auto const& system = pair.second;
-			auto const& systemSignature = gSystemSignature[type];
-
-			if ((entitySignature & systemSignature) == systemSignature)
-			{
-				system->entites_.insert(entity);
-			}
-			else
-			{
-				system->entites_.erase(entity);
-			}
-		}
-	}
+    std::vector< std::vector<std::shared_ptr<Component> > > Component::sComponents;
 }

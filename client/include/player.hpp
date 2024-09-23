@@ -3,28 +3,13 @@
 
 #include "ecs.hpp"
 
-struct Position
-{
-	double x;
-	double y;
-	double z;
-};
+#include "physicsSystem.hpp"
 
-class Player
-{
+class Player : public ecs::Entity {
 public:
-	Player() : entityNumber_(0) {}
-	void Init();
+	Player();
 
-	void printPos() 
-	{
-		std::cout << "\033[2J\033[1;1H";
-
-		auto curPos = ecs::GetComponent<Position>(entityNumber_);
-		std::cout << "x : " << curPos.x << " y :" << curPos.y << std::endl;
-	}
-
-	ecs::Entity entityNumber_;
+	void linkAssets();
 };
 
 #endif // !__PLAYERSYSTEM_HPP

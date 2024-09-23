@@ -1,6 +1,8 @@
 #ifndef __AssetSystem_HPP
 #define __AssetSystem_HPP
 
+#include "ecs.hpp"
+
 #include "assetMap.hpp"
 
 #include "d3d12core.hpp"
@@ -13,8 +15,32 @@
 #include <string>
 #include <filesystem>
 #include <vector>
+#include <span>
 
-class AssetSystem {
+class AssetSystem;
+
+class AssetLinker : public ecs::Component {
+public:
+    ENABLE_COMPONENT(AssetLinker);
+
+    friend class AssetSystem;
+
+    AssetLinker(const ecs::Entity& entity) NOEXCEPT
+        : Component(entity) {}
+
+    void configAsset(assetIDs::ID id) {
+        // It doesn't check duplication.
+        // The duplication will introduce a slight overhead, but it's not a big deal.
+        requiredAssets_.push_back(id);
+    }
+
+private:
+    void loadRequiredAssets(AssetSystem& assetSys);
+
+    std::vector<assetIDs::ID> requiredAssets_;
+};
+
+class AssetSystem : public ecs::System<AssetLinker>{
 public:
     friend class AssetLinker;
 
@@ -23,7 +49,6 @@ public:
 
     void loadAssets();
 
-private:
     void allocCtx();
     void freeCtx();
 
@@ -59,6 +84,7 @@ private:
         throw std::runtime_error("MaterialTree with key " + key + " not found");
     }
 
+private:
     std::map<Key, gfx::d3d12::Texture> textures_;
     std::map<std::filesystem::path, gfx::d3d12::AssimpLoader> assimpLoaders_;
     std::map<std::filesystem::path, const gfx::d3d12::Texture*> texPaths_;
@@ -67,22 +93,6 @@ private:
     std::unique_ptr<gfx::d3d12::D3D12RenderContext> pCtx_;
     gfx::d3d12::Core* pCore_;
     std::size_t fenceIdx_;
-};
-
-class AssetLinker {
-public:
-    friend class AssetSystem;
-
-    void configAsset(assetIDs::ID id) {
-        // It doesn't check duplication.
-        // The duplication will introduce a slight overhead, but it's not a big deal.
-        requiredAssets_.push_back(id);
-    }
-
-private:
-    void loadRequiredAssets(AssetSystem& assetSys);
-
-    std::vector<assetIDs::ID> requiredAssets_;
 };
 
 #endif  // __AssetSystem_HPP
