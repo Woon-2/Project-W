@@ -166,7 +166,7 @@ void AssimpLoader::processAiNodeMaterial( Core& core, const PathTexMap& pathTexm
         }
 
         auto aimaterial = scene->mMaterials[aimesh->mMaterialIndex];
-        matTree.setMaterial( buildMaterial(core, pathTexmap, aimaterial) );
+        matTree.addMaterial( buildMaterial(core, pathTexmap, aimaterial) );
     }
 
     for (auto i = 0u; i < node->mNumChildren; ++i) {

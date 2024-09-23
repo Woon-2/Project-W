@@ -3,21 +3,18 @@
 
 #include "d3d12material.hpp"
 
+#include <vector>
+
 namespace gfx {
 
 namespace d3d12 {
 
 class MaterialTree {
 public:
-    MaterialTree(const Material& material = Material())
-        : material_(material), children_() {}
-
-    MaterialTree(Material&& material)
-        : material_(std::move(material)), children_() {}
-
-    const Material& material() const { return material_; }
-    Material& material() { return material_; }
-    void setMaterial(const Material& material) { material_ = material; }
+    void addMaterial(const Material& material) { materials_.push_back(material); }
+    void addMaterial(Material&& material) { materials_.push_back(std::move(material)); }
+    const auto& materials() const { return materials_; }
+    auto& materials() { return materials_; }
 
     void addChild(const MaterialTree& child) { children_.push_back(child); }
     void addChild(MaterialTree&& child) { children_.push_back(std::move(child)); }
@@ -26,7 +23,7 @@ public:
     auto& children() { return children_; }
 
 private:
-    Material material_;
+    std::vector<Material> materials_;
     std::vector<MaterialTree> children_;
 };
 
