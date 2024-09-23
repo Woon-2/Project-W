@@ -45,5 +45,5 @@ VS_OUTPUT VSMain(VS_INPUT input) {
 
 float4 PSMain(VS_OUTPUT input) : SV_TARGET {
     float3 normalV = normalize(input.normalV);
-    return Lighting(input.posV, normalV, getInstanceData(input.instID).matIdx);
+    return Lighting(input.posV, normalV);
 }
