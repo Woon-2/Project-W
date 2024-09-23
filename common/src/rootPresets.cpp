@@ -80,19 +80,11 @@ wrl::ComPtr<ID3D12RootSignature> rootPresetSolid(Core& core) {
 }
 
 wrl::ComPtr<ID3D12RootSignature> rootPresetUnified(Core& core) {
-    auto params = std::array<D3D12_ROOT_PARAMETER, 5>{
+    auto params = std::array<D3D12_ROOT_PARAMETER, 4>{
         D3D12_ROOT_PARAMETER{   // Per Instance Data
             .ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV,
             .Descriptor = D3D12_ROOT_DESCRIPTOR{
                 .ShaderRegister = 0u,
-                .RegisterSpace = 0u
-            },
-            .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
-        },
-        D3D12_ROOT_PARAMETER{   // Materials
-            .ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV,
-            .Descriptor = D3D12_ROOT_DESCRIPTOR{
-                .ShaderRegister = 1u,
                 .RegisterSpace = 0u
             },
             .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL

@@ -134,8 +134,7 @@ namespace {
             .wvp = mu::transpose(world * view * proj).getXmf(),
             .normalXform = dx::convertMat<dx::XMFLOAT3X4>(
                 mu::transpose(mu::inverse(world)).get()
-            ),
-            .matIdx = matIdx
+            )
         };
     }
 
@@ -145,8 +144,7 @@ namespace {
             .wvp = mu::transpose(world * view * proj).getXmf(),
             .normalXform = dx::convertMat<dx::XMFLOAT3X4>(
                 mu::transpose(mu::inverse(world)).get()
-            ),
-            .matIdx = matIdx
+            )
         };
     }
 }   // namespace gfx::d3d12::<anonymous>

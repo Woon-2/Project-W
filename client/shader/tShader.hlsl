@@ -1,15 +1,19 @@
 // The order of the includes is important, as some depend on others
 
+#ifdef INCLUDE_phongLighting
+#include "phongMaterial_t.hlsl"
+#endif
+
 #ifdef INCLUDE_drawcallIdxOnly
 #include "drawcallIdxOnly.hlsl"
 #endif
 
-#ifdef INCLUDE_basicInstancing
-#include "basicInstancing.hlsl"
-#endif
-
 #ifdef INCLUDE_phongLighting
 #include "phongLighting_t.hlsl"
+#endif
+
+#ifdef INCLUDE_basicInstancing
+#include "basicInstancing.hlsl"
 #endif
 
 // non textured shader

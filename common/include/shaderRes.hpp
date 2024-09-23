@@ -38,8 +38,6 @@ struct BasicPID {
     dx::XMFLOAT4X4 wv;
     dx::XMFLOAT4X4 wvp;
     dx::XMFLOAT3X4 normalXform; // use 3x4 matrix to avoid padding
-    std::uint32_t matIdx;
-    dx::XMFLOAT3 padding;
 };
 
 struct PDDPhong {

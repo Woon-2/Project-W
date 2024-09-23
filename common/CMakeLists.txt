@@ -103,6 +103,21 @@ target_include_directories(coro
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
+# === TMP ===
+add_library(TMP
+    INTERFACE
+        include/TMP.hpp
+)
+
+add_library(common::TMP ALIAS TMP)
+
+auto_configure(TMP INTERFACE)
+
+target_include_directories(TMP
+    INTERFACE
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+
 # === input ===
 add_library(input
     src/mouse.cpp include/mouse.hpp
@@ -218,6 +233,7 @@ target_link_libraries(gfx
         common::mu
         common::coro
         common::mem
+        common::TMP
 )
 
 target_include_directories(gfx

@@ -10,14 +10,6 @@ cbuffer PerFrameData : register(b1)
     uint gLightCnt;
 };
 
-struct Material
-{
-    uint diffuseMapIdx;
-    uint specularMapIdx;
-    float shininess;
-    float padding;
-};
-
 struct Light
 {
     float4 ambient;
@@ -33,8 +25,6 @@ struct Light
     int type;
     float3 padding;
 };
-
-// StructuredBuffer<Material> gMaterials : register(t1, space0);
 
 StructuredBuffer<Light> gLights : register(t2);
 

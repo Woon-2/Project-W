@@ -35,7 +35,7 @@ struct PhongInstancingNT {
     static constexpr std::size_t materialIdx = 6u;
 
     using PIDType = d3d12::sr::BasicPID;
-    using PDDType = d3d12::sr::BasicPDD;
+    using PDDType = d3d12::sr::PDDNTPhong;
     using PFDType = d3d12::sr::BasicPFD;
     using LightType = d3d12::sr::PhongLight;
     using MaterialType = d3d12::sr::PhongMaterialNT;
@@ -58,7 +58,7 @@ struct PhongInstancing {
     static constexpr std::size_t materialIdx = 6u;
 
     using PIDType = d3d12::sr::BasicPID;
-    using PDDType = d3d12::sr::BasicPDD;
+    using PDDType = d3d12::sr::PDDPhong;
     using PFDType = d3d12::sr::BasicPFD;
     using LightType = d3d12::sr::PhongLight;
     using MaterialType = d3d12::sr::PhongMaterial;

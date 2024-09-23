@@ -8,14 +8,6 @@ cbuffer PerFrameData : register(b1)
     uint gLightCnt;
 };
 
-struct Material
-{
-    float4 ambient;
-    float4 diffuse;
-    float4 specular;    // a = power
-    float4 emmisive;
-};
-
 struct Light
 {
     float4 ambient;
@@ -31,7 +23,6 @@ struct Light
     float3 padding;
 };
 
-// StructuredBuffer<Material> gMaterials : register(t1);
 StructuredBuffer<Light> gLights : register(t2);
 
 float4 dirLight(uint lightIdx, float3 posVNormalized, float3 normalV) {
