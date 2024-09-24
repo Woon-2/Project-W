@@ -11,6 +11,7 @@
 #include <vector>
 #include <optional>
 #include <tuple>
+#include <numeric>
 
 class ModelData {
 public:
@@ -25,6 +26,15 @@ public:
 
     const auto& children() const NOEXCEPT { return children_; }
     auto& children() NOEXCEPT { return children_; }
+
+    std::size_t treeSize() const NOEXCEPT {
+        return std::accumulate( children_.begin(), children_.end(),
+            srcModel_->meshes().size(),
+            [](std::size_t sum, const ModelData& child) {
+                return sum + child.treeSize();
+            }
+        );
+    }
 
     void addChild(const ModelData& child) { children_.push_back(child); }
     void addChild(ModelData&& child) { children_.push_back(std::move(child)); }
@@ -57,6 +67,7 @@ public:
     }
     bool valid() const NOEXCEPT { return modelData_.has_value(); }
 
+    std::size_t treeSize() const NOEXCEPT { return modelData_->treeSize(); }
     const ModelData& root() const NOEXCEPT { return modelData_.value(); }
     ModelData& root() NOEXCEPT { return modelData_.value(); }
 
@@ -66,14 +77,15 @@ private:
 
 class Fragmentizer : public ecs::System<Model> {
 public:
-    std::vector<gfx::d3d12::Fragment> fragmentize() const;
+    std::vector<gfx::d3d12::Fragment> fragmentize(std::vector<mu::Mat4x4>& outWorlds) const;
     void addEntity(ecs::Entity& entity);
 
 private:
     void fragmentizeNodes( const gfx::d3d12::Model* refModel,
         const gfx::d3d12::MaterialTree* refMatTree,
         const std::vector<const ModelData*>& nodes,
-        std::vector<gfx::d3d12::Fragment>& fragments
+        std::vector<gfx::d3d12::Fragment>& fragments,
+        std::vector<mu::Mat4x4>& worlds
     ) const;
 
     std::map<

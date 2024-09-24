@@ -25,8 +25,31 @@ void ModelData::syncHierarchy( const gfx::d3d12::Model& srcSubModel,
     }
 }
 
-std::vector<gfx::d3d12::Fragment> Fragmentizer::fragmentize() const {
+std::vector<gfx::d3d12::Fragment> Fragmentizer::fragmentize(std::vector<mu::Mat4x4>& outWorlds) const {
     std::vector<gfx::d3d12::Fragment> fragments;
+
+    std::size_t fragmentCntExpected = 0;
+    std::size_t worldCntExpected = 0;
+
+    for (const auto& [key, models] : instanceSets_) {
+        auto nodes = std::vector<const ModelData*>();
+        nodes.reserve(models.size());
+
+        std::ranges::for_each( models, [&nodes](const auto& model) {
+            if (auto pModel = model.lock(); pModel) {
+                nodes.push_back(&pModel->root());
+            }
+        } );
+
+        auto treeSize = nodes[0]->treeSize();
+
+        fragmentCntExpected += treeSize;
+        worldCntExpected += nodes.size() * treeSize;
+    }
+
+    fragments.reserve(fragmentCntExpected);
+    outWorlds.reserve(worldCntExpected);
+
     for (const auto& [key, models] : instanceSets_) {
         auto nodes = std::vector<const ModelData*>();
         nodes.reserve(models.size());
@@ -40,7 +63,7 @@ std::vector<gfx::d3d12::Fragment> Fragmentizer::fragmentize() const {
         fragmentizeNodes(
             std::get<const gfx::d3d12::Model*>(key),
             std::get<const gfx::d3d12::MaterialTree*>(key),
-            nodes, fragments
+            nodes, fragments, outWorlds
         );
     }
 
@@ -50,7 +73,8 @@ std::vector<gfx::d3d12::Fragment> Fragmentizer::fragmentize() const {
 void Fragmentizer::fragmentizeNodes( const gfx::d3d12::Model* refModel,
     const gfx::d3d12::MaterialTree* refMatTree,
     const std::vector<const ModelData*>& nodes,
-    std::vector<gfx::d3d12::Fragment>& fragments
+    std::vector<gfx::d3d12::Fragment>& fragments,
+    std::vector<mu::Mat4x4>& worlds
 ) const {
     /*
     노드 처리(레퍼런스노드포인터, 노드포인터벡터):
@@ -66,26 +90,28 @@ void Fragmentizer::fragmentizeNodes( const gfx::d3d12::Model* refModel,
 
    // TODO: 트리들의 모양이 정확히 같은지 체크
 
-    auto worlds = std::vector<mu::Mat4x4>();
-    worlds.reserve(nodes.size());
-    std::transform( nodes.begin(), nodes.end(), std::back_inserter(worlds),
-        [](const ModelData* node) {
-            return node->coord().xform();
-        }
-    );
+    if (refModel->meshes().size()) {
+        auto oldWorldCnt = worlds.size();
 
-    auto meshIt = refModel->meshes().begin();
-    auto matIt = refMatTree->materials().begin();
-
-    while (meshIt != refModel->meshes().end()) {
-        fragments.emplace_back(
-            /* .pMesh = */ &meshIt->mesh,
-            /* .pMaterial = */ &(*matIt),
-            /* .worlds = */ worlds
+        std::transform(nodes.begin(), nodes.end(), std::back_inserter(worlds),
+            [](const ModelData* node) {
+                return node->coord().xform();
+            }
         );
 
-        ++meshIt;
-        ++matIt;
+        auto meshIt = refModel->meshes().begin();
+        auto matIt = refMatTree->materials().begin();
+
+        while (meshIt != refModel->meshes().end()) {
+            fragments.emplace_back(
+                /* .pMesh = */ &meshIt->mesh,
+                /* .pMaterial = */ &(*matIt),
+                /* .worlds = */ std::span(worlds.data() + oldWorldCnt, worlds.data() + worlds.size())
+            );
+
+            ++meshIt;
+            ++matIt;
+        }
     }
 
     auto childIts = std::vector< std::vector<ModelData>::const_iterator >();
@@ -105,7 +131,7 @@ void Fragmentizer::fragmentizeNodes( const gfx::d3d12::Model* refModel,
             [](const auto& it) { return &*it; }
         );
 
-        fragmentizeNodes(&*modelIt, &*matTreeIt, childNodes, fragments);
+        fragmentizeNodes(&*modelIt, &*matTreeIt, childNodes, fragments, worlds);
 
         std::ranges::for_each( childIts, [](auto& it) {
             ++it;
