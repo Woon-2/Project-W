@@ -1,5 +1,6 @@
 #include "inputSystem.hpp"
 #include "physicsSystem.hpp"
+#include "ccoord.hpp"
 
 #include "player.hpp"
 
@@ -19,6 +20,12 @@ void PlayerController::handleEvent(Event event, float deltaTime) {
     case Event::MoveRight:
         moveRight(deltaTime);
         break;
+    case Event::YawLeft:
+        yawLeft(deltaTime);
+        break;
+    case Event::YawRight:
+        yawRight(deltaTime);
+        break;
     default:
         throw std::runtime_error("Invalid event");
         break;
@@ -36,6 +43,38 @@ void MU_CALLCONV PlayerController::addForce(mu::Vec3 force) {
     }
 
     std::static_pointer_cast<RigidBody>(pRigidBodyBase)->addForce(force);
+}
+
+void PlayerController::yawLeft(float deltaTime) {
+    if (!valid()) {
+        throw ECS_EXCEPT("Component is not valid");
+    }
+
+    auto pCoord = Component::at(ecs::Components::Coord, entityID().value()).lock();
+    if (!pCoord) {
+        throw ECS_EXCEPT("Coord component doesn't exist");
+    }
+
+    auto yaw = yawStep_;
+    yaw *= -deltaTime;
+
+    std::static_pointer_cast<Coord>(pCoord)->get() << mu::rotateYH(yaw);
+}
+
+void PlayerController::yawRight(float deltaTime) {
+    if (!valid()) {
+        throw ECS_EXCEPT("Component is not valid");
+    }
+
+    auto pCoord = Component::at(ecs::Components::Coord, entityID().value()).lock();
+    if (!pCoord) {
+        throw ECS_EXCEPT("Coord component doesn't exist");
+    }
+
+    auto yaw = yawStep_;
+    yaw *= deltaTime;
+
+    std::static_pointer_cast<Coord>(pCoord)->get() << mu::rotateYH(yaw);
 }
 
 void InputSystem::update(float deltaTime) {
@@ -60,4 +99,6 @@ void InputSystem::initKeyMap() {
     keyMap_['S'] = PlayerController::Event::MoveBackward;
     keyMap_['A'] = PlayerController::Event::MoveLeft;
     keyMap_['D'] = PlayerController::Event::MoveRight;
+    keyMap_['Q'] = PlayerController::Event::YawLeft;
+    keyMap_['E'] = PlayerController::Event::YawRight;
 }

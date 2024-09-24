@@ -16,13 +16,15 @@ public:
         MoveForward,
         MoveBackward,
         MoveLeft,
-        MoveRight
+        MoveRight,
+        YawLeft,
+        YawRight
     };
 
     ENABLE_COMPONENT(PlayerController);
 
     PlayerController(const ecs::Entity& entity) NOEXCEPT
-        : Component(entity), forceStep_(4000.f) {}
+        : Component(entity), forceStep_(4000.f), yawStep_(0.6f * mu::pi) {}
 
     void handleEvent(Event event, float deltaTime);
 
@@ -39,10 +41,13 @@ private:
     void moveRight(float deltaTime) {
         addForce( mu::Vec3(forceStep_ * deltaTime, 0.f, 0.f) );
     }
+    void yawLeft(float deltaTime);
+    void yawRight(float deltaTime);
 
     void MU_CALLCONV addForce(mu::Vec3 force);
 
     float forceStep_;
+    mu::Radian yawStep_;
 };
 
 

@@ -24,6 +24,7 @@ void Player::linkAssets(const AssetSystem& assetSystem) {
 		assetSystem.materialTree("DragonMaterialTree")
 	);
 	model.root().coord().setParent(&as<Coord>().get());
+	model.root().coord() << mu::rotateYH(mu::Radian(mu::pi));
 }
 
 void Player::update() {

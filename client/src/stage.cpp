@@ -57,8 +57,15 @@ void Stage::processInput(double deltaTime) {
 void Stage::simulate(double deltaTime) {
     pSystems_->physicsSystem.update(static_cast<float>(deltaTime));
     player_.update();
-    camera_.updateView();
+
+    // camera update
+    camera_.coordSys() << mu::translate(player_.as<RigidBody>().deltaPosition());
+    //
+
     pSystems_->coordRoot.update();
+    camera_.unfocus();
+    camera_.focus( gfx::coord::Pt3( &player_.as<Coord>().get(), mu::Vec3(0.f, 0.f, 0.f) ) );
+    camera_.updateView();
 }
 
 void Stage::initEntities() {
