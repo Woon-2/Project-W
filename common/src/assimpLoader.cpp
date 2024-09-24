@@ -5,6 +5,7 @@ namespace gfx {
 void AssimpLoader::load(const std::filesystem::path& path, Flags flags) {
     state_ = std::make_unique<State>();
     state_->scene = state_->importer.ReadFile(path.string(), flags);
+    state_->path = path;
 
     if ( !state_->scene || state_->scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE
         || !state_->scene->mRootNode

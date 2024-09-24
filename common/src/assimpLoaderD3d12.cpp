@@ -46,56 +46,58 @@ Material AssimpLoader::buildMaterial( Core& core, const PathTexMap& pathTexmap,
     }
 
     aiString path;
+    auto dir = loadedPath();
+    dir.remove_filename();
     if (AI_SUCCESS == material->GetTexture(aiTextureType_DIFFUSE, 0, &path)) {
-        if (auto tex = pathTexmap.find(path.C_Str()); tex != pathTexmap.end()) {
+        if (auto tex = pathTexmap.find(dir/path.C_Str()); tex != pathTexmap.end()) {
             mat.pushTexture(core, Material::Maps::Diffuse, *tex->second);
         }
     }
 
     if (AI_SUCCESS == material->GetTexture(aiTextureType_AMBIENT, 0, &path)) {
-        if (auto tex = pathTexmap.find(path.C_Str()); tex != pathTexmap.end()) {
+        if (auto tex = pathTexmap.find(dir/path.C_Str()); tex != pathTexmap.end()) {
             mat.pushTexture(core, Material::Maps::Ambient, *tex->second);
         }
     }
 
     if (AI_SUCCESS == material->GetTexture(aiTextureType_SPECULAR, 0, &path)) {
-        if (auto tex = pathTexmap.find(path.C_Str()); tex != pathTexmap.end()) {
+        if (auto tex = pathTexmap.find(dir/path.C_Str()); tex != pathTexmap.end()) {
             mat.pushTexture(core, Material::Maps::Specular, *tex->second);
         }
     }
 
     if (AI_SUCCESS == material->GetTexture(aiTextureType_EMISSIVE, 0, &path)) {
-        if (auto tex = pathTexmap.find(path.C_Str()); tex != pathTexmap.end()) {
+        if (auto tex = pathTexmap.find(dir/path.C_Str()); tex != pathTexmap.end()) {
             mat.pushTexture(core, Material::Maps::Emissive, *tex->second);
         }
     }
 
     if (AI_SUCCESS == material->GetTexture(aiTextureType_NORMALS, 0, &path)) {
-        if (auto tex = pathTexmap.find(path.C_Str()); tex != pathTexmap.end()) {
+        if (auto tex = pathTexmap.find(dir/path.C_Str()); tex != pathTexmap.end()) {
             mat.pushTexture(core, Material::Maps::Normal, *tex->second);
         }
     }
 
     if (AI_SUCCESS == material->GetTexture(aiTextureType_DIFFUSE_ROUGHNESS, 0, &path)) {
-        if (auto tex = pathTexmap.find(path.C_Str()); tex != pathTexmap.end()) {
+        if (auto tex = pathTexmap.find(dir/path.C_Str()); tex != pathTexmap.end()) {
             mat.pushTexture(core, Material::Maps::Roughness, *tex->second);
         }
     }
 
     if (AI_SUCCESS == material->GetTexture(aiTextureType_METALNESS, 0, &path)) {
-        if (auto tex = pathTexmap.find(path.C_Str()); tex != pathTexmap.end()) {
+        if (auto tex = pathTexmap.find(dir/path.C_Str()); tex != pathTexmap.end()) {
             mat.pushTexture(core, Material::Maps::Metallic, *tex->second);
         }
     }
 
     if (AI_SUCCESS == material->GetTexture(aiTextureType_HEIGHT, 0, &path)) {
-        if (auto tex = pathTexmap.find(path.C_Str()); tex != pathTexmap.end()) {
+        if (auto tex = pathTexmap.find(dir/path.C_Str()); tex != pathTexmap.end()) {
             mat.pushTexture(core, Material::Maps::Height, *tex->second);
         }
     }
 
     if (AI_SUCCESS == material->GetTexture(aiTextureType_OPACITY, 0, &path)) {
-        if (auto tex = pathTexmap.find(path.C_Str()); tex != pathTexmap.end()) {
+        if (auto tex = pathTexmap.find(dir/path.C_Str()); tex != pathTexmap.end()) {
             mat.pushTexture(core, Material::Maps::Opacity, *tex->second);
         }
     }
