@@ -118,7 +118,7 @@ namespace {
         return rp::PhongInstancing::PIDType{
             .wv = mu::transpose(world * view).getXmf(),
             .wvp = mu::transpose(world * view * proj).getXmf(),
-            .normalXform = dx::convertMat<dx::XMFLOAT3X4>(
+            .normalXform = dx::convertMat<dx::XMFLOAT3X3>(
                 mu::transpose(mu::inverse(world)).get()
             )
         };
@@ -128,7 +128,7 @@ namespace {
         return rp::PhongInstancingNT::PIDType{
             .wv = mu::transpose(world * view).getXmf(),
             .wvp = mu::transpose(world * view * proj).getXmf(),
-            .normalXform = dx::convertMat<dx::XMFLOAT3X4>(
+            .normalXform = dx::convertMat<dx::XMFLOAT3X3>(
                 mu::transpose(mu::inverse(world)).get()
             )
         };
