@@ -30,7 +30,7 @@ void illuminanceDrawImpl(const IScene& scene, ConcreteShader& shader, ID3D12Grap
         case rp::DIType::Light: {
             auto lights = di.get<const RenderProtocol::FLightType&>(RenderProtocol::lightIdx);
             auto cnt = std::min(ConcreteShader::defMaxLights - lightCnt, lights.size());
-            shader.lights().uploadRegion( lights.data(), cnt * sizeof(Light), lightCnt * sizeof(Light) );
+            shader.lights().uploadRegion( lights.data(), cnt * sizeof(Light), lightCnt * sizeof(Light), shader.frameIdx());
             lightCnt += cnt;
             break;
         }
@@ -44,7 +44,7 @@ void illuminanceDrawImpl(const IScene& scene, ConcreteShader& shader, ID3D12Grap
         case rp::DIType::PID: {
             auto pids = di.get<const RenderProtocol::FPIDType&>(RenderProtocol::PIDIdx);
             auto cnt = std::min(ConcreteShader::defMaxInstances - instanceCnt, pids.size());
-            shader.pid().uploadRegion(pids.data(), cnt * sizeof(PID), instanceCnt * sizeof(PID));
+            shader.pid().uploadRegion(pids.data(), cnt * sizeof(PID), instanceCnt * sizeof(PID), shader.frameIdx());
             instanceCnt += cnt;
             break;
         }
@@ -58,8 +58,8 @@ void illuminanceDrawImpl(const IScene& scene, ConcreteShader& shader, ID3D12Grap
             auto pdd = di.get<const RenderProtocol::FPDDType&>(RenderProtocol::PDDIdx);
             pfd.lightCnt = static_cast<std::uint32_t>( lightCnt );
 
-            shader.pdd().upload(&pdd, sizeof(PDD));
-            shader.pfd().upload(&pfd, sizeof(PFD));
+            shader.pdd().upload(&pdd, sizeof(PDD), shader.frameIdx());
+            shader.pfd().upload(&pfd, sizeof(PFD), shader.frameIdx());
 
             pMesh->draw(pCmdList, instanceCnt);
             break;

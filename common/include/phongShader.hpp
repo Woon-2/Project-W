@@ -17,12 +17,10 @@ namespace d3d12 {
 class PhongShaderNT : public Shader {
 public:
     static constexpr size_t defMaxInstances = 1000u;
-    static constexpr size_t defMaxMaterials = 24u;
     static constexpr size_t defMaxLights = 12u;
 
     struct Config {
         size_t maxInstances = defMaxInstances;
-        size_t maxMaterials = defMaxMaterials;
         size_t maxLights = defMaxLights;
     };
 
@@ -57,7 +55,6 @@ public:
     GpuMappedRes& pfd() NOEXCEPT { return resPerFrameData_; }
     GpuMappedRes& pdd() NOEXCEPT { return resPerDrawcallData_; }
     GpuMappedRes& pid() NOEXCEPT { return resPerInstanceData_; }
-    GpuMappedRes& materials() NOEXCEPT { return resMaterials_; }
     GpuMappedRes& lights() NOEXCEPT { return resLights_; }
 
 private:
@@ -66,11 +63,9 @@ private:
     GpuMappedRes resPerFrameData_;
     GpuMappedRes resPerDrawcallData_;
     GpuMappedRes resPerInstanceData_;
-    GpuMappedRes resMaterials_;
     GpuMappedRes resLights_;
 
     std::size_t maxInstances_;
-    std::size_t maxMaterials_;
     std::size_t maxLights_;
     std::size_t frameIdx_;
 };
@@ -78,12 +73,10 @@ private:
 class PhongShader : public Shader {
 public:
     static constexpr std::size_t defMaxInstances = PhongShaderNT::defMaxInstances;
-    static constexpr std::size_t defMaxMaterials = PhongShaderNT::defMaxMaterials;
     static constexpr std::size_t defMaxLights = PhongShaderNT::defMaxLights;
 
     struct Config {
         size_t maxInstances = defMaxInstances;
-        size_t maxMaterials = defMaxMaterials;
         size_t maxLights = defMaxLights;
     };
 
@@ -116,7 +109,6 @@ public:
     GpuMappedRes& pfd() NOEXCEPT { return resPerFrameData_; }
     GpuMappedRes& pdd() NOEXCEPT { return resPerDrawcallData_; }
     GpuMappedRes& pid() NOEXCEPT { return resPerInstanceData_; }
-    GpuMappedRes& materials() NOEXCEPT { return resMaterials_; }
     GpuMappedRes& lights() NOEXCEPT { return resLights_; }
     D3D12_GPU_DESCRIPTOR_HANDLE texSrvStart() NOEXCEPT { return texSrvStart_; }
 
@@ -126,13 +118,11 @@ private:
     GpuMappedRes resPerFrameData_;
     GpuMappedRes resPerDrawcallData_;
     GpuMappedRes resPerInstanceData_;
-    GpuMappedRes resMaterials_;
     GpuMappedRes resLights_;
     D3D12_GPU_DESCRIPTOR_HANDLE texSrvStart_;
     DescriptorHeap* pTexSrvHeap_;   // temporary
 
     std::size_t maxInstances_;
-    std::size_t maxMaterials_;
     std::size_t maxLights_;
     std::size_t frameIdx_;
 };
