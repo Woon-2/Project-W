@@ -13,10 +13,10 @@
 
 class Stage {
 public:
-    Stage(gfx::d3d12::Core& core, const Win32::WndClient& client, Systems& systems)
+    Stage(gfx::d3d12::Core& core, const Win32::WndClient& client, Systems& systems) NOEXCEPT
         : camera_( gfx::Camera::Config{
         .fov = 90.f, .aspect = client.width / static_cast<float>(client.height),
-        .near = 0.1f, .far = 1000.f
+        .near = 0.1f, .far = 10000.f
     } ), player_(), pSystems_(&systems) {
         init();
     }

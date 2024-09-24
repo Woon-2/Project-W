@@ -3,6 +3,9 @@
 #include "assetMap.hpp"
 #include "cmodel.hpp"
 
+#include "mygfx.hpp"
+#include "d3d12scene.hpp"
+
 #include <ranges>
 
 void Stage::init() {
@@ -10,6 +13,7 @@ void Stage::init() {
     initLights();
 
     setupCamera();
+    pSystems_->coordRoot.update();
 }
 
 void Stage::update(double deltaTime) {
@@ -25,17 +29,17 @@ void Stage::render(gfx::ICore& core, gfx::IRenderTarget& target) {
     target.preRender(*pRenderContext);
     target.clear(*pRenderContext);
 
-    // auto scene = gfx::d3d12::CameraScene(camera_);
+    auto scene = gfx::d3d12::CameraScene(camera_);
 
-    // scene.addMaterial(&Gun::sMaterial);
+    for (const auto& light : lights_) {
+        scene.addLight(&light);
+    }
+    auto worlds = std::vector<mu::Mat4x4>();
+    scene.setFragments(pSystems_->fragmentizer.fragmentize(worlds));
 
-    // for (const auto& light : lights_) {
-    //     scene.addLight(&light);
-    // }
-    
-    //  pGfx_->render( *pRenderContext, scene, static_cast<MyGfx&>(*pGfx_).renderer(
-    //      MyGfx::Renderer::Phong
-    //  ), *pWnd_ );
+    core.render( *pRenderContext, scene, static_cast<MyGfx&>(core).renderer(
+        MyGfx::Renderer::Phong
+    ), target );
 
     target.postRender(*pRenderContext);
     pRenderContext->postRender();
@@ -52,6 +56,9 @@ void Stage::processInput(double deltaTime) {
 
 void Stage::simulate(double deltaTime) {
     pSystems_->physicsSystem.update(static_cast<float>(deltaTime));
+    player_.update();
+    camera_.updateView();
+    pSystems_->coordRoot.update();
 }
 
 void Stage::initEntities() {
@@ -96,6 +103,6 @@ void Stage::setupCamera() {
     auto& world = pSystems_->coordRoot.get();
 
     camera_.coordSys().setParent(&world);
-    camera_.coordSys() << mu::translate(0.f, 1.f, -10.f);
+    camera_.coordSys() << mu::translate(0.f, 120.f, -120.f);
     camera_.focus( gfx::coord::Pt3( &world, mu::Vec3(0.f, 0.f, 0.f) ) );
 }

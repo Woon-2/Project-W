@@ -10,6 +10,7 @@ public:
 	Player();
 
 	void linkAssets(const AssetSystem& assetSystem);
+	void update();
 };
 
 #endif // !__PLAYERSYSTEM_HPP

@@ -18,8 +18,14 @@ Player::Player() {
 }
 
 void Player::linkAssets(const AssetSystem& assetSystem) {
-	as<Model>().init(
+	auto& model = as<Model>();
+	model.init(
 		assetSystem.model("DragonModel"),
 		assetSystem.materialTree("DragonMaterialTree")
 	);
+	model.root().coord().setParent(&as<Coord>().get());
+}
+
+void Player::update() {
+	as<Coord>().get() << mu::translate( as<RigidBody>().deltaPosition() );
 }

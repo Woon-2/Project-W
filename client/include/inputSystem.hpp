@@ -22,7 +22,7 @@ public:
     ENABLE_COMPONENT(PlayerController);
 
     PlayerController(const ecs::Entity& entity) NOEXCEPT
-        : Component(entity), forceStep_(5.f) {}
+        : Component(entity), forceStep_(4000.f) {}
 
     void handleEvent(Event event, float deltaTime);
 
