@@ -106,8 +106,15 @@ public:
     template <class ConcreteComponent>
     std::weak_ptr<ConcreteComponent> get();
     template <class ConcreteComponent>
+    std::weak_ptr<const ConcreteComponent> getC() const {
+        return get<ConcreteComponent>();
+    }
+    template <class ConcreteComponent>
     std::weak_ptr<const ConcreteComponent> get() const;
     std::weak_ptr<Component> get(Components type);
+    std::weak_ptr<const Component> getC(Components type) {
+        return get(type);
+    }
     std::weak_ptr<const Component> get(Components type) const;
 
     template <class ConcreteComponent, class ... Args>

@@ -6,9 +6,11 @@
 
 #include "d3d12model.hpp"
 #include "d3d12materialTree.hpp"
+#include "drawInfo.hpp"
 
 #include <vector>
 #include <optional>
+#include <tuple>
 
 class ModelData {
 public:
@@ -55,8 +57,29 @@ public:
     }
     bool valid() const NOEXCEPT { return modelData_.has_value(); }
 
+    const ModelData& root() const NOEXCEPT { return modelData_.value(); }
+    ModelData& root() NOEXCEPT { return modelData_.value(); }
+
 private:
     std::optional<ModelData> modelData_;
+};
+
+class Fragmentizer : public ecs::System<Model> {
+public:
+    std::vector<gfx::d3d12::Fragment> fragmentize() const;
+    void addEntity(ecs::Entity& entity);
+
+private:
+    void fragmentizeNodes( const gfx::d3d12::Model* refModel,
+        const gfx::d3d12::MaterialTree* refMatTree,
+        const std::vector<const ModelData*>& nodes,
+        std::vector<gfx::d3d12::Fragment>& fragments
+    ) const;
+
+    std::map<
+        std::tuple<const gfx::d3d12::Model*, const gfx::d3d12::MaterialTree*>,
+        std::vector<std::weak_ptr<const Model>>
+    > instanceSets_;
 };
 
 #endif // __Client_Model_HPP
