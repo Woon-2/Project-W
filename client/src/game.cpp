@@ -48,9 +48,9 @@ void Game::initialRender() {
     const auto expectedFrameTime = 1. / lockFPS_;
 
     // skip rendering if the frame time is too long
-    if (timer_.GetDT() > expectedFrameTime * 2.) {
+    /*if (timer_.GetDT() > expectedFrameTime * 2.) {
         return;
-    }
+    }*/
 
     static_cast<MyGfx&>(*pGfx_).setFrame(curFenceIdx_);
 
@@ -67,9 +67,9 @@ void Game::regularRender() {
     const auto expectedFrameTime = 1. / lockFPS_;
 
     // skip rendering if the frame time is too long
-    if (timer_.GetDT() > expectedFrameTime * 2.) {
+    /*if (timer_.GetDT() > expectedFrameTime * 2.) {
         return;
-    }
+    }*/
 
     static_cast<MyGfx&>(*pGfx_).setFrame(curFenceIdx_);
 
