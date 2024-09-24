@@ -37,11 +37,13 @@ public:
     Model buildModel(Core& core, D3D12RenderContext& ctx) const {
         auto model = Model(scene()->mRootNode->mName.C_Str());
         processAiNode(core, ctx, scene()->mRootNode, scene(), model);
+        model.coord().traverse();
         return model;
     }
     Model buildModel(Core& core, D3D12RenderContext& ctx, const gfx::InputLayout& inputLayout) const {
         auto model = Model(scene()->mRootNode->mName.C_Str());
         processAiNode(core, ctx, scene()->mRootNode, scene(), model, inputLayout);
+        model.coord().traverse();
         return model;
     }
 
