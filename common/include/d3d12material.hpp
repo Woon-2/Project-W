@@ -89,7 +89,9 @@ public:
         MappingMode mappingMode;
     };
 
-    Material() = default;
+    Material()
+        : indices_(etoi(Maps::Max), TextureIdx(-1)), properties_(etoi(Properties::Max)) {}
+
     template < std::ranges::sized_range RTexKeys, std::ranges::sized_range RTex,
         std::ranges::sized_range RPropKeys, std::ranges::sized_range RProp
     >
