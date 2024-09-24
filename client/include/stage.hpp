@@ -13,23 +13,26 @@
 
 class Stage {
 public:
-    Stage(gfx::d3d12::Core& core, const Win32::WndClient& client, Systems& systems) NOEXCEPT
+    Stage(gfx::d3d12::Core& core, const Win32::WndClient& client, Systems& systems)
         : camera_( gfx::Camera::Config{
         .fov = 90.f, .aspect = client.width / static_cast<float>(client.height),
         .near = 0.1f, .far = 1000.f
     } ), player_(), pSystems_(&systems) {
-        initLights();
+        init();
     }
 
     void update(double deltaTime);
     void render(gfx::ICore& core, gfx::IRenderTarget& target);
 
 private:
+    void init();
+    void processNetwork(double deltaTime);
+    void processInput(double deltaTime);
+    void simulate(double deltaTime);
+
+    void initEntities();
     void initLights();
     void setupCamera();
-    void processNetwork(double deltaTime) {}
-    void processInput(double deltaTime);
-    void simulate(double deltaTime) {}
 
     gfx::Camera camera_;
     Player player_;

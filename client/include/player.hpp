@@ -3,13 +3,13 @@
 
 #include "ecs.hpp"
 
-#include "physicsSystem.hpp"
+#include "assetSystem.hpp"
 
 class Player : public ecs::Entity {
 public:
 	Player();
 
-	void linkAssets();
+	void linkAssets(const AssetSystem& assetSystem);
 };
 
 #endif // !__PLAYERSYSTEM_HPP

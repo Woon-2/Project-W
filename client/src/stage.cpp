@@ -5,6 +5,13 @@
 
 #include <ranges>
 
+void Stage::init() {
+    initEntities();
+    initLights();
+
+    setupCamera();
+}
+
 void Stage::update(double deltaTime) {
     processNetwork(deltaTime);
     processInput(deltaTime);
@@ -35,9 +42,30 @@ void Stage::render(gfx::ICore& core, gfx::IRenderTarget& target) {
     core.postRender();
 }
 
+void Stage::processNetwork(double deltaTime) {
+    // networkSystem_.update();
+}
+
 void Stage::processInput(double deltaTime) {
-    // inputSystem_.update();
-    // pSystems_->physicsSystem.update(static_cast<float>(deltaTime));
+    pSystems_->inputSystem.update(static_cast<float>(deltaTime));
+}
+
+void Stage::simulate(double deltaTime) {
+    pSystems_->physicsSystem.update(static_cast<float>(deltaTime));
+}
+
+void Stage::initEntities() {
+    pSystems_->assetSystem.addEntity(player_);
+    pSystems_->coordRoot.addEntity(player_);
+    pSystems_->inputSystem.addEntity(player_);
+    pSystems_->physicsSystem.addEntity(player_);
+
+    pSystems_->assetSystem.allocCtx();
+    pSystems_->assetSystem.loadAssets();
+    pSystems_->assetSystem.freeCtx();
+    player_.linkAssets(pSystems_->assetSystem);
+
+    pSystems_->fragmentizer.addEntity(player_);
 }
 
 void Stage::initLights() {
