@@ -60,6 +60,7 @@ public:
 private:
     struct State{
         Assimp::Importer importer;
+        std::filesystem::path path;
         const aiScene* scene;
     };
 
@@ -77,6 +78,12 @@ public:
             throw std::runtime_error("No scene loaded");
         }
         return state_->scene;
+    }
+    const std::filesystem::path loadedPath() const {
+        if (!state_) {
+            throw std::runtime_error("No scene loaded");
+        }
+        return state_->path;
     }
 
 private:
