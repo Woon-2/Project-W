@@ -44,7 +44,7 @@ struct PhongInstancingNT {
     using FPDDType = PDDType;
     using FPFDType = PFDType;
     using FLightType = std::vector<LightType>;
-    using FMaterialType = std::vector<MaterialType>;
+    using FMaterialType = MaterialType;
 };
 
 struct PhongInstancing {
@@ -67,7 +67,7 @@ struct PhongInstancing {
     using FPDDType = PDDType;
     using FPFDType = PFDType;
     using FLightType = std::vector<LightType>;
-    using FMaterialType = std::vector<MaterialType>;
+    using FMaterialType = MaterialType;
 };
 
 }   // namespace gfx::rp

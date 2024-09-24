@@ -34,7 +34,7 @@ namespace d3d12 {
 class CameraScene : public gfx::CameraScene {
 public:
     CameraScene(const Camera& camera)
-        : gfx::CameraScene(camera), fragments_(), lights_(), materials_(),
+        : gfx::CameraScene(camera), fragments_(), lights_(),
         protocol_(rp::Protocol::PhongInstancing) /* temporarilly fixed protocol */ {}
 
     Generator<DrawInfo> iteration() const override;
@@ -56,10 +56,6 @@ public:
         lights_.push_back(pLight);
     }
 
-    void addMaterial(const Material* pMaterial) {
-        materials_.push_back(pMaterial);
-    }
-
     rp::Protocol protocol() const override {
         return protocol_;
     }
@@ -70,7 +66,6 @@ private:
 
     std::vector<Fragment> fragments_;
     std::vector<const sr::PhongLight*> lights_;
-    std::vector<const Material*> materials_;
 
     rp::Protocol protocol_;
 };

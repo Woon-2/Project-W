@@ -16,14 +16,14 @@ namespace d3d12 {
 namespace {
 
     template <class RenderProtocol>
-    Generator<DrawInfo> iterationImpl(const auto& lights, const auto& materials, const auto& fragments, const mu::Mat4x4& view, const mu::Mat4x4& proj);
+    Generator<DrawInfo> iterationImpl(const auto& lights, const auto& fragments, const mu::Mat4x4& view, const mu::Mat4x4& proj);
     template <class RenderProtocol>
     Generator<DrawInfo> fragmentIteration(const auto& fragment, const mu::Mat4x4& view, const mu::Mat4x4& proj, auto& baseInstIdx);
-    rp::PhongInstancing::PIDType genPID(rp::PhongInstancing, std::uint32_t matIdx, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj);
-    rp::PhongInstancingNT::PIDType genPID(rp::PhongInstancingNT, std::uint32_t matIdx, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj);
+    rp::PhongInstancing::PIDType genPID(rp::PhongInstancing, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj);
+    rp::PhongInstancingNT::PIDType genPID(rp::PhongInstancingNT, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj);
 
     template <class RenderProtocol>
-    Generator<DrawInfo> iterationImpl(const auto& lights, const auto& materials, const auto& fragments, const mu::Mat4x4& view, const mu::Mat4x4& proj) {
+    Generator<DrawInfo> iterationImpl(const auto& lights, const auto& fragments, const mu::Mat4x4& view, const mu::Mat4x4& proj) {
         // As it is expected to be not too many lights,
         // store seperated light or material's pointers in a vector
         // which gives more light or material management flexibility.
@@ -42,23 +42,6 @@ namespace {
         lightInfo.set(RenderProtocol::lightIdx, std::move(tmpLightBuffer));
 
         co_yield std::move(lightInfo);
-
-        using MaterialType = RenderProtocol::MaterialType;
-        using FMaterialType = RenderProtocol::FMaterialType;
-
-        auto materialInfo = DrawInfo();
-
-        auto tmpMaterialBuffer = FMaterialType();
-        std::ranges::copy( materials | std::views::transform(
-            [](auto pMaterial) { return std::any_cast<MaterialType>(
-                pMaterial->as(RenderProtocol::protocol)
-            ); }
-        ), std::back_inserter(tmpMaterialBuffer) );
-
-        materialInfo.set(RenderProtocol::typeIdx, rp::DIType::Material);
-        materialInfo.set(RenderProtocol::materialIdx, std::move(tmpMaterialBuffer));
-
-        co_yield std::move(materialInfo);
 
         using PFDType = RenderProtocol::PFDType;
         using FPFDType = RenderProtocol::FPFDType;
@@ -103,8 +86,8 @@ namespace {
         pidBuffer.reserve( fragment.worlds.size() );
 
         std::ranges::copy( fragment.worlds | std::views::transform(
-            [&view, &proj, matIdx = fragment.matIdx](const auto& world) {
-                return genPID(RenderProtocol{}, matIdx, world, view, proj);
+            [&view, &proj](const auto& world) {
+                return genPID(RenderProtocol{}, world, view, proj);
             }
         ), std::back_inserter(pidBuffer) );
 
@@ -120,6 +103,9 @@ namespace {
 
         pddInfo.set(RenderProtocol::typeIdx, rp::DIType::PDD);
         pddInfo.set(RenderProtocol::PDDIdx, FPDDType{
+            .material = std::any_cast<typename RenderProtocol::FMaterialType>(
+                fragment.pMaterial->as(RenderProtocol::protocol)
+            ),
             .instanceIndex = baseInstIdx
         } );
         
@@ -128,7 +114,7 @@ namespace {
         co_yield std::move(pddInfo);
     }
 
-    rp::PhongInstancing::PIDType genPID(rp::PhongInstancing, std::uint32_t matIdx, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj) {
+    rp::PhongInstancing::PIDType genPID(rp::PhongInstancing, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj) {
         return rp::PhongInstancing::PIDType{
             .wv = mu::transpose(world * view).getXmf(),
             .wvp = mu::transpose(world * view * proj).getXmf(),
@@ -138,7 +124,7 @@ namespace {
         };
     }
 
-    rp::PhongInstancingNT::PIDType genPID(rp::PhongInstancingNT, std::uint32_t matIdx, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj) {
+    rp::PhongInstancingNT::PIDType genPID(rp::PhongInstancingNT, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj) {
         return rp::PhongInstancingNT::PIDType{
             .wv = mu::transpose(world * view).getXmf(),
             .wvp = mu::transpose(world * view * proj).getXmf(),
@@ -170,14 +156,14 @@ Generator<DrawInfo> CameraScene::iteration() const {
 }
 
 Generator<DrawInfo> CameraScene::phongInstancingIteration() const {
-    auto coro = iterationImpl<rp::PhongInstancing>(lights_, materials_, fragments_, view(), proj());
+    auto coro = iterationImpl<rp::PhongInstancing>(lights_, fragments_, view(), proj());
     for (auto& drawInfo : coro) {
         co_yield std::move(drawInfo);
     }
 }
 
 Generator<DrawInfo> CameraScene::phongInstancingNTIteration() const {
-    auto coro = iterationImpl<rp::PhongInstancingNT>(lights_, materials_, fragments_, view(), proj());
+    auto coro = iterationImpl<rp::PhongInstancingNT>(lights_, fragments_, view(), proj());
     for (auto& drawInfo : coro) {
         co_yield std::move(drawInfo);
     }

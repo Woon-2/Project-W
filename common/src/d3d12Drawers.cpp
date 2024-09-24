@@ -35,14 +35,6 @@ void illuminanceDrawImpl(const IScene& scene, ConcreteShader& shader, ID3D12Grap
             break;
         }
 
-        case rp::DIType::Material: {
-            auto materials = di.get<const RenderProtocol::FMaterialType&>(RenderProtocol::materialIdx);
-            auto cnt = std::min(ConcreteShader::defMaxMaterials - materialCnt, materials.size());
-            shader.materials().uploadRegion(materials.data(), cnt * sizeof(Material), materialCnt * sizeof(Material));
-            materialCnt += cnt;
-            break;
-        }
-
         case rp::DIType::Mesh: {
             pMesh = di.get<const Mesh*>(RenderProtocol::meshIdx);
             pMesh->bind(pCmdList);

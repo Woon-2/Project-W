@@ -2,6 +2,7 @@
 #define __DrawInfo_HPP
 
 #include "d3d12mesh.hpp"
+#include "d3d12material.hpp"
 
 #define DXMATH_VEC_UTIL
 #define DXMATH_MAT_UTIL
@@ -16,16 +17,15 @@ namespace gfx {
 namespace d3d12 {
 
 struct Fragment {
-    const d3d12::Mesh* pMesh;
+    const Mesh* pMesh;
+    const Material* pMaterial;
     std::span<mu::Mat4x4> worlds;
-    std::uint32_t matIdx;
 };
 
 struct UniDrawinfo {
     enum class Type {
         Fragment,
-        Light,
-        Material
+        Light
     };
     Type type;
     void* pData;
