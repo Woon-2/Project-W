@@ -152,9 +152,6 @@ private:
     std::optional<ID> id_;
 };
 
-// To derive from Component,
-// the derived class must declare Entity as a friend class, and its own at function.
-// and provide type() function that returns the Components enum value.
 class Component {
 protected:
     friend class Entity;
