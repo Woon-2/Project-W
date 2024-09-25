@@ -1,6 +1,6 @@
 #include "inputSystem.hpp"
 #include "physicsSystem.hpp"
-#include "ccoord.hpp"
+#include "cmodel.hpp"
 
 #include "player.hpp"
 
@@ -50,15 +50,15 @@ void PlayerController::yawLeft(float deltaTime) {
         throw ECS_EXCEPT("Component is not valid");
     }
 
-    auto pCoord = Component::at(ecs::Components::Coord, entityID().value()).lock();
-    if (!pCoord) {
-        throw ECS_EXCEPT("Coord component doesn't exist");
+    auto pModel = Component::at(ecs::Components::Model, entityID().value()).lock();
+    if (!pModel) {
+        throw ECS_EXCEPT("Model component doesn't exist");
     }
 
     auto yaw = yawStep_;
     yaw *= -deltaTime;
 
-    std::static_pointer_cast<Coord>(pCoord)->get() << mu::rotateYH(yaw);
+    std::static_pointer_cast<Model>(pModel)->root().coord() << mu::rotateYH(yaw);
 }
 
 void PlayerController::yawRight(float deltaTime) {
@@ -66,15 +66,15 @@ void PlayerController::yawRight(float deltaTime) {
         throw ECS_EXCEPT("Component is not valid");
     }
 
-    auto pCoord = Component::at(ecs::Components::Coord, entityID().value()).lock();
-    if (!pCoord) {
-        throw ECS_EXCEPT("Coord component doesn't exist");
+    auto pModel = Component::at(ecs::Components::Model, entityID().value()).lock();
+    if (!pModel) {
+        throw ECS_EXCEPT("Model component doesn't exist");
     }
 
     auto yaw = yawStep_;
     yaw *= deltaTime;
 
-    std::static_pointer_cast<Coord>(pCoord)->get() << mu::rotateYH(yaw);
+    std::static_pointer_cast<Model>(pModel)->root().coord() << mu::rotateYH(yaw);
 }
 
 void InputSystem::update(float deltaTime) {
