@@ -90,20 +90,6 @@ void Texture::loadDDS( Core& core, D3D12RenderContext& ctx,
     UpdateSubresources( pCmdList.Get(), res_.Get(), upRes_.Get(),
         0, 0, static_cast<UINT>( subresources.size() ), subresources.data()
     );
-
-    auto bar = D3D12_RESOURCE_BARRIER{
-        .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-        .Transition = {
-            .pResource = res_.Get(),
-            .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
-            .StateBefore = D3D12_RESOURCE_STATE_COPY_DEST,
-            .StateAfter = initialState
-        }
-    };
-
-    pCmdList->ResourceBarrier(1, &bar);
-
-    desc_ = res_->GetDesc();
 }
 
 void Texture::loadWIC( Core& core, D3D12RenderContext& ctx,
