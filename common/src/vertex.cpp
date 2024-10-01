@@ -16,7 +16,7 @@ void VertexBuffer::constructProperty( Vertex::Properties prop, const void* data,
         throw;  // TODO: add exception
     }
 
-    auto offset = offsets_[toIdx(prop)];
+    auto offset = offsets_[etoi(prop)];
     if (offset == invalidOffset) {
         throw;  // TODO: add exception
     }
@@ -35,8 +35,8 @@ void VertexBuffer::fetchProp( const VertexBuffer& other, Vertex::Properties prop
 ) {
     configProperty(prop, accOffset);
 
-    auto pbw = other.propByteWidth(prop);
-    auto otherOff = other.offsets_[other.toIdx(prop)];
+    const auto pbw = Vertex::propByteWidth(prop);
+    const auto otherOff = other.offsets_[etoi(prop)];
 
     for (std::size_t i = 0; i < other.size(); ++i) {
         std::ranges::copy_n( other.data_.data() + i * other.stride_ + otherOff,

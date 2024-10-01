@@ -25,7 +25,6 @@ class VertexBuffer;
 class Vertex {
 public:
     friend class VertexBuffer;
-    static constexpr std::size_t numProperties = 6u;
 
     /**
      * @brief Properties of a vertex.
@@ -35,13 +34,19 @@ public:
      * @see VertexBuffer
      */
     enum class Properties : std::uint32_t {
-        Position = 0x1,
-        Normal = 0x2,
-        TexCoord = 0x4,
-        Tangent = 0x8,
-        Bitangent = 0x10,
-        Color = 0x20
+        Position3D,
+        Normal3D,
+        TexCoord2D0,
+        Tangent3D,
+        Bitangent3D,
+        Color3D,
+        Color4D,
+        SIZE
     };
+
+    static constexpr std::size_t propByteWidth(Properties prop) NOEXCEPT {
+        return propByteWidths[etoi(prop)];
+    }
 
     /**
      * @brief Gets the property of the vertex.
@@ -88,6 +93,16 @@ public:
     void* operator[](Properties prop);
 
 private:
+    static constexpr std::size_t propByteWidths[etoi(Properties::SIZE)] = {
+        /* Position3D */ 3 * sizeof(float),
+        /* Normal3D */ 3 * sizeof(float),
+        /* TexCoord2D0 */ 2 * sizeof(float),
+        /* Tangent3D */ 3 * sizeof(float),
+        /* Bitangent3D */ 3 * sizeof(float),
+        /* Color3D */ 3 * sizeof(float),
+        /* Color4D */ 4 * sizeof(float)
+    };
+
     Vertex()
         : pStart_(nullptr), pBuf_(nullptr) {}
     Vertex(std::uint8_t* pStart, VertexBuffer* pBuf)
@@ -159,7 +174,7 @@ public:
     }
 
     bool contains(Vertex::Properties prop) const NOEXCEPT {
-        return properties_ & prop;
+        return properties_ & (1 << etoi(prop));
     }
 
     /**
@@ -169,8 +184,8 @@ public:
      * @see Vertex::Properties VertexBuffer::configStride VertexBuffer::constructProperty VertexBuffer::constructRawMem
      */
     void configProperty(Vertex::Properties prop, offset_t offset) NOEXCEPT {
-        offsets_[toIdx(prop)] = offset;
-        properties_ = properties_ | prop;
+        offsets_[etoi(prop)] = offset;
+        properties_ = properties_ | (1 << etoi(prop));
     }
     /**
      * @brief Configures the stride of the vertex buffer.
@@ -246,27 +261,7 @@ public:
     std::size_t byteWidth() const NOEXCEPT {
         return data_.size();
     }
-    /**
-     * @brief Gets the byte width of the property.
-     * @param prop Property to get the byte width.
-     * @return `std::size_t` Byte width of the property.
-     * @see Vertex::Properties VertexBuffer::byteWidth VertexBuffer::size
-     */
-    std::size_t propByteWidth(Vertex::Properties prop) const {
-        if (!contains(prop)) {
-            throw;  // TODO: add exception
-        }
 
-        auto propIdx = toIdx(prop);
-        if (propIdx == Vertex::numProperties - 1) {
-            return stride_ - offsets_[propIdx];
-        }
-        if (offsets_[propIdx + 1] == invalidOffset) {
-            return stride_ - offsets_[propIdx];
-        }
-
-        return offsets_[propIdx + 1] - offsets_[propIdx];
-    }
     /**
      * @brief Gets the number of vertices in the vertex buffer.
      * @return `std::size_t` Number of vertices.
@@ -323,25 +318,13 @@ public:
      * @see Vertex::Properties VertexBuffer::configProperty VertexBuffer::constructProperty VertexBuffer::constructRawMem
      */
     offset_t offset(Vertex::Properties prop) const {
-        return offsets_[toIdx(prop)];
+        return offsets_[etoi(prop)];
     }
 
 private:
     void fetchProp(const VertexBuffer& other, Vertex::Properties prop, offset_t& accOffset);
 
-    static constexpr std::size_t toIdx(Vertex::Properties prop) {
-        switch (prop) {
-        case Vertex::Properties::Position: return 0u;
-        case Vertex::Properties::Normal: return 1u;
-        case Vertex::Properties::TexCoord: return 2u;
-        case Vertex::Properties::Tangent: return 3u;
-        case Vertex::Properties::Bitangent: return 4u;
-        case Vertex::Properties::Color: return 5u;
-        default: throw;  // TODO: add exception
-        }
-    }
-
-    std::array<offset_t, Vertex::numProperties> offsets_;
+    std::array<offset_t, etoi(Vertex::Properties::SIZE)> offsets_;
     std::vector<std::uint8_t> data_;
     std::uint32_t properties_;
     std::size_t stride_;
@@ -368,7 +351,7 @@ void Vertex::set(Properties prop, T&& val) {
 }
 
 inline void* Vertex::operator[](Properties prop) {
-    return pStart_ + pBuf_->offsets_[pBuf_->toIdx(prop)];
+    return pStart_ + pBuf_->offsets_[etoi(prop)];
 }
 
 } // namespace gfx
