@@ -5,6 +5,10 @@
 
 #include <concepts>
 #include <vector>
+#include <bitset>
+#include <ranges>
+#include <algorithm>
+#include <cassert>
 
 #include "config.hpp"
 
@@ -28,95 +32,104 @@ public:
         VertexBuffer::offset_t offset;
     };
 
-    /**
-     * @brief Default constructor.    
-     * Creates an empty input layout with no elements and an invalid stride.
-     */
+    struct Slot {
+        std::vector<Element> elements;
+        std::size_t stride = 0;
+    };
+
+    using SlotIdx = std::size_t;
+    
+    struct ElemDesc {
+        Element elem;
+        SlotIdx slotIdx;
+    };
+
     InputLayout()
-        : elements_(), stride_(VertexBuffer::invalidStride) {}
+        : slots_() {}
 
-    /**
-     * @brief Constructs an input layout with a stride and elements.
-     * @tparam Elems Elements.
-     * @param stride The specification of stride between vertices.
-     * @param elems The elements of the input layout.
-     * @details The elements are sorted by their offsets.
-     * @see Element InputLayout::configProperty
-     */
-    template < std::same_as<Element>... Elems >
-    InputLayout(std::size_t stride, Elems... elems)
-        : elements_(), stride_(stride) {
-        // For offset-based sorting, we do not pass elements directly into the vector.
-        (configProperty(elems.prop, elems.offset), ...);
+    template < std::same_as<Slot>... Slots >
+    InputLayout(Slots&& ... slots)
+        : slots_(std::forward<Slot>(slots)...) {}
+
+    void configSlots(std::size_t slotCnt) {
+        slots_.resize(slotCnt);
     }
 
-    /**
-     * @brief Configures a property with an offset, creating an element.
-     * @param prop The property to configure.
-     * @param offset The offset of the property.
-     * @see Element
-     */
-    void configProperty(Vertex::Properties prop, VertexBuffer::offset_t offset);
-    /**
-     * @brief Configures the specification of stride between vertices.
-     * @param stride The stride to configure.
-     * @see stride
-     */
-    void configStride(std::size_t stride) NOEXCEPT {
-        stride_ = stride;
-    }
-    /**
-     * @brief Gets the stride value
-     * @return `std::size_t` The stride.
-     * @see configStride
-     */
-    std::size_t stride() const NOEXCEPT {
-        return stride_;
+    void configProperty(Vertex::Properties prop, SlotIdx idx);
+
+    bool has(Vertex::Properties prop) const NOEXCEPT {
+        return slotIdx(prop) != flags_.size();
     }
 
-    /**
-     * @brief Gets the count of elements.
-     * @return `std::size_t` The count of elements.
-     */
-    std::size_t elemCnt() const NOEXCEPT {
-        return elements_.size();
+    bool has(SlotIdx idx, Vertex::Properties prop) const NOEXCEPT {
+        return flags_[idx].test(etoi(prop));
     }
-    /**
-     * @brief Gets the begin iterator of the container of elements.
-     * @details As Inputlayout exposes begin and end,    
-     * it is iterable and therefore can be used in range-based algorithms.
-     * @return `std::vector<Element>::const_iterator` The begin iterator.
-     */
-    auto begin() const NOEXCEPT {
-        return elements_.begin();
+
+    SlotIdx slotIdx(Vertex::Properties prop) const NOEXCEPT {
+        return std::ranges::distance( flags_.begin(),
+            std::ranges::find_if( flags_, [prop](const auto& flag) {
+                return flag.test(etoi(prop));
+            } )
+        );
     }
-    /**
-     * @brief Gets the begin iterator of the container of elements.
-     * @return `std::vector<Element>::iterator` The begin iterator.
-     */
+
+    Slot& slot(SlotIdx idx) {
+        assert(idx < slots_.size());
+        return slots_[idx];
+    }
+
+    const Slot& slot(SlotIdx idx) const {
+        assert(idx < slots_.size());
+        return slots_[idx];
+    }
+
+    std::size_t slotCnt() const NOEXCEPT {
+        return slots_.size();
+    }
+
+    std::size_t stride(SlotIdx idx) const NOEXCEPT {
+        return slots_[idx].stride;
+    }
+
+    const ElemDesc elemDesc(Vertex::Properties prop) const {
+        auto idx = slotIdx(prop);
+        assert(idx != flags_.size());
+        return ElemDesc {
+            // if slotIdx succeeded, then the element must exist in the slot.
+            .elem = *std::ranges::find_if( slot(idx).elements, [prop](const auto& elem) {
+                return elem.prop == prop;
+            } ),
+            .slotIdx = idx
+        };
+    }
+
     auto begin() NOEXCEPT {
-        return elements_.begin();
-    }
-    /**
-     * @brief Gets the end iterator of the container of elements.
-     * @return `std::vector<Element>::const_iterator` The end iterator.
-     */
-    auto end() const NOEXCEPT {
-        return elements_.end();
-    }
-    /**
-     * @brief Gets the end iterator of the container of elements.
-     * @return `std::vector<Element>::iterator` The end iterator.
-     */
-    auto end() NOEXCEPT {
-        return elements_.end();
+        return slots_.begin();
     }
 
-    friend VertexBuffer convert(const VertexBuffer& vb, const InputLayout& il);
+    auto end() NOEXCEPT {
+        return slots_.end();
+    }
+
+    auto begin() const NOEXCEPT {
+        return slots_.begin();
+    }
+
+    auto end() const NOEXCEPT {
+        return slots_.end();
+    }
+
+    auto cbegin() const NOEXCEPT {
+        return slots_.cbegin();
+    }
+
+    auto cend() const NOEXCEPT {
+        return slots_.cend();
+    }
 
 private:
-    std::vector<Element> elements_;
-    std::size_t stride_;
+    std::vector<Slot> slots_;
+    std::vector<std::bitset<etoi(Vertex::Properties::SIZE)>> flags_;
 };
 
 }   // namespace gfx
