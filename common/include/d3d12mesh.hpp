@@ -14,180 +14,104 @@ namespace gfx {
 
 namespace d3d12 {
 
-/**
- * @brief A class representing a mesh in D3D12.     
- * It contains a vertex buffer and an index buffer, and it can bind them to the graphics pipeline's input assembler stage.    
- * Mesh::draw call count should be considered as draw call count, as unlike shader buffers, multiple input assembler settings cannot be bound at once.
- * @details It creates D3D12 resources for the vertex buffer and the index buffer in the constructors,     
- * and to upload the data to the GPU, auxiliary upload buffers are used.    
- * Since the upload buffers is not more needed after the data is uploaded,    
- * it is recommended to release them after the data is uploaded to the GPU.     
- * The release of the upload buffers is done by calling Mesh::completeInit.    
- * 
- * @note The constructors adds graphics command list a command to copy the data from the upload buffers to the default buffers,    
- * so you need to prepare the graphics command list to open and the data is uploaded to the GPU when the command list is executed.    
- * In consequence, waiting for the command list to be executed is required before using the mesh or releasing the upload buffers.
- * 
- * sample code:    
- * @code
- * core.preRender();    // to open the graphics command list
- * 
- * auto mesh = gfx::d3d12::Mesh( core, ctx, gfx::loadMesh("path/to/mesh.obj"),
- *     "myMesh1TmpUpBuf_vb", "myMesh1TmpUpBuf_ib"
- * );
- * 
- * core.postRender();    // to close the graphics command list and execute it
- * core.waitForGpu();    // to wait for the command list to be executed
- * 
- * mesh.completeInit(core);    // to release the upload buffers
- * @endcode
- * @note It is recommended to add Mesh object on DrawInfo object when rendering things with IScene implementation and IRenderer implementation,    
- * as binding and drawing logic of meshes is a lot easier than directly using the d3d12 resources.    
- * @see gfx::Mesh VertexBuffer Core Core::preRender Core::postRender Core::waitForGpu
- */
-class Mesh {
+class Mesh : public gfx::Mesh {
 public:
-    using IndexCont = gfx::Mesh::IndexCont;
+    Mesh() = default;
 
-    /**
-     * @brief Creates an empty mesh with no resources.
-     */
-    Mesh()
-        : vbView_{}, ibView_{}, vb_(), ib_(), vub_(), iub_() {}
-    /**
-     * @brief Copys other Mesh object.    
-     * As the D3D12 resources reside in D3D12 side and Mesh has just pointers to them,    
-     * the copy constructor doesn't create new resources, so waiting for the gpu and Mesh::completeInit is not needed for the copied mesh.
-     */
-    Mesh(const Mesh& other)
-        : vbView_(other.vbView_), ibView_(other.ibView_), vb_(other.vb_), ib_(other.ib_),
-        vub_(), iub_() {}
-    /**
-     * @brief Moves other Mesh object and invalidates the source Mesh object.    
-     */
-    Mesh(Mesh&& other) noexcept
-        : vbView_(std::exchange(other.vbView_, {})), ibView_(std::exchange(other.ibView_, {})),
-        vb_(std::move(other.vb_)), ib_(std::move(other.ib_)), vub_(std::move(other.vub_)), iub_(std::move(other.iub_)) {}
-    /**
-     * @brief Copy-assigns other Mesh object.    
-     * As the D3D12 resources reside in D3D12 side and Mesh has just pointers to them,
-     * the copy assignment operator doesn't create new resources, so waiting for the gpu and Mesh::completeInit is not needed for the copied mesh.
-     * @details However, The release of the resources which was held before the assignment can take place if it was the last reference to the resources.
-     */
-    Mesh& operator=(const Mesh& other) {
-        if (this == &other) {
+    template < std::ranges::range VBS, std::ranges::range IB,
+        class VBIt = std::conditional_t<
+            std::is_lvalue_reference_v< std::remove_const_t<VBS> >,
+            typename VBS::const_iterator,
+            std::move_iterator<typename VBS::iterator> 
+        >
+    > requires std::same_as<std::ranges::range_value_t<VBS>, VertexBuffer>
+            && std::same_as<std::ranges::range_value_t<IB>, Index>
+    Mesh(Core& core, D3D12RenderContext& ctx, VBS&& vbs, IB&& ib)
+        : gfx::Mesh(std::forward<VBS>(vbs), std::forward<IB>(ib)),
+        vbvs_(), ibv_(), vbrs_(), ibr_(), vubs_(), iub_() {
+        buildRes(core, ctx);
+    }
+
+    template < std::ranges::range VBS,
+        class VBIt = std::conditional_t<
+            std::is_lvalue_reference_v< std::remove_const_t<VBS> >,
+            typename VBS::const_iterator,
+            std::move_iterator<typename VBS::iterator> 
+        >
+    > requires std::same_as<std::ranges::range_value_t<VBS>, VertexBuffer>
+    Mesh(Core& core, D3D12RenderContext& ctx, VBS&& vbs, Cont<Index>&& ib)
+        : gfx::Mesh(std::forward<VBS>(vbs), std::move(ib)),
+        vbvs_(), ibv_(), vbrs_(), ibr_(), vubs_(), iub_() {
+        buildRes(core, ctx);
+    }
+
+    template <std::ranges::range IB>
+        requires std::same_as<std::ranges::range_value_t<IB>, Index>
+    Mesh(Core& core, D3D12RenderContext& ctx, Cont<VertexBuffer>&& vbs, IB&& ib)
+        : gfx::Mesh(std::move(vbs), std::forward<IB>(ib)),
+        vbvs_(), ibv_(), vbrs_(), ibr_(), vubs_(), iub_() {
+        buildRes(core, ctx);
+    }
+
+    Mesh(Core& core, D3D12RenderContext& ctx, Cont<VertexBuffer>&& vbs, Cont<Index>&& ib)
+        : gfx::Mesh(std::move(vbs), std::move(ib)),
+        vbvs_(), ibv_(), vbrs_(), ibr_(), vubs_(), iub_() {
+        buildRes(core, ctx);
+    }
+
+    Mesh(const Mesh& mesh)
+        : gfx::Mesh(mesh), vbvs_(mesh.vbvs_), ibv_(mesh.ibv_),
+        vbrs_(mesh.vbrs_), ibr_(mesh.ibr_), vubs_(), iub_() {}
+
+    Mesh(Mesh&& mesh) noexcept
+        : gfx::Mesh(std::move(mesh)), vbvs_(std::exchange(mesh.vbvs_, {})), ibv_(std::exchange(mesh.ibv_, {})),
+        vbrs_(std::move(mesh.vbrs_)), ibr_(std::move(mesh.ibr_)), vubs_(std::move(mesh.vubs_)), iub_(std::move(mesh.iub_)) {}
+
+    Mesh& operator=(const Mesh& mesh) {
+        if (this == &mesh) {
             return *this;
         }
 
-        vbView_ = other.vbView_;
-        ibView_ = other.ibView_;
-        vb_ = other.vb_;
-        ib_ = other.ib_;
+        Mesh::operator=(mesh);
+
+        vbvs_ = mesh.vbvs_;
+        ibv_ = mesh.ibv_;
+        vbrs_ = mesh.vbrs_;
+        ibr_ = mesh.ibr_;
 
         return *this;
     }
-    /**
-     * @brief Move-assigns other Mesh object and invalidates the source Mesh object.
-     * @details The release of the resources which was held before the assignment can take place if it was the last reference to the resources.
-     */
-    Mesh& operator=(Mesh&& other) noexcept {
-        if (this == &other) {
+
+    Mesh& operator=(Mesh&& mesh) noexcept {
+        if (this == &mesh) {
             return *this;
         }
 
-        vbView_ = std::exchange(other.vbView_, {});
-        ibView_ = std::exchange(other.ibView_, {});
-        vb_ = std::move(other.vb_);
-        ib_ = std::move(other.ib_);
-        vub_ = std::move(other.vub_);
-        iub_ = std::move(other.iub_);
+        Mesh::operator=(std::move(mesh));
+
+        vbvs_ = std::exchange(mesh.vbvs_, {});
+        ibv_ = std::exchange(mesh.ibv_, {});
+        vbrs_ = std::move(mesh.vbrs_);
+        ibr_ = std::move(mesh.ibr_);
+        vubs_ = std::move(mesh.vubs_);
+        iub_ = std::move(mesh.iub_);
 
         return *this;
-    }
-
-    /**
-     * @brief Constructs a d3d12 mesh with a vertex buffer and an index buffer.     
-     * It uploads the data to the GPU in same memory layout as the input buffers.
-     * @param core The D3D12 core object.
-     * @param ctx The D3D12 render context object.
-     * @param vbuf The vertex buffer.
-     * @param ibuf The index buffer.
-     * @param vbUpIdx The upload buffer index for the vertex buffer, which is used to register and to pop the upload buffer from the core.
-     * @param ibUpIdx The upload buffer index for the index buffer, which is used to register and to pop the upload buffer from the core.
-     * @see VertexBuffer Core Core::addTmpUpBuf Core::popTmpUpBuf Core::popTmpUpBufs
-     * @details It creates d3d12 resources internally and isn't in valid state until the gpu actually uploads the data.     
-     * Look at the class details to be acknowledged about proper construction of the mesh.
-     */
-    Mesh( d3d12::Core& core, d3d12::D3D12RenderContext& ctx,
-        const VertexBuffer& vbuf, const IndexCont& ibuf
-    ) : vbView_(), ibView_(), vb_(), ib_(), vub_(), iub_() {
-        buildRes(core, ctx, vbuf, ibuf);
-    }
-    /**
-     * @brief Constructs a d3d12 mesh with a vertex buffer and an index buffer.    
-     * It uploads the data to the GPU in same memory layout as the input buffers.
-     * @tparam R A range of 32-bit unsigned integers.
-     * @param core The D3D12 core object.
-     * @param ctx The D3D12 render context object.
-     * @param vb The vertex buffer.
-     * @param ib The index buffer.
-     * @param vbUpIdx The upload buffer index for the vertex buffer, which is used to register and to pop the upload buffer from the core.
-     * @param ibUpIdx The upload buffer index for the index buffer, which is used to register and to pop the upload buffer from the core.
-     * @details It creates d3d12 resources internally and isn't in valid state until the gpu actually uploads the data.     
-     * Look at the class details to be acknowledged about proper construction of the mesh.
-     * @see VertexBuffer Core Core::addTmpUpBuf Core::popTmpUpBuf Core::popTmpUpBufs
-     */
-    template <std::ranges::range R>
-    Mesh(d3d12::Core& core, d3d12::D3D12RenderContext& ctx, const VertexBuffer& vb, R&& ib)
-        : vbView_(), ibView_(), vb_(), ib_(), vub_(), iub_() {
-        buildRes(core, ctx, vb, IndexCont(std::begin(ib), std::end(ib)));
-    }
-    /**
-     * @brief Constructs a d3d12 mesh with gfx::Mesh object.    
-     * It uploads the data to the GPU in same memory layout as the vertex buffer and the index buffer of the input mesh.
-     * @param core The D3D12 core object.
-     * @param ctx The D3D12 render context object.
-     * @param mesh The mesh object to copy the vertex buffer and the index buffer.
-     * @param vbUpIdx The upload buffer index for the vertex buffer, which is used to register and to pop the upload buffer from the core.
-     * @param ibUpIdx The upload buffer index for the index buffer, which is used to register and to pop the upload buffer from the core.
-     * @details It creates d3d12 resources internally and isn't in valid state until the gpu actually uploads the data.     
-     * Look at the class details to be acknowledged about proper construction of the mesh.
-     * @see VertexBuffer Core Core::addTmpUpBuf Core::popTmpUpBuf Core::popTmpUpBufs
-     */
-    Mesh(d3d12::Core& core, d3d12::D3D12RenderContext& ctx, const gfx::Mesh& mesh)
-        : vbView_(), ibView_(), vb_(), ib_(), vub_(), iub_() {
-        buildRes(core, ctx, mesh.vb(), mesh.ib());
     }
 
     void completeInit();
-
-    /**
-     * @brief Binds the mesh to the graphics pipeline's input assembler stage.
-     * @param pCmdList The graphics command list to bind the mesh.
-     * @details It binds the internal vertex buffer and the index buffer to the graphics pipeline's input assembler stage.
-     * @note It is recommended to add Mesh object on DrawInfo object when rendering things with IScene implementation and IRenderer implementation,    
-     * as binding and drawing logic of meshes is a lot easier than directly using the d3d12 resources.  
-     */
-    void bind(ID3D12GraphicsCommandList* pCmdList) const;
-    /**
-     * @brief Draws the mesh.
-     * @param pCmdList The graphics command list to draw the mesh.
-     * @details The draw call is performed by calling `DrawIndexedInstanced` with the index buffer's index count.
-     * @note It is recommended to add Mesh object on DrawInfo object when rendering things with IScene implementation and IRenderer implementation,    
-     * as binding and drawing logic of meshes is a lot easier than directly using the d3d12 resources.  
-     */
-    void draw(ID3D12GraphicsCommandList* pCmdList) const;
-
-    void draw(ID3D12GraphicsCommandList* pCmdList, std::size_t instanceCount) const;
+    void bind(d3d12::D3D12RenderContext& ctx) const;
+    void draw(d3d12::D3D12RenderContext& ctx) const;
+    void draw(d3d12::D3D12RenderContext& ctx, std::size_t instanceCount) const;
 
 private:
-    void buildRes(d3d12::Core& core, d3d12::D3D12RenderContext& ctx, const VertexBuffer& vb, const IndexCont& ib);
+    void buildRes(d3d12::Core& core, d3d12::D3D12RenderContext& ctx);
 
-    std::array<D3D12_VERTEX_BUFFER_VIEW, 1> vbView_;
-    D3D12_INDEX_BUFFER_VIEW ibView_;
-    wrl::ComPtr<ID3D12Resource> vb_;
-    wrl::ComPtr<ID3D12Resource> ib_;
-    wrl::ComPtr<ID3D12Resource> vub_;
+    Cont<D3D12_VERTEX_BUFFER_VIEW> vbvs_;
+    D3D12_INDEX_BUFFER_VIEW ibv_;
+    Cont<wrl::ComPtr<ID3D12Resource>> vbrs_;
+    wrl::ComPtr<ID3D12Resource> ibr_;
+    Cont<wrl::ComPtr<ID3D12Resource>> vubs_;
     wrl::ComPtr<ID3D12Resource> iub_;
 };
 

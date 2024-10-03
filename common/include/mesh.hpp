@@ -93,6 +93,11 @@ public:
         ib_ = std::move(ib);
     }
 
+    void clear() {
+        vbs_.clear();
+        ib_.clear();
+    }
+
 private:
     Cont<VertexBuffer> vbs_;
     Cont<Index> ib_;

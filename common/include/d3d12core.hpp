@@ -157,16 +157,6 @@ private:
             ) {}
     };
 
-    class UpBufIdxNotFound : public gfx::Exception {
-    public:
-        UpBufIdxNotFound(int lineNum, const char* fileStr, std::string_view idx)
-            : gfx::Exception(lineNum, fileStr,
-                "The temporary upload buffer with index \""s + idx.data() + "\" does not exist.\n"s
-                + "Please check if the temporary upload buffer is registered to the Core\n"s
-                + "or the temporary upload buffer is already popped."s
-            ) {}
-    };
-
     class ShaderIdxNotFound : public gfx::Exception {
     public:
         ShaderIdxNotFound(int lineNum, const char* fileStr, std::string_view idx)
@@ -195,7 +185,6 @@ public:
     friend class DeviceFetcher;
 
     using RootIdx = std::string;
-    using UpBufIdx = std::string;
     using ShaderIdx = std::string;
     using InputLayoutIdx = std::string;
     using DescHeapIdx = std::string;

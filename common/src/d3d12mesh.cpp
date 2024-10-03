@@ -7,47 +7,64 @@ namespace gfx {
 namespace d3d12 {
 
 void Mesh::completeInit() {
-    vub_.Reset();
+    vubs_.clear();
     iub_.Reset();
 }
 
-void Mesh::bind(ID3D12GraphicsCommandList* pCmdList) const {
-    DX_THROW_FAILED_VOID( pCmdList->IASetVertexBuffers(0, 1, vbView_.data()) );
-    DX_THROW_FAILED_VOID( pCmdList->IASetIndexBuffer(&ibView_) );
+void Mesh::bind(D3D12RenderContext& ctx) const {
+    auto cmdList = std::any_cast<wrl::ComPtr<ID3D12GraphicsCommandList>>(
+        ctx.cast(gfx::RenderContextType::D3D12)
+    );
+
+    DX_THROW_FAILED_VOID(
+        cmdList->IASetVertexBuffers(0, static_cast<UINT>( vbvs_.size() ), vbvs_.data())
+    );
+    DX_THROW_FAILED_VOID( cmdList->IASetIndexBuffer(&ibv_) );
 }
 
-void Mesh::draw(ID3D12GraphicsCommandList* pCmdList) const {
-    DX_THROW_FAILED_VOID( pCmdList->DrawIndexedInstanced(
-        static_cast<UINT>( ibView_.SizeInBytes / sizeof(IndexCont::value_type) ), 1, 0, 0, 0
+void Mesh::draw(D3D12RenderContext& ctx) const {
+    auto cmdList = std::any_cast<wrl::ComPtr<ID3D12GraphicsCommandList>>(
+        ctx.cast(gfx::RenderContextType::D3D12)
+    );
+
+    DX_THROW_FAILED_VOID( cmdList->DrawIndexedInstanced(
+        static_cast<UINT>( ibv_.SizeInBytes / sizeof(Index) ), 1, 0, 0, 0
     ) );
 }
 
-void Mesh::draw(ID3D12GraphicsCommandList* pCmdList, std::size_t instanceCount) const {
-    DX_THROW_FAILED_VOID( pCmdList->DrawIndexedInstanced(
-        static_cast<UINT>( ibView_.SizeInBytes / sizeof(IndexCont::value_type) ),
+void Mesh::draw(D3D12RenderContext& ctx, std::size_t instanceCount) const {
+    auto cmdList = std::any_cast<wrl::ComPtr<ID3D12GraphicsCommandList>>(
+        ctx.cast(gfx::RenderContextType::D3D12)
+    );
+
+    DX_THROW_FAILED_VOID( cmdList->DrawIndexedInstanced(
+        static_cast<UINT>( ibv_.SizeInBytes / sizeof(Index) ),
         static_cast<UINT>( instanceCount ), 0, 0, 0
     ) );
 }
 
-void Mesh::buildRes(Core& core, D3D12RenderContext& ctx, const VertexBuffer& vbuf, const IndexCont& ibuf) {
-    // Vertex buffer
-    vub_ = createUpBuf( core, vbuf.rawMem(), vbuf.byteWidth() );
-    vb_ = createDefBuf( core, ctx, vub_.Get(), D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER );
-    vbView_[0] = D3D12_VERTEX_BUFFER_VIEW {
-        .BufferLocation = vb_->GetGPUVirtualAddress(),
-        .SizeInBytes = static_cast<UINT>( vbuf.byteWidth() ),
-        .StrideInBytes = static_cast<UINT>( vbuf.stride() )
-    };
+void Mesh::buildRes(Core& core, D3D12RenderContext& ctx) {
+    // Vertex buffers
+    vubs_.clear();
+    vbvs_.clear();
+    for (const auto& vb : vbs()) {
+        auto vub = createUpBuf(core, vb.rawMem(), vb.byteWidth());
+        auto vbr = createDefBuf(core, ctx, vub.Get(), D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+        vubs_.push_back(vub);
+        vbrs_.push_back(vbr);
+        vbvs_.emplace_back( 
+            /* .BufferLocation = */ vub->GetGPUVirtualAddress(),
+            /* .SizeInBytes = */ static_cast<UINT>( vb.byteWidth() ),
+            /* .StrideInBytes = */ static_cast<UINT>( vb.stride() )
+        );
+    }
 
     // Index buffer
-    const auto ibByteWidth = ibuf.size() * sizeof(IndexCont::value_type);
-    iub_ = createUpBuf( core, ibuf.data(), ibByteWidth );
-    ib_ = createDefBuf( core, ctx, iub_.Get(), D3D12_RESOURCE_STATE_INDEX_BUFFER );
-    ibView_ = D3D12_INDEX_BUFFER_VIEW {
-        .BufferLocation = ib_->GetGPUVirtualAddress(),
-        .SizeInBytes = static_cast<std::uint32_t>( ibByteWidth ),
-        .Format = DXGI_FORMAT_R32_UINT
-    };
+    const auto ibByteWidth = ib().size() * sizeof(Index);
+    iub_ = createUpBuf(core, ib().data(), ibByteWidth);
+    ibv_.BufferLocation = iub_->GetGPUVirtualAddress();
+    ibv_.SizeInBytes = static_cast<UINT>( ibByteWidth );
+    ibv_.Format = DXGI_FORMAT_R32_UINT;
 }
 
 }   // namespace d3d12
