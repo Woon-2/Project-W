@@ -4,39 +4,73 @@ namespace gfx {
 
 namespace d3d12 {
 
+namespace detail {
+
+void InputElementAuxMap::init() {
+    auxMap_.try_emplace(Vertex::Properties::Position3D, InputElementAux{
+        .semanticName = "POSITION",
+        .semanticIndex = 0,
+        .format = DXGI_FORMAT_R32G32B32_FLOAT
+    } );
+    auxMap_.try_emplace(Vertex::Properties::Normal3D, InputElementAux{
+        .semanticName = "NORMAL",
+        .semanticIndex = 0,
+        .format = DXGI_FORMAT_R32G32B32_FLOAT
+    } );
+    auxMap_.try_emplace(Vertex::Properties::Color3D, InputElementAux{
+        .semanticName = "COLOR",
+        .semanticIndex = 0,
+        .format = DXGI_FORMAT_R32G32B32_FLOAT
+    } );
+    auxMap_.try_emplace(Vertex::Properties::Color4D, InputElementAux{
+        .semanticName = "COLOR",
+        .semanticIndex = 0,
+        .format = DXGI_FORMAT_R32G32B32A32_FLOAT
+    } );
+    auxMap_.try_emplace(Vertex::Properties::TexCoord2D0, InputElementAux{
+        .semanticName = "TEXCOORD0",
+        .semanticIndex = 0,
+        .format = DXGI_FORMAT_R32G32_FLOAT
+    } );
+    auxMap_.try_emplace(Vertex::Properties::Tangent3D, InputElementAux{
+        .semanticName = "TANGENT",
+        .semanticIndex = 0,
+        .format = DXGI_FORMAT_R32G32B32_FLOAT
+    } );
+    auxMap_.try_emplace(Vertex::Properties::Bitangent3D, InputElementAux{
+        .semanticName = "BITANGENT",
+        .semanticIndex = 0,
+        .format = DXGI_FORMAT_R32G32B32_FLOAT
+    } );
+}
+
+} // namespace gfx::d3d12::detail
+
 InputLayout::InputLayout(const gfx::InputLayout& il)
     : gfx::InputLayout(il), elemDescs_() {
     elemDescs_.reserve(il.elemCnt());
-    for (const auto& elem : il) {
-        dispatchElem(elem);
+    for (auto itSlot = il.begin(); itSlot != il.end(); ++itSlot) {
+        for (const auto& elem : itSlot->elements) {
+            dispatchElem( ElemDesc{
+                .elem = elem,
+                .slotIdx = static_cast<SlotIdx>( std::distance(il.begin(), itSlot) )
+            } );
+        }
     }
 }
 
-void InputLayout::configPropertyAux( Vertex::Properties prop, std::string semanticName,
-    std::uint32_t semanticIndex, DXGI_FORMAT format, std::uint32_t inputSlot
-) {
-    auxMap_.emplace( prop, ElementAux{semanticName, semanticIndex, format, inputSlot} );
-}
+void InputLayout::dispatchElem(const ElemDesc& elemDesc) {
+    const auto& aux = auxMap_.aux(elemDesc.elem.prop);
 
-void InputLayout::dispatchElem(Element elem) {
-    auto [first, last] = auxMap_.equal_range(elem.prop);
-    auto accOffset = elem.offset;
-
-    for (auto it = first; it != last; ++it) {
-        const auto& aux = it->second;
-
-        elemDescs_.push_back( D3D12_INPUT_ELEMENT_DESC{
-            .SemanticName = aux.semanticName.c_str(),
-            .SemanticIndex = aux.semanticIndex,
-            .Format = aux.format,
-            .InputSlot = aux.inputSlot,
-            .AlignedByteOffset = static_cast<std::uint32_t>( accOffset ),
-            .InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-            .InstanceDataStepRate = 0
-        } );
-
-        accOffset += formatWidth(aux.format);
-    }
+    elemDescs_.emplace_back( 
+        /* .SemanticName = */ aux.semanticName.c_str(),
+        /* .SemanticIndex = */ aux.semanticIndex,
+        /* .Format = */ aux.format,
+        /* .InputSlot = */ static_cast<UINT>( elemDesc.slotIdx ),
+        /* .AlignedByteOffset = */ static_cast<UINT>( elemDesc.elem.offset ),
+        /* .InputSlotClass = */ D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+        /* .InstanceDataStepRate = */ 0
+    );
 }
 
 std::size_t InputLayout::formatWidth(DXGI_FORMAT format) NOEXCEPT {
@@ -54,7 +88,7 @@ std::size_t InputLayout::formatWidth(DXGI_FORMAT format) NOEXCEPT {
     }
 }
 
-std::multimap<Vertex::Properties, InputLayout::ElementAux> InputLayout::auxMap_;
+detail::InputElementAuxMap InputLayout::auxMap_;
 
 }   // namespace d3d12
 

@@ -18,6 +18,34 @@ namespace gfx {
 
 namespace d3d12 {
 
+namespace detail {
+
+struct InputElementAux {
+    std::string semanticName;
+    std::uint32_t semanticIndex;
+    DXGI_FORMAT format;
+};
+
+
+class InputElementAuxMap {
+public:
+    InputElementAuxMap()
+        : auxMap_() {
+        init();
+    }
+
+    const InputElementAux& aux(Vertex::Properties prop) const {
+        return auxMap_.at(prop);
+    }
+
+private:
+    void init();
+
+    std::map<Vertex::Properties, InputElementAux> auxMap_;
+};
+
+} // namespace gfx::d3d12::detail
+
 /**
  * @brief A class representing an input layout in D3D12.    
  * Like gfx::InputLayout, it's a collection of vertex properties and their offsets.    
@@ -40,75 +68,25 @@ namespace d3d12 {
  * @see gfx::InputLayout Vertex VertexBuffer Shader ShaderBuilder
  */
 class InputLayout : public gfx::InputLayout {
-private:
-    struct ElementAux {
-        std::string semanticName;
-        std::uint32_t semanticIndex;
-        DXGI_FORMAT format;
-        std::uint32_t inputSlot;
-    };
-
 public:
     using gfx::InputLayout::Element;
 
-    /**
-     * @brief Default constructor.    
-     * Creates an empty input layout with no elements and an invalid stride.
-     */
     InputLayout()
         : gfx::InputLayout(), elemDescs_() {}
 
-    /**
-     * @brief Constructs an input layout with a stride and elements.
-     * @tparam Elems Elements.
-     * @param stride The specification of stride between vertices.
-     * @param elems The elements of the input layout.
-     * @details The elements are sorted by their offsets.
-     * @note To create D3D12 input element descriptors,     
-     * it is required to configure auxiliary information with InputLayout::configPropertyAux before creating InputLayout instances.
-     * @see Element InputLayout::configProperty
-     */
-    template < std::same_as<Element>... Elems >
-    InputLayout(std::size_t stride, Elems... elems)
-        : gfx::InputLayout(stride, elems...), elemDescs_() {
-        elemDescs_.reserve(sizeof...(elems));
-        dispatchElems(elems...);
+    template < std::same_as<Slot>... Slots >
+    InputLayout(Slots&&... slots)
+        : gfx::InputLayout( std::forward<Slots>(slots)... ), elemDescs_() {
+        // elemDescs_.reserve(sizeof...(elems));
+        // dispatchElems(elems...);
     }
-    /**
-     * @brief Constructs an input layout with a gfx::InputLayout.      
-     * It is constructed as if the auxiliary information is complemented to the original input elements.
-     * @param il The input layout to copy.
-     * @details The input layout is copied with the same elements and stride.
-     * @note To create D3D12 input element descriptors,
-     * it is required to configure auxiliary information with InputLayout::configPropertyAux before creating InputLayout instances. 
-     */
+
     InputLayout(const gfx::InputLayout& il);
 
-    /**
-     * @brief Configures a property with an offset, creating an element.
-     * @param prop The property to configure.
-     * @param offset The offset of the property.
-     * @note To create D3D12 input element descriptors,    
-     * it is required to configure auxiliary information with InputLayout::configPropertyAux before creating InputLayout instances.
-     * @see configPropertyAux Element
-     */
-    void configProperty(Vertex::Properties prop, VertexBuffer::offset_t offset) {
-        gfx::InputLayout::configProperty(prop, offset);
-        dispatchElem(Element{prop, offset});
+    void configProperty(Vertex::Properties prop, SlotIdx idx) {
+        gfx::InputLayout::configProperty(prop, idx);
+        dispatchElem( ElemDesc{ .elem = slot(idx).elements.back(), .slotIdx = idx } );
     }
-    /**
-     * @brief Maps auxiliary information that is needed for D3D12 shader input layout to a specific property statically.
-     * @param prop The property to map.
-     * @param semanticName The semantic name of the property.
-     * @param semanticIndex The semantic index of the property.
-     * @param format The format of the property.
-     * @param inputSlot The input slot of the property.
-     * @note This function should be called before creating any InputLayout instances or calling InputLayout::configProperty.
-     * @see configProperty
-     */
-    static void configPropertyAux( Vertex::Properties prop, std::string semanticName,
-        std::uint32_t semanticIndex, DXGI_FORMAT format, std::uint32_t inputSlot
-    );
 
     /**
      * @brief Creates a D3D12 input layout descriptor with configured elements.    
@@ -132,19 +110,11 @@ public:
     }
 
 private:
-    void dispatchElems() {}
-
-    template < std::same_as<Element>... Elems >
-    void dispatchElems(Element elem, Elems... rest) {
-        dispatchElem(elem);
-        dispatchElems(rest...);
-    }
-
-    void dispatchElem(Element elem);
+    void dispatchElem(const ElemDesc& elem);
 
     static std::size_t formatWidth(DXGI_FORMAT format) NOEXCEPT;
 
-    static std::multimap<Vertex::Properties, ElementAux> auxMap_;
+    static detail::InputElementAuxMap auxMap_;
     std::vector<D3D12_INPUT_ELEMENT_DESC> elemDescs_;
 };
 

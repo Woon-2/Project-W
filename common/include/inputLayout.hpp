@@ -9,6 +9,7 @@
 #include <ranges>
 #include <algorithm>
 #include <cassert>
+#include <numeric>
 
 #include "config.hpp"
 
@@ -85,6 +86,14 @@ public:
 
     std::size_t slotCnt() const NOEXCEPT {
         return slots_.size();
+    }
+
+    std::size_t elemCnt() const NOEXCEPT {
+        return std::accumulate( slots_.begin(), slots_.end(), std::size_t(0),
+            [](std::size_t acc, const auto& slot) {
+                return acc + slot.elements.size();
+            }
+        );
     }
 
     std::size_t stride(SlotIdx idx) const NOEXCEPT {
