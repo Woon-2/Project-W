@@ -6,7 +6,7 @@
 namespace gfx {
 
 void VertexBuffer::constructProperty( Vertex::Properties prop, const void* data,
-    std::size_t elemByteWidth, std::size_t cnt, std::size_t stride
+    std::size_t cnt, std::size_t stride
 ) {
     if (!contains(prop)) {
         throw;  // TODO: add exception
@@ -25,7 +25,7 @@ void VertexBuffer::constructProperty( Vertex::Properties prop, const void* data,
 
     for (std::size_t i = 0; i < cnt; ++i) {
         std::ranges::copy_n( static_cast<const std::uint8_t*>(data) + i * stride,
-            elemByteWidth, data_.begin() + i * stride_ + offset
+            Vertex::propByteWidth(prop), data_.begin() + i * stride_ + offset
         );
     }
 }

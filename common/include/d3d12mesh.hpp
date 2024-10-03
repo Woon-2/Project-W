@@ -59,6 +59,16 @@ public:
         buildRes(core, ctx);
     }
 
+    Mesh(Core& core, D3D12RenderContext& ctx, const gfx::Mesh& mesh)
+        : gfx::Mesh(mesh), vbvs_(), ibv_(), vbrs_(), ibr_(), vubs_(), iub_() {
+        buildRes(core, ctx);
+    }
+
+    Mesh(Core& core, D3D12RenderContext& ctx, gfx::Mesh&& mesh)
+        : gfx::Mesh(std::move(mesh)), vbvs_(), ibv_(), vbrs_(), ibr_(), vubs_(), iub_() {
+        buildRes(core, ctx);
+    }
+
     Mesh(const Mesh& mesh)
         : gfx::Mesh(mesh), vbvs_(mesh.vbvs_), ibv_(mesh.ibv_),
         vbrs_(mesh.vbrs_), ibr_(mesh.ibr_), vubs_(), iub_() {}

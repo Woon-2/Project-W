@@ -25,6 +25,8 @@ public:
     template <class T>
     using Cont = std::vector<T>;
 
+    using VBFlags = std::vector<VertexBuffer::VBFlag>;
+
     Mesh() = default;
 
     template < std::ranges::range VBS, std::ranges::range IB,
@@ -98,9 +100,14 @@ public:
         ib_.clear();
     }
 
+    const VBFlags& flags() const NOEXCEPT {
+        return flags_;
+    }
+
 private:
     Cont<VertexBuffer> vbs_;
     Cont<Index> ib_;
+    VBFlags flags_;
 };
 
 }   // namespace gfx

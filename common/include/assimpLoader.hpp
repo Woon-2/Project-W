@@ -14,6 +14,7 @@
 #include <vector>
 #include <memory>
 #include <filesystem>
+#include <bitset>
 
 namespace gfx {
 
@@ -65,11 +66,9 @@ private:
     };
 
 protected:
-    const Mesh buildGeneralMesh(const aiMesh* mesh) const;
-    const Mesh buildGeneralMesh(const aiMesh* mesh, const InputLayout& inputLayout) const {
-        auto tmp = buildGeneralMesh(mesh);
-        return Mesh(convert(tmp.vb(), inputLayout), tmp.ib());
-    }
+    using VBFlags = InputLayout::VBFlags;
+
+    Mesh buildGeneralMesh(const VBFlags& flags, const aiMesh* mesh) const;
 
 public:
     void load(const std::filesystem::path& path, Flags flags);
@@ -79,7 +78,7 @@ public:
         }
         return state_->scene;
     }
-    const std::filesystem::path loadedPath() const {
+    std::filesystem::path loadedPath() const {
         if (!state_) {
             throw std::runtime_error("No scene loaded");
         }

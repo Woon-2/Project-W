@@ -115,16 +115,14 @@ void AssimpLoader::processAiNode( Core& core, D3D12RenderContext& ctx,
             continue;
         }
         
-        model.addMesh(Mesh(core, ctx, buildGeneralMesh(aimesh)), aimesh->mName.C_Str());
+        model.addMesh(buildMesh(core, ctx, aimesh), aimesh->mName.C_Str());
     }
 
     for (auto i = 0u; i < node->mNumChildren; ++i) {
         auto aiChild = node->mChildren[i];
         auto child = Model(aiChild->mName.C_Str());
         processAiNode(core, ctx, aiChild, scene, child);
-        if (child.meshes().size() > 0) {
-            model.addChild(std::move(child), aiChild->mTransformation);
-        }
+        model.addChild(std::move(child), aiChild->mTransformation);
     }
 }
 
@@ -137,16 +135,8 @@ void AssimpLoader::processAiNode( Core& core, D3D12RenderContext& ctx,
         if (aimesh->mNumVertices == 0 || aimesh->mNumFaces == 0) {
             continue;
         }
-
-        auto mesh = buildGeneralMesh(aimesh, inputLayout);
-
-        for (const auto& elem : inputLayout) {
-            if (!mesh.vb().contains(elem.prop)) {
-                throw std::runtime_error("Input layout mismatch");
-            }
-        }
         
-        model.addMesh(Mesh(core, ctx, mesh), aimesh->mName.C_Str());
+        model.addMesh( buildMesh(core, ctx, aimesh, inputLayout), aimesh->mName.C_Str() );
     }
 
     for (auto i = 0u; i < node->mNumChildren; ++i) {

@@ -25,21 +25,36 @@ public:
     Mesh buildMesh(Core& core, D3D12RenderContext& ctx) const {
         return buildMesh(core, ctx, scene()->mMeshes[0]);
     }
+
     Mesh buildMesh(Core& core, D3D12RenderContext& ctx, const gfx::InputLayout& inputLayout) const {
         return buildMesh(core, ctx, scene()->mMeshes[0], inputLayout);
     }
+
     Mesh buildMesh(Core& core, D3D12RenderContext& ctx, const aiMesh* mesh) const {
-        return Mesh(core, ctx, buildGeneralMesh(mesh));
+        return Mesh( core, ctx, buildGeneralMesh(
+            VBFlags{
+                etoi(Vertex::Properties::Position3D),
+                etoi(Vertex::Properties::Normal3D),
+                etoi(Vertex::Properties::TexCoord2D0),
+                etoi(Vertex::Properties::Tangent3D),
+                etoi(Vertex::Properties::Bitangent3D),
+                etoi(Vertex::Properties::Color3D),
+                etoi(Vertex::Properties::Color4D)
+            },
+        mesh ) );
     }
+
     Mesh buildMesh(Core& core, D3D12RenderContext& ctx, const aiMesh* mesh, const gfx::InputLayout& inputLayout) const {
-        return Mesh(core, ctx, buildGeneralMesh(mesh, inputLayout));
+        return Mesh( core, ctx, buildGeneralMesh( inputLayout.flags(), mesh ) );
     }
+
     Model buildModel(Core& core, D3D12RenderContext& ctx) const {
         auto model = Model(scene()->mRootNode->mName.C_Str());
         processAiNode(core, ctx, scene()->mRootNode, scene(), model);
         model.coord().traverse();
         return model;
     }
+
     Model buildModel(Core& core, D3D12RenderContext& ctx, const gfx::InputLayout& inputLayout) const {
         auto model = Model(scene()->mRootNode->mName.C_Str());
         processAiNode(core, ctx, scene()->mRootNode, scene(), model, inputLayout);
@@ -50,7 +65,9 @@ public:
     Material buildMaterial(Core& core, const PathTexMap& pathTexmap) const {
         return buildMaterial(core, pathTexmap, scene()->mMaterials[0]);
     }
+
     Material buildMaterial(Core& core, const PathTexMap& pathTexmap, const aiMaterial* material) const;
+
     MaterialTree buildMaterialTree(Core& core, const PathTexMap& pathTexmap) const {
         auto matTree = MaterialTree();
         processAiNodeMaterial(core, pathTexmap, scene()->mRootNode, scene(), matTree);

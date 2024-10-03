@@ -45,15 +45,24 @@ public:
         SlotIdx slotIdx;
     };
 
+    using VBFlags = std::vector<VertexBuffer::VBFlag>;
+
     InputLayout()
-        : slots_() {}
+        : slots_(), flags_() {}
 
     template < std::same_as<Slot>... Slots >
     InputLayout(Slots&& ... slots)
-        : slots_(std::forward<Slot>(slots)...) {}
+        : slots_(std::forward<Slot>(slots)...), flags_(slots_.size()) {
+        for (const auto& s : slots_) {
+            for (const auto& e : s.elements) {
+                flags_[etoi(e.prop)].set(etoi(e.prop));
+            }
+        }
+    }
 
     void configSlots(std::size_t slotCnt) {
         slots_.resize(slotCnt);
+        flags_.resize(slotCnt);
     }
 
     void configProperty(Vertex::Properties prop, SlotIdx idx);
@@ -136,9 +145,18 @@ public:
         return slots_.cend();
     }
 
+    const auto& flag(SlotIdx idx) const NOEXCEPT {
+        assert(idx < flags_.size());
+        return flags_[idx];
+    }
+
+    const auto& flags() const NOEXCEPT {
+        return flags_;
+    }
+
 private:
     std::vector<Slot> slots_;
-    std::vector<std::bitset<etoi(Vertex::Properties::SIZE)>> flags_;
+    VBFlags flags_;
 };
 
 }   // namespace gfx

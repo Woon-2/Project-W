@@ -1,5 +1,7 @@
 #include "assimpLoader.hpp"
 
+#include "gfxExcept.hpp"
+
 namespace gfx {
 
 void AssimpLoader::load(const std::filesystem::path& path, Flags flags) {
@@ -14,67 +16,127 @@ void AssimpLoader::load(const std::filesystem::path& path, Flags flags) {
     }
 }
 
-const Mesh AssimpLoader::buildGeneralMesh(const aiMesh* mesh) const {
-    auto vb = VertexBuffer();
-    auto ib = Mesh::IndexCont();
+Mesh AssimpLoader::buildGeneralMesh(const VBFlags& flags, const aiMesh* mesh) const {
+    auto vbs = Mesh::Cont<VertexBuffer>();
+    vbs.reserve(flags.size());
 
-    // calc stride
-    auto stride = std::size_t(0);
+    for (const auto& flag : flags) {
+        auto vb = VertexBuffer();
 
-    if (mesh->HasPositions()) {
-        stride += sizeof(aiVector3D);
+        // calculate stride while checking the flags
+        auto stride = std::size_t(0);
+
+        if (flag.test(etoi(Vertex::Properties::Position3D))) {
+            if (!mesh->HasPositions()) {
+                continue;
+            }
+            stride += sizeof(aiVector3D);
+
+        }
+        if (flag.test(etoi(Vertex::Properties::Normal3D))) {
+            if (!mesh->HasNormals()) {
+                continue;
+            }
+            stride += sizeof(aiVector3D);
+        }
+        if (flag.test(etoi(Vertex::Properties::TexCoord2D0))) {
+            if (!mesh->HasTextureCoords(0)) {
+                continue;
+            }
+            stride += sizeof(aiVector2D);
+        }
+        if (flag.test(etoi(Vertex::Properties::Tangent3D))) {
+            if (!mesh->HasTangentsAndBitangents()) {
+                continue;
+            }
+            stride += sizeof(aiVector3D);
+        }
+        if (flag.test(etoi(Vertex::Properties::Bitangent3D))) {
+            if (!mesh->HasTangentsAndBitangents()) {
+                continue;
+            }
+            stride += sizeof(aiVector3D);
+        }
+        if (flag.test(etoi(Vertex::Properties::Color3D))) {
+            if (!mesh->HasVertexColors(0)) {
+                continue;
+            }
+            stride += sizeof(aiColor4D);    // assimp stores vertex color in aiColor4D
+        }
+        if (flag.test(etoi(Vertex::Properties::Color4D))) {
+            if (!mesh->HasVertexColors(0)) {
+                continue;
+            }
+            stride += sizeof(aiColor4D);
+        }
+
+        vb.configStride(stride);
+
+        // layout the properties in order of the flags
+
+        auto accOffset = VertexBuffer::offset_t(0);
+
+        if (flag.test(etoi(Vertex::Properties::Position3D))) {
+            vb.configProperty(Vertex::Properties::Position3D, accOffset);
+            vb.constructProperty( Vertex::Properties::Position3D,
+                mesh->mVertices, mesh->mNumVertices, sizeof(aiVector3D)
+            );
+            accOffset += sizeof(aiVector3D);
+        }
+
+        if (flag.test(etoi(Vertex::Properties::Normal3D))) {
+            vb.configProperty(Vertex::Properties::Normal3D, accOffset);
+            vb.constructProperty( Vertex::Properties::Normal3D,
+                mesh->mNormals, mesh->mNumVertices, sizeof(aiVector3D)
+            );
+            accOffset += sizeof(aiVector3D);
+        }
+
+        if (flag.test(etoi(Vertex::Properties::TexCoord2D0))) {
+            vb.configProperty(Vertex::Properties::TexCoord2D0, accOffset);
+            vb.constructProperty( Vertex::Properties::TexCoord2D0,
+                mesh->mTextureCoords[0], mesh->mNumVertices, sizeof(aiVector2D)
+            );
+            accOffset += sizeof(aiVector2D);
+        }
+
+        if (flag.test(etoi(Vertex::Properties::Tangent3D))) {
+            vb.configProperty(Vertex::Properties::Tangent3D, accOffset);
+            vb.constructProperty( Vertex::Properties::Tangent3D,
+                mesh->mTangents, mesh->mNumVertices, sizeof(aiVector3D)
+            );
+            accOffset += sizeof(aiVector3D);
+        }
+
+        if (flag.test(etoi(Vertex::Properties::Bitangent3D))) {
+            vb.configProperty(Vertex::Properties::Bitangent3D, accOffset);
+            vb.constructProperty( Vertex::Properties::Bitangent3D,
+                mesh->mBitangents, mesh->mNumVertices, sizeof(aiVector3D)
+            );
+            accOffset += sizeof(aiVector3D);
+        }
+
+        if (flag.test(etoi(Vertex::Properties::Color3D))) {
+            vb.configProperty(Vertex::Properties::Color3D, accOffset);
+            vb.constructProperty( Vertex::Properties::Color3D,
+                mesh->mColors[0], mesh->mNumVertices, sizeof(aiColor4D)
+            );
+            accOffset += sizeof(aiColor4D);
+        }
+
+        if (flag.test(etoi(Vertex::Properties::Color4D))) {
+            vb.configProperty(Vertex::Properties::Color4D, accOffset);
+            vb.constructProperty( Vertex::Properties::Color4D,
+                mesh->mColors[0], mesh->mNumVertices, sizeof(aiColor4D)
+            );
+            accOffset += sizeof(aiColor4D);
+        }
+
+        vbs.push_back(std::move(vb));
     }
 
-    if (mesh->HasNormals()) {
-        stride += sizeof(aiVector3D);
-    }
+    auto ib = Mesh::Cont<Mesh::Index>();
 
-    if (mesh->HasTextureCoords(0)) {
-        stride += sizeof(aiVector2D);
-    }
-
-    if (mesh->HasVertexColors(0)) {
-        stride += sizeof(aiColor4D);
-    }
-
-    vb.configStride(stride);
-
-    auto accOffset = VertexBuffer::offset_t(0);
-
-    // construct vertex buffer
-    if (mesh->HasPositions()) {
-        vb.configProperty(Vertex::Properties::Position, accOffset);
-        vb.constructProperty(Vertex::Properties::Position,
-            mesh->mVertices, sizeof(aiVector3D), mesh->mNumVertices, sizeof(aiVector3D)
-        );
-        accOffset += sizeof(aiVector3D);
-    }
-
-    if (mesh->HasNormals()) {
-        vb.configProperty(Vertex::Properties::Normal, accOffset);
-        vb.constructProperty(Vertex::Properties::Normal,
-            mesh->mNormals, sizeof(aiVector3D), mesh->mNumVertices, sizeof(aiVector3D)
-        );
-        accOffset += sizeof(aiVector3D);
-    }
-
-    if (mesh->HasTextureCoords(0)) {
-        vb.configProperty(Vertex::Properties::TexCoord, accOffset);
-        vb.constructProperty(Vertex::Properties::TexCoord,
-            mesh->mTextureCoords[0], sizeof(aiVector2D), mesh->mNumVertices, sizeof(aiVector3D)
-        );
-        accOffset += sizeof(aiVector2D);
-    }
-
-    if (mesh->HasVertexColors(0)) {
-        vb.configProperty(Vertex::Properties::Color, accOffset);
-        vb.constructProperty(Vertex::Properties::Color,
-           mesh->mColors[0], sizeof(aiColor4D), mesh->mNumVertices, sizeof(aiColor4D)
-        );
-        accOffset += sizeof(aiColor4D);
-    }
-
-    // construct index buffer
     auto out = std::back_inserter(ib);
     for (std::size_t i = 0; i < mesh->mNumFaces; ++i) {
         auto face = mesh->mFaces[i];
@@ -88,7 +150,7 @@ const Mesh AssimpLoader::buildGeneralMesh(const aiMesh* mesh) const {
         }
     }
 
-    return Mesh(std::move(vb), std::move(ib));
+    return Mesh(std::move(vbs), std::move(ib));
 }
 
 }   // namespace gfx
