@@ -1,6 +1,8 @@
 #ifndef __SHADER_HPP
 #define __SHADER_HPP
 
+#include "shader.hpp"
+
 #include "d3d12InputLayout.hpp"
 
 #include "directx/d3dx12.h"
@@ -37,7 +39,7 @@ namespace d3d12 {
  * and pipeline state objects (PSOs) for each index.
  * @see Shader::Desc InputLayout ShaderBuilder SimpleShaderBuilder
  */
-class Shader {
+class Shader : public gfx::Shader<InputLayout> {
 public:
     friend class ShaderBuilder;
 
@@ -49,6 +51,9 @@ public:
         Vertex,
         Pixel
     };
+
+    template <class T>
+    using Cont = std::vector<T>;
 
     /**
      * @brief Descriptor for the shader.
@@ -64,7 +69,6 @@ public:
         UINT sampleMask;
         D3D12_RASTERIZER_DESC rasterizerState;
         D3D12_DEPTH_STENCIL_DESC depthStencilState;
-        InputLayout inputLayout;
         D3D12_INDEX_BUFFER_STRIP_CUT_VALUE ibStripCutValue;
         D3D12_PRIMITIVE_TOPOLOGY_TYPE primitiveTopologyType;
         UINT numRenderTargets;
@@ -77,6 +81,11 @@ public:
     };
 
     using Idx = int;
+
+    struct BindOption {
+        Idx idx;
+        ILIdx ilIdx;
+    };
 
     Shader() NOEXCEPT = default;
     virtual ~Shader() = default;
@@ -125,19 +134,12 @@ public:
      * @see bind
      */
     void make(ID3D12Device* pDevice, Idx idx, const Desc& desc);
-    /**
-     * @brief Binds the shader to the pipeline with the given index.
-     * @param pCmdList The command list to bind the shader.
-     * @param idx The index of the shader.
-     * @see make
-     */
-    void bind(ID3D12GraphicsCommandList* pCmdList, Idx idx) const;
+    void bind(IRenderContext& ctx, std::any option) const override;
 
 private:
     std::map< Type, wrl::ComPtr<ID3DBlob> > codes_;
-    std::map< Idx, wrl::ComPtr<ID3D12PipelineState> > psos_;
+    std::map< Idx, Cont<wrl::ComPtr<ID3D12PipelineState>> > psosMap_;
     wrl::ComPtr<ID3D12RootSignature> pRoot_;
-    InputLayout inputLayout_;
 };
 
 /**
@@ -191,16 +193,6 @@ public:
 
     ShaderBuilder& depthStencil(const D3D12_DEPTH_STENCIL_DESC& desc) NOEXCEPT {
         desc_.depthStencilState = desc;
-        return *this;
-    }
-
-    ShaderBuilder& inputLayout(const InputLayout& il) {
-        desc_.inputLayout = il;
-        return *this;
-    }
-
-    ShaderBuilder& inputLayout(InputLayout&& il) {
-        desc_.inputLayout = std::move(il);
         return *this;
     }
     
@@ -331,16 +323,6 @@ public:
 
     SimpleShaderBuilder& setRoot(wrl::ComPtr<ID3D12RootSignature> pRootSignature) NOEXCEPT {
         ShaderBuilder::root(pRootSignature);
-        return *this;
-    }
-
-    SimpleShaderBuilder& setInputLayout(const InputLayout& il) {
-        ShaderBuilder::inputLayout(il);
-        return *this;
-    }
-
-    SimpleShaderBuilder& setInputLayout(InputLayout&& il) {
-        ShaderBuilder::inputLayout(std::move(il));
         return *this;
     }
 
