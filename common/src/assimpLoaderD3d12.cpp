@@ -106,7 +106,7 @@ Material AssimpLoader::buildMaterial( Core& core, const PathTexMap& pathTexmap,
 }
 
 void AssimpLoader::processAiNode( Core& core, D3D12RenderContext& ctx,
-    const aiNode* node, const aiScene* scene, Model& model
+    const aiNode* node, const aiScene* scene, Model& model, const VBFlags& flags
 ) const {
     for (auto i = 0u; i < node->mNumMeshes; ++i) {
         auto aimesh = scene->mMeshes[node->mMeshes[i]];
@@ -115,34 +115,13 @@ void AssimpLoader::processAiNode( Core& core, D3D12RenderContext& ctx,
             continue;
         }
         
-        model.addMesh(buildMesh(core, ctx, aimesh), aimesh->mName.C_Str());
+        model.addMesh( buildMesh(core, ctx, aimesh, flags), aimesh->mName.C_Str() );
     }
 
     for (auto i = 0u; i < node->mNumChildren; ++i) {
         auto aiChild = node->mChildren[i];
         auto child = Model(aiChild->mName.C_Str());
-        processAiNode(core, ctx, aiChild, scene, child);
-        model.addChild(std::move(child), aiChild->mTransformation);
-    }
-}
-
-void AssimpLoader::processAiNode( Core& core, D3D12RenderContext& ctx,
-    const aiNode* node, const aiScene* scene, Model& model, const gfx::InputLayout& inputLayout
-) const {
-    for (auto i = 0u; i < node->mNumMeshes; ++i) {
-        auto aimesh = scene->mMeshes[node->mMeshes[i]];
-
-        if (aimesh->mNumVertices == 0 || aimesh->mNumFaces == 0) {
-            continue;
-        }
-        
-        model.addMesh( buildMesh(core, ctx, aimesh, inputLayout), aimesh->mName.C_Str() );
-    }
-
-    for (auto i = 0u; i < node->mNumChildren; ++i) {
-        auto aiChild = node->mChildren[i];
-        auto child = Model(aiChild->mName.C_Str());
-        processAiNode(core, ctx, aiChild, scene, child, inputLayout);
+        processAiNode(core, ctx, aiChild, scene, child, flags);
         model.addChild(std::move(child), aiChild->mTransformation);
     }
 }
