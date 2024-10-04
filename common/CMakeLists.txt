@@ -180,7 +180,6 @@ add_library(gfx
     src/d3d12Drawers.cpp include/d3d12Drawers.hpp
     src/nullShader.cpp include/nullShader.hpp
     src/solidShader.cpp include/solidShader.hpp
-    src/ntShader.cpp include/ntShader.hpp
     src/phongShader.cpp include/phongShader.hpp
     src/inputLayoutPresets.cpp include/inputLayoutPresets.hpp
     src/d3d12InputLayoutPresets.cpp include/d3d12InputLayoutPresets.hpp
@@ -198,6 +197,7 @@ add_library(gfx
     src/assimpLoader.cpp include/assimpLoader.hpp
     src/assimpLoaderD3d12.cpp include/assimpLoaderD3d12.hpp
     src/d3d12materialTree.cpp include/d3d12materialTree.hpp
+    src/shader.cpp include/shader.hpp
     
     include/dxtarget.hpp
     include/gfxPrimitive.hpp
