@@ -31,7 +31,7 @@ public:
 
     void render( const class IScene& scene, class IRenderContext& renderContext,
         class IRenderTarget& target
-    ) const {
+    ) const override {
         for (const auto& pair : pairs_) {
             auto protocol = pair.first;
             auto pShader = pair.second;
@@ -42,7 +42,7 @@ public:
         }
     }
 
-    void cleanup() NOEXCEPT {
+    void cleanup() override {
         pairs_.clear();
     }
 

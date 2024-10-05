@@ -12,7 +12,7 @@ namespace rp {
 enum class Protocol {
     PhongInstancingNT,
     PhongInstancing,
-    SomeProtocol,
+    Null,
 };
 
 enum class DIType {
@@ -44,6 +44,29 @@ concept PFUnified = requires {
     typename T::FPFDType;
     typename T::FLightType;
     typename T::FMaterialType;
+};
+
+struct Null {
+    static constexpr Protocol protocol = Protocol::Null;
+    static constexpr std::size_t typeIdx = 0u;
+    static constexpr std::size_t meshIdx = 1u;
+    static constexpr std::size_t PIDIdx = 2u;
+    static constexpr std::size_t PDDIdx = 3u;
+    static constexpr std::size_t PFDIdx = 4u;
+    static constexpr std::size_t lightIdx = 5u;
+    static constexpr std::size_t materialIdx = 6u;
+
+    using PIDType = void;
+    using PDDType = void;
+    using PFDType = void;
+    using LightType = void;
+    using MaterialType = void;
+
+    using FPIDType = void;
+    using FPDDType = void;
+    using FPFDType = void;
+    using FLightType = void;
+    using FMaterialType = void;
 };
 
 struct PhongInstancingNT {

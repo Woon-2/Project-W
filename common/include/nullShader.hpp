@@ -23,9 +23,9 @@ public:
         return d3d12::rootName(RootPreset::Null);
     }
 
-    static Core::InputLayoutIdx inputLayoutName() {
-        return d3d12::inputLayoutName(InputLayoutPreset::Pos3);
-    }
+    void draw( IRenderContext& ctx, const IScene& scene,
+        IRenderTarget& target, rp::Protocol protocol
+    ) const override;
 };
 
 }   // namespace d3d12

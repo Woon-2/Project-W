@@ -1,5 +1,7 @@
 #include "nullShader.hpp"
 
+#include "gfxExcept.hpp"
+
 namespace gfx {
 
 namespace d3d12 {
@@ -13,10 +15,19 @@ NullShader::NullShader(Core& core)
     auto pRoot = core.root( rootName() );
     auto pDevice = static_cast<ID3D12Device*>( DeviceFetcher::device(core) );
 
-    const auto& il = core.inputLayout( inputLayoutName() );
+    pushInputLayout(InputLayout());
+    pushProtocol(rp::Protocol::Null);
 
-    builder.setInputLayout(il).setRoot(pRoot).build(pDevice, *this, 0u);
+    builder.setRoot(pRoot).build(pDevice, *this, 0u);
     builder.wireframe().build(pDevice, *this, 1u);
+}
+
+void NullShader::draw( IRenderContext& ctx, const IScene& scene,
+    IRenderTarget& target, rp::Protocol protocol
+) const {
+    if (!supports(protocol)) {
+        throw GFX_EXCEPT("The protocol is not supported.");
+    }
 }
 
 }   // namespace d3d12
