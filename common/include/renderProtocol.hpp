@@ -24,6 +24,28 @@ enum class DIType {
     Material
 };
 
+template <class T>
+concept PFUnified = requires {
+    T::protocol;
+    T::typeIdx;
+    T::meshIdx;
+    T::PIDIdx;
+    T::PDDIdx;
+    T::PFDIdx;
+    T::lightIdx;
+    T::materialIdx;
+    typename T::PIDType;
+    typename T::PDDType;
+    typename T::PFDType;
+    typename T::LightType;
+    typename T::MaterialType;
+    typename T::FPIDType;
+    typename T::FPDDType;
+    typename T::FPFDType;
+    typename T::FLightType;
+    typename T::FMaterialType;
+};
+
 struct PhongInstancingNT {
     static constexpr Protocol protocol = Protocol::PhongInstancingNT;
     static constexpr std::size_t typeIdx = 0u;
