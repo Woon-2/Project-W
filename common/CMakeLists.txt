@@ -179,7 +179,6 @@ add_library(gfx
     src/d3d12InputLayout.cpp include/d3d12InputLayout.hpp
     src/d3d12Drawers.cpp include/d3d12Drawers.hpp
     src/nullShader.cpp include/nullShader.hpp
-    src/solidShader.cpp include/solidShader.hpp
     src/phongShader.cpp include/phongShader.hpp
     src/inputLayoutPresets.cpp include/inputLayoutPresets.hpp
     src/d3d12InputLayoutPresets.cpp include/d3d12InputLayoutPresets.hpp
