@@ -198,6 +198,7 @@ add_library(gfx
     src/assimpLoaderD3d12.cpp include/assimpLoaderD3d12.hpp
     src/d3d12materialTree.cpp include/d3d12materialTree.hpp
     src/shader.cpp include/shader.hpp
+    src/renderer.cpp include/renderer.hpp
     
     include/dxtarget.hpp
     include/gfxPrimitive.hpp

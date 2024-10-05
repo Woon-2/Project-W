@@ -11,13 +11,38 @@
 
 #include <span>
 #include <cstdint>
+#include <optional>
 
 namespace gfx {
 
 namespace d3d12 {
 
+class MeshView {
+public:
+    MeshView(const Mesh* pMesh)
+        : pMesh_(pMesh), pShader_(nullptr), protocol_(std::nullopt) {}
+
+    MeshView(const Mesh* pMesh, const Shader* pShader, rp::Protocol protocol)
+        : pMesh_(pMesh), pShader_(pShader), protocol_(protocol) {}
+
+    const Shader* shader() const NOEXCEPT { return pShader_; }
+    void setShader(const Shader* pShader) NOEXCEPT { pShader_ = pShader; }
+
+    const Mesh* mesh() const NOEXCEPT { return pMesh_; }
+    void setMesh(const Mesh* pMesh) NOEXCEPT { pMesh_ = pMesh; }
+
+    bool hasProtocol() const NOEXCEPT { return protocol_.has_value(); }
+    rp::Protocol protocol() const NOEXCEPT { return protocol_.value(); }
+    void setProtocol(rp::Protocol protocol) NOEXCEPT { protocol_ = protocol; }
+
+private:
+    const Mesh* pMesh_;
+    const Shader* pShader_;
+    std::optional<rp::Protocol> protocol_;
+};
+
 struct Fragment {
-    const Mesh* pMesh;
+    const MeshView* pMesh;
     const Material* pMaterial;
     std::span<mu::Mat4x4> worlds;
 };

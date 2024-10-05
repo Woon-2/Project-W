@@ -76,7 +76,9 @@ public:
     }
 
     virtual void bind(IRenderContext& ctx, std::any option) const = 0;
-    virtual void draw(IRenderContext& ctx, const IScene& scene) const = 0;
+    virtual void draw( IRenderContext& ctx, const IScene& scene,
+        IRenderTarget& target, rp::Protocol protocol
+    ) const = 0;
 };
 
 }   // namespace gfx

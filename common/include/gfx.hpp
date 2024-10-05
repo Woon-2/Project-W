@@ -134,8 +134,6 @@ public:
      */
     virtual void render(const class IScene& scene, class IRenderContext& renderContext, class IRenderTarget& target) const = 0;
     virtual void cleanup() = 0;
-
-    virtual rp::Protocol protocol() const = 0;
 };
 
 /**
@@ -357,9 +355,7 @@ public:
      * @return Generator<DrawInfo> An iterable object that generates the sequence of DrawInfo instances.
      * @note This function should be implemented as a coroutine which yields DrawInfo instances.
      */
-    virtual Generator<DrawInfo> iteration() const = 0;
-
-    virtual rp::Protocol protocol() const = 0;
+    virtual Generator<DrawInfo> iteration(rp::Protocol protocol) const = 0;
 };
 
 }   // namespace gfx

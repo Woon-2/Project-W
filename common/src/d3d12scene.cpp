@@ -14,15 +14,14 @@ namespace gfx {
 namespace d3d12 {
 
 namespace {
-
-    template <class RenderProtocol>
+    template <rp::PFUnified RenderProtocol>
     Generator<DrawInfo> iterationImpl(const auto& lights, const auto& fragments, const mu::Mat4x4& view, const mu::Mat4x4& proj);
-    template <class RenderProtocol>
+    template <rp::PFUnified RenderProtocol>
     Generator<DrawInfo> fragmentIteration(const auto& fragment, const mu::Mat4x4& view, const mu::Mat4x4& proj, auto& baseInstIdx);
     rp::PhongInstancing::PIDType genPID(rp::PhongInstancing, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj);
     rp::PhongInstancingNT::PIDType genPID(rp::PhongInstancingNT, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj);
 
-    template <class RenderProtocol>
+    template <rp::PFUnified RenderProtocol>
     Generator<DrawInfo> iterationImpl(const auto& lights, const auto& fragments, const mu::Mat4x4& view, const mu::Mat4x4& proj) {
         // As it is expected to be not too many lights,
         // store seperated light or material's pointers in a vector
@@ -35,7 +34,7 @@ namespace {
 
         auto tmpLightBuffer = FLightType();
         std::ranges::copy( lights | std::views::transform(
-            [](auto pLight) { return *pLight; }
+            [](const auto& pAnyLight) { return *std::any_cast<const LightType*>(pAnyLight); }
         ), std::back_inserter(tmpLightBuffer) );
 
         lightInfo.set(RenderProtocol::typeIdx, rp::DIType::Light);
@@ -66,7 +65,7 @@ namespace {
         }
     }
 
-    template <class RenderProtocol>
+    template <rp::PFUnified RenderProtocol>
     Generator<DrawInfo> fragmentIteration(const auto& fragment, const mu::Mat4x4& view, const mu::Mat4x4& proj, auto& baseInstIdx) {
         auto meshInfo = DrawInfo();
 
@@ -135,10 +134,25 @@ namespace {
     }
 }   // namespace gfx::d3d12::<anonymous>
 
-Generator<DrawInfo> CameraScene::iteration() const {
-    switch (protocol_) {
+Generator<DrawInfo> CameraScene::iteration(rp::Protocol protocol) const {
+    const Cont<std::any>* pArgLightsMap = nullptr;
+    const Cont<Fragment>* pArgFragmentsMap = nullptr;
+
+    auto tmpArgLightsMap = Cont<std::any>();
+    auto tmpArgFragmentsMap = Cont<Fragment>();
+
+    if (lightsMap_.contains(protocol)) {
+        pArgLightsMap = &lightsMap_.at(protocol);
+    } else {
+        pArgLightsMap = &tmpArgLightsMap;
+    }
+
+
+    switch (protocol) {
     case rp::Protocol::PhongInstancing: {
-        auto coro = phongInstancingIteration();
+        auto coro = iterationImpl<rp::PhongInstancing>(
+            *pArgLightsMap, *pArgFragmentsMap, view(), proj()
+        );
         for (auto& drawInfo : coro) {
             co_yield std::move(drawInfo);
         }
@@ -146,26 +160,14 @@ Generator<DrawInfo> CameraScene::iteration() const {
     }
 
     case rp::Protocol::PhongInstancingNT: {
-        auto coro = phongInstancingNTIteration();
+        auto coro = iterationImpl<rp::PhongInstancingNT>(
+            *pArgLightsMap, *pArgFragmentsMap, view(), proj()
+        );
         for (auto& drawInfo : coro) {
             co_yield std::move(drawInfo);
         }
         break;
     }
-    }
-}
-
-Generator<DrawInfo> CameraScene::phongInstancingIteration() const {
-    auto coro = iterationImpl<rp::PhongInstancing>(lights_, fragments_, view(), proj());
-    for (auto& drawInfo : coro) {
-        co_yield std::move(drawInfo);
-    }
-}
-
-Generator<DrawInfo> CameraScene::phongInstancingNTIteration() const {
-    auto coro = iterationImpl<rp::PhongInstancingNT>(lights_, fragments_, view(), proj());
-    for (auto& drawInfo : coro) {
-        co_yield std::move(drawInfo);
     }
 }
 
