@@ -28,13 +28,13 @@ public:
 
     std::optional<Mesh> buildMesh(Core& core, D3D12RenderContext& ctx, const aiMesh* mesh) const {
         return buildMesh( core, ctx, mesh, VBFlags{
-            1 << etoi(Vertex::Properties::Position3D),
-            1 << etoi(Vertex::Properties::Normal3D),
-            1 << etoi(Vertex::Properties::TexCoord2D0),
-            1 << etoi(Vertex::Properties::Tangent3D),
-            1 << etoi(Vertex::Properties::Bitangent3D),
-            1 << etoi(Vertex::Properties::Color3D),
-            1 << etoi(Vertex::Properties::Color4D)
+            1ull << etoi(Vertex::Properties::Position3D),
+            1ull << etoi(Vertex::Properties::Normal3D),
+            1ull << etoi(Vertex::Properties::TexCoord2D0),
+            1ull << etoi(Vertex::Properties::Tangent3D),
+            1ull << etoi(Vertex::Properties::Bitangent3D),
+            1ull << etoi(Vertex::Properties::Color3D),
+            1ull << etoi(Vertex::Properties::Color4D)
         } );
     }
 
@@ -48,13 +48,13 @@ public:
 
     Model buildModel(Core& core, D3D12RenderContext& ctx) const {
         return buildModel( core, ctx, VBFlags{
-            1 << etoi(Vertex::Properties::Position3D),
-            1 << etoi(Vertex::Properties::Normal3D),
-            1 << etoi(Vertex::Properties::TexCoord2D0),
-            1 << etoi(Vertex::Properties::Tangent3D),
-            1 << etoi(Vertex::Properties::Bitangent3D),
-            1 << etoi(Vertex::Properties::Color3D),
-            1 << etoi(Vertex::Properties::Color4D)
+            1ull << etoi(Vertex::Properties::Position3D),
+            1ull << etoi(Vertex::Properties::Normal3D),
+            1ull << etoi(Vertex::Properties::TexCoord2D0),
+            1ull << etoi(Vertex::Properties::Tangent3D),
+            1ull << etoi(Vertex::Properties::Bitangent3D),
+            1ull << etoi(Vertex::Properties::Color3D),
+            1ull << etoi(Vertex::Properties::Color4D)
         } );
     }
 
@@ -80,13 +80,13 @@ public:
 private:
     void processAiNode(Core& core, D3D12RenderContext& ctx, const aiNode* node, const aiScene* scene, Model& model) const {
         processAiNode( core, ctx, node, scene, model, VBFlags{
-            1 << etoi(Vertex::Properties::Position3D),
-            1 << etoi(Vertex::Properties::Normal3D),
-            1 << etoi(Vertex::Properties::TexCoord2D0),
-            1 << etoi(Vertex::Properties::Tangent3D),
-            1 << etoi(Vertex::Properties::Bitangent3D),
-            1 << etoi(Vertex::Properties::Color3D),
-            1 << etoi(Vertex::Properties::Color4D)
+            1ull << etoi(Vertex::Properties::Position3D),
+            1ull << etoi(Vertex::Properties::Normal3D),
+            1ull << etoi(Vertex::Properties::TexCoord2D0),
+            1ull << etoi(Vertex::Properties::Tangent3D),
+            1ull << etoi(Vertex::Properties::Bitangent3D),
+            1ull << etoi(Vertex::Properties::Color3D),
+            1ull << etoi(Vertex::Properties::Color4D)
         } );
     }
     void processAiNode(Core& core, D3D12RenderContext& ctx, const aiNode* node, const aiScene* scene, Model& model, const VBFlags& flags) const;
