@@ -9,6 +9,7 @@ namespace d3d12 {
 void Mesh::completeInit() {
     vubs_.clear();
     iub_.Reset();
+    clear();
 }
 
 void Mesh::bind(D3D12RenderContext& ctx) const {
@@ -53,7 +54,7 @@ void Mesh::buildRes(Core& core, D3D12RenderContext& ctx) {
         vubs_.push_back(vub);
         vbrs_.push_back(vbr);
         vbvs_.emplace_back( 
-            /* .BufferLocation = */ vub->GetGPUVirtualAddress(),
+            /* .BufferLocation = */ vbr->GetGPUVirtualAddress(),
             /* .SizeInBytes = */ static_cast<UINT>( vb.byteWidth() ),
             /* .StrideInBytes = */ static_cast<UINT>( vb.stride() )
         );
@@ -62,7 +63,8 @@ void Mesh::buildRes(Core& core, D3D12RenderContext& ctx) {
     // Index buffer
     const auto ibByteWidth = ib().size() * sizeof(Index);
     iub_ = createUpBuf(core, ib().data(), ibByteWidth);
-    ibv_.BufferLocation = iub_->GetGPUVirtualAddress();
+    ibr_ = createDefBuf(core, ctx, iub_.Get(), D3D12_RESOURCE_STATE_INDEX_BUFFER);
+    ibv_.BufferLocation = ibr_->GetGPUVirtualAddress();
     ibv_.SizeInBytes = static_cast<UINT>( ibByteWidth );
     ibv_.Format = DXGI_FORMAT_R32_UINT;
 }
