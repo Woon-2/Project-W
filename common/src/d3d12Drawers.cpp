@@ -22,7 +22,6 @@ void illuminanceDrawImpl(const IScene& scene, ConcreteShader& shader, D3D12Rende
     shader.setRootParams(pCmdList.Get());
 
     auto lightCnt = 0ull;
-    auto materialCnt = 0ull;
     const Mesh* pMesh = nullptr;
     auto instanceCnt = 0ull;
     auto pfd = PFD{};
