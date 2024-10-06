@@ -9,6 +9,8 @@
 #include <vector>
 #include <ranges>
 #include <algorithm>
+#include <tuple>
+#include <any>
 
 #include <cassert>
 
@@ -19,14 +21,14 @@ class Renderer : public IRenderer {
 public:
     void init(gfx::ICore& core) override {}
 
-    void pushShader(rp::Protocol protocol, TShader* pShader) {
+    void pushShader(rp::Protocol protocol, TShader* pShader, std::any option = {}) {
         assert(pShader != nullptr);
         assert(pShader->supports(protocol));
-        pairs_.emplace_back(protocol, pShader);
+        tuples_.emplace_back(protocol, pShader, option);
     }
 
     bool supports(rp::Protocol protocol) const {
-        return std::ranges::any_of(pairs_, [protocol](const auto& pair) {
+        return std::ranges::any_of(tuples_, [protocol](const auto& pair) {
             return pair.first == protocol;
         } );
     }
@@ -34,22 +36,22 @@ public:
     void render( const class IScene& scene, class IRenderContext& renderContext,
         class IRenderTarget& target
     ) const override {
-        for (const auto& pair : pairs_) {
-            auto protocol = pair.first;
-            auto pShader = pair.second;
+        for (const auto& tuple : tuples_) {
+            auto protocol = std::get<rp::Protocol>(tuple);
+            auto pShader = std::get<TShader*>(tuple);
+            auto option = std::get<std::any>(tuple);
 
-            /* pShader->bind(renderContext, protocol::option); */
-            pShader->bind(renderContext, std::any{});
+            pShader->bind(renderContext, option);
             pShader->draw(renderContext, scene, target, protocol);
         }
     }
 
     void cleanup() override {
-        pairs_.clear();
+        tuples_.clear();
     }
 
 private:
-    std::vector< std::pair<rp::Protocol, TShader*> > pairs_;
+    std::vector< std::tuple<rp::Protocol, TShader*, std::any> > tuples_;
 };
 
 }   // namespace gfx

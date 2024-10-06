@@ -60,6 +60,14 @@ public:
     std::size_t maxLightCnt() const NOEXCEPT { return maxLights_; }
     std::size_t maxInstCnt() const NOEXCEPT { return maxInstances_; }
 
+    BindOption optSolidAndGeneral() const NOEXCEPT {
+        return BindOption{ .idx = 0, .ilIdx = 0 };
+    }
+
+    BindOption optWireframeAndGeneral() const NOEXCEPT {
+        return BindOption{ .idx = 1, .ilIdx = 0 };
+    }
+
 private:
     std::vector< std::vector< wrl::ComPtr<ID3D12Resource> > > internalResArr_;
 
@@ -117,6 +125,14 @@ public:
     void draw( IRenderContext& ctx, const IScene& scene,
         IRenderTarget& target, rp::Protocol protocol
     ) override;
+
+    BindOption optSolidAndGeneral() const NOEXCEPT {
+        return BindOption{ .idx = 0, .ilIdx = 0 };
+    }
+
+    BindOption optWireframeAndGeneral() const NOEXCEPT {
+        return BindOption{ .idx = 1, .ilIdx = 0 };
+    }
 
 private:
     std::vector< std::vector< wrl::ComPtr<ID3D12Resource> > > internalResArr_;
