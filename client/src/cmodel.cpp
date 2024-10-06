@@ -73,10 +73,6 @@ void Fragmentizer::addEntity(ecs::Entity& entity) {
 }
 
 void Fragmentizer::addModelData(const ModelDataXX& modelData) {
-    if (modelData.nodes().empty()) {
-        return;
-    }
-
     for ( const auto& node : modelData.nodes() ) {
         nodesMap_[node].push_back(&node);
     }
