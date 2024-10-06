@@ -8,8 +8,7 @@ namespace gfx {
 
 namespace d3d12 {
 
-void illuminanceDraw(const IScene& scene, rp::PhongInstancing protocol, PhongShader& shader, ID3D12GraphicsCommandList* pCmdList);
-void illuminanceDraw(const IScene& scene, rp::PhongInstancingNT protocol, PhongShaderNT& shader, ID3D12GraphicsCommandList* pCmdList);
+void illuminanceDraw(const IScene& scene, rp::Protocol protocol, Shader& shader, D3D12RenderContext& ctx);
 
 }   // namespace gfx::d3d12
 

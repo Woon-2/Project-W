@@ -5,6 +5,41 @@ namespace gfx {
 
 namespace d3d12 {
 
+void Shader::defPreDraw( IRenderContext& ctx, const IScene& scene,
+    IRenderTarget& target, rp::Protocol protocol
+) {
+    if ( !supports(protocol) ) {
+        throw GFX_EXCEPT("The protocol is not supported.");
+    }
+
+    if ( !ctx.castableTo(RenderContextType::D3D12) ) {
+        throw GFX_EXCEPT("The render context is not supported.");
+    }
+
+    if ( !target.castableTo(RenderTargetType::D3D12)
+        || !target.castableTo(RenderTargetType::D3D12_DEPTH)
+    ) {
+        throw GFX_EXCEPT("The render target type is mismatched.");
+    }
+
+    // temporary bind option
+    bind( ctx, BindOption{ .idx = 0, .ilIdx = 0 } );
+
+    auto pCmdList = std::any_cast<wrl::ComPtr<ID3D12GraphicsCommandList>>(
+        ctx.cast(RenderContextType::D3D12)
+    );
+
+    auto pTarget = std::any_cast<D3D12_CPU_DESCRIPTOR_HANDLE>(
+        target.cast(RenderTargetType::D3D12)
+    );
+
+    auto pDepthTarget = std::any_cast<D3D12_CPU_DESCRIPTOR_HANDLE>(
+        target.cast(RenderTargetType::D3D12_DEPTH)
+    );
+
+    DX_THROW_FAILED_VOID( pCmdList->OMSetRenderTargets(1u, &pTarget, true, &pDepthTarget) );
+}
+
 void Shader::make(ID3D12Device* pDevice, Idx idx, const Desc& desc) {
     auto vsBlob = codes_.at(Type::Vertex);
     auto psBlob = codes_.at(Type::Pixel);

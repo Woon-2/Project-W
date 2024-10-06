@@ -7,8 +7,8 @@ namespace d3d12 {
 
 namespace {
 
-template <class RenderProtocol, class ConcreteShader>
-void illuminanceDrawImpl(const IScene& scene, ConcreteShader& shader, ID3D12GraphicsCommandList* pCmdList) {
+template <rp::PFUnified RenderProtocol, rp::PFUnifiedShader ConcreteShader>
+void illuminanceDrawImpl(const IScene& scene, ConcreteShader& shader, D3D12RenderContext& ctx) {
     using Light = RenderProtocol::LightType;
     using Material = RenderProtocol::MaterialType;
     using PID = RenderProtocol::PIDType;
@@ -23,13 +23,13 @@ void illuminanceDrawImpl(const IScene& scene, ConcreteShader& shader, ID3D12Grap
     auto instanceCnt = 0ull;
     auto pfd = PFD{};
 
-    for (auto di : scene.iteration()) {
+    for (auto di : scene.iteration(RenderProtocol::protocol)) {
         auto type = di.get<rp::DIType>(RenderProtocol::typeIdx);
 
         switch (type) {
         case rp::DIType::Light: {
             auto lights = di.get<const RenderProtocol::FLightType&>(RenderProtocol::lightIdx);
-            auto cnt = std::min(ConcreteShader::defMaxLights - lightCnt, lights.size());
+            auto cnt = std::min(shader.maxLightCnt() - lightCnt, lights.size());
             shader.lights().uploadRegion( lights.data(), cnt * sizeof(Light), lightCnt * sizeof(Light), shader.frameIdx());
             lightCnt += cnt;
             break;
@@ -37,13 +37,13 @@ void illuminanceDrawImpl(const IScene& scene, ConcreteShader& shader, ID3D12Grap
 
         case rp::DIType::Mesh: {
             pMesh = di.get<const Mesh*>(RenderProtocol::meshIdx);
-            pMesh->bind(pCmdList);
+            pMesh->bind(ctx);
             break;
         }
 
         case rp::DIType::PID: {
             auto pids = di.get<const RenderProtocol::FPIDType&>(RenderProtocol::PIDIdx);
-            auto cnt = std::min(ConcreteShader::defMaxInstances - instanceCnt, pids.size());
+            auto cnt = std::min(shader.maxInstCnt() - instanceCnt, pids.size());
             shader.pid().uploadRegion(pids.data(), cnt * sizeof(PID), instanceCnt * sizeof(PID), shader.frameIdx());
             instanceCnt += cnt;
             break;
@@ -61,7 +61,7 @@ void illuminanceDrawImpl(const IScene& scene, ConcreteShader& shader, ID3D12Grap
             shader.pdd().upload(&pdd, sizeof(PDD), shader.frameIdx());
             shader.pfd().upload(&pfd, sizeof(PFD), shader.frameIdx());
 
-            pMesh->draw(pCmdList, instanceCnt);
+            pMesh->draw(ctx, instanceCnt);
             break;
         }
 
@@ -73,16 +73,15 @@ void illuminanceDrawImpl(const IScene& scene, ConcreteShader& shader, ID3D12Grap
 
 }   // namespace gfx::d3d12::<anonymous>
 
-void illuminanceDraw( const IScene& scene, rp::PhongInstancing protocol,
-    PhongShader& shader, ID3D12GraphicsCommandList* pCmdList
-) {
-    illuminanceDrawImpl<rp::PhongInstancing>(scene, shader, pCmdList);
-}
-
-void illuminanceDraw( const IScene& scene, rp::PhongInstancingNT protocol,
-    PhongShaderNT& shader, ID3D12GraphicsCommandList* pCmdList
-) {
-    illuminanceDrawImpl<rp::PhongInstancingNT>(scene, shader, pCmdList);
+void illuminanceDraw(const IScene& scene, rp::Protocol protocol, Shader& shader, D3D12RenderContext& ctx) {
+    switch (protocol) {
+    case rp::Protocol::PhongInstancing:
+        illuminanceDrawImpl<rp::PhongInstancing>(scene, static_cast<PhongShader&>(shader), ctx);
+        break;
+    case rp::Protocol::PhongInstancingNT:
+        illuminanceDrawImpl<rp::PhongInstancingNT>(scene, static_cast<PhongShaderNT&>(shader), ctx);
+        break;
+    }
 }
 
 }   // namespace gfx::d3d12

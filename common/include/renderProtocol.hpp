@@ -46,6 +46,17 @@ concept PFUnified = requires {
     typename T::FMaterialType;
 };
 
+template <class T>
+concept PFUnifiedShader = requires (T& t){
+    t.maxLightCnt();
+    t.maxInstCnt();
+    t.frameIdx();
+    t.pid();
+    t.pdd();
+    t.pfd();
+    t.lights();
+};
+
 struct Null {
     static constexpr Protocol protocol = Protocol::Null;
     static constexpr std::size_t typeIdx = 0u;

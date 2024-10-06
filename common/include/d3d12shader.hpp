@@ -40,6 +40,11 @@ namespace d3d12 {
  * @see Shader::Desc InputLayout ShaderBuilder SimpleShaderBuilder
  */
 class Shader : public gfx::Shader<InputLayout> {
+protected:
+    void defPreDraw( IRenderContext& ctx, const IScene& scene,
+        IRenderTarget& target, rp::Protocol protocol
+    );
+
 public:
     friend class ShaderBuilder;
 

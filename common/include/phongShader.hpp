@@ -16,12 +16,12 @@ namespace d3d12 {
 
 class PhongShaderNT : public Shader {
 public:
-    static constexpr size_t defMaxInstances = 1000u;
-    static constexpr size_t defMaxLights = 12u;
+    static constexpr size_t defMaxInstCnt = 1000u;
+    static constexpr size_t defMaxLightCnt = 12u;
 
     struct Config {
-        size_t maxInstances = defMaxInstances;
-        size_t maxLights = defMaxLights;
+        size_t maxInstCnt = defMaxInstCnt;
+        size_t maxLightCnt = defMaxLightCnt;
     };
 
     PhongShaderNT(Core& core, const Config& config = Config{}, std::size_t duplicationCnt = 1u);
@@ -32,10 +32,6 @@ public:
 
     static Core::RootIdx rootName() NOEXCEPT {
         return d3d12::rootName(RootPreset::Unified);
-    }
-
-    static Core::InputLayoutIdx inputLayoutName() NOEXCEPT {
-        return d3d12::inputLayoutName(InputLayoutPreset::Pos3Norm3);
     }
 
     // TODO: make interface standard or base class
@@ -51,6 +47,10 @@ public:
     #endif
         frameIdx_ = frameIdx;
     }
+
+    void draw( IRenderContext& ctx, const IScene& scene,
+        IRenderTarget& target, rp::Protocol protocol
+    ) override;
 
     GpuMappedRes& pfd() NOEXCEPT { return resPerFrameData_; }
     GpuMappedRes& pdd() NOEXCEPT { return resPerDrawcallData_; }
@@ -72,12 +72,12 @@ private:
 
 class PhongShader : public Shader {
 public:
-    static constexpr std::size_t defMaxInstances = PhongShaderNT::defMaxInstances;
-    static constexpr std::size_t defMaxLights = PhongShaderNT::defMaxLights;
+    static constexpr std::size_t defMaxInstCnt = PhongShaderNT::defMaxInstCnt;
+    static constexpr std::size_t defMaxLightCnt = PhongShaderNT::defMaxLightCnt;
 
     struct Config {
-        size_t maxInstances = defMaxInstances;
-        size_t maxLights = defMaxLights;
+        size_t maxInstCnt = defMaxInstCnt;
+        size_t maxLightCnt = defMaxLightCnt;
     };
 
     PhongShader(Core& core, const Config& config = Config{}, std::size_t duplicationCnt = 1u);
@@ -88,10 +88,6 @@ public:
 
     static Core::RootIdx rootName() NOEXCEPT {
         return d3d12::rootName(RootPreset::Unified1);
-    }
-
-    static Core::InputLayoutIdx inputLayoutName() NOEXCEPT {
-        return d3d12::inputLayoutName(InputLayoutPreset::Pos3Norm3Tex2);
     }
 
     void setRootParams(ID3D12GraphicsCommandList* pCmdList, size_t frameIdx = 0) const;
@@ -111,6 +107,13 @@ public:
     GpuMappedRes& pid() NOEXCEPT { return resPerInstanceData_; }
     GpuMappedRes& lights() NOEXCEPT { return resLights_; }
     D3D12_GPU_DESCRIPTOR_HANDLE texSrvStart() NOEXCEPT { return texSrvStart_; }
+    
+    std::size_t maxLightCnt() const NOEXCEPT { return maxLights_; }
+    std::size_t maxInstCnt() const NOEXCEPT { return maxInstances_; }
+
+    void draw( IRenderContext& ctx, const IScene& scene,
+        IRenderTarget& target, rp::Protocol protocol
+    ) override;
 
 private:
     std::vector< std::vector< wrl::ComPtr<ID3D12Resource> > > internalResArr_;
