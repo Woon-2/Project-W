@@ -187,7 +187,7 @@ public:
      */
     void configProperty(Vertex::Properties prop, offset_t offset) NOEXCEPT {
         offsets_[etoi(prop)] = offset;
-        properties_ = properties_.test(etoi(prop));
+        properties_.set(etoi(prop));
     }
     /**
      * @brief Configures the stride of the vertex buffer.
