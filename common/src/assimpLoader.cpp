@@ -95,7 +95,7 @@ Mesh AssimpLoader::buildGeneralMesh(const VBFlags& flags, const aiMesh* mesh) co
         if (flag.test(etoi(Vertex::Properties::TexCoord2D0))) {
             vb.configProperty(Vertex::Properties::TexCoord2D0, accOffset);
             vb.constructProperty( Vertex::Properties::TexCoord2D0,
-                mesh->mTextureCoords[0], mesh->mNumVertices, sizeof(aiVector2D)
+                mesh->mTextureCoords[0], mesh->mNumVertices, sizeof(aiVector3D)
             );
             accOffset += sizeof(aiVector2D);
         }
@@ -121,7 +121,7 @@ Mesh AssimpLoader::buildGeneralMesh(const VBFlags& flags, const aiMesh* mesh) co
             vb.constructProperty( Vertex::Properties::Color3D,
                 mesh->mColors[0], mesh->mNumVertices, sizeof(aiColor4D)
             );
-            accOffset += sizeof(aiColor4D);
+            accOffset += sizeof(aiColor3D);
         }
 
         if (flag.test(etoi(Vertex::Properties::Color4D))) {
@@ -132,7 +132,9 @@ Mesh AssimpLoader::buildGeneralMesh(const VBFlags& flags, const aiMesh* mesh) co
             accOffset += sizeof(aiColor4D);
         }
 
-        vbs.push_back(std::move(vb));
+        if (vb.byteWidth() > 0) {
+            vbs.push_back(std::move(vb));
+        }
     }
 
     auto ib = Mesh::Cont<Mesh::Index>();

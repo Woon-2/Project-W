@@ -115,7 +115,10 @@ void AssimpLoader::processAiNode( Core& core, D3D12RenderContext& ctx,
             continue;
         }
         
-        model.addMesh( buildMesh(core, ctx, aimesh, flags), aimesh->mName.C_Str() );
+        auto mesh = buildMesh(core, ctx, aimesh, flags);
+        if (mesh.has_value()) {
+            model.addMesh(std::move(mesh.value()), aimesh->mName.C_Str());
+        }
     }
 
     for (auto i = 0u; i < node->mNumChildren; ++i) {

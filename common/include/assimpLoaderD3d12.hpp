@@ -22,35 +22,39 @@ class AssimpLoader : public gfx::AssimpLoader {
 public:
     using PathTexMap = std::map<std::filesystem::path, const Texture*>;
 
-    Mesh buildMesh(Core& core, D3D12RenderContext& ctx) const {
+    std::optional<Mesh> buildMesh(Core& core, D3D12RenderContext& ctx) const {
         return buildMesh(core, ctx, scene()->mMeshes[0]);
     }
 
-    Mesh buildMesh(Core& core, D3D12RenderContext& ctx, const aiMesh* mesh) const {
+    std::optional<Mesh> buildMesh(Core& core, D3D12RenderContext& ctx, const aiMesh* mesh) const {
         return buildMesh( core, ctx, mesh, VBFlags{
-            etoi(Vertex::Properties::Position3D),
-            etoi(Vertex::Properties::Normal3D),
-            etoi(Vertex::Properties::TexCoord2D0),
-            etoi(Vertex::Properties::Tangent3D),
-            etoi(Vertex::Properties::Bitangent3D),
-            etoi(Vertex::Properties::Color3D),
-            etoi(Vertex::Properties::Color4D)
+            1 << etoi(Vertex::Properties::Position3D),
+            1 << etoi(Vertex::Properties::Normal3D),
+            1 << etoi(Vertex::Properties::TexCoord2D0),
+            1 << etoi(Vertex::Properties::Tangent3D),
+            1 << etoi(Vertex::Properties::Bitangent3D),
+            1 << etoi(Vertex::Properties::Color3D),
+            1 << etoi(Vertex::Properties::Color4D)
         } );
     }
 
-    Mesh buildMesh(Core& core, D3D12RenderContext& ctx, const aiMesh* mesh, const VBFlags& flags) const {
-        return Mesh( core, ctx, buildGeneralMesh( flags, mesh ) );
+    std::optional<Mesh> buildMesh(Core& core, D3D12RenderContext& ctx, const aiMesh* mesh, const VBFlags& flags) const {
+        auto gm = buildGeneralMesh( flags, mesh );
+        if (gm.vbs().empty() || gm.ib().empty()) {
+            return std::nullopt;
+        }
+        return Mesh( core, ctx, std::move(gm) );
     }
 
     Model buildModel(Core& core, D3D12RenderContext& ctx) const {
         return buildModel( core, ctx, VBFlags{
-            etoi(Vertex::Properties::Position3D),
-            etoi(Vertex::Properties::Normal3D),
-            etoi(Vertex::Properties::TexCoord2D0),
-            etoi(Vertex::Properties::Tangent3D),
-            etoi(Vertex::Properties::Bitangent3D),
-            etoi(Vertex::Properties::Color3D),
-            etoi(Vertex::Properties::Color4D)
+            1 << etoi(Vertex::Properties::Position3D),
+            1 << etoi(Vertex::Properties::Normal3D),
+            1 << etoi(Vertex::Properties::TexCoord2D0),
+            1 << etoi(Vertex::Properties::Tangent3D),
+            1 << etoi(Vertex::Properties::Bitangent3D),
+            1 << etoi(Vertex::Properties::Color3D),
+            1 << etoi(Vertex::Properties::Color4D)
         } );
     }
 
@@ -76,13 +80,13 @@ public:
 private:
     void processAiNode(Core& core, D3D12RenderContext& ctx, const aiNode* node, const aiScene* scene, Model& model) const {
         processAiNode( core, ctx, node, scene, model, VBFlags{
-            etoi(Vertex::Properties::Position3D),
-            etoi(Vertex::Properties::Normal3D),
-            etoi(Vertex::Properties::TexCoord2D0),
-            etoi(Vertex::Properties::Tangent3D),
-            etoi(Vertex::Properties::Bitangent3D),
-            etoi(Vertex::Properties::Color3D),
-            etoi(Vertex::Properties::Color4D)
+            1 << etoi(Vertex::Properties::Position3D),
+            1 << etoi(Vertex::Properties::Normal3D),
+            1 << etoi(Vertex::Properties::TexCoord2D0),
+            1 << etoi(Vertex::Properties::Tangent3D),
+            1 << etoi(Vertex::Properties::Bitangent3D),
+            1 << etoi(Vertex::Properties::Color3D),
+            1 << etoi(Vertex::Properties::Color4D)
         } );
     }
     void processAiNode(Core& core, D3D12RenderContext& ctx, const aiNode* node, const aiScene* scene, Model& model, const VBFlags& flags) const;
