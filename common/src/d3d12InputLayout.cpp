@@ -28,7 +28,7 @@ void InputElementAuxMap::init() {
         .format = DXGI_FORMAT_R32G32B32A32_FLOAT
     } );
     auxMap_.try_emplace(Vertex::Properties::TexCoord2D0, InputElementAux{
-        .semanticName = "TEXCOORD0",
+        .semanticName = "TEXCOORD",
         .semanticIndex = 0,
         .format = DXGI_FORMAT_R32G32_FLOAT
     } );
