@@ -19,7 +19,7 @@ class Renderer : public IRenderer {
 public:
     void init(gfx::ICore& core) override {}
 
-    void pushShader(rp::Protocol protocol, const TShader* pShader) {
+    void pushShader(rp::Protocol protocol, TShader* pShader) {
         assert(pShader != nullptr);
         assert(pShader->supports(protocol));
         pairs_.emplace_back(protocol, pShader);
@@ -49,7 +49,7 @@ public:
     }
 
 private:
-    std::vector< std::pair<rp::Protocol, const TShader*> > pairs_;
+    std::vector< std::pair<rp::Protocol, TShader*> > pairs_;
 };
 
 }   // namespace gfx
