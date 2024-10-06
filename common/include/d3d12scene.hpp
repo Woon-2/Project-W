@@ -31,6 +31,9 @@ public:
     template <class T>
     using Cont = std::vector<T>;
 
+    CameraScene(const Camera& camera)
+        : gfx::CameraScene(camera), fragmentsMap_(), lightsMap_() {}
+
     Generator<DrawInfo> iteration(rp::Protocol protocol) const override;
 
     void addFragment(Fragment&& fragment) {
@@ -72,6 +75,33 @@ public:
         }
         */
         fragmentsMap_[protocol] = std::move(fragments);
+    }
+
+    void addLight(rp::Protocol protocol, std::any light) {
+        lightsMap_[protocol].push_back(light);
+    }
+
+    template <std::ranges::range R>
+    void addLights(rp::Protocol protocol, R&& lights) {
+        if constexpr (std::ranges::sized_range<R>) {
+            auto& cont = lightsMap_[protocol];
+            cont.reserve(std::ranges::size(lights) + cont.size());
+        }
+
+        if constexpr (std::is_lvalue_reference_v< std::remove_cv_t<R> >) {
+            lightsMap_[protocol].insert( std::end(lightsMap_[protocol]),
+                std::begin(lights), std::end(lights)
+            );
+        } else {
+            lightsMap_[protocol].insert( std::end(lightsMap_[protocol]),
+                std::move_iterator(std::begin(lights)),
+                std::move_iterator(std::end(lights))
+            );
+        }
+    }
+
+    void setLights(rp::Protocol protocol, Cont<std::any>&& lights) {
+        lightsMap_[protocol] = std::move(lights);
     }
 
 private:
