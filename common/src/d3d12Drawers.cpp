@@ -7,7 +7,7 @@ namespace d3d12 {
 
 namespace {
 
-template <rp::PFUnified RenderProtocol, rp::PFUnifiedShader ConcreteShader>
+template <rp::PFUnified RenderProtocol, PFUnifiedD3d12Shader ConcreteShader>
 void illuminanceDrawImpl(const IScene& scene, ConcreteShader& shader, D3D12RenderContext& ctx) {
     using Light = RenderProtocol::LightType;
     using Material = RenderProtocol::MaterialType;
@@ -15,7 +15,11 @@ void illuminanceDrawImpl(const IScene& scene, ConcreteShader& shader, D3D12Rende
     using PFD = RenderProtocol::PFDType;
     using PDD = RenderProtocol::PDDType;
 
-    shader.setRootParams(pCmdList);
+    auto pCmdList = std::any_cast<wrl::ComPtr<ID3D12GraphicsCommandList>>(
+        ctx.cast(RenderContextType::D3D12)
+    );
+
+    shader.setRootParams(pCmdList.Get());
 
     auto lightCnt = 0ull;
     auto materialCnt = 0ull;

@@ -57,6 +57,9 @@ public:
     GpuMappedRes& pid() NOEXCEPT { return resPerInstanceData_; }
     GpuMappedRes& lights() NOEXCEPT { return resLights_; }
 
+    std::size_t maxLightCnt() const NOEXCEPT { return maxLights_; }
+    std::size_t maxInstCnt() const NOEXCEPT { return maxInstances_; }
+
 private:
     std::vector< std::vector< wrl::ComPtr<ID3D12Resource> > > internalResArr_;
 

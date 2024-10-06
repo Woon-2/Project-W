@@ -24,7 +24,7 @@ NullShader::NullShader(Core& core)
 
 void NullShader::draw( IRenderContext& ctx, const IScene& scene,
     IRenderTarget& target, rp::Protocol protocol
-) const {
+) {
     if (!supports(protocol)) {
         throw GFX_EXCEPT("The protocol is not supported.");
     }

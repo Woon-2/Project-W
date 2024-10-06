@@ -25,7 +25,7 @@ public:
 
     void draw( IRenderContext& ctx, const IScene& scene,
         IRenderTarget& target, rp::Protocol protocol
-    ) const override;
+    ) override;
 };
 
 }   // namespace d3d12
