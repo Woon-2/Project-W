@@ -37,10 +37,10 @@ public:
     Generator<DrawInfo> iteration(rp::Protocol protocol) const override;
 
     void addFragment(Fragment&& fragment) {
-        if (!fragment.pMesh->hasProtocol()) {
+        if (!fragment.meshView.hasProtocol()) {
             throw GFX_EXCEPT("Mesh has no protocol");
         }
-        fragmentsMap_[fragment.pMesh->protocol()].push_back(std::move(fragment));
+        fragmentsMap_[fragment.meshView.protocol()].push_back(std::move(fragment));
     }
 
     template <std::ranges::range R>

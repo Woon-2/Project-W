@@ -70,7 +70,7 @@ namespace {
         auto meshInfo = DrawInfo();
 
         meshInfo.set(RenderProtocol::typeIdx, rp::DIType::Mesh);
-        meshInfo.set(RenderProtocol::meshIdx, fragment.pMesh);
+        meshInfo.set(RenderProtocol::meshIdx, fragment.meshView.mesh());
 
         co_yield std::move(meshInfo);
 

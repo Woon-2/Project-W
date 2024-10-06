@@ -31,15 +31,20 @@ void Stage::render(gfx::ICore& core, gfx::IRenderTarget& target) {
 
     auto scene = gfx::d3d12::CameraScene(camera_);
 
-    for (const auto& light : lights_) {
-        scene.addLight(&light);
-    }
-    auto worlds = std::vector<mu::Mat4x4>();
-    scene.setFragments(pSystems_->fragmentizer.fragmentize(worlds));
+    scene.addLights( gfx::rp::Protocol::PhongInstancing,
+        lights_ | std::views::transform( [](const auto& light) {
+            return std::any{ &light };
+        } )
+    );
 
-    core.render( *pRenderContext, scene, static_cast<MyGfx&>(core).renderer(
-        MyGfx::Renderer::Phong
-    ), target );
+    auto worlds = std::vector<mu::Mat4x4>();
+    scene.setFragments( gfx::rp::Protocol::PhongInstancing,
+        pSystems_->fragmentizer.fragmentize(worlds)
+    );
+
+    core.render( *pRenderContext, scene,
+        static_cast<MyGfx&>(core).illuminanceRenderer(), target
+    );
 
     target.postRender(*pRenderContext);
     pRenderContext->postRender();

@@ -3,26 +3,19 @@
 
 #include "d3d12core.hpp"
 #include "phongShader.hpp"
+#include "renderer.hpp"
 
 class MyGfx : public gfx::d3d12::Core {
 public:
-    enum class Renderer {
-        Phong
-    };
-
+    using MyRenderer  = gfx::Renderer<gfx::d3d12::Shader>;
     void init() override;
-    void setFrame(std::size_t frameIdx) {
-        static_cast<gfx::d3d12::PhongShader&>(
-            shader(gfx::d3d12::PhongShader::shaderName())
-        ).setFrame(frameIdx);
-    }
-
-    gfx::IRenderer& renderer(Renderer) const NOEXCEPT {
-        return *pRenderer_;
-    }
+    void setFrame(std::size_t frameIdx);
+    const MyRenderer& illuminanceRenderer() const NOEXCEPT { return illuminanceRenderer_; }
 
 private:
-    std::unique_ptr<gfx::IRenderer> pRenderer_;
+    std::optional<gfx::d3d12::PhongShader> phongShader_;
+    std::optional<gfx::d3d12::PhongShaderNT> phongShaderNT_;
+    MyRenderer illuminanceRenderer_;
 };
 
 #endif // __MYGFX_HPP

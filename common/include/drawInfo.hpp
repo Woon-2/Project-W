@@ -13,6 +13,8 @@
 #include <cstdint>
 #include <optional>
 
+#include "enumUtil.hpp"
+
 namespace gfx {
 
 namespace d3d12 {
@@ -35,6 +37,13 @@ public:
     rp::Protocol protocol() const NOEXCEPT { return protocol_.value(); }
     void setProtocol(rp::Protocol protocol) NOEXCEPT { protocol_ = protocol; }
 
+    auto operator<=>(const MeshView& other) const NOEXCEPT {
+        auto first = etoi(protocol_.value_or(gfx::rp::Protocol::Null))
+            <=> etoi(other.protocol_.value_or(gfx::rp::Protocol::Null));
+        if (first != 0) return first;
+        return pMesh_ <=> other.pMesh_;
+    }
+
 private:
     const Mesh* pMesh_;
     const Shader* pShader_;
@@ -42,7 +51,7 @@ private:
 };
 
 struct Fragment {
-    const MeshView* pMesh;
+    const MeshView meshView;
     const Material* pMaterial;
     std::span<mu::Mat4x4> worlds;
 };

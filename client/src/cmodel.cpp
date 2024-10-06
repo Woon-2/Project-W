@@ -3,6 +3,38 @@
 #include <ranges>
 #include <algorithm>
 
+void ModelDataXX::syncHierarchy( const gfx::d3d12::Model& srcSubModel,
+    const gfx::d3d12::MaterialTree& srcSubMaterialTree, ModelDataXX& dstModel
+) {
+    dstModel.children_.clear();
+    dstModel.nodes_.clear();
+    dstModel.treeSize_ = 0;
+
+    auto itMesh = srcSubModel.meshes().begin();
+    auto itMaterial = srcSubMaterialTree.materials().begin();
+
+    while (itMesh != srcSubModel.meshes().end()) {
+        dstModel.nodes_.emplace_back( &itMesh->mesh, &*itMaterial, &dstModel );
+        ++dstModel.treeSize_;
+
+        ++itMesh;
+        ++itMaterial;
+    }
+
+    auto itModel = srcSubModel.children().begin();
+    auto itMatTree = srcSubMaterialTree.children().begin();
+
+    while (itModel != srcSubModel.children().end()) {
+        dstModel.children_.emplace_back(&*itModel, &*itMatTree);
+        dstModel.children_.back().coord().setParent(&dstModel.coord());
+
+        dstModel.treeSize_ += dstModel.children_.back().treeSize();
+
+        ++itModel;
+        ++itMatTree;
+    }
+}
+
 ModelData::ModelData(const gfx::d3d12::Model* srcModel, const gfx::d3d12::MaterialTree* srcMaterialTree)
     : coordSys_(srcModel->coord()), srcModel_(srcModel), srcMaterialTree_(srcMaterialTree) {
     syncHierarchy(*srcModel, *srcMaterialTree, *this);
@@ -25,123 +57,6 @@ void ModelData::syncHierarchy( const gfx::d3d12::Model& srcSubModel,
     }
 }
 
-std::vector<gfx::d3d12::Fragment> Fragmentizer::fragmentize(std::vector<mu::Mat4x4>& outWorlds) const {
-    std::vector<gfx::d3d12::Fragment> fragments;
-
-    std::size_t fragmentCntExpected = 0;
-    std::size_t worldCntExpected = 0;
-
-    for (const auto& [key, models] : instanceSets_) {
-        auto nodes = std::vector<const ModelData*>();
-        nodes.reserve(models.size());
-
-        std::ranges::for_each( models, [&nodes](const auto& model) {
-            if (auto pModel = model.lock(); pModel) {
-                nodes.push_back(&pModel->root());
-            }
-        } );
-
-        auto treeSize = nodes[0]->treeSize();
-
-        fragmentCntExpected += treeSize;
-        worldCntExpected += nodes.size() * treeSize;
-    }
-
-    fragments.reserve(fragmentCntExpected);
-    outWorlds.reserve(worldCntExpected);
-
-    for (const auto& [key, models] : instanceSets_) {
-        auto nodes = std::vector<const ModelData*>();
-        nodes.reserve(models.size());
-
-        std::ranges::for_each( models, [&nodes](const auto& model) {
-            if (auto pModel = model.lock(); pModel) {
-                nodes.push_back(&pModel->root());
-            }
-        } );
-
-        fragmentizeNodes(
-            std::get<const gfx::d3d12::Model*>(key),
-            std::get<const gfx::d3d12::MaterialTree*>(key),
-            nodes, fragments, outWorlds
-        );
-    }
-
-    return fragments;
-}
-
-void Fragmentizer::fragmentizeNodes( const gfx::d3d12::Model* refModel,
-    const gfx::d3d12::MaterialTree* refMatTree,
-    const std::vector<const ModelData*>& nodes,
-    std::vector<gfx::d3d12::Fragment>& fragments,
-    std::vector<mu::Mat4x4>& worlds
-) const {
-    /*
-    노드 처리(레퍼런스노드포인터, 노드포인터벡터):
-    노드포인터벡터를 월드변환벡터로 변환한다.
-    레퍼런스노드포인터의 각 메시에 대해:
-        해당 메시와 월드변환벡터로 Fragment를 구성해 Scene에 삽입한다.
-    노드포인터벡터를 자식반복자벡터로 변환한다.
-    레퍼런스노드포인터의 각 자식 노드에 대해:
-        자식반복자벡터를 자식노드포인터벡터로 변환한다.
-        노드 처리(레퍼런스자식노드포인터, 자식노드포인터벡터)
-        반복자벡터의 반복자들을 전진시킨다.
-    */
-
-   // TODO: 트리들의 모양이 정확히 같은지 체크
-
-    if (refModel->meshes().size()) {
-        auto oldWorldCnt = worlds.size();
-
-        std::transform(nodes.begin(), nodes.end(), std::back_inserter(worlds),
-            [](const ModelData* node) {
-                return node->coord().xform();
-            }
-        );
-
-        auto meshIt = refModel->meshes().begin();
-        auto matIt = refMatTree->materials().begin();
-
-        while (meshIt != refModel->meshes().end()) {
-            fragments.emplace_back(
-                /* .pMesh = */ &meshIt->mesh,
-                /* .pMaterial = */ &(*matIt),
-                /* .worlds = */ std::span(worlds.data() + oldWorldCnt, worlds.data() + worlds.size())
-            );
-
-            ++meshIt;
-            ++matIt;
-        }
-    }
-
-    auto childIts = std::vector< std::vector<ModelData>::const_iterator >();
-    childIts.reserve(nodes.size());
-    for (const auto& node : nodes) {
-        childIts.push_back(node->children().begin());
-    }
-
-    auto modelIt = refModel->children().begin();
-    auto matTreeIt = refMatTree->children().begin();
-
-    while (modelIt != refModel->children().end()) {
-        auto childNodes = std::vector<const ModelData*>();
-        childNodes.reserve(nodes.size());
-
-        std::ranges::transform( childIts, std::back_inserter(childNodes),
-            [](const auto& it) { return &*it; }
-        );
-
-        fragmentizeNodes(&*modelIt, &*matTreeIt, childNodes, fragments, worlds);
-
-        std::ranges::for_each( childIts, [](auto& it) {
-            ++it;
-        } );
-
-        ++modelIt;
-        ++matTreeIt;
-    }
-}
-
 void Fragmentizer::addEntity(ecs::Entity& entity) {
     ecs::System<Model>::addEntity(entity);
     auto weakModel = entity.getC<Model>();
@@ -154,7 +69,68 @@ void Fragmentizer::addEntity(ecs::Entity& entity) {
         throw std::runtime_error("Model component is not initialized");
     }
 
-    auto& root = model->root();
-    instanceSets_[ {root.srcModel(), root.srcMaterialTree()} ]
-        .push_back(std::move(weakModel));
+    addModelData(model->root());
+}
+
+void Fragmentizer::addModelData(const ModelDataXX& modelData) {
+    if (modelData.nodes().empty()) {
+        return;
+    }
+
+    for ( const auto& node : modelData.nodes() ) {
+        nodesMap_[node].push_back(&node);
+    }
+
+    for ( const auto& child : modelData.children() ) {
+        addModelData(child);
+    }
+}
+
+std::vector<gfx::d3d12::Fragment> Fragmentizer::fragmentize(
+    std::vector<mu::Mat4x4>& outWorlds
+) const {
+    std::vector<gfx::d3d12::Fragment> fragments;
+
+    const auto fragmentCntExpected = nodesMap_.size();
+    std::size_t worldCntExpected = 0;
+
+    for (const auto& [key, nodes] : nodesMap_) {
+        worldCntExpected += nodes.size();
+    }
+
+    fragments.reserve(fragmentCntExpected);
+    outWorlds.reserve(worldCntExpected);
+
+    for (const auto& [key, nodes] : nodesMap_) {
+        fragmentizeData(key, nodes, fragments, outWorlds);
+    }
+
+    return fragments;
+}
+
+void Fragmentizer::fragmentizeData(
+    const ModelDataXX::Node& key,
+    const std::vector<const ModelDataXX::Node*>& data,
+    std::vector<gfx::d3d12::Fragment>& fragments,
+    std::vector<mu::Mat4x4>& worlds
+) const {
+    if (data.empty()) {
+        return;
+    }
+
+    auto oldWorldCnt = worlds.size();
+
+    std::transform(data.begin(), data.end(), std::back_inserter(worlds),
+        [](const ModelDataXX::Node* node) {
+            return node->pModel->coord().xform();
+        }
+    );
+
+    for (const auto& node : data) {
+        fragments.emplace_back(
+            /* .pMesh = */ node->meshView,
+            /* .pMaterial = */ node->pMaterial,
+            /* .worlds = */ std::span( worlds.data() + oldWorldCnt, worlds.data() + worlds.size() )
+        );
+    }
 }

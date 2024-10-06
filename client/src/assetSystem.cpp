@@ -77,10 +77,7 @@ void AssetSystem::loadModel(const Key& key, const std::filesystem::path& path) {
     using Flag = gfx::d3d12::AssimpLoader::Flag;
 
     if (auto loader = assimpLoaders_.find(path); loader != assimpLoaders_.end()) {
-        models_.try_emplace( key, loader->second.buildModel(
-            *pCore_, *pCtx_, gfx::makeInputLayoutPreset( gfx::InputLayoutPreset::Pos3Norm3Tex2 )
-        ) );
-
+        models_.try_emplace( key, loader->second.buildModel(*pCore_, *pCtx_) );
         return;
     }
 
@@ -90,9 +87,7 @@ void AssetSystem::loadModel(const Key& key, const std::filesystem::path& path) {
         | Flag::convertToLeftHanded | Flag::sortByPType
     );
 
-    models_.try_emplace( key, loader.buildModel(
-        *pCore_, *pCtx_, gfx::makeInputLayoutPreset( gfx::InputLayoutPreset::Pos3Norm3Tex2 )
-    ) );
+    models_.try_emplace( key, loader.buildModel(*pCore_, *pCtx_) );
 
     assimpLoaders_.try_emplace( path, std::move(loader) );
 }
