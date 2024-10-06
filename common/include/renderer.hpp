@@ -17,6 +17,8 @@ namespace gfx {
 template <class TShader>
 class Renderer : public IRenderer {
 public:
+    void init(gfx::ICore& core) override {}
+
     void pushShader(rp::Protocol protocol, const TShader* pShader) {
         assert(pShader != nullptr);
         assert(pShader->supports(protocol));
