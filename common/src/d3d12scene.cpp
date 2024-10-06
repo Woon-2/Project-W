@@ -147,6 +147,12 @@ Generator<DrawInfo> CameraScene::iteration(rp::Protocol protocol) const {
         pArgLightsMap = &tmpArgLightsMap;
     }
 
+    if (fragmentsMap_.contains(protocol)) {
+        pArgFragmentsMap = &fragmentsMap_.at(protocol);
+    } else {
+        pArgFragmentsMap = &tmpArgFragmentsMap;
+    }
+
 
     switch (protocol) {
     case rp::Protocol::PhongInstancing: {
