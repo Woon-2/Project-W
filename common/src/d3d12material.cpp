@@ -71,9 +71,18 @@ rp::PhongInstancing::MaterialType Material::asPhongInstancing() const {
         );
     }
 
+    auto textureFlag = 0u;
+    textureFlag |= contains(Maps::Ambient) ? rp::PhongInstancing::MaterialType::textureFlagAmbient : 0u;
+    textureFlag |= contains(Maps::Diffuse) ? rp::PhongInstancing::MaterialType::textureFlagDiffuse : 0u;
+    textureFlag |= contains(Maps::Specular) ? rp::PhongInstancing::MaterialType::textureFlagSpecular : 0u;
+    textureFlag |= contains(Maps::Emissive) ? rp::PhongInstancing::MaterialType::textureFlagEmmisive : 0u;
+
     auto ret = rp::PhongInstancing::MaterialType{
+        .textureFlag = textureFlag,
+        .ambientMapIdx = indices_[etoi(Maps::Ambient)],
         .diffuseMapIdx = indices_[etoi(Maps::Diffuse)],
         .specularMapIdx = indices_[etoi(Maps::Specular)],
+        .emmisiveMapIdx = indices_[etoi(Maps::Emissive)],
         .shininess = properties_[etoi(Properties::Shininess)].value().scalar
     };
 

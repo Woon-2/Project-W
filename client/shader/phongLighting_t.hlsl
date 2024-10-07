@@ -2,6 +2,11 @@
 #define LIGHT_TYPE_POINT 1
 #define LIGHT_TYPE_SPOT 2
 
+#define TEX_DIFFUSE 0x01
+#define TEX_SPECULAR 0x02
+#define TEX_AMBIENT 0x04
+#define TEX_EMMISIVE 0x08
+
 #include "textures.hlsl"
 
 cbuffer PerFrameData : register(b1)
@@ -39,10 +44,22 @@ float4 dirLight(uint lightIdx, float3 posVNormalized, float3 normalV, float2 tex
         float3 reflected = reflect(-toLight, normalV);
         specular = pow(max(0.f, dot(reflected, -posVNormalized)), gMaterial.shininess);
     }
-        
-    return gTex2DLUT[ gMaterial.diffuseMapIdx ].Sample(gSample, tex) * gLights[lightIdx].ambient +
-        gTex2DLUT[ gMaterial.diffuseMapIdx ].Sample(gSample, tex) * gLights[lightIdx].diffuse * diffused +
-        gTex2DLUT[ gMaterial.specularMapIdx ].Sample(gSample, tex) * float4(gLights[lightIdx].specular, 1.f) * specular;
+
+    float4 color = float4(0.f, 0.f, 0.f, 0.f);
+    if (gMaterial.textureFlag & TEX_AMBIENT) {
+        color += gTex2DLUT[ gMaterial.ambientMapIdx ].Sample(gSample, tex) * gLights[lightIdx].ambient;
+    }
+    if (gMaterial.textureFlag & TEX_DIFFUSE) {
+        color += gTex2DLUT[ gMaterial.diffuseMapIdx ].Sample(gSample, tex) * gLights[lightIdx].diffuse * diffused;
+    }
+    if (gMaterial.textureFlag & TEX_SPECULAR) {
+        color += gTex2DLUT[ gMaterial.specularMapIdx ].Sample(gSample, tex) * float4(gLights[lightIdx].specular, 1.f) * specular;
+    }
+    if (gMaterial.textureFlag & TEX_EMMISIVE) {
+        color += gTex2DLUT[ gMaterial.emmisiveMapIdx ].Sample(gSample, tex);
+    }
+
+    return color;
 }
 
 float4 pointLight(uint lightIdx, float3 posV, float3 posVNormalized, float3 normalV, float2 tex) {
@@ -58,10 +75,21 @@ float4 pointLight(uint lightIdx, float3 posV, float3 posVNormalized, float3 norm
         specular = pow(max(0.f, dot(reflected, -posVNormalized)), gMaterial.shininess);
     }
 
-    return (gTex2DLUT[ gMaterial.diffuseMapIdx ].Sample(gSample, tex) * gLights[lightIdx].ambient +
-        gTex2DLUT[ gMaterial.diffuseMapIdx ].Sample(gSample, tex) * gLights[lightIdx].diffuse * diffused +
-        gTex2DLUT[ gMaterial.specularMapIdx ].Sample(gSample, tex) * float4(gLights[lightIdx].specular, 1.f) * specular
-    ) * atten;
+    float4 color = float4(0.f, 0.f, 0.f, 0.f);
+    if (gMaterial.textureFlag & TEX_AMBIENT) {
+        color += gTex2DLUT[ gMaterial.ambientMapIdx ].Sample(gSample, tex) * gLights[lightIdx].ambient;
+    }
+    if (gMaterial.textureFlag & TEX_DIFFUSE) {
+        color += gTex2DLUT[ gMaterial.diffuseMapIdx ].Sample(gSample, tex) * gLights[lightIdx].diffuse * diffused;
+    }
+    if (gMaterial.textureFlag & TEX_SPECULAR) {
+        color += gTex2DLUT[ gMaterial.specularMapIdx ].Sample(gSample, tex) * float4(gLights[lightIdx].specular, 1.f) * specular;
+    }
+    if (gMaterial.textureFlag & TEX_EMMISIVE) {
+        color += gTex2DLUT[ gMaterial.emmisiveMapIdx ].Sample(gSample, tex);
+    }
+
+    return color * atten;
 }
 
 float4 spotLight(uint lightIdx, float3 posV, float3 posVNormalized, float3 normalV, float2 tex) {
@@ -87,10 +115,21 @@ float4 spotLight(uint lightIdx, float3 posV, float3 posVNormalized, float3 norma
         gLights[lightIdx].falloff
     );
 
-    return (gTex2DLUT[ gMaterial.diffuseMapIdx ].Sample(gSample, tex) * gLights[lightIdx].ambient +
-        gTex2DLUT[ gMaterial.diffuseMapIdx ].Sample(gSample, tex) * gLights[lightIdx].diffuse * diffused +
-        gTex2DLUT[ gMaterial.specularMapIdx ].Sample(gSample, tex) * float4(gLights[lightIdx].specular, 1.f) * specular
-    ) * atten * coneAtten;
+    float4 color = float4(0.f, 0.f, 0.f, 0.f);
+    if (gMaterial.textureFlag & TEX_AMBIENT) {
+        color += gTex2DLUT[ gMaterial.ambientMapIdx ].Sample(gSample, tex) * gLights[lightIdx].ambient;
+    }
+    if (gMaterial.textureFlag & TEX_DIFFUSE) {
+        color += gTex2DLUT[ gMaterial.diffuseMapIdx ].Sample(gSample, tex) * gLights[lightIdx].diffuse * diffused;
+    }
+    if (gMaterial.textureFlag & TEX_SPECULAR) {
+        color += gTex2DLUT[ gMaterial.specularMapIdx ].Sample(gSample, tex) * float4(gLights[lightIdx].specular, 1.f) * specular;
+    }
+    if (gMaterial.textureFlag & TEX_EMMISIVE) {
+        color += gTex2DLUT[ gMaterial.emmisiveMapIdx ].Sample(gSample, tex);
+    }
+
+    return color * atten * coneAtten;
 }
 
 float4 Lighting(float3 posV, float3 normalV, float2 tex) {

@@ -22,10 +22,19 @@ struct PhongMaterialNT {
 };
 
 struct PhongMaterial {
+    static constexpr std::uint32_t textureFlagAmbient = 0x01u;
+    static constexpr std::uint32_t textureFlagDiffuse = 0x02u;
+    static constexpr std::uint32_t textureFlagSpecular = 0x04u;
+    static constexpr std::uint32_t textureFlagEmmisive = 0x08u;
+
+    std::uint32_t textureFlag;
+    std::uint32_t ambientMapIdx;
     std::uint32_t diffuseMapIdx;
     std::uint32_t specularMapIdx;
+    std::uint32_t emmisiveMapIdx;
     float shininess;
     float padding;
+    float padding2;
 };
 
 struct BasicPFD {

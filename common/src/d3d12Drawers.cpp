@@ -10,7 +10,6 @@ namespace {
 template <rp::PFUnified RenderProtocol, PFUnifiedD3d12Shader ConcreteShader>
 void illuminanceDrawImpl(const IScene& scene, ConcreteShader& shader, D3D12RenderContext& ctx) {
     using Light = RenderProtocol::LightType;
-    using Material = RenderProtocol::MaterialType;
     using PID = RenderProtocol::PIDType;
     using PFD = RenderProtocol::PFDType;
     using PDD = RenderProtocol::PDDType;
