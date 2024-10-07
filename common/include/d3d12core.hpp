@@ -621,9 +621,9 @@ public:
     using MyBase::defWndFrame;
 
     Window()
-        : backBuffers_(), offscreenBuffers_(), depthBuffers_(1),
+        : backBuffers_(), offscreenBuffers_(), depthBuffers_(),
         postRenderFunc_(&Window<Traits>::initialPostRender), pFirstRtv_(), pFirstDsv_(),
-        rtvIdx_(0), rtvStride_(0), dsvStride_(0) {}
+        rtvIdx_(0), dsvIdx_(0), rtvStride_(0), dsvStride_(0) {}
 
     /**
      * @brief Opens the window with the default window name which specified in Win32::Window::defWndName    
@@ -679,7 +679,7 @@ public:
     }
 
     void buildRtv(Core& core, std::size_t backBufCnt = MyBase::defBackBufCnt);
-    void buildDsv(Core& core);
+    void buildDsv(Core& core, std::size_t backBufCnt = MyBase::defBackBufCnt);
     void createRTBuffers(ID3D12Device* pDevice);
     /**
      * @brief Creates depth buffers for the swap chain's back buffers internally.
@@ -753,12 +753,12 @@ private:
 
         backBuffers_.resize( this->backBufCnt() );
         offscreenBuffers_.resize( this->backBufCnt() );
-        depthBuffers_.resize( 1 );
+        depthBuffers_.resize( this->backBufCnt() );
 
         createRTBuffers( pDevice );
         createDepthBuffers( pDevice );
         buildRtv( core, backBuffers_.size() );
-        buildDsv( core );
+        buildDsv( core, backBuffers_.size() );
     }
 
     std::vector<wrl::ComPtr<ID3D12Resource>> backBuffers_;
@@ -768,6 +768,7 @@ private:
     D3D12_CPU_DESCRIPTOR_HANDLE pFirstRtv_;
     D3D12_CPU_DESCRIPTOR_HANDLE pFirstDsv_;
     std::size_t rtvIdx_;
+    std::size_t dsvIdx_;
     UINT rtvStride_;
     UINT dsvStride_;
 };
@@ -795,18 +796,20 @@ void Window<Traits>::buildRtv(Core& core, std::size_t backBufCnt) {
 
 // TODO: deal with multiple depth stencils.
 template <class Traits>
-void Window<Traits>::buildDsv(Core& core) {
+void Window<Traits>::buildDsv(Core& core, std::size_t backBufCnt) {
     auto pDevice = static_cast<ID3D12Device*>( WindowAttorney::device(core) );
 
     if (core.containsDescHeap(offscreenDepthHeapIdx)) {
         core.popDescHeap(offscreenDepthHeapIdx);
     }
 
-    core.addDescHeap(offscreenDepthHeapIdx, DescriptorHeap( pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1 ));
+    core.addDescHeap(offscreenDepthHeapIdx, DescriptorHeap( pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, backBufCnt ));
 
     auto& heap = core.descHeap(offscreenDepthHeapIdx);
 
-    heap.pushDsv(pDevice, depthBuffers_[0].Get());
+    for (auto i = 0; i < backBufCnt; ++i) {
+        heap.pushDsv(pDevice, depthBuffers_[i].Get());
+    }
 
     pFirstDsv_ = heap.cpuHandle();
     dsvStride_ = static_cast<UINT>( heap.stride() );
@@ -883,9 +886,11 @@ void Window<Traits>::createDepthBuffers(ID3D12Device* pDevice) {
         .DepthStencil = { .Depth = 1.0f, .Stencil = 0u }
     };
 
-    DX_THROW_FAILED( pDevice->CreateCommittedResource(
-        &heapProp, D3D12_HEAP_FLAG_NONE, &depthDesc, D3D12_RESOURCE_STATE_DEPTH_WRITE, &cv, __uuidof(ID3D12Resource), &depthBuffers_[0]
-    ) );
+    for (auto i = 0u; i < depthBuffers_.size(); ++i) {
+        DX_THROW_FAILED(pDevice->CreateCommittedResource(
+            &heapProp, D3D12_HEAP_FLAG_NONE, &depthDesc, D3D12_RESOURCE_STATE_DEPTH_WRITE, &cv, __uuidof(ID3D12Resource), &depthBuffers_[i]
+        ));
+    }
 }
 
 template <class Traits>
@@ -901,7 +906,9 @@ std::any Window<Traits>::cast(RenderTargetType rentarType) {
             .ptr = pFirstRtv_.ptr + rtvIdx_ * rtvStride_
         };   
     case RenderTargetType::D3D12_DEPTH:
-        return pFirstDsv_;
+        return D3D12_CPU_DESCRIPTOR_HANDLE{
+            .ptr = pFirstDsv_.ptr + dsvIdx_ * dsvStride_
+        };
     default:
         throw GFX_EXCEPT("Cannot cast to the requested render target type.");
     }
@@ -917,13 +924,16 @@ void Window<Traits>::clear(IRenderContext& renderContext) {
     auto pRtv = D3D12_CPU_DESCRIPTOR_HANDLE{
         .ptr = pFirstRtv_.ptr + bufIdx * rtvStride_
     };
-
-    DX_THROW_FAILED_VOID( pCmdList->ClearRenderTargetView(
+    DX_THROW_FAILED_VOID(pCmdList->ClearRenderTargetView(
         pRtv, clearColor.data(), 0, nullptr
-    ) );
+    ));
 
+    auto dsIdx = dsvIdx_;
+    auto pDsv = D3D12_CPU_DESCRIPTOR_HANDLE{
+        .ptr = pFirstDsv_.ptr + dsIdx * dsvStride_
+    };
     DX_THROW_FAILED_VOID( pCmdList->ClearDepthStencilView(
-        pFirstDsv_, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0, nullptr
+        pDsv, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0, nullptr
     ) );
 }
 
@@ -970,6 +980,7 @@ void Window<Traits>::postRender(IRenderContext& renderContext) {
 template <class Traits>
 void Window<Traits>::initialPostRender(ID3D12GraphicsCommandList *pCmdList) {
     rtvIdx_ = (rtvIdx_ + 1) % offscreenBuffers_.size();
+    dsvIdx_ = (dsvIdx_ + 1) % depthBuffers_.size();
     postRenderFunc_ = &Window<Traits>::regularPostRender;
 }
 
@@ -1028,6 +1039,7 @@ void Window<Traits>::regularPostRender(ID3D12GraphicsCommandList *pCmdList) {
     pCmdList->ResourceBarrier(1, &bar);
 
     rtvIdx_ = (rtvIdx_ + 1) % offscreenBuffers_.size();
+    dsvIdx_ = (dsvIdx_ + 1) % depthBuffers_.size();
 }
 
 template <class Traits>

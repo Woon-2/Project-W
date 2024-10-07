@@ -52,13 +52,21 @@ void Game::initialRender() {
         return;
     }*/
 
+    // #0 render
     static_cast<MyGfx&>(*pGfx_).setFrame(curFenceIdx_);
 
     pStage_->render(*pGfx_, *pWnd_);
 
-    auto pd3d12Gfx_ = static_cast<gfx::d3d12::Core*>(pGfx_);
-    pd3d12Gfx_->signalGpu(curFenceIdx_);
+    auto pd3d12Gfx = static_cast<gfx::d3d12::Core*>(pGfx_);
+    pd3d12Gfx->signalGpu(curFenceIdx_);
     std::swap(curFenceIdx_, prevFenceIdx_);
+
+    // #1 render
+    static_cast<MyGfx&>(*pGfx_).setFrame(curFenceIdx_);
+
+    pStage_->render(*pGfx_, *pWnd_);
+
+    pd3d12Gfx->signalGpu(curFenceIdx_);
 
     renderFunc_ = &Game::regularRender;
 }
@@ -71,15 +79,18 @@ void Game::regularRender() {
         return;
     }*/
 
+    auto pd3d12Gfx = static_cast<gfx::d3d12::Core*>(pGfx_);
+
+    pd3d12Gfx->waitGpu(prevFenceIdx_);
+    pWnd_->present();
+    pd3d12Gfx->signalGpu(curFenceIdx_);
+    pd3d12Gfx->waitGpu(curFenceIdx_);
+
     static_cast<MyGfx&>(*pGfx_).setFrame(curFenceIdx_);
 
     pStage_->render(*pGfx_, *pWnd_);
 
-    auto pd3d12Gfx_ = static_cast<gfx::d3d12::Core*>(pGfx_);
-    pd3d12Gfx_->signalGpu(curFenceIdx_);
-    pd3d12Gfx_->waitGpu(prevFenceIdx_);
-
-    pWnd_->present();
+    pd3d12Gfx->signalGpu(curFenceIdx_);
 
     std::swap(curFenceIdx_, prevFenceIdx_);
 }
