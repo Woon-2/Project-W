@@ -17,11 +17,11 @@ namespace d3d12 {
 class Texture {
 public:
     Texture() NOEXCEPT
-        : desc_{}, srv_(), rtv_(), dsv_(), res_(), upRes_() {}
+        : desc_{}, srv_(), rtv_(), dsv_(), res_(), upRes_(), state_(D3D12_RESOURCE_STATE_COMMON) {}
 
     Texture( Core& core, const D3D12_RESOURCE_DESC& desc,
         D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
-    ) : desc_(desc), srv_(), res_(), upRes_() {
+    ) : desc_(desc), srv_(), res_(), upRes_(), state_(initialState) {
         res_ = createDefRes(core, desc, initialState);
     }
 
@@ -53,17 +53,32 @@ public:
         return dsv_;
     }
 
-    void cvt2rt( D3D12RenderContext& ctx );
-    void cvt2ds( D3D12RenderContext& ctx );
-    void cvt2sr( D3D12RenderContext& ctx );
-    void cvt2cpSrc( D3D12RenderContext& ctx );
-    void cvt2cpDst( D3D12RenderContext& ctx );
+    void cvt2Common( D3D12RenderContext& ctx ) {
+        cvt(ctx, D3D12_RESOURCE_STATE_COMMON);
+    }
+    void cvt2rt( D3D12RenderContext& ctx ) {
+        cvt(ctx, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    }
+    void cvt2ds( D3D12RenderContext& ctx ) {
+        cvt(ctx, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    }
+    void cvt2sr( D3D12RenderContext& ctx ) {
+        cvt(ctx, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+    }
+    void cvt2cpSrc( D3D12RenderContext& ctx ) {
+        cvt(ctx, D3D12_RESOURCE_STATE_COPY_SOURCE);
+    }
+    void cvt2cpDst( D3D12RenderContext& ctx ) {
+        cvt(ctx, D3D12_RESOURCE_STATE_COPY_DEST);
+    }
 
     D3D12_RESOURCE_STATES state() const NOEXCEPT {
         return state_;
     }
 
 private:
+    void cvt( D3D12RenderContext& ctx, D3D12_RESOURCE_STATES state );
+
     void loadDDS( Core& core, D3D12RenderContext& ctx, const std::filesystem::path& path,
         D3D12_RESOURCE_STATES initialState
     );
