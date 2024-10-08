@@ -197,6 +197,7 @@ add_library(gfx
     src/shader.cpp include/shader.hpp
     src/renderer.cpp include/renderer.hpp
     src/d3d12Descriptor.cpp include/d3d12Descriptor.hpp
+    src/d3d12SpecialRenderTargets.cpp include/d3d12SpecialRenderTargets.hpp
     
     include/dxtarget.hpp
     include/gfxPrimitive.hpp
