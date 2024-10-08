@@ -1,13 +1,13 @@
 // The order of the includes is important, as some depend on others
 
 #ifdef INCLUDE_phongLighting
-#include "phongMaterial.hlsl"
+#include "phongMaterial_t.hlsl"
 #endif
 
 #include "drawcallWithMaterial.hlsl"
 
 #ifdef INCLUDE_phongLighting
-#include "phongLighting.hlsl"
+#include "phongLightingShadowed_t.hlsl"
 #endif
 
 #ifdef INCLUDE_basicInstancing
@@ -19,13 +19,16 @@
 struct VS_INPUT {
     float3 pos : POSITION;
     float3 normal : NORMAL;
+    float2 tex : TEXCOORD;
     uint instID : SV_InstanceID;
 };
 
 struct VS_OUTPUT {
     float4 pos : SV_Position;
+    float4 shadowPos : TEXCOORD0;
     float3 posV : POSITION;
     float3 normalV : NORMAL;
+    float2 tex : TEXCOORD1;
     nointerpolation uint instID : INSTID;
 };
 
@@ -40,12 +43,15 @@ VS_OUTPUT VSMain(VS_INPUT input) {
     output.normalV = mul( input.normal,
         getInstanceData(input.instID).normalXform
     );
+    output.tex = input.tex;
     output.instID = input.instID;
+    output.shadowPos = mul( output.posV, gView2LightProj );
 
     return output;
 }
 
 float4 PSMain(VS_OUTPUT input) : SV_TARGET {
     float3 normalV = normalize(input.normalV);
-    return Lighting(input.posV, normalV);
+    float shadowed = gTex2DLUT[gShadowMapIdx].SampleCmpLevelZero(gShadowSampler, input.shadowPos.xy, input.shadowPos.z);
+    return Lighting(input.posV, normalV, input.tex) * shadowed;
 }

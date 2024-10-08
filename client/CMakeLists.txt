@@ -109,7 +109,6 @@ compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/ntShader.hlsl"
     "${COMPILED_SHADER_PATH}/ntShader_vs.cso"
     "vs_5_1"
     "VSMain"
-    /D INCLUDE_drawcallIdxOnly
     /D INCLUDE_basicInstancing
     /D INCLUDE_phongLighting
 )
@@ -118,7 +117,6 @@ compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/ntShader.hlsl"
     "${COMPILED_SHADER_PATH}/ntShader_ps.cso"
     "ps_5_1"
     "PSMain"
-    /D INCLUDE_drawcallIdxOnly
     /D INCLUDE_basicInstancing
     /D INCLUDE_phongLighting
 )
@@ -127,7 +125,6 @@ compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/tShader.hlsl"
     "${COMPILED_SHADER_PATH}/tShader_vs.cso"
     "vs_5_1"
     "VSMain"
-    /D INCLUDE_drawcallIdxOnly
     /D INCLUDE_basicInstancing
     /D INCLUDE_phongLighting
     /enable_unbounded_descriptor_tables
@@ -137,11 +134,29 @@ compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/tShader.hlsl"
     "${COMPILED_SHADER_PATH}/tShader_ps.cso"
     "ps_5_1"
     "PSMain"
-    /D INCLUDE_drawcallIdxOnly
     /D INCLUDE_basicInstancing
     /D INCLUDE_phongLighting
     /enable_unbounded_descriptor_tables
 )
+
+compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/tShaderShadowed.hlsl"
+    "${COMPILED_SHADER_PATH}/tShaderShadowed_vs.cso"
+    "vs_5_1"
+    "VSMain"
+    /D INCLUDE_basicInstancing
+    /D INCLUDE_phongLighting
+    /enable_unbounded_descriptor_tables
+)
+
+compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/tShaderShadowed.hlsl"
+    "${COMPILED_SHADER_PATH}/tShaderShadowed_ps.cso"
+    "ps_5_1"
+    "PSMain"
+    /D INCLUDE_basicInstancing
+    /D INCLUDE_phongLighting
+    /enable_unbounded_descriptor_tables
+)
+
 
 add_hlsl_target("${HLSL_COMPILED_SHADERS}")
 

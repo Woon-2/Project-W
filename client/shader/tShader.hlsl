@@ -4,9 +4,7 @@
 #include "phongMaterial_t.hlsl"
 #endif
 
-#ifdef INCLUDE_drawcallIdxOnly
-#include "drawcallIdxOnly.hlsl"
-#endif
+#include "drawcallWithMaterial.hlsl"
 
 #ifdef INCLUDE_phongLighting
 #include "phongLighting_t.hlsl"
@@ -52,6 +50,5 @@ VS_OUTPUT VSMain(VS_INPUT input) {
 
 float4 PSMain(VS_OUTPUT input) : SV_TARGET {
     float3 normalV = normalize(input.normalV);
-    // return float4(input.tex, 0, 1);
     return Lighting(input.posV, normalV, input.tex);
 }
