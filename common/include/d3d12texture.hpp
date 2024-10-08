@@ -6,6 +6,8 @@
 #include "texLoader/DDSTextureLoader12.h"
 #include "texLoader/WICTextureLoader12.h"
 
+#include "d3d12resLow.hpp"
+
 #include <filesystem>
 
 namespace gfx {
@@ -16,6 +18,12 @@ class Texture {
 public:
     Texture() NOEXCEPT
         : desc_{}, srv_(), res_(), upRes_() {}
+
+    Texture( Core& core, const D3D12_RESOURCE_DESC& desc,
+        D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+    ) : desc_(desc), srv_(), res_(), upRes_() {
+        res_ = createDefRes(core, desc, initialState);
+    }
 
     Texture( Core& core, D3D12RenderContext& ctx, const std::filesystem::path& path,
         D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE

@@ -7,28 +7,12 @@ namespace gfx {
 namespace d3d12 {
 
 namespace {
-wrl::ComPtr<ID3D12Resource> createUninitBuf( Core& core, UINT64 bytes, D3D12_RESOURCE_STATES state,
-    D3D12_HEAP_TYPE heapType
+wrl::ComPtr<ID3D12Resource> createUninitRes( Core& core, const D3D12_RESOURCE_DESC& desc,
+    D3D12_RESOURCE_STATES state, D3D12_HEAP_TYPE heapType
 ) {
     auto pDevice = static_cast<ID3D12Device*>( DeviceFetcher::device(core) );
 
     auto ret = wrl::ComPtr<ID3D12Resource>();
-
-    auto desc = D3D12_RESOURCE_DESC{
-        .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
-        .Alignment = 0,
-        .Width = bytes,
-        .Height = 1,
-        .DepthOrArraySize = 1,
-        .MipLevels = 1,
-        .Format = DXGI_FORMAT_UNKNOWN,
-        .SampleDesc = DXGI_SAMPLE_DESC{
-            .Count = 1,
-            .Quality = 0
-        },
-        .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-        .Flags = D3D12_RESOURCE_FLAG_NONE
-    };
 
     auto heapProps = D3D12_HEAP_PROPERTIES{
         .Type = heapType,
@@ -46,7 +30,40 @@ wrl::ComPtr<ID3D12Resource> createUninitBuf( Core& core, UINT64 bytes, D3D12_RES
 
     return ret;
 }
+
+wrl::ComPtr<ID3D12Resource> createUninitBuf( Core& core, UINT64 bytes, D3D12_RESOURCE_STATES state,
+    D3D12_HEAP_TYPE heapType
+) {
+    auto desc = D3D12_RESOURCE_DESC{
+        .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
+        .Alignment = 0,
+        .Width = bytes,
+        .Height = 1,
+        .DepthOrArraySize = 1,
+        .MipLevels = 1,
+        .Format = DXGI_FORMAT_UNKNOWN,
+        .SampleDesc = DXGI_SAMPLE_DESC{
+            .Count = 1,
+            .Quality = 0
+        },
+        .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+        .Flags = D3D12_RESOURCE_FLAG_NONE
+    };
+
+    return createUninitRes(core, desc, state, heapType);
+}
 }   // namespace gfx::d3d12::{anonymous_namespace}
+
+wrl::ComPtr<ID3D12Resource> createUpRes( Core& core,
+    const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES state
+) {
+    return createUninitRes(core, desc, state, D3D12_HEAP_TYPE_UPLOAD);
+}
+wrl::ComPtr<ID3D12Resource> createDefRes( Core& core,
+    const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES state
+) {
+    return createUninitRes(core, desc, state, D3D12_HEAP_TYPE_DEFAULT);
+}
 
 wrl::ComPtr<ID3D12Resource> createUpBuf(Core& core, UINT64 bytes) {
     return createUninitBuf(core, bytes, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_HEAP_TYPE_UPLOAD);
