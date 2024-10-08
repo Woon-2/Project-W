@@ -17,7 +17,7 @@ namespace d3d12 {
 class Texture {
 public:
     Texture() NOEXCEPT
-        : desc_{}, srv_(), res_(), upRes_() {}
+        : desc_{}, srv_(), rtv_(), dsv_(), res_(), upRes_() {}
 
     Texture( Core& core, const D3D12_RESOURCE_DESC& desc,
         D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
@@ -40,9 +40,17 @@ public:
     }
 
     void makeSrv(Core& core, const Descriptor& desc);
+    void makeRtv(Core& core, const Descriptor& desc);
+    void makeDsv(Core& core, const Descriptor& desc);
 
     const Descriptor& srv() const NOEXCEPT {
         return srv_;
+    }
+    const Descriptor& rtv() const NOEXCEPT {
+        return rtv_;
+    }
+    const Descriptor& dsv() const NOEXCEPT {
+        return dsv_;
     }
 
 private:
@@ -55,12 +63,14 @@ private:
     
     D3D12_RESOURCE_DESC desc_;
     Descriptor srv_;
+    Descriptor rtv_;
+    Descriptor dsv_;
     wrl::ComPtr<ID3D12Resource> res_;
     wrl::ComPtr<ID3D12Resource> upRes_;
 };
 
-}
+}   // namespace gfx::d3d12
 
-}
+}   // namespace gfx
 
 #endif // __D3d12Texture_HPP

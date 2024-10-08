@@ -17,6 +17,18 @@ void Texture::makeSrv(Core& core, const Descriptor& desc) {
     srv_.makeSrv(pDevice, res_.Get());
 }
 
+void Texture::makeRtv(Core& core, const Descriptor& desc) {
+    rtv_ = desc;
+    auto pDevice = static_cast<ID3D12Device*>( DeviceFetcher::device(core) );
+    rtv_.makeRtv(pDevice, res_.Get());
+}
+
+void Texture::makeDsv(Core& core, const Descriptor& desc) {
+    dsv_ = desc;
+    auto pDevice = static_cast<ID3D12Device*>( DeviceFetcher::device(core) );
+    dsv_.makeDsv(pDevice, res_.Get());
+}
+
 void Texture::load( Core& core, D3D12RenderContext& ctx,
     const std::filesystem::path& path, D3D12_RESOURCE_STATES initialState
 ) {
