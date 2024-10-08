@@ -7,10 +7,11 @@
 void MyGfx::init() {
     configRtvHeapSize(3u);
     configDsvHeapSize(3u);
-    configCbvSrvUavHeapSize(123u);
+    configCbvSrvUavHeapSize(124u);
 
     defineDescRange("offscreenRtv", 0u, 3u);
     defineDescRange("frameDsv", 0u, 3u);
+    defineDescRange(gfx::rp::ShadowMapGen::DescRangeIDShadowTex, 0u, 1u);
     defineDescRange(gfx::rp::PhongInstancing::DescRangeIDTex2D, 0u, 123u);
 
     gfx::d3d12::Core::init();

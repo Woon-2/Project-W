@@ -12,6 +12,8 @@ namespace rp {
 enum class Protocol {
     PhongInstancingNT,
     PhongInstancing,
+    ShadowMapGen,
+    PhongInstancingShadowed,
     Null,
 };
 
@@ -128,6 +130,27 @@ struct PhongInstancing {
     using FPFDType = PFDType;
     using FLightType = std::vector<LightType>;
     using FMaterialType = MaterialType;
+};
+
+struct ShadowMapGen {
+    static constexpr Protocol protocol = Protocol::ShadowMapGen;
+    static constexpr std::size_t typeIdx = 0u;
+    static constexpr std::size_t meshIdx = 1u;
+    static constexpr std::size_t PIDIdx = 2u;
+    static constexpr std::size_t PDDIdx = 3u;
+    static constexpr std::size_t PFDIdx = 4u;
+
+    // temporary place it here,
+    // move it to d3d12 root related header file.
+    static constexpr const char* DescRangeIDShadowTex = "shadowTex";
+
+    using PIDType = d3d12::sr::BasicPID;
+    using PDDType = d3d12::sr::PDDShadow;
+    using PFDType = d3d12::sr::PFDShadow;
+
+    using FPIDType = std::vector<PIDType>;
+    using FPDDType = PDDType;
+    using FPFDType = PFDType;
 };
 
 }   // namespace gfx::rp

@@ -4,12 +4,17 @@
 #include "d3d12core.hpp"
 #include "d3d12texture.hpp"
 
+#include "shadowShader.hpp"
+
 namespace gfx {
 
 namespace d3d12 {
 
 class ShadowTarget : public IRenderTarget {
 public:
+    ShadowTarget(ShadowShader& shader)
+        : pShadowTex_(&shader.shadowMap()) {}
+
     bool castableTo(RenderTargetType type) const override;
     std::any cast(RenderTargetType type) override;
     void preRender(IRenderContext& renderContext) override;

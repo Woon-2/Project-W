@@ -61,7 +61,7 @@ PhongShader::PhongShader(Core &core, const Config &config, std::size_t duplicati
     resPerDrawcallData_(core, sizeof(d3d12::sr::PDDPhong), internalResArr_[1], duplicationCnt),
     resPerInstanceData_(core, sizeof(d3d12::sr::BasicPID) * config.maxInstCnt, internalResArr_[2], duplicationCnt),
     resLights_(core, sizeof(d3d12::sr::PhongLight) * config.maxLightCnt, internalResArr_[3], duplicationCnt),
-    texSrvStart_(),
+    srvHeapStart_(core.descHeapCbvSrvUav().gpuStart()),
     maxInstances_(config.maxInstCnt),
     maxLights_(config.maxLightCnt) {
     if ( !core.hasDescRange(rp::PhongInstancing::DescRangeIDTex2D) ) {
@@ -70,10 +70,6 @@ PhongShader::PhongShader(Core &core, const Config &config, std::size_t duplicati
 
     pushInputLayout( gfx::makeInputLayoutPreset(gfx::InputLayoutPreset::TexDiffuse) );
     pushProtocol(rp::Protocol::PhongInstancing);
-
-    texSrvStart_ = core.descHeapCbvSrvUav()[
-        core.descRange(rp::PhongInstancing::DescRangeIDTex2D).first
-    ].gpuHandle();
 
     auto builder = SimpleShaderBuilder();
     builder.code(Type::Vertex, loadCSO(compiledShaderPath / "tShader_vs.cso"));
@@ -94,7 +90,7 @@ void PhongShader::setRootParams(ID3D12GraphicsCommandList* pCmdList, size_t fram
         0u, resPerInstanceData_.gpuAddress(frameIdx)
     ) );
     DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootDescriptorTable(
-        1u, texSrvStart_
+        1u, srvHeapStart_
     ) );
     DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootShaderResourceView(
         2u, resLights_.gpuAddress(frameIdx)

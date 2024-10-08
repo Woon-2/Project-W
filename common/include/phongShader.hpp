@@ -117,7 +117,7 @@ public:
     GpuMappedRes& pdd() NOEXCEPT { return resPerDrawcallData_; }
     GpuMappedRes& pid() NOEXCEPT { return resPerInstanceData_; }
     GpuMappedRes& lights() NOEXCEPT { return resLights_; }
-    D3D12_GPU_DESCRIPTOR_HANDLE texSrvStart() NOEXCEPT { return texSrvStart_; }
+    D3D12_GPU_DESCRIPTOR_HANDLE srvHeapStart() NOEXCEPT { return srvHeapStart_; }
     
     std::size_t maxLightCnt() const NOEXCEPT { return maxLights_; }
     std::size_t maxInstCnt() const NOEXCEPT { return maxInstances_; }
@@ -141,7 +141,7 @@ private:
     GpuMappedRes resPerDrawcallData_;
     GpuMappedRes resPerInstanceData_;
     GpuMappedRes resLights_;
-    D3D12_GPU_DESCRIPTOR_HANDLE texSrvStart_;
+    D3D12_GPU_DESCRIPTOR_HANDLE srvHeapStart_;
     std::size_t maxInstances_;
     std::size_t maxLights_;
     std::size_t frameIdx_;

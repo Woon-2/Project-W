@@ -61,6 +61,15 @@ struct PDDNTPhong {
     std::uint32_t padding[3];
 };
 
+struct PFDShadow {
+    dx::XMFLOAT4X4 view2LightProj;
+};
+
+struct PDDShadow {
+    std::uint32_t instanceIndex;
+    std::uint32_t padding[3];
+};
+
 struct PhongLight {
     static constexpr std::int32_t kTypeDirectional = 0;
     static constexpr std::int32_t kTypePoint = 1;

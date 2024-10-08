@@ -422,14 +422,15 @@ public:
         return descHeapSam_;
     }
 
+    // TODO: 반드시 수정, 힙 타입별로.
     void defineDescRange(const DescRangeID& id, std::size_t startIdx, std::size_t size) {
         auto range = std::pair{ startIdx, startIdx + size };
 
-        if ( std::ranges::any_of( descHeapIdxMap_, [&range](const auto& pair) {
-            return pair.second.first < range.first && pair.second.second > range.first;
-        } ) ) {
-            throw GFX_EXCEPT("The descriptor range with the given id overlaps with the existing descriptor range.");
-        }
+        // if ( std::ranges::any_of( descHeapIdxMap_, [&range](const auto& pair) {
+        //     return pair.second.first < range.first && pair.second.second > range.first;
+        // } ) ) {
+        //     throw GFX_EXCEPT("The descriptor range with the given id overlaps with the existing descriptor range.");
+        // }
 
         auto [_, emplaced] = descHeapIdxMap_.try_emplace(id, range);
 

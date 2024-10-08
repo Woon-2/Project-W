@@ -121,11 +121,19 @@ public:
         return type_;
     }
 
-    D3D12_CPU_DESCRIPTOR_HANDLE cpuStart() const NOEXCEPT {
+    D3D12_CPU_DESCRIPTOR_HANDLE& cpuStart() NOEXCEPT {
         return cpuStart_;
     }
 
-    D3D12_GPU_DESCRIPTOR_HANDLE gpuStart() const NOEXCEPT {
+    const D3D12_CPU_DESCRIPTOR_HANDLE& cpuStart() const NOEXCEPT {
+        return cpuStart_;
+    }
+
+    D3D12_GPU_DESCRIPTOR_HANDLE& gpuStart() NOEXCEPT {
+        return gpuStart_;
+    }
+
+    const D3D12_GPU_DESCRIPTOR_HANDLE& gpuStart() const NOEXCEPT {
         return gpuStart_;
     }
 

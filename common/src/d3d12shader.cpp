@@ -22,9 +22,6 @@ void Shader::defPreDraw( IRenderContext& ctx, const IScene& scene,
         throw GFX_EXCEPT("The render target type is mismatched.");
     }
 
-    // temporary bind option
-    bind( ctx, BindOption{ .idx = 0, .ilIdx = 0 } );
-
     auto pCmdList = std::any_cast<wrl::ComPtr<ID3D12GraphicsCommandList>>(
         ctx.cast(RenderContextType::D3D12)
     );
