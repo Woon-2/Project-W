@@ -9,13 +9,7 @@ void Material::pushTexture(Core& core, Maps prop, const Texture& tex) {
         throw std::runtime_error("Texture already exists for this property");
     }
 
-    auto& texSrvHeap = core.descHeap(Texture::texSrvHeapIdx);
-    auto texSrvHeapStart = texSrvHeap.gpuHandle();
-    auto srvStride = texSrvHeap.stride();
-    auto texSrvAddr = tex.gpuHandle();
-    auto idx = static_cast<std::uint32_t>( (texSrvAddr.ptr - texSrvHeapStart.ptr) / srvStride );
-
-    indices_[etoi(prop)] = idx;
+    indices_[etoi(prop)] = static_cast<TextureIdx>( tex.srv().idx() );
 }
 
 const Material::TextureIdx Material::idx(Maps prop) const {

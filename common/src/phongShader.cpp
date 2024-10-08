@@ -72,7 +72,7 @@ PhongShader::PhongShader(Core &core, const Config &config, std::size_t duplicati
     pushInputLayout( gfx::makeInputLayoutPreset(gfx::InputLayoutPreset::TexDiffuse) );
     pushProtocol(rp::Protocol::PhongInstancing);
 
-    texSrvStart_ = core.descHeap(Texture::texSrvHeapIdx).gpuHandleUninit();
+    texSrvStart_ = core.descHeap(Texture::texSrvHeapIdx).gpuStart();
     pTexSrvHeap_ = &core.descHeap(Texture::texSrvHeapIdx);
 
     auto builder = SimpleShaderBuilder();

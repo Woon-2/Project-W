@@ -75,26 +75,107 @@ private:
     std::list<wrl::ComPtr<ID3D12CommandAllocator>> cmdAllocs_;
 };
 
+class Descriptor {
+public:
+    friend class DescriptorHeap;
+
+    enum class Type {
+        SRV, RTV, DSV, UAV, CBV, SAM, NUL
+    };
+
+    Descriptor()
+        : cpuHandle_(), gpuHandle_(), idx_(std::size_t(-1)),
+        type_(Type::NUL), shaderVisible_(false), initialized_(false) {}
+
+    Type type() const NOEXCEPT {
+        return type_;
+    }
+
+    bool shaderVisible() const NOEXCEPT {
+        return shaderVisible_;
+    }
+
+    bool initialized() const NOEXCEPT {
+        return initialized_;
+    }
+
+    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle() const NOEXCEPT {
+        return cpuHandle_;
+    }
+
+    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle() const NOEXCEPT {
+        return gpuHandle_;
+    }
+
+    std::size_t idx() const NOEXCEPT {
+        return idx_;
+    }
+
+private:
+    Descriptor( const D3D12_CPU_DESCRIPTOR_HANDLE& cpuHandle,
+        const D3D12_GPU_DESCRIPTOR_HANDLE& gpuHandle, std::size_t idx, Type type,
+        bool shaderVisible, bool initialized
+    ) : cpuHandle_(cpuHandle), gpuHandle_(gpuHandle), idx_(idx), type_(type),
+        shaderVisible_(shaderVisible), initialized_(initialized) {}
+
+    void makeSrv(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc);
+    void makeSrv(ID3D12Device* pDevice, ID3D12Resource* pRes);
+    void makeRtv(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_RENDER_TARGET_VIEW_DESC& rtvDesc);
+    void makeRtv(ID3D12Device* pDevice, ID3D12Resource* pRes);
+    void makeDsv(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc);
+    void makeDsv(ID3D12Device* pDevice, ID3D12Resource* pRes);
+    void makeUav(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_UNORDERED_ACCESS_VIEW_DESC& uavDesc);
+    void makeCbv(ID3D12Device* pDevice, const D3D12_CONSTANT_BUFFER_VIEW_DESC& cbvDesc);
+    void makeSam(ID3D12Device* pDevice, const D3D12_SAMPLER_DESC& samplerDesc);
+
+    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle_;
+    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle_;
+    std::size_t idx_;
+    Type type_;
+    bool shaderVisible_;
+    bool initialized_;
+};
+
 class DescriptorHeap {
 public:
     DescriptorHeap()
-        : pHeap_(), cpuStart_(), gpuStart_(), type_(D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES), size_(0), capacity_(0), stride_(0), shaderVisible_(false) {}
+        : pHeap_(), descriptors_(), cpuStart_(), gpuStart_(), stride_(0),
+        size_(0), type_(D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES), shaderVisible_(false) {}
     DescriptorHeap(ID3D12Device* pDevice, D3D12_DESCRIPTOR_HEAP_TYPE type, std::size_t capacity, bool shaderVisible = false);
 
-    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle(std::size_t idx = 0) const;
-    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle(std::size_t idx = 0) const;
-    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandleUninit(std::size_t idx = 0) const;
-    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandleUninit(std::size_t idx = 0) const;
+    Descriptor& at(std::size_t idx) {
+        return descriptors_.at(idx);
+    }
 
-    void pushSrv(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc);
-    void pushSrv(ID3D12Device* pDevice, ID3D12Resource* pRes);
-    void pushRtv(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_RENDER_TARGET_VIEW_DESC& rtvDesc);
-    void pushRtv(ID3D12Device* pDevice, ID3D12Resource* pRes);
-    void pushDsv(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc);
-    void pushDsv(ID3D12Device* pDevice, ID3D12Resource* pRes);
-    void pushUav(ID3D12Device* pDevice, ID3D12Resource* pRes, const D3D12_UNORDERED_ACCESS_VIEW_DESC& uavDesc);
-    void pushCbv(ID3D12Device* pDevice, const D3D12_CONSTANT_BUFFER_VIEW_DESC& cbvDesc);
-    void pushSam(ID3D12Device* pDevice, const D3D12_SAMPLER_DESC& samplerDesc);
+    const Descriptor& at(std::size_t idx) const {
+        return descriptors_.at(idx);
+    }
+
+    Descriptor& operator[](std::size_t idx) NOEXCEPT {
+        return descriptors_[idx];
+    }
+
+    const Descriptor& operator[](std::size_t idx) const NOEXCEPT {
+        return descriptors_[idx];
+    }
+
+    const Descriptor& pushSrv( ID3D12Device* pDevice, ID3D12Resource* pRes, 
+        const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
+    );
+    const Descriptor& pushSrv(ID3D12Device* pDevice, ID3D12Resource* pRes);
+    const Descriptor& pushRtv( ID3D12Device* pDevice, ID3D12Resource* pRes, 
+        const D3D12_RENDER_TARGET_VIEW_DESC& rtvDesc
+    );
+    const Descriptor& pushRtv(ID3D12Device* pDevice, ID3D12Resource* pRes);
+    const Descriptor& pushDsv( ID3D12Device* pDevice, ID3D12Resource* pRes, 
+        const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc
+    );
+    const Descriptor& pushDsv(ID3D12Device* pDevice, ID3D12Resource* pRes);
+    const Descriptor& pushUav( ID3D12Device* pDevice, ID3D12Resource* pRes, 
+        const D3D12_UNORDERED_ACCESS_VIEW_DESC& uavDesc
+    );
+    const Descriptor& pushCbv(ID3D12Device* pDevice, const D3D12_CONSTANT_BUFFER_VIEW_DESC& cbvDesc);
+    const Descriptor& pushSam(ID3D12Device* pDevice, const D3D12_SAMPLER_DESC& samplerDesc);
 
     void set(ID3D12GraphicsCommandList* pCmdList) {
         DX_THROW_FAILED_VOID(pCmdList->SetDescriptorHeaps(1u, pHeap_.GetAddressOf()));
@@ -102,6 +183,10 @@ public:
 
     std::size_t size() const NOEXCEPT {
         return size_;
+    }
+
+    std::size_t capacity() const NOEXCEPT {
+        return descriptors_.capacity();
     }
 
     std::size_t stride() const NOEXCEPT {
@@ -112,13 +197,31 @@ public:
         return type_;
     }
 
+    bool empty() const NOEXCEPT {
+        return descriptors_.empty();
+    }
+
+    bool full() const NOEXCEPT {
+        return descriptors_.size() == descriptors_.capacity();
+    }
+
+    D3D12_CPU_DESCRIPTOR_HANDLE cpuStart() const NOEXCEPT {
+        return cpuStart_;
+    }
+
+    D3D12_GPU_DESCRIPTOR_HANDLE gpuStart() const NOEXCEPT {
+        return gpuStart_;
+    }
+
 private:
+    void validatePush(Descriptor::Type type) const;
+
     wrl::ComPtr<ID3D12DescriptorHeap> pHeap_;
+    std::vector<Descriptor> descriptors_;
     D3D12_CPU_DESCRIPTOR_HANDLE cpuStart_;
     D3D12_GPU_DESCRIPTOR_HANDLE gpuStart_;
-    std::size_t size_;
-    std::size_t capacity_;
     std::size_t stride_;
+    std::size_t size_;
     D3D12_DESCRIPTOR_HEAP_TYPE type_;
     bool shaderVisible_;
 };
@@ -790,7 +893,7 @@ void Window<Traits>::buildRtv(Core& core, std::size_t backBufCnt) {
         heap.pushRtv(pDevice, offscreenBuffers_[i].Get());
     }
 
-    pFirstRtv_ = heap.cpuHandle();
+    pFirstRtv_ = heap.cpuStart();
     rtvStride_ = static_cast<UINT>( heap.stride() );
 }
 
@@ -811,7 +914,7 @@ void Window<Traits>::buildDsv(Core& core, std::size_t backBufCnt) {
         heap.pushDsv(pDevice, depthBuffers_[i].Get());
     }
 
-    pFirstDsv_ = heap.cpuHandle();
+    pFirstDsv_ = heap.cpuStart();
     dsvStride_ = static_cast<UINT>( heap.stride() );
 }
 

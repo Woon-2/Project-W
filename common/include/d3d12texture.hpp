@@ -17,7 +17,7 @@ public:
     static const Core::DescHeapIdx texSrvHeapIdx;
 
     Texture() NOEXCEPT
-        : desc_{}, res_(), gpuHandle_{} {}
+        : desc_{}, srv_(), res_(), upRes_() {}
 
     Texture( Core& core, D3D12RenderContext& ctx, const std::filesystem::path& path,
         D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
@@ -33,7 +33,9 @@ public:
         upRes_.Reset();
     }
 
-    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle() const NOEXCEPT { return gpuHandle_; }
+    const Descriptor& srv() const NOEXCEPT {
+        return srv_;
+    }
 
 private:
     void loadDDS( Core& core, D3D12RenderContext& ctx, const std::filesystem::path& path,
@@ -44,9 +46,9 @@ private:
     );
     
     D3D12_RESOURCE_DESC desc_;
+    Descriptor srv_;
     wrl::ComPtr<ID3D12Resource> res_;
     wrl::ComPtr<ID3D12Resource> upRes_;
-    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle_;
 };
 
 }

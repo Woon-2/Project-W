@@ -52,9 +52,7 @@ void Texture::load( Core& core, D3D12RenderContext& ctx,
     }
 
     auto& texSrvHeap = core.descHeap(texSrvHeapIdx);
-
-    texSrvHeap.pushSrv( pDevice, res_.Get() );  // temporary
-    gpuHandle_ = texSrvHeap.gpuHandle( texSrvHeap.size() - 1 );
+    srv_ = texSrvHeap.pushSrv( pDevice, res_.Get() );
 }
 
 void Texture::loadDDS( Core& core, D3D12RenderContext& ctx,
