@@ -53,6 +53,16 @@ public:
         return dsv_;
     }
 
+    void cvt2rt( D3D12RenderContext& ctx );
+    void cvt2ds( D3D12RenderContext& ctx );
+    void cvt2sr( D3D12RenderContext& ctx );
+    void cvt2cpSrc( D3D12RenderContext& ctx );
+    void cvt2cpDst( D3D12RenderContext& ctx );
+
+    D3D12_RESOURCE_STATES state() const NOEXCEPT {
+        return state_;
+    }
+
 private:
     void loadDDS( Core& core, D3D12RenderContext& ctx, const std::filesystem::path& path,
         D3D12_RESOURCE_STATES initialState
@@ -67,6 +77,7 @@ private:
     Descriptor dsv_;
     wrl::ComPtr<ID3D12Resource> res_;
     wrl::ComPtr<ID3D12Resource> upRes_;
+    D3D12_RESOURCE_STATES state_;
 };
 
 }   // namespace gfx::d3d12

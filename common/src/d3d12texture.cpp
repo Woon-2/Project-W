@@ -29,6 +29,96 @@ void Texture::makeDsv(Core& core, const Descriptor& desc) {
     dsv_.makeDsv(pDevice, res_.Get());
 }
 
+void Texture::cvt2rt( D3D12RenderContext& ctx ) {
+    auto pCmdList = std::any_cast<wrl::ComPtr<ID3D12GraphicsCommandList>>(
+        ctx.cast(RenderContextType::D3D12)
+    );
+
+    auto bar = D3D12_RESOURCE_BARRIER{
+        .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+        .Transition = {
+            .pResource = res_.Get(),
+            .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+            .StateBefore = state_,
+            .StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET
+        }
+    };
+
+    pCmdList->ResourceBarrier(1, &bar);
+}
+
+void Texture::cvt2ds( D3D12RenderContext& ctx ) {
+    auto pCmdList = std::any_cast<wrl::ComPtr<ID3D12GraphicsCommandList>>(
+        ctx.cast(RenderContextType::D3D12)
+    );
+
+    auto bar = D3D12_RESOURCE_BARRIER{
+        .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+        .Transition = {
+            .pResource = res_.Get(),
+            .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+            .StateBefore = state_,
+            .StateAfter = D3D12_RESOURCE_STATE_DEPTH_WRITE
+        }
+    };
+
+    pCmdList->ResourceBarrier(1, &bar);
+}
+
+void Texture::cvt2sr( D3D12RenderContext& ctx ) {
+    auto pCmdList = std::any_cast<wrl::ComPtr<ID3D12GraphicsCommandList>>(
+        ctx.cast(RenderContextType::D3D12)
+    );
+
+    auto bar = D3D12_RESOURCE_BARRIER{
+        .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+        .Transition = {
+            .pResource = res_.Get(),
+            .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+            .StateBefore = state_,
+            .StateAfter = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+        }
+    };
+
+    pCmdList->ResourceBarrier(1, &bar);
+}
+
+void Texture::cvt2cpSrc( D3D12RenderContext& ctx ) {
+    auto pCmdList = std::any_cast<wrl::ComPtr<ID3D12GraphicsCommandList>>(
+        ctx.cast(RenderContextType::D3D12)
+    );
+
+    auto bar = D3D12_RESOURCE_BARRIER{
+        .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+        .Transition = {
+            .pResource = res_.Get(),
+            .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+            .StateBefore = state_,
+            .StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE
+        }
+    };
+
+    pCmdList->ResourceBarrier(1, &bar);
+}
+
+void Texture::cvt2cpDst( D3D12RenderContext& ctx ) {
+    auto pCmdList = std::any_cast<wrl::ComPtr<ID3D12GraphicsCommandList>>(
+        ctx.cast(RenderContextType::D3D12)
+    );
+
+    auto bar = D3D12_RESOURCE_BARRIER{
+        .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+        .Transition = {
+            .pResource = res_.Get(),
+            .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+            .StateBefore = state_,
+            .StateAfter = D3D12_RESOURCE_STATE_COPY_DEST
+        }
+    };
+
+    pCmdList->ResourceBarrier(1, &bar);
+}
+
 void Texture::load( Core& core, D3D12RenderContext& ctx,
     const std::filesystem::path& path, D3D12_RESOURCE_STATES initialState
 ) {
