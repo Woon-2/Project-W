@@ -45,7 +45,7 @@ VS_OUTPUT VSMain(VS_INPUT input) {
     );
     output.tex = input.tex;
     output.instID = input.instID;
-    output.shadowPos = mul( output.posV, gView2LightProj );
+    output.shadowPos = mul( float4(output.posV, 1.f), gView2LightProj );
 
     return output;
 }
