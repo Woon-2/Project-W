@@ -139,6 +139,13 @@ compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/tShader.hlsl"
     /enable_unbounded_descriptor_tables
 )
 
+compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/shadowMapShader.hlsl"
+    "${COMPILED_SHADER_PATH}/shadowMapShader_vs.cso"
+    "vs_5_1"
+    "VSMain"
+    /D INCLUDE_basicInstancing
+)
+
 compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/tShaderShadowed.hlsl"
     "${COMPILED_SHADER_PATH}/tShaderShadowed_vs.cso"
     "vs_5_1"
