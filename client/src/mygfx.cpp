@@ -5,6 +5,14 @@
 #include "d3d12texture.hpp"
 
 void MyGfx::init() {
+    configRtvHeapSize(3u);
+    configDsvHeapSize(3u);
+    configCbvSrvUavHeapSize(123u);
+
+    defineDescRange("offscreenRtv", 0u, 3u);
+    defineDescRange("frameDsv", 0u, 3u);
+    defineDescRange(gfx::rp::PhongInstancing::DescRangeIDTex2D, 0u, 123u);
+
     gfx::d3d12::Core::init();
 
     addRoot( gfx::d3d12::rootName(gfx::d3d12::RootPreset::Unified),
@@ -15,10 +23,6 @@ void MyGfx::init() {
     );
 
     auto pDevice = static_cast<ID3D12Device*>( gfx::d3d12::DeviceFetcher::device(*this) );
-
-    addDescHeap( gfx::d3d12::Texture::texSrvHeapIdx,
-        gfx::d3d12::DescriptorHeap(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 123u, true)
-    );
 
     phongShader_ = gfx::d3d12::PhongShader( *this,
         gfx::d3d12::PhongShader::Config{ .maxInstCnt = 1000u, .maxLightCnt = 12u },

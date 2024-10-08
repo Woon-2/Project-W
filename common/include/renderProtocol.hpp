@@ -113,6 +113,10 @@ struct PhongInstancing {
     static constexpr std::size_t lightIdx = 5u;
     static constexpr std::size_t materialIdx = 6u;
 
+    // temporary place it here,
+    // move it to d3d12 root related header file.
+    static constexpr const char* DescRangeIDTex2D = "tex2D";
+
     using PIDType = d3d12::sr::BasicPID;
     using PDDType = d3d12::sr::PDDPhong;
     using PFDType = d3d12::sr::BasicPFD;

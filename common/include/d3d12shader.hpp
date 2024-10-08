@@ -3,6 +3,7 @@
 
 #include "shader.hpp"
 
+#include "d3d12Descriptor.hpp"
 #include "d3d12InputLayout.hpp"
 
 #include "directx/d3dx12.h"

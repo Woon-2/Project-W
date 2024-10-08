@@ -29,15 +29,15 @@ void Shader::defPreDraw( IRenderContext& ctx, const IScene& scene,
         ctx.cast(RenderContextType::D3D12)
     );
 
-    auto pTarget = std::any_cast<D3D12_CPU_DESCRIPTOR_HANDLE>(
+    auto rtv = std::any_cast<Descriptor>(
         target.cast(RenderTargetType::D3D12)
     );
 
-    auto pDepthTarget = std::any_cast<D3D12_CPU_DESCRIPTOR_HANDLE>(
+    auto dsv = std::any_cast<Descriptor>(
         target.cast(RenderTargetType::D3D12_DEPTH)
     );
 
-    DX_THROW_FAILED_VOID( pCmdList->OMSetRenderTargets(1u, &pTarget, true, &pDepthTarget) );
+    DX_THROW_FAILED_VOID( pCmdList->OMSetRenderTargets(1u, &rtv.cpuHandle(), true, &dsv.cpuHandle()) );
 }
 
 void Shader::make(ID3D12Device* pDevice, Idx idx, const Desc& desc) {

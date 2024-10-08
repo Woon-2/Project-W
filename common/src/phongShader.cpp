@@ -62,18 +62,18 @@ PhongShader::PhongShader(Core &core, const Config &config, std::size_t duplicati
     resPerInstanceData_(core, sizeof(d3d12::sr::BasicPID) * config.maxInstCnt, internalResArr_[2], duplicationCnt),
     resLights_(core, sizeof(d3d12::sr::PhongLight) * config.maxLightCnt, internalResArr_[3], duplicationCnt),
     texSrvStart_(),
-    pTexSrvHeap_(nullptr),
     maxInstances_(config.maxInstCnt),
     maxLights_(config.maxLightCnt) {
-    if ( !core.containsDescHeap(Texture::texSrvHeapIdx) ) {
-        throw GFX_EXCEPT("[Description] Texture descriptor heap not found.");
+    if ( !core.hasDescRange(rp::PhongInstancing::DescRangeIDTex2D) ) {
+        throw GFX_EXCEPT("[Description] Texture2D descriptor range not found.");
     }
 
     pushInputLayout( gfx::makeInputLayoutPreset(gfx::InputLayoutPreset::TexDiffuse) );
     pushProtocol(rp::Protocol::PhongInstancing);
 
-    texSrvStart_ = core.descHeap(Texture::texSrvHeapIdx).gpuStart();
-    pTexSrvHeap_ = &core.descHeap(Texture::texSrvHeapIdx);
+    texSrvStart_ = core.descHeapCbvSrvUav()[
+        core.descRange(rp::PhongInstancing::DescRangeIDTex2D).first
+    ].gpuHandle();
 
     auto builder = SimpleShaderBuilder();
     builder.code(Type::Vertex, loadCSO(compiledShaderPath / "tShader_vs.cso"));
@@ -89,7 +89,6 @@ PhongShader::PhongShader(Core &core, const Config &config, std::size_t duplicati
 void PhongShader::setRootParams(ID3D12GraphicsCommandList* pCmdList, size_t frameIdx) const {
     // temporary
     pCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    pTexSrvHeap_->set(pCmdList);
 
     DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootShaderResourceView(
         0u, resPerInstanceData_.gpuAddress(frameIdx)

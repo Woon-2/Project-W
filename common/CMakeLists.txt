@@ -196,6 +196,7 @@ add_library(gfx
     src/d3d12materialTree.cpp include/d3d12materialTree.hpp
     src/shader.cpp include/shader.hpp
     src/renderer.cpp include/renderer.hpp
+    src/d3d12Descriptor.cpp include/d3d12Descriptor.hpp
     
     include/dxtarget.hpp
     include/gfxPrimitive.hpp

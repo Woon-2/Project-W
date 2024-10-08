@@ -12,6 +12,14 @@ public:
     void setFrame(std::size_t frameIdx);
     const MyRenderer& illuminanceRenderer() const NOEXCEPT { return illuminanceRenderer_; }
 
+    gfx::d3d12::Core::DescRangeID offscreenRtvRangeID() const NOEXCEPT {
+        return gfx::d3d12::Core::DescRangeID("offscreenRtv");
+    }
+
+    gfx::d3d12::Core::DescRangeID frameDsvRangeID() const NOEXCEPT {
+        return gfx::d3d12::Core::DescRangeID("frameDsv");
+    }
+
 private:
     std::optional<gfx::d3d12::PhongShader> phongShader_;
     std::optional<gfx::d3d12::PhongShaderNT> phongShaderNT_;

@@ -14,8 +14,6 @@ namespace d3d12 {
 
 class Texture {
 public:
-    static const Core::DescHeapIdx texSrvHeapIdx;
-
     Texture() NOEXCEPT
         : desc_{}, srv_(), res_(), upRes_() {}
 
@@ -32,6 +30,8 @@ public:
     void completeInit() {
         upRes_.Reset();
     }
+
+    void makeSrv(Core& core, const Descriptor& desc);
 
     const Descriptor& srv() const NOEXCEPT {
         return srv_;

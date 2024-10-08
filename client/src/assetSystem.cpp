@@ -4,12 +4,14 @@
 
 #include "inputLayoutPresets.hpp"
 
+#include "renderProtocol.hpp"
+
 #include <ranges>
 #include <algorithm>
 
 AssetSystem::AssetSystem(gfx::d3d12::Core& core, std::size_t fenceIdx)
     : textures_(), texPaths_(), models_(), matTrees_(),
-    pCtx_(), pCore_(&core), fenceIdx_(fenceIdx) {
+    pCtx_(), pCore_(&core), fenceIdx_(fenceIdx), readyTextureCnt_(0) {
 
 }
 
@@ -62,6 +64,9 @@ void AssetSystem::loadTexture(const Key& key, const std::filesystem::path& path)
     }
 
     auto [it, _] = textures_.try_emplace(key, gfx::d3d12::Texture(*pCore_, *pCtx_, path));
+    it->second.makeSrv(*pCore_, pCore_->descHeapCbvSrvUav()[
+        pCore_->descRange(gfx::rp::PhongInstancing::DescRangeIDTex2D).first + readyTextureCnt_++
+    ]);
     texPaths_.try_emplace(path, &it->second);
 }
 

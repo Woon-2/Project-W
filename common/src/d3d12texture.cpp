@@ -11,6 +11,12 @@ namespace gfx {
 
 namespace d3d12 {
 
+void Texture::makeSrv(Core& core, const Descriptor& desc) {
+    srv_ = desc;
+    auto pDevice = static_cast<ID3D12Device*>( DeviceFetcher::device(core) );
+    srv_.makeSrv(pDevice, res_.Get());
+}
+
 void Texture::load( Core& core, D3D12RenderContext& ctx,
     const std::filesystem::path& path, D3D12_RESOURCE_STATES initialState
 ) {
@@ -40,19 +46,6 @@ void Texture::load( Core& core, D3D12RenderContext& ctx,
     // It does not wait for the gpu to finish the command list.
     // So, If the created SRV is used before the command list is executed,
     // it will cause an error.
-
-    desc_ = res_->GetDesc();
-
-    auto pDevice = static_cast<ID3D12Device*>( DeviceFetcher::device(core) );
-
-    if (!core.containsDescHeap(texSrvHeapIdx)) {
-        core.addDescHeap( texSrvHeapIdx,
-            DescriptorHeap( pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 123u, true )
-        );
-    }
-
-    auto& texSrvHeap = core.descHeap(texSrvHeapIdx);
-    srv_ = texSrvHeap.pushSrv( pDevice, res_.Get() );
 }
 
 void Texture::loadDDS( Core& core, D3D12RenderContext& ctx,
@@ -119,8 +112,6 @@ void Texture::loadWIC( Core& core, D3D12RenderContext& ctx,
         0, 0, 1u, &subresource
     );
 }
-
-const Core::DescHeapIdx Texture::texSrvHeapIdx = "TexSrv"s;
 
 }   // namespace gfx::d3d12
 

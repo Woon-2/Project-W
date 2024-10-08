@@ -93,6 +93,7 @@ private:
     std::unique_ptr<gfx::d3d12::D3D12RenderContext> pCtx_;
     gfx::d3d12::Core* pCore_;
     std::size_t fenceIdx_;
+    std::size_t readyTextureCnt_;
 };
 
 #endif  // __AssetSystem_HPP

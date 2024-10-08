@@ -142,8 +142,6 @@ private:
     GpuMappedRes resPerInstanceData_;
     GpuMappedRes resLights_;
     D3D12_GPU_DESCRIPTOR_HANDLE texSrvStart_;
-    DescriptorHeap* pTexSrvHeap_;   // temporary
-
     std::size_t maxInstances_;
     std::size_t maxLights_;
     std::size_t frameIdx_;
