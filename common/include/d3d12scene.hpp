@@ -36,6 +36,13 @@ public:
 
     Generator<DrawInfo> iteration(rp::Protocol protocol) const override;
 
+    void addFragment(const Fragment& fragment) {
+        if (!fragment.meshView.hasProtocol()) {
+            throw GFX_EXCEPT("Mesh has no protocol");
+        }
+        fragmentsMap_[fragment.meshView.protocol()].push_back(fragment);
+    }
+
     void addFragment(Fragment&& fragment) {
         if (!fragment.meshView.hasProtocol()) {
             throw GFX_EXCEPT("Mesh has no protocol");
@@ -103,6 +110,10 @@ public:
     void setLights(rp::Protocol protocol, Cont<std::any>&& lights) {
         lightsMap_[protocol] = std::move(lights);
     }
+
+    // temporary
+    // single, static light
+    mu::Mat4x4 makeView2LightProj() const;
 
 private:
     std::map<rp::Protocol, Cont<Fragment>> fragmentsMap_;

@@ -4,22 +4,33 @@
 
 #include "renderProtocol.hpp"
 
+#include "gfxExcept.hpp"
+
 #include <ranges>
 #include <algorithm>
 #include <iterator>
 #include <execution>
+#include <concepts>
 
 namespace gfx {
 
 namespace d3d12 {
 
 namespace {
+    template <class RenderProtocol>
+        requires std::same_as<RenderProtocol, rp::ShadowMapGen>
+    Generator<DrawInfo> iterationImpl(const auto& fragments, const mu::Mat4x4& view2LightProj, const mu::Mat4x4& view, const mu::Mat4x4& proj);
+    template <class RenderProtocol>
+        requires std::same_as<RenderProtocol, rp::ShadowMapGen>
+    Generator<DrawInfo> fragmentIteration(const auto& fragment, const mu::Mat4x4& view, const mu::Mat4x4& proj, auto& baseInstIdx);
+
     template <rp::PFUnified RenderProtocol>
     Generator<DrawInfo> iterationImpl(const auto& lights, const auto& fragments, const mu::Mat4x4& view, const mu::Mat4x4& proj);
     template <rp::PFUnified RenderProtocol>
     Generator<DrawInfo> fragmentIteration(const auto& fragment, const mu::Mat4x4& view, const mu::Mat4x4& proj, auto& baseInstIdx);
     rp::PhongInstancing::PIDType genPID(rp::PhongInstancing, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj);
     rp::PhongInstancingNT::PIDType genPID(rp::PhongInstancingNT, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj);
+    rp::ShadowMapGen::PIDType genPID(rp::ShadowMapGen, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj);
 
     template <rp::PFUnified RenderProtocol>
     Generator<DrawInfo> iterationImpl(const auto& lights, const auto& fragments, const mu::Mat4x4& view, const mu::Mat4x4& proj) {
@@ -113,6 +124,77 @@ namespace {
         co_yield std::move(pddInfo);
     }
 
+    template <class RenderProtocol>
+        requires std::same_as<RenderProtocol, rp::ShadowMapGen>
+    Generator<DrawInfo> iterationImpl(const auto& fragments, const mu::Mat4x4& view2LightProj, const mu::Mat4x4& view, const mu::Mat4x4& proj) {
+        using PFDType = RenderProtocol::PFDType;
+        using FPFDType = RenderProtocol::FPFDType;
+
+        auto pfdInfo = DrawInfo();
+
+        pfdInfo.set(RenderProtocol::typeIdx, rp::DIType::PFD);
+        pfdInfo.set( RenderProtocol::PFDIdx, PFDType{
+            .view2LightProj = mu::transpose( view2LightProj ).getXmf()
+        } );
+
+        co_yield std::move(pfdInfo);
+
+        auto baseInstIdx = 0u;
+
+        for (const auto& fragment : fragments) {
+            auto fi = fragmentIteration<RenderProtocol>(fragment, view, proj, baseInstIdx);
+            for (auto& drawInfo : fi) {
+                co_yield std::move(drawInfo);
+            }
+        }
+    }
+
+    template <class RenderProtocol>
+        requires std::same_as<RenderProtocol, rp::ShadowMapGen>
+    Generator<DrawInfo> fragmentIteration(const auto& fragment, const mu::Mat4x4& view, const mu::Mat4x4& proj, auto& baseInstIdx) {
+        auto meshInfo = DrawInfo();
+
+        meshInfo.set(RenderProtocol::typeIdx, rp::DIType::Mesh);
+        meshInfo.set(RenderProtocol::meshIdx, fragment.meshView.mesh());
+
+        co_yield std::move(meshInfo);
+
+        using PIDType = RenderProtocol::PIDType;
+        using FPIDType = RenderProtocol::FPIDType;
+
+        auto pidInfo = DrawInfo();
+
+        auto pidBuffer = FPIDType();
+        // replace reserve with reserve_if_possible later
+        // to support various type of containers
+        pidBuffer.reserve( fragment.worlds.size() );
+
+        std::ranges::copy( fragment.worlds | std::views::transform(
+            [&view, &proj](const auto& world) {
+                return genPID(RenderProtocol{}, world, view, proj);
+            }
+        ), std::back_inserter(pidBuffer) );
+
+        pidInfo.set(RenderProtocol::typeIdx, rp::DIType::PID);
+        pidInfo.set(RenderProtocol::PIDIdx, std::move(pidBuffer));
+
+        co_yield std::move(pidInfo);
+
+        using PDDType = RenderProtocol::PDDType;
+        using FPDDType = RenderProtocol::FPDDType;
+
+        auto pddInfo = DrawInfo();
+
+        pddInfo.set(RenderProtocol::typeIdx, rp::DIType::PDD);
+        pddInfo.set(RenderProtocol::PDDIdx, FPDDType{
+            .instanceIndex = baseInstIdx
+        } );
+        
+        baseInstIdx += static_cast<std::uint32_t>( fragment.worlds.size() );
+
+        co_yield std::move(pddInfo);
+    }
+
     rp::PhongInstancing::PIDType genPID(rp::PhongInstancing, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj) {
         return rp::PhongInstancing::PIDType{
             .wv = mu::transpose(world * view).getXmf(),
@@ -132,6 +214,14 @@ namespace {
             )
         };
     }
+
+    rp::ShadowMapGen::PIDType genPID(rp::ShadowMapGen, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj) {
+        return rp::ShadowMapGen::PIDType{
+            .wv = mu::transpose(world * view).getXmf(),
+            .wvp = mu::transpose(world * view * proj).getXmf()
+        };
+    }
+
 }   // namespace gfx::d3d12::<anonymous>
 
 Generator<DrawInfo> CameraScene::iteration(rp::Protocol protocol) const {
@@ -174,7 +264,32 @@ Generator<DrawInfo> CameraScene::iteration(rp::Protocol protocol) const {
         }
         break;
     }
+
+    case rp::Protocol::ShadowMapGen: {
+        auto coro = iterationImpl<rp::ShadowMapGen>(
+            *pArgFragmentsMap, makeView2LightProj(), view(), proj()
+        );
+        for (auto& drawInfo : coro) {
+            co_yield std::move(drawInfo);
+        }
+        break;
     }
+
+    default:
+        throw GFX_EXCEPT("[Description] Scene iteration with Invalid protocol.");
+    }
+}
+
+mu::Mat4x4 CameraScene::makeView2LightProj() const {
+    auto pLight = std::any_cast<const sr::PhongLight*>( lightsMap_.at(rp::Protocol::ShadowMapGen).front() );
+    auto pos = mu::Vec3( dx::XMLoadFloat3(&pLight->posV) );
+    auto dir = mu::Vec3( dx::XMLoadFloat3(&pLight->dirV) );
+    auto up = mu::Vec3( 0.f, 1.f, 0.f );
+
+    auto lightView = mu::lookAt(pos, pos + dir, up);
+    auto lightProj = proj();
+
+    return mu::inverse(view()) * lightView * lightProj;
 }
 
 }   // namespace d3d12

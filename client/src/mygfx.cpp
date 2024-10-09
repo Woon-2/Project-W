@@ -12,7 +12,7 @@ void MyGfx::init() {
     defineDescRange("offscreenRtv", 0u, 3u);
     defineDescRange("frameDsv", 0u, 3u);
     defineDescRange(gfx::rp::ShadowMapGen::DescRangeIDShadowTex, 0u, 1u);
-    defineDescRange(gfx::rp::PhongInstancing::DescRangeIDTex2D, 0u, 123u);
+    defineDescRange(gfx::rp::PhongInstancing::DescRangeIDTex2D, 1u, 123u);
 
     gfx::d3d12::Core::init();
 
