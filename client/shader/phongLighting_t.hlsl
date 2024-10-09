@@ -2,9 +2,9 @@
 #define LIGHT_TYPE_POINT 1
 #define LIGHT_TYPE_SPOT 2
 
-#define TEX_DIFFUSE 0x01
-#define TEX_SPECULAR 0x02
-#define TEX_AMBIENT 0x04
+#define TEX_AMBIENT 0x01
+#define TEX_DIFFUSE 0x02
+#define TEX_SPECULAR 0x04
 #define TEX_EMMISIVE 0x08
 
 #include "textures.hlsl"
