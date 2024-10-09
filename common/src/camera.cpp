@@ -16,7 +16,7 @@ void Camera::updateView() {
     const auto& parent = *pParent;
 
     auto repPos = pos().represent( parent );
-    auto repUp = up.represent( parent );
+    auto repUp = mu::Vec3(0.f, 1.f, 0.f);
 
     if (focused()) {
         auto repAt = focusPos_->represent( parent );

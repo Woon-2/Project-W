@@ -3,12 +3,20 @@
 #include "rootPresets.hpp"
 #include "d3d12InputLayoutPresets.hpp"
 #include "d3d12texture.hpp"
-#include "phongRenderer.hpp"
 
 void MyGfx::init() {
-    pRenderer_ = std::make_unique<gfx::PhongRenderer>(2u);
+    configRtvHeapSize(3u);
+    configDsvHeapSize(4u);
+    configCbvSrvUavHeapSize(124u);
+
+    defineDescRange("offscreenRtv", 0u, 3u);
+    defineDescRange("frameDsv", 0u, 3u);
+    defineDescRange(gfx::rp::ShadowMapGen::DescRangeIDShadowDS, 3u, 1u);
+    defineDescRange(gfx::rp::ShadowMapGen::DescRangeIDShadowTex, 0u, 1u);
+    defineDescRange(gfx::rp::PhongInstancing::DescRangeIDTex2D, 1u, 123u);
 
     gfx::d3d12::Core::init();
+
     addRoot( gfx::d3d12::rootName(gfx::d3d12::RootPreset::Unified),
         gfx::d3d12::makeRootPreset(*this, gfx::d3d12::RootPreset::Unified)
     );
@@ -16,21 +24,48 @@ void MyGfx::init() {
         gfx::d3d12::makeRootPreset(*this, gfx::d3d12::RootPreset::Unified1)
     );
 
-    gfx::d3d12::configInputLayoutAux(gfx::Vertex::Properties::Position);
-    gfx::d3d12::configInputLayoutAux(gfx::Vertex::Properties::Normal);
-    gfx::d3d12::configInputLayoutAux(gfx::Vertex::Properties::TexCoord);
-    addInputLayout( gfx::d3d12::inputLayoutName(gfx::InputLayoutPreset::Pos3Norm3),
-        gfx::makeInputLayoutPreset(gfx::InputLayoutPreset::Pos3Norm3)
-    );
-    addInputLayout(gfx::d3d12::inputLayoutName(gfx::InputLayoutPreset::Pos3Norm3Tex2),
-        gfx::makeInputLayoutPreset(gfx::InputLayoutPreset::Pos3Norm3Tex2)
-    );
-
     auto pDevice = static_cast<ID3D12Device*>( gfx::d3d12::DeviceFetcher::device(*this) );
 
-    addDescHeap( gfx::d3d12::Texture::texSrvHeapIdx,
-        gfx::d3d12::DescriptorHeap(pDevice, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 123u, true)
+    phongShader_ = gfx::d3d12::PhongShader( *this,
+        gfx::d3d12::PhongShader::Config{ .maxInstCnt = 1000u, .maxLightCnt = 12u },
+        2u
     );
 
-    pRenderer_->init(*this);
+    phongShaderNT_ = gfx::d3d12::PhongShaderNT( *this,
+        gfx::d3d12::PhongShaderNT::Config{ .maxInstCnt = 1000u, .maxLightCnt = 12u },
+        2u
+    );
+
+    phongShadowedShader_ = gfx::d3d12::PhongShadowedShader( *this,
+        gfx::d3d12::PhongShadowedShader::Config{ .maxInstCnt = 1000u, .maxLightCnt = 12u },
+        2u
+    );
+
+    shadowShader_ = gfx::d3d12::ShadowShader( *this,
+        gfx::d3d12::ShadowShader::Config{ .shadowMapWidth = 1024u, .shadowMapHeight = 1024u, .maxInstCnt = 1000u },
+        2u
+    );
+
+    illuminanceRenderer_.init(*this);
+    illuminanceRenderer_.pushShader( gfx::rp::Protocol::PhongInstancing, &phongShader_.value(),
+        phongShader_.value().optSolidAndGeneral()
+    );
+    illuminanceRenderer_.pushShader( gfx::rp::Protocol::PhongInstancingShadowed, &phongShadowedShader_.value(),
+        phongShadowedShader_.value().optGeneral()
+    );
+    illuminanceRenderer_.pushShader( gfx::rp::Protocol::PhongInstancingNT, &phongShaderNT_.value(),
+        phongShaderNT_.value().optSolidAndGeneral()
+    );
+
+    shadowRenderer_.init(*this);
+    shadowRenderer_.pushShader( gfx::rp::Protocol::ShadowMapGen, &shadowShader_.value(),
+        shadowShader_.value().optGeneral()
+    );
+}
+
+void MyGfx::setFrame(std::size_t frameIdx) {
+    phongShader_.value().setFrame(frameIdx);
+    phongShaderNT_.value().setFrame(frameIdx);
+    shadowShader_.value().setFrame(frameIdx);
+    phongShadowedShader_.value().setFrame(frameIdx);
 }

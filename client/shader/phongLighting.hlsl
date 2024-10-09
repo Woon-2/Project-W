@@ -8,14 +8,6 @@ cbuffer PerFrameData : register(b1)
     uint gLightCnt;
 };
 
-struct Material
-{
-    float4 ambient;
-    float4 diffuse;
-    float4 specular;    // a = power
-    float4 emmisive;
-};
-
 struct Light
 {
     float4 ambient;
@@ -31,25 +23,24 @@ struct Light
     float3 padding;
 };
 
-StructuredBuffer<Material> gMaterials : register(t1);
 StructuredBuffer<Light> gLights : register(t2);
 
-float4 dirLight(uint lightIdx, uint matIdx, float3 posVNormalized, float3 normalV) {
+float4 dirLight(uint lightIdx, float3 posVNormalized, float3 normalV) {
     float3 toLight = -gLights[lightIdx].dirV;
     float diffused = max(0.f, dot(normalV, toLight));
     float specular = 0.f;
     
     if (diffused > 0.f && gLights[lightIdx].specular.a > 0.f) {
         float3 reflected = reflect(-toLight, normalV);
-        specular = pow(max(0.f, dot(reflected, -posVNormalized)), gMaterials[matIdx].specular.a);
+        specular = pow(max(0.f, dot(reflected, -posVNormalized)), gMaterial.specular.a);
     }
 
-    return gMaterials[matIdx].ambient * gLights[lightIdx].ambient +
-        gMaterials[matIdx].diffuse * gLights[lightIdx].diffuse * diffused +
-        gMaterials[matIdx].specular * gLights[lightIdx].specular * specular;
+    return gMaterial.ambient * gLights[lightIdx].ambient +
+        gMaterial.diffuse * gLights[lightIdx].diffuse * diffused +
+        gMaterial.specular * gLights[lightIdx].specular * specular;
 }
 
-float4 pointLight(uint lightIdx, uint matIdx, float3 posV, float3 posVNormalized, float3 normalV) {
+float4 pointLight(uint lightIdx, float3 posV, float3 posVNormalized, float3 normalV) {
     float3 toLight = gLights[lightIdx].posV - posV;
     float dist = length(toLight);
     toLight /= dist;
@@ -59,16 +50,16 @@ float4 pointLight(uint lightIdx, uint matIdx, float3 posV, float3 posVNormalized
 
     if (diffused > 0.f && gLights[lightIdx].specular.a > 0.f) {
         float3 reflected = reflect(-toLight, normalV);
-        specular = pow(max(0.f, dot(reflected, -posVNormalized)), gMaterials[matIdx].specular.a);
+        specular = pow(max(0.f, dot(reflected, -posVNormalized)), gMaterial.specular.a);
     }
 
-    return ( gMaterials[matIdx].ambient * gLights[lightIdx].ambient +
-        gMaterials[matIdx].diffuse * gLights[lightIdx].diffuse * diffused +
-        gMaterials[matIdx].specular * gLights[lightIdx].specular * specular
+    return ( gMaterial.ambient * gLights[lightIdx].ambient +
+        gMaterial.diffuse * gLights[lightIdx].diffuse * diffused +
+        gMaterial.specular * gLights[lightIdx].specular * specular
     ) * atten;
 }
 
-float4 spotLight(uint lightIdx, uint matIdx, float3 posV, float3 posVNormalized, float3 normalV) {
+float4 spotLight(uint lightIdx, float3 posV, float3 posVNormalized, float3 normalV) {
     float3 toLight = gLights[lightIdx].posV - posV;
     float dist = length(toLight);
     toLight /= dist;
@@ -78,7 +69,7 @@ float4 spotLight(uint lightIdx, uint matIdx, float3 posV, float3 posVNormalized,
     
     if (diffused > 0.f && gLights[lightIdx].specular.a > 0.f) {
         float3 reflected = reflect(-toLight, normalV);
-        specular = pow(max(0.f, dot(reflected, -posVNormalized)), gMaterials[matIdx].specular.a);
+        specular = pow(max(0.f, dot(reflected, -posVNormalized)), gMaterial.specular.a);
     }
 
     float cosChi = max(dot(-toLight, gLights[lightIdx].dirV), 0.f);
@@ -91,32 +82,32 @@ float4 spotLight(uint lightIdx, uint matIdx, float3 posV, float3 posVNormalized,
         gLights[lightIdx].falloff
     );
 
-    return ( gMaterials[matIdx].ambient * gLights[lightIdx].ambient +
-        gMaterials[matIdx].diffuse * gLights[lightIdx].diffuse * diffused +
-        gMaterials[matIdx].specular * gLights[lightIdx].specular * specular
+    return ( gMaterial.ambient * gLights[lightIdx].ambient +
+        gMaterial.diffuse * gLights[lightIdx].diffuse * diffused +
+        gMaterial.specular * gLights[lightIdx].specular * specular
     ) * atten * coneAtten;
 }
 
-float4 Lighting(float3 posV, float3 normalV, uint matIdx) {
-    float4 color = gMaterials[matIdx].ambient * gcGlobalAmbientLight + gMaterials[matIdx].emmisive;
+float4 Lighting(float3 posV, float3 normalV) {
+    float4 color = gMaterial.ambient * gcGlobalAmbientLight + gMaterial.emmisive;
 
     for (uint i = 0; i < gLightCnt; ++i) {
         float3 posVNormalized = normalize(posV);
 
         switch (gLights[i].type) {
             case LIGHT_TYPE_DIRECTIONAL:
-                color += dirLight(i, matIdx, posVNormalized, normalV);
+                color += dirLight(i, posVNormalized, normalV);
                 break;
             case LIGHT_TYPE_POINT:
-                color += pointLight(i, matIdx, posV, posVNormalized, normalV);
+                color += pointLight(i, posV, posVNormalized, normalV);
                 break;
             case LIGHT_TYPE_SPOT:
-                color += spotLight(i, matIdx, posV, posVNormalized, normalV);
+                color += spotLight(i, posV, posVNormalized, normalV);
                 break;
         }
     }
 
-    color.a = gMaterials[matIdx].diffuse.a;
+    color.a = gMaterial.diffuse.a;
 
     return color;
 }

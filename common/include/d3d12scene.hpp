@@ -3,6 +3,7 @@
 
 #include "camera.hpp"
 #include "d3d12core.hpp"
+#include "renderProtocol.hpp"
 
 #include "d3d12model.hpp"
 #include "d3d12material.hpp"
@@ -10,69 +11,113 @@
 #include "mathUtil.hpp"
 #include "shaderRes.hpp"
 #include "drawInfo.hpp"
+#include "gfxExcept.hpp"
 
 #include "generator.hpp"
 
 #include <vector>
 #include <ranges>
 #include <span>
-
-#include "RenderProtocol.hpp"
+#include <map>
+#include <any>
+#include <type_traits>
 
 namespace gfx {
 
 namespace d3d12 {
 
-/**
- * @brief A class representing a scene viewd by a camera in D3D12.    
- * @details As implementing the IScene interface, it can be used in the render loop.     
- * It constructs DrawInfo s with Mesh, world matrix, view matrix, and projection matrix,    
- * (temporarily with color) and returns them in iteration.    
- * 
- * It can be adjusted view frustum culling and LOD later.
- */
 class CameraScene : public gfx::CameraScene {
 public:
-    CameraScene(const Camera& camera)
-        : gfx::CameraScene(camera), fragments_(), lights_(), materials_(),
-        protocol_(rp::Protocol::PhongInstancing) /* temporarilly fixed protocol */ {}
+    template <class T>
+    using Cont = std::vector<T>;
 
-    Generator<DrawInfo> iteration() const override;
+    CameraScene(const Camera& camera)
+        : gfx::CameraScene(camera), fragmentsMap_(), lightsMap_() {}
+
+    Generator<DrawInfo> iteration(rp::Protocol protocol) const override;
+
+    void addFragment(const Fragment& fragment) {
+        if (!fragment.meshView.hasProtocol()) {
+            throw GFX_EXCEPT("Mesh has no protocol");
+        }
+        fragmentsMap_[fragment.meshView.protocol()].push_back(fragment);
+    }
 
     void addFragment(Fragment&& fragment) {
-        fragments_.push_back(std::move(fragment));
+        if (!fragment.meshView.hasProtocol()) {
+            throw GFX_EXCEPT("Mesh has no protocol");
+        }
+        fragmentsMap_[fragment.meshView.protocol()].push_back(std::move(fragment));
     }
 
     template <std::ranges::range R>
-    void addFragments(R&& fragments) {
-        fragments_.insert(std::end(fragments_), std::begin(fragments), std::end(fragments));
+    void addFragments(rp::Protocol protocol, R&& fragments) {
+        /*
+        for (const auto& fragment : fragments) {
+            assert(fragment.pMesh->protocol() == protocol);
+        }
+        */
+
+        if constexpr (std::ranges::sized_range<R>) {
+            auto& cont = fragmentsMap_[protocol];
+            cont.reserve(std::ranges::size(fragments) + cont.size());
+        }
+
+        if constexpr (std::is_lvalue_reference_v< std::remove_cv_t<R> >) {
+            fragmentsMap_[protocol].insert( std::end(fragmentsMap_[protocol]),
+                std::begin(fragments), std::end(fragments)
+            );
+        } else {
+            fragmentsMap_[protocol].insert( std::end(fragmentsMap_[protocol]),
+                std::move_iterator(std::begin(fragments)),
+                std::move_iterator(std::end(fragments))
+            );
+        }
     }
 
-    void setFragments(std::vector<Fragment>&& fragments) {
-        fragments_ = std::move(fragments);
+    void setFragments(rp::Protocol protocol, Cont<Fragment>&& fragments) {
+        /*
+        for (const auto& fragment : fragments) {
+            assert(fragment.pMesh->protocol() == protocol);
+        }
+        */
+        fragmentsMap_[protocol] = std::move(fragments);
     }
 
-    void addLight(const sr::PhongLight* pLight) {
-        lights_.push_back(pLight);
+    void addLight(rp::Protocol protocol, std::any light) {
+        lightsMap_[protocol].push_back(light);
     }
 
-    void addMaterial(const Material* pMaterial) {
-        materials_.push_back(pMaterial);
+    template <std::ranges::range R>
+    void addLights(rp::Protocol protocol, R&& lights) {
+        if constexpr (std::ranges::sized_range<R>) {
+            auto& cont = lightsMap_[protocol];
+            cont.reserve(std::ranges::size(lights) + cont.size());
+        }
+
+        if constexpr (std::is_lvalue_reference_v< std::remove_cv_t<R> >) {
+            lightsMap_[protocol].insert( std::end(lightsMap_[protocol]),
+                std::begin(lights), std::end(lights)
+            );
+        } else {
+            lightsMap_[protocol].insert( std::end(lightsMap_[protocol]),
+                std::move_iterator(std::begin(lights)),
+                std::move_iterator(std::end(lights))
+            );
+        }
     }
 
-    rp::Protocol protocol() const override {
-        return protocol_;
+    void setLights(rp::Protocol protocol, Cont<std::any>&& lights) {
+        lightsMap_[protocol] = std::move(lights);
     }
+
+    // temporary
+    // single, static light
+    mu::Mat4x4 makeView2LightProj() const;
 
 private:
-    Generator<DrawInfo> phongInstancingIteration() const;
-    Generator<DrawInfo> phongInstancingNTIteration() const;
-
-    std::vector<Fragment> fragments_;
-    std::vector<const sr::PhongLight*> lights_;
-    std::vector<const Material*> materials_;
-
-    rp::Protocol protocol_;
+    std::map<rp::Protocol, Cont<Fragment>> fragmentsMap_;
+    std::map<rp::Protocol, Cont<std::any>> lightsMap_;
 };
 
 }   // namespace d3d12
@@ -80,5 +125,3 @@ private:
 }   // namespace gfx
 
 #endif // __D3D12_SCENE_HPP
-
-// 

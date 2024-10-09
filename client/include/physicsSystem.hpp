@@ -7,20 +7,22 @@
 
 #include <array>
 
-#include "mathUtil.hpp"
+#include "ecs.hpp"
 
+#include "mathUtil.hpp"
 #include "keyboardXX.hpp"
 
-class Rigidbody {
+class RigidBody : public ecs::Component {
 public:
-	Rigidbody() NOEXCEPT;
+	ENABLE_COMPONENT(RigidBody);
+
+	RigidBody(const ecs::Entity& entity) NOEXCEPT;
 
 	void MU_CALLCONV addForce(mu::Vec3 force) NOEXCEPT;
-
 	void MU_CALLCONV updateRigid(float dt, float friction) NOEXCEPT;
-
+	
 	void MU_CALLCONV setPosition(mu::Vec3 pos) NOEXCEPT { position_ = pos; }
-
+	const mu::Vec3 MU_CALLCONV position() const NOEXCEPT { return position_; }
 	const mu::Vec3 MU_CALLCONV deltaPosition() const NOEXCEPT { return position_ - oldPosition_; }
 	const mu::Vec3 MU_CALLCONV force() const NOEXCEPT { return force_; }
 	const mu::Vec3 MU_CALLCONV velocity() const NOEXCEPT { return velocity_; }
@@ -30,7 +32,6 @@ private:
 	void updateForce(float dt, float friction) NOEXCEPT;
 	void updateAngular(float dt) NOEXCEPT;
 
-private:
 	mu::Mat4x4 rotation_;
 	mu::Mat4x4 inertialMass_;
 
@@ -49,15 +50,9 @@ private:
 	int cornerLocation_;
 };
 
-class PhysicsSystem {
+class PhysicsSystem : public ecs::System<RigidBody> {
 public:
-	PhysicsSystem() NOEXCEPT : pKeyboard_(nullptr) {}
-	PhysicsSystem(ic::Keyboard& keyboard) NOEXCEPT : pKeyboard_(&keyboard) {}
-
 	void update(float deltaTime);
-
-private:
-	ic::Keyboard* pKeyboard_;
 };
 
 #endif

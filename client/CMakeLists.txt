@@ -43,8 +43,6 @@ target_sources(client
         src/app.cpp include/app.hpp
         src/game.cpp include/game.hpp
         src/mygfx.cpp include/mygfx.hpp
-        include/testInput.hpp
-        src/ecs.cpp include/ecs.hpp
         src/ecsExcept.cpp include/ecsExcept.hpp
         src/player.cpp include/player.hpp
         src/inputSystem.cpp include/inputSystem.hpp
@@ -52,10 +50,14 @@ target_sources(client
         src/assetMap.cpp include/assetMap.hpp
         src/cmodel.cpp include/cmodel.hpp
         src/physicsSystem.cpp include/physicsSystem.hpp
-
+        src/stage.cpp include/stage.hpp
         src/Timer.cpp include/Timer.hpp
-        src/gun.cpp include/gun.hpp
-)
+        src/ecs.cpp include/ecs.hpp
+        src/ccoord.cpp include/ccoord.hpp
+
+        include/testInput.hpp
+        include/systems.hpp
+        )
 
 include(auto_configure)
 
@@ -107,7 +109,6 @@ compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/ntShader.hlsl"
     "${COMPILED_SHADER_PATH}/ntShader_vs.cso"
     "vs_5_1"
     "VSMain"
-    /D INCLUDE_drawcallIdxOnly
     /D INCLUDE_basicInstancing
     /D INCLUDE_phongLighting
 )
@@ -116,7 +117,6 @@ compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/ntShader.hlsl"
     "${COMPILED_SHADER_PATH}/ntShader_ps.cso"
     "ps_5_1"
     "PSMain"
-    /D INCLUDE_drawcallIdxOnly
     /D INCLUDE_basicInstancing
     /D INCLUDE_phongLighting
 )
@@ -125,7 +125,6 @@ compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/tShader.hlsl"
     "${COMPILED_SHADER_PATH}/tShader_vs.cso"
     "vs_5_1"
     "VSMain"
-    /D INCLUDE_drawcallIdxOnly
     /D INCLUDE_basicInstancing
     /D INCLUDE_phongLighting
     /enable_unbounded_descriptor_tables
@@ -135,11 +134,36 @@ compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/tShader.hlsl"
     "${COMPILED_SHADER_PATH}/tShader_ps.cso"
     "ps_5_1"
     "PSMain"
-    /D INCLUDE_drawcallIdxOnly
     /D INCLUDE_basicInstancing
     /D INCLUDE_phongLighting
     /enable_unbounded_descriptor_tables
 )
+
+compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/shadowMapShader.hlsl"
+    "${COMPILED_SHADER_PATH}/shadowMapShader_vs.cso"
+    "vs_5_1"
+    "VSMain"
+    /D INCLUDE_basicInstancing
+)
+
+compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/tShaderShadowed.hlsl"
+    "${COMPILED_SHADER_PATH}/tShaderShadowed_vs.cso"
+    "vs_5_1"
+    "VSMain"
+    /D INCLUDE_basicInstancing
+    /D INCLUDE_phongLighting
+    /enable_unbounded_descriptor_tables
+)
+
+compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/tShaderShadowed.hlsl"
+    "${COMPILED_SHADER_PATH}/tShaderShadowed_ps.cso"
+    "ps_5_1"
+    "PSMain"
+    /D INCLUDE_basicInstancing
+    /D INCLUDE_phongLighting
+    /enable_unbounded_descriptor_tables
+)
+
 
 add_hlsl_target("${HLSL_COMPILED_SHADERS}")
 

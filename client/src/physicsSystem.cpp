@@ -5,24 +5,24 @@
 
 #include <iostream>
 
-Rigidbody::Rigidbody() NOEXCEPT
-{
+RigidBody::RigidBody(const ecs::Entity& entity) NOEXCEPT
+	: Component(entity) {
 	mass_ = 1;
 	cornerLocation_ = 0;
 }
 
-void MU_CALLCONV Rigidbody::addForce(mu::Vec3 force) NOEXCEPT
+void MU_CALLCONV RigidBody::addForce(mu::Vec3 force) NOEXCEPT
 {
 	force_ += force;
 }
 
-void MU_CALLCONV Rigidbody::updateRigid(float dt, float friction) NOEXCEPT
+void MU_CALLCONV RigidBody::updateRigid(float dt, float friction) NOEXCEPT
 {
 	updateForce(dt, friction);
 	updateAngular(dt);
 }
 
-void Rigidbody::updateForce(float dt, float friction) NOEXCEPT
+void RigidBody::updateForce(float dt, float friction) NOEXCEPT
 {
 	oldPosition_ = position_;
 
@@ -49,39 +49,17 @@ void Rigidbody::updateForce(float dt, float friction) NOEXCEPT
 
 	// 힘을 다 사용했으므로 초기화
 	force_ = mu::Vec3(0.0f, 0.0f, 0.0f);
-
-	// 체크용 코드
-	{
-		std::cout << "force.x : " << force_.x() << '\n';
-		std::cout << "force.y : " << force_.y() << '\n';
-		std::cout << "force.z : " << force_.z() << '\n';
-		std::cout << "velocity.x : " << velocity_.x() << '\n';
-		std::cout << "velocity.y : " << velocity_.y() << '\n';
-		std::cout << "velocity.z : " << velocity_.z() << '\n';
-	}
-
-
 }
 
-void Rigidbody::updateAngular(float dt) NOEXCEPT
+void RigidBody::updateAngular(float dt) NOEXCEPT
 {
 }
 
 void PhysicsSystem::update(float deltaTime)
 {
-	pKeyboard_->patchKeyState();
-
-	auto& system = ecs::gSystems[typeid(PhysicsSystem).name()];
-
-	for (auto const& entity : system->entites_)
-	{
-		auto& rb = ecs::GetComponent<Rigidbody>(entity);
-		auto& pos = ecs::GetComponent<Position>(entity);
-		auto& controller = ecs::GetComponent<PlayerController>(entity);
-
-		controller.processInput(rb, pKeyboard_);
-
-		rb.updateRigid(deltaTime, 1.5f);
-		// rb.setPosition(position);
+	for (auto& rb : components<RigidBody>()) {
+		if (auto ptr = rb.lock()) {
+			ptr->updateRigid(deltaTime, 1.5f);
+		}
 	}
 }

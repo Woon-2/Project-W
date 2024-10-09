@@ -2,28 +2,31 @@
 
 #include "inputSystem.hpp"
 #include "physicsSystem.hpp"
+#include "assetSystem.hpp"
+#include "ccoord.hpp"
+#include "cmodel.hpp"
 
-void Player::Init()
-{
-	entityNumber_ = ecs::CreateEntity();
-	Position position{ 0, 0, 0 };
-	ecs::AddComponent(entityNumber_, position);
-	PlayerController controller;
-	ecs::AddComponent(entityNumber_, controller);
-	Rigidbody rb;
-	ecs::AddComponent(entityNumber_, rb);
+#include "assetMap.hpp"
 
-	ecs::Signature signature;
-	signature.set(ecs::GetComponentType<Position>());
-	signature.set(ecs::GetComponentType<PlayerController>());
-	signature.set(ecs::GetComponentType<Rigidbody>());
-	ecs::SetSignature(entityNumber_, signature);
-	
-	ecs::SetEntity(typeid(PhysicsSystem).name(), entityNumber_);
+Player::Player() {
+	createComponent<RigidBody>();
+	createComponent<AssetLinker>();
+	createComponent<PlayerController>();
+	createComponent<Model>();
+	createComponent<Coord>();
+	as<AssetLinker>().configAsset(assetIDs::dragon);
+}
 
-	ecs::GetComponent<Rigidbody>(entityNumber_).setPosition(mu::Vec3(
-		static_cast<float>(position.x),
-		static_cast<float>(position.y),
-		static_cast<float>(position.z)
-	));
+void Player::linkAssets(const AssetSystem& assetSystem) {
+	auto& model = as<Model>();
+	model.init(
+		assetSystem.model("DragonModel"),
+		assetSystem.materialTree("DragonMaterialTree")
+	);
+	model.root().coord().setParent(&as<Coord>().get());
+	model.root().coord() << mu::rotateYH(mu::Radian(mu::pi));
+}
+
+void Player::update() {
+	as<Coord>().get() << mu::translate( as<RigidBody>().deltaPosition() );
 }

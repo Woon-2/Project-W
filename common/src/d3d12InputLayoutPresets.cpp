@@ -4,42 +4,19 @@ namespace gfx {
 
 namespace d3d12 {
 
-void configInputLayoutAux(Vertex::Properties prop) {
-    switch (prop) {
-    case Vertex::Properties::Position:
-        InputLayout::configPropertyAux( Vertex::Properties::Position,
-            "POSITION", 0u, DXGI_FORMAT_R32G32B32_FLOAT, 0u
-        );
-        break;
-
-    case Vertex::Properties::Normal:
-        InputLayout::configPropertyAux( Vertex::Properties::Normal,
-            "NORMAL", 0u, DXGI_FORMAT_R32G32B32_FLOAT, 0u
-        );
-        break;
-
-    case Vertex::Properties::TexCoord:
-        InputLayout::configPropertyAux( Vertex::Properties::Normal,
-            "TEX", 0u, DXGI_FORMAT_R32G32_FLOAT, 0u
-        );
-        break;
-
-    default:
-        throw GFX_EXCEPT("Invalid InputLayoutPreset");
-    }
-}
-
 Core::InputLayoutIdx inputLayoutName(InputLayoutPreset preset) {
     switch (preset) {
-    case InputLayoutPreset::Pos3:
-        return "Pos3";
-
-    case InputLayoutPreset::Pos3Norm3:
-        return "Pos3Norm3";
-
-    case InputLayoutPreset::Pos3Norm3Tex2:
-        return "Pos3Norm3Tex2";
-
+    case InputLayoutPreset::Solid: return "Solid";
+    case InputLayoutPreset::SolidDiffuse: return "SolidDiffuse";
+    case InputLayoutPreset::S_SolidDiffuse: return "S_SolidDiffuse";
+    case InputLayoutPreset::Color: return "Color";
+    case InputLayoutPreset::S_Color: return "S_Color";
+    case InputLayoutPreset::ColorDiffuse: return "ColorDiffuse";
+    case InputLayoutPreset::S_ColorDiffuse: return "S_ColorDiffuse";
+    case InputLayoutPreset::Tex: return "Tex";
+    case InputLayoutPreset::S_Tex: return "S_Tex";
+    case InputLayoutPreset::TexDiffuse: return "TexDiffuse";
+    case InputLayoutPreset::S_TexDiffuse: return "S_TexDiffuse";
     default:
         throw GFX_EXCEPT("Invalid InputLayoutPreset");
     }

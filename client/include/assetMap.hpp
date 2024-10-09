@@ -2,6 +2,7 @@
 #define __AssetMap_HPP
 
 #include <array>
+#include <vector>
 #include <string>
 #include <filesystem>
 
@@ -14,6 +15,7 @@ enum class AssetType {
     Animation,
     Script,
     Level,
+    MaterialTree,
     AssetTypeCount
 };
 
@@ -25,14 +27,13 @@ struct AssetDesc {
 };
 
 namespace detail {
-extern const std::array<AssetDesc, 2> gAssetDescs;
+extern const std::array<std::vector<AssetDesc>, 1> gAssetDescs;
 }   // namespace detail
 
 namespace assetIDs {
     using ID = std::size_t;
 
-    inline constexpr ID model_gun = 0u;
-    inline constexpr ID tex_gun = 1u;
+    inline constexpr ID dragon = 0u;
 }
 
 #endif  // __AssetMap_HPP

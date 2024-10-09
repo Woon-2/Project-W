@@ -1,48 +1,104 @@
 #include "inputSystem.hpp"
 #include "physicsSystem.hpp"
+#include "cmodel.hpp"
 
 #include "player.hpp"
 
 #include "keyboardXX.hpp"
 
-void InputSystem::update()
-{
-	pKeyboard_->patchKeyState();
-
-	auto& system = ecs::gSystems[typeid(InputSystem).name()];
-
-
-	for (auto const& entity : system->entites_)
-	{
-		auto& controller = ecs::GetComponent<PlayerController>(entity);
-		auto& position = ecs::GetComponent<Position>(entity);
-
-		// controller.processInput(position, pKeyboard_);
-	}
+void PlayerController::handleEvent(Event event, float deltaTime) {
+    switch (event) {
+    case Event::MoveForward:
+        moveForward(deltaTime);
+        break;
+    case Event::MoveBackward:
+        moveBackward(deltaTime);
+        break;
+    case Event::MoveLeft:
+        moveLeft(deltaTime);
+        break;
+    case Event::MoveRight:
+        moveRight(deltaTime);
+        break;
+    case Event::YawLeft:
+        yawLeft(deltaTime);
+        break;
+    case Event::YawRight:
+        yawRight(deltaTime);
+        break;
+    default:
+        throw std::runtime_error("Invalid event");
+        break;
+    }
 }
 
-void PlayerController::processInput(Rigidbody& rb, ic::Keyboard* pKeyboard)
-{    
-    constexpr auto step = 3.f;
-
-    if (pKeyboard->pressed('A')) {
-        // position.x -= 0.5;
-        rb.addForce(mu::Vec3(-step, 0.0f, 0.0f));
+void MU_CALLCONV PlayerController::addForce(mu::Vec3 force) {
+    if (!valid()) {
+        throw ECS_EXCEPT("Component is not valid");
     }
 
-    if (pKeyboard->pressed('D')) {
-        // position.x += 0.5;
-        rb.addForce(mu::Vec3(+step, 0.0f, 0.0f));
+    auto pRigidBodyBase = Component::at(ecs::Components::RigidBody, entityID().value()).lock();
+    if (!pRigidBodyBase) {
+        throw ECS_EXCEPT("RigidBody component doesn't exist");
     }
 
-    if (pKeyboard->pressed('W')) {
-        // position.z -= 0.5;
-        rb.addForce(mu::Vec3(0.0f, 0.0f, step));
+    std::static_pointer_cast<RigidBody>(pRigidBodyBase)->addForce(force);
+}
+
+void PlayerController::yawLeft(float deltaTime) {
+    if (!valid()) {
+        throw ECS_EXCEPT("Component is not valid");
     }
 
-    if (pKeyboard->pressed('S')) {
-        // position.z += 0.5;
-        rb.addForce({ 0.0f, 0.0f, -step });
+    auto pModel = Component::at(ecs::Components::Model, entityID().value()).lock();
+    if (!pModel) {
+        throw ECS_EXCEPT("Model component doesn't exist");
     }
-    
+
+    auto yaw = yawStep_;
+    yaw *= -deltaTime;
+
+    std::static_pointer_cast<Model>(pModel)->root().coord() << mu::rotateYH(yaw);
+}
+
+void PlayerController::yawRight(float deltaTime) {
+    if (!valid()) {
+        throw ECS_EXCEPT("Component is not valid");
+    }
+
+    auto pModel = Component::at(ecs::Components::Model, entityID().value()).lock();
+    if (!pModel) {
+        throw ECS_EXCEPT("Model component doesn't exist");
+    }
+
+    auto yaw = yawStep_;
+    yaw *= deltaTime;
+
+    std::static_pointer_cast<Model>(pModel)->root().coord() << mu::rotateYH(yaw);
+}
+
+void InputSystem::update(float deltaTime) {
+	pKeyboard_->patchKeyState();
+
+    for (auto& weakPC : components<PlayerController>()) {
+        auto pc = weakPC.lock();
+        if (!pc) {
+            throw ECS_EXCEPT("PlayerController component is not valid");
+        }
+
+        for (const auto& [key, event] : keyMap_) {
+            if (pKeyboard_->pressed(key)) {
+                pc->handleEvent(event, deltaTime);
+            }
+        }
+    }
+}
+
+void InputSystem::initKeyMap() {
+    keyMap_['W'] = PlayerController::Event::MoveForward;
+    keyMap_['S'] = PlayerController::Event::MoveBackward;
+    keyMap_['A'] = PlayerController::Event::MoveLeft;
+    keyMap_['D'] = PlayerController::Event::MoveRight;
+    keyMap_['Q'] = PlayerController::Event::YawLeft;
+    keyMap_['E'] = PlayerController::Event::YawRight;
 }

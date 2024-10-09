@@ -1,15 +1,17 @@
 // The order of the includes is important, as some depend on others
 
-#ifdef INCLUDE_drawcallIdxOnly
-#include "drawcallIdxOnly.hlsl"
+#ifdef INCLUDE_phongLighting
+#include "phongMaterial_t.hlsl"
+#endif
+
+#include "drawcallWithMaterial.hlsl"
+
+#ifdef INCLUDE_phongLighting
+#include "phongLighting_t.hlsl"
 #endif
 
 #ifdef INCLUDE_basicInstancing
 #include "basicInstancing.hlsl"
-#endif
-
-#ifdef INCLUDE_phongLighting
-#include "phongLighting_t.hlsl"
 #endif
 
 // non textured shader
@@ -17,7 +19,7 @@
 struct VS_INPUT {
     float3 pos : POSITION;
     float3 normal : NORMAL;
-    float2 tex : TEX;
+    float2 tex : TEXCOORD;
     uint instID : SV_InstanceID;
 };
 
@@ -25,7 +27,7 @@ struct VS_OUTPUT {
     float4 pos : SV_Position;
     float3 posV : POSITION;
     float3 normalV : NORMAL;
-    float2 tex : TEX;
+    float2 tex : TEXCOORD;
     nointerpolation uint instID : INSTID;
 };
 
@@ -48,5 +50,5 @@ VS_OUTPUT VSMain(VS_INPUT input) {
 
 float4 PSMain(VS_OUTPUT input) : SV_TARGET {
     float3 normalV = normalize(input.normalV);
-    return Lighting(input.posV, normalV, getInstanceData(input.instID).matIdx, input.tex);
+    return Lighting(input.posV, normalV, input.tex);
 }

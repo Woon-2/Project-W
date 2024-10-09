@@ -4,7 +4,6 @@
 #define ASSIMP_MATH_UTIL
 
 #include "mesh.hpp"
-#include "inputLayout.hpp"
 
 #include "coord.hpp"
 
@@ -26,10 +25,11 @@ namespace gfx {
  * A child Model's total transformation is the product of its parent's total transformation and its own local transformation.
  * @see Mesh coord::System loadModel
  */
+template <class ConcreteModel, class ConcreteMesh>
 class Model {
 private:
     struct NamedMesh {
-        Mesh mesh;
+        ConcreteMesh mesh;
         std::string name;
 
         friend auto operator<=>(const NamedMesh& lhs, const NamedMesh& rhs) noexcept {
@@ -58,11 +58,11 @@ public:
      * @param child The child model to add.
      * @see Model::popChild Model::child coord::System::setParent
      */
-    void addChild(const Model& child) {
+    void addChild(const ConcreteModel& child) {
         children_.push_back(child);
         children_.back().coord().setParent(&coordSys_);
     }
-    void addChild(Model&& child) {
+    void addChild(ConcreteModel&& child) {
         children_.push_back(std::move(child));
         children_.back().coord().setParent(&coordSys_);
     }
@@ -74,7 +74,7 @@ public:
      * @param xform The transformation matrix.
      * @see Model::popChild Model::child coord::System::setParent
      */
-    void MU_CALLCONV addChild(Model&& child, mu::Mat4x4 xform) {
+    void MU_CALLCONV addChild(ConcreteModel&& child, mu::Mat4x4 xform) {
         children_.push_back(std::move(child));
         children_.back().coord().setParent(&coordSys_);
         children_.back().coord() << xform;
@@ -87,7 +87,7 @@ public:
      * @return Model The popped child model.
      * @see Model::addChild Model::child
      */
-    Model popChild(std::string_view name);
+    const ConcreteModel popChild(std::string_view name);
     /**
      * @brief Accesses a child model by name.
      * @throws `std::runtime_error` If the child model is not found.
@@ -95,9 +95,9 @@ public:
      * @return const Model& A const reference to the child model.
      * @see Model::popChild Model::addChild
      */
-    const Model& child(std::string_view name) const;
-    Model& child(std::string_view name) {
-        return const_cast<Model&>( const_cast<const Model*>(this)->child(name) );
+    const ConcreteModel& child(std::string_view name) const;
+    ConcreteModel& child(std::string_view name) {
+        return const_cast<ConcreteModel&>( const_cast<const Model*>(this)->child(name) );
     }
     /**
      * @brief Adds a mesh to the model with a name.
@@ -106,16 +106,16 @@ public:
      * @note The name is used to identify the mesh.
      * @see Model::popMesh Model::mesh
      */
-    void addMesh(const Mesh& mesh, const std::string& name) {
+    void addMesh(const ConcreteMesh& mesh, const std::string& name) {
         meshes_.push_back({mesh, name});
     }
-    void addMesh(Mesh&& mesh, const std::string& name) {
+    void addMesh(ConcreteMesh&& mesh, const std::string& name) {
         meshes_.push_back({std::move(mesh), name});
     }
-    void addMesh(const Mesh& mesh, std::string&& name) {
+    void addMesh(const ConcreteMesh& mesh, std::string&& name) {
         meshes_.push_back({mesh, std::move(name)});
     }
-    void addMesh(Mesh&& mesh, std::string&& name) {
+    void addMesh(ConcreteMesh&& mesh, std::string&& name) {
         meshes_.push_back({std::move(mesh), std::move(name)});
     }
 
@@ -126,7 +126,7 @@ public:
      * @return Mesh The popped mesh.
      * @see Model::addMesh Model::mesh
      */
-    Mesh popMesh(std::string_view name);
+    const ConcreteMesh popMesh(std::string_view name);
     /**
      * @brief Accesses a mesh by name.
      * @throws `std::runtime_error` If the mesh is not found.
@@ -134,9 +134,9 @@ public:
      * @return const Mesh& A const reference to the mesh.
      * @see Model::popMesh Model::addMesh
      */
-    const Mesh& mesh(std::string_view name) const;
-    Mesh& mesh(std::string_view name) {
-        return const_cast<Mesh&>( const_cast<const Model*>(this)->mesh(name) );
+    const ConcreteMesh& mesh(std::string_view name) const;
+    ConcreteMesh& mesh(std::string_view name) {
+        return const_cast<ConcreteMesh&>( const_cast<const Model*>(this)->mesh(name) );
     }
 
     /**
@@ -184,30 +184,10 @@ public:
 
 private:
     coord::System coordSys_;
-    std::vector<Model> children_;
+    std::vector<ConcreteModel> children_;
     std::vector<NamedMesh> meshes_;
     std::string name_;
 };
-
-/**
- * @brief Loads a model tree from a file.    
- * It loads meshes with assimp in the way loadModel does.    
- * And the tree is structured by the scene graph in the file.
- * @param path Path to the file.
- * @return Model A model object representing the scene graph.
- * @see Model loadMesh coord::System
- */
-Model loadModel(const std::filesystem::path& path);
-/**
- * @brief Loads a model tree from a file with a specified input layout.    
- * It loads meshes with assimp in the way loadModel does.    
- * And the tree is structured by the scene graph in the file.
- * @param path Path to the file.
- * @param il The input layout to set to the vertex buffer.
- * @return Model A model object representing the scene graph.
- * @see Model loadMesh coord::System VertexBuffer InputLayout convert
- */
-Model loadModel(const std::filesystem::path& path, const InputLayout& il);
 
 }   // namespace gfx
 

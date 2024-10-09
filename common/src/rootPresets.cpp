@@ -80,19 +80,11 @@ wrl::ComPtr<ID3D12RootSignature> rootPresetSolid(Core& core) {
 }
 
 wrl::ComPtr<ID3D12RootSignature> rootPresetUnified(Core& core) {
-    auto params = std::array<D3D12_ROOT_PARAMETER, 5>{
+    auto params = std::array<D3D12_ROOT_PARAMETER, 4>{
         D3D12_ROOT_PARAMETER{   // Per Instance Data
             .ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV,
             .Descriptor = D3D12_ROOT_DESCRIPTOR{
                 .ShaderRegister = 0u,
-                .RegisterSpace = 0u
-            },
-            .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
-        },
-        D3D12_ROOT_PARAMETER{   // Materials
-            .ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV,
-            .Descriptor = D3D12_ROOT_DESCRIPTOR{
-                .ShaderRegister = 1u,
                 .RegisterSpace = 0u
             },
             .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
@@ -162,19 +154,11 @@ wrl::ComPtr<ID3D12RootSignature> rootPresetUnified1(Core& core) {
         }
     };
 
-    auto params = std::array<D3D12_ROOT_PARAMETER, 6>{
+    auto params = std::array<D3D12_ROOT_PARAMETER, 5>{
         D3D12_ROOT_PARAMETER{   // Per Instance Data
             .ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV,
             .Descriptor = D3D12_ROOT_DESCRIPTOR{
                 .ShaderRegister = 0u,
-                .RegisterSpace = 0u
-            },
-            .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
-        },
-        D3D12_ROOT_PARAMETER{   // Materials
-            .ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV,
-            .Descriptor = D3D12_ROOT_DESCRIPTOR{
-                .ShaderRegister = 1u,
                 .RegisterSpace = 0u
             },
             .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
@@ -213,27 +197,45 @@ wrl::ComPtr<ID3D12RootSignature> rootPresetUnified1(Core& core) {
         },
     };
 
-    auto samplerDesc = D3D12_STATIC_SAMPLER_DESC{
-        .Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR,
-        .AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER,
-        .AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER,
-        .AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER,
-        .MipLODBias = 0.0f,
-        .MaxAnisotropy = 0,
-        .ComparisonFunc = D3D12_COMPARISON_FUNC_NONE,
-        .BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK,
-        .MinLOD = 0.0f,
-        .MaxLOD = std::numeric_limits<float>::max(),
-        .ShaderRegister = 0u,
-        .RegisterSpace = 0u,
-        .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+    D3D12_STATIC_SAMPLER_DESC samplerDescs[] = {
+        D3D12_STATIC_SAMPLER_DESC {
+            .Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+            .AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+            .AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+            .AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+            .MipLODBias = 0.0f,
+            .MaxAnisotropy = 0,
+            .ComparisonFunc = D3D12_COMPARISON_FUNC_NONE,
+            .BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK,
+            .MinLOD = 0.0f,
+            .MaxLOD = std::numeric_limits<float>::max(),
+            .ShaderRegister = 0u,
+            .RegisterSpace = 0u,
+            .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+        },
+        // for shadow map
+        D3D12_STATIC_SAMPLER_DESC {
+            .Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+            .AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+            .AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+            .AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+            .MipLODBias = 0.0f,
+            .MaxAnisotropy = 0,
+            .ComparisonFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL,
+            .BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK,
+            .MinLOD = 0.0f,
+            .MaxLOD = std::numeric_limits<float>::max(),
+            .ShaderRegister = 1u,
+            .RegisterSpace = 0u,
+            .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+        }
     };
 
     auto desc = D3D12_ROOT_SIGNATURE_DESC{
         .NumParameters = static_cast<UINT>(params.size()),
         .pParameters = params.data(),
-        .NumStaticSamplers = 1u,
-        .pStaticSamplers = &samplerDesc,
+        .NumStaticSamplers = 2u,
+        .pStaticSamplers = samplerDescs,
         .Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
     };
 

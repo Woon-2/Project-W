@@ -14,6 +14,29 @@ namespace d3d12 {
 
 namespace sr {
 
+struct PhongMaterialNT {
+    dx::XMFLOAT4 ambient;
+    dx::XMFLOAT4 diffuse;
+    dx::XMFLOAT4 specular; // a = power
+    dx::XMFLOAT4 emmisive;
+};
+
+struct PhongMaterial {
+    static constexpr std::uint32_t textureFlagAmbient = 0x01u;
+    static constexpr std::uint32_t textureFlagDiffuse = 0x02u;
+    static constexpr std::uint32_t textureFlagSpecular = 0x04u;
+    static constexpr std::uint32_t textureFlagEmmisive = 0x08u;
+
+    std::uint32_t textureFlag;
+    std::uint32_t ambientMapIdx;
+    std::uint32_t diffuseMapIdx;
+    std::uint32_t specularMapIdx;
+    std::uint32_t emmisiveMapIdx;
+    float shininess;
+    float padding;
+    float padding2;
+};
+
 struct BasicPFD {
     dx::XMFLOAT4 globalAmbientLight;
     std::uint32_t lightCnt;
@@ -23,28 +46,35 @@ struct BasicPFD {
 struct BasicPID {
     dx::XMFLOAT4X4 wv;
     dx::XMFLOAT4X4 wvp;
-    dx::XMFLOAT3X4 normalXform; // use 3x4 matrix to avoid padding
-    std::uint32_t matIdx;
-    dx::XMFLOAT3 padding;
+    dx::XMFLOAT3X3 normalXform; // use 3x4 matrix to avoid padding
 };
 
-struct BasicPDD {
+struct PDDPhong {
+    PhongMaterial material;
     std::uint32_t instanceIndex;
     std::uint32_t padding[3];
 };
 
-struct PhongMaterialNT {
-    dx::XMFLOAT4 ambient;
-    dx::XMFLOAT4 diffuse;
-    dx::XMFLOAT4 specular; // a = power
-    dx::XMFLOAT4 emmisive;
+struct PDDNTPhong {
+    PhongMaterialNT material;
+    std::uint32_t instanceIndex;
+    std::uint32_t padding[3];
 };
 
-struct PhongMaterial {
-    std::uint32_t diffuseMapIdx;
-    std::uint32_t specularMapIdx;
-    float shininess;
-    float padding;
+struct BasicPFDShadowed {
+    dx::XMFLOAT4X4 view2LightProj;
+    dx::XMFLOAT4 globalAmbientLight;
+    std::uint32_t lightCnt;
+    std::uint32_t shadowMapIdx;
+};
+
+struct PFDShadow {
+    dx::XMFLOAT4X4 view2LightProj;
+};
+
+struct PDDShadow {
+    std::uint32_t instanceIndex;
+    std::uint32_t padding[3];
 };
 
 struct PhongLight {

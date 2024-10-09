@@ -35,7 +35,7 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     endif()
 endif()
 
-project(PZolzak VERSION 2024.09.10 LANGUAGES CXX)
+project(PZolzak VERSION 2024.10.08 LANGUAGES CXX)
 
 message(STATUS "Configuring ${CMAKE_PROJECT_NAME}(v${CMAKE_PROJECT_VERSION})...")
 message(STATUS "Author: @Woon2 (wkdauddns9@gmail.com)")
@@ -48,7 +48,6 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 add_subdirectory(extern)
 add_subdirectory(common)
 add_subdirectory(client)
-add_subdirectory(server)
 
 include(doxy)
 add_doxygen("${PROJECT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/docs")

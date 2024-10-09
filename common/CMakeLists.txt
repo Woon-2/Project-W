@@ -103,6 +103,21 @@ target_include_directories(coro
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
+# === TMP ===
+add_library(TMP
+    INTERFACE
+        include/TMP.hpp
+)
+
+add_library(common::TMP ALIAS TMP)
+
+auto_configure(TMP INTERFACE)
+
+target_include_directories(TMP
+    INTERFACE
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+
 # === input ===
 add_library(input
     src/mouse.cpp include/mouse.hpp
@@ -151,8 +166,6 @@ add_library(gfx
     src/dxexcept.cpp include/dxexcept.hpp
     src/d3d12core.cpp include/d3d12core.hpp
     src/d3dwindow.cpp include/d3dwindow.hpp
-    src/phongRenderer.cpp include/phongRenderer.hpp
-    src/sampleScene.cpp include/sampleScene.hpp
     src/d3d12shader.cpp include/d3d12shader.hpp
     src/rootPresets.cpp include/rootPresets.hpp
     src/d3d12resLow.cpp include/d3d12resLow.hpp
@@ -164,8 +177,6 @@ add_library(gfx
     src/d3d12InputLayout.cpp include/d3d12InputLayout.hpp
     src/d3d12Drawers.cpp include/d3d12Drawers.hpp
     src/nullShader.cpp include/nullShader.hpp
-    src/solidShader.cpp include/solidShader.hpp
-    src/ntShader.cpp include/ntShader.hpp
     src/phongShader.cpp include/phongShader.hpp
     src/inputLayoutPresets.cpp include/inputLayoutPresets.hpp
     src/d3d12InputLayoutPresets.cpp include/d3d12InputLayoutPresets.hpp
@@ -180,6 +191,14 @@ add_library(gfx
     src/renderProtocol.cpp include/renderProtocol.hpp
     src/d3d12texture.cpp include/d3d12texture.hpp
     src/d3d12material.cpp include/d3d12material.hpp
+    src/assimpLoader.cpp include/assimpLoader.hpp
+    src/assimpLoaderD3d12.cpp include/assimpLoaderD3d12.hpp
+    src/d3d12materialTree.cpp include/d3d12materialTree.hpp
+    src/shader.cpp include/shader.hpp
+    src/renderer.cpp include/renderer.hpp
+    src/d3d12Descriptor.cpp include/d3d12Descriptor.hpp
+    src/d3d12SpecialRenderTargets.cpp include/d3d12SpecialRenderTargets.hpp
+    src/shadowShader.cpp include/shadowShader.hpp
     
     include/dxtarget.hpp
     include/gfxPrimitive.hpp
@@ -215,6 +234,7 @@ target_link_libraries(gfx
         common::mu
         common::coro
         common::mem
+        common::TMP
 )
 
 target_include_directories(gfx

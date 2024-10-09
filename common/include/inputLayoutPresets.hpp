@@ -6,9 +6,17 @@
 namespace gfx {
 
 enum class InputLayoutPreset {
-    Pos3,
-    Pos3Norm3,
-    Pos3Norm3Tex2
+    Solid,
+    SolidDiffuse,
+    S_SolidDiffuse,
+    Color,
+    S_Color,
+    ColorDiffuse,
+    S_ColorDiffuse,
+    Tex,
+    S_Tex,
+    TexDiffuse,
+    S_TexDiffuse
 };
 
 const InputLayout makeInputLayoutPreset(InputLayoutPreset preset);

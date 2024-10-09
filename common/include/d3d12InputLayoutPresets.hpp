@@ -8,7 +8,6 @@ namespace gfx {
 
 namespace d3d12 {
 
-void configInputLayoutAux(Vertex::Properties prop);
 Core::InputLayoutIdx inputLayoutName(InputLayoutPreset preset);
 
 }   // namespace d3d12

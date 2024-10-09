@@ -5,7 +5,6 @@
 App::App(HINSTANCE hInstance)
     : window_(), mouse_(), keyboard_(), pGfx_(), pGame_() {
     MyWindow::setHInst(hInstance);
-    net::initNet();
 }
 
 App::~App() {
@@ -13,7 +12,6 @@ App::~App() {
     pGfx_->cleanup();
     gfx::DXFactory::cleanup();
     gfx::DXInfoQueue::cleanup();
-    net::relNet();
 }
 
 int App::run() {
@@ -30,7 +28,11 @@ int App::run() {
 
     gfx::DXFactory::cleanup();
 
-    window_.open(static_cast<gfx::d3d12::Core&>(*pGfx_), Win32::WndFrame{ 0, 0, 1024, 768 }, 3u);
+    auto& myGfx = static_cast<MyGfx&>(*pGfx_);
+
+    window_.open( myGfx, myGfx.offscreenRtvRangeID(), myGfx.frameDsvRangeID(),
+        Win32::WndFrame{ 0, 0, 1024, 768 }, 3u
+    );
     window_.setTitle("project-W client");
     window_.show(SW_SHOW);
 

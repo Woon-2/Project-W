@@ -1,494 +1,346 @@
-#ifndef __ECS_HPP
-#define __ECS_HPP
-
-#include <iostream>
-#include <bitset>
-#include <queue>
-#include <array>
-#include <map>
-#include <string>
-#include <set>
-#include <memory>
-#include <cassert>
+#ifndef __Ecsxx_HPP
+#define __Ecsxx_HPP
 
 #include "ecsExcept.hpp"
 
-/**
- * @brief This is namespace for ecs ( Entity_Component_System )
- * 
- * Entity has a id.
- * 
- * Component is a **struct** or **class**.
- * Component is assigned id as ComponentType.
- * 
- */
+#include <cstdint>
+#include <vector>
+#include <deque>
+#include <thread>
+#include <map>
+#include <ranges>
+#include <optional>
+#include <memory>
+#include <tuple>
+#include <functional>
+
+#include <atomic>
+
+#include "config.hpp"
+#include "enumUtil.hpp"
+#include "TMP.hpp"
+
+#define ENABLE_COMPONENT(__ComponentType)    \
+    friend class ecs::Entity; \
+    static constexpr ecs::Components type() NOEXCEPT {  \
+        return ecs::Components::__ComponentType;    \
+    }   \
+    static std::weak_ptr<__ComponentType> at(ecs::Entity::ID id) {    \
+        if (auto ptr = ecs::Component::at(ecs::Components::__ComponentType, id).lock()) {    \
+            return std::static_pointer_cast<__ComponentType>(ptr);    \
+        }   \
+        throw ECS_EXCEPT( #__ComponentType " is dead");    \
+    }   \
+    static std::weak_ptr<const __ComponentType> atC(ecs::Entity::ID id) {    \
+        if (auto ptr = ecs::Component::atC(ecs::Components::__ComponentType, id).lock()) {    \
+            return std::static_pointer_cast<const __ComponentType>(ptr);    \
+        }   \
+        throw ECS_EXCEPT( #__ComponentType " is dead");    \
+    }
+
+// Entity를 할당하는 스레드와 반납하는 스레드가 다르면,
+// Entity 풀들의 크기가 서로 달라지게 된다.
+// 문제가 되면 고치자.
 
 namespace ecs {
-	/**
-	* @typedef Entity
-	* @brief A 32-bit integer type that represents an entity.
-	*/
-	using Entity = std::int32_t;
-	/**
-	* @typedef ComponentType
-	* @brief An 8-bit unsigned integer type that represents the component type.
-	* 
-	* 
-	*/
-	using ComponentType = std::uint8_t;
 
-	/**
-	* @var MAX_ENTITIES
-	* @brief Maximum number of entities that the system can manage.
-	*/
-	const Entity MAX_ENTITIES = 1024;
-	/**
-	* @var MAX_COMPONENTS
-	* @brief Maximum number of components that the system can manage.
-	*/
-	const ComponentType MAX_COMPONENTS = 64;
+struct InitDesc {
+    std::size_t threadCnt;
+    std::size_t entityPoolSize;
+};
 
-	/**
-	* @typedef Signature
-	* @brief Bitset that represents the set of components assigned to an entity.
-	* 
-	* This bit set represents what components an entity has.
-	*/
-	using Signature = std::bitset<MAX_COMPONENTS>;
+enum class Components {
+    PlayerController = 1,
+    RigidBody,
+    AssetLinker,
+    Coord,
+    Model,
+    Size
+};
 
-	/**
-	* @var gSignature
-	* @brief The array of signatures each entity has.
-	* 
-	* This array represents the component configuration of each entity managed by the system.
-	*/
-	extern std::array<Signature, MAX_ENTITIES> gSignature;
+void init(const InitDesc& desc);
 
-	/**
-	* @var gAvailableEntities
-	* @brief Queue that stores unused entity IDs.
-	* 
-	* This queue manages reusable entity IDs and is used when new entities are created.
-	*/
-	extern std::queue<Entity> gAvailableEntities;
-	/**
-	* @var gLivingEntityCount
-	* @brief Variables representing the number of entities currently active.
-	*/
-	extern uint32_t gLivingEntityCount;
+class Component;
 
-	/**
-	* @brief Configures the ECS environment for entity management.
-	* 
-	* Makes the queue ready to manage the entity.
-	*/
-	void ConfigEntity();
-	/**
-	* @brief Creates a new entity.
-	* 
-	* Generates a new entity ID and returns it.
-	* 
-	* @return Entity The newly created entity ID.
-	*/
-	Entity CreateEntity();
-	/**
-	* @brief Destroys an entity.
-	* 
-	* Remove the specified entity from the ECS system, freeing up its resources.
-	* 
-	* @param entity The ID of the entity to destroy.
-	*/
-	void DestroyEntity(const Entity entity);
-	/**
-	* @brief Sets the signature for a given entity.
-	* 
-	* @code
-	* ecs::Signature signature;
-	* signature.set(ecs::GetComponentType<PlayerController>());
-	* signature.set(ecs::GetComponentType<Position>());
-	* ecs::SetSignature(entityNumber_, signature);
-	* @endcode
-	* 
-	* @param entity The ID of the entity.
-	* @param signature The signature to assign to the entity.
-	*/
-	void SetSignature(Entity entity, Signature signature);
-	/**
-	* @brief Retrieves the signature of a specified entity.
-	* 
-	* Returns the bitset signature that represents the components of the entity.
-	* 
-	* @param entity The ID of the entity.
-	* @return Signature The signature associated with the entity.
-	*/
-	Signature GetSignature(Entity entity);
+class Entity {
+public:
+    using ID = std::uint32_t;
 
-	/**
-	* @brief Abstract class for managing component arrays.
-	* 
-	* The base class for component arrays that provides an interface for handling entity destruction.
-	*/
-	class IComponentArray
-	{
-	public:
-		/**
-		* @brief Virtual destructor.
-		*/
-		virtual ~IComponentArray() = default;
-		/**
-		* @brief Handles the destruction of an entity.
-		* 
-		* When an entity is destroyed, this function is called to remove it from the component array.
-		* 
-		* @param entity The ID of the entity to destroy.
-		*/
-		virtual void EntityDestroyed(Entity entity) = 0;
-	};
+    Entity()
+        : id_(fetch(std::this_thread::get_id())) {}
 
-	/**
-	* @brief Template class for managing specific component arrays.
-	* 
-	* Manages arrays of specific component types and allows for insertion, removal, 
-	*	and retrieval of components associated with entities
-	* 
-	* @tparam Component The type of component to manage.
-	*/
-	template <class Component>
-	class ComponentArray : public IComponentArray
-	{
-	public:
-		/**
-		* @brief Inserts a component for a specific entity.
-		* 
-		* Adds a component to the array, associating it with a specific entity.
-		* 
-		* @param entity The ID of the entity.
-		* @param component The component to insert.
-		*/
-		void InsertData(Entity entity, Component component)
-		{
-			if (entityToIndexMap_.find(entity) != entityToIndexMap_.end())
-			{
-				throw ECS_EXCEPT("This Entity is already inserted into the ComponentArray.");
-			}
+    ~Entity() {
+        if (id_.has_value()) {
+            release(std::this_thread::get_id(), id_.value());
+        }
+    }
 
-			size_t newIndex = size_;
-			entityToIndexMap_[entity] = newIndex;
-			indexToEntityMap_[newIndex] = entity;
-			componentArray_[newIndex] = component;
-			++size_;
-		}
+    Entity(const Entity&) = delete;
+    Entity& operator=(const Entity&) = delete;
 
-		/**
-		* @brief Removes a component associated with a specific entity.
-		* 
-		* Removes the component for a given entity, reorganizing the array if necessary.
-		* 
-		* reorganizing : Cover the index to be erased with the last index and clear the last index
-		* 
-		* if entity is deleted this function is called.
-		* so you don't need to call this.
-		* 
-		* @param entity The ID of the entity.
-		*/
-		void RemoveData(Entity entity)
-		{
-			if (entityToIndexMap_.find(entity) == entityToIndexMap_.end())
-			{
-				throw ECS_EXCEPT("This Entity is not exist.");
-			}
+    Entity(Entity&& other) NOEXCEPT
+        : id_(std::move(other.id_)) {
+        other.id_.reset();
+    }
 
-			size_t indexOfRemoveEntity = entityToIndexMap_[entity];
-			size_t indexOfLastElement = size_ - 1;
-			componentArray_[indexOfRemoveEntity] = componentArray_[indexOfLastElement];
+    Entity& operator=(Entity&& other) NOEXCEPT {
+        if (this == &other) {
+            return *this;
+        }
 
-			Entity entityOfLastElement = indexToEntityMap_[indexOfLastElement];
-			entityToIndexMap_[entityOfLastElement] = indexOfRemoveEntity;
-			indexToEntityMap_[indexOfRemoveEntity] = entityOfLastElement;
+        id_ = std::move(other.id_);
+        other.id_.reset();
 
-			entityToIndexMap_.erase(entity);
-			indexToEntityMap_.erase(indexOfLastElement);
+        return *this;
+    }
 
-			--size_;
-		}
+    const std::optional<ID>& id() const NOEXCEPT {
+        return id_;
+    }
 
-		/**
-		* @brief Retrieves the component associated with a specific entity.
-		* 
-		* Returns the component associated with the given entity ID.
-		* 
-		* For example, if you want specific player's position (position is component), call this. 
-		* 
-		* or call template function GetComponent()
-		* 
-		* @param entity The ID of the entity.
-		* @return Component& Reference to the component associated with the entity.
-		*/
-		Component& GetData(Entity entity)
-		{
-			if (entityToIndexMap_.find(entity) == entityToIndexMap_.end())
-			{
-				throw ECS_EXCEPT("This Entity is not exist.");
-			}
+    template <class ConcreteComponent>
+    ConcreteComponent& as();
+    template <class ConcreteComponent>
+    const ConcreteComponent& as() const;
 
-			return componentArray_[entityToIndexMap_[entity]];
-		}
-		/**
-		* @brief Handles the destruction of an entity.
-		* 
-		* Removes the entity's component from the array if it exists.
-		* 
-		* @param entity The ID of the entity to destroy.
-		*/
-		void EntityDestroyed(Entity entity) override
-		{
-			if (entityToIndexMap_.find(entity) != entityToIndexMap_.end())
-			{
-				// Remove the entity's component if it existed
-				RemoveData(entity);
-			}
-		}
+    template <class ConcreteComponent>
+    std::weak_ptr<ConcreteComponent> get();
+    template <class ConcreteComponent>
+    std::weak_ptr<const ConcreteComponent> getC() const {
+        return get<ConcreteComponent>();
+    }
+    template <class ConcreteComponent>
+    std::weak_ptr<const ConcreteComponent> get() const;
+    std::weak_ptr<Component> get(Components type);
+    std::weak_ptr<const Component> getC(Components type) {
+        return get(type);
+    }
+    std::weak_ptr<const Component> get(Components type) const;
 
-	private:
-		std::array<Component, MAX_ENTITIES> componentArray_;
-		std::map<Entity, size_t> entityToIndexMap_;
-		std::map<size_t, Entity> indexToEntityMap_;
-		size_t size_;
-	};
+    template <class ConcreteComponent, class ... Args>
+    void createComponent(Args&& ... args);
 
-	/**
-	* @var gComponentTypes
-	* @brief Maps component type names to 'ComponentType' IDs.
-	* 
-	* This map is used to index component types using 'gNextComponentType'.
-	*/
-	extern std::map<std::string, ComponentType> gComponentTypes;
-	/**
-	* @var gComponentArrays
-	* @brief Maps component type names to arrays of components.
-	* 
-	* This map associates component types with their respective arrays that store the components associated with entities.
-	*/
-	extern std::map<std::string, std::shared_ptr<IComponentArray>> gComponentArrays;
-	/**
-	* @var gNextComponentType
-	* @brief The ID to be assigned to the next registered component type.
-	*/
-	extern ComponentType gNextComponentType;
+    bool valid() const NOEXCEPT {
+        return id_.has_value();
+    }
 
-	/**
-	* @brief Retrieves the component array for a specific component type.
-	* 
-	* Returns the array of components associated with the given component type.
-	* 
-	* @tparam Component The type of component to retrieve the array for.
-	* @return std::shared_ptr<ComponentArray<Component>> A shared pointer to the component array.
-	*/
-	template <class Component>
-	std::shared_ptr<ComponentArray<Component>> GetComponentArray()
-	{
-		std::string typeName = typeid(Component).name();
-		
-		if (gComponentTypes.find(typeName) == gComponentTypes.end())
-		{
-			throw ECS_EXCEPT("Component not registered before use.");
-		}
+    auto operator<=>(const Entity& other) const NOEXCEPT = default;
 
-		return std::static_pointer_cast<ComponentArray<Component>>(gComponentArrays[typeName]);
-	}
-	/**
-	* @brief Registers a new component type.
-	* 
-	* This function registers a component type, allowing it to be used within the ECS.
-	* 
-	* @tparam Component The type of component to register.
-	*/
-	template<class Component>
-	void RegisterComponent() {
-		std::string typeName = typeid(Component).name();
+private:
+    friend void init(const InitDesc& desc);
 
-		if (gComponentTypes.find(typeName) == gComponentTypes.end())
-		{
-			ECS_EXCEPT("This Component is already Registered.");
-		}
+    static void init(std::size_t threadCnt, std::size_t entityPoolSize);
+    static std::size_t poolIdx(std::thread::id threadId);
 
-		gComponentTypes.insert({typeName, gNextComponentType});
+    bool available(std::thread::id threadId) const NOEXCEPT {
+        return !sEntityPools[poolIdx(threadId)].empty();
+    }
+    bool available(std::thread::id threadId, std::size_t cnt) const NOEXCEPT {
+        return sEntityPools[poolIdx(threadId)].size() >= cnt;
+    }
 
-		gComponentArrays.insert({ typeName, std::make_shared<ComponentArray<Component>>() });
+    ID fetch(std::thread::id threadId);
+    std::vector<ID> fetch(std::thread::id threadId, std::size_t cnt);
+    void release(std::thread::id threadId, ID id) {
+        sEntityPools[poolIdx(threadId)].push_back(id);
+    }
+    template <std::ranges::range R>
+    void release(std::thread::id threadId, const R& ids) {
+        auto idx = poolIdx(threadId);
+        sEntityPools[idx].insert(
+            sEntityPools[idx].end(), std::begin(ids), std::end(ids)
+        );
+    }
 
-		++gNextComponentType;
-	}
-	/**
-	* @brief Retrieves the component type ID for a specific component.
-	* 
-	* Returns the 'ComponentType' ID associated with the given component type.
-	* Return values can be used to combine signatures.
-	* 
-	* @tparam Component The type of component to retrieve the ID for.
-	* @return ComponentType The ID of the component type.
-	*/
-	template<class Component>
-	ComponentType GetComponentType()
-	{
-		std::string typeName = typeid(Component).name();
+    static std::vector<std::deque<ID>> sEntityPools;
+    static std::map<std::thread::id, std::size_t> sThreadMap;
+    static std::atomic_flag sLock;
+    std::vector<void*> components_;
+    std::optional<ID> id_;
+};
 
-		if (gComponentTypes.find(typeName) == gComponentTypes.end())
-		{
-			throw ECS_EXCEPT("Component not exit");
-		}
+class Component {
+protected:
+    friend class Entity;
 
-		return gComponentTypes[typeName];
-	}
+    static std::weak_ptr<Component> at(Components type, Entity::ID idx) {
+        if (static_cast<std::size_t>(idx) >= sComponents[etoi(type)].size()) {
+            throw ECS_EXCEPT("Component index out of range");
+        }
 
-	/**
-	* @brief Adds a component to an entity.
-	* 
-	* Inserts a component into the array for the specified entity.
-	* 
-	* @tparam Component The type of component to add.
-	* @param entity The ID of entity.
-	* @param component The component to add.
-	*/
-	template<class Component>
-	void AddComponent(Entity entity, Component component)
-	{
-		GetComponentArray<Component>()->InsertData(entity, component);
-	}
-	/**
-	* @brief Removes a component from a entity.
-	* 
-	* Removes the component associated with the specified entity from the component array.
-	* 
-	* @tparam Component The type of component to remove.
-	* @param entity The ID of the entity.
-	*/
-	template<class Component>
-	void RemoveComponent(Entity entity)
-	{
-		GetComponentArray<Component>()->RemoveData(entity);
-	}
-	/**
-	* @Retrieves a component from an entity.
-	* 
-	* Returns the component associated with the specified entity.
-	* 
-	* @tparam Component The type of component to retrieve.
-	* @param entity The ID of the entity.
-	* @return Component& Reference to the component associated with the entity.
-	*/
-	template<class Component>
-	Component& GetComponent(Entity entity)
-	{
-		return GetComponentArray<Component>()->GetData(entity);
-	}
-	/**
-	* @brief Handles the destruction of an entity in the component.
-	* 
-	* Removes the entity from all relevant component arrays.
-	* 
-	* @param entity The ID of the entity to destroy.
-	*/
-	void componentDestroyEntity(Entity entity);
+        return sComponents[etoi(type)][idx];
+    }
 
-	/**
-	* @brief Represents a system in the ECS framework.
-	* 
-	* Systems operate on entities with specific component signatures.
-	*/
-	class System
-	{
-	public:
-		/**
-		* @brief A set of entities that this system operates on.
-		*/
-		std::set<Entity> entites_;
-	};
+    static std::weak_ptr<const Component> atC(Components type, Entity::ID idx) {
+        if (static_cast<std::size_t>(idx) >= sComponents[etoi(type)].size()) {
+            throw ECS_EXCEPT("Component index out of range");
+        }
 
-	/**
-	* @var gSystemSignature
-	* @brief Maps system type names to their component signatures.
-	* 
-	* This map associates systems with the signatures of components they operate on.
-	*/
-	extern std::map<std::string, Signature> gSystemSignature;
-	/**
-	* @var gSystems
-	* @brief Maps system type names to system instances.
-	* 
-	* This map stores the instances of systems registered in the ECS.
-	*/
-	extern std::map<std::string, std::shared_ptr<System>> gSystems;
+        return sComponents[etoi(type)][idx];
+    }
 
-	/**
-	* @brief Registers a new system with the ECS.
-	* 
-	* This function registers a system type, creating an instance of it within the ECS.
-	* 
-	* @tparam Sys The type of system to register.
-	* @return std::shared_ptr<System> A shared pointer to the registered system instance.
-	*/
-	template<class Sys>
-	std::shared_ptr<System> RegisterSystem()
-	{
-		std::string typeName = typeid(Sys).name();
+public:
+    Component(const Entity& entity)
+        : entityID_(entity.id()) {}
 
-		if (gSystems.find(typeName) != gSystems.end())
-		{
-			throw ECS_EXCEPT("This System is already Registered.");
-		}
+    virtual ~Component() = default;
+    Component(const Component&) = default;
+    Component& operator=(const Component&) = default;
+    Component(Component&&) noexcept = default;
+    Component& operator=(Component&&) noexcept = default;
 
-		auto system = std::make_shared<System>();
-		gSystems.try_emplace( typeName, system );
-		return system;
-	}
+    bool valid() const NOEXCEPT {
+        return entityID_.has_value();
+    }
 
-	/**
-	* @brief Sets the component signature for a system.
-	* 
-	* Associates a component signature with a system, defining which entities it will operate on.
-	* 
-	* @tparam Sys The type of system.
-	* @param signature The signature to set for the system.
-	*/
-	template<class Sys>
-	void SetSystemSignature(Signature signature)
-	{
-		std::string typeName = typeid(Sys).name();
+    const std::optional<Entity::ID>& entityID() const NOEXCEPT {
+        return entityID_;
+    }
 
-		if (gSystems.find(typeName) == gSystems.end())
-		{
-			throw ECS_EXCEPT("System not exit");
-		}
+    auto operator<=>(const Component& other) const NOEXCEPT = default;
 
-		gSystemSignature.insert({ typeName, signature });
-	}
+private:
+    friend void init(const InitDesc& desc);
+    static void init(std::size_t entityCnt) {
+        sComponents.clear();
+        sComponents.resize(etoi(Components::Size));
 
-	/**
-	* @brief Handles the destruction of and entity in the system.
-	* 
-	* Removes the entity from all relevant systems.
-	* 
-	* @param entity The ID of the entity to destroy.
-	*/
-	void systemDestroyEntity(Entity entity);
+        for (auto& component : sComponents) {
+            component.resize(entityCnt);
+        }
+    }
 
-	/**
-	* @brief Adds an entity to a specific system.
-	* 
-	* Assigns an entity to a system based on its name.
-	* 
-	* @param sysName The name of system.
-	* @param entity The ID of the entity to add.
-	*/
-	void SetEntity(std::string sysName, Entity entity);
+    static std::vector< std::vector<std::shared_ptr<Component> > > sComponents;
+    std::optional<Entity::ID> entityID_;
+};
 
-	/**
-	* @brief Updates the system when an entity's signature changes.
-	* 
-	* Ensures systems are updated when an entity's component configuration changes.
-	*/
-	void EntitySignatureChanged(Entity entity);
+template <class ConcreteComponent, class ... Args>
+void Entity::createComponent(Args&& ... args) {
+    if (!valid()) {
+        throw ECS_EXCEPT("Entity is invalid");
+    }
 
-}	// namespace ecs
+    Component::sComponents[ etoi(ConcreteComponent::type()) ][id_.value()]
+        = std::make_shared<ConcreteComponent>(*this, std::forward<Args>(args)...);
+}
 
-#endif // !__ECS_HPP
+template <class ConcreteComponent>
+ConcreteComponent& Entity::as() {
+    if (!valid()) {
+        throw ECS_EXCEPT("Entity is invalid");
+    }
+
+    if (auto component = ConcreteComponent::at(id_.value()).lock()) {
+        return *component;
+    }
+
+    throw ECS_EXCEPT("Component is dead");
+}
+
+template <class ConcreteComponent>
+const ConcreteComponent& Entity::as() const {
+    if (!valid()) {
+        throw ECS_EXCEPT("Entity is invalid");
+    }
+
+    if (auto component = ConcreteComponent::atC(id_.value()).lock()) {
+        return *component;
+    }
+
+    throw ECS_EXCEPT("Component is dead");
+}
+
+template <class ConcreteComponent>
+std::weak_ptr<ConcreteComponent> Entity::get() {
+    if (!valid()) {
+        return {};
+    }
+
+    return ConcreteComponent::at(id_.value());
+}
+
+template <class ConcreteComponent>
+std::weak_ptr<const ConcreteComponent> Entity::get() const {
+    if (!valid()) {
+        return {};
+    }
+
+    return ConcreteComponent::atC(id_.value());
+}
+
+inline std::weak_ptr<Component> Entity::get(Components type) {
+    if (!valid()) {
+        return {};
+    }
+
+    return Component::at(type, id_.value());
+}
+
+inline std::weak_ptr<const Component> Entity::get(Components type) const {
+    if (!valid()) {
+        return {};
+    }
+
+    return Component::atC(type, id_.value());
+}
+
+template <class ... ConcreteComponents>
+class System {
+protected:
+    template <class ConcreteComponent>
+    bool contains(Entity::ID id) {
+        constexpr auto compIdx = indexOf<ConcreteComponent, ConcreteComponents...>();
+        static_assert(compIdx != -1, "Component not found");
+
+        const auto& compVec = std::get<compIdx>(componentsTuple_);
+
+        return std::ranges::find_if( compVec, [&id](const auto& component) {
+            auto compEntityID = component.lock()->entityID();
+            return compEntityID.has_value() && compEntityID.value() == id;
+        } ) != std::end(compVec);
+    }
+
+    template <class ConcreteComponent>
+    auto& components() NOEXCEPT {
+        constexpr auto compIdx = indexOf<ConcreteComponent, ConcreteComponents...>();
+        static_assert(compIdx != -1, "Component not found");
+
+        return std::get<compIdx>(componentsTuple_);
+    }
+
+    template <class ConcreteComponent>
+    const auto& components() const NOEXCEPT {
+        constexpr auto compIdx = indexOf<ConcreteComponent, ConcreteComponents...>();
+        static_assert(compIdx != -1, "Component not found");
+
+        return std::get<compIdx>(componentsTuple_);
+    }
+
+public:
+    System() = default;
+    virtual ~System() = default;
+    System(const System&) = default;
+    System& operator=(const System&) = default;
+    System(System&&) noexcept = default;
+    System& operator=(System&&) noexcept = default;
+
+    void addEntity(Entity& entity) {
+        if (!entity.valid()) {
+            throw ECS_EXCEPT("Entity is invalid");
+        }
+
+        std::apply(
+            [&entity](auto& ... components) {
+                (components.push_back(entity.get<ConcreteComponents>()), ...);
+            },
+            componentsTuple_
+        );
+    }
+
+private:
+    std::tuple< std::vector<std::weak_ptr<ConcreteComponents>>... > componentsTuple_;
+};
+
+}   // namespace ecs
+
+#endif  // __Ecsxx_HPP

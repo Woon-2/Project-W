@@ -4,45 +4,35 @@ namespace gfx {
     
 namespace d3d12 {
 
-void Material::pushTexture(Core& core, Properties prop, const Texture& tex) {
-    if (textures_.contains(prop)) {
+void Material::pushTexture(Core& core, Maps prop, const Texture& tex) {
+    if (contains(prop)) {
         throw std::runtime_error("Texture already exists for this property");
     }
 
-    auto& texSrvHeap = core.descHeap(Texture::texSrvHeapIdx);
-    auto texSrvHeapStart = texSrvHeap.gpuHandle();
-    auto srvStride = texSrvHeap.stride();
-    auto texSrvAddr = tex.gpuHandle();
-    auto idx = static_cast<std::uint32_t>( (texSrvAddr.ptr - texSrvHeapStart.ptr) / srvStride );
-
-    textures_.try_emplace(prop, TextureIndexed{tex, idx});
+    indices_[etoi(prop)] = static_cast<TextureIdx>( tex.srv().idx() );
 }
 
-void Material::pushTexture(Core& core, Properties prop, Texture&& tex) {
-    if (textures_.contains(prop)) {
-        throw std::runtime_error("Texture already exists for this property");
+const Material::TextureIdx Material::idx(Maps prop) const {
+    if (!contains(prop)) {
+        throw std::runtime_error("Texture not found for this property");
     }
-
-    auto& texSrvHeap = core.descHeap(Texture::texSrvHeapIdx);
-    auto texSrvHeapStart = texSrvHeap.gpuHandle();
-    auto srvStride = texSrvHeap.stride();
-    auto texSrvAddr = tex.gpuHandle();
-    auto idx = static_cast<std::uint32_t>( (texSrvAddr.ptr - texSrvHeapStart.ptr) / srvStride );
-
-    textures_.try_emplace(prop, TextureIndexed{std::move(tex), idx});
+    return indices_[etoi(prop)];
 }
 
 bool Material::canSupport(rp::Protocol protocol) const {
     switch(protocol) {
     case rp::Protocol::PhongInstancingNT: {
-        auto ret = constants_.type() == typeid(rp::PhongInstancingNT::MaterialType);
+        auto ret = contains(Properties::DiffuseColor);
+        ret = ret && contains(Properties::SpecularColor);
+        ret = ret && contains(Properties::AmbientColor);
+        ret = ret && contains(Properties::EmissiveColor);
         return ret;
     }
 
     case rp::Protocol::PhongInstancing: {
-        auto ret = constants_.type() == typeid(float);
-        ret = ret && textures_.contains(Properties::Diffuse);
-        ret = ret && textures_.contains(Properties::Specular);
+        auto ret = contains(Properties::Shininess);
+        ret = ret && contains(Maps::Diffuse);
+        ret = ret && contains(Maps::Specular);
         return ret;
     }
 
@@ -59,6 +49,8 @@ std::any Material::as(rp::Protocol protocol) const {
         return asPhongInstancingNT();
     case rp::Protocol::PhongInstancing:
         return asPhongInstancing();
+    case rp::Protocol::PhongInstancingShadowed:
+        return asPhongInstancing();
     default:
         throw std::runtime_error("Undefined protocol");
     }
@@ -67,14 +59,27 @@ std::any Material::as(rp::Protocol protocol) const {
 }
 
 rp::PhongInstancing::MaterialType Material::asPhongInstancing() const {
-    if (constants_.type() != typeid(float)) {
-        throw std::runtime_error("PhongInstancing render protocol's Material Auxiliary data must be of type float.");
+    if ( !contains(Maps::Diffuse) || !contains(Maps::Specular)
+        || !contains(Properties::Shininess)
+    ) {
+        throw std::runtime_error("PhongInstancing render protocol's Material must have "
+            "Diffuse and Specular textures and shininess property."
+        );
     }
 
+    auto textureFlag = 0u;
+    textureFlag |= contains(Maps::Ambient) ? rp::PhongInstancing::MaterialType::textureFlagAmbient : 0u;
+    textureFlag |= contains(Maps::Diffuse) ? rp::PhongInstancing::MaterialType::textureFlagDiffuse : 0u;
+    textureFlag |= contains(Maps::Specular) ? rp::PhongInstancing::MaterialType::textureFlagSpecular : 0u;
+    textureFlag |= contains(Maps::Emissive) ? rp::PhongInstancing::MaterialType::textureFlagEmmisive : 0u;
+
     auto ret = rp::PhongInstancing::MaterialType{
-        .diffuseMapIdx = textures_.at(Properties::Diffuse).idx,
-        .specularMapIdx = textures_.at(Properties::Specular).idx,
-        .shininess = std::any_cast<float>(constants_)
+        .textureFlag = textureFlag,
+        .ambientMapIdx = indices_[etoi(Maps::Ambient)],
+        .diffuseMapIdx = indices_[etoi(Maps::Diffuse)],
+        .specularMapIdx = indices_[etoi(Maps::Specular)],
+        .emmisiveMapIdx = indices_[etoi(Maps::Emissive)],
+        .shininess = properties_[etoi(Properties::Shininess)].value().scalar
     };
 
     return ret;
@@ -82,11 +87,20 @@ rp::PhongInstancing::MaterialType Material::asPhongInstancing() const {
 
 rp::PhongInstancingNT::MaterialType Material::asPhongInstancingNT() const
 {
-    if ( constants_.type() != typeid( rp::PhongInstancingNT::MaterialType ) ) {
-        throw std::runtime_error("PhongInstancingNT render protocol's Material Auxiliary data must be of type PhongMaterialNT.");
+    if ( !contains(Properties::DiffuseColor) || !contains(Properties::SpecularColor)
+        || !contains(Properties::AmbientColor) || !contains(Properties::EmissiveColor)
+    ) {
+        throw std::runtime_error("PhongInstancingNT render protocol's Material must have "
+            "Diffuse, Specular, Ambient and Emissive colors."
+        );
     }
 
-    return std::any_cast<rp::PhongInstancingNT::MaterialType>( constants_ );
+    return rp::PhongInstancingNT::MaterialType{
+        .ambient = properties_[etoi(Properties::AmbientColor)].value().vec4.getXmf(),
+        .diffuse = properties_[etoi(Properties::DiffuseColor)].value().vec4.getXmf(),
+        .specular = properties_[etoi(Properties::SpecularColor)].value().vec4.getXmf(),
+        .emmisive = properties_[etoi(Properties::EmissiveColor)].value().vec4.getXmf()
+    };
 }
 
 }   // namespace gfx::d3d12
