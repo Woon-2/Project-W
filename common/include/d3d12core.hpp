@@ -112,16 +112,6 @@ private:
             ) {}
     };
 
-    class ShaderIdxNotFound : public gfx::Exception {
-    public:
-        ShaderIdxNotFound(int lineNum, const char* fileStr, std::string_view idx)
-            : gfx::Exception(lineNum, fileStr,
-                "The shader with index \""s + idx.data() + "\" does not exist.\n"s
-                + "Please check if the shader is registered to the Core.\n"s
-                + "or the shader is already popped."s
-            ) {}
-    };
-
     class InputLayoutIdxNotFound : public gfx::Exception {
     public:
         InputLayoutIdxNotFound(int lineNum, const char* fileStr, std::string_view idx)
@@ -150,7 +140,6 @@ public:
     friend class DeviceFetcher;
 
     using RootIdx = std::string;
-    using ShaderIdx = std::string;
     using InputLayoutIdx = std::string;
     using DescRangeID = std::string;
 
@@ -306,46 +295,6 @@ public:
         return roots_.contains(idx);
     }
 
-    void addShader(ShaderIdx idx, std::unique_ptr<Shader>&& shader) {
-        shaders_[idx] = std::move(shader);
-    }
-
-    /**
-     * @brief Queries the Shader for the specified index.
-     * @param idx The index of the Shader.
-     * @return `const Shader&` The Shader.
-     * @throws gfx::Exception When the Shader for the specified index is not found.
-     * @note The Shader for `idx` must be registered to the Core.
-     * @see Core::addShader Core::popShader Core::containsShader Shader
-     */
-    Shader& shader(const ShaderIdx& idx) {
-        if (shaders_.contains(idx)) {
-            return *shaders_.at(idx);
-        }
-        throw GFX_EXCEPT_CLASS(d3d12::Core::ShaderIdxNotFound, idx);
-    }
-    /**
-     * @brief Queries whether the Core contains the Shader for the specified index.
-     * @param idx The index of the Shader.
-     * @return `bool` Whether the Core contains the Shader for the specified index.
-     */
-    bool containsShader(const ShaderIdx& idx) const NOEXCEPT {
-        return shaders_.contains(idx);
-    }
-    /**
-     * @brief Pops the Shader for the specified index.     
-     * @param idx The index of the Shader.
-     * @throws gfx::Exception When the Shader for the specified index is not found.
-     * @note The Shader for `idx` must be registered to the Core.
-     * @see Core::addShader Core::containsShader
-     */
-    void popShader(const ShaderIdx& idx) {
-        if (auto pos = shaders_.find(idx); pos != shaders_.end()) {
-            shaders_.erase(pos);
-            return;
-        }
-        throw GFX_EXCEPT_CLASS(d3d12::Core::ShaderIdxNotFound, idx);
-    }
     /**
      * @brief Registers an InputLayout to the Core.
      * @param idx The index of the InputLayout, which becomes the key of the InputLayout.
@@ -480,7 +429,6 @@ private:
 
     CmdListPool gfxCmdListPool_;
     std::map<RootIdx, wrl::ComPtr<ID3D12RootSignature>> roots_;
-    std::map<ShaderIdx, std::unique_ptr<Shader>> shaders_;
     std::map<InputLayoutIdx, InputLayout> inputLayouts_;
     DescriptorHeap descHeapCbvSrvUav_;
     DescriptorHeap descHeapRtv_;
@@ -536,18 +484,6 @@ public:
      * @note `contextType` must be RenderContextType::D3D12.
      */
     std::any cast(RenderContextType contextType) override;
-
-    /**
-     * @brief Queries the Shader for the specified index.
-     * @param idx The index of the Shader.
-     * @return `const Shader&` The Shader.
-     * @note The Shader for `idx` must be registered to the Core.
-     * @see Core::addShader Core::popShader Core::containsShader Shader
-     * @note The Shader for `idx` must be registered to the Core.
-     */
-    Shader& shader(const Core::ShaderIdx& idx) const {
-        return pCore_->shader(idx);
-    }
 
     void preRender() override;
     void postRender() override;
@@ -910,7 +846,7 @@ void Window<Traits>::createDepthBuffers(ID3D12Device* pDevice) {
         .Height = static_cast<UINT>(this->client().height),
         .DepthOrArraySize = 1,
         .MipLevels = 1,
-        .Format = DXGI_FORMAT_D24_UNORM_S8_UINT,
+        .Format = DXGI_FORMAT_D32_FLOAT,
         .SampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
         .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
         .Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
@@ -925,7 +861,7 @@ void Window<Traits>::createDepthBuffers(ID3D12Device* pDevice) {
     };
 
     auto cv = D3D12_CLEAR_VALUE{
-        .Format = DXGI_FORMAT_D24_UNORM_S8_UINT,
+        .Format = DXGI_FORMAT_D32_FLOAT,
         .DepthStencil = { .Depth = 1.0f, .Stencil = 0u }
     };
 

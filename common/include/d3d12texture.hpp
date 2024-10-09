@@ -25,6 +25,12 @@ public:
         res_ = createDefRes(core, desc, initialState);
     }
 
+    Texture( Core& core, const D3D12_RESOURCE_DESC& desc, const D3D12_CLEAR_VALUE& clearValue,
+        D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+    ) : desc_(desc), srv_(), res_(), upRes_(), state_(initialState) {
+        res_ = createDefRes(core, desc, initialState, clearValue);
+    }
+
     Texture( Core& core, D3D12RenderContext& ctx, const std::filesystem::path& path,
         D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
     ) : Texture() {
@@ -40,6 +46,7 @@ public:
     }
 
     void makeSrv(Core& core, const Descriptor& desc);
+    void makeSrv(Core& core, const Descriptor& desc, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc);
     void makeRtv(Core& core, const Descriptor& desc);
     void makeDsv(Core& core, const Descriptor& desc);
 
@@ -74,6 +81,10 @@ public:
 
     D3D12_RESOURCE_STATES state() const NOEXCEPT {
         return state_;
+    }
+
+    const D3D12_RESOURCE_DESC& resDesc() const NOEXCEPT {
+        return desc_;
     }
 
 private:

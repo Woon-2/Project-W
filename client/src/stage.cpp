@@ -6,6 +6,8 @@
 #include "mygfx.hpp"
 #include "d3d12scene.hpp"
 
+#include "d3d12SpecialRendertargets.hpp"
+
 #include <ranges>
 
 void Stage::init() {
@@ -29,6 +31,8 @@ void Stage::render(gfx::ICore& core, gfx::IRenderTarget& target) {
     target.preRender(*pRenderContext);
     target.clear(*pRenderContext);
 
+    auto& myGfx = static_cast<MyGfx&>(core);
+
     auto scene = gfx::d3d12::CameraScene(camera_);
 
     scene.addLights( gfx::rp::Protocol::PhongInstancing,
@@ -36,14 +40,31 @@ void Stage::render(gfx::ICore& core, gfx::IRenderTarget& target) {
             return std::any{ &light };
         } )
     );
-
-    auto worlds = std::vector<mu::Mat4x4>();
-    scene.setFragments( gfx::rp::Protocol::PhongInstancing,
-        pSystems_->fragmentizer.fragmentize(worlds)
+    scene.addLight( gfx::rp::Protocol::ShadowMapGen,
+        std::any{ &lights_.front() }
     );
 
-    core.render( *pRenderContext, scene,
-        static_cast<MyGfx&>(core).illuminanceRenderer(), target
+    auto worlds = std::vector<mu::Mat4x4>();
+    auto fragments = pSystems_->fragmentizer.fragmentize(worlds);
+
+    scene.addFragments( gfx::rp::Protocol::PhongInstancing,
+        fragments
+    );
+    scene.addFragments( gfx::rp::Protocol::ShadowMapGen,
+        fragments
+    );
+
+    // render shadow
+    auto shadowTarget = myGfx.shadowTarget();
+    shadowTarget.preRender(*pRenderContext);
+    myGfx.render( *pRenderContext, scene,
+        myGfx.shadowRenderer(), shadowTarget
+    );
+    shadowTarget.postRender(*pRenderContext);
+
+    // render illuminance
+    myGfx.render( *pRenderContext, scene,
+        myGfx.illuminanceRenderer(), target
     );
 
     target.postRender(*pRenderContext);

@@ -283,7 +283,7 @@ public:
             .primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
             .numRenderTargets = 1u,
             .rtvFormats = { DXGI_FORMAT_R8G8B8A8_UNORM },
-            .dsvFormat = DXGI_FORMAT_D24_UNORM_S8_UINT,
+            .dsvFormat = DXGI_FORMAT_D32_FLOAT,
             .sampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u }
         } ) {}
 

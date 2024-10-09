@@ -51,7 +51,7 @@ private:
 };
 
 struct Fragment {
-    const MeshView meshView;
+    MeshView meshView;
     const Material* pMaterial;
     std::span<mu::Mat4x4> worlds;
 };

@@ -281,7 +281,7 @@ Generator<DrawInfo> CameraScene::iteration(rp::Protocol protocol) const {
 }
 
 mu::Mat4x4 CameraScene::makeView2LightProj() const {
-    auto pLight = std::any_cast<const sr::PhongLight*>( lightsMap_.at(rp::Protocol::ShadowMapGen).front() );
+    auto pLight = std::any_cast<sr::PhongLight*>( lightsMap_.at(rp::Protocol::ShadowMapGen).front() );
     auto pos = mu::Vec3( dx::XMLoadFloat3(&pLight->posV) );
     auto dir = mu::Vec3( dx::XMLoadFloat3(&pLight->dirV) );
     auto up = mu::Vec3( 0.f, 1.f, 0.f );

@@ -17,6 +17,12 @@ void Texture::makeSrv(Core& core, const Descriptor& desc) {
     srv_.makeSrv(pDevice, res_.Get());
 }
 
+void Texture::makeSrv(Core& core, const Descriptor& desc, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc) {
+    srv_ = desc;
+    auto pDevice = static_cast<ID3D12Device*>(DeviceFetcher::device(core));
+    srv_.makeSrv(pDevice, res_.Get(), srvDesc);
+}
+
 void Texture::makeRtv(Core& core, const Descriptor& desc) {
     rtv_ = desc;
     auto pDevice = static_cast<ID3D12Device*>( DeviceFetcher::device(core) );
@@ -73,6 +79,7 @@ void Texture::load( Core& core, D3D12RenderContext& ctx,
     };
 
     state_ = initialState;
+    desc_ = res_->GetDesc();
 
     pCmdList->ResourceBarrier(1, &bar);
 

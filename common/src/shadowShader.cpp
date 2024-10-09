@@ -22,6 +22,9 @@ ShadowShader::ShadowShader(Core &core, const Config &config, std::size_t duplica
         },
         .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
         .Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
+    }, D3D12_CLEAR_VALUE{
+        .Format = DXGI_FORMAT_D32_FLOAT,
+        .DepthStencil = { 1.0f, 0u }
     } ),
     internalResArr_(3, std::ranges::range_value_t<decltype(internalResArr_)>(duplicationCnt)),
     resPerFrameData_(core, sizeof(d3d12::sr::BasicPFD), internalResArr_[0], duplicationCnt),
@@ -32,11 +35,30 @@ ShadowShader::ShadowShader(Core &core, const Config &config, std::size_t duplica
     if ( !core.hasDescRange(rp::ShadowMapGen::DescRangeIDShadowTex) ) {
         throw GFX_EXCEPT("[Description] Shadow map descriptor range not found.");
     }
+    if (!core.hasDescRange(rp::PhongInstancing::DescRangeIDTex2D)) {
+        throw GFX_EXCEPT("[Description] Texture2D descriptor range not found.");
+    }
 
-    // shadowMap_.makeDsv(/* ... */);
-    // shadowMap_.makeSrv(/* ... */);
+    shadowMap_.makeDsv(core, core.descHeapDsv()[
+        core.descRange(rp::ShadowMapGen::DescRangeIDShadowDS).first
+    ]);
+    auto shadowMapResDesc = shadowMap_.resDesc();
+    
+    auto shadowMapSrvDesc = D3D12_SHADER_RESOURCE_VIEW_DESC{
+        .Format = DXGI_FORMAT_R32_FLOAT,
+        .ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
+        .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+        .Texture2D = D3D12_TEX2D_SRV{
+            .MostDetailedMip = 0,
+            .MipLevels = shadowMapResDesc.MipLevels
+        }
+    };
 
-    // pushInputLayout( gfx::makeInputLayoutPreset(gfx::InputLayoutPreset::TexDiffuse) );
+    shadowMap_.makeSrv(core, core.descHeapCbvSrvUav()[
+        core.descRange(rp::ShadowMapGen::DescRangeIDShadowTex).first
+    ], shadowMapSrvDesc);
+
+    pushInputLayout( gfx::makeInputLayoutPreset(gfx::InputLayoutPreset::Solid) );
     pushProtocol(rp::Protocol::ShadowMapGen);
 
     auto builder = SimpleShaderBuilder();
@@ -84,6 +106,8 @@ void ShadowShader::draw( IRenderContext& ctx, const IScene& scene,
     auto pCmdList = std::any_cast<wrl::ComPtr<ID3D12GraphicsCommandList>>(
         ctx.cast(RenderContextType::D3D12)
     );
+
+    setRootParams(pCmdList.Get(), frameIdx());
 
     auto dsv = std::any_cast<Descriptor>(
         target.cast(RenderTargetType::D3D12_DEPTH)

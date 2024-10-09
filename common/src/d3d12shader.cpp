@@ -38,18 +38,20 @@ void Shader::defPreDraw( IRenderContext& ctx, const IScene& scene,
 }
 
 void Shader::make(ID3D12Device* pDevice, Idx idx, const Desc& desc) {
-    auto vsBlob = codes_.at(Type::Vertex);
-    auto psBlob = codes_.at(Type::Pixel);
+    // TODO: replace query with bit flag
+
+    auto vsBlob = codes_[Type::Vertex];
+    auto psBlob = codes_[Type::Pixel];
 
     auto psoDesc = D3D12_GRAPHICS_PIPELINE_STATE_DESC{
         .pRootSignature = desc.pRootSignature.Get(),
         .VS = D3D12_SHADER_BYTECODE{
-            .pShaderBytecode = vsBlob->GetBufferPointer(),
-            .BytecodeLength = vsBlob->GetBufferSize()
+            .pShaderBytecode = vsBlob ? vsBlob->GetBufferPointer() : nullptr,
+            .BytecodeLength = vsBlob ? vsBlob->GetBufferSize() : 0
         },
         .PS = D3D12_SHADER_BYTECODE{
-            .pShaderBytecode = psBlob->GetBufferPointer(),
-            .BytecodeLength = psBlob->GetBufferSize()
+            .pShaderBytecode = psBlob ? psBlob->GetBufferPointer() : nullptr,
+            .BytecodeLength = psBlob ? psBlob->GetBufferSize() : 0
         },
         .BlendState = desc.blend,
         .SampleMask = desc.sampleMask,

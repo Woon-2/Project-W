@@ -19,6 +19,14 @@ wrl::ComPtr<ID3D12Resource> createUpRes( Core& core,
 wrl::ComPtr<ID3D12Resource> createDefRes( Core& core,
     const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES state
 );
+wrl::ComPtr<ID3D12Resource> createUpRes( Core& core,
+    const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES state,
+    const D3D12_CLEAR_VALUE& clearValue
+);
+wrl::ComPtr<ID3D12Resource> createDefRes( Core& core,
+    const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES state,
+    const D3D12_CLEAR_VALUE& clearValue
+);
 
 /**
  * @brief Creates a upload buffer which can upload data from the cpu to the gpu in D3D12, with initial data.    

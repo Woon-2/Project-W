@@ -6,11 +6,12 @@
 
 void MyGfx::init() {
     configRtvHeapSize(3u);
-    configDsvHeapSize(3u);
+    configDsvHeapSize(4u);
     configCbvSrvUavHeapSize(124u);
 
     defineDescRange("offscreenRtv", 0u, 3u);
     defineDescRange("frameDsv", 0u, 3u);
+    defineDescRange(gfx::rp::ShadowMapGen::DescRangeIDShadowDS, 3u, 1u);
     defineDescRange(gfx::rp::ShadowMapGen::DescRangeIDShadowTex, 0u, 1u);
     defineDescRange(gfx::rp::PhongInstancing::DescRangeIDTex2D, 1u, 123u);
 
@@ -35,6 +36,11 @@ void MyGfx::init() {
         2u
     );
 
+    shadowShader_ = gfx::d3d12::ShadowShader( *this,
+        gfx::d3d12::ShadowShader::Config{ .shadowMapWidth = 1024u, .shadowMapHeight = 1024u, .maxInstCnt = 1000u },
+        2u
+    );
+
     illuminanceRenderer_.init(*this);
     illuminanceRenderer_.pushShader( gfx::rp::Protocol::PhongInstancing, &phongShader_.value(),
         phongShader_.value().optSolidAndGeneral()
@@ -42,9 +48,15 @@ void MyGfx::init() {
     illuminanceRenderer_.pushShader( gfx::rp::Protocol::PhongInstancingNT, &phongShaderNT_.value(),
         phongShaderNT_.value().optSolidAndGeneral()
     );
+
+    shadowRenderer_.init(*this);
+    shadowRenderer_.pushShader( gfx::rp::Protocol::ShadowMapGen, &shadowShader_.value(),
+        shadowShader_.value().optGeneral()
+    );
 }
 
 void MyGfx::setFrame(std::size_t frameIdx) {
     phongShader_.value().setFrame(frameIdx);
     phongShaderNT_.value().setFrame(frameIdx);
+    shadowShader_.value().setFrame(frameIdx);
 }

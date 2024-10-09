@@ -8,7 +8,7 @@ namespace d3d12 {
 
 namespace {
 wrl::ComPtr<ID3D12Resource> createUninitRes( Core& core, const D3D12_RESOURCE_DESC& desc,
-    D3D12_RESOURCE_STATES state, D3D12_HEAP_TYPE heapType
+    D3D12_RESOURCE_STATES state, D3D12_HEAP_TYPE heapType, const D3D12_CLEAR_VALUE* clearValue
 ) {
     auto pDevice = static_cast<ID3D12Device*>( DeviceFetcher::device(core) );
 
@@ -24,7 +24,7 @@ wrl::ComPtr<ID3D12Resource> createUninitRes( Core& core, const D3D12_RESOURCE_DE
 
     DX_THROW_FAILED( pDevice->CreateCommittedResource(
         &heapProps, D3D12_HEAP_FLAG_NONE, &desc,
-        state, nullptr,
+        state, clearValue,
         __uuidof(ID3D12Resource), &ret
     ) );
 
@@ -50,19 +50,31 @@ wrl::ComPtr<ID3D12Resource> createUninitBuf( Core& core, UINT64 bytes, D3D12_RES
         .Flags = D3D12_RESOURCE_FLAG_NONE
     };
 
-    return createUninitRes(core, desc, state, heapType);
+    return createUninitRes(core, desc, state, heapType, nullptr);
 }
 }   // namespace gfx::d3d12::{anonymous_namespace}
 
 wrl::ComPtr<ID3D12Resource> createUpRes( Core& core,
     const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES state
 ) {
-    return createUninitRes(core, desc, state, D3D12_HEAP_TYPE_UPLOAD);
+    return createUninitRes(core, desc, state, D3D12_HEAP_TYPE_UPLOAD, nullptr);
 }
 wrl::ComPtr<ID3D12Resource> createDefRes( Core& core,
     const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES state
 ) {
-    return createUninitRes(core, desc, state, D3D12_HEAP_TYPE_DEFAULT);
+    return createUninitRes(core, desc, state, D3D12_HEAP_TYPE_DEFAULT, nullptr);
+}
+wrl::ComPtr<ID3D12Resource> createUpRes( Core& core,
+    const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES state,
+    const D3D12_CLEAR_VALUE& clearValue
+) {
+    return createUninitRes(core, desc, state, D3D12_HEAP_TYPE_UPLOAD, &clearValue);
+}
+wrl::ComPtr<ID3D12Resource> createDefRes( Core& core,
+    const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_STATES state,
+    const D3D12_CLEAR_VALUE& clearValue
+) {
+    return createUninitRes(core, desc, state, D3D12_HEAP_TYPE_DEFAULT, &clearValue);
 }
 
 wrl::ComPtr<ID3D12Resource> createUpBuf(Core& core, UINT64 bytes) {

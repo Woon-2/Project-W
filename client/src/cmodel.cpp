@@ -100,6 +100,57 @@ void Fragmentizer::fragmentizeData(
         }
     );
 
+    // =====================
+    std::transform(data.begin(), data.end(), std::back_inserter(worlds),
+        [](const ModelDataXX::Node* node) {
+            return node->pModel->coord().xform() * mu::translate(50.f, 0.f, 0.f);
+        }
+    );
+
+    std::transform(data.begin(), data.end(), std::back_inserter(worlds),
+        [](const ModelDataXX::Node* node) {
+            return node->pModel->coord().xform() * mu::translate(50.f, 0.f, 50.f);
+        }
+    );
+
+    std::transform(data.begin(), data.end(), std::back_inserter(worlds),
+        [](const ModelDataXX::Node* node) {
+            return node->pModel->coord().xform() * mu::translate(50.f, 0.f, -50.f);
+        }
+    );
+
+    std::transform(data.begin(), data.end(), std::back_inserter(worlds),
+        [](const ModelDataXX::Node* node) {
+            return node->pModel->coord().xform() * mu::translate(-50.f, 0.f, 0.f);
+        }
+    );
+
+    std::transform(data.begin(), data.end(), std::back_inserter(worlds),
+        [](const ModelDataXX::Node* node) {
+            return node->pModel->coord().xform() * mu::translate(-50.f, 0.f, 50.f);
+        }
+    );
+
+    std::transform(data.begin(), data.end(), std::back_inserter(worlds),
+        [](const ModelDataXX::Node* node) {
+            return node->pModel->coord().xform() * mu::translate(-50.f, 0.f, -50.f);
+        }
+    );
+
+    std::transform(data.begin(), data.end(), std::back_inserter(worlds),
+        [](const ModelDataXX::Node* node) {
+            return node->pModel->coord().xform() * mu::translate(0.f, 0.f, 50.f);
+        }
+    );
+
+    std::transform(data.begin(), data.end(), std::back_inserter(worlds),
+        [](const ModelDataXX::Node* node) {
+            return node->pModel->coord().xform() * mu::translate(0.f, 0.f, -50.f);
+        }
+    );
+
+    // =====================
+
     for (const auto& node : data) {
         fragments.emplace_back(
             /* .pMesh = */ node->meshView,

@@ -166,6 +166,7 @@ struct ShadowMapGen {
     // temporary place it here,
     // move it to d3d12 root related header file.
     static constexpr const char* DescRangeIDShadowTex = "shadowTex";
+    static constexpr const char* DescRangeIDShadowDS = "shadowDS";
 
     using PIDType = d3d12::sr::BasicPID;
     using PDDType = d3d12::sr::PDDShadow;
