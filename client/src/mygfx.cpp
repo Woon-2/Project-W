@@ -36,6 +36,11 @@ void MyGfx::init() {
         2u
     );
 
+    phongShadowedShader_ = gfx::d3d12::PhongShadowedShader( *this,
+        gfx::d3d12::PhongShadowedShader::Config{ .maxInstCnt = 1000u, .maxLightCnt = 12u },
+        2u
+    );
+
     shadowShader_ = gfx::d3d12::ShadowShader( *this,
         gfx::d3d12::ShadowShader::Config{ .shadowMapWidth = 1024u, .shadowMapHeight = 1024u, .maxInstCnt = 1000u },
         2u
@@ -44,6 +49,9 @@ void MyGfx::init() {
     illuminanceRenderer_.init(*this);
     illuminanceRenderer_.pushShader( gfx::rp::Protocol::PhongInstancing, &phongShader_.value(),
         phongShader_.value().optSolidAndGeneral()
+    );
+    illuminanceRenderer_.pushShader( gfx::rp::Protocol::PhongInstancingShadowed, &phongShadowedShader_.value(),
+        phongShadowedShader_.value().optGeneral()
     );
     illuminanceRenderer_.pushShader( gfx::rp::Protocol::PhongInstancingNT, &phongShaderNT_.value(),
         phongShaderNT_.value().optSolidAndGeneral()
@@ -59,4 +67,5 @@ void MyGfx::setFrame(std::size_t frameIdx) {
     phongShader_.value().setFrame(frameIdx);
     phongShaderNT_.value().setFrame(frameIdx);
     shadowShader_.value().setFrame(frameIdx);
+    phongShadowedShader_.value().setFrame(frameIdx);
 }

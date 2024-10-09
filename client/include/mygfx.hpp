@@ -30,6 +30,7 @@ public:
 private:
     std::optional<gfx::d3d12::PhongShader> phongShader_;
     std::optional<gfx::d3d12::PhongShaderNT> phongShaderNT_;
+    std::optional<gfx::d3d12::PhongShadowedShader> phongShadowedShader_;
     std::optional<gfx::d3d12::ShadowShader> shadowShader_;
     MyRenderer illuminanceRenderer_;
     MyRenderer shadowRenderer_;

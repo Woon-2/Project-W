@@ -1,6 +1,8 @@
 #include "d3d12Drawers.hpp"
 #include "d3d12mesh.hpp"
 
+#include "gfxExcept.hpp"
+
 namespace gfx {
 
 namespace d3d12 {
@@ -83,6 +85,12 @@ void illuminanceDraw(const IScene& scene, rp::Protocol protocol, Shader& shader,
     case rp::Protocol::PhongInstancingNT:
         illuminanceDrawImpl<rp::PhongInstancingNT>(scene, static_cast<PhongShaderNT&>(shader), ctx);
         break;
+    case rp::Protocol::PhongInstancingShadowed:
+        illuminanceDrawImpl<rp::PhongInstancingShadowed>(scene, static_cast<PhongShadowedShader&>(shader), ctx);
+        break;
+
+    default:
+        throw GFX_EXCEPT("[Description] shader doesn't implements draw method of given protocol.");
     }
 }
 

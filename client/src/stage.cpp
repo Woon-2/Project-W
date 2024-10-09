@@ -35,7 +35,7 @@ void Stage::render(gfx::ICore& core, gfx::IRenderTarget& target) {
 
     auto scene = gfx::d3d12::CameraScene(camera_);
 
-    scene.addLights( gfx::rp::Protocol::PhongInstancing,
+    scene.addLights( gfx::rp::Protocol::PhongInstancingShadowed,
         lights_ | std::views::transform( [](const auto& light) {
             return std::any{ &light };
         } )
@@ -46,8 +46,7 @@ void Stage::render(gfx::ICore& core, gfx::IRenderTarget& target) {
 
     auto worlds = std::vector<mu::Mat4x4>();
     auto fragments = pSystems_->fragmentizer.fragmentize(worlds);
-
-    scene.addFragments( gfx::rp::Protocol::PhongInstancing,
+    scene.addFragments( gfx::rp::Protocol::PhongInstancingShadowed,
         fragments
     );
     scene.addFragments( gfx::rp::Protocol::ShadowMapGen,
@@ -114,7 +113,7 @@ void Stage::initLights() {
         .diffuse = dx::XMFLOAT4{ 0.54f, 0.56f, 0.58f, 1.f },
         .specular = dx::XMFLOAT4{ 0.25f, 0.25f, 0.25f, 1.f },
         .falloff = 1.f,
-        .dirV = dx::XMFLOAT3{ -0.1f, -0.6f, 0.4f },
+        .dirV = dx::XMFLOAT3{ -0.0f, -0.9f, -0.4f },
         .type = gfx::d3d12::sr::PhongLight::kTypeDirectional
     } );
 

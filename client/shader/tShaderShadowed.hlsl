@@ -32,6 +32,13 @@ struct VS_OUTPUT {
     nointerpolation uint instID : INSTID;
 };
 
+static matrix gMtxTexture = {
+    0.5f, 0.f, 0.f, 0.f,
+    0.f, -0.5f, 0.f, 0.f,
+    0.f, 0.f, 1.f, 0.f,
+    0.5f, 0.5f, 0.f, 1.f
+};
+
 VS_OUTPUT VSMain(VS_INPUT input) {
     VS_OUTPUT output;
     output.pos = mul( float4(input.pos, 1.f),
@@ -45,13 +52,16 @@ VS_OUTPUT VSMain(VS_INPUT input) {
     );
     output.tex = input.tex;
     output.instID = input.instID;
-    output.shadowPos = mul( float4(output.posV, 1.f), gView2LightProj );
+    output.shadowPos = mul( mul( float4(output.posV, 1.f), gView2LightProj ), gMtxTexture );
 
     return output;
 }
 
 float4 PSMain(VS_OUTPUT input) : SV_TARGET {
     float3 normalV = normalize(input.normalV);
-    float shadowed = gTex2DLUT[gShadowMapIdx].SampleCmpLevelZero(gShadowSampler, input.shadowPos.xy, input.shadowPos.z);
+    input.shadowPos.xy /= input.shadowPos.ww;
+    float shadowed = gTex2DLUT[gShadowMapIdx].SampleCmpLevelZero(
+        gShadowSampler, input.shadowPos.xy, input.shadowPos.z / input.shadowPos.w
+    );
     return Lighting(input.posV, normalV, input.tex) * shadowed;
 }

@@ -21,6 +21,9 @@ namespace {
         requires std::same_as<RenderProtocol, rp::ShadowMapGen>
     Generator<DrawInfo> iterationImpl(const auto& fragments, const mu::Mat4x4& view2LightProj, const mu::Mat4x4& view, const mu::Mat4x4& proj);
     template <class RenderProtocol>
+        requires std::same_as<RenderProtocol, rp::PhongInstancingShadowed>
+    Generator<DrawInfo> iterationImpl(const auto& lights, const auto& fragments, const mu::Mat4x4& view2LightProj, const mu::Mat4x4& view, const mu::Mat4x4& proj);
+    template <class RenderProtocol>
         requires std::same_as<RenderProtocol, rp::ShadowMapGen>
     Generator<DrawInfo> fragmentIteration(const auto& fragment, const mu::Mat4x4& view, const mu::Mat4x4& proj, auto& baseInstIdx);
 
@@ -31,6 +34,7 @@ namespace {
     rp::PhongInstancing::PIDType genPID(rp::PhongInstancing, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj);
     rp::PhongInstancingNT::PIDType genPID(rp::PhongInstancingNT, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj);
     rp::ShadowMapGen::PIDType genPID(rp::ShadowMapGen, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj);
+    rp::PhongInstancingShadowed::PIDType genPID(rp::PhongInstancingShadowed, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj);
 
     template <rp::PFUnified RenderProtocol>
     Generator<DrawInfo> iterationImpl(const auto& lights, const auto& fragments, const mu::Mat4x4& view, const mu::Mat4x4& proj) {
@@ -62,6 +66,53 @@ namespace {
         pfdInfo.set(RenderProtocol::PFDIdx, PFDType {
             .globalAmbientLight = { 0.1f, 0.1f, 0.1f, 1.f } // ,
             // .lightCnt = static_cast<std::uint32_t>( lights.size() )
+        } );
+
+        co_yield std::move(pfdInfo);
+
+        auto baseInstIdx = 0u;
+
+        for (const auto& fragment : fragments) {
+            auto fi = fragmentIteration<RenderProtocol>(fragment, view, proj, baseInstIdx);
+            for (auto& drawInfo : fi) {
+                co_yield std::move(drawInfo);
+            }
+        }
+    }
+
+    template <class RenderProtocol>
+        requires std::same_as<RenderProtocol, rp::PhongInstancingShadowed>
+    Generator<DrawInfo> iterationImpl(const auto& lights, const auto& fragments, const mu::Mat4x4& view2LightProj, const mu::Mat4x4& view, const mu::Mat4x4& proj) {
+        // As it is expected to be not too many lights,
+        // store seperated light or material's pointers in a vector
+        // which gives more light or material management flexibility.
+
+        using LightType = RenderProtocol::LightType;
+        using FLightType = RenderProtocol::FLightType;
+
+        auto lightInfo = DrawInfo();
+
+        auto tmpLightBuffer = FLightType();
+        std::ranges::copy(lights | std::views::transform(
+            [](const auto& pAnyLight) { return *std::any_cast<const LightType*>(pAnyLight); }
+        ), std::back_inserter(tmpLightBuffer));
+
+        lightInfo.set(RenderProtocol::typeIdx, rp::DIType::Light);
+        lightInfo.set(RenderProtocol::lightIdx, std::move(tmpLightBuffer));
+
+        co_yield std::move(lightInfo);
+
+        using PFDType = RenderProtocol::PFDType;
+        using FPFDType = RenderProtocol::FPFDType;
+
+        auto pfdInfo = DrawInfo();
+
+        pfdInfo.set(RenderProtocol::typeIdx, rp::DIType::PFD);
+        pfdInfo.set(RenderProtocol::PFDIdx, PFDType{
+            .view2LightProj = mu::transpose( view2LightProj ).getXmf(),
+            .globalAmbientLight = { 0.1f, 0.1f, 0.1f, 1.f }, // ,
+            // .lightCnt = static_cast<std::uint32_t>( lights.size() )
+            .shadowMapIdx = 0u
         } );
 
         co_yield std::move(pfdInfo);
@@ -200,7 +251,7 @@ namespace {
             .wv = mu::transpose(world * view).getXmf(),
             .wvp = mu::transpose(world * view * proj).getXmf(),
             .normalXform = dx::convertMat<dx::XMFLOAT3X3>(
-                mu::transpose(mu::inverse(world)).get()
+                mu::inverse(world * view).get()
             )
         };
     }
@@ -210,7 +261,17 @@ namespace {
             .wv = mu::transpose(world * view).getXmf(),
             .wvp = mu::transpose(world * view * proj).getXmf(),
             .normalXform = dx::convertMat<dx::XMFLOAT3X3>(
-                mu::transpose(mu::inverse(world)).get()
+                mu::inverse(world * view).get()
+            )
+        };
+    }
+
+    rp::PhongInstancingShadowed::PIDType genPID(rp::PhongInstancingShadowed, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj) {
+        return rp::PhongInstancingShadowed::PIDType{
+            .wv = mu::transpose(world * view).getXmf(),
+            .wvp = mu::transpose(world * view * proj).getXmf(),
+            .normalXform = dx::convertMat<dx::XMFLOAT3X3>(
+                mu::inverse(world * view).get()
             )
         };
     }
@@ -268,6 +329,16 @@ Generator<DrawInfo> CameraScene::iteration(rp::Protocol protocol) const {
     case rp::Protocol::ShadowMapGen: {
         auto coro = iterationImpl<rp::ShadowMapGen>(
             *pArgFragmentsMap, makeView2LightProj(), view(), proj()
+        );
+        for (auto& drawInfo : coro) {
+            co_yield std::move(drawInfo);
+        }
+        break;
+    }
+
+    case rp::Protocol::PhongInstancingShadowed: {
+        auto coro = iterationImpl<rp::PhongInstancingShadowed>(
+            *pArgLightsMap, *pArgFragmentsMap, makeView2LightProj(), view(), proj()
         );
         for (auto& drawInfo : coro) {
             co_yield std::move(drawInfo);

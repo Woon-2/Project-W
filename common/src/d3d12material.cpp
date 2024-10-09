@@ -49,6 +49,8 @@ std::any Material::as(rp::Protocol protocol) const {
         return asPhongInstancingNT();
     case rp::Protocol::PhongInstancing:
         return asPhongInstancing();
+    case rp::Protocol::PhongInstancingShadowed:
+        return asPhongInstancing();
     default:
         throw std::runtime_error("Undefined protocol");
     }
