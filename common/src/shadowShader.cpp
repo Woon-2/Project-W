@@ -8,6 +8,21 @@ namespace d3d12 {
 
 ShadowShader::ShadowShader(Core &core, const Config &config, std::size_t duplicationCnt) 
     : Shader(),
+    shadowMap_( core, D3D12_RESOURCE_DESC{
+        .Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+        .Alignment = 0u,
+        .Width = config.shadowMapWidth,
+        .Height = config.shadowMapHeight,
+        .DepthOrArraySize = 1,
+        .MipLevels = 1,
+        .Format = DXGI_FORMAT_D32_FLOAT,
+        .SampleDesc = DXGI_SAMPLE_DESC{
+            .Count = 1,
+            .Quality = 0
+        },
+        .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+        .Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
+    } ),
     internalResArr_(3, std::ranges::range_value_t<decltype(internalResArr_)>(duplicationCnt)),
     resPerFrameData_(core, sizeof(d3d12::sr::BasicPFD), internalResArr_[0], duplicationCnt),
     resPerDrawcallData_(core, sizeof(d3d12::sr::PDDPhong), internalResArr_[1], duplicationCnt),
@@ -17,6 +32,9 @@ ShadowShader::ShadowShader(Core &core, const Config &config, std::size_t duplica
     if ( !core.hasDescRange(rp::ShadowMapGen::DescRangeIDShadowTex) ) {
         throw GFX_EXCEPT("[Description] Shadow map descriptor range not found.");
     }
+
+    // shadowMap_.makeDsv(/* ... */);
+    // shadowMap_.makeSrv(/* ... */);
 
     // pushInputLayout( gfx::makeInputLayoutPreset(gfx::InputLayoutPreset::TexDiffuse) );
     pushProtocol(rp::Protocol::ShadowMapGen);

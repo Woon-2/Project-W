@@ -10,6 +10,7 @@
 #include "d3d12InputLayoutPresets.hpp"
 
 #include <vector>
+#include <cstdint>
 
 namespace gfx {
 
@@ -20,7 +21,9 @@ public:
     static constexpr std::size_t defMaxInstCnt = 1000u;
 
     struct Config {
-        size_t maxInstCnt = defMaxInstCnt;
+        std::uint32_t shadowMapWidth;
+        std::uint32_t shadowMapHeight;
+        std::size_t maxInstCnt = defMaxInstCnt;
     };
 
     ShadowShader(Core& core, const Config& config = Config{}, std::size_t duplicationCnt = 1u);
