@@ -110,6 +110,62 @@ void PhongShader::draw( IRenderContext& ctx, const IScene& scene,
     d3d12::illuminanceDraw( scene, protocol, *this, static_cast<D3D12RenderContext&>(ctx) );
 }
 
+PhongShadowedShader::PhongShadowedShader( Core &core,
+    const Config &config, std::size_t duplicationCnt
+)  : Shader(),
+    internalResArr_(4, std::ranges::range_value_t<decltype(internalResArr_)>(duplicationCnt)),
+    resPerFrameData_(core, sizeof(d3d12::sr::BasicPFD), internalResArr_[0], duplicationCnt),
+    resPerDrawcallData_(core, sizeof(d3d12::sr::PDDPhong), internalResArr_[1], duplicationCnt),
+    resPerInstanceData_(core, sizeof(d3d12::sr::BasicPID) * config.maxInstCnt, internalResArr_[2], duplicationCnt),
+    resLights_(core, sizeof(d3d12::sr::PhongLight) * config.maxLightCnt, internalResArr_[3], duplicationCnt),
+    srvHeapStart_(core.descHeapCbvSrvUav().gpuStart()),
+    maxInstances_(config.maxInstCnt),
+    maxLights_(config.maxLightCnt) {
+    if ( !core.hasDescRange(rp::PhongInstancing::DescRangeIDTex2D) ) {
+        throw GFX_EXCEPT("[Description] Texture2D descriptor range not found.");
+    }
+
+    pushInputLayout( gfx::makeInputLayoutPreset(gfx::InputLayoutPreset::TexDiffuse) );
+    pushProtocol(rp::Protocol::PhongInstancingShadowed);
+
+    auto builder = SimpleShaderBuilder();
+    builder.code(Type::Vertex, loadCSO(compiledShaderPath / "tShaderShadowed_vs.cso"));
+    builder.code(Type::Pixel, loadCSO(compiledShaderPath / "tShaderShadowed_ps.cso"));
+
+    auto pRoot = core.root(rootName());
+    auto pDevice = static_cast<ID3D12Device*>(DeviceFetcher::device(core));
+
+    builder.setRoot(pRoot).build(pDevice, *this, 0u);
+}
+
+void PhongShadowedShader::setRootParams(ID3D12GraphicsCommandList* pCmdList, size_t frameIdx) const {
+    // temporary
+    pCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootShaderResourceView(
+        0u, resPerInstanceData_.gpuAddress(frameIdx)
+    ) );
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootDescriptorTable(
+        1u, srvHeapStart_
+    ) );
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootShaderResourceView(
+        2u, resLights_.gpuAddress(frameIdx)
+    ) );
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootConstantBufferView(
+        3u, resPerDrawcallData_.gpuAddress(frameIdx)
+    ) );
+    DX_THROW_FAILED_VOID( pCmdList->SetGraphicsRootConstantBufferView(
+        4u, resPerFrameData_.gpuAddress(frameIdx)
+    ) );
+}
+
+void PhongShadowedShader::draw( IRenderContext& ctx, const IScene& scene,
+    IRenderTarget& target, rp::Protocol protocol
+) {
+    defPreDraw(ctx, scene, target, protocol);
+    d3d12::illuminanceDraw( scene, protocol, *this, static_cast<D3D12RenderContext&>(ctx) );
+}
+
 }   // namespace gfx::d3d12
 
 }   // namespace gfx

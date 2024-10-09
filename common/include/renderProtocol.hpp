@@ -132,6 +132,29 @@ struct PhongInstancing {
     using FMaterialType = MaterialType;
 };
 
+struct PhongInstancingShadowed {
+    static constexpr Protocol protocol = Protocol::PhongInstancingShadowed;
+    static constexpr std::size_t typeIdx = 0u;
+    static constexpr std::size_t meshIdx = 1u;
+    static constexpr std::size_t PIDIdx = 2u;
+    static constexpr std::size_t PDDIdx = 3u;
+    static constexpr std::size_t PFDIdx = 4u;
+    static constexpr std::size_t lightIdx = 5u;
+    static constexpr std::size_t materialIdx = 6u;
+
+    using PIDType = d3d12::sr::BasicPID;
+    using PDDType = d3d12::sr::PDDPhong;
+    using PFDType = d3d12::sr::BasicPFDShadowed;
+    using LightType = d3d12::sr::PhongLight;
+    using MaterialType = d3d12::sr::PhongMaterial;
+
+    using FPIDType = std::vector<PIDType>;
+    using FPDDType = PDDType;
+    using FPFDType = PFDType;
+    using FLightType = std::vector<LightType>;
+    using FMaterialType = MaterialType;
+};
+
 struct ShadowMapGen {
     static constexpr Protocol protocol = Protocol::ShadowMapGen;
     static constexpr std::size_t typeIdx = 0u;

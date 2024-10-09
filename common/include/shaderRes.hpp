@@ -61,6 +61,13 @@ struct PDDNTPhong {
     std::uint32_t padding[3];
 };
 
+struct BasicPFDShadowed {
+    dx::XMFLOAT4X4 view2LightProj;
+    dx::XMFLOAT4 globalAmbientLight;
+    std::uint32_t lightCnt;
+    std::uint32_t shadowMapIdx;
+};
+
 struct PFDShadow {
     dx::XMFLOAT4X4 view2LightProj;
 };
