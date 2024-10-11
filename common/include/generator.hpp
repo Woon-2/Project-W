@@ -95,8 +95,8 @@ struct Generator<T>::Promise {
 
 	void return_void() noexcept {}
 
-	void unhandled_exception() noexcept {
-		stored_ = std::current_exception();
+	void unhandled_exception() {
+		throw;
 	}
 
 	std::variant<std::monostate, T, std::exception_ptr> stored_;
@@ -109,7 +109,7 @@ template <class T>
 		if (std::holds_alternative<std::exception_ptr>(
 			h_.promise().stored_
 		)) [[unlikely]] {
-			std::rethrow_exception(h_.promise().stored_);
+			std::rethrow_exception( std::get<std::exception_ptr>( h_.promise().stored_ ) );
 		}
 	}
 
