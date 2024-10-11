@@ -31,10 +31,17 @@ namespace {
     Generator<DrawInfo> iterationImpl(const auto& lights, const auto& fragments, const mu::Mat4x4& view, const mu::Mat4x4& proj);
     template <rp::PFUnified RenderProtocol>
     Generator<DrawInfo> fragmentIteration(const auto& fragment, const mu::Mat4x4& view, const mu::Mat4x4& proj, auto& baseInstIdx);
-    rp::PhongInstancing::PIDType genPID(rp::PhongInstancing, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj);
-    rp::PhongInstancingNT::PIDType genPID(rp::PhongInstancingNT, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj);
-    rp::ShadowMapGen::PIDType genPID(rp::ShadowMapGen, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj);
-    rp::PhongInstancingShadowed::PIDType genPID(rp::PhongInstancingShadowed, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj);
+    template <rp::PFUnified RenderProtocol>
+    typename RenderProtocol::FLightType genLights(const auto& lights);
+    template <rp::PFUnified RenderProtocol>
+    typename RenderProtocol::FPFDType genPFD(const auto& lights);
+    template <class RenderProtocol>
+        requires std::same_as<RenderProtocol, rp::ShadowMapGen>
+    typename RenderProtocol::FPIDType genPID(const auto& worlds, const mu::Mat4x4& view, const mu::Mat4x4& proj);
+    template <rp::PFUnified RenderProtocol>
+    typename RenderProtocol::FPIDType genPID(const auto& worlds, const mu::Mat4x4& view, const mu::Mat4x4& proj);
+    template <rp::PFUnified RenderProtocol>
+    typename RenderProtocol::FPDDType genPDD(const auto* pMaterial, auto& baseInstIdx);
 
     template <rp::PFUnified RenderProtocol>
     Generator<DrawInfo> iterationImpl(const auto& lights, const auto& fragments, const mu::Mat4x4& view, const mu::Mat4x4& proj) {
@@ -42,18 +49,10 @@ namespace {
         // store seperated light or material's pointers in a vector
         // which gives more light or material management flexibility.
 
-        using LightType = RenderProtocol::LightType;
-        using FLightType = RenderProtocol::FLightType;
-
         auto lightInfo = DrawInfo();
 
-        auto tmpLightBuffer = FLightType();
-        std::ranges::copy( lights | std::views::transform(
-            [](const auto& pAnyLight) { return *std::any_cast<const LightType*>(pAnyLight); }
-        ), std::back_inserter(tmpLightBuffer) );
-
         lightInfo.set(RenderProtocol::typeIdx, rp::DIType::Light);
-        lightInfo.set(RenderProtocol::lightIdx, std::move(tmpLightBuffer));
+        lightInfo.set(RenderProtocol::lightIdx, genLights<RenderProtocol>(lights));
 
         co_yield std::move(lightInfo);
 
@@ -63,10 +62,7 @@ namespace {
         auto pfdInfo = DrawInfo();
 
         pfdInfo.set(RenderProtocol::typeIdx, rp::DIType::PFD);
-        pfdInfo.set(RenderProtocol::PFDIdx, PFDType {
-            .globalAmbientLight = { 0.1f, 0.1f, 0.1f, 1.f } // ,
-            // .lightCnt = static_cast<std::uint32_t>( lights.size() )
-        } );
+        pfdInfo.set(RenderProtocol::PFDIdx, genPFD<RenderProtocol>(lights));
 
         co_yield std::move(pfdInfo);
 
@@ -92,13 +88,8 @@ namespace {
 
         auto lightInfo = DrawInfo();
 
-        auto tmpLightBuffer = FLightType();
-        std::ranges::copy(lights | std::views::transform(
-            [](const auto& pAnyLight) { return *std::any_cast<const LightType*>(pAnyLight); }
-        ), std::back_inserter(tmpLightBuffer));
-
         lightInfo.set(RenderProtocol::typeIdx, rp::DIType::Light);
-        lightInfo.set(RenderProtocol::lightIdx, std::move(tmpLightBuffer));
+        lightInfo.set(RenderProtocol::lightIdx, genLights<RenderProtocol>(lights));
 
         co_yield std::move(lightInfo);
 
@@ -136,24 +127,10 @@ namespace {
 
         co_yield std::move(meshInfo);
 
-        using PIDType = RenderProtocol::PIDType;
-        using FPIDType = RenderProtocol::FPIDType;
-
         auto pidInfo = DrawInfo();
 
-        auto pidBuffer = FPIDType();
-        // replace reserve with reserve_if_possible later
-        // to support various type of containers
-        pidBuffer.reserve( fragment.worlds.size() );
-
-        std::ranges::copy( fragment.worlds | std::views::transform(
-            [&view, &proj](const auto& world) {
-                return genPID(RenderProtocol{}, world, view, proj);
-            }
-        ), std::back_inserter(pidBuffer) );
-
         pidInfo.set(RenderProtocol::typeIdx, rp::DIType::PID);
-        pidInfo.set(RenderProtocol::PIDIdx, std::move(pidBuffer));
+        pidInfo.set(RenderProtocol::PIDIdx, genPID<RenderProtocol>(fragment.worlds, view, proj));
 
         co_yield std::move(pidInfo);
 
@@ -163,12 +140,7 @@ namespace {
         auto pddInfo = DrawInfo();
 
         pddInfo.set(RenderProtocol::typeIdx, rp::DIType::PDD);
-        pddInfo.set(RenderProtocol::PDDIdx, FPDDType{
-            .material = std::any_cast<typename RenderProtocol::FMaterialType>(
-                fragment.pMaterial->as(RenderProtocol::protocol)
-            ),
-            .instanceIndex = baseInstIdx
-        } );
+        pddInfo.set(RenderProtocol::PDDIdx, genPDD<RenderProtocol>(fragment.pMaterial, baseInstIdx));
         
         baseInstIdx += static_cast<std::uint32_t>( fragment.worlds.size() );
 
@@ -215,19 +187,8 @@ namespace {
 
         auto pidInfo = DrawInfo();
 
-        auto pidBuffer = FPIDType();
-        // replace reserve with reserve_if_possible later
-        // to support various type of containers
-        pidBuffer.reserve( fragment.worlds.size() );
-
-        std::ranges::copy( fragment.worlds | std::views::transform(
-            [&view, &proj](const auto& world) {
-                return genPID(RenderProtocol{}, world, view, proj);
-            }
-        ), std::back_inserter(pidBuffer) );
-
         pidInfo.set(RenderProtocol::typeIdx, rp::DIType::PID);
-        pidInfo.set(RenderProtocol::PIDIdx, std::move(pidBuffer));
+        pidInfo.set(RenderProtocol::PIDIdx, genPID<RenderProtocol>(fragment.worlds, view, proj));
 
         co_yield std::move(pidInfo);
 
@@ -246,40 +207,89 @@ namespace {
         co_yield std::move(pddInfo);
     }
 
-    rp::PhongInstancing::PIDType genPID(rp::PhongInstancing, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj) {
-        return rp::PhongInstancing::PIDType{
-            .wv = mu::transpose(world * view).getXmf(),
-            .wvp = mu::transpose(world * view * proj).getXmf(),
-            .normalXform = dx::convertMat<dx::XMFLOAT3X3>(
-                mu::inverse(world * view).get()
-            )
+    template <rp::PFUnified RenderProtocol>
+    typename RenderProtocol::FLightType genLights(const auto& lights) {
+        using LightType = RenderProtocol::LightType;
+        using FLightType = RenderProtocol::FLightType;
+
+        auto lightBuffer = FLightType();
+        lightBuffer.reserve( lights.size() );
+
+        std::ranges::copy( lights | std::views::transform(
+            [](const auto& pAnyLight) { return *std::any_cast<const LightType*>(pAnyLight); }
+        ), std::back_inserter(lightBuffer) );
+
+        return lightBuffer;
+    }
+
+    template <rp::PFUnified RenderProtocol>
+    typename RenderProtocol::FPFDType genPFD(const auto& lights) {
+        using FPFDType = RenderProtocol::FPFDType;
+
+        return FPFDType{
+            .globalAmbientLight = { 0.1f, 0.1f, 0.1f, 1.f },
+            // .lightCnt = static_cast<std::uint32_t>( lights.size() )
         };
     }
 
-    rp::PhongInstancingNT::PIDType genPID(rp::PhongInstancingNT, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj) {
-        return rp::PhongInstancingNT::PIDType{
-            .wv = mu::transpose(world * view).getXmf(),
-            .wvp = mu::transpose(world * view * proj).getXmf(),
-            .normalXform = dx::convertMat<dx::XMFLOAT3X3>(
-                mu::inverse(world * view).get()
-            )
-        };
+    template <class RenderProtocol>
+        requires std::same_as<RenderProtocol, rp::ShadowMapGen>
+    typename RenderProtocol::FPIDType genPID(const auto& worlds, const mu::Mat4x4& view, const mu::Mat4x4& proj) {
+        using PIDType = RenderProtocol::PIDType;
+        using FPIDType = RenderProtocol::FPIDType;
+
+        auto pidBuffer = FPIDType();
+        // replace reserve with reserve_if_possible later
+        // to support various type of containers
+        pidBuffer.reserve( worlds.size() );
+
+        std::ranges::copy( worlds | std::views::transform(
+            [&view, &proj](const auto& world) {
+                return PIDType{
+                    .wv = mu::transpose( world * view ).getXmf(),
+                    .wvp = mu::transpose( world * view * proj ).getXmf()
+                };
+            }
+        ), std::back_inserter(pidBuffer) );
+
+        return pidBuffer;
     }
 
-    rp::PhongInstancingShadowed::PIDType genPID(rp::PhongInstancingShadowed, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj) {
-        return rp::PhongInstancingShadowed::PIDType{
-            .wv = mu::transpose(world * view).getXmf(),
-            .wvp = mu::transpose(world * view * proj).getXmf(),
-            .normalXform = dx::convertMat<dx::XMFLOAT3X3>(
-                mu::inverse(world * view).get()
-            )
-        };
+    template <rp::PFUnified RenderProtocol>
+    typename RenderProtocol::FPIDType genPID(const auto& worlds, const mu::Mat4x4& view, const mu::Mat4x4& proj) {
+        using PIDType = RenderProtocol::PIDType;
+        using FPIDType = RenderProtocol::FPIDType;
+
+        auto pidBuffer = FPIDType();
+        // replace reserve with reserve_if_possible later
+        // to support various type of containers
+        pidBuffer.reserve( worlds.size() );
+
+        std::ranges::copy( worlds | std::views::transform(
+            [&view, &proj](const auto& world) {
+                return PIDType{
+                    .wv = mu::transpose( world * view ).getXmf(),
+                    .wvp = mu::transpose( world * view * proj ).getXmf(),
+                    .normalXform = dx::convertMat<dx::XMFLOAT3X3>(
+                        mu::inverse(world * view).get()
+                    )
+                };
+            }
+        ), std::back_inserter(pidBuffer) );
+
+        return pidBuffer;
     }
 
-    rp::ShadowMapGen::PIDType genPID(rp::ShadowMapGen, const mu::Mat4x4& world, const mu::Mat4x4& view, const mu::Mat4x4& proj) {
-        return rp::ShadowMapGen::PIDType{
-            .wv = mu::transpose(world * view).getXmf(),
-            .wvp = mu::transpose(world * view * proj).getXmf()
+    template <rp::PFUnified RenderProtocol>
+    typename RenderProtocol::FPDDType genPDD(const auto* pMaterial, auto& baseInstIdx) {
+        using PDDType = RenderProtocol::PDDType;
+        using FPDDType = RenderProtocol::FPDDType;
+
+        return FPDDType{
+            .material = std::any_cast<typename RenderProtocol::FMaterialType>(
+                pMaterial->as(RenderProtocol::protocol)
+            ),
+            .instanceIndex = baseInstIdx
         };
     }
 
