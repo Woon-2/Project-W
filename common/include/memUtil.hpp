@@ -70,4 +70,9 @@ private:
     std::size_t alignment_;
 };
 
+template <std::size_t N>
+struct RawMemory {
+	std::uint8_t data[N];
+};
+
 #endif // __AlignMem_HPP
