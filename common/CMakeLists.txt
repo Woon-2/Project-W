@@ -145,7 +145,7 @@ target_link_libraries(input
 
 # === memory ===
 add_library(mem
-    src/alignMem.cpp include/alignMem.hpp
+    src/memUtil.cpp include/memUtil.hpp
 )
 
 add_library(common::mem ALIAS mem)
@@ -199,6 +199,8 @@ add_library(gfx
     src/d3d12Descriptor.cpp include/d3d12Descriptor.hpp
     src/d3d12SpecialRenderTargets.cpp include/d3d12SpecialRenderTargets.hpp
     src/shadowShader.cpp include/shadowShader.hpp
+    src/d3d12Low.cpp include/d3d12Low.hpp
+    src/d3d12ResourceXX.cpp include/d3d12ResourceXX.hpp
     
     include/dxtarget.hpp
     include/gfxPrimitive.hpp
