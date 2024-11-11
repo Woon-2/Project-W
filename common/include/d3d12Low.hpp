@@ -360,9 +360,6 @@ public:
 		D3D12_HEAP_TYPE heapType
 	);
 
-	D3D12Resource(const D3D12Resource& other) = delete;
-	D3D12Resource& operator=(const D3D12Resource& other) = delete;
-
 	void init( const wrl::ComPtr<InterfaceType>& src,
 		D3D12_RESOURCE_STATES initialState
 	) {
