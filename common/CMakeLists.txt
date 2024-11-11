@@ -201,6 +201,7 @@ add_library(gfx
     src/shadowShader.cpp include/shadowShader.hpp
     src/d3d12Low.cpp include/d3d12Low.hpp
     src/d3d12ResourceXX.cpp include/d3d12ResourceXX.hpp
+    src/d3d12ShaderXX.cpp include/d3d12ShaderXX.hpp
     
     include/dxtarget.hpp
     include/gfxPrimitive.hpp
