@@ -303,6 +303,8 @@ RefModel& RefModel::operator=(RefModel&& other) noexcept {
         node.children_.clear();
         node.pRefModel_ = nullptr;
     }
+
+    return *this;
 }
 
 void Model::Node::addMesh(Mesh&& mesh) {

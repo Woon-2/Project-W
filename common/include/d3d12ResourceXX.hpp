@@ -257,6 +257,8 @@ public:
         std::uint32_t resourceIdx;
         std::uint32_t arrayIdx;
         std::uint32_t padding;
+
+        auto operator<=>(const MapRef&) const = default;
     };
 
     Material();
@@ -354,13 +356,9 @@ private:
     std::size_t size_;
 };
 
-enum class RenderPassID {
-
-};
-
 struct MaterialMapKey {
     std::string state;
-    RenderPassID renderPassID;
+    std::string renderPassID;
 };
 
 auto operator<=>(const MaterialMapKey& lhs, const MaterialMapKey& rhs) {
@@ -507,11 +505,11 @@ public:
         materialTable_[key] = pMaterial;
     }
 
-    Material& material(RenderPassID renderPass) {
+    Material& material(const std::string& renderPass) {
         return *materialTable_.at(MaterialMapKey{ .state = state_, .renderPassID = renderPass });
     }
 
-    const Material& material(RenderPassID renderPass) const {
+    const Material& material(const std::string& renderPass) const {
         return *materialTable_.at(MaterialMapKey{ .state = state_, .renderPassID = renderPass });
     }
 
