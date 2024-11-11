@@ -230,6 +230,41 @@ void RefMesh::draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt) const {
     );
 }
 
+RefModel::Node::Node(const Node& other)
+    : coord_(other.coord_), meshes_(other.meshes_), children_(),
+    pRefModel_(other.pRefModel_) {}
+
+RefModel::Node::Node(Node&& other) noexcept
+    : coord_(std::move(other.coord_)), meshes_(std::move(other.meshes_)),
+    children_(std::move(other.children_)),
+    pRefModel_(std::exchange(other.pRefModel_, nullptr)) {}
+
+RefModel::Node& RefModel::Node::operator=(const Node& other) {
+    if (this == &other) {
+        return *this;
+    }
+
+    coord_ = other.coord_;
+    meshes_ = other.meshes_;
+    children_.clear();
+    pRefModel_ = other.pRefModel_;
+
+    return *this;
+}
+
+RefModel::Node& RefModel::Node::operator=(Node&& other) noexcept {
+    if (this == &other) {
+        return *this;
+    }
+
+    coord_ = std::move(other.coord_);
+    meshes_ = std::move(other.meshes_);
+    children_ = std::move(other.children_);
+    pRefModel_ = std::exchange(other.pRefModel_, nullptr);
+
+    return *this;
+}
+
 void RefModel::Node::addMesh(RefMesh&& mesh) {
     for (auto& [key, material] : mesh.materialMap()) {
         for (auto& mapRef : material.mapRefs()) {
@@ -269,6 +304,7 @@ RefModel::RefModel(RefModel&& other) noexcept
         auto& node = other.nodeStorage_[i];
         auto clone = Node(this);
         clone.meshes_ = std::move(node.meshes_);
+        clone.coord_.setLocalXform(node.coord_.localXform());
         for (auto pChild : node.children_) {
             clone.addChild(nodeStorage_.data() + (pChild - pOtherFirstNode));
         }
@@ -295,6 +331,7 @@ RefModel& RefModel::operator=(RefModel&& other) noexcept {
         auto& node = other.nodeStorage_[i];
         auto clone = Node(this);
         clone.meshes_ = std::move(node.meshes_);
+        clone.coord_.setLocalXform(node.coord_.localXform());
         for (auto pChild : node.children_) {
             clone.addChild(nodeStorage_.data() + (pChild - pOtherFirstNode));
         }
@@ -315,6 +352,102 @@ void Model::Node::addChild(Node* child) {
     child->pModel_ = pModel_;
     child->coord_.setParent(&coord_);
     children_.push_back(child);
+}
+
+Model::Model(const Model& other)
+    : nodeStorage_(other.nodeStorage_.size()),
+    state_(), pRoot_(nullptr) {
+    auto pOtherFirstNode = other.nodeStorage_.data();
+
+    pRoot_ = nodeStorage_.data() + (other.pRoot_ - pOtherFirstNode);
+
+    for (std::size_t i = 0; i < other.nodeStorage_.size(); ++i) {
+        auto& node = other.nodeStorage_[i];
+        auto clone = Node(this);
+        clone.meshes_ = node.meshes_;
+        clone.coord_.setLocalXform(node.coord_.localXform());
+        for (auto pChild : node.children_) {
+            clone.addChild(nodeStorage_.data() + (pChild - pOtherFirstNode));
+        }
+        nodeStorage_[i] = std::move(clone);
+    }
+}
+
+Model& Model::operator=(const Model& other) {
+    if (this == &other) {
+        return *this;
+    }
+
+    nodeStorage_.resize(other.nodeStorage_.size());
+    state_ = other.state_;
+
+    auto pOtherFirstNode = other.nodeStorage_.data();
+
+    pRoot_ = nodeStorage_.data() + (other.pRoot_ - pOtherFirstNode);
+
+    for (std::size_t i = 0; i < other.nodeStorage_.size(); ++i) {
+        auto& node = other.nodeStorage_[i];
+        auto clone = Node(this);
+        clone.meshes_ = node.meshes_;
+        clone.coord_.setLocalXform(node.coord_.localXform());
+        for (auto pChild : node.children_) {
+            clone.addChild(nodeStorage_.data() + (pChild - pOtherFirstNode));
+        }
+        nodeStorage_[i] = std::move(clone);
+    }
+
+    return *this;
+}
+
+Model::Model(Model&& other) noexcept
+    : nodeStorage_(other.nodeStorage_.size()),
+    state_(std::move(other.state_)), pRoot_(nullptr) {
+    auto pOtherFirstNode = other.nodeStorage_.data();
+
+    pRoot_ = nodeStorage_.data() + (other.pRoot_ - pOtherFirstNode);
+
+    for (std::size_t i = 0; i < other.nodeStorage_.size(); ++i) {
+        auto& node = other.nodeStorage_[i];
+        auto clone = Node(this);
+        clone.meshes_ = std::move(node.meshes_);
+        clone.coord_.setLocalXform(node.coord_.localXform());
+        for (auto pChild : node.children_) {
+            clone.addChild(nodeStorage_.data() + (pChild - pOtherFirstNode));
+        }
+        nodeStorage_[i] = std::move(clone);
+
+        node.children_.clear();
+        node.pModel_ = nullptr;
+    }
+}
+
+Model& Model::operator=(Model&& other) noexcept {
+    if (this == &other) {
+        return *this;
+    }
+
+    nodeStorage_.resize(other.nodeStorage_.size());
+
+    auto pOtherFirstNode = other.nodeStorage_.data();
+
+    pRoot_ = nodeStorage_.data() + (other.pRoot_ - pOtherFirstNode);
+    state_ = std::move(other.state_);
+
+    for (std::size_t i = 0; i < other.nodeStorage_.size(); ++i) {
+        auto& node = other.nodeStorage_[i];
+        auto clone = Node(this);
+        clone.meshes_ = std::move(node.meshes_);
+        clone.coord_.setLocalXform(node.coord_.localXform());
+        for (auto pChild : node.children_) {
+            clone.addChild(nodeStorage_.data() + (pChild - pOtherFirstNode));
+        }
+        nodeStorage_[i] = std::move(clone);
+
+        node.children_.clear();
+        node.pModel_ = nullptr;
+    }
+
+    return *this;
 }
 
 

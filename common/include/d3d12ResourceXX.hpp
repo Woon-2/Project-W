@@ -439,6 +439,12 @@ public:
         friend class RefModel;
         Node(const RefModel* pRefModel = nullptr)
             : coord_(), meshes_(), children_(), pRefModel_(pRefModel) {}
+        ~Node() = default;
+        Node(const Node& other);
+        Node(Node&& other) noexcept;
+        Node& operator=(const Node& other);
+        Node& operator=(Node&& other) noexcept;
+
         void addMesh(RefMesh&& mesh);
         void addChild(Node* child);
         auto& coord() noexcept { return coord_; }
@@ -455,6 +461,7 @@ public:
         const StaticTextureStorage& sts
     );
 
+    ~RefModel() = default;
     RefModel(const RefModel& other) = delete;
     RefModel(RefModel&& other) noexcept;
     RefModel& operator=(const RefModel& other) = delete;
@@ -552,6 +559,12 @@ public:
         std::vector<Node*> children_;
         const Model* pModel_;
     };
+
+    ~Model() = default;
+    Model(const Model& other);
+    Model(Model&& other) noexcept;
+    Model& operator=(const Model& other);
+    Model& operator=(Model&& other) noexcept;
 
     auto& nodes() noexcept { return nodeStorage_; }
     const auto& nodes() const noexcept { return nodeStorage_; }
