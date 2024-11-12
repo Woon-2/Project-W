@@ -30,8 +30,6 @@ endfunction()
 function(compile_hlsl INPUT_HLSL_FILE OUTPUT_CSO_FILE SHADER_TYPE ENTRY_POINT)
     find_hlsl_compiler()
 
-    message(STATUS "ADDITIONAL ARGS: ${ARGN}")
-
     add_custom_command(
         OUTPUT "${OUTPUT_CSO_FILE}"
         COMMAND "${HLSL_COMPILER}" ${ARGN} /E "${ENTRY_POINT}" /T "${SHADER_TYPE}" /Fo "${OUTPUT_CSO_FILE}" "${INPUT_HLSL_FILE}"
