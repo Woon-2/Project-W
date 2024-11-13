@@ -202,56 +202,19 @@ float3 spotLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 norm
 
 float4 illuminate(float3 posV, float3 normalV, float2 tex) {
     float4 albedo = material.albedoConstant * material.albedoConstantMapRatio;
-    if (material.albedoMapRef.x != uint(-1)) {
-        if (material.albedoMapRef.x == MAP_TYPE_TEXTURE2D) {
-            albedo = gTex2Ds[material.albedoMapRef.y].Sample(gSamplers[samplerIdx], tex);
-        } else if (material.albedoMapRef.x == MAP_TYPE_TEXTUREARRAY) {
-            albedo = gTex2DArrays[material.albedoMapRef.y].Sample(gSamplers[samplerIdx], float3(tex, material.albedoMapRef.z));
-        } else /* if (material.albedoMapRef.x == MAP_TYPE_TEXTURECUBE) */ {
-            // albedo = gTexCubes[material.albedoMapRef.y].Sample(...);
-        }
-    }
+    albedo += sampleFromMapRef(material.albedoMapRef, tex, samplerIdx) * (1.f - material.albedoConstantMapRatio);
+
     float roughness = material.roughnessConstant * material.roughnessConstantMapRatio;
-    if (material.roughnessMapRef.x != uint(-1)) {
-        if (material.roughnessMapRef.x == MAP_TYPE_TEXTURE2D) {
-            roughness = gTex2Ds[material.roughnessMapRef.y].Sample(gSamplers[samplerIdx], tex).r;
-        } else if (material.roughnessMapRef.x == MAP_TYPE_TEXTUREARRAY) {
-            roughness = gTex2DArrays[material.roughnessMapRef.y].Sample(gSamplers[samplerIdx], float3(tex, material.roughnessMapRef.z)).r;
-        } else /* if (material.roughnessMapRef.x == MAP_TYPE_TEXTURECUBE) */ {
-            // roughness = gTexCubes[material.roughnessMapRef.y].Sample(...);
-        }
-    }
+    roughness += sampleFromMapRef(material.roughnessMapRef, tex, samplerIdx).r * (1.f - material.roughnessConstantMapRatio);
+
     float metallic = material.metallicConstant * material.metallicConstantMapRatio;
-    if (material.metallicMapRef.x != uint(-1)) {
-        if (material.metallicMapRef.x == MAP_TYPE_TEXTURE2D) {
-            metallic = gTex2Ds[material.metallicMapRef.y].Sample(gSamplers[samplerIdx], tex).r;
-        } else if (material.metallicMapRef.x == MAP_TYPE_TEXTUREARRAY) {
-            metallic = gTex2DArrays[material.metallicMapRef.y].Sample(gSamplers[samplerIdx], float3(tex, material.metallicMapRef.z)).r;
-        } else /* if (material.metallicMapRef.x == MAP_TYPE_TEXTURECUBE) */ {
-            // metallic = gTexCubes[material.metallicMapRef.y].Sample(...);
-        }
-    }
+    metallic += sampleFromMapRef(material.metallicMapRef, tex, samplerIdx).r * (1.f - material.metallicConstantMapRatio);
+
     float ao = material.ambientOcclusionConstant * material.ambientOcclusionConstantMapRatio;
-    if (material.ambientOcclusionMapRef.x != uint(-1)) {
-        if (material.ambientOcclusionMapRef.x == MAP_TYPE_TEXTURE2D) {
-            ao = gTex2Ds[material.ambientOcclusionMapRef.y].Sample(gSamplers[samplerIdx], tex).r;
-        } else if (material.ambientOcclusionMapRef.x == MAP_TYPE_TEXTUREARRAY) {
-            ao = gTex2DArrays[material.ambientOcclusionMapRef.y].Sample(gSamplers[samplerIdx], float3(tex, material.ambientOcclusionMapRef.z)).r;
-        } else /* if (material.ambientOcclusionMapRef.x == MAP_TYPE_TEXTURECUBE) */ {
-            // ao = gTexCubes[material.ambientOcclusionMapRef.y].Sample(...);
-        }
-    }
+    ao += sampleFromMapRef(material.ambientOcclusionMapRef, tex, samplerIdx).r * (1.f - material.ambientOcclusionConstantMapRatio);
 
     float3 emmisive = material.emmisiveConstant * material.emmisiveConstantMapRatio;
-    if (material.emmisiveMapRef.x != uint(-1)) {
-        if (material.emmisiveMapRef.x == MAP_TYPE_TEXTURE2D) {
-            emmisive = gTex2Ds[material.emmisiveMapRef.y].Sample(gSamplers[samplerIdx], tex).rgb;
-        } else if (material.emmisiveMapRef.x == MAP_TYPE_TEXTUREARRAY) {
-            emmisive = gTex2DArrays[material.emmisiveMapRef.y].Sample(gSamplers[samplerIdx], float3(tex, material.emmisiveMapRef.z)).rgb;
-        } else /* if (material.emmisiveMapRef.x == MAP_TYPE_TEXTURECUBE) */ {
-            // emmisive = gTexCubes[material.emmisiveMapRef.y].Sample(...);
-        }
-    }
+    emmisive += sampleFromMapRef(material.emmisiveMapRef, tex, samplerIdx).rgb * (1.f - material.emmisiveConstantMapRatio);
 
     float3 posVNormalized = normalize(posV);
 

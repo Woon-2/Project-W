@@ -1,6 +1,6 @@
 #include "pbrLighting.hlsl"
 
-cbuffer PerConfigureData : register(b0) {
+cbuffer PerConfigurationData : register(b0) {
 	float viewportWidth;
 	float viewportHeight;
 };
@@ -62,16 +62,9 @@ float4 PSMain(VSOutput input) : SV_TARGET {
 		input.tangentV = normalize(input.tangentV);
 		input.bitangentV = normalize(input.bitangentV);
 
-		float3 normal = float3(0.0f, 0.0f, 1.0f);
-		if (material.normalMapRef.x == MAP_TYPE_TEXTURE2D) {
-			normal = gTex2Ds[material.normalMapRef.y].Sample(gSamplers[samplerIdx], input.texcoord).rgb;
-		} else if (material.normalMapRef.x == MAP_TYPE_TEXTUREARRAY) {
-			normal = gTex2DArrays[material.normalMapRef.y].Sample(gSamplers[samplerIdx], float3(input.texcoord, material.normalMapRef.z)).rgb;
-		} else /* if (material.normalMapRef.x == MAP_TYPE_TEXTURECUBE) */ {
-			// normal = gTexCubes[material.normalMapRef.y].Sample(...);
-		}
-
+		float3 normal = sampleFromMapRef(material.normalMapRef, input.texcoord, samplerIdx).rgb;
 		normal = normal * 2.0f - 1.0f;
+		
 		float3x3 TBN = float3x3(input.tangentV, input.bitangentV, input.normalV);
 		input.normalV = mul(normal, TBN);
 	}
@@ -81,7 +74,7 @@ float4 PSMain(VSOutput input) : SV_TARGET {
 
 	// tone mapping
 	final = final / (1 + final);
-	final = pow(final, 1.f / 2.2f);
+	final = pow(abs(final), 1.f / 2.2f);
     float2 seed = input.pos.xy / float2(viewportWidth, viewportHeight);
     float3 noise = float3( n2rand(seed, final.r), n2rand(seed, final.g), n2rand(seed, final.b) ) / 255.f;
     final += noise;
