@@ -3,6 +3,7 @@
 
 #include <filesystem>
 
+const auto shaderPath = std::filesystem::path("@SHADER_PATH@");
 const auto compiledShaderPath = std::filesystem::path("@COMPILED_SHADER_PATH@");
 
 #endif  // __SHADERPATH_HPP

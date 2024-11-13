@@ -251,18 +251,22 @@ target_include_directories(gfx
 # === shaders ===
 include(find_hlsl_compiler)
 
+set(SHADER_PATH ${CMAKE_CURRENT_SOURCE_DIR}/shaders CACHE PATH
+    "Write path to populate shaders."
+)
+
 set(COMPILED_SHADER_PATH "${CMAKE_CURRENT_BINARY_DIR}/shaders" CACHE PATH
     "Write path to populate compiled shaders."
 )
 
-compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shaders/pbrShader.hlsl"
+compile_hlsl("${SHADER_PATH}/pbrShader.hlsl"
     "${COMPILED_SHADER_PATH}/pbrShader_vs.cso"
     "vs_5_1"
     "VSMain"
     /enable_unbounded_descriptor_tables
 )
 
-compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shaders/pbrShader.hlsl"
+compile_hlsl("${SHADER_PATH}/pbrShader.hlsl"
     "${COMPILED_SHADER_PATH}/pbrShader_ps.cso"
     "ps_5_1"
     "PSMain"
