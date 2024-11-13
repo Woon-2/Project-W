@@ -1,6 +1,12 @@
 #ifndef __bindless_hlsl__
 #define __bindless_hlsl__
 
+#include "samplers.hlsl"
+
+#define MAP_TYPE_TEXTURE2D 0
+#define MAP_TYPE_TEXTUREARRAY 1
+#define MAP_TYPE_TEXTURECUBE 2
+
 Texture2D gTex2Ds[] : register(t10, space1);
 Texture2DArray gTex2DArrays[] : register(t10, space2);
 TextureCube gTexCubes[] : register(t10, space3);

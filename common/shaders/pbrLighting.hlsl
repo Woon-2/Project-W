@@ -1,14 +1,9 @@
 #include "bindless.hlsl"
-#include "samplers.hlsl"
 
 #define PI 3.14159
 #define LIGHT_TYPE_POINT 0
 #define LIGHT_TYPE_SPOT 1
 #define LIGHT_TYPE_DIRECTIONAL 2
-
-#define MAP_TYPE_TEXTURE2D 0
-#define MAP_TYPE_TEXTUREARRAY 1
-#define MAP_TYPE_TEXTURECUBE 2
 
 struct Light {
     float3 color;
