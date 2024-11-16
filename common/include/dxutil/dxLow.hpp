@@ -167,7 +167,7 @@ public:
     }
 
     void present() {
-        get()->Present(1, 0);
+        DX_THROW_FAILED( get()->Present(1, 0) );
     }
 
     std::size_t backBufCnt() const NOEXCEPT {
@@ -187,7 +187,7 @@ public:
             return;
         }
 
-        get()->SetFullscreenState(true, nullptr);
+        DX_THROW_FAILED( get()->SetFullscreenState(true, nullptr) );
 
         auto md = DXGI_MODE_DESC {
             .Width = scd_.Width,
@@ -198,10 +198,12 @@ public:
             .Scaling = scfd_.Scaling
         };
 
-        get()->ResizeTarget(&md);
+        DX_THROW_FAILED( get()->ResizeTarget(&md) );
 
         preResizeBuffers(pContext);
-        get()->ResizeBuffers(scd_.BufferCount, scd_.Width, scd_.Height, scd_.Format, scd_.Flags);
+        DX_THROW_FAILED( get()->ResizeBuffers(scd_.BufferCount, scd_.Width,
+            scd_.Height, scd_.Format, scd_.Flags
+        ) );
         postResizeBuffers(pContext);
 
         fullScreen_ = true;
@@ -212,7 +214,7 @@ public:
             return;
         }
 
-        get()->SetFullscreenState(false, nullptr);
+        DX_THROW_FAILED( get()->SetFullscreenState(false, nullptr) );
 
         auto md = DXGI_MODE_DESC {
             .Width = scd_.Width,
@@ -223,10 +225,12 @@ public:
             .Scaling = scfd_.Scaling
         };
 
-        get()->ResizeTarget(&md);
+        DX_THROW_FAILED( get()->ResizeTarget(&md) );
 
         preResizeBuffers(pContext);
-        get()->ResizeBuffers(scd_.BufferCount, scd_.Width, scd_.Height, scd_.Format, scd_.Flags);
+        DX_THROW_FAILED( get()->ResizeBuffers(scd_.BufferCount, scd_.Width,
+            scd_.Height, scd_.Format, scd_.Flags
+        ) );
         postResizeBuffers(pContext);
 
         fullScreen_ = false;
