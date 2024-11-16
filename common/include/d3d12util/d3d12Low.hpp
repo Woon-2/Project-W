@@ -504,16 +504,16 @@ public:
 	}
 
 	void clearRenderTarget(D3D12GfxCmdList& cmdList) {
-		cmdList.get()->ClearRenderTargetView( rtvs_[backBufIdx()].cpuHandle(),
-			rtvClearValue_.Color, 0u, nullptr
-		);
+		DX_THROW_FAILED_VOID( cmdList.get()->ClearRenderTargetView(
+			rtvs_[backBufIdx()].cpuHandle(), rtvClearValue_.Color, 0u, nullptr
+		) );
 	}
 
 	void clearDepthStencil(D3D12GfxCmdList& cmdList) {
-		cmdList.get()->ClearDepthStencilView( dsv_.cpuHandle(), D3D12_CLEAR_FLAG_DEPTH,
-			dsvClearValue_.DepthStencil.Depth, dsvClearValue_.DepthStencil.Stencil, 0u,
-			nullptr
-		);
+		DX_THROW_FAILED_VOID( cmdList.get()->ClearDepthStencilView(
+			dsv_.cpuHandle(), D3D12_CLEAR_FLAG_DEPTH, dsvClearValue_.DepthStencil.Depth,
+			dsvClearValue_.DepthStencil.Stencil, 0u, nullptr
+		) );
 	}
 
 	void updateBackBufIdx() {
@@ -554,7 +554,9 @@ void Window<Traits>::buildBuffers( D3D12Device& device,
 
 	backBuffers_.resize( this->backBufCnt() );
 	for (auto i = 0u; i < backBuffers_.size(); ++i) {
-		get()->GetBuffer(i, __uuidof(D3D12Resource::InterfaceType), &backBuffers_[i]);
+		DX_THROW_FAILED( get()->GetBuffer(i,
+		__uuidof(D3D12Resource::InterfaceType), &backBuffers_[i]
+		) );
 	}
 
 	depthBuffer_ = D3D12Resource( device, D3D12_RESOURCE_DESC{

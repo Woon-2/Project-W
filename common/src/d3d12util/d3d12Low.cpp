@@ -24,7 +24,9 @@ dx::DXGIAdapter getAvailableAdapter(dx::DXGIFactory& factory, D3D_FEATURE_LEVEL 
 		}
 	}
 
-	factory.get()->EnumWarpAdapter(__uuidof(dx::DXGIAdapter::InterfaceType), &pAdapter);
+	DX_THROW_FAILED( factory.get()->EnumWarpAdapter(
+		__uuidof(dx::DXGIAdapter::InterfaceType), &pAdapter
+	) );
 	return dx::DXGIAdapter( std::move(pAdapter) );
 }
 
@@ -34,13 +36,13 @@ D3D12Device::D3D12Device(dx::DXGIAdapter& adapter, D3D_FEATURE_LEVEL featureLeve
 	: dx::DXWrapper<ID3D12Device>() {
 #ifdef ENABLE_DXGI_INFO
 	wrl::ComPtr<D3D12DebugInterfaceType> pDebug{};
-	D3D12GetDebugInterface(__uuidof(D3D12DebugInterfaceType), &pDebug);
+	DX_THROW_FAILED( D3D12GetDebugInterface(__uuidof(D3D12DebugInterfaceType), &pDebug) );
 	pDebug->EnableDebugLayer();
 #endif
 
-	D3D12CreateDevice(adapter.get().Get(), featureLevel,
+	DX_THROW_FAILED( D3D12CreateDevice( adapter.get().Get(), featureLevel,
 		__uuidof(InterfaceType), &src_
-	);
+	) );
 }
 
 D3D12Device::D3D12Device(dx::DXGIAdapter&& adapter, D3D_FEATURE_LEVEL featureLevel)
@@ -54,15 +56,19 @@ D3D12CmdQueue::D3D12CmdQueue(D3D12Device& device)
 		.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE,
 		.NodeMask = 0
 	};
-	device.get()->CreateCommandQueue(&desc, __uuidof(InterfaceType), &src_);
+	DX_THROW_FAILED( device.get()->CreateCommandQueue(
+		&desc, __uuidof(InterfaceType), &src_
+	) );
 }
 
 D3D12GfxCmdList::D3D12GfxCmdList(D3D12Device& device)
 	: dx::DXWrapper<ID3D12GraphicsCommandList>() {
-	device.get()->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(Allocator), &alloc_);
-	device.get()->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, alloc_.Get(), nullptr,
-		__uuidof(InterfaceType), &src_
-	);
+	DX_THROW_FAILED( device.get()->CreateCommandAllocator(
+		D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(Allocator), &alloc_
+	) );
+	DX_THROW_FAILED( device.get()->CreateCommandList( 0, D3D12_COMMAND_LIST_TYPE_DIRECT,
+		alloc_.Get(), nullptr, __uuidof(InterfaceType), &src_
+	) );
 }
 
 void D3D12GfxCmdList::reset() {
@@ -81,51 +87,11 @@ void D3D12GfxCmdList::copyResource(D3D12Resource& srcRes, D3D12Resource& destRes
 	srcRes.commitState(*this, D3D12_RESOURCE_STATE_COPY_SOURCE);
 	destRes.commitState(*this, D3D12_RESOURCE_STATE_COPY_DEST);
 
-	get()->CopyResource(destRes.get().Get(), srcRes.get().Get());
+	DX_THROW_FAILED_VOID( get()->CopyResource(destRes.get().Get(), srcRes.get().Get()) );
 
 	srcRes.commitState(*this, srcOldState);
 	destRes.commitState(*this, destOldState);
 }
-
-// D3D12Window::D3D12Window(const RECT& clientRect, LPCWSTR wndName, DXGIFactory& factory, D3D12CmdQueue& cmdQueue)
-// 	: Window(clientRect, wndName), dx::DXWrapper<IDXGISwapChain3>() {
-// 	auto desc = DXGI_SWAP_CHAIN_DESC1{
-// 		.Width = static_cast<UINT>(clientRect.right - clientRect.left),
-// 		.Height = static_cast<UINT>(clientRect.bottom - clientRect.top),
-// 		.Format = D3DConfig::backBufferFormat,
-// 		.Stereo = false,
-// 		.SampleDesc = DXGI_SAMPLE_DESC{
-// 			.Count = 1,
-// 			.Quality = 0
-// 		},
-// 		.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT,
-// 		.BufferCount = 3u,
-// 		.Scaling = DXGI_SCALING_NONE,
-// 		.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD,
-// 		.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED,
-// 		.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH
-// 	};
-
-// 	auto fsDesc = DXGI_SWAP_CHAIN_FULLSCREEN_DESC{
-// 		.RefreshRate = DXGI_RATIONAL {
-// 			.Numerator = 60,
-// 			.Denominator = 1
-// 		},
-// 		.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED,
-// 		.Scaling = DXGI_MODE_SCALING_UNSPECIFIED,
-// 		.Windowed = true
-// 	};
-
-// 	auto tmp = wrl::ComPtr<IDXGISwapChain1>{};
-
-// 	factory.get()->CreateSwapChainForHwnd(cmdQueue.get().Get(), hWnd(), &desc,
-// 		&fsDesc, nullptr, &tmp
-// 	);
-
-// 	tmp.As<InterfaceType>(&src_);
-
-// 	factory.get()->MakeWindowAssociation(hWnd(), DXGI_MWA_NO_ALT_ENTER);
-// }
 
 D3D12Resource::D3D12Resource(D3D12Device& device, const D3D12_RESOURCE_DESC& resDesc,
 	D3D12_HEAP_TYPE heapType, D3D12_RESOURCE_STATES initialState,
@@ -135,9 +101,10 @@ D3D12Resource::D3D12Resource(D3D12Device& device, const D3D12_RESOURCE_DESC& res
 		.Type = heapType
 	};
 
-	device.get()->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
+	DX_THROW_FAILED( device.get()->CreateCommittedResource(
+		&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
 		state_, optimizedClearValue, __uuidof(InterfaceType), &src_
-	);
+	) );
 
 	desc_ = src_->GetDesc();
 	gpuAddr_ = src_->GetGPUVirtualAddress();
@@ -162,7 +129,9 @@ std::size_t D3D12Resource::makeCbv(const D3D12_CONSTANT_BUFFER_VIEW_DESC& cbvDes
 	D3D12Device& device, Descriptor& destView
 ) {
 	destView.setType(Descriptor::Type::CBV);
-	device.get()->CreateConstantBufferView(&cbvDesc, destView.cpuHandle());
+	DX_THROW_FAILED_VOID( device.get()->CreateConstantBufferView(
+		&cbvDesc, destView.cpuHandle()
+	) );
 	views_.push_back(destView);
 	return views_.size() - 1u;
 }
@@ -171,7 +140,9 @@ std::size_t D3D12Resource::makeSrv(const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDes
 	D3D12Device& device, Descriptor& destView
 ) {
 	destView.setType(Descriptor::Type::SRV);
-	device.get()->CreateShaderResourceView(src_.Get(), &srvDesc, destView.cpuHandle());
+	DX_THROW_FAILED_VOID( device.get()->CreateShaderResourceView(
+		src_.Get(), &srvDesc, destView.cpuHandle()
+	) );
 	views_.push_back(destView);
 	return views_.size() - 1u;
 }
@@ -180,7 +151,9 @@ std::size_t D3D12Resource::makeUav(const D3D12_UNORDERED_ACCESS_VIEW_DESC& uavDe
 	D3D12Device& device, Descriptor& destView
 ) {
 	destView.setType(Descriptor::Type::UAV);
-	device.get()->CreateUnorderedAccessView(src_.Get(), nullptr, &uavDesc, destView.cpuHandle());
+	DX_THROW_FAILED_VOID( device.get()->CreateUnorderedAccessView(
+		src_.Get(), nullptr, &uavDesc, destView.cpuHandle()
+	) );
 	views_.push_back(destView);
 	return views_.size() - 1u;
 }
@@ -189,7 +162,9 @@ std::size_t D3D12Resource::makeRtv(const D3D12_RENDER_TARGET_VIEW_DESC& rtvDesc,
 	D3D12Device& device, Descriptor& destView
 ) {
 	destView.setType(Descriptor::Type::RTV);
-	device.get()->CreateRenderTargetView(src_.Get(), &rtvDesc, destView.cpuHandle());
+	DX_THROW_FAILED_VOID( device.get()->CreateRenderTargetView(
+		src_.Get(), &rtvDesc, destView.cpuHandle()
+	) );
 	views_.push_back(destView);
 	return views_.size() - 1u;
 }
@@ -198,7 +173,9 @@ std::size_t D3D12Resource::makeDsv(const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
 	D3D12Device& device, Descriptor& destView
 ) {
 	destView.setType(Descriptor::Type::DSV);
-	device.get()->CreateDepthStencilView(src_.Get(), &dsvDesc, destView.cpuHandle());
+	DX_THROW_FAILED_VOID( device.get()->CreateDepthStencilView(
+		src_.Get(), &dsvDesc, destView.cpuHandle()
+	) );
 	views_.push_back(destView);
 	return views_.size() - 1u;
 }
@@ -207,35 +184,45 @@ void D3D12Resource::remakeCbv( std::size_t idx,
 	const D3D12_CONSTANT_BUFFER_VIEW_DESC& cbvDesc, D3D12Device& device
 ) {
 	assert(views_.at(idx).type() == Descriptor::Type::CBV);
-	device.get()->CreateConstantBufferView(&cbvDesc, views_.at(idx).cpuHandle());
+	DX_THROW_FAILED_VOID( device.get()->CreateConstantBufferView(
+		&cbvDesc, views_.at(idx).cpuHandle()
+	) );
 }
 
 void D3D12Resource::remakeSrv( std::size_t idx,
 	const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc, D3D12Device& device
 ) {
 	assert(views_.at(idx).type() == Descriptor::Type::SRV);
-	device.get()->CreateShaderResourceView(src_.Get(), &srvDesc, views_.at(idx).cpuHandle());
+	DX_THROW_FAILED_VOID( device.get()->CreateShaderResourceView(
+		src_.Get(), &srvDesc, views_.at(idx).cpuHandle()
+	) );
 }
 
 void D3D12Resource::remakeUav( std::size_t idx,
 	const D3D12_UNORDERED_ACCESS_VIEW_DESC& uavDesc, D3D12Device& device
 ) {
 	assert(views_.at(idx).type() == Descriptor::Type::UAV);
-	device.get()->CreateUnorderedAccessView(src_.Get(), nullptr, &uavDesc, views_.at(idx).cpuHandle());
+	DX_THROW_FAILED_VOID( device.get()->CreateUnorderedAccessView(
+		src_.Get(), nullptr, &uavDesc, views_.at(idx).cpuHandle()
+	) );
 }
 
 void D3D12Resource::remakeRtv( std::size_t idx,
 	const D3D12_RENDER_TARGET_VIEW_DESC& rtvDesc, D3D12Device& device
 ) {
 	assert(views_.at(idx).type() == Descriptor::Type::RTV);
-	device.get()->CreateRenderTargetView(src_.Get(), &rtvDesc, views_.at(idx).cpuHandle());
+	DX_THROW_FAILED_VOID( device.get()->CreateRenderTargetView(
+		src_.Get(), &rtvDesc, views_.at(idx).cpuHandle()
+	) );
 }
 
 void D3D12Resource::remakeDsv( std::size_t idx,
 	const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc, D3D12Device& device
 ) {
 	assert(views_.at(idx).type() == Descriptor::Type::DSV);
-	device.get()->CreateDepthStencilView(src_.Get(), &dsvDesc, views_.at(idx).cpuHandle());
+	DX_THROW_FAILED_VOID( device.get()->CreateDepthStencilView(
+		src_.Get(), &dsvDesc, views_.at(idx).cpuHandle()
+	) );
 }
 
 std::size_t D3D12Resource::makeDefCbv(D3D12Device& device, Descriptor& destView) {
@@ -244,7 +231,9 @@ std::size_t D3D12Resource::makeDefCbv(D3D12Device& device, Descriptor& destView)
 		.BufferLocation = src_->GetGPUVirtualAddress(),
 		.SizeInBytes = static_cast<UINT>( desc_.Width * desc_.Height )
 	};
-	device.get()->CreateConstantBufferView(&desc, destView.cpuHandle());
+	DX_THROW_FAILED_VOID( device.get()->CreateConstantBufferView(
+		&desc, destView.cpuHandle()
+	) );
 
 	views_.push_back(destView);
 	return views_.size() - 1u;
@@ -252,28 +241,36 @@ std::size_t D3D12Resource::makeDefCbv(D3D12Device& device, Descriptor& destView)
 
 std::size_t D3D12Resource::makeDefSrv(D3D12Device& device, Descriptor& destView) {
 	destView.setType(Descriptor::Type::SRV);
-	device.get()->CreateShaderResourceView(src_.Get(), nullptr, destView.cpuHandle());
+	DX_THROW_FAILED_VOID( device.get()->CreateShaderResourceView(
+		src_.Get(), nullptr, destView.cpuHandle()
+	) );
 	views_.push_back(destView);
 	return views_.size() - 1u;
 }
 
 std::size_t D3D12Resource::makeDefUav(D3D12Device& device, Descriptor& destView) {
 	destView.setType(Descriptor::Type::UAV);
-	device.get()->CreateUnorderedAccessView(src_.Get(), nullptr, nullptr, destView.cpuHandle());
+	DX_THROW_FAILED_VOID( device.get()->CreateUnorderedAccessView(
+		src_.Get(), nullptr, nullptr, destView.cpuHandle()
+	) );
 	views_.push_back(destView);
 	return views_.size() - 1u;
 }
 
 std::size_t D3D12Resource::makeDefRtv(D3D12Device& device, Descriptor& destView) {
 	destView.setType(Descriptor::Type::RTV);
-	device.get()->CreateRenderTargetView(src_.Get(), nullptr, destView.cpuHandle());
+	DX_THROW_FAILED_VOID( device.get()->CreateRenderTargetView(
+		src_.Get(), nullptr, destView.cpuHandle()
+	) );
 	views_.push_back(destView);
 	return views_.size() - 1u;
 }
 
 std::size_t D3D12Resource::makeDefDsv(D3D12Device& device, Descriptor& destView) {
 	destView.setType(Descriptor::Type::DSV);
-	device.get()->CreateDepthStencilView(src_.Get(), nullptr, destView.cpuHandle());
+	DX_THROW_FAILED_VOID( device.get()->CreateDepthStencilView(
+		src_.Get(), nullptr, destView.cpuHandle()
+	) );
 	views_.push_back(destView);
 	return views_.size() - 1u;
 }
@@ -284,27 +281,37 @@ void D3D12Resource::remakeDefCbv(std::size_t idx, D3D12Device& device) {
 		.BufferLocation = src_->GetGPUVirtualAddress(),
 		.SizeInBytes = static_cast<UINT>( desc_.Width * desc_.Height )
 	};
-	device.get()->CreateConstantBufferView(&desc, views_.at(idx).cpuHandle());
+	DX_THROW_FAILED_VOID( device.get()->CreateConstantBufferView(
+		&desc, views_.at(idx).cpuHandle()
+	) );
 }
 
 void D3D12Resource::remakeDefSrv(std::size_t idx, D3D12Device& device) {
 	assert(views_.at(idx).type() == Descriptor::Type::SRV);
-	device.get()->CreateShaderResourceView(src_.Get(), nullptr, views_.at(idx).cpuHandle());
+	DX_THROW_FAILED_VOID( device.get()->CreateShaderResourceView(
+		src_.Get(), nullptr, views_.at(idx).cpuHandle()
+	) );
 }
 
 void D3D12Resource::remakeDefUav(std::size_t idx, D3D12Device& device) {
 	assert(views_.at(idx).type() == Descriptor::Type::UAV);
-	device.get()->CreateUnorderedAccessView(src_.Get(), nullptr, nullptr, views_.at(idx).cpuHandle());
+	DX_THROW_FAILED_VOID( device.get()->CreateUnorderedAccessView(
+		src_.Get(), nullptr, nullptr, views_.at(idx).cpuHandle()
+	) );
 }
 
 void D3D12Resource::remakeDefRtv(std::size_t idx, D3D12Device& device) {
 	assert(views_.at(idx).type() == Descriptor::Type::RTV);
-	device.get()->CreateRenderTargetView(src_.Get(), nullptr, views_.at(idx).cpuHandle());
+	DX_THROW_FAILED_VOID( device.get()->CreateRenderTargetView(
+		src_.Get(), nullptr, views_.at(idx).cpuHandle()
+	) );
 }
 
 void D3D12Resource::remakeDefDsv(std::size_t idx, D3D12Device& device) {
 	assert(views_.at(idx).type() == Descriptor::Type::DSV);
-	device.get()->CreateDepthStencilView(src_.Get(), nullptr, views_.at(idx).cpuHandle());
+	DX_THROW_FAILED_VOID( device.get()->CreateDepthStencilView(
+		src_.Get(), nullptr, views_.at(idx).cpuHandle()
+	) );
 }
 
 void D3D12Resource::makeDefVbv(D3D12Device& device) {
@@ -335,7 +342,7 @@ void D3D12Resource::commitState(D3D12GfxCmdList& cmdList, D3D12_RESOURCE_STATES 
 		}
 	};
 
-	cmdList.get()->ResourceBarrier(1u, &bar);
+	DX_THROW_FAILED_VOID( cmdList.get()->ResourceBarrier(1u, &bar) );
 	state_ = resState;
 }
 
