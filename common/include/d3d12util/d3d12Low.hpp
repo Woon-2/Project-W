@@ -516,13 +516,16 @@ public:
 		) );
 	}
 
-	void updateBackBufIdx() {
-		backBufIdx_ = get()->GetCurrentBackBufferIndex();
-	}
-
 	std::size_t backBufIdx() const NOEXCEPT {
 		return backBufIdx_;
 	}
+
+	void present(D3D12GfxCmdList& cmdList) {
+		backBuffers_[backBufIdx_].commitState(cmdList, D3D12_RESOURCE_STATE_PRESENT);
+        MyBase::present();
+		backBuffers_[backBufIdx_].commitState(cmdList, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		backBufIdx_ = get()->GetCurrentBackBufferIndex();
+    }
 
 private:
 	void buildBuffers(D3D12Device& device, const D3D12_CLEAR_VALUE& rtvClearValue,
