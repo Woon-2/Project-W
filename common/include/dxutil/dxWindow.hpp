@@ -3,7 +3,7 @@
 
 #include "gfx.hpp"
 #include "Window.hpp"
-#include "dxutil/dxtarget.hpp"
+#include "dxutil/dxLow.hpp"
 #include "dxutil/dxexcept.hpp"
 
 #include <string>
@@ -17,23 +17,8 @@
 
 namespace gfx {
 
-// TODO: Store client rect
-// TODO: make fullscreen toggle
-/**
- * @brief A window with a DirectX's swapchain.    
- * It creates a swapchain when D3DWindow::open is called.    
- * 
- * The back buffers are created with the same size as the client area of the window.
- * 
- * D3DWindow::present presents the back buffer to the front buffer through the swapchain.     
- * 
- * `pSwapChain_`, `scd_`, and `scfd_`'s access level is protected to allow for more advanced usage for derived classes.
- * @tparam Traits Traits class for the window.
- * @note Currently only supports DXGI_FORMAT_R8G8B8A8_UNORM format and 2 back buffers,    
- * and it doesn't support multisampling.
- */
 template <class Traits>
-class D3DWindow : public Win32::Window<Traits> {
+class DXWindow : public Win32::Window<Traits> {
 protected:
     wrl::ComPtr<IDXGISwapChain3> pSwapChain_{};
     DXGI_SWAP_CHAIN_DESC1 scd_{};
@@ -253,7 +238,7 @@ private:
  */
 template <Win32::Win32Char T>
 struct BasicD3DWTraits : public Win32::BasicWindowTraits<T> {
-    using MyWindow = D3DWindow<BasicD3DWTraits>;
+    using MyWindow = DXWindow<BasicD3DWTraits>;
     using MyBase = Win32::BasicWindowTraits<T>;
     using MyChar = T;
     using MyString = std::basic_string<MyChar>;

@@ -1,15 +1,13 @@
 #ifndef __d3d12Low_HPP
 #define __d3d12Low_HPP
 
-#include "config.hpp"
-
-#include "dxutil/dxtarget.hpp"
+#include "dxutil/dxLow.hpp"
 #include <directx/d3dx12.h>
 #include <directx/d3d12.h>
 
 #include "dxutil/dxexcept.hpp"
 
-#include "window.hpp"
+#include "config.hpp"
 
 #include <vector>
 
@@ -17,61 +15,20 @@ namespace gfx {
 
 namespace d3d12 {
 
-template <class TInterface>
-class D3DWrapper {
+dx::DXGIAdapter getAvailableAdapter(dx::DXGIFactory& factory, D3D_FEATURE_LEVEL featureLevel);
+
+class D3D12Device : public dx::DXWrapper<ID3D12Device> {
 public:
-	using InterfaceType = TInterface;
-
-	D3DWrapper() = default;
-
-	D3DWrapper(const wrl::ComPtr<InterfaceType>& src) NOEXCEPT
-		: src_(src) {}
-
-	D3DWrapper(wrl::ComPtr<InterfaceType>&& src) NOEXCEPT
-		: src_(std::move(src)) {}
-
-	template <class T>
-	wrl::ComPtr<T> as() {
-		wrl::ComPtr<T> ret{};
-		src_.As<T>(&ret);
-		return ret;
-	}
-
-	auto& get() NOEXCEPT {
-		return src_;
-	}
-
-	const auto& get() const NOEXCEPT {
-		return src_;
-	}
-
-protected:
-	wrl::ComPtr<InterfaceType> src_;
+	D3D12Device(dx::DXGIAdapter& adapter, D3D_FEATURE_LEVEL featureLevel);
+	D3D12Device(dx::DXGIAdapter&& adapter, D3D_FEATURE_LEVEL featureLevel);
 };
 
-class DXGIAdapter : public D3DWrapper<IDXGIAdapter1> {
-public:
-	using D3DWrapper<IDXGIAdapter1>::D3DWrapper;
-};
-
-class D3D12Device : public D3DWrapper<ID3D12Device> {
-public:
-	D3D12Device(DXGIAdapter& adapter, D3D_FEATURE_LEVEL featureLevel);
-	D3D12Device(DXGIAdapter&& adapter, D3D_FEATURE_LEVEL featureLevel);
-};
-
-class DXGIFactory : public D3DWrapper<IDXGIFactory4> {
-public:
-	DXGIFactory();
-	DXGIAdapter getAvailableAdapter(D3D_FEATURE_LEVEL featureLevel);
-};
-
-class D3D12CmdQueue : public D3DWrapper<ID3D12CommandQueue> {
+class D3D12CmdQueue : public dx::DXWrapper<ID3D12CommandQueue> {
 public:
 	D3D12CmdQueue(D3D12Device& device);
 };
 
-class D3D12GfxCmdList : public D3DWrapper<ID3D12GraphicsCommandList> {
+class D3D12GfxCmdList : public dx::DXWrapper<ID3D12GraphicsCommandList> {
 public:
 	using Allocator = ID3D12CommandAllocator;
 
@@ -83,7 +40,7 @@ private:
 	wrl::ComPtr<Allocator> alloc_;
 };
 
-// class D3D12Window : public Win32::Window, public D3DWrapper<IDXGISwapChain3> {
+// class D3D12Window : public Win32::Window, public dx::DXWrapper<IDXGISwapChain3> {
 // public:
 // 	D3D12Window(const RECT& clientRect, LPCWSTR wndName, DXGIFactory& factory, D3D12CmdQueue& cmdQueue);
 // };
@@ -139,12 +96,12 @@ public:
 };
 
 template <class TDescriptor>
-class DescriptorHeap : public D3DWrapper<ID3D12DescriptorHeap> {
+class DescriptorHeap : public dx::DXWrapper<ID3D12DescriptorHeap> {
 public:
 	using DescriptorType = TDescriptor;
 
 	DescriptorHeap()
-		: D3DWrapper(), descriptors_(), stride_(0),
+		: dx::DXWrapper(), descriptors_(), stride_(0),
 		type_(D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES), shaderVisible_(false) {}
 
 	DescriptorHeap( D3D12Device& device, D3D12_DESCRIPTOR_HEAP_TYPE heapType,
@@ -314,20 +271,20 @@ private:
 	Type type_;
 };
 
-class D3D12Resource : public D3DWrapper<ID3D12Resource> {
+class D3D12Resource : public dx::DXWrapper<ID3D12Resource> {
 public:
 	enum class Views {
 		CBV, SRV, UAV, RTV, SAM, VBV, IBV
 	};
 
 	D3D12Resource()
-		: D3DWrapper<InterfaceType>(),
+		: dx::DXWrapper<InterfaceType>(),
 		views_(), vbview_{}, desc_{}, gpuAddr_{},
 		stride_(0u), state_(D3D12_RESOURCE_STATE_COMMON) {}
 
 	D3D12Resource( const wrl::ComPtr<InterfaceType>& src,
 		D3D12_RESOURCE_STATES initialState
-	) : D3DWrapper<InterfaceType>(src),
+	) : dx::DXWrapper<InterfaceType>(src),
 		views_(), vbview_{}, desc_(src->GetDesc()),
 		gpuAddr_(src->GetGPUVirtualAddress()), stride_(0u),
 		state_(initialState) {}
@@ -337,7 +294,7 @@ public:
 
 	D3D12Resource( wrl::ComPtr<InterfaceType>&& src,
 		D3D12_RESOURCE_STATES initialState
-	) : D3DWrapper<InterfaceType>(std::move(src)),
+	) : dx::DXWrapper<InterfaceType>(std::move(src)),
 		views_(), vbview_{}, desc_(src->GetDesc()),
 		gpuAddr_(src->GetGPUVirtualAddress()), stride_(0u),
 		state_(initialState) {}
@@ -448,9 +405,9 @@ private:
 	D3D12_RESOURCE_STATES state_;
 };
 
-class RootSignature : public D3DWrapper<ID3D12RootSignature> {
+class RootSignature : public dx::DXWrapper<ID3D12RootSignature> {
 public:
-	using D3DWrapper<ID3D12RootSignature>::D3DWrapper;
+	using dx::DXWrapper<ID3D12RootSignature>::DXWrapper;
 
 	void bind(D3D12GfxCmdList& cmdList) {
         DX_THROW_FAILED_VOID(

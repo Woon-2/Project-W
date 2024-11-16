@@ -93,7 +93,7 @@ private:
 	std::vector<Slot> slots_;
 };
 
-class ShaderBlob : public D3DWrapper<ID3DBlob> {
+class ShaderBlob : public dx::DXWrapper<ID3DBlob> {
 public:
 	enum class Type {
 		Vertex,
@@ -118,7 +118,7 @@ private:
 
 class Shader;
 
-class RenderProtocol : public D3DWrapper<ID3D12PipelineState> {
+class RenderProtocol : public dx::DXWrapper<ID3D12PipelineState> {
 public:
 	struct Desc {
 		D3D12_STREAM_OUTPUT_DESC streamOutput;

@@ -1,7 +1,5 @@
 #include "d3d12util/d3d12RenderPass.hpp"
 
-#include "dxutil/dxMathUtil.hpp"
-
 #include <ranges>
 #include <algorithm>
 #include <tuple>

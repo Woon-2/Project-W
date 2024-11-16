@@ -6,10 +6,32 @@ namespace gfx {
 
 namespace d3d12 {
 
+dx::DXGIAdapter getAvailableAdapter(dx::DXGIFactory& factory, D3D_FEATURE_LEVEL featureLevel) {
+	wrl::ComPtr<dx::DXGIAdapter::InterfaceType> pAdapter{};
+
+	for (UINT i = 0; factory.get()->EnumAdapters1(i, &pAdapter) != DXGI_ERROR_NOT_FOUND; ++i) {
+		DXGI_ADAPTER_DESC1 desc{};
+		pAdapter->GetDesc1(&desc);
+
+		if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) {
+			continue;
+		}
+
+		if ( D3D12CreateDevice(pAdapter.Get(), featureLevel,
+			__uuidof(D3D12Device::InterfaceType), nullptr
+		) >= 0 ) {
+			return dx::DXGIAdapter( std::move(pAdapter) );
+		}
+	}
+
+	factory.get()->EnumWarpAdapter(__uuidof(dx::DXGIAdapter::InterfaceType), &pAdapter);
+	return dx::DXGIAdapter( std::move(pAdapter) );
+}
+
 using D3D12DebugInterfaceType = ID3D12Debug;
 
-D3D12Device::D3D12Device(DXGIAdapter& adapter, D3D_FEATURE_LEVEL featureLevel)
-	: D3DWrapper<ID3D12Device>() {
+D3D12Device::D3D12Device(dx::DXGIAdapter& adapter, D3D_FEATURE_LEVEL featureLevel)
+	: dx::DXWrapper<ID3D12Device>() {
 #ifdef ENABLE_DXGI_INFO
 	wrl::ComPtr<D3D12DebugInterfaceType> pDebug{};
 	D3D12GetDebugInterface(__uuidof(D3D12DebugInterfaceType), &pDebug);
@@ -21,42 +43,11 @@ D3D12Device::D3D12Device(DXGIAdapter& adapter, D3D_FEATURE_LEVEL featureLevel)
 	);
 }
 
-D3D12Device::D3D12Device(DXGIAdapter&& adapter, D3D_FEATURE_LEVEL featureLevel)
+D3D12Device::D3D12Device(dx::DXGIAdapter&& adapter, D3D_FEATURE_LEVEL featureLevel)
 	: D3D12Device(adapter, featureLevel) {}
 
-DXGIFactory::DXGIFactory()
-	: D3DWrapper<IDXGIFactory4>() {
-#ifdef ENABLE_DXGI_INFO
-	CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, __uuidof(InterfaceType), &src_);
-#else
-	CreateDXGIFactory2(0, __uuidof(InterfaceType), &src_);
-#endif
-}
-
-DXGIAdapter DXGIFactory::getAvailableAdapter(D3D_FEATURE_LEVEL featureLevel) {
-	wrl::ComPtr<DXGIAdapter::InterfaceType> pAdapter{};
-
-	for (UINT i = 0; src_->EnumAdapters1(i, &pAdapter) != DXGI_ERROR_NOT_FOUND; ++i) {
-		DXGI_ADAPTER_DESC1 desc{};
-		pAdapter->GetDesc1(&desc);
-
-		if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) {
-			continue;
-		}
-
-		if ( D3D12CreateDevice(pAdapter.Get(), featureLevel,
-			__uuidof(D3D12Device::InterfaceType), nullptr
-		) >= 0 ) {
-			return DXGIAdapter( std::move(pAdapter) );
-		}
-	}
-
-	src_->EnumWarpAdapter(__uuidof(DXGIAdapter::InterfaceType), &pAdapter);
-	return DXGIAdapter( std::move(pAdapter) );
-}
-
 D3D12CmdQueue::D3D12CmdQueue(D3D12Device& device)
-	: D3DWrapper<ID3D12CommandQueue>() {
+	: dx::DXWrapper<ID3D12CommandQueue>() {
 	auto desc = D3D12_COMMAND_QUEUE_DESC{
 		.Type = D3D12_COMMAND_LIST_TYPE_DIRECT,
 		.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL,
@@ -67,7 +58,7 @@ D3D12CmdQueue::D3D12CmdQueue(D3D12Device& device)
 }
 
 D3D12GfxCmdList::D3D12GfxCmdList(D3D12Device& device)
-	: D3DWrapper<ID3D12GraphicsCommandList>() {
+	: dx::DXWrapper<ID3D12GraphicsCommandList>() {
 	device.get()->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(Allocator), &alloc_);
 	device.get()->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, alloc_.Get(), nullptr,
 		__uuidof(InterfaceType), &src_
@@ -88,7 +79,7 @@ void D3D12GfxCmdList::copyResource(D3D12Resource& srcRes, D3D12Resource& destRes
 }
 
 // D3D12Window::D3D12Window(const RECT& clientRect, LPCWSTR wndName, DXGIFactory& factory, D3D12CmdQueue& cmdQueue)
-// 	: Window(clientRect, wndName), D3DWrapper<IDXGISwapChain3>() {
+// 	: Window(clientRect, wndName), dx::DXWrapper<IDXGISwapChain3>() {
 // 	auto desc = DXGI_SWAP_CHAIN_DESC1{
 // 		.Width = static_cast<UINT>(clientRect.right - clientRect.left),
 // 		.Height = static_cast<UINT>(clientRect.bottom - clientRect.top),

@@ -16,7 +16,7 @@ ShaderBlob::ShaderBlob( const std::filesystem::path& path,
 	const InputLayout& inputLayout, const D3D_SHADER_MACRO* macros,
 	std::string_view entryPoint, std::string_view target,
 	UINT flag1, UINT flag2, Type type
-) : D3DWrapper<ID3DBlob>(), type_(type) {
+) : dx::DXWrapper<ID3DBlob>(), type_(type) {
 	auto errorBlob = wrl::ComPtr<ID3DBlob>{};
 	D3DCompileFromFile(path.wstring().c_str(), macros, D3D_COMPILE_STANDARD_FILE_INCLUDE,
 		entryPoint.data(), target.data(), flag1, flag2, &get(), &errorBlob
@@ -30,7 +30,7 @@ ShaderBlob::ShaderBlob( const std::filesystem::path& path,
 RenderProtocol::RenderProtocol( D3D12Device& device,
     Shader& shader, const ShaderBlob* pBlobs, std::size_t blobCnt,
 	const Desc& desc
-) : D3DWrapper<InterfaceType>(), pShader_(&shader) {
+) : dx::DXWrapper<InterfaceType>(), pShader_(&shader) {
 	auto byteCodes = std::array<D3D12_SHADER_BYTECODE, etoi(ShaderBlob::Type::Size)>{};
 
 	for (std::size_t i = 0; i < blobCnt; ++i) {
