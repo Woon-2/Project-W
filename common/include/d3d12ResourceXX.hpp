@@ -17,6 +17,8 @@
 #include <vector>
 #include <map>
 #include <memory>
+#include <ranges>
+#include <algorithm>
 
 #include "enumUtil.hpp"
 #include "memUtil.hpp"
@@ -27,6 +29,8 @@ namespace d3d12 {
 
 class UploadBuffer : public D3D12Resource {
 public:
+    UploadBuffer() = default;
+
     UploadBuffer(D3D12Device& device, const void* data, std::size_t byteWidth,
         std::size_t srcOffset, std::size_t destOffset,
         D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE
@@ -238,15 +242,26 @@ public:
     };
 
     enum class MapType {
-        Diffuse,
+        Albedo,
         Normal,
-        Emmissive,
+        Roughness,
+        Metallic,
+        Emmisive,
+        AmbientOcllusion,
         Size
     };
 
     enum class ConstantType {
-        Shininess,
-        SpecularColor,
+        Albedo,
+        Roughness,
+        Metallic,
+        Emmisive,
+        AmbientOcllusion,
+        AlbedoConstantMapRatio,
+        RoughnessConstantMapRatio,
+        MetallicConstantMapRatio,
+        EmmisiveConstantMapRatio,
+        AmbientOcllusionConstantMapRatio,
         Size
     };
 
@@ -257,6 +272,10 @@ public:
         std::uint32_t resourceIdx;
         std::uint32_t arrayIdx;
         std::uint32_t padding;
+
+        dx::XMUINT4 toxm() const {
+            return dx::XMUINT4{ type, resourceIdx, arrayIdx, padding };
+        }
 
         auto operator<=>(const MapRef&) const = default;
     };
@@ -577,29 +596,6 @@ private:
     std::vector<Node> nodeStorage_;
     std::string state_;
     Node* pRoot_;
-};
-
-
-// =============================================================
-
-class PhongMaterial {
-public:
-    struct ShaderLayout {
-        Material::MapRef diffuseMapRef;
-        Material::MapRef normalMapRef;
-        Material::MapRef emmisiveMapRef;
-        dx::XMFLOAT3 specularColor;
-        float shininess;
-    };
-
-    PhongMaterial(const Material& source);
-
-    const ShaderLayout& get() const noexcept {
-        return shaderLayout_;
-    }
-
-private:
-    ShaderLayout shaderLayout_;
 };
 
 }   // namespace gfx::d3d12

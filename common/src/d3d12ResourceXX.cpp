@@ -450,17 +450,6 @@ Model& Model::operator=(Model&& other) noexcept {
     return *this;
 }
 
-
-// =====================================================================
-
-PhongMaterial::PhongMaterial(const Material& source) {
-    shaderLayout_.diffuseMapRef = source.mapRef(Material::MapType::Diffuse);
-    shaderLayout_.normalMapRef = source.mapRef(Material::MapType::Normal);
-    shaderLayout_.emmisiveMapRef = source.mapRef(Material::MapType::Emmissive);
-    shaderLayout_.specularColor = source.constant<dx::XMFLOAT3>(Material::ConstantType::SpecularColor);
-    shaderLayout_.shininess = source.constant<float>(Material::ConstantType::SpecularColor);
-}
-
 }   // namespace gfx::d3d12
 
 }   // namespace gfx
