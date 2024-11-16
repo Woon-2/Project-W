@@ -163,7 +163,7 @@ add_library(gfx
     src/gfx.cpp include/gfx.hpp
     src/gfxExcept.cpp include/gfxExcept.hpp
     src/dxutil/dxexcept.cpp include/dxutil/dxexcept.hpp
-    src/dxutil/dxWindow.cpp include/dxutil/dxWindow.hpp
+    src/dxutil/dxLow.cpp include/dxutil/dxLow.hpp
     src/vertex.cpp include/vertex.hpp
     src/coord.cpp include/coord.hpp
     src/d3d12util/d3d12Low.cpp include/d3d12util/d3d12Low.hpp
@@ -171,7 +171,6 @@ add_library(gfx
     src/d3d12util/d3d12ShaderXX.cpp include/d3d12util/d3d12ShaderXX.hpp
     src/d3d12util/d3d12RenderPass.cpp include/d3d12util/d3d12RenderPass.hpp
     
-    include/dxutil/dxLow.hpp
     include/shaderPath.hpp
     include/enumUtil.hpp
 )
