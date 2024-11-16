@@ -10,8 +10,6 @@
 
 #include "gfxExcept.hpp"
 
-#include "renderProtocol.hpp"
-
 /**
  * @file gfx.hpp
  */
@@ -350,12 +348,7 @@ public:
     IScene& operator=(const IScene&) = default;
     IScene& operator=(IScene&&) noexcept = default;
 
-    /**
-     * @brief Generate a sequence of DrawInfo instances.
-     * @return Generator<DrawInfo> An iterable object that generates the sequence of DrawInfo instances.
-     * @note This function should be implemented as a coroutine which yields DrawInfo instances.
-     */
-    virtual Generator<DrawInfo> iteration(rp::Protocol protocol) const = 0;
+    virtual Generator<DrawInfo> iteration() const = 0;
 };
 
 }   // namespace gfx

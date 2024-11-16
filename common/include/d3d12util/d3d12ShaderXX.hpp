@@ -1,8 +1,8 @@
 #ifndef __D3D12ShaderXX_HPP
 #define __D3D12ShaderXX_HPP
 
-#include "d3d12Low.hpp"
-#include "d3d12ResourceXX.hpp"
+#include "d3d12util/d3d12Low.hpp"
+#include "d3d12util/d3d12ResourceXX.hpp"
 
 #include "gfxExcept.hpp"
 

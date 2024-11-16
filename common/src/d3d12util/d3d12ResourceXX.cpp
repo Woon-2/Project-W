@@ -1,4 +1,4 @@
-#include "d3d12ResourceXX.hpp"
+#include "d3d12util/d3d12ResourceXX.hpp"
 
 namespace gfx {
 

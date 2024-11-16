@@ -162,50 +162,16 @@ target_include_directories(mem
 add_library(gfx
     src/gfx.cpp include/gfx.hpp
     src/gfxExcept.cpp include/gfxExcept.hpp
-    src/dxfactory.cpp include/dxfactory.hpp
     src/dxexcept.cpp include/dxexcept.hpp
-    src/d3d12core.cpp include/d3d12core.hpp
     src/d3dwindow.cpp include/d3dwindow.hpp
-    src/d3d12shader.cpp include/d3d12shader.hpp
-    src/rootPresets.cpp include/rootPresets.hpp
-    src/d3d12resLow.cpp include/d3d12resLow.hpp
-    src/d3d12res.cpp include/d3d12res.hpp
     src/vertex.cpp include/vertex.hpp
-    src/mesh.cpp include/mesh.hpp
-    src/d3d12mesh.cpp include/d3d12mesh.hpp
-    src/inputLayout.cpp include/inputLayout.hpp
-    src/d3d12InputLayout.cpp include/d3d12InputLayout.hpp
-    src/d3d12Drawers.cpp include/d3d12Drawers.hpp
-    src/nullShader.cpp include/nullShader.hpp
-    src/phongShader.cpp include/phongShader.hpp
-    src/inputLayoutPresets.cpp include/inputLayoutPresets.hpp
-    src/d3d12InputLayoutPresets.cpp include/d3d12InputLayoutPresets.hpp
-    src/model.cpp include/model.hpp
-    src/d3d12model.cpp include/d3d12model.hpp
-    src/camera.cpp include/camera.hpp
-    src/d3d12scene.cpp include/d3d12scene.hpp
     src/coord.cpp include/coord.hpp
-    src/shaderRes.cpp include/shaderRes.hpp
-    src/drawInfo.cpp include/drawInfo.hpp
-    src/gpuMem.cpp include/gpuMem.hpp
-    src/renderProtocol.cpp include/renderProtocol.hpp
-    src/d3d12texture.cpp include/d3d12texture.hpp
-    src/d3d12material.cpp include/d3d12material.hpp
-    src/assimpLoader.cpp include/assimpLoader.hpp
-    src/assimpLoaderD3d12.cpp include/assimpLoaderD3d12.hpp
-    src/d3d12materialTree.cpp include/d3d12materialTree.hpp
-    src/shader.cpp include/shader.hpp
-    src/renderer.cpp include/renderer.hpp
-    src/d3d12Descriptor.cpp include/d3d12Descriptor.hpp
-    src/d3d12SpecialRenderTargets.cpp include/d3d12SpecialRenderTargets.hpp
-    src/shadowShader.cpp include/shadowShader.hpp
     src/d3d12util/d3d12Low.cpp include/d3d12util/d3d12Low.hpp
     src/d3d12util/d3d12ResourceXX.cpp include/d3d12util/d3d12ResourceXX.hpp
     src/d3d12util/d3d12ShaderXX.cpp include/d3d12util/d3d12ShaderXX.hpp
     src/d3d12util/d3d12RenderPass.cpp include/d3d12util/d3d12RenderPass.hpp
     
     include/dxtarget.hpp
-    include/gfxPrimitive.hpp
     include/shaderPath.hpp
     include/enumUtil.hpp
     include/dxMathUtil.hpp

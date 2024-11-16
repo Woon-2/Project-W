@@ -1,7 +1,7 @@
 #ifndef __d3d12Resource_HPP
 #define __d3d12Resource_HPP
 
-#include "d3d12Low.hpp"
+#include "d3d12util/d3d12Low.hpp"
 #include "texLoader/DDSTextureLoader12.h"
 #include "coord.hpp"
 
@@ -380,7 +380,7 @@ struct MaterialMapKey {
     std::string renderPassID;
 };
 
-auto operator<=>(const MaterialMapKey& lhs, const MaterialMapKey& rhs) {
+inline auto operator<=>(const MaterialMapKey& lhs, const MaterialMapKey& rhs) {
     return std::tuple(lhs.state, lhs.renderPassID)
         <=> std::tuple(rhs.state, rhs.renderPassID);
 }

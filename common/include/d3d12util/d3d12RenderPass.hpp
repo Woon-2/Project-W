@@ -1,9 +1,9 @@
 #ifndef __d3d12RenderPass_HPP
 #define __d3d12RenderPass_HPP
 
-#include "d3d12ShaderXX.hpp"
-#include "d3d12Low.hpp"
-#include "d3d12ResourceXX.hpp"
+#include "d3d12util/d3d12ShaderXX.hpp"
+#include "d3d12util/d3d12Low.hpp"
+#include "d3d12util/d3d12ResourceXX.hpp"
 #include "coord.hpp"
 
 #include <string>
