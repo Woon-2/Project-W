@@ -160,7 +160,6 @@ target_include_directories(mem
 
 # === gfx ===
 add_library(gfx
-    src/gfx.cpp include/gfx.hpp
     src/gfxExcept.cpp include/gfxExcept.hpp
     src/dxutil/dxexcept.cpp include/dxutil/dxexcept.hpp
     src/dxutil/dxLow.cpp include/dxutil/dxLow.hpp
@@ -170,6 +169,7 @@ add_library(gfx
     src/d3d12util/d3d12ResourceXX.cpp include/d3d12util/d3d12ResourceXX.hpp
     src/d3d12util/d3d12ShaderXX.cpp include/d3d12util/d3d12ShaderXX.hpp
     src/d3d12util/d3d12RenderPass.cpp include/d3d12util/d3d12RenderPass.hpp
+    src/d3d12engine/d3d12Engine.cpp include/d3d12engine/d3d12Engine.hpp
     
     include/shaderPath.hpp
     include/enumUtil.hpp
