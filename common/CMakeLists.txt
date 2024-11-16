@@ -199,10 +199,10 @@ add_library(gfx
     src/d3d12Descriptor.cpp include/d3d12Descriptor.hpp
     src/d3d12SpecialRenderTargets.cpp include/d3d12SpecialRenderTargets.hpp
     src/shadowShader.cpp include/shadowShader.hpp
-    src/d3d12Low.cpp include/d3d12Low.hpp
-    src/d3d12ResourceXX.cpp include/d3d12ResourceXX.hpp
-    src/d3d12ShaderXX.cpp include/d3d12ShaderXX.hpp
-    src/d3d12RenderPass.cpp include/d3d12RenderPass.hpp
+    src/d3d12util/d3d12Low.cpp include/d3d12util/d3d12Low.hpp
+    src/d3d12util/d3d12ResourceXX.cpp include/d3d12util/d3d12ResourceXX.hpp
+    src/d3d12util/d3d12ShaderXX.cpp include/d3d12util/d3d12ShaderXX.hpp
+    src/d3d12util/d3d12RenderPass.cpp include/d3d12util/d3d12RenderPass.hpp
     
     include/dxtarget.hpp
     include/gfxPrimitive.hpp
