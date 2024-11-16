@@ -8,6 +8,10 @@
 
 #include <bitset>
 #include <vector>
+#include <ranges>
+#include <algorithm>
+#include <filesystem>
+#include <cstdint>
 
 #include "enumUtil.hpp"
 
@@ -17,6 +21,11 @@ namespace d3d12 {
 
 class InputLayout {
 public:
+	enum class Spec {
+		serial,
+		separated
+	};
+
 	struct Elem {
 		std::string semanticName;
 		UINT semanticIndex;
@@ -115,7 +124,7 @@ public:
 		D3D12_STREAM_OUTPUT_DESC streamOutput;
 		D3D12_BLEND_DESC blend;
 		UINT sampleMask;
-		D3D12_RASTERIZER_DESC rasterizerState;
+		D3D12_RASTERIZER_DESC rasterizerState; 
 		D3D12_DEPTH_STENCIL_DESC depthStencilState;
 		D3D12_INDEX_BUFFER_STRIP_CUT_VALUE ibStripCutValue;
 		D3D12_PRIMITIVE_TOPOLOGY_TYPE primitiveTopologyType;
@@ -163,9 +172,14 @@ public:
 		: blobs_(etoi(ShaderBlob::Type::Size)),
 		inputLayout_(std::move(il)), root_(root) {}
 
+	virtual ~Shader() = default;
+
 	const auto& blobs() const noexcept {
 		return blobs_;
 	}
+
+	virtual void loadBlobs() = 0;
+	virtual void releaseBlobs() = 0;
 
 	template <ShaderBlob::Type ... Types>
 	std::vector<ShaderBlob> selectBlobs() const {
@@ -192,6 +206,10 @@ public:
 		return root_;
 	}
 
+	void bind(D3D12GfxCmdList& cmdList, const Mesh& mesh) {
+		mesh.bind(cmdList);
+	}
+
 	void draw(D3D12GfxCmdList& cmdList, const Mesh& mesh, std::size_t instanceCnt) {
 		mesh.draw(cmdList, instanceCnt);
 	}
@@ -205,6 +223,171 @@ protected:
 inline bool RenderProtocol::compatibleWith(const RefMesh& mesh) const {
     pShader_->inputLayout().checkBindable(mesh.vbs());
 }
+
+class UnifiedRoot : public RootSignature {
+public:
+	enum class ParamIndices {
+		BindlessTex2D,
+		BindlessTexArray,
+		BindlessTexCube,
+		b0, b1, b2, b3, b4, b5, b6, b7, b8, b9,
+		t0, t1, t2, t3, t4, t5, t6, t7, t8, t9,
+		u0, u1, u2, u3, u4, u5, u6, u7, u8, u9
+	};
+
+	enum class SamplerIndices {
+		NearestWrap,
+		TrilinearWrap,
+		NearestBorder,
+		TrilinearBorder,
+		TrilinearComparison
+	};
+
+	static constexpr auto cbvRegisterCnt = 10u;
+	static constexpr auto srvRegisterCnt = 10u;
+	static constexpr auto uavRegisterCnt = 10u;
+
+private:
+	class Params {
+	public:
+		UINT operator[](ParamIndices idx) const noexcept {
+			return static_cast<UINT>( etoi(idx) );
+		}
+	};
+
+	class Samplers {
+	public:
+		UINT operator[](SamplerIndices idx) const noexcept {
+			return static_cast<UINT>( etoi(idx) );
+		}
+	};
+
+public:
+	UnifiedRoot(D3D12Device& device);
+
+	Params params;
+	Samplers samplers;
+};
+
+namespace sr {
+
+struct PerConfigurationData0 {
+	float viewportWidth;
+	float viewportHeight;
+};
+
+struct PerInstanceData0 {
+	dx::XMFLOAT4X4 wvp;
+	dx::XMFLOAT4X4 wv;
+	dx::XMFLOAT3X3 wvNormal;
+};
+
+struct Light {
+	enum class Type {
+		Point,
+		Spot,
+		Directional,
+		Size
+	};
+
+	dx::XMFLOAT3 color;
+	float falloff;
+	dx::XMFLOAT3 posV;
+	float cosTheta;
+	dx::XMFLOAT3 dirV;
+	float cosPhi;
+	dx::XMFLOAT3 atten;
+	float intensity;
+	int type;
+	int padding[3];
+};
+
+struct PBRMaterial {
+	static PBRMaterial convert(const Material& material);
+
+	dx::XMFLOAT4 albedoConstant;
+	float roughnessConstant;
+	float metallicConstant;
+	float albedoConstantMapRatio;
+	float roughnessConstantMapRatio;
+	float metallicConstantMapRatio;
+	dx::XMFLOAT3 emmisiveConstant;
+	float emmisiveConstantMapRatio;
+	float ambientOcclusionConstant;
+	float ambientOcclusionConstantMapRatio;
+	float padding;
+	dx::XMUINT4 albedoMapRef;
+	dx::XMUINT4 roughnessMapRef;
+	dx::XMUINT4 normalMapRef;
+	dx::XMUINT4 metallicMapRef;
+	dx::XMUINT4 emmisiveMapRef;
+	dx::XMUINT4 ambientOcclusionMapRef;
+};
+
+struct PerDrawcallData0 {
+	PBRMaterial material;
+	std::uint32_t instanceBase;
+	std::uint32_t samplerIdx;
+	dx::XMUINT2 padding;
+};
+
+struct PerFrameData0 {
+	dx::XMFLOAT3 globalAmbient;
+	float padding0;
+	std::uint32_t lightCnt;
+	dx::XMUINT3 padding1;
+};
+
+}	// namespace gfx::d3d12::sr
+
+class ShaderPBRIllumination : public Shader {
+public:
+	struct Config {
+		std::size_t maxInstanceCnt;
+		std::size_t maxDrawcallCnt;
+		std::size_t maxLightCnt;
+	};
+
+	ShaderPBRIllumination( D3D12Device& device, const RootSignature& root,
+		const Config& config, InputLayout::Spec ilSpec = InputLayout::Spec::serial
+	);
+
+	RenderProtocol makeProtocol( D3D12Device& device, const RenderProtocol::Desc& desc) {
+		return RenderProtocol( device, *this,
+			selectBlobs<ShaderBlob::Type::Vertex, ShaderBlob::Type::Pixel>(), desc
+		);
+	}
+
+	std::size_t maxInstanceCnt() const noexcept {
+		return maxInstanceCnt_;
+	}
+
+	std::size_t maxLightCnt() const noexcept {
+		return maxLightCnt_;
+	}
+
+	std::size_t maxDrawcallCnt() const noexcept {
+		return maxDrawcallCnt_;
+	}
+
+	void loadBlobs() override;
+	void releaseBlobs() override;
+
+	UploadBuffer perConfigurationData_;
+	UploadBuffer perFrameData_;
+	UploadBuffer perDrawcallData_;
+	UploadBuffer perInstanceData_;
+	UploadBuffer lightBuffer_;
+
+private:
+	static InputLayout makeInputLayout(InputLayout::Spec ilSpec);
+	static InputLayout makeInputLayoutSerial();
+	static InputLayout makeInputLayoutSeparated();
+
+	std::size_t maxInstanceCnt_;
+	std::size_t maxLightCnt_;
+	std::size_t maxDrawcallCnt_;
+};
 
 }   // namespace gfx::d3d12
 
