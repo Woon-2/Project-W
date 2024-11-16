@@ -162,8 +162,8 @@ target_include_directories(mem
 add_library(gfx
     src/gfx.cpp include/gfx.hpp
     src/gfxExcept.cpp include/gfxExcept.hpp
-    src/dxexcept.cpp include/dxexcept.hpp
-    src/d3dwindow.cpp include/d3dwindow.hpp
+    src/dxutil/dxexcept.cpp include/dxutil/dxexcept.hpp
+    src/dxutil/d3dwindow.cpp include/dxutil/d3dwindow.hpp
     src/vertex.cpp include/vertex.hpp
     src/coord.cpp include/coord.hpp
     src/d3d12util/d3d12Low.cpp include/d3d12util/d3d12Low.hpp
@@ -171,10 +171,10 @@ add_library(gfx
     src/d3d12util/d3d12ShaderXX.cpp include/d3d12util/d3d12ShaderXX.hpp
     src/d3d12util/d3d12RenderPass.cpp include/d3d12util/d3d12RenderPass.hpp
     
-    include/dxtarget.hpp
+    include/dxutil/dxtarget.hpp
     include/shaderPath.hpp
     include/enumUtil.hpp
-    include/dxMathUtil.hpp
+    include/dxutil/dxMathUtil.hpp
 )
 
 add_library(common::gfx ALIAS gfx)

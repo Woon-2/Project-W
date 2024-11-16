@@ -1,4 +1,4 @@
-#include "dxexcept.hpp"
+#include "dxutil/dxexcept.hpp"
 
 #ifdef ENABLE_DXGI_INFO
 #include <string_view>

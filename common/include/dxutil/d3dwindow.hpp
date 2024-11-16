@@ -3,8 +3,8 @@
 
 #include "gfx.hpp"
 #include "Window.hpp"
-#include "dxtarget.hpp"
-#include "dxexcept.hpp"
+#include "dxutil/dxtarget.hpp"
+#include "dxutil/dxexcept.hpp"
 
 #include <string>
 #include <string_view>

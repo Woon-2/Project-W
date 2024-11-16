@@ -2,7 +2,7 @@
 #define __DXEXCEPT_HPP
 
 #include "gfxExcept.hpp"
-#include "dxtarget.hpp"
+#include "dxutil/dxtarget.hpp"
 
 /**
  * @page page1 Conditional Compilation

@@ -2,7 +2,7 @@
 
 #include "shaderPath.hpp"
 
-#include "dxexcept.hpp"
+#include "dxutil/dxexcept.hpp"
 
 #include <d3dcompiler.h>
 

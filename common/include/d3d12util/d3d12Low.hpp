@@ -3,11 +3,11 @@
 
 #include "config.hpp"
 
-#include "dxtarget.hpp"
+#include "dxutil/dxtarget.hpp"
 #include <directx/d3dx12.h>
 #include <directx/d3d12.h>
 
-#include "dxexcept.hpp"
+#include "dxutil/dxexcept.hpp"
 
 #include "window.hpp"
 

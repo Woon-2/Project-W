@@ -1,6 +1,6 @@
 #include "d3d12util/d3d12RenderPass.hpp"
 
-#include "dxMathUtil.hpp"
+#include "dxutil/dxMathUtil.hpp"
 
 #include <ranges>
 #include <algorithm>

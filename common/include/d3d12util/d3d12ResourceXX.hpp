@@ -5,7 +5,7 @@
 #include "texLoader/DDSTextureLoader12.h"
 #include "coord.hpp"
 
-#include "dxexcept.hpp"
+#include "dxutil/dxexcept.hpp"
 
 #include "vertex.hpp"
 
