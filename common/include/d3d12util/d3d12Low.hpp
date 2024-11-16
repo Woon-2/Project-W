@@ -605,6 +605,24 @@ void Window<Traits>::postResizeBuffers(void* pContext) {
 	rebuildViews(*static_cast<D3D12Device*>(pContext));
 }
 
+template <Win32::Win32Char T>
+struct BasicD3D12WTraits : public dx::BasicDXDWTraits<T> {
+    using MyWindow = DXWindow<BasicD3D12WTraits>;
+    using MyBase = Win32::BasicDXDWTraits<T>;
+    using MyChar = T;
+    using MyString = std::basic_string<MyChar>;
+    using MyStringView = std::basic_string_view<MyChar>;
+
+    static constexpr const MyStringView clsName() NOEXCEPT {
+        if constexpr ( std::is_same_v<MyChar, CHAR> ) {
+            return "D3D12W";
+        }
+        else /* WCHAR */ {
+            return L"D3D12W";
+        }
+    }
+};
+
 }   // namespace gfx::d3d12
 
 }   // namespace gfx
