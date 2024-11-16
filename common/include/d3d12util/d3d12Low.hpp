@@ -35,6 +35,8 @@ public:
 	D3D12GfxCmdList(D3D12Device& device);
 
 	void copyResource(class D3D12Resource& srcRes, D3D12Resource& destRes);
+	void reset();
+	void close();
 
 private:
 	wrl::ComPtr<Allocator> alloc_;

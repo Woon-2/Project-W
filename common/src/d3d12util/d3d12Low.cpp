@@ -65,6 +65,15 @@ D3D12GfxCmdList::D3D12GfxCmdList(D3D12Device& device)
 	);
 }
 
+void D3D12GfxCmdList::reset() {
+	DX_THROW_FAILED( alloc_->Reset() );
+	DX_THROW_FAILED( src_->Reset(alloc_.Get(), nullptr) );
+}
+
+void D3D12GfxCmdList::close() {
+	DX_THROW_FAILED( src_->Close() );
+}
+
 void D3D12GfxCmdList::copyResource(D3D12Resource& srcRes, D3D12Resource& destRes) {
 	auto srcOldState = srcRes.state();
 	auto destOldState = destRes.state();
