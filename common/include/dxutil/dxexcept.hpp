@@ -2,7 +2,6 @@
 #define __DXEXCEPT_HPP
 
 #include "gfxExcept.hpp"
-#include "dxutil/dxLow.hpp"
 
 /**
  * @page page1 Conditional Compilation
@@ -21,6 +20,8 @@ using namespace std::literals;
 
 #ifdef ENABLE_DXGI_INFO
 #include <dxgidebug.h>
+
+#include <wrl.h>
 
 #include <iostream>
 #include <sstream>
@@ -85,6 +86,8 @@ using namespace std::literals;
 #endif  // ENABLE_DXGI_INFO
 
 namespace gfx {
+
+namespace wrl = Microsoft::WRL;
 
 #ifdef ENABLE_DXGI_INFO
 

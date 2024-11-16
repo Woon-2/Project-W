@@ -1,5 +1,7 @@
 #include "dxutil/dxexcept.hpp"
 
+#include <dxgi1_6.h>
+
 #ifdef ENABLE_DXGI_INFO
 #include <string_view>
 #include <vector>
