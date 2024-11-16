@@ -359,11 +359,32 @@ public:
 		D3D12Device& device, Descriptor& destView
 	);
 
+	void remakeCbv(std::size_t idx, const D3D12_CONSTANT_BUFFER_VIEW_DESC& cbvDesc,
+		D3D12Device& device
+	);
+	void remakeSrv(std::size_t idx, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc,
+		D3D12Device& device
+	);
+	void remakeUav(std::size_t idx, const D3D12_UNORDERED_ACCESS_VIEW_DESC& uavDesc,
+		D3D12Device& device
+	);
+	void remakeRtv(std::size_t idx, const D3D12_RENDER_TARGET_VIEW_DESC& rtvDesc,
+		D3D12Device& device
+	);
+	void remakeDsv(std::size_t idx, const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
+		D3D12Device& device
+	);
+
 	std::size_t makeDefCbv(D3D12Device& device, Descriptor& destView);
 	std::size_t makeDefSrv(D3D12Device& device, Descriptor& destView);
 	std::size_t makeDefUav(D3D12Device& device, Descriptor& destView);
 	std::size_t makeDefRtv(D3D12Device& device, Descriptor& destView);
 	std::size_t makeDefDsv(D3D12Device& device, Descriptor& destView);
+	void remakeDefCbv(std::size_t idx, D3D12Device& device);
+	void remakeDefSrv(std::size_t idx, D3D12Device& device);
+	void remakeDefUav(std::size_t idx, D3D12Device& device);
+	void remakeDefRtv(std::size_t idx, D3D12Device& device);
+	void remakeDefDsv(std::size_t idx, D3D12Device& device);
 	void makeDefVbv(D3D12Device& device);
 	void makeDefIbv(D3D12Device& device);
 
@@ -392,6 +413,9 @@ public:
 	}
 
 	void commitState(D3D12GfxCmdList& cmdList, D3D12_RESOURCE_STATES resState);
+	void updateDesc() NOEXCEPT {
+		desc_ = get()->GetDesc();
+	}
 
 private:
 	std::vector<Descriptor> views_;
@@ -415,6 +439,171 @@ public:
         );
 	}
 };
+
+template <class Traits>
+class Window : public dx::DXWindow<Traits> {
+public:
+	using MyBase = dx::DXWindow<Traits>;
+    using MyChar = typename Traits::MyChar;
+    using MyString = typename Traits::MyString;
+    using MyStringView = typename Traits::MyStringView;
+    using MyBase::nativeHandle;
+    using MyBase::defWndName;
+    using MyBase::defWndFrame;
+	using MyBase::get;
+
+	void open( dx::DXGIFactory& factory, D3D12Device& device, D3D12CmdQueue& cmdQueue,
+		DescriptorRange<DescriptorHeapCPU>& rtvRangeBackBuf,
+		DescriptorRange<DescriptorHeapCPU>& dsvRangeBackBuf,
+		std::size_t backBufCnt = MyBase::defBackBufCnt,
+		const D3D12_CLEAR_VALUE& rtvClearValue = { .Format = DXGI_FORMAT_R8G8B8A8_UNORM, .Color = { 0.0f, 0.0f, 0.0f, 1.0f } },
+		const D3D12_CLEAR_VALUE& dsvClearValue = { .Format = DXGI_FORMAT_D32_FLOAT, .DepthStencil = { 1.0f, 0u } }
+	) {
+		open( factory, device, cmdQueue, defWndName(), rtvRangeBackBuf,
+			dsvRangeBackBuf, backBufCnt, rtvClearValue, dsvClearValue
+		);
+	}
+
+	void open( dx::DXGIFactory& factory, D3D12Device& device, D3D12CmdQueue& cmdQueue,
+		DescriptorRange<DescriptorHeapCPU>& rtvRangeBackBuf,
+		DescriptorRange<DescriptorHeapCPU>& dsvRangeBackBuf,
+		const Win32::WndFrame& wndFrame, std::size_t backBufCnt = MyBase::defBackBufCnt,
+		const D3D12_CLEAR_VALUE& rtvClearValue = { .Format = DXGI_FORMAT_R8G8B8A8_UNORM, .Color = { 0.0f, 0.0f, 0.0f, 1.0f } },
+		const D3D12_CLEAR_VALUE& dsvClearValue = { .Format = DXGI_FORMAT_D32_FLOAT, .DepthStencil = { 1.0f, 0u } }
+	) {
+		open( factory, device, cmdQueue, defWndName(), wndFrame,
+			rtvRangeBackBuf, dsvRangeBackBuf, backBufCnt, rtvClearValue, dsvClearValue
+		);
+	}
+
+	void open( dx::DXGIFactory& factory, D3D12Device& device, D3D12CmdQueue& cmdQueue,
+		MyStringView wndName, DescriptorRange<DescriptorHeapCPU>& rtvRangeBackBuf,
+		DescriptorRange<DescriptorHeapCPU>& dsvRangeBackBuf,
+		std::size_t backBufCnt = MyBase::defBackBufCnt,
+		const D3D12_CLEAR_VALUE& rtvClearValue = { .Format = DXGI_FORMAT_R8G8B8A8_UNORM, .Color = { 0.0f, 0.0f, 0.0f, 1.0f } },
+		const D3D12_CLEAR_VALUE& dsvClearValue = { .Format = DXGI_FORMAT_D32_FLOAT, .DepthStencil = { 1.0f, 0u } }
+	) {
+		open( factory, device, cmdQueue, wndName, defWndFrame(),
+			rtvRangeBackBuf, dsvRangeBackBuf, backBufCnt, rtvClearValue, dsvClearValue
+		);
+	}
+
+	void open( dx::DXGIFactory& factory, D3D12Device& device, D3D12CmdQueue& cmdQueue,
+		MyStringView wndName, const Win32::WndFrame& wndFrame,
+		DescriptorRange<DescriptorHeapCPU>& rtvRangeBackBuf,
+		DescriptorRange<DescriptorHeapCPU>& dsvRangeBackBuf,
+		std::size_t backBufCnt = MyBase::defBackBufCnt,
+		const D3D12_CLEAR_VALUE& rtvClearValue = { .Format = DXGI_FORMAT_R8G8B8A8_UNORM, .Color = { 0.0f, 0.0f, 0.0f, 1.0f } },
+		const D3D12_CLEAR_VALUE& dsvClearValue = { .Format = DXGI_FORMAT_D32_FLOAT, .DepthStencil = { 1.0f, 0u } }
+	) {
+		MyBase::open(factory, cmdQueue.get().Get(), wndName, wndFrame, backBufCnt);
+		buildBuffers(device);
+		buildViews(device, rtvRangeBackBuf, dsvRangeBackBuf);
+	}
+
+	void clearRenderTarget(D3D12GfxCmdList& cmdList) {
+		cmdList.get()->ClearRenderTargetView( rtvs_[backBufIdx()].cpuHandle(),
+			rtvClearValue_.Color, 0u, nullptr
+		);
+	}
+
+	void clearDepthStencil(D3D12GfxCmdList& cmdList) {
+		cmdList.get()->ClearDepthStencilView( dsv_.cpuHandle(), D3D12_CLEAR_FLAG_DEPTH,
+			dsvClearValue_.DepthStencil.Depth, dsvClearValue_.DepthStencil.Stencil, 0u,
+			nullptr
+		);
+	}
+
+	void updateBackBufIdx() {
+		backBufIdx_ = get()->GetCurrentBackBufferIndex();
+	}
+
+	std::size_t backBufIdx() const NOEXCEPT {
+		return backBufIdx_;
+	}
+
+private:
+	void buildBuffers(D3D12Device& device, const D3D12_CLEAR_VALUE& rtvClearValue,
+		const D3D12_CLEAR_VALUE& dsvClearValue
+	);
+	void buildViews( D3D12Device& device,
+		DescriptorRange<DescriptorHeapCPU>& rtvRangeBackBuf,
+		DescriptorRange<DescriptorHeapCPU>& dsvRangeBackBuf
+	);
+	void rebuildViews(D3D12Device& device);
+	void preResizeBuffers(void* pContext) override;
+    void postResizeBuffers(void* pContext) override;
+
+	std::vector<D3D12Resource> backBuffers_;
+	D3D12Resource depthBuffer_;
+	std::vector<DescriptorCPU> rtvs_;
+	D3D12_CLEAR_VALUE rtvClearValue_;
+	D3D12_CLEAR_VALUE dsvClearValue_;
+	DescriptorCPU dsv_;
+	std::size_t backBufIdx_;
+};
+
+template <class Traits>
+void Window<Traits>::buildBuffers( D3D12Device& device,
+	const D3D12_CLEAR_VALUE& rtvClearValue, const D3D12_CLEAR_VALUE& dsvClearValue
+) {
+	rtvClearValue_ = rtvClearValue;
+	dsvClearValue_ = dsvClearValue;
+
+	backBuffers_.resize( this->backBufCnt() );
+	for (auto i = 0u; i < backBuffers_.size(); ++i) {
+		get()->GetBuffer(i, __uuidof(D3D12Resource::InterfaceType), &backBuffers_[i]);
+	}
+
+	depthBuffer_ = D3D12Resource( device, D3D12_RESOURCE_DESC{
+		.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+		.Alignment = 0u,
+		.Width = this->client().width,
+		.Height = this->client().height,
+		.DepthOrArraySize = 1u,
+		.MipLevels = 1u,
+		.Format = DXGI_FORMAT_D32_FLOAT,
+		.SampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
+		.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+		.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
+	}, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_DEPTH_WRITE, &dsvClearValue_ );
+}
+
+template <class Traits>
+void Window<Traits>::buildViews( D3D12Device& device,
+	DescriptorRange<DescriptorHeapCPU>& rtvRangeBackBuf,
+	DescriptorRange<DescriptorHeapCPU>& dsvRangeBackBuf
+) {
+	rtvs_.reserve( backBuffers_.size() );
+	for (auto i = 0u; i < rtvs_.size(); ++i) {
+		rtvs_.push_back( rtvRangeBackBuf.alloc() );
+		backBuffers_[i].makeDefRtv(device, rtvs_[i]);
+	}
+
+	dsv_ = dsvRangeBackBuf.alloc();
+	depthBuffer_.makeDefDsv(device, dsv_);
+}
+
+template <class Traits>
+void Window<Traits>::rebuildViews(D3D12Device& device) {
+	for (auto i = 0u; i < backBuffers_.size(); ++i) {
+		backBuffers_[i].remakeDefRtv(i, device);
+	}
+
+	depthBuffer_.remakeDefDsv(0u, device);
+}
+
+template <class Traits>
+void Window<Traits>::preResizeBuffers(void* pContext) {
+	backBuffers_.clear();
+	depthBuffer_ = D3D12Resource();
+}
+
+template <class Traits>
+void Window<Traits>::postResizeBuffers(void* pContext) {
+	buildBuffers(*static_cast<D3D12Device*>(pContext));
+	rebuildViews(*static_cast<D3D12Device*>(pContext));
+}
 
 }   // namespace gfx::d3d12
 

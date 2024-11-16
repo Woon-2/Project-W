@@ -194,6 +194,41 @@ std::size_t D3D12Resource::makeDsv(const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
 	return views_.size() - 1u;
 }
 
+void D3D12Resource::remakeCbv( std::size_t idx,
+	const D3D12_CONSTANT_BUFFER_VIEW_DESC& cbvDesc, D3D12Device& device
+) {
+	assert(views_.at(idx).type() == Descriptor::Type::CBV);
+	device.get()->CreateConstantBufferView(&cbvDesc, views_.at(idx).cpuHandle());
+}
+
+void D3D12Resource::remakeSrv( std::size_t idx,
+	const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc, D3D12Device& device
+) {
+	assert(views_.at(idx).type() == Descriptor::Type::SRV);
+	device.get()->CreateShaderResourceView(src_.Get(), &srvDesc, views_.at(idx).cpuHandle());
+}
+
+void D3D12Resource::remakeUav( std::size_t idx,
+	const D3D12_UNORDERED_ACCESS_VIEW_DESC& uavDesc, D3D12Device& device
+) {
+	assert(views_.at(idx).type() == Descriptor::Type::UAV);
+	device.get()->CreateUnorderedAccessView(src_.Get(), nullptr, &uavDesc, views_.at(idx).cpuHandle());
+}
+
+void D3D12Resource::remakeRtv( std::size_t idx,
+	const D3D12_RENDER_TARGET_VIEW_DESC& rtvDesc, D3D12Device& device
+) {
+	assert(views_.at(idx).type() == Descriptor::Type::RTV);
+	device.get()->CreateRenderTargetView(src_.Get(), &rtvDesc, views_.at(idx).cpuHandle());
+}
+
+void D3D12Resource::remakeDsv( std::size_t idx,
+	const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc, D3D12Device& device
+) {
+	assert(views_.at(idx).type() == Descriptor::Type::DSV);
+	device.get()->CreateDepthStencilView(src_.Get(), &dsvDesc, views_.at(idx).cpuHandle());
+}
+
 std::size_t D3D12Resource::makeDefCbv(D3D12Device& device, Descriptor& destView) {
 	destView.setType(Descriptor::Type::CBV);
 	auto desc = D3D12_CONSTANT_BUFFER_VIEW_DESC{
@@ -232,6 +267,35 @@ std::size_t D3D12Resource::makeDefDsv(D3D12Device& device, Descriptor& destView)
 	device.get()->CreateDepthStencilView(src_.Get(), nullptr, destView.cpuHandle());
 	views_.push_back(destView);
 	return views_.size() - 1u;
+}
+
+void D3D12Resource::remakeDefCbv(std::size_t idx, D3D12Device& device) {
+	assert(views_.at(idx).type() == Descriptor::Type::CBV);
+	auto desc = D3D12_CONSTANT_BUFFER_VIEW_DESC{
+		.BufferLocation = src_->GetGPUVirtualAddress(),
+		.SizeInBytes = static_cast<UINT>( desc_.Width * desc_.Height )
+	};
+	device.get()->CreateConstantBufferView(&desc, views_.at(idx).cpuHandle());
+}
+
+void D3D12Resource::remakeDefSrv(std::size_t idx, D3D12Device& device) {
+	assert(views_.at(idx).type() == Descriptor::Type::SRV);
+	device.get()->CreateShaderResourceView(src_.Get(), nullptr, views_.at(idx).cpuHandle());
+}
+
+void D3D12Resource::remakeDefUav(std::size_t idx, D3D12Device& device) {
+	assert(views_.at(idx).type() == Descriptor::Type::UAV);
+	device.get()->CreateUnorderedAccessView(src_.Get(), nullptr, nullptr, views_.at(idx).cpuHandle());
+}
+
+void D3D12Resource::remakeDefRtv(std::size_t idx, D3D12Device& device) {
+	assert(views_.at(idx).type() == Descriptor::Type::RTV);
+	device.get()->CreateRenderTargetView(src_.Get(), nullptr, views_.at(idx).cpuHandle());
+}
+
+void D3D12Resource::remakeDefDsv(std::size_t idx, D3D12Device& device) {
+	assert(views_.at(idx).type() == Descriptor::Type::DSV);
+	device.get()->CreateDepthStencilView(src_.Get(), nullptr, views_.at(idx).cpuHandle());
 }
 
 void D3D12Resource::makeDefVbv(D3D12Device& device) {
