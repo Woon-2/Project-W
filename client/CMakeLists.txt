@@ -43,7 +43,6 @@ target_sources(client
         src/app.cpp include/app.hpp
         src/game.cpp include/game.hpp
         src/mygfx.cpp include/mygfx.hpp
-        src/ecsExcept.cpp include/ecsExcept.hpp
         src/player.cpp include/player.hpp
         src/inputSystem.cpp include/inputSystem.hpp
         src/assetSystem.cpp include/assetSystem.hpp
@@ -52,12 +51,11 @@ target_sources(client
         src/physicsSystem.cpp include/physicsSystem.hpp
         src/stage.cpp include/stage.hpp
         src/Timer.cpp include/Timer.hpp
-        src/ecs.cpp include/ecs.hpp
         src/ccoord.cpp include/ccoord.hpp
 
         include/testInput.hpp
         include/systems.hpp
-        )
+)
 
 include(auto_configure)
 

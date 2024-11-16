@@ -1,5 +1,5 @@
-#ifndef __Ecsxx_HPP
-#define __Ecsxx_HPP
+#ifndef __Ecs_HPP
+#define __Ecs_HPP
 
 #include "ecsExcept.hpp"
 
@@ -9,6 +9,7 @@
 #include <thread>
 #include <map>
 #include <ranges>
+#include <algorithm>
 #include <optional>
 #include <memory>
 #include <tuple>
@@ -70,26 +71,21 @@ public:
         : id_(fetch(std::this_thread::get_id())) {}
 
     ~Entity() {
-        if (id_.has_value()) {
-            release(std::this_thread::get_id(), id_.value());
-        }
+        release(std::this_thread::get_id());
     }
 
     Entity(const Entity&) = delete;
     Entity& operator=(const Entity&) = delete;
 
     Entity(Entity&& other) NOEXCEPT
-        : id_(std::move(other.id_)) {
-        other.id_.reset();
-    }
+        : id_(std::exchange(other.id_, std::nullopt)) {}
 
     Entity& operator=(Entity&& other) NOEXCEPT {
         if (this == &other) {
             return *this;
         }
 
-        id_ = std::move(other.id_);
-        other.id_.reset();
+        id_ = std::exchange(other.id_, std::nullopt);
 
         return *this;
     }
@@ -104,18 +100,18 @@ public:
     const ConcreteComponent& as() const;
 
     template <class ConcreteComponent>
-    std::weak_ptr<ConcreteComponent> get();
+    ConcreteComponent* get();
     template <class ConcreteComponent>
-    std::weak_ptr<const ConcreteComponent> getC() const {
+    const ConcreteComponent* getC() const {
         return get<ConcreteComponent>();
     }
     template <class ConcreteComponent>
-    std::weak_ptr<const ConcreteComponent> get() const;
-    std::weak_ptr<Component> get(Components type);
-    std::weak_ptr<const Component> getC(Components type) {
+    const ConcreteComponent* get() const;
+    Component* get(Components type);
+    const Component* getC(Components type) {
         return get(type);
     }
-    std::weak_ptr<const Component> get(Components type) const;
+    const Component* get(Components type) const;
 
     template <class ConcreteComponent, class ... Args>
     void createComponent(Args&& ... args);
@@ -123,6 +119,8 @@ public:
     bool valid() const NOEXCEPT {
         return id_.has_value();
     }
+
+    void release(std::thread::id threadId);
 
     auto operator<=>(const Entity& other) const NOEXCEPT = default;
 
@@ -139,23 +137,12 @@ private:
         return sEntityPools[poolIdx(threadId)].size() >= cnt;
     }
 
-    ID fetch(std::thread::id threadId);
-    std::vector<ID> fetch(std::thread::id threadId, std::size_t cnt);
-    void release(std::thread::id threadId, ID id) {
-        sEntityPools[poolIdx(threadId)].push_back(id);
-    }
-    template <std::ranges::range R>
-    void release(std::thread::id threadId, const R& ids) {
-        auto idx = poolIdx(threadId);
-        sEntityPools[idx].insert(
-            sEntityPools[idx].end(), std::begin(ids), std::end(ids)
-        );
-    }
+    static ID fetch(std::thread::id threadId);
+    static std::vector<ID> fetch(std::thread::id threadId, std::size_t cnt);
 
     static std::vector<std::deque<ID>> sEntityPools;
     static std::map<std::thread::id, std::size_t> sThreadMap;
     static std::atomic_flag sLock;
-    std::vector<void*> components_;
     std::optional<ID> id_;
 };
 
@@ -163,31 +150,31 @@ class Component {
 protected:
     friend class Entity;
 
-    static std::weak_ptr<Component> at(Components type, Entity::ID idx) {
+    static Component* at(Components type, Entity::ID idx) {
         if (static_cast<std::size_t>(idx) >= sComponents[etoi(type)].size()) {
             throw ECS_EXCEPT("Component index out of range");
         }
 
-        return sComponents[etoi(type)][idx];
+        return sComponents[etoi(type)][idx].get();
     }
 
-    static std::weak_ptr<const Component> atC(Components type, Entity::ID idx) {
+    static const Component* atC(Components type, Entity::ID idx) {
         if (static_cast<std::size_t>(idx) >= sComponents[etoi(type)].size()) {
             throw ECS_EXCEPT("Component index out of range");
         }
 
-        return sComponents[etoi(type)][idx];
+        return sComponents[etoi(type)][idx].get();
     }
 
 public:
     Component(const Entity& entity)
         : entityID_(entity.id()) {}
 
-    virtual ~Component() = default;
-    Component(const Component&) = default;
-    Component& operator=(const Component&) = default;
-    Component(Component&&) noexcept = default;
-    Component& operator=(Component&&) noexcept = default;
+    virtual ~Component();
+    Component(const Component&) = delete;
+    Component& operator=(const Component&) = delete;
+    Component(Component&&) noexcept;
+    Component& operator=(Component&&) noexcept;
 
     bool valid() const NOEXCEPT {
         return entityID_.has_value();
@@ -210,7 +197,7 @@ private:
         }
     }
 
-    static std::vector< std::vector<std::shared_ptr<Component> > > sComponents;
+    static std::vector< std::vector<std::unique_ptr<Component>> > sComponents;
     std::optional<Entity::ID> entityID_;
 };
 
@@ -230,7 +217,7 @@ ConcreteComponent& Entity::as() {
         throw ECS_EXCEPT("Entity is invalid");
     }
 
-    if (auto component = ConcreteComponent::at(id_.value()).lock()) {
+    if (auto component = ConcreteComponent::at(id_.value())()) {
         return *component;
     }
 
@@ -243,7 +230,7 @@ const ConcreteComponent& Entity::as() const {
         throw ECS_EXCEPT("Entity is invalid");
     }
 
-    if (auto component = ConcreteComponent::atC(id_.value()).lock()) {
+    if (auto component = ConcreteComponent::atC(id_.value())) {
         return *component;
     }
 
@@ -251,7 +238,7 @@ const ConcreteComponent& Entity::as() const {
 }
 
 template <class ConcreteComponent>
-std::weak_ptr<ConcreteComponent> Entity::get() {
+ConcreteComponent* Entity::get() {
     if (!valid()) {
         return {};
     }
@@ -260,7 +247,7 @@ std::weak_ptr<ConcreteComponent> Entity::get() {
 }
 
 template <class ConcreteComponent>
-std::weak_ptr<const ConcreteComponent> Entity::get() const {
+const ConcreteComponent* Entity::get() const {
     if (!valid()) {
         return {};
     }
@@ -268,7 +255,7 @@ std::weak_ptr<const ConcreteComponent> Entity::get() const {
     return ConcreteComponent::atC(id_.value());
 }
 
-inline std::weak_ptr<Component> Entity::get(Components type) {
+inline Component* Entity::get(Components type) {
     if (!valid()) {
         return {};
     }
@@ -276,7 +263,7 @@ inline std::weak_ptr<Component> Entity::get(Components type) {
     return Component::at(type, id_.value());
 }
 
-inline std::weak_ptr<const Component> Entity::get(Components type) const {
+inline const Component* Entity::get(Components type) const {
     if (!valid()) {
         return {};
     }
@@ -287,19 +274,6 @@ inline std::weak_ptr<const Component> Entity::get(Components type) const {
 template <class ... ConcreteComponents>
 class System {
 protected:
-    template <class ConcreteComponent>
-    bool contains(Entity::ID id) {
-        constexpr auto compIdx = indexOf<ConcreteComponent, ConcreteComponents...>();
-        static_assert(compIdx != -1, "Component not found");
-
-        const auto& compVec = std::get<compIdx>(componentsTuple_);
-
-        return std::ranges::find_if( compVec, [&id](const auto& component) {
-            auto compEntityID = component.lock()->entityID();
-            return compEntityID.has_value() && compEntityID.value() == id;
-        } ) != std::end(compVec);
-    }
-
     template <class ConcreteComponent>
     auto& components() NOEXCEPT {
         constexpr auto compIdx = indexOf<ConcreteComponent, ConcreteComponents...>();
@@ -338,9 +312,9 @@ public:
     }
 
 private:
-    std::tuple< std::vector<std::weak_ptr<ConcreteComponents>>... > componentsTuple_;
+    std::tuple< std::vector<ConcreteComponents*>... > componentsTuple_;
 };
 
 }   // namespace ecs
 
-#endif  // __Ecsxx_HPP
+#endif  // __Ecs_HPP

@@ -1,5 +1,5 @@
-#ifndef __ECSEXCEPT_HPP
-#define __ECSEXCEPT_HPP
+#ifndef __EcsExcept_HPP
+#define __EcsExcept_HPP
 
 #include <string>
 #include <string_view>
@@ -24,4 +24,4 @@ namespace ecs {
 
 }
 
-#endif // !__ECSEXCEPT_HPP
+#endif // __EcsExcept_HPP

@@ -244,6 +244,21 @@ gen_shader_path()
 
 add_dependencies(gfx hlsl)
 
+# === ecs ===
+add_library(ecs
+    src/ecs.cpp include/ecs.hpp
+    include/ecsExcept.hpp
+)
+
+add_library(common::ecs ALIAS ecs)
+
+auto_configure(ecs PRIVATE)
+
+target_include_directories(ecs
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+
 # === net ===
 add_library(net
     src/net.cpp include/net.hpp
