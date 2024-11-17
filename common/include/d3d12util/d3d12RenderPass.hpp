@@ -134,8 +134,9 @@ namespace rp {
 
 class PBRIllumination : public gfx::d3d12::RenderPass {
 public:
-    PBRIllumination(D3D12Device& device, ShaderPBRIllumination& shader)
-        : protocol_( shader.makeProtocol( device,
+    PBRIllumination( D3D12Device& device, ShaderPBRIllumination& shader,
+        const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
+    ) : viewport_(vp), protocol_( shader.makeProtocol( device,
             RenderProtocol::Desc{ makeDesc() }
         ) ), lights_(), batch_(), pCamera_(nullptr) {}
 

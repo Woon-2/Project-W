@@ -56,6 +56,8 @@ enum class Components {
     AssetLinker,
     Coord,
     Model,
+    Camera,
+    Light,
     Size
 };
 
@@ -271,6 +273,9 @@ inline const Component* Entity::get(Components type) const {
     return Component::atC(type, id_.value());
 }
 
+template <class T>
+using SysCompCont = std::vector<T>;
+
 template <class ... ConcreteComponents>
 class System {
 protected:
@@ -312,7 +317,7 @@ public:
     }
 
 private:
-    std::tuple< std::vector<ConcreteComponents*>... > componentsTuple_;
+    std::tuple< SysCompCont<ConcreteComponents*>... > componentsTuple_;
 };
 
 }   // namespace ecs
