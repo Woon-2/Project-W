@@ -614,8 +614,8 @@ void Window<Traits>::postResizeBuffers(void* pContext) {
 
 template <Win32::Win32Char T>
 struct BasicD3D12WTraits : public dx::BasicDXDWTraits<T> {
-    using MyWindow = DXWindow<BasicD3D12WTraits>;
-    using MyBase = Win32::BasicDXDWTraits<T>;
+    using MyWindow = dx::DXWindow<BasicD3D12WTraits>;
+    using MyBase = dx::BasicDXDWTraits<T>;
     using MyChar = T;
     using MyString = std::basic_string<MyChar>;
     using MyStringView = std::basic_string_view<MyChar>;
