@@ -4,19 +4,23 @@ namespace gfx {
 
 namespace d3d12engine {
 
-Core::Core(dx::DXGIFactory& factory)
-    : device_( d3d12::getAvailableAdapter(factory, D3D_FEATURE_LEVEL_12_1), D3D_FEATURE_LEVEL_12_1 ),
+Core::Core()
+    : factory_(),
+    device_( d3d12::getAvailableAdapter(factory_, D3D_FEATURE_LEVEL_12_1), D3D_FEATURE_LEVEL_12_1 ),
     cmdQueue_( device_ ), cmdList_( device_ ),
     rtvHeap_(device_, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, initialRtvHeapSize),
     dsvHeap_(device_, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, initialDsvHeapSize),
     cbvSrvUavHeap_(device_, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, initialCbvSrvUavHeapSize),
     descRanges_(rtvHeap_, dsvHeap_, cbvSrvUavHeap_),
     window_(), fence_(device_) {
-    window_.open( factory, device_, cmdQueue_, "Project-W",
+    window_.open( factory_, device_, cmdQueue_, "Project-W",
         Win32::WndFrame{ .x = 100, .y = 100, .width = 1024, .height = 768 },
         descRanges_.rtvRangeBackBuf, descRanges_.dsvRangeBackBuf
     );
     window_.show(SW_SHOW);
+    factory_.get().Reset();
+
+    ecs::init( ecs::InitDesc{ .threadCnt = 1u, .entityPoolSize = 0x100u } );
 }
 
 void Core::render(IRenderer& renderer) {

@@ -30,10 +30,14 @@ class Core {
 public:
     using MyWindow = d3d12::Window<d3d12::BasicD3D12WTraits<char>>;
 
-    Core(dx::DXGIFactory& factory);
+    Core();
 
     d3d12::D3D12GfxCmdList fetchCmdList() {
         return cmdList_;
+    }
+
+    static void setHInst(HINSTANCE hInstance) NOEXCEPT {
+        MyWindow::setHInst(hInstance);
     }
 
     void render(IRenderer& renderer);
@@ -42,6 +46,7 @@ public:
     const MyWindow& window() const NOEXCEPT { return window_; }
 
 private:
+    dx::DXGIFactory factory_;
     d3d12::D3D12Device device_;
     d3d12::D3D12CmdQueue cmdQueue_;
     d3d12::D3D12GfxCmdList cmdList_;
