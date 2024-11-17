@@ -2,10 +2,10 @@
 
 namespace gfx {
 
-namespace d3d12 {
+namespace d3d12engine {
 
 Core::Core(dx::DXGIFactory& factory)
-    : device_( getAvailableAdapter(factory, D3D_FEATURE_LEVEL_12_1), D3D_FEATURE_LEVEL_12_1 ),
+    : device_( d3d12::getAvailableAdapter(factory, D3D_FEATURE_LEVEL_12_1), D3D_FEATURE_LEVEL_12_1 ),
     cmdQueue_( device_ ), cmdList_( device_ ),
     rtvHeap_(device_, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, initialRtvHeapSize),
     dsvHeap_(device_, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, initialDsvHeapSize),
@@ -27,6 +27,6 @@ void Core::render(IRenderer& renderer) {
     fence_.wait();
 }
 
-}   // namespace gfx::d3d12
+}   // namespace gfx::d3d12engine
 
 }   // namespace gfx

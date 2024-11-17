@@ -10,7 +10,7 @@
 
 namespace gfx {
 
-namespace d3d12 {
+namespace d3d12engine {
 
 inline constexpr auto initialRtvHeapSize = 3u;
 inline constexpr auto initialDsvHeapSize = 1u;
@@ -24,29 +24,35 @@ public:
 
 class Core {
 public:
-    using MyWindow = Window<BasicD3D12WTraits<char>>;
+    using MyWindow = d3d12::Window<d3d12::BasicD3D12WTraits<char>>;
 
     Core(dx::DXGIFactory& factory);
 
-    D3D12GfxCmdList fetchCmdList() {
+    d3d12::D3D12GfxCmdList fetchCmdList() {
         return cmdList_;
     }
 
     void render(IRenderer& renderer);
 
 private:
-    D3D12Device device_;
-    D3D12CmdQueue cmdQueue_;
-    D3D12GfxCmdList cmdList_;
-    DescriptorHeapCPU rtvHeap_;
-    DescriptorHeapCPU dsvHeap_;
-    DescriptorHeapGPU cbvSrvUavHeap_;
-    DescriptorRanges descRanges_;
+    d3d12::D3D12Device device_;
+    d3d12::D3D12CmdQueue cmdQueue_;
+    d3d12::D3D12GfxCmdList cmdList_;
+    d3d12::DescriptorHeapCPU rtvHeap_;
+    d3d12::DescriptorHeapCPU dsvHeap_;
+    d3d12::DescriptorHeapGPU cbvSrvUavHeap_;
+    d3d12::DescriptorRanges descRanges_;
     MyWindow window_;
-    Fence fence_;
+    d3d12::Fence fence_;
 };
 
-}   // namespace gfx::d3d12
+class Scene {
+public:
+
+private:
+};
+
+}   // namespace gfx::d3d12engine
 
 }   // namespace gfx
 
