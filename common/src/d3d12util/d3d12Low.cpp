@@ -346,6 +346,41 @@ void D3D12Resource::commitState(D3D12GfxCmdList& cmdList, D3D12_RESOURCE_STATES 
 	state_ = resState;
 }
 
+Fence::Fence(D3D12Device& device, UINT64 initValue = 0u)
+	: dx::DXWrapper<ID3D12Fence>(), value_(initValue), event_(nullptr) {
+	DX_THROW_FAILED( device.get()->CreateFence(
+		initValue, D3D12_FENCE_FLAG_NONE, __uuidof(InterfaceType), &src_
+	) );
+
+	event_ = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+
+	if (event_ == nullptr) {
+		DX_THROW_FAILED( HRESULT_FROM_WIN32(GetLastError()) );
+	}
+}
+
+void Fence::signal(UINT64 value) {
+	DX_THROW_FAILED( src_->Signal(value) );
+	value_ = value;
+}
+
+void Fence::signal() {
+	signal(value_ + 1);
+}
+
+void Fence::wait(UINT64 value) {
+	if (src_->GetCompletedValue() >= value) {
+		return;
+	}
+
+	DX_THROW_FAILED( src_->SetEventOnCompletion(value, event_) );
+	WaitForSingleObject(event_, INFINITE);
+}
+
+void Fence::wait() {
+	wait(value_);
+}
+
 }   // namespace gfx::d3d12
 
 }   // namespace gfx

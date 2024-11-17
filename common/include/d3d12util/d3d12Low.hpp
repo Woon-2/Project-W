@@ -630,6 +630,21 @@ struct BasicD3D12WTraits : public dx::BasicDXDWTraits<T> {
     }
 };
 
+class Fence : public dx::DXWrapper<ID3D12Fence> {
+public:
+	Fence() = default;
+	Fence(D3D12Device& device, UINT64 initValue = 0u);
+
+	void signal(UINT64 value);
+	void signal();
+	void wait(UINT64 value);
+	void wait();
+
+private:
+	UINT64 value_;
+	HANDLE event_;
+};
+
 }   // namespace gfx::d3d12
 
 }   // namespace gfx
