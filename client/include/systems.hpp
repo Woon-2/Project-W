@@ -3,20 +3,16 @@
 
 #include "inputSystem.hpp"
 #include "physicsSystem.hpp"
-#include "assetSystem.hpp"
-#include "ccoord.hpp"
-#include "cmodel.hpp"
+
+#include "d3d12engine/d3d12Engine.hpp"
 
 struct Systems {
-    AssetSystem assetSystem;
     PhysicsSystem physicsSystem;
     InputSystem inputSystem;
-    CoordRoot coordRoot;
-    Fragmentizer fragmentizer;
+    gfx::d3d12engine::CoordRoot coordRoot;
 
-    Systems(gfx::d3d12::Core& core, ic::Keyboard& keyboard, std::size_t fenceIdx = 0)
-        : assetSystem(core, fenceIdx), physicsSystem(), inputSystem(keyboard),
-        coordRoot(), fragmentizer() {}
+    Systems(ic::Keyboard& keyboard, std::size_t fenceIdx = 0)
+        : physicsSystem(), inputSystem(keyboard), coordRoot() {}
 };
 
 #endif  // __Systems_HPP
