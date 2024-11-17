@@ -4,43 +4,44 @@
 #include "mouseWin32Adaptor.hpp"
 #include "keyboardWin32Adaptor.hpp"
 
-#include "d3d12core.hpp"
+#include "d3d12engine/d3d12Engine.hpp"
 #include "Timer.hpp"
-
-#include "systems.hpp"
-#include "stage.hpp"
 
 #include <vector>
 #include <memory>
 
+// this is for temporary use
+class Stage {
+
+};
+
 class Game {
 public:
     static constexpr auto defLockFPS = 600.;
-    using MyWindow = gfx::d3d12::Window<gfx::d3d12::BasicD3D12WTraits<char>>;
-    using RenderFunc = void (Game::*)();
+    using Mouse = ic::Win32::Mouse;
+    using Keyboard = ic::Win32::Keyboard;
     
-    Game(gfx::ICore& gfx, MyWindow& wnd, ic::Mouse& mouse, ic::Keyboard& keyboard);
+    Game();
 
-    void update();
-    void render();
+    int run();
+
     double fpsLock() const { return lockFPS_; }
     double setFPSLock(double fps) { return lockFPS_ = fps; }
 
 private:
+    void update();
+    void render();
+
     void setupWndMsgHandlers();
     void initialRender();
     void regularRender();
 
-    Systems systems_;
+    gfx::d3d12engine::Core core_;
+    Mouse mouse_;
+    Keyboard keyboard_;
     Timer timer_;
     std::unique_ptr<Stage> pStage_;
-    gfx::ICore* pGfx_;
-    MyWindow* pWnd_;
-    ic::Mouse* pMouse_;
-    RenderFunc renderFunc_;
     double lockFPS_;
-    std::size_t curFenceIdx_;
-    std::size_t prevFenceIdx_;
 };
 
 #endif // __GAME_HPP
