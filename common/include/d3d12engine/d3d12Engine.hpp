@@ -38,6 +38,9 @@ public:
 
     void render(IRenderer& renderer);
 
+    MyWindow& window() NOEXCEPT { return window_; }
+    const MyWindow& window() const NOEXCEPT { return window_; }
+
 private:
     d3d12::D3D12Device device_;
     d3d12::D3D12CmdQueue cmdQueue_;
