@@ -26,15 +26,15 @@
     static constexpr ecs::Components type() NOEXCEPT {  \
         return ecs::Components::__ComponentType;    \
     }   \
-    static std::weak_ptr<__ComponentType> at(ecs::Entity::ID id) {    \
-        if (auto ptr = ecs::Component::at(ecs::Components::__ComponentType, id).lock()) {    \
-            return std::static_pointer_cast<__ComponentType>(ptr);    \
+    static __ComponentType* at(ecs::Entity::ID id) {    \
+        if (auto ptr = ecs::Component::at(ecs::Components::__ComponentType, id)) {    \
+            return static_cast<__ComponentType*>(ptr);    \
         }   \
         throw ECS_EXCEPT( #__ComponentType " is dead");    \
     }   \
-    static std::weak_ptr<const __ComponentType> atC(ecs::Entity::ID id) {    \
-        if (auto ptr = ecs::Component::atC(ecs::Components::__ComponentType, id).lock()) {    \
-            return std::static_pointer_cast<const __ComponentType>(ptr);    \
+    static const __ComponentType* atC(ecs::Entity::ID id) {    \
+        if (auto ptr = ecs::Component::atC(ecs::Components::__ComponentType, id)) {    \
+            return static_cast<const __ComponentType*>(ptr);    \
         }   \
         throw ECS_EXCEPT( #__ComponentType " is dead");    \
     }
