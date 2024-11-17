@@ -442,6 +442,10 @@ private:
         return materialMap_;
     }
 
+    const auto& materialMap() const noexcept {
+        return materialMap_;
+    }
+
     void bind(D3D12GfxCmdList& cmdList) const;
     void draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt) const;
 
@@ -468,6 +472,10 @@ public:
         void addChild(Node* child);
         auto& coord() noexcept { return coord_; }
         const auto& coord() const noexcept { return coord_; }
+        auto& meshes() noexcept { return meshes_; }
+        const auto& meshes() const noexcept { return meshes_; }
+        auto& children() noexcept { return children_; }
+        const auto& children() const noexcept { return children_; }
 
     private:
         gfx::coord::System coord_;
@@ -492,6 +500,8 @@ public:
 
     auto& nodes() noexcept { return nodeStorage_; }
     const auto& nodes() const noexcept { return nodeStorage_; }
+    Node* root() noexcept { return pRoot_; }
+    const Node* root() const noexcept { return pRoot_; }
 
 private:
     std::vector<Node> nodeStorage_;
@@ -503,11 +513,14 @@ class Mesh {
 public:
     friend class Shader;
 
-    Mesh(RefMesh& refMesh, std::string_view initialState)
-        : state_(initialState), materialTable_(), pRefMesh_(&refMesh),
+    Mesh(const RefMesh& refMesh, std::string_view initialState)
+        : Mesh(refMesh, std::string(initialState)) {}
+
+    Mesh(const RefMesh& refMesh, std::string&& initialState)
+        : state_(std::move(initialState)), materialTable_(), pRefMesh_(&refMesh),
         pCurMaterial_(nullptr) {
         for (auto& [key, material] : refMesh.materialMap()) {
-            materialTable_[key] = &material;
+            materialTable_[key] = material;
         }
     }
 
@@ -527,16 +540,20 @@ public:
         return materialTable_.contains(key);
     }
 
-    void map(const MaterialMapKey& key, Material* pMaterial) {
-        materialTable_[key] = pMaterial;
+    void map(const MaterialMapKey& key, const Material& mat) {
+        materialTable_[key] = mat;
+    }
+
+    void map(const MaterialMapKey& key, const Material&& mat) {
+        materialTable_[key] = std::move(mat);
     }
 
     Material& material(const std::string& renderPass) {
-        return *materialTable_.at(MaterialMapKey{ .state = state_, .renderPassID = renderPass });
+        return materialTable_.at(MaterialMapKey{ .state = state_, .renderPassID = renderPass });
     }
 
     const Material& material(const std::string& renderPass) const {
-        return *materialTable_.at(MaterialMapKey{ .state = state_, .renderPassID = renderPass });
+        return materialTable_.at(MaterialMapKey{ .state = state_, .renderPassID = renderPass });
     }
 
     const RefMesh& refMesh() const noexcept {
@@ -553,7 +570,7 @@ private:
     }
 
     std::string state_;
-    std::map<MaterialMapKey, Material*> materialTable_;
+    std::map<MaterialMapKey, Material> materialTable_;
     const RefMesh* pRefMesh_;
     Material* pCurMaterial_;
 };
@@ -566,6 +583,10 @@ public:
         Node(const Model* pModel = nullptr)
             : coord_(), meshes_(), children_(), pModel_(pModel) {}
         void addMesh(Mesh&& mesh);
+        void emplaceMesh(const RefMesh& refMesh, std::string&& initialState);
+        void emplaceMesh(const RefMesh& refMesh, std::string_view initialState) {
+            emplaceMesh(refMesh, std::string(initialState));
+        }
         void addChild(Node* child);
         auto& coord() noexcept { return coord_; }
         const auto& coord() const noexcept { return coord_; }
@@ -579,7 +600,11 @@ public:
         const Model* pModel_;
     };
 
+    Model() = default;
     ~Model() = default;
+    Model(const RefModel& ref, std::string_view initialState)
+        : Model(ref, std::string(initialState)) {}
+    Model(const RefModel& ref, std::string&& initialState);
     Model(const Model& other);
     Model(Model&& other) noexcept;
     Model& operator=(const Model& other);
@@ -589,8 +614,10 @@ public:
     const auto& nodes() const noexcept { return nodeStorage_; }
 
     std::string_view state() const noexcept { return state_; }
-    void setState(std::string_view state) { state_ = state; }
-    void setState(std::string&& state) { state_ = std::move(state); }
+    void setState(std::string_view state) {
+        setState(std::string(state));
+    }
+    void setState(std::string&& state);
 
 private:
     std::vector<Node> nodeStorage_;

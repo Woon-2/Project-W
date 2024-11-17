@@ -4,25 +4,6 @@ namespace gfx {
 
 namespace d3d12 {
 
-// SharedDescriptorRanges::SharedDescriptorRanges(
-//     const Desc& desc
-// ) : sizeHelper_(0u),
-//     cbvRange_(desc.cbvSrvUavHeap, sizeHelper_, accSize(desc.rangeSizeCbv), DescriptorGPU::Type::CBV),
-//     sbufRange_(desc.cbvSrvUavHeap, sizeHelper_, accSize(desc.rangeSizeSbuf), DescriptorGPU::Type::SRV),
-//     tex2dRange_(desc.cbvSrvUavHeap, sizeHelper_, accSize(desc.rangeSizeTex2d), DescriptorGPU::Type::SRV),
-//     tex2dArrRange_(desc.cbvSrvUavHeap, sizeHelper_, accSize(desc.rangeSizeTex2dArr), DescriptorGPU::Type::SRV),
-//     texCubeRange_(desc.cbvSrvUavHeap, sizeHelper_, accSize(desc.rangeSizeTexCube), DescriptorGPU::Type::SRV),
-//     rtvRange_(desc.rtvHeap, sizeHelper_, accSize(desc.rangeSizeRtv), DescriptorCPU::Type::RTV),
-//     dsvRange_(desc.dsvHeap, sizeHelper_, accSize(desc.rangeSizeDsv), DescriptorCPU::Type::DSV) {}
-
-// void SharedDescriptorRanges::bind(D3D12GfxCmdList& cmdList) {
-//     cbvRange_.bind(cmdList, 0u);
-//     sbufRange_.bind(cmdList, 1u);
-//     tex2dRange_.bind(cmdList, 2u);
-//     tex2dArrRange_.bind(cmdList, 3u);
-//     texCubeRange_.bind(cmdList, 4u);
-// }
-
 TextureResource::Desc Texture::convertDesc(const Desc& desc) {
     return TextureResource::Desc{
         .width = desc.width,
@@ -348,10 +329,35 @@ void Model::Node::addMesh(Mesh&& mesh) {
     meshes_.push_back(std::move(mesh));
 }
 
+void Model::Node::emplaceMesh(const RefMesh& refMesh, std::string&& initialState) {
+    meshes_.emplace_back(refMesh, std::move(initialState));
+}
+
 void Model::Node::addChild(Node* child) {
     child->pModel_ = pModel_;
     child->coord_.setParent(&coord_);
     children_.push_back(child);
+}
+
+Model::Model(const RefModel& ref, std::string&& initialState)
+    : nodeStorage_(ref.nodes().size()), state_(std::move(initialState)),
+    pRoot_(nullptr) {
+    auto pRefFirstNode = ref.nodes().data();
+
+    pRoot_ = nodeStorage_.data() + (ref.root() - pRefFirstNode);
+
+    for (std::size_t i = 0; i < ref.nodes().size(); ++i) {
+        auto& node = ref.nodes()[i];
+        auto clone = Node(this);
+        for (const auto& mesh : node.meshes()) {
+            clone.emplaceMesh(mesh, initialState);
+        }
+        clone.coord_.setLocalXform(node.coord().localXform());
+        for (auto pChild : node.children()) {
+            clone.addChild(nodeStorage_.data() + (pChild - pRefFirstNode));
+        }
+        nodeStorage_[i] = std::move(clone);
+    }
 }
 
 Model::Model(const Model& other)
