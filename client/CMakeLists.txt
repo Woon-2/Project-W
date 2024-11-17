@@ -42,16 +42,13 @@ target_sources(client
         src/main.cpp
         src/app.cpp include/app.hpp
         src/game.cpp include/game.hpp
-        src/mygfx.cpp include/mygfx.hpp
         src/player.cpp include/player.hpp
         src/inputSystem.cpp include/inputSystem.hpp
         src/assetSystem.cpp include/assetSystem.hpp
         src/assetMap.cpp include/assetMap.hpp
-        src/cmodel.cpp include/cmodel.hpp
         src/physicsSystem.cpp include/physicsSystem.hpp
         src/stage.cpp include/stage.hpp
         src/Timer.cpp include/Timer.hpp
-        src/ccoord.cpp include/ccoord.hpp
 
         include/testInput.hpp
         include/systems.hpp
