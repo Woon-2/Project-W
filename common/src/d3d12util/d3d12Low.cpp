@@ -359,13 +359,13 @@ Fence::Fence(D3D12Device& device, UINT64 initValue)
 	}
 }
 
-void Fence::signal(UINT64 value) {
-	DX_THROW_FAILED( src_->Signal(value) );
+void Fence::signal(D3D12CmdQueue& cmdQueue, UINT64 value) {
+	DX_THROW_FAILED( cmdQueue.get()->Signal(get().Get(), value) );
 	value_ = value;
 }
 
-void Fence::signal() {
-	signal(value_ + 1);
+void Fence::signal(D3D12CmdQueue& cmdQueue) {
+	signal(cmdQueue, value_ + 1);
 }
 
 void Fence::wait(UINT64 value) {

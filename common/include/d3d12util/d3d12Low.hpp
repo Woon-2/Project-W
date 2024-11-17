@@ -8,8 +8,11 @@
 #include "dxutil/dxexcept.hpp"
 
 #include "config.hpp"
+#include "TMP.hpp"
 
 #include <vector>
+#include <ranges>
+#include <algorithm>
 
 namespace gfx {
 
@@ -23,9 +26,16 @@ public:
 	D3D12Device(dx::DXGIAdapter&& adapter, D3D_FEATURE_LEVEL featureLevel);
 };
 
+class D3D12GfxCmdList;
+
 class D3D12CmdQueue : public dx::DXWrapper<ID3D12CommandQueue> {
 public:
 	D3D12CmdQueue(D3D12Device& device);
+
+	template <std::ranges::range R>
+		requires std::same_as<std::ranges::range_value_t<R>, D3D12GfxCmdList>
+	void execute(R&& cmdLists);
+	void execute(D3D12GfxCmdList& cmdList);
 };
 
 class D3D12GfxCmdList : public dx::DXWrapper<ID3D12GraphicsCommandList> {
@@ -42,10 +52,22 @@ private:
 	wrl::ComPtr<Allocator> alloc_;
 };
 
-// class D3D12Window : public Win32::Window, public dx::DXWrapper<IDXGISwapChain3> {
-// public:
-// 	D3D12Window(const RECT& clientRect, LPCWSTR wndName, DXGIFactory& factory, D3D12CmdQueue& cmdQueue);
-// };
+template <std::ranges::range R>
+	requires std::same_as<std::ranges::range_value_t<R>, D3D12GfxCmdList>
+void D3D12CmdQueue::execute(R&& cmdLists) {
+	std::vector<ID3D12CommandList*> tmp;
+	reserve_if_possible(tmp, std::ranges::size(cmdLists));
+	std::ranges::transform(cmdLists, std::back_inserter(tmp),
+		[](auto& cmdList) { return cmdList.get().Get(); }
+	);
+
+	get()->ExecuteCommandLists(static_cast<UINT>(tmp.size()), tmp.data());
+}
+
+inline void D3D12CmdQueue::execute(D3D12GfxCmdList& cmdList) {
+	ID3D12CommandList* tmp[]{ cmdList.get().Get() };
+	get()->ExecuteCommandLists(1u, tmp);
+}
 
 class DescriptorCPU {
 public:
@@ -243,7 +265,7 @@ public:
 	using DescriptorType = typename TDescHeap::DescriptorType;
 	using Type = typename DescriptorType::Type;
 
-	DescriptorRange(const TDescHeap& srcHeap, std::size_t beginIdx, std::size_t endIdx, Type type)
+	DescriptorRange(TDescHeap& srcHeap, std::size_t beginIdx, std::size_t endIdx, Type type)
 		: pDescHeap_(&srcHeap), beginIdx_(beginIdx), endIdx_(endIdx), size_(0), type_(type) {}
 
 	void clear() NOEXCEPT {
@@ -499,7 +521,7 @@ public:
 		const D3D12_CLEAR_VALUE& dsvClearValue = { .Format = DXGI_FORMAT_D32_FLOAT, .DepthStencil = { 1.0f, 0u } }
 	) {
 		MyBase::open(factory, cmdQueue.get().Get(), wndName, wndFrame, backBufCnt);
-		buildBuffers(device);
+		buildBuffers(device, rtvClearValue, dsvClearValue);
 		buildViews(device, rtvRangeBackBuf, dsvRangeBackBuf);
 	}
 
@@ -558,15 +580,15 @@ void Window<Traits>::buildBuffers( D3D12Device& device,
 	backBuffers_.resize( this->backBufCnt() );
 	for (auto i = 0u; i < backBuffers_.size(); ++i) {
 		DX_THROW_FAILED( get()->GetBuffer(i,
-		__uuidof(D3D12Resource::InterfaceType), &backBuffers_[i]
+			__uuidof(D3D12Resource::InterfaceType), &backBuffers_[i].get()
 		) );
 	}
 
 	depthBuffer_ = D3D12Resource( device, D3D12_RESOURCE_DESC{
 		.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
 		.Alignment = 0u,
-		.Width = this->client().width,
-		.Height = this->client().height,
+		.Width = static_cast<UINT64>( this->client().width ),
+		.Height = static_cast<UINT>( this->client().height ),
 		.DepthOrArraySize = 1u,
 		.MipLevels = 1u,
 		.Format = DXGI_FORMAT_D32_FLOAT,
@@ -608,7 +630,7 @@ void Window<Traits>::preResizeBuffers(void* pContext) {
 
 template <class Traits>
 void Window<Traits>::postResizeBuffers(void* pContext) {
-	buildBuffers(*static_cast<D3D12Device*>(pContext));
+	buildBuffers(*static_cast<D3D12Device*>(pContext), rtvClearValue_, dsvClearValue_);
 	rebuildViews(*static_cast<D3D12Device*>(pContext));
 }
 
@@ -635,8 +657,8 @@ public:
 	Fence() = default;
 	Fence(D3D12Device& device, UINT64 initValue = 0u);
 
-	void signal(UINT64 value);
-	void signal();
+	void signal(D3D12CmdQueue& cmdQueue, UINT64 value);
+	void signal(D3D12CmdQueue& cmdQueue);
 	void wait(UINT64 value);
 	void wait();
 
