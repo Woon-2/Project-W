@@ -173,6 +173,8 @@ add_library(gfx
     
     include/shaderPath.hpp
     include/enumUtil.hpp
+    include/d3d12engine/descriptorRangeSpec.hpp
+    include/TMP.hpp
 )
 
 add_library(common::gfx ALIAS gfx)
