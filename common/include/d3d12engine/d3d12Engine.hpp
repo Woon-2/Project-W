@@ -45,6 +45,14 @@ public:
     MyWindow& window() NOEXCEPT { return window_; }
     const MyWindow& window() const NOEXCEPT { return window_; }
 
+    void setFullScreen() {
+        window_.setFullScreen(&device_);
+    }
+
+    void setWindowed() {
+        window_.setWindowed(&device_);
+    }
+
 private:
     dx::DXGIFactory factory_;
     d3d12::D3D12Device device_;
