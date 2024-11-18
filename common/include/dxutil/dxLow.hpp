@@ -156,7 +156,7 @@ public:
         };
 
         DX_THROW_FAILED( factory.get()->CreateSwapChainForHwnd(
-            factory.get().Get(), nativeHandle(), &scd_, &scfd_, nullptr, &tmp
+            pDevice, nativeHandle(), &scd_, &scfd_, nullptr, &tmp
         ) );
 
         DX_THROW_FAILED( tmp.As(&get()) );

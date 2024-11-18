@@ -69,6 +69,8 @@ D3D12GfxCmdList::D3D12GfxCmdList(D3D12Device& device)
 	DX_THROW_FAILED( device.get()->CreateCommandList( 0, D3D12_COMMAND_LIST_TYPE_DIRECT,
 		alloc_.Get(), nullptr, __uuidof(InterfaceType), &src_
 	) );
+
+	close();
 }
 
 void D3D12GfxCmdList::reset() {
@@ -108,7 +110,6 @@ D3D12Resource::D3D12Resource(D3D12Device& device, const D3D12_RESOURCE_DESC& res
 	) );
 
 	desc_ = src_->GetDesc();
-	gpuAddr_ = src_->GetGPUVirtualAddress();
 }
 
 D3D12Resource::D3D12Resource(D3D12Device& device, const D3D12_RESOURCE_DESC& resDesc,
@@ -227,9 +228,10 @@ void D3D12Resource::remakeDsv( std::size_t idx,
 }
 
 std::size_t D3D12Resource::makeDefCbv(D3D12Device& device, Descriptor& destView) {
+	pullGpuAddr();
 	destView.setType(Descriptor::Type::CBV);
 	auto desc = D3D12_CONSTANT_BUFFER_VIEW_DESC{
-		.BufferLocation = src_->GetGPUVirtualAddress(),
+		.BufferLocation = gpuAddr(),
 		.SizeInBytes = static_cast<UINT>( desc_.Width * desc_.Height )
 	};
 	DX_THROW_FAILED_VOID( device.get()->CreateConstantBufferView(
@@ -277,9 +279,10 @@ std::size_t D3D12Resource::makeDefDsv(D3D12Device& device, Descriptor& destView)
 }
 
 void D3D12Resource::remakeDefCbv(std::size_t idx, D3D12Device& device) {
+	pullGpuAddr();
 	assert(views_.at(idx).type() == Descriptor::Type::CBV);
 	auto desc = D3D12_CONSTANT_BUFFER_VIEW_DESC{
-		.BufferLocation = src_->GetGPUVirtualAddress(),
+		.BufferLocation = gpuAddr(),
 		.SizeInBytes = static_cast<UINT>( desc_.Width * desc_.Height )
 	};
 	DX_THROW_FAILED_VOID( device.get()->CreateConstantBufferView(
@@ -316,16 +319,18 @@ void D3D12Resource::remakeDefDsv(std::size_t idx, D3D12Device& device) {
 }
 
 void D3D12Resource::makeDefVbv(D3D12Device& device) {
+	pullGpuAddr();
 	vbview_ = D3D12_VERTEX_BUFFER_VIEW{
-		.BufferLocation = src_->GetGPUVirtualAddress(),
+		.BufferLocation = gpuAddr(),
 		.SizeInBytes = static_cast<UINT>(desc_.Width * desc_.Height),
 		.StrideInBytes = static_cast<UINT>(stride_)
 	};
 }
 
 void D3D12Resource::makeDefIbv(D3D12Device& device) {
+	pullGpuAddr();
 	ibview_ = D3D12_INDEX_BUFFER_VIEW{
-		.BufferLocation = src_->GetGPUVirtualAddress(),
+		.BufferLocation = gpuAddr(),
 		.SizeInBytes = static_cast<UINT>(desc_.Width * desc_.Height),
 		.Format = DXGI_FORMAT_R16_UINT
 	};

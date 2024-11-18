@@ -41,6 +41,7 @@ public:
     }
 
     void render(IRenderer& renderer);
+    void render();
 
     MyWindow& window() NOEXCEPT { return window_; }
     const MyWindow& window() const NOEXCEPT { return window_; }

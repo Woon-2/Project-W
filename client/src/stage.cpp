@@ -17,7 +17,7 @@ void Stage::update(double deltaTime) {
 }
 
 void Stage::render(gfx::d3d12engine::Core& core) {
-    
+    core.render();
 }
 
 void Stage::processNetwork(double deltaTime) {

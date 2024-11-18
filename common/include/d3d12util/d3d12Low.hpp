@@ -264,7 +264,8 @@ DescriptorHeap<TDescriptor>::DescriptorHeap(D3D12Device& device, D3D12_DESCRIPTO
 	stride_ = device.get()->GetDescriptorHandleIncrementSize(heapType);
 
 	auto cpuHandle = src_->GetCPUDescriptorHandleForHeapStart();
-	auto gpuHandle = src_->GetGPUDescriptorHandleForHeapStart();
+	auto gpuHandle = bShaderVisible ? src_->GetGPUDescriptorHandleForHeapStart()
+		: D3D12_GPU_DESCRIPTOR_HANDLE{};
 
 	while (capacity--) {
 		descriptors_.emplace_back(cpuHandle, gpuHandle, Descriptor::Type::INVALID);
@@ -343,7 +344,7 @@ public:
 		D3D12_RESOURCE_STATES initialState
 	) : dx::DXWrapper<InterfaceType>(src),
 		views_(), vbview_{}, desc_(src->GetDesc()),
-		gpuAddr_(src->GetGPUVirtualAddress()), stride_(0u),
+		gpuAddr_(), stride_(0u),
 		state_(initialState) {}
 
 	D3D12Resource(const wrl::ComPtr<InterfaceType>& src)
@@ -353,7 +354,7 @@ public:
 		D3D12_RESOURCE_STATES initialState
 	) : dx::DXWrapper<InterfaceType>(std::move(src)),
 		views_(), vbview_{}, desc_(src->GetDesc()),
-		gpuAddr_(src->GetGPUVirtualAddress()), stride_(0u),
+		gpuAddr_(), stride_(0u),
 		state_(initialState) {}
 
 	D3D12Resource(wrl::ComPtr<InterfaceType>&& src)
@@ -379,7 +380,6 @@ public:
 	) {
 		get() = src;
 		desc_ = src->GetDesc();
-		gpuAddr_ = src->GetGPUVirtualAddress();
 		state_ = initialState;
 	}
 
@@ -392,7 +392,6 @@ public:
 	) {
 		get() = std::move(src);
 		desc_ = src->GetDesc();
-		gpuAddr_ = src->GetGPUVirtualAddress();
 		state_ = initialState;
 	}
 
@@ -480,6 +479,14 @@ public:
 
 	std::size_t stride() const NOEXCEPT {
 		return stride_;
+	}
+
+	void pullGpuAddr() {
+		gpuAddr_ = get()->GetGPUVirtualAddress();
+	}
+
+	D3D12_GPU_VIRTUAL_ADDRESS gpuAddr() const NOEXCEPT {
+		return gpuAddr_;
 	}
 
 private:
@@ -579,14 +586,23 @@ public:
 		) );
 	}
 
+	void setRenderTarget(D3D12GfxCmdList& cmdList) {
+		backBuffers_[backBufIdx_].commitState(cmdList, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		DX_THROW_FAILED_VOID( cmdList.get()->OMSetRenderTargets(
+			1u, &rtvs_[backBufIdx()].cpuHandle(), FALSE, &dsv_.cpuHandle()
+		) );
+	}
+
+	void setPresent(D3D12GfxCmdList& cmdList) {
+		backBuffers_[backBufIdx_].commitState(cmdList, D3D12_RESOURCE_STATE_PRESENT);
+	}
+
 	std::size_t backBufIdx() const NOEXCEPT {
 		return backBufIdx_;
 	}
 
 	void present(D3D12GfxCmdList& cmdList) {
-		backBuffers_[backBufIdx_].commitState(cmdList, D3D12_RESOURCE_STATE_PRESENT);
         MyBase::present();
-		backBuffers_[backBufIdx_].commitState(cmdList, D3D12_RESOURCE_STATE_RENDER_TARGET);
 		backBufIdx_ = get()->GetCurrentBackBufferIndex();
     }
 
@@ -645,7 +661,7 @@ void Window<Traits>::buildViews( D3D12Device& device,
 	DescriptorRange<DescriptorHeapCPU>& dsvRangeBackBuf
 ) {
 	rtvs_.reserve( backBuffers_.size() );
-	for (auto i = 0u; i < rtvs_.size(); ++i) {
+	for (auto i = 0u; i < backBuffers_.size(); ++i) {
 		rtvs_.push_back( rtvRangeBackBuf.alloc() );
 		backBuffers_[i].makeDefRtv(device, rtvs_[i]);
 	}

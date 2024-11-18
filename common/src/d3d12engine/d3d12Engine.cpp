@@ -25,7 +25,24 @@ Core::Core()
 
 void Core::render(IRenderer& renderer) {
     cmdList_.reset();
+    window_.setRenderTarget(cmdList_);
+    window_.clearRenderTarget(cmdList_);
+    window_.clearDepthStencil(cmdList_);
     renderer.render(*this);
+    window_.setPresent(cmdList_);
+    cmdList_.close();
+    cmdQueue_.execute(cmdList_);
+    window_.present(cmdList_);
+    fence_.signal(cmdQueue_);
+    fence_.wait();
+}
+
+void Core::render() {
+    cmdList_.reset();
+    window_.setRenderTarget(cmdList_);
+    window_.clearRenderTarget(cmdList_);
+    window_.clearDepthStencil(cmdList_);
+    window_.setPresent(cmdList_);
     cmdList_.close();
     cmdQueue_.execute(cmdList_);
     window_.present(cmdList_);
