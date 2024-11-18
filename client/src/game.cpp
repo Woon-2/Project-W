@@ -62,8 +62,9 @@ void Game::render() {
 }
 
 void Game::setupWndMsgHandlers() {
-    // core_.window().addMsgHandler(0, std::make_unique<TestInputHandler<MyWindow>>(*pWnd_, *pMouse_, *pGfx_));
-    // core_.window().addMsgHandler(1, std::make_unique<ic::Win32::MouseMsgHandler<MyWindow>>(*pWnd_, pMouse_));
+    using MyWindow = gfx::d3d12engine::Core::MyWindow;
+    core_.window().addMsgHandler(0, std::make_unique<TestInputHandler<MyWindow>>(core_.window(), mouse_, core_));
+    core_.window().addMsgHandler(1, std::make_unique<ic::Win32::MouseMsgHandler<MyWindow>>(core_.window(), mouse_));
     core_.window().addMsgHandler( 10000, std::make_unique<
         Win32::BasicMsgHandler<gfx::d3d12engine::Core::MyWindow>
     >(core_.window()) );
