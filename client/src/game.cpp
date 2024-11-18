@@ -54,12 +54,10 @@ void Game::update() {
         std::this_thread::sleep_for( std::chrono::duration<double>(restFrameTime) );
     }
 
-    // TODO: update stage
     pStage_->update(timer_.GetDT());
 }
 
 void Game::render() {
-    // TODO: render stage
     pStage_->render(core_);
 }
 
