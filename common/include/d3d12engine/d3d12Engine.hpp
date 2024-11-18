@@ -131,6 +131,7 @@ protected:
 public:
     virtual void init(Scene& scene) = 0;
     virtual void update(Scene& scene) = 0;
+    virtual ~IRenderPass() = default;
 };
 
 class Scene : public ecs::System<Model, Camera, Light> {
