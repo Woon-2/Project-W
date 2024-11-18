@@ -210,7 +210,7 @@ void Entity::createComponent(Args&& ... args) {
     }
 
     Component::sComponents[ etoi(ConcreteComponent::type()) ][id_.value()]
-        = std::make_shared<ConcreteComponent>(*this, std::forward<Args>(args)...);
+        = std::make_unique<ConcreteComponent>(*this, std::forward<Args>(args)...);
 }
 
 template <class ConcreteComponent>
