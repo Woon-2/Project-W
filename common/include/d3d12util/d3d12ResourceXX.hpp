@@ -61,6 +61,12 @@ public:
 
 class TextureResource : public D3D12Resource {
 public:
+    enum class Type {
+        Texture,
+        TextureArray,
+        TextureCube
+    };
+
     struct Desc {
         std::uint32_t width;
         std::uint32_t height;
@@ -75,7 +81,7 @@ public:
         D3D12_HEAP_TYPE heapType
     );
     TextureResource( D3D12Device& device, D3D12GfxCmdList& cmdList, 
-        const std::filesystem::path& path, UploadBuffer& upBuf
+        const std::filesystem::path& path
     );
 
 private:
@@ -87,7 +93,7 @@ private:
 
     static LoadDDSReturnType loadDDS(
         D3D12Device& device, D3D12GfxCmdList& cmdList,
-        const std::filesystem::path& path, UploadBuffer& upBuf
+        const std::filesystem::path& path
     );
 
     std::unique_ptr<std::uint8_t[]> data_;
@@ -122,16 +128,16 @@ public:
 
     Texture(D3D12Device& device, D3D12GfxCmdList& cmdList,
         DescriptorRange<DescriptorHeapGPU>& tex2dRange,
-        const std::filesystem::path& path, UploadBuffer& upBuf
-    ) : TextureResource(device, cmdList, path, upBuf) {
+        const std::filesystem::path& path
+    ) : TextureResource(device, cmdList, path) {
         makeDefSrv(device, tex2dRange.alloc());
     }
 
     Texture(D3D12Device& device, D3D12GfxCmdList& cmdList,
         DescriptorRange<DescriptorHeapGPU>& tex2dRange,
         const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc,
-        const std::filesystem::path& path, UploadBuffer& upBuf
-    ) : TextureResource(device, cmdList, path, upBuf) {
+        const std::filesystem::path& path
+    ) : TextureResource(device, cmdList, path) {
         makeSrv(srvDesc, device, tex2dRange.alloc());
     }
 
@@ -162,16 +168,16 @@ public:
 
     TextureArray(D3D12Device& device, D3D12GfxCmdList& cmdList,
         DescriptorRange<DescriptorHeapGPU>& tex2dArrRange,
-        const std::filesystem::path& path, UploadBuffer& upBuf
-    ) : TextureResource(device, cmdList, path, upBuf) {
+        const std::filesystem::path& path
+    ) : TextureResource(device, cmdList, path) {
         makeDefSrv(device, tex2dArrRange.alloc());
     }
 
     TextureArray(D3D12Device& device, D3D12GfxCmdList& cmdList,
         DescriptorRange<DescriptorHeapGPU>& tex2dArrRange,
         const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc,
-        const std::filesystem::path& path, UploadBuffer& upBuf
-    ) : TextureResource(device, cmdList, path, upBuf) {
+        const std::filesystem::path& path
+    ) : TextureResource(device, cmdList, path) {
         makeSrv(srvDesc, device, tex2dArrRange.alloc());
     }
 
@@ -199,16 +205,16 @@ public:
 
     TextureCube(D3D12Device& device, D3D12GfxCmdList& cmdList,
         DescriptorRange<DescriptorHeapGPU>& texCubeRange,
-        const std::filesystem::path& path, UploadBuffer& upBuf
-    ) : TextureResource(device, cmdList, path, upBuf) {
+        const std::filesystem::path& path
+    ) : TextureResource(device, cmdList, path) {
         makeDefSrv(device, texCubeRange.alloc());
     }
 
     TextureCube(D3D12Device& device, D3D12GfxCmdList& cmdList,
         DescriptorRange<DescriptorHeapGPU>& texCubeRange,
         const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc,
-        const std::filesystem::path& path, UploadBuffer& upBuf
-    ) : TextureResource(device, cmdList, path, upBuf) {
+        const std::filesystem::path& path
+    ) : TextureResource(device, cmdList, path) {
         makeSrv(srvDesc, device, texCubeRange.alloc());
     }
 
@@ -219,7 +225,9 @@ public:
 
 class StaticTextureStorage {
 public:
-    void load(const std::filesystem::path& path);
+    void load( const std::filesystem::path& path, TextureResource::Type type,
+        D3D12Device& device, D3D12GfxCmdList& cmdList, DescriptorRange<DescriptorHeapGPU>& range
+    );
     const DescriptorGPU& get(const std::filesystem::path& path) const;
     DescriptorGPU& get(const std::filesystem::path& path);
     const DescriptorGPU& operator[](const std::filesystem::path& path) const;
@@ -235,11 +243,7 @@ private:
 
 class Material {
 public:
-    enum class ResourceType {
-        Texture,
-        TextureArray,
-        TextureCube
-    };
+    using ResourceType = TextureResource::Type;
 
     enum class MapType {
         Albedo,
@@ -327,17 +331,13 @@ public:
         vertexBuffer.stride(), vertexBuffer.propFlag()
     ) {}
 
-    void completeInit() {
-        upBuf_.get()->Release();
-    }
-
     template <std::ranges::range R>
 		requires std::same_as<std::ranges::range_value_t<R>, VertexBuffer>
     static void bind(D3D12GfxCmdList& cmdList, std::size_t slot, const R& vbs) {
 		auto views = std::vector<D3D12_VERTEX_BUFFER_VIEW>(vbs.size());
-		std::ranges::transform(vbs, views.begin(), [](const auto& vb) {
-			return vb.vbview_;
-		});
+		std::ranges::transform( vbs, views.begin(), [](const auto& vb) {
+			return vb.vbview();
+		} );
         DX_THROW_FAILED_VOID( cmdList.get()->IASetVertexBuffers(
             static_cast<UINT>(slot), static_cast<UINT>( views.size() ), views.data()
         ) );
@@ -346,23 +346,17 @@ public:
 	const auto& attributes() const noexcept { return attribs_; }
 
 private:
-	UploadBuffer upBuf_;
-	D3D12_VERTEX_BUFFER_VIEW vbview_;
 	std::bitset<etoi(Vertex::Properties::SIZE)> attribs_;
 };
 
 class IndexBuffer : public DefaultBuffer {
 public:
     IndexBuffer(D3D12Device& device, D3D12GfxCmdList& cmdList,
-        const void* pData, std::size_t indexCnt, std::size_t byteWidth
+        const void* pData, std::size_t indexCnt
     );
 
-    void completeInit() {
-		upBuf_.get()->Release();
-    }
-
 	void bind(D3D12GfxCmdList& cmdList) const {
-		cmdList.get()->IASetIndexBuffer(&ibview_);
+		cmdList.get()->IASetIndexBuffer(&ibview());
 	}
 
     std::size_t size() const noexcept {
@@ -370,8 +364,6 @@ public:
     }
 
 private:
-    UploadBuffer upBuf_;
-	D3D12_INDEX_BUFFER_VIEW ibview_;
     std::size_t size_;
 };
 

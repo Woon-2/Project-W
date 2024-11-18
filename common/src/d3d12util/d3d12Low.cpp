@@ -74,6 +74,7 @@ D3D12GfxCmdList::D3D12GfxCmdList(D3D12Device& device)
 void D3D12GfxCmdList::reset() {
 	DX_THROW_FAILED( alloc_->Reset() );
 	DX_THROW_FAILED( src_->Reset(alloc_.Get(), nullptr) );
+	xResources_.clear();
 }
 
 void D3D12GfxCmdList::close() {

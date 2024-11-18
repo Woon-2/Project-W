@@ -87,10 +87,9 @@ TextureResource::TextureResource( D3D12Device& device, const Desc& texResDesc,
     }, heapType), data_(), subresources_() {}
 
 TextureResource::TextureResource( D3D12Device& device,
-    D3D12GfxCmdList& cmdList, const std::filesystem::path& path,
-    UploadBuffer& upBuf
+    D3D12GfxCmdList& cmdList, const std::filesystem::path& path
 ) : D3D12Resource(), data_(), subresources_() {
-    auto loadedData = loadDDS(device, cmdList, path, upBuf);
+    auto loadedData = loadDDS(device, cmdList, path);
     init(std::move(loadedData.res));
     data_ = std::move(loadedData.ddsData);
     subresources_ = std::move(loadedData.subresources);
@@ -98,7 +97,7 @@ TextureResource::TextureResource( D3D12Device& device,
 
 TextureResource::LoadDDSReturnType TextureResource::loadDDS(
     D3D12Device& device, D3D12GfxCmdList& cmdList,
-    const std::filesystem::path& path, UploadBuffer& upBuf
+    const std::filesystem::path& path
 ) {
     auto ret = LoadDDSReturnType{};
 
@@ -120,11 +119,50 @@ TextureResource::LoadDDSReturnType TextureResource::loadDDS(
 
     auto requiredBytes = GetRequiredIntermediateSize(ret.res.Get(), 0, static_cast<UINT>(ret.subresources.size()));
 
+    auto upBufIdx = cmdList.emplaceXResource<UploadBuffer>(device, requiredBytes);
+    auto& upBuf = cmdList.getXResource<UploadBuffer>(upBufIdx);
+
     UpdateSubresources(cmdList.get().Get(), ret.res.Get(), upBuf.get().Get(),
         0, 0, static_cast<UINT>(ret.subresources.size()), ret.subresources.data()
     );
 
     return ret;
+}
+
+void StaticTextureStorage::load( const std::filesystem::path& path,
+    TextureResource::Type type, D3D12Device& device, D3D12GfxCmdList& cmdList,
+    DescriptorRange<DescriptorHeapGPU>& range
+) {
+    // switch(type) {
+    // case TextureResource::Type::Texture: {
+    //     auto idx = cmdList.emplaceXResource<UploadBuffer>();
+    //     storedTexs_.emplace_back( device, cmdList, range,
+    //         path, cmdList.getXResource<UploadBuffer>(idx)
+    //     );
+    //     map_[path] = storedTexs_.back().view(Texture::idxSrv);
+    //     break;
+    // }
+    // }
+}
+
+const DescriptorGPU& StaticTextureStorage::get(const std::filesystem::path& path) const {
+    return map_.at(path);
+}
+
+DescriptorGPU& StaticTextureStorage::get(const std::filesystem::path& path) {
+    return map_.at(path);
+}
+
+const DescriptorGPU& StaticTextureStorage::operator[](const std::filesystem::path& path) const {
+    return map_.at(path);
+}
+
+DescriptorGPU& StaticTextureStorage::operator[](const std::filesystem::path& path) {
+    return map_[path];
+}
+
+bool StaticTextureStorage::contains(const std::filesystem::path& path) const {
+    return map_.contains(path);
 }
 
 Material::Material()
@@ -174,23 +212,28 @@ void Material::addConstant(ConstantType type, float constant) {
 VertexBuffer::VertexBuffer( D3D12Device& device, D3D12GfxCmdList& cmdList,
     const void* pData, std::size_t byteWidth, std::size_t stride,
 	std::bitset<etoi(Vertex::Properties::SIZE)> attribs
-) : DefaultBuffer(device, byteWidth), upBuf_(device, pData, byteWidth),
-    vbview_{ .BufferLocation = get()->GetGPUVirtualAddress(),
-		.SizeInBytes = static_cast<UINT>(byteWidth),
-	    .StrideInBytes = static_cast<UINT>(stride)
-    }, attribs_(attribs) {
-    cmdList.copyResource(upBuf_, *this);
+) : DefaultBuffer(device, byteWidth), attribs_(attribs) {
+    auto upBufIdx = cmdList.emplaceXResource<UploadBuffer>(device, pData, byteWidth);
+    auto& upBuf = cmdList.getXResource<UploadBuffer>(upBufIdx);
+    cmdList.copyResource(upBuf, *this);
+
+    setStride(stride);
+    makeDefVbv(device);
+
 	commitState(cmdList, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
 }
 
 IndexBuffer::IndexBuffer(D3D12Device& device, D3D12GfxCmdList& cmdList,
-    const void* pData, std::size_t indexCnt, std::size_t byteWidth
-) : DefaultBuffer(device, byteWidth), upBuf_(device, pData, byteWidth),
-    ibview_{ .BufferLocation = get()->GetGPUVirtualAddress(),
-        .SizeInBytes = static_cast<UINT>(byteWidth),
-		.Format = DXGI_FORMAT_R16_UINT
-    }, size_(indexCnt) {
-	cmdList.copyResource(upBuf_, *this);
+    const void* pData, std::size_t indexCnt
+) : DefaultBuffer(device, indexCnt * sizeof(std::uint16_t)), size_(indexCnt) {
+    auto upBufIdx = cmdList.emplaceXResource<UploadBuffer>(
+        device, pData, indexCnt * sizeof(std::uint16_t)
+    );
+    auto& upBuf = cmdList.getXResource<UploadBuffer>(upBufIdx);
+	cmdList.copyResource(upBuf, *this);
+
+    makeDefIbv(device);
+
 	commitState(cmdList, D3D12_RESOURCE_STATE_INDEX_BUFFER);
 }
 
