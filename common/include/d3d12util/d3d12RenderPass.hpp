@@ -54,14 +54,18 @@ public:
 
     void updateView();
 
-    void MU_CALLCONV focusAt(mu::Vec3 focus) NOEXCEPT {
+    void MU_CALLCONV focusAt(mu::Vec3 focus, mu::Vec3 up) NOEXCEPT {
         focus_ = focus;
         focusMode_ = FocusMode::LookAt;
+
+        repUp_ = up;
     }
 
-    void MU_CALLCONV focusTo(mu::Vec3 focus) NOEXCEPT {
+    void MU_CALLCONV focusTo(mu::Vec3 focus, mu::Vec3 up) NOEXCEPT {
         focus_ = focus;
         focusMode_ = FocusMode::LookTo;
+
+        repUp_ = up;
     }
 
     void defocus() NOEXCEPT {

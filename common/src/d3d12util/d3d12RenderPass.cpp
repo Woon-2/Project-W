@@ -3,6 +3,7 @@
 #include <ranges>
 #include <algorithm>
 #include <tuple>
+#include "d3d12RenderPass.hpp"
 
 namespace gfx {
 
@@ -12,7 +13,9 @@ namespace d3d12 {
 void Camera::updateView() {
     auto xform = coordSys_.xform();
     repPos_ = xform.row(3);
-    repUp_ = xform.row(1);
+    if (focusMode_ == FocusMode::None) {
+        repUp_ = xform.row(1);
+    }
 
     switch (focusMode_) {
     case FocusMode::LookAt:
@@ -162,4 +165,4 @@ void PBRIllumination::trackModel(Model* pModel) {
 
 }   // namespace gfx::d3d12
 
-}   // namespace gfx
+} // namespace gfx

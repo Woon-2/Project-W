@@ -43,6 +43,56 @@ void CoordRoot::addEntity(ecs::Entity& entity) {
     pCoord->get().setParent(&rootCoordSys_);
 }
 
+void Camera::update(float deltaTime) {
+    auto playerXform = pAttached_->xform();
+    auto playerPos = mu::Vec3(playerXform.row(3));
+
+    auto cameraXform = camera_.coord().xform();
+    auto cameraPos = cameraXform.row(3);
+
+    mu::Mat4x4 rotationMatrix = mu::Mat4x4();
+    mu::Vec3 right = pAttached_->xform().row(0);
+    mu::Vec3 up = pAttached_->xform().row(1);
+    mu::Vec3 look = pAttached_->xform().row(2);
+
+    rotationMatrix.setRow(0, right);
+    rotationMatrix.setRow(1, up);
+    rotationMatrix.setRow(2, look); 
+
+	mu::Vec3 xmf3Offset = mu::Vec4(offset_, 1.f) * rotationMatrix;
+	mu::Vec3 xmf3Position = playerPos + xmf3Offset;
+	mu::Vec3 xmf3Direction = xmf3Position - mu::Vec3(cameraPos);
+
+    float fLength = xmf3Direction.len();
+	xmf3Direction = xmf3Direction.norm();
+	float fTimeLagScale = (timeLag_) ? deltaTime * (1.f / timeLag_) : 1.f;
+	float fDistance = fLength * fTimeLagScale;
+
+	if (fDistance > fLength) {
+		fDistance = fLength;
+	}
+
+	if (fLength < 0.01f) {
+		fDistance = fLength;
+	}
+
+	if (fDistance > 0.f) {
+        cameraPos += mu::Vec4(xmf3Direction * fDistance, 0.f);
+		auto posDiff = mu::Vec3(cameraPos) - xmf3Position;
+		auto reducedDiff = posDiff * 0.5f;
+
+        camera_.coord().setLocalXform(mu::Mat4x4());
+        camera_.coord() << mu::translate(cameraPos);
+
+        camera_.focusAt( playerPos + ( reducedDiff * mu::Vec3( playerXform.row(2) ) ), playerXform.row(1));
+	}
+	else {
+        camera_.focusAt(playerPos + mu::Vec3(playerXform.row(2)), playerXform.row(1));
+	}
+
+	camera_.updateView();
+}
+
 void Scene::addEntity(ecs::Entity& entity) {
     MyBase::addEntity(entity);
     reservedEntities_.push_back(entity.id().value());
