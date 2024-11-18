@@ -13,6 +13,7 @@
 #include <vector>
 #include <ranges>
 #include <algorithm>
+#include <any>
 
 namespace gfx {
 
@@ -48,8 +49,30 @@ public:
 	void reset();
 	void close();
 
+	std::size_t addXResource(std::any&& xRes) {
+		xResources_.push_back(std::move(xRes));
+		return xResources_.size() - 1;
+	}
+
+	template <class T, class ... Args>
+	std::size_t emplaceXResource(Args&& ... args) {
+		xResources_.emplace_back(std::make_any<T>(std::forward<Args>(args)...));
+		return xResources_.size() - 1;
+	}
+
+	template <class T>
+	T& getXResource(std::size_t idx) {
+		return std::any_cast<T&>(xResources_.at(idx));
+	}
+
+	template <class T>
+	const T& getXResource(std::size_t idx) const {
+		return std::any_cast<const T&>(xResources_.at(idx));
+	}
+
 private:
 	wrl::ComPtr<Allocator> alloc_;
+	std::vector<std::any> xResources_;
 };
 
 template <std::ranges::range R>
@@ -439,6 +462,14 @@ public:
 	void commitState(D3D12GfxCmdList& cmdList, D3D12_RESOURCE_STATES resState);
 	void updateDesc() NOEXCEPT {
 		desc_ = get()->GetDesc();
+	}
+
+	void setStride(std::size_t stride) NOEXCEPT {
+		stride_ = stride;
+	}
+
+	std::size_t stride() const NOEXCEPT {
+		return stride_;
 	}
 
 private:
