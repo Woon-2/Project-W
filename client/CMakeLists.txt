@@ -47,6 +47,7 @@ target_sources(client
         src/physicsSystem.cpp include/physicsSystem.hpp
         src/stage.cpp include/stage.hpp
         src/Timer.cpp include/Timer.hpp
+        src/renderer.cpp include/renderer.hpp
 
         include/testInput.hpp
         include/systems.hpp

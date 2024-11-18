@@ -34,11 +34,16 @@ private:
     void regularRender();
 
     gfx::d3d12engine::Core core_;
+
     Mouse mouse_;
     Keyboard keyboard_;
+
     Systems systems_;
+
     Timer timer_;
+
     std::unique_ptr<Stage> pStage_;
+
     double lockFPS_;
 };
 

@@ -12,7 +12,7 @@ Core::Core()
     dsvHeap_(device_, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, initialDsvHeapSize),
     cbvSrvUavHeap_(device_, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, initialCbvSrvUavHeapSize),
     descRanges_(rtvHeap_, dsvHeap_, cbvSrvUavHeap_),
-    window_(), fence_(device_) {
+    root_(device_), window_(), fence_(device_) {
     window_.open( factory_, device_, cmdQueue_, "Project-W",
         Win32::WndFrame{ .x = 100, .y = 100, .width = 1024, .height = 768 },
         descRanges_.rtvRangeBackBuf, descRanges_.dsvRangeBackBuf

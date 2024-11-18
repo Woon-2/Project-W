@@ -709,6 +709,17 @@ struct BasicD3D12WTraits : public dx::BasicDXDWTraits<T> {
     }
 };
 
+inline D3D12_VIEWPORT convClientToVP(const Win32::WndClient& client) NOEXCEPT {
+	return D3D12_VIEWPORT{
+		.TopLeftX = 0.0f,
+		.TopLeftY = 0.0f,
+		.Width = static_cast<FLOAT>( client.width ),
+		.Height = static_cast<FLOAT>( client.height ),
+		.MinDepth = 0.0f,
+		.MaxDepth = 1.0f
+	};
+}
+
 class Fence : public dx::DXWrapper<ID3D12Fence> {
 public:
 	Fence() = default;

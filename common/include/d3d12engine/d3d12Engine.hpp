@@ -46,6 +46,12 @@ public:
     MyWindow& window() NOEXCEPT { return window_; }
     const MyWindow& window() const NOEXCEPT { return window_; }
 
+    d3d12::D3D12Device& device() NOEXCEPT { return device_; }
+    const d3d12::D3D12Device& device() const NOEXCEPT { return device_; }
+
+    d3d12::UnifiedRoot& root() NOEXCEPT { return root_; }
+    const d3d12::UnifiedRoot& root() const NOEXCEPT { return root_; }
+
     void setFullScreen() {
         window_.setFullScreen(&device_);
     }
@@ -63,6 +69,7 @@ private:
     d3d12::DescriptorHeapCPU dsvHeap_;
     d3d12::DescriptorHeapGPU cbvSrvUavHeap_;
     d3d12::DescriptorRanges descRanges_;
+    d3d12::UnifiedRoot root_;
     MyWindow window_;
     d3d12::Fence fence_;
 };
@@ -179,6 +186,8 @@ namespace rp {
 
 class PBRIllumination : public IRenderPass, public d3d12::rp::PBRIllumination {
 public:
+    using d3d12::rp::PBRIllumination::PBRIllumination;
+
     void init(Scene& scene) override;
     void update(Scene& scene) override;
 };
