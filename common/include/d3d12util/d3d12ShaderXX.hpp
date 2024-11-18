@@ -178,6 +178,12 @@ public:
 		return blobs_;
 	}
 
+	void loadBlobsIfNot() {
+		if (std::ranges::none_of(blobs_, [](const auto& blob) { return blob.has_value(); })) {
+			loadBlobs();
+		}
+	}
+
 	virtual void loadBlobs() = 0;
 	virtual void releaseBlobs() = 0;
 
@@ -192,6 +198,12 @@ public:
 		(throwIfNot(blobs_[etoi(Types)].has_value()), ...);
 		(selected.push_back(blobs_[etoi(Types)].value()), ...);
 		return selected;
+	}
+
+	template <ShaderBlob::Type ... Types>
+	std::vector<ShaderBlob> selectBlobsStrong() {
+		loadBlobsIfNot();
+		return selectBlobs<Types...>();
 	}
 
 	void setInputLayout(const InputLayout& inputLayout) {
@@ -354,7 +366,7 @@ public:
 
 	RenderProtocol makeProtocol( D3D12Device& device, const RenderProtocol::Desc& desc) {
 		return RenderProtocol( device, *this,
-			selectBlobs<ShaderBlob::Type::Vertex, ShaderBlob::Type::Pixel>(), desc
+			selectBlobsStrong<ShaderBlob::Type::Vertex, ShaderBlob::Type::Pixel>(), desc
 		);
 	}
 
