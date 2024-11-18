@@ -67,6 +67,11 @@ void PBRIllumination::setViewport(const D3D12_VIEWPORT& vp) {
 
 
 void PBRIllumination::preRender(D3D12GfxCmdList& cmdList) {
+    cmdList.get()->SetPipelineState( protocol_.get().Get() );
+    cmdList.get()->RSSetViewports(1u, &viewport_);
+    auto scissorRect = D3D12_RECT{ 0, 0, static_cast<LONG>(viewport_.Width), static_cast<LONG>(viewport_.Height) };
+    cmdList.get()->RSSetScissorRects(1u, &scissorRect);
+
     std::ranges::sort(batch_, std::less<>{}, [this](const auto& pair) {
         return std::tuple(&pair.first->material(renderPassID()), &pair.first->refMesh());
     });
@@ -132,7 +137,7 @@ void PBRIllumination::render(D3D12GfxCmdList& cmdList) {
             0u, accDrawcallCnt++ * sizeof(sr::PerDrawcallData0)
         );
 
-        shader().bind(cmdList, *pMesh);
+        shader().bindMesh(cmdList, *pMesh);
         shader().draw( cmdList, *pMesh, static_cast<std::size_t>(last - first) );
 
         if (accDrawcallCnt == shader().maxDrawcallCnt()) {

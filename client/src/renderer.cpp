@@ -10,3 +10,13 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
     ), renderPass_( core.device(), shader_,
         gfx::d3d12::convClientToVP( core.window().client() )
     ) {}
+
+void Renderer::render(gfx::d3d12engine::Core& core) {
+    auto cmdList = core.fetchCmdList();
+
+    shader_.bindRootParams( core.root(), cmdList );
+
+    renderPass_.preRender( cmdList );
+    renderPass_.render( cmdList );
+    renderPass_.postRender( cmdList );
+}

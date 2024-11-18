@@ -19,6 +19,51 @@ namespace gfx {
 
 namespace d3d12 {
 
+class UnifiedRoot : public RootSignature {
+public:
+	enum class ParamIndices {
+		BindlessTex2D,
+		BindlessTexArray,
+		BindlessTexCube,
+		b0, b1, b2, b3, b4, b5, b6, b7, b8, b9,
+		t0, t1, t2, t3, t4, t5, t6, t7, t8, t9,
+		u0, u1, u2, u3, u4, u5, u6, u7, u8, u9
+	};
+
+	enum class SamplerIndices {
+		NearestWrap,
+		TrilinearWrap,
+		NearestBorder,
+		TrilinearBorder,
+		TrilinearComparison
+	};
+
+	static constexpr auto cbvRegisterCnt = 10u;
+	static constexpr auto srvRegisterCnt = 10u;
+	static constexpr auto uavRegisterCnt = 10u;
+
+private:
+	class Params {
+	public:
+		UINT operator[](ParamIndices idx) const noexcept {
+			return static_cast<UINT>( etoi(idx) );
+		}
+	};
+
+	class Samplers {
+	public:
+		UINT operator[](SamplerIndices idx) const noexcept {
+			return static_cast<UINT>( etoi(idx) );
+		}
+	};
+
+public:
+	UnifiedRoot(D3D12Device& device);
+
+	Params params;
+	Samplers samplers;
+};
+
 class InputLayout {
 public:
 	enum class Spec {
@@ -184,6 +229,8 @@ public:
 		}
 	}
 
+	virtual void bindRootParams(const UnifiedRoot& root, D3D12GfxCmdList& cmdList) = 0;
+
 	virtual void loadBlobs() = 0;
 	virtual void releaseBlobs() = 0;
 
@@ -218,7 +265,7 @@ public:
 		return root_;
 	}
 
-	void bind(D3D12GfxCmdList& cmdList, const Mesh& mesh) {
+	void bindMesh(D3D12GfxCmdList& cmdList, const Mesh& mesh) {
 		mesh.bind(cmdList);
 	}
 
@@ -235,51 +282,6 @@ protected:
 inline bool RenderProtocol::compatibleWith(const RefMesh& mesh) const {
     pShader_->inputLayout().checkBindable(mesh.vbs());
 }
-
-class UnifiedRoot : public RootSignature {
-public:
-	enum class ParamIndices {
-		BindlessTex2D,
-		BindlessTexArray,
-		BindlessTexCube,
-		b0, b1, b2, b3, b4, b5, b6, b7, b8, b9,
-		t0, t1, t2, t3, t4, t5, t6, t7, t8, t9,
-		u0, u1, u2, u3, u4, u5, u6, u7, u8, u9
-	};
-
-	enum class SamplerIndices {
-		NearestWrap,
-		TrilinearWrap,
-		NearestBorder,
-		TrilinearBorder,
-		TrilinearComparison
-	};
-
-	static constexpr auto cbvRegisterCnt = 10u;
-	static constexpr auto srvRegisterCnt = 10u;
-	static constexpr auto uavRegisterCnt = 10u;
-
-private:
-	class Params {
-	public:
-		UINT operator[](ParamIndices idx) const noexcept {
-			return static_cast<UINT>( etoi(idx) );
-		}
-	};
-
-	class Samplers {
-	public:
-		UINT operator[](SamplerIndices idx) const noexcept {
-			return static_cast<UINT>( etoi(idx) );
-		}
-	};
-
-public:
-	UnifiedRoot(D3D12Device& device);
-
-	Params params;
-	Samplers samplers;
-};
 
 namespace sr {
 
@@ -381,6 +383,8 @@ public:
 	std::size_t maxDrawcallCnt() const noexcept {
 		return maxDrawcallCnt_;
 	}
+
+	void bindRootParams(const UnifiedRoot& root, D3D12GfxCmdList& cmdList) override;
 
 	void loadBlobs() override;
 	void releaseBlobs() override;

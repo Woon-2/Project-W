@@ -300,7 +300,38 @@ ShaderPBRIllumination::ShaderPBRIllumination( D3D12Device& device, const RootSig
 	perFrameData_(device, sizeof(sr::PerFrameData0)),
 	perDrawcallData_(device, sizeof(sr::PerDrawcallData0) * config.maxDrawcallCnt),
 	perInstanceData_(device, sizeof(sr::PerInstanceData0) * config.maxInstanceCnt),
-	lightBuffer_(device, sizeof(sr::Light) * config.maxLightCnt) {}
+	lightBuffer_(device, sizeof(sr::Light) * config.maxLightCnt) {
+	perConfigurationData_.pullGpuAddr();
+	perFrameData_.pullGpuAddr();
+	perDrawcallData_.pullGpuAddr();
+	perInstanceData_.pullGpuAddr();
+	lightBuffer_.pullGpuAddr();
+}
+
+void ShaderPBRIllumination::bindRootParams(
+	const UnifiedRoot& root, D3D12GfxCmdList& cmdList
+) {
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		root.params[ UnifiedRoot::ParamIndices::b0 ],
+		perConfigurationData_.gpuAddr()
+	);
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		root.params[ UnifiedRoot::ParamIndices::b1 ],
+		perDrawcallData_.gpuAddr()
+	);
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		root.params[ UnifiedRoot::ParamIndices::b2 ],
+		perFrameData_.gpuAddr()
+	);
+	cmdList.get()->SetGraphicsRootShaderResourceView(
+		root.params[ UnifiedRoot::ParamIndices::t0 ],
+		perInstanceData_.gpuAddr()
+	);
+	cmdList.get()->SetGraphicsRootShaderResourceView(
+		root.params[ UnifiedRoot::ParamIndices::t1 ],
+		lightBuffer_.gpuAddr()
+	);
+}
 
 void ShaderPBRIllumination::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
