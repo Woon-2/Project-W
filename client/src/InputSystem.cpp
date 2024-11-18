@@ -1,6 +1,5 @@
 #include "inputSystem.hpp"
 #include "physicsSystem.hpp"
-#include "cmodel.hpp"
 
 #include "player.hpp"
 
@@ -37,12 +36,12 @@ void MU_CALLCONV PlayerController::addForce(mu::Vec3 force) {
         throw ECS_EXCEPT("Component is not valid");
     }
 
-    auto pRigidBodyBase = Component::at(ecs::Components::RigidBody, entityID().value()).lock();
-    if (!pRigidBodyBase) {
+    auto pRigidBody = RigidBody::at(entityID().value());
+    if (!pRigidBody) {
         throw ECS_EXCEPT("RigidBody component doesn't exist");
     }
 
-    std::static_pointer_cast<RigidBody>(pRigidBodyBase)->addForce(force);
+    pRigidBody->addForce(force);
 }
 
 void PlayerController::yawLeft(float deltaTime) {
@@ -50,7 +49,7 @@ void PlayerController::yawLeft(float deltaTime) {
         throw ECS_EXCEPT("Component is not valid");
     }
 
-    auto pModel = Component::at(ecs::Components::Model, entityID().value()).lock();
+    auto pModel = gfx::d3d12engine::Model::at(entityID().value());
     if (!pModel) {
         throw ECS_EXCEPT("Model component doesn't exist");
     }
@@ -58,7 +57,7 @@ void PlayerController::yawLeft(float deltaTime) {
     auto yaw = yawStep_;
     yaw *= -deltaTime;
 
-    std::static_pointer_cast<Model>(pModel)->root().coord() << mu::rotateYH(yaw);
+    // pModel->root().coord() << mu::rotateYH(yaw);
 }
 
 void PlayerController::yawRight(float deltaTime) {
@@ -66,7 +65,7 @@ void PlayerController::yawRight(float deltaTime) {
         throw ECS_EXCEPT("Component is not valid");
     }
 
-    auto pModel = Component::at(ecs::Components::Model, entityID().value()).lock();
+    auto pModel = gfx::d3d12engine::Model::at(entityID().value());
     if (!pModel) {
         throw ECS_EXCEPT("Model component doesn't exist");
     }
@@ -74,21 +73,20 @@ void PlayerController::yawRight(float deltaTime) {
     auto yaw = yawStep_;
     yaw *= deltaTime;
 
-    std::static_pointer_cast<Model>(pModel)->root().coord() << mu::rotateYH(yaw);
+    // pModel->root().coord() << mu::rotateYH(yaw);
 }
 
 void InputSystem::update(float deltaTime) {
 	pKeyboard_->patchKeyState();
 
-    for (auto& weakPC : components<PlayerController>()) {
-        auto pc = weakPC.lock();
-        if (!pc) {
+    for (auto& playerController : components<PlayerController>()) {
+        if (!playerController) {
             throw ECS_EXCEPT("PlayerController component is not valid");
         }
 
         for (const auto& [key, event] : keyMap_) {
             if (pKeyboard_->pressed(key)) {
-                pc->handleEvent(event, deltaTime);
+                playerController->handleEvent(event, deltaTime);
             }
         }
     }

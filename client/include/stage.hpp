@@ -3,26 +3,21 @@
 
 #include "ecs.hpp"
 #include "systems.hpp"
-
 #include "player.hpp"
-#include "camera.hpp"
 
-#include "d3d12core.hpp"
+#include "d3d12engine/d3d12Engine.hpp"
 
 #include <vector>
 
 class Stage {
 public:
-    Stage(gfx::d3d12::Core& core, const Win32::WndClient& client, Systems& systems) NOEXCEPT
-        : camera_( gfx::Camera::Config{
-        .fov = 90.f, .aspect = client.width / static_cast<float>(client.height),
-        .near = 0.1f, .far = 10000.f
-    } ), player_(), pSystems_(&systems) {
+    Stage(gfx::d3d12engine::Core& core, Systems& systems) NOEXCEPT
+        : player_(), scene_(), pSystems_(&systems) {
         init();
     }
 
     void update(double deltaTime);
-    void render(gfx::ICore& core, gfx::IRenderTarget& target);
+    void render(gfx::d3d12engine::Core& core);
 
 private:
     void init();
@@ -34,10 +29,9 @@ private:
     void initLights();
     void setupCamera();
 
-    gfx::Camera camera_;
     Player player_;
+    gfx::d3d12engine::Scene scene_;
     Systems* pSystems_;
-    std::vector< gfx::d3d12::sr::PhongLight > lights_;
 };
 
 #endif  // __Stage_HPP

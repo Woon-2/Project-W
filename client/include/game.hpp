@@ -1,19 +1,16 @@
 #ifndef __GAME_HPP
 #define __GAME_HPP
 
+#include "stage.hpp"
+
 #include "mouseWin32Adaptor.hpp"
 #include "keyboardWin32Adaptor.hpp"
-
 #include "d3d12engine/d3d12Engine.hpp"
 #include "Timer.hpp"
+#include "systems.hpp"
 
 #include <vector>
 #include <memory>
-
-// this is for temporary use
-class Stage {
-
-};
 
 class Game {
 public:
@@ -39,6 +36,7 @@ private:
     gfx::d3d12engine::Core core_;
     Mouse mouse_;
     Keyboard keyboard_;
+    Systems systems_;
     Timer timer_;
     std::unique_ptr<Stage> pStage_;
     double lockFPS_;

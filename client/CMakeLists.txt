@@ -43,7 +43,6 @@ target_sources(client
         src/game.cpp include/game.hpp
         src/player.cpp include/player.hpp
         src/inputSystem.cpp include/inputSystem.hpp
-        src/assetSystem.cpp include/assetSystem.hpp
         src/assetMap.cpp include/assetMap.hpp
         src/physicsSystem.cpp include/physicsSystem.hpp
         src/stage.cpp include/stage.hpp

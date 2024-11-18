@@ -1,10 +1,9 @@
 #ifndef __testInput_HPP
 #define __testInput_HPP
 
-#include "Window.hpp"
-#include "mouse.hpp"
+#include "d3d12engine/d3d12Engine.hpp"
 
-#include "gfx.hpp"
+#include "mouse.hpp"
 
 #include <string>
 
@@ -16,8 +15,8 @@ public:
     using MyChar = typename MyWindow::MyChar;
     using MyString = std::basic_string<MyChar>;
 
-    TestInputHandler(MyWindow& wnd, ic::Mouse& mouse, gfx::ICore& gfx)
-        : Win32::MsgHandler<Wnd>(wnd), pMouse_(&mouse), pGfx_(&gfx) {}
+    TestInputHandler(MyWindow& wnd, ic::Mouse& mouse, gfx::d3d12engine::Core& core)
+        : Win32::MsgHandler<Wnd>(wnd), pMouse_(&mouse), pCore_(&core) {}
 
     std::optional<LRESULT> operator()(
         const ::Win32::Message& msg
@@ -78,10 +77,10 @@ private:
 
         case VK_F9:
             if (pWnd->fullScreen()) {
-                pWnd->setWindowed(*pGfx_);
+                pCore_->setWindowed();
             }
             else {
-                pWnd->setFullScreen(*pGfx_);
+                pCore_->setFullScreen();
             }
             break;
 
@@ -101,7 +100,7 @@ private:
     }
 
     ic::Mouse* pMouse_;
-    gfx::ICore* pGfx_;
+    gfx::d3d12engine::Core* pCore_;
 };
 
 #endif // __testInput_HPP

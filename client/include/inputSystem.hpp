@@ -6,6 +6,8 @@
 #include "keyboardXX.hpp"
 #include "player.hpp"
 
+#include "d3d12engine/d3d12Engine.hpp"
+
 #include <map>
 
 class Rigidbody;
