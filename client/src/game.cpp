@@ -1,28 +1,47 @@
 #include "game.hpp"
 
 #include "player.hpp"
-#include "cmodel.hpp"
 
 #include "mouseWin32Adaptor.hpp"
 #include "testInput.hpp"
-
-#include "d3d12scene.hpp"
-
-#include "mygfx.hpp"
 
 #include <chrono>
 #include <thread>
 
 using namespace std::literals;
 
-Game::Game(gfx::ICore& gfx, MyWindow& wnd, ic::Mouse& mouse, ic::Keyboard& keyboard)
-    : systems_( static_cast<gfx::d3d12::Core&>(gfx), keyboard ),
-    timer_(), pStage_(), pGfx_(&gfx), pWnd_(&wnd),
-    pMouse_(&mouse), renderFunc_(&Game::initialRender), lockFPS_(defLockFPS),
-    curFenceIdx_(0), prevFenceIdx_(1u) {
+Game::Game()
+    : core_(), mouse_(), keyboard_(), systems_(keyboard_),
+    timer_(), pStage_(), lockFPS_(defLockFPS) {
     setupWndMsgHandlers();
-    ecs::init( ecs::InitDesc{ .threadCnt = 1u, .entityPoolSize = 0x100u } );
-    pStage_ = std::make_unique<Stage>( static_cast<gfx::d3d12::Core&>(gfx), wnd.client(), systems_ );
+}
+
+int Game::run() {
+    try {
+
+    pStage_ = std::make_unique<Stage>(core_, systems_);
+
+    for(;;) {
+        if (auto returnCode = core_.window().processMessages()) {
+            return returnCode.value();
+        }
+
+        update();
+        render();
+    }
+
+    } catch (const gfx::Exception& e) {
+        MessageBoxA(nullptr, e.what(), "GFX Exception",
+            MB_OK | MB_ICONEXCLAMATION);
+    } catch (const std::exception& e) {
+        MessageBoxA(nullptr, e.what(), "Standard Exception",
+            MB_OK | MB_ICONEXCLAMATION);
+    } catch(...) {
+        MessageBoxA(nullptr, "no details available",
+            "Unknown Exception", MB_OK | MB_ICONEXCLAMATION);
+    }
+
+    return 0;
 }
 
 void Game::update() {
@@ -35,67 +54,19 @@ void Game::update() {
         std::this_thread::sleep_for( std::chrono::duration<double>(restFrameTime) );
     }
 
-    pWnd_->setTitle(timer_.str());
-
+    // TODO: update stage
     pStage_->update(timer_.GetDT());
 }
 
 void Game::render() {
-    (this->*renderFunc_)();
-}
-
-void Game::initialRender() {
-    const auto expectedFrameTime = 1. / lockFPS_;
-
-    // skip rendering if the frame time is too long
-    /*if (timer_.GetDT() > expectedFrameTime * 2.) {
-        return;
-    }*/
-
-    // #0 render
-    static_cast<MyGfx&>(*pGfx_).setFrame(curFenceIdx_);
-
-    pStage_->render(*pGfx_, *pWnd_);
-
-    auto pd3d12Gfx = static_cast<gfx::d3d12::Core*>(pGfx_);
-    pd3d12Gfx->signalGpu(curFenceIdx_);
-    std::swap(curFenceIdx_, prevFenceIdx_);
-
-    // #1 render
-    static_cast<MyGfx&>(*pGfx_).setFrame(curFenceIdx_);
-
-    pStage_->render(*pGfx_, *pWnd_);
-
-    pd3d12Gfx->signalGpu(curFenceIdx_);
-
-    renderFunc_ = &Game::regularRender;
-}
-
-void Game::regularRender() {
-    const auto expectedFrameTime = 1. / lockFPS_;
-
-    // skip rendering if the frame time is too long
-    /*if (timer_.GetDT() > expectedFrameTime * 2.) {
-        return;
-    }*/
-
-    auto pd3d12Gfx = static_cast<gfx::d3d12::Core*>(pGfx_);
-
-    pd3d12Gfx->waitGpu(prevFenceIdx_);
-    pWnd_->present();
-    pd3d12Gfx->signalGpu(curFenceIdx_);
-    pd3d12Gfx->waitGpu(curFenceIdx_);
-
-    static_cast<MyGfx&>(*pGfx_).setFrame(curFenceIdx_);
-
-    pStage_->render(*pGfx_, *pWnd_);
-
-    pd3d12Gfx->signalGpu(curFenceIdx_);
-
-    std::swap(curFenceIdx_, prevFenceIdx_);
+    // TODO: render stage
+    pStage_->render(core_);
 }
 
 void Game::setupWndMsgHandlers() {
-    pWnd_->addMsgHandler(0, std::make_unique<TestInputHandler<MyWindow>>(*pWnd_, *pMouse_, *pGfx_));
-    pWnd_->addMsgHandler(1, std::make_unique<ic::Win32::MouseMsgHandler<MyWindow>>(*pWnd_, pMouse_));
+    // core_.window().addMsgHandler(0, std::make_unique<TestInputHandler<MyWindow>>(*pWnd_, *pMouse_, *pGfx_));
+    // core_.window().addMsgHandler(1, std::make_unique<ic::Win32::MouseMsgHandler<MyWindow>>(*pWnd_, pMouse_));
+    core_.window().addMsgHandler( 10000, std::make_unique<
+        Win32::BasicMsgHandler<gfx::d3d12engine::Core::MyWindow>
+    >(core_.window()) );
 }
