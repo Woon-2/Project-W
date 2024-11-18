@@ -219,7 +219,7 @@ ConcreteComponent& Entity::as() {
         throw ECS_EXCEPT("Entity is invalid");
     }
 
-    if (auto component = ConcreteComponent::at(id_.value())()) {
+    if (auto component = ConcreteComponent::at(id_.value())) {
         return *component;
     }
 

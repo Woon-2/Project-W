@@ -98,6 +98,9 @@ class Model : public ecs::Component {
 public:
     ENABLE_COMPONENT(Model);
 
+    Model(const ecs::Entity& entity) NOEXCEPT
+        : ecs::Component(entity) {}
+
     d3d12::Model& get() NOEXCEPT { return model_; }
     const d3d12::Model& get() const NOEXCEPT { return model_; }
 
@@ -155,19 +158,19 @@ private:
     std::vector<ecs::Entity::ID> reservedEntities_;
 };
 
-ecs::SysCompCont<Model*>& IRenderPass::models(Scene& scene) {
+inline ecs::SysCompCont<Model*>& IRenderPass::models(Scene& scene) {
     return scene.components<Model>();
 }
 
-ecs::SysCompCont<Camera*>& IRenderPass::cameras(Scene& scene) {
+inline ecs::SysCompCont<Camera*>& IRenderPass::cameras(Scene& scene) {
     return scene.components<Camera>();
 }
 
-ecs::SysCompCont<Light*>& IRenderPass::lights(Scene& scene) {
+inline ecs::SysCompCont<Light*>& IRenderPass::lights(Scene& scene) {
     return scene.components<Light>();
 }
 
-std::vector<ecs::Entity::ID>& IRenderPass::reservedEntities(Scene& scene) {
+inline std::vector<ecs::Entity::ID>& IRenderPass::reservedEntities(Scene& scene) {
     return scene.reservedEntities_;
 }
 
