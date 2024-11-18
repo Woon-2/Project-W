@@ -250,7 +250,7 @@ void RefModel::Node::addMesh(RefMesh&& mesh) {
     for (auto& [key, material] : mesh.materialMap()) {
         for (auto& mapRef : material.mapRefs()) {
             if (mapRef.resourceIdx != Material::MapRef::invalid) {
-                mapRef.resourceIdx += static_cast<std::uint32_t>(
+                mapRef.resourceIdx = static_cast<std::uint32_t>(
                     pRefModel_->textureMap_.at(mapRef).offset()
                 );
             }
