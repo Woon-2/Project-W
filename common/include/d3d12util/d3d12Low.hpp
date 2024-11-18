@@ -92,6 +92,8 @@ inline void D3D12CmdQueue::execute(D3D12GfxCmdList& cmdList) {
 	get()->ExecuteCommandLists(1u, tmp);
 }
 
+class DescriptorGPU;
+
 class DescriptorCPU {
 public:
 	friend class D3D12Resource;
@@ -104,6 +106,8 @@ public:
 
 	DescriptorCPU()
 		: cpuHandle_{}, gpuHandle_{}, offsetFromRange_(std::size_t(-1)), type_(Type::INVALID) {}
+
+	DescriptorCPU(const DescriptorGPU& other);
 
 	DescriptorCPU( const D3D12_CPU_DESCRIPTOR_HANDLE& cpuHandle,
 		const D3D12_GPU_DESCRIPTOR_HANDLE& gpuHandle, Type viewType
@@ -137,10 +141,16 @@ class DescriptorGPU : public DescriptorCPU {
 public:
 	using DescriptorCPU::DescriptorCPU;
 
+	DescriptorGPU(const DescriptorCPU& other)
+		: DescriptorCPU(other) {}
+
 	const D3D12_GPU_DESCRIPTOR_HANDLE& gpuHandle() const NOEXCEPT {
 		return gpuHandle_;
 	}
 };
+
+inline DescriptorCPU::DescriptorCPU(const DescriptorGPU& other)
+	: DescriptorCPU(reinterpret_cast<const DescriptorCPU&>(other)) {}
 
 template <class TDescriptor>
 class DescriptorHeap : public dx::DXWrapper<ID3D12DescriptorHeap> {

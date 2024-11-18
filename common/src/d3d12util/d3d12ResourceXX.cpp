@@ -133,16 +133,22 @@ void StaticTextureStorage::load( const std::filesystem::path& path,
     TextureResource::Type type, D3D12Device& device, D3D12GfxCmdList& cmdList,
     DescriptorRange<DescriptorHeapGPU>& range
 ) {
-    // switch(type) {
-    // case TextureResource::Type::Texture: {
-    //     auto idx = cmdList.emplaceXResource<UploadBuffer>();
-    //     storedTexs_.emplace_back( device, cmdList, range,
-    //         path, cmdList.getXResource<UploadBuffer>(idx)
-    //     );
-    //     map_[path] = storedTexs_.back().view(Texture::idxSrv);
-    //     break;
-    // }
-    // }
+    switch(type) {
+    case TextureResource::Type::Texture:
+        storedTexs_.emplace_back(device, cmdList, range, path);
+        map_[path] = storedTexs_.back().view(Texture::idxSrv);
+        break;
+
+    case TextureResource::Type::TextureArray:
+        storedTexArrs_.emplace_back(device, cmdList, range, path);
+        map_[path] = storedTexArrs_.back().view(TextureArray::idxSrv);
+        break;
+
+    case TextureResource::Type::TextureCube:
+        storedTexCubes_.emplace_back(device, cmdList, range, path);
+        map_[path] = storedTexCubes_.back().view(TextureCube::idxSrv);
+        break;
+    }
 }
 
 const DescriptorGPU& StaticTextureStorage::get(const std::filesystem::path& path) const {
