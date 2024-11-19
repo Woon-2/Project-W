@@ -288,6 +288,7 @@ sr::PBRMaterial sr::PBRMaterial::convert(const Material& material) {
 		.roughnessMapRef = material.mapRef(Material::MapType::Roughness).toxm(),
 		.normalMapRef = material.mapRef(Material::MapType::Normal).toxm(),
 		.metallicMapRef = material.mapRef(Material::MapType::Metallic).toxm(),
+		.metallicSmoothnessMapRef = material.mapRef(Material::MapType::MetallicSmoothness).toxm(),
 		.emmisiveMapRef = material.mapRef(Material::MapType::Emmisive).toxm(),
 		.ambientOcclusionMapRef = material.mapRef(Material::MapType::AmbientOcllusion).toxm()
 	};
