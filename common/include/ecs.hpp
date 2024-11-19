@@ -14,6 +14,7 @@
 #include <memory>
 #include <tuple>
 #include <functional>
+#include <type_traits>
 
 #include <atomic>
 
@@ -27,16 +28,12 @@
         return ecs::Components::__ComponentType;    \
     }   \
     static __ComponentType* at(ecs::Entity::ID id) {    \
-        if (auto ptr = ecs::Component::at(ecs::Components::__ComponentType, id)) {    \
-            return static_cast<__ComponentType*>(ptr);    \
-        }   \
-        throw ECS_EXCEPT( #__ComponentType " is dead");    \
+        auto ptr = ecs::Component::at(ecs::Components::__ComponentType, id);    \
+        return static_cast<__ComponentType*>(ptr);    \
     }   \
     static const __ComponentType* atC(ecs::Entity::ID id) {    \
-        if (auto ptr = ecs::Component::atC(ecs::Components::__ComponentType, id)) {    \
-            return static_cast<const __ComponentType*>(ptr);    \
-        }   \
-        throw ECS_EXCEPT( #__ComponentType " is dead");    \
+        auto ptr = ecs::Component::atC(ecs::Components::__ComponentType, id);   \
+        return static_cast<const __ComponentType*>(ptr);    \
     }
 
 // Entity를 할당하는 스레드와 반납하는 스레드가 다르면,
@@ -242,7 +239,7 @@ const ConcreteComponent& Entity::as() const {
 template <class ConcreteComponent>
 ConcreteComponent* Entity::get() {
     if (!valid()) {
-        return {};
+        return nullptr;
     }
 
     return ConcreteComponent::at(id_.value());
@@ -251,7 +248,7 @@ ConcreteComponent* Entity::get() {
 template <class ConcreteComponent>
 const ConcreteComponent* Entity::get() const {
     if (!valid()) {
-        return {};
+        return nullptr;
     }
 
     return ConcreteComponent::atC(id_.value());
@@ -259,7 +256,7 @@ const ConcreteComponent* Entity::get() const {
 
 inline Component* Entity::get(Components type) {
     if (!valid()) {
-        return {};
+        return nullptr;
     }
 
     return Component::at(type, id_.value());
@@ -267,7 +264,7 @@ inline Component* Entity::get(Components type) {
 
 inline const Component* Entity::get(Components type) const {
     if (!valid()) {
-        return {};
+        return nullptr;
     }
 
     return Component::atC(type, id_.value());
@@ -308,9 +305,15 @@ public:
             throw ECS_EXCEPT("Entity is invalid");
         }
 
+        auto pushIfNotNull = [&entity](auto& components) {
+            if (auto component = entity.get<std::remove_pointer_t< std::ranges::range_value_t<decltype(components)> >>()) {
+                components.push_back(component);
+            }
+        };
+
         std::apply(
-            [&entity](auto& ... components) {
-                (components.push_back(entity.get<ConcreteComponents>()), ...);
+            [&pushIfNotNull](auto& ... components) {
+                (pushIfNotNull(components), ...);
             },
             componentsTuple_
         );
