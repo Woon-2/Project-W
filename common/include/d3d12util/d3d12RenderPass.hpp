@@ -111,6 +111,7 @@ private:
 class RenderPass {
 public:
     RenderPass() = default;
+    RenderPass(const char* id) : RenderPass(std::string_view(id)) {}
     RenderPass(std::string_view id) : renderPassID_(id) {}
     RenderPass(std::string&& id) : renderPassID_(std::move(id)) {}
     virtual ~RenderPass() = default;
@@ -136,7 +137,8 @@ class PBRIllumination : public gfx::d3d12::RenderPass {
 public:
     PBRIllumination( D3D12Device& device, ShaderPBRIllumination& shader,
         const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
-    ) : viewport_(vp), protocol_( shader.makeProtocol( device,
+    ) : gfx::d3d12::RenderPass("PBRIllumination"),
+        viewport_(vp), protocol_( shader.makeProtocol( device,
             RenderProtocol::Desc{ makeDesc() }
         ) ), lights_(), batch_(), pCamera_(nullptr) {}
 

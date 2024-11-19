@@ -505,6 +505,9 @@ class Mesh {
 public:
     friend class Shader;
 
+    Mesh(const RefMesh& refMesh, const char* initialState)
+        : Mesh(refMesh, std::string_view(initialState)) {}
+
     Mesh(const RefMesh& refMesh, std::string_view initialState)
         : Mesh(refMesh, std::string(initialState)) {}
 
@@ -518,6 +521,10 @@ public:
 
     std::string_view state() const noexcept {
         return state_;
+    }
+
+    void setState(const char* state) noexcept {
+        state_ = state;
     }
 
     void setState(std::string&& state) noexcept {
@@ -575,6 +582,9 @@ public:
         Node(const Model* pModel = nullptr)
             : coord_(), meshes_(), children_(), pModel_(pModel) {}
         void addMesh(Mesh&& mesh);
+        void emplaceMesh(const RefMesh& refMesh, const char* initialState) {
+            emplaceMesh(refMesh, std::string_view(initialState));
+        }
         void emplaceMesh(const RefMesh& refMesh, std::string&& initialState);
         void emplaceMesh(const RefMesh& refMesh, std::string_view initialState) {
             emplaceMesh(refMesh, std::string(initialState));
@@ -594,6 +604,8 @@ public:
 
     Model() = default;
     ~Model() = default;
+    Model(const RefModel& ref, const char* initialState)
+        : Model(ref, std::string_view(initialState)) {}
     Model(const RefModel& ref, std::string_view initialState)
         : Model(ref, std::string(initialState)) {}
     Model(const RefModel& ref, std::string&& initialState);
@@ -606,6 +618,9 @@ public:
     const auto& nodes() const noexcept { return nodeStorage_; }
 
     std::string_view state() const noexcept { return state_; }
+    void setState(const char* state) noexcept {
+        setState(std::string_view(state));
+    }
     void setState(std::string_view state) {
         setState(std::string(state));
     }
