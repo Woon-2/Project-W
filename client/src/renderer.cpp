@@ -11,11 +11,16 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
         gfx::d3d12::convClientToVP( core.window().client() )
     ) {}
 
-void Renderer::render(gfx::d3d12engine::Core& core) {
+void Renderer::init(gfx::d3d12engine::Scene& scene) {
+    renderPass_.init(scene);
+}
+
+void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& scene) {
+    renderPass_.update(scene);
+
     auto cmdList = core.fetchCmdList();
 
     shader_.bindRootParams( core.root(), cmdList );
-
     renderPass_.preRender( cmdList );
     renderPass_.render( cmdList );
     renderPass_.postRender( cmdList );

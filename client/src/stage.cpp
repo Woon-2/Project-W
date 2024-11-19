@@ -11,6 +11,7 @@ void Stage::init(gfx::d3d12engine::Core& core) {
     setupCamera();
     loadTextures(core);
     // pSystems_->coordRoot.update();
+    pRenderer_->init(scene_);
 }
 
 void Stage::update(double deltaTime) {
@@ -20,7 +21,7 @@ void Stage::update(double deltaTime) {
 }
 
 void Stage::render(gfx::d3d12engine::Core& core) {
-    core.render(*pRenderer_);
+    core.render(*pRenderer_, scene_);
 }
 
 void Stage::loadTextures(gfx::d3d12engine::Core& core) {
@@ -60,6 +61,9 @@ void Stage::simulate(double deltaTime) {
 }
 
 void Stage::initEntities() {
+    scene_.addEntity(player_);
+
+    scene_.clearStash();
     // pSystems_->assetSystem.addEntity(player_);
     // pSystems_->coordRoot.addEntity(player_);
     // pSystems_->inputSystem.addEntity(player_);

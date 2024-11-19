@@ -23,7 +23,8 @@ inline constexpr auto initialCbvSrvUavHeapSize = 1000u;
 class IRenderer {
 public:
     virtual ~IRenderer() = default;
-    virtual void render(class Core&) = 0;
+    virtual void init(class Scene&) = 0;
+    virtual void render(class Core&, Scene&) = 0;
 };
 
 class Core {
@@ -41,7 +42,7 @@ public:
         MyWindow::setHInst(hInstance);
     }
 
-    void render(IRenderer& renderer);
+    void render(IRenderer& renderer, Scene& scene);
     void render();
 
     MyWindow& window() NOEXCEPT { return window_; }

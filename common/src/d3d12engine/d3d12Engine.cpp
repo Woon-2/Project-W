@@ -23,14 +23,14 @@ Core::Core()
     ecs::init( ecs::InitDesc{ .threadCnt = 1u, .entityPoolSize = 0x100u } );
 }
 
-void Core::render(IRenderer& renderer) {
+void Core::render(IRenderer& renderer, Scene& scene) {
     cmdList_.reset();
     cmdList_.get()->SetGraphicsRootSignature(root_.get().Get());
     cmdList_.get()->SetComputeRootSignature(root_.get().Get());
     window_.setRenderTarget(cmdList_);
     window_.clearRenderTarget(cmdList_);
     window_.clearDepthStencil(cmdList_);
-    renderer.render(*this);
+    renderer.render(*this, scene);
     window_.setPresent(cmdList_);
     cmdList_.close();
     cmdQueue_.execute(cmdList_);

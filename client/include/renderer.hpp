@@ -7,7 +7,8 @@ class Renderer : public gfx::d3d12engine::IRenderer {
 public:
     Renderer(gfx::d3d12engine::Core& core);
 
-    void render(gfx::d3d12engine::Core& core) override;
+    void init(gfx::d3d12engine::Scene& scene) override;
+    void render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& scene) override;
 
 private:
     gfx::d3d12::ShaderPBRIllumination shader_;
