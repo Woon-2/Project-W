@@ -174,6 +174,47 @@ private:
     const Camera* pCamera_;
 };
 
+class PBRIlluminationMacro : public gfx::d3d12::RenderPass {
+public:
+    PBRIlluminationMacro( D3D12Device& device, ShaderPBRIlluminationMacro& shader,
+        const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
+    ) : gfx::d3d12::RenderPass("PBRIlluminationMacro"),
+        viewport_(vp), protocol_( shader.makeProtocol( device,
+            RenderProtocol::Desc{ makeDesc() }
+        ) ), lights_(), batch_(), pCamera_(nullptr) {}
+
+    void setViewport(const D3D12_VIEWPORT& vp);
+
+    const D3D12_VIEWPORT& viewport() const NOEXCEPT {
+        return viewport_;
+    }
+
+    void preRender(D3D12GfxCmdList& cmdList) override;
+    void render(D3D12GfxCmdList& cmdList) override;
+    void postRender(D3D12GfxCmdList& cmdList) override;
+
+    void trackModel(Model* pModel);
+    void setCamera(const Camera* pCamera) NOEXCEPT {
+        pCamera_ = pCamera;
+    }
+
+private:
+    ShaderPBRIllumination& shader() noexcept {
+        return static_cast<ShaderPBRIllumination&>(protocol_.shader());
+    }
+    const ShaderPBRIllumination& shader() const noexcept {
+        return static_cast<const ShaderPBRIllumination&>(protocol_.shader());
+    }
+
+    static RenderProtocol::Desc makeDesc();
+
+    D3D12_VIEWPORT viewport_;
+    RenderProtocol protocol_;
+    std::vector<const sr::Light*> lights_;
+    std::vector< std::pair<Mesh*, mu::Mat4x4> > batch_;
+    const Camera* pCamera_;
+};
+
 }   // namespace gfx::d3d12::rp
 
 }   // namespace gfx::d3d12

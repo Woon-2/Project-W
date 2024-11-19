@@ -232,6 +232,14 @@ public:
     void update(Scene& scene) override;
 };
 
+class PBRIlluminationMacro : public IRenderPass, public d3d12::rp::PBRIlluminationMacro {
+public:
+    using d3d12::rp::PBRIlluminationMacro::PBRIlluminationMacro;
+
+    void init(Scene& scene) override;
+    void update(Scene& scene) override;
+};
+
 }   // namespace gfx::d3d12engine::rp
 
 }   // namespace gfx::d3d12engine

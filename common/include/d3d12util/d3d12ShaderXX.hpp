@@ -402,6 +402,57 @@ private:
 	std::size_t maxDrawcallCnt_;
 };
 
+class ShaderPBRIlluminationMacro : public Shader {
+public:
+	struct Config {
+		std::size_t maxInstanceCnt;
+		std::size_t maxDrawcallCnt;
+		std::size_t maxLightCnt;
+	};
+
+	ShaderPBRIlluminationMacro( D3D12Device& device, const RootSignature& root,
+		const Config& config, InputLayout::Spec ilSpec = InputLayout::Spec::serial
+	);
+
+	RenderProtocol makeProtocol( D3D12Device& device, const RenderProtocol::Desc& desc) {
+		return RenderProtocol( device, *this,
+			selectBlobsStrong<ShaderBlob::Type::Vertex, ShaderBlob::Type::Pixel>(), desc
+		);
+	}
+
+	std::size_t maxInstanceCnt() const noexcept {
+		return maxInstanceCnt_;
+	}
+
+	std::size_t maxLightCnt() const noexcept {
+		return maxLightCnt_;
+	}
+
+	std::size_t maxDrawcallCnt() const noexcept {
+		return maxDrawcallCnt_;
+	}
+
+	void bindRootParams(const UnifiedRoot& root, D3D12GfxCmdList& cmdList) override;
+
+	void loadBlobs() override;
+	void releaseBlobs() override;
+
+	UploadBuffer perConfigurationData_;
+	UploadBuffer perFrameData_;
+	UploadBuffer perDrawcallData_;
+	UploadBuffer perInstanceData_;
+	UploadBuffer lightBuffer_;
+
+private:
+	static InputLayout makeInputLayout(InputLayout::Spec ilSpec);
+	static InputLayout makeInputLayoutSerial();
+	static InputLayout makeInputLayoutSeparated();
+
+	std::size_t maxInstanceCnt_;
+	std::size_t maxLightCnt_;
+	std::size_t maxDrawcallCnt_;
+};
+
 }   // namespace gfx::d3d12
 
 }   // namespace gfx

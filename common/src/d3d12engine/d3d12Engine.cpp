@@ -126,6 +126,26 @@ void PBRIllumination::update(Scene& scene) {
     }
 }
 
+void PBRIlluminationMacro::init(Scene& scene) {
+    for (auto& pModel : models(scene)) {
+        trackModel(&pModel->get());
+    }
+    if (!cameras(scene).empty()) {
+        setCamera(&cameras(scene).front()->get());
+    }
+}
+
+void PBRIlluminationMacro::update(Scene& scene) {
+    for (auto& entityID : reservedEntities(scene)) {
+        if ( auto pModel = Model::at(entityID) ) {
+            trackModel(&pModel->get());
+        }
+        if ( auto pCamera = Camera::at(entityID) ) {
+            setCamera(&pCamera->get());
+        }
+    }
+}
+
 }   // namespace gfx::d3d12engine::rp
 
 }   // namespace gfx::d3d12engine
