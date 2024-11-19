@@ -14,14 +14,15 @@ class Stage {
 public:
     Stage(gfx::d3d12engine::Core& core, Systems& systems, Renderer& renderer) NOEXCEPT
         : player_(), scene_(), pSystems_(&systems), pRenderer_(&renderer) {
-        init();
+        init(core);
     }
 
     void update(double deltaTime);
     void render(gfx::d3d12engine::Core& core);
 
 private:
-    void init();
+    void init(gfx::d3d12engine::Core& core);
+    void loadTextures(gfx::d3d12engine::Core& core);
     void processNetwork(double deltaTime);
     void processInput(double deltaTime);
     void simulate(double deltaTime);

@@ -1,12 +1,15 @@
 #include "stage.hpp"
 
+#include "resourcePath.hpp"
+
 #include <ranges>
 
-void Stage::init() {
+void Stage::init(gfx::d3d12engine::Core& core) {
     initEntities();
     initLights();
 
     setupCamera();
+    loadTextures(core);
     // pSystems_->coordRoot.update();
 }
 
@@ -18,6 +21,20 @@ void Stage::update(double deltaTime) {
 
 void Stage::render(gfx::d3d12engine::Core& core) {
     core.render(*pRenderer_);
+}
+
+void Stage::loadTextures(gfx::d3d12engine::Core& core) {
+    core.prepareGPUResLoad();
+
+    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45_col.dds", gfx::d3d12::TextureResource::Type::Texture);
+    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45_col_2.dds", gfx::d3d12::TextureResource::Type::Texture);
+    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45_col_3.dds", gfx::d3d12::TextureResource::Type::Texture);
+    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45_glass_nor_.dds", gfx::d3d12::TextureResource::Type::Texture);
+    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45_REF_1.dds", gfx::d3d12::TextureResource::Type::Texture);
+    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45-nor_1.dds", gfx::d3d12::TextureResource::Type::Texture);
+    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45-steel detail_2_col.dds", gfx::d3d12::TextureResource::Type::Texture);
+    
+    core.finishGPUResLoad();
 }
 
 void Stage::processNetwork(double deltaTime) {

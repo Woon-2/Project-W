@@ -5,7 +5,7 @@ namespace gfx {
 namespace d3d12engine {
 
 Core::Core()
-    : factory_(),
+    : staticTexStorage_(), factory_(),
     device_( d3d12::getAvailableAdapter(factory_, D3D_FEATURE_LEVEL_12_1), D3D_FEATURE_LEVEL_12_1 ),
     cmdQueue_( device_ ), cmdList_( device_ ),
     rtvHeap_(device_, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, initialRtvHeapSize),
@@ -52,6 +52,27 @@ void Core::render() {
     window_.present(cmdList_);
     fence_.signal(cmdQueue_);
     fence_.wait();
+}
+
+void Core::loadStaticTexture( const std::filesystem::path& path,
+    d3d12::TextureResource::Type type
+) {
+    switch (type) {
+    case d3d12::TextureResource::Type::Texture:
+        staticTexStorage_.load(path, type, device_, cmdList_, descRanges_.srvRangeTex2D);
+        break;
+
+    case d3d12::TextureResource::Type::TextureArray:
+        staticTexStorage_.load(path, type, device_, cmdList_, descRanges_.srvRangeTex2DArray);
+        break;
+
+    case d3d12::TextureResource::Type::TextureCube:
+        staticTexStorage_.load(path, type, device_, cmdList_, descRanges_.srvRangeTexCube);
+        break;
+
+    default:
+        throw GFX_EXCEPT("[Description] Unknown texture type");
+    }
 }
 
 void CoordRoot::addEntity(ecs::Entity& entity) {

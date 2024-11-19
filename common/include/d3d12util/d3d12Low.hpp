@@ -379,7 +379,7 @@ public:
 		D3D12_RESOURCE_STATES initialState
 	) {
 		get() = src;
-		desc_ = src->GetDesc();
+		desc_ = get()->GetDesc();
 		state_ = initialState;
 	}
 
@@ -391,7 +391,7 @@ public:
 		D3D12_RESOURCE_STATES initialState
 	) {
 		get() = std::move(src);
-		desc_ = src->GetDesc();
+		desc_ = get()->GetDesc();
 		state_ = initialState;
 	}
 

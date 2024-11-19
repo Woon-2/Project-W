@@ -52,6 +52,20 @@ public:
     d3d12::UnifiedRoot& root() NOEXCEPT { return root_; }
     const d3d12::UnifiedRoot& root() const NOEXCEPT { return root_; }
 
+    void prepareGPUResLoad() {
+        cmdList_.reset();
+    }
+
+    void finishGPUResLoad() {
+        cmdList_.close();
+        cmdQueue_.execute(cmdList_);
+
+        fence_.signal(cmdQueue_);
+        fence_.wait();
+    }
+
+    void loadStaticTexture(const std::filesystem::path& path, d3d12::TextureResource::Type type);
+
     void setFullScreen() {
         window_.setFullScreen(&device_);
     }
@@ -61,6 +75,7 @@ public:
     }
 
 private:
+    d3d12::StaticTextureStorage staticTexStorage_;
     dx::DXGIFactory factory_;
     d3d12::D3D12Device device_;
     d3d12::D3D12CmdQueue cmdQueue_;
@@ -181,6 +196,11 @@ inline ecs::SysCompCont<Light*>& IRenderPass::lights(Scene& scene) {
 inline std::vector<ecs::Entity::ID>& IRenderPass::reservedEntities(Scene& scene) {
     return scene.reservedEntities_;
 }
+
+class Terrain : public ecs::Entity {
+public:
+    Terrain();
+};
 
 namespace rp {
 

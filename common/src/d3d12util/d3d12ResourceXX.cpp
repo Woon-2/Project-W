@@ -106,7 +106,7 @@ TextureResource::LoadDDSReturnType TextureResource::loadDDS(
     auto alphaMode = DirectX::DDS_ALPHA_MODE_UNKNOWN;
     auto blsCubemap = false;
 
-    DirectX::LoadDDSTextureFromFileEx(
+    DX_THROW_FAILED( DirectX::LoadDDSTextureFromFileEx(
         device.get().Get(),
         path.wstring().c_str(),
         0,
@@ -117,7 +117,7 @@ TextureResource::LoadDDSReturnType TextureResource::loadDDS(
         ret.subresources,
         &alphaMode,
         &blsCubemap
-    );
+    ) );
 
     auto requiredBytes = GetRequiredIntermediateSize(ret.res.Get(), 0, static_cast<UINT>(ret.subresources.size()));
 
