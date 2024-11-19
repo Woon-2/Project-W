@@ -11,7 +11,7 @@
 using namespace std::literals;
 
 Game::Game()
-    : core_(), mouse_(), keyboard_(), systems_(keyboard_),
+    : core_(), mouse_(), keyboard_(), renderer_(core_), systems_(keyboard_),
     timer_(), pStage_(), lockFPS_(defLockFPS) {
     setupWndMsgHandlers();
 }
@@ -19,7 +19,7 @@ Game::Game()
 int Game::run() {
     try {
 
-    pStage_ = std::make_unique<Stage>(core_, systems_);
+    pStage_ = std::make_unique<Stage>(core_, systems_, renderer_);
 
     for(;;) {
         if (auto returnCode = core_.window().processMessages()) {

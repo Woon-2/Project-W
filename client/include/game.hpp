@@ -8,6 +8,7 @@
 #include "d3d12engine/d3d12Engine.hpp"
 #include "Timer.hpp"
 #include "systems.hpp"
+#include "renderer.hpp"
 
 #include <vector>
 #include <memory>
@@ -37,6 +38,8 @@ private:
 
     Mouse mouse_;
     Keyboard keyboard_;
+
+    Renderer renderer_;
 
     Systems systems_;
 
