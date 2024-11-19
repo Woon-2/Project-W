@@ -22,6 +22,7 @@ public:
 
 private:
     void init(gfx::d3d12engine::Core& core);
+    void loadAssets(gfx::d3d12engine::Core& core);
     void loadTextures(gfx::d3d12engine::Core& core);
     void processNetwork(double deltaTime);
     void processInput(double deltaTime);

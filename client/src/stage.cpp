@@ -24,20 +24,6 @@ void Stage::render(gfx::d3d12engine::Core& core) {
     core.render(*pRenderer_, scene_);
 }
 
-void Stage::loadTextures(gfx::d3d12engine::Core& core) {
-    core.prepareGPUResLoad();
-
-    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45_col.dds", gfx::d3d12::TextureResource::Type::Texture);
-    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45_col_2.dds", gfx::d3d12::TextureResource::Type::Texture);
-    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45_col_3.dds", gfx::d3d12::TextureResource::Type::Texture);
-    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45_glass_nor_.dds", gfx::d3d12::TextureResource::Type::Texture);
-    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45_REF_1.dds", gfx::d3d12::TextureResource::Type::Texture);
-    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45-nor_1.dds", gfx::d3d12::TextureResource::Type::Texture);
-    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45-steel detail_2_col.dds", gfx::d3d12::TextureResource::Type::Texture);
-    
-    core.finishGPUResLoad();
-}
-
 void Stage::processNetwork(double deltaTime) {
     // networkSystem_.update();
 }
@@ -107,4 +93,22 @@ void Stage::setupCamera() {
     // camera_.coordSys().setParent(&world);
     // camera_.coordSys() << mu::translate(0.f, 120.f, -120.f);
     // camera_.focus( gfx::coord::Pt3( &world, mu::Vec3(0.f, 0.f, 0.f) ) );
+}
+
+void Stage::loadAssets(gfx::d3d12engine::Core& core) {
+    core.prepareGPUResLoad();
+
+    loadTextures(core);
+
+    core.finishGPUResLoad();
+}
+
+void Stage::loadTextures(gfx::d3d12engine::Core& core) {
+    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45_col.dds", gfx::d3d12::TextureResource::Type::Texture);
+    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45_col_2.dds", gfx::d3d12::TextureResource::Type::Texture);
+    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45_col_3.dds", gfx::d3d12::TextureResource::Type::Texture);
+    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45_glass_nor_.dds", gfx::d3d12::TextureResource::Type::Texture);
+    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45_REF_1.dds", gfx::d3d12::TextureResource::Type::Texture);
+    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45-nor_1.dds", gfx::d3d12::TextureResource::Type::Texture);
+    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45-steel detail_2_col.dds", gfx::d3d12::TextureResource::Type::Texture);
 }
