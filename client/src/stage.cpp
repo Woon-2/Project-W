@@ -29,11 +29,11 @@ void Stage::processNetwork(double deltaTime) {
 }
 
 void Stage::processInput(double deltaTime) {
-    // pSystems_->inputSystem.update(static_cast<float>(deltaTime));
+    pSystems_->inputSystem.update(static_cast<float>(deltaTime));
 }
 
 void Stage::simulate(double deltaTime) {
-    // pSystems_->physicsSystem.update(static_cast<float>(deltaTime));
+    pSystems_->physicsSystem.update(static_cast<float>(deltaTime));
     // player_.update();
 
     // // camera update
@@ -48,6 +48,9 @@ void Stage::simulate(double deltaTime) {
 
 void Stage::initEntities() {
     scene_.addEntity(player_);
+    pSystems_->coordRoot.addEntity(player_);
+    pSystems_->inputSystem.addEntity(player_);
+    pSystems_->physicsSystem.addEntity(player_);
 
     scene_.clearStash();
     // pSystems_->assetSystem.addEntity(player_);
