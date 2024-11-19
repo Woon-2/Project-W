@@ -1015,8 +1015,8 @@ void Model::Node::addChild(Node* child) {
 }
 
 Model::Model(const RefModel& ref, std::string&& initialState)
-    : nodeStorage_(ref.nodes().size()), state_(std::move(initialState)),
-    pRoot_(nullptr) {
+    : nodeStorage_(ref.nodes().size()), markedRenderPasses_(),
+    state_(std::move(initialState)), pRoot_(nullptr) {
     auto pRefFirstNode = ref.nodes().data();
 
     pRoot_ = nodeStorage_.data() + (ref.root() - pRefFirstNode);
@@ -1037,6 +1037,7 @@ Model::Model(const RefModel& ref, std::string&& initialState)
 
 Model::Model(const Model& other)
     : nodeStorage_(other.nodeStorage_.size()),
+    markedRenderPasses_(other.markedRenderPasses_),
     state_(), pRoot_(nullptr) {
     auto pOtherFirstNode = other.nodeStorage_.data();
 
@@ -1060,6 +1061,7 @@ Model& Model::operator=(const Model& other) {
     }
 
     nodeStorage_.resize(other.nodeStorage_.size());
+    markedRenderPasses_ = other.markedRenderPasses_;
     state_ = other.state_;
 
     auto pOtherFirstNode = other.nodeStorage_.data();
@@ -1082,6 +1084,7 @@ Model& Model::operator=(const Model& other) {
 
 Model::Model(Model&& other) noexcept
     : nodeStorage_(other.nodeStorage_.size()),
+    markedRenderPasses_(std::move(other.markedRenderPasses_)),
     state_(std::move(other.state_)), pRoot_(nullptr) {
     auto pOtherFirstNode = other.nodeStorage_.data();
 
@@ -1108,6 +1111,7 @@ Model& Model::operator=(Model&& other) noexcept {
     }
 
     nodeStorage_.resize(other.nodeStorage_.size());
+    markedRenderPasses_ = std::move(other.markedRenderPasses_);
 
     auto pOtherFirstNode = other.nodeStorage_.data();
 

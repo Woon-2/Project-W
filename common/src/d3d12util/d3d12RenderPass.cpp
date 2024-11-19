@@ -286,6 +286,10 @@ void PBRIlluminationMacro::postRender(D3D12GfxCmdList& cmdList) {
 }
 
 void PBRIlluminationMacro::trackModel(Model* pModel) {
+    if (!pModel->willDrawOnRenderPass(renderPassID())) {
+        return;
+    }
+
     auto& nodes = pModel->nodes();
 
     for (auto& node : nodes) {

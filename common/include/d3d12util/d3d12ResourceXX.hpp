@@ -722,8 +722,23 @@ public:
     }
     void setState(std::string&& state);
 
+    template <class StrLike>
+    void markRenderPass(StrLike&& renderPass) {
+        markedRenderPasses_.emplace_back(std::forward<StrLike>(renderPass));
+    }
+
+    template <class StrLike>
+    bool willDrawOnRenderPass(StrLike&& renderPass) const {
+        if (markedRenderPasses_.empty()) {
+            return true;
+        }
+        return std::ranges::find(markedRenderPasses_, renderPass)
+            != markedRenderPasses_.end();
+    }
+
 private:
     std::vector<Node> nodeStorage_;
+    std::vector<std::string> markedRenderPasses_;
     std::string state_;
     Node* pRoot_;
 };
