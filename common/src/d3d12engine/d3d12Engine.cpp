@@ -75,8 +75,10 @@ void Core::loadStaticTexture( const std::filesystem::path& path,
     }
 }
 
-void Core::loadRefModel(const std::filesystem::path& path) {
-    refModelStorage_.loadModel(path, staticTexStorage_, device_, cmdList_);
+void Core::loadRefModel( const std::filesystem::path& path,
+    const d3d12::RefModelStorage::ID& key
+) {
+    refModelStorage_.loadModel(path, key, staticTexStorage_, device_, cmdList_);
 }
 
 void CoordRoot::addEntity(ecs::Entity& entity) {
@@ -88,6 +90,10 @@ void CoordRoot::addEntity(ecs::Entity& entity) {
     
     pCoord->get().setParent(&rootCoordSys_);
 }
+
+Model::Model(const ecs::Entity& entity, const d3d12::RefModelStorage::ID& key,
+    std::string&& initialState, const Core& core
+) : ecs::Component(entity), model_(core.refModelStorage_.get(key), std::move(initialState)) {}
 
 void Scene::addEntity(ecs::Entity& entity) {
     MyBase::addEntity(entity);

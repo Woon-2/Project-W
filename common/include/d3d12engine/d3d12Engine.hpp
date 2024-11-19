@@ -29,6 +29,7 @@ public:
 class Core {
 public:
     using MyWindow = d3d12::Window<d3d12::BasicD3D12WTraits<char>>;
+    friend class Model;
 
     Core();
 
@@ -65,7 +66,7 @@ public:
     }
 
     void loadStaticTexture(const std::filesystem::path& path, d3d12::TextureResource::Type type);
-    void loadRefModel(const std::filesystem::path& path);
+    void loadRefModel(const std::filesystem::path& path, const d3d12::RefModelStorage::ID& key);
 
     void setFullScreen() {
         window_.setFullScreen(&device_);
@@ -123,8 +124,21 @@ class Model : public ecs::Component {
 public:
     ENABLE_COMPONENT(Model);
 
-    Model(const ecs::Entity& entity) NOEXCEPT
-        : ecs::Component(entity) {}
+    Model(const ecs::Entity& entity, const d3d12::RefModelStorage::ID& key,
+        const Core& core
+    ) : Model(entity, key, d3d12::RefMesh::defaultState, core) {}
+
+    Model(const ecs::Entity& entity, const d3d12::RefModelStorage::ID& key,
+        const char* initialState, const Core& core
+    ) : Model(entity, key, std::string_view(initialState), core) {}
+
+    Model(const ecs::Entity& entity, const d3d12::RefModelStorage::ID& key,
+        std::string_view initialState, const Core& core
+    ) : Model(entity, key, std::string(initialState), core) {}
+
+    Model(const ecs::Entity& entity, const d3d12::RefModelStorage::ID& key,
+        std::string&& initialState, const Core& core
+    );
 
     d3d12::Model& get() NOEXCEPT { return model_; }
     const d3d12::Model& get() const NOEXCEPT { return model_; }

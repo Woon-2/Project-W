@@ -419,6 +419,8 @@ private:
 
 class RefMesh {
 public:
+    static constexpr const char* defaultState = "default";
+
     friend class RefModel;
     friend class Mesh;
 
@@ -572,34 +574,31 @@ private:
 
 class RefModelStorage {
 public:
-    void loadModel( const std::filesystem::path& path, const StaticTextureStorage& sts,
+    using ID = std::string;
+
+    void loadModel( const std::filesystem::path& path, const ID& key,
+        const StaticTextureStorage& sts,
         D3D12Device& device, D3D12GfxCmdList& cmdList
     );
 
-    void loadTerrain( const std::filesystem::path& path, const StaticTextureStorage& sts,
-        D3D12Device& device, D3D12GfxCmdList& cmdList,
-        int xStart, int zStart, int width, int length, mu::Vec3 scale,
-        const std::filesystem::path& diffuseMapPath
-    );
-
-    const RefModel& get(const std::filesystem::path& path) const {
-        return map_.at(path);
+    const RefModel& get(const ID& key) const {
+        return map_.at(key);
     }
 
-    RefModel& get(const std::filesystem::path& path) {
-        return map_.at(path);
+    RefModel& get(const ID& key) {
+        return map_.at(key);
     }
 
-    const RefModel& operator[](const std::filesystem::path& path) const {
-        return get(path);
+    const RefModel& operator[](const ID& key) const {
+        return get(key);
     }
 
-    RefModel& operator[](const std::filesystem::path& path) {
-        return get(path);
+    RefModel& operator[](const ID& key) {
+        return get(key);
     }
 
 private:
-    std::map<std::filesystem::path, RefModel> map_;
+    std::map<ID, RefModel> map_;
 };
 
 class Mesh {

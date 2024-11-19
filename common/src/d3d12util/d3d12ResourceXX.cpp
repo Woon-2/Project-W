@@ -817,7 +817,7 @@ RefModel RefModel::loadTerrainFromHeightmap( const Bitmap& heightmap,
 
     mesh.ibs_.emplace_back(device, cmdList, indices.data(), indices.size());
 
-    mesh.map( MaterialMapKey{ "Default", "PBRIllumination" },
+    mesh.map( MaterialMapKey{ RefMesh::defaultState, "PBRIllumination" },
         Material::MapType::Albedo,
         Material::MapRef{
             .type = static_cast<std::uint32_t>( etoi(Material::ResourceType::Texture) ),
@@ -992,9 +992,10 @@ void RefModel::loadNodesFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
 }
 
 void RefModelStorage::loadModel( const std::filesystem::path& path,
-    const StaticTextureStorage& sts, D3D12Device& device, D3D12GfxCmdList& cmdList
+    const ID& key, const StaticTextureStorage& sts, D3D12Device& device,
+    D3D12GfxCmdList& cmdList
 ) {
-    map_[path] = RefModel::loadHierarchyFromFile(path, device, cmdList, sts);
+    map_[key] = RefModel::loadHierarchyFromFile(path, device, cmdList, sts);
 }
 
 void Model::Node::addMesh(Mesh&& mesh) {

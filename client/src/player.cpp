@@ -8,7 +8,7 @@
 Player::Player() {
 	createComponent<RigidBody>();
 	createComponent<PlayerController>();
-	createComponent<gfx::d3d12engine::Model>();
+	// createComponent<gfx::d3d12engine::Model>();
 	createComponent<gfx::d3d12engine::Coord>();
 }
 
