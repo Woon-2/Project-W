@@ -78,3 +78,11 @@ file(COPY "${PROJECT_SOURCE_DIR}/extern/assimp/assimp-vc143-mt.dll"
 file(COPY "${PROJECT_SOURCE_DIR}/extern/assimp/assimp-vc143-mt.dll"
     DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/Release"
 )
+
+file(COPY "${PROJECT_SOURCE_DIR}/extern/FreeImage/x64/FreeImage.dll"
+    DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/Debug"
+)
+
+file(COPY "${PROJECT_SOURCE_DIR}/extern/FreeImage/x64/FreeImage.dll"
+    DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/Release"
+)
