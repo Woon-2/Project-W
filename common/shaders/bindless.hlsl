@@ -13,7 +13,7 @@ TextureCube gTexCubes[] : register(t10, space3);
 
 float4 sampleFromMapRef(uint4 mapRef, float2 tex, uint samIdx) {
     if (mapRef.x == uint(-1)) {
-        return float4(0.f, 0.f, 0.f, 1.0f);
+        return float4(0.f, 0.f, 0.f, 0.0f);
     }
     if (mapRef.x == MAP_TYPE_TEXTURE2D) {
         return gTex2Ds[mapRef.y].Sample(gSamplers[samIdx], tex);
