@@ -265,10 +265,6 @@ public:
 		return root_;
 	}
 
-	void bindMesh(D3D12GfxCmdList& cmdList, const Mesh& mesh) {
-		mesh.bind(cmdList);
-	}
-
 	void draw(D3D12GfxCmdList& cmdList, const Mesh& mesh, std::size_t instanceCnt) {
 		mesh.draw(cmdList, instanceCnt);
 	}

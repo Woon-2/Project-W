@@ -138,7 +138,6 @@ void PBRIllumination::render(D3D12GfxCmdList& cmdList) {
             0u, accDrawcallCnt++ * sizeof(sr::PerDrawcallData0)
         );
 
-        shader().bindMesh(cmdList, *pMesh);
         shader().draw( cmdList, *pMesh, static_cast<std::size_t>(last - first) );
 
         if (accDrawcallCnt == shader().maxDrawcallCnt()) {
