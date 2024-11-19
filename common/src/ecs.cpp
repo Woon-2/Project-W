@@ -78,12 +78,6 @@ void Entity::release(std::thread::id threadId) {
     }
 }
 
-Component::~Component() {
-    if (entityID_.has_value()) {
-        sComponents[etoi(Components::Size)][entityID_.value()] = nullptr;
-    }
-}
-
 Component::Component(Component&& other) noexcept
     : entityID_(std::exchange(other.entityID_, std::nullopt)) {}
 

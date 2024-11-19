@@ -172,7 +172,7 @@ public:
     Component(const Entity& entity)
         : entityID_(entity.id()) {}
 
-    virtual ~Component();
+    virtual ~Component() = default;
     Component(const Component&) = delete;
     Component& operator=(const Component&) = delete;
     Component(Component&&) noexcept;
