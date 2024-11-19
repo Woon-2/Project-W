@@ -228,6 +228,7 @@ target_include_directories(gfx
         "${ASSIMP_INCLUDE}"
         "${TEXLOADER_INCLUDE}"
         "${D3D12_INCLUDE}"
+        "${FREEIMAGE_INCLUDE}"
 )
 
 # === shaders ===
