@@ -250,6 +250,7 @@ public:
         Normal,
         Roughness,
         Metallic,
+        MetallicSmoothness,
         Emmisive,
         AmbientOcllusion,
         Size
@@ -290,6 +291,7 @@ public:
     void addTexRes(MapType type, const TextureArray& tex);
     void addTexRes(MapType type, const TextureCube& tex);
     void MU_CALLCONV addConstant(ConstantType type, mu::Vec3 constant);
+    void MU_CALLCONV addConstant(ConstantType type, mu::Vec4 constant);
     void addConstant(ConstantType type, float constant);
 
     const MapRef& mapRef(MapType type) const {
@@ -382,12 +384,15 @@ public:
     friend class RefModel;
     friend class Mesh;
 
+    static RefMesh loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdList, FILE* pInFile);
+    static void loadMaterialsFromFile(D3D12Device& device, D3D12GfxCmdList& cmdList, FILE* pInFile, RefMesh& mesh);
+
     const auto& vbs() const noexcept {
         return vbs_;
     }
 
-    const auto& ib() const noexcept {
-        return ib_;
+    const auto& ibs() const noexcept {
+        return ibs_;
     }
 
     D3D12_PRIMITIVE_TOPOLOGY topology() const noexcept {
@@ -408,6 +413,12 @@ public:
 
     void MU_CALLCONV map(const MaterialMapKey& key,
         Material::ConstantType constantType, mu::Vec3 constant
+    ) {
+        materialMap_[key].addConstant(constantType, constant);
+    }
+
+    void MU_CALLCONV map(const MaterialMapKey& key,
+        Material::ConstantType constantType, mu::Vec4 constant
     ) {
         materialMap_[key].addConstant(constantType, constant);
     }
@@ -438,11 +449,12 @@ private:
         return materialMap_;
     }
 
-    void bind(D3D12GfxCmdList& cmdList) const;
-    void draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt) const;
+    void bind(D3D12GfxCmdList& cmdList, std::size_t ibIdx = 0) const;
+    void draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt, std::size_t ibIdx = 0) const;
 
+    std::string name_;
     std::vector<VertexBuffer> vbs_;
-    IndexBuffer ib_;
+    std::vector<IndexBuffer> ibs_;
     std::map<MaterialMapKey, Material> materialMap_;
     D3D12_PRIMITIVE_TOPOLOGY topology_;
 };
@@ -453,7 +465,7 @@ public:
     public:
         friend class RefModel;
         Node(const RefModel* pRefModel = nullptr)
-            : coord_(), meshes_(), children_(), pRefModel_(pRefModel) {}
+            : coord_(), name_(), meshes_(), children_(), pRefModel_(pRefModel) {}
         ~Node() = default;
         Node(const Node& other);
         Node(Node&& other) noexcept;
@@ -471,10 +483,14 @@ public:
 
     private:
         gfx::coord::System coord_;
+        std::string name_;
         std::vector<RefMesh> meshes_;
         std::vector<Node*> children_;
         const RefModel* pRefModel_;
     };
+
+    RefModel()
+        : nodeStorage_(), textureMap_(), pRoot_(nullptr) {}
 
     RefModel(const std::map<Material::MapRef, std::filesystem::path>& pathMap,
         const StaticTextureStorage& sts
@@ -486,6 +502,10 @@ public:
     RefModel& operator=(const RefModel& other) = delete;
     RefModel& operator=(RefModel&& other) noexcept;
 
+    static RefModel loadHierarchyFromFile( const std::filesystem::path& path,
+        D3D12Device& device, D3D12GfxCmdList& cmdList, const StaticTextureStorage& sts
+    );
+
     void map(const Material::MapRef& mapRef, const DescriptorGPU& descriptor) {
         textureMap_[mapRef] = descriptor;
     }
@@ -496,6 +516,10 @@ public:
     const Node* root() const noexcept { return pRoot_; }
 
 private:
+    static void loadNodesFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
+        FILE* pInFile, Node& node, RefModel& model
+    );
+
     std::vector<Node> nodeStorage_;
     std::map<Material::MapRef, DescriptorGPU> textureMap_;
     Node* pRoot_;
@@ -560,10 +584,6 @@ public:
     }
 
 private:
-    void bind(D3D12GfxCmdList& cmdList) const {
-        pRefMesh_->bind(cmdList);
-    }
-
     void draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt) const {
         pRefMesh_->draw(cmdList, instanceCnt);
     }

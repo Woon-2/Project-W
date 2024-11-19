@@ -38,6 +38,7 @@ public:
         Position3D,
         Normal3D,
         TexCoord2D0,
+        TexCoord2D1,
         Tangent3D,
         Bitangent3D,
         Color3D,

@@ -1,5 +1,7 @@
 #include "d3d12util/d3d12ResourceXX.hpp"
 
+#include <cstdio>
+
 namespace gfx {
 
 namespace d3d12 {
@@ -209,6 +211,13 @@ void MU_CALLCONV Material::addConstant(ConstantType type, mu::Vec3 constant) {
     constants_[etoi(type)] = tmp;
 }
 
+void MU_CALLCONV Material::addConstant(ConstantType type, mu::Vec4 constant) {
+    RawMemory<16> tmp{};
+    *reinterpret_cast<dx::XMFLOAT4*>(&tmp) = constant.getXmf();
+    constants_[etoi(type)] = tmp;
+}
+
+
 void Material::addConstant(ConstantType type, float constant) {
     RawMemory<16> tmp{};
     *reinterpret_cast<float*>(&tmp) = constant;
@@ -243,30 +252,277 @@ IndexBuffer::IndexBuffer(D3D12Device& device, D3D12GfxCmdList& cmdList,
 	commitState(cmdList, D3D12_RESOURCE_STATE_INDEX_BUFFER);
 }
 
-void RefMesh::bind(D3D12GfxCmdList& cmdList) const {
+void RefMesh::draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt, std::size_t ibIdx) const {
     VertexBuffer::bind(cmdList, 0u, vbs_);
-    ib_.bind(cmdList);
+    ibs_[ibIdx].bind(cmdList);
     cmdList.get()->IASetPrimitiveTopology(topology_);
-}
-
-void RefMesh::draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt) const {
-    bind(cmdList);
     DX_THROW_FAILED_VOID(
         cmdList.get()->DrawIndexedInstanced(
-            static_cast<UINT>( ib_.size() ),
+            static_cast<UINT>( ibs_[ibIdx].size() ),
             static_cast<UINT>( instanceCnt ),
             0u, 0, 0u
         )
     );
 }
 
+RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdList, FILE* pInFile) {
+    auto ret = RefMesh{};
+    
+    char pstrToken[64] = { '\0' };
+	BYTE nStrLength = 0;
+
+    int nVertices = 0;
+	int nPositions = 0, nColors = 0, nNormals = 0, nTangents = 0, nBiTangents = 0, nTextureCoords = 0, nIndices = 0, nSubMeshes = 0, nSubIndices = 0;
+
+	UINT nReads = (UINT)::fread(&nVertices, sizeof(int), 1, pInFile);
+
+	nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+    auto meshName = std::string(nStrLength, '\0');
+	nReads = (UINT)::fread(meshName.data(), sizeof(char), nStrLength, pInFile);
+    ret.name_ = std::move(meshName);
+
+	for ( ; ; )
+	{
+		nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+		nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
+		pstrToken[nStrLength] = '\0';
+
+		if (!strcmp(pstrToken, "<Bounds>:"))
+		{
+            dx::XMFLOAT3 aabbCenter, aabbExtents;
+			nReads = (UINT)::fread(&aabbCenter, sizeof(dx::XMFLOAT3), 1, pInFile);
+			nReads = (UINT)::fread(&aabbExtents, sizeof(dx::XMFLOAT3), 1, pInFile);
+		}
+		else if (!strcmp(pstrToken, "<Positions>:"))
+		{
+			nReads = (UINT)::fread(&nPositions, sizeof(int), 1, pInFile);
+			if (nPositions > 0)
+			{
+				auto positions = std::vector<dx::XMFLOAT3>(nPositions);
+				nReads = (UINT)::fread(positions.data(), sizeof(dx::XMFLOAT3), nPositions, pInFile);
+                auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
+                tmp.set(etoi(Vertex::Properties::Position3D));
+                ret.vbs_.emplace_back( device, cmdList, positions.data(),
+                    sizeof(dx::XMFLOAT3) * nPositions, sizeof(dx::XMFLOAT3), tmp
+                );
+			}
+		}
+		else if (!strcmp(pstrToken, "<Colors>:"))
+		{
+			nReads = (UINT)::fread(&nColors, sizeof(int), 1, pInFile);
+			if (nColors > 0)
+			{
+                auto colors = std::vector<dx::XMFLOAT4>(nColors);
+                nReads = (UINT)::fread(colors.data(), sizeof(dx::XMFLOAT4), nColors, pInFile);
+                auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
+                tmp.set(etoi(Vertex::Properties::Color4D));
+                ret.vbs_.emplace_back( device, cmdList, colors.data(),
+                    sizeof(dx::XMFLOAT4) * nColors, sizeof(dx::XMFLOAT4), tmp
+                );
+			}
+		}
+		else if (!strcmp(pstrToken, "<TextureCoords0>:"))
+		{
+			nReads = (UINT)::fread(&nTextureCoords, sizeof(int), 1, pInFile);
+			if (nTextureCoords > 0)
+			{
+                auto texCoords = std::vector<dx::XMFLOAT2>(nTextureCoords);
+                nReads = (UINT)::fread(texCoords.data(), sizeof(dx::XMFLOAT2), nTextureCoords, pInFile);
+                auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
+                tmp.set(etoi(Vertex::Properties::TexCoord2D0));
+                ret.vbs_.emplace_back( device, cmdList, texCoords.data(),
+                    sizeof(dx::XMFLOAT2) * nTextureCoords, sizeof(dx::XMFLOAT2), tmp
+                );
+			}
+		}
+		else if (!strcmp(pstrToken, "<TextureCoords1>:"))
+		{
+			nReads = (UINT)::fread(&nTextureCoords, sizeof(int), 1, pInFile);
+			if (nTextureCoords > 0)
+			{
+                auto texCoords = std::vector<dx::XMFLOAT2>(nTextureCoords);
+                nReads = (UINT)::fread(texCoords.data(), sizeof(dx::XMFLOAT2), nTextureCoords, pInFile);
+                auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
+                tmp.set(etoi(Vertex::Properties::TexCoord2D1));
+                ret.vbs_.emplace_back( device, cmdList, texCoords.data(),
+                    sizeof(dx::XMFLOAT2) * nTextureCoords, sizeof(dx::XMFLOAT2), tmp
+                );
+			}
+		}
+		else if (!strcmp(pstrToken, "<Normals>:"))
+		{
+			nReads = (UINT)::fread(&nNormals, sizeof(int), 1, pInFile);
+			if (nNormals > 0)
+			{
+                auto normals = std::vector<dx::XMFLOAT3>(nNormals);
+                nReads = (UINT)::fread(normals.data(), sizeof(dx::XMFLOAT3), nNormals, pInFile);
+                auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
+                tmp.set(etoi(Vertex::Properties::Normal3D));
+                ret.vbs_.emplace_back( device, cmdList, normals.data(),
+                    sizeof(dx::XMFLOAT3) * nNormals, sizeof(dx::XMFLOAT3), tmp
+                );
+			}
+		}
+		else if (!strcmp(pstrToken, "<Tangents>:"))
+		{
+			nReads = (UINT)::fread(&nTangents, sizeof(int), 1, pInFile);
+			if (nTangents > 0)
+			{
+                auto tangents = std::vector<dx::XMFLOAT3>(nTangents);
+                nReads = (UINT)::fread(tangents.data(), sizeof(dx::XMFLOAT3), nTangents, pInFile);
+                auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
+                tmp.set(etoi(Vertex::Properties::Tangent3D));
+                ret.vbs_.emplace_back( device, cmdList, tangents.data(),
+                    sizeof(dx::XMFLOAT3) * nTangents, sizeof(dx::XMFLOAT3), tmp
+                );
+			}
+		}
+		else if (!strcmp(pstrToken, "<BiTangents>:"))
+		{
+			nReads = (UINT)::fread(&nBiTangents, sizeof(int), 1, pInFile);
+			if (nBiTangents > 0)
+			{
+                auto biTangents = std::vector<dx::XMFLOAT3>(nBiTangents);
+                nReads = (UINT)::fread(biTangents.data(), sizeof(dx::XMFLOAT3), nBiTangents, pInFile);
+                auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
+                tmp.set(etoi(Vertex::Properties::Bitangent3D));
+                ret.vbs_.emplace_back( device, cmdList, biTangents.data(),
+                    sizeof(dx::XMFLOAT3) * nBiTangents, sizeof(dx::XMFLOAT3), tmp
+                );
+			}
+		}
+		else if (!strcmp(pstrToken, "<Indices>:")) {
+            nReads = (UINT)::fread(&nIndices, sizeof(int), 1, pInFile);
+            auto indices = std::vector<std::uint16_t>(nIndices);
+            nReads = (UINT)::fread(indices.data(), sizeof(std::uint16_t), nIndices, pInFile);
+            ret.ibs_.emplace_back( device, cmdList, indices.data(), nIndices );
+        }
+		else if (!strcmp(pstrToken, "</Mesh>"))
+		{
+			break;
+		}
+	}
+
+    return ret;
+}
+
+void RefMesh::loadMaterialsFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
+    FILE* pInFile, RefMesh& mesh
+) {
+    char pstrToken[64] = { '\0' };
+
+	int nMaterial = 0;
+	BYTE nStrLength = 0;
+
+	UINT nReads{};
+
+    auto floatVal = float{};
+    auto float4 = dx::XMFLOAT4{};
+    auto float3 = dx::XMFLOAT3{};
+    Material::MapRef mapRef{};
+
+	for ( ; ; )
+	{
+        nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+        nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
+		pstrToken[nStrLength] = '\0';
+        if (!strcmp(pstrToken, "</Materials>")) {
+            break;
+        }
+
+        nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+        auto stateName = std::string(nStrLength, '\0');
+	    nReads = (UINT)::fread(stateName.data(), sizeof(char), nStrLength, pInFile);
+
+        nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+        auto renderPassName = std::string(nStrLength, '\0');
+	    nReads = (UINT)::fread(renderPassName.data(), sizeof(char), nStrLength, pInFile);
+
+
+		nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+		nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile); 
+		pstrToken[nStrLength] = '\0';
+
+		if (!strcmp(pstrToken, "<AlbedoColor>:"))
+		{
+			nReads = (UINT)::fread(&float4, sizeof(dx::XMFLOAT4), 1, pInFile);
+            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
+                Material::ConstantType::Albedo, mu::Vec4(float4.x, float4.y, float4.z, float4.w)
+            );
+		}
+		else if (!strcmp(pstrToken, "<EmissiveColor>:"))
+		{
+			nReads = (UINT)::fread(&float3, sizeof(dx::XMFLOAT3), 1, pInFile);
+            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
+                Material::ConstantType::Emmisive, mu::Vec3(float3.x, float3.y, float3.z)
+            );
+		}
+		else if (!strcmp(pstrToken, "<AmbientOcllusion>:"))
+		{
+			nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
+            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
+                Material::ConstantType::AmbientOcllusion, floatVal
+            );
+		}
+		else if (!strcmp(pstrToken, "<Smoothness>:"))
+		{
+			nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
+            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
+                Material::ConstantType::Roughness, 1.f - floatVal
+            );
+		}
+		else if (!strcmp(pstrToken, "<Metallic>:"))
+		{
+			nReads = (UINT)::fread(&float3, sizeof(dx::XMFLOAT3), 1, pInFile);
+            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
+                Material::ConstantType::Emmisive, mu::Vec3(float3.x, float3.y, float3.z)
+            );
+		}
+		else if (!strcmp(pstrToken, "<AlbedoMap>:"))
+		{
+            nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
+            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
+                Material::MapType::Albedo, mapRef
+            );
+		}
+		else if (!strcmp(pstrToken, "<NormalMap>:"))
+		{
+			nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
+            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
+                Material::MapType::Normal, mapRef
+            );
+		}
+		else if (!strcmp(pstrToken, "<MetallicMap>:"))
+		{
+			nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
+            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
+                Material::MapType::Metallic, mapRef
+            );
+		}
+        else if (!strcmp(pstrToken, "<MetallicSmoothnessMap>:"))
+		{
+			nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
+            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
+                Material::MapType::MetallicSmoothness, mapRef
+            );
+		}
+		else if (!strcmp(pstrToken, "<EmissionMap>:"))
+		{
+			nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
+            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
+                Material::MapType::Emmisive, mapRef
+            );
+		}
+	}
+}
+
 RefModel::Node::Node(const Node& other)
-    : coord_(other.coord_), meshes_(other.meshes_), children_(),
-    pRefModel_(other.pRefModel_) {}
+    : coord_(other.coord_), name_(other.name_), meshes_(other.meshes_),
+    children_(), pRefModel_(other.pRefModel_) {}
 
 RefModel::Node::Node(Node&& other) noexcept
-    : coord_(std::move(other.coord_)), meshes_(std::move(other.meshes_)),
-    children_(std::move(other.children_)),
+    : coord_(std::move(other.coord_)), name_(std::move(other.name_)),
+    meshes_(std::move(other.meshes_)), children_(std::move(other.children_)),
     pRefModel_(std::exchange(other.pRefModel_, nullptr)) {}
 
 RefModel::Node& RefModel::Node::operator=(const Node& other) {
@@ -275,6 +531,7 @@ RefModel::Node& RefModel::Node::operator=(const Node& other) {
     }
 
     coord_ = other.coord_;
+    name_ = other.name_;
     meshes_ = other.meshes_;
     children_.clear();
     pRefModel_ = other.pRefModel_;
@@ -288,6 +545,7 @@ RefModel::Node& RefModel::Node::operator=(Node&& other) noexcept {
     }
 
     coord_ = std::move(other.coord_);
+    name_ = std::move(other.name_);
     meshes_ = std::move(other.meshes_);
     children_ = std::move(other.children_);
     pRefModel_ = std::exchange(other.pRefModel_, nullptr);
@@ -372,6 +630,162 @@ RefModel& RefModel::operator=(RefModel&& other) noexcept {
     }
 
     return *this;
+}
+
+RefModel RefModel::loadHierarchyFromFile( const std::filesystem::path& path,
+    D3D12Device& device, D3D12GfxCmdList& cmdList, const StaticTextureStorage& sts
+) {
+    auto model = RefModel();
+
+    auto pInFile = std::fopen(path.string().c_str(), "rb");
+    if (!pInFile) {
+        throw std::runtime_error("Failed to open file: " + path.string());
+    }
+
+    char pstrToken[64] = { '\0' };
+
+	BYTE nStrLength = 0;
+	UINT nReads = 0;
+
+    Material::MapRef mapRef{};
+
+
+    nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+    nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
+    pstrToken[nStrLength] = '\0';
+
+    if (strcmp(pstrToken, "<Dictionary>:")) {
+        std::fclose(pInFile);
+        throw std::runtime_error("Invalid file format: " + path.string());    
+    }
+
+    for ( ; ; ) {
+        nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+        nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
+        pstrToken[nStrLength] = '\0';
+
+        if (!strcmp(pstrToken, "<Item>")) {
+            nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
+
+            nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+            auto texPath = std::string(nStrLength, '\0');
+            nReads = (UINT)::fread(texPath.data(), sizeof(char), nStrLength, pInFile);
+
+            if (!sts.contains(std::filesystem::path(texPath))) {
+                std::fclose(pInFile);
+                throw std::runtime_error("Texture not found: " + texPath);
+            }
+            model.textureMap_[mapRef] = sts.get(std::filesystem::path(texPath));
+
+            nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+            nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
+            pstrToken[nStrLength] = '\0';
+
+            if (strcmp(pstrToken, "</Item>")) {
+                std::fclose(pInFile);
+                throw std::runtime_error("Invalid file format: " + path.string());
+            }
+        }
+        else if (!strcmp(pstrToken, "</Dictionary>")) {
+            break;
+        }
+    }
+
+    nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+    nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
+    pstrToken[nStrLength] = '\0';
+
+    if (strcmp(pstrToken, "<NodesInfo>:")) {
+        std::fclose(pInFile);
+        throw std::runtime_error("Invalid file format: " + path.string());
+    }
+
+    nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+    nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
+    pstrToken[nStrLength] = '\0';
+
+    if (strcmp(pstrToken, "<NodeCnt>:")) {
+        std::fclose(pInFile);
+        throw std::runtime_error("Invalid file format: " + path.string());
+    }
+
+    int nNodes = 0;
+    nReads = (UINT)::fread(&nNodes, sizeof(int), 1, pInFile);
+    model.nodeStorage_.reserve(nNodes);
+
+    nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+    nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
+    pstrToken[nStrLength] = '\0';
+
+    if (!strcmp(pstrToken, "<Node>:")) {
+        model.nodeStorage_.emplace_back(&model);
+        auto& node = model.nodeStorage_.back();
+        loadNodesFromFile(device, cmdList, pInFile, node, model);
+        model.pRoot_ = &node;
+    }
+
+    std::fclose(pInFile);
+    return model;
+}
+
+void RefModel::loadNodesFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
+    FILE* pInFile, Node& node, RefModel& model
+) {
+    char pstrToken[64] = { '\0' };
+
+	BYTE nStrLength = 0;
+	UINT nReads = 0;
+
+    dx::XMFLOAT4X4 xform{};
+
+	int nFrame = 0, nTextures = 0;
+
+    auto nodeName = std::string(nStrLength, '\0');
+	nReads = (UINT)::fread(nodeName.data(), sizeof(char), nStrLength, pInFile);
+
+    for ( ; ; )
+	{
+		nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+		nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
+		pstrToken[nStrLength] = '\0';
+
+		if (!strcmp(pstrToken, "<Xform>:"))
+		{
+            nReads = (UINT)::fread(&xform, sizeof(float), 16, pInFile);
+            node.coord_.setLocalXform(DirectX::XMLoadFloat4x4(&xform));
+        }
+        else if (!strcmp(pstrToken, "<Mesh>:"))
+		{
+			node.addMesh( RefMesh::loadGeometryFromFile(device, cmdList, pInFile) );
+            
+            nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+            nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
+            pstrToken[nStrLength] = '\0';
+
+            if (!strcmp(pstrToken, "<Materials>:")) {
+                node.meshes_.back().loadMaterialsFromFile(device, cmdList, pInFile, node.meshes_.back());
+            }
+		}
+		else if (!strcmp(pstrToken, "<Children>:"))
+		{
+			int nChilds = 0;
+			nReads = (UINT)::fread(&nChilds, sizeof(int), 1, pInFile);
+			if (nChilds > 0)
+			{
+				for (int i = 0; i < nChilds; ++i)
+				{
+                    model.nodeStorage_.emplace_back(&model);
+                    auto& child = model.nodeStorage_.back();
+                    loadNodesFromFile(device, cmdList, pInFile, child, model);
+                    node.addChild(&child);
+				}
+			}
+		}
+		else if (!strcmp(pstrToken, "</Node>"))
+		{
+			break;
+		}
+    }
 }
 
 void Model::Node::addMesh(Mesh&& mesh) {
