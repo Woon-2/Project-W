@@ -110,7 +110,9 @@ void PBRIllumination::init(Scene& scene) {
     for (auto& pModel : models(scene)) {
         trackModel(&pModel->get());
     }
-    setCamera(&cameras(scene).front()->get());
+    if (!cameras(scene).empty()) {
+        setCamera(&cameras(scene).front()->get());
+    }
 }
 
 void PBRIllumination::update(Scene& scene) {
