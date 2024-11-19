@@ -330,6 +330,7 @@ struct PBRMaterial {
 	dx::XMUINT4 roughnessMapRef;
 	dx::XMUINT4 normalMapRef;
 	dx::XMUINT4 metallicMapRef;
+	dx::XMUINT4 metallicSmoothnessMapRef;
 	dx::XMUINT4 emmisiveMapRef;
 	dx::XMUINT4 ambientOcclusionMapRef;
 };

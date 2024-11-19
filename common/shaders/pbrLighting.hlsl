@@ -36,6 +36,7 @@ struct Material {
     uint4 roughnessMapRef;
     uint4 normalMapRef;
     uint4 metallicMapRef;
+    uint4 metallicSmoothnessMapRef;
     uint4 emmisiveMapRef;
     uint4 ambientOcclusionMapRef;
 };
@@ -199,11 +200,19 @@ float4 illuminate(float3 posV, float3 normalV, float2 tex) {
     float4 albedo = material.albedoConstant * material.albedoConstantMapRatio;
     albedo += sampleFromMapRef(material.albedoMapRef, tex, samplerIdx) * (1.f - material.albedoConstantMapRatio);
 
-    float roughness = material.roughnessConstant * material.roughnessConstantMapRatio;
-    roughness += sampleFromMapRef(material.roughnessMapRef, tex, samplerIdx).r * (1.f - material.roughnessConstantMapRatio);
 
+    float roughness = material.roughnessConstant * material.roughnessConstantMapRatio;
     float metallic = material.metallicConstant * material.metallicConstantMapRatio;
-    metallic += sampleFromMapRef(material.metallicMapRef, tex, samplerIdx).r * (1.f - material.metallicConstantMapRatio);
+
+    if (material.metallicSmoothnessMapRef.x != uint(-1)) {
+        float4 metallicSmoothness = sampleFromMapRef(material.metallicSmoothnessMapRef, tex, samplerIdx);
+        roughness += (1.f - metallicSmoothness.a) * (1.f - material.roughnessConstantMapRatio);
+        metallic += metallicSmoothness.r * (1.f - material.metallicConstantMapRatio);
+    }
+    else {
+        roughness += sampleFromMapRef(material.roughnessMapRef, tex, samplerIdx).r * (1.f - material.roughnessConstantMapRatio);
+        metallic += sampleFromMapRef(material.metallicMapRef, tex, samplerIdx).r * (1.f - material.metallicConstantMapRatio);
+    }
 
     float ao = material.ambientOcclusionConstant * material.ambientOcclusionConstantMapRatio;
     ao += sampleFromMapRef(material.ambientOcclusionMapRef, tex, samplerIdx).r * (1.f - material.ambientOcclusionConstantMapRatio);
