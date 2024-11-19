@@ -919,6 +919,16 @@ Model& Model::operator=(Model&& other) noexcept {
     return *this;
 }
 
+void Model::setState(std::string&& state) {
+    state_ = std::move(state);
+
+    for (auto& node : nodeStorage_) {
+        for (auto& mesh : node.meshes_) {
+            mesh.setState(state_);
+        }
+    }
+}
+
 }   // namespace gfx::d3d12
 
 }   // namespace gfx
