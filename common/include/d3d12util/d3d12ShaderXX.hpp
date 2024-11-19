@@ -276,7 +276,7 @@ protected:
 };
 
 inline bool RenderProtocol::compatibleWith(const RefMesh& mesh) const {
-    pShader_->inputLayout().checkBindable(mesh.vbs());
+    return pShader_->inputLayout().checkBindable(mesh.vbs());
 }
 
 namespace sr {
