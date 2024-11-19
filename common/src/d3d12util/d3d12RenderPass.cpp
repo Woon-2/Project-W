@@ -158,6 +158,10 @@ void PBRIllumination::trackModel(Model* pModel) {
     for (auto& node : nodes) {
         auto xform = node.coord().xform();
         for (auto& mesh : node.meshes()) {
+            if (!protocol_.compatibleWith(mesh.refMesh())) {
+                throw std::runtime_error("Incompatible mesh");
+            }
+
             batch_.emplace_back(&mesh, xform);
         }
     }
