@@ -1,5 +1,7 @@
 #include "d3d12util/d3d12ResourceXX.hpp"
 
+#include "resourcePath.hpp"
+
 #include <cstdio>
 
 namespace gfx {
@@ -867,14 +869,16 @@ RefModel RefModel::loadHierarchyFromFile( const std::filesystem::path& path,
             nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
 
             nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
-            auto texPath = std::string(nStrLength, '\0');
-            nReads = (UINT)::fread(texPath.data(), sizeof(char), nStrLength, pInFile);
+            auto texName = std::string(nStrLength, '\0');
+            nReads = (UINT)::fread(texName.data(), sizeof(char), nStrLength, pInFile);
 
-            if (!sts.contains(std::filesystem::path(texPath))) {
+            auto texPath = resourcePath / texName;
+
+            if (!sts.contains(texPath)) {
                 std::fclose(pInFile);
-                throw std::runtime_error("Texture not found: " + texPath);
+                throw std::runtime_error("Texture not found: " + texPath.string());
             }
-            model.textureMap_[mapRef] = sts.get(std::filesystem::path(texPath));
+            model.textureMap_[mapRef] = sts.get(texPath);
 
             nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
             nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
