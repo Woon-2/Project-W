@@ -715,16 +715,11 @@ RefModel& RefModel::operator=(RefModel&& other) noexcept {
     return *this;
 }
 
-RefModel RefModel::loadTerrainFromHeightmap( const Bitmap& heightmap,
+RefModel RefModel::loadTerrainSubsetFromHeightmap( const Bitmap& heightmap,
     D3D12Device& device, D3D12GfxCmdList& cmdList,
     int xStart, int zStart, int width, int length, mu::Vec3 scale,
-    const std::filesystem::path& diffuseMapPath,
-    const StaticTextureStorage& sts
+    const Material::MapRef& albedoMapRef
 ) {
-    if (!sts.contains(diffuseMapPath)) {
-        throw std::runtime_error("Diffuse map not found in texture storage");
-    }
-
     auto model = RefModel();
 
     model.nodeStorage_.emplace_back(&model);
@@ -820,12 +815,7 @@ RefModel RefModel::loadTerrainFromHeightmap( const Bitmap& heightmap,
     mesh.ibs_.emplace_back(device, cmdList, indices.data(), indices.size());
 
     mesh.map( MaterialMapKey{ RefMesh::defaultState, rp::PBRIlluminationMacro::id },
-        Material::MapType::Albedo,
-        Material::MapRef{
-            .type = static_cast<std::uint32_t>( etoi(Material::ResourceType::Texture) ),
-            .resourceIdx = static_cast<std::uint32_t>(sts.get(diffuseMapPath).offset()),
-            .arrayIdx = 0
-        }
+        Material::MapType::Albedo, albedoMapRef
     );
 
     mesh.topology_ = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;

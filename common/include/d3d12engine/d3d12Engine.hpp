@@ -68,6 +68,10 @@ public:
 
     void loadStaticTexture(const std::filesystem::path& path, d3d12::TextureResource::Type type);
     void loadRefModel(const std::filesystem::path& path, const d3d12::RefModelStorage::ID& key);
+    void loadTerrain( const d3d12::Bitmap& heightMap, const std::filesystem::path& albedoMapPath,
+        const d3d12::RefModelStorage::ID& key, mu::Vec3 scale,
+        std::size_t xDivisions = 1u, std::size_t zDivisions = 1u
+    );
 
     void setFullScreen() {
         window_.setFullScreen(&device_);
@@ -214,12 +218,43 @@ inline std::vector<ecs::Entity::ID>& IRenderPass::reservedEntities(Scene& scene)
     return scene.reservedEntities_;
 }
 
+class Terrain;
+
+class TerrainSubset : public ecs::Entity {
+public:
+    TerrainSubset( const d3d12::RefModelStorage::ID& key, const Terrain* pTerrain,
+        Core& core
+    );
+
+    TerrainSubset(const TerrainSubset&) = delete;
+    TerrainSubset(TerrainSubset&& other) noexcept;
+    TerrainSubset& operator=(const TerrainSubset&) = delete;
+    TerrainSubset& operator=(TerrainSubset&& other) noexcept;
+    ~TerrainSubset() = default;
+
+private:
+    d3d12::RefModelStorage::ID key_;    // store key to release later
+    const Terrain* pTerrain_;
+};
+
 class Terrain : public ecs::Entity {
 public:
-    Terrain(const std::filesystem::path& heightMapPath);
+    Terrain( const d3d12::RefModelStorage::ID& identifier,
+        const std::filesystem::path& heightMapPath,
+        const std::filesystem::path& albedoMapPath, mu::Vec3 scale,
+        Core& core, std::size_t xDivisions = 1u, std::size_t zDivisions = 1u
+    );
+
+    Terrain(const Terrain&) = delete;
+    Terrain(Terrain&& other) noexcept;
+    Terrain& operator=(const Terrain&) = delete;
+    Terrain& operator=(Terrain&& other) noexcept;
+    ~Terrain() = default;
 
 private:
     d3d12::Bitmap heightMap_;
+    std::vector< std::vector<TerrainSubset> > subsets_;
+    mu::Vec3 scale_;
 };
 
 namespace rp {

@@ -81,6 +81,37 @@ void Core::loadRefModel( const std::filesystem::path& path,
     refModelStorage_.loadModel(path, key, staticTexStorage_, device_, cmdList_);
 }
 
+void Core::loadTerrain( const d3d12::Bitmap& heightMap,
+    const std::filesystem::path& albedoMapPath, const d3d12::RefModelStorage::ID& key,
+    mu::Vec3 scale, std::size_t xDivisions, std::size_t zDivisions
+) {
+    if (!staticTexStorage_.contains(albedoMapPath)) {
+        throw GFX_EXCEPT("Texture not found: " + albedoMapPath.string());
+    }
+
+    auto albedoMapRef = d3d12::Material::MapRef{
+        .type = etoi(d3d12::Material::MapType::Albedo),
+        .resourceIdx = static_cast<std::uint32_t>( staticTexStorage_.get(albedoMapPath).offset() ),
+        .arrayIdx = 0u,
+        .padding = 0u
+    };
+
+    for (std::size_t i = 0; i < zDivisions; ++i) {
+        for (std::size_t j = 0; j < xDivisions; ++j) {
+            auto serialKey = key + "_" + std::to_string(i) + "_" + std::to_string(j);
+
+            refModelStorage_[serialKey] = d3d12::RefModel::loadTerrainSubsetFromHeightmap(
+                heightMap, device_, cmdList_,
+                static_cast<int>( (heightMap.width() / xDivisions) * j ),
+                static_cast<int>( (heightMap.height() / zDivisions) * i ),
+                static_cast<int>( (heightMap.width() / xDivisions) + 1 ),
+                static_cast<int>( (heightMap.height() / zDivisions) + 1),
+                scale, albedoMapRef
+            );
+        }
+    }
+}
+
 void CoordRoot::addEntity(ecs::Entity& entity) {
     ecs::System<Coord>::addEntity(entity);
     auto pCoord = entity.get<Coord>();
@@ -102,6 +133,63 @@ void Scene::addEntity(ecs::Entity& entity) {
 
 void Scene::clearStash() {
     reservedEntities_.clear();
+}
+
+TerrainSubset::TerrainSubset( const d3d12::RefModelStorage::ID& key,
+    const Terrain* pTerrain, Core& core
+) : key_(key), pTerrain_(pTerrain) {
+    createComponent<Model>(key, d3d12::RefMesh::defaultState, core);
+    createComponent<Coord>();
+}
+
+TerrainSubset::TerrainSubset(TerrainSubset&& other) noexcept
+    : Entity(std::move(other)), key_(std::move(other.key_)),
+    pTerrain_(std::exchange(other.pTerrain_, nullptr)) {}
+
+TerrainSubset& TerrainSubset::operator=(TerrainSubset&& other) noexcept {
+    if (this == &other) {
+        return *this;
+    }
+
+    Entity::operator=(std::move(other));
+    key_ = std::move(other.key_);
+    pTerrain_ = std::exchange(other.pTerrain_, nullptr);
+
+    return *this;
+}
+
+Terrain::Terrain( const d3d12::RefModelStorage::ID& identifier,
+    const std::filesystem::path& heightMapPath,
+    const std::filesystem::path& albedoMapPath, mu::Vec3 scale,
+    Core& core, std::size_t xDivisions, std::size_t zDivisions
+) : heightMap_(heightMapPath), subsets_(zDivisions), scale_(scale) {
+    core.loadTerrain(heightMap_, albedoMapPath, identifier, scale, xDivisions, zDivisions);
+
+    for (std::size_t i = 0; i < zDivisions; ++i) {
+        for (std::size_t j = 0; j < xDivisions; ++j) {
+            auto serialKey = identifier + "_" + std::to_string(i) + "_" + std::to_string(j);
+            subsets_[i].emplace_back(serialKey, this, core);
+        }
+    }
+}
+
+Terrain::Terrain(Terrain&& other) noexcept
+    : Entity(std::move(other)), heightMap_(std::move(other.heightMap_)),
+    subsets_(std::move(other.subsets_)), scale_(std::move(other.scale_)) {
+
+}
+
+Terrain& Terrain::operator=(Terrain&& other) noexcept {
+    if (this == &other) {
+        return *this;
+    }
+
+    Entity::operator=(std::move(other));
+    heightMap_ = std::move(other.heightMap_);
+    subsets_ = std::move(other.subsets_);
+    scale_ = std::move(other.scale_);
+
+    return *this;
 }
 
 namespace rp {

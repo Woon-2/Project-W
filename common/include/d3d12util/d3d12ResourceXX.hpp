@@ -542,11 +542,10 @@ public:
     RefModel& operator=(const RefModel& other) = delete;
     RefModel& operator=(RefModel&& other) noexcept;
 
-    static RefModel loadTerrainFromHeightmap( const Bitmap& heightmap,
+    static RefModel loadTerrainSubsetFromHeightmap( const Bitmap& heightmap,
         D3D12Device& device, D3D12GfxCmdList& cmdList,
         int xStart, int zStart, int width, int length, mu::Vec3 scale,
-        const std::filesystem::path& diffuseMapPath,
-        const StaticTextureStorage& sts
+        const Material::MapRef& albedoMapRef
     );
 
     static RefModel loadHierarchyFromFile( const std::filesystem::path& path,
