@@ -128,10 +128,15 @@ void PBRIllumination::update(Scene& scene) {
 
 void PBRIlluminationMacro::init(Scene& scene) {
     for (auto& pModel : models(scene)) {
-        trackModel(&pModel->get());
+        if (pModel) {
+            trackModel(&pModel->get());
+        }
     }
     if (!cameras(scene).empty()) {
-        setCamera(&cameras(scene).front()->get());
+        auto& pCamera = cameras(scene).front();
+        if (pCamera) {
+            setCamera(&cameras(scene).front()->get());
+        }
     }
 }
 

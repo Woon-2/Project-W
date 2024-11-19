@@ -273,6 +273,7 @@ inline const Component* Entity::get(Components type) const {
 template <class T>
 using SysCompCont = std::vector<T>;
 
+// TODO: Remove expired components
 template <class ... ConcreteComponents>
 class System {
 protected:
