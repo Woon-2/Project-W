@@ -135,9 +135,11 @@ namespace rp {
 
 class PBRIllumination : public gfx::d3d12::RenderPass {
 public:
+    static constexpr const char* id = "PBRIllumination";
+
     PBRIllumination( D3D12Device& device, ShaderPBRIllumination& shader,
         const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
-    ) : gfx::d3d12::RenderPass("PBRIllumination"),
+    ) : gfx::d3d12::RenderPass(id),
         viewport_(vp), protocol_( shader.makeProtocol( device,
             RenderProtocol::Desc{ makeDesc() }
         ) ), lights_(), batch_(), pCamera_(nullptr) {}
@@ -176,9 +178,11 @@ private:
 
 class PBRIlluminationMacro : public gfx::d3d12::RenderPass {
 public:
+    static constexpr const char* id = "PBRIlluminationMacro";
+
     PBRIlluminationMacro( D3D12Device& device, ShaderPBRIlluminationMacro& shader,
         const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
-    ) : gfx::d3d12::RenderPass("PBRIlluminationMacro"),
+    ) : gfx::d3d12::RenderPass(id),
         viewport_(vp), protocol_( shader.makeProtocol( device,
             RenderProtocol::Desc{ makeDesc() }
         ) ), lights_(), batch_(), pCamera_(nullptr) {}

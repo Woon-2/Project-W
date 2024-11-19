@@ -1,5 +1,7 @@
 #include "d3d12util/d3d12ResourceXX.hpp"
 
+#include "d3d12util/d3d12RenderPass.hpp"
+
 #include "resourcePath.hpp"
 
 #include <cstdio>
@@ -817,7 +819,7 @@ RefModel RefModel::loadTerrainFromHeightmap( const Bitmap& heightmap,
 
     mesh.ibs_.emplace_back(device, cmdList, indices.data(), indices.size());
 
-    mesh.map( MaterialMapKey{ RefMesh::defaultState, "PBRIllumination" },
+    mesh.map( MaterialMapKey{ RefMesh::defaultState, rp::PBRIlluminationMacro::id },
         Material::MapType::Albedo,
         Material::MapRef{
             .type = static_cast<std::uint32_t>( etoi(Material::ResourceType::Texture) ),
