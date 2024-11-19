@@ -65,6 +65,7 @@ public:
     }
 
     void loadStaticTexture(const std::filesystem::path& path, d3d12::TextureResource::Type type);
+    void loadRefModel(const std::filesystem::path& path);
 
     void setFullScreen() {
         window_.setFullScreen(&device_);
@@ -76,6 +77,7 @@ public:
 
 private:
     d3d12::StaticTextureStorage staticTexStorage_;
+    d3d12::RefModelStorage refModelStorage_;
     dx::DXGIFactory factory_;
     d3d12::D3D12Device device_;
     d3d12::D3D12CmdQueue cmdQueue_;

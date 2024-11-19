@@ -570,6 +570,38 @@ private:
     Node* pRoot_;
 };
 
+class RefModelStorage {
+public:
+    void loadModel( const std::filesystem::path& path, const StaticTextureStorage& sts,
+        D3D12Device& device, D3D12GfxCmdList& cmdList
+    );
+
+    void loadTerrain( const std::filesystem::path& path, const StaticTextureStorage& sts,
+        D3D12Device& device, D3D12GfxCmdList& cmdList,
+        int xStart, int zStart, int width, int length, mu::Vec3 scale,
+        const std::filesystem::path& diffuseMapPath
+    );
+
+    const RefModel& get(const std::filesystem::path& path) const {
+        return map_.at(path);
+    }
+
+    RefModel& get(const std::filesystem::path& path) {
+        return map_.at(path);
+    }
+
+    const RefModel& operator[](const std::filesystem::path& path) const {
+        return get(path);
+    }
+
+    RefModel& operator[](const std::filesystem::path& path) {
+        return get(path);
+    }
+
+private:
+    std::map<std::filesystem::path, RefModel> map_;
+};
+
 class Mesh {
 public:
     friend class Shader;

@@ -987,6 +987,12 @@ void RefModel::loadNodesFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
     }
 }
 
+void RefModelStorage::loadModel( const std::filesystem::path& path,
+    const StaticTextureStorage& sts, D3D12Device& device, D3D12GfxCmdList& cmdList
+) {
+    map_[path] = RefModel::loadHierarchyFromFile(path, device, cmdList, sts);
+}
+
 void Model::Node::addMesh(Mesh&& mesh) {
     meshes_.push_back(std::move(mesh));
 }

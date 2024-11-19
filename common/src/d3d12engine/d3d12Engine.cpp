@@ -75,6 +75,10 @@ void Core::loadStaticTexture( const std::filesystem::path& path,
     }
 }
 
+void Core::loadRefModel(const std::filesystem::path& path) {
+    refModelStorage_.loadModel(path, staticTexStorage_, device_, cmdList_);
+}
+
 void CoordRoot::addEntity(ecs::Entity& entity) {
     ecs::System<Coord>::addEntity(entity);
     auto pCoord = entity.get<Coord>();
