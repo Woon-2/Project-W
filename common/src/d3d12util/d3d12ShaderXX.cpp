@@ -175,7 +175,7 @@ UnifiedRoot::UnifiedRoot(D3D12Device& device)
 		/* .MinLOD = */ 0.f,
 		/* .MaxLOD = */ std::numeric_limits<float>::max(),
 		/* .ShaderRegister = */ 0u,
-		/* .RegisterSpace = */ 0u,
+		/* .RegisterSpace = */ 1u,
 		/* .ShaderVisibility = */ D3D12_SHADER_VISIBILITY_ALL
 	);
 
@@ -192,7 +192,7 @@ UnifiedRoot::UnifiedRoot(D3D12Device& device)
 		/* .MinLOD = */ 0.f,
 		/* .MaxLOD = */ std::numeric_limits<float>::max(),
 		/* .ShaderRegister = */ 1u,
-		/* .RegisterSpace = */ 0u,
+		/* .RegisterSpace = */ 1u,
 		/* .ShaderVisibility = */ D3D12_SHADER_VISIBILITY_ALL
 	);
 
@@ -209,7 +209,7 @@ UnifiedRoot::UnifiedRoot(D3D12Device& device)
 		/* .MinLOD = */ 0.f,
 		/* .MaxLOD = */ std::numeric_limits<float>::max(),
 		/* .ShaderRegister = */ 2u,
-		/* .RegisterSpace = */ 0u,
+		/* .RegisterSpace = */ 1u,
 		/* .ShaderVisibility = */ D3D12_SHADER_VISIBILITY_ALL
 	);
 
@@ -226,7 +226,7 @@ UnifiedRoot::UnifiedRoot(D3D12Device& device)
 		/* .MinLOD = */ 0.f,
 		/* .MaxLOD = */ std::numeric_limits<float>::max(),
 		/* .ShaderRegister = */ 3u,
-		/* .RegisterSpace = */ 0u,
+		/* .RegisterSpace = */ 1u,
 		/* .ShaderVisibility = */ D3D12_SHADER_VISIBILITY_ALL
 	);
 
@@ -243,7 +243,7 @@ UnifiedRoot::UnifiedRoot(D3D12Device& device)
 		/* .MinLOD = */ 0.f,
 		/* .MaxLOD = */ std::numeric_limits<float>::max(),
 		/* .ShaderRegister = */ 4u,
-		/* .RegisterSpace = */ 0u,
+		/* .RegisterSpace = */ 1u,
 		/* .ShaderVisibility = */ D3D12_SHADER_VISIBILITY_ALL
 	);
 
@@ -300,7 +300,9 @@ ShaderPBRIllumination::ShaderPBRIllumination( D3D12Device& device, const RootSig
 	perFrameData_(device, sizeof(sr::PerFrameData0)),
 	perDrawcallData_(device, sizeof(sr::PerDrawcallData0) * config.maxDrawcallCnt),
 	perInstanceData_(device, sizeof(sr::PerInstanceData0) * config.maxInstanceCnt),
-	lightBuffer_(device, sizeof(sr::Light) * config.maxLightCnt) {
+	lightBuffer_(device, sizeof(sr::Light) * config.maxLightCnt),
+	maxInstanceCnt_(config.maxInstanceCnt), maxLightCnt_(config.maxLightCnt),
+	maxDrawcallCnt_(config.maxDrawcallCnt) {
 	perConfigurationData_.pullGpuAddr();
 	perFrameData_.pullGpuAddr();
 	perDrawcallData_.pullGpuAddr();

@@ -36,6 +36,7 @@ namespace rp {
 
 RenderProtocol::Desc PBRIllumination::makeDesc() {
     return RenderProtocol::Desc {
+        .sampleMask = UINT_MAX,
         .rasterizerState = D3D12_RASTERIZER_DESC{
             .FillMode = D3D12_FILL_MODE_SOLID,
             .CullMode = D3D12_CULL_MODE_BACK,

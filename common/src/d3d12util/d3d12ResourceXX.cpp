@@ -40,7 +40,7 @@ UploadBuffer::UploadBuffer( D3D12Device& device, std::size_t byteWidth,
             .Count = 1,
             .Quality = 0
         },
-        .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+        .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
         .Flags = flags
     }, D3D12_HEAP_TYPE_UPLOAD ) {
     get()->Map(0, nullptr, reinterpret_cast<void**>(&pMappedData_));
@@ -68,7 +68,7 @@ DefaultBuffer::DefaultBuffer( D3D12Device& device, std::size_t byteWidth,
             .Count = 1,
             .Quality = 0
         },
-        .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+        .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
         .Flags = flags
     }, D3D12_HEAP_TYPE_DEFAULT ) {}
 
