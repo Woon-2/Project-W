@@ -5,6 +5,8 @@
 #include "texLoader/DDSTextureLoader12.h"
 #include "coord.hpp"
 
+#include "FreeImage.h"
+
 #include "dxutil/dxexcept.hpp"
 
 #include "vertex.hpp"
@@ -379,6 +381,42 @@ inline auto operator<=>(const MaterialMapKey& lhs, const MaterialMapKey& rhs) {
         <=> std::tuple(rhs.state, rhs.renderPassID);
 }
 
+class Bitmap {
+public:
+    Bitmap() = default;
+
+	Bitmap( const std::filesystem::path& path ) {
+		load( path );
+	}
+
+    Bitmap(const Bitmap&) = delete;
+    Bitmap& operator=(const Bitmap&) = delete;
+    Bitmap(Bitmap&& other) noexcept;
+    Bitmap& operator=(Bitmap&& other) noexcept;
+
+	~Bitmap() {
+		unload();
+	}
+
+	void load( const std::filesystem::path& path );
+    BYTE getGreyscalePixel( size_t x, size_t y ) const;
+	void unload();
+
+    std::size_t width() const noexcept {
+        return width_;
+    }
+
+    std::size_t height() const noexcept {
+        return height_;
+    }
+
+private:
+    FIBITMAP* pBitmap_;
+	std::size_t width_;
+	std::size_t height_;
+	unsigned char* bits_;
+};
+
 class RefMesh {
 public:
     friend class RefModel;
@@ -501,6 +539,13 @@ public:
     RefModel(RefModel&& other) noexcept;
     RefModel& operator=(const RefModel& other) = delete;
     RefModel& operator=(RefModel&& other) noexcept;
+
+    static RefModel loadTerrainFromHeightmap( const Bitmap& heightmap,
+        D3D12Device& device, D3D12GfxCmdList& cmdList,
+        int xStart, int zStart, int width, int length, mu::Vec3 scale,
+        const std::filesystem::path& diffuseMapPath,
+        const StaticTextureStorage& sts
+    );
 
     static RefModel loadHierarchyFromFile( const std::filesystem::path& path,
         D3D12Device& device, D3D12GfxCmdList& cmdList, const StaticTextureStorage& sts

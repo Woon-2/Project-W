@@ -252,6 +252,85 @@ IndexBuffer::IndexBuffer(D3D12Device& device, D3D12GfxCmdList& cmdList,
 	commitState(cmdList, D3D12_RESOURCE_STATE_INDEX_BUFFER);
 }
 
+Bitmap::Bitmap(Bitmap&& other) noexcept
+    : pBitmap_(std::exchange(other.pBitmap_, nullptr)),
+    width_(std::exchange(other.width_, 0)),
+    height_(std::exchange(other.height_, 0)),
+    bits_(std::exchange(other.bits_, nullptr)) {}
+
+Bitmap& Bitmap::operator=(Bitmap&& other) noexcept {
+    if (this == &other) {
+        return *this;
+    }
+
+    pBitmap_ = std::exchange(other.pBitmap_, nullptr);
+    width_ = std::exchange(other.width_, 0);
+    height_ = std::exchange(other.height_, 0);
+    bits_ = std::exchange(other.bits_, nullptr);
+
+    return *this;
+}
+
+void Bitmap::load( const std::filesystem::path& path ) {
+    auto cstrFileName = path.string().c_str();
+
+    FREE_IMAGE_FORMAT format = FreeImage_GetFileType( cstrFileName );
+
+    if ( format == -1 )
+    {
+        std::cerr << "Could not find image: \"" << path << "\"\n";
+        return;
+    }
+    else if ( format == FIF_UNKNOWN )
+    {
+        std::cerr << "Couldn't determine file format - attempting to get from file extension...\n";
+        format = FreeImage_GetFIFFromFilename( cstrFileName );
+
+        if ( !FreeImage_FIFSupportsReading( format ) )
+        {
+            std::cerr << "Detected image format cannot be read!\n";
+            return;
+        }
+    }
+
+    FIBITMAP* bitmap = FreeImage_Load( format, cstrFileName );
+    int bits_per_pixel = FreeImage_GetBPP( bitmap );
+
+    if ( bits_per_pixel == 32 )
+    {
+        pBitmap_ = bitmap;
+    }
+    else
+    {
+        pBitmap_ = FreeImage_ConvertTo32Bits( bitmap );
+    }
+
+    width_ = FreeImage_GetWidth( pBitmap_ );
+    height_ = FreeImage_GetHeight( pBitmap_ );
+    bits_ = FreeImage_GetBits( pBitmap_ );
+}
+
+BYTE Bitmap::getGreyscalePixel( size_t x, size_t y ) const {
+    BYTE ret{};
+    if ( !FreeImage_GetPixelIndex( pBitmap_, static_cast<unsigned int>(x), 
+        static_cast<unsigned int>(y), &ret 
+    ) ) {
+        std::cerr << "Failed to get pixel index\n";
+    }
+    return ret;
+}
+
+void Bitmap::unload() {
+    if ( pBitmap_ )
+    {
+        FreeImage_Unload( pBitmap_ );
+        pBitmap_ = nullptr;
+        width_ = 0;
+        height_ = 0;
+        bits_ = nullptr;
+    }
+}
+
 void RefMesh::draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt, std::size_t ibIdx) const {
     VertexBuffer::bind(cmdList, 0u, vbs_);
     ibs_[ibIdx].bind(cmdList);
@@ -630,6 +709,126 @@ RefModel& RefModel::operator=(RefModel&& other) noexcept {
     }
 
     return *this;
+}
+
+RefModel RefModel::loadTerrainFromHeightmap( const Bitmap& heightmap,
+    D3D12Device& device, D3D12GfxCmdList& cmdList,
+    int xStart, int zStart, int width, int length, mu::Vec3 scale,
+    const std::filesystem::path& diffuseMapPath,
+    const StaticTextureStorage& sts
+) {
+    if (!sts.contains(diffuseMapPath)) {
+        throw std::runtime_error("Diffuse map not found in texture storage");
+    }
+
+    auto model = RefModel();
+
+    model.nodeStorage_.emplace_back(&model);
+    auto& node = model.nodeStorage_.back();
+    model.pRoot_ = &node;
+
+    auto positions = std::vector<dx::XMFLOAT3>(width * length);
+    auto normals = std::vector<dx::XMFLOAT3>(width * length);
+    auto uvs = std::vector<dx::XMFLOAT2>(width * length);
+
+    auto scaleXmf = scale.getXmf();
+
+    for (int i = 0, z = zStart; z < (zStart + length); ++z) {
+        for (int x = xStart; x < (xStart + width); ++x, ++i) {
+            // Calculate position
+            auto height = heightmap.getGreyscalePixel(x, z) / 255.f * scaleXmf.y;
+
+            auto position = dx::XMFLOAT3(x * scaleXmf.x,
+                height, z * scaleXmf.z
+            );
+
+            positions.push_back(position);
+
+            // Calculate normal
+            auto iWidth = static_cast<int>(heightmap.width());
+            auto iLength = static_cast<int>(heightmap.height());
+
+            auto nHeightMapIndex = x + (z * iWidth);
+            auto xHeightMapAdd = x < iWidth - 1 ? 1 : -1;
+            auto zHeightMapAdd = z < iLength - 1 ? iWidth : -iWidth;
+
+            float y1 = heightmap.getGreyscalePixel(x, z) / 255.f * scaleXmf.y;
+            float y2 = heightmap.getGreyscalePixel(x + xHeightMapAdd, z) / 255.f * scaleXmf.y;
+            float y3 = heightmap.getGreyscalePixel(x, z + zHeightMapAdd) / 255.f * scaleXmf.y;
+
+            auto edge1 = mu::Vec3(0.f, y3 - y1, scaleXmf.z);
+            auto edge2 = mu::Vec3(scaleXmf.x, y2 - y1, 0.f);
+            auto normal = mu::cross(edge1, edge2);
+
+            normals.push_back(normal.getXmf());
+
+            // Calculate UV
+            auto uv = dx::XMFLOAT2(static_cast<float>(x) / iWidth, static_cast<float>(z) / iLength);
+            uvs.push_back(uv);
+        }
+    }
+
+    auto indices = std::vector<std::uint16_t>();
+
+    indices.reserve(((width * 2) * (length - 1)) + ((length - 1) - 1));
+
+    auto out = std::back_inserter(indices);
+
+    for (int i = 0, z = 0; z < length - 1; ++z) {
+        if (!(z % 2)) {
+            for (int x = 0; x < width; ++x) {
+                if (x == 0 && z > 0) {
+                    out = static_cast<UINT>(x + (z * width));
+                }
+                out = static_cast<UINT>(x + (z * width));
+                out = static_cast<UINT>(x + ((z + 1) * width));
+            }
+        }
+        else {
+            for (int x = width - 1; x >= 0; --x) {
+                if (x == (width - 1)) {
+                    out = static_cast<UINT>(x + (z * width));
+                }
+                out = static_cast<UINT>(x + (z * width));
+                out = static_cast<UINT>(x + ((z + 1) * width));
+            }
+        }
+    }
+
+
+    auto mesh = RefMesh();
+
+    mesh.vbs_.emplace_back(device, cmdList, positions.data(),
+        sizeof(dx::XMFLOAT3) * positions.size(), sizeof(dx::XMFLOAT3),
+        std::bitset<etoi(Vertex::Properties::SIZE)>{ 1ull << etoi(Vertex::Properties::Position3D) }
+    );
+
+    mesh.vbs_.emplace_back(device, cmdList, normals.data(),
+        sizeof(dx::XMFLOAT3) * normals.size(), sizeof(dx::XMFLOAT3),
+        std::bitset<etoi(Vertex::Properties::SIZE)>{ 1ull << etoi(Vertex::Properties::Normal3D) }
+    );
+
+    mesh.vbs_.emplace_back(device, cmdList, uvs.data(),
+        sizeof(dx::XMFLOAT2) * uvs.size(), sizeof(dx::XMFLOAT2),
+        std::bitset<etoi(Vertex::Properties::SIZE)>{ 1ull << etoi(Vertex::Properties::TexCoord2D0) }
+    );
+
+    mesh.ibs_.emplace_back(device, cmdList, indices.data(), indices.size());
+
+    mesh.map( MaterialMapKey{ "Default", "PBRIllumination" },
+        Material::MapType::Albedo,
+        Material::MapRef{
+            .type = static_cast<std::uint32_t>( etoi(Material::ResourceType::Texture) ),
+            .resourceIdx = static_cast<std::uint32_t>(sts.get(diffuseMapPath).offset()),
+            .arrayIdx = 0
+        }
+    );
+
+    mesh.topology_ = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+
+    node.addMesh(std::move(mesh));
+
+    return model;
 }
 
 RefModel RefModel::loadHierarchyFromFile( const std::filesystem::path& path,

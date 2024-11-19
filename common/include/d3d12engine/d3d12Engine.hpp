@@ -199,7 +199,10 @@ inline std::vector<ecs::Entity::ID>& IRenderPass::reservedEntities(Scene& scene)
 
 class Terrain : public ecs::Entity {
 public:
-    Terrain();
+    Terrain(const std::filesystem::path& heightMapPath);
+
+private:
+    d3d12::Bitmap heightMap_;
 };
 
 namespace rp {
