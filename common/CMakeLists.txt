@@ -215,6 +215,7 @@ target_link_libraries(gfx
         assimp
         ddsLoader
         wicLoader
+        freeImage
         common::mu
         common::coro
         common::mem
