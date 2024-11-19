@@ -552,9 +552,9 @@ void RefMesh::loadMaterialsFromFile( D3D12Device& device, D3D12GfxCmdList& cmdLi
 		}
 		else if (!strcmp(pstrToken, "<Metallic>:"))
 		{
-			nReads = (UINT)::fread(&float3, sizeof(dx::XMFLOAT3), 1, pInFile);
+			nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
             mesh.map( MaterialMapKey{ stateName, renderPassName }, 
-                Material::ConstantType::Emmisive, mu::Vec3(float3.x, float3.y, float3.z)
+                Material::ConstantType::Metallic, floatVal
             );
 		}
 		else if (!strcmp(pstrToken, "<AlbedoMap>:"))
