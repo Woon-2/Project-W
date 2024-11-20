@@ -1,0 +1,11 @@
+add_library(freeImage SHARED IMPORTED GLOBAL)
+
+set_target_properties(freeImage PROPERTIES
+    IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/x64/FreeImage.dll"
+    INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/x64"
+    IMPORTED_IMPLIB "${CMAKE_CURRENT_SOURCE_DIR}/x64/FreeImage.lib"
+)
+
+set(FREEIMAGE_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/x64"
+    CACHE PATH "specify the path to FreeImage include directory"
+)

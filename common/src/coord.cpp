@@ -53,6 +53,7 @@ System& System::operator=(System&& sys) noexcept {
 
     localXform_ = std::move(sys.localXform_);
     cachedTotalXform_ = std::move(sys.cachedTotalXform_);
+    children_ = std::move(sys.children_);
     parent_ = std::exchange(sys.parent_, nullptr);
 
     for (auto& child : children_) {

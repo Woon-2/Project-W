@@ -2,31 +2,17 @@
 
 #include "inputSystem.hpp"
 #include "physicsSystem.hpp"
-#include "assetSystem.hpp"
-#include "ccoord.hpp"
-#include "cmodel.hpp"
 
-#include "assetMap.hpp"
+#include "d3d12engine/d3d12Engine.hpp"
 
 Player::Player() {
 	createComponent<RigidBody>();
-	createComponent<AssetLinker>();
 	createComponent<PlayerController>();
-	createComponent<Model>();
-	createComponent<Coord>();
-	as<AssetLinker>().configAsset(assetIDs::dragon);
-}
-
-void Player::linkAssets(const AssetSystem& assetSystem) {
-	auto& model = as<Model>();
-	model.init(
-		assetSystem.model("DragonModel"),
-		assetSystem.materialTree("DragonMaterialTree")
-	);
-	model.root().coord().setParent(&as<Coord>().get());
-	model.root().coord() << mu::rotateYH(mu::Radian(mu::pi));
+	// createComponent<gfx::d3d12engine::Model>();
+	createComponent<gfx::d3d12engine::Coord>();
 }
 
 void Player::update() {
-	as<Coord>().get() << mu::translate( as<RigidBody>().deltaPosition() );
+	as<gfx::d3d12engine::Coord>().get()
+		<< mu::translate( as<RigidBody>().deltaPosition() );
 }

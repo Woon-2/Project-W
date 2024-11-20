@@ -57,9 +57,9 @@ void RigidBody::updateAngular(float dt) NOEXCEPT
 
 void PhysicsSystem::update(float deltaTime)
 {
-	for (auto& rb : components<RigidBody>()) {
-		if (auto ptr = rb.lock()) {
-			ptr->updateRigid(deltaTime, 1.5f);
+	for (auto& pRigidBody : components<RigidBody>()) {
+		if (pRigidBody) {
+			pRigidBody->updateRigid(deltaTime, 1.5f);
 		}
 	}
 }

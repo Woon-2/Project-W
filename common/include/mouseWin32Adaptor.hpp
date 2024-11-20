@@ -63,8 +63,8 @@ public:
     using MyMouseMsgAPI = MouseMsgAPI;
     using MyString = std::basic_string<MyChar>;
 
-    MouseMsgHandler(MyWindow& wnd, MyMouse* pMouse)
-        : ::Win32::MsgHandler<MyWindow>(wnd), pMouse_(pMouse), cursorEnabled_(true) {
+    MouseMsgHandler(MyWindow& wnd, MyMouse& mouse)
+        : ::Win32::MsgHandler<MyWindow>(wnd), pMouse_(&mouse), cursorEnabled_(true) {
         auto rid = RAWINPUTDEVICE{
             .usUsagePage = 0x01,    // Generic Desktop Controls
             .usUsage = 0x02,    // Mouse

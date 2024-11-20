@@ -40,24 +40,18 @@ add_executable(client)
 target_sources(client
     PRIVATE
         src/main.cpp
-        src/app.cpp include/app.hpp
         src/game.cpp include/game.hpp
-        src/mygfx.cpp include/mygfx.hpp
-        src/ecsExcept.cpp include/ecsExcept.hpp
         src/player.cpp include/player.hpp
         src/inputSystem.cpp include/inputSystem.hpp
-        src/assetSystem.cpp include/assetSystem.hpp
         src/assetMap.cpp include/assetMap.hpp
-        src/cmodel.cpp include/cmodel.hpp
         src/physicsSystem.cpp include/physicsSystem.hpp
         src/stage.cpp include/stage.hpp
         src/Timer.cpp include/Timer.hpp
-        src/ecs.cpp include/ecs.hpp
-        src/ccoord.cpp include/ccoord.hpp
+        src/renderer.cpp include/renderer.hpp
 
         include/testInput.hpp
         include/systems.hpp
-        )
+)
 
 include(auto_configure)
 
@@ -77,105 +71,18 @@ target_link_libraries(client
         common::net
 )
 
-include(find_hlsl_compiler)
-
-set(COMPILED_SHADER_PATH "${CMAKE_CURRENT_BINARY_DIR}/shader" CACHE PATH
-    "Write path to populate compiled shaders."
-)
-
-compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/nullShader.hlsl"
-    "${COMPILED_SHADER_PATH}/nullShader_vs.cso"
-    "vs_5_1"
-    "VSMain"
-)
-compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/nullShader.hlsl"
-    "${COMPILED_SHADER_PATH}/nullShader_ps.cso"
-    "ps_5_1"
-    "PSMain"
-)
-
-compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/solidShader.hlsl"
-    "${COMPILED_SHADER_PATH}/solidShader_vs.cso"
-    "vs_5_1"
-    "VSMain"
-)
-compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/solidShader.hlsl"
-    "${COMPILED_SHADER_PATH}/solidShader_ps.cso"
-    "ps_5_1"
-    "PSMain"
-)
-
-compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/ntShader.hlsl"
-    "${COMPILED_SHADER_PATH}/ntShader_vs.cso"
-    "vs_5_1"
-    "VSMain"
-    /D INCLUDE_basicInstancing
-    /D INCLUDE_phongLighting
-)
-
-compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/ntShader.hlsl"
-    "${COMPILED_SHADER_PATH}/ntShader_ps.cso"
-    "ps_5_1"
-    "PSMain"
-    /D INCLUDE_basicInstancing
-    /D INCLUDE_phongLighting
-)
-
-compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/tShader.hlsl"
-    "${COMPILED_SHADER_PATH}/tShader_vs.cso"
-    "vs_5_1"
-    "VSMain"
-    /D INCLUDE_basicInstancing
-    /D INCLUDE_phongLighting
-    /enable_unbounded_descriptor_tables
-)
-
-compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/tShader.hlsl"
-    "${COMPILED_SHADER_PATH}/tShader_ps.cso"
-    "ps_5_1"
-    "PSMain"
-    /D INCLUDE_basicInstancing
-    /D INCLUDE_phongLighting
-    /enable_unbounded_descriptor_tables
-)
-
-compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/shadowMapShader.hlsl"
-    "${COMPILED_SHADER_PATH}/shadowMapShader_vs.cso"
-    "vs_5_1"
-    "VSMain"
-    /D INCLUDE_basicInstancing
-)
-
-compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/tShaderShadowed.hlsl"
-    "${COMPILED_SHADER_PATH}/tShaderShadowed_vs.cso"
-    "vs_5_1"
-    "VSMain"
-    /D INCLUDE_basicInstancing
-    /D INCLUDE_phongLighting
-    /enable_unbounded_descriptor_tables
-)
-
-compile_hlsl("${CMAKE_CURRENT_SOURCE_DIR}/shader/tShaderShadowed.hlsl"
-    "${COMPILED_SHADER_PATH}/tShaderShadowed_ps.cso"
-    "ps_5_1"
-    "PSMain"
-    /D INCLUDE_basicInstancing
-    /D INCLUDE_phongLighting
-    /enable_unbounded_descriptor_tables
-)
-
-
-add_hlsl_target("${HLSL_COMPILED_SHADERS}")
-
-include(configure_paths)
-gen_shader_path()
-
-add_dependencies(client hlsl)
-
 file(COPY "${PROJECT_SOURCE_DIR}/extern/assimp/assimp-vc143-mt.dll"
     DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/Debug"
 )
 
 file(COPY "${PROJECT_SOURCE_DIR}/extern/assimp/assimp-vc143-mt.dll"
+    DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/Release"
+)
+
+file(COPY "${PROJECT_SOURCE_DIR}/extern/FreeImage/x64/FreeImage.dll"
+    DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/Debug"
+)
+
+file(COPY "${PROJECT_SOURCE_DIR}/extern/FreeImage/x64/FreeImage.dll"
     DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/Release"
 )

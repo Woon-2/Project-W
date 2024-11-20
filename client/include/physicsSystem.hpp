@@ -1,15 +1,12 @@
 #ifndef __PHYSICSSYSTEM_HPP
 #define __PHYSICSSYSTEM_HPP
 
-#define DXMATH_VEC_UTIL
-#define DXMATH_MAT_UTIL
-#define DXMATH_QUAT_UTIL
-
 #include <array>
 
 #include "ecs.hpp"
 
-#include "mathUtil.hpp"
+#include "d3d12engine/d3d12Engine.hpp"
+
 #include "keyboardXX.hpp"
 
 class RigidBody : public ecs::Component {
