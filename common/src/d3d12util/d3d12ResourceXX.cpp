@@ -335,13 +335,13 @@ void Bitmap::unload() {
     }
 }
 
-void RefMesh::draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt, std::size_t ibIdx) const {
-    VertexBuffer::bind(cmdList, 0u, vbs_);
-    ibs_[ibIdx].bind(cmdList);
+void RefSubmesh::draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt) const {
+    VertexBuffer::bind(cmdList, 0u, parent_->vbs());
+    ib_.bind(cmdList);
     cmdList.get()->IASetPrimitiveTopology(topology_);
     DX_THROW_FAILED_VOID(
         cmdList.get()->DrawIndexedInstanced(
-            static_cast<UINT>( ibs_[ibIdx].size() ),
+            static_cast<UINT>( ib_.size() ),
             static_cast<UINT>( instanceCnt ),
             0u, 0, 0u
         )
@@ -355,7 +355,7 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
 	BYTE nStrLength = 0;
 
     int nVertices = 0;
-	int nPositions = 0, nColors = 0, nNormals = 0, nTangents = 0, nBiTangents = 0, nTextureCoords = 0, nIndices = 0, nSubMeshes = 0, nSubIndices = 0;
+	int nPositions = 0, nColors = 0, nNormals = 0, nTangents = 0, nBiTangents = 0, nTextureCoords = 0, nSubMeshes = 0, nSubIndices = 0;
 
 	UINT nReads = (UINT)::fread(&nVertices, sizeof(int), 1, pInFile);
 
@@ -474,11 +474,40 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
                 );
 			}
 		}
-		else if (!strcmp(pstrToken, "<Indices>:")) {
-            nReads = (UINT)::fread(&nIndices, sizeof(int), 1, pInFile);
-            auto indices = std::vector<std::uint16_t>(nIndices);
-            nReads = (UINT)::fread(indices.data(), sizeof(std::uint16_t), nIndices, pInFile);
-            ret.ibs_.emplace_back( device, cmdList, indices.data(), nIndices );
+		else if (!strcmp(pstrToken, "<Submeshes>:")) {
+            nReads = (UINT)::fread(&nSubMeshes, sizeof(int), 1, pInFile);
+            ret.submeshes_.reserve(nSubMeshes);
+
+            for (int i = 0; i < nSubMeshes; ++i) {
+
+                nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+                nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
+                pstrToken[nStrLength] = '\0';
+                
+                if (strcmp(pstrToken, "<Submesh>:")) {
+                    fclose(pInFile);
+                    throw std::runtime_error("Submesh token expected");
+                }
+                
+                ret.submeshes_.emplace_back(&ret);
+                auto& submesh = ret.submeshes_.back();
+                
+                // enable more topology types later
+                // nReads = (UINT)::fread(&submesh.topology_, sizeof(int), 1, pInFile);
+                nReads = (UINT)::fread(&nSubIndices, sizeof(int), 1, pInFile);
+                auto indices = std::vector<std::uint16_t>(nSubIndices);
+                nReads = (UINT)::fread(indices.data(), sizeof(std::uint16_t), nSubIndices, pInFile);
+                submesh.ib_ = IndexBuffer(device, cmdList, indices.data(), nSubIndices);
+            }
+
+            nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+            nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
+            pstrToken[nStrLength] = '\0';
+
+            if (strcmp(pstrToken, "</Submeshes>")) {
+                fclose(pInFile);
+                throw std::runtime_error("Submeshes end token expected");
+            }
         }
 		else if (!strcmp(pstrToken, "</Mesh>"))
 		{
@@ -493,15 +522,17 @@ void RefMesh::loadMaterialsFromFile( D3D12Device& device, D3D12GfxCmdList& cmdLi
     FILE* pInFile, RefMesh& mesh
 ) {
     char pstrToken[64] = { '\0' };
-
-	int nMaterial = 0;
 	BYTE nStrLength = 0;
 
 	UINT nReads{};
 
-    auto floatVal = float{};
-    auto float4 = dx::XMFLOAT4{};
-    Material::MapRef mapRef{};
+    int materialCnt = 0;
+    nReads = (UINT)::fread(&materialCnt, sizeof(int), 1, pInFile);
+
+    if (materialCnt != mesh.submeshes_.size()) {
+        fclose(pInFile);
+        throw std::runtime_error("Material count mismatch");
+    }
 
 	for ( ; ; )
 	{
@@ -511,57 +542,86 @@ void RefMesh::loadMaterialsFromFile( D3D12Device& device, D3D12GfxCmdList& cmdLi
         if (!strcmp(pstrToken, "</Materials>")) {
             break;
         }
-		else if (!strcmp(pstrToken, "<AlbedoColor>:"))
-		{
-			nReads = (UINT)::fread(&float4, sizeof(dx::XMFLOAT4), 1, pInFile);
-            mesh.material().addConstant( Material::ConstantType::Albedo, mu::Vec4(float4.x, float4.y, float4.z, float4.w) );
-		}
-		else if (!strcmp(pstrToken, "<EmissiveColor>:"))
-		{
-			nReads = (UINT)::fread(&float4, sizeof(dx::XMFLOAT4), 1, pInFile);
-            mesh.material().addConstant( Material::ConstantType::Emmisive, mu::Vec3(float4.x, float4.y, float4.z) );
-		}
-		else if (!strcmp(pstrToken, "<AmbientOcllusion>:"))
-		{
-			nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
-            mesh.material().addConstant( Material::ConstantType::AmbientOcllusion, floatVal );
-		}
-		else if (!strcmp(pstrToken, "<Smoothness>:"))
-		{
-			nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
-            mesh.material().addConstant( Material::ConstantType::Roughness, 1.f - floatVal );
-		}
-		else if (!strcmp(pstrToken, "<Metallic>:"))
-		{
-			nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
-            mesh.material().addConstant( Material::ConstantType::Metallic, floatVal );
-		}
-		else if (!strcmp(pstrToken, "<AlbedoMap>:"))
-		{
-            nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
-            mesh.material().addMapRef( Material::MapType::Albedo, mapRef );
-		}
-		else if (!strcmp(pstrToken, "<NormalMap>:"))
-		{
-			nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
-            mesh.material().addMapRef( Material::MapType::Normal, mapRef );
-		}
-		else if (!strcmp(pstrToken, "<MetallicMap>:"))
-		{
-			nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
-            mesh.material().addMapRef( Material::MapType::Metallic, mapRef );
-		}
-        else if (!strcmp(pstrToken, "<MetallicSmoothnessMap>:"))
-		{
-			nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
-            mesh.material().addMapRef( Material::MapType::MetallicSmoothness, mapRef );
-		}
-		else if (!strcmp(pstrToken, "<EmissionMap>:"))
-		{
-			nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
-            mesh.material().addMapRef( Material::MapType::Emmisive, mapRef );
-		}
+        else if (!strcmp(pstrToken, "<Material>:")) {
+            int materialIdx = 0;
+            nReads = (UINT)::fread(&materialIdx, sizeof(int), 1, pInFile);
+            loadMaterialFromFile(device, cmdList, pInFile, mesh, materialIdx);
+        }
 	}
+}
+
+void RefMesh::loadMaterialFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
+    FILE* pInFile, RefMesh& mesh, std::size_t materialIdx
+) {
+    char pstrToken[64] = { '\0' };
+
+	BYTE nStrLength = 0;
+
+	UINT nReads{};
+
+    auto floatVal = float{};
+    auto float4 = dx::XMFLOAT4{};
+    Material::MapRef mapRef{};
+
+    auto& submesh = mesh.submeshes_[materialIdx];
+
+    for (;;) {
+
+        if (!strcmp(pstrToken, "</Materials>")) {
+            break;
+        }
+        else if (!strcmp(pstrToken, "<AlbedoColor>:"))
+        {
+            nReads = (UINT)::fread(&float4, sizeof(dx::XMFLOAT4), 1, pInFile);
+            submesh.material().addConstant( Material::ConstantType::Albedo, mu::Vec4(float4.x, float4.y, float4.z, float4.w) );
+        }
+        else if (!strcmp(pstrToken, "<EmissiveColor>:"))
+        {
+            nReads = (UINT)::fread(&float4, sizeof(dx::XMFLOAT4), 1, pInFile);
+            submesh.material().addConstant( Material::ConstantType::Emmisive, mu::Vec3(float4.x, float4.y, float4.z) );
+        }
+        else if (!strcmp(pstrToken, "<AmbientOcllusion>:"))
+        {
+            nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
+            submesh.material().addConstant( Material::ConstantType::AmbientOcllusion, floatVal );
+        }
+        else if (!strcmp(pstrToken, "<Smoothness>:"))
+        {
+            nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
+            submesh.material().addConstant( Material::ConstantType::Roughness, 1.f - floatVal );
+        }
+        else if (!strcmp(pstrToken, "<Metallic>:"))
+        {
+            nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
+            submesh.material().addConstant( Material::ConstantType::Metallic, floatVal );
+        }
+        else if (!strcmp(pstrToken, "<AlbedoMap>:"))
+        {
+            nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
+            submesh.material().addMapRef( Material::MapType::Albedo, mapRef );
+        }
+        else if (!strcmp(pstrToken, "<NormalMap>:"))
+        {
+            nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
+            submesh.material().addMapRef( Material::MapType::Normal, mapRef );
+        }
+        else if (!strcmp(pstrToken, "<MetallicMap>:"))
+        {
+            nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
+            submesh.material().addMapRef( Material::MapType::Metallic, mapRef );
+        }
+        else if (!strcmp(pstrToken, "<MetallicSmoothnessMap>:"))
+        {
+            nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
+            submesh.material().addMapRef( Material::MapType::MetallicSmoothness, mapRef );
+        }
+        else if (!strcmp(pstrToken, "<EmissionMap>:"))
+        {
+            nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
+            submesh.material().addMapRef( Material::MapType::Emmisive, mapRef );
+        }
+
+    }
 }
 
 RefModel::Node::Node(const Node& other)
@@ -602,11 +662,13 @@ RefModel::Node& RefModel::Node::operator=(Node&& other) noexcept {
 }
 
 void RefModel::Node::addMesh(RefMesh&& mesh) {
-    for (auto& mapRef : mesh.material().mapRefs()) {
-        if (mapRef.resourceIdx != Material::MapRef::invalid) {
-            mapRef.resourceIdx = static_cast<std::uint32_t>(
-                pRefModel_->textureMap_.at(mapRef).offset()
-            );
+    for (auto& submesh : mesh.submeshes_) {
+        for (auto& mapRef : submesh.material().mapRefs()) {
+            if (mapRef.resourceIdx != Material::MapRef::invalid) {
+                mapRef.resourceIdx = static_cast<std::uint32_t>(
+                    pRefModel_->textureMap_.at(mapRef).offset()
+                );
+            }
         }
     }
     meshes_.push_back(std::move(mesh));
@@ -775,11 +837,10 @@ RefModel RefModel::loadTerrainSubsetFromHeightmap( const Bitmap& heightmap,
         std::bitset<etoi(Vertex::Properties::SIZE)>{ 1ull << etoi(Vertex::Properties::TexCoord2D0) }
     );
 
-    mesh.ibs_.emplace_back(device, cmdList, indices.data(), indices.size());
-
-    mesh.material().addMapRef( Material::MapType::Albedo, albedoMapRef );
-
-    mesh.topology_ = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+    mesh.submeshes_.emplace_back(&mesh, D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    auto& submesh = mesh.submeshes_.back();
+    submesh.ib_ = IndexBuffer(device, cmdList, indices.data(), indices.size());
+    submesh.material().addMapRef( Material::MapType::Albedo, albedoMapRef );
 
     node.addMesh(std::move(mesh));
 
@@ -968,6 +1029,21 @@ void RefModelStorage::loadModel( const std::filesystem::path& path,
     D3D12GfxCmdList& cmdList
 ) {
     map_[key] = RefModel::loadHierarchyFromFile(path, device, cmdList, sts);
+}
+
+Submesh::Submesh(Mesh* parent, const RefSubmesh* pRefSubmesh)
+    : parent_(parent), pRefSubmesh_(pRefSubmesh), material_() {
+    if (pRefSubmesh_) {
+        material_ = pRefSubmesh_->material();
+    }
+}
+
+Mesh::Mesh(const RefMesh& refMesh)
+    : pRefMesh_(&refMesh), submeshes_() {
+    submeshes_.reserve(refMesh.submeshes().size());
+    for (const auto& refSubmesh : refMesh.submeshes()) {
+        submeshes_.emplace_back(this, &refSubmesh);
+    }
 }
 
 void Model::Node::addMesh(Mesh&& mesh) {

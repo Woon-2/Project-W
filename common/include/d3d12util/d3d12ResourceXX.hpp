@@ -56,6 +56,8 @@ private:
 
 class DefaultBuffer : public D3D12Resource {
 public:
+    DefaultBuffer() = default;
+
     DefaultBuffer(D3D12Device& device, std::size_t byteWidth,
         D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE
     );
@@ -324,6 +326,8 @@ private:
 
 class VertexBuffer : public DefaultBuffer {
 public:
+    VertexBuffer() = default;
+
     VertexBuffer(D3D12Device& device, D3D12GfxCmdList& cmdList,
         const void* pData, std::size_t byteWidth, std::size_t stride,
 		std::bitset<etoi(Vertex::Properties::SIZE)> attribs
@@ -355,6 +359,9 @@ private:
 
 class IndexBuffer : public DefaultBuffer {
 public:
+    IndexBuffer()
+        : DefaultBuffer(), size_(0u) {}
+
     IndexBuffer(D3D12Device& device, D3D12GfxCmdList& cmdList,
         const void* pData, std::size_t indexCnt
     );
@@ -407,22 +414,24 @@ private:
 	unsigned char* bits_;
 };
 
-class RefMesh {
+class RefMesh;
+
+class RefSubmesh {
 public:
-    static constexpr const char* defaultState = "default";
-
+    friend class RefMesh;
     friend class RefModel;
-    friend class Mesh;
+    friend class Submesh;
 
-    static RefMesh loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdList, FILE* pInFile);
-    static void loadMaterialsFromFile(D3D12Device& device, D3D12GfxCmdList& cmdList, FILE* pInFile, RefMesh& mesh);
+    RefSubmesh( RefMesh* parent = nullptr,
+        D3D12_PRIMITIVE_TOPOLOGY topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST
+    ) : parent_(parent), ib_(), material_(), topology_(topology) {}
 
-    const auto& vbs() const noexcept {
-        return vbs_;
+    const RefMesh* parent() const noexcept {
+        return parent_;
     }
 
-    const auto& ibs() const noexcept {
-        return ibs_;
+    const auto& ib() const noexcept {
+        return ib_;
     }
 
     D3D12_PRIMITIVE_TOPOLOGY topology() const noexcept {
@@ -443,14 +452,37 @@ public:
     }
 
 private:
-    void bind(D3D12GfxCmdList& cmdList, std::size_t ibIdx = 0) const;
-    void draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt, std::size_t ibIdx = 0) const;
+    void draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt) const;
+
+    RefMesh* parent_;
+    IndexBuffer ib_;
+    Material material_;
+    D3D12_PRIMITIVE_TOPOLOGY topology_;
+};
+
+class RefMesh {
+public:
+    friend class RefModel;
+
+    const auto& vbs() const noexcept {
+        return vbs_;
+    }
+
+    const auto& submeshes() const noexcept {
+        return submeshes_;
+    }
+    
+    static RefMesh loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdList, FILE* pInFile);
+    static void loadMaterialsFromFile(D3D12Device& device, D3D12GfxCmdList& cmdList, FILE* pInFile, RefMesh& mesh);
+
+private:
+    static void loadMaterialFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
+        FILE* pInFile, RefMesh& mesh, std::size_t materialIdx
+    );
 
     std::string name_;
     std::vector<VertexBuffer> vbs_;
-    std::vector<IndexBuffer> ibs_;
-    Material material_;
-    D3D12_PRIMITIVE_TOPOLOGY topology_;
+    std::vector<RefSubmesh> submeshes_;
 };
 
 class RefModel {
@@ -554,32 +586,60 @@ private:
     std::map<ID, RefModel> map_;
 };
 
-class Mesh {
+class Mesh;
+
+class Submesh {
 public:
     friend class Shader;
+    friend class Mesh;
 
-    Mesh(const RefMesh& refMesh)
-        : pRefMesh_(&refMesh), pCurMaterial_(nullptr) {}
+    Submesh(Mesh* parent = nullptr, const RefSubmesh* pRefSubmesh = nullptr);
 
-    const RefMesh& refMesh() const noexcept {
-        return *pRefMesh_;
+    void draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt) const {
+        pRefSubmesh_->draw(cmdList, instanceCnt);
     }
 
-    void setMaterial(Material& material) noexcept {
-        pCurMaterial_ = &material;
+    Material& material() noexcept {
+        return material_;
     }
 
     const Material& material() const noexcept {
-        return *pCurMaterial_;
+        return material_;
+    }
+
+    void setMaterial(Material& material) noexcept {
+        material_ = material;
+    }
+
+    const RefSubmesh* refSubmesh() const noexcept {
+        return pRefSubmesh_;
     }
 
 private:
-    void draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt) const {
-        pRefMesh_->draw(cmdList, instanceCnt);
+    Mesh* parent_;
+    const RefSubmesh* pRefSubmesh_;
+    Material material_;
+};
+
+class Mesh {
+public:
+    Mesh(const RefMesh& refMesh);
+
+    const RefMesh* refMesh() const noexcept {
+        return pRefMesh_;
     }
 
+    auto& submeshes() noexcept {
+        return submeshes_;
+    }
+
+    const auto& submeshes() const noexcept {
+        return submeshes_;
+    }
+
+private:
     const RefMesh* pRefMesh_;
-    Material* pCurMaterial_;
+    std::vector<Submesh> submeshes_;
 };
 
 class Model {

@@ -73,14 +73,14 @@ void PBRIllumination::preRender(D3D12GfxCmdList& cmdList) {
     auto scissorRect = D3D12_RECT{ 0, 0, static_cast<LONG>(viewport_.Width), static_cast<LONG>(viewport_.Height) };
     cmdList.get()->RSSetScissorRects(1u, &scissorRect);
 
-    std::ranges::sort(batch_, std::less<>{}, [this](const auto& pair) {
-        return std::tuple(&pair.first->material(), &pair.first->refMesh());
-    });
+    std::ranges::sort( batch_, std::less<>{}, [this](const auto& pair) {
+        return std::tuple(&pair.first->material(), pair.first->refSubmesh());
+    } );
 
     auto pids = std::vector<sr::PerInstanceData0>();
     pids.reserve( shader().maxInstanceCnt() );
 
-    for (const auto& [pMesh, xform] : batch_) {
+    for (const auto& [pSubmesh, xform] : batch_) {
         pids.emplace_back(
             /* .wvp = */ mu::transpose( xform * pCamera_->view() * pCamera_->proj() ).getXmf(),
             /* .wv = */ mu::transpose( xform * pCamera_->view() ).getXmf(),
@@ -121,14 +121,14 @@ void PBRIllumination::render(D3D12GfxCmdList& cmdList) {
 
     while (first != batch_.end()) {
         auto proj = [this](const auto& pair) {
-            return std::tuple(&pair.first->material(), &pair.first->refMesh());
+            return std::tuple(&pair.first->material(), pair.first->refSubmesh());
         };
 
         auto last = std::ranges::upper_bound(first, batch_.end(), proj(*first), std::less<>{}, proj);
 
-        auto pMesh = first->first;
+        auto pSubmesh = first->first;
 
-        auto material = sr::PBRMaterial::convert( pMesh->material() );
+        auto material = sr::PBRMaterial::convert( pSubmesh->material() );
 
         auto pdd = sr::PerDrawcallData0{
             .material = material,
@@ -138,7 +138,7 @@ void PBRIllumination::render(D3D12GfxCmdList& cmdList) {
             0u, accDrawcallCnt++ * sizeof(sr::PerDrawcallData0)
         );
 
-        shader().draw( cmdList, *pMesh, static_cast<std::size_t>(last - first) );
+        shader().draw( cmdList, *pSubmesh, static_cast<std::size_t>(last - first) );
 
         if (accDrawcallCnt == shader().maxDrawcallCnt()) {
             break;
@@ -165,11 +165,12 @@ void PBRIllumination::trackModel(Model* pModel) {
     for (auto& node : nodes) {
         auto xform = node.coord().xform();
         for (auto& mesh : node.meshes()) {
-            if (!protocol_.compatibleWith(mesh.refMesh())) {
+            if (!protocol_.compatibleWith(*mesh.refMesh())) {
                 throw std::runtime_error("Incompatible mesh");
             }
-
-            batch_.emplace_back(&mesh, xform);
+            for (auto& submesh : mesh.submeshes()) {
+                batch_.emplace_back(&submesh, xform);
+            }
         }
     }
 }
@@ -214,13 +215,13 @@ void PBRIlluminationMacro::preRender(D3D12GfxCmdList& cmdList) {
     cmdList.get()->RSSetScissorRects(1u, &scissorRect);
 
     std::ranges::sort(batch_, std::less<>{}, [this](const auto& pair) {
-        return std::tuple(&pair.first->material(), &pair.first->refMesh());
+        return std::tuple(&pair.first->material(), pair.first->refSubmesh());
     });
 
     auto pids = std::vector<sr::PerInstanceData0>();
     pids.reserve( shader().maxInstanceCnt() );
 
-    for (const auto& [pMesh, xform] : batch_) {
+    for (const auto& [pSubmesh, xform] : batch_) {
         pids.emplace_back(
             /* .wvp = */ mu::transpose( xform * pCamera_->view() * pCamera_->proj() ).getXmf(),
             /* .wv = */ mu::transpose( xform * pCamera_->view() ).getXmf(),
@@ -261,14 +262,14 @@ void PBRIlluminationMacro::render(D3D12GfxCmdList& cmdList) {
 
     while (first != batch_.end()) {
         auto proj = [this](const auto& pair) {
-            return std::tuple(&pair.first->material(), &pair.first->refMesh());
+            return std::tuple(&pair.first->material(), pair.first->refSubmesh());
         };
 
         auto last = std::ranges::upper_bound(first, batch_.end(), proj(*first), std::less<>{}, proj);
 
-        auto pMesh = first->first;
+        auto pSubmesh = first->first;
 
-        auto material = sr::PBRMaterial::convert( pMesh->material() );
+        auto material = sr::PBRMaterial::convert( pSubmesh->material() );
 
         auto pdd = sr::PerDrawcallData0{
             .material = material,
@@ -278,7 +279,7 @@ void PBRIlluminationMacro::render(D3D12GfxCmdList& cmdList) {
             0u, accDrawcallCnt++ * sizeof(sr::PerDrawcallData0)
         );
 
-        shader().draw( cmdList, *pMesh, static_cast<std::size_t>(last - first) );
+        shader().draw( cmdList, *pSubmesh, static_cast<std::size_t>(last - first) );
 
         if (accDrawcallCnt == shader().maxDrawcallCnt()) {
             break;
@@ -305,11 +306,13 @@ void PBRIlluminationMacro::trackModel(Model* pModel) {
     for (auto& node : nodes) {
         auto xform = node.coord().xform();
         for (auto& mesh : node.meshes()) {
-            if (!protocol_.compatibleWith(mesh.refMesh())) {
+            if (!protocol_.compatibleWith(*mesh.refMesh())) {
                 throw std::runtime_error("Incompatible mesh");
             }
 
-            batch_.emplace_back(&mesh, xform);
+            for (auto& submesh : mesh.submeshes()) {
+                batch_.emplace_back(&submesh, xform);
+            }
         }
     }
 }

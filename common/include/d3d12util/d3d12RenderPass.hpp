@@ -172,7 +172,7 @@ private:
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
     std::vector<const sr::Light*> lights_;
-    std::vector< std::pair<Mesh*, mu::Mat4x4> > batch_;
+    std::vector< std::pair<Submesh*, mu::Mat4x4> > batch_;
     const Camera* pCamera_;
 };
 
@@ -215,7 +215,7 @@ private:
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
     std::vector<const sr::Light*> lights_;
-    std::vector< std::pair<Mesh*, mu::Mat4x4> > batch_;
+    std::vector< std::pair<Submesh*, mu::Mat4x4> > batch_;
     const Camera* pCamera_;
 };
 
