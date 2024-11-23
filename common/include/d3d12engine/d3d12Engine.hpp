@@ -210,8 +210,8 @@ class Terrain;
 
 class TerrainSubset : public ecs::Entity {
 public:
-    TerrainSubset( const d3d12::RefModelStorage::ID& key, const Terrain* pTerrain,
-        Core& core
+    TerrainSubset( const d3d12::RefModelStorage::ID& key,
+        Terrain* pTerrain, Core& core
     );
 
     TerrainSubset(const TerrainSubset&) = delete;

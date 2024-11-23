@@ -136,10 +136,11 @@ void Scene::clearStash() {
 }
 
 TerrainSubset::TerrainSubset( const d3d12::RefModelStorage::ID& key,
-    const Terrain* pTerrain, Core& core
+    Terrain* pTerrain, Core& core
 ) : key_(key), pTerrain_(pTerrain) {
     createComponent<Model>(key, core);
     createComponent<Coord>();
+    as<Coord>().get().setParent(&pTerrain->as<Coord>().get());
 }
 
 TerrainSubset::TerrainSubset(TerrainSubset&& other) noexcept
