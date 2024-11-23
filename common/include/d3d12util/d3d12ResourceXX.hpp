@@ -371,16 +371,6 @@ private:
     std::size_t size_;
 };
 
-struct MaterialMapKey {
-    std::string state;
-    std::string renderPassID;
-};
-
-inline auto operator<=>(const MaterialMapKey& lhs, const MaterialMapKey& rhs) {
-    return std::tuple(lhs.state, lhs.renderPassID)
-        <=> std::tuple(rhs.state, rhs.renderPassID);
-}
-
 class Bitmap {
 public:
     Bitmap() = default;
@@ -439,63 +429,27 @@ public:
         return topology_;
     }
 
-    void map( const MaterialMapKey& key, Material::MapType mapType,
-        const Material::MapRef& mapRef
-    ) {
-        materialMap_[key].addMapRef(mapType, mapRef);
+    Material& material() noexcept {
+        return material_;
     }
 
-    void map(const MaterialMapKey& key, Material::ConstantType constantType,
-        const float constant
-    ) {
-        materialMap_[key].addConstant(constantType, constant);
-    }
-
-    void MU_CALLCONV map(const MaterialMapKey& key,
-        Material::ConstantType constantType, mu::Vec3 constant
-    ) {
-        materialMap_[key].addConstant(constantType, constant);
-    }
-
-    void MU_CALLCONV map(const MaterialMapKey& key,
-        Material::ConstantType constantType, mu::Vec4 constant
-    ) {
-        materialMap_[key].addConstant(constantType, constant);
-    }
-
-    bool mapped(const MaterialMapKey& key) const {
-        return materialMap_.contains(key);
-    }
-
-    const Material::MapRef& mapRef(const MaterialMapKey& key, Material::MapType type) const {
-        return materialMap_.at(key).mapRef(type);
-    }
-
-    const RawMemory<16>& constant(const MaterialMapKey& key, Material::ConstantType type) const {
-        return materialMap_.at(key).constant(type);
+    const Material& material() const noexcept {
+        return material_;
     }
 
     template <class T>
-    const T& constant(const MaterialMapKey& key, Material::ConstantType type) const {
-        return materialMap_.at(key).constant<T>(type);
+    const T& constant(Material::ConstantType type) const {
+        return material_.constant<T>(type);
     }
 
 private:
-    auto& materialMap() noexcept {
-        return materialMap_;
-    }
-
-    const auto& materialMap() const noexcept {
-        return materialMap_;
-    }
-
     void bind(D3D12GfxCmdList& cmdList, std::size_t ibIdx = 0) const;
     void draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt, std::size_t ibIdx = 0) const;
 
     std::string name_;
     std::vector<VertexBuffer> vbs_;
     std::vector<IndexBuffer> ibs_;
-    std::map<MaterialMapKey, Material> materialMap_;
+    Material material_;
     D3D12_PRIMITIVE_TOPOLOGY topology_;
 };
 
@@ -604,58 +558,19 @@ class Mesh {
 public:
     friend class Shader;
 
-    Mesh(const RefMesh& refMesh, const char* initialState)
-        : Mesh(refMesh, std::string_view(initialState)) {}
-
-    Mesh(const RefMesh& refMesh, std::string_view initialState)
-        : Mesh(refMesh, std::string(initialState)) {}
-
-    Mesh(const RefMesh& refMesh, std::string&& initialState)
-        : state_(std::move(initialState)), materialTable_(), pRefMesh_(&refMesh),
-        pCurMaterial_(nullptr) {
-        for (auto& [key, material] : refMesh.materialMap()) {
-            materialTable_[key] = material;
-        }
-    }
-
-    std::string_view state() const noexcept {
-        return state_;
-    }
-
-    void setState(const char* state) noexcept {
-        state_ = state;
-    }
-
-    void setState(std::string&& state) noexcept {
-        state_ = std::move(state);
-    }
-
-    void setState(std::string_view state) noexcept {
-        state_ = state;
-    }
-
-    bool hasMapped(const MaterialMapKey& key) const {
-        return materialTable_.contains(key);
-    }
-
-    void map(const MaterialMapKey& key, const Material& mat) {
-        materialTable_[key] = mat;
-    }
-
-    void map(const MaterialMapKey& key, const Material&& mat) {
-        materialTable_[key] = std::move(mat);
-    }
-
-    Material& material(const std::string& renderPass) {
-        return materialTable_.at(MaterialMapKey{ .state = state_, .renderPassID = renderPass });
-    }
-
-    const Material& material(const std::string& renderPass) const {
-        return materialTable_.at(MaterialMapKey{ .state = state_, .renderPassID = renderPass });
-    }
+    Mesh(const RefMesh& refMesh)
+        : pRefMesh_(&refMesh), pCurMaterial_(nullptr) {}
 
     const RefMesh& refMesh() const noexcept {
         return *pRefMesh_;
+    }
+
+    void setMaterial(Material& material) noexcept {
+        pCurMaterial_ = &material;
+    }
+
+    const Material& material() const noexcept {
+        return *pCurMaterial_;
     }
 
 private:
@@ -663,8 +578,6 @@ private:
         pRefMesh_->draw(cmdList, instanceCnt);
     }
 
-    std::string state_;
-    std::map<MaterialMapKey, Material> materialTable_;
     const RefMesh* pRefMesh_;
     Material* pCurMaterial_;
 };
@@ -677,13 +590,7 @@ public:
         Node(const Model* pModel = nullptr)
             : coord_(), meshes_(), children_(), pModel_(pModel) {}
         void addMesh(Mesh&& mesh);
-        void emplaceMesh(const RefMesh& refMesh, const char* initialState) {
-            emplaceMesh(refMesh, std::string_view(initialState));
-        }
-        void emplaceMesh(const RefMesh& refMesh, std::string&& initialState);
-        void emplaceMesh(const RefMesh& refMesh, std::string_view initialState) {
-            emplaceMesh(refMesh, std::string(initialState));
-        }
+        void emplaceMesh(const RefMesh& refMesh);
         void addChild(Node* child);
         auto& coord() noexcept { return coord_; }
         const auto& coord() const noexcept { return coord_; }
@@ -699,11 +606,7 @@ public:
 
     Model() = default;
     ~Model() = default;
-    Model(const RefModel& ref, const char* initialState)
-        : Model(ref, std::string_view(initialState)) {}
-    Model(const RefModel& ref, std::string_view initialState)
-        : Model(ref, std::string(initialState)) {}
-    Model(const RefModel& ref, std::string&& initialState);
+    Model(const RefModel& ref);
     Model(const Model& other);
     Model(Model&& other) noexcept;
     Model& operator=(const Model& other);
@@ -712,33 +615,8 @@ public:
     auto& nodes() noexcept { return nodeStorage_; }
     const auto& nodes() const noexcept { return nodeStorage_; }
 
-    std::string_view state() const noexcept { return state_; }
-    void setState(const char* state) noexcept {
-        setState(std::string_view(state));
-    }
-    void setState(std::string_view state) {
-        setState(std::string(state));
-    }
-    void setState(std::string&& state);
-
-    template <class StrLike>
-    void markRenderPass(StrLike&& renderPass) {
-        markedRenderPasses_.emplace_back(std::forward<StrLike>(renderPass));
-    }
-
-    template <class StrLike>
-    bool willDrawOnRenderPass(StrLike&& renderPass) const {
-        if (markedRenderPasses_.empty()) {
-            return true;
-        }
-        return std::ranges::find(markedRenderPasses_, renderPass)
-            != markedRenderPasses_.end();
-    }
-
 private:
     std::vector<Node> nodeStorage_;
-    std::vector<std::string> markedRenderPasses_;
-    std::string state_;
     Node* pRoot_;
 };
 

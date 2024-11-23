@@ -74,7 +74,7 @@ void PBRIllumination::preRender(D3D12GfxCmdList& cmdList) {
     cmdList.get()->RSSetScissorRects(1u, &scissorRect);
 
     std::ranges::sort(batch_, std::less<>{}, [this](const auto& pair) {
-        return std::tuple(&pair.first->material(renderPassID()), &pair.first->refMesh());
+        return std::tuple(&pair.first->material(), &pair.first->refMesh());
     });
 
     auto pids = std::vector<sr::PerInstanceData0>();
@@ -121,14 +121,14 @@ void PBRIllumination::render(D3D12GfxCmdList& cmdList) {
 
     while (first != batch_.end()) {
         auto proj = [this](const auto& pair) {
-            return std::tuple(&pair.first->material(renderPassID()), &pair.first->refMesh());
+            return std::tuple(&pair.first->material(), &pair.first->refMesh());
         };
 
         auto last = std::ranges::upper_bound(first, batch_.end(), proj(*first), std::less<>{}, proj);
 
         auto pMesh = first->first;
 
-        auto material = sr::PBRMaterial::convert( pMesh->material(renderPassID()) );
+        auto material = sr::PBRMaterial::convert( pMesh->material() );
 
         auto pdd = sr::PerDrawcallData0{
             .material = material,
@@ -207,7 +207,7 @@ void PBRIlluminationMacro::preRender(D3D12GfxCmdList& cmdList) {
     cmdList.get()->RSSetScissorRects(1u, &scissorRect);
 
     std::ranges::sort(batch_, std::less<>{}, [this](const auto& pair) {
-        return std::tuple(&pair.first->material(renderPassID()), &pair.first->refMesh());
+        return std::tuple(&pair.first->material(), &pair.first->refMesh());
     });
 
     auto pids = std::vector<sr::PerInstanceData0>();
@@ -254,14 +254,14 @@ void PBRIlluminationMacro::render(D3D12GfxCmdList& cmdList) {
 
     while (first != batch_.end()) {
         auto proj = [this](const auto& pair) {
-            return std::tuple(&pair.first->material(renderPassID()), &pair.first->refMesh());
+            return std::tuple(&pair.first->material(), &pair.first->refMesh());
         };
 
         auto last = std::ranges::upper_bound(first, batch_.end(), proj(*first), std::less<>{}, proj);
 
         auto pMesh = first->first;
 
-        auto material = sr::PBRMaterial::convert( pMesh->material(renderPassID()) );
+        auto material = sr::PBRMaterial::convert( pMesh->material() );
 
         auto pdd = sr::PerDrawcallData0{
             .material = material,
@@ -286,10 +286,6 @@ void PBRIlluminationMacro::postRender(D3D12GfxCmdList& cmdList) {
 }
 
 void PBRIlluminationMacro::trackModel(Model* pModel) {
-    if (!pModel->willDrawOnRenderPass(renderPassID())) {
-        return;
-    }
-
     auto& nodes = pModel->nodes();
 
     for (auto& node : nodes) {

@@ -122,9 +122,9 @@ void CoordRoot::addEntity(ecs::Entity& entity) {
     pCoord->get().setParent(&rootCoordSys_);
 }
 
-Model::Model(const ecs::Entity& entity, const d3d12::RefModelStorage::ID& key,
-    std::string&& initialState, const Core& core
-) : ecs::Component(entity), model_(core.refModelStorage_.get(key), std::move(initialState)) {}
+Model::Model( const ecs::Entity& entity,
+    const d3d12::RefModelStorage::ID& key, const Core& core
+) : ecs::Component(entity), model_(core.refModelStorage_.get(key)) {}
 
 void Scene::addEntity(ecs::Entity& entity) {
     MyBase::addEntity(entity);
@@ -138,7 +138,7 @@ void Scene::clearStash() {
 TerrainSubset::TerrainSubset( const d3d12::RefModelStorage::ID& key,
     const Terrain* pTerrain, Core& core
 ) : key_(key), pTerrain_(pTerrain) {
-    createComponent<Model>(key, d3d12::RefMesh::defaultState, core);
+    createComponent<Model>(key, core);
     createComponent<Coord>();
 }
 

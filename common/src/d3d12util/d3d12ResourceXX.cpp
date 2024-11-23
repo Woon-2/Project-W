@@ -512,89 +512,55 @@ void RefMesh::loadMaterialsFromFile( D3D12Device& device, D3D12GfxCmdList& cmdLi
         if (!strcmp(pstrToken, "</Materials>")) {
             break;
         }
-
-        nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
-        auto stateName = std::string(nStrLength, '\0');
-	    nReads = (UINT)::fread(stateName.data(), sizeof(char), nStrLength, pInFile);
-
-        nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
-        auto renderPassName = std::string(nStrLength, '\0');
-	    nReads = (UINT)::fread(renderPassName.data(), sizeof(char), nStrLength, pInFile);
-
-
-		nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
-		nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile); 
-		pstrToken[nStrLength] = '\0';
-
-		if (!strcmp(pstrToken, "<AlbedoColor>:"))
+		else if (!strcmp(pstrToken, "<AlbedoColor>:"))
 		{
 			nReads = (UINT)::fread(&float4, sizeof(dx::XMFLOAT4), 1, pInFile);
-            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
-                Material::ConstantType::Albedo, mu::Vec4(float4.x, float4.y, float4.z, float4.w)
-            );
+            mesh.material().addConstant( Material::ConstantType::Albedo, mu::Vec4(float4.x, float4.y, float4.z, float4.w) );
 		}
 		else if (!strcmp(pstrToken, "<EmissiveColor>:"))
 		{
 			nReads = (UINT)::fread(&float3, sizeof(dx::XMFLOAT3), 1, pInFile);
-            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
-                Material::ConstantType::Emmisive, mu::Vec3(float3.x, float3.y, float3.z)
-            );
+            mesh.material().addConstant( Material::ConstantType::Emmisive, mu::Vec3(float3.x, float3.y, float3.z) );
 		}
 		else if (!strcmp(pstrToken, "<AmbientOcllusion>:"))
 		{
 			nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
-            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
-                Material::ConstantType::AmbientOcllusion, floatVal
-            );
+            mesh.material().addConstant( Material::ConstantType::AmbientOcllusion, floatVal );
 		}
 		else if (!strcmp(pstrToken, "<Smoothness>:"))
 		{
 			nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
-            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
-                Material::ConstantType::Roughness, 1.f - floatVal
-            );
+            mesh.material().addConstant( Material::ConstantType::Roughness, 1.f - floatVal );
 		}
 		else if (!strcmp(pstrToken, "<Metallic>:"))
 		{
 			nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
-            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
-                Material::ConstantType::Metallic, floatVal
-            );
+            mesh.material().addConstant( Material::ConstantType::Metallic, floatVal );
 		}
 		else if (!strcmp(pstrToken, "<AlbedoMap>:"))
 		{
             nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
-            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
-                Material::MapType::Albedo, mapRef
-            );
+            mesh.material().addMapRef( Material::MapType::Albedo, mapRef );
 		}
 		else if (!strcmp(pstrToken, "<NormalMap>:"))
 		{
 			nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
-            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
-                Material::MapType::Normal, mapRef
-            );
+            mesh.material().addMapRef( Material::MapType::Normal, mapRef );
 		}
 		else if (!strcmp(pstrToken, "<MetallicMap>:"))
 		{
 			nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
-            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
-                Material::MapType::Metallic, mapRef
-            );
+            mesh.material().addMapRef( Material::MapType::Metallic, mapRef );
 		}
         else if (!strcmp(pstrToken, "<MetallicSmoothnessMap>:"))
 		{
 			nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
-            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
-                Material::MapType::MetallicSmoothness, mapRef
-            );
+            mesh.material().addMapRef( Material::MapType::MetallicSmoothness, mapRef );
 		}
 		else if (!strcmp(pstrToken, "<EmissionMap>:"))
 		{
 			nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
-            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
-                Material::MapType::Emmisive, mapRef
-            );
+            mesh.material().addMapRef( Material::MapType::Emmisive, mapRef );
 		}
 	}
 }
@@ -637,13 +603,11 @@ RefModel::Node& RefModel::Node::operator=(Node&& other) noexcept {
 }
 
 void RefModel::Node::addMesh(RefMesh&& mesh) {
-    for (auto& [key, material] : mesh.materialMap()) {
-        for (auto& mapRef : material.mapRefs()) {
-            if (mapRef.resourceIdx != Material::MapRef::invalid) {
-                mapRef.resourceIdx = static_cast<std::uint32_t>(
-                    pRefModel_->textureMap_.at(mapRef).offset()
-                );
-            }
+    for (auto& mapRef : mesh.material().mapRefs()) {
+        if (mapRef.resourceIdx != Material::MapRef::invalid) {
+            mapRef.resourceIdx = static_cast<std::uint32_t>(
+                pRefModel_->textureMap_.at(mapRef).offset()
+            );
         }
     }
     meshes_.push_back(std::move(mesh));
@@ -814,9 +778,7 @@ RefModel RefModel::loadTerrainSubsetFromHeightmap( const Bitmap& heightmap,
 
     mesh.ibs_.emplace_back(device, cmdList, indices.data(), indices.size());
 
-    mesh.map( MaterialMapKey{ RefMesh::defaultState, rp::PBRIlluminationMacro::id },
-        Material::MapType::Albedo, albedoMapRef
-    );
+    mesh.material().addMapRef( Material::MapType::Albedo, albedoMapRef );
 
     mesh.topology_ = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
 
@@ -994,8 +956,8 @@ void Model::Node::addMesh(Mesh&& mesh) {
     meshes_.push_back(std::move(mesh));
 }
 
-void Model::Node::emplaceMesh(const RefMesh& refMesh, std::string&& initialState) {
-    meshes_.emplace_back(refMesh, std::move(initialState));
+void Model::Node::emplaceMesh(const RefMesh& refMesh) {
+    meshes_.emplace_back(refMesh);
 }
 
 void Model::Node::addChild(Node* child) {
@@ -1004,9 +966,8 @@ void Model::Node::addChild(Node* child) {
     children_.push_back(child);
 }
 
-Model::Model(const RefModel& ref, std::string&& initialState)
-    : nodeStorage_(ref.nodes().size()), markedRenderPasses_(),
-    state_(std::move(initialState)), pRoot_(nullptr) {
+Model::Model(const RefModel& ref)
+    : nodeStorage_(ref.nodes().size()), pRoot_(nullptr) {
     auto pRefFirstNode = ref.nodes().data();
 
     pRoot_ = nodeStorage_.data() + (ref.root() - pRefFirstNode);
@@ -1015,7 +976,7 @@ Model::Model(const RefModel& ref, std::string&& initialState)
         auto& node = ref.nodes()[i];
         auto clone = Node(this);
         for (const auto& mesh : node.meshes()) {
-            clone.emplaceMesh(mesh, initialState);
+            clone.emplaceMesh(mesh);
         }
         clone.coord_.setLocalXform(node.coord().localXform());
         for (auto pChild : node.children()) {
@@ -1026,9 +987,7 @@ Model::Model(const RefModel& ref, std::string&& initialState)
 }
 
 Model::Model(const Model& other)
-    : nodeStorage_(other.nodeStorage_.size()),
-    markedRenderPasses_(other.markedRenderPasses_),
-    state_(), pRoot_(nullptr) {
+    : nodeStorage_(other.nodeStorage_.size()), pRoot_(nullptr) {
     auto pOtherFirstNode = other.nodeStorage_.data();
 
     pRoot_ = nodeStorage_.data() + (other.pRoot_ - pOtherFirstNode);
@@ -1051,8 +1010,6 @@ Model& Model::operator=(const Model& other) {
     }
 
     nodeStorage_.resize(other.nodeStorage_.size());
-    markedRenderPasses_ = other.markedRenderPasses_;
-    state_ = other.state_;
 
     auto pOtherFirstNode = other.nodeStorage_.data();
 
@@ -1073,9 +1030,7 @@ Model& Model::operator=(const Model& other) {
 }
 
 Model::Model(Model&& other) noexcept
-    : nodeStorage_(other.nodeStorage_.size()),
-    markedRenderPasses_(std::move(other.markedRenderPasses_)),
-    state_(std::move(other.state_)), pRoot_(nullptr) {
+    : nodeStorage_(other.nodeStorage_.size()), pRoot_(nullptr) {
     auto pOtherFirstNode = other.nodeStorage_.data();
 
     pRoot_ = nodeStorage_.data() + (other.pRoot_ - pOtherFirstNode);
@@ -1101,12 +1056,10 @@ Model& Model::operator=(Model&& other) noexcept {
     }
 
     nodeStorage_.resize(other.nodeStorage_.size());
-    markedRenderPasses_ = std::move(other.markedRenderPasses_);
 
     auto pOtherFirstNode = other.nodeStorage_.data();
 
     pRoot_ = nodeStorage_.data() + (other.pRoot_ - pOtherFirstNode);
-    state_ = std::move(other.state_);
 
     for (std::size_t i = 0; i < other.nodeStorage_.size(); ++i) {
         auto& node = other.nodeStorage_[i];
@@ -1123,16 +1076,6 @@ Model& Model::operator=(Model&& other) noexcept {
     }
 
     return *this;
-}
-
-void Model::setState(std::string&& state) {
-    state_ = std::move(state);
-
-    for (auto& node : nodeStorage_) {
-        for (auto& mesh : node.meshes_) {
-            mesh.setState(state_);
-        }
-    }
 }
 
 }   // namespace gfx::d3d12

@@ -129,20 +129,8 @@ class Model : public ecs::Component {
 public:
     ENABLE_COMPONENT(Model);
 
-    Model(const ecs::Entity& entity, const d3d12::RefModelStorage::ID& key,
-        const Core& core
-    ) : Model(entity, key, d3d12::RefMesh::defaultState, core) {}
-
-    Model(const ecs::Entity& entity, const d3d12::RefModelStorage::ID& key,
-        const char* initialState, const Core& core
-    ) : Model(entity, key, std::string_view(initialState), core) {}
-
-    Model(const ecs::Entity& entity, const d3d12::RefModelStorage::ID& key,
-        std::string_view initialState, const Core& core
-    ) : Model(entity, key, std::string(initialState), core) {}
-
-    Model(const ecs::Entity& entity, const d3d12::RefModelStorage::ID& key,
-        std::string&& initialState, const Core& core
+    Model( const ecs::Entity& entity,
+        const d3d12::RefModelStorage::ID& key, const Core& core
     );
 
     d3d12::Model& get() NOEXCEPT { return model_; }
