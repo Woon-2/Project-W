@@ -24,66 +24,73 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
 
     }
 
+    void DispatchMaterials(Material[] materials) {
+        for (int i = 0; i < materials.Length; i++) {
+            if (materials[i].HasProperty("_MainTex"))
+            {
+                Texture mainAlbedoMap = materials[i].GetTexture("_MainTex");
+                if(mainAlbedoMap != null && !m_pTexturePath.Contains(mainAlbedoMap.name))
+                    m_pTexturePath.Add(mainAlbedoMap.name);
+            }
+            if (materials[i].HasProperty("_SpecGlossMap"))
+            {
+                Texture specularcMap = materials[i].GetTexture("_SpecGlossMap");
+                if(specularcMap != null && !m_pTexturePath.Contains(specularcMap.name))
+                    m_pTexturePath.Add(specularcMap.name);
+            }
+            if (materials[i].HasProperty("_MetallicGlossMap"))
+            {
+                Texture metallicMap = materials[i].GetTexture("_MetallicGlossMap");
+                if(metallicMap != null && !m_pTexturePath.Contains(metallicMap.name))
+                    m_pTexturePath.Add(metallicMap.name);
+            }
+            if (materials[i].HasProperty("_BumpMap"))
+            {
+                Texture bumpMap = materials[i].GetTexture("_BumpMap");
+                if(bumpMap != null && !m_pTexturePath.Contains(bumpMap.name))
+                    m_pTexturePath.Add(bumpMap.name);
+            }
+            if (materials[i].HasProperty("_EmissionMap"))
+            {
+                Texture emissionMap = materials[i].GetTexture("_EmissionMap");
+                if (emissionMap != null && !m_pTexturePath.Contains(emissionMap.name))
+                    m_pTexturePath.Add(emissionMap.name);
+            }
+            if (materials[i].HasProperty("_DetailAlbedoMap"))
+            {
+                Texture detailAlbedoMap = materials[i].GetTexture("_DetailAlbedoMap");
+                if(detailAlbedoMap != null && !m_pTexturePath.Contains(detailAlbedoMap.name))
+                    m_pTexturePath.Add(detailAlbedoMap.name);
+            }
+            if (materials[i].HasProperty("_DetailNormalMap"))
+            {
+                Texture detailNormalMap = materials[i].GetTexture("_DetailNormalMap");
+                if(detailNormalMap != null && !m_pTexturePath.Contains(detailNormalMap.name))
+                    m_pTexturePath.Add(detailNormalMap.name);
+            }
+        }
+    }
+
     void WriteTextureInfo(Transform current)
     {
-        SkinnedMeshRenderer meshRenderer = current.gameObject.GetComponent<SkinnedMeshRenderer>();
+        SkinnedMeshRenderer skinnedMeshRenderer = current.gameObject.GetComponent<SkinnedMeshRenderer>();
 
-        if (meshRenderer)
+        if (skinnedMeshRenderer) {
+            Material[] materials = skinnedMeshRenderer.materials;
+            if (materials.Length > 0) {
+                DispatchMaterials(materials);
+            }
+            return;
+        }
+
+        MeshRenderer meshRenderer = current.gameObject.GetComponent<MeshRenderer>();
+        MeshFilter meshFilter = current.gameObject.GetComponent<MeshFilter>();
+
+        if (meshRenderer && meshFilter)
         {
             Material[] materials = meshRenderer.materials;
             if (materials.Length > 0) {
-                for (int i = 0; i < materials.Length; i++)
-                {
-                    if (materials[i].HasProperty("_MainTex"))
-                    {
-                        Texture mainAlbedoMap = materials[i].GetTexture("_MainTex");
-                        WriteTextureName("<Item>", "</Item>", mainAlbedoMap);
-                        if(mainAlbedoMap != null)
-                            m_pTexturePath.Add(mainAlbedoMap.name);
-                    }
-                    if (materials[i].HasProperty("_SpecGlossMap"))
-                    {
-                        Texture specularcMap = materials[i].GetTexture("_SpecGlossMap");
-                        WriteTextureName("<Item>", "</Item>", specularcMap);
-                        if(specularcMap != null)
-                            m_pTexturePath.Add(specularcMap.name);
-                    }
-                    if (materials[i].HasProperty("_MetallicGlossMap"))
-                    {
-                        Texture metallicMap = materials[i].GetTexture("_MetallicGlossMap");
-                        WriteTextureName("<Item>", "</Item>", metallicMap);
-                        if(metallicMap != null)
-                            m_pTexturePath.Add(metallicMap.name);
-                    }
-                    if (materials[i].HasProperty("_BumpMap"))
-                    {
-                        Texture bumpMap = materials[i].GetTexture("_BumpMap");
-                        WriteTextureName("<Item>", "</Item>", bumpMap);
-                        if(bumpMap != null)
-                            m_pTexturePath.Add(bumpMap.name);
-                    }
-                    if (materials[i].HasProperty("_EmissionMap"))
-                    {
-                        Texture emissionMap = materials[i].GetTexture("_EmissionMap");
-                        WriteTextureName("<Item>", "</Item>", emissionMap);
-                        if (emissionMap != null)
-                            m_pTexturePath.Add(emissionMap.name);
-                    }
-                    if (materials[i].HasProperty("_DetailAlbedoMap"))
-                    {
-                        Texture detailAlbedoMap = materials[i].GetTexture("_DetailAlbedoMap");
-                        WriteTextureName("<Item>", "</Item>", detailAlbedoMap);
-                        if(detailAlbedoMap != null)
-                            m_pTexturePath.Add(detailAlbedoMap.name);
-                    }
-                    if (materials[i].HasProperty("_DetailNormalMap"))
-                    {
-                        Texture detailNormalMap = materials[i].GetTexture("_DetailNormalMap");
-                        WriteTextureName("<Item>", "</Item>", detailNormalMap);
-                        if(detailNormalMap != null)
-                            m_pTexturePath.Add(detailNormalMap.name);
-                    }
-                }
+                DispatchMaterials(materials);
             }
         }
     }
@@ -628,6 +635,7 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
                 if (detailNormalMap != null)
                     WriteMapRef(detailNormalMap.name);
             }
+            WriteString("</Material>");
         }
         WriteString("</Materials>");
     }
