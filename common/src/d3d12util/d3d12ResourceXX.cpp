@@ -501,7 +501,6 @@ void RefMesh::loadMaterialsFromFile( D3D12Device& device, D3D12GfxCmdList& cmdLi
 
     auto floatVal = float{};
     auto float4 = dx::XMFLOAT4{};
-    auto float3 = dx::XMFLOAT3{};
     Material::MapRef mapRef{};
 
 	for ( ; ; )
@@ -519,8 +518,8 @@ void RefMesh::loadMaterialsFromFile( D3D12Device& device, D3D12GfxCmdList& cmdLi
 		}
 		else if (!strcmp(pstrToken, "<EmissiveColor>:"))
 		{
-			nReads = (UINT)::fread(&float3, sizeof(dx::XMFLOAT3), 1, pInFile);
-            mesh.material().addConstant( Material::ConstantType::Emmisive, mu::Vec3(float3.x, float3.y, float3.z) );
+			nReads = (UINT)::fread(&float4, sizeof(dx::XMFLOAT4), 1, pInFile);
+            mesh.material().addConstant( Material::ConstantType::Emmisive, mu::Vec3(float4.x, float4.y, float4.z) );
 		}
 		else if (!strcmp(pstrToken, "<AmbientOcllusion>:"))
 		{
@@ -819,7 +818,7 @@ RefModel RefModel::loadHierarchyFromFile( const std::filesystem::path& path,
         nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
         pstrToken[nStrLength] = '\0';
 
-        if (!strcmp(pstrToken, "<Item>")) {
+        if (!strcmp(pstrToken, "<Item>:")) {
             nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
 
             nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
@@ -881,6 +880,15 @@ RefModel RefModel::loadHierarchyFromFile( const std::filesystem::path& path,
         model.pRoot_ = &node;
     }
 
+    nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+    nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
+    pstrToken[nStrLength] = '\0';
+
+    if (strcmp(pstrToken, "</NodesInfo>")) {
+        std::fclose(pInFile);
+        throw std::runtime_error("Invalid file format: " + path.string());
+    }
+
     std::fclose(pInFile);
     return model;
 }
@@ -933,6 +941,16 @@ void RefModel::loadNodesFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
 				{
                     model.nodeStorage_.emplace_back(&model);
                     auto& child = model.nodeStorage_.back();
+
+                    nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+                    nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
+                    pstrToken[nStrLength] = '\0';
+
+                    if (strcmp(pstrToken, "<Node>:")) {
+                        fclose(pInFile);
+                        throw std::runtime_error("Invalid file format");
+                    }
+
                     loadNodesFromFile(device, cmdList, pInFile, child, model);
                     node.addChild(&child);
 				}

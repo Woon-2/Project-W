@@ -120,6 +120,18 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         }
     }
 
+    void accNodeCntRecursive(Transform child, ref int nodeCnt)
+    {
+        nodeCnt++;
+        if (child.childCount > 0)
+        {
+            for (int k = 0; k < child.childCount; k++)
+            {
+                accNodeCntRecursive(child.GetChild(k), ref nodeCnt);
+            }
+        }
+    }
+
     bool FindTextureByName(List<string> pTextureNamesList, Texture texture)
     {
         if (texture)
@@ -560,15 +572,6 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
                 Color emission = materials[i].GetColor("_EmissionColor");
                 WriteColor("<EmissiveColor>:", emission);
             }
-            if (materials[i].HasProperty("_SpecColor"))
-            {
-                Color specular = materials[i].GetColor("_SpecColor");
-                WriteColor("<SpecularColor>:", specular);
-            }
-            if (materials[i].HasProperty("_Glossiness"))
-            {
-                WriteFloat("<Glossiness>:", materials[i].GetFloat("_Glossiness"));
-            }
             if (materials[i].HasProperty("_Smoothness"))
             {
                 WriteFloat("<Smoothness>:", materials[i].GetFloat("_Smoothness"));
@@ -577,35 +580,12 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
             {
                 WriteFloat("<Metallic>:", materials[i].GetFloat("_Metallic"));
             }
-            if (materials[i].HasProperty("_SpecularHighlights"))
-            {
-                WriteFloat("<SpecularHighlight>:", materials[i].GetFloat("_SpecularHighlights"));
-            }
-            if (materials[i].HasProperty("_GlossyReflections"))
-            {
-                WriteFloat("<GlossyReflection>:", materials[i].GetFloat("_GlossyReflections"));
-            }
-
             if (materials[i].HasProperty("_MainTex"))
             {
                 Texture mainAlbedoMap = materials[i].GetTexture("_MainTex");
                 WriteTextureName("<AlbedoMap>:", "</AlbedoMap>", mainAlbedoMap);
                 if (mainAlbedoMap != null) 
                     WriteMapRef(mainAlbedoMap.name);
-            }
-            if (materials[i].HasProperty("_SpecGlossMap"))
-            {
-                Texture specularcMap = materials[i].GetTexture("_SpecGlossMap");
-                WriteTextureName("<SpecularMap>:", "</SpecularMap>", specularcMap);
-                if (specularcMap != null)
-                    WriteMapRef(specularcMap.name);
-            }
-            if (materials[i].HasProperty("_MetallicGlossMap"))
-            {
-                Texture metallicMap = materials[i].GetTexture("_MetallicGlossMap");
-                WriteTextureName("<MetallicMap>:", "</MetallicMap>", metallicMap);
-                if (metallicMap != null)
-                    WriteMapRef(metallicMap.name);
             }
             if (materials[i].HasProperty("_BumpMap"))
             {
@@ -614,26 +594,19 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
                 if (bumpMap != null)
                     WriteMapRef(bumpMap.name);
             }
+            if (materials[i].HasProperty("_MetallicGlossMap"))
+            {
+                Texture metallicMap = materials[i].GetTexture("_MetallicGlossMap");
+                WriteTextureName("<MetallicSmoothnessMap>:", "</MetallicSmoothnessMap>", metallicMap);
+                if (metallicMap != null)
+                    WriteMapRef(metallicMap.name);
+            }
             if (materials[i].HasProperty("_EmissionMap"))
             {
                 Texture emissionMap = materials[i].GetTexture("_EmissionMap");
                 WriteTextureName("<EmissionMap>:", "</EmissionMap>", emissionMap);
                 if(emissionMap != null) 
                     WriteMapRef(emissionMap.name);
-            }
-            if (materials[i].HasProperty("_DetailAlbedoMap"))
-            {
-                Texture detailAlbedoMap = materials[i].GetTexture("_DetailAlbedoMap");
-                WriteTextureName("<DetailAlbedoMap>:", "</DetailAlbedoMap>", detailAlbedoMap);
-                if (detailAlbedoMap != null)
-                    WriteMapRef(detailAlbedoMap.name);
-            }
-            if (materials[i].HasProperty("_DetailNormalMap"))
-            {
-                Texture detailNormalMap = materials[i].GetTexture("_DetailNormalMap");
-                WriteTextureName("<DetailNormalMap>:", "</DetailNormalMap>", detailNormalMap);
-                if (detailNormalMap != null)
-                    WriteMapRef(detailNormalMap.name);
             }
             WriteString("</Material>");
         }
@@ -657,6 +630,7 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
             Material[] materials = meshRenderer.materials;
             if (materials.Length > 0) WriteMaterials(materials);
 
+            WriteString("</Node>");
             return;
         }
 
@@ -669,6 +643,8 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
             Material[] materials = skinnedMeshRenderer.materials;
             if (materials.Length > 0) WriteMaterials(materials);
         }
+
+        WriteString("</Node>");
     }
 
     void WriteFrameHierarchyInfo(Transform child)
@@ -684,8 +660,6 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
                 WriteFrameHierarchyInfo(child.GetChild(k));
             }
         }
-
-        WriteString("</Node>"); 
     }
 
     void Start()
@@ -697,7 +671,15 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         WriteTextureMap(transform);
         WriteString("</TexturePath>");
 
+        WriteString("<NodesInfo>:");
+
+        int nodeCnt = 0;
+        accNodeCntRecursive(transform, ref nodeCnt);
+        WriteInteger("<NodeCnt>:", nodeCnt);
+
         WriteFrameHierarchyInfo(transform);
+
+        WriteString("</NodesInfo>");
 
         binaryWriter.Flush();
         binaryWriter.Close();
