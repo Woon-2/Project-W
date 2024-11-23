@@ -640,10 +640,11 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         WriteString("</Xform>");
 
         MeshRenderer meshRenderer = current.gameObject.GetComponent<MeshRenderer>();
+        MeshFilter meshFilter = current.gameObject.GetComponent<MeshFilter>();
 
-        if (meshRenderer)
+        if (meshRenderer && meshFilter)
         {
-            WriteMeshInfo(meshRenderer.sharedMesh);
+            WriteMeshInfo(meshFilter.sharedMesh);
 
             Material[] materials = meshRenderer.materials;
             if (materials.Length > 0) WriteMaterials(materials);
