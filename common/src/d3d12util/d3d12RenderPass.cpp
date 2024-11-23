@@ -153,6 +153,13 @@ void PBRIllumination::postRender(D3D12GfxCmdList& cmdList) {
 }
 
 void PBRIllumination::trackModel(Model* pModel) {
+    if (!pModel->markedRenderPasses().empty()) {
+        auto it = std::ranges::find(pModel->markedRenderPasses(), renderPassID());
+        if (it == pModel->markedRenderPasses().end()) {
+            return;
+        }
+    }
+
     auto& nodes = pModel->nodes();
 
     for (auto& node : nodes) {
@@ -286,6 +293,13 @@ void PBRIlluminationMacro::postRender(D3D12GfxCmdList& cmdList) {
 }
 
 void PBRIlluminationMacro::trackModel(Model* pModel) {
+    if (!pModel->markedRenderPasses().empty()) {
+        auto it = std::ranges::find(pModel->markedRenderPasses(), renderPassID());
+        if (it == pModel->markedRenderPasses().end()) {
+            return;
+        }
+    }
+
     auto& nodes = pModel->nodes();
 
     for (auto& node : nodes) {

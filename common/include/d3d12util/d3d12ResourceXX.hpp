@@ -615,7 +615,19 @@ public:
     auto& nodes() noexcept { return nodeStorage_; }
     const auto& nodes() const noexcept { return nodeStorage_; }
 
+    Node* root() noexcept { return pRoot_; }
+    const Node* root() const noexcept { return pRoot_; }
+
+    void markRenderPass(const std::string& renderPass) {
+        markedRenderPasses_.push_back(renderPass);
+    }
+
+    const auto& markedRenderPasses() const noexcept {
+        return markedRenderPasses_;
+    }
+
 private:
+    std::vector<std::string> markedRenderPasses_;
     std::vector<Node> nodeStorage_;
     Node* pRoot_;
 };
