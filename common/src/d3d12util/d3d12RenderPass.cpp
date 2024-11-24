@@ -221,7 +221,8 @@ void PBRIlluminationMacro::preRender(D3D12GfxCmdList& cmdList) {
     auto pids = std::vector<sr::PerInstanceData0>();
     pids.reserve( shader().maxInstanceCnt() );
 
-    for (const auto& [pSubmesh, xform] : batch_) {
+    for (auto& [pSubmesh, xform] : batch_) {
+        xform = pSubmesh->parent()->parent()->coord().xform();
         pids.emplace_back(
             /* .wvp = */ mu::transpose( xform * pCamera_->view() * pCamera_->proj() ).getXmf(),
             /* .wv = */ mu::transpose( xform * pCamera_->view() ).getXmf(),

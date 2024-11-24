@@ -595,6 +595,10 @@ public:
 
     Submesh(Mesh* parent = nullptr, const RefSubmesh* pRefSubmesh = nullptr);
 
+    const Mesh* parent() const noexcept {
+        return parent_;
+    }
+
     void draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt) const {
         pRefSubmesh_->draw(cmdList, instanceCnt);
     }
@@ -621,26 +625,7 @@ private:
     Material material_;
 };
 
-class Mesh {
-public:
-    Mesh(const RefMesh& refMesh);
-
-    const RefMesh* refMesh() const noexcept {
-        return pRefMesh_;
-    }
-
-    auto& submeshes() noexcept {
-        return submeshes_;
-    }
-
-    const auto& submeshes() const noexcept {
-        return submeshes_;
-    }
-
-private:
-    const RefMesh* pRefMesh_;
-    std::vector<Submesh> submeshes_;
-};
+class Mesh;
 
 class Model {
 public:
@@ -690,6 +675,32 @@ private:
     std::vector<std::string> markedRenderPasses_;
     std::vector<Node> nodeStorage_;
     Node* pRoot_;
+};
+
+class Mesh {
+public:
+    Mesh(const RefMesh& refMesh);
+
+    const Model::Node* parent() const noexcept {
+        return parent_;
+    }
+
+    const RefMesh* refMesh() const noexcept {
+        return pRefMesh_;
+    }
+
+    auto& submeshes() noexcept {
+        return submeshes_;
+    }
+
+    const auto& submeshes() const noexcept {
+        return submeshes_;
+    }
+
+private:
+    Model::Node* parent_;
+    const RefMesh* pRefMesh_;
+    std::vector<Submesh> submeshes_;
 };
 
 }   // namespace gfx::d3d12
