@@ -106,17 +106,11 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
                 if (emissionMap != null && !m_pTexturePath.Contains(emissionMap.name))
                     m_pTexturePath.Add(emissionMap.name);
             }
-            if (materials[i].HasProperty("_DetailAlbedoMap"))
+            if (materials[i].HasProperty("_OcclusionMap"))
             {
-                Texture detailAlbedoMap = materials[i].GetTexture("_DetailAlbedoMap");
-                if(detailAlbedoMap != null && !m_pTexturePath.Contains(detailAlbedoMap.name))
-                    m_pTexturePath.Add(detailAlbedoMap.name);
-            }
-            if (materials[i].HasProperty("_DetailNormalMap"))
-            {
-                Texture detailNormalMap = materials[i].GetTexture("_DetailNormalMap");
-                if(detailNormalMap != null && !m_pTexturePath.Contains(detailNormalMap.name))
-                    m_pTexturePath.Add(detailNormalMap.name);
+                Texture occlusionMap = materials[i].GetTexture("_OcclusionMap");
+                if (occlusionMap != null && !m_pTexturePath.Contains(occlusionMap.name))
+                    m_pTexturePath.Add(occlusionMap.name);
             }
         }
     }
@@ -525,10 +519,6 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
             {
                 if (!FindTextureByName(m_pTextureNamesListForCounting, materials[i].GetTexture("_MainTex"))) nTextures++;
             }
-            if (materials[i].HasProperty("_SpecGlossMap"))
-            {
-                if (!FindTextureByName(m_pTextureNamesListForCounting, materials[i].GetTexture("_SpecGlossMap"))) nTextures++;
-            }
             if (materials[i].HasProperty("_MetallicGlossMap"))
             {
                 if (!FindTextureByName(m_pTextureNamesListForCounting, materials[i].GetTexture("_MetallicGlossMap"))) nTextures++;
@@ -541,13 +531,9 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
             {
                 if (!FindTextureByName(m_pTextureNamesListForCounting, materials[i].GetTexture("_EmissionMap"))) nTextures++;
             }
-            if (materials[i].HasProperty("_DetailAlbedoMap"))
+            if (materials[i].HasProperty("_OcclusionMap"))
             {
-                if (!FindTextureByName(m_pTextureNamesListForCounting, materials[i].GetTexture("_DetailAlbedoMap"))) nTextures++;
-            }
-            if (materials[i].HasProperty("_DetailNormalMap"))
-            {
-                if (!FindTextureByName(m_pTextureNamesListForCounting, materials[i].GetTexture("_DetailNormalMap"))) nTextures++;
+                if (!FindTextureByName(m_pTextureNamesListForCounting, materials[i].GetTexture("_OcclusionMap"))) nTextures++;
             }
         }
         return(nTextures);
@@ -653,6 +639,9 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         {
             WriteInteger("<Material:>", i);
 
+            // temporarily write default values
+            WriteFloat("<AmbientOcclusion:>", 1.f);
+
             if (materials[i].HasProperty("_Color"))
             {
                 Color albedo = materials[i].GetColor("_Color");
@@ -694,6 +683,12 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
                 Texture emissionMap = materials[i].GetTexture("_EmissionMap");
                 if (emissionMap != null)
                     WriteMapRef("<EmissionMap:>", emissionMap.name);
+            }
+            if (materials[i].HasProperty("_OcclusionMap"))
+            {
+                Texture occlusionMap = materials[i].GetTexture("_OcclusionMap");
+                if (occlusionMap != null)
+                    WriteMapRef("<OcclusionMap:>", occlusionMap.name);
             }
             WriteString("</Material>");
         }

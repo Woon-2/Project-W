@@ -584,6 +584,7 @@ void RefMesh::loadMaterialFromFile( D3D12Device& device, D3D12GfxCmdList& cmdLis
     Material::MapRef mapRef{};
 
     auto& submesh = mesh.submeshes_[materialIdx];
+    auto& material = submesh.material();
 
     for (;;) {
 
@@ -593,52 +594,57 @@ void RefMesh::loadMaterialFromFile( D3D12Device& device, D3D12GfxCmdList& cmdLis
         else if (!strcmp(pstrToken, "<AlbedoColor:>"))
         {
             nReads = (UINT)::fread(&float4, sizeof(dx::XMFLOAT4), 1, pInFile);
-            submesh.material().addConstant( Material::ConstantType::Albedo, mu::Vec4(float4.x, float4.y, float4.z, float4.w) );
+            material.addConstant( Material::ConstantType::Albedo, mu::Vec4(float4.x, float4.y, float4.z, float4.w) );
         }
         else if (!strcmp(pstrToken, "<EmissiveColor:>"))
         {
             nReads = (UINT)::fread(&float4, sizeof(dx::XMFLOAT4), 1, pInFile);
-            submesh.material().addConstant( Material::ConstantType::Emmisive, mu::Vec3(float4.x, float4.y, float4.z) );
+            material.addConstant( Material::ConstantType::Emmisive, mu::Vec3(float4.x, float4.y, float4.z) );
         }
         else if (!strcmp(pstrToken, "<AmbientOcllusion:>"))
         {
             nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
-            submesh.material().addConstant( Material::ConstantType::AmbientOcllusion, floatVal );
+            material.addConstant( Material::ConstantType::AmbientOcllusion, floatVal );
         }
         else if (!strcmp(pstrToken, "<Smoothness:>"))
         {
             nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
-            submesh.material().addConstant( Material::ConstantType::Roughness, 1.f - floatVal );
+            material.addConstant( Material::ConstantType::Roughness, 1.f - floatVal );
         }
         else if (!strcmp(pstrToken, "<Metallic:>"))
         {
             nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
-            submesh.material().addConstant( Material::ConstantType::Metallic, floatVal );
+            material.addConstant( Material::ConstantType::Metallic, floatVal );
+        }
+        else if (!strcmp(pstrToken, "<AmbientOcllusion:>"))
+        {
+            nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
+            material.addConstant( Material::ConstantType::AmbientOcllusion, floatVal );
         }
         else if (!strcmp(pstrToken, "<AlbedoMap:>"))
         {
             nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
-            submesh.material().addMapRef( Material::MapType::Albedo, mapRef );
+            material.addMapRef( Material::MapType::Albedo, mapRef );
         }
         else if (!strcmp(pstrToken, "<NormalMap:>"))
         {
             nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
-            submesh.material().addMapRef( Material::MapType::Normal, mapRef );
+            material.addMapRef( Material::MapType::Normal, mapRef );
         }
         else if (!strcmp(pstrToken, "<MetallicMap:>"))
         {
             nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
-            submesh.material().addMapRef( Material::MapType::Metallic, mapRef );
+            material.addMapRef( Material::MapType::Metallic, mapRef );
         }
         else if (!strcmp(pstrToken, "<MetallicSmoothnessMap:>"))
         {
             nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
-            submesh.material().addMapRef( Material::MapType::MetallicSmoothness, mapRef );
+            material.addMapRef( Material::MapType::MetallicSmoothness, mapRef );
         }
         else if (!strcmp(pstrToken, "<EmissionMap:>"))
         {
             nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
-            submesh.material().addMapRef( Material::MapType::Emmisive, mapRef );
+            material.addMapRef( Material::MapType::Emmisive, mapRef );
         }
         else {
             fclose(pInFile);
@@ -646,6 +652,22 @@ void RefMesh::loadMaterialFromFile( D3D12Device& device, D3D12GfxCmdList& cmdLis
         }
 
     }
+
+    const auto albedoRatio = material.contains(Material::MapType::Albedo) ? 0.f : 1.f;
+    const auto roughnessRatio = ( material.contains(Material::MapType::MetallicSmoothness)
+            || material.contains(Material::MapType::Roughness)
+        ) ? 0.f : 1.f;
+    const auto metallicRatio = ( material.contains(Material::MapType::MetallicSmoothness)
+            || material.contains(Material::MapType::Metallic)
+        ) ? 0.f : 1.f;
+    const auto emmisiveRatio = material.contains(Material::MapType::Emmisive) ? 0.f : 1.f;
+    const auto ambientOcllusionRatio = 1.f;
+
+    material.addConstant( Material::ConstantType::AlbedoConstantMapRatio, albedoRatio );
+    material.addConstant( Material::ConstantType::RoughnessConstantMapRatio, roughnessRatio );
+    material.addConstant( Material::ConstantType::MetallicConstantMapRatio, metallicRatio );
+    material.addConstant( Material::ConstantType::EmmisiveConstantMapRatio, emmisiveRatio );
+    material.addConstant( Material::ConstantType::AmbientOcllusionConstantMapRatio, ambientOcllusionRatio );
 }
 
 RefModel::Node::Node(const Node& other)

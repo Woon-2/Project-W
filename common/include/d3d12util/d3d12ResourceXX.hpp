@@ -319,6 +319,10 @@ public:
         return *reinterpret_cast<const T*>(&constants_[etoi(type)]);
     }
 
+    bool contains(MapType type) const {
+        return mapRef(type).resourceIdx != Material::MapRef::invalid;
+    }
+    
 private:
     std::vector<MapRef> mapRefs_;
     std::vector<RawMemory<16>> constants_;
