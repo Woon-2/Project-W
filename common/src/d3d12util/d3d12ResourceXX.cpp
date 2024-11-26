@@ -355,7 +355,7 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
 	BYTE nStrLength = 0;
 
     int nVertices = 0;
-	int nPositions = 0, nColors = 0, nNormals = 0, nTangents = 0, nBiTangents = 0, nTextureCoords = 0, nSubMeshes = 0, nSubIndices = 0;
+	int nPositions = 0, nColors = 0, nNormals = 0, nTangents = 0, nBiTangents = 0, nTextureCoords = 0, nSubMeshes = 0, nSubmeshIndex = 0, nSubIndices = 0;
 
 	UINT nReads = (UINT)::fread(&nVertices, sizeof(int), 1, pInFile);
 
@@ -370,13 +370,13 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
 		nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
 		pstrToken[nStrLength] = '\0';
 
-		if (!strcmp(pstrToken, "<Bounds>:"))
+		if (!strcmp(pstrToken, "<Bounds:>"))
 		{
             dx::XMFLOAT3 aabbCenter, aabbExtents;
 			nReads = (UINT)::fread(&aabbCenter, sizeof(dx::XMFLOAT3), 1, pInFile);
 			nReads = (UINT)::fread(&aabbExtents, sizeof(dx::XMFLOAT3), 1, pInFile);
 		}
-		else if (!strcmp(pstrToken, "<Positions>:"))
+		else if (!strcmp(pstrToken, "<Positions:>"))
 		{
 			nReads = (UINT)::fread(&nPositions, sizeof(int), 1, pInFile);
 			if (nPositions > 0)
@@ -390,7 +390,7 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
                 );
 			}
 		}
-		else if (!strcmp(pstrToken, "<Colors>:"))
+		else if (!strcmp(pstrToken, "<Colors:>"))
 		{
 			nReads = (UINT)::fread(&nColors, sizeof(int), 1, pInFile);
 			if (nColors > 0)
@@ -404,7 +404,7 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
                 );
 			}
 		}
-		else if (!strcmp(pstrToken, "<TextureCoords0>:"))
+		else if (!strcmp(pstrToken, "<TextureCoords0:>"))
 		{
 			nReads = (UINT)::fread(&nTextureCoords, sizeof(int), 1, pInFile);
 			if (nTextureCoords > 0)
@@ -418,7 +418,7 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
                 );
 			}
 		}
-		else if (!strcmp(pstrToken, "<TextureCoords1>:"))
+		else if (!strcmp(pstrToken, "<TextureCoords1:>"))
 		{
 			nReads = (UINT)::fread(&nTextureCoords, sizeof(int), 1, pInFile);
 			if (nTextureCoords > 0)
@@ -432,7 +432,7 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
                 );
 			}
 		}
-		else if (!strcmp(pstrToken, "<Normals>:"))
+		else if (!strcmp(pstrToken, "<Normals:>"))
 		{
 			nReads = (UINT)::fread(&nNormals, sizeof(int), 1, pInFile);
 			if (nNormals > 0)
@@ -446,7 +446,7 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
                 );
 			}
 		}
-		else if (!strcmp(pstrToken, "<Tangents>:"))
+		else if (!strcmp(pstrToken, "<Tangents:>"))
 		{
 			nReads = (UINT)::fread(&nTangents, sizeof(int), 1, pInFile);
 			if (nTangents > 0)
@@ -460,7 +460,7 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
                 );
 			}
 		}
-		else if (!strcmp(pstrToken, "<BiTangents>:"))
+		else if (!strcmp(pstrToken, "<BiTangents:>"))
 		{
 			nReads = (UINT)::fread(&nBiTangents, sizeof(int), 1, pInFile);
 			if (nBiTangents > 0)
@@ -474,7 +474,7 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
                 );
 			}
 		}
-		else if (!strcmp(pstrToken, "<Submeshes>:")) {
+		else if (!strcmp(pstrToken, "<Submeshes:>")) {
             nReads = (UINT)::fread(&nSubMeshes, sizeof(int), 1, pInFile);
             ret.submeshes_.reserve(nSubMeshes);
 
@@ -484,33 +484,26 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
                 nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
                 pstrToken[nStrLength] = '\0';
                 
-                if (strcmp(pstrToken, "<Submesh>:")) {
+                if (strcmp(pstrToken, "<Submesh:>")) {
                     fclose(pInFile);
-                    throw std::runtime_error("Submesh token expected");
+                    throw std::runtime_error("Submesh token expected but got " + std::string(pstrToken));
                 }
+
+                nReads = (UINT)::fread(&nSubmeshIndex, sizeof(int), 1, pInFile);
                 
                 ret.submeshes_.emplace_back(&ret);
                 auto& submesh = ret.submeshes_.back();
                 
                 // enable more topology types later
                 // nReads = (UINT)::fread(&submesh.topology_, sizeof(int), 1, pInFile);
+                submesh.topology_ = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
                 nReads = (UINT)::fread(&nSubIndices, sizeof(int), 1, pInFile);
-                auto indices = std::vector<std::uint16_t>(nSubIndices);
-                nReads = (UINT)::fread(indices.data(), sizeof(std::uint16_t), nSubIndices, pInFile);
+                auto indices = std::vector<int>(nSubIndices);
+                nReads = (UINT)::fread(indices.data(), sizeof(int), nSubIndices, pInFile);
                 submesh.ib_ = IndexBuffer(device, cmdList, indices.data(), nSubIndices);
             }
-
-            nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
-            nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
-            pstrToken[nStrLength] = '\0';
-
-            if (strcmp(pstrToken, "</Submeshes>")) {
-                fclose(pInFile);
-                throw std::runtime_error("Submeshes end token expected");
-            }
         }
-		else if (!strcmp(pstrToken, "</Mesh>"))
-		{
+		else if (!strcmp(pstrToken, "</Mesh>")) {
 			break;
 		}
 	}
@@ -542,10 +535,14 @@ void RefMesh::loadMaterialsFromFile( D3D12Device& device, D3D12GfxCmdList& cmdLi
         if (!strcmp(pstrToken, "</Materials>")) {
             break;
         }
-        else if (!strcmp(pstrToken, "<Material>:")) {
+        else if (!strcmp(pstrToken, "<Material:>")) {
             int materialIdx = 0;
             nReads = (UINT)::fread(&materialIdx, sizeof(int), 1, pInFile);
             loadMaterialFromFile(device, cmdList, pInFile, mesh, materialIdx);
+        }
+        else {
+            fclose(pInFile);
+            throw std::runtime_error("expected material token or materials end token but got " + std::string(pstrToken));
         }
 	}
 }
@@ -567,58 +564,62 @@ void RefMesh::loadMaterialFromFile( D3D12Device& device, D3D12GfxCmdList& cmdLis
 
     for (;;) {
 
-        if (!strcmp(pstrToken, "</Materials>")) {
+        if (!strcmp(pstrToken, "</Material>")) {
             break;
         }
-        else if (!strcmp(pstrToken, "<AlbedoColor>:"))
+        else if (!strcmp(pstrToken, "<AlbedoColor:>"))
         {
             nReads = (UINT)::fread(&float4, sizeof(dx::XMFLOAT4), 1, pInFile);
             submesh.material().addConstant( Material::ConstantType::Albedo, mu::Vec4(float4.x, float4.y, float4.z, float4.w) );
         }
-        else if (!strcmp(pstrToken, "<EmissiveColor>:"))
+        else if (!strcmp(pstrToken, "<EmissiveColor:>"))
         {
             nReads = (UINT)::fread(&float4, sizeof(dx::XMFLOAT4), 1, pInFile);
             submesh.material().addConstant( Material::ConstantType::Emmisive, mu::Vec3(float4.x, float4.y, float4.z) );
         }
-        else if (!strcmp(pstrToken, "<AmbientOcllusion>:"))
+        else if (!strcmp(pstrToken, "<AmbientOcllusion:>"))
         {
             nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
             submesh.material().addConstant( Material::ConstantType::AmbientOcllusion, floatVal );
         }
-        else if (!strcmp(pstrToken, "<Smoothness>:"))
+        else if (!strcmp(pstrToken, "<Smoothness:>"))
         {
             nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
             submesh.material().addConstant( Material::ConstantType::Roughness, 1.f - floatVal );
         }
-        else if (!strcmp(pstrToken, "<Metallic>:"))
+        else if (!strcmp(pstrToken, "<Metallic:>"))
         {
             nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
             submesh.material().addConstant( Material::ConstantType::Metallic, floatVal );
         }
-        else if (!strcmp(pstrToken, "<AlbedoMap>:"))
+        else if (!strcmp(pstrToken, "<AlbedoMap:>"))
         {
             nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
             submesh.material().addMapRef( Material::MapType::Albedo, mapRef );
         }
-        else if (!strcmp(pstrToken, "<NormalMap>:"))
+        else if (!strcmp(pstrToken, "<NormalMap:>"))
         {
             nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
             submesh.material().addMapRef( Material::MapType::Normal, mapRef );
         }
-        else if (!strcmp(pstrToken, "<MetallicMap>:"))
+        else if (!strcmp(pstrToken, "<MetallicMap:>"))
         {
             nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
             submesh.material().addMapRef( Material::MapType::Metallic, mapRef );
         }
-        else if (!strcmp(pstrToken, "<MetallicSmoothnessMap>:"))
+        else if (!strcmp(pstrToken, "<MetallicSmoothnessMap:>"))
         {
             nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
             submesh.material().addMapRef( Material::MapType::MetallicSmoothness, mapRef );
         }
-        else if (!strcmp(pstrToken, "<EmissionMap>:"))
+        else if (!strcmp(pstrToken, "<EmissionMap:>"))
         {
             nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
             submesh.material().addMapRef( Material::MapType::Emmisive, mapRef );
+        }
+        else {
+            fclose(pInFile);
+            throw std::runtime_error("expected material token or material end token but got " + std::string(pstrToken));
         }
 
     }
@@ -869,7 +870,7 @@ RefModel RefModel::loadHierarchyFromFile( const std::filesystem::path& path,
     nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
     pstrToken[nStrLength] = '\0';
 
-    if (strcmp(pstrToken, "<Dictionary>:")) {
+    if (strcmp(pstrToken, "<Dictionary:>")) {
         std::fclose(pInFile);
         throw std::runtime_error("Invalid file format: " + path.string());    
     }
@@ -879,75 +880,71 @@ RefModel RefModel::loadHierarchyFromFile( const std::filesystem::path& path,
         nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
         pstrToken[nStrLength] = '\0';
 
-        if (!strcmp(pstrToken, "<Item>:")) {
+        if (!strcmp(pstrToken, "<Item:>")) {
             nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
 
             nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
-            auto texName = std::string(nStrLength, '\0');
-            nReads = (UINT)::fread(texName.data(), sizeof(char), nStrLength, pInFile);
+            auto texRelativePath = std::string(nStrLength, '\0');
+            nReads = (UINT)::fread(texRelativePath.data(), sizeof(char), nStrLength, pInFile);
 
-            auto texPath = resourcePath / texName;
+            auto texPath = resourcePath / std::move(texRelativePath);
 
             if (!sts.contains(texPath)) {
                 std::fclose(pInFile);
                 throw std::runtime_error("Texture not found: " + texPath.string());
             }
             model.textureMap_[mapRef] = sts.get(texPath);
-
-            nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
-            nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
-            pstrToken[nStrLength] = '\0';
-
-            if (strcmp(pstrToken, "</Item>")) {
-                std::fclose(pInFile);
-                throw std::runtime_error("Invalid file format: " + path.string());
-            }
         }
         else if (!strcmp(pstrToken, "</Dictionary>")) {
             break;
         }
+        else {
+            std::fclose(pInFile);
+            throw std::runtime_error("expected Item or Dictionary end token but got: " + std::string(pstrToken));
+        }
     }
 
     nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
     nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
     pstrToken[nStrLength] = '\0';
 
-    if (strcmp(pstrToken, "<NodesInfo>:")) {
+    if (strcmp(pstrToken, "<NodesInfo:>")) {
         std::fclose(pInFile);
-        throw std::runtime_error("Invalid file format: " + path.string());
+        throw std::runtime_error("expected NodesInfo token but got: " + std::string(pstrToken));
     }
 
     nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
     nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
     pstrToken[nStrLength] = '\0';
 
-    if (strcmp(pstrToken, "<NodeCnt>:")) {
+    if (strcmp(pstrToken, "<NodeCnt:>")) {
         std::fclose(pInFile);
-        throw std::runtime_error("Invalid file format: " + path.string());
+        throw std::runtime_error("expected NodeCnt token but got: " + std::string(pstrToken));
     }
 
     int nNodes = 0;
     nReads = (UINT)::fread(&nNodes, sizeof(int), 1, pInFile);
     model.nodeStorage_.reserve(nNodes);
 
-    nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
-    nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
-    pstrToken[nStrLength] = '\0';
+    for (;;) {
+        nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+        nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
+        pstrToken[nStrLength] = '\0';
 
-    if (!strcmp(pstrToken, "<Node>:")) {
-        model.nodeStorage_.emplace_back(&model);
-        auto& node = model.nodeStorage_.back();
-        loadNodesFromFile(device, cmdList, pInFile, node, model);
-        model.pRoot_ = &node;
-    }
+        if (!strcmp(pstrToken, "<Node:>")) {
+            model.nodeStorage_.emplace_back(&model);
+            auto& node = model.nodeStorage_.back();
+            loadNodesFromFile(device, cmdList, pInFile, node, model);
+            model.pRoot_ = &node;
+        }
+        else if (strcmp(pstrToken, "</NodesInfo>")) {
+            break;
+        }
+        else {
+            std::fclose(pInFile);
+            throw std::runtime_error("expected Node or NodesInfo end token but got: " + std::string(pstrToken));
+        }
 
-    nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
-    nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
-    pstrToken[nStrLength] = '\0';
-
-    if (strcmp(pstrToken, "</NodesInfo>")) {
-        std::fclose(pInFile);
-        throw std::runtime_error("Invalid file format: " + path.string());
     }
 
     std::fclose(pInFile);
@@ -966,6 +963,7 @@ void RefModel::loadNodesFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
 
 	int nFrame = 0, nTextures = 0;
 
+    nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
     auto nodeName = std::string(nStrLength, '\0');
 	nReads = (UINT)::fread(nodeName.data(), sizeof(char), nStrLength, pInFile);
 
@@ -975,12 +973,12 @@ void RefModel::loadNodesFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
 		nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
 		pstrToken[nStrLength] = '\0';
 
-		if (!strcmp(pstrToken, "<Xform>:"))
+		if (!strcmp(pstrToken, "<Xform:>"))
 		{
             nReads = (UINT)::fread(&xform, sizeof(float), 16, pInFile);
             node.coord_.setLocalXform(DirectX::XMLoadFloat4x4(&xform));
         }
-        else if (!strcmp(pstrToken, "<Mesh>:"))
+        else if (!strcmp(pstrToken, "<Mesh:>"))
 		{
 			node.addMesh( RefMesh::loadGeometryFromFile(device, cmdList, pInFile) );
             
@@ -988,11 +986,11 @@ void RefModel::loadNodesFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
             nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
             pstrToken[nStrLength] = '\0';
 
-            if (!strcmp(pstrToken, "<Materials>:")) {
+            if (!strcmp(pstrToken, "<Materials:>")) {
                 node.meshes_.back().loadMaterialsFromFile(device, cmdList, pInFile, node.meshes_.back());
             }
 		}
-		else if (!strcmp(pstrToken, "<Children>:"))
+		else if (!strcmp(pstrToken, "<Children:>"))
 		{
 			int nChilds = 0;
 			nReads = (UINT)::fread(&nChilds, sizeof(int), 1, pInFile);
@@ -1007,9 +1005,9 @@ void RefModel::loadNodesFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
                     nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
                     pstrToken[nStrLength] = '\0';
 
-                    if (strcmp(pstrToken, "<Node>:")) {
+                    if (strcmp(pstrToken, "<Node:>")) {
                         fclose(pInFile);
-                        throw std::runtime_error("Invalid file format");
+                        throw std::runtime_error("Node token expected but got: " + std::string(pstrToken));
                     }
 
                     loadNodesFromFile(device, cmdList, pInFile, child, model);

@@ -595,10 +595,9 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         WriteString("</Mesh>");
     }
 
-    void WriteMapRef(string header, string footer, string path) {
+    void WriteMapRef(string header, string path) {
         WriteString(header);
         WriteMapRef(path);
-        WriteString(footer);
     }
 
     void WriteMapRef(string path) 
@@ -652,25 +651,25 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
             {
                 Texture mainAlbedoMap = materials[i].GetTexture("_MainTex");
                 if (mainAlbedoMap != null)
-                    WriteMapRef("<AlbedoMap:>", "</AlbedoMap>", mainAlbedoMap.name);
+                    WriteMapRef("<AlbedoMap:>", mainAlbedoMap.name);
             }
             if (materials[i].HasProperty("_BumpMap"))
             {
                 Texture bumpMap = materials[i].GetTexture("_BumpMap");
                 if (bumpMap != null)
-                    WriteMapRef("<NormalMap:>", "</NormalMap>", bumpMap.name);
+                    WriteMapRef("<NormalMap:>", bumpMap.name);
             }
             if (materials[i].HasProperty("_MetallicGlossMap"))
             {
                 Texture metallicMap = materials[i].GetTexture("_MetallicGlossMap");
                 if (metallicMap != null)
-                    WriteMapRef("<MetallicSmoothnessMap:>", "</MetallicSmoothnessMap>", metallicMap.name);
+                    WriteMapRef("<MetallicSmoothnessMap:>", metallicMap.name);
             }
             if (materials[i].HasProperty("_EmissionMap"))
             {
                 Texture emissionMap = materials[i].GetTexture("_EmissionMap");
                 if (emissionMap != null)
-                    WriteMapRef("<EmissionMap:>", "</EmissionMap>", emissionMap.name);
+                    WriteMapRef("<EmissionMap:>", emissionMap.name);
             }
             WriteString("</Material>");
         }
