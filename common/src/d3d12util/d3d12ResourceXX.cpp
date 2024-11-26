@@ -370,7 +370,7 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
 	BYTE nStrLength = 0;
 
     int nVertices = 0;
-	int nPositions = 0, nColors = 0, nNormals = 0, nTangents = 0, nBiTangents = 0, nTextureCoords = 0, nSubMeshes = 0, nSubmeshIndex = 0, nSubIndices = 0;
+	int nPositions = 0, nColors = 0, nNormals = 0, nTangents = 0, nBiTangents = 0, nTextureCoords = 0, nSubMeshes = 0, nIndices = 0, nSubmeshIndex = 0, nSubIndices = 0;
 
 	UINT nReads = (UINT)::fread(&nVertices, sizeof(int), 1, pInFile);
 
@@ -491,6 +491,7 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
 		}
 		else if (!strcmp(pstrToken, "<Submeshes:>")) {
             nReads = (UINT)::fread(&nSubMeshes, sizeof(int), 1, pInFile);
+            nReads = (UINT)::fread(&nIndices, sizeof(int), 1, pInFile);
             ret.submeshes_.reserve(nSubMeshes);
 
             for (int i = 0; i < nSubMeshes; ++i) {
@@ -513,14 +514,14 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
                 // nReads = (UINT)::fread(&submesh.topology_, sizeof(int), 1, pInFile);
                 submesh.topology_ = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
                 nReads = (UINT)::fread(&nSubIndices, sizeof(int), 1, pInFile);
-                if (nSubIndices < 65536) {
+                if (nIndices < 65536) {
                     auto indices = std::vector<std::uint16_t>(nSubIndices);
                     nReads = (UINT)::fread(indices.data(), sizeof(std::uint16_t), nSubIndices, pInFile);
                     submesh.ib_ = IndexBuffer(device, cmdList, indices.data(), DXGI_FORMAT_R16_UINT, nSubIndices);
                 }
                 else {
-                    auto indices = std::vector<int>(nSubIndices);
-                    nReads = (UINT)::fread(indices.data(), sizeof(int), nSubIndices, pInFile);
+                    auto indices = std::vector<std::uint32_t>(nSubIndices);
+                    nReads = (UINT)::fread(indices.data(), sizeof(std::uint32_t), nSubIndices, pInFile);
                     submesh.ib_ = IndexBuffer(device, cmdList, indices.data(), DXGI_FORMAT_R32_UINT, nSubIndices);
                 }
             }
