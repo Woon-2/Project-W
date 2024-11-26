@@ -14,14 +14,64 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
 
     private List<string> m_pTexturePath = new List<string>();
 
-    // path : path, resourceIndex, ArrayIndex
-    private Dictionary<string, (string, uint, uint)> m_pTextureIndexInfo = new Dictionary<string, (string, uint, uint)>();
+    // path : path, resourceTypeIndex, ArrayIndex
+    private Dictionary<string, (string, int, int)> m_pTextureIndexInfo = new Dictionary<string, (string, int, int)>();
+    private Dictionary<(int, int, int, int), (string, string)> m_mapRefMap = new Dictionary<(int, int, int, int), (string, string)>();
 
     private BinaryWriter binaryWriter = null;
+    private BinaryReader binaryReader = null;
 
-    void WriteConvertMap()
-    {
+    void WriteDictionary() {
+        binaryWriter.Write("<Dictionary:>");
 
+        foreach (var kvp in m_mapRefMap) {
+            binaryWriter.Write("<Item:>");
+            binaryWriter.Write(kvp.Key.Item1);    // MapRef
+            binaryWriter.Write(kvp.Key.Item2);
+            binaryWriter.Write(kvp.Key.Item3);
+            binaryWriter.Write(kvp.Key.Item4);
+            WriteString(kvp.Value.Item2);   // newTexPath
+        }
+
+        binaryWriter.Write("</Dictionary>");
+    }
+
+    string ReadString() {
+        int length = binaryReader.ReadInt32(); // Read string length
+        byte[] stringBytes = binaryReader.ReadBytes(length);
+        return System.Text.Encoding.UTF8.GetString(stringBytes); // Decode string
+    }
+
+    void ReadRemapFile(string path) {
+        binaryReader = new BinaryReader(File.Open(path, FileMode.Open));
+
+        string convertMapTag = ReadString();
+        if (convertMapTag != "<ConvertMap:>") {
+            throw new InvalidDataException("Invalid file format: missing <ConvertMap:> tag.");
+        }
+
+        int i = 0;
+
+        // Read Items in ConvertMap
+        while (true) {
+            string itemTag = ReadString();
+            if (itemTag == "</ConvertMap>") {
+                break; // End of ConvertMap section
+            }
+            if (itemTag != "<Item:>") {
+                throw new InvalidDataException("Invalid file format: missing <Item:> tag.");
+            }
+
+            string inputPath = ReadString();
+            string newTexPath = ReadString();
+            int resourceTypeIndex = binaryReader.ReadInt32();
+            int arrayIndex = binaryReader.ReadInt32();
+
+            m_pTextureIndexInfo.Add(inputPath, (newTexPath, resourceTypeIndex, arrayIndex));
+            m_mapRefMap.Add((resourceTypeIndex, i++, arrayIndex, 0), (inputPath, newTexPath));
+        }
+
+        binaryReader.Close();
     }
 
     void DispatchMaterials(Material[] materials) {
@@ -71,7 +121,7 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         }
     }
 
-    void WriteTextureInfo(Transform current)
+    void StoreMaterialInfo(Transform current)
     {
         SkinnedMeshRenderer skinnedMeshRenderer = current.gameObject.GetComponent<SkinnedMeshRenderer>();
 
@@ -95,29 +145,43 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         }
     }
 
-    void StoreTexturePath(Texture texture)
-{
-    if (texture)
-    {
-        string texturePath = AssetDatabase.GetAssetPath(texture); // Unity 에디터에서 텍스처 경로를 가져옴
-        if (!string.IsNullOrEmpty(texturePath) && !m_pTextureNamesListForWriting.Contains(texturePath))
-        {
-            m_pTextureNamesListForWriting.Add(texturePath);
-        }
-    }
-}
+    void ArrangeTextureList(Transform child) {
+        StoreMaterialInfo(child);
 
-    void WriteTextureMap(Transform child)
-    {
-        WriteTextureInfo(child);
-
-        if (child.childCount > 0)
-        {
-            for (int k = 0; k < child.childCount; k++)
-            {
-                WriteTextureMap(child.GetChild(k));
+        if (child.childCount > 0) {
+            for (int k = 0; k < child.childCount; k++) {
+                ArrangeTextureList(child.GetChild(k));
             }
         }
+    }
+
+    void CalculateResourceIndices() {
+        var updatedMapRefMap = new Dictionary<(int, int, int, int), (string, string)>();
+
+        foreach (var kvp in m_mapRefMap) {
+            var oldKey = kvp.Key;       // 현재 키 (int, int, int, int)
+            var value = kvp.Value;      // 현재 값 (string, string)
+
+            string inputPath = value.Item1;
+            string newPath = value.Item2;
+
+            // inputPath가 m_pTexturePath에 있는지 확인하고 인덱스 찾기
+            int newIndex = m_pTexturePath.IndexOf(inputPath);
+            if (newIndex == -1)
+            {
+                Debug.LogWarning($"Value '{inputPath}' not found in m_pTexturePath.");
+                continue; // 존재하지 않는 경우 스킵
+            }
+
+            // 새로운 키 생성: 두 번째 값(oldKey.Item2)을 newIndex로 교체
+            var newKey = (oldKey.Item1, newIndex, oldKey.Item3, oldKey.Item4);
+
+            // 새 딕셔너리에 추가
+            updatedMapRefMap[newKey] = value;
+        }
+
+        // 기존 딕셔너리를 갱신된 딕셔너리로 교체
+        m_mapRefMap = updatedMapRefMap;
     }
 
     void accNodeCntRecursive(Transform child, ref int nodeCnt)
@@ -494,15 +558,15 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
 
     void WriteMeshInfo(Mesh mesh)
     {
-        WriteObjectName("<Mesh>:", mesh.vertexCount, mesh);
+        WriteObjectName("<Mesh:>", mesh.vertexCount, mesh);
 
-        WriteBoundingBox("<Bounds>:", mesh.bounds);
+        WriteBoundingBox("<Bounds:>", mesh.bounds);
 
-        if ((mesh.vertices != null) && (mesh.vertices.Length > 0)) WriteVectors("<Positions>:", mesh.vertices);
-        if ((mesh.colors != null) && (mesh.colors.Length > 0)) WriteColors("<Colors>:", mesh.colors);
-        if ((mesh.uv != null) && (mesh.uv.Length > 0)) WriteTextureCoords("<TextureCoords0>:", mesh.uv);
-        if ((mesh.uv2 != null) && (mesh.uv2.Length > 0)) WriteTextureCoords("<TextureCoords1>:", mesh.uv2);
-        if ((mesh.normals != null) && (mesh.normals.Length > 0)) WriteVectors("<Normals>:", mesh.normals);
+        if ((mesh.vertices != null) && (mesh.vertices.Length > 0)) WriteVectors("<Positions:>", mesh.vertices);
+        if ((mesh.colors != null) && (mesh.colors.Length > 0)) WriteColors("<Colors:>", mesh.colors);
+        if ((mesh.uv != null) && (mesh.uv.Length > 0)) WriteTextureCoords("<TextureCoords0:>", mesh.uv);
+        if ((mesh.uv2 != null) && (mesh.uv2.Length > 0)) WriteTextureCoords("<TextureCoords1:>", mesh.uv2);
+        if ((mesh.normals != null) && (mesh.normals.Length > 0)) WriteVectors("<Normals:>", mesh.normals);
 
         if ((mesh.normals.Length > 0) && (mesh.tangents.Length > 0))
         {
@@ -514,42 +578,46 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
                 biTangents[i] = Vector3.Normalize(Vector3.Cross(mesh.normals[i], tangents[i])) * mesh.tangents[i].w;
             }
 
-            WriteVectors("<Tangents>:", tangents);
-            WriteVectors("<BiTangents>:", biTangents);
+            WriteVectors("<Tangents:>", tangents);
+            WriteVectors("<BiTangents:>", biTangents);
         }
 
-        WriteInteger("<SubMeshes>:", mesh.subMeshCount);
+        WriteInteger("<SubMeshes:>", mesh.subMeshCount);
         if (mesh.subMeshCount > 0)
         {
             for (int i = 0; i < mesh.subMeshCount; i++)
             {
                 int[] subindicies = mesh.GetTriangles(i);
-                WriteIntegers("<SubMesh>:", i, subindicies);
+                WriteIntegers("<SubMesh:>", i, subindicies);
             }
         }
 
         WriteString("</Mesh>");
     }
 
+    void WriteMapRef(string header, string footer, string path) {
+        WriteString(header);
+        WriteMapRef(path);
+        WriteString(footer);
+    }
+
     void WriteMapRef(string path) 
     {
-        if( m_pTextureIndexInfo.TryGetValue(path, out var value) )
-        {
+        if( m_pTextureIndexInfo.TryGetValue(path, out var value) ) {
             // Item2 : resourceTypeIndex -> type
             binaryWriter.Write(value.Item2);
             // m_pTexturePath[] path to index -> resourceIndex
             int index = m_pTexturePath.IndexOf(path);
-            if (index >= 0)
-            {
-                binaryWriter.Write((uint)index);
+            if (index < 0) {
+                Debug.LogWarning($"Path not found in m_pTexturePath: {path}");
             }
+            binaryWriter.Write(index);
             // Item3 : arrayIndex -> arrayIdx
             binaryWriter.Write(value.Item3);
             // padding
             binaryWriter.Write(0);
         }
-        else
-        {
+        else {
             Debug.LogWarning($"Path not found in texture index info: {path}");
             binaryWriter.Write(0); // Default value for missing data
         }
@@ -557,56 +625,52 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
 
     void WriteMaterials(Material[] materials)
     {
-        WriteInteger("<Materials>:", materials.Length);
+        WriteInteger("<Materials:>", materials.Length);
         for (int i = 0; i < materials.Length; i++)
         {
-            WriteInteger("<Material>:", i);
+            WriteInteger("<Material:>", i);
 
             if (materials[i].HasProperty("_Color"))
             {
                 Color albedo = materials[i].GetColor("_Color");
-                WriteColor("<AlbedoColor>:", albedo);
+                WriteColor("<AlbedoColor:>", albedo);
             }
             if (materials[i].HasProperty("_EmissionColor"))
             {
                 Color emission = materials[i].GetColor("_EmissionColor");
-                WriteColor("<EmissiveColor>:", emission);
+                WriteColor("<EmissiveColor:>", emission);
             }
             if (materials[i].HasProperty("_Smoothness"))
             {
-                WriteFloat("<Smoothness>:", materials[i].GetFloat("_Smoothness"));
+                WriteFloat("<Smoothness:>", materials[i].GetFloat("_Smoothness"));
             }
             if (materials[i].HasProperty("_Metallic"))
             {
-                WriteFloat("<Metallic>:", materials[i].GetFloat("_Metallic"));
+                WriteFloat("<Metallic:>", materials[i].GetFloat("_Metallic"));
             }
             if (materials[i].HasProperty("_MainTex"))
             {
                 Texture mainAlbedoMap = materials[i].GetTexture("_MainTex");
-                WriteTextureName("<AlbedoMap>:", "</AlbedoMap>", mainAlbedoMap);
-                if (mainAlbedoMap != null) 
-                    WriteMapRef(mainAlbedoMap.name);
+                if (mainAlbedoMap != null)
+                    WriteMapRef("<AlbedoMap:>", "</AlbedoMap>", mainAlbedoMap.name);
             }
             if (materials[i].HasProperty("_BumpMap"))
             {
                 Texture bumpMap = materials[i].GetTexture("_BumpMap");
-                WriteTextureName("<NormalMap>:", "</NormalMap>", bumpMap);
                 if (bumpMap != null)
-                    WriteMapRef(bumpMap.name);
+                    WriteMapRef("<NormalMap:>", "</NormalMap>", bumpMap.name);
             }
             if (materials[i].HasProperty("_MetallicGlossMap"))
             {
                 Texture metallicMap = materials[i].GetTexture("_MetallicGlossMap");
-                WriteTextureName("<MetallicSmoothnessMap>:", "</MetallicSmoothnessMap>", metallicMap);
                 if (metallicMap != null)
-                    WriteMapRef(metallicMap.name);
+                    WriteMapRef("<MetallicSmoothnessMap:>", "</MetallicSmoothnessMap>", metallicMap.name);
             }
             if (materials[i].HasProperty("_EmissionMap"))
             {
                 Texture emissionMap = materials[i].GetTexture("_EmissionMap");
-                WriteTextureName("<EmissionMap>:", "</EmissionMap>", emissionMap);
-                if(emissionMap != null) 
-                    WriteMapRef(emissionMap.name);
+                if (emissionMap != null)
+                    WriteMapRef("<EmissionMap:>", "</EmissionMap>", emissionMap.name);
             }
             WriteString("</Material>");
         }
@@ -615,9 +679,9 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
 
     void WriteFrameInfo(Transform current)
     {
-        WriteObjectName("<Node>:", current.gameObject);
+        WriteObjectName("<Node:>", current.gameObject);
 
-        WriteLocalMatrix("<Xform>:", current);
+        WriteLocalMatrix("<Xform:>", current);
         WriteString("</Xform>");
 
         MeshRenderer meshRenderer = current.gameObject.GetComponent<MeshRenderer>();
@@ -651,7 +715,7 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
     {
         WriteFrameInfo(child);
 
-        WriteInteger("<Children>:", child.childCount);
+        WriteInteger("<Children:>", child.childCount);
 
         if (child.childCount > 0)
         {
@@ -666,16 +730,17 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
     {
         binaryWriter = new BinaryWriter(File.Open(string.Copy(gameObject.name).Replace(" ", "_") + ".bin", FileMode.Create));
 
-        WriteConvertMap();
-        WriteString("<TexturePath>");
-        WriteTextureMap(transform);
-        WriteString("</TexturePath>");
+        ReadRemapFile("Remap.bin");
+        ArrangeTextureList(transform);
+        CalculateResourceIndices();
 
-        WriteString("<NodesInfo>:");
+        WriteDictionary();
+
+        WriteString("<NodesInfo:>");
 
         int nodeCnt = 0;
         accNodeCntRecursive(transform, ref nodeCnt);
-        WriteInteger("<NodeCnt>:", nodeCnt);
+        WriteInteger("<NodeCnt:>", nodeCnt);
 
         WriteFrameHierarchyInfo(transform);
 
