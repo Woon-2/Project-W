@@ -360,10 +360,10 @@ private:
 class IndexBuffer : public DefaultBuffer {
 public:
     IndexBuffer()
-        : DefaultBuffer(), size_(0u) {}
+        : DefaultBuffer(), size_(0u), indexFormat_(DXGI_FORMAT_UNKNOWN) {}
 
     IndexBuffer(D3D12Device& device, D3D12GfxCmdList& cmdList,
-        const void* pData, std::size_t indexCnt
+        const void* pData, DXGI_FORMAT indexFormat, std::size_t indexCnt
     );
 
 	void bind(D3D12GfxCmdList& cmdList) const {
@@ -375,7 +375,10 @@ public:
     }
 
 private:
+    static std::size_t indexByteWidth(DXGI_FORMAT indexFormat);
+
     std::size_t size_;
+    DXGI_FORMAT indexFormat_;
 };
 
 class Bitmap {

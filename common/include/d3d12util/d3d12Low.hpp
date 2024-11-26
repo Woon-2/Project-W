@@ -414,6 +414,7 @@ public:
 	std::size_t makeDsv(const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
 		D3D12Device& device, Descriptor& destView
 	);
+	void makeIbv(D3D12Device& device, DXGI_FORMAT format, std::size_t cnt, std::size_t byteOffset = 0u);
 
 	void remakeCbv(std::size_t idx, const D3D12_CONSTANT_BUFFER_VIEW_DESC& cbvDesc,
 		D3D12Device& device

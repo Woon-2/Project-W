@@ -243,17 +243,32 @@ VertexBuffer::VertexBuffer( D3D12Device& device, D3D12GfxCmdList& cmdList,
 }
 
 IndexBuffer::IndexBuffer(D3D12Device& device, D3D12GfxCmdList& cmdList,
-    const void* pData, std::size_t indexCnt
-) : DefaultBuffer(device, indexCnt * sizeof(std::uint16_t)), size_(indexCnt) {
+    const void* pData, DXGI_FORMAT indexFormat, std::size_t indexCnt
+) : DefaultBuffer(device, indexCnt * indexByteWidth(indexFormat)), size_(indexCnt),
+    indexFormat_(indexFormat) {
+
     auto upBufIdx = cmdList.emplaceXResource<UploadBuffer>(
-        device, pData, indexCnt * sizeof(std::uint16_t)
+        device, pData, indexCnt * indexByteWidth(indexFormat)
     );
     auto& upBuf = cmdList.getXResource<UploadBuffer>(upBufIdx);
 	cmdList.copyResource(upBuf, *this);
 
-    makeDefIbv(device);
+    makeIbv(device, indexFormat, indexCnt);
 
 	commitState(cmdList, D3D12_RESOURCE_STATE_INDEX_BUFFER);
+}
+
+std::size_t IndexBuffer::indexByteWidth(DXGI_FORMAT indexFormat) {
+    switch (indexFormat) {
+    case DXGI_FORMAT_R16_UINT:
+        return 2u;
+
+    case DXGI_FORMAT_R32_UINT:
+        return 4u;
+
+    default:
+        throw std::runtime_error("Invalid index format");
+    }
 }
 
 Bitmap::Bitmap(Bitmap&& other) noexcept
@@ -498,9 +513,16 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
                 // nReads = (UINT)::fread(&submesh.topology_, sizeof(int), 1, pInFile);
                 submesh.topology_ = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
                 nReads = (UINT)::fread(&nSubIndices, sizeof(int), 1, pInFile);
-                auto indices = std::vector<int>(nSubIndices);
-                nReads = (UINT)::fread(indices.data(), sizeof(int), nSubIndices, pInFile);
-                submesh.ib_ = IndexBuffer(device, cmdList, indices.data(), nSubIndices);
+                if (nSubIndices < 65536) {
+                    auto indices = std::vector<std::uint16_t>(nSubIndices);
+                    nReads = (UINT)::fread(indices.data(), sizeof(std::uint16_t), nSubIndices, pInFile);
+                    submesh.ib_ = IndexBuffer(device, cmdList, indices.data(), DXGI_FORMAT_R16_UINT, nSubIndices);
+                }
+                else {
+                    auto indices = std::vector<int>(nSubIndices);
+                    nReads = (UINT)::fread(indices.data(), sizeof(int), nSubIndices, pInFile);
+                    submesh.ib_ = IndexBuffer(device, cmdList, indices.data(), DXGI_FORMAT_R32_UINT, nSubIndices);
+                }
             }
         }
 		else if (!strcmp(pstrToken, "</Mesh>")) {
@@ -793,34 +815,6 @@ RefModel RefModel::loadTerrainSubsetFromHeightmap( const Bitmap& heightmap,
         }
     }
 
-    auto indices = std::vector<std::uint16_t>();
-
-    indices.reserve(((width * 2) * (length - 1)) + ((length - 1) - 1));
-
-    auto out = std::back_inserter(indices);
-
-    for (int i = 0, z = 0; z < length - 1; ++z) {
-        if (!(z % 2)) {
-            for (int x = 0; x < width; ++x) {
-                if (x == 0 && z > 0) {
-                    out = static_cast<UINT>(x + (z * width));
-                }
-                out = static_cast<UINT>(x + (z * width));
-                out = static_cast<UINT>(x + ((z + 1) * width));
-            }
-        }
-        else {
-            for (int x = width - 1; x >= 0; --x) {
-                if (x == (width - 1)) {
-                    out = static_cast<UINT>(x + (z * width));
-                }
-                out = static_cast<UINT>(x + (z * width));
-                out = static_cast<UINT>(x + ((z + 1) * width));
-            }
-        }
-    }
-
-
     auto mesh = RefMesh();
 
     mesh.vbs_.emplace_back(device, cmdList, positions.data(),
@@ -840,7 +834,48 @@ RefModel RefModel::loadTerrainSubsetFromHeightmap( const Bitmap& heightmap,
 
     mesh.submeshes_.emplace_back(&mesh, D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
     auto& submesh = mesh.submeshes_.back();
-    submesh.ib_ = IndexBuffer(device, cmdList, indices.data(), indices.size());
+
+
+    auto makeIb = [&](auto&& indices) {
+        using IndexType = std::ranges::range_value_t<decltype(indices)>;
+        indices.reserve(((width * 2) * (length - 1)) + ((length - 1) - 1));
+
+        auto out = std::back_inserter(indices);
+
+        for (int i = 0, z = 0; z < length - 1; ++z) {
+            if (!(z % 2)) {
+                for (int x = 0; x < width; ++x) {
+                    if (x == 0 && z > 0) {
+                        out = static_cast<IndexType>(x + (z * width));
+                    }
+                    out = static_cast<IndexType>(x + (z * width));
+                    out = static_cast<IndexType>(x + ((z + 1) * width));
+                }
+            }
+            else {
+                for (int x = width - 1; x >= 0; --x) {
+                    if (x == (width - 1)) {
+                        out = static_cast<IndexType>(x + (z * width));
+                    }
+                    out = static_cast<IndexType>(x + (z * width));
+                    out = static_cast<IndexType>(x + ((z + 1) * width));
+                }
+            }
+        }
+
+        const auto format = sizeof(IndexType) == 2 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
+        submesh.ib_ = IndexBuffer(device, cmdList, indices.data(), format, indices.size());
+    };
+
+    const auto indexCnt = ((width * 2) * (length - 1)) + ((length - 1) - 1);
+
+    if (indexCnt < 65536) {
+        makeIb(std::vector<std::uint16_t>{});
+    }
+    else {
+        makeIb(std::vector<int>{});
+    }
+
     submesh.material().addMapRef( Material::MapType::Albedo, albedoMapRef );
 
     node.addMesh(std::move(mesh));

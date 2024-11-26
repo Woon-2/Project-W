@@ -432,6 +432,14 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         if (pIntegers.Length > 0) foreach (int i in pIntegers) binaryWriter.Write(i);
     }
 
+    void WriteUInteger16s(string strHeader, int n, int[] pIntegers)
+    {
+        binaryWriter.Write(strHeader);
+        binaryWriter.Write(n);
+        binaryWriter.Write(pIntegers.Length);
+        if (pIntegers.Length > 0) foreach (int i in pIntegers) binaryWriter.Write((ushort)i);
+    }
+
     void WriteIntegers(string strHeader, int n, int[] pIntegers)
     {
         binaryWriter.Write(strHeader);
@@ -582,13 +590,18 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
             WriteVectors("<BiTangents:>", biTangents);
         }
 
-        WriteInteger("<SubMeshes:>", mesh.subMeshCount);
+        WriteInteger("<Submeshes:>", mesh.subMeshCount);
         if (mesh.subMeshCount > 0)
         {
             for (int i = 0; i < mesh.subMeshCount; i++)
             {
                 int[] subindicies = mesh.GetTriangles(i);
-                WriteIntegers("<SubMesh:>", i, subindicies);
+                if (subindicies.Length < 65536) {
+                    WriteUInteger16s("<Submesh:>", i, subindicies);
+                }
+                else {
+                    WriteIntegers("<Submesh:>", i, subindicies);
+                }
             }
         }
 
