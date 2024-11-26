@@ -9,7 +9,7 @@ void Stage::init(gfx::d3d12engine::Core& core) {
     initLights();
 
     setupCamera();
-    loadTextures(core);
+    loadAssets(core);
     // pSystems_->coordRoot.update();
     pRenderer_->init(scene_);
 }
@@ -103,16 +103,18 @@ void Stage::loadAssets(gfx::d3d12engine::Core& core) {
     core.prepareGPUResLoad();
 
     loadTextures(core);
+    loadModels(core);
 
     core.finishGPUResLoad();
 }
 
 void Stage::loadTextures(gfx::d3d12engine::Core& core) {
-    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45_col.dds", gfx::d3d12::TextureResource::Type::Texture);
-    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45_col_2.dds", gfx::d3d12::TextureResource::Type::Texture);
-    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45_col_3.dds", gfx::d3d12::TextureResource::Type::Texture);
-    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45_glass_nor_.dds", gfx::d3d12::TextureResource::Type::Texture);
-    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45_REF_1.dds", gfx::d3d12::TextureResource::Type::Texture);
-    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45-nor_1.dds", gfx::d3d12::TextureResource::Type::Texture);
-    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45-steel detail_2_col.dds", gfx::d3d12::TextureResource::Type::Texture);
+    core.loadStaticTexture(resourcePath/"models"/"HelicopterModel"/"Textures"/"Default.dds", gfx::d3d12::TextureResource::Type::Texture);
+    core.loadStaticTexture(resourcePath/"models"/"HelicopterModel"/"Textures"/"Hellfire.dds", gfx::d3d12::TextureResource::Type::Texture);
+    core.loadStaticTexture(resourcePath/"models"/"HelicopterModel"/"Textures"/"Hydra.dds", gfx::d3d12::TextureResource::Type::Texture);
+    core.loadStaticTexture(resourcePath/"models"/"HelicopterModel"/"Textures"/"Texture.dds", gfx::d3d12::TextureResource::Type::Texture);
+}
+
+void Stage::loadModels(gfx::d3d12engine::Core& core) {
+    core.loadRefModel(resourcePath/"models"/"HelicopterModel"/"OH-58D.bin", "OH-58D");
 }
