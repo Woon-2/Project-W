@@ -17,7 +17,6 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
     // path : path, resourceTypeIndex, ArrayIndex
     private Dictionary<string, (string, int, int)> m_pTextureIndexInfo = new Dictionary<string, (string, int, int)>();
     private Dictionary<(int, int, int, int), (string, string)> m_mapRefMap = new Dictionary<(int, int, int, int), (string, string)>();
-    private Dictionary<string, float> m_ratioMap = new Dictionary<string, float>();
 
     private BinaryWriter binaryWriter = null;
     private BinaryReader binaryReader = null;
