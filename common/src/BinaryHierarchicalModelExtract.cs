@@ -593,13 +593,23 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         WriteInteger("<Submeshes:>", mesh.subMeshCount);
         if (mesh.subMeshCount > 0)
         {
-            for (int i = 0; i < mesh.subMeshCount; i++)
-            {
+            int indexCount = 0;
+            for (int i = 0; i < mesh.subMeshCount; i++) {
                 int[] subindicies = mesh.GetTriangles(i);
-                if (subindicies.Length < 65536) {
+                indexCount += subindicies.Length;
+            }
+
+            if (indexCount < 65536) {
+                for (int i = 0; i < mesh.subMeshCount; i++)
+                {
+                    int[] subindicies = mesh.GetTriangles(i);
                     WriteUInteger16s("<Submesh:>", i, subindicies);
                 }
-                else {
+            }
+            else {
+                for (int i = 0; i < mesh.subMeshCount; i++)
+                {
+                    int[] subindicies = mesh.GetTriangles(i);
                     WriteIntegers("<Submesh:>", i, subindicies);
                 }
             }
