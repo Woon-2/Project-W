@@ -899,7 +899,20 @@ RefModel RefModel::loadTerrainSubsetFromHeightmap( const Bitmap& heightmap,
         makeIb(std::vector<int>{});
     }
 
-    submesh.material().addMapRef( Material::MapType::Albedo, albedoMapRef );
+    auto& material = submesh.material();
+
+    material.addMapRef( Material::MapType::Albedo, albedoMapRef );
+
+    // temporal constants
+    material.addConstant( Material::ConstantType::AmbientOcllusion, 1.f );
+    material.addConstant( Material::ConstantType::Roughness, 0.83f );
+    material.addConstant( Material::ConstantType::Metallic, 0.07f );
+    material.addConstant( Material::ConstantType::Emmisive, mu::Vec3(0.f) );
+    material.addConstant( Material::ConstantType::AlbedoConstantMapRatio, 0.f );
+    material.addConstant( Material::ConstantType::RoughnessConstantMapRatio, 1.f );
+    material.addConstant( Material::ConstantType::MetallicConstantMapRatio, 1.f );
+    material.addConstant( Material::ConstantType::EmmisiveConstantMapRatio, 1.f );
+    material.addConstant( Material::ConstantType::AmbientOcllusionConstantMapRatio, 1.f );
 
     node.addMesh(std::move(mesh));
 
