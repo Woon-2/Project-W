@@ -256,7 +256,7 @@ public:
         Metallic,
         MetallicSmoothness,
         Emmisive,
-        AmbientOcllusion,
+        AmbientOcclusion,
         Size
     };
 
@@ -265,12 +265,12 @@ public:
         Roughness,
         Metallic,
         Emmisive,
-        AmbientOcllusion,
+        AmbientOcclusion,
         AlbedoConstantMapRatio,
         RoughnessConstantMapRatio,
         MetallicConstantMapRatio,
         EmmisiveConstantMapRatio,
-        AmbientOcllusionConstantMapRatio,
+        AmbientOcclusionConstantMapRatio,
         Size
     };
 

@@ -282,15 +282,15 @@ sr::PBRMaterial sr::PBRMaterial::convert(const Material& material) {
 		.metallicConstantMapRatio = material.constant<float>(Material::ConstantType::MetallicConstantMapRatio),
 		.emmisiveConstant = material.constant<dx::XMFLOAT3>(Material::ConstantType::Emmisive),
 		.emmisiveConstantMapRatio = material.constant<float>(Material::ConstantType::EmmisiveConstantMapRatio),
-		.ambientOcclusionConstant = material.constant<float>(Material::ConstantType::AmbientOcllusion),
-		.ambientOcclusionConstantMapRatio = material.constant<float>(Material::ConstantType::AmbientOcllusionConstantMapRatio),
+		.ambientOcclusionConstant = material.constant<float>(Material::ConstantType::AmbientOcclusion),
+		.ambientOcclusionConstantMapRatio = material.constant<float>(Material::ConstantType::AmbientOcclusionConstantMapRatio),
 		.albedoMapRef = material.mapRef(Material::MapType::Albedo).toxm(),
 		.roughnessMapRef = material.mapRef(Material::MapType::Roughness).toxm(),
 		.normalMapRef = material.mapRef(Material::MapType::Normal).toxm(),
 		.metallicMapRef = material.mapRef(Material::MapType::Metallic).toxm(),
 		.metallicSmoothnessMapRef = material.mapRef(Material::MapType::MetallicSmoothness).toxm(),
 		.emmisiveMapRef = material.mapRef(Material::MapType::Emmisive).toxm(),
-		.ambientOcclusionMapRef = material.mapRef(Material::MapType::AmbientOcllusion).toxm()
+		.ambientOcclusionMapRef = material.mapRef(Material::MapType::AmbientOcclusion).toxm()
 	};
 }
 

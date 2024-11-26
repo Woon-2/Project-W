@@ -587,6 +587,9 @@ void RefMesh::loadMaterialFromFile( D3D12Device& device, D3D12GfxCmdList& cmdLis
     auto& material = submesh.material();
 
     for (;;) {
+        nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+        nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
+        pstrToken[nStrLength] = '\0';
 
         if (!strcmp(pstrToken, "</Material>")) {
             break;
@@ -601,10 +604,10 @@ void RefMesh::loadMaterialFromFile( D3D12Device& device, D3D12GfxCmdList& cmdLis
             nReads = (UINT)::fread(&float4, sizeof(dx::XMFLOAT4), 1, pInFile);
             material.addConstant( Material::ConstantType::Emmisive, mu::Vec3(float4.x, float4.y, float4.z) );
         }
-        else if (!strcmp(pstrToken, "<AmbientOcllusion:>"))
+        else if (!strcmp(pstrToken, "<AmbientOcclusion:>"))
         {
             nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
-            material.addConstant( Material::ConstantType::AmbientOcllusion, floatVal );
+            material.addConstant( Material::ConstantType::AmbientOcclusion, floatVal );
         }
         else if (!strcmp(pstrToken, "<Smoothness:>"))
         {
@@ -616,10 +619,10 @@ void RefMesh::loadMaterialFromFile( D3D12Device& device, D3D12GfxCmdList& cmdLis
             nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
             material.addConstant( Material::ConstantType::Metallic, floatVal );
         }
-        else if (!strcmp(pstrToken, "<AmbientOcllusion:>"))
+        else if (!strcmp(pstrToken, "<AmbientOcclusion:>"))
         {
             nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
-            material.addConstant( Material::ConstantType::AmbientOcllusion, floatVal );
+            material.addConstant( Material::ConstantType::AmbientOcclusion, floatVal );
         }
         else if (!strcmp(pstrToken, "<AlbedoMap:>"))
         {
@@ -667,7 +670,7 @@ void RefMesh::loadMaterialFromFile( D3D12Device& device, D3D12GfxCmdList& cmdLis
     material.addConstant( Material::ConstantType::RoughnessConstantMapRatio, roughnessRatio );
     material.addConstant( Material::ConstantType::MetallicConstantMapRatio, metallicRatio );
     material.addConstant( Material::ConstantType::EmmisiveConstantMapRatio, emmisiveRatio );
-    material.addConstant( Material::ConstantType::AmbientOcllusionConstantMapRatio, ambientOcllusionRatio );
+    material.addConstant( Material::ConstantType::AmbientOcclusionConstantMapRatio, ambientOcllusionRatio );
 }
 
 RefModel::Node::Node(const Node& other)
@@ -904,7 +907,7 @@ RefModel RefModel::loadTerrainSubsetFromHeightmap( const Bitmap& heightmap,
     material.addMapRef( Material::MapType::Albedo, albedoMapRef );
 
     // temporal constants
-    material.addConstant( Material::ConstantType::AmbientOcllusion, 1.f );
+    material.addConstant( Material::ConstantType::AmbientOcclusion, 1.f );
     material.addConstant( Material::ConstantType::Roughness, 0.83f );
     material.addConstant( Material::ConstantType::Metallic, 0.07f );
     material.addConstant( Material::ConstantType::Emmisive, mu::Vec3(0.f) );
@@ -912,7 +915,7 @@ RefModel RefModel::loadTerrainSubsetFromHeightmap( const Bitmap& heightmap,
     material.addConstant( Material::ConstantType::RoughnessConstantMapRatio, 1.f );
     material.addConstant( Material::ConstantType::MetallicConstantMapRatio, 1.f );
     material.addConstant( Material::ConstantType::EmmisiveConstantMapRatio, 1.f );
-    material.addConstant( Material::ConstantType::AmbientOcllusionConstantMapRatio, 1.f );
+    material.addConstant( Material::ConstantType::AmbientOcclusionConstantMapRatio, 1.f );
 
     node.addMesh(std::move(mesh));
 
@@ -1008,7 +1011,7 @@ RefModel RefModel::loadHierarchyFromFile( const std::filesystem::path& path,
             loadNodesFromFile(device, cmdList, pInFile, node, model);
             model.pRoot_ = &node;
         }
-        else if (strcmp(pstrToken, "</NodesInfo>")) {
+        else if (!strcmp(pstrToken, "</NodesInfo>")) {
             break;
         }
         else {
