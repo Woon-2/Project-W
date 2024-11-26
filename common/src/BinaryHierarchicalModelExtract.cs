@@ -682,7 +682,6 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         WriteObjectName("<Node:>", current.gameObject);
 
         WriteLocalMatrix("<Xform:>", current);
-        WriteString("</Xform>");
 
         MeshRenderer meshRenderer = current.gameObject.GetComponent<MeshRenderer>();
         MeshFilter meshFilter = current.gameObject.GetComponent<MeshFilter>();
