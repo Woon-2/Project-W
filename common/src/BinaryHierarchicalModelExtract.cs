@@ -640,7 +640,7 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
             WriteInteger("<Material:>", i);
 
             // temporarily write default values
-            WriteFloat("<AmbientOcclusion:>", 1.f);
+            WriteFloat("<AmbientOcclusion:>", 1.0f);
 
             if (materials[i].HasProperty("_Color"))
             {
