@@ -697,8 +697,6 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
 
     void WriteFrameInfo(Transform current)
     {
-        WriteObjectName("<Node:>", current.gameObject);
-
         WriteLocalMatrix("<Xform:>", current);
 
         MeshRenderer meshRenderer = current.gameObject.GetComponent<MeshRenderer>();
@@ -710,8 +708,6 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
 
             Material[] materials = meshRenderer.materials;
             if (materials.Length > 0) WriteMaterials(materials);
-
-            WriteString("</Node>");
             return;
         }
 
@@ -724,12 +720,11 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
             Material[] materials = skinnedMeshRenderer.materials;
             if (materials.Length > 0) WriteMaterials(materials);
         }
-
-        WriteString("</Node>");
     }
 
     void WriteFrameHierarchyInfo(Transform child)
     {
+        WriteObjectName("<Node:>", child.gameObject);
         WriteFrameInfo(child);
 
         WriteInteger("<Children:>", child.childCount);
@@ -741,6 +736,7 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
                 WriteFrameHierarchyInfo(child.GetChild(k));
             }
         }
+        WriteString("</Node>");
     }
 
     void Start()
