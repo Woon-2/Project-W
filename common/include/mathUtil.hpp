@@ -1540,7 +1540,7 @@ public:
     }
 
     void XM_CALLCONV setRow(std::size_t r, mu::Vec<C> vec) __MathUtil_NOEXCEPT {
-        mat_.r[r] = vec;
+        mat_.r[r] = vec.get();
     }
 
     float XM_CALLCONV det() const __MathUtil_NOEXCEPT {
