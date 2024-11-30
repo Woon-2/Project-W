@@ -130,7 +130,8 @@ public:
     ENABLE_COMPONENT(Model);
 
     Model( const ecs::Entity& entity,
-        const d3d12::RefModelStorage::ID& key, const Core& core
+        const d3d12::RefModelStorage::ID& key, const Core& core,
+        Coord& coordComp
     );
 
     d3d12::Model& get() NOEXCEPT { return model_; }

@@ -123,8 +123,11 @@ void CoordRoot::addEntity(ecs::Entity& entity) {
 }
 
 Model::Model( const ecs::Entity& entity,
-    const d3d12::RefModelStorage::ID& key, const Core& core
-) : ecs::Component(entity), model_(core.refModelStorage_.get(key)) {}
+    const d3d12::RefModelStorage::ID& key, const Core& core,
+    Coord& coordComp
+) : ecs::Component(entity), model_(core.refModelStorage_.get(key)) {
+    model_.root()->coord().setParent(&coordComp.get());
+}
 
 void Scene::addEntity(ecs::Entity& entity) {
     MyBase::addEntity(entity);

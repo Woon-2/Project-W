@@ -10,7 +10,7 @@ void Stage::init(gfx::d3d12engine::Core& core) {
 
     setupCamera();
     loadAssets(core);
-    // pSystems_->coordRoot.update();
+    pSystems_->coordRoot.update();
     pRenderer_->init(scene_);
 }
 
