@@ -6,7 +6,7 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
             .maxInstanceCnt = 0x1000u,
             .maxDrawcallCnt = 0x1000u,
             .maxLightCnt = 0x100u
-        }
+        }, gfx::d3d12::InputLayout::Spec::separated
     ), renderPass_( core.device(), shader_,
         gfx::d3d12::convClientToVP( core.window().client() )
     ) {}
