@@ -525,10 +525,6 @@ public:
     RefModel()
         : nodeStorage_(), textureMap_(), pRoot_(nullptr) {}
 
-    RefModel(const std::map<Material::MapRef, std::filesystem::path>& pathMap,
-        const StaticTextureStorage& sts
-    );
-
     ~RefModel() = default;
     RefModel(const RefModel& other) = delete;
     RefModel(RefModel&& other) noexcept;

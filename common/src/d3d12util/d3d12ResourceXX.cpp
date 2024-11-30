@@ -729,15 +729,6 @@ void RefModel::Node::addChild(Node* child) {
     children_.push_back(child);
 }
 
-RefModel::RefModel(const std::map<Material::MapRef, std::filesystem::path>& pathMap,
-    const StaticTextureStorage& sts
-) : nodeStorage_(), textureMap_(), pRoot_(nullptr) {
-    for (auto& [mapRef, path] : pathMap) {
-        assert(sts.contains(path));
-        map(mapRef, sts.get(path));
-    }
-}
-
 RefModel::RefModel(RefModel&& other) noexcept
     : nodeStorage_(other.nodeStorage_.size()),
     textureMap_(std::move(other.textureMap_)), pRoot_(nullptr) {
