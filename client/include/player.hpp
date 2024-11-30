@@ -5,8 +5,7 @@
 
 class Player : public ecs::Entity {
 public:
-	Player();
-
+	void init(gfx::d3d12engine::Core& core);
 	void update();
 };
 

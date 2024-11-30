@@ -29,7 +29,7 @@ private:
     void processInput(double deltaTime);
     void simulate(double deltaTime);
 
-    void initEntities();
+    void initEntities(gfx::d3d12engine::Core& core);
     void initLights();
     void setupCamera();
 

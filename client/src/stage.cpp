@@ -5,11 +5,12 @@
 #include <ranges>
 
 void Stage::init(gfx::d3d12engine::Core& core) {
-    initEntities();
+    loadAssets(core);
+
+    initEntities(core);
     initLights();
 
     setupCamera();
-    loadAssets(core);
     pSystems_->coordRoot.update();
     pRenderer_->init(scene_);
 }
@@ -47,7 +48,9 @@ void Stage::simulate(double deltaTime) {
     // camera_.updateView();
 }
 
-void Stage::initEntities() {
+void Stage::initEntities(gfx::d3d12engine::Core& core) {
+    player_.init(core);
+
     scene_.addEntity(player_);
     pSystems_->coordRoot.addEntity(player_);
     pSystems_->inputSystem.addEntity(player_);

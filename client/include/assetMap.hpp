@@ -1,38 +1,22 @@
 #ifndef __AssetMap_HPP
 #define __AssetMap_HPP
 
-#include <array>
-#include <vector>
-#include <string>
+#include "d3d12engine/d3d12Engine.hpp"
+
 #include <filesystem>
+#include <vector>
 
-enum class AssetType {
-    Texture,
-    Font,
-    Sound,
-    Music,
-    Model,
-    Animation,
-    Script,
-    Level,
-    AssetTypeCount
+enum class AssetModel {
+    Helicopter
 };
 
-struct AssetDesc {
-    using Key = std::string;
-    AssetType type;
-    Key key;
-    std::filesystem::path path;
+enum class AssetTexture {
+    Helicopter
 };
 
-namespace detail {
-extern const std::array<std::vector<AssetDesc>, 1> gAssetDescs;
-}   // namespace detail
+gfx::d3d12::RefModelStorage::ID assetModelID(AssetModel asset);
+std::vector<std::filesystem::path> assetTextureID(AssetTexture asset);
 
-namespace assetIDs {
-    using ID = std::size_t;
 
-    inline constexpr ID dragon = 0u;
-}
 
 #endif  // __AssetMap_HPP
