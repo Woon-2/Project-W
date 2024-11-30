@@ -201,8 +201,8 @@ void Scene::clearStash() {
 TerrainSubset::TerrainSubset( const d3d12::RefModelStorage::ID& key,
     Terrain* pTerrain, Core& core
 ) : key_(key), pTerrain_(pTerrain) {
-    createComponent<Model>(key, core);
     createComponent<Coord>();
+    createComponent<Model>(key, core, as<Coord>());
     as<Coord>().get().setParent(&pTerrain->as<Coord>().get());
 }
 
@@ -239,9 +239,7 @@ Terrain::Terrain( const d3d12::RefModelStorage::ID& identifier,
 
 Terrain::Terrain(Terrain&& other) noexcept
     : Entity(std::move(other)), heightMap_(std::move(other.heightMap_)),
-    subsets_(std::move(other.subsets_)), scale_(std::move(other.scale_)) {
-
-}
+    subsets_(std::move(other.subsets_)), scale_(std::move(other.scale_)) {}
 
 Terrain& Terrain::operator=(Terrain&& other) noexcept {
     if (this == &other) {

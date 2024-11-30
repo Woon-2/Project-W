@@ -3,7 +3,6 @@
 #include <ranges>
 #include <algorithm>
 #include <tuple>
-#include "d3d12RenderPass.hpp"
 
 namespace gfx {
 

@@ -2,6 +2,7 @@
 #define __player_HPP
 
 #include "ecs.hpp"
+#include "d3d12engine/d3d12Engine.hpp"
 
 class Player : public ecs::Entity {
 public:
