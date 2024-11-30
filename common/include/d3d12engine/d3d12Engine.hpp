@@ -157,8 +157,13 @@ public:
     d3d12::Camera& get() NOEXCEPT { return camera_; }
     const d3d12::Camera& get() const NOEXCEPT { return camera_; }
 
+    void update(float deltaTime);
+
 private:
     d3d12::Camera camera_;
+    const coord::System* pAttached_;
+    mu::Vec3 offset_;
+    float timeLag_;
 };
 
 class Light : public ecs::Component {
