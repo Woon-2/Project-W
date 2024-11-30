@@ -145,6 +145,15 @@ class Camera : public ecs::Component {
 public:
     ENABLE_COMPONENT(Camera);
 
+    Camera( const ecs::Entity& entity,
+        coord::System& baseCoord
+    );
+
+    Camera( const ecs::Entity& entity,
+        coord::System& baseCoord,
+        const d3d12::Camera::Config& config
+    );
+
     d3d12::Camera& get() NOEXCEPT { return camera_; }
     const d3d12::Camera& get() const NOEXCEPT { return camera_; }
 

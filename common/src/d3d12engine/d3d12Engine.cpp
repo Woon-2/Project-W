@@ -129,6 +129,16 @@ Model::Model( const ecs::Entity& entity,
     model_.root()->coord().setParent(&coordComp.get());
 }
 
+Camera::Camera( const ecs::Entity& entity,
+    coord::System& baseCoord
+) : ecs::Component(entity), camera_(baseCoord) {}
+
+
+Camera::Camera( const ecs::Entity& entity,
+    coord::System& baseCoord,
+    const d3d12::Camera::Config& config
+) : ecs::Component(entity), camera_(baseCoord, config) {}
+
 void Scene::addEntity(ecs::Entity& entity) {
     MyBase::addEntity(entity);
     reservedEntities_.push_back(entity.id().value());
