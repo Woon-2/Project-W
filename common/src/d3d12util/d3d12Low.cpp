@@ -185,6 +185,7 @@ std::size_t D3D12Resource::makeDsv(const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
 void D3D12Resource::makeIbv( D3D12Device& device, DXGI_FORMAT format,
 	std::size_t cnt, std::size_t byteOffset
 ) {
+	pullGpuAddr();
 	std::size_t indexByteWidth = 0u;
 	switch (format) {
 	case DXGI_FORMAT_R16_UINT:
