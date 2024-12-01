@@ -199,6 +199,8 @@ public:
         stride_ = stride;
     }
 
+    void constructNullProperty(Vertex::Properties prop, std::size_t cnt);
+
     void constructProperty( Vertex::Properties prop, const void* data,
         std::size_t cnt, std::size_t stride
     );
@@ -213,6 +215,11 @@ public:
         data_.resize(byteWidth);
         std::memcpy(data_.data(), data, byteWidth);
     }
+
+    std::vector<std::uint8_t>&& vertices() && noexcept {
+        return std::move(data_);
+    }
+
     /**
      * @brief Gets the raw memory pointer of the vertex buffer.
      * @return `void*` Raw memory pointer.
