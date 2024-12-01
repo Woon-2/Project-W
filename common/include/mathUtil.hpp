@@ -1133,7 +1133,7 @@ const Vec<D> XM_CALLCONV asin(Vec<D> vec) __MathUtil_NOEXCEPT {
     return dx::XMVectorASin(vec.get());
 }
 
-Radian asin(float val) __MathUtil_NOEXCEPT {
+inline Radian asin(float val) __MathUtil_NOEXCEPT {
     return Radian(std::asinf(val));
 }
 
@@ -1143,7 +1143,7 @@ const Vec<D> XM_CALLCONV acos(Vec<D> vec) __MathUtil_NOEXCEPT {
     return dx::XMVectorACos(vec.get());
 }
 
-Radian acos(float val) __MathUtil_NOEXCEPT {
+inline Radian acos(float val) __MathUtil_NOEXCEPT {
     return Radian(std::acosf(val));
 }
 
@@ -1153,7 +1153,7 @@ const Vec<D> XM_CALLCONV atan(Vec<D> vec) __MathUtil_NOEXCEPT {
     return dx::XMVectorATan(vec.get());
 }
 
-Radian atan(float val) __MathUtil_NOEXCEPT {
+inline Radian atan(float val) __MathUtil_NOEXCEPT {
     return Radian(std::atanf(val));
 }
 
