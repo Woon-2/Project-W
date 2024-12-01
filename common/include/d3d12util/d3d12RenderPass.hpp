@@ -39,7 +39,7 @@ public:
     Camera(const Config& config)
         : coordMovement_(), coordRotation_(), config_(config), view_(), proj_(
             mu::persp(config_.fov, config_.aspect,config_.nearZ, config_.farZ)
-        ), repPos_(), repUp_() {
+        ), repPos_(), repUp_(), repFwd_(), focus_(), focusMode_(FocusMode::None) {
         coordRotation_.setParent(&coordMovement_);
     }
 
