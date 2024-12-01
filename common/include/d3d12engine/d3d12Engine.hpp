@@ -51,8 +51,8 @@ public:
     d3d12::D3D12Device& device() NOEXCEPT { return device_; }
     const d3d12::D3D12Device& device() const NOEXCEPT { return device_; }
 
-    d3d12::UnifiedRoot& root() NOEXCEPT { return root_; }
-    const d3d12::UnifiedRoot& root() const NOEXCEPT { return root_; }
+    d3d12::detail::UnifiedRootImpl& root() NOEXCEPT { return d3d12::UnifiedRoot::get(); }
+    const d3d12::detail::UnifiedRootImpl& root() const NOEXCEPT { return d3d12::UnifiedRoot::get(); }
 
     void prepareGPUResLoad() {
         cmdList_.reset();
@@ -98,7 +98,6 @@ private:
     d3d12::DescriptorHeapCPU dsvHeap_;
     d3d12::DescriptorHeapGPU cbvSrvUavHeap_;
     d3d12::DescriptorRanges descRanges_;
-    d3d12::UnifiedRoot root_;
     MyWindow window_;
     d3d12::Fence fence_;
 };

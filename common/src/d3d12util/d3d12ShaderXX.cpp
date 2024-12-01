@@ -112,7 +112,9 @@ RenderProtocol::RenderProtocol( D3D12Device& device,
 	device.get()->CreateGraphicsPipelineState(&psoDesc, __uuidof(InterfaceType), &get());
 }
 
-UnifiedRoot::UnifiedRoot(D3D12Device& device)
+namespace detail {
+
+UnifiedRootImpl::UnifiedRootImpl(D3D12Device& device)
 	: RootSignature() {
 	auto tex2dRange = D3D12_DESCRIPTOR_RANGE {
 		.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
@@ -309,6 +311,10 @@ UnifiedRoot::UnifiedRoot(D3D12Device& device)
 	);
 }
 
+}	// namespace gfx::d3d12::detail
+
+detail::UnifiedRootImpl UnifiedRoot::impl_;
+
 sr::PBRMaterial sr::PBRMaterial::convert(const Material& material) {
 	return PBRMaterial{
 		.albedoConstant = material.constant<dx::XMFLOAT4>(Material::ConstantType::Albedo),
@@ -334,9 +340,10 @@ sr::PBRMaterial sr::PBRMaterial::convert(const Material& material) {
 ShaderPBRIllumination::ShaderPBRIllumination( D3D12Device& device, const RootSignature& root,
 	const Config& config, InputLayout::Spec ilSpec
 ) : Shader(root, makeInputLayout(ilSpec)),
+	cbDrawcallDataSize_( calcConstantBufferSize(sizeof(sr::PerDrawcallData0)) ),
 	perConfigurationData_(device, sizeof(sr::PerConfigurationData0)),
 	perFrameData_(device, sizeof(sr::PerFrameData0)),
-	perDrawcallData_(device, sizeof(sr::PerDrawcallData0) * config.maxDrawcallCnt),
+	perDrawcallData_(device, cbDrawcallDataSize_ * config.maxDrawcallCnt),
 	perInstanceData_(device, sizeof(sr::PerInstanceData0) * config.maxInstanceCnt),
 	lightBuffer_(device, sizeof(sr::Light) * config.maxLightCnt),
 	maxInstanceCnt_(config.maxInstanceCnt), maxLightCnt_(config.maxLightCnt),
@@ -348,9 +355,9 @@ ShaderPBRIllumination::ShaderPBRIllumination( D3D12Device& device, const RootSig
 	lightBuffer_.pullGpuAddr();
 }
 
-void ShaderPBRIllumination::bindRootParams(
-	const UnifiedRoot& root, D3D12GfxCmdList& cmdList
-) {
+void ShaderPBRIllumination::bindRootParams(D3D12GfxCmdList& cmdList) {
+	auto& root = UnifiedRoot::get();
+
 	cmdList.get()->SetGraphicsRootConstantBufferView(
 		root.params[ UnifiedRoot::ParamIndices::b0 ],
 		perConfigurationData_.gpuAddr()
@@ -370,6 +377,15 @@ void ShaderPBRIllumination::bindRootParams(
 	cmdList.get()->SetGraphicsRootShaderResourceView(
 		root.params[ UnifiedRoot::ParamIndices::t1 ],
 		lightBuffer_.gpuAddr()
+	);
+}
+
+void ShaderPBRIllumination::bindPerDrawcallData(
+	std::size_t drawcallIdx, D3D12GfxCmdList& cmdList
+) {
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		UnifiedRoot::get().params[ UnifiedRoot::ParamIndices::b1 ],
+		perDrawcallData_.gpuAddr() + cbDrawcallDataSize() * drawcallIdx
 	);
 }
 
@@ -457,9 +473,10 @@ InputLayout ShaderPBRIllumination::makeInputLayoutSeparated() {
 ShaderPBRIlluminationMacro::ShaderPBRIlluminationMacro( D3D12Device& device, const RootSignature& root,
 	const Config& config, InputLayout::Spec ilSpec
 ) : Shader(root, makeInputLayout(ilSpec)),
+	cbDrawcallDataSize_( calcConstantBufferSize(sizeof(sr::PerDrawcallData0)) ),
 	perConfigurationData_(device, sizeof(sr::PerConfigurationData0)),
 	perFrameData_(device, sizeof(sr::PerFrameData0)),
-	perDrawcallData_(device, sizeof(sr::PerDrawcallData0) * config.maxDrawcallCnt),
+	perDrawcallData_(device, cbDrawcallDataSize_ * config.maxDrawcallCnt),
 	perInstanceData_(device, sizeof(sr::PerInstanceData0) * config.maxInstanceCnt),
 	lightBuffer_(device, sizeof(sr::Light) * config.maxLightCnt),
 	maxInstanceCnt_(config.maxInstanceCnt), maxLightCnt_(config.maxLightCnt),
@@ -471,16 +488,12 @@ ShaderPBRIlluminationMacro::ShaderPBRIlluminationMacro( D3D12Device& device, con
 	lightBuffer_.pullGpuAddr();
 }
 
-void ShaderPBRIlluminationMacro::bindRootParams(
-	const UnifiedRoot& root, D3D12GfxCmdList& cmdList
-) {
+void ShaderPBRIlluminationMacro::bindRootParams(D3D12GfxCmdList& cmdList) {
+	auto& root = UnifiedRoot::get();
+
 	cmdList.get()->SetGraphicsRootConstantBufferView(
 		root.params[ UnifiedRoot::ParamIndices::b0 ],
 		perConfigurationData_.gpuAddr()
-	);
-	cmdList.get()->SetGraphicsRootConstantBufferView(
-		root.params[ UnifiedRoot::ParamIndices::b1 ],
-		perDrawcallData_.gpuAddr()
 	);
 	cmdList.get()->SetGraphicsRootConstantBufferView(
 		root.params[ UnifiedRoot::ParamIndices::b2 ],
@@ -493,6 +506,15 @@ void ShaderPBRIlluminationMacro::bindRootParams(
 	cmdList.get()->SetGraphicsRootShaderResourceView(
 		root.params[ UnifiedRoot::ParamIndices::t1 ],
 		lightBuffer_.gpuAddr()
+	);
+}
+
+void ShaderPBRIlluminationMacro::bindPerDrawcallData(
+	std::size_t drawcallIdx, D3D12GfxCmdList& cmdList
+) {
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		UnifiedRoot::get().params[ UnifiedRoot::ParamIndices::b1 ],
+		perDrawcallData_.gpuAddr() + cbDrawcallDataSize() * drawcallIdx
 	);
 }
 

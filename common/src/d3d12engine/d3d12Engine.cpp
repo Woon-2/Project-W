@@ -12,7 +12,8 @@ Core::Core()
     dsvHeap_(device_, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, initialDsvHeapSize),
     cbvSrvUavHeap_(device_, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, initialCbvSrvUavHeapSize),
     descRanges_(rtvHeap_, dsvHeap_, cbvSrvUavHeap_),
-    root_(device_), window_(), fence_(device_) {
+    window_(), fence_(device_) {
+    d3d12::UnifiedRoot::init(device_);
     window_.open( factory_, device_, cmdQueue_, "Project-W",
         Win32::WndFrame{ .x = 100, .y = 100, .width = 1600, .height = 900 },
         descRanges_.rtvRangeBackBuf, descRanges_.dsvRangeBackBuf
@@ -25,8 +26,8 @@ Core::Core()
 
 void Core::render(IRenderer& renderer, Scene& scene) {
     cmdList_.reset();
-    cmdList_.get()->SetGraphicsRootSignature(root_.get().Get());
-    cmdList_.get()->SetComputeRootSignature(root_.get().Get());
+    cmdList_.get()->SetGraphicsRootSignature(d3d12::UnifiedRoot::get().get().Get());
+    cmdList_.get()->SetComputeRootSignature(d3d12::UnifiedRoot::get().get().Get());
     window_.setRenderTarget(cmdList_);
     window_.clearRenderTarget(cmdList_);
     window_.clearDepthStencil(cmdList_);
@@ -41,8 +42,8 @@ void Core::render(IRenderer& renderer, Scene& scene) {
 
 void Core::render() {
     cmdList_.reset();
-    cmdList_.get()->SetGraphicsRootSignature(root_.get().Get());
-    cmdList_.get()->SetComputeRootSignature(root_.get().Get());
+    cmdList_.get()->SetGraphicsRootSignature(d3d12::UnifiedRoot::get().get().Get());
+    cmdList_.get()->SetComputeRootSignature(d3d12::UnifiedRoot::get().get().Get());
     window_.setRenderTarget(cmdList_);
     window_.clearRenderTarget(cmdList_);
     window_.clearDepthStencil(cmdList_);

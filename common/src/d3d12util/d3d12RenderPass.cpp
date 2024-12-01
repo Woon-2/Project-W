@@ -143,8 +143,10 @@ void PBRIllumination::render(D3D12GfxCmdList& cmdList) {
             .samplerIdx = 0u
         };
         shader().perDrawcallData_.stage( &pdd, sizeof(sr::PerDrawcallData0),
-            0u, accDrawcallCnt++ * sizeof(sr::PerDrawcallData0)
+            0u, accDrawcallCnt * shader().cbDrawcallDataSize()
         );
+
+        shader().bindPerDrawcallData(accDrawcallCnt++, cmdList);
 
         shader().draw( cmdList, *pSubmesh, static_cast<std::size_t>(last - first),
             std::get<VBLayoutIdx>(*first)
@@ -296,8 +298,10 @@ void PBRIlluminationMacro::render(D3D12GfxCmdList& cmdList) {
             .samplerIdx = 0u
         };
         shader().perDrawcallData_.stage( &pdd, sizeof(sr::PerDrawcallData0),
-            0u, accDrawcallCnt++ * sizeof(sr::PerDrawcallData0)
+            0u, accDrawcallCnt * shader().cbDrawcallDataSize()
         );
+
+        shader().bindPerDrawcallData(accDrawcallCnt++, cmdList);
 
         shader().draw( cmdList, *pSubmesh, static_cast<std::size_t>(last - first),
             std::get<VBLayoutIdx>(*first)

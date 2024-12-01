@@ -27,7 +27,7 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
 
     auto cmdList = core.fetchCmdList();
 
-    shader_.bindRootParams( core.root(), cmdList );
+    shader_.bindRootParams( cmdList );
     renderPass_.preRender( cmdList );
     renderPass_.render( cmdList );
     renderPass_.postRender( cmdList );
