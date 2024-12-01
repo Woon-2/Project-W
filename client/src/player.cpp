@@ -16,9 +16,11 @@ void Player::init(gfx::d3d12engine::Core& core) {
 }
 
 void MU_CALLCONV Player::addCamera( mu::Vec3 offset, float timeLag,
-	const gfx::d3d12::Camera::Config& config
+	const gfx::d3d12::Camera::Config& config, gfx::d3d12engine::CoordRoot& coordRoot
 ) {
 	createComponent<gfx::d3d12engine::Camera>(config);
+	as<gfx::d3d12engine::Camera>().get().coordMovement() << mu::translate(offset);
+	as<gfx::d3d12engine::Camera>().get().coordMovement().setParent(&coordRoot.get());
 	as<gfx::d3d12engine::Camera>().setOffset(offset);
 	as<gfx::d3d12engine::Camera>().setTimeLag(timeLag);
 	as<gfx::d3d12engine::Camera>().attach( as<gfx::d3d12engine::Model>() );
