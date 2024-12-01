@@ -33,14 +33,14 @@ public:
         float farZ = defFar;
     };
 
-    Camera(coord::System& baseCoordSys)
-        : Camera(baseCoordSys, Config()) {}
+    Camera()
+        : Camera(Config()) {}
 
-    Camera(coord::System& baseCoordSys, const Config& config)
-        : coordSys_(), config_(config), view_(), proj_(
+    Camera(const Config& config)
+        : coordMovement_(), coordRotation_(), config_(config), view_(), proj_(
             mu::persp(config_.fov, config_.aspect,config_.nearZ, config_.farZ)
         ), repPos_(), repUp_() {
-        coordSys_.setParent(&baseCoordSys);
+        coordRotation_.setParent(&coordMovement_);
     }
 
     const Config& config() const NOEXCEPT {
@@ -72,12 +72,20 @@ public:
         focusMode_ = FocusMode::None;
     }
 
-    coord::System& coord() NOEXCEPT {
-        return coordSys_;
+    coord::System& coordMovement() NOEXCEPT {
+        return coordMovement_;
     }
 
-    const coord::System& coord() const NOEXCEPT {
-        return coordSys_;
+    const coord::System& coordMovement() const NOEXCEPT {
+        return coordMovement_;
+    }
+
+    coord::System& coordRotation() NOEXCEPT {
+        return coordRotation_;
+    }
+
+    const coord::System& coordRotation() const NOEXCEPT {
+        return coordRotation_;
     }
 
     mu::Mat4x4 MU_CALLCONV view() const NOEXCEPT {
@@ -101,7 +109,8 @@ public:
     }
 
 private:
-    coord::System coordSys_;
+    coord::System coordMovement_;
+    coord::System coordRotation_;
     Config config_;
     mu::Mat4x4 view_;
     mu::Mat4x4 proj_;

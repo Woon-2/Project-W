@@ -129,64 +129,48 @@ Model::Model( const ecs::Entity& entity,
     model_.root()->coord().setParent(&coordComp.get());
 }
 
-Camera::Camera( const ecs::Entity& entity,
-    coord::System& baseCoord
-) : ecs::Component(entity), camera_(baseCoord) {}
+Camera::Camera(const ecs::Entity& entity)
+    : ecs::Component(entity), camera_(),
+    pAttachedMovement_(nullptr), pAttachedRotation_(nullptr),
+    offset_(), timeLag_(0.f) {}
 
-
 Camera::Camera( const ecs::Entity& entity,
-    coord::System& baseCoord,
     const d3d12::Camera::Config& config
-) : ecs::Component(entity), camera_(baseCoord, config) {}
+) : ecs::Component(entity), camera_(config),
+    pAttachedMovement_(nullptr), pAttachedRotation_(nullptr),
+    offset_(), timeLag_(0.f) {}
 
 void Camera::update(float deltaTime) {
-    auto playerXform = pAttached_->xform();
-    auto playerPos = mu::Vec3(playerXform.row(3));
+    // following camera
+    if (pAttachedMovement_ && pAttachedRotation_) {
+        const auto targetPos = mu::Vec3(pAttachedMovement_->localXform().row(3));
+        const auto idealPos = targetPos + offset_;
+        const auto curPos = mu::Vec3(camera_.coordMovement().localXform().row(3));
+        const auto deltaPos = idealPos - curPos;
 
-    auto cameraXform = camera_.coord().xform();
-    auto cameraPos = cameraXform.row(3);
+        const auto movement = timeLag_ ? deltaPos * deltaTime / timeLag_ : deltaPos * deltaTime;
+        camera_.coordMovement() << mu::translate(movement);
+        const auto updatedPos = mu::Vec3(camera_.coordMovement().localXform().row(3));
+        const auto augmentedLook = timeLag_ ? mu::normalize( (targetPos - updatedPos) + movement * deltaTime / timeLag_ )
+            : mu::normalize(targetPos - updatedPos);
+        const auto cameraLook = mu::normalize(mu::Vec3(camera_.coordRotation().localXform().row(2)));
 
-    mu::Mat4x4 rotationMatrix = mu::Mat4x4();
-    mu::Vec3 right = pAttached_->xform().row(0);
-    mu::Vec3 up = pAttached_->xform().row(1);
-    mu::Vec3 look = pAttached_->xform().row(2);
-
-    rotationMatrix.setRow(0, right);
-    rotationMatrix.setRow(1, up);
-    rotationMatrix.setRow(2, look); 
-
-	mu::Vec3 xmf3Offset = mu::Vec4(offset_, 1.f) * rotationMatrix;
-	mu::Vec3 xmf3Position = playerPos + xmf3Offset;
-	mu::Vec3 xmf3Direction = xmf3Position - mu::Vec3(cameraPos);
-
-    float fLength = xmf3Direction.len();
-	xmf3Direction = xmf3Direction.norm();
-	float fTimeLagScale = (timeLag_) ? deltaTime * (1.f / timeLag_) : 1.f;
-	float fDistance = fLength * fTimeLagScale;
-
-	if (fDistance > fLength) {
-		fDistance = fLength;
-	}
-
-	if (fLength < 0.01f) {
-		fDistance = fLength;
-	}
-
-	if (fDistance > 0.f) {
-        cameraPos += mu::Vec4(xmf3Direction * fDistance, 0.f);
-		auto posDiff = mu::Vec3(cameraPos) - xmf3Position;
-		auto reducedDiff = posDiff * 0.5f;
-
-        camera_.coord().setLocalXform(mu::Mat4x4());
-        camera_.coord() << mu::translate(cameraPos);
-
-        camera_.focusAt( playerPos + ( reducedDiff * mu::Vec3( playerXform.row(2) ) ), playerXform.row(1));
-	}
-	else {
-        camera_.focusAt(playerPos + mu::Vec3(playerXform.row(2)), playerXform.row(1));
-	}
-
+        const auto rotAxis = mu::cross(cameraLook, augmentedLook);
+        const auto rotAngle = mu::acos(mu::dot(cameraLook, augmentedLook));
+        camera_.coordRotation() << mu::rotate(rotAngle, rotAxis);
+    }
+    
 	camera_.updateView();
+}
+
+void Camera::attach(const Model& model) NOEXCEPT {
+    pAttachedMovement_ = model.get().root()->coord().parent();
+    pAttachedRotation_ = &model.get().root()->coord();
+}
+
+void Camera::detach() NOEXCEPT {
+    pAttachedMovement_ = nullptr;
+    pAttachedRotation_ = nullptr;
 }
 
 void Scene::addEntity(ecs::Entity& entity) {

@@ -145,12 +145,9 @@ class Camera : public ecs::Component {
 public:
     ENABLE_COMPONENT(Camera);
 
-    Camera( const ecs::Entity& entity,
-        coord::System& baseCoord
-    );
+    Camera(const ecs::Entity& entity);
 
     Camera( const ecs::Entity& entity,
-        coord::System& baseCoord,
         const d3d12::Camera::Config& config
     );
 
@@ -158,10 +155,15 @@ public:
     const d3d12::Camera& get() const NOEXCEPT { return camera_; }
 
     void update(float deltaTime);
+    void attach(const Model& model) NOEXCEPT;
+    void detach() NOEXCEPT;
+    void setTimeLag(float timeLag) NOEXCEPT { timeLag_ = timeLag; }
+    void MU_CALLCONV setOffset(mu::Vec3 offset) NOEXCEPT { offset_ = offset; }
 
 private:
     d3d12::Camera camera_;
-    const coord::System* pAttached_;
+    const coord::System* pAttachedMovement_;
+    const coord::System* pAttachedRotation_;
     mu::Vec3 offset_;
     float timeLag_;
 };
