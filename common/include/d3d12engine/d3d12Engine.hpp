@@ -67,7 +67,13 @@ public:
     }
 
     void loadStaticTexture(const std::filesystem::path& path, d3d12::TextureResource::Type type);
-    void loadRefModel(const std::filesystem::path& path, const d3d12::RefModelStorage::ID& key);
+    void loadRefModel(const std::filesystem::path& path, const d3d12::RefModelStorage::ID& key);\
+    void layoutRefModelVBs( const d3d12::RefModelStorage::ID& key, std::size_t vbLayoutIdx,
+        const d3d12::InputLayout& inputLayout
+    );
+    void layoutRefModelVBs(const d3d12::RefModelStorage::ID& key, std::size_t vbLayoutIdx,
+        const std::vector<std::vector<Vertex::Properties>>& vbProps
+    );
     void loadTerrain( const d3d12::Bitmap& heightMap, const std::filesystem::path& albedoMapPath,
         const d3d12::RefModelStorage::ID& key, mu::Vec3 scale,
         std::size_t xDivisions = 1u, std::size_t zDivisions = 1u

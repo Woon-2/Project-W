@@ -11,6 +11,13 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
         gfx::d3d12::convClientToVP( core.window().client() )
     ) {}
 
+void Renderer::layoutVBs( gfx::d3d12engine::Core& core,
+    const gfx::d3d12::RefModelStorage::ID& key,
+    std::size_t layoutIdx
+) {
+    core.layoutRefModelVBs( key, layoutIdx, shader_.inputLayout() );
+}
+
 void Renderer::init(gfx::d3d12engine::Scene& scene) {
     renderPass_.init(scene);
 }

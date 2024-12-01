@@ -145,6 +145,10 @@ void arrangeVBs(RefMesh& refMesh, D3D12Device& device, D3D12GfxCmdList& cmdList,
 	std::size_t layoutIdx, const InputLayout& inputLayout
 );
 
+void arrangeVBs(RefModel& refModel, D3D12Device& device, D3D12GfxCmdList& cmdList,
+	std::size_t layoutIdx, const InputLayout& inputLayout
+);
+
 class ShaderBlob : public dx::DXWrapper<ID3DBlob> {
 public:
 	enum class Type {

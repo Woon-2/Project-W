@@ -95,11 +95,12 @@ void Stage::loadTextures(gfx::d3d12engine::Core& core) {
     loadTexture(core, AssetTexture::Helicopter);
 }
 
-void loadModel(gfx::d3d12engine::Core& core, AssetModel key) {
+void loadModel(gfx::d3d12engine::Core& core, AssetModel key, Renderer& renderer) {
     auto modelInfo = assetModelInfo(key);
     core.loadRefModel(modelInfo.path, modelInfo.id);
+    renderer.layoutVBs(core, modelInfo.id, 1);
 }
 
 void Stage::loadModels(gfx::d3d12engine::Core& core) {
-    loadModel(core, AssetModel::Helicopter);
+    loadModel(core, AssetModel::Helicopter, *pRenderer_);
 }

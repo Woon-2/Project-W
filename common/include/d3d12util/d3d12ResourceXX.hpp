@@ -552,6 +552,10 @@ public:
         D3D12Device& device, D3D12GfxCmdList& cmdList, const StaticTextureStorage& sts
     );
 
+    void arrangeVBs( D3D12Device& device, D3D12GfxCmdList& cmdList,
+        std::size_t layoutIdx, const std::vector<std::vector<Vertex::Properties>>& vbProps
+    );
+
     void map(const Material::MapRef& mapRef, const DescriptorGPU& descriptor) {
         textureMap_[mapRef] = descriptor;
     }
@@ -594,6 +598,10 @@ public:
 
     RefModel& operator[](const ID& key) {
         return get(key);
+    }
+
+    bool contains(const ID& key) const {
+        return map_.contains(key);
     }
 
 private:

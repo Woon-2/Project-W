@@ -371,12 +371,13 @@ void RefMesh::arrangeVBs( D3D12Device& device, D3D12GfxCmdList& cmdList,
     // make newly arranged Vbs based on primaryVBs at layout index 0
     // to match the specified vbProps(layout)
 
-    auto& primaryVBs = vbLayouts_[0];
-    assert(!primaryVBs.empty());
-
     if (vbLayouts_.size() <= layoutIdx) {
         vbLayouts_.resize(layoutIdx + 1);
     }
+
+    auto& primaryVBs = vbLayouts_[0];
+    assert(!primaryVBs.empty());
+
     auto newVBs = std::vector<VertexBuffer>{};
 
     for (auto& props : vbProps) {
@@ -1155,6 +1156,16 @@ void RefModel::loadNodesFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
 		{
 			break;
 		}
+    }
+}
+
+void RefModel::arrangeVBs( D3D12Device& device, D3D12GfxCmdList& cmdList,
+    std::size_t layoutIdx, const std::vector<std::vector<Vertex::Properties>>& vbProps
+) {
+    for (auto& node : nodeStorage_) {
+        for (auto& mesh : node.meshes_) {
+            mesh.arrangeVBs(device, cmdList, layoutIdx, vbProps);
+        }
     }
 }
 

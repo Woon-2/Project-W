@@ -29,14 +29,24 @@ void arrangeVBs(RefMesh& refMesh, D3D12Device& device, D3D12GfxCmdList& cmdList,
 	for (std::size_t i = 0; i < inputLayout.slotCnt(); ++i) {
 		const auto& slot = inputLayout.slot(i);
 
-		for (auto i = etoi(Vertex::Properties::Position3D); i < etoi(Vertex::Properties::SIZE); ++i) {
-			if (slot.attributes.test(i)) {
-				slotProps[i].push_back( static_cast<Vertex::Properties>(i) );
+		for (auto j = etoi(Vertex::Properties::Position3D); j < etoi(Vertex::Properties::SIZE); ++j) {
+			if (slot.attributes.test(j)) {
+				slotProps[i].push_back( static_cast<Vertex::Properties>(j) );
 			}
 		}
 	}
 
 	refMesh.arrangeVBs(device, cmdList, layoutIdx, slotProps);
+}
+
+void arrangeVBs(RefModel& refModel, D3D12Device& device, D3D12GfxCmdList& cmdList,
+	std::size_t layoutIdx, const InputLayout& inputLayout
+) {
+	for (auto& node : refModel.nodes()) {
+		for (auto& mesh : node.meshes()) {
+			arrangeVBs(mesh, device, cmdList, layoutIdx, inputLayout);
+		}
+	}
 }
 
 ShaderBlob::ShaderBlob( const std::filesystem::path& path,

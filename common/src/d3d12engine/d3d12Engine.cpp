@@ -81,12 +81,32 @@ void Core::loadRefModel( const std::filesystem::path& path,
     refModelStorage_.loadModel(path, key, staticTexStorage_, device_, cmdList_);
 }
 
+void Core::layoutRefModelVBs( const d3d12::RefModelStorage::ID& key, std::size_t vbLayoutIdx,
+    const d3d12::InputLayout& inputLayout
+) {
+    if (!refModelStorage_.contains(key)) {
+        throw GFX_EXCEPT("[Description] RefModel not found: " + key);
+    }
+
+    d3d12::arrangeVBs(refModelStorage_.get(key), device_, cmdList_, vbLayoutIdx, inputLayout);
+}
+
+void Core::layoutRefModelVBs(const d3d12::RefModelStorage::ID& key, std::size_t vbLayoutIdx,
+    const std::vector<std::vector<Vertex::Properties>>& vbProps
+) {
+    if (!refModelStorage_.contains(key)) {
+        throw GFX_EXCEPT("[Description] RefModel not found: " + key);
+    }
+
+    refModelStorage_.get(key).arrangeVBs(device_, cmdList_, vbLayoutIdx, vbProps);
+}
+
 void Core::loadTerrain( const d3d12::Bitmap& heightMap,
     const std::filesystem::path& albedoMapPath, const d3d12::RefModelStorage::ID& key,
     mu::Vec3 scale, std::size_t xDivisions, std::size_t zDivisions
 ) {
     if (!staticTexStorage_.contains(albedoMapPath)) {
-        throw GFX_EXCEPT("Texture not found: " + albedoMapPath.string());
+        throw GFX_EXCEPT("[Description] Texture not found: " + albedoMapPath.string());
     }
 
     auto albedoMapRef = d3d12::Material::MapRef{

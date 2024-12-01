@@ -9,6 +9,10 @@ public:
 
     void init(gfx::d3d12engine::Scene& scene) override;
     void render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& scene) override;
+    void layoutVBs( gfx::d3d12engine::Core& core,
+        const gfx::d3d12::RefModelStorage::ID& key,
+        std::size_t layoutIdx
+    );
 
 private:
     gfx::d3d12::ShaderPBRIllumination shader_;
