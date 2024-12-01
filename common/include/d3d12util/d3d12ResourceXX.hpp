@@ -333,13 +333,13 @@ public:
     VertexBuffer() = default;
 
     VertexBuffer(D3D12Device& device, D3D12GfxCmdList& cmdList,
-        const void* pData, std::size_t byteWidth, std::size_t stride,
+        std::vector<std::uint8_t>&& pData, std::size_t byteWidth, std::size_t stride,
 		std::bitset<etoi(Vertex::Properties::SIZE)> attribs
     );
 
     VertexBuffer(D3D12Device& device, D3D12GfxCmdList& cmdList,
-        const gfx::VertexBuffer& vertexBuffer
-    ) : VertexBuffer(device, cmdList, vertexBuffer.rawMem(), vertexBuffer.byteWidth(),
+        gfx::VertexBuffer&& vertexBuffer
+    ) : VertexBuffer(device, cmdList, std::move(vertexBuffer).vertices(), vertexBuffer.byteWidth(),
         vertexBuffer.stride(), vertexBuffer.propFlag()
     ) {}
 
@@ -356,8 +356,11 @@ public:
 	}
 
 	const auto& attributes() const noexcept { return attribs_; }
+    const void* cpuMem() const noexcept { return cpuMem_.data(); }
+    void releaseCpuMem() noexcept { cpuMem_.clear(); cpuMem_.shrink_to_fit(); }
 
 private:
+    std::vector<std::uint8_t> cpuMem_;
 	std::bitset<etoi(Vertex::Properties::SIZE)> attribs_;
 };
 
@@ -459,7 +462,7 @@ public:
     }
 
 private:
-    void draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt) const;
+    void draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt, std::size_t vbLayoutIdx) const;
 
     RefMesh* parent_;
     IndexBuffer ib_;
@@ -471,8 +474,16 @@ class RefMesh {
 public:
     friend class RefModel;
 
-    const auto& vbs() const noexcept {
-        return vbs_;
+    void arrangeVBs( D3D12Device& device, D3D12GfxCmdList& cmdList,
+        std::size_t layoutIdx, const std::vector<std::vector<Vertex::Properties>>& vbProps
+    );
+
+    const auto& vbs(std::size_t layoutIdx) const noexcept {
+        return vbLayouts_[layoutIdx];
+    }
+
+    std::size_t vbLayoutCnt() const noexcept {
+        return vbLayouts_.size();
     }
 
     const auto& submeshes() const noexcept {
@@ -488,7 +499,7 @@ private:
     );
 
     std::string name_;
-    std::vector<VertexBuffer> vbs_;
+    std::vector< std::vector<VertexBuffer> > vbLayouts_;
     std::vector<RefSubmesh> submeshes_;
 };
 
@@ -602,8 +613,8 @@ public:
         return parent_;
     }
 
-    void draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt) const {
-        pRefSubmesh_->draw(cmdList, instanceCnt);
+    void draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt, std::size_t vbLayoutIdx) const {
+        pRefSubmesh_->draw(cmdList, instanceCnt, vbLayoutIdx);
     }
 
     Material& material() noexcept {

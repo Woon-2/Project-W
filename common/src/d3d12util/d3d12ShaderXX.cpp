@@ -12,6 +12,33 @@ namespace gfx {
 
 namespace d3d12 {
 
+std::optional<std::size_t> InputLayout::bindableIdx(const RefMesh& mesh) const {
+	for (std::size_t i = 0u; i < mesh.vbLayoutCnt(); ++i) {
+		if (checkBindable(mesh.vbs(i))) {
+			return i;
+		}
+	}
+
+	return std::nullopt;
+}
+
+void arrangeVBs(RefMesh& refMesh, D3D12Device& device, D3D12GfxCmdList& cmdList,
+	std::size_t layoutIdx, const InputLayout& inputLayout
+) {
+	auto slotProps = std::vector<std::vector<Vertex::Properties>>(inputLayout.slotCnt());
+	for (std::size_t i = 0; i < inputLayout.slotCnt(); ++i) {
+		const auto& slot = inputLayout.slot(i);
+
+		for (auto i = etoi(Vertex::Properties::Position3D); i < etoi(Vertex::Properties::SIZE); ++i) {
+			if (slot.attributes.test(i)) {
+				slotProps[i].push_back( static_cast<Vertex::Properties>(i) );
+			}
+		}
+	}
+
+	refMesh.arrangeVBs(device, cmdList, layoutIdx, slotProps);
+}
+
 ShaderBlob::ShaderBlob( const std::filesystem::path& path,
 	const InputLayout& inputLayout, const D3D_SHADER_MACRO* macros,
 	std::string_view entryPoint, std::string_view target,

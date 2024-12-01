@@ -74,14 +74,18 @@ void PBRIllumination::preRender(D3D12GfxCmdList& cmdList) {
     auto scissorRect = D3D12_RECT{ 0, 0, static_cast<LONG>(viewport_.Width), static_cast<LONG>(viewport_.Height) };
     cmdList.get()->RSSetScissorRects(1u, &scissorRect);
 
-    std::ranges::sort( batch_, std::less<>{}, [this](const auto& pair) {
-        return std::tuple(&pair.first->material(), pair.first->refSubmesh());
+    std::ranges::sort( batch_, std::less<>{}, [this](const auto& tuple) {
+        return std::tuple(
+            &std::get<gfx::d3d12::Submesh*>(tuple)->material(),
+            std::get<gfx::d3d12::Submesh*>(tuple)->refSubmesh()
+        );
     } );
 
     auto pids = std::vector<sr::PerInstanceData0>();
     pids.reserve( shader().maxInstanceCnt() );
 
-    for (const auto& [pSubmesh, xform] : batch_) {
+    for (auto& [pSubmesh, vbLayoutIdx, xform] : batch_) {
+        xform = pSubmesh->parent()->parent()->coord().xform();
         pids.emplace_back(
             /* .wvp = */ mu::transpose( xform * pCamera_->view() * pCamera_->proj() ).getXmf(),
             /* .wv = */ mu::transpose( xform * pCamera_->view() ).getXmf(),
@@ -119,15 +123,17 @@ void PBRIllumination::preRender(D3D12GfxCmdList& cmdList) {
 void PBRIllumination::render(D3D12GfxCmdList& cmdList) {
     auto first = batch_.begin();
     auto accDrawcallCnt = 0u;
-
     while (first != batch_.end()) {
-        auto proj = [this](const auto& pair) {
-            return std::tuple(&pair.first->material(), pair.first->refSubmesh());
+        auto proj = [this](const auto& tuple) {
+            return std::tuple(
+                &std::get<gfx::d3d12::Submesh*>(tuple)->material(),
+                std::get<gfx::d3d12::Submesh*>(tuple)->refSubmesh()
+            );
         };
 
         auto last = std::ranges::upper_bound(first, batch_.end(), proj(*first), std::less<>{}, proj);
 
-        auto pSubmesh = first->first;
+        auto pSubmesh = std::get<gfx::d3d12::Submesh*>(*first);
 
         auto material = sr::PBRMaterial::convert( pSubmesh->material() );
 
@@ -139,7 +145,9 @@ void PBRIllumination::render(D3D12GfxCmdList& cmdList) {
             0u, accDrawcallCnt++ * sizeof(sr::PerDrawcallData0)
         );
 
-        shader().draw( cmdList, *pSubmesh, static_cast<std::size_t>(last - first) );
+        shader().draw( cmdList, *pSubmesh, static_cast<std::size_t>(last - first),
+            std::get<VBLayoutIdx>(*first)
+        );
 
         if (accDrawcallCnt == shader().maxDrawcallCnt()) {
             break;
@@ -166,11 +174,13 @@ void PBRIllumination::trackModel(Model* pModel) {
     for (auto& node : nodes) {
         auto xform = node.coord().xform();
         for (auto& mesh : node.meshes()) {
-            if (!protocol_.compatibleWith(*mesh.refMesh())) {
+            auto vbLayoutIdx = protocol_.compatibleLayout(*mesh.refMesh());
+            if (!vbLayoutIdx) {
                 throw std::runtime_error("Incompatible mesh");
             }
+
             for (auto& submesh : mesh.submeshes()) {
-                batch_.emplace_back(&submesh, xform);
+                batch_.emplace_back(&submesh, vbLayoutIdx.value(), xform);
             }
         }
     }
@@ -215,14 +225,17 @@ void PBRIlluminationMacro::preRender(D3D12GfxCmdList& cmdList) {
     auto scissorRect = D3D12_RECT{ 0, 0, static_cast<LONG>(viewport_.Width), static_cast<LONG>(viewport_.Height) };
     cmdList.get()->RSSetScissorRects(1u, &scissorRect);
 
-    std::ranges::sort(batch_, std::less<>{}, [this](const auto& pair) {
-        return std::tuple(&pair.first->material(), pair.first->refSubmesh());
-    });
+    std::ranges::sort( batch_, std::less<>{}, [this](const auto& tuple) {
+        return std::tuple(
+            &std::get<gfx::d3d12::Submesh*>(tuple)->material(),
+            std::get<gfx::d3d12::Submesh*>(tuple)->refSubmesh()
+        );
+    } );
 
     auto pids = std::vector<sr::PerInstanceData0>();
     pids.reserve( shader().maxInstanceCnt() );
 
-    for (auto& [pSubmesh, xform] : batch_) {
+    for (auto& [pSubmesh, vbLayoutIdx, xform] : batch_) {
         xform = pSubmesh->parent()->parent()->coord().xform();
         pids.emplace_back(
             /* .wvp = */ mu::transpose( xform * pCamera_->view() * pCamera_->proj() ).getXmf(),
@@ -263,13 +276,16 @@ void PBRIlluminationMacro::render(D3D12GfxCmdList& cmdList) {
     auto accDrawcallCnt = 0u;
 
     while (first != batch_.end()) {
-        auto proj = [this](const auto& pair) {
-            return std::tuple(&pair.first->material(), pair.first->refSubmesh());
+        auto proj = [this](const auto& tuple) {
+            return std::tuple(
+                &std::get<gfx::d3d12::Submesh*>(tuple)->material(),
+                std::get<gfx::d3d12::Submesh*>(tuple)->refSubmesh()
+            );
         };
 
         auto last = std::ranges::upper_bound(first, batch_.end(), proj(*first), std::less<>{}, proj);
 
-        auto pSubmesh = first->first;
+        auto pSubmesh = std::get<gfx::d3d12::Submesh*>(*first);
 
         auto material = sr::PBRMaterial::convert( pSubmesh->material() );
 
@@ -281,7 +297,9 @@ void PBRIlluminationMacro::render(D3D12GfxCmdList& cmdList) {
             0u, accDrawcallCnt++ * sizeof(sr::PerDrawcallData0)
         );
 
-        shader().draw( cmdList, *pSubmesh, static_cast<std::size_t>(last - first) );
+        shader().draw( cmdList, *pSubmesh, static_cast<std::size_t>(last - first),
+            std::get<VBLayoutIdx>(*first)
+        );
 
         if (accDrawcallCnt == shader().maxDrawcallCnt()) {
             break;
@@ -308,12 +326,13 @@ void PBRIlluminationMacro::trackModel(Model* pModel) {
     for (auto& node : nodes) {
         auto xform = node.coord().xform();
         for (auto& mesh : node.meshes()) {
-            if (!protocol_.compatibleWith(*mesh.refMesh())) {
+            auto vbLayoutIdx = protocol_.compatibleLayout(*mesh.refMesh());
+            if (!vbLayoutIdx) {
                 throw std::runtime_error("Incompatible mesh");
             }
 
             for (auto& submesh : mesh.submeshes()) {
-                batch_.emplace_back(&submesh, xform);
+                batch_.emplace_back(&submesh, vbLayoutIdx.value(), xform);
             }
         }
     }

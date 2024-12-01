@@ -229,10 +229,10 @@ void Material::addConstant(ConstantType type, float constant) {
 }
 
 VertexBuffer::VertexBuffer( D3D12Device& device, D3D12GfxCmdList& cmdList,
-    const void* pData, std::size_t byteWidth, std::size_t stride,
+    std::vector<std::uint8_t>&& pData, std::size_t byteWidth, std::size_t stride,
 	std::bitset<etoi(Vertex::Properties::SIZE)> attribs
-) : DefaultBuffer(device, byteWidth), attribs_(attribs) {
-    auto upBufIdx = cmdList.emplaceXResource<UploadBuffer>(device, pData, byteWidth);
+) : DefaultBuffer(device, byteWidth), cpuMem_(std::move(pData)), attribs_(attribs) {
+    auto upBufIdx = cmdList.emplaceXResource<UploadBuffer>(device, cpuMem_.data(), byteWidth);
     auto& upBuf = cmdList.getXResource<UploadBuffer>(upBufIdx);
     cmdList.copyResource(upBuf, *this);
 
@@ -350,8 +350,10 @@ void Bitmap::unload() {
     }
 }
 
-void RefSubmesh::draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt) const {
-    VertexBuffer::bind(cmdList, 0u, parent_->vbs());
+void RefSubmesh::draw( D3D12GfxCmdList& cmdList, std::size_t instanceCnt,
+    std::size_t vbLayoutIdx
+) const {
+    VertexBuffer::bind(cmdList, 0u, parent_->vbs(vbLayoutIdx));
     ib_.bind(cmdList);
     cmdList.get()->IASetPrimitiveTopology(topology_);
     DX_THROW_FAILED_VOID(
@@ -361,6 +363,62 @@ void RefSubmesh::draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt) const {
             0u, 0, 0u
         )
     );
+}
+
+void RefMesh::arrangeVBs( D3D12Device& device, D3D12GfxCmdList& cmdList,
+    std::size_t layoutIdx, const std::vector<std::vector<Vertex::Properties>>& vbProps
+) {
+    // make newly arranged Vbs based on primaryVBs at layout index 0
+    // to match the specified vbProps(layout)
+
+    auto& primaryVBs = vbLayouts_[0];
+    assert(!primaryVBs.empty());
+
+    if (vbLayouts_.size() <= layoutIdx) {
+        vbLayouts_.resize(layoutIdx + 1);
+    }
+    auto newVBs = std::vector<VertexBuffer>{};
+
+    for (auto& props : vbProps) {
+        // configure memory layout of the new vertex buffer
+        auto vb = gfx::VertexBuffer();
+        std::size_t stride = 0u;
+        for (auto prop : props) {
+            stride += Vertex::propByteWidth(prop);
+        }
+        vb.configStride(stride);
+
+        // calculate the number of vertices
+        auto vertexCnt = primaryVBs[0].vbview().SizeInBytes / primaryVBs[0].vbview().StrideInBytes;
+
+        // construct the new vertex buffer
+        std::size_t accOffset = 0u;
+        for (auto prop : props) {
+            vb.configProperty(prop, accOffset);
+            accOffset += Vertex::propByteWidth(prop);
+
+            auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
+            tmp.set(etoi(prop));
+
+            auto it = std::ranges::find_if(primaryVBs, [tmp](const VertexBuffer& vb) {
+                return vb.attributes() == tmp;
+            });
+
+            if (it != primaryVBs.end()) {
+                assert(Vertex::propByteWidth(prop) == it->vbview().StrideInBytes);
+                vb.constructProperty( prop, it->cpuMem(),
+                    vertexCnt, Vertex::propByteWidth(prop)
+                );
+            }
+            else {
+                vb.constructNullProperty(prop, vertexCnt);
+            }
+        }
+
+        newVBs.emplace_back( device, cmdList, std::move(vb) );
+    }
+
+    vbLayouts_[layoutIdx] = std::move(newVBs);
 }
 
 RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdList, FILE* pInFile) {
@@ -379,6 +437,10 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
 	nReads = (UINT)::fread(meshName.data(), sizeof(char), nStrLength, pInFile);
     ret.name_ = std::move(meshName);
 
+    ret.vbLayouts_.emplace_back();
+    auto& primaryVBs = ret.vbLayouts_.back();
+    auto vbMem = std::vector<std::uint8_t>();
+
 	for ( ; ; )
 	{
 		nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
@@ -396,11 +458,11 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
 			nReads = (UINT)::fread(&nPositions, sizeof(int), 1, pInFile);
 			if (nPositions > 0)
 			{
-				auto positions = std::vector<dx::XMFLOAT3>(nPositions);
-				nReads = (UINT)::fread(positions.data(), sizeof(dx::XMFLOAT3), nPositions, pInFile);
+				vbMem.resize(sizeof(dx::XMFLOAT3) * nPositions);
+				nReads = (UINT)::fread(vbMem.data(), sizeof(dx::XMFLOAT3), nPositions, pInFile);
                 auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
                 tmp.set(etoi(Vertex::Properties::Position3D));
-                ret.vbs_.emplace_back( device, cmdList, positions.data(),
+                primaryVBs.emplace_back( device, cmdList, std::move(vbMem),
                     sizeof(dx::XMFLOAT3) * nPositions, sizeof(dx::XMFLOAT3), tmp
                 );
 			}
@@ -410,11 +472,11 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
 			nReads = (UINT)::fread(&nColors, sizeof(int), 1, pInFile);
 			if (nColors > 0)
 			{
-                auto colors = std::vector<dx::XMFLOAT4>(nColors);
-                nReads = (UINT)::fread(colors.data(), sizeof(dx::XMFLOAT4), nColors, pInFile);
+                vbMem.resize(sizeof(dx::XMFLOAT4) * nColors);
+                nReads = (UINT)::fread(vbMem.data(), sizeof(dx::XMFLOAT4), nColors, pInFile);
                 auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
                 tmp.set(etoi(Vertex::Properties::Color4D));
-                ret.vbs_.emplace_back( device, cmdList, colors.data(),
+                primaryVBs.emplace_back( device, cmdList, std::move(vbMem),
                     sizeof(dx::XMFLOAT4) * nColors, sizeof(dx::XMFLOAT4), tmp
                 );
 			}
@@ -424,11 +486,11 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
 			nReads = (UINT)::fread(&nTextureCoords, sizeof(int), 1, pInFile);
 			if (nTextureCoords > 0)
 			{
-                auto texCoords = std::vector<dx::XMFLOAT2>(nTextureCoords);
-                nReads = (UINT)::fread(texCoords.data(), sizeof(dx::XMFLOAT2), nTextureCoords, pInFile);
+                vbMem.resize(sizeof(dx::XMFLOAT2) * nTextureCoords);
+                nReads = (UINT)::fread(vbMem.data(), sizeof(dx::XMFLOAT2), nTextureCoords, pInFile);
                 auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
                 tmp.set(etoi(Vertex::Properties::TexCoord2D0));
-                ret.vbs_.emplace_back( device, cmdList, texCoords.data(),
+                primaryVBs.emplace_back( device, cmdList, std::move(vbMem),
                     sizeof(dx::XMFLOAT2) * nTextureCoords, sizeof(dx::XMFLOAT2), tmp
                 );
 			}
@@ -438,11 +500,11 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
 			nReads = (UINT)::fread(&nTextureCoords, sizeof(int), 1, pInFile);
 			if (nTextureCoords > 0)
 			{
-                auto texCoords = std::vector<dx::XMFLOAT2>(nTextureCoords);
-                nReads = (UINT)::fread(texCoords.data(), sizeof(dx::XMFLOAT2), nTextureCoords, pInFile);
+                vbMem.resize(sizeof(dx::XMFLOAT2) * nTextureCoords);
+                nReads = (UINT)::fread(vbMem.data(), sizeof(dx::XMFLOAT2), nTextureCoords, pInFile);
                 auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
                 tmp.set(etoi(Vertex::Properties::TexCoord2D1));
-                ret.vbs_.emplace_back( device, cmdList, texCoords.data(),
+                primaryVBs.emplace_back( device, cmdList, std::move(vbMem),
                     sizeof(dx::XMFLOAT2) * nTextureCoords, sizeof(dx::XMFLOAT2), tmp
                 );
 			}
@@ -452,11 +514,11 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
 			nReads = (UINT)::fread(&nNormals, sizeof(int), 1, pInFile);
 			if (nNormals > 0)
 			{
-                auto normals = std::vector<dx::XMFLOAT3>(nNormals);
-                nReads = (UINT)::fread(normals.data(), sizeof(dx::XMFLOAT3), nNormals, pInFile);
+                vbMem.resize(sizeof(dx::XMFLOAT3) * nNormals);
+                nReads = (UINT)::fread(vbMem.data(), sizeof(dx::XMFLOAT3), nNormals, pInFile);
                 auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
                 tmp.set(etoi(Vertex::Properties::Normal3D));
-                ret.vbs_.emplace_back( device, cmdList, normals.data(),
+                primaryVBs.emplace_back( device, cmdList, std::move(vbMem),
                     sizeof(dx::XMFLOAT3) * nNormals, sizeof(dx::XMFLOAT3), tmp
                 );
 			}
@@ -466,11 +528,11 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
 			nReads = (UINT)::fread(&nTangents, sizeof(int), 1, pInFile);
 			if (nTangents > 0)
 			{
-                auto tangents = std::vector<dx::XMFLOAT3>(nTangents);
-                nReads = (UINT)::fread(tangents.data(), sizeof(dx::XMFLOAT3), nTangents, pInFile);
+                vbMem.resize(sizeof(dx::XMFLOAT3) * nTangents);
+                nReads = (UINT)::fread(vbMem.data(), sizeof(dx::XMFLOAT3), nTangents, pInFile);
                 auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
                 tmp.set(etoi(Vertex::Properties::Tangent3D));
-                ret.vbs_.emplace_back( device, cmdList, tangents.data(),
+                primaryVBs.emplace_back( device, cmdList, std::move(vbMem),
                     sizeof(dx::XMFLOAT3) * nTangents, sizeof(dx::XMFLOAT3), tmp
                 );
 			}
@@ -480,11 +542,11 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
 			nReads = (UINT)::fread(&nBiTangents, sizeof(int), 1, pInFile);
 			if (nBiTangents > 0)
 			{
-                auto biTangents = std::vector<dx::XMFLOAT3>(nBiTangents);
-                nReads = (UINT)::fread(biTangents.data(), sizeof(dx::XMFLOAT3), nBiTangents, pInFile);
+                vbMem.resize(sizeof(dx::XMFLOAT3) * nBiTangents);
+                nReads = (UINT)::fread(vbMem.data(), sizeof(dx::XMFLOAT3), nBiTangents, pInFile);
                 auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
                 tmp.set(etoi(Vertex::Properties::Bitangent3D));
-                ret.vbs_.emplace_back( device, cmdList, biTangents.data(),
+                primaryVBs.emplace_back( device, cmdList, std::move(vbMem),
                     sizeof(dx::XMFLOAT3) * nBiTangents, sizeof(dx::XMFLOAT3), tmp
                 );
 			}
@@ -791,9 +853,12 @@ RefModel RefModel::loadTerrainSubsetFromHeightmap( const Bitmap& heightmap,
     auto& node = model.nodeStorage_.back();
     model.pRoot_ = &node;
 
-    auto positions = std::vector<dx::XMFLOAT3>(width * length);
-    auto normals = std::vector<dx::XMFLOAT3>(width * length);
-    auto uvs = std::vector<dx::XMFLOAT2>(width * length);
+    auto posVBMem = std::vector<std::uint8_t>(width * length * sizeof(dx::XMFLOAT3));
+    auto normalVBMem = std::vector<std::uint8_t>(width * length * sizeof(dx::XMFLOAT3));
+    auto uvVBMem = std::vector<std::uint8_t>(width * length * sizeof(dx::XMFLOAT2));
+    const auto posVBMemSize = posVBMem.size();
+    const auto normalVBMemSize = normalVBMem.size();
+    const auto uvVBMemSize = uvVBMem.size();
 
     auto scaleXmf = scale.getXmf();
 
@@ -806,7 +871,8 @@ RefModel RefModel::loadTerrainSubsetFromHeightmap( const Bitmap& heightmap,
                 height, z * scaleXmf.z
             );
 
-            positions.push_back(position);
+            auto posOffset = i * sizeof(dx::XMFLOAT3);
+            std::memcpy(posVBMem.data() + posOffset, &position, sizeof(dx::XMFLOAT3));
 
             // Calculate normal
             auto iWidth = static_cast<int>(heightmap.width());
@@ -824,28 +890,33 @@ RefModel RefModel::loadTerrainSubsetFromHeightmap( const Bitmap& heightmap,
             auto edge2 = mu::Vec3(scaleXmf.x, y2 - y1, 0.f);
             auto normal = mu::cross(edge1, edge2);
 
-            normals.push_back(normal.getXmf());
+            auto normalOffset = i * sizeof(dx::XMFLOAT3);
+            std::memcpy(normalVBMem.data() + normalOffset, &normal, sizeof(dx::XMFLOAT3));
 
             // Calculate UV
             auto uv = dx::XMFLOAT2(static_cast<float>(x) / iWidth, static_cast<float>(z) / iLength);
-            uvs.push_back(uv);
+
+            auto uvOffset = i * sizeof(dx::XMFLOAT2);
+            std::memcpy(uvVBMem.data() + uvOffset, &uv, sizeof(dx::XMFLOAT2));
         }
     }
 
     auto mesh = RefMesh();
+    mesh.vbLayouts_.emplace_back();
+    auto& primaryVBs = mesh.vbLayouts_.back();
 
-    mesh.vbs_.emplace_back(device, cmdList, positions.data(),
-        sizeof(dx::XMFLOAT3) * positions.size(), sizeof(dx::XMFLOAT3),
+    primaryVBs.emplace_back(device, cmdList, std::move(posVBMem),
+        posVBMemSize, sizeof(dx::XMFLOAT3),
         std::bitset<etoi(Vertex::Properties::SIZE)>{ 1ull << etoi(Vertex::Properties::Position3D) }
     );
 
-    mesh.vbs_.emplace_back(device, cmdList, normals.data(),
-        sizeof(dx::XMFLOAT3) * normals.size(), sizeof(dx::XMFLOAT3),
+    primaryVBs.emplace_back(device, cmdList, std::move(normalVBMem),
+        normalVBMemSize, sizeof(dx::XMFLOAT3),
         std::bitset<etoi(Vertex::Properties::SIZE)>{ 1ull << etoi(Vertex::Properties::Normal3D) }
     );
 
-    mesh.vbs_.emplace_back(device, cmdList, uvs.data(),
-        sizeof(dx::XMFLOAT2) * uvs.size(), sizeof(dx::XMFLOAT2),
+    primaryVBs.emplace_back(device, cmdList, std::move(uvVBMem),
+        uvVBMemSize, sizeof(dx::XMFLOAT2),
         std::bitset<etoi(Vertex::Properties::SIZE)>{ 1ull << etoi(Vertex::Properties::TexCoord2D0) }
     );
 

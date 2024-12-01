@@ -134,9 +134,16 @@ public:
 		return true;
 	}
 
+	std::optional<std::size_t> bindableIdx(const RefMesh& mesh) const;
+	std::size_t slotCnt() const noexcept { return slots_.size(); }
+
 private:
 	std::vector<Slot> slots_;
 };
+
+void arrangeVBs(RefMesh& refMesh, D3D12Device& device, D3D12GfxCmdList& cmdList,
+	std::size_t layoutIdx, const InputLayout& inputLayout
+);
 
 class ShaderBlob : public dx::DXWrapper<ID3DBlob> {
 public:
@@ -196,7 +203,7 @@ public:
 		cmdList.get()->SetPipelineState(get().Get());
 	}
 
-	bool compatibleWith(const RefMesh& mesh) const;
+	std::optional<std::size_t> compatibleLayout(const RefMesh& mesh) const;
 
 	Shader& shader() const noexcept { return *pShader_; }
 
@@ -265,8 +272,10 @@ public:
 		return root_;
 	}
 
-	void draw(D3D12GfxCmdList& cmdList, const Submesh& submesh, std::size_t instanceCnt) {
-		submesh.draw(cmdList, instanceCnt);
+	void draw( D3D12GfxCmdList& cmdList, const Submesh& submesh,
+		std::size_t instanceCnt, std::size_t vbLayoutIdx
+	) {
+		submesh.draw(cmdList, instanceCnt, vbLayoutIdx);
 	}
 
 protected:
@@ -275,8 +284,10 @@ protected:
 	RootSignature root_;
 };
 
-inline bool RenderProtocol::compatibleWith(const RefMesh& mesh) const {
-    return pShader_->inputLayout().checkBindable(mesh.vbs());
+inline std::optional<std::size_t> RenderProtocol::compatibleLayout(
+	const RefMesh& mesh
+) const {
+    return pShader_->inputLayout().bindableIdx(mesh);
 }
 
 namespace sr {
