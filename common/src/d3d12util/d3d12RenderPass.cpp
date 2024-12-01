@@ -139,6 +139,7 @@ void PBRIllumination::render(D3D12GfxCmdList& cmdList) {
 
         auto pdd = sr::PerDrawcallData0{
             .material = material,
+            .instanceBase = static_cast<std::uint32_t>(first - batch_.begin()),
             .samplerIdx = 0u
         };
         shader().perDrawcallData_.stage( &pdd, sizeof(sr::PerDrawcallData0),
@@ -291,6 +292,7 @@ void PBRIlluminationMacro::render(D3D12GfxCmdList& cmdList) {
 
         auto pdd = sr::PerDrawcallData0{
             .material = material,
+            .instanceBase = static_cast<std::uint32_t>(first - batch_.begin()),
             .samplerIdx = 0u
         };
         shader().perDrawcallData_.stage( &pdd, sizeof(sr::PerDrawcallData0),
