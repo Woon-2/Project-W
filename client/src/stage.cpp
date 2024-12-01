@@ -36,6 +36,9 @@ void Stage::processInput(double deltaTime) {
 void Stage::simulate(double deltaTime) {
     pSystems_->physicsSystem.update(static_cast<float>(deltaTime));
     player_.update(static_cast<float>(deltaTime));
+    pSystems_->coordRoot.update();
+
+    player_.postUpdate();
 }
 
 void Stage::initEntities(gfx::d3d12engine::Core& core) {

@@ -20,6 +20,7 @@ public:
 		const gfx::d3d12::Camera::Config& config
 	);
 	void update(float deltaTime);
+	void postUpdate();
 };
 
 #endif	// __player_HPP

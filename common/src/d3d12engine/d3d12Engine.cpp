@@ -179,8 +179,6 @@ void Camera::update(float deltaTime) {
         const auto rotAngle = mu::acos(mu::dot(cameraLook, augmentedLook));
         camera_.coordRotation() << mu::rotate(rotAngle, rotAxis);
     }
-    
-	camera_.updateView();
 }
 
 void Camera::attach(const Model& model) NOEXCEPT {

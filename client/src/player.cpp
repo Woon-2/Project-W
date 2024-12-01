@@ -29,3 +29,7 @@ void Player::update(float deltaTime) {
 		<< mu::translate( as<RigidBody>().deltaPosition() );
 	as<gfx::d3d12engine::Camera>().update(deltaTime);
 }
+
+void Player::postUpdate() {
+	as<gfx::d3d12engine::Camera>().get().updateView();
+}
