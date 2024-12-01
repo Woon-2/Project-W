@@ -365,6 +365,52 @@ void RefSubmesh::draw( D3D12GfxCmdList& cmdList, std::size_t instanceCnt,
     );
 }
 
+RefSubmesh::RefSubmesh(RefSubmesh&& other) noexcept
+    : parent_(std::exchange(other.parent_, nullptr)),
+    ib_(std::move(other.ib_)),
+    material_(std::move(other.material_)),
+    topology_(std::exchange(other.topology_, D3D_PRIMITIVE_TOPOLOGY_UNDEFINED)) {}
+
+RefSubmesh& RefSubmesh::operator=(RefSubmesh&& other) noexcept {
+    if (this == &other) {
+        return *this;
+    }
+
+    parent_ = std::exchange(other.parent_, nullptr);
+    ib_ = std::move(other.ib_);
+    material_ = std::move(other.material_);
+    topology_ = std::exchange(other.topology_, D3D_PRIMITIVE_TOPOLOGY_UNDEFINED);
+
+    return *this;
+}
+
+RefMesh::RefMesh(RefMesh&& other) noexcept
+    : name_(std::move(other.name_)),
+    vbLayouts_(std::move(other.vbLayouts_)),
+    submeshes_(std::move(other.submeshes_)),
+    parent_(std::exchange(other.parent_, nullptr)) {
+    for (auto& submesh : submeshes_) {
+        submesh.parent_ = this;
+    }
+}
+
+RefMesh& RefMesh::operator=(RefMesh&& other) noexcept {
+    if (this == &other) {
+        return *this;
+    }
+
+    name_ = std::move(other.name_);
+    vbLayouts_ = std::move(other.vbLayouts_);
+    submeshes_ = std::move(other.submeshes_);
+    parent_ = std::exchange(other.parent_, nullptr);
+
+    for (auto& submesh : submeshes_) {
+        submesh.parent_ = this;
+    }
+
+    return *this;
+}
+
 void RefMesh::arrangeVBs( D3D12Device& device, D3D12GfxCmdList& cmdList,
     std::size_t layoutIdx, const std::vector<std::vector<Vertex::Properties>>& vbProps
 ) {
@@ -736,27 +782,17 @@ void RefMesh::loadMaterialFromFile( D3D12Device& device, D3D12GfxCmdList& cmdLis
     material.addConstant( Material::ConstantType::AmbientOcclusionConstantMapRatio, ambientOcllusionRatio );
 }
 
-RefModel::Node::Node(const Node& other)
-    : coord_(other.coord_), name_(other.name_), meshes_(other.meshes_),
-    children_(), pRefModel_(other.pRefModel_) {}
-
 RefModel::Node::Node(Node&& other) noexcept
     : coord_(std::move(other.coord_)), name_(std::move(other.name_)),
     meshes_(std::move(other.meshes_)), children_(std::move(other.children_)),
-    pRefModel_(std::exchange(other.pRefModel_, nullptr)) {}
-
-RefModel::Node& RefModel::Node::operator=(const Node& other) {
-    if (this == &other) {
-        return *this;
+    pRefModel_(std::exchange(other.pRefModel_, nullptr)) {
+    for (auto& mesh : meshes_) {
+        mesh.parent_ = this;
     }
 
-    coord_ = other.coord_;
-    name_ = other.name_;
-    meshes_ = other.meshes_;
-    children_.clear();
-    pRefModel_ = other.pRefModel_;
-
-    return *this;
+    for (auto& child : children_) {
+        child->pRefModel_ = this->pRefModel_;
+    }
 }
 
 RefModel::Node& RefModel::Node::operator=(Node&& other) noexcept {
@@ -769,6 +805,14 @@ RefModel::Node& RefModel::Node::operator=(Node&& other) noexcept {
     meshes_ = std::move(other.meshes_);
     children_ = std::move(other.children_);
     pRefModel_ = std::exchange(other.pRefModel_, nullptr);
+
+    for (auto& mesh : meshes_) {
+        mesh.parent_ = this;
+    }
+
+    for (auto& child : children_) {
+        child->pRefModel_ = this->pRefModel_;
+    }
 
     return *this;
 }
@@ -784,6 +828,7 @@ void RefModel::Node::addMesh(RefMesh&& mesh) {
         }
     }
     meshes_.push_back(std::move(mesh));
+    meshes_.back().parent_ = this;
 }
 
 void RefModel::Node::addChild(Node* child) {
@@ -1183,20 +1228,139 @@ Submesh::Submesh(Mesh* parent, const RefSubmesh* pRefSubmesh)
     }
 }
 
-Mesh::Mesh(const RefMesh& refMesh)
-    : pRefMesh_(&refMesh), submeshes_() {
+Submesh::Submesh(Submesh&& other) noexcept
+    : parent_(std::exchange(other.parent_, nullptr)),
+    pRefSubmesh_(std::exchange(other.pRefSubmesh_, nullptr)),
+    material_(std::move(other.material_)) {}
+
+Submesh& Submesh::operator=(Submesh&& other) noexcept {
+    if (this == &other) {
+        return *this;
+    }
+
+    parent_ = std::exchange(other.parent_, nullptr);
+    pRefSubmesh_ = std::exchange(other.pRefSubmesh_, nullptr);
+    material_ = std::move(other.material_);
+
+    return *this;
+}
+
+Mesh::Mesh(const RefMesh& refMesh, Model::Node* parent)
+    : parent_(parent), pRefMesh_(&refMesh), submeshes_() {
     submeshes_.reserve(refMesh.submeshes().size());
     for (const auto& refSubmesh : refMesh.submeshes()) {
         submeshes_.emplace_back(this, &refSubmesh);
     }
 }
 
+Mesh::Mesh(const Mesh& other)
+    : parent_(other.parent_), pRefMesh_(other.pRefMesh_),
+    submeshes_(other.submeshes_) {
+    for (auto& submesh : submeshes_) {
+        submesh.parent_ = this;
+    }
+}
+
+Mesh::Mesh(Mesh&& other) noexcept
+    : parent_(std::exchange(other.parent_, nullptr)),
+    pRefMesh_(std::exchange(other.pRefMesh_, nullptr)),
+    submeshes_(std::move(other.submeshes_)) {
+    for (auto& submesh : submeshes_) {
+        submesh.parent_ = this;
+    }
+}
+
+Mesh& Mesh::operator=(const Mesh& other) {
+    parent_ = other.parent_;
+    pRefMesh_ = other.pRefMesh_;
+    submeshes_ = other.submeshes_;
+
+    for (auto& submesh : submeshes_) {
+        submesh.parent_ = this;
+    }
+
+    return *this;
+}
+
+Mesh& Mesh::operator=(Mesh&& other) noexcept {
+    if (this == &other) {
+        return *this;
+    }
+
+    parent_ = std::exchange(other.parent_, nullptr);
+    pRefMesh_ = std::exchange(other.pRefMesh_, nullptr);
+    submeshes_ = std::move(other.submeshes_);
+
+    for (auto& submesh : submeshes_) {
+        submesh.parent_ = this;
+    }
+
+    return *this;
+}
+
+Model::Node::Node(const Node& other)
+    : coord_(other.coord_), meshes_(other.meshes_),
+    children_(), pModel_(other.pModel_) {
+    for (auto& mesh : meshes_) {
+        mesh.parent_ = this;
+    }
+}
+
+Model::Node::Node(Node&& other) noexcept
+    : coord_(std::move(other.coord_)), meshes_(std::move(other.meshes_)),
+    children_(std::move(other.children_)),
+    pModel_(std::exchange(other.pModel_, nullptr)) {
+    for (auto& mesh : meshes_) {
+        mesh.parent_ = this;
+    }
+
+    for (auto& child : children_) {
+        child->pModel_ = this->pModel_;
+    }
+}
+
+Model::Node& Model::Node::operator=(const Node& other) {
+    coord_ = other.coord_;
+    meshes_ = other.meshes_;
+    children_.clear();
+    children_.shrink_to_fit();
+    pModel_ = other.pModel_;
+
+    for (auto& mesh : meshes_) {
+        mesh.parent_ = this;
+    }
+
+    return *this;
+}
+
+Model::Node& Model::Node::operator=(Node&& other) noexcept {
+    if (this == &other) {
+        return *this;
+    }
+
+    coord_ = std::move(other.coord_);
+    meshes_ = std::move(other.meshes_);
+    children_ = std::move(other.children_);
+    pModel_ = std::exchange(other.pModel_, nullptr);
+
+    for (auto& mesh : meshes_) {
+        mesh.parent_ = this;
+    }
+
+    for (auto& child : children_) {
+        child->pModel_ = this->pModel_;
+    }
+
+    return *this;
+}
+
 void Model::Node::addMesh(Mesh&& mesh) {
     meshes_.push_back(std::move(mesh));
+    meshes_.back().parent_ = this;
 }
 
 void Model::Node::emplaceMesh(const RefMesh& refMesh) {
-    meshes_.emplace_back(refMesh);
+    meshes_.emplace_back(refMesh, this);
 }
 
 void Model::Node::addChild(Node* child) {

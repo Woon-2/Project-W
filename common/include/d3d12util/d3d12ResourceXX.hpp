@@ -436,6 +436,12 @@ public:
         D3D12_PRIMITIVE_TOPOLOGY topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST
     ) : parent_(parent), ib_(), material_(), topology_(topology) {}
 
+    RefSubmesh(const RefSubmesh& other) = delete;
+    RefSubmesh(RefSubmesh&& other) noexcept;
+    RefSubmesh& operator=(const RefSubmesh& other) = delete;
+    RefSubmesh& operator=(RefSubmesh&& other) noexcept;
+    ~RefSubmesh() = default;
+
     const RefMesh* parent() const noexcept {
         return parent_;
     }
@@ -470,39 +476,6 @@ private:
     D3D12_PRIMITIVE_TOPOLOGY topology_;
 };
 
-class RefMesh {
-public:
-    friend class RefModel;
-
-    void arrangeVBs( D3D12Device& device, D3D12GfxCmdList& cmdList,
-        std::size_t layoutIdx, const std::vector<std::vector<Vertex::Properties>>& vbProps
-    );
-
-    const auto& vbs(std::size_t layoutIdx) const noexcept {
-        return vbLayouts_[layoutIdx];
-    }
-
-    std::size_t vbLayoutCnt() const noexcept {
-        return vbLayouts_.size();
-    }
-
-    const auto& submeshes() const noexcept {
-        return submeshes_;
-    }
-    
-    static RefMesh loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdList, FILE* pInFile);
-    static void loadMaterialsFromFile(D3D12Device& device, D3D12GfxCmdList& cmdList, FILE* pInFile, RefMesh& mesh);
-
-private:
-    static void loadMaterialFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
-        FILE* pInFile, RefMesh& mesh, std::size_t materialIdx
-    );
-
-    std::string name_;
-    std::vector< std::vector<VertexBuffer> > vbLayouts_;
-    std::vector<RefSubmesh> submeshes_;
-};
-
 class RefModel {
 public:
     class Node {
@@ -510,11 +483,11 @@ public:
         friend class RefModel;
         Node(const RefModel* pRefModel = nullptr)
             : coord_(), name_(), meshes_(), children_(), pRefModel_(pRefModel) {}
-        ~Node() = default;
-        Node(const Node& other);
+        Node(const Node& other) = delete;
         Node(Node&& other) noexcept;
-        Node& operator=(const Node& other);
+        Node& operator=(const Node& other) = delete;
         Node& operator=(Node&& other) noexcept;
+        ~Node() = default;
 
         void addMesh(RefMesh&& mesh);
         void addChild(Node* child);
@@ -575,6 +548,53 @@ private:
     Node* pRoot_;
 };
 
+class RefMesh {
+public:
+    friend class RefModel;
+
+    RefMesh(RefModel::Node* parent = nullptr)
+        : name_(), vbLayouts_(), submeshes_(), parent_(parent) {}
+
+    RefMesh(const RefMesh& other) = delete;
+    RefMesh(RefMesh&& other) noexcept;
+    RefMesh& operator=(const RefMesh& other) = delete;
+    RefMesh& operator=(RefMesh&& other) noexcept;
+    ~RefMesh() = default;
+
+    void arrangeVBs( D3D12Device& device, D3D12GfxCmdList& cmdList,
+        std::size_t layoutIdx, const std::vector<std::vector<Vertex::Properties>>& vbProps
+    );
+
+    const auto& vbs(std::size_t layoutIdx) const noexcept {
+        return vbLayouts_[layoutIdx];
+    }
+
+    std::size_t vbLayoutCnt() const noexcept {
+        return vbLayouts_.size();
+    }
+
+    const auto& submeshes() const noexcept {
+        return submeshes_;
+    }
+
+    const RefModel::Node* parent() const noexcept {
+        return parent_;
+    }
+    
+    static RefMesh loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdList, FILE* pInFile);
+    static void loadMaterialsFromFile(D3D12Device& device, D3D12GfxCmdList& cmdList, FILE* pInFile, RefMesh& mesh);
+
+private:
+    static void loadMaterialFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
+        FILE* pInFile, RefMesh& mesh, std::size_t materialIdx
+    );
+
+    std::string name_;
+    std::vector< std::vector<VertexBuffer> > vbLayouts_;
+    std::vector<RefSubmesh> submeshes_;
+    RefModel::Node* parent_;
+};
+
 class RefModelStorage {
 public:
     using ID = std::string;
@@ -616,6 +636,11 @@ public:
     friend class Mesh;
 
     Submesh(Mesh* parent = nullptr, const RefSubmesh* pRefSubmesh = nullptr);
+    Submesh(const Submesh& other) = default;
+    Submesh(Submesh&& other) noexcept;
+    Submesh& operator=(const Submesh& other) = default;
+    Submesh& operator=(Submesh&& other) noexcept;
+    ~Submesh() = default;
 
     const Mesh* parent() const noexcept {
         return parent_;
@@ -656,6 +681,12 @@ public:
         friend class Model;
         Node(const Model* pModel = nullptr)
             : coord_(), meshes_(), children_(), pModel_(pModel) {}
+        Node(const Node& other);
+        Node(Node&& other) noexcept;
+        Node& operator=(const Node& other);
+        Node& operator=(Node&& other) noexcept;
+        ~Node() = default;
+
         void addMesh(Mesh&& mesh);
         void emplaceMesh(const RefMesh& refMesh);
         void addChild(Node* child);
@@ -701,7 +732,14 @@ private:
 
 class Mesh {
 public:
-    Mesh(const RefMesh& refMesh);
+    friend class Model;
+
+    Mesh(const RefMesh& refMesh, Model::Node* parent = nullptr);
+    Mesh(const Mesh& other);
+    Mesh(Mesh&& other) noexcept;
+    Mesh& operator=(const Mesh& other);
+    Mesh& operator=(Mesh&& other) noexcept;
+    ~Mesh() = default;
 
     const Model::Node* parent() const noexcept {
         return parent_;
