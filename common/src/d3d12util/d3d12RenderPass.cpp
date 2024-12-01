@@ -10,10 +10,9 @@ namespace gfx {
 namespace d3d12 {
 
 void Camera::updateView() {
-    auto xform = coordSys_.xform();
-    repPos_ = xform.row(3);
+    repPos_ = mu::Vec3(coordMovement_.xform().row(3));
     if (focusMode_ == FocusMode::None) {
-        repUp_ = xform.row(1);
+        repUp_ = mu::Vec3(coordRotation_.xform().row(1));
     }
 
     switch (focusMode_) {
@@ -28,7 +27,7 @@ void Camera::updateView() {
         break;
 
     case FocusMode::None:
-        repFwd_ = xform.row(2);
+        repFwd_ = mu::normalize(mu::Vec3(coordRotation_.xform().row(2)));
         view_ = mu::lookAt(repPos_, repPos_ + repFwd_, repUp_);
         break;
     }
