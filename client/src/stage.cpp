@@ -1,6 +1,6 @@
 #include "stage.hpp"
 
-#include "resourcePath.hpp"
+#include "assetMap.hpp"
 
 #include <ranges>
 
@@ -10,7 +10,6 @@ void Stage::init(gfx::d3d12engine::Core& core) {
     initEntities(core);
     initLights();
 
-    setupCamera();
     pSystems_->coordRoot.update();
     pRenderer_->init(scene_);
 }
@@ -36,20 +35,12 @@ void Stage::processInput(double deltaTime) {
 
 void Stage::simulate(double deltaTime) {
     pSystems_->physicsSystem.update(static_cast<float>(deltaTime));
-    // player_.update();
-
-    // // camera update
-    // camera_.coordSys() << mu::translate(player_.as<RigidBody>().deltaPosition());
-    // //
-
-    // pSystems_->coordRoot.update();
-    // camera_.unfocus();
-    // camera_.focus( gfx::coord::Pt3( &player_.as<Coord>().get(), mu::Vec3(0.f, 0.f, 0.f) ) );
-    // camera_.updateView();
+    player_.update(static_cast<float>(deltaTime));
 }
 
 void Stage::initEntities(gfx::d3d12engine::Core& core) {
     player_.init(core);
+    player_.addCamera(mu::Vec3(0.f, 10.f, -10.f), 1.f);
 
     scene_.addEntity(player_);
     pSystems_->coordRoot.addEntity(player_);
@@ -57,17 +48,6 @@ void Stage::initEntities(gfx::d3d12engine::Core& core) {
     pSystems_->physicsSystem.addEntity(player_);
 
     scene_.clearStash();
-    // pSystems_->assetSystem.addEntity(player_);
-    // pSystems_->coordRoot.addEntity(player_);
-    // pSystems_->inputSystem.addEntity(player_);
-    // pSystems_->physicsSystem.addEntity(player_);
-
-    // pSystems_->assetSystem.allocCtx();
-    // pSystems_->assetSystem.loadAssets();
-    // pSystems_->assetSystem.freeCtx();
-    // player_.linkAssets(pSystems_->assetSystem);
-
-    // pSystems_->fragmentizer.addEntity(player_);
 }
 
 void Stage::initLights() {
@@ -94,14 +74,6 @@ void Stage::initLights() {
     // } );
 }
 
-void Stage::setupCamera() {
-    // auto& world = pSystems_->coordRoot.get();
-
-    // camera_.coordSys().setParent(&world);
-    // camera_.coordSys() << mu::translate(0.f, 120.f, -120.f);
-    // camera_.focus( gfx::coord::Pt3( &world, mu::Vec3(0.f, 0.f, 0.f) ) );
-}
-
 void Stage::loadAssets(gfx::d3d12engine::Core& core) {
     core.prepareGPUResLoad();
 
@@ -111,13 +83,23 @@ void Stage::loadAssets(gfx::d3d12engine::Core& core) {
     core.finishGPUResLoad();
 }
 
+void loadTexture(gfx::d3d12engine::Core& core, AssetTexture key) {
+    for (const auto& texInfo : assetTextureInfo(key)) {
+        for (const auto& path : texInfo.paths) {
+            core.loadStaticTexture(path, texInfo.type);
+        }
+    }
+}
+
 void Stage::loadTextures(gfx::d3d12engine::Core& core) {
-    core.loadStaticTexture(resourcePath/"models"/"HelicopterModel"/"Textures"/"Default.dds", gfx::d3d12::TextureResource::Type::Texture);
-    core.loadStaticTexture(resourcePath/"models"/"HelicopterModel"/"Textures"/"Hellfire.dds", gfx::d3d12::TextureResource::Type::Texture);
-    core.loadStaticTexture(resourcePath/"models"/"HelicopterModel"/"Textures"/"Hydra.dds", gfx::d3d12::TextureResource::Type::Texture);
-    core.loadStaticTexture(resourcePath/"models"/"HelicopterModel"/"Textures"/"Texture.dds", gfx::d3d12::TextureResource::Type::Texture);
+    loadTexture(core, AssetTexture::Helicopter);
+}
+
+void loadModel(gfx::d3d12engine::Core& core, AssetModel key) {
+    auto modelInfo = assetModelInfo(key);
+    core.loadRefModel(modelInfo.path, modelInfo.id);
 }
 
 void Stage::loadModels(gfx::d3d12engine::Core& core) {
-    core.loadRefModel(resourcePath/"models"/"HelicopterModel"/"OH-58D.bin", "OH-58D");
+    loadModel(core, AssetModel::Helicopter);
 }

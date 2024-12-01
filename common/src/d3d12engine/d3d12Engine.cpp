@@ -14,7 +14,7 @@ Core::Core()
     descRanges_(rtvHeap_, dsvHeap_, cbvSrvUavHeap_),
     root_(device_), window_(), fence_(device_) {
     window_.open( factory_, device_, cmdQueue_, "Project-W",
-        Win32::WndFrame{ .x = 100, .y = 100, .width = 1024, .height = 768 },
+        Win32::WndFrame{ .x = 100, .y = 100, .width = 1600, .height = 900 },
         descRanges_.rtvRangeBackBuf, descRanges_.dsvRangeBackBuf
     );
     window_.show(SW_SHOW);
