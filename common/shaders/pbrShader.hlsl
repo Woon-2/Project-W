@@ -29,7 +29,17 @@ VSOutput VSMain( float3 position : POSITION, float3 normal : NORMAL,
 ) {
 	VSOutput result;
 
-    result.pos = mul(float4(position, 1.0f), gInstances[instanceBase + instanceOffset].wvp);
+	if (instanceOffset % 3 == 0) {
+		result.pos = float4(0.0f, 0.5f, 0.2f, 1.0f);
+	}
+	else if (instanceOffset % 3 == 1) {
+		result.pos = float4(0.5f, -0.5f, 0.2f, 1.0f);
+	}
+	else {
+		result.pos = float4(-0.5f, -0.5f, 0.2f, 1.0f);
+	}
+
+    //result.pos = mul(float4(position, 1.0f), gInstances[instanceBase + instanceOffset].wvp);
 	result.posV = mul(float4(position, 1.0f), gInstances[instanceBase + instanceOffset].wv).xyz;
 	result.normalV = mul(normal, gInstances[instanceBase + instanceOffset].wvNormal).xyz;
 	if (material.normalMapRef.x != uint(-1)) {
@@ -56,6 +66,9 @@ float n2rand(float2 n,float c) {
 }
 
 float4 PSMain(VSOutput input) : SV_TARGET {
+	return float4(1.0f, 0.0f, 0.0f, 1.0f);
+
+
 	input.normalV = normalize(input.normalV);
 
 	if (material.normalMapRef.x != uint(-1)) {
