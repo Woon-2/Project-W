@@ -218,11 +218,11 @@ public:
     }
 
 private:
-    ShaderPBRIllumination& shader() noexcept {
-        return static_cast<ShaderPBRIllumination&>(protocol_.shader());
+    ShaderPBRIlluminationMacro& shader() noexcept {
+        return static_cast<ShaderPBRIlluminationMacro&>(protocol_.shader());
     }
-    const ShaderPBRIllumination& shader() const noexcept {
-        return static_cast<const ShaderPBRIllumination&>(protocol_.shader());
+    const ShaderPBRIlluminationMacro& shader() const noexcept {
+        return static_cast<const ShaderPBRIlluminationMacro&>(protocol_.shader());
     }
 
     static RenderProtocol::Desc makeDesc();
