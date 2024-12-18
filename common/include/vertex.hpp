@@ -99,6 +99,7 @@ private:
         /* Position3D */ 3 * sizeof(float),
         /* Normal3D */ 3 * sizeof(float),
         /* TexCoord2D0 */ 2 * sizeof(float),
+        /* TexCoord2D1 */ 2 * sizeof(float),
         /* Tangent3D */ 3 * sizeof(float),
         /* Bitangent3D */ 3 * sizeof(float),
         /* Color3D */ 3 * sizeof(float),
