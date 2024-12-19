@@ -137,8 +137,8 @@ void Core::loadTerrain( const d3d12::Bitmap& heightMap,
                 heightMap, device_, cmdList_,
                 static_cast<int>( (heightMap.width() / xDivisions) * j ),
                 static_cast<int>( (heightMap.height() / zDivisions) * i ),
-                static_cast<int>( (heightMap.width() / xDivisions) + 1 ),
-                static_cast<int>( (heightMap.height() / zDivisions) + 1),
+                static_cast<int>( (heightMap.width() / xDivisions) /* + 1 */),
+                static_cast<int>( (heightMap.height() / zDivisions) /* + 1 */),
                 scale, albedoMapRef
             );
         }
@@ -238,8 +238,9 @@ TerrainSubset::TerrainSubset( const d3d12::RefModelStorage::ID& key,
     Terrain* pTerrain, Core& core
 ) : key_(key), pTerrain_(pTerrain) {
     createComponent<Coord>();
-    createComponent<Model>(key, core, as<Coord>());
     as<Coord>().get().setParent(&pTerrain->as<Coord>().get());
+    createComponent<Model>(key, core, as<Coord>());
+    as<Model>().get().markRenderPass(d3d12::rp::PBRIlluminationMacro::id);
 }
 
 TerrainSubset::TerrainSubset(TerrainSubset&& other) noexcept
@@ -258,12 +259,22 @@ TerrainSubset& TerrainSubset::operator=(TerrainSubset&& other) noexcept {
     return *this;
 }
 
-Terrain::Terrain( const d3d12::RefModelStorage::ID& identifier,
+void Terrain::init( const d3d12::RefModelStorage::ID& identifier,
     const std::filesystem::path& heightMapPath,
     const std::filesystem::path& albedoMapPath, mu::Vec3 scale,
-    Core& core, std::size_t xDivisions, std::size_t zDivisions
-) : heightMap_(heightMapPath), subsets_(zDivisions), scale_(scale) {
+    Core& core, mu::Vec3 offset, std::size_t xDivisions, std::size_t zDivisions
+) {
+    heightMap_ = gfx::d3d12::Bitmap(heightMapPath);
+    subsets_.resize(zDivisions);
+    scale_ = scale;
+
     core.loadTerrain(heightMap_, albedoMapPath, identifier, scale, xDivisions, zDivisions);
+    createComponent<Coord>();
+    as<Coord>().get() << mu::translate(
+        heightMap_.width() * scale.x() * -0.5f + offset.x(),
+        0.f + offset.y(),
+        heightMap_.height() * scale.z() * -0.5f + offset.z()
+    );
 
     for (std::size_t i = 0; i < zDivisions; ++i) {
         for (std::size_t j = 0; j < xDivisions; ++j) {

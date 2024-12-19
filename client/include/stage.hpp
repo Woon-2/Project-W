@@ -32,6 +32,7 @@ private:
     void loadAssets(gfx::d3d12engine::Core& core);
     void loadTextures(gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdList& cmdList);
     void loadModels(gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdList& cmdList);
+    void loadTerrains(gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdList& cmdList);
     void processNetwork(double deltaTime);
     void processInput(double deltaTime);
     void simulate(double deltaTime);
@@ -40,6 +41,7 @@ private:
 
     Player player_;
     LightEntity directionalLight_;
+    gfx::d3d12engine::Terrain terrain_;
     gfx::d3d12engine::Scene scene_;
     Systems* pSystems_;
     Renderer* pRenderer_;

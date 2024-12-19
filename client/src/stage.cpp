@@ -1,6 +1,7 @@
 #include "stage.hpp"
 
 #include "assetMap.hpp"
+#include "resourcePath.hpp"
 
 #include <ranges>
 
@@ -46,14 +47,20 @@ void Stage::initEntities(gfx::d3d12engine::Core& core) {
     directionalLight_.init(gfx::d3d12::sr::Light{
         .color = mu::Vec3(1.f, 1.f, 1.f).getXmf(),
         .dirV = mu::NVec3(0.f, -1.f, 1.f).getXmf(),
-        .intensity = 25.f,
+        .intensity = 10.f,
         .type = etoi(gfx::d3d12::sr::Light::Type::Directional)
     });
 
     scene_.addEntity(player_);
+    for (auto& subsetRows : terrain_.subsets()) {
+        for (auto& subset : subsetRows) {
+            scene_.addEntity(subset);
+        }
+    }
     scene_.addEntity(directionalLight_);
 
     pSystems_->coordRoot.addEntity(player_);
+    pSystems_->coordRoot.addEntity(terrain_);
     pSystems_->inputSystem.addEntity(player_);
     pSystems_->physicsSystem.addEntity(player_);
 
@@ -67,6 +74,7 @@ void Stage::loadAssets(gfx::d3d12engine::Core& core) {
 
     loadTextures(core, cmdList);
     loadModels(core, cmdList);
+    loadTerrains(core, cmdList);
 
     core.finishGPUResLoad();
 }
@@ -86,9 +94,24 @@ void Stage::loadTextures(gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdLi
 void loadModel(gfx::d3d12engine::Core& core, AssetModel key, Renderer& renderer) {
     auto modelInfo = assetModelInfo(key);
     core.loadRefModel(modelInfo.path, modelInfo.id);
-    renderer.layoutVBs(core, modelInfo.id, 1);
+    renderer.layoutVBsPBR(core, modelInfo.id, 1);
 }
 
 void Stage::loadModels(gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdList& cmdList) {
     loadModel(core, AssetModel::Helicopter, *pRenderer_);
+}
+
+void Stage::loadTerrains(gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdList& cmdList) {
+    terrain_.init(
+        "Terrain",
+        resourcePath/"terrains/Height-Map.png",
+        resourcePath/"terrains/Diffuse-Map.dds",
+        mu::Vec3(0.05f, 200.f, 0.05f),
+        core, mu::Vec3(0.f, -7.5f, 0.f)
+    );
+    for (const auto& subsetRows : terrain_.subsets()) {
+        for (const auto& subset : subsetRows) {
+            pRenderer_->layoutVBsPBRMacro(core, subset.refModelKey(), 1);
+        }
+    }
 }

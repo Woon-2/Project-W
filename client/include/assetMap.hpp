@@ -11,7 +11,8 @@ enum class AssetModel {
 };
 
 enum class AssetTexture {
-    Helicopter
+    Helicopter,
+    Terrain
 };
 
 struct ModelInfo {

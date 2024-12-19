@@ -622,12 +622,8 @@ public:
         return map_.at(key);
     }
 
-    const RefModel& operator[](const ID& key) const {
-        return get(key);
-    }
-
     RefModel& operator[](const ID& key) {
-        return get(key);
+        return map_[key];
     }
 
     bool contains(const ID& key) const {

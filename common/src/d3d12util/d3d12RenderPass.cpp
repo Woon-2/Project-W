@@ -223,6 +223,20 @@ void PBRIllumination::trackModel(Model* pModel) {
     }
 }
 
+PBRIlluminationMacro::PBRIlluminationMacro( D3D12Device& device,
+    ShaderPBRIlluminationMacro& shader, const D3D12_VIEWPORT& vp
+) : gfx::d3d12::RenderPass(id),
+    viewport_(vp), protocol_( shader.makeProtocol( device,
+        RenderProtocol::Desc{ makeDesc() }
+    ) ), lights_(), batch_(), pCamera_(nullptr) {
+    auto pcd = sr::PerConfigurationData0{
+        .viewportWidth = vp.Width,
+        .viewportHeight = vp.Height
+    };
+
+    shader.perConfigurationData_.stage(&pcd, sizeof(sr::PerConfigurationData0));
+}
+
 RenderProtocol::Desc PBRIlluminationMacro::makeDesc() {
     return RenderProtocol::Desc {
         .blend = D3D12_BLEND_DESC{

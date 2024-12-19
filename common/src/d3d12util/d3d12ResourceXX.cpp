@@ -305,7 +305,8 @@ Bitmap& Bitmap::operator=(Bitmap&& other) noexcept {
 }
 
 void Bitmap::load( const std::filesystem::path& path ) {
-    auto cstrFileName = path.string().c_str();
+    auto strFileName = path.string();
+    auto cstrFileName = strFileName.c_str();
 
     FREE_IMAGE_FORMAT format = FreeImage_GetFileType( cstrFileName );
 
@@ -344,13 +345,13 @@ void Bitmap::load( const std::filesystem::path& path ) {
 }
 
 BYTE Bitmap::getGreyscalePixel( size_t x, size_t y ) const {
-    BYTE ret{};
-    if ( !FreeImage_GetPixelIndex( pBitmap_, static_cast<unsigned int>(x), 
+    RGBQUAD ret{};
+    if ( !FreeImage_GetPixelColor( pBitmap_, static_cast<unsigned int>(x), 
         static_cast<unsigned int>(y), &ret 
     ) ) {
-        std::cerr << "Failed to get pixel index\n";
+        std::cerr << "Failed to get pixel\n";
     }
-    return ret;
+    return ret.rgbRed;
 }
 
 void Bitmap::unload() {
@@ -835,9 +836,11 @@ void RefModel::Node::addMesh(RefMesh&& mesh) {
     for (auto& submesh : mesh.submeshes_) {
         for (auto& mapRef : submesh.material().mapRefs()) {
             if (mapRef.resourceIdx != Material::MapRef::invalid) {
-                mapRef.resourceIdx = static_cast<std::uint32_t>(
-                    pRefModel_->textureMap_.at(mapRef).offset()
-                );
+                if (pRefModel_->textureMap_.contains(mapRef)) {
+                    mapRef.resourceIdx = static_cast<std::uint32_t>(
+                        pRefModel_->textureMap_.at(mapRef).offset()
+                    );
+                }
             }
         }
     }
@@ -940,7 +943,7 @@ RefModel RefModel::loadTerrainSubsetFromHeightmap( const Bitmap& heightmap,
 
             auto nHeightMapIndex = x + (z * iWidth);
             auto xHeightMapAdd = x < iWidth - 1 ? 1 : -1;
-            auto zHeightMapAdd = z < iLength - 1 ? iWidth : -iWidth;
+            auto zHeightMapAdd = z < iLength - 1 ? 1 : -1;
 
             float y1 = heightmap.getGreyscalePixel(x, z) / 255.f * scaleXmf.y;
             float y2 = heightmap.getGreyscalePixel(x + xHeightMapAdd, z) / 255.f * scaleXmf.y;

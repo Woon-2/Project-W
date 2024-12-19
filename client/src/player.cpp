@@ -16,6 +16,9 @@ void Player::init(gfx::d3d12engine::Core& core) {
 	createComponent<gfx::d3d12engine::Model>( assetModelInfo(AssetModel::Helicopter).id,
 		core, as<gfx::d3d12engine::Coord>()
 	);
+	as<gfx::d3d12engine::Model>().get().markRenderPass(
+		gfx::d3d12::rp::PBRIllumination::id
+	);
 	as<gfx::d3d12engine::Model>().get().root()->coord() << mu::rotateY(mu::Degree(-90.f));
 }
 

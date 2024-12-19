@@ -197,10 +197,7 @@ public:
 
     PBRIlluminationMacro( D3D12Device& device, ShaderPBRIlluminationMacro& shader,
         const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
-    ) : gfx::d3d12::RenderPass(id),
-        viewport_(vp), protocol_( shader.makeProtocol( device,
-            RenderProtocol::Desc{ makeDesc() }
-        ) ), lights_(), batch_(), pCamera_(nullptr) {}
+    );
 
     void setViewport(const D3D12_VIEWPORT& vp);
 

@@ -27,6 +27,12 @@ std::vector<TextureInfo> assetTextureInfo(AssetTexture asset) {
                     resourcePath/"models/HelicopterModel/Textures/Texture.dds"
                 },
                 .type = gfx::d3d12::TextureResource::Type::Texture
+            },
+            TextureInfo{
+                .paths = {
+                    resourcePath/"terrains/Diffuse-Map.dds",
+                },
+                .type = gfx::d3d12::TextureResource::Type::Texture
             }
         }
     };
