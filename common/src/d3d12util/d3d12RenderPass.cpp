@@ -35,6 +35,20 @@ void Camera::updateView() {
 
 namespace rp {
 
+PBRIllumination::PBRIllumination( D3D12Device& device,
+    ShaderPBRIllumination& shader, const D3D12_VIEWPORT& vp
+) : gfx::d3d12::RenderPass(id),
+    viewport_(vp), protocol_( shader.makeProtocol( device,
+        RenderProtocol::Desc{ makeDesc() }
+    ) ), lights_(), batch_(), pCamera_(nullptr) {
+    auto pcd = sr::PerConfigurationData0{
+        .viewportWidth = vp.Width,
+        .viewportHeight = vp.Height
+    };
+
+    shader.perConfigurationData_.stage(&pcd, sizeof(sr::PerConfigurationData0));
+}
+
 RenderProtocol::Desc PBRIllumination::makeDesc() {
     return RenderProtocol::Desc {
         .blend = D3D12_BLEND_DESC{

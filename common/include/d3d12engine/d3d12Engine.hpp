@@ -181,6 +181,8 @@ private:
 class Light : public ecs::Component {
 public:
     ENABLE_COMPONENT(Light);
+    Light(const ecs::Entity& entity, const d3d12::sr::Light& light)
+        : ecs::Component(entity), light_(light) {}
 
     d3d12::sr::Light& get() NOEXCEPT { return light_; }
     const d3d12::sr::Light& get() const NOEXCEPT { return light_; }

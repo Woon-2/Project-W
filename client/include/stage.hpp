@@ -10,6 +10,13 @@
 
 #include <vector>
 
+class LightEntity : public ecs::Entity {
+public:
+    void init(const gfx::d3d12::sr::Light& lightDesc) {
+        createComponent<gfx::d3d12engine::Light>(lightDesc);
+    }
+};
+
 class Stage {
 public:
     Stage(gfx::d3d12engine::Core& core, Systems& systems, Renderer& renderer) NOEXCEPT
@@ -30,10 +37,9 @@ private:
     void simulate(double deltaTime);
 
     void initEntities(gfx::d3d12engine::Core& core);
-    void initLights();
-    void setupCamera();
 
     Player player_;
+    LightEntity directionalLight_;
     gfx::d3d12engine::Scene scene_;
     Systems* pSystems_;
     Renderer* pRenderer_;

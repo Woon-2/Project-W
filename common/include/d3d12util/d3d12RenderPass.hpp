@@ -154,10 +154,7 @@ public:
 
     PBRIllumination( D3D12Device& device, ShaderPBRIllumination& shader,
         const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
-    ) : gfx::d3d12::RenderPass(id),
-        viewport_(vp), protocol_( shader.makeProtocol( device,
-            RenderProtocol::Desc{ makeDesc() }
-        ) ), lights_(), batch_(), pCamera_(nullptr) {}
+    );
 
     void setViewport(const D3D12_VIEWPORT& vp);
 
@@ -172,6 +169,9 @@ public:
     void trackModel(Model* pModel);
     void setCamera(const Camera* pCamera) NOEXCEPT {
         pCamera_ = pCamera;
+    }
+    void addLight(const sr::Light* pLight) NOEXCEPT {
+        lights_.push_back(pLight);
     }
 
 private:
@@ -215,6 +215,9 @@ public:
     void trackModel(Model* pModel);
     void setCamera(const Camera* pCamera) NOEXCEPT {
         pCamera_ = pCamera;
+    }
+    void addLight(const sr::Light* pLight) NOEXCEPT {
+        lights_.push_back(pLight);
     }
 
 private:

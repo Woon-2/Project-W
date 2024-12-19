@@ -299,6 +299,9 @@ void PBRIllumination::init(Scene& scene) {
     if (!cameras(scene).empty()) {
         setCamera(&cameras(scene).front()->get());
     }
+    for (auto& pLight : lights(scene)) {
+        addLight(&pLight->get());
+    }
 }
 
 void PBRIllumination::update(Scene& scene) {
@@ -308,6 +311,9 @@ void PBRIllumination::update(Scene& scene) {
         }
         if ( auto pCamera = Camera::at(entityID) ) {
             setCamera(&pCamera->get());
+        }
+        if ( auto pLight = Light::at(entityID) ) {
+            addLight(&pLight->get());
         }
     }
 }
@@ -324,6 +330,11 @@ void PBRIlluminationMacro::init(Scene& scene) {
             setCamera(&cameras(scene).front()->get());
         }
     }
+    for (auto& pLight : lights(scene)) {
+        if (pLight) {
+            addLight(&pLight->get());
+        }
+    }
 }
 
 void PBRIlluminationMacro::update(Scene& scene) {
@@ -333,6 +344,9 @@ void PBRIlluminationMacro::update(Scene& scene) {
         }
         if ( auto pCamera = Camera::at(entityID) ) {
             setCamera(&pCamera->get());
+        }
+        if ( auto pLight = Light::at(entityID) ) {
+            addLight(&pLight->get());
         }
     }
 }

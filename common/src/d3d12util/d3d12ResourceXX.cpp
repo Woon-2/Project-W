@@ -787,7 +787,7 @@ void RefMesh::loadMaterialFromFile( D3D12Device& device, D3D12GfxCmdList& cmdLis
             || material.contains(Material::MapType::Metallic)
         ) ? 0.f : 1.f;
     const auto emmisiveRatio = material.contains(Material::MapType::Emmisive) ? 0.f : 1.f;
-    const auto ambientOcllusionRatio = 1.f;
+    const auto ambientOcllusionRatio = material.contains(Material::MapType::AmbientOcclusion) ? 0.f : 1.f;
 
     material.addConstant( Material::ConstantType::AlbedoConstantMapRatio, albedoRatio );
     material.addConstant( Material::ConstantType::RoughnessConstantMapRatio, roughnessRatio );

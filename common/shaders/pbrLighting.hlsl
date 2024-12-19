@@ -145,11 +145,11 @@ float3 dirLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 norma
     float G = GeometrySmith(NV, NL, roughness);
 
     float3 kD = (1.f - F);
-    kD *= 1.f - kD;
+    kD *= 1.f - metallic;
     kD *= albedo / PI;
     float3 kS = F * D * G / max(4 * NV * NL, 0.001f);
 
-    return gLights[lightIdx].color * gLights[lightIdx].intensity * (kD + kS);
+    return gLights[lightIdx].color * gLights[lightIdx].intensity * (kD + kS) * NL;
 }
 
 float3 spotLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 normalV,
