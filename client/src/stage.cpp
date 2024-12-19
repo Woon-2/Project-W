@@ -8,7 +8,7 @@ void Stage::init(gfx::d3d12engine::Core& core) {
     loadAssets(core);
 
     initEntities(core);
-    // initLights();
+    initLights();
 
     pSystems_->coordRoot.update();
     pRenderer_->init(scene_);
@@ -50,10 +50,6 @@ void Stage::initEntities(gfx::d3d12engine::Core& core) {
     pSystems_->inputSystem.addEntity(player_);
     pSystems_->physicsSystem.addEntity(player_);
 
-    cube_.init();
-    scene_.addEntity(cube_);
-    pSystems_->coordRoot.addEntity(cube_);
-
     scene_.clearStash();
 }
 
@@ -86,22 +82,22 @@ void Stage::loadAssets(gfx::d3d12engine::Core& core) {
 
     core.prepareGPUResLoad();
 
-    loadTextures(core);
+    loadTextures(core, cmdList);
     loadModels(core, cmdList);
 
     core.finishGPUResLoad();
 }
 
 void loadTexture(gfx::d3d12engine::Core& core, AssetTexture key) {
-    // for (const auto& texInfo : assetTextureInfo(key)) {
-    //     for (const auto& path : texInfo.paths) {
-    //         core.loadStaticTexture(path, texInfo.type);
-    //     }
-    // }
+    for (const auto& texInfo : assetTextureInfo(key)) {
+        for (const auto& path : texInfo.paths) {
+            core.loadStaticTexture(path, texInfo.type);
+        }
+    }
 }
 
-void Stage::loadTextures(gfx::d3d12engine::Core& core) {
-    // loadTexture(core, AssetTexture::Helicopter);
+void Stage::loadTextures(gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdList& cmdList) {
+    loadTexture(core, AssetTexture::Helicopter);
 }
 
 void loadModel(gfx::d3d12engine::Core& core, AssetModel key, Renderer& renderer) {
@@ -111,6 +107,5 @@ void loadModel(gfx::d3d12engine::Core& core, AssetModel key, Renderer& renderer)
 }
 
 void Stage::loadModels(gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdList& cmdList) {
-    // loadModel(core, AssetModel::Helicopter, *pRenderer_);
-    CubeEntity::loadModel(core, cmdList);
+    loadModel(core, AssetModel::Helicopter, *pRenderer_);
 }

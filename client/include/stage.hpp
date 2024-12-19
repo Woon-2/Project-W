@@ -13,7 +13,7 @@
 class Stage {
 public:
     Stage(gfx::d3d12engine::Core& core, Systems& systems, Renderer& renderer) NOEXCEPT
-        : player_(), cube_(), scene_(), pSystems_(&systems), pRenderer_(&renderer) {
+        : player_(), scene_(), pSystems_(&systems), pRenderer_(&renderer) {
         init(core);
     }
 
@@ -23,7 +23,7 @@ public:
 private:
     void init(gfx::d3d12engine::Core& core);
     void loadAssets(gfx::d3d12engine::Core& core);
-    void loadTextures(gfx::d3d12engine::Core& core);
+    void loadTextures(gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdList& cmdList);
     void loadModels(gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdList& cmdList);
     void processNetwork(double deltaTime);
     void processInput(double deltaTime);
@@ -34,7 +34,6 @@ private:
     void setupCamera();
 
     Player player_;
-    CubeEntity cube_;
     gfx::d3d12engine::Scene scene_;
     Systems* pSystems_;
     Renderer* pRenderer_;
