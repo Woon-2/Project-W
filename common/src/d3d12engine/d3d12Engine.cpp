@@ -26,8 +26,19 @@ Core::Core()
 
 void Core::render(IRenderer& renderer, Scene& scene) {
     cmdList_.reset();
-    cmdList_.get()->SetGraphicsRootSignature(d3d12::UnifiedRoot::get().get().Get());
-    cmdList_.get()->SetComputeRootSignature(d3d12::UnifiedRoot::get().get().Get());
+    const auto unifiedRoot = d3d12::UnifiedRoot::get();
+    cmdList_.get()->SetGraphicsRootSignature(unifiedRoot.get().Get());
+    cmdList_.get()->SetComputeRootSignature(unifiedRoot.get().Get());
+    cbvSrvUavHeap_.set(cmdList_.get().Get());
+    descRanges_.srvRangeTex2D.bind( cmdList_, unifiedRoot.params[
+        d3d12::UnifiedRoot::ParamIndices::BindlessTex2D
+    ] );
+    descRanges_.srvRangeTex2DArray.bind( cmdList_, unifiedRoot.params[
+        d3d12::UnifiedRoot::ParamIndices::BindlessTexArray
+    ] );
+    descRanges_.srvRangeTexCube.bind( cmdList_, unifiedRoot.params[
+        d3d12::UnifiedRoot::ParamIndices::BindlessTexCube
+    ] );
     window_.setRenderTarget(cmdList_);
     window_.clearRenderTarget(cmdList_);
     window_.clearDepthStencil(cmdList_);
@@ -44,6 +55,7 @@ void Core::render() {
     cmdList_.reset();
     cmdList_.get()->SetGraphicsRootSignature(d3d12::UnifiedRoot::get().get().Get());
     cmdList_.get()->SetComputeRootSignature(d3d12::UnifiedRoot::get().get().Get());
+    cbvSrvUavHeap_.set(cmdList_.get().Get());
     window_.setRenderTarget(cmdList_);
     window_.clearRenderTarget(cmdList_);
     window_.clearDepthStencil(cmdList_);

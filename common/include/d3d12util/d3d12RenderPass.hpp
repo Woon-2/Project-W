@@ -272,6 +272,46 @@ private:
     std::vector< std::tuple<Submesh*, VBLayoutIdx, mu::Mat4x4> > batch_;
 };
 
+class Cube : public gfx::d3d12::RenderPass {
+public:
+    static constexpr const char* id = "Cube";
+
+    Cube( D3D12Device& device, ShaderCube& shader,
+        const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
+    ) : gfx::d3d12::RenderPass(id),
+        viewport_(vp), protocol_( shader.makeProtocol( device,
+            RenderProtocol::Desc{ makeDesc() }
+        ) ), batch_() {}
+
+    void setViewport(const D3D12_VIEWPORT& vp) {
+        viewport_ = vp;
+    }
+
+    const D3D12_VIEWPORT& viewport() const NOEXCEPT {
+        return viewport_;
+    }
+
+    void preRender(D3D12GfxCmdList& cmdList) override;
+    void render(D3D12GfxCmdList& cmdList) override;
+    void postRender(D3D12GfxCmdList& cmdList) override;
+
+    void trackModel(Model* pModel);
+
+private:
+    ShaderCube& shader() noexcept {
+        return static_cast<ShaderCube&>(protocol_.shader());
+    }
+    const ShaderCube& shader() const noexcept {
+        return static_cast<const ShaderCube&>(protocol_.shader());
+    }
+
+    static RenderProtocol::Desc makeDesc();
+
+    D3D12_VIEWPORT viewport_;
+    RenderProtocol protocol_;
+    std::vector< std::pair<Submesh*, VBLayoutIdx> > batch_;
+};
+
 }   // namespace gfx::d3d12::rp
 
 }   // namespace gfx::d3d12

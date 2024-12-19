@@ -3,6 +3,14 @@
 
 #include "d3d12engine/d3d12Engine.hpp"
 
+class CubeRefModel : public gfx::d3d12::RefModel {
+public:
+    CubeRefModel() = default;
+    CubeRefModel( gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdList& cmdList,
+        float width, float height, float depth
+    );
+};
+
 class Renderer : public gfx::d3d12engine::IRenderer {
 public:
     Renderer(gfx::d3d12engine::Core& core);
@@ -17,8 +25,10 @@ public:
 private:
     gfx::d3d12::ShaderPBRIllumination shader_;
     gfx::d3d12engine::rp::PBRIllumination renderPass_;
-    gfx::d3d12::ShaderTriangle shaderTriangle_;
-    gfx::d3d12::rp::Triangle renderPassTriangle_;
+    gfx::d3d12::ShaderCube shaderCube_;
+    gfx::d3d12::rp::Cube renderPassCube_;
+    CubeRefModel cubeRefModel_;
+    gfx::d3d12::Model cubeModel_;
 };
 
 #endif  // __renderer_HPP

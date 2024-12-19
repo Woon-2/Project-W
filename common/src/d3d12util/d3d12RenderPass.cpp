@@ -393,6 +393,82 @@ RenderProtocol::Desc Triangle::makeDesc() {
     };
 }
 
+void Cube::preRender(D3D12GfxCmdList& cmdList) {
+    cmdList.get()->SetPipelineState( protocol_.get().Get() );
+    cmdList.get()->RSSetViewports(1u, &viewport_);
+    auto scissorRect = D3D12_RECT{ 0, 0, static_cast<LONG>(viewport_.Width), static_cast<LONG>(viewport_.Height) };
+    cmdList.get()->RSSetScissorRects(1u, &scissorRect);
+}
+
+void Cube::render(D3D12GfxCmdList& cmdList) {
+    for (auto& [pSubmesh, vbLayoutIdx] : batch_) {
+        const auto pdd = sr::PerDrawcallData1{
+            .color = dx::XMFLOAT4(1.f, 1.f, 0.f, 1.f)
+        };
+        shader().perDrawcallData_.stage(&pdd, sizeof(sr::PerDrawcallData1));
+        pSubmesh->draw(cmdList, 1u, vbLayoutIdx);
+    }
+}
+
+void Cube::postRender(D3D12GfxCmdList& cmdList) {}
+
+void Cube::trackModel(Model* pModel) {
+    if (!pModel->markedRenderPasses().empty()) {
+        auto it = std::ranges::find(pModel->markedRenderPasses(), renderPassID());
+        if (it == pModel->markedRenderPasses().end()) {
+            return;
+        }
+    }
+
+    auto& nodes = pModel->nodes();
+
+    for (auto& node : nodes) {
+        for (auto& mesh : node.meshes()) {
+            auto vbLayoutIdx = protocol_.compatibleLayout(*mesh.refMesh());
+            if (!vbLayoutIdx) {
+                throw std::runtime_error("Incompatible mesh");
+            }
+
+            for (auto& submesh : mesh.submeshes()) {
+                batch_.emplace_back(&submesh, vbLayoutIdx.value());
+            }
+        }
+    }
+}
+
+RenderProtocol::Desc Cube::makeDesc() {
+    return RenderProtocol::Desc {
+        .blend = D3D12_BLEND_DESC{
+            .AlphaToCoverageEnable = false,
+            .IndependentBlendEnable = false,
+            .RenderTarget = {
+                D3D12_RENDER_TARGET_BLEND_DESC{
+                    .BlendEnable = false,
+                    .LogicOpEnable = false,
+                    .RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL,
+                }
+            }
+        },
+        .sampleMask = UINT_MAX,
+        .rasterizerState = D3D12_RASTERIZER_DESC{
+            .FillMode = D3D12_FILL_MODE_SOLID,
+            .CullMode = D3D12_CULL_MODE_BACK,
+            .DepthClipEnable = true,
+        },
+        .depthStencilState = D3D12_DEPTH_STENCIL_DESC{
+            .DepthEnable = true,
+            .DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
+            .DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+        },
+        .primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+        .numRenderTargets = 1u,
+        .rtvFormats = { DXGI_FORMAT_R8G8B8A8_UNORM },
+        .dsvFormat = DXGI_FORMAT_D32_FLOAT,
+        .sampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
+        .nodeMask = 0u
+    };
+}
+
 }   // namespace gfx::d3d12::rp
 
 }   // namespace gfx::d3d12

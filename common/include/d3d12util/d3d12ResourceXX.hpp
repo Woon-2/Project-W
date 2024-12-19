@@ -467,7 +467,7 @@ public:
         return material_.constant<T>(type);
     }
 
-private:
+// private:
     void draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt, std::size_t vbLayoutIdx) const;
 
     RefMesh* parent_;
@@ -538,7 +538,7 @@ public:
     Node* root() noexcept { return pRoot_; }
     const Node* root() const noexcept { return pRoot_; }
 
-private:
+protected:
     static void loadNodesFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
         FILE* pInFile, Node& node, RefModel& model
     );
@@ -584,7 +584,7 @@ public:
     static RefMesh loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdList, FILE* pInFile);
     static void loadMaterialsFromFile(D3D12Device& device, D3D12GfxCmdList& cmdList, FILE* pInFile, RefMesh& mesh);
 
-private:
+// private:
     static void loadMaterialFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
         FILE* pInFile, RefMesh& mesh, std::size_t materialIdx
     );

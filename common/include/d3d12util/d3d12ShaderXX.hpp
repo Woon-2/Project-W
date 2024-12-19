@@ -388,6 +388,10 @@ struct PerDrawcallData0 {
 	dx::XMUINT2 padding;
 };
 
+struct PerDrawcallData1 {
+	dx::XMFLOAT4 color;
+};
+
 struct PerFrameData0 {
 	dx::XMFLOAT3 globalAmbient;
 	float padding0;
@@ -532,6 +536,34 @@ public:
 private:
 	static InputLayout makeInputLayout();
 };
+
+class ShaderCube : public Shader {
+private:
+	std::size_t cbDrawcallDataSize_;
+
+public:
+	ShaderCube(D3D12Device& device, const RootSignature& root);
+
+	RenderProtocol makeProtocol( D3D12Device& device, const RenderProtocol::Desc& desc) {
+		return RenderProtocol( device, *this,
+			selectBlobsStrong<ShaderBlob::Type::Vertex, ShaderBlob::Type::Pixel>(), desc
+		);
+	}
+
+	void bindRootParams(D3D12GfxCmdList& cmdList) override;
+	void loadBlobs() override;
+	void releaseBlobs() override;
+
+	UploadBuffer perDrawcallData_;
+
+	std::size_t cbDrawcallDataSize() const noexcept {
+		return cbDrawcallDataSize_;
+	}
+
+private:
+	static InputLayout makeInputLayout();
+};
+
 
 }   // namespace gfx::d3d12
 
