@@ -140,10 +140,6 @@ UnifiedRootImpl::UnifiedRootImpl(D3D12Device& device)
 		.OffsetInDescriptorsFromTableStart = 0u
 	};
 
-	static constexpr auto cbvRegisterCnt = 10u;
-	static constexpr auto srvRegisterCnt = 10u;
-	static constexpr auto uavRegisterCnt = 10u;
-
 	auto params = std::vector<D3D12_ROOT_PARAMETER>();
 	params.reserve(3u + cbvRegisterCnt + srvRegisterCnt + uavRegisterCnt);
 	params.push_back( D3D12_ROOT_PARAMETER{

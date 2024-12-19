@@ -27,9 +27,9 @@ public:
 		BindlessTex2D,
 		BindlessTexArray,
 		BindlessTexCube,
-		b0, b1, b2, b3, b4, b5, b6, b7, b8, b9,
-		t0, t1, t2, t3, t4, t5, t6, t7, t8, t9,
-		u0, u1, u2, u3, u4, u5, u6, u7, u8, u9
+		b0, b1, b2, b3, b4, b5, b6, b7,
+		t0, t1, t2, t3, t4, t5, t6, t7,
+		u0, u1, u2, u3, u4, u5, u6, u7
 	};
 
 	enum class SamplerIndices {
@@ -40,9 +40,9 @@ public:
 		TrilinearComparison
 	};
 
-	static constexpr auto cbvRegisterCnt = 10u;
-	static constexpr auto srvRegisterCnt = 10u;
-	static constexpr auto uavRegisterCnt = 10u;
+	static constexpr auto cbvRegisterCnt = 8u;
+	static constexpr auto srvRegisterCnt = 8u;
+	static constexpr auto uavRegisterCnt = 8u;
 
 private:
 	class Params {
