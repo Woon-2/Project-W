@@ -317,7 +317,10 @@ public:
 
 	void bind(D3D12GfxCmdList& cmdList, std::size_t rootParamIdx) {
         DX_THROW_FAILED_VOID(
-		    cmdList.get()->SetGraphicsRootDescriptorTable(rootParamIdx, (*pDescHeap_)[beginIdx_].gpuHandle())
+		    cmdList.get()->SetGraphicsRootDescriptorTable(
+				static_cast<UINT>( rootParamIdx ),
+				(*pDescHeap_)[beginIdx_].gpuHandle()
+			)
         );
 	}
 
@@ -353,7 +356,7 @@ public:
 	D3D12Resource( wrl::ComPtr<InterfaceType>&& src,
 		D3D12_RESOURCE_STATES initialState
 	) : dx::DXWrapper<InterfaceType>(std::move(src)),
-		views_(), vbview_{}, desc_(src->GetDesc()),
+		views_(), vbview_{}, desc_(get()->GetDesc()),
 		gpuAddr_(), stride_(0u),
 		state_(initialState) {}
 
