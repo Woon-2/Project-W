@@ -243,6 +243,20 @@ VertexBuffer::VertexBuffer( D3D12Device& device, D3D12GfxCmdList& cmdList,
 }
 
 IndexBuffer::IndexBuffer(D3D12Device& device, D3D12GfxCmdList& cmdList,
+    std::vector<std::uint8_t>&& pData, DXGI_FORMAT indexFormat, std::size_t indexCnt
+) : DefaultBuffer(device, indexCnt * indexByteWidth(indexFormat)), size_(indexCnt),
+    indexFormat_(indexFormat), cpuMem_(std::move(pData)) {
+
+    auto upBufIdx = cmdList.emplaceXResource<UploadBuffer>(device, cpuMem_.data(), cpuMem_.size());
+    auto& upBuf = cmdList.getXResource<UploadBuffer>(upBufIdx);
+    cmdList.copyResource(upBuf, *this);
+
+    makeIbv(device, indexFormat, indexCnt);
+
+    commitState(cmdList, D3D12_RESOURCE_STATE_INDEX_BUFFER);
+}
+
+IndexBuffer::IndexBuffer(D3D12Device& device, D3D12GfxCmdList& cmdList,
     const void* pData, DXGI_FORMAT indexFormat, std::size_t indexCnt
 ) : DefaultBuffer(device, indexCnt * indexByteWidth(indexFormat)), size_(indexCnt),
     indexFormat_(indexFormat) {

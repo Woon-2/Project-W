@@ -373,9 +373,16 @@ public:
         const void* pData, DXGI_FORMAT indexFormat, std::size_t indexCnt
     );
 
+    IndexBuffer(D3D12Device& device, D3D12GfxCmdList& cmdList,
+        std::vector<std::uint8_t>&& pData, DXGI_FORMAT indexFormat, std::size_t indexCnt
+    );
+
 	void bind(D3D12GfxCmdList& cmdList) const {
 		cmdList.get()->IASetIndexBuffer(&ibview());
 	}
+
+    const void* cpuMem() const noexcept { return cpuMem_.data(); }
+    void releaseCpuMem() noexcept { cpuMem_.clear(); cpuMem_.shrink_to_fit(); }
 
     std::size_t size() const noexcept {
         return size_;
@@ -384,6 +391,7 @@ public:
 private:
     static std::size_t indexByteWidth(DXGI_FORMAT indexFormat);
 
+    std::vector<std::uint8_t> cpuMem_;
     std::size_t size_;
     DXGI_FORMAT indexFormat_;
 };

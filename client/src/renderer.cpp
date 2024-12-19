@@ -179,7 +179,7 @@ CubeRefModel::CubeRefModel( gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCm
 
     auto refSubmesh = gfx::d3d12::RefSubmesh(&refMesh);
     refSubmesh.topology_ = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-    refSubmesh.ib_ = gfx::d3d12::IndexBuffer(device, cmdList, indexIbMem.data(), DXGI_FORMAT_R16_UINT, 36u);
+    refSubmesh.ib_ = gfx::d3d12::IndexBuffer(device, cmdList, std::move(indexIbMem), DXGI_FORMAT_R16_UINT, 36u);
 
     refMesh.submeshes_.push_back(std::move(refSubmesh));
 
