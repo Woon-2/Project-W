@@ -25,23 +25,11 @@ struct VSOutput {
 
 VSOutput VSMain( float3 position : POSITION, float3 normal : NORMAL,
 	float3 tangent : TANGENT, float3 bitangent : BITANGENT,
-	float2 texcoord : TEXCOORD, uint instanceOffset : SV_InstanceID,
-	uint tmp : SV_VertexID
+	float2 texcoord : TEXCOORD, uint instanceOffset : SV_InstanceID
 ) {
 	VSOutput result;
 
-	// triangle
-	if (tmp == 0) {
-		result.pos = float4(-0.5f, -0.5f, 0.5f, 1.0f);
-	}
-	else if (tmp == 1) {
-		result.pos = float4(0.f, 0.5f, 0.5f, 1.0f);
-	}
-	else {
-		result.pos = float4(0.5f, -0.5f, 0.5f, 1.0f);
-	}
-
-    // result.pos = mul(float4(position, 1.0f), gInstances[instanceBase + instanceOffset].wvp);
+    result.pos = mul(float4(position, 1.0f), gInstances[instanceBase + instanceOffset].wvp);
 	result.posV = mul(float4(position, 1.0f), gInstances[instanceBase + instanceOffset].wv).xyz;
 	result.normalV = mul(normal, gInstances[instanceBase + instanceOffset].wvNormal).xyz;
 	if (material.normalMapRef.x != uint(-1)) {

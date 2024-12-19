@@ -43,7 +43,7 @@ void Stage::simulate(double deltaTime) {
 
 void Stage::initEntities(gfx::d3d12engine::Core& core) {
     player_.init(core);
-    player_.addCamera(mu::Vec3(0.f, 0.2f, -0.5f), 1.f, pSystems_->coordRoot);
+    player_.addCamera(mu::Vec3(0.f, 2.8f, -6.5f), 1.f, pSystems_->coordRoot);
 
     scene_.addEntity(player_);
     pSystems_->coordRoot.addEntity(player_);

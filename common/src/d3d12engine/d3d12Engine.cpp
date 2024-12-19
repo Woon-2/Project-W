@@ -205,7 +205,7 @@ void Camera::update(float deltaTime) {
 
             // view transform's rotation part is inverse matrix of the camera's rotation matrix
             camera_.coordRotation().setLocalXform(
-                mu::transpose( mu::lookAt(mu::Vec3(), mu::Vec3(augmentedLook), up) )
+                mu::transpose( mu::lookAt(mu::Vec3(), mu::Vec3(augmentedLook), mu::Vec3(0.f, 1.f, 0.f)) )
             );
         }
     }
