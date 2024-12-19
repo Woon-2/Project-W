@@ -59,7 +59,7 @@ void PhysicsSystem::update(float deltaTime)
 {
 	for (auto& pRigidBody : components<RigidBody>()) {
 		if (pRigidBody) {
-			pRigidBody->updateRigid(deltaTime, 1.5f);
+			pRigidBody->updateRigid(deltaTime, 4.5f);
 		}
 	}
 }

@@ -10,6 +10,8 @@ namespace gfx {
 namespace d3d12 {
 
 void Camera::updateView() {
+    coordMovement_.traverse();
+
     repPos_ = mu::Vec3(coordMovement_.xform().row(3));
     if (focusMode_ == FocusMode::None) {
         repUp_ = mu::Vec3(coordRotation_.xform().row(1));
@@ -402,7 +404,10 @@ void Cube::preRender(D3D12GfxCmdList& cmdList) {
 
 void Cube::render(D3D12GfxCmdList& cmdList) {
     for (auto& [pSubmesh, vbLayoutIdx] : batch_) {
+        const auto xform = pSubmesh->parent()->parent()->coord().xform();
+
         const auto pdd = sr::PerDrawcallData1{
+            .wvp = mu::transpose(xform * pCamera_->view() * pCamera_->proj()).getXmf(),
             .color = dx::XMFLOAT4(1.f, 1.f, 0.f, 1.f)
         };
         shader().perDrawcallData_.stage(&pdd, sizeof(sr::PerDrawcallData1));

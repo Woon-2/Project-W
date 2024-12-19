@@ -6,6 +6,8 @@
 
 class Player : public ecs::Entity {
 public:
+	Player();
+
 	void init(gfx::d3d12engine::Core& core);
 	void MU_CALLCONV addCamera(mu::Vec3 offset, gfx::d3d12engine::CoordRoot& coordRoot) {
 		addCamera(offset, gfx::d3d12::Camera::Config(), coordRoot);
@@ -24,7 +26,10 @@ public:
 		const gfx::d3d12::Camera::Config& config, gfx::d3d12engine::CoordRoot& coordRoot
 	);
 	void update(float deltaTime);
-	void postUpdate();
+	void postUpdate(float deltaTime);
+
+private:
+	gfx::coord::System coordRot_;
 };
 
 #endif	// __player_HPP

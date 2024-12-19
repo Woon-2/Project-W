@@ -162,6 +162,12 @@ Model::Model( const ecs::Entity& entity,
     model_.root()->coord().setParent(&coordComp.get());
 }
 
+Model::Model( const ecs::Entity& entity,
+    const d3d12::RefModel& refModel, Coord& coordComp
+) : ecs::Component(entity), model_(refModel) {
+    model_.root()->coord().setParent(&coordComp.get());
+}
+
 Camera::Camera(const ecs::Entity& entity)
     : ecs::Component(entity), camera_(),
     pAttachedMovement_(nullptr), pAttachedRotation_(nullptr),
@@ -176,27 +182,42 @@ Camera::Camera( const ecs::Entity& entity,
 void Camera::update(float deltaTime) {
     // following camera
     if (pAttachedMovement_ && pAttachedRotation_) {
-        const auto targetPos = mu::Vec3(pAttachedMovement_->localXform().row(3));
+        const auto targetPos = mu::Vec3(pAttachedMovement_->xform().row(3));
         const auto idealPos = targetPos + offset_;
-        const auto curPos = mu::Vec3(camera_.coordMovement().localXform().row(3));
+        const auto curPos = mu::Vec3(camera_.coordMovement().xform().row(3));
         const auto deltaPos = idealPos - curPos;
 
         const auto movement = timeLag_ ? deltaPos * deltaTime / timeLag_ : deltaPos * deltaTime;
         camera_.coordMovement() << mu::translate(movement);
-        const auto updatedPos = mu::Vec3(camera_.coordMovement().localXform().row(3));
-        const auto augmentedLook = timeLag_ ? mu::normalize( (targetPos - updatedPos) + movement * deltaTime / timeLag_ )
-            : mu::normalize(targetPos - updatedPos);
-        const auto cameraLook = mu::normalize(mu::Vec3(camera_.coordRotation().localXform().row(2)));
+        const auto updatedPos = curPos + movement;
+        const auto augmentedLook = mu::normalize(targetPos - updatedPos);
+        const auto cameraLook = mu::normalize(targetPos - curPos);
 
-        const auto rotAxis = mu::cross(cameraLook, augmentedLook);
-        const auto rotAngle = mu::acos(mu::dot(cameraLook, augmentedLook));
-        camera_.coordRotation() << mu::rotate(rotAngle, rotAxis);
+        if (movement.len2() > 0.f) {
+            auto up = mu::Vec3(0.f, 1.f, 0.f);
+
+            static constexpr auto endurance = 0.000001f;
+            if (std::abs(mu::dot(cameraLook, augmentedLook) - 1.0f) >= endurance) {
+                const auto rotAxis = mu::cross(cameraLook, augmentedLook);
+                const auto rotAngle = mu::acos(mu::dot(cameraLook, augmentedLook));
+                up *= mu::rotate(rotAngle, rotAxis);
+            }
+
+            // view transform's rotation part is inverse matrix of the camera's rotation matrix
+            camera_.coordRotation().setLocalXform(
+                mu::transpose( mu::lookAt(mu::Vec3(), mu::Vec3(augmentedLook), up) )
+            );
+        }
     }
 }
 
 void Camera::attach(const Model& model) NOEXCEPT {
-    pAttachedMovement_ = model.get().root()->coord().parent();
-    pAttachedRotation_ = &model.get().root()->coord();
+    attach(*model.get().root()->coord().parent(), model.get().root()->coord());
+}
+
+void Camera::attach(const coord::System& movement, const coord::System& rotation) NOEXCEPT {
+    pAttachedMovement_ = &movement;
+    pAttachedRotation_ = &rotation;
 }
 
 void Camera::detach() NOEXCEPT {

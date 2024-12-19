@@ -389,6 +389,7 @@ struct PerDrawcallData0 {
 };
 
 struct PerDrawcallData1 {
+	dx::XMFLOAT4X4 wvp;
 	dx::XMFLOAT4 color;
 };
 

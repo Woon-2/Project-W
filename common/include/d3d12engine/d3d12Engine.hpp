@@ -139,6 +139,10 @@ public:
         Coord& coordComp
     );
 
+    Model( const ecs::Entity& entity,
+        const d3d12::RefModel& refModel, Coord& coordComp
+    );
+
     d3d12::Model& get() NOEXCEPT { return model_; }
     const d3d12::Model& get() const NOEXCEPT { return model_; }
 
@@ -161,6 +165,7 @@ public:
 
     void update(float deltaTime);
     void attach(const Model& model) NOEXCEPT;
+    void attach(const coord::System& movement, const coord::System& rotation) NOEXCEPT;
     void detach() NOEXCEPT;
     void setTimeLag(float timeLag) NOEXCEPT { timeLag_ = timeLag; }
     void MU_CALLCONV setOffset(mu::Vec3 offset) NOEXCEPT { offset_ = offset; }

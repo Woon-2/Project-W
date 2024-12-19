@@ -20,7 +20,7 @@ public:
     static constexpr auto defFov = mu::Degree(90.f);
     static constexpr auto defAspect = 16.f / 9.f;
     static constexpr auto defNear = 0.1f;
-    static constexpr auto defFar = 1000.f;
+    static constexpr auto defFar = 100.f;
 
     enum class FocusMode {
         None, LookAt, LookTo
@@ -281,7 +281,7 @@ public:
     ) : gfx::d3d12::RenderPass(id),
         viewport_(vp), protocol_( shader.makeProtocol( device,
             RenderProtocol::Desc{ makeDesc() }
-        ) ), batch_() {}
+        ) ), batch_(), pCamera_(nullptr) {}
 
     void setViewport(const D3D12_VIEWPORT& vp) {
         viewport_ = vp;
@@ -296,6 +296,9 @@ public:
     void postRender(D3D12GfxCmdList& cmdList) override;
 
     void trackModel(Model* pModel);
+    void setCamera(const Camera* pCamera) NOEXCEPT {
+        pCamera_ = pCamera;
+    }
 
 private:
     ShaderCube& shader() noexcept {
@@ -310,6 +313,7 @@ private:
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
     std::vector< std::pair<Submesh*, VBLayoutIdx> > batch_;
+    const Camera* pCamera_;
 };
 
 }   // namespace gfx::d3d12::rp

@@ -12,18 +12,7 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
     ), shaderCube_( core.device(), core.root() ),
     renderPassCube_( core.device(), shaderCube_,
         gfx::d3d12::convClientToVP( core.window().client() )
-    ), cubeRefModel_(), cubeModel_() {
-    core.prepareGPUResLoad();
-    auto cmdList = core.fetchCmdList();
-    cubeRefModel_ = CubeRefModel( core, cmdList, 0.5f, 0.5f, 0.5f );
-    cubeRefModel_.arrangeVBs( core.device(), cmdList, 1u,
-        std::vector<std::vector<gfx::Vertex::Properties>>{
-            { gfx::Vertex::Properties::Position3D }
-        }
-    );
-    cubeModel_ = gfx::d3d12::Model( cubeRefModel_ );
-    core.finishGPUResLoad();
-}
+    ) {}
 
 void Renderer::layoutVBs( gfx::d3d12engine::Core& core,
     const gfx::d3d12::RefModelStorage::ID& key,
@@ -33,8 +22,8 @@ void Renderer::layoutVBs( gfx::d3d12engine::Core& core,
 }
 
 void Renderer::init(gfx::d3d12engine::Scene& scene) {
-    renderPass_.init(scene);
-    renderPassCube_.trackModel( &cubeModel_ );
+    // renderPass_.init(scene);
+    renderPassCube_.init(scene);
 }
 
 void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& scene) {
@@ -187,3 +176,37 @@ CubeRefModel::CubeRefModel( gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCm
 
     pRoot_->addMesh(std::move(refMesh));
 }
+
+void CubeRP::init(gfx::d3d12engine::Scene& scene) {
+    for (auto& pModel : models(scene)) {
+        trackModel(&pModel->get());
+    }
+    if (!cameras(scene).empty()) {
+        setCamera(&cameras(scene).front()->get());
+    }
+}
+
+void CubeRP::update(gfx::d3d12engine::Scene& scene) {
+    for (auto& entityID : reservedEntities(scene)) {
+        if ( auto pModel = gfx::d3d12engine::Model::at(entityID) ) {
+            trackModel(&pModel->get());
+        }
+        if ( auto pCamera = gfx::d3d12engine::Camera::at(entityID) ) {
+            setCamera(&pCamera->get());
+        }
+    }
+}
+
+void CubeEntity::loadModel(gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdList& cmdList) {
+    sCubeRefModel = CubeRefModel(core, cmdList, 0.5f, 0.5f, 0.5f);
+    sCubeRefModel.arrangeVBs(core.device(), cmdList, 1, { { gfx::Vertex::Properties::Position3D } });
+}
+
+void CubeEntity::init() {
+	createComponent<gfx::d3d12engine::Coord>();
+    createComponent<gfx::d3d12engine::Model>( sCubeRefModel,
+        as<gfx::d3d12engine::Coord>()
+    );
+}
+
+CubeRefModel CubeEntity::sCubeRefModel;
