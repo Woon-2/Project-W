@@ -5,10 +5,10 @@
 #include <ranges>
 
 void Stage::init(gfx::d3d12engine::Core& core) {
-    loadAssets(core);
+    // loadAssets(core);
 
     initEntities(core);
-    initLights();
+    // initLights();
 
     pSystems_->coordRoot.update();
     pRenderer_->init(scene_);
@@ -34,21 +34,21 @@ void Stage::processInput(double deltaTime) {
 }
 
 void Stage::simulate(double deltaTime) {
-    pSystems_->physicsSystem.update(static_cast<float>(deltaTime));
-    player_.update(static_cast<float>(deltaTime));
+    // pSystems_->physicsSystem.update(static_cast<float>(deltaTime));
+    // player_.update(static_cast<float>(deltaTime));
     pSystems_->coordRoot.update();
 
-    player_.postUpdate();
+    // player_.postUpdate();
 }
 
 void Stage::initEntities(gfx::d3d12engine::Core& core) {
-    player_.init(core);
-    player_.addCamera(mu::Vec3(0.f, 10.f, -10.f), 1.f, pSystems_->coordRoot);
+    // player_.init(core);
+    // player_.addCamera(mu::Vec3(0.f, 10.f, -10.f), 1.f, pSystems_->coordRoot);
 
-    scene_.addEntity(player_);
-    pSystems_->coordRoot.addEntity(player_);
-    pSystems_->inputSystem.addEntity(player_);
-    pSystems_->physicsSystem.addEntity(player_);
+    // scene_.addEntity(player_);
+    // pSystems_->coordRoot.addEntity(player_);
+    // pSystems_->inputSystem.addEntity(player_);
+    // pSystems_->physicsSystem.addEntity(player_);
 
     scene_.clearStash();
 }

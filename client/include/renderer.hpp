@@ -17,6 +17,8 @@ public:
 private:
     gfx::d3d12::ShaderPBRIllumination shader_;
     gfx::d3d12engine::rp::PBRIllumination renderPass_;
+    gfx::d3d12::ShaderTriangle shaderTriangle_;
+    gfx::d3d12::rp::Triangle renderPassTriangle_;
 };
 
 #endif  // __renderer_HPP

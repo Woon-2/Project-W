@@ -344,6 +344,55 @@ void PBRIlluminationMacro::trackModel(Model* pModel) {
     }
 }
 
+void Triangle::preRender(D3D12GfxCmdList& cmdList) {
+    cmdList.get()->SetPipelineState( protocol_.get().Get() );
+    cmdList.get()->RSSetViewports(1u, &viewport_);
+    auto scissorRect = D3D12_RECT{ 0, 0, static_cast<LONG>(viewport_.Width), static_cast<LONG>(viewport_.Height) };
+    cmdList.get()->RSSetScissorRects(1u, &scissorRect);
+
+    cmdList.get()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+}
+
+void Triangle::render(D3D12GfxCmdList& cmdList) {
+    cmdList.get()->DrawInstanced(3u, 1u, 0u, 0u);
+}
+
+void Triangle::postRender(D3D12GfxCmdList& cmdList) {}
+
+RenderProtocol::Desc Triangle::makeDesc() {
+    return RenderProtocol::Desc {
+        .blend = D3D12_BLEND_DESC{
+            .AlphaToCoverageEnable = false,
+            .IndependentBlendEnable = false,
+            .RenderTarget = {
+                D3D12_RENDER_TARGET_BLEND_DESC{
+                    .BlendEnable = false,
+                    .LogicOpEnable = false,
+                    .RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL,
+                }
+            }
+        },
+        .sampleMask = UINT_MAX,
+        .rasterizerState = D3D12_RASTERIZER_DESC{
+            .FillMode = D3D12_FILL_MODE_SOLID,
+            .CullMode = D3D12_CULL_MODE_BACK,
+            .DepthClipEnable = true,
+        },
+        .depthStencilState = D3D12_DEPTH_STENCIL_DESC{
+            .DepthEnable = true,
+            .DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
+            .DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+        },
+        
+        .primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+        .numRenderTargets = 1u,
+        .rtvFormats = { DXGI_FORMAT_R8G8B8A8_UNORM },
+        .dsvFormat = DXGI_FORMAT_D32_FLOAT,
+        .sampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
+        .nodeMask = 0u
+    };
+}
+
 }   // namespace gfx::d3d12::rp
 
 }   // namespace gfx::d3d12

@@ -579,6 +579,29 @@ InputLayout ShaderPBRIlluminationMacro::makeInputLayoutSeparated() {
 	} );
 }
 
+ShaderTriangle::ShaderTriangle(D3D12Device& device, const RootSignature& root)
+	: Shader(root, makeInputLayout()) {}
+
+void ShaderTriangle::loadBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
+		shaderPath/"triangle.hlsl", inputLayout(), nullptr,
+		"VSMain", "vs_5_1", 0, 0, ShaderBlob::Type::Vertex
+	};
+	blobs_[etoi(ShaderBlob::Type::Pixel)] = ShaderBlob{
+		shaderPath/"triangle.hlsl", inputLayout(), nullptr,
+		"PSMain", "ps_5_1", 0, 0, ShaderBlob::Type::Pixel
+	};
+}
+
+void ShaderTriangle::releaseBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)].reset();
+	blobs_[etoi(ShaderBlob::Type::Pixel)].reset();
+}
+
+InputLayout ShaderTriangle::makeInputLayout() {
+	return InputLayout( std::vector<InputLayout::Slot>{} );
+}
+
 }   // namespace gfx::d3d12
 
 }   // namespace gfx

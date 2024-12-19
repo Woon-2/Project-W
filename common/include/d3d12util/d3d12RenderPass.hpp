@@ -234,6 +234,44 @@ private:
     const Camera* pCamera_;
 };
 
+class Triangle : public gfx::d3d12::RenderPass {
+public: 
+    static constexpr const char* id = "Triangle";
+
+    Triangle( D3D12Device& device, ShaderTriangle& shader,
+        const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
+    ) : gfx::d3d12::RenderPass(id),
+        viewport_(vp), protocol_( shader.makeProtocol( device,
+            RenderProtocol::Desc{ makeDesc() }
+        ) ), batch_() {}
+
+    void setViewport(const D3D12_VIEWPORT& vp) {
+        viewport_ = vp;
+    }
+
+    const D3D12_VIEWPORT& viewport() const NOEXCEPT {
+        return viewport_;
+    }
+
+    void preRender(D3D12GfxCmdList& cmdList) override;
+    void render(D3D12GfxCmdList& cmdList) override;
+    void postRender(D3D12GfxCmdList& cmdList) override;
+
+private:
+    ShaderTriangle& shader() noexcept {
+        return static_cast<ShaderTriangle&>(protocol_.shader());
+    }
+    const ShaderTriangle& shader() const noexcept {
+        return static_cast<const ShaderTriangle&>(protocol_.shader());
+    }
+
+    static RenderProtocol::Desc makeDesc();
+
+    D3D12_VIEWPORT viewport_;
+    RenderProtocol protocol_;
+    std::vector< std::tuple<Submesh*, VBLayoutIdx, mu::Mat4x4> > batch_;
+};
+
 }   // namespace gfx::d3d12::rp
 
 }   // namespace gfx::d3d12

@@ -9,6 +9,9 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
         }, gfx::d3d12::InputLayout::Spec::separated
     ), renderPass_( core.device(), shader_,
         gfx::d3d12::convClientToVP( core.window().client() )
+    ), shaderTriangle_( core.device(), core.root() ),
+    renderPassTriangle_( core.device(), shaderTriangle_,
+        gfx::d3d12::convClientToVP( core.window().client() )
     ) {}
 
 void Renderer::layoutVBs( gfx::d3d12engine::Core& core,
@@ -23,12 +26,19 @@ void Renderer::init(gfx::d3d12engine::Scene& scene) {
 }
 
 void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& scene) {
-    renderPass_.update(scene);
+    // renderPass_.update(scene);
+
+    // auto cmdList = core.fetchCmdList();
+
+    // shader_.bindRootParams( cmdList );
+    // renderPass_.preRender( cmdList );
+    // renderPass_.render( cmdList );
+    // renderPass_.postRender( cmdList );
 
     auto cmdList = core.fetchCmdList();
 
-    shader_.bindRootParams( cmdList );
-    renderPass_.preRender( cmdList );
-    renderPass_.render( cmdList );
-    renderPass_.postRender( cmdList );
+    shaderTriangle_.bindRootParams( cmdList );
+    renderPassTriangle_.preRender( cmdList );
+    renderPassTriangle_.render( cmdList );
+    renderPassTriangle_.postRender( cmdList );
 }
