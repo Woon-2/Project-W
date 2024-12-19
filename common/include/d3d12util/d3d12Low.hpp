@@ -317,7 +317,7 @@ public:
 
 	void bind(D3D12GfxCmdList& cmdList, std::size_t rootParamIdx) {
         DX_THROW_FAILED_VOID(
-		    cmdList.get()->SetGraphicsRootDescriptorTable(rootParamIdx, (*pDescHeap_)[beginIdx_])
+		    cmdList.get()->SetGraphicsRootDescriptorTable(rootParamIdx, (*pDescHeap_)[beginIdx_].gpuHandle())
         );
 	}
 
