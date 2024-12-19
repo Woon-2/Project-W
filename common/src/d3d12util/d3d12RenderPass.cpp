@@ -453,12 +453,13 @@ RenderProtocol::Desc Cube::makeDesc() {
         .rasterizerState = D3D12_RASTERIZER_DESC{
             .FillMode = D3D12_FILL_MODE_SOLID,
             .CullMode = D3D12_CULL_MODE_BACK,
-            .DepthClipEnable = true,
+            .DepthClipEnable = true
         },
         .depthStencilState = D3D12_DEPTH_STENCIL_DESC{
             .DepthEnable = true,
             .DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
             .DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+            .StencilEnable = false
         },
         .primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
         .numRenderTargets = 1u,

@@ -173,8 +173,10 @@ CubeRefModel::CubeRefModel( gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCm
 
     auto indexIbMem = std::vector<std::uint8_t>(sizeof(std::uint16_t) * 6 * 6);
 
-    for (int i = 0; i < 36; ++i) {
+    for (int i = 0; i < 36; i += 3) {
         *reinterpret_cast<std::uint16_t*>(indexIbMem.data() + sizeof(std::uint16_t) * i) = i;
+        *reinterpret_cast<std::uint16_t*>(indexIbMem.data() + sizeof(std::uint16_t) * (i + 1)) = i + 2;
+        *reinterpret_cast<std::uint16_t*>(indexIbMem.data() + sizeof(std::uint16_t) * (i + 2)) = i + 1;
     }
 
     auto refSubmesh = gfx::d3d12::RefSubmesh(&refMesh);
