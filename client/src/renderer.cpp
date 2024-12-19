@@ -70,93 +70,94 @@ CubeRefModel::CubeRefModel( gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCm
     float fx = width * 0.5f;
     float fy = height * 0.5f;
     float fz = depth * 0.5f;
+    float zOffset = 0.5f;
 
     gfx::dx::XMFLOAT3 pos{};
     std::size_t i = 0;
 
     //ⓐ 앞면(Front) 사각형의 위쪽 삼각형
-    pos = gfx::dx::XMFLOAT3(-fx, +fy, -fz);
+    pos = gfx::dx::XMFLOAT3(-fx, +fy, zOffset-fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
-    pos = gfx::dx::XMFLOAT3(+fx, -fy, -fz);
+    pos = gfx::dx::XMFLOAT3(+fx, -fy, zOffset-fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
-    pos = gfx::dx::XMFLOAT3(+fx, +fy, -fz);
+    pos = gfx::dx::XMFLOAT3(+fx, +fy, zOffset-fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
     //ⓑ 앞면(Front) 사각형의 아래쪽 삼각형
-    pos = gfx::dx::XMFLOAT3(+fx, -fy, -fz);
+    pos = gfx::dx::XMFLOAT3(+fx, -fy, zOffset-fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
-    pos = gfx::dx::XMFLOAT3(-fx, +fy, -fz);
+    pos = gfx::dx::XMFLOAT3(-fx, +fy, zOffset-fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
-    pos = gfx::dx::XMFLOAT3(-fx, -fy, -fz);
+    pos = gfx::dx::XMFLOAT3(-fx, -fy, zOffset-fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
     //ⓒ 윗면(Top) 사각형의 위쪽 삼각형
-    pos = gfx::dx::XMFLOAT3(-fx, +fy, +fz);
+    pos = gfx::dx::XMFLOAT3(-fx, +fy, zOffset+fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
-    pos = gfx::dx::XMFLOAT3(+fx, +fy, +fz);
+    pos = gfx::dx::XMFLOAT3(+fx, +fy, zOffset+fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
-    pos = gfx::dx::XMFLOAT3(+fx, +fy, -fz);
+    pos = gfx::dx::XMFLOAT3(+fx, +fy, zOffset-fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
     //ⓓ 윗면(Top) 사각형의 아래쪽 삼각형
-    pos = gfx::dx::XMFLOAT3(-fx, +fy, +fz);
+    pos = gfx::dx::XMFLOAT3(-fx, +fy, zOffset+fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
-    pos = gfx::dx::XMFLOAT3(+fx, +fy, -fz);
+    pos = gfx::dx::XMFLOAT3(+fx, +fy, zOffset-fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
-    pos = gfx::dx::XMFLOAT3(-fx, +fy, -fz);
+    pos = gfx::dx::XMFLOAT3(-fx, +fy, zOffset-fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
     //ⓔ 뒷면(Back) 사각형의 위쪽 삼각형
-    pos = gfx::dx::XMFLOAT3(-fx, -fy, +fz);
+    pos = gfx::dx::XMFLOAT3(-fx, -fy, zOffset+fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
-    pos = gfx::dx::XMFLOAT3(+fx, -fy, +fz);
+    pos = gfx::dx::XMFLOAT3(+fx, -fy, zOffset+fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
-    pos = gfx::dx::XMFLOAT3(+fx, +fy, +fz);
+    pos = gfx::dx::XMFLOAT3(+fx, +fy, zOffset+fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
     //ⓕ 뒷면(Back) 사각형의 아래쪽 삼각형
-    pos = gfx::dx::XMFLOAT3(-fx, -fy, +fz);
+    pos = gfx::dx::XMFLOAT3(-fx, -fy, zOffset+fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
-    pos = gfx::dx::XMFLOAT3(+fx, +fy, +fz);
+    pos = gfx::dx::XMFLOAT3(+fx, +fy, zOffset+fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
-    pos = gfx::dx::XMFLOAT3(-fx, +fy, +fz);
+    pos = gfx::dx::XMFLOAT3(-fx, +fy, zOffset+fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
     //ⓖ 아래면(Bottom) 사각형의 위쪽 삼각형
-    pos = gfx::dx::XMFLOAT3(-fx, -fy, -fz);
+    pos = gfx::dx::XMFLOAT3(-fx, -fy, zOffset-fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
-    pos = gfx::dx::XMFLOAT3(+fx, -fy, -fz);
+    pos = gfx::dx::XMFLOAT3(+fx, -fy, zOffset-fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
-    pos = gfx::dx::XMFLOAT3(+fx, -fy, +fz);
+    pos = gfx::dx::XMFLOAT3(+fx, -fy, zOffset+fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
     //ⓗ 아래면(Bottom) 사각형의 아래쪽 삼각형
-    pos = gfx::dx::XMFLOAT3(-fx, -fy, -fz);
+    pos = gfx::dx::XMFLOAT3(-fx, -fy, zOffset-fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
-    pos = gfx::dx::XMFLOAT3(+fx, -fy, +fz);
+    pos = gfx::dx::XMFLOAT3(+fx, -fy, zOffset+fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
-    pos = gfx::dx::XMFLOAT3(-fx, -fy, +fz);
+    pos = gfx::dx::XMFLOAT3(-fx, -fy, zOffset+fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
     //ⓘ 옆면(Left) 사각형의 위쪽 삼각형
-    pos = gfx::dx::XMFLOAT3(-fx, +fy, +fz);
+    pos = gfx::dx::XMFLOAT3(-fx, +fy, zOffset+fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
-    pos = gfx::dx::XMFLOAT3(-fx, +fy, -fz);
+    pos = gfx::dx::XMFLOAT3(-fx, +fy, zOffset-fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
-    pos = gfx::dx::XMFLOAT3(-fx, -fy, -fz);
+    pos = gfx::dx::XMFLOAT3(-fx, -fy, zOffset-fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
     //ⓙ 옆면(Left) 사각형의 아래쪽 삼각형
-    pos = gfx::dx::XMFLOAT3(-fx, +fy, +fz);
+    pos = gfx::dx::XMFLOAT3(-fx, +fy, zOffset+fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
-    pos = gfx::dx::XMFLOAT3(-fx, -fy, -fz);
+    pos = gfx::dx::XMFLOAT3(-fx, -fy, zOffset-fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
-    pos = gfx::dx::XMFLOAT3(-fx, -fy, +fz);
+    pos = gfx::dx::XMFLOAT3(-fx, -fy, zOffset+fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
     //ⓚ 옆면(Right) 사각형의 위쪽 삼각형
-    pos = gfx::dx::XMFLOAT3(+fx, +fy, -fz);
+    pos = gfx::dx::XMFLOAT3(+fx, +fy, zOffset-fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
-    pos = gfx::dx::XMFLOAT3(+fx, +fy, +fz);
+    pos = gfx::dx::XMFLOAT3(+fx, +fy, zOffset+fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
-    pos = gfx::dx::XMFLOAT3(+fx, -fy, +fz);
+    pos = gfx::dx::XMFLOAT3(+fx, -fy, zOffset+fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
     //ⓛ 옆면(Right) 사각형의 아래쪽 삼각형
-    pos = gfx::dx::XMFLOAT3(+fx, +fy, -fz);
+    pos = gfx::dx::XMFLOAT3(+fx, +fy, zOffset-fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
-    pos = gfx::dx::XMFLOAT3(+fx, -fy, +fz);
+    pos = gfx::dx::XMFLOAT3(+fx, -fy, zOffset+fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
-    pos = gfx::dx::XMFLOAT3(+fx, -fy, -fz);
+    pos = gfx::dx::XMFLOAT3(+fx, -fy, zOffset-fz);
     std::memcpy(vbPosMem.data() + sizeof(gfx::dx::XMFLOAT3) * i++, &pos, sizeof(gfx::dx::XMFLOAT3));
 
     refMesh.vbLayouts_.emplace_back();
