@@ -398,9 +398,11 @@ private:
 
 class Bitmap {
 public:
-    Bitmap() = default;
+    Bitmap()
+        : pBitmap_(nullptr), width_(0u), height_(0u), bits_(nullptr) {}
 
-	Bitmap( const std::filesystem::path& path ) {
+	Bitmap( const std::filesystem::path& path )
+        : pBitmap_(nullptr), width_(0u), height_(0u), bits_(nullptr) {
 		load( path );
 	}
 
