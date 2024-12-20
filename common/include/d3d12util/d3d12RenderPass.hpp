@@ -20,7 +20,7 @@ public:
     static constexpr auto defFov = mu::Degree(90.f);
     static constexpr auto defAspect = 16.f / 9.f;
     static constexpr auto defNear = 0.1f;
-    static constexpr auto defFar = 100.f;
+    static constexpr auto defFar = 1000.f;
 
     enum class FocusMode {
         None, LookAt, LookTo
@@ -191,11 +191,11 @@ private:
     const Camera* pCamera_;
 };
 
-class PBRIlluminationMacro : public gfx::d3d12::RenderPass {
+class PBRIlluminationTerrain : public gfx::d3d12::RenderPass {
 public:
-    static constexpr const char* id = "PBRIlluminationMacro";
+    static constexpr const char* id = "PBRIlluminationTerrain";
 
-    PBRIlluminationMacro( D3D12Device& device, ShaderPBRIlluminationMacro& shader,
+    PBRIlluminationTerrain( D3D12Device& device, ShaderPBRIlluminationTerrain& shader,
         const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
     );
 
@@ -218,11 +218,11 @@ public:
     }
 
 private:
-    ShaderPBRIlluminationMacro& shader() noexcept {
-        return static_cast<ShaderPBRIlluminationMacro&>(protocol_.shader());
+    ShaderPBRIlluminationTerrain& shader() noexcept {
+        return static_cast<ShaderPBRIlluminationTerrain&>(protocol_.shader());
     }
-    const ShaderPBRIlluminationMacro& shader() const noexcept {
-        return static_cast<const ShaderPBRIlluminationMacro&>(protocol_.shader());
+    const ShaderPBRIlluminationTerrain& shader() const noexcept {
+        return static_cast<const ShaderPBRIlluminationTerrain&>(protocol_.shader());
     }
 
     static RenderProtocol::Desc makeDesc();

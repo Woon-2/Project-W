@@ -240,7 +240,7 @@ TerrainSubset::TerrainSubset( const d3d12::RefModelStorage::ID& key,
     createComponent<Coord>();
     as<Coord>().get().setParent(&pTerrain->as<Coord>().get());
     createComponent<Model>(key, core, as<Coord>());
-    as<Model>().get().markRenderPass(d3d12::rp::PBRIlluminationMacro::id);
+    as<Model>().get().markRenderPass(d3d12::rp::PBRIlluminationTerrain::id);
 }
 
 TerrainSubset::TerrainSubset(TerrainSubset&& other) noexcept
@@ -329,7 +329,7 @@ void PBRIllumination::update(Scene& scene) {
     }
 }
 
-void PBRIlluminationMacro::init(Scene& scene) {
+void PBRIlluminationTerrain::init(Scene& scene) {
     for (auto& pModel : models(scene)) {
         if (pModel) {
             trackModel(&pModel->get());
@@ -348,7 +348,7 @@ void PBRIlluminationMacro::init(Scene& scene) {
     }
 }
 
-void PBRIlluminationMacro::update(Scene& scene) {
+void PBRIlluminationTerrain::update(Scene& scene) {
     for (auto& entityID : reservedEntities(scene)) {
         if ( auto pModel = Model::at(entityID) ) {
             trackModel(&pModel->get());

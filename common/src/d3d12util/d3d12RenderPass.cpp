@@ -223,8 +223,8 @@ void PBRIllumination::trackModel(Model* pModel) {
     }
 }
 
-PBRIlluminationMacro::PBRIlluminationMacro( D3D12Device& device,
-    ShaderPBRIlluminationMacro& shader, const D3D12_VIEWPORT& vp
+PBRIlluminationTerrain::PBRIlluminationTerrain( D3D12Device& device,
+    ShaderPBRIlluminationTerrain& shader, const D3D12_VIEWPORT& vp
 ) : gfx::d3d12::RenderPass(id),
     viewport_(vp), protocol_( shader.makeProtocol( device,
         RenderProtocol::Desc{ makeDesc() }
@@ -237,7 +237,7 @@ PBRIlluminationMacro::PBRIlluminationMacro( D3D12Device& device,
     shader.perConfigurationData_.stage(&pcd, sizeof(sr::PerConfigurationData0));
 }
 
-RenderProtocol::Desc PBRIlluminationMacro::makeDesc() {
+RenderProtocol::Desc PBRIlluminationTerrain::makeDesc() {
     return RenderProtocol::Desc {
         .blend = D3D12_BLEND_DESC{
             .AlphaToCoverageEnable = false,
@@ -267,7 +267,7 @@ RenderProtocol::Desc PBRIlluminationMacro::makeDesc() {
             .DepthFunc = D3D12_COMPARISON_FUNC_LESS,
             .StencilEnable = false
         },
-        .primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+        .primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH,
         .numRenderTargets = 1u,
         .rtvFormats = { DXGI_FORMAT_R8G8B8A8_UNORM },
         .dsvFormat = DXGI_FORMAT_D32_FLOAT,
@@ -276,7 +276,7 @@ RenderProtocol::Desc PBRIlluminationMacro::makeDesc() {
     };
 }
 
-void PBRIlluminationMacro::setViewport(const D3D12_VIEWPORT& vp) {
+void PBRIlluminationTerrain::setViewport(const D3D12_VIEWPORT& vp) {
     viewport_ = vp;
 
     auto pcd = sr::PerConfigurationData0{
@@ -288,7 +288,7 @@ void PBRIlluminationMacro::setViewport(const D3D12_VIEWPORT& vp) {
 }
 
 
-void PBRIlluminationMacro::preRender(D3D12GfxCmdList& cmdList) {
+void PBRIlluminationTerrain::preRender(D3D12GfxCmdList& cmdList) {
     cmdList.get()->SetPipelineState( protocol_.get().Get() );
     cmdList.get()->RSSetViewports(1u, &viewport_);
     auto scissorRect = D3D12_RECT{ 0, 0, static_cast<LONG>(viewport_.Width), static_cast<LONG>(viewport_.Height) };
@@ -301,14 +301,14 @@ void PBRIlluminationMacro::preRender(D3D12GfxCmdList& cmdList) {
         );
     } );
 
-    auto pids = std::vector<sr::PerInstanceData0>();
+    auto pids = std::vector<sr::PerInstanceData1>();
     pids.reserve( shader().maxInstanceCnt() );
 
     for (auto& [pSubmesh, vbLayoutIdx, xform] : batch_) {
         xform = pSubmesh->parent()->parent()->coord().xform();
         pids.emplace_back(
-            /* .wvp = */ mu::transpose( xform * pCamera_->view() * pCamera_->proj() ).getXmf(),
             /* .wv = */ mu::transpose( xform * pCamera_->view() ).getXmf(),
+            /* .proj = */ mu::transpose( pCamera_->proj() ).getXmf(),
             /* .wvNormal = */ dx::convertMat<dx::XMFLOAT3X3>(
                 mu::inverse(xform * pCamera_->view()).get()
             )
@@ -340,7 +340,7 @@ void PBRIlluminationMacro::preRender(D3D12GfxCmdList& cmdList) {
     shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData0));
 }
 
-void PBRIlluminationMacro::render(D3D12GfxCmdList& cmdList) {
+void PBRIlluminationTerrain::render(D3D12GfxCmdList& cmdList) {
     auto first = batch_.begin();
     auto accDrawcallCnt = 0u;
 
@@ -381,11 +381,11 @@ void PBRIlluminationMacro::render(D3D12GfxCmdList& cmdList) {
     }
 }
 
-void PBRIlluminationMacro::postRender(D3D12GfxCmdList& cmdList) {
+void PBRIlluminationTerrain::postRender(D3D12GfxCmdList& cmdList) {
 
 }
 
-void PBRIlluminationMacro::trackModel(Model* pModel) {
+void PBRIlluminationTerrain::trackModel(Model* pModel) {
     if (!pModel->markedRenderPasses().empty()) {
         auto it = std::ranges::find(pModel->markedRenderPasses(), renderPassID());
         if (it == pModel->markedRenderPasses().end()) {

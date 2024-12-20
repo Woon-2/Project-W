@@ -983,49 +983,71 @@ RefModel RefModel::loadTerrainSubsetFromHeightmap( const Bitmap& heightmap,
         std::bitset<etoi(Vertex::Properties::SIZE)>{ 1ull << etoi(Vertex::Properties::TexCoord2D0) }
     );
 
-    mesh.submeshes_.emplace_back(&mesh, D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    // without tesselation
+    // mesh.submeshes_.emplace_back(&mesh, D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+
+    // with tesselation (quad patch, 16 control points)
+    mesh.submeshes_.emplace_back(&mesh, D3D_PRIMITIVE_TOPOLOGY_16_CONTROL_POINT_PATCHLIST);
+
     auto& submesh = mesh.submeshes_.back();
 
 
-    auto makeIb = [&](auto&& indices) {
-        using IndexType = std::ranges::range_value_t<decltype(indices)>;
-        indices.reserve(((width * 2) * (length - 1)) + ((length - 1) - 1));
+    // without tesselation
 
-        auto out = std::back_inserter(indices);
+    // auto makeIb = [&](auto&& indices) {
+    //     using IndexType = std::ranges::range_value_t<decltype(indices)>;
+    //     indices.reserve(((width * 2) * (length - 1)) + ((length - 1) - 1));
 
-        for (int i = 0, z = 0; z < length - 1; ++z) {
-            if (!(z % 2)) {
-                for (int x = 0; x < width; ++x) {
-                    if (x == 0 && z > 0) {
-                        out = static_cast<IndexType>(x + (z * width));
-                    }
-                    out = static_cast<IndexType>(x + (z * width));
-                    out = static_cast<IndexType>(x + ((z + 1) * width));
-                }
-            }
-            else {
-                for (int x = width - 1; x >= 0; --x) {
-                    if (x == (width - 1)) {
-                        out = static_cast<IndexType>(x + (z * width));
-                    }
-                    out = static_cast<IndexType>(x + (z * width));
-                    out = static_cast<IndexType>(x + ((z + 1) * width));
+    //     auto out = std::back_inserter(indices);
+
+    //     for (int i = 0, z = 0; z < length - 1; ++z) {
+    //         if (!(z % 2)) {
+    //             for (int x = 0; x < width; ++x) {
+    //                 if (x == 0 && z > 0) {
+    //                     out = static_cast<IndexType>(x + (z * width));
+    //                 }
+    //                 out = static_cast<IndexType>(x + (z * width));
+    //                 out = static_cast<IndexType>(x + ((z + 1) * width));
+    //             }
+    //         }
+    //         else {
+    //             for (int x = width - 1; x >= 0; --x) {
+    //                 if (x == (width - 1)) {
+    //                     out = static_cast<IndexType>(x + (z * width));
+    //                 }
+    //                 out = static_cast<IndexType>(x + (z * width));
+    //                 out = static_cast<IndexType>(x + ((z + 1) * width));
+    //             }
+    //         }
+    //     }
+
+    //     const auto format = sizeof(IndexType) == 2 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
+    //     submesh.ib_ = IndexBuffer(device, cmdList, indices.data(), format, indices.size());
+    // };
+
+    // with tesselation (quad patch, 16 control points)
+
+    const auto indexCnt = (width / 16 - 3) * (length / 16 - 3) * 16;
+    const auto indexByteWidth = indexCnt < 65536 ? sizeof(std::uint16_t) : sizeof(std::uint32_t);
+
+    std::vector<std::uint8_t> ibMem(indexCnt * indexByteWidth);
+    auto k = 0;
+
+    for (int z = 0; z < length - 3 * 16; z += 16) {
+        for (int x = 0; x < width - 3 * 16; x += 16) {
+            for (int i = 0; i < 4; ++i) {
+                for (int j = 0; j < 4; ++j) {
+                    auto idx = x + j * 16 + ((z + i * 16) * width);
+                    std::memcpy(ibMem.data() + k++ * indexByteWidth, &idx, indexByteWidth);
                 }
             }
         }
-
-        const auto format = sizeof(IndexType) == 2 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
-        submesh.ib_ = IndexBuffer(device, cmdList, indices.data(), format, indices.size());
-    };
-
-    const auto indexCnt = ((width * 2) * (length - 1)) + ((length - 1) - 1);
-
-    if (indexCnt < 65536) {
-        makeIb(std::vector<std::uint16_t>{});
     }
-    else {
-        makeIb(std::vector<int>{});
-    }
+
+    const auto format = indexCnt < 65536 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
+    assert(indexCnt == k);
+    submesh.ib_ = IndexBuffer(device, cmdList, std::move(ibMem), format, k);
+    
 
     auto& material = submesh.material();
 

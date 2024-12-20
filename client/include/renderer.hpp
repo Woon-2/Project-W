@@ -21,8 +21,8 @@ public:
 private:
     gfx::d3d12::ShaderPBRIllumination shaderPBR_;
     gfx::d3d12engine::rp::PBRIllumination renderPassPBR_;
-    gfx::d3d12::ShaderPBRIlluminationMacro shaderPBRMacro_;
-    gfx::d3d12engine::rp::PBRIlluminationMacro renderPassPBRMacro_;
+    gfx::d3d12::ShaderPBRIlluminationTerrain shaderPBRTerrain_;
+    gfx::d3d12engine::rp::PBRIlluminationTerrain renderPassPBRTerrain_;
 };
 
 #endif  // __renderer_HPP

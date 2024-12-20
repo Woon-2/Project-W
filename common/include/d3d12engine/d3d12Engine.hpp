@@ -292,9 +292,9 @@ public:
     void update(Scene& scene) override;
 };
 
-class PBRIlluminationMacro : public IRenderPass, public d3d12::rp::PBRIlluminationMacro {
+class PBRIlluminationTerrain : public IRenderPass, public d3d12::rp::PBRIlluminationTerrain {
 public:
-    using d3d12::rp::PBRIlluminationMacro::PBRIlluminationMacro;
+    using d3d12::rp::PBRIlluminationTerrain::PBRIlluminationTerrain;
 
     void init(Scene& scene) override;
     void update(Scene& scene) override;

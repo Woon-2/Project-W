@@ -181,6 +181,8 @@ public:
 		Vertex,
 		Pixel,
 		Geometry,
+		Hull,
+		Domain,
 		Size
 	};
 
@@ -338,6 +340,12 @@ struct PerInstanceData0 {
 	dx::XMFLOAT3X3 wvNormal;
 };
 
+struct PerInstanceData1 {
+	dx::XMFLOAT4X4 wv;
+	dx::XMFLOAT4X4 proj;
+	dx::XMFLOAT3X3 wvNormal;
+};
+
 struct Light {
 	enum class Type {
 		Point,
@@ -461,7 +469,7 @@ private:
 	std::size_t maxDrawcallCnt_;
 };
 
-class ShaderPBRIlluminationMacro : public Shader {
+class ShaderPBRIlluminationTerrain : public Shader {
 private:
 	std::size_t cbDrawcallDataSize_;
 
@@ -472,13 +480,15 @@ public:
 		std::size_t maxLightCnt;
 	};
 
-	ShaderPBRIlluminationMacro( D3D12Device& device, const RootSignature& root,
+	ShaderPBRIlluminationTerrain( D3D12Device& device, const RootSignature& root,
 		const Config& config, InputLayout::Spec ilSpec = InputLayout::Spec::serial
 	);
 
 	RenderProtocol makeProtocol( D3D12Device& device, const RenderProtocol::Desc& desc) {
 		return RenderProtocol( device, *this,
-			selectBlobsStrong<ShaderBlob::Type::Vertex, ShaderBlob::Type::Pixel>(), desc
+			selectBlobsStrong< ShaderBlob::Type::Vertex, ShaderBlob::Type::Pixel,
+				ShaderBlob::Type::Hull, ShaderBlob::Type::Domain
+			>(), desc
 		);
 	}
 

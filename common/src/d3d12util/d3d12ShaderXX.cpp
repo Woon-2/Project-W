@@ -90,6 +90,8 @@ RenderProtocol::RenderProtocol( D3D12Device& device,
 		.pRootSignature = shader.rootSiganture().get().Get(),
 		.VS = byteCodes[etoi(ShaderBlob::Type::Vertex)],
 		.PS = byteCodes[etoi(ShaderBlob::Type::Pixel)],
+		.DS = byteCodes[etoi(ShaderBlob::Type::Domain)],
+		.HS = byteCodes[etoi(ShaderBlob::Type::Hull)],
 		.GS = byteCodes[etoi(ShaderBlob::Type::Geometry)],
 		.StreamOutput = desc.streamOutput,
 		.BlendState = desc.blend,
@@ -466,14 +468,14 @@ InputLayout ShaderPBRIllumination::makeInputLayoutSeparated() {
 	} );
 }
 
-ShaderPBRIlluminationMacro::ShaderPBRIlluminationMacro( D3D12Device& device, const RootSignature& root,
+ShaderPBRIlluminationTerrain::ShaderPBRIlluminationTerrain( D3D12Device& device, const RootSignature& root,
 	const Config& config, InputLayout::Spec ilSpec
 ) : Shader(root, makeInputLayout(ilSpec)),
 	cbDrawcallDataSize_( calcConstantBufferSize(sizeof(sr::PerDrawcallData0)) ),
 	perConfigurationData_(device, sizeof(sr::PerConfigurationData0)),
 	perFrameData_(device, sizeof(sr::PerFrameData0)),
 	perDrawcallData_(device, cbDrawcallDataSize_ * config.maxDrawcallCnt),
-	perInstanceData_(device, sizeof(sr::PerInstanceData0) * config.maxInstanceCnt),
+	perInstanceData_(device, sizeof(sr::PerInstanceData1) * config.maxInstanceCnt),
 	lightBuffer_(device, sizeof(sr::Light) * config.maxLightCnt),
 	maxInstanceCnt_(config.maxInstanceCnt), maxLightCnt_(config.maxLightCnt),
 	maxDrawcallCnt_(config.maxDrawcallCnt) {
@@ -484,7 +486,7 @@ ShaderPBRIlluminationMacro::ShaderPBRIlluminationMacro( D3D12Device& device, con
 	lightBuffer_.pullGpuAddr();
 }
 
-void ShaderPBRIlluminationMacro::bindRootParams(D3D12GfxCmdList& cmdList) {
+void ShaderPBRIlluminationTerrain::bindRootParams(D3D12GfxCmdList& cmdList) {
 	auto& root = UnifiedRoot::get();
 
 	cmdList.get()->SetGraphicsRootConstantBufferView(
@@ -505,7 +507,7 @@ void ShaderPBRIlluminationMacro::bindRootParams(D3D12GfxCmdList& cmdList) {
 	);
 }
 
-void ShaderPBRIlluminationMacro::bindPerDrawcallData(
+void ShaderPBRIlluminationTerrain::bindPerDrawcallData(
 	std::size_t drawcallIdx, D3D12GfxCmdList& cmdList
 ) {
 	cmdList.get()->SetGraphicsRootConstantBufferView(
@@ -514,23 +516,33 @@ void ShaderPBRIlluminationMacro::bindPerDrawcallData(
 	);
 }
 
-void ShaderPBRIlluminationMacro::loadBlobs() {
+void ShaderPBRIlluminationTerrain::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath/"pbrShaderMacro.hlsl", inputLayout(), nullptr,
+		shaderPath/"pbrShaderTerrain.hlsl", inputLayout(), nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 	blobs_[etoi(ShaderBlob::Type::Pixel)] = ShaderBlob{
-		shaderPath/"pbrShaderMacro.hlsl", inputLayout(), nullptr,
+		shaderPath/"pbrShaderTerrain.hlsl", inputLayout(), nullptr,
 		"PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Pixel
+	};
+	blobs_[etoi(ShaderBlob::Type::Hull)] = ShaderBlob{
+		shaderPath/"pbrShaderTerrain.hlsl", inputLayout(), nullptr,
+		"HSMain", "hs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Hull
+	};
+	blobs_[etoi(ShaderBlob::Type::Domain)] = ShaderBlob{
+		shaderPath/"pbrShaderTerrain.hlsl", inputLayout(), nullptr,
+		"DSMain", "ds_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Domain
 	};
 }
 
-void ShaderPBRIlluminationMacro::releaseBlobs() {
+void ShaderPBRIlluminationTerrain::releaseBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)].reset();
 	blobs_[etoi(ShaderBlob::Type::Pixel)].reset();
+	blobs_[etoi(ShaderBlob::Type::Hull)].reset();
+	blobs_[etoi(ShaderBlob::Type::Domain)].reset();
 }
 
-InputLayout ShaderPBRIlluminationMacro::makeInputLayout(InputLayout::Spec ilSpec) {
+InputLayout ShaderPBRIlluminationTerrain::makeInputLayout(InputLayout::Spec ilSpec) {
 	switch (ilSpec) {
 	case InputLayout::Spec::serial:
 		return makeInputLayoutSerial();
@@ -541,7 +553,7 @@ InputLayout ShaderPBRIlluminationMacro::makeInputLayout(InputLayout::Spec ilSpec
 	}
 }
 
-InputLayout ShaderPBRIlluminationMacro::makeInputLayoutSerial() {
+InputLayout ShaderPBRIlluminationTerrain::makeInputLayoutSerial() {
 	return InputLayout( std::vector<InputLayout::Slot>{
 		InputLayout::Slot{
 			.elems = {
@@ -556,7 +568,7 @@ InputLayout ShaderPBRIlluminationMacro::makeInputLayoutSerial() {
 	} );
 }
 
-InputLayout ShaderPBRIlluminationMacro::makeInputLayoutSeparated() {
+InputLayout ShaderPBRIlluminationTerrain::makeInputLayoutSeparated() {
 	return InputLayout( std::vector<InputLayout::Slot>{
 		InputLayout::Slot{
 			.elems = {
