@@ -229,10 +229,10 @@ void Material::addConstant(ConstantType type, float constant) {
 }
 
 VertexBuffer::VertexBuffer( D3D12Device& device, D3D12GfxCmdList& cmdList,
-    const void* pData, std::size_t byteWidth, std::size_t stride,
+    std::vector<std::uint8_t>&& pData, std::size_t byteWidth, std::size_t stride,
 	std::bitset<etoi(Vertex::Properties::SIZE)> attribs
-) : DefaultBuffer(device, byteWidth), attribs_(attribs) {
-    auto upBufIdx = cmdList.emplaceXResource<UploadBuffer>(device, pData, byteWidth);
+) : DefaultBuffer(device, byteWidth), cpuMem_(std::move(pData)), attribs_(attribs) {
+    auto upBufIdx = cmdList.emplaceXResource<UploadBuffer>(device, cpuMem_.data(), byteWidth);
     auto& upBuf = cmdList.getXResource<UploadBuffer>(upBufIdx);
     cmdList.copyResource(upBuf, *this);
 
@@ -243,17 +243,46 @@ VertexBuffer::VertexBuffer( D3D12Device& device, D3D12GfxCmdList& cmdList,
 }
 
 IndexBuffer::IndexBuffer(D3D12Device& device, D3D12GfxCmdList& cmdList,
-    const void* pData, std::size_t indexCnt
-) : DefaultBuffer(device, indexCnt * sizeof(std::uint16_t)), size_(indexCnt) {
+    std::vector<std::uint8_t>&& pData, DXGI_FORMAT indexFormat, std::size_t indexCnt
+) : DefaultBuffer(device, indexCnt * indexByteWidth(indexFormat)), size_(indexCnt),
+    indexFormat_(indexFormat), cpuMem_(std::move(pData)) {
+
+    auto upBufIdx = cmdList.emplaceXResource<UploadBuffer>(device, cpuMem_.data(), cpuMem_.size());
+    auto& upBuf = cmdList.getXResource<UploadBuffer>(upBufIdx);
+    cmdList.copyResource(upBuf, *this);
+
+    makeIbv(device, indexFormat, indexCnt);
+
+    commitState(cmdList, D3D12_RESOURCE_STATE_INDEX_BUFFER);
+}
+
+IndexBuffer::IndexBuffer(D3D12Device& device, D3D12GfxCmdList& cmdList,
+    const void* pData, DXGI_FORMAT indexFormat, std::size_t indexCnt
+) : DefaultBuffer(device, indexCnt * indexByteWidth(indexFormat)), size_(indexCnt),
+    indexFormat_(indexFormat) {
+
     auto upBufIdx = cmdList.emplaceXResource<UploadBuffer>(
-        device, pData, indexCnt * sizeof(std::uint16_t)
+        device, pData, indexCnt * indexByteWidth(indexFormat)
     );
     auto& upBuf = cmdList.getXResource<UploadBuffer>(upBufIdx);
 	cmdList.copyResource(upBuf, *this);
 
-    makeDefIbv(device);
+    makeIbv(device, indexFormat, indexCnt);
 
 	commitState(cmdList, D3D12_RESOURCE_STATE_INDEX_BUFFER);
+}
+
+std::size_t IndexBuffer::indexByteWidth(DXGI_FORMAT indexFormat) {
+    switch (indexFormat) {
+    case DXGI_FORMAT_R16_UINT:
+        return 2u;
+
+    case DXGI_FORMAT_R32_UINT:
+        return 4u;
+
+    default:
+        throw std::runtime_error("Invalid index format");
+    }
 }
 
 Bitmap::Bitmap(Bitmap&& other) noexcept
@@ -276,7 +305,8 @@ Bitmap& Bitmap::operator=(Bitmap&& other) noexcept {
 }
 
 void Bitmap::load( const std::filesystem::path& path ) {
-    auto cstrFileName = path.string().c_str();
+    auto strFileName = path.string();
+    auto cstrFileName = strFileName.c_str();
 
     FREE_IMAGE_FORMAT format = FreeImage_GetFileType( cstrFileName );
 
@@ -315,13 +345,13 @@ void Bitmap::load( const std::filesystem::path& path ) {
 }
 
 BYTE Bitmap::getGreyscalePixel( size_t x, size_t y ) const {
-    BYTE ret{};
-    if ( !FreeImage_GetPixelIndex( pBitmap_, static_cast<unsigned int>(x), 
+    RGBQUAD ret{};
+    if ( !FreeImage_GetPixelColor( pBitmap_, static_cast<unsigned int>(x), 
         static_cast<unsigned int>(y), &ret 
     ) ) {
-        std::cerr << "Failed to get pixel index\n";
+        std::cerr << "Failed to get pixel\n";
     }
-    return ret;
+    return ret.rgbRed;
 }
 
 void Bitmap::unload() {
@@ -335,17 +365,122 @@ void Bitmap::unload() {
     }
 }
 
-void RefMesh::draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt, std::size_t ibIdx) const {
-    VertexBuffer::bind(cmdList, 0u, vbs_);
-    ibs_[ibIdx].bind(cmdList);
+void RefSubmesh::draw( D3D12GfxCmdList& cmdList, std::size_t instanceCnt,
+    std::size_t vbLayoutIdx
+) const {
+    VertexBuffer::bind(cmdList, 0u, parent_->vbs(vbLayoutIdx));
+    ib_.bind(cmdList);
     cmdList.get()->IASetPrimitiveTopology(topology_);
     DX_THROW_FAILED_VOID(
         cmdList.get()->DrawIndexedInstanced(
-            static_cast<UINT>( ibs_[ibIdx].size() ),
+            static_cast<UINT>( ib_.size() ),
             static_cast<UINT>( instanceCnt ),
             0u, 0, 0u
         )
     );
+}
+
+RefSubmesh::RefSubmesh(RefSubmesh&& other) noexcept
+    : parent_(std::exchange(other.parent_, nullptr)),
+    ib_(std::move(other.ib_)),
+    material_(std::move(other.material_)),
+    topology_(std::exchange(other.topology_, D3D_PRIMITIVE_TOPOLOGY_UNDEFINED)) {}
+
+RefSubmesh& RefSubmesh::operator=(RefSubmesh&& other) noexcept {
+    if (this == &other) {
+        return *this;
+    }
+
+    parent_ = std::exchange(other.parent_, nullptr);
+    ib_ = std::move(other.ib_);
+    material_ = std::move(other.material_);
+    topology_ = std::exchange(other.topology_, D3D_PRIMITIVE_TOPOLOGY_UNDEFINED);
+
+    return *this;
+}
+
+RefMesh::RefMesh(RefMesh&& other) noexcept
+    : name_(std::move(other.name_)),
+    vbLayouts_(std::move(other.vbLayouts_)),
+    submeshes_(std::move(other.submeshes_)),
+    parent_(std::exchange(other.parent_, nullptr)) {
+    for (auto& submesh : submeshes_) {
+        submesh.parent_ = this;
+    }
+}
+
+RefMesh& RefMesh::operator=(RefMesh&& other) noexcept {
+    if (this == &other) {
+        return *this;
+    }
+
+    name_ = std::move(other.name_);
+    vbLayouts_ = std::move(other.vbLayouts_);
+    submeshes_ = std::move(other.submeshes_);
+    parent_ = std::exchange(other.parent_, nullptr);
+
+    for (auto& submesh : submeshes_) {
+        submesh.parent_ = this;
+    }
+
+    return *this;
+}
+
+void RefMesh::arrangeVBs( D3D12Device& device, D3D12GfxCmdList& cmdList,
+    std::size_t layoutIdx, const std::vector<std::vector<Vertex::Properties>>& vbProps
+) {
+    // make newly arranged Vbs based on primaryVBs at layout index 0
+    // to match the specified vbProps(layout)
+
+    if (vbLayouts_.size() <= layoutIdx) {
+        vbLayouts_.resize(layoutIdx + 1);
+    }
+
+    auto& primaryVBs = vbLayouts_[0];
+    assert(!primaryVBs.empty());
+
+    auto newVBs = std::vector<VertexBuffer>{};
+
+    for (auto& props : vbProps) {
+        // configure memory layout of the new vertex buffer
+        auto vb = gfx::VertexBuffer();
+        std::size_t stride = 0u;
+        for (auto prop : props) {
+            stride += Vertex::propByteWidth(prop);
+        }
+        vb.configStride(stride);
+
+        // calculate the number of vertices
+        auto vertexCnt = primaryVBs[0].vbview().SizeInBytes / primaryVBs[0].vbview().StrideInBytes;
+
+        // construct the new vertex buffer
+        std::size_t accOffset = 0u;
+        for (auto prop : props) {
+            vb.configProperty(prop, accOffset);
+            accOffset += Vertex::propByteWidth(prop);
+
+            auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
+            tmp.set(etoi(prop));
+
+            auto it = std::ranges::find_if(primaryVBs, [tmp](const VertexBuffer& vb) {
+                return vb.attributes() == tmp;
+            });
+
+            if (it != primaryVBs.end()) {
+                assert(Vertex::propByteWidth(prop) == it->vbview().StrideInBytes);
+                vb.constructProperty( prop, it->cpuMem(),
+                    vertexCnt, Vertex::propByteWidth(prop)
+                );
+            }
+            else {
+                vb.constructNullProperty(prop, vertexCnt);
+            }
+        }
+
+        newVBs.emplace_back( device, cmdList, std::move(vb) );
+    }
+
+    vbLayouts_[layoutIdx] = std::move(newVBs);
 }
 
 RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdList, FILE* pInFile) {
@@ -355,7 +490,7 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
 	BYTE nStrLength = 0;
 
     int nVertices = 0;
-	int nPositions = 0, nColors = 0, nNormals = 0, nTangents = 0, nBiTangents = 0, nTextureCoords = 0, nIndices = 0, nSubMeshes = 0, nSubIndices = 0;
+	int nPositions = 0, nColors = 0, nNormals = 0, nTangents = 0, nBiTangents = 0, nTextureCoords = 0, nSubMeshes = 0, nIndices = 0, nSubmeshIndex = 0, nSubIndices = 0;
 
 	UINT nReads = (UINT)::fread(&nVertices, sizeof(int), 1, pInFile);
 
@@ -364,124 +499,158 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
 	nReads = (UINT)::fread(meshName.data(), sizeof(char), nStrLength, pInFile);
     ret.name_ = std::move(meshName);
 
+    ret.vbLayouts_.emplace_back();
+    auto& primaryVBs = ret.vbLayouts_.back();
+    auto vbMem = std::vector<std::uint8_t>();
+
 	for ( ; ; )
 	{
 		nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
 		nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
 		pstrToken[nStrLength] = '\0';
 
-		if (!strcmp(pstrToken, "<Bounds>:"))
+		if (!strcmp(pstrToken, "<Bounds:>"))
 		{
             dx::XMFLOAT3 aabbCenter, aabbExtents;
 			nReads = (UINT)::fread(&aabbCenter, sizeof(dx::XMFLOAT3), 1, pInFile);
 			nReads = (UINT)::fread(&aabbExtents, sizeof(dx::XMFLOAT3), 1, pInFile);
 		}
-		else if (!strcmp(pstrToken, "<Positions>:"))
+		else if (!strcmp(pstrToken, "<Positions:>"))
 		{
 			nReads = (UINT)::fread(&nPositions, sizeof(int), 1, pInFile);
 			if (nPositions > 0)
 			{
-				auto positions = std::vector<dx::XMFLOAT3>(nPositions);
-				nReads = (UINT)::fread(positions.data(), sizeof(dx::XMFLOAT3), nPositions, pInFile);
+				vbMem.resize(sizeof(dx::XMFLOAT3) * nPositions);
+				nReads = (UINT)::fread(vbMem.data(), sizeof(dx::XMFLOAT3), nPositions, pInFile);
                 auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
                 tmp.set(etoi(Vertex::Properties::Position3D));
-                ret.vbs_.emplace_back( device, cmdList, positions.data(),
+                primaryVBs.emplace_back( device, cmdList, std::move(vbMem),
                     sizeof(dx::XMFLOAT3) * nPositions, sizeof(dx::XMFLOAT3), tmp
                 );
 			}
 		}
-		else if (!strcmp(pstrToken, "<Colors>:"))
+		else if (!strcmp(pstrToken, "<Colors:>"))
 		{
 			nReads = (UINT)::fread(&nColors, sizeof(int), 1, pInFile);
 			if (nColors > 0)
 			{
-                auto colors = std::vector<dx::XMFLOAT4>(nColors);
-                nReads = (UINT)::fread(colors.data(), sizeof(dx::XMFLOAT4), nColors, pInFile);
+                vbMem.resize(sizeof(dx::XMFLOAT4) * nColors);
+                nReads = (UINT)::fread(vbMem.data(), sizeof(dx::XMFLOAT4), nColors, pInFile);
                 auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
                 tmp.set(etoi(Vertex::Properties::Color4D));
-                ret.vbs_.emplace_back( device, cmdList, colors.data(),
+                primaryVBs.emplace_back( device, cmdList, std::move(vbMem),
                     sizeof(dx::XMFLOAT4) * nColors, sizeof(dx::XMFLOAT4), tmp
                 );
 			}
 		}
-		else if (!strcmp(pstrToken, "<TextureCoords0>:"))
+		else if (!strcmp(pstrToken, "<TextureCoords0:>"))
 		{
 			nReads = (UINT)::fread(&nTextureCoords, sizeof(int), 1, pInFile);
 			if (nTextureCoords > 0)
 			{
-                auto texCoords = std::vector<dx::XMFLOAT2>(nTextureCoords);
-                nReads = (UINT)::fread(texCoords.data(), sizeof(dx::XMFLOAT2), nTextureCoords, pInFile);
+                vbMem.resize(sizeof(dx::XMFLOAT2) * nTextureCoords);
+                nReads = (UINT)::fread(vbMem.data(), sizeof(dx::XMFLOAT2), nTextureCoords, pInFile);
                 auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
                 tmp.set(etoi(Vertex::Properties::TexCoord2D0));
-                ret.vbs_.emplace_back( device, cmdList, texCoords.data(),
+                primaryVBs.emplace_back( device, cmdList, std::move(vbMem),
                     sizeof(dx::XMFLOAT2) * nTextureCoords, sizeof(dx::XMFLOAT2), tmp
                 );
 			}
 		}
-		else if (!strcmp(pstrToken, "<TextureCoords1>:"))
+		else if (!strcmp(pstrToken, "<TextureCoords1:>"))
 		{
 			nReads = (UINT)::fread(&nTextureCoords, sizeof(int), 1, pInFile);
 			if (nTextureCoords > 0)
 			{
-                auto texCoords = std::vector<dx::XMFLOAT2>(nTextureCoords);
-                nReads = (UINT)::fread(texCoords.data(), sizeof(dx::XMFLOAT2), nTextureCoords, pInFile);
+                vbMem.resize(sizeof(dx::XMFLOAT2) * nTextureCoords);
+                nReads = (UINT)::fread(vbMem.data(), sizeof(dx::XMFLOAT2), nTextureCoords, pInFile);
                 auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
                 tmp.set(etoi(Vertex::Properties::TexCoord2D1));
-                ret.vbs_.emplace_back( device, cmdList, texCoords.data(),
+                primaryVBs.emplace_back( device, cmdList, std::move(vbMem),
                     sizeof(dx::XMFLOAT2) * nTextureCoords, sizeof(dx::XMFLOAT2), tmp
                 );
 			}
 		}
-		else if (!strcmp(pstrToken, "<Normals>:"))
+		else if (!strcmp(pstrToken, "<Normals:>"))
 		{
 			nReads = (UINT)::fread(&nNormals, sizeof(int), 1, pInFile);
 			if (nNormals > 0)
 			{
-                auto normals = std::vector<dx::XMFLOAT3>(nNormals);
-                nReads = (UINT)::fread(normals.data(), sizeof(dx::XMFLOAT3), nNormals, pInFile);
+                vbMem.resize(sizeof(dx::XMFLOAT3) * nNormals);
+                nReads = (UINT)::fread(vbMem.data(), sizeof(dx::XMFLOAT3), nNormals, pInFile);
                 auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
                 tmp.set(etoi(Vertex::Properties::Normal3D));
-                ret.vbs_.emplace_back( device, cmdList, normals.data(),
+                primaryVBs.emplace_back( device, cmdList, std::move(vbMem),
                     sizeof(dx::XMFLOAT3) * nNormals, sizeof(dx::XMFLOAT3), tmp
                 );
 			}
 		}
-		else if (!strcmp(pstrToken, "<Tangents>:"))
+		else if (!strcmp(pstrToken, "<Tangents:>"))
 		{
 			nReads = (UINT)::fread(&nTangents, sizeof(int), 1, pInFile);
 			if (nTangents > 0)
 			{
-                auto tangents = std::vector<dx::XMFLOAT3>(nTangents);
-                nReads = (UINT)::fread(tangents.data(), sizeof(dx::XMFLOAT3), nTangents, pInFile);
+                vbMem.resize(sizeof(dx::XMFLOAT3) * nTangents);
+                nReads = (UINT)::fread(vbMem.data(), sizeof(dx::XMFLOAT3), nTangents, pInFile);
                 auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
                 tmp.set(etoi(Vertex::Properties::Tangent3D));
-                ret.vbs_.emplace_back( device, cmdList, tangents.data(),
+                primaryVBs.emplace_back( device, cmdList, std::move(vbMem),
                     sizeof(dx::XMFLOAT3) * nTangents, sizeof(dx::XMFLOAT3), tmp
                 );
 			}
 		}
-		else if (!strcmp(pstrToken, "<BiTangents>:"))
+		else if (!strcmp(pstrToken, "<BiTangents:>"))
 		{
 			nReads = (UINT)::fread(&nBiTangents, sizeof(int), 1, pInFile);
 			if (nBiTangents > 0)
 			{
-                auto biTangents = std::vector<dx::XMFLOAT3>(nBiTangents);
-                nReads = (UINT)::fread(biTangents.data(), sizeof(dx::XMFLOAT3), nBiTangents, pInFile);
+                vbMem.resize(sizeof(dx::XMFLOAT3) * nBiTangents);
+                nReads = (UINT)::fread(vbMem.data(), sizeof(dx::XMFLOAT3), nBiTangents, pInFile);
                 auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
                 tmp.set(etoi(Vertex::Properties::Bitangent3D));
-                ret.vbs_.emplace_back( device, cmdList, biTangents.data(),
+                primaryVBs.emplace_back( device, cmdList, std::move(vbMem),
                     sizeof(dx::XMFLOAT3) * nBiTangents, sizeof(dx::XMFLOAT3), tmp
                 );
 			}
 		}
-		else if (!strcmp(pstrToken, "<Indices>:")) {
+		else if (!strcmp(pstrToken, "<Submeshes:>")) {
+            nReads = (UINT)::fread(&nSubMeshes, sizeof(int), 1, pInFile);
             nReads = (UINT)::fread(&nIndices, sizeof(int), 1, pInFile);
-            auto indices = std::vector<std::uint16_t>(nIndices);
-            nReads = (UINT)::fread(indices.data(), sizeof(std::uint16_t), nIndices, pInFile);
-            ret.ibs_.emplace_back( device, cmdList, indices.data(), nIndices );
+            ret.submeshes_.reserve(nSubMeshes);
+
+            for (int i = 0; i < nSubMeshes; ++i) {
+
+                nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+                nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
+                pstrToken[nStrLength] = '\0';
+                
+                if (strcmp(pstrToken, "<Submesh:>")) {
+                    fclose(pInFile);
+                    throw std::runtime_error("Submesh token expected but got " + std::string(pstrToken));
+                }
+
+                nReads = (UINT)::fread(&nSubmeshIndex, sizeof(int), 1, pInFile);
+                
+                ret.submeshes_.emplace_back(&ret);
+                auto& submesh = ret.submeshes_.back();
+                
+                // enable more topology types later
+                // nReads = (UINT)::fread(&submesh.topology_, sizeof(int), 1, pInFile);
+                submesh.topology_ = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+                nReads = (UINT)::fread(&nSubIndices, sizeof(int), 1, pInFile);
+                if (nIndices < 65536) {
+                    auto indices = std::vector<std::uint16_t>(nSubIndices);
+                    nReads = (UINT)::fread(indices.data(), sizeof(std::uint16_t), nSubIndices, pInFile);
+                    submesh.ib_ = IndexBuffer(device, cmdList, indices.data(), DXGI_FORMAT_R16_UINT, nSubIndices);
+                }
+                else {
+                    auto indices = std::vector<std::uint32_t>(nSubIndices);
+                    nReads = (UINT)::fread(indices.data(), sizeof(std::uint32_t), nSubIndices, pInFile);
+                    submesh.ib_ = IndexBuffer(device, cmdList, indices.data(), DXGI_FORMAT_R32_UINT, nSubIndices);
+                }
+            }
         }
-		else if (!strcmp(pstrToken, "</Mesh>"))
-		{
+		else if (!strcmp(pstrToken, "</Mesh>")) {
 			break;
 		}
 	}
@@ -493,16 +662,17 @@ void RefMesh::loadMaterialsFromFile( D3D12Device& device, D3D12GfxCmdList& cmdLi
     FILE* pInFile, RefMesh& mesh
 ) {
     char pstrToken[64] = { '\0' };
-
-	int nMaterial = 0;
 	BYTE nStrLength = 0;
 
 	UINT nReads{};
 
-    auto floatVal = float{};
-    auto float4 = dx::XMFLOAT4{};
-    auto float3 = dx::XMFLOAT3{};
-    Material::MapRef mapRef{};
+    int materialCnt = 0;
+    nReads = (UINT)::fread(&materialCnt, sizeof(int), 1, pInFile);
+
+    if (materialCnt != mesh.submeshes_.size()) {
+        fclose(pInFile);
+        throw std::runtime_error("Material count mismatch");
+    }
 
 	for ( ; ; )
 	{
@@ -512,114 +682,132 @@ void RefMesh::loadMaterialsFromFile( D3D12Device& device, D3D12GfxCmdList& cmdLi
         if (!strcmp(pstrToken, "</Materials>")) {
             break;
         }
-
-        nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
-        auto stateName = std::string(nStrLength, '\0');
-	    nReads = (UINT)::fread(stateName.data(), sizeof(char), nStrLength, pInFile);
-
-        nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
-        auto renderPassName = std::string(nStrLength, '\0');
-	    nReads = (UINT)::fread(renderPassName.data(), sizeof(char), nStrLength, pInFile);
-
-
-		nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
-		nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile); 
-		pstrToken[nStrLength] = '\0';
-
-		if (!strcmp(pstrToken, "<AlbedoColor>:"))
-		{
-			nReads = (UINT)::fread(&float4, sizeof(dx::XMFLOAT4), 1, pInFile);
-            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
-                Material::ConstantType::Albedo, mu::Vec4(float4.x, float4.y, float4.z, float4.w)
-            );
-		}
-		else if (!strcmp(pstrToken, "<EmissiveColor>:"))
-		{
-			nReads = (UINT)::fread(&float3, sizeof(dx::XMFLOAT3), 1, pInFile);
-            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
-                Material::ConstantType::Emmisive, mu::Vec3(float3.x, float3.y, float3.z)
-            );
-		}
-		else if (!strcmp(pstrToken, "<AmbientOcllusion>:"))
-		{
-			nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
-            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
-                Material::ConstantType::AmbientOcllusion, floatVal
-            );
-		}
-		else if (!strcmp(pstrToken, "<Smoothness>:"))
-		{
-			nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
-            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
-                Material::ConstantType::Roughness, 1.f - floatVal
-            );
-		}
-		else if (!strcmp(pstrToken, "<Metallic>:"))
-		{
-			nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
-            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
-                Material::ConstantType::Metallic, floatVal
-            );
-		}
-		else if (!strcmp(pstrToken, "<AlbedoMap>:"))
-		{
-            nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
-            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
-                Material::MapType::Albedo, mapRef
-            );
-		}
-		else if (!strcmp(pstrToken, "<NormalMap>:"))
-		{
-			nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
-            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
-                Material::MapType::Normal, mapRef
-            );
-		}
-		else if (!strcmp(pstrToken, "<MetallicMap>:"))
-		{
-			nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
-            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
-                Material::MapType::Metallic, mapRef
-            );
-		}
-        else if (!strcmp(pstrToken, "<MetallicSmoothnessMap>:"))
-		{
-			nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
-            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
-                Material::MapType::MetallicSmoothness, mapRef
-            );
-		}
-		else if (!strcmp(pstrToken, "<EmissionMap>:"))
-		{
-			nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
-            mesh.map( MaterialMapKey{ stateName, renderPassName }, 
-                Material::MapType::Emmisive, mapRef
-            );
-		}
+        else if (!strcmp(pstrToken, "<Material:>")) {
+            int materialIdx = 0;
+            nReads = (UINT)::fread(&materialIdx, sizeof(int), 1, pInFile);
+            loadMaterialFromFile(device, cmdList, pInFile, mesh, materialIdx);
+        }
+        else {
+            fclose(pInFile);
+            throw std::runtime_error("expected material token or materials end token but got " + std::string(pstrToken));
+        }
 	}
 }
 
-RefModel::Node::Node(const Node& other)
-    : coord_(other.coord_), name_(other.name_), meshes_(other.meshes_),
-    children_(), pRefModel_(other.pRefModel_) {}
+void RefMesh::loadMaterialFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
+    FILE* pInFile, RefMesh& mesh, std::size_t materialIdx
+) {
+    char pstrToken[64] = { '\0' };
+
+	BYTE nStrLength = 0;
+
+	UINT nReads{};
+
+    auto floatVal = float{};
+    auto float4 = dx::XMFLOAT4{};
+    Material::MapRef mapRef{};
+
+    auto& submesh = mesh.submeshes_[materialIdx];
+    auto& material = submesh.material();
+
+    for (;;) {
+        nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+        nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
+        pstrToken[nStrLength] = '\0';
+
+        if (!strcmp(pstrToken, "</Material>")) {
+            break;
+        }
+        else if (!strcmp(pstrToken, "<AlbedoColor:>"))
+        {
+            nReads = (UINT)::fread(&float4, sizeof(dx::XMFLOAT4), 1, pInFile);
+            material.addConstant( Material::ConstantType::Albedo, mu::Vec4(float4.x, float4.y, float4.z, float4.w) );
+        }
+        else if (!strcmp(pstrToken, "<EmissiveColor:>"))
+        {
+            nReads = (UINT)::fread(&float4, sizeof(dx::XMFLOAT4), 1, pInFile);
+            material.addConstant( Material::ConstantType::Emmisive, mu::Vec3(float4.x, float4.y, float4.z) );
+        }
+        else if (!strcmp(pstrToken, "<AmbientOcclusion:>"))
+        {
+            nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
+            material.addConstant( Material::ConstantType::AmbientOcclusion, floatVal );
+        }
+        else if (!strcmp(pstrToken, "<Smoothness:>"))
+        {
+            nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
+            material.addConstant( Material::ConstantType::Roughness, 1.f - floatVal );
+        }
+        else if (!strcmp(pstrToken, "<Metallic:>"))
+        {
+            nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
+            material.addConstant( Material::ConstantType::Metallic, floatVal );
+        }
+        else if (!strcmp(pstrToken, "<AmbientOcclusion:>"))
+        {
+            nReads = (UINT)::fread(&floatVal, sizeof(float), 1, pInFile);
+            material.addConstant( Material::ConstantType::AmbientOcclusion, floatVal );
+        }
+        else if (!strcmp(pstrToken, "<AlbedoMap:>"))
+        {
+            nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
+            material.addMapRef( Material::MapType::Albedo, mapRef );
+        }
+        else if (!strcmp(pstrToken, "<NormalMap:>"))
+        {
+            nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
+            material.addMapRef( Material::MapType::Normal, mapRef );
+        }
+        else if (!strcmp(pstrToken, "<MetallicMap:>"))
+        {
+            nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
+            material.addMapRef( Material::MapType::Metallic, mapRef );
+        }
+        else if (!strcmp(pstrToken, "<MetallicSmoothnessMap:>"))
+        {
+            nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
+            material.addMapRef( Material::MapType::MetallicSmoothness, mapRef );
+        }
+        else if (!strcmp(pstrToken, "<EmissionMap:>"))
+        {
+            nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
+            material.addMapRef( Material::MapType::Emmisive, mapRef );
+        }
+        else {
+            fclose(pInFile);
+            throw std::runtime_error("expected material token or material end token but got " + std::string(pstrToken));
+        }
+
+    }
+
+    const auto albedoRatio = material.contains(Material::MapType::Albedo) ? 0.f : 1.f;
+    const auto roughnessRatio = ( material.contains(Material::MapType::MetallicSmoothness)
+            || material.contains(Material::MapType::Roughness)
+        ) ? 0.f : 1.f;
+    const auto metallicRatio = ( material.contains(Material::MapType::MetallicSmoothness)
+            || material.contains(Material::MapType::Metallic)
+        ) ? 0.f : 1.f;
+    const auto emmisiveRatio = material.contains(Material::MapType::Emmisive) ? 0.f : 1.f;
+    const auto ambientOcllusionRatio = material.contains(Material::MapType::AmbientOcclusion) ? 0.f : 1.f;
+
+    material.addConstant( Material::ConstantType::AlbedoConstantMapRatio, albedoRatio );
+    material.addConstant( Material::ConstantType::RoughnessConstantMapRatio, roughnessRatio );
+    material.addConstant( Material::ConstantType::MetallicConstantMapRatio, metallicRatio );
+    material.addConstant( Material::ConstantType::EmmisiveConstantMapRatio, emmisiveRatio );
+    material.addConstant( Material::ConstantType::AmbientOcclusionConstantMapRatio, ambientOcllusionRatio );
+}
 
 RefModel::Node::Node(Node&& other) noexcept
     : coord_(std::move(other.coord_)), name_(std::move(other.name_)),
     meshes_(std::move(other.meshes_)), children_(std::move(other.children_)),
-    pRefModel_(std::exchange(other.pRefModel_, nullptr)) {}
-
-RefModel::Node& RefModel::Node::operator=(const Node& other) {
-    if (this == &other) {
-        return *this;
+    pRefModel_(std::exchange(other.pRefModel_, nullptr)) {
+    for (auto& mesh : meshes_) {
+        mesh.parent_ = this;
     }
 
-    coord_ = other.coord_;
-    name_ = other.name_;
-    meshes_ = other.meshes_;
-    children_.clear();
-    pRefModel_ = other.pRefModel_;
-
-    return *this;
+    for (auto& child : children_) {
+        child->pRefModel_ = this->pRefModel_;
+    }
 }
 
 RefModel::Node& RefModel::Node::operator=(Node&& other) noexcept {
@@ -633,35 +821,37 @@ RefModel::Node& RefModel::Node::operator=(Node&& other) noexcept {
     children_ = std::move(other.children_);
     pRefModel_ = std::exchange(other.pRefModel_, nullptr);
 
+    for (auto& mesh : meshes_) {
+        mesh.parent_ = this;
+    }
+
+    for (auto& child : children_) {
+        child->pRefModel_ = this->pRefModel_;
+    }
+
     return *this;
 }
 
 void RefModel::Node::addMesh(RefMesh&& mesh) {
-    for (auto& [key, material] : mesh.materialMap()) {
-        for (auto& mapRef : material.mapRefs()) {
+    for (auto& submesh : mesh.submeshes_) {
+        for (auto& mapRef : submesh.material().mapRefs()) {
             if (mapRef.resourceIdx != Material::MapRef::invalid) {
-                mapRef.resourceIdx = static_cast<std::uint32_t>(
-                    pRefModel_->textureMap_.at(mapRef).offset()
-                );
+                if (pRefModel_->textureMap_.contains(mapRef)) {
+                    mapRef.resourceIdx = static_cast<std::uint32_t>(
+                        pRefModel_->textureMap_.at(mapRef).offset()
+                    );
+                }
             }
         }
     }
     meshes_.push_back(std::move(mesh));
+    meshes_.back().parent_ = this;
 }
 
 void RefModel::Node::addChild(Node* child) {
     child->pRefModel_ = pRefModel_;
     child->coord_.setParent(&coord_);
     children_.push_back(child);
-}
-
-RefModel::RefModel(const std::map<Material::MapRef, std::filesystem::path>& pathMap,
-    const StaticTextureStorage& sts
-) : nodeStorage_(), textureMap_(), pRoot_(nullptr) {
-    for (auto& [mapRef, path] : pathMap) {
-        assert(sts.contains(path));
-        map(mapRef, sts.get(path));
-    }
 }
 
 RefModel::RefModel(RefModel&& other) noexcept
@@ -726,9 +916,12 @@ RefModel RefModel::loadTerrainSubsetFromHeightmap( const Bitmap& heightmap,
     auto& node = model.nodeStorage_.back();
     model.pRoot_ = &node;
 
-    auto positions = std::vector<dx::XMFLOAT3>(width * length);
-    auto normals = std::vector<dx::XMFLOAT3>(width * length);
-    auto uvs = std::vector<dx::XMFLOAT2>(width * length);
+    auto posVBMem = std::vector<std::uint8_t>(width * length * sizeof(dx::XMFLOAT3));
+    auto normalVBMem = std::vector<std::uint8_t>(width * length * sizeof(dx::XMFLOAT3));
+    auto uvVBMem = std::vector<std::uint8_t>(width * length * sizeof(dx::XMFLOAT2));
+    const auto posVBMemSize = posVBMem.size();
+    const auto normalVBMemSize = normalVBMem.size();
+    const auto uvVBMemSize = uvVBMem.size();
 
     auto scaleXmf = scale.getXmf();
 
@@ -741,7 +934,8 @@ RefModel RefModel::loadTerrainSubsetFromHeightmap( const Bitmap& heightmap,
                 height, z * scaleXmf.z
             );
 
-            positions.push_back(position);
+            auto posOffset = i * sizeof(dx::XMFLOAT3);
+            std::memcpy(posVBMem.data() + posOffset, &position, sizeof(dx::XMFLOAT3));
 
             // Calculate normal
             auto iWidth = static_cast<int>(heightmap.width());
@@ -749,7 +943,7 @@ RefModel RefModel::loadTerrainSubsetFromHeightmap( const Bitmap& heightmap,
 
             auto nHeightMapIndex = x + (z * iWidth);
             auto xHeightMapAdd = x < iWidth - 1 ? 1 : -1;
-            auto zHeightMapAdd = z < iLength - 1 ? iWidth : -iWidth;
+            auto zHeightMapAdd = z < iLength - 1 ? 1 : -1;
 
             float y1 = heightmap.getGreyscalePixel(x, z) / 255.f * scaleXmf.y;
             float y2 = heightmap.getGreyscalePixel(x + xHeightMapAdd, z) / 255.f * scaleXmf.y;
@@ -759,66 +953,116 @@ RefModel RefModel::loadTerrainSubsetFromHeightmap( const Bitmap& heightmap,
             auto edge2 = mu::Vec3(scaleXmf.x, y2 - y1, 0.f);
             auto normal = mu::cross(edge1, edge2);
 
-            normals.push_back(normal.getXmf());
+            auto normalOffset = i * sizeof(dx::XMFLOAT3);
+            std::memcpy(normalVBMem.data() + normalOffset, &normal, sizeof(dx::XMFLOAT3));
 
             // Calculate UV
             auto uv = dx::XMFLOAT2(static_cast<float>(x) / iWidth, static_cast<float>(z) / iLength);
-            uvs.push_back(uv);
+
+            auto uvOffset = i * sizeof(dx::XMFLOAT2);
+            std::memcpy(uvVBMem.data() + uvOffset, &uv, sizeof(dx::XMFLOAT2));
         }
     }
-
-    auto indices = std::vector<std::uint16_t>();
-
-    indices.reserve(((width * 2) * (length - 1)) + ((length - 1) - 1));
-
-    auto out = std::back_inserter(indices);
-
-    for (int i = 0, z = 0; z < length - 1; ++z) {
-        if (!(z % 2)) {
-            for (int x = 0; x < width; ++x) {
-                if (x == 0 && z > 0) {
-                    out = static_cast<UINT>(x + (z * width));
-                }
-                out = static_cast<UINT>(x + (z * width));
-                out = static_cast<UINT>(x + ((z + 1) * width));
-            }
-        }
-        else {
-            for (int x = width - 1; x >= 0; --x) {
-                if (x == (width - 1)) {
-                    out = static_cast<UINT>(x + (z * width));
-                }
-                out = static_cast<UINT>(x + (z * width));
-                out = static_cast<UINT>(x + ((z + 1) * width));
-            }
-        }
-    }
-
 
     auto mesh = RefMesh();
+    mesh.vbLayouts_.emplace_back();
+    auto& primaryVBs = mesh.vbLayouts_.back();
 
-    mesh.vbs_.emplace_back(device, cmdList, positions.data(),
-        sizeof(dx::XMFLOAT3) * positions.size(), sizeof(dx::XMFLOAT3),
+    primaryVBs.emplace_back(device, cmdList, std::move(posVBMem),
+        posVBMemSize, sizeof(dx::XMFLOAT3),
         std::bitset<etoi(Vertex::Properties::SIZE)>{ 1ull << etoi(Vertex::Properties::Position3D) }
     );
 
-    mesh.vbs_.emplace_back(device, cmdList, normals.data(),
-        sizeof(dx::XMFLOAT3) * normals.size(), sizeof(dx::XMFLOAT3),
+    primaryVBs.emplace_back(device, cmdList, std::move(normalVBMem),
+        normalVBMemSize, sizeof(dx::XMFLOAT3),
         std::bitset<etoi(Vertex::Properties::SIZE)>{ 1ull << etoi(Vertex::Properties::Normal3D) }
     );
 
-    mesh.vbs_.emplace_back(device, cmdList, uvs.data(),
-        sizeof(dx::XMFLOAT2) * uvs.size(), sizeof(dx::XMFLOAT2),
+    primaryVBs.emplace_back(device, cmdList, std::move(uvVBMem),
+        uvVBMemSize, sizeof(dx::XMFLOAT2),
         std::bitset<etoi(Vertex::Properties::SIZE)>{ 1ull << etoi(Vertex::Properties::TexCoord2D0) }
     );
 
-    mesh.ibs_.emplace_back(device, cmdList, indices.data(), indices.size());
+    // without tesselation
+    // mesh.submeshes_.emplace_back(&mesh, D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 
-    mesh.map( MaterialMapKey{ RefMesh::defaultState, rp::PBRIlluminationMacro::id },
-        Material::MapType::Albedo, albedoMapRef
-    );
+    // with tesselation (quad patch, 16 control points)
+    mesh.submeshes_.emplace_back(&mesh, D3D_PRIMITIVE_TOPOLOGY_16_CONTROL_POINT_PATCHLIST);
 
-    mesh.topology_ = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+    auto& submesh = mesh.submeshes_.back();
+
+
+    // without tesselation
+
+    // auto makeIb = [&](auto&& indices) {
+    //     using IndexType = std::ranges::range_value_t<decltype(indices)>;
+    //     indices.reserve(((width * 2) * (length - 1)) + ((length - 1) - 1));
+
+    //     auto out = std::back_inserter(indices);
+
+    //     for (int i = 0, z = 0; z < length - 1; ++z) {
+    //         if (!(z % 2)) {
+    //             for (int x = 0; x < width; ++x) {
+    //                 if (x == 0 && z > 0) {
+    //                     out = static_cast<IndexType>(x + (z * width));
+    //                 }
+    //                 out = static_cast<IndexType>(x + (z * width));
+    //                 out = static_cast<IndexType>(x + ((z + 1) * width));
+    //             }
+    //         }
+    //         else {
+    //             for (int x = width - 1; x >= 0; --x) {
+    //                 if (x == (width - 1)) {
+    //                     out = static_cast<IndexType>(x + (z * width));
+    //                 }
+    //                 out = static_cast<IndexType>(x + (z * width));
+    //                 out = static_cast<IndexType>(x + ((z + 1) * width));
+    //             }
+    //         }
+    //     }
+
+    //     const auto format = sizeof(IndexType) == 2 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
+    //     submesh.ib_ = IndexBuffer(device, cmdList, indices.data(), format, indices.size());
+    // };
+
+    // with tesselation (quad patch, 16 control points)
+
+    const auto indexCnt = (width / 16 - 3) * (length / 16 - 3) * 16;
+    const auto indexByteWidth = indexCnt < 65536 ? sizeof(std::uint16_t) : sizeof(std::uint32_t);
+
+    std::vector<std::uint8_t> ibMem(indexCnt * indexByteWidth);
+    auto k = 0;
+
+    for (int z = 0; z < length - 3 * 16; z += 16) {
+        for (int x = 0; x < width - 3 * 16; x += 16) {
+            for (int i = 0; i < 4; ++i) {
+                for (int j = 0; j < 4; ++j) {
+                    auto idx = x + j * 16 + ((z + i * 16) * width);
+                    std::memcpy(ibMem.data() + k++ * indexByteWidth, &idx, indexByteWidth);
+                }
+            }
+        }
+    }
+
+    const auto format = indexCnt < 65536 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
+    assert(indexCnt == k);
+    submesh.ib_ = IndexBuffer(device, cmdList, std::move(ibMem), format, k);
+    
+
+    auto& material = submesh.material();
+
+    material.addMapRef( Material::MapType::Albedo, albedoMapRef );
+
+    // temporal constants
+    material.addConstant( Material::ConstantType::AmbientOcclusion, 1.f );
+    material.addConstant( Material::ConstantType::Roughness, 0.83f );
+    material.addConstant( Material::ConstantType::Metallic, 0.07f );
+    material.addConstant( Material::ConstantType::Emmisive, mu::Vec3(0.f) );
+    material.addConstant( Material::ConstantType::AlbedoConstantMapRatio, 0.f );
+    material.addConstant( Material::ConstantType::RoughnessConstantMapRatio, 1.f );
+    material.addConstant( Material::ConstantType::MetallicConstantMapRatio, 1.f );
+    material.addConstant( Material::ConstantType::EmmisiveConstantMapRatio, 1.f );
+    material.addConstant( Material::ConstantType::AmbientOcclusionConstantMapRatio, 1.f );
 
     node.addMesh(std::move(mesh));
 
@@ -847,7 +1091,7 @@ RefModel RefModel::loadHierarchyFromFile( const std::filesystem::path& path,
     nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
     pstrToken[nStrLength] = '\0';
 
-    if (strcmp(pstrToken, "<Dictionary>:")) {
+    if (strcmp(pstrToken, "<Dictionary:>")) {
         std::fclose(pInFile);
         throw std::runtime_error("Invalid file format: " + path.string());    
     }
@@ -857,66 +1101,71 @@ RefModel RefModel::loadHierarchyFromFile( const std::filesystem::path& path,
         nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
         pstrToken[nStrLength] = '\0';
 
-        if (!strcmp(pstrToken, "<Item>")) {
+        if (!strcmp(pstrToken, "<Item:>")) {
             nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
 
             nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
-            auto texName = std::string(nStrLength, '\0');
-            nReads = (UINT)::fread(texName.data(), sizeof(char), nStrLength, pInFile);
+            auto texRelativePath = std::string(nStrLength, '\0');
+            nReads = (UINT)::fread(texRelativePath.data(), sizeof(char), nStrLength, pInFile);
 
-            auto texPath = resourcePath / texName;
+            auto texPath = resourcePath / std::move(texRelativePath);
 
             if (!sts.contains(texPath)) {
                 std::fclose(pInFile);
                 throw std::runtime_error("Texture not found: " + texPath.string());
             }
             model.textureMap_[mapRef] = sts.get(texPath);
-
-            nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
-            nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
-            pstrToken[nStrLength] = '\0';
-
-            if (strcmp(pstrToken, "</Item>")) {
-                std::fclose(pInFile);
-                throw std::runtime_error("Invalid file format: " + path.string());
-            }
         }
         else if (!strcmp(pstrToken, "</Dictionary>")) {
             break;
         }
+        else {
+            std::fclose(pInFile);
+            throw std::runtime_error("expected Item or Dictionary end token but got: " + std::string(pstrToken));
+        }
     }
 
     nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
     nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
     pstrToken[nStrLength] = '\0';
 
-    if (strcmp(pstrToken, "<NodesInfo>:")) {
+    if (strcmp(pstrToken, "<NodesInfo:>")) {
         std::fclose(pInFile);
-        throw std::runtime_error("Invalid file format: " + path.string());
+        throw std::runtime_error("expected NodesInfo token but got: " + std::string(pstrToken));
     }
 
     nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
     nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
     pstrToken[nStrLength] = '\0';
 
-    if (strcmp(pstrToken, "<NodeCnt>:")) {
+    if (strcmp(pstrToken, "<NodeCnt:>")) {
         std::fclose(pInFile);
-        throw std::runtime_error("Invalid file format: " + path.string());
+        throw std::runtime_error("expected NodeCnt token but got: " + std::string(pstrToken));
     }
 
     int nNodes = 0;
     nReads = (UINT)::fread(&nNodes, sizeof(int), 1, pInFile);
     model.nodeStorage_.reserve(nNodes);
 
-    nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
-    nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
-    pstrToken[nStrLength] = '\0';
+    for (;;) {
+        nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+        nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
+        pstrToken[nStrLength] = '\0';
 
-    if (!strcmp(pstrToken, "<Node>:")) {
-        model.nodeStorage_.emplace_back(&model);
-        auto& node = model.nodeStorage_.back();
-        loadNodesFromFile(device, cmdList, pInFile, node, model);
-        model.pRoot_ = &node;
+        if (!strcmp(pstrToken, "<Node:>")) {
+            model.nodeStorage_.emplace_back(&model);
+            auto& node = model.nodeStorage_.back();
+            loadNodesFromFile(device, cmdList, pInFile, node, model);
+            model.pRoot_ = &node;
+        }
+        else if (!strcmp(pstrToken, "</NodesInfo>")) {
+            break;
+        }
+        else {
+            std::fclose(pInFile);
+            throw std::runtime_error("expected Node or NodesInfo end token but got: " + std::string(pstrToken));
+        }
+
     }
 
     std::fclose(pInFile);
@@ -935,6 +1184,7 @@ void RefModel::loadNodesFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
 
 	int nFrame = 0, nTextures = 0;
 
+    nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
     auto nodeName = std::string(nStrLength, '\0');
 	nReads = (UINT)::fread(nodeName.data(), sizeof(char), nStrLength, pInFile);
 
@@ -944,12 +1194,12 @@ void RefModel::loadNodesFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
 		nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
 		pstrToken[nStrLength] = '\0';
 
-		if (!strcmp(pstrToken, "<Xform>:"))
+		if (!strcmp(pstrToken, "<Xform:>"))
 		{
             nReads = (UINT)::fread(&xform, sizeof(float), 16, pInFile);
             node.coord_.setLocalXform(DirectX::XMLoadFloat4x4(&xform));
         }
-        else if (!strcmp(pstrToken, "<Mesh>:"))
+        else if (!strcmp(pstrToken, "<Mesh:>"))
 		{
 			node.addMesh( RefMesh::loadGeometryFromFile(device, cmdList, pInFile) );
             
@@ -957,11 +1207,11 @@ void RefModel::loadNodesFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
             nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
             pstrToken[nStrLength] = '\0';
 
-            if (!strcmp(pstrToken, "<Materials>:")) {
+            if (!strcmp(pstrToken, "<Materials:>")) {
                 node.meshes_.back().loadMaterialsFromFile(device, cmdList, pInFile, node.meshes_.back());
             }
 		}
-		else if (!strcmp(pstrToken, "<Children>:"))
+		else if (!strcmp(pstrToken, "<Children:>"))
 		{
 			int nChilds = 0;
 			nReads = (UINT)::fread(&nChilds, sizeof(int), 1, pInFile);
@@ -971,6 +1221,16 @@ void RefModel::loadNodesFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
 				{
                     model.nodeStorage_.emplace_back(&model);
                     auto& child = model.nodeStorage_.back();
+
+                    nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+                    nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
+                    pstrToken[nStrLength] = '\0';
+
+                    if (strcmp(pstrToken, "<Node:>")) {
+                        fclose(pInFile);
+                        throw std::runtime_error("Node token expected but got: " + std::string(pstrToken));
+                    }
+
                     loadNodesFromFile(device, cmdList, pInFile, child, model);
                     node.addChild(&child);
 				}
@@ -983,6 +1243,16 @@ void RefModel::loadNodesFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
     }
 }
 
+void RefModel::arrangeVBs( D3D12Device& device, D3D12GfxCmdList& cmdList,
+    std::size_t layoutIdx, const std::vector<std::vector<Vertex::Properties>>& vbProps
+) {
+    for (auto& node : nodeStorage_) {
+        for (auto& mesh : node.meshes_) {
+            mesh.arrangeVBs(device, cmdList, layoutIdx, vbProps);
+        }
+    }
+}
+
 void RefModelStorage::loadModel( const std::filesystem::path& path,
     const ID& key, const StaticTextureStorage& sts, D3D12Device& device,
     D3D12GfxCmdList& cmdList
@@ -990,12 +1260,146 @@ void RefModelStorage::loadModel( const std::filesystem::path& path,
     map_[key] = RefModel::loadHierarchyFromFile(path, device, cmdList, sts);
 }
 
-void Model::Node::addMesh(Mesh&& mesh) {
-    meshes_.push_back(std::move(mesh));
+Submesh::Submesh(Mesh* parent, const RefSubmesh* pRefSubmesh)
+    : parent_(parent), pRefSubmesh_(pRefSubmesh), material_() {
+    if (pRefSubmesh_) {
+        material_ = pRefSubmesh_->material();
+    }
 }
 
-void Model::Node::emplaceMesh(const RefMesh& refMesh, std::string&& initialState) {
-    meshes_.emplace_back(refMesh, std::move(initialState));
+Submesh::Submesh(Submesh&& other) noexcept
+    : parent_(std::exchange(other.parent_, nullptr)),
+    pRefSubmesh_(std::exchange(other.pRefSubmesh_, nullptr)),
+    material_(std::move(other.material_)) {}
+
+Submesh& Submesh::operator=(Submesh&& other) noexcept {
+    if (this == &other) {
+        return *this;
+    }
+
+    parent_ = std::exchange(other.parent_, nullptr);
+    pRefSubmesh_ = std::exchange(other.pRefSubmesh_, nullptr);
+    material_ = std::move(other.material_);
+
+    return *this;
+}
+
+Mesh::Mesh(const RefMesh& refMesh, Model::Node* parent)
+    : parent_(parent), pRefMesh_(&refMesh), submeshes_() {
+    submeshes_.reserve(refMesh.submeshes().size());
+    for (const auto& refSubmesh : refMesh.submeshes()) {
+        submeshes_.emplace_back(this, &refSubmesh);
+    }
+}
+
+Mesh::Mesh(const Mesh& other)
+    : parent_(other.parent_), pRefMesh_(other.pRefMesh_),
+    submeshes_(other.submeshes_) {
+    for (auto& submesh : submeshes_) {
+        submesh.parent_ = this;
+    }
+}
+
+Mesh::Mesh(Mesh&& other) noexcept
+    : parent_(std::exchange(other.parent_, nullptr)),
+    pRefMesh_(std::exchange(other.pRefMesh_, nullptr)),
+    submeshes_(std::move(other.submeshes_)) {
+    for (auto& submesh : submeshes_) {
+        submesh.parent_ = this;
+    }
+}
+
+Mesh& Mesh::operator=(const Mesh& other) {
+    parent_ = other.parent_;
+    pRefMesh_ = other.pRefMesh_;
+    submeshes_ = other.submeshes_;
+
+    for (auto& submesh : submeshes_) {
+        submesh.parent_ = this;
+    }
+
+    return *this;
+}
+
+Mesh& Mesh::operator=(Mesh&& other) noexcept {
+    if (this == &other) {
+        return *this;
+    }
+
+    parent_ = std::exchange(other.parent_, nullptr);
+    pRefMesh_ = std::exchange(other.pRefMesh_, nullptr);
+    submeshes_ = std::move(other.submeshes_);
+
+    for (auto& submesh : submeshes_) {
+        submesh.parent_ = this;
+    }
+
+    return *this;
+}
+
+Model::Node::Node(const Node& other)
+    : coord_(other.coord_), meshes_(other.meshes_),
+    children_(), pModel_(other.pModel_) {
+    for (auto& mesh : meshes_) {
+        mesh.parent_ = this;
+    }
+}
+
+Model::Node::Node(Node&& other) noexcept
+    : coord_(std::move(other.coord_)), meshes_(std::move(other.meshes_)),
+    children_(std::move(other.children_)),
+    pModel_(std::exchange(other.pModel_, nullptr)) {
+    for (auto& mesh : meshes_) {
+        mesh.parent_ = this;
+    }
+
+    for (auto& child : children_) {
+        child->pModel_ = this->pModel_;
+    }
+}
+
+Model::Node& Model::Node::operator=(const Node& other) {
+    coord_ = other.coord_;
+    meshes_ = other.meshes_;
+    children_.clear();
+    children_.shrink_to_fit();
+    pModel_ = other.pModel_;
+
+    for (auto& mesh : meshes_) {
+        mesh.parent_ = this;
+    }
+
+    return *this;
+}
+
+Model::Node& Model::Node::operator=(Node&& other) noexcept {
+    if (this == &other) {
+        return *this;
+    }
+
+    coord_ = std::move(other.coord_);
+    meshes_ = std::move(other.meshes_);
+    children_ = std::move(other.children_);
+    pModel_ = std::exchange(other.pModel_, nullptr);
+
+    for (auto& mesh : meshes_) {
+        mesh.parent_ = this;
+    }
+
+    for (auto& child : children_) {
+        child->pModel_ = this->pModel_;
+    }
+
+    return *this;
+}
+
+void Model::Node::addMesh(Mesh&& mesh) {
+    meshes_.push_back(std::move(mesh));
+    meshes_.back().parent_ = this;
+}
+
+void Model::Node::emplaceMesh(const RefMesh& refMesh) {
+    meshes_.emplace_back(refMesh, this);
 }
 
 void Model::Node::addChild(Node* child) {
@@ -1004,9 +1408,8 @@ void Model::Node::addChild(Node* child) {
     children_.push_back(child);
 }
 
-Model::Model(const RefModel& ref, std::string&& initialState)
-    : nodeStorage_(ref.nodes().size()), markedRenderPasses_(),
-    state_(std::move(initialState)), pRoot_(nullptr) {
+Model::Model(const RefModel& ref)
+    : nodeStorage_(ref.nodes().size()), pRoot_(nullptr) {
     auto pRefFirstNode = ref.nodes().data();
 
     pRoot_ = nodeStorage_.data() + (ref.root() - pRefFirstNode);
@@ -1015,7 +1418,7 @@ Model::Model(const RefModel& ref, std::string&& initialState)
         auto& node = ref.nodes()[i];
         auto clone = Node(this);
         for (const auto& mesh : node.meshes()) {
-            clone.emplaceMesh(mesh, initialState);
+            clone.emplaceMesh(mesh);
         }
         clone.coord_.setLocalXform(node.coord().localXform());
         for (auto pChild : node.children()) {
@@ -1026,9 +1429,7 @@ Model::Model(const RefModel& ref, std::string&& initialState)
 }
 
 Model::Model(const Model& other)
-    : nodeStorage_(other.nodeStorage_.size()),
-    markedRenderPasses_(other.markedRenderPasses_),
-    state_(), pRoot_(nullptr) {
+    : nodeStorage_(other.nodeStorage_.size()), pRoot_(nullptr) {
     auto pOtherFirstNode = other.nodeStorage_.data();
 
     pRoot_ = nodeStorage_.data() + (other.pRoot_ - pOtherFirstNode);
@@ -1051,8 +1452,6 @@ Model& Model::operator=(const Model& other) {
     }
 
     nodeStorage_.resize(other.nodeStorage_.size());
-    markedRenderPasses_ = other.markedRenderPasses_;
-    state_ = other.state_;
 
     auto pOtherFirstNode = other.nodeStorage_.data();
 
@@ -1073,9 +1472,7 @@ Model& Model::operator=(const Model& other) {
 }
 
 Model::Model(Model&& other) noexcept
-    : nodeStorage_(other.nodeStorage_.size()),
-    markedRenderPasses_(std::move(other.markedRenderPasses_)),
-    state_(std::move(other.state_)), pRoot_(nullptr) {
+    : nodeStorage_(other.nodeStorage_.size()), pRoot_(nullptr) {
     auto pOtherFirstNode = other.nodeStorage_.data();
 
     pRoot_ = nodeStorage_.data() + (other.pRoot_ - pOtherFirstNode);
@@ -1101,12 +1498,10 @@ Model& Model::operator=(Model&& other) noexcept {
     }
 
     nodeStorage_.resize(other.nodeStorage_.size());
-    markedRenderPasses_ = std::move(other.markedRenderPasses_);
 
     auto pOtherFirstNode = other.nodeStorage_.data();
 
     pRoot_ = nodeStorage_.data() + (other.pRoot_ - pOtherFirstNode);
-    state_ = std::move(other.state_);
 
     for (std::size_t i = 0; i < other.nodeStorage_.size(); ++i) {
         auto& node = other.nodeStorage_[i];
@@ -1123,16 +1518,6 @@ Model& Model::operator=(Model&& other) noexcept {
     }
 
     return *this;
-}
-
-void Model::setState(std::string&& state) {
-    state_ = std::move(state);
-
-    for (auto& node : nodeStorage_) {
-        for (auto& mesh : node.meshes_) {
-            mesh.setState(state_);
-        }
-    }
 }
 
 }   // namespace gfx::d3d12

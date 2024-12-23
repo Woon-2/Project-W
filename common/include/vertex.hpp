@@ -99,6 +99,7 @@ private:
         /* Position3D */ 3 * sizeof(float),
         /* Normal3D */ 3 * sizeof(float),
         /* TexCoord2D0 */ 2 * sizeof(float),
+        /* TexCoord2D1 */ 2 * sizeof(float),
         /* Tangent3D */ 3 * sizeof(float),
         /* Bitangent3D */ 3 * sizeof(float),
         /* Color3D */ 3 * sizeof(float),
@@ -199,6 +200,8 @@ public:
         stride_ = stride;
     }
 
+    void constructNullProperty(Vertex::Properties prop, std::size_t cnt);
+
     void constructProperty( Vertex::Properties prop, const void* data,
         std::size_t cnt, std::size_t stride
     );
@@ -213,6 +216,11 @@ public:
         data_.resize(byteWidth);
         std::memcpy(data_.data(), data, byteWidth);
     }
+
+    std::vector<std::uint8_t>&& vertices() && noexcept {
+        return std::move(data_);
+    }
+
     /**
      * @brief Gets the raw memory pointer of the vertex buffer.
      * @return `void*` Raw memory pointer.

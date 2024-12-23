@@ -182,6 +182,31 @@ std::size_t D3D12Resource::makeDsv(const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
 	return views_.size() - 1u;
 }
 
+void D3D12Resource::makeIbv( D3D12Device& device, DXGI_FORMAT format,
+	std::size_t cnt, std::size_t byteOffset
+) {
+	pullGpuAddr();
+	std::size_t indexByteWidth = 0u;
+	switch (format) {
+	case DXGI_FORMAT_R16_UINT:
+		indexByteWidth = 2u;
+		break;
+
+	case DXGI_FORMAT_R32_UINT:
+		indexByteWidth = 4u;
+		break;
+	
+	default:
+		throw std::runtime_error("Invalid index format");
+	}
+
+	ibview_ = D3D12_INDEX_BUFFER_VIEW{
+		.BufferLocation = gpuAddr() + byteOffset,
+		.SizeInBytes = static_cast<UINT>( cnt * indexByteWidth ),
+		.Format = format
+	};
+}
+
 void D3D12Resource::remakeCbv( std::size_t idx,
 	const D3D12_CONSTANT_BUFFER_VIEW_DESC& cbvDesc, D3D12Device& device
 ) {

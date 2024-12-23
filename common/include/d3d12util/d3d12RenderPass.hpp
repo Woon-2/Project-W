@@ -33,14 +33,14 @@ public:
         float farZ = defFar;
     };
 
-    Camera(coord::System& baseCoordSys)
-        : Camera(baseCoordSys, Config()) {}
+    Camera()
+        : Camera(Config()) {}
 
-    Camera(coord::System& baseCoordSys, const Config& config)
-        : coordSys_(), config_(config), view_(), proj_(
+    Camera(const Config& config)
+        : coordMovement_(), coordRotation_(), config_(config), view_(), proj_(
             mu::persp(config_.fov, config_.aspect,config_.nearZ, config_.farZ)
-        ), repPos_(), repUp_() {
-        coordSys_.setParent(&baseCoordSys);
+        ), repPos_(), repUp_(), repFwd_(), focus_(), focusMode_(FocusMode::None) {
+        coordRotation_.setParent(&coordMovement_);
     }
 
     const Config& config() const NOEXCEPT {
@@ -54,26 +54,38 @@ public:
 
     void updateView();
 
-    void MU_CALLCONV focusAt(mu::Vec3 focus) NOEXCEPT {
+    void MU_CALLCONV focusAt(mu::Vec3 focus, mu::Vec3 up) NOEXCEPT {
         focus_ = focus;
         focusMode_ = FocusMode::LookAt;
+
+        repUp_ = up;
     }
 
-    void MU_CALLCONV focusTo(mu::Vec3 focus) NOEXCEPT {
+    void MU_CALLCONV focusTo(mu::Vec3 focus, mu::Vec3 up) NOEXCEPT {
         focus_ = focus;
         focusMode_ = FocusMode::LookTo;
+
+        repUp_ = up;
     }
 
     void defocus() NOEXCEPT {
         focusMode_ = FocusMode::None;
     }
 
-    coord::System& coord() NOEXCEPT {
-        return coordSys_;
+    coord::System& coordMovement() NOEXCEPT {
+        return coordMovement_;
     }
 
-    const coord::System& coord() const NOEXCEPT {
-        return coordSys_;
+    const coord::System& coordMovement() const NOEXCEPT {
+        return coordMovement_;
+    }
+
+    coord::System& coordRotation() NOEXCEPT {
+        return coordRotation_;
+    }
+
+    const coord::System& coordRotation() const NOEXCEPT {
+        return coordRotation_;
     }
 
     mu::Mat4x4 MU_CALLCONV view() const NOEXCEPT {
@@ -97,7 +109,8 @@ public:
     }
 
 private:
-    coord::System coordSys_;
+    coord::System coordMovement_;
+    coord::System coordRotation_;
     Config config_;
     mu::Mat4x4 view_;
     mu::Mat4x4 proj_;
@@ -110,6 +123,8 @@ private:
 
 class RenderPass {
 public:
+    using VBLayoutIdx = std::size_t;
+
     RenderPass() = default;
     RenderPass(const char* id) : RenderPass(std::string_view(id)) {}
     RenderPass(std::string_view id) : renderPassID_(id) {}
@@ -139,10 +154,7 @@ public:
 
     PBRIllumination( D3D12Device& device, ShaderPBRIllumination& shader,
         const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
-    ) : gfx::d3d12::RenderPass(id),
-        viewport_(vp), protocol_( shader.makeProtocol( device,
-            RenderProtocol::Desc{ makeDesc() }
-        ) ), lights_(), batch_(), pCamera_(nullptr) {}
+    );
 
     void setViewport(const D3D12_VIEWPORT& vp);
 
@@ -158,6 +170,9 @@ public:
     void setCamera(const Camera* pCamera) NOEXCEPT {
         pCamera_ = pCamera;
     }
+    void addLight(const sr::Light* pLight) NOEXCEPT {
+        lights_.push_back(pLight);
+    }
 
 private:
     ShaderPBRIllumination& shader() noexcept {
@@ -172,20 +187,17 @@ private:
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
     std::vector<const sr::Light*> lights_;
-    std::vector< std::pair<Mesh*, mu::Mat4x4> > batch_;
+    std::vector< std::tuple<Submesh*, VBLayoutIdx, mu::Mat4x4> > batch_;
     const Camera* pCamera_;
 };
 
-class PBRIlluminationMacro : public gfx::d3d12::RenderPass {
+class PBRIlluminationTerrain : public gfx::d3d12::RenderPass {
 public:
-    static constexpr const char* id = "PBRIlluminationMacro";
+    static constexpr const char* id = "PBRIlluminationTerrain";
 
-    PBRIlluminationMacro( D3D12Device& device, ShaderPBRIlluminationMacro& shader,
+    PBRIlluminationTerrain( D3D12Device& device, ShaderPBRIlluminationTerrain& shader,
         const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
-    ) : gfx::d3d12::RenderPass(id),
-        viewport_(vp), protocol_( shader.makeProtocol( device,
-            RenderProtocol::Desc{ makeDesc() }
-        ) ), lights_(), batch_(), pCamera_(nullptr) {}
+    );
 
     void setViewport(const D3D12_VIEWPORT& vp);
 
@@ -201,13 +213,16 @@ public:
     void setCamera(const Camera* pCamera) NOEXCEPT {
         pCamera_ = pCamera;
     }
+    void addLight(const sr::Light* pLight) NOEXCEPT {
+        lights_.push_back(pLight);
+    }
 
 private:
-    ShaderPBRIllumination& shader() noexcept {
-        return static_cast<ShaderPBRIllumination&>(protocol_.shader());
+    ShaderPBRIlluminationTerrain& shader() noexcept {
+        return static_cast<ShaderPBRIlluminationTerrain&>(protocol_.shader());
     }
-    const ShaderPBRIllumination& shader() const noexcept {
-        return static_cast<const ShaderPBRIllumination&>(protocol_.shader());
+    const ShaderPBRIlluminationTerrain& shader() const noexcept {
+        return static_cast<const ShaderPBRIlluminationTerrain&>(protocol_.shader());
     }
 
     static RenderProtocol::Desc makeDesc();
@@ -215,7 +230,7 @@ private:
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
     std::vector<const sr::Light*> lights_;
-    std::vector< std::pair<Mesh*, mu::Mat4x4> > batch_;
+    std::vector< std::tuple<Submesh*, VBLayoutIdx, mu::Mat4x4> > batch_;
     const Camera* pCamera_;
 };
 

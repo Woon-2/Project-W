@@ -51,8 +51,8 @@ public:
     d3d12::D3D12Device& device() NOEXCEPT { return device_; }
     const d3d12::D3D12Device& device() const NOEXCEPT { return device_; }
 
-    d3d12::UnifiedRoot& root() NOEXCEPT { return root_; }
-    const d3d12::UnifiedRoot& root() const NOEXCEPT { return root_; }
+    d3d12::detail::UnifiedRootImpl& root() NOEXCEPT { return d3d12::UnifiedRoot::get(); }
+    const d3d12::detail::UnifiedRootImpl& root() const NOEXCEPT { return d3d12::UnifiedRoot::get(); }
 
     void prepareGPUResLoad() {
         cmdList_.reset();
@@ -67,7 +67,13 @@ public:
     }
 
     void loadStaticTexture(const std::filesystem::path& path, d3d12::TextureResource::Type type);
-    void loadRefModel(const std::filesystem::path& path, const d3d12::RefModelStorage::ID& key);
+    void loadRefModel(const std::filesystem::path& path, const d3d12::RefModelStorage::ID& key);\
+    void layoutRefModelVBs( const d3d12::RefModelStorage::ID& key, std::size_t vbLayoutIdx,
+        const d3d12::InputLayout& inputLayout
+    );
+    void layoutRefModelVBs(const d3d12::RefModelStorage::ID& key, std::size_t vbLayoutIdx,
+        const std::vector<std::vector<Vertex::Properties>>& vbProps
+    );
     void loadTerrain( const d3d12::Bitmap& heightMap, const std::filesystem::path& albedoMapPath,
         const d3d12::RefModelStorage::ID& key, mu::Vec3 scale,
         std::size_t xDivisions = 1u, std::size_t zDivisions = 1u
@@ -92,7 +98,6 @@ private:
     d3d12::DescriptorHeapCPU dsvHeap_;
     d3d12::DescriptorHeapGPU cbvSrvUavHeap_;
     d3d12::DescriptorRanges descRanges_;
-    d3d12::UnifiedRoot root_;
     MyWindow window_;
     d3d12::Fence fence_;
 };
@@ -129,20 +134,13 @@ class Model : public ecs::Component {
 public:
     ENABLE_COMPONENT(Model);
 
-    Model(const ecs::Entity& entity, const d3d12::RefModelStorage::ID& key,
-        const Core& core
-    ) : Model(entity, key, d3d12::RefMesh::defaultState, core) {}
+    Model( const ecs::Entity& entity,
+        const d3d12::RefModelStorage::ID& key, const Core& core,
+        Coord& coordComp
+    );
 
-    Model(const ecs::Entity& entity, const d3d12::RefModelStorage::ID& key,
-        const char* initialState, const Core& core
-    ) : Model(entity, key, std::string_view(initialState), core) {}
-
-    Model(const ecs::Entity& entity, const d3d12::RefModelStorage::ID& key,
-        std::string_view initialState, const Core& core
-    ) : Model(entity, key, std::string(initialState), core) {}
-
-    Model(const ecs::Entity& entity, const d3d12::RefModelStorage::ID& key,
-        std::string&& initialState, const Core& core
+    Model( const ecs::Entity& entity,
+        const d3d12::RefModel& refModel, Coord& coordComp
     );
 
     d3d12::Model& get() NOEXCEPT { return model_; }
@@ -156,16 +154,35 @@ class Camera : public ecs::Component {
 public:
     ENABLE_COMPONENT(Camera);
 
+    Camera(const ecs::Entity& entity);
+
+    Camera( const ecs::Entity& entity,
+        const d3d12::Camera::Config& config
+    );
+
     d3d12::Camera& get() NOEXCEPT { return camera_; }
     const d3d12::Camera& get() const NOEXCEPT { return camera_; }
 
+    void update(float deltaTime);
+    void attach(const Model& model) NOEXCEPT;
+    void attach(const coord::System& movement, const coord::System& rotation) NOEXCEPT;
+    void detach() NOEXCEPT;
+    void setTimeLag(float timeLag) NOEXCEPT { timeLag_ = timeLag; }
+    void MU_CALLCONV setOffset(mu::Vec3 offset) NOEXCEPT { offset_ = offset; }
+
 private:
     d3d12::Camera camera_;
+    const coord::System* pAttachedMovement_;
+    const coord::System* pAttachedRotation_;
+    mu::Vec3 offset_;
+    float timeLag_;
 };
 
 class Light : public ecs::Component {
 public:
     ENABLE_COMPONENT(Light);
+    Light(const ecs::Entity& entity, const d3d12::sr::Light& light)
+        : ecs::Component(entity), light_(light) {}
 
     d3d12::sr::Light& get() NOEXCEPT { return light_; }
     const d3d12::sr::Light& get() const NOEXCEPT { return light_; }
@@ -222,8 +239,8 @@ class Terrain;
 
 class TerrainSubset : public ecs::Entity {
 public:
-    TerrainSubset( const d3d12::RefModelStorage::ID& key, const Terrain* pTerrain,
-        Core& core
+    TerrainSubset( const d3d12::RefModelStorage::ID& key,
+        Terrain* pTerrain, Core& core
     );
 
     TerrainSubset(const TerrainSubset&) = delete;
@@ -232,6 +249,8 @@ public:
     TerrainSubset& operator=(TerrainSubset&& other) noexcept;
     ~TerrainSubset() = default;
 
+    d3d12::RefModelStorage::ID refModelKey() const NOEXCEPT { return key_; }
+
 private:
     d3d12::RefModelStorage::ID key_;    // store key to release later
     const Terrain* pTerrain_;
@@ -239,17 +258,23 @@ private:
 
 class Terrain : public ecs::Entity {
 public:
-    Terrain( const d3d12::RefModelStorage::ID& identifier,
-        const std::filesystem::path& heightMapPath,
-        const std::filesystem::path& albedoMapPath, mu::Vec3 scale,
-        Core& core, std::size_t xDivisions = 1u, std::size_t zDivisions = 1u
-    );
+    Terrain() = default;
 
     Terrain(const Terrain&) = delete;
     Terrain(Terrain&& other) noexcept;
     Terrain& operator=(const Terrain&) = delete;
     Terrain& operator=(Terrain&& other) noexcept;
     ~Terrain() = default;
+
+    void init( const d3d12::RefModelStorage::ID& identifier,
+        const std::filesystem::path& heightMapPath,
+        const std::filesystem::path& albedoMapPath, mu::Vec3 scale,
+        Core& core, mu::Vec3 offset = mu::Vec3(),
+        std::size_t xDivisions = 1u, std::size_t zDivisions = 1u
+    );
+
+    auto& subsets() noexcept { return subsets_; }
+    const auto& subsets() const noexcept { return subsets_; }
 
 private:
     d3d12::Bitmap heightMap_;
@@ -267,9 +292,9 @@ public:
     void update(Scene& scene) override;
 };
 
-class PBRIlluminationMacro : public IRenderPass, public d3d12::rp::PBRIlluminationMacro {
+class PBRIlluminationTerrain : public IRenderPass, public d3d12::rp::PBRIlluminationTerrain {
 public:
-    using d3d12::rp::PBRIlluminationMacro::PBRIlluminationMacro;
+    using d3d12::rp::PBRIlluminationTerrain::PBRIlluminationTerrain;
 
     void init(Scene& scene) override;
     void update(Scene& scene) override;

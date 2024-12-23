@@ -1,14 +1,41 @@
 #include "assetMap.hpp"
 #include "resourcePath.hpp"
 
-namespace detail {
-const std::array<std::vector<AssetDesc>, 1> gAssetDescs = { { {
-    AssetDesc{ AssetType::Model, "DragonModel", resourcePath/"models"/"dragon"/"Dragon 2.5_fbx.fbx" },
-    AssetDesc{ AssetType::Texture, "DragonTex", resourcePath/"models"/"dragon"/"textures"/"Dragon_ground_color.jpg" },
-    AssetDesc{ AssetType::Texture, "DragonNormalMap", resourcePath/"models"/"dragon"/"textures"/"Dragon_Nor.jpg" },
-    AssetDesc{ AssetType::Texture, "DragonBumpMap", resourcePath/"models"/"dragon"/"textures"/"Dragon_Bump_Col2.jpg" },
-    AssetDesc{ AssetType::Texture, "FloorTex", resourcePath/"models"/"dragon"/"textures"/"Floor_C.jpg"},
-    AssetDesc{ AssetType::Texture, "FloorNormalMap", resourcePath/"models"/"dragon"/"textures"/"Floor_N.jpg"},
-    AssetDesc{ AssetType::Texture, "FloorSpecularMap", resourcePath/"models"/"dragon"/"textures"/"Floor_S.jpg"},
-} } };
-}   // namespace detail
+#include "enumUtil.hpp"
+
+#include <vector>
+
+ModelInfo assetModelInfo(AssetModel asset) {
+    static auto sAssetModelInfos = std::vector<ModelInfo>{
+        ModelInfo{
+            .id = "Helicopter",
+            .path = resourcePath/"models/HelicopterModel/OH-58D.bin"
+        }
+    };
+
+    return sAssetModelInfos[etoi(asset)];
+}
+
+std::vector<TextureInfo> assetTextureInfo(AssetTexture asset) {
+    static auto sTextureInfos = std::vector<std::vector<TextureInfo>>{
+        std::vector<TextureInfo> {
+            TextureInfo{
+                .paths = {
+                    resourcePath/"models/HelicopterModel/Textures/Default.dds",
+                    resourcePath/"models/HelicopterModel/Textures/Hellfire.dds",
+                    resourcePath/"models/HelicopterModel/Textures/Hydra.dds",
+                    resourcePath/"models/HelicopterModel/Textures/Texture.dds"
+                },
+                .type = gfx::d3d12::TextureResource::Type::Texture
+            },
+            TextureInfo{
+                .paths = {
+                    resourcePath/"terrains/Diffuse-Map.dds",
+                },
+                .type = gfx::d3d12::TextureResource::Type::Texture
+            }
+        }
+    };
+
+    return sTextureInfos[etoi(asset)];
+}

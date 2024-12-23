@@ -19,15 +19,17 @@ namespace gfx {
 
 namespace d3d12 {
 
-class UnifiedRoot : public RootSignature {
+namespace detail {
+
+class UnifiedRootImpl : public RootSignature {
 public:
 	enum class ParamIndices {
 		BindlessTex2D,
 		BindlessTexArray,
 		BindlessTexCube,
-		b0, b1, b2, b3, b4, b5, b6, b7, b8, b9,
-		t0, t1, t2, t3, t4, t5, t6, t7, t8, t9,
-		u0, u1, u2, u3, u4, u5, u6, u7, u8, u9
+		b0, b1, b2, b3, b4, b5, b6, b7,
+		t0, t1, t2, t3, t4, t5, t6, t7,
+		u0, u1, u2, u3, u4, u5, u6, u7
 	};
 
 	enum class SamplerIndices {
@@ -38,9 +40,9 @@ public:
 		TrilinearComparison
 	};
 
-	static constexpr auto cbvRegisterCnt = 10u;
-	static constexpr auto srvRegisterCnt = 10u;
-	static constexpr auto uavRegisterCnt = 10u;
+	static constexpr auto cbvRegisterCnt = 8u;
+	static constexpr auto srvRegisterCnt = 8u;
+	static constexpr auto uavRegisterCnt = 8u;
 
 private:
 	class Params {
@@ -58,10 +60,34 @@ private:
 	};
 
 public:
-	UnifiedRoot(D3D12Device& device);
+	UnifiedRootImpl() = default;
+	UnifiedRootImpl(D3D12Device& device);
 
 	Params params;
 	Samplers samplers;
+};
+
+} // namespace gfx::d3d12::detail
+
+class UnifiedRoot {
+public:
+	using ParamIndices = detail::UnifiedRootImpl::ParamIndices;
+	using SamplerIndices = detail::UnifiedRootImpl::SamplerIndices;
+
+	static constexpr auto cbvRegisterCnt = detail::UnifiedRootImpl::cbvRegisterCnt;
+	static constexpr auto srvRegisterCnt = detail::UnifiedRootImpl::srvRegisterCnt;
+	static constexpr auto uavRegisterCnt = detail::UnifiedRootImpl::uavRegisterCnt;
+
+	static void init(D3D12Device& device) {
+		impl_ = detail::UnifiedRootImpl(device);
+	}
+
+	static detail::UnifiedRootImpl& get() noexcept {
+		return impl_;
+	}
+
+private:
+	static detail::UnifiedRootImpl impl_;
 };
 
 class InputLayout {
@@ -134,9 +160,20 @@ public:
 		return true;
 	}
 
+	std::optional<std::size_t> bindableIdx(const RefMesh& mesh) const;
+	std::size_t slotCnt() const noexcept { return slots_.size(); }
+
 private:
 	std::vector<Slot> slots_;
 };
+
+void arrangeVBs(RefMesh& refMesh, D3D12Device& device, D3D12GfxCmdList& cmdList,
+	std::size_t layoutIdx, const InputLayout& inputLayout
+);
+
+void arrangeVBs(RefModel& refModel, D3D12Device& device, D3D12GfxCmdList& cmdList,
+	std::size_t layoutIdx, const InputLayout& inputLayout
+);
 
 class ShaderBlob : public dx::DXWrapper<ID3DBlob> {
 public:
@@ -144,6 +181,8 @@ public:
 		Vertex,
 		Pixel,
 		Geometry,
+		Hull,
+		Domain,
 		Size
 	};
 
@@ -196,7 +235,7 @@ public:
 		cmdList.get()->SetPipelineState(get().Get());
 	}
 
-	bool compatibleWith(const RefMesh& mesh) const;
+	std::optional<std::size_t> compatibleLayout(const RefMesh& mesh) const;
 
 	Shader& shader() const noexcept { return *pShader_; }
 
@@ -205,6 +244,11 @@ private:
 };
 
 class Shader {
+protected:
+	static std::size_t calcConstantBufferSize(std::size_t size) {
+		return (size + 255ull) & ~255ull;
+	}
+
 public:
 	Shader(const RootSignature& root)
 		: blobs_(etoi(ShaderBlob::Type::Size)), inputLayout_(), root_(root) {}
@@ -229,7 +273,7 @@ public:
 		}
 	}
 
-	virtual void bindRootParams(const UnifiedRoot& root, D3D12GfxCmdList& cmdList) = 0;
+	virtual void bindRootParams(D3D12GfxCmdList& cmdList) = 0;
 
 	virtual void loadBlobs() = 0;
 	virtual void releaseBlobs() = 0;
@@ -265,8 +309,10 @@ public:
 		return root_;
 	}
 
-	void draw(D3D12GfxCmdList& cmdList, const Mesh& mesh, std::size_t instanceCnt) {
-		mesh.draw(cmdList, instanceCnt);
+	void draw( D3D12GfxCmdList& cmdList, const Submesh& submesh,
+		std::size_t instanceCnt, std::size_t vbLayoutIdx
+	) {
+		submesh.draw(cmdList, instanceCnt, vbLayoutIdx);
 	}
 
 protected:
@@ -275,8 +321,10 @@ protected:
 	RootSignature root_;
 };
 
-inline bool RenderProtocol::compatibleWith(const RefMesh& mesh) const {
-    return pShader_->inputLayout().checkBindable(mesh.vbs());
+inline std::optional<std::size_t> RenderProtocol::compatibleLayout(
+	const RefMesh& mesh
+) const {
+    return pShader_->inputLayout().bindableIdx(mesh);
 }
 
 namespace sr {
@@ -289,6 +337,12 @@ struct PerConfigurationData0 {
 struct PerInstanceData0 {
 	dx::XMFLOAT4X4 wvp;
 	dx::XMFLOAT4X4 wv;
+	dx::XMFLOAT3X3 wvNormal;
+};
+
+struct PerInstanceData1 {
+	dx::XMFLOAT4X4 wv;
+	dx::XMFLOAT4X4 proj;
 	dx::XMFLOAT3X3 wvNormal;
 };
 
@@ -342,6 +396,11 @@ struct PerDrawcallData0 {
 	dx::XMUINT2 padding;
 };
 
+struct PerDrawcallData1 {
+	dx::XMFLOAT4X4 wvp;
+	dx::XMFLOAT4 color;
+};
+
 struct PerFrameData0 {
 	dx::XMFLOAT3 globalAmbient;
 	float padding0;
@@ -352,6 +411,9 @@ struct PerFrameData0 {
 }	// namespace gfx::d3d12::sr
 
 class ShaderPBRIllumination : public Shader {
+private:
+	std::size_t cbDrawcallDataSize_;
+	
 public:
 	struct Config {
 		std::size_t maxInstanceCnt;
@@ -381,7 +443,12 @@ public:
 		return maxDrawcallCnt_;
 	}
 
-	void bindRootParams(const UnifiedRoot& root, D3D12GfxCmdList& cmdList) override;
+	void bindRootParams(D3D12GfxCmdList& cmdList) override;
+	void bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCmdList& cmdList);
+
+	std::size_t cbDrawcallDataSize() const noexcept {
+		return cbDrawcallDataSize_;
+	}
 
 	void loadBlobs() override;
 	void releaseBlobs() override;
@@ -402,7 +469,10 @@ private:
 	std::size_t maxDrawcallCnt_;
 };
 
-class ShaderPBRIlluminationMacro : public Shader {
+class ShaderPBRIlluminationTerrain : public Shader {
+private:
+	std::size_t cbDrawcallDataSize_;
+
 public:
 	struct Config {
 		std::size_t maxInstanceCnt;
@@ -410,13 +480,15 @@ public:
 		std::size_t maxLightCnt;
 	};
 
-	ShaderPBRIlluminationMacro( D3D12Device& device, const RootSignature& root,
+	ShaderPBRIlluminationTerrain( D3D12Device& device, const RootSignature& root,
 		const Config& config, InputLayout::Spec ilSpec = InputLayout::Spec::serial
 	);
 
 	RenderProtocol makeProtocol( D3D12Device& device, const RenderProtocol::Desc& desc) {
 		return RenderProtocol( device, *this,
-			selectBlobsStrong<ShaderBlob::Type::Vertex, ShaderBlob::Type::Pixel>(), desc
+			selectBlobsStrong< ShaderBlob::Type::Vertex, ShaderBlob::Type::Pixel,
+				ShaderBlob::Type::Hull, ShaderBlob::Type::Domain
+			>(), desc
 		);
 	}
 
@@ -432,7 +504,8 @@ public:
 		return maxDrawcallCnt_;
 	}
 
-	void bindRootParams(const UnifiedRoot& root, D3D12GfxCmdList& cmdList) override;
+	void bindRootParams(D3D12GfxCmdList& cmdList) override;
+	void bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCmdList& cmdList);
 
 	void loadBlobs() override;
 	void releaseBlobs() override;
@@ -442,6 +515,10 @@ public:
 	UploadBuffer perDrawcallData_;
 	UploadBuffer perInstanceData_;
 	UploadBuffer lightBuffer_;
+
+	std::size_t cbDrawcallDataSize() const noexcept {
+		return cbDrawcallDataSize_;
+	}
 
 private:
 	static InputLayout makeInputLayout(InputLayout::Spec ilSpec);

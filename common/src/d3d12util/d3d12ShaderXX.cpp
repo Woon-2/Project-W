@@ -12,6 +12,43 @@ namespace gfx {
 
 namespace d3d12 {
 
+std::optional<std::size_t> InputLayout::bindableIdx(const RefMesh& mesh) const {
+	for (std::size_t i = 0u; i < mesh.vbLayoutCnt(); ++i) {
+		if (checkBindable(mesh.vbs(i))) {
+			return i;
+		}
+	}
+
+	return std::nullopt;
+}
+
+void arrangeVBs(RefMesh& refMesh, D3D12Device& device, D3D12GfxCmdList& cmdList,
+	std::size_t layoutIdx, const InputLayout& inputLayout
+) {
+	auto slotProps = std::vector<std::vector<Vertex::Properties>>(inputLayout.slotCnt());
+	for (std::size_t i = 0; i < inputLayout.slotCnt(); ++i) {
+		const auto& slot = inputLayout.slot(i);
+
+		for (auto j = etoi(Vertex::Properties::Position3D); j < etoi(Vertex::Properties::SIZE); ++j) {
+			if (slot.attributes.test(j)) {
+				slotProps[i].push_back( static_cast<Vertex::Properties>(j) );
+			}
+		}
+	}
+
+	refMesh.arrangeVBs(device, cmdList, layoutIdx, slotProps);
+}
+
+void arrangeVBs(RefModel& refModel, D3D12Device& device, D3D12GfxCmdList& cmdList,
+	std::size_t layoutIdx, const InputLayout& inputLayout
+) {
+	for (auto& node : refModel.nodes()) {
+		for (auto& mesh : node.meshes()) {
+			arrangeVBs(mesh, device, cmdList, layoutIdx, inputLayout);
+		}
+	}
+}
+
 ShaderBlob::ShaderBlob( const std::filesystem::path& path,
 	const InputLayout& inputLayout, const D3D_SHADER_MACRO* macros,
 	std::string_view entryPoint, std::string_view target,
@@ -53,6 +90,8 @@ RenderProtocol::RenderProtocol( D3D12Device& device,
 		.pRootSignature = shader.rootSiganture().get().Get(),
 		.VS = byteCodes[etoi(ShaderBlob::Type::Vertex)],
 		.PS = byteCodes[etoi(ShaderBlob::Type::Pixel)],
+		.DS = byteCodes[etoi(ShaderBlob::Type::Domain)],
+		.HS = byteCodes[etoi(ShaderBlob::Type::Hull)],
 		.GS = byteCodes[etoi(ShaderBlob::Type::Geometry)],
 		.StreamOutput = desc.streamOutput,
 		.BlendState = desc.blend,
@@ -75,7 +114,9 @@ RenderProtocol::RenderProtocol( D3D12Device& device,
 	device.get()->CreateGraphicsPipelineState(&psoDesc, __uuidof(InterfaceType), &get());
 }
 
-UnifiedRoot::UnifiedRoot(D3D12Device& device)
+namespace detail {
+
+UnifiedRootImpl::UnifiedRootImpl(D3D12Device& device)
 	: RootSignature() {
 	auto tex2dRange = D3D12_DESCRIPTOR_RANGE {
 		.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
@@ -100,10 +141,6 @@ UnifiedRoot::UnifiedRoot(D3D12Device& device)
 		.RegisterSpace = 3u,
 		.OffsetInDescriptorsFromTableStart = 0u
 	};
-
-	static constexpr auto cbvRegisterCnt = 10u;
-	static constexpr auto srvRegisterCnt = 10u;
-	static constexpr auto uavRegisterCnt = 10u;
 
 	auto params = std::vector<D3D12_ROOT_PARAMETER>();
 	params.reserve(3u + cbvRegisterCnt + srvRegisterCnt + uavRegisterCnt);
@@ -272,6 +309,10 @@ UnifiedRoot::UnifiedRoot(D3D12Device& device)
 	);
 }
 
+}	// namespace gfx::d3d12::detail
+
+detail::UnifiedRootImpl UnifiedRoot::impl_;
+
 sr::PBRMaterial sr::PBRMaterial::convert(const Material& material) {
 	return PBRMaterial{
 		.albedoConstant = material.constant<dx::XMFLOAT4>(Material::ConstantType::Albedo),
@@ -282,24 +323,25 @@ sr::PBRMaterial sr::PBRMaterial::convert(const Material& material) {
 		.metallicConstantMapRatio = material.constant<float>(Material::ConstantType::MetallicConstantMapRatio),
 		.emmisiveConstant = material.constant<dx::XMFLOAT3>(Material::ConstantType::Emmisive),
 		.emmisiveConstantMapRatio = material.constant<float>(Material::ConstantType::EmmisiveConstantMapRatio),
-		.ambientOcclusionConstant = material.constant<float>(Material::ConstantType::AmbientOcllusion),
-		.ambientOcclusionConstantMapRatio = material.constant<float>(Material::ConstantType::AmbientOcllusionConstantMapRatio),
+		.ambientOcclusionConstant = material.constant<float>(Material::ConstantType::AmbientOcclusion),
+		.ambientOcclusionConstantMapRatio = material.constant<float>(Material::ConstantType::AmbientOcclusionConstantMapRatio),
 		.albedoMapRef = material.mapRef(Material::MapType::Albedo).toxm(),
 		.roughnessMapRef = material.mapRef(Material::MapType::Roughness).toxm(),
 		.normalMapRef = material.mapRef(Material::MapType::Normal).toxm(),
 		.metallicMapRef = material.mapRef(Material::MapType::Metallic).toxm(),
 		.metallicSmoothnessMapRef = material.mapRef(Material::MapType::MetallicSmoothness).toxm(),
 		.emmisiveMapRef = material.mapRef(Material::MapType::Emmisive).toxm(),
-		.ambientOcclusionMapRef = material.mapRef(Material::MapType::AmbientOcllusion).toxm()
+		.ambientOcclusionMapRef = material.mapRef(Material::MapType::AmbientOcclusion).toxm()
 	};
 }
 
 ShaderPBRIllumination::ShaderPBRIllumination( D3D12Device& device, const RootSignature& root,
 	const Config& config, InputLayout::Spec ilSpec
 ) : Shader(root, makeInputLayout(ilSpec)),
+	cbDrawcallDataSize_( calcConstantBufferSize(sizeof(sr::PerDrawcallData0)) ),
 	perConfigurationData_(device, sizeof(sr::PerConfigurationData0)),
 	perFrameData_(device, sizeof(sr::PerFrameData0)),
-	perDrawcallData_(device, sizeof(sr::PerDrawcallData0) * config.maxDrawcallCnt),
+	perDrawcallData_(device, cbDrawcallDataSize_ * config.maxDrawcallCnt),
 	perInstanceData_(device, sizeof(sr::PerInstanceData0) * config.maxInstanceCnt),
 	lightBuffer_(device, sizeof(sr::Light) * config.maxLightCnt),
 	maxInstanceCnt_(config.maxInstanceCnt), maxLightCnt_(config.maxLightCnt),
@@ -311,9 +353,9 @@ ShaderPBRIllumination::ShaderPBRIllumination( D3D12Device& device, const RootSig
 	lightBuffer_.pullGpuAddr();
 }
 
-void ShaderPBRIllumination::bindRootParams(
-	const UnifiedRoot& root, D3D12GfxCmdList& cmdList
-) {
+void ShaderPBRIllumination::bindRootParams(D3D12GfxCmdList& cmdList) {
+	auto& root = UnifiedRoot::get();
+
 	cmdList.get()->SetGraphicsRootConstantBufferView(
 		root.params[ UnifiedRoot::ParamIndices::b0 ],
 		perConfigurationData_.gpuAddr()
@@ -333,6 +375,15 @@ void ShaderPBRIllumination::bindRootParams(
 	cmdList.get()->SetGraphicsRootShaderResourceView(
 		root.params[ UnifiedRoot::ParamIndices::t1 ],
 		lightBuffer_.gpuAddr()
+	);
+}
+
+void ShaderPBRIllumination::bindPerDrawcallData(
+	std::size_t drawcallIdx, D3D12GfxCmdList& cmdList
+) {
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		UnifiedRoot::get().params[ UnifiedRoot::ParamIndices::b1 ],
+		perDrawcallData_.gpuAddr() + cbDrawcallDataSize() * drawcallIdx
 	);
 }
 
@@ -417,13 +468,14 @@ InputLayout ShaderPBRIllumination::makeInputLayoutSeparated() {
 	} );
 }
 
-ShaderPBRIlluminationMacro::ShaderPBRIlluminationMacro( D3D12Device& device, const RootSignature& root,
+ShaderPBRIlluminationTerrain::ShaderPBRIlluminationTerrain( D3D12Device& device, const RootSignature& root,
 	const Config& config, InputLayout::Spec ilSpec
 ) : Shader(root, makeInputLayout(ilSpec)),
+	cbDrawcallDataSize_( calcConstantBufferSize(sizeof(sr::PerDrawcallData0)) ),
 	perConfigurationData_(device, sizeof(sr::PerConfigurationData0)),
 	perFrameData_(device, sizeof(sr::PerFrameData0)),
-	perDrawcallData_(device, sizeof(sr::PerDrawcallData0) * config.maxDrawcallCnt),
-	perInstanceData_(device, sizeof(sr::PerInstanceData0) * config.maxInstanceCnt),
+	perDrawcallData_(device, cbDrawcallDataSize_ * config.maxDrawcallCnt),
+	perInstanceData_(device, sizeof(sr::PerInstanceData1) * config.maxInstanceCnt),
 	lightBuffer_(device, sizeof(sr::Light) * config.maxLightCnt),
 	maxInstanceCnt_(config.maxInstanceCnt), maxLightCnt_(config.maxLightCnt),
 	maxDrawcallCnt_(config.maxDrawcallCnt) {
@@ -434,16 +486,12 @@ ShaderPBRIlluminationMacro::ShaderPBRIlluminationMacro( D3D12Device& device, con
 	lightBuffer_.pullGpuAddr();
 }
 
-void ShaderPBRIlluminationMacro::bindRootParams(
-	const UnifiedRoot& root, D3D12GfxCmdList& cmdList
-) {
+void ShaderPBRIlluminationTerrain::bindRootParams(D3D12GfxCmdList& cmdList) {
+	auto& root = UnifiedRoot::get();
+
 	cmdList.get()->SetGraphicsRootConstantBufferView(
 		root.params[ UnifiedRoot::ParamIndices::b0 ],
 		perConfigurationData_.gpuAddr()
-	);
-	cmdList.get()->SetGraphicsRootConstantBufferView(
-		root.params[ UnifiedRoot::ParamIndices::b1 ],
-		perDrawcallData_.gpuAddr()
 	);
 	cmdList.get()->SetGraphicsRootConstantBufferView(
 		root.params[ UnifiedRoot::ParamIndices::b2 ],
@@ -459,23 +507,42 @@ void ShaderPBRIlluminationMacro::bindRootParams(
 	);
 }
 
-void ShaderPBRIlluminationMacro::loadBlobs() {
+void ShaderPBRIlluminationTerrain::bindPerDrawcallData(
+	std::size_t drawcallIdx, D3D12GfxCmdList& cmdList
+) {
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		UnifiedRoot::get().params[ UnifiedRoot::ParamIndices::b1 ],
+		perDrawcallData_.gpuAddr() + cbDrawcallDataSize() * drawcallIdx
+	);
+}
+
+void ShaderPBRIlluminationTerrain::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath/"pbrShaderMacro.hlsl", inputLayout(), nullptr,
+		shaderPath/"pbrShaderTerrain.hlsl", inputLayout(), nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 	blobs_[etoi(ShaderBlob::Type::Pixel)] = ShaderBlob{
-		shaderPath/"pbrShaderMacro.hlsl", inputLayout(), nullptr,
+		shaderPath/"pbrShaderTerrain.hlsl", inputLayout(), nullptr,
 		"PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Pixel
+	};
+	blobs_[etoi(ShaderBlob::Type::Hull)] = ShaderBlob{
+		shaderPath/"pbrShaderTerrain.hlsl", inputLayout(), nullptr,
+		"HSMain", "hs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Hull
+	};
+	blobs_[etoi(ShaderBlob::Type::Domain)] = ShaderBlob{
+		shaderPath/"pbrShaderTerrain.hlsl", inputLayout(), nullptr,
+		"DSMain", "ds_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Domain
 	};
 }
 
-void ShaderPBRIlluminationMacro::releaseBlobs() {
+void ShaderPBRIlluminationTerrain::releaseBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)].reset();
 	blobs_[etoi(ShaderBlob::Type::Pixel)].reset();
+	blobs_[etoi(ShaderBlob::Type::Hull)].reset();
+	blobs_[etoi(ShaderBlob::Type::Domain)].reset();
 }
 
-InputLayout ShaderPBRIlluminationMacro::makeInputLayout(InputLayout::Spec ilSpec) {
+InputLayout ShaderPBRIlluminationTerrain::makeInputLayout(InputLayout::Spec ilSpec) {
 	switch (ilSpec) {
 	case InputLayout::Spec::serial:
 		return makeInputLayoutSerial();
@@ -486,7 +553,7 @@ InputLayout ShaderPBRIlluminationMacro::makeInputLayout(InputLayout::Spec ilSpec
 	}
 }
 
-InputLayout ShaderPBRIlluminationMacro::makeInputLayoutSerial() {
+InputLayout ShaderPBRIlluminationTerrain::makeInputLayoutSerial() {
 	return InputLayout( std::vector<InputLayout::Slot>{
 		InputLayout::Slot{
 			.elems = {
@@ -501,7 +568,7 @@ InputLayout ShaderPBRIlluminationMacro::makeInputLayoutSerial() {
 	} );
 }
 
-InputLayout ShaderPBRIlluminationMacro::makeInputLayoutSeparated() {
+InputLayout ShaderPBRIlluminationTerrain::makeInputLayoutSeparated() {
 	return InputLayout( std::vector<InputLayout::Slot>{
 		InputLayout::Slot{
 			.elems = {

@@ -5,6 +5,31 @@
 
 namespace gfx {
 
+void VertexBuffer::constructNullProperty(
+    Vertex::Properties prop, std::size_t cnt
+) {
+    if (!contains(prop)) {
+        throw;  // TODO: add exception
+    }
+
+    if (stride_ == invalidStride) {
+        throw;  // TODO: add exception
+    }
+
+    auto offset = offsets_[etoi(prop)];
+    if (offset == invalidOffset) {
+        throw;  // TODO: add exception
+    }
+
+    data_.resize(stride_ * cnt);
+
+    for (std::size_t i = 0; i < cnt; ++i) {
+        std::ranges::fill_n( data_.begin() + i * stride_ + offset,
+            Vertex::propByteWidth(prop), 0
+        );
+    }
+}
+
 void VertexBuffer::constructProperty( Vertex::Properties prop, const void* data,
     std::size_t cnt, std::size_t stride
 ) {

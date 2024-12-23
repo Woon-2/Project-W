@@ -793,6 +793,24 @@ float XM_CALLCONV dot(Vec<D> lhs, Vec<D> rhs) __MathUtil_NOEXCEPT {
 
 template <std::size_t D>
     requires (D >= 1 && D <= 4)
+float XM_CALLCONV dot(NVec<D> lhs, Vec<D> rhs) __MathUtil_NOEXCEPT {
+    return dot(Vec<D>(lhs), rhs);
+}
+
+template <std::size_t D>
+    requires (D >= 1 && D <= 4)
+float XM_CALLCONV dot(Vec<D> lhs, NVec<D> rhs) __MathUtil_NOEXCEPT {
+    return dot(lhs, Vec<D>(rhs));
+}
+
+template <std::size_t D>
+    requires (D >= 1 && D <= 4)
+float XM_CALLCONV dot(NVec<D> lhs, NVec<D> rhs) __MathUtil_NOEXCEPT {
+    return dot(Vec<D>(lhs), Vec<D>(rhs));
+}
+
+template <std::size_t D>
+    requires (D >= 1 && D <= 4)
 const Vec<D> XM_CALLCONV cross(Vec<D> lhs, Vec<D> rhs) __MathUtil_NOEXCEPT {
     if constexpr (D == 2) {
         return dx::XMVector2Cross(lhs.get(), rhs.get());
@@ -803,6 +821,24 @@ const Vec<D> XM_CALLCONV cross(Vec<D> lhs, Vec<D> rhs) __MathUtil_NOEXCEPT {
             "Cross product is only defined for 2D and 3D vectors."
         );
     }
+}
+
+template <std::size_t D>
+    requires (D >= 1 && D <= 4)
+const Vec<D> XM_CALLCONV cross(NVec<D> lhs, Vec<D> rhs) __MathUtil_NOEXCEPT {
+    return cross(Vec<D>(lhs), rhs);
+}
+
+template <std::size_t D>
+    requires (D >= 1 && D <= 4)
+const Vec<D> XM_CALLCONV cross(Vec<D> lhs, NVec<D> rhs) __MathUtil_NOEXCEPT {
+    return cross(lhs, Vec<D>(rhs));
+}
+
+template <std::size_t D>
+    requires (D >= 1 && D <= 4)
+const NVec<D> XM_CALLCONV cross(NVec<D> lhs, NVec<D> rhs) __MathUtil_NOEXCEPT {
+    return NVec<D>(cross(Vec<D>(lhs), Vec<D>(rhs)));
 }
 
 template <std::size_t D>
@@ -1097,16 +1133,28 @@ const Vec<D> XM_CALLCONV asin(Vec<D> vec) __MathUtil_NOEXCEPT {
     return dx::XMVectorASin(vec.get());
 }
 
+inline Radian asin(float val) __MathUtil_NOEXCEPT {
+    return Radian(std::asinf(val));
+}
+
 template <std::size_t D>
     requires (D >= 1 && D <= 4)
 const Vec<D> XM_CALLCONV acos(Vec<D> vec) __MathUtil_NOEXCEPT {
     return dx::XMVectorACos(vec.get());
 }
 
+inline Radian acos(float val) __MathUtil_NOEXCEPT {
+    return Radian(std::acosf(val));
+}
+
 template <std::size_t D>
     requires (D >= 1 && D <= 4)
 const Vec<D> XM_CALLCONV atan(Vec<D> vec) __MathUtil_NOEXCEPT {
     return dx::XMVectorATan(vec.get());
+}
+
+inline Radian atan(float val) __MathUtil_NOEXCEPT {
+    return Radian(std::atanf(val));
 }
 
 using Vec1 = Vec<1>;
@@ -1537,6 +1585,10 @@ public:
             dx::XMVectorGetByIndex(mat_.r[2], c),
             dx::XMVectorGetByIndex(mat_.r[3], c)
         );
+    }
+
+    void XM_CALLCONV setRow(std::size_t r, mu::Vec<C> vec) __MathUtil_NOEXCEPT {
+        mat_.r[r] = vec.get();
     }
 
     float XM_CALLCONV det() const __MathUtil_NOEXCEPT {

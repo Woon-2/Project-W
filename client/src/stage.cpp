@@ -1,16 +1,15 @@
 #include "stage.hpp"
 
+#include "assetMap.hpp"
 #include "resourcePath.hpp"
 
 #include <ranges>
 
 void Stage::init(gfx::d3d12engine::Core& core) {
-    initEntities();
-    initLights();
+    loadAssets(core);
 
-    setupCamera();
-    loadTextures(core);
-    // pSystems_->coordRoot.update();
+    initEntities(core);
+    pSystems_->coordRoot.update();
     pRenderer_->init(scene_);
 }
 
@@ -35,84 +34,84 @@ void Stage::processInput(double deltaTime) {
 
 void Stage::simulate(double deltaTime) {
     pSystems_->physicsSystem.update(static_cast<float>(deltaTime));
-    // player_.update();
+    player_.update(static_cast<float>(deltaTime));
+    pSystems_->coordRoot.update();
 
-    // // camera update
-    // camera_.coordSys() << mu::translate(player_.as<RigidBody>().deltaPosition());
-    // //
-
-    // pSystems_->coordRoot.update();
-    // camera_.unfocus();
-    // camera_.focus( gfx::coord::Pt3( &player_.as<Coord>().get(), mu::Vec3(0.f, 0.f, 0.f) ) );
-    // camera_.updateView();
+    player_.postUpdate(deltaTime);
 }
 
-void Stage::initEntities() {
+void Stage::initEntities(gfx::d3d12engine::Core& core) {
+    player_.init(core);
+    player_.addCamera(mu::Vec3(0.f, 2.8f, -6.5f), 1.f, pSystems_->coordRoot);
+
+    directionalLight_.init(gfx::d3d12::sr::Light{
+        .color = mu::Vec3(1.f, 1.f, 1.f).getXmf(),
+        .dirV = mu::NVec3(0.f, -1.f, 1.f).getXmf(),
+        .intensity = 10.f,
+        .type = etoi(gfx::d3d12::sr::Light::Type::Directional)
+    });
+
     scene_.addEntity(player_);
+    for (auto& subsetRows : terrain_.subsets()) {
+        for (auto& subset : subsetRows) {
+            scene_.addEntity(subset);
+        }
+    }
+    scene_.addEntity(directionalLight_);
+
     pSystems_->coordRoot.addEntity(player_);
+    pSystems_->coordRoot.addEntity(terrain_);
     pSystems_->inputSystem.addEntity(player_);
     pSystems_->physicsSystem.addEntity(player_);
 
     scene_.clearStash();
-    // pSystems_->assetSystem.addEntity(player_);
-    // pSystems_->coordRoot.addEntity(player_);
-    // pSystems_->inputSystem.addEntity(player_);
-    // pSystems_->physicsSystem.addEntity(player_);
-
-    // pSystems_->assetSystem.allocCtx();
-    // pSystems_->assetSystem.loadAssets();
-    // pSystems_->assetSystem.freeCtx();
-    // player_.linkAssets(pSystems_->assetSystem);
-
-    // pSystems_->fragmentizer.addEntity(player_);
-}
-
-void Stage::initLights() {
-    // lights_.push_back( gfx::d3d12::sr::PhongLight{
-    //     .ambient = dx::XMFLOAT4{ 0.51f, 0.54f, 0.57f, 1.f },
-    //     .diffuse = dx::XMFLOAT4{ 0.54f, 0.56f, 0.58f, 1.f },
-    //     .specular = dx::XMFLOAT4{ 0.25f, 0.25f, 0.25f, 1.f },
-    //     .falloff = 1.f,
-    //     .dirV = dx::XMFLOAT3{ -0.0f, -0.9f, -0.4f },
-    //     .type = gfx::d3d12::sr::PhongLight::kTypeDirectional
-    // } );
-
-    // lights_.push_back( gfx::d3d12::sr::PhongLight{
-    //     .ambient = dx::XMFLOAT4{ 0.f, 0.f, 0.f, 1.f },
-    //     .diffuse = dx::XMFLOAT4{ 0.15f, 0.3f, 0.65f, 1.f },
-    //     .specular = dx::XMFLOAT4{ 0.1f, 0.15f, 0.2f, 0.f },
-    //     .posV = dx::XMFLOAT3{ -50.f, 20.f, -5.f },
-    //     .falloff = 8.f,
-    //     .dirV = dx::XMFLOAT3{ 0.f, 0.f, 1.f },
-    //     .cosTheta = std::cos( static_cast<float>( mu::Radian( mu::Degree(25.f) ) ) ),
-    //     .atten = dx::XMFLOAT3{ 1.f, 0.045f, 0.0075f },
-    //     .cosPhi = std::cos( static_cast<float>( mu::Radian( mu::Degree(60.f) ) ) ),
-    //     .type = gfx::d3d12::sr::PhongLight::kTypeSpot
-    // } );
-}
-
-void Stage::setupCamera() {
-    // auto& world = pSystems_->coordRoot.get();
-
-    // camera_.coordSys().setParent(&world);
-    // camera_.coordSys() << mu::translate(0.f, 120.f, -120.f);
-    // camera_.focus( gfx::coord::Pt3( &world, mu::Vec3(0.f, 0.f, 0.f) ) );
 }
 
 void Stage::loadAssets(gfx::d3d12engine::Core& core) {
+    auto cmdList = core.fetchCmdList();
+
     core.prepareGPUResLoad();
 
-    loadTextures(core);
+    loadTextures(core, cmdList);
+    loadModels(core, cmdList);
+    loadTerrains(core, cmdList);
 
     core.finishGPUResLoad();
 }
 
-void Stage::loadTextures(gfx::d3d12engine::Core& core) {
-    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45_col.dds", gfx::d3d12::TextureResource::Type::Texture);
-    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45_col_2.dds", gfx::d3d12::TextureResource::Type::Texture);
-    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45_col_3.dds", gfx::d3d12::TextureResource::Type::Texture);
-    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45_glass_nor_.dds", gfx::d3d12::TextureResource::Type::Texture);
-    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45_REF_1.dds", gfx::d3d12::TextureResource::Type::Texture);
-    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45-nor_1.dds", gfx::d3d12::TextureResource::Type::Texture);
-    core.loadStaticTexture(resourcePath/"models"/"E-45-Aircraft"/"textures"/"E-45-steel detail_2_col.dds", gfx::d3d12::TextureResource::Type::Texture);
+void loadTexture(gfx::d3d12engine::Core& core, AssetTexture key) {
+    for (const auto& texInfo : assetTextureInfo(key)) {
+        for (const auto& path : texInfo.paths) {
+            core.loadStaticTexture(path, texInfo.type);
+        }
+    }
+}
+
+void Stage::loadTextures(gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdList& cmdList) {
+    loadTexture(core, AssetTexture::Helicopter);
+}
+
+void loadModel(gfx::d3d12engine::Core& core, AssetModel key, Renderer& renderer) {
+    auto modelInfo = assetModelInfo(key);
+    core.loadRefModel(modelInfo.path, modelInfo.id);
+    renderer.layoutVBsPBR(core, modelInfo.id, 1);
+}
+
+void Stage::loadModels(gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdList& cmdList) {
+    loadModel(core, AssetModel::Helicopter, *pRenderer_);
+}
+
+void Stage::loadTerrains(gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdList& cmdList) {
+    terrain_.init(
+        "Terrain",
+        resourcePath/"terrains/Height-Map.png",
+        resourcePath/"terrains/Diffuse-Map.dds",
+        mu::Vec3(0.05f, 200.f, 0.05f),
+        core, mu::Vec3(0.f, -7.5f, 0.f)
+    );
+    for (const auto& subsetRows : terrain_.subsets()) {
+        for (const auto& subset : subsetRows) {
+            pRenderer_->layoutVBsPBRMacro(core, subset.refModelKey(), 1);
+        }
+    }
 }

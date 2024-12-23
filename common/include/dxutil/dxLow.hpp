@@ -167,7 +167,7 @@ public:
     }
 
     void present() {
-        DX_THROW_FAILED( get()->Present(1, 0) );
+        DX_THROW_FAILED( get()->Present(0, 0) );
     }
 
     std::size_t backBufCnt() const NOEXCEPT {

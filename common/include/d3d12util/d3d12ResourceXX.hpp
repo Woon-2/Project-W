@@ -56,6 +56,8 @@ private:
 
 class DefaultBuffer : public D3D12Resource {
 public:
+    DefaultBuffer() = default;
+
     DefaultBuffer(D3D12Device& device, std::size_t byteWidth,
         D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE
     );
@@ -254,7 +256,7 @@ public:
         Metallic,
         MetallicSmoothness,
         Emmisive,
-        AmbientOcllusion,
+        AmbientOcclusion,
         Size
     };
 
@@ -263,12 +265,12 @@ public:
         Roughness,
         Metallic,
         Emmisive,
-        AmbientOcllusion,
+        AmbientOcclusion,
         AlbedoConstantMapRatio,
         RoughnessConstantMapRatio,
         MetallicConstantMapRatio,
         EmmisiveConstantMapRatio,
-        AmbientOcllusionConstantMapRatio,
+        AmbientOcclusionConstantMapRatio,
         Size
     };
 
@@ -317,6 +319,10 @@ public:
         return *reinterpret_cast<const T*>(&constants_[etoi(type)]);
     }
 
+    bool contains(MapType type) const {
+        return mapRef(type).resourceIdx != Material::MapRef::invalid;
+    }
+    
 private:
     std::vector<MapRef> mapRefs_;
     std::vector<RawMemory<16>> constants_;
@@ -324,14 +330,16 @@ private:
 
 class VertexBuffer : public DefaultBuffer {
 public:
+    VertexBuffer() = default;
+
     VertexBuffer(D3D12Device& device, D3D12GfxCmdList& cmdList,
-        const void* pData, std::size_t byteWidth, std::size_t stride,
+        std::vector<std::uint8_t>&& pData, std::size_t byteWidth, std::size_t stride,
 		std::bitset<etoi(Vertex::Properties::SIZE)> attribs
     );
 
     VertexBuffer(D3D12Device& device, D3D12GfxCmdList& cmdList,
-        const gfx::VertexBuffer& vertexBuffer
-    ) : VertexBuffer(device, cmdList, vertexBuffer.rawMem(), vertexBuffer.byteWidth(),
+        gfx::VertexBuffer&& vertexBuffer
+    ) : VertexBuffer(device, cmdList, std::move(vertexBuffer).vertices(), vertexBuffer.byteWidth(),
         vertexBuffer.stride(), vertexBuffer.propFlag()
     ) {}
 
@@ -348,44 +356,53 @@ public:
 	}
 
 	const auto& attributes() const noexcept { return attribs_; }
+    const void* cpuMem() const noexcept { return cpuMem_.data(); }
+    void releaseCpuMem() noexcept { cpuMem_.clear(); cpuMem_.shrink_to_fit(); }
 
 private:
+    std::vector<std::uint8_t> cpuMem_;
 	std::bitset<etoi(Vertex::Properties::SIZE)> attribs_;
 };
 
 class IndexBuffer : public DefaultBuffer {
 public:
+    IndexBuffer()
+        : DefaultBuffer(), size_(0u), indexFormat_(DXGI_FORMAT_UNKNOWN) {}
+
     IndexBuffer(D3D12Device& device, D3D12GfxCmdList& cmdList,
-        const void* pData, std::size_t indexCnt
+        const void* pData, DXGI_FORMAT indexFormat, std::size_t indexCnt
+    );
+
+    IndexBuffer(D3D12Device& device, D3D12GfxCmdList& cmdList,
+        std::vector<std::uint8_t>&& pData, DXGI_FORMAT indexFormat, std::size_t indexCnt
     );
 
 	void bind(D3D12GfxCmdList& cmdList) const {
 		cmdList.get()->IASetIndexBuffer(&ibview());
 	}
 
+    const void* cpuMem() const noexcept { return cpuMem_.data(); }
+    void releaseCpuMem() noexcept { cpuMem_.clear(); cpuMem_.shrink_to_fit(); }
+
     std::size_t size() const noexcept {
         return size_;
     }
 
 private:
+    static std::size_t indexByteWidth(DXGI_FORMAT indexFormat);
+
+    std::vector<std::uint8_t> cpuMem_;
     std::size_t size_;
+    DXGI_FORMAT indexFormat_;
 };
-
-struct MaterialMapKey {
-    std::string state;
-    std::string renderPassID;
-};
-
-inline auto operator<=>(const MaterialMapKey& lhs, const MaterialMapKey& rhs) {
-    return std::tuple(lhs.state, lhs.renderPassID)
-        <=> std::tuple(rhs.state, rhs.renderPassID);
-}
 
 class Bitmap {
 public:
-    Bitmap() = default;
+    Bitmap()
+        : pBitmap_(nullptr), width_(0u), height_(0u), bits_(nullptr) {}
 
-	Bitmap( const std::filesystem::path& path ) {
+	Bitmap( const std::filesystem::path& path )
+        : pBitmap_(nullptr), width_(0u), height_(0u), bits_(nullptr) {
 		load( path );
 	}
 
@@ -417,85 +434,55 @@ private:
 	unsigned char* bits_;
 };
 
-class RefMesh {
+class RefMesh;
+
+class RefSubmesh {
 public:
-    static constexpr const char* defaultState = "default";
-
+    friend class RefMesh;
     friend class RefModel;
-    friend class Mesh;
+    friend class Submesh;
 
-    static RefMesh loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdList, FILE* pInFile);
-    static void loadMaterialsFromFile(D3D12Device& device, D3D12GfxCmdList& cmdList, FILE* pInFile, RefMesh& mesh);
+    RefSubmesh( RefMesh* parent = nullptr,
+        D3D12_PRIMITIVE_TOPOLOGY topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST
+    ) : parent_(parent), ib_(), material_(), topology_(topology) {}
 
-    const auto& vbs() const noexcept {
-        return vbs_;
+    RefSubmesh(const RefSubmesh& other) = delete;
+    RefSubmesh(RefSubmesh&& other) noexcept;
+    RefSubmesh& operator=(const RefSubmesh& other) = delete;
+    RefSubmesh& operator=(RefSubmesh&& other) noexcept;
+    ~RefSubmesh() = default;
+
+    const RefMesh* parent() const noexcept {
+        return parent_;
     }
 
-    const auto& ibs() const noexcept {
-        return ibs_;
+    const auto& ib() const noexcept {
+        return ib_;
     }
 
     D3D12_PRIMITIVE_TOPOLOGY topology() const noexcept {
         return topology_;
     }
 
-    void map( const MaterialMapKey& key, Material::MapType mapType,
-        const Material::MapRef& mapRef
-    ) {
-        materialMap_[key].addMapRef(mapType, mapRef);
+    Material& material() noexcept {
+        return material_;
     }
 
-    void map(const MaterialMapKey& key, Material::ConstantType constantType,
-        const float constant
-    ) {
-        materialMap_[key].addConstant(constantType, constant);
-    }
-
-    void MU_CALLCONV map(const MaterialMapKey& key,
-        Material::ConstantType constantType, mu::Vec3 constant
-    ) {
-        materialMap_[key].addConstant(constantType, constant);
-    }
-
-    void MU_CALLCONV map(const MaterialMapKey& key,
-        Material::ConstantType constantType, mu::Vec4 constant
-    ) {
-        materialMap_[key].addConstant(constantType, constant);
-    }
-
-    bool mapped(const MaterialMapKey& key) const {
-        return materialMap_.contains(key);
-    }
-
-    const Material::MapRef& mapRef(const MaterialMapKey& key, Material::MapType type) const {
-        return materialMap_.at(key).mapRef(type);
-    }
-
-    const RawMemory<16>& constant(const MaterialMapKey& key, Material::ConstantType type) const {
-        return materialMap_.at(key).constant(type);
+    const Material& material() const noexcept {
+        return material_;
     }
 
     template <class T>
-    const T& constant(const MaterialMapKey& key, Material::ConstantType type) const {
-        return materialMap_.at(key).constant<T>(type);
+    const T& constant(Material::ConstantType type) const {
+        return material_.constant<T>(type);
     }
 
-private:
-    auto& materialMap() noexcept {
-        return materialMap_;
-    }
+// private:
+    void draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt, std::size_t vbLayoutIdx) const;
 
-    const auto& materialMap() const noexcept {
-        return materialMap_;
-    }
-
-    void bind(D3D12GfxCmdList& cmdList, std::size_t ibIdx = 0) const;
-    void draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt, std::size_t ibIdx = 0) const;
-
-    std::string name_;
-    std::vector<VertexBuffer> vbs_;
-    std::vector<IndexBuffer> ibs_;
-    std::map<MaterialMapKey, Material> materialMap_;
+    RefMesh* parent_;
+    IndexBuffer ib_;
+    Material material_;
     D3D12_PRIMITIVE_TOPOLOGY topology_;
 };
 
@@ -506,11 +493,11 @@ public:
         friend class RefModel;
         Node(const RefModel* pRefModel = nullptr)
             : coord_(), name_(), meshes_(), children_(), pRefModel_(pRefModel) {}
-        ~Node() = default;
-        Node(const Node& other);
+        Node(const Node& other) = delete;
         Node(Node&& other) noexcept;
-        Node& operator=(const Node& other);
+        Node& operator=(const Node& other) = delete;
         Node& operator=(Node&& other) noexcept;
+        ~Node() = default;
 
         void addMesh(RefMesh&& mesh);
         void addChild(Node* child);
@@ -532,10 +519,6 @@ public:
     RefModel()
         : nodeStorage_(), textureMap_(), pRoot_(nullptr) {}
 
-    RefModel(const std::map<Material::MapRef, std::filesystem::path>& pathMap,
-        const StaticTextureStorage& sts
-    );
-
     ~RefModel() = default;
     RefModel(const RefModel& other) = delete;
     RefModel(RefModel&& other) noexcept;
@@ -552,6 +535,10 @@ public:
         D3D12Device& device, D3D12GfxCmdList& cmdList, const StaticTextureStorage& sts
     );
 
+    void arrangeVBs( D3D12Device& device, D3D12GfxCmdList& cmdList,
+        std::size_t layoutIdx, const std::vector<std::vector<Vertex::Properties>>& vbProps
+    );
+
     void map(const Material::MapRef& mapRef, const DescriptorGPU& descriptor) {
         textureMap_[mapRef] = descriptor;
     }
@@ -561,7 +548,7 @@ public:
     Node* root() noexcept { return pRoot_; }
     const Node* root() const noexcept { return pRoot_; }
 
-private:
+protected:
     static void loadNodesFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
         FILE* pInFile, Node& node, RefModel& model
     );
@@ -569,6 +556,53 @@ private:
     std::vector<Node> nodeStorage_;
     std::map<Material::MapRef, DescriptorGPU> textureMap_;
     Node* pRoot_;
+};
+
+class RefMesh {
+public:
+    friend class RefModel;
+
+    RefMesh(RefModel::Node* parent = nullptr)
+        : name_(), vbLayouts_(), submeshes_(), parent_(parent) {}
+
+    RefMesh(const RefMesh& other) = delete;
+    RefMesh(RefMesh&& other) noexcept;
+    RefMesh& operator=(const RefMesh& other) = delete;
+    RefMesh& operator=(RefMesh&& other) noexcept;
+    ~RefMesh() = default;
+
+    void arrangeVBs( D3D12Device& device, D3D12GfxCmdList& cmdList,
+        std::size_t layoutIdx, const std::vector<std::vector<Vertex::Properties>>& vbProps
+    );
+
+    const auto& vbs(std::size_t layoutIdx) const noexcept {
+        return vbLayouts_[layoutIdx];
+    }
+
+    std::size_t vbLayoutCnt() const noexcept {
+        return vbLayouts_.size();
+    }
+
+    const auto& submeshes() const noexcept {
+        return submeshes_;
+    }
+
+    const RefModel::Node* parent() const noexcept {
+        return parent_;
+    }
+    
+    static RefMesh loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdList, FILE* pInFile);
+    static void loadMaterialsFromFile(D3D12Device& device, D3D12GfxCmdList& cmdList, FILE* pInFile, RefMesh& mesh);
+
+// private:
+    static void loadMaterialFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
+        FILE* pInFile, RefMesh& mesh, std::size_t materialIdx
+    );
+
+    std::string name_;
+    std::vector< std::vector<VertexBuffer> > vbLayouts_;
+    std::vector<RefSubmesh> submeshes_;
+    RefModel::Node* parent_;
 };
 
 class RefModelStorage {
@@ -588,86 +622,63 @@ public:
         return map_.at(key);
     }
 
-    const RefModel& operator[](const ID& key) const {
-        return get(key);
+    RefModel& operator[](const ID& key) {
+        return map_[key];
     }
 
-    RefModel& operator[](const ID& key) {
-        return get(key);
+    bool contains(const ID& key) const {
+        return map_.contains(key);
     }
 
 private:
     std::map<ID, RefModel> map_;
 };
 
-class Mesh {
+class Mesh;
+
+class Submesh {
 public:
     friend class Shader;
+    friend class Mesh;
 
-    Mesh(const RefMesh& refMesh, const char* initialState)
-        : Mesh(refMesh, std::string_view(initialState)) {}
+    Submesh(Mesh* parent = nullptr, const RefSubmesh* pRefSubmesh = nullptr);
+    Submesh(const Submesh& other) = default;
+    Submesh(Submesh&& other) noexcept;
+    Submesh& operator=(const Submesh& other) = default;
+    Submesh& operator=(Submesh&& other) noexcept;
+    ~Submesh() = default;
 
-    Mesh(const RefMesh& refMesh, std::string_view initialState)
-        : Mesh(refMesh, std::string(initialState)) {}
-
-    Mesh(const RefMesh& refMesh, std::string&& initialState)
-        : state_(std::move(initialState)), materialTable_(), pRefMesh_(&refMesh),
-        pCurMaterial_(nullptr) {
-        for (auto& [key, material] : refMesh.materialMap()) {
-            materialTable_[key] = material;
-        }
+    const Mesh* parent() const noexcept {
+        return parent_;
     }
 
-    std::string_view state() const noexcept {
-        return state_;
+    void draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt, std::size_t vbLayoutIdx) const {
+        pRefSubmesh_->draw(cmdList, instanceCnt, vbLayoutIdx);
     }
 
-    void setState(const char* state) noexcept {
-        state_ = state;
+    Material& material() noexcept {
+        return material_;
     }
 
-    void setState(std::string&& state) noexcept {
-        state_ = std::move(state);
+    const Material& material() const noexcept {
+        return material_;
     }
 
-    void setState(std::string_view state) noexcept {
-        state_ = state;
+    void setMaterial(Material& material) noexcept {
+        material_ = material;
     }
 
-    bool hasMapped(const MaterialMapKey& key) const {
-        return materialTable_.contains(key);
-    }
-
-    void map(const MaterialMapKey& key, const Material& mat) {
-        materialTable_[key] = mat;
-    }
-
-    void map(const MaterialMapKey& key, const Material&& mat) {
-        materialTable_[key] = std::move(mat);
-    }
-
-    Material& material(const std::string& renderPass) {
-        return materialTable_.at(MaterialMapKey{ .state = state_, .renderPassID = renderPass });
-    }
-
-    const Material& material(const std::string& renderPass) const {
-        return materialTable_.at(MaterialMapKey{ .state = state_, .renderPassID = renderPass });
-    }
-
-    const RefMesh& refMesh() const noexcept {
-        return *pRefMesh_;
+    const RefSubmesh* refSubmesh() const noexcept {
+        return pRefSubmesh_;
     }
 
 private:
-    void draw(D3D12GfxCmdList& cmdList, std::size_t instanceCnt) const {
-        pRefMesh_->draw(cmdList, instanceCnt);
-    }
-
-    std::string state_;
-    std::map<MaterialMapKey, Material> materialTable_;
-    const RefMesh* pRefMesh_;
-    Material* pCurMaterial_;
+    Mesh* parent_;
+    const RefSubmesh* pRefSubmesh_;
+    Material material_;
 };
+
+class Mesh;
 
 class Model {
 public:
@@ -676,14 +687,14 @@ public:
         friend class Model;
         Node(const Model* pModel = nullptr)
             : coord_(), meshes_(), children_(), pModel_(pModel) {}
+        Node(const Node& other);
+        Node(Node&& other) noexcept;
+        Node& operator=(const Node& other);
+        Node& operator=(Node&& other) noexcept;
+        ~Node() = default;
+
         void addMesh(Mesh&& mesh);
-        void emplaceMesh(const RefMesh& refMesh, const char* initialState) {
-            emplaceMesh(refMesh, std::string_view(initialState));
-        }
-        void emplaceMesh(const RefMesh& refMesh, std::string&& initialState);
-        void emplaceMesh(const RefMesh& refMesh, std::string_view initialState) {
-            emplaceMesh(refMesh, std::string(initialState));
-        }
+        void emplaceMesh(const RefMesh& refMesh);
         void addChild(Node* child);
         auto& coord() noexcept { return coord_; }
         const auto& coord() const noexcept { return coord_; }
@@ -699,11 +710,7 @@ public:
 
     Model() = default;
     ~Model() = default;
-    Model(const RefModel& ref, const char* initialState)
-        : Model(ref, std::string_view(initialState)) {}
-    Model(const RefModel& ref, std::string_view initialState)
-        : Model(ref, std::string(initialState)) {}
-    Model(const RefModel& ref, std::string&& initialState);
+    Model(const RefModel& ref);
     Model(const Model& other);
     Model(Model&& other) noexcept;
     Model& operator=(const Model& other);
@@ -712,34 +719,54 @@ public:
     auto& nodes() noexcept { return nodeStorage_; }
     const auto& nodes() const noexcept { return nodeStorage_; }
 
-    std::string_view state() const noexcept { return state_; }
-    void setState(const char* state) noexcept {
-        setState(std::string_view(state));
-    }
-    void setState(std::string_view state) {
-        setState(std::string(state));
-    }
-    void setState(std::string&& state);
+    Node* root() noexcept { return pRoot_; }
+    const Node* root() const noexcept { return pRoot_; }
 
-    template <class StrLike>
-    void markRenderPass(StrLike&& renderPass) {
-        markedRenderPasses_.emplace_back(std::forward<StrLike>(renderPass));
+    void markRenderPass(const std::string& renderPass) {
+        markedRenderPasses_.push_back(renderPass);
     }
 
-    template <class StrLike>
-    bool willDrawOnRenderPass(StrLike&& renderPass) const {
-        if (markedRenderPasses_.empty()) {
-            return true;
-        }
-        return std::ranges::find(markedRenderPasses_, renderPass)
-            != markedRenderPasses_.end();
+    const auto& markedRenderPasses() const noexcept {
+        return markedRenderPasses_;
     }
 
 private:
-    std::vector<Node> nodeStorage_;
     std::vector<std::string> markedRenderPasses_;
-    std::string state_;
+    std::vector<Node> nodeStorage_;
     Node* pRoot_;
+};
+
+class Mesh {
+public:
+    friend class Model;
+
+    Mesh(const RefMesh& refMesh, Model::Node* parent = nullptr);
+    Mesh(const Mesh& other);
+    Mesh(Mesh&& other) noexcept;
+    Mesh& operator=(const Mesh& other);
+    Mesh& operator=(Mesh&& other) noexcept;
+    ~Mesh() = default;
+
+    const Model::Node* parent() const noexcept {
+        return parent_;
+    }
+
+    const RefMesh* refMesh() const noexcept {
+        return pRefMesh_;
+    }
+
+    auto& submeshes() noexcept {
+        return submeshes_;
+    }
+
+    const auto& submeshes() const noexcept {
+        return submeshes_;
+    }
+
+private:
+    Model::Node* parent_;
+    const RefMesh* pRefMesh_;
+    std::vector<Submesh> submeshes_;
 };
 
 }   // namespace gfx::d3d12
