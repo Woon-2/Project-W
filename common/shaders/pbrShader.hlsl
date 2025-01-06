@@ -7,6 +7,7 @@ cbuffer PerConfigurationData : register(b0) {
 
 struct PerInstanceData {
     float4x4 wvp;
+	float4x4 world;
     float4x4 wv;
     float3x3 wvNormal;
 };

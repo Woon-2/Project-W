@@ -8,7 +8,7 @@ public:
     Renderer(gfx::d3d12engine::Core& core);
 
     void init(gfx::d3d12engine::Scene& scene) override;
-    void render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& scene) override;
+    void render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& scene, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) override;
     void layoutVBsPBR( gfx::d3d12engine::Core& core,
         const gfx::d3d12::RefModelStorage::ID& key,
         std::size_t layoutIdx

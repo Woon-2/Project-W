@@ -336,6 +336,7 @@ struct PerConfigurationData0 {
 
 struct PerInstanceData0 {
 	dx::XMFLOAT4X4 wvp;
+	dx::XMFLOAT4X4 world;
 	dx::XMFLOAT4X4 wv;
 	dx::XMFLOAT3X3 wvNormal;
 };
@@ -393,7 +394,8 @@ struct PerDrawcallData0 {
 	PBRMaterial material;
 	std::uint32_t instanceBase;
 	std::uint32_t samplerIdx;
-	dx::XMUINT2 padding;
+	std::uint32_t shadowSamplerIdx;
+	std::uint32_t padding;
 };
 
 struct PerDrawcallData1 {
@@ -401,11 +403,21 @@ struct PerDrawcallData1 {
 	dx::XMFLOAT4 color;
 };
 
+struct PerDrawcallData2 {
+	std::uint32_t instanceBase;
+};
+
 struct PerFrameData0 {
 	dx::XMFLOAT3 globalAmbient;
 	float padding0;
+	dx::XMUINT4 shadowMapRef;
+	dx::XMFLOAT4X4 lightVP;
 	std::uint32_t lightCnt;
 	dx::XMUINT3 padding1;
+};
+
+struct PerFrameData1 {
+	dx::XMFLOAT4X4 lightVP;
 };
 
 }	// namespace gfx::d3d12::sr
@@ -527,6 +539,60 @@ private:
 
 	std::size_t maxInstanceCnt_;
 	std::size_t maxLightCnt_;
+	std::size_t maxDrawcallCnt_;
+};
+
+class ShaderShadowMap : public Shader {
+private:
+	std::size_t cbDrawcallDataSize_;
+
+public:
+	struct Config {
+		std::size_t maxInstanceCnt;
+		std::size_t maxDrawcallCnt;
+	};
+
+	ShaderShadowMap( D3D12Device& device, D3D12GfxCmdList& cmdList,
+		const RootSignature& root, const Config& config,
+		const Texture::Desc& shadowMapDesc,
+		InputLayout::Spec ilSpec = InputLayout::Spec::serial
+	);
+
+	RenderProtocol makeProtocol( D3D12Device& device, const RenderProtocol::Desc& desc) {
+		return RenderProtocol( device, *this,
+			selectBlobsStrong<ShaderBlob::Type::Vertex>(), desc
+		);
+	}
+
+	std::size_t maxInstanceCnt() const noexcept {
+		return maxInstanceCnt_;
+	}
+
+	std::size_t maxDrawcallCnt() const noexcept {
+		return maxDrawcallCnt_;
+	}
+
+	void bindRootParams(D3D12GfxCmdList& cmdList) override;
+	void bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCmdList& cmdList);
+
+	void loadBlobs() override;
+	void releaseBlobs() override;
+
+	UploadBuffer perFrameData_;
+	UploadBuffer perDrawcallData_;
+	UploadBuffer perInstanceData_;
+
+	std::size_t cbDrawcallDataSize() const noexcept {
+		return cbDrawcallDataSize_;
+	}
+
+private:
+	static InputLayout makeInputLayout(InputLayout::Spec ilSpec);
+	static InputLayout makeInputLayoutSerial();
+	static InputLayout makeInputLayoutSeparated();
+
+	Texture shadowMap_;
+	std::size_t maxInstanceCnt_;
 	std::size_t maxDrawcallCnt_;
 };
 

@@ -597,6 +597,14 @@ public:
 		) );
 	}
 
+	DescriptorCPU& curRtv() NOEXCEPT {
+		return rtvs_[backBufIdx_];
+	}
+
+	DescriptorCPU& curDsv() NOEXCEPT {
+		return dsv_;
+	}
+
 	void setPresent(D3D12GfxCmdList& cmdList) {
 		backBuffers_[backBufIdx_].commitState(cmdList, D3D12_RESOURCE_STATE_PRESENT);
 	}

@@ -24,7 +24,7 @@ class IRenderer {
 public:
     virtual ~IRenderer() = default;
     virtual void init(class Scene&) = 0;
-    virtual void render(class Core&, Scene&) = 0;
+    virtual void render(class Core&, Scene&, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) = 0;
 };
 
 class Core {

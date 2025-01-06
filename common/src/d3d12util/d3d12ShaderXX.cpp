@@ -267,14 +267,14 @@ UnifiedRootImpl::UnifiedRootImpl(D3D12Device& device)
 		/* .ShaderVisibility = */ D3D12_SHADER_VISIBILITY_ALL
 	);
 
-	// trilinear comparison
+	// bilinear comparison
 	samplers.emplace_back(
-		/* .Filter = */ D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR,
+		/* .Filter = */ D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT,
 		/* .AddressU = */ D3D12_TEXTURE_ADDRESS_MODE_BORDER,
 		/* .AddressV = */ D3D12_TEXTURE_ADDRESS_MODE_BORDER,
 		/* .AddressW = */ D3D12_TEXTURE_ADDRESS_MODE_BORDER,
 		/* .MipLODBias = */ 0.f,
-		/* .MaxAnisotropy = */ 16u,
+		/* .MaxAnisotropy = */ 0u,
 		/* .ComparisonFunc = */ D3D12_COMPARISON_FUNC_LESS_EQUAL,
 		/* .BorderColor = */ D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE,
 		/* .MinLOD = */ 0.f,
@@ -587,6 +587,95 @@ InputLayout ShaderPBRIlluminationTerrain::makeInputLayoutSeparated() {
 				InputLayout::Elem{ .semanticName = "TEXCOORD", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32_FLOAT },
 			},
 			.attributes = (1ull << etoi(Vertex::Properties::TexCoord2D0))
+		}
+	} );
+}
+
+/*
+std::uint32_t width;
+        std::uint32_t height;
+        std::uint16_t mipLevels;
+        DXGI_FORMAT format;
+        DXGI_SAMPLE_DESC sampleDesc;
+        D3D12_RESOURCE_FLAGS flags;
+*/
+
+ShaderShadowMap::ShaderShadowMap( D3D12Device& device, D3D12GfxCmdList& cmdList, 
+	const RootSignature& root, const Config& config,
+	const Texture::Desc& shadowMapDesc,
+	InputLayout::Spec ilSpec
+) : Shader(root, makeInputLayout(ilSpec)),
+	cbDrawcallDataSize_( calcConstantBufferSize(sizeof(sr::PerDrawcallData2)) ),
+	perFrameData_(device, sizeof(sr::PerFrameData1)),
+	perDrawcallData_(device, cbDrawcallDataSize_ * config.maxDrawcallCnt),
+	perInstanceData_(device, sizeof(sr::PerInstanceData0) * config.maxInstanceCnt),
+	/* shadowMap_(device, cmdList, shadowMapDesc), */	// get texture range!
+	maxInstanceCnt_(config.maxInstanceCnt), maxDrawcallCnt_(config.maxDrawcallCnt) {
+	perFrameData_.pullGpuAddr();
+	perDrawcallData_.pullGpuAddr();
+	perInstanceData_.pullGpuAddr();
+}
+
+void ShaderShadowMap::bindRootParams(D3D12GfxCmdList& cmdList) {
+	auto& root = UnifiedRoot::get();
+
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		root.params[ UnifiedRoot::ParamIndices::b2 ],
+		perFrameData_.gpuAddr()
+	);
+	cmdList.get()->SetGraphicsRootShaderResourceView(
+		root.params[ UnifiedRoot::ParamIndices::t0 ],
+		perInstanceData_.gpuAddr()
+	);
+}
+
+void ShaderShadowMap::bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCmdList& cmdList) {
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		UnifiedRoot::get().params[ UnifiedRoot::ParamIndices::b1 ],
+		perDrawcallData_.gpuAddr() + cbDrawcallDataSize() * drawcallIdx
+	);
+}
+
+void ShaderShadowMap::loadBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
+		shaderPath/"shadowMap.hlsl", inputLayout(), nullptr,
+		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
+	};
+}
+
+void ShaderShadowMap::releaseBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)].reset();
+}
+
+InputLayout ShaderShadowMap::makeInputLayout(InputLayout::Spec ilSpec) {
+	switch (ilSpec) {
+	case InputLayout::Spec::serial:
+		return makeInputLayoutSerial();
+	case InputLayout::Spec::separated:
+		return makeInputLayoutSeparated();
+	default:
+		throw GFX_EXCEPT( "Invalid input layout specification." );
+	}
+}
+
+InputLayout ShaderShadowMap::makeInputLayoutSerial() {
+	return InputLayout( std::vector<InputLayout::Slot>{
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "POSITION", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT }
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Position3D))
+		}
+	} );
+}
+
+InputLayout ShaderShadowMap::makeInputLayoutSeparated() {
+	return InputLayout( std::vector<InputLayout::Slot>{
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "POSITION", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT }
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Position3D))
 		}
 	} );
 }

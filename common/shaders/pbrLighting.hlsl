@@ -47,12 +47,15 @@ cbuffer PerDrawcallData : register(b1) {
     Material material;
     uint instanceBase;
     uint samplerIdx;
-    uint2 padding;
+    uint shadowSamplerIdx;
+    uint padding;
 };
 
 cbuffer PerFrameData : register(b2) {
     float3 globalAmbient;
     float padding0;
+    uint4 shadowMapRef;
+    float4x4 lightVP;
     uint lightCnt;
     uint3 padding1;
 };

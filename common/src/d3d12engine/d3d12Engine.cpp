@@ -42,7 +42,7 @@ void Core::render(IRenderer& renderer, Scene& scene) {
     window_.setRenderTarget(cmdList_);
     window_.clearRenderTarget(cmdList_);
     window_.clearDepthStencil(cmdList_);
-    renderer.render(*this, scene);
+    renderer.render(*this, scene, window_.curRtv(), window_.curDsv());
     window_.setPresent(cmdList_);
     cmdList_.close();
     cmdQueue_.execute(cmdList_);

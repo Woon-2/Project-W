@@ -25,4 +25,15 @@ float4 sampleFromMapRef(uint4 mapRef, float2 tex, uint samIdx) {
     }
 }
 
+float sampleCmpFromMapRef(uint4 mapRef, float2 tex, float val, uint samIdx) {
+    if (mapRef.x == uint(-1)) {
+        return 1.f;
+    }
+    if (mapRef.x == MAP_TYPE_TEXTURE2D) {
+        return gTex2Ds[mapRef.y].SampleCmpLevelZero(gComparisonSamplers[samIdx], tex, val);
+    } else if (mapRef.x == MAP_TYPE_TEXTUREARRAY) {
+        return gTex2DArrays[mapRef.y].SampleCmpLevelZero(gComparisonSamplers[samIdx], float3(tex, mapRef.z), val);
+    }
+}
+
 #endif // __bindless_hlsl__

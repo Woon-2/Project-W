@@ -131,9 +131,9 @@ public:
     RenderPass(std::string&& id) : renderPassID_(std::move(id)) {}
     virtual ~RenderPass() = default;
 
-    virtual void preRender(D3D12GfxCmdList& cmdList) = 0;
-    virtual void render(D3D12GfxCmdList& cmdList) = 0;
-    virtual void postRender(D3D12GfxCmdList& cmdList) = 0;
+    virtual void preRender(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) = 0;
+    virtual void render(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) = 0;
+    virtual void postRender(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) = 0;
 
     void setRenderPassID(const std::string& renderPassID) {
         renderPassID_ = renderPassID;
@@ -162,9 +162,9 @@ public:
         return viewport_;
     }
 
-    void preRender(D3D12GfxCmdList& cmdList) override;
-    void render(D3D12GfxCmdList& cmdList) override;
-    void postRender(D3D12GfxCmdList& cmdList) override;
+    void preRender(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) override;
+    void render(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) override;
+    void postRender(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) override;
 
     void trackModel(Model* pModel);
     void setCamera(const Camera* pCamera) NOEXCEPT {
@@ -205,9 +205,9 @@ public:
         return viewport_;
     }
 
-    void preRender(D3D12GfxCmdList& cmdList) override;
-    void render(D3D12GfxCmdList& cmdList) override;
-    void postRender(D3D12GfxCmdList& cmdList) override;
+    void preRender(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) override;
+    void render(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) override;
+    void postRender(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) override;
 
     void trackModel(Model* pModel);
     void setCamera(const Camera* pCamera) NOEXCEPT {
@@ -230,6 +230,47 @@ private:
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
     std::vector<const sr::Light*> lights_;
+    std::vector< std::tuple<Submesh*, VBLayoutIdx, mu::Mat4x4> > batch_;
+    const Camera* pCamera_;
+};
+
+class ShadowMap : public gfx::d3d12::RenderPass {
+public:
+    static constexpr const char* id = "ShadowMap";
+
+    ShadowMap( D3D12Device& device, ShaderShadowMap& shader,
+        const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
+    );
+
+    void setViewport(const D3D12_VIEWPORT& vp);
+
+    const D3D12_VIEWPORT& viewport() const NOEXCEPT {
+        return viewport_;
+    }
+
+    void preRender(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) override;
+    void render(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) override;
+    void postRender(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) override;
+
+    void trackModel(Model* pModel);
+    void setCamera(const Camera* pCamera) NOEXCEPT {
+        pCamera_ = pCamera;
+    }
+    void setLight(const sr::Light* pLight);
+
+private:
+    ShaderShadowMap& shader() noexcept {
+        return static_cast<ShaderShadowMap&>(protocol_.shader());
+    }
+    const ShaderShadowMap& shader() const noexcept {
+        return static_cast<const ShaderShadowMap&>(protocol_.shader());
+    }
+
+    static RenderProtocol::Desc makeDesc();
+
+    D3D12_VIEWPORT viewport_;
+    RenderProtocol protocol_;
+    const sr::Light* pLight_;
     std::vector< std::tuple<Submesh*, VBLayoutIdx, mu::Mat4x4> > batch_;
     const Camera* pCamera_;
 };
