@@ -12,7 +12,7 @@
 
 class LightEntity : public ecs::Entity {
 public:
-    void init(const gfx::d3d12::sr::Light& lightDesc) {
+    void init(const gfx::d3d12::WorldLight& lightDesc) {
         createComponent<gfx::d3d12engine::Light>(lightDesc);
     }
 };

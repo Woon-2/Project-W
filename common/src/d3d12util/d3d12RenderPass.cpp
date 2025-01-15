@@ -63,8 +63,8 @@ std::string RenderTargets::sSpecifierStrings[etoi(RenderTargets::Specifier::SIZE
 ShadowMaterial::ShadowMaterial( Texture& mapResource,
     const DescriptorCPU& dsv, const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
     const DescriptorGPU& srv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
-) : dsvDesc_(dsvDesc), srvDesc_(srvDesc), mapResource_(mapResource),
-    srv_(srv), dsv_(dsv) {}
+) : dsvDesc_(dsvDesc), srvDesc_(srvDesc), srv_(srv), dsv_(dsv),
+    mapResource_(mapResource) {}
 
 void ShadowMaterial::onPush(D3D12GfxCmdList& cmdList) {
     mapResource_.commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
@@ -82,6 +82,22 @@ void ShadowMaterial::onClear(D3D12GfxCmdList& cmdList) {
     cmdList.get()->ClearDepthStencilView(
         dsv_.cpuHandle(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0u, nullptr
     );
+}
+
+sr::Light WorldLight::toViewLight(const Camera& camera) const {
+    const auto view = camera.view();
+
+    return sr::Light{
+        .color = color,
+        .falloff = falloff,
+        .posV = mu::Vec3( mu::Vec4(pos.x, pos.y, pos.z, 1.0f) * view ).getXmf(),
+        .cosTheta = cosTheta,
+        .dirV = mu::Vec3( mu::Vec4(dir.x, dir.y, dir.z, 0.0f) * view ).getXmf(),
+        .cosPhi = cosPhi,
+        .atten = atten,
+        .intensity = intensity,
+        .type = type
+    };
 }
 
 namespace rp {
@@ -189,7 +205,7 @@ void PBRIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderT
     lightBuffer.reserve( lights_.size() );
 
     for (const auto& light : lights_) {
-        lightBuffer.emplace_back( *light );
+        lightBuffer.emplace_back( light->toViewLight(*pCamera_) );
 
         if (lightBuffer.size() == shader().maxLightCnt()) [[unlikely]] {
             break;
@@ -377,7 +393,7 @@ void PBRIlluminationTerrain::preRender(D3D12GfxCmdList& cmdList, RenderTargets& 
     lightBuffer.reserve( lights_.size() );
 
     for (const auto& light : lights_) {
-        lightBuffer.emplace_back( *light );
+        lightBuffer.emplace_back( light->toViewLight(*pCamera_) );
 
         if (lightBuffer.size() == shader().maxLightCnt()) [[unlikely]] {
             break;
@@ -467,9 +483,25 @@ void PBRIlluminationTerrain::trackModel(Model* pModel) {
 }
 
 
-ShadowMap::ShadowMap( D3D12Device& device,
-    ShaderShadowMap& shader, const D3D12_VIEWPORT& vp
+ShadowMap::ShadowMap( D3D12Device& device, ShaderShadowMap& shader,
+    DescriptorRange<DescriptorHeapCPU>& dsvRange, const D3D12_VIEWPORT& vp
 ) : gfx::d3d12::RenderPass(id),
+    shadowMapSrvDesc_{
+        .Format = shader.shadowMap_.desc().Format,
+        .ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
+        .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+        .Texture2D = D3D12_TEX2D_SRV{ .MipLevels = 1u }
+    },
+    shadowMapDsvDesc_{
+        .Format = convertToDepthFormat( shader.shadowMap_.desc().Format ),
+        .ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D,
+        .Flags = D3D12_DSV_FLAG_NONE
+    },
+    idxShadowMapDsv_( shader.shadowMap_.makeDsv( shadowMapDsvDesc_, device, dsvRange.alloc() ) ),
+    shadowMaterial_( shader.shadowMap_, shader.shadowMap_.view( idxShadowMapDsv_ ),
+        shadowMapDsvDesc_, shader.shadowMap_.view( shader.shadowMap_.idxSrv ),
+        shadowMapSrvDesc_
+    ),
     viewport_(vp), protocol_( shader.makeProtocol( device,
         RenderProtocol::Desc{ makeDesc() }
     ) ), pLight_(nullptr), batch_(), pCamera_(nullptr) {}
@@ -520,12 +552,12 @@ void ShadowMap::setViewport(const D3D12_VIEWPORT& vp) {
     viewport_ = vp;
 }
 
-
 void ShadowMap::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
     cmdList.get()->SetPipelineState( protocol_.get().Get() );
     cmdList.get()->RSSetViewports(1u, &viewport_);
     auto scissorRect = D3D12_RECT{ 0, 0, static_cast<LONG>(viewport_.Width), static_cast<LONG>(viewport_.Height) };
     cmdList.get()->RSSetScissorRects(1u, &scissorRect);
+    renderTargets.pushTarget(cmdList, RenderTargets::Specifier::Shadow, &shadowMaterial_);
 
     std::ranges::sort( batch_, std::less<>{}, [this](const auto& tuple) {
         return std::tuple(
@@ -534,18 +566,13 @@ void ShadowMap::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets
         );
     } );
 
-    auto pids = std::vector<sr::PerInstanceData0>();
+    auto pids = std::vector<sr::PerInstanceData2>();
     pids.reserve( shader().maxInstanceCnt() );
 
     for (auto& [pSubmesh, vbLayoutIdx, xform] : batch_) {
         xform = pSubmesh->parent()->parent()->coord().xform();
         pids.emplace_back(
-            /* .wvp = */ mu::transpose( xform * pCamera_->view() * pCamera_->proj() ).getXmf(),
-            /* .world = */ mu::transpose( xform ).getXmf(),
-            /* .wv = */ mu::transpose( xform * pCamera_->view() ).getXmf(),
-            /* .wvNormal = */ dx::convertMat<dx::XMFLOAT3X3>(
-                mu::inverse(xform * pCamera_->view()).get()
-            )
+            /* .world = */ mu::transpose( xform ).getXmf()
         );
 
         if (pids.size() == shader().maxInstanceCnt()) [[unlikely]] {
@@ -553,11 +580,12 @@ void ShadowMap::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets
         }
     }
 
-    shader().perInstanceData_.stage(pids.data(), pids.size() * sizeof(sr::PerInstanceData0));
+    shader().perInstanceData_.stage(pids.data(), pids.size() * sizeof(sr::PerInstanceData2));
 }
 
 void ShadowMap::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
-    // cmdList.get()->OMSetRenderTargets(0u, nullptr, true, &dsv.cpuHandle());
+    renderTargets.bind(cmdList, RenderTargets::Specifier::Shadow);
+    renderTargets.clear(cmdList, RenderTargets::Specifier::Shadow);
 
     auto first = batch_.begin();
     auto accDrawcallCnt = 0u;
@@ -624,11 +652,11 @@ void ShadowMap::trackModel(Model* pModel) {
     }
 }
 
-void ShadowMap::setLight(const sr::Light* pLight) {
+void ShadowMap::setLight(const WorldLight* pLight) {
     pLight_ = pLight;
 
-    const auto lightPos = mu::Vec3( DirectX::XMLoadFloat3(&pLight_->posV) );
-    const auto lightDir = mu::Vec3( DirectX::XMLoadFloat3(&pLight_->dirV) );
+    const auto lightPos = mu::Vec3( DirectX::XMLoadFloat3(&pLight_->pos) );
+    const auto lightDir = mu::Vec3( DirectX::XMLoadFloat3(&pLight_->dir) );
 
     const auto lightView = mu::lookAt( lightPos, lightPos + lightDir, mu::Vec3( 0.f, 1.f, 0.f ) );
     const auto lightProj = mu::ortho( -10.f, 10.f, -10.f, 10.f, 0.1f, 100.f );

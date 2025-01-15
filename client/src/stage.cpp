@@ -44,10 +44,10 @@ void Stage::initEntities(gfx::d3d12engine::Core& core) {
     player_.init(core);
     player_.addCamera(mu::Vec3(0.f, 2.8f, -6.5f), 1.f, pSystems_->coordRoot);
 
-    directionalLight_.init(gfx::d3d12::sr::Light{
+    directionalLight_.init(gfx::d3d12::WorldLight{
         .color = mu::Vec3(1.f, 1.f, 1.f).getXmf(),
-        .dirV = mu::NVec3(0.f, -1.f, 1.f).getXmf(),
-        .intensity = 10.f,
+        .dir = mu::NVec3(0.f, -1.f, 1.f).getXmf(),
+        .intensity = 1.5f,
         .type = etoi(gfx::d3d12::sr::Light::Type::Directional)
     });
 

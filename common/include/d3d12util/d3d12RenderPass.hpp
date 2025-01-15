@@ -122,8 +122,10 @@ private:
     FocusMode focusMode_;
 };
 
-// render target classes are designed to have maximum lifetime of a frame,
-// and should never own any resources.
+// Render targets' low level resources should reside in shaders or window,
+// and below render target classes should not own them.
+// By doing so, we can avoid the need to manage the resources' lifetimes
+// in render target classes.
 class IRenderTarget {
 public:
     friend class RenderTargets;
@@ -204,9 +206,26 @@ private:
 
     D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc_;
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc_;
-    Texture& mapResource_;
     const DescriptorGPU& srv_;
     const DescriptorCPU& dsv_;
+    Texture& mapResource_;
+};
+
+struct WorldLight {
+    using Type = sr::Light::Type;
+
+    sr::Light toViewLight(const Camera& camera) const;
+
+    dx::XMFLOAT3 color;
+    float falloff;
+    dx::XMFLOAT3 pos;
+    float cosTheta;
+    dx::XMFLOAT3 dir;
+    float cosPhi;
+    dx::XMFLOAT3 atten;
+    float intensity;
+    int type;
+    int padding[3];
 };
 
 class RenderPass {
@@ -258,7 +277,7 @@ public:
     void setCamera(const Camera* pCamera) NOEXCEPT {
         pCamera_ = pCamera;
     }
-    void addLight(const sr::Light* pLight) NOEXCEPT {
+    void addLight(const WorldLight* pLight) NOEXCEPT {
         lights_.push_back(pLight);
     }
 
@@ -274,7 +293,7 @@ private:
 
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
-    std::vector<const sr::Light*> lights_;
+    std::vector<const WorldLight*> lights_;
     std::vector< std::tuple<Submesh*, VBLayoutIdx, mu::Mat4x4> > batch_;
     const Camera* pCamera_;
 };
@@ -301,7 +320,7 @@ public:
     void setCamera(const Camera* pCamera) NOEXCEPT {
         pCamera_ = pCamera;
     }
-    void addLight(const sr::Light* pLight) NOEXCEPT {
+    void addLight(const WorldLight* pLight) NOEXCEPT {
         lights_.push_back(pLight);
     }
 
@@ -317,7 +336,7 @@ private:
 
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
-    std::vector<const sr::Light*> lights_;
+    std::vector<const WorldLight*> lights_;
     std::vector< std::tuple<Submesh*, VBLayoutIdx, mu::Mat4x4> > batch_;
     const Camera* pCamera_;
 };
@@ -327,6 +346,7 @@ public:
     static constexpr const char* id = "ShadowMap";
 
     ShadowMap( D3D12Device& device, ShaderShadowMap& shader,
+        DescriptorRange<DescriptorHeapCPU>& dsvRange,
         const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
     );
 
@@ -344,7 +364,7 @@ public:
     void setCamera(const Camera* pCamera) NOEXCEPT {
         pCamera_ = pCamera;
     }
-    void setLight(const sr::Light* pLight);
+    void setLight(const WorldLight* pLight);
 
 private:
     ShaderShadowMap& shader() noexcept {
@@ -356,9 +376,13 @@ private:
 
     static RenderProtocol::Desc makeDesc();
 
+    D3D12_SHADER_RESOURCE_VIEW_DESC shadowMapSrvDesc_;
+    D3D12_DEPTH_STENCIL_VIEW_DESC shadowMapDsvDesc_;
+    std::size_t idxShadowMapDsv_;
+    ShadowMaterial shadowMaterial_;
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
-    const sr::Light* pLight_;
+    const WorldLight* pLight_;
     std::vector< std::tuple<Submesh*, VBLayoutIdx, mu::Mat4x4> > batch_;
     const Camera* pCamera_;
 };
