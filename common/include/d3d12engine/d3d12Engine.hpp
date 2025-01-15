@@ -17,7 +17,7 @@ namespace gfx {
 namespace d3d12engine {
 
 inline constexpr auto initialRtvHeapSize = 3u;
-inline constexpr auto initialDsvHeapSize = 1u;
+inline constexpr auto initialDsvHeapSize = 11u;
 inline constexpr auto initialCbvSrvUavHeapSize = 1000u;
 
 class IRenderer {
@@ -87,6 +87,7 @@ public:
         window_.setWindowed(&device_);
     }
 
+    d3d12::DescriptorRanges& descRanges() NOEXCEPT { return descRanges_; }
     const d3d12::DescriptorRanges& descRanges() const NOEXCEPT { return descRanges_; }
 
 
@@ -184,14 +185,14 @@ private:
 class Light : public ecs::Component {
 public:
     ENABLE_COMPONENT(Light);
-    Light(const ecs::Entity& entity, const d3d12::sr::Light& light)
+    Light(const ecs::Entity& entity, const d3d12::WorldLight& light)
         : ecs::Component(entity), light_(light) {}
 
-    d3d12::sr::Light& get() NOEXCEPT { return light_; }
-    const d3d12::sr::Light& get() const NOEXCEPT { return light_; }
+    d3d12::WorldLight& get() NOEXCEPT { return light_; }
+    const d3d12::WorldLight& get() const NOEXCEPT { return light_; }
 
 private:
-    d3d12::sr::Light light_;
+    d3d12::WorldLight light_;
 };
 
 class Scene;
