@@ -367,6 +367,35 @@ void PBRIlluminationTerrain::update(Scene& scene) {
     }
 }
 
+void ShadowMap::init(Scene& scene) {
+    for (auto& pModel : models(scene)) {
+        if (pModel) {
+            trackModel(&pModel->get());
+        }
+    }
+    if (!cameras(scene).empty()) {
+        auto& pCamera = cameras(scene).front();
+        if (pCamera) {
+            setCamera(&cameras(scene).front()->get());
+        }
+    }
+    if (lights(scene).empty()) {
+        throw GFX_EXCEPT("No light found");
+    }
+    setLight( &lights(scene).front()->get() );
+}
+
+void ShadowMap::update(Scene& scene) {
+    for (auto& entityID : reservedEntities(scene)) {
+        if ( auto pModel = Model::at(entityID) ) {
+            trackModel(&pModel->get());
+        }
+        if ( auto pCamera = Camera::at(entityID) ) {
+            setCamera(&pCamera->get());
+        }
+    }
+}
+
 }   // namespace gfx::d3d12engine::rp
 
 }   // namespace gfx::d3d12engine

@@ -347,6 +347,10 @@ struct PerInstanceData1 {
 	dx::XMFLOAT3X3 wvNormal;
 };
 
+struct PerInstanceData2 {
+	dx::XMFLOAT4X4 world;
+};
+
 struct Light {
 	enum class Type {
 		Point,
@@ -405,6 +409,7 @@ struct PerDrawcallData1 {
 
 struct PerDrawcallData2 {
 	std::uint32_t instanceBase;
+	dx::XMUINT3 padding;
 };
 
 struct PerFrameData0 {
@@ -582,6 +587,7 @@ public:
 	UploadBuffer perFrameData_;
 	UploadBuffer perDrawcallData_;
 	UploadBuffer perInstanceData_;
+	Texture shadowMap_;
 
 	std::size_t cbDrawcallDataSize() const noexcept {
 		return cbDrawcallDataSize_;
@@ -592,7 +598,6 @@ private:
 	static InputLayout makeInputLayoutSerial();
 	static InputLayout makeInputLayoutSeparated();
 
-	Texture shadowMap_;
 	std::size_t maxInstanceCnt_;
 	std::size_t maxDrawcallCnt_;
 };

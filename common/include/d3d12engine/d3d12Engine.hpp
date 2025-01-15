@@ -87,6 +87,9 @@ public:
         window_.setWindowed(&device_);
     }
 
+    const d3d12::DescriptorRanges& descRanges() const NOEXCEPT { return descRanges_; }
+
+
 private:
     d3d12::StaticTextureStorage staticTexStorage_;
     d3d12::RefModelStorage refModelStorage_;
@@ -295,6 +298,14 @@ public:
 class PBRIlluminationTerrain : public IRenderPass, public d3d12::rp::PBRIlluminationTerrain {
 public:
     using d3d12::rp::PBRIlluminationTerrain::PBRIlluminationTerrain;
+
+    void init(Scene& scene) override;
+    void update(Scene& scene) override;
+};
+
+class ShadowMap : public IRenderPass, public d3d12::rp::ShadowMap {
+public:
+    using d3d12::rp::ShadowMap::ShadowMap;
 
     void init(Scene& scene) override;
     void update(Scene& scene) override;

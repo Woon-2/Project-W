@@ -496,7 +496,10 @@ RenderProtocol::Desc ShadowMap::makeDesc() {
         .rasterizerState = D3D12_RASTERIZER_DESC{
             .FillMode = D3D12_FILL_MODE_SOLID,
             .CullMode = D3D12_CULL_MODE_BACK,
-            .DepthClipEnable = true,
+            .DepthBias = 100000,
+            .DepthBiasClamp = 0.0f,
+            .SlopeScaledDepthBias = 1.0f,
+            .DepthClipEnable = true
         },
         .depthStencilState = D3D12_DEPTH_STENCIL_DESC{
             .DepthEnable = true,

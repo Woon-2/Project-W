@@ -609,7 +609,7 @@ ShaderShadowMap::ShaderShadowMap( D3D12Device& device, D3D12GfxCmdList& cmdList,
 	cbDrawcallDataSize_( calcConstantBufferSize(sizeof(sr::PerDrawcallData2)) ),
 	perFrameData_(device, sizeof(sr::PerFrameData1)),
 	perDrawcallData_(device, cbDrawcallDataSize_ * config.maxDrawcallCnt),
-	perInstanceData_(device, sizeof(sr::PerInstanceData0) * config.maxInstanceCnt),
+	perInstanceData_(device, sizeof(sr::PerInstanceData2) * config.maxInstanceCnt),
 	shadowMap_(device, tex2dRange, shadowMapDesc, D3D12_HEAP_TYPE_DEFAULT),
 	maxInstanceCnt_(config.maxInstanceCnt), maxDrawcallCnt_(config.maxDrawcallCnt) {
 	perFrameData_.pullGpuAddr();
