@@ -362,6 +362,10 @@ void D3D12Resource::makeDefIbv(D3D12Device& device) {
 }
 
 void D3D12Resource::commitState(D3D12GfxCmdList& cmdList, D3D12_RESOURCE_STATES resState) {
+	if (state_ == resState) {
+		return;
+	}
+
 	auto bar = D3D12_RESOURCE_BARRIER{
 		.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
 		.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
