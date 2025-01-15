@@ -591,16 +591,7 @@ InputLayout ShaderPBRIlluminationTerrain::makeInputLayoutSeparated() {
 	} );
 }
 
-/*
-std::uint32_t width;
-        std::uint32_t height;
-        std::uint16_t mipLevels;
-        DXGI_FORMAT format;
-        DXGI_SAMPLE_DESC sampleDesc;
-        D3D12_RESOURCE_FLAGS flags;
-*/
-
-ShaderShadowMap::ShaderShadowMap( D3D12Device& device, D3D12GfxCmdList& cmdList, 
+ShaderShadowMap::ShaderShadowMap( D3D12Device& device, 
 	const RootSignature& root, const Config& config,
 	const Texture::Desc& shadowMapDesc,
 	DescriptorRange<DescriptorHeapGPU>& tex2dRange,
