@@ -126,7 +126,10 @@ private:
 // and should never own any resources.
 class IRenderTarget {
 public:
+    friend class RenderTargets;
     virtual ~IRenderTarget() = default;
+
+private:
     virtual void onPush(D3D12GfxCmdList& cmdList) = 0;
     virtual void onPop(D3D12GfxCmdList& cmdList) = 0;
     virtual void onBind(D3D12GfxCmdList& cmdList) = 0;
@@ -167,6 +170,7 @@ public:
     MainRenderTarget(TWindow& window)
         : window_(window) {}
 
+private:
     void onPush(D3D12GfxCmdList& cmdList) override {}
 
     void onBind(D3D12GfxCmdList& cmdList) override {
@@ -182,7 +186,6 @@ public:
         window_.clearDepthStencil(cmdList);
     }
 
-private:
     TWindow& window_;
 };
 
@@ -193,12 +196,12 @@ public:
         const DescriptorGPU& srv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
     );
 
+private:
     void onPush(D3D12GfxCmdList& cmdList) override;
     void onBind(D3D12GfxCmdList& cmdList) override;
     void onPop(D3D12GfxCmdList& cmdList) override;
     void onClear(D3D12GfxCmdList& cmdList) override;
 
-private:
     D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc_;
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc_;
     Texture& mapResource_;
