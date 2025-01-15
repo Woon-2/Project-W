@@ -10,6 +10,7 @@
 #include <string_view>
 #include <vector>
 #include <map>
+#include <type_traits>
 
 namespace gfx {
 
@@ -119,6 +120,63 @@ private:
     mu::Vec3 repFwd_;
     mu::Vec3 focus_;
     FocusMode focusMode_;
+};
+
+// render target classes are designed to have maximum lifetime of a frame,
+// and should never own any resources.
+class IRenderTarget {
+public:
+    virtual ~IRenderTarget() = default;
+    virtual void onPush(D3D12GfxCmdList& cmdList) = 0;
+    virtual void onPop(D3D12GfxCmdList& cmdList) = 0;
+    virtual void onBind(D3D12GfxCmdList& cmdList) = 0;
+};
+
+class RenderTargets {
+public:
+    // should update sSpecifierStrings as well if Specifiers are updated
+    enum class Specifier {
+        Main,
+        MainDepth,
+        Shadow,
+        SIZE
+    };
+
+    void pushTarget(D3D12GfxCmdList& cmdList, Specifier spec, IRenderTarget* pTarget);
+    IRenderTarget* popTarget(D3D12GfxCmdList& cmdList, Specifier spec);
+    template <class ... Specs>
+        requires (std::is_same_v<Specifier, std::remove_cvref_t<Specs>> && ...)
+    void bind(D3D12GfxCmdList& cmdList, Specs ... specs) {
+        (map_.at(specs)->onBind(cmdList), ...);
+    }
+
+private:
+    static std::string sSpecifierStrings[etoi(Specifier::SIZE)];
+
+    std::map<Specifier, IRenderTarget*> map_;
+};
+
+template <class TWindow>
+class MainRenderTarget : public IRenderTarget {
+public:
+    MainRenderTarget(TWindow& window)
+        : window_(window) {}
+
+    void onPush(D3D12GfxCmdList& cmdList) override {
+        window_.clearRenderTarget(cmdList);
+        window_.clearDepthStencil(cmdList);
+    }
+
+    void onBind(D3D12GfxCmdList& cmdList) override {
+        window_.setRenderTarget(cmdList);
+    }
+
+    void onPop(D3D12GfxCmdList& cmdList) override {
+        window_.setPresent(cmdList);
+    }
+
+private:
+    TWindow& window_;
 };
 
 class RenderPass {

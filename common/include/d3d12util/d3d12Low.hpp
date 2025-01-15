@@ -107,6 +107,7 @@ public:
 	DescriptorCPU()
 		: cpuHandle_{}, gpuHandle_{}, offsetFromRange_(std::size_t(-1)), type_(Type::INVALID) {}
 
+	// TODO: implement this
 	DescriptorCPU(const DescriptorGPU& other);
 
 	DescriptorCPU( const D3D12_CPU_DESCRIPTOR_HANDLE& cpuHandle,

@@ -33,6 +33,33 @@ void Camera::updateView() {
     }
 }
 
+void RenderTargets::pushTarget(D3D12GfxCmdList& cmdList, Specifier spec, IRenderTarget* pTarget) {
+    if (map_.contains(spec)) {
+        throw GFX_EXCEPT( std::string("RenderTarget with the specifier")
+            + sSpecifierStrings[etoi(spec)] + "already exists."
+        );
+    }
+    map_[spec] = pTarget;
+    pTarget->onPush(cmdList);
+}
+
+IRenderTarget* RenderTargets::popTarget(D3D12GfxCmdList& cmdList, Specifier spec) {
+    if (!map_.contains(spec)) {
+        throw GFX_EXCEPT( std::string("RenderTarget with the specifier")
+            + sSpecifierStrings[etoi(spec)] + "does not exist."
+        );
+    }
+    auto itTarget = map_.find(spec);
+    auto pTarget = itTarget->second;
+    map_.erase(itTarget);
+    pTarget->onPop(cmdList);
+    return pTarget;
+}
+
+std::string RenderTargets::sSpecifierStrings[etoi(RenderTargets::Specifier::SIZE)] = {
+    "Main", "MainDepth", "Shadow"
+};
+
 namespace rp {
 
 PBRIllumination::PBRIllumination( D3D12Device& device,
