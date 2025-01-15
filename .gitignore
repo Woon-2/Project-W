@@ -487,4 +487,6 @@ common/include/resourcePath.hpp
 !extern/zlib/*
 !extern/d3dx12/lib/*
 !extern/texLoader/*
+!extern/FreeImage/*
+!extern/FreeImage/x64/*
 !resource/*/*/*.obj
