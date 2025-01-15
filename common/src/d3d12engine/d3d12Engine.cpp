@@ -43,6 +43,8 @@ void Core::render(IRenderer& renderer, Scene& scene) {
     auto renderTargets = d3d12::RenderTargets();
     auto mainRT = d3d12::MainRenderTarget(window_);
     renderTargets.pushTarget(cmdList_, d3d12::RenderTargets::Specifier::Main, &mainRT);
+    renderTargets.bind(cmdList_, d3d12::RenderTargets::Specifier::Main);
+    renderTargets.clear(cmdList_, d3d12::RenderTargets::Specifier::Main);
 
     renderer.render(*this, scene, renderTargets);
     

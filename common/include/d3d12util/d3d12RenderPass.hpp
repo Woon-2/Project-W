@@ -130,6 +130,7 @@ public:
     virtual void onPush(D3D12GfxCmdList& cmdList) = 0;
     virtual void onPop(D3D12GfxCmdList& cmdList) = 0;
     virtual void onBind(D3D12GfxCmdList& cmdList) = 0;
+    virtual void onClear(D3D12GfxCmdList& cmdList) = 0;
 };
 
 class RenderTargets {
@@ -148,6 +149,11 @@ public:
     void bind(D3D12GfxCmdList& cmdList, Specs ... specs) {
         (map_.at(specs)->onBind(cmdList), ...);
     }
+    template <class ... Specs>
+        requires (std::is_same_v<Specifier, std::remove_cvref_t<Specs>> && ...)
+    void clear(D3D12GfxCmdList& cmdList, Specs ... specs) {
+        (map_.at(specs)->onClear(cmdList), ...);
+    }
 
 private:
     static std::string sSpecifierStrings[etoi(Specifier::SIZE)];
@@ -161,11 +167,7 @@ public:
     MainRenderTarget(TWindow& window)
         : window_(window) {}
 
-    void onPush(D3D12GfxCmdList& cmdList) override {
-        window_.setRenderTarget(cmdList);
-        window_.clearRenderTarget(cmdList);
-        window_.clearDepthStencil(cmdList);
-    }
+    void onPush(D3D12GfxCmdList& cmdList) override {}
 
     void onBind(D3D12GfxCmdList& cmdList) override {
         window_.setRenderTarget(cmdList);
@@ -175,8 +177,33 @@ public:
         window_.setPresent(cmdList);
     }
 
+    void onClear(D3D12GfxCmdList& cmdList) override {
+        window_.clearRenderTarget(cmdList);
+        window_.clearDepthStencil(cmdList);
+    }
+
 private:
     TWindow& window_;
+};
+
+class ShadowMaterial : public IRenderTarget, public Material {
+public:
+    ShadowMaterial( Texture& mapResource, const DescriptorCPU& dsv,
+        const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
+        const DescriptorGPU& srv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
+    );
+
+    void onPush(D3D12GfxCmdList& cmdList) override;
+    void onBind(D3D12GfxCmdList& cmdList) override;
+    void onPop(D3D12GfxCmdList& cmdList) override;
+    void onClear(D3D12GfxCmdList& cmdList) override;
+
+private:
+    D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc_;
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc_;
+    Texture& mapResource_;
+    const DescriptorGPU& srv_;
+    const DescriptorCPU& dsv_;
 };
 
 class RenderPass {

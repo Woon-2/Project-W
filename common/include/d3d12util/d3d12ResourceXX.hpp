@@ -257,6 +257,7 @@ public:
         MetallicSmoothness,
         Emmisive,
         AmbientOcclusion,
+        Shadow,
         Size
     };
 

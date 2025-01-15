@@ -60,6 +60,30 @@ std::string RenderTargets::sSpecifierStrings[etoi(RenderTargets::Specifier::SIZE
     "Main", "Shadow"
 };
 
+ShadowMaterial::ShadowMaterial( Texture& mapResource,
+    const DescriptorCPU& dsv, const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
+    const DescriptorGPU& srv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
+) : dsvDesc_(dsvDesc), srvDesc_(srvDesc), mapResource_(mapResource),
+    srv_(srv), dsv_(dsv) {}
+
+void ShadowMaterial::onPush(D3D12GfxCmdList& cmdList) {
+    mapResource_.commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+}
+
+void ShadowMaterial::onPop(D3D12GfxCmdList& cmdList) {
+    mapResource_.commitState(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+}
+
+void ShadowMaterial::onBind(D3D12GfxCmdList& cmdList) {
+    cmdList.get()->OMSetRenderTargets(0u, nullptr, false, &dsv_.cpuHandle());
+}
+
+void ShadowMaterial::onClear(D3D12GfxCmdList& cmdList) {
+    cmdList.get()->ClearDepthStencilView(
+        dsv_.cpuHandle(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0u, nullptr
+    );
+}
+
 namespace rp {
 
 PBRIllumination::PBRIllumination( D3D12Device& device,
