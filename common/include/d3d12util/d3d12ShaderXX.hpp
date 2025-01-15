@@ -555,6 +555,7 @@ public:
 	ShaderShadowMap( D3D12Device& device, D3D12GfxCmdList& cmdList,
 		const RootSignature& root, const Config& config,
 		const Texture::Desc& shadowMapDesc,
+		DescriptorRange<DescriptorHeapGPU>& tex2dRange,
 		InputLayout::Spec ilSpec = InputLayout::Spec::serial
 	);
 

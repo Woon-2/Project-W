@@ -603,13 +603,14 @@ std::uint32_t width;
 ShaderShadowMap::ShaderShadowMap( D3D12Device& device, D3D12GfxCmdList& cmdList, 
 	const RootSignature& root, const Config& config,
 	const Texture::Desc& shadowMapDesc,
+	DescriptorRange<DescriptorHeapGPU>& tex2dRange,
 	InputLayout::Spec ilSpec
 ) : Shader(root, makeInputLayout(ilSpec)),
 	cbDrawcallDataSize_( calcConstantBufferSize(sizeof(sr::PerDrawcallData2)) ),
 	perFrameData_(device, sizeof(sr::PerFrameData1)),
 	perDrawcallData_(device, cbDrawcallDataSize_ * config.maxDrawcallCnt),
 	perInstanceData_(device, sizeof(sr::PerInstanceData0) * config.maxInstanceCnt),
-	/* shadowMap_(device, cmdList, shadowMapDesc), */	// get texture range!
+	shadowMap_(device, tex2dRange, shadowMapDesc, D3D12_HEAP_TYPE_DEFAULT),
 	maxInstanceCnt_(config.maxInstanceCnt), maxDrawcallCnt_(config.maxDrawcallCnt) {
 	perFrameData_.pullGpuAddr();
 	perDrawcallData_.pullGpuAddr();
