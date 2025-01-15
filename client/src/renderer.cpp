@@ -38,19 +38,19 @@ void Renderer::init(gfx::d3d12engine::Scene& scene) {
     renderPassPBRTerrain_.init(scene);
 }
 
-void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& scene, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) {
+void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& scene, gfx::d3d12::RenderTargets& renderTargets) {
     renderPassPBR_.update(scene);
     renderPassPBRTerrain_.update(scene);
 
     auto cmdList = core.fetchCmdList();
 
     shaderPBR_.bindRootParams( cmdList );
-    renderPassPBR_.preRender( cmdList, rtv, dsv );
-    renderPassPBR_.render( cmdList, rtv, dsv );
-    renderPassPBR_.postRender( cmdList, rtv, dsv );
+    renderPassPBR_.preRender( cmdList, renderTargets );
+    renderPassPBR_.render( cmdList, renderTargets );
+    renderPassPBR_.postRender( cmdList, renderTargets );
 
     shaderPBRTerrain_.bindRootParams( cmdList );
-    renderPassPBRTerrain_.preRender( cmdList, rtv, dsv );
-    renderPassPBRTerrain_.render( cmdList, rtv, dsv );
-    renderPassPBRTerrain_.postRender( cmdList, rtv, dsv );
+    renderPassPBRTerrain_.preRender( cmdList, renderTargets );
+    renderPassPBRTerrain_.render( cmdList, renderTargets );
+    renderPassPBRTerrain_.postRender( cmdList, renderTargets );
 }

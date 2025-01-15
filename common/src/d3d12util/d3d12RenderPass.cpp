@@ -57,7 +57,7 @@ IRenderTarget* RenderTargets::popTarget(D3D12GfxCmdList& cmdList, Specifier spec
 }
 
 std::string RenderTargets::sSpecifierStrings[etoi(RenderTargets::Specifier::SIZE)] = {
-    "Main", "MainDepth", "Shadow"
+    "Main", "Shadow"
 };
 
 namespace rp {
@@ -129,7 +129,7 @@ void PBRIllumination::setViewport(const D3D12_VIEWPORT& vp) {
 }
 
 
-void PBRIllumination::preRender(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) {
+void PBRIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
     cmdList.get()->SetPipelineState( protocol_.get().Get() );
     cmdList.get()->RSSetViewports(1u, &viewport_);
     auto scissorRect = D3D12_RECT{ 0, 0, static_cast<LONG>(viewport_.Width), static_cast<LONG>(viewport_.Height) };
@@ -182,8 +182,8 @@ void PBRIllumination::preRender(D3D12GfxCmdList& cmdList, gfx::d3d12::Descriptor
     shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData0));
 }
 
-void PBRIllumination::render(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) {
-    cmdList.get()->OMSetRenderTargets(1u, &rtv.cpuHandle(), true, &dsv.cpuHandle());
+void PBRIllumination::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
+    renderTargets.bind(cmdList, RenderTargets::Specifier::Main);
 
     auto first = batch_.begin();
     auto accDrawcallCnt = 0u;
@@ -224,7 +224,7 @@ void PBRIllumination::render(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU
     }
 }
 
-void PBRIllumination::postRender(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) {
+void PBRIllumination::postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
 
 }
 
@@ -318,7 +318,7 @@ void PBRIlluminationTerrain::setViewport(const D3D12_VIEWPORT& vp) {
 }
 
 
-void PBRIlluminationTerrain::preRender(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) {
+void PBRIlluminationTerrain::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
     cmdList.get()->SetPipelineState( protocol_.get().Get() );
     cmdList.get()->RSSetViewports(1u, &viewport_);
     auto scissorRect = D3D12_RECT{ 0, 0, static_cast<LONG>(viewport_.Width), static_cast<LONG>(viewport_.Height) };
@@ -370,8 +370,8 @@ void PBRIlluminationTerrain::preRender(D3D12GfxCmdList& cmdList, gfx::d3d12::Des
     shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData0));
 }
 
-void PBRIlluminationTerrain::render(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) {
-    cmdList.get()->OMSetRenderTargets(1u, &rtv.cpuHandle(), true, &dsv.cpuHandle());
+void PBRIlluminationTerrain::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
+    renderTargets.bind(cmdList, RenderTargets::Specifier::Main);
 
     auto first = batch_.begin();
     auto accDrawcallCnt = 0u;
@@ -413,7 +413,7 @@ void PBRIlluminationTerrain::render(D3D12GfxCmdList& cmdList, gfx::d3d12::Descri
     }
 }
 
-void PBRIlluminationTerrain::postRender(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) {
+void PBRIlluminationTerrain::postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
 
 }
 
@@ -494,7 +494,7 @@ void ShadowMap::setViewport(const D3D12_VIEWPORT& vp) {
 }
 
 
-void ShadowMap::preRender(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) {
+void ShadowMap::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
     cmdList.get()->SetPipelineState( protocol_.get().Get() );
     cmdList.get()->RSSetViewports(1u, &viewport_);
     auto scissorRect = D3D12_RECT{ 0, 0, static_cast<LONG>(viewport_.Width), static_cast<LONG>(viewport_.Height) };
@@ -529,8 +529,8 @@ void ShadowMap::preRender(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& r
     shader().perInstanceData_.stage(pids.data(), pids.size() * sizeof(sr::PerInstanceData0));
 }
 
-void ShadowMap::render(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) {
-    cmdList.get()->OMSetRenderTargets(0u, nullptr, true, &dsv.cpuHandle());
+void ShadowMap::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
+    // cmdList.get()->OMSetRenderTargets(0u, nullptr, true, &dsv.cpuHandle());
 
     auto first = batch_.begin();
     auto accDrawcallCnt = 0u;
@@ -568,7 +568,7 @@ void ShadowMap::render(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv,
     }
 }
 
-void ShadowMap::postRender(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) {
+void ShadowMap::postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
 
 }
 

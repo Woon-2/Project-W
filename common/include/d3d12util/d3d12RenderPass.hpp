@@ -137,7 +137,6 @@ public:
     // should update sSpecifierStrings as well if Specifiers are updated
     enum class Specifier {
         Main,
-        MainDepth,
         Shadow,
         SIZE
     };
@@ -163,6 +162,7 @@ public:
         : window_(window) {}
 
     void onPush(D3D12GfxCmdList& cmdList) override {
+        window_.setRenderTarget(cmdList);
         window_.clearRenderTarget(cmdList);
         window_.clearDepthStencil(cmdList);
     }
@@ -189,9 +189,9 @@ public:
     RenderPass(std::string&& id) : renderPassID_(std::move(id)) {}
     virtual ~RenderPass() = default;
 
-    virtual void preRender(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) = 0;
-    virtual void render(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) = 0;
-    virtual void postRender(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) = 0;
+    virtual void preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) = 0;
+    virtual void render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) = 0;
+    virtual void postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) = 0;
 
     void setRenderPassID(const std::string& renderPassID) {
         renderPassID_ = renderPassID;
@@ -220,9 +220,9 @@ public:
         return viewport_;
     }
 
-    void preRender(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) override;
-    void render(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) override;
-    void postRender(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) override;
+    void preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
 
     void trackModel(Model* pModel);
     void setCamera(const Camera* pCamera) NOEXCEPT {
@@ -263,9 +263,9 @@ public:
         return viewport_;
     }
 
-    void preRender(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) override;
-    void render(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) override;
-    void postRender(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) override;
+    void preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
 
     void trackModel(Model* pModel);
     void setCamera(const Camera* pCamera) NOEXCEPT {
@@ -306,9 +306,9 @@ public:
         return viewport_;
     }
 
-    void preRender(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) override;
-    void render(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) override;
-    void postRender(D3D12GfxCmdList& cmdList, gfx::d3d12::DescriptorCPU& rtv, gfx::d3d12::DescriptorCPU& dsv) override;
+    void preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
 
     void trackModel(Model* pModel);
     void setCamera(const Camera* pCamera) NOEXCEPT {

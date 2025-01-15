@@ -39,11 +39,14 @@ void Core::render(IRenderer& renderer, Scene& scene) {
     descRanges_.srvRangeTexCube.bind( cmdList_, unifiedRoot.params[
         d3d12::UnifiedRoot::ParamIndices::BindlessTexCube
     ] );
-    window_.setRenderTarget(cmdList_);
-    window_.clearRenderTarget(cmdList_);
-    window_.clearDepthStencil(cmdList_);
-    renderer.render(*this, scene, window_.curRtv(), window_.curDsv());
-    window_.setPresent(cmdList_);
+
+    auto renderTargets = d3d12::RenderTargets();
+    auto mainRT = d3d12::MainRenderTarget(window_);
+    renderTargets.pushTarget(cmdList_, d3d12::RenderTargets::Specifier::Main, &mainRT);
+
+    renderer.render(*this, scene, renderTargets);
+    
+    renderTargets.popTarget(cmdList_, d3d12::RenderTargets::Specifier::Main);
     cmdList_.close();
     cmdQueue_.execute(cmdList_);
     window_.present(cmdList_);
