@@ -748,6 +748,8 @@ private:
 	HANDLE event_;
 };
 
+DXGI_FORMAT convertToDepthFormat(DXGI_FORMAT format);
+
 }   // namespace gfx::d3d12
 
 }   // namespace gfx
