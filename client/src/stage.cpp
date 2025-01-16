@@ -29,7 +29,9 @@ void Stage::processNetwork(double deltaTime) {
 }
 
 void Stage::processInput(double deltaTime) {
-    pSystems_->inputSystem.update(static_cast<float>(deltaTime));
+    pSystems_->inputSystem.update(static_cast<float>(deltaTime),
+        ControllerAdapters{ .renderModeController = RenderModeController(pRenderer_) }
+    );
 }
 
 void Stage::simulate(double deltaTime) {

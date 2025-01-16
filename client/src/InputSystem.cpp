@@ -5,7 +5,9 @@
 
 #include "keyboardXX.hpp"
 
-void PlayerController::handleEvent(Event event, float deltaTime) {
+void PlayerController::handleEvent( Event event, float deltaTime,
+    const ControllerAdapters& controllerAdapters
+) {
     switch (event) {
     case Event::MoveForward:
         moveForward(deltaTime);
@@ -24,6 +26,21 @@ void PlayerController::handleEvent(Event event, float deltaTime) {
         break;
     case Event::YawRight:
         yawRight(deltaTime);
+        break;
+    case Event::SetRenderModeColor:
+        controllerAdapters.renderModeController.setMode(Renderer::Mode::Color);
+        break;
+    case Event::SetRenderModeAlbedo:
+        controllerAdapters.renderModeController.setMode(Renderer::Mode::Albedo);
+        break;
+    case Event::SetRenderModeNormal:
+        controllerAdapters.renderModeController.setMode(Renderer::Mode::Normal);
+        break;
+    case Event::SetRenderModeDepth:
+        controllerAdapters.renderModeController.setMode(Renderer::Mode::Depth);
+        break;
+    case Event::SetRenderModeDirectionalLightDepth:
+        controllerAdapters.renderModeController.setMode(Renderer::Mode::DirectionalLightDepth);
         break;
     default:
         throw std::runtime_error("Invalid event");
@@ -57,7 +74,7 @@ void PlayerController::yawLeft(float deltaTime) {
     auto yaw = yawStep_;
     yaw *= -deltaTime;
 
-    // pModel->root().coord() << mu::rotateYH(yaw);
+    pModel->get().root()->coord() << mu::rotateYH(yaw);
 }
 
 void PlayerController::yawRight(float deltaTime) {
@@ -73,10 +90,10 @@ void PlayerController::yawRight(float deltaTime) {
     auto yaw = yawStep_;
     yaw *= deltaTime;
 
-    // pModel->root().coord() << mu::rotateYH(yaw);
+    pModel->get().root()->coord() << mu::rotateYH(yaw);
 }
 
-void InputSystem::update(float deltaTime) {
+void InputSystem::update(float deltaTime, const ControllerAdapters& controllerAdapters) {
 	pKeyboard_->patchKeyState();
 
     for (auto& playerController : components<PlayerController>()) {
@@ -86,7 +103,7 @@ void InputSystem::update(float deltaTime) {
 
         for (const auto& [key, event] : keyMap_) {
             if (pKeyboard_->pressed(key)) {
-                playerController->handleEvent(event, deltaTime);
+                playerController->handleEvent(event, deltaTime, controllerAdapters);
             }
         }
     }
@@ -99,4 +116,10 @@ void InputSystem::initKeyMap() {
     keyMap_['D'] = PlayerController::Event::MoveRight;
     keyMap_['Q'] = PlayerController::Event::YawLeft;
     keyMap_['E'] = PlayerController::Event::YawRight;
+
+    keyMap_['1'] = PlayerController::Event::SetRenderModeColor;
+    keyMap_['2'] = PlayerController::Event::SetRenderModeAlbedo;
+    keyMap_['3'] = PlayerController::Event::SetRenderModeNormal;
+    keyMap_['4'] = PlayerController::Event::SetRenderModeDepth;
+    keyMap_['5'] = PlayerController::Event::SetRenderModeDirectionalLightDepth;
 }

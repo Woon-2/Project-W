@@ -35,7 +35,7 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
     ), shaderScreenQuad_(core.device(), core.root()),
     renderPassScreenQuad_( core.device(), shaderScreenQuad_,
         gfx::d3d12::convClientToVP(core.window().client())
-    ) {}
+    ), renderMode_(Mode::Color) {}
 
 void Renderer::layoutVBsPBR( gfx::d3d12engine::Core& core,
     const gfx::d3d12::RefModelStorage::ID& key,
@@ -58,29 +58,45 @@ void Renderer::init(gfx::d3d12engine::Scene& scene) {
 }
 
 void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& scene, gfx::d3d12::RenderTargets& renderTargets) {
-    renderPassPBR_.update(scene);
-    renderPassPBRTerrain_.update(scene);
-
     auto cmdList = core.fetchCmdList();
 
-    shaderShadowMap_.bindRootParams( cmdList );
-    renderPassShadowMap_.preRender( cmdList, renderTargets );
-    renderPassShadowMap_.render( cmdList, renderTargets );
-    renderPassShadowMap_.postRender( cmdList, renderTargets );
+    renderPassPBR_.update(scene);
+    renderPassPBRTerrain_.update(scene);
+    renderPassShadowMap_.update(scene);
+    renderPassScreenQuad_.update(scene);
 
-    shaderPBRTerrain_.bindRootParams( cmdList );
-    renderPassPBRTerrain_.preRender( cmdList, renderTargets );
-    renderPassPBRTerrain_.render( cmdList, renderTargets );
-    renderPassPBRTerrain_.postRender( cmdList, renderTargets );
+    switch (renderMode_) {
+    case Mode::Color:
+        shaderShadowMap_.bindRootParams( cmdList );
+        renderPassShadowMap_.preRender( cmdList, renderTargets );
+        renderPassShadowMap_.render( cmdList, renderTargets );
+        renderPassShadowMap_.postRender( cmdList, renderTargets );
 
-    shaderPBR_.bindRootParams( cmdList );
-    renderPassPBR_.preRender( cmdList, renderTargets );
-    renderPassPBR_.render( cmdList, renderTargets );
-    renderPassPBR_.postRender( cmdList, renderTargets );
+        shaderPBRTerrain_.bindRootParams( cmdList );
+        renderPassPBRTerrain_.preRender( cmdList, renderTargets );
+        renderPassPBRTerrain_.render( cmdList, renderTargets );
+        renderPassPBRTerrain_.postRender( cmdList, renderTargets );
 
-    shaderScreenQuad_.bindRootParams( cmdList );
-    shaderScreenQuad_.screenQuad_.link(&shaderShadowMap_.shadowMap_);
-    renderPassScreenQuad_.preRender( cmdList, renderTargets );
-    renderPassScreenQuad_.render( cmdList, renderTargets );
-    renderPassScreenQuad_.postRender( cmdList, renderTargets );
+        shaderPBR_.bindRootParams( cmdList );
+        renderPassPBR_.preRender( cmdList, renderTargets );
+        renderPassPBR_.render( cmdList, renderTargets );
+        renderPassPBR_.postRender( cmdList, renderTargets );
+        break;
+
+    case Mode::DirectionalLightDepth:
+        shaderShadowMap_.bindRootParams( cmdList );
+        renderPassShadowMap_.preRender( cmdList, renderTargets );
+        renderPassShadowMap_.render( cmdList, renderTargets );
+        renderPassShadowMap_.postRender( cmdList, renderTargets );
+
+        shaderScreenQuad_.bindRootParams( cmdList );
+        shaderScreenQuad_.screenQuad_.link(&shaderShadowMap_.shadowMap_);
+        renderPassScreenQuad_.preRender( cmdList, renderTargets );
+        renderPassScreenQuad_.render( cmdList, renderTargets );
+        renderPassScreenQuad_.postRender( cmdList, renderTargets );
+        break;
+
+    default:
+        throw GFX_EXCEPT("[Description] Unknown render mode");
+    }
 }

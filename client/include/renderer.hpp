@@ -5,6 +5,14 @@
 
 class Renderer : public gfx::d3d12engine::IRenderer {
 public:
+    enum class Mode {
+        Color,
+        Albedo,
+        Normal,
+        Depth,
+        DirectionalLightDepth,
+    };
+
     Renderer(gfx::d3d12engine::Core& core);
 
     void init(gfx::d3d12engine::Scene& scene) override;
@@ -17,6 +25,9 @@ public:
         const gfx::d3d12::RefModelStorage::ID& key,
         std::size_t layoutIdx
     );
+    void setMode(Mode renderMode) NOEXCEPT {
+        renderMode_ = renderMode;
+    }
 
 private:
     gfx::d3d12::ShaderPBRIllumination shaderPBR_;
@@ -30,6 +41,21 @@ private:
 
     gfx::d3d12::ShaderScreenQuad shaderScreenQuad_;
     gfx::d3d12engine::rp::ScreenQuad renderPassScreenQuad_;
+
+    Mode renderMode_;
+};
+
+class RenderModeController {
+public:
+    RenderModeController(Renderer* pRenderer) NOEXCEPT
+        : pRenderer_(pRenderer) {}
+
+    void setMode(Renderer::Mode renderMode) const NOEXCEPT {
+        pRenderer_->setMode(renderMode);
+    }
+
+private:
+    Renderer* pRenderer_;
 };
 
 #endif  // __renderer_HPP
