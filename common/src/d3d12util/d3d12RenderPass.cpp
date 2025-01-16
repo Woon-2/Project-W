@@ -487,13 +487,13 @@ ShadowMap::ShadowMap( D3D12Device& device, ShaderShadowMap& shader,
     DescriptorRange<DescriptorHeapCPU>& dsvRange, const D3D12_VIEWPORT& vp
 ) : gfx::d3d12::RenderPass(id),
     shadowMapSrvDesc_{
-        .Format = shader.shadowMap_.desc().Format,
+        .Format = convertToColorFormat( shader.shadowMap_.desc().Format ),
         .ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
         .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
         .Texture2D = D3D12_TEX2D_SRV{ .MipLevels = 1u }
     },
     shadowMapDsvDesc_{
-        .Format = convertToDepthFormat( shader.shadowMap_.desc().Format ),
+        .Format = shader.shadowMap_.desc().Format,
         .ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D,
         .Flags = D3D12_DSV_FLAG_NONE
     },

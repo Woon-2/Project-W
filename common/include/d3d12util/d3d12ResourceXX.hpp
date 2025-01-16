@@ -82,8 +82,22 @@ public:
     };
 
     TextureResource( D3D12Device& device, const Desc& texResDesc,
+        D3D12_HEAP_TYPE heapType, D3D12_RESOURCE_STATES initialState
+    );
+
+    TextureResource( D3D12Device& device, const Desc& texResDesc,
+        D3D12_HEAP_TYPE heapType, D3D12_RESOURCE_STATES initialState,
+        const D3D12_CLEAR_VALUE& optimizedClearValue
+    );
+
+    TextureResource( D3D12Device& device, const Desc& texResDesc,
         D3D12_HEAP_TYPE heapType
     );
+
+    TextureResource( D3D12Device& device, const Desc& texResDesc,
+        D3D12_HEAP_TYPE heapType, const D3D12_CLEAR_VALUE& optimizedClearValue
+    );
+
     TextureResource( D3D12Device& device, D3D12GfxCmdList& cmdList, 
         const std::filesystem::path& path
     );
@@ -119,14 +133,58 @@ public:
 
     Texture( D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
         const Desc& texResDesc, D3D12_HEAP_TYPE heapType
+    ) : Texture(device, tex2dRange, texResDesc, heapType,
+            D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+        ) {}
+
+    Texture( D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+        const Desc& texResDesc, D3D12_HEAP_TYPE heapType,
+        const D3D12_CLEAR_VALUE& optimizedClearValue
+    ) : Texture(device, tex2dRange, texResDesc, heapType,
+            D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, optimizedClearValue
+        ) {}
+
+    Texture( D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+        const Desc& texResDesc, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc,
+        D3D12_HEAP_TYPE heapType
+    ) : Texture(device, tex2dRange, texResDesc, srvDesc, heapType,
+            D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+        ) {}
+
+    Texture( D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+        const Desc& texResDesc, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc,
+        D3D12_HEAP_TYPE heapType, const D3D12_CLEAR_VALUE& optimizedClearValue
+    ) : Texture(device, tex2dRange, texResDesc, srvDesc, heapType,
+            D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, optimizedClearValue
+        ) {}
+
+    Texture( D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+        const Desc& texResDesc, D3D12_HEAP_TYPE heapType,
+        D3D12_RESOURCE_STATES initialState
     ) : TextureResource(device, convertDesc(texResDesc), heapType) {
         makeDefSrv(device, tex2dRange.alloc());
     }
 
     Texture( D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+        const Desc& texResDesc, D3D12_HEAP_TYPE heapType,
+        D3D12_RESOURCE_STATES initialState,
+        const D3D12_CLEAR_VALUE& optimizedClearValue
+    ) : TextureResource(device, convertDesc(texResDesc), heapType, optimizedClearValue) {
+        makeDefSrv(device, tex2dRange.alloc());
+    }
+
+    Texture( D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
         const Desc& texResDesc, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc,
-        D3D12_HEAP_TYPE heapType
+        D3D12_HEAP_TYPE heapType, D3D12_RESOURCE_STATES initialState
     ) : TextureResource(device, convertDesc(texResDesc), heapType) {
+        makeSrv(srvDesc, device, tex2dRange.alloc());
+    }
+
+    Texture( D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+        const Desc& texResDesc, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc,
+        D3D12_HEAP_TYPE heapType, D3D12_RESOURCE_STATES initialState,
+        const D3D12_CLEAR_VALUE& optimizedClearValue
+    ) : TextureResource(device, convertDesc(texResDesc), heapType, optimizedClearValue) {
         makeSrv(srvDesc, device, tex2dRange.alloc());
     }
 

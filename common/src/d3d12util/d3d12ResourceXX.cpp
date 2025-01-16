@@ -79,8 +79,8 @@ DefaultBuffer::DefaultBuffer( D3D12Device& device, std::size_t byteWidth,
     }, D3D12_HEAP_TYPE_DEFAULT ) {}
 
 TextureResource::TextureResource( D3D12Device& device, const Desc& texResDesc,
-    D3D12_HEAP_TYPE heapType
-) : D3D12Resource(device, D3D12_RESOURCE_DESC{
+    D3D12_HEAP_TYPE heapType, D3D12_RESOURCE_STATES initialState
+) : D3D12Resource( device, D3D12_RESOURCE_DESC{
         .Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
         .Width = texResDesc.width,
         .Height = texResDesc.height,
@@ -90,7 +90,36 @@ TextureResource::TextureResource( D3D12Device& device, const Desc& texResDesc,
         .SampleDesc = texResDesc.sampleDesc,
         .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
         .Flags = texResDesc.flags
-    }, heapType), data_(), subresources_() {}
+    }, heapType, initialState, nullptr ),
+    data_(), subresources_() {}
+
+TextureResource::TextureResource( D3D12Device& device, const Desc& texResDesc,
+    D3D12_HEAP_TYPE heapType, D3D12_RESOURCE_STATES initialState,
+    const D3D12_CLEAR_VALUE& optimizedClearValue
+) : D3D12Resource( device, D3D12_RESOURCE_DESC{
+        .Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+        .Width = texResDesc.width,
+        .Height = texResDesc.height,
+        .DepthOrArraySize = texResDesc.arraySize,
+        .MipLevels = texResDesc.mipLevels,
+        .Format = texResDesc.format,
+        .SampleDesc = texResDesc.sampleDesc,
+        .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+        .Flags = texResDesc.flags
+    }, heapType, initialState, &optimizedClearValue ),
+    data_(), subresources_() {}
+
+TextureResource::TextureResource( D3D12Device& device, const Desc& texResDesc,
+    D3D12_HEAP_TYPE heapType
+) : TextureResource( device, texResDesc, heapType,
+        D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+    ) {}
+
+TextureResource::TextureResource( D3D12Device& device, const Desc& texResDesc,
+    D3D12_HEAP_TYPE heapType, const D3D12_CLEAR_VALUE& optimizedClearValue
+) : TextureResource( device, texResDesc, heapType,
+        D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, optimizedClearValue
+    ) {}
 
 TextureResource::TextureResource( D3D12Device& device,
     D3D12GfxCmdList& cmdList, const std::filesystem::path& path

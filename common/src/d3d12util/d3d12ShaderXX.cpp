@@ -601,8 +601,16 @@ ShaderShadowMap::ShaderShadowMap( D3D12Device& device,
 	perFrameData_(device, sizeof(sr::PerFrameData1)),
 	perDrawcallData_(device, cbDrawcallDataSize_ * config.maxDrawcallCnt),
 	perInstanceData_(device, sizeof(sr::PerInstanceData2) * config.maxInstanceCnt),
-	shadowMap_(device, tex2dRange, shadowMapDesc, D3D12_HEAP_TYPE_DEFAULT),
-	maxInstanceCnt_(config.maxInstanceCnt), maxDrawcallCnt_(config.maxDrawcallCnt) {
+	shadowMap_( device, tex2dRange, shadowMapDesc,
+		D3D12_SHADER_RESOURCE_VIEW_DESC{
+			.Format = convertToColorFormat(shadowMapDesc.format),
+			.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
+			.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+			.Texture2D = D3D12_TEX2D_SRV{ .MipLevels = 1u }
+		},
+		D3D12_HEAP_TYPE_DEFAULT,
+		D3D12_CLEAR_VALUE{ .Format = shadowMapDesc.format, .DepthStencil = { 1.f, 0u } }
+	), maxInstanceCnt_(config.maxInstanceCnt), maxDrawcallCnt_(config.maxDrawcallCnt) {
 	perFrameData_.pullGpuAddr();
 	perDrawcallData_.pullGpuAddr();
 	perInstanceData_.pullGpuAddr();

@@ -748,7 +748,8 @@ private:
 	HANDLE event_;
 };
 
-DXGI_FORMAT convertToDepthFormat(DXGI_FORMAT format);
+DXGI_FORMAT convertToDepthFormat(DXGI_FORMAT colorFormat);
+DXGI_FORMAT convertToColorFormat(DXGI_FORMAT depthFormat);
 
 }   // namespace gfx::d3d12
 
