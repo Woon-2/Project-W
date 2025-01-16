@@ -88,15 +88,15 @@ sr::Light WorldLight::toViewLight(const Camera& camera) const {
     const auto view = camera.view();
 
     return sr::Light{
-        .color = color,
+        .color = color.getXmf(),
         .falloff = falloff,
-        .posV = mu::Vec3( mu::Vec4(pos.x, pos.y, pos.z, 1.0f) * view ).getXmf(),
+        .posV = mu::Vec3( mu::Vec4(pos, 1.0f) * view ).getXmf(),
         .cosTheta = cosTheta,
-        .dirV = mu::Vec3( mu::Vec4(dir.x, dir.y, dir.z, 0.0f) * view ).getXmf(),
+        .dirV = mu::Vec3( mu::Vec4(dir, 0.0f) * view ).getXmf(),
         .cosPhi = cosPhi,
-        .atten = atten,
+        .atten = atten.getXmf(),
         .intensity = intensity,
-        .type = type
+        .type = etoi(type)
     };
 }
 
@@ -580,7 +580,18 @@ void ShadowMap::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets
         }
     }
 
+    const auto lightPos = mu::Vec3( pCamera_->repPos() - pLight_->dir * 800.f );
+    const auto lightDir = pLight_->dir;
+
+    const auto lightView = mu::lookAt( lightPos, lightPos + lightDir, mu::Vec3( 0.f, 1.f, 0.f ) );
+    const auto lightProj = mu::ortho( -10.f, 10.f, -10.f, 10.f, 600.f, 1200.f );
+
+    const auto pfd = sr::PerFrameData1{
+        .lightVP = mu::transpose( lightView * lightProj ).getXmf()
+    };
+
     shader().perInstanceData_.stage(pids.data(), pids.size() * sizeof(sr::PerInstanceData2));
+    shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData1));
 }
 
 void ShadowMap::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
@@ -654,18 +665,6 @@ void ShadowMap::trackModel(Model* pModel) {
 
 void ShadowMap::setLight(const WorldLight* pLight) {
     pLight_ = pLight;
-
-    const auto lightPos = mu::Vec3( DirectX::XMLoadFloat3(&pLight_->pos) );
-    const auto lightDir = mu::Vec3( DirectX::XMLoadFloat3(&pLight_->dir) );
-
-    const auto lightView = mu::lookAt( lightPos, lightPos + lightDir, mu::Vec3( 0.f, 1.f, 0.f ) );
-    const auto lightProj = mu::ortho( -10.f, 10.f, -10.f, 10.f, 0.1f, 100.f );
-
-    const auto pfd = sr::PerFrameData1{
-        .lightVP = mu::transpose( lightView * lightProj ).getXmf()
-    };
-
-    shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData1));
 }
 
 ScreenQuad::ScreenQuad( D3D12Device& device, ShaderScreenQuad& shader,

@@ -216,16 +216,15 @@ struct WorldLight {
 
     sr::Light toViewLight(const Camera& camera) const;
 
-    dx::XMFLOAT3 color;
+    mu::Vec3 color;
+    mu::Vec3 pos;
+    mu::Vec3 dir;
+    mu::Vec3 atten;
     float falloff;
-    dx::XMFLOAT3 pos;
     float cosTheta;
-    dx::XMFLOAT3 dir;
     float cosPhi;
-    dx::XMFLOAT3 atten;
     float intensity;
-    int type;
-    int padding[3];
+    Type type;
 };
 
 class RenderPass {

@@ -46,10 +46,10 @@ void Stage::initEntities(gfx::d3d12engine::Core& core) {
     player_.as<gfx::d3d12engine::Coord>().get() << mu::translate(0.f, 2.5f, 0.f);
 
     directionalLight_.init(gfx::d3d12::WorldLight{
-        .color = mu::Vec3(1.f, 1.f, 1.f).getXmf(),
-        .dir = mu::NVec3(0.f, -1.f, 1.f).getXmf(),
+        .color = mu::Vec3(1.f, 1.f, 1.f),
+        .dir = mu::NVec3(0.f, -1.f, 1.f),
         .intensity = 1.5f,
-        .type = etoi(gfx::d3d12::sr::Light::Type::Directional)
+        .type = gfx::d3d12::sr::Light::Type::Directional
     });
 
     scene_.addEntity(player_);

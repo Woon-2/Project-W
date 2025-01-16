@@ -78,9 +78,9 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
     renderPassPBR_.render( cmdList, renderTargets );
     renderPassPBR_.postRender( cmdList, renderTargets );
 
-    /*shaderScreenQuad_.bindRootParams( cmdList );
+    shaderScreenQuad_.bindRootParams( cmdList );
     shaderScreenQuad_.screenQuad_.link(&shaderShadowMap_.shadowMap_);
     renderPassScreenQuad_.preRender( cmdList, renderTargets );
     renderPassScreenQuad_.render( cmdList, renderTargets );
-    renderPassScreenQuad_.postRender( cmdList, renderTargets );*/
+    renderPassScreenQuad_.postRender( cmdList, renderTargets );
 }
