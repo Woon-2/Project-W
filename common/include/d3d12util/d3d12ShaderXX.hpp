@@ -412,6 +412,12 @@ struct PerDrawcallData2 {
 	dx::XMUINT3 padding;
 };
 
+struct PerDrawcallData3 {
+	dx::XMUINT4 frameMapRef;
+	std::uint32_t samplerIdx;
+	dx::XMUINT3 padding;
+};
+
 struct PerFrameData0 {
 	dx::XMFLOAT3 globalAmbient;
 	float padding0;
@@ -599,6 +605,34 @@ private:
 
 	std::size_t maxInstanceCnt_;
 	std::size_t maxDrawcallCnt_;
+};
+
+class ShaderScreenQuad : public Shader {
+public:
+	ShaderScreenQuad(D3D12Device& device, const RootSignature& root);
+	ShaderScreenQuad( D3D12Device& device, const RootSignature& root,
+		const Texture* pTexture
+	) : ShaderScreenQuad(device, root) {
+		screenQuad_.link(pTexture);
+	}
+
+	RenderProtocol makeProtocol( D3D12Device& device, const RenderProtocol::Desc& desc) {
+		return RenderProtocol( device, *this,
+			selectBlobsStrong<ShaderBlob::Type::Vertex, ShaderBlob::Type::Pixel>(), desc
+		);
+	}
+
+	void bindRootParams(D3D12GfxCmdList& cmdList) override;
+
+	void loadBlobs() override;
+	void releaseBlobs() override;
+
+	void draw(D3D12GfxCmdList& cmdList) const {
+		screenQuad_.draw(cmdList);
+	}
+
+	UploadBuffer perDrawcallData_;
+	ScreenQuad screenQuad_;
 };
 
 }   // namespace gfx::d3d12

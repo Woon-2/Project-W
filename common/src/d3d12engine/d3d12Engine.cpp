@@ -396,6 +396,10 @@ void ShadowMap::update(Scene& scene) {
     }
 }
 
+void ScreenQuad::init(Scene& scene) {}
+
+void ScreenQuad::update(Scene& scene) {}
+
 }   // namespace gfx::d3d12engine::rp
 
 }   // namespace gfx::d3d12engine

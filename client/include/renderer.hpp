@@ -27,6 +27,9 @@ private:
 
     gfx::d3d12::ShaderShadowMap shaderShadowMap_;
     gfx::d3d12engine::rp::ShadowMap renderPassShadowMap_;
+
+    gfx::d3d12::ShaderScreenQuad shaderScreenQuad_;
+    gfx::d3d12engine::rp::ScreenQuad renderPassScreenQuad_;
 };
 
 #endif  // __renderer_HPP

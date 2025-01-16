@@ -1549,6 +1549,11 @@ Model& Model::operator=(Model&& other) noexcept {
     return *this;
 }
 
+void ScreenQuad::draw(D3D12GfxCmdList& cmdList) const {
+    cmdList.get()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    DX_THROW_FAILED_VOID( cmdList.get()->DrawInstanced(4u, 1u, 0u, 0u) );
+}
+
 }   // namespace gfx::d3d12
 
 }   // namespace gfx

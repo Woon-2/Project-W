@@ -32,6 +32,9 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
     ), renderPassShadowMap_( core.device(), shaderShadowMap_,
         core.descRanges().dsvRange,
         gfx::d3d12::convClientToVP( core.window().client() )
+    ), shaderScreenQuad_(core.device(), core.root()),
+    renderPassScreenQuad_( core.device(), shaderScreenQuad_,
+        gfx::d3d12::convClientToVP(core.window().client())
     ) {}
 
 void Renderer::layoutVBsPBR( gfx::d3d12engine::Core& core,
@@ -74,4 +77,10 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
     renderPassPBR_.preRender( cmdList, renderTargets );
     renderPassPBR_.render( cmdList, renderTargets );
     renderPassPBR_.postRender( cmdList, renderTargets );
+
+    /*shaderScreenQuad_.bindRootParams( cmdList );
+    shaderScreenQuad_.screenQuad_.link(&shaderShadowMap_.shadowMap_);
+    renderPassScreenQuad_.preRender( cmdList, renderTargets );
+    renderPassScreenQuad_.render( cmdList, renderTargets );
+    renderPassScreenQuad_.postRender( cmdList, renderTargets );*/
 }

@@ -387,6 +387,38 @@ private:
     const Camera* pCamera_;
 };
 
+class ScreenQuad : public gfx::d3d12::RenderPass {
+public:
+    static constexpr const char* id = "ScreenQuad";
+
+    ScreenQuad( D3D12Device& device, ShaderScreenQuad& shader,
+        const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
+    );
+
+    void setViewport(const D3D12_VIEWPORT& vp);
+
+    const D3D12_VIEWPORT& viewport() const NOEXCEPT {
+        return viewport_;
+    }
+
+    void preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+
+private:
+    ShaderScreenQuad& shader() noexcept {
+        return static_cast<ShaderScreenQuad&>(protocol_.shader());
+    }
+    const ShaderScreenQuad& shader() const noexcept {
+        return static_cast<const ShaderScreenQuad&>(protocol_.shader());
+    }
+
+    static RenderProtocol::Desc makeDesc();
+
+    D3D12_VIEWPORT viewport_;
+    RenderProtocol protocol_;
+};
+
 }   // namespace gfx::d3d12::rp
 
 }   // namespace gfx::d3d12

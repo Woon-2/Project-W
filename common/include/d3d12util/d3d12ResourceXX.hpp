@@ -828,6 +828,36 @@ private:
     std::vector<Submesh> submeshes_;
 };
 
+class ScreenQuad {
+public:
+    ScreenQuad() NOEXCEPT
+        : pTex_(nullptr) {}
+
+    ScreenQuad(const Texture* pTex) NOEXCEPT
+        : pTex_(pTex) {}
+
+    void link(const Texture* pTex) NOEXCEPT {
+        pTex_ = pTex;
+    }
+
+    void unlink() NOEXCEPT {
+        pTex_ = nullptr;
+    }
+
+    void draw(D3D12GfxCmdList& cmdList) const;
+
+    Material::MapRef mapRef() const {
+        return Material::MapRef{
+            .type = etoi(Material::ResourceType::Texture),
+            .resourceIdx = static_cast<std::uint32_t>( pTex_->view(pTex_->idxSrv).offset() ),
+            .arrayIdx = 0u
+        };
+    }
+
+private:
+    const Texture* pTex_;
+};
+
 }   // namespace gfx::d3d12
 
 }   // namespace gfx

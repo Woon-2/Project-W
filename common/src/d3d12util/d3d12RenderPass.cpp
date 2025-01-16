@@ -668,8 +668,81 @@ void ShadowMap::setLight(const WorldLight* pLight) {
     shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData1));
 }
 
+ScreenQuad::ScreenQuad( D3D12Device& device, ShaderScreenQuad& shader,
+    const D3D12_VIEWPORT& vp
+) : gfx::d3d12::RenderPass(id),
+    viewport_(vp), protocol_( shader.makeProtocol( device,
+        RenderProtocol::Desc{ makeDesc() }
+    ) ) {}
+
+RenderProtocol::Desc ScreenQuad::makeDesc() {
+    return RenderProtocol::Desc {
+        .blend = D3D12_BLEND_DESC{
+            .AlphaToCoverageEnable = false,
+            .IndependentBlendEnable = false,
+            .RenderTarget = {
+                D3D12_RENDER_TARGET_BLEND_DESC{
+                    .BlendEnable = false,
+                    .SrcBlend = D3D12_BLEND_ONE,
+                    .DestBlend = D3D12_BLEND_ZERO,
+                    .BlendOp = D3D12_BLEND_OP_ADD,
+                    .SrcBlendAlpha = D3D12_BLEND_ONE,
+                    .DestBlendAlpha = D3D12_BLEND_ZERO,
+                    .BlendOpAlpha = D3D12_BLEND_OP_ADD,
+                    .RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL
+                }
+            }
+        },
+        .sampleMask = UINT_MAX,
+        .rasterizerState = D3D12_RASTERIZER_DESC{
+            .FillMode = D3D12_FILL_MODE_SOLID,
+            .CullMode = D3D12_CULL_MODE_NONE,
+            .DepthClipEnable = true
+        },
+        .depthStencilState = D3D12_DEPTH_STENCIL_DESC{
+            .DepthEnable = false,
+            .DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
+            .DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+            .StencilEnable = false
+        },
+        .primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+        .numRenderTargets = 1u,
+        .rtvFormats = { DXGI_FORMAT_R8G8B8A8_UNORM },
+        .dsvFormat = DXGI_FORMAT_D32_FLOAT,
+        .sampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
+        .nodeMask = 0u
+    };
+}
+
+void ScreenQuad::setViewport(const D3D12_VIEWPORT& vp) {
+    viewport_ = vp;
+}
+
+void ScreenQuad::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
+    cmdList.get()->SetPipelineState( protocol_.get().Get() );
+    cmdList.get()->RSSetViewports(1u, &viewport_);
+    auto scissorRect = D3D12_RECT{ 0, 0, static_cast<LONG>(viewport_.Width), static_cast<LONG>(viewport_.Height) };
+    cmdList.get()->RSSetScissorRects(1u, &scissorRect);
+}
+
+void ScreenQuad::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
+    renderTargets.bind(cmdList, RenderTargets::Specifier::Main);
+    renderTargets.clear(cmdList, RenderTargets::Specifier::Main);
+
+    const auto pdd = sr::PerDrawcallData3{
+        .frameMapRef = shader().screenQuad_.mapRef().toxm(),
+        .samplerIdx = 0u
+    };
+
+    shader().perDrawcallData_.stage(&pdd, sizeof(sr::PerDrawcallData3));
+
+    shader().draw( cmdList );
+}
+
+void ScreenQuad::postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {}
+
 }   // namespace gfx::d3d12::rp
 
 }   // namespace gfx::d3d12
 
-} // namespace gfx
+}   // namespace gfx

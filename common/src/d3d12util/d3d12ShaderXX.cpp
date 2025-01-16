@@ -680,6 +680,38 @@ InputLayout ShaderShadowMap::makeInputLayoutSeparated() {
 	} );
 }
 
+ShaderScreenQuad::ShaderScreenQuad(D3D12Device& device, const RootSignature& root)
+	: Shader(root, InputLayout()),
+	perDrawcallData_(device, sizeof(sr::PerDrawcallData3)),
+	screenQuad_() {
+	perDrawcallData_.pullGpuAddr();
+}
+
+void ShaderScreenQuad::bindRootParams(D3D12GfxCmdList& cmdList) {
+	auto& root = UnifiedRoot::get();
+
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		root.params[ UnifiedRoot::ParamIndices::b1 ],
+		perDrawcallData_.gpuAddr()
+	);
+}
+
+void ShaderScreenQuad::loadBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
+		shaderPath/"screenQuad.hlsl", inputLayout(), nullptr,
+		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
+	};
+	blobs_[etoi(ShaderBlob::Type::Pixel)] = ShaderBlob{
+		shaderPath/"screenQuad.hlsl", inputLayout(), nullptr,
+		"PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Pixel
+	};
+}
+
+void ShaderScreenQuad::releaseBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)].reset();
+	blobs_[etoi(ShaderBlob::Type::Pixel)].reset();
+}
+
 }   // namespace gfx::d3d12
 
 }   // namespace gfx
