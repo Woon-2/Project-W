@@ -244,7 +244,7 @@ void PBRIllumination::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTarg
         auto pdd = sr::PerDrawcallData0{
             .material = material,
             .instanceBase = static_cast<std::uint32_t>(first - batch_.begin()),
-            .samplerIdx = 0u
+            .samplerIdx = UnifiedRoot::get().samplers[ UnifiedRoot::SamplerIndices::TrilinearBorder ]
         };
         shader().perDrawcallData_.stage( &pdd, sizeof(sr::PerDrawcallData0),
             0u, accDrawcallCnt * shader().cbDrawcallDataSize()
@@ -433,7 +433,7 @@ void PBRIlluminationTerrain::render(D3D12GfxCmdList& cmdList, RenderTargets& ren
         auto pdd = sr::PerDrawcallData0{
             .material = material,
             .instanceBase = static_cast<std::uint32_t>(first - batch_.begin()),
-            .samplerIdx = 0u
+            .samplerIdx = UnifiedRoot::get().samplers[ UnifiedRoot::SamplerIndices::TrilinearBorder ]
         };
         shader().perDrawcallData_.stage( &pdd, sizeof(sr::PerDrawcallData0),
             0u, accDrawcallCnt * shader().cbDrawcallDataSize()
@@ -730,7 +730,7 @@ void ScreenQuad::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) 
 
     const auto pdd = sr::PerDrawcallData3{
         .frameMapRef = shader().screenQuad_.mapRef().toxm(),
-        .samplerIdx = 0u
+        .samplerIdx = UnifiedRoot::get().samplers[ UnifiedRoot::SamplerIndices::TrilinearBorder ]
     };
 
     shader().perDrawcallData_.stage(&pdd, sizeof(sr::PerDrawcallData3));
