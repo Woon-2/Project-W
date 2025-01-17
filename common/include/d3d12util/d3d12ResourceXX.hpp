@@ -333,16 +333,21 @@ public:
         Size
     };
 
+    enum class ColorSpace {
+        SRGB,
+        Linear
+    };
+
     struct MapRef {
         static constexpr std::uint32_t invalid = std::uint32_t(-1);
 
         std::uint32_t type;
         std::uint32_t resourceIdx;
         std::uint32_t arrayIdx;
-        std::uint32_t padding;
+        std::uint32_t colorSpace;
 
         dx::XMUINT4 toxm() const {
-            return dx::XMUINT4{ type, resourceIdx, arrayIdx, padding };
+            return dx::XMUINT4{ type, resourceIdx, arrayIdx, colorSpace };
         }
 
         auto operator<=>(const MapRef&) const = default;
@@ -850,7 +855,8 @@ public:
         return Material::MapRef{
             .type = etoi(Material::ResourceType::Texture),
             .resourceIdx = static_cast<std::uint32_t>( pTex_->view(pTex_->idxSrv).offset() ),
-            .arrayIdx = 0u
+            .arrayIdx = 0u,
+            .colorSpace = etoi(Material::ColorSpace::SRGB)
         };
     }
 

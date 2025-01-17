@@ -131,7 +131,7 @@ void Core::loadTerrain( const d3d12::Bitmap& heightMap,
         .type = etoi(d3d12::Material::MapType::Albedo),
         .resourceIdx = static_cast<std::uint32_t>( staticTexStorage_.get(albedoMapPath).offset() ),
         .arrayIdx = 0u,
-        .padding = 0u
+        .colorSpace = etoi(d3d12::Material::ColorSpace::SRGB)
     };
 
     for (std::size_t i = 0; i < zDivisions; ++i) {

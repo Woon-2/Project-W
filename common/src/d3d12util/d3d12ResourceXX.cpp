@@ -218,7 +218,8 @@ void Material::addTexRes(MapType type, const Texture& tex) {
     addMapRef( type, MapRef{
         .type = etoi(ResourceType::Texture),
         .resourceIdx = static_cast<std::uint32_t>(tex.view(Texture::idxSrv).offset()),
-        .arrayIdx = 0
+        .arrayIdx = 0,
+        .colorSpace = etoi(ColorSpace::SRGB)
     } );
 }
 
@@ -226,7 +227,8 @@ void Material::addTexRes(MapType type, const TextureArray& tex) {
     addMapRef( type, MapRef{
         .type = etoi(ResourceType::TextureArray),
         .resourceIdx = static_cast<std::uint32_t>(tex.view(TextureArray::idxSrv).offset()),
-        .arrayIdx = 0
+        .arrayIdx = 0,
+        .colorSpace = etoi(ColorSpace::SRGB)
     } );
 }
 
@@ -234,7 +236,8 @@ void Material::addTexRes(MapType type, const TextureCube& tex) {
     addMapRef( type, MapRef{
         .type = etoi(ResourceType::TextureCube),
         .resourceIdx = static_cast<std::uint32_t>(tex.view(TextureCube::idxSrv).offset()),
-        .arrayIdx = 0
+        .arrayIdx = 0,
+        .colorSpace = etoi(ColorSpace::SRGB)
     } );
 }
 

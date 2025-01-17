@@ -5,6 +5,9 @@
 #define LIGHT_TYPE_SPOT 1
 #define LIGHT_TYPE_DIRECTIONAL 2
 
+#define COLOR_SPACE_SRGB 0
+#define COLOR_SPACE_LINEAR 1
+
 struct Light {
     float3 color;
     float falloff;
@@ -202,7 +205,10 @@ float3 spotLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 norm
 float4 illuminate(float3 posV, float3 normalV, float2 tex) {
     float4 albedo = material.albedoConstant * material.albedoConstantMapRatio;
     albedo += sampleFromMapRef(material.albedoMapRef, tex, samplerIdx) * (1.f - material.albedoConstantMapRatio);
-
+    if (material.albedoMapRef.w == COLOR_SPACE_SRGB) {
+        // sRGB => linear
+        albedo.rgb = pow( abs(albedo.rgb), 2.2f );
+    }
 
     float roughness = material.roughnessConstant * material.roughnessConstantMapRatio;
     float metallic = material.metallicConstant * material.metallicConstantMapRatio;
@@ -239,6 +245,11 @@ float4 illuminate(float3 posV, float3 normalV, float2 tex) {
 
     float3 ambient = globalAmbient * albedo.rgb * ao;
     color += ambient + emmisive;
+
+    // tone mapping
+	// color = color / (color + float3(1.f, 1.f, 1.f));
+    // linear => sRGB
+    color = pow( abs(color), 1.f/2.2f );
 
     return float4(color, albedo.w);
 }
