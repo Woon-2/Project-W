@@ -50,7 +50,7 @@ void Stage::initEntities(gfx::d3d12engine::Core& core) {
     directionalLight_.init(gfx::d3d12::WorldLight{
         .color = mu::Vec3(1.f, 1.f, 1.f),
         .dir = mu::NVec3(0.f, -1.f, 1.f),
-        .intensity = 1.5f,
+        .intensity = 5.0f,
         .type = gfx::d3d12::sr::Light::Type::Directional
     });
 

@@ -86,13 +86,14 @@ void ShadowMaterial::onClear(D3D12GfxCmdList& cmdList) {
 
 sr::Light WorldLight::toViewLight(const Camera& camera) const {
     const auto view = camera.view();
+    const auto viewForVector = mu::transpose( mu::inverse(view) );
 
     return sr::Light{
         .color = color.getXmf(),
         .falloff = falloff,
         .posV = mu::Vec3( mu::Vec4(pos, 1.0f) * view ).getXmf(),
         .cosTheta = cosTheta,
-        .dirV = mu::Vec3( mu::Vec4(dir, 0.0f) * view ).getXmf(),
+        .dirV = mu::Vec3( mu::Vec4(dir, 0.0f) * viewForVector ).getXmf(),
         .cosPhi = cosPhi,
         .atten = atten.getXmf(),
         .intensity = intensity,

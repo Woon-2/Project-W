@@ -61,8 +61,8 @@ cbuffer PerFrameData : register(b2) {
 };
 
 float3 fresnel(float3 F0, float HV) {
-    return F0 + (1.f - F0) * pow(2, (-5.55473f * HV - 6.98316f) * HV);
-	// return F0 + (1.f - F0)*pow(1 - HV, 5.f);
+    // return F0 + (1.f - F0) * pow(2, (-5.55473f * HV - 6.98316f) * HV);
+	return F0 + (1.f - F0)*pow(1.f - HV, 5.f);
 }
 
 float distribute(float NH, float roughness) {
@@ -96,7 +96,7 @@ float3 pointLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 nor
     float2 tex, float3 albedo, float roughness, float metallic, float ao
 ) {
     float3 N = normalV;
-    float3 V = posVNormalized;
+    float3 V = -posVNormalized;
 
     float3 L = gLights[lightIdx].posV - posV;
     float dist = length(L);
@@ -116,21 +116,21 @@ float3 pointLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 nor
     float D = distribute(NH, roughness);
     float G = GeometrySmith(NV, NL, roughness);
 
-    float3 kD = (1.f - F);
-    kD *= 1.f - kD;
+    float3 kD = float3(1.f, 1.f, 1.f) - F;
+    kD *= 1.f - metallic;
     kD *= albedo / PI;
-    float3 kS = F * D * G / max(4 * NV * NL, 0.001f);
+    float3 specular = F * D * G / max(4 * NV * NL, 0.001f);
 
     float atten = 1.f / dot(gLights[lightIdx].atten, float3(1.f, dist, dist * dist));
 
-    return gLights[lightIdx].color * gLights[lightIdx].intensity * (kD + kS) * atten;
+    return gLights[lightIdx].color * gLights[lightIdx].intensity * (kD + specular) * NL * atten;
 }
 
 float3 dirLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 normalV,
     float2 tex, float3 albedo, float roughness, float metallic, float ao
 ) {
     float3 N = normalV;
-    float3 V = posVNormalized;
+    float3 V = -posVNormalized;
     float3 L = -gLights[lightIdx].dirV;
 
     float3 H = normalize(L + V);
@@ -147,18 +147,19 @@ float3 dirLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 norma
     float D = distribute(NH, roughness);
     float G = GeometrySmith(NV, NL, roughness);
 
-    float3 kD = 1.f - metallic;
+    float3 kD = float3(1.f, 1.f, 1.f) - F;
+    kD *= 1.f - metallic;
     kD *= albedo / PI;
-    float3 kS = D * F * G / (4 * NV * NL + 0.001f);
+    float3 specular = D * F * G / max(4 * NV * NL, 0.001f);
 
-    return gLights[lightIdx].color * gLights[lightIdx].intensity * (kD + kS) * NL;
+    return gLights[lightIdx].color * gLights[lightIdx].intensity * (kD + specular) * NL;
 }
 
 float3 spotLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 normalV,
     float2 tex, float3 albedo, float roughness, float metallic, float ao
 ) {
     float3 N = normalV;
-    float3 V = posVNormalized;
+    float3 V = -posVNormalized;
 
     float3 L = gLights[lightIdx].posV - posV;
     float dist = length(L);
@@ -178,10 +179,10 @@ float3 spotLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 norm
     float D = distribute(NH, roughness);
     float G = GeometrySmith(NV, NL, roughness);
 
-    float3 kD = (1.f - F);
-    kD *= 1.f - kD;
+    float3 kD = float3(1.f, 1.f, 1.f) - F;
+    kD *= 1.f - metallic;
     kD *= albedo / PI;
-    float3 kS = F * D * G / max(4 * NV * NL, 0.001f);
+    float3 specular = F * D * G / max(4 * NV * NL, 0.001f);
 
     float atten = 1.f / dot(gLights[lightIdx].atten, float3(1.f, dist, dist * dist));
 
@@ -195,7 +196,7 @@ float3 spotLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 norm
         gLights[lightIdx].falloff
     );
 
-    return gLights[lightIdx].color * gLights[lightIdx].intensity * (kD + kS) * atten * coneAtten;
+    return gLights[lightIdx].color * gLights[lightIdx].intensity * (kD + specular) * NL * atten * coneAtten;
 }
 
 float4 illuminate(float3 posV, float3 normalV, float2 tex) {
