@@ -432,6 +432,8 @@ struct PerDrawcallData4 {
 	std::uint32_t shadowSamplerIdx;
     std::uint32_t heightMapSamplerIdx;
 	std::uint32_t samplerIdx;
+	dx::XMFLOAT2 tileScale;
+    dx::XMFLOAT2 padding;
 };
 
 struct PerFrameData0 {

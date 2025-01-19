@@ -909,11 +909,12 @@ void Tessellation::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets
                 .type = etoi(Material::ResourceType::Texture),
                 .resourceIdx = static_cast<std::uint32_t>( pHeightMapTex->view(pHeightMapTex->idxSrv).offset() ),
                 .arrayIdx = 0u,
-                .colorSpace = etoi(Material::ColorSpace::SRGB)
+                .colorSpace = etoi(Material::ColorSpace::SRGB),
             }.toxm(),
             .instanceBase = static_cast<std::uint32_t>(first - batch_.begin()),
             .heightMapSamplerIdx = UnifiedRoot::get().samplers[ UnifiedRoot::SamplerIndices::TrilinearBorder ],
-            .samplerIdx = UnifiedRoot::get().samplers[ UnifiedRoot::SamplerIndices::TrilinearBorder ]
+            .samplerIdx = UnifiedRoot::get().samplers[ UnifiedRoot::SamplerIndices::TrilinearBorder ],
+            .tileScale = mu::Vec2(100.f).getXmf()  // TODO: get from material
         };
         shader().perDrawcallData_.stage( &pdd, sizeof(sr::PerDrawcallData4),
             0u, accDrawcallCnt * shader().cbDrawcallDataSize()

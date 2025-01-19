@@ -34,7 +34,7 @@ cbuffer PerDrawcallData : register(b1) {
     uint shadowSamplerIdx;
     uint heightMapSamplerIdx;
     uint samplerIdx;
-    float2 tileSize;
+    float2 tileScale;
     float2 padding;
 };
 
@@ -64,7 +64,7 @@ VSOutput VSMain( float3 position : POSITION, float2 texcoord : TEXCOORD, uint in
 
 	result.pos = position;
 	result.texcoord = texcoord;
-    result.tileTexCoord = texcoord * tileSize;
+    result.tileTexCoord = texcoord * CHUNK_SIZE / tileScale;
 	result.instanceOffset = instanceOffset;
 
 	return result;
