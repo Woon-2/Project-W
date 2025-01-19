@@ -34,6 +34,8 @@ cbuffer PerDrawcallData : register(b1) {
     uint shadowSamplerIdx;
     uint heightMapSamplerIdx;
     uint samplerIdx;
+    float2 tileSize;
+    float2 padding;
 };
 
 cbuffer PerFrameData : register(b2) {
@@ -53,6 +55,7 @@ struct VSOutPut
 {
     float3 pos : POSITION;
 	float2 texcoord : TEXCOORD;
+    float2 tileTexCoord : TEXCOORD1;
 	nointerpolation uint instanceOffset : INSTANCE_OFFSET;
 }
 
@@ -61,6 +64,7 @@ VSOutput VSMain( float3 position : POSITION, float2 texcoord : TEXCOORD, uint in
 
 	result.pos = position;
 	result.texcoord = texcoord;
+    result.tileTexCoord = texcoord * tileSize;
 	result.instanceOffset = instanceOffset;
 
 	return result;
@@ -75,6 +79,7 @@ struct HSConstantOutput {
 struct HSOutput {
 	float3 pos : POSITION;
 	float2 texcoord : TEXCOORD;
+    float2 tileTexCoord : TEXCOORD1;
 };
 
 [domain("quad")]
@@ -88,6 +93,7 @@ HSOutput HSMain(InputPatch<VSOutput, 4> input, uint i : SV_OutputControlPointID)
 
 	result.pos = input[i].pos;
 	result.texcoord = input[i].texcoord;
+    result.tileTexCoord = input[i].tileTexCoord;
 	
     return result;
 }
@@ -141,6 +147,7 @@ struct DSOutput {
 	float4 pos : SV_POSITION;
 	float3 normalV : NORMAL_V;
 	float2 texcoord : TEXCOORD;
+    float2 tileTexCoord : TEXCOORD1;
 	nointerpolation uint instanceOffset : INSTANCE_OFFSET;
 };
 
@@ -164,6 +171,15 @@ DSOutput DSMain(HSConstantOutput input, float2 uv : SV_DomainLocation, const Out
     float2 t0 = lerp(t00, t01, uv.u); 	 // interpolate bottom
     float2 t1 = lerp(t10, t11, uv.u);    // interpolate top
     output.texcoord = lerp(t0, t1, uv.v);          // final interpolation
+
+    float2 tt00 = patch[0].tileTexCoord;     // bottom left
+    float2 tt01 = patch[1].tileTexCoord;     // bottom right
+    float2 tt10 = patch[2].tileTexCoord;     // top left
+    float2 tt11 = patch[3].tileTexCoord;     // top right
+
+    float2 tt0 = lerp(tt00, tt01, uv.u); 	 // interpolate bottom
+    float2 tt1 = lerp(tt10, tt11, uv.u);    // interpolate top
+    output.tileTexCoord = lerp(tt0, tt1, uv.v);          // final interpolation
 
     // sample the height from the height map
 	float height = sampleFromMapRef(heightMapRef, output.texcoord, heightMapSamplerIdx).r;
@@ -205,6 +221,5 @@ DSOutput DSMain(HSConstantOutput input, float2 uv : SV_DomainLocation, const Out
 
 float4 PSMain(DSOutput input) : SV_TARGET {
 	input.normalV = normalize(input.normalV);
-
-    return illuminate(input.posV, input.normalV, input.texcoord);
+    return accumulateLighting(input.posV, input.normalV, input.tileTexCoord);
 }
