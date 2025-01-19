@@ -21,6 +21,7 @@
 #include <memory>
 #include <ranges>
 #include <algorithm>
+#include <iostream>
 
 #include "enumUtil.hpp"
 #include "memUtil.hpp"
@@ -308,6 +309,7 @@ public:
     using ResourceType = TextureResource::Type;
 
     enum class MapType {
+        Height,
         Albedo,
         Normal,
         Roughness,
@@ -330,6 +332,8 @@ public:
         MetallicConstantMapRatio,
         EmmisiveConstantMapRatio,
         AmbientOcclusionConstantMapRatio,
+        TileSize,
+        TileOffset,
         Size
     };
 
@@ -358,6 +362,7 @@ public:
     void addTexRes(MapType type, const Texture& tex);
     void addTexRes(MapType type, const TextureArray& tex);
     void addTexRes(MapType type, const TextureCube& tex);
+    void MU_CALLCONV addConstant(ConstantType type, mu::Vec2 constant);
     void MU_CALLCONV addConstant(ConstantType type, mu::Vec3 constant);
     void MU_CALLCONV addConstant(ConstantType type, mu::Vec4 constant);
     void addConstant(ConstantType type, float constant);
@@ -862,6 +867,37 @@ public:
 
 private:
     const Texture* pTex_;
+};
+
+class LevelChunk {
+public:
+    struct PatchVertex {
+        dx::XMFLOAT3 pos;
+        dx::XMFLOAT2 texCoord;
+    };
+
+    friend class LevelRegion;
+    static void initChunkMesh(D3D12Device& device, D3D12GfxCmdList& cmdList);
+
+private:
+    void load(const StaticTextureStorage& sts,
+        std::map<Material::MapRef, DescriptorGPU>& textureMap, std::istream& is
+    );
+    mu::Mat4x4 MU_CALLCONV idxToWorld() const;
+
+    static VertexBuffer sChunkVb;
+    static IndexBuffer sChunkIb;
+    
+    Material material_;
+    dx::XMUINT2 idx_;
+};
+
+class LevelRegion {
+public:
+    LevelRegion(const StaticTextureStorage& sts, std::istream& is);
+
+private:
+    std::vector<LevelChunk> chunks_;
 };
 
 }   // namespace gfx::d3d12
