@@ -400,6 +400,39 @@ void ScreenQuad::init(Scene& scene) {}
 
 void ScreenQuad::update(Scene& scene) {}
 
+void Tessellation::init(Scene& scene) {
+    for (auto& pModel : models(scene)) {
+        if (pModel) {
+            trackModel(&pModel->get());
+        }
+    }
+    if (!cameras(scene).empty()) {
+        auto& pCamera = cameras(scene).front();
+        if (pCamera) {
+            setCamera(&cameras(scene).front()->get());
+        }
+    }
+    for (auto& pLight : lights(scene)) {
+        if (pLight) {
+            addLight(&pLight->get());
+        }
+    }
+}
+
+void Tessellation::update(Scene& scene) {
+    for (auto& entityID : reservedEntities(scene)) {
+        if ( auto pModel = Model::at(entityID) ) {
+            trackModel(&pModel->get());
+        }
+        if ( auto pCamera = Camera::at(entityID) ) {
+            setCamera(&pCamera->get());
+        }
+        if ( auto pLight = Light::at(entityID) ) {
+            addLight(&pLight->get());
+        }
+    }
+}
+
 }   // namespace gfx::d3d12engine::rp
 
 }   // namespace gfx::d3d12engine

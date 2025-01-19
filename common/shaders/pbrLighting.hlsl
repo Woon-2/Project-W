@@ -21,47 +21,7 @@ struct Light {
     int3 padding;
 };
 
-// MapRef.x: resource type, MapRef.y: resource index, MapRef.z: array index
-
-struct Material {
-    float4 albedoConstant;
-    float roughnessConstant;
-    float metallicConstant;
-    float albedoConstantMapRatio;
-    float roughnessConstantMapRatio;
-    float metallicConstantMapRatio;
-    float3 emmisiveConstant;
-    float emmisiveConstantMapRatio;
-    float ambientOcclusionConstant;
-    float ambientOcclusionConstantMapRatio;
-    float padding;
-    uint4 albedoMapRef;
-    uint4 roughnessMapRef;
-    uint4 normalMapRef;
-    uint4 metallicMapRef;
-    uint4 metallicSmoothnessMapRef;
-    uint4 emmisiveMapRef;
-    uint4 ambientOcclusionMapRef;
-};
-
 StructuredBuffer<Light> gLights : register(t1);
-
-cbuffer PerDrawcallData : register(b1) {
-    Material material;
-    uint instanceBase;
-    uint samplerIdx;
-    uint shadowSamplerIdx;
-    uint padding;
-};
-
-cbuffer PerFrameData : register(b2) {
-    float3 globalAmbient;
-    float padding0;
-    uint4 shadowMapRef;
-    float4x4 lightVP;
-    uint lightCnt;
-    uint3 padding1;
-};
 
 float3 fresnel(float3 F0, float HV) {
     // return F0 + (1.f - F0) * pow(2, (-5.55473f * HV - 6.98316f) * HV);

@@ -42,6 +42,9 @@ private:
     gfx::d3d12::ShaderScreenQuad shaderScreenQuad_;
     gfx::d3d12engine::rp::ScreenQuad renderPassScreenQuad_;
 
+    gfx::d3d12::ShaderTessellation shaderTessellation_;
+    gfx::d3d12engine::rp::Tessellation renderPassTessellation_;
+
     Mode renderMode_;
 };
 
