@@ -320,6 +320,14 @@ public:
     void update(Scene& scene) override;
 };
 
+class Tessellation : public IRenderPass, public d3d12::rp::Tessellation {
+public:
+    using d3d12::rp::Tessellation::Tessellation;
+
+    void init(Scene& scene) override;
+    void update(Scene& scene) override;
+};
+
 }   // namespace gfx::d3d12engine::rp
 
 }   // namespace gfx::d3d12engine
