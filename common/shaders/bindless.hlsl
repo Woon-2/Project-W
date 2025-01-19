@@ -25,6 +25,13 @@ float4 sampleFromMapRef(uint4 mapRef, float2 tex, uint samIdx) {
     }
 }
 
+float4 sampleFromMapRef2DOffset(uint4 mapRef, float2 tex, int2 offset, uint samIdx) {
+    if (mapRef.x == MAP_TYPE_TEXTURE2D) {
+        return gTex2Ds[mapRef.y].Sample(gSamplers[samIdx], tex, offset);
+    } 
+    return float4(0.f, 0.f, 0.f, 0.f);
+}
+
 float sampleCmpFromMapRef(uint4 mapRef, float2 tex, float val, uint samIdx) {
     if (mapRef.x == uint(-1)) {
         return 1.f;

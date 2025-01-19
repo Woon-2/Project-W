@@ -1,8 +1,46 @@
-#include "pbrLighting.hlsl"
+// MapRef.x: resource type, MapRef.y: resource index, MapRef.z: array index
+
+struct Material {
+    float4 albedoConstant;
+    float roughnessConstant;
+    float metallicConstant;
+    float albedoConstantMapRatio;
+    float roughnessConstantMapRatio;
+    float metallicConstantMapRatio;
+    float3 emmisiveConstant;
+    float emmisiveConstantMapRatio;
+    float ambientOcclusionConstant;
+    float ambientOcclusionConstantMapRatio;
+    float padding;
+    uint4 albedoMapRef;
+    uint4 roughnessMapRef;
+    uint4 normalMapRef;
+    uint4 metallicMapRef;
+    uint4 metallicSmoothnessMapRef;
+    uint4 emmisiveMapRef;
+    uint4 ambientOcclusionMapRef;
+};
 
 cbuffer PerConfigurationData : register(b0) {
 	float viewportWidth;
 	float viewportHeight;
+};
+
+cbuffer PerDrawcallData : register(b1) {
+    Material material;
+    uint instanceBase;
+    uint samplerIdx;
+    uint shadowSamplerIdx;
+    uint padding;
+};
+
+cbuffer PerFrameData : register(b2) {
+    float3 globalAmbient;
+    float padding0;
+    uint4 shadowMapRef;
+    float4x4 lightVP;
+    uint lightCnt;
+    uint3 padding1;
 };
 
 struct PerInstanceData {
@@ -12,6 +50,8 @@ struct PerInstanceData {
 };
 
 StructuredBuffer<PerInstanceData> gInstances: register(t0);
+
+#include "pbrLighting.hlsl"
 
 struct VSOutput {
 	float3 posV : POSITION_V;
