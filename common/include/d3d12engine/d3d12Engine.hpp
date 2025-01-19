@@ -87,6 +87,10 @@ public:
         window_.setWindowed(&device_);
     }
 
+    void initChunkMesh(d3d12::D3D12GfxCmdList& cmdList) {
+        d3d12::LevelChunk::initChunkMesh(device_, cmdList);
+    }
+
     d3d12::DescriptorRanges& descRanges() NOEXCEPT { return descRanges_; }
     const d3d12::DescriptorRanges& descRanges() const NOEXCEPT { return descRanges_; }
 

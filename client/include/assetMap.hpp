@@ -7,11 +7,17 @@
 #include <vector>
 
 enum class AssetModel {
-    Helicopter
+    Helicopter,
+    Tree0,
+    Tree1,
+    Tree2
 };
 
 enum class AssetTexture {
     Helicopter,
+    Tree0,
+    Tree1,
+    Tree2,
     Terrain
 };
 
@@ -25,8 +31,8 @@ struct TextureInfo {
     gfx::d3d12::TextureResource::Type type;
 };
 
-ModelInfo assetModelInfo(AssetModel asset);
-std::vector<TextureInfo> assetTextureInfo(AssetTexture asset);
+const ModelInfo& assetModelInfo(AssetModel asset);
+const TextureInfo& assetTextureInfo(AssetTexture asset);
 
 
 
