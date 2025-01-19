@@ -51,20 +51,20 @@ StructuredBuffer<PerInstanceData> gInstances: register(t0);
 
 #include "pbrLighting.hlsl"
 
-struct VSOutPut 
+struct VSOutput 
 {
     float3 pos : POSITION;
 	float2 texcoord : TEXCOORD;
     float2 tileTexCoord : TEXCOORD1;
 	nointerpolation uint instanceOffset : INSTANCE_OFFSET;
-}
+};
 
 VSOutput VSMain( float3 position : POSITION, float2 texcoord : TEXCOORD, uint instanceOffset : SV_InstanceID) {
 	VSOutput result;
 
 	result.pos = position;
 	result.texcoord = texcoord;
-    result.tileTexCoord = texcoord * CHUNK_SIZE / tileScale;
+    result.tileTexCoord = texcoord * tileScale;
 	result.instanceOffset = instanceOffset;
 
 	return result;
@@ -103,15 +103,15 @@ HSConstantOutput HSConstant(InputPatch<VSOutput, 4> input)
 	HSConstantOutput output;
 
 	// 정점 위치를 뷰 공간으로 전환
-	intput[0].pos = mul(float4(intput[0].pos, 1.0f), gInstances[instanceBase + instanceOffset].wv).xyz;
-	intput[1].pos = mul(float4(intput[1].pos, 1.0f), gInstances[instanceBase + instanceOffset].wv).xyz;
-	intput[2].pos = mul(float4(intput[2].pos, 1.0f), gInstances[instanceBase + instanceOffset].wv).xyz;
-	intput[3].pos = mul(float4(intput[3].pos, 1.0f), gInstances[instanceBase + instanceOffset].wv).xyz;
+	float3 pos00 = mul(float4(input[0].pos, 1.0f), gInstances[instanceBase + input[0].instanceOffset].wv).xyz;
+	float3 pos01 = mul(float4(input[1].pos, 1.0f), gInstances[instanceBase + input[1].instanceOffset].wv).xyz;
+	float3 pos10 = mul(float4(input[2].pos, 1.0f), gInstances[instanceBase + input[2].instanceOffset].wv).xyz;
+	float3 pos11 = mul(float4(input[3].pos, 1.0f), gInstances[instanceBase + input[3].instanceOffset].wv).xyz;
 
-    float Len00 = length(input[0].pos);
-    float Len01 = length(input[1].pos);
-    float Len10 = length(input[2].pos);
-    float Len11 = length(input[3].pos);
+    float Len00 = length(pos00);
+    float Len01 = length(pos01);
+    float Len10 = length(pos10);
+    float Len11 = length(pos11);
 
 	float zMin = 0.1f;
 	float zMax = 1000.f;
@@ -145,6 +145,7 @@ HSConstantOutput HSConstant(InputPatch<VSOutput, 4> input)
 
 struct DSOutput {
 	float4 pos : SV_POSITION;
+    float3 posV : POSITION_V;
 	float3 normalV : NORMAL_V;
 	float2 texcoord : TEXCOORD;
     float2 tileTexCoord : TEXCOORD1;
@@ -168,21 +169,21 @@ DSOutput DSMain(HSConstantOutput input, float2 uv : SV_DomainLocation, const Out
     float2 t10 = patch[2].texcoord;     // top left
     float2 t11 = patch[3].texcoord;     // top right
 
-    float2 t0 = lerp(t00, t01, uv.u); 	 // interpolate bottom
-    float2 t1 = lerp(t10, t11, uv.u);    // interpolate top
-    output.texcoord = lerp(t0, t1, uv.v);          // final interpolation
+    float2 t0 = lerp(t00, t01, uv.x); 	 // interpolate bottom
+    float2 t1 = lerp(t10, t11, uv.x);    // interpolate top
+    output.texcoord = lerp(t0, t1, uv.y);          // final interpolation
 
     float2 tt00 = patch[0].tileTexCoord;     // bottom left
     float2 tt01 = patch[1].tileTexCoord;     // bottom right
     float2 tt10 = patch[2].tileTexCoord;     // top left
     float2 tt11 = patch[3].tileTexCoord;     // top right
 
-    float2 tt0 = lerp(tt00, tt01, uv.u); 	 // interpolate bottom
-    float2 tt1 = lerp(tt10, tt11, uv.u);    // interpolate top
-    output.tileTexCoord = lerp(tt0, tt1, uv.v);          // final interpolation
+    float2 tt0 = lerp(tt00, tt01, uv.x); 	 // interpolate bottom
+    float2 tt1 = lerp(tt10, tt11, uv.x);    // interpolate top
+    output.tileTexCoord = lerp(tt0, tt1, uv.y);          // final interpolation
 
     // sample the height from the height map
-	float height = sampleFromMapRef(heightMapRef, output.texcoord, heightMapSamplerIdx).r;
+	float height = sampleLevelFromMapRef(heightMapRef, output.texcoord, 0.f, heightMapSamplerIdx).r;
 
     // get the position for each vertex
     float3 p00 = patch[0].pos;
@@ -191,19 +192,21 @@ DSOutput DSMain(HSConstantOutput input, float2 uv : SV_DomainLocation, const Out
     float3 p11 = patch[3].pos;
 
     // same interpolation as the previous one
-    float3 p0 = lerp(p00, p01, uv.u);
-    float3 p1 = lerp(p10, p11, uv.u);
-    output.pos = lerp(p0, p1, uv.v);
+    float3 p0 = lerp(p00, p01, uv.x);
+    float3 p1 = lerp(p10, p11, uv.x);
+    output.pos = float4( lerp(p0, p1, uv.y), 1.f );
     
     output.pos.y += height;  // add the sampled height
 
+    // transform from local to view space
+    output.posV = mul(output.pos, gInstances[instanceBase + input.instanceOffset].wv).xyz;
     // transform from local to clip space
-	output.pos = mul(float4(output.pos, 1.0f), gInstances[instanceBase + instanceOffset].wvp).xyz;
+	output.pos = mul(output.pos, gInstances[instanceBase + input.instanceOffset].wvp);
 
-	float lHeight = sampleFromMapRef(heightMapRef, output.texcoord, int2(-1, 0) heightMapSamplerIdx).r;
-	float tHeight = sampleFromMapRef(heightMapRef, output.texcoord, int2(0, 1) heightMapSamplerIdx).r;
-	float rHeight = sampleFromMapRef(heightMapRef, output.texcoord, int2(1, 0) heightMapSamplerIdx).r;
-	float bHeight = sampleFromMapRef(heightMapRef, output.texcoord, int2(0, -1) heightMapSamplerIdx).r;
+	float lHeight = sampleLevelFromMapRef2DOffset(heightMapRef, output.texcoord, 0.f, int2(-1, 0), heightMapSamplerIdx).r;
+	float tHeight = sampleLevelFromMapRef2DOffset(heightMapRef, output.texcoord, 0.f, int2(0, 1), heightMapSamplerIdx).r;
+	float rHeight = sampleLevelFromMapRef2DOffset(heightMapRef, output.texcoord, 0.f, int2(1, 0), heightMapSamplerIdx).r;
+	float bHeight = sampleLevelFromMapRef2DOffset(heightMapRef, output.texcoord, 0.f, int2(0, -1), heightMapSamplerIdx).r;
 
 	float3 normalM = cross(rHeight - lHeight, tHeight - bHeight);
 	const float epsilon = 0.0005f;
@@ -214,7 +217,7 @@ DSOutput DSMain(HSConstantOutput input, float2 uv : SV_DomainLocation, const Out
 		normalM = normalize(normalM);
 	}
 
-	output.normalV = mul( float4(normalM, 0.f), wvNormal ).xyz;
+	output.normalV = mul( float4(normalM, 0.f), gInstances[instanceBase + input.instanceOffset].wvNormal ).xyz;
 
 	return output;
 }

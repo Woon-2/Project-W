@@ -25,9 +25,30 @@ float4 sampleFromMapRef(uint4 mapRef, float2 tex, uint samIdx) {
     }
 }
 
+float4 sampleLevelFromMapRef(uint4 mapRef, float2 tex, float LOD, uint samIdx) {
+    if (mapRef.x == uint(-1)) {
+        return float4(0.f, 0.f, 0.f, 0.0f);
+    }
+    if (mapRef.x == MAP_TYPE_TEXTURE2D) {
+        return gTex2Ds[mapRef.y].SampleLevel(gSamplers[samIdx], tex, LOD);
+    } else if (mapRef.x == MAP_TYPE_TEXTUREARRAY) {
+        return gTex2DArrays[mapRef.y].SampleLevel(gSamplers[samIdx], float3(tex, mapRef.z), LOD);
+    } else /* if (mapRef.x == MAP_TYPE_TEXTURECUBE) */ {
+        // TODO: should return correctly sampled value.
+        return gTexCubes[mapRef.y].SampleLevel(gSamplers[samIdx], float3(tex, 1.0f), LOD);
+    }
+}
+
 float4 sampleFromMapRef2DOffset(uint4 mapRef, float2 tex, int2 offset, uint samIdx) {
     if (mapRef.x == MAP_TYPE_TEXTURE2D) {
         return gTex2Ds[mapRef.y].Sample(gSamplers[samIdx], tex, offset);
+    } 
+    return float4(0.f, 0.f, 0.f, 0.f);
+}
+
+float4 sampleLevelFromMapRef2DOffset(uint4 mapRef, float2 tex, float LOD, int2 offset, uint samIdx) {
+    if (mapRef.x == MAP_TYPE_TEXTURE2D) {
+        return gTex2Ds[mapRef.y].SampleLevel(gSamplers[samIdx], tex, LOD, offset);
     } 
     return float4(0.f, 0.f, 0.f, 0.f);
 }
