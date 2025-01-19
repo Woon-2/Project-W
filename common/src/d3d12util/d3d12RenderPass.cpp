@@ -36,7 +36,7 @@ void Camera::updateView() {
 void RenderTargets::pushTarget(D3D12GfxCmdList& cmdList, Specifier spec, IRenderTarget* pTarget) {
     if (map_.contains(spec)) {
         throw GFX_EXCEPT( std::string("RenderTarget with the specifier")
-            + sSpecifierStrings[etoi(spec)] + "already exists."
+            + sSpecifierStrings[etoi(spec)] + " already exists."
         );
     }
     map_[spec] = pTarget;
@@ -46,7 +46,7 @@ void RenderTargets::pushTarget(D3D12GfxCmdList& cmdList, Specifier spec, IRender
 IRenderTarget* RenderTargets::popTarget(D3D12GfxCmdList& cmdList, Specifier spec) {
     if (!map_.contains(spec)) {
         throw GFX_EXCEPT( std::string("RenderTarget with the specifier")
-            + sSpecifierStrings[etoi(spec)] + "does not exist."
+            + sSpecifierStrings[etoi(spec)] + " does not exist."
         );
     }
     auto itTarget = map_.find(spec);
@@ -64,7 +64,12 @@ ShadowMaterial::ShadowMaterial( Texture& mapResource,
     const DescriptorCPU& dsv, const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
     const DescriptorGPU& srv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
 ) : dsvDesc_(dsvDesc), srvDesc_(srvDesc), srv_(srv), dsv_(dsv),
-    mapResource_(mapResource) {}
+    mapResource_(mapResource) {
+    addMapRef(MapType::Shadow, MapRef{
+        .type = etoi(ResourceType::Texture),
+        .resourceIdx = static_cast<std::uint32_t>( mapResource_.idxSrv ),
+    } );
+}
 
 void ShadowMaterial::onPush(D3D12GfxCmdList& cmdList) {
     mapResource_.commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
@@ -101,6 +106,32 @@ sr::Light WorldLight::toViewLight(const Camera& camera) const {
     };
 }
 
+mu::Mat4x4 MU_CALLCONV WorldLight::view(const Camera& camera) const {
+    const auto lightPos = mu::Vec3( camera.repPos() - dir * distanceToCamera );
+    const auto lightDir = dir;
+    // we assume that the light should have up vector (0, 1, 0)
+
+    return mu::lookAt( lightPos, lightPos + lightDir, mu::Vec3( 0.f, 1.f, 0.f ) );
+}
+
+mu::Mat4x4 MU_CALLCONV WorldLight::proj() const {
+    if (type == Type::Directional) {
+        return mu::ortho( config.ortho.width, config.ortho.height,
+            config.ortho.nearZ, config.ortho.farZ
+        );
+    } else {
+        return mu::persp( config.perspective.fovy, config.perspective.aspect,
+            config.perspective.nearZ, config.perspective.farZ
+        );
+    }
+
+    throw GFX_EXCEPT( "Invalid light type." );
+}
+
+mu::Mat4x4 MU_CALLCONV WorldLight::viewProj(const Camera& camera) const {
+    return view(camera) * proj();
+}
+
 namespace rp {
 
 PBRIllumination::PBRIllumination( D3D12Device& device,
@@ -108,7 +139,8 @@ PBRIllumination::PBRIllumination( D3D12Device& device,
 ) : gfx::d3d12::RenderPass(id),
     viewport_(vp), protocol_( shader.makeProtocol( device,
         RenderProtocol::Desc{ makeDesc() }
-    ) ), lights_(), batch_(), pCamera_(nullptr) {
+    ) ), lights_(), batch_(), pCamera_(nullptr),
+    pShadowMaterial_(nullptr) {
     auto pcd = sr::PerConfigurationData0{
         .viewportWidth = vp.Width,
         .viewportHeight = vp.Height
@@ -213,8 +245,17 @@ void PBRIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderT
         }
     }
 
-    auto pfd = sr::PerFrameData0{
+    pShadowMaterial_ = static_cast<ShadowMaterial*>(
+        renderTargets.popTarget(cmdList, RenderTargets::Specifier::Shadow)
+    );
+
+    // temporarilly directional light at first
+    const auto pDirectionalLight = lights_.front();
+
+    const auto pfd = sr::PerFrameData0{
         .globalAmbient = dx::XMFLOAT3(0.1f, 0.1f, 0.1f),
+        .shadowMapRef = pShadowMaterial_->mapRef(Material::MapType::Shadow).toxm(),
+        .lightVP = mu::transpose( pDirectionalLight->viewProj(*pCamera_) ).getXmf(),
         .lightCnt = static_cast<std::uint32_t>( lightBuffer.size() )
     };
 
@@ -245,7 +286,8 @@ void PBRIllumination::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTarg
         auto pdd = sr::PerDrawcallData0{
             .material = material,
             .instanceBase = static_cast<std::uint32_t>(first - batch_.begin()),
-            .samplerIdx = UnifiedRoot::get().samplers[ UnifiedRoot::SamplerIndices::TrilinearBorder ]
+            .samplerIdx = UnifiedRoot::get().samplers[ UnifiedRoot::SamplerIndices::TrilinearBorder ],
+            .shadowSamplerIdx = UnifiedRoot::get().samplers[ UnifiedRoot::SamplerIndices::BilinearComparison ]
         };
         shader().perDrawcallData_.stage( &pdd, sizeof(sr::PerDrawcallData0),
             0u, accDrawcallCnt * shader().cbDrawcallDataSize()
@@ -266,7 +308,8 @@ void PBRIllumination::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTarg
 }
 
 void PBRIllumination::postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
-
+    renderTargets.pushTarget(cmdList, RenderTargets::Specifier::Shadow, pShadowMaterial_);
+    pShadowMaterial_ = nullptr;
 }
 
 void PBRIllumination::trackModel(Model* pModel) {
@@ -529,7 +572,7 @@ RenderProtocol::Desc ShadowMap::makeDesc() {
         .rasterizerState = D3D12_RASTERIZER_DESC{
             .FillMode = D3D12_FILL_MODE_SOLID,
             .CullMode = D3D12_CULL_MODE_BACK,
-            .DepthBias = 100000,
+            .DepthBias = 1000,
             .DepthBiasClamp = 0.0f,
             .SlopeScaledDepthBias = 1.0f,
             .DepthClipEnable = true
@@ -581,14 +624,8 @@ void ShadowMap::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets
         }
     }
 
-    const auto lightPos = mu::Vec3( pCamera_->repPos() - pLight_->dir * 800.f );
-    const auto lightDir = pLight_->dir;
-
-    const auto lightView = mu::lookAt( lightPos, lightPos + lightDir, mu::Vec3( 0.f, 1.f, 0.f ) );
-    const auto lightProj = mu::ortho( -10.f, 10.f, -10.f, 10.f, 600.f, 1200.f );
-
     const auto pfd = sr::PerFrameData1{
-        .lightVP = mu::transpose( lightView * lightProj ).getXmf()
+        .lightVP = mu::transpose( pLight_->viewProj(*pCamera_) ).getXmf()
     };
 
     shader().perInstanceData_.stage(pids.data(), pids.size() * sizeof(sr::PerInstanceData2));

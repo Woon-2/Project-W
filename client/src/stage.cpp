@@ -47,10 +47,27 @@ void Stage::initEntities(gfx::d3d12engine::Core& core) {
     player_.addCamera(mu::Vec3(0.f, 2.8f, -6.5f), 1.f, pSystems_->coordRoot);
     player_.as<gfx::d3d12engine::Coord>().get() << mu::translate(0.f, 2.5f, 0.f);
 
+    /*
+    const auto lightPos = mu::Vec3( pCamera_->repPos() - pLight_->dir * 800.f );
+    const auto lightDir = pLight_->dir;
+
+    const auto lightView = mu::lookAt( lightPos, lightPos + lightDir, mu::Vec3( 0.f, 1.f, 0.f ) );
+    const auto lightProj = mu::ortho( -10.f, 10.f, -10.f, 10.f, 600.f, 1200.f );
+    */
+
     directionalLight_.init(gfx::d3d12::WorldLight{
+        .config = gfx::d3d12::WorldLight::Config{
+            .ortho = {
+                .width = 20.f,
+                .height = 20.f,
+                .nearZ = 600.f,
+                .farZ = 1200.f
+            }
+        },
         .color = mu::Vec3(1.f, 1.f, 1.f),
         .dir = mu::NVec3(0.f, -1.f, 1.f),
         .intensity = 5.0f,
+        .distanceToCamera = 800.f,
         .type = gfx::d3d12::sr::Light::Type::Directional
     });
 

@@ -144,5 +144,5 @@ DSOutput DSMain(HSConstantOutput input, float2 uv : SV_DomainLocation, const Out
 
 float4 PSMain(DSOutput input) : SV_TARGET {
 	input.normalV = normalize(input.normalV);
-    return illuminate(input.posV, input.normalV, input.texcoord);
+    return accumulateLighting(input.posV, input.normalV, input.texcoord);
 }

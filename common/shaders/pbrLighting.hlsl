@@ -202,7 +202,7 @@ float3 spotLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 norm
     return gLights[lightIdx].color * gLights[lightIdx].intensity * (kD + specular) * NL * atten * coneAtten;
 }
 
-float4 illuminate(float3 posV, float3 normalV, float2 tex) {
+float4 accumulateLighting(float3 posV, float3 normalV, float2 tex) {
     float4 albedo = material.albedoConstant * material.albedoConstantMapRatio;
     albedo += sampleFromMapRef(material.albedoMapRef, tex, samplerIdx) * (1.f - material.albedoConstantMapRatio);
     if (material.albedoMapRef.w == COLOR_SPACE_SRGB) {
@@ -252,4 +252,15 @@ float4 illuminate(float3 posV, float3 normalV, float2 tex) {
     color = pow( abs(color), 1.f/2.2f );
 
     return float4(color, albedo.w);
+}
+
+float4 illuminate(float3 posV, float4 posL, float3 normalV, float2 tex) {
+    float4 color = accumulateLighting(posV, normalV, tex);
+
+    // calculate illumination factor from shadow map
+    posL.xyz /= posL.w;
+    float illuminationFactor = sampleCmpFromMapRef(shadowMapRef, posL.xy, posL.z, shadowSamplerIdx).r;
+
+    return illuminationFactor * float4(color);
+    // return float4(illuminationFactor, illuminationFactor, illuminationFactor, illuminationFactor);
 }

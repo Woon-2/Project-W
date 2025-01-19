@@ -37,7 +37,8 @@ public:
 		TrilinearWrap,
 		NearestBorder,
 		TrilinearBorder,
-		TrilinearComparison
+		NearestComparison,
+		BilinearComparison
 	};
 
 	static constexpr auto cbvRegisterCnt = 8u;

@@ -214,9 +214,35 @@ private:
 struct WorldLight {
     using Type = sr::Light::Type;
 
-    sr::Light toViewLight(const Camera& camera) const;
+    struct Config {
+        union {
+            struct Ortho {
+                float width;
+                float height;
+                float nearZ;
+                float farZ;
+            } ortho;
 
+            struct NonDirectional {
+                float fovy;
+                float aspect;
+                float nearZ;
+                float farZ;
+            } perspective;
+        };
+    };
+
+    sr::Light toViewLight(const Camera& camera) const;
+    // for directional lights
+    mu::Mat4x4 MU_CALLCONV view(const Camera& camera) const;
+    // for point lights
+    // std::array<mu::Mat4x4, 6> MU_CALLCONV views() const;
+    mu::Mat4x4 MU_CALLCONV proj() const;
+    mu::Mat4x4 MU_CALLCONV viewProj(const Camera& camera) const;
+
+    Config config;
     mu::Vec3 color;
+    // absolute position for point lights,
     mu::Vec3 pos;
     mu::Vec3 dir;
     mu::Vec3 atten;
@@ -224,6 +250,7 @@ struct WorldLight {
     float cosTheta;
     float cosPhi;
     float intensity;
+    float distanceToCamera;
     Type type;
 };
 
@@ -295,6 +322,7 @@ private:
     std::vector<const WorldLight*> lights_;
     std::vector< std::tuple<Submesh*, VBLayoutIdx, mu::Mat4x4> > batch_;
     const Camera* pCamera_;
+    ShadowMaterial* pShadowMaterial_;
 };
 
 class PBRIlluminationTerrain : public gfx::d3d12::RenderPass {

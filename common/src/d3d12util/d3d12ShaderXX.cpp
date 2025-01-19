@@ -197,7 +197,7 @@ UnifiedRootImpl::UnifiedRootImpl(D3D12Device& device)
 	}
 
 	auto samplers = std::vector<D3D12_STATIC_SAMPLER_DESC>();
-	samplers.reserve(5u);
+	samplers.reserve(6u);
 
 	// nearest point wrap
 	samplers.emplace_back(
@@ -267,6 +267,23 @@ UnifiedRootImpl::UnifiedRootImpl(D3D12Device& device)
 		/* .ShaderVisibility = */ D3D12_SHADER_VISIBILITY_ALL
 	);
 
+	// nearest comparison
+	samplers.emplace_back(
+		/* .Filter = */ D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT,
+		/* .AddressU = */ D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+		/* .AddressV = */ D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+		/* .AddressW = */ D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+		/* .MipLODBias = */ 0.f,
+		/* .MaxAnisotropy = */ 0u,
+		/* .ComparisonFunc = */ D3D12_COMPARISON_FUNC_LESS_EQUAL,
+		/* .BorderColor = */ D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE,
+		/* .MinLOD = */ 0.f,
+		/* .MaxLOD = */ std::numeric_limits<float>::max(),
+		/* .ShaderRegister = */ 0u,
+		/* .RegisterSpace = */ 2u,
+		/* .ShaderVisibility = */ D3D12_SHADER_VISIBILITY_ALL
+	);
+
 	// bilinear comparison
 	samplers.emplace_back(
 		/* .Filter = */ D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT,
@@ -279,8 +296,8 @@ UnifiedRootImpl::UnifiedRootImpl(D3D12Device& device)
 		/* .BorderColor = */ D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE,
 		/* .MinLOD = */ 0.f,
 		/* .MaxLOD = */ std::numeric_limits<float>::max(),
-		/* .ShaderRegister = */ 4u,
-		/* .RegisterSpace = */ 1u,
+		/* .ShaderRegister = */ 1u,
+		/* .RegisterSpace = */ 2u,
 		/* .ShaderVisibility = */ D3D12_SHADER_VISIBILITY_ALL
 	);
 

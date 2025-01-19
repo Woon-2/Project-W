@@ -17,11 +17,19 @@ StructuredBuffer<PerInstanceData> gInstances: register(t0);
 struct VSOutput {
 	float4 pos : SV_POSITION;
 	float3 posV : POSITION_V;
+	float4 posL : POSITION_L;
 	float3 normalV : NORMAL_V;
 	float3 tangentV : TANGENT_V;
 	float3 bitangentV : BITANGENT_V;
 	float2 texcoord : TEXCOORD;
 	nointerpolation uint instanceOffset : INSTANCE_OFFSET;
+};
+
+static float4x4 gmtxTexturize = {
+	0.5f, 0.0f, 0.0f, 0.0f,
+	0.0f, -0.5f, 0.0f, 0.0f,
+	0.0f, 0.0f, 1.0f, 0.0f,
+	0.5f, 0.5f, 0.0f, 1.0f
 };
 
 VSOutput VSMain( float3 position : POSITION, float3 normal : NORMAL,
@@ -32,6 +40,10 @@ VSOutput VSMain( float3 position : POSITION, float3 normal : NORMAL,
 
     result.pos = mul(float4(position, 1.0f), gInstances[instanceBase + instanceOffset].wvp);
 	result.posV = mul(float4(position, 1.0f), gInstances[instanceBase + instanceOffset].wv).xyz;
+	result.posL = mul( mul(
+		mul(float4(position, 1.0f), gInstances[instanceBase + instanceOffset].world),
+		lightVP
+	), gmtxTexturize );
 	result.normalV = mul(normal, gInstances[instanceBase + instanceOffset].wvNormal).xyz;
 	if (material.normalMapRef.x != uint(-1)) {
 		result.tangentV = mul(tangent, gInstances[instanceBase + instanceOffset].wvNormal).xyz;
@@ -57,5 +69,5 @@ float4 PSMain(VSOutput input) : SV_TARGET {
 		input.normalV = mul(normal, TBN);
 	}
 
-    return illuminate(input.posV, input.normalV, input.texcoord);
+    return illuminate(input.posV, input.posL, input.normalV, input.texcoord);
 }

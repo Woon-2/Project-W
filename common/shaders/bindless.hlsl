@@ -33,6 +33,9 @@ float sampleCmpFromMapRef(uint4 mapRef, float2 tex, float val, uint samIdx) {
         return gTex2Ds[mapRef.y].SampleCmpLevelZero(gComparisonSamplers[samIdx], tex, val);
     } else if (mapRef.x == MAP_TYPE_TEXTUREARRAY) {
         return gTex2DArrays[mapRef.y].SampleCmpLevelZero(gComparisonSamplers[samIdx], float3(tex, mapRef.z), val);
+    } else /* if (mapRef.x == MAP_TYPE_TEXTURECUBE) */ {
+        // TODO: should return correctly sampled value.
+        return 0.f;
     }
 }
 
