@@ -355,7 +355,7 @@ struct PerInstanceData2 {
 struct PerInstanceData3 {
 	dx::XMFLOAT4X4 wvp;
     dx::XMFLOAT4X4 wv;
-	dx::XMFLOAT4X4 wvNormal;
+	dx::XMFLOAT3X3 wvNormal;
 };
 
 struct Light {
