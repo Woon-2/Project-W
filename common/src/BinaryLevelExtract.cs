@@ -5,7 +5,7 @@ using UnityEngine;
 using UnityEditor;
 using System.IO;
 
-public class LevelExtract : MonoBehaviour
+public class BinaryLevelExtract : MonoBehaviour
 {
     public GameObject terrainGroup;  // Assign the parent GameObject containing all terrain objects in the inspector.
     public GameObject objectGroup;  // Assign the parent GameObject containing all objects in the inspector.
@@ -26,7 +26,9 @@ public class LevelExtract : MonoBehaviour
         ArrangeTextureList();
         CalculateResourceIndices();
 
-        using (StreamWriter writer = new StreamWriter("ObjectsInLevel.txt"))
+        using ( BinaryWriter writer = new BinaryWriter(
+            File.Open(string.Copy(gameObject.name).Replace(" ", "_") + ".bin", FileMode.Create)
+        ) )
         {
             WriteDictionary(writer);
             ExtractAllTerrainData(writer);
@@ -34,7 +36,7 @@ public class LevelExtract : MonoBehaviour
         }
     }
 
-    private void ExtractAllTerrainData(StreamWriter writer)
+    private void ExtractAllTerrainData(BinaryWriter writer)
     {
         Terrain[] terrains = terrainGroup.GetComponentsInChildren<Terrain>();
 
@@ -44,7 +46,7 @@ public class LevelExtract : MonoBehaviour
         }
     }
 
-    private void ExtractTerrainData(Terrain terrain, StreamWriter writer)
+    private void ExtractTerrainData(Terrain terrain, BinaryWriter writer)
     {
         if (terrain == null) return;
 
@@ -88,20 +90,17 @@ public class LevelExtract : MonoBehaviour
                 Vector2 tileSize = layer.tileSize;
                 writer.Write("<TileSize:>");
                 writer.Write(tileSize.x);
-                writer.Write(", ");
                 writer.Write(tileSize.y);
 
                 Vector2 tileOffset = layer.tileOffset;
                 writer.Write("<TileOffset:>");
                 writer.Write(tileOffset.x);
-                writer.Write(", ");
                 writer.Write(tileOffset.y);
-                writer.Write("\n");
             }
         }
     }
 
-    private void WriteMapRef(string path, StreamWriter writer) 
+    private void WriteMapRef(string path, BinaryWriter writer) 
     {
         if( m_pTextureIndexInfo.TryGetValue(path, out var value) ) {
             // Item2 : resourceTypeIndex -> type
@@ -119,7 +118,6 @@ public class LevelExtract : MonoBehaviour
         }
         else {
             Debug.LogWarning($"Path not found in texture index info: {path}");
-            writer.Write(0); // Default value for missing data
         }
     }
 
@@ -148,7 +146,7 @@ public class LevelExtract : MonoBehaviour
         Debug.Log($"Height map for {terrainName} saved to {terrainName}_HeightMap.jpg");
     }
 
-    private void ExtractAllObjectsData(StreamWriter writer)
+    private void ExtractAllObjectsData(BinaryWriter writer)
     {
         if (objectGroup == null)
         {
@@ -159,23 +157,22 @@ public class LevelExtract : MonoBehaviour
         ExtractObjectsInHiearchy(objectGroup.transform, writer);
     }
 
-    private void ExtractObjectsInHiearchy(Transform xform, StreamWriter writer)
+    private void ExtractObjectsInHiearchy(Transform xform, BinaryWriter writer)
     {
-        writer.Write("<Node:>\n");
+        writer.Write("<Node:>");
         ExtractObjectData(xform, writer);
 
-        writer.Write("<Children:> ");
+        writer.Write("<Children:>");
         writer.Write(xform.childCount);
-        writer.Write("\n");
 
         foreach (Transform child in xform)
         {
             ExtractObjectsInHiearchy(child, writer);
         }
-        writer.Write("</Node>\n");
+        writer.Write("</Node>");
     }
 
-    private void ExtractObjectData(Transform xform, StreamWriter writer)
+    private void ExtractObjectData(Transform xform, BinaryWriter writer)
     {
         if (xform == null)
         {
@@ -186,20 +183,17 @@ public class LevelExtract : MonoBehaviour
         // {objectName}, {transform matrix}, {prefabName}, {isInstance}
 
         WriteObjectName(xform.gameObject, writer);
-        writer.Write(", ");
 
         Matrix4x4 matrix = Matrix4x4.identity;
         matrix.SetTRS(xform.position, xform.rotation, xform.localScale);
         WriteMatrix(matrix, writer);
-        writer.Write(", ");
 
         WriteObjectName(xform.parent.gameObject, writer);
-        writer.Write(", ");
 
         WriteIsInstance(xform.gameObject, writer);
     }
 
-    private void WriteMatrix(Matrix4x4 matrix, StreamWriter writer)
+    private void WriteMatrix(Matrix4x4 matrix, BinaryWriter writer)
     {
         writer.Write(matrix.m00);
         writer.Write(matrix.m10);
@@ -219,12 +213,12 @@ public class LevelExtract : MonoBehaviour
         writer.Write(matrix.m33);
     }
 
-    private void WriteObjectName(Object obj, StreamWriter writer)
+    private void WriteObjectName(Object obj, BinaryWriter writer)
     {
         writer.Write((obj) ? string.Copy(obj.name).Replace(" ", "_") : "null");
     }
 
-    private void WriteIsInstance(Object obj, StreamWriter writer)
+    private void WriteIsInstance(Object obj, BinaryWriter writer)
     {
         writer.Write(obj.name.StartsWith("GO_"));
     }
@@ -326,22 +320,18 @@ public class LevelExtract : MonoBehaviour
         m_mapRefMap = updatedMapRefMap;
     }
 
-    void WriteDictionary(StreamWriter writer) {
+    void WriteDictionary(BinaryWriter writer) {
         writer.Write("<Dictionary:>");
 
         foreach (var kvp in m_mapRefMap) {
             writer.Write("<Item:>");
             writer.Write(kvp.Key.Item1);    // MapRef
-            writer.Write(", ");
             writer.Write(kvp.Key.Item2);
-            writer.Write(", ");
             writer.Write(kvp.Key.Item3);
-            writer.Write(", ");
             writer.Write(kvp.Key.Item4);
-            writer.Write(", ");
             writer.Write(kvp.Value.Item2);   // newTexPath
         }
 
-        writer.Write("</Dictionary>\n");
+        writer.Write("</Dictionary>");
     }
 }
