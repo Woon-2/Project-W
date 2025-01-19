@@ -38,10 +38,16 @@ public class LevelExtract : MonoBehaviour
     {
         Terrain[] terrains = terrainGroup.GetComponentsInChildren<Terrain>();
 
+        writer.Write("<Chunks:> ");
+        writer.Write(terrains.Length);
+        writer.Write("\n");
+
         foreach (var terrain in terrains)
         {
             ExtractTerrainData(terrain, writer);
         }
+
+        writer.Write("</Chunks>\n");
     }
 
     private void ExtractTerrainData(Terrain terrain, StreamWriter writer)

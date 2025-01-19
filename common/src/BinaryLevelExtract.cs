@@ -40,10 +40,16 @@ public class BinaryLevelExtract : MonoBehaviour
     {
         Terrain[] terrains = terrainGroup.GetComponentsInChildren<Terrain>();
 
+        writer.Write("<Chunks:>");
+        writer.Write(terrains.Length);
+
+
         foreach (var terrain in terrains)
         {
             ExtractTerrainData(terrain, writer);
         }
+
+        writer.Write("</Chunks>");
     }
 
     private void ExtractTerrainData(Terrain terrain, BinaryWriter writer)
