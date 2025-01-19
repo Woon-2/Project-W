@@ -35,7 +35,15 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
     ), shaderScreenQuad_(core.device(), core.root()),
     renderPassScreenQuad_( core.device(), shaderScreenQuad_,
         gfx::d3d12::convClientToVP(core.window().client())
-    ), renderMode_(Mode::Color) {}
+    ), renderMode_(Mode::Color
+    ), shaderTessellation_(core.device(), core.root(), 
+        gfx::d3d12::ShaderTessellation::Config{
+            .maxInstanceCnt = 0x1000u,
+            .maxDrawcallCnt = 0x1000u,
+            .maxLightCnt = 0x100u
+        }, gfx::d3d12::InputLayout::Spec::separated
+    ), renderPassTessellation_(core.device(), shaderTessellation_,
+        gfx::d3d12::convClientToVP(core.window().client())) {}
 
 void Renderer::layoutVBsPBR( gfx::d3d12engine::Core& core,
     const gfx::d3d12::RefModelStorage::ID& key,
@@ -55,6 +63,7 @@ void Renderer::init(gfx::d3d12engine::Scene& scene) {
     renderPassPBR_.init(scene);
     renderPassPBRTerrain_.init(scene);
     renderPassShadowMap_.init(scene);
+    renderPassTessellation_.init(scene);
 }
 
 void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& scene, gfx::d3d12::RenderTargets& renderTargets) {
@@ -64,6 +73,7 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
     renderPassPBRTerrain_.update(scene);
     renderPassShadowMap_.update(scene);
     renderPassScreenQuad_.update(scene);
+    renderPassTessellation_.update(scene);
 
     switch (renderMode_) {
     case Mode::Color:
@@ -81,6 +91,11 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
         renderPassPBR_.preRender( cmdList, renderTargets );
         renderPassPBR_.render( cmdList, renderTargets );
         renderPassPBR_.postRender( cmdList, renderTargets );
+
+        //shaderTessellation_.bindRootParams( cmdList );
+        //renderPassTessellation_.preRender( cmdList, renderTargets );
+        //renderPassTessellation_.render( cmdList, renderTargets );
+        //renderPassTessellation_.postRender( cmdList, renderTargets );       
         break;
 
     case Mode::DirectionalLightDepth:
