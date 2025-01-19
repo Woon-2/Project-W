@@ -741,6 +741,190 @@ void ScreenQuad::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) 
 
 void ScreenQuad::postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {}
 
+Tessellation::Tessellation( D3D12Device& device,
+    ShaderTessellation& shader, const D3D12_VIEWPORT& vp
+) : gfx::d3d12::RenderPass(id),
+    viewport_(vp), protocol_( shader.makeProtocol( device,
+        RenderProtocol::Desc{ makeDesc() }
+    ) ), lights_(), batch_(), pCamera_(nullptr) {
+}
+
+RenderProtocol::Desc Tessellation::makeDesc() {
+    return RenderProtocol::Desc {
+        .blend = D3D12_BLEND_DESC{
+            .AlphaToCoverageEnable = false,
+            .IndependentBlendEnable = false,
+            .RenderTarget = {
+                D3D12_RENDER_TARGET_BLEND_DESC{
+                    .BlendEnable = false,
+                    .SrcBlend = D3D12_BLEND_ONE,
+                    .DestBlend = D3D12_BLEND_ZERO,
+                    .BlendOp = D3D12_BLEND_OP_ADD,
+                    .SrcBlendAlpha = D3D12_BLEND_ONE,
+                    .DestBlendAlpha = D3D12_BLEND_ZERO,
+                    .BlendOpAlpha = D3D12_BLEND_OP_ADD,
+                    .RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL
+                }
+            }
+        },
+        .sampleMask = UINT_MAX,
+        .rasterizerState = D3D12_RASTERIZER_DESC{
+            .FillMode = D3D12_FILL_MODE_SOLID,
+            .CullMode = D3D12_CULL_MODE_BACK,
+            .DepthClipEnable = true,
+        },
+        .depthStencilState = D3D12_DEPTH_STENCIL_DESC{
+            .DepthEnable = true,
+            .DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
+            .DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+            .StencilEnable = false
+        },
+        .primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH,
+        .numRenderTargets = 1u,
+        .rtvFormats = { DXGI_FORMAT_R8G8B8A8_UNORM },
+        .dsvFormat = DXGI_FORMAT_D32_FLOAT,
+        .sampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
+        .nodeMask = 0u
+    };
+}
+
+void Tessellation::setViewport(const D3D12_VIEWPORT& vp) {
+    viewport_ = vp;
+}
+
+void Tessellation::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
+    cmdList.get()->SetPipelineState( protocol_.get().Get() );
+    cmdList.get()->RSSetViewports(1u, &viewport_);
+    auto scissorRect = D3D12_RECT{ 0, 0, static_cast<LONG>(viewport_.Width), static_cast<LONG>(viewport_.Height) };
+    cmdList.get()->RSSetScissorRects(1u, &scissorRect);
+
+    std::ranges::sort( batch_, std::less<>{}, [this](const auto& tuple) {
+        return std::tuple(
+            &std::get<gfx::d3d12::Submesh*>(tuple)->material(),
+            std::get<gfx::d3d12::Submesh*>(tuple)->refSubmesh()
+        );
+    } );
+
+    auto pids = std::vector<sr::PerInstanceData3>();
+    pids.reserve( shader().maxInstanceCnt() );
+
+    for (auto& [pSubmesh, vbLayoutIdx, xform] : batch_) {
+        xform = pSubmesh->parent()->parent()->coord().xform();
+        pids.emplace_back(
+            /* .wvp = */ mu::transpose( xform * pCamera_->view() * pCamera_->proj() ).getXmf(),
+            /* .wv = */ mu::transpose( xform * pCamera_->view() ).getXmf(),
+            /* .wvNormal = */ dx::convertMat<dx::XMFLOAT3X3>(
+                mu::inverse(xform * pCamera_->view()).get()
+            )
+        );
+
+        if (pids.size() == shader().maxInstanceCnt()) [[unlikely]] {
+            break;
+        }
+    }
+
+    auto lightBuffer = std::vector<sr::Light>();
+    lightBuffer.reserve( lights_.size() );
+
+    for (const auto& light : lights_) {
+        lightBuffer.emplace_back( light->toViewLight(*pCamera_) );
+
+        if (lightBuffer.size() == shader().maxLightCnt()) [[unlikely]] {
+            break;
+        }
+    }
+
+    auto pfd = sr::PerFrameData0{
+        .globalAmbient = dx::XMFLOAT3(0.1f, 0.1f, 0.1f),
+        .lightCnt = static_cast<std::uint32_t>( lightBuffer.size() )
+    };
+
+    shader().perInstanceData_.stage(pids.data(), pids.size() * sizeof(sr::PerInstanceData3));
+    shader().lightBuffer_.stage(lightBuffer.data(), lightBuffer.size() * sizeof(sr::Light));
+    shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData0));
+}
+
+void Tessellation::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
+    renderTargets.bind(cmdList, RenderTargets::Specifier::Main);
+
+    auto first = batch_.begin();
+    auto accDrawcallCnt = 0u;
+
+    while (first != batch_.end()) {
+        auto proj = [this](const auto& tuple) {
+            return std::tuple(
+                &std::get<gfx::d3d12::Submesh*>(tuple)->material(),
+                std::get<gfx::d3d12::Submesh*>(tuple)->refSubmesh()
+            );
+        };
+
+        auto last = std::ranges::upper_bound(first, batch_.end(), proj(*first), std::less<>{}, proj);
+
+        auto pSubmesh = std::get<gfx::d3d12::Submesh*>(*first);
+
+        auto material = sr::PBRMaterial::convert( pSubmesh->material() );
+
+        auto& pHeightMapTex = shader().pHeightMap_;
+
+        auto pdd = sr::PerDrawcallData4{
+            .material = material,
+            .heightMapRef = Material::MapRef{
+                .type = etoi(Material::ResourceType::Texture),
+                .resourceIdx = static_cast<std::uint32_t>( pHeightMapTex->view(pHeightMapTex->idxSrv).offset() ),
+                .arrayIdx = 0u,
+                .colorSpace = etoi(Material::ColorSpace::SRGB)
+            }.toxm(),
+            .instanceBase = static_cast<std::uint32_t>(first - batch_.begin()),
+            .heightMapSamplerIdx = UnifiedRoot::get().samplers[ UnifiedRoot::SamplerIndices::TrilinearBorder ],
+            .samplerIdx = UnifiedRoot::get().samplers[ UnifiedRoot::SamplerIndices::TrilinearBorder ]
+        };
+        shader().perDrawcallData_.stage( &pdd, sizeof(sr::PerDrawcallData4),
+            0u, accDrawcallCnt * shader().cbDrawcallDataSize()
+        );
+
+        shader().bindPerDrawcallData(accDrawcallCnt++, cmdList);
+
+        shader().draw( cmdList, *pSubmesh, static_cast<std::size_t>(last - first),
+            std::get<VBLayoutIdx>(*first)
+        );
+
+        if (accDrawcallCnt == shader().maxDrawcallCnt()) {
+            break;
+        }
+
+        first = last;
+    }
+}
+
+void Tessellation::postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
+
+}
+
+void Tessellation::trackModel(Model* pModel) {
+    if (!pModel->markedRenderPasses().empty()) {
+        auto it = std::ranges::find(pModel->markedRenderPasses(), renderPassID());
+        if (it == pModel->markedRenderPasses().end()) {
+            return;
+        }
+    }
+
+    auto& nodes = pModel->nodes();
+
+    for (auto& node : nodes) {
+        auto xform = node.coord().xform();
+        for (auto& mesh : node.meshes()) {
+            auto vbLayoutIdx = protocol_.compatibleLayout(*mesh.refMesh());
+            if (!vbLayoutIdx) {
+                throw std::runtime_error("Incompatible mesh");
+            }
+
+            for (auto& submesh : mesh.submeshes()) {
+                batch_.emplace_back(&submesh, vbLayoutIdx.value(), xform);
+            }
+        }
+    }
+}
+
 }   // namespace gfx::d3d12::rp
 
 }   // namespace gfx::d3d12
