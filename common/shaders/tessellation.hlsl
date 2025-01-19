@@ -123,17 +123,17 @@ HSConstantOutput HSConstant(InputPatch<VSOutput, 4> input)
     float Distance11 = clamp((Len11 - zMin) / (zMax - zMin), 0.0, 1.0);
 
     const int MIN_TESS_LEVEL = 1;
-    const int MAX_TESS_LEVEL = 7;
+    const int MAX_TESS_LEVEL = 8;
 
-    float TessLevel0 = lerp( MAX_TESS_LEVEL, MIN_TESS_LEVEL, min(Distance10, Distance00) );
-    float TessLevel1 = lerp( MAX_TESS_LEVEL, MIN_TESS_LEVEL, min(Distance00, Distance01) );
-    float TessLevel2 = lerp( MAX_TESS_LEVEL, MIN_TESS_LEVEL, min(Distance01, Distance11) );
-    float TessLevel3 = lerp( MAX_TESS_LEVEL, MIN_TESS_LEVEL, min(Distance11, Distance10) );
+    float TessLevel0 = min( lerp( MAX_TESS_LEVEL, MIN_TESS_LEVEL, min(Distance10, Distance00) ), 6.f );
+    float TessLevel1 = min( lerp( MAX_TESS_LEVEL, MIN_TESS_LEVEL, min(Distance00, Distance01) ), 6.f );
+    float TessLevel2 = min( lerp( MAX_TESS_LEVEL, MIN_TESS_LEVEL, min(Distance01, Distance11) ), 6.f );
+    float TessLevel3 = min( lerp( MAX_TESS_LEVEL, MIN_TESS_LEVEL, min(Distance11, Distance10) ), 6.f );
 
-    output.tessEdgeFactors[0] = TessLevel0;
-    output.tessEdgeFactors[1] = TessLevel1;
-    output.tessEdgeFactors[2] = TessLevel2;
-    output.tessEdgeFactors[3] = TessLevel3;
+    output.tessEdgeFactors[0] = pow(2.f, TessLevel0) - 1.f;
+    output.tessEdgeFactors[1] = pow(2.f, TessLevel1) - 1.f;
+    output.tessEdgeFactors[2] = pow(2.f, TessLevel2) - 1.f;
+    output.tessEdgeFactors[3] = pow(2.f, TessLevel3) - 1.f;
 
     output.tessInsideFactors[0] = max(TessLevel1, TessLevel3);
     output.tessInsideFactors[1] = max(TessLevel0, TessLevel2);
