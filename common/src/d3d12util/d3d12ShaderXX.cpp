@@ -772,19 +772,19 @@ void ShaderTessellation::bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCm
 
 void ShaderTessellation::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath/"pbrShaderTerrain.hlsl", inputLayout(), nullptr,
+		shaderPath/"tessellation.hlsl", inputLayout(), nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 	blobs_[etoi(ShaderBlob::Type::Pixel)] = ShaderBlob{
-		shaderPath/"pbrShaderTerrain.hlsl", inputLayout(), nullptr,
+		shaderPath/"tessellation.hlsl", inputLayout(), nullptr,
 		"PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Pixel
 	};
 	blobs_[etoi(ShaderBlob::Type::Hull)] = ShaderBlob{
-		shaderPath/"pbrShaderTerrain.hlsl", inputLayout(), nullptr,
+		shaderPath/"tessellation.hlsl", inputLayout(), nullptr,
 		"HSMain", "hs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Hull
 	};
 	blobs_[etoi(ShaderBlob::Type::Domain)] = ShaderBlob{
-		shaderPath/"pbrShaderTerrain.hlsl", inputLayout(), nullptr,
+		shaderPath/"tessellation.hlsl", inputLayout(), nullptr,
 		"DSMain", "ds_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Domain
 	};
 }

@@ -1819,7 +1819,7 @@ void LevelChunk::initChunkMesh(D3D12Device& device, D3D12GfxCmdList& cmdList) {
     );
 
     // construct index buffer
-    std::vector<std::uint8_t> ibMem((patchWidth - 1) * (patchLength - 1) * 2 * sizeof(std::uint16_t));
+    std::vector<std::uint8_t> ibMem((patchWidth - 1) * (patchLength - 1) * 4 * sizeof(std::uint16_t));
 
     auto k = 0;
 
@@ -1827,7 +1827,7 @@ void LevelChunk::initChunkMesh(D3D12Device& device, D3D12GfxCmdList& cmdList) {
         for (int x = 0; x < patchWidth - 1; ++x) {
             for (int i = 0; i < 2; ++i) {
                 for (int j = 0; j < 2; ++j) {
-                    auto idx = x + j + ((z + i) * patchWidth);
+                    auto idx = static_cast<std::uint16_t>( x + j + ((z + i) * patchWidth) );
                     std::memcpy(ibMem.data() + k++ * sizeof(std::uint16_t), &idx, sizeof(std::uint16_t));
                 }
             }
