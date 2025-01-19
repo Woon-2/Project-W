@@ -309,7 +309,7 @@ public:
 
     const dx::XMFLOAT2 getXmf() const __MathUtil_NOEXCEPT requires (D == 2) {
         dx::XMFLOAT2 ret;
-        dx::XMStoreFloat3(&ret, vec_);
+        dx::XMStoreFloat2(&ret, vec_);
         return ret;
     }
 
