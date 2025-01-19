@@ -742,7 +742,7 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
 
     void Start()
     {
-        binaryWriter = new BinaryWriter(File.Open(string.Copy(gameObject.name).Replace(" ", "_") + ".bin", FileMode.Create));
+        binaryWriter = new BinaryWriter(File.Open(string.Copy(transform.parent.gameObject.name).Replace(" ", "_") + ".bin", FileMode.Create));
 
         ReadRemapFile("Remap.bin");
         ArrangeTextureList(transform);
