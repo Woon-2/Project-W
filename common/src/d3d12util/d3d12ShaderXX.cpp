@@ -734,7 +734,7 @@ ShaderTessellation::ShaderTessellation( D3D12Device& device, const RootSignature
 )  : Shader(root, makeInputLayout(ilSpec)),
 	cbDrawcallDataSize_( calcConstantBufferSize(sizeof(sr::PerDrawcallData4)) ),
 	perDrawcallData_(device, cbDrawcallDataSize_ * config.maxDrawcallCnt),
-	perInstanceData_(device, sizeof(sr::PerInstanceData3) * config.maxInstanceCnt),
+	perInstanceData_(device, sizeof(sr::PerInstanceData0) * config.maxInstanceCnt),
 	perFrameData_(device, sizeof(sr::PerFrameData0)),
 	maxInstanceCnt_(config.maxInstanceCnt), maxDrawcallCnt_(config.maxDrawcallCnt), maxLightCnt_(config.maxLightCnt),
 	lightBuffer_(device, sizeof(sr::Light) * config.maxLightCnt)
@@ -835,6 +835,102 @@ InputLayout ShaderTessellation::makeInputLayoutSeparated() {
 		}
 	} );
 }
+
+ShaderShadowMapTessellation::ShaderShadowMapTessellation( D3D12Device& device,
+	const RootSignature& root, const Config& config, InputLayout::Spec ilSpec
+) : Shader(root, makeInputLayout(ilSpec)),
+	cbDrawcallDataSize_( calcConstantBufferSize(sizeof(sr::PerDrawcallData4)) ),
+	perDrawcallData_(device, cbDrawcallDataSize_ * config.maxDrawcallCnt),
+	perInstanceData_(device, sizeof(sr::PerInstanceData4) * config.maxInstanceCnt),
+	perFrameData_(device, sizeof(sr::PerFrameData1)),
+	maxInstanceCnt_(config.maxInstanceCnt), maxDrawcallCnt_(config.maxDrawcallCnt) {
+	perDrawcallData_.pullGpuAddr();
+	perInstanceData_.pullGpuAddr();
+	perFrameData_.pullGpuAddr();
+}
+
+void ShaderShadowMapTessellation::bindRootParams(D3D12GfxCmdList& cmdList) {
+	auto& root = UnifiedRoot::get();
+
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		root.params[ UnifiedRoot::ParamIndices::b2 ],
+		perFrameData_.gpuAddr()
+	);
+	cmdList.get()->SetGraphicsRootShaderResourceView(
+		root.params[ UnifiedRoot::ParamIndices::t0 ],
+		perInstanceData_.gpuAddr()
+	);	
+}
+
+void ShaderShadowMapTessellation::bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCmdList& cmdList) {
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		UnifiedRoot::get().params[ UnifiedRoot::ParamIndices::b1 ],
+		perDrawcallData_.gpuAddr() + cbDrawcallDataSize() * drawcallIdx
+	);
+}
+
+void ShaderShadowMapTessellation::loadBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
+		shaderPath/"shadowMapTerrain.hlsl", inputLayout(), nullptr,
+		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
+	};
+	blobs_[etoi(ShaderBlob::Type::Hull)] = ShaderBlob{
+		shaderPath/"shadowMapTerrain.hlsl", inputLayout(), nullptr,
+		"HSMain", "hs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Hull
+	};
+	blobs_[etoi(ShaderBlob::Type::Domain)] = ShaderBlob{
+		shaderPath/"shadowMapTerrain.hlsl", inputLayout(), nullptr,
+		"DSMain", "ds_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Domain
+	};
+}
+
+void ShaderShadowMapTessellation::releaseBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)].reset();
+	blobs_[etoi(ShaderBlob::Type::Hull)].reset();
+	blobs_[etoi(ShaderBlob::Type::Domain)].reset();
+}
+
+InputLayout ShaderShadowMapTessellation::makeInputLayout(InputLayout::Spec ilSpec) {
+	switch (ilSpec) {
+	case InputLayout::Spec::serial:
+		return makeInputLayoutSerial();
+	case InputLayout::Spec::separated:
+		return makeInputLayoutSeparated();
+	default:
+		throw GFX_EXCEPT( "Invalid input layout specification." );
+	}
+}
+
+InputLayout ShaderShadowMapTessellation::makeInputLayoutSerial() {
+	return InputLayout( std::vector<InputLayout::Slot>{
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "POSITION", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+				InputLayout::Elem{ .semanticName = "TEXCOORD", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32_FLOAT }
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Position3D))
+				| (1ull << etoi(Vertex::Properties::TexCoord2D0))
+		}
+	} );
+}
+
+InputLayout ShaderShadowMapTessellation::makeInputLayoutSeparated() {
+	return InputLayout( std::vector<InputLayout::Slot>{
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "POSITION", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Position3D))
+		},
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "TEXCOORD", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32_FLOAT },
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::TexCoord2D0))
+		}
+	} );
+}
+
 
 }   // namespace gfx::d3d12
 

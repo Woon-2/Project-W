@@ -23,6 +23,7 @@ struct Material {
 
 struct PerInstanceData {
 	float4x4 wvp;
+    float4x4 world;
     float4x4 wv;
     float3x3 wvNormal;
 };
@@ -50,6 +51,13 @@ cbuffer PerFrameData : register(b2) {
 StructuredBuffer<PerInstanceData> gInstances: register(t0);
 
 #include "pbrLighting.hlsl"
+
+static float4x4 gmtxTexturize = {
+	0.5f, 0.0f, 0.0f, 0.0f,
+	0.0f, -0.5f, 0.0f, 0.0f,
+	0.0f, 0.0f, 1.0f, 0.0f,
+	0.5f, 0.5f, 0.0f, 1.0f
+};
 
 struct VSOutput 
 {
@@ -146,6 +154,7 @@ HSConstantOutput HSConstant(InputPatch<VSOutput, 4> input)
 struct DSOutput {
 	float4 pos : SV_POSITION;
     float3 posV : POSITION_V;
+    float4 posL : POSITION_L;
 	float3 normalV : NORMAL_V;
     float3 tangentV : TANGENT_V;
     float3 bitangentV : BITANGENT_V;
@@ -202,6 +211,12 @@ DSOutput DSMain(HSConstantOutput input, float2 uv : SV_DomainLocation, const Out
 
     // transform from local to view space
     output.posV = mul(output.pos, gInstances[instanceBase + input.instanceOffset].wv).xyz;
+
+    // transform from local to light space
+    output.posL = mul( mul(
+        mul(output.pos, gInstances[instanceBase + input.instanceOffset].world),
+        lightVP
+    ), gmtxTexturize );
     // transform from local to clip space
 	output.pos = mul(output.pos, gInstances[instanceBase + input.instanceOffset].wvp);
 
@@ -248,5 +263,6 @@ float4 PSMain(DSOutput input) : SV_TARGET {
 	}
 
     // return float4(input.texcoord, 0.f, 1.f);
-    return accumulateLighting(input.posV, N, input.tileTexCoord);
+    // return accumulateLighting(input.posV, N, input.tileTexCoord);
+    return illuminate(input.posV, input.posL, input.normalV, input.tileTexCoord);
 }

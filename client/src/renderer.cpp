@@ -43,7 +43,17 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
             .maxLightCnt = 0x100u
         }, gfx::d3d12::InputLayout::Spec::serial
     ), renderPassTessellation_(core.device(), shaderTessellation_,
-        gfx::d3d12::convClientToVP(core.window().client())) {}
+        gfx::d3d12::convClientToVP(core.window().client())
+    ), shaderShadowMapTessellation_(core.device(), core.root(),
+        gfx::d3d12::ShaderShadowMapTessellation::Config{
+            .maxInstanceCnt = 0x1000u,
+            .maxDrawcallCnt = 0x1000u,
+        }, gfx::d3d12::InputLayout::Spec::serial
+    ), renderPassShadowMapTessellation_(core.device(),
+        shaderShadowMapTessellation_, renderPassShadowMap_
+    ) {
+        shaderShadowMapTessellation_.pShadowMap_ = &shaderShadowMap_.shadowMap_;
+    }
 
 void Renderer::layoutVBsPBR( gfx::d3d12engine::Core& core,
     const gfx::d3d12::RefModelStorage::ID& key,
@@ -64,6 +74,7 @@ void Renderer::init(gfx::d3d12engine::Scene& scene) {
     renderPassPBRTerrain_.init(scene);
     renderPassShadowMap_.init(scene);
     renderPassTessellation_.init(scene);
+    renderPassShadowMapTessellation_.init(scene);
 }
 
 void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& scene, gfx::d3d12::RenderTargets& renderTargets) {
@@ -74,6 +85,7 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
     renderPassShadowMap_.update(scene);
     renderPassScreenQuad_.update(scene);
     renderPassTessellation_.update(scene);
+    renderPassShadowMapTessellation_.update(scene);
 
     switch (renderMode_) {
     case Mode::Color:
@@ -81,6 +93,11 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
         renderPassShadowMap_.preRender( cmdList, renderTargets );
         renderPassShadowMap_.render( cmdList, renderTargets );
         renderPassShadowMap_.postRender( cmdList, renderTargets );
+
+        shaderShadowMapTessellation_.bindRootParams( cmdList );
+        renderPassShadowMapTessellation_.preRender( cmdList, renderTargets );
+        renderPassShadowMapTessellation_.render( cmdList, renderTargets );
+        renderPassShadowMapTessellation_.postRender( cmdList, renderTargets );
 
         shaderPBRTerrain_.bindRootParams( cmdList );
         renderPassPBRTerrain_.preRender( cmdList, renderTargets );
@@ -95,7 +112,7 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
         shaderTessellation_.bindRootParams( cmdList );
         renderPassTessellation_.preRender( cmdList, renderTargets );
         renderPassTessellation_.render( cmdList, renderTargets );
-        renderPassTessellation_.postRender( cmdList, renderTargets );       
+        renderPassTessellation_.postRender( cmdList, renderTargets );
         break;
 
     case Mode::DirectionalLightDepth:
@@ -103,6 +120,11 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
         renderPassShadowMap_.preRender( cmdList, renderTargets );
         renderPassShadowMap_.render( cmdList, renderTargets );
         renderPassShadowMap_.postRender( cmdList, renderTargets );
+
+        shaderShadowMapTessellation_.bindRootParams( cmdList );
+        renderPassShadowMapTessellation_.preRender( cmdList, renderTargets );
+        renderPassShadowMapTessellation_.render( cmdList, renderTargets );
+        renderPassShadowMapTessellation_.postRender( cmdList, renderTargets );
 
         shaderScreenQuad_.bindRootParams( cmdList );
         shaderScreenQuad_.screenQuad_.link(&shaderShadowMap_.shadowMap_);

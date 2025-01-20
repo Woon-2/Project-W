@@ -453,6 +453,39 @@ void Tessellation::update(Scene& scene) {
     }
 }
 
+void ShadowMapTessellation::init(Scene& scene) {
+    // for (auto& pModel : models(scene)) {
+    //    do nothing
+    // }
+    for (auto& pChunk : levelChunks(scene)) {
+        trackChunk(&pChunk->get());
+    }
+    if (!cameras(scene).empty()) {
+        auto& pCamera = cameras(scene).front();
+        if (pCamera) {
+            setCamera(&cameras(scene).front()->get());
+        }
+    }
+    if (lights(scene).empty()) {
+        throw GFX_EXCEPT("No light found");
+    }
+    setLight( &lights(scene).front()->get() );
+}
+
+void ShadowMapTessellation::update(Scene& scene) {
+    for (auto& entityID : reservedEntities(scene)) {
+        // if ( auto pModel = Model::at(entityID) ) {
+        //     do nothing
+        // }
+        for (auto& pChunk : levelChunks(scene)) {
+            trackChunk(&pChunk->get());
+        }
+        if ( auto pCamera = Camera::at(entityID) ) {
+            setCamera(&pCamera->get());
+        }
+    }
+}
+
 }   // namespace gfx::d3d12engine::rp
 
 }   // namespace gfx::d3d12engine

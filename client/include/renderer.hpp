@@ -45,6 +45,9 @@ private:
     gfx::d3d12::ShaderTessellation shaderTessellation_;
     gfx::d3d12engine::rp::Tessellation renderPassTessellation_;
 
+    gfx::d3d12::ShaderShadowMapTessellation shaderShadowMapTessellation_;
+    gfx::d3d12engine::rp::ShadowMapTessellation renderPassShadowMapTessellation_;
+
     Mode renderMode_;
 };
 

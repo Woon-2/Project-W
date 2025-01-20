@@ -1,9 +1,29 @@
-#include "samplers.hlsl"
+#include "bindless.hlsl"
+
+struct Material {
+    float4 albedoConstant;
+    float roughnessConstant;
+    float metallicConstant;
+    float albedoConstantMapRatio;
+    float roughnessConstantMapRatio;
+    float metallicConstantMapRatio;
+    float3 emmisiveConstant;
+    float emmisiveConstantMapRatio;
+    float ambientOcclusionConstant;
+    float ambientOcclusionConstantMapRatio;
+    float padding;
+    uint4 albedoMapRef;
+    uint4 roughnessMapRef;
+    uint4 normalMapRef;
+    uint4 metallicMapRef;
+    uint4 metallicSmoothnessMapRef;
+    uint4 emmisiveMapRef;
+    uint4 ambientOcclusionMapRef;
+};
 
 struct PerInstanceData {
-	float4x4 wvp;
+	float4x4 world;
     float4x4 wv;
-    float3x3 wvNormal;
 };
 
 cbuffer PerDrawcallData : register(b1) {
@@ -18,12 +38,7 @@ cbuffer PerDrawcallData : register(b1) {
 };
 
 cbuffer PerFrameData : register(b2) {
-    float3 globalAmbient;
-    float padding0;
-    uint4 shadowMapRef;
     float4x4 lightVP;
-    uint lightCnt;
-    uint3 padding1;
 };
 
 StructuredBuffer<PerInstanceData> gInstances: register(t0);
@@ -140,10 +155,10 @@ DSOutput DSMain(HSConstantOutput input, float2 uv : SV_DomainLocation, const Out
 
     float2 t0 = lerp(t00, t01, uv.x); 	 // interpolate bottom
     float2 t1 = lerp(t10, t11, uv.x);    // interpolate top
-    output.texcoord = lerp(t0, t1, uv.y);          // final interpolation
+    float2 texcoord = lerp(t0, t1, uv.y);          // final interpolation
 
     // sample the height from the height map
-	float height = sampleLevelFromMapRef(heightMapRef, output.texcoord, 0.f, heightMapSamplerIdx).r;
+	float height = sampleLevelFromMapRef(heightMapRef, texcoord, 0.f, heightMapSamplerIdx).r;
 
     // get the position for each vertex
     float3 p00 = patch[0].pos;
@@ -158,8 +173,11 @@ DSOutput DSMain(HSConstantOutput input, float2 uv : SV_DomainLocation, const Out
     
     output.pos.y += height * 100.f;  // add the sampled height
 
-    // transform from local to clip space
-	output.pos = mul(output.pos, gInstances[instanceBase + input.instanceOffset].wvp);
+    // transform from local to light space
+	output.pos = mul(
+        mul(output.pos, gInstances[instanceBase + input.instanceOffset].world),
+        lightVP    
+    );
 
 	return output;
 }

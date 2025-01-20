@@ -375,6 +375,14 @@ public:
     void update(Scene& scene) override;
 };
 
+class ShadowMapTessellation : public IRenderPass, public d3d12::rp::ShadowMapTessellation {
+public:
+    using d3d12::rp::ShadowMapTessellation::ShadowMapTessellation;
+
+    void init(Scene& scene) override;
+    void update(Scene& scene) override;
+};
+
 }   // namespace gfx::d3d12engine::rp
 
 }   // namespace gfx::d3d12engine

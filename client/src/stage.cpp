@@ -53,7 +53,7 @@ void Stage::initEntities(gfx::d3d12engine::Core& core) {
                 .width = 20.f,
                 .height = 20.f,
                 .nearZ = 600.f,
-                .farZ = 1200.f
+                .farZ = 1800.f
             }
         },
         .color = mu::Vec3(1.f, 1.f, 1.f),

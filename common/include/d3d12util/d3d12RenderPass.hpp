@@ -371,6 +371,7 @@ private:
 class ShadowMap : public gfx::d3d12::RenderPass {
 public:
     static constexpr const char* id = "ShadowMap";
+    friend class ShadowMapTessellation;
 
     ShadowMap( D3D12Device& device, ShaderShadowMap& shader,
         DescriptorRange<DescriptorHeapCPU>& dsvRange,
@@ -485,6 +486,52 @@ private:
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
     std::vector<const WorldLight*> lights_;
+    std::vector<const LevelChunkModel*> batch_;
+    const Camera* pCamera_;
+    ShadowMaterial* pShadowMaterial_;
+};
+
+class ShadowMapTessellation : public gfx::d3d12::RenderPass {
+public:
+    static constexpr const char* id = "ShadowMapTessellation";
+
+    ShadowMapTessellation( D3D12Device& device, ShaderShadowMapTessellation& shader,
+        ShadowMap& shadowMapRP, const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
+    );
+
+    void setViewport(const D3D12_VIEWPORT& vp);
+
+    const D3D12_VIEWPORT& viewport() const NOEXCEPT {
+        return viewport_;
+    }    
+
+    void preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    
+    void trackChunk(const LevelChunkModel* pChunk);
+    void setCamera(const Camera* pCamera) NOEXCEPT {
+        pCamera_ = pCamera;
+    }
+    void setLight(const WorldLight* pLight);
+
+private:
+    ShaderShadowMapTessellation& shader() noexcept {
+        return static_cast<ShaderShadowMapTessellation&>(protocol_.shader());
+    }
+    const ShaderShadowMapTessellation& shader() const noexcept {
+        return static_cast<const ShaderShadowMapTessellation&>(protocol_.shader());
+    }
+
+    static RenderProtocol::Desc makeDesc();
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC shadowMapSrvDesc_;
+    D3D12_DEPTH_STENCIL_VIEW_DESC shadowMapDsvDesc_;
+    std::size_t idxShadowMapDsv_;
+    ShadowMaterial* pShadowMaterial_;
+    D3D12_VIEWPORT viewport_;
+    RenderProtocol protocol_;
+    const WorldLight* pLight_;
     std::vector<const LevelChunkModel*> batch_;
     const Camera* pCamera_;
 };
