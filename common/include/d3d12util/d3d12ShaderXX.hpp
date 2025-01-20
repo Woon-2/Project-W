@@ -441,7 +441,7 @@ struct PerFrameData0 {
 	float padding0;
 	dx::XMUINT4 shadowMapRef;
 	dx::XMFLOAT4X4 lightVP;
-	std::uint32_t lightCnt;
+	std::uint32_t lightCnt;	
 	dx::XMUINT3 padding1;
 };
 
@@ -700,19 +700,14 @@ public:
 		return maxLightCnt_;
 	}
 
-	void linkHeightMap(Texture* pHeightMap) NOEXCEPT {
-		pHeightMap_ = pHeightMap;
-	}
-
-	void unlinkHeightMap() NOEXCEPT {
-		pHeightMap_ = nullptr;
+	void draw(D3D12GfxCmdList& cmdList, const LevelChunkModel& chunk) const {
+		chunk.draw(cmdList);
 	}
 
 	UploadBuffer perInstanceData_;
 	UploadBuffer perDrawcallData_;
 	UploadBuffer perFrameData_;
 	UploadBuffer lightBuffer_;
-	Texture* pHeightMap_;
 
 private:
 	static InputLayout makeInputLayout(InputLayout::Spec ilSpec);
@@ -723,6 +718,60 @@ private:
 	std::size_t maxDrawcallCnt_;
 	std::size_t maxLightCnt_;
 };
+
+// class ShaderShadowMapTessellation : public Shader {
+// private:
+// 	std::size_t cbDrawcallDataSize_;
+
+// public:
+// 	struct Config {
+// 		std::size_t maxInstanceCnt;
+// 		std::size_t maxDrawcallCnt;
+// 	};
+
+// 	ShaderShadowMapTessellation( D3D12Device& device, const RootSignature& root,
+// 		const Config& config, const Texture::Desc& shadowMapDesc,
+// 		DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+// 		InputLayout::Spec ilSpec = InputLayout::Spec::serial
+// 	);
+
+// 	RenderProtocol makeProtocol( D3D12Device& device, const RenderProtocol::Desc& desc) {
+// 		return RenderProtocol( device, *this,
+// 			selectBlobsStrong<ShaderBlob::Type::Vertex, ShaderBlob::Type::Hull, ShaderBlob::Type::Domain>(), desc
+// 		);
+// 	}
+
+// 	std::size_t maxInstanceCnt() const noexcept {
+// 		return maxInstanceCnt_;
+// 	}
+
+// 	std::size_t maxDrawcallCnt() const noexcept {
+// 		return maxDrawcallCnt_;
+// 	}
+
+// 	void bindRootParams(D3D12GfxCmdList& cmdList) override;
+// 	void bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCmdList& cmdList);
+
+// 	void loadBlobs() override;
+// 	void releaseBlobs() override;
+
+// 	UploadBuffer perFrameData_;
+// 	UploadBuffer perDrawcallData_;
+// 	UploadBuffer perInstanceData_;
+// 	Texture shadowMap_;
+
+// 	std::size_t cbDrawcallDataSize() const noexcept {
+// 		return cbDrawcallDataSize_;
+// 	}
+
+// private:
+// 	static InputLayout makeInputLayout(InputLayout::Spec ilSpec);
+// 	static InputLayout makeInputLayoutSerial();
+// 	static InputLayout makeInputLayoutSeparated();
+
+// 	std::size_t maxInstanceCnt_;
+// 	std::size_t maxDrawcallCnt_;
+// };
 
 }   // namespace gfx::d3d12
 

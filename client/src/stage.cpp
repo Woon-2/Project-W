@@ -47,14 +47,6 @@ void Stage::initEntities(gfx::d3d12engine::Core& core) {
     player_.addCamera(mu::Vec3(0.f, 4.8f, -10.f), 1.f, pSystems_->coordRoot);
     player_.as<gfx::d3d12engine::Coord>().get() << mu::translate(0.f, 2.5f, 0.f);
 
-    /*
-    const auto lightPos = mu::Vec3( pCamera_->repPos() - pLight_->dir * 800.f );
-    const auto lightDir = pLight_->dir;
-
-    const auto lightView = mu::lookAt( lightPos, lightPos + lightDir, mu::Vec3( 0.f, 1.f, 0.f ) );
-    const auto lightProj = mu::ortho( -10.f, 10.f, -10.f, 10.f, 600.f, 1200.f );
-    */
-
     directionalLight_.init(gfx::d3d12::WorldLight{
         .config = gfx::d3d12::WorldLight::Config{
             .ortho = {
@@ -72,15 +64,10 @@ void Stage::initEntities(gfx::d3d12engine::Core& core) {
     });
 
     scene_.addEntity(player_);
-    for (auto& subsetRows : terrain_.subsets()) {
-        for (auto& subset : subsetRows) {
-            scene_.addEntity(subset);
-        }
-    }
+    level_.activateChunk(1u, 1u, scene_);
     scene_.addEntity(directionalLight_);
 
     pSystems_->coordRoot.addEntity(player_);
-    // pSystems_->coordRoot.addEntity(terrain_);
     pSystems_->inputSystem.addEntity(player_);
     pSystems_->physicsSystem.addEntity(player_);
 
@@ -94,7 +81,7 @@ void Stage::loadAssets(gfx::d3d12engine::Core& core) {
 
     loadTextures(core, cmdList);
     loadModels(core, cmdList);
-    // loadTerrains(core, cmdList);
+    loadLevel(core, cmdList);
 
     core.finishGPUResLoad();
 }
@@ -108,10 +95,10 @@ void loadTexture(gfx::d3d12engine::Core& core, AssetTexture key) {
 
 void Stage::loadTextures(gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdList& cmdList) {
     loadTexture(core, AssetTexture::Helicopter);
-    loadTexture(core, AssetTexture::Terrain);
     loadTexture(core, AssetTexture::Tree0);
     loadTexture(core, AssetTexture::Tree1);
     loadTexture(core, AssetTexture::Tree2);
+    loadTexture(core, AssetTexture::Terrain);
 }
 
 void loadModel(gfx::d3d12engine::Core& core, AssetModel key, Renderer& renderer) {
@@ -128,17 +115,6 @@ void Stage::loadModels(gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdList
     loadModel(core, AssetModel::Tree2, *pRenderer_);
 }
 
-void Stage::loadTerrains(gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdList& cmdList) {
-    terrain_.init(
-        "Terrain",
-        resourcePath/"terrains/Height-Map.png",
-        resourcePath/"terrains/Diffuse-Map.dds",
-        mu::Vec3(0.05f, 200.f, 0.05f),
-        core, mu::Vec3(0.f, -7.5f, 0.f)
-    );
-    for (const auto& subsetRows : terrain_.subsets()) {
-        for (const auto& subset : subsetRows) {
-            pRenderer_->layoutVBsPBRMacro(core, subset.refModelKey(), 1);
-        }
-    }
+void Stage::loadLevel(gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdList& cmdList) {
+    level_ = gfx::d3d12engine::LevelRegion(core);
 }

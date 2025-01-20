@@ -835,18 +835,11 @@ void Tessellation::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTarg
     auto scissorRect = D3D12_RECT{ 0, 0, static_cast<LONG>(viewport_.Width), static_cast<LONG>(viewport_.Height) };
     cmdList.get()->RSSetScissorRects(1u, &scissorRect);
 
-    std::ranges::sort( batch_, std::less<>{}, [this](const auto& tuple) {
-        return std::tuple(
-            &std::get<gfx::d3d12::Submesh*>(tuple)->material(),
-            std::get<gfx::d3d12::Submesh*>(tuple)->refSubmesh()
-        );
-    } );
-
     auto pids = std::vector<sr::PerInstanceData3>();
     pids.reserve( shader().maxInstanceCnt() );
 
-    for (auto& [pSubmesh, vbLayoutIdx, xform] : batch_) {
-        xform = pSubmesh->parent()->parent()->coord().xform();
+    for (const auto& pChunk : batch_) {
+        auto xform = pChunk->idxToWorld();
         pids.emplace_back(
             /* .wvp = */ mu::transpose( xform * pCamera_->view() * pCamera_->proj() ).getXmf(),
             /* .wv = */ mu::transpose( xform * pCamera_->view() ).getXmf(),
@@ -884,53 +877,29 @@ void Tessellation::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTarg
 void Tessellation::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
     renderTargets.bind(cmdList, RenderTargets::Specifier::Main);
 
-    auto first = batch_.begin();
     auto accDrawcallCnt = 0u;
-
-    while (first != batch_.end()) {
-        auto proj = [this](const auto& tuple) {
-            return std::tuple(
-                &std::get<gfx::d3d12::Submesh*>(tuple)->material(),
-                std::get<gfx::d3d12::Submesh*>(tuple)->refSubmesh()
-            );
-        };
-
-        auto last = std::ranges::upper_bound(first, batch_.end(), proj(*first), std::less<>{}, proj);
-
-        auto pSubmesh = std::get<gfx::d3d12::Submesh*>(*first);
-
-        auto material = sr::PBRMaterial::convert( pSubmesh->material() );
-
-        auto& pHeightMapTex = shader().pHeightMap_;
-
+    for (const auto& pChunk : batch_) {
+        auto material = sr::PBRMaterial::convert( pChunk->material() );
         auto pdd = sr::PerDrawcallData4{
             .material = material,
-            .heightMapRef = Material::MapRef{
-                .type = etoi(Material::ResourceType::Texture),
-                .resourceIdx = static_cast<std::uint32_t>( pHeightMapTex->view(pHeightMapTex->idxSrv).offset() ),
-                .arrayIdx = 0u,
-                .colorSpace = etoi(Material::ColorSpace::SRGB),
-            }.toxm(),
-            .instanceBase = static_cast<std::uint32_t>(first - batch_.begin()),
+            .heightMapRef = pChunk->material().mapRef(Material::MapType::Height).toxm(),
+            .instanceBase = accDrawcallCnt,
             .heightMapSamplerIdx = UnifiedRoot::get().samplers[ UnifiedRoot::SamplerIndices::TrilinearBorder ],
-            .samplerIdx = UnifiedRoot::get().samplers[ UnifiedRoot::SamplerIndices::TrilinearBorder ],
-            .tileScale = mu::Vec2(100.f).getXmf()  // TODO: get from material
+            .samplerIdx = UnifiedRoot::get().samplers[ UnifiedRoot::SamplerIndices::TrilinearWrap ],
+            .tileScale = mu::Vec2(33.f).getXmf()  // TODO: get from material
         };
+
         shader().perDrawcallData_.stage( &pdd, sizeof(sr::PerDrawcallData4),
             0u, accDrawcallCnt * shader().cbDrawcallDataSize()
         );
 
         shader().bindPerDrawcallData(accDrawcallCnt++, cmdList);
 
-        shader().draw( cmdList, *pSubmesh, static_cast<std::size_t>(last - first),
-            std::get<VBLayoutIdx>(*first)
-        );
+        shader().draw( cmdList, *pChunk );
 
         if (accDrawcallCnt == shader().maxDrawcallCnt()) {
             break;
         }
-
-        first = last;
     }
 }
 
@@ -938,7 +907,7 @@ void Tessellation::postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTar
 
 }
 
-void Tessellation::trackModel(Model* pModel) {
+void Tessellation::trackChunk(const LevelChunkModel* pModel) {
     if (!pModel->markedRenderPasses().empty()) {
         auto it = std::ranges::find(pModel->markedRenderPasses(), renderPassID());
         if (it == pModel->markedRenderPasses().end()) {
@@ -946,21 +915,7 @@ void Tessellation::trackModel(Model* pModel) {
         }
     }
 
-    auto& nodes = pModel->nodes();
-
-    for (auto& node : nodes) {
-        auto xform = node.coord().xform();
-        for (auto& mesh : node.meshes()) {
-            auto vbLayoutIdx = protocol_.compatibleLayout(*mesh.refMesh());
-            if (!vbLayoutIdx) {
-                throw std::runtime_error("Incompatible mesh");
-            }
-
-            for (auto& submesh : mesh.submeshes()) {
-                batch_.emplace_back(&submesh, vbLayoutIdx.value(), xform);
-            }
-        }
-    }
+    batch_.push_back(pModel);
 }
 
 }   // namespace gfx::d3d12::rp

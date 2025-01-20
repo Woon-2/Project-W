@@ -737,8 +737,7 @@ ShaderTessellation::ShaderTessellation( D3D12Device& device, const RootSignature
 	perInstanceData_(device, sizeof(sr::PerInstanceData3) * config.maxInstanceCnt),
 	perFrameData_(device, sizeof(sr::PerFrameData0)),
 	maxInstanceCnt_(config.maxInstanceCnt), maxDrawcallCnt_(config.maxDrawcallCnt), maxLightCnt_(config.maxLightCnt),
-	lightBuffer_(device, sizeof(sr::Light) * config.maxLightCnt),
-	pHeightMap_(nullptr)
+	lightBuffer_(device, sizeof(sr::Light) * config.maxLightCnt)
 {
 	perDrawcallData_.pullGpuAddr();
 	perInstanceData_.pullGpuAddr();

@@ -6,6 +6,8 @@
 
 #include <cstdio>
 #include <array>
+#include <ranges>
+#include <algorithm>
 
 namespace gfx {
 
@@ -1564,7 +1566,7 @@ void ScreenQuad::draw(D3D12GfxCmdList& cmdList) const {
     DX_THROW_FAILED_VOID( cmdList.get()->DrawInstanced(4u, 1u, 0u, 0u) );
 }
 
-LevelRegion::LevelRegion(const StaticTextureStorage& sts, std::istream& is)
+LevelRegionModel::LevelRegionModel(const StaticTextureStorage& sts, std::istream&& is)
     : chunks_() {
     char pstrToken[64] = { '\0' };
 
@@ -1582,7 +1584,7 @@ LevelRegion::LevelRegion(const StaticTextureStorage& sts, std::istream& is)
     pstrToken[nStrLength] = '\0';
 
     if (strcmp(pstrToken, "<Dictionary:>")) {
-        throw std::runtime_error("<Dictionary:> tag expected but has not been received, in LevelChunk Loading.");    
+        throw std::runtime_error("<Dictionary:> tag expected but has not been received, in LevelChunkModel Loading.");    
     }
 
     // map textures
@@ -1639,7 +1641,31 @@ LevelRegion::LevelRegion(const StaticTextureStorage& sts, std::istream& is)
     }
 }
 
-void LevelChunk::load( const StaticTextureStorage& sts,
+LevelChunkModel& LevelRegionModel::get(const dx::XMUINT2& idx) {
+    auto it = std::ranges::find_if(chunks_, [&](const auto& chunk) {
+        return chunk.idx().x == idx.x && chunk.idx().y == idx.y;
+    });
+
+    if (it == chunks_.end()) {
+        throw std::runtime_error("Chunk not found: " + std::to_string(idx.x) + ", " + std::to_string(idx.y));
+    }
+
+    return *it;
+}
+
+const LevelChunkModel& LevelRegionModel::get(const dx::XMUINT2& idx) const {
+    auto it = std::ranges::find_if(chunks_, [&](const auto& chunk) {
+        return chunk.idx().x == idx.x && chunk.idx().y == idx.y;
+    });
+
+    if (it == chunks_.end()) {
+        throw std::runtime_error("Chunk not found: " + std::to_string(idx.x) + ", " + std::to_string(idx.y));
+    }
+
+    return *it;
+}
+
+void LevelChunkModel::load( const StaticTextureStorage& sts,
     std::map<Material::MapRef, DescriptorGPU>& textureMap, std::istream& is
 ) {
     char pstrToken[64] = { '\0' };
@@ -1686,7 +1712,7 @@ void LevelChunk::load( const StaticTextureStorage& sts,
         throw std::runtime_error(std::string("HeightMap not found: ") + heightMapPath.string());
     }
     mapRef = Material::MapRef{
-        .resourceIdx = static_cast<std::uint32_t>(textureMap.at(mapRef).offset())
+        .resourceIdx = static_cast<std::uint32_t>(sts.get(heightMapPath).offset())
     };
     material_.addMapRef(Material::MapType::Height, mapRef);        
 
@@ -1714,6 +1740,7 @@ void LevelChunk::load( const StaticTextureStorage& sts,
     is.read(reinterpret_cast<char*>(&mapRef), sizeof(Material::MapRef));
     mapRef.resourceIdx = static_cast<std::uint32_t>(textureMap.at(mapRef).offset());
     material_.addMapRef(Material::MapType::Albedo, mapRef);
+    material_.addConstant(Material::ConstantType::AlbedoConstantMapRatio, 0.f);
 
     // NormalMap
     is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
@@ -1739,6 +1766,7 @@ void LevelChunk::load( const StaticTextureStorage& sts,
 
     is.read(reinterpret_cast<char*>(&floatVal), sizeof(float));
     material_.addConstant(Material::ConstantType::Roughness, 1.f - floatVal);
+    material_.addConstant(Material::ConstantType::RoughnessConstantMapRatio, 1.f);
 
     // Metallic
     is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
@@ -1751,6 +1779,7 @@ void LevelChunk::load( const StaticTextureStorage& sts,
 
     is.read(reinterpret_cast<char*>(&floatVal), sizeof(float));
     material_.addConstant(Material::ConstantType::Metallic, floatVal);
+    material_.addConstant(Material::ConstantType::MetallicConstantMapRatio, 1.f);
 
     // Tile Size
     is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
@@ -1777,16 +1806,29 @@ void LevelChunk::load( const StaticTextureStorage& sts,
     material_.addConstant(Material::ConstantType::TileOffset, mu::Vec2(float2Val.x, float2Val.y));
 }
 
-mu::Mat4x4 MU_CALLCONV LevelChunk::idxToWorld() const {
-    // temporary
-    return mu::translate(
-        1201.392f + 33.f * static_cast<float>(idx_.x),
-        518.955f + 0.f,
-        -182.669f + 33.f * static_cast<float>(idx_.y)
+void LevelChunkModel::draw(D3D12GfxCmdList& cmdList) const {
+    VertexBuffer::bind(cmdList, 0u, std::views::single(sChunkVb));
+    cmdList.get()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST);
+    sChunkIb.bind(cmdList);
+
+    DX_THROW_FAILED_VOID(
+        cmdList.get()->DrawIndexedInstanced(
+            static_cast<UINT>( sChunkIb.size() ),
+            1u, 0u, 0, 0u
+        )
     );
 }
 
-void LevelChunk::initChunkMesh(D3D12Device& device, D3D12GfxCmdList& cmdList) {
+mu::Mat4x4 MU_CALLCONV LevelChunkModel::idxToWorld() const {
+    // temporary
+    return mu::translate(
+        0.f + 0.f * static_cast<float>(idx_.x),
+        -50.f + 0.f,
+        0.f + 0.f * static_cast<float>(idx_.y)
+    );
+}
+
+void LevelChunkModel::initChunkMesh(D3D12Device& device, D3D12GfxCmdList& cmdList) {
     // construct 256x256 size, 100m x 100m area patch
     static constexpr auto patchWidth = 256;
     static constexpr auto patchLength = 256;
@@ -1798,12 +1840,13 @@ void LevelChunk::initChunkMesh(D3D12Device& device, D3D12GfxCmdList& cmdList) {
         for (int x = 0; x < patchWidth; ++x) {
             const auto vertex = PatchVertex{
                 .pos = dx::XMFLOAT3(
-                    static_cast<float>(x), 0.f, static_cast<float>(z)
+                    static_cast<float>(x) / patchWidth * 100.f, 0.f, static_cast<float>(z) / patchLength * 100.f
                 ),
                 .texCoord = dx::XMFLOAT2(
                     static_cast<float>(x) / patchWidth, static_cast<float>(z) / patchLength
                 )
             };
+
             std::memcpy( vbMem.data() + (z * patchWidth + x) * sizeof(PatchVertex),
                 &vertex, sizeof(PatchVertex)
             );
@@ -1840,8 +1883,8 @@ void LevelChunk::initChunkMesh(D3D12Device& device, D3D12GfxCmdList& cmdList) {
     sChunkIb = IndexBuffer(device, cmdList, std::move(ibMem), format, indexCnt);
 }
 
-VertexBuffer LevelChunk::sChunkVb;
-IndexBuffer LevelChunk::sChunkIb;
+VertexBuffer LevelChunkModel::sChunkVb;
+IndexBuffer LevelChunkModel::sChunkIb;
 
 }   // namespace gfx::d3d12
 

@@ -41,7 +41,7 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
             .maxInstanceCnt = 0x1000u,
             .maxDrawcallCnt = 0x1000u,
             .maxLightCnt = 0x100u
-        }, gfx::d3d12::InputLayout::Spec::separated
+        }, gfx::d3d12::InputLayout::Spec::serial
     ), renderPassTessellation_(core.device(), shaderTessellation_,
         gfx::d3d12::convClientToVP(core.window().client())) {}
 
@@ -92,10 +92,10 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
         renderPassPBR_.render( cmdList, renderTargets );
         renderPassPBR_.postRender( cmdList, renderTargets );
 
-        //shaderTessellation_.bindRootParams( cmdList );
-        //renderPassTessellation_.preRender( cmdList, renderTargets );
-        //renderPassTessellation_.render( cmdList, renderTargets );
-        //renderPassTessellation_.postRender( cmdList, renderTargets );       
+        shaderTessellation_.bindRootParams( cmdList );
+        renderPassTessellation_.preRender( cmdList, renderTargets );
+        renderPassTessellation_.render( cmdList, renderTargets );
+        renderPassTessellation_.postRender( cmdList, renderTargets );       
         break;
 
     case Mode::DirectionalLightDepth:

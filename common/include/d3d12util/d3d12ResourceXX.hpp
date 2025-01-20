@@ -869,35 +869,61 @@ private:
     const Texture* pTex_;
 };
 
-class LevelChunk {
+class LevelChunkModel {
 public:
     struct PatchVertex {
         dx::XMFLOAT3 pos;
         dx::XMFLOAT2 texCoord;
     };
 
-    friend class LevelRegion;
+    friend class LevelRegionModel;
     static void initChunkMesh(D3D12Device& device, D3D12GfxCmdList& cmdList);
+    void draw(D3D12GfxCmdList& cmdList) const;
+
+    void markRenderPass(const std::string& renderPass) {
+        markedRenderPasses_.push_back(renderPass);
+    }
+
+    const auto& markedRenderPasses() const noexcept {
+        return markedRenderPasses_;
+    }
+
+    mu::Mat4x4 MU_CALLCONV idxToWorld() const;
+    const dx::XMUINT2 idx() const noexcept {
+        return idx_;
+    }
+
+    Material& material() noexcept {
+        return material_;
+    }
+
+    const Material& material() const noexcept {
+        return material_;
+    }
 
 private:
     void load(const StaticTextureStorage& sts,
         std::map<Material::MapRef, DescriptorGPU>& textureMap, std::istream& is
     );
-    mu::Mat4x4 MU_CALLCONV idxToWorld() const;
 
     static VertexBuffer sChunkVb;
     static IndexBuffer sChunkIb;
     
     Material material_;
+    std::vector<std::string> markedRenderPasses_;
     dx::XMUINT2 idx_;
 };
 
-class LevelRegion {
+class LevelRegionModel {
 public:
-    LevelRegion(const StaticTextureStorage& sts, std::istream& is);
+    LevelRegionModel() = default;
+    LevelRegionModel(const StaticTextureStorage& sts, std::istream&& is);
+
+    LevelChunkModel& get(const dx::XMUINT2& idx);
+    const LevelChunkModel& get(const dx::XMUINT2& idx) const;
 
 private:
-    std::vector<LevelChunk> chunks_;
+    std::vector<LevelChunkModel> chunks_;
 };
 
 }   // namespace gfx::d3d12

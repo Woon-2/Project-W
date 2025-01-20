@@ -464,7 +464,7 @@ public:
     void render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
     void postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
     
-    void trackModel(Model* pModel);
+    void trackChunk(const LevelChunkModel* pChunk);
     void setCamera(const Camera* pCamera) NOEXCEPT {
         pCamera_ = pCamera;
     }
@@ -485,7 +485,7 @@ private:
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
     std::vector<const WorldLight*> lights_;
-    std::vector< std::tuple<Submesh*, VBLayoutIdx, mu::Mat4x4> > batch_;
+    std::vector<const LevelChunkModel*> batch_;
     const Camera* pCamera_;
 };
 

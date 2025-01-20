@@ -1,5 +1,9 @@
 #include "d3d12engine/d3d12Engine.hpp"
 
+#include <fstream>
+
+#include "resourcePath.hpp"
+
 namespace gfx {
 
 namespace d3d12engine {
@@ -239,6 +243,18 @@ void Scene::clearStash() {
     reservedEntities_.clear();
 }
 
+LevelRegion::LevelRegion(const Core& core)
+    : model_(core.staticTexStorage(), std::ifstream(resourcePath/"LevelGraph.bin")) {}
+
+void LevelRegion::activateChunk(std::size_t xIdx, std::size_t zIdx, Scene& scene) {
+    auto& chunk = model_.get(
+        dx::XMUINT2(static_cast<std::uint32_t>(xIdx), static_cast<std::uint32_t>(zIdx))
+    );
+
+    subEntities_.emplace_back().embed(&chunk);
+    scene.addEntity(subEntities_.back());
+}
+
 TerrainSubset::TerrainSubset( const d3d12::RefModelStorage::ID& key,
     Terrain* pTerrain, Core& core
 ) : key_(key), pTerrain_(pTerrain) {
@@ -401,10 +417,11 @@ void ScreenQuad::init(Scene& scene) {}
 void ScreenQuad::update(Scene& scene) {}
 
 void Tessellation::init(Scene& scene) {
-    for (auto& pModel : models(scene)) {
-        if (pModel) {
-            trackModel(&pModel->get());
-        }
+    // for (auto& pModel : models(scene)) {
+    //    do nothing
+    // }
+    for (auto& pChunk : levelChunks(scene)) {
+        trackChunk(&pChunk->get());
     }
     if (!cameras(scene).empty()) {
         auto& pCamera = cameras(scene).front();
@@ -421,8 +438,11 @@ void Tessellation::init(Scene& scene) {
 
 void Tessellation::update(Scene& scene) {
     for (auto& entityID : reservedEntities(scene)) {
-        if ( auto pModel = Model::at(entityID) ) {
-            trackModel(&pModel->get());
+        // if ( auto pModel = Model::at(entityID) ) {
+        //     do nothing
+        // }
+        for (auto& pChunk : levelChunks(scene)) {
+            trackChunk(&pChunk->get());
         }
         if ( auto pCamera = Camera::at(entityID) ) {
             setCamera(&pCamera->get());
