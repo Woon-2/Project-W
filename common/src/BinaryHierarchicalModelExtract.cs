@@ -15,7 +15,7 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
     private List<string> m_pTexturePath = new List<string>();
 
     // path : path, resourceTypeIndex, ArrayIndex
-    private Dictionary<string, (string, int, int)> m_pTextureIndexInfo = new Dictionary<string, (string, int, int)>();
+    private Dictionary<string, (string, int, int, int)> m_pTextureIndexInfo = new Dictionary<string, (string, int, int, int)>();
     private Dictionary<(int, int, int, int), (string, string)> m_mapRefMap = new Dictionary<(int, int, int, int), (string, string)>();
 
     private BinaryWriter binaryWriter = null;
@@ -66,9 +66,10 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
             string newTexPath = ReadString();
             int resourceTypeIndex = binaryReader.ReadInt32();
             int arrayIndex = binaryReader.ReadInt32();
+            int colorSpace = binaryReader.ReadInt32();
 
-            m_pTextureIndexInfo.Add(inputPath, (newTexPath, resourceTypeIndex, arrayIndex));
-            m_mapRefMap.Add((resourceTypeIndex, i++, arrayIndex, 0), (inputPath, newTexPath));
+            m_pTextureIndexInfo.Add(inputPath, (newTexPath, resourceTypeIndex, arrayIndex, colorSpace));
+            m_mapRefMap.Add((resourceTypeIndex, i++, arrayIndex, colorSpace), (inputPath, newTexPath));
         }
 
         binaryReader.Close();
@@ -623,8 +624,8 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
             binaryWriter.Write(index);
             // Item3 : arrayIndex -> arrayIdx
             binaryWriter.Write(value.Item3);
-            // padding
-            binaryWriter.Write(0);
+            // Item4 : colorSpace -> colorSpace
+            binaryWriter.Write(value.Item4);
         }
         else {
             Debug.LogWarning($"Path not found in texture index info: {path}");
@@ -741,7 +742,7 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
 
     void Start()
     {
-        binaryWriter = new BinaryWriter(File.Open(string.Copy(gameObject.name).Replace(" ", "_") + ".bin", FileMode.Create));
+        binaryWriter = new BinaryWriter(File.Open(string.Copy(transform.parent.gameObject.name).Replace(" ", "_") + ".bin", FileMode.Create));
 
         ReadRemapFile("Remap.bin");
         ArrangeTextureList(transform);

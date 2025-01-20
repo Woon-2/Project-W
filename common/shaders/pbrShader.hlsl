@@ -1,26 +1,75 @@
-#include "pbrLighting.hlsl"
+// MapRef.x: resource type, MapRef.y: resource index, MapRef.z: array index
+
+struct Material {
+    float4 albedoConstant;
+    float roughnessConstant;
+    float metallicConstant;
+    float albedoConstantMapRatio;
+    float roughnessConstantMapRatio;
+    float metallicConstantMapRatio;
+    float3 emmisiveConstant;
+    float emmisiveConstantMapRatio;
+    float ambientOcclusionConstant;
+    float ambientOcclusionConstantMapRatio;
+    float padding;
+    uint4 albedoMapRef;
+    uint4 roughnessMapRef;
+    uint4 normalMapRef;
+    uint4 metallicMapRef;
+    uint4 metallicSmoothnessMapRef;
+    uint4 emmisiveMapRef;
+    uint4 ambientOcclusionMapRef;
+};
 
 cbuffer PerConfigurationData : register(b0) {
 	float viewportWidth;
 	float viewportHeight;
 };
 
+cbuffer PerDrawcallData : register(b1) {
+    Material material;
+    uint instanceBase;
+    uint samplerIdx;
+    uint shadowSamplerIdx;
+    uint padding;
+};
+
+cbuffer PerFrameData : register(b2) {
+    float3 globalAmbient;
+    float padding0;
+    uint4 shadowMapRef;
+    float4x4 lightVP;
+    uint lightCnt;
+    uint3 padding1;
+};
+
 struct PerInstanceData {
     float4x4 wvp;
+	float4x4 world;
     float4x4 wv;
     float3x3 wvNormal;
 };
 
 StructuredBuffer<PerInstanceData> gInstances: register(t0);
 
+#include "pbrLighting.hlsl"
+
 struct VSOutput {
 	float4 pos : SV_POSITION;
 	float3 posV : POSITION_V;
+	float4 posL : POSITION_L;
 	float3 normalV : NORMAL_V;
 	float3 tangentV : TANGENT_V;
 	float3 bitangentV : BITANGENT_V;
 	float2 texcoord : TEXCOORD;
 	nointerpolation uint instanceOffset : INSTANCE_OFFSET;
+};
+
+static float4x4 gmtxTexturize = {
+	0.5f, 0.0f, 0.0f, 0.0f,
+	0.0f, -0.5f, 0.0f, 0.0f,
+	0.0f, 0.0f, 1.0f, 0.0f,
+	0.5f, 0.5f, 0.0f, 1.0f
 };
 
 VSOutput VSMain( float3 position : POSITION, float3 normal : NORMAL,
@@ -31,6 +80,10 @@ VSOutput VSMain( float3 position : POSITION, float3 normal : NORMAL,
 
     result.pos = mul(float4(position, 1.0f), gInstances[instanceBase + instanceOffset].wvp);
 	result.posV = mul(float4(position, 1.0f), gInstances[instanceBase + instanceOffset].wv).xyz;
+	result.posL = mul( mul(
+		mul(float4(position, 1.0f), gInstances[instanceBase + instanceOffset].world),
+		lightVP
+	), gmtxTexturize );
 	result.normalV = mul(normal, gInstances[instanceBase + instanceOffset].wvNormal).xyz;
 	if (material.normalMapRef.x != uint(-1)) {
 		result.tangentV = mul(tangent, gInstances[instanceBase + instanceOffset].wvNormal).xyz;
@@ -56,5 +109,5 @@ float4 PSMain(VSOutput input) : SV_TARGET {
 		input.normalV = mul(normal, TBN);
 	}
 
-    return illuminate(input.posV, input.normalV, input.texcoord);
+    return illuminate(input.posV, input.posL, input.normalV, input.texcoord);
 }

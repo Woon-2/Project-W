@@ -5,6 +5,9 @@
 #define LIGHT_TYPE_SPOT 1
 #define LIGHT_TYPE_DIRECTIONAL 2
 
+#define COLOR_SPACE_SRGB 0
+#define COLOR_SPACE_LINEAR 1
+
 struct Light {
     float3 color;
     float falloff;
@@ -18,48 +21,11 @@ struct Light {
     int3 padding;
 };
 
-// MapRef.x: resource type, MapRef.y: resource index, MapRef.z: array index
-
-struct Material {
-    float4 albedoConstant;
-    float roughnessConstant;
-    float metallicConstant;
-    float albedoConstantMapRatio;
-    float roughnessConstantMapRatio;
-    float metallicConstantMapRatio;
-    float3 emmisiveConstant;
-    float emmisiveConstantMapRatio;
-    float ambientOcclusionConstant;
-    float ambientOcclusionConstantMapRatio;
-    float padding;
-    uint4 albedoMapRef;
-    uint4 roughnessMapRef;
-    uint4 normalMapRef;
-    uint4 metallicMapRef;
-    uint4 metallicSmoothnessMapRef;
-    uint4 emmisiveMapRef;
-    uint4 ambientOcclusionMapRef;
-};
-
 StructuredBuffer<Light> gLights : register(t1);
 
-cbuffer PerDrawcallData : register(b1) {
-    Material material;
-    uint instanceBase;
-    uint samplerIdx;
-    uint2 padding;
-};
-
-cbuffer PerFrameData : register(b2) {
-    float3 globalAmbient;
-    float padding0;
-    uint lightCnt;
-    uint3 padding1;
-};
-
 float3 fresnel(float3 F0, float HV) {
-    return F0 + (1.f - F0) * pow(2, (-5.55473f * HV - 6.98316f) * HV);
-	// return F0 + (1.f - F0)*pow(1 - HV, 5.f);
+    // return F0 + (1.f - F0) * pow(2, (-5.55473f * HV - 6.98316f) * HV);
+	return F0 + (1.f - F0)*pow(1.f - HV, 5.f);
 }
 
 float distribute(float NH, float roughness) {
@@ -93,7 +59,7 @@ float3 pointLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 nor
     float2 tex, float3 albedo, float roughness, float metallic, float ao
 ) {
     float3 N = normalV;
-    float3 V = posVNormalized;
+    float3 V = -posVNormalized;
 
     float3 L = gLights[lightIdx].posV - posV;
     float dist = length(L);
@@ -113,21 +79,21 @@ float3 pointLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 nor
     float D = distribute(NH, roughness);
     float G = GeometrySmith(NV, NL, roughness);
 
-    float3 kD = (1.f - F);
-    kD *= 1.f - kD;
+    float3 kD = float3(1.f, 1.f, 1.f) - F;
+    kD *= 1.f - metallic;
     kD *= albedo / PI;
-    float3 kS = F * D * G / max(4 * NV * NL, 0.001f);
+    float3 specular = F * D * G / max(4 * NV * NL, 0.001f);
 
     float atten = 1.f / dot(gLights[lightIdx].atten, float3(1.f, dist, dist * dist));
 
-    return gLights[lightIdx].color * gLights[lightIdx].intensity * (kD + kS) * atten;
+    return gLights[lightIdx].color * gLights[lightIdx].intensity * (kD + specular) * NL * atten;
 }
 
 float3 dirLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 normalV,
     float2 tex, float3 albedo, float roughness, float metallic, float ao
 ) {
     float3 N = normalV;
-    float3 V = posVNormalized;
+    float3 V = -posVNormalized;
     float3 L = -gLights[lightIdx].dirV;
 
     float3 H = normalize(L + V);
@@ -144,18 +110,19 @@ float3 dirLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 norma
     float D = distribute(NH, roughness);
     float G = GeometrySmith(NV, NL, roughness);
 
-    float3 kD = 1.f - metallic;
+    float3 kD = float3(1.f, 1.f, 1.f) - F;
+    kD *= 1.f - metallic;
     kD *= albedo / PI;
-    float3 kS = D * F * G / (4 * NV * NL + 0.001f);
+    float3 specular = D * F * G / max(4 * NV * NL, 0.001f);
 
-    return gLights[lightIdx].color * gLights[lightIdx].intensity * (kD + kS) * NL;
+    return gLights[lightIdx].color * gLights[lightIdx].intensity * (kD + specular) * NL;
 }
 
 float3 spotLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 normalV,
     float2 tex, float3 albedo, float roughness, float metallic, float ao
 ) {
     float3 N = normalV;
-    float3 V = posVNormalized;
+    float3 V = -posVNormalized;
 
     float3 L = gLights[lightIdx].posV - posV;
     float dist = length(L);
@@ -175,10 +142,10 @@ float3 spotLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 norm
     float D = distribute(NH, roughness);
     float G = GeometrySmith(NV, NL, roughness);
 
-    float3 kD = (1.f - F);
-    kD *= 1.f - kD;
+    float3 kD = float3(1.f, 1.f, 1.f) - F;
+    kD *= 1.f - metallic;
     kD *= albedo / PI;
-    float3 kS = F * D * G / max(4 * NV * NL, 0.001f);
+    float3 specular = F * D * G / max(4 * NV * NL, 0.001f);
 
     float atten = 1.f / dot(gLights[lightIdx].atten, float3(1.f, dist, dist * dist));
 
@@ -192,13 +159,16 @@ float3 spotLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 norm
         gLights[lightIdx].falloff
     );
 
-    return gLights[lightIdx].color * gLights[lightIdx].intensity * (kD + kS) * atten * coneAtten;
+    return gLights[lightIdx].color * gLights[lightIdx].intensity * (kD + specular) * NL * atten * coneAtten;
 }
 
-float4 illuminate(float3 posV, float3 normalV, float2 tex) {
+float4 accumulateLighting(float3 posV, float3 normalV, float2 tex) {
     float4 albedo = material.albedoConstant * material.albedoConstantMapRatio;
     albedo += sampleFromMapRef(material.albedoMapRef, tex, samplerIdx) * (1.f - material.albedoConstantMapRatio);
-
+    if (material.albedoMapRef.w == COLOR_SPACE_SRGB) {
+        // sRGB => linear
+        albedo.rgb = pow( abs(albedo.rgb), 2.2f );
+    }
 
     float roughness = material.roughnessConstant * material.roughnessConstantMapRatio;
     float metallic = material.metallicConstant * material.metallicConstantMapRatio;
@@ -236,5 +206,21 @@ float4 illuminate(float3 posV, float3 normalV, float2 tex) {
     float3 ambient = globalAmbient * albedo.rgb * ao;
     color += ambient + emmisive;
 
+    // tone mapping
+	// color = color / (color + float3(1.f, 1.f, 1.f));
+    // linear => sRGB
+    color = pow( abs(color), 1.f/2.2f );
+
     return float4(color, albedo.w);
+}
+
+float4 illuminate(float3 posV, float4 posL, float3 normalV, float2 tex) {
+    float4 color = accumulateLighting(posV, normalV, tex);
+
+    // calculate illumination factor from shadow map
+    posL.xyz /= posL.w;
+    float illuminationFactor = sampleCmpFromMapRef(shadowMapRef, posL.xy, posL.z, shadowSamplerIdx).r;
+
+    return illuminationFactor * float4(color);
+    // return float4(illuminationFactor, illuminationFactor, illuminationFactor, illuminationFactor);
 }

@@ -37,7 +37,8 @@ public:
 		TrilinearWrap,
 		NearestBorder,
 		TrilinearBorder,
-		TrilinearComparison
+		NearestComparison,
+		BilinearComparison
 	};
 
 	static constexpr auto cbvRegisterCnt = 8u;
@@ -336,6 +337,7 @@ struct PerConfigurationData0 {
 
 struct PerInstanceData0 {
 	dx::XMFLOAT4X4 wvp;
+	dx::XMFLOAT4X4 world;
 	dx::XMFLOAT4X4 wv;
 	dx::XMFLOAT3X3 wvNormal;
 };
@@ -344,6 +346,21 @@ struct PerInstanceData1 {
 	dx::XMFLOAT4X4 wv;
 	dx::XMFLOAT4X4 proj;
 	dx::XMFLOAT3X3 wvNormal;
+};
+
+struct PerInstanceData2 {
+	dx::XMFLOAT4X4 world;
+};
+
+struct PerInstanceData3 {
+	dx::XMFLOAT4X4 wvp;
+    dx::XMFLOAT4X4 wv;
+	dx::XMFLOAT3X3 wvNormal;
+};
+
+struct PerInstanceData4 {
+	dx::XMFLOAT4X4 world;
+	dx::XMFLOAT4X4 wv;
 };
 
 struct Light {
@@ -393,7 +410,8 @@ struct PerDrawcallData0 {
 	PBRMaterial material;
 	std::uint32_t instanceBase;
 	std::uint32_t samplerIdx;
-	dx::XMUINT2 padding;
+	std::uint32_t shadowSamplerIdx;
+	std::uint32_t padding;
 };
 
 struct PerDrawcallData1 {
@@ -401,11 +419,43 @@ struct PerDrawcallData1 {
 	dx::XMFLOAT4 color;
 };
 
+struct PerDrawcallData2 {
+	std::uint32_t instanceBase;
+	dx::XMUINT3 padding;
+};
+
+struct PerDrawcallData3 {
+	dx::XMUINT4 frameMapRef;
+	std::uint32_t samplerIdx;
+	dx::XMUINT3 padding;
+};
+
+struct PerDrawcallData4 {
+	PBRMaterial material;
+    dx::XMUINT4 heightMapRef;
+    std::uint32_t instanceBase;
+	std::uint32_t shadowSamplerIdx;
+    std::uint32_t heightMapSamplerIdx;
+	std::uint32_t samplerIdx;
+	dx::XMFLOAT2 tileScale;
+    dx::XMFLOAT2 padding;
+};
+
 struct PerFrameData0 {
 	dx::XMFLOAT3 globalAmbient;
 	float padding0;
-	std::uint32_t lightCnt;
+	dx::XMUINT4 shadowMapRef;
+	dx::XMFLOAT4X4 lightVP;
+	std::uint32_t lightCnt;	
 	dx::XMUINT3 padding1;
+};
+
+struct PerFrameData1 {
+	dx::XMFLOAT4X4 lightVP;
+};
+
+struct PerFrameData2 {
+
 };
 
 }	// namespace gfx::d3d12::sr
@@ -527,6 +577,206 @@ private:
 
 	std::size_t maxInstanceCnt_;
 	std::size_t maxLightCnt_;
+	std::size_t maxDrawcallCnt_;
+};
+
+class ShaderShadowMap : public Shader {
+private:
+	std::size_t cbDrawcallDataSize_;
+
+public:
+	struct Config {
+		std::size_t maxInstanceCnt;
+		std::size_t maxDrawcallCnt;
+	};
+
+	ShaderShadowMap( D3D12Device& device, const RootSignature& root,
+		const Config& config, const Texture::Desc& shadowMapDesc,
+		DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+		InputLayout::Spec ilSpec = InputLayout::Spec::serial
+	);
+
+	RenderProtocol makeProtocol( D3D12Device& device, const RenderProtocol::Desc& desc) {
+		return RenderProtocol( device, *this,
+			selectBlobsStrong<ShaderBlob::Type::Vertex>(), desc
+		);
+	}
+
+	std::size_t maxInstanceCnt() const noexcept {
+		return maxInstanceCnt_;
+	}
+
+	std::size_t maxDrawcallCnt() const noexcept {
+		return maxDrawcallCnt_;
+	}
+
+	void bindRootParams(D3D12GfxCmdList& cmdList) override;
+	void bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCmdList& cmdList);
+
+	void loadBlobs() override;
+	void releaseBlobs() override;
+
+	UploadBuffer perFrameData_;
+	UploadBuffer perDrawcallData_;
+	UploadBuffer perInstanceData_;
+	Texture shadowMap_;
+
+	std::size_t cbDrawcallDataSize() const noexcept {
+		return cbDrawcallDataSize_;
+	}
+
+private:
+	static InputLayout makeInputLayout(InputLayout::Spec ilSpec);
+	static InputLayout makeInputLayoutSerial();
+	static InputLayout makeInputLayoutSeparated();
+
+	std::size_t maxInstanceCnt_;
+	std::size_t maxDrawcallCnt_;
+};
+
+class ShaderScreenQuad : public Shader {
+public:
+	ShaderScreenQuad(D3D12Device& device, const RootSignature& root);
+	ShaderScreenQuad( D3D12Device& device, const RootSignature& root,
+		const Texture* pTexture
+	) : ShaderScreenQuad(device, root) {
+		screenQuad_.link(pTexture);
+	}
+
+	RenderProtocol makeProtocol( D3D12Device& device, const RenderProtocol::Desc& desc) {
+		return RenderProtocol( device, *this,
+			selectBlobsStrong<ShaderBlob::Type::Vertex, ShaderBlob::Type::Pixel>(), desc
+		);
+	}
+
+	void bindRootParams(D3D12GfxCmdList& cmdList) override;
+
+	void loadBlobs() override;
+	void releaseBlobs() override;
+
+	void draw(D3D12GfxCmdList& cmdList) const {
+		screenQuad_.draw(cmdList);
+	}
+
+	UploadBuffer perDrawcallData_;
+	ScreenQuad screenQuad_;
+};
+
+class ShaderTessellation : public Shader {
+private:
+	std::size_t cbDrawcallDataSize_;
+
+public:
+	struct Config {
+		std::size_t maxInstanceCnt;
+		std::size_t maxDrawcallCnt;
+		std::size_t maxLightCnt;
+	};
+
+	ShaderTessellation( D3D12Device& device, const RootSignature& root, const Config& config,
+		InputLayout::Spec ilSpec = InputLayout::Spec::serial
+	);
+
+	RenderProtocol makeProtocol( D3D12Device& device, const RenderProtocol::Desc& desc) {
+		return RenderProtocol( device, *this,
+			selectBlobsStrong<ShaderBlob::Type::Vertex, ShaderBlob::Type::Hull, ShaderBlob::Type::Domain, ShaderBlob::Type::Pixel>(), desc
+		);
+	}	
+
+	void bindRootParams(D3D12GfxCmdList& cmdList) override;
+	void bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCmdList& cmdList);
+
+	std::size_t cbDrawcallDataSize() const noexcept {
+		return cbDrawcallDataSize_;
+	}
+
+	void loadBlobs() override;
+	void releaseBlobs() override;
+
+	std::size_t maxInstanceCnt() const noexcept {
+		return maxInstanceCnt_;
+	}
+
+	std::size_t maxDrawcallCnt() const noexcept {
+		return maxDrawcallCnt_;
+	}
+
+	std::size_t maxLightCnt() const noexcept {
+		return maxLightCnt_;
+	}
+
+	void draw(D3D12GfxCmdList& cmdList, const LevelChunkModel& chunk) const {
+		chunk.draw(cmdList);
+	}
+
+	UploadBuffer perInstanceData_;
+	UploadBuffer perDrawcallData_;
+	UploadBuffer perFrameData_;
+	UploadBuffer lightBuffer_;
+
+private:
+	static InputLayout makeInputLayout(InputLayout::Spec ilSpec);
+	static InputLayout makeInputLayoutSerial();
+	static InputLayout makeInputLayoutSeparated();
+
+	std::size_t maxInstanceCnt_;
+	std::size_t maxDrawcallCnt_;
+	std::size_t maxLightCnt_;
+};
+
+class ShaderShadowMapTessellation : public Shader {
+private:
+	std::size_t cbDrawcallDataSize_;
+
+public:
+	struct Config {
+		std::size_t maxInstanceCnt;
+		std::size_t maxDrawcallCnt;
+	};
+
+	ShaderShadowMapTessellation( D3D12Device& device, const RootSignature& root,
+		const Config& config, InputLayout::Spec ilSpec = InputLayout::Spec::serial
+	);
+
+	RenderProtocol makeProtocol( D3D12Device& device, const RenderProtocol::Desc& desc) {
+		return RenderProtocol( device, *this,
+			selectBlobsStrong<ShaderBlob::Type::Vertex, ShaderBlob::Type::Hull, ShaderBlob::Type::Domain>(), desc
+		);
+	}
+
+	std::size_t maxInstanceCnt() const noexcept {
+		return maxInstanceCnt_;
+	}
+
+	std::size_t maxDrawcallCnt() const noexcept {
+		return maxDrawcallCnt_;
+	}
+
+	void bindRootParams(D3D12GfxCmdList& cmdList) override;
+	void bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCmdList& cmdList);
+
+	void loadBlobs() override;
+	void releaseBlobs() override;
+
+	void draw(D3D12GfxCmdList& cmdList, const LevelChunkModel& chunk) const {
+		chunk.draw(cmdList);
+	}
+
+	UploadBuffer perFrameData_;
+	UploadBuffer perDrawcallData_;
+	UploadBuffer perInstanceData_;
+	Texture* pShadowMap_;
+
+	std::size_t cbDrawcallDataSize() const noexcept {
+		return cbDrawcallDataSize_;
+	}
+
+private:
+	static InputLayout makeInputLayout(InputLayout::Spec ilSpec);
+	static InputLayout makeInputLayoutSerial();
+	static InputLayout makeInputLayoutSeparated();
+
+	std::size_t maxInstanceCnt_;
 	std::size_t maxDrawcallCnt_;
 };
 

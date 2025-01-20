@@ -5,6 +5,9 @@
 #include "resourcePath.hpp"
 
 #include <cstdio>
+#include <array>
+#include <ranges>
+#include <algorithm>
 
 namespace gfx {
 
@@ -79,8 +82,8 @@ DefaultBuffer::DefaultBuffer( D3D12Device& device, std::size_t byteWidth,
     }, D3D12_HEAP_TYPE_DEFAULT ) {}
 
 TextureResource::TextureResource( D3D12Device& device, const Desc& texResDesc,
-    D3D12_HEAP_TYPE heapType
-) : D3D12Resource(device, D3D12_RESOURCE_DESC{
+    D3D12_HEAP_TYPE heapType, D3D12_RESOURCE_STATES initialState
+) : D3D12Resource( device, D3D12_RESOURCE_DESC{
         .Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
         .Width = texResDesc.width,
         .Height = texResDesc.height,
@@ -90,7 +93,36 @@ TextureResource::TextureResource( D3D12Device& device, const Desc& texResDesc,
         .SampleDesc = texResDesc.sampleDesc,
         .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
         .Flags = texResDesc.flags
-    }, heapType), data_(), subresources_() {}
+    }, heapType, initialState, nullptr ),
+    data_(), subresources_() {}
+
+TextureResource::TextureResource( D3D12Device& device, const Desc& texResDesc,
+    D3D12_HEAP_TYPE heapType, D3D12_RESOURCE_STATES initialState,
+    const D3D12_CLEAR_VALUE& optimizedClearValue
+) : D3D12Resource( device, D3D12_RESOURCE_DESC{
+        .Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+        .Width = texResDesc.width,
+        .Height = texResDesc.height,
+        .DepthOrArraySize = texResDesc.arraySize,
+        .MipLevels = texResDesc.mipLevels,
+        .Format = texResDesc.format,
+        .SampleDesc = texResDesc.sampleDesc,
+        .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+        .Flags = texResDesc.flags
+    }, heapType, initialState, &optimizedClearValue ),
+    data_(), subresources_() {}
+
+TextureResource::TextureResource( D3D12Device& device, const Desc& texResDesc,
+    D3D12_HEAP_TYPE heapType
+) : TextureResource( device, texResDesc, heapType,
+        D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+    ) {}
+
+TextureResource::TextureResource( D3D12Device& device, const Desc& texResDesc,
+    D3D12_HEAP_TYPE heapType, const D3D12_CLEAR_VALUE& optimizedClearValue
+) : TextureResource( device, texResDesc, heapType,
+        D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, optimizedClearValue
+    ) {}
 
 TextureResource::TextureResource( D3D12Device& device,
     D3D12GfxCmdList& cmdList, const std::filesystem::path& path
@@ -189,7 +221,8 @@ void Material::addTexRes(MapType type, const Texture& tex) {
     addMapRef( type, MapRef{
         .type = etoi(ResourceType::Texture),
         .resourceIdx = static_cast<std::uint32_t>(tex.view(Texture::idxSrv).offset()),
-        .arrayIdx = 0
+        .arrayIdx = 0,
+        .colorSpace = etoi(ColorSpace::SRGB)
     } );
 }
 
@@ -197,7 +230,8 @@ void Material::addTexRes(MapType type, const TextureArray& tex) {
     addMapRef( type, MapRef{
         .type = etoi(ResourceType::TextureArray),
         .resourceIdx = static_cast<std::uint32_t>(tex.view(TextureArray::idxSrv).offset()),
-        .arrayIdx = 0
+        .arrayIdx = 0,
+        .colorSpace = etoi(ColorSpace::SRGB)
     } );
 }
 
@@ -205,8 +239,15 @@ void Material::addTexRes(MapType type, const TextureCube& tex) {
     addMapRef( type, MapRef{
         .type = etoi(ResourceType::TextureCube),
         .resourceIdx = static_cast<std::uint32_t>(tex.view(TextureCube::idxSrv).offset()),
-        .arrayIdx = 0
+        .arrayIdx = 0,
+        .colorSpace = etoi(ColorSpace::SRGB)
     } );
+}
+
+void MU_CALLCONV Material::addConstant(ConstantType type, mu::Vec2 constant) {
+    RawMemory<16> tmp{};
+    *reinterpret_cast<dx::XMFLOAT2*>(&tmp) = constant.getXmf();
+    constants_[etoi(type)] = tmp;
 }
 
 void MU_CALLCONV Material::addConstant(ConstantType type, mu::Vec3 constant) {
@@ -1519,6 +1560,331 @@ Model& Model::operator=(Model&& other) noexcept {
 
     return *this;
 }
+
+void ScreenQuad::draw(D3D12GfxCmdList& cmdList) const {
+    cmdList.get()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    DX_THROW_FAILED_VOID( cmdList.get()->DrawInstanced(4u, 1u, 0u, 0u) );
+}
+
+LevelRegionModel::LevelRegionModel(const StaticTextureStorage& sts, std::istream&& is)
+    : chunks_() {
+    char pstrToken[64] = { '\0' };
+
+	BYTE nStrLength = 0;
+	UINT nReads = 0;
+
+    Material::MapRef mapRef{};
+    float floatVal{};
+
+    std::map<Material::MapRef, DescriptorGPU> textureMap;
+
+
+    is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
+    is.read(reinterpret_cast<char*>(pstrToken), nStrLength);
+    pstrToken[nStrLength] = '\0';
+
+    if (strcmp(pstrToken, "<Dictionary:>")) {
+        throw std::runtime_error("<Dictionary:> tag expected but has not been received, in LevelChunkModel Loading.");    
+    }
+
+    // map textures
+    for (;;) {
+        is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
+        is.read(reinterpret_cast<char*>(pstrToken), nStrLength);
+        pstrToken[nStrLength] = '\0';
+
+        if (!strcmp(pstrToken, "<Item:>")) {
+            is.read(reinterpret_cast<char*>(&mapRef), sizeof(Material::MapRef));
+
+            is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
+            auto texRelativePath = std::string(nStrLength, '\0');
+            is.read(texRelativePath.data(), nStrLength);
+
+            auto texPath = resourcePath / std::move(texRelativePath);
+
+            if (!sts.contains(texPath)) {
+                throw std::runtime_error("Texture not found: " + texPath.string());
+            }
+            textureMap[mapRef] = sts.get(texPath);
+        }
+        else if (!strcmp(pstrToken, "</Dictionary>")) {
+            break;
+        }
+        else {
+            throw std::runtime_error("expected Item or Dictionary end token but got: " + std::string(pstrToken));
+        }
+    }
+
+    
+    is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
+    is.read(reinterpret_cast<char*>(pstrToken), nStrLength);
+    pstrToken[nStrLength] = '\0';
+
+    if (strcmp(pstrToken, "<Chunks:>")) {
+        throw std::runtime_error("Chunks token expected but got: " + std::string(pstrToken));
+    }
+
+    int nChunks = 0;
+    is.read(reinterpret_cast<char*>(&nChunks), sizeof(int));
+    chunks_.resize(nChunks);
+
+    for (auto& chunk : chunks_) {
+        chunk.load(sts, textureMap, is);
+    }
+
+    is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
+    is.read(reinterpret_cast<char*>(pstrToken), nStrLength);
+    pstrToken[nStrLength] = '\0';
+
+    if (strcmp(pstrToken, "</Chunks>")) {
+        throw std::runtime_error("Chunks end token expected but got: " + std::string(pstrToken));
+    }
+}
+
+LevelChunkModel& LevelRegionModel::get(const dx::XMUINT2& idx) {
+    auto it = std::ranges::find_if(chunks_, [&](const auto& chunk) {
+        return chunk.idx().x == idx.x && chunk.idx().y == idx.y;
+    });
+
+    if (it == chunks_.end()) {
+        throw std::runtime_error("Chunk not found: " + std::to_string(idx.x) + ", " + std::to_string(idx.y));
+    }
+
+    return *it;
+}
+
+const LevelChunkModel& LevelRegionModel::get(const dx::XMUINT2& idx) const {
+    auto it = std::ranges::find_if(chunks_, [&](const auto& chunk) {
+        return chunk.idx().x == idx.x && chunk.idx().y == idx.y;
+    });
+
+    if (it == chunks_.end()) {
+        throw std::runtime_error("Chunk not found: " + std::to_string(idx.x) + ", " + std::to_string(idx.y));
+    }
+
+    return *it;
+}
+
+void LevelChunkModel::load( const StaticTextureStorage& sts,
+    std::map<Material::MapRef, DescriptorGPU>& textureMap, std::istream& is
+) {
+    char pstrToken[64] = { '\0' };
+
+	BYTE nStrLength = 0;
+	UINT nReads = 0;
+
+    Material::MapRef mapRef{};
+    float floatVal{};
+    dx::XMFLOAT2 float2Val{};
+
+    is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
+    is.read(reinterpret_cast<char*>(pstrToken), nStrLength);
+    pstrToken[nStrLength] = '\0';
+
+    if (strcmp(pstrToken, "<Chunk:>")) {
+        throw std::runtime_error("Chunk token expected but got: " + std::string(pstrToken));
+    }
+
+    is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
+    auto chunkName = std::string(nStrLength, '\0');
+    is.read(chunkName.data(), nStrLength);
+
+    // TerrainName_M_N => M(x), N(z) extract
+    auto pos = chunkName.find_last_of('_');
+    if (pos == std::string::npos) {
+        throw std::runtime_error("Invalid chunk name: " + chunkName);
+    }
+
+    const auto zStrPos = pos + 1;
+    pos = chunkName.find_last_of('_', pos - 1);
+    if (pos == std::string::npos) {
+        throw std::runtime_error("Invalid chunk name: " + chunkName);
+    }
+
+    const auto xStrPos = pos + 1;
+
+    idx_.x = std::stoi(chunkName.substr(xStrPos, zStrPos - xStrPos - 1));
+    idx_.y = std::stoi(chunkName.substr(zStrPos));
+
+    // HeightMap
+    const auto heightMapPath = resourcePath/"terrains/HeightMaps"/(chunkName + "_HeightMap.dds");
+    if ( !sts.contains(heightMapPath) ) {
+        throw std::runtime_error(std::string("HeightMap not found: ") + heightMapPath.string());
+    }
+    mapRef = Material::MapRef{
+        .resourceIdx = static_cast<std::uint32_t>(sts.get(heightMapPath).offset())
+    };
+    material_.addMapRef(Material::MapType::Height, mapRef);        
+
+    // Layer
+    is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
+    is.read(reinterpret_cast<char*>(pstrToken), nStrLength);
+    pstrToken[nStrLength] = '\0';
+
+    if (strcmp(pstrToken, "<Layer:>")) {
+        throw std::runtime_error("Layer token expected but got: " + std::string(pstrToken));
+    }
+
+    int layer{};    // temporarily no use
+    is.read(reinterpret_cast<char*>(&layer), sizeof(int));
+    
+    // AlbedoMap
+    is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
+    is.read(reinterpret_cast<char*>(pstrToken), nStrLength);
+    pstrToken[nStrLength] = '\0';
+
+    if (strcmp(pstrToken, "<AlbedoMap:>")) {
+        throw std::runtime_error("AlbedoMap token expected but got: " + std::string(pstrToken));
+    }
+
+    is.read(reinterpret_cast<char*>(&mapRef), sizeof(Material::MapRef));
+    mapRef.resourceIdx = static_cast<std::uint32_t>(textureMap.at(mapRef).offset());
+    material_.addMapRef(Material::MapType::Albedo, mapRef);
+    material_.addConstant(Material::ConstantType::AlbedoConstantMapRatio, 0.f);
+
+    // NormalMap
+    is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
+    is.read(reinterpret_cast<char*>(pstrToken), nStrLength);
+    pstrToken[nStrLength] = '\0';
+
+    if (strcmp(pstrToken, "<NormalMap:>")) {
+        throw std::runtime_error("NormalMap token expected but got: " + std::string(pstrToken));
+    }
+
+    is.read(reinterpret_cast<char*>(&mapRef), sizeof(Material::MapRef));
+    mapRef.resourceIdx = static_cast<std::uint32_t>(textureMap.at(mapRef).offset());
+    material_.addMapRef(Material::MapType::Normal, mapRef);
+
+    // Smoothness
+    is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
+    is.read(reinterpret_cast<char*>(pstrToken), nStrLength);
+    pstrToken[nStrLength] = '\0';
+
+    if (strcmp(pstrToken, "<Smoothness:>")) {
+        throw std::runtime_error("Smoothness token expected but got: " + std::string(pstrToken));
+    }
+
+    is.read(reinterpret_cast<char*>(&floatVal), sizeof(float));
+    material_.addConstant(Material::ConstantType::Roughness, 1.f - floatVal);
+    material_.addConstant(Material::ConstantType::RoughnessConstantMapRatio, 1.f);
+
+    // Metallic
+    is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
+    is.read(reinterpret_cast<char*>(pstrToken), nStrLength);
+    pstrToken[nStrLength] = '\0';
+
+    if (strcmp(pstrToken, "<Metallic:>")) {
+        throw std::runtime_error("Metallic token expected but got: " + std::string(pstrToken));
+    }
+
+    is.read(reinterpret_cast<char*>(&floatVal), sizeof(float));
+    material_.addConstant(Material::ConstantType::Metallic, floatVal);
+    material_.addConstant(Material::ConstantType::MetallicConstantMapRatio, 1.f);
+
+    // Tile Size
+    is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
+    is.read(reinterpret_cast<char*>(pstrToken), nStrLength);
+    pstrToken[nStrLength] = '\0';
+
+    if (strcmp(pstrToken, "<TileSize:>")) {
+        throw std::runtime_error("TileSize token expected but got: " + std::string(pstrToken));
+    }
+
+    is.read(reinterpret_cast<char*>(&float2Val), sizeof(dx::XMFLOAT2));
+    material_.addConstant(Material::ConstantType::TileSize, mu::Vec2(float2Val.x, float2Val.y));
+
+    // Tile Offset
+    is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
+    is.read(reinterpret_cast<char*>(pstrToken), nStrLength);
+    pstrToken[nStrLength] = '\0';
+
+    if (strcmp(pstrToken, "<TileOffset:>")) {
+        throw std::runtime_error("TileOffset token expected but got: " + std::string(pstrToken));
+    }
+
+    is.read(reinterpret_cast<char*>(&float2Val), sizeof(dx::XMFLOAT2));
+    material_.addConstant(Material::ConstantType::TileOffset, mu::Vec2(float2Val.x, float2Val.y));
+}
+
+void LevelChunkModel::draw(D3D12GfxCmdList& cmdList) const {
+    VertexBuffer::bind(cmdList, 0u, std::views::single(sChunkVb));
+    cmdList.get()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_4_CONTROL_POINT_PATCHLIST);
+    sChunkIb.bind(cmdList);
+
+    DX_THROW_FAILED_VOID(
+        cmdList.get()->DrawIndexedInstanced(
+            static_cast<UINT>( sChunkIb.size() ),
+            1u, 0u, 0, 0u
+        )
+    );
+}
+
+mu::Mat4x4 MU_CALLCONV LevelChunkModel::idxToWorld() const {
+    // temporary
+    return mu::translate(
+        0.f + 0.f * static_cast<float>(idx_.x),
+        -50.f + 0.f,
+        0.f + 0.f * static_cast<float>(idx_.y)
+    );
+}
+
+void LevelChunkModel::initChunkMesh(D3D12Device& device, D3D12GfxCmdList& cmdList) {
+    // construct 256x256 size, 100m x 100m area patch
+    static constexpr auto patchWidth = 256;
+    static constexpr auto patchLength = 256;
+
+    // construct vertex buffer
+    std::vector<std::uint8_t> vbMem(patchWidth * patchLength * sizeof(PatchVertex));
+
+    for (int z = 0; z < patchLength; ++z) {
+        for (int x = 0; x < patchWidth; ++x) {
+            const auto vertex = PatchVertex{
+                .pos = dx::XMFLOAT3(
+                    static_cast<float>(x) / patchWidth * 100.f, 0.f, static_cast<float>(z) / patchLength * 100.f
+                ),
+                .texCoord = dx::XMFLOAT2(
+                    static_cast<float>(x) / patchWidth, static_cast<float>(z) / patchLength
+                )
+            };
+
+            std::memcpy( vbMem.data() + (z * patchWidth + x) * sizeof(PatchVertex),
+                &vertex, sizeof(PatchVertex)
+            );
+        }
+    }
+
+    const auto vbMemByteWidth = vbMem.size();
+    sChunkVb = VertexBuffer(device, cmdList, std::move(vbMem), vbMemByteWidth, sizeof(PatchVertex),
+        std::bitset<etoi(Vertex::Properties::SIZE)>(
+            (1ull << etoi(Vertex::Properties::Position3D))
+            | (1ull << etoi(Vertex::Properties::TexCoord2D0))
+        )
+    );
+
+    // construct index buffer
+    std::vector<std::uint8_t> ibMem((patchWidth - 1) * (patchLength - 1) * 4 * sizeof(std::uint16_t));
+
+    auto k = 0;
+
+    for (int z = 0; z < patchLength - 1; ++z) {
+        for (int x = 0; x < patchWidth - 1; ++x) {
+            for (int i = 0; i < 2; ++i) {
+                for (int j = 0; j < 2; ++j) {
+                    auto idx = static_cast<std::uint16_t>( x + j + ((z + i) * patchWidth) );
+                    std::memcpy(ibMem.data() + k++ * sizeof(std::uint16_t), &idx, sizeof(std::uint16_t));
+                }
+            }
+        }
+    }
+
+    const auto format = DXGI_FORMAT_R16_UINT;
+    const auto indexCnt = k;
+
+    sChunkIb = IndexBuffer(device, cmdList, std::move(ibMem), format, indexCnt);
+}
+
+VertexBuffer LevelChunkModel::sChunkVb;
+IndexBuffer LevelChunkModel::sChunkIb;
 
 }   // namespace gfx::d3d12
 

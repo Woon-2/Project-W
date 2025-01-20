@@ -362,6 +362,10 @@ void D3D12Resource::makeDefIbv(D3D12Device& device) {
 }
 
 void D3D12Resource::commitState(D3D12GfxCmdList& cmdList, D3D12_RESOURCE_STATES resState) {
+	if (state_ == resState) {
+		return;
+	}
+
 	auto bar = D3D12_RESOURCE_BARRIER{
 		.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
 		.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
@@ -410,6 +414,48 @@ void Fence::wait(UINT64 value) {
 
 void Fence::wait() {
 	wait(value_);
+}
+
+DXGI_FORMAT convertToDepthFormat(DXGI_FORMAT colorFormat) {
+	switch (colorFormat) {
+	case DXGI_FORMAT_R32G8X24_TYPELESS:
+	case DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS:
+		return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+
+	case DXGI_FORMAT_R32_TYPELESS:
+	case DXGI_FORMAT_R32_FLOAT:
+		return DXGI_FORMAT_D32_FLOAT;
+
+	case DXGI_FORMAT_R24G8_TYPELESS:
+	case DXGI_FORMAT_R24_UNORM_X8_TYPELESS:
+		return DXGI_FORMAT_D24_UNORM_S8_UINT;
+
+	case DXGI_FORMAT_R16_TYPELESS:
+	case DXGI_FORMAT_R16_FLOAT:
+		return DXGI_FORMAT_D16_UNORM;
+
+	default:
+		throw GFX_EXCEPT("[Description] Given format does not have a depth equivalent");
+	}
+}
+
+DXGI_FORMAT convertToColorFormat(DXGI_FORMAT depthFormat) {
+	switch (depthFormat) {
+	case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
+		return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
+
+	case DXGI_FORMAT_D32_FLOAT:
+		return DXGI_FORMAT_R32_FLOAT;
+
+	case DXGI_FORMAT_D24_UNORM_S8_UINT:
+		return DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+
+	case DXGI_FORMAT_D16_UNORM:
+		return DXGI_FORMAT_R16_FLOAT;
+
+	default:
+		throw GFX_EXCEPT("[Description] Given format does not have a color equivalent");
+	}
 }
 
 }   // namespace gfx::d3d12

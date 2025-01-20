@@ -19,6 +19,9 @@ void Player::init(gfx::d3d12engine::Core& core) {
 	as<gfx::d3d12engine::Model>().get().markRenderPass(
 		gfx::d3d12::rp::PBRIllumination::id
 	);
+	as<gfx::d3d12engine::Model>().get().markRenderPass(
+		gfx::d3d12::rp::ShadowMap::id
+	);
 	as<gfx::d3d12engine::Model>().get().root()->coord() << mu::rotateY(mu::Degree(-90.f));
 }
 

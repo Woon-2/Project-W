@@ -4,13 +4,16 @@
 #include "ecs.hpp"
 
 #include "keyboardXX.hpp"
-#include "player.hpp"
+
+#include "renderer.hpp"
 
 #include "d3d12engine/d3d12Engine.hpp"
 
 #include <map>
 
-class Rigidbody;
+struct ControllerAdapters {
+    RenderModeController renderModeController;
+};
 
 class PlayerController : public ecs::Component {
 public:
@@ -20,15 +23,20 @@ public:
         MoveLeft,
         MoveRight,
         YawLeft,
-        YawRight
+        YawRight,
+        SetRenderModeColor,
+        SetRenderModeAlbedo,
+        SetRenderModeNormal,
+        SetRenderModeDepth,
+        SetRenderModeDirectionalLightDepth,
     };
 
     ENABLE_COMPONENT(PlayerController);
 
     PlayerController(const ecs::Entity& entity) NOEXCEPT
-        : Component(entity), forceStep_(400.f), yawStep_(0.6f * mu::pi) {}
+        : Component(entity), forceStep_(800.f), yawStep_(0.6f * mu::pi) {}
 
-    void handleEvent(Event event, float deltaTime);
+    void handleEvent(Event event, float deltaTime, const ControllerAdapters& controllerAdapters);
 
 private:
     void moveForward(float deltaTime) {
@@ -59,7 +67,7 @@ public:
         initKeyMap();
     }
 
-	void update(float deltaTime);
+	void update(float deltaTime, const ControllerAdapters& controllerAdapters);
 
 private:
     void initKeyMap();

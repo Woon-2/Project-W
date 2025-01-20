@@ -107,6 +107,7 @@ public:
 	DescriptorCPU()
 		: cpuHandle_{}, gpuHandle_{}, offsetFromRange_(std::size_t(-1)), type_(Type::INVALID) {}
 
+	// TODO: implement this
 	DescriptorCPU(const DescriptorGPU& other);
 
 	DescriptorCPU( const D3D12_CPU_DESCRIPTOR_HANDLE& cpuHandle,
@@ -597,6 +598,14 @@ public:
 		) );
 	}
 
+	DescriptorCPU& curRtv() NOEXCEPT {
+		return rtvs_[backBufIdx_];
+	}
+
+	DescriptorCPU& curDsv() NOEXCEPT {
+		return dsv_;
+	}
+
 	void setPresent(D3D12GfxCmdList& cmdList) {
 		backBuffers_[backBufIdx_].commitState(cmdList, D3D12_RESOURCE_STATE_PRESENT);
 	}
@@ -738,6 +747,9 @@ private:
 	UINT64 value_;
 	HANDLE event_;
 };
+
+DXGI_FORMAT convertToDepthFormat(DXGI_FORMAT colorFormat);
+DXGI_FORMAT convertToColorFormat(DXGI_FORMAT depthFormat);
 
 }   // namespace gfx::d3d12
 

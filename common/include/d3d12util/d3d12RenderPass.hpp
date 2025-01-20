@@ -10,6 +10,7 @@
 #include <string_view>
 #include <vector>
 #include <map>
+#include <type_traits>
 
 namespace gfx {
 
@@ -121,6 +122,138 @@ private:
     FocusMode focusMode_;
 };
 
+// Render targets' low level resources should reside in shaders or window,
+// and below render target classes should not own them.
+// By doing so, we can avoid the need to manage the resources' lifetimes
+// in render target classes.
+class IRenderTarget {
+public:
+    friend class RenderTargets;
+    virtual ~IRenderTarget() = default;
+
+private:
+    virtual void onPush(D3D12GfxCmdList& cmdList) = 0;
+    virtual void onPop(D3D12GfxCmdList& cmdList) = 0;
+    virtual void onBind(D3D12GfxCmdList& cmdList) = 0;
+    virtual void onClear(D3D12GfxCmdList& cmdList) = 0;
+};
+
+class RenderTargets {
+public:
+    // should update sSpecifierStrings as well if Specifiers are updated
+    enum class Specifier {
+        Main,
+        Shadow,
+        SIZE
+    };
+
+    void pushTarget(D3D12GfxCmdList& cmdList, Specifier spec, IRenderTarget* pTarget);
+    IRenderTarget* popTarget(D3D12GfxCmdList& cmdList, Specifier spec);
+    template <class ... Specs>
+        requires (std::is_same_v<Specifier, std::remove_cvref_t<Specs>> && ...)
+    void bind(D3D12GfxCmdList& cmdList, Specs ... specs) {
+        (map_.at(specs)->onBind(cmdList), ...);
+    }
+    template <class ... Specs>
+        requires (std::is_same_v<Specifier, std::remove_cvref_t<Specs>> && ...)
+    void clear(D3D12GfxCmdList& cmdList, Specs ... specs) {
+        (map_.at(specs)->onClear(cmdList), ...);
+    }
+
+private:
+    static std::string sSpecifierStrings[etoi(Specifier::SIZE)];
+
+    std::map<Specifier, IRenderTarget*> map_;
+};
+
+template <class TWindow>
+class MainRenderTarget : public IRenderTarget {
+public:
+    MainRenderTarget(TWindow& window)
+        : window_(window) {}
+
+private:
+    void onPush(D3D12GfxCmdList& cmdList) override {}
+
+    void onBind(D3D12GfxCmdList& cmdList) override {
+        window_.setRenderTarget(cmdList);
+    }
+
+    void onPop(D3D12GfxCmdList& cmdList) override {
+        window_.setPresent(cmdList);
+    }
+
+    void onClear(D3D12GfxCmdList& cmdList) override {
+        window_.clearRenderTarget(cmdList);
+        window_.clearDepthStencil(cmdList);
+    }
+
+    TWindow& window_;
+};
+
+class ShadowMaterial : public IRenderTarget, public Material {
+public:
+    ShadowMaterial( Texture& mapResource, const DescriptorCPU& dsv,
+        const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
+        const DescriptorGPU& srv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
+    );
+
+private:
+    void onPush(D3D12GfxCmdList& cmdList) override;
+    void onBind(D3D12GfxCmdList& cmdList) override;
+    void onPop(D3D12GfxCmdList& cmdList) override;
+    void onClear(D3D12GfxCmdList& cmdList) override;
+
+    D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc_;
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc_;
+    const DescriptorGPU& srv_;
+    const DescriptorCPU& dsv_;
+    Texture& mapResource_;
+};
+
+struct WorldLight {
+    using Type = sr::Light::Type;
+
+    struct Config {
+        union {
+            struct Ortho {
+                float width;
+                float height;
+                float nearZ;
+                float farZ;
+            } ortho;
+
+            struct NonDirectional {
+                float fovy;
+                float aspect;
+                float nearZ;
+                float farZ;
+            } perspective;
+        };
+    };
+
+    sr::Light toViewLight(const Camera& camera) const;
+    // for directional lights
+    mu::Mat4x4 MU_CALLCONV view(const Camera& camera) const;
+    // for point lights
+    // std::array<mu::Mat4x4, 6> MU_CALLCONV views() const;
+    mu::Mat4x4 MU_CALLCONV proj() const;
+    mu::Mat4x4 MU_CALLCONV viewProj(const Camera& camera) const;
+
+    Config config;
+    mu::Vec3 color;
+    // absolute position for point lights,
+    mu::Vec3 pos;
+    mu::Vec3 dir;
+    mu::Vec3 atten;
+    float falloff;
+    float cosTheta;
+    float cosPhi;
+    float intensity;
+    float distanceToCamera;
+    Type type;
+};
+
 class RenderPass {
 public:
     using VBLayoutIdx = std::size_t;
@@ -131,9 +264,9 @@ public:
     RenderPass(std::string&& id) : renderPassID_(std::move(id)) {}
     virtual ~RenderPass() = default;
 
-    virtual void preRender(D3D12GfxCmdList& cmdList) = 0;
-    virtual void render(D3D12GfxCmdList& cmdList) = 0;
-    virtual void postRender(D3D12GfxCmdList& cmdList) = 0;
+    virtual void preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) = 0;
+    virtual void render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) = 0;
+    virtual void postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) = 0;
 
     void setRenderPassID(const std::string& renderPassID) {
         renderPassID_ = renderPassID;
@@ -162,15 +295,15 @@ public:
         return viewport_;
     }
 
-    void preRender(D3D12GfxCmdList& cmdList) override;
-    void render(D3D12GfxCmdList& cmdList) override;
-    void postRender(D3D12GfxCmdList& cmdList) override;
+    void preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
 
     void trackModel(Model* pModel);
     void setCamera(const Camera* pCamera) NOEXCEPT {
         pCamera_ = pCamera;
     }
-    void addLight(const sr::Light* pLight) NOEXCEPT {
+    void addLight(const WorldLight* pLight) NOEXCEPT {
         lights_.push_back(pLight);
     }
 
@@ -186,9 +319,10 @@ private:
 
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
-    std::vector<const sr::Light*> lights_;
+    std::vector<const WorldLight*> lights_;
     std::vector< std::tuple<Submesh*, VBLayoutIdx, mu::Mat4x4> > batch_;
     const Camera* pCamera_;
+    ShadowMaterial* pShadowMaterial_;
 };
 
 class PBRIlluminationTerrain : public gfx::d3d12::RenderPass {
@@ -205,15 +339,15 @@ public:
         return viewport_;
     }
 
-    void preRender(D3D12GfxCmdList& cmdList) override;
-    void render(D3D12GfxCmdList& cmdList) override;
-    void postRender(D3D12GfxCmdList& cmdList) override;
+    void preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
 
     void trackModel(Model* pModel);
     void setCamera(const Camera* pCamera) NOEXCEPT {
         pCamera_ = pCamera;
     }
-    void addLight(const sr::Light* pLight) NOEXCEPT {
+    void addLight(const WorldLight* pLight) NOEXCEPT {
         lights_.push_back(pLight);
     }
 
@@ -229,8 +363,176 @@ private:
 
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
-    std::vector<const sr::Light*> lights_;
+    std::vector<const WorldLight*> lights_;
     std::vector< std::tuple<Submesh*, VBLayoutIdx, mu::Mat4x4> > batch_;
+    const Camera* pCamera_;
+};
+
+class ShadowMap : public gfx::d3d12::RenderPass {
+public:
+    static constexpr const char* id = "ShadowMap";
+    friend class ShadowMapTessellation;
+
+    ShadowMap( D3D12Device& device, ShaderShadowMap& shader,
+        DescriptorRange<DescriptorHeapCPU>& dsvRange,
+        const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
+    );
+
+    void setViewport(const D3D12_VIEWPORT& vp);
+
+    const D3D12_VIEWPORT& viewport() const NOEXCEPT {
+        return viewport_;
+    }
+
+    void preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+
+    void trackModel(Model* pModel);
+    void setCamera(const Camera* pCamera) NOEXCEPT {
+        pCamera_ = pCamera;
+    }
+    void setLight(const WorldLight* pLight);
+
+private:
+    ShaderShadowMap& shader() noexcept {
+        return static_cast<ShaderShadowMap&>(protocol_.shader());
+    }
+    const ShaderShadowMap& shader() const noexcept {
+        return static_cast<const ShaderShadowMap&>(protocol_.shader());
+    }
+
+    static RenderProtocol::Desc makeDesc();
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC shadowMapSrvDesc_;
+    D3D12_DEPTH_STENCIL_VIEW_DESC shadowMapDsvDesc_;
+    std::size_t idxShadowMapDsv_;
+    ShadowMaterial shadowMaterial_;
+    D3D12_VIEWPORT viewport_;
+    RenderProtocol protocol_;
+    const WorldLight* pLight_;
+    std::vector< std::tuple<Submesh*, VBLayoutIdx, mu::Mat4x4> > batch_;
+    const Camera* pCamera_;
+};
+
+class ScreenQuad : public gfx::d3d12::RenderPass {
+public:
+    static constexpr const char* id = "ScreenQuad";
+
+    ScreenQuad( D3D12Device& device, ShaderScreenQuad& shader,
+        const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
+    );
+
+    void setViewport(const D3D12_VIEWPORT& vp);
+
+    const D3D12_VIEWPORT& viewport() const NOEXCEPT {
+        return viewport_;
+    }
+
+    void preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+
+private:
+    ShaderScreenQuad& shader() noexcept {
+        return static_cast<ShaderScreenQuad&>(protocol_.shader());
+    }
+    const ShaderScreenQuad& shader() const noexcept {
+        return static_cast<const ShaderScreenQuad&>(protocol_.shader());
+    }
+
+    static RenderProtocol::Desc makeDesc();
+
+    D3D12_VIEWPORT viewport_;
+    RenderProtocol protocol_;
+};
+
+class Tessellation : public gfx::d3d12::RenderPass {
+public:
+    static constexpr const char* id = "Tessellation";
+
+    Tessellation( D3D12Device& device, ShaderTessellation& shader,
+        const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
+    );
+
+    void setViewport(const D3D12_VIEWPORT& vp);
+
+    const D3D12_VIEWPORT& viewport() const NOEXCEPT {
+        return viewport_;
+    }    
+
+    void preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    
+    void trackChunk(const LevelChunkModel* pChunk);
+    void setCamera(const Camera* pCamera) NOEXCEPT {
+        pCamera_ = pCamera;
+    }
+    void addLight(const WorldLight* pLight) NOEXCEPT {
+        lights_.push_back(pLight);
+    }
+
+private:
+    ShaderTessellation& shader() noexcept {
+        return static_cast<ShaderTessellation&>(protocol_.shader());
+    }
+    const ShaderTessellation& shader() const noexcept {
+        return static_cast<const ShaderTessellation&>(protocol_.shader());
+    }
+
+    static RenderProtocol::Desc makeDesc();
+
+    D3D12_VIEWPORT viewport_;
+    RenderProtocol protocol_;
+    std::vector<const WorldLight*> lights_;
+    std::vector<const LevelChunkModel*> batch_;
+    const Camera* pCamera_;
+    ShadowMaterial* pShadowMaterial_;
+};
+
+class ShadowMapTessellation : public gfx::d3d12::RenderPass {
+public:
+    static constexpr const char* id = "ShadowMapTessellation";
+
+    ShadowMapTessellation( D3D12Device& device, ShaderShadowMapTessellation& shader,
+        ShadowMap& shadowMapRP, const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
+    );
+
+    void setViewport(const D3D12_VIEWPORT& vp);
+
+    const D3D12_VIEWPORT& viewport() const NOEXCEPT {
+        return viewport_;
+    }    
+
+    void preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    
+    void trackChunk(const LevelChunkModel* pChunk);
+    void setCamera(const Camera* pCamera) NOEXCEPT {
+        pCamera_ = pCamera;
+    }
+    void setLight(const WorldLight* pLight);
+
+private:
+    ShaderShadowMapTessellation& shader() noexcept {
+        return static_cast<ShaderShadowMapTessellation&>(protocol_.shader());
+    }
+    const ShaderShadowMapTessellation& shader() const noexcept {
+        return static_cast<const ShaderShadowMapTessellation&>(protocol_.shader());
+    }
+
+    static RenderProtocol::Desc makeDesc();
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC shadowMapSrvDesc_;
+    D3D12_DEPTH_STENCIL_VIEW_DESC shadowMapDsvDesc_;
+    std::size_t idxShadowMapDsv_;
+    ShadowMaterial* pShadowMaterial_;
+    D3D12_VIEWPORT viewport_;
+    RenderProtocol protocol_;
+    const WorldLight* pLight_;
+    std::vector<const LevelChunkModel*> batch_;
     const Camera* pCamera_;
 };
 

@@ -197,7 +197,7 @@ UnifiedRootImpl::UnifiedRootImpl(D3D12Device& device)
 	}
 
 	auto samplers = std::vector<D3D12_STATIC_SAMPLER_DESC>();
-	samplers.reserve(5u);
+	samplers.reserve(6u);
 
 	// nearest point wrap
 	samplers.emplace_back(
@@ -267,20 +267,37 @@ UnifiedRootImpl::UnifiedRootImpl(D3D12Device& device)
 		/* .ShaderVisibility = */ D3D12_SHADER_VISIBILITY_ALL
 	);
 
-	// trilinear comparison
+	// nearest comparison
 	samplers.emplace_back(
-		/* .Filter = */ D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR,
+		/* .Filter = */ D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT,
 		/* .AddressU = */ D3D12_TEXTURE_ADDRESS_MODE_BORDER,
 		/* .AddressV = */ D3D12_TEXTURE_ADDRESS_MODE_BORDER,
 		/* .AddressW = */ D3D12_TEXTURE_ADDRESS_MODE_BORDER,
 		/* .MipLODBias = */ 0.f,
-		/* .MaxAnisotropy = */ 16u,
+		/* .MaxAnisotropy = */ 0u,
 		/* .ComparisonFunc = */ D3D12_COMPARISON_FUNC_LESS_EQUAL,
 		/* .BorderColor = */ D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE,
 		/* .MinLOD = */ 0.f,
 		/* .MaxLOD = */ std::numeric_limits<float>::max(),
-		/* .ShaderRegister = */ 4u,
-		/* .RegisterSpace = */ 1u,
+		/* .ShaderRegister = */ 0u,
+		/* .RegisterSpace = */ 2u,
+		/* .ShaderVisibility = */ D3D12_SHADER_VISIBILITY_ALL
+	);
+
+	// bilinear comparison
+	samplers.emplace_back(
+		/* .Filter = */ D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT,
+		/* .AddressU = */ D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+		/* .AddressV = */ D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+		/* .AddressW = */ D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+		/* .MipLODBias = */ 0.f,
+		/* .MaxAnisotropy = */ 0u,
+		/* .ComparisonFunc = */ D3D12_COMPARISON_FUNC_LESS_EQUAL,
+		/* .BorderColor = */ D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE,
+		/* .MinLOD = */ 0.f,
+		/* .MaxLOD = */ std::numeric_limits<float>::max(),
+		/* .ShaderRegister = */ 1u,
+		/* .RegisterSpace = */ 2u,
 		/* .ShaderVisibility = */ D3D12_SHADER_VISIBILITY_ALL
 	);
 
@@ -590,6 +607,330 @@ InputLayout ShaderPBRIlluminationTerrain::makeInputLayoutSeparated() {
 		}
 	} );
 }
+
+ShaderShadowMap::ShaderShadowMap( D3D12Device& device, 
+	const RootSignature& root, const Config& config,
+	const Texture::Desc& shadowMapDesc,
+	DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+	InputLayout::Spec ilSpec
+) : Shader(root, makeInputLayout(ilSpec)),
+	cbDrawcallDataSize_( calcConstantBufferSize(sizeof(sr::PerDrawcallData2)) ),
+	perFrameData_(device, sizeof(sr::PerFrameData1)),
+	perDrawcallData_(device, cbDrawcallDataSize_ * config.maxDrawcallCnt),
+	perInstanceData_(device, sizeof(sr::PerInstanceData2) * config.maxInstanceCnt),
+	shadowMap_( device, tex2dRange, shadowMapDesc,
+		D3D12_SHADER_RESOURCE_VIEW_DESC{
+			.Format = convertToColorFormat(shadowMapDesc.format),
+			.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
+			.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+			.Texture2D = D3D12_TEX2D_SRV{ .MipLevels = 1u }
+		},
+		D3D12_HEAP_TYPE_DEFAULT,
+		D3D12_CLEAR_VALUE{ .Format = shadowMapDesc.format, .DepthStencil = { 1.f, 0u } }
+	), maxInstanceCnt_(config.maxInstanceCnt), maxDrawcallCnt_(config.maxDrawcallCnt) {
+	perFrameData_.pullGpuAddr();
+	perDrawcallData_.pullGpuAddr();
+	perInstanceData_.pullGpuAddr();
+}
+
+void ShaderShadowMap::bindRootParams(D3D12GfxCmdList& cmdList) {
+	auto& root = UnifiedRoot::get();
+
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		root.params[ UnifiedRoot::ParamIndices::b2 ],
+		perFrameData_.gpuAddr()
+	);
+	cmdList.get()->SetGraphicsRootShaderResourceView(
+		root.params[ UnifiedRoot::ParamIndices::t0 ],
+		perInstanceData_.gpuAddr()
+	);
+}
+
+void ShaderShadowMap::bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCmdList& cmdList) {
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		UnifiedRoot::get().params[ UnifiedRoot::ParamIndices::b1 ],
+		perDrawcallData_.gpuAddr() + cbDrawcallDataSize() * drawcallIdx
+	);
+}
+
+void ShaderShadowMap::loadBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
+		shaderPath/"shadowMap.hlsl", inputLayout(), nullptr,
+		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
+	};
+}
+
+void ShaderShadowMap::releaseBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)].reset();
+}
+
+InputLayout ShaderShadowMap::makeInputLayout(InputLayout::Spec ilSpec) {
+	switch (ilSpec) {
+	case InputLayout::Spec::serial:
+		return makeInputLayoutSerial();
+	case InputLayout::Spec::separated:
+		return makeInputLayoutSeparated();
+	default:
+		throw GFX_EXCEPT( "Invalid input layout specification." );
+	}
+}
+
+InputLayout ShaderShadowMap::makeInputLayoutSerial() {
+	return InputLayout( std::vector<InputLayout::Slot>{
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "POSITION", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT }
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Position3D))
+		}
+	} );
+}
+
+InputLayout ShaderShadowMap::makeInputLayoutSeparated() {
+	return InputLayout( std::vector<InputLayout::Slot>{
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "POSITION", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT }
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Position3D))
+		}
+	} );
+}
+
+ShaderScreenQuad::ShaderScreenQuad(D3D12Device& device, const RootSignature& root)
+	: Shader(root, InputLayout()),
+	perDrawcallData_(device, sizeof(sr::PerDrawcallData3)),
+	screenQuad_() {
+	perDrawcallData_.pullGpuAddr();
+}
+
+void ShaderScreenQuad::bindRootParams(D3D12GfxCmdList& cmdList) {
+	auto& root = UnifiedRoot::get();
+
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		root.params[ UnifiedRoot::ParamIndices::b1 ],
+		perDrawcallData_.gpuAddr()
+	);
+}
+
+void ShaderScreenQuad::loadBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
+		shaderPath/"screenQuad.hlsl", inputLayout(), nullptr,
+		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
+	};
+	blobs_[etoi(ShaderBlob::Type::Pixel)] = ShaderBlob{
+		shaderPath/"screenQuad.hlsl", inputLayout(), nullptr,
+		"PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Pixel
+	};
+}
+
+void ShaderScreenQuad::releaseBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)].reset();
+	blobs_[etoi(ShaderBlob::Type::Pixel)].reset();
+}
+
+ShaderTessellation::ShaderTessellation( D3D12Device& device, const RootSignature& root,
+	const Config& config, InputLayout::Spec ilSpec
+)  : Shader(root, makeInputLayout(ilSpec)),
+	cbDrawcallDataSize_( calcConstantBufferSize(sizeof(sr::PerDrawcallData4)) ),
+	perDrawcallData_(device, cbDrawcallDataSize_ * config.maxDrawcallCnt),
+	perInstanceData_(device, sizeof(sr::PerInstanceData0) * config.maxInstanceCnt),
+	perFrameData_(device, sizeof(sr::PerFrameData0)),
+	maxInstanceCnt_(config.maxInstanceCnt), maxDrawcallCnt_(config.maxDrawcallCnt), maxLightCnt_(config.maxLightCnt),
+	lightBuffer_(device, sizeof(sr::Light) * config.maxLightCnt)
+{
+	perDrawcallData_.pullGpuAddr();
+	perInstanceData_.pullGpuAddr();
+	perFrameData_.pullGpuAddr();
+	lightBuffer_.pullGpuAddr();
+}
+
+void ShaderTessellation::bindRootParams(D3D12GfxCmdList& cmdList) {
+	auto& root = UnifiedRoot::get();
+
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		root.params[ UnifiedRoot::ParamIndices::b2 ],
+		perFrameData_.gpuAddr()
+	);
+	cmdList.get()->SetGraphicsRootShaderResourceView(
+		root.params[ UnifiedRoot::ParamIndices::t0 ],
+		perInstanceData_.gpuAddr()
+	);	
+	cmdList.get()->SetGraphicsRootShaderResourceView(
+		root.params[ UnifiedRoot::ParamIndices::t1 ],
+		lightBuffer_.gpuAddr()
+	);	
+}
+
+void ShaderTessellation::bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCmdList& cmdList) {
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		UnifiedRoot::get().params[ UnifiedRoot::ParamIndices::b1 ],
+		perDrawcallData_.gpuAddr() + cbDrawcallDataSize() * drawcallIdx
+	);
+}
+
+void ShaderTessellation::loadBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
+		shaderPath/"tessellation.hlsl", inputLayout(), nullptr,
+		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
+	};
+	blobs_[etoi(ShaderBlob::Type::Pixel)] = ShaderBlob{
+		shaderPath/"tessellation.hlsl", inputLayout(), nullptr,
+		"PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Pixel
+	};
+	blobs_[etoi(ShaderBlob::Type::Hull)] = ShaderBlob{
+		shaderPath/"tessellation.hlsl", inputLayout(), nullptr,
+		"HSMain", "hs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Hull
+	};
+	blobs_[etoi(ShaderBlob::Type::Domain)] = ShaderBlob{
+		shaderPath/"tessellation.hlsl", inputLayout(), nullptr,
+		"DSMain", "ds_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Domain
+	};
+}
+
+void ShaderTessellation::releaseBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)].reset();
+	blobs_[etoi(ShaderBlob::Type::Pixel)].reset();
+	blobs_[etoi(ShaderBlob::Type::Hull)].reset();
+	blobs_[etoi(ShaderBlob::Type::Domain)].reset();
+}
+
+InputLayout ShaderTessellation::makeInputLayout(InputLayout::Spec ilSpec) {
+	switch (ilSpec) {
+	case InputLayout::Spec::serial:
+		return makeInputLayoutSerial();
+	case InputLayout::Spec::separated:
+		return makeInputLayoutSeparated();
+	default:
+		throw GFX_EXCEPT( "Invalid input layout specification." );
+	}
+}
+
+InputLayout ShaderTessellation::makeInputLayoutSerial() {
+	return InputLayout( std::vector<InputLayout::Slot>{
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "POSITION", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+				InputLayout::Elem{ .semanticName = "TEXCOORD", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32_FLOAT }
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Position3D))
+				| (1ull << etoi(Vertex::Properties::TexCoord2D0))
+		}
+	} );
+}
+
+InputLayout ShaderTessellation::makeInputLayoutSeparated() {
+	return InputLayout( std::vector<InputLayout::Slot>{
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "POSITION", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Position3D))
+		},
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "TEXCOORD", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32_FLOAT },
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::TexCoord2D0))
+		}
+	} );
+}
+
+ShaderShadowMapTessellation::ShaderShadowMapTessellation( D3D12Device& device,
+	const RootSignature& root, const Config& config, InputLayout::Spec ilSpec
+) : Shader(root, makeInputLayout(ilSpec)),
+	cbDrawcallDataSize_( calcConstantBufferSize(sizeof(sr::PerDrawcallData4)) ),
+	perDrawcallData_(device, cbDrawcallDataSize_ * config.maxDrawcallCnt),
+	perInstanceData_(device, sizeof(sr::PerInstanceData4) * config.maxInstanceCnt),
+	perFrameData_(device, sizeof(sr::PerFrameData1)),
+	maxInstanceCnt_(config.maxInstanceCnt), maxDrawcallCnt_(config.maxDrawcallCnt) {
+	perDrawcallData_.pullGpuAddr();
+	perInstanceData_.pullGpuAddr();
+	perFrameData_.pullGpuAddr();
+}
+
+void ShaderShadowMapTessellation::bindRootParams(D3D12GfxCmdList& cmdList) {
+	auto& root = UnifiedRoot::get();
+
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		root.params[ UnifiedRoot::ParamIndices::b2 ],
+		perFrameData_.gpuAddr()
+	);
+	cmdList.get()->SetGraphicsRootShaderResourceView(
+		root.params[ UnifiedRoot::ParamIndices::t0 ],
+		perInstanceData_.gpuAddr()
+	);	
+}
+
+void ShaderShadowMapTessellation::bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCmdList& cmdList) {
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		UnifiedRoot::get().params[ UnifiedRoot::ParamIndices::b1 ],
+		perDrawcallData_.gpuAddr() + cbDrawcallDataSize() * drawcallIdx
+	);
+}
+
+void ShaderShadowMapTessellation::loadBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
+		shaderPath/"shadowMapTerrain.hlsl", inputLayout(), nullptr,
+		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
+	};
+	blobs_[etoi(ShaderBlob::Type::Hull)] = ShaderBlob{
+		shaderPath/"shadowMapTerrain.hlsl", inputLayout(), nullptr,
+		"HSMain", "hs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Hull
+	};
+	blobs_[etoi(ShaderBlob::Type::Domain)] = ShaderBlob{
+		shaderPath/"shadowMapTerrain.hlsl", inputLayout(), nullptr,
+		"DSMain", "ds_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Domain
+	};
+}
+
+void ShaderShadowMapTessellation::releaseBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)].reset();
+	blobs_[etoi(ShaderBlob::Type::Hull)].reset();
+	blobs_[etoi(ShaderBlob::Type::Domain)].reset();
+}
+
+InputLayout ShaderShadowMapTessellation::makeInputLayout(InputLayout::Spec ilSpec) {
+	switch (ilSpec) {
+	case InputLayout::Spec::serial:
+		return makeInputLayoutSerial();
+	case InputLayout::Spec::separated:
+		return makeInputLayoutSeparated();
+	default:
+		throw GFX_EXCEPT( "Invalid input layout specification." );
+	}
+}
+
+InputLayout ShaderShadowMapTessellation::makeInputLayoutSerial() {
+	return InputLayout( std::vector<InputLayout::Slot>{
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "POSITION", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+				InputLayout::Elem{ .semanticName = "TEXCOORD", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32_FLOAT }
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Position3D))
+				| (1ull << etoi(Vertex::Properties::TexCoord2D0))
+		}
+	} );
+}
+
+InputLayout ShaderShadowMapTessellation::makeInputLayoutSeparated() {
+	return InputLayout( std::vector<InputLayout::Slot>{
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "POSITION", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Position3D))
+		},
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "TEXCOORD", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32_FLOAT },
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::TexCoord2D0))
+		}
+	} );
+}
+
 
 }   // namespace gfx::d3d12
 

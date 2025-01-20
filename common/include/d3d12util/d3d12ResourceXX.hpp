@@ -21,6 +21,7 @@
 #include <memory>
 #include <ranges>
 #include <algorithm>
+#include <iostream>
 
 #include "enumUtil.hpp"
 #include "memUtil.hpp"
@@ -82,8 +83,22 @@ public:
     };
 
     TextureResource( D3D12Device& device, const Desc& texResDesc,
+        D3D12_HEAP_TYPE heapType, D3D12_RESOURCE_STATES initialState
+    );
+
+    TextureResource( D3D12Device& device, const Desc& texResDesc,
+        D3D12_HEAP_TYPE heapType, D3D12_RESOURCE_STATES initialState,
+        const D3D12_CLEAR_VALUE& optimizedClearValue
+    );
+
+    TextureResource( D3D12Device& device, const Desc& texResDesc,
         D3D12_HEAP_TYPE heapType
     );
+
+    TextureResource( D3D12Device& device, const Desc& texResDesc,
+        D3D12_HEAP_TYPE heapType, const D3D12_CLEAR_VALUE& optimizedClearValue
+    );
+
     TextureResource( D3D12Device& device, D3D12GfxCmdList& cmdList, 
         const std::filesystem::path& path
     );
@@ -119,14 +134,58 @@ public:
 
     Texture( D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
         const Desc& texResDesc, D3D12_HEAP_TYPE heapType
+    ) : Texture(device, tex2dRange, texResDesc, heapType,
+            D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+        ) {}
+
+    Texture( D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+        const Desc& texResDesc, D3D12_HEAP_TYPE heapType,
+        const D3D12_CLEAR_VALUE& optimizedClearValue
+    ) : Texture(device, tex2dRange, texResDesc, heapType,
+            D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, optimizedClearValue
+        ) {}
+
+    Texture( D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+        const Desc& texResDesc, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc,
+        D3D12_HEAP_TYPE heapType
+    ) : Texture(device, tex2dRange, texResDesc, srvDesc, heapType,
+            D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+        ) {}
+
+    Texture( D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+        const Desc& texResDesc, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc,
+        D3D12_HEAP_TYPE heapType, const D3D12_CLEAR_VALUE& optimizedClearValue
+    ) : Texture(device, tex2dRange, texResDesc, srvDesc, heapType,
+            D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, optimizedClearValue
+        ) {}
+
+    Texture( D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+        const Desc& texResDesc, D3D12_HEAP_TYPE heapType,
+        D3D12_RESOURCE_STATES initialState
     ) : TextureResource(device, convertDesc(texResDesc), heapType) {
         makeDefSrv(device, tex2dRange.alloc());
     }
 
     Texture( D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+        const Desc& texResDesc, D3D12_HEAP_TYPE heapType,
+        D3D12_RESOURCE_STATES initialState,
+        const D3D12_CLEAR_VALUE& optimizedClearValue
+    ) : TextureResource(device, convertDesc(texResDesc), heapType, optimizedClearValue) {
+        makeDefSrv(device, tex2dRange.alloc());
+    }
+
+    Texture( D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
         const Desc& texResDesc, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc,
-        D3D12_HEAP_TYPE heapType
+        D3D12_HEAP_TYPE heapType, D3D12_RESOURCE_STATES initialState
     ) : TextureResource(device, convertDesc(texResDesc), heapType) {
+        makeSrv(srvDesc, device, tex2dRange.alloc());
+    }
+
+    Texture( D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+        const Desc& texResDesc, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc,
+        D3D12_HEAP_TYPE heapType, D3D12_RESOURCE_STATES initialState,
+        const D3D12_CLEAR_VALUE& optimizedClearValue
+    ) : TextureResource(device, convertDesc(texResDesc), heapType, optimizedClearValue) {
         makeSrv(srvDesc, device, tex2dRange.alloc());
     }
 
@@ -250,6 +309,7 @@ public:
     using ResourceType = TextureResource::Type;
 
     enum class MapType {
+        Height,
         Albedo,
         Normal,
         Roughness,
@@ -257,6 +317,7 @@ public:
         MetallicSmoothness,
         Emmisive,
         AmbientOcclusion,
+        Shadow,
         Size
     };
 
@@ -271,7 +332,14 @@ public:
         MetallicConstantMapRatio,
         EmmisiveConstantMapRatio,
         AmbientOcclusionConstantMapRatio,
+        TileSize,
+        TileOffset,
         Size
+    };
+
+    enum class ColorSpace {
+        SRGB,
+        Linear
     };
 
     struct MapRef {
@@ -280,10 +348,10 @@ public:
         std::uint32_t type;
         std::uint32_t resourceIdx;
         std::uint32_t arrayIdx;
-        std::uint32_t padding;
+        std::uint32_t colorSpace;
 
         dx::XMUINT4 toxm() const {
-            return dx::XMUINT4{ type, resourceIdx, arrayIdx, padding };
+            return dx::XMUINT4{ type, resourceIdx, arrayIdx, colorSpace };
         }
 
         auto operator<=>(const MapRef&) const = default;
@@ -294,6 +362,7 @@ public:
     void addTexRes(MapType type, const Texture& tex);
     void addTexRes(MapType type, const TextureArray& tex);
     void addTexRes(MapType type, const TextureCube& tex);
+    void MU_CALLCONV addConstant(ConstantType type, mu::Vec2 constant);
     void MU_CALLCONV addConstant(ConstantType type, mu::Vec3 constant);
     void MU_CALLCONV addConstant(ConstantType type, mu::Vec4 constant);
     void addConstant(ConstantType type, float constant);
@@ -767,6 +836,94 @@ private:
     Model::Node* parent_;
     const RefMesh* pRefMesh_;
     std::vector<Submesh> submeshes_;
+};
+
+class ScreenQuad {
+public:
+    ScreenQuad() NOEXCEPT
+        : pTex_(nullptr) {}
+
+    ScreenQuad(const Texture* pTex) NOEXCEPT
+        : pTex_(pTex) {}
+
+    void link(const Texture* pTex) NOEXCEPT {
+        pTex_ = pTex;
+    }
+
+    void unlink() NOEXCEPT {
+        pTex_ = nullptr;
+    }
+
+    void draw(D3D12GfxCmdList& cmdList) const;
+
+    Material::MapRef mapRef() const {
+        return Material::MapRef{
+            .type = etoi(Material::ResourceType::Texture),
+            .resourceIdx = static_cast<std::uint32_t>( pTex_->view(pTex_->idxSrv).offset() ),
+            .arrayIdx = 0u,
+            .colorSpace = etoi(Material::ColorSpace::SRGB)
+        };
+    }
+
+private:
+    const Texture* pTex_;
+};
+
+class LevelChunkModel {
+public:
+    struct PatchVertex {
+        dx::XMFLOAT3 pos;
+        dx::XMFLOAT2 texCoord;
+    };
+
+    friend class LevelRegionModel;
+    static void initChunkMesh(D3D12Device& device, D3D12GfxCmdList& cmdList);
+    void draw(D3D12GfxCmdList& cmdList) const;
+
+    void markRenderPass(const std::string& renderPass) {
+        markedRenderPasses_.push_back(renderPass);
+    }
+
+    const auto& markedRenderPasses() const noexcept {
+        return markedRenderPasses_;
+    }
+
+    mu::Mat4x4 MU_CALLCONV idxToWorld() const;
+    const dx::XMUINT2 idx() const noexcept {
+        return idx_;
+    }
+
+    Material& material() noexcept {
+        return material_;
+    }
+
+    const Material& material() const noexcept {
+        return material_;
+    }
+
+private:
+    void load(const StaticTextureStorage& sts,
+        std::map<Material::MapRef, DescriptorGPU>& textureMap, std::istream& is
+    );
+
+    static VertexBuffer sChunkVb;
+    static IndexBuffer sChunkIb;
+    
+    Material material_;
+    std::vector<std::string> markedRenderPasses_;
+    dx::XMUINT2 idx_;
+};
+
+class LevelRegionModel {
+public:
+    LevelRegionModel() = default;
+    LevelRegionModel(const StaticTextureStorage& sts, std::istream&& is);
+
+    LevelChunkModel& get(const dx::XMUINT2& idx);
+    const LevelChunkModel& get(const dx::XMUINT2& idx) const;
+
+private:
+    std::vector<LevelChunkModel> chunks_;
 };
 
 }   // namespace gfx::d3d12

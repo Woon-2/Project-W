@@ -1,5 +1,9 @@
 #include "d3d12engine/d3d12Engine.hpp"
 
+#include <fstream>
+
+#include "resourcePath.hpp"
+
 namespace gfx {
 
 namespace d3d12engine {
@@ -39,11 +43,16 @@ void Core::render(IRenderer& renderer, Scene& scene) {
     descRanges_.srvRangeTexCube.bind( cmdList_, unifiedRoot.params[
         d3d12::UnifiedRoot::ParamIndices::BindlessTexCube
     ] );
-    window_.setRenderTarget(cmdList_);
-    window_.clearRenderTarget(cmdList_);
-    window_.clearDepthStencil(cmdList_);
-    renderer.render(*this, scene);
-    window_.setPresent(cmdList_);
+
+    auto renderTargets = d3d12::RenderTargets();
+    auto mainRT = d3d12::MainRenderTarget(window_);
+    renderTargets.pushTarget(cmdList_, d3d12::RenderTargets::Specifier::Main, &mainRT);
+    renderTargets.bind(cmdList_, d3d12::RenderTargets::Specifier::Main);
+    renderTargets.clear(cmdList_, d3d12::RenderTargets::Specifier::Main);
+
+    renderer.render(*this, scene, renderTargets);
+    
+    renderTargets.popTarget(cmdList_, d3d12::RenderTargets::Specifier::Main);
     cmdList_.close();
     cmdQueue_.execute(cmdList_);
     window_.present(cmdList_);
@@ -126,7 +135,7 @@ void Core::loadTerrain( const d3d12::Bitmap& heightMap,
         .type = etoi(d3d12::Material::MapType::Albedo),
         .resourceIdx = static_cast<std::uint32_t>( staticTexStorage_.get(albedoMapPath).offset() ),
         .arrayIdx = 0u,
-        .padding = 0u
+        .colorSpace = etoi(d3d12::Material::ColorSpace::SRGB)
     };
 
     for (std::size_t i = 0; i < zDivisions; ++i) {
@@ -232,6 +241,18 @@ void Scene::addEntity(ecs::Entity& entity) {
 
 void Scene::clearStash() {
     reservedEntities_.clear();
+}
+
+LevelRegion::LevelRegion(const Core& core)
+    : model_(core.staticTexStorage(), std::ifstream(resourcePath/"LevelGraph.bin")) {}
+
+void LevelRegion::activateChunk(std::size_t xIdx, std::size_t zIdx, Scene& scene) {
+    auto& chunk = model_.get(
+        dx::XMUINT2(static_cast<std::uint32_t>(xIdx), static_cast<std::uint32_t>(zIdx))
+    );
+
+    subEntities_.emplace_back().embed(&chunk);
+    scene.addEntity(subEntities_.back());
 }
 
 TerrainSubset::TerrainSubset( const d3d12::RefModelStorage::ID& key,
@@ -358,6 +379,109 @@ void PBRIlluminationTerrain::update(Scene& scene) {
         }
         if ( auto pLight = Light::at(entityID) ) {
             addLight(&pLight->get());
+        }
+    }
+}
+
+void ShadowMap::init(Scene& scene) {
+    for (auto& pModel : models(scene)) {
+        if (pModel) {
+            trackModel(&pModel->get());
+        }
+    }
+    if (!cameras(scene).empty()) {
+        auto& pCamera = cameras(scene).front();
+        if (pCamera) {
+            setCamera(&cameras(scene).front()->get());
+        }
+    }
+    if (lights(scene).empty()) {
+        throw GFX_EXCEPT("No light found");
+    }
+    setLight( &lights(scene).front()->get() );
+}
+
+void ShadowMap::update(Scene& scene) {
+    for (auto& entityID : reservedEntities(scene)) {
+        if ( auto pModel = Model::at(entityID) ) {
+            trackModel(&pModel->get());
+        }
+        if ( auto pCamera = Camera::at(entityID) ) {
+            setCamera(&pCamera->get());
+        }
+    }
+}
+
+void ScreenQuad::init(Scene& scene) {}
+
+void ScreenQuad::update(Scene& scene) {}
+
+void Tessellation::init(Scene& scene) {
+    // for (auto& pModel : models(scene)) {
+    //    do nothing
+    // }
+    for (auto& pChunk : levelChunks(scene)) {
+        trackChunk(&pChunk->get());
+    }
+    if (!cameras(scene).empty()) {
+        auto& pCamera = cameras(scene).front();
+        if (pCamera) {
+            setCamera(&cameras(scene).front()->get());
+        }
+    }
+    for (auto& pLight : lights(scene)) {
+        if (pLight) {
+            addLight(&pLight->get());
+        }
+    }
+}
+
+void Tessellation::update(Scene& scene) {
+    for (auto& entityID : reservedEntities(scene)) {
+        // if ( auto pModel = Model::at(entityID) ) {
+        //     do nothing
+        // }
+        for (auto& pChunk : levelChunks(scene)) {
+            trackChunk(&pChunk->get());
+        }
+        if ( auto pCamera = Camera::at(entityID) ) {
+            setCamera(&pCamera->get());
+        }
+        if ( auto pLight = Light::at(entityID) ) {
+            addLight(&pLight->get());
+        }
+    }
+}
+
+void ShadowMapTessellation::init(Scene& scene) {
+    // for (auto& pModel : models(scene)) {
+    //    do nothing
+    // }
+    for (auto& pChunk : levelChunks(scene)) {
+        trackChunk(&pChunk->get());
+    }
+    if (!cameras(scene).empty()) {
+        auto& pCamera = cameras(scene).front();
+        if (pCamera) {
+            setCamera(&cameras(scene).front()->get());
+        }
+    }
+    if (lights(scene).empty()) {
+        throw GFX_EXCEPT("No light found");
+    }
+    setLight( &lights(scene).front()->get() );
+}
+
+void ShadowMapTessellation::update(Scene& scene) {
+    for (auto& entityID : reservedEntities(scene)) {
+        // if ( auto pModel = Model::at(entityID) ) {
+        //     do nothing
+        // }
+        for (auto& pChunk : levelChunks(scene)) {
+            trackChunk(&pChunk->get());
+        }
+        if ( auto pCamera = Camera::at(entityID) ) {
+            setCamera(&pCamera->get());
         }
     }
 }
