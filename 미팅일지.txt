@@ -191,3 +191,20 @@
   * 나중에 포트폴리오로 사용할 때 직접 제작했다는 증거
   * 개발 과정 문서화는 취업시 좋은 평가를 받을 수 있음.
  - ToDo 하기
+
+2025-01-20
+---------------
+1.진행상황
+ - 유니티에서 Height Map을 뽑아서 클라이언트에 렌더링
+ 
+2. 서버 질문
+ - Overlapped I/O 버그 미해결 => SESSION 클래스의 소멸자.
+ - SleepEX를 계속 호출해야 모든 callback 이 실행된다. Sleep Ex 대신 Accept나 Send Recv도 callback을 실행해 준다.
+ - Overlapped I/O 소켓은 non-overlapped I/O 호출도 아무 문제없이 잘 동작한다.
+ - 
+3. 다음 미팅
+ - 2025-02-03 월요일 오후 2시 30분
+ - 클라이언트에서 청크 사이 이동
+ - oVERLAPPED	I/O 에서 이동 동기화
+
+
