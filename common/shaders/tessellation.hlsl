@@ -147,6 +147,8 @@ struct DSOutput {
 	float4 pos : SV_POSITION;
     float3 posV : POSITION_V;
 	float3 normalV : NORMAL_V;
+    float3 tangentV : TANGENT_V;
+    float3 bitangentV : BITANGENT_V;
 	float2 texcoord : TEXCOORD;
     float2 tileTexCoord : TEXCOORD1;
 	nointerpolation uint instanceOffset : INSTANCE_OFFSET;
@@ -196,7 +198,7 @@ DSOutput DSMain(HSConstantOutput input, float2 uv : SV_DomainLocation, const Out
     float3 p1 = lerp(p10, p11, uv.x);
     output.pos = float4( lerp(p0, p1, uv.y), 1.f );
     
-    output.pos.y += height;  // add the sampled height
+    output.pos.y += height * 100.f;  // add the sampled height
 
     // transform from local to view space
     output.posV = mul(output.pos, gInstances[instanceBase + input.instanceOffset].wv).xyz;
@@ -208,21 +210,43 @@ DSOutput DSMain(HSConstantOutput input, float2 uv : SV_DomainLocation, const Out
 	float rHeight = sampleLevelFromMapRef2DOffset(heightMapRef, output.texcoord, 0.f, int2(1, 0), heightMapSamplerIdx).r;
 	float bHeight = sampleLevelFromMapRef2DOffset(heightMapRef, output.texcoord, 0.f, int2(0, -1), heightMapSamplerIdx).r;
 
-	float3 normalM = cross(rHeight - lHeight, tHeight - bHeight);
+    float3 tangentM = rHeight - lHeight;
+    float3 bitangentM = tHeight - bHeight;
+	float3 normalM = cross(tangentM, bitangentM);
+    tangentM = normalize(tangentM);
+    bitangentM = normalize(bitangentM);
 	const float epsilon = 0.0005f;
 	if (length(normalM < epsilon)) {
 		normalM = float3(0.f, 1.f, 0.f);
+        tangentM = float3(1.f, 0.f, 0.f);
+        bitangentM = float3(0.f, 0.f, 1.f);
 	} 
 	else {
 		normalM = normalize(normalM);
 	}
 
 	output.normalV = mul( float4(normalM, 0.f), gInstances[instanceBase + input.instanceOffset].wvNormal ).xyz;
+    output.tangentV = mul( float4(tangentM, 0.f), gInstances[instanceBase + input.instanceOffset].wvNormal ).xyz;
+    output.bitangentV = mul( float4(bitangentM, 0.f), gInstances[instanceBase + input.instanceOffset].wvNormal ).xyz;
+    output.instanceOffset = input.instanceOffset;
 
 	return output;
 }
 
 float4 PSMain(DSOutput input) : SV_TARGET {
-	input.normalV = normalize(input.normalV);
-    return accumulateLighting(input.posV, input.normalV, input.tileTexCoord);
+	float3 N = normalize(input.normalV);
+
+    if (material.normalMapRef.x != uint(-1)) {
+        float3 T = normalize(input.tangentV - dot(input.tangentV, N) * N);
+        float3 B = cross(N, T);
+        float3x3 TBN = float3x3(T, B, N);
+
+		float3 normal = sampleFromMapRef(material.normalMapRef, input.tileTexCoord, samplerIdx).rgb;
+		normal = normal * 2.0f - 1.0f;
+		
+		N = mul(normal, TBN);
+	}
+
+    // return float4(input.texcoord, 0.f, 1.f);
+    return accumulateLighting(input.posV, N, input.tileTexCoord);
 }
