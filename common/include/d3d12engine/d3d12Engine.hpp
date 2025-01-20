@@ -31,6 +31,7 @@ class Core {
 public:
     using MyWindow = d3d12::Window<d3d12::BasicD3D12WTraits<char>>;
     friend class Model;
+    friend class LevelRegion;
 
     Core();
 
@@ -67,7 +68,7 @@ public:
     }
 
     void loadStaticTexture(const std::filesystem::path& path, d3d12::TextureResource::Type type);
-    void loadRefModel(const std::filesystem::path& path, const d3d12::RefModelStorage::ID& key);\
+    void loadRefModel(const std::filesystem::path& path, const d3d12::RefModelStorage::ID& key);
     void layoutRefModelVBs( const d3d12::RefModelStorage::ID& key, std::size_t vbLayoutIdx,
         const d3d12::InputLayout& inputLayout
     );
@@ -88,7 +89,7 @@ public:
     }
 
     void initChunkMesh(d3d12::D3D12GfxCmdList& cmdList) {
-        d3d12::LevelChunk::initChunkMesh(device_, cmdList);
+        d3d12::LevelChunkModel::initChunkMesh(device_, cmdList);
     }
 
     d3d12::DescriptorRanges& descRanges() NOEXCEPT { return descRanges_; }
@@ -96,6 +97,9 @@ public:
 
 
 private:
+    d3d12::StaticTextureStorage& staticTexStorage() NOEXCEPT { return staticTexStorage_; }
+    const d3d12::StaticTextureStorage& staticTexStorage() const NOEXCEPT { return staticTexStorage_; }
+
     d3d12::StaticTextureStorage staticTexStorage_;
     d3d12::RefModelStorage refModelStorage_;
     dx::DXGIFactory factory_;
@@ -158,6 +162,20 @@ private:
     d3d12::Model model_;
 };
 
+class LevelChunk : public ecs::Component {
+public:
+    ENABLE_COMPONENT(LevelChunk);
+
+    LevelChunk(const ecs::Entity& entity, d3d12::LevelChunkModel& model) NOEXCEPT
+        : ecs::Component(entity), pModel_(&model) {}
+
+    d3d12::LevelChunkModel& get() NOEXCEPT { return *pModel_; }
+    const d3d12::LevelChunkModel& get() const NOEXCEPT { return *pModel_; }
+
+private:
+    d3d12::LevelChunkModel* pModel_;
+};
+
 class Camera : public ecs::Component {
 public:
     ENABLE_COMPONENT(Camera);
@@ -204,6 +222,7 @@ class Scene;
 class IRenderPass {
 protected:
     ecs::SysCompCont<Model*>& models(Scene& scene);
+    ecs::SysCompCont<LevelChunk*>& levelChunks(Scene& scene);
     ecs::SysCompCont<Camera*>& cameras(Scene& scene);
     ecs::SysCompCont<Light*>& lights(Scene& scene);
     std::vector<ecs::Entity::ID>& reservedEntities(Scene& scene);
@@ -214,11 +233,11 @@ public:
     virtual ~IRenderPass() = default;
 };
 
-class Scene : public ecs::System<Model, Camera, Light> {
+class Scene : public ecs::System<Model, Camera, Light, LevelChunk> {
 public:
     friend class IRenderPass;
 
-    using MyBase = ecs::System<Model, Camera, Light>;
+    using MyBase = ecs::System<Model, Camera, Light, LevelChunk>;
 
     void addEntity(ecs::Entity& entity);
     void clearStash();
@@ -227,8 +246,32 @@ private:
     std::vector<ecs::Entity::ID> reservedEntities_;
 };
 
+class LevelRegion : public ecs::Entity {
+private:
+    class SubEntity : public ecs::Entity {
+    public:
+        void embed(d3d12::LevelChunkModel* pModel) {
+            createComponent<LevelChunk>(*pModel);
+        }
+    };
+
+public:
+    LevelRegion() = default;
+    LevelRegion(const Core& core);
+
+    void activateChunk(std::size_t xIdx, std::size_t zIdx, Scene& scene);
+
+private:
+    d3d12::LevelRegionModel model_;
+    std::vector<SubEntity> subEntities_;
+};
+
 inline ecs::SysCompCont<Model*>& IRenderPass::models(Scene& scene) {
     return scene.components<Model>();
+}
+
+inline ecs::SysCompCont<LevelChunk*>& IRenderPass::levelChunks(Scene& scene) {
+    return scene.components<LevelChunk>();
 }
 
 inline ecs::SysCompCont<Camera*>& IRenderPass::cameras(Scene& scene) {
