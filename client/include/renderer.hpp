@@ -36,6 +36,8 @@ private:
     gfx::d3d12::ShaderPBRIlluminationTerrain shaderPBRTerrain_;
     gfx::d3d12engine::rp::PBRIlluminationTerrain renderPassPBRTerrain_;
 
+    gfx::d3d12::ShadowMaterialStandAlone shadowMaterial_;
+
     gfx::d3d12::ShaderShadowMap shaderShadowMap_;
     gfx::d3d12engine::rp::ShadowMap renderPassShadowMap_;
 

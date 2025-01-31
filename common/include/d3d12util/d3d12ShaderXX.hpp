@@ -610,9 +610,7 @@ public:
 	};
 
 	ShaderShadowMap( D3D12Device& device, const RootSignature& root,
-		const Config& config, const Texture::Desc& shadowMapDesc,
-		DescriptorRange<DescriptorHeapGPU>& tex2dRange,
-		InputLayout::Spec ilSpec = InputLayout::Spec::serial
+		const Config& config, InputLayout::Spec ilSpec = InputLayout::Spec::serial
 	);
 
 	RenderProtocol makeProtocol( D3D12Device& device, const RenderProtocol::Desc& desc) {

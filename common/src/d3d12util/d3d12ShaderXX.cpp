@@ -657,8 +657,6 @@ const D3D12_DEPTH_STENCIL_VIEW_DESC makeShadowMapDsvDesc(
 
 ShaderShadowMap::ShaderShadowMap( D3D12Device& device, 
 	const RootSignature& root, const Config& config,
-	const Texture::Desc& shadowMapDesc,
-	DescriptorRange<DescriptorHeapGPU>& tex2dRange,
 	InputLayout::Spec ilSpec
 ) : Shader(root, makeInputLayout(ilSpec)),
 	cbDrawcallDataSize_( calcConstantBufferSize(sizeof(sr::PerDrawcallData2)) ),

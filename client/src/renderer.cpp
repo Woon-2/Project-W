@@ -17,20 +17,21 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
         }, gfx::d3d12::InputLayout::Spec::separated
     ), renderPassPBRTerrain_( core.device(), shaderPBRTerrain_,
         gfx::d3d12::convClientToVP( core.window().client() )
-    ), shaderShadowMap_( core.device(), core.root(),
-        gfx::d3d12::ShaderShadowMap::Config{
-            .maxInstanceCnt = 0x1000u,
-            .maxDrawcallCnt = 0x1000u
-        }, gfx::d3d12::Texture::Desc{
+    ), shadowMaterial_( core.device(), gfx::d3d12::Texture::Desc{
             .width = static_cast<std::uint32_t>( core.window().client().width ),
             .height = static_cast<std::uint32_t>( core.window().client().height ),
             .mipLevels = 1u,
             .format = DXGI_FORMAT_D32_FLOAT,
             .sampleDesc = { .Count = 1u, .Quality = 0u },
             .flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
-        }, core.descRanges().srvRangeTex2D, gfx::d3d12::InputLayout::Spec::separated
+        }, core.descRanges().srvRangeTex2D, core.descRanges().dsvRange
+    ), shaderShadowMap_( core.device(), core.root(),
+        gfx::d3d12::ShaderShadowMap::Config{
+            .maxInstanceCnt = 0x1000u,
+            .maxDrawcallCnt = 0x1000u
+        }, gfx::d3d12::InputLayout::Spec::separated
     ), renderPassShadowMap_( core.device(), shaderShadowMap_,
-        core.descRanges().dsvRange,
+        shadowMaterial_, shadowMaterial_.idxDsv,
         gfx::d3d12::convClientToVP( core.window().client() )
     ), shaderScreenQuad_(core.device(), core.root()),
     renderPassScreenQuad_( core.device(), shaderScreenQuad_,
@@ -52,7 +53,8 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
     ), renderPassShadowMapTessellation_(core.device(),
         shaderShadowMapTessellation_, renderPassShadowMap_
     ) {
-        shaderShadowMapTessellation_.setShadowMap(shaderShadowMap_.shadowMap());
+        shaderShadowMap_.setShadowMap( &shadowMaterial_.texture() );
+        shaderShadowMapTessellation_.setShadowMap( &shadowMaterial_.texture() );
     }
 
 void Renderer::layoutVBsPBR( gfx::d3d12engine::Core& core,
