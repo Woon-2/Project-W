@@ -199,6 +199,34 @@ public:
         const DescriptorGPU& srv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
     );
 
+    const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc() const NOEXCEPT {
+        return dsvDesc_;
+    }
+
+    const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc() const NOEXCEPT {
+        return srvDesc_;
+    }
+
+    const DescriptorGPU& srv() const NOEXCEPT {
+        return *pSrv_;
+    }
+
+    const DescriptorCPU& dsv() const NOEXCEPT {
+        return *pDsv_;
+    }
+
+    Texture& texture() NOEXCEPT {
+        return *pMapResource_;
+    }
+
+    const Texture& texture() const NOEXCEPT {
+        return *pMapResource_;
+    }
+
+    bool valid() const NOEXCEPT {
+        return pMapResource_ != nullptr && pSrv_ != nullptr && pDsv_ != nullptr;
+    }
+
 private:
     void onPush(D3D12GfxCmdList& cmdList) override;
     void onBind(D3D12GfxCmdList& cmdList) override;
@@ -222,14 +250,6 @@ public:
 		DescriptorRange<DescriptorHeapGPU>& tex2dRange,
         DescriptorRange<DescriptorHeapCPU>& dsvRange
     );
-
-    Texture* texture() NOEXCEPT {
-        return &shadowMap_;
-    }
-
-    const Texture* texture() const NOEXCEPT {
-        return &shadowMap_;
-    }
 
 private:
     Texture shadowMap_;
@@ -396,6 +416,11 @@ class ShadowMap : public gfx::d3d12::RenderPass {
 public:
     static constexpr const char* id = "ShadowMap";
     friend class ShadowMapTessellation;
+
+    ShadowMap( D3D12Device& device, ShaderShadowMap& shader,
+        const ShadowMaterial& shadowMaterial, std::size_t idxShadowMapDsv,
+        const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
+    );
 
     ShadowMap( D3D12Device& device, ShaderShadowMap& shader,
         DescriptorRange<DescriptorHeapCPU>& dsvRange,

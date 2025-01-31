@@ -52,7 +52,7 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
     ), renderPassShadowMapTessellation_(core.device(),
         shaderShadowMapTessellation_, renderPassShadowMap_
     ) {
-        shaderShadowMapTessellation_.setShadowMap(&shaderShadowMap_.shadowMap_);
+        shaderShadowMapTessellation_.setShadowMap(shaderShadowMap_.shadowMap());
     }
 
 void Renderer::layoutVBsPBR( gfx::d3d12engine::Core& core,
@@ -127,7 +127,7 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
         renderPassShadowMapTessellation_.postRender( cmdList, renderTargets );
 
         shaderScreenQuad_.bindRootParams( cmdList );
-        shaderScreenQuad_.screenQuad_.link(&shaderShadowMap_.shadowMap_);
+        shaderScreenQuad_.screenQuad_.link(shaderShadowMap_.shadowMap());
         renderPassScreenQuad_.preRender( cmdList, renderTargets );
         renderPassScreenQuad_.render( cmdList, renderTargets );
         renderPassScreenQuad_.postRender( cmdList, renderTargets );

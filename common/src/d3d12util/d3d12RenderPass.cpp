@@ -548,24 +548,26 @@ void PBRIlluminationTerrain::trackModel(Model* pModel) {
     }
 }
 
+ShadowMap::ShadowMap( D3D12Device& device, ShaderShadowMap& shader,
+    const ShadowMaterial& shadowMaterial, std::size_t idxShadowMapDsv,
+    const D3D12_VIEWPORT& vp
+) : gfx::d3d12::RenderPass(id),
+    shadowMapSrvDesc_( shadowMaterial.srvDesc() ),
+    shadowMapDsvDesc_( shadowMaterial.dsvDesc() ),
+    idxShadowMapDsv_( idxShadowMapDsv ),
+    shadowMaterial_( shadowMaterial ),
+    viewport_(vp), protocol_( shader.makeProtocol( device,
+        RenderProtocol::Desc{ makeDesc() }
+    ) ), pLight_(nullptr), batch_(), pCamera_(nullptr) {}
 
 ShadowMap::ShadowMap( D3D12Device& device, ShaderShadowMap& shader,
     DescriptorRange<DescriptorHeapCPU>& dsvRange, const D3D12_VIEWPORT& vp
 ) : gfx::d3d12::RenderPass(id),
-    shadowMapSrvDesc_{
-        .Format = convertToColorFormat( shader.shadowMap_.desc().Format ),
-        .ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
-        .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-        .Texture2D = D3D12_TEX2D_SRV{ .MipLevels = 1u }
-    },
-    shadowMapDsvDesc_{
-        .Format = shader.shadowMap_.desc().Format,
-        .ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D,
-        .Flags = D3D12_DSV_FLAG_NONE
-    },
-    idxShadowMapDsv_( shader.shadowMap_.makeDsv( shadowMapDsvDesc_, device, dsvRange.alloc() ) ),
-    shadowMaterial_( shader.shadowMap_, shader.shadowMap_.view( idxShadowMapDsv_ ),
-        shadowMapDsvDesc_, shader.shadowMap_.view( shader.shadowMap_.idxSrv ),
+    shadowMapSrvDesc_( detail::makeShadowMapSrvDesc( shader.shadowMap()->desc() ) ),
+    shadowMapDsvDesc_( detail::makeShadowMapDsvDesc( shader.shadowMap()->desc() ) ),
+    idxShadowMapDsv_( shader.shadowMap()->makeDsv( shadowMapDsvDesc_, device, dsvRange.alloc() ) ),
+    shadowMaterial_( *shader.shadowMap(), shader.shadowMap()->view( idxShadowMapDsv_ ),
+        shadowMapDsvDesc_, shader.shadowMap()->view( shader.shadowMap()->idxSrv ),
         shadowMapSrvDesc_
     ),
     viewport_(vp), protocol_( shader.makeProtocol( device,

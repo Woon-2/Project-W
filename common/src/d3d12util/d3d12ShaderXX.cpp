@@ -621,6 +621,17 @@ const D3D12_SHADER_RESOURCE_VIEW_DESC makeShadowMapSrvDesc(
     };
 }
 
+const D3D12_SHADER_RESOURCE_VIEW_DESC makeShadowMapSrvDesc(
+	const D3D12_RESOURCE_DESC& shadowMapDesc
+) {
+	return D3D12_SHADER_RESOURCE_VIEW_DESC{
+		.Format = convertToColorFormat(shadowMapDesc.Format),
+		.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
+		.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+		.Texture2D = D3D12_TEX2D_SRV{ .MipLevels = 1u }
+	};
+}
+
 const D3D12_DEPTH_STENCIL_VIEW_DESC makeShadowMapDsvDesc(
     const Texture::Desc& shadowMapDesc
 ) {
@@ -631,7 +642,18 @@ const D3D12_DEPTH_STENCIL_VIEW_DESC makeShadowMapDsvDesc(
         .Texture2D = D3D12_TEX2D_DSV{ .MipSlice = 0u }
     };
 }
-}   // namespace gfx::d3d12::detail
+
+const D3D12_DEPTH_STENCIL_VIEW_DESC makeShadowMapDsvDesc(
+	const D3D12_RESOURCE_DESC& shadowMapDesc
+) {
+	return D3D12_DEPTH_STENCIL_VIEW_DESC{
+		.Format = shadowMapDesc.Format,
+		.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D,
+		.Flags = D3D12_DSV_FLAG_NONE,
+		.Texture2D = D3D12_TEX2D_DSV{ .MipSlice = 0u }
+	};
+}
+}	// namespace gfx::d3d12::detail
 
 ShaderShadowMap::ShaderShadowMap( D3D12Device& device, 
 	const RootSignature& root, const Config& config,
@@ -643,11 +665,8 @@ ShaderShadowMap::ShaderShadowMap( D3D12Device& device,
 	perFrameData_(device, sizeof(sr::PerFrameData1)),
 	perDrawcallData_(device, cbDrawcallDataSize_ * config.maxDrawcallCnt),
 	perInstanceData_(device, sizeof(sr::PerInstanceData2) * config.maxInstanceCnt),
-	shadowMap_( device, tex2dRange, shadowMapDesc,
-		detail::makeShadowMapSrvDesc( shadowMapDesc ),
-		D3D12_HEAP_TYPE_DEFAULT,
-		D3D12_CLEAR_VALUE{ .Format = shadowMapDesc.format, .DepthStencil = { 1.f, 0u } }
-	), maxInstanceCnt_(config.maxInstanceCnt), maxDrawcallCnt_(config.maxDrawcallCnt) {
+	maxInstanceCnt_(config.maxInstanceCnt), maxDrawcallCnt_(config.maxDrawcallCnt),
+	pShadowMap_(nullptr) {
 	perFrameData_.pullGpuAddr();
 	perDrawcallData_.pullGpuAddr();
 	perInstanceData_.pullGpuAddr();
