@@ -69,7 +69,6 @@ struct HSConstantOutput {
 struct HSOutput {
 	float3 pos : POSITION;
 	float2 texcoord : TEXCOORD;
-    float2 tileTexCoord : TEXCOORD1;
 };
 
 [domain("quad")]

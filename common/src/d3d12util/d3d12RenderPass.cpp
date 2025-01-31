@@ -558,7 +558,10 @@ ShadowMap::ShadowMap( D3D12Device& device, ShaderShadowMap& shader,
     shadowMaterial_( shadowMaterial ),
     viewport_(vp), protocol_( shader.makeProtocol( device,
         RenderProtocol::Desc{ makeDesc() }
-    ) ), pLight_(nullptr), batch_(), pCamera_(nullptr) {}
+    ) ), pLight_(nullptr), batch_(), pCamera_(nullptr) {
+    viewport_.Width *= 4;
+    viewport_.Height *= 4;
+}
 
 ShadowMap::ShadowMap( D3D12Device& device, ShaderShadowMap& shader,
     DescriptorRange<DescriptorHeapCPU>& dsvRange, const D3D12_VIEWPORT& vp
@@ -572,7 +575,10 @@ ShadowMap::ShadowMap( D3D12Device& device, ShaderShadowMap& shader,
     ),
     viewport_(vp), protocol_( shader.makeProtocol( device,
         RenderProtocol::Desc{ makeDesc() }
-    ) ), pLight_(nullptr), batch_(), pCamera_(nullptr) {}
+    ) ), pLight_(nullptr), batch_(), pCamera_(nullptr) {
+    viewport_.Width *= 4;
+    viewport_.Height *= 4;
+}
 
 RenderProtocol::Desc ShadowMap::makeDesc() {
     return RenderProtocol::Desc {
@@ -961,11 +967,11 @@ ShadowMapTessellation::ShadowMapTessellation( D3D12Device& device,
 ) : gfx::d3d12::RenderPass(id),
     shadowMapSrvDesc_( shadowMapRP.shadowMapSrvDesc_ ),
     shadowMapDsvDesc_( shadowMapRP.shadowMapDsvDesc_ ),
-    pShadowMaterial_( &shadowMapRP.shadowMaterial_ ),
     viewport_(vp), protocol_( shader.makeProtocol( device,
         RenderProtocol::Desc{ makeDesc() }
     ) ), pLight_(nullptr), batch_(), pCamera_(nullptr) {
-
+    viewport_.Width *= 4;
+    viewport_.Height *= 4;
 }
 
 RenderProtocol::Desc ShadowMapTessellation::makeDesc() {

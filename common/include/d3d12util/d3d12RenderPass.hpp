@@ -577,7 +577,6 @@ private:
     D3D12_SHADER_RESOURCE_VIEW_DESC shadowMapSrvDesc_;
     D3D12_DEPTH_STENCIL_VIEW_DESC shadowMapDsvDesc_;
     std::size_t idxShadowMapDsv_;
-    ShadowMaterial* pShadowMaterial_;
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
     const WorldLight* pLight_;

@@ -18,8 +18,8 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
     ), renderPassPBRTerrain_( core.device(), shaderPBRTerrain_,
         gfx::d3d12::convClientToVP( core.window().client() )
     ), shadowMaterial_( core.device(), gfx::d3d12::Texture::Desc{
-            .width = static_cast<std::uint32_t>( core.window().client().width ),
-            .height = static_cast<std::uint32_t>( core.window().client().height ),
+            .width = static_cast<std::uint32_t>( core.window().client().width * 4 ),
+            .height = static_cast<std::uint32_t>( core.window().client().height * 4 ),
             .mipLevels = 1u,
             .format = DXGI_FORMAT_D32_FLOAT,
             .sampleDesc = { .Count = 1u, .Quality = 0u },
@@ -51,7 +51,8 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
             .maxDrawcallCnt = 0x1000u,
         }, gfx::d3d12::InputLayout::Spec::serial
     ), renderPassShadowMapTessellation_(core.device(),
-        shaderShadowMapTessellation_, renderPassShadowMap_
+        shaderShadowMapTessellation_, renderPassShadowMap_,
+        gfx::d3d12::convClientToVP(core.window().client())
     ) {
         shaderShadowMap_.setShadowMap( &shadowMaterial_.texture() );
         shaderShadowMapTessellation_.setShadowMap( &shadowMaterial_.texture() );
@@ -75,6 +76,7 @@ void Renderer::init(gfx::d3d12engine::Scene& scene) {
     renderPassPBR_.init(scene);
     renderPassPBRTerrain_.init(scene);
     renderPassShadowMap_.init(scene);
+    renderPassScreenQuad_.init(scene);
     renderPassTessellation_.init(scene);
     renderPassShadowMapTessellation_.init(scene);
 }
@@ -129,7 +131,7 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
         renderPassShadowMapTessellation_.postRender( cmdList, renderTargets );
 
         shaderScreenQuad_.bindRootParams( cmdList );
-        shaderScreenQuad_.screenQuad_.link(shaderShadowMap_.shadowMap());
+        shaderScreenQuad_.screenQuad_.link(&shadowMaterial_.texture());
         renderPassScreenQuad_.preRender( cmdList, renderTargets );
         renderPassScreenQuad_.render( cmdList, renderTargets );
         renderPassScreenQuad_.postRender( cmdList, renderTargets );
