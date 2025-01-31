@@ -52,7 +52,7 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
     ), renderPassShadowMapTessellation_(core.device(),
         shaderShadowMapTessellation_, renderPassShadowMap_
     ) {
-        shaderShadowMapTessellation_.pShadowMap_ = &shaderShadowMap_.shadowMap_;
+        shaderShadowMapTessellation_.setShadowMap(&shaderShadowMap_.shadowMap_);
     }
 
 void Renderer::layoutVBsPBR( gfx::d3d12engine::Core& core,

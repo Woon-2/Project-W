@@ -60,33 +60,55 @@ std::string RenderTargets::sSpecifierStrings[etoi(RenderTargets::Specifier::SIZE
     "Main", "Shadow"
 };
 
+ShadowMaterial::ShadowMaterial()
+    : dsvDesc_{}, srvDesc_{}, pSrv_(nullptr), pDsv_(nullptr), pMapResource_(nullptr) {}
+
 ShadowMaterial::ShadowMaterial( Texture& mapResource,
     const DescriptorCPU& dsv, const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
     const DescriptorGPU& srv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
-) : dsvDesc_(dsvDesc), srvDesc_(srvDesc), srv_(srv), dsv_(dsv),
-    mapResource_(mapResource) {
+) : dsvDesc_(dsvDesc), srvDesc_(srvDesc), pSrv_(&srv), pDsv_(&dsv),
+    pMapResource_(&mapResource) {
     addMapRef(MapType::Shadow, MapRef{
         .type = etoi(ResourceType::Texture),
-        .resourceIdx = static_cast<std::uint32_t>( mapResource_.idxSrv ),
+        .resourceIdx = static_cast<std::uint32_t>( pMapResource_->idxSrv ),
     } );
 }
 
 void ShadowMaterial::onPush(D3D12GfxCmdList& cmdList) {
-    mapResource_.commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    pMapResource_->commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 }
 
 void ShadowMaterial::onPop(D3D12GfxCmdList& cmdList) {
-    mapResource_.commitState(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    pMapResource_->commitState(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 }
 
 void ShadowMaterial::onBind(D3D12GfxCmdList& cmdList) {
-    cmdList.get()->OMSetRenderTargets(0u, nullptr, false, &dsv_.cpuHandle());
+    cmdList.get()->OMSetRenderTargets(0u, nullptr, false, &pDsv_->cpuHandle());
 }
 
 void ShadowMaterial::onClear(D3D12GfxCmdList& cmdList) {
     cmdList.get()->ClearDepthStencilView(
-        dsv_.cpuHandle(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0u, nullptr
+        pDsv_->cpuHandle(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0u, nullptr
     );
+}
+
+ShadowMaterialStandAlone::ShadowMaterialStandAlone( D3D12Device& device,
+    const Texture::Desc& shadowMapDesc,
+	DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+    DescriptorRange<DescriptorHeapCPU>& dsvRange
+) : ShadowMaterial(), shadowMap_( device, tex2dRange, shadowMapDesc,
+        detail::makeShadowMapSrvDesc( shadowMapDesc ),
+        D3D12_HEAP_TYPE_DEFAULT,
+        D3D12_CLEAR_VALUE{ .Format = shadowMapDesc.format, .DepthStencil = { 1.f, 0u }
+    } ) {
+    const auto dsvDesc = detail::makeShadowMapDsvDesc(shadowMapDesc);
+    const auto idx = shadowMap_.makeDsv( dsvDesc, device, dsvRange.alloc() );
+    assert(idxDsv == idx);
+
+    ShadowMaterial::operator=( ShadowMaterial(
+        shadowMap_, shadowMap_.view(idxDsv), dsvDesc,
+        shadowMap_.view(idxSrv), detail::makeShadowMapSrvDesc(shadowMapDesc)
+    ) );
 }
 
 sr::Light WorldLight::toViewLight(const Camera& camera) const {

@@ -580,6 +580,17 @@ private:
 	std::size_t maxDrawcallCnt_;
 };
 
+namespace detail
+{
+const D3D12_SHADER_RESOURCE_VIEW_DESC makeShadowMapSrvDesc(
+    const Texture::Desc& shadowMapDesc
+);
+
+const D3D12_DEPTH_STENCIL_VIEW_DESC makeShadowMapDsvDesc(
+    const Texture::Desc& shadowMapDesc
+);
+}   // namespace gfx::d3d12::detail
+
 class ShaderShadowMap : public Shader {
 private:
 	std::size_t cbDrawcallDataSize_;
@@ -762,10 +773,21 @@ public:
 		chunk.draw(cmdList);
 	}
 
+	void setShadowMap(Texture* pShadowMap) {
+		pShadowMap_ = pShadowMap;
+	}
+
+	Texture* shadowMap() noexcept {
+		return pShadowMap_;
+	}
+
+	const Texture* shadowMap() const noexcept {
+		return pShadowMap_;
+	}
+
 	UploadBuffer perFrameData_;
 	UploadBuffer perDrawcallData_;
 	UploadBuffer perInstanceData_;
-	Texture* pShadowMap_;
 
 	std::size_t cbDrawcallDataSize() const noexcept {
 		return cbDrawcallDataSize_;
@@ -778,6 +800,7 @@ private:
 
 	std::size_t maxInstanceCnt_;
 	std::size_t maxDrawcallCnt_;
+	Texture* pShadowMap_;
 };
 
 }   // namespace gfx::d3d12

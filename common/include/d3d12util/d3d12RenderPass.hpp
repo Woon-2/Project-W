@@ -193,6 +193,7 @@ private:
 
 class ShadowMaterial : public IRenderTarget, public Material {
 public:
+    ShadowMaterial();
     ShadowMaterial( Texture& mapResource, const DescriptorCPU& dsv,
         const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
         const DescriptorGPU& srv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
@@ -206,9 +207,32 @@ private:
 
     D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc_;
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc_;
-    const DescriptorGPU& srv_;
-    const DescriptorCPU& dsv_;
-    Texture& mapResource_;
+    const DescriptorGPU* pSrv_;
+    const DescriptorCPU* pDsv_;
+    Texture* pMapResource_;
+};
+
+class ShadowMaterialStandAlone : public ShadowMaterial {
+public:
+    static constexpr std::size_t idxSrv = Texture::idxSrv;
+    static constexpr std::size_t idxDsv = idxSrv + 1u;
+
+    ShadowMaterialStandAlone( D3D12Device& device,
+        const Texture::Desc& shadowMapDesc,
+		DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+        DescriptorRange<DescriptorHeapCPU>& dsvRange
+    );
+
+    Texture* texture() NOEXCEPT {
+        return &shadowMap_;
+    }
+
+    const Texture* texture() const NOEXCEPT {
+        return &shadowMap_;
+    }
+
+private:
+    Texture shadowMap_;
 };
 
 struct WorldLight {
