@@ -219,7 +219,19 @@ float4 illuminate(float3 posV, float4 posL, float3 normalV, float2 tex) {
 
     // calculate illumination factor from shadow map
     posL.xyz /= posL.w;
-    float illuminationFactor = sampleCmpFromMapRef(shadowMapRef, posL.xy, posL.z, shadowSamplerIdx).r;
+
+    // PCF
+    float p00 = sampleCmpFromMapRef2DOffset(shadowMapRef, posL.xy, posL.z, int2(-1, -1), shadowSamplerIdx).r;
+    float p01 = sampleCmpFromMapRef2DOffset(shadowMapRef, posL.xy, posL.z, int2(-1, 0), shadowSamplerIdx).r;
+    float p02 = sampleCmpFromMapRef2DOffset(shadowMapRef, posL.xy, posL.z, int2(-1, 1), shadowSamplerIdx).r;
+    float p10 = sampleCmpFromMapRef2DOffset(shadowMapRef, posL.xy, posL.z, int2(0, -1), shadowSamplerIdx).r;
+    float p11 = sampleCmpFromMapRef2DOffset(shadowMapRef, posL.xy, posL.z, int2(0, 0), shadowSamplerIdx).r;
+    float p12 = sampleCmpFromMapRef2DOffset(shadowMapRef, posL.xy, posL.z, int2(0, 1), shadowSamplerIdx).r;
+    float p20 = sampleCmpFromMapRef2DOffset(shadowMapRef, posL.xy, posL.z, int2(1, -1), shadowSamplerIdx).r;
+    float p21 = sampleCmpFromMapRef2DOffset(shadowMapRef, posL.xy, posL.z, int2(1, 0), shadowSamplerIdx).r;
+    float p22 = sampleCmpFromMapRef2DOffset(shadowMapRef, posL.xy, posL.z, int2(1, 1), shadowSamplerIdx).r;
+
+    float illuminationFactor = (p00 + p01 + p02 + p10 + p11 + p12 + p20 + p21 + p22) / 9.f;
 
     return illuminationFactor * float4(color);
     // return float4(illuminationFactor, illuminationFactor, illuminationFactor, illuminationFactor);

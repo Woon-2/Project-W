@@ -559,8 +559,8 @@ ShadowMap::ShadowMap( D3D12Device& device, ShaderShadowMap& shader,
     viewport_(vp), protocol_( shader.makeProtocol( device,
         RenderProtocol::Desc{ makeDesc() }
     ) ), pLight_(nullptr), batch_(), pCamera_(nullptr) {
-    viewport_.Width *= 4;
-    viewport_.Height *= 4;
+    viewport_.Width *= 8;
+    viewport_.Height *= 8;
 }
 
 ShadowMap::ShadowMap( D3D12Device& device, ShaderShadowMap& shader,
@@ -576,8 +576,8 @@ ShadowMap::ShadowMap( D3D12Device& device, ShaderShadowMap& shader,
     viewport_(vp), protocol_( shader.makeProtocol( device,
         RenderProtocol::Desc{ makeDesc() }
     ) ), pLight_(nullptr), batch_(), pCamera_(nullptr) {
-    viewport_.Width *= 4;
-    viewport_.Height *= 4;
+    viewport_.Width *= 8;
+    viewport_.Height *= 8;
 }
 
 RenderProtocol::Desc ShadowMap::makeDesc() {
@@ -970,8 +970,8 @@ ShadowMapTessellation::ShadowMapTessellation( D3D12Device& device,
     viewport_(vp), protocol_( shader.makeProtocol( device,
         RenderProtocol::Desc{ makeDesc() }
     ) ), pLight_(nullptr), batch_(), pCamera_(nullptr) {
-    viewport_.Width *= 4;
-    viewport_.Height *= 4;
+    viewport_.Width *= 8;
+    viewport_.Height *= 8;
 }
 
 RenderProtocol::Desc ShadowMapTessellation::makeDesc() {
@@ -996,9 +996,9 @@ RenderProtocol::Desc ShadowMapTessellation::makeDesc() {
         .rasterizerState = D3D12_RASTERIZER_DESC{
             .FillMode = D3D12_FILL_MODE_SOLID,
             .CullMode = D3D12_CULL_MODE_BACK,
-            .DepthBias = 1000,
+            .DepthBias = 20000,
             .DepthBiasClamp = 0.0f,
-            .SlopeScaledDepthBias = 1.0f,
+            .SlopeScaledDepthBias = 2.0f,
             .DepthClipEnable = true
         },
         .depthStencilState = D3D12_DEPTH_STENCIL_DESC{

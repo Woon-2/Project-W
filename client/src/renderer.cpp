@@ -18,8 +18,8 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
     ), renderPassPBRTerrain_( core.device(), shaderPBRTerrain_,
         gfx::d3d12::convClientToVP( core.window().client() )
     ), shadowMaterial_( core.device(), gfx::d3d12::Texture::Desc{
-            .width = static_cast<std::uint32_t>( core.window().client().width * 4 ),
-            .height = static_cast<std::uint32_t>( core.window().client().height * 4 ),
+            .width = static_cast<std::uint32_t>( core.window().client().width * 8 ),
+            .height = static_cast<std::uint32_t>( core.window().client().height * 8 ),
             .mipLevels = 1u,
             .format = DXGI_FORMAT_D32_FLOAT,
             .sampleDesc = { .Count = 1u, .Quality = 0u },

@@ -50,8 +50,8 @@ void Stage::initEntities(gfx::d3d12engine::Core& core) {
     directionalLight_.init(gfx::d3d12::WorldLight{
         .config = gfx::d3d12::WorldLight::Config{
             .ortho = {
-                .width = 80.f,
-                .height = 80.f,
+                .width = 180.f,
+                .height = 60.f,
                 .nearZ = 600.f,
                 .farZ = 1600.f
             }
