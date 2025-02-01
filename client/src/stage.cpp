@@ -64,7 +64,11 @@ void Stage::initEntities(gfx::d3d12engine::Core& core) {
     });
 
     scene_.addEntity(player_);
-    level_.activateChunk(1u, 1u, scene_);
+    for (auto i = 0u; i < 3u; ++i) {
+        for (auto j = 0u; j < 3u; ++j) {
+            level_.activateChunk(i, j, scene_);
+        }
+    }
     scene_.addEntity(directionalLight_);
 
     pSystems_->coordRoot.addEntity(player_);
