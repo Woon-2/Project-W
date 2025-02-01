@@ -1566,7 +1566,7 @@ void ScreenQuad::draw(D3D12GfxCmdList& cmdList) const {
     DX_THROW_FAILED_VOID( cmdList.get()->DrawInstanced(4u, 1u, 0u, 0u) );
 }
 
-LevelRegionModel::LevelRegionModel(const StaticTextureStorage& sts, std::istream&& is)
+LevelRegionModel::LevelRegionModel(const StaticTextureStorage& sts, std::istream& is)
     : chunks_() {
     char pstrToken[64] = { '\0' };
 
@@ -1823,7 +1823,7 @@ mu::Mat4x4 MU_CALLCONV LevelChunkModel::idxToWorld() const {
     // temporary
     return mu::translate(
         0.f + 0.f * static_cast<float>(idx_.x),
-        -50.f + 0.f,
+        -25.f + 0.f,
         0.f + 0.f * static_cast<float>(idx_.y)
     );
 }

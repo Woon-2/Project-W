@@ -243,8 +243,65 @@ void Scene::clearStash() {
     reservedEntities_.clear();
 }
 
+ObjectDisposition::ObjectDisposition(std::ifstream& is)
+    : xform_(), name_(), prefabName_(), children_() {
+    char pstrToken[64] = { '\0' };
+    BYTE nStrLength = 0;
+    dx::XMFLOAT4X4 xform{};
+    bool isInstance = false;
+    int childCnt = 0;
+
+    is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
+    is.read(reinterpret_cast<char*>(pstrToken), nStrLength);
+    pstrToken[nStrLength] = '\0';
+
+    if (strcmp(pstrToken, "<Node:>")) {
+        throw std::runtime_error("Node token expected but got: " + std::string(pstrToken));
+    }
+
+    is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
+    name_.resize(nStrLength);
+    is.read(reinterpret_cast<char*>(name_.data()), nStrLength);
+
+    is.read(reinterpret_cast<char*>(&xform), sizeof(dx::XMFLOAT4X4));
+    xform_ = mu::Mat4x4( dx::loadMat(xform) );
+
+    is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
+    prefabName_.resize(nStrLength);
+    is.read(reinterpret_cast<char*>(prefabName_.data()), nStrLength);
+
+    is.read(reinterpret_cast<char*>(&isInstance), sizeof(bool));
+    if (!isInstance) {
+        prefabName_.clear();
+    }
+
+    is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
+    is.read(reinterpret_cast<char*>(pstrToken), nStrLength);
+    pstrToken[nStrLength] = '\0';
+
+    if (strcmp(pstrToken, "<Children:>")) {
+        throw std::runtime_error("Children token expected but got: " + std::string(pstrToken));
+    }
+
+    is.read(reinterpret_cast<char*>(&childCnt), sizeof(int));
+
+    for (int i = 0; i < childCnt; ++i) {
+        children_.emplace_back(is);
+    }
+
+    is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
+    is.read(reinterpret_cast<char*>(pstrToken), nStrLength);
+    pstrToken[nStrLength] = '\0';
+
+    if (strcmp(pstrToken, "</Node>")) {
+        throw std::runtime_error("Node end token expected but got: " + std::string(pstrToken));
+    }
+}
+
 LevelRegion::LevelRegion(const Core& core)
-    : model_(core.staticTexStorage(), std::ifstream(resourcePath/"LevelGraph.bin")) {}
+    : pStream_( std::make_unique<std::ifstream>(resourcePath/"LevelGraph.bin") ),
+    model_(core.staticTexStorage(), *pStream_),
+    dispositionRoot_(*pStream_), subEntities_() {}
 
 void LevelRegion::activateChunk(std::size_t xIdx, std::size_t zIdx, Scene& scene) {
     auto& chunk = model_.get(
