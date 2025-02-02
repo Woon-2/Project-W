@@ -1804,6 +1804,10 @@ void LevelChunkModel::load( const StaticTextureStorage& sts,
 
     is.read(reinterpret_cast<char*>(&float2Val), sizeof(dx::XMFLOAT2));
     material_.addConstant(Material::ConstantType::TileOffset, mu::Vec2(float2Val.x, float2Val.y));
+
+    // Ambient Occlusion(temporary)
+    material_.addConstant(Material::ConstantType::AmbientOcclusion, 1.f);
+    material_.addConstant(Material::ConstantType::AmbientOcclusionConstantMapRatio, 1.f);
 }
 
 void LevelChunkModel::draw(D3D12GfxCmdList& cmdList) const {

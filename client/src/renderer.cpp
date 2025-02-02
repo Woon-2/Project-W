@@ -9,14 +9,6 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
         }, gfx::d3d12::InputLayout::Spec::separated
     ), renderPassPBR_( core.device(), shaderPBR_,
         gfx::d3d12::convClientToVP( core.window().client() )
-    ), shaderPBRTerrain_( core.device(), core.root(),
-        gfx::d3d12::ShaderPBRIlluminationTerrain::Config{
-            .maxInstanceCnt = 0x1000u,
-            .maxDrawcallCnt = 0x1000u,
-            .maxLightCnt = 0x100u
-        }, gfx::d3d12::InputLayout::Spec::separated
-    ), renderPassPBRTerrain_( core.device(), shaderPBRTerrain_,
-        gfx::d3d12::convClientToVP( core.window().client() )
     ), shadowMaterial_( core.device(), gfx::d3d12::Texture::Desc{
             .width = static_cast<std::uint32_t>( core.window().client().width * 8 ),
             .height = static_cast<std::uint32_t>( core.window().client().height * 8 ),
@@ -65,16 +57,8 @@ void Renderer::layoutVBsPBR( gfx::d3d12engine::Core& core,
     core.layoutRefModelVBs( key, layoutIdx, shaderPBR_.inputLayout() );
 }
 
-void Renderer::layoutVBsPBRMacro( gfx::d3d12engine::Core& core,
-    const gfx::d3d12::RefModelStorage::ID& key,
-    std::size_t layoutIdx
-) {
-    core.layoutRefModelVBs( key, layoutIdx, shaderPBRTerrain_.inputLayout() );
-}
-
 void Renderer::init(gfx::d3d12engine::Scene& scene) {
     renderPassPBR_.init(scene);
-    renderPassPBRTerrain_.init(scene);
     renderPassShadowMap_.init(scene);
     renderPassScreenQuad_.init(scene);
     renderPassTessellation_.init(scene);
@@ -85,7 +69,6 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
     auto cmdList = core.fetchCmdList();
 
     renderPassPBR_.update(scene);
-    renderPassPBRTerrain_.update(scene);
     renderPassShadowMap_.update(scene);
     renderPassScreenQuad_.update(scene);
     renderPassTessellation_.update(scene);
@@ -102,11 +85,6 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
         renderPassShadowMapTessellation_.preRender( cmdList, renderTargets );
         renderPassShadowMapTessellation_.render( cmdList, renderTargets );
         renderPassShadowMapTessellation_.postRender( cmdList, renderTargets );
-
-        shaderPBRTerrain_.bindRootParams( cmdList );
-        renderPassPBRTerrain_.preRender( cmdList, renderTargets );
-        renderPassPBRTerrain_.render( cmdList, renderTargets );
-        renderPassPBRTerrain_.postRender( cmdList, renderTargets );
 
         shaderPBR_.bindRootParams( cmdList );
         renderPassPBR_.preRender( cmdList, renderTargets );
