@@ -162,7 +162,8 @@ float3 spotLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 norm
     return gLights[lightIdx].color * gLights[lightIdx].intensity * (kD + specular) * NL * atten * coneAtten;
 }
 
-float4 accumulateLighting(float3 posV, float3 normalV, float2 tex) {
+float4 illuminate(float3 posV, float4 posL, float3 normalV, float2 tex)
+{
     float4 albedo = material.albedoConstant * material.albedoConstantMapRatio;
     albedo += sampleFromMapRef(material.albedoMapRef, tex, samplerIdx) * (1.f - material.albedoConstantMapRatio);
     if (material.albedoMapRef.w == COLOR_SPACE_SRGB) {
@@ -202,21 +203,7 @@ float4 accumulateLighting(float3 posV, float3 normalV, float2 tex) {
             color += dirLight(i, posV, posVNormalized, normalV, tex, albedo.rgb, roughness, metallic, ao);
         }
     }
-
-    float3 ambient = globalAmbient * albedo.rgb * ao;
-    color += ambient + emmisive;
-
-    // tone mapping
-	// color = color / (color + float3(1.f, 1.f, 1.f));
-    // linear => sRGB
-    color = pow( abs(color), 1.f/2.2f );
-
-    return float4(color, albedo.w);
-}
-
-float4 illuminate(float3 posV, float4 posL, float3 normalV, float2 tex) {
-    float4 color = accumulateLighting(posV, normalV, tex);
-
+    
     // calculate illumination factor from shadow map
     posL.xyz /= posL.w;
 
@@ -232,7 +219,16 @@ float4 illuminate(float3 posV, float4 posL, float3 normalV, float2 tex) {
     float p22 = sampleCmpFromMapRef2DOffset(shadowMapRef, posL.xy, posL.z, int2(1, 1), shadowSamplerIdx).r;
 
     float illuminationFactor = (p00 + p01 + p02 + p10 + p11 + p12 + p20 + p21 + p22) / 9.f;
+    
+    color *= illuminationFactor;
 
-    return illuminationFactor * float4(color);
-    // return float4(illuminationFactor, illuminationFactor, illuminationFactor, illuminationFactor);
+    float3 ambient = globalAmbient * albedo.rgb * ao;
+    color += ambient + emmisive;
+
+    // tone mapping
+	// color = color / (color + float3(1.f, 1.f, 1.f));
+    // linear => sRGB
+    color = pow( abs(color), 1.f/2.2f );
+
+    return float4(color, albedo.w);
 }
