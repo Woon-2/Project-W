@@ -50,10 +50,10 @@ void Stage::initEntities(gfx::d3d12engine::Core& core) {
     directionalLight_.init(gfx::d3d12::WorldLight{
         .config = gfx::d3d12::WorldLight::Config{
             .ortho = {
-                .width = 20.f,
-                .height = 20.f,
+                .width = 180.f,
+                .height = 60.f,
                 .nearZ = 600.f,
-                .farZ = 1800.f
+                .farZ = 1600.f
             }
         },
         .color = mu::Vec3(1.f, 1.f, 1.f),
@@ -64,7 +64,11 @@ void Stage::initEntities(gfx::d3d12engine::Core& core) {
     });
 
     scene_.addEntity(player_);
-    level_.activateChunk(1u, 1u, scene_);
+    for (auto i = 0u; i < 3u; ++i) {
+        for (auto j = 0u; j < 3u; ++j) {
+            level_.activateChunk(i, j, scene_);
+        }
+    }
     scene_.addEntity(directionalLight_);
 
     pSystems_->coordRoot.addEntity(player_);

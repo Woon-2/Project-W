@@ -69,7 +69,6 @@ struct HSConstantOutput {
 struct HSOutput {
 	float3 pos : POSITION;
 	float2 texcoord : TEXCOORD;
-    float2 tileTexCoord : TEXCOORD1;
 };
 
 [domain("quad")]
@@ -171,7 +170,7 @@ DSOutput DSMain(HSConstantOutput input, float2 uv : SV_DomainLocation, const Out
     float3 p1 = lerp(p10, p11, uv.x);
     output.pos = float4( lerp(p0, p1, uv.y), 1.f );
     
-    output.pos.y += height * 100.f;  // add the sampled height
+    output.pos.y += height * 50.f;  // add the sampled height
 
     // transform from local to light space
 	output.pos = mul(

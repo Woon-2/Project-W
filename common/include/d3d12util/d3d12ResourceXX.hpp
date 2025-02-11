@@ -917,7 +917,7 @@ private:
 class LevelRegionModel {
 public:
     LevelRegionModel() = default;
-    LevelRegionModel(const StaticTextureStorage& sts, std::istream&& is);
+    LevelRegionModel(const StaticTextureStorage& sts, std::istream& is);
 
     LevelChunkModel& get(const dx::XMUINT2& idx);
     const LevelChunkModel& get(const dx::XMUINT2& idx) const;

@@ -21,10 +21,6 @@ public:
         const gfx::d3d12::RefModelStorage::ID& key,
         std::size_t layoutIdx
     );
-    void layoutVBsPBRMacro( gfx::d3d12engine::Core& core,
-        const gfx::d3d12::RefModelStorage::ID& key,
-        std::size_t layoutIdx
-    );
     void setMode(Mode renderMode) NOEXCEPT {
         renderMode_ = renderMode;
     }
@@ -33,8 +29,7 @@ private:
     gfx::d3d12::ShaderPBRIllumination shaderPBR_;
     gfx::d3d12engine::rp::PBRIllumination renderPassPBR_;
 
-    gfx::d3d12::ShaderPBRIlluminationTerrain shaderPBRTerrain_;
-    gfx::d3d12engine::rp::PBRIlluminationTerrain renderPassPBRTerrain_;
+    gfx::d3d12::ShadowMaterialStandAlone shadowMaterial_;
 
     gfx::d3d12::ShaderShadowMap shaderShadowMap_;
     gfx::d3d12engine::rp::ShadowMap renderPassShadowMap_;

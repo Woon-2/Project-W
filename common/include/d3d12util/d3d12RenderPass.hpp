@@ -193,10 +193,39 @@ private:
 
 class ShadowMaterial : public IRenderTarget, public Material {
 public:
+    ShadowMaterial();
     ShadowMaterial( Texture& mapResource, const DescriptorCPU& dsv,
         const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
         const DescriptorGPU& srv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
     );
+
+    const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc() const NOEXCEPT {
+        return dsvDesc_;
+    }
+
+    const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc() const NOEXCEPT {
+        return srvDesc_;
+    }
+
+    const DescriptorGPU& srv() const NOEXCEPT {
+        return *pSrv_;
+    }
+
+    const DescriptorCPU& dsv() const NOEXCEPT {
+        return *pDsv_;
+    }
+
+    Texture& texture() NOEXCEPT {
+        return *pMapResource_;
+    }
+
+    const Texture& texture() const NOEXCEPT {
+        return *pMapResource_;
+    }
+
+    bool valid() const NOEXCEPT {
+        return pMapResource_ != nullptr && pSrv_ != nullptr && pDsv_ != nullptr;
+    }
 
 private:
     void onPush(D3D12GfxCmdList& cmdList) override;
@@ -206,9 +235,24 @@ private:
 
     D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc_;
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc_;
-    const DescriptorGPU& srv_;
-    const DescriptorCPU& dsv_;
-    Texture& mapResource_;
+    const DescriptorGPU* pSrv_;
+    const DescriptorCPU* pDsv_;
+    Texture* pMapResource_;
+};
+
+class ShadowMaterialStandAlone : public ShadowMaterial {
+public:
+    static constexpr std::size_t idxSrv = Texture::idxSrv;
+    static constexpr std::size_t idxDsv = idxSrv + 1u;
+
+    ShadowMaterialStandAlone( D3D12Device& device,
+        const Texture::Desc& shadowMapDesc,
+		DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+        DescriptorRange<DescriptorHeapCPU>& dsvRange
+    );
+
+private:
+    Texture shadowMap_;
 };
 
 struct WorldLight {
@@ -374,6 +418,11 @@ public:
     friend class ShadowMapTessellation;
 
     ShadowMap( D3D12Device& device, ShaderShadowMap& shader,
+        const ShadowMaterial& shadowMaterial, std::size_t idxShadowMapDsv,
+        const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
+    );
+
+    ShadowMap( D3D12Device& device, ShaderShadowMap& shader,
         DescriptorRange<DescriptorHeapCPU>& dsvRange,
         const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
     );
@@ -528,7 +577,6 @@ private:
     D3D12_SHADER_RESOURCE_VIEW_DESC shadowMapSrvDesc_;
     D3D12_DEPTH_STENCIL_VIEW_DESC shadowMapDsvDesc_;
     std::size_t idxShadowMapDsv_;
-    ShadowMaterial* pShadowMaterial_;
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
     const WorldLight* pLight_;

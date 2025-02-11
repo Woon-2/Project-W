@@ -11,6 +11,8 @@
 #include "ecs.hpp"
 
 #include <vector>
+#include <fstream>
+#include <memory>
 
 namespace gfx {
 
@@ -246,6 +248,18 @@ private:
     std::vector<ecs::Entity::ID> reservedEntities_;
 };
 
+class ObjectDisposition {
+public:
+    ObjectDisposition() = default;
+    ObjectDisposition(std::ifstream& is);
+
+private:
+    mu::Mat4x4 xform_;
+    std::string name_;
+    std::string prefabName_;
+    std::vector<ObjectDisposition> children_;
+};
+
 class LevelRegion : public ecs::Entity {
 private:
     class SubEntity : public ecs::Entity {
@@ -261,8 +275,16 @@ public:
 
     void activateChunk(std::size_t xIdx, std::size_t zIdx, Scene& scene);
 
+    ObjectDisposition& dispositionRoot() NOEXCEPT { return dispositionRoot_; }
+    const ObjectDisposition& dispositionRoot() const NOEXCEPT { return dispositionRoot_; }
+
 private:
+    std::unique_ptr< std::ifstream > pStream_;
+    // the order of the following members is important
+    // ObjectDisposition's constructor reads from the stream
+    // which has been already read some data from LevelRegionModel's constructor
     d3d12::LevelRegionModel model_;
+    ObjectDisposition dispositionRoot_;
     std::vector<SubEntity> subEntities_;
 };
 

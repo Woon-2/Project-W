@@ -31,6 +31,11 @@ using XMFLOAT4 = DirectX::XMFLOAT4;
 using XMFLOAT3X3 = DirectX::XMFLOAT3X3;
 using XMFLOAT4X4 = DirectX::XMFLOAT4X4;
 
+DirectX::XMMATRIX XM_CALLCONV loadMat(const DirectX::XMFLOAT4X4& mat);
+DirectX::XMMATRIX XM_CALLCONV loadMat(const DirectX::XMFLOAT3X3& mat);
+void XM_CALLCONV storeMat(DirectX::FXMMATRIX src, DirectX::XMFLOAT4X4& dst);
+void XM_CALLCONV storeMat(DirectX::FXMMATRIX src, DirectX::XMFLOAT3X3& dst);
+
 template <class T>
 T XM_CALLCONV convertMat(DirectX::FXMMATRIX mat) {
     T result;

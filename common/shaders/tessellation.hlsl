@@ -207,7 +207,7 @@ DSOutput DSMain(HSConstantOutput input, float2 uv : SV_DomainLocation, const Out
     float3 p1 = lerp(p10, p11, uv.x);
     output.pos = float4( lerp(p0, p1, uv.y), 1.f );
     
-    output.pos.y += height * 100.f;  // add the sampled height
+    output.pos.y += height * 50.f;  // add the sampled height
 
     // transform from local to view space
     output.posV = mul(output.pos, gInstances[instanceBase + input.instanceOffset].wv).xyz;

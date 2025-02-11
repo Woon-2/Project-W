@@ -9,28 +9,21 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
         }, gfx::d3d12::InputLayout::Spec::separated
     ), renderPassPBR_( core.device(), shaderPBR_,
         gfx::d3d12::convClientToVP( core.window().client() )
-    ), shaderPBRTerrain_( core.device(), core.root(),
-        gfx::d3d12::ShaderPBRIlluminationTerrain::Config{
-            .maxInstanceCnt = 0x1000u,
-            .maxDrawcallCnt = 0x1000u,
-            .maxLightCnt = 0x100u
-        }, gfx::d3d12::InputLayout::Spec::separated
-    ), renderPassPBRTerrain_( core.device(), shaderPBRTerrain_,
-        gfx::d3d12::convClientToVP( core.window().client() )
-    ), shaderShadowMap_( core.device(), core.root(),
-        gfx::d3d12::ShaderShadowMap::Config{
-            .maxInstanceCnt = 0x1000u,
-            .maxDrawcallCnt = 0x1000u
-        }, gfx::d3d12::Texture::Desc{
-            .width = static_cast<std::uint32_t>( core.window().client().width ),
-            .height = static_cast<std::uint32_t>( core.window().client().height ),
+    ), shadowMaterial_( core.device(), gfx::d3d12::Texture::Desc{
+            .width = static_cast<std::uint32_t>( core.window().client().width * 8 ),
+            .height = static_cast<std::uint32_t>( core.window().client().height * 8 ),
             .mipLevels = 1u,
             .format = DXGI_FORMAT_D32_FLOAT,
             .sampleDesc = { .Count = 1u, .Quality = 0u },
             .flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
-        }, core.descRanges().srvRangeTex2D, gfx::d3d12::InputLayout::Spec::separated
+        }, core.descRanges().srvRangeTex2D, core.descRanges().dsvRange
+    ), shaderShadowMap_( core.device(), core.root(),
+        gfx::d3d12::ShaderShadowMap::Config{
+            .maxInstanceCnt = 0x1000u,
+            .maxDrawcallCnt = 0x1000u
+        }, gfx::d3d12::InputLayout::Spec::separated
     ), renderPassShadowMap_( core.device(), shaderShadowMap_,
-        core.descRanges().dsvRange,
+        shadowMaterial_, shadowMaterial_.idxDsv,
         gfx::d3d12::convClientToVP( core.window().client() )
     ), shaderScreenQuad_(core.device(), core.root()),
     renderPassScreenQuad_( core.device(), shaderScreenQuad_,
@@ -50,9 +43,11 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
             .maxDrawcallCnt = 0x1000u,
         }, gfx::d3d12::InputLayout::Spec::serial
     ), renderPassShadowMapTessellation_(core.device(),
-        shaderShadowMapTessellation_, renderPassShadowMap_
+        shaderShadowMapTessellation_, renderPassShadowMap_,
+        gfx::d3d12::convClientToVP(core.window().client())
     ) {
-        shaderShadowMapTessellation_.pShadowMap_ = &shaderShadowMap_.shadowMap_;
+        shaderShadowMap_.setShadowMap( &shadowMaterial_.texture() );
+        shaderShadowMapTessellation_.setShadowMap( &shadowMaterial_.texture() );
     }
 
 void Renderer::layoutVBsPBR( gfx::d3d12engine::Core& core,
@@ -62,17 +57,10 @@ void Renderer::layoutVBsPBR( gfx::d3d12engine::Core& core,
     core.layoutRefModelVBs( key, layoutIdx, shaderPBR_.inputLayout() );
 }
 
-void Renderer::layoutVBsPBRMacro( gfx::d3d12engine::Core& core,
-    const gfx::d3d12::RefModelStorage::ID& key,
-    std::size_t layoutIdx
-) {
-    core.layoutRefModelVBs( key, layoutIdx, shaderPBRTerrain_.inputLayout() );
-}
-
 void Renderer::init(gfx::d3d12engine::Scene& scene) {
     renderPassPBR_.init(scene);
-    renderPassPBRTerrain_.init(scene);
     renderPassShadowMap_.init(scene);
+    renderPassScreenQuad_.init(scene);
     renderPassTessellation_.init(scene);
     renderPassShadowMapTessellation_.init(scene);
 }
@@ -81,7 +69,6 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
     auto cmdList = core.fetchCmdList();
 
     renderPassPBR_.update(scene);
-    renderPassPBRTerrain_.update(scene);
     renderPassShadowMap_.update(scene);
     renderPassScreenQuad_.update(scene);
     renderPassTessellation_.update(scene);
@@ -98,11 +85,6 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
         renderPassShadowMapTessellation_.preRender( cmdList, renderTargets );
         renderPassShadowMapTessellation_.render( cmdList, renderTargets );
         renderPassShadowMapTessellation_.postRender( cmdList, renderTargets );
-
-        shaderPBRTerrain_.bindRootParams( cmdList );
-        renderPassPBRTerrain_.preRender( cmdList, renderTargets );
-        renderPassPBRTerrain_.render( cmdList, renderTargets );
-        renderPassPBRTerrain_.postRender( cmdList, renderTargets );
 
         shaderPBR_.bindRootParams( cmdList );
         renderPassPBR_.preRender( cmdList, renderTargets );
@@ -127,7 +109,7 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
         renderPassShadowMapTessellation_.postRender( cmdList, renderTargets );
 
         shaderScreenQuad_.bindRootParams( cmdList );
-        shaderScreenQuad_.screenQuad_.link(&shaderShadowMap_.shadowMap_);
+        shaderScreenQuad_.screenQuad_.link(&shadowMaterial_.texture());
         renderPassScreenQuad_.preRender( cmdList, renderTargets );
         renderPassScreenQuad_.render( cmdList, renderTargets );
         renderPassScreenQuad_.postRender( cmdList, renderTargets );

@@ -1566,7 +1566,7 @@ void ScreenQuad::draw(D3D12GfxCmdList& cmdList) const {
     DX_THROW_FAILED_VOID( cmdList.get()->DrawInstanced(4u, 1u, 0u, 0u) );
 }
 
-LevelRegionModel::LevelRegionModel(const StaticTextureStorage& sts, std::istream&& is)
+LevelRegionModel::LevelRegionModel(const StaticTextureStorage& sts, std::istream& is)
     : chunks_() {
     char pstrToken[64] = { '\0' };
 
@@ -1804,6 +1804,10 @@ void LevelChunkModel::load( const StaticTextureStorage& sts,
 
     is.read(reinterpret_cast<char*>(&float2Val), sizeof(dx::XMFLOAT2));
     material_.addConstant(Material::ConstantType::TileOffset, mu::Vec2(float2Val.x, float2Val.y));
+
+    // Ambient Occlusion(temporary)
+    material_.addConstant(Material::ConstantType::AmbientOcclusion, 1.f);
+    material_.addConstant(Material::ConstantType::AmbientOcclusionConstantMapRatio, 1.f);
 }
 
 void LevelChunkModel::draw(D3D12GfxCmdList& cmdList) const {
@@ -1822,9 +1826,9 @@ void LevelChunkModel::draw(D3D12GfxCmdList& cmdList) const {
 mu::Mat4x4 MU_CALLCONV LevelChunkModel::idxToWorld() const {
     // temporary
     return mu::translate(
-        0.f + 0.f * static_cast<float>(idx_.x),
-        -50.f + 0.f,
-        0.f + 0.f * static_cast<float>(idx_.y)
+        0.f + (33.f - 33.f / 256.f) * static_cast<float>(idx_.x),
+        -25.f + 0.f,
+        0.f + (33.f - 33.f / 256.f) * static_cast<float>(idx_.y)
     );
 }
 
@@ -1840,10 +1844,10 @@ void LevelChunkModel::initChunkMesh(D3D12Device& device, D3D12GfxCmdList& cmdLis
         for (int x = 0; x < patchWidth; ++x) {
             const auto vertex = PatchVertex{
                 .pos = dx::XMFLOAT3(
-                    static_cast<float>(x) / patchWidth * 100.f, 0.f, static_cast<float>(z) / patchLength * 100.f
+                    static_cast<float>(x) / patchWidth * 33.f, 0.f, static_cast<float>(z) / patchLength * 33.f
                 ),
                 .texCoord = dx::XMFLOAT2(
-                    static_cast<float>(x) / patchWidth, static_cast<float>(z) / patchLength
+                    static_cast<float>(x) / patchWidth, 1 - static_cast<float>(z) / patchLength
                 )
             };
 

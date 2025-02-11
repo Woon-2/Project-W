@@ -60,33 +60,55 @@ std::string RenderTargets::sSpecifierStrings[etoi(RenderTargets::Specifier::SIZE
     "Main", "Shadow"
 };
 
+ShadowMaterial::ShadowMaterial()
+    : dsvDesc_{}, srvDesc_{}, pSrv_(nullptr), pDsv_(nullptr), pMapResource_(nullptr) {}
+
 ShadowMaterial::ShadowMaterial( Texture& mapResource,
     const DescriptorCPU& dsv, const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
     const DescriptorGPU& srv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
-) : dsvDesc_(dsvDesc), srvDesc_(srvDesc), srv_(srv), dsv_(dsv),
-    mapResource_(mapResource) {
+) : dsvDesc_(dsvDesc), srvDesc_(srvDesc), pSrv_(&srv), pDsv_(&dsv),
+    pMapResource_(&mapResource) {
     addMapRef(MapType::Shadow, MapRef{
         .type = etoi(ResourceType::Texture),
-        .resourceIdx = static_cast<std::uint32_t>( mapResource_.idxSrv ),
+        .resourceIdx = static_cast<std::uint32_t>( pMapResource_->idxSrv ),
     } );
 }
 
 void ShadowMaterial::onPush(D3D12GfxCmdList& cmdList) {
-    mapResource_.commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    pMapResource_->commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 }
 
 void ShadowMaterial::onPop(D3D12GfxCmdList& cmdList) {
-    mapResource_.commitState(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    pMapResource_->commitState(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 }
 
 void ShadowMaterial::onBind(D3D12GfxCmdList& cmdList) {
-    cmdList.get()->OMSetRenderTargets(0u, nullptr, false, &dsv_.cpuHandle());
+    cmdList.get()->OMSetRenderTargets(0u, nullptr, false, &pDsv_->cpuHandle());
 }
 
 void ShadowMaterial::onClear(D3D12GfxCmdList& cmdList) {
     cmdList.get()->ClearDepthStencilView(
-        dsv_.cpuHandle(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0u, nullptr
+        pDsv_->cpuHandle(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0u, nullptr
     );
+}
+
+ShadowMaterialStandAlone::ShadowMaterialStandAlone( D3D12Device& device,
+    const Texture::Desc& shadowMapDesc,
+	DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+    DescriptorRange<DescriptorHeapCPU>& dsvRange
+) : ShadowMaterial(), shadowMap_( device, tex2dRange, shadowMapDesc,
+        detail::makeShadowMapSrvDesc( shadowMapDesc ),
+        D3D12_HEAP_TYPE_DEFAULT,
+        D3D12_CLEAR_VALUE{ .Format = shadowMapDesc.format, .DepthStencil = { 1.f, 0u }
+    } ) {
+    const auto dsvDesc = detail::makeShadowMapDsvDesc(shadowMapDesc);
+    const auto idx = shadowMap_.makeDsv( dsvDesc, device, dsvRange.alloc() );
+    assert(idxDsv == idx);
+
+    ShadowMaterial::operator=( ShadowMaterial(
+        shadowMap_, shadowMap_.view(idxDsv), dsvDesc,
+        shadowMap_.view(idxSrv), detail::makeShadowMapSrvDesc(shadowMapDesc)
+    ) );
 }
 
 sr::Light WorldLight::toViewLight(const Camera& camera) const {
@@ -526,29 +548,37 @@ void PBRIlluminationTerrain::trackModel(Model* pModel) {
     }
 }
 
+ShadowMap::ShadowMap( D3D12Device& device, ShaderShadowMap& shader,
+    const ShadowMaterial& shadowMaterial, std::size_t idxShadowMapDsv,
+    const D3D12_VIEWPORT& vp
+) : gfx::d3d12::RenderPass(id),
+    shadowMapSrvDesc_( shadowMaterial.srvDesc() ),
+    shadowMapDsvDesc_( shadowMaterial.dsvDesc() ),
+    idxShadowMapDsv_( idxShadowMapDsv ),
+    shadowMaterial_( shadowMaterial ),
+    viewport_(vp), protocol_( shader.makeProtocol( device,
+        RenderProtocol::Desc{ makeDesc() }
+    ) ), pLight_(nullptr), batch_(), pCamera_(nullptr) {
+    viewport_.Width *= 8;
+    viewport_.Height *= 8;
+}
 
 ShadowMap::ShadowMap( D3D12Device& device, ShaderShadowMap& shader,
     DescriptorRange<DescriptorHeapCPU>& dsvRange, const D3D12_VIEWPORT& vp
 ) : gfx::d3d12::RenderPass(id),
-    shadowMapSrvDesc_{
-        .Format = convertToColorFormat( shader.shadowMap_.desc().Format ),
-        .ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
-        .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-        .Texture2D = D3D12_TEX2D_SRV{ .MipLevels = 1u }
-    },
-    shadowMapDsvDesc_{
-        .Format = shader.shadowMap_.desc().Format,
-        .ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D,
-        .Flags = D3D12_DSV_FLAG_NONE
-    },
-    idxShadowMapDsv_( shader.shadowMap_.makeDsv( shadowMapDsvDesc_, device, dsvRange.alloc() ) ),
-    shadowMaterial_( shader.shadowMap_, shader.shadowMap_.view( idxShadowMapDsv_ ),
-        shadowMapDsvDesc_, shader.shadowMap_.view( shader.shadowMap_.idxSrv ),
+    shadowMapSrvDesc_( detail::makeShadowMapSrvDesc( shader.shadowMap()->desc() ) ),
+    shadowMapDsvDesc_( detail::makeShadowMapDsvDesc( shader.shadowMap()->desc() ) ),
+    idxShadowMapDsv_( shader.shadowMap()->makeDsv( shadowMapDsvDesc_, device, dsvRange.alloc() ) ),
+    shadowMaterial_( *shader.shadowMap(), shader.shadowMap()->view( idxShadowMapDsv_ ),
+        shadowMapDsvDesc_, shader.shadowMap()->view( shader.shadowMap()->idxSrv ),
         shadowMapSrvDesc_
     ),
     viewport_(vp), protocol_( shader.makeProtocol( device,
         RenderProtocol::Desc{ makeDesc() }
-    ) ), pLight_(nullptr), batch_(), pCamera_(nullptr) {}
+    ) ), pLight_(nullptr), batch_(), pCamera_(nullptr) {
+    viewport_.Width *= 8;
+    viewport_.Height *= 8;
+}
 
 RenderProtocol::Desc ShadowMap::makeDesc() {
     return RenderProtocol::Desc {
@@ -937,11 +967,11 @@ ShadowMapTessellation::ShadowMapTessellation( D3D12Device& device,
 ) : gfx::d3d12::RenderPass(id),
     shadowMapSrvDesc_( shadowMapRP.shadowMapSrvDesc_ ),
     shadowMapDsvDesc_( shadowMapRP.shadowMapDsvDesc_ ),
-    pShadowMaterial_( &shadowMapRP.shadowMaterial_ ),
     viewport_(vp), protocol_( shader.makeProtocol( device,
         RenderProtocol::Desc{ makeDesc() }
     ) ), pLight_(nullptr), batch_(), pCamera_(nullptr) {
-
+    viewport_.Width *= 8;
+    viewport_.Height *= 8;
 }
 
 RenderProtocol::Desc ShadowMapTessellation::makeDesc() {
@@ -966,9 +996,9 @@ RenderProtocol::Desc ShadowMapTessellation::makeDesc() {
         .rasterizerState = D3D12_RASTERIZER_DESC{
             .FillMode = D3D12_FILL_MODE_SOLID,
             .CullMode = D3D12_CULL_MODE_BACK,
-            .DepthBias = 1000,
+            .DepthBias = 20000,
             .DepthBiasClamp = 0.0f,
-            .SlopeScaledDepthBias = 1.0f,
+            .SlopeScaledDepthBias = 2.0f,
             .DepthClipEnable = true
         },
         .depthStencilState = D3D12_DEPTH_STENCIL_DESC{
