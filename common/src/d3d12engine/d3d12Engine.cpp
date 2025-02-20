@@ -123,37 +123,6 @@ void Core::layoutRefModelVBs(const d3d12::RefModelStorage::ID& key, std::size_t 
     refModelStorage_.get(key).arrangeVBs(device_, cmdList_, vbLayoutIdx, vbProps);
 }
 
-void Core::loadTerrain( const d3d12::Bitmap& heightMap,
-    const std::filesystem::path& albedoMapPath, const d3d12::RefModelStorage::ID& key,
-    mu::Vec3 scale, std::size_t xDivisions, std::size_t zDivisions
-) {
-    if (!staticTexStorage_.contains(albedoMapPath)) {
-        throw GFX_EXCEPT("[Description] Texture not found: " + albedoMapPath.string());
-    }
-
-    auto albedoMapRef = d3d12::Material::MapRef{
-        .type = etoi(d3d12::Material::MapType::Albedo),
-        .resourceIdx = static_cast<std::uint32_t>( staticTexStorage_.get(albedoMapPath).offset() ),
-        .arrayIdx = 0u,
-        .colorSpace = etoi(d3d12::Material::ColorSpace::SRGB)
-    };
-
-    for (std::size_t i = 0; i < zDivisions; ++i) {
-        for (std::size_t j = 0; j < xDivisions; ++j) {
-            auto serialKey = key + "_" + std::to_string(i) + "_" + std::to_string(j);
-
-            refModelStorage_[serialKey] = d3d12::RefModel::loadTerrainSubsetFromHeightmap(
-                heightMap, device_, cmdList_,
-                static_cast<int>( (heightMap.width() / xDivisions) * j ),
-                static_cast<int>( (heightMap.height() / zDivisions) * i ),
-                static_cast<int>( (heightMap.width() / xDivisions) /* + 1 */),
-                static_cast<int>( (heightMap.height() / zDivisions) /* + 1 */),
-                scale, albedoMapRef
-            );
-        }
-    }
-}
-
 void CoordRoot::addEntity(ecs::Entity& entity) {
     ecs::System<Coord>::addEntity(entity);
     auto pCoord = entity.get<Coord>();
@@ -310,73 +279,6 @@ void LevelRegion::activateChunk(std::size_t xIdx, std::size_t zIdx, Scene& scene
 
     subEntities_.emplace_back().embed(&chunk);
     scene.addEntity(subEntities_.back());
-}
-
-TerrainSubset::TerrainSubset( const d3d12::RefModelStorage::ID& key,
-    Terrain* pTerrain, Core& core
-) : key_(key), pTerrain_(pTerrain) {
-    createComponent<Coord>();
-    as<Coord>().get().setParent(&pTerrain->as<Coord>().get());
-    createComponent<Model>(key, core, as<Coord>());
-    as<Model>().get().markRenderPass(d3d12::rp::PBRIlluminationTerrain::id);
-}
-
-TerrainSubset::TerrainSubset(TerrainSubset&& other) noexcept
-    : Entity(std::move(other)), key_(std::move(other.key_)),
-    pTerrain_(std::exchange(other.pTerrain_, nullptr)) {}
-
-TerrainSubset& TerrainSubset::operator=(TerrainSubset&& other) noexcept {
-    if (this == &other) {
-        return *this;
-    }
-
-    Entity::operator=(std::move(other));
-    key_ = std::move(other.key_);
-    pTerrain_ = std::exchange(other.pTerrain_, nullptr);
-
-    return *this;
-}
-
-void Terrain::init( const d3d12::RefModelStorage::ID& identifier,
-    const std::filesystem::path& heightMapPath,
-    const std::filesystem::path& albedoMapPath, mu::Vec3 scale,
-    Core& core, mu::Vec3 offset, std::size_t xDivisions, std::size_t zDivisions
-) {
-    heightMap_ = gfx::d3d12::Bitmap(heightMapPath);
-    subsets_.resize(zDivisions);
-    scale_ = scale;
-
-    core.loadTerrain(heightMap_, albedoMapPath, identifier, scale, xDivisions, zDivisions);
-    createComponent<Coord>();
-    as<Coord>().get() << mu::translate(
-        heightMap_.width() * scale.x() * -0.5f + offset.x(),
-        0.f + offset.y(),
-        heightMap_.height() * scale.z() * -0.5f + offset.z()
-    );
-
-    for (std::size_t i = 0; i < zDivisions; ++i) {
-        for (std::size_t j = 0; j < xDivisions; ++j) {
-            auto serialKey = identifier + "_" + std::to_string(i) + "_" + std::to_string(j);
-            subsets_[i].emplace_back(serialKey, this, core);
-        }
-    }
-}
-
-Terrain::Terrain(Terrain&& other) noexcept
-    : Entity(std::move(other)), heightMap_(std::move(other.heightMap_)),
-    subsets_(std::move(other.subsets_)), scale_(std::move(other.scale_)) {}
-
-Terrain& Terrain::operator=(Terrain&& other) noexcept {
-    if (this == &other) {
-        return *this;
-    }
-
-    Entity::operator=(std::move(other));
-    heightMap_ = std::move(other.heightMap_);
-    subsets_ = std::move(other.subsets_);
-    scale_ = std::move(other.scale_);
-
-    return *this;
 }
 
 namespace rp {
