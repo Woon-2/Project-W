@@ -268,15 +268,15 @@ ObjectDisposition::ObjectDisposition(std::ifstream& is)
 LevelRegion::LevelRegion(const Core& core)
     : pStream_( std::make_unique<std::ifstream>(resourcePath/"LevelGraph.bin") ),
     model_(core.staticTexStorage(), *pStream_),
-    dispositionRoot_(*pStream_), subEntities_() {}
+    dispositionRoot_(*pStream_), chunks_() {}
 
 void LevelRegion::activateChunk(std::size_t xIdx, std::size_t zIdx, Scene& scene) {
     auto& chunk = model_.get(
         dx::XMUINT2(static_cast<std::uint32_t>(xIdx), static_cast<std::uint32_t>(zIdx))
     );
 
-    subEntities_.emplace_back().embed(&chunk);
-    scene.addEntity(subEntities_.back());
+    chunks_.emplace_back().embed(&chunk);
+    scene.addEntity(chunks_.back());
 }
 
 namespace rp {
@@ -377,7 +377,7 @@ void Tessellation::init(Scene& scene) {
     // for (auto& pModel : models(scene)) {
     //    do nothing
     // }
-    for (auto& pChunk : levelChunks(scene)) {
+    for (auto& pChunk : levelChunkModels(scene)) {
         trackChunk(&pChunk->get());
     }
     if (!cameras(scene).empty()) {
@@ -398,7 +398,7 @@ void Tessellation::update(Scene& scene) {
         // if ( auto pModel = Model::at(entityID) ) {
         //     do nothing
         // }
-        for (auto& pChunk : levelChunks(scene)) {
+        for (auto& pChunk : levelChunkModels(scene)) {
             trackChunk(&pChunk->get());
         }
         if ( auto pCamera = Camera::at(entityID) ) {
@@ -414,7 +414,7 @@ void ShadowMapTessellation::init(Scene& scene) {
     // for (auto& pModel : models(scene)) {
     //    do nothing
     // }
-    for (auto& pChunk : levelChunks(scene)) {
+    for (auto& pChunk : levelChunkModels(scene)) {
         trackChunk(&pChunk->get());
     }
     if (!cameras(scene).empty()) {
@@ -434,7 +434,7 @@ void ShadowMapTessellation::update(Scene& scene) {
         // if ( auto pModel = Model::at(entityID) ) {
         //     do nothing
         // }
-        for (auto& pChunk : levelChunks(scene)) {
+        for (auto& pChunk : levelChunkModels(scene)) {
             trackChunk(&pChunk->get());
         }
         if ( auto pCamera = Camera::at(entityID) ) {

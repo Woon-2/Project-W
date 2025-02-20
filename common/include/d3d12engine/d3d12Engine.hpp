@@ -182,11 +182,11 @@ private:
     d3d12::Model model_;
 };
 
-class LevelChunk : public ecs::Component {
+class LevelChunkModel : public ecs::Component {
 public:
-    ENABLE_COMPONENT(LevelChunk);
+    ENABLE_COMPONENT(LevelChunkModel);
 
-    LevelChunk(const ecs::Entity& entity, d3d12::LevelChunkModel& model) NOEXCEPT
+    LevelChunkModel(const ecs::Entity& entity, d3d12::LevelChunkModel& model) NOEXCEPT
         : ecs::Component(entity), pModel_(&model) {}
 
     d3d12::LevelChunkModel& get() NOEXCEPT { return *pModel_; }
@@ -242,7 +242,7 @@ class Scene;
 class IRenderPass {
 protected:
     ecs::SysCompCont<Model*>& models(Scene& scene);
-    ecs::SysCompCont<LevelChunk*>& levelChunks(Scene& scene);
+    ecs::SysCompCont<LevelChunkModel*>& levelChunkModels(Scene& scene);
     ecs::SysCompCont<Camera*>& cameras(Scene& scene);
     ecs::SysCompCont<Light*>& lights(Scene& scene);
     std::vector<ecs::Entity::ID>& reservedEntities(Scene& scene);
@@ -253,11 +253,11 @@ public:
     virtual ~IRenderPass() = default;
 };
 
-class Scene : public ecs::System<Model, Camera, Light, LevelChunk> {
+class Scene : public ecs::System<Model, Camera, Light, LevelChunkModel> {
 public:
     friend class IRenderPass;
 
-    using MyBase = ecs::System<Model, Camera, Light, LevelChunk>;
+    using MyBase = ecs::System<Model, Camera, Light, LevelChunkModel>;
 
     void addEntity(ecs::Entity& entity);
     void clearStash();
@@ -278,14 +278,14 @@ private:
     std::vector<ObjectDisposition> children_;
 };
 
+class LevelChunk : public ecs::Entity {
+public:
+    void embed(d3d12::LevelChunkModel* pModel) {
+        createComponent<LevelChunkModel>(*pModel);
+    }
+};
+
 class LevelRegion : public ecs::Entity {
-private:
-    class SubEntity : public ecs::Entity {
-    public:
-        void embed(d3d12::LevelChunkModel* pModel) {
-            createComponent<LevelChunk>(*pModel);
-        }
-    };
 
 public:
     LevelRegion() = default;
@@ -303,15 +303,15 @@ private:
     // which has been already read some data from LevelRegionModel's constructor
     d3d12::LevelRegionModel model_;
     ObjectDisposition dispositionRoot_;
-    std::vector<SubEntity> subEntities_;
+    std::vector<LevelChunk> chunks_;
 };
 
 inline ecs::SysCompCont<Model*>& IRenderPass::models(Scene& scene) {
     return scene.components<Model>();
 }
 
-inline ecs::SysCompCont<LevelChunk*>& IRenderPass::levelChunks(Scene& scene) {
-    return scene.components<LevelChunk>();
+inline ecs::SysCompCont<LevelChunkModel*>& IRenderPass::levelChunkModels(Scene& scene) {
+    return scene.components<LevelChunkModel>();
 }
 
 inline ecs::SysCompCont<Camera*>& IRenderPass::cameras(Scene& scene) {

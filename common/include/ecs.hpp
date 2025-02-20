@@ -53,7 +53,7 @@ enum class Components {
     AssetLinker,
     Coord,
     Model,
-    LevelChunk,
+    LevelChunkModel,
     Camera,
     Light,
     Size
