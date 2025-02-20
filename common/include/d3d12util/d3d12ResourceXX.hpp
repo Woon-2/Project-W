@@ -632,7 +632,7 @@ class RefModelStorage {
 public:
     using ID = std::string;
 
-    void loadModel( const std::filesystem::path& path, const ID& key,
+    void loadModel( const ID& key, const std::filesystem::path& path,
         const StaticTextureStorage& sts,
         D3D12Device& device, D3D12GfxCmdList& cmdList
     );

@@ -35,6 +35,9 @@ public:
     friend class Model;
     friend class LevelRegion;
 
+    using TextureKey = std::string;
+    using RefModelKey = d3d12::RefModelStorage::ID;
+
     Core();
 
     d3d12::D3D12GfxCmdList fetchCmdList() {
@@ -69,8 +72,8 @@ public:
         fence_.wait();
     }
 
-    void loadStaticTexture(const std::filesystem::path& path, d3d12::TextureResource::Type type);
-    void loadRefModel(const std::filesystem::path& path, const d3d12::RefModelStorage::ID& key);
+    void loadStaticTexture(const TextureKey& key , d3d12::TextureResource::Type type);
+    void loadRefModel(const RefModelKey& key);
     void layoutRefModelVBs( const d3d12::RefModelStorage::ID& key, std::size_t vbLayoutIdx,
         const d3d12::InputLayout& inputLayout
     );
@@ -88,6 +91,22 @@ public:
 
     void initChunkMesh(d3d12::D3D12GfxCmdList& cmdList) {
         d3d12::LevelChunkModel::initChunkMesh(device_, cmdList);
+    }
+
+    void registTexturePath(const TextureKey& key, const std::filesystem::path& path) {
+        texturePaths_[key] = path;
+    }
+
+    void removeTexturePath(const TextureKey& key) {
+        texturePaths_.erase(key);
+    }
+
+    void registRefModelPath(const RefModelKey& key, const std::filesystem::path& path) {
+        refModelPaths_[key] = path;
+    }
+
+    void removeRefModelPath(const RefModelKey& key) {
+        refModelPaths_.erase(key);
     }
 
     d3d12::DescriptorRanges& descRanges() NOEXCEPT { return descRanges_; }
@@ -110,6 +129,9 @@ private:
     d3d12::DescriptorRanges descRanges_;
     MyWindow window_;
     d3d12::Fence fence_;
+
+    std::map< TextureKey, std::filesystem::path > texturePaths_;
+    std::map< RefModelKey, std::filesystem::path > refModelPaths_;
 };
 
 class Coord : public ecs::Component {

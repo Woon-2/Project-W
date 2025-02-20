@@ -8,19 +8,19 @@
 const ModelInfo& assetModelInfo(AssetModel asset) {
     static auto sAssetModelInfos = std::vector<ModelInfo>{
         ModelInfo{
-            .id = "Helicopter",
+            .key = "GO_OH-58D",
             .path = resourcePath/"models/HelicopterModel/GO_OH-58D.bin"
         },
         ModelInfo{
-            .id = "Tree0",
+            .key = "GO_URP_Tree_0",
             .path = resourcePath/"models/Trees/GO_URP_Tree_0.bin"
         },
         ModelInfo{
-            .id = "Tree1",
+            .key = "GO_URP_Tree_1",
             .path = resourcePath/"models/Trees/GO_URP_Tree_1.bin"
         },
         ModelInfo{
-            .id = "Tree2",
+            .key = "GO_URP_Tree_2",
             .path = resourcePath/"models/Trees/GO_URP_Tree_2.bin"
         }
     };
@@ -31,6 +31,12 @@ const ModelInfo& assetModelInfo(AssetModel asset) {
 const TextureInfo& assetTextureInfo(AssetTexture asset) {
     static auto sTextureInfos = std::vector<TextureInfo>{
         TextureInfo{
+            .keys = {
+                "GO_OH-58D_Default",
+                "GO_OH-58D_Hellfire",
+                "GO_OH-58D_Hydra",
+                "GO_OH-58D_Texture"
+            },
             .paths = {
                 resourcePath/"models/HelicopterModel/Textures/Default.dds",
                 resourcePath/"models/HelicopterModel/Textures/Hellfire.dds",
@@ -40,6 +46,10 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
             .type = gfx::d3d12::TextureResource::Type::Texture
         },
         TextureInfo{
+            .keys = {
+                "GO_URP_Tree_0_Leaf",
+                "GO_URP_Tree_0_Trunk"
+            },
             .paths = {
                 resourcePath/"models/Trees/Textures/URP_1_Leaf.dds",
                 resourcePath/"models/Trees/Textures/URP_1_Trunk.dds",
@@ -47,6 +57,10 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
             .type = gfx::d3d12::TextureResource::Type::Texture
         },
         TextureInfo{
+            .keys = {
+                "GO_URP_Tree_1_Leaf",
+                "GO_URP_Tree_1_Trunk"s
+            },
             .paths = {
                 resourcePath/"models/Trees/Textures/URP_2_Leaf.dds",
                 resourcePath/"models/Trees/Textures/URP_2_Trunk.dds",
@@ -54,6 +68,10 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
             .type = gfx::d3d12::TextureResource::Type::Texture
         },
         TextureInfo{
+            .keys = {
+                "GO_URP_Tree_2_Leaf",
+                "GO_URP_Tree_2_Trunk"
+            },
             .paths = {
                 resourcePath/"models/Trees/Textures/URP_3_Leaf.dds",
                 resourcePath/"models/Trees/Textures/URP_3_Trunk.dds",
@@ -61,6 +79,19 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
             .type = gfx::d3d12::TextureResource::Type::Texture
         },
         TextureInfo{
+            .keys = {
+                "Terrain_0_0_HeightMap",
+                "Terrain_0_1_HeightMap",
+                "Terrain_0_2_HeightMap",
+                "Terrain_1_0_HeightMap",
+                "Terrain_1_1_HeightMap",
+                "Terrain_1_2_HeightMap",
+                "Terrain_2_0_HeightMap",
+                "Terrain_2_1_HeightMap",
+                "Terrain_2_2_HeightMap",
+                "Grass_A_BaseColor",
+                "Grass_A_Normal"
+            },
             .paths = {
                 resourcePath/"terrains/HeightMaps/Terrain_0_0_HeightMap.dds",
                 resourcePath/"terrains/HeightMaps/Terrain_0_1_HeightMap.dds",

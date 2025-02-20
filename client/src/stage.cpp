@@ -92,8 +92,9 @@ void Stage::loadAssets(gfx::d3d12engine::Core& core) {
 
 void loadTexture(gfx::d3d12engine::Core& core, AssetTexture key) {
     const auto& texInfo = assetTextureInfo(key);
-    for (const auto& path : texInfo.paths) {
-        core.loadStaticTexture(path, texInfo.type);
+    for (auto i = 0ull; i < texInfo.keys.size(); ++i) {
+        core.registTexturePath(texInfo.keys[i], texInfo.paths[i]);
+        core.loadStaticTexture(texInfo.keys[i], texInfo.type);
     }
 }
 
@@ -107,8 +108,9 @@ void Stage::loadTextures(gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdLi
 
 void loadModel(gfx::d3d12engine::Core& core, AssetModel key, Renderer& renderer) {
     auto modelInfo = assetModelInfo(key);
-    core.loadRefModel(modelInfo.path, modelInfo.id);
-    renderer.layoutVBsPBR(core, modelInfo.id, 1);
+    core.registRefModelPath(modelInfo.key, modelInfo.path);
+    core.loadRefModel(modelInfo.key);
+    renderer.layoutVBsPBR(core, modelInfo.key, 1);
 }
 
 void Stage::loadModels(gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdList& cmdList) {

@@ -76,20 +76,20 @@ void Core::render() {
     fence_.wait();
 }
 
-void Core::loadStaticTexture( const std::filesystem::path& path,
+void Core::loadStaticTexture( const Core::TextureKey& key,
     d3d12::TextureResource::Type type
 ) {
     switch (type) {
     case d3d12::TextureResource::Type::Texture:
-        staticTexStorage_.load(path, type, device_, cmdList_, descRanges_.srvRangeTex2D);
+        staticTexStorage_.load(texturePaths_.at(key), type, device_, cmdList_, descRanges_.srvRangeTex2D);
         break;
 
     case d3d12::TextureResource::Type::TextureArray:
-        staticTexStorage_.load(path, type, device_, cmdList_, descRanges_.srvRangeTex2DArray);
+        staticTexStorage_.load(texturePaths_.at(key), type, device_, cmdList_, descRanges_.srvRangeTex2DArray);
         break;
 
     case d3d12::TextureResource::Type::TextureCube:
-        staticTexStorage_.load(path, type, device_, cmdList_, descRanges_.srvRangeTexCube);
+        staticTexStorage_.load(texturePaths_.at(key), type, device_, cmdList_, descRanges_.srvRangeTexCube);
         break;
 
     default:
@@ -97,10 +97,8 @@ void Core::loadStaticTexture( const std::filesystem::path& path,
     }
 }
 
-void Core::loadRefModel( const std::filesystem::path& path,
-    const d3d12::RefModelStorage::ID& key
-) {
-    refModelStorage_.loadModel(path, key, staticTexStorage_, device_, cmdList_);
+void Core::loadRefModel(const Core::RefModelKey& key) {
+    refModelStorage_.loadModel(key, refModelPaths_.at(key), staticTexStorage_, device_, cmdList_);
 }
 
 void Core::layoutRefModelVBs( const d3d12::RefModelStorage::ID& key, std::size_t vbLayoutIdx,

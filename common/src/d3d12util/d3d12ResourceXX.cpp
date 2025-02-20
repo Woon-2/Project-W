@@ -1050,9 +1050,8 @@ void RefModel::arrangeVBs( D3D12Device& device, D3D12GfxCmdList& cmdList,
     }
 }
 
-void RefModelStorage::loadModel( const std::filesystem::path& path,
-    const ID& key, const StaticTextureStorage& sts, D3D12Device& device,
-    D3D12GfxCmdList& cmdList
+void RefModelStorage::loadModel( const ID& key, const std::filesystem::path& path,
+    const StaticTextureStorage& sts, D3D12Device& device, D3D12GfxCmdList& cmdList
 ) {
     map_[key] = RefModel::loadHierarchyFromFile(path, device, cmdList, sts);
 }

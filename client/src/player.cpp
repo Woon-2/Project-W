@@ -13,7 +13,7 @@ void Player::init(gfx::d3d12engine::Core& core) {
 	createComponent<RigidBody>();
 	createComponent<PlayerController>();
 	createComponent<gfx::d3d12engine::Coord>();
-	createComponent<gfx::d3d12engine::Model>( assetModelInfo(AssetModel::Helicopter).id,
+	createComponent<gfx::d3d12engine::Model>( assetModelInfo(AssetModel::Helicopter).key,
 		core, as<gfx::d3d12engine::Coord>()
 	);
 	as<gfx::d3d12engine::Model>().get().markRenderPass(

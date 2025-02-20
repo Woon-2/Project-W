@@ -22,11 +22,12 @@ enum class AssetTexture {
 };
 
 struct ModelInfo {
-    gfx::d3d12::RefModelStorage::ID id;
+    gfx::d3d12engine::Core::RefModelKey key;
     std::filesystem::path path;
 };
 
 struct TextureInfo {
+    std::vector< gfx::d3d12engine::Core::TextureKey > keys;
     std::vector<std::filesystem::path> paths;
     gfx::d3d12::TextureResource::Type type;
 };
