@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.27)
+cmake_minimum_required(VERSION 3.18)
 
 if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     if(NOT DEFINED CMAKE_CONFIGURATION_TYPES)
@@ -35,20 +35,25 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     endif()
 endif()
 
-project(PZolzak VERSION 2025.02.24 LANGUAGES CXX)
+add_executable(server)
 
-message(STATUS "Configuring ${CMAKE_PROJECT_NAME}(v${CMAKE_PROJECT_VERSION})...")
-message(STATUS "Author: @Woon2 (wkdauddns9@gmail.com)")
-message(STATUS "Coauthor: @lcat12345, @Hsg2311")
+target_sources(server
+    PRIVATE
+        src/main.cpp
+)
 
-# target_sources
+include(auto_configure)
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+auto_configure(server PRIVATE)
 
-add_subdirectory(extern)
-add_subdirectory(common)
-add_subdirectory(client)
-add_subdirectory(server)
+target_include_directories(server
+    PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
 
-include(doxy)
-add_doxygen("${PROJECT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/docs")
+target_link_libraries(server
+    PRIVATE
+        common::woon2exception
+        common::gfx
+        common::net
+)
