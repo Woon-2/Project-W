@@ -158,8 +158,15 @@ Camera::Camera( const ecs::Entity& entity,
 void Camera::update(float deltaTime) {
     // following camera
     if (pAttachedMovement_ && pAttachedRotation_) {
+        auto offsetRotation = pAttachedRotation_->localXform();
+        offsetRotation.setRow(0, mu::Vec4(mu::NVec3(mu::Vec3(offsetRotation.row(0))), 0.f));
+        offsetRotation.setRow(1, mu::Vec4(mu::NVec3(mu::Vec3(offsetRotation.row(1))), 0.f));
+        offsetRotation.setRow(2, mu::Vec4(mu::NVec3(mu::Vec3(offsetRotation.row(2))), 0.f));
+        // temporary
+        offsetRotation *= mu::rotateY(mu::Degree(90.f));
+
         const auto targetPos = mu::Vec3(pAttachedMovement_->xform().row(3));
-        const auto idealPos = targetPos + offset_;
+        const auto idealPos = targetPos + mu::Vec3( mu::Vec4(offset_, 0.f) * offsetRotation );
         const auto curPos = mu::Vec3(camera_.coordMovement().xform().row(3));
         const auto deltaPos = idealPos - curPos;
 
@@ -175,6 +182,7 @@ void Camera::update(float deltaTime) {
             static constexpr auto endurance = 0.000001f;
             if (std::abs(mu::dot(cameraLook, augmentedLook) - 1.0f) >= endurance) {
                 const auto rotAxis = mu::cross(cameraLook, augmentedLook);
+
                 const auto rotAngle = mu::acos(mu::dot(cameraLook, augmentedLook));
                 up *= mu::rotate(rotAngle, rotAxis);
             }
