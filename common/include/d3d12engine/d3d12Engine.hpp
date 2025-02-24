@@ -13,6 +13,7 @@
 #include <vector>
 #include <fstream>
 #include <memory>
+#include <optional>
 
 namespace gfx {
 
@@ -114,6 +115,9 @@ public:
 
 
 private:
+    d3d12::RefModelStorage& refModelStorage() NOEXCEPT { return refModelStorage_; }
+    const d3d12::RefModelStorage& refModelStorage() const NOEXCEPT { return refModelStorage_; }
+
     d3d12::StaticTextureStorage& staticTexStorage() NOEXCEPT { return staticTexStorage_; }
     const d3d12::StaticTextureStorage& staticTexStorage() const NOEXCEPT { return staticTexStorage_; }
 
@@ -271,7 +275,6 @@ public:
     ObjectDisposition() = default;
     ObjectDisposition(std::ifstream& is);
 
-private:
     mu::Mat4x4 xform_;
     std::string name_;
     std::string prefabName_;
@@ -283,6 +286,8 @@ public:
     void embed(d3d12::LevelChunkModel* pModel) {
         createComponent<LevelChunkModel>(*pModel);
     }
+
+    // model, coord
 };
 
 class LevelRegion : public ecs::Entity {
@@ -292,11 +297,17 @@ public:
     LevelRegion(const Core& core);
 
     void activateChunk(std::size_t xIdx, std::size_t zIdx, Scene& scene);
+    std::vector<ecs::Entity> instantiateAllObjects(const Core& core, coord::System& coordRoot);
 
     ObjectDisposition& dispositionRoot() NOEXCEPT { return dispositionRoot_; }
     const ObjectDisposition& dispositionRoot() const NOEXCEPT { return dispositionRoot_; }
 
 private:
+    void instantiateObjectHierarchy( std::optional<std::size_t> parentIdx,
+        const ObjectDisposition& disposition, const Core& core,
+        coord::System& coordRoot, std::vector<ecs::Entity>& out
+    );
+
     std::unique_ptr< std::ifstream > pStream_;
     // the order of the following members is important
     // ObjectDisposition's constructor reads from the stream

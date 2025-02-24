@@ -279,6 +279,55 @@ void LevelRegion::activateChunk(std::size_t xIdx, std::size_t zIdx, Scene& scene
     scene.addEntity(chunks_.back());
 }
 
+std::vector<ecs::Entity> LevelRegion::instantiateAllObjects(const Core& core, coord::System& coordRoot) {
+    auto ret = std::vector<ecs::Entity>();
+
+    instantiateObjectHierarchy(std::nullopt, dispositionRoot_, core, coordRoot, ret);
+
+    return ret;
+}
+
+void LevelRegion::instantiateObjectHierarchy( std::optional<std::size_t> parentIdx,
+    const ObjectDisposition& disposition, const Core& core,
+    coord::System& coordRoot, std::vector<ecs::Entity>& out
+) {
+    if (disposition.prefabName_.empty()) {
+        for (auto& child : disposition.children_) {
+            instantiateObjectHierarchy(parentIdx, child, core, coordRoot, out);
+        }
+        return;
+    }
+
+    const auto modelKey = disposition.prefabName_.substr(2);
+
+    auto obj = ecs::Entity();
+
+    if (!core.refModelStorage().contains(modelKey)) {
+        throw GFX_EXCEPT("RefModel not found: " + modelKey);
+    }
+
+    obj.createComponent<Coord>();
+    obj.as<Coord>().get().setLocalXform(disposition.xform_);
+    obj.as<Coord>().get() << mu::translate(0.f, -25.f, 0.f);
+
+    auto& refModel = core.refModelStorage().get(modelKey);
+    obj.createComponent<Model>(modelKey, core, obj.as<Coord>());
+
+    if (parentIdx.has_value()) {
+        obj.as<Coord>().get().setParent(&out[parentIdx.value()].as<Coord>().get());
+    }
+    else {
+        obj.as<Coord>().get().setParent(&coordRoot);
+    }
+
+    out.push_back(std::move(obj));
+    std::size_t myIdx = out.size() - 1;
+
+    for (auto& child : disposition.children_) {
+        instantiateObjectHierarchy(myIdx, child, core, coordRoot, out);
+    }
+}
+
 namespace rp {
 
 void PBRIllumination::init(Scene& scene) {

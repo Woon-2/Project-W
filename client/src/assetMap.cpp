@@ -59,7 +59,7 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
         TextureInfo{
             .keys = {
                 "GO_URP_Tree_1_Leaf",
-                "GO_URP_Tree_1_Trunk"s
+                "GO_URP_Tree_1_Trunk"
             },
             .paths = {
                 resourcePath/"models/Trees/Textures/URP_2_Leaf.dds",

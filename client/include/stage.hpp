@@ -21,7 +21,7 @@ class Stage {
 public:
     Stage(gfx::d3d12engine::Core& core, Systems& systems, Renderer& renderer) NOEXCEPT
         : player_(), directionalLight_(), level_(),
-        scene_(), pSystems_(&systems), pRenderer_(&renderer) {
+        scene_(), entities_(), pSystems_(&systems), pRenderer_(&renderer) {
         init(core);
     }
 
@@ -44,6 +44,7 @@ private:
     LightEntity directionalLight_;
     gfx::d3d12engine::LevelRegion level_;
     gfx::d3d12engine::Scene scene_;
+    std::vector<ecs::Entity> entities_;
     Systems* pSystems_;
     Renderer* pRenderer_;
 };

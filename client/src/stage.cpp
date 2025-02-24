@@ -63,12 +63,21 @@ void Stage::initEntities(gfx::d3d12engine::Core& core) {
         .type = gfx::d3d12::sr::Light::Type::Directional
     });
 
-    scene_.addEntity(player_);
     for (auto i = 0u; i < 3u; ++i) {
         for (auto j = 0u; j < 3u; ++j) {
             level_.activateChunk(i, j, scene_);
         }
     }
+
+    entities_ = level_.instantiateAllObjects(core, pSystems_->coordRoot.get());
+    for (auto& entt : entities_) {
+        entt.createComponent<RigidBody>();
+
+        scene_.addEntity(entt);
+        pSystems_->physicsSystem.addEntity(entt);
+    }
+
+    scene_.addEntity(player_);
     scene_.addEntity(directionalLight_);
 
     pSystems_->coordRoot.addEntity(player_);
