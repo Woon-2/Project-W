@@ -269,24 +269,26 @@ gen_shader_path()
 add_dependencies(gfx hlsl)
 
 # === net ===
-add_library(net INTERFACE
+add_library(net
+    src/net/session.cpp include/net/session.hpp
+
     include/net/protocol.hpp
     include/net/netInclude.hpp
 )
 
 add_library(common::net ALIAS net)
 
-auto_configure(net INTERFACE)
-define_win32_lighten_macros(net INTERFACE)
+auto_configure(net PRIVATE)
+define_win32_lighten_macros(net PUBLIC)
 
 target_link_libraries(net
-    INTERFACE
+    PRIVATE
         common::mu
         ws2_32.lib
 )
 
 target_include_directories(net
-    INTERFACE
+    PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 

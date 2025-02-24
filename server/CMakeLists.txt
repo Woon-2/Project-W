@@ -54,5 +54,6 @@ target_include_directories(server
 
 target_link_libraries(server
     PRIVATE
+        common::mu
         common::net
 )
