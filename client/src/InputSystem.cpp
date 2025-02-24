@@ -21,6 +21,12 @@ void PlayerController::handleEvent( Event event, float deltaTime,
     case Event::MoveRight:
         moveRight(deltaTime);
         break;
+    case Event::MoveUp:
+        moveUp(deltaTime);
+        break;
+    case Event::MoveDown:
+        moveDown(deltaTime);
+        break;
     case Event::YawLeft:
         yawLeft(deltaTime);
         break;
@@ -114,6 +120,8 @@ void InputSystem::initKeyMap() {
     keyMap_['S'] = PlayerController::Event::MoveBackward;
     keyMap_['A'] = PlayerController::Event::MoveLeft;
     keyMap_['D'] = PlayerController::Event::MoveRight;
+    keyMap_[VK_CONTROL] = PlayerController::Event::MoveDown;
+    keyMap_[VK_SPACE] = PlayerController::Event::MoveUp;
     keyMap_['Q'] = PlayerController::Event::YawLeft;
     keyMap_['E'] = PlayerController::Event::YawRight;
 

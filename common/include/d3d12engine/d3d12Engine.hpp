@@ -13,6 +13,7 @@
 #include <vector>
 #include <fstream>
 #include <memory>
+#include <optional>
 
 namespace gfx {
 
@@ -34,6 +35,9 @@ public:
     using MyWindow = d3d12::Window<d3d12::BasicD3D12WTraits<char>>;
     friend class Model;
     friend class LevelRegion;
+
+    using TextureKey = std::string;
+    using RefModelKey = d3d12::RefModelStorage::ID;
 
     Core();
 
@@ -69,17 +73,13 @@ public:
         fence_.wait();
     }
 
-    void loadStaticTexture(const std::filesystem::path& path, d3d12::TextureResource::Type type);
-    void loadRefModel(const std::filesystem::path& path, const d3d12::RefModelStorage::ID& key);
+    void loadStaticTexture(const TextureKey& key , d3d12::TextureResource::Type type);
+    void loadRefModel(const RefModelKey& key);
     void layoutRefModelVBs( const d3d12::RefModelStorage::ID& key, std::size_t vbLayoutIdx,
         const d3d12::InputLayout& inputLayout
     );
     void layoutRefModelVBs(const d3d12::RefModelStorage::ID& key, std::size_t vbLayoutIdx,
         const std::vector<std::vector<Vertex::Properties>>& vbProps
-    );
-    void loadTerrain( const d3d12::Bitmap& heightMap, const std::filesystem::path& albedoMapPath,
-        const d3d12::RefModelStorage::ID& key, mu::Vec3 scale,
-        std::size_t xDivisions = 1u, std::size_t zDivisions = 1u
     );
 
     void setFullScreen() {
@@ -94,11 +94,30 @@ public:
         d3d12::LevelChunkModel::initChunkMesh(device_, cmdList);
     }
 
+    void registTexturePath(const TextureKey& key, const std::filesystem::path& path) {
+        texturePaths_[key] = path;
+    }
+
+    void removeTexturePath(const TextureKey& key) {
+        texturePaths_.erase(key);
+    }
+
+    void registRefModelPath(const RefModelKey& key, const std::filesystem::path& path) {
+        refModelPaths_[key] = path;
+    }
+
+    void removeRefModelPath(const RefModelKey& key) {
+        refModelPaths_.erase(key);
+    }
+
     d3d12::DescriptorRanges& descRanges() NOEXCEPT { return descRanges_; }
     const d3d12::DescriptorRanges& descRanges() const NOEXCEPT { return descRanges_; }
 
 
 private:
+    d3d12::RefModelStorage& refModelStorage() NOEXCEPT { return refModelStorage_; }
+    const d3d12::RefModelStorage& refModelStorage() const NOEXCEPT { return refModelStorage_; }
+
     d3d12::StaticTextureStorage& staticTexStorage() NOEXCEPT { return staticTexStorage_; }
     const d3d12::StaticTextureStorage& staticTexStorage() const NOEXCEPT { return staticTexStorage_; }
 
@@ -114,6 +133,9 @@ private:
     d3d12::DescriptorRanges descRanges_;
     MyWindow window_;
     d3d12::Fence fence_;
+
+    std::map< TextureKey, std::filesystem::path > texturePaths_;
+    std::map< RefModelKey, std::filesystem::path > refModelPaths_;
 };
 
 class Coord : public ecs::Component {
@@ -164,11 +186,11 @@ private:
     d3d12::Model model_;
 };
 
-class LevelChunk : public ecs::Component {
+class LevelChunkModel : public ecs::Component {
 public:
-    ENABLE_COMPONENT(LevelChunk);
+    ENABLE_COMPONENT(LevelChunkModel);
 
-    LevelChunk(const ecs::Entity& entity, d3d12::LevelChunkModel& model) NOEXCEPT
+    LevelChunkModel(const ecs::Entity& entity, d3d12::LevelChunkModel& model) NOEXCEPT
         : ecs::Component(entity), pModel_(&model) {}
 
     d3d12::LevelChunkModel& get() NOEXCEPT { return *pModel_; }
@@ -224,7 +246,7 @@ class Scene;
 class IRenderPass {
 protected:
     ecs::SysCompCont<Model*>& models(Scene& scene);
-    ecs::SysCompCont<LevelChunk*>& levelChunks(Scene& scene);
+    ecs::SysCompCont<LevelChunkModel*>& levelChunkModels(Scene& scene);
     ecs::SysCompCont<Camera*>& cameras(Scene& scene);
     ecs::SysCompCont<Light*>& lights(Scene& scene);
     std::vector<ecs::Entity::ID>& reservedEntities(Scene& scene);
@@ -235,11 +257,11 @@ public:
     virtual ~IRenderPass() = default;
 };
 
-class Scene : public ecs::System<Model, Camera, Light, LevelChunk> {
+class Scene : public ecs::System<Model, Camera, Light, LevelChunkModel> {
 public:
     friend class IRenderPass;
 
-    using MyBase = ecs::System<Model, Camera, Light, LevelChunk>;
+    using MyBase = ecs::System<Model, Camera, Light, LevelChunkModel>;
 
     void addEntity(ecs::Entity& entity);
     void clearStash();
@@ -253,47 +275,54 @@ public:
     ObjectDisposition() = default;
     ObjectDisposition(std::ifstream& is);
 
-private:
     mu::Mat4x4 xform_;
     std::string name_;
     std::string prefabName_;
     std::vector<ObjectDisposition> children_;
 };
 
+class LevelChunk : public ecs::Entity {
+public:
+    void embed(d3d12::LevelChunkModel* pModel) {
+        createComponent<LevelChunkModel>(*pModel);
+    }
+
+    // model, coord
+};
+
 class LevelRegion : public ecs::Entity {
-private:
-    class SubEntity : public ecs::Entity {
-    public:
-        void embed(d3d12::LevelChunkModel* pModel) {
-            createComponent<LevelChunk>(*pModel);
-        }
-    };
 
 public:
     LevelRegion() = default;
     LevelRegion(const Core& core);
 
     void activateChunk(std::size_t xIdx, std::size_t zIdx, Scene& scene);
+    std::vector<ecs::Entity> instantiateAllObjects(const Core& core, coord::System& coordRoot);
 
     ObjectDisposition& dispositionRoot() NOEXCEPT { return dispositionRoot_; }
     const ObjectDisposition& dispositionRoot() const NOEXCEPT { return dispositionRoot_; }
 
 private:
+    void instantiateObjectHierarchy( std::optional<std::size_t> parentIdx,
+        const ObjectDisposition& disposition, const Core& core,
+        coord::System& coordRoot, std::vector<ecs::Entity>& out
+    );
+
     std::unique_ptr< std::ifstream > pStream_;
     // the order of the following members is important
     // ObjectDisposition's constructor reads from the stream
     // which has been already read some data from LevelRegionModel's constructor
     d3d12::LevelRegionModel model_;
     ObjectDisposition dispositionRoot_;
-    std::vector<SubEntity> subEntities_;
+    std::vector<LevelChunk> chunks_;
 };
 
 inline ecs::SysCompCont<Model*>& IRenderPass::models(Scene& scene) {
     return scene.components<Model>();
 }
 
-inline ecs::SysCompCont<LevelChunk*>& IRenderPass::levelChunks(Scene& scene) {
-    return scene.components<LevelChunk>();
+inline ecs::SysCompCont<LevelChunkModel*>& IRenderPass::levelChunkModels(Scene& scene) {
+    return scene.components<LevelChunkModel>();
 }
 
 inline ecs::SysCompCont<Camera*>& IRenderPass::cameras(Scene& scene) {
@@ -307,53 +336,6 @@ inline ecs::SysCompCont<Light*>& IRenderPass::lights(Scene& scene) {
 inline std::vector<ecs::Entity::ID>& IRenderPass::reservedEntities(Scene& scene) {
     return scene.reservedEntities_;
 }
-
-class Terrain;
-
-class TerrainSubset : public ecs::Entity {
-public:
-    TerrainSubset( const d3d12::RefModelStorage::ID& key,
-        Terrain* pTerrain, Core& core
-    );
-
-    TerrainSubset(const TerrainSubset&) = delete;
-    TerrainSubset(TerrainSubset&& other) noexcept;
-    TerrainSubset& operator=(const TerrainSubset&) = delete;
-    TerrainSubset& operator=(TerrainSubset&& other) noexcept;
-    ~TerrainSubset() = default;
-
-    d3d12::RefModelStorage::ID refModelKey() const NOEXCEPT { return key_; }
-
-private:
-    d3d12::RefModelStorage::ID key_;    // store key to release later
-    const Terrain* pTerrain_;
-};
-
-class Terrain : public ecs::Entity {
-public:
-    Terrain() = default;
-
-    Terrain(const Terrain&) = delete;
-    Terrain(Terrain&& other) noexcept;
-    Terrain& operator=(const Terrain&) = delete;
-    Terrain& operator=(Terrain&& other) noexcept;
-    ~Terrain() = default;
-
-    void init( const d3d12::RefModelStorage::ID& identifier,
-        const std::filesystem::path& heightMapPath,
-        const std::filesystem::path& albedoMapPath, mu::Vec3 scale,
-        Core& core, mu::Vec3 offset = mu::Vec3(),
-        std::size_t xDivisions = 1u, std::size_t zDivisions = 1u
-    );
-
-    auto& subsets() noexcept { return subsets_; }
-    const auto& subsets() const noexcept { return subsets_; }
-
-private:
-    d3d12::Bitmap heightMap_;
-    std::vector< std::vector<TerrainSubset> > subsets_;
-    mu::Vec3 scale_;
-};
 
 namespace rp {
 

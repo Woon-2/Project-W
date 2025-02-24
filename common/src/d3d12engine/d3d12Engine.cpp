@@ -76,20 +76,20 @@ void Core::render() {
     fence_.wait();
 }
 
-void Core::loadStaticTexture( const std::filesystem::path& path,
+void Core::loadStaticTexture( const Core::TextureKey& key,
     d3d12::TextureResource::Type type
 ) {
     switch (type) {
     case d3d12::TextureResource::Type::Texture:
-        staticTexStorage_.load(path, type, device_, cmdList_, descRanges_.srvRangeTex2D);
+        staticTexStorage_.load(texturePaths_.at(key), type, device_, cmdList_, descRanges_.srvRangeTex2D);
         break;
 
     case d3d12::TextureResource::Type::TextureArray:
-        staticTexStorage_.load(path, type, device_, cmdList_, descRanges_.srvRangeTex2DArray);
+        staticTexStorage_.load(texturePaths_.at(key), type, device_, cmdList_, descRanges_.srvRangeTex2DArray);
         break;
 
     case d3d12::TextureResource::Type::TextureCube:
-        staticTexStorage_.load(path, type, device_, cmdList_, descRanges_.srvRangeTexCube);
+        staticTexStorage_.load(texturePaths_.at(key), type, device_, cmdList_, descRanges_.srvRangeTexCube);
         break;
 
     default:
@@ -97,10 +97,8 @@ void Core::loadStaticTexture( const std::filesystem::path& path,
     }
 }
 
-void Core::loadRefModel( const std::filesystem::path& path,
-    const d3d12::RefModelStorage::ID& key
-) {
-    refModelStorage_.loadModel(path, key, staticTexStorage_, device_, cmdList_);
+void Core::loadRefModel(const Core::RefModelKey& key) {
+    refModelStorage_.loadModel(key, refModelPaths_.at(key), staticTexStorage_, device_, cmdList_);
 }
 
 void Core::layoutRefModelVBs( const d3d12::RefModelStorage::ID& key, std::size_t vbLayoutIdx,
@@ -121,37 +119,6 @@ void Core::layoutRefModelVBs(const d3d12::RefModelStorage::ID& key, std::size_t 
     }
 
     refModelStorage_.get(key).arrangeVBs(device_, cmdList_, vbLayoutIdx, vbProps);
-}
-
-void Core::loadTerrain( const d3d12::Bitmap& heightMap,
-    const std::filesystem::path& albedoMapPath, const d3d12::RefModelStorage::ID& key,
-    mu::Vec3 scale, std::size_t xDivisions, std::size_t zDivisions
-) {
-    if (!staticTexStorage_.contains(albedoMapPath)) {
-        throw GFX_EXCEPT("[Description] Texture not found: " + albedoMapPath.string());
-    }
-
-    auto albedoMapRef = d3d12::Material::MapRef{
-        .type = etoi(d3d12::Material::MapType::Albedo),
-        .resourceIdx = static_cast<std::uint32_t>( staticTexStorage_.get(albedoMapPath).offset() ),
-        .arrayIdx = 0u,
-        .colorSpace = etoi(d3d12::Material::ColorSpace::SRGB)
-    };
-
-    for (std::size_t i = 0; i < zDivisions; ++i) {
-        for (std::size_t j = 0; j < xDivisions; ++j) {
-            auto serialKey = key + "_" + std::to_string(i) + "_" + std::to_string(j);
-
-            refModelStorage_[serialKey] = d3d12::RefModel::loadTerrainSubsetFromHeightmap(
-                heightMap, device_, cmdList_,
-                static_cast<int>( (heightMap.width() / xDivisions) * j ),
-                static_cast<int>( (heightMap.height() / zDivisions) * i ),
-                static_cast<int>( (heightMap.width() / xDivisions) /* + 1 */),
-                static_cast<int>( (heightMap.height() / zDivisions) /* + 1 */),
-                scale, albedoMapRef
-            );
-        }
-    }
 }
 
 void CoordRoot::addEntity(ecs::Entity& entity) {
@@ -191,8 +158,15 @@ Camera::Camera( const ecs::Entity& entity,
 void Camera::update(float deltaTime) {
     // following camera
     if (pAttachedMovement_ && pAttachedRotation_) {
+        auto offsetRotation = pAttachedRotation_->localXform();
+        offsetRotation.setRow(0, mu::Vec4(mu::NVec3(mu::Vec3(offsetRotation.row(0))), 0.f));
+        offsetRotation.setRow(1, mu::Vec4(mu::NVec3(mu::Vec3(offsetRotation.row(1))), 0.f));
+        offsetRotation.setRow(2, mu::Vec4(mu::NVec3(mu::Vec3(offsetRotation.row(2))), 0.f));
+        // temporary
+        offsetRotation *= mu::rotateY(mu::Degree(90.f));
+
         const auto targetPos = mu::Vec3(pAttachedMovement_->xform().row(3));
-        const auto idealPos = targetPos + offset_;
+        const auto idealPos = targetPos + mu::Vec3( mu::Vec4(offset_, 0.f) * offsetRotation );
         const auto curPos = mu::Vec3(camera_.coordMovement().xform().row(3));
         const auto deltaPos = idealPos - curPos;
 
@@ -208,6 +182,7 @@ void Camera::update(float deltaTime) {
             static constexpr auto endurance = 0.000001f;
             if (std::abs(mu::dot(cameraLook, augmentedLook) - 1.0f) >= endurance) {
                 const auto rotAxis = mu::cross(cameraLook, augmentedLook);
+
                 const auto rotAngle = mu::acos(mu::dot(cameraLook, augmentedLook));
                 up *= mu::rotate(rotAngle, rotAxis);
             }
@@ -301,82 +276,64 @@ ObjectDisposition::ObjectDisposition(std::ifstream& is)
 LevelRegion::LevelRegion(const Core& core)
     : pStream_( std::make_unique<std::ifstream>(resourcePath/"LevelGraph.bin") ),
     model_(core.staticTexStorage(), *pStream_),
-    dispositionRoot_(*pStream_), subEntities_() {}
+    dispositionRoot_(*pStream_), chunks_() {}
 
 void LevelRegion::activateChunk(std::size_t xIdx, std::size_t zIdx, Scene& scene) {
     auto& chunk = model_.get(
         dx::XMUINT2(static_cast<std::uint32_t>(xIdx), static_cast<std::uint32_t>(zIdx))
     );
 
-    subEntities_.emplace_back().embed(&chunk);
-    scene.addEntity(subEntities_.back());
+    chunks_.emplace_back().embed(&chunk);
+    scene.addEntity(chunks_.back());
 }
 
-TerrainSubset::TerrainSubset( const d3d12::RefModelStorage::ID& key,
-    Terrain* pTerrain, Core& core
-) : key_(key), pTerrain_(pTerrain) {
-    createComponent<Coord>();
-    as<Coord>().get().setParent(&pTerrain->as<Coord>().get());
-    createComponent<Model>(key, core, as<Coord>());
-    as<Model>().get().markRenderPass(d3d12::rp::PBRIlluminationTerrain::id);
+std::vector<ecs::Entity> LevelRegion::instantiateAllObjects(const Core& core, coord::System& coordRoot) {
+    auto ret = std::vector<ecs::Entity>();
+
+    instantiateObjectHierarchy(std::nullopt, dispositionRoot_, core, coordRoot, ret);
+
+    return ret;
 }
 
-TerrainSubset::TerrainSubset(TerrainSubset&& other) noexcept
-    : Entity(std::move(other)), key_(std::move(other.key_)),
-    pTerrain_(std::exchange(other.pTerrain_, nullptr)) {}
-
-TerrainSubset& TerrainSubset::operator=(TerrainSubset&& other) noexcept {
-    if (this == &other) {
-        return *this;
-    }
-
-    Entity::operator=(std::move(other));
-    key_ = std::move(other.key_);
-    pTerrain_ = std::exchange(other.pTerrain_, nullptr);
-
-    return *this;
-}
-
-void Terrain::init( const d3d12::RefModelStorage::ID& identifier,
-    const std::filesystem::path& heightMapPath,
-    const std::filesystem::path& albedoMapPath, mu::Vec3 scale,
-    Core& core, mu::Vec3 offset, std::size_t xDivisions, std::size_t zDivisions
+void LevelRegion::instantiateObjectHierarchy( std::optional<std::size_t> parentIdx,
+    const ObjectDisposition& disposition, const Core& core,
+    coord::System& coordRoot, std::vector<ecs::Entity>& out
 ) {
-    heightMap_ = gfx::d3d12::Bitmap(heightMapPath);
-    subsets_.resize(zDivisions);
-    scale_ = scale;
-
-    core.loadTerrain(heightMap_, albedoMapPath, identifier, scale, xDivisions, zDivisions);
-    createComponent<Coord>();
-    as<Coord>().get() << mu::translate(
-        heightMap_.width() * scale.x() * -0.5f + offset.x(),
-        0.f + offset.y(),
-        heightMap_.height() * scale.z() * -0.5f + offset.z()
-    );
-
-    for (std::size_t i = 0; i < zDivisions; ++i) {
-        for (std::size_t j = 0; j < xDivisions; ++j) {
-            auto serialKey = identifier + "_" + std::to_string(i) + "_" + std::to_string(j);
-            subsets_[i].emplace_back(serialKey, this, core);
+    if (disposition.prefabName_.empty()) {
+        for (auto& child : disposition.children_) {
+            instantiateObjectHierarchy(parentIdx, child, core, coordRoot, out);
         }
-    }
-}
-
-Terrain::Terrain(Terrain&& other) noexcept
-    : Entity(std::move(other)), heightMap_(std::move(other.heightMap_)),
-    subsets_(std::move(other.subsets_)), scale_(std::move(other.scale_)) {}
-
-Terrain& Terrain::operator=(Terrain&& other) noexcept {
-    if (this == &other) {
-        return *this;
+        return;
     }
 
-    Entity::operator=(std::move(other));
-    heightMap_ = std::move(other.heightMap_);
-    subsets_ = std::move(other.subsets_);
-    scale_ = std::move(other.scale_);
+    const auto modelKey = disposition.prefabName_.substr(2);
 
-    return *this;
+    auto obj = ecs::Entity();
+
+    if (!core.refModelStorage().contains(modelKey)) {
+        throw GFX_EXCEPT("RefModel not found: " + modelKey);
+    }
+
+    obj.createComponent<Coord>();
+    obj.as<Coord>().get().setLocalXform(disposition.xform_);
+    obj.as<Coord>().get() << mu::translate(0.f, -25.f, 0.f);
+
+    auto& refModel = core.refModelStorage().get(modelKey);
+    obj.createComponent<Model>(modelKey, core, obj.as<Coord>());
+
+    if (parentIdx.has_value()) {
+        obj.as<Coord>().get().setParent(&out[parentIdx.value()].as<Coord>().get());
+    }
+    else {
+        obj.as<Coord>().get().setParent(&coordRoot);
+    }
+
+    out.push_back(std::move(obj));
+    std::size_t myIdx = out.size() - 1;
+
+    for (auto& child : disposition.children_) {
+        instantiateObjectHierarchy(myIdx, child, core, coordRoot, out);
+    }
 }
 
 namespace rp {
@@ -477,7 +434,7 @@ void Tessellation::init(Scene& scene) {
     // for (auto& pModel : models(scene)) {
     //    do nothing
     // }
-    for (auto& pChunk : levelChunks(scene)) {
+    for (auto& pChunk : levelChunkModels(scene)) {
         trackChunk(&pChunk->get());
     }
     if (!cameras(scene).empty()) {
@@ -498,7 +455,7 @@ void Tessellation::update(Scene& scene) {
         // if ( auto pModel = Model::at(entityID) ) {
         //     do nothing
         // }
-        for (auto& pChunk : levelChunks(scene)) {
+        for (auto& pChunk : levelChunkModels(scene)) {
             trackChunk(&pChunk->get());
         }
         if ( auto pCamera = Camera::at(entityID) ) {
@@ -514,7 +471,7 @@ void ShadowMapTessellation::init(Scene& scene) {
     // for (auto& pModel : models(scene)) {
     //    do nothing
     // }
-    for (auto& pChunk : levelChunks(scene)) {
+    for (auto& pChunk : levelChunkModels(scene)) {
         trackChunk(&pChunk->get());
     }
     if (!cameras(scene).empty()) {
@@ -534,7 +491,7 @@ void ShadowMapTessellation::update(Scene& scene) {
         // if ( auto pModel = Model::at(entityID) ) {
         //     do nothing
         // }
-        for (auto& pChunk : levelChunks(scene)) {
+        for (auto& pChunk : levelChunkModels(scene)) {
             trackChunk(&pChunk->get());
         }
         if ( auto pCamera = Camera::at(entityID) ) {

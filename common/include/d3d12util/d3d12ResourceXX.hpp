@@ -5,8 +5,6 @@
 #include "texLoader/DDSTextureLoader12.h"
 #include "coord.hpp"
 
-#include "FreeImage.h"
-
 #include "dxutil/dxexcept.hpp"
 
 #include "vertex.hpp"
@@ -465,44 +463,6 @@ private:
     DXGI_FORMAT indexFormat_;
 };
 
-class Bitmap {
-public:
-    Bitmap()
-        : pBitmap_(nullptr), width_(0u), height_(0u), bits_(nullptr) {}
-
-	Bitmap( const std::filesystem::path& path )
-        : pBitmap_(nullptr), width_(0u), height_(0u), bits_(nullptr) {
-		load( path );
-	}
-
-    Bitmap(const Bitmap&) = delete;
-    Bitmap& operator=(const Bitmap&) = delete;
-    Bitmap(Bitmap&& other) noexcept;
-    Bitmap& operator=(Bitmap&& other) noexcept;
-
-	~Bitmap() {
-		unload();
-	}
-
-	void load( const std::filesystem::path& path );
-    BYTE getGreyscalePixel( size_t x, size_t y ) const;
-	void unload();
-
-    std::size_t width() const noexcept {
-        return width_;
-    }
-
-    std::size_t height() const noexcept {
-        return height_;
-    }
-
-private:
-    FIBITMAP* pBitmap_;
-	std::size_t width_;
-	std::size_t height_;
-	unsigned char* bits_;
-};
-
 class RefMesh;
 
 class RefSubmesh {
@@ -594,12 +554,6 @@ public:
     RefModel& operator=(const RefModel& other) = delete;
     RefModel& operator=(RefModel&& other) noexcept;
 
-    static RefModel loadTerrainSubsetFromHeightmap( const Bitmap& heightmap,
-        D3D12Device& device, D3D12GfxCmdList& cmdList,
-        int xStart, int zStart, int width, int length, mu::Vec3 scale,
-        const Material::MapRef& albedoMapRef
-    );
-
     static RefModel loadHierarchyFromFile( const std::filesystem::path& path,
         D3D12Device& device, D3D12GfxCmdList& cmdList, const StaticTextureStorage& sts
     );
@@ -661,10 +615,14 @@ public:
     }
     
     static RefMesh loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdList, FILE* pInFile);
-    static void loadMaterialsFromFile(D3D12Device& device, D3D12GfxCmdList& cmdList, FILE* pInFile, RefMesh& mesh);
+    static void loadMaterialsFromFile(D3D12Device& device, D3D12GfxCmdList& cmdList,
+        const std::map<Material::MapRef, DescriptorGPU>& textureMap,
+        FILE* pInFile, RefMesh& mesh
+    );
 
 // private:
     static void loadMaterialFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
+        const std::map<Material::MapRef, DescriptorGPU>& textureMap,
         FILE* pInFile, RefMesh& mesh, std::size_t materialIdx
     );
 
@@ -678,7 +636,7 @@ class RefModelStorage {
 public:
     using ID = std::string;
 
-    void loadModel( const std::filesystem::path& path, const ID& key,
+    void loadModel( const ID& key, const std::filesystem::path& path,
         const StaticTextureStorage& sts,
         D3D12Device& device, D3D12GfxCmdList& cmdList
     );

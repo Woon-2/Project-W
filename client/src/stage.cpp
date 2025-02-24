@@ -63,12 +63,21 @@ void Stage::initEntities(gfx::d3d12engine::Core& core) {
         .type = gfx::d3d12::sr::Light::Type::Directional
     });
 
-    scene_.addEntity(player_);
     for (auto i = 0u; i < 3u; ++i) {
         for (auto j = 0u; j < 3u; ++j) {
             level_.activateChunk(i, j, scene_);
         }
     }
+
+    entities_ = level_.instantiateAllObjects(core, pSystems_->coordRoot.get());
+    for (auto& entt : entities_) {
+        entt.createComponent<RigidBody>();
+
+        scene_.addEntity(entt);
+        pSystems_->physicsSystem.addEntity(entt);
+    }
+
+    scene_.addEntity(player_);
     scene_.addEntity(directionalLight_);
 
     pSystems_->coordRoot.addEntity(player_);
@@ -92,8 +101,9 @@ void Stage::loadAssets(gfx::d3d12engine::Core& core) {
 
 void loadTexture(gfx::d3d12engine::Core& core, AssetTexture key) {
     const auto& texInfo = assetTextureInfo(key);
-    for (const auto& path : texInfo.paths) {
-        core.loadStaticTexture(path, texInfo.type);
+    for (auto i = 0ull; i < texInfo.keys.size(); ++i) {
+        core.registTexturePath(texInfo.keys[i], texInfo.paths[i]);
+        core.loadStaticTexture(texInfo.keys[i], texInfo.type);
     }
 }
 
@@ -107,8 +117,9 @@ void Stage::loadTextures(gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdLi
 
 void loadModel(gfx::d3d12engine::Core& core, AssetModel key, Renderer& renderer) {
     auto modelInfo = assetModelInfo(key);
-    core.loadRefModel(modelInfo.path, modelInfo.id);
-    renderer.layoutVBsPBR(core, modelInfo.id, 1);
+    core.registRefModelPath(modelInfo.key, modelInfo.path);
+    core.loadRefModel(modelInfo.key);
+    renderer.layoutVBsPBR(core, modelInfo.key, 1);
 }
 
 void Stage::loadModels(gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdList& cmdList) {

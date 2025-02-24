@@ -122,16 +122,20 @@ HSConstantOutput HSConstant(InputPatch<VSOutput, 4> input)
     float Len11 = length(pos11);
 
 	float zMin = 0.1f;
-	float zMax = 1000.f;
+	float zMax = 100.f;
 
 	// 다시 볼만한 코드
     float Distance00 = clamp((Len00 - zMin) / (zMax - zMin), 0.0, 1.0);
     float Distance01 = clamp((Len01 - zMin) / (zMax - zMin), 0.0, 1.0);
     float Distance10 = clamp((Len10 - zMin) / (zMax - zMin), 0.0, 1.0);
     float Distance11 = clamp((Len11 - zMin) / (zMax - zMin), 0.0, 1.0);
+    Distance00 *= Distance00;
+    Distance01 *= Distance01;
+    Distance10 *= Distance10;
+    Distance11 *= Distance11;
 
     const int MIN_TESS_LEVEL = 1;
-    const int MAX_TESS_LEVEL = 8;
+    const int MAX_TESS_LEVEL = 10;
 
     float TessLevel0 = min( lerp( MAX_TESS_LEVEL, MIN_TESS_LEVEL, min(Distance10, Distance00) ), 6.f );
     float TessLevel1 = min( lerp( MAX_TESS_LEVEL, MIN_TESS_LEVEL, min(Distance00, Distance01) ), 6.f );

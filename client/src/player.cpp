@@ -13,7 +13,7 @@ void Player::init(gfx::d3d12engine::Core& core) {
 	createComponent<RigidBody>();
 	createComponent<PlayerController>();
 	createComponent<gfx::d3d12engine::Coord>();
-	createComponent<gfx::d3d12engine::Model>( assetModelInfo(AssetModel::Helicopter).id,
+	createComponent<gfx::d3d12engine::Model>( assetModelInfo(AssetModel::Helicopter).key,
 		core, as<gfx::d3d12engine::Coord>()
 	);
 	as<gfx::d3d12engine::Model>().get().markRenderPass(
@@ -22,7 +22,6 @@ void Player::init(gfx::d3d12engine::Core& core) {
 	as<gfx::d3d12engine::Model>().get().markRenderPass(
 		gfx::d3d12::rp::ShadowMap::id
 	);
-	as<gfx::d3d12engine::Model>().get().root()->coord() << mu::rotateY(mu::Degree(-90.f));
 }
 
 void MU_CALLCONV Player::addCamera( mu::Vec3 offset, float timeLag,
