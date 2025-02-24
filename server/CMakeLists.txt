@@ -39,12 +39,22 @@ add_executable(server)
 
 target_sources(server
     PRIVATE
+        include/netInclude.hpp
+        include/protocol.hpp
+
         src/main.cpp
 )
 
 include(auto_configure)
+include(win32_configuration)
 
 auto_configure(server PRIVATE)
+define_win32_lighten_macros(server PRIVATE)
+
+target_compile_definitions(server
+    PRIVATE
+        DXMATH_VEC_UTIL DXMATH_MAT_UTIL DXMATH_QUAT_UTIL
+)
 
 target_include_directories(server
     PRIVATE
@@ -54,6 +64,6 @@ target_include_directories(server
 target_link_libraries(server
     PRIVATE
         common::woon2exception
-        common::gfx
+        common::mu
         common::net
 )
