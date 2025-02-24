@@ -1,5 +1,5 @@
-#include "protocol.hpp"
-#include "netInclude.hpp"
+#include "net/protocol.hpp"
+#include "net/netInclude.hpp"
 
 #include <iostream>
 #include <cstdint>

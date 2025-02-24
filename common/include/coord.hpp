@@ -1,10 +1,6 @@
 #ifndef __COORD_HPP
 #define __COORD_HPP
 
-#define DXMATH_VEC_UTIL
-#define DXMATH_MAT_UTIL
-#define DXMATH_QUAT_UTIL
-
 #include "mathUtil.hpp"
 
 #include <utility>
