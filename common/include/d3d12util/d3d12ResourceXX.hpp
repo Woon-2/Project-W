@@ -615,10 +615,14 @@ public:
     }
     
     static RefMesh loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdList, FILE* pInFile);
-    static void loadMaterialsFromFile(D3D12Device& device, D3D12GfxCmdList& cmdList, FILE* pInFile, RefMesh& mesh);
+    static void loadMaterialsFromFile(D3D12Device& device, D3D12GfxCmdList& cmdList,
+        const std::map<Material::MapRef, DescriptorGPU>& textureMap,
+        FILE* pInFile, RefMesh& mesh
+    );
 
 // private:
     static void loadMaterialFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
+        const std::map<Material::MapRef, DescriptorGPU>& textureMap,
         FILE* pInFile, RefMesh& mesh, std::size_t materialIdx
     );
 

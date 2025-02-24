@@ -620,6 +620,7 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
 }
 
 void RefMesh::loadMaterialsFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
+    const std::map<Material::MapRef, DescriptorGPU>& textureMap,
     FILE* pInFile, RefMesh& mesh
 ) {
     char pstrToken[64] = { '\0' };
@@ -646,7 +647,7 @@ void RefMesh::loadMaterialsFromFile( D3D12Device& device, D3D12GfxCmdList& cmdLi
         else if (!strcmp(pstrToken, "<Material:>")) {
             int materialIdx = 0;
             nReads = (UINT)::fread(&materialIdx, sizeof(int), 1, pInFile);
-            loadMaterialFromFile(device, cmdList, pInFile, mesh, materialIdx);
+            loadMaterialFromFile(device, cmdList, textureMap, pInFile, mesh, materialIdx);
         }
         else {
             fclose(pInFile);
@@ -656,6 +657,7 @@ void RefMesh::loadMaterialsFromFile( D3D12Device& device, D3D12GfxCmdList& cmdLi
 }
 
 void RefMesh::loadMaterialFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
+    const std::map<Material::MapRef, DescriptorGPU>& textureMap,
     FILE* pInFile, RefMesh& mesh, std::size_t materialIdx
 ) {
     char pstrToken[64] = { '\0' };
@@ -712,26 +714,31 @@ void RefMesh::loadMaterialFromFile( D3D12Device& device, D3D12GfxCmdList& cmdLis
         else if (!strcmp(pstrToken, "<AlbedoMap:>"))
         {
             nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
+            mapRef.resourceIdx = textureMap.at(mapRef).offset();
             material.addMapRef( Material::MapType::Albedo, mapRef );
         }
         else if (!strcmp(pstrToken, "<NormalMap:>"))
         {
             nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
+            mapRef.resourceIdx = textureMap.at(mapRef).offset();
             material.addMapRef( Material::MapType::Normal, mapRef );
         }
         else if (!strcmp(pstrToken, "<MetallicMap:>"))
         {
             nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
+            mapRef.resourceIdx = textureMap.at(mapRef).offset();
             material.addMapRef( Material::MapType::Metallic, mapRef );
         }
         else if (!strcmp(pstrToken, "<MetallicSmoothnessMap:>"))
         {
             nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
+            mapRef.resourceIdx = textureMap.at(mapRef).offset();
             material.addMapRef( Material::MapType::MetallicSmoothness, mapRef );
         }
         else if (!strcmp(pstrToken, "<EmissionMap:>"))
         {
             nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
+            mapRef.resourceIdx = textureMap.at(mapRef).offset();
             material.addMapRef( Material::MapType::Emmisive, mapRef );
         }
         else {
@@ -1005,7 +1012,7 @@ void RefModel::loadNodesFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
             pstrToken[nStrLength] = '\0';
 
             if (!strcmp(pstrToken, "<Materials:>")) {
-                node.meshes_.back().loadMaterialsFromFile(device, cmdList, pInFile, node.meshes_.back());
+                node.meshes_.back().loadMaterialsFromFile(device, cmdList, model.textureMap_, pInFile, node.meshes_.back());
             }
 		}
 		else if (!strcmp(pstrToken, "<Children:>"))
