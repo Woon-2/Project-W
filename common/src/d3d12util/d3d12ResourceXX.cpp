@@ -1588,16 +1588,16 @@ void LevelChunkModel::draw(D3D12GfxCmdList& cmdList) const {
 mu::Mat4x4 MU_CALLCONV LevelChunkModel::idxToWorld() const {
     // temporary
     return mu::translate(
-        0.f + (33.f - 33.f / 256.f) * static_cast<float>(idx_.x),
+        0.f + (33.f - 33.f / 16.f) * static_cast<float>(idx_.x),
         -25.f + 0.f,
-        0.f + (33.f - 33.f / 256.f) * static_cast<float>(idx_.y)
+        0.f + (33.f - 33.f / 16.f) * static_cast<float>(idx_.y)
     );
 }
 
 void LevelChunkModel::initChunkMesh(D3D12Device& device, D3D12GfxCmdList& cmdList) {
-    // construct 256x256 size, 100m x 100m area patch
-    static constexpr auto patchWidth = 256;
-    static constexpr auto patchLength = 256;
+    // construct 16x16 size, 100m x 100m area patch
+    static constexpr auto patchWidth = 16;
+    static constexpr auto patchLength = 16;
 
     // construct vertex buffer
     std::vector<std::uint8_t> vbMem(patchWidth * patchLength * sizeof(PatchVertex));
