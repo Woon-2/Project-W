@@ -7,6 +7,7 @@
 
 #include <cstdint>
 
+inline constexpr const char* SERVERIP = "127.0.0.1";
 inline constexpr std::uint16_t PORT = 7777;
 inline constexpr auto maxConnection = 5;
 

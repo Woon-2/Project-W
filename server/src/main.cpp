@@ -19,66 +19,8 @@
 
 RigidXform gXforms[maxConnection];
 
-class IDPool {
-public:
-    static void initList() {
-        idList_.resize(maxConnection);
-        std::iota(idList_.begin(), idList_.end(), 0u);
-    }
-
-    static std::optional<std::uint16_t> allocID() {
-        if(idList_.empty()){
-            return std::nullopt;
-        }
-
-        auto id = idList_.front();
-        idList_.pop_front();
-
-        return id;
-    }
-
-    static void deallocID(std::uint16_t id) {
-        idList_.push_front(id);
-    }
-    
-    private:
-    static std::forward_list<std::uint16_t> idList_;
-};
-
-std::forward_list<std::uint16_t> IDPool::idList_;
 std::list<Session> gSessions;
 std::deque<Packet> gBroadcastQueue;
-
-Session::~Session() {
-    if (id_ != -1) {
-        IDPool::deallocID(id_);
-        if (sock_ != INVALID_SOCKET) {
-            closesocket(sock_);
-        }
-    }
-}
-
-Session::Session(SOCKET sock)
-    : sock_(sock), id_(-1) {
-    if (auto allocatedId = IDPool::allocID()) {
-        id_ = allocatedId.value();
-    }
-}
-
-Session::Session(Session&& rhs) noexcept
-    : sock_(std::exchange(rhs.sock_, INVALID_SOCKET))
-    , id_(std::exchange(rhs.id_, -1)) {}
-
-Session& Session::operator=(Session&& other) noexcept {
-    if (this == &other) {
-        return *this;
-    }
-
-    sock_ = std::exchange(other.sock_, INVALID_SOCKET);
-    id_ = std::exchange(other.id_, -1);
-
-    return *this;
-}
 
 
 //std::forward_list<std::uint16_t> IDPool::idList_(std::numeric_limits<std::uint16_t>::max());
@@ -93,6 +35,7 @@ void recvPacket(Session& session) {
 
     switch(packet.type) {
         case PacketType::CSHello:
+            std::cout << "Received Hello From Client!\n";
             session.enqueuePacket(
                 Packet{
                     .type = PacketType::SCAssign,
@@ -208,6 +151,9 @@ int main()
             if (clientSocket == INVALID_SOCKET) {
                 std::cerr << "accept failed\n";
                 break;
+            }
+            else {
+                std::cout << "Client Connected\n";
             }
 
             int flag = 1;

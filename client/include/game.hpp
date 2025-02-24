@@ -5,7 +5,9 @@
 
 #include "mouseWin32Adaptor.hpp"
 #include "keyboardWin32Adaptor.hpp"
+
 #include "d3d12engine/d3d12Engine.hpp"
+
 #include "Timer.hpp"
 #include "systems.hpp"
 #include "renderer.hpp"
@@ -30,9 +32,13 @@ private:
     void update();
     void render();
 
+    void initNetwork();
+
     void setupWndMsgHandlers();
     void initialRender();
     void regularRender();
+
+    Session session_;
 
     gfx::d3d12engine::Core core_;
 

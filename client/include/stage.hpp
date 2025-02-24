@@ -1,6 +1,10 @@
 #ifndef __Stage_HPP
 #define __Stage_HPP
 
+#include "net/netInclude.hpp"
+#include "net/protocol.hpp"
+#include "net/session.hpp"
+
 #include "ecs.hpp"
 #include "systems.hpp"
 #include "player.hpp"
@@ -19,9 +23,9 @@ public:
 
 class Stage {
 public:
-    Stage(gfx::d3d12engine::Core& core, Systems& systems, Renderer& renderer) NOEXCEPT
+    Stage(gfx::d3d12engine::Core& core, Systems& systems, Renderer& renderer, Session& session) NOEXCEPT
         : player_(), directionalLight_(), level_(),
-        scene_(), entities_(), pSystems_(&systems), pRenderer_(&renderer) {
+        scene_(), entities_(), pSession_(&session), pSystems_(&systems), pRenderer_(&renderer) {
         init(core);
     }
 
@@ -45,6 +49,7 @@ private:
     gfx::d3d12engine::LevelRegion level_;
     gfx::d3d12engine::Scene scene_;
     std::vector<ecs::Entity> entities_;
+    Session* pSession_;
     Systems* pSystems_;
     Renderer* pRenderer_;
 };

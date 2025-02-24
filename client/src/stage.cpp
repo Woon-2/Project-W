@@ -25,7 +25,7 @@ void Stage::render(gfx::d3d12engine::Core& core) {
 }
 
 void Stage::processNetwork(double deltaTime) {
-    // networkSystem_.update();
+    pSession_->flushPackets();
 }
 
 void Stage::processInput(double deltaTime) {

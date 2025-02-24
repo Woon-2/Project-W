@@ -11,7 +11,7 @@
 using namespace std::literals;
 
 Game::Game()
-    : core_(), mouse_(), keyboard_(), renderer_(core_), systems_(keyboard_),
+    : session_(), core_(), mouse_(), keyboard_(), renderer_(core_), systems_(keyboard_),
     timer_(), pStage_(), lockFPS_(defLockFPS) {
     setupWndMsgHandlers();
 }
@@ -19,7 +19,9 @@ Game::Game()
 int Game::run() {
     try {
 
-    pStage_ = std::make_unique<Stage>(core_, systems_, renderer_);
+    initNetwork();
+
+    pStage_ = std::make_unique<Stage>(core_, systems_, renderer_, session_);
 
     for(;;) {
         if (auto returnCode = core_.window().processMessages()) {
@@ -59,6 +61,39 @@ void Game::update() {
 
 void Game::render() {
     pStage_->render(core_);
+}
+
+void Game::initNetwork() {
+    WSADATA wsaData;
+    if (::WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        std::cerr << "WSAStartup failed\n";
+        return;
+    }
+
+    auto sock = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (sock == INVALID_SOCKET) {
+        std::cerr << "socket failed\n";
+        return;
+    }
+
+    sockaddr_in serverAddr{};
+    serverAddr.sin_family = AF_INET;
+    ::inet_pton(AF_INET, SERVERIP, &serverAddr.sin_addr);
+    serverAddr.sin_port = ::htons(PORT);
+
+    if (::connect(sock, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) == SOCKET_ERROR) {
+        std::cerr << "connect failed\n";
+        return;
+    }
+
+    session_ = Session(sock);
+
+    session_.enqueuePacket(
+        Packet{
+            .type = PacketType::CSHello,
+            .size = sizeof(CSHello)
+        }
+    );
 }
 
 void Game::setupWndMsgHandlers() {
