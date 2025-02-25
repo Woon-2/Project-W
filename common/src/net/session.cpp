@@ -4,7 +4,7 @@
 #include <iostream>
 
 void IDPool::initList() {
-    idList_.resize(maxConnection);
+    idList_.resize(maxConnection * 2);
     std::iota(idList_.begin(), idList_.end(), 0u);
 }
 
@@ -58,7 +58,7 @@ void Session::flushPackets() {
     while (!sendQueue_.empty()) {
         auto& packet = sendQueue_.front();
         auto sendSize = ::send(sock_, reinterpret_cast<const char*>(&packet), sizeof(Packet), 0);
-        if (sendSize == SOCKET_ERROR) {
+        if (sendSize == SOCKET_ERROR && WSAGetLastError() != WSAEWOULDBLOCK) {
             std::cerr << "send failed\n";
             break;
         }

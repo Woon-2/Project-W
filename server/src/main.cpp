@@ -83,11 +83,11 @@ void fillBroadcastQueue() {
 
 void initXforms() {
     // temporary
-    gXforms[0].pos = {52.94f, 14.82f, 43.68f};
-    gXforms[1].pos = {50.29f, 21.f, 56.59f};
-    gXforms[2].pos = {30.22f, 21.5f, 52.51f};
-    gXforms[3].pos = {41.4f, 16.f, 46.1f};
-    gXforms[4].pos = {41.5f, 17.5f, 39.3f};
+    gXforms[0].pos = {52.94f, 14.82f - 25.f, 43.68f};
+    gXforms[1].pos = {50.29f, 21.f - 25.f, 56.59f};
+    gXforms[2].pos = {30.22f, 21.5f - 25.f, 52.51f};
+    gXforms[3].pos = {41.4f, 16.f - 25.f, 46.1f};
+    gXforms[4].pos = {41.5f, 17.5f - 25.f, 39.3f};
 }
 
 int main()
@@ -159,11 +159,10 @@ int main()
             int flag = 1;
             setsockopt(clientSocket, IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(flag));
 
-            if(auto id = IDPool::allocID()) {
-                gSessions.emplace_back(clientSocket);
-            }
-            else {
+            
+            if (gSessions.emplace_back(clientSocket).id() == -1) {
                 ::closesocket(clientSocket);
+                gSessions.pop_back();
             }
         }
 

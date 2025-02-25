@@ -60,7 +60,7 @@ void Game::update() {
 }
 
 void Game::render() {
-    pStage_->render(core_);
+    pStage_->render();
 }
 
 void Game::initNetwork() {
@@ -86,7 +86,7 @@ void Game::initNetwork() {
         return;
     }
 
-    session_ = Session(sock);
+    session_ = Session(sock, -1u);
 
     session_.enqueuePacket(
         Packet{
@@ -94,6 +94,19 @@ void Game::initNetwork() {
             .size = sizeof(CSHello)
         }
     );
+
+    // non-blocking socket
+    u_long mode = 1;
+    if ( ioctlsocket(session_.sock(), FIONBIO, &mode) == SOCKET_ERROR ) {
+        std::cerr << "ioctlsocket failed\n";
+        throw;
+    }
+
+    // disable nagle algorithm
+    int flag = 1;
+    setsockopt(session_.sock(), IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(flag));
+
+    session_.flushPackets();
 }
 
 void Game::setupWndMsgHandlers() {

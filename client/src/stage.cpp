@@ -5,26 +5,94 @@
 
 #include <ranges>
 
-void Stage::init(gfx::d3d12engine::Core& core) {
-    loadAssets(core);
+void Stage::init() {
+    loadAssets();
 
-    initEntities(core);
+    initEntities();
     pSystems_->coordRoot.update();
-    pRenderer_->init(scene_);
 }
 
 void Stage::update(double deltaTime) {
-    processNetwork(deltaTime);
+    processPackets(deltaTime);
     processInput(deltaTime);
     simulate(deltaTime);
+    updateNetwork(deltaTime);
 }
 
-void Stage::render(gfx::d3d12engine::Core& core) {
-    core.render(*pRenderer_, scene_);
-    scene_.clearStash();
+void Stage::render() {
+    if (pPlayer_) {
+        pCore_->render(*pRenderer_, scene_);
+        scene_.clearStash();
+    }
 }
 
-void Stage::processNetwork(double deltaTime) {
+void Stage::processPackets(double deltaTime) {
+    for (;;) {
+        Packet recvPacket{};
+        auto recvBytes = ::recv(pSession_->sock(), reinterpret_cast<char*>(&recvPacket), sizeof(Packet), 0);
+        if (recvBytes == SOCKET_ERROR) {
+            return;
+        }
+
+        const auto cameraOffset = mu::Vec3(0.f, 4.8f, -10.f);
+        const auto cameraTimeLag = 1.f;
+
+        static int fuck = 0;
+
+        switch (recvPacket.type) {
+        case PacketType::SCAssign: {
+            pSession_->setId(recvPacket.scAssign.id);
+            pPlayer_ = &entities_[recvPacket.scAssign.id];
+            pPlayer_->createComponent<PlayerController>();
+
+            pPlayer_->createComponent<gfx::d3d12engine::Camera>(gfx::d3d12::Camera::Config());
+            auto& camera = pPlayer_->as<gfx::d3d12engine::Camera>();
+            camera.get().coordMovement() << mu::translate(cameraOffset);
+            camera.get().coordRotation().setLocalXform(
+                mu::transpose(mu::lookAt(mu::Vec3(), -cameraOffset, mu::Vec3(0.f, 1.f, 0.f)))
+            );
+            camera.get().coordMovement().setParent(&pSystems_->coordRoot.get());
+            camera.setOffset(cameraOffset);
+            camera.setTimeLag(cameraTimeLag);
+            camera.attach(pPlayer_->as<gfx::d3d12engine::Model>());
+
+            pSystems_->coordRoot.addEntity(*pPlayer_);
+            pSystems_->inputSystem.addEntity(*pPlayer_);
+            pSystems_->physicsSystem.addEntity(*pPlayer_);
+
+            initScene();
+            break;
+        }
+
+        case PacketType::SCWorld:
+            for (auto i = 0u; i < maxConnection; ++i) {
+                if (i == pSession_->id()) {
+                    continue;
+                }
+                auto& xform = recvPacket.scWorld.xforms[i];
+
+                entities_[i].as<gfx::d3d12engine::Coord>().get().setLocalXform(mu::translate(xform.pos));
+                entities_[i].as<gfx::d3d12engine::Model>().get().root()->coord().setLocalXform(mu::Mat4x4(xform.rot));
+            }
+            break;
+        }
+    }
+}
+
+void Stage::updateNetwork(double deltaTime) {
+    if (pPlayer_) {
+        pSession_->enqueuePacket(Packet{
+            .type = PacketType::CSWorld,
+            .size = sizeof(CSWorld),
+            .csWorld = {
+                .xform = {
+                    .pos = pPlayer_->as<gfx::d3d12engine::Coord>().get().localXform().row(3),
+                    .rot = mu::NQuat(mu::quatRotMat(pPlayer_->as<gfx::d3d12engine::Model>().get().root()->coord().localXform()))
+                }
+            }
+        });
+    }
+
     pSession_->flushPackets();
 }
 
@@ -36,17 +104,26 @@ void Stage::processInput(double deltaTime) {
 
 void Stage::simulate(double deltaTime) {
     pSystems_->physicsSystem.update(static_cast<float>(deltaTime));
-    player_.update(static_cast<float>(deltaTime));
+
+    if (pPlayer_) {
+        pPlayer_->as<gfx::d3d12engine::Coord>().get()
+		    << mu::translate( pPlayer_->as<RigidBody>().deltaPosition()
+        );
+    }
+
     pSystems_->coordRoot.update();
 
-    player_.postUpdate(deltaTime);
+    if (pPlayer_) {
+        pPlayer_->as<gfx::d3d12engine::Camera>().update(deltaTime);
+        pPlayer_->as<gfx::d3d12engine::Camera>().get().updateView();
+    }
 }
 
-void Stage::initEntities(gfx::d3d12engine::Core& core) {
-    player_.init(core);
-    player_.addCamera(mu::Vec3(0.f, 4.8f, -10.f), 1.f, pSystems_->coordRoot);
-    player_.as<gfx::d3d12engine::Coord>().get() << mu::translate(0.f, 2.5f, 0.f);
+void Stage::initEntities() {
+    entities_ = level_.instantiateAllObjects(*pCore_, pSystems_->coordRoot.get());
+}
 
+void Stage::initScene() {
     directionalLight_.init(gfx::d3d12::WorldLight{
         .config = gfx::d3d12::WorldLight::Config{
             .ortho = {
@@ -69,34 +146,32 @@ void Stage::initEntities(gfx::d3d12engine::Core& core) {
         }
     }
 
-    entities_ = level_.instantiateAllObjects(core, pSystems_->coordRoot.get());
     for (auto& entt : entities_) {
+        entt.as<gfx::d3d12engine::Model>().get().markRenderPass(gfx::d3d12::rp::PBRIllumination::id);
+        entt.as<gfx::d3d12engine::Model>().get().markRenderPass(gfx::d3d12::rp::ShadowMap::id);
         entt.createComponent<RigidBody>();
 
         scene_.addEntity(entt);
         pSystems_->physicsSystem.addEntity(entt);
     }
 
-    scene_.addEntity(player_);
     scene_.addEntity(directionalLight_);
 
-    pSystems_->coordRoot.addEntity(player_);
-    pSystems_->inputSystem.addEntity(player_);
-    pSystems_->physicsSystem.addEntity(player_);
-
     scene_.clearStash();
+
+    pRenderer_->init(scene_);
 }
 
-void Stage::loadAssets(gfx::d3d12engine::Core& core) {
-    auto cmdList = core.fetchCmdList();
+void Stage::loadAssets() {
+    auto cmdList = pCore_->fetchCmdList();
 
-    core.prepareGPUResLoad();
+    pCore_->prepareGPUResLoad();
 
-    loadTextures(core, cmdList);
-    loadModels(core, cmdList);
-    loadLevel(core, cmdList);
+    loadTextures(cmdList);
+    loadModels(cmdList);
+    loadLevel(cmdList);
 
-    core.finishGPUResLoad();
+    pCore_->finishGPUResLoad();
 }
 
 void loadTexture(gfx::d3d12engine::Core& core, AssetTexture key) {
@@ -107,12 +182,12 @@ void loadTexture(gfx::d3d12engine::Core& core, AssetTexture key) {
     }
 }
 
-void Stage::loadTextures(gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdList& cmdList) {
-    loadTexture(core, AssetTexture::Helicopter);
-    loadTexture(core, AssetTexture::Tree0);
-    loadTexture(core, AssetTexture::Tree1);
-    loadTexture(core, AssetTexture::Tree2);
-    loadTexture(core, AssetTexture::Terrain);
+void Stage::loadTextures(gfx::d3d12::D3D12GfxCmdList& cmdList) {
+    loadTexture(*pCore_, AssetTexture::Helicopter);
+    loadTexture(*pCore_, AssetTexture::Tree0);
+    loadTexture(*pCore_, AssetTexture::Tree1);
+    loadTexture(*pCore_, AssetTexture::Tree2);
+    loadTexture(*pCore_, AssetTexture::Terrain);
 }
 
 void loadModel(gfx::d3d12engine::Core& core, AssetModel key, Renderer& renderer) {
@@ -122,14 +197,14 @@ void loadModel(gfx::d3d12engine::Core& core, AssetModel key, Renderer& renderer)
     renderer.layoutVBsPBR(core, modelInfo.key, 1);
 }
 
-void Stage::loadModels(gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdList& cmdList) {
-    core.initChunkMesh(cmdList);
-    loadModel(core, AssetModel::Helicopter, *pRenderer_);
-    loadModel(core, AssetModel::Tree0, *pRenderer_);
-    loadModel(core, AssetModel::Tree1, *pRenderer_);
-    loadModel(core, AssetModel::Tree2, *pRenderer_);
+void Stage::loadModels(gfx::d3d12::D3D12GfxCmdList& cmdList) {
+    pCore_->initChunkMesh(cmdList);
+    loadModel(*pCore_, AssetModel::Helicopter, *pRenderer_);
+    loadModel(*pCore_, AssetModel::Tree0, *pRenderer_);
+    loadModel(*pCore_, AssetModel::Tree1, *pRenderer_);
+    loadModel(*pCore_, AssetModel::Tree2, *pRenderer_);
 }
 
-void Stage::loadLevel(gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdList& cmdList) {
-    level_ = gfx::d3d12engine::LevelRegion(core);
+void Stage::loadLevel(gfx::d3d12::D3D12GfxCmdList& cmdList) {
+    level_ = gfx::d3d12engine::LevelRegion(*pCore_);
 }

@@ -1463,6 +1463,12 @@ inline const Quat XM_CALLCONV quatRotAxis(
     return dx::XMQuaternionRotationAxis(axis, angle);
 }
 
+inline const Quat XM_CALLCONV quatRotAxis(
+    mu::Vec3 axis, Radian angle
+) __MathUtil_NOEXCEPT {
+    return quatRotAxis(axis.get(), angle);
+}
+
 inline const Quat XM_CALLCONV quatRotMat(
     dx::FXMMATRIX mat
 ) __MathUtil_NOEXCEPT {
@@ -1791,6 +1797,18 @@ inline const Mat<4, 4> XM_CALLCONV rotateZH(Degree angle) __MathUtil_NOEXCEPT {
 
 inline const Mat<4, 4> XM_CALLCONV rotateRPYH(Radian roll, Radian pitch, Radian yaw) __MathUtil_NOEXCEPT {
     return dx::XMMatrixRotationRollPitchYaw(pitch, yaw, roll);
+}
+
+inline const Quat XM_CALLCONV quatRotMat(
+    mu::Mat<3, 3> mat
+) __MathUtil_NOEXCEPT {
+    return quatRotMat(mat.get());
+}
+
+inline const Quat XM_CALLCONV quatRotMat(
+    mu::Mat<4, 4> mat
+) __MathUtil_NOEXCEPT {
+    return quatRotMat(mat.get());
 }
 
 inline const Mat<3, 3> XM_CALLCONV transpose(Mat<3, 3> mat) __MathUtil_NOEXCEPT {

@@ -29,6 +29,8 @@ public:
     ~Session();
 
     Session(SOCKET sock);
+    Session(SOCKET sock, std::uint32_t id)
+        : sock_(sock), id_(id) {}
 
     Session(const Session&) = delete;
     Session& operator=(const Session&) = delete;
