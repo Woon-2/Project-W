@@ -67,6 +67,7 @@ target_link_libraries(client
         common::woon2exception
         common::win32
         common::gfx
+        common::mu
         common::input
         common::net
 )

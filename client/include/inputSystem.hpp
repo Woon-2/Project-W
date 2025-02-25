@@ -36,7 +36,7 @@ public:
     ENABLE_COMPONENT(PlayerController);
 
     PlayerController(const ecs::Entity& entity) NOEXCEPT
-        : Component(entity), forceStep_(800.f), yawStep_(0.6f * mu::pi) {}
+        : Component(entity), forceStep_(1600.f), yawStep_(0.6f * mu::pi) {}
 
     void handleEvent(Event event, float deltaTime, const ControllerAdapters& controllerAdapters);
 

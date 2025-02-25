@@ -82,6 +82,11 @@ add_library(common::mu ALIAS mu)
 
 auto_configure(mu INTERFACE)
 
+target_compile_definitions(mu
+    INTERFACE
+        DXMATH_VEC_UTIL DXMATH_MAT_UTIL DXMATH_QUAT_UTIL
+)
+
 target_include_directories(mu
     INTERFACE
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
@@ -265,16 +270,20 @@ add_dependencies(gfx hlsl)
 
 # === net ===
 add_library(net
-    src/net.cpp include/net.hpp
+    src/net/session.cpp include/net/session.hpp
+
+    include/net/protocol.hpp
+    include/net/netInclude.hpp
 )
 
 add_library(common::net ALIAS net)
 
 auto_configure(net PRIVATE)
+define_win32_lighten_macros(net PUBLIC)
 
 target_link_libraries(net
     PRIVATE
-        common::woon2exception
+        common::mu
         ws2_32.lib
 )
 
