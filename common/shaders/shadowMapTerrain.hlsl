@@ -102,13 +102,17 @@ HSConstantOutput HSConstant(InputPatch<VSOutput, 4> input)
     float Len11 = length(pos11);
 
 	float zMin = 0.1f;
-	float zMax = 1000.f;
+	float zMax = 100.f;
 
 	// 다시 볼만한 코드
     float Distance00 = clamp((Len00 - zMin) / (zMax - zMin), 0.0, 1.0);
     float Distance01 = clamp((Len01 - zMin) / (zMax - zMin), 0.0, 1.0);
     float Distance10 = clamp((Len10 - zMin) / (zMax - zMin), 0.0, 1.0);
     float Distance11 = clamp((Len11 - zMin) / (zMax - zMin), 0.0, 1.0);
+    Distance00 *= Distance00;
+    Distance01 *= Distance01;
+    Distance10 *= Distance10;
+    Distance11 *= Distance11;
 
     const int MIN_TESS_LEVEL = 1;
     const int MAX_TESS_LEVEL = 8;
@@ -157,7 +161,9 @@ DSOutput DSMain(HSConstantOutput input, float2 uv : SV_DomainLocation, const Out
     float2 texcoord = lerp(t0, t1, uv.y);          // final interpolation
 
     // sample the height from the height map
-	float height = sampleLevelFromMapRef(heightMapRef, texcoord, 0.f, heightMapSamplerIdx).r;
+	uint4 heightPixel = sampleLevelFromMapRef(heightMapRef, texcoord, 0.f, heightMapSamplerIdx) * 255;
+    uint heightInt = heightPixel.r | (heightPixel.g << 8) | (heightPixel.b << 16) | (heightPixel.a << 24);
+    float height = asfloat(heightInt) * 50.f;
 
     // get the position for each vertex
     float3 p00 = patch[0].pos;
@@ -170,7 +176,7 @@ DSOutput DSMain(HSConstantOutput input, float2 uv : SV_DomainLocation, const Out
     float3 p1 = lerp(p10, p11, uv.x);
     output.pos = float4( lerp(p0, p1, uv.y), 1.f );
     
-    output.pos.y += height * 50.f;  // add the sampled height
+    output.pos.y += height;  // add the sampled height
 
     // transform from local to light space
 	output.pos = mul(

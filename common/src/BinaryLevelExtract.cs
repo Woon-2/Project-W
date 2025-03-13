@@ -129,27 +129,33 @@ public class BinaryLevelExtract : MonoBehaviour
 
     private void SaveHeightMapAsImage(Terrain terrain, float[,] heights, int resolution, string terrainName)
     {
-        Texture2D heightMapTexture = new Texture2D(resolution, resolution, TextureFormat.R8, false);
+        Texture2D heightMapTexture = new Texture2D(resolution, resolution, TextureFormat.RGBA32, false);
+        byte[] rawData = new byte[resolution * resolution * 4];
 
         for (int y = 0; y < resolution; y++)
         {
             for (int x = 0; x < resolution; x++)
             {
                 float normalizedHeight = heights[y, x];
-                // temporary
-                normalizedHeight *= 20.0f;
+                normalizedHeight *= 20.0f; // Temporary scaling
 
-                byte grayValue = (byte)(normalizedHeight * 255);  // Convert to 0-255 range
-                Color heightColor = new Color32(grayValue, grayValue, grayValue, 255);
-                heightMapTexture.SetPixel(x, y, heightColor);
+                byte[] floatBytes = System.BitConverter.GetBytes(normalizedHeight); // Convert float to byte array
+                
+                int index = (y * resolution + x) * 4;
+                rawData[index] = floatBytes[0];       // Low byte
+                rawData[index + 1] = floatBytes[1];
+                rawData[index + 2] = floatBytes[2];
+                rawData[index + 3] = floatBytes[3];   // High byte
             }
         }
+
+        heightMapTexture.LoadRawTextureData(rawData);
         heightMapTexture.Apply();
 
-        byte[] jpgBytes = heightMapTexture.EncodeToJPG();
-        File.WriteAllBytes($"{terrainName}_HeightMap.jpg", jpgBytes);
+        byte[] pngBytes = heightMapTexture.EncodeToPNG();
+        File.WriteAllBytes(terrainName + "_HeightMap.png", pngBytes);
 
-        Debug.Log($"Height map for {terrainName} saved to {terrainName}_HeightMap.jpg");
+        Debug.Log("Height map for " + terrainName + " saved to " + terrainName + "_HeightMap.png");
     }
 
     private void ExtractAllObjectsData(BinaryWriter writer)

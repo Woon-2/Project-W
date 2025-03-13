@@ -50,7 +50,7 @@ float GeometrySchlickGGX(float NV, float roughness) {
 }
 
 float GeometrySmith(float NV, float NL, float roughness) {
-	float ggx2 = GeometrySchlickGGX(NV, roughness);
+	float ggx2 = max(GeometrySchlickGGX(NV, roughness), 0.00002f);
 	float ggx1 = GeometrySchlickGGX(NL, roughness);
 	return ggx1 * ggx2;
 }

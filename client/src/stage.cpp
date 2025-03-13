@@ -133,7 +133,7 @@ void Stage::initScene() {
                 .farZ = 1600.f
             }
         },
-        .color = mu::Vec3(1.f, 1.f, 1.f),
+        .color = mu::Vec3(1.f, 0.92f, 0.76f),
         .dir = mu::NVec3(0.f, -1.f, 1.f),
         .intensity = 5.0f,
         .distanceToCamera = 800.f,
