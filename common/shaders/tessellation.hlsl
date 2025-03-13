@@ -229,13 +229,13 @@ DSOutput DSMain(HSConstantOutput input, float2 uv : SV_DomainLocation, const Out
 	float rHeight = sampleLevelFromMapRef2DOffset(heightMapRef, output.texcoord, 0.f, int2(1, 0), heightMapSamplerIdx).r;
 	float bHeight = sampleLevelFromMapRef2DOffset(heightMapRef, output.texcoord, 0.f, int2(0, -1), heightMapSamplerIdx).r;
 
-    float3 tangentM = rHeight - lHeight;
-    float3 bitangentM = tHeight - bHeight;
-	float3 normalM = cross(tangentM, bitangentM);
+    float3 tangentM = float3(1.f / input.tessInsideFactors[0], rHeight - lHeight, 0.f);
+    float3 bitangentM = float3(0.f, tHeight - bHeight, 1.f / input.tessInsideFactors[1]);
+	float3 normalM = cross(bitangentM, tangentM);
     tangentM = normalize(tangentM);
     bitangentM = normalize(bitangentM);
 	const float epsilon = 0.0005f;
-	if (length(normalM < epsilon)) {
+	if (length(normalM) < epsilon) {
 		normalM = float3(0.f, 1.f, 0.f);
         tangentM = float3(1.f, 0.f, 0.f);
         bitangentM = float3(0.f, 0.f, 1.f);
@@ -266,7 +266,8 @@ float4 PSMain(DSOutput input) : SV_TARGET {
 		N = mul(normal, TBN);
 	}
 
+    // return float4(N * 0.5f + 0.5f, 1.f);
     // return float4(input.texcoord, 0.f, 1.f);
     // return accumulateLighting(input.posV, N, input.tileTexCoord);
-    return illuminate(input.posV, input.posL, input.normalV, input.tileTexCoord);
+    return illuminate(input.posV, input.posL, N, input.tileTexCoord);
 }

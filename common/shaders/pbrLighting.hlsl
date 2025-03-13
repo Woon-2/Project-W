@@ -40,7 +40,7 @@ float distribute(float NH, float roughness) {
 }
 
 float GeometrySchlickGGX(float NV, float roughness) {
-	float r = (roughness + 1.f);
+	float r = roughness + 1.f;
 	float k = (r*r) / 8.f;
 
 	float nom = NV;
@@ -113,7 +113,7 @@ float3 dirLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 norma
     float3 kD = float3(1.f, 1.f, 1.f) - F;
     kD *= 1.f - metallic;
     kD *= albedo / PI;
-    float3 specular = D * F * G / max(4 * NV * NL, 0.001f);
+    float3 specular = F * D * G / max(4 * NV * NL, 0.0001f);
 
     return gLights[lightIdx].color * gLights[lightIdx].intensity * (kD + specular) * NL;
 }
