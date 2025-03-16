@@ -9,15 +9,17 @@ namespace gfx {
 namespace d3d12engine {
 
 Core::Core()
-    : staticTexStorage_(), factory_(),
+    : staticTexStorage_(), factory_(), samStorage_(),
     device_( d3d12::getAvailableAdapter(factory_, D3D_FEATURE_LEVEL_12_1), D3D_FEATURE_LEVEL_12_1 ),
     cmdQueue_( device_ ), cmdList_( device_ ),
     rtvHeap_(device_, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, initialRtvHeapSize),
     dsvHeap_(device_, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, initialDsvHeapSize),
+    samHeap_(device_, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, initialSamHeapSize),
     cbvSrvUavHeap_(device_, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, initialCbvSrvUavHeapSize),
-    descRanges_(rtvHeap_, dsvHeap_, cbvSrvUavHeap_),
+    descRanges_(rtvHeap_, dsvHeap_, samHeap_, cbvSrvUavHeap_),
     window_(), fence_(device_) {
     d3d12::UnifiedRoot::init(device_);
+    samStorage_.init(device_, descRanges_.samRange, descRanges_.samCmpRange);
     window_.open( factory_, device_, cmdQueue_, "Project-W",
         Win32::WndFrame{ .x = 100, .y = 100, .width = 1600, .height = 900 },
         descRanges_.rtvRangeBackBuf, descRanges_.dsvRangeBackBuf
@@ -33,7 +35,13 @@ void Core::render(IRenderer& renderer, Scene& scene) {
     const auto unifiedRoot = d3d12::UnifiedRoot::get();
     cmdList_.get()->SetGraphicsRootSignature(unifiedRoot.get().Get());
     cmdList_.get()->SetComputeRootSignature(unifiedRoot.get().Get());
-    cbvSrvUavHeap_.set(cmdList_.get().Get());
+    d3d12::DescriptorHeapGPU::set(cmdList_.get().Get(), cbvSrvUavHeap_, samHeap_);
+    descRanges_.samRange.bind( cmdList_, unifiedRoot.params[
+        d3d12::UnifiedRoot::ParamIndices::BindlessSampler
+    ]);
+    descRanges_.samCmpRange.bind( cmdList_, unifiedRoot.params[
+        d3d12::UnifiedRoot::ParamIndices::BindlessSamplerComparison
+    ]);
     descRanges_.srvRangeTex2D.bind( cmdList_, unifiedRoot.params[
         d3d12::UnifiedRoot::ParamIndices::BindlessTex2D
     ] );
@@ -64,7 +72,7 @@ void Core::render() {
     cmdList_.reset();
     cmdList_.get()->SetGraphicsRootSignature(d3d12::UnifiedRoot::get().get().Get());
     cmdList_.get()->SetComputeRootSignature(d3d12::UnifiedRoot::get().get().Get());
-    cbvSrvUavHeap_.set(cmdList_.get().Get());
+    d3d12::DescriptorHeapGPU::set(cmdList_.get().Get(), cbvSrvUavHeap_, samHeap_);
     window_.setRenderTarget(cmdList_);
     window_.clearRenderTarget(cmdList_);
     window_.clearDepthStencil(cmdList_);
@@ -351,39 +359,6 @@ void PBRIllumination::init(Scene& scene) {
 }
 
 void PBRIllumination::update(Scene& scene) {
-    for (auto& entityID : reservedEntities(scene)) {
-        if ( auto pModel = Model::at(entityID) ) {
-            trackModel(&pModel->get());
-        }
-        if ( auto pCamera = Camera::at(entityID) ) {
-            setCamera(&pCamera->get());
-        }
-        if ( auto pLight = Light::at(entityID) ) {
-            addLight(&pLight->get());
-        }
-    }
-}
-
-void PBRIlluminationTerrain::init(Scene& scene) {
-    for (auto& pModel : models(scene)) {
-        if (pModel) {
-            trackModel(&pModel->get());
-        }
-    }
-    if (!cameras(scene).empty()) {
-        auto& pCamera = cameras(scene).front();
-        if (pCamera) {
-            setCamera(&cameras(scene).front()->get());
-        }
-    }
-    for (auto& pLight : lights(scene)) {
-        if (pLight) {
-            addLight(&pLight->get());
-        }
-    }
-}
-
-void PBRIlluminationTerrain::update(Scene& scene) {
     for (auto& entityID : reservedEntities(scene)) {
         if ( auto pModel = Model::at(entityID) ) {
             trackModel(&pModel->get());

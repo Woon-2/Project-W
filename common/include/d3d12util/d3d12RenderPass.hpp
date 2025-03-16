@@ -330,7 +330,7 @@ public:
     static constexpr const char* id = "PBRIllumination";
 
     PBRIllumination( D3D12Device& device, ShaderPBRIllumination& shader,
-        const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
+        const SamplerStorage& samplerStorage, const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
     );
 
     void setViewport(const D3D12_VIEWPORT& vp);
@@ -367,49 +367,7 @@ private:
     std::vector< std::tuple<Submesh*, VBLayoutIdx, mu::Mat4x4> > batch_;
     const Camera* pCamera_;
     ShadowMaterial* pShadowMaterial_;
-};
-
-class PBRIlluminationTerrain : public gfx::d3d12::RenderPass {
-public:
-    static constexpr const char* id = "PBRIlluminationTerrain";
-
-    PBRIlluminationTerrain( D3D12Device& device, ShaderPBRIlluminationTerrain& shader,
-        const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
-    );
-
-    void setViewport(const D3D12_VIEWPORT& vp);
-
-    const D3D12_VIEWPORT& viewport() const NOEXCEPT {
-        return viewport_;
-    }
-
-    void preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
-    void render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
-    void postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
-
-    void trackModel(Model* pModel);
-    void setCamera(const Camera* pCamera) NOEXCEPT {
-        pCamera_ = pCamera;
-    }
-    void addLight(const WorldLight* pLight) NOEXCEPT {
-        lights_.push_back(pLight);
-    }
-
-private:
-    ShaderPBRIlluminationTerrain& shader() noexcept {
-        return static_cast<ShaderPBRIlluminationTerrain&>(protocol_.shader());
-    }
-    const ShaderPBRIlluminationTerrain& shader() const noexcept {
-        return static_cast<const ShaderPBRIlluminationTerrain&>(protocol_.shader());
-    }
-
-    static RenderProtocol::Desc makeDesc();
-
-    D3D12_VIEWPORT viewport_;
-    RenderProtocol protocol_;
-    std::vector<const WorldLight*> lights_;
-    std::vector< std::tuple<Submesh*, VBLayoutIdx, mu::Mat4x4> > batch_;
-    const Camera* pCamera_;
+    const SamplerStorage* pSamplerStorage_;
 };
 
 class ShadowMap : public gfx::d3d12::RenderPass {
@@ -469,6 +427,7 @@ public:
     static constexpr const char* id = "ScreenQuad";
 
     ScreenQuad( D3D12Device& device, ShaderScreenQuad& shader,
+        const SamplerStorage& samplerStorage,
         const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
     );
 
@@ -494,6 +453,7 @@ private:
 
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
+    const SamplerStorage* pSamplerStorage_;
 };
 
 class Tessellation : public gfx::d3d12::RenderPass {
@@ -501,6 +461,7 @@ public:
     static constexpr const char* id = "Tessellation";
 
     Tessellation( D3D12Device& device, ShaderTessellation& shader,
+        const SamplerStorage& samplerStorage,
         const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
     );
 
@@ -538,6 +499,7 @@ private:
     std::vector<const LevelChunkModel*> batch_;
     const Camera* pCamera_;
     ShadowMaterial* pShadowMaterial_;
+    const SamplerStorage* pSamplerStorage_;
 };
 
 class ShadowMapTessellation : public gfx::d3d12::RenderPass {
@@ -545,6 +507,7 @@ public:
     static constexpr const char* id = "ShadowMapTessellation";
 
     ShadowMapTessellation( D3D12Device& device, ShaderShadowMapTessellation& shader,
+        const SamplerStorage& samplerStorage,
         ShadowMap& shadowMapRP, const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
     );
 
@@ -582,6 +545,7 @@ private:
     const WorldLight* pLight_;
     std::vector<const LevelChunkModel*> batch_;
     const Camera* pCamera_;
+    const SamplerStorage* pSamplerStorage_;
 };
 
 }   // namespace gfx::d3d12::rp

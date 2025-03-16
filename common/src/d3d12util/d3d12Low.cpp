@@ -381,6 +381,12 @@ void D3D12Resource::commitState(D3D12GfxCmdList& cmdList, D3D12_RESOURCE_STATES 
 	state_ = resState;
 }
 
+Sampler::Sampler( D3D12Device& device,
+	const D3D12_SAMPLER_DESC& samplerDesc, DescriptorCPU& destView
+) : view_(destView) {
+	device.get()->CreateSampler(&samplerDesc, view_.cpuHandle());
+}
+
 Fence::Fence(D3D12Device& device, UINT64 initValue)
 	: dx::DXWrapper<ID3D12Fence>(), value_(initValue), event_(nullptr) {
 	DX_THROW_FAILED( device.get()->CreateFence(

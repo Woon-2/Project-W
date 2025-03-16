@@ -142,47 +142,93 @@ UnifiedRootImpl::UnifiedRootImpl(D3D12Device& device)
 		.OffsetInDescriptorsFromTableStart = 0u
 	};
 
+	auto samRange = D3D12_DESCRIPTOR_RANGE {
+		.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
+		.NumDescriptors = UINT(-1),
+		.BaseShaderRegister = 0u,
+		.RegisterSpace = 1u,
+		.OffsetInDescriptorsFromTableStart = 0u
+	};
+
+	auto samCmpRange = D3D12_DESCRIPTOR_RANGE {
+		.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
+		.NumDescriptors = UINT(-1),
+		.BaseShaderRegister = 0u,
+		.RegisterSpace = 2u,
+		.OffsetInDescriptorsFromTableStart = 0u
+	};
+
 	auto params = std::vector<D3D12_ROOT_PARAMETER>();
-	params.reserve(3u + cbvRegisterCnt + srvRegisterCnt + uavRegisterCnt);
+	params.reserve(5u + cbvRegisterCnt + srvRegisterCnt + uavRegisterCnt);
 	params.push_back( D3D12_ROOT_PARAMETER{
 		.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
 		.DescriptorTable = D3D12_ROOT_DESCRIPTOR_TABLE {
-			.NumDescriptorRanges = 1u,
-			.pDescriptorRanges = &tex2dRange
-		} }
+				.NumDescriptorRanges = 1u,
+				.pDescriptorRanges = &tex2dRange
+			},
+		.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+		}
 	);
 	params.push_back( D3D12_ROOT_PARAMETER{
 		.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
 		.DescriptorTable = D3D12_ROOT_DESCRIPTOR_TABLE {
 			.NumDescriptorRanges = 1u,
-			.pDescriptorRanges = &texArrayRange
-		} }
+				.pDescriptorRanges = &texArrayRange,
+			},
+		.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+		}
 	);
 	params.push_back( D3D12_ROOT_PARAMETER{
 		.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
 		.DescriptorTable = D3D12_ROOT_DESCRIPTOR_TABLE {
 			.NumDescriptorRanges = 1u,
-			.pDescriptorRanges = &texCubeRange
-		} }
+				.pDescriptorRanges = &texCubeRange
+			},
+		.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+		}
+	);
+
+	params.push_back( D3D12_ROOT_PARAMETER{
+		.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
+		.DescriptorTable = D3D12_ROOT_DESCRIPTOR_TABLE {
+			.NumDescriptorRanges = 1u,
+				.pDescriptorRanges = &samRange
+			},
+		.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+		}
+	);
+
+	params.push_back( D3D12_ROOT_PARAMETER{
+		.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
+		.DescriptorTable = D3D12_ROOT_DESCRIPTOR_TABLE {
+			.NumDescriptorRanges = 1u,
+				.pDescriptorRanges = &samCmpRange
+			},
+		.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+		}
 	);
 
 	for (UINT i = 0u; i < cbvRegisterCnt; ++i) {
 		params.push_back( D3D12_ROOT_PARAMETER{
 			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV,
 			.Descriptor = D3D12_ROOT_DESCRIPTOR {
-				.ShaderRegister = i,
-				.RegisterSpace = 0u
-			} }
+					.ShaderRegister = i,
+					.RegisterSpace = 0u
+				},
+			.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+			}
 		);
 	}
 
 	for (UINT i = 0u; i < srvRegisterCnt; ++i) {
 		params.push_back( D3D12_ROOT_PARAMETER{
 			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV,
-			.Descriptor = D3D12_ROOT_DESCRIPTOR {
-				.ShaderRegister = i,
-				.RegisterSpace = 0u
-			} }
+				.Descriptor = D3D12_ROOT_DESCRIPTOR {
+					.ShaderRegister = i,
+					.RegisterSpace = 0u
+				},
+			.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+			}
 		);
 	}
 
@@ -190,122 +236,19 @@ UnifiedRootImpl::UnifiedRootImpl(D3D12Device& device)
 		params.push_back( D3D12_ROOT_PARAMETER{
 			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV,
 			.Descriptor = D3D12_ROOT_DESCRIPTOR {
-				.ShaderRegister = i,
-				.RegisterSpace = 0u
-			} }
+					.ShaderRegister = i,
+					.RegisterSpace = 0u
+				},
+			.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+			}
 		);
 	}
-
-	auto samplers = std::vector<D3D12_STATIC_SAMPLER_DESC>();
-	samplers.reserve(6u);
-
-	// nearest point wrap
-	samplers.emplace_back(
-		/* .Filter = */ D3D12_FILTER_MIN_MAG_MIP_POINT,
-		/* .AddressU = */ D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-		/* .AddressV = */ D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-		/* .AddressW = */ D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-		/* .MipLODBias = */ 0.f,
-		/* .MaxAnisotropy = */ 0u,
-		/* .ComparisonFunc = */ D3D12_COMPARISON_FUNC_NEVER,
-		/* .BorderColor = */ D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK,
-		/* .MinLOD = */ 0.f,
-		/* .MaxLOD = */ std::numeric_limits<float>::max(),
-		/* .ShaderRegister = */ 0u,
-		/* .RegisterSpace = */ 1u,
-		/* .ShaderVisibility = */ D3D12_SHADER_VISIBILITY_ALL
-	);
-
-	// trilinear wrap
-	samplers.emplace_back(
-		/* .Filter = */ D3D12_FILTER_MIN_MAG_MIP_LINEAR,
-		/* .AddressU = */ D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-		/* .AddressV = */ D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-		/* .AddressW = */ D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-		/* .MipLODBias = */ 0.f,
-		/* .MaxAnisotropy = */ 0u,
-		/* .ComparisonFunc = */ D3D12_COMPARISON_FUNC_NEVER,
-		/* .BorderColor = */ D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK,
-		/* .MinLOD = */ 0.f,
-		/* .MaxLOD = */ std::numeric_limits<float>::max(),
-		/* .ShaderRegister = */ 1u,
-		/* .RegisterSpace = */ 1u,
-		/* .ShaderVisibility = */ D3D12_SHADER_VISIBILITY_ALL
-	);
-
-	// nearest border
-	samplers.emplace_back(
-		/* .Filter = */ D3D12_FILTER_MIN_MAG_MIP_POINT,
-		/* .AddressU = */ D3D12_TEXTURE_ADDRESS_MODE_BORDER,
-		/* .AddressV = */ D3D12_TEXTURE_ADDRESS_MODE_BORDER,
-		/* .AddressW = */ D3D12_TEXTURE_ADDRESS_MODE_BORDER,
-		/* .MipLODBias = */ 0.f,
-		/* .MaxAnisotropy = */ 0u,
-		/* .ComparisonFunc = */ D3D12_COMPARISON_FUNC_NEVER,
-		/* .BorderColor = */ D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK,
-		/* .MinLOD = */ 0.f,
-		/* .MaxLOD = */ std::numeric_limits<float>::max(),
-		/* .ShaderRegister = */ 2u,
-		/* .RegisterSpace = */ 1u,
-		/* .ShaderVisibility = */ D3D12_SHADER_VISIBILITY_ALL
-	);
-
-	// trilinear border
-	samplers.emplace_back(
-		/* .Filter = */ D3D12_FILTER_MIN_MAG_MIP_LINEAR,
-		/* .AddressU = */ D3D12_TEXTURE_ADDRESS_MODE_BORDER,
-		/* .AddressV = */ D3D12_TEXTURE_ADDRESS_MODE_BORDER,
-		/* .AddressW = */ D3D12_TEXTURE_ADDRESS_MODE_BORDER,
-		/* .MipLODBias = */ 0.f,
-		/* .MaxAnisotropy = */ 0u,
-		/* .ComparisonFunc = */ D3D12_COMPARISON_FUNC_NEVER,
-		/* .BorderColor = */ D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK,
-		/* .MinLOD = */ 0.f,
-		/* .MaxLOD = */ std::numeric_limits<float>::max(),
-		/* .ShaderRegister = */ 3u,
-		/* .RegisterSpace = */ 1u,
-		/* .ShaderVisibility = */ D3D12_SHADER_VISIBILITY_ALL
-	);
-
-	// nearest comparison
-	samplers.emplace_back(
-		/* .Filter = */ D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT,
-		/* .AddressU = */ D3D12_TEXTURE_ADDRESS_MODE_BORDER,
-		/* .AddressV = */ D3D12_TEXTURE_ADDRESS_MODE_BORDER,
-		/* .AddressW = */ D3D12_TEXTURE_ADDRESS_MODE_BORDER,
-		/* .MipLODBias = */ 0.f,
-		/* .MaxAnisotropy = */ 0u,
-		/* .ComparisonFunc = */ D3D12_COMPARISON_FUNC_LESS_EQUAL,
-		/* .BorderColor = */ D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE,
-		/* .MinLOD = */ 0.f,
-		/* .MaxLOD = */ std::numeric_limits<float>::max(),
-		/* .ShaderRegister = */ 0u,
-		/* .RegisterSpace = */ 2u,
-		/* .ShaderVisibility = */ D3D12_SHADER_VISIBILITY_ALL
-	);
-
-	// bilinear comparison
-	samplers.emplace_back(
-		/* .Filter = */ D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT,
-		/* .AddressU = */ D3D12_TEXTURE_ADDRESS_MODE_BORDER,
-		/* .AddressV = */ D3D12_TEXTURE_ADDRESS_MODE_BORDER,
-		/* .AddressW = */ D3D12_TEXTURE_ADDRESS_MODE_BORDER,
-		/* .MipLODBias = */ 0.f,
-		/* .MaxAnisotropy = */ 0u,
-		/* .ComparisonFunc = */ D3D12_COMPARISON_FUNC_LESS_EQUAL,
-		/* .BorderColor = */ D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE,
-		/* .MinLOD = */ 0.f,
-		/* .MaxLOD = */ std::numeric_limits<float>::max(),
-		/* .ShaderRegister = */ 1u,
-		/* .RegisterSpace = */ 2u,
-		/* .ShaderVisibility = */ D3D12_SHADER_VISIBILITY_ALL
-	);
 
 	auto desc = D3D12_ROOT_SIGNATURE_DESC{
 		.NumParameters = static_cast<UINT>(params.size()),
 		.pParameters = params.data(),
-		.NumStaticSamplers = static_cast<UINT>(samplers.size()),
-		.pStaticSamplers = samplers.data(),
+		.NumStaticSamplers = 0u,
+		.pStaticSamplers = nullptr,
 		.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
 			| D3D12_ROOT_SIGNATURE_FLAG_ALLOW_STREAM_OUTPUT
 	};

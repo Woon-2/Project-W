@@ -302,6 +302,35 @@ private:
     std::vector<TextureCube> storedTexCubes_;
 };
 
+class SamplerStorage {
+public:
+    enum class Indices {
+        NearestWrap,
+		TrilinearWrap,
+		NearestBorder,
+		TrilinearBorder,
+		NearestClamp,
+		TrilinearClamp,
+		NearestComparison,
+		BilinearComparison
+    };
+
+    void init( D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& samRange,
+        DescriptorRange<DescriptorHeapGPU>& samCmpRange
+    );
+
+    const Sampler& get(Indices idx) const NOEXCEPT {
+        return storedSamplers_[etoi(idx)];
+    }
+
+    const Sampler& operator[](Indices idx) const NOEXCEPT {
+        return get(idx);
+    }
+
+private:
+    std::vector<Sampler> storedSamplers_;
+};
+
 class Material {
 public:
     using ResourceType = TextureResource::Type;

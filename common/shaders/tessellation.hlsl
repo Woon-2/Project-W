@@ -91,7 +91,7 @@ struct HSOutput {
 };
 
 [domain("quad")]
-[partitioning("fractional_even")]
+[partitioning("pow2")]
 [outputtopology("triangle_ccw")]
 [outputcontrolpoints(4)]
 [patchconstantfunc("HSConstant")]
@@ -122,7 +122,7 @@ HSConstantOutput HSConstant(InputPatch<VSOutput, 4> input)
     float Len11 = length(pos11);
 
 	float zMin = 0.1f;
-	float zMax = 100.f;
+	float zMax = 160.f;
 
 	// 다시 볼만한 코드
     float Distance00 = clamp((Len00 - zMin) / (zMax - zMin), 0.0, 1.0);
@@ -147,8 +147,8 @@ HSConstantOutput HSConstant(InputPatch<VSOutput, 4> input)
     output.tessEdgeFactors[2] = pow(2.f, TessLevel2) - 1.f;
     output.tessEdgeFactors[3] = pow(2.f, TessLevel3) - 1.f;
 
-    output.tessInsideFactors[0] = max(TessLevel1, TessLevel3);
-    output.tessInsideFactors[1] = max(TessLevel0, TessLevel2);
+    output.tessInsideFactors[0] = max(output.tessEdgeFactors[1], output.tessEdgeFactors[3]);
+    output.tessInsideFactors[1] = max(output.tessEdgeFactors[0], output.tessEdgeFactors[2]);
 
 	output.instanceOffset = input[0].instanceOffset;
 
@@ -199,6 +199,7 @@ DSOutput DSMain(HSConstantOutput input, float2 uv : SV_DomainLocation, const Out
 
     // sample the height from the height map
 	uint4 heightPixel = sampleLevelFromMapRef(heightMapRef, output.texcoord, 0.f, heightMapSamplerIdx) * 255;
+
     uint heightInt = heightPixel.r | (heightPixel.g << 8) | (heightPixel.b << 16) | (heightPixel.a << 24);
     float height = asfloat(heightInt) * 50.f;
 
@@ -232,7 +233,7 @@ DSOutput DSMain(HSConstantOutput input, float2 uv : SV_DomainLocation, const Out
 
     uint4 rHeightPixel = sampleLevelFromMapRef2DOffset(heightMapRef, output.texcoord, 0.f, int2(1, 0), heightMapSamplerIdx) * 255;
     uint rHeightInt = rHeightPixel.r | (rHeightPixel.g << 8) | (rHeightPixel.b << 16) | (rHeightPixel.a << 24);
-    float rHeight = asfloat(rHeightInt) * 50.f;
+    float rHeight = asfloat(rHeightInt) * 50.f;     
 
     float3 tangentM = float3(2.06f / input.tessInsideFactors[0], rHeight - height, 0.f);
     float3 bitangentM = float3(0.f, tHeight - height, 2.06f / input.tessInsideFactors[1]);
@@ -271,6 +272,7 @@ float4 PSMain(DSOutput input) : SV_TARGET {
 		N = mul(normal, TBN);
 	}
 
+    // return float4(sampleLevelFromMapRef(heightMapRef, input.texcoord, 0.f, heightMapSamplerIdx).xyz, 1.f);
     // return float4(N * 0.5f + 0.5f, 1.f);
     // return float4(input.texcoord, 0.f, 1.f);
     // return accumulateLighting(input.posV, N, input.tileTexCoord);

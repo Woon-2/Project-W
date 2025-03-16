@@ -27,18 +27,11 @@ public:
 		BindlessTex2D,
 		BindlessTexArray,
 		BindlessTexCube,
+		BindlessSampler,
+		BindlessSamplerComparison,
 		b0, b1, b2, b3, b4, b5, b6, b7,
 		t0, t1, t2, t3, t4, t5, t6, t7,
 		u0, u1, u2, u3, u4, u5, u6, u7
-	};
-
-	enum class SamplerIndices {
-		NearestWrap,
-		TrilinearWrap,
-		NearestBorder,
-		TrilinearBorder,
-		NearestComparison,
-		BilinearComparison
 	};
 
 	static constexpr auto cbvRegisterCnt = 8u;
@@ -53,19 +46,11 @@ private:
 		}
 	};
 
-	class Samplers {
-	public:
-		UINT operator[](SamplerIndices idx) const noexcept {
-			return static_cast<UINT>( etoi(idx) );
-		}
-	};
-
 public:
 	UnifiedRootImpl() = default;
 	UnifiedRootImpl(D3D12Device& device);
 
 	Params params;
-	Samplers samplers;
 };
 
 } // namespace gfx::d3d12::detail
@@ -73,7 +58,6 @@ public:
 class UnifiedRoot {
 public:
 	using ParamIndices = detail::UnifiedRootImpl::ParamIndices;
-	using SamplerIndices = detail::UnifiedRootImpl::SamplerIndices;
 
 	static constexpr auto cbvRegisterCnt = detail::UnifiedRootImpl::cbvRegisterCnt;
 	static constexpr auto srvRegisterCnt = detail::UnifiedRootImpl::srvRegisterCnt;

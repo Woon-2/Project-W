@@ -7,7 +7,7 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
             .maxDrawcallCnt = 0x1000u,
             .maxLightCnt = 0x100u
         }, gfx::d3d12::InputLayout::Spec::separated
-    ), renderPassPBR_( core.device(), shaderPBR_,
+    ), renderPassPBR_( core.device(), shaderPBR_, core.samStorage(),
         gfx::d3d12::convClientToVP( core.window().client() )
     ), shadowMaterial_( core.device(), gfx::d3d12::Texture::Desc{
             .width = static_cast<std::uint32_t>( core.window().client().width * 8 ),
@@ -27,7 +27,7 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
         gfx::d3d12::convClientToVP( core.window().client() )
     ), shaderScreenQuad_(core.device(), core.root()),
     renderPassScreenQuad_( core.device(), shaderScreenQuad_,
-        gfx::d3d12::convClientToVP(core.window().client())
+        core.samStorage(), gfx::d3d12::convClientToVP(core.window().client())
     ), renderMode_(Mode::Color
     ), shaderTessellation_(core.device(), core.root(), 
         gfx::d3d12::ShaderTessellation::Config{
@@ -36,14 +36,15 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
             .maxLightCnt = 0x100u
         }, gfx::d3d12::InputLayout::Spec::serial
     ), renderPassTessellation_(core.device(), shaderTessellation_,
-        gfx::d3d12::convClientToVP(core.window().client())
+        core.samStorage(), gfx::d3d12::convClientToVP(core.window().client())
     ), shaderShadowMapTessellation_(core.device(), core.root(),
         gfx::d3d12::ShaderShadowMapTessellation::Config{
             .maxInstanceCnt = 0x1000u,
             .maxDrawcallCnt = 0x1000u,
         }, gfx::d3d12::InputLayout::Spec::serial
     ), renderPassShadowMapTessellation_(core.device(),
-        shaderShadowMapTessellation_, renderPassShadowMap_,
+        shaderShadowMapTessellation_, core.samStorage(),
+        renderPassShadowMap_,
         gfx::d3d12::convClientToVP(core.window().client())
     ) {
         shaderShadowMap_.setShadowMap( &shadowMaterial_.texture() );

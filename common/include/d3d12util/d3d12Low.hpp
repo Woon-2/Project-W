@@ -184,10 +184,6 @@ public:
 		return descriptors_[idx];
 	}
 
-	void set(ID3D12GraphicsCommandList* pCmdList) {
-		pCmdList->SetDescriptorHeaps(1u, src_.GetAddressOf());
-	}
-
 	std::size_t stride() const NOEXCEPT {
 		return stride_;
 	}
@@ -292,6 +288,15 @@ public:
 	DescriptorHeapGPU(D3D12Device& device, D3D12_DESCRIPTOR_HEAP_TYPE heapType,
 		std::size_t capacity
 	) : DescriptorHeap(device, heapType, capacity, true) {}
+
+	template <class ... Args>
+		requires (std::same_as<std::remove_cvref_t<Args>, DescriptorHeapGPU> && ...)
+	static void set(ID3D12GraphicsCommandList* pCmdList, Args&& ... heaps) {
+		ID3D12DescriptorHeap* arrHeaps[]{
+			(heaps.get().Get())...
+		};
+		pCmdList->SetDescriptorHeaps(sizeof(arrHeaps) / sizeof(arrHeaps[0]), arrHeaps);
+	}
 };
 
 template <class TDescHeap>
@@ -515,6 +520,27 @@ public:
 		    cmdList.get()->SetGraphicsRootSignature(get().Get())
         );
 	}
+};
+
+class Sampler {
+public:
+	Sampler() = default;
+	Sampler(D3D12Device& device, const D3D12_SAMPLER_DESC& samplerDesc,
+		DescriptorCPU& destView
+	);
+
+	const DescriptorCPU& view() const NOEXCEPT {
+		return view_;
+	}
+
+	// shortcut for static_cast<std::uint32_t>( view().offset() )
+	// which is used by many render passes.
+	std::uint32_t index() const NOEXCEPT {
+		return static_cast<std::uint32_t>( view_.offset() );
+	}
+
+private:
+	DescriptorCPU view_;
 };
 
 template <class Traits>

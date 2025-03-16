@@ -21,6 +21,7 @@ namespace d3d12engine {
 
 inline constexpr auto initialRtvHeapSize = 3u;
 inline constexpr auto initialDsvHeapSize = 11u;
+inline constexpr auto initialSamHeapSize = 20u;
 inline constexpr auto initialCbvSrvUavHeapSize = 1000u;
 
 class IRenderer {
@@ -73,7 +74,7 @@ public:
         fence_.wait();
     }
 
-    void loadStaticTexture(const TextureKey& key , d3d12::TextureResource::Type type);
+    void loadStaticTexture(const TextureKey& key, d3d12::TextureResource::Type type);
     void loadRefModel(const RefModelKey& key);
     void layoutRefModelVBs( const d3d12::RefModelStorage::ID& key, std::size_t vbLayoutIdx,
         const d3d12::InputLayout& inputLayout
@@ -113,22 +114,24 @@ public:
     d3d12::DescriptorRanges& descRanges() NOEXCEPT { return descRanges_; }
     const d3d12::DescriptorRanges& descRanges() const NOEXCEPT { return descRanges_; }
 
+    const d3d12::SamplerStorage& samStorage() const NOEXCEPT { return samStorage_; }
+    const d3d12::StaticTextureStorage& staticTexStorage() const NOEXCEPT { return staticTexStorage_; }
+    const d3d12::RefModelStorage& refModelStorage() const NOEXCEPT { return refModelStorage_; }
 
 private:
     d3d12::RefModelStorage& refModelStorage() NOEXCEPT { return refModelStorage_; }
-    const d3d12::RefModelStorage& refModelStorage() const NOEXCEPT { return refModelStorage_; }
-
     d3d12::StaticTextureStorage& staticTexStorage() NOEXCEPT { return staticTexStorage_; }
-    const d3d12::StaticTextureStorage& staticTexStorage() const NOEXCEPT { return staticTexStorage_; }
 
     d3d12::StaticTextureStorage staticTexStorage_;
     d3d12::RefModelStorage refModelStorage_;
+    d3d12::SamplerStorage samStorage_;
     dx::DXGIFactory factory_;
     d3d12::D3D12Device device_;
     d3d12::D3D12CmdQueue cmdQueue_;
     d3d12::D3D12GfxCmdList cmdList_;
     d3d12::DescriptorHeapCPU rtvHeap_;
     d3d12::DescriptorHeapCPU dsvHeap_;
+    d3d12::DescriptorHeapGPU samHeap_;
     d3d12::DescriptorHeapGPU cbvSrvUavHeap_;
     d3d12::DescriptorRanges descRanges_;
     MyWindow window_;
@@ -342,14 +345,6 @@ namespace rp {
 class PBRIllumination : public IRenderPass, public d3d12::rp::PBRIllumination {
 public:
     using d3d12::rp::PBRIllumination::PBRIllumination;
-
-    void init(Scene& scene) override;
-    void update(Scene& scene) override;
-};
-
-class PBRIlluminationTerrain : public IRenderPass, public d3d12::rp::PBRIlluminationTerrain {
-public:
-    using d3d12::rp::PBRIlluminationTerrain::PBRIlluminationTerrain;
 
     void init(Scene& scene) override;
     void update(Scene& scene) override;
