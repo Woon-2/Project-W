@@ -1,5 +1,5 @@
-#ifndef __net_H
-#define __net_H
+#ifndef __netLow_H
+#define __netLow_H
 
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -13,6 +13,7 @@
 #include <optional>
 #include <functional>
 #include <chrono>
+#include <optional>
 
 #include <cstdint>
 
@@ -206,8 +207,8 @@ public:
         }
     }
 
-    SocketBase(const SocketBase&) = default;
-    SocketBase& operator=(const SocketBase&) = default;
+    SocketBase(const SocketBase&) = delete;
+    SocketBase& operator=(const SocketBase&) = delete;
 
     SocketBase(SocketBase&& other) noexcept
         : sock_( std::exchange(other.sock_, INVALID_SOCKET) ),
@@ -228,6 +229,10 @@ public:
         if (::bind(sock_, &addr.get().addr, static_cast<int>(addr.size())) == SOCKET_ERROR) {
             throw NET_LAST_EXCEPT("Failed to bind UDP socket"sv);
         }
+    }
+
+    void bindUc(const SockAddr& addr) {
+        ::bind(sock_, &addr.get().addr, static_cast<int>(addr.size()));
     }
 
     void setMode(long cmd, u_long* argp) {
@@ -255,73 +260,12 @@ public:
         return sock_ == rhs.sock_;
     }
 
-    friend SOCKET nativeHandle(const SocketBase& sock) NET_NOEXCEPT {
-        return sock.sock_;
+    SOCKET nativeHandle() const NET_NOEXCEPT {
+        return sock_;
     }
 };
 
 }   // namespace net::detail
-
-class UdpSocket : public detail::SocketBase {
-public:
-    UdpSocket()
-        : SocketBase(createNativeSocket()) {}
-
-    UdpSocket(SOCKET sock, bool bOpen = true) NET_NOEXCEPT
-        : SocketBase(sock, bOpen) {}
-
-    std::size_t sendTo(const SockAddr& addr, const void* data, std::size_t size) {
-        int sendSize = ::sendto(sock_, static_cast<const char*>(data), static_cast<int>(size), 0, &addr.get().addr, static_cast<int>(addr.size()));
-        if (sendSize < 0) {
-            throw NET_LAST_EXCEPT("Failed to send data"sv);
-        }
-        return sendSize;
-    }
-
-    std::size_t recvFrom(SockAddr& addr, char* data, std::size_t size) {
-        auto addrSize = static_cast<int>(addr.size());
-        auto recvSize = ::recvfrom(sock_, data, static_cast<int>(size), 0, &addr.get().addr, &addrSize);
-        if (recvSize < 0) {
-            throw NET_LAST_EXCEPT("Failed to receive data"sv);
-        }
-        return recvSize;
-    }
-
-    int sendToUc(const SockAddr& addr, const void* data, std::size_t size) {
-        return ::sendto(sock_, static_cast<const char*>(data), static_cast<int>(size), 0, &addr.get().addr, static_cast<int>(addr.size()));
-    }
-
-    int recvFromUc(SockAddr& addr, char* data, std::size_t size) {
-        auto addrSize = static_cast<int>(addr.size());
-        return ::recvfrom(sock_, data, static_cast<int>(size), 0, &addr.get().addr, &addrSize);
-    }
-
-    void open() {
-        if (open_) {
-            throw NET_EXCEPT(WSAEISCONN, "Socket is already open"sv);
-        }
-
-        sock_ = createNativeSocket();
-        open_ = true;
-    }
-
-    auto operator<=>(const UdpSocket& rhs) const NET_NOEXCEPT {
-        return this->SocketBase::operator<=>(rhs);
-    }
-
-    bool operator==(const UdpSocket& rhs) const NET_NOEXCEPT {
-        return this->SocketBase::operator==(rhs);
-    }
-
-private:
-    static SOCKET createNativeSocket() {
-        auto ret = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-        if (ret == INVALID_SOCKET) {
-            throw NET_LAST_EXCEPT("Failed to create UDP socket"sv);
-        }
-        return ret;
-    }
-};
 
 class TcpSocket : public detail::SocketBase {
 public:
@@ -337,59 +281,86 @@ public:
         }
     }
 
+    void listenUc(std::size_t backlog = SOMAXCONN) {
+        ::listen(sock_, static_cast<int>(backlog));
+    }
+
     void connect(const SockAddr& addr) {
         if (::connect(sock_, &addr.get().addr, static_cast<int>(addr.size())) == SOCKET_ERROR) {
             throw NET_LAST_EXCEPT("Failed to connect TCP socket"sv);
         }
     }
 
-    std::size_t send(const void* data, std::size_t size) {
-        int sendSize = ::send(sock_, static_cast<const char*>(data), static_cast<int>(size), 0);
-        if (sendSize < 0) {
-            throw NET_LAST_EXCEPT("Failed to send data"sv);
-        }
-        return sendSize;
+    void connectUc(const SockAddr& addr) {
+        ::connect(sock_, &addr.get().addr, static_cast<int>(addr.size()));
     }
 
-    std::size_t recv(char* data, std::size_t size) {
-        int recvSize = ::recv(sock_, data, static_cast<int>(size), 0);
-        if (recvSize < 0) {
+    template <std::ranges::contiguous_range R>
+        requires std::same_as<std::ranges::range_value_t<R>, WSABUF>
+    DWORD WSASend(R&& wsaBufs) {
+        //std::data(wsaBufs); // 버퍼들 주소
+        //std::size(wsaBufs); // 버퍼 개수
+        DWORD sent{};
+        if (::WSASend(sock_, std::data(wsaBufs), std::size(wsaBufs), &sent, 0, nullptr, nullptr)) {
+            throw NET_LAST_EXCEPT("Failed to send data"sv);
+        }
+        return sent;
+    }
+
+    template <std::ranges::contiguous_range R>
+        requires std::same_as<std::ranges::range_value_t<R>, WSABUF>
+    std::optional<DWORD> WSASendUc(R&& wsaBufs) {
+        DWORD sent{};
+        if (::WSASend(sock_, std::data(wsaBufs), std::size(wsaBufs), &sent, 0, nullptr, nullptr)) {
+            return {};
+        }
+        return sent;
+    }
+
+    template <std::ranges::contiguous_range R>
+        requires std::same_as<std::ranges::range_value_t<R>, WSABUF>
+    DWORD WSARecv(R&& wsaBufs) {
+        DWORD recvSize{};
+        DWORD flags{};
+        if (::WSARecv(sock_, std::data(wsaBufs), std::size(wsaBufs), &recvSize, &flags, nullptr, nullptr)) {
             throw NET_LAST_EXCEPT("Failed to receive data"sv);
-            return 0;
         }
         return recvSize;
     }
 
-    int sendUc(const void* data, std::size_t size) {
-        return ::send(sock_, static_cast<const char*>(data), static_cast<int>(size), 0);
+    template <std::ranges::contiguous_range R>
+        requires std::same_as<std::ranges::range_value_t<R>, WSABUF>
+    std::optional<DWORD> WSARecvUc(R&& wsaBufs) {
+        DWORD recvSize{};
+        DWORD flags{};
+        if (::WSARecv(sock_, std::data(wsaBufs), std::size(wsaBufs), &recvSize, &flags, nullptr, nullptr)) {
+            return {};
+        }
+        return recvSize;
     }
 
-    int recvUc(char* data, std::size_t size) {
-        return ::recv(sock_, data, static_cast<int>(size), 0);
-    }
-
-    TcpSocket accept() {
+    TcpSocket WSAAccept(){
         auto tmp = SockAddr();
-        return accept(tmp);
+        return WSAAccept(tmp);
     }
 
-    TcpSocket accept(SockAddr& addr) {
+    TcpSocket WSAAccept(SockAddr& addr) {
         int addrSize = static_cast<int>(addr.size());
-        SOCKET client = ::accept(sock_, &addr.get().addr, &addrSize);
+        SOCKET client = ::WSAAccept(sock_, &addr.get().addr, &addrSize, nullptr, 0);
         if (client == INVALID_SOCKET) {
             throw NET_LAST_EXCEPT("Failed to accept TCP connection"sv);
         }
         return TcpSocket(client);
     }
 
-    TcpSocket acceptUc() {
+    TcpSocket WSAAcceptUc(){
         auto tmp = SockAddr();
-        return acceptUc(tmp);
+        return WSAAcceptUc(tmp);
     }
 
-    TcpSocket acceptUc(SockAddr& addr) {
+    TcpSocket WSAAcceptUc(SockAddr& addr) {
         int addrSize = static_cast<int>(addr.size());
-        SOCKET client = ::accept(sock_, &addr.get().addr, &addrSize);
+        SOCKET client = ::WSAAccept(sock_, &addr.get().addr, &addrSize, nullptr, 0);
         if (client == INVALID_SOCKET) {
             return TcpSocket(INVALID_SOCKET, false);
         }
@@ -405,6 +376,12 @@ public:
         open_ = true;
     }
 
+    void setSockOpt(int level, int optname, const char* optval, int optlen) {
+        if (setsockopt(sock_, level, optname, optval, optlen) == SOCKET_ERROR) {
+            throw NET_LAST_EXCEPT("Failed to set socket option"sv);
+        }
+    }
+
     auto operator<=>(const TcpSocket& rhs) const NET_NOEXCEPT {
         return this->SocketBase::operator<=>(rhs);
     }
@@ -415,7 +392,7 @@ public:
 
 private:
     static SOCKET createNativeSocket() {
-        auto ret = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        auto ret = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, nullptr, 0, 0);
         if (ret == INVALID_SOCKET) {
             throw NET_LAST_EXCEPT("Failed to create TCP socket"sv);
         }
@@ -433,22 +410,12 @@ inline void disNonb(TcpSocket& sock) {
     sock.setMode(FIONBIO, &mode);
 }
 
-inline void enNonb(UdpSocket& sock) {
-    u_long mode = 1;
-    sock.setMode(FIONBIO, &mode);
-}
-
-inline void disNonb(UdpSocket& sock) {
-    u_long mode = 0;
-    sock.setMode(FIONBIO, &mode);
-}
-
 namespace detail {
     template <std::ranges::range R>
     void fillFDSet(fd_set& set, const R& socks) {
         FD_ZERO(&set);
         for (auto& sock : socks) {
-            FD_SET(nativeHandle(*sock), &set);
+            FD_SET(sock->nativeHandle(), &set);
         }
     }
 
@@ -456,7 +423,7 @@ namespace detail {
     void retreiveFDSet(const fd_set& set, const R& baseRange, R& outRange) {
         std::ranges::copy_if(baseRange, std::back_inserter(outRange),
             [&set](const auto& sock) {
-                return FD_ISSET(nativeHandle(*sock), &set);
+                return FD_ISSET(sock->nativeHandle(), &set);
             }
         );
     }

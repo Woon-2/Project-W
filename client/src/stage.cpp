@@ -28,16 +28,16 @@ void Stage::render() {
 
 void Stage::processPackets(double deltaTime) {
     for (;;) {
+        char buf[ 256 ]{};
         Packet recvPacket{};
-        auto recvBytes = ::recv(pSession_->sock(), reinterpret_cast<char*>(&recvPacket), sizeof(Packet), 0);
+        auto recvBytes = ::recv(pSession_->sock().nativeHandle(), reinterpret_cast<char*>(&buf ), sizeof( buf ), 0);
+		std::memcpy( &recvPacket, buf, sizeof( Packet ) );
         if (recvBytes == SOCKET_ERROR) {
             return;
         }
 
         const auto cameraOffset = mu::Vec3(0.f, 4.8f, -10.f);
         const auto cameraTimeLag = 1.f;
-
-        static int fuck = 0;
 
         switch (recvPacket.type) {
         case PacketType::SCAssign: {
@@ -82,8 +82,8 @@ void Stage::processPackets(double deltaTime) {
 void Stage::updateNetwork(double deltaTime) {
     if (pPlayer_) {
         pSession_->enqueuePacket(Packet{
+            .size = 16u + sizeof(CSWorld),
             .type = PacketType::CSWorld,
-            .size = sizeof(CSWorld),
             .csWorld = {
                 .xform = {
                     .pos = pPlayer_->as<gfx::d3d12engine::Coord>().get().localXform().row(3),

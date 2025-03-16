@@ -44,9 +44,10 @@ struct CSWorld {
     RigidXform xform;
 };
 
+#pragma pack(push, 1)
 struct Packet {
-    PacketType type;
     std::uint16_t size;
+    PacketType type;
     union {
         CSHello csHello;
         SCAssign scAssign;
@@ -55,5 +56,6 @@ struct Packet {
         CSWorld csWorld;
     };
 };
+#pragma pack(pop)
 
 #endif // __PROTOCOL_HPP
