@@ -271,6 +271,7 @@ add_dependencies(gfx hlsl)
 # === net ===
 add_library(net
     src/net/session.cpp include/net/session.hpp
+    src/net/netLow.cpp include/net/netLow.hpp
 
     include/net/protocol.hpp
     include/net/netInclude.hpp
@@ -284,6 +285,7 @@ define_win32_lighten_macros(net PUBLIC)
 target_link_libraries(net
     PRIVATE
         common::mu
+        common::woon2exception
         ws2_32.lib
 )
 

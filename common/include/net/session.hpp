@@ -1,13 +1,15 @@
 #ifndef __SESSION_HPP
 #define __SESSION_HPP
 
-#include "net/netInclude.hpp"
+#include "net/netLow.hpp"
 #include "net/protocol.hpp"
 
 #include <cstdint>
 #include <deque>
 #include <forward_list>
 #include <optional>
+#include <vector>
+#include <array>
 
 class IDPool {
 public:
@@ -23,14 +25,18 @@ public:
 
 class Session {
 public:
+    static constexpr std::size_t recvBufSize = 4096u;
+
     Session()
-        : sock_(INVALID_SOCKET), id_(-1) {}
+        : recvBuf_{}, sendQueue_{}, recvQueue_{}, sock_(INVALID_SOCKET), id_(-1)
+        , recvBytesRemain_(0), recvOffset_(0), readOffset_(0) {}
 
     ~Session();
 
-    Session(SOCKET sock);
-    Session(SOCKET sock, std::uint32_t id)
-        : sock_(sock), id_(id) {}
+    Session(net::TcpSocket&& sock);
+    Session(net::TcpSocket&& sock, std::uint32_t id)
+        : recvBuf_{}, sendQueue_{}, recvQueue_{}, sock_(std::move(sock)), id_(id)
+        , recvBytesRemain_(0), recvOffset_(0), readOffset_(0) {}
 
     Session(const Session&) = delete;
     Session& operator=(const Session&) = delete;
@@ -38,7 +44,8 @@ public:
     Session(Session&& rhs) noexcept;
     Session& operator=(Session&& other) noexcept;
 
-    SOCKET sock() const noexcept { return sock_; }
+    net::TcpSocket& sock() noexcept { return sock_; }
+    const net::TcpSocket& sock() const noexcept { return sock_; }
     std::uint32_t id() const noexcept { return id_; }
 
     void setId(std::uint32_t id) noexcept {
@@ -51,14 +58,25 @@ public:
 
     void flushPackets();
 
+    void recvPackets();
+
     bool operator==(const Session& other) const noexcept {
         return id_ == other.id_;
     }
 
+    std::deque<Packet>& getRecvQueue() noexcept {
+        return recvQueue_;
+    }
+
 private:
+    std::array< char, recvBufSize > recvBuf_;
     std::deque<Packet> sendQueue_;
-    SOCKET sock_;
+    std::deque<Packet> recvQueue_;
+    net::TcpSocket sock_;
     std::uint32_t id_;
+    std::uint32_t recvBytesRemain_;
+    std::uint32_t recvOffset_;
+    std::uint32_t readOffset_;
 };
 
 #endif  // __SESSION_HPP

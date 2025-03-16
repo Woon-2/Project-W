@@ -1,7 +1,7 @@
-#ifndef __NET_H__
-#define __NET_H__
+#ifndef __NETLOW_H__
+#define __NETLOW_H__
 
-#include "net.hpp"
+#include "net/netLow.hpp"
 
 namespace net {
 

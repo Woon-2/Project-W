@@ -1,3 +1,4 @@
+#include "net/netLow.hpp"
 #include "net/protocol.hpp"
 #include "net/netInclude.hpp"
 #include "net/session.hpp"
@@ -22,41 +23,40 @@ RigidXform gXforms[maxConnection];
 std::list<Session> gSessions;
 std::deque<Packet> gBroadcastQueue;
 
-
 //std::forward_list<std::uint16_t> IDPool::idList_(std::numeric_limits<std::uint16_t>::max());
 
-void recvPacket(Session& session) {
-    Packet packet{};
-    auto recvSize = ::recv(session.sock(), reinterpret_cast<char*>(&packet), sizeof(Packet), 0);
-    if (recvSize == SOCKET_ERROR) {
-        std::cerr << "recv failed\n";
-        return;
-    }
+void precessPacket(Session& session) {
+    auto& recvQueue = session.getRecvQueue();
+    
+    while(!recvQueue.empty()) {
+        auto packet = recvQueue.front();
+        recvQueue.pop_front();
 
-    switch(packet.type) {
-        case PacketType::CSHello:
-            std::cout << "Received Hello From Client!\n";
-            session.enqueuePacket(
-                Packet{
-                    .type = PacketType::SCAssign,
-                    .size = sizeof(SCAssign),
-                    .scAssign = {
-                        .id = session.id()
+        switch(packet.type) {
+            case PacketType::CSHello:
+                std::cout << "Received Hello From Client!\n";
+                session.enqueuePacket(
+                    Packet{
+                        .size = 16u + sizeof(SCAssign),
+                        .type = PacketType::SCAssign,
+                        .scAssign = {
+                            .id = session.id()
+                        }
                     }
-                }
-            );
-            break;
-            
-        case PacketType::CSLeave:
-            std::erase(gSessions, session);
-            break;
+                );
+                break;
+                
+            case PacketType::CSLeave:
+                std::erase(gSessions, session);
+                break;
 
-        case PacketType::CSWorld:
-            gXforms[session.id()] = packet.csWorld.xform;
-            break;
+            case PacketType::CSWorld:
+                gXforms[session.id()] = packet.csWorld.xform;
+                break;
 
-        default:
-            break;
+            default:
+                break;
+        }
     }
 }
 
@@ -70,8 +70,8 @@ void sendPacket(Session& session) {
 
 void fillBroadcastQueue() {
     auto worldPacket =  Packet{
-        .type = PacketType::SCWorld,
-        .size = sizeof(SCWorld)
+        .size = 16 + sizeof(SCWorld),
+        .type = PacketType::SCWorld
     };
 
     for (std::size_t i = 0; i < maxConnection; ++i) {
@@ -92,94 +92,85 @@ void initXforms() {
 
 int main()
 {
-    WSADATA wsaData;
-    if (::WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        std::cerr << "WSAStartup failed\n";
-        return 0;
-    }
+    net::initNet();
 
-    auto listenSocket = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (listenSocket == INVALID_SOCKET) {
-        std::cerr << "socket failed\n";
-        return 0;
-    }
-
-    sockaddr_in serverAddr{};
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_addr.s_addr = ::htonl(INADDR_ANY);
-    serverAddr.sin_port = ::htons(PORT);
-    if (::bind(listenSocket, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) == SOCKET_ERROR) {
-        std::cerr << "bind failed\n";
-        return 0;
-    }
-
-    if (::listen(listenSocket, SOMAXCONN) == SOCKET_ERROR) {
-        std::cerr << "listen failed\n";
-        return 0;
-    }
+    auto listenSocket = net::TcpSocket();
+    
+    listenSocket.bind(net::SockAddr(net::Ipv4Addr(), net::Port(PORT)));
+    listenSocket.listen(SOMAXCONN);
 
     int flag = 1;
-    setsockopt(listenSocket, IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(flag));
+    listenSocket.setSockOpt(SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&flag), sizeof(flag));
 
-    fd_set readSet;
-    fd_set writeSet;
+    flag = true;
+    listenSocket.setSockOpt(IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char*>(&flag), sizeof(flag));
+
+  
     int retVal{};
 
     initXforms();
     IDPool::initList();
 
     while (true) {
-        FD_ZERO(&readSet);
-        FD_ZERO(&writeSet);
+        auto recvRequestSocks = std::vector<net::TcpSocket*>();
+        auto recvReadySocks = std::vector<net::TcpSocket*>();
+        auto sendRequestSocks = std::vector<net::TcpSocket*>();
+        auto sendReadySocks = std::vector<net::TcpSocket*>();
 
-        FD_SET(listenSocket, &readSet);
-        for (const auto& s : gSessions){
-            FD_SET(s.sock(), &readSet);
-            FD_SET(s.sock(), &writeSet);
-        }
-
-        retVal = ::select(0, &readSet, &writeSet, nullptr, nullptr);
-        if (retVal == SOCKET_ERROR){
-            std::cerr << "select failed\n";
-            break;
-        }
-
-        if (FD_ISSET(listenSocket, &readSet)){
-            sockaddr_in clientAddr{};
-            int addrLen = sizeof(clientAddr);
-            auto clientSocket = ::accept(listenSocket, reinterpret_cast<sockaddr*>(&clientAddr), &addrLen);
-            if (clientSocket == INVALID_SOCKET) {
-                std::cerr << "accept failed\n";
-                break;
-            }
-            else {
-                std::cout << "Client Connected\n";
-            }
-
-            int flag = 1;
-            setsockopt(clientSocket, IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(flag));
-
-            
-            if (gSessions.emplace_back(clientSocket).id() == -1) {
-                ::closesocket(clientSocket);
-                gSessions.pop_back();
-            }
-        }
+		recvRequestSocks.push_back( &listenSocket );
 
         for (auto& session : gSessions) {
-            if (FD_ISSET(session.sock(), &readSet)) {
-                recvPacket(session);
+            recvRequestSocks.push_back(&session.sock());
+            sendRequestSocks.push_back(&session.sock());
+        }
+
+        net::select<decltype(recvRequestSocks)>(recvRequestSocks, sendRequestSocks, {}, recvReadySocks, sendReadySocks, {}, 100ms);
+
+        for (auto& sock : recvReadySocks) {
+            if (sock->nativeHandle() == listenSocket.nativeHandle()) {
+                auto clientSocket = listenSocket.WSAAcceptUc();
+                if (clientSocket.nativeHandle() == INVALID_SOCKET) {
+                    std::cerr << "accept failed\n";
+                    break;
+                }
+                else {
+                    std::cout << "Client Connected\n";
+                }
+
+                int flag = 1;
+                clientSocket.setSockOpt(IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char*>(&flag), sizeof(flag));
+
+                if (gSessions.emplace_back(std::move(clientSocket)).id() == -1) {
+                    ::closesocket(clientSocket.nativeHandle());
+                    gSessions.pop_back();
+                }
+            }
+            else{
+                auto session = std::find_if(gSessions.begin(), gSessions.end(), [&sock](const auto& s) {
+                    return s.sock().nativeHandle() == sock->nativeHandle();
+                });
+
+                if (session != gSessions.end()) {
+                    session->recvPackets();
+                    precessPacket(*session);
+                }
             }
         }
 
         fillBroadcastQueue();
 
-        for (auto& session : gSessions) {
-            if (FD_ISSET(session.sock(), &writeSet)) {
-                sendPacket(session);
+        for(const auto& sock : sendReadySocks) {
+            auto session = std::find_if(gSessions.begin(), gSessions.end(), [&sock](const auto& s) {
+                return s.sock().nativeHandle() == sock->nativeHandle();
+            });
+
+            if (session != gSessions.end()) {
+                sendPacket(*session);
             }
         }
 
         gBroadcastQueue.clear();
     }
+
+    net::relNet();
 }

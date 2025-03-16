@@ -70,41 +70,33 @@ void Game::initNetwork() {
         return;
     }
 
-    auto sock = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (sock == INVALID_SOCKET) {
-        std::cerr << "socket failed\n";
-        return;
-    }
+    auto sock = net::TcpSocket( );
+	if ( sock.nativeHandle( ) == INVALID_SOCKET ) {
+		std::cerr << "socket failed\n";
+		return;
+	}
 
-    sockaddr_in serverAddr{};
-    serverAddr.sin_family = AF_INET;
-    ::inet_pton(AF_INET, SERVERIP, &serverAddr.sin_addr);
-    serverAddr.sin_port = ::htons(PORT);
+    sock.connect( net::SockAddr( net::Ipv4Addr( ), net::Port( PORT ) ) );
 
-    if (::connect(sock, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) == SOCKET_ERROR) {
-        std::cerr << "connect failed\n";
-        return;
-    }
-
-    session_ = Session(sock, -1u);
+    session_ = Session(std::move(sock), -1);
 
     session_.enqueuePacket(
         Packet{
-            .type = PacketType::CSHello,
-            .size = sizeof(CSHello)
+            .size = sizeof(std::uint16_t) * 2,
+            .type = PacketType::CSHello
         }
     );
 
     // non-blocking socket
     u_long mode = 1;
-    if ( ioctlsocket(session_.sock(), FIONBIO, &mode) == SOCKET_ERROR ) {
+    if ( ioctlsocket(session_.sock().nativeHandle(), FIONBIO, &mode) == SOCKET_ERROR ) {
         std::cerr << "ioctlsocket failed\n";
         throw;
     }
 
     // disable nagle algorithm
     int flag = 1;
-    setsockopt(session_.sock(), IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(flag));
+    setsockopt(session_.sock().nativeHandle(), IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(flag));
 
     session_.flushPackets();
 }
