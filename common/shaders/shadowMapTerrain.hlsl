@@ -161,9 +161,12 @@ DSOutput DSMain(HSConstantOutput input, float2 uv : SV_DomainLocation, const Out
     float2 texcoord = lerp(t0, t1, uv.y);          // final interpolation
 
     // sample the height from the height map
-	uint4 heightPixel = sampleLevelFromMapRef(heightMapRef, texcoord, 0.f, heightMapSamplerIdx) * 255;
-    uint heightInt = heightPixel.r | (heightPixel.g << 8) | (heightPixel.b << 16) | (heightPixel.a << 24);
-    float height = asfloat(heightInt) * 50.f;
+	float4 heightPixel = sampleLevelFromMapRef(heightMapRef, texcoord, 0.f, heightMapSamplerIdx);
+    float height = heightPixel.a / 16777216.f
+        + heightPixel.b / 65536.f
+        + heightPixel.g / 256.f
+        + heightPixel.r;
+    height *= 50.f;
 
     // get the position for each vertex
     float3 p00 = patch[0].pos;

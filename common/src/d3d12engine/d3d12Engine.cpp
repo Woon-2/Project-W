@@ -105,6 +105,27 @@ void Core::loadStaticTexture( const Core::TextureKey& key,
     }
 }
 
+void Core::loadStaticTexture( const Core::TextureKey& key,
+    const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
+) {
+    switch (srvDesc.ViewDimension) {
+    case D3D12_SRV_DIMENSION::D3D12_SRV_DIMENSION_TEXTURE2D:
+        staticTexStorage_.load(texturePaths_.at(key), srvDesc, device_, cmdList_, descRanges_.srvRangeTex2D);
+        break;
+
+    case D3D12_SRV_DIMENSION::D3D12_SRV_DIMENSION_TEXTURE2DARRAY:
+        staticTexStorage_.load(texturePaths_.at(key), srvDesc, device_, cmdList_, descRanges_.srvRangeTex2DArray);
+        break;
+
+    case D3D12_SRV_DIMENSION::D3D12_SRV_DIMENSION_TEXTURECUBE:
+        staticTexStorage_.load(texturePaths_.at(key), srvDesc, device_, cmdList_, descRanges_.srvRangeTexCube);
+        break;
+
+    default:
+        throw GFX_EXCEPT("[Description] Unknown srv dimension");
+    }
+}
+
 void Core::loadRefModel(const Core::RefModelKey& key) {
     refModelStorage_.loadModel(key, refModelPaths_.at(key), staticTexStorage_, device_, cmdList_);
 }

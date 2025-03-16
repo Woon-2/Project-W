@@ -75,6 +75,7 @@ public:
     }
 
     void loadStaticTexture(const TextureKey& key, d3d12::TextureResource::Type type);
+    void loadStaticTexture(const TextureKey& key, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc);
     void loadRefModel(const RefModelKey& key);
     void layoutRefModelVBs( const d3d12::RefModelStorage::ID& key, std::size_t vbLayoutIdx,
         const d3d12::InputLayout& inputLayout

@@ -80,6 +80,17 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
         },
         TextureInfo{
             .keys = {
+                "Grass_A_BaseColor",
+                "Grass_A_Normal"
+            },
+            .paths = {
+                resourcePath/"terrains/Textures/Grass_A_BaseColor.dds",
+                resourcePath/"terrains/Textures/Grass_A_Normal.dds",
+            },
+            .type = gfx::d3d12::TextureResource::Type::Texture
+        },
+        TextureInfo{
+            .keys = {
                 "Terrain_0_0_HeightMap",
                 "Terrain_0_1_HeightMap",
                 "Terrain_0_2_HeightMap",
@@ -89,8 +100,6 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
                 "Terrain_2_0_HeightMap",
                 "Terrain_2_1_HeightMap",
                 "Terrain_2_2_HeightMap",
-                "Grass_A_BaseColor",
-                "Grass_A_Normal"
             },
             .paths = {
                 resourcePath/"terrains/HeightMaps/Terrain_0_0_HeightMap.dds",
@@ -102,9 +111,6 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
                 resourcePath/"terrains/HeightMaps/Terrain_2_0_HeightMap.dds",
                 resourcePath/"terrains/HeightMaps/Terrain_2_1_HeightMap.dds",
                 resourcePath/"terrains/HeightMaps/Terrain_2_2_HeightMap.dds",
-
-                resourcePath/"terrains/Textures/Grass_A_BaseColor.dds",
-                resourcePath/"terrains/Textures/Grass_A_Normal.dds",
             },
             .type = gfx::d3d12::TextureResource::Type::Texture
         }

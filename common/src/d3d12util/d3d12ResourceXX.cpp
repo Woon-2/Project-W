@@ -189,6 +189,32 @@ void StaticTextureStorage::load( const std::filesystem::path& path,
     }
 }
 
+void StaticTextureStorage::load( const std::filesystem::path& path,
+    const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc, D3D12Device& device,
+    D3D12GfxCmdList& cmdList, DescriptorRange<DescriptorHeapGPU>& range
+) {
+    switch (srvDesc.ViewDimension) {
+    case D3D12_SRV_DIMENSION::D3D12_SRV_DIMENSION_TEXTURE2D:
+        storedTexs_.emplace_back(device, cmdList, range, srvDesc, path);
+        map_[path] = storedTexs_.back().view(Texture::idxSrv);
+        break;
+
+    case D3D12_SRV_DIMENSION::D3D12_SRV_DIMENSION_TEXTURE2DARRAY:
+        storedTexArrs_.emplace_back(device, cmdList, range, srvDesc, path);
+        map_[path] = storedTexArrs_.back().view(TextureArray::idxSrv);
+        break;
+
+    case D3D12_SRV_DIMENSION::D3D12_SRV_DIMENSION_TEXTURECUBE:
+        storedTexCubes_.emplace_back(device, cmdList, range, srvDesc, path);
+        map_[path] = storedTexCubes_.back().view(TextureCube::idxSrv);
+        break;
+
+    default:
+        throw GFX_EXCEPT("[Description]: Unknown SRV dimension");
+        break;
+    }
+}
+
 const DescriptorGPU& StaticTextureStorage::get(const std::filesystem::path& path) const {
     return map_.at(path);
 }

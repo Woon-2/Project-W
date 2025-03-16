@@ -129,14 +129,14 @@ void Stage::initScene() {
             .ortho = {
                 .width = 180.f,
                 .height = 60.f,
-                .nearZ = 600.f,
-                .farZ = 1600.f
+                .nearZ = 200.f,
+                .farZ = 3000.f
             }
         },
         .color = mu::Vec3(1.f, 0.92f, 0.76f),
-        .dir = mu::NVec3(0.f, -1.f, 1.f),
+        .dir = mu::NVec3(0.f, -1.f, 0.33f),
         .intensity = 5.0f,
-        .distanceToCamera = 800.f,
+        .distanceToCamera = 1600.f,
         .type = gfx::d3d12::sr::Light::Type::Directional
     });
 
@@ -182,12 +182,26 @@ void loadTexture(gfx::d3d12engine::Core& core, AssetTexture key) {
     }
 }
 
+void loadHeightmapTexture(gfx::d3d12engine::Core& core, AssetTexture key) {
+    const auto& texInfo = assetTextureInfo(key);
+    for (auto i = 0ull; i < texInfo.keys.size(); ++i) {
+        core.registTexturePath(texInfo.keys[i], texInfo.paths[i]);
+        core.loadStaticTexture(texInfo.keys[i], D3D12_SHADER_RESOURCE_VIEW_DESC{
+            .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
+            .ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
+            .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+            .Texture2D = D3D12_TEX2D_SRV{ .MipLevels = 1u }
+        });
+    }
+}
+
 void Stage::loadTextures(gfx::d3d12::D3D12GfxCmdList& cmdList) {
     loadTexture(*pCore_, AssetTexture::Helicopter);
     loadTexture(*pCore_, AssetTexture::Tree0);
     loadTexture(*pCore_, AssetTexture::Tree1);
     loadTexture(*pCore_, AssetTexture::Tree2);
     loadTexture(*pCore_, AssetTexture::Terrain);
+    loadHeightmapTexture(*pCore_, AssetTexture::TerrainHeightmap);
 }
 
 void loadModel(gfx::d3d12engine::Core& core, AssetModel key, Renderer& renderer) {

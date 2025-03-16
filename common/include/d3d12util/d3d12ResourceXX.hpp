@@ -289,6 +289,9 @@ public:
     void load( const std::filesystem::path& path, TextureResource::Type type,
         D3D12Device& device, D3D12GfxCmdList& cmdList, DescriptorRange<DescriptorHeapGPU>& range
     );
+    void load( const std::filesystem::path& path, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc,
+        D3D12Device& device, D3D12GfxCmdList& cmdList, DescriptorRange<DescriptorHeapGPU>& range
+    );
     const DescriptorGPU& get(const std::filesystem::path& path) const;
     DescriptorGPU& get(const std::filesystem::path& path);
     const DescriptorGPU& operator[](const std::filesystem::path& path) const;

@@ -198,10 +198,12 @@ DSOutput DSMain(HSConstantOutput input, float2 uv : SV_DomainLocation, const Out
     output.tileTexCoord = lerp(tt0, tt1, uv.y);          // final interpolation
 
     // sample the height from the height map
-	uint4 heightPixel = sampleLevelFromMapRef(heightMapRef, output.texcoord, 0.f, heightMapSamplerIdx) * 255;
-
-    uint heightInt = heightPixel.r | (heightPixel.g << 8) | (heightPixel.b << 16) | (heightPixel.a << 24);
-    float height = asfloat(heightInt) * 50.f;
+	float4 heightPixel = sampleLevelFromMapRef(heightMapRef, output.texcoord, 0.f, heightMapSamplerIdx);
+    float height = heightPixel.a / 16777216.f
+        + heightPixel.b / 65536.f
+        + heightPixel.g / 256.f
+        + heightPixel.r;
+    height *= 50.f;
 
     // get the position for each vertex
     float3 p00 = patch[0].pos;
@@ -227,13 +229,19 @@ DSOutput DSMain(HSConstantOutput input, float2 uv : SV_DomainLocation, const Out
     // transform from local to clip space
 	output.pos = mul(output.pos, gInstances[instanceBase + input.instanceOffset].wvp);
 
-    uint4 tHeightPixel = sampleLevelFromMapRef2DOffset(heightMapRef, output.texcoord, 0.f, int2(0, 1), heightMapSamplerIdx) * 255;
-    uint tHeightInt = tHeightPixel.r | (tHeightPixel.g << 8) | (tHeightPixel.b << 16) | (tHeightPixel.a << 24);
-    float tHeight = asfloat(tHeightInt) * 50.f;
+    float4 tHeightPixel = sampleLevelFromMapRef2DOffset(heightMapRef, output.texcoord, 0.f, int2(0, 1), heightMapSamplerIdx);
+    float tHeight = tHeightPixel.a / 16777216.f
+        + tHeightPixel.b / 65536.f
+        + tHeightPixel.g / 256.f
+        + tHeightPixel.r;
+    tHeight *= 50.f;
 
-    uint4 rHeightPixel = sampleLevelFromMapRef2DOffset(heightMapRef, output.texcoord, 0.f, int2(1, 0), heightMapSamplerIdx) * 255;
-    uint rHeightInt = rHeightPixel.r | (rHeightPixel.g << 8) | (rHeightPixel.b << 16) | (rHeightPixel.a << 24);
-    float rHeight = asfloat(rHeightInt) * 50.f;     
+    float4 rHeightPixel = sampleLevelFromMapRef2DOffset(heightMapRef, output.texcoord, 0.f, int2(1, 0), heightMapSamplerIdx);
+    float rHeight = rHeightPixel.a / 16777216.f
+        + rHeightPixel.b / 65536.f
+        + rHeightPixel.g / 256.f
+        + rHeightPixel.r;
+    rHeight *= 50.f; 
 
     float3 tangentM = float3(2.06f / input.tessInsideFactors[0], rHeight - height, 0.f);
     float3 bitangentM = float3(0.f, tHeight - height, 2.06f / input.tessInsideFactors[1]);
