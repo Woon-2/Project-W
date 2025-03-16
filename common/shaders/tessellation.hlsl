@@ -203,7 +203,7 @@ DSOutput DSMain(HSConstantOutput input, float2 uv : SV_DomainLocation, const Out
         + heightPixel.b / 65536.f
         + heightPixel.g / 256.f
         + heightPixel.r;
-    height *= 50.f;
+    height *= 200.f;
 
     // get the position for each vertex
     float3 p00 = patch[0].pos;
@@ -234,14 +234,14 @@ DSOutput DSMain(HSConstantOutput input, float2 uv : SV_DomainLocation, const Out
         + tHeightPixel.b / 65536.f
         + tHeightPixel.g / 256.f
         + tHeightPixel.r;
-    tHeight *= 50.f;
+    tHeight *= 200.f;
 
     float4 rHeightPixel = sampleLevelFromMapRef2DOffset(heightMapRef, output.texcoord, 0.f, int2(1, 0), heightMapSamplerIdx);
     float rHeight = rHeightPixel.a / 16777216.f
         + rHeightPixel.b / 65536.f
         + rHeightPixel.g / 256.f
         + rHeightPixel.r;
-    rHeight *= 50.f; 
+    rHeight *= 200.f; 
 
     float3 tangentM = float3(2.06f / input.tessInsideFactors[0], rHeight - height, 0.f);
     float3 bitangentM = float3(0.f, tHeight - height, 2.06f / input.tessInsideFactors[1]);

@@ -27,31 +27,20 @@ public class BinaryLevelExtract : MonoBehaviour
         CalculateResourceIndices();
 
         using (BinaryWriter writer = new BinaryWriter(
-            File.Open(string.Copy(gameObject.name).Replace(" ", "_") + ".bin", FileMode.Create)
+            File.Open(string.Copy(gameObject.name).Replace(" ", "_") + "_Terrain.bin", FileMode.Create)
         ))
         {
             WriteDictionary(writer);
             ExtractAllTerrainData(writer);
+        }
+
+        using (BinaryWriter writer = new BinaryWriter(
+            File.Open(string.Copy(gameObject.name).Replace(" ", "_") + ".bin", FileMode.Create)
+        ))
+        {
             ExtractAllObjectsData(writer);
         }
     }
-    /*
-    private void ExtractAllTerrainData(BinaryWriter writer)
-    {
-        Terrain[] terrains = terrainGroup.GetComponentsInChildren<Terrain>();
-
-        writer.Write("<Chunks:>");
-        writer.Write(terrains.Length);
-
-
-        foreach (var terrain in terrains)
-        {
-            ExtractTerrainData(terrain, writer);
-        }
-
-        writer.Write("</Chunks>");
-    }
-    */
 
     private void ExtractAllTerrainData(BinaryWriter writer)
     {
@@ -242,7 +231,6 @@ public class BinaryLevelExtract : MonoBehaviour
             for (int x = 0; x < resolution; x++)
             {
                 float normalizedHeight = heights[y, x];
-                normalizedHeight = heights[y, x] * 30.0f; // Temporary scaling
                 uint height = (uint)(normalizedHeight * 4294967296.0f);
 
                 Color32 color = new Color32(

@@ -166,7 +166,7 @@ DSOutput DSMain(HSConstantOutput input, float2 uv : SV_DomainLocation, const Out
         + heightPixel.b / 65536.f
         + heightPixel.g / 256.f
         + heightPixel.r;
-    height *= 50.f;
+    height *= 200.f;
 
     // get the position for each vertex
     float3 p00 = patch[0].pos;

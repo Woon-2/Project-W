@@ -312,7 +312,8 @@ private:
         coord::System& coordRoot, std::vector<ecs::Entity>& out
     );
 
-    std::unique_ptr< std::ifstream > pStream_;
+    std::unique_ptr< std::ifstream > pTerrainStream_;
+    std::unique_ptr< std::ifstream > pObjectStream_;
     // the order of the following members is important
     // ObjectDisposition's constructor reads from the stream
     // which has been already read some data from LevelRegionModel's constructor

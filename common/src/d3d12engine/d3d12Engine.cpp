@@ -303,9 +303,10 @@ ObjectDisposition::ObjectDisposition(std::ifstream& is)
 }
 
 LevelRegion::LevelRegion(const Core& core)
-    : pStream_( std::make_unique<std::ifstream>(resourcePath/"LevelGraph.bin") ),
-    model_(core.staticTexStorage(), *pStream_),
-    dispositionRoot_(*pStream_), chunks_() {}
+    : pTerrainStream_( std::make_unique<std::ifstream>(resourcePath/"LevelGraph_Terrain.bin", std::ios::binary) ),
+    pObjectStream_( std::make_unique<std::ifstream>(resourcePath/"LevelGraph.bin", std::ios::binary) ),
+    model_(core.staticTexStorage(), *pTerrainStream_),
+    dispositionRoot_(*pObjectStream_), chunks_() {}
 
 void LevelRegion::activateChunk(std::size_t xIdx, std::size_t zIdx, Scene& scene) {
     auto& chunk = model_.get(
