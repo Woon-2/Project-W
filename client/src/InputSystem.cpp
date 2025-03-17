@@ -1,7 +1,5 @@
 #include "inputSystem.hpp"
-#include "physicsSystem.hpp"
-
-#include "player.hpp"
+#include "game/physicsSystem.hpp"
 
 #include "keyboardXX.hpp"
 

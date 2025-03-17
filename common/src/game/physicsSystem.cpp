@@ -1,9 +1,4 @@
-#include "physicsSystem.hpp"
-#include "player.hpp"
-
-#include "inputSystem.hpp"
-
-#include <iostream>
+#include "game/physicsSystem.hpp"
 
 RigidBody::RigidBody(const ecs::Entity& entity) NOEXCEPT
 	: Component(entity) {

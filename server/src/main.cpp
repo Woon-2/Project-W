@@ -1,9 +1,14 @@
+#include "sNetEx.hpp"
+
 #include "net/netLow.hpp"
 #include "net/protocol.hpp"
 #include "net/netInclude.hpp"
 #include "net/session.hpp"
 
-#include "mathUtil.hpp"
+#include "game/level.hpp"
+#include "game/physicsSystem.hpp"
+#include "coord.hpp"
+#include "resourcePath.hpp"
 
 #include <iostream>
 #include <cstdint>
@@ -17,82 +22,24 @@
 #include <utility>
 #include <deque>
 #include <algorithm>
-
-RigidXform gXforms[maxConnection];
+#include <chrono>
+#include <random>
 
 std::list<Session> gSessions;
-std::deque<Packet> gBroadcastQueue;
-
-//std::forward_list<std::uint16_t> IDPool::idList_(std::numeric_limits<std::uint16_t>::max());
-
-void precessPacket(Session& session) {
-    auto& recvQueue = session.getRecvQueue();
-    
-    while(!recvQueue.empty()) {
-        auto packet = recvQueue.front();
-        recvQueue.pop_front();
-
-        switch(packet.type) {
-            case PacketType::CSHello:
-                std::cout << "Received Hello From Client!\n";
-                session.enqueuePacket(
-                    Packet{
-                        .size = 16u + sizeof(SCAssign),
-                        .type = PacketType::SCAssign,
-                        .scAssign = {
-                            .id = session.id()
-                        }
-                    }
-                );
-                break;
-                
-            case PacketType::CSLeave:
-                std::erase(gSessions, session);
-                break;
-
-            case PacketType::CSWorld:
-                gXforms[session.id()] = packet.csWorld.xform;
-                break;
-
-            default:
-                break;
-        }
-    }
-}
-
-void sendPacket(Session& session) {
-    for (const auto& packet : gBroadcastQueue) {
-        session.enqueuePacket(packet);   
-    }
-
-    session.flushPackets();
-}
-
-void fillBroadcastQueue() {
-    auto worldPacket =  Packet{
-        .size = 16 + sizeof(SCWorld),
-        .type = PacketType::SCWorld
-    };
-
-    for (std::size_t i = 0; i < maxConnection; ++i) {
-        worldPacket.scWorld.xforms[i] = gXforms[i];
-    }
-
-    gBroadcastQueue.push_back(worldPacket);
-}
-
-void initXforms() {
-    // temporary
-    gXforms[0].pos = {52.94f, 14.82f - 25.f, 43.68f};
-    gXforms[1].pos = {50.29f, 21.f - 25.f, 56.59f};
-    gXforms[2].pos = {30.22f, 21.5f - 25.f, 52.51f};
-    gXforms[3].pos = {41.4f, 16.f - 25.f, 46.1f};
-    gXforms[4].pos = {41.5f, 17.5f - 25.f, 39.3f};
-}
+std::uniform_real_distribution<float> gDist(-1.f, 1.f);
+std::mt19937 gRng(std::random_device{}());
 
 int main()
 {
+    using Clock = std::chrono::high_resolution_clock;
+    using Seconds = std::chrono::duration<float>;
+    static constexpr auto frameRate = 0.016f;
+    static constexpr auto directionChangeRate = 2.f;
+    float directionChangeCounter = 0.f;
+
+    ecs::init( ecs::InitDesc{ .threadCnt = 1u, .entityPoolSize = 0x160u } );
     net::initNet();
+    IDPool::initList();
 
     auto listenSocket = net::TcpSocket();
     
@@ -108,8 +55,35 @@ int main()
   
     int retVal{};
 
-    initXforms();
-    IDPool::initList();
+    auto levelEntity = gameEngine::LevelRegion(resourcePath/"LevelGraph.bin");
+    
+    auto netSystem = SNetExSystem();
+    auto physicsSystem = PhysicsSystem();
+    auto coordRoot = gameEngine::CoordRoot();
+
+    auto entities = levelEntity.instantiateAllObjects(coordRoot.get());
+    auto directions = std::vector<mu::Vec3>(entities.size() - 5u);
+    for (auto& dir : directions) {
+        dir = mu::Vec3(gDist(gRng), 0.f, gDist(gRng));
+    }
+    // add netEx, rigidBody
+    
+    for (std::size_t i = 0u; i < entities.size(); ++i) {
+        auto& entity = entities[i];
+        if (i < 5u) {
+            entity.createComponent<NetEx>(std::make_unique<SNetExHelicopter>(entity.id().value()), static_cast<std::uint32_t>(i));
+        }
+        else {
+            entity.createComponent<NetEx>(std::make_unique<SNetExAI>(entity.id().value(), static_cast<std::uint32_t>(i)), static_cast<std::uint32_t>(i));
+        }
+        entity.createComponent<RigidBody>();
+
+        netSystem.addEntity(entity);
+        physicsSystem.addEntity(entity);
+        coordRoot.addEntity(entity);
+    }
+
+    auto lastTp = Clock::now();
 
     while (true) {
         auto recvRequestSocks = std::vector<net::TcpSocket*>();
@@ -144,6 +118,9 @@ int main()
                     ::closesocket(clientSocket.nativeHandle());
                     gSessions.pop_back();
                 }
+                else {
+                    netSystem.addSession(gSessions.back());
+                }
             }
             else{
                 auto session = std::find_if(gSessions.begin(), gSessions.end(), [&sock](const auto& s) {
@@ -152,12 +129,57 @@ int main()
 
                 if (session != gSessions.end()) {
                     session->recvPackets();
-                    precessPacket(*session);
                 }
             }
         }
 
-        fillBroadcastQueue();
+        // update game ===============
+        auto tp = Clock::now();
+        auto elapsed = std::chrono::duration_cast<Seconds>(tp - lastTp).count();
+
+        if (elapsed < frameRate / 2.f) {
+            std::this_thread::sleep_for(std::chrono::duration<float>(frameRate - elapsed));
+            elapsed = frameRate;
+        }
+
+        netSystem.preUpdate();
+
+        // physically update
+        const float forceStep_ = 800.f;
+        for (std::size_t i = 5u; i < entities.size(); ++i) {
+            auto& entity = entities[i];
+            auto& coord = entity.as<gameEngine::Coord>();
+            auto& rigidBody = entity.as<RigidBody>();
+            auto& netEx = entity.as<NetEx>();
+
+            rigidBody.addForce(directions[i - 5u] * forceStep_ * elapsed);
+        }
+
+        physicsSystem.update(elapsed);
+
+        for (std::size_t i = 5u; i < entities.size(); ++i) {
+            auto& entity = entities[i];
+            auto& coord = entity.as<gameEngine::Coord>();
+            auto& rigidBody = entity.as<RigidBody>();
+            coord.get() << mu::translate( rigidBody.deltaPosition() );
+        }
+
+        directionChangeCounter += elapsed;
+        if (directionChangeCounter > directionChangeRate) {
+            directionChangeCounter = 0.f;
+            for (auto& dir : directions) {
+                dir = mu::Vec3(gDist(gRng), 0.f, gDist(gRng));
+            }
+        }
+
+        coordRoot.update();
+        
+        lastTp = tp;
+
+        // fill broadcast queue
+        netSystem.postUpdate();
+
+        // ===========================
 
         for(const auto& sock : sendReadySocks) {
             auto session = std::find_if(gSessions.begin(), gSessions.end(), [&sock](const auto& s) {
@@ -165,11 +187,9 @@ int main()
             });
 
             if (session != gSessions.end()) {
-                sendPacket(*session);
+                session->flushPackets();
             }
         }
-
-        gBroadcastQueue.clear();
     }
 
     net::relNet();

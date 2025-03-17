@@ -1,7 +1,5 @@
 #include "game.hpp"
 
-#include "player.hpp"
-
 #include "mouseWin32Adaptor.hpp"
 #include "testInput.hpp"
 
@@ -43,6 +41,8 @@ int Game::run() {
             "Unknown Exception", MB_OK | MB_ICONEXCLAMATION);
     }
 
+    net::relNet();
+
     return 0;
 }
 
@@ -64,11 +64,7 @@ void Game::render() {
 }
 
 void Game::initNetwork() {
-    WSADATA wsaData;
-    if (::WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        std::cerr << "WSAStartup failed\n";
-        return;
-    }
+    net::initNet();
 
     auto sock = net::TcpSocket( );
 	if ( sock.nativeHandle( ) == INVALID_SOCKET ) {
@@ -79,6 +75,8 @@ void Game::initNetwork() {
     sock.connect( net::SockAddr( net::Ipv4Addr( ), net::Port( PORT ) ) );
 
     session_ = Session(std::move(sock), -1);
+
+    systems_.netSystem = CNetExSystem(&session_);
 
     session_.enqueuePacket(
         Packet{

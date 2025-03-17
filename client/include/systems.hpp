@@ -2,7 +2,8 @@
 #define __Systems_HPP
 
 #include "inputSystem.hpp"
-#include "physicsSystem.hpp"
+#include "game/physicsSystem.hpp"
+#include "cNetEx.hpp"
 
 #include "d3d12engine/d3d12Engine.hpp"
 
@@ -10,9 +11,10 @@ struct Systems {
     PhysicsSystem physicsSystem;
     InputSystem inputSystem;
     gameEngine::CoordRoot coordRoot;
+    CNetExSystem netSystem;
 
     Systems(ic::Keyboard& keyboard, std::size_t fenceIdx = 0)
-        : physicsSystem(), inputSystem(keyboard), coordRoot() {}
+        : physicsSystem(), inputSystem(keyboard), coordRoot(), netSystem() {}
 };
 
 #endif  // __Systems_HPP

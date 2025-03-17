@@ -4,6 +4,7 @@
 #include "resourcePath.hpp"
 
 #include <ranges>
+#include <algorithm>
 
 void Stage::init() {
     loadAssets();
@@ -27,22 +28,30 @@ void Stage::render() {
 }
 
 void Stage::processPackets(double deltaTime) {
-    for (;;) {
-        char buf[ 256 ]{};
-        Packet recvPacket{};
-        auto recvBytes = ::recv(pSession_->sock().nativeHandle(), reinterpret_cast<char*>(&buf ), sizeof( buf ), 0);
-		std::memcpy( &recvPacket, buf, sizeof( Packet ) );
-        if (recvBytes == SOCKET_ERROR) {
-            return;
-        }
+    pSession_->recvPackets();
 
-        const auto cameraOffset = mu::Vec3(0.f, 4.8f, -10.f);
-        const auto cameraTimeLag = 1.f;
+    pSystems_->netSystem.preUpdate(*pCore_);
+    auto v = pSystems_->netSystem.retreiveCreatedEntities();
 
-        switch (recvPacket.type) {
-        case PacketType::SCAssign: {
-            pSession_->setId(recvPacket.scAssign.id);
-            pPlayer_ = &entities_[recvPacket.scAssign.id];
+    for (auto& entt : v) {
+        entt.as<gfx::d3d12engine::Model>().get().markRenderPass(gfx::d3d12::rp::PBRIllumination::id);
+        entt.as<gfx::d3d12engine::Model>().get().markRenderPass(gfx::d3d12::rp::ShadowMap::id);
+        scene_.addEntity(entt);
+        pSystems_->coordRoot.addEntity(entt);
+    }
+    
+    std::ranges::move(v, std::back_inserter(entities_));
+
+    if (pSystems_->netSystem.playerID_.has_value()) {
+        auto it = std::ranges::find_if(entities_,
+            [&id = pSystems_->netSystem.playerID_.value()](const auto& entt) {
+            return entt.id() == id;
+        });
+        if (it != entities_.end()) {
+            const auto cameraOffset = mu::Vec3(0.f, 4.8f, -10.f);
+            const auto cameraTimeLag = 1.f;
+
+            pPlayer_ = &*it;
             pPlayer_->createComponent<PlayerController>();
 
             pPlayer_->createComponent<gfx::d3d12engine::Camera>(gfx::d3d12::Camera::Config());
@@ -56,43 +65,17 @@ void Stage::processPackets(double deltaTime) {
             camera.setTimeLag(cameraTimeLag);
             camera.attach(pPlayer_->as<gfx::d3d12engine::Model>());
 
-            pSystems_->coordRoot.addEntity(*pPlayer_);
             pSystems_->inputSystem.addEntity(*pPlayer_);
             pSystems_->physicsSystem.addEntity(*pPlayer_);
-
             initScene();
-            break;
-        }
-
-        case PacketType::SCWorld:
-            for (auto i = 0u; i < maxConnection; ++i) {
-                if (i == pSession_->id()) {
-                    continue;
-                }
-                auto& xform = recvPacket.scWorld.xforms[i];
-
-                entities_[i].as<gameEngine::Coord>().get().setLocalXform(mu::translate(xform.pos));
-                entities_[i].as<gfx::d3d12engine::Model>().get().root()->coord().setLocalXform(mu::Mat4x4(xform.rot));
-            }
-            break;
         }
     }
 }
 
 void Stage::updateNetwork(double deltaTime) {
     if (pPlayer_) {
-        pSession_->enqueuePacket(Packet{
-            .size = 16u + sizeof(CSWorld),
-            .type = PacketType::CSWorld,
-            .csWorld = {
-                .xform = {
-                    .pos = pPlayer_->as<gameEngine::Coord>().get().localXform().row(3),
-                    .rot = mu::NQuat(mu::quatRotMat(pPlayer_->as<gfx::d3d12engine::Model>().get().root()->coord().localXform()))
-                }
-            }
-        });
+        pPlayer_->as<NetEx>().generatePackets(*pSession_);
     }
-
     pSession_->flushPackets();
 }
 
@@ -120,7 +103,7 @@ void Stage::simulate(double deltaTime) {
 }
 
 void Stage::initEntities() {
-    entities_ = level_.instantiateAllObjects(*pCore_, pSystems_->coordRoot.get());
+
 }
 
 void Stage::initScene() {
@@ -144,15 +127,6 @@ void Stage::initScene() {
         for (auto j = 0u; j < 3u; ++j) {
             level_.activateChunk(i, j, scene_);
         }
-    }
-
-    for (auto& entt : entities_) {
-        entt.as<gfx::d3d12engine::Model>().get().markRenderPass(gfx::d3d12::rp::PBRIllumination::id);
-        entt.as<gfx::d3d12engine::Model>().get().markRenderPass(gfx::d3d12::rp::ShadowMap::id);
-        entt.createComponent<RigidBody>();
-
-        scene_.addEntity(entt);
-        pSystems_->physicsSystem.addEntity(entt);
     }
 
     scene_.addEntity(directionalLight_);

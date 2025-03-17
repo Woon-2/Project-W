@@ -1,11 +1,13 @@
 #include "net/session.hpp"
 
+#include "game/level.hpp"
+
 #include <numeric>
 #include <iostream>
 #include <vector>
 
 void IDPool::initList() {
-    idList_.resize(maxConnection * 2);
+    idList_.resize(0xFFFF);
     std::iota(idList_.begin(), idList_.end(), 0u);
 }
 
@@ -68,6 +70,10 @@ void IDPool::deallocID(std::uint16_t id) {
 void Session::flushPackets() {
     auto wsaBufs = std::vector<WSABUF>(sendQueue_.size());
 
+    if (sendQueue_.empty()) {
+        return;
+    }
+
     for (std::size_t i = 0u; i < sendQueue_.size(); ++i) {
         auto& packet = sendQueue_[i];
 
@@ -91,7 +97,7 @@ void Session::recvPackets() {
 
     auto recvSize = sock_.WSARecvUc(std::views::single(wsaBuf));
 
-    if (!recvSize) {}
+    if (!recvSize) { return; }
 
 	std::cout << "Received " << recvSize.value( ) << " bytes\n";
 

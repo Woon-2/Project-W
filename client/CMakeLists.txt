@@ -41,13 +41,12 @@ target_sources(client
     PRIVATE
         src/main.cpp
         src/game.cpp include/game.hpp
-        src/player.cpp include/player.hpp
         src/inputSystem.cpp include/inputSystem.hpp
         src/assetMap.cpp include/assetMap.hpp
-        src/physicsSystem.cpp include/physicsSystem.hpp
         src/stage.cpp include/stage.hpp
         src/Timer.cpp include/Timer.hpp
         src/renderer.cpp include/renderer.hpp
+        src/cNetEx.cpp include/cNetEx.hpp
 
         include/testInput.hpp
         include/systems.hpp
@@ -64,6 +63,7 @@ target_include_directories(client
 
 target_link_libraries(client
     PRIVATE
+        common::game
         common::woon2exception
         common::win32
         common::gfx

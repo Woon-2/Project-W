@@ -7,7 +7,6 @@
 
 #include "ecs.hpp"
 #include "systems.hpp"
-#include "player.hpp"
 #include "renderer.hpp"
 
 #include "d3d12engine/d3d12Engine.hpp"

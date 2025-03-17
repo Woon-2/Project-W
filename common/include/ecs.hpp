@@ -56,7 +56,8 @@ enum class Components {
     LevelChunkModel,
     Camera,
     Light,
-    Size
+    NetEx,
+    Size,
 };
 
 void init(const InitDesc& desc);

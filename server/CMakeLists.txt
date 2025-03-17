@@ -40,6 +40,7 @@ add_executable(server)
 target_sources(server
     PRIVATE
         src/main.cpp
+        src/sNetEx.cpp include/sNetEx.hpp
 )
 
 include(auto_configure)

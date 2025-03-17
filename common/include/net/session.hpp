@@ -4,12 +4,15 @@
 #include "net/netLow.hpp"
 #include "net/protocol.hpp"
 
+#include "ecs.hpp"
+
 #include <cstdint>
 #include <deque>
 #include <forward_list>
 #include <optional>
 #include <vector>
 #include <array>
+#include <memory>
 
 class IDPool {
 public:
@@ -21,6 +24,36 @@ public:
     
     private:
     static std::forward_list<std::uint16_t> idList_;
+};
+
+class INetExProcessor {
+public:
+    virtual void generatePackets(class Session& session) = 0;
+    virtual void processPacket(const Packet& packet) = 0;
+};
+
+class NetEx : public ecs::Component {
+public:
+    ENABLE_COMPONENT(NetEx);
+
+    NetEx( const ecs::Entity& entity, std::unique_ptr<INetExProcessor>&& pNetExProcessor,
+        std::uint32_t netId = -1u
+    ) NOEXCEPT : ecs::Component(entity), pProcessor_(std::move(pNetExProcessor)), netId_(netId) {}
+
+    void generatePackets(Session& session) {
+        pProcessor_->generatePackets(session);
+    }
+    void processPacket(const Packet& packet) {
+        pProcessor_->processPacket(packet);
+    }
+
+    std::uint32_t id() const noexcept {
+        return netId_;
+    }
+
+private:
+    std::unique_ptr<INetExProcessor> pProcessor_;
+    std::uint32_t netId_;
 };
 
 class Session {
@@ -78,5 +111,6 @@ private:
     std::uint32_t recvOffset_;
     std::uint32_t readOffset_;
 };
+
 
 #endif  // __SESSION_HPP

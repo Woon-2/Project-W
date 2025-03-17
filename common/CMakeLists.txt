@@ -82,11 +82,6 @@ add_library(common::mu ALIAS mu)
 
 auto_configure(mu INTERFACE)
 
-target_compile_definitions(mu
-    INTERFACE
-        DXMATH_VEC_UTIL DXMATH_MAT_UTIL DXMATH_QUAT_UTIL
-)
-
 target_include_directories(mu
     INTERFACE
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
@@ -181,6 +176,7 @@ target_include_directories(ecs
 add_library(game
     src/game/level.cpp include/game/level.hpp
     src/coord.cpp include/coord.hpp
+    src/game/physicsSystem.cpp include/game/physicsSystem.hpp
 )
 
 add_library(common::game ALIAS game)
@@ -209,6 +205,7 @@ define_win32_lighten_macros(net PUBLIC)
 
 target_link_libraries(net
     PRIVATE
+        common::ecs
         common::mu
         common::woon2exception
         common::game

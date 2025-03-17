@@ -72,7 +72,7 @@ void CoordRoot::addEntity(ecs::Entity& entity) {
 
 
 LevelRegion::LevelRegion(const std::filesystem::path& path)
-    : ecs::Entity(), dispositionRoot_() {}//////////
+    : ecs::Entity(), pStream_(std::make_unique<std::ifstream>(path, std::ios::binary)), dispositionRoot_(*pStream_) {}
 
 std::vector<ecs::Entity> LevelRegion::instantiateAllObjects(gfx::coord::System& coordRoot) {
     auto ret = std::vector<ecs::Entity>();
