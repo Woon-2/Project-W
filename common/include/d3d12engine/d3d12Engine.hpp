@@ -1,6 +1,8 @@
 #ifndef __D3D12Engine_HPP
 #define __D3D12Engine_HPP
 
+#include "game/level.hpp"
+
 #include "d3d12engine/descriptorRangeSpec.hpp"
 
 #include "d3d12util/d3d12Low.hpp"
@@ -14,6 +16,7 @@
 #include <fstream>
 #include <memory>
 #include <optional>
+#include <filesystem>
 
 namespace gfx {
 
@@ -142,45 +145,17 @@ private:
     std::map< RefModelKey, std::filesystem::path > refModelPaths_;
 };
 
-class Coord : public ecs::Component {
-public:
-    ENABLE_COMPONENT(Coord);
-
-    Coord(const ecs::Entity& entity) NOEXCEPT
-        : ecs::Component(entity) {}
-
-    coord::System& get() NOEXCEPT { return coordSys_; }
-    const coord::System& get() const NOEXCEPT { return coordSys_; }
-
-private:
-    coord::System coordSys_;
-};
-
-class CoordRoot : public ecs::System<Coord> {
-public:
-    void addEntity(ecs::Entity& entity);
-    void update() {
-        rootCoordSys_.traverse();
-    }
-
-    coord::System& get() NOEXCEPT { return rootCoordSys_; }
-    const coord::System& get() const NOEXCEPT { return rootCoordSys_; }
-
-private:
-    coord::System rootCoordSys_;
-};
-
 class Model : public ecs::Component {
 public:
     ENABLE_COMPONENT(Model);
 
     Model( const ecs::Entity& entity,
         const d3d12::RefModelStorage::ID& key, const Core& core,
-        Coord& coordComp
+        gameEngine::Coord& coordComp
     );
 
     Model( const ecs::Entity& entity,
-        const d3d12::RefModel& refModel, Coord& coordComp
+        const d3d12::RefModel& refModel, gameEngine::Coord& coordComp
     );
 
     d3d12::Model& get() NOEXCEPT { return model_; }
@@ -274,17 +249,6 @@ private:
     std::vector<ecs::Entity::ID> reservedEntities_;
 };
 
-class ObjectDisposition {
-public:
-    ObjectDisposition() = default;
-    ObjectDisposition(std::ifstream& is);
-
-    mu::Mat4x4 xform_;
-    std::string name_;
-    std::string prefabName_;
-    std::vector<ObjectDisposition> children_;
-};
-
 class LevelChunk : public ecs::Entity {
 public:
     void embed(d3d12::LevelChunkModel* pModel) {
@@ -295,20 +259,21 @@ public:
 };
 
 class LevelRegion : public ecs::Entity {
-
 public:
     LevelRegion() = default;
-    LevelRegion(const Core& core);
+    LevelRegion( const Core& core, const std::filesystem::path& levelPath,
+        const std::filesystem::path& levelTerrainPath
+    );
 
     void activateChunk(std::size_t xIdx, std::size_t zIdx, Scene& scene);
     std::vector<ecs::Entity> instantiateAllObjects(const Core& core, coord::System& coordRoot);
 
-    ObjectDisposition& dispositionRoot() NOEXCEPT { return dispositionRoot_; }
-    const ObjectDisposition& dispositionRoot() const NOEXCEPT { return dispositionRoot_; }
+    gameEngine::ObjectDisposition& dispositionRoot() NOEXCEPT { return dispositionRoot_; }
+    const gameEngine::ObjectDisposition& dispositionRoot() const NOEXCEPT { return dispositionRoot_; }
 
 private:
     void instantiateObjectHierarchy( std::optional<std::size_t> parentIdx,
-        const ObjectDisposition& disposition, const Core& core,
+        const gameEngine::ObjectDisposition& disposition, const Core& core,
         coord::System& coordRoot, std::vector<ecs::Entity>& out
     );
 
@@ -318,7 +283,7 @@ private:
     // ObjectDisposition's constructor reads from the stream
     // which has been already read some data from LevelRegionModel's constructor
     d3d12::LevelRegionModel model_;
-    ObjectDisposition dispositionRoot_;
+    gameEngine::ObjectDisposition dispositionRoot_;
     std::vector<LevelChunk> chunks_;
 };
 

@@ -12,9 +12,9 @@ Player::Player()
 void Player::init(gfx::d3d12engine::Core& core) {
 	createComponent<RigidBody>();
 	createComponent<PlayerController>();
-	createComponent<gfx::d3d12engine::Coord>();
+	createComponent<gameEngine::Coord>();
 	createComponent<gfx::d3d12engine::Model>( assetModelInfo(AssetModel::Helicopter).key,
-		core, as<gfx::d3d12engine::Coord>()
+		core, as<gameEngine::Coord>()
 	);
 	as<gfx::d3d12engine::Model>().get().markRenderPass(
 		gfx::d3d12::rp::PBRIllumination::id
@@ -25,7 +25,7 @@ void Player::init(gfx::d3d12engine::Core& core) {
 }
 
 void MU_CALLCONV Player::addCamera( mu::Vec3 offset, float timeLag,
-	const gfx::d3d12::Camera::Config& config, gfx::d3d12engine::CoordRoot& coordRoot
+	const gfx::d3d12::Camera::Config& config, gameEngine::CoordRoot& coordRoot
 ) {
 	createComponent<gfx::d3d12engine::Camera>(config);
 	auto& camera = as<gfx::d3d12engine::Camera>();
@@ -40,7 +40,7 @@ void MU_CALLCONV Player::addCamera( mu::Vec3 offset, float timeLag,
 }
 
 void Player::update(float deltaTime) {
-	as<gfx::d3d12engine::Coord>().get()
+	as<gameEngine::Coord>().get()
 		<< mu::translate( as<RigidBody>().deltaPosition() );
 }
 

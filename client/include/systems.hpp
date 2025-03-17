@@ -9,7 +9,7 @@
 struct Systems {
     PhysicsSystem physicsSystem;
     InputSystem inputSystem;
-    gfx::d3d12engine::CoordRoot coordRoot;
+    gameEngine::CoordRoot coordRoot;
 
     Systems(ic::Keyboard& keyboard, std::size_t fenceIdx = 0)
         : physicsSystem(), inputSystem(keyboard), coordRoot() {}

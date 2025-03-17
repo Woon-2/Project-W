@@ -150,25 +150,15 @@ void Core::layoutRefModelVBs(const d3d12::RefModelStorage::ID& key, std::size_t 
     refModelStorage_.get(key).arrangeVBs(device_, cmdList_, vbLayoutIdx, vbProps);
 }
 
-void CoordRoot::addEntity(ecs::Entity& entity) {
-    ecs::System<Coord>::addEntity(entity);
-    auto pCoord = entity.get<Coord>();
-    if (!pCoord) {
-        throw ECS_EXCEPT("Entity does not have a Coord component");
-    }
-    
-    pCoord->get().setParent(&rootCoordSys_);
-}
-
 Model::Model( const ecs::Entity& entity,
     const d3d12::RefModelStorage::ID& key, const Core& core,
-    Coord& coordComp
+    gameEngine::Coord& coordComp
 ) : ecs::Component(entity), model_(core.refModelStorage_.get(key)) {
     model_.root()->coord().setParent(&coordComp.get());
 }
 
 Model::Model( const ecs::Entity& entity,
-    const d3d12::RefModel& refModel, Coord& coordComp
+    const d3d12::RefModel& refModel, gameEngine::Coord& coordComp
 ) : ecs::Component(entity), model_(refModel) {
     model_.root()->coord().setParent(&coordComp.get());
 }
@@ -247,64 +237,11 @@ void Scene::clearStash() {
     reservedEntities_.clear();
 }
 
-ObjectDisposition::ObjectDisposition(std::ifstream& is)
-    : xform_(), name_(), prefabName_(), children_() {
-    char pstrToken[64] = { '\0' };
-    BYTE nStrLength = 0;
-    dx::XMFLOAT4X4 xform{};
-    bool isInstance = false;
-    int childCnt = 0;
-
-    is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
-    is.read(reinterpret_cast<char*>(pstrToken), nStrLength);
-    pstrToken[nStrLength] = '\0';
-
-    if (strcmp(pstrToken, "<Node:>")) {
-        throw std::runtime_error("Node token expected but got: " + std::string(pstrToken));
-    }
-
-    is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
-    name_.resize(nStrLength);
-    is.read(reinterpret_cast<char*>(name_.data()), nStrLength);
-
-    is.read(reinterpret_cast<char*>(&xform), sizeof(dx::XMFLOAT4X4));
-    xform_ = mu::Mat4x4( dx::loadMat(xform) );
-
-    is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
-    prefabName_.resize(nStrLength);
-    is.read(reinterpret_cast<char*>(prefabName_.data()), nStrLength);
-
-    is.read(reinterpret_cast<char*>(&isInstance), sizeof(bool));
-    if (!isInstance) {
-        prefabName_.clear();
-    }
-
-    is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
-    is.read(reinterpret_cast<char*>(pstrToken), nStrLength);
-    pstrToken[nStrLength] = '\0';
-
-    if (strcmp(pstrToken, "<Children:>")) {
-        throw std::runtime_error("Children token expected but got: " + std::string(pstrToken));
-    }
-
-    is.read(reinterpret_cast<char*>(&childCnt), sizeof(int));
-
-    for (int i = 0; i < childCnt; ++i) {
-        children_.emplace_back(is);
-    }
-
-    is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
-    is.read(reinterpret_cast<char*>(pstrToken), nStrLength);
-    pstrToken[nStrLength] = '\0';
-
-    if (strcmp(pstrToken, "</Node>")) {
-        throw std::runtime_error("Node end token expected but got: " + std::string(pstrToken));
-    }
-}
-
-LevelRegion::LevelRegion(const Core& core)
-    : pTerrainStream_( std::make_unique<std::ifstream>(resourcePath/"LevelGraph_Terrain.bin", std::ios::binary) ),
-    pObjectStream_( std::make_unique<std::ifstream>(resourcePath/"LevelGraph.bin", std::ios::binary) ),
+LevelRegion::LevelRegion( const Core& core,
+    const std::filesystem::path& levelPath,
+    const std::filesystem::path& levelTerrainPath
+) : pTerrainStream_( std::make_unique<std::ifstream>(levelTerrainPath, std::ios::binary) ),
+    pObjectStream_( std::make_unique<std::ifstream>(levelPath, std::ios::binary) ),
     model_(core.staticTexStorage(), *pTerrainStream_),
     dispositionRoot_(*pObjectStream_), chunks_() {}
 
@@ -326,7 +263,7 @@ std::vector<ecs::Entity> LevelRegion::instantiateAllObjects(const Core& core, co
 }
 
 void LevelRegion::instantiateObjectHierarchy( std::optional<std::size_t> parentIdx,
-    const ObjectDisposition& disposition, const Core& core,
+    const gameEngine::ObjectDisposition& disposition, const Core& core,
     coord::System& coordRoot, std::vector<ecs::Entity>& out
 ) {
     if (disposition.prefabName_.empty()) {
@@ -344,18 +281,18 @@ void LevelRegion::instantiateObjectHierarchy( std::optional<std::size_t> parentI
         throw GFX_EXCEPT("RefModel not found: " + modelKey);
     }
 
-    obj.createComponent<Coord>();
-    obj.as<Coord>().get().setLocalXform(disposition.xform_);
-    obj.as<Coord>().get() << mu::translate(0.f, -25.f, 0.f);
+    obj.createComponent<gameEngine::Coord>();
+    obj.as<gameEngine::Coord>().get().setLocalXform(disposition.xform_);
+    obj.as<gameEngine::Coord>().get() << mu::translate(0.f, -25.f, 0.f);
 
     auto& refModel = core.refModelStorage().get(modelKey);
-    obj.createComponent<Model>(modelKey, core, obj.as<Coord>());
+    obj.createComponent<Model>(modelKey, core, obj.as<gameEngine::Coord>());
 
     if (parentIdx.has_value()) {
-        obj.as<Coord>().get().setParent(&out[parentIdx.value()].as<Coord>().get());
+        obj.as<gameEngine::Coord>().get().setParent(&out[parentIdx.value()].as<gameEngine::Coord>().get());
     }
     else {
-        obj.as<Coord>().get().setParent(&coordRoot);
+        obj.as<gameEngine::Coord>().get().setParent(&coordRoot);
     }
 
     out.push_back(std::move(obj));

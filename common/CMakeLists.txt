@@ -177,13 +177,50 @@ target_include_directories(ecs
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
+# === game ===
+add_library(game
+    src/game/level.cpp include/game/level.hpp
+    src/coord.cpp include/coord.hpp
+)
+
+add_library(common::game ALIAS game)
+
+auto_configure(game PRIVATE)
+
+target_link_libraries(game
+    PRIVATE
+        common::mu
+        common::ecs
+)
+
+# === net ===
+add_library(net
+    src/net/session.cpp include/net/session.hpp
+    src/net/netLow.cpp include/net/netLow.hpp
+
+    include/net/protocol.hpp
+    include/net/netInclude.hpp
+)
+
+add_library(common::net ALIAS net)
+
+auto_configure(net PRIVATE)
+define_win32_lighten_macros(net PUBLIC)
+
+target_link_libraries(net
+    PRIVATE
+        common::mu
+        common::woon2exception
+        common::game
+        ws2_32.lib
+)
+
 # === gfx ===
 add_library(gfx
     src/gfxExcept.cpp include/gfxExcept.hpp
     src/dxutil/dxexcept.cpp include/dxutil/dxexcept.hpp
     src/dxutil/dxLow.cpp include/dxutil/dxLow.hpp
     src/vertex.cpp include/vertex.hpp
-    src/coord.cpp include/coord.hpp
     src/d3d12util/d3d12Low.cpp include/d3d12util/d3d12Low.hpp
     src/d3d12util/d3d12ResourceXX.cpp include/d3d12util/d3d12ResourceXX.hpp
     src/d3d12util/d3d12ShaderXX.cpp include/d3d12util/d3d12ShaderXX.hpp
@@ -226,6 +263,7 @@ target_link_libraries(gfx
         common::mem
         common::TMP
         common::ecs
+        common::game
 )
 
 target_include_directories(gfx
@@ -234,6 +272,11 @@ target_include_directories(gfx
         "${TEXLOADER_INCLUDE}"
         "${D3D12_INCLUDE}"
         "${FREEIMAGE_INCLUDE}"
+)
+
+target_include_directories(net
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
 # === shaders ===
@@ -268,31 +311,6 @@ gen_shader_path()
 
 add_dependencies(gfx hlsl)
 
-# === net ===
-add_library(net
-    src/net/session.cpp include/net/session.hpp
-    src/net/netLow.cpp include/net/netLow.hpp
-
-    include/net/protocol.hpp
-    include/net/netInclude.hpp
-)
-
-add_library(common::net ALIAS net)
-
-auto_configure(net PRIVATE)
-define_win32_lighten_macros(net PUBLIC)
-
-target_link_libraries(net
-    PRIVATE
-        common::mu
-        common::woon2exception
-        ws2_32.lib
-)
-
-target_include_directories(net
-    PUBLIC
-        "${CMAKE_CURRENT_SOURCE_DIR}/include"
-)
 
 gen_resource_path()
 

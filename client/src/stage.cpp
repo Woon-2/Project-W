@@ -71,7 +71,7 @@ void Stage::processPackets(double deltaTime) {
                 }
                 auto& xform = recvPacket.scWorld.xforms[i];
 
-                entities_[i].as<gfx::d3d12engine::Coord>().get().setLocalXform(mu::translate(xform.pos));
+                entities_[i].as<gameEngine::Coord>().get().setLocalXform(mu::translate(xform.pos));
                 entities_[i].as<gfx::d3d12engine::Model>().get().root()->coord().setLocalXform(mu::Mat4x4(xform.rot));
             }
             break;
@@ -86,7 +86,7 @@ void Stage::updateNetwork(double deltaTime) {
             .type = PacketType::CSWorld,
             .csWorld = {
                 .xform = {
-                    .pos = pPlayer_->as<gfx::d3d12engine::Coord>().get().localXform().row(3),
+                    .pos = pPlayer_->as<gameEngine::Coord>().get().localXform().row(3),
                     .rot = mu::NQuat(mu::quatRotMat(pPlayer_->as<gfx::d3d12engine::Model>().get().root()->coord().localXform()))
                 }
             }
@@ -106,7 +106,7 @@ void Stage::simulate(double deltaTime) {
     pSystems_->physicsSystem.update(static_cast<float>(deltaTime));
 
     if (pPlayer_) {
-        pPlayer_->as<gfx::d3d12engine::Coord>().get()
+        pPlayer_->as<gameEngine::Coord>().get()
 		    << mu::translate( pPlayer_->as<RigidBody>().deltaPosition()
         );
     }
@@ -220,5 +220,8 @@ void Stage::loadModels(gfx::d3d12::D3D12GfxCmdList& cmdList) {
 }
 
 void Stage::loadLevel(gfx::d3d12::D3D12GfxCmdList& cmdList) {
-    level_ = gfx::d3d12engine::LevelRegion(*pCore_);
+    level_ = gfx::d3d12engine::LevelRegion(*pCore_,
+        resourcePath/"LevelGraph.bin",
+        resourcePath/"LevelGraph_Terrain.bin"
+    );
 }
