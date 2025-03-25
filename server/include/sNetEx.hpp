@@ -28,6 +28,9 @@ public:
 
         for (auto& pNetEx : components<NetEx>()) {
             auto pCoord = gameEngine::Coord::at(pNetEx->entityID().value());
+
+            auto translation = pCoord->get().xform().row(3);
+
             session.enqueuePacket(
                 Packet{
                     .size = 16u + sizeof(SCCreate),
@@ -36,8 +39,8 @@ public:
                         .netId = pNetEx->id(),
                         .objType = ObjectType::Helicopter,
                         .xform = {
-                            .translation = mu::Vec3(pCoord->get().xform().row(3)),
-                            .rotation = mu::NQuat()
+                            .translation = {translation.x(), translation.y(), translation.z()},
+                            .rotation = {0.0f, 0.0f, 0.0f}
                         }
                     }
                 }

@@ -3,29 +3,19 @@
 
 #include "netInclude.hpp"
 
-#ifndef DXMATH_VEC_UTIL
-#define DXMATH_VEC_UTIL
-#endif
-#ifndef DXMATH_MAT_UTIL
-#define DXMATH_MAT_UTIL
-#endif
-#ifndef DXMATH_QUAT_UTIL
-#define DXMATH_QUAT_UTIL
-#endif
-#include "mathUtil.hpp"
-
 #include <cstdint>
 
 inline constexpr const char* SERVERIP = "127.0.0.1";
 inline constexpr std::uint16_t PORT = 7777;
 inline constexpr auto maxConnection = 5;
 
+#pragma pack(push, 1)
 struct RigidXform {
-    mu::Vec3 translation;
-    mu::NQuat rotation;
+    float translation[3];
+    float rotation[3];
 };
 
-enum class PacketType : std::uint16_t {
+enum class PacketType : std::uint8_t {
     CSHello,
     SCCreate,
     SCAssign,
@@ -69,7 +59,6 @@ struct CSWorld {
     RigidXform xform;
 };
 
-// #pragma pack(push, 1)
 struct Packet {
     std::uint16_t size;
     PacketType type;
@@ -82,6 +71,21 @@ struct Packet {
         CSWorld csWorld;
     };
 };
-// #pragma pack(pop)
+#pragma pack(pop)
+
+template <class T>
+constexpr std::uint16_t calcPacketSize() {
+    return sizeof(PacketType) + sizeof(std::uint16_t) + sizeof(T);
+}
+
+template <>
+constexpr std::uint16_t calcPacketSize<CSHello>() {
+    return sizeof(PacketType) + sizeof(std::uint16_t);
+}
+
+template <>
+constexpr std::uint16_t calcPacketSize<CSLeave>() {
+    return sizeof(PacketType) + sizeof(std::uint16_t);
+}
 
 #endif // __PROTOCOL_HPP

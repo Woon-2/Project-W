@@ -39,6 +39,19 @@ void CNetExSystem::handleSCCreate(const SCCreate& scCreate, const gfx::d3d12engi
     createdEntities_.emplace_back();
     auto& entity = createdEntities_.back();
 
+    auto translation = mu::Vec3(scCreate.xform.translation[0],
+        scCreate.xform.translation[1], scCreate.xform.translation[2]
+    );
+
+    const auto x = scCreate.xform.rotation[0];
+    const auto y = scCreate.xform.rotation[1];
+    const auto z = scCreate.xform.rotation[2];
+
+    float wSquared = 1.0f - (x * x + y * y + z * z);
+    const auto w = (wSquared > 0.0f) ? std::sqrt(wSquared) : 0.0f;
+
+    auto rotation = mu::NQuat(x, y, z, w);
+
     switch (scCreate.objType) {
     case ObjectType::Helicopter:
         if (!core.refModelStorage().contains("GO_OH-58D")) {
@@ -46,10 +59,10 @@ void CNetExSystem::handleSCCreate(const SCCreate& scCreate, const gfx::d3d12engi
         }
         entity.createComponent<NetEx>(std::make_unique<CNetExHelicopter>(entity.id().value()), scCreate.netId);
         entity.createComponent<gameEngine::Coord>();
-        entity.as<gameEngine::Coord>().get().setLocalXform(mu::translate(scCreate.xform.translation));
+        entity.as<gameEngine::Coord>().get().setLocalXform(mu::translate(translation));
 
         entity.createComponent<gfx::d3d12engine::Model>("GO_OH-58D", core, entity.as<gameEngine::Coord>());
-        entity.as<gfx::d3d12engine::Model>().get().root()->coord() << mu::Mat4x4(scCreate.xform.rotation);
+        entity.as<gfx::d3d12engine::Model>().get().root()->coord() << mu::Mat4x4(rotation);
         addEntity(entity);
         break;
 
@@ -59,10 +72,10 @@ void CNetExSystem::handleSCCreate(const SCCreate& scCreate, const gfx::d3d12engi
         }
         entity.createComponent<NetEx>(std::make_unique<CNetExTree0>(), scCreate.netId);
         entity.createComponent<gameEngine::Coord>();
-        entity.as<gameEngine::Coord>().get().setLocalXform(mu::translate(scCreate.xform.translation));
+        entity.as<gameEngine::Coord>().get().setLocalXform(mu::translate(translation));
 
         entity.createComponent<gfx::d3d12engine::Model>("GO_URP_Tree_0", core, entity.as<gameEngine::Coord>());
-        entity.as<gfx::d3d12engine::Model>().get().root()->coord() << mu::Mat4x4(scCreate.xform.rotation);
+        entity.as<gfx::d3d12engine::Model>().get().root()->coord() << mu::Mat4x4(rotation);
         addEntity(entity);
         break;
 
@@ -72,10 +85,10 @@ void CNetExSystem::handleSCCreate(const SCCreate& scCreate, const gfx::d3d12engi
         }
         entity.createComponent<NetEx>(std::make_unique<CNetExTree1>(), scCreate.netId);
         entity.createComponent<gameEngine::Coord>();
-        entity.as<gameEngine::Coord>().get().setLocalXform(mu::translate(scCreate.xform.translation));
+        entity.as<gameEngine::Coord>().get().setLocalXform(mu::translate(translation));
 
         entity.createComponent<gfx::d3d12engine::Model>("GO_URP_Tree_1", core, entity.as<gameEngine::Coord>());
-        entity.as<gfx::d3d12engine::Model>().get().root()->coord() << mu::Mat4x4(scCreate.xform.rotation);
+        entity.as<gfx::d3d12engine::Model>().get().root()->coord() << mu::Mat4x4(rotation);
         addEntity(entity);
         break;
 
@@ -85,10 +98,10 @@ void CNetExSystem::handleSCCreate(const SCCreate& scCreate, const gfx::d3d12engi
         }
         entity.createComponent<NetEx>(std::make_unique<CNetExTree2>(), scCreate.netId);
         entity.createComponent<gameEngine::Coord>();
-        entity.as<gameEngine::Coord>().get().setLocalXform(mu::translate(scCreate.xform.translation));
+        entity.as<gameEngine::Coord>().get().setLocalXform(mu::translate(translation));
 
         entity.createComponent<gfx::d3d12engine::Model>("GO_URP_Tree_2", core, entity.as<gameEngine::Coord>());
-        entity.as<gfx::d3d12engine::Model>().get().root()->coord() << mu::Mat4x4(scCreate.xform.rotation);
+        entity.as<gfx::d3d12engine::Model>().get().root()->coord() << mu::Mat4x4(rotation);
         addEntity(entity);
         break;
 
@@ -140,13 +153,16 @@ void CNetExHelicopter::generatePackets(Session& session) {
     auto pCoord = gameEngine::Coord::at(entityID_);
     auto pModel = gfx::d3d12engine::Model::at(entityID_);
 
+    const auto translation = pCoord->get().localXform().row(3);
+    const auto rotation = mu::quatRotMat(pModel->get().root()->coord().localXform());
+
     session.enqueuePacket( Packet{
-        .size = 16u + sizeof(CSWorld),
+        .size = calcPacketSize<CSWorld>(),
         .type = PacketType::CSWorld,
         .csWorld = CSWorld{
             .xform = RigidXform{
-                .translation = pCoord->get().localXform().row(3),
-                .rotation = mu::NQuat(mu::quatRotMat(pModel->get().root()->coord().localXform()))
+                .translation = {translation.x(), translation.y(), translation.z()},
+                .rotation = {rotation.x(), rotation.y(), rotation.z()}
             }
         }
     } );
@@ -168,6 +184,19 @@ void CNetExHelicopter::handleSCWorld(const SCWorld& scWorld) {
     auto pCoord = gameEngine::Coord::at(entityID_);
     auto pModel = gfx::d3d12engine::Model::at(entityID_);
 
-    pCoord->get().setLocalXform(mu::translate(scWorld.xform.translation));
-    pModel->get().root()->coord().setLocalXform(mu::Mat4x4(scWorld.xform.rotation));
+    const auto translation = mu::Vec3(scWorld.xform.translation[0],
+        scWorld.xform.translation[1], scWorld.xform.translation[2]
+    );
+
+    const auto x = scWorld.xform.rotation[0];
+    const auto y = scWorld.xform.rotation[1];
+    const auto z = scWorld.xform.rotation[2];
+
+    float wSquared = 1.0f - (x * x + y * y + z * z);
+    const auto w = (wSquared > 0.0f) ? std::sqrt(wSquared) : 0.0f;
+
+    const auto rotation = mu::NQuat(x, y, z, w);
+
+    pCoord->get().setLocalXform(mu::translate(translation));
+    pModel->get().root()->coord().setLocalXform(mu::Mat4x4(rotation));
 }

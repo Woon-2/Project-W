@@ -36,7 +36,7 @@ void SNetExHelicopter::generatePackets(Session& session) {
     if (lastReceivedWorld_.has_value()) {
         session.enqueuePacket(
             Packet{
-                .size = 16u + sizeof(SCWorld),
+                .size = calcPacketSize<SCWorld>(),
                 .type = PacketType::SCWorld,
                 .scWorld = SCWorld {
                     .netId = lastReceivedWorld_.value().netId,
@@ -65,15 +65,18 @@ void SNetExHelicopter::handleCSWorld(const CSWorld& csWorld) {
 
 void SNetExAI::generatePackets(Session& session) {
     auto pCoord = gameEngine::Coord::at(entityID_);
+
+    const auto translation = pCoord->get().xform().row(3);
+
     session.enqueuePacket(
         Packet{
-            .size = 16u + sizeof(SCWorld),
+            .size = calcPacketSize<SCWorld>(),
             .type = PacketType::SCWorld,
             .scWorld = SCWorld {
                 .netId = netId_,
                 .xform = {
-                    .translation = mu::Vec3(pCoord->get().xform().row(3)),
-                    .rotation = mu::NQuat()
+                    .translation = { translation.x(), translation.y(), translation.z() },
+                    .rotation = { 0.0f, 0.0f, 0.0f }
                 }
             }
         }

@@ -80,7 +80,7 @@ void Game::initNetwork() {
 
     session_.enqueuePacket(
         Packet{
-            .size = sizeof(std::uint16_t) * 2,
+            .size = calcPacketSize<CSHello>(),
             .type = PacketType::CSHello
         }
     );
