@@ -65,7 +65,7 @@ void CNetExSystem::handleSCInitCreate(const SCInitCreate& scInitCreate, const gf
         if (!core.refModelStorage().contains("GO_OH-58D")) {
             throw GFX_EXCEPT("RefModel not found: GO_OH-58D");
         }
-        entity.createComponent<NetEx>(std::make_unique<CNetExHelicopter>(entity.id().value()), scInitCreate.netId);
+        entity.createComponent<NetEx>(std::make_unique<CNetExHelicopter>(entity.id().value()));
         entity.createComponent<gameEngine::Coord>();
         entity.as<gameEngine::Coord>().get().setLocalXform(mu::translate(translation));
 
@@ -78,7 +78,7 @@ void CNetExSystem::handleSCInitCreate(const SCInitCreate& scInitCreate, const gf
         if (!core.refModelStorage().contains("GO_URP_Tree_0")) {
             throw GFX_EXCEPT("RefModel not found: GO_URP_Tree_0");
         }
-        entity.createComponent<NetEx>(std::make_unique<CNetExTree0>(), scInitCreate.netId);
+        entity.createComponent<NetEx>(std::make_unique<CNetExTree0>(entity.id().value()));
         entity.createComponent<gameEngine::Coord>();
         entity.as<gameEngine::Coord>().get().setLocalXform(mu::translate(translation));
 
@@ -91,7 +91,7 @@ void CNetExSystem::handleSCInitCreate(const SCInitCreate& scInitCreate, const gf
         if (!core.refModelStorage().contains("GO_URP_Tree_1")) {
             throw GFX_EXCEPT("RefModel not found: GO_URP_Tree_1");
         }
-        entity.createComponent<NetEx>(std::make_unique<CNetExTree1>(), scInitCreate.netId);
+        entity.createComponent<NetEx>(std::make_unique<CNetExTree1>(entity.id().value()));
         entity.createComponent<gameEngine::Coord>();
         entity.as<gameEngine::Coord>().get().setLocalXform(mu::translate(translation));
 
@@ -104,7 +104,7 @@ void CNetExSystem::handleSCInitCreate(const SCInitCreate& scInitCreate, const gf
         if (!core.refModelStorage().contains("GO_URP_Tree_2")) {
             throw GFX_EXCEPT("RefModel not found: GO_URP_Tree_2");
         }
-        entity.createComponent<NetEx>(std::make_unique<CNetExTree2>(), scInitCreate.netId);
+        entity.createComponent<NetEx>(std::make_unique<CNetExTree2>(entity.id().value()));
         entity.createComponent<gameEngine::Coord>();
         entity.as<gameEngine::Coord>().get().setLocalXform(mu::translate(translation));
 
@@ -119,6 +119,7 @@ void CNetExSystem::handleSCInitCreate(const SCInitCreate& scInitCreate, const gf
     }
 
     netIdToNetEx_[scInitCreate.netId] = entity.get<NetEx>();
+    ++recvdInitPacketCnt_;
 }
 
 void CNetExSystem::handleSCWorld(const SCWorld& scWorld, const Packet& originalPacket) {
@@ -155,11 +156,12 @@ void CNetExSystem::handleSCInitAssign(const SCInitAssign& scAssign) {
     }
 
     playerID_ = pNetEx->entityID();
+    ++recvdInitPacketCnt_;
 }
 
 void CNetExHelicopter::generatePackets(Session& session) {
-    auto pCoord = gameEngine::Coord::at(entityID_);
-    auto pModel = gfx::d3d12engine::Model::at(entityID_);
+    auto pCoord = gameEngine::Coord::at(entityID());
+    auto pModel = gfx::d3d12engine::Model::at(entityID());
 
     const auto translation = pCoord->get().localXform().row(3);
     const auto rotation = mu::quatRotMat(pModel->get().root()->coord().localXform());
@@ -189,8 +191,8 @@ void CNetExHelicopter::processPacket(const Packet& packet) {
 }
 
 void CNetExHelicopter::handleSCWorld(const SCWorld& scWorld) {
-    auto pCoord = gameEngine::Coord::at(entityID_);
-    auto pModel = gfx::d3d12engine::Model::at(entityID_);
+    auto pCoord = gameEngine::Coord::at(entityID());
+    auto pModel = gfx::d3d12engine::Model::at(entityID());
 
     const auto translation = mu::Vec3(scWorld.xform.translation[0],
         scWorld.xform.translation[1], scWorld.xform.translation[2]

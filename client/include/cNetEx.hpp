@@ -45,33 +45,41 @@ private:
     std::uint32_t recvdInitPacketCnt_;
 };
 
-class CNetExHelicopter : public INetExProcessor {
+class CNetExHelicopter : public NetExProcessorBase {
 public:
-    CNetExHelicopter(ecs::Entity::ID entityID) : entityID_(entityID) {}
+    CNetExHelicopter(ecs::Entity::ID entityId)
+        : NetExProcessorBase(entityId) {}
 
     void generatePackets(Session& session) override;
     void processPacket(const Packet& packet) override;
 
 private:
     void handleSCWorld(const SCWorld& scWorld);
-
-    ecs::Entity::ID entityID_;
 };
 
-class CNetExTree0 : public INetExProcessor {
+class CNetExTree0 : public NetExProcessorBase {
 public:
+    CNetExTree0(ecs::Entity::ID entityId)
+        : NetExProcessorBase(entityId) {}
+
     void generatePackets(Session& session) override {}
     void processPacket(const Packet& packet) override {}
 };
 
-class CNetExTree1 : public INetExProcessor {
+class CNetExTree1 : public NetExProcessorBase {
 public:
+    CNetExTree1(ecs::Entity::ID entityId)
+        : NetExProcessorBase(entityId) {}
+
     void generatePackets(Session& session) override {}
     void processPacket(const Packet& packet) override {}
 };
 
-class CNetExTree2 : public INetExProcessor {
+class CNetExTree2 : public NetExProcessorBase {
 public:
+    CNetExTree2(ecs::Entity::ID entityId)
+        : NetExProcessorBase(entityId) {}
+
     void generatePackets(Session& session) override {}
     void processPacket(const Packet& packet) override {}
 };

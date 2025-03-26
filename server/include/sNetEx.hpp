@@ -32,9 +32,10 @@ private:
     std::list<NetEx*> freeHelicopters_; 
 };
 
-class SNetExHelicopter : public INetExProcessor {
+class SNetExHelicopter : public NetExProcessorBase {
 public:
-    SNetExHelicopter(ecs::Entity::ID entityID) : lastReceivedWorld_{}, entityID_(entityID) {}
+    SNetExHelicopter(ecs::Entity::ID entityId)
+        : NetExProcessorBase(entityId) {}
 
     void generatePackets(Session& session) override;
     void processPacket(const Packet& packet) override;
@@ -43,21 +44,18 @@ private:
     void handleCSWorld(const CSWorld& csWorld);
 
     std::optional<CSWorld> lastReceivedWorld_;
-    ecs::Entity::ID entityID_;
 };
 
-class SNetExAI : public INetExProcessor {
+class SNetExAI : public NetExProcessorBase {
 public:
-    SNetExAI(ecs::Entity::ID entityID, std::uint32_t netId) : entityID_(entityID), netId_(netId) {}
+    SNetExAI(ecs::Entity::ID entityId)
+        : NetExProcessorBase(entityId) {}
 
     void generatePackets(Session& session) override;
     void processPacket(const Packet& packet) override;
 
 private:
     void handleCSWorld(const CSWorld& csWorld);
-
-    ecs::Entity::ID entityID_;
-    std::uint32_t netId_;
 };
 
 #endif // __SERVER_NETEX_HPP

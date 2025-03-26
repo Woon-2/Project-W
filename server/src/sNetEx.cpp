@@ -10,7 +10,7 @@ void SNetExSystem::addEntity(ecs::Entity& entity) {
         freeHelicopters_.push_back(&netEx);
     }
 
-    netIdToNetEx_[netEx.id()] = &netEx;
+    netIdToNetEx_[netEx.netId()] = &netEx;
 }
 
 void SNetExSystem::addSession(Session& session) {
@@ -37,7 +37,7 @@ void SNetExSystem::addSession(Session& session) {
                 .size = calcPacketSize<SCInitCreate>(),
                 .type = PacketType::SCInitCreate,
                 .scInitCreate = SCInitCreate{
-                    .netId = pNetEx->id(),
+                    .netId = pNetEx->netId(),
                     .objType = ObjectType::Helicopter,
                     .xform = {
                         .translation = {translation.x(), translation.y(), translation.z()},
@@ -56,7 +56,7 @@ void SNetExSystem::addSession(Session& session) {
             .size = calcPacketSize<SCInitAssign>(),
             .type = PacketType::SCInitAssign,
             .scInitAssign = SCInitAssign{
-                .netId = pNetEx->id()
+                .netId = pNetEx->netId()
             }
         }
     );
@@ -124,7 +124,7 @@ void SNetExHelicopter::handleCSWorld(const CSWorld& csWorld) {
 }
 
 void SNetExAI::generatePackets(Session& session) {
-    auto pCoord = gameEngine::Coord::at(entityID_);
+    auto pCoord = gameEngine::Coord::at(entityID());
 
     const auto translation = pCoord->get().xform().row(3);
 
@@ -133,7 +133,7 @@ void SNetExAI::generatePackets(Session& session) {
             .size = calcPacketSize<SCWorld>(),
             .type = PacketType::SCWorld,
             .scWorld = SCWorld {
-                .netId = netId_,
+                .netId = netId(),
                 .xform = {
                     .translation = { translation.x(), translation.y(), translation.z() },
                     .rotation = { 0.0f, 0.0f, 0.0f }

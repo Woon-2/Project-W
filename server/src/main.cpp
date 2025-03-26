@@ -71,10 +71,10 @@ int main()
     for (std::size_t i = 0u; i < entities.size(); ++i) {
         auto& entity = entities[i];
         if (i < 5u) {
-            entity.createComponent<NetEx>(std::make_unique<SNetExHelicopter>(entity.id().value()), static_cast<std::uint32_t>(i));
+            entity.createComponent<NetEx>(std::make_unique<SNetExHelicopter>(entity.id().value()));
         }
         else {
-            entity.createComponent<NetEx>(std::make_unique<SNetExAI>(entity.id().value(), static_cast<std::uint32_t>(i)), static_cast<std::uint32_t>(i));
+            entity.createComponent<NetEx>(std::make_unique<SNetExAI>(entity.id().value()));
         }
         entity.createComponent<RigidBody>();
 
