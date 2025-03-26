@@ -99,8 +99,6 @@ void Session::recvPackets() {
 
     if (!recvSize) { return; }
 
-	std::cout << "Received " << recvSize.value( ) << " bytes\n";
-
     while (recvSize.value() > 0) {
         if (recvBytesRemain_ > 0) {
             if (recvSize.value() >= recvBytesRemain_) {
@@ -121,7 +119,6 @@ void Session::recvPackets() {
         }
         else {
             const auto requiredSize = reinterpret_cast<Packet*>(recvBuf_.data() + readOffset_)->size;
-			std::cout << "Required Size: " << requiredSize << '\n';
             if (recvSize.value() >= requiredSize) {
                 auto packet = Packet{};
                 std::memcpy(&packet, recvBuf_.data() + readOffset_, requiredSize);
@@ -141,11 +138,6 @@ void Session::recvPackets() {
     }
 
     readOffset_ = 0;
-
-	std::cout << "RecvOffset: " << recvOffset_ << '\n';
-	std::cout << "ReadOffset: " << readOffset_ << '\n';
-	std::cout << "RecvBytesRemain: " << recvBytesRemain_ << '\n';
-	std::cout << "Recved Packets: " << recvQueue_.size( ) << '\n';
 }
 
 
