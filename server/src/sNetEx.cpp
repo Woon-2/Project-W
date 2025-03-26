@@ -16,6 +16,17 @@ void SNetExSystem::addEntity(ecs::Entity& entity) {
 void SNetExSystem::addSession(Session& session) {
     pSessions_.push_back(&session);
 
+    session.enqueuePacket(
+        Packet{
+            .size = calcPacketSize<SCInitInfo>(),
+            .type = PacketType::SCInitInfo,
+            .scInitInfo = SCInitInfo{
+                // N SCInitCreate Packet + 1 SCInitAssign Packet
+                .packetCnt = static_cast<std::uint32_t>(components<NetEx>().size() + 1u)
+            }
+        }
+    );
+
     for (auto& pNetEx : components<NetEx>()) {
         auto pCoord = gameEngine::Coord::at(pNetEx->entityID().value());
 
@@ -23,9 +34,9 @@ void SNetExSystem::addSession(Session& session) {
 
         session.enqueuePacket(
             Packet{
-                .size = calcPacketSize<SCCreate>(),
-                .type = PacketType::SCCreate,
-                .scCreate = SCCreate{
+                .size = calcPacketSize<SCInitCreate>(),
+                .type = PacketType::SCInitCreate,
+                .scInitCreate = SCInitCreate{
                     .netId = pNetEx->id(),
                     .objType = ObjectType::Helicopter,
                     .xform = {
@@ -42,9 +53,9 @@ void SNetExSystem::addSession(Session& session) {
 
     session.enqueuePacket(
         Packet{
-            .size = calcPacketSize<SCAssign>(),
-            .type = PacketType::SCAssign,
-            .scAssign = SCAssign{
+            .size = calcPacketSize<SCInitAssign>(),
+            .type = PacketType::SCInitAssign,
+            .scInitAssign = SCInitAssign{
                 .netId = pNetEx->id()
             }
         }

@@ -16,7 +16,8 @@ class CNetExSystem : public ecs::System<NetEx> {
 public:
     CNetExSystem() = default;
     CNetExSystem(Session* pSession)
-        : createdEntities_(), netIdToNetEx_(), pSession_(pSession) {}
+        : createdEntities_(), netIdToNetEx_(), pSession_(pSession),
+        initPacketCnt_(-1u), recvdInitPacketCnt_(0u) {}
 
     void preUpdate(const gfx::d3d12engine::Core& core);
     void postUpdate();
@@ -24,17 +25,24 @@ public:
         return std::move(createdEntities_);
     }
 
+    bool hasInitialized() const noexcept {
+        return initPacketCnt_ == recvdInitPacketCnt_;
+    }
+
     std::optional<ecs::Entity::ID> playerID_ = std::nullopt;
 
 private:
     void processPacket(const Packet& packet, const gfx::d3d12engine::Core& core);
-    void handleSCCreate(const SCCreate& scCreate, const gfx::d3d12engine::Core& core);
+    void handleSCInitInfo(const SCInitInfo& scInitInfo);
+    void handleSCInitCreate(const SCInitCreate& scCreate, const gfx::d3d12engine::Core& core);
+    void handleSCInitAssign(const SCInitAssign& scAssign);
     void handleSCWorld(const SCWorld& scWorld, const Packet& originalPacket);
-    void handleSCAssign(const SCAssign& scAssign);
 
     std::vector<ecs::Entity> createdEntities_;
     std::map<std::uint32_t, NetEx*> netIdToNetEx_;
     Session* pSession_;
+    std::uint32_t initPacketCnt_;
+    std::uint32_t recvdInitPacketCnt_;
 };
 
 class CNetExHelicopter : public INetExProcessor {

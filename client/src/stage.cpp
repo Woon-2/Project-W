@@ -98,7 +98,7 @@ void Stage::simulate(double deltaTime) {
     pSystems_->coordRoot.update();
 
     if (pPlayer_) {
-        pPlayer_->as<gfx::d3d12engine::Camera>().update(deltaTime);
+        pPlayer_->as<gfx::d3d12engine::Camera>().update(static_cast<float>(deltaTime));
         pPlayer_->as<gfx::d3d12engine::Camera>().get().updateView();
     }
 }

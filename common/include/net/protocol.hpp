@@ -18,10 +18,12 @@ struct RigidXform {
 enum class PacketType : std::uint8_t {
     CSHello,
     SCCreate,
-    SCAssign,
     CSLeave,
     SCWorld,
     CSWorld,
+    SCInitInfo,
+    SCInitCreate,
+    SCInitAssign,
 };
 
 enum class ObjectType : std::uint8_t {
@@ -35,7 +37,7 @@ struct CSHello {
  
 };
 
-struct SCAssign {
+struct SCInitAssign {
     std::uint32_t netId;
 };
 
@@ -43,6 +45,12 @@ struct SCCreate {
     std::uint32_t netId;
     ObjectType objType;
     RigidXform xform;
+};
+
+using SCInitCreate = SCCreate;
+
+struct SCInitInfo {
+    std::uint32_t packetCnt;
 };
 
 struct CSLeave {
@@ -65,10 +73,12 @@ struct Packet {
     union {
         CSHello csHello;
         SCCreate scCreate;
-        SCAssign scAssign;
         CSLeave csLeave;
         SCWorld scWorld;
         CSWorld csWorld;
+        SCInitInfo scInitInfo;
+        SCInitCreate scInitCreate;
+        SCInitAssign scInitAssign;
     };
 };
 #pragma pack(pop)

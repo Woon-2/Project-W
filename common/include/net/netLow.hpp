@@ -301,7 +301,7 @@ public:
         //std::data(wsaBufs); // 버퍼들 주소
         //std::size(wsaBufs); // 버퍼 개수
         DWORD sent{};
-        if (::WSASend(sock_, std::data(wsaBufs), std::size(wsaBufs), &sent, 0, nullptr, nullptr)) {
+        if (::WSASend(sock_, std::data(wsaBufs), static_cast<DWORD>(std::size(wsaBufs)), &sent, 0, nullptr, nullptr)) {
             throw NET_LAST_EXCEPT("Failed to send data"sv);
         }
         return sent;
@@ -311,7 +311,7 @@ public:
         requires std::same_as<std::ranges::range_value_t<R>, WSABUF>
     std::optional<DWORD> WSASendUc(R&& wsaBufs) {
         DWORD sent{};
-        if (::WSASend(sock_, std::data(wsaBufs), std::size(wsaBufs), &sent, 0, nullptr, nullptr)) {
+        if (::WSASend(sock_, std::data(wsaBufs), static_cast<DWORD>(std::size(wsaBufs)), &sent, 0, nullptr, nullptr)) {
             return {};
         }
         return sent;
@@ -322,7 +322,7 @@ public:
     DWORD WSARecv(R&& wsaBufs) {
         DWORD recvSize{};
         DWORD flags{};
-        if (::WSARecv(sock_, std::data(wsaBufs), std::size(wsaBufs), &recvSize, &flags, nullptr, nullptr)) {
+        if (::WSARecv(sock_, std::data(wsaBufs), static_cast<DWORD>(std::size(wsaBufs)), &recvSize, &flags, nullptr, nullptr)) {
             throw NET_LAST_EXCEPT("Failed to receive data"sv);
         }
         return recvSize;
@@ -333,7 +333,7 @@ public:
     std::optional<DWORD> WSARecvUc(R&& wsaBufs) {
         DWORD recvSize{};
         DWORD flags{};
-        if (::WSARecv(sock_, std::data(wsaBufs), std::size(wsaBufs), &recvSize, &flags, nullptr, nullptr)) {
+        if (::WSARecv(sock_, std::data(wsaBufs), static_cast<DWORD>(std::size(wsaBufs)), &recvSize, &flags, nullptr, nullptr)) {
             return {};
         }
         return recvSize;

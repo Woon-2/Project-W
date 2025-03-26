@@ -17,16 +17,20 @@ void CNetExSystem::postUpdate() {
 
 void CNetExSystem::processPacket(const Packet& packet, const gfx::d3d12engine::Core& core) {
     switch (packet.type) {
-    case PacketType::SCCreate:
-        handleSCCreate(packet.scCreate, core);
+    case PacketType::SCInitInfo:
+        handleSCInitInfo(packet.scInitInfo);
+        break;
+
+    case PacketType::SCInitCreate:
+        handleSCInitCreate(packet.scInitCreate, core);
         break;
 
     case PacketType::SCWorld:
         handleSCWorld(packet.scWorld, packet);
         break;
 
-    case PacketType::SCAssign:
-        handleSCAssign(packet.scAssign);
+    case PacketType::SCInitAssign:
+        handleSCInitAssign(packet.scInitAssign);
         break;
 
     default:
@@ -35,29 +39,33 @@ void CNetExSystem::processPacket(const Packet& packet, const gfx::d3d12engine::C
     }
 }
 
-void CNetExSystem::handleSCCreate(const SCCreate& scCreate, const gfx::d3d12engine::Core& core) {
+void CNetExSystem::handleSCInitInfo(const SCInitInfo& scInitInfo) {
+    initPacketCnt_ = scInitInfo.packetCnt;
+}
+
+void CNetExSystem::handleSCInitCreate(const SCInitCreate& scInitCreate, const gfx::d3d12engine::Core& core) {
     createdEntities_.emplace_back();
     auto& entity = createdEntities_.back();
 
-    auto translation = mu::Vec3(scCreate.xform.translation[0],
-        scCreate.xform.translation[1], scCreate.xform.translation[2]
+    auto translation = mu::Vec3(scInitCreate.xform.translation[0],
+        scInitCreate.xform.translation[1], scInitCreate.xform.translation[2]
     );
 
-    const auto x = scCreate.xform.rotation[0];
-    const auto y = scCreate.xform.rotation[1];
-    const auto z = scCreate.xform.rotation[2];
+    const auto x = scInitCreate.xform.rotation[0];
+    const auto y = scInitCreate.xform.rotation[1];
+    const auto z = scInitCreate.xform.rotation[2];
 
     float wSquared = 1.0f - (x * x + y * y + z * z);
     const auto w = (wSquared > 0.0f) ? std::sqrt(wSquared) : 0.0f;
 
     auto rotation = mu::NQuat(x, y, z, w);
 
-    switch (scCreate.objType) {
+    switch (scInitCreate.objType) {
     case ObjectType::Helicopter:
         if (!core.refModelStorage().contains("GO_OH-58D")) {
             throw GFX_EXCEPT("RefModel not found: GO_OH-58D");
         }
-        entity.createComponent<NetEx>(std::make_unique<CNetExHelicopter>(entity.id().value()), scCreate.netId);
+        entity.createComponent<NetEx>(std::make_unique<CNetExHelicopter>(entity.id().value()), scInitCreate.netId);
         entity.createComponent<gameEngine::Coord>();
         entity.as<gameEngine::Coord>().get().setLocalXform(mu::translate(translation));
 
@@ -70,7 +78,7 @@ void CNetExSystem::handleSCCreate(const SCCreate& scCreate, const gfx::d3d12engi
         if (!core.refModelStorage().contains("GO_URP_Tree_0")) {
             throw GFX_EXCEPT("RefModel not found: GO_URP_Tree_0");
         }
-        entity.createComponent<NetEx>(std::make_unique<CNetExTree0>(), scCreate.netId);
+        entity.createComponent<NetEx>(std::make_unique<CNetExTree0>(), scInitCreate.netId);
         entity.createComponent<gameEngine::Coord>();
         entity.as<gameEngine::Coord>().get().setLocalXform(mu::translate(translation));
 
@@ -83,7 +91,7 @@ void CNetExSystem::handleSCCreate(const SCCreate& scCreate, const gfx::d3d12engi
         if (!core.refModelStorage().contains("GO_URP_Tree_1")) {
             throw GFX_EXCEPT("RefModel not found: GO_URP_Tree_1");
         }
-        entity.createComponent<NetEx>(std::make_unique<CNetExTree1>(), scCreate.netId);
+        entity.createComponent<NetEx>(std::make_unique<CNetExTree1>(), scInitCreate.netId);
         entity.createComponent<gameEngine::Coord>();
         entity.as<gameEngine::Coord>().get().setLocalXform(mu::translate(translation));
 
@@ -96,7 +104,7 @@ void CNetExSystem::handleSCCreate(const SCCreate& scCreate, const gfx::d3d12engi
         if (!core.refModelStorage().contains("GO_URP_Tree_2")) {
             throw GFX_EXCEPT("RefModel not found: GO_URP_Tree_2");
         }
-        entity.createComponent<NetEx>(std::make_unique<CNetExTree2>(), scCreate.netId);
+        entity.createComponent<NetEx>(std::make_unique<CNetExTree2>(), scInitCreate.netId);
         entity.createComponent<gameEngine::Coord>();
         entity.as<gameEngine::Coord>().get().setLocalXform(mu::translate(translation));
 
@@ -106,11 +114,11 @@ void CNetExSystem::handleSCCreate(const SCCreate& scCreate, const gfx::d3d12engi
         break;
 
     default:
-        std::cerr << "Invalid object type received. : " << etoi(scCreate.objType) << '\n';
+        std::cerr << "Invalid object type received. : " << etoi(scInitCreate.objType) << '\n';
         break;
     }
 
-    netIdToNetEx_[scCreate.netId] = entity.get<NetEx>();
+    netIdToNetEx_[scInitCreate.netId] = entity.get<NetEx>();
 }
 
 void CNetExSystem::handleSCWorld(const SCWorld& scWorld, const Packet& originalPacket) {
@@ -134,7 +142,7 @@ void CNetExSystem::handleSCWorld(const SCWorld& scWorld, const Packet& originalP
     pNetEx->processPacket(originalPacket);
 }
 
-void CNetExSystem::handleSCAssign(const SCAssign& scAssign) {
+void CNetExSystem::handleSCInitAssign(const SCInitAssign& scAssign) {
     if (!netIdToNetEx_.contains(scAssign.netId)) {
         std::cerr << "NetEx not found for netId: " << scAssign.netId << '\n';
         return;

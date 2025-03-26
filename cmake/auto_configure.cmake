@@ -15,6 +15,8 @@ function(auto_configure TARGET_NAME ACCESS_MODIFIER)
                 /fp:fast
                 /JMC
                 /wd4819
+                /wd4146
+                /wd4996
         )
     # See below link for gcc options
     # https://gcc.gnu.org/onlinedocs/gcc/Option-Summary.html

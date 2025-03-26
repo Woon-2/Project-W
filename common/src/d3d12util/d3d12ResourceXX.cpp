@@ -880,31 +880,31 @@ void RefMesh::loadMaterialFromFile( D3D12Device& device, D3D12GfxCmdList& cmdLis
         else if (!strcmp(pstrToken, "<AlbedoMap:>"))
         {
             nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
-            mapRef.resourceIdx = textureMap.at(mapRef).offset();
+            mapRef.resourceIdx = static_cast<std::uint32_t>( textureMap.at(mapRef).offset() );
             material.addMapRef( Material::MapType::Albedo, mapRef );
         }
         else if (!strcmp(pstrToken, "<NormalMap:>"))
         {
             nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
-            mapRef.resourceIdx = textureMap.at(mapRef).offset();
+            mapRef.resourceIdx = static_cast<std::uint32_t>( textureMap.at(mapRef).offset() );
             material.addMapRef( Material::MapType::Normal, mapRef );
         }
         else if (!strcmp(pstrToken, "<MetallicMap:>"))
         {
             nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
-            mapRef.resourceIdx = textureMap.at(mapRef).offset();
+            mapRef.resourceIdx = static_cast<std::uint32_t>( textureMap.at(mapRef).offset() );
             material.addMapRef( Material::MapType::Metallic, mapRef );
         }
         else if (!strcmp(pstrToken, "<MetallicSmoothnessMap:>"))
         {
             nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
-            mapRef.resourceIdx = textureMap.at(mapRef).offset();
+            mapRef.resourceIdx = static_cast<std::uint32_t>( textureMap.at(mapRef).offset() );
             material.addMapRef( Material::MapType::MetallicSmoothness, mapRef );
         }
         else if (!strcmp(pstrToken, "<EmissionMap:>"))
         {
             nReads = (UINT)::fread(&mapRef, sizeof(Material::MapRef), 1, pInFile);
-            mapRef.resourceIdx = textureMap.at(mapRef).offset();
+            mapRef.resourceIdx = static_cast<std::uint32_t>( textureMap.at(mapRef).offset() );
             material.addMapRef( Material::MapType::Emmisive, mapRef );
         }
         else {
