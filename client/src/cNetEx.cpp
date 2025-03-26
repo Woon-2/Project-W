@@ -171,6 +171,7 @@ void CNetExHelicopter::generatePackets(Session& session) {
         .size = calcPacketSize<CSWorld>(),
         .type = PacketType::CSWorld,
         .csWorld = CSWorld{
+            .netId = netId(),
             .xform = RigidXform{
                 .translation = {translation.x(), translation.y(), translation.z()},
                 .rotation = {rotation.x(), rotation.y(), rotation.z()}

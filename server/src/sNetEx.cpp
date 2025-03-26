@@ -82,9 +82,11 @@ void SNetExSystem::postUpdate() {
 void SNetExSystem::processPacket(const Packet& packet) {
     switch (packet.type) {
     case PacketType::CSWorld:
-        for (auto& pNetEx : components<NetEx>()) {
-            pNetEx->processPacket(packet);
+        if (!netIdToNetEx_.contains(packet.csWorld.netId)) {
+            std::cerr << "NetEx not found for netId: " << packet.csWorld.netId << '\n';
+            return;
         }
+        netIdToNetEx_.at(packet.csWorld.netId)->processPacket(packet);
         break;
     
     default:
