@@ -9,6 +9,7 @@
 #include <vector>
 #include <map>
 #include <optional>
+#include <list>
 
 class SNetExSystem : public ecs::System<NetEx> {
 public:
@@ -17,45 +18,8 @@ public:
     SNetExSystem(std::vector<Session*>&& pSessions)
         : netIdToNetEx_(), pSessions_(std::move(pSessions)) {}
 
-    void addEntity(ecs::Entity& entity) {
-        ecs::System<NetEx>::addEntity(entity);
-        auto& netEx = entity.as<NetEx>();
-        netIdToNetEx_[netEx.id()] = &netEx;
-    }
-
-    void addSession(Session& session) {
-        pSessions_.push_back(&session);
-
-        for (auto& pNetEx : components<NetEx>()) {
-            auto pCoord = gameEngine::Coord::at(pNetEx->entityID().value());
-
-            auto translation = pCoord->get().xform().row(3);
-
-            session.enqueuePacket(
-                Packet{
-                    .size = 16u + sizeof(SCCreate),
-                    .type = PacketType::SCCreate,
-                    .scCreate = SCCreate{
-                        .netId = pNetEx->id(),
-                        .objType = ObjectType::Helicopter,
-                        .xform = {
-                            .translation = {translation.x(), translation.y(), translation.z()},
-                            .rotation = {0.0f, 0.0f, 0.0f}
-                        }
-                    }
-                }
-            );
-            session.enqueuePacket(
-                Packet{
-                    .size = 16u + sizeof(SCAssign),
-                    .type = PacketType::SCAssign,
-                    .scAssign = SCAssign{
-                        .netId = pNetEx->id()
-                    }
-                }
-            );
-        }
-    }
+    void addEntity(ecs::Entity& entity);
+    void addSession(Session& session);
 
     void preUpdate();
     void postUpdate();
@@ -65,6 +29,7 @@ private:
 
     std::map<std::uint32_t, NetEx*> netIdToNetEx_;
     std::vector<Session*> pSessions_;
+    std::list<NetEx*> freeHelicopters_; 
 };
 
 class SNetExHelicopter : public INetExProcessor {
