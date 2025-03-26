@@ -30,7 +30,7 @@ Session::~Session() {
 
 Session::Session(net::TcpSocket&& sock)
     : recvBuf_{}, sendQueue_{}, recvQueue_{}, sock_(std::move(sock)), id_(-1)
-    , recvBytesRemain_(0), recvOffset_(0), readOffset_(0) {
+    , recvBytesRemain_(0), recvOffset_(0) {
     if (auto allocatedId = IDPool::allocID()) {
         id_ = allocatedId.value();
     }
@@ -43,8 +43,7 @@ Session::Session(Session&& rhs) noexcept
     , sock_(std::move(rhs.sock_))
     , id_(std::exchange(rhs.id_, -1))
     , recvBytesRemain_(std::exchange(rhs.recvBytesRemain_, 0))
-    , recvOffset_(std::exchange(rhs.recvOffset_, 0))
-    , readOffset_(std::exchange(rhs.readOffset_, 0)) {}
+    , recvOffset_(std::exchange(rhs.recvOffset_, 0)) {}
 
 Session& Session::operator=(Session&& other) noexcept {
     if (this == &other) {
@@ -58,7 +57,6 @@ Session& Session::operator=(Session&& other) noexcept {
     id_ = std::exchange(other.id_, -1);
     recvBytesRemain_ = std::exchange(other.recvBytesRemain_, 0);
     recvOffset_ = std::exchange(other.recvOffset_, 0);
-    readOffset_ = std::exchange(other.readOffset_, 0);
 
     return *this;
 }
@@ -91,7 +89,7 @@ void Session::flushPackets() {
 
 void Session::recvPackets() {
     auto wsaBuf = WSABUF{
-        .len = recvBufSize,
+        .len = static_cast<ULONG>(recvBufSize - recvOffset_),
         .buf = recvBuf_.data() + recvOffset_
     };
 
@@ -99,52 +97,29 @@ void Session::recvPackets() {
 
     if (!recvSize) { return; }
 
-    while (recvSize.value() > 0) {
-        if (recvBytesRemain_ > 0) {
-            if (recvSize.value() >= recvBytesRemain_) {
-                auto packet = Packet{};    
-                std::memcpy(&packet, recvBuf_.data(), reinterpret_cast<Packet*>(recvBuf_.data())->size);
-                
-                recvQueue_.push_back(packet);
-                readOffset_ = reinterpret_cast<Packet*>(recvBuf_.data())->size;
-                recvOffset_ = 0;
-                *recvSize -= recvBytesRemain_;
-                recvBytesRemain_ = 0;
-            }
-            else {
-                recvOffset_ += recvSize.value();
-                recvBytesRemain_ -= recvSize.value();
-                *recvSize = 0;
-            }
+    std::cout << "Received " << recvSize.value() << " bytes\n";
+    auto readOffset = 0u;
+
+    // recvOffset_ + recvSize.value() represents
+    // previously received bytes + currently received bytes
+    while (recvOffset_ + recvSize.value() >= sizeof(std::uint16_t)) {  // at least it should be able to receive packet size
+        const auto requiredSize = reinterpret_cast<const Packet*>(recvBuf_.data() + readOffset)->size;
+
+        if (recvOffset_ + recvSize.value() < requiredSize) {
+            // packet fragmentized, reassemble required.
+            recvBytesRemain_ = requiredSize - (recvOffset_ + recvSize.value());
+            std::memmove(recvBuf_.data() + recvOffset_, recvBuf_.data() + recvOffset_ + readOffset, recvSize.value());
+            recvOffset_ += recvSize.value();
+            return;
         }
-        else {
-            const auto requiredSize = reinterpret_cast<Packet*>(recvBuf_.data() + readOffset_)->size;
-            if (recvSize.value() >= requiredSize) {
-                auto packet = Packet{};
-                std::memcpy(&packet, recvBuf_.data() + readOffset_, requiredSize);
-                
-                recvQueue_.push_back(packet);
-                *recvSize -= requiredSize;
-                readOffset_ += requiredSize;
-            }
-            else {
-                std::memcpy(recvBuf_.data(), recvBuf_.data() + readOffset_, recvSize.value());
-                recvOffset_ = recvSize.value();
-                recvBytesRemain_ = reinterpret_cast<Packet*>(recvBuf_.data())->size - recvSize.value();
-                *recvSize = 0;
-                readOffset_ = 0;
-            }
-        }
+
+        recvQueue_.emplace_back();
+        std::memcpy(&recvQueue_.back(), recvBuf_.data() + readOffset, requiredSize);
+
+        readOffset += requiredSize;
+        *recvSize -= (requiredSize - recvOffset_);
+        recvOffset_ = 0u;
     }
-
-    readOffset_ = 0;
 }
-
-
-// ['H', 'e', 'l', 'l', 'o', 'w', 'o', 'r', 'l', 'd']
-//   0    1    2    3    4    5    6
-// "Hel"
-// offset: 3
-// WSARecv: recvBuf.data() + offset
 
 std::forward_list<std::uint16_t> IDPool::idList_;

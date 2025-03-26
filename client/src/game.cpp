@@ -64,6 +64,7 @@ void Game::render() {
 }
 
 void Game::initNetwork() {
+    IDPool::initList();
     net::initNet();
 
     auto sock = net::TcpSocket( );

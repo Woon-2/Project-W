@@ -312,6 +312,9 @@ public:
     std::optional<DWORD> WSASendUc(R&& wsaBufs) {
         DWORD sent{};
         if (::WSASend(sock_, std::data(wsaBufs), static_cast<DWORD>(std::size(wsaBufs)), &sent, 0, nullptr, nullptr)) {
+            if (WSAGetLastError() == WSA_IO_PENDING || WSAGetLastError() == WSAEWOULDBLOCK) {
+                return sent;
+            }
             return {};
         }
         return sent;
@@ -334,6 +337,9 @@ public:
         DWORD recvSize{};
         DWORD flags{};
         if (::WSARecv(sock_, std::data(wsaBufs), static_cast<DWORD>(std::size(wsaBufs)), &recvSize, &flags, nullptr, nullptr)) {
+            if (WSAGetLastError() == WSA_IO_PENDING || WSAGetLastError() == WSAEWOULDBLOCK) {
+                return recvSize;
+            }
             return {};
         }
         return recvSize;

@@ -29,8 +29,6 @@ public:
         return initPacketCnt_ == recvdInitPacketCnt_;
     }
 
-    std::optional<ecs::Entity::ID> playerID_ = std::nullopt;
-
 private:
     void processPacket(const Packet& packet, const gfx::d3d12engine::Core& core);
     void handleSCInitInfo(const SCInitInfo& scInitInfo);

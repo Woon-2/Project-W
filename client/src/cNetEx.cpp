@@ -66,6 +66,7 @@ void CNetExSystem::handleSCInitCreate(const SCInitCreate& scInitCreate, const gf
             throw GFX_EXCEPT("RefModel not found: GO_OH-58D");
         }
         entity.createComponent<NetEx>(std::make_unique<CNetExHelicopter>(entity.id().value()));
+        entity.as<NetEx>().addCategory(NetExCategory::Helicopter);
         entity.createComponent<gameEngine::Coord>();
         entity.as<gameEngine::Coord>().get().setLocalXform(mu::translate(translation));
 
@@ -155,7 +156,7 @@ void CNetExSystem::handleSCInitAssign(const SCInitAssign& scAssign) {
         return;
     }
 
-    playerID_ = pNetEx->entityID();
+    pNetEx->addCategory(NetExCategory::Player);
     ++recvdInitPacketCnt_;
 }
 

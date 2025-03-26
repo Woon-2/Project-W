@@ -33,6 +33,12 @@ enum class ObjectType : std::uint8_t {
     Tree2,
 };
 
+enum class NetExCategory : std::uint32_t {
+    Player,
+    AI,
+    Helicopter
+};
+
 struct CSHello {
  
 };

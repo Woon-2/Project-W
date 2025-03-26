@@ -30,33 +30,35 @@ void Stage::render() {
 void Stage::processPackets(double deltaTime) {
     pSession_->recvPackets();
 
+    bool alreadyInitialized = pSystems_->netSystem.hasInitialized();
+
     pSystems_->netSystem.preUpdate(*pCore_);
+
+    if (!pSystems_->netSystem.hasInitialized()) {
+        return;
+    }
+
     auto v = pSystems_->netSystem.retreiveCreatedEntities();
+    auto playerIdx = -1u;
+    const auto oldEntitySize = entities_.size();
 
     for (auto& entt : v) {
         entt.as<gfx::d3d12engine::Model>().get().markRenderPass(gfx::d3d12::rp::PBRIllumination::id);
         entt.as<gfx::d3d12engine::Model>().get().markRenderPass(gfx::d3d12::rp::ShadowMap::id);
-        scene_.addEntity(entt);
-        pSystems_->coordRoot.addEntity(entt);
-    }
-    
-    std::ranges::move(v, std::back_inserter(entities_));
 
-    if (pSystems_->netSystem.playerID_.has_value()) {
-        auto it = std::ranges::find_if(entities_,
-            [&id = pSystems_->netSystem.playerID_.value()](const auto& entt) {
-            return entt.id() == id;
-        });
-        if (it != entities_.end()) {
+        if (entt.as<NetEx>().hasCategory(NetExCategory::Player)) {
+            // as a vector is a contiguous range,
+            // address gap between two element represents the gap of the indices.
+            playerIdx = &entt - v.data();
+
             const auto cameraOffset = mu::Vec3(0.f, 4.8f, -10.f);
             const auto cameraTimeLag = 1.f;
 
-            pPlayer_ = &*it;
-            pPlayer_->createComponent<PlayerController>();
-            pPlayer_->createComponent<RigidBody>();
+            entt.createComponent<PlayerController>();
+            entt.createComponent<RigidBody>();
 
-            pPlayer_->createComponent<gfx::d3d12engine::Camera>(gfx::d3d12::Camera::Config());
-            auto& camera = pPlayer_->as<gfx::d3d12engine::Camera>();
+            entt.createComponent<gfx::d3d12engine::Camera>(gfx::d3d12::Camera::Config());
+            auto& camera = entt.as<gfx::d3d12engine::Camera>();
             camera.get().coordMovement() << mu::translate(cameraOffset);
             camera.get().coordRotation().setLocalXform(
                 mu::transpose(mu::lookAt(mu::Vec3(), -cameraOffset, mu::Vec3(0.f, 1.f, 0.f)))
@@ -64,12 +66,21 @@ void Stage::processPackets(double deltaTime) {
             camera.get().coordMovement().setParent(&pSystems_->coordRoot.get());
             camera.setOffset(cameraOffset);
             camera.setTimeLag(cameraTimeLag);
-            camera.attach(pPlayer_->as<gfx::d3d12engine::Model>());
+            camera.attach(entt.as<gfx::d3d12engine::Model>());
 
-            pSystems_->inputSystem.addEntity(*pPlayer_);
-            pSystems_->physicsSystem.addEntity(*pPlayer_);
-            initScene();
+            pSystems_->inputSystem.addEntity(entt);
+            pSystems_->physicsSystem.addEntity(entt);
         }
+
+        scene_.addEntity(entt);
+        pSystems_->coordRoot.addEntity(entt);
+    }
+    
+    std::ranges::move(v, std::back_inserter(entities_));
+
+    if (!alreadyInitialized && pSystems_->netSystem.hasInitialized()) {
+        pPlayer_ = &entities_[oldEntitySize + playerIdx];
+        initScene();
     }
 }
 

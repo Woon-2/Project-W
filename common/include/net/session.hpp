@@ -92,6 +92,14 @@ public:
         return pProcessor_.get();
     }
 
+    void addCategory(NetExCategory category) {
+        pProcessor_->addCategory(category);
+    }
+
+    bool hasCategory(NetExCategory category) const {
+        return pProcessor_->hasCategory(category);
+    }
+
 private:
     std::unique_ptr<NetExProcessorBase> pProcessor_;
 };
@@ -102,14 +110,14 @@ public:
 
     Session()
         : recvBuf_{}, sendQueue_{}, recvQueue_{}, sock_(INVALID_SOCKET), id_(-1)
-        , recvBytesRemain_(0), recvOffset_(0), readOffset_(0) {}
+        , recvBytesRemain_(0), recvOffset_(0) {}
 
     ~Session();
 
     Session(net::TcpSocket&& sock);
     Session(net::TcpSocket&& sock, std::uint32_t id)
         : recvBuf_{}, sendQueue_{}, recvQueue_{}, sock_(std::move(sock)), id_(id)
-        , recvBytesRemain_(0), recvOffset_(0), readOffset_(0) {}
+        , recvBytesRemain_(0), recvOffset_(0) {}
 
     Session(const Session&) = delete;
     Session& operator=(const Session&) = delete;
@@ -149,7 +157,6 @@ private:
     std::uint32_t id_;
     std::uint32_t recvBytesRemain_;
     std::uint32_t recvOffset_;
-    std::uint32_t readOffset_;
 };
 
 
