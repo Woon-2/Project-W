@@ -27,7 +27,7 @@ Core::Core()
     window_.show(SW_SHOW);
     factory_.get().Reset();
 
-    ecs::init( ecs::InitDesc{ .threadCnt = 1u, .entityPoolSize = 0x160u } );
+    ecs::init( ecs::InitDesc{ .threadCnt = 1u, .entityPoolSize = 0x3200u } );
 }
 
 void Core::render(IRenderer& renderer, Scene& scene) {

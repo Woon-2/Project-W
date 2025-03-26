@@ -53,6 +53,7 @@ void Stage::processPackets(double deltaTime) {
 
             pPlayer_ = &*it;
             pPlayer_->createComponent<PlayerController>();
+            pPlayer_->createComponent<RigidBody>();
 
             pPlayer_->createComponent<gfx::d3d12engine::Camera>(gfx::d3d12::Camera::Config());
             auto& camera = pPlayer_->as<gfx::d3d12engine::Camera>();
