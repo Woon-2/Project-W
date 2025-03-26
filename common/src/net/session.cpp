@@ -110,8 +110,8 @@ void Session::recvPackets() {
                 recvQueue_.push_back(packet);
                 readOffset_ = reinterpret_cast<Packet*>(recvBuf_.data())->size;
                 recvOffset_ = 0;
+                *recvSize -= recvBytesRemain_;
                 recvBytesRemain_ = 0;
-                *recvSize -= readOffset_;
             }
             else {
                 recvOffset_ += recvSize.value();
@@ -124,7 +124,7 @@ void Session::recvPackets() {
 			std::cout << "Required Size: " << requiredSize << '\n';
             if (recvSize.value() >= requiredSize) {
                 auto packet = Packet{};
-                std::memcpy(&packet, recvBuf_.data(), requiredSize);
+                std::memcpy(&packet, recvBuf_.data() + readOffset_, requiredSize);
                 
                 recvQueue_.push_back(packet);
                 *recvSize -= requiredSize;

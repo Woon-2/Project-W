@@ -51,6 +51,10 @@ public:
         return netId_;
     }
 
+    INetExProcessor* getProcessor() noexcept {
+        return pProcessor_.get();
+    }
+
 private:
     std::unique_ptr<INetExProcessor> pProcessor_;
     std::uint32_t netId_;
@@ -58,7 +62,7 @@ private:
 
 class Session {
 public:
-    static constexpr std::size_t recvBufSize = 4096u;
+    static constexpr std::size_t recvBufSize = 40960u;
 
     Session()
         : recvBuf_{}, sendQueue_{}, recvQueue_{}, sock_(INVALID_SOCKET), id_(-1)
