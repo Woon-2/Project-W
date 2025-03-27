@@ -25,6 +25,28 @@
 #include <chrono>
 #include <random>
 
+// dummy model to store rotation coordinate system
+class DummyModel : public ecs::Component {
+public:
+    ENABLE_COMPONENT(DummyModel)
+
+    DummyModel(const ecs::Entity& entity, gameEngine::Coord& coordComp)
+        : Component(entity), coord_() {
+        coord_.setParent(&coordComp.get());
+    }
+
+    const gfx::coord::System& coord() const NOEXCEPT {
+        return coord_;
+    }
+
+    gfx::coord::System& coord() NOEXCEPT {
+        return coord_;
+    }
+
+private:
+    gfx::coord::System coord_;
+};
+
 std::list<Session> gSessions;
 std::uniform_real_distribution<float> gDist(-1.f, 1.f);
 std::mt19937 gRng(std::random_device{}());
@@ -81,11 +103,14 @@ int main()
             entity.as<NetEx>().addCategory(NetExCategory::Helicopter);
         }
         entity.createComponent<RigidBody>();
+        entity.createComponent<DummyModel>(entity.as<gameEngine::Coord>());
 
         netSystem.addEntity(entity);
         physicsSystem.addEntity(entity);
         coordRoot.addEntity(entity);
     }
+
+    coordRoot.update();
 
     auto lastTp = Clock::now();
 
