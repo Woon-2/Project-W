@@ -63,13 +63,13 @@ target_include_directories(client
 
 target_link_libraries(client
     PRIVATE
-        common::game
+        common::ecsClient
         common::woon2exception
         common::win32
         common::gfx
         common::mu
         common::input
-        common::net
+        common::netClient
 )
 
 file(COPY "${PROJECT_SOURCE_DIR}/extern/assimp/assimp-vc143-mt.dll"

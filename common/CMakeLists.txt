@@ -158,39 +158,65 @@ target_include_directories(mem
 )
 
 # === ecs ===
-add_library(ecs
+add_library(ecsClient
+    src/game/level.cpp include/game/level.hpp
+    src/coord.cpp include/coord.hpp
+    src/game/physicsSystem.cpp include/game/physicsSystem.hpp
+
     src/ecs.cpp include/ecs.hpp
     include/ecsExcept.hpp
 )
 
-add_library(common::ecs ALIAS ecs)
+add_library(common::ecsClient ALIAS ecsClient)
 
-auto_configure(ecs PRIVATE)
+target_compile_definitions(ecsClient
+    PUBLIC
+        ECS_CLIENT
+)
 
-target_include_directories(ecs
+auto_configure(ecsClient PRIVATE)
+
+target_link_libraries(ecsClient
+    PRIVATE
+        common::mu
+)
+
+target_include_directories(ecsClient
     PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
-# === game ===
-add_library(game
+add_library(ecsServer
     src/game/level.cpp include/game/level.hpp
     src/coord.cpp include/coord.hpp
     src/game/physicsSystem.cpp include/game/physicsSystem.hpp
+
+    src/ecs.cpp include/ecs.hpp
+    include/ecsExcept.hpp
 )
 
-add_library(common::game ALIAS game)
+add_library(common::ecsServer ALIAS ecsServer)
 
-auto_configure(game PRIVATE)
+target_compile_definitions(ecsServer
+    PUBLIC
+        ECS_SERVER
+)
 
-target_link_libraries(game
+auto_configure(ecsServer PRIVATE)
+
+target_link_libraries(ecsServer
     PRIVATE
         common::mu
-        common::ecs
+        common::woon2exception
+)
+
+target_include_directories(ecsServer
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
 # === net ===
-add_library(net
+add_library(netClient
     src/net/session.cpp include/net/session.hpp
     src/net/netLow.cpp include/net/netLow.hpp
 
@@ -198,18 +224,48 @@ add_library(net
     include/net/netInclude.hpp
 )
 
-add_library(common::net ALIAS net)
+add_library(common::netClient ALIAS netClient)
 
-auto_configure(net PRIVATE)
-define_win32_lighten_macros(net PUBLIC)
+auto_configure(netClient PRIVATE)
+define_win32_lighten_macros(netClient PUBLIC)
 
-target_link_libraries(net
+target_link_libraries(netClient
     PRIVATE
-        common::ecs
         common::mu
+        common::ecsClient
         common::woon2exception
-        common::game
         ws2_32.lib
+)
+
+target_include_directories(netClient
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+
+add_library(netServer
+    src/net/session.cpp include/net/session.hpp
+    src/net/netLow.cpp include/net/netLow.hpp
+
+    include/net/protocol.hpp
+    include/net/netInclude.hpp
+)
+
+add_library(common::netServer ALIAS netServer)
+
+auto_configure(netServer PRIVATE)
+define_win32_lighten_macros(netServer PUBLIC)
+
+target_link_libraries(netServer
+    PRIVATE
+        common::mu
+        common::ecsServer
+        common::woon2exception
+        ws2_32.lib
+)
+
+target_include_directories(netServer
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
 # === gfx ===
@@ -259,8 +315,7 @@ target_link_libraries(gfx
         common::coro
         common::mem
         common::TMP
-        common::ecs
-        common::game
+        common::ecsClient
 )
 
 target_include_directories(gfx
@@ -269,11 +324,6 @@ target_include_directories(gfx
         "${TEXLOADER_INCLUDE}"
         "${D3D12_INCLUDE}"
         "${FREEIMAGE_INCLUDE}"
-)
-
-target_include_directories(net
-    PUBLIC
-        "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
 # === shaders ===

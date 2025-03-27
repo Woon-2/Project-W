@@ -48,15 +48,19 @@ struct InitDesc {
 };
 
 enum class Components {
+#ifdef ECS_CLIENT
     PlayerController,
-    RigidBody,
     AssetLinker,
-    Coord,
     Model,
-    DummyModel,
-    LevelChunkModel,
     Camera,
     Light,
+    LevelChunkModel,
+#endif
+#ifdef ECS_SERVER
+    DummyModel,
+#endif
+    RigidBody,
+    Coord,
     NetEx,
     Size,
 };
