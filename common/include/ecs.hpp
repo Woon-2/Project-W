@@ -48,7 +48,7 @@ struct InitDesc {
 };
 
 enum class Components {
-    PlayerController = 1,
+    PlayerController,
     RigidBody,
     AssetLinker,
     Coord,

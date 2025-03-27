@@ -49,7 +49,7 @@ void Stage::processPackets(double deltaTime) {
         if (entt.as<NetEx>().hasCategory(NetExCategory::Player)) {
             // as a vector is a contiguous range,
             // address gap between two element represents the gap of the indices.
-            playerIdx = &entt - v.data();
+            playerIdx = static_cast<std::uint32_t>(&entt - v.data());
 
             const auto cameraOffset = mu::Vec3(0.f, 4.8f, -10.f);
             const auto cameraTimeLag = 1.f;
