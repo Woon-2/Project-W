@@ -1553,6 +1553,8 @@ template <std::size_t D /* Dimension */>
     requires (D >= 1 && D <= 4)
 class alignas(16) NVec {
 public:
+    struct NoNormalize_t {};
+
     template <std::size_t D2>
         requires (D2 >= 1 && D2 <= 4)
     friend class Vec;
@@ -1567,24 +1569,36 @@ public:
     }
 
     NVec(float val) __MathUtil_NOEXCEPT
-        : vec_(dx::XMVectorReplicate(val)) {
+        : NVec(val, NoNormalize_t{}) {
         normalize();
     }
+
+    NVec(float val, NoNormalize_t) __MathUtil_NOEXCEPT
+        : vec_(dx::XMVectorReplicate(val)) {}
 
     NVec(float x, float y) __MathUtil_NOEXCEPT requires (D == 2)
-        : vec_(dx::XMVectorSet(x, y, 0.f, 1.f)) {
+        : NVec(x, y, NoNormalize_t{}) {
         normalize();
     }
+
+    NVec(float x, float y, NoNormalize_t) __MathUtil_NOEXCEPT requires (D == 2)
+        : vec_(dx::XMVectorSet(x, y, 0.f, 1.f)) {}
 
     NVec(float x, float y, float z) __MathUtil_NOEXCEPT requires (D == 3)
-        : vec_(dx::XMVectorSet(x, y, z, 1.f)) {
+        : NVec(x, y, z, NoNormalize_t{}) {
         normalize();
     }
 
+    NVec(float x, float y, float z, NoNormalize_t) __MathUtil_NOEXCEPT requires (D == 3)
+        : vec_(dx::XMVectorSet(x, y, z, 1.f)) {}
+
     NVec(float x, float y, float z, float w) __MathUtil_NOEXCEPT requires (D == 4)
-        : vec_(dx::XMVectorSet(x, y, z, w)) {
+        : NVec(x, y, z, w, NoNormalize_t{}) {
         normalize();
     }
+    
+    NVec(float x, float y, float z, float w, NoNormalize_t) __MathUtil_NOEXCEPT requires (D == 4)
+        : vec_(dx::XMVectorSet(x, y, z, w)) {}
 
     NVec(dx::FXMVECTOR vec) __MathUtil_NOEXCEPT
         : vec_(vec) {
@@ -1594,9 +1608,14 @@ public:
     template <std::size_t D2>
         requires (D2 >= 1 && D2 <= 4)
     NVec(Vec<D2> vec) __MathUtil_NOEXCEPT
-        : vec_(vec.vec_) {
+        : NVec(vec, NoNormalize_t{}){
         normalize();
     }
+
+    template <std::size_t D2>
+        requires (D2 >= 1 && D2 <= 4)
+    NVec(Vec<D2> vec, NoNormalize_t) __MathUtil_NOEXCEPT
+        : vec_(vec.vec_) {}
 
     template <std::size_t D2, std::floating_point ... Fs>
         requires (D2 >= 1 && D2 < 4 && D > D2)
@@ -2058,7 +2077,7 @@ const Vec<D> MU_CALLCONV cross(Vec<D> lhs, NVec<D> rhs) __MathUtil_NOEXCEPT {
 template <std::size_t D>
     requires (D >= 1 && D <= 4)
 const NVec<D> MU_CALLCONV cross(NVec<D> lhs, NVec<D> rhs) __MathUtil_NOEXCEPT {
-    return NVec<D>(cross(Vec<D>(lhs), Vec<D>(rhs)));
+    return NVec<D>(cross(Vec<D>(lhs), Vec<D>(rhs)), typename NVec<D>::NoNormalize_t{});
 }
 
 template <std::size_t D>
@@ -2478,6 +2497,11 @@ public:
     Quat(dx::FXMVECTOR quat) __MathUtil_NOEXCEPT
         : quat_(quat) {}
 
+    Quat(mu::Vec3 v, float w) __MathUtil_NOEXCEPT
+        : quat_(v.get()) {
+        quat_ = dx::XMVectorSetW(quat_, w);
+    }
+
     Quat(class NQuat nQuat) __MathUtil_NOEXCEPT;
 
     Quat& MU_CALLCONV operator+=(Quat rhs) __MathUtil_NOEXCEPT {
@@ -2571,10 +2595,9 @@ class Mat;
 #endif // DXMATH_MAT_UTIL
 
 class NQuat {
-private:
+public:
     struct NoNormalize_t {};
 
-public:
     friend class Quat;
 
     NQuat() __MathUtil_NOEXCEPT
@@ -2583,8 +2606,21 @@ public:
     }
 
     NQuat(float x, float y, float z, float w) __MathUtil_NOEXCEPT
-        : NQuat(dx::XMVectorSet(x, y, z, w)) {
+        : NQuat(x, y, z, w, NoNormalize_t{}) {
         normalize();
+    }
+
+    NQuat(float x, float y, float z, float w, NoNormalize_t) __MathUtil_NOEXCEPT
+        : quat_(dx::XMVectorSet(x, y, z, w)) {}
+
+    NQuat(mu::Vec3 v, float w) __MathUtil_NOEXCEPT
+        : NQuat(v, w, NoNormalize_t{}) {
+        normalize();
+    }
+
+    NQuat(mu::Vec3 v, float w, NoNormalize_t) __MathUtil_NOEXCEPT
+        : quat_(v.get()) {
+        quat_ = dx::XMVectorSetW(quat_, w);
     }
 
     NQuat(Radian angle, float axisX, float axisY, float axisZ) __MathUtil_NOEXCEPT
