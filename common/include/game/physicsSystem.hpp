@@ -1,12 +1,16 @@
 #ifndef __PHYSICSSYSTEM_HPP
 #define __PHYSICSSYSTEM_HPP
 
-#include <array>
-
 #include "ecs.hpp"
 #include "coord.hpp"
 
 #include "keyboardXX.hpp"
+
+#include <DirectXCollision.h>
+
+#include <array>
+#include <vector>
+#include <numeric>
 
 class RigidBody : public ecs::Component {
 public:
@@ -49,6 +53,64 @@ private:
 class PhysicsSystem : public ecs::System<RigidBody> {
 public:
 	void update(float deltaTime);
+};
+
+struct BoundingCapsule {
+	mu::Vec3 base;
+	mu::Vec3 tip;
+	float radius;
+	float height;
+};
+
+struct BoundingOrientedBox {
+	mu::Vec3 center;
+	mu::Vec3 extents;
+	mu::NQuat orientation;
+};
+
+struct BoundingFrustum {
+	mu::Vec3 origin;
+	mu::NQuat orientation;
+	mu::Radian fovy;
+	float aspect;
+	float nearZ;
+	float farZ;
+};
+
+inline mu::Vec3 MU_CALLCONV ClosestPointOnLineSegment(
+	mu::Vec3 A, mu::Vec3 B, mu::Vec3 point
+) {
+	auto AB = B - A;
+	float t = mu::dot(point - A, AB) / dot(AB, AB);
+	return A + std::clamp(t, 0.f, 1.f) * AB; // saturate(t) can be written as: min((max(t, 0), 1)
+}
+
+class Collider {
+public:
+	enum class Type {
+		Capsule,
+		Box,
+		Frustum
+	};
+
+	bool MU_CALLCONV intersects(const Collider& other) const;
+	bool MU_CALLCONV contains(const mu::Vec3& point) const;
+
+private:
+	Type type_;
+	union {
+		BoundingCapsule capsule_;
+		BoundingOrientedBox box_;
+		BoundingFrustum frustum_;
+	};
+};
+
+class BoundingVolumeNode {
+public:
+
+private:
+	std::vector<Collider> colliders_;
+	std::vector<BoundingVolumeNode> children_;
 };
 
 #endif
