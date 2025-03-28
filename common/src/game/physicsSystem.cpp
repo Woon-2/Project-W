@@ -461,3 +461,53 @@ bool MU_CALLCONV Collider::contains(const mu::Vec3 point) const {
 
 	throw std::runtime_error("requested coolision detection is currently not implemented.");
 }
+
+// needs optimization
+bool BoundingVolumeNode::collides(const BoundingVolumeNode& other) const {
+	auto collided = false;
+
+	for (const auto& collider : colliders_) {
+		for (const auto& otherCollider : other.colliders_) {
+			if (collider.intersects(otherCollider)) {
+				collided = true;
+				break;
+			}
+		}
+	}
+
+	if (!collided) {
+		return false;
+	}
+
+	if (children_.empty() && other.children_.empty()) {
+		return true;
+	}
+
+	if (children_.empty()) {
+		for (const auto& otherChild : other.children_) {
+			if (collides(otherChild)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	if (other.children_.empty()) {
+		for (const auto& child : children_) {
+			if (other.collides(child)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	for (const auto& child : children_) {
+		for (const auto& otherChild : other.children_) {
+			if (child.collides(otherChild)) {
+				return true;
+			}
+		}
+	}
+
+	return false;
+}

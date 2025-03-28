@@ -153,6 +153,8 @@ public:
 		children_.reserve(size);
 	}
 
+	bool collides(const BoundingVolumeNode& other) const;
+
 private:
 	std::vector<Collider> colliders_;
 	std::vector<BoundingVolumeNode> children_;
@@ -164,6 +166,13 @@ public:
 
 	BoundingVolume(const ecs::Entity& entity) NOEXCEPT
 		: Component(entity) {}
+
+	BoundingVolumeNode& root() NOEXCEPT { return root_; }
+	const BoundingVolumeNode& root() const NOEXCEPT { return root_; }
+
+	bool collides(const BoundingVolume& other) const {
+		return root_.collides(other.root_);
+	}
 
 private:
 	BoundingVolumeNode root_;
