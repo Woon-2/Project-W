@@ -62,6 +62,7 @@ enum class Components {
     RigidBody,
     Coord,
     NetEx,
+    BoundingVolume,
     Size,
 };
 

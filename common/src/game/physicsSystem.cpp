@@ -59,7 +59,7 @@ void PhysicsSystem::update(float deltaTime)
 	}
 }
 
-bool MU_CALLCONV contains(const BoundingCapsule& a, const mu::Vec3& point) {
+bool MU_CALLCONV contains(const BoundingCapsule a, const mu::Vec3 point) {
 	auto aNormal = mu::Vec3(mu::NVec3(a.tip - a.base));
 	auto aLineEndOffset = aNormal * a.radius;
 	auto aA = a.base + aLineEndOffset;
@@ -70,9 +70,8 @@ bool MU_CALLCONV contains(const BoundingCapsule& a, const mu::Vec3& point) {
 	return (best - point).len2() < a.radius * a.radius;
 }
 
-bool MU_CALLCONV intersects(const BoundingCapsule& a, const BoundingCapsule& b) {
+bool MU_CALLCONV intersects(const BoundingCapsule a, const BoundingCapsule& b) {
 	// capsule A:
-	mu::Vec3 as = mu::Vec3(mu::Vec2(1.f, 1.f), 1.f);
 	mu::Vec3 aNormal = mu::NVec3(a.tip - a.base); 
 	auto aLineEndOffset = aNormal * a.radius; 
 	auto aA = a.base + aLineEndOffset; 
@@ -111,15 +110,13 @@ bool MU_CALLCONV intersects(const BoundingCapsule& a, const BoundingCapsule& b) 
 	// now do the same for capsule A segment:
 	bestA = ClosestPointOnLineSegment(aA, aB, bestB);
 
-	auto penetrationNormal = bestA - bestB;
-	auto len = penetrationNormal.len();
-	penetrationNormal /= len;  // normalize
+	auto len = (bestA - bestB).len();
 	float penetrationDepth = a.radius + b.radius - len;
 
 	return penetrationDepth > 0;
 }
 
-bool MU_CALLCONV intersects(const BoundingOrientedBox& lhs, const BoundingOrientedBox& rhs) {
+bool MU_CALLCONV intersects(const BoundingOrientedBox lhs, const BoundingOrientedBox& rhs) {
     // Build the 3x3 rotation matrix that defines the orientation of B relative to A.
 	auto R = mu::Mat3x3(lhs.orientation * rhs.orientation.dual());
 
@@ -291,7 +288,7 @@ bool MU_CALLCONV intersects(const BoundingOrientedBox& lhs, const BoundingOrient
 	return mu::notEqualAllI(noIntersection, mu::Vec3::trueV());
 }
 
-bool MU_CALLCONV intersects(const BoundingOrientedBox& lhs, const BoundingFrustum& rhs) {
+bool MU_CALLCONV intersects(const BoundingOrientedBox lhs, const BoundingFrustum& rhs) {
 	// transform box into frustum space
 	auto R = mu::Mat3x3(lhs.orientation * rhs.orientation.dual());
 	auto c = lhs.center - rhs.origin;
@@ -349,10 +346,83 @@ bool MU_CALLCONV intersects(const BoundingOrientedBox& lhs, const BoundingFrustu
 	return hasIntersection;
 }
 
-bool MU_CALLCONV Collider::intersects(const Collider& other) const {
+bool MU_CALLCONV intersects(const BoundingCapsule lhs, const BoundingOrientedBox& rhs) {
+	// Align capsule to the box's local space.
+	mu::Vec3 aNormal = mu::NVec3(lhs.tip - lhs.base); 
+	auto aLineEndOffset = aNormal * lhs.radius; 
+	auto aA = lhs.base + aLineEndOffset;
+	auto aB = lhs.tip - aLineEndOffset;
+	aA -= rhs.center;
+	aB -= rhs.center;
+	aA = rhs.orientation.dual().rotate(aA);
+	aB = rhs.orientation.dual().rotate(aB);
+
+	auto halfX = rhs.extents.x();
+	auto halfY = rhs.extents.y();
+	auto halfZ = rhs.extents.z();
+
+	const auto bestAL = ClosestPointOnLineSegment(aA, aB, mu::Vec3(-halfX, 0.f, 0.f));
+	const auto bestAR = ClosestPointOnLineSegment(aA, aB, mu::Vec3(halfX, 0.f, 0.f));
+	const auto bestAT = ClosestPointOnLineSegment(aA, aB, mu::Vec3(0.f, halfY, 0.f));
+	const auto bestAB = ClosestPointOnLineSegment(aA, aB, mu::Vec3(0.f, -halfY, 0.f));
+	const auto bestAF = ClosestPointOnLineSegment(aA, aB, mu::Vec3(0.f, 0.f, halfZ));
+	const auto bestAN = ClosestPointOnLineSegment(aA, aB, mu::Vec3(0.f, 0.f, -halfZ));
+
+
+	const auto bestALProj = mu::Vec3(-halfX, std::clamp(bestAL.y(), -halfY, halfY), std::clamp(bestAL.z(), -halfZ, halfZ));
+	const auto bestARProj = mu::Vec3(halfX, std::clamp(bestAR.y(), -halfY, halfY), std::clamp(bestAR.z(), -halfZ, halfZ));
+	const auto bestATProj = mu::Vec3(std::clamp(bestAT.x(), -halfX, halfX), halfY, std::clamp(bestAT.z(), -halfZ, halfZ));
+	const auto bestABProj = mu::Vec3(std::clamp(bestAB.x(), -halfX, halfX), -halfY, std::clamp(bestAB.z(), -halfZ, halfZ));
+	const auto bestAFProj = mu::Vec3(std::clamp(bestAF.x(), -halfX, halfX), std::clamp(bestAF.y(), -halfY, halfY), halfZ);
+	const auto bestANProj = mu::Vec3(std::clamp(bestAN.x(), -halfX, halfX), std::clamp(bestAN.y(), -halfY, halfY), -halfZ);
+
+	const auto r2 = lhs.radius * lhs.radius;
+
+	return ((bestAL - bestALProj).len2() <= r2)
+		|| ((bestAR - bestARProj).len2() <= r2)
+		|| ((bestAT - bestATProj).len2() <= r2)
+		|| ((bestAB - bestABProj).len2() <= r2)
+		|| ((bestAF - bestAFProj).len2() <= r2)
+		|| ((bestAN - bestANProj).len2() <= r2);
+}
+
+bool MU_CALLCONV intersects(const BoundingCapsule lhs, const BoundingFrustum& rhs) {
+	// approximate the capsule as a OBB
+	const auto center = (lhs.base + lhs.tip) * 0.5f;
+	const auto halfHeight = (lhs.tip - lhs.base).len() * 0.5f;
+	const auto v = mu::NVec3(lhs.tip - lhs.base);
+	
+	const auto front = mu::NVec3(0.f, 0.f, 1.f, mu::NVec3::NoNormalize_t{});
+	auto n = mu::cross(v, front);
+	static constexpr auto endurance = 1e-6f;
+	if (n.len2() < endurance) {
+		n = mu::NVec3(0.f, 1.f, 0.f, mu::NVec3::NoNormalize_t{});	
+	}
+
+	const auto theta = std::acos(mu::dot(v, front));
+	const auto halfCos = std::cos(theta) * 0.5f;
+	const auto halfSin = std::sin(theta) * 0.5f;
+
+	const auto quatV = mu::Vec3(n) * halfSin;
+	const auto quatW = halfCos;
+
+	auto orientation = mu::NQuat(quatV, quatW, mu::NQuat::NoNormalize_t{});
+	auto extents = mu::Vec3(lhs.radius, lhs.radius, halfHeight);
+
+	auto obb = BoundingOrientedBox{ center, extents, orientation };
+	return intersects(obb, rhs);
+}
+
+bool Collider::intersects(const Collider& other) const {
 	switch (type_) {
 	case Type::Capsule:
 		switch (other.type_) {
+		case Type::Capsule:
+			return ::intersects(capsule_, other.capsule_);
+		case Type::Box:
+			return ::intersects(capsule_, other.box_);
+		case Type::Frustum:
+			return ::intersects(capsule_, other.frustum_);
 		default:
 			break;
 		}
@@ -362,6 +432,8 @@ bool MU_CALLCONV Collider::intersects(const Collider& other) const {
 			return ::intersects(box_, other.box_);
 		case Type::Frustum:
 			return ::intersects(box_, other.frustum_);
+		case Type::Capsule:
+			return ::intersects(other.capsule_, box_);
 		default:
 			break;
 		}
@@ -369,6 +441,8 @@ bool MU_CALLCONV Collider::intersects(const Collider& other) const {
 		switch (other.type_) {
 		case Type::Box:
 			return ::intersects(other.box_, frustum_);
+		case Type::Capsule:
+			return ::intersects(other.capsule_, frustum_);
 		default:
 			break;
 		}
@@ -377,7 +451,7 @@ bool MU_CALLCONV Collider::intersects(const Collider& other) const {
 	throw std::runtime_error("requested coolision detection is currently not implemented.");
 }
 
-bool MU_CALLCONV Collider::contains(const mu::Vec3& point) const {
+bool MU_CALLCONV Collider::contains(const mu::Vec3 point) const {
 	switch (type_) {
 	case Type::Capsule:
 		return ::contains(capsule_, point);

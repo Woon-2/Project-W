@@ -93,8 +93,13 @@ public:
 		Frustum
 	};
 
-	bool MU_CALLCONV intersects(const Collider& other) const;
-	bool MU_CALLCONV contains(const mu::Vec3& point) const;
+	Collider(const BoundingCapsule& capsule) : type_(Type::Capsule), capsule_(capsule) {}
+	Collider(const BoundingOrientedBox& box) : type_(Type::Box), box_(box) {}
+	Collider(const BoundingFrustum& frustum) : type_(Type::Frustum), frustum_(frustum) {}
+
+
+	bool intersects(const Collider& other) const;
+	bool MU_CALLCONV contains(const mu::Vec3 point) const;
 
 private:
 	Type type_;
@@ -107,10 +112,61 @@ private:
 
 class BoundingVolumeNode {
 public:
+	BoundingVolumeNode() = default;
+
+	BoundingVolumeNode(const BoundingVolumeNode& other)
+		: colliders_(other.colliders_), children_() {}
+
+	BoundingVolumeNode& operator=(const BoundingVolumeNode& other) {
+		colliders_ = other.colliders_;
+		children_.clear();
+	}
+
+	BoundingVolumeNode(BoundingVolumeNode&& other) noexcept = default;
+	BoundingVolumeNode& operator=(BoundingVolumeNode&& other) noexcept = default;
+
+	void addCollider(const Collider& collider) {
+		colliders_.push_back(collider);
+	}
+	
+	void addCollider(const BoundingCapsule& capsule) {
+		colliders_.emplace_back(capsule);
+	}
+
+	void addCollider(const BoundingOrientedBox& box) {
+		colliders_.emplace_back(box);
+	}
+
+	void addCollider(const BoundingFrustum& frustum) {
+		colliders_.emplace_back(frustum);
+	}
+
+	void reserveColliders(std::size_t size) {
+		colliders_.reserve(size);
+	}
+
+	void addChildren(const BoundingVolumeNode& child) {
+		children_.push_back(child);
+	}
+
+	void reserveChildren(std::size_t size) {
+		children_.reserve(size);
+	}
 
 private:
 	std::vector<Collider> colliders_;
 	std::vector<BoundingVolumeNode> children_;
+};
+
+class BoundingVolume : public ecs::Component {
+public:
+	ENABLE_COMPONENT(BoundingVolume);
+
+	BoundingVolume(const ecs::Entity& entity) NOEXCEPT
+		: Component(entity) {}
+
+private:
+	BoundingVolumeNode root_;
 };
 
 #endif
