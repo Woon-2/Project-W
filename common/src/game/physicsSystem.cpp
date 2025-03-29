@@ -628,6 +628,98 @@ bool MU_CALLCONV Collider::contains(const mu::Vec3 point) const {
 	throw std::runtime_error("requested coolision detection is currently not implemented.");
 }
 
+Collider MU_CALLCONV transformCollider(mu::Mat4x4 transform, const Collider& collider) {
+	switch (collider.type_) {
+	case Collider::Type::Capsule:
+		return Collider{ transformCollider(transform, collider.capsule_) };
+	case Collider::Type::Box:
+		return Collider{ transformCollider(transform, collider.aabb_) };
+	case Collider::Type::OrientedBox:
+		return Collider{ transformCollider(transform, collider.obb_) };
+	case Collider::Type::Frustum:
+		return Collider{ transformCollider(transform, collider.frustum_) };
+	default:
+		throw std::runtime_error("requested coolision detection is currently not implemented.");
+	}
+}
+
+BoundingCapsule MU_CALLCONV transformCollider(
+	mu::Mat4x4 transform, const BoundingCapsule& capsule
+) {
+	auto newBase = mu::Vec3(mu::Vec4(capsule.base, 1.f) * transform);
+	auto newTip = mu::Vec3(mu::Vec4(capsule.tip, 1.f) * transform);
+	// TODO: check uniform scale when debugging
+	auto newRadius = transform.row(0).len() * capsule.radius;
+
+	return BoundingCapsule{
+		.base = newBase,
+		.tip = newTip,
+		.radius = newRadius
+	};
+}
+
+BoundingBox MU_CALLCONV transformCollider(
+	mu::Mat4x4 transform, const BoundingBox& box
+) {
+	// TODO: check no rotation when debugging
+	auto newMinX = box.min.x() * transform.row(0).len();
+	auto newMinY = box.min.y() * transform.row(1).len();
+	auto newMinZ = box.min.z() * transform.row(2).len();
+	auto newMaxX = box.max.x() * transform.row(0).len();
+	auto newMaxY = box.max.y() * transform.row(1).len();
+	auto newMaxZ = box.max.z() * transform.row(2).len();
+
+	return BoundingBox{
+		.min = mu::Vec3(newMinX, newMinY, newMinZ),
+		.max = mu::Vec3(newMaxX, newMaxY, newMaxZ)
+	};
+}
+
+BoundingOrientedBox MU_CALLCONV transformCollider(
+	mu::Mat4x4 transform, const BoundingOrientedBox& box
+) {
+	dx::XMMATRIX nM;
+	nM.r[0] = mu::NVec3(transform.row(0)).get();
+	nM.r[1] = mu::NVec3(transform.row(1)).get();
+	nM.r[2] = mu::NVec3(transform.row(2)).get();
+	nM.r[3] = dx::g_XMIdentityR3;
+
+	auto rotation = mu::quatRotMat(nM);
+	auto newOrientation = mu::NQuat(box.orientation * rotation);
+	auto newCenter = mu::Vec3(mu::Vec4(box.center, 1.f) * transform);
+
+	auto dx = mu::Vec3(transform.row(0)).lenV();
+	auto dy = mu::Vec3(transform.row(1)).lenV();
+	auto dz = mu::Vec3(transform.row(2)).lenV();
+
+	auto vScale = mu::select(dy, dx, mu::Vec3(dx::g_XMSelect1000));
+	vScale = mu::select(dz, vScale, mu::Vec3(dx::g_XMSelect1100));
+	auto newExtents = box.extents * vScale;
+
+	return BoundingOrientedBox{
+		.center = newCenter,
+		.extents = newExtents,
+		.orientation = newOrientation
+	};
+}
+
+BoundingFrustum MU_CALLCONV transformCollider(
+	mu::Mat4x4 transform, const BoundingFrustum& frustum
+) {
+	auto newOrigin = mu::Vec3(mu::Vec4(frustum.origin, 1.f) * transform);
+	// TODO: check no scale when debugging
+	auto newOrientation = mu::NQuat(frustum.orientation * mu::quatRotMat(transform));
+
+	return BoundingFrustum{
+		.origin = newOrigin,
+		.orientation = newOrientation,
+		.fovy = frustum.fovy,
+		.aspect = frustum.aspect,
+		.nearZ = frustum.nearZ,
+		.farZ = frustum.farZ
+	};
+}
+
 // needs optimization
 bool BoundingVolumeNode::collides(const BoundingVolumeNode& other) const {
 	auto collided = false;
@@ -676,6 +768,34 @@ bool BoundingVolumeNode::collides(const BoundingVolumeNode& other) const {
 	}
 
 	return false;
+}
+
+bool MU_CALLCONV BoundingVolumeNode::collides(
+	mu::Mat4x4 lhsTransform, const BoundingVolumeNode& lhs,
+	const mu::Mat4x4& rhsTransform, const BoundingVolumeNode& rhs
+) {
+	auto worldLhs = lhs.transform(lhsTransform);
+	auto worldRhs = rhs.transform(rhsTransform);
+	
+	return worldLhs.collides(worldRhs);
+}
+
+BoundingVolumeNode MU_CALLCONV BoundingVolumeNode::transform(
+	mu::Mat4x4 transform
+) const {
+	BoundingVolumeNode ret{};
+
+	ret.reserveColliders(colliders_.size());
+	for (const auto& collider : colliders_) {
+		ret.addCollider(transformCollider(transform, collider));
+	}
+
+	ret.reserveChildren(children_.size());
+	for (const auto& child : children_) {
+		ret.addChild(child.transform(transform));
+	}
+
+	return ret;
 }
 
 BoundingVolume::BoundingVolume(const ecs::Entity& entity, std::ifstream& bvhStream)

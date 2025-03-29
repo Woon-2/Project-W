@@ -393,6 +393,10 @@ public:
         }
     }
 
+    Vec MU_CALLCONV lenV() const __MathUtil_NOEXCEPT {
+        return Vec(dx::XMVector3Length(vec_));
+    }
+
     float MU_CALLCONV len2() const __MathUtil_NOEXCEPT {
         if constexpr (D == 1) {
             return dx::XMVectorGetX(vec_) * dx::XMVectorGetX(vec_);
@@ -403,6 +407,10 @@ public:
         } else if constexpr (D == 4) {
             return dx::XMVectorGetX(dx::XMVector4LengthSq(vec_));
         }
+    }
+
+    Vec MU_CALLCONV len2V() const __MathUtil_NOEXCEPT {
+        return Vec(dx::XMVector3LengthSq(vec_));
     }
 
     float MU_CALLCONV norm() const __MathUtil_NOEXCEPT {

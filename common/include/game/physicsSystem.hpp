@@ -93,6 +93,8 @@ inline mu::Vec3 MU_CALLCONV ClosestPointOnLineSegment(
 
 class Collider {
 public:
+	friend Collider MU_CALLCONV transformCollider(mu::Mat4x4 transform, const Collider& collider);
+
 	enum class Type {
 		Capsule,
 		Box,
@@ -118,6 +120,12 @@ private:
 		BoundingFrustum frustum_;
 	};
 };
+
+Collider MU_CALLCONV transformCollider(mu::Mat4x4 transform, const Collider& collider);
+BoundingCapsule MU_CALLCONV transformCollider(mu::Mat4x4 transform, const BoundingCapsule& capsule);
+BoundingBox MU_CALLCONV transformCollider(mu::Mat4x4 transform, const BoundingBox& box);
+BoundingOrientedBox MU_CALLCONV transformCollider(mu::Mat4x4 transform, const BoundingOrientedBox& box);
+BoundingFrustum MU_CALLCONV transformCollider(mu::Mat4x4 transform, const BoundingFrustum& frustum);
 
 class BoundingVolumeNode {
 public:
@@ -171,6 +179,13 @@ public:
 	}
 
 	bool collides(const BoundingVolumeNode& other) const;
+
+	static bool MU_CALLCONV collides(
+		const mu::Mat4x4 lhsTransform, const BoundingVolumeNode& lhs,
+		const mu::Mat4x4& rhsTransform, const BoundingVolumeNode& rhs
+	);
+
+	BoundingVolumeNode MU_CALLCONV transform(mu::Mat4x4 transform) const;
 
 private:
 	std::vector<Collider> colliders_;
