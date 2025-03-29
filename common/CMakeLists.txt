@@ -165,6 +165,8 @@ add_library(ecsClient
 
     src/ecs.cpp include/ecs.hpp
     include/ecsExcept.hpp
+    include/enumUtil.hpp
+    include/TMP.hpp
 )
 
 add_library(common::ecsClient ALIAS ecsClient)
@@ -179,6 +181,7 @@ auto_configure(ecsClient PRIVATE)
 target_link_libraries(ecsClient
     PRIVATE
         common::mu
+        common::TMP
 )
 
 target_include_directories(ecsClient
@@ -193,6 +196,8 @@ add_library(ecsServer
 
     src/ecs.cpp include/ecs.hpp
     include/ecsExcept.hpp
+    include/enumUtil.hpp
+    include/TMP.hpp
 )
 
 add_library(common::ecsServer ALIAS ecsServer)
@@ -208,6 +213,7 @@ target_link_libraries(ecsServer
     PRIVATE
         common::mu
         common::woon2exception
+        common::TMP
 )
 
 target_include_directories(ecsServer

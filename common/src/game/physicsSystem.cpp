@@ -1,5 +1,7 @@
 #include "game/physicsSystem.hpp"
 
+#include "TMP.hpp"
+
 RigidBody::RigidBody(const ecs::Entity& entity) NOEXCEPT
 	: Component(entity) {
 	mass_ = 1;
@@ -674,4 +676,198 @@ bool BoundingVolumeNode::collides(const BoundingVolumeNode& other) const {
 	}
 
 	return false;
+}
+
+BoundingVolume::BoundingVolume(const ecs::Entity& entity, std::ifstream& bvhStream)
+	: Component(entity) {
+	importBVHNode(bvhStream, root_);
+}
+
+void BoundingVolume::importBVHNode(std::ifstream& bvhStream, BoundingVolumeNode& node) {
+	auto& is = bvhStream;
+
+	char pstrToken[64] = { '\0' };
+
+	std::uint8_t nStrLength = 0;
+	std::uint32_t nReads = 0;
+
+	int intVal{};
+
+	readStream(is, nStrLength);
+	readStream(is, pstrToken, nStrLength);
+
+	if (std::strcmp(pstrToken, "<Node:>")) {
+		throw std::runtime_error("[BoundingVolume::importBVHNode]: <Node:> token expected but not found.");
+	}
+
+	for (;;) {
+		readStream(is, nStrLength);
+		readStream(is, pstrToken, nStrLength);
+
+		if (!std::strcmp(pstrToken, "</Node>")) {
+			break;
+		}
+		else if (!std::strcmp(pstrToken, "<Colliders:>")) {
+			readStream(is, intVal);
+			readColliders(is, node, static_cast<std::size_t>(intVal));
+		}
+		else if (!std::strcmp(pstrToken, "<Children:>")) {
+			readStream(is, intVal);
+			node.reserveChildren(static_cast<std::size_t>(intVal));
+			for (std::size_t i = 0; i < static_cast<std::size_t>(intVal); ++i) {
+				importBVHNode(is, node.addChild());
+			}
+		}
+		else {
+			throw std::runtime_error("[BoundingVolume::importBVHNode]: unknown token found.");
+		}
+	}
+}
+
+void BoundingVolume::readColliders( std::ifstream& is,
+	BoundingVolumeNode& node, std::size_t colliderCnt
+) {
+	char pstrToken[64] = { '\0' };
+
+	std::uint8_t nStrLength = 0;
+	std::uint32_t nReads = 0;
+
+	int intVal{};
+
+	node.reserveColliders(colliderCnt);
+
+	for (std::size_t i = 0; i < colliderCnt; ++i) {
+		readStream(is, nStrLength);
+		readStream(is, pstrToken, nStrLength);
+
+		if (std::strcmp(pstrToken, "<Collider:>")) {
+			throw std::runtime_error("[BoundingVolume::readColliders]: <Collider:> token expected but not found.");
+		}
+
+		for (;;) {
+			if (!std::strcmp(pstrToken, "</Collider>")) {
+				break;
+			}
+			else if (!std::strcmp(pstrToken, "<Name:>")) {
+				readStream(is, nStrLength);
+				readStream(is, pstrToken, nStrLength);
+			}
+			else if (!std::strcmp(pstrToken, "<Type:>")) {
+				readStream(is, intVal);
+				switch (intVal) {
+				case etoi(Collider::Type::Capsule):
+					readCapsuleCollider(is, node);
+					break;
+
+				case etoi(Collider::Type::OrientedBox):
+					readOBBCollider(is, node);
+					break;
+
+				default:
+					throw std::runtime_error("[BoundingVolume::readColliders]: unsupported collider type found.");
+				}
+			}
+			else {
+				throw std::runtime_error("[BoundingVolume::readColliders]: unknown token found.");
+			}
+		}
+	}
+
+	readStream(is, nStrLength);
+	readStream(is, pstrToken, nStrLength);
+
+	if (std::strcmp(pstrToken, "</Colliders>")) {
+		throw std::runtime_error("[BoundingVolume::readColliders]: </Colliders> token expected but not found.");
+	}
+}
+
+void BoundingVolume::readCapsuleCollider(std::ifstream& bvhStream, BoundingVolumeNode& node) {
+	char pstrToken[64] = { '\0' };
+
+	std::uint8_t nStrLength = 0;
+	std::uint32_t nReads = 0;
+
+    float floatVal{};
+	int intVal{};
+    dx::XMFLOAT3 float3Val{};
+
+	readStream(bvhStream, nStrLength);
+	readStream(bvhStream, pstrToken, nStrLength);
+
+	if (std::strcmp(pstrToken, "<Base:>")) {
+		throw std::runtime_error("[BoundingVolume::readCapsuleCollider]: <Base:> token expected but not found.");
+	}
+
+	readStream(bvhStream, float3Val);
+	const auto base = mu::Vec3(float3Val.x, float3Val.y, float3Val.z);
+
+	readStream(bvhStream, nStrLength);
+	readStream(bvhStream, pstrToken, nStrLength);
+
+	if (std::strcmp(pstrToken, "<Tip:>")) {
+		throw std::runtime_error("[BoundingVolume::readCapsuleCollider]: <Tip:> token expected but not found.");
+	}
+
+	readStream(bvhStream, float3Val);
+	const auto tip = mu::Vec3(float3Val.x, float3Val.y, float3Val.z);
+
+	readStream(bvhStream, nStrLength);
+	readStream(bvhStream, pstrToken, nStrLength);
+
+	if (std::strcmp(pstrToken, "<Radius:>")) {
+		throw std::runtime_error("[BoundingVolume::readCapsuleCollider]: <Radius:> token expected but not found.");
+	}
+
+	readStream(bvhStream, floatVal);
+	const auto radius = floatVal;
+
+	node.addCollider( BoundingCapsule{
+		.base = base, .tip = tip, .radius = radius
+	} );
+}
+
+void BoundingVolume::readOBBCollider(std::ifstream& is, BoundingVolumeNode& node) {
+	char pstrToken[64] = { '\0' };
+
+	std::uint8_t nStrLength = 0;
+	std::uint32_t nReads = 0;
+
+    float floatVal{};
+	int intVal{};
+    dx::XMFLOAT3 float3Val{};
+	dx::XMFLOAT4 float4Val{};
+
+	readStream(is, nStrLength);
+	readStream(is, pstrToken, nStrLength);
+
+	if (std::strcmp(pstrToken, "<Center:>")) {
+		throw std::runtime_error("[BoundingVolume::readOBBCollider]: <Center:> token expected but not found.");
+	}
+
+	readStream(is, float3Val);
+	const auto center = mu::Vec3(float3Val.x, float3Val.y, float3Val.z);
+
+	readStream(is, nStrLength);
+	readStream(is, pstrToken, nStrLength);
+
+	if (std::strcmp(pstrToken, "<Extents:>")) {
+		throw std::runtime_error("[BoundingVolume::readOBBCollider]: <Extents:> token expected but not found.");
+	}
+
+	readStream(is, float3Val);
+	const auto extents = mu::Vec3(float3Val.x, float3Val.y, float3Val.z);
+
+	readStream(is, nStrLength);
+	readStream(is, pstrToken, nStrLength);
+
+	if (std::strcmp(pstrToken, "<Orientation:>")) {
+		throw std::runtime_error("[BoundingVolume::readOBBCollider]: <Orientation:> token expected but not found.");
+	}
+
+	readStream(is, float4Val);
+	const auto orientation = mu::NQuat(float4Val.x, float4Val.y, float4Val.z, float4Val.w);
+
+	node.addCollider( BoundingOrientedBox{
+		.center = center, .extents = extents, .orientation = orientation
+	} );
 }

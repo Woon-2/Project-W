@@ -11,6 +11,8 @@
 #include <array>
 #include <vector>
 #include <numeric>
+#include <filesystem>
+#include <fstream>
 
 class RigidBody : public ecs::Component {
 public:
@@ -152,8 +154,16 @@ public:
 		colliders_.reserve(size);
 	}
 
-	void addChildren(const BoundingVolumeNode& child) {
+	[[maybe_unused]] BoundingVolumeNode& addChild() {
+		return children_.emplace_back();
+	}
+
+	void addChild(const BoundingVolumeNode& child) {
 		children_.push_back(child);
+	}
+
+	void addChild(BoundingVolumeNode&& child) {
+		children_.push_back(std::move(child));
 	}
 
 	void reserveChildren(std::size_t size) {
@@ -174,6 +184,12 @@ public:
 	BoundingVolume(const ecs::Entity& entity) NOEXCEPT
 		: Component(entity) {}
 
+	BoundingVolume(const ecs::Entity& entity, const std::filesystem::path& bvhPath)
+		: BoundingVolume(entity, std::ifstream(bvhPath)) {}
+	BoundingVolume(const ecs::Entity& entity, std::ifstream& bvhStream);
+	BoundingVolume(const ecs::Entity& entity, std::ifstream&& bvhStream)
+		: BoundingVolume(entity, bvhStream) {}
+
 	BoundingVolumeNode& root() NOEXCEPT { return root_; }
 	const BoundingVolumeNode& root() const NOEXCEPT { return root_; }
 
@@ -182,6 +198,11 @@ public:
 	}
 
 private:
+	static void importBVHNode(std::ifstream& bvhStream, BoundingVolumeNode& node);
+	static void readColliders(std::ifstream& bvhStream, BoundingVolumeNode& node, std::size_t colliderCnt);
+	static void readCapsuleCollider(std::ifstream& bvhStream, BoundingVolumeNode& node);
+	static void readOBBCollider(std::ifstream& bvhStream, BoundingVolumeNode& node);
+
 	BoundingVolumeNode root_;
 };
 
