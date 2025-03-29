@@ -2,6 +2,7 @@
 #define __D3D12Engine_HPP
 
 #include "game/level.hpp"
+#include "game/physicsSystem.hpp"
 
 #include "d3d12engine/descriptorRangeSpec.hpp"
 
@@ -273,6 +274,9 @@ public:
     );
 
     void activateChunk(std::size_t xIdx, std::size_t zIdx, Scene& scene);
+    void activateChunk( std::size_t xIdx, std::size_t zIdx, const Core& core,
+        const Core::BVHPathKey& bvhPathKey, Scene& scene, CollisionSystem& collisionSystem
+    );
     std::vector<ecs::Entity> instantiateAllObjects(const Core& core, coord::System& coordRoot);
 
     gameEngine::ObjectDisposition& dispositionRoot() NOEXCEPT { return dispositionRoot_; }

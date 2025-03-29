@@ -1010,23 +1010,20 @@ void CollisionSystem::update() {
 				continue;
 			}
 
-			auto pCoord = gameEngine::Coord::atC(pBV->entityID().value());
-			if (!pCoord) {
-				std::cerr << "Tried collision check on BoundingVolume component while entity has no Coord component." << '\n';
-				continue; 
+			auto xform = mu::Mat4x4();
+			if (auto pCoord = gameEngine::Coord::atC(pBV->entityID().value())) {
+				xform = pCoord->get().xform();
 			}
 
-			auto pOtherCoord = gameEngine::Coord::atC(pOtherBV->entityID().value());
-			if (!pOtherCoord) {
-				std::cerr << "Tried collision check on BoundingVolume component while entity has no Coord component." << '\n';
-				continue; 
+			auto otherXform = mu::Mat4x4();
+			if (auto pOtherCoord = gameEngine::Coord::atC(pOtherBV->entityID().value())) {
+				otherXform = pOtherCoord->get().xform();
 			}
 
 			if ( BoundingVolumeNode::collides(
-					pCoord->get().xform(), pBV->root(),
-					pOtherCoord->get().xform(), pOtherBV->root()
+					xform, pBV->root(),
+					otherXform, pOtherBV->root()
 			) ) {
-				std::cout << "Collision!\n";
 				pBV->markCollision(pOtherBV);
 				pOtherBV->markCollision(pBV);
 			}

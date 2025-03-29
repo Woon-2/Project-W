@@ -255,6 +255,17 @@ void LevelRegion::activateChunk(std::size_t xIdx, std::size_t zIdx, Scene& scene
     scene.addEntity(chunks_.back());
 }
 
+void LevelRegion::activateChunk( std::size_t xIdx, std::size_t zIdx, const Core& core,
+    const Core::BVHPathKey& bvhPathKey, Scene& scene, CollisionSystem& collisionSystem
+) {
+    if (!core.bvhPathStorage().contains(bvhPathKey)) {
+        throw GFX_EXCEPT("[Description] BVH path not registered for key: " + bvhPathKey);
+    }
+    activateChunk(xIdx, zIdx, scene);
+    chunks_.back().createComponent<BoundingVolume>(core.bvhPathStorage().get(bvhPathKey));
+    collisionSystem.addEntity(chunks_.back());
+}
+
 std::vector<ecs::Entity> LevelRegion::instantiateAllObjects(const Core& core, coord::System& coordRoot) {
     auto ret = std::vector<ecs::Entity>();
 

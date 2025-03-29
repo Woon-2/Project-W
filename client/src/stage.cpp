@@ -139,7 +139,9 @@ void Stage::initScene() {
 
     for (auto i = 0u; i < 3u; ++i) {
         for (auto j = 0u; j < 3u; ++j) {
-            level_.activateChunk(i, j, scene_);
+            level_.activateChunk( i, j, *pCore_, assetBVHInfo(
+                static_cast<AssetBVH>(etoi(AssetBVH::Terrain_0_0) + (i * 3u) + j)
+            ).key, scene_, pSystems_->collisionSystem );
         }
     }
 
