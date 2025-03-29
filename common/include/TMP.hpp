@@ -5,6 +5,7 @@
 #include <concepts>
 #include <ranges>
 #include <utility>
+#include <iostream>
 
 template <class T>
 consteval int indexOf() {
@@ -33,6 +34,20 @@ template <std::ranges::range R>
         range.reserve(newCapicity);
     }
     return std::forward<R>(range);
+}
+
+template <class T, class CharT, class Traits>
+std::basic_istream<CharT, Traits>& readStream(std::basic_istream<CharT, Traits>& is, T& t) {
+    return is.read(reinterpret_cast<char*>(&t), sizeof(T));
+}
+
+template <class CharT, class Traits, std::integral IntT>
+std::basic_istream<CharT, Traits>& readStream(
+    std::basic_istream<CharT, Traits>& is, char* pStr, IntT nStrLength
+) {
+    is.read(pStr, static_cast<std::streamsize>(nStrLength));
+    pStr[nStrLength] = '\0';
+    return is;
 }
 
 #endif  // __TMP_HPP
