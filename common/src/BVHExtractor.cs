@@ -5,89 +5,47 @@ using UnityEngine;
 
 public class BVHExtractor : MonoBehaviour
 {
-    private const int BOX_COLLIDER = 0;
-    private const int CAPSULE_COLLIDER = 1;
+    // the integer value must match with the physicsSystem.hpp's enum(Collider::Type) value
+    private const int BOX_COLLIDER = 2; // OBB
+    private const int CAPSULE_COLLIDER = 0;
 
     private BinaryWriter binaryWriter = null;
-    private Queue<GameObject> jobQueue = null;
-    private int lastLevel = -1;
-    private List<int> levelNodeCnts = null;
 
     void Start()
     {
         binaryWriter = new BinaryWriter(File.Open(string.Copy(transform.parent.gameObject.name).Replace(" ", "_") + ".bvh", FileMode.Create));
-        jobQueue = new Queue<GameObject>();
-        levelNodeCnts = new List<int>();
         ExtractBVH(transform);
     }
 
     void ExtractBVH(Transform transform)
     {
-        GameObject obj;
-        int curLevelNodeCnt = 0;
+        WriteString("<Node:>");
+        ExtractColliderInfo(transform.gameObject);
 
-        // calcaulate level nodes count to reserve node when import
-        jobQueue.Enqueue(transform.gameObject);
-        while (jobQueue.TryDequeue(out obj))
+        WriteInteger("<Children:>", transform.childCount);
+        for (int k = 0; k < transform.childCount; k++)
         {
-            int level = GetLevel(obj);
-            if (level > lastLevel)
-            {
-                if (level > 0)
-                {
-                    levelNodeCnts.Add(curLevelNodeCnt);
-                }
-                curLevelNodeCnt = 0;
-                lastLevel = level;
-            }
-
-            ++curLevelNodeCnt;
-
-            for (int k = 0; k < obj.transform.childCount; k++)
-            {
-                jobQueue.Enqueue(obj.transform.GetChild(k).gameObject);
-            }
+            ExtractBVH(transform.GetChild(k));
         }
-
-        levelNodeCnts.Add(curLevelNodeCnt);
-        lastLevel = -1;
-
-        // actual extraction
-        jobQueue.Enqueue(transform.gameObject);
-        while (jobQueue.TryDequeue(out obj))
-        {
-            int level = GetLevel(obj);
-            if (level > lastLevel)
-            {
-                WriteInteger("<Level:>", level);
-                WriteInteger(levelNodeCnts[level]);
-                lastLevel = level;
-            }
-
-            ExtractColliderInfo(obj);
-
-            for (int k = 0; k < obj.transform.childCount; k++)
-            {
-                jobQueue.Enqueue(obj.transform.GetChild(k).gameObject);
-            }
-        }
+        WriteString("</Node>");
     }
 
     void ExtractColliderInfo(GameObject obj)
     {
-        WriteString("<Node:>");
+        WriteInteger("<Colliders:>", obj.GetComponents<Collider>().Length);
+
         foreach (var collider in obj.GetComponents<Collider>())
         {
             WriteString("<Collider:>");
-            // sb.AppendLine($"GameObject: {collider.gameObject.name}");
             WriteString("<Name:>", obj.name);
 
             if (collider is BoxCollider box)
             {
+                WriteInteger("<Type:>", BOX_COLLIDER);
+
                 Vector3 center = box.transform.TransformPoint(box.center);
                 Vector3 size = Vector3.Scale(box.transform.localScale, box.size);
 
-                WriteInteger("<Type:>", BOX_COLLIDER);
                 WriteVector("<Center:>", center);
                 WriteVector("<Extents:>", size * 0.5f);
 
@@ -124,7 +82,8 @@ public class BVHExtractor : MonoBehaviour
             }
             WriteString("</Collider>");
         }
-        WriteString("</Node>");
+
+        WriteString("</Colliders>");
     }
 
     int GetLevel(GameObject obj)
