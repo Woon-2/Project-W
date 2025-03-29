@@ -59,7 +59,6 @@ struct BoundingCapsule {
 	mu::Vec3 base;
 	mu::Vec3 tip;
 	float radius;
-	float height;
 };
 
 struct BoundingBox {
