@@ -295,28 +295,32 @@ bool MU_CALLCONV intersects(const BoundingOrientedBox lhs, const BoundingFrustum
 	c *= R;
 
 	R = mu::transpose(R);
-	const auto x0 = c - R.row(0) * lhs.extents.x();
-	const auto x1 = c + R.row(0) * lhs.extents.x();
-	const auto y0 = c - R.row(1) * lhs.extents.y();
-	const auto y1 = c + R.row(1) * lhs.extents.y();
-	const auto z0 = c - R.row(2) * lhs.extents.z();
-	const auto z1 = c + R.row(2) * lhs.extents.z();
+	const auto x0 = -R.row(0) * lhs.extents.x();
+	const auto x1 = R.row(0) * lhs.extents.x();
+	const auto y0 = -R.row(1) * lhs.extents.y();
+	const auto y1 = R.row(1) * lhs.extents.y();
+	const auto z0 = -R.row(2) * lhs.extents.z();
+	const auto z1 = R.row(2) * lhs.extents.z();
 
 	// project all corners of box via perspective projection matrix
 	const auto persp = mu::persp(rhs.fovy, rhs.aspect, rhs.nearZ, rhs.farZ);
 
-	const auto p0 = mu::Vec3(mu::Vec4(x0, 1.0f) * persp);
+	const auto p0 = mu::Vec3(mu::Vec4(c + x0 + y0 + z0, 1.f) * persp);
 	const auto p0w = p0.w();
-	const auto p1 = mu::Vec3(mu::Vec4(x1, 1.0f) * persp);
+	const auto p1 = mu::Vec3(mu::Vec4(c + x1 + y0 + z0, 1.f) * persp);
 	const auto p1w = p1.w();
-	const auto p2 = mu::Vec3(mu::Vec4(y0, 1.0f) * persp);
+	const auto p2 = mu::Vec3(mu::Vec4(c + x0 + y1 + z0, 1.f) * persp);
 	const auto p2w = p2.w();
-	const auto p3 = mu::Vec3(mu::Vec4(y1, 1.0f) * persp);
+	const auto p3 = mu::Vec3(mu::Vec4(c + x1 + y1 + z0, 1.f) * persp);
 	const auto p3w = p3.w();
-	const auto p4 = mu::Vec3(mu::Vec4(z0, 1.0f) * persp);
+	const auto p4 = mu::Vec3(mu::Vec4(c + x0 + y0 + z1, 1.f) * persp);
 	const auto p4w = p4.w();
-	const auto p5 = mu::Vec3(mu::Vec4(z1, 1.0f) * persp);
+	const auto p5 = mu::Vec3(mu::Vec4(c + x1 + y0 + z1, 1.f) * persp);
 	const auto p5w = p5.w();
+	const auto p6 = mu::Vec3(mu::Vec4(c + x0 + y1 + z1, 1.f) * persp);
+	const auto p6w = p6.w();
+	const auto p7 = mu::Vec3(mu::Vec4(c + x1 + y1 + z1, 1.f) * persp);
+	const auto p7w = p7.w();
 
 	// if any corner is inside the frustum, we have an intersection
 	auto hasIntersection = p0.x() >= -p0w && p0.x() <= p0w
@@ -342,6 +346,14 @@ bool MU_CALLCONV intersects(const BoundingOrientedBox lhs, const BoundingFrustum
 	hasIntersection = hasIntersection || (p5.x() >= -p5w && p5.x() <= p5w
 		&& p5.y() >= -p5w && p5.y() <= p5w
 		&& p5.z() >= 0.f && p5.z() <= p5w);
+
+	hasIntersection = hasIntersection || (p6.x() >= -p6w && p6.x() <= p6w
+		&& p6.y() >= -p6w && p6.y() <= p6w
+		&& p6.z() >= 0.f && p6.z() <= p6w);
+
+	hasIntersection = hasIntersection || (p7.x() >= -p7w && p7.x() <= p7w
+		&& p7.y() >= -p7w && p7.y() <= p7w
+		&& p7.z() >= 0.f && p7.z() <= p7w);
 	
 	return hasIntersection;
 }
@@ -413,6 +425,152 @@ bool MU_CALLCONV intersects(const BoundingCapsule lhs, const BoundingFrustum& rh
 	return intersects(obb, rhs);
 }
 
+bool MU_CALLCONV intersects(const BoundingBox lhs, const BoundingBox rhs) {
+	return lhs.min.x() <= rhs.max.x() && lhs.max.x() >= rhs.min.x()
+		&& lhs.min.y() <= rhs.max.y() && lhs.max.y() >= rhs.min.y()
+		&& lhs.min.z() <= rhs.max.z() && lhs.max.z() >= rhs.min.z();
+}
+
+bool MU_CALLCONV intersects(const BoundingBox lhs, const BoundingCapsule rhs) {
+	mu::Vec3 aNormal = mu::NVec3(rhs.tip - rhs.base); 
+	auto aLineEndOffset = aNormal * rhs.radius; 
+	auto aA = rhs.base + aLineEndOffset;
+	auto aB = rhs.tip - aLineEndOffset;
+
+	const auto bCenter = (lhs.min + lhs.max) * 0.5f;
+	const auto bCenterX = bCenter.x();
+	const auto bCenterY = bCenter.y();
+	const auto bCenterZ = bCenter.z();
+	const auto bMinX = lhs.min.x();
+	const auto bMinY = lhs.min.y();
+	const auto bMinZ = lhs.min.z();
+	const auto bMaxX = lhs.max.x();
+	const auto bMaxY = lhs.max.y();
+	const auto bMaxZ = lhs.max.z();
+
+	const auto bestAL = ClosestPointOnLineSegment(aA, aB, mu::Vec3(bMinX, bCenterY, bCenterZ));
+	const auto bestAR = ClosestPointOnLineSegment(aA, aB, mu::Vec3(bMaxX, bCenterY, bCenterZ));
+	const auto bestAT = ClosestPointOnLineSegment(aA, aB, mu::Vec3(bCenterX, bMaxY, bCenterZ));
+	const auto bestAB = ClosestPointOnLineSegment(aA, aB, mu::Vec3(bCenterX, bMinY, bCenterZ));
+	const auto bestAF = ClosestPointOnLineSegment(aA, aB, mu::Vec3(bCenterX, bCenterY, bMaxZ));
+	const auto bestAN = ClosestPointOnLineSegment(aA, aB, mu::Vec3(bCenterX, bCenterY, bMinZ));
+
+	const auto bestALProj = mu::Vec3(bMinX, std::clamp(bestAL.y(), bMinY, bMaxY), std::clamp(bestAL.z(), bMinZ, bMaxZ));
+	const auto bestARProj = mu::Vec3(bMaxX, std::clamp(bestAR.y(), bMinY, bMaxY), std::clamp(bestAR.z(), bMinZ, bMaxZ));
+	const auto bestATProj = mu::Vec3(std::clamp(bestAT.x(), bMinX, bMaxX), bMaxY, std::clamp(bestAT.z(), bMinZ, bMaxZ));
+	const auto bestABProj = mu::Vec3(std::clamp(bestAB.x(), bMinX, bMaxX), bMinY, std::clamp(bestAB.z(), bMinZ, bMaxZ));
+	const auto bestAFProj = mu::Vec3(std::clamp(bestAF.x(), bMinX, bMaxX), std::clamp(bestAF.y(), bMinY, bMaxY), bMaxZ);
+	const auto bestANProj = mu::Vec3(std::clamp(bestAN.x(), bMinX, bMaxX), std::clamp(bestAN.y(), bMinY, bMaxY), bMinZ);
+
+	const auto r2 = rhs.radius * rhs.radius;
+
+	return ((bestAL - bestALProj).len2() <= r2)
+		|| ((bestAR - bestARProj).len2() <= r2)
+		|| ((bestAT - bestATProj).len2() <= r2)
+		|| ((bestAB - bestABProj).len2() <= r2)
+		|| ((bestAF - bestAFProj).len2() <= r2)
+		|| ((bestAN - bestANProj).len2() <= r2);
+}
+
+bool MU_CALLCONV intersects(const BoundingBox lhs, const BoundingOrientedBox& rhs) {
+	// transform box to obb's local space
+	auto R = mu::Mat3x3(rhs.orientation.dual());
+	auto aExtents = mu::Vec3(lhs.max - lhs.min) * 0.5f;
+	auto aCenter = (lhs.min + lhs.max) * 0.5f;
+	aCenter -= rhs.center;
+	aCenter *= R;
+
+	R = mu::transpose(R);
+	const auto ARX0 = mu::abs(R.row(0u));
+	const auto ARX1 = mu::abs(R.row(1u));
+	const auto ARX2 = mu::abs(R.row(2u));
+
+	aExtents = aExtents.x() * ARX0 + aExtents.y() * ARX1 + aExtents.z() * ARX2;
+
+	// check collision between two aabbs
+	const auto aMin = aCenter - aExtents;
+	const auto aMax = aCenter + aExtents;
+	const auto bMin = -rhs.extents;
+	const auto bMax = rhs.extents;
+
+	return aMin.x() <= bMax.x() && aMax.x() >= bMin.x()
+		&& aMin.y() <= bMax.y() && aMax.y() >= bMin.y()
+		&& aMin.z() <= bMax.z() && aMax.z() >= bMin.z();
+}
+
+bool MU_CALLCONV intersects(const BoundingBox lhs, const BoundingFrustum& rhs) {
+	// transform box into frustum space
+	auto R = mu::Mat3x3(rhs.orientation.dual());
+	auto aExtents = mu::Vec3(lhs.max - lhs.min) * 0.5f;
+	auto c = (lhs.min + lhs.max) * 0.5f;
+	c -= rhs.origin;
+	c *= R;
+
+	R = mu::transpose(R);
+
+	const auto x0 = -R.row(0) * aExtents.x();
+	const auto x1 = R.row(0) * aExtents.x();
+	const auto y0 = -R.row(1) * aExtents.y();
+	const auto y1 = R.row(1) * aExtents.y();
+	const auto z0 = -R.row(2) * aExtents.z();
+	const auto z1 = R.row(2) * aExtents.z();
+
+	// project all corners of box via perspective projection matrix
+	const auto persp = mu::persp(rhs.fovy, rhs.aspect, rhs.nearZ, rhs.farZ);
+
+	const auto p0 = mu::Vec3(mu::Vec4(c + x0 + y0 + z0, 1.f) * persp);
+	const auto p0w = p0.w();
+	const auto p1 = mu::Vec3(mu::Vec4(c + x1 + y0 + z0, 1.f) * persp);
+	const auto p1w = p1.w();
+	const auto p2 = mu::Vec3(mu::Vec4(c + x0 + y1 + z0, 1.f) * persp);
+	const auto p2w = p2.w();
+	const auto p3 = mu::Vec3(mu::Vec4(c + x1 + y1 + z0, 1.f) * persp);
+	const auto p3w = p3.w();
+	const auto p4 = mu::Vec3(mu::Vec4(c + x0 + y0 + z1, 1.f) * persp);
+	const auto p4w = p4.w();
+	const auto p5 = mu::Vec3(mu::Vec4(c + x1 + y0 + z1, 1.f) * persp);
+	const auto p5w = p5.w();
+	const auto p6 = mu::Vec3(mu::Vec4(c + x0 + y1 + z1, 1.f) * persp);
+	const auto p6w = p6.w();
+	const auto p7 = mu::Vec3(mu::Vec4(c + x1 + y1 + z1, 1.f) * persp);
+	const auto p7w = p7.w();
+
+	// if any corner is inside the frustum, we have an intersection
+	auto hasIntersection = p0.x() >= -p0w && p0.x() <= p0w
+		&& p0.y() >= -p0w && p0.y() <= p0w
+		&& p0.z() >= 0.f && p0.z() <= p0w;
+
+	hasIntersection = hasIntersection || (p1.x() >= -p1w && p1.x() <= p1w
+		&& p1.y() >= -p1w && p1.y() <= p1w
+		&& p1.z() >= 0.f && p1.z() <= p1w);
+
+	hasIntersection = hasIntersection || (p2.x() >= -p2w && p2.x() <= p2w
+		&& p2.y() >= -p2w && p2.y() <= p2w
+		&& p2.z() >= 0.f && p2.z() <= p2w);
+	
+	hasIntersection = hasIntersection || (p3.x() >= -p3w && p3.x() <= p3w
+		&& p3.y() >= -p3w && p3.y() <= p3w
+		&& p3.z() >= 0.f && p3.z() <= p3w);
+	
+	hasIntersection = hasIntersection || (p4.x() >= -p4w && p4.x() <= p4w
+		&& p4.y() >= -p4w && p4.y() <= p4w
+		&& p4.z() >= 0.f && p4.z() <= p4w);
+	
+	hasIntersection = hasIntersection || (p5.x() >= -p5w && p5.x() <= p5w
+		&& p5.y() >= -p5w && p5.y() <= p5w
+		&& p5.z() >= 0.f && p5.z() <= p5w);
+
+	hasIntersection = hasIntersection || (p6.x() >= -p6w && p6.x() <= p6w
+		&& p6.y() >= -p6w && p6.y() <= p6w
+		&& p6.z() >= 0.f && p6.z() <= p6w);
+	
+	hasIntersection = hasIntersection || (p7.x() >= -p7w && p7.x() <= p7w
+		&& p7.y() >= -p7w && p7.y() <= p7w
+		&& p7.z() >= 0.f && p7.z() <= p7w);
+
+	return hasIntersection;
+}
+
 bool Collider::intersects(const Collider& other) const {
 	switch (type_) {
 	case Type::Capsule:
@@ -420,29 +578,35 @@ bool Collider::intersects(const Collider& other) const {
 		case Type::Capsule:
 			return ::intersects(capsule_, other.capsule_);
 		case Type::Box:
-			return ::intersects(capsule_, other.box_);
+			return ::intersects(other.aabb_, capsule_);
+		case Type::OrientedBox:
+			return ::intersects(capsule_, other.obb_);
 		case Type::Frustum:
 			return ::intersects(capsule_, other.frustum_);
 		default:
 			break;
 		}
-	case Type::Box:
+	case Type::OrientedBox:
 		switch (other.type_) {
-		case Type::Box:
-			return ::intersects(box_, other.box_);
-		case Type::Frustum:
-			return ::intersects(box_, other.frustum_);
 		case Type::Capsule:
-			return ::intersects(other.capsule_, box_);
+			return ::intersects(other.capsule_, obb_);
+		case Type::Box:
+			return ::intersects(other.aabb_, obb_);
+		case Type::OrientedBox:
+			return ::intersects(obb_, other.obb_);
+		case Type::Frustum:
+			return ::intersects(obb_, other.frustum_);
 		default:
 			break;
 		}
 	case Type::Frustum:
 		switch (other.type_) {
-		case Type::Box:
-			return ::intersects(other.box_, frustum_);
 		case Type::Capsule:
 			return ::intersects(other.capsule_, frustum_);
+		case Type::Box:
+			return ::intersects(other.aabb_, frustum_);
+		case Type::OrientedBox:
+			return ::intersects(other.obb_, frustum_);		
 		default:
 			break;
 		}

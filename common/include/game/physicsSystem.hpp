@@ -62,6 +62,11 @@ struct BoundingCapsule {
 	float height;
 };
 
+struct BoundingBox {
+	mu::Vec3 min;
+	mu::Vec3 max;
+};
+
 struct BoundingOrientedBox {
 	mu::Vec3 center;
 	mu::Vec3 extents;
@@ -90,11 +95,13 @@ public:
 	enum class Type {
 		Capsule,
 		Box,
+		OrientedBox,
 		Frustum
 	};
 
 	Collider(const BoundingCapsule& capsule) : type_(Type::Capsule), capsule_(capsule) {}
-	Collider(const BoundingOrientedBox& box) : type_(Type::Box), box_(box) {}
+	Collider(const BoundingBox& box) : type_(Type::Box), aabb_(box) {}
+	Collider(const BoundingOrientedBox& box) : type_(Type::OrientedBox), obb_(box) {}
 	Collider(const BoundingFrustum& frustum) : type_(Type::Frustum), frustum_(frustum) {}
 
 
@@ -105,7 +112,8 @@ private:
 	Type type_;
 	union {
 		BoundingCapsule capsule_;
-		BoundingOrientedBox box_;
+		BoundingBox aabb_;
+		BoundingOrientedBox obb_;
 		BoundingFrustum frustum_;
 	};
 };
