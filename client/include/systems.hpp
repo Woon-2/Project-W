@@ -11,10 +11,12 @@ struct Systems {
     PhysicsSystem physicsSystem;
     InputSystem inputSystem;
     gameEngine::CoordRoot coordRoot;
+    CollisionSystem collisionSystem;
     CNetExSystem netSystem;
 
     Systems(ic::Keyboard& keyboard, std::size_t fenceIdx = 0)
-        : physicsSystem(), inputSystem(keyboard), coordRoot(), netSystem() {}
+        : physicsSystem(), inputSystem(keyboard), coordRoot(),
+        collisionSystem(), netSystem() {}
 };
 
 #endif  // __Systems_HPP

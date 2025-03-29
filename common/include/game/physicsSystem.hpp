@@ -212,6 +212,14 @@ public:
 		return root_.collides(other.root_);
 	}
 
+	void resetCollisions() {
+		pCurrentlyCollidedVolumes_.clear();
+	}
+
+	void markCollision(const BoundingVolume* pVolume) {
+		pCurrentlyCollidedVolumes_.push_back(pVolume);
+	}
+
 private:
 	static void importBVHNode(std::ifstream& bvhStream, BoundingVolumeNode& node);
 	static void readColliders(std::ifstream& bvhStream, BoundingVolumeNode& node, std::size_t colliderCnt);
@@ -219,6 +227,12 @@ private:
 	static void readOBBCollider(std::ifstream& bvhStream, BoundingVolumeNode& node);
 
 	BoundingVolumeNode root_;
+	std::vector<const BoundingVolume*> pCurrentlyCollidedVolumes_;
+};
+
+class CollisionSystem : public ecs::System<BoundingVolume> {
+public:
+	void update();
 };
 
 #endif

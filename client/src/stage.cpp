@@ -74,6 +74,7 @@ void Stage::processPackets(double deltaTime) {
 
         scene_.addEntity(entt);
         pSystems_->coordRoot.addEntity(entt);
+        pSystems_->collisionSystem.addEntity(entt);
     }
     
     std::ranges::move(v, std::back_inserter(entities_));
@@ -107,6 +108,7 @@ void Stage::simulate(double deltaTime) {
     }
 
     pSystems_->coordRoot.update();
+    pSystems_->collisionSystem.update();
 
     if (pPlayer_) {
         pPlayer_->as<gfx::d3d12engine::Camera>().update(static_cast<float>(deltaTime));

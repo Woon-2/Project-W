@@ -1,5 +1,7 @@
 #include "game/physicsSystem.hpp"
 
+#include "game/level.hpp"
+
 #include "TMP.hpp"
 
 RigidBody::RigidBody(const ecs::Entity& entity) NOEXCEPT
@@ -993,4 +995,41 @@ void BoundingVolume::readOBBCollider(std::ifstream& is, BoundingVolumeNode& node
 	node.addCollider( BoundingOrientedBox{
 		.center = center, .extents = extents, .orientation = orientation
 	} );
+}
+
+void CollisionSystem::update() {
+	// reset collisions from previous frame
+	for (auto pBV : components<BoundingVolume>()) {
+		pBV->resetCollisions();
+	}
+
+	// check for collisions between bounding volumes
+	for (auto pBV : components<BoundingVolume>()) {
+		for (auto pOtherBV : components<BoundingVolume>()) {
+			if (pBV == pOtherBV) {
+				continue;
+			}
+
+			auto pCoord = gameEngine::Coord::atC(pBV->entityID().value());
+			if (!pCoord) {
+				std::cerr << "Tried collision check on BoundingVolume component while entity has no Coord component." << '\n';
+				continue; 
+			}
+
+			auto pOtherCoord = gameEngine::Coord::atC(pOtherBV->entityID().value());
+			if (!pOtherCoord) {
+				std::cerr << "Tried collision check on BoundingVolume component while entity has no Coord component." << '\n';
+				continue; 
+			}
+
+			if ( BoundingVolumeNode::collides(
+					pCoord->get().xform(), pBV->root(),
+					pOtherCoord->get().xform(), pOtherBV->root()
+			) ) {
+				std::cout << "Collision!\n";
+				pBV->markCollision(pOtherBV);
+				pOtherBV->markCollision(pBV);
+			}
+		}
+	}
 }
