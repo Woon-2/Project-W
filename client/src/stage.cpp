@@ -155,6 +155,7 @@ void Stage::loadAssets() {
 
     loadTextures(cmdList);
     loadModels(cmdList);
+    loadBVHPaths();
     loadLevel(cmdList);
 
     pCore_->finishGPUResLoad();
@@ -203,6 +204,24 @@ void Stage::loadModels(gfx::d3d12::D3D12GfxCmdList& cmdList) {
     loadModel(*pCore_, AssetModel::Tree0, *pRenderer_);
     loadModel(*pCore_, AssetModel::Tree1, *pRenderer_);
     loadModel(*pCore_, AssetModel::Tree2, *pRenderer_);
+}
+
+void loadBVHPath(gfx::d3d12engine::Core& core, AssetBVH key) {
+    auto bvhInfo = assetBVHInfo(key);
+    core.loadBVHPath(bvhInfo.key, bvhInfo.path);
+}
+
+void Stage::loadBVHPaths() {
+    loadBVHPath(*pCore_, AssetBVH::Helicopter);
+    loadBVHPath(*pCore_, AssetBVH::Terrain_0_0);
+    loadBVHPath(*pCore_, AssetBVH::Terrain_0_1);
+    loadBVHPath(*pCore_, AssetBVH::Terrain_0_2);
+    loadBVHPath(*pCore_, AssetBVH::Terrain_1_0);
+    loadBVHPath(*pCore_, AssetBVH::Terrain_1_1);
+    loadBVHPath(*pCore_, AssetBVH::Terrain_1_2);
+    loadBVHPath(*pCore_, AssetBVH::Terrain_2_0);
+    loadBVHPath(*pCore_, AssetBVH::Terrain_2_1);
+    loadBVHPath(*pCore_, AssetBVH::Terrain_2_2);
 }
 
 void Stage::loadLevel(gfx::d3d12::D3D12GfxCmdList& cmdList) {

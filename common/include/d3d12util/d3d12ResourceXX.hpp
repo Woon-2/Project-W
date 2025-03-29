@@ -693,6 +693,33 @@ private:
     std::map<ID, RefModel> map_;
 };
 
+class BVHPathStorage {
+public:
+    using ID = std::string;
+
+    void regist(const ID& key, const std::filesystem::path& path) {
+        auto [_, emplaced] = bvhPaths_.try_emplace(key, path);
+        if (!emplaced) {
+            throw GFX_EXCEPT("[Description] specified BVH path has already been registered.");
+        }
+    }
+
+    const std::filesystem::path& get(const ID& key) const {
+        return bvhPaths_.at(key);
+    }
+
+    const std::filesystem::path& operator[](const ID& key) const {
+        return get(key);
+    }
+
+    bool contains(const ID& key) const {
+        return bvhPaths_.contains(key);
+    }
+
+private: 
+    std::map<ID, std::filesystem::path> bvhPaths_;
+};
+
 class Mesh;
 
 class Submesh {

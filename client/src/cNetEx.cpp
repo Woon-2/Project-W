@@ -1,6 +1,11 @@
 #include "cNetEx.hpp"
 
+#include "game/physicsSystem.hpp"
+
+#include "assetMap.hpp"
+
 #include <iostream>
+#include <optional>
 
 void CNetExSystem::preUpdate(const gfx::d3d12engine::Core& core) {
     for (const auto& packet : pSession_->getRecvQueue()) {
@@ -43,6 +48,40 @@ void CNetExSystem::handleSCInitInfo(const SCInitInfo& scInitInfo) {
     initPacketCnt_ = scInitInfo.packetCnt;
 }
 
+void buildEntityWithAsset( mu::Vec3 translation,
+    mu::NQuat rotation,
+    const gfx::d3d12engine::Core& core,
+    std::optional<AssetModel> assetModel,
+    std::optional<AssetBVH> assetBVH,
+    ecs::Entity& entity
+) {
+    entity.createComponent<gameEngine::Coord>();
+    entity.as<gameEngine::Coord>().get().setLocalXform(mu::translate(translation));
+
+    if (assetModel.has_value()) {
+        const auto asset = assetModel.value();
+        const auto key = assetModelInfo(asset).key;
+
+        if (!core.refModelStorage().contains(key)) {
+            throw GFX_EXCEPT("RefModel not found: " + key);
+        }
+
+        entity.createComponent<gfx::d3d12engine::Model>(key, core, entity.as<gameEngine::Coord>());
+        entity.as<gfx::d3d12engine::Model>().get().root()->coord() << mu::Mat4x4(rotation);
+    }
+
+    if (assetBVH.has_value()) {
+        const auto asset = assetBVH.value();
+        const auto& key = assetBVHInfo(asset).key;
+
+        if (!core.bvhPathStorage().contains(key)) {
+            throw GFX_EXCEPT("BVH not found: " + key);
+        }
+
+        entity.createComponent<BoundingVolume>(core.bvhPathStorage().get(key));
+    }
+}
+
 void CNetExSystem::handleSCInitCreate(const SCInitCreate& scInitCreate, const gfx::d3d12engine::Core& core) {
     createdEntities_.emplace_back();
     auto& entity = createdEntities_.back();
@@ -62,55 +101,27 @@ void CNetExSystem::handleSCInitCreate(const SCInitCreate& scInitCreate, const gf
 
     switch (scInitCreate.objType) {
     case ObjectType::Helicopter:
-        if (!core.refModelStorage().contains("GO_OH-58D")) {
-            throw GFX_EXCEPT("RefModel not found: GO_OH-58D");
-        }
         entity.createComponent<NetEx>(std::make_unique<CNetExHelicopter>(entity.id().value()));
         entity.as<NetEx>().addCategory(NetExCategory::Helicopter);
-        entity.createComponent<gameEngine::Coord>();
-        entity.as<gameEngine::Coord>().get().setLocalXform(mu::translate(translation));
-
-        entity.createComponent<gfx::d3d12engine::Model>("GO_OH-58D", core, entity.as<gameEngine::Coord>());
-        entity.as<gfx::d3d12engine::Model>().get().root()->coord() << mu::Mat4x4(rotation);
+        buildEntityWithAsset(translation, rotation, core, AssetModel::Helicopter, AssetBVH::Helicopter, entity);
         addEntity(entity);
         break;
 
     case ObjectType::Tree0:
-        if (!core.refModelStorage().contains("GO_URP_Tree_0")) {
-            throw GFX_EXCEPT("RefModel not found: GO_URP_Tree_0");
-        }
         entity.createComponent<NetEx>(std::make_unique<CNetExTree0>(entity.id().value()));
-        entity.createComponent<gameEngine::Coord>();
-        entity.as<gameEngine::Coord>().get().setLocalXform(mu::translate(translation));
-
-        entity.createComponent<gfx::d3d12engine::Model>("GO_URP_Tree_0", core, entity.as<gameEngine::Coord>());
-        entity.as<gfx::d3d12engine::Model>().get().root()->coord() << mu::Mat4x4(rotation);
+        buildEntityWithAsset(translation, rotation, core, AssetModel::Tree0, {}, entity);
         addEntity(entity);
         break;
 
     case ObjectType::Tree1:
-        if (!core.refModelStorage().contains("GO_URP_Tree_1")) {
-            throw GFX_EXCEPT("RefModel not found: GO_URP_Tree_1");
-        }
         entity.createComponent<NetEx>(std::make_unique<CNetExTree1>(entity.id().value()));
-        entity.createComponent<gameEngine::Coord>();
-        entity.as<gameEngine::Coord>().get().setLocalXform(mu::translate(translation));
-
-        entity.createComponent<gfx::d3d12engine::Model>("GO_URP_Tree_1", core, entity.as<gameEngine::Coord>());
-        entity.as<gfx::d3d12engine::Model>().get().root()->coord() << mu::Mat4x4(rotation);
+        buildEntityWithAsset(translation, rotation, core, AssetModel::Tree1, {}, entity);
         addEntity(entity);
         break;
 
     case ObjectType::Tree2:
-        if (!core.refModelStorage().contains("GO_URP_Tree_2")) {
-            throw GFX_EXCEPT("RefModel not found: GO_URP_Tree_2");
-        }
         entity.createComponent<NetEx>(std::make_unique<CNetExTree2>(entity.id().value()));
-        entity.createComponent<gameEngine::Coord>();
-        entity.as<gameEngine::Coord>().get().setLocalXform(mu::translate(translation));
-
-        entity.createComponent<gfx::d3d12engine::Model>("GO_URP_Tree_2", core, entity.as<gameEngine::Coord>());
-        entity.as<gfx::d3d12engine::Model>().get().root()->coord() << mu::Mat4x4(rotation);
+        buildEntityWithAsset(translation, rotation, core, AssetModel::Tree2, {}, entity);
         addEntity(entity);
         break;
 

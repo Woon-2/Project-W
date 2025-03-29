@@ -9,7 +9,8 @@ namespace gfx {
 namespace d3d12engine {
 
 Core::Core()
-    : staticTexStorage_(), factory_(), samStorage_(),
+    : staticTexStorage_(), refModelStorage_(),
+    bvhPathStorage_(), samStorage_(), factory_(),
     device_( d3d12::getAvailableAdapter(factory_, D3D_FEATURE_LEVEL_12_1), D3D_FEATURE_LEVEL_12_1 ),
     cmdQueue_( device_ ), cmdList_( device_ ),
     rtvHeap_(device_, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, initialRtvHeapSize),

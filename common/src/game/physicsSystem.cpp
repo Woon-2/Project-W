@@ -745,6 +745,9 @@ void BoundingVolume::readColliders( std::ifstream& is,
 		}
 
 		for (;;) {
+			readStream(is, nStrLength);
+			readStream(is, pstrToken, nStrLength);
+
 			if (!std::strcmp(pstrToken, "</Collider>")) {
 				break;
 			}

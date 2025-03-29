@@ -42,6 +42,7 @@ public:
 
     using TextureKey = std::string;
     using RefModelKey = d3d12::RefModelStorage::ID;
+    using BVHPathKey = d3d12::BVHPathStorage::ID;
 
     Core();
 
@@ -80,6 +81,10 @@ public:
     void loadStaticTexture(const TextureKey& key, d3d12::TextureResource::Type type);
     void loadStaticTexture(const TextureKey& key, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc);
     void loadRefModel(const RefModelKey& key);
+    void loadBVHPath(const BVHPathKey& key, const std::filesystem::path& path) {
+        bvhPathStorage_.regist(key, path);
+    }
+
     void layoutRefModelVBs( const d3d12::RefModelStorage::ID& key, std::size_t vbLayoutIdx,
         const d3d12::InputLayout& inputLayout
     );
@@ -121,6 +126,7 @@ public:
     const d3d12::SamplerStorage& samStorage() const NOEXCEPT { return samStorage_; }
     const d3d12::StaticTextureStorage& staticTexStorage() const NOEXCEPT { return staticTexStorage_; }
     const d3d12::RefModelStorage& refModelStorage() const NOEXCEPT { return refModelStorage_; }
+    const d3d12::BVHPathStorage& bvhPathStorage() const NOEXCEPT { return bvhPathStorage_; }
 
 private:
     d3d12::RefModelStorage& refModelStorage() NOEXCEPT { return refModelStorage_; }
@@ -128,6 +134,7 @@ private:
 
     d3d12::StaticTextureStorage staticTexStorage_;
     d3d12::RefModelStorage refModelStorage_;
+    d3d12::BVHPathStorage bvhPathStorage_;
     d3d12::SamplerStorage samStorage_;
     dx::DXGIFactory factory_;
     d3d12::D3D12Device device_;

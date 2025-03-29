@@ -36,6 +36,7 @@ private:
     void loadAssets();
     void loadTextures(gfx::d3d12::D3D12GfxCmdList& cmdList);
     void loadModels(gfx::d3d12::D3D12GfxCmdList& cmdList);
+    void loadBVHPaths();
     void loadLevel(gfx::d3d12::D3D12GfxCmdList& cmdList);
     void processPackets(double deltaTime);
     void updateNetwork(double deltaTime);

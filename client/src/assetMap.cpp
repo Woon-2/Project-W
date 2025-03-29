@@ -118,3 +118,50 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
 
     return sTextureInfos[etoi(asset)];
 }
+
+const BVHInfo& assetBVHInfo(AssetBVH asset) {
+    static auto sAssetBVHInfos = std::vector<BVHInfo>{
+        BVHInfo{
+            .key = "GO_OH-58D",
+            .path = resourcePath/"models/HelicopterModel/GO_OH-58D.bvh"
+        },
+        BVHInfo{
+            .key = "Terrain_0_0",
+            .path = resourcePath/"terrains/BVHs/Terrain_0_0.bvh"
+        },
+        BVHInfo{
+            .key = "Terrain_0_1",
+            .path = resourcePath/"terrains/BVHs/Terrain_0_1.bvh"
+        },
+        BVHInfo{
+            .key = "Terrain_0_2",
+            .path = resourcePath/"terrains/BVHs/Terrain_0_2.bvh"
+        },
+        BVHInfo{
+            .key = "Terrain_1_0",
+            .path = resourcePath/"terrains/BVHs/Terrain_1_0.bvh"
+        },
+        BVHInfo{
+            .key = "Terrain_1_1",
+            .path = resourcePath/"terrains/BVHs/Terrain_1_1.bvh"
+        },
+        BVHInfo{
+            .key = "Terrain_1_2",
+            .path = resourcePath/"terrains/BVHs/Terrain_1_2.bvh"
+        },
+        BVHInfo{
+            .key = "Terrain_2_0",
+            .path = resourcePath/"terrains/BVHs/Terrain_2_0.bvh"
+        },
+        BVHInfo{
+            .key = "Terrain_2_1",
+            .path = resourcePath/"terrains/BVHs/Terrain_2_1.bvh"
+        },
+        BVHInfo{
+            .key = "Terrain_2_2",
+            .path = resourcePath/"terrains/BVHs/Terrain_2_2.bvh"
+        }
+    };
+
+    return sAssetBVHInfos[etoi(asset)];
+}
