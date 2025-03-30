@@ -5,6 +5,7 @@
 #include "d3d12util/d3d12Low.hpp"
 #include "d3d12util/d3d12ResourceXX.hpp"
 #include "coord.hpp"
+#include "game/physicsSystem.hpp"
 
 #include <string>
 #include <string_view>
@@ -16,6 +17,7 @@ namespace gfx {
 
 namespace d3d12 {
 
+// TODO: support orthogonal projection mode
 class Camera {
 public:
     static constexpr auto defFov = mu::Degree(90.f);
@@ -38,9 +40,17 @@ public:
         : Camera(Config()) {}
 
     Camera(const Config& config)
-        : coordMovement_(), coordRotation_(), config_(config), view_(), proj_(
+        : coordMovement_(), coordRotation_(), config_(config), bv_(), view_(), proj_(
             mu::persp(config_.fov, config_.aspect,config_.nearZ, config_.farZ)
         ), repPos_(), repUp_(), repFwd_(), focus_(), focusMode_(FocusMode::None) {
+        bv_.addCollider( BoundingFrustum{
+            .origin = mu::Vec3(0.f, 0.f, 0.f),
+            .orientation = mu::NQuat(),
+            .fovy = config_.fov,
+            .aspect = config_.aspect,
+            .nearZ = config_.nearZ,
+            .farZ = config_.farZ
+        } );
         coordRotation_.setParent(&coordMovement_);
     }
 
@@ -54,6 +64,10 @@ public:
     }
 
     void updateView();
+
+    const BoundingVolumeNode& bvNode() const NOEXCEPT {
+        return bv_;
+    }
 
     void MU_CALLCONV focusAt(mu::Vec3 focus, mu::Vec3 up) NOEXCEPT {
         focus_ = focus;
@@ -113,6 +127,7 @@ private:
     coord::System coordMovement_;
     coord::System coordRotation_;
     Config config_;
+    BoundingVolumeNode bv_;
     mu::Mat4x4 view_;
     mu::Mat4x4 proj_;
     mu::Vec3 repPos_;
@@ -344,6 +359,7 @@ public:
     void postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
 
     void trackModel(Model* pModel);
+    void trackModel(Model* pModel, const BoundingVolumeNode* pBVNode);
     void setCamera(const Camera* pCamera) NOEXCEPT {
         pCamera_ = pCamera;
     }
@@ -364,7 +380,9 @@ private:
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
     std::vector<const WorldLight*> lights_;
-    std::vector< std::tuple<Submesh*, VBLayoutIdx, mu::Mat4x4> > batch_;
+    std::vector< std::tuple<bool, const BoundingVolumeNode*, Submesh*,
+        const coord::System*, VBLayoutIdx, mu::Mat4x4>
+    > batch_;
     const Camera* pCamera_;
     ShadowMaterial* pShadowMaterial_;
     const SamplerStorage* pSamplerStorage_;
@@ -396,6 +414,7 @@ public:
     void postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
 
     void trackModel(Model* pModel);
+    void trackModel(Model* pModel, const BoundingVolumeNode* pBVNode);
     void setCamera(const Camera* pCamera) NOEXCEPT {
         pCamera_ = pCamera;
     }
@@ -418,7 +437,9 @@ private:
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
     const WorldLight* pLight_;
-    std::vector< std::tuple<Submesh*, VBLayoutIdx, mu::Mat4x4> > batch_;
+    std::vector< std::tuple<bool, const BoundingVolumeNode*, Submesh*,
+        const coord::System*, VBLayoutIdx, mu::Mat4x4>
+    > batch_;
     const Camera* pCamera_;
 };
 

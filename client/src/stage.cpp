@@ -72,9 +72,9 @@ void Stage::processPackets(double deltaTime) {
             pSystems_->physicsSystem.addEntity(entt);
         }
 
-        scene_.addEntity(entt);
         pSystems_->coordRoot.addEntity(entt);
         pSystems_->collisionSystem.addEntity(entt);
+        scene_.addEntity(entt);
     }
     
     std::ranges::move(v, std::back_inserter(entities_));

@@ -319,7 +319,13 @@ namespace rp {
 
 void PBRIllumination::init(Scene& scene) {
     for (auto& pModel : models(scene)) {
-        trackModel(&pModel->get());
+        const auto entityID = pModel->entityID().value();
+        if (auto pBV = BoundingVolume::atC(entityID)) {
+            trackModel(&pModel->get(), &pBV->root());
+        }
+        else {
+            trackModel(&pModel->get());
+        }
     }
     if (!cameras(scene).empty()) {
         setCamera(&cameras(scene).front()->get());
@@ -332,7 +338,12 @@ void PBRIllumination::init(Scene& scene) {
 void PBRIllumination::update(Scene& scene) {
     for (auto& entityID : reservedEntities(scene)) {
         if ( auto pModel = Model::at(entityID) ) {
-            trackModel(&pModel->get());
+            if (auto pBV = BoundingVolume::atC(entityID)) {
+                trackModel(&pModel->get(), &pBV->root());
+            }
+            else {
+                trackModel(&pModel->get());
+            }
         }
         if ( auto pCamera = Camera::at(entityID) ) {
             setCamera(&pCamera->get());
@@ -345,7 +356,11 @@ void PBRIllumination::update(Scene& scene) {
 
 void ShadowMap::init(Scene& scene) {
     for (auto& pModel : models(scene)) {
-        if (pModel) {
+        const auto entityID = pModel->entityID().value();
+        if (auto pBV = BoundingVolume::atC(entityID)) {
+            trackModel(&pModel->get(), &pBV->root());
+        }
+        else {
             trackModel(&pModel->get());
         }
     }
@@ -364,7 +379,12 @@ void ShadowMap::init(Scene& scene) {
 void ShadowMap::update(Scene& scene) {
     for (auto& entityID : reservedEntities(scene)) {
         if ( auto pModel = Model::at(entityID) ) {
-            trackModel(&pModel->get());
+            if (auto pBV = BoundingVolume::atC(entityID)) {
+                trackModel(&pModel->get(), &pBV->root());
+            }
+            else {
+                trackModel(&pModel->get());
+            }
         }
         if ( auto pCamera = Camera::at(entityID) ) {
             setCamera(&pCamera->get());
