@@ -200,7 +200,7 @@ public:
 		: Component(entity) {}
 
 	BoundingVolume(const ecs::Entity& entity, const std::filesystem::path& bvhPath)
-		: BoundingVolume(entity, std::ifstream(bvhPath)) {}
+		: BoundingVolume(entity, std::ifstream(bvhPath, std::ios::binary)) {}
 	BoundingVolume(const ecs::Entity& entity, std::ifstream& bvhStream);
 	BoundingVolume(const ecs::Entity& entity, std::ifstream&& bvhStream)
 		: BoundingVolume(entity, bvhStream) {}
