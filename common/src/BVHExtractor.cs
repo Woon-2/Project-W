@@ -14,6 +14,7 @@ public class BVHExtractor : MonoBehaviour
     void Start()
     {
         binaryWriter = new BinaryWriter(File.Open(string.Copy(transform.parent.gameObject.name).Replace(" ", "_") + ".bvh", FileMode.Create));
+        transform.SetParent(null, false);
         ExtractBVH(transform);
     }
 
