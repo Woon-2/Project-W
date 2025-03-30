@@ -650,7 +650,13 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
             }
             if (materials[i].HasProperty("_EmissionColor"))
             {
-                Color emission = materials[i].GetColor("_EmissionColor");
+                Color emission = Color.black; // Default value for emission color when emission is not enabled
+
+                if (materials[i].IsKeywordEnabled("_EMISSION"))
+                {
+                    emission = materials[i].GetColor("_EmissionColor");
+                }
+
                 WriteColor("<EmissiveColor:>", emission);
             }
             if (materials[i].HasProperty("_Smoothness"))
