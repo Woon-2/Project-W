@@ -8,6 +8,7 @@
 
 enum class AssetModel {
     Helicopter,
+    Character,
     Tree0,
     Tree1,
     Tree2
@@ -28,6 +29,7 @@ enum class AssetBVH {
 
 enum class AssetTexture {
     Helicopter,
+    Character,
     Tree0,
     Tree1,
     Tree2,

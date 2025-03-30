@@ -188,6 +188,7 @@ void loadHeightmapTexture(gfx::d3d12engine::Core& core, AssetTexture key) {
 
 void Stage::loadTextures(gfx::d3d12::D3D12GfxCmdList& cmdList) {
     loadTexture(*pCore_, AssetTexture::Helicopter);
+    loadTexture(*pCore_, AssetTexture::Character);
     loadTexture(*pCore_, AssetTexture::Tree0);
     loadTexture(*pCore_, AssetTexture::Tree1);
     loadTexture(*pCore_, AssetTexture::Tree2);
@@ -205,6 +206,7 @@ void loadModel(gfx::d3d12engine::Core& core, AssetModel key, Renderer& renderer)
 void Stage::loadModels(gfx::d3d12::D3D12GfxCmdList& cmdList) {
     pCore_->initChunkMesh(cmdList);
     loadModel(*pCore_, AssetModel::Helicopter, *pRenderer_);
+    loadModel(*pCore_, AssetModel::Character, *pRenderer_);
     loadModel(*pCore_, AssetModel::Tree0, *pRenderer_);
     loadModel(*pCore_, AssetModel::Tree1, *pRenderer_);
     loadModel(*pCore_, AssetModel::Tree2, *pRenderer_);
