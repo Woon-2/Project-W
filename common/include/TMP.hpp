@@ -38,7 +38,11 @@ template <std::ranges::range R>
 
 template <class T, class CharT, class Traits>
 std::basic_istream<CharT, Traits>& readStream(std::basic_istream<CharT, Traits>& is, T& t) {
-    return is.read(reinterpret_cast<char*>(&t), sizeof(T));
+    is.read(reinterpret_cast<char*>(&t), sizeof(T));
+    if (is.fail() || is.bad()) {
+        throw std::runtime_error("[Description] readStream: I/O error occured.");
+    }
+    return is;
 }
 
 template <class CharT, class Traits, std::integral IntT>
@@ -47,6 +51,9 @@ std::basic_istream<CharT, Traits>& readStream(
 ) {
     is.read(pStr, static_cast<std::streamsize>(nStrLength));
     pStr[nStrLength] = '\0';
+    if (is.fail() || is.bad()) {
+        throw std::runtime_error("[Description] readStream: I/O error occured.");
+    }
     return is;
 }
 
