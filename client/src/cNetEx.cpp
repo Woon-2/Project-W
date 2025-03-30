@@ -103,7 +103,7 @@ void CNetExSystem::handleSCInitCreate(const SCInitCreate& scInitCreate, const gf
     case ObjectType::Helicopter:
         entity.createComponent<NetEx>(std::make_unique<CNetExHelicopter>(entity.id().value()));
         entity.as<NetEx>().addCategory(NetExCategory::Helicopter);
-        buildEntityWithAsset(translation, rotation, core, AssetModel::Helicopter, AssetBVH::Helicopter, entity);
+        buildEntityWithAsset(translation, rotation, core, AssetModel::Character, {}, entity);
         addEntity(entity);
         break;
 

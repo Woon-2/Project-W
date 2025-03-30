@@ -44,22 +44,22 @@ private:
     void moveForward(float deltaTime) {
         addForce( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
             ecs::Component::atC(ecs::Components::Model, entityID().value())
-        )->get().root()->coord().localXform().row(0u) ) ) * forceStep_ * deltaTime  );
+        )->get().root()->coord().localXform().row(2u) ) ) * forceStep_ * deltaTime  );
     }
     void moveBackward(float deltaTime) {
         addForce( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
             ecs::Component::atC(ecs::Components::Model, entityID().value())
-        )->get().root()->coord().localXform().row(0u) ) ) * -forceStep_ * deltaTime  );
+        )->get().root()->coord().localXform().row(2u) ) ) * -forceStep_ * deltaTime  );
     }
     void moveLeft(float deltaTime) {
         addForce( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
             ecs::Component::atC(ecs::Components::Model, entityID().value())
-        )->get().root()->coord().localXform().row(2u) ) ) * forceStep_ * deltaTime  );
+        )->get().root()->coord().localXform().row(0u) ) ) * -forceStep_ * deltaTime  );
     }
     void moveRight(float deltaTime) {
         addForce( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
             ecs::Component::atC(ecs::Components::Model, entityID().value())
-        )->get().root()->coord().localXform().row(2u) ) ) * -forceStep_ * deltaTime  );
+        )->get().root()->coord().localXform().row(0u) ) ) * forceStep_ * deltaTime  );
     }
     void moveUp(float deltaTime) {
         addForce( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(

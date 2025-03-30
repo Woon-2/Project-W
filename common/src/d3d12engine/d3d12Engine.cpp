@@ -183,7 +183,7 @@ void Camera::update(float deltaTime) {
         offsetRotation.setRow(1, mu::Vec4(mu::NVec3(mu::Vec3(offsetRotation.row(1))), 0.f));
         offsetRotation.setRow(2, mu::Vec4(mu::NVec3(mu::Vec3(offsetRotation.row(2))), 0.f));
         // temporary
-        offsetRotation *= mu::rotateY(mu::Degree(90.f));
+        // offsetRotation *= mu::rotateY(mu::Degree(90.f));
 
         const auto targetPos = mu::Vec3(pAttachedMovement_->xform().row(3));
         const auto idealPos = targetPos + mu::Vec3( mu::Vec4(offset_, 0.f) * offsetRotation );

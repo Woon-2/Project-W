@@ -51,8 +51,8 @@ void Stage::processPackets(double deltaTime) {
             // address gap between two element represents the gap of the indices.
             playerIdx = static_cast<std::uint32_t>(&entt - v.data());
 
-            const auto cameraOffset = mu::Vec3(0.f, 4.8f, -10.f);
-            const auto cameraTimeLag = 1.f;
+            const auto cameraOffset = mu::Vec3(0.f, 1.8f, -1.6f);
+            const auto cameraTimeLag = 0.4f;
 
             entt.createComponent<PlayerController>();
             entt.createComponent<RigidBody>();
