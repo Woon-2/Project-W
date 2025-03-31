@@ -9,6 +9,9 @@ using System.Text;
 
 public class BinaryHierarchicalModelExtract : MonoBehaviour
 {
+    public Transform geometry = null;
+    public Transform skeleton = null;
+
     private List<string> m_pTextureNamesListForCounting = new List<string>();
     private List<string> m_pTextureNamesListForWriting = new List<string>();
 
@@ -20,6 +23,9 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
 
     private BinaryWriter binaryWriter = null;
     private BinaryReader binaryReader = null;
+
+    private List<Transform> bones = null;
+    private List<Matrix4x4> bindposes = null;
 
     void WriteDictionary() {
         binaryWriter.Write("<Dictionary:>");
@@ -470,6 +476,12 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         binaryWriter.Write(matrix.m33);
     }
 
+    void WriteMatrix(string strHeader, Matrix4x4 matrix)
+    {
+        binaryWriter.Write(strHeader);
+        WriteMatrix(matrix);
+    }
+
     void WriteMatrix(Vector3 position, Quaternion rotation, Vector3 scale)
     {
         Matrix4x4 matrix = Matrix4x4.identity;
@@ -502,7 +514,7 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         WriteMatrix(matrix);
     }
 
-        void WriteMatrixes(string strHeader, Matrix4x4[] matrixes)
+    void WriteMatrixes(string strHeader, Matrix4x4[] matrixes)
     {
         WriteString(strHeader, matrixes.Length);
         if (matrixes.Length > 0)
@@ -511,7 +523,37 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         }
     }
 
-        int GetTexturesCount(Material[] materials)
+    void WriteBoneWeights(string strHeader, BoneWeight[] boneWeights, int[] boneIndices)
+    {
+        WriteString(strHeader, boneWeights.Length);
+        if (boneWeights.Length > 0)
+        {
+            foreach (BoneWeight bw in boneWeights)
+            {
+                binaryWriter.Write(bw.weight0);
+                binaryWriter.Write(bw.weight1);
+                binaryWriter.Write(bw.weight2);
+                binaryWriter.Write(bw.weight3);
+            }
+        }
+    }
+
+    void WriteBoneIndices(string strHeader, BoneWeight[] boneWeights, int[] boneIndices)
+    {
+        WriteString(strHeader, boneWeights.Length);
+        if (boneWeights.Length > 0)
+        {
+            foreach (BoneWeight bw in boneWeights)
+            {
+                binaryWriter.Write(boneIndices[bw.boneIndex0]);
+                binaryWriter.Write(boneIndices[bw.boneIndex1]);
+                binaryWriter.Write(boneIndices[bw.boneIndex2]);
+                binaryWriter.Write(boneIndices[bw.boneIndex3]);
+            }
+        }
+    }
+
+    int GetTexturesCount(Material[] materials)
     {
         int nTextures = 0;
         for (int i = 0; i < materials.Length; i++)
@@ -551,7 +593,7 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         return(nTextures);
     }
 
-    void WriteMeshInfo(Mesh mesh)
+    void WriteMeshInfo(Mesh mesh, int[] boneIndices = null)
     {
         WriteObjectName("<Mesh:>", mesh.vertexCount, mesh);
 
@@ -562,8 +604,12 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         if ((mesh.uv != null) && (mesh.uv.Length > 0)) WriteTextureCoords("<TextureCoords0:>", mesh.uv);
         if ((mesh.uv2 != null) && (mesh.uv2.Length > 0)) WriteTextureCoords("<TextureCoords1:>", mesh.uv2);
         if ((mesh.normals != null) && (mesh.normals.Length > 0)) WriteVectors("<Normals:>", mesh.normals);
+        if ((mesh.boneWeights != null) && (mesh.boneWeights.Length > 0)) {
+            WriteBoneWeights("<BoneWeights:>", mesh.boneWeights, boneIndices);
+            WriteBoneIndices("<BoneIndices:>", mesh.boneWeights, boneIndices);
+        }
 
-        if ((mesh.normals.Length > 0) && (mesh.tangents.Length > 0))
+        if ((mesh.normals != null && mesh.normals.Length > 0) && (mesh.tangents != null && mesh.tangents.Length > 0))
         {
             Vector3[] tangents = new Vector3[mesh.tangents.Length];
             Vector3[] biTangents = new Vector3[mesh.tangents.Length];
@@ -629,6 +675,7 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         }
         else {
             Debug.LogWarning($"Path not found in texture index info: {path}");
+            Debug.Log($"Current texture index infos: {string.Join(", ", m_pTextureIndexInfo.Keys)}");
             binaryWriter.Write(0); // Default value for missing data
         }
     }
@@ -711,6 +758,8 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
 
         if (meshRenderer && meshFilter)
         {
+            if (meshRenderer.enabled == false) return;
+
             WriteMeshInfo(meshFilter.sharedMesh);
 
             Material[] materials = meshRenderer.materials;
@@ -720,51 +769,164 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
 
         SkinnedMeshRenderer skinnedMeshRenderer = current.gameObject.GetComponent<SkinnedMeshRenderer>();
 
-        if (skinnedMeshRenderer)
+        if (skinnedMeshRenderer && skinnedMeshRenderer.enabled == true)
         {
-            WriteMeshInfo(skinnedMeshRenderer.sharedMesh);
+            int[] boneIndices = new int[skinnedMeshRenderer.bones.Length];
+            for (int i = 0; i < skinnedMeshRenderer.bones.Length; i++)
+            {
+                bool found = false;
+                for (int j = 0; j < bones.Count; j++)
+                {
+                    if (skinnedMeshRenderer.bones[i].gameObject.name == bones[j].gameObject.name)
+                    {
+                        found = true;
+                        boneIndices[i] = j;
+                        break;
+                    }
+                }
+
+                if (!found)
+                {
+                    Debug.LogError("Bone not found: " + skinnedMeshRenderer.bones[i].gameObject.name);
+                }
+            }
+
+            WriteMeshInfo(skinnedMeshRenderer.sharedMesh, boneIndices);
 
             Material[] materials = skinnedMeshRenderer.materials;
             if (materials.Length > 0) WriteMaterials(materials);
         }
     }
 
-    void WriteFrameHierarchyInfo(Transform child)
+    void WriteFrameHierarchyInfo(Transform current)
     {
-        WriteObjectName("<Node:>", child.gameObject);
-        WriteFrameInfo(child);
+        WriteObjectName("<Node:>", current.gameObject);
+        WriteFrameInfo(current);
 
-        WriteInteger("<Children:>", child.childCount);
+        WriteInteger("<Children:>", current.childCount);
 
-        if (child.childCount > 0)
+        if (current.childCount > 0)
         {
-            for (int k = 0; k < child.childCount; k++)
+            for (int k = 0; k < current.childCount; k++)
             {
-                WriteFrameHierarchyInfo(child.GetChild(k));
+                WriteFrameHierarchyInfo(current.GetChild(k));
             }
         }
         WriteString("</Node>");
     }
 
+    void WriteBoneHierarchyInfo(Transform current, int n = 0)
+    {
+        WriteObjectName("<Bone:>", current.gameObject);
+        WriteInteger("<BoneIndex:>", n);
+        WriteLocalMatrix("<Xform:>", current);
+        WriteMatrix("<BindPose:>", bindposes[n]);
+
+        WriteInteger("<Children:>", current.childCount);
+
+        for (int k = 0; k < current.childCount; k++)
+        {
+            WriteBoneHierarchyInfo(current.GetChild(k), n + 1);
+        }
+        WriteString("</Bone>");
+    }
+
+    void processBoneHierarchy(Transform current)
+    {
+        bones.Add(current);
+        bindposes.Add(Matrix4x4.identity);  // Initialize bindpose with identity matrix
+
+        for (int k = 0; k < current.childCount; k++)
+        {
+            processBoneHierarchy(current.GetChild(k));
+        }
+    }
+
+    void updateBindPoses(Transform current)
+    {
+        SkinnedMeshRenderer skinnedMeshRenderer = current.gameObject.GetComponent<SkinnedMeshRenderer>();
+
+        if (skinnedMeshRenderer && skinnedMeshRenderer.enabled == true)
+        {
+            int[] boneIndices = new int[skinnedMeshRenderer.bones.Length];
+            for (int i = 0; i < skinnedMeshRenderer.bones.Length; i++)
+            {
+                for (int j = 0; j < bones.Count; j++)
+                {
+                    if (skinnedMeshRenderer.bones[i].gameObject.name == bones[j].gameObject.name)
+                    {
+                        boneIndices[i] = j;
+                        break;
+                    }
+                }
+            }
+
+            Mesh mesh = skinnedMeshRenderer.sharedMesh;
+
+            if (mesh != null && mesh.bindposes.Length > 0)
+            {
+                for (int i = 0; i < mesh.bindposes.Length; i++)
+                {
+                    bindposes[boneIndices[i]] = mesh.bindposes[i];
+                }
+            }
+        }
+    }
+
+    void processBones()
+    {
+        processBoneHierarchy(skeleton);
+        updateBindPoses(geometry);
+    }
+
+    void ExtractGeometry()
+    {
+        WriteString("<Geometry:>");
+
+        int nodeCnt = 0;
+        accNodeCntRecursive(geometry, ref nodeCnt);
+        WriteInteger("<NodeCnt:>", nodeCnt);
+
+        WriteFrameHierarchyInfo(geometry);
+
+        WriteString("</Geometry>");
+    }
+
+    void ExtractSkeleton()
+    {
+        WriteString("<Skeleton:>");
+
+        int nodeCnt = 0;
+        accNodeCntRecursive(skeleton, ref nodeCnt);
+        WriteInteger("<BoneCnt:>", nodeCnt);
+
+        WriteBoneHierarchyInfo(skeleton);
+
+        WriteString("</Skeleton>");
+    }
+
     void Start()
     {
+        if (geometry == null)
+        {
+            Debug.LogError("Geometry is not assigned.");
+            return;
+        }
+
         binaryWriter = new BinaryWriter(File.Open(string.Copy(transform.parent.gameObject.name).Replace(" ", "_") + ".bin", FileMode.Create));
+        bones = new List<Transform>();
+        bindposes = new List<Matrix4x4>();
 
         ReadRemapFile("Remap.bin");
-        ArrangeTextureList(transform);
+        ArrangeTextureList(geometry);
         CalculateResourceIndices();
 
         WriteDictionary();
 
-        WriteString("<NodesInfo:>");
 
-        int nodeCnt = 0;
-        accNodeCntRecursive(transform, ref nodeCnt);
-        WriteInteger("<NodeCnt:>", nodeCnt);
-
-        WriteFrameHierarchyInfo(transform);
-
-        WriteString("</NodesInfo>");
+        if (skeleton != null) processBones();
+        ExtractGeometry();
+        if (skeleton != null) ExtractSkeleton();
 
         binaryWriter.Flush();
         binaryWriter.Close();
