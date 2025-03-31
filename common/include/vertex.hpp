@@ -43,6 +43,8 @@ public:
         Bitangent3D,
         Color3D,
         Color4D,
+        BoneWeights4D,
+        BoneIndices4D,
         SIZE
     };
 
@@ -103,7 +105,9 @@ private:
         /* Tangent3D */ 3 * sizeof(float),
         /* Bitangent3D */ 3 * sizeof(float),
         /* Color3D */ 3 * sizeof(float),
-        /* Color4D */ 4 * sizeof(float)
+        /* Color4D */ 4 * sizeof(float),
+        /* BoneWeights4D */ sizeof(float) * 4,
+        /* BoneIndices4D */ sizeof(std::uint32_t) * 4
     };
 
     Vertex()

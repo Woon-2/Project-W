@@ -617,7 +617,9 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
 	BYTE nStrLength = 0;
 
     int nVertices = 0;
-	int nPositions = 0, nColors = 0, nNormals = 0, nTangents = 0, nBiTangents = 0, nTextureCoords = 0, nSubMeshes = 0, nIndices = 0, nSubmeshIndex = 0, nSubIndices = 0;
+	int nPositions = 0, nColors = 0, nNormals = 0, nTangents = 0, nBiTangents = 0,
+        nTextureCoords = 0, nSubMeshes = 0, nIndices = 0, nSubmeshIndex = 0, nSubIndices = 0, nBoneWeights = 0,
+        nBoneIndices = 0;
 
 	UINT nReads = (UINT)::fread(&nVertices, sizeof(int), 1, pInFile);
 
@@ -740,6 +742,30 @@ RefMesh RefMesh::loadGeometryFromFile(D3D12Device& device, D3D12GfxCmdList& cmdL
                 );
 			}
 		}
+        else if (!strcmp(pstrToken, "<BoneWeights:>")) {
+            nReads = (UINT)::fread(&nBoneWeights, sizeof(int), 1, pInFile);
+            if (nBoneWeights > 0) {
+                vbMem.resize(sizeof(dx::XMFLOAT4) * nBoneWeights);
+                nReads = (UINT)::fread(vbMem.data(), sizeof(dx::XMFLOAT4), nBoneWeights, pInFile);
+                auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
+                tmp.set(etoi(Vertex::Properties::BoneWeights4D));
+                primaryVBs.emplace_back( device, cmdList, std::move(vbMem),
+                    sizeof(dx::XMFLOAT4) * nBoneWeights, sizeof(dx::XMFLOAT4), tmp
+                );
+            }
+        }
+        else if (!strcmp(pstrToken, "<BoneIndices:>")) {
+            nReads = (UINT)::fread(&nBoneIndices, sizeof(int), 1, pInFile);
+            if (nBoneIndices > 0) {
+                vbMem.resize(sizeof(dx::XMUINT4) * nBoneIndices);
+                nReads = (UINT)::fread(vbMem.data(), sizeof(dx::XMUINT4), nBoneIndices, pInFile);
+                auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
+                tmp.set(etoi(Vertex::Properties::BoneIndices4D));
+                primaryVBs.emplace_back( device, cmdList, std::move(vbMem),
+                    sizeof(dx::XMUINT4) * nBoneIndices, sizeof(dx::XMUINT4), tmp
+                );
+            }
+        }
 		else if (!strcmp(pstrToken, "<Submeshes:>")) {
             nReads = (UINT)::fread(&nSubMeshes, sizeof(int), 1, pInFile);
             nReads = (UINT)::fread(&nIndices, sizeof(int), 1, pInFile);
@@ -988,9 +1014,44 @@ void RefModel::Node::addChild(Node* child) {
     children_.push_back(child);
 }
 
+RefModel::Bone::Bone(Bone&& other) noexcept
+    : toParent_(other.toParent_), toLocal_(other.toLocal_),
+    boneIdx_(std::exchange(other.boneIdx_, -1)), name_(std::move(other.name_)),
+    children_(std::move(other.children_)), pRefModel_(std::exchange(other.pRefModel_, nullptr)) {
+    for (auto& child : children_) {
+        child->pRefModel_ = this->pRefModel_;
+    }
+}
+
+RefModel::Bone& RefModel::Bone::operator=(Bone&& other) noexcept {
+    if (this == &other) {
+        return *this;
+    }
+
+    toParent_ = other.toParent_;
+    toLocal_ = other.toLocal_;
+    boneIdx_ = std::exchange(other.boneIdx_, -1);
+    name_ = std::move(other.name_);
+    children_ = std::move(other.children_);
+    pRefModel_ = std::exchange(other.pRefModel_, nullptr);
+
+    for (auto& child : children_) {
+        child->pRefModel_ = this->pRefModel_;
+    }
+
+    return *this;
+}
+
+void RefModel::Bone::addChild(Bone* child) {
+    child->pRefModel_ = pRefModel_;
+    children_.push_back(child);
+}
+
 RefModel::RefModel(RefModel&& other) noexcept
     : nodeStorage_(other.nodeStorage_.size()),
-    textureMap_(std::move(other.textureMap_)), pRoot_(nullptr) {
+    boneStorage_(other.boneStorage_.size()),
+    textureMap_(std::move(other.textureMap_)), pRoot_(nullptr),
+    pRootBone_(nullptr) {
     auto pOtherFirstNode = other.nodeStorage_.data();
 
     pRoot_ = nodeStorage_.data() + (other.pRoot_ - pOtherFirstNode);
@@ -1008,6 +1069,33 @@ RefModel::RefModel(RefModel&& other) noexcept
         node.children_.clear();
         node.pRefModel_ = nullptr;
     }
+
+    auto pOtherFirstBone = other.boneStorage_.data();
+
+    pRootBone_ = boneStorage_.data() + (other.pRootBone_ - pOtherFirstBone);
+
+    for (std::size_t i = 0; i < other.boneStorage_.size(); ++i) {
+        auto& bone = other.boneStorage_[i];
+        auto& newBone = boneStorage_[i];
+
+        newBone = Bone(this);
+        newBone.toParent_ = bone.toParent_;
+        newBone.toLocal_ = bone.toLocal_;
+        newBone.boneIdx_ = bone.boneIdx_;
+        newBone.name_ = std::move(bone.name_);
+
+        for (auto pChild : bone.children_) {
+            newBone.addChild(boneStorage_.data() + (pChild - pOtherFirstBone));
+        }
+
+        bone.children_.clear();
+        bone.pRefModel_ = nullptr;
+    }
+
+    other.nodeStorage_.clear();
+    other.boneStorage_.clear();
+    other.pRoot_ = nullptr;
+    other.pRootBone_ = nullptr;
 }
 
 RefModel& RefModel::operator=(RefModel&& other) noexcept {
@@ -1035,6 +1123,35 @@ RefModel& RefModel::operator=(RefModel&& other) noexcept {
         node.children_.clear();
         node.pRefModel_ = nullptr;
     }
+
+    boneStorage_.resize(other.boneStorage_.size());
+
+    auto pOtherFirstBone = other.boneStorage_.data();
+
+    pRootBone_ = boneStorage_.data() + (other.pRootBone_ - pOtherFirstBone);
+
+    for (std::size_t i = 0; i < other.boneStorage_.size(); ++i) {
+        auto& bone = other.boneStorage_[i];
+        auto& newBone = boneStorage_[i];
+
+        newBone = Bone(this);
+        newBone.toParent_ = bone.toParent_;
+        newBone.toLocal_ = bone.toLocal_;
+        newBone.boneIdx_ = bone.boneIdx_;
+        newBone.name_ = std::move(bone.name_);
+
+        for (auto pChild : bone.children_) {
+            newBone.addChild(boneStorage_.data() + (pChild - pOtherFirstBone));
+        }
+
+        bone.children_.clear();
+        bone.pRefModel_ = nullptr;
+    }
+
+    other.nodeStorage_.clear();
+    other.boneStorage_.clear();
+    other.pRoot_ = nullptr;
+    other.pRootBone_ = nullptr;
 
     return *this;
 }
@@ -1099,9 +1216,9 @@ RefModel RefModel::loadHierarchyFromFile( const std::filesystem::path& path,
     nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
     pstrToken[nStrLength] = '\0';
 
-    if (strcmp(pstrToken, "<NodesInfo:>")) {
+    if (strcmp(pstrToken, "<Geometry:>")) {
         std::fclose(pInFile);
-        throw std::runtime_error("expected NodesInfo token but got: " + std::string(pstrToken));
+        throw std::runtime_error("expected Geometry token but got: " + std::string(pstrToken));
     }
 
     nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
@@ -1128,15 +1245,61 @@ RefModel RefModel::loadHierarchyFromFile( const std::filesystem::path& path,
             loadNodesFromFile(device, cmdList, pInFile, node, model);
             model.pRoot_ = &node;
         }
-        else if (!strcmp(pstrToken, "</NodesInfo>")) {
+        else if (!strcmp(pstrToken, "</Geometry>")) {
             break;
         }
         else {
             std::fclose(pInFile);
-            throw std::runtime_error("expected Node or NodesInfo end token but got: " + std::string(pstrToken));
+            throw std::runtime_error("expected Node or Geometry end token but got: " + std::string(pstrToken));
         }
 
     }
+
+    nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+    if (nReads == 0) {
+        // there's no skeleton in the model
+        std::fclose(pInFile);
+        return model;
+    }
+
+    nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
+    if (strcmp(pstrToken, "<Skeleton:>")) {
+        std::fclose(pInFile);
+        throw std::runtime_error("expected Skeleton token but got: " + std::string(pstrToken));
+    }
+
+    nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+    nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
+    pstrToken[nStrLength] = '\0';
+
+    if (strcmp(pstrToken, "<BoneCnt:>")) {
+        std::fclose(pInFile);
+        throw std::runtime_error("expected BoneCnt token but got: " + std::string(pstrToken));
+    }
+
+    int nBones = 0;
+    nReads = (UINT)::fread(&nBones, sizeof(int), 1, pInFile);
+    model.boneStorage_.reserve(nBones);
+
+    for (;;) {
+        nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+        nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
+        pstrToken[nStrLength] = '\0';
+
+        if (!strcmp(pstrToken, "<Bone:>")) {
+            model.boneStorage_.emplace_back(&model);
+            auto& bone = model.boneStorage_.back();
+            loadBonesFromFile(device, cmdList, pInFile, bone, model);
+        }
+        else if (!strcmp(pstrToken, "</Skeleton>")) {
+            break;
+        }
+        else {
+            std::fclose(pInFile);
+            throw std::runtime_error("expected Bone or Skeleton end token but got: " + std::string(pstrToken));
+        }
+    }
+    
 
     std::fclose(pInFile);
     return model;
@@ -1210,6 +1373,66 @@ void RefModel::loadNodesFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
 		{
 			break;
 		}
+    }
+}
+
+void RefModel::loadBonesFromFile( D3D12Device& device,
+    D3D12GfxCmdList& cmdList, FILE* pInFile, Bone& bone, RefModel& model
+) {
+    char pstrToken[64] = { '\0' };
+
+	BYTE nStrLength = 0;
+	UINT nReads = 0;
+
+    dx::XMFLOAT4X4 xform{};
+    int intVal{};
+
+    nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+    auto boneName = std::string(nStrLength, '\0');
+    nReads = (UINT)::fread(boneName.data(), sizeof(char), nStrLength, pInFile);
+
+    for (;;) {
+        nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+        nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
+        pstrToken[nStrLength] = '\0';
+
+        if (!strcmp(pstrToken, "<BoneIndex:>")) {
+            nReads = (UINT)::fread(&intVal, sizeof(int), 1, pInFile);
+            bone.boneIdx_ = intVal;
+        }
+        else if (!strcmp(pstrToken, "<Xform:>")) {
+            nReads = (UINT)::fread(&xform, sizeof(float), 16, pInFile);
+            bone.toParent_ = mu::Mat4x4(DirectX::XMLoadFloat4x4(&xform));
+        }
+        else if (!strcmp(pstrToken, "<BindPose:>")) {
+            nReads = (UINT)::fread(&xform, sizeof(float), 16, pInFile);
+            bone.toLocal_ = mu::Mat4x4(DirectX::XMLoadFloat4x4(&xform));
+        }
+        else if (!strcmp(pstrToken, "<Children:>")) {
+            int nChilds = 0;
+            nReads = (UINT)::fread(&nChilds, sizeof(int), 1, pInFile);
+            if (nChilds > 0) {
+                for (int i = 0; i < nChilds; ++i) {
+                    model.boneStorage_.emplace_back(&model);
+                    auto& child = model.boneStorage_.back();
+
+                    nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
+                    nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
+                    pstrToken[nStrLength] = '\0';
+
+                    if (strcmp(pstrToken, "<Bone:>")) {
+                        fclose(pInFile);
+                        throw std::runtime_error("Bone token expected but got: " + std::string(pstrToken));
+                    }
+
+                    loadBonesFromFile(device, cmdList, pInFile, child, model);
+                    bone.addChild(&child);
+                }
+            }
+        }
+        else if (!strcmp(pstrToken, "</Bone>")) {
+            break;
+        }
     }
 }
 

@@ -577,8 +577,40 @@ public:
         const RefModel* pRefModel_;
     };
 
+    class Bone {
+    public:
+        friend class RefModel;
+        Bone(const RefModel* pRefModel = nullptr)
+            : toParent_(), toLocal_(), name_(), children_(), pRefModel_(pRefModel),
+            boneIdx_(-1) {}
+        Bone(const Bone& other) = delete;
+        Bone(Bone&& other) noexcept;
+        Bone& operator=(const Bone& other) = delete;
+        Bone& operator=(Bone&& other) noexcept;
+        ~Bone() = default;
+
+        void addChild(Bone* child);
+        mu::Mat4x4 MU_CALLCONV toParentMatrix() const noexcept {
+            return toParent_;
+        }
+        mu::Mat4x4 MU_CALLCONV toLocalMatrix() const noexcept {
+            return toLocal_;
+        }
+        auto& children() noexcept { return children_; }
+        const auto& children() const noexcept { return children_; }
+        int boneIdx() const noexcept { return boneIdx_; }
+
+    private:
+        mu::Mat4x4 toParent_;
+        mu::Mat4x4 toLocal_;
+        std::string name_;
+        std::vector<Bone*> children_;
+        const RefModel* pRefModel_;
+        int boneIdx_;
+    };
+
     RefModel()
-        : nodeStorage_(), textureMap_(), pRoot_(nullptr) {}
+        : nodeStorage_(), boneStorage_(), textureMap_(), pRoot_(nullptr), pRootBone_(nullptr) {}
 
     ~RefModel() = default;
     RefModel(const RefModel& other) = delete;
@@ -607,10 +639,15 @@ protected:
     static void loadNodesFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
         FILE* pInFile, Node& node, RefModel& model
     );
+    static void loadBonesFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
+        FILE* pInFile, Bone& bone, RefModel& model
+    );
 
     std::vector<Node> nodeStorage_;
+    std::vector<Bone> boneStorage_;
     std::map<Material::MapRef, DescriptorGPU> textureMap_;
     Node* pRoot_;
+    Bone* pRootBone_;
 };
 
 class RefMesh {
