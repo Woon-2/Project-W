@@ -21,13 +21,14 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
     private Dictionary<string, (string, int, int, int)> m_pTextureIndexInfo = new Dictionary<string, (string, int, int, int)>();
     private Dictionary<(int, int, int, int), (string, string)> m_mapRefMap = new Dictionary<(int, int, int, int), (string, string)>();
 
-    private BinaryWriter binaryWriter = null;
+    private BinaryWriter geometryWriter = null;
+    private BinaryWriter skeletonWriter = null;
     private BinaryReader binaryReader = null;
 
     private List<Transform> bones = null;
     private List<Matrix4x4> bindposes = null;
 
-    void WriteDictionary() {
+    void WriteDictionary(BinaryWriter binaryWriter) {
         binaryWriter.Write("<Dictionary:>");
 
         foreach (var kvp in m_mapRefMap) {
@@ -36,7 +37,7 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
             binaryWriter.Write(kvp.Key.Item2);
             binaryWriter.Write(kvp.Key.Item3);
             binaryWriter.Write(kvp.Key.Item4);
-            WriteString(kvp.Value.Item2);   // newTexPath
+            WriteString(binaryWriter, kvp.Value.Item2);   // newTexPath
         }
 
         binaryWriter.Write("</Dictionary>");
@@ -215,31 +216,31 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         }
     }
 
-    void WriteObjectName(Object obj)
+    void WriteObjectName(BinaryWriter binaryWriter, Object obj)
     {
         binaryWriter.Write((obj) ? string.Copy(obj.name).Replace(" ", "_") : "null");
     }
 
-    void WriteObjectName(int i, Object obj)
+    void WriteObjectName(BinaryWriter binaryWriter, int i, Object obj)
     {
         binaryWriter.Write(i);
         binaryWriter.Write((obj) ? string.Copy(obj.name).Replace(" ", "_") : "null");
     }
 
-    void WriteObjectName(string strHeader, Object obj)
+    void WriteObjectName(BinaryWriter binaryWriter, string strHeader, Object obj)
     {
         binaryWriter.Write(strHeader);
         binaryWriter.Write((obj) ? string.Copy(obj.name).Replace(" ", "_") : "null");
     }
 
-    void WriteObjectName(string strHeader, int i, Object obj)
+    void WriteObjectName(BinaryWriter binaryWriter, string strHeader, int i, Object obj)
     {
         binaryWriter.Write(strHeader);
         binaryWriter.Write(i);
         binaryWriter.Write((obj) ? string.Copy(obj.name).Replace(" ", "_") : "null");
     }
 
-    void WriteObjectName(string strHeader, int i, int j, Object obj)
+    void WriteObjectName(BinaryWriter binaryWriter, string strHeader, int i, int j, Object obj)
     {
         binaryWriter.Write(strHeader);
         binaryWriter.Write(i);
@@ -247,7 +248,7 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         binaryWriter.Write((obj) ? string.Copy(obj.name).Replace(" ", "_") : "null");
     }
 
-    void WriteObjectName(string strHeader, int i, Object obj, float f, int j, int k)
+    void WriteObjectName(BinaryWriter binaryWriter, string strHeader, int i, Object obj, float f, int j, int k)
     {
         binaryWriter.Write(strHeader);
         binaryWriter.Write(i);
@@ -257,31 +258,31 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         binaryWriter.Write(k);
     }
 
-    void WriteString(string strToWrite)
+    void WriteString(BinaryWriter binaryWriter, string strToWrite)
     {
         binaryWriter.Write(strToWrite);
     }
 
-    void WriteString(string strHeader, string strToWrite)
+    void WriteString(BinaryWriter binaryWriter, string strHeader, string strToWrite)
     {
         binaryWriter.Write(strHeader);
         binaryWriter.Write(strToWrite);
     }
 
-    void WriteString(string strToWrite, int i)
+    void WriteString(BinaryWriter binaryWriter, string strToWrite, int i)
     {
         binaryWriter.Write(strToWrite);
         binaryWriter.Write(i);
     }
 
-    void WriteString(string strToWrite, int i, float f)
+    void WriteString(BinaryWriter binaryWriter, string strToWrite, int i, float f)
     {
         binaryWriter.Write(strToWrite);
         binaryWriter.Write(i);
         binaryWriter.Write(f);
     }
 
-    void WriteTextureName(string strHeader, string strFooter, Texture texture)
+    void WriteTextureName(BinaryWriter binaryWriter, string strHeader, string strFooter, Texture texture)
     {
         binaryWriter.Write(strHeader);
         if (texture)
@@ -295,49 +296,49 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         binaryWriter.Write(strFooter);
     }
 
-    void WriteInteger(int i)
+    void WriteInteger(BinaryWriter binaryWriter, int i)
     {
         binaryWriter.Write(i);
     }
 
-    void WriteInteger(string strHeader, int i)
+    void WriteInteger(BinaryWriter binaryWriter, string strHeader, int i)
     {
         binaryWriter.Write(strHeader);
         binaryWriter.Write(i);
     }
 
-    void WriteFloat(string strHeader, float f)
+    void WriteFloat(BinaryWriter binaryWriter, string strHeader, float f)
     {
         binaryWriter.Write(strHeader);
         binaryWriter.Write(f);
     }
 
-    void WriteVector(Vector2 v)
+    void WriteVector(BinaryWriter binaryWriter, Vector2 v)
     {
         binaryWriter.Write(v.x);
         binaryWriter.Write(v.y);
     }
 
-    void WriteVector(string strHeader, Vector2 v)
+    void WriteVector(BinaryWriter binaryWriter, string strHeader, Vector2 v)
     {
         binaryWriter.Write(strHeader);
-        WriteVector(v);
+        WriteVector(binaryWriter, v);
     }
 
-    void WriteVector(Vector3 v)
+    void WriteVector(BinaryWriter binaryWriter, Vector3 v)
     {
         binaryWriter.Write(v.x);
         binaryWriter.Write(v.y);
         binaryWriter.Write(v.z);
     }
 
-    void WriteVector(string strHeader, Vector3 v)
+    void WriteVector(BinaryWriter binaryWriter, string strHeader, Vector3 v)
     {
         binaryWriter.Write(strHeader);
-        WriteVector(v);
+        WriteVector(binaryWriter, v);
     }
 
-    void WriteVector(Vector4 v)
+    void WriteVector(BinaryWriter binaryWriter, Vector4 v)
     {
         binaryWriter.Write(v.x);
         binaryWriter.Write(v.y);
@@ -345,13 +346,13 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         binaryWriter.Write(v.w);
     }
 
-    void WriteVector(string strHeader, Vector4 v)
+    void WriteVector(BinaryWriter binaryWriter, string strHeader, Vector4 v)
     {
         binaryWriter.Write(strHeader);
-        WriteVector(v);
+        WriteVector(binaryWriter, v);
     }
 
-    void WriteVector(Quaternion q)
+    void WriteVector(BinaryWriter binaryWriter, Quaternion q)
     {
         binaryWriter.Write(q.x);
         binaryWriter.Write(q.y);
@@ -359,13 +360,13 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         binaryWriter.Write(q.w);
     }
 
-    void WriteVector(string strHeader, Quaternion q)
+    void WriteVector(BinaryWriter binaryWriter, string strHeader, Quaternion q)
     {
         binaryWriter.Write(strHeader);
-        WriteVector(q);
+        WriteVector(binaryWriter, q);
     }
 
-    void WriteColor(Color c)
+    void WriteColor(BinaryWriter binaryWriter, Color c)
     {
         binaryWriter.Write(c.r);
         binaryWriter.Write(c.g);
@@ -373,67 +374,67 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         binaryWriter.Write(c.a);
     }
 
-    void WriteColor(string strHeader, Color c)
+    void WriteColor(BinaryWriter binaryWriter, string strHeader, Color c)
     {
         binaryWriter.Write(strHeader);
-        WriteColor(c);
+        WriteColor(binaryWriter, c);
     }
 
-    void WriteTextureCoord(Vector2 uv)
+    void WriteTextureCoord(BinaryWriter binaryWriter, Vector2 uv)
     {
         binaryWriter.Write(uv.x);
         binaryWriter.Write(1.0f - uv.y);
     }
 
-    void WriteVectors(string strHeader, Vector2[] vectors)
+    void WriteVectors(BinaryWriter binaryWriter, string strHeader, Vector2[] vectors)
     {
         binaryWriter.Write(strHeader);
         binaryWriter.Write(vectors.Length);
-        if (vectors.Length > 0) foreach (Vector2 v in vectors) WriteVector(v);
+        if (vectors.Length > 0) foreach (Vector2 v in vectors) WriteVector(binaryWriter, v);
     }
 
-    void WriteVectors(string strHeader, Vector3[] vectors)
+    void WriteVectors(BinaryWriter binaryWriter, string strHeader, Vector3[] vectors)
     {
         binaryWriter.Write(strHeader);
         binaryWriter.Write(vectors.Length);
-        if (vectors.Length > 0) foreach (Vector3 v in vectors) WriteVector(v);
+        if (vectors.Length > 0) foreach (Vector3 v in vectors) WriteVector(binaryWriter, v);
     }
 
-    void WriteVectors(string strHeader, Vector4[] vectors)
+    void WriteVectors(BinaryWriter binaryWriter, string strHeader, Vector4[] vectors)
     {
         binaryWriter.Write(strHeader);
         binaryWriter.Write(vectors.Length);
-        if (vectors.Length > 0) foreach (Vector4 v in vectors) WriteVector(v); 
+        if (vectors.Length > 0) foreach (Vector4 v in vectors) WriteVector(binaryWriter, v); 
     }
 
-    void WriteColors(string strHeader, Color[] colors)
+    void WriteColors(BinaryWriter binaryWriter, string strHeader, Color[] colors)
     {
         binaryWriter.Write(strHeader);
         binaryWriter.Write(colors.Length);
-        if (colors.Length > 0) foreach (Color c in colors) WriteColor(c);
+        if (colors.Length > 0) foreach (Color c in colors) WriteColor(binaryWriter, c);
     }
 
-    void WriteTextureCoords(string strHeader, Vector2[] uvs)
+    void WriteTextureCoords(BinaryWriter binaryWriter, string strHeader, Vector2[] uvs)
     {
         binaryWriter.Write(strHeader);
         binaryWriter.Write(uvs.Length);
-        if (uvs.Length > 0) foreach (Vector2 uv in uvs) WriteTextureCoord(uv);
+        if (uvs.Length > 0) foreach (Vector2 uv in uvs) WriteTextureCoord(binaryWriter, uv);
     }
 
-    void WriteIntegers(int[] pIntegers)
+    void WriteIntegers(BinaryWriter binaryWriter, int[] pIntegers)
     {
         binaryWriter.Write(pIntegers.Length);
         foreach (int i in pIntegers) binaryWriter.Write(i);
     }
 
-    void WriteIntegers(string strHeader, int[] pIntegers)
+    void WriteIntegers(BinaryWriter binaryWriter, string strHeader, int[] pIntegers)
     {
         binaryWriter.Write(strHeader);
         binaryWriter.Write(pIntegers.Length);
         if (pIntegers.Length > 0) foreach (int i in pIntegers) binaryWriter.Write(i);
     }
 
-    void WriteUInteger16s(string strHeader, int n, int[] pIntegers)
+    void WriteUInteger16s(BinaryWriter binaryWriter, string strHeader, int n, int[] pIntegers)
     {
         binaryWriter.Write(strHeader);
         binaryWriter.Write(n);
@@ -441,7 +442,7 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         if (pIntegers.Length > 0) foreach (int i in pIntegers) binaryWriter.Write((ushort)i);
     }
 
-    void WriteIntegers(string strHeader, int n, int[] pIntegers)
+    void WriteIntegers(BinaryWriter binaryWriter, string strHeader, int n, int[] pIntegers)
     {
         binaryWriter.Write(strHeader);
         binaryWriter.Write(n);
@@ -449,14 +450,14 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         if (pIntegers.Length > 0) foreach (int i in pIntegers) binaryWriter.Write(i);
     }
 
-    void WriteBoundingBox(string strHeader, Bounds bounds)
+    void WriteBoundingBox(BinaryWriter binaryWriter, string strHeader, Bounds bounds)
     {
         binaryWriter.Write(strHeader);
-        WriteVector(bounds.center);
-        WriteVector(bounds.extents);
+        WriteVector(binaryWriter, bounds.center);
+        WriteVector(binaryWriter, bounds.extents);
     }
 
-    void WriteMatrix(Matrix4x4 matrix)
+    void WriteMatrix(BinaryWriter binaryWriter, Matrix4x4 matrix)
     {
         binaryWriter.Write(matrix.m00);
         binaryWriter.Write(matrix.m10);
@@ -476,56 +477,56 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         binaryWriter.Write(matrix.m33);
     }
 
-    void WriteMatrix(string strHeader, Matrix4x4 matrix)
+    void WriteMatrix(BinaryWriter binaryWriter, string strHeader, Matrix4x4 matrix)
     {
         binaryWriter.Write(strHeader);
-        WriteMatrix(matrix);
+        WriteMatrix(binaryWriter, matrix);
     }
 
-    void WriteMatrix(Vector3 position, Quaternion rotation, Vector3 scale)
+    void WriteMatrix(BinaryWriter binaryWriter, Vector3 position, Quaternion rotation, Vector3 scale)
     {
         Matrix4x4 matrix = Matrix4x4.identity;
         matrix.SetTRS(position, rotation, scale);
-        WriteMatrix(matrix);
+        WriteMatrix(binaryWriter, matrix);
     }
 
-    void WriteTransform(string strHeader, Transform current)
+    void WriteTransform(BinaryWriter binaryWriter, string strHeader, Transform current)
     {
         binaryWriter.Write(strHeader);
-        WriteVector(current.localPosition);
-        WriteVector(current.localEulerAngles);
-        WriteVector(current.localScale);
-        WriteVector(current.localRotation);
+        WriteVector(binaryWriter, current.localPosition);
+        WriteVector(binaryWriter, current.localEulerAngles);
+        WriteVector(binaryWriter, current.localScale);
+        WriteVector(binaryWriter, current.localRotation);
     }
 
-    void WriteLocalMatrix(string strHeader, Transform current)
+    void WriteLocalMatrix(BinaryWriter binaryWriter, string strHeader, Transform current)
     {
         binaryWriter.Write(strHeader);
         Matrix4x4 matrix = Matrix4x4.identity;
         matrix.SetTRS(current.localPosition, current.localRotation, current.localScale);
-        WriteMatrix(matrix);
+        WriteMatrix(binaryWriter, matrix);
     }
 
-    void WriteWorldMatrix(string strHeader, Transform current)
+    void WriteWorldMatrix(BinaryWriter binaryWriter, string strHeader, Transform current)
     {
         binaryWriter.Write(strHeader);
         Matrix4x4 matrix = Matrix4x4.identity;
         matrix.SetTRS(current.position, current.rotation, current.lossyScale);
-        WriteMatrix(matrix);
+        WriteMatrix(binaryWriter, matrix);
     }
 
-    void WriteMatrixes(string strHeader, Matrix4x4[] matrixes)
+    void WriteMatrixes(BinaryWriter binaryWriter, string strHeader, Matrix4x4[] matrixes)
     {
-        WriteString(strHeader, matrixes.Length);
+        WriteString(binaryWriter, strHeader, matrixes.Length);
         if (matrixes.Length > 0)
         {
-            foreach (Matrix4x4 matrix in matrixes) WriteMatrix(matrix);
+            foreach (Matrix4x4 matrix in matrixes) WriteMatrix(binaryWriter, matrix);
         }
     }
 
-    void WriteBoneWeights(string strHeader, BoneWeight[] boneWeights, int[] boneIndices)
+    void WriteBoneWeights(BinaryWriter binaryWriter, string strHeader, BoneWeight[] boneWeights, int[] boneIndices)
     {
-        WriteString(strHeader, boneWeights.Length);
+        WriteString(binaryWriter, strHeader, boneWeights.Length);
         if (boneWeights.Length > 0)
         {
             foreach (BoneWeight bw in boneWeights)
@@ -538,9 +539,9 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         }
     }
 
-    void WriteBoneIndices(string strHeader, BoneWeight[] boneWeights, int[] boneIndices)
+    void WriteBoneIndices(BinaryWriter binaryWriter, string strHeader, BoneWeight[] boneWeights, int[] boneIndices)
     {
-        WriteString(strHeader, boneWeights.Length);
+        WriteString(binaryWriter, strHeader, boneWeights.Length);
         if (boneWeights.Length > 0)
         {
             foreach (BoneWeight bw in boneWeights)
@@ -595,18 +596,18 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
 
     void WriteMeshInfo(Mesh mesh, int[] boneIndices = null)
     {
-        WriteObjectName("<Mesh:>", mesh.vertexCount, mesh);
+        WriteObjectName(geometryWriter, "<Mesh:>", mesh.vertexCount, mesh);
 
-        WriteBoundingBox("<Bounds:>", mesh.bounds);
+        WriteBoundingBox(geometryWriter, "<Bounds:>", mesh.bounds);
 
-        if ((mesh.vertices != null) && (mesh.vertices.Length > 0)) WriteVectors("<Positions:>", mesh.vertices);
-        if ((mesh.colors != null) && (mesh.colors.Length > 0)) WriteColors("<Colors:>", mesh.colors);
-        if ((mesh.uv != null) && (mesh.uv.Length > 0)) WriteTextureCoords("<TextureCoords0:>", mesh.uv);
-        if ((mesh.uv2 != null) && (mesh.uv2.Length > 0)) WriteTextureCoords("<TextureCoords1:>", mesh.uv2);
-        if ((mesh.normals != null) && (mesh.normals.Length > 0)) WriteVectors("<Normals:>", mesh.normals);
+        if ((mesh.vertices != null) && (mesh.vertices.Length > 0)) WriteVectors(geometryWriter, "<Positions:>", mesh.vertices);
+        if ((mesh.colors != null) && (mesh.colors.Length > 0)) WriteColors(geometryWriter, "<Colors:>", mesh.colors);
+        if ((mesh.uv != null) && (mesh.uv.Length > 0)) WriteTextureCoords(geometryWriter, "<TextureCoords0:>", mesh.uv);
+        if ((mesh.uv2 != null) && (mesh.uv2.Length > 0)) WriteTextureCoords(geometryWriter, "<TextureCoords1:>", mesh.uv2);
+        if ((mesh.normals != null) && (mesh.normals.Length > 0)) WriteVectors(geometryWriter, "<Normals:>", mesh.normals);
         if ((mesh.boneWeights != null) && (mesh.boneWeights.Length > 0)) {
-            WriteBoneWeights("<BoneWeights:>", mesh.boneWeights, boneIndices);
-            WriteBoneIndices("<BoneIndices:>", mesh.boneWeights, boneIndices);
+            WriteBoneWeights(geometryWriter, "<BoneWeights:>", mesh.boneWeights, boneIndices);
+            WriteBoneIndices(geometryWriter, "<BoneIndices:>", mesh.boneWeights, boneIndices);
         }
 
         if ((mesh.normals != null && mesh.normals.Length > 0) && (mesh.tangents != null && mesh.tangents.Length > 0))
@@ -619,17 +620,17 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
                 biTangents[i] = Vector3.Normalize(Vector3.Cross(mesh.normals[i], tangents[i])) * mesh.tangents[i].w;
             }
 
-            WriteVectors("<Tangents:>", tangents);
-            WriteVectors("<BiTangents:>", biTangents);
+            WriteVectors(geometryWriter, "<Tangents:>", tangents);
+            WriteVectors(geometryWriter, "<BiTangents:>", biTangents);
         }
 
-        WriteInteger("<Submeshes:>", mesh.subMeshCount);
+        WriteInteger(geometryWriter, "<Submeshes:>", mesh.subMeshCount);
         int indexCount = 0;
         for (int i = 0; i < mesh.subMeshCount; i++) {
             int[] subindicies = mesh.GetTriangles(i);
             indexCount += subindicies.Length;
         }
-        binaryWriter.Write(indexCount);
+        geometryWriter.Write(indexCount);
 
         if (mesh.subMeshCount > 0)
         {
@@ -637,27 +638,27 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
                 for (int i = 0; i < mesh.subMeshCount; i++)
                 {
                     int[] subindicies = mesh.GetTriangles(i);
-                    WriteUInteger16s("<Submesh:>", i, subindicies);
+                    WriteUInteger16s(geometryWriter, "<Submesh:>", i, subindicies);
                 }
             }
             else {
                 for (int i = 0; i < mesh.subMeshCount; i++)
                 {
                     int[] subindicies = mesh.GetTriangles(i);
-                    WriteIntegers("<Submesh:>", i, subindicies);
+                    WriteIntegers(geometryWriter, "<Submesh:>", i, subindicies);
                 }
             }
         }
 
-        WriteString("</Mesh>");
+        WriteString(geometryWriter, "</Mesh>");
     }
 
-    void WriteMapRef(string header, string path) {
-        WriteString(header);
-        WriteMapRef(path);
+    void WriteMapRef(BinaryWriter binaryWriter, string header, string path) {
+        WriteString(geometryWriter, header);
+        WriteMapRef(geometryWriter, path);
     }
 
-    void WriteMapRef(string path) 
+    void WriteMapRef(BinaryWriter binaryWriter, string path) 
     {
         if( m_pTextureIndexInfo.TryGetValue(path, out var value) ) {
             // Item2 : resourceTypeIndex -> type
@@ -682,18 +683,18 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
 
     void WriteMaterials(Material[] materials)
     {
-        WriteInteger("<Materials:>", materials.Length);
+        WriteInteger(geometryWriter, "<Materials:>", materials.Length);
         for (int i = 0; i < materials.Length; i++)
         {
-            WriteInteger("<Material:>", i);
+            WriteInteger(geometryWriter, "<Material:>", i);
 
             // temporarily write default values
-            WriteFloat("<AmbientOcclusion:>", 1.0f);
+            WriteFloat(geometryWriter, "<AmbientOcclusion:>", 1.0f);
 
             if (materials[i].HasProperty("_Color"))
             {
                 Color albedo = materials[i].GetColor("_Color");
-                WriteColor("<AlbedoColor:>", albedo);
+                WriteColor(geometryWriter, "<AlbedoColor:>", albedo);
             }
             if (materials[i].HasProperty("_EmissionColor"))
             {
@@ -704,54 +705,54 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
                     emission = materials[i].GetColor("_EmissionColor");
                 }
 
-                WriteColor("<EmissiveColor:>", emission);
+                WriteColor(geometryWriter, "<EmissiveColor:>", emission);
             }
             if (materials[i].HasProperty("_Smoothness"))
             {
-                WriteFloat("<Smoothness:>", materials[i].GetFloat("_Smoothness"));
+                WriteFloat(geometryWriter, "<Smoothness:>", materials[i].GetFloat("_Smoothness"));
             }
             if (materials[i].HasProperty("_Metallic"))
             {
-                WriteFloat("<Metallic:>", materials[i].GetFloat("_Metallic"));
+                WriteFloat(geometryWriter, "<Metallic:>", materials[i].GetFloat("_Metallic"));
             }
             if (materials[i].HasProperty("_MainTex"))
             {
                 Texture mainAlbedoMap = materials[i].GetTexture("_MainTex");
                 if (mainAlbedoMap != null)
-                    WriteMapRef("<AlbedoMap:>", mainAlbedoMap.name);
+                    WriteMapRef(geometryWriter, "<AlbedoMap:>", mainAlbedoMap.name);
             }
             if (materials[i].HasProperty("_BumpMap"))
             {
                 Texture bumpMap = materials[i].GetTexture("_BumpMap");
                 if (bumpMap != null)
-                    WriteMapRef("<NormalMap:>", bumpMap.name);
+                    WriteMapRef(geometryWriter, "<NormalMap:>", bumpMap.name);
             }
             if (materials[i].HasProperty("_MetallicGlossMap"))
             {
                 Texture metallicMap = materials[i].GetTexture("_MetallicGlossMap");
                 if (metallicMap != null)
-                    WriteMapRef("<MetallicSmoothnessMap:>", metallicMap.name);
+                    WriteMapRef(geometryWriter, "<MetallicSmoothnessMap:>", metallicMap.name);
             }
             if (materials[i].HasProperty("_EmissionMap"))
             {
                 Texture emissionMap = materials[i].GetTexture("_EmissionMap");
                 if (emissionMap != null)
-                    WriteMapRef("<EmissionMap:>", emissionMap.name);
+                    WriteMapRef(geometryWriter, "<EmissionMap:>", emissionMap.name);
             }
             if (materials[i].HasProperty("_OcclusionMap"))
             {
                 Texture occlusionMap = materials[i].GetTexture("_OcclusionMap");
                 if (occlusionMap != null)
-                    WriteMapRef("<OcclusionMap:>", occlusionMap.name);
+                    WriteMapRef(geometryWriter, "<OcclusionMap:>", occlusionMap.name);
             }
-            WriteString("</Material>");
+            WriteString(geometryWriter, "</Material>");
         }
-        WriteString("</Materials>");
+        WriteString(geometryWriter, "</Materials>");
     }
 
     void WriteFrameInfo(Transform current)
     {
-        WriteLocalMatrix("<Xform:>", current);
+        WriteLocalMatrix(geometryWriter, "<Xform:>", current);
 
         MeshRenderer meshRenderer = current.gameObject.GetComponent<MeshRenderer>();
         MeshFilter meshFilter = current.gameObject.GetComponent<MeshFilter>();
@@ -800,10 +801,10 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
 
     void WriteFrameHierarchyInfo(Transform current)
     {
-        WriteObjectName("<Node:>", current.gameObject);
+        WriteObjectName(geometryWriter, "<Node:>", current.gameObject);
         WriteFrameInfo(current);
 
-        WriteInteger("<Children:>", current.childCount);
+        WriteInteger(geometryWriter, "<Children:>", current.childCount);
 
         if (current.childCount > 0)
         {
@@ -812,23 +813,23 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
                 WriteFrameHierarchyInfo(current.GetChild(k));
             }
         }
-        WriteString("</Node>");
+        WriteString(geometryWriter, "</Node>");
     }
 
     void WriteBoneHierarchyInfo(Transform current, int n = 0)
     {
-        WriteObjectName("<Bone:>", current.gameObject);
-        WriteInteger("<BoneIndex:>", n);
-        WriteLocalMatrix("<Xform:>", current);
-        WriteMatrix("<BindPose:>", bindposes[n]);
+        WriteObjectName(skeletonWriter, "<Bone:>", current.gameObject);
+        WriteInteger(skeletonWriter, "<BoneIndex:>", n);
+        WriteLocalMatrix(skeletonWriter, "<Xform:>", current);
+        WriteMatrix(skeletonWriter, "<BindPose:>", bindposes[n]);
 
-        WriteInteger("<Children:>", current.childCount);
+        WriteInteger(skeletonWriter, "<Children:>", current.childCount);
 
         for (int k = 0; k < current.childCount; k++)
         {
             WriteBoneHierarchyInfo(current.GetChild(k), n + 1);
         }
-        WriteString("</Bone>");
+        WriteString(skeletonWriter, "</Bone>");
     }
 
     void processBoneHierarchy(Transform current)
@@ -881,28 +882,28 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
 
     void ExtractGeometry()
     {
-        WriteString("<Geometry:>");
+        WriteString(geometryWriter, "<Geometry:>");
 
         int nodeCnt = 0;
         accNodeCntRecursive(geometry, ref nodeCnt);
-        WriteInteger("<NodeCnt:>", nodeCnt);
+        WriteInteger(geometryWriter, "<NodeCnt:>", nodeCnt);
 
         WriteFrameHierarchyInfo(geometry);
 
-        WriteString("</Geometry>");
+        WriteString(geometryWriter, "</Geometry>");
     }
 
     void ExtractSkeleton()
     {
-        WriteString("<Skeleton:>");
+        WriteString(skeletonWriter, "<Skeleton:>");
 
         int nodeCnt = 0;
         accNodeCntRecursive(skeleton, ref nodeCnt);
-        WriteInteger("<BoneCnt:>", nodeCnt);
+        WriteInteger(skeletonWriter, "<BoneCnt:>", nodeCnt);
 
         WriteBoneHierarchyInfo(skeleton);
 
-        WriteString("</Skeleton>");
+        WriteString(skeletonWriter, "</Skeleton>");
     }
 
     void Start()
@@ -913,7 +914,8 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
             return;
         }
 
-        binaryWriter = new BinaryWriter(File.Open(string.Copy(transform.parent.gameObject.name).Replace(" ", "_") + ".bin", FileMode.Create));
+        geometryWriter = new BinaryWriter(File.Open(string.Copy(transform.parent.gameObject.name).Replace(" ", "_") + ".bin", FileMode.Create));
+        skeletonWriter = new BinaryWriter(File.Open(string.Copy(transform.parent.gameObject.name).Replace(" ", "_") + ".anim", FileMode.Create));
         bones = new List<Transform>();
         bindposes = new List<Matrix4x4>();
 
@@ -921,15 +923,17 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         ArrangeTextureList(geometry);
         CalculateResourceIndices();
 
-        WriteDictionary();
+        WriteDictionary(geometryWriter);
 
 
         if (skeleton != null) processBones();
         ExtractGeometry();
         if (skeleton != null) ExtractSkeleton();
 
-        binaryWriter.Flush();
-        binaryWriter.Close();
+        geometryWriter.Flush();
+        geometryWriter.Close();
+        skeletonWriter.Flush();
+        skeletonWriter.Close();
 
         print("Model Binary Write Completed");
     }
