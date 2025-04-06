@@ -306,6 +306,42 @@ protected:
 	RootSignature root_;
 };
 
+class ComputeShader {
+protected:
+	static std::size_t calcConstantBufferSize(std::size_t size) {
+		return (size + 255ull) & ~255ull;
+	}
+
+public:
+	ComputeShader(const RootSignature& root)
+		: blob_(), root_(root) {}
+
+	virtual ~ComputeShader() = default;
+
+	const auto& blob() const noexcept {
+		return blob_;
+	}
+
+	void loadBlobsIfNot() {
+		if (!blob_.has_value()) {
+			loadBlobs();
+		}
+	}
+
+	const RootSignature& rootSiganture() const noexcept {
+		return root_;
+	}
+
+	virtual void bindRootParams(D3D12GfxCmdList& cmdList) = 0;
+	virtual void loadBlobs() = 0;
+	virtual void releaseBlobs() = 0;
+
+
+private:
+	std::optional<ShaderBlob> blob_;
+	RootSignature root_;
+};
+
 inline std::optional<std::size_t> RenderProtocol::compatibleLayout(
 	const RefMesh& mesh
 ) const {
