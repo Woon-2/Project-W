@@ -127,8 +127,8 @@ void Core::loadStaticTexture( const Core::TextureKey& key,
     }
 }
 
-void Core::loadRefModel(const Core::RefModelKey& key) {
-    refModelStorage_.loadModel(key, refModelPaths_.at(key), staticTexStorage_, device_, cmdList_);
+[[maybe_unused]] d3d12::RefModel& Core::loadRefModel(const Core::RefModelKey& key) {
+    return refModelStorage_.loadModel(key, refModelPaths_.at(key), staticTexStorage_, device_, cmdList_);
 }
 
 void Core::layoutRefModelVBs( const d3d12::RefModelStorage::ID& key, std::size_t vbLayoutIdx,
@@ -139,6 +139,20 @@ void Core::layoutRefModelVBs( const d3d12::RefModelStorage::ID& key, std::size_t
     }
 
     d3d12::arrangeVBs(refModelStorage_.get(key), device_, cmdList_, vbLayoutIdx, inputLayout);
+}
+
+[[maybe_unused]] Skeleton& Core::loadAnim(const AnimationKey& key) {
+    return animationStorage_.loadSkeleton(key, animationPaths_.at(key));
+}
+
+[[maybe_unused]] d3d12::RefModel& Core::loadRefModelWithAnim(
+    const RefModelKey& key, const AnimationKey& animKey
+) {
+    auto& refModel = loadRefModel(key);
+    auto& skeleton = loadAnim(animKey);
+    refModel.linkSkeleton(&skeleton);
+
+    return refModel;
 }
 
 void Core::layoutRefModelVBs(const d3d12::RefModelStorage::ID& key, std::size_t vbLayoutIdx,

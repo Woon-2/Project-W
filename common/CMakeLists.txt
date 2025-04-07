@@ -162,6 +162,7 @@ add_library(ecsClient
     src/game/level.cpp include/game/level.hpp
     src/coord.cpp include/coord.hpp
     src/game/physicsSystem.cpp include/game/physicsSystem.hpp
+    src/game/animSystem.cpp include/game/animSystem.hpp
 
     src/ecs.cpp include/ecs.hpp
     include/ecsExcept.hpp
@@ -285,6 +286,7 @@ add_library(gfx
     src/d3d12util/d3d12ShaderXX.cpp include/d3d12util/d3d12ShaderXX.hpp
     src/d3d12util/d3d12RenderPass.cpp include/d3d12util/d3d12RenderPass.hpp
     src/d3d12engine/d3d12Engine.cpp include/d3d12engine/d3d12Engine.hpp
+    src/game/animSystem.cpp include/game/animSystem.hpp
     
     include/shaderPath.hpp
     include/enumUtil.hpp

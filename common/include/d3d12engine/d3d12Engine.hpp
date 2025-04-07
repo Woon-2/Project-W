@@ -44,6 +44,7 @@ public:
     using TextureKey = std::string;
     using RefModelKey = d3d12::RefModelStorage::ID;
     using BVHPathKey = d3d12::BVHPathStorage::ID;
+    using AnimationKey = d3d12::AnimationStorage::ID;
 
     Core();
 
@@ -81,7 +82,9 @@ public:
 
     void loadStaticTexture(const TextureKey& key, d3d12::TextureResource::Type type);
     void loadStaticTexture(const TextureKey& key, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc);
-    void loadRefModel(const RefModelKey& key);
+    [[maybe_unused]] d3d12::RefModel& loadRefModel(const RefModelKey& key);
+    [[maybe_unused]] Skeleton& loadAnim(const AnimationKey& key);
+    [[maybe_unused]] d3d12::RefModel& loadRefModelWithAnim(const RefModelKey& key, const AnimationKey& animKey);
     void loadBVHPath(const BVHPathKey& key, const std::filesystem::path& path) {
         bvhPathStorage_.regist(key, path);
     }
@@ -117,6 +120,10 @@ public:
         refModelPaths_[key] = path;
     }
 
+    void registAnimPath(const AnimationKey& key, const std::filesystem::path& path) {
+        animationPaths_[key] = path;
+    }
+
     void removeRefModelPath(const RefModelKey& key) {
         refModelPaths_.erase(key);
     }
@@ -128,6 +135,7 @@ public:
     const d3d12::StaticTextureStorage& staticTexStorage() const NOEXCEPT { return staticTexStorage_; }
     const d3d12::RefModelStorage& refModelStorage() const NOEXCEPT { return refModelStorage_; }
     const d3d12::BVHPathStorage& bvhPathStorage() const NOEXCEPT { return bvhPathStorage_; }
+    const d3d12::AnimationStorage& animStorage() const NOEXCEPT { return animationStorage_; }
 
 private:
     d3d12::RefModelStorage& refModelStorage() NOEXCEPT { return refModelStorage_; }
@@ -136,6 +144,7 @@ private:
     d3d12::StaticTextureStorage staticTexStorage_;
     d3d12::RefModelStorage refModelStorage_;
     d3d12::BVHPathStorage bvhPathStorage_;
+    d3d12::AnimationStorage animationStorage_;
     d3d12::SamplerStorage samStorage_;
     dx::DXGIFactory factory_;
     d3d12::D3D12Device device_;
@@ -151,6 +160,7 @@ private:
 
     std::map< TextureKey, std::filesystem::path > texturePaths_;
     std::map< RefModelKey, std::filesystem::path > refModelPaths_;
+    std::map< AnimationKey, std::filesystem::path > animationPaths_;
 };
 
 class Model : public ecs::Component {

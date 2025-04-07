@@ -39,7 +39,8 @@ enum class AssetTexture {
 
 struct ModelInfo {
     gfx::d3d12engine::Core::RefModelKey key;
-    std::filesystem::path path;
+    std::filesystem::path geometryPath;
+    std::filesystem::path animationPath;
 };
 
 struct TextureInfo {

@@ -9,23 +9,24 @@ const ModelInfo& assetModelInfo(AssetModel asset) {
     static auto sAssetModelInfos = std::vector<ModelInfo>{
         ModelInfo{
             .key = "GO_OH-58D",
-            .path = resourcePath/"models/HelicopterModel/GO_OH-58D.bin"
+            .geometryPath = resourcePath/"models/HelicopterModel/GO_OH-58D.bin"
         },
         ModelInfo{
             .key = "GO_Character",
-            .path = resourcePath/"models/Character/GO_Character.bin"
+            .geometryPath = resourcePath/"models/Character/GO_Character.bin",
+            .animationPath = resourcePath/"models/Character/GO_Character.anim"
         },
         ModelInfo{
             .key = "GO_URP_Tree_0",
-            .path = resourcePath/"models/Trees/GO_URP_Tree_0.bin"
+            .geometryPath = resourcePath/"models/Trees/GO_URP_Tree_0.bin"
         },
         ModelInfo{
             .key = "GO_URP_Tree_1",
-            .path = resourcePath/"models/Trees/GO_URP_Tree_1.bin"
+            .geometryPath = resourcePath/"models/Trees/GO_URP_Tree_1.bin"
         },
         ModelInfo{
             .key = "GO_URP_Tree_2",
-            .path = resourcePath/"models/Trees/GO_URP_Tree_2.bin"
+            .geometryPath = resourcePath/"models/Trees/GO_URP_Tree_2.bin"
         }
     };
 

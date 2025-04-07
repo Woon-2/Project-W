@@ -9,6 +9,8 @@
 
 #include "vertex.hpp"
 
+#include "game/animSystem.hpp"
+
 #include <bitset>
 #include <filesystem>
 #include <cstdint>
@@ -286,10 +288,10 @@ public:
 
 class StaticTextureStorage {
 public:
-    void load( const std::filesystem::path& path, TextureResource::Type type,
+    [[maybe_unused]] DescriptorGPU& load( const std::filesystem::path& path, TextureResource::Type type,
         D3D12Device& device, D3D12GfxCmdList& cmdList, DescriptorRange<DescriptorHeapGPU>& range
     );
-    void load( const std::filesystem::path& path, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc,
+    [[maybe_unused]] DescriptorGPU& load( const std::filesystem::path& path, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc,
         D3D12Device& device, D3D12GfxCmdList& cmdList, DescriptorRange<DescriptorHeapGPU>& range
     );
     const DescriptorGPU& get(const std::filesystem::path& path) const;
@@ -577,40 +579,8 @@ public:
         const RefModel* pRefModel_;
     };
 
-    class Bone {
-    public:
-        friend class RefModel;
-        Bone(const RefModel* pRefModel = nullptr)
-            : toParent_(), toLocal_(), name_(), children_(), pRefModel_(pRefModel),
-            boneIdx_(-1) {}
-        Bone(const Bone& other) = delete;
-        Bone(Bone&& other) noexcept;
-        Bone& operator=(const Bone& other) = delete;
-        Bone& operator=(Bone&& other) noexcept;
-        ~Bone() = default;
-
-        void addChild(Bone* child);
-        mu::Mat4x4 MU_CALLCONV toParentMatrix() const noexcept {
-            return toParent_;
-        }
-        mu::Mat4x4 MU_CALLCONV toLocalMatrix() const noexcept {
-            return toLocal_;
-        }
-        auto& children() noexcept { return children_; }
-        const auto& children() const noexcept { return children_; }
-        int boneIdx() const noexcept { return boneIdx_; }
-
-    private:
-        mu::Mat4x4 toParent_;
-        mu::Mat4x4 toLocal_;
-        std::string name_;
-        std::vector<Bone*> children_;
-        const RefModel* pRefModel_;
-        int boneIdx_;
-    };
-
     RefModel()
-        : nodeStorage_(), boneStorage_(), textureMap_(), pRoot_(nullptr), pRootBone_(nullptr) {}
+        : nodeStorage_(), textureMap_(), pRoot_(nullptr) {}
 
     ~RefModel() = default;
     RefModel(const RefModel& other) = delete;
@@ -618,7 +588,7 @@ public:
     RefModel& operator=(const RefModel& other) = delete;
     RefModel& operator=(RefModel&& other) noexcept;
 
-    static RefModel loadHierarchyFromFile( const std::filesystem::path& path,
+    static RefModel loadHierarchyFromFile( const std::filesystem::path& geometryPath,
         D3D12Device& device, D3D12GfxCmdList& cmdList, const StaticTextureStorage& sts
     );
 
@@ -635,19 +605,25 @@ public:
     Node* root() noexcept { return pRoot_; }
     const Node* root() const noexcept { return pRoot_; }
 
+    bool hasSkeleton() const noexcept {
+        return pSkeleton_ != nullptr;
+    }
+    void linkSkeleton(const Skeleton* skeleton) noexcept {
+        pSkeleton_ = skeleton;
+    }
+    const Skeleton* skeleton() const noexcept {
+        return pSkeleton_;
+    }
+
 protected:
     static void loadNodesFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
         FILE* pInFile, Node& node, RefModel& model
     );
-    static void loadBonesFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
-        FILE* pInFile, Bone& bone, RefModel& model
-    );
 
     std::vector<Node> nodeStorage_;
-    std::vector<Bone> boneStorage_;
     std::map<Material::MapRef, DescriptorGPU> textureMap_;
     Node* pRoot_;
-    Bone* pRootBone_;
+    const Skeleton* pSkeleton_;
 };
 
 class RefMesh {
@@ -705,7 +681,7 @@ class RefModelStorage {
 public:
     using ID = std::string;
 
-    void loadModel( const ID& key, const std::filesystem::path& path,
+    [[maybe_unused]] RefModel& loadModel( const ID& key, const std::filesystem::path& path,
         const StaticTextureStorage& sts,
         D3D12Device& device, D3D12GfxCmdList& cmdList
     );
@@ -728,6 +704,33 @@ public:
 
 private:
     std::map<ID, RefModel> map_;
+};
+
+class AnimationStorage {
+public:
+    using ID = std::string;
+
+    [[maybe_unused]] Skeleton& loadSkeleton( const ID& key, const std::filesystem::path& path );
+
+    const Skeleton& get(const ID& key) const {
+        return skeletonMap_.at(key);
+    }
+
+    Skeleton& get(const ID& key) {
+        return skeletonMap_.at(key);
+    }
+
+    Skeleton& operator[](const ID& key) {
+        return skeletonMap_[key];
+    }
+
+    bool contains(const ID& key) const {
+        return skeletonMap_.contains(key);
+    }
+
+
+private:
+    std::map<ID, Skeleton> skeletonMap_;
 };
 
 class BVHPathStorage {

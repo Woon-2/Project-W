@@ -198,8 +198,14 @@ void Stage::loadTextures(gfx::d3d12::D3D12GfxCmdList& cmdList) {
 
 void loadModel(gfx::d3d12engine::Core& core, AssetModel key, Renderer& renderer) {
     auto modelInfo = assetModelInfo(key);
-    core.registRefModelPath(modelInfo.key, modelInfo.path);
-    core.loadRefModel(modelInfo.key);
+    core.registRefModelPath(modelInfo.key, modelInfo.geometryPath);
+    if (!modelInfo.animationPath.empty()) {
+        core.registAnimPath(modelInfo.key, modelInfo.animationPath);
+        core.loadRefModelWithAnim(modelInfo.key, modelInfo.key);
+    }
+    else {
+        core.loadRefModel(modelInfo.key);
+    }
     renderer.layoutVBsPBR(core, modelInfo.key, 1);
 }
 
