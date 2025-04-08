@@ -1,5 +1,7 @@
 #include "game/animSystem.hpp"
 
+#include <cmath>
+
 #include "TMP.hpp"
 
 Bone::Bone(Bone&& other) noexcept
@@ -200,4 +202,125 @@ void Skeleton::loadBonesFromFile(std::ifstream& in, Bone& bone, Skeleton& skelet
             break;
         }
     }
+}
+
+AnimInstance::AnimInstance(const Skeleton* pSkeleton, const AnimClip* pAnimClip)
+    : boneXformCache_(pSkeleton->bones().size()),
+    keyFrameCache_(), pAnimClip_(pAnimClip), pSkeleton_(pSkeleton),
+    elapsedTime_(0.0f), stage_(Stage::None) {
+    if (!pAnimClip_) {
+        throw std::runtime_error("AnimInstance requires a valid AnimClip.");
+    }
+
+    if (!pSkeleton_) {
+        throw std::runtime_error("AnimInstance requires a valid Skeleton.");
+    }
+
+    if (pAnimClip_->boneCnt() != pSkeleton_->bones().size()) {
+        throw std::runtime_error("AnimClip bone count does not match Skeleton bone count.");
+    }
+
+    // initialize keyFrameCache_ with the first key frame of each bone
+    keyFrameCache_.reserve(pSkeleton_->bones().size());
+    for (std::size_t i = 0; i < pSkeleton->bones().size(); ++i) {
+        keyFrameCache_.push_back(pAnimClip_->keyFrameBegin(static_cast<BoneIdx>(i)));
+    }
+}
+
+void AnimInstance::update(float deltaTime) {
+    if (stage_ != Stage::None) {
+        throw std::runtime_error(
+            "[Description] AnimInstance::update: expected AnimInstance stage: "
+            + std::to_string(etoi(Stage::None)) +
+            " but got: " + std::to_string(etoi(stage_))
+        );
+    }
+
+    elapsedTime_ += deltaTime;
+
+    if (elapsedTime_ > pAnimClip_->duration()) {
+
+        if (pAnimClip_->flags() & AnimClip::Flags::Loop) {
+            elapsedTime_ = std::fmod(elapsedTime_, pAnimClip_->duration());
+
+            // reset key frame cache
+            for (std::size_t i = 0; i < pSkeleton_->bones().size(); ++i) {
+                keyFrameCache_[i] = pAnimClip_->keyFrameBegin(static_cast<BoneIdx>(i));
+            }
+        }
+        else {
+            // do something, e.g., stop the animation or clamp to duration
+            return;
+        }
+    }
+
+    for (std::size_t i = 0; i < pSkeleton_->bones().size(); ++i) {
+        auto& keyFrame = keyFrameCache_[i];
+        auto nextKeyFrame = std::next(keyFrame);
+
+        // every key frame must end with sentinal key frame
+        // which has time = duration
+        while (nextKeyFrame->time <= elapsedTime_) {
+            keyFrame = nextKeyFrame;
+            ++nextKeyFrame;
+        }
+    }
+
+    stage_ = Stage::CalcLocal;
+}
+
+void AnimInstance::calcLocals() {
+    if (stage_ != Stage::CalcLocal) {
+        throw std::runtime_error(
+            "[Description] AnimInstance::calcLocals: expected AnimInstance stage: "
+            + std::to_string(etoi(Stage::CalcLocal)) +
+            " but got: " + std::to_string(etoi(stage_))
+        );
+    }
+
+    // calculate local transforms for each bone
+    // with compute shader
+
+    // lhsMat, rhsMat, ratio => localMat
+
+    stage_ = Stage::CalcWorld;
+}
+
+void AnimInstance::calcWorlds() {
+    if (stage_ != Stage::CalcWorld) {
+        throw std::runtime_error(
+            "[Description] AnimInstance::calcWorlds: expected AnimInstance stage: "
+            + std::to_string(etoi(Stage::CalcWorld)) +
+            " but got: " + std::to_string(etoi(stage_))
+        );
+    }
+
+    auto pRootBone = pSkeleton_->root();
+
+    traverseBone(*pRootBone);
+
+    stage_ = Stage::CalcFinal;
+}
+
+void AnimInstance::traverseBone(const Bone& bone) {
+    boneXformCache_[bone.boneIdx()] *= bone.toParentMatrix();
+
+    for (const auto& child : bone.children()) {
+        traverseBone(*child);
+    }
+}
+
+void AnimInstance::calcFinals() {
+    if (stage_ != Stage::CalcFinal) {
+        throw std::runtime_error(
+            "[Description] AnimInstance::calcFinals: expected AnimInstance stage: "
+            + std::to_string(etoi(Stage::CalcFinal)) +
+            " but got: " + std::to_string(etoi(stage_))
+        );
+    }
+
+    // calculate final transforms for each bone
+    // with compute shader
+
+    stage_ = Stage::None;
 }
