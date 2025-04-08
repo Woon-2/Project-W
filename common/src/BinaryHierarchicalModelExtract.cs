@@ -950,8 +950,11 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
 
         WriteString(binaryWriter, "<AnimationClip:>", clip.name);
 
+        WriteInteger(binaryWriter, "<BoneCnt:>", bones.Count);
+
         int fps = (int)clip.frameRate;
-        int keyFrameCnt = Mathf.CeilToInt(clip.length * fps);
+        int keyFrameCnt = Mathf.CeilToInt(clip.length * fps) + 1;
+        WriteFloat(binaryWriter, "<Duration:>", (keyFrameCnt - 1) / (float)fps);
         WriteInteger(binaryWriter, "<KeyFrames:>", keyFrameCnt);
 
         Vector3[] lastPositions = new Vector3[bones.Count];
@@ -963,7 +966,7 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
             float time = i / (float)fps;
             clip.SampleAnimation(go, time);
 
-            WriteInteger(binaryWriter, "<KeyFrame:>", i);
+            WriteString(binaryWriter, "<KeyFrame:>");
             WriteFloat(binaryWriter, time);
             for (int j = 0; j < bones.Count; ++j)
             {
@@ -983,7 +986,7 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
                     continue;
                 }
 
-                WriteInteger(binaryWriter, j);
+                WriteInteger(binaryWriter, "<BoneIdx:>", j);
                 WriteVector(binaryWriter, pos);
                 WriteVector(binaryWriter, rot);
                 WriteVector(binaryWriter, scale);
@@ -992,6 +995,7 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
                 lastRotations[j] = rot;
                 lastScales[j] = scale;
             }
+            WriteString(binaryWriter, "</KeyFrame>");
         }
 
         WriteString(binaryWriter, "</AnimationClip>");
@@ -1023,14 +1027,14 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
             return;
         }
 
-        WriteString(binaryWriter, "<Animations:>", animClips.Length);
+        WriteString(binaryWriter, "<AnimationClips:>", animClips.Length);
 
         foreach (var clip in animClips)
         {
             ExtractClip(clip, binaryWriter);
         }
 
-        WriteString(binaryWriter, "</Animations>");
+        WriteString(binaryWriter, "</AnimationClips>");
     }
 
     void Start()
