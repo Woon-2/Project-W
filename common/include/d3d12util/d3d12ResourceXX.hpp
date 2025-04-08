@@ -711,26 +711,31 @@ public:
     using ID = std::string;
 
     [[maybe_unused]] Skeleton& loadSkeleton( const ID& key, const std::filesystem::path& path );
+    [[maybe_unused]] SkeletonAnimClipsPair& loadSkAnim( const ID& key, const std::filesystem::path& path );
 
-    const Skeleton& get(const ID& key) const {
-        return skeletonMap_.at(key);
+    const Skeleton& getSk(const ID& key) const {
+        return map_.at(key).skeleton;
     }
 
-    Skeleton& get(const ID& key) {
-        return skeletonMap_.at(key);
+    Skeleton& getSk(const ID& key) {
+        return map_.at(key).skeleton;
     }
 
-    Skeleton& operator[](const ID& key) {
-        return skeletonMap_[key];
+    auto& getAnimClips(const ID& key) {
+        return map_.at(key).animClips;
+    }
+
+    const auto& getAnimClips(const ID& key) const {
+        return map_.at(key).animClips;
     }
 
     bool contains(const ID& key) const {
-        return skeletonMap_.contains(key);
+        return map_.contains(key);
     }
 
 
 private:
-    std::map<ID, Skeleton> skeletonMap_;
+    std::map<ID, SkeletonAnimClipsPair> map_;
 };
 
 class BVHPathStorage {

@@ -1255,14 +1255,25 @@ void RefModel::arrangeVBs( D3D12Device& device, D3D12GfxCmdList& cmdList,
     }
 }
 
-[[maybe_unused]] RefModel& RefModelStorage::loadModel( const ID& key, const std::filesystem::path& path,
+[[maybe_unused]] RefModel& RefModelStorage::loadModel(
+    const ID& key, const std::filesystem::path& path,
     const StaticTextureStorage& sts, D3D12Device& device, D3D12GfxCmdList& cmdList
 ) {
     return map_[key] = RefModel::loadHierarchyFromFile(path, device, cmdList, sts);
 }
 
-[[maybe_unused]] Skeleton& AnimationStorage::loadSkeleton( const ID& key, const std::filesystem::path& path ) {
-    return skeletonMap_[key] = Skeleton::loadHierarchyFromFile(path);
+[[maybe_unused]] Skeleton& AnimationStorage::loadSkeleton(
+    const ID& key, const std::filesystem::path& path
+) {
+    return ( map_[key] = SkeletonAnimClipsPair{
+        .skeleton = Skeleton::loadHierarchyFromFile(path)
+    } ).skeleton;
+}
+
+[[maybe_unused]] SkeletonAnimClipsPair& AnimationStorage::loadSkAnim( 
+    const ID& key, const std::filesystem::path& path
+) {
+    return map_[key] = loadSkeletonAndAnimClipFromFile(path);
 }
 
 Submesh::Submesh(Mesh* parent, const RefSubmesh* pRefSubmesh)

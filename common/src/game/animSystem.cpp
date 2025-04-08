@@ -102,12 +102,16 @@ Skeleton& Skeleton::operator=(Skeleton&& other) noexcept {
 }
 
 Skeleton Skeleton::loadHierarchyFromFile(const std::filesystem::path& path) {
-    Skeleton skeleton;
-
-    auto in = std::ifstream(path.string(), std::ios::binary);
+    auto in = std::ifstream(path, std::ios::binary);
     if (!in) {
         throw std::runtime_error("Failed to open file: " + path.string());
     }
+
+    return loadHierarchyFromStream(in);
+}
+
+Skeleton Skeleton::loadHierarchyFromStream(std::istream& in) {
+    Skeleton skeleton;
 
     char pstrToken[64] = { '\0' };
 
@@ -138,7 +142,7 @@ Skeleton Skeleton::loadHierarchyFromFile(const std::filesystem::path& path) {
         if (!strcmp(pstrToken, "<Bone:>")) {
             auto& rootBone = skeleton.boneStorage_.emplace_back(&skeleton);
             skeleton.pRoot_ = &rootBone;
-            loadBonesFromFile(in, rootBone, skeleton);
+            loadBonesFromStream(in, rootBone, skeleton);
         }
         else if (!strcmp(pstrToken, "</Skeleton>")) {
             break;
@@ -151,7 +155,7 @@ Skeleton Skeleton::loadHierarchyFromFile(const std::filesystem::path& path) {
     return skeleton;
 }
 
-void Skeleton::loadBonesFromFile(std::ifstream& in, Bone& bone, Skeleton& skeleton) {
+void Skeleton::loadBonesFromStream(std::istream& in, Bone& bone, Skeleton& skeleton) {
     char pstrToken[64] = { '\0' };
 
 	std::uint8_t nStrLength = 0;
@@ -193,7 +197,7 @@ void Skeleton::loadBonesFromFile(std::ifstream& in, Bone& bone, Skeleton& skelet
                         throw std::runtime_error("Bone token expected but got: " + std::string(pstrToken));
                     }
 
-                    loadBonesFromFile(in, child, skeleton);
+                    loadBonesFromStream(in, child, skeleton);
                     bone.addChild(&child);
                 }
             }
@@ -202,6 +206,163 @@ void Skeleton::loadBonesFromFile(std::ifstream& in, Bone& bone, Skeleton& skelet
             break;
         }
     }
+}
+
+AnimClip AnimClip::loadClipFromStream(std::istream& in) {
+    AnimClip animClip;
+
+    char pstrToken[64] = { '\0' };
+
+	std::uint8_t nStrLength = 0;
+	std::size_t nReads = 0;
+
+
+    readStream(in, nStrLength);
+    auto clipName = std::string(nStrLength, '\0');
+    readStream(in, clipName.data(), nStrLength);
+    animClip.name_ = clipName;
+
+    // allocate memory spaces for key frames
+    // with extracted bone count and key frame count
+    readStream(in, nStrLength);
+    readStream(in, pstrToken, nStrLength);
+    if (std::strcmp(pstrToken, "<BoneCnt:>")) {
+        throw std::runtime_error("expected BoneCnt token but got: " + std::string(pstrToken));
+    }
+
+    int boneCnt{};
+    readStream(in, boneCnt);
+    animClip.keyFrames_.resize(boneCnt);
+
+    readStream(in, nStrLength);
+    readStream(in, pstrToken, nStrLength);
+    if (std::strcmp(pstrToken, "<Duration:>")) {
+        throw std::runtime_error("expected Duration token but got: " + std::string(pstrToken));
+    }
+
+    float duration{};
+    readStream(in, duration);
+    animClip.duration_ = duration;
+
+    readStream(in, nStrLength);
+    readStream(in, pstrToken, nStrLength);
+    if (std::strcmp(pstrToken, "<KeyFrames:>")) {
+        throw std::runtime_error("expected KeyFrames token but got: " + std::string(pstrToken));
+    }
+    int keyFrameCnt{};
+    readStream(in, keyFrameCnt);
+
+    for (int i = 0; i < boneCnt; ++i) {
+        auto& keyFrames = animClip.keyFrames_[i];
+        keyFrames.resize(keyFrameCnt);
+    }
+
+    // read key frames
+    for (int keyFrameIdx = 0; keyFrameIdx < keyFrameCnt; ++keyFrameIdx) {
+        readStream(in, nStrLength);
+        readStream(in, pstrToken, nStrLength);
+        if (std::strcmp(pstrToken, "<KeyFrame:>")) {
+            throw std::runtime_error("expected KeyFrame token but got: " + std::string(pstrToken));
+        }
+
+        float time{};
+        readStream(in, time);
+
+        for (;;) {
+            readStream(in, nStrLength);
+            readStream(in, pstrToken, nStrLength);
+
+            if (!std::strcmp(pstrToken, "<BoneIdx:>")) {
+                int boneIdx{};
+                readStream(in, boneIdx);
+
+                auto& keyFrame = animClip.keyFrames_[boneIdx][keyFrameIdx];
+
+                keyFrame.time = time;
+
+                dx::XMFLOAT3 pos{};
+                readStream(in, pos);
+                keyFrame.pos = mu::Vec3(dx::XMLoadFloat3(&pos));
+
+                dx::XMFLOAT4 rot{};
+                readStream(in, rot);
+                keyFrame.rot = mu::NQuat(dx::XMLoadFloat4(&rot));
+
+                dx::XMFLOAT3 scale{};
+                readStream(in, scale);
+                keyFrame.scale = mu::Vec3(dx::XMLoadFloat3(&scale));
+            }
+            else if (!std::strcmp(pstrToken, "</KeyFrame>")) {
+                break;
+            }
+            else {
+                throw std::runtime_error("expected BoneIdx or KeyFrame end token but got: " + std::string(pstrToken));
+            }
+        }
+    }
+
+    readStream(in, nStrLength);
+    readStream(in, pstrToken, nStrLength);
+
+    if (std::strcmp(pstrToken, "</AnimationClip>")) {
+        throw std::runtime_error("expected AnimationClip end token but got: " + std::string(pstrToken));
+    }
+
+    // temporary
+    animClip.flags_ = etoi(AnimClip::Flags::Loop);
+
+    return animClip;
+}
+
+std::vector<AnimClip> AnimClip::loadClipsFromStream(std::istream& in) {
+    std::vector<AnimClip> animClips;
+
+    char pstrToken[64] = { '\0' };
+
+    std::uint8_t nStrLength = 0;
+    std::size_t nReads = 0;
+
+    readStream(in, nStrLength);
+    readStream(in, pstrToken, nStrLength);
+    if (std::strcmp(pstrToken, "<AnimationClips:>")) {
+        throw std::runtime_error("expected AnimationClips token but got: " + std::string(pstrToken));
+    }
+
+    int clipCnt{};
+    readStream(in, clipCnt);
+    animClips.reserve(clipCnt);
+
+    for (int i = 0; i < clipCnt; ++i) {
+        readStream(in, nStrLength);
+        readStream(in, pstrToken, nStrLength);
+
+        if (std::strcmp(pstrToken, "<AnimationClip:>")) {
+            throw std::runtime_error("expected AnimationClip token but got: " + std::string(pstrToken));
+        }
+
+        animClips.push_back(AnimClip::loadClipFromStream(in));
+    }
+
+    readStream(in, nStrLength);
+    readStream(in, pstrToken, nStrLength);
+    if (std::strcmp(pstrToken, "</AnimationClips>")) {
+        throw std::runtime_error("expected AnimationClips end token but got: " + std::string(pstrToken));
+    }
+
+    return animClips;
+}
+
+SkeletonAnimClipsPair loadSkeletonAndAnimClipFromFile(
+    const std::filesystem::path& animBinaryPath
+) {
+    SkeletonAnimClipsPair pair;
+
+    auto in = std::ifstream(animBinaryPath, std::ios::binary);
+
+    pair.skeleton = Skeleton::loadHierarchyFromStream(in);
+    pair.animClips = AnimClip::loadClipsFromStream(in);
+
+    return pair;
 }
 
 AnimInstance::AnimInstance(const Skeleton* pSkeleton, const AnimClip* pAnimClip)

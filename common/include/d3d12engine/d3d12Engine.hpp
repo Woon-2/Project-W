@@ -83,7 +83,7 @@ public:
     void loadStaticTexture(const TextureKey& key, d3d12::TextureResource::Type type);
     void loadStaticTexture(const TextureKey& key, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc);
     [[maybe_unused]] d3d12::RefModel& loadRefModel(const RefModelKey& key);
-    [[maybe_unused]] Skeleton& loadAnim(const AnimationKey& key);
+    [[maybe_unused]] SkeletonAnimClipsPair& loadAnim(const AnimationKey& key);
     [[maybe_unused]] d3d12::RefModel& loadRefModelWithAnim(const RefModelKey& key, const AnimationKey& animKey);
     void loadBVHPath(const BVHPathKey& key, const std::filesystem::path& path) {
         bvhPathStorage_.regist(key, path);

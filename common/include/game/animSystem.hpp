@@ -64,6 +64,7 @@ public:
     Skeleton& operator=(Skeleton&& other) noexcept;
 
     static Skeleton loadHierarchyFromFile(const std::filesystem::path& path);
+    static Skeleton loadHierarchyFromStream(std::istream& in);
 
     auto& bones() noexcept { return boneStorage_; }
     const auto& bones() const noexcept { return boneStorage_; }
@@ -71,14 +72,16 @@ public:
     const Bone* root() const noexcept { return pRoot_; }
 
 protected:
-    static void loadBonesFromFile(std::ifstream& in, Bone& bone, Skeleton& skeleton);
+    static void loadBonesFromStream(std::istream& in, Bone& bone, Skeleton& skeleton);
 
     std::vector<Bone> boneStorage_;
     Bone* pRoot_;
 };
 
 struct KeyFrame {
-    mu::Mat4x4 xform;
+    mu::Vec3 pos;
+    mu::NQuat rot;
+    mu::Vec3 scale;
     float time;
 };
 
@@ -86,14 +89,15 @@ using BoneIdx = int;
 
 class AnimClip {
 public:
-    enum class Flags {
+    enum class Flags : int {
         Loop = 0x01,
         RootMotion = 0x02
     };
 
     AnimClip() = default;
 
-    // static AnimClip loadClipFromFile(const std::filesystem::path& path);
+    static AnimClip loadClipFromStream(std::istream& in);
+    static std::vector<AnimClip> loadClipsFromStream(std::istream& in);
 
     const KeyFrame& keyFrame(BoneIdx boneIdx, std::size_t keyFrameIdx) const {
         return keyFrames_[boneIdx][keyFrameIdx];
@@ -123,7 +127,7 @@ public:
         return duration_;
     }
 
-    Flags flags() const noexcept {
+    int flags() const noexcept {
         return flags_;
     }
 
@@ -131,8 +135,17 @@ private:
     std::vector< std::vector<KeyFrame> > keyFrames_; // [boneIdx][keyFrameIdx]
     std::string name_;
     float duration_;
-    Flags flags_;
+    int flags_;
 };
+
+struct SkeletonAnimClipsPair {
+    Skeleton skeleton;
+    std::vector<AnimClip> animClips;
+};
+
+SkeletonAnimClipsPair loadSkeletonAndAnimClipFromFile(
+    const std::filesystem::path& animBinaryPath
+);
 
 DEFINE_ENUM_LOGICAL_OP_ALL(AnimClip::Flags);
 
