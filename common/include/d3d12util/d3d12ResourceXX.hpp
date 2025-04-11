@@ -294,6 +294,13 @@ public:
     [[maybe_unused]] DescriptorGPU& load( const std::filesystem::path& path, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc,
         D3D12Device& device, D3D12GfxCmdList& cmdList, DescriptorRange<DescriptorHeapGPU>& range
     );
+
+    const Texture& getTexture(const std::filesystem::path& path) const;
+    Texture& getTexture(const std::filesystem::path& path);
+    const TextureArray& getTextureArray(const std::filesystem::path& path) const;
+    TextureArray& getTextureArray(const std::filesystem::path& path);
+    const TextureCube& getTextureCube(const std::filesystem::path& path) const;
+    TextureCube& getTextureCube(const std::filesystem::path& path);
     const DescriptorGPU& get(const std::filesystem::path& path) const;
     DescriptorGPU& get(const std::filesystem::path& path);
     const DescriptorGPU& operator[](const std::filesystem::path& path) const;
@@ -302,6 +309,9 @@ public:
 
 private:
     std::map<std::filesystem::path, DescriptorGPU> map_;
+    std::map<std::filesystem::path, std::size_t> texIdxMap_;
+    std::map<std::filesystem::path, std::size_t> texArrIdxMap_;
+    std::map<std::filesystem::path, std::size_t> texCubeIdxMap_;
     std::vector<Texture> storedTexs_;
     std::vector<TextureArray> storedTexArrs_;
     std::vector<TextureCube> storedTexCubes_;

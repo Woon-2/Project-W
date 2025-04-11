@@ -197,20 +197,47 @@ TextureResource::LoadDDSReturnType TextureResource::loadDDS(
     switch (srvDesc.ViewDimension) {
     case D3D12_SRV_DIMENSION::D3D12_SRV_DIMENSION_TEXTURE2D:
         storedTexs_.emplace_back(device, cmdList, range, srvDesc, path);
+        texIdxMap_.try_emplace(path, storedTexs_.size() - 1u);
         return map_[path] = storedTexs_.back().view(Texture::idxSrv);
 
     case D3D12_SRV_DIMENSION::D3D12_SRV_DIMENSION_TEXTURE2DARRAY:
         storedTexArrs_.emplace_back(device, cmdList, range, srvDesc, path);
+        texArrIdxMap_.try_emplace(path, storedTexArrs_.size() - 1u);
         return map_[path] = storedTexArrs_.back().view(TextureArray::idxSrv);
 
     case D3D12_SRV_DIMENSION::D3D12_SRV_DIMENSION_TEXTURECUBE:
         storedTexCubes_.emplace_back(device, cmdList, range, srvDesc, path);
+        texCubeIdxMap_.try_emplace(path, storedTexCubes_.size() - 1u);
         return map_[path] = storedTexCubes_.back().view(TextureCube::idxSrv);
 
     default:
         throw GFX_EXCEPT("[Description]: Unknown SRV dimension");
         break;
     }
+}
+
+const Texture& StaticTextureStorage::getTexture(const std::filesystem::path& path) const {
+    return storedTexs_.at(texIdxMap_.at(path));
+}
+
+Texture& StaticTextureStorage::getTexture(const std::filesystem::path& path) {
+    return storedTexs_.at(texIdxMap_.at(path));
+}
+
+const TextureArray& StaticTextureStorage::getTextureArray(const std::filesystem::path& path) const {
+    return storedTexArrs_.at(texArrIdxMap_.at(path));
+}
+
+TextureArray& StaticTextureStorage::getTextureArray(const std::filesystem::path& path) {
+    return storedTexArrs_.at(texArrIdxMap_.at(path));
+}
+
+const TextureCube& StaticTextureStorage::getTextureCube(const std::filesystem::path& path) const {
+    return storedTexCubes_.at(texCubeIdxMap_.at(path));
+}
+
+TextureCube& StaticTextureStorage::getTextureCube(const std::filesystem::path& path) {
+    return storedTexCubes_.at(texCubeIdxMap_.at(path));
 }
 
 const DescriptorGPU& StaticTextureStorage::get(const std::filesystem::path& path) const {
