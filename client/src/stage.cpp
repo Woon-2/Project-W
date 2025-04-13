@@ -7,6 +7,7 @@
 #include <algorithm>
 
 void Stage::init() {
+    prepareResStorage();
     loadAssets();
 
     initEntities();
@@ -32,7 +33,7 @@ void Stage::processPackets(double deltaTime) {
 
     bool alreadyInitialized = pSystems_->netSystem.hasInitialized();
 
-    pSystems_->netSystem.preUpdate(*pCore_);
+    pSystems_->netSystem.preUpdate();
 
     if (!pSystems_->netSystem.hasInitialized()) {
         return;
@@ -139,7 +140,7 @@ void Stage::initScene() {
 
     for (auto i = 0u; i < 3u; ++i) {
         for (auto j = 0u; j < 3u; ++j) {
-            level_.activateChunk( i, j, *pCore_, assetBVHInfo(
+            level_.activateChunk( i, j, staticResStorage_.slot(slotKeyBVHPath), assetBVHInfo(
                 static_cast<AssetBVH>(etoi(AssetBVH::Terrain_0_0) + (i * 3u) + j)
             ).key, scene_, pSystems_->collisionSystem );
         }
@@ -150,6 +151,18 @@ void Stage::initScene() {
     scene_.clearStash();
 
     pRenderer_->init(scene_);
+}
+
+void Stage::prepareResStorage() {
+    staticResStorage_.addSlot(slotKeyTexture, gfx::d3d12::ResourceStorage::ResType::Texture);
+    staticResStorage_.addSlot(slotKeyTexArray, gfx::d3d12::ResourceStorage::ResType::TexArray);
+    staticResStorage_.addSlot(slotKeyTexCube, gfx::d3d12::ResourceStorage::ResType::TexCube);
+    staticResStorage_.addSlot(slotKeyModel, gfx::d3d12::ResourceStorage::ResType::RefModel);
+    staticResStorage_.addSlot(slotKeyBVHPath, gfx::d3d12::ResourceStorage::ResType::BVHPath);
+    staticResStorage_.addSlot(slotKeySkeleton, gfx::d3d12::ResourceStorage::ResType::Skeleton);
+    staticResStorage_.addSlot(slotKeyAnimClip, gfx::d3d12::ResourceStorage::ResType::AnimClip);
+
+    pSystems_->netSystem.linkResStorage(&staticResStorage_);
 }
 
 void Stage::loadAssets() {
@@ -165,79 +178,141 @@ void Stage::loadAssets() {
     pCore_->finishGPUResLoad();
 }
 
-void loadTexture(gfx::d3d12engine::Core& core, AssetTexture key) {
+void loadTexture( gfx::d3d12::ResourceStorage& storage,
+    gfx::d3d12::DescriptorRanges& descRanges,
+    gfx::d3d12::D3D12Device& device, gfx::d3d12::D3D12GfxCmdList& cmdList,
+    AssetTexture key
+) {
     const auto& texInfo = assetTextureInfo(key);
     for (auto i = 0ull; i < texInfo.keys.size(); ++i) {
-        core.registTexturePath(texInfo.keys[i], texInfo.paths[i]);
-        core.loadStaticTexture(texInfo.keys[i], texInfo.type);
+        gfx::d3d12::loadTextureAt(
+            storage.slot(Stage::slotKeyTexture), texInfo.paths[i].string(), device,
+            cmdList, descRanges.srvRangeTex2D, texInfo.paths[i]
+        );
     }
 }
 
-void loadHeightmapTexture(gfx::d3d12engine::Core& core, AssetTexture key) {
+void loadHeightmapTexture( gfx::d3d12::ResourceStorage& storage,
+    gfx::d3d12::DescriptorRanges& descRanges,
+    gfx::d3d12::D3D12Device& device, gfx::d3d12::D3D12GfxCmdList& cmdList,
+    AssetTexture key
+) {
     const auto& texInfo = assetTextureInfo(key);
     for (auto i = 0ull; i < texInfo.keys.size(); ++i) {
-        core.registTexturePath(texInfo.keys[i], texInfo.paths[i]);
-        core.loadStaticTexture(texInfo.keys[i], D3D12_SHADER_RESOURCE_VIEW_DESC{
-            .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
-            .ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
-            .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-            .Texture2D = D3D12_TEX2D_SRV{ .MipLevels = 1u }
-        });
+        gfx::d3d12::loadTextureAt(
+            storage.slot(Stage::slotKeyTexture), texInfo.paths[i].string(), device,
+            cmdList, descRanges.srvRangeTex2D, texInfo.paths[i],
+            D3D12_SHADER_RESOURCE_VIEW_DESC{
+                .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
+                .ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
+                .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+                .Texture2D = D3D12_TEX2D_SRV{ .MipLevels = 1u }
+            }
+        );
     }
 }
 
 void Stage::loadTextures(gfx::d3d12::D3D12GfxCmdList& cmdList) {
-    loadTexture(*pCore_, AssetTexture::Helicopter);
-    loadTexture(*pCore_, AssetTexture::Character);
-    loadTexture(*pCore_, AssetTexture::Tree0);
-    loadTexture(*pCore_, AssetTexture::Tree1);
-    loadTexture(*pCore_, AssetTexture::Tree2);
-    loadTexture(*pCore_, AssetTexture::Terrain);
-    loadHeightmapTexture(*pCore_, AssetTexture::TerrainHeightmap);
+    loadTexture( staticResStorage_, pCore_->descRanges(),
+        pCore_->device(), cmdList, AssetTexture::Helicopter
+    );
+    loadTexture( staticResStorage_, pCore_->descRanges(),
+        pCore_->device(), cmdList, AssetTexture::Character
+    );
+    loadTexture( staticResStorage_, pCore_->descRanges(),
+        pCore_->device(), cmdList, AssetTexture::Tree0
+    );
+    loadTexture( staticResStorage_, pCore_->descRanges(),
+        pCore_->device(), cmdList, AssetTexture::Tree1
+    );
+    loadTexture( staticResStorage_, pCore_->descRanges(),
+        pCore_->device(), cmdList, AssetTexture::Tree2
+    );
+    loadTexture(staticResStorage_, pCore_->descRanges(),
+        pCore_->device(), cmdList, AssetTexture::Terrain
+    );
+
+    loadHeightmapTexture( staticResStorage_, pCore_->descRanges(),
+        pCore_->device(), cmdList, AssetTexture::TerrainHeightmap
+    );
 }
 
-void loadModel(gfx::d3d12engine::Core& core, AssetModel key, Renderer& renderer) {
+void loadModel( gfx::d3d12::ResourceStorage& storage,
+    gfx::d3d12::D3D12Device& device, gfx::d3d12::D3D12GfxCmdList& cmdList,
+    AssetModel key, Renderer& renderer
+) {
     auto modelInfo = assetModelInfo(key);
-    core.registRefModelPath(modelInfo.key, modelInfo.geometryPath);
     if (!modelInfo.animationPath.empty()) {
-        core.registAnimPath(modelInfo.key, modelInfo.animationPath);
-        core.loadRefModelWithAnim(modelInfo.key, modelInfo.key);
+        gfx::d3d12::loadSkeletalRefModelAndAnimAt(
+            storage.slot(Stage::slotKeyModel), storage.slot(Stage::slotKeySkeleton),
+            storage.slot(Stage::slotKeyAnimClip), modelInfo.key, modelInfo.key,
+            device, cmdList, modelInfo.geometryPath,
+            storage.slot(Stage::slotKeyTexture),
+            storage.slot(Stage::slotKeyTexArray),
+            storage.slot(Stage::slotKeyTexCube),
+            modelInfo.animationPath
+        );
     }
     else {
-        core.loadRefModel(modelInfo.key);
+        gfx::d3d12::loadRefModelAt(
+            storage.slot(Stage::slotKeyModel), modelInfo.key, device, cmdList,
+            modelInfo.geometryPath,
+            storage.slot(Stage::slotKeyTexture),
+            storage.slot(Stage::slotKeyTexArray),
+            storage.slot(Stage::slotKeyTexCube)
+        );
     }
-    renderer.layoutVBsPBR(core, modelInfo.key, 1);
+    renderer.layoutVBsPBR( device, cmdList,
+        *storage.slot(Stage::slotKeyModel).get<gfx::d3d12::RefModel>(modelInfo.key),
+        1u
+    );
 }
 
 void Stage::loadModels(gfx::d3d12::D3D12GfxCmdList& cmdList) {
     pCore_->initChunkMesh(cmdList);
-    loadModel(*pCore_, AssetModel::Helicopter, *pRenderer_);
-    loadModel(*pCore_, AssetModel::Character, *pRenderer_);
-    loadModel(*pCore_, AssetModel::Tree0, *pRenderer_);
-    loadModel(*pCore_, AssetModel::Tree1, *pRenderer_);
-    loadModel(*pCore_, AssetModel::Tree2, *pRenderer_);
+    loadModel( staticResStorage_, pCore_->device(), cmdList,
+        AssetModel::Helicopter, *pRenderer_
+    );
+    loadModel( staticResStorage_, pCore_->device(), cmdList,
+        AssetModel::Character, *pRenderer_
+    );
+
+    loadModel( staticResStorage_, pCore_->device(), cmdList,
+        AssetModel::Tree0, *pRenderer_
+    );
+
+    loadModel( staticResStorage_, pCore_->device(), cmdList,
+        AssetModel::Tree1, *pRenderer_
+    );
+
+    loadModel( staticResStorage_, pCore_->device(), cmdList,
+        AssetModel::Tree2, *pRenderer_
+    );
 }
 
-void loadBVHPath(gfx::d3d12engine::Core& core, AssetBVH key) {
+void loadBVHPath(gfx::d3d12::ResourceStorage& storage, AssetBVH key) {
     auto bvhInfo = assetBVHInfo(key);
-    core.loadBVHPath(bvhInfo.key, bvhInfo.path);
+    storage.slot(Stage::slotKeyBVHPath).load<std::filesystem::path>(
+        bvhInfo.key, bvhInfo.path
+    );
 }
 
 void Stage::loadBVHPaths() {
-    loadBVHPath(*pCore_, AssetBVH::Helicopter);
-    loadBVHPath(*pCore_, AssetBVH::Terrain_0_0);
-    loadBVHPath(*pCore_, AssetBVH::Terrain_0_1);
-    loadBVHPath(*pCore_, AssetBVH::Terrain_0_2);
-    loadBVHPath(*pCore_, AssetBVH::Terrain_1_0);
-    loadBVHPath(*pCore_, AssetBVH::Terrain_1_1);
-    loadBVHPath(*pCore_, AssetBVH::Terrain_1_2);
-    loadBVHPath(*pCore_, AssetBVH::Terrain_2_0);
-    loadBVHPath(*pCore_, AssetBVH::Terrain_2_1);
-    loadBVHPath(*pCore_, AssetBVH::Terrain_2_2);
+    loadBVHPath(staticResStorage_, AssetBVH::Helicopter);
+    loadBVHPath(staticResStorage_, AssetBVH::Terrain_0_0);
+    loadBVHPath(staticResStorage_, AssetBVH::Terrain_0_1);
+    loadBVHPath(staticResStorage_, AssetBVH::Terrain_0_2);
+    loadBVHPath(staticResStorage_, AssetBVH::Terrain_1_0);
+    loadBVHPath(staticResStorage_, AssetBVH::Terrain_1_1);
+    loadBVHPath(staticResStorage_, AssetBVH::Terrain_1_2);
+    loadBVHPath(staticResStorage_, AssetBVH::Terrain_2_0);
+    loadBVHPath(staticResStorage_, AssetBVH::Terrain_2_1);
+    loadBVHPath(staticResStorage_, AssetBVH::Terrain_2_2);
 }
 
 void Stage::loadLevel(gfx::d3d12::D3D12GfxCmdList& cmdList) {
-    level_ = gfx::d3d12engine::LevelRegion(*pCore_,
+    level_ = gfx::d3d12engine::LevelRegion(
+        staticResStorage_.slot(Stage::slotKeyTexture),
         resourcePath/"LevelGraph.bin",
         resourcePath/"LevelGraph_Terrain.bin"
     );

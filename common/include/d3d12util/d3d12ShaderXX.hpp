@@ -336,6 +336,15 @@ public:
 	virtual void loadBlobs() = 0;
 	virtual void releaseBlobs() = 0;
 
+	void dispatch( D3D12GfxCmdList& cmdList, std::size_t threadGroupCntX,
+		std::size_t threadGroupCntY, std::size_t threadGroupCntZ
+	) {
+		cmdList.get()->Dispatch(
+			static_cast<UINT>(threadGroupCntX),
+			static_cast<UINT>(threadGroupCntY),
+			static_cast<UINT>(threadGroupCntZ)
+		);
+	}
 
 private:
 	std::optional<ShaderBlob> blob_;
@@ -653,18 +662,6 @@ public:
 	void loadBlobs() override;
 	void releaseBlobs() override;
 
-	void setShadowMap(Texture* pShadowMap) {
-		pShadowMap_ = pShadowMap;
-	}
-
-	Texture* shadowMap() noexcept {
-		return pShadowMap_;
-	}
-
-	const Texture* shadowMap() const noexcept {
-		return pShadowMap_;
-	}
-
 	UploadBuffer perFrameData_;
 	UploadBuffer perDrawcallData_;
 	UploadBuffer perInstanceData_;
@@ -680,17 +677,11 @@ private:
 
 	std::size_t maxInstanceCnt_;
 	std::size_t maxDrawcallCnt_;
-	Texture* pShadowMap_;
 };
 
 class ShaderScreenQuad : public Shader {
 public:
 	ShaderScreenQuad(D3D12Device& device, const RootSignature& root);
-	ShaderScreenQuad( D3D12Device& device, const RootSignature& root,
-		const Texture* pTexture
-	) : ShaderScreenQuad(device, root) {
-		screenQuad_.link(pTexture);
-	}
 
 	RenderProtocol makeProtocol( D3D12Device& device, const RenderProtocol::Desc& desc) {
 		return RenderProtocol( device, *this,
@@ -705,6 +696,10 @@ public:
 
 	void draw(D3D12GfxCmdList& cmdList) const {
 		screenQuad_.draw(cmdList);
+	}
+
+	void setScreenTexture(Texture* pScreenTexture) {
+		screenQuad_.link(pScreenTexture);
 	}
 
 	UploadBuffer perDrawcallData_;
@@ -811,18 +806,6 @@ public:
 		chunk.draw(cmdList);
 	}
 
-	void setShadowMap(Texture* pShadowMap) {
-		pShadowMap_ = pShadowMap;
-	}
-
-	Texture* shadowMap() noexcept {
-		return pShadowMap_;
-	}
-
-	const Texture* shadowMap() const noexcept {
-		return pShadowMap_;
-	}
-
 	UploadBuffer perFrameData_;
 	UploadBuffer perDrawcallData_;
 	UploadBuffer perInstanceData_;
@@ -838,7 +821,6 @@ private:
 
 	std::size_t maxInstanceCnt_;
 	std::size_t maxDrawcallCnt_;
-	Texture* pShadowMap_;
 };
 
 }   // namespace gfx::d3d12

@@ -9,8 +9,7 @@ namespace gfx {
 namespace d3d12engine {
 
 Core::Core()
-    : staticTexStorage_(), refModelStorage_(),
-    bvhPathStorage_(), samStorage_(), factory_(),
+    : samStorage_(), factory_(),
     device_( d3d12::getAvailableAdapter(factory_, D3D_FEATURE_LEVEL_12_1), D3D_FEATURE_LEVEL_12_1 ),
     cmdQueue_( device_ ), cmdList_( device_ ),
     rtvHeap_(device_, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, initialRtvHeapSize),
@@ -85,90 +84,11 @@ void Core::render() {
     fence_.wait();
 }
 
-void Core::loadStaticTexture( const Core::TextureKey& key,
-    d3d12::TextureResource::Type type
-) {
-    switch (type) {
-    case d3d12::TextureResource::Type::Texture:
-        staticTexStorage_.load(texturePaths_.at(key), type, device_, cmdList_, descRanges_.srvRangeTex2D);
-        break;
-
-    case d3d12::TextureResource::Type::TextureArray:
-        staticTexStorage_.load(texturePaths_.at(key), type, device_, cmdList_, descRanges_.srvRangeTex2DArray);
-        break;
-
-    case d3d12::TextureResource::Type::TextureCube:
-        staticTexStorage_.load(texturePaths_.at(key), type, device_, cmdList_, descRanges_.srvRangeTexCube);
-        break;
-
-    default:
-        throw GFX_EXCEPT("[Description] Unknown texture type");
-    }
-}
-
-void Core::loadStaticTexture( const Core::TextureKey& key,
-    const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
-) {
-    switch (srvDesc.ViewDimension) {
-    case D3D12_SRV_DIMENSION::D3D12_SRV_DIMENSION_TEXTURE2D:
-        staticTexStorage_.load(texturePaths_.at(key), srvDesc, device_, cmdList_, descRanges_.srvRangeTex2D);
-        break;
-
-    case D3D12_SRV_DIMENSION::D3D12_SRV_DIMENSION_TEXTURE2DARRAY:
-        staticTexStorage_.load(texturePaths_.at(key), srvDesc, device_, cmdList_, descRanges_.srvRangeTex2DArray);
-        break;
-
-    case D3D12_SRV_DIMENSION::D3D12_SRV_DIMENSION_TEXTURECUBE:
-        staticTexStorage_.load(texturePaths_.at(key), srvDesc, device_, cmdList_, descRanges_.srvRangeTexCube);
-        break;
-
-    default:
-        throw GFX_EXCEPT("[Description] Unknown srv dimension");
-    }
-}
-
-[[maybe_unused]] d3d12::RefModel& Core::loadRefModel(const Core::RefModelKey& key) {
-    return refModelStorage_.loadModel(key, refModelPaths_.at(key), staticTexStorage_, device_, cmdList_);
-}
-
-void Core::layoutRefModelVBs( const d3d12::RefModelStorage::ID& key, std::size_t vbLayoutIdx,
-    const d3d12::InputLayout& inputLayout
-) {
-    if (!refModelStorage_.contains(key)) {
-        throw GFX_EXCEPT("[Description] RefModel not found: " + key);
-    }
-
-    d3d12::arrangeVBs(refModelStorage_.get(key), device_, cmdList_, vbLayoutIdx, inputLayout);
-}
-
-[[maybe_unused]] SkeletonAnimClipsPair& Core::loadAnim(const AnimationKey& key) {
-    return animationStorage_.loadSkAnim(key, animationPaths_.at(key));
-}
-
-[[maybe_unused]] d3d12::RefModel& Core::loadRefModelWithAnim(
-    const RefModelKey& key, const AnimationKey& animKey
-) {
-    auto& refModel = loadRefModel(key);
-    auto& [sk, _] = loadAnim(animKey);
-    refModel.linkSkeleton(&sk);
-
-    return refModel;
-}
-
-void Core::layoutRefModelVBs(const d3d12::RefModelStorage::ID& key, std::size_t vbLayoutIdx,
-    const std::vector<std::vector<Vertex::Properties>>& vbProps
-) {
-    if (!refModelStorage_.contains(key)) {
-        throw GFX_EXCEPT("[Description] RefModel not found: " + key);
-    }
-
-    refModelStorage_.get(key).arrangeVBs(device_, cmdList_, vbLayoutIdx, vbProps);
-}
-
 Model::Model( const ecs::Entity& entity,
-    const d3d12::RefModelStorage::ID& key, const Core& core,
+    const d3d12::ResourceStorage::Slot& modelSlot,
+    const d3d12::ResourceStorage::ResID& modelKey,
     gameEngine::Coord& coordComp
-) : ecs::Component(entity), model_(core.refModelStorage_.get(key)) {
+) : ecs::Component(entity), model_(*modelSlot.get<d3d12::RefModel>(modelKey)) {
     model_.root()->coord().setParent(&coordComp.get());
 }
 
@@ -252,12 +172,12 @@ void Scene::clearStash() {
     reservedEntities_.clear();
 }
 
-LevelRegion::LevelRegion( const Core& core,
+LevelRegion::LevelRegion( const d3d12::ResourceStorage::Slot& heightmapSlot,
     const std::filesystem::path& levelPath,
     const std::filesystem::path& levelTerrainPath
 ) : pTerrainStream_( std::make_unique<std::ifstream>(levelTerrainPath, std::ios::binary) ),
     pObjectStream_( std::make_unique<std::ifstream>(levelPath, std::ios::binary) ),
-    model_(core.staticTexStorage(), *pTerrainStream_),
+    model_(heightmapSlot, *pTerrainStream_),
     dispositionRoot_(*pObjectStream_), chunks_() {}
 
 void LevelRegion::activateChunk(std::size_t xIdx, std::size_t zIdx, Scene& scene) {
@@ -269,32 +189,43 @@ void LevelRegion::activateChunk(std::size_t xIdx, std::size_t zIdx, Scene& scene
     scene.addEntity(chunks_.back());
 }
 
-void LevelRegion::activateChunk( std::size_t xIdx, std::size_t zIdx, const Core& core,
-    const Core::BVHPathKey& bvhPathKey, Scene& scene, CollisionSystem& collisionSystem
+void LevelRegion::activateChunk( std::size_t xIdx, std::size_t zIdx,
+    const d3d12::ResourceStorage::Slot& bvhPathSlot,
+    const d3d12::ResourceStorage::ResID& bvhPathKey, Scene& scene,
+    CollisionSystem& collisionSystem
 ) {
-    if (!core.bvhPathStorage().contains(bvhPathKey)) {
+    if (!bvhPathSlot.contains<std::filesystem::path>(bvhPathKey)) {
         throw GFX_EXCEPT("[Description] BVH path not registered for key: " + bvhPathKey);
     }
+
+    auto& bvhPath = *bvhPathSlot.get<std::filesystem::path>(bvhPathKey);
+    if (!std::filesystem::exists(bvhPath)) {
+        throw GFX_EXCEPT("[Description] BVH path not found: " + bvhPath.string());
+    }
+
     activateChunk(xIdx, zIdx, scene);
-    chunks_.back().createComponent<BoundingVolume>(core.bvhPathStorage().get(bvhPathKey));
+    chunks_.back().createComponent<BoundingVolume>(bvhPath);
     collisionSystem.addEntity(chunks_.back());
 }
 
-std::vector<ecs::Entity> LevelRegion::instantiateAllObjects(const Core& core, coord::System& coordRoot) {
+std::vector<ecs::Entity> LevelRegion::instantiateAllObjects(
+    const d3d12::ResourceStorage::Slot& refModelSlot, coord::System& coordRoot
+) {
     auto ret = std::vector<ecs::Entity>();
 
-    instantiateObjectHierarchy(std::nullopt, dispositionRoot_, core, coordRoot, ret);
+    instantiateObjectHierarchy(std::nullopt, dispositionRoot_, refModelSlot, coordRoot, ret);
 
     return ret;
 }
 
 void LevelRegion::instantiateObjectHierarchy( std::optional<std::size_t> parentIdx,
-    const gameEngine::ObjectDisposition& disposition, const Core& core,
+    const gameEngine::ObjectDisposition& disposition,
+    const d3d12::ResourceStorage::Slot& refModelSlot,
     coord::System& coordRoot, std::vector<ecs::Entity>& out
 ) {
     if (disposition.prefabName_.empty()) {
         for (auto& child : disposition.children_) {
-            instantiateObjectHierarchy(parentIdx, child, core, coordRoot, out);
+            instantiateObjectHierarchy(parentIdx, child, refModelSlot, coordRoot, out);
         }
         return;
     }
@@ -303,7 +234,7 @@ void LevelRegion::instantiateObjectHierarchy( std::optional<std::size_t> parentI
 
     auto obj = ecs::Entity();
 
-    if (!core.refModelStorage().contains(modelKey)) {
+    if (!refModelSlot.contains<d3d12::RefModel>(modelKey)) {
         throw GFX_EXCEPT("RefModel not found: " + modelKey);
     }
 
@@ -311,8 +242,8 @@ void LevelRegion::instantiateObjectHierarchy( std::optional<std::size_t> parentI
     obj.as<gameEngine::Coord>().get().setLocalXform(disposition.xform_);
     obj.as<gameEngine::Coord>().get() << mu::translate(0.f, -25.f, 0.f);
 
-    auto& refModel = core.refModelStorage().get(modelKey);
-    obj.createComponent<Model>(modelKey, core, obj.as<gameEngine::Coord>());
+    auto& refModel = *refModelSlot.get<d3d12::RefModel>(modelKey);
+    obj.createComponent<Model>(refModelSlot, modelKey, obj.as<gameEngine::Coord>());
 
     if (parentIdx.has_value()) {
         obj.as<gameEngine::Coord>().get().setParent(&out[parentIdx.value()].as<gameEngine::Coord>().get());
@@ -325,7 +256,7 @@ void LevelRegion::instantiateObjectHierarchy( std::optional<std::size_t> parentI
     std::size_t myIdx = out.size() - 1;
 
     for (auto& child : disposition.children_) {
-        instantiateObjectHierarchy(myIdx, child, core, coordRoot, out);
+        instantiateObjectHierarchy(myIdx, child, refModelSlot, coordRoot, out);
     }
 }
 

@@ -16,9 +16,12 @@ public:
     Renderer(gfx::d3d12engine::Core& core);
 
     void init(gfx::d3d12engine::Scene& scene) override;
-    void render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& scene, gfx::d3d12::RenderTargets& renderTargets) override;
-    void layoutVBsPBR( gfx::d3d12engine::Core& core,
-        const gfx::d3d12::RefModelStorage::ID& key,
+    void render( gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& scene,
+        gfx::d3d12::RenderTargets& renderTargets
+    ) override;
+    void layoutVBsPBR( gfx::d3d12::D3D12Device& device,
+        gfx::d3d12::D3D12GfxCmdList& cmdList,
+        gfx::d3d12::RefModel& refModel,
         std::size_t layoutIdx
     );
     void setMode(Mode renderMode) NOEXCEPT {
@@ -26,10 +29,12 @@ public:
     }
 
 private:
+    static constexpr auto slotKeyTexture = "texture";
+
+    gfx::d3d12::ResourceStorage rendererTexStorage_;
+
     gfx::d3d12::ShaderPBRIllumination shaderPBR_;
     gfx::d3d12engine::rp::PBRIllumination renderPassPBR_;
-
-    gfx::d3d12::ShadowMaterialStandAlone shadowMaterial_;
 
     gfx::d3d12::ShaderShadowMap shaderShadowMap_;
     gfx::d3d12engine::rp::ShadowMap renderPassShadowMap_;

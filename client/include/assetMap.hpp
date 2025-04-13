@@ -38,19 +38,19 @@ enum class AssetTexture {
 };
 
 struct ModelInfo {
-    gfx::d3d12engine::Core::RefModelKey key;
+    gfx::d3d12::ResourceStorage::ResID key;
     std::filesystem::path geometryPath;
     std::filesystem::path animationPath;
 };
 
 struct TextureInfo {
-    std::vector<gfx::d3d12engine::Core::TextureKey> keys;
+    std::vector<gfx::d3d12::ResourceStorage::ResID> keys;
     std::vector<std::filesystem::path> paths;
     gfx::d3d12::TextureResource::Type type;
 };
 
 struct BVHInfo {
-    gfx::d3d12engine::Core::BVHPathKey key;
+    gfx::d3d12::ResourceStorage::ResID key;
     std::filesystem::path path;
 };
 

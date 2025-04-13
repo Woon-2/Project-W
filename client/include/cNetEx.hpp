@@ -14,12 +14,23 @@
 
 class CNetExSystem : public ecs::System<NetEx> {
 public:
+    static constexpr auto slotKeyTexture = "texture";
+    static constexpr auto slotKeyTexArray = "texarray";
+    static constexpr auto slotKeyTexCube = "texcube";
+    static constexpr auto slotKeyModel = "model";
+    static constexpr auto slotKeyBVHPath = "bvhpath";
+    static constexpr auto slotKeySkeleton = "skeleton";
+    static constexpr auto slotKeyAnimClip = "animclip";
+
     CNetExSystem() = default;
-    CNetExSystem(Session* pSession)
-        : createdEntities_(), netIdToNetEx_(), pSession_(pSession),
+    CNetExSystem(Session* pSession, gfx::d3d12::ResourceStorage* pResStorage = nullptr)
+        : createdEntities_(), netIdToNetEx_(), pResStorage_(pResStorage), pSession_(pSession),
         initPacketCnt_(-1u), recvdInitPacketCnt_(0u) {}
 
-    void preUpdate(const gfx::d3d12engine::Core& core);
+    void linkResStorage(gfx::d3d12::ResourceStorage* pResStorage) noexcept {
+        pResStorage_ = pResStorage;
+    }
+    void preUpdate();
     void postUpdate();
     std::vector<ecs::Entity>&& retreiveCreatedEntities() noexcept {
         return std::move(createdEntities_);
@@ -30,14 +41,15 @@ public:
     }
 
 private:
-    void processPacket(const Packet& packet, const gfx::d3d12engine::Core& core);
+    void processPacket(const Packet& packet);
     void handleSCInitInfo(const SCInitInfo& scInitInfo);
-    void handleSCInitCreate(const SCInitCreate& scCreate, const gfx::d3d12engine::Core& core);
+    void handleSCInitCreate(const SCInitCreate& scCreate);
     void handleSCInitAssign(const SCInitAssign& scAssign);
     void handleSCWorld(const SCWorld& scWorld, const Packet& originalPacket);
 
     std::vector<ecs::Entity> createdEntities_;
     std::map<std::uint32_t, NetEx*> netIdToNetEx_;
+    gfx::d3d12::ResourceStorage* pResStorage_;
     Session* pSession_;
     std::uint32_t initPacketCnt_;
     std::uint32_t recvdInitPacketCnt_;

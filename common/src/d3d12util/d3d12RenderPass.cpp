@@ -63,11 +63,11 @@ std::string RenderTargets::sSpecifierStrings[etoi(RenderTargets::Specifier::SIZE
 ShadowMaterial::ShadowMaterial()
     : dsvDesc_{}, srvDesc_{}, pSrv_(nullptr), pDsv_(nullptr), pMapResource_(nullptr) {}
 
-ShadowMaterial::ShadowMaterial( Texture& mapResource,
-    const DescriptorCPU& dsv, const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
-    const DescriptorGPU& srv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
-) : dsvDesc_(dsvDesc), srvDesc_(srvDesc), pSrv_(&srv), pDsv_(&dsv),
-    pMapResource_(&mapResource) {
+ShadowMaterial::ShadowMaterial( Texture* pMapResource,
+    const DescriptorCPU* pDsv, const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
+    const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
+) : dsvDesc_(dsvDesc), srvDesc_(srvDesc), pSrv_(pSrv), pDsv_(pDsv),
+    pMapResource_(pMapResource) {
     addMapRef(MapType::Shadow, MapRef{
         .type = etoi(ResourceType::Texture),
         .resourceIdx = static_cast<std::uint32_t>( pMapResource_->idxSrv ),
@@ -90,25 +90,6 @@ void ShadowMaterial::onClear(D3D12GfxCmdList& cmdList) {
     cmdList.get()->ClearDepthStencilView(
         pDsv_->cpuHandle(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0u, nullptr
     );
-}
-
-ShadowMaterialStandAlone::ShadowMaterialStandAlone( D3D12Device& device,
-    const Texture::Desc& shadowMapDesc,
-	DescriptorRange<DescriptorHeapGPU>& tex2dRange,
-    DescriptorRange<DescriptorHeapCPU>& dsvRange
-) : ShadowMaterial(), shadowMap_( device, tex2dRange, shadowMapDesc,
-        detail::makeShadowMapSrvDesc( shadowMapDesc ),
-        D3D12_HEAP_TYPE_DEFAULT,
-        D3D12_CLEAR_VALUE{ .Format = shadowMapDesc.format, .DepthStencil = { 1.f, 0u }
-    } ) {
-    const auto dsvDesc = detail::makeShadowMapDsvDesc(shadowMapDesc);
-    const auto idx = shadowMap_.makeDsv( dsvDesc, device, dsvRange.alloc() );
-    assert(idxDsv == idx);
-
-    ShadowMaterial::operator=( ShadowMaterial(
-        shadowMap_, shadowMap_.view(idxDsv), dsvDesc,
-        shadowMap_.view(idxSrv), detail::makeShadowMapSrvDesc(shadowMapDesc)
-    ) );
 }
 
 sr::Light WorldLight::toViewLight(const Camera& camera) const {
@@ -159,16 +140,29 @@ namespace rp {
 PBRIllumination::PBRIllumination( D3D12Device& device, ShaderPBRIllumination& shader, 
     const SamplerStorage& samplerStorage, const D3D12_VIEWPORT& vp
 ) : gfx::d3d12::RenderPass(id),
-    viewport_(vp), protocol_( shader.makeProtocol( device,
+    shadowMaterial_(), viewport_(vp),
+    protocol_( shader.makeProtocol( device,
         RenderProtocol::Desc{ makeDesc() }
     ) ), lights_(), batch_(), pCamera_(nullptr),
-    pShadowMaterial_(nullptr), pSamplerStorage_(&samplerStorage) {
+    pSamplerStorage_(&samplerStorage) {
     auto pcd = sr::PerConfigurationData0{
         .viewportWidth = vp.Width,
         .viewportHeight = vp.Height
     };
 
     shader.perConfigurationData_.stage(&pcd, sizeof(sr::PerConfigurationData0));
+}
+
+void PBRIllumination::initResources(
+    RenderPassTextures shadowMap, const DescriptorCPU* pDsv,
+    const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
+    const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
+) {
+    checkRequiredTextures();
+    shadowMaterial_ = ShadowMaterial(
+        getTexture(RenderPassTextures::ShadowMap),
+        pDsv, dsvDesc, pSrv, srvDesc
+    );
 }
 
 RenderProtocol::Desc PBRIllumination::makeDesc() {
@@ -317,16 +311,14 @@ void PBRIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderT
         }
     }
 
-    pShadowMaterial_ = static_cast<ShadowMaterial*>(
-        renderTargets.popTarget(cmdList, RenderTargets::Specifier::Shadow)
-    );
+    shadowMaterial_.texture().commitState(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
     // temporarilly directional light at first
     const auto pDirectionalLight = lights_.front();
 
     const auto pfd = sr::PerFrameData0{
         .globalAmbient = dx::XMFLOAT3(0.1f, 0.1f, 0.1f),
-        .shadowMapRef = pShadowMaterial_->mapRef(Material::MapType::Shadow).toxm(),
+        .shadowMapRef = shadowMaterial_.mapRef(Material::MapType::Shadow).toxm(),
         .lightVP = mu::transpose( pDirectionalLight->viewProj(*pCamera_) ).getXmf(),
         .lightCnt = static_cast<std::uint32_t>( lightBuffer.size() )
     };
@@ -391,8 +383,7 @@ void PBRIllumination::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTarg
 }
 
 void PBRIllumination::postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
-    renderTargets.pushTarget(cmdList, RenderTargets::Specifier::Shadow, pShadowMaterial_);
-    pShadowMaterial_ = nullptr;
+    shadowMaterial_.texture().commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 }
 
 void PBRIllumination::trackModel(Model* pModel) {
@@ -447,14 +438,10 @@ void PBRIllumination::trackModel(Model* pModel, const BoundingVolumeNode* pBVNod
     }
 }
 
-ShadowMap::ShadowMap( D3D12Device& device, ShaderShadowMap& shader,
-    const ShadowMaterial& shadowMaterial, std::size_t idxShadowMapDsv,
-    const D3D12_VIEWPORT& vp
+ShadowMap::ShadowMap( D3D12Device& device,
+    ShaderShadowMap& shader, const D3D12_VIEWPORT& vp
 ) : gfx::d3d12::RenderPass(id),
-    shadowMapSrvDesc_( shadowMaterial.srvDesc() ),
-    shadowMapDsvDesc_( shadowMaterial.dsvDesc() ),
-    idxShadowMapDsv_( idxShadowMapDsv ),
-    shadowMaterial_( shadowMaterial ),
+    shadowMaterial_(),
     viewport_(vp), protocol_( shader.makeProtocol( device,
         RenderProtocol::Desc{ makeDesc() }
     ) ), pLight_(nullptr), batch_(), pCamera_(nullptr) {
@@ -462,21 +449,16 @@ ShadowMap::ShadowMap( D3D12Device& device, ShaderShadowMap& shader,
     viewport_.Height *= 8;
 }
 
-ShadowMap::ShadowMap( D3D12Device& device, ShaderShadowMap& shader,
-    DescriptorRange<DescriptorHeapCPU>& dsvRange, const D3D12_VIEWPORT& vp
-) : gfx::d3d12::RenderPass(id),
-    shadowMapSrvDesc_( detail::makeShadowMapSrvDesc( shader.shadowMap()->desc() ) ),
-    shadowMapDsvDesc_( detail::makeShadowMapDsvDesc( shader.shadowMap()->desc() ) ),
-    idxShadowMapDsv_( shader.shadowMap()->makeDsv( shadowMapDsvDesc_, device, dsvRange.alloc() ) ),
-    shadowMaterial_( *shader.shadowMap(), shader.shadowMap()->view( idxShadowMapDsv_ ),
-        shadowMapDsvDesc_, shader.shadowMap()->view( shader.shadowMap()->idxSrv ),
-        shadowMapSrvDesc_
-    ),
-    viewport_(vp), protocol_( shader.makeProtocol( device,
-        RenderProtocol::Desc{ makeDesc() }
-    ) ), pLight_(nullptr), batch_(), pCamera_(nullptr) {
-    viewport_.Width *= 8;
-    viewport_.Height *= 8;
+void ShadowMap::initResources(
+    RenderPassTextures shadowMap, const DescriptorCPU* pDsv,
+    const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
+    const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
+) {
+    checkRequiredTextures();
+    shadowMaterial_ = ShadowMaterial(
+        getTexture(RenderPassTextures::ShadowMap),
+        pDsv, dsvDesc, pSrv, srvDesc
+    );
 }
 
 RenderProtocol::Desc ShadowMap::makeDesc() {
@@ -530,7 +512,7 @@ void ShadowMap::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets
     cmdList.get()->RSSetViewports(1u, &viewport_);
     auto scissorRect = D3D12_RECT{ 0, 0, static_cast<LONG>(viewport_.Width), static_cast<LONG>(viewport_.Height) };
     cmdList.get()->RSSetScissorRects(1u, &scissorRect);
-    renderTargets.pushTarget(cmdList, RenderTargets::Specifier::Shadow, &shadowMaterial_);
+    shadowMaterial_.texture().commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
     // sort batch by bounding volume node and other properties
     // to cull out the same bounding volume nodes
@@ -610,9 +592,8 @@ void ShadowMap::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets
 }
 
 void ShadowMap::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
-    renderTargets.bind(cmdList, RenderTargets::Specifier::Shadow);
-    renderTargets.clear(cmdList, RenderTargets::Specifier::Shadow);
-
+    shadowMaterial_.texture().commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    cmdList.get()->OMSetRenderTargets(0u, nullptr, false, &shadowMaterial_.dsv().cpuHandle());
     auto first = batch_.begin();
     auto accDrawcallCnt = 0u;
 
@@ -795,11 +776,23 @@ void ScreenQuad::postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTarge
 Tessellation::Tessellation( D3D12Device& device,
     ShaderTessellation& shader, const SamplerStorage& samplerStorage,
     const D3D12_VIEWPORT& vp
-) : gfx::d3d12::RenderPass(id),
+) : gfx::d3d12::RenderPass(id), shadowMaterial_(),
     viewport_(vp), protocol_( shader.makeProtocol( device,
         RenderProtocol::Desc{ makeDesc() }
-    ) ), lights_(), batch_(), pCamera_(nullptr), pShadowMaterial_(nullptr),
+    ) ), lights_(), batch_(), pCamera_(nullptr),
     pSamplerStorage_(&samplerStorage) {}
+
+void Tessellation::initResources(
+    RenderPassTextures shadowMap, const DescriptorCPU* pDsv,
+    const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
+    const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
+) {
+    checkRequiredTextures();
+    shadowMaterial_ = ShadowMaterial(
+        getTexture(RenderPassTextures::ShadowMap),
+        pDsv, dsvDesc, pSrv, srvDesc
+    );
+}
 
 RenderProtocol::Desc Tessellation::makeDesc() {
     return RenderProtocol::Desc {
@@ -883,13 +876,11 @@ void Tessellation::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTarg
     // temporarilly directional light at first
     const auto pDirectionalLight = lights_.front();
 
-    pShadowMaterial_ = static_cast<ShadowMaterial*>(
-        renderTargets.popTarget(cmdList, RenderTargets::Specifier::Shadow)
-    );
+    shadowMaterial_.texture().commitState(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
     auto pfd = sr::PerFrameData0{
         .globalAmbient = dx::XMFLOAT3(0.1f, 0.1f, 0.1f),
-        .shadowMapRef = pShadowMaterial_->mapRef(Material::MapType::Shadow).toxm(),
+        .shadowMapRef = shadowMaterial_.mapRef(Material::MapType::Shadow).toxm(),
         .lightVP = mu::transpose(pDirectionalLight->viewProj(*pCamera_)).getXmf(),
         .lightCnt = static_cast<std::uint32_t>( lightBuffer.size() ),
     };
@@ -930,9 +921,7 @@ void Tessellation::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets
 }
 
 void Tessellation::postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
-    renderTargets.pushTarget(cmdList, RenderTargets::Specifier::Shadow, pShadowMaterial_);
-
-    pShadowMaterial_ = nullptr;
+    shadowMaterial_.texture().commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 }
 
 void Tessellation::trackChunk(const LevelChunkModel* pModel) {
@@ -947,17 +936,26 @@ void Tessellation::trackChunk(const LevelChunkModel* pModel) {
 }
 
 ShadowMapTessellation::ShadowMapTessellation( D3D12Device& device,
-    ShaderShadowMapTessellation& shader,
-    const SamplerStorage& samplerStorage, ShadowMap& shadowMapRP,
+    ShaderShadowMapTessellation& shader, const SamplerStorage& samplerStorage,
     const D3D12_VIEWPORT& vp
 ) : gfx::d3d12::RenderPass(id),
-    shadowMapSrvDesc_( shadowMapRP.shadowMapSrvDesc_ ),
-    shadowMapDsvDesc_( shadowMapRP.shadowMapDsvDesc_ ),
     viewport_(vp), protocol_( shader.makeProtocol( device,
         RenderProtocol::Desc{ makeDesc() }
     ) ), pLight_(nullptr), batch_(), pCamera_(nullptr), pSamplerStorage_(&samplerStorage) {
     viewport_.Width *= 8;
     viewport_.Height *= 8;
+}
+
+void ShadowMapTessellation::initResources(
+    RenderPassTextures shadowMap, const DescriptorCPU* pDsv,
+    const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
+    const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
+) {
+    checkRequiredTextures();
+    shadowMaterial_ = ShadowMaterial(
+        getTexture(RenderPassTextures::ShadowMap),
+        pDsv, dsvDesc, pSrv, srvDesc
+    );
 }
 
 RenderProtocol::Desc ShadowMapTessellation::makeDesc() {
@@ -1036,7 +1034,8 @@ void ShadowMapTessellation::preRender(D3D12GfxCmdList& cmdList, RenderTargets& r
 }
 
 void ShadowMapTessellation::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
-    renderTargets.bind(cmdList, RenderTargets::Specifier::Shadow);
+    shadowMaterial_.texture().commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    cmdList.get()->OMSetRenderTargets(0u, nullptr, false, &shadowMaterial_.dsv().cpuHandle());
 
     auto accDrawcallCnt = 0u;
     for (const auto& pChunk : batch_) {

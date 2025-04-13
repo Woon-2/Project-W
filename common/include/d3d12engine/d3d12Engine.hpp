@@ -41,11 +41,6 @@ public:
     friend class Model;
     friend class LevelRegion;
 
-    using TextureKey = std::string;
-    using RefModelKey = d3d12::RefModelStorage::ID;
-    using BVHPathKey = d3d12::BVHPathStorage::ID;
-    using AnimationKey = d3d12::AnimationStorage::ID;
-
     Core();
 
     d3d12::D3D12GfxCmdList fetchCmdList() {
@@ -80,22 +75,6 @@ public:
         fence_.wait();
     }
 
-    void loadStaticTexture(const TextureKey& key, d3d12::TextureResource::Type type);
-    void loadStaticTexture(const TextureKey& key, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc);
-    [[maybe_unused]] d3d12::RefModel& loadRefModel(const RefModelKey& key);
-    [[maybe_unused]] SkeletonAnimClipsPair& loadAnim(const AnimationKey& key);
-    [[maybe_unused]] d3d12::RefModel& loadRefModelWithAnim(const RefModelKey& key, const AnimationKey& animKey);
-    void loadBVHPath(const BVHPathKey& key, const std::filesystem::path& path) {
-        bvhPathStorage_.regist(key, path);
-    }
-
-    void layoutRefModelVBs( const d3d12::RefModelStorage::ID& key, std::size_t vbLayoutIdx,
-        const d3d12::InputLayout& inputLayout
-    );
-    void layoutRefModelVBs(const d3d12::RefModelStorage::ID& key, std::size_t vbLayoutIdx,
-        const std::vector<std::vector<Vertex::Properties>>& vbProps
-    );
-
     void setFullScreen() {
         window_.setFullScreen(&device_);
     }
@@ -108,43 +87,12 @@ public:
         d3d12::LevelChunkModel::initChunkMesh(device_, cmdList);
     }
 
-    void registTexturePath(const TextureKey& key, const std::filesystem::path& path) {
-        texturePaths_[key] = path;
-    }
-
-    void removeTexturePath(const TextureKey& key) {
-        texturePaths_.erase(key);
-    }
-
-    void registRefModelPath(const RefModelKey& key, const std::filesystem::path& path) {
-        refModelPaths_[key] = path;
-    }
-
-    void registAnimPath(const AnimationKey& key, const std::filesystem::path& path) {
-        animationPaths_[key] = path;
-    }
-
-    void removeRefModelPath(const RefModelKey& key) {
-        refModelPaths_.erase(key);
-    }
-
     d3d12::DescriptorRanges& descRanges() NOEXCEPT { return descRanges_; }
     const d3d12::DescriptorRanges& descRanges() const NOEXCEPT { return descRanges_; }
 
     const d3d12::SamplerStorage& samStorage() const NOEXCEPT { return samStorage_; }
-    const d3d12::StaticTextureStorage& staticTexStorage() const NOEXCEPT { return staticTexStorage_; }
-    const d3d12::RefModelStorage& refModelStorage() const NOEXCEPT { return refModelStorage_; }
-    const d3d12::BVHPathStorage& bvhPathStorage() const NOEXCEPT { return bvhPathStorage_; }
-    const d3d12::AnimationStorage& animStorage() const NOEXCEPT { return animationStorage_; }
 
 private:
-    d3d12::RefModelStorage& refModelStorage() NOEXCEPT { return refModelStorage_; }
-    d3d12::StaticTextureStorage& staticTexStorage() NOEXCEPT { return staticTexStorage_; }
-
-    d3d12::StaticTextureStorage staticTexStorage_;
-    d3d12::RefModelStorage refModelStorage_;
-    d3d12::BVHPathStorage bvhPathStorage_;
-    d3d12::AnimationStorage animationStorage_;
     d3d12::SamplerStorage samStorage_;
     dx::DXGIFactory factory_;
     d3d12::D3D12Device device_;
@@ -157,10 +105,6 @@ private:
     d3d12::DescriptorRanges descRanges_;
     MyWindow window_;
     d3d12::Fence fence_;
-
-    std::map< TextureKey, std::filesystem::path > texturePaths_;
-    std::map< RefModelKey, std::filesystem::path > refModelPaths_;
-    std::map< AnimationKey, std::filesystem::path > animationPaths_;
 };
 
 class Model : public ecs::Component {
@@ -168,7 +112,8 @@ public:
     ENABLE_COMPONENT(Model);
 
     Model( const ecs::Entity& entity,
-        const d3d12::RefModelStorage::ID& key, const Core& core,
+        const d3d12::ResourceStorage::Slot& modelSlot,
+        const d3d12::ResourceStorage::ResID& modelKey,
         gameEngine::Coord& coordComp
     );
 
@@ -279,22 +224,29 @@ public:
 class LevelRegion : public ecs::Entity {
 public:
     LevelRegion() = default;
-    LevelRegion( const Core& core, const std::filesystem::path& levelPath,
+    LevelRegion( const d3d12::ResourceStorage::Slot& heightmapSlot,
+        const std::filesystem::path& levelPath,
         const std::filesystem::path& levelTerrainPath
     );
 
     void activateChunk(std::size_t xIdx, std::size_t zIdx, Scene& scene);
-    void activateChunk( std::size_t xIdx, std::size_t zIdx, const Core& core,
-        const Core::BVHPathKey& bvhPathKey, Scene& scene, CollisionSystem& collisionSystem
+    void activateChunk( std::size_t xIdx, std::size_t zIdx,
+        const d3d12::ResourceStorage::Slot& bvhPathSlot,
+        const d3d12::ResourceStorage::ResID& bvhPathKey, Scene& scene,
+        CollisionSystem& collisionSystem
     );
-    std::vector<ecs::Entity> instantiateAllObjects(const Core& core, coord::System& coordRoot);
+    std::vector<ecs::Entity> instantiateAllObjects(
+        const d3d12::ResourceStorage::Slot& refModelSlot,
+        coord::System& coordRoot
+    );
 
     gameEngine::ObjectDisposition& dispositionRoot() NOEXCEPT { return dispositionRoot_; }
     const gameEngine::ObjectDisposition& dispositionRoot() const NOEXCEPT { return dispositionRoot_; }
 
 private:
     void instantiateObjectHierarchy( std::optional<std::size_t> parentIdx,
-        const gameEngine::ObjectDisposition& disposition, const Core& core,
+        const gameEngine::ObjectDisposition& disposition,
+        const d3d12::ResourceStorage::Slot& refModelSlot,
         coord::System& coordRoot, std::vector<ecs::Entity>& out
     );
 
