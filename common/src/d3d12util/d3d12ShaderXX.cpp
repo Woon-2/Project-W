@@ -50,7 +50,7 @@ void arrangeVBs(RefModel& refModel, D3D12Device& device, D3D12GfxCmdList& cmdLis
 }
 
 ShaderBlob::ShaderBlob( const std::filesystem::path& path,
-	const InputLayout& inputLayout, const D3D_SHADER_MACRO* macros,
+	const D3D_SHADER_MACRO* macros,
 	std::string_view entryPoint, std::string_view target,
 	UINT flag1, UINT flag2, Type type
 ) : dx::DXWrapper<ID3DBlob>(), type_(type) {
@@ -112,6 +112,25 @@ RenderProtocol::RenderProtocol( D3D12Device& device,
 	};
 
 	device.get()->CreateGraphicsPipelineState(&psoDesc, __uuidof(InterfaceType), &get());
+}
+
+ComputeProtocol::ComputeProtocol(D3D12Device& device,
+	ComputeShader& shader, const ShaderBlob& blob, const Desc& desc
+) : dx::DXWrapper<ID3D12PipelineState>(), pShader_(&shader) {
+	auto byteCode = D3D12_SHADER_BYTECODE{
+		.pShaderBytecode = blob.get()->GetBufferPointer(),
+		.BytecodeLength = blob.get()->GetBufferSize()
+	};
+
+	auto psoDesc = D3D12_COMPUTE_PIPELINE_STATE_DESC{
+		.pRootSignature = shader.rootSiganture().get().Get(),
+		.CS = byteCode,
+		.NodeMask = desc.nodeMask,
+		.CachedPSO = desc.cachedPSO,
+		.Flags = desc.flags
+	};
+
+	device.get()->CreateComputePipelineState(&psoDesc, __uuidof(InterfaceType), &get());
 }
 
 namespace detail {
@@ -349,11 +368,11 @@ void ShaderPBRIllumination::bindPerDrawcallData(
 
 void ShaderPBRIllumination::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath/"pbrShader.hlsl", inputLayout(), nullptr,
+		shaderPath/"pbrShader.hlsl", nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 	blobs_[etoi(ShaderBlob::Type::Pixel)] = ShaderBlob{
-		shaderPath/"pbrShader.hlsl", inputLayout(), nullptr,
+		shaderPath/"pbrShader.hlsl", nullptr,
 		"PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Pixel
 	};
 }
@@ -478,19 +497,19 @@ void ShaderPBRIlluminationTerrain::bindPerDrawcallData(
 
 void ShaderPBRIlluminationTerrain::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath/"pbrShaderTerrain.hlsl", inputLayout(), nullptr,
+		shaderPath/"pbrShaderTerrain.hlsl", nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 	blobs_[etoi(ShaderBlob::Type::Pixel)] = ShaderBlob{
-		shaderPath/"pbrShaderTerrain.hlsl", inputLayout(), nullptr,
+		shaderPath/"pbrShaderTerrain.hlsl", nullptr,
 		"PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Pixel
 	};
 	blobs_[etoi(ShaderBlob::Type::Hull)] = ShaderBlob{
-		shaderPath/"pbrShaderTerrain.hlsl", inputLayout(), nullptr,
+		shaderPath/"pbrShaderTerrain.hlsl", nullptr,
 		"HSMain", "hs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Hull
 	};
 	blobs_[etoi(ShaderBlob::Type::Domain)] = ShaderBlob{
-		shaderPath/"pbrShaderTerrain.hlsl", inputLayout(), nullptr,
+		shaderPath/"pbrShaderTerrain.hlsl", nullptr,
 		"DSMain", "ds_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Domain
 	};
 }
@@ -634,7 +653,7 @@ void ShaderShadowMap::bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCmdLi
 
 void ShaderShadowMap::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath/"shadowMap.hlsl", inputLayout(), nullptr,
+		shaderPath/"shadowMap.hlsl", nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 }
@@ -694,11 +713,11 @@ void ShaderScreenQuad::bindRootParams(D3D12GfxCmdList& cmdList) {
 
 void ShaderScreenQuad::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath/"screenQuad.hlsl", inputLayout(), nullptr,
+		shaderPath/"screenQuad.hlsl", nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 	blobs_[etoi(ShaderBlob::Type::Pixel)] = ShaderBlob{
-		shaderPath/"screenQuad.hlsl", inputLayout(), nullptr,
+		shaderPath/"screenQuad.hlsl", nullptr,
 		"PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Pixel
 	};
 }
@@ -750,19 +769,19 @@ void ShaderTessellation::bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCm
 
 void ShaderTessellation::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath/"tessellation.hlsl", inputLayout(), nullptr,
+		shaderPath/"tessellation.hlsl", nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 	blobs_[etoi(ShaderBlob::Type::Pixel)] = ShaderBlob{
-		shaderPath/"tessellation.hlsl", inputLayout(), nullptr,
+		shaderPath/"tessellation.hlsl", nullptr,
 		"PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Pixel
 	};
 	blobs_[etoi(ShaderBlob::Type::Hull)] = ShaderBlob{
-		shaderPath/"tessellation.hlsl", inputLayout(), nullptr,
+		shaderPath/"tessellation.hlsl", nullptr,
 		"HSMain", "hs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Hull
 	};
 	blobs_[etoi(ShaderBlob::Type::Domain)] = ShaderBlob{
-		shaderPath/"tessellation.hlsl", inputLayout(), nullptr,
+		shaderPath/"tessellation.hlsl", nullptr,
 		"DSMain", "ds_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Domain
 	};
 }
@@ -850,15 +869,15 @@ void ShaderShadowMapTessellation::bindPerDrawcallData(std::size_t drawcallIdx, D
 
 void ShaderShadowMapTessellation::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath/"shadowMapTerrain.hlsl", inputLayout(), nullptr,
+		shaderPath/"shadowMapTerrain.hlsl", nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 	blobs_[etoi(ShaderBlob::Type::Hull)] = ShaderBlob{
-		shaderPath/"shadowMapTerrain.hlsl", inputLayout(), nullptr,
+		shaderPath/"shadowMapTerrain.hlsl", nullptr,
 		"HSMain", "hs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Hull
 	};
 	blobs_[etoi(ShaderBlob::Type::Domain)] = ShaderBlob{
-		shaderPath/"shadowMapTerrain.hlsl", inputLayout(), nullptr,
+		shaderPath/"shadowMapTerrain.hlsl", nullptr,
 		"DSMain", "ds_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Domain
 	};
 }
@@ -910,6 +929,45 @@ InputLayout ShaderShadowMapTessellation::makeInputLayoutSeparated() {
 	} );
 }
 
+ShaderMatMul::ShaderMatMul(D3D12Device& device, const RootSignature& root, const Config& config)
+	: ComputeShader(root), lhsMatrices_(device, sizeof(dx::XMFLOAT4X4) * config.maxMatrixCnt),
+	rhsMatrices_(device, sizeof(dx::XMFLOAT4X4) * config.maxMatrixCnt),
+	resultMatrices_(device, sizeof(dx::XMFLOAT4X4) * config.maxMatrixCnt),
+	resultMatricesSrc_(device, sizeof(dx::XMFLOAT4X4) * config.maxMatrixCnt,
+		D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+	), maxMatrixCnt_(config.maxMatrixCnt) {
+	lhsMatrices_.pullGpuAddr();
+	rhsMatrices_.pullGpuAddr();
+	resultMatrices_.pullGpuAddr();
+}
+
+void ShaderMatMul::bindRootParams(D3D12GfxCmdList& cmdList) {
+	auto& root = UnifiedRoot::get();
+
+	cmdList.get()->SetComputeRootConstantBufferView(
+		root.params[ UnifiedRoot::ParamIndices::t3 ],
+		lhsMatrices_.gpuAddr()
+	);
+	cmdList.get()->SetComputeRootConstantBufferView(
+		root.params[ UnifiedRoot::ParamIndices::t4 ],
+		rhsMatrices_.gpuAddr()
+	);
+	cmdList.get()->SetComputeRootUnorderedAccessView(
+		root.params[ UnifiedRoot::ParamIndices::u0 ],
+		resultMatricesSrc_.gpuAddr()
+	);
+}
+
+void ShaderMatMul::loadBlob() {
+	blob_ = ShaderBlob{
+		shaderPath/"matMul.hlsl", nullptr,
+		"CSMain", "cs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Compute
+	};
+}
+
+void ShaderMatMul::releaseBlob() {
+	blob_.reset();
+}
 
 }   // namespace gfx::d3d12
 

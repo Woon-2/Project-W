@@ -199,6 +199,27 @@ public:
     );
 };
 
+class ReadbackBuffer : public D3D12Resource {
+public:
+    ReadbackBuffer() = default;
+
+    ReadbackBuffer(D3D12Device& device, std::size_t byteWidth,
+        D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE
+    );
+
+    void readback(D3D12GfxCmdList& cmdList, DefaultBuffer& srcBuf);
+    template <class T>
+    T* getReadbackResult() const {
+        return static_cast<T*>(pMappedData_);
+    }
+    void completeReadback() {
+        get()->Unmap(0, nullptr);
+    }
+
+private:
+    void* pMappedData_;
+};
+
 class TextureResource : public D3D12Resource {
 public:
     enum class Type {

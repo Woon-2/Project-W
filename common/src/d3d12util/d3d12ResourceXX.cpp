@@ -105,6 +105,28 @@ DefaultBuffer::DefaultBuffer( D3D12Device& device, std::size_t byteWidth,
         .Flags = flags
     }, D3D12_HEAP_TYPE_DEFAULT ) {}
 
+ReadbackBuffer::ReadbackBuffer(D3D12Device& device, std::size_t byteWidth,
+    D3D12_RESOURCE_FLAGS flags
+) : D3D12Resource( device, D3D12_RESOURCE_DESC{
+        .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
+        .Width = static_cast<UINT64>(byteWidth),
+        .Height = static_cast<UINT>(1),
+        .DepthOrArraySize = static_cast<UINT16>(1),
+        .MipLevels = static_cast<UINT16>(1),
+        .Format = DXGI_FORMAT_UNKNOWN,
+        .SampleDesc = DXGI_SAMPLE_DESC{
+            .Count = 1,
+            .Quality = 0
+        },
+        .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+        .Flags = flags
+    }, D3D12_HEAP_TYPE_READBACK ) {}
+
+void ReadbackBuffer::readback(D3D12GfxCmdList& cmdList, DefaultBuffer& srcBuf) {
+    cmdList.copyResource(srcBuf, *this);
+    get()->Map(0, nullptr, reinterpret_cast<void**>(&pMappedData_));
+}
+
 TextureResource::TextureResource( D3D12Device& device, const Desc& texResDesc,
     D3D12_HEAP_TYPE heapType, D3D12_RESOURCE_STATES initialState
 ) : D3D12Resource( device, D3D12_RESOURCE_DESC{

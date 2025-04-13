@@ -168,11 +168,12 @@ public:
 		Geometry,
 		Hull,
 		Domain,
+		Compute,
 		Size
 	};
 
 	ShaderBlob( const std::filesystem::path& path,
-		const InputLayout& inputLayout, const D3D_SHADER_MACRO* macros,
+		const D3D_SHADER_MACRO* macros,
 		std::string_view entryPoint, std::string_view target,
 		UINT flag1, UINT flag2, Type type
 	);
@@ -226,6 +227,30 @@ public:
 
 private:
 	Shader* pShader_;
+};
+
+class ComputeShader;
+
+class ComputeProtocol : public dx::DXWrapper<ID3D12PipelineState> {
+public:
+	struct Desc {
+		UINT nodeMask;
+		D3D12_CACHED_PIPELINE_STATE cachedPSO;
+		D3D12_PIPELINE_STATE_FLAGS flags;
+	};
+
+	ComputeProtocol(D3D12Device& device, ComputeShader& shader,
+		const ShaderBlob& blob, const Desc& desc
+	);
+
+	void bind(D3D12GfxCmdList& cmdList) {
+		cmdList.get()->SetPipelineState(get().Get());
+	}
+
+	ComputeShader& shader() const noexcept { return *pShader_; }
+
+private:
+	ComputeShader* pShader_;
 };
 
 class Shader {
@@ -306,6 +331,13 @@ protected:
 	RootSignature root_;
 };
 
+
+inline std::optional<std::size_t> RenderProtocol::compatibleLayout(
+	const RefMesh& mesh
+) const {
+    return pShader_->inputLayout().bindableIdx(mesh);
+}
+
 class ComputeShader {
 protected:
 	static std::size_t calcConstantBufferSize(std::size_t size) {
@@ -322,9 +354,9 @@ public:
 		return blob_;
 	}
 
-	void loadBlobsIfNot() {
+	void loadBlobIfNot() {
 		if (!blob_.has_value()) {
-			loadBlobs();
+			loadBlob();
 		}
 	}
 
@@ -333,8 +365,8 @@ public:
 	}
 
 	virtual void bindRootParams(D3D12GfxCmdList& cmdList) = 0;
-	virtual void loadBlobs() = 0;
-	virtual void releaseBlobs() = 0;
+	virtual void loadBlob() = 0;
+	virtual void releaseBlob() = 0;
 
 	void dispatch( D3D12GfxCmdList& cmdList, std::size_t threadGroupCntX,
 		std::size_t threadGroupCntY, std::size_t threadGroupCntZ
@@ -346,16 +378,10 @@ public:
 		);
 	}
 
-private:
+protected:
 	std::optional<ShaderBlob> blob_;
 	RootSignature root_;
 };
-
-inline std::optional<std::size_t> RenderProtocol::compatibleLayout(
-	const RefMesh& mesh
-) const {
-    return pShader_->inputLayout().bindableIdx(mesh);
-}
 
 namespace sr {
 
@@ -821,6 +847,32 @@ private:
 
 	std::size_t maxInstanceCnt_;
 	std::size_t maxDrawcallCnt_;
+};
+
+class ShaderMatMul : public ComputeShader {
+public:
+	struct Config {
+		std::size_t maxMatrixCnt;
+	};
+
+	ShaderMatMul(D3D12Device& device, const RootSignature& root, const Config& config);
+
+	ComputeProtocol makeProtocol( D3D12Device& device, const ComputeProtocol::Desc& desc) {
+		loadBlobIfNot();
+		return ComputeProtocol(device, *this, blob_.value(), desc);
+	}	
+
+	void bindRootParams(D3D12GfxCmdList& cmdList) override;
+	void loadBlob() override;
+	void releaseBlob() override;
+
+	UploadBuffer lhsMatrices_;
+	UploadBuffer rhsMatrices_;
+	ReadbackBuffer resultMatrices_;
+	
+private:
+	DefaultBuffer resultMatricesSrc_;
+	std::size_t maxMatrixCnt_;
 };
 
 }   // namespace gfx::d3d12
