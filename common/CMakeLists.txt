@@ -288,6 +288,7 @@ add_library(gfx
     src/d3d12util/d3d12ResourceXX.cpp include/d3d12util/d3d12ResourceXX.hpp
     src/d3d12util/d3d12ShaderXX.cpp include/d3d12util/d3d12ShaderXX.hpp
     src/d3d12util/d3d12RenderPass.cpp include/d3d12util/d3d12RenderPass.hpp
+    src/d3d12util/d3d12ComputePass.cpp include/d3d12util/d3d12ComputePass.hpp
     src/d3d12engine/d3d12Engine.cpp include/d3d12engine/d3d12Engine.hpp
     src/game/animSystem.cpp include/game/animSystem.hpp
     

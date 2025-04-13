@@ -851,6 +851,8 @@ private:
 
 class ShaderMatMul : public ComputeShader {
 public:
+	static constexpr std::size_t groupSizeX = 256u;
+
 	struct Config {
 		std::size_t maxMatrixCnt;
 	};
@@ -866,12 +868,22 @@ public:
 	void loadBlob() override;
 	void releaseBlob() override;
 
+	std::size_t maxMatrixCnt() const noexcept {
+		return maxMatrixCnt_;
+	}
+
+	void dispatch(D3D12GfxCmdList& cmdList, std::size_t threadGroupCnt) {
+		cmdList.get()->Dispatch(
+			static_cast<UINT>(threadGroupCnt), 1u, 1u
+		);
+	}
+
 	UploadBuffer lhsMatrices_;
 	UploadBuffer rhsMatrices_;
 	ReadbackBuffer resultMatrices_;
+	DefaultBuffer resultMatricesSrc_;
 	
 private:
-	DefaultBuffer resultMatricesSrc_;
 	std::size_t maxMatrixCnt_;
 };
 
