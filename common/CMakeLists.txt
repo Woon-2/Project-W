@@ -89,17 +89,18 @@ target_include_directories(mu
 
 # === coro ===
 add_library(coro
-    INTERFACE
-        include/generator.hpp
-        include/resumable.hpp
+    src/FSM.cpp include/FSM.hpp
+
+    include/generator.hpp
+    include/resumable.hpp
 )
 
 add_library(common::coro ALIAS coro)
 
-auto_configure(coro INTERFACE)
+auto_configure(coro PUBLIC)
 
 target_include_directories(coro
-    INTERFACE
+    PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
@@ -183,6 +184,7 @@ target_link_libraries(ecsClient
     PRIVATE
         common::mu
         common::TMP
+        common::coro
 )
 
 target_include_directories(ecsClient
@@ -215,6 +217,7 @@ target_link_libraries(ecsServer
         common::mu
         common::woon2exception
         common::TMP
+        common::coro
 )
 
 target_include_directories(ecsServer
