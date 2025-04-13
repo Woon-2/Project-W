@@ -63,6 +63,7 @@ enum class Components {
     Coord,
     NetEx,
     BoundingVolume,
+    AnimController,
     Size,
 };
 

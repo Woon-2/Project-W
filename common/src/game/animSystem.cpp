@@ -242,7 +242,7 @@ AnimClip AnimClip::loadClipFromStream(std::istream& in) {
 
     float duration{};
     readStream(in, duration);
-    animClip.duration_ = duration;
+    animClip.duration_ = Milliseconds(duration * 1000.f);
 
     readStream(in, nStrLength);
     readStream(in, pstrToken, nStrLength);
@@ -368,7 +368,7 @@ SkeletonAnimClipsPair loadSkeletonAndAnimClipFromFile(
 AnimInstance::AnimInstance(const Skeleton* pSkeleton, const AnimClip* pAnimClip)
     : boneXformCache_(pSkeleton->bones().size()),
     keyFrameCache_(), pAnimClip_(pAnimClip), pSkeleton_(pSkeleton),
-    elapsedTime_(0.0f), stage_(Stage::None) {
+    elapsedTime_(0_ms), stage_(Stage::None), speed_(1.f), weight_(0.f) {
     if (!pAnimClip_) {
         throw std::runtime_error("AnimInstance requires a valid AnimClip.");
     }
@@ -388,7 +388,7 @@ AnimInstance::AnimInstance(const Skeleton* pSkeleton, const AnimClip* pAnimClip)
     }
 }
 
-void AnimInstance::update(float deltaTime) {
+void AnimInstance::update(Milliseconds deltaTime) {
     if (stage_ != Stage::None) {
         throw std::runtime_error(
             "[Description] AnimInstance::update: expected AnimInstance stage: "
@@ -397,12 +397,12 @@ void AnimInstance::update(float deltaTime) {
         );
     }
 
-    elapsedTime_ += deltaTime;
+    elapsedTime_ += deltaTime * speed_;
 
     if (elapsedTime_ > pAnimClip_->duration()) {
 
         if (pAnimClip_->flags() & AnimClip::Flags::Loop) {
-            elapsedTime_ = std::fmod(elapsedTime_, pAnimClip_->duration());
+            elapsedTime_ -= pAnimClip_->duration();
 
             // reset key frame cache
             for (std::size_t i = 0; i < pSkeleton_->bones().size(); ++i) {
@@ -421,7 +421,7 @@ void AnimInstance::update(float deltaTime) {
 
         // every key frame must end with sentinal key frame
         // which has time = duration
-        while (nextKeyFrame->time <= elapsedTime_) {
+        while (nextKeyFrame->time * 1000.f <= elapsedTime_.count()) {
             keyFrame = nextKeyFrame;
             ++nextKeyFrame;
         }
@@ -484,4 +484,133 @@ void AnimInstance::calcFinals() {
     // with compute shader
 
     stage_ = Stage::None;
+}
+
+void AnimController::play(const std::string& key) {
+    const auto& animClip = clipInfo(key);
+    insts_.emplace_back(key,
+        AnimInstance(pSkeleton_, &animClip)
+    );
+
+    if (animClip.flags() & AnimClip::Flags::Loop) {
+        animSequences_.emplace_back(key, loopImpl(key, *this));
+    }
+    else {
+        animSequences_.emplace_back(key, onceImpl(key, *this));
+    }
+}
+
+void AnimController::play(const std::string& key, std::coroutine_handle<> seq) {
+    const auto& animClip = clipInfo(key);
+    insts_.emplace_back(key,
+        AnimInstance(pSkeleton_, &animClip)
+    );
+
+    animSequences_.emplace_back(key, seq);
+}
+
+void AnimController::update(Milliseconds deltaTime) {
+    deltaTime_ = deltaTime;
+    for (auto& [key, inst] : insts_) {
+        inst.update(deltaTime_);
+    }
+
+    auto cur = animSequences_.begin();
+    while (cur != animSequences_.end()) {
+        auto& [key, coro] = *cur;
+        coro.resume();
+        if (coro.done()) {
+            std::erase_if(insts_, [&key](const auto& pair) { return pair.first == key; });
+            coro.destroy();
+            cur = animSequences_.erase(cur);
+        }
+        else {
+            ++cur;
+        }
+    }
+}
+
+void AnimController::setAnimSequence(const std::string& key, std::coroutine_handle<> animSequence) {
+    for (auto& [k, c] : animSequences_) {
+        if (k == key) {
+            c = animSequence;
+            break;
+        }
+    }
+}
+
+TaskAnim fadeInImpl(std::string key, Milliseconds fadeDuration,
+    std::coroutine_handle<> suspended, AnimController& con
+) {
+    auto elapsed = AnimConAttorney::getElapsed(key, con);
+    while (elapsed < fadeDuration) {
+        AnimConAttorney::setWeight(key, std::clamp(elapsed / fadeDuration, 0.f, 1.f), con);
+        co_await std::suspend_always{};
+        elapsed = AnimConAttorney::getElapsed(key, con);
+    }
+    con.setAnimSequence(key, suspended);
+}
+
+TaskAnim fadeOutImpl(std::string key, Milliseconds fadeDuration, AnimController& con) {
+    auto elapsed = Milliseconds(0.f);
+
+    while (elapsed < fadeDuration) {
+        AnimConAttorney::setWeight(key, 1.f - std::clamp(elapsed / fadeDuration, 0.f, 1.f), con);
+        co_await std::suspend_always{};
+        elapsed += AnimConAttorney::getDeltaTime(con) * AnimConAttorney::getSpeed(key, con);
+    }
+}
+
+TaskAnim loopImpl(std::string key, AnimController& con) {
+    AnimConAttorney::setWeight(key, 1.f, con);
+    const auto duration = AnimConAttorney::getDuration(key, con);
+    for (;;) {
+        const auto elapsed = AnimConAttorney::getElapsed(key, con);
+        if (elapsed >= duration) {
+            AnimConAttorney::setElapsed(key, elapsed - duration, con);
+        }
+        co_await std::suspend_always{};
+    }
+}
+
+TaskAnim onceImpl(std::string key, AnimController& con) {
+    AnimConAttorney::setWeight(key, 1.f, con);
+    auto elapsed = AnimConAttorney::getElapsed(key, con);
+    auto duration = AnimConAttorney::getDuration(key, con);
+    while (elapsed < duration) {
+        co_await std::suspend_always{};
+        elapsed = AnimConAttorney::getElapsed(key, con);
+    }
+}
+
+TaskAnim fadeIn(std::string key, Milliseconds fadeDuration, AnimController& animCon) {
+    co_await FadeIn{ .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration };
+    if (animCon.clipInfo(key).flags() & AnimClip::Flags::Loop) {
+        co_await Loop{ .pAnimCon = &animCon, .key = key };
+    }
+    else {
+        co_await Once{ .pAnimCon = &animCon, .key = key };
+    }
+}
+
+TaskAnim fadeOut(std::string key, Milliseconds fadeDuration, AnimController& animCon) {
+    co_await FadeOut{ .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration };
+}
+
+// on anim controller's play => register anim instances' matrices on anim system
+
+void AnimSystem::update(Milliseconds deltaTime) {
+    // update timing and weights for all anim instances
+    for (auto& pAnimCon : components<AnimController>()) {
+        pAnimCon->update(deltaTime);
+    }
+
+    // calculate transform for all anim instances
+    for (auto& pAnimCon : components<AnimController>()) {
+        for (auto& [key, inst] : AnimConAttorney::getInstances(*pAnimCon)) {
+            inst.calcLocals();
+            inst.calcWorlds();
+            inst.calcFinals();
+        }
+    }
 }

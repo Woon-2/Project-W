@@ -9,6 +9,7 @@
 #include <memory>
 #include <stdexcept>
 #include <typeinfo>
+#include <chrono>
 
 template <class T>
 consteval int indexOf() {
@@ -147,5 +148,14 @@ T&& any_cast_move(AnyMoveOnly&& a) {
 }
 
 
+using Clock = std::chrono::high_resolution_clock;
+using Milliseconds = std::chrono::duration<float, std::milli>;
+
+inline Milliseconds operator"" _ms(unsigned long long int ms) {
+    return Milliseconds(static_cast<float>(ms));
+}
+inline Milliseconds operator"" _ms(long double ms) {
+    return Milliseconds(static_cast<float>(ms));
+}
 
 #endif  // __TMP_HPP
