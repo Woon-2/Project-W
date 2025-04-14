@@ -513,6 +513,13 @@ struct PerFrameData2 {
 
 };
 
+struct KeyFrame {
+	dx::XMFLOAT3 pos;
+	dx::XMFLOAT4 rot;
+	dx::XMFLOAT3 scale;
+	float ratio;
+};
+
 }	// namespace gfx::d3d12::sr
 
 class ShaderPBRIllumination : public Shader {
@@ -859,7 +866,7 @@ public:
 
 	ShaderMatMul(D3D12Device& device, const RootSignature& root, const Config& config);
 
-	ComputeProtocol makeProtocol( D3D12Device& device, const ComputeProtocol::Desc& desc) {
+	ComputeProtocol makeProtocol(D3D12Device& device, const ComputeProtocol::Desc& desc) {
 		loadBlobIfNot();
 		return ComputeProtocol(device, *this, blob_.value(), desc);
 	}	
@@ -885,6 +892,51 @@ public:
 	
 private:
 	std::size_t maxMatrixCnt_;
+};
+
+struct KeyFrame {
+    mu::Vec3 pos;
+    mu::NQuat rot;
+    mu::Vec3 scale;
+    float time;
+};
+
+class ShaderAnimInterpolation : public ComputeShader {
+public:
+	static constexpr std::size_t groupSizeX = 256u;
+
+	struct Config {
+		std::size_t maxKeyFrameCnt;
+	};
+
+	ShaderAnimInterpolation(D3D12Device& device, const RootSignature& root, const Config& config);
+
+	ComputeProtocol makeProtocol(D3D12Device& device, const ComputeProtocol::Desc& desc) {
+		loadBlobIfNot();
+		return ComputeProtocol(device, *this, blob_.value(), desc);
+	}	
+
+	void bindRootParams(D3D12GfxCmdList& cmdList) override;
+	void loadBlob() override;
+	void releaseBlob() override;
+
+	std::size_t maxKeyFrameCnt() const noexcept {
+		return maxKeyFrameCnt_;
+	}
+
+	void dispatch(D3D12GfxCmdList& cmdList, std::size_t threadGroupCnt) {
+		cmdList.get()->Dispatch(
+			static_cast<UINT>(threadGroupCnt), 1u, 1u
+		);
+	}
+
+	UploadBuffer lhsKeyFrames_;
+	UploadBuffer rhsKeyFrames_;
+	ReadbackBuffer resultMatrices_;
+	DefaultBuffer resultMatricesSrc_;
+
+private:
+	std::size_t maxKeyFrameCnt_;
 };
 
 }   // namespace gfx::d3d12

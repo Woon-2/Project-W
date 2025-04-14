@@ -938,7 +938,7 @@ ShaderMatMul::ShaderMatMul(D3D12Device& device, const RootSignature& root, const
 	), maxMatrixCnt_(config.maxMatrixCnt) {
 	lhsMatrices_.pullGpuAddr();
 	rhsMatrices_.pullGpuAddr();
-	resultMatrices_.pullGpuAddr();
+	resultMatricesSrc_.pullGpuAddr();
 }
 
 void ShaderMatMul::bindRootParams(D3D12GfxCmdList& cmdList) {
@@ -966,6 +966,47 @@ void ShaderMatMul::loadBlob() {
 }
 
 void ShaderMatMul::releaseBlob() {
+	blob_.reset();
+}
+
+ShaderAnimInterpolation::ShaderAnimInterpolation(D3D12Device& device, const RootSignature& root, const Config& config)
+	: ComputeShader(root),
+	lhsKeyFrames_(device, sizeof(sr::KeyFrame) * config.maxKeyFrameCnt),
+	rhsKeyFrames_(device, sizeof(sr::KeyFrame) * config.maxKeyFrameCnt),
+	resultMatrices_(device, sizeof(dx::XMFLOAT4X4) * config.maxKeyFrameCnt),
+	resultMatricesSrc_(device, sizeof(dx::XMFLOAT4X4) * config.maxKeyFrameCnt,
+		D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+	), maxKeyFrameCnt_(config.maxKeyFrameCnt) {
+	lhsKeyFrames_.pullGpuAddr();
+	rhsKeyFrames_.pullGpuAddr();
+	resultMatricesSrc_.pullGpuAddr();
+}
+
+void ShaderAnimInterpolation::bindRootParams(D3D12GfxCmdList& cmdList) {
+	auto& root = UnifiedRoot::get();
+
+	cmdList.get()->SetComputeRootConstantBufferView(
+		root.params[ UnifiedRoot::ParamIndices::t3 ],
+		lhsKeyFrames_.gpuAddr()
+	);
+	cmdList.get()->SetComputeRootConstantBufferView(
+		root.params[ UnifiedRoot::ParamIndices::t4 ],
+		rhsKeyFrames_.gpuAddr()
+	);
+	cmdList.get()->SetComputeRootUnorderedAccessView(
+		root.params[ UnifiedRoot::ParamIndices::u0 ],
+		resultMatricesSrc_.gpuAddr()
+	);
+}
+
+void ShaderAnimInterpolation::loadBlob() {
+	blob_ = ShaderBlob{
+		shaderPath/"animInterpolation.hlsl", nullptr,
+		"CSMain", "cs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Compute
+	};
+}
+
+void ShaderAnimInterpolation::releaseBlob() {
 	blob_.reset();
 }
 
