@@ -155,8 +155,6 @@ struct PromiseCompute {
 
 class AnimInstance {
 public:
-    friend class AnimController;
-
     enum class Stage {
         None,
         CalcLocal,
@@ -176,6 +174,7 @@ public:
 
     Milliseconds elapsed() const noexcept { return elapsedTime_; }
     float speed() const noexcept { return speed_; }
+    float weight() const noexcept { return weight_; }
 
     auto& boneXformCache() noexcept { return boneXformCache_; }
     const auto& boneXformCache() const noexcept { return boneXformCache_; }
@@ -236,6 +235,8 @@ public:
 
     const Skeleton& skeleton() const { return *pSkeleton_; }
     void setSkeleton(const Skeleton* pSkeleton) { pSkeleton_ = pSkeleton; }
+
+    const auto& instances() const { return insts_; }
 
 private:
     std::unordered_map<std::string, const AnimClip*> clipMap_;

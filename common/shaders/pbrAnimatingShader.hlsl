@@ -50,8 +50,10 @@ struct PerInstanceData {
     float3x3 wvNormal;
     uint animIdx0;  // animIdx represents the first bone index of the animation
     uint animIdx1;
-    float4 animWeight0;
-    float4 animWeight1;
+    uint2 padding;
+    float animWeight0;
+    float animWeight1;
+    float2 padding2;
 };
 
 StructuredBuffer<PerInstanceData> gInstances: register(t0);

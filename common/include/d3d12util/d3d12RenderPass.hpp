@@ -14,6 +14,8 @@
 #include <unordered_map>
 #include <type_traits>
 
+class AnimController;
+
 namespace gfx {
 
 namespace d3d12 {
@@ -412,6 +414,66 @@ private:
     std::vector<const WorldLight*> lights_;
     std::vector< std::tuple<bool, const BoundingVolumeNode*, Submesh*,
         const coord::System*, VBLayoutIdx, mu::Mat4x4>
+    > batch_;
+    const Camera* pCamera_;
+    const SamplerStorage* pSamplerStorage_;
+};
+
+class PBRAnimatedIllumination : public gfx::d3d12::RenderPass {
+public:
+    static constexpr const char* id = "PBRAnimatedIllumination";
+
+    PBRAnimatedIllumination( D3D12Device& device, ShaderPBRAnimatedIllumination& shader,
+        const SamplerStorage& samplerStorage, const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
+    );
+
+    void initResources(
+        RenderPassTextures shadowMap, const DescriptorCPU* pDsv,
+        const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
+        const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
+    );
+
+    std::vector<RenderPassTextures> requiredTextures() const {
+        return {RenderPassTextures::ShadowMap};
+    }
+
+    void setViewport(const D3D12_VIEWPORT& vp);
+
+    const D3D12_VIEWPORT& viewport() const NOEXCEPT {
+        return viewport_;
+    }
+
+    void preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+
+    void trackModel(Model* pModel, const AnimController* pAnimController);
+    void trackModel(Model* pModel, const AnimController* pAnimController,
+        const BoundingVolumeNode* pBVNode
+    );
+    void setCamera(const Camera* pCamera) NOEXCEPT {
+        pCamera_ = pCamera;
+    }
+    void addLight(const WorldLight* pLight) NOEXCEPT {
+        lights_.push_back(pLight);
+    }
+
+private:
+ShaderPBRAnimatedIllumination& shader() noexcept {
+        return static_cast<ShaderPBRAnimatedIllumination&>(protocol_.shader());
+    }
+    const ShaderPBRAnimatedIllumination& shader() const noexcept {
+        return static_cast<const ShaderPBRAnimatedIllumination&>(protocol_.shader());
+    }
+
+    static RenderProtocol::Desc makeDesc();
+
+    ShadowMaterial shadowMaterial_;
+    D3D12_VIEWPORT viewport_;
+    RenderProtocol protocol_;
+    std::vector<const WorldLight*> lights_;
+    std::vector< std::tuple<bool, const BoundingVolumeNode*, Submesh*,
+        const coord::System*, VBLayoutIdx, mu::Mat4x4, const AnimController*>
     > batch_;
     const Camera* pCamera_;
     const SamplerStorage* pSamplerStorage_;

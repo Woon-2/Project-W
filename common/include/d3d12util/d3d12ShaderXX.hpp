@@ -418,6 +418,19 @@ struct PerInstanceData4 {
 	dx::XMFLOAT4X4 wv;
 };
 
+struct PerInstanceData5 {
+	dx::XMFLOAT4X4 wvp;
+	dx::XMFLOAT4X4 world;
+	dx::XMFLOAT4X4 wv;
+	dx::XMFLOAT3X3 wvNormal;
+	std::uint32_t animIdx0;
+	std::uint32_t animIdx1;
+	dx::XMUINT2 padding;
+	float animWeight0;
+	float animWeight1;
+	dx::XMFLOAT2 padding2;
+};
+
 struct Light {
 	enum class Type {
 		Point,
@@ -579,6 +592,72 @@ private:
 	std::size_t maxInstanceCnt_;
 	std::size_t maxLightCnt_;
 	std::size_t maxDrawcallCnt_;
+};
+
+class ShaderPBRAnimatedIllumination : public Shader {
+private:
+	std::size_t cbDrawcallDataSize_;
+
+public:
+	struct Config {
+		std::size_t maxInstanceCnt;
+		std::size_t maxDrawcallCnt;
+		std::size_t maxLightCnt;
+		std::size_t maxBoneCnt;
+	};
+
+	ShaderPBRAnimatedIllumination( D3D12Device& device, const RootSignature& root,
+		const Config& config, InputLayout::Spec ilSpec = InputLayout::Spec::serial
+	);
+
+	RenderProtocol makeProtocol( D3D12Device& device, const RenderProtocol::Desc& desc) {
+		return RenderProtocol( device, *this,
+			selectBlobsStrong<ShaderBlob::Type::Vertex, ShaderBlob::Type::Pixel>(), desc
+		);
+	}
+
+	std::size_t maxInstanceCnt() const noexcept {
+		return maxInstanceCnt_;
+	}
+
+	std::size_t maxLightCnt() const noexcept {
+		return maxLightCnt_;
+	}
+
+	std::size_t maxDrawcallCnt() const noexcept {
+		return maxDrawcallCnt_;
+	}
+
+	std::size_t maxBoneCnt() const noexcept {
+		return maxBoneCnt_;
+	}
+
+	void bindRootParams(D3D12GfxCmdList& cmdList) override;
+	void bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCmdList& cmdList);
+
+	std::size_t cbDrawcallDataSize() const noexcept {
+		return cbDrawcallDataSize_;
+	}
+
+	void loadBlobs() override;
+	void releaseBlobs() override;
+
+	UploadBuffer perConfigurationData_;
+	UploadBuffer perFrameData_;
+	UploadBuffer perDrawcallData_;
+	UploadBuffer perInstanceData_;
+	UploadBuffer lightBuffer_;
+	UploadBuffer boneBuffer_;
+
+private:
+	static InputLayout makeInputLayout(InputLayout::Spec ilSpec);
+	static InputLayout makeInputLayoutSerial();
+	static InputLayout makeInputLayoutSeparated();
+
+	std::size_t maxInstanceCnt_;
+	std::size_t maxLightCnt_;
+	std::size_t maxDrawcallCnt_;
+	std::size_t maxBoneCnt_;
 };
 
 class ShaderPBRIlluminationTerrain : public Shader {

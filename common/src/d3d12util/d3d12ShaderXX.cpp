@@ -447,6 +447,162 @@ InputLayout ShaderPBRIllumination::makeInputLayoutSeparated() {
 	} );
 }
 
+ShaderPBRAnimatedIllumination::ShaderPBRAnimatedIllumination(
+	D3D12Device& device, const RootSignature& root,
+	const Config& config, InputLayout::Spec ilSpec
+) : Shader(root, makeInputLayout(ilSpec)),
+	cbDrawcallDataSize_( calcConstantBufferSize(sizeof(sr::PerDrawcallData0)) ),
+	perConfigurationData_(device, sizeof(sr::PerConfigurationData0)),
+	perFrameData_(device, sizeof(sr::PerFrameData0)),
+	perDrawcallData_(device, cbDrawcallDataSize_ * config.maxDrawcallCnt),
+	perInstanceData_(device, sizeof(sr::PerInstanceData5) * config.maxInstanceCnt),
+	lightBuffer_(device, sizeof(sr::Light) * config.maxLightCnt),
+	boneBuffer_(device, sizeof(dx::XMFLOAT4X4) * config.maxBoneCnt),
+	maxInstanceCnt_(config.maxInstanceCnt), maxLightCnt_(config.maxLightCnt),
+	maxDrawcallCnt_(config.maxDrawcallCnt), maxBoneCnt_(config.maxBoneCnt) {
+	perConfigurationData_.pullGpuAddr();
+	perFrameData_.pullGpuAddr();
+	perDrawcallData_.pullGpuAddr();
+	perInstanceData_.pullGpuAddr();
+	lightBuffer_.pullGpuAddr();
+	boneBuffer_.pullGpuAddr();
+}
+
+void ShaderPBRAnimatedIllumination::bindRootParams(D3D12GfxCmdList& cmdList) {
+	auto& root = UnifiedRoot::get();
+
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		root.params[ UnifiedRoot::ParamIndices::b0 ],
+		perConfigurationData_.gpuAddr()
+	);
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		root.params[ UnifiedRoot::ParamIndices::b1 ],
+		perDrawcallData_.gpuAddr()
+	);
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		root.params[ UnifiedRoot::ParamIndices::b2 ],
+		perFrameData_.gpuAddr()
+	);
+	cmdList.get()->SetGraphicsRootShaderResourceView(
+		root.params[ UnifiedRoot::ParamIndices::t0 ],
+		perInstanceData_.gpuAddr()
+	);
+	cmdList.get()->SetGraphicsRootShaderResourceView(
+		root.params[ UnifiedRoot::ParamIndices::t1 ],
+		lightBuffer_.gpuAddr()
+	);
+	cmdList.get()->SetGraphicsRootShaderResourceView(
+		root.params[ UnifiedRoot::ParamIndices::t2 ],
+		boneBuffer_.gpuAddr()
+	);
+}
+
+void ShaderPBRAnimatedIllumination::bindPerDrawcallData(
+	std::size_t drawcallIdx, D3D12GfxCmdList& cmdList
+) {
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		UnifiedRoot::get().params[ UnifiedRoot::ParamIndices::b1 ],
+		perDrawcallData_.gpuAddr() + cbDrawcallDataSize() * drawcallIdx
+	);
+}
+
+void ShaderPBRAnimatedIllumination::loadBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
+		shaderPath/"pbrAnimatingShader.hlsl", nullptr,
+		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
+	};
+	blobs_[etoi(ShaderBlob::Type::Pixel)] = ShaderBlob{
+		shaderPath/"pbrAnimatingShader.hlsl", nullptr,
+		"PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Pixel
+	};
+}
+
+void ShaderPBRAnimatedIllumination::releaseBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)].reset();
+	blobs_[etoi(ShaderBlob::Type::Pixel)].reset();
+}
+
+InputLayout ShaderPBRAnimatedIllumination::makeInputLayout(InputLayout::Spec ilSpec) {
+	switch (ilSpec) {
+	case InputLayout::Spec::serial:
+		return makeInputLayoutSerial();
+	case InputLayout::Spec::separated:
+		return makeInputLayoutSeparated();
+	default:
+		throw GFX_EXCEPT( "Invalid input layout specification." );
+	}
+}
+
+InputLayout ShaderPBRAnimatedIllumination::makeInputLayoutSerial() {
+	return InputLayout( std::vector<InputLayout::Slot>{
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "POSITION", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+				InputLayout::Elem{ .semanticName = "NORMAL", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+				InputLayout::Elem{ .semanticName = "TANGENT", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+				InputLayout::Elem{ .semanticName = "BITANGENT", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+				InputLayout::Elem{ .semanticName = "TEXCOORD", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32_FLOAT },
+				InputLayout::Elem{ .semanticName = "BONE_INDICES", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32A32_UINT },
+				InputLayout::Elem{ .semanticName = "BONE_WEIGHTS", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32A32_FLOAT }
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Position3D))
+				| (1ull << etoi(Vertex::Properties::Normal3D))
+				| (1ull << etoi(Vertex::Properties::Tangent3D))
+				| (1ull << etoi(Vertex::Properties::Bitangent3D))
+				| (1ull << etoi(Vertex::Properties::TexCoord2D0))
+				| (1ull << etoi(Vertex::Properties::BoneIndices4D))
+				| (1ull << etoi(Vertex::Properties::BoneWeights4D))
+		}
+	} );
+}
+
+InputLayout ShaderPBRAnimatedIllumination::makeInputLayoutSeparated() {
+	return InputLayout( std::vector<InputLayout::Slot>{
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "POSITION", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Position3D))
+		},
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "NORMAL", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Normal3D))
+		},
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "TANGENT", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Tangent3D))
+		},
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "BITANGENT", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Bitangent3D))
+		},
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "TEXCOORD", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32_FLOAT },
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::TexCoord2D0))
+		},
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "BONE_INDICES", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32A32_UINT },
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::BoneIndices4D))
+		},
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "BONE_WEIGHTS", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32A32_FLOAT },
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::BoneWeights4D))
+		}
+	} );
+}
+
 ShaderPBRIlluminationTerrain::ShaderPBRIlluminationTerrain( D3D12Device& device, const RootSignature& root,
 	const Config& config, InputLayout::Spec ilSpec
 ) : Shader(root, makeInputLayout(ilSpec)),

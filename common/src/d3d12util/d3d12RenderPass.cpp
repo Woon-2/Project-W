@@ -1,5 +1,7 @@
 #include "d3d12util/d3d12RenderPass.hpp"
 
+#include "game/animSystem.hpp"
+
 #include <ranges>
 #include <algorithm>
 #include <tuple>
@@ -437,6 +439,345 @@ void PBRIllumination::trackModel(Model* pModel, const BoundingVolumeNode* pBVNod
         }
     }
 }
+
+PBRAnimatedIllumination::PBRAnimatedIllumination(
+    D3D12Device& device, ShaderPBRAnimatedIllumination& shader,
+    const SamplerStorage& samplerStorage, const D3D12_VIEWPORT& vp
+) : gfx::d3d12::RenderPass(id),
+    shadowMaterial_(), viewport_(vp),
+    protocol_( shader.makeProtocol( device,
+        RenderProtocol::Desc{ makeDesc() }
+    ) ), lights_(), batch_(), pCamera_(nullptr),
+    pSamplerStorage_(&samplerStorage) {
+    auto pcd = sr::PerConfigurationData0{
+        .viewportWidth = vp.Width,
+        .viewportHeight = vp.Height
+    };
+
+    shader.perConfigurationData_.stage(&pcd, sizeof(sr::PerConfigurationData0));
+}
+
+void PBRAnimatedIllumination::initResources(
+    RenderPassTextures shadowMap, const DescriptorCPU* pDsv,
+    const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
+    const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
+) {
+    checkRequiredTextures();
+    shadowMaterial_ = ShadowMaterial(
+        getTexture(RenderPassTextures::ShadowMap),
+        pDsv, dsvDesc, pSrv, srvDesc
+    );
+}
+
+RenderProtocol::Desc PBRAnimatedIllumination::makeDesc() {
+    return RenderProtocol::Desc {
+        .blend = D3D12_BLEND_DESC{
+            .AlphaToCoverageEnable = false,
+            .IndependentBlendEnable = false,
+            .RenderTarget = {
+                D3D12_RENDER_TARGET_BLEND_DESC{
+                    .BlendEnable = false,
+                    .LogicOpEnable = false,
+                    .SrcBlend = D3D12_BLEND_ONE,
+                    .DestBlend = D3D12_BLEND_ZERO,
+                    .BlendOp = D3D12_BLEND_OP_ADD,
+                    .SrcBlendAlpha = D3D12_BLEND_ONE,
+                    .DestBlendAlpha = D3D12_BLEND_ZERO,
+                    .BlendOpAlpha = D3D12_BLEND_OP_ADD,
+                    .LogicOp = D3D12_LOGIC_OP_NOOP,
+                    .RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL
+                }
+            }
+        },
+        .sampleMask = UINT_MAX,
+        .rasterizerState = D3D12_RASTERIZER_DESC{
+            .FillMode = D3D12_FILL_MODE_SOLID,
+            .CullMode = D3D12_CULL_MODE_BACK,
+            .DepthClipEnable = true
+        },
+        .depthStencilState = D3D12_DEPTH_STENCIL_DESC{
+            .DepthEnable = true,
+            .DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
+            .DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+            .StencilEnable = false
+        },
+        .primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+        .numRenderTargets = 1u,
+        .rtvFormats = { DXGI_FORMAT_R8G8B8A8_UNORM },
+        .dsvFormat = DXGI_FORMAT_D32_FLOAT,
+        .sampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
+        .nodeMask = 0u
+    };
+}
+
+void PBRAnimatedIllumination::setViewport(const D3D12_VIEWPORT& vp) {
+    viewport_ = vp;
+
+    auto pcd = sr::PerConfigurationData0{
+        .viewportWidth = vp.Width,
+        .viewportHeight = vp.Height
+    };
+
+    shader().perConfigurationData_.stage(&pcd, sizeof(sr::PerConfigurationData0));
+}
+
+void PBRAnimatedIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
+    cmdList.get()->SetPipelineState( protocol_.get().Get() );
+    cmdList.get()->RSSetViewports(1u, &viewport_);
+    auto scissorRect = D3D12_RECT{ 0, 0, static_cast<LONG>(viewport_.Width), static_cast<LONG>(viewport_.Height) };
+    cmdList.get()->RSSetScissorRects(1u, &scissorRect);
+
+    // firstly sort batch by bounding volume node and other properties
+    // to cull out the same bounding volume nodes
+    // that are out of the camera frustum.
+    auto proj = [this](const auto& tuple) {
+        return std::tuple(
+            std::get<const BoundingVolumeNode*>(tuple),
+            &std::get<gfx::d3d12::Submesh*>(tuple)->material(),
+            std::get<gfx::d3d12::Submesh*>(tuple)->refSubmesh()
+        );
+    };
+
+    std::ranges::sort(batch_, std::less<>{}, proj);
+
+    auto pids = std::vector<sr::PerInstanceData5>();
+    pids.reserve( shader().maxInstanceCnt() );
+
+    const BoundingVolumeNode* pLastCulledBVNode = nullptr;
+
+    for (auto& [willNotDraw, pBVNode, pSubmesh, pCoord, vbLayoutIdx, xform, pAnimCon] : batch_) {
+        // update xform
+        xform = pSubmesh->parent()->parent()->coord().xform();
+
+        // cull out instances that are out of the camera frustum.
+        // enhance performance by eliding collision check of the same bounding volume nodes.
+        if (pLastCulledBVNode && pLastCulledBVNode == pBVNode) {
+            willNotDraw = true;
+            continue;
+        }
+
+        if (pBVNode && !BoundingVolumeNode::collides(
+            pCamera_->coordRotation().xform(), pCamera_->bvNode(),
+            pCoord->xform(), *pBVNode
+        )) {
+            willNotDraw = true;
+            pLastCulledBVNode = pBVNode;
+            continue;
+        }
+
+        willNotDraw = false;
+    }
+
+    // finally sort batch by culled status and other properties
+    // to separate instances that are visible and invisible.
+    auto proj2 = [this](const auto& tuple) {
+        return std::tuple(
+            std::get<bool>(tuple),
+            &std::get<gfx::d3d12::Submesh*>(tuple)->material(),
+            std::get<gfx::d3d12::Submesh*>(tuple)->refSubmesh()
+        );
+    };
+
+    std::ranges::sort(batch_, std::less<>{}, proj2);
+
+    auto bones = std::vector<dx::XMFLOAT4X4>();
+    bones.reserve( shader().maxBoneCnt() );
+
+    for (const auto& [willNotDraw, pBVNode, pSubmesh, pCoord, vbLayoutIdx, xform, pAnimCon] : batch_) {
+        // as the first criterion of sorting is the culled status,
+        // if the first instance is culled, then all the rest are culled.
+        if (willNotDraw) {
+            break;
+        }
+
+        auto firstBoneIndices = std::vector<std::uint32_t>();
+        firstBoneIndices.reserve( shader().maxInstanceCnt() * 2u );
+        auto weights = std::vector<float>();
+        weights.reserve( shader().maxInstanceCnt() * 2u );
+
+        bool boneFull = false;
+
+        for (const auto& [key, animInst] : pAnimCon->instances()) {
+            firstBoneIndices.push_back(static_cast<std::uint32_t>(bones.size()));
+            weights.push_back(animInst.weight());
+
+            for (const auto& bone: animInst.boneXformCache()) {
+                bones.push_back(mu::transpose( bone ).getXmf());
+            }
+
+            if (bones.size() == shader().maxBoneCnt()) {
+                boneFull = true;
+                break;
+            }
+        }
+
+        if (boneFull) {
+            break;
+        }
+
+        // upload per instance data
+        pids.emplace_back(
+            /* .wvp = */ mu::transpose( xform * pCamera_->view() * pCamera_->proj() ).getXmf(),
+            /* .world = */ mu::transpose( xform ).getXmf(),
+            /* .wv = */ mu::transpose( xform * pCamera_->view() ).getXmf(),
+            /* .wvNormal = */ dx::convertMat<dx::XMFLOAT3X3>(
+                mu::inverse(xform * pCamera_->view()).get()
+            ),
+            /* .animIdx0 = */ (firstBoneIndices.size() > 0) ? firstBoneIndices[0] : 0u,
+            /* .animIdx1 = */ (firstBoneIndices.size() > 1) ? firstBoneIndices[1] : 0u,
+            /* .padding = */ dx::XMUINT2(0u, 0u),
+            /* .animWeight0 = */ (weights.size() > 0) ? weights[0] : 0.0f,
+            /* .animWeight1 = */ (weights.size() > 1) ? weights[1] : 0.0f
+        );
+
+        if (pids.size() == shader().maxInstanceCnt()) [[unlikely]] {
+            break;
+        }
+    }
+
+
+    auto lightBuffer = std::vector<sr::Light>();
+    lightBuffer.reserve( lights_.size() );
+
+    for (const auto& light : lights_) {
+        lightBuffer.emplace_back( light->toViewLight(*pCamera_) );
+
+        if (lightBuffer.size() == shader().maxLightCnt()) [[unlikely]] {
+            break;
+        }
+    }
+
+
+    shadowMaterial_.texture().commitState(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+    // temporarilly directional light at first
+    const auto pDirectionalLight = lights_.front();
+
+    const auto pfd = sr::PerFrameData0{
+        .globalAmbient = dx::XMFLOAT3(0.1f, 0.1f, 0.1f),
+        .shadowMapRef = shadowMaterial_.mapRef(Material::MapType::Shadow).toxm(),
+        .lightVP = mu::transpose( pDirectionalLight->viewProj(*pCamera_) ).getXmf(),
+        .lightCnt = static_cast<std::uint32_t>( lightBuffer.size() )
+    };
+
+    shader().perInstanceData_.stage(pids.data(), pids.size() * sizeof(sr::PerInstanceData0));
+    shader().lightBuffer_.stage(lightBuffer.data(), lightBuffer.size() * sizeof(sr::Light));
+    shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData0));
+    shader().boneBuffer_.stage(bones.data(), bones.size() * sizeof(dx::XMFLOAT4X4));
+}
+
+void PBRAnimatedIllumination::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
+    renderTargets.bind(cmdList, RenderTargets::Specifier::Main);
+
+    auto first = batch_.begin();
+    auto accDrawcallCnt = 0u;
+
+    // instances that are going to be drawn are at the front of the batch
+    // as the first criterion of sorting is the culled status.
+    auto proj = [this](const auto& tuple) {
+        return std::tuple(
+            std::get<bool>(tuple),
+            &std::get<gfx::d3d12::Submesh*>(tuple)->material(),
+            std::get<gfx::d3d12::Submesh*>(tuple)->refSubmesh()
+        );
+    };
+
+    while (first != batch_.end()) {
+        auto last = std::ranges::upper_bound(first, batch_.end(), proj(*first), std::less<>{}, proj);
+
+        // as the first criterion of sorting is the culled status,
+        // if the first instance is culled, then all the rest are culled.
+        auto willNotDraw = std::get<bool>(*first);
+        if (willNotDraw) {
+            break;
+        }
+
+        auto pSubmesh = std::get<gfx::d3d12::Submesh*>(*first);
+
+        auto material = sr::PBRMaterial::convert( pSubmesh->material() );
+
+        auto pdd = sr::PerDrawcallData0{
+            .material = material,
+            .instanceBase = static_cast<std::uint32_t>(first - batch_.begin()),
+            .samplerIdx = pSamplerStorage_->get( SamplerStorage::Indices::TrilinearBorder ).index(),
+            .shadowSamplerIdx = pSamplerStorage_->get( SamplerStorage::Indices::BilinearComparison ).index(),
+        };
+        shader().perDrawcallData_.stage( &pdd, sizeof(sr::PerDrawcallData0),
+            0u, accDrawcallCnt * shader().cbDrawcallDataSize()
+        );
+
+        shader().bindPerDrawcallData(accDrawcallCnt++, cmdList);
+
+        shader().draw( cmdList, *pSubmesh, static_cast<std::size_t>(last - first),
+            std::get<VBLayoutIdx>(*first)
+        );
+
+        if (accDrawcallCnt == shader().maxDrawcallCnt()) {
+            break;
+        }
+
+        first = last;
+    }
+}
+
+void PBRAnimatedIllumination::postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
+    shadowMaterial_.texture().commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+}
+
+void PBRAnimatedIllumination::trackModel(Model* pModel, const AnimController* pAnimCon) {
+    if (!pModel->markedRenderPasses().empty()) {
+        auto it = std::ranges::find(pModel->markedRenderPasses(), renderPassID());
+        if (it == pModel->markedRenderPasses().end()) {
+            return;
+        }
+    }
+
+    auto& nodes = pModel->nodes();
+    const auto* pCoord = &pModel->root()->coord();
+
+    for (auto& node : nodes) {
+        auto xform = node.coord().xform();
+        for (auto& mesh : node.meshes()) {
+            auto vbLayoutIdx = protocol_.compatibleLayout(*mesh.refMesh());
+            if (!vbLayoutIdx) {
+                throw std::runtime_error("Incompatible mesh");
+            }
+
+            for (auto& submesh : mesh.submeshes()) {
+                batch_.emplace_back(false, nullptr, &submesh, pCoord, vbLayoutIdx.value(), xform, pAnimCon);
+            }
+        }
+    }
+}
+
+void PBRAnimatedIllumination::trackModel( Model* pModel,
+    const AnimController* pAnimCon, const BoundingVolumeNode* pBVNode
+) {
+    if (!pModel->markedRenderPasses().empty()) {
+        auto it = std::ranges::find(pModel->markedRenderPasses(), renderPassID());
+        if (it == pModel->markedRenderPasses().end()) {
+            return;
+        }
+    }
+
+    auto& nodes = pModel->nodes();
+    const auto* pCoord = &pModel->root()->coord();
+
+    for (auto& node : nodes) {
+        auto xform = node.coord().xform();
+        for (auto& mesh : node.meshes()) {
+            auto vbLayoutIdx = protocol_.compatibleLayout(*mesh.refMesh());
+            if (!vbLayoutIdx) {
+                throw std::runtime_error("Incompatible mesh");
+            }
+
+            for (auto& submesh : mesh.submeshes()) {
+                batch_.emplace_back(false, pBVNode, &submesh, pCoord, vbLayoutIdx.value(), xform, pAnimCon);
+            }
+        }
+    }
+}
+
 
 ShadowMap::ShadowMap( D3D12Device& device,
     ShaderShadowMap& shader, const D3D12_VIEWPORT& vp
