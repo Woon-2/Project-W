@@ -79,42 +79,6 @@ private:
     std::string computePassID_;
 };
 
-/*
-class ScreenQuad : public gfx::d3d12::RenderPass {
-public:
-    static constexpr const char* id = "ScreenQuad";
-
-    ScreenQuad( D3D12Device& device, ShaderScreenQuad& shader,
-        const SamplerStorage& samplerStorage,
-        const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
-    );
-
-    void setViewport(const D3D12_VIEWPORT& vp);
-
-    const D3D12_VIEWPORT& viewport() const NOEXCEPT {
-        return viewport_;
-    }
-
-    void preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
-    void render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
-    void postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
-
-private:
-    ShaderScreenQuad& shader() noexcept {
-        return static_cast<ShaderScreenQuad&>(protocol_.shader());
-    }
-    const ShaderScreenQuad& shader() const noexcept {
-        return static_cast<const ShaderScreenQuad&>(protocol_.shader());
-    }
-
-    static RenderProtocol::Desc makeDesc();
-
-    D3D12_VIEWPORT viewport_;
-    RenderProtocol protocol_;
-    const SamplerStorage* pSamplerStorage_;
-};
-*/
-
 namespace cp {
 
 class MatMul : public gfx::d3d12::ComputePass {
@@ -123,11 +87,16 @@ public:
 
     MatMul(D3D12Device& device, ShaderMatMul& shader);
 
+    // matrix pairs are cleared after call of postCompute()
+    std::size_t addMatrixPair(const mu::Mat4x4& lhs, const mu::Mat4x4& rhs) {
+        lhsMatrices_.push_back(lhs);
+        rhsMatrices_.push_back(rhs);
+        return lhsMatrices_.size() - 1u;
+    }
+
     void preCompute(D3D12GfxCmdList& cmdList) override;
     void compute(D3D12GfxCmdList& cmdList) override;
     void postCompute(D3D12GfxCmdList& cmdList) override;
-
-    void setThreadCnt(std::size_t threadCnt);
 
     std::vector<mu::Mat4x4>& resultMatrices() {
         return resultMatrices_;
@@ -147,6 +116,44 @@ private:
     static ComputeProtocol::Desc makeDesc();
 
     ComputeProtocol protocol_;
+    std::vector<mu::Mat4x4> lhsMatrices_;
+    std::vector<mu::Mat4x4> rhsMatrices_;
+    std::vector<mu::Mat4x4> resultMatrices_;
+    std::size_t threadGroupCnt_;
+};
+
+class AnimInterpolation : public gfx::d3d12::ComputePass {
+public:
+    static constexpr const char* id = "AnimInterpolation";
+
+    AnimInterpolation(D3D12Device& device, ShaderAnimInterpolation& shader);
+
+    std::size_t addKeyFramePair(const KeyFrame& lhs, const KeyFrame& rhs, float ratio);
+
+    void preCompute(D3D12GfxCmdList& cmdList) override;
+    void compute(D3D12GfxCmdList& cmdList) override;
+    void postCompute(D3D12GfxCmdList& cmdList) override;
+
+    std::vector<mu::Mat4x4>& resultMatrices() {
+        return resultMatrices_;
+    }
+    const std::vector<mu::Mat4x4>& resultMatrices() const {
+        return resultMatrices_;
+    }
+
+private:
+    ShaderAnimInterpolation& shader() noexcept {
+        return static_cast<ShaderAnimInterpolation&>(protocol_.shader());
+    }
+    const ShaderAnimInterpolation& shader() const noexcept {
+        return static_cast<const ShaderAnimInterpolation&>(protocol_.shader());
+    }
+
+    static ComputeProtocol::Desc makeDesc();
+
+    ComputeProtocol protocol_;
+    std::vector<sr::KeyFrame> lhsKeyFrames_;
+    std::vector<sr::KeyFrame> rhsKeyFrames_;
     std::vector<mu::Mat4x4> resultMatrices_;
     std::size_t threadGroupCnt_;
 };
