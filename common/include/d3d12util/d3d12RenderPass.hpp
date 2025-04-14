@@ -11,7 +11,10 @@
 #include <string_view>
 #include <vector>
 #include <map>
+#include <unordered_map>
 #include <type_traits>
+
+class AnimController;
 
 namespace gfx {
 
@@ -209,9 +212,9 @@ private:
 class ShadowMaterial : public IRenderTarget, public Material {
 public:
     ShadowMaterial();
-    ShadowMaterial( Texture& mapResource, const DescriptorCPU& dsv,
+    ShadowMaterial( Texture* pMapResource, const DescriptorCPU* pDsv,
         const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
-        const DescriptorGPU& srv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
+        const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
     );
 
     const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc() const NOEXCEPT {
@@ -253,21 +256,6 @@ private:
     const DescriptorGPU* pSrv_;
     const DescriptorCPU* pDsv_;
     Texture* pMapResource_;
-};
-
-class ShadowMaterialStandAlone : public ShadowMaterial {
-public:
-    static constexpr std::size_t idxSrv = Texture::idxSrv;
-    static constexpr std::size_t idxDsv = idxSrv + 1u;
-
-    ShadowMaterialStandAlone( D3D12Device& device,
-        const Texture::Desc& shadowMapDesc,
-		DescriptorRange<DescriptorHeapGPU>& tex2dRange,
-        DescriptorRange<DescriptorHeapCPU>& dsvRange
-    );
-
-private:
-    Texture shadowMap_;
 };
 
 struct WorldLight {
@@ -313,9 +301,18 @@ struct WorldLight {
     Type type;
 };
 
+enum class RenderPassTextures {
+    ShadowMap,
+    ShadowCascade0,
+    ShadowCascade1,
+    ShadowCascade2,
+    ShadowCascade3
+};
+
 class RenderPass {
 public:
     using VBLayoutIdx = std::size_t;
+    using ResKey = std::string;
 
     RenderPass() = default;
     RenderPass(const char* id) : RenderPass(std::string_view(id)) {}
@@ -333,8 +330,32 @@ public:
     const auto& renderPassID() const noexcept {
         return renderPassID_;
     }
+    void mapTexture(RenderPassTextures type, Texture* pTexture) {
+        textureMap_[type] = pTexture;
+    }
+    Texture* getTexture(RenderPassTextures type) const {
+        auto it = textureMap_.find(type);
+        if (it != textureMap_.end()) {
+            return it->second;
+        }
+        return nullptr;
+    }
+
+    virtual std::vector<RenderPassTextures> requiredTextures() const {
+        return {};
+    }
+
+protected:
+    void checkRequiredTextures() const {
+        for (const auto& texID : requiredTextures()) {
+            if (!textureMap_.contains(texID)) {
+                throw std::runtime_error("Required texture not found: " + renderPassID_);
+            }
+        }
+    }
 
 private:
+    std::unordered_map<RenderPassTextures, Texture*> textureMap_;
     std::string renderPassID_;
 };
 
@@ -347,6 +368,16 @@ public:
     PBRIllumination( D3D12Device& device, ShaderPBRIllumination& shader,
         const SamplerStorage& samplerStorage, const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
     );
+
+    void initResources(
+        RenderPassTextures shadowMap, const DescriptorCPU* pDsv,
+        const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
+        const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
+    );
+
+    std::vector<RenderPassTextures> requiredTextures() const {
+        return {RenderPassTextures::ShadowMap};
+    }
 
     void setViewport(const D3D12_VIEWPORT& vp);
 
@@ -377,6 +408,7 @@ private:
 
     static RenderProtocol::Desc makeDesc();
 
+    ShadowMaterial shadowMaterial_;
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
     std::vector<const WorldLight*> lights_;
@@ -384,7 +416,66 @@ private:
         const coord::System*, VBLayoutIdx, mu::Mat4x4>
     > batch_;
     const Camera* pCamera_;
-    ShadowMaterial* pShadowMaterial_;
+    const SamplerStorage* pSamplerStorage_;
+};
+
+class PBRAnimatedIllumination : public gfx::d3d12::RenderPass {
+public:
+    static constexpr const char* id = "PBRAnimatedIllumination";
+
+    PBRAnimatedIllumination( D3D12Device& device, ShaderPBRAnimatedIllumination& shader,
+        const SamplerStorage& samplerStorage, const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
+    );
+
+    void initResources(
+        RenderPassTextures shadowMap, const DescriptorCPU* pDsv,
+        const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
+        const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
+    );
+
+    std::vector<RenderPassTextures> requiredTextures() const {
+        return {RenderPassTextures::ShadowMap};
+    }
+
+    void setViewport(const D3D12_VIEWPORT& vp);
+
+    const D3D12_VIEWPORT& viewport() const NOEXCEPT {
+        return viewport_;
+    }
+
+    void preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+
+    void trackModel(Model* pModel, const AnimController* pAnimController);
+    void trackModel(Model* pModel, const AnimController* pAnimController,
+        const BoundingVolumeNode* pBVNode
+    );
+    void setCamera(const Camera* pCamera) NOEXCEPT {
+        pCamera_ = pCamera;
+    }
+    void addLight(const WorldLight* pLight) NOEXCEPT {
+        lights_.push_back(pLight);
+    }
+
+private:
+    ShaderPBRAnimatedIllumination& shader() noexcept {
+        return static_cast<ShaderPBRAnimatedIllumination&>(protocol_.shader());
+    }
+    const ShaderPBRAnimatedIllumination& shader() const noexcept {
+        return static_cast<const ShaderPBRAnimatedIllumination&>(protocol_.shader());
+    }
+
+    static RenderProtocol::Desc makeDesc();
+
+    ShadowMaterial shadowMaterial_;
+    D3D12_VIEWPORT viewport_;
+    RenderProtocol protocol_;
+    std::vector<const WorldLight*> lights_;
+    std::vector< std::tuple<bool, const BoundingVolumeNode*, Submesh*,
+        const coord::System*, VBLayoutIdx, mu::Mat4x4, const AnimController*>
+    > batch_;
+    const Camera* pCamera_;
     const SamplerStorage* pSamplerStorage_;
 };
 
@@ -394,14 +485,19 @@ public:
     friend class ShadowMapTessellation;
 
     ShadowMap( D3D12Device& device, ShaderShadowMap& shader,
-        const ShadowMaterial& shadowMaterial, std::size_t idxShadowMapDsv,
         const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
     );
 
-    ShadowMap( D3D12Device& device, ShaderShadowMap& shader,
-        DescriptorRange<DescriptorHeapCPU>& dsvRange,
-        const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
+    void initResources(
+        RenderPassTextures shadowMap, const DescriptorCPU* pDsv,
+        const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
+        const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
     );
+
+    std::vector<RenderPassTextures> requiredTextures() const {
+        return {RenderPassTextures::ShadowMap};
+    }
+
 
     void setViewport(const D3D12_VIEWPORT& vp);
 
@@ -430,9 +526,6 @@ private:
 
     static RenderProtocol::Desc makeDesc();
 
-    D3D12_SHADER_RESOURCE_VIEW_DESC shadowMapSrvDesc_;
-    D3D12_DEPTH_STENCIL_VIEW_DESC shadowMapDsvDesc_;
-    std::size_t idxShadowMapDsv_;
     ShadowMaterial shadowMaterial_;
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
@@ -486,6 +579,16 @@ public:
         const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
     );
 
+    void initResources(
+        RenderPassTextures shadowMap, const DescriptorCPU* pDsv,
+        const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
+        const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
+    );
+
+    std::vector<RenderPassTextures> requiredTextures() const {
+        return {RenderPassTextures::ShadowMap};
+    }
+
     void setViewport(const D3D12_VIEWPORT& vp);
 
     const D3D12_VIEWPORT& viewport() const NOEXCEPT {
@@ -514,12 +617,12 @@ private:
 
     static RenderProtocol::Desc makeDesc();
 
+    ShadowMaterial shadowMaterial_;
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
     std::vector<const WorldLight*> lights_;
     std::vector<const LevelChunkModel*> batch_;
     const Camera* pCamera_;
-    ShadowMaterial* pShadowMaterial_;
     const SamplerStorage* pSamplerStorage_;
 };
 
@@ -529,8 +632,18 @@ public:
 
     ShadowMapTessellation( D3D12Device& device, ShaderShadowMapTessellation& shader,
         const SamplerStorage& samplerStorage,
-        ShadowMap& shadowMapRP, const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
+        const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
     );
+
+    void initResources(
+        RenderPassTextures shadowMap, const DescriptorCPU* pDsv,
+        const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
+        const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
+    );
+
+    std::vector<RenderPassTextures> requiredTextures() const {
+        return {RenderPassTextures::ShadowMap};
+    }
 
     void setViewport(const D3D12_VIEWPORT& vp);
 
@@ -558,9 +671,7 @@ private:
 
     static RenderProtocol::Desc makeDesc();
 
-    D3D12_SHADER_RESOURCE_VIEW_DESC shadowMapSrvDesc_;
-    D3D12_DEPTH_STENCIL_VIEW_DESC shadowMapDsvDesc_;
-    std::size_t idxShadowMapDsv_;
+    ShadowMaterial shadowMaterial_;
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
     const WorldLight* pLight_;

@@ -7,9 +7,9 @@
 #include <iostream>
 #include <optional>
 
-void CNetExSystem::preUpdate(const gfx::d3d12engine::Core& core) {
+void CNetExSystem::preUpdate() {
     for (const auto& packet : pSession_->getRecvQueue()) {
-        processPacket(packet, core);
+        processPacket(packet);
     }
     pSession_->getRecvQueue().clear();
 }
@@ -20,14 +20,14 @@ void CNetExSystem::postUpdate() {
     }
 }
 
-void CNetExSystem::processPacket(const Packet& packet, const gfx::d3d12engine::Core& core) {
+void CNetExSystem::processPacket(const Packet& packet) {
     switch (packet.type) {
     case PacketType::SCInitInfo:
         handleSCInitInfo(packet.scInitInfo);
         break;
 
     case PacketType::SCInitCreate:
-        handleSCInitCreate(packet.scInitCreate, core);
+        handleSCInitCreate(packet.scInitCreate);
         break;
 
     case PacketType::SCWorld:
@@ -50,7 +50,7 @@ void CNetExSystem::handleSCInitInfo(const SCInitInfo& scInitInfo) {
 
 void buildEntityWithAsset( mu::Vec3 translation,
     mu::NQuat rotation,
-    const gfx::d3d12engine::Core& core,
+    const gfx::d3d12::ResourceStorage& resStorage,
     std::optional<AssetModel> assetModel,
     std::optional<AssetBVH> assetBVH,
     ecs::Entity& entity
@@ -58,15 +58,25 @@ void buildEntityWithAsset( mu::Vec3 translation,
     entity.createComponent<gameEngine::Coord>();
     entity.as<gameEngine::Coord>().get().setLocalXform(mu::translate(translation));
 
+    auto& modelSlot = resStorage.slot(CNetExSystem::slotKeyModel);
+    auto& bvhPathSlot = resStorage.slot(CNetExSystem::slotKeyBVHPath);
+
     if (assetModel.has_value()) {
         const auto asset = assetModel.value();
         const auto key = assetModelInfo(asset).key;
+        bool hasAnimation = !assetModelInfo(asset).animationPath.empty();
 
-        if (!core.refModelStorage().contains(key)) {
-            throw GFX_EXCEPT("RefModel not found: " + key);
+        if (!modelSlot.contains<gfx::d3d12::RefModel>(key)) {
+            throw GFX_EXCEPT("Model not found: " + key);
         }
 
-        entity.createComponent<gfx::d3d12engine::Model>(key, core, entity.as<gameEngine::Coord>());
+        entity.createComponent<gfx::d3d12engine::Model>(modelSlot, key, entity.as<gameEngine::Coord>());
+        if (hasAnimation) {
+            entity.createComponent<AnimController>();
+            entity.as<AnimController>().setSkeleton(
+                entity.as<gfx::d3d12engine::Model>().get().refModel()->skeleton()
+            );
+        }
         entity.as<gfx::d3d12engine::Model>().get().root()->coord() << mu::Mat4x4(rotation);
     }
 
@@ -74,15 +84,15 @@ void buildEntityWithAsset( mu::Vec3 translation,
         const auto asset = assetBVH.value();
         const auto& key = assetBVHInfo(asset).key;
 
-        if (!core.bvhPathStorage().contains(key)) {
-            throw GFX_EXCEPT("BVH not found: " + key);
+        if (!bvhPathSlot.contains<std::filesystem::path>(key)) {
+            throw GFX_EXCEPT("BVH path not found: " + key);
         }
 
-        entity.createComponent<BoundingVolume>(core.bvhPathStorage().get(key));
+        entity.createComponent<BoundingVolume>(*bvhPathSlot.get<std::filesystem::path>(key));
     }
 }
 
-void CNetExSystem::handleSCInitCreate(const SCInitCreate& scInitCreate, const gfx::d3d12engine::Core& core) {
+void CNetExSystem::handleSCInitCreate(const SCInitCreate& scInitCreate) {
     createdEntities_.emplace_back();
     auto& entity = createdEntities_.back();
 
@@ -103,25 +113,25 @@ void CNetExSystem::handleSCInitCreate(const SCInitCreate& scInitCreate, const gf
     case ObjectType::Helicopter:
         entity.createComponent<NetEx>(std::make_unique<CNetExHelicopter>(entity.id().value()));
         entity.as<NetEx>().addCategory(NetExCategory::Helicopter);
-        buildEntityWithAsset(translation, rotation, core, AssetModel::Character, {}, entity);
+        buildEntityWithAsset(translation, rotation, *pResStorage_, AssetModel::Character, {}, entity);
         addEntity(entity);
         break;
 
     case ObjectType::Tree0:
         entity.createComponent<NetEx>(std::make_unique<CNetExTree0>(entity.id().value()));
-        buildEntityWithAsset(translation, rotation, core, AssetModel::Tree0, {}, entity);
+        buildEntityWithAsset(translation, rotation, *pResStorage_, AssetModel::Tree0, {}, entity);
         addEntity(entity);
         break;
 
     case ObjectType::Tree1:
         entity.createComponent<NetEx>(std::make_unique<CNetExTree1>(entity.id().value()));
-        buildEntityWithAsset(translation, rotation, core, AssetModel::Tree1, {}, entity);
+        buildEntityWithAsset(translation, rotation, *pResStorage_, AssetModel::Tree1, {}, entity);
         addEntity(entity);
         break;
 
     case ObjectType::Tree2:
         entity.createComponent<NetEx>(std::make_unique<CNetExTree2>(entity.id().value()));
-        buildEntityWithAsset(translation, rotation, core, AssetModel::Tree2, {}, entity);
+        buildEntityWithAsset(translation, rotation, *pResStorage_, AssetModel::Tree2, {}, entity);
         addEntity(entity);
         break;
 

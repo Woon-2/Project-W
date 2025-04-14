@@ -2,6 +2,8 @@
 
 #include "d3d12util/d3d12RenderPass.hpp"
 
+#include "game/animSystem.hpp"
+
 #include "resourcePath.hpp"
 
 #include <cstdio>
@@ -12,6 +14,30 @@
 namespace gfx {
 
 namespace d3d12 {
+
+AnyMoveOnly ResourceStorage::Slot::buildContainer(ResType type) {
+    switch (type) {
+    case ResType::AnimClip:
+        return ContainerType<AnimClip>();
+    case ResType::BVHPath:
+        return ContainerType<std::filesystem::path>();
+    case ResType::RefModel:
+        return ContainerType<RefModel>();
+    case ResType::Skeleton:
+        return ContainerType<Skeleton>();
+    case ResType::TexCube:
+        return ContainerType<TextureCube>();
+    case ResType::Texture:
+        return ContainerType<Texture>();
+    case ResType::TexArray:
+        return ContainerType<TextureArray>();
+
+    default:
+        throw std::runtime_error("[Description] ResourceStorage::Slot::buildContainer: "
+            "unknown resource type received."
+        );
+    }
+}
 
 TextureResource::Desc Texture::convertDesc(const Desc& desc) {
     return TextureResource::Desc{
@@ -80,6 +106,28 @@ DefaultBuffer::DefaultBuffer( D3D12Device& device, std::size_t byteWidth,
         .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
         .Flags = flags
     }, D3D12_HEAP_TYPE_DEFAULT ) {}
+
+ReadbackBuffer::ReadbackBuffer(D3D12Device& device, std::size_t byteWidth,
+    D3D12_RESOURCE_FLAGS flags
+) : D3D12Resource( device, D3D12_RESOURCE_DESC{
+        .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
+        .Width = static_cast<UINT64>(byteWidth),
+        .Height = static_cast<UINT>(1),
+        .DepthOrArraySize = static_cast<UINT16>(1),
+        .MipLevels = static_cast<UINT16>(1),
+        .Format = DXGI_FORMAT_UNKNOWN,
+        .SampleDesc = DXGI_SAMPLE_DESC{
+            .Count = 1,
+            .Quality = 0
+        },
+        .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+        .Flags = flags
+    }, D3D12_HEAP_TYPE_READBACK ) {}
+
+void ReadbackBuffer::readback(D3D12GfxCmdList& cmdList, DefaultBuffer& srcBuf) {
+    cmdList.copyResource(srcBuf, *this);
+    get()->Map(0, nullptr, reinterpret_cast<void**>(&pMappedData_));
+}
 
 TextureResource::TextureResource( D3D12Device& device, const Desc& texResDesc,
     D3D12_HEAP_TYPE heapType, D3D12_RESOURCE_STATES initialState
@@ -165,74 +213,6 @@ TextureResource::LoadDDSReturnType TextureResource::loadDDS(
     );
 
     return ret;
-}
-
-void StaticTextureStorage::load( const std::filesystem::path& path,
-    TextureResource::Type type, D3D12Device& device, D3D12GfxCmdList& cmdList,
-    DescriptorRange<DescriptorHeapGPU>& range
-) {
-    switch(type) {
-    case TextureResource::Type::Texture:
-        storedTexs_.emplace_back(device, cmdList, range, path);
-        map_[path] = storedTexs_.back().view(Texture::idxSrv);
-        break;
-
-    case TextureResource::Type::TextureArray:
-        storedTexArrs_.emplace_back(device, cmdList, range, path);
-        map_[path] = storedTexArrs_.back().view(TextureArray::idxSrv);
-        break;
-
-    case TextureResource::Type::TextureCube:
-        storedTexCubes_.emplace_back(device, cmdList, range, path);
-        map_[path] = storedTexCubes_.back().view(TextureCube::idxSrv);
-        break;
-    }
-}
-
-void StaticTextureStorage::load( const std::filesystem::path& path,
-    const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc, D3D12Device& device,
-    D3D12GfxCmdList& cmdList, DescriptorRange<DescriptorHeapGPU>& range
-) {
-    switch (srvDesc.ViewDimension) {
-    case D3D12_SRV_DIMENSION::D3D12_SRV_DIMENSION_TEXTURE2D:
-        storedTexs_.emplace_back(device, cmdList, range, srvDesc, path);
-        map_[path] = storedTexs_.back().view(Texture::idxSrv);
-        break;
-
-    case D3D12_SRV_DIMENSION::D3D12_SRV_DIMENSION_TEXTURE2DARRAY:
-        storedTexArrs_.emplace_back(device, cmdList, range, srvDesc, path);
-        map_[path] = storedTexArrs_.back().view(TextureArray::idxSrv);
-        break;
-
-    case D3D12_SRV_DIMENSION::D3D12_SRV_DIMENSION_TEXTURECUBE:
-        storedTexCubes_.emplace_back(device, cmdList, range, srvDesc, path);
-        map_[path] = storedTexCubes_.back().view(TextureCube::idxSrv);
-        break;
-
-    default:
-        throw GFX_EXCEPT("[Description]: Unknown SRV dimension");
-        break;
-    }
-}
-
-const DescriptorGPU& StaticTextureStorage::get(const std::filesystem::path& path) const {
-    return map_.at(path);
-}
-
-DescriptorGPU& StaticTextureStorage::get(const std::filesystem::path& path) {
-    return map_.at(path);
-}
-
-const DescriptorGPU& StaticTextureStorage::operator[](const std::filesystem::path& path) const {
-    return map_.at(path);
-}
-
-DescriptorGPU& StaticTextureStorage::operator[](const std::filesystem::path& path) {
-    return map_[path];
-}
-
-bool StaticTextureStorage::contains(const std::filesystem::path& path) const {
-    return map_.contains(path);
 }
 
 void SamplerStorage::init( D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& samRange,
@@ -1014,44 +994,10 @@ void RefModel::Node::addChild(Node* child) {
     children_.push_back(child);
 }
 
-RefModel::Bone::Bone(Bone&& other) noexcept
-    : toParent_(other.toParent_), toLocal_(other.toLocal_),
-    boneIdx_(std::exchange(other.boneIdx_, -1)), name_(std::move(other.name_)),
-    children_(std::move(other.children_)), pRefModel_(std::exchange(other.pRefModel_, nullptr)) {
-    for (auto& child : children_) {
-        child->pRefModel_ = this->pRefModel_;
-    }
-}
-
-RefModel::Bone& RefModel::Bone::operator=(Bone&& other) noexcept {
-    if (this == &other) {
-        return *this;
-    }
-
-    toParent_ = other.toParent_;
-    toLocal_ = other.toLocal_;
-    boneIdx_ = std::exchange(other.boneIdx_, -1);
-    name_ = std::move(other.name_);
-    children_ = std::move(other.children_);
-    pRefModel_ = std::exchange(other.pRefModel_, nullptr);
-
-    for (auto& child : children_) {
-        child->pRefModel_ = this->pRefModel_;
-    }
-
-    return *this;
-}
-
-void RefModel::Bone::addChild(Bone* child) {
-    child->pRefModel_ = pRefModel_;
-    children_.push_back(child);
-}
-
 RefModel::RefModel(RefModel&& other) noexcept
     : nodeStorage_(other.nodeStorage_.size()),
-    boneStorage_(other.boneStorage_.size()),
     textureMap_(std::move(other.textureMap_)), pRoot_(nullptr),
-    pRootBone_(nullptr) {
+    pSkeleton_(std::exchange(other.pSkeleton_, nullptr)) {
     auto pOtherFirstNode = other.nodeStorage_.data();
 
     pRoot_ = nodeStorage_.data() + (other.pRoot_ - pOtherFirstNode);
@@ -1070,32 +1016,8 @@ RefModel::RefModel(RefModel&& other) noexcept
         node.pRefModel_ = nullptr;
     }
 
-    auto pOtherFirstBone = other.boneStorage_.data();
-
-    pRootBone_ = boneStorage_.data() + (other.pRootBone_ - pOtherFirstBone);
-
-    for (std::size_t i = 0; i < other.boneStorage_.size(); ++i) {
-        auto& bone = other.boneStorage_[i];
-        auto& newBone = boneStorage_[i];
-
-        newBone = Bone(this);
-        newBone.toParent_ = bone.toParent_;
-        newBone.toLocal_ = bone.toLocal_;
-        newBone.boneIdx_ = bone.boneIdx_;
-        newBone.name_ = std::move(bone.name_);
-
-        for (auto pChild : bone.children_) {
-            newBone.addChild(boneStorage_.data() + (pChild - pOtherFirstBone));
-        }
-
-        bone.children_.clear();
-        bone.pRefModel_ = nullptr;
-    }
-
     other.nodeStorage_.clear();
-    other.boneStorage_.clear();
     other.pRoot_ = nullptr;
-    other.pRootBone_ = nullptr;
 }
 
 RefModel& RefModel::operator=(RefModel&& other) noexcept {
@@ -1105,6 +1027,7 @@ RefModel& RefModel::operator=(RefModel&& other) noexcept {
 
     nodeStorage_.resize(other.nodeStorage_.size());
     textureMap_ = std::move(other.textureMap_);
+    pSkeleton_ = std::exchange(other.pSkeleton_, nullptr);
 
     auto pOtherFirstNode = other.nodeStorage_.data();
 
@@ -1124,40 +1047,17 @@ RefModel& RefModel::operator=(RefModel&& other) noexcept {
         node.pRefModel_ = nullptr;
     }
 
-    boneStorage_.resize(other.boneStorage_.size());
-
-    auto pOtherFirstBone = other.boneStorage_.data();
-
-    pRootBone_ = boneStorage_.data() + (other.pRootBone_ - pOtherFirstBone);
-
-    for (std::size_t i = 0; i < other.boneStorage_.size(); ++i) {
-        auto& bone = other.boneStorage_[i];
-        auto& newBone = boneStorage_[i];
-
-        newBone = Bone(this);
-        newBone.toParent_ = bone.toParent_;
-        newBone.toLocal_ = bone.toLocal_;
-        newBone.boneIdx_ = bone.boneIdx_;
-        newBone.name_ = std::move(bone.name_);
-
-        for (auto pChild : bone.children_) {
-            newBone.addChild(boneStorage_.data() + (pChild - pOtherFirstBone));
-        }
-
-        bone.children_.clear();
-        bone.pRefModel_ = nullptr;
-    }
-
     other.nodeStorage_.clear();
-    other.boneStorage_.clear();
     other.pRoot_ = nullptr;
-    other.pRootBone_ = nullptr;
 
     return *this;
 }
 
 RefModel RefModel::loadHierarchyFromFile( const std::filesystem::path& path,
-    D3D12Device& device, D3D12GfxCmdList& cmdList, const StaticTextureStorage& sts
+    D3D12Device& device, D3D12GfxCmdList& cmdList,
+    const ResourceStorage::Slot& texSlot,
+    const ResourceStorage::Slot& texArraySlot,
+    const ResourceStorage::Slot& texCubeSlot
 ) {
     auto model = RefModel();
 
@@ -1197,11 +1097,31 @@ RefModel RefModel::loadHierarchyFromFile( const std::filesystem::path& path,
 
             auto texPath = resourcePath / std::move(texRelativePath);
 
-            if (!sts.contains(texPath)) {
+            bool found = false;
+
+            if (texSlot.contains<Texture>(texPath.string())) {
+                model.textureMap_[mapRef] = reinterpret_cast<const DescriptorGPU&>(
+                    texSlot.get<Texture>(texPath.string())->view(Texture::idxSrv)
+                );
+                found = true;
+            }
+            else if (texArraySlot.contains<TextureArray>(texPath.string())) {
+                model.textureMap_[mapRef] = reinterpret_cast<const DescriptorGPU&>(
+                    texArraySlot.get<TextureArray>(texPath.string())->view(TextureArray::idxSrv)
+                );
+                found = true;
+            }
+            else if (texCubeSlot.contains<TextureCube>(texPath.string())) {
+                model.textureMap_[mapRef] = reinterpret_cast<const DescriptorGPU&>(
+                    texCubeSlot.get<TextureCube>(texPath.string())->view(TextureCube::idxSrv)
+                );
+                found = true;
+            }
+
+            if (!found) {
                 std::fclose(pInFile);
                 throw std::runtime_error("Texture not found: " + texPath.string());
             }
-            model.textureMap_[mapRef] = sts.get(texPath);
         }
         else if (!strcmp(pstrToken, "</Dictionary>")) {
             break;
@@ -1254,52 +1174,6 @@ RefModel RefModel::loadHierarchyFromFile( const std::filesystem::path& path,
         }
 
     }
-
-    nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
-    if (nReads == 0) {
-        // there's no skeleton in the model
-        std::fclose(pInFile);
-        return model;
-    }
-
-    nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
-    if (strcmp(pstrToken, "<Skeleton:>")) {
-        std::fclose(pInFile);
-        throw std::runtime_error("expected Skeleton token but got: " + std::string(pstrToken));
-    }
-
-    nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
-    nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
-    pstrToken[nStrLength] = '\0';
-
-    if (strcmp(pstrToken, "<BoneCnt:>")) {
-        std::fclose(pInFile);
-        throw std::runtime_error("expected BoneCnt token but got: " + std::string(pstrToken));
-    }
-
-    int nBones = 0;
-    nReads = (UINT)::fread(&nBones, sizeof(int), 1, pInFile);
-    model.boneStorage_.reserve(nBones);
-
-    for (;;) {
-        nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
-        nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
-        pstrToken[nStrLength] = '\0';
-
-        if (!strcmp(pstrToken, "<Bone:>")) {
-            model.boneStorage_.emplace_back(&model);
-            auto& bone = model.boneStorage_.back();
-            loadBonesFromFile(device, cmdList, pInFile, bone, model);
-        }
-        else if (!strcmp(pstrToken, "</Skeleton>")) {
-            break;
-        }
-        else {
-            std::fclose(pInFile);
-            throw std::runtime_error("expected Bone or Skeleton end token but got: " + std::string(pstrToken));
-        }
-    }
-    
 
     std::fclose(pInFile);
     return model;
@@ -1376,66 +1250,6 @@ void RefModel::loadNodesFromFile( D3D12Device& device, D3D12GfxCmdList& cmdList,
     }
 }
 
-void RefModel::loadBonesFromFile( D3D12Device& device,
-    D3D12GfxCmdList& cmdList, FILE* pInFile, Bone& bone, RefModel& model
-) {
-    char pstrToken[64] = { '\0' };
-
-	BYTE nStrLength = 0;
-	UINT nReads = 0;
-
-    dx::XMFLOAT4X4 xform{};
-    int intVal{};
-
-    nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
-    auto boneName = std::string(nStrLength, '\0');
-    nReads = (UINT)::fread(boneName.data(), sizeof(char), nStrLength, pInFile);
-
-    for (;;) {
-        nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
-        nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
-        pstrToken[nStrLength] = '\0';
-
-        if (!strcmp(pstrToken, "<BoneIndex:>")) {
-            nReads = (UINT)::fread(&intVal, sizeof(int), 1, pInFile);
-            bone.boneIdx_ = intVal;
-        }
-        else if (!strcmp(pstrToken, "<Xform:>")) {
-            nReads = (UINT)::fread(&xform, sizeof(float), 16, pInFile);
-            bone.toParent_ = mu::Mat4x4(DirectX::XMLoadFloat4x4(&xform));
-        }
-        else if (!strcmp(pstrToken, "<BindPose:>")) {
-            nReads = (UINT)::fread(&xform, sizeof(float), 16, pInFile);
-            bone.toLocal_ = mu::Mat4x4(DirectX::XMLoadFloat4x4(&xform));
-        }
-        else if (!strcmp(pstrToken, "<Children:>")) {
-            int nChilds = 0;
-            nReads = (UINT)::fread(&nChilds, sizeof(int), 1, pInFile);
-            if (nChilds > 0) {
-                for (int i = 0; i < nChilds; ++i) {
-                    model.boneStorage_.emplace_back(&model);
-                    auto& child = model.boneStorage_.back();
-
-                    nReads = (UINT)::fread(&nStrLength, sizeof(BYTE), 1, pInFile);
-                    nReads = (UINT)::fread(pstrToken, sizeof(char), nStrLength, pInFile);
-                    pstrToken[nStrLength] = '\0';
-
-                    if (strcmp(pstrToken, "<Bone:>")) {
-                        fclose(pInFile);
-                        throw std::runtime_error("Bone token expected but got: " + std::string(pstrToken));
-                    }
-
-                    loadBonesFromFile(device, cmdList, pInFile, child, model);
-                    bone.addChild(&child);
-                }
-            }
-        }
-        else if (!strcmp(pstrToken, "</Bone>")) {
-            break;
-        }
-    }
-}
-
 void RefModel::arrangeVBs( D3D12Device& device, D3D12GfxCmdList& cmdList,
     std::size_t layoutIdx, const std::vector<std::vector<Vertex::Properties>>& vbProps
 ) {
@@ -1444,12 +1258,6 @@ void RefModel::arrangeVBs( D3D12Device& device, D3D12GfxCmdList& cmdList,
             mesh.arrangeVBs(device, cmdList, layoutIdx, vbProps);
         }
     }
-}
-
-void RefModelStorage::loadModel( const ID& key, const std::filesystem::path& path,
-    const StaticTextureStorage& sts, D3D12Device& device, D3D12GfxCmdList& cmdList
-) {
-    map_[key] = RefModel::loadHierarchyFromFile(path, device, cmdList, sts);
 }
 
 Submesh::Submesh(Mesh* parent, const RefSubmesh* pRefSubmesh)
@@ -1601,7 +1409,7 @@ void Model::Node::addChild(Node* child) {
 }
 
 Model::Model(const RefModel& ref)
-    : nodeStorage_(ref.nodes().size()), pRoot_(nullptr) {
+    : nodeStorage_(ref.nodes().size()), pRoot_(nullptr), pRefModel_(&ref) {
     auto pRefFirstNode = ref.nodes().data();
 
     pRoot_ = nodeStorage_.data() + (ref.root() - pRefFirstNode);
@@ -1621,7 +1429,7 @@ Model::Model(const RefModel& ref)
 }
 
 Model::Model(const Model& other)
-    : nodeStorage_(other.nodeStorage_.size()), pRoot_(nullptr) {
+    : nodeStorage_(other.nodeStorage_.size()), pRoot_(nullptr), pRefModel_(other.pRefModel_) {
     auto pOtherFirstNode = other.nodeStorage_.data();
 
     pRoot_ = nodeStorage_.data() + (other.pRoot_ - pOtherFirstNode);
@@ -1648,6 +1456,7 @@ Model& Model::operator=(const Model& other) {
     auto pOtherFirstNode = other.nodeStorage_.data();
 
     pRoot_ = nodeStorage_.data() + (other.pRoot_ - pOtherFirstNode);
+    pRefModel_ = other.pRefModel_;
 
     for (std::size_t i = 0; i < other.nodeStorage_.size(); ++i) {
         auto& node = other.nodeStorage_[i];
@@ -1664,7 +1473,7 @@ Model& Model::operator=(const Model& other) {
 }
 
 Model::Model(Model&& other) noexcept
-    : nodeStorage_(other.nodeStorage_.size()), pRoot_(nullptr) {
+    : nodeStorage_(other.nodeStorage_.size()), pRoot_(nullptr), pRefModel_(other.pRefModel_) {
     auto pOtherFirstNode = other.nodeStorage_.data();
 
     pRoot_ = nodeStorage_.data() + (other.pRoot_ - pOtherFirstNode);
@@ -1694,6 +1503,7 @@ Model& Model::operator=(Model&& other) noexcept {
     auto pOtherFirstNode = other.nodeStorage_.data();
 
     pRoot_ = nodeStorage_.data() + (other.pRoot_ - pOtherFirstNode);
+    pRefModel_ = other.pRefModel_;
 
     for (std::size_t i = 0; i < other.nodeStorage_.size(); ++i) {
         auto& node = other.nodeStorage_[i];
@@ -1717,7 +1527,7 @@ void ScreenQuad::draw(D3D12GfxCmdList& cmdList) const {
     DX_THROW_FAILED_VOID( cmdList.get()->DrawInstanced(4u, 1u, 0u, 0u) );
 }
 
-LevelRegionModel::LevelRegionModel(const StaticTextureStorage& sts, std::istream& is)
+LevelRegionModel::LevelRegionModel(const ResourceStorage::Slot& heightmapSlot, std::istream& is)
     : chunks_() {
     char pstrToken[64] = { '\0' };
 
@@ -1753,10 +1563,12 @@ LevelRegionModel::LevelRegionModel(const StaticTextureStorage& sts, std::istream
 
             auto texPath = resourcePath / std::move(texRelativePath);
 
-            if (!sts.contains(texPath)) {
+            if (!heightmapSlot.contains<Texture>(texPath.string())) {
                 throw std::runtime_error("Texture not found: " + texPath.string());
             }
-            textureMap[mapRef] = sts.get(texPath);
+            textureMap[mapRef] = reinterpret_cast<const DescriptorGPU&>(
+                heightmapSlot.get<Texture>(texPath.string())->view(Texture::idxSrv)
+            );
         }
         else if (!strcmp(pstrToken, "</Dictionary>")) {
             break;
@@ -1780,7 +1592,7 @@ LevelRegionModel::LevelRegionModel(const StaticTextureStorage& sts, std::istream
     chunks_.resize(nChunks);
 
     for (auto& chunk : chunks_) {
-        chunk.load(sts, textureMap, is);
+        chunk.load(heightmapSlot, textureMap, is);
     }
 
     is.read(reinterpret_cast<char*>(&nStrLength), sizeof(BYTE));
@@ -1816,7 +1628,7 @@ const LevelChunkModel& LevelRegionModel::get(const dx::XMUINT2& idx) const {
     return *it;
 }
 
-void LevelChunkModel::load( const StaticTextureStorage& sts,
+void LevelChunkModel::load( const ResourceStorage::Slot& heightmapSlot,
     std::map<Material::MapRef, DescriptorGPU>& textureMap, std::istream& is
 ) {
     char pstrToken[64] = { '\0' };
@@ -1858,12 +1670,14 @@ void LevelChunkModel::load( const StaticTextureStorage& sts,
     idx_.y = std::stoi(chunkName.substr(zStrPos));
 
     // HeightMap
-    const auto heightMapPath = resourcePath/"terrains/HeightMaps"/(chunkName + "_HeightMap.dds");
-    if ( !sts.contains(heightMapPath) ) {
+    const auto heightMapPath = resourcePath/"terrains\\HeightMaps"/(chunkName + "_HeightMap.dds");
+    if ( !heightmapSlot.contains<Texture>(heightMapPath.string()) ) {
         throw std::runtime_error(std::string("HeightMap not found: ") + heightMapPath.string());
     }
     mapRef = Material::MapRef{
-        .resourceIdx = static_cast<std::uint32_t>(sts.get(heightMapPath).offset())
+        .resourceIdx = static_cast<std::uint32_t>(
+            heightmapSlot.get<Texture>(heightMapPath.string())->view(Texture::idxSrv).offset()
+        )
     };
     material_.addMapRef(Material::MapType::Height, mapRef);        
 
@@ -2036,6 +1850,234 @@ void LevelChunkModel::initChunkMesh(D3D12Device& device, D3D12GfxCmdList& cmdLis
     const auto indexCnt = k;
 
     sChunkIb = IndexBuffer(device, cmdList, std::move(ibMem), format, indexCnt);
+}
+
+// load texture with default srv desc from file
+Texture& loadTextureAt( ResourceStorage::Slot& texSlot,
+    const ResourceStorage::ResID& resID,
+    D3D12Device& device, D3D12GfxCmdList& cmdList,
+    DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+    const std::filesystem::path& path
+) {
+    return texSlot.load<Texture>(resID, device, cmdList, tex2dRange, path);
+}
+
+// load texture with custom srv desc from file
+Texture& loadTextureAt( ResourceStorage::Slot& texSlot,
+    const ResourceStorage::ResID& resID,
+    D3D12Device& device, D3D12GfxCmdList& cmdList,
+    DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+    const std::filesystem::path& path,
+    const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
+) {
+    return texSlot.load<Texture>(resID, device, cmdList, tex2dRange, srvDesc, path);
+}
+
+// load texture manually with default srv desc, default state, and no clear value
+Texture& loadTextureAt( ResourceStorage::Slot& texSlot, const ResourceStorage::ResID& resID,
+    D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+    const Texture::Desc& resDesc, D3D12_HEAP_TYPE heapType
+) {
+    return texSlot.load<Texture>(resID, device, tex2dRange, resDesc, heapType);
+}
+
+// load texture manually with custom srv desc, default state, and no clear value
+Texture& loadTextureAt( ResourceStorage::Slot& texSlot, const ResourceStorage::ResID& resID,
+    D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+    const Texture::Desc& resDesc, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc,
+    D3D12_HEAP_TYPE heapType
+) {
+    return texSlot.load<Texture>(resID, device, tex2dRange, resDesc, srvDesc, heapType);
+}
+
+// load texture manually with default srv desc, custom state, and no clear value
+Texture& loadTextureAt( ResourceStorage::Slot& texSlot, const ResourceStorage::ResID& resID,
+    D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+    const Texture::Desc& resDesc, D3D12_HEAP_TYPE heapType,
+    D3D12_RESOURCE_STATES initialState
+) {
+    return texSlot.load<Texture>(resID, device, tex2dRange, resDesc, heapType, initialState);
+}
+
+// load texture manually with custom srv desc, custom state, and no clear value
+Texture& loadTextureAt( ResourceStorage::Slot& texSlot, const ResourceStorage::ResID& resID,
+    D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+    const Texture::Desc& resDesc, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc,
+    D3D12_HEAP_TYPE heapType, D3D12_RESOURCE_STATES initialState
+) {
+    return texSlot.load<Texture>(resID, device, tex2dRange, resDesc, srvDesc, heapType, initialState);
+}
+
+// load texture manually with default srv desc, default state, and clear value
+Texture& loadTextureAt( ResourceStorage::Slot& texSlot, const ResourceStorage::ResID& resID,
+    D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+    const Texture::Desc& resDesc, D3D12_HEAP_TYPE heapType,
+    const D3D12_CLEAR_VALUE& optimizedClearValue
+) {
+    return texSlot.load<Texture>(resID, device, tex2dRange, resDesc, heapType, optimizedClearValue);
+}
+
+// load texture manually with default srv desc, custom state, and clear value
+Texture& loadTextureAt( ResourceStorage::Slot& texSlot, const ResourceStorage::ResID& resID,
+    D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+    const Texture::Desc& resDesc, D3D12_HEAP_TYPE heapType,
+    D3D12_RESOURCE_STATES initialState, const D3D12_CLEAR_VALUE& optimizedClearValue
+) {
+    return texSlot.load<Texture>(resID, device, tex2dRange, resDesc, heapType, initialState, optimizedClearValue);
+}
+
+// load texture manually with custom srv desc, default state, and clear value
+Texture& loadTextureAt( ResourceStorage::Slot& texSlot, const ResourceStorage::ResID& resID,
+    D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+    const Texture::Desc& resDesc, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc,
+    D3D12_HEAP_TYPE heapType, const D3D12_CLEAR_VALUE& optimizedClearValue
+) {
+    return texSlot.load<Texture>(resID, device, tex2dRange, resDesc, srvDesc, heapType, optimizedClearValue);
+}
+
+// load texture manually with custom srv desc, custom state, and clear value
+Texture& loadTextureAt( ResourceStorage::Slot& texSlot, const ResourceStorage::ResID& resID,
+    D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+    const Texture::Desc& resDesc, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc,
+    D3D12_HEAP_TYPE heapType, D3D12_RESOURCE_STATES initialState,
+    const D3D12_CLEAR_VALUE& optimizedClearValue
+) {
+    return texSlot.load<Texture>(resID, device, tex2dRange, resDesc, srvDesc, heapType, initialState, optimizedClearValue);
+}
+
+RefModel& loadRefModelAt( ResourceStorage::Slot& modelSlot,
+    const ResourceStorage::ResID& resID,
+    D3D12Device& device, D3D12GfxCmdList& cmdList,
+    const std::filesystem::path& geometryPath,
+    const ResourceStorage::Slot& texSlot,
+    const ResourceStorage::Slot& texArraySlot,
+    const ResourceStorage::Slot& texCubeSlot
+) {
+    return modelSlot.load<RefModel>(resID, RefModel::loadHierarchyFromFile,
+        geometryPath, device, cmdList, texSlot, texArraySlot, texCubeSlot
+    );
+}
+
+Skeleton& loadSkeletonAt( ResourceStorage::Slot& skeletonSlot,
+    const ResourceStorage::ResID& resID,
+    const std::filesystem::path& skeletonPath
+) {
+    return skeletonSlot.load<Skeleton>(
+        resID, Skeleton::loadHierarchyFromFile, skeletonPath
+    );
+}
+
+RefModel& loadSkeletalRefModelAt( ResourceStorage::Slot& modelSlot,
+    ResourceStorage::Slot& skeletonSlot,
+    const ResourceStorage::ResID& modelID,
+    const ResourceStorage::ResID& skeletonID,
+    D3D12Device& device, D3D12GfxCmdList& cmdList,
+    const std::filesystem::path& geometryPath,
+    const ResourceStorage::Slot& texSlot,
+    const ResourceStorage::Slot& texArraySlot,
+    const ResourceStorage::Slot& texCubeSlot,
+    const std::filesystem::path& skeletonPath
+) {
+    auto& refModel = loadRefModelAt( modelSlot, modelID, device,
+        cmdList, geometryPath, texSlot, texArraySlot, texCubeSlot
+    );
+    auto& skeleton = loadSkeletonAt(skeletonSlot, skeletonID, skeletonPath);
+    refModel.linkSkeleton(&skeleton);
+
+    return refModel;
+}
+
+Skeleton& loadSkeletonAndAnimAt( ResourceStorage::Slot& skeletonSlot,
+    ResourceStorage::Slot& animSlot,
+    const std::filesystem::path& skAnimPath
+) {
+    auto [skeleton, animClips] = loadSkeletonAndAnimClipFromFile(skAnimPath);
+    auto& ret = skeletonSlot.load<Skeleton>(
+        skAnimPath.string(), std::move(skeleton)
+    );
+
+    for (auto& animClip : animClips) {
+        animSlot.load<AnimClip>(
+            animClip.name(), std::move(animClip)
+        );
+    }
+
+    return ret;
+}
+
+RefModel& loadSkeletalRefModelAndAnimAt( ResourceStorage::Slot& modelSlot,
+    ResourceStorage::Slot& skeletonSlot,
+    ResourceStorage::Slot& animSlot,
+    const ResourceStorage::ResID& modelID,
+    const ResourceStorage::ResID& skeletonID,
+    D3D12Device& device, D3D12GfxCmdList& cmdList,
+    const std::filesystem::path& geometryPath,
+    const ResourceStorage::Slot& texSlot,
+    const ResourceStorage::Slot& texArraySlot,
+    const ResourceStorage::Slot& texCubeSlot,
+    const std::filesystem::path& skAnimPath
+) {
+    auto& refModel = loadRefModelAt(modelSlot, modelID, device, cmdList, geometryPath, texSlot, texArraySlot, texCubeSlot);
+    auto& skeleton = loadSkeletonAndAnimAt(skeletonSlot, animSlot, skAnimPath);
+    refModel.linkSkeleton(&skeleton);
+
+    return refModel;
+}
+
+std::pair<Texture, ShadowMapInfo> makeShadowMap(
+    const Texture::Desc& shadowMapDesc,
+    D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+    DescriptorRange<DescriptorHeapCPU>& dsvRange
+) {
+    const auto srvDesc = detail::makeShadowMapSrvDesc( shadowMapDesc );
+    const auto dsvDesc = detail::makeShadowMapDsvDesc(shadowMapDesc);
+    auto tex = Texture( device, tex2dRange, shadowMapDesc,
+        srvDesc, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_DEPTH_WRITE,
+        D3D12_CLEAR_VALUE{ .Format = shadowMapDesc.format, .DepthStencil = { 1.f, 0u } }
+    );
+
+    tex.makeDsv( dsvDesc, device, dsvRange.alloc() );
+
+    return {
+        std::move(tex),
+        ShadowMapInfo{
+            .pTex = nullptr,
+            .srvDesc = srvDesc,
+            .dsvDesc = dsvDesc
+        }
+    };
+}
+
+Texture __makeShadowMap(
+    const Texture::Desc& shadowMapDesc,
+    D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+    DescriptorRange<DescriptorHeapCPU>& dsvRange
+) {
+    const auto srvDesc = detail::makeShadowMapSrvDesc(shadowMapDesc);
+    const auto dsvDesc = detail::makeShadowMapDsvDesc(shadowMapDesc);
+    auto tex = Texture( device, tex2dRange, shadowMapDesc,
+        srvDesc, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_DEPTH_WRITE,
+        D3D12_CLEAR_VALUE{ .Format = shadowMapDesc.format, .DepthStencil = { 1.f, 0u } }
+    );
+
+    tex.makeDsv( dsvDesc, device, dsvRange.alloc() );
+    return tex;
+}
+
+ShadowMapInfo loadShadowMapAt(
+    ResourceStorage::Slot& shadowMapSlot,
+    const ResourceStorage::ResID& resID,
+    D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+    DescriptorRange<DescriptorHeapCPU>& dsvRange,
+    const Texture::Desc& shadowMapDesc
+) {
+    return ShadowMapInfo{
+        .pTex = &shadowMapSlot.load<Texture>(resID, __makeShadowMap,
+            shadowMapDesc, device, tex2dRange, dsvRange
+        ),
+        .srvDesc = detail::makeShadowMapSrvDesc(shadowMapDesc),
+        .dsvDesc = detail::makeShadowMapDsvDesc(shadowMapDesc)
+    };
 }
 
 VertexBuffer LevelChunkModel::sChunkVb;

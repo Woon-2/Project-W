@@ -9,23 +9,24 @@ const ModelInfo& assetModelInfo(AssetModel asset) {
     static auto sAssetModelInfos = std::vector<ModelInfo>{
         ModelInfo{
             .key = "GO_OH-58D",
-            .path = resourcePath/"models/HelicopterModel/GO_OH-58D.bin"
+            .geometryPath = resourcePath/"models\\HelicopterModel\\GO_OH-58D.bin"
         },
         ModelInfo{
             .key = "GO_Character",
-            .path = resourcePath/"models/Character/GO_Character.bin"
+            .geometryPath = resourcePath/"models\\Character\\GO_Character.bin",
+            .animationPath = resourcePath/"models\\Character\\GO_Character.anim"
         },
         ModelInfo{
             .key = "GO_URP_Tree_0",
-            .path = resourcePath/"models/Trees/GO_URP_Tree_0.bin"
+            .geometryPath = resourcePath/"models\\Trees\\GO_URP_Tree_0.bin"
         },
         ModelInfo{
             .key = "GO_URP_Tree_1",
-            .path = resourcePath/"models/Trees/GO_URP_Tree_1.bin"
+            .geometryPath = resourcePath/"models\\Trees\\GO_URP_Tree_1.bin"
         },
         ModelInfo{
             .key = "GO_URP_Tree_2",
-            .path = resourcePath/"models/Trees/GO_URP_Tree_2.bin"
+            .geometryPath = resourcePath/"models\\Trees\\GO_URP_Tree_2.bin"
         }
     };
 
@@ -42,10 +43,10 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
                 "GO_OH-58D_Texture"
             },
             .paths = {
-                resourcePath/"models/HelicopterModel/Textures/Default.dds",
-                resourcePath/"models/HelicopterModel/Textures/Hellfire.dds",
-                resourcePath/"models/HelicopterModel/Textures/Hydra.dds",
-                resourcePath/"models/HelicopterModel/Textures/Texture.dds"
+                resourcePath/"models\\HelicopterModel\\Textures\\Default.dds",
+                resourcePath/"models\\HelicopterModel\\Textures\\Hellfire.dds",
+                resourcePath/"models\\HelicopterModel\\Textures\\Hydra.dds",
+                resourcePath/"models\\HelicopterModel\\Textures\\Texture.dds"
             },
             .type = gfx::d3d12::TextureResource::Type::Texture
         },
@@ -83,36 +84,36 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
                 "T_Set_Peasant_Rd_D",
             },
             .paths = {
-                resourcePath/"models/Character/Textures/T_Belt_Peasant_MR.dds",
-                resourcePath/"models/Character/Textures/T_Belt_Peasant_N.dds",
-                resourcePath/"models/Character/Textures/T_Belt_Peasant_Rd_D.dds",
-                resourcePath/"models/Character/Textures/T_Cape_Peasant_Bl_D.dds",
-                resourcePath/"models/Character/Textures/T_Cape_Peasant_MR.dds",
-                resourcePath/"models/Character/Textures/T_Cape_Peasant_N.dds",
-                resourcePath/"models/Character/Textures/T_Gloves_Peasant_Bl_D.dds",
-                resourcePath/"models/Character/Textures/T_Gloves_Peasant_MR.dds",
-                resourcePath/"models/Character/Textures/T_Gloves_Peasant_N.dds",
-                resourcePath/"models/Character/Textures/T_HU_Eye_Gn_D.dds",
-                resourcePath/"models/Character/Textures/T_HU_Eye_MR.dds",
-                resourcePath/"models/Character/Textures/T_HU_Eye_N.dds",
-                resourcePath/"models/Character/Textures/T_HU_F_Body_05_D.dds",
-                resourcePath/"models/Character/Textures/T_HU_F_Body_MR.dds",
-                resourcePath/"models/Character/Textures/T_HU_F_Body_N.dds",
-                resourcePath/"models/Character/Textures/T_HU_F_Body_Preview.dds",
-                resourcePath/"models/Character/Textures/T_HU_F_Facial_01_Bk_D.dds",
-                resourcePath/"models/Character/Textures/T_HU_F_Facial_01_MR.dds",
-                resourcePath/"models/Character/Textures/T_HU_F_Facial_01_N.dds",
-                resourcePath/"models/Character/Textures/T_HU_F_Head_05_A_D.dds",
-                resourcePath/"models/Character/Textures/T_HU_F_Head_A_MR.dds",
-                resourcePath/"models/Character/Textures/T_HU_F_Head_A_N.dds",
-                resourcePath/"models/Character/Textures/T_HU_F_Head_UH_Bk_D.dds",
-                resourcePath/"models/Character/Textures/T_HU_Hair_01_Gr_D.dds",
-                resourcePath/"models/Character/Textures/T_HU_Hair_01_MR.dds",
-                resourcePath/"models/Character/Textures/T_HU_Hair_01_N.dds",
-                resourcePath/"models/Character/Textures/T_Set_Peasant_Bl_D.dds",
-                resourcePath/"models/Character/Textures/T_Set_Peasant_MR.dds",
-                resourcePath/"models/Character/Textures/T_Set_Peasant_N.dds",
-                resourcePath/"models/Character/Textures/T_Set_Peasant_Rd_D.dds",
+                resourcePath/"models\\Character\\Textures\\T_Belt_Peasant_MR.dds",
+                resourcePath/"models\\Character\\Textures\\T_Belt_Peasant_N.dds",
+                resourcePath/"models\\Character\\Textures\\T_Belt_Peasant_Rd_D.dds",
+                resourcePath/"models\\Character\\Textures\\T_Cape_Peasant_Bl_D.dds",
+                resourcePath/"models\\Character\\Textures\\T_Cape_Peasant_MR.dds",
+                resourcePath/"models\\Character\\Textures\\T_Cape_Peasant_N.dds",
+                resourcePath/"models\\Character\\Textures\\T_Gloves_Peasant_Bl_D.dds",
+                resourcePath/"models\\Character\\Textures\\T_Gloves_Peasant_MR.dds",
+                resourcePath/"models\\Character\\Textures\\T_Gloves_Peasant_N.dds",
+                resourcePath/"models\\Character\\Textures\\T_HU_Eye_Gn_D.dds",
+                resourcePath/"models\\Character\\Textures\\T_HU_Eye_MR.dds",
+                resourcePath/"models\\Character\\Textures\\T_HU_Eye_N.dds",
+                resourcePath/"models\\Character\\Textures\\T_HU_F_Body_05_D.dds",
+                resourcePath/"models\\Character\\Textures\\T_HU_F_Body_MR.dds",
+                resourcePath/"models\\Character\\Textures\\T_HU_F_Body_N.dds",
+                resourcePath/"models\\Character\\Textures\\T_HU_F_Body_Preview.dds",
+                resourcePath/"models\\Character\\Textures\\T_HU_F_Facial_01_Bk_D.dds",
+                resourcePath/"models\\Character\\Textures\\T_HU_F_Facial_01_MR.dds",
+                resourcePath/"models\\Character\\Textures\\T_HU_F_Facial_01_N.dds",
+                resourcePath/"models\\Character\\Textures\\T_HU_F_Head_05_A_D.dds",
+                resourcePath/"models\\Character\\Textures\\T_HU_F_Head_A_MR.dds",
+                resourcePath/"models\\Character\\Textures\\T_HU_F_Head_A_N.dds",
+                resourcePath/"models\\Character\\Textures\\T_HU_F_Head_UH_Bk_D.dds",
+                resourcePath/"models\\Character\\Textures\\T_HU_Hair_01_Gr_D.dds",
+                resourcePath/"models\\Character\\Textures\\T_HU_Hair_01_MR.dds",
+                resourcePath/"models\\Character\\Textures\\T_HU_Hair_01_N.dds",
+                resourcePath/"models\\Character\\Textures\\T_Set_Peasant_Bl_D.dds",
+                resourcePath/"models\\Character\\Textures\\T_Set_Peasant_MR.dds",
+                resourcePath/"models\\Character\\Textures\\T_Set_Peasant_N.dds",
+                resourcePath/"models\\Character\\Textures\\T_Set_Peasant_Rd_D.dds",
             },
             .type = gfx::d3d12::TextureResource::Type::Texture
         },
@@ -122,8 +123,8 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
                 "GO_URP_Tree_0_Trunk"
             },
             .paths = {
-                resourcePath/"models/Trees/Textures/URP_1_Leaf.dds",
-                resourcePath/"models/Trees/Textures/URP_1_Trunk.dds",
+                resourcePath/"models\\Trees\\Textures\\URP_1_Leaf.dds",
+                resourcePath/"models\\Trees\\Textures\\URP_1_Trunk.dds",
             },
             .type = gfx::d3d12::TextureResource::Type::Texture
         },
@@ -133,8 +134,8 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
                 "GO_URP_Tree_1_Trunk"
             },
             .paths = {
-                resourcePath/"models/Trees/Textures/URP_2_Leaf.dds",
-                resourcePath/"models/Trees/Textures/URP_2_Trunk.dds",
+                resourcePath/"models\\Trees\\Textures\\URP_2_Leaf.dds",
+                resourcePath/"models\\Trees\\Textures\\URP_2_Trunk.dds",
             },
             .type = gfx::d3d12::TextureResource::Type::Texture
         },
@@ -144,8 +145,8 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
                 "GO_URP_Tree_2_Trunk"
             },
             .paths = {
-                resourcePath/"models/Trees/Textures/URP_3_Leaf.dds",
-                resourcePath/"models/Trees/Textures/URP_3_Trunk.dds",
+                resourcePath/"models\\Trees\\Textures\\URP_3_Leaf.dds",
+                resourcePath/"models\\Trees\\Textures\\URP_3_Trunk.dds",
             },
             .type = gfx::d3d12::TextureResource::Type::Texture
         },
@@ -155,8 +156,8 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
                 "Grass_A_Normal"
             },
             .paths = {
-                resourcePath/"terrains/Textures/Grass_A_BaseColor.dds",
-                resourcePath/"terrains/Textures/Grass_A_Normal.dds",
+                resourcePath/"terrains\\Textures\\Grass_A_BaseColor.dds",
+                resourcePath/"terrains\\Textures\\Grass_A_Normal.dds",
             },
             .type = gfx::d3d12::TextureResource::Type::Texture
         },
@@ -173,15 +174,15 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
                 "Terrain_2_2_HeightMap",
             },
             .paths = {
-                resourcePath/"terrains/HeightMaps/Terrain_0_0_HeightMap.dds",
-                resourcePath/"terrains/HeightMaps/Terrain_0_1_HeightMap.dds",
-                resourcePath/"terrains/HeightMaps/Terrain_0_2_HeightMap.dds",
-                resourcePath/"terrains/HeightMaps/Terrain_1_0_HeightMap.dds",
-                resourcePath/"terrains/HeightMaps/Terrain_1_1_HeightMap.dds",
-                resourcePath/"terrains/HeightMaps/Terrain_1_2_HeightMap.dds",
-                resourcePath/"terrains/HeightMaps/Terrain_2_0_HeightMap.dds",
-                resourcePath/"terrains/HeightMaps/Terrain_2_1_HeightMap.dds",
-                resourcePath/"terrains/HeightMaps/Terrain_2_2_HeightMap.dds",
+                resourcePath/"terrains\\HeightMaps\\Terrain_0_0_HeightMap.dds",
+                resourcePath/"terrains\\HeightMaps\\Terrain_0_1_HeightMap.dds",
+                resourcePath/"terrains\\HeightMaps\\Terrain_0_2_HeightMap.dds",
+                resourcePath/"terrains\\HeightMaps\\Terrain_1_0_HeightMap.dds",
+                resourcePath/"terrains\\HeightMaps\\Terrain_1_1_HeightMap.dds",
+                resourcePath/"terrains\\HeightMaps\\Terrain_1_2_HeightMap.dds",
+                resourcePath/"terrains\\HeightMaps\\Terrain_2_0_HeightMap.dds",
+                resourcePath/"terrains\\HeightMaps\\Terrain_2_1_HeightMap.dds",
+                resourcePath/"terrains\\HeightMaps\\Terrain_2_2_HeightMap.dds",
             },
             .type = gfx::d3d12::TextureResource::Type::Texture
         }

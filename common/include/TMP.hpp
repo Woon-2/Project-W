@@ -6,6 +6,10 @@
 #include <ranges>
 #include <utility>
 #include <iostream>
+#include <memory>
+#include <stdexcept>
+#include <typeinfo>
+#include <chrono>
 
 template <class T>
 consteval int indexOf() {
@@ -55,6 +59,103 @@ std::basic_istream<CharT, Traits>& readStream(
         throw std::runtime_error("[Description] readStream: I/O error occured.");
     }
     return is;
+}
+
+class AnyMoveOnly {
+public:
+    AnyMoveOnly() = default;
+
+    // 소유권 이동 가능
+    AnyMoveOnly(AnyMoveOnly&& other) noexcept = default;
+    AnyMoveOnly& operator=(AnyMoveOnly&& other) noexcept = default;
+
+    // 복사 금지
+    AnyMoveOnly(const AnyMoveOnly&) = delete;
+    AnyMoveOnly& operator=(const AnyMoveOnly&) = delete;
+
+    template <typename T>
+    AnyMoveOnly(T&& value) {
+        using U = std::decay_t<T>;
+        static_assert(!std::is_reference<U>::value, "Can't store reference");
+        holder = std::make_unique<Holder<U>>(std::forward<T>(value));
+    }
+
+    bool has_value() const {
+        return holder != nullptr;
+    }
+
+    const std::type_info& type() const {
+        return holder ? holder->type() : typeid(void);
+    }
+
+    void reset() {
+        holder.reset();
+    }
+
+    template <typename T>
+    friend T* any_cast(AnyMoveOnly*) noexcept;
+    template <typename T>
+    friend const T* any_cast(const AnyMoveOnly*) noexcept;
+    template <typename T>
+    friend T&& any_cast_move(AnyMoveOnly&& a);
+    
+
+private:
+    struct Base {
+        virtual ~Base() = default;
+        virtual const std::type_info& type() const = 0;
+    };
+
+    template <typename T>
+    struct Holder : Base {
+        T value;
+
+        template <typename U>
+        Holder(U&& v) : value(std::forward<U>(v)) {}
+
+        const std::type_info& type() const override {
+            return typeid(T);
+        }
+    };
+
+    std::unique_ptr<Base> holder;
+};
+
+// any_cast: pointer version
+template <typename T>
+T* any_cast(AnyMoveOnly* a) noexcept {
+    if (a && a->holder && a->holder->type() == typeid(T)) {
+        return &static_cast<AnyMoveOnly::Holder<T>*>(a->holder.get())->value;
+    }
+    return nullptr;
+}
+
+// any_cast: pointer version
+template <typename T>
+const T* any_cast(const AnyMoveOnly* a) noexcept {
+    if (a && a->holder && a->holder->type() == typeid(T)) {
+        return &static_cast<AnyMoveOnly::Holder<T>*>(a->holder.get())->value;
+    }
+    return nullptr;
+}
+
+template <typename T>
+T&& any_cast_move(AnyMoveOnly&& a) {
+    if (a.type() != typeid(T)) {
+        throw std::bad_cast();
+    }
+    return std::move(static_cast<AnyMoveOnly::Holder<T>*>(a.holder.get())->value);
+}
+
+
+using Clock = std::chrono::high_resolution_clock;
+using Milliseconds = std::chrono::duration<float, std::milli>;
+
+inline Milliseconds operator"" _ms(unsigned long long int ms) {
+    return Milliseconds(static_cast<float>(ms));
+}
+inline Milliseconds operator"" _ms(long double ms) {
+    return Milliseconds(static_cast<float>(ms));
 }
 
 #endif  // __TMP_HPP

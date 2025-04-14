@@ -50,7 +50,7 @@ void arrangeVBs(RefModel& refModel, D3D12Device& device, D3D12GfxCmdList& cmdLis
 }
 
 ShaderBlob::ShaderBlob( const std::filesystem::path& path,
-	const InputLayout& inputLayout, const D3D_SHADER_MACRO* macros,
+	const D3D_SHADER_MACRO* macros,
 	std::string_view entryPoint, std::string_view target,
 	UINT flag1, UINT flag2, Type type
 ) : dx::DXWrapper<ID3DBlob>(), type_(type) {
@@ -112,6 +112,25 @@ RenderProtocol::RenderProtocol( D3D12Device& device,
 	};
 
 	device.get()->CreateGraphicsPipelineState(&psoDesc, __uuidof(InterfaceType), &get());
+}
+
+ComputeProtocol::ComputeProtocol(D3D12Device& device,
+	ComputeShader& shader, const ShaderBlob& blob, const Desc& desc
+) : dx::DXWrapper<ID3D12PipelineState>(), pShader_(&shader) {
+	auto byteCode = D3D12_SHADER_BYTECODE{
+		.pShaderBytecode = blob.get()->GetBufferPointer(),
+		.BytecodeLength = blob.get()->GetBufferSize()
+	};
+
+	auto psoDesc = D3D12_COMPUTE_PIPELINE_STATE_DESC{
+		.pRootSignature = shader.rootSiganture().get().Get(),
+		.CS = byteCode,
+		.NodeMask = desc.nodeMask,
+		.CachedPSO = desc.cachedPSO,
+		.Flags = desc.flags
+	};
+
+	device.get()->CreateComputePipelineState(&psoDesc, __uuidof(InterfaceType), &get());
 }
 
 namespace detail {
@@ -349,11 +368,11 @@ void ShaderPBRIllumination::bindPerDrawcallData(
 
 void ShaderPBRIllumination::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath/"pbrShader.hlsl", inputLayout(), nullptr,
+		shaderPath/"pbrShader.hlsl", nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 	blobs_[etoi(ShaderBlob::Type::Pixel)] = ShaderBlob{
-		shaderPath/"pbrShader.hlsl", inputLayout(), nullptr,
+		shaderPath/"pbrShader.hlsl", nullptr,
 		"PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Pixel
 	};
 }
@@ -428,6 +447,162 @@ InputLayout ShaderPBRIllumination::makeInputLayoutSeparated() {
 	} );
 }
 
+ShaderPBRAnimatedIllumination::ShaderPBRAnimatedIllumination(
+	D3D12Device& device, const RootSignature& root,
+	const Config& config, InputLayout::Spec ilSpec
+) : Shader(root, makeInputLayout(ilSpec)),
+	cbDrawcallDataSize_( calcConstantBufferSize(sizeof(sr::PerDrawcallData0)) ),
+	perConfigurationData_(device, sizeof(sr::PerConfigurationData0)),
+	perFrameData_(device, sizeof(sr::PerFrameData0)),
+	perDrawcallData_(device, cbDrawcallDataSize_ * config.maxDrawcallCnt),
+	perInstanceData_(device, sizeof(sr::PerInstanceData5) * config.maxInstanceCnt),
+	lightBuffer_(device, sizeof(sr::Light) * config.maxLightCnt),
+	boneBuffer_(device, sizeof(dx::XMFLOAT4X4) * config.maxBoneCnt),
+	maxInstanceCnt_(config.maxInstanceCnt), maxLightCnt_(config.maxLightCnt),
+	maxDrawcallCnt_(config.maxDrawcallCnt), maxBoneCnt_(config.maxBoneCnt) {
+	perConfigurationData_.pullGpuAddr();
+	perFrameData_.pullGpuAddr();
+	perDrawcallData_.pullGpuAddr();
+	perInstanceData_.pullGpuAddr();
+	lightBuffer_.pullGpuAddr();
+	boneBuffer_.pullGpuAddr();
+}
+
+void ShaderPBRAnimatedIllumination::bindRootParams(D3D12GfxCmdList& cmdList) {
+	auto& root = UnifiedRoot::get();
+
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		root.params[ UnifiedRoot::ParamIndices::b0 ],
+		perConfigurationData_.gpuAddr()
+	);
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		root.params[ UnifiedRoot::ParamIndices::b1 ],
+		perDrawcallData_.gpuAddr()
+	);
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		root.params[ UnifiedRoot::ParamIndices::b2 ],
+		perFrameData_.gpuAddr()
+	);
+	cmdList.get()->SetGraphicsRootShaderResourceView(
+		root.params[ UnifiedRoot::ParamIndices::t0 ],
+		perInstanceData_.gpuAddr()
+	);
+	cmdList.get()->SetGraphicsRootShaderResourceView(
+		root.params[ UnifiedRoot::ParamIndices::t1 ],
+		lightBuffer_.gpuAddr()
+	);
+	cmdList.get()->SetGraphicsRootShaderResourceView(
+		root.params[ UnifiedRoot::ParamIndices::t2 ],
+		boneBuffer_.gpuAddr()
+	);
+}
+
+void ShaderPBRAnimatedIllumination::bindPerDrawcallData(
+	std::size_t drawcallIdx, D3D12GfxCmdList& cmdList
+) {
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		UnifiedRoot::get().params[ UnifiedRoot::ParamIndices::b1 ],
+		perDrawcallData_.gpuAddr() + cbDrawcallDataSize() * drawcallIdx
+	);
+}
+
+void ShaderPBRAnimatedIllumination::loadBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
+		shaderPath/"pbrAnimatingShader.hlsl", nullptr,
+		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
+	};
+	blobs_[etoi(ShaderBlob::Type::Pixel)] = ShaderBlob{
+		shaderPath/"pbrAnimatingShader.hlsl", nullptr,
+		"PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Pixel
+	};
+}
+
+void ShaderPBRAnimatedIllumination::releaseBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)].reset();
+	blobs_[etoi(ShaderBlob::Type::Pixel)].reset();
+}
+
+InputLayout ShaderPBRAnimatedIllumination::makeInputLayout(InputLayout::Spec ilSpec) {
+	switch (ilSpec) {
+	case InputLayout::Spec::serial:
+		return makeInputLayoutSerial();
+	case InputLayout::Spec::separated:
+		return makeInputLayoutSeparated();
+	default:
+		throw GFX_EXCEPT( "Invalid input layout specification." );
+	}
+}
+
+InputLayout ShaderPBRAnimatedIllumination::makeInputLayoutSerial() {
+	return InputLayout( std::vector<InputLayout::Slot>{
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "POSITION", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+				InputLayout::Elem{ .semanticName = "NORMAL", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+				InputLayout::Elem{ .semanticName = "TANGENT", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+				InputLayout::Elem{ .semanticName = "BITANGENT", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+				InputLayout::Elem{ .semanticName = "TEXCOORD", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32_FLOAT },
+				InputLayout::Elem{ .semanticName = "BONE_INDICES", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32A32_UINT },
+				InputLayout::Elem{ .semanticName = "BONE_WEIGHTS", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32A32_FLOAT }
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Position3D))
+				| (1ull << etoi(Vertex::Properties::Normal3D))
+				| (1ull << etoi(Vertex::Properties::Tangent3D))
+				| (1ull << etoi(Vertex::Properties::Bitangent3D))
+				| (1ull << etoi(Vertex::Properties::TexCoord2D0))
+				| (1ull << etoi(Vertex::Properties::BoneIndices4D))
+				| (1ull << etoi(Vertex::Properties::BoneWeights4D))
+		}
+	} );
+}
+
+InputLayout ShaderPBRAnimatedIllumination::makeInputLayoutSeparated() {
+	return InputLayout( std::vector<InputLayout::Slot>{
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "POSITION", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Position3D))
+		},
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "NORMAL", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Normal3D))
+		},
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "TANGENT", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Tangent3D))
+		},
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "BITANGENT", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Bitangent3D))
+		},
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "TEXCOORD", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32_FLOAT },
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::TexCoord2D0))
+		},
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "BONE_INDICES", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32A32_UINT },
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::BoneIndices4D))
+		},
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "BONE_WEIGHTS", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32A32_FLOAT },
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::BoneWeights4D))
+		}
+	} );
+}
+
 ShaderPBRIlluminationTerrain::ShaderPBRIlluminationTerrain( D3D12Device& device, const RootSignature& root,
 	const Config& config, InputLayout::Spec ilSpec
 ) : Shader(root, makeInputLayout(ilSpec)),
@@ -478,19 +653,19 @@ void ShaderPBRIlluminationTerrain::bindPerDrawcallData(
 
 void ShaderPBRIlluminationTerrain::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath/"pbrShaderTerrain.hlsl", inputLayout(), nullptr,
+		shaderPath/"pbrShaderTerrain.hlsl", nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 	blobs_[etoi(ShaderBlob::Type::Pixel)] = ShaderBlob{
-		shaderPath/"pbrShaderTerrain.hlsl", inputLayout(), nullptr,
+		shaderPath/"pbrShaderTerrain.hlsl", nullptr,
 		"PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Pixel
 	};
 	blobs_[etoi(ShaderBlob::Type::Hull)] = ShaderBlob{
-		shaderPath/"pbrShaderTerrain.hlsl", inputLayout(), nullptr,
+		shaderPath/"pbrShaderTerrain.hlsl", nullptr,
 		"HSMain", "hs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Hull
 	};
 	blobs_[etoi(ShaderBlob::Type::Domain)] = ShaderBlob{
-		shaderPath/"pbrShaderTerrain.hlsl", inputLayout(), nullptr,
+		shaderPath/"pbrShaderTerrain.hlsl", nullptr,
 		"DSMain", "ds_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Domain
 	};
 }
@@ -606,8 +781,7 @@ ShaderShadowMap::ShaderShadowMap( D3D12Device& device,
 	perFrameData_(device, sizeof(sr::PerFrameData1)),
 	perDrawcallData_(device, cbDrawcallDataSize_ * config.maxDrawcallCnt),
 	perInstanceData_(device, sizeof(sr::PerInstanceData2) * config.maxInstanceCnt),
-	maxInstanceCnt_(config.maxInstanceCnt), maxDrawcallCnt_(config.maxDrawcallCnt),
-	pShadowMap_(nullptr) {
+	maxInstanceCnt_(config.maxInstanceCnt), maxDrawcallCnt_(config.maxDrawcallCnt) {
 	perFrameData_.pullGpuAddr();
 	perDrawcallData_.pullGpuAddr();
 	perInstanceData_.pullGpuAddr();
@@ -635,7 +809,7 @@ void ShaderShadowMap::bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCmdLi
 
 void ShaderShadowMap::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath/"shadowMap.hlsl", inputLayout(), nullptr,
+		shaderPath/"shadowMap.hlsl", nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 }
@@ -695,11 +869,11 @@ void ShaderScreenQuad::bindRootParams(D3D12GfxCmdList& cmdList) {
 
 void ShaderScreenQuad::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath/"screenQuad.hlsl", inputLayout(), nullptr,
+		shaderPath/"screenQuad.hlsl", nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 	blobs_[etoi(ShaderBlob::Type::Pixel)] = ShaderBlob{
-		shaderPath/"screenQuad.hlsl", inputLayout(), nullptr,
+		shaderPath/"screenQuad.hlsl", nullptr,
 		"PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Pixel
 	};
 }
@@ -751,19 +925,19 @@ void ShaderTessellation::bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCm
 
 void ShaderTessellation::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath/"tessellation.hlsl", inputLayout(), nullptr,
+		shaderPath/"tessellation.hlsl", nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 	blobs_[etoi(ShaderBlob::Type::Pixel)] = ShaderBlob{
-		shaderPath/"tessellation.hlsl", inputLayout(), nullptr,
+		shaderPath/"tessellation.hlsl", nullptr,
 		"PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Pixel
 	};
 	blobs_[etoi(ShaderBlob::Type::Hull)] = ShaderBlob{
-		shaderPath/"tessellation.hlsl", inputLayout(), nullptr,
+		shaderPath/"tessellation.hlsl", nullptr,
 		"HSMain", "hs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Hull
 	};
 	blobs_[etoi(ShaderBlob::Type::Domain)] = ShaderBlob{
-		shaderPath/"tessellation.hlsl", inputLayout(), nullptr,
+		shaderPath/"tessellation.hlsl", nullptr,
 		"DSMain", "ds_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Domain
 	};
 }
@@ -851,15 +1025,15 @@ void ShaderShadowMapTessellation::bindPerDrawcallData(std::size_t drawcallIdx, D
 
 void ShaderShadowMapTessellation::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath/"shadowMapTerrain.hlsl", inputLayout(), nullptr,
+		shaderPath/"shadowMapTerrain.hlsl", nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 	blobs_[etoi(ShaderBlob::Type::Hull)] = ShaderBlob{
-		shaderPath/"shadowMapTerrain.hlsl", inputLayout(), nullptr,
+		shaderPath/"shadowMapTerrain.hlsl", nullptr,
 		"HSMain", "hs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Hull
 	};
 	blobs_[etoi(ShaderBlob::Type::Domain)] = ShaderBlob{
-		shaderPath/"shadowMapTerrain.hlsl", inputLayout(), nullptr,
+		shaderPath/"shadowMapTerrain.hlsl", nullptr,
 		"DSMain", "ds_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Domain
 	};
 }
@@ -911,6 +1085,86 @@ InputLayout ShaderShadowMapTessellation::makeInputLayoutSeparated() {
 	} );
 }
 
+ShaderMatMul::ShaderMatMul(D3D12Device& device, const RootSignature& root, const Config& config)
+	: ComputeShader(root), lhsMatrices_(device, sizeof(dx::XMFLOAT4X4) * config.maxMatrixCnt),
+	rhsMatrices_(device, sizeof(dx::XMFLOAT4X4) * config.maxMatrixCnt),
+	resultMatrices_(device, sizeof(dx::XMFLOAT4X4) * config.maxMatrixCnt),
+	resultMatricesSrc_(device, sizeof(dx::XMFLOAT4X4) * config.maxMatrixCnt,
+		D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+	), maxMatrixCnt_(config.maxMatrixCnt) {
+	lhsMatrices_.pullGpuAddr();
+	rhsMatrices_.pullGpuAddr();
+	resultMatricesSrc_.pullGpuAddr();
+}
+
+void ShaderMatMul::bindRootParams(D3D12GfxCmdList& cmdList) {
+	auto& root = UnifiedRoot::get();
+
+	cmdList.get()->SetComputeRootShaderResourceView(
+		root.params[ UnifiedRoot::ParamIndices::t3 ],
+		lhsMatrices_.gpuAddr()
+	);
+	cmdList.get()->SetComputeRootShaderResourceView(
+		root.params[ UnifiedRoot::ParamIndices::t4 ],
+		rhsMatrices_.gpuAddr()
+	);
+	cmdList.get()->SetComputeRootUnorderedAccessView(
+		root.params[ UnifiedRoot::ParamIndices::u0 ],
+		resultMatricesSrc_.gpuAddr()
+	);
+}
+
+void ShaderMatMul::loadBlob() {
+	blob_ = ShaderBlob{
+		shaderPath/"matMul.hlsl", nullptr,
+		"CSMain", "cs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Compute
+	};
+}
+
+void ShaderMatMul::releaseBlob() {
+	blob_.reset();
+}
+
+ShaderAnimInterpolation::ShaderAnimInterpolation(D3D12Device& device, const RootSignature& root, const Config& config)
+	: ComputeShader(root),
+	lhsKeyFrames_(device, sizeof(sr::KeyFrame) * config.maxKeyFrameCnt),
+	rhsKeyFrames_(device, sizeof(sr::KeyFrame) * config.maxKeyFrameCnt),
+	resultMatrices_(device, sizeof(dx::XMFLOAT4X4) * config.maxKeyFrameCnt),
+	resultMatricesSrc_(device, sizeof(dx::XMFLOAT4X4) * config.maxKeyFrameCnt,
+		D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+	), maxKeyFrameCnt_(config.maxKeyFrameCnt) {
+	lhsKeyFrames_.pullGpuAddr();
+	rhsKeyFrames_.pullGpuAddr();
+	resultMatricesSrc_.pullGpuAddr();
+}
+
+void ShaderAnimInterpolation::bindRootParams(D3D12GfxCmdList& cmdList) {
+	auto& root = UnifiedRoot::get();
+
+	cmdList.get()->SetComputeRootShaderResourceView(
+		root.params[ UnifiedRoot::ParamIndices::t3 ],
+		lhsKeyFrames_.gpuAddr()
+	);
+	cmdList.get()->SetComputeRootShaderResourceView(
+		root.params[ UnifiedRoot::ParamIndices::t4 ],
+		rhsKeyFrames_.gpuAddr()
+	);
+	cmdList.get()->SetComputeRootUnorderedAccessView(
+		root.params[ UnifiedRoot::ParamIndices::u0 ],
+		resultMatricesSrc_.gpuAddr()
+	);
+}
+
+void ShaderAnimInterpolation::loadBlob() {
+	blob_ = ShaderBlob{
+		shaderPath/"animInterpolation.hlsl", nullptr,
+		"CSMain", "cs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Compute
+	};
+}
+
+void ShaderAnimInterpolation::releaseBlob() {
+	blob_.reset();
+}
 
 }   // namespace gfx::d3d12
 

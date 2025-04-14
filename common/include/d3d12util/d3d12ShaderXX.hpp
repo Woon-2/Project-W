@@ -168,11 +168,12 @@ public:
 		Geometry,
 		Hull,
 		Domain,
+		Compute,
 		Size
 	};
 
 	ShaderBlob( const std::filesystem::path& path,
-		const InputLayout& inputLayout, const D3D_SHADER_MACRO* macros,
+		const D3D_SHADER_MACRO* macros,
 		std::string_view entryPoint, std::string_view target,
 		UINT flag1, UINT flag2, Type type
 	);
@@ -226,6 +227,30 @@ public:
 
 private:
 	Shader* pShader_;
+};
+
+class ComputeShader;
+
+class ComputeProtocol : public dx::DXWrapper<ID3D12PipelineState> {
+public:
+	struct Desc {
+		UINT nodeMask;
+		D3D12_CACHED_PIPELINE_STATE cachedPSO;
+		D3D12_PIPELINE_STATE_FLAGS flags;
+	};
+
+	ComputeProtocol(D3D12Device& device, ComputeShader& shader,
+		const ShaderBlob& blob, const Desc& desc
+	);
+
+	void bind(D3D12GfxCmdList& cmdList) {
+		cmdList.get()->SetPipelineState(get().Get());
+	}
+
+	ComputeShader& shader() const noexcept { return *pShader_; }
+
+private:
+	ComputeShader* pShader_;
 };
 
 class Shader {
@@ -306,6 +331,13 @@ protected:
 	RootSignature root_;
 };
 
+
+inline std::optional<std::size_t> RenderProtocol::compatibleLayout(
+	const RefMesh& mesh
+) const {
+    return pShader_->inputLayout().bindableIdx(mesh);
+}
+
 class ComputeShader {
 protected:
 	static std::size_t calcConstantBufferSize(std::size_t size) {
@@ -322,9 +354,9 @@ public:
 		return blob_;
 	}
 
-	void loadBlobsIfNot() {
+	void loadBlobIfNot() {
 		if (!blob_.has_value()) {
-			loadBlobs();
+			loadBlob();
 		}
 	}
 
@@ -333,20 +365,23 @@ public:
 	}
 
 	virtual void bindRootParams(D3D12GfxCmdList& cmdList) = 0;
-	virtual void loadBlobs() = 0;
-	virtual void releaseBlobs() = 0;
+	virtual void loadBlob() = 0;
+	virtual void releaseBlob() = 0;
 
+	void dispatch( D3D12GfxCmdList& cmdList, std::size_t threadGroupCntX,
+		std::size_t threadGroupCntY, std::size_t threadGroupCntZ
+	) {
+		cmdList.get()->Dispatch(
+			static_cast<UINT>(threadGroupCntX),
+			static_cast<UINT>(threadGroupCntY),
+			static_cast<UINT>(threadGroupCntZ)
+		);
+	}
 
-private:
+protected:
 	std::optional<ShaderBlob> blob_;
 	RootSignature root_;
 };
-
-inline std::optional<std::size_t> RenderProtocol::compatibleLayout(
-	const RefMesh& mesh
-) const {
-    return pShader_->inputLayout().bindableIdx(mesh);
-}
 
 namespace sr {
 
@@ -381,6 +416,19 @@ struct PerInstanceData3 {
 struct PerInstanceData4 {
 	dx::XMFLOAT4X4 world;
 	dx::XMFLOAT4X4 wv;
+};
+
+struct PerInstanceData5 {
+	dx::XMFLOAT4X4 wvp;
+	dx::XMFLOAT4X4 world;
+	dx::XMFLOAT4X4 wv;
+	dx::XMFLOAT3X3 wvNormal;
+	std::uint32_t animIdx0;
+	std::uint32_t animIdx1;
+	dx::XMUINT2 padding;
+	float animWeight0;
+	float animWeight1;
+	dx::XMFLOAT2 padding2;
 };
 
 struct Light {
@@ -478,6 +526,13 @@ struct PerFrameData2 {
 
 };
 
+struct KeyFrame {
+	dx::XMFLOAT3 pos;
+	dx::XMFLOAT4 rot;
+	dx::XMFLOAT3 scale;
+	float ratio;
+};
+
 }	// namespace gfx::d3d12::sr
 
 class ShaderPBRIllumination : public Shader {
@@ -537,6 +592,72 @@ private:
 	std::size_t maxInstanceCnt_;
 	std::size_t maxLightCnt_;
 	std::size_t maxDrawcallCnt_;
+};
+
+class ShaderPBRAnimatedIllumination : public Shader {
+private:
+	std::size_t cbDrawcallDataSize_;
+
+public:
+	struct Config {
+		std::size_t maxInstanceCnt;
+		std::size_t maxDrawcallCnt;
+		std::size_t maxLightCnt;
+		std::size_t maxBoneCnt;
+	};
+
+	ShaderPBRAnimatedIllumination( D3D12Device& device, const RootSignature& root,
+		const Config& config, InputLayout::Spec ilSpec = InputLayout::Spec::serial
+	);
+
+	RenderProtocol makeProtocol( D3D12Device& device, const RenderProtocol::Desc& desc) {
+		return RenderProtocol( device, *this,
+			selectBlobsStrong<ShaderBlob::Type::Vertex, ShaderBlob::Type::Pixel>(), desc
+		);
+	}
+
+	std::size_t maxInstanceCnt() const noexcept {
+		return maxInstanceCnt_;
+	}
+
+	std::size_t maxLightCnt() const noexcept {
+		return maxLightCnt_;
+	}
+
+	std::size_t maxDrawcallCnt() const noexcept {
+		return maxDrawcallCnt_;
+	}
+
+	std::size_t maxBoneCnt() const noexcept {
+		return maxBoneCnt_;
+	}
+
+	void bindRootParams(D3D12GfxCmdList& cmdList) override;
+	void bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCmdList& cmdList);
+
+	std::size_t cbDrawcallDataSize() const noexcept {
+		return cbDrawcallDataSize_;
+	}
+
+	void loadBlobs() override;
+	void releaseBlobs() override;
+
+	UploadBuffer perConfigurationData_;
+	UploadBuffer perFrameData_;
+	UploadBuffer perDrawcallData_;
+	UploadBuffer perInstanceData_;
+	UploadBuffer lightBuffer_;
+	UploadBuffer boneBuffer_;
+
+private:
+	static InputLayout makeInputLayout(InputLayout::Spec ilSpec);
+	static InputLayout makeInputLayoutSerial();
+	static InputLayout makeInputLayoutSeparated();
+
+	std::size_t maxInstanceCnt_;
+	std::size_t maxLightCnt_;
+	std::size_t maxDrawcallCnt_;
+	std::size_t maxBoneCnt_;
 };
 
 class ShaderPBRIlluminationTerrain : public Shader {
@@ -653,18 +774,6 @@ public:
 	void loadBlobs() override;
 	void releaseBlobs() override;
 
-	void setShadowMap(Texture* pShadowMap) {
-		pShadowMap_ = pShadowMap;
-	}
-
-	Texture* shadowMap() noexcept {
-		return pShadowMap_;
-	}
-
-	const Texture* shadowMap() const noexcept {
-		return pShadowMap_;
-	}
-
 	UploadBuffer perFrameData_;
 	UploadBuffer perDrawcallData_;
 	UploadBuffer perInstanceData_;
@@ -680,17 +789,11 @@ private:
 
 	std::size_t maxInstanceCnt_;
 	std::size_t maxDrawcallCnt_;
-	Texture* pShadowMap_;
 };
 
 class ShaderScreenQuad : public Shader {
 public:
 	ShaderScreenQuad(D3D12Device& device, const RootSignature& root);
-	ShaderScreenQuad( D3D12Device& device, const RootSignature& root,
-		const Texture* pTexture
-	) : ShaderScreenQuad(device, root) {
-		screenQuad_.link(pTexture);
-	}
 
 	RenderProtocol makeProtocol( D3D12Device& device, const RenderProtocol::Desc& desc) {
 		return RenderProtocol( device, *this,
@@ -705,6 +808,10 @@ public:
 
 	void draw(D3D12GfxCmdList& cmdList) const {
 		screenQuad_.draw(cmdList);
+	}
+
+	void setScreenTexture(Texture* pScreenTexture) {
+		screenQuad_.link(pScreenTexture);
 	}
 
 	UploadBuffer perDrawcallData_;
@@ -811,18 +918,6 @@ public:
 		chunk.draw(cmdList);
 	}
 
-	void setShadowMap(Texture* pShadowMap) {
-		pShadowMap_ = pShadowMap;
-	}
-
-	Texture* shadowMap() noexcept {
-		return pShadowMap_;
-	}
-
-	const Texture* shadowMap() const noexcept {
-		return pShadowMap_;
-	}
-
 	UploadBuffer perFrameData_;
 	UploadBuffer perDrawcallData_;
 	UploadBuffer perInstanceData_;
@@ -838,7 +933,89 @@ private:
 
 	std::size_t maxInstanceCnt_;
 	std::size_t maxDrawcallCnt_;
-	Texture* pShadowMap_;
+};
+
+class ShaderMatMul : public ComputeShader {
+public:
+	static constexpr std::size_t groupSizeX = 256u;
+
+	struct Config {
+		std::size_t maxMatrixCnt;
+	};
+
+	ShaderMatMul(D3D12Device& device, const RootSignature& root, const Config& config);
+
+	ComputeProtocol makeProtocol(D3D12Device& device, const ComputeProtocol::Desc& desc) {
+		loadBlobIfNot();
+		return ComputeProtocol(device, *this, blob_.value(), desc);
+	}	
+
+	void bindRootParams(D3D12GfxCmdList& cmdList) override;
+	void loadBlob() override;
+	void releaseBlob() override;
+
+	std::size_t maxMatrixCnt() const noexcept {
+		return maxMatrixCnt_;
+	}
+
+	void dispatch(D3D12GfxCmdList& cmdList, std::size_t threadGroupCnt) {
+		cmdList.get()->Dispatch(
+			static_cast<UINT>(threadGroupCnt), 1u, 1u
+		);
+	}
+
+	UploadBuffer lhsMatrices_;
+	UploadBuffer rhsMatrices_;
+	ReadbackBuffer resultMatrices_;
+	DefaultBuffer resultMatricesSrc_;
+	
+private:
+	std::size_t maxMatrixCnt_;
+};
+
+struct KeyFrame {
+    mu::Vec3 pos;
+    mu::NQuat rot;
+    mu::Vec3 scale;
+    float time;
+};
+
+class ShaderAnimInterpolation : public ComputeShader {
+public:
+	static constexpr std::size_t groupSizeX = 256u;
+
+	struct Config {
+		std::size_t maxKeyFrameCnt;
+	};
+
+	ShaderAnimInterpolation(D3D12Device& device, const RootSignature& root, const Config& config);
+
+	ComputeProtocol makeProtocol(D3D12Device& device, const ComputeProtocol::Desc& desc) {
+		loadBlobIfNot();
+		return ComputeProtocol(device, *this, blob_.value(), desc);
+	}	
+
+	void bindRootParams(D3D12GfxCmdList& cmdList) override;
+	void loadBlob() override;
+	void releaseBlob() override;
+
+	std::size_t maxKeyFrameCnt() const noexcept {
+		return maxKeyFrameCnt_;
+	}
+
+	void dispatch(D3D12GfxCmdList& cmdList, std::size_t threadGroupCnt) {
+		cmdList.get()->Dispatch(
+			static_cast<UINT>(threadGroupCnt), 1u, 1u
+		);
+	}
+
+	UploadBuffer lhsKeyFrames_;
+	UploadBuffer rhsKeyFrames_;
+	ReadbackBuffer resultMatrices_;
+	DefaultBuffer resultMatricesSrc_;
+
+private:
+	std::size_t maxKeyFrameCnt_;
 };
 
 }   // namespace gfx::d3d12
