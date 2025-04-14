@@ -1,5 +1,7 @@
 #include "d3d12engine/d3d12Engine.hpp"
 
+#include "game/animSystem.hpp"
+
 #include <fstream>
 
 #include "resourcePath.hpp"
@@ -299,6 +301,55 @@ void PBRIllumination::update(Scene& scene) {
     }
 }
 
+void PBRAnimatedIllumination::init(Scene& scene) {
+    for (auto& pModel : models(scene)) {
+        const auto entityID = pModel->entityID().value();
+
+        auto pAnimCon = AnimController::atC(entityID);
+        if (!pAnimCon) {
+            throw GFX_EXCEPT("[Description] PBRAnimatedIllumination::init: "
+                "AnimController not found for entity: " + std::to_string(entityID));
+        }
+
+        if (auto pBV = BoundingVolume::atC(entityID)) {
+            trackModel(&pModel->get(), pAnimCon, &pBV->root());
+        }
+        else {
+            trackModel(&pModel->get(), pAnimCon);
+        }
+    }
+    if (!cameras(scene).empty()) {
+        setCamera(&cameras(scene).front()->get());
+    }
+    for (auto& pLight : lights(scene)) {
+        addLight(&pLight->get());
+    }
+}
+
+void PBRAnimatedIllumination::update(Scene& scene) {
+    for (auto& entityID : reservedEntities(scene)) {
+        if ( auto pModel = Model::at(entityID) ) {
+            auto pAnimCon = AnimController::atC(entityID);
+            if (!pAnimCon) {
+                throw GFX_EXCEPT("[Description] PBRAnimatedIllumination::init: "
+                    "AnimController not found for entity: " + std::to_string(entityID));
+            }
+
+            if (auto pBV = BoundingVolume::atC(entityID)) {
+                trackModel(&pModel->get(), pAnimCon, &pBV->root());
+            }
+            else {
+                trackModel(&pModel->get(), pAnimCon);
+            }
+        }
+        if ( auto pCamera = Camera::at(entityID) ) {
+            setCamera(&pCamera->get());
+        }
+        if ( auto pLight = Light::at(entityID) ) {
+            addLight(&pLight->get());
+        }
+    }
+}
 void ShadowMap::init(Scene& scene) {
     for (auto& pModel : models(scene)) {
         const auto entityID = pModel->entityID().value();

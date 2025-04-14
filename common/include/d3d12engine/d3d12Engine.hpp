@@ -293,6 +293,14 @@ public:
     void update(Scene& scene) override;
 };
 
+class PBRAnimatedIllumination : public IRenderPass, public d3d12::rp::PBRAnimatedIllumination {
+public:
+    using d3d12::rp::PBRAnimatedIllumination::PBRAnimatedIllumination;
+
+    void init(Scene& scene) override;
+    void update(Scene& scene) override;
+};
+
 class ShadowMap : public IRenderPass, public d3d12::rp::ShadowMap {
 public:
     using d3d12::rp::ShadowMap::ShadowMap;

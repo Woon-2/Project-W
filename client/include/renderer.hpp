@@ -36,6 +36,9 @@ private:
     gfx::d3d12::ShaderPBRIllumination shaderPBR_;
     gfx::d3d12engine::rp::PBRIllumination renderPassPBR_;
 
+    gfx::d3d12::ShaderPBRAnimatedIllumination shaderPBRAnimated_;
+    gfx::d3d12engine::rp::PBRAnimatedIllumination renderPassPBRAnimated_;
+
     gfx::d3d12::ShaderShadowMap shaderShadowMap_;
     gfx::d3d12engine::rp::ShadowMap renderPassShadowMap_;
 

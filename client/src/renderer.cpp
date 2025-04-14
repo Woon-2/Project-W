@@ -10,6 +10,15 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
         }, gfx::d3d12::InputLayout::Spec::separated
     ), renderPassPBR_( core.device(), shaderPBR_, core.samStorage(),
         gfx::d3d12::convClientToVP( core.window().client() )
+    ), shaderPBRAnimated_( core.device(), core.root(),
+        gfx::d3d12::ShaderPBRAnimatedIllumination::Config{
+            .maxInstanceCnt = 0x1000u,
+            .maxDrawcallCnt = 0x1000u,
+            .maxLightCnt = 0x100u,
+            .maxBoneCnt = 10'000'000u
+        }, gfx::d3d12::InputLayout::Spec::separated
+    ), renderPassPBRAnimated_( core.device(), shaderPBRAnimated_,
+        core.samStorage(), gfx::d3d12::convClientToVP( core.window().client() )
     ), shaderShadowMap_( core.device(), core.root(),
         gfx::d3d12::ShaderShadowMap::Config{
             .maxInstanceCnt = 0x1000u,
@@ -59,6 +68,12 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
 
     renderPassPBR_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowMap, pTex);
     renderPassPBR_.initResources(
+        gfx::d3d12::RenderPassTextures::ShadowMap, &pTex->view(1u),
+        dsvDesc, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pTex->view(0u)), srvDesc
+    );
+
+    renderPassPBRAnimated_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowMap, pTex);
+    renderPassPBRAnimated_.initResources(
         gfx::d3d12::RenderPassTextures::ShadowMap, &pTex->view(1u),
         dsvDesc, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pTex->view(0u)), srvDesc
     );

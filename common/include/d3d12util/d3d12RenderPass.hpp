@@ -459,7 +459,7 @@ public:
     }
 
 private:
-ShaderPBRAnimatedIllumination& shader() noexcept {
+    ShaderPBRAnimatedIllumination& shader() noexcept {
         return static_cast<ShaderPBRAnimatedIllumination&>(protocol_.shader());
     }
     const ShaderPBRAnimatedIllumination& shader() const noexcept {
