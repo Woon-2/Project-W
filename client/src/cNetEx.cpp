@@ -64,12 +64,19 @@ void buildEntityWithAsset( mu::Vec3 translation,
     if (assetModel.has_value()) {
         const auto asset = assetModel.value();
         const auto key = assetModelInfo(asset).key;
+        bool hasAnimation = !assetModelInfo(asset).animationPath.empty();
 
         if (!modelSlot.contains<gfx::d3d12::RefModel>(key)) {
             throw GFX_EXCEPT("Model not found: " + key);
         }
 
         entity.createComponent<gfx::d3d12engine::Model>(modelSlot, key, entity.as<gameEngine::Coord>());
+        if (hasAnimation) {
+            entity.createComponent<AnimController>();
+            entity.as<AnimController>().setSkeleton(
+                entity.as<gfx::d3d12engine::Model>().get().refModel()->skeleton()
+            );
+        }
         entity.as<gfx::d3d12engine::Model>().get().root()->coord() << mu::Mat4x4(rotation);
     }
 

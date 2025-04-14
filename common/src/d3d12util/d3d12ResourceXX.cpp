@@ -1409,7 +1409,7 @@ void Model::Node::addChild(Node* child) {
 }
 
 Model::Model(const RefModel& ref)
-    : nodeStorage_(ref.nodes().size()), pRoot_(nullptr) {
+    : nodeStorage_(ref.nodes().size()), pRoot_(nullptr), pRefModel_(&ref) {
     auto pRefFirstNode = ref.nodes().data();
 
     pRoot_ = nodeStorage_.data() + (ref.root() - pRefFirstNode);
@@ -1429,7 +1429,7 @@ Model::Model(const RefModel& ref)
 }
 
 Model::Model(const Model& other)
-    : nodeStorage_(other.nodeStorage_.size()), pRoot_(nullptr) {
+    : nodeStorage_(other.nodeStorage_.size()), pRoot_(nullptr), pRefModel_(other.pRefModel_) {
     auto pOtherFirstNode = other.nodeStorage_.data();
 
     pRoot_ = nodeStorage_.data() + (other.pRoot_ - pOtherFirstNode);
@@ -1456,6 +1456,7 @@ Model& Model::operator=(const Model& other) {
     auto pOtherFirstNode = other.nodeStorage_.data();
 
     pRoot_ = nodeStorage_.data() + (other.pRoot_ - pOtherFirstNode);
+    pRefModel_ = other.pRefModel_;
 
     for (std::size_t i = 0; i < other.nodeStorage_.size(); ++i) {
         auto& node = other.nodeStorage_[i];
@@ -1472,7 +1473,7 @@ Model& Model::operator=(const Model& other) {
 }
 
 Model::Model(Model&& other) noexcept
-    : nodeStorage_(other.nodeStorage_.size()), pRoot_(nullptr) {
+    : nodeStorage_(other.nodeStorage_.size()), pRoot_(nullptr), pRefModel_(other.pRefModel_) {
     auto pOtherFirstNode = other.nodeStorage_.data();
 
     pRoot_ = nodeStorage_.data() + (other.pRoot_ - pOtherFirstNode);
@@ -1502,6 +1503,7 @@ Model& Model::operator=(Model&& other) noexcept {
     auto pOtherFirstNode = other.nodeStorage_.data();
 
     pRoot_ = nodeStorage_.data() + (other.pRoot_ - pOtherFirstNode);
+    pRefModel_ = other.pRefModel_;
 
     for (std::size_t i = 0; i < other.nodeStorage_.size(); ++i) {
         auto& node = other.nodeStorage_[i];

@@ -912,10 +912,15 @@ public:
         return markedRenderPasses_;
     }
 
+    const RefModel* refModel() const noexcept {
+        return pRefModel_;
+    }
+
 private:
     std::vector<std::string> markedRenderPasses_;
     std::vector<Node> nodeStorage_;
     Node* pRoot_;
+    const RefModel* pRefModel_;
 };
 
 class Mesh {

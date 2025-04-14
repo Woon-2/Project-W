@@ -647,59 +647,67 @@ void AnimSystem::update( gfx::d3d12::D3D12CmdQueue& cmdQueue,
     clearXformCache();
 
     // calculate transform for all anim instances
+    // pass 1: calculate local transforms
     for (auto& pAnimCon : components<AnimController>()) {
-        // pass 1: calculate local transforms
         for (auto& [key, inst] : AnimConAttorney::getInstances(*pAnimCon)) {
             // add transforms to cache
             suspendedTasks_.push_back(inst.calcLocals(*this));
         }
+    }
 
-        cmdList.reset();
+    cmdList.get()->SetComputeRootSignature(shaderAnimInterpolation_.rootSiganture().get().Get());
+    shaderAnimInterpolation_.bindRootParams(cmdList);
+    computePassAnimInterpolation_.preCompute(cmdList);
+    computePassAnimInterpolation_.compute(cmdList);
+    computePassAnimInterpolation_.postCompute(cmdList);
 
-        computePassMatMul_.preCompute(cmdList);
-        computePassMatMul_.compute(cmdList);
-        computePassMatMul_.postCompute(cmdList);
+    cmdList.close();
+    cmdQueue.execute(cmdList);
+    fence_.signal(cmdQueue);
+    fence_.wait();
 
-        cmdList.close();
-        cmdQueue.execute(cmdList);
-        fence_.signal(cmdQueue);
-        fence_.wait();
+    boneXformCache_ = std::move(computePassMatMul_.resultMatrices());
 
-        boneXformCache_ = std::move(computePassMatMul_.resultMatrices());
+    // store the result matrices in the anim instance
+    for (auto& suspended : suspendedTasks_) {
+        suspended.resume();
+    }
+    suspendedTasks_.clear();
 
-        // store the result matrices in the anim instance
-        for (auto& suspended : suspendedTasks_) {
-            suspended.resume();
-        }
-        suspendedTasks_.clear();
-
-        // pass 2: calculate world transforms
+    // pass 2: calculate world transforms
+    for (auto& pAnimCon : components<AnimController>()) {
         for (auto& [key, inst] : AnimConAttorney::getInstances(*pAnimCon)) {
             inst.calcWorlds(*this);
         }
+    }
 
-        // pass 3: calculate final transforms
+    // pass 3: calculate final transforms
+    for (auto& pAnimCon : components<AnimController>()) {
         for (auto& [key, inst] : AnimConAttorney::getInstances(*pAnimCon)) {
             suspendedTasks_.push_back(inst.calcFinals(*this));
         }
-
-        cmdList.reset();
-
-        computePassMatMul_.preCompute(cmdList);
-        computePassMatMul_.compute(cmdList);
-        computePassMatMul_.postCompute(cmdList);
-
-        cmdList.close();
-        cmdQueue.execute(cmdList);
-        fence_.signal(cmdQueue);
-        fence_.wait();
-
-        boneXformCache_ = std::move(computePassMatMul_.resultMatrices());
-
-        // store the result matrices in the anim instance
-        for (auto& suspended : suspendedTasks_) {
-            suspended.resume();
-        }
-        suspendedTasks_.clear();
     }
+
+    cmdList.reset();
+
+    cmdList.get()->SetComputeRootSignature(shaderMatMul_.rootSiganture().get().Get());
+    shaderMatMul_.bindRootParams(cmdList);
+    computePassMatMul_.preCompute(cmdList);
+    computePassMatMul_.compute(cmdList);
+    computePassMatMul_.postCompute(cmdList);
+
+    cmdList.close();
+    cmdQueue.execute(cmdList);
+    fence_.signal(cmdQueue);
+    fence_.wait();
+
+    boneXformCache_ = std::move(computePassMatMul_.resultMatrices());
+
+    // store the result matrices in the anim instance
+    for (auto& suspended : suspendedTasks_) {
+        suspended.resume();
+    }
+    suspendedTasks_.clear();
+
+    cmdList.reset();
 }

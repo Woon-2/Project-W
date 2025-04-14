@@ -342,7 +342,8 @@ TaskAnim fadeOut(std::string key, Milliseconds fadeDuration, AnimController& ani
 class AnimSystem : public ecs::System<AnimController>{
 public:
     AnimSystem(gfx::d3d12::D3D12Device& device, const gfx::d3d12::RootSignature& root);
-    // the cmdList must be closed before calling this function
+    // the cmdList must be open before calling this function,
+    // and it does not close the cmdList after executing the compute pass
     void update(gfx::d3d12::D3D12CmdQueue& cmdQueue,
         gfx::d3d12::D3D12GfxCmdList& cmdList, Milliseconds deltaTime
     );

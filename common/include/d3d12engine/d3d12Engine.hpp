@@ -3,6 +3,7 @@
 
 #include "game/level.hpp"
 #include "game/physicsSystem.hpp"
+#include "game/animSystem.hpp"
 
 #include "d3d12engine/descriptorRangeSpec.hpp"
 

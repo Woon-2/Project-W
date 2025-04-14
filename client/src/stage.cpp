@@ -101,14 +101,20 @@ void Stage::processInput(double deltaTime) {
 
 void Stage::simulate(double deltaTime) {
     pSystems_->physicsSystem.update(static_cast<float>(deltaTime));
-
+    
     if (pPlayer_) {
         pPlayer_->as<gameEngine::Coord>().get()
-		    << mu::translate( pPlayer_->as<RigidBody>().deltaPosition()
-        );
-    }
+        << mu::translate( pPlayer_->as<RigidBody>().deltaPosition()
+    );
+}
 
     pSystems_->coordRoot.update();
+    auto cmdList = pCore_->fetchCmdList();
+    cmdList.reset();
+    pSystems_->animSystem.update( pCore_->cmdQueue(), cmdList,
+        Milliseconds(static_cast<float>(deltaTime))
+    );
+    cmdList.close();
     pSystems_->collisionSystem.update();
 
     if (pPlayer_) {

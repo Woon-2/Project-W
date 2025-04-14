@@ -1100,11 +1100,11 @@ ShaderMatMul::ShaderMatMul(D3D12Device& device, const RootSignature& root, const
 void ShaderMatMul::bindRootParams(D3D12GfxCmdList& cmdList) {
 	auto& root = UnifiedRoot::get();
 
-	cmdList.get()->SetComputeRootConstantBufferView(
+	cmdList.get()->SetComputeRootShaderResourceView(
 		root.params[ UnifiedRoot::ParamIndices::t3 ],
 		lhsMatrices_.gpuAddr()
 	);
-	cmdList.get()->SetComputeRootConstantBufferView(
+	cmdList.get()->SetComputeRootShaderResourceView(
 		root.params[ UnifiedRoot::ParamIndices::t4 ],
 		rhsMatrices_.gpuAddr()
 	);
@@ -1141,11 +1141,11 @@ ShaderAnimInterpolation::ShaderAnimInterpolation(D3D12Device& device, const Root
 void ShaderAnimInterpolation::bindRootParams(D3D12GfxCmdList& cmdList) {
 	auto& root = UnifiedRoot::get();
 
-	cmdList.get()->SetComputeRootConstantBufferView(
+	cmdList.get()->SetComputeRootShaderResourceView(
 		root.params[ UnifiedRoot::ParamIndices::t3 ],
 		lhsKeyFrames_.gpuAddr()
 	);
-	cmdList.get()->SetComputeRootConstantBufferView(
+	cmdList.get()->SetComputeRootShaderResourceView(
 		root.params[ UnifiedRoot::ParamIndices::t4 ],
 		rhsKeyFrames_.gpuAddr()
 	);

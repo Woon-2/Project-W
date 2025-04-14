@@ -1,7 +1,5 @@
 #include "d3d12engine/d3d12Engine.hpp"
 
-#include "game/animSystem.hpp"
-
 #include <fstream>
 
 #include "resourcePath.hpp"

@@ -9,7 +9,7 @@
 using namespace std::literals;
 
 Game::Game()
-    : session_(), core_(), mouse_(), keyboard_(), renderer_(core_), systems_(keyboard_),
+    : session_(), core_(), mouse_(), keyboard_(), renderer_(core_), systems_(core_, keyboard_),
     timer_(), pStage_(), lockFPS_(defLockFPS) {
     setupWndMsgHandlers();
 }
