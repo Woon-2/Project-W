@@ -401,17 +401,14 @@ void AnimInstance::update(Milliseconds deltaTime) {
 
     if (elapsedTime_ > pAnimClip_->duration()) {
 
-        if (pAnimClip_->flags() & AnimClip::Flags::Loop) {
-            elapsedTime_ -= pAnimClip_->duration();
-
-            // reset key frame cache
-            for (std::size_t i = 0; i < pSkeleton_->bones().size(); ++i) {
-                keyFrameCache_[i] = pAnimClip_->keyFrameBegin(static_cast<BoneIdx>(i));
-            }
-        }
-        else {
-            // do something, e.g., stop the animation or clamp to duration
+        if (!(pAnimClip_->flags() & AnimClip::Flags::Loop)) {
             return;
+        }
+        elapsedTime_ -= pAnimClip_->duration();
+
+        // reset key frame cache
+        for (std::size_t i = 0; i < pSkeleton_->bones().size(); ++i) {
+            keyFrameCache_[i] = pAnimClip_->keyFrameBegin(static_cast<BoneIdx>(i));
         }
     }
 
@@ -430,7 +427,7 @@ void AnimInstance::update(Milliseconds deltaTime) {
     stage_ = Stage::CalcLocal;
 }
 
-void AnimInstance::calcLocals() {
+TaskCompute AnimInstance::calcLocals(AnimSystem& animSystem) {
     if (stage_ != Stage::CalcLocal) {
         throw std::runtime_error(
             "[Description] AnimInstance::calcLocals: expected AnimInstance stage: "
@@ -442,12 +439,29 @@ void AnimInstance::calcLocals() {
     // calculate local transforms for each bone
     // with compute shader
 
-    // lhsMat, rhsMat, ratio => localMat
+    // lhsFrame, rhsFrame, ratio => localMat
+    std::vector<std::size_t> indices;
+    indices.reserve(keyFrameCache_.size());
+
+    for (auto& lhsFrame : keyFrameCache_) {
+        auto rhsFrame = std::next(lhsFrame);
+
+        auto ratio = (elapsedTime_.count() - lhsFrame->time) / (rhsFrame->time - lhsFrame->time);
+        indices.push_back( animSystem.addKeyFramePair(
+            *lhsFrame, *rhsFrame, ratio
+        ) );
+    }
+
+    co_await std::suspend_always{};
+
+    for (std::size_t i = 0u; i < indices.size(); ++i) {
+        boneXformCache_[i] = animSystem.getXform(indices[i]);
+    }
 
     stage_ = Stage::CalcWorld;
 }
 
-void AnimInstance::calcWorlds() {
+void AnimInstance::calcWorlds(AnimSystem& animSystem) {
     if (stage_ != Stage::CalcWorld) {
         throw std::runtime_error(
             "[Description] AnimInstance::calcWorlds: expected AnimInstance stage: "
@@ -471,7 +485,7 @@ void AnimInstance::traverseBone(const Bone& bone) {
     }
 }
 
-void AnimInstance::calcFinals() {
+TaskCompute AnimInstance::calcFinals(AnimSystem& animSystem) {
     if (stage_ != Stage::CalcFinal) {
         throw std::runtime_error(
             "[Description] AnimInstance::calcFinals: expected AnimInstance stage: "
@@ -482,6 +496,20 @@ void AnimInstance::calcFinals() {
 
     // calculate final transforms for each bone
     // with compute shader
+    std::vector<std::size_t> indices;
+    indices.reserve(boneXformCache_.size());
+
+    for (std::size_t i = 0u; i < boneXformCache_.size(); ++i) {
+        indices.push_back(animSystem.addXformPair(
+            pSkeleton_->bones()[i].toLocalMatrix(), boneXformCache_[i]
+        ));
+    }
+
+    co_await std::suspend_always{};
+
+    for (std::size_t i = 0u; i < indices.size(); ++i) {
+        boneXformCache_[i] = animSystem.getXform(indices[i]);
+    }
 
     stage_ = Stage::None;
 }
@@ -563,12 +591,7 @@ TaskAnim fadeOutImpl(std::string key, Milliseconds fadeDuration, AnimController&
 
 TaskAnim loopImpl(std::string key, AnimController& con) {
     AnimConAttorney::setWeight(key, 1.f, con);
-    const auto duration = AnimConAttorney::getDuration(key, con);
     for (;;) {
-        const auto elapsed = AnimConAttorney::getElapsed(key, con);
-        if (elapsed >= duration) {
-            AnimConAttorney::setElapsed(key, elapsed - duration, con);
-        }
         co_await std::suspend_always{};
     }
 }
@@ -597,20 +620,86 @@ TaskAnim fadeOut(std::string key, Milliseconds fadeDuration, AnimController& ani
     co_await FadeOut{ .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration };
 }
 
-// on anim controller's play => register anim instances' matrices on anim system
+AnimSystem::AnimSystem( gfx::d3d12::D3D12Device& device,
+    const gfx::d3d12::RootSignature& root
+) : shaderMatMul_(device, root, gfx::d3d12::ShaderMatMul::Config{
+        .maxMatrixCnt = 10'000'000u
+    }), computePassMatMul_(device, shaderMatMul_),
+    shaderAnimInterpolation_(device, root, gfx::d3d12::ShaderAnimInterpolation::Config{
+        .maxKeyFrameCnt = 10'000'000u
+    }), computePassAnimInterpolation_(device, shaderAnimInterpolation_),
+    boneXformCache_(),
+    suspendedTasks_(),
+    fence_(device) {
+    suspendedTasks_.reserve(10'000'000u);
+}
 
-void AnimSystem::update(Milliseconds deltaTime) {
+// on anim controller's play => register anim instances' matrices on anim system
+void AnimSystem::update( gfx::d3d12::D3D12CmdQueue& cmdQueue,
+    gfx::d3d12::D3D12GfxCmdList& cmdList, Milliseconds deltaTime
+) {
     // update timing and weights for all anim instances
+    // and remove expired anim instances
     for (auto& pAnimCon : components<AnimController>()) {
         pAnimCon->update(deltaTime);
     }
 
+    clearXformCache();
+
     // calculate transform for all anim instances
     for (auto& pAnimCon : components<AnimController>()) {
+        // pass 1: calculate local transforms
         for (auto& [key, inst] : AnimConAttorney::getInstances(*pAnimCon)) {
-            inst.calcLocals();
-            inst.calcWorlds();
-            inst.calcFinals();
+            // add transforms to cache
+            suspendedTasks_.push_back(inst.calcLocals(*this));
         }
+
+        cmdList.reset();
+
+        computePassMatMul_.preCompute(cmdList);
+        computePassMatMul_.compute(cmdList);
+        computePassMatMul_.postCompute(cmdList);
+
+        cmdList.close();
+        cmdQueue.execute(cmdList);
+        fence_.signal(cmdQueue);
+        fence_.wait();
+
+        boneXformCache_ = std::move(computePassMatMul_.resultMatrices());
+
+        // store the result matrices in the anim instance
+        for (auto& suspended : suspendedTasks_) {
+            suspended.resume();
+        }
+        suspendedTasks_.clear();
+
+        // pass 2: calculate world transforms
+        for (auto& [key, inst] : AnimConAttorney::getInstances(*pAnimCon)) {
+            inst.calcWorlds(*this);
+        }
+
+        // pass 3: calculate final transforms
+        for (auto& [key, inst] : AnimConAttorney::getInstances(*pAnimCon)) {
+            suspendedTasks_.push_back(inst.calcFinals(*this));
+        }
+
+        cmdList.reset();
+
+        computePassMatMul_.preCompute(cmdList);
+        computePassMatMul_.compute(cmdList);
+        computePassMatMul_.postCompute(cmdList);
+
+        cmdList.close();
+        cmdQueue.execute(cmdList);
+        fence_.signal(cmdQueue);
+        fence_.wait();
+
+        boneXformCache_ = std::move(computePassMatMul_.resultMatrices());
+
+        // store the result matrices in the anim instance
+        for (auto& suspended : suspendedTasks_) {
+            suspended.resume();
+        }
+        suspendedTasks_.clear();
     }
 }

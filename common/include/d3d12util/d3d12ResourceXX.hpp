@@ -9,8 +9,6 @@
 
 #include "vertex.hpp"
 
-#include "game/animSystem.hpp"
-
 #include <bitset>
 #include <filesystem>
 #include <cstdint>
@@ -30,6 +28,9 @@
 #include "enumUtil.hpp"
 #include "memUtil.hpp"
 #include "TMP.hpp"
+
+class Skeleton;
+class AnimClip;
 
 namespace gfx {
 

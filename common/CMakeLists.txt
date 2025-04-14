@@ -163,7 +163,6 @@ add_library(ecsClient
     src/game/level.cpp include/game/level.hpp
     src/coord.cpp include/coord.hpp
     src/game/physicsSystem.cpp include/game/physicsSystem.hpp
-    src/game/animSystem.cpp include/game/animSystem.hpp
 
     src/ecs.cpp include/ecs.hpp
     include/ecsExcept.hpp

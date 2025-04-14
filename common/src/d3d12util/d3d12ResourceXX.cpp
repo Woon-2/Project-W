@@ -2,6 +2,8 @@
 
 #include "d3d12util/d3d12RenderPass.hpp"
 
+#include "game/animSystem.hpp"
+
 #include "resourcePath.hpp"
 
 #include <cstdio>

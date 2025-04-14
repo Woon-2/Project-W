@@ -4,6 +4,8 @@
 #include "FSM.hpp"
 #include "ecs.hpp"
 
+#include "d3d12util/d3d12ComputePass.hpp"
+
 #ifndef DXMATH_VEC_UTIL
 #define DXMATH_VEC_UTIL
 #endif
@@ -81,14 +83,9 @@ protected:
     Bone* pRoot_;
 };
 
-struct KeyFrame {
-    mu::Vec3 pos;
-    mu::NQuat rot;
-    mu::Vec3 scale;
-    float time;
-};
-
 using BoneIdx = int;
+
+using KeyFrame = gfx::d3d12::KeyFrame;
 
 class AnimClip {
 public:
@@ -138,6 +135,24 @@ SkeletonAnimClipsPair loadSkeletonAndAnimClipFromFile(
 
 DEFINE_ENUM_LOGICAL_OP_ALL(AnimClip::Flags);
 
+class AnimSystem;
+
+struct PromiseCompute;
+
+struct TaskCompute : std::coroutine_handle<PromiseCompute> {
+    using promise_type = PromiseCompute;
+};
+
+struct PromiseCompute {
+    TaskCompute get_return_object() {
+        return TaskCompute{ std::coroutine_handle<PromiseCompute>::from_promise(*this) };
+    }
+    std::suspend_never initial_suspend() { return {}; }
+    std::suspend_never final_suspend() noexcept { return {}; }
+    void unhandled_exception() { throw; }
+    void return_void() {}
+};
+
 class AnimInstance {
 public:
     friend class AnimController;
@@ -152,13 +167,12 @@ public:
     AnimInstance(const Skeleton* pSkeleton, const AnimClip* pAnimClip);
 
     void update(Milliseconds deltaTime);
-    void calcLocals();
-    void calcWorlds();
-    void calcFinals();
+    TaskCompute calcLocals(AnimSystem& animSystem);
+    void calcWorlds(AnimSystem& animSystem);
+    TaskCompute calcFinals(AnimSystem& animSystem);
 
     void setSpeed(float speed) noexcept { speed_ = speed; }
     void setWeight(float weight) noexcept { weight_ = weight; }
-    void setElapsed(Milliseconds elapsed) noexcept { elapsedTime_ = elapsed; }
 
     Milliseconds elapsed() const noexcept { return elapsedTime_; }
     float speed() const noexcept { return speed_; }
@@ -263,15 +277,6 @@ struct AnimConAttorney {
             }
         }
     }
-
-    static void setElapsed(const std::string& key, Milliseconds elapsed, AnimController& con) {
-        for (auto& [k, inst] : con.insts_) {
-            if (k == key) {
-                inst.setElapsed(elapsed);
-                break;
-            }
-        }
-    }
 };
 
 TaskAnim fadeInImpl(std::string key, Milliseconds fadeDuration,
@@ -335,9 +340,37 @@ TaskAnim fadeOut(std::string key, Milliseconds fadeDuration, AnimController& ani
 
 class AnimSystem : public ecs::System<AnimController>{
 public:
-    void update(Milliseconds deltaTime);
+    AnimSystem(gfx::d3d12::D3D12Device& device, const gfx::d3d12::RootSignature& root);
+    // the cmdList must be closed before calling this function
+    void update(gfx::d3d12::D3D12CmdQueue& cmdQueue,
+        gfx::d3d12::D3D12GfxCmdList& cmdList, Milliseconds deltaTime
+    );
+
+    std::size_t MU_CALLCONV addXformPair(mu::Mat4x4 lhs, const mu::Mat4x4& rhs) {
+        return computePassMatMul_.addMatrixPair(lhs, rhs);
+    }
+
+    std::size_t MU_CALLCONV addKeyFramePair(const KeyFrame& lhs, const KeyFrame& rhs, float ratio) {
+        return computePassAnimInterpolation_.addKeyFramePair(lhs, rhs, ratio);
+    }
+
+    mu::Mat4x4 MU_CALLCONV getXform(std::size_t idx) const {
+        return boneXformCache_.at(idx);
+    }
+
+    void clearXformCache() {
+        boneXformCache_.clear();
+    }
 
 private:
+    gfx::d3d12::ShaderMatMul shaderMatMul_;
+    gfx::d3d12::cp::MatMul computePassMatMul_;
+    gfx::d3d12::ShaderAnimInterpolation shaderAnimInterpolation_;
+    gfx::d3d12::cp::AnimInterpolation computePassAnimInterpolation_;
+
+    std::vector<mu::Mat4x4> boneXformCache_;
+    std::vector<std::coroutine_handle<>> suspendedTasks_;
+    gfx::d3d12::Fence fence_;
 };
 
 #endif // __AnimSystem_HPP

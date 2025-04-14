@@ -60,6 +60,9 @@ public:
     d3d12::D3D12Device& device() NOEXCEPT { return device_; }
     const d3d12::D3D12Device& device() const NOEXCEPT { return device_; }
 
+    d3d12::D3D12CmdQueue& cmdQueue() NOEXCEPT { return cmdQueue_; }
+    const d3d12::D3D12CmdQueue& cmdQueue() const NOEXCEPT { return cmdQueue_; }
+
     d3d12::detail::UnifiedRootImpl& root() NOEXCEPT { return d3d12::UnifiedRoot::get(); }
     const d3d12::detail::UnifiedRootImpl& root() const NOEXCEPT { return d3d12::UnifiedRoot::get(); }
 
