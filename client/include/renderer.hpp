@@ -24,6 +24,11 @@ public:
         gfx::d3d12::RefModel& refModel,
         std::size_t layoutIdx
     );
+    void layoutVBsPBRAnimated(gfx::d3d12::D3D12Device& device,
+        gfx::d3d12::D3D12GfxCmdList& cmdList,
+        gfx::d3d12::RefModel& refModel,
+        std::size_t layoutIdx
+    );
     void setMode(Mode renderMode) NOEXCEPT {
         renderMode_ = renderMode;
     }

@@ -44,9 +44,6 @@ void Stage::processPackets(double deltaTime) {
     const auto oldEntitySize = entities_.size();
 
     for (auto& entt : v) {
-        entt.as<gfx::d3d12engine::Model>().get().markRenderPass(gfx::d3d12::rp::PBRIllumination::id);
-        entt.as<gfx::d3d12engine::Model>().get().markRenderPass(gfx::d3d12::rp::ShadowMap::id);
-
         if (entt.as<NetEx>().hasCategory(NetExCategory::Player)) {
             // as a vector is a contiguous range,
             // address gap between two element represents the gap of the indices.
@@ -71,6 +68,10 @@ void Stage::processPackets(double deltaTime) {
 
             pSystems_->inputSystem.addEntity(entt);
             pSystems_->physicsSystem.addEntity(entt);
+        }
+
+        if (entt.get<AnimController>()) {
+            pSystems_->animSystem.addEntity(entt);
         }
 
         pSystems_->coordRoot.addEntity(entt);
@@ -112,7 +113,7 @@ void Stage::simulate(double deltaTime) {
     auto cmdList = pCore_->fetchCmdList();
     cmdList.reset();
     pSystems_->animSystem.update( pCore_->cmdQueue(), cmdList,
-        Milliseconds(static_cast<float>(deltaTime))
+        Milliseconds(static_cast<float>(deltaTime * 1000.f))
     );
     cmdList.close();
     pSystems_->collisionSystem.update();
@@ -258,6 +259,10 @@ void loadModel( gfx::d3d12::ResourceStorage& storage,
             storage.slot(Stage::slotKeyTexCube),
             modelInfo.animationPath
         );
+        renderer.layoutVBsPBRAnimated(device, cmdList,
+            *storage.slot(Stage::slotKeyModel).get<gfx::d3d12::RefModel>(modelInfo.key),
+            1u
+        );
     }
     else {
         gfx::d3d12::loadRefModelAt(
@@ -267,11 +272,11 @@ void loadModel( gfx::d3d12::ResourceStorage& storage,
             storage.slot(Stage::slotKeyTexArray),
             storage.slot(Stage::slotKeyTexCube)
         );
+        renderer.layoutVBsPBR(device, cmdList,
+            *storage.slot(Stage::slotKeyModel).get<gfx::d3d12::RefModel>(modelInfo.key),
+            1u
+        );
     }
-    renderer.layoutVBsPBR( device, cmdList,
-        *storage.slot(Stage::slotKeyModel).get<gfx::d3d12::RefModel>(modelInfo.key),
-        1u
-    );
 }
 
 void Stage::loadModels(gfx::d3d12::D3D12GfxCmdList& cmdList) {

@@ -1,6 +1,7 @@
 #include "cNetEx.hpp"
 
 #include "game/physicsSystem.hpp"
+#include "game/animSystem.hpp"
 
 #include "assetMap.hpp"
 
@@ -48,6 +49,53 @@ void CNetExSystem::handleSCInitInfo(const SCInitInfo& scInitInfo) {
     initPacketCnt_ = scInitInfo.packetCnt;
 }
 
+fsm::State characterStateIdle(fsm::FSM& fsm) {
+    for (;;) {
+        while (auto events = co_await fsm.getEvents()) {
+            while (auto ev = events.pop()) {
+                // do something
+            }
+        }
+    
+        co_await fsm.completeStateUpdate();
+    }
+}
+
+void initAnimations(
+    const gfx::d3d12::ResourceStorage& resStorage,
+    AssetModel assetModel, AnimController& animCon
+) {
+    const auto& animClipSlot = resStorage.slot(CNetExSystem::slotKeyAnimClip);
+
+    switch (assetModel) {
+    case AssetModel::Character:
+        animCon.fsm().addState("Idle", characterStateIdle);
+        animCon.fsm().start("Idle");
+
+        animCon.addClip("GO_Character_Idle",
+            animClipSlot.get<AnimClip>("GO_Character_Idle")
+        );
+        animCon.addClip("GO_Character_Idle1",
+            animClipSlot.get<AnimClip>("GO_Character_Idle1")
+        );
+        animCon.addClip("GO_Character_Idle2",
+            animClipSlot.get<AnimClip>("GO_Character_Idle2")
+        );
+        animCon.addClip("GO_Character_Walk",
+            animClipSlot.get<AnimClip>("GO_Character_Walk")
+        );
+        animCon.addClip("GO_Character_Run",
+            animClipSlot.get<AnimClip>("GO_Character_Run")
+        );
+
+        animCon.play("GO_Character_Run");
+        break;
+
+    default:
+        break;
+    }
+}
+
 void buildEntityWithAsset( mu::Vec3 translation,
     mu::NQuat rotation,
     const gfx::d3d12::ResourceStorage& resStorage,
@@ -72,10 +120,11 @@ void buildEntityWithAsset( mu::Vec3 translation,
 
         entity.createComponent<gfx::d3d12engine::Model>(modelSlot, key, entity.as<gameEngine::Coord>());
         if (hasAnimation) {
-            entity.createComponent<AnimController>();
+            entity.createComponent<AnimController>(std::to_string(entity.id().value()));
             entity.as<AnimController>().setSkeleton(
                 entity.as<gfx::d3d12engine::Model>().get().refModel()->skeleton()
             );
+            initAnimations(resStorage, assetModel.value(), entity.as<AnimController>());
         }
         entity.as<gfx::d3d12engine::Model>().get().root()->coord() << mu::Mat4x4(rotation);
     }
@@ -110,10 +159,29 @@ void CNetExSystem::handleSCInitCreate(const SCInitCreate& scInitCreate) {
     auto rotation = mu::NQuat(x, y, z, w);
 
     switch (scInitCreate.objType) {
+    case ObjectType::Character:
+        entity.createComponent<NetEx>(std::make_unique<CNetExHelicopter>(entity.id().value()));
+        entity.as<NetEx>().addCategory(NetExCategory::Character);
+        buildEntityWithAsset(translation, rotation, *pResStorage_, AssetModel::Character, {}, entity);
+        entity.as<gfx::d3d12engine::Model>().get().markRenderPass(
+            gfx::d3d12engine::rp::PBRAnimatedIllumination::id
+        );
+        entity.as<gfx::d3d12engine::Model>().get().markRenderPass(
+            gfx::d3d12engine::rp::ShadowMap::id
+        );
+        addEntity(entity);
+        break;
+
     case ObjectType::Helicopter:
         entity.createComponent<NetEx>(std::make_unique<CNetExHelicopter>(entity.id().value()));
         entity.as<NetEx>().addCategory(NetExCategory::Helicopter);
-        buildEntityWithAsset(translation, rotation, *pResStorage_, AssetModel::Character, {}, entity);
+        buildEntityWithAsset(translation, rotation, *pResStorage_, AssetModel::Helicopter, {}, entity);
+        entity.as<gfx::d3d12engine::Model>().get().markRenderPass(
+            gfx::d3d12engine::rp::PBRIllumination::id
+        );
+        entity.as<gfx::d3d12engine::Model>().get().markRenderPass(
+            gfx::d3d12engine::rp::ShadowMap::id
+        );
         addEntity(entity);
         break;
 
@@ -121,18 +189,36 @@ void CNetExSystem::handleSCInitCreate(const SCInitCreate& scInitCreate) {
         entity.createComponent<NetEx>(std::make_unique<CNetExTree0>(entity.id().value()));
         buildEntityWithAsset(translation, rotation, *pResStorage_, AssetModel::Tree0, {}, entity);
         addEntity(entity);
+        entity.as<gfx::d3d12engine::Model>().get().markRenderPass(
+            gfx::d3d12engine::rp::PBRIllumination::id
+        );
+        entity.as<gfx::d3d12engine::Model>().get().markRenderPass(
+            gfx::d3d12engine::rp::ShadowMap::id
+        );
         break;
 
     case ObjectType::Tree1:
         entity.createComponent<NetEx>(std::make_unique<CNetExTree1>(entity.id().value()));
         buildEntityWithAsset(translation, rotation, *pResStorage_, AssetModel::Tree1, {}, entity);
         addEntity(entity);
+        entity.as<gfx::d3d12engine::Model>().get().markRenderPass(
+            gfx::d3d12engine::rp::PBRIllumination::id
+        );
+        entity.as<gfx::d3d12engine::Model>().get().markRenderPass(
+            gfx::d3d12engine::rp::ShadowMap::id
+        );
         break;
 
     case ObjectType::Tree2:
         entity.createComponent<NetEx>(std::make_unique<CNetExTree2>(entity.id().value()));
         buildEntityWithAsset(translation, rotation, *pResStorage_, AssetModel::Tree2, {}, entity);
         addEntity(entity);
+        entity.as<gfx::d3d12engine::Model>().get().markRenderPass(
+            gfx::d3d12engine::rp::PBRIllumination::id
+        );
+        entity.as<gfx::d3d12engine::Model>().get().markRenderPass(
+            gfx::d3d12engine::rp::ShadowMap::id
+        );
         break;
 
     default:

@@ -27,6 +27,7 @@ enum class PacketType : std::uint8_t {
 };
 
 enum class ObjectType : std::uint8_t {
+    Character,
     Helicopter,
     Tree0,
     Tree1,
@@ -36,6 +37,7 @@ enum class ObjectType : std::uint8_t {
 enum class NetExCategory : std::uint32_t {
     Player,
     AI,
+    Character,
     Helicopter
 };
 

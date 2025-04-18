@@ -38,7 +38,7 @@ void SNetExSystem::addSession(Session& session) {
                 .type = PacketType::SCInitCreate,
                 .scInitCreate = SCInitCreate{
                     .netId = pNetEx->netId(),
-                    .objType = ObjectType::Helicopter,
+                    .objType = ObjectType::Character,
                     .xform = {
                         .translation = {translation.x(), translation.y(), translation.z()},
                         .rotation = {0.0f, 0.0f, 0.0f}

@@ -95,12 +95,12 @@ int main()
         if (i < 5u) {
             entity.createComponent<NetEx>(std::make_unique<SNetExHelicopter>(entity.id().value()));
             entity.as<NetEx>().addCategory(NetExCategory::Player);
-            entity.as<NetEx>().addCategory(NetExCategory::Helicopter);
+            entity.as<NetEx>().addCategory(NetExCategory::Character);
         }
         else {
             entity.createComponent<NetEx>(std::make_unique<SNetExAI>(entity.id().value()));
             entity.as<NetEx>().addCategory(NetExCategory::AI);
-            entity.as<NetEx>().addCategory(NetExCategory::Helicopter);
+            entity.as<NetEx>().addCategory(NetExCategory::Character);
         }
         entity.createComponent<RigidBody>();
         entity.createComponent<DummyModel>(entity.as<gameEngine::Coord>());

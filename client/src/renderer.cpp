@@ -107,8 +107,19 @@ void Renderer::layoutVBsPBR( gfx::d3d12::D3D12Device& device,
     );
 }
 
+void Renderer::layoutVBsPBRAnimated(gfx::d3d12::D3D12Device& device,
+    gfx::d3d12::D3D12GfxCmdList& cmdList,
+    gfx::d3d12::RefModel& refModel,
+    std::size_t layoutIdx
+) {
+    gfx::d3d12::arrangeVBs(refModel, device, cmdList, layoutIdx,
+        shaderPBRAnimated_.inputLayout()
+    );
+}
+
 void Renderer::init(gfx::d3d12engine::Scene& scene) {
     renderPassPBR_.init(scene);
+    renderPassPBRAnimated_.init(scene);
     renderPassShadowMap_.init(scene);
     renderPassScreenQuad_.init(scene);
     renderPassTessellation_.init(scene);
@@ -119,6 +130,7 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
     auto cmdList = core.fetchCmdList();
 
     renderPassPBR_.update(scene);
+    renderPassPBRAnimated_.update(scene);
     renderPassShadowMap_.update(scene);
     renderPassScreenQuad_.update(scene);
     renderPassTessellation_.update(scene);
@@ -140,6 +152,11 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
         renderPassShadowMapTessellation_.preRender( cmdList, renderTargets );
         renderPassShadowMapTessellation_.render( cmdList, renderTargets );
         renderPassShadowMapTessellation_.postRender( cmdList, renderTargets );
+
+        shaderPBRAnimated_.bindRootParams( cmdList );
+        renderPassPBRAnimated_.preRender( cmdList, renderTargets );
+        renderPassPBRAnimated_.render( cmdList, renderTargets );
+        renderPassPBRAnimated_.postRender( cmdList, renderTargets );
 
         shaderPBR_.bindRootParams( cmdList );
         renderPassPBR_.preRender( cmdList, renderTargets );
