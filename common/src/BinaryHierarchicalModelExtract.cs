@@ -30,6 +30,7 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
     private List<Matrix4x4> bindposes = null;
 
     public AnimationClip[] animClips;
+    public string[] clipExtractionNames;
     public float keyFramePosThreshold = 0.05f;
     public float keyFrameRotThreshold = 15.0f; // degrees
     public float keyFrameScaleThreshold = 0.1f;
@@ -901,14 +902,23 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
             }
 
             Mesh mesh = skinnedMeshRenderer.sharedMesh;
+            Debug.Log(current.gameObject.name);
 
             if (mesh != null && mesh.bindposes.Length > 0)
             {
                 for (int i = 0; i < mesh.bindposes.Length; i++)
                 {
-                    bindposes[boneIndices[i]] = mesh.bindposes[i];
+                    if (mesh.bindposes[i] != Matrix4x4.identity)
+                    {
+                        bindposes[boneIndices[i]] = mesh.bindposes[i];
+                    }
                 }
             }
+        }
+
+        for (int i = 0; i < current.childCount; ++i)
+        {
+            updateBindPoses(current.GetChild(i));
         }
     }
 
@@ -948,7 +958,7 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
     {
         if (clip == null) return;
 
-        WriteString(binaryWriter, "<AnimationClip:>", clip.name);
+        WriteString(binaryWriter, "<AnimationClip:>", clipExtractionNames[System.Array.IndexOf(animClips, clip)]);
 
         WriteInteger(binaryWriter, "<BoneCnt:>", bones.Count);
 
