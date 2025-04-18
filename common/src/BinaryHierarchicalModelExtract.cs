@@ -855,30 +855,32 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         WriteString(geometryWriter, "</Node>");
     }
 
-    void WriteBoneHierarchyInfo(Transform current, int n = 0)
+    void WriteBoneHierarchyInfo(Transform current, ref int n)
     {
         WriteObjectName(skeletonWriter, "<Bone:>", current.gameObject);
         WriteInteger(skeletonWriter, "<BoneIndex:>", n);
         WriteLocalMatrix(skeletonWriter, "<Xform:>", current);
         WriteMatrix(skeletonWriter, "<BindPose:>", bindposes[n]);
+        ++n;
 
         WriteInteger(skeletonWriter, "<Children:>", current.childCount);
 
         for (int k = 0; k < current.childCount; k++)
         {
-            WriteBoneHierarchyInfo(current.GetChild(k), n + 1);
+            WriteBoneHierarchyInfo(current.GetChild(k), ref n);
         }
         WriteString(skeletonWriter, "</Bone>");
     }
 
-    void processBoneHierarchy(Transform current)
+    void processBoneHierarchy(Transform root, Transform current)
     {
         bones.Add(current);
-        bindposes.Add(Matrix4x4.identity);  // Initialize bindpose with identity matrix
+        bindposes.Add(current.worldToLocalMatrix * root.localToWorldMatrix);
+        // bindposes.Add(Matrix4x4.identity);  // Initialize bindpose with identity matrix
 
         for (int k = 0; k < current.childCount; k++)
         {
-            processBoneHierarchy(current.GetChild(k));
+            processBoneHierarchy(root, current.GetChild(k));
         }
     }
 
@@ -924,8 +926,8 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
 
     void processBones()
     {
-        processBoneHierarchy(skeleton);
-        updateBindPoses(geometry);
+        processBoneHierarchy(skeleton, skeleton);
+        // updateBindPoses(geometry);
     }
 
     void ExtractGeometry()
@@ -949,7 +951,8 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         accNodeCntRecursive(skeleton, ref nodeCnt);
         WriteInteger(skeletonWriter, "<BoneCnt:>", nodeCnt);
 
-        WriteBoneHierarchyInfo(skeleton);
+        int n = 0;
+        WriteBoneHierarchyInfo(skeleton, ref n);
 
         WriteString(skeletonWriter, "</Skeleton>");
     }
@@ -977,7 +980,14 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
             clip.SampleAnimation(go, time);
 
             WriteString(binaryWriter, "<KeyFrame:>");
-            WriteFloat(binaryWriter, time);
+            if (i == keyFrameCnt - 1)
+            {
+                WriteFloat(binaryWriter, float.MaxValue);
+            }
+            else
+            {
+                WriteFloat(binaryWriter, time);
+            }
             for (int j = 0; j < bones.Count; ++j)
             {
                 Transform bone = bones[j];
