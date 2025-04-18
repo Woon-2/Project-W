@@ -417,7 +417,7 @@ void AnimInstance::update(Milliseconds deltaTime) {
         auto nextKeyFrame = std::next(keyFrame);
 
         // every key frame must end with sentinal key frame
-        // which has time = duration
+        // which has time = float_max
         while (nextKeyFrame->time * 1000.f <= elapsedTime_.count()) {
             keyFrame = nextKeyFrame;
             ++nextKeyFrame;
