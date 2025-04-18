@@ -428,10 +428,8 @@ struct PerInstanceData5 {
 	dx::XMFLOAT3X3 wvNormal;
 	std::uint32_t animIdx0;
 	std::uint32_t animIdx1;
-	dx::XMUINT2 padding;
 	float animWeight0;
 	float animWeight1;
-	dx::XMFLOAT2 padding2;
 };
 
 struct Light {
@@ -652,6 +650,7 @@ public:
 	UploadBuffer perDrawcallData_;
 	UploadBuffer perInstanceData_;
 	UploadBuffer lightBuffer_;
+	UploadBuffer toBoneLocalBuffer_;
 	UploadBuffer boneBuffer_;
 
 private:

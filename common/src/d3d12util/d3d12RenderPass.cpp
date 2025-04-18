@@ -540,9 +540,6 @@ void PBRAnimatedIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets&
 
     std::ranges::sort(batch_, std::less<>{}, proj);
 
-    auto pids = std::vector<sr::PerInstanceData5>();
-    pids.reserve( shader().maxInstanceCnt() );
-
     const BoundingVolumeNode* pLastCulledBVNode = nullptr;
 
     for (auto& [willNotDraw, pBVNode, pSubmesh, pCoord, vbLayoutIdx, xform, pAnimCon] : batch_) {
@@ -580,8 +577,15 @@ void PBRAnimatedIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets&
 
     std::ranges::sort(batch_, std::less<>{}, proj2);
 
+    auto pids = std::vector<sr::PerInstanceData5>();
+    pids.reserve( shader().maxInstanceCnt() );
+
     auto bones = std::vector<dx::XMFLOAT4X4>();
+    auto toBoneLocals = std::vector<dx::XMFLOAT4X4>();
     bones.reserve( shader().maxBoneCnt() );
+    toBoneLocals.reserve( shader().maxBoneCnt() );
+
+    static constexpr std::size_t targetAnimCntExpected = 4u;
 
     for (const auto& [willNotDraw, pBVNode, pSubmesh, pCoord, vbLayoutIdx, xform, pAnimCon] : batch_) {
         // as the first criterion of sorting is the culled status,
@@ -591,9 +595,9 @@ void PBRAnimatedIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets&
         }
 
         auto firstBoneIndices = std::vector<std::uint32_t>();
-        firstBoneIndices.reserve( shader().maxInstanceCnt() * 2u );
+        firstBoneIndices.reserve( targetAnimCntExpected );
         auto weights = std::vector<float>();
-        weights.reserve( shader().maxInstanceCnt() * 2u );
+        weights.reserve( targetAnimCntExpected );
 
         bool boneFull = false;
 
@@ -602,7 +606,11 @@ void PBRAnimatedIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets&
             weights.push_back(animInst.weight());
 
             for (const auto& bone: animInst.boneXformCache()) {
-                bones.push_back(mu::transpose( bone ).getXmf());
+                bones.push_back( mu::transpose(bone).getXmf() );
+            }
+
+            for (const auto& bone : animInst.skeleton()->bones()) {
+                toBoneLocals.push_back( mu::transpose(bone.toLocalMatrix()).getXmf() );
             }
 
             if (bones.size() == shader().maxBoneCnt()) {
@@ -623,9 +631,8 @@ void PBRAnimatedIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets&
             /* .wvNormal = */ dx::convertMat<dx::XMFLOAT3X3>(
                 mu::inverse(xform * pCamera_->view()).get()
             ),
-            /* .animIdx0 = */ (firstBoneIndices.size() > 0) ? firstBoneIndices[0] : 0u,
+            /* .animIdx = */ (firstBoneIndices.size() > 0) ? firstBoneIndices[0] : 0u,
             /* .animIdx1 = */ (firstBoneIndices.size() > 1) ? firstBoneIndices[1] : 0u,
-            /* .padding = */ dx::XMUINT2(0u, 0u),
             /* .animWeight0 = */ (weights.size() > 0) ? weights[0] : 0.0f,
             /* .animWeight1 = */ (weights.size() > 1) ? weights[1] : 0.0f
         );
@@ -664,6 +671,7 @@ void PBRAnimatedIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets&
     shader().lightBuffer_.stage(lightBuffer.data(), lightBuffer.size() * sizeof(sr::Light));
     shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData0));
     shader().boneBuffer_.stage(bones.data(), bones.size() * sizeof(dx::XMFLOAT4X4));
+    shader().toBoneLocalBuffer_.stage(toBoneLocals.data(), toBoneLocals.size() * sizeof(dx::XMFLOAT4X4));
 }
 
 void PBRAnimatedIllumination::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {

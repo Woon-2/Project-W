@@ -458,6 +458,7 @@ ShaderPBRAnimatedIllumination::ShaderPBRAnimatedIllumination(
 	perInstanceData_(device, sizeof(sr::PerInstanceData5) * config.maxInstanceCnt),
 	lightBuffer_(device, sizeof(sr::Light) * config.maxLightCnt),
 	boneBuffer_(device, sizeof(dx::XMFLOAT4X4) * config.maxBoneCnt),
+	toBoneLocalBuffer_(device, sizeof(dx::XMFLOAT4X4) * config.maxBoneCnt),
 	maxInstanceCnt_(config.maxInstanceCnt), maxLightCnt_(config.maxLightCnt),
 	maxDrawcallCnt_(config.maxDrawcallCnt), maxBoneCnt_(config.maxBoneCnt) {
 	perConfigurationData_.pullGpuAddr();
@@ -466,6 +467,7 @@ ShaderPBRAnimatedIllumination::ShaderPBRAnimatedIllumination(
 	perInstanceData_.pullGpuAddr();
 	lightBuffer_.pullGpuAddr();
 	boneBuffer_.pullGpuAddr();
+	toBoneLocalBuffer_.pullGpuAddr();
 }
 
 void ShaderPBRAnimatedIllumination::bindRootParams(D3D12GfxCmdList& cmdList) {
@@ -492,7 +494,11 @@ void ShaderPBRAnimatedIllumination::bindRootParams(D3D12GfxCmdList& cmdList) {
 		lightBuffer_.gpuAddr()
 	);
 	cmdList.get()->SetGraphicsRootShaderResourceView(
-		root.params[ UnifiedRoot::ParamIndices::t2 ],
+		root.params[ UnifiedRoot::ParamIndices::t3 ],
+		toBoneLocalBuffer_.gpuAddr()
+	);
+	cmdList.get()->SetGraphicsRootShaderResourceView(
+		root.params[ UnifiedRoot::ParamIndices::t4 ],
 		boneBuffer_.gpuAddr()
 	);
 }

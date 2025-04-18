@@ -82,48 +82,6 @@ private:
 
 namespace cp {
 
-class MatMul : public gfx::d3d12::ComputePass {
-public:
-    static constexpr const char* id = "MatMul";
-
-    MatMul(D3D12Device& device, ShaderMatMul& shader);
-
-    // matrix pairs are cleared after call of postCompute()
-    std::size_t addMatrixPair(const mu::Mat4x4& lhs, const mu::Mat4x4& rhs) {
-        lhsMatrices_.push_back(lhs);
-        rhsMatrices_.push_back(rhs);
-        return lhsMatrices_.size() - 1u;
-    }
-
-    void preCompute(D3D12GfxCmdList& cmdList) override;
-    void compute(D3D12GfxCmdList& cmdList) override;
-    void postCompute(D3D12GfxCmdList& cmdList) override;
-    void postExecution() override;
-
-    std::vector<mu::Mat4x4>& resultMatrices() {
-        return resultMatrices_;
-    }
-    const std::vector<mu::Mat4x4>& resultMatrices() const {
-        return resultMatrices_;
-    }
-
-private:
-    ShaderMatMul& shader() noexcept {
-        return static_cast<ShaderMatMul&>(protocol_.shader());
-    }
-    const ShaderMatMul& shader() const noexcept {
-        return static_cast<const ShaderMatMul&>(protocol_.shader());
-    }
-
-    static ComputeProtocol::Desc makeDesc();
-
-    ComputeProtocol protocol_;
-    std::vector<mu::Mat4x4> lhsMatrices_;
-    std::vector<mu::Mat4x4> rhsMatrices_;
-    std::vector<mu::Mat4x4> resultMatrices_;
-    std::size_t threadGroupCnt_;
-};
-
 class AnimInterpolation : public gfx::d3d12::ComputePass {
 public:
     static constexpr const char* id = "AnimInterpolation";

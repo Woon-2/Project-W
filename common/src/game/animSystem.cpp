@@ -474,7 +474,7 @@ void AnimInstance::calcWorlds(AnimSystem& animSystem) {
 
     traverseBone(*pRootBone);
 
-    stage_ = Stage::CalcFinal;
+    stage_ = Stage::None;
 }
 
 void AnimInstance::traverseBone(const Bone& bone, const mu::Mat4x4& parentXform) {
@@ -483,38 +483,6 @@ void AnimInstance::traverseBone(const Bone& bone, const mu::Mat4x4& parentXform)
     for (const auto& child : bone.children()) {
         traverseBone(*child, boneXformCache_[bone.boneIdx()]);
     }
-}
-
-TaskCompute AnimInstance::calcFinals(AnimSystem& animSystem) {
-    if (stage_ != Stage::CalcFinal) {
-        throw std::runtime_error(
-            "[Description] AnimInstance::calcFinals: expected AnimInstance stage: "
-            + std::to_string(etoi(Stage::CalcFinal)) +
-            " but got: " + std::to_string(etoi(stage_))
-        );
-    }
-
-    // calculate final transforms for each bone
-    // with compute shader
-    std::vector<std::size_t> indices;
-    indices.reserve(boneXformCache_.size());
-
-    for (std::size_t i = 0u; i < boneXformCache_.size(); ++i) {
-        auto a = mu::inverse(pSkeleton_->bones()[i].toLocalMatrix());
-        auto b = boneXformCache_[i];
-
-        indices.push_back(animSystem.addXformPair(
-            pSkeleton_->bones()[i].toLocalMatrix(), boneXformCache_[i]
-        ));
-    }
-
-    co_await std::suspend_always{};
-
-    for (std::size_t i = 0u; i < indices.size(); ++i) {
-        boneXformCache_[i] = animSystem.getXform(indices[i]);
-    }
-
-    stage_ = Stage::None;
 }
 
 void AnimController::play(const std::string& key) {
@@ -626,10 +594,7 @@ TaskAnim fadeOut(std::string key, Milliseconds fadeDuration, AnimController& ani
 
 AnimSystem::AnimSystem( gfx::d3d12::D3D12Device& device,
     const gfx::d3d12::RootSignature& root
-) : shaderMatMul_(device, root, gfx::d3d12::ShaderMatMul::Config{
-        .maxMatrixCnt = 32'000u
-    }), computePassMatMul_(device, shaderMatMul_),
-    shaderAnimInterpolation_(device, root, gfx::d3d12::ShaderAnimInterpolation::Config{
+) : shaderAnimInterpolation_(device, root, gfx::d3d12::ShaderAnimInterpolation::Config{
         .maxKeyFrameCnt = 32'000u
     }), computePassAnimInterpolation_(device, shaderAnimInterpolation_),
     boneXformCache_(),
@@ -685,35 +650,6 @@ void AnimSystem::update( gfx::d3d12::D3D12CmdQueue& cmdQueue,
             inst.calcWorlds(*this);
         }
     }
-
-    // pass 3: calculate final transforms
-    for (auto& pAnimCon : components<AnimController>()) {
-        for (auto& [key, inst] : AnimConAttorney::getInstances(*pAnimCon)) {
-            suspendedTasks_.push_back(inst.calcFinals(*this));
-        }
-    }
-
-    cmdList.reset();
-
-    cmdList.get()->SetComputeRootSignature(shaderMatMul_.rootSiganture().get().Get());
-    shaderMatMul_.bindRootParams(cmdList);
-    computePassMatMul_.preCompute(cmdList);
-    computePassMatMul_.compute(cmdList);
-    computePassMatMul_.postCompute(cmdList);
-
-    cmdList.close();
-    cmdQueue.execute(cmdList);
-    fence_.signal(cmdQueue);
-    fence_.wait();
-    computePassMatMul_.postExecution();
-
-    boneXformCache_ = std::move(computePassMatMul_.resultMatrices());
-
-    // store the result matrices in the anim instance
-    for (auto& suspended : suspendedTasks_) {
-        suspended.resume();
-    }
-    suspendedTasks_.clear();
 
     cmdList.reset();
 }

@@ -50,14 +50,13 @@ struct PerInstanceData {
     float3x3 wvNormal;
     uint animIdx0;  // animIdx represents the first bone index of the animation
     uint animIdx1;
-    uint2 padding;
     float animWeight0;
     float animWeight1;
-    float2 padding2;
 };
 
 StructuredBuffer<PerInstanceData> gInstances: register(t0);
-StructuredBuffer<float4x4> gBones: register(t2);
+StructuredBuffer<float4x4> gToBoneLocal: register(t3);
+StructuredBuffer<float4x4> gBones: register(t4);
 
 #include "pbrLighting.hlsl"
 
@@ -80,11 +79,16 @@ static float4x4 gmtxTexturize = {
 };
 
 float4x4 blendBoneTransform(uint animIdx, uint4 boneIndices, float4 weights) {
+    uint idx0 = animIdx + boneIndices.x;
+    uint idx1 = animIdx + boneIndices.y;
+    uint idx2 = animIdx + boneIndices.z;
+    uint idx3 = animIdx + boneIndices.w;
+
     return 
-        gBones[animIdx + boneIndices.x] * weights.x +
-        gBones[animIdx + boneIndices.y] * weights.y +
-        gBones[animIdx + boneIndices.z] * weights.z +
-        gBones[animIdx + boneIndices.w] * weights.w;
+        mul(gToBoneLocal[idx0], gBones[idx0]) * weights.x +
+        mul(gToBoneLocal[idx1], gBones[idx1]) * weights.y +
+        mul(gToBoneLocal[idx2], gBones[idx2]) * weights.z +
+        mul(gToBoneLocal[idx3], gBones[idx3]) * weights.w;
 }
 
 VSOutput VSMain( float3 position : POSITION, float3 normal : NORMAL,

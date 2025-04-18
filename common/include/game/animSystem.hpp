@@ -158,8 +158,7 @@ public:
     enum class Stage {
         None,
         CalcLocal,
-        CalcWorld,
-        CalcFinal
+        CalcWorld
     };
 
     AnimInstance(const Skeleton* pSkeleton, const AnimClip* pAnimClip);
@@ -167,7 +166,6 @@ public:
     void update(Milliseconds deltaTime);
     TaskCompute calcLocals(AnimSystem& animSystem);
     void calcWorlds(AnimSystem& animSystem);
-    TaskCompute calcFinals(AnimSystem& animSystem);
 
     void setSpeed(float speed) noexcept { speed_ = speed; }
     void setWeight(float weight) noexcept { weight_ = weight; }
@@ -180,6 +178,9 @@ public:
     const auto& boneXformCache() const noexcept { return boneXformCache_; }
     auto& keyFrameCache() noexcept { return keyFrameCache_; }
     const auto& keyFrameCache() const noexcept { return keyFrameCache_; }
+
+    const Skeleton* skeleton() const noexcept { return pSkeleton_; }
+    const AnimClip* animClip() const noexcept { return pAnimClip_; }
 
 private:
     void traverseBone(const Bone& bone, const mu::Mat4x4& parentXform = mu::Mat4x4());
@@ -352,10 +353,6 @@ public:
         gfx::d3d12::D3D12GfxCmdList& cmdList, Milliseconds deltaTime
     );
 
-    std::size_t MU_CALLCONV addXformPair(mu::Mat4x4 lhs, const mu::Mat4x4& rhs) {
-        return computePassMatMul_.addMatrixPair(lhs, rhs);
-    }
-
     std::size_t MU_CALLCONV addKeyFramePair(const KeyFrame& lhs, const KeyFrame& rhs, float ratio) {
         return computePassAnimInterpolation_.addKeyFramePair(lhs, rhs, ratio);
     }
@@ -369,8 +366,6 @@ public:
     }
 
 private:
-    gfx::d3d12::ShaderMatMul shaderMatMul_;
-    gfx::d3d12::cp::MatMul computePassMatMul_;
     gfx::d3d12::ShaderAnimInterpolation shaderAnimInterpolation_;
     gfx::d3d12::cp::AnimInterpolation computePassAnimInterpolation_;
 
