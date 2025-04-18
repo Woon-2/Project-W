@@ -1,7 +1,9 @@
 struct KeyFrame
 {
     float3 translation;
+    float padding;
     float3 scale;
+    float padding2;
     float4 rotation; // quaternion
     float  ratio;    // 보간 비율 (0~1)
 };
@@ -44,9 +46,9 @@ float4x4 QuaternionToMatrix(float4 q)
     float wx = w * x, wy = w * y, wz = w * z;
 
     return float4x4(
-        1 - 2 * (yy + zz), 2 * (xy - wz),     2 * (xz + wy),     0,
-        2 * (xy + wz),     1 - 2 * (xx + zz), 2 * (yz - wx),     0,
-        2 * (xz - wy),     2 * (yz + wx),     1 - 2 * (xx + yy), 0,
+        1 - 2 * (yy + zz), 2 * (xy + wz),     2 * (xz - wy),     0,
+        2 * (xy - wz),     1 - 2 * (xx + zz), 2 * (yz + wx),     0,
+        2 * (xz + wy),     2 * (yz - wx),     1 - 2 * (xx + yy), 0,
         0,                 0,                 0,                 1
     );
 }
@@ -67,9 +69,9 @@ void CSMain(uint3 dispatchThreadID : SV_DispatchThreadID)
     float4x4 R = QuaternionToMatrix(Q);
 
     float4x4 M;
-    M[0] = float4(R[0].xyz * S.x, 0);
-    M[1] = float4(R[1].xyz * S.y, 0);
-    M[2] = float4(R[2].xyz * S.z, 0);
+    M[0] = float4(R[0].xyz , 0);
+    M[1] = float4(R[1].xyz , 0);
+    M[2] = float4(R[2].xyz , 0);
     M[3] = float4(T, 1);
 
     outMatrices[index] = M;

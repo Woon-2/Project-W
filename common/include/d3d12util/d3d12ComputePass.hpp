@@ -40,6 +40,7 @@ public:
     virtual void preCompute(D3D12GfxCmdList& cmdList) = 0;
     virtual void compute(D3D12GfxCmdList& cmdList) = 0;
     virtual void postCompute(D3D12GfxCmdList& cmdList) = 0;
+    virtual void postExecution() = 0;
 
     void setComputePassID(const std::string& computePassID) {
         computePassID_ = computePassID;
@@ -97,6 +98,7 @@ public:
     void preCompute(D3D12GfxCmdList& cmdList) override;
     void compute(D3D12GfxCmdList& cmdList) override;
     void postCompute(D3D12GfxCmdList& cmdList) override;
+    void postExecution() override;
 
     std::vector<mu::Mat4x4>& resultMatrices() {
         return resultMatrices_;
@@ -133,6 +135,7 @@ public:
     void preCompute(D3D12GfxCmdList& cmdList) override;
     void compute(D3D12GfxCmdList& cmdList) override;
     void postCompute(D3D12GfxCmdList& cmdList) override;
+    void postExecution() override;
 
     std::vector<mu::Mat4x4>& resultMatrices() {
         return resultMatrices_;

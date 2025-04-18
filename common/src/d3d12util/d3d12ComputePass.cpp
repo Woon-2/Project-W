@@ -54,14 +54,18 @@ void MatMul::compute(D3D12GfxCmdList& cmdList) {
 
 void MatMul::postCompute(D3D12GfxCmdList& cmdList) {
     shader().resultMatrices_.readback(cmdList, shader().resultMatricesSrc_);
-    
+}
+
+void MatMul::postExecution() {
     resultMatrices_.reserve(threadGroupCnt_ * shader().groupSizeX);
+    shader().resultMatrices_.mapReadbackResult();
     auto pMatrices = shader().resultMatrices_.getReadbackResult<dx::XMFLOAT4X4>();
     for (std::size_t i = 0u; i < threadGroupCnt_ * shader().groupSizeX; ++i) {
         resultMatrices_.emplace_back(dx::loadMat(pMatrices[i]));
+        resultMatrices_.back() = mu::transpose(resultMatrices_.back());
     }
 
-    shader().resultMatrices_.completeReadback();
+    shader().resultMatrices_.unmapReadbackResult();
 
     threadGroupCnt_ = 0u;
     lhsMatrices_.clear();
@@ -83,14 +87,18 @@ ComputeProtocol::Desc AnimInterpolation::makeDesc() {
 std::size_t AnimInterpolation::addKeyFramePair(const KeyFrame& lhs, const KeyFrame& rhs, float ratio) {
     lhsKeyFrames_.emplace_back(
         /* .pos = */ lhs.pos.getXmf(),
-        /* .rot = */ lhs.rot.getXmf(),
+        /* .padding = */ 0.f,
         /* .scale = */ lhs.scale.getXmf(),
+        /* .padding2 = */ 0.f,
+        /* .rot = */ lhs.rot.getXmf(),
         /* .ratio = */ ratio
     );
     rhsKeyFrames_.emplace_back(
         /* .pos = */ rhs.pos.getXmf(),
-        /* .rot = */ rhs.rot.getXmf(),
-        /* .scale = */ rhs.scale.getXmf()
+        /* .padding = */ 0.f,
+        /* .scale = */ rhs.scale.getXmf(),
+        /* .padding2 = */ 0.f,
+        /* .rot = */ rhs.rot.getXmf()
     );
 
     return lhsKeyFrames_.size() - 1u;
@@ -117,14 +125,18 @@ void AnimInterpolation::compute(D3D12GfxCmdList& cmdList) {
 
 void AnimInterpolation::postCompute(D3D12GfxCmdList& cmdList) {
     shader().resultMatrices_.readback(cmdList, shader().resultMatricesSrc_);
+}
 
+void AnimInterpolation::postExecution() {
     resultMatrices_.reserve(threadGroupCnt_ * shader().groupSizeX);
+    shader().resultMatrices_.mapReadbackResult();
     auto pMatrices = shader().resultMatrices_.getReadbackResult<dx::XMFLOAT4X4>();
     for (std::size_t i = 0u; i < threadGroupCnt_ * shader().groupSizeX; ++i) {
         resultMatrices_.emplace_back(dx::loadMat(pMatrices[i]));
+        resultMatrices_.back() = mu::transpose(resultMatrices_.back());
     }
 
-    shader().resultMatrices_.completeReadback();
+    shader().resultMatrices_.unmapReadbackResult();
 
     threadGroupCnt_ = 0u;
     lhsKeyFrames_.clear();

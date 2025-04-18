@@ -136,6 +136,9 @@ public:
 	template <std::ranges::contiguous_range R>
 		requires std::same_as<std::ranges::range_value_t<R>, VertexBuffer>
 	bool checkBindable(const R& vbs) const {
+		if (slots_.size() > std::size(vbs)) {
+			return false;
+		}
 		for (std::size_t i = 0; i < slots_.size(); ++i) {
 			const auto& slot = slots_[i];
 			if (slot.attributes != vbs[i].attributes()) {
@@ -528,8 +531,10 @@ struct PerFrameData2 {
 
 struct KeyFrame {
 	dx::XMFLOAT3 pos;
-	dx::XMFLOAT4 rot;
+	float padding;
 	dx::XMFLOAT3 scale;
+	float padding2;
+	dx::XMFLOAT4 rot;
 	float ratio;
 };
 
