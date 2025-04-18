@@ -182,7 +182,7 @@ public:
     const auto& keyFrameCache() const noexcept { return keyFrameCache_; }
 
 private:
-    void traverseBone(const Bone& bone);
+    void traverseBone(const Bone& bone, const mu::Mat4x4& parentXform = mu::Mat4x4());
 
     std::vector<mu::Mat4x4> boneXformCache_;
     std::vector< std::vector<KeyFrame>::const_iterator > keyFrameCache_;
@@ -215,8 +215,8 @@ public:
     ENABLE_COMPONENT(AnimController);
     friend struct AnimConAttorney;
 
-    AnimController(const ecs::Entity& entity) NOEXCEPT
-        : ecs::Component(entity), clipMap_(), insts_(), animSequences_(),
+    AnimController(const ecs::Entity& entity, const std::string& name) NOEXCEPT
+        : ecs::Component(entity), fsm_(name), clipMap_(), insts_(), animSequences_(),
         deltaTime_(0_ms), pSkeleton_(nullptr) {}
 
     void addClip(const std::string& key, const AnimClip* pClip) {
@@ -238,7 +238,11 @@ public:
 
     const auto& instances() const { return insts_; }
 
+    auto& fsm() { return fsm_; }
+    const auto& fsm() const { return fsm_; }
+
 private:
+    fsm::FSM fsm_;
     std::unordered_map<std::string, const AnimClip*> clipMap_;
     std::list<std::pair<std::string, AnimInstance>> insts_;
     std::list<std::pair<std::string, std::coroutine_handle<>>> animSequences_;

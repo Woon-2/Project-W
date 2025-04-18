@@ -254,7 +254,7 @@ AnimClip AnimClip::loadClipFromStream(std::istream& in) {
 
     for (int i = 0; i < boneCnt; ++i) {
         auto& keyFrames = animClip.keyFrames_[i];
-        keyFrames.resize(keyFrameCnt);
+        keyFrames.reserve(keyFrameCnt / 16u);
     }
 
     // read key frames
@@ -276,7 +276,7 @@ AnimClip AnimClip::loadClipFromStream(std::istream& in) {
                 int boneIdx{};
                 readStream(in, boneIdx);
 
-                auto& keyFrame = animClip.keyFrames_[boneIdx][keyFrameIdx];
+                auto& keyFrame = animClip.keyFrames_[boneIdx].emplace_back();
 
                 keyFrame.time = time;
 
@@ -446,7 +446,7 @@ TaskCompute AnimInstance::calcLocals(AnimSystem& animSystem) {
     for (auto& lhsFrame : keyFrameCache_) {
         auto rhsFrame = std::next(lhsFrame);
 
-        auto ratio = (elapsedTime_.count() - lhsFrame->time) / (rhsFrame->time - lhsFrame->time);
+        auto ratio = (elapsedTime_.count() / 1000.f - lhsFrame->time) / (rhsFrame->time - lhsFrame->time);
         indices.push_back( animSystem.addKeyFramePair(
             *lhsFrame, *rhsFrame, ratio
         ) );
@@ -477,11 +477,11 @@ void AnimInstance::calcWorlds(AnimSystem& animSystem) {
     stage_ = Stage::CalcFinal;
 }
 
-void AnimInstance::traverseBone(const Bone& bone) {
-    boneXformCache_[bone.boneIdx()] *= bone.toParentMatrix();
+void AnimInstance::traverseBone(const Bone& bone, const mu::Mat4x4& parentXform) {
+    boneXformCache_[bone.boneIdx()] *= parentXform;
 
     for (const auto& child : bone.children()) {
-        traverseBone(*child);
+        traverseBone(*child, boneXformCache_[bone.boneIdx()]);
     }
 }
 
@@ -500,6 +500,9 @@ TaskCompute AnimInstance::calcFinals(AnimSystem& animSystem) {
     indices.reserve(boneXformCache_.size());
 
     for (std::size_t i = 0u; i < boneXformCache_.size(); ++i) {
+        auto a = mu::inverse(pSkeleton_->bones()[i].toLocalMatrix());
+        auto b = boneXformCache_[i];
+
         indices.push_back(animSystem.addXformPair(
             pSkeleton_->bones()[i].toLocalMatrix(), boneXformCache_[i]
         ));
@@ -538,6 +541,7 @@ void AnimController::play(const std::string& key, std::coroutine_handle<> seq) {
 }
 
 void AnimController::update(Milliseconds deltaTime) {
+    fsm_.update();
     deltaTime_ = deltaTime;
     for (auto& [key, inst] : insts_) {
         inst.update(deltaTime_);
@@ -623,10 +627,10 @@ TaskAnim fadeOut(std::string key, Milliseconds fadeDuration, AnimController& ani
 AnimSystem::AnimSystem( gfx::d3d12::D3D12Device& device,
     const gfx::d3d12::RootSignature& root
 ) : shaderMatMul_(device, root, gfx::d3d12::ShaderMatMul::Config{
-        .maxMatrixCnt = 10'000'000u
+        .maxMatrixCnt = 32'000u
     }), computePassMatMul_(device, shaderMatMul_),
     shaderAnimInterpolation_(device, root, gfx::d3d12::ShaderAnimInterpolation::Config{
-        .maxKeyFrameCnt = 10'000'000u
+        .maxKeyFrameCnt = 32'000u
     }), computePassAnimInterpolation_(device, shaderAnimInterpolation_),
     boneXformCache_(),
     suspendedTasks_(),
@@ -665,8 +669,9 @@ void AnimSystem::update( gfx::d3d12::D3D12CmdQueue& cmdQueue,
     cmdQueue.execute(cmdList);
     fence_.signal(cmdQueue);
     fence_.wait();
+    computePassAnimInterpolation_.postExecution();
 
-    boneXformCache_ = std::move(computePassMatMul_.resultMatrices());
+    boneXformCache_ = std::move(computePassAnimInterpolation_.resultMatrices());
 
     // store the result matrices in the anim instance
     for (auto& suspended : suspendedTasks_) {
@@ -700,6 +705,7 @@ void AnimSystem::update( gfx::d3d12::D3D12CmdQueue& cmdQueue,
     cmdQueue.execute(cmdList);
     fence_.signal(cmdQueue);
     fence_.wait();
+    computePassMatMul_.postExecution();
 
     boneXformCache_ = std::move(computePassMatMul_.resultMatrices());
 

@@ -208,12 +208,17 @@ public:
         D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE
     );
 
-    void readback(D3D12GfxCmdList& cmdList, DefaultBuffer& srcBuf);
+    void readback(D3D12GfxCmdList& cmdList, DefaultBuffer& srcBuf) {
+        cmdList.copyResource(srcBuf, *this);
+    }
+    void mapReadbackResult() {
+        get()->Map(0, nullptr, reinterpret_cast<void**>(&pMappedData_));
+    }
     template <class T>
     T* getReadbackResult() const {
         return static_cast<T*>(pMappedData_);
     }
-    void completeReadback() {
+    void unmapReadbackResult() {
         get()->Unmap(0, nullptr);
     }
 
@@ -882,6 +887,7 @@ public:
         const auto& coord() const noexcept { return coord_; }
         auto& meshes() noexcept { return meshes_; }
         const auto& meshes() const noexcept { return meshes_; }
+        const Model* model() const noexcept { return pModel_; }
 
     private:
         gfx::coord::System coord_;

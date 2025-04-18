@@ -124,11 +124,6 @@ ReadbackBuffer::ReadbackBuffer(D3D12Device& device, std::size_t byteWidth,
         .Flags = flags
     }, D3D12_HEAP_TYPE_READBACK ) {}
 
-void ReadbackBuffer::readback(D3D12GfxCmdList& cmdList, DefaultBuffer& srcBuf) {
-    cmdList.copyResource(srcBuf, *this);
-    get()->Map(0, nullptr, reinterpret_cast<void**>(&pMappedData_));
-}
-
 TextureResource::TextureResource( D3D12Device& device, const Desc& texResDesc,
     D3D12_HEAP_TYPE heapType, D3D12_RESOURCE_STATES initialState
 ) : D3D12Resource( device, D3D12_RESOURCE_DESC{
