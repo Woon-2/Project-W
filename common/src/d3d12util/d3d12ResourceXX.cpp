@@ -2030,8 +2030,11 @@ RefModel& loadSkeletalRefModelAt( ResourceStorage::Slot& modelSlot,
     return refModel;
 }
 
-Skeleton& loadSkeletonAndAnimAt( ResourceStorage::Slot& skeletonSlot,
+Skeleton& loadSkeletonAndAnimAt( D3D12Device& device,
+    D3D12GfxCmdList& cmdList, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+    ResourceStorage::Slot& skeletonSlot,
     ResourceStorage::Slot& animSlot,
+    ResourceStorage::Slot& bakedPresampledAnimSlot,
     const std::filesystem::path& skAnimPath
 ) {
     auto [skeleton, animClips] = loadSkeletonAndAnimClipFromFile(skAnimPath);
@@ -2040,9 +2043,13 @@ Skeleton& loadSkeletonAndAnimAt( ResourceStorage::Slot& skeletonSlot,
     );
 
     for (auto& animClip : animClips) {
-        animSlot.load<AnimClip>(
+        auto& loadedAnimClip = animSlot.load<AnimClip>(
             animClip.name(), std::move(animClip)
         );
+        loadedAnimClip.setCustomData(&bakePresampledAnimClipAt(
+            bakedPresampledAnimSlot, loadedAnimClip.name(), device, cmdList,
+            tex2dRange, loadedAnimClip
+        ));
     }
 
     return ret;
@@ -2051,6 +2058,7 @@ Skeleton& loadSkeletonAndAnimAt( ResourceStorage::Slot& skeletonSlot,
 RefModel& loadSkeletalRefModelAndAnimAt( ResourceStorage::Slot& modelSlot,
     ResourceStorage::Slot& skeletonSlot,
     ResourceStorage::Slot& animSlot,
+    ResourceStorage::Slot& bakedPresampledAnimSlot,
     const ResourceStorage::ResID& modelID,
     const ResourceStorage::ResID& skeletonID,
     D3D12Device& device, D3D12GfxCmdList& cmdList,
@@ -2058,10 +2066,11 @@ RefModel& loadSkeletalRefModelAndAnimAt( ResourceStorage::Slot& modelSlot,
     const ResourceStorage::Slot& texSlot,
     const ResourceStorage::Slot& texArraySlot,
     const ResourceStorage::Slot& texCubeSlot,
+    DescriptorRange<DescriptorHeapGPU>& tex2dRange,
     const std::filesystem::path& skAnimPath
 ) {
     auto& refModel = loadRefModelAt(modelSlot, modelID, device, cmdList, geometryPath, texSlot, texArraySlot, texCubeSlot);
-    auto& skeleton = loadSkeletonAndAnimAt(skeletonSlot, animSlot, skAnimPath);
+    auto& skeleton = loadSkeletonAndAnimAt(device, cmdList, tex2dRange, skeletonSlot, animSlot, bakedPresampledAnimSlot, skAnimPath);
     refModel.linkSkeleton(&skeleton);
 
     return refModel;

@@ -124,11 +124,15 @@ public:
     int flags() const noexcept { return flags_; }
     const auto& presampleData() const { return samples_; }
 
+    void setCustomData(void* pCustomData) { pCustomData_ = pCustomData; }
+    void* customData() const { return pCustomData_; }
+
 private:
     std::vector< std::vector<KeyFrame> > keyFrames_; // [boneIdx][keyFrameIdx]
     std::vector< std::vector<mu::Mat4x4> > samples_; // [boneIdx][sampleIdx]
     std::string name_;
     Milliseconds duration_;
+    void* pCustomData_;
     int flags_;
 };
 

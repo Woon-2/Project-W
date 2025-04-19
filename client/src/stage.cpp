@@ -245,18 +245,21 @@ void Stage::loadTextures(gfx::d3d12::D3D12GfxCmdList& cmdList) {
 }
 
 void loadModel( gfx::d3d12::ResourceStorage& storage,
-    gfx::d3d12::D3D12Device& device, gfx::d3d12::D3D12GfxCmdList& cmdList,
+    gfx::d3d12engine::Core& core, gfx::d3d12::D3D12GfxCmdList& cmdList,
     AssetModel key, Renderer& renderer
 ) {
+    auto& device = core.device();
     auto modelInfo = assetModelInfo(key);
     if (!modelInfo.animationPath.empty()) {
         gfx::d3d12::loadSkeletalRefModelAndAnimAt(
             storage.slot(Stage::slotKeyModel), storage.slot(Stage::slotKeySkeleton),
-            storage.slot(Stage::slotKeyAnimClip), modelInfo.key, modelInfo.key,
+            storage.slot(Stage::slotKeyAnimClip), storage.slot(Stage::slotKeyTexture),
+            modelInfo.key, modelInfo.key,
             device, cmdList, modelInfo.geometryPath,
             storage.slot(Stage::slotKeyTexture),
             storage.slot(Stage::slotKeyTexArray),
             storage.slot(Stage::slotKeyTexCube),
+            core.descRanges().srvRangeTex2D,
             modelInfo.animationPath
         );
         renderer.layoutVBsPBRAnimated(device, cmdList,
@@ -281,22 +284,22 @@ void loadModel( gfx::d3d12::ResourceStorage& storage,
 
 void Stage::loadModels(gfx::d3d12::D3D12GfxCmdList& cmdList) {
     pCore_->initChunkMesh(cmdList);
-    loadModel( staticResStorage_, pCore_->device(), cmdList,
+    loadModel( staticResStorage_, *pCore_, cmdList,
         AssetModel::Helicopter, *pRenderer_
     );
-    loadModel( staticResStorage_, pCore_->device(), cmdList,
+    loadModel( staticResStorage_, *pCore_, cmdList,
         AssetModel::Character, *pRenderer_
     );
 
-    loadModel( staticResStorage_, pCore_->device(), cmdList,
+    loadModel( staticResStorage_, *pCore_, cmdList,
         AssetModel::Tree0, *pRenderer_
     );
 
-    loadModel( staticResStorage_, pCore_->device(), cmdList,
+    loadModel( staticResStorage_, *pCore_, cmdList,
         AssetModel::Tree1, *pRenderer_
     );
 
-    loadModel( staticResStorage_, pCore_->device(), cmdList,
+    loadModel( staticResStorage_, *pCore_, cmdList,
         AssetModel::Tree2, *pRenderer_
     );
 }

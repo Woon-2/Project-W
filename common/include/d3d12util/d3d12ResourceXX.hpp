@@ -1202,14 +1202,18 @@ RefModel& loadSkeletalRefModelAt( ResourceStorage::Slot& modelSlot,
     const std::filesystem::path& skeletonPath
 );
 
-Skeleton& loadSkeletonAndAnimAt( ResourceStorage::Slot& skeletonSlot,
+Skeleton& loadSkeletonAndAnimAt( D3D12Device& device,
+    D3D12GfxCmdList& cmdList, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+    ResourceStorage::Slot& skeletonSlot,
     ResourceStorage::Slot& animSlot,
+    ResourceStorage::Slot& bakedPresampledAnimSlot,
     const std::filesystem::path& skAnimPath
 );
 
 RefModel& loadSkeletalRefModelAndAnimAt( ResourceStorage::Slot& modelSlot,
     ResourceStorage::Slot& skeletonSlot,
     ResourceStorage::Slot& animSlot,
+    ResourceStorage::Slot& bakedPresampledAnimSlot,
     const ResourceStorage::ResID& modelID,
     const ResourceStorage::ResID& skeletonID,
     D3D12Device& device, D3D12GfxCmdList& cmdList,
@@ -1217,6 +1221,7 @@ RefModel& loadSkeletalRefModelAndAnimAt( ResourceStorage::Slot& modelSlot,
     const ResourceStorage::Slot& texSlot,
     const ResourceStorage::Slot& texArraySlot,
     const ResourceStorage::Slot& texCubeSlot,
+    DescriptorRange<DescriptorHeapGPU>& tex2dRange,
     const std::filesystem::path& skAnimPath
 );
 
