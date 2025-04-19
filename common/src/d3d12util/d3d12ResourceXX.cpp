@@ -1847,6 +1847,54 @@ void LevelChunkModel::initChunkMesh(D3D12Device& device, D3D12GfxCmdList& cmdLis
     sChunkIb = IndexBuffer(device, cmdList, std::move(ibMem), format, indexCnt);
 }
 
+Texture bakePresampledAnimClip( D3D12Device& device,
+    D3D12GfxCmdList& cmdList, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+    const AnimClip& animClip
+) {
+    auto desc = Texture::Desc{
+        .width = static_cast<std::uint32_t>(animClip.sampleCnt()),
+        // multiply boneCnt by 4, as a bone matrix is represented with 4 texels.
+        .height = static_cast<std::uint32_t>(animClip.boneCnt() * 4u),
+        .mipLevels = 1u,
+        .format = DXGI_FORMAT_R32G32B32A32_FLOAT,
+        .sampleDesc = DXGI_SAMPLE_DESC{
+            .Count = 1u,
+            .Quality = 0u
+        },
+        .flags = D3D12_RESOURCE_FLAG_NONE
+    };
+
+    auto ret = Texture(device, tex2dRange, desc, D3D12_HEAP_TYPE_DEFAULT);
+
+    auto auxIdx = cmdList.emplaceXResource<Texture>(device, tex2dRange, desc, D3D12_HEAP_TYPE_UPLOAD);
+    auto& aux = cmdList.getXResource<Texture>(auxIdx);
+    auto& presampleData = animClip.presampleData();
+    dx::XMFLOAT4X4* pMatrices{};
+
+    aux.get()->Map(0u, nullptr, reinterpret_cast<void**>(&pMatrices));
+
+    for (std::size_t i = 0; i < animClip.boneCnt(); ++i) {
+        for (std::size_t j = 0; j < animClip.sampleCnt(); ++j) {
+            pMatrices[i * animClip.boneCnt() + j] =
+                mu::transpose(presampleData[i][j]).getXmf();
+        }
+    }
+
+    aux.get()->Unmap(0u, nullptr);
+    cmdList.copyResource(aux, ret);
+
+    return ret;
+}
+
+Texture& bakePresampledAnimClipAt( ResourceStorage::Slot& texSlot,
+    const ResourceStorage::ResID& resID,
+    D3D12Device& device, D3D12GfxCmdList& cmdList,
+    DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+    const AnimClip& animClip
+) {
+    return texSlot.load<Texture>(resID, bakePresampledAnimClip, device, cmdList, tex2dRange, animClip);
+}
+
 // load texture with default srv desc from file
 Texture& loadTextureAt( ResourceStorage::Slot& texSlot,
     const ResourceStorage::ResID& resID,

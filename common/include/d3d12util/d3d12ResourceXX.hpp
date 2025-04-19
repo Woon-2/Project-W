@@ -1087,6 +1087,22 @@ namespace detail {
     };
 }
 
+// the command list must be in the recording state
+// as it utilizes the command list to create the texture resource
+Texture bakePresampledAnimClip( D3D12Device& device,
+    D3D12GfxCmdList& cmdList, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+    const AnimClip& animClip
+);
+
+// the command list must be in the recording state
+// as it utilizes the command list to create the texture resource
+Texture& bakePresampledAnimClipAt( ResourceStorage::Slot& texSlot,
+    const ResourceStorage::ResID& resID,
+    D3D12Device& device, D3D12GfxCmdList& cmdList,
+    DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+    const AnimClip& animClip
+);
+
 // load texture with default srv desc from file
 Texture& loadTextureAt( ResourceStorage::Slot& texSlot,
     const ResourceStorage::ResID& resID,

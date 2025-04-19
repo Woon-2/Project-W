@@ -122,6 +122,7 @@ public:
         return duration_ / static_cast<float>(sampleCnt());
     }
     int flags() const noexcept { return flags_; }
+    const auto& presampleData() const { return samples_; }
 
 private:
     std::vector< std::vector<KeyFrame> > keyFrames_; // [boneIdx][keyFrameIdx]
