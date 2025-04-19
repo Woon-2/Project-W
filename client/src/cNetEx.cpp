@@ -88,7 +88,7 @@ void initAnimations(
             animClipSlot.get<AnimClip>("GO_Character_Run")
         );
 
-        animCon.play("GO_Character_Run");
+        animCon.play("GO_Character_Run", AnimInstance::ClipMode::Presampled);
         break;
 
     default:
