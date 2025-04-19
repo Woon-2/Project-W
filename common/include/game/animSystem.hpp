@@ -112,10 +112,7 @@ public:
         return keyFrames_[boneIdx].end();
     }
 
-    mu::Mat4x4 MU_CALLCONV sample(BoneIdx boneIdx, std::size_t sampleIdx) const {
-        return samples_[boneIdx][sampleIdx];
-    }
-
+    mu::Mat4x4 MU_CALLCONV sample(BoneIdx boneIdx, Milliseconds elapsed) const;
     std::size_t keyFrameCnt(BoneIdx boneIdx) const { return keyFrames_[boneIdx].size(); }
     std::size_t sampleCnt() const { return samples_[0].size(); }
     std::size_t boneCnt() const { return keyFrames_.size(); }
@@ -171,7 +168,12 @@ public:
         CalcWorld
     };
 
-    AnimInstance(const Skeleton* pSkeleton, const AnimClip* pAnimClip);
+    enum class ClipMode {
+        KeyFrame,
+        Presampled
+    };
+
+    AnimInstance(const Skeleton* pSkeleton, const AnimClip* pAnimClip, ClipMode clipMode);
 
     void update(Milliseconds deltaTime);
     TaskCompute calcLocals(AnimSystem& animSystem);
@@ -203,6 +205,7 @@ private:
     Stage stage_;
     float speed_;
     float weight_;
+    ClipMode clipMode_;
 };
 
 struct PromiseAnim;
@@ -234,8 +237,10 @@ public:
         clipMap_.try_emplace(key, pClip);
     }
 
-    void play(const std::string& key);
-    void play(const std::string& key, std::coroutine_handle<> seq);
+    void play(const std::string& key, AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame);
+    void play( const std::string& key, std::coroutine_handle<> seq,
+        AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
+    );
 
     void update(Milliseconds deltaTime);
     void setAnimSequence(const std::string& key, std::coroutine_handle<> animSequence);

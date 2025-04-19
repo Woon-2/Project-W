@@ -467,6 +467,15 @@ std::vector<AnimClip> AnimClip::loadClipsFromStream(std::istream& in) {
     return animClips;
 }
 
+mu::Mat4x4 MU_CALLCONV AnimClip::sample(BoneIdx boneIdx, Milliseconds elapsed) const {
+    auto& samples = samples_[boneIdx];
+    auto sampleIdx = static_cast<std::size_t>(elapsed / sampleInterval());
+    if (sampleIdx >= samples.size()) {
+        sampleIdx = samples.size() - 1;
+    }
+    return samples[sampleIdx];
+}
+
 SkeletonAnimClipsPair loadSkeletonAndAnimClipFromFile(
     const std::filesystem::path& animBinaryPath
 ) {
@@ -480,10 +489,10 @@ SkeletonAnimClipsPair loadSkeletonAndAnimClipFromFile(
     return pair;
 }
 
-AnimInstance::AnimInstance(const Skeleton* pSkeleton, const AnimClip* pAnimClip)
+AnimInstance::AnimInstance(const Skeleton* pSkeleton, const AnimClip* pAnimClip, ClipMode clipMode)
     : boneXformCache_(pSkeleton->bones().size()),
     keyFrameCache_(), pAnimClip_(pAnimClip), pSkeleton_(pSkeleton),
-    elapsedTime_(0_ms), stage_(Stage::None), speed_(1.f), weight_(0.f) {
+    elapsedTime_(0_ms), stage_(Stage::None), speed_(1.f), weight_(0.f), clipMode_(clipMode) {
     if (!pAnimClip_) {
         throw std::runtime_error("AnimInstance requires a valid AnimClip.");
     }
@@ -496,10 +505,12 @@ AnimInstance::AnimInstance(const Skeleton* pSkeleton, const AnimClip* pAnimClip)
         throw std::runtime_error("AnimClip bone count does not match Skeleton bone count.");
     }
 
-    // initialize keyFrameCache_ with the first key frame of each bone
-    keyFrameCache_.reserve(pSkeleton_->bones().size());
-    for (std::size_t i = 0; i < pSkeleton->bones().size(); ++i) {
-        keyFrameCache_.push_back(pAnimClip_->keyFrameBegin(static_cast<BoneIdx>(i)));
+    if (clipMode == ClipMode::KeyFrame) {
+        // initialize keyFrameCache_ with the first key frame of each bone
+        keyFrameCache_.reserve(pSkeleton_->bones().size());
+        for (std::size_t i = 0; i < pSkeleton->bones().size(); ++i) {
+            keyFrameCache_.push_back(pAnimClip_->keyFrameBegin(static_cast<BoneIdx>(i)));
+        }
     }
 }
 
@@ -521,21 +532,30 @@ void AnimInstance::update(Milliseconds deltaTime) {
         }
         elapsedTime_ -= pAnimClip_->duration();
 
-        // reset key frame cache
-        for (std::size_t i = 0; i < pSkeleton_->bones().size(); ++i) {
-            keyFrameCache_[i] = pAnimClip_->keyFrameBegin(static_cast<BoneIdx>(i));
+        if (clipMode_ == ClipMode::KeyFrame) {
+            // reset key frame cache
+            for (std::size_t i = 0; i < pSkeleton_->bones().size(); ++i) {
+                keyFrameCache_[i] = pAnimClip_->keyFrameBegin(static_cast<BoneIdx>(i));
+            }
         }
     }
 
-    for (std::size_t i = 0; i < pSkeleton_->bones().size(); ++i) {
-        auto& keyFrame = keyFrameCache_[i];
-        auto nextKeyFrame = std::next(keyFrame);
+    if (clipMode_ == ClipMode::KeyFrame) {
+        for (std::size_t i = 0; i < pSkeleton_->bones().size(); ++i) {
+            auto& keyFrame = keyFrameCache_[i];
+            auto nextKeyFrame = std::next(keyFrame);
 
-        // every key frame must end with sentinal key frame
-        // which has time = float_max
-        while (nextKeyFrame->time * 1000.f <= elapsedTime_.count()) {
-            keyFrame = nextKeyFrame;
-            ++nextKeyFrame;
+            // every key frame must end with sentinal key frame
+            // which has time = float_max
+            while (nextKeyFrame->time * 1000.f <= elapsedTime_.count()) {
+                keyFrame = nextKeyFrame;
+                ++nextKeyFrame;
+            }
+        }
+    }
+    else /* if clipMode_ == ClipMode::Presampled */ {
+        for (std::size_t i = 0; i < pSkeleton_->bones().size(); ++i) {
+            boneXformCache_[i] = pAnimClip_->sample(static_cast<BoneIdx>(i), elapsedTime_);
         }
     }
 
@@ -549,6 +569,13 @@ TaskCompute AnimInstance::calcLocals(AnimSystem& animSystem) {
             + std::to_string(etoi(Stage::CalcLocal)) +
             " but got: " + std::to_string(etoi(stage_))
         );
+    }
+
+    if (clipMode_ == ClipMode::Presampled) {
+        // skip local transform calculation
+        co_await std::suspend_always{};
+        stage_ = Stage::CalcWorld;
+        co_return;
     }
 
     // calculate local transforms for each bone
@@ -585,6 +612,12 @@ void AnimInstance::calcWorlds(AnimSystem& animSystem) {
         );
     }
 
+    if (clipMode_ == ClipMode::Presampled) {
+        // skip world transform calculation
+        stage_ = Stage::None;
+        return;
+    }
+
     auto pRootBone = pSkeleton_->root();
 
     traverseBone(*pRootBone);
@@ -600,10 +633,10 @@ void AnimInstance::traverseBone(const Bone& bone, const mu::Mat4x4& parentXform)
     }
 }
 
-void AnimController::play(const std::string& key) {
+void AnimController::play(const std::string& key, AnimInstance::ClipMode clipMode) {
     const auto& animClip = clipInfo(key);
     insts_.emplace_back(key,
-        AnimInstance(pSkeleton_, &animClip)
+        AnimInstance(pSkeleton_, &animClip, clipMode)
     );
 
     if (animClip.flags() & AnimClip::Flags::Loop) {
@@ -614,10 +647,12 @@ void AnimController::play(const std::string& key) {
     }
 }
 
-void AnimController::play(const std::string& key, std::coroutine_handle<> seq) {
+void AnimController::play( const std::string& key, std::coroutine_handle<> seq,
+    AnimInstance::ClipMode clipMode
+) {
     const auto& animClip = clipInfo(key);
     insts_.emplace_back(key,
-        AnimInstance(pSkeleton_, &animClip)
+        AnimInstance(pSkeleton_, &animClip, clipMode)
     );
 
     animSequences_.emplace_back(key, seq);
