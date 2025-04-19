@@ -26,6 +26,14 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
         }, gfx::d3d12::InputLayout::Spec::separated
     ), renderPassShadowMap_( core.device(), shaderShadowMap_,
         gfx::d3d12::convClientToVP( core.window().client() )
+    ), shaderShadowMapAnimated_( core.device(), core.root(),
+        gfx::d3d12::ShaderShadowMapAnimated::Config{
+            .maxInstanceCnt = 0x1000u,
+            .maxDrawcallCnt = 0x1000u,
+            .maxBoneCnt = 10'000'000u
+        }, gfx::d3d12::InputLayout::Spec::separated
+    ), renderPassShadowMapAnimated_( core.device(), shaderShadowMapAnimated_,
+        gfx::d3d12::convClientToVP( core.window().client() )
     ), shaderScreenQuad_(core.device(), core.root()),
     renderPassScreenQuad_( core.device(), shaderScreenQuad_,
         core.samStorage(), gfx::d3d12::convClientToVP(core.window().client())
@@ -84,6 +92,12 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
         dsvDesc, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pTex->view(0u)), srvDesc
     );
 
+    renderPassShadowMapAnimated_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowMap, pTex);
+    renderPassShadowMapAnimated_.initResources(
+        gfx::d3d12::RenderPassTextures::ShadowMap, &pTex->view(1u),
+        dsvDesc, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pTex->view(0u)), srvDesc
+    );
+
     renderPassTessellation_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowMap, pTex);
     renderPassTessellation_.initResources(
         gfx::d3d12::RenderPassTextures::ShadowMap, &pTex->view(1u),
@@ -115,12 +129,16 @@ void Renderer::layoutVBsPBRAnimated(gfx::d3d12::D3D12Device& device,
     gfx::d3d12::arrangeVBs(refModel, device, cmdList, layoutIdx,
         shaderPBRAnimated_.inputLayout()
     );
+    gfx::d3d12::arrangeVBs(refModel, device, cmdList, layoutIdx + 1u,
+        shaderShadowMapAnimated_.inputLayout()
+    );
 }
 
 void Renderer::init(gfx::d3d12engine::Scene& scene) {
     renderPassPBR_.init(scene);
     renderPassPBRAnimated_.init(scene);
     renderPassShadowMap_.init(scene);
+    renderPassShadowMapAnimated_.init(scene);
     renderPassScreenQuad_.init(scene);
     renderPassTessellation_.init(scene);
     renderPassShadowMapTessellation_.init(scene);
@@ -132,6 +150,7 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
     renderPassPBR_.update(scene);
     renderPassPBRAnimated_.update(scene);
     renderPassShadowMap_.update(scene);
+    renderPassShadowMapAnimated_.update(scene);
     renderPassScreenQuad_.update(scene);
     renderPassTessellation_.update(scene);
     renderPassShadowMapTessellation_.update(scene);
@@ -142,6 +161,11 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
             rendererTexStorage_.slot(slotKeyTexture).get<gfx::d3d12::Texture>("shadowMap")->view(1u).cpuHandle(),
             D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0u, nullptr   
         );
+
+        shaderShadowMapAnimated_.bindRootParams( cmdList );
+        renderPassShadowMapAnimated_.preRender( cmdList, renderTargets );
+        renderPassShadowMapAnimated_.render( cmdList, renderTargets );
+        renderPassShadowMapAnimated_.postRender( cmdList, renderTargets );
 
         shaderShadowMap_.bindRootParams( cmdList );
         renderPassShadowMap_.preRender( cmdList, renderTargets );

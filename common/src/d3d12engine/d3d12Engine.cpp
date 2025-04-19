@@ -348,6 +348,7 @@ void PBRAnimatedIllumination::update(Scene& scene) {
         }
     }
 }
+
 void ShadowMap::init(Scene& scene) {
     for (auto& pModel : models(scene)) {
         const auto entityID = pModel->entityID().value();
@@ -378,6 +379,57 @@ void ShadowMap::update(Scene& scene) {
             }
             else {
                 trackModel(&pModel->get());
+            }
+        }
+        if ( auto pCamera = Camera::at(entityID) ) {
+            setCamera(&pCamera->get());
+        }
+    }
+}
+
+void ShadowMapAnimated::init(Scene& scene) {
+    for (auto& pModel : models(scene)) {
+        const auto entityID = pModel->entityID().value();
+
+        auto pAnimCon = AnimController::atC(entityID);
+        if (!pAnimCon) {
+            throw GFX_EXCEPT("[Description] PBRAnimatedIllumination::init: "
+                "AnimController not found for entity: " + std::to_string(entityID));
+        }
+
+        if (auto pBV = BoundingVolume::atC(entityID)) {
+            trackModel(&pModel->get(), pAnimCon, &pBV->root());
+        }
+        else {
+            trackModel(&pModel->get(), pAnimCon);
+        }
+    }
+    if (!cameras(scene).empty()) {
+        auto& pCamera = cameras(scene).front();
+        if (pCamera) {
+            setCamera(&cameras(scene).front()->get());
+        }
+    }
+    if (lights(scene).empty()) {
+        throw GFX_EXCEPT("No light found");
+    }
+    setLight( &lights(scene).front()->get() );
+}
+
+void ShadowMapAnimated::update(Scene& scene) {
+    for (auto& entityID : reservedEntities(scene)) {
+        if ( auto pModel = Model::at(entityID) ) {
+            auto pAnimCon = AnimController::atC(entityID);
+            if (!pAnimCon) {
+                throw GFX_EXCEPT("[Description] PBRAnimatedIllumination::init: "
+                    "AnimController not found for entity: " + std::to_string(entityID));
+            }
+
+            if (auto pBV = BoundingVolume::atC(entityID)) {
+                trackModel(&pModel->get(), pAnimCon, &pBV->root());
+            }
+            else {
+                trackModel(&pModel->get(), pAnimCon);
             }
         }
         if ( auto pCamera = Camera::at(entityID) ) {

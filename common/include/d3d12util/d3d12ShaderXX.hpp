@@ -432,6 +432,14 @@ struct PerInstanceData5 {
 	float animWeight1;
 };
 
+struct PerInstanceData6 {
+	dx::XMFLOAT4X4 world;
+	std::uint32_t animIdx0;
+	std::uint32_t animIdx1;
+	float animWeight0;
+	float animWeight1;
+};
+
 struct Light {
 	enum class Type {
 		Point,
@@ -793,6 +801,65 @@ private:
 
 	std::size_t maxInstanceCnt_;
 	std::size_t maxDrawcallCnt_;
+};
+
+class ShaderShadowMapAnimated : public Shader {
+private:
+	std::size_t cbDrawcallDataSize_;
+
+public:
+	struct Config {
+		std::size_t maxInstanceCnt;
+		std::size_t maxDrawcallCnt;
+		std::size_t maxBoneCnt;
+	};
+
+	ShaderShadowMapAnimated( D3D12Device& device, const RootSignature& root,
+		const Config& config, InputLayout::Spec ilSpec = InputLayout::Spec::serial
+	);
+
+	RenderProtocol makeProtocol( D3D12Device& device, const RenderProtocol::Desc& desc) {
+		return RenderProtocol( device, *this,
+			selectBlobsStrong<ShaderBlob::Type::Vertex>(), desc
+		);
+	}
+
+	std::size_t maxInstanceCnt() const noexcept {
+		return maxInstanceCnt_;
+	}
+
+	std::size_t maxDrawcallCnt() const noexcept {
+		return maxDrawcallCnt_;
+	}
+
+	std::size_t maxBoneCnt() const noexcept {
+		return maxBoneCnt_;
+	}
+
+	void bindRootParams(D3D12GfxCmdList& cmdList) override;
+	void bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCmdList& cmdList);
+
+	void loadBlobs() override;
+	void releaseBlobs() override;
+
+	UploadBuffer perFrameData_;
+	UploadBuffer perDrawcallData_;
+	UploadBuffer perInstanceData_;
+	UploadBuffer boneBuffer_;
+	UploadBuffer toBoneLocalBuffer_;
+
+	std::size_t cbDrawcallDataSize() const noexcept {
+		return cbDrawcallDataSize_;
+	}
+
+private:
+	static InputLayout makeInputLayout(InputLayout::Spec ilSpec);
+	static InputLayout makeInputLayoutSerial();
+	static InputLayout makeInputLayoutSeparated();
+
+	std::size_t maxInstanceCnt_;
+	std::size_t maxDrawcallCnt_;
+	std::size_t maxBoneCnt_;
 };
 
 class ShaderScreenQuad : public Shader {

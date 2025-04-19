@@ -47,6 +47,9 @@ private:
     gfx::d3d12::ShaderShadowMap shaderShadowMap_;
     gfx::d3d12engine::rp::ShadowMap renderPassShadowMap_;
 
+    gfx::d3d12::ShaderShadowMapAnimated shaderShadowMapAnimated_;
+    gfx::d3d12engine::rp::ShadowMapAnimated renderPassShadowMapAnimated_;
+
     gfx::d3d12::ShaderScreenQuad shaderScreenQuad_;
     gfx::d3d12engine::rp::ScreenQuad renderPassScreenQuad_;
 

@@ -310,6 +310,14 @@ public:
     void update(Scene& scene) override;
 };
 
+class ShadowMapAnimated : public IRenderPass, public d3d12::rp::ShadowMapAnimated {
+public:
+    using d3d12::rp::ShadowMapAnimated::ShadowMapAnimated;
+
+    void init(Scene& scene) override;
+    void update(Scene& scene) override;
+};
+
 class ScreenQuad : public IRenderPass, public d3d12::rp::ScreenQuad {
 public:
     using d3d12::rp::ScreenQuad::ScreenQuad;
