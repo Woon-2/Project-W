@@ -73,7 +73,7 @@ public:
     AnyMoveOnly(const AnyMoveOnly&) = delete;
     AnyMoveOnly& operator=(const AnyMoveOnly&) = delete;
 
-    template <typename T>
+    template <class T>
     AnyMoveOnly(T&& value) {
         using U = std::decay_t<T>;
         static_assert(!std::is_reference<U>::value, "Can't store reference");
@@ -92,11 +92,11 @@ public:
         holder.reset();
     }
 
-    template <typename T>
+    template <class T>
     friend T* any_cast(AnyMoveOnly*) noexcept;
-    template <typename T>
+    template <class T>
     friend const T* any_cast(const AnyMoveOnly*) noexcept;
-    template <typename T>
+    template <class T>
     friend T&& any_cast_move(AnyMoveOnly&& a);
     
 
@@ -106,11 +106,11 @@ private:
         virtual const std::type_info& type() const = 0;
     };
 
-    template <typename T>
+    template <class T>
     struct Holder : Base {
         T value;
 
-        template <typename U>
+        template <class U>
         Holder(U&& v) : value(std::forward<U>(v)) {}
 
         const std::type_info& type() const override {
@@ -122,7 +122,7 @@ private:
 };
 
 // any_cast: pointer version
-template <typename T>
+template <class T>
 T* any_cast(AnyMoveOnly* a) noexcept {
     if (a && a->holder && a->holder->type() == typeid(T)) {
         return &static_cast<AnyMoveOnly::Holder<T>*>(a->holder.get())->value;
@@ -131,7 +131,7 @@ T* any_cast(AnyMoveOnly* a) noexcept {
 }
 
 // any_cast: pointer version
-template <typename T>
+template <class T>
 const T* any_cast(const AnyMoveOnly* a) noexcept {
     if (a && a->holder && a->holder->type() == typeid(T)) {
         return &static_cast<AnyMoveOnly::Holder<T>*>(a->holder.get())->value;
