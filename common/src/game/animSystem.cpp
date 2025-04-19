@@ -208,9 +208,7 @@ void Skeleton::loadBonesFromStream(std::istream& in, Bone& bone, Skeleton& skele
     }
 }
 
-AnimClip AnimClip::loadClipFromStream(std::istream& in) {
-    AnimClip animClip;
-
+void AnimClip::loadKeyFrameClipFromStream(std::istream& in, AnimClip& animClip) {
     char pstrToken[64] = { '\0' };
 
 	std::uint8_t nStrLength = 0;
@@ -254,6 +252,8 @@ AnimClip AnimClip::loadClipFromStream(std::istream& in) {
 
     for (int i = 0; i < boneCnt; ++i) {
         auto& keyFrames = animClip.keyFrames_[i];
+        // we assume that the key frame count for each bone
+        // is averaged to be the whole key frame count divided by 16.
         keyFrames.reserve(keyFrameCnt / 16u);
     }
 
@@ -310,8 +310,92 @@ AnimClip AnimClip::loadClipFromStream(std::istream& in) {
 
     // temporary
     animClip.flags_ = etoi(AnimClip::Flags::Loop);
+}
 
-    return animClip;
+void AnimClip::loadPresampledClipFromStream(std::istream& in, AnimClip& animClip) {
+    char pstrToken[64] = { '\0' };
+
+	std::uint8_t nStrLength = 0;
+	std::size_t nReads = 0;
+    dx::XMFLOAT4X4 xform{};
+
+
+    readStream(in, nStrLength);
+    auto clipName = std::string(nStrLength, '\0');
+    readStream(in, clipName.data(), nStrLength);
+    animClip.name_ = clipName;
+
+    // allocate memory spaces for samples
+    // with extracted bone count and sample count
+    readStream(in, nStrLength);
+    readStream(in, pstrToken, nStrLength);
+    if (std::strcmp(pstrToken, "<BoneCnt:>")) {
+        throw std::runtime_error("expected BoneCnt token but got: " + std::string(pstrToken));
+    }
+
+    int boneCnt{};
+    readStream(in, boneCnt);
+    animClip.samples_.resize(boneCnt);
+
+    readStream(in, nStrLength);
+    readStream(in, pstrToken, nStrLength);
+    if (std::strcmp(pstrToken, "<Duration:>")) {
+        throw std::runtime_error("expected Duration token but got: " + std::string(pstrToken));
+    }
+
+    float duration{};
+    readStream(in, duration);
+    animClip.duration_ = Milliseconds(duration * 1000.f);
+
+    readStream(in, nStrLength);
+    readStream(in, pstrToken, nStrLength);
+    if (std::strcmp(pstrToken, "<Samples:>")) {
+        throw std::runtime_error("expected Samples token but got: " + std::string(pstrToken));
+    }
+    int sampleCnt{};
+    readStream(in, sampleCnt);
+
+    for (int i = 0; i < boneCnt; ++i) {
+        auto& samples = animClip.samples_[i];
+        samples.reserve(sampleCnt);
+    }
+
+    // read samples
+    for (int sampleIdx = 0; sampleIdx < sampleCnt; ++sampleIdx) {
+        readStream(in, nStrLength);
+        readStream(in, pstrToken, nStrLength);
+        if (std::strcmp(pstrToken, "<Sample:>")) {
+            throw std::runtime_error("expected Sample token but got: " + std::string(pstrToken));
+        }
+
+        for (int i = 0; i < boneCnt; ++i) {
+            readStream(in, nStrLength);
+            readStream(in, pstrToken, nStrLength);
+            if (std::strcmp(pstrToken, "<Xform:>")) {
+                throw std::runtime_error("expected Xform token but got: " + std::string(pstrToken));
+            }
+            readStream(in, xform);
+            animClip.samples_[i].emplace_back(
+                mu::Mat4x4(DirectX::XMLoadFloat4x4(&xform))
+            );
+        }
+
+        readStream(in, nStrLength);
+        readStream(in, pstrToken, nStrLength);
+        if (std::strcmp(pstrToken, "</Sample>")) {
+            throw std::runtime_error("expected Sample end token but got: " + std::string(pstrToken));
+        }
+    }
+
+    readStream(in, nStrLength);
+    readStream(in, pstrToken, nStrLength);
+
+    if (std::strcmp(pstrToken, "</AnimationClip>")) {
+        throw std::runtime_error("expected AnimationClip end token but got: " + std::string(pstrToken));
+    }
+
+    // temporary
+    animClip.flags_ = etoi(AnimClip::Flags::Loop);
 }
 
 std::vector<AnimClip> AnimClip::loadClipsFromStream(std::istream& in) {
@@ -324,8 +408,8 @@ std::vector<AnimClip> AnimClip::loadClipsFromStream(std::istream& in) {
 
     readStream(in, nStrLength);
     readStream(in, pstrToken, nStrLength);
-    if (std::strcmp(pstrToken, "<AnimationClips:>")) {
-        throw std::runtime_error("expected AnimationClips token but got: " + std::string(pstrToken));
+    if (std::strcmp(pstrToken, "<KeyFrameAnimationClips:>")) {
+        throw std::runtime_error("expected KeyFrameAnimationClips token but got: " + std::string(pstrToken));
     }
 
     int clipCnt{};
@@ -340,13 +424,44 @@ std::vector<AnimClip> AnimClip::loadClipsFromStream(std::istream& in) {
             throw std::runtime_error("expected AnimationClip token but got: " + std::string(pstrToken));
         }
 
-        animClips.push_back(AnimClip::loadClipFromStream(in));
+        AnimClip::loadKeyFrameClipFromStream(in, animClips.emplace_back());
     }
 
     readStream(in, nStrLength);
     readStream(in, pstrToken, nStrLength);
-    if (std::strcmp(pstrToken, "</AnimationClips>")) {
-        throw std::runtime_error("expected AnimationClips end token but got: " + std::string(pstrToken));
+    if (std::strcmp(pstrToken, "</KeyFrameAnimationClips>")) {
+        throw std::runtime_error("expected KeyFrameAnimationClips end token but got: " + std::string(pstrToken));
+    }
+
+    readStream(in, nStrLength);
+    readStream(in, pstrToken, nStrLength);
+    if (std::strcmp(pstrToken, "<PresampledAnimationClips:>")) {
+        throw std::runtime_error("expected PresampledAnimationClips token but got: " + std::string(pstrToken));
+    }
+
+    int presampledClipCnt{};
+    readStream(in, presampledClipCnt);
+
+    if (presampledClipCnt != clipCnt) {
+        throw std::runtime_error("expected PresampledAnimationClips count to be equal to KeyFrameAnimationClips count.");
+    }
+
+    for (int i = 0; i < presampledClipCnt; ++i) {
+        readStream(in, nStrLength);
+        readStream(in, pstrToken, nStrLength);
+
+        if (std::strcmp(pstrToken, "<AnimationClip:>")) {
+            throw std::runtime_error("expected AnimationClip token but got: " + std::string(pstrToken));
+        }
+
+        AnimClip::loadPresampledClipFromStream(in, animClips.at(i));
+    }
+
+    readStream(in, nStrLength);
+    readStream(in, pstrToken, nStrLength);
+
+    if (std::strcmp(pstrToken, "</PresampledAnimationClips>")) {
+        throw std::runtime_error("expected PresampledAnimationClips end token but got: " + std::string(pstrToken));
     }
 
     return animClips;

@@ -96,7 +96,8 @@ public:
 
     AnimClip() = default;
 
-    static AnimClip loadClipFromStream(std::istream& in);
+    static void loadKeyFrameClipFromStream(std::istream& in, AnimClip& animClip);
+    static void loadPresampledClipFromStream(std::istream& in, AnimClip& animClip);
     static std::vector<AnimClip> loadClipsFromStream(std::istream& in);
 
     const KeyFrame& keyFrame(BoneIdx boneIdx, std::size_t keyFrameIdx) const {
@@ -111,14 +112,23 @@ public:
         return keyFrames_[boneIdx].end();
     }
 
+    mu::Mat4x4 MU_CALLCONV sample(BoneIdx boneIdx, std::size_t sampleIdx) const {
+        return samples_[boneIdx][sampleIdx];
+    }
+
     std::size_t keyFrameCnt(BoneIdx boneIdx) const { return keyFrames_[boneIdx].size(); }
+    std::size_t sampleCnt() const { return samples_[0].size(); }
     std::size_t boneCnt() const { return keyFrames_.size(); }
-    const std::string& name() const noexcept { return name_; }
-    Milliseconds duration() const noexcept { return duration_; }
+    const std::string& name() const { return name_; }
+    Milliseconds duration() const { return duration_; }
+    Milliseconds sampleInterval() const {
+        return duration_ / static_cast<float>(sampleCnt());
+    }
     int flags() const noexcept { return flags_; }
 
 private:
     std::vector< std::vector<KeyFrame> > keyFrames_; // [boneIdx][keyFrameIdx]
+    std::vector< std::vector<mu::Mat4x4> > samples_; // [boneIdx][sampleIdx]
     std::string name_;
     Milliseconds duration_;
     int flags_;

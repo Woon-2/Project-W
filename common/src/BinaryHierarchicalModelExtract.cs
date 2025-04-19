@@ -31,6 +31,7 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
 
     public AnimationClip[] animClips;
     public string[] clipExtractionNames;
+    public float[] clipPresampleFPSs;
     public float keyFramePosThreshold = 0.05f;
     public float keyFrameRotThreshold = 15.0f; // degrees
     public float keyFrameScaleThreshold = 0.1f;
@@ -957,7 +958,7 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         WriteString(skeletonWriter, "</Skeleton>");
     }
 
-    void ExtractClip(AnimationClip clip, BinaryWriter binaryWriter)
+    void ExtractKeyFrameClip(AnimationClip clip, BinaryWriter binaryWriter)
     {
         if (clip == null) return;
 
@@ -1021,7 +1022,7 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         WriteString(binaryWriter, "</AnimationClip>");
     }
 
-    void ExtractAnimations(BinaryWriter binaryWriter)
+    void ExtractKeyFrameAnimations(BinaryWriter binaryWriter)
     {
         if (go == null)
         {
@@ -1047,14 +1048,81 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
             return;
         }
 
-        WriteString(binaryWriter, "<AnimationClips:>", animClips.Length);
+        WriteString(binaryWriter, "<KeyFrameAnimationClips:>", animClips.Length);
 
         foreach (var clip in animClips)
         {
-            ExtractClip(clip, binaryWriter);
+            ExtractKeyFrameClip(clip, binaryWriter);
         }
 
-        WriteString(binaryWriter, "</AnimationClips>");
+        WriteString(binaryWriter, "</KeyFrameAnimationClips>");
+    }
+
+    void ExtractPresampledClip(AnimationClip clip, BinaryWriter binaryWriter)
+    {
+        if (clip == null) return;
+
+        int animIdx = System.Array.IndexOf(animClips, clip);
+
+        WriteString(binaryWriter, "<AnimationClip:>", clipExtractionNames[animIdx]);
+
+        WriteInteger(binaryWriter, "<BoneCnt:>", bones.Count);
+
+        int fps = (int)clipPresampleFPSs[animIdx];
+        int sampleCnt = Mathf.CeilToInt(clip.length * fps) + 1;
+        WriteFloat(binaryWriter, "<Duration:>", (sampleCnt - 1) / (float)fps);
+        WriteInteger(binaryWriter, "<Samples:>", sampleCnt);
+
+        for (int i = 0; i < sampleCnt; ++i)
+        {
+            clip.SampleAnimation(go, i / (float)fps);
+
+            WriteString(binaryWriter, "<Sample:>");
+            for (int j = 0; j < bones.Count; ++j)
+            {
+                Transform bone = bones[j];
+                WriteLocalMatrix(binaryWriter, "<Xform:>", bone);
+            }
+            WriteString(binaryWriter, "</Sample>");
+        }
+
+        WriteString(binaryWriter, "</AnimationClip>");
+    }
+
+    void ExtractPresampledAnimation(BinaryWriter binaryWriter)
+    {
+        if (go == null)
+        {
+            Debug.LogError("root game object is not assigned.");
+            return;
+        }
+
+        if (skeleton == null)
+        {
+            Debug.LogError("Skeleton is not assigned.");
+            return;
+        }
+
+        if (bones == null || bones.Count == 0)
+        {
+            Debug.LogError("No bones found in the skeleton.");
+            return;
+        }
+
+        if (animClips == null || animClips.Length == 0)
+        {
+            Debug.LogWarning("No animation clips found.");
+            return;
+        }
+
+        WriteString(binaryWriter, "<PresampledAnimationClips:>", animClips.Length);
+
+        foreach (var clip in animClips)
+        {
+            ExtractPresampledClip(clip, binaryWriter);
+        }
+
+        WriteString(binaryWriter, "</PresampledAnimationClips>");
     }
 
     void Start()
@@ -1080,7 +1148,8 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         if (skeleton != null) processBones();
         ExtractGeometry();
         if (skeleton != null) ExtractSkeleton();
-        if (skeleton != null) ExtractAnimations(skeletonWriter);
+        if (skeleton != null) ExtractKeyFrameAnimations(skeletonWriter);
+        if (skeleton != null) ExtractPresampledAnimation(skeletonWriter);
 
         geometryWriter.Flush();
         geometryWriter.Close();
