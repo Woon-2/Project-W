@@ -31,7 +31,7 @@ cbuffer PerDrawcallData : register(b1) {
     uint instanceBase;
     uint samplerIdx;
     uint shadowSamplerIdx;
-    uint padding;
+    uint presampledAnimSamplerIdx;
 };
 
 cbuffer PerFrameData : register(b2) {
@@ -48,10 +48,16 @@ struct PerInstanceData {
 	float4x4 world;
     float4x4 wv;
     float3x3 wvNormal;
-    uint animIdx0;  // animIdx represents the first bone index of the animation
+    uint animIdx0;  // animIdx represents the first bone index of the animation in keyframe mode,
+                    // and the presampled matrices texture's bindless index in presampled mode.
     uint animIdx1;
     float animWeight0;
     float animWeight1;
+    float sampleIdx0; // for presampled mode, this is the time index to sample matrix as u coordinate.
+                      // (u: time, v: bone)
+    float sampleIdx1;
+    uint boneCnt;
+    bool usePresampled;
 };
 
 StructuredBuffer<PerInstanceData> gInstances: register(t0);
@@ -78,6 +84,40 @@ static float4x4 gmtxTexturize = {
 	0.5f, 0.5f, 0.0f, 1.0f
 };
 
+float4x4 loadPresampledMatrix(uint animIdx, float sampleIdx, float boneIdx, uint samIdx) {
+    float4x4 M;
+    // as a texture stores float4 values, we need to load 4x4 matrix as 4 float4 values.
+    M[0] = sampleLevelFromMapRef2DOffset( uint4(MAP_TYPE_TEXTURE2D, animIdx, 0, 0),
+        float2(sampleIdx, boneIdx), 0.f, int2(0, 0), samIdx
+    );
+    M[1] = sampleLevelFromMapRef2DOffset( uint4(MAP_TYPE_TEXTURE2D, animIdx, 0, 0),
+        float2(sampleIdx, boneIdx), 0.f, int2(0, 1), samIdx
+    );
+    M[2] = sampleLevelFromMapRef2DOffset( uint4(MAP_TYPE_TEXTURE2D, animIdx, 0, 0),
+        float2(sampleIdx, boneIdx), 0.f, int2(0, 2), samIdx
+    );
+    M[3] = sampleLevelFromMapRef2DOffset( uint4(MAP_TYPE_TEXTURE2D, animIdx, 0, 0),
+        float2(sampleIdx, boneIdx), 0.f, int2(0, 3), samIdx
+    );
+
+    return M;
+}
+
+float4x4 blendPresampledBoneTransform( uint animIdx, float sampleIdx, uint boneCnt,
+    uint samIdx, uint4 boneIndices, float4 weights
+) {
+    float4x4 M0 = loadPresampledMatrix(animIdx, sampleIdx, (float)boneIndices.x / boneCnt, samIdx);
+    float4x4 M1 = loadPresampledMatrix(animIdx, sampleIdx, (float)boneIndices.y / boneCnt, samIdx);
+    float4x4 M2 = loadPresampledMatrix(animIdx, sampleIdx, (float)boneIndices.z / boneCnt, samIdx);
+    float4x4 M3 = loadPresampledMatrix(animIdx, sampleIdx, (float)boneIndices.w / boneCnt, samIdx);
+
+    return 
+        mul(gToBoneLocal[boneIndices.x], M0) * weights.x +
+        mul(gToBoneLocal[boneIndices.y], M1) * weights.y +
+        mul(gToBoneLocal[boneIndices.z], M2) * weights.z +
+        mul(gToBoneLocal[boneIndices.w], M3) * weights.w;
+}
+
 float4x4 blendBoneTransform(uint animIdx, uint4 boneIndices, float4 weights) {
     uint idx0 = animIdx + boneIndices.x;
     uint idx1 = animIdx + boneIndices.y;
@@ -98,8 +138,29 @@ VSOutput VSMain( float3 position : POSITION, float3 normal : NORMAL,
 ) {
 	VSOutput result;
 
-    float4x4 anim0 = blendBoneTransform(gInstances[instanceBase + instanceOffset].animIdx0, boneIndices, boneWeights);
-    float4x4 anim1 = blendBoneTransform(gInstances[instanceBase + instanceOffset].animIdx1, boneIndices, boneWeights);
+    float4x4 anim0;
+    float4x4 anim1;
+
+    if (gInstances[instanceBase + instanceOffset].usePresampled) {
+        anim0 = blendPresampledBoneTransform(
+            gInstances[instanceBase + instanceOffset].animIdx0,
+            gInstances[instanceBase + instanceOffset].sampleIdx0,
+            gInstances[instanceBase + instanceOffset].boneCnt,
+            presampledAnimSamplerIdx,
+            boneIndices, boneWeights
+        );
+        anim1 = blendPresampledBoneTransform(
+            gInstances[instanceBase + instanceOffset].animIdx1,
+            gInstances[instanceBase + instanceOffset].sampleIdx1,
+            gInstances[instanceBase + instanceOffset].boneCnt,
+            presampledAnimSamplerIdx,
+            boneIndices, boneWeights
+        );
+    }
+    else {
+        anim0 = blendBoneTransform(gInstances[instanceBase + instanceOffset].animIdx0, boneIndices, boneWeights);
+        anim1 = blendBoneTransform(gInstances[instanceBase + instanceOffset].animIdx1, boneIndices, boneWeights);
+    }
     float4x4 anim = anim0 * gInstances[instanceBase + instanceOffset].animWeight0
         + anim1 * gInstances[instanceBase + instanceOffset].animWeight1;
 

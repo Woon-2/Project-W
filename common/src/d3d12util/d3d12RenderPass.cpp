@@ -600,6 +600,7 @@ void PBRAnimatedIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets&
         weights.reserve( targetAnimCntExpected );
 
         bool boneFull = false;
+        std::size_t boneCntInSkeleton = pAnimCon->skeleton().bones().size();
 
         for (const auto& [key, animInst] : pAnimCon->instances()) {
             firstBoneIndices.push_back(static_cast<std::uint32_t>(bones.size()));
@@ -634,7 +635,11 @@ void PBRAnimatedIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets&
             /* .animIdx = */ (firstBoneIndices.size() > 0) ? firstBoneIndices[0] : 0u,
             /* .animIdx1 = */ (firstBoneIndices.size() > 1) ? firstBoneIndices[1] : 0u,
             /* .animWeight0 = */ (weights.size() > 0) ? weights[0] : 0.0f,
-            /* .animWeight1 = */ (weights.size() > 1) ? weights[1] : 0.0f
+            /* .animWeight1 = */ (weights.size() > 1) ? weights[1] : 0.0f,
+            /* .sampleIdx0 = */ 0.f,
+            /* .sampleIdx1 = */ 0.f,
+            /* .boneCnt = */ static_cast<std::uint32_t>(boneCntInSkeleton),
+            /* .usePresampled = */ false
         );
 
         if (pids.size() == shader().maxInstanceCnt()) [[unlikely]] {
@@ -709,6 +714,7 @@ void PBRAnimatedIllumination::render(D3D12GfxCmdList& cmdList, RenderTargets& re
             .instanceBase = static_cast<std::uint32_t>(first - batch_.begin()),
             .samplerIdx = pSamplerStorage_->get( SamplerStorage::Indices::TrilinearBorder ).index(),
             .shadowSamplerIdx = pSamplerStorage_->get( SamplerStorage::Indices::BilinearComparison ).index(),
+            .presampledAnimSamplerIdx = pSamplerStorage_->get( SamplerStorage::Indices::NearestClamp ).index(),
         };
         shader().perDrawcallData_.stage( &pdd, sizeof(sr::PerDrawcallData0),
             0u, accDrawcallCnt * shader().cbDrawcallDataSize()
@@ -1196,7 +1202,7 @@ void ShadowMapAnimated::preRender(D3D12GfxCmdList& cmdList, RenderTargets& rende
         auto weights = std::vector<float>();
         weights.reserve( targetAnimCntExpected );
 
-        bool boneFull = false;
+        auto boneFull = false;
 
         for (const auto& [key, animInst] : pAnimCon->instances()) {
             firstBoneIndices.push_back(static_cast<std::uint32_t>(bones.size()));
