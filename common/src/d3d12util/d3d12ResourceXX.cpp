@@ -1864,24 +1864,35 @@ Texture bakePresampledAnimClip( D3D12Device& device,
         .flags = D3D12_RESOURCE_FLAG_NONE
     };
 
-    auto ret = Texture(device, tex2dRange, desc, D3D12_HEAP_TYPE_DEFAULT);
+    auto ret = Texture(device, tex2dRange, desc, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST);
 
-    auto auxIdx = cmdList.emplaceXResource<Texture>(device, tex2dRange, desc, D3D12_HEAP_TYPE_UPLOAD);
-    auto& aux = cmdList.getXResource<Texture>(auxIdx);
+    const auto uploadBufferSize = GetRequiredIntermediateSize(ret.get().Get(), 0u, 1u);
+
+    auto auxIdx = cmdList.emplaceXResource<UploadBuffer>(device, uploadBufferSize);
+    auto& aux = cmdList.getXResource<UploadBuffer>(auxIdx);
     auto& presampleData = animClip.presampleData();
-    dx::XMFLOAT4X4* pMatrices{};
 
-    aux.get()->Map(0u, nullptr, reinterpret_cast<void**>(&pMatrices));
-
+    auto animationData = std::vector<dx::XMFLOAT4X4>(
+        animClip.boneCnt() * animClip.sampleCnt()
+    );
     for (std::size_t i = 0; i < animClip.boneCnt(); ++i) {
         for (std::size_t j = 0; j < animClip.sampleCnt(); ++j) {
-            pMatrices[i * animClip.boneCnt() + j] =
+            animationData[i * animClip.sampleCnt() + j] =
                 mu::transpose(presampleData[i][j]).getXmf();
         }
     }
 
-    aux.get()->Unmap(0u, nullptr);
-    cmdList.copyResource(aux, ret);
+    D3D12_SUBRESOURCE_DATA texSubresource{
+        .pData = animationData.data(),
+        .RowPitch = static_cast<std::int64_t>(desc.width * sizeof(dx::XMFLOAT4))
+    };
+    texSubresource.SlicePitch = static_cast<std::int64_t>(texSubresource.RowPitch * desc.height);
+
+    UpdateSubresources(cmdList.get().Get(), ret.get().Get(),
+        aux.get().Get(), 0u, 0u, 1u, &texSubresource
+    );
+
+    ret.commitState(cmdList, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
     return ret;
 }
