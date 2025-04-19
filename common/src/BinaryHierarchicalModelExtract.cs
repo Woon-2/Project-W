@@ -1069,8 +1069,8 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
         WriteInteger(binaryWriter, "<BoneCnt:>", bones.Count);
 
         int fps = (int)clipPresampleFPSs[animIdx];
-        int sampleCnt = Mathf.CeilToInt(clip.length * fps) + 1;
-        WriteFloat(binaryWriter, "<Duration:>", (sampleCnt - 1) / (float)fps);
+        int sampleCnt = Mathf.CeilToInt(clip.length * fps);
+        WriteFloat(binaryWriter, "<Duration:>", (sampleCnt) / (float)fps);
         WriteInteger(binaryWriter, "<Samples:>", sampleCnt);
 
         for (int i = 0; i < sampleCnt; ++i)
@@ -1081,7 +1081,8 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
             for (int j = 0; j < bones.Count; ++j)
             {
                 Transform bone = bones[j];
-                WriteLocalMatrix(binaryWriter, "<Xform:>", bone);
+                Matrix4x4 boneWorld = skeleton.worldToLocalMatrix * bone.localToWorldMatrix;
+                WriteMatrix(binaryWriter, "<Xform:>", boneWorld);
             }
             WriteString(binaryWriter, "</Sample>");
         }
