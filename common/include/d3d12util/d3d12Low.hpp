@@ -56,23 +56,23 @@ public:
 
 	template <class T, class ... Args>
 	std::size_t emplaceXResource(Args&& ... args) {
-		xResources_.emplace_back(std::make_any<T>(std::forward<Args>(args)...));
+		xResources_.emplace_back(AnyMoveOnly(T(std::forward<Args>(args)...)));
 		return xResources_.size() - 1;
 	}
 
 	template <class T>
 	T& getXResource(std::size_t idx) {
-		return std::any_cast<T&>(xResources_.at(idx));
+		return *any_cast<T>(&xResources_.at(idx));
 	}
 
 	template <class T>
 	const T& getXResource(std::size_t idx) const {
-		return std::any_cast<const T&>(xResources_.at(idx));
+		return *any_cast<T>(&xResources_.at(idx));
 	}
 
 private:
 	wrl::ComPtr<Allocator> alloc_;
-	std::vector<std::any> xResources_;
+	std::vector<AnyMoveOnly> xResources_;
 };
 
 template <std::ranges::range R>
