@@ -433,6 +433,7 @@ struct PerInstanceData5 {
 	float sampleIdx0;
 	float sampleIdx1;
 	std::uint32_t boneCnt;
+	std::uint32_t skeletonIdx;
 	bool usePresampled;
 };
 
@@ -442,6 +443,7 @@ struct PerInstanceData6 {
 	std::uint32_t animIdx1;
 	float animWeight0;
 	float animWeight1;
+	std::uint32_t skeletonIdx;
 };
 
 struct Light {

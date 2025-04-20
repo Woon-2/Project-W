@@ -5,6 +5,7 @@
 #include <ranges>
 #include <algorithm>
 #include <tuple>
+#include <unordered_map>
 
 namespace gfx {
 
@@ -581,9 +582,12 @@ void PBRAnimatedIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets&
     pids.reserve( shader().maxInstanceCnt() );
 
     auto bones = std::vector<dx::XMFLOAT4X4>();
-    auto toBoneLocals = std::vector<dx::XMFLOAT4X4>();
     bones.reserve( shader().maxBoneCnt() );
-    toBoneLocals.reserve( shader().maxBoneCnt() );
+    auto skeletonMap = std::unordered_map<const Skeleton*, std::size_t>();
+    auto toBoneLocals = std::vector<dx::XMFLOAT4X4>();
+    // we expect that avg 16 animations share the same skeleton
+    skeletonMap.reserve( shader().maxBoneCnt() / 16u );
+    toBoneLocals.reserve( shader().maxBoneCnt() / 16u );
 
     static constexpr std::size_t targetAnimCntExpected = 4u;
 
@@ -592,6 +596,13 @@ void PBRAnimatedIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets&
         // if the first instance is culled, then all the rest are culled.
         if (willNotDraw) {
             break;
+        }
+
+        auto [itSkIdxPair, emplaced] = skeletonMap.try_emplace(&pAnimCon->skeleton(), toBoneLocals.size());
+        if (emplaced) {
+            for (const auto& bone : pAnimCon->skeleton().bones()) {
+                toBoneLocals.push_back( mu::transpose(bone.toLocalMatrix()).getXmf() );
+            }
         }
 
         auto firstBoneIndices = std::vector<std::uint32_t>();
@@ -608,10 +619,6 @@ void PBRAnimatedIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets&
 
             for (const auto& bone: animInst.boneXformCache()) {
                 bones.push_back( mu::transpose(bone).getXmf() );
-            }
-
-            for (const auto& bone : animInst.skeleton()->bones()) {
-                toBoneLocals.push_back( mu::transpose(bone.toLocalMatrix()).getXmf() );
             }
 
             if (bones.size() == shader().maxBoneCnt()) {
@@ -639,6 +646,7 @@ void PBRAnimatedIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets&
             /* .sampleIdx0 = */ 0.f,
             /* .sampleIdx1 = */ 0.f,
             /* .boneCnt = */ static_cast<std::uint32_t>(boneCntInSkeleton),
+            /* .skeletonIdx = */ static_cast<std::uint32_t>(itSkIdxPair->second),
             /* .usePresampled = */ false
         );
 
@@ -1184,9 +1192,12 @@ void ShadowMapAnimated::preRender(D3D12GfxCmdList& cmdList, RenderTargets& rende
     pids.reserve( shader().maxInstanceCnt() );
 
     auto bones = std::vector<dx::XMFLOAT4X4>();
-    auto toBoneLocals = std::vector<dx::XMFLOAT4X4>();
     bones.reserve( shader().maxBoneCnt() );
-    toBoneLocals.reserve( shader().maxBoneCnt() );
+    auto skeletonMap = std::unordered_map<const Skeleton*, std::size_t>();
+    auto toBoneLocals = std::vector<dx::XMFLOAT4X4>();
+    // we expect that avg 16 animations share the same skeleton
+    skeletonMap.reserve( shader().maxBoneCnt() / 16u );
+    toBoneLocals.reserve( shader().maxBoneCnt() / 16u );
 
     static constexpr std::size_t targetAnimCntExpected = 4u;
 
@@ -1195,6 +1206,13 @@ void ShadowMapAnimated::preRender(D3D12GfxCmdList& cmdList, RenderTargets& rende
         // if the first instance is culled, then all the rest are culled.
         if (willNotDraw) {
             break;
+        }
+
+        auto [itSkIdxPair, emplaced] = skeletonMap.try_emplace(&pAnimCon->skeleton(), toBoneLocals.size());
+        if (emplaced) {
+            for (const auto& bone : pAnimCon->skeleton().bones()) {
+                toBoneLocals.push_back( mu::transpose(bone.toLocalMatrix()).getXmf() );
+            }
         }
 
         auto firstBoneIndices = std::vector<std::uint32_t>();
@@ -1210,10 +1228,6 @@ void ShadowMapAnimated::preRender(D3D12GfxCmdList& cmdList, RenderTargets& rende
 
             for (const auto& bone: animInst.boneXformCache()) {
                 bones.push_back( mu::transpose(bone).getXmf() );
-            }
-
-            for (const auto& bone : animInst.skeleton()->bones()) {
-                toBoneLocals.push_back( mu::transpose(bone.toLocalMatrix()).getXmf() );
             }
 
             if (bones.size() == shader().maxBoneCnt()) {
@@ -1232,7 +1246,8 @@ void ShadowMapAnimated::preRender(D3D12GfxCmdList& cmdList, RenderTargets& rende
             /* .animIdx0 = */ (firstBoneIndices.size() > 0) ? firstBoneIndices[0] : 0u,
             /* .animIdx1 = */ (firstBoneIndices.size() > 1) ? firstBoneIndices[1] : 0u,
             /* .animWeight0 = */ (weights.size() > 0) ? weights[0] : 0.0f,
-            /* .animWeight1 = */ (weights.size() > 1) ? weights[1] : 0.0f
+            /* .animWeight1 = */ (weights.size() > 1) ? weights[1] : 0.0f,
+            /* .skeletonIdx = */ static_cast<std::uint32_t>(itSkIdxPair->second)
         );
 
         if (pids.size() == shader().maxInstanceCnt()) [[unlikely]] {

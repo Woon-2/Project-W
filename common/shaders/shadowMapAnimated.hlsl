@@ -4,6 +4,9 @@ struct PerInstanceData {
     uint animIdx1;
     float animWeight0;
     float animWeight1;
+    uint skeletonIdx; // skeletonIdx represents the first toLocalMatrix index.
+                    // animation matrices are spread over the animation instances,
+                    // but toLocal matrices are shared by animation instances which shares the same skeleton.
 };
 
 StructuredBuffer<PerInstanceData> gInstances: register(t0);
@@ -23,17 +26,12 @@ struct VSOutput {
 	float4 pos : SV_POSITION;
 };
 
-float4x4 blendBoneTransform(uint animIdx, uint4 boneIndices, float4 weights) {
-    uint idx0 = animIdx + boneIndices.x;
-    uint idx1 = animIdx + boneIndices.y;
-    uint idx2 = animIdx + boneIndices.z;
-    uint idx3 = animIdx + boneIndices.w;
-
+float4x4 blendBoneTransform(uint animIdx, uint skIdx, uint4 boneIndices, float4 weights) {
     return 
-        mul(gToBoneLocal[idx0], gBones[idx0]) * weights.x +
-        mul(gToBoneLocal[idx1], gBones[idx1]) * weights.y +
-        mul(gToBoneLocal[idx2], gBones[idx2]) * weights.z +
-        mul(gToBoneLocal[idx3], gBones[idx3]) * weights.w;
+        mul(gToBoneLocal[skIdx + boneIndices.x], gBones[animIdx + boneIndices.x]) * weights.x +
+        mul(gToBoneLocal[skIdx + boneIndices.y], gBones[animIdx + boneIndices.y]) * weights.y +
+        mul(gToBoneLocal[skIdx + boneIndices.z], gBones[animIdx + boneIndices.z]) * weights.z +
+        mul(gToBoneLocal[skIdx + boneIndices.w], gBones[animIdx + boneIndices.w]) * weights.w;
 }
 
 VSOutput VSMain( float3 position : POSITION, uint4 boneIndices : BONE_INDICES,
@@ -41,8 +39,16 @@ VSOutput VSMain( float3 position : POSITION, uint4 boneIndices : BONE_INDICES,
 ) {
 	VSOutput result;
 
-    float4x4 anim0 = blendBoneTransform(gInstances[instanceBase + instanceOffset].animIdx0, boneIndices, boneWeights);
-    float4x4 anim1 = blendBoneTransform(gInstances[instanceBase + instanceOffset].animIdx1, boneIndices, boneWeights);
+    float4x4 anim0 = blendBoneTransform(
+        gInstances[instanceBase + instanceOffset].animIdx0,
+        gInstances[instanceBase + instanceOffset].skeletonIdx,
+        boneIndices, boneWeights
+    );
+    float4x4 anim1 = blendBoneTransform(
+        gInstances[instanceBase + instanceOffset].animIdx1,
+        gInstances[instanceBase + instanceOffset].skeletonIdx,
+        boneIndices, boneWeights
+    );
     float4x4 anim = anim0 * gInstances[instanceBase + instanceOffset].animWeight0
         + anim1 * gInstances[instanceBase + instanceOffset].animWeight1;
 

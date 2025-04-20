@@ -198,6 +198,7 @@ public:
 
     const Skeleton* skeleton() const noexcept { return pSkeleton_; }
     const AnimClip* animClip() const noexcept { return pAnimClip_; }
+    ClipMode clipMode() const noexcept { return clipMode_; }
 
 private:
     void traverseBone(const Bone& bone, const mu::Mat4x4& parentXform = mu::Mat4x4());
