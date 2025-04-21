@@ -443,6 +443,9 @@ struct PerInstanceData6 {
 	std::uint32_t animIdx1;
 	float animWeight0;
 	float animWeight1;
+	int sampleIdx0;
+	int sampleIdx1;
+	std::uint32_t boneCnt;
 	std::uint32_t skeletonIdx;
 };
 
@@ -850,7 +853,6 @@ public:
 	UploadBuffer perFrameData_;
 	UploadBuffer perDrawcallData_;
 	UploadBuffer perInstanceData_;
-	UploadBuffer boneBuffer_;
 	UploadBuffer toBoneLocalBuffer_;
 
 	std::size_t cbDrawcallDataSize() const noexcept {

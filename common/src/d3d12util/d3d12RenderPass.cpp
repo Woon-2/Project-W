@@ -621,6 +621,7 @@ void PBRAnimatedIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets&
 
         for (const auto& [key, animInst] : pAnimCon->instances()) {
             weights.push_back(animInst.weight());
+
             if (clipmodes.emplace_back(animInst.clipMode()) == AnimInstance::ClipMode::KeyFrame) {
                 firstBoneIndices.push_back(static_cast<std::uint32_t>(bones.size()));
                 animIndices.push_back(firstBoneIndices.back());
@@ -1212,8 +1213,6 @@ void ShadowMapAnimated::preRender(D3D12GfxCmdList& cmdList, RenderTargets& rende
     auto pids = std::vector<sr::PerInstanceData6>();
     pids.reserve( shader().maxInstanceCnt() );
 
-    auto bones = std::vector<dx::XMFLOAT4X4>();
-    bones.reserve( shader().maxBoneCnt() );
     auto skeletonMap = std::unordered_map<const Skeleton*, std::size_t>();
     auto toBoneLocals = std::vector<dx::XMFLOAT4X4>();
     // we expect that avg 16 animations share the same skeleton
@@ -1236,38 +1235,39 @@ void ShadowMapAnimated::preRender(D3D12GfxCmdList& cmdList, RenderTargets& rende
             }
         }
 
-        auto firstBoneIndices = std::vector<std::uint32_t>();
-        firstBoneIndices.reserve( targetAnimCntExpected );
         auto weights = std::vector<float>();
         weights.reserve( targetAnimCntExpected );
+        auto sampleIndices = std::vector<int>();
+        sampleIndices.reserve( targetAnimCntExpected );
+        auto animIndices = std::vector<std::uint32_t>();
+        animIndices.reserve( targetAnimCntExpected );
 
-        auto boneFull = false;
+        std::size_t boneCntInSkeleton = pAnimCon->skeleton().bones().size();
 
         for (const auto& [key, animInst] : pAnimCon->instances()) {
-            firstBoneIndices.push_back(static_cast<std::uint32_t>(bones.size()));
             weights.push_back(animInst.weight());
 
-            for (const auto& bone: animInst.boneXformCache()) {
-                bones.push_back( mu::transpose(bone).getXmf() );
+            auto bakedXforms = static_cast<Texture*>(animInst.animClip()->customData());
+            if (!bakedXforms) {
+                throw GFX_EXCEPT( "[Description]: Presampled animation clip has no baked xforms." );
             }
 
-            if (bones.size() == shader().maxBoneCnt()) {
-                boneFull = true;
-                break;
-            }
-        }
-
-        if (boneFull) {
-            break;
+            animIndices.push_back(static_cast<std::uint32_t>(bakedXforms->view(bakedXforms->idxSrv).offset()));
+            sampleIndices.push_back( static_cast<int>(
+                animInst.elapsed() / animInst.animClip()->sampleInterval()
+            ) );
         }
 
         // upload per instance data
         pids.emplace_back(
             /* .world = */ mu::transpose( xform ).getXmf(),
-            /* .animIdx0 = */ (firstBoneIndices.size() > 0) ? firstBoneIndices[0] : 0u,
-            /* .animIdx1 = */ (firstBoneIndices.size() > 1) ? firstBoneIndices[1] : 0u,
+            /* .animIdx0 = */ (animIndices.size() > 0) ? animIndices[0] : 0u,
+            /* .animIdx1 = */ (animIndices.size() > 1) ? animIndices[1] : 0u,
             /* .animWeight0 = */ (weights.size() > 0) ? weights[0] : 0.0f,
             /* .animWeight1 = */ (weights.size() > 1) ? weights[1] : 0.0f,
+            /* .sampleIdx0 = */ (sampleIndices.size() > 0) ? sampleIndices[0] : 0,
+            /* .sampleIdx1 = */ (sampleIndices.size() > 1) ? sampleIndices[1] : 0,
+            /* .boneCnt = */ static_cast<std::uint32_t>(boneCntInSkeleton),
             /* .skeletonIdx = */ static_cast<std::uint32_t>(itSkIdxPair->second)
         );
 
@@ -1283,7 +1283,6 @@ void ShadowMapAnimated::preRender(D3D12GfxCmdList& cmdList, RenderTargets& rende
 
     shader().perInstanceData_.stage(pids.data(), pids.size() * sizeof(sr::PerInstanceData6));
     shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData1));
-    shader().boneBuffer_.stage(bones.data(), bones.size() * sizeof(dx::XMFLOAT4X4));
     shader().toBoneLocalBuffer_.stage(toBoneLocals.data(), toBoneLocals.size() * sizeof(dx::XMFLOAT4X4));
 }
 

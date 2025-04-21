@@ -865,14 +865,12 @@ ShaderShadowMapAnimated::ShaderShadowMapAnimated( D3D12Device& device,
 	perFrameData_(device, sizeof(sr::PerFrameData1)),
 	perDrawcallData_(device, cbDrawcallDataSize_ * config.maxDrawcallCnt),
 	perInstanceData_(device, sizeof(sr::PerInstanceData6) * config.maxInstanceCnt),
-	boneBuffer_(device, sizeof(dx::XMFLOAT4X4) * config.maxBoneCnt),
 	toBoneLocalBuffer_(device, sizeof(dx::XMFLOAT4X4) * config.maxBoneCnt),
 	maxInstanceCnt_(config.maxInstanceCnt), maxDrawcallCnt_(config.maxDrawcallCnt),
 	maxBoneCnt_(config.maxBoneCnt) {
 	perFrameData_.pullGpuAddr();
 	perDrawcallData_.pullGpuAddr();
 	perInstanceData_.pullGpuAddr();
-	boneBuffer_.pullGpuAddr();
 	toBoneLocalBuffer_.pullGpuAddr();
 }
 
@@ -890,10 +888,6 @@ void ShaderShadowMapAnimated::bindRootParams(D3D12GfxCmdList& cmdList) {
 	cmdList.get()->SetGraphicsRootShaderResourceView(
 		root.params[ UnifiedRoot::ParamIndices::t3 ],
 		toBoneLocalBuffer_.gpuAddr()
-	);
-	cmdList.get()->SetGraphicsRootShaderResourceView(
-		root.params[ UnifiedRoot::ParamIndices::t4 ],
-		boneBuffer_.gpuAddr()
 	);
 }
 
