@@ -11,6 +11,20 @@ Texture2D gTex2Ds[] : register(t10, space1);
 Texture2DArray gTex2DArrays[] : register(t10, space2);
 TextureCube gTexCubes[] : register(t10, space3);
 
+float4 loadFromMapRef(uint4 mapRef, int2 tex, int LOD) {
+    if (mapRef.x == uint(-1)) {
+        return float4(0.f, 0.f, 0.f, 0.0f);
+    }
+    if (mapRef.x == MAP_TYPE_TEXTURE2D) {
+        return gTex2Ds[mapRef.y].Load(int3(tex, LOD));
+    } else if (mapRef.x == MAP_TYPE_TEXTUREARRAY) {
+        return gTex2DArrays[mapRef.y].Load(int4(tex, mapRef.z, LOD));
+    } else /* if (mapRef.x == MAP_TYPE_TEXTURECUBE) */ {
+        // TODO: should return correctly  value.
+        return float4(0.f, 0.f, 0.f, 0.0f);
+    }
+}
+
 float4 sampleFromMapRef(uint4 mapRef, float2 tex, uint samIdx) {
     if (mapRef.x == uint(-1)) {
         return float4(0.f, 0.f, 0.f, 0.0f);

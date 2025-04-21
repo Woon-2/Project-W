@@ -609,27 +609,49 @@ void PBRAnimatedIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets&
         firstBoneIndices.reserve( targetAnimCntExpected );
         auto weights = std::vector<float>();
         weights.reserve( targetAnimCntExpected );
+        auto clipmodes = std::vector<AnimInstance::ClipMode>();
+        clipmodes.reserve( targetAnimCntExpected );
+        auto sampleIndices = std::vector<int>();
+        sampleIndices.reserve( targetAnimCntExpected );
+        auto animIndices = std::vector<std::uint32_t>();
+        animIndices.reserve( targetAnimCntExpected );
 
         bool boneFull = false;
         std::size_t boneCntInSkeleton = pAnimCon->skeleton().bones().size();
 
         for (const auto& [key, animInst] : pAnimCon->instances()) {
-            firstBoneIndices.push_back(static_cast<std::uint32_t>(bones.size()));
             weights.push_back(animInst.weight());
+            if (clipmodes.emplace_back(animInst.clipMode()) == AnimInstance::ClipMode::KeyFrame) {
+                firstBoneIndices.push_back(static_cast<std::uint32_t>(bones.size()));
+                animIndices.push_back(firstBoneIndices.back());
 
-            for (const auto& bone: animInst.boneXformCache()) {
-                bones.push_back( mu::transpose(bone).getXmf() );
-            }
+                for (const auto& bone: animInst.boneXformCache()) {
+                    bones.push_back( mu::transpose(bone).getXmf() );
+                }
 
-            if (bones.size() == shader().maxBoneCnt()) {
-                boneFull = true;
-                break;
+                if (bones.size() == shader().maxBoneCnt()) {
+                    boneFull = true;
+                    break;
+                }
             }
+            else /* if (animInst.clipMode() == AnimInstance::ClipMode::Presampled) */ {
+                auto bakedXforms = static_cast<Texture*>(animInst.animClip()->customData());
+                if (!bakedXforms) {
+                    throw GFX_EXCEPT( "[Description]: Presampled animation clip has no baked xforms." );
+                }
+
+                animIndices.push_back(static_cast<std::uint32_t>(bakedXforms->view(bakedXforms->idxSrv).offset()));
+                sampleIndices.push_back( static_cast<int>(
+                    animInst.elapsed() / animInst.animClip()->sampleInterval()
+                ) );
+            }
+            
         }
 
         if (boneFull) {
             break;
         }
+
 
         // upload per instance data
         pids.emplace_back(
@@ -639,15 +661,15 @@ void PBRAnimatedIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets&
             /* .wvNormal = */ dx::convertMat<dx::XMFLOAT3X3>(
                 mu::inverse(xform * pCamera_->view()).get()
             ),
-            /* .animIdx = */ (firstBoneIndices.size() > 0) ? firstBoneIndices[0] : 0u,
-            /* .animIdx1 = */ (firstBoneIndices.size() > 1) ? firstBoneIndices[1] : 0u,
+            /* .animIdx0 = */ (animIndices.size() > 0) ? animIndices[0] : 0u,
+            /* .animIdx1 = */ (animIndices.size() > 1) ? animIndices[1] : 0u,
             /* .animWeight0 = */ (weights.size() > 0) ? weights[0] : 0.0f,
             /* .animWeight1 = */ (weights.size() > 1) ? weights[1] : 0.0f,
-            /* .sampleIdx0 = */ 0.f,
-            /* .sampleIdx1 = */ 0.f,
+            /* .sampleIdx0 = */ (sampleIndices.size() > 0) ? sampleIndices[0] : 0,
+            /* .sampleIdx1 = */ (sampleIndices.size() > 1) ? sampleIndices[1] : 0,
             /* .boneCnt = */ static_cast<std::uint32_t>(boneCntInSkeleton),
             /* .skeletonIdx = */ static_cast<std::uint32_t>(itSkIdxPair->second),
-            /* .usePresampled = */ false
+            /* .usePresampled = */ clipmodes.size() > 0 ? (clipmodes[0] == AnimInstance::ClipMode::Presampled) : false
         );
 
         if (pids.size() == shader().maxInstanceCnt()) [[unlikely]] {
@@ -721,8 +743,7 @@ void PBRAnimatedIllumination::render(D3D12GfxCmdList& cmdList, RenderTargets& re
             .material = material,
             .instanceBase = static_cast<std::uint32_t>(first - batch_.begin()),
             .samplerIdx = pSamplerStorage_->get( SamplerStorage::Indices::TrilinearBorder ).index(),
-            .shadowSamplerIdx = pSamplerStorage_->get( SamplerStorage::Indices::BilinearComparison ).index(),
-            .presampledAnimSamplerIdx = pSamplerStorage_->get( SamplerStorage::Indices::NearestClamp ).index(),
+            .shadowSamplerIdx = pSamplerStorage_->get( SamplerStorage::Indices::BilinearComparison ).index()
         };
         shader().perDrawcallData_.stage( &pdd, sizeof(sr::PerDrawcallData0),
             0u, accDrawcallCnt * shader().cbDrawcallDataSize()

@@ -430,8 +430,8 @@ struct PerInstanceData5 {
 	std::uint32_t animIdx1;
 	float animWeight0;
 	float animWeight1;
-	float sampleIdx0;
-	float sampleIdx1;
+	int sampleIdx0;
+	int sampleIdx1;
 	std::uint32_t boneCnt;
 	std::uint32_t skeletonIdx;
 	bool usePresampled;
@@ -494,7 +494,6 @@ struct PerDrawcallData0 {
 	std::uint32_t instanceBase;
 	std::uint32_t samplerIdx;
 	std::uint32_t shadowSamplerIdx;
-	std::uint32_t presampledAnimSamplerIdx;
 };
 
 struct PerDrawcallData1 {

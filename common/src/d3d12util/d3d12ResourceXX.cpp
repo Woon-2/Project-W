@@ -1851,7 +1851,7 @@ Texture bakePresampledAnimClip( D3D12Device& device,
     D3D12GfxCmdList& cmdList, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
     const AnimClip& animClip
 ) {
-    auto desc = Texture::Desc{
+    const auto desc = Texture::Desc{
         .width = static_cast<std::uint32_t>(animClip.sampleCnt()),
         // multiply boneCnt by 4, as a bone matrix is represented with 4 texels.
         .height = static_cast<std::uint32_t>(animClip.boneCnt() * 4u),
@@ -1868,17 +1868,20 @@ Texture bakePresampledAnimClip( D3D12Device& device,
 
     const auto uploadBufferSize = GetRequiredIntermediateSize(ret.get().Get(), 0u, 1u);
 
-    auto auxIdx = cmdList.emplaceXResource<UploadBuffer>(device, uploadBufferSize);
+    const auto auxIdx = cmdList.emplaceXResource<UploadBuffer>(device, uploadBufferSize);
     auto& aux = cmdList.getXResource<UploadBuffer>(auxIdx);
-    auto& presampleData = animClip.presampleData();
+    const auto& presampleData = animClip.presampleData();
 
-    auto animationData = std::vector<dx::XMFLOAT4X4>(
-        animClip.boneCnt() * animClip.sampleCnt()
+    auto animationData = std::vector<dx::XMFLOAT4>(
+        (animClip.boneCnt() * 4u) * animClip.sampleCnt()
     );
     for (std::size_t i = 0; i < animClip.boneCnt(); ++i) {
         for (std::size_t j = 0; j < animClip.sampleCnt(); ++j) {
-            animationData[i * animClip.sampleCnt() + j] =
-                mu::transpose(presampleData[i][j]).getXmf();
+            const auto mat = presampleData[i][j];
+            animationData[(i * 4u + 0u) * animClip.sampleCnt() + j] = mat.row(0u).getXmf();
+            animationData[(i * 4u + 1u) * animClip.sampleCnt() + j] = mat.row(1u).getXmf();
+            animationData[(i * 4u + 2u) * animClip.sampleCnt() + j] = mat.row(2u).getXmf();
+            animationData[(i * 4u + 3u) * animClip.sampleCnt() + j] = mat.row(3u).getXmf();
         }
     }
 

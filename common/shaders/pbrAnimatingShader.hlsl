@@ -31,7 +31,6 @@ cbuffer PerDrawcallData : register(b1) {
     uint instanceBase;
     uint samplerIdx;
     uint shadowSamplerIdx;
-    uint presampledAnimSamplerIdx;
 };
 
 cbuffer PerFrameData : register(b2) {
@@ -53,9 +52,9 @@ struct PerInstanceData {
     uint animIdx1;
     float animWeight0;
     float animWeight1;
-    float sampleIdx0; // for presampled mode, this is the time index to sample matrix as u coordinate.
-                      // (u: time, v: bone)
-    float sampleIdx1;
+    int sampleIdx0; // for presampled mode, this is the time index to sample matrix as texels' x coordinate.
+                      // (x: time, y: bone)
+    int sampleIdx1;
     uint boneCnt;
     uint skeletonIdx;   // skeletonIdx represents the first toLocalMatrix index.
                         // animation matrices are spread over the animation instances,
@@ -87,32 +86,33 @@ static float4x4 gmtxTexturize = {
 	0.5f, 0.5f, 0.0f, 1.0f
 };
 
-float4x4 loadPresampledMatrix(uint animIdx, float sampleIdx, float boneIdx, uint samIdx) {
+float4x4 loadPresampledMatrix(uint animIdx, int sampleIdx, int boneIdx) {
     float4x4 M;
+    int vIdx = boneIdx * 4;
     // as a texture stores float4 values, we need to load 4x4 matrix as 4 float4 values.
-    M[0] = sampleLevelFromMapRef2DOffset( uint4(MAP_TYPE_TEXTURE2D, animIdx, 0, 0),
-        float2(sampleIdx, boneIdx), 0.f, int2(0, 0), samIdx
+    M[0] = loadFromMapRef( uint4(MAP_TYPE_TEXTURE2D, animIdx, 0, 0),
+        int2(sampleIdx, vIdx + 0), 0
     );
-    M[1] = sampleLevelFromMapRef2DOffset( uint4(MAP_TYPE_TEXTURE2D, animIdx, 0, 0),
-        float2(sampleIdx, boneIdx), 0.f, int2(0, 1), samIdx
+    M[1] = loadFromMapRef( uint4(MAP_TYPE_TEXTURE2D, animIdx, 0, 0),
+        int2(sampleIdx, vIdx + 1), 0
     );
-    M[2] = sampleLevelFromMapRef2DOffset( uint4(MAP_TYPE_TEXTURE2D, animIdx, 0, 0),
-        float2(sampleIdx, boneIdx), 0.f, int2(0, 2), samIdx
+    M[2] = loadFromMapRef( uint4(MAP_TYPE_TEXTURE2D, animIdx, 0, 0),
+        int2(sampleIdx, vIdx + 2), 0
     );
-    M[3] = sampleLevelFromMapRef2DOffset( uint4(MAP_TYPE_TEXTURE2D, animIdx, 0, 0),
-        float2(sampleIdx, boneIdx), 0.f, int2(0, 3), samIdx
+    M[3] = loadFromMapRef( uint4(MAP_TYPE_TEXTURE2D, animIdx, 0, 0),
+        int2(sampleIdx, vIdx + 3), 0
     );
 
     return M;
 }
 
-float4x4 blendPresampledBoneTransform( uint animIdx, float sampleIdx, uint boneCnt,
-    uint skIdx, uint samIdx, uint4 boneIndices, float4 weights
+float4x4 blendPresampledBoneTransform( uint animIdx, int sampleIdx, uint boneCnt,
+    uint skIdx, uint4 boneIndices, float4 weights
 ) {
-    float4x4 M0 = loadPresampledMatrix(animIdx, sampleIdx, (float)boneIndices.x / boneCnt, samIdx);
-    float4x4 M1 = loadPresampledMatrix(animIdx, sampleIdx, (float)boneIndices.y / boneCnt, samIdx);
-    float4x4 M2 = loadPresampledMatrix(animIdx, sampleIdx, (float)boneIndices.z / boneCnt, samIdx);
-    float4x4 M3 = loadPresampledMatrix(animIdx, sampleIdx, (float)boneIndices.w / boneCnt, samIdx);
+    float4x4 M0 = loadPresampledMatrix(animIdx, sampleIdx, boneIndices.x);
+    float4x4 M1 = loadPresampledMatrix(animIdx, sampleIdx, boneIndices.y);
+    float4x4 M2 = loadPresampledMatrix(animIdx, sampleIdx, boneIndices.z);
+    float4x4 M3 = loadPresampledMatrix(animIdx, sampleIdx, boneIndices.w);
 
     return 
         mul(gToBoneLocal[skIdx + boneIndices.x], M0) * weights.x +
@@ -145,7 +145,6 @@ VSOutput VSMain( float3 position : POSITION, float3 normal : NORMAL,
             gInstances[instanceBase + instanceOffset].sampleIdx0,
             gInstances[instanceBase + instanceOffset].boneCnt,
             gInstances[instanceBase + instanceOffset].skeletonIdx,
-            presampledAnimSamplerIdx,
             boneIndices, boneWeights
         );
         anim1 = blendPresampledBoneTransform(
@@ -153,7 +152,6 @@ VSOutput VSMain( float3 position : POSITION, float3 normal : NORMAL,
             gInstances[instanceBase + instanceOffset].sampleIdx1,
             gInstances[instanceBase + instanceOffset].boneCnt,
             gInstances[instanceBase + instanceOffset].skeletonIdx,
-            presampledAnimSamplerIdx,
             boneIndices, boneWeights
         );
     }
