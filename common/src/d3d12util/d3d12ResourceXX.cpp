@@ -1849,7 +1849,7 @@ void LevelChunkModel::initChunkMesh(D3D12Device& device, D3D12GfxCmdList& cmdLis
 
 Texture bakePresampledAnimClip( D3D12Device& device,
     D3D12GfxCmdList& cmdList, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
-    const AnimClip& animClip
+    AnimClip& animClip
 ) {
     const auto desc = Texture::Desc{
         .width = static_cast<std::uint32_t>(animClip.sampleCnt()),
@@ -1885,6 +1885,8 @@ Texture bakePresampledAnimClip( D3D12Device& device,
         }
     }
 
+    animClip.clearPresampledMatrices();
+
     D3D12_SUBRESOURCE_DATA texSubresource{
         .pData = animationData.data(),
         .RowPitch = static_cast<std::int64_t>(desc.width * sizeof(dx::XMFLOAT4))
@@ -1904,7 +1906,7 @@ Texture& bakePresampledAnimClipAt( ResourceStorage::Slot& texSlot,
     const ResourceStorage::ResID& resID,
     D3D12Device& device, D3D12GfxCmdList& cmdList,
     DescriptorRange<DescriptorHeapGPU>& tex2dRange,
-    const AnimClip& animClip
+    AnimClip& animClip
 ) {
     return texSlot.load<Texture>(resID, bakePresampledAnimClip, device, cmdList, tex2dRange, animClip);
 }

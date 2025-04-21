@@ -94,8 +94,6 @@ public:
         RootMotion = 0x02
     };
 
-    AnimClip() = default;
-
     static void loadKeyFrameClipFromStream(std::istream& in, AnimClip& animClip);
     static void loadPresampledClipFromStream(std::istream& in, AnimClip& animClip);
     static std::vector<AnimClip> loadClipsFromStream(std::istream& in);
@@ -114,7 +112,7 @@ public:
 
     mu::Mat4x4 MU_CALLCONV sample(BoneIdx boneIdx, Milliseconds elapsed) const;
     std::size_t keyFrameCnt(BoneIdx boneIdx) const { return keyFrames_[boneIdx].size(); }
-    std::size_t sampleCnt() const { return samples_[0].size(); }
+    std::size_t sampleCnt() const { return sampleCnt_; }
     std::size_t boneCnt() const { return keyFrames_.size(); }
     const std::string& name() const { return name_; }
     Milliseconds duration() const { return duration_; }
@@ -126,12 +124,26 @@ public:
 
     void setCustomData(void* pCustomData) { pCustomData_ = pCustomData; }
     void* customData() const { return pCustomData_; }
+    // as client bakes the samples into a texture,
+    // the presampled matrices are no longer needed.
+    // clearing the presampled matrices will free the memory,
+    // and enhance the performance on AnimInstance::update()
+    // by skipping sampling procedure.
+    void clearPresampledMatrices() {
+        for (auto& samples : samples_) {
+            samples.clear();
+            samples.shrink_to_fit();
+        }
+        samples_.clear();
+        samples_.shrink_to_fit();
+    }
 
 private:
     std::vector< std::vector<KeyFrame> > keyFrames_; // [boneIdx][keyFrameIdx]
     std::vector< std::vector<mu::Mat4x4> > samples_; // [boneIdx][sampleIdx]
     std::string name_;
     Milliseconds duration_;
+    std::size_t sampleCnt_;
     void* pCustomData_;
     int flags_;
 };

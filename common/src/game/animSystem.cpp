@@ -354,6 +354,7 @@ void AnimClip::loadPresampledClipFromStream(std::istream& in, AnimClip& animClip
     }
     int sampleCnt{};
     readStream(in, sampleCnt);
+    animClip.sampleCnt_ = sampleCnt;
 
     for (int i = 0; i < boneCnt; ++i) {
         auto& samples = animClip.samples_[i];
@@ -554,8 +555,13 @@ void AnimInstance::update(Milliseconds deltaTime) {
         }
     }
     else /* if clipMode_ == ClipMode::Presampled */ {
-        for (std::size_t i = 0; i < pSkeleton_->bones().size(); ++i) {
-            boneXformCache_[i] = pAnimClip_->sample(static_cast<BoneIdx>(i), elapsedTime_);
+        // skip sampling.
+        // empty samples means that the clip is sampled in another way that user defined.
+        // the user defined sampling should much performant than the one in this function.
+        if (!pAnimClip_->presampleData().empty()) {
+            for (std::size_t i = 0; i < pSkeleton_->bones().size(); ++i) {
+                boneXformCache_[i] = pAnimClip_->sample(static_cast<BoneIdx>(i), elapsedTime_);
+            }
         }
     }
 
