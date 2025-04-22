@@ -433,7 +433,6 @@ struct PerInstanceData5 {
 	int sampleIdx0;
 	int sampleIdx1;
 	std::uint32_t boneCnt;
-	std::uint32_t skeletonIdx;
 	bool usePresampled;
 };
 
@@ -446,7 +445,6 @@ struct PerInstanceData6 {
 	int sampleIdx0;
 	int sampleIdx1;
 	std::uint32_t boneCnt;
-	std::uint32_t skeletonIdx;
 };
 
 struct Light {
@@ -666,7 +664,6 @@ public:
 	UploadBuffer perDrawcallData_;
 	UploadBuffer perInstanceData_;
 	UploadBuffer lightBuffer_;
-	UploadBuffer toBoneLocalBuffer_;
 	UploadBuffer boneBuffer_;
 
 private:
@@ -853,7 +850,6 @@ public:
 	UploadBuffer perFrameData_;
 	UploadBuffer perDrawcallData_;
 	UploadBuffer perInstanceData_;
-	UploadBuffer toBoneLocalBuffer_;
 
 	std::size_t cbDrawcallDataSize() const noexcept {
 		return cbDrawcallDataSize_;

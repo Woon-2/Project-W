@@ -182,7 +182,8 @@ public:
     enum class Stage {
         None,
         CalcLocal,
-        CalcWorld
+        CalcWorld,
+        CalcFinal
     };
 
     enum class ClipMode {
@@ -195,6 +196,7 @@ public:
     void update(Milliseconds deltaTime);
     TaskCompute calcLocals(AnimSystem& animSystem);
     void calcWorlds(AnimSystem& animSystem);
+    TaskCompute calcFinals(AnimSystem& animSystem);
 
     void setSpeed(float speed) noexcept { speed_ = speed; }
     void setWeight(float weight) noexcept { weight_ = weight; }
@@ -390,6 +392,10 @@ public:
         return computePassAnimInterpolation_.addKeyFramePair(lhs, rhs, ratio);
     }
 
+    std::size_t MU_CALLCONV addXformPair(mu::Mat4x4 lhs, const mu::Mat4x4& rhs) {
+        return computePassMatMul_.addMatrixPair(lhs, rhs);
+    }
+
     mu::Mat4x4 MU_CALLCONV getXform(std::size_t idx) const {
         return boneXformCache_.at(idx);
     }
@@ -401,6 +407,9 @@ public:
 private:
     gfx::d3d12::ShaderAnimInterpolation shaderAnimInterpolation_;
     gfx::d3d12::cp::AnimInterpolation computePassAnimInterpolation_;
+
+    gfx::d3d12::ShaderMatMul shaderMatMul_;
+    gfx::d3d12::cp::MatMul computePassMatMul_;
 
     std::vector<mu::Mat4x4> boneXformCache_;
     std::vector<std::coroutine_handle<>> suspendedTasks_;

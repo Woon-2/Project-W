@@ -620,13 +620,52 @@ void AnimInstance::calcWorlds(AnimSystem& animSystem) {
 
     if (clipMode_ == ClipMode::Presampled) {
         // skip world transform calculation
-        stage_ = Stage::None;
+        stage_ = Stage::CalcFinal;
         return;
     }
 
     auto pRootBone = pSkeleton_->root();
 
     traverseBone(*pRootBone);
+
+    stage_ = Stage::CalcFinal;
+}
+
+TaskCompute AnimInstance::calcFinals(AnimSystem& animSystem) {
+    if (stage_ != Stage::CalcFinal) {
+        throw std::runtime_error(
+            "[Description] AnimInstance::calcFinals: expected AnimInstance stage: "
+            + std::to_string(etoi(Stage::CalcFinal)) +
+            " but got: " + std::to_string(etoi(stage_))
+        );
+    }
+
+    if (clipMode_ == ClipMode::Presampled) {
+        // skip final transform calculation
+        co_await std::suspend_always{};
+        stage_ = Stage::None;
+        co_return;
+    }
+
+    // calculate final transforms for each bone
+    // with compute shader
+    std::vector<std::size_t> indices;
+    indices.reserve(boneXformCache_.size());
+
+    for (std::size_t i = 0u; i < boneXformCache_.size(); ++i) {
+        auto a = mu::inverse(pSkeleton_->bones()[i].toLocalMatrix());
+        auto b = boneXformCache_[i];
+
+        indices.push_back(animSystem.addXformPair(
+            pSkeleton_->bones()[i].toLocalMatrix(), boneXformCache_[i]
+        ));
+    }
+
+    co_await std::suspend_always{};
+
+    for (std::size_t i = 0u; i < indices.size(); ++i) {
+        boneXformCache_[i] = animSystem.getXform(indices[i]);
+    }
 
     stage_ = Stage::None;
 }
@@ -753,6 +792,9 @@ AnimSystem::AnimSystem( gfx::d3d12::D3D12Device& device,
 ) : shaderAnimInterpolation_(device, root, gfx::d3d12::ShaderAnimInterpolation::Config{
         .maxKeyFrameCnt = 32'000u
     }), computePassAnimInterpolation_(device, shaderAnimInterpolation_),
+    shaderMatMul_(device, root, gfx::d3d12::ShaderMatMul::Config{
+        .maxMatrixCnt = 32'000u
+    }), computePassMatMul_(device, shaderMatMul_),
     boneXformCache_(),
     suspendedTasks_(),
     fence_(device) {
@@ -806,6 +848,35 @@ void AnimSystem::update( gfx::d3d12::D3D12CmdQueue& cmdQueue,
             inst.calcWorlds(*this);
         }
     }
+
+    // pass 3: calculate final transforms
+    for (auto& pAnimCon : components<AnimController>()) {
+        for (auto& [key, inst] : AnimConAttorney::getInstances(*pAnimCon)) {
+            suspendedTasks_.push_back(inst.calcFinals(*this));
+        }
+    }
+
+    cmdList.reset();
+
+    cmdList.get()->SetComputeRootSignature(shaderMatMul_.rootSiganture().get().Get());
+    shaderMatMul_.bindRootParams(cmdList);
+    computePassMatMul_.preCompute(cmdList);
+    computePassMatMul_.compute(cmdList);
+    computePassMatMul_.postCompute(cmdList);
+
+    cmdList.close();
+    cmdQueue.execute(cmdList);
+    fence_.signal(cmdQueue);
+    fence_.wait();
+    computePassMatMul_.postExecution();
+
+    boneXformCache_ = std::move(computePassMatMul_.resultMatrices());
+
+    // store the result matrices in the anim instance
+    for (auto& suspended : suspendedTasks_) {
+        suspended.resume();
+    }
+    suspendedTasks_.clear();
 
     cmdList.reset();
 }

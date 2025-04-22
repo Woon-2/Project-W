@@ -10,13 +10,9 @@ struct PerInstanceData {
                     // (x: time, y: bone)
     int sampleIdx1;
     uint boneCnt;
-    uint skeletonIdx; // skeletonIdx represents the first toLocalMatrix index.
-                    // animation matrices are spread over the animation instances,
-                    // but toLocal matrices are shared by animation instances which shares the same skeleton.
 };
 
 StructuredBuffer<PerInstanceData> gInstances: register(t0);
-StructuredBuffer<float4x4> gToBoneLocal: register(t3);
 
 cbuffer PerDrawcallData : register(b1) {
     uint instanceBase;
@@ -52,7 +48,7 @@ float4x4 loadPresampledMatrix(uint animIdx, int sampleIdx, int boneIdx) {
 }
 
 float4x4 blendPresampledBoneTransform( uint animIdx, int sampleIdx, uint boneCnt,
-    uint skIdx, uint4 boneIndices, float4 weights
+    uint4 boneIndices, float4 weights
 ) {
     float4x4 M0 = loadPresampledMatrix(animIdx, sampleIdx, boneIndices.x);
     float4x4 M1 = loadPresampledMatrix(animIdx, sampleIdx, boneIndices.y);
@@ -60,10 +56,10 @@ float4x4 blendPresampledBoneTransform( uint animIdx, int sampleIdx, uint boneCnt
     float4x4 M3 = loadPresampledMatrix(animIdx, sampleIdx, boneIndices.w);
 
     return 
-        mul(gToBoneLocal[skIdx + boneIndices.x], M0) * weights.x +
-        mul(gToBoneLocal[skIdx + boneIndices.y], M1) * weights.y +
-        mul(gToBoneLocal[skIdx + boneIndices.z], M2) * weights.z +
-        mul(gToBoneLocal[skIdx + boneIndices.w], M3) * weights.w;
+        M0 * weights.x +
+        M1 * weights.y +
+        M2 * weights.z +
+        M3 * weights.w;
 }
 
 VSOutput VSMain( float3 position : POSITION, uint4 boneIndices : BONE_INDICES,
@@ -75,7 +71,6 @@ VSOutput VSMain( float3 position : POSITION, uint4 boneIndices : BONE_INDICES,
         gInstances[instanceBase + instanceOffset].animIdx0,
         gInstances[instanceBase + instanceOffset].sampleIdx0,
         gInstances[instanceBase + instanceOffset].boneCnt,
-        gInstances[instanceBase + instanceOffset].skeletonIdx,
         boneIndices,
         boneWeights
     );
@@ -84,7 +79,6 @@ VSOutput VSMain( float3 position : POSITION, uint4 boneIndices : BONE_INDICES,
         gInstances[instanceBase + instanceOffset].animIdx1,
         gInstances[instanceBase + instanceOffset].sampleIdx1,
         gInstances[instanceBase + instanceOffset].boneCnt,
-        gInstances[instanceBase + instanceOffset].skeletonIdx,
         boneIndices,
         boneWeights
     );

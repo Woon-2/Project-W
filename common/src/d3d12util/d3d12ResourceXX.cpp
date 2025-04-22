@@ -1849,7 +1849,7 @@ void LevelChunkModel::initChunkMesh(D3D12Device& device, D3D12GfxCmdList& cmdLis
 
 Texture bakePresampledAnimClip( D3D12Device& device,
     D3D12GfxCmdList& cmdList, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
-    AnimClip& animClip
+    AnimClip& animClip, const Skeleton& skeleton
 ) {
     const auto desc = Texture::Desc{
         .width = static_cast<std::uint32_t>(animClip.sampleCnt()),
@@ -1877,7 +1877,8 @@ Texture bakePresampledAnimClip( D3D12Device& device,
     );
     for (std::size_t i = 0; i < animClip.boneCnt(); ++i) {
         for (std::size_t j = 0; j < animClip.sampleCnt(); ++j) {
-            const auto mat = presampleData[i][j];
+            const auto toLocal = skeleton.bones()[i].toLocalMatrix();
+            const auto mat = toLocal * presampleData[i][j];
             animationData[(i * 4u + 0u) * animClip.sampleCnt() + j] = mat.row(0u).getXmf();
             animationData[(i * 4u + 1u) * animClip.sampleCnt() + j] = mat.row(1u).getXmf();
             animationData[(i * 4u + 2u) * animClip.sampleCnt() + j] = mat.row(2u).getXmf();
@@ -1906,9 +1907,9 @@ Texture& bakePresampledAnimClipAt( ResourceStorage::Slot& texSlot,
     const ResourceStorage::ResID& resID,
     D3D12Device& device, D3D12GfxCmdList& cmdList,
     DescriptorRange<DescriptorHeapGPU>& tex2dRange,
-    AnimClip& animClip
+    AnimClip& animClip, const Skeleton& skeleton
 ) {
-    return texSlot.load<Texture>(resID, bakePresampledAnimClip, device, cmdList, tex2dRange, animClip);
+    return texSlot.load<Texture>(resID, bakePresampledAnimClip, device, cmdList, tex2dRange, animClip, skeleton);
 }
 
 // load texture with default srv desc from file
@@ -2064,7 +2065,7 @@ Skeleton& loadSkeletonAndAnimAt( D3D12Device& device,
         );
         loadedAnimClip.setCustomData(&bakePresampledAnimClipAt(
             bakedPresampledAnimSlot, loadedAnimClip.name(), device, cmdList,
-            tex2dRange, loadedAnimClip
+            tex2dRange, loadedAnimClip, ret
         ));
     }
 

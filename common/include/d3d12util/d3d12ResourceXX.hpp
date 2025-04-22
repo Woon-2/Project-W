@@ -1091,7 +1091,7 @@ namespace detail {
 // as it utilizes the command list to create the texture resource
 Texture bakePresampledAnimClip( D3D12Device& device,
     D3D12GfxCmdList& cmdList, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
-    AnimClip& animClip
+    AnimClip& animClip, const Skeleton& skeleton
 );
 
 // the command list must be in the recording state
@@ -1100,7 +1100,7 @@ Texture& bakePresampledAnimClipAt( ResourceStorage::Slot& texSlot,
     const ResourceStorage::ResID& resID,
     D3D12Device& device, D3D12GfxCmdList& cmdList,
     DescriptorRange<DescriptorHeapGPU>& tex2dRange,
-    AnimClip& animClip
+    AnimClip& animClip, const Skeleton& skeleton
 );
 
 // load texture with default srv desc from file
