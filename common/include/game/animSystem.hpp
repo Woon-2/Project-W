@@ -255,6 +255,8 @@ struct PromiseAnim {
 
 class AnimController : public ecs::Component {
 public:
+    static constexpr int evAnimUpdate = 0x01;
+
     ENABLE_COMPONENT(AnimController);
     friend struct AnimConAttorney;
 

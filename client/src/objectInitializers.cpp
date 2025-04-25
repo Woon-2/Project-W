@@ -13,124 +13,155 @@ inline constexpr auto characterMoveLb2 = 0.01f * 0.01f;
 inline constexpr auto characterWalkUb2 = 1.6f * 1.6f;
 inline constexpr auto characterRunUb2 = 10.f * 10.f;
 
-fsm::State characterStateIdle(fsm::FSM& fsm, AnimController& con) {
-    // Rigidbody may not exist at the start point,
-    // and we do not update the state if rigidbody doesn't exist.
-    co_await std::suspend_always{};
+void characterStateIdleUpdate(fsm::FSM& fsm, AnimController& con, Milliseconds deltaTime) {
+    const auto entityId = con.entityID().value();
+    const auto rigidBody = RigidBody::atC(entityId);
+    if (!rigidBody) {
+        return;
+    }
+    const auto velocity = rigidBody->velocity();
+    const auto speed2 = velocity.len2();
 
+    if (speed2 > characterMoveLb2) {
+        if (speed2 < characterWalkUb2) {
+            fsm.pushDeferredEvent(fsm::Event::transition("Idle", "Walk"));
+        }
+        else if (speed2 < characterRunUb2) {
+            fsm.pushDeferredEvent(fsm::Event::transition("Idle", "Run"));
+        }
+        else {
+            fsm.pushDeferredEvent(fsm::Event::transition("Idle", "Sprint"));
+        }
+    }
+}
+
+fsm::State characterStateIdle(fsm::FSM& fsm, AnimController& con) {
     for (;;) {
         while (auto events = co_await fsm.getEvents()) {
             while (auto ev = events.pop()) {
+                if (ev->evType() == AnimController::evAnimUpdate) {
+                    characterStateIdleUpdate(
+                        fsm, con, ev->get<Milliseconds>()
+                    );
+                }
                 // do something
-            }
-        }
-
-        const auto entityId = con.entityID().value();
-        const auto velocity = RigidBody::atC(entityId)->velocity();
-        const auto speed2 = velocity.len2();
-
-        if (speed2 > characterMoveLb2) {
-            if (speed2 < characterWalkUb2) {
-                fsm.pushEvent(fsm::Event::transition("Idle", "Walk"));
-            }
-            else if (speed2 < characterRunUb2) {
-                fsm.pushEvent(fsm::Event::transition("Idle", "Run"));
-            }
-            else {
-                fsm.pushEvent(fsm::Event::transition("Idle", "Sprint"));
             }
         }
     
         co_await fsm.completeStateUpdate();
+    }
+}
+
+void characterStateWalkUpdate(fsm::FSM& fsm, AnimController& con, Milliseconds deltaTime) {
+    const auto entityId = con.entityID().value();
+    const auto rigidBody = RigidBody::atC(entityId);
+    if (!rigidBody) {
+        fsm.pushDeferredEvent(fsm::Event::transition("Walk", "Idle"));
+        return;
+    }
+    const auto velocity = rigidBody->velocity();
+    const auto speed2 = velocity.len2();
+
+    if (speed2 < characterMoveLb2) {
+        fsm.pushDeferredEvent(fsm::Event::transition("Walk", "Idle"));
+    }
+    else if (speed2 >= characterWalkUb2) {
+        if (speed2 < characterRunUb2) {
+            fsm.pushDeferredEvent(fsm::Event::transition("Walk", "Run"));
+        }
+        else {
+            fsm.pushDeferredEvent(fsm::Event::transition("Walk", "Sprint"));
+        }
     }
 }
 
 fsm::State characterStateWalk(fsm::FSM& fsm, AnimController& con) {
-    // Rigidbody may not exist at the start point,
-    // and we do not update the state if rigidbody doesn't exist.
-    co_await std::suspend_always{};
-
     for (;;) {
         while (auto events = co_await fsm.getEvents()) {
             while (auto ev = events.pop()) {
+                if (ev->evType() == AnimController::evAnimUpdate) {
+                    characterStateWalkUpdate(
+                        fsm, con, ev->get<Milliseconds>()
+                    );
+                }
                 // do something
-            }
-        }
-
-        const auto entityId = con.entityID().value();
-        const auto velocity = RigidBody::atC(entityId)->velocity();
-        const auto speed2 = velocity.len2();
-
-        if (speed2 < characterMoveLb2) {
-            fsm.pushEvent(fsm::Event::transition("Walk", "Idle"));
-        }
-        else if (speed2 >= characterWalkUb2) {
-            if (speed2 < characterRunUb2) {
-                fsm.pushEvent(fsm::Event::transition("Walk", "Run"));
-            }
-            else {
-                fsm.pushEvent(fsm::Event::transition("Walk", "Sprint"));
             }
         }
     
         co_await fsm.completeStateUpdate();
+    }
+}
+
+void characterStateRunUpdate(fsm::FSM& fsm, AnimController& con, Milliseconds deltaTime) {
+    const auto entityId = con.entityID().value();
+    const auto rigidBody = RigidBody::atC(entityId);
+    if (!rigidBody) {
+        fsm.pushDeferredEvent(fsm::Event::transition("Run", "Idle"));
+        return;
+    }
+    const auto velocity = rigidBody->velocity();
+    const auto speed2 = velocity.len2();
+
+    if (speed2 < characterMoveLb2) {
+        fsm.pushDeferredEvent(fsm::Event::transition("Run", "Idle"));
+    }
+    else if (speed2 < characterWalkUb2) {
+        fsm.pushDeferredEvent(fsm::Event::transition("Run", "Walk"));
+    }
+    else if (speed2 >= characterRunUb2) {
+        fsm.pushDeferredEvent(fsm::Event::transition("Run", "Sprint"));
     }
 }
 
 fsm::State characterStateRun(fsm::FSM& fsm, AnimController& con) {
-    // Rigidbody may not exist at the start point,
-    // and we do not update the state if rigidbody doesn't exist.
-    co_await std::suspend_always{};
-
     for (;;) {
         while (auto events = co_await fsm.getEvents()) {
             while (auto ev = events.pop()) {
+                if (ev->evType() == AnimController::evAnimUpdate) {
+                    characterStateRunUpdate(
+                        fsm, con, ev->get<Milliseconds>()
+                    );
+                }
                 // do something
             }
-        }
-
-        const auto entityId = con.entityID().value();
-        const auto velocity = RigidBody::atC(entityId)->velocity();
-        const auto speed2 = velocity.len2();
-
-        if (speed2 < characterMoveLb2) {
-            fsm.pushEvent(fsm::Event::transition("Run", "Idle"));
-        }
-        else if (speed2 < characterWalkUb2) {
-            fsm.pushEvent(fsm::Event::transition("Run", "Walk"));
-        }
-        else if (speed2 >= characterRunUb2) {
-            fsm.pushEvent(fsm::Event::transition("Run", "Sprint"));
         }
     
         co_await fsm.completeStateUpdate();
     }
 }
 
-fsm::State characterStateSprint(fsm::FSM& fsm, AnimController& con) {
-    // Rigidbody may not exist at the start point,
-    // and we do not update the state if rigidbody doesn't exist.
-    co_await std::suspend_always{};
+void characterStateSprintUpdate(fsm::FSM& fsm, AnimController& con, Milliseconds deltaTime) {
+    const auto entityId = con.entityID().value();
+    const auto rigidBody = RigidBody::atC(entityId);
+    if (!rigidBody) {
+        fsm.pushDeferredEvent(fsm::Event::transition("Sprint", "Idle"));
+        return;
+    }
+    const auto velocity = rigidBody->velocity();
+    const auto speed2 = velocity.len2();
 
+    if (speed2 < characterMoveLb2) {
+        fsm.pushDeferredEvent(fsm::Event::transition("Sprint", "Idle"));
+    }
+    else if (speed2 < characterWalkUb2) {
+        fsm.pushDeferredEvent(fsm::Event::transition("Sprint", "Walk"));
+    }
+    else if (speed2 < characterRunUb2) {
+        fsm.pushDeferredEvent(fsm::Event::transition("Sprint", "Run"));
+    }
+}
+
+fsm::State characterStateSprint(fsm::FSM& fsm, AnimController& con) {
     for (;;) {
         while (auto events = co_await fsm.getEvents()) {
             while (auto ev = events.pop()) {
+                if (ev->evType() == AnimController::evAnimUpdate) {
+                    characterStateSprintUpdate(
+                        fsm, con, ev->get<Milliseconds>()
+                    );
+                }
                 // do something
             }
-        }
-
-        const auto entityId = con.entityID().value();
-        const auto velocity = RigidBody::atC(entityId)->velocity();
-        const auto speed2 = velocity.len2();
-
-        if (speed2 < characterMoveLb2) {
-            fsm.pushEvent(fsm::Event::transition("Sprint", "Idle"));
-        }
-        else if (speed2 < characterWalkUb2) {
-            fsm.pushEvent(fsm::Event::transition("Sprint", "Walk"));
-        }
-        else if (speed2 < characterRunUb2) {
-            fsm.pushEvent(fsm::Event::transition("Sprint", "Run"));
         }
     
         co_await fsm.completeStateUpdate();
@@ -158,7 +189,7 @@ void initAnimations(
         animCon.fsm().addTransition("Sprint", "Sprint", [](){});
 
         animCon.fsm().addTransition("Idle", "Walk", [&animCon](){
-            fadeIn("GO_Character_Idle", 500_ms, animCon).resume();
+            fadeIn("GO_Character_Walk", 500_ms, animCon).resume();
             fadeOut("GO_Character_Idle", 500_ms, animCon).resume();
         });
         animCon.fsm().addTransition("Idle", "Run", [&animCon](){
@@ -228,15 +259,7 @@ void initAnimations(
             animClipSlot.get<AnimClip>("GO_Character_Sprint")
         );
 
-        circular(
-            std::vector<std::string>{ "GO_Character_Idle", "GO_Character_Idle1",
-                "GO_Character_Idle2", "GO_Character_Walk", "GO_Character_Run",
-                "GO_Character_Sprint"
-            },
-            animCon
-        ).resume();
-
-        // animCon.play("GO_Character_Run", AnimInstance::ClipMode::Presampled);
+        animCon.play("GO_Character_Idle");
         break;
 
     default:

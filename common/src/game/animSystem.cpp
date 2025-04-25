@@ -710,6 +710,8 @@ void AnimController::play( const std::string& key, std::coroutine_handle<> seq,
 }
 
 void AnimController::update(Milliseconds deltaTime) {
+    fsm_.pushEvent(fsm::Event::create<Milliseconds>(evAnimUpdate, deltaTime));
+
     fsm_.update();
     deltaTime_ = deltaTime;
     for (auto& [key, inst] : insts_) {
