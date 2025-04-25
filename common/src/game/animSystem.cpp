@@ -783,16 +783,39 @@ std::coroutine_handle<> AnimController::resetAnimSequence(
     return nullptr;
 }
 
+std::vector<std::coroutine_handle<>> AnimController::restoreAnimSequences(
+    const std::vector<std::string>& keys
+) {
+    auto ret = std::vector<std::coroutine_handle<>>();
+    ret.reserve(animSequences_.size());
+
+    for (auto& [k, c] : animSequences_) {
+        const auto it = std::ranges::find_if(keys, [&k](const auto& key) { return key != k; });
+        if (it != keys.end()) {
+            ret.push_back(c);
+            c = removeImpl(k, *this);
+        }
+    }
+
+    return ret;
+}
+
 TaskAnim fadeInImpl(std::string key, Milliseconds fadeDuration,
     std::coroutine_handle<> suspended, AnimController& con
 ) {
     auto raii = CoroRAII(suspended);
 
-    auto elapsed = AnimConAttorney::getElapsed(key, con);
-    while (elapsed < fadeDuration) {
-        AnimConAttorney::setWeight(key, std::clamp(elapsed / fadeDuration, 0.f, 1.f), con);
+    auto accTime = Milliseconds(0.f);
+    while (accTime < fadeDuration) {
+        AnimConAttorney::setWeight(key, std::clamp(accTime / fadeDuration, 0.f, 1.f), con);
         co_await std::suspend_always{};
-        elapsed = AnimConAttorney::getElapsed(key, con);
+        accTime += AnimConAttorney::getDeltaTime(con);
+
+        const auto duration = AnimConAttorney::getDuration(key, con);
+        const auto elapsed = AnimConAttorney::getElapsed(key, con);
+        if (elapsed >= duration) {
+            AnimConAttorney::setElapsed(key, elapsed - duration, con);
+        }
     }
 
     raii.release();
@@ -807,6 +830,12 @@ TaskAnim fadeOutImpl(std::string key, Milliseconds fadeDuration, AnimController&
         co_await std::suspend_always{};
         elapsed += AnimConAttorney::getDeltaTime(con) * AnimConAttorney::getSpeed(key, con);
     }
+}
+
+TaskAnim removeImpl(std::string key, AnimController& con) {
+    AnimConAttorney::setWeight(key, 0.f, con);
+    AnimConAttorney::setSpeed(key, 0.f, con);
+    co_await std::suspend_always{};
 }
 
 TaskAnim loopImpl(std::string key, AnimController& con) {
@@ -882,7 +911,7 @@ TaskAnimSequence fadeIn( std::string key, std::string prevKey,
     Milliseconds fadeDuration, AnimController& animCon
 ) {
     const auto preElapsed = AnimConAttorney::getDuration(key, animCon)
-    * (AnimConAttorney::getElapsed(prevKey, animCon) / AnimConAttorney::getDuration(prevKey, animCon));
+        * (AnimConAttorney::getElapsed(prevKey, animCon) / AnimConAttorney::getDuration(prevKey, animCon));
 
     auto expired = co_await FadeIn{
         .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration, .preElapsed = preElapsed
@@ -902,6 +931,17 @@ TaskAnimSequence fadeIn( std::string key, std::string prevKey,
 TaskAnimSequence fadeOut(std::string key, Milliseconds fadeDuration, AnimController& animCon) {
     auto expired = co_await FadeOut{ .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration };
     expired.destroy();
+}
+
+TaskAnimSequence fadeOutAll( std::vector<std::string> keys,
+    Milliseconds fadeDuration, AnimController& animCon
+) {
+    auto expireds = co_await FadeOutAll{
+        .pAnimCon = &animCon, .keys = std::move(keys), .fadeDuration = fadeDuration
+    };
+    for (auto& expired : expireds) {
+        expired.destroy();
+    }
 }
 
 TaskAnimSequence sequencial( std::vector<std::string> keys,

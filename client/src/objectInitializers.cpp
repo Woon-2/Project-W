@@ -189,55 +189,103 @@ void initAnimations(
         animCon.fsm().addTransition("Sprint", "Sprint", [](){});
 
         animCon.fsm().addTransition("Idle", "Walk", [&animCon](){
-            fadeOut("GO_Character_Idle", 500_ms, animCon);
-            fadeIn("GO_Character_Walk", "GO_Character_Idle", 500_ms, animCon);
+            animCon.restoreAnimSequences({
+                "GO_Character_Idle",
+                "GO_Character_Walk"
+            });
+            fadeOut("GO_Character_Idle", 240_ms, animCon);
+            fadeIn("GO_Character_Walk", "GO_Character_Idle", 240_ms, animCon);
         });
         animCon.fsm().addTransition("Idle", "Run", [&animCon](){
-            fadeOut("GO_Character_Idle", 500_ms, animCon);
-            fadeIn("GO_Character_Run", "GO_Character_Idle", 500_ms, animCon);
+            animCon.restoreAnimSequences({
+                "GO_Character_Idle",
+                "GO_Character_Run"
+            });
+            fadeOut("GO_Character_Idle", 240_ms, animCon);
+            fadeIn("GO_Character_Run", "GO_Character_Idle", 240_ms, animCon);
         });
         animCon.fsm().addTransition("Idle", "Sprint", [&animCon](){
-            fadeOut("GO_Character_Idle", 500_ms, animCon);
-            fadeIn("GO_Character_Sprint", "GO_Character_Idle", 500_ms, animCon);
+            animCon.restoreAnimSequences({
+                "GO_Character_Idle",
+                "GO_Character_Sprint"
+            });
+            fadeOut("GO_Character_Idle", 240_ms, animCon);
+            fadeIn("GO_Character_Sprint", "GO_Character_Idle", 240_ms, animCon);
         });
 
         animCon.fsm().addTransition("Walk", "Idle", [&animCon](){
-            fadeOut("GO_Character_Walk", 500_ms, animCon);
-            fadeIn("GO_Character_Idle", "GO_Character_Walk", 500_ms, animCon);
+            animCon.restoreAnimSequences({
+                "GO_Character_Walk",
+                "GO_Character_Idle"
+            });
+            fadeOut("GO_Character_Walk", 240_ms, animCon);
+            fadeIn("GO_Character_Idle", "GO_Character_Walk", 240_ms, animCon);
         });
         animCon.fsm().addTransition("Walk", "Run", [&animCon](){
-            fadeOut("GO_Character_Walk", 500_ms, animCon);
-            fadeIn("GO_Character_Run", "GO_Character_Walk", 500_ms, animCon);
+            animCon.restoreAnimSequences({
+                "GO_Character_Walk",
+                "GO_Character_Run"
+            });
+            fadeOut("GO_Character_Walk", 240_ms, animCon);
+            fadeIn("GO_Character_Run", "GO_Character_Walk", 240_ms, animCon);
         });
         animCon.fsm().addTransition("Walk", "Sprint", [&animCon](){
-            fadeOut("GO_Character_Walk", 500_ms, animCon);
-            fadeIn("GO_Character_Sprint", "GO_Character_Walk", 500_ms, animCon);
+            animCon.restoreAnimSequences({
+                "GO_Character_Walk",
+                "GO_Character_Sprint"
+            });
+            fadeOut("GO_Character_Walk", 240_ms, animCon);
+            fadeIn("GO_Character_Sprint", "GO_Character_Walk", 240_ms, animCon);
         });
 
         animCon.fsm().addTransition("Run", "Idle", [&animCon](){
-            fadeOut("GO_Character_Run", 500_ms, animCon);
-            fadeIn("GO_Character_Idle", "GO_Character_Run", 500_ms, animCon);
+            animCon.restoreAnimSequences({
+                "GO_Character_Run",
+                "GO_Character_Idle"
+            });
+            fadeOut("GO_Character_Run", 240_ms, animCon);
+            fadeIn("GO_Character_Idle", "GO_Character_Run", 240_ms, animCon);
         });
         animCon.fsm().addTransition("Run", "Walk", [&animCon](){
-            fadeOut("GO_Character_Run", 500_ms, animCon);
-            fadeIn("GO_Character_Walk", "GO_Character_Run", 500_ms, animCon);
+            animCon.restoreAnimSequences({
+                "GO_Character_Run",
+                "GO_Character_Walk"
+            });
+            fadeOut("GO_Character_Run", 240_ms, animCon);
+            fadeIn("GO_Character_Walk", "GO_Character_Run", 240_ms, animCon);
         });
         animCon.fsm().addTransition("Run", "Sprint", [&animCon](){
-            fadeOut("GO_Character_Run", 500_ms, animCon);
-            fadeIn("GO_Character_Sprint", "GO_Character_Run", 500_ms, animCon);
+            animCon.restoreAnimSequences({
+                "GO_Character_Run",
+                "GO_Character_Sprint"
+            });
+            fadeOut("GO_Character_Run", 150_ms, animCon);
+            fadeIn("GO_Character_Sprint", "GO_Character_Run", 150_ms, animCon);
         });
 
         animCon.fsm().addTransition("Sprint", "Idle", [&animCon](){
-            fadeOut("GO_Character_Sprint", 500_ms, animCon);
-            fadeIn("GO_Character_Idle", "GO_Character_Sprint", 500_ms, animCon);
+            animCon.restoreAnimSequences({
+                "GO_Character_Sprint",
+                "GO_Character_Idle"
+            });
+            fadeOut("GO_Character_Sprint", 240_ms, animCon);
+            fadeIn("GO_Character_Idle", "GO_Character_Sprint", 240_ms, animCon);
         });
         animCon.fsm().addTransition("Sprint", "Walk", [&animCon](){
-            fadeOut("GO_Character_Sprint", 500_ms, animCon);
-            fadeIn("GO_Character_Walk", "GO_Character_Sprint", 500_ms, animCon);
+            animCon.restoreAnimSequences({
+                "GO_Character_Sprint",
+                "GO_Character_Walk"
+            });
+            fadeOut("GO_Character_Sprint", 240_ms, animCon);
+            fadeIn("GO_Character_Walk", "GO_Character_Sprint", 240_ms, animCon);
         });
         animCon.fsm().addTransition("Sprint", "Run", [&animCon](){
-            fadeOut("GO_Character_Sprint", 500_ms, animCon);
-            fadeIn("GO_Character_Run", "GO_Character_Sprint", 500_ms, animCon);
+            animCon.restoreAnimSequences({
+                "GO_Character_Sprint",
+                "GO_Character_Run"
+            });
+            fadeOut("GO_Character_Sprint", 150_ms, animCon);
+            fadeIn("GO_Character_Run", "GO_Character_Sprint", 150_ms, animCon);
         });
 
         animCon.addClip("GO_Character_Idle",

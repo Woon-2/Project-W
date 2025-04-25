@@ -312,6 +312,9 @@ public:
     std::coroutine_handle<> resetAnimSequence(
         const std::string& key, std::coroutine_handle<> animSequence
     );
+    std::vector<std::coroutine_handle<>> restoreAnimSequences(
+        const std::vector<std::string>& keys
+    );
 
     const AnimClip& clipInfo(const std::string& key) const {
         return *clipMap_.at(key);
@@ -326,7 +329,7 @@ public:
     const auto& fsm() const { return fsm_; }
 
     void print() const {
-        system("cls");
+        //system("cls");
         for (const auto& [key, inst] : insts_) {
             std::cout << "playing animation \"" << inst.animClip()->name()
                 << "\", elapsed: " << inst.elapsed()
@@ -378,6 +381,24 @@ struct AnimConAttorney {
         }
     }
 
+    static void setSpeed(const std::string& key, float speed, AnimController& con) {
+        for (auto& [k, inst] : con.insts_) {
+            if (k == key) {
+                inst.setSpeed(speed);
+                break;
+            }
+        }
+    }
+
+    static void setElapsed(const std::string& key, Milliseconds elapsed, AnimController& con) {
+        for (auto& [k, inst] : con.insts_) {
+            if (k == key) {
+                inst.setElapsed(elapsed);
+                break;
+            }
+        }
+    }
+
     static int getClipFlags(const std::string& key, const AnimController& con) {
         auto it = con.clipMap_.find(key);
         return (it != con.clipMap_.end()) ? it->second->flags() : 0;
@@ -411,6 +432,7 @@ TaskAnim fadeInImpl(std::string key, Milliseconds fadeDuration,
     std::coroutine_handle<> suspended, AnimController& con
 );
 TaskAnim fadeOutImpl(std::string key, Milliseconds fadeDuration, AnimController& con);
+TaskAnim removeImpl(std::string key, AnimController& con);
 TaskAnim loopImpl(std::string key, AnimController& con);
 TaskAnim onceImpl(std::string key, AnimController& con);
 TaskAnim sequencialNodeImpl(const std::string& key, std::coroutine_handle<> suspended, AnimController& con);
@@ -445,6 +467,24 @@ struct FadeOut {
     std::string key;
     Milliseconds fadeDuration;
     std::coroutine_handle<> __expired;
+};
+
+struct FadeOutAll {
+    bool await_ready() { return false; }
+    void await_suspend(std::coroutine_handle<> suspended) {
+        for (const auto& key : keys) {
+            auto expired = pAnimCon->resetAnimSequence(key, fadeOutImpl(key, fadeDuration, *pAnimCon));
+            if (expired) {
+                __expireds.push_back(expired);
+            }
+        }
+    }
+    std::vector<std::coroutine_handle<>> await_resume() { return std::move(__expireds); }
+
+    AnimController* pAnimCon;
+    std::vector<std::string> keys;
+    Milliseconds fadeDuration;
+    std::vector<std::coroutine_handle<>> __expireds;
 };
 
 struct Loop {
@@ -489,6 +529,9 @@ TaskAnimSequence fadeIn( std::string key, std::string prevKey,
     Milliseconds fadeDuration, AnimController& animCon
 );
 TaskAnimSequence fadeOut(std::string key, Milliseconds fadeDuration, AnimController& animCon);
+TaskAnimSequence fadeOutAll( std::vector<std::string> keys,
+    Milliseconds fadeDuration, AnimController& animCon
+);
 TaskAnimSequence sequencial( std::vector<std::string> keys, AnimController& animCon,
     Milliseconds preElapsed = 0_ms
 );

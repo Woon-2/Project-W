@@ -7,5 +7,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, [[maybe_unused]] HINSTANCE hPrevInstan
     gfx::DXInfoQueue::init();
     auto ret = Game().run();
     gfx::DXInfoQueue::cleanup();
+
+    system("pause");
+
     return ret;
 }
