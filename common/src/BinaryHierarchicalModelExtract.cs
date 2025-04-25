@@ -32,9 +32,9 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
     public AnimationClip[] animClips;
     public string[] clipExtractionNames;
     public float[] clipPresampleFPSs;
-    public float keyFramePosThreshold = 0.05f;
-    public float keyFrameRotThreshold = 15.0f; // degrees
-    public float keyFrameScaleThreshold = 0.1f;
+    public float[] keyFramePosThresholds;
+    public float[] keyFrameRotThresholds; // degrees
+    public float[] keyFrameScaleThresholds;
 
     void WriteDictionary(BinaryWriter binaryWriter)
     {
@@ -962,7 +962,9 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
     {
         if (clip == null) return;
 
-        WriteString(binaryWriter, "<AnimationClip:>", clipExtractionNames[System.Array.IndexOf(animClips, clip)]);
+        int clipIdx = System.Array.IndexOf(animClips, clip);
+
+        WriteString(binaryWriter, "<AnimationClip:>", clipExtractionNames[clipIdx]);
 
         WriteInteger(binaryWriter, "<BoneCnt:>", bones.Count);
 
@@ -998,9 +1000,9 @@ public class BinaryHierarchicalModelExtract : MonoBehaviour
                 Quaternion rot = bone.localRotation;
                 Vector3 scale = bone.localScale;
 
-                bool changed = Vector3.Distance(pos, lastPositions[j]) > keyFramePosThreshold ||
-                               Quaternion.Angle(rot, lastRotations[j]) > keyFrameRotThreshold ||
-                               Vector3.Distance(scale, lastScales[j]) > keyFrameScaleThreshold;
+                bool changed = Vector3.Distance(pos, lastPositions[j]) > keyFramePosThresholds[clipIdx] ||
+                               Quaternion.Angle(rot, lastRotations[j]) > keyFrameRotThresholds[clipIdx] ||
+                               Vector3.Distance(scale, lastScales[j]) > keyFrameScaleThresholds[clipIdx];
 
                 if (!(changed || i == 0 || i == keyFrameCnt - 1))
                 {

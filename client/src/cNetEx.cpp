@@ -87,10 +87,15 @@ void initAnimations(
         animCon.addClip("GO_Character_Run",
             animClipSlot.get<AnimClip>("GO_Character_Run")
         );
+        animCon.addClip("GO_Character_Sprint",
+            animClipSlot.get<AnimClip>("GO_Character_Sprint")
+        );
 
         circular(
             std::vector<std::string>{ "GO_Character_Idle", "GO_Character_Idle1",
-                "GO_Character_Idle2", "GO_Character_Walk", "GO_Character_Run" },
+                "GO_Character_Idle2", "GO_Character_Walk", "GO_Character_Run",
+                "GO_Character_Sprint"
+            },
             animCon
         ).resume();
 
