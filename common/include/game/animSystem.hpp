@@ -192,8 +192,15 @@ public:
     };
 
     AnimInstance(const Skeleton* pSkeleton, const AnimClip* pAnimClip, ClipMode clipMode)
-        : AnimInstance(pSkeleton, pAnimClip, clipMode, pAnimClip->flags()) {}
-    AnimInstance(const Skeleton* pSkeleton, const AnimClip* pAnimClip, ClipMode clipMode, int flags);
+        : AnimInstance(pSkeleton, pAnimClip, 0_ms, clipMode, pAnimClip->flags()) {}
+    AnimInstance( const Skeleton* pSkeleton, const AnimClip* pAnimClip,
+        Milliseconds preElapsed, ClipMode clipMode
+    ) : AnimInstance(pSkeleton, pAnimClip, preElapsed, clipMode, pAnimClip->flags()) {}
+    AnimInstance(const Skeleton* pSkeleton, const AnimClip* pAnimClip, ClipMode clipMode, int flags)
+        : AnimInstance(pSkeleton, pAnimClip, 0_ms, clipMode, flags) {}
+    AnimInstance( const Skeleton* pSkeleton, const AnimClip* pAnimClip,
+        Milliseconds preElapsed, ClipMode clipMode, int flags
+    );
 
     void update(Milliseconds deltaTime);
     TaskCompute calcLocals(AnimSystem& animSystem);
@@ -283,8 +290,18 @@ public:
         clipMap_.try_emplace(key, pClip);
     }
 
-    void play(const std::string& key, AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame);
+    void play(const std::string& key, AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame) {
+        play(key, 0_ms, clipMode);
+    }
     void play( const std::string& key, std::coroutine_handle<> seq,
+        AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
+    ) {
+        play(key, 0_ms, seq, clipMode);
+    }
+    void play( const std::string& key, Milliseconds preElapsed,
+        AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
+    );
+    void play( const std::string& key, Milliseconds preElapsed, std::coroutine_handle<> seq,
         AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
     );
 
@@ -383,18 +400,21 @@ TaskAnim fadeOutImpl(std::string key, Milliseconds fadeDuration, AnimController&
 TaskAnim loopImpl(std::string key, AnimController& con);
 TaskAnim onceImpl(std::string key, AnimController& con);
 TaskAnim sequencialNodeImpl(const std::string& key, std::coroutine_handle<> suspended, AnimController& con);
-TaskAnim sequencialImpl(const std::vector<std::string>& keys, std::coroutine_handle<> suspended, AnimController& con);
+TaskAnim sequencialImpl( const std::vector<std::string>& keys,
+    Milliseconds preElapsed, std::coroutine_handle<> suspended, AnimController& con
+);
 
 struct FadeIn {
     bool await_ready() { return false; }
     void await_suspend(std::coroutine_handle<> suspended) {
-        pAnimCon->play(key, fadeInImpl(key, fadeDuration, suspended, *pAnimCon));
+        pAnimCon->play(key, preElapsed, fadeInImpl(key, fadeDuration, suspended, *pAnimCon));
     }
     void await_resume() {}
 
     AnimController* pAnimCon;
     std::string key;
     Milliseconds fadeDuration;
+    Milliseconds preElapsed;
 };
 
 struct FadeOut {
@@ -439,18 +459,25 @@ struct Once {
 struct Sequencial {
     bool await_ready() { return false; }
     void await_suspend(std::coroutine_handle<> suspended) {
-        sequencialImpl(std::move(keys), suspended, *pAnimCon).resume();
+        sequencialImpl(std::move(keys), preElapsed, suspended, *pAnimCon).resume();
     }
     void await_resume() {}
 
     AnimController* pAnimCon;
     std::vector<std::string> keys;
+    Milliseconds preElapsed;
 };
 
-TaskAnimSequence fadeIn(std::string key, Milliseconds fadeDuration, AnimController& animCon);
+TaskAnimSequence fadeIn( std::string key, std::string prevKey,
+    Milliseconds fadeDuration, AnimController& animCon
+);
 TaskAnimSequence fadeOut(std::string key, Milliseconds fadeDuration, AnimController& animCon);
-TaskAnimSequence sequencial(std::vector<std::string> keys, AnimController& animCon);
-TaskAnimSequence circular(std::vector<std::string> keys, AnimController& animCon);
+TaskAnimSequence sequencial( std::vector<std::string> keys, AnimController& animCon,
+    Milliseconds preElapsed = 0_ms
+);
+TaskAnimSequence circular( std::vector<std::string> keys, AnimController& animCon,
+    Milliseconds preElapsed = 0_ms
+);
 
 class AnimSystem : public ecs::System<AnimController>{
 public:

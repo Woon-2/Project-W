@@ -491,10 +491,10 @@ SkeletonAnimClipsPair loadSkeletonAndAnimClipFromFile(
 }
 
 AnimInstance::AnimInstance( const Skeleton* pSkeleton, const AnimClip* pAnimClip,
-    ClipMode clipMode, int flags
+    Milliseconds preElapsed, ClipMode clipMode, int flags
 ) : boneXformCache_(pSkeleton->bones().size()),
     keyFrameCache_(), pAnimClip_(pAnimClip), pSkeleton_(pSkeleton),
-    elapsedTime_(0_ms), stage_(Stage::None), speed_(1.f), weight_(0.f), clipMode_(clipMode),
+    elapsedTime_(preElapsed), stage_(Stage::None), speed_(1.f), weight_(0.f), clipMode_(clipMode),
     flags_(flags) {
     if (!pAnimClip_) {
         throw std::runtime_error("AnimInstance requires a valid AnimClip.");
@@ -684,10 +684,12 @@ void AnimInstance::traverseBone(const Bone& bone, const mu::Mat4x4& parentXform)
     }
 }
 
-void AnimController::play(const std::string& key, AnimInstance::ClipMode clipMode) {
+void AnimController::play( const std::string& key,
+    Milliseconds preElapsed, AnimInstance::ClipMode clipMode
+) {
     const auto& animClip = clipInfo(key);
     insts_.emplace_back(key,
-        AnimInstance(pSkeleton_, &animClip, clipMode)
+        AnimInstance(pSkeleton_, &animClip, preElapsed, clipMode)
     );
 
     if (animClip.flags() & AnimClip::Flags::Loop) {
@@ -698,12 +700,12 @@ void AnimController::play(const std::string& key, AnimInstance::ClipMode clipMod
     }
 }
 
-void AnimController::play( const std::string& key, std::coroutine_handle<> seq,
-    AnimInstance::ClipMode clipMode
+void AnimController::play( const std::string& key, Milliseconds preElapsed,
+    std::coroutine_handle<> seq, AnimInstance::ClipMode clipMode
 ) {
     const auto& animClip = clipInfo(key);
     insts_.emplace_back(key,
-        AnimInstance(pSkeleton_, &animClip, clipMode)
+        AnimInstance(pSkeleton_, &animClip, preElapsed, clipMode)
     );
 
     animSequences_.emplace_back(key, seq);
@@ -808,26 +810,28 @@ TaskAnim sequencialNodeImpl( const std::string& key,
 }
 
 TaskAnim sequencialImpl( const std::vector<std::string>& keys,
-    std::coroutine_handle<> suspended, AnimController& con
+    Milliseconds preElapsed, std::coroutine_handle<> suspended, AnimController& con
 ) {
     auto raii = CoroRAII(suspended);
 
     struct Awaitable {
         bool await_ready() { return false; }
         void await_suspend(std::coroutine_handle<> suspended) {
-            pAnimCon->play(key, sequencialNodeImpl(key, suspended, *pAnimCon));
+            pAnimCon->play(key, preElapsed, sequencialNodeImpl(key, suspended, *pAnimCon));
             AnimConAttorney::resetFlags(key, etoi(AnimClip::Flags::Loop), *pAnimCon);
         }
         void await_resume() {}
     
         AnimController* pAnimCon;
         std::string key;
+        Milliseconds preElapsed;
     };
     
     for (const auto& key : keys) {
         co_await Awaitable{
             .pAnimCon = &con,
-            .key = key
+            .key = key,
+            .preElapsed = preElapsed
         };
     }
     
@@ -835,8 +839,14 @@ TaskAnim sequencialImpl( const std::vector<std::string>& keys,
     suspended.resume();
 }
 
-TaskAnimSequence fadeIn(std::string key, Milliseconds fadeDuration, AnimController& animCon) {
-    co_await FadeIn{ .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration };
+TaskAnimSequence fadeIn( std::string key, std::string prevKey,
+    Milliseconds fadeDuration, AnimController& animCon
+) {
+    const auto preElapsed = AnimConAttorney::getDuration(key, animCon)
+    * (AnimConAttorney::getElapsed(prevKey, animCon) / AnimConAttorney::getDuration(prevKey, animCon));
+
+    co_await FadeIn{ .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration, .preElapsed = preElapsed };
+
     if (animCon.clipInfo(key).flags() & AnimClip::Flags::Loop) {
         auto expired = co_await Loop{ .pAnimCon = &animCon, .key = key };
         expired.destroy();
@@ -852,13 +862,18 @@ TaskAnimSequence fadeOut(std::string key, Milliseconds fadeDuration, AnimControl
     expired.destroy();
 }
 
-TaskAnimSequence sequencial(std::vector<std::string> keys, AnimController& animCon) {
-    co_await Sequencial{ .pAnimCon = &animCon, .keys = std::move(keys) };
+TaskAnimSequence sequencial( std::vector<std::string> keys,
+    AnimController& animCon, Milliseconds preElapsed
+) {
+    co_await Sequencial{ .pAnimCon = &animCon, .keys = std::move(keys), .preElapsed = preElapsed };
 }
 
-TaskAnimSequence circular(std::vector<std::string> keys, AnimController& animCon) {
+TaskAnimSequence circular( std::vector<std::string> keys,
+    AnimController& animCon, Milliseconds preElapsed
+) {
     for (;;) {
-        co_await Sequencial{ .pAnimCon = &animCon, .keys = keys };
+        co_await Sequencial{ .pAnimCon = &animCon, .keys = keys, .preElapsed = preElapsed };
+        preElapsed = 0_ms;
     }
 }
 
