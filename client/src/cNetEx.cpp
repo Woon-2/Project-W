@@ -88,7 +88,13 @@ void initAnimations(
             animClipSlot.get<AnimClip>("GO_Character_Run")
         );
 
-        animCon.play("GO_Character_Run", AnimInstance::ClipMode::Presampled);
+        circular(
+            std::vector<std::string>{ "GO_Character_Idle", "GO_Character_Idle1",
+                "GO_Character_Idle2", "GO_Character_Walk", "GO_Character_Run" },
+            animCon
+        ).resume();
+
+        // animCon.play("GO_Character_Run", AnimInstance::ClipMode::Presampled);
         break;
 
     default:

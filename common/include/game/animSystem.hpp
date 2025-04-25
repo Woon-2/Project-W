@@ -191,7 +191,9 @@ public:
         Presampled
     };
 
-    AnimInstance(const Skeleton* pSkeleton, const AnimClip* pAnimClip, ClipMode clipMode);
+    AnimInstance(const Skeleton* pSkeleton, const AnimClip* pAnimClip, ClipMode clipMode)
+        : AnimInstance(pSkeleton, pAnimClip, clipMode, pAnimClip->flags()) {}
+    AnimInstance(const Skeleton* pSkeleton, const AnimClip* pAnimClip, ClipMode clipMode, int flags);
 
     void update(Milliseconds deltaTime);
     TaskCompute calcLocals(AnimSystem& animSystem);
@@ -214,6 +216,10 @@ public:
     const AnimClip* animClip() const noexcept { return pAnimClip_; }
     ClipMode clipMode() const noexcept { return clipMode_; }
 
+    int flags() const noexcept { return flags_; }
+    void setFlags(int flags) { flags_ |= flags; }
+    void resetFlags(int flags) { flags_ &= (~flags); }
+
 private:
     void traverseBone(const Bone& bone, const mu::Mat4x4& parentXform = mu::Mat4x4());
 
@@ -226,6 +232,9 @@ private:
     float speed_;
     float weight_;
     ClipMode clipMode_;
+    // this flags can be different from its parent clip!
+    // (maybe we want to play an animation once though the parent clip has loop flag.)
+    int flags_;
 };
 
 struct PromiseAnim;
@@ -320,6 +329,34 @@ struct AnimConAttorney {
             }
         }
     }
+
+    static int getClipFlags(const std::string& key, const AnimController& con) {
+        auto it = con.clipMap_.find(key);
+        return (it != con.clipMap_.end()) ? it->second->flags() : 0;
+    }
+
+    static int getFlags(const std::string& key, const AnimController& con) {
+        auto it = std::ranges::find_if(con.insts_, [&key](const auto& pair) { return pair.first == key; });
+        return (it != con.insts_.end()) ? it->second.flags() : 0;
+    }
+
+    static void setFlags(const std::string& key, int flags, AnimController& con) {
+        for (auto& [k, inst] : con.insts_) {
+            if (k == key) {
+                inst.setFlags(flags);
+                break;
+            }
+        }
+    }
+
+    static void resetFlags(const std::string& key, int flags, AnimController& con) {
+        for (auto& [k, inst] : con.insts_) {
+            if (k == key) {
+                inst.resetFlags(flags);
+                break;
+            }
+        }
+    }
 };
 
 TaskAnim fadeInImpl(std::string key, Milliseconds fadeDuration,
@@ -328,6 +365,8 @@ TaskAnim fadeInImpl(std::string key, Milliseconds fadeDuration,
 TaskAnim fadeOutImpl(std::string key, Milliseconds fadeDuration, AnimController& con);
 TaskAnim loopImpl(std::string key, AnimController& con);
 TaskAnim onceImpl(std::string key, AnimController& con);
+TaskAnim sequencialNodeImpl(const std::string& key, std::coroutine_handle<> suspended, AnimController& con);
+TaskAnim sequencialImpl(const std::vector<std::string>& keys, std::coroutine_handle<> suspended, AnimController& con);
 
 struct FadeIn {
     bool await_ready() { return false; }
@@ -358,6 +397,7 @@ struct Loop {
     bool await_ready() { return false; }
     void await_suspend(std::coroutine_handle<> suspended) {
         __expired = pAnimCon->resetAnimSequence(key, loopImpl(key, *pAnimCon));
+        AnimConAttorney::setFlags(key, etoi(AnimClip::Flags::Loop), *pAnimCon);
     }
     std::coroutine_handle<> await_resume() { return __expired; }
 
@@ -370,6 +410,7 @@ struct Once {
     bool await_ready() { return false; }
     void await_suspend(std::coroutine_handle<> suspended) {
         __expired = pAnimCon->resetAnimSequence(key, onceImpl(key, *pAnimCon));
+        AnimConAttorney::resetFlags(key, etoi(AnimClip::Flags::Loop), *pAnimCon);
     }
     std::coroutine_handle<> await_resume() { return __expired; }
 
@@ -378,8 +419,21 @@ struct Once {
     std::coroutine_handle<> __expired;
 };
 
+struct Sequencial {
+    bool await_ready() { return false; }
+    void await_suspend(std::coroutine_handle<> suspended) {
+        sequencialImpl(std::move(keys), suspended, *pAnimCon).resume();
+    }
+    void await_resume() {}
+
+    AnimController* pAnimCon;
+    std::vector<std::string> keys;
+};
+
 TaskAnim fadeIn(std::string key, Milliseconds fadeDuration, AnimController& animCon);
 TaskAnim fadeOut(std::string key, Milliseconds fadeDuration, AnimController& animCon);
+TaskAnim sequencial(std::vector<std::string> keys, AnimController& animCon);
+TaskAnim circular(std::vector<std::string> keys, AnimController& animCon);
 
 class AnimSystem : public ecs::System<AnimController>{
 public:

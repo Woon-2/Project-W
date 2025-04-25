@@ -490,10 +490,12 @@ SkeletonAnimClipsPair loadSkeletonAndAnimClipFromFile(
     return pair;
 }
 
-AnimInstance::AnimInstance(const Skeleton* pSkeleton, const AnimClip* pAnimClip, ClipMode clipMode)
-    : boneXformCache_(pSkeleton->bones().size()),
+AnimInstance::AnimInstance( const Skeleton* pSkeleton, const AnimClip* pAnimClip,
+    ClipMode clipMode, int flags
+) : boneXformCache_(pSkeleton->bones().size()),
     keyFrameCache_(), pAnimClip_(pAnimClip), pSkeleton_(pSkeleton),
-    elapsedTime_(0_ms), stage_(Stage::None), speed_(1.f), weight_(0.f), clipMode_(clipMode) {
+    elapsedTime_(0_ms), stage_(Stage::None), speed_(1.f), weight_(0.f), clipMode_(clipMode),
+    flags_(flags) {
     if (!pAnimClip_) {
         throw std::runtime_error("AnimInstance requires a valid AnimClip.");
     }
@@ -528,7 +530,8 @@ void AnimInstance::update(Milliseconds deltaTime) {
 
     if (elapsedTime_ > pAnimClip_->duration()) {
 
-        if (!(pAnimClip_->flags() & AnimClip::Flags::Loop)) {
+        if (!(flags_ & AnimClip::Flags::Loop)) {
+            stage_ = Stage::CalcLocal;
             return;
         }
         elapsedTime_ -= pAnimClip_->duration();
@@ -569,7 +572,10 @@ void AnimInstance::update(Milliseconds deltaTime) {
 }
 
 TaskCompute AnimInstance::calcLocals(AnimSystem& animSystem) {
-    if (stage_ != Stage::CalcLocal) {
+    // the animations played during AnimController::update()
+    // via Animation Sequences are not updated yet but valid.
+    // so we accept the stage_ to be CalcLocal or None.
+    if (stage_ != Stage::CalcLocal && stage_ != Stage::None) {
         throw std::runtime_error(
             "[Description] AnimInstance::calcLocals: expected AnimInstance stage: "
             + std::to_string(etoi(Stage::CalcLocal)) +
@@ -782,6 +788,51 @@ TaskAnim onceImpl(std::string key, AnimController& con) {
     }
 }
 
+TaskAnim sequencialNodeImpl( const std::string& key,
+    std::coroutine_handle<> suspended, AnimController& con
+) {
+    auto raii = CoroRAII(suspended);
+
+    AnimConAttorney::setWeight(key, 1.f, con);
+    auto elapsed = AnimConAttorney::getElapsed(key, con);
+    auto duration = AnimConAttorney::getDuration(key, con);
+    while (elapsed < duration) {
+        co_await std::suspend_always{};
+        elapsed = AnimConAttorney::getElapsed(key, con);
+    }
+
+    raii.release();
+    suspended.resume();
+}
+
+TaskAnim sequencialImpl( const std::vector<std::string>& keys,
+    std::coroutine_handle<> suspended, AnimController& con
+) {
+    auto raii = CoroRAII(suspended);
+
+    struct Awaitable {
+        bool await_ready() { return false; }
+        void await_suspend(std::coroutine_handle<> suspended) {
+            pAnimCon->play(key, sequencialNodeImpl(key, suspended, *pAnimCon));
+            AnimConAttorney::resetFlags(key, etoi(AnimClip::Flags::Loop), *pAnimCon);
+        }
+        void await_resume() {}
+    
+        AnimController* pAnimCon;
+        std::string key;
+    };
+    
+    for (const auto& key : keys) {
+        co_await Awaitable{
+            .pAnimCon = &con,
+            .key = key
+        };
+    }
+    
+    raii.release();
+    suspended.resume();
+}
+
 TaskAnim fadeIn(std::string key, Milliseconds fadeDuration, AnimController& animCon) {
     co_await FadeIn{ .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration };
     if (animCon.clipInfo(key).flags() & AnimClip::Flags::Loop) {
@@ -797,6 +848,16 @@ TaskAnim fadeIn(std::string key, Milliseconds fadeDuration, AnimController& anim
 TaskAnim fadeOut(std::string key, Milliseconds fadeDuration, AnimController& animCon) {
     auto expired = co_await FadeOut{ .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration };
     expired.destroy();
+}
+
+TaskAnim sequencial(std::vector<std::string> keys, AnimController& animCon) {
+    co_await Sequencial{ .pAnimCon = &animCon, .keys = std::move(keys) };
+}
+
+TaskAnim circular(std::vector<std::string> keys, AnimController& animCon) {
+    for (;;) {
+        co_await Sequencial{ .pAnimCon = &animCon, .keys = keys };
+    }
 }
 
 AnimSystem::AnimSystem( gfx::d3d12::D3D12Device& device,
