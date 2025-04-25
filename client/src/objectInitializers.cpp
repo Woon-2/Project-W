@@ -8,7 +8,7 @@
 #include <optional>
 
 // move lower bound
-inline constexpr auto characterMoveLb2 = 0.01f * 0.01f;
+inline constexpr auto characterMoveLb2 = 0.04f * 0.04f;
 // walk upper bound
 inline constexpr auto characterWalkUb2 = 1.6f * 1.6f;
 inline constexpr auto characterRunUb2 = 10.f * 10.f;
