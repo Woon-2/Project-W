@@ -10,6 +10,8 @@
 #include <stdexcept>
 #include <typeinfo>
 #include <chrono>
+#include <coroutine>
+#include <utility>
 
 template <class T>
 consteval int indexOf() {
@@ -157,5 +159,43 @@ inline Milliseconds operator"" _ms(unsigned long long int ms) {
 inline Milliseconds operator"" _ms(long double ms) {
     return Milliseconds(static_cast<float>(ms));
 }
+
+class CoroRAII {
+public:
+    CoroRAII(std::coroutine_handle<> h = nullptr)
+        : h_(h) {}
+
+    ~CoroRAII() {
+        if (h_) {
+            h_.destroy();
+        }
+    }
+
+    CoroRAII(const CoroRAII&) = delete;
+    CoroRAII& operator=(const CoroRAII&) = delete;
+
+    CoroRAII(CoroRAII&& other) noexcept
+        : h_(std::exchange(other.h_, nullptr)) {}
+
+    CoroRAII& operator=(CoroRAII&& other) {
+        if (this == &other) {
+            return *this;
+        }
+
+        h_ = std::exchange(other.h_, nullptr);
+        return *this;
+    }
+
+    std::coroutine_handle<> release() {
+        h_ = nullptr;
+        return h_;
+    }
+
+    std::coroutine_handle<> get() const { return h_; }
+    std::coroutine_handle<> operator->() const { return h_; }
+
+private:
+    std::coroutine_handle<> h_;
+};
 
 #endif  // __TMP_HPP

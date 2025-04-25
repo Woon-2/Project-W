@@ -715,7 +715,7 @@ void AnimController::update(Milliseconds deltaTime) {
         auto& [key, coro] = *cur;
         coro.resume();
         if (coro.done()) {
-            std::erase_if(insts_, [&key](const auto& pair) { return pair.first == key; });
+            insts_.erase(std::next(insts_.begin(), std::distance(animSequences_.begin(), cur)));
             coro.destroy();
             cur = animSequences_.erase(cur);
         }
@@ -725,25 +725,34 @@ void AnimController::update(Milliseconds deltaTime) {
     }
 }
 
-void AnimController::setAnimSequence(const std::string& key, std::coroutine_handle<> animSequence) {
+std::coroutine_handle<> AnimController::resetAnimSequence(
+    const std::string& key, std::coroutine_handle<> animSequence
+) {
     for (auto& [k, c] : animSequences_) {
         if (k == key) {
+            auto old = c;
             c = animSequence;
-            break;
+            return old;
         }
     }
+
+    return nullptr;
 }
 
 TaskAnim fadeInImpl(std::string key, Milliseconds fadeDuration,
     std::coroutine_handle<> suspended, AnimController& con
 ) {
+    auto raii = CoroRAII(suspended);
+
     auto elapsed = AnimConAttorney::getElapsed(key, con);
     while (elapsed < fadeDuration) {
         AnimConAttorney::setWeight(key, std::clamp(elapsed / fadeDuration, 0.f, 1.f), con);
         co_await std::suspend_always{};
         elapsed = AnimConAttorney::getElapsed(key, con);
     }
-    con.setAnimSequence(key, suspended);
+
+    raii.release();
+    suspended.resume();
 }
 
 TaskAnim fadeOutImpl(std::string key, Milliseconds fadeDuration, AnimController& con) {
@@ -776,15 +785,18 @@ TaskAnim onceImpl(std::string key, AnimController& con) {
 TaskAnim fadeIn(std::string key, Milliseconds fadeDuration, AnimController& animCon) {
     co_await FadeIn{ .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration };
     if (animCon.clipInfo(key).flags() & AnimClip::Flags::Loop) {
-        co_await Loop{ .pAnimCon = &animCon, .key = key };
+        auto expired = co_await Loop{ .pAnimCon = &animCon, .key = key };
+        expired.destroy();
     }
     else {
-        co_await Once{ .pAnimCon = &animCon, .key = key };
+        auto expired = co_await Once{ .pAnimCon = &animCon, .key = key };
+        expired.destroy();
     }
 }
 
 TaskAnim fadeOut(std::string key, Milliseconds fadeDuration, AnimController& animCon) {
-    co_await FadeOut{ .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration };
+    auto expired = co_await FadeOut{ .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration };
+    expired.destroy();
 }
 
 AnimSystem::AnimSystem( gfx::d3d12::D3D12Device& device,

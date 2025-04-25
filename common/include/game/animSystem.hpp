@@ -263,7 +263,9 @@ public:
     );
 
     void update(Milliseconds deltaTime);
-    void setAnimSequence(const std::string& key, std::coroutine_handle<> animSequence);
+    std::coroutine_handle<> resetAnimSequence(
+        const std::string& key, std::coroutine_handle<> animSequence
+    );
 
     const AnimClip& clipInfo(const std::string& key) const {
         return *clipMap_.at(key);
@@ -342,38 +344,38 @@ struct FadeIn {
 struct FadeOut {
     bool await_ready() { return false; }
     void await_suspend(std::coroutine_handle<> suspended) {
-        pAnimCon->setAnimSequence(key, fadeOutImpl(key, fadeDuration, *pAnimCon));
-        suspended.destroy();
+        __expired = pAnimCon->resetAnimSequence(key, fadeOutImpl(key, fadeDuration, *pAnimCon));
     }
-    void await_resume() {}
+    std::coroutine_handle<> await_resume() { return __expired; }
 
     AnimController* pAnimCon;
     std::string key;
     Milliseconds fadeDuration;
+    std::coroutine_handle<> __expired;
 };
 
 struct Loop {
     bool await_ready() { return false; }
     void await_suspend(std::coroutine_handle<> suspended) {
-        pAnimCon->setAnimSequence(key, loopImpl(key, *pAnimCon));
-        suspended.destroy();
+        __expired = pAnimCon->resetAnimSequence(key, loopImpl(key, *pAnimCon));
     }
-    void await_resume() {}
+    std::coroutine_handle<> await_resume() { return __expired; }
 
     AnimController* pAnimCon;
     std::string key;
+    std::coroutine_handle<> __expired;
 };
 
 struct Once {
     bool await_ready() { return false; }
     void await_suspend(std::coroutine_handle<> suspended) {
-        pAnimCon->setAnimSequence(key, onceImpl(key, *pAnimCon));
-        suspended.destroy();
+        __expired = pAnimCon->resetAnimSequence(key, onceImpl(key, *pAnimCon));
     }
-    void await_resume() {}
+    std::coroutine_handle<> await_resume() { return __expired; }
 
     AnimController* pAnimCon;
     std::string key;
+    std::coroutine_handle<> __expired;
 };
 
 TaskAnim fadeIn(std::string key, Milliseconds fadeDuration, AnimController& animCon);
