@@ -7,12 +7,130 @@
 
 #include <optional>
 
-fsm::State characterStateIdle(fsm::FSM& fsm) {
+// move lower bound
+inline constexpr auto characterMoveLb2 = 0.01f * 0.01f;
+// walk upper bound
+inline constexpr auto characterWalkUb2 = 1.6f * 1.6f;
+inline constexpr auto characterRunUb2 = 10.f * 10.f;
+
+fsm::State characterStateIdle(fsm::FSM& fsm, AnimController& con) {
+    // Rigidbody may not exist at the start point,
+    // and we do not update the state if rigidbody doesn't exist.
+    co_await std::suspend_always{};
+
     for (;;) {
         while (auto events = co_await fsm.getEvents()) {
             while (auto ev = events.pop()) {
                 // do something
             }
+        }
+
+        const auto entityId = con.entityID().value();
+        const auto velocity = RigidBody::atC(entityId)->velocity();
+        const auto speed2 = velocity.len2();
+
+        if (speed2 > characterMoveLb2) {
+            if (speed2 < characterWalkUb2) {
+                fsm.pushEvent(fsm::Event::transition("Idle", "Walk"));
+            }
+            else if (speed2 < characterRunUb2) {
+                fsm.pushEvent(fsm::Event::transition("Idle", "Run"));
+            }
+            else {
+                fsm.pushEvent(fsm::Event::transition("Idle", "Sprint"));
+            }
+        }
+    
+        co_await fsm.completeStateUpdate();
+    }
+}
+
+fsm::State characterStateWalk(fsm::FSM& fsm, AnimController& con) {
+    // Rigidbody may not exist at the start point,
+    // and we do not update the state if rigidbody doesn't exist.
+    co_await std::suspend_always{};
+
+    for (;;) {
+        while (auto events = co_await fsm.getEvents()) {
+            while (auto ev = events.pop()) {
+                // do something
+            }
+        }
+
+        const auto entityId = con.entityID().value();
+        const auto velocity = RigidBody::atC(entityId)->velocity();
+        const auto speed2 = velocity.len2();
+
+        if (speed2 < characterMoveLb2) {
+            fsm.pushEvent(fsm::Event::transition("Walk", "Idle"));
+        }
+        else if (speed2 >= characterWalkUb2) {
+            if (speed2 < characterRunUb2) {
+                fsm.pushEvent(fsm::Event::transition("Walk", "Run"));
+            }
+            else {
+                fsm.pushEvent(fsm::Event::transition("Walk", "Sprint"));
+            }
+        }
+    
+        co_await fsm.completeStateUpdate();
+    }
+}
+
+fsm::State characterStateRun(fsm::FSM& fsm, AnimController& con) {
+    // Rigidbody may not exist at the start point,
+    // and we do not update the state if rigidbody doesn't exist.
+    co_await std::suspend_always{};
+
+    for (;;) {
+        while (auto events = co_await fsm.getEvents()) {
+            while (auto ev = events.pop()) {
+                // do something
+            }
+        }
+
+        const auto entityId = con.entityID().value();
+        const auto velocity = RigidBody::atC(entityId)->velocity();
+        const auto speed2 = velocity.len2();
+
+        if (speed2 < characterMoveLb2) {
+            fsm.pushEvent(fsm::Event::transition("Run", "Idle"));
+        }
+        else if (speed2 < characterWalkUb2) {
+            fsm.pushEvent(fsm::Event::transition("Run", "Walk"));
+        }
+        else if (speed2 >= characterRunUb2) {
+            fsm.pushEvent(fsm::Event::transition("Run", "Sprint"));
+        }
+    
+        co_await fsm.completeStateUpdate();
+    }
+}
+
+fsm::State characterStateSprint(fsm::FSM& fsm, AnimController& con) {
+    // Rigidbody may not exist at the start point,
+    // and we do not update the state if rigidbody doesn't exist.
+    co_await std::suspend_always{};
+
+    for (;;) {
+        while (auto events = co_await fsm.getEvents()) {
+            while (auto ev = events.pop()) {
+                // do something
+            }
+        }
+
+        const auto entityId = con.entityID().value();
+        const auto velocity = RigidBody::atC(entityId)->velocity();
+        const auto speed2 = velocity.len2();
+
+        if (speed2 < characterMoveLb2) {
+            fsm.pushEvent(fsm::Event::transition("Sprint", "Idle"));
+        }
+        else if (speed2 < characterWalkUb2) {
+            fsm.pushEvent(fsm::Event::transition("Sprint", "Walk"));
+        }
+        else if (speed2 < characterRunUb2) {
+            fsm.pushEvent(fsm::Event::transition("Sprint", "Run"));
         }
     
         co_await fsm.completeStateUpdate();
@@ -28,8 +146,68 @@ void initAnimations(
 
     switch (assetModel) {
     case AssetModel::Character:
-        animCon.fsm().addState("Idle", characterStateIdle);
+        animCon.fsm().addState("Idle", characterStateIdle, animCon);
+        animCon.fsm().addState("Walk", characterStateWalk, animCon);
+        animCon.fsm().addState("Run", characterStateRun, animCon);
+        animCon.fsm().addState("Sprint", characterStateSprint, animCon);
         animCon.fsm().start("Idle");
+
+        animCon.fsm().addTransition("Idle", "Idle", [](){});
+        animCon.fsm().addTransition("Walk", "Walk", [](){});
+        animCon.fsm().addTransition("Run", "Run", [](){});
+        animCon.fsm().addTransition("Sprint", "Sprint", [](){});
+
+        animCon.fsm().addTransition("Idle", "Walk", [&animCon](){
+            fadeIn("GO_Character_Idle", 500_ms, animCon).resume();
+            fadeOut("GO_Character_Idle", 500_ms, animCon).resume();
+        });
+        animCon.fsm().addTransition("Idle", "Run", [&animCon](){
+            fadeIn("GO_Character_Run", 500_ms, animCon).resume();
+            fadeOut("GO_Character_Idle", 500_ms, animCon).resume();
+        });
+        animCon.fsm().addTransition("Idle", "Sprint", [&animCon](){
+            fadeIn("GO_Character_Sprint", 500_ms, animCon).resume();
+            fadeOut("GO_Character_Idle", 500_ms, animCon).resume();
+        });
+
+        animCon.fsm().addTransition("Walk", "Idle", [&animCon](){
+            fadeIn("GO_Character_Idle", 500_ms, animCon).resume();
+            fadeOut("GO_Character_Walk", 500_ms, animCon).resume();
+        });
+        animCon.fsm().addTransition("Walk", "Run", [&animCon](){
+            fadeIn("GO_Character_Run", 500_ms, animCon).resume();
+            fadeOut("GO_Character_Walk", 500_ms, animCon).resume();
+        });
+        animCon.fsm().addTransition("Walk", "Sprint", [&animCon](){
+            fadeIn("GO_Character_Sprint", 500_ms, animCon).resume();
+            fadeOut("GO_Character_Walk", 500_ms, animCon).resume();
+        });
+
+        animCon.fsm().addTransition("Run", "Idle", [&animCon](){
+            fadeIn("GO_Character_Idle", 500_ms, animCon).resume();
+            fadeOut("GO_Character_Run", 500_ms, animCon).resume();
+        });
+        animCon.fsm().addTransition("Run", "Walk", [&animCon](){
+            fadeIn("GO_Character_Walk", 500_ms, animCon).resume();
+            fadeOut("GO_Character_Run", 500_ms, animCon).resume();
+        });
+        animCon.fsm().addTransition("Run", "Sprint", [&animCon](){
+            fadeIn("GO_Character_Sprint", 500_ms, animCon).resume();
+            fadeOut("GO_Character_Run", 500_ms, animCon).resume();
+        });
+
+        animCon.fsm().addTransition("Sprint", "Idle", [&animCon](){
+            fadeIn("GO_Character_Idle", 500_ms, animCon).resume();
+            fadeOut("GO_Character_Sprint", 500_ms, animCon).resume();
+        });
+        animCon.fsm().addTransition("Sprint", "Walk", [&animCon](){
+            fadeIn("GO_Character_Walk", 500_ms, animCon).resume();
+            fadeOut("GO_Character_Sprint", 500_ms, animCon).resume();
+        });
+        animCon.fsm().addTransition("Sprint", "Run", [&animCon](){
+            fadeIn("GO_Character_Run", 500_ms, animCon).resume();
+            fadeOut("GO_Character_Sprint", 500_ms, animCon).resume();
+        });
 
         animCon.addClip("GO_Character_Idle",
             animClipSlot.get<AnimClip>("GO_Character_Idle")
