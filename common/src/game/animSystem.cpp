@@ -835,7 +835,7 @@ TaskAnim sequencialImpl( const std::vector<std::string>& keys,
     suspended.resume();
 }
 
-TaskAnim fadeIn(std::string key, Milliseconds fadeDuration, AnimController& animCon) {
+TaskAnimSequence fadeIn(std::string key, Milliseconds fadeDuration, AnimController& animCon) {
     co_await FadeIn{ .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration };
     if (animCon.clipInfo(key).flags() & AnimClip::Flags::Loop) {
         auto expired = co_await Loop{ .pAnimCon = &animCon, .key = key };
@@ -847,16 +847,16 @@ TaskAnim fadeIn(std::string key, Milliseconds fadeDuration, AnimController& anim
     }
 }
 
-TaskAnim fadeOut(std::string key, Milliseconds fadeDuration, AnimController& animCon) {
+TaskAnimSequence fadeOut(std::string key, Milliseconds fadeDuration, AnimController& animCon) {
     auto expired = co_await FadeOut{ .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration };
     expired.destroy();
 }
 
-TaskAnim sequencial(std::vector<std::string> keys, AnimController& animCon) {
+TaskAnimSequence sequencial(std::vector<std::string> keys, AnimController& animCon) {
     co_await Sequencial{ .pAnimCon = &animCon, .keys = std::move(keys) };
 }
 
-TaskAnim circular(std::vector<std::string> keys, AnimController& animCon) {
+TaskAnimSequence circular(std::vector<std::string> keys, AnimController& animCon) {
     for (;;) {
         co_await Sequencial{ .pAnimCon = &animCon, .keys = keys };
     }

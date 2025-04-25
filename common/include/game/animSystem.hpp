@@ -253,6 +253,21 @@ struct PromiseAnim {
     void return_void() {}
 };
 
+struct PromiseAnimSequence;
+
+struct TaskAnimSequence : std::coroutine_handle<PromiseAnimSequence> {
+    using promise_type = PromiseAnimSequence;
+};
+struct PromiseAnimSequence {
+    TaskAnimSequence get_return_object() {
+        return TaskAnimSequence{ std::coroutine_handle<PromiseAnimSequence>::from_promise(*this) };
+    }
+    std::suspend_never initial_suspend() { return {}; }
+    std::suspend_never final_suspend() noexcept { return {}; }
+    void unhandled_exception() { throw; }
+    void return_void() {}
+};
+
 class AnimController : public ecs::Component {
 public:
     static constexpr int evAnimUpdate = 0x01;
@@ -432,10 +447,10 @@ struct Sequencial {
     std::vector<std::string> keys;
 };
 
-TaskAnim fadeIn(std::string key, Milliseconds fadeDuration, AnimController& animCon);
-TaskAnim fadeOut(std::string key, Milliseconds fadeDuration, AnimController& animCon);
-TaskAnim sequencial(std::vector<std::string> keys, AnimController& animCon);
-TaskAnim circular(std::vector<std::string> keys, AnimController& animCon);
+TaskAnimSequence fadeIn(std::string key, Milliseconds fadeDuration, AnimController& animCon);
+TaskAnimSequence fadeOut(std::string key, Milliseconds fadeDuration, AnimController& animCon);
+TaskAnimSequence sequencial(std::vector<std::string> keys, AnimController& animCon);
+TaskAnimSequence circular(std::vector<std::string> keys, AnimController& animCon);
 
 class AnimSystem : public ecs::System<AnimController>{
 public:
