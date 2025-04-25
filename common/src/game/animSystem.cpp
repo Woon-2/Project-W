@@ -684,10 +684,28 @@ void AnimInstance::traverseBone(const Bone& bone, const mu::Mat4x4& parentXform)
     }
 }
 
-void AnimController::play( const std::string& key,
+std::coroutine_handle<> AnimController::play( const std::string& key,
     Milliseconds preElapsed, AnimInstance::ClipMode clipMode
 ) {
     const auto& animClip = clipInfo(key);
+
+    const auto itDupl = std::ranges::find_if(insts_, [&key](const auto& pair) {
+        return pair.first == key;
+    });
+    
+    if (itDupl != insts_.end()) {
+        itDupl->second.setElapsed(preElapsed);
+        itDupl->second.setSpeed(1.f);
+        itDupl->second.setWeight(1.f);
+    
+        if (animClip.flags() & AnimClip::Flags::Loop) {
+            return resetAnimSequence(key, loopImpl(key, *this));
+        }
+        else {
+            return resetAnimSequence(key, onceImpl(key, *this));
+        }
+    }
+
     insts_.emplace_back(key,
         AnimInstance(pSkeleton_, &animClip, preElapsed, clipMode)
     );
@@ -698,17 +716,33 @@ void AnimController::play( const std::string& key,
     else {
         animSequences_.emplace_back(key, onceImpl(key, *this));
     }
+
+    return nullptr;
 }
 
-void AnimController::play( const std::string& key, Milliseconds preElapsed,
+std::coroutine_handle<> AnimController::play( const std::string& key, Milliseconds preElapsed,
     std::coroutine_handle<> seq, AnimInstance::ClipMode clipMode
 ) {
     const auto& animClip = clipInfo(key);
+
+    const auto itDupl = std::ranges::find_if(insts_, [&key](const auto& pair) {
+        return pair.first == key;
+    });
+    
+    if (itDupl != insts_.end()) {
+        itDupl->second.setElapsed(preElapsed);
+        itDupl->second.setSpeed(1.f);
+        itDupl->second.setWeight(1.f);
+        return resetAnimSequence(key, seq);
+    }
+
     insts_.emplace_back(key,
         AnimInstance(pSkeleton_, &animClip, preElapsed, clipMode)
     );
 
     animSequences_.emplace_back(key, seq);
+
+    return nullptr;
 }
 
 void AnimController::update(Milliseconds deltaTime) {
@@ -817,22 +851,27 @@ TaskAnim sequencialImpl( const std::vector<std::string>& keys,
     struct Awaitable {
         bool await_ready() { return false; }
         void await_suspend(std::coroutine_handle<> suspended) {
-            pAnimCon->play(key, preElapsed, sequencialNodeImpl(key, suspended, *pAnimCon));
+            __expired = pAnimCon->play(key, preElapsed, sequencialNodeImpl(key, suspended, *pAnimCon));
             AnimConAttorney::resetFlags(key, etoi(AnimClip::Flags::Loop), *pAnimCon);
         }
-        void await_resume() {}
+        std::coroutine_handle<> await_resume() {
+            return __expired;
+        }
     
         AnimController* pAnimCon;
         std::string key;
         Milliseconds preElapsed;
+        std::coroutine_handle<> __expired;
     };
     
     for (const auto& key : keys) {
-        co_await Awaitable{
+        auto expired = co_await Awaitable{
             .pAnimCon = &con,
             .key = key,
             .preElapsed = preElapsed
         };
+        if (expired) expired.destroy();
+        preElapsed = std::max(0_ms, preElapsed - AnimConAttorney::getDuration(key, con));
     }
     
     raii.release();
@@ -845,7 +884,10 @@ TaskAnimSequence fadeIn( std::string key, std::string prevKey,
     const auto preElapsed = AnimConAttorney::getDuration(key, animCon)
     * (AnimConAttorney::getElapsed(prevKey, animCon) / AnimConAttorney::getDuration(prevKey, animCon));
 
-    co_await FadeIn{ .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration, .preElapsed = preElapsed };
+    auto expired = co_await FadeIn{
+        .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration, .preElapsed = preElapsed
+    };
+    if (expired) expired.destroy();
 
     if (animCon.clipInfo(key).flags() & AnimClip::Flags::Loop) {
         auto expired = co_await Loop{ .pAnimCon = &animCon, .key = key };

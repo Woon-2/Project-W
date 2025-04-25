@@ -105,9 +105,9 @@ void Stage::simulate(double deltaTime) {
     
     if (pPlayer_) {
         pPlayer_->as<gameEngine::Coord>().get()
-        << mu::translate( pPlayer_->as<RigidBody>().deltaPosition()
-    );
-}
+            << mu::translate( pPlayer_->as<RigidBody>().deltaPosition() );
+        pPlayer_->as<AnimController>().print();
+    }
 
     pSystems_->coordRoot.update();
     auto cmdList = pCore_->fetchCmdList();

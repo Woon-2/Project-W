@@ -48,7 +48,8 @@ function(config_win32 targetName accessModifier)
 
     target_link_options(${targetName}
     ${accessModifier}
-        $<IF:$<CONFIG:Debug>,/SUBSYSTEM:CONSOLE,/SUBSYSTEM:WINDOWS>
+        "/SUBSYSTEM:CONSOLE"
+        # $<IF:$<CONFIG:Debug>,/SUBSYSTEM:CONSOLE,/SUBSYSTEM:WINDOWS>
         "/ENTRY:WinMainCRTStartup"
     )
 endfunction()

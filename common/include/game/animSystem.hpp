@@ -207,6 +207,7 @@ public:
     void calcWorlds(AnimSystem& animSystem);
     TaskCompute calcFinals(AnimSystem& animSystem);
 
+    void setElapsed(Milliseconds elapsed) noexcept { elapsedTime_ = elapsed; }
     void setSpeed(float speed) noexcept { speed_ = speed; }
     void setWeight(float weight) noexcept { weight_ = weight; }
 
@@ -290,19 +291,21 @@ public:
         clipMap_.try_emplace(key, pClip);
     }
 
-    void play(const std::string& key, AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame) {
-        play(key, 0_ms, clipMode);
-    }
-    void play( const std::string& key, std::coroutine_handle<> seq,
+    std::coroutine_handle<> play( const std::string& key,
         AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
     ) {
-        play(key, 0_ms, seq, clipMode);
+        return play(key, 0_ms, clipMode);
     }
-    void play( const std::string& key, Milliseconds preElapsed,
+    std::coroutine_handle<> play( const std::string& key, std::coroutine_handle<> seq,
+        AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
+    ) {
+        return play(key, 0_ms, seq, clipMode);
+    }
+    std::coroutine_handle<> play( const std::string& key, Milliseconds preElapsed,
         AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
     );
-    void play( const std::string& key, Milliseconds preElapsed, std::coroutine_handle<> seq,
-        AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
+    std::coroutine_handle<> play( const std::string& key, Milliseconds preElapsed,
+        std::coroutine_handle<> seq, AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
     );
 
     void update(Milliseconds deltaTime);
@@ -321,6 +324,17 @@ public:
 
     auto& fsm() { return fsm_; }
     const auto& fsm() const { return fsm_; }
+
+    void print() const {
+        system("cls");
+        for (const auto& [key, inst] : insts_) {
+            std::cout << "playing animation \"" << inst.animClip()->name()
+                << "\", elapsed: " << inst.elapsed()
+                << ", duration: " << inst.animClip()->duration()
+                << ", speed: " << inst.speed()
+                << ", weight: " << inst.weight() << '\n';
+        }
+    }
 
 private:
     fsm::FSM fsm_;
@@ -407,14 +421,17 @@ TaskAnim sequencialImpl( const std::vector<std::string>& keys,
 struct FadeIn {
     bool await_ready() { return false; }
     void await_suspend(std::coroutine_handle<> suspended) {
-        pAnimCon->play(key, preElapsed, fadeInImpl(key, fadeDuration, suspended, *pAnimCon));
+        __expired = pAnimCon->play(key, preElapsed, fadeInImpl(key, fadeDuration, suspended, *pAnimCon));
     }
-    void await_resume() {}
+    std::coroutine_handle<> await_resume() {
+        return __expired;
+    }
 
     AnimController* pAnimCon;
     std::string key;
     Milliseconds fadeDuration;
     Milliseconds preElapsed;
+    std::coroutine_handle<> __expired;
 };
 
 struct FadeOut {
