@@ -47,6 +47,7 @@ target_sources(client
         src/Timer.cpp include/Timer.hpp
         src/renderer.cpp include/renderer.hpp
         src/cNetEx.cpp include/cNetEx.hpp
+        src/objectInitializers.cpp include/objectInitializers.hpp
 
         include/testInput.hpp
         include/systems.hpp
