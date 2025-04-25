@@ -928,6 +928,77 @@ TaskAnimSequence fadeIn( std::string key, std::string prevKey,
     }
 }
 
+TaskAnimSequence fadeIn( std::string key, std::vector<std::string> possiblePrevKeys,
+    Milliseconds fadeDuration, AnimController& animCon
+) {
+    auto pPrevKey = std::ranges::find_if(possiblePrevKeys, [&animCon](const auto& key) {
+        return AnimConAttorney::playing(key, animCon);
+    });
+
+    if (pPrevKey == std::end(possiblePrevKeys)) {
+        throw std::runtime_error{ "[Description] fadeIn:: the previous animation instance key doesn't exist in possiblePrevKeys." };
+    }
+
+    const auto prevKey = *pPrevKey;
+    if (prevKey != key) {
+        const auto preElapsed = AnimConAttorney::getDuration(key, animCon)
+            * (AnimConAttorney::getElapsed(prevKey, animCon) / AnimConAttorney::getDuration(prevKey, animCon));
+
+        auto expired = co_await FadeIn{ .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration, .preElapsed = preElapsed };
+        if (expired) expired.destroy();
+    }
+
+    if (animCon.clipInfo(key).flags() & AnimClip::Flags::Loop) {
+        auto expired = co_await Loop{ .pAnimCon = &animCon, .key = key };
+        expired.destroy();
+    }
+    else {
+        auto expired = co_await Once{ .pAnimCon = &animCon, .key = key };
+        expired.destroy();
+    }
+}
+
+TaskAnimSequence fadeInSequencial( std::vector<std::string> keys,
+    std::string prevKey, Milliseconds fadeDuration, AnimController& animCon
+) {
+    auto& key = *std::begin(keys);
+
+    const auto firstDuration = AnimConAttorney::getDuration(key, animCon);
+    const auto preElapsed = firstDuration * (AnimConAttorney::getElapsed(prevKey, animCon)
+        / AnimConAttorney::getDuration(prevKey, animCon));
+
+    auto expired = co_await FadeIn{
+        .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration, .preElapsed = preElapsed
+    };
+    if (expired) expired.destroy();
+    co_await Sequencial{ .pAnimCon = &animCon, .keys = std::move(keys),
+        .preElapsed = std::min(preElapsed + fadeDuration, firstDuration)
+    };
+}
+
+TaskAnimSequence fadeInCircular( std::vector<std::string> keys, std::string prevKey,
+    Milliseconds fadeDuration, AnimController& animCon
+) {
+    auto& key = *std::begin(keys);
+
+    const auto firstDuration = AnimConAttorney::getDuration(key, animCon);
+    auto preElapsed = firstDuration * (AnimConAttorney::getElapsed(prevKey, animCon)
+        / AnimConAttorney::getDuration(prevKey, animCon));
+
+    auto expired = co_await FadeIn{
+        .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration, .preElapsed = preElapsed
+    };
+    if (expired) expired.destroy();
+
+    for (;;) {
+        co_await Sequencial{ .pAnimCon = &animCon, .keys = keys,
+            .preElapsed = std::min(preElapsed + fadeDuration, firstDuration)
+        };
+        preElapsed = 0_ms;
+        fadeDuration = 0_ms;
+    }
+}
+
 TaskAnimSequence fadeOut(std::string key, Milliseconds fadeDuration, AnimController& animCon) {
     auto expired = co_await FadeOut{ .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration };
     expired.destroy();

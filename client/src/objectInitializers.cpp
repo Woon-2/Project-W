@@ -177,6 +177,25 @@ void initAnimations(
 
     switch (assetModel) {
     case AssetModel::Character:
+        animCon.addClip("GO_Character_Idle",
+            animClipSlot.get<AnimClip>("GO_Character_Idle")
+        );
+        animCon.addClip("GO_Character_Idle1",
+            animClipSlot.get<AnimClip>("GO_Character_Idle1")
+        );
+        animCon.addClip("GO_Character_Idle2",
+            animClipSlot.get<AnimClip>("GO_Character_Idle2")
+        );
+        animCon.addClip("GO_Character_Walk",
+            animClipSlot.get<AnimClip>("GO_Character_Walk")
+        );
+        animCon.addClip("GO_Character_Run",
+            animClipSlot.get<AnimClip>("GO_Character_Run")
+        );
+        animCon.addClip("GO_Character_Sprint",
+            animClipSlot.get<AnimClip>("GO_Character_Sprint")
+        );
+
         animCon.fsm().addState("Idle", characterStateIdle, animCon);
         animCon.fsm().addState("Walk", characterStateWalk, animCon);
         animCon.fsm().addState("Run", characterStateRun, animCon);
@@ -191,35 +210,71 @@ void initAnimations(
         animCon.fsm().addTransition("Idle", "Walk", [&animCon](){
             animCon.restoreAnimSequences({
                 "GO_Character_Idle",
+                "GO_Character_Idle1",
+                "GO_Character_Idle2",
                 "GO_Character_Walk"
             });
-            fadeOut("GO_Character_Idle", 240_ms, animCon);
-            fadeIn("GO_Character_Walk", "GO_Character_Idle", 240_ms, animCon);
+            fadeOutAll( {"GO_Character_Idle",
+                "GO_Character_Idle1",
+                "GO_Character_Idle2"
+            }, 240_ms, animCon );
+            fadeIn( "GO_Character_Walk",
+                {"GO_Character_Idle",
+                    "GO_Character_Idle1",
+                    "GO_Character_Idle2"
+                }, 240_ms, animCon
+            );
         });
         animCon.fsm().addTransition("Idle", "Run", [&animCon](){
             animCon.restoreAnimSequences({
                 "GO_Character_Idle",
+                "GO_Character_Idle1",
+                "GO_Character_Idle2",
                 "GO_Character_Run"
             });
-            fadeOut("GO_Character_Idle", 240_ms, animCon);
-            fadeIn("GO_Character_Run", "GO_Character_Idle", 240_ms, animCon);
+            fadeOutAll( {"GO_Character_Idle",
+                "GO_Character_Idle1",
+                "GO_Character_Idle2"
+            }, 240_ms, animCon );
+            fadeIn( "GO_Character_Run",
+                {"GO_Character_Idle",
+                    "GO_Character_Idle1",
+                    "GO_Character_Idle2"
+                }, 240_ms, animCon
+            );
         });
         animCon.fsm().addTransition("Idle", "Sprint", [&animCon](){
             animCon.restoreAnimSequences({
                 "GO_Character_Idle",
+                "GO_Character_Idle1",
+                "GO_Character_Idle2",
                 "GO_Character_Sprint"
             });
-            fadeOut("GO_Character_Idle", 240_ms, animCon);
-            fadeIn("GO_Character_Sprint", "GO_Character_Idle", 240_ms, animCon);
+            fadeOutAll( {"GO_Character_Idle",
+                "GO_Character_Idle1",
+                "GO_Character_Idle2"
+            }, 240_ms, animCon );
+            fadeIn( "GO_Character_Sprint",
+                {"GO_Character_Idle",
+                    "GO_Character_Idle1",
+                    "GO_Character_Idle2"
+                }, 240_ms, animCon
+            );
         });
 
         animCon.fsm().addTransition("Walk", "Idle", [&animCon](){
             animCon.restoreAnimSequences({
-                "GO_Character_Walk",
-                "GO_Character_Idle"
+                "GO_Character_Idle",
+                "GO_Character_Idle1",
+                "GO_Character_Idle2",
+                "GO_Character_Walk"
             });
             fadeOut("GO_Character_Walk", 240_ms, animCon);
-            fadeIn("GO_Character_Idle", "GO_Character_Walk", 240_ms, animCon);
+            fadeInCircular( { "GO_Character_Idle",
+                    "GO_Character_Idle1",
+                    "GO_Character_Idle2",
+                }, "GO_Character_Walk", 240_ms, animCon
+            );
         });
         animCon.fsm().addTransition("Walk", "Run", [&animCon](){
             animCon.restoreAnimSequences({
@@ -240,11 +295,17 @@ void initAnimations(
 
         animCon.fsm().addTransition("Run", "Idle", [&animCon](){
             animCon.restoreAnimSequences({
-                "GO_Character_Run",
-                "GO_Character_Idle"
+                "GO_Character_Idle",
+                "GO_Character_Idle1",
+                "GO_Character_Idle2",
+                "GO_Character_Run"
             });
             fadeOut("GO_Character_Run", 240_ms, animCon);
-            fadeIn("GO_Character_Idle", "GO_Character_Run", 240_ms, animCon);
+            fadeInCircular( { "GO_Character_Idle",
+                    "GO_Character_Idle1",
+                    "GO_Character_Idle2",
+                }, "GO_Character_Run", 240_ms, animCon
+            );
         });
         animCon.fsm().addTransition("Run", "Walk", [&animCon](){
             animCon.restoreAnimSequences({
@@ -265,11 +326,17 @@ void initAnimations(
 
         animCon.fsm().addTransition("Sprint", "Idle", [&animCon](){
             animCon.restoreAnimSequences({
-                "GO_Character_Sprint",
-                "GO_Character_Idle"
+                "GO_Character_Idle",
+                "GO_Character_Idle1",
+                "GO_Character_Idle2",
+                "GO_Character_Sprint"
             });
             fadeOut("GO_Character_Sprint", 240_ms, animCon);
-            fadeIn("GO_Character_Idle", "GO_Character_Sprint", 240_ms, animCon);
+            fadeInCircular( { "GO_Character_Idle",
+                    "GO_Character_Idle1",
+                    "GO_Character_Idle2",
+                }, "GO_Character_Sprint", 240_ms, animCon
+            );
         });
         animCon.fsm().addTransition("Sprint", "Walk", [&animCon](){
             animCon.restoreAnimSequences({
@@ -288,26 +355,10 @@ void initAnimations(
             fadeIn("GO_Character_Run", "GO_Character_Sprint", 150_ms, animCon);
         });
 
-        animCon.addClip("GO_Character_Idle",
-            animClipSlot.get<AnimClip>("GO_Character_Idle")
+        circular( std::vector<std::string>{
+                "GO_Character_Idle", "GO_Character_Idle1", "GO_Character_Idle2"
+            }, animCon
         );
-        animCon.addClip("GO_Character_Idle1",
-            animClipSlot.get<AnimClip>("GO_Character_Idle1")
-        );
-        animCon.addClip("GO_Character_Idle2",
-            animClipSlot.get<AnimClip>("GO_Character_Idle2")
-        );
-        animCon.addClip("GO_Character_Walk",
-            animClipSlot.get<AnimClip>("GO_Character_Walk")
-        );
-        animCon.addClip("GO_Character_Run",
-            animClipSlot.get<AnimClip>("GO_Character_Run")
-        );
-        animCon.addClip("GO_Character_Sprint",
-            animClipSlot.get<AnimClip>("GO_Character_Sprint")
-        );
-
-        animCon.play("GO_Character_Idle");
         break;
 
     default:

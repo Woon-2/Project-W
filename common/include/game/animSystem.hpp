@@ -329,7 +329,7 @@ public:
     const auto& fsm() const { return fsm_; }
 
     void print() const {
-        //system("cls");
+        system("cls");
         for (const auto& [key, inst] : insts_) {
             std::cout << "playing animation \"" << inst.animClip()->name()
                 << "\", elapsed: " << inst.elapsed()
@@ -351,6 +351,11 @@ private:
 struct AnimConAttorney {
     static Milliseconds getDeltaTime(const AnimController& con) {
         return con.deltaTime_;
+    }
+
+    static bool playing(const std::string& key, const AnimController& con) {
+        return std::ranges::find_if(con.insts_, [&key](const auto& pair) { return pair.first == key; })
+            != con.insts_.end();
     }
 
     static Milliseconds getElapsed(const std::string& key, const AnimController& con) {
@@ -526,6 +531,15 @@ struct Sequencial {
 };
 
 TaskAnimSequence fadeIn( std::string key, std::string prevKey,
+    Milliseconds fadeDuration, AnimController& animCon
+);
+TaskAnimSequence fadeIn( std::string key, std::vector<std::string> possiblePrevKeys,
+    Milliseconds fadeDuration, AnimController& animCon
+);
+TaskAnimSequence fadeInSequencial( std::vector<std::string> keys, std::string prevKey,
+    Milliseconds fadeDuration, AnimController& animCon
+);
+TaskAnimSequence fadeInCircular( std::vector<std::string> keys, std::string prevKey,
     Milliseconds fadeDuration, AnimController& animCon
 );
 TaskAnimSequence fadeOut(std::string key, Milliseconds fadeDuration, AnimController& animCon);
