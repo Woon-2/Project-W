@@ -343,7 +343,8 @@ private:
     fsm::FSM fsm_;
     std::unordered_map<std::string, const AnimClip*> clipMap_;
     std::list<std::pair<std::string, AnimInstance>> insts_;
-    std::list<std::pair<std::string, std::coroutine_handle<>>> animSequences_;
+    // the last boolean value represents the sequence has been created in current frame
+    std::list<std::tuple<std::string, std::coroutine_handle<>, bool>> animSequences_;
     Milliseconds deltaTime_;
     const Skeleton* pSkeleton_;
 };
@@ -433,13 +434,18 @@ struct AnimConAttorney {
     }
 };
 
-TaskAnim fadeInImpl(std::string key, Milliseconds fadeDuration,
+TaskAnim fadeInImpl( std::string key, Milliseconds fadeDuration,
     std::coroutine_handle<> suspended, AnimController& con
 );
-TaskAnim fadeOutImpl(std::string key, Milliseconds fadeDuration, AnimController& con);
-TaskAnim removeImpl(std::string key, AnimController& con);
-TaskAnim loopImpl(std::string key, AnimController& con);
-TaskAnim onceImpl(std::string key, AnimController& con);
+TaskAnim fadeOutImpl( std::string key, Milliseconds fadeDuration,
+    std::coroutine_handle<> suspended, AnimController& con
+);
+TaskAnim removeImpl(std::string key, std::coroutine_handle<> suspended, AnimController& con);
+TaskAnim loopImpl(std::string key, std::coroutine_handle<> suspended, AnimController& con);
+TaskAnim onceImpl(std::string key, std::coroutine_handle<> suspended, AnimController& con);
+TaskAnim partialImpl( std::string key, std::coroutine_handle<> suspended,
+    Milliseconds preElapsed, Milliseconds endPoint, AnimController& con
+);
 TaskAnim sequencialNodeImpl(const std::string& key, std::coroutine_handle<> suspended, AnimController& con);
 TaskAnim sequencialImpl( const std::vector<std::string>& keys,
     Milliseconds preElapsed, std::coroutine_handle<> suspended, AnimController& con
@@ -464,7 +470,7 @@ struct FadeIn {
 struct FadeOut {
     bool await_ready() { return false; }
     void await_suspend(std::coroutine_handle<> suspended) {
-        __expired = pAnimCon->resetAnimSequence(key, fadeOutImpl(key, fadeDuration, *pAnimCon));
+        __expired = pAnimCon->resetAnimSequence(key, fadeOutImpl(key, fadeDuration, suspended, *pAnimCon));
     }
     std::coroutine_handle<> await_resume() { return __expired; }
 
@@ -478,7 +484,7 @@ struct FadeOutAll {
     bool await_ready() { return false; }
     void await_suspend(std::coroutine_handle<> suspended) {
         for (const auto& key : keys) {
-            auto expired = pAnimCon->resetAnimSequence(key, fadeOutImpl(key, fadeDuration, *pAnimCon));
+            auto expired = pAnimCon->resetAnimSequence(key, fadeOutImpl(key, fadeDuration, suspended, *pAnimCon));
             if (expired) {
                 __expireds.push_back(expired);
             }
@@ -495,7 +501,7 @@ struct FadeOutAll {
 struct Loop {
     bool await_ready() { return false; }
     void await_suspend(std::coroutine_handle<> suspended) {
-        __expired = pAnimCon->resetAnimSequence(key, loopImpl(key, *pAnimCon));
+        __expired = pAnimCon->resetAnimSequence(key, loopImpl(key, suspended, *pAnimCon));
         AnimConAttorney::setFlags(key, etoi(AnimClip::Flags::Loop), *pAnimCon);
     }
     std::coroutine_handle<> await_resume() { return __expired; }
@@ -508,13 +514,29 @@ struct Loop {
 struct Once {
     bool await_ready() { return false; }
     void await_suspend(std::coroutine_handle<> suspended) {
-        __expired = pAnimCon->resetAnimSequence(key, onceImpl(key, *pAnimCon));
+        __expired = pAnimCon->resetAnimSequence(key, onceImpl(key, suspended, *pAnimCon));
         AnimConAttorney::resetFlags(key, etoi(AnimClip::Flags::Loop), *pAnimCon);
     }
     std::coroutine_handle<> await_resume() { return __expired; }
 
     AnimController* pAnimCon;
     std::string key;
+    std::coroutine_handle<> __expired;
+};
+
+struct Partial {
+    bool await_ready() { return false; }
+    void await_suspend(std::coroutine_handle<> suspended) {
+        __expired = pAnimCon->resetAnimSequence(key,
+            partialImpl(key, suspended, preElapsed, endPoint, *pAnimCon)
+        );
+    }
+    std::coroutine_handle<> await_resume() { return __expired; }
+
+    AnimController* pAnimCon;
+    std::string key;
+    Milliseconds endPoint;
+    Milliseconds preElapsed = AnimConAttorney::getElapsed(key, *pAnimCon);
     std::coroutine_handle<> __expired;
 };
 

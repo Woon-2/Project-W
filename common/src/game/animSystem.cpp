@@ -695,14 +695,12 @@ std::coroutine_handle<> AnimController::play( const std::string& key,
     
     if (itDupl != insts_.end()) {
         itDupl->second.setElapsed(preElapsed);
-        itDupl->second.setSpeed(1.f);
-        itDupl->second.setWeight(1.f);
     
         if (animClip.flags() & AnimClip::Flags::Loop) {
-            return resetAnimSequence(key, loopImpl(key, *this));
+            return resetAnimSequence(key, loopImpl(key, std::noop_coroutine(), *this));
         }
         else {
-            return resetAnimSequence(key, onceImpl(key, *this));
+            return resetAnimSequence(key, onceImpl(key, std::noop_coroutine(), *this));
         }
     }
 
@@ -711,10 +709,14 @@ std::coroutine_handle<> AnimController::play( const std::string& key,
     );
 
     if (animClip.flags() & AnimClip::Flags::Loop) {
-        animSequences_.emplace_back(key, loopImpl(key, *this));
+        std::get<std::coroutine_handle<>>(
+            animSequences_.emplace_back(key, loopImpl(key, std::noop_coroutine(), *this), true)
+        ).resume();
     }
     else {
-        animSequences_.emplace_back(key, onceImpl(key, *this));
+        std::get<std::coroutine_handle<>>(
+            animSequences_.emplace_back(key, onceImpl(key, std::noop_coroutine(), *this), true)
+        ).resume();
     }
 
     return nullptr;
@@ -731,8 +733,6 @@ std::coroutine_handle<> AnimController::play( const std::string& key, Millisecon
     
     if (itDupl != insts_.end()) {
         itDupl->second.setElapsed(preElapsed);
-        itDupl->second.setSpeed(1.f);
-        itDupl->second.setWeight(1.f);
         return resetAnimSequence(key, seq);
     }
 
@@ -740,12 +740,18 @@ std::coroutine_handle<> AnimController::play( const std::string& key, Millisecon
         AnimInstance(pSkeleton_, &animClip, preElapsed, clipMode)
     );
 
-    animSequences_.emplace_back(key, seq);
+    std::get<std::coroutine_handle<>>(
+        animSequences_.emplace_back(key, seq, true)
+    ).resume();
 
     return nullptr;
 }
 
 void AnimController::update(Milliseconds deltaTime) {
+    for (auto& [_, __, isNew] : animSequences_) {
+        isNew = false;
+    }
+
     fsm_.pushEvent(fsm::Event::create<Milliseconds>(evAnimUpdate, deltaTime));
 
     fsm_.update();
@@ -756,8 +762,10 @@ void AnimController::update(Milliseconds deltaTime) {
 
     auto cur = animSequences_.begin();
     while (cur != animSequences_.end()) {
-        auto& [key, coro] = *cur;
-        coro.resume();
+        auto& [key, coro, isNew] = *cur;
+        if (!isNew) {
+            coro.resume();
+        }
         if (coro.done()) {
             insts_.erase(std::next(insts_.begin(), std::distance(animSequences_.begin(), cur)));
             coro.destroy();
@@ -772,10 +780,11 @@ void AnimController::update(Milliseconds deltaTime) {
 std::coroutine_handle<> AnimController::resetAnimSequence(
     const std::string& key, std::coroutine_handle<> animSequence
 ) {
-    for (auto& [k, c] : animSequences_) {
+    for (auto& [k, c, _] : animSequences_) {
         if (k == key) {
             auto old = c;
             c = animSequence;
+            c.resume();
             return old;
         }
     }
@@ -789,18 +798,18 @@ std::vector<std::coroutine_handle<>> AnimController::restoreAnimSequences(
     auto ret = std::vector<std::coroutine_handle<>>();
     ret.reserve(animSequences_.size());
 
-    for (auto& [k, c] : animSequences_) {
+    for (auto& [k, c, _] : animSequences_) {
         const auto it = std::ranges::find_if(keys, [&k](const auto& key) { return key != k; });
         if (it != keys.end()) {
             ret.push_back(c);
-            c = removeImpl(k, *this);
+            c = removeImpl(k, std::noop_coroutine(), *this);
         }
     }
 
     return ret;
 }
 
-TaskAnim fadeInImpl(std::string key, Milliseconds fadeDuration,
+TaskAnim fadeInImpl( std::string key, Milliseconds fadeDuration,
     std::coroutine_handle<> suspended, AnimController& con
 ) {
     auto raii = CoroRAII(suspended);
@@ -822,30 +831,49 @@ TaskAnim fadeInImpl(std::string key, Milliseconds fadeDuration,
     suspended.resume();
 }
 
-TaskAnim fadeOutImpl(std::string key, Milliseconds fadeDuration, AnimController& con) {
-    auto elapsed = Milliseconds(0.f);
+TaskAnim fadeOutImpl( std::string key, Milliseconds fadeDuration,
+    std::coroutine_handle<> suspended, AnimController& con
+) {
+    auto raii = CoroRAII(suspended);
 
-    while (elapsed < fadeDuration) {
-        AnimConAttorney::setWeight(key, 1.f - std::clamp(elapsed / fadeDuration, 0.f, 1.f), con);
+    auto accTime = Milliseconds(0.f);
+
+    while (accTime < fadeDuration) {
+        AnimConAttorney::setWeight(key, 1.f - std::clamp(accTime / fadeDuration, 0.f, 1.f), con);
         co_await std::suspend_always{};
-        elapsed += AnimConAttorney::getDeltaTime(con) * AnimConAttorney::getSpeed(key, con);
+        accTime += AnimConAttorney::getDeltaTime(con) * AnimConAttorney::getSpeed(key, con);
     }
+
+    raii.release();
+    suspended.resume();
 }
 
-TaskAnim removeImpl(std::string key, AnimController& con) {
+TaskAnim removeImpl(std::string key, std::coroutine_handle<> suspended, AnimController& con) {
+    auto raii = CoroRAII(suspended);
+
     AnimConAttorney::setWeight(key, 0.f, con);
     AnimConAttorney::setSpeed(key, 0.f, con);
     co_await std::suspend_always{};
+
+    raii.release();
+    suspended.resume();
 }
 
-TaskAnim loopImpl(std::string key, AnimController& con) {
+TaskAnim loopImpl(std::string key, std::coroutine_handle<> suspended, AnimController& con) {
+    auto raii = CoroRAII(suspended);
+
     AnimConAttorney::setWeight(key, 1.f, con);
     for (;;) {
         co_await std::suspend_always{};
     }
+
+    raii.release();
+    suspended.resume();
 }
 
-TaskAnim onceImpl(std::string key, AnimController& con) {
+TaskAnim onceImpl(std::string key, std::coroutine_handle<> suspended, AnimController& con) {
+    auto raii = CoroRAII(suspended);
+
     AnimConAttorney::setWeight(key, 1.f, con);
     auto elapsed = AnimConAttorney::getElapsed(key, con);
     auto duration = AnimConAttorney::getDuration(key, con);
@@ -853,6 +881,26 @@ TaskAnim onceImpl(std::string key, AnimController& con) {
         co_await std::suspend_always{};
         elapsed = AnimConAttorney::getElapsed(key, con);
     }
+
+    raii.release();
+    suspended.resume();
+}
+
+TaskAnim partialImpl( std::string key, std::coroutine_handle<> suspended,
+    Milliseconds preElapsed, Milliseconds endPoint, AnimController& con
+) {
+    auto raii = CoroRAII(suspended);
+
+    AnimConAttorney::setWeight(key, 1.f, con);
+    AnimConAttorney::setElapsed(key, preElapsed, con);
+    auto elapsed = preElapsed;
+    while (elapsed < endPoint) {
+        co_await std::suspend_always{};
+        elapsed = AnimConAttorney::getElapsed(key, con);
+    }
+
+    raii.release();
+    suspended.resume();
 }
 
 TaskAnim sequencialNodeImpl( const std::string& key,
