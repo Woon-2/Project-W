@@ -697,10 +697,10 @@ std::coroutine_handle<> AnimController::play( const std::string& key,
         itDupl->second.setElapsed(preElapsed);
     
         if (animClip.flags() & AnimClip::Flags::Loop) {
-            return resetAnimSequence(key, loopImpl(key, std::noop_coroutine(), *this));
+            return resetAnimSequence(key, loopImpl(key, std::noop_coroutine(), preElapsed, *this));
         }
         else {
-            return resetAnimSequence(key, onceImpl(key, std::noop_coroutine(), *this));
+            return resetAnimSequence(key, onceImpl(key, std::noop_coroutine(), preElapsed, *this));
         }
     }
 
@@ -710,12 +710,12 @@ std::coroutine_handle<> AnimController::play( const std::string& key,
 
     if (animClip.flags() & AnimClip::Flags::Loop) {
         std::get<std::coroutine_handle<>>(
-            animSequences_.emplace_back(key, loopImpl(key, std::noop_coroutine(), *this), true)
+            animSequences_.emplace_back(key, loopImpl(key, std::noop_coroutine(), preElapsed, *this), true)
         ).resume();
     }
     else {
         std::get<std::coroutine_handle<>>(
-            animSequences_.emplace_back(key, onceImpl(key, std::noop_coroutine(), *this), true)
+            animSequences_.emplace_back(key, onceImpl(key, std::noop_coroutine(), preElapsed, *this), true)
         ).resume();
     }
 
@@ -859,7 +859,9 @@ TaskAnim removeImpl(std::string key, std::coroutine_handle<> suspended, AnimCont
     suspended.resume();
 }
 
-TaskAnim loopImpl(std::string key, std::coroutine_handle<> suspended, AnimController& con) {
+TaskAnim loopImpl( std::string key, std::coroutine_handle<> suspended,
+    Milliseconds preElapsed, AnimController& con
+) {
     auto raii = CoroRAII(suspended);
 
     AnimConAttorney::setWeight(key, 1.f, con);
@@ -871,7 +873,9 @@ TaskAnim loopImpl(std::string key, std::coroutine_handle<> suspended, AnimContro
     suspended.resume();
 }
 
-TaskAnim onceImpl(std::string key, std::coroutine_handle<> suspended, AnimController& con) {
+TaskAnim onceImpl( std::string key, std::coroutine_handle<> suspended,
+    Milliseconds preElapsed, AnimController& con
+) {
     auto raii = CoroRAII(suspended);
 
     AnimConAttorney::setWeight(key, 1.f, con);
@@ -1078,13 +1082,52 @@ TaskAnimSequence circular( std::vector<std::string> keys,
     }
 }
 
+TaskAnimSequence softCircular( std::vector<std::string> keys, std::string prevKey,
+    Milliseconds fadeDuration, AnimController& animCon
+) {
+    auto preElapsed = AnimConAttorney::getDuration(*std::begin(keys), animCon)
+        * ( AnimConAttorney::getElapsed(prevKey, animCon)
+            / AnimConAttorney::getDuration(prevKey, animCon)
+        );
+
+    for (;;) {
+        for (auto& key : keys) {
+            const auto duration = AnimConAttorney::getDuration(key, animCon);
+
+            if (key == prevKey) {
+                auto expired = co_await Partial{ .pAnimCon = &animCon, .key = key,
+                    .endPoint = duration - fadeDuration,
+                    .preElapsed = 0_ms
+                };
+                expired.destroy();
+                continue;
+            }
+
+            fadeOut(std::move(prevKey), fadeDuration, animCon);
+            auto expired = co_await FadeIn{
+                .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration, .preElapsed = preElapsed
+            };
+            if (expired) expired.destroy();
+            prevKey = key;
+            
+            expired = co_await Partial{ .pAnimCon = &animCon, .key = key,
+                .endPoint = duration - fadeDuration,
+                .preElapsed = std::min(AnimConAttorney::getElapsed(key, animCon), duration)
+            };
+            if (expired) expired.destroy();
+
+            preElapsed = 0_ms;
+        }
+    }
+}
+
 AnimSystem::AnimSystem( gfx::d3d12::D3D12Device& device,
     const gfx::d3d12::RootSignature& root
 ) : shaderAnimInterpolation_(device, root, gfx::d3d12::ShaderAnimInterpolation::Config{
-        .maxKeyFrameCnt = 32'000u
+        .maxKeyFrameCnt = 64'000u
     }), computePassAnimInterpolation_(device, shaderAnimInterpolation_),
     shaderMatMul_(device, root, gfx::d3d12::ShaderMatMul::Config{
-        .maxMatrixCnt = 32'000u
+        .maxMatrixCnt = 64'000u
     }), computePassMatMul_(device, shaderMatMul_),
     boneXformCache_(),
     suspendedTasks_(),

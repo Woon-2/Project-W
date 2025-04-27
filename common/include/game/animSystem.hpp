@@ -329,7 +329,7 @@ public:
     const auto& fsm() const { return fsm_; }
 
     void print() const {
-        system("cls");
+        // system("cls");
         for (const auto& [key, inst] : insts_) {
             std::cout << "playing animation \"" << inst.animClip()->name()
                 << "\", elapsed: " << inst.elapsed()
@@ -441,8 +441,12 @@ TaskAnim fadeOutImpl( std::string key, Milliseconds fadeDuration,
     std::coroutine_handle<> suspended, AnimController& con
 );
 TaskAnim removeImpl(std::string key, std::coroutine_handle<> suspended, AnimController& con);
-TaskAnim loopImpl(std::string key, std::coroutine_handle<> suspended, AnimController& con);
-TaskAnim onceImpl(std::string key, std::coroutine_handle<> suspended, AnimController& con);
+TaskAnim loopImpl( std::string key, std::coroutine_handle<> suspended,
+    Milliseconds preElapsed, AnimController& con
+);
+TaskAnim onceImpl( std::string key, std::coroutine_handle<> suspended,
+    Milliseconds preElapsed, AnimController& con
+);
 TaskAnim partialImpl( std::string key, std::coroutine_handle<> suspended,
     Milliseconds preElapsed, Milliseconds endPoint, AnimController& con
 );
@@ -501,26 +505,28 @@ struct FadeOutAll {
 struct Loop {
     bool await_ready() { return false; }
     void await_suspend(std::coroutine_handle<> suspended) {
-        __expired = pAnimCon->resetAnimSequence(key, loopImpl(key, suspended, *pAnimCon));
+        __expired = pAnimCon->resetAnimSequence(key, loopImpl(key, suspended, preElapsed, *pAnimCon));
         AnimConAttorney::setFlags(key, etoi(AnimClip::Flags::Loop), *pAnimCon);
     }
     std::coroutine_handle<> await_resume() { return __expired; }
 
     AnimController* pAnimCon;
     std::string key;
+    Milliseconds preElapsed = AnimConAttorney::getElapsed(key, *pAnimCon);
     std::coroutine_handle<> __expired;
 };
 
 struct Once {
     bool await_ready() { return false; }
     void await_suspend(std::coroutine_handle<> suspended) {
-        __expired = pAnimCon->resetAnimSequence(key, onceImpl(key, suspended, *pAnimCon));
+        __expired = pAnimCon->resetAnimSequence(key, onceImpl(key, suspended, preElapsed, *pAnimCon));
         AnimConAttorney::resetFlags(key, etoi(AnimClip::Flags::Loop), *pAnimCon);
     }
     std::coroutine_handle<> await_resume() { return __expired; }
 
     AnimController* pAnimCon;
     std::string key;
+    Milliseconds preElapsed = AnimConAttorney::getElapsed(key, *pAnimCon);
     std::coroutine_handle<> __expired;
 };
 
@@ -573,6 +579,9 @@ TaskAnimSequence sequencial( std::vector<std::string> keys, AnimController& anim
 );
 TaskAnimSequence circular( std::vector<std::string> keys, AnimController& animCon,
     Milliseconds preElapsed = 0_ms
+);
+TaskAnimSequence softCircular( std::vector<std::string> keys, std::string prevKey,
+    Milliseconds fadeDuration, AnimController& animCon
 );
 
 class AnimSystem : public ecs::System<AnimController>{

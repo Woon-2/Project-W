@@ -269,10 +269,9 @@ void initAnimations(
                 "GO_Character_Idle2",
                 "GO_Character_Walk"
             });
-            fadeOut("GO_Character_Walk", 360_ms, animCon);
-            fadeInCircular( { "GO_Character_Idle",
+            softCircular( { "GO_Character_Idle",
                     "GO_Character_Idle1",
-                    "GO_Character_Idle2",
+                    "GO_Character_Idle2"
                 }, "GO_Character_Walk", 360_ms, animCon
             );
         });
@@ -301,10 +300,10 @@ void initAnimations(
                 "GO_Character_Run"
             });
             fadeOut("GO_Character_Run", 360_ms, animCon);
-            fadeInCircular( { "GO_Character_Idle",
+            softCircular( { "GO_Character_Idle",
                     "GO_Character_Idle1",
-                    "GO_Character_Idle2",
-                }, "GO_Character_Run", 360_ms, animCon
+                    "GO_Character_Idle2"
+                }, "GO_Character_Walk", 360_ms, animCon
             );
         });
         animCon.fsm().addTransition("Run", "Walk", [&animCon](){
@@ -332,10 +331,10 @@ void initAnimations(
                 "GO_Character_Sprint"
             });
             fadeOut("GO_Character_Sprint", 360_ms, animCon);
-            fadeInCircular( { "GO_Character_Idle",
+            softCircular( { "GO_Character_Idle",
                     "GO_Character_Idle1",
-                    "GO_Character_Idle2",
-                }, "GO_Character_Sprint", 360_ms, animCon
+                    "GO_Character_Idle2"
+                }, "GO_Character_Walk", 360_ms, animCon
             );
         });
         animCon.fsm().addTransition("Sprint", "Walk", [&animCon](){
@@ -355,9 +354,11 @@ void initAnimations(
             fadeIn("GO_Character_Run", "GO_Character_Sprint", 220_ms, animCon);
         });
 
-        circular( std::vector<std::string>{
+         animCon.play("GO_Character_Idle");
+
+         softCircular( {
                 "GO_Character_Idle", "GO_Character_Idle1", "GO_Character_Idle2"
-            }, animCon
+            }, "GO_Character_Idle", 360_ms, animCon
         );
         break;
 
