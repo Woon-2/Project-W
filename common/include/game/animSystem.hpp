@@ -329,7 +329,7 @@ public:
     const auto& fsm() const { return fsm_; }
 
     void print() const {
-        // system("cls");
+        system("cls");
         for (const auto& [key, inst] : insts_) {
             std::cout << "playing animation \"" << inst.animClip()->name()
                 << "\", elapsed: " << inst.elapsed()
@@ -339,12 +339,19 @@ public:
         }
     }
 
+    void free(std::coroutine_handle<> expired) {
+        if (expired) {
+            expireds_.push_back(expired);
+        }
+    }
+
 private:
     fsm::FSM fsm_;
     std::unordered_map<std::string, const AnimClip*> clipMap_;
     std::list<std::pair<std::string, AnimInstance>> insts_;
     // the last boolean value represents the sequence has been created in current frame
     std::list<std::tuple<std::string, std::coroutine_handle<>, bool>> animSequences_;
+    std::vector<std::coroutine_handle<>> expireds_;
     Milliseconds deltaTime_;
     const Skeleton* pSkeleton_;
 };
@@ -458,92 +465,103 @@ TaskAnim sequencialImpl( const std::vector<std::string>& keys,
 struct FadeIn {
     bool await_ready() { return false; }
     void await_suspend(std::coroutine_handle<> suspended) {
-        __expired = pAnimCon->play(key, preElapsed, fadeInImpl(key, fadeDuration, suspended, *pAnimCon));
+        pAnimCon->free(
+            pAnimCon->play(key, preElapsed, fadeInImpl(key, fadeDuration, suspended, *pAnimCon))
+        );
     }
-    std::coroutine_handle<> await_resume() {
-        return __expired;
-    }
+    void await_resume() {}
 
     AnimController* pAnimCon;
     std::string key;
     Milliseconds fadeDuration;
     Milliseconds preElapsed;
-    std::coroutine_handle<> __expired;
 };
 
 struct FadeOut {
     bool await_ready() { return false; }
     void await_suspend(std::coroutine_handle<> suspended) {
-        __expired = pAnimCon->resetAnimSequence(key, fadeOutImpl(key, fadeDuration, suspended, *pAnimCon));
+        pAnimCon->free(
+            pAnimCon->resetAnimSequence(key, fadeOutImpl(key, fadeDuration, suspended, *pAnimCon))
+        );
     }
-    std::coroutine_handle<> await_resume() { return __expired; }
+    void await_resume() {}
 
     AnimController* pAnimCon;
     std::string key;
     Milliseconds fadeDuration;
-    std::coroutine_handle<> __expired;
 };
 
-struct FadeOutAll {
+struct FadeOutSelect {
     bool await_ready() { return false; }
     void await_suspend(std::coroutine_handle<> suspended) {
+        bool first = true;
+
         for (const auto& key : keys) {
-            auto expired = pAnimCon->resetAnimSequence(key, fadeOutImpl(key, fadeDuration, suspended, *pAnimCon));
-            if (expired) {
-                __expireds.push_back(expired);
+            if (first) {
+                auto expired = pAnimCon->resetAnimSequence(key, fadeOutImpl(key, fadeDuration, suspended, *pAnimCon));
+                if (expired) {
+                    pAnimCon->free(expired);
+                    first = false;
+                }
+            }
+            else {
+                auto expired = pAnimCon->resetAnimSequence(key, removeImpl(key, std::noop_coroutine(), *pAnimCon));
+                if (expired) {
+                    pAnimCon->free(expired);
+                }
             }
         }
     }
-    std::vector<std::coroutine_handle<>> await_resume() { return std::move(__expireds); }
+    void await_resume() {}
 
     AnimController* pAnimCon;
     std::vector<std::string> keys;
     Milliseconds fadeDuration;
-    std::vector<std::coroutine_handle<>> __expireds;
 };
 
 struct Loop {
     bool await_ready() { return false; }
     void await_suspend(std::coroutine_handle<> suspended) {
-        __expired = pAnimCon->resetAnimSequence(key, loopImpl(key, suspended, preElapsed, *pAnimCon));
+        pAnimCon->free(
+            pAnimCon->resetAnimSequence(key, loopImpl(key, suspended, preElapsed, *pAnimCon))
+        );
         AnimConAttorney::setFlags(key, etoi(AnimClip::Flags::Loop), *pAnimCon);
     }
-    std::coroutine_handle<> await_resume() { return __expired; }
+    void await_resume() {}
 
     AnimController* pAnimCon;
     std::string key;
     Milliseconds preElapsed = AnimConAttorney::getElapsed(key, *pAnimCon);
-    std::coroutine_handle<> __expired;
 };
 
 struct Once {
     bool await_ready() { return false; }
     void await_suspend(std::coroutine_handle<> suspended) {
-        __expired = pAnimCon->resetAnimSequence(key, onceImpl(key, suspended, preElapsed, *pAnimCon));
+        pAnimCon->free(
+            pAnimCon->resetAnimSequence(key, onceImpl(key, suspended, preElapsed, *pAnimCon))
+        );
         AnimConAttorney::resetFlags(key, etoi(AnimClip::Flags::Loop), *pAnimCon);
     }
-    std::coroutine_handle<> await_resume() { return __expired; }
+    void await_resume() {}
 
     AnimController* pAnimCon;
     std::string key;
     Milliseconds preElapsed = AnimConAttorney::getElapsed(key, *pAnimCon);
-    std::coroutine_handle<> __expired;
 };
 
 struct Partial {
     bool await_ready() { return false; }
     void await_suspend(std::coroutine_handle<> suspended) {
-        __expired = pAnimCon->resetAnimSequence(key,
+        pAnimCon->free( pAnimCon->resetAnimSequence(key,
             partialImpl(key, suspended, preElapsed, endPoint, *pAnimCon)
-        );
+        ) );
     }
-    std::coroutine_handle<> await_resume() { return __expired; }
+    void await_resume() {}
 
     AnimController* pAnimCon;
     std::string key;
     Milliseconds endPoint;
     Milliseconds preElapsed = AnimConAttorney::getElapsed(key, *pAnimCon);
-    std::coroutine_handle<> __expired;
 };
 
 struct Sequencial {
@@ -571,7 +589,7 @@ TaskAnimSequence fadeInCircular( std::vector<std::string> keys, std::string prev
     Milliseconds fadeDuration, AnimController& animCon
 );
 TaskAnimSequence fadeOut(std::string key, Milliseconds fadeDuration, AnimController& animCon);
-TaskAnimSequence fadeOutAll( std::vector<std::string> keys,
+TaskAnimSequence fadeOutSelect( std::vector<std::string> keys,
     Milliseconds fadeDuration, AnimController& animCon
 );
 TaskAnimSequence sequencial( std::vector<std::string> keys, AnimController& animCon,

@@ -214,7 +214,7 @@ void initAnimations(
                 "GO_Character_Idle2",
                 "GO_Character_Walk"
             });
-            fadeOutAll( {"GO_Character_Idle",
+            fadeOutSelect( {"GO_Character_Idle",
                 "GO_Character_Idle1",
                 "GO_Character_Idle2"
             }, 360_ms, animCon );
@@ -232,7 +232,7 @@ void initAnimations(
                 "GO_Character_Idle2",
                 "GO_Character_Run"
             });
-            fadeOutAll( {"GO_Character_Idle",
+            fadeOutSelect( {"GO_Character_Idle",
                 "GO_Character_Idle1",
                 "GO_Character_Idle2"
             }, 360_ms, animCon );
@@ -250,7 +250,7 @@ void initAnimations(
                 "GO_Character_Idle2",
                 "GO_Character_Sprint"
             });
-            fadeOutAll( {"GO_Character_Idle",
+            fadeOutSelect( {"GO_Character_Idle",
                 "GO_Character_Idle1",
                 "GO_Character_Idle2"
             }, 360_ms, animCon );

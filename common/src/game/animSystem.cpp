@@ -775,6 +775,11 @@ void AnimController::update(Milliseconds deltaTime) {
             ++cur;
         }
     }
+
+    for (auto& expired : expireds_) {
+        expired.destroy();
+    }
+    expireds_.clear();
 }
 
 std::coroutine_handle<> AnimController::resetAnimSequence(
@@ -932,26 +937,24 @@ TaskAnim sequencialImpl( const std::vector<std::string>& keys,
     struct Awaitable {
         bool await_ready() { return false; }
         void await_suspend(std::coroutine_handle<> suspended) {
-            __expired = pAnimCon->play(key, preElapsed, sequencialNodeImpl(key, suspended, *pAnimCon));
+            pAnimCon->free(
+                pAnimCon->play(key, preElapsed, sequencialNodeImpl(key, suspended, *pAnimCon))
+            );
             AnimConAttorney::resetFlags(key, etoi(AnimClip::Flags::Loop), *pAnimCon);
         }
-        std::coroutine_handle<> await_resume() {
-            return __expired;
-        }
+        void await_resume() {}
     
         AnimController* pAnimCon;
         std::string key;
         Milliseconds preElapsed;
-        std::coroutine_handle<> __expired;
     };
     
     for (const auto& key : keys) {
-        auto expired = co_await Awaitable{
+        co_await Awaitable{
             .pAnimCon = &con,
             .key = key,
             .preElapsed = preElapsed
         };
-        if (expired) expired.destroy();
         preElapsed = std::max(0_ms, preElapsed - AnimConAttorney::getDuration(key, con));
     }
     
@@ -965,18 +968,15 @@ TaskAnimSequence fadeIn( std::string key, std::string prevKey,
     const auto preElapsed = AnimConAttorney::getDuration(key, animCon)
         * (AnimConAttorney::getElapsed(prevKey, animCon) / AnimConAttorney::getDuration(prevKey, animCon));
 
-    auto expired = co_await FadeIn{
+    co_await FadeIn{
         .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration, .preElapsed = preElapsed
     };
-    if (expired) expired.destroy();
 
     if (animCon.clipInfo(key).flags() & AnimClip::Flags::Loop) {
-        auto expired = co_await Loop{ .pAnimCon = &animCon, .key = key };
-        expired.destroy();
+        co_await Loop{ .pAnimCon = &animCon, .key = key };
     }
     else {
-        auto expired = co_await Once{ .pAnimCon = &animCon, .key = key };
-        expired.destroy();
+        co_await Once{ .pAnimCon = &animCon, .key = key };
     }
 }
 
@@ -996,17 +996,14 @@ TaskAnimSequence fadeIn( std::string key, std::vector<std::string> possiblePrevK
         const auto preElapsed = AnimConAttorney::getDuration(key, animCon)
             * (AnimConAttorney::getElapsed(prevKey, animCon) / AnimConAttorney::getDuration(prevKey, animCon));
 
-        auto expired = co_await FadeIn{ .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration, .preElapsed = preElapsed };
-        if (expired) expired.destroy();
+        co_await FadeIn{ .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration, .preElapsed = preElapsed };
     }
 
     if (animCon.clipInfo(key).flags() & AnimClip::Flags::Loop) {
-        auto expired = co_await Loop{ .pAnimCon = &animCon, .key = key };
-        expired.destroy();
+        co_await Loop{ .pAnimCon = &animCon, .key = key };
     }
     else {
-        auto expired = co_await Once{ .pAnimCon = &animCon, .key = key };
-        expired.destroy();
+        co_await Once{ .pAnimCon = &animCon, .key = key };
     }
 }
 
@@ -1019,10 +1016,9 @@ TaskAnimSequence fadeInSequencial( std::vector<std::string> keys,
     const auto preElapsed = firstDuration * (AnimConAttorney::getElapsed(prevKey, animCon)
         / AnimConAttorney::getDuration(prevKey, animCon));
 
-    auto expired = co_await FadeIn{
+    co_await FadeIn{
         .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration, .preElapsed = preElapsed
     };
-    if (expired) expired.destroy();
     co_await Sequencial{ .pAnimCon = &animCon, .keys = std::move(keys),
         .preElapsed = std::min(preElapsed + fadeDuration, firstDuration)
     };
@@ -1037,10 +1033,9 @@ TaskAnimSequence fadeInCircular( std::vector<std::string> keys, std::string prev
     auto preElapsed = firstDuration * (AnimConAttorney::getElapsed(prevKey, animCon)
         / AnimConAttorney::getDuration(prevKey, animCon));
 
-    auto expired = co_await FadeIn{
+    co_await FadeIn{
         .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration, .preElapsed = preElapsed
     };
-    if (expired) expired.destroy();
 
     for (;;) {
         co_await Sequencial{ .pAnimCon = &animCon, .keys = keys,
@@ -1052,19 +1047,15 @@ TaskAnimSequence fadeInCircular( std::vector<std::string> keys, std::string prev
 }
 
 TaskAnimSequence fadeOut(std::string key, Milliseconds fadeDuration, AnimController& animCon) {
-    auto expired = co_await FadeOut{ .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration };
-    expired.destroy();
+    co_await FadeOut{ .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration };
 }
 
-TaskAnimSequence fadeOutAll( std::vector<std::string> keys,
+TaskAnimSequence fadeOutSelect( std::vector<std::string> keys,
     Milliseconds fadeDuration, AnimController& animCon
 ) {
-    auto expireds = co_await FadeOutAll{
+    co_await FadeOutSelect{
         .pAnimCon = &animCon, .keys = std::move(keys), .fadeDuration = fadeDuration
     };
-    for (auto& expired : expireds) {
-        expired.destroy();
-    }
 }
 
 TaskAnimSequence sequencial( std::vector<std::string> keys,
@@ -1095,26 +1086,23 @@ TaskAnimSequence softCircular( std::vector<std::string> keys, std::string prevKe
             const auto duration = AnimConAttorney::getDuration(key, animCon);
 
             if (key == prevKey) {
-                auto expired = co_await Partial{ .pAnimCon = &animCon, .key = key,
+                co_await Partial{ .pAnimCon = &animCon, .key = key,
                     .endPoint = duration - fadeDuration,
                     .preElapsed = 0_ms
                 };
-                expired.destroy();
                 continue;
             }
 
             fadeOut(std::move(prevKey), fadeDuration, animCon);
-            auto expired = co_await FadeIn{
+            co_await FadeIn{
                 .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration, .preElapsed = preElapsed
             };
-            if (expired) expired.destroy();
             prevKey = key;
             
-            expired = co_await Partial{ .pAnimCon = &animCon, .key = key,
+            co_await Partial{ .pAnimCon = &animCon, .key = key,
                 .endPoint = duration - fadeDuration,
                 .preElapsed = std::min(AnimConAttorney::getElapsed(key, animCon), duration)
             };
-            if (expired) expired.destroy();
 
             preElapsed = 0_ms;
         }
