@@ -930,7 +930,8 @@ TaskAnim sequencialNodeImpl( const std::string& key,
 }
 
 TaskAnim sequencialImpl( const std::vector<std::string>& keys,
-    Milliseconds preElapsed, std::coroutine_handle<> suspended, AnimController& con
+    Milliseconds preElapsed, std::coroutine_handle<> suspended, AnimController& con,
+    AnimInstance::ClipMode clipMode
 ) {
     auto raii = CoroRAII(suspended);
 
@@ -938,7 +939,7 @@ TaskAnim sequencialImpl( const std::vector<std::string>& keys,
         bool await_ready() { return false; }
         void await_suspend(std::coroutine_handle<> suspended) {
             pAnimCon->free(
-                pAnimCon->play(key, preElapsed, sequencialNodeImpl(key, suspended, *pAnimCon))
+                pAnimCon->play(key, preElapsed, sequencialNodeImpl(key, suspended, *pAnimCon), clipMode)
             );
             AnimConAttorney::resetFlags(key, etoi(AnimClip::Flags::Loop), *pAnimCon);
         }
@@ -947,13 +948,15 @@ TaskAnim sequencialImpl( const std::vector<std::string>& keys,
         AnimController* pAnimCon;
         std::string key;
         Milliseconds preElapsed;
+        AnimInstance::ClipMode clipMode;
     };
     
     for (const auto& key : keys) {
         co_await Awaitable{
             .pAnimCon = &con,
             .key = key,
-            .preElapsed = preElapsed
+            .preElapsed = preElapsed,
+            .clipMode = clipMode
         };
         preElapsed = std::max(0_ms, preElapsed - AnimConAttorney::getDuration(key, con));
     }
@@ -963,13 +966,18 @@ TaskAnim sequencialImpl( const std::vector<std::string>& keys,
 }
 
 TaskAnimSequence fadeIn( std::string key, std::string prevKey,
-    Milliseconds fadeDuration, AnimController& animCon
+    Milliseconds fadeDuration, AnimController& animCon,
+    AnimInstance::ClipMode clipMode
 ) {
     const auto preElapsed = AnimConAttorney::getDuration(key, animCon)
         * (AnimConAttorney::getElapsed(prevKey, animCon) / AnimConAttorney::getDuration(prevKey, animCon));
 
     co_await FadeIn{
-        .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration, .preElapsed = preElapsed
+        .pAnimCon = &animCon,
+        .key = key,
+        .fadeDuration = fadeDuration,
+        .preElapsed = preElapsed,
+        .clipMode = clipMode
     };
 
     if (animCon.clipInfo(key).flags() & AnimClip::Flags::Loop) {
@@ -981,7 +989,8 @@ TaskAnimSequence fadeIn( std::string key, std::string prevKey,
 }
 
 TaskAnimSequence fadeIn( std::string key, std::vector<std::string> possiblePrevKeys,
-    Milliseconds fadeDuration, AnimController& animCon
+    Milliseconds fadeDuration, AnimController& animCon,
+    AnimInstance::ClipMode clipMode
 ) {
     auto pPrevKey = std::ranges::find_if(possiblePrevKeys, [&animCon](const auto& key) {
         return AnimConAttorney::playing(key, animCon);
@@ -996,7 +1005,13 @@ TaskAnimSequence fadeIn( std::string key, std::vector<std::string> possiblePrevK
         const auto preElapsed = AnimConAttorney::getDuration(key, animCon)
             * (AnimConAttorney::getElapsed(prevKey, animCon) / AnimConAttorney::getDuration(prevKey, animCon));
 
-        co_await FadeIn{ .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration, .preElapsed = preElapsed };
+        co_await FadeIn{
+            .pAnimCon = &animCon,
+            .key = key,
+            .fadeDuration = fadeDuration,
+            .preElapsed = preElapsed,
+            .clipMode = clipMode
+        };
     }
 
     if (animCon.clipInfo(key).flags() & AnimClip::Flags::Loop) {
@@ -1008,7 +1023,8 @@ TaskAnimSequence fadeIn( std::string key, std::vector<std::string> possiblePrevK
 }
 
 TaskAnimSequence fadeInSequencial( std::vector<std::string> keys,
-    std::string prevKey, Milliseconds fadeDuration, AnimController& animCon
+    std::string prevKey, Milliseconds fadeDuration, AnimController& animCon,
+    AnimInstance::ClipMode clipMode
 ) {
     auto& key = *std::begin(keys);
 
@@ -1017,15 +1033,23 @@ TaskAnimSequence fadeInSequencial( std::vector<std::string> keys,
         / AnimConAttorney::getDuration(prevKey, animCon));
 
     co_await FadeIn{
-        .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration, .preElapsed = preElapsed
+        .pAnimCon = &animCon,
+        .key = key,
+        .fadeDuration = fadeDuration,
+        .preElapsed = preElapsed,
+        .clipMode = clipMode
     };
-    co_await Sequencial{ .pAnimCon = &animCon, .keys = std::move(keys),
-        .preElapsed = std::min(preElapsed + fadeDuration, firstDuration)
+    co_await Sequencial{
+        .pAnimCon = &animCon,
+        .keys = std::move(keys),
+        .preElapsed = std::min(preElapsed + fadeDuration, firstDuration),
+        .clipMode = clipMode
     };
 }
 
 TaskAnimSequence fadeInCircular( std::vector<std::string> keys, std::string prevKey,
-    Milliseconds fadeDuration, AnimController& animCon
+    Milliseconds fadeDuration, AnimController& animCon,
+    AnimInstance::ClipMode clipMode
 ) {
     auto& key = *std::begin(keys);
 
@@ -1034,12 +1058,19 @@ TaskAnimSequence fadeInCircular( std::vector<std::string> keys, std::string prev
         / AnimConAttorney::getDuration(prevKey, animCon));
 
     co_await FadeIn{
-        .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration, .preElapsed = preElapsed
+        .pAnimCon = &animCon,
+        .key = key,
+        .fadeDuration = fadeDuration,
+        .preElapsed = preElapsed,
+        .clipMode = clipMode
     };
 
     for (;;) {
-        co_await Sequencial{ .pAnimCon = &animCon, .keys = keys,
-            .preElapsed = std::min(preElapsed + fadeDuration, firstDuration)
+        co_await Sequencial{
+            .pAnimCon = &animCon,
+            .keys = keys,
+            .preElapsed = std::min(preElapsed + fadeDuration, firstDuration),
+            .clipMode = clipMode
         };
         preElapsed = 0_ms;
         fadeDuration = 0_ms;
@@ -1059,22 +1090,35 @@ TaskAnimSequence fadeOutSelect( std::vector<std::string> keys,
 }
 
 TaskAnimSequence sequencial( std::vector<std::string> keys,
-    AnimController& animCon, Milliseconds preElapsed
+    AnimController& animCon, Milliseconds preElapsed,
+    AnimInstance::ClipMode clipMode
 ) {
-    co_await Sequencial{ .pAnimCon = &animCon, .keys = std::move(keys), .preElapsed = preElapsed };
+    co_await Sequencial{
+        .pAnimCon = &animCon,
+        .keys = std::move(keys),
+        .preElapsed = preElapsed,
+        .clipMode = clipMode
+    };
 }
 
 TaskAnimSequence circular( std::vector<std::string> keys,
-    AnimController& animCon, Milliseconds preElapsed
+    AnimController& animCon, Milliseconds preElapsed,
+    AnimInstance::ClipMode clipMode
 ) {
     for (;;) {
-        co_await Sequencial{ .pAnimCon = &animCon, .keys = keys, .preElapsed = preElapsed };
+        co_await Sequencial{
+            .pAnimCon = &animCon,
+            .keys = keys,
+            .preElapsed = preElapsed,
+            .clipMode = clipMode
+        };
         preElapsed = 0_ms;
     }
 }
 
 TaskAnimSequence softCircular( std::vector<std::string> keys, std::string prevKey,
-    Milliseconds fadeDuration, AnimController& animCon
+    Milliseconds fadeDuration, AnimController& animCon,
+    AnimInstance::ClipMode clipMode
 ) {
     auto preElapsed = AnimConAttorney::getDuration(*std::begin(keys), animCon)
         * ( AnimConAttorney::getElapsed(prevKey, animCon)
@@ -1086,7 +1130,8 @@ TaskAnimSequence softCircular( std::vector<std::string> keys, std::string prevKe
             const auto duration = AnimConAttorney::getDuration(key, animCon);
 
             if (key == prevKey) {
-                co_await Partial{ .pAnimCon = &animCon, .key = key,
+                co_await Partial{ .pAnimCon = &animCon,
+                    .key = key,
                     .endPoint = duration - fadeDuration,
                     .preElapsed = 0_ms
                 };
@@ -1095,11 +1140,16 @@ TaskAnimSequence softCircular( std::vector<std::string> keys, std::string prevKe
 
             fadeOut(std::move(prevKey), fadeDuration, animCon);
             co_await FadeIn{
-                .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration, .preElapsed = preElapsed
+                .pAnimCon = &animCon,
+                .key = key,
+                .fadeDuration = fadeDuration,
+                .preElapsed = preElapsed,
+                .clipMode = clipMode
             };
             prevKey = key;
             
-            co_await Partial{ .pAnimCon = &animCon, .key = key,
+            co_await Partial{ .pAnimCon = &animCon,
+                .key = key,
                 .endPoint = duration - fadeDuration,
                 .preElapsed = std::min(AnimConAttorney::getElapsed(key, animCon), duration)
             };

@@ -459,14 +459,15 @@ TaskAnim partialImpl( std::string key, std::coroutine_handle<> suspended,
 );
 TaskAnim sequencialNodeImpl(const std::string& key, std::coroutine_handle<> suspended, AnimController& con);
 TaskAnim sequencialImpl( const std::vector<std::string>& keys,
-    Milliseconds preElapsed, std::coroutine_handle<> suspended, AnimController& con
+    Milliseconds preElapsed, std::coroutine_handle<> suspended, AnimController& con,
+    AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
 );
 
 struct FadeIn {
     bool await_ready() { return false; }
     void await_suspend(std::coroutine_handle<> suspended) {
         pAnimCon->free(
-            pAnimCon->play(key, preElapsed, fadeInImpl(key, fadeDuration, suspended, *pAnimCon))
+            pAnimCon->play(key, preElapsed, fadeInImpl(key, fadeDuration, suspended, *pAnimCon), clipMode)
         );
     }
     void await_resume() {}
@@ -475,6 +476,7 @@ struct FadeIn {
     std::string key;
     Milliseconds fadeDuration;
     Milliseconds preElapsed;
+    AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame;
 };
 
 struct FadeOut {
@@ -574,32 +576,40 @@ struct Sequencial {
     AnimController* pAnimCon;
     std::vector<std::string> keys;
     Milliseconds preElapsed;
+    AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame;
 };
 
 TaskAnimSequence fadeIn( std::string key, std::string prevKey,
-    Milliseconds fadeDuration, AnimController& animCon
+    Milliseconds fadeDuration, AnimController& animCon,
+    AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
 );
 TaskAnimSequence fadeIn( std::string key, std::vector<std::string> possiblePrevKeys,
-    Milliseconds fadeDuration, AnimController& animCon
+    Milliseconds fadeDuration, AnimController& animCon,
+    AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
 );
 TaskAnimSequence fadeInSequencial( std::vector<std::string> keys, std::string prevKey,
-    Milliseconds fadeDuration, AnimController& animCon
+    Milliseconds fadeDuration, AnimController& animCon,
+    AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
 );
 TaskAnimSequence fadeInCircular( std::vector<std::string> keys, std::string prevKey,
-    Milliseconds fadeDuration, AnimController& animCon
+    Milliseconds fadeDuration, AnimController& animCon,
+    AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
 );
 TaskAnimSequence fadeOut(std::string key, Milliseconds fadeDuration, AnimController& animCon);
 TaskAnimSequence fadeOutSelect( std::vector<std::string> keys,
     Milliseconds fadeDuration, AnimController& animCon
 );
 TaskAnimSequence sequencial( std::vector<std::string> keys, AnimController& animCon,
-    Milliseconds preElapsed = 0_ms
+    Milliseconds preElapsed = 0_ms,
+    AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
 );
 TaskAnimSequence circular( std::vector<std::string> keys, AnimController& animCon,
-    Milliseconds preElapsed = 0_ms
+    Milliseconds preElapsed = 0_ms,
+    AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
 );
 TaskAnimSequence softCircular( std::vector<std::string> keys, std::string prevKey,
-    Milliseconds fadeDuration, AnimController& animCon
+    Milliseconds fadeDuration, AnimController& animCon,
+    AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
 );
 
 class AnimSystem : public ecs::System<AnimController>{

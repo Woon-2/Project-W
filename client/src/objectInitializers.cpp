@@ -222,7 +222,7 @@ void initAnimations(
                 {"GO_Character_Idle",
                     "GO_Character_Idle1",
                     "GO_Character_Idle2"
-                }, 360_ms, animCon
+                }, 360_ms, animCon, AnimInstance::ClipMode::Presampled
             );
         });
         animCon.fsm().addTransition("Idle", "Run", [&animCon](){
@@ -240,7 +240,7 @@ void initAnimations(
                 {"GO_Character_Idle",
                     "GO_Character_Idle1",
                     "GO_Character_Idle2"
-                }, 360_ms, animCon
+                }, 360_ms, animCon, AnimInstance::ClipMode::Presampled
             );
         });
         animCon.fsm().addTransition("Idle", "Sprint", [&animCon](){
@@ -258,7 +258,7 @@ void initAnimations(
                 {"GO_Character_Idle",
                     "GO_Character_Idle1",
                     "GO_Character_Idle2"
-                }, 360_ms, animCon
+                }, 360_ms, animCon, AnimInstance::ClipMode::Presampled
             );
         });
 
@@ -272,7 +272,8 @@ void initAnimations(
             softCircular( { "GO_Character_Idle",
                     "GO_Character_Idle1",
                     "GO_Character_Idle2"
-                }, "GO_Character_Walk", 360_ms, animCon
+                }, "GO_Character_Walk", 360_ms, animCon,
+                AnimInstance::ClipMode::Presampled
             );
         });
         animCon.fsm().addTransition("Walk", "Run", [&animCon](){
@@ -281,7 +282,9 @@ void initAnimations(
                 "GO_Character_Run"
             });
             fadeOut("GO_Character_Walk", 360_ms, animCon);
-            fadeIn("GO_Character_Run", "GO_Character_Walk", 360_ms, animCon);
+            fadeIn("GO_Character_Run", "GO_Character_Walk", 360_ms, animCon,
+                AnimInstance::ClipMode::Presampled
+            );
         });
         animCon.fsm().addTransition("Walk", "Sprint", [&animCon](){
             animCon.restoreAnimSequences({
@@ -289,7 +292,9 @@ void initAnimations(
                 "GO_Character_Sprint"
             });
             fadeOut("GO_Character_Walk", 360_ms, animCon);
-            fadeIn("GO_Character_Sprint", "GO_Character_Walk", 360_ms, animCon);
+            fadeIn("GO_Character_Sprint", "GO_Character_Walk", 360_ms,
+                animCon, AnimInstance::ClipMode::Presampled
+            );
         });
 
         animCon.fsm().addTransition("Run", "Idle", [&animCon](){
@@ -303,7 +308,8 @@ void initAnimations(
             softCircular( { "GO_Character_Idle",
                     "GO_Character_Idle1",
                     "GO_Character_Idle2"
-                }, "GO_Character_Walk", 360_ms, animCon
+                }, "GO_Character_Walk", 360_ms, animCon,
+                AnimInstance::ClipMode::Presampled
             );
         });
         animCon.fsm().addTransition("Run", "Walk", [&animCon](){
@@ -312,7 +318,9 @@ void initAnimations(
                 "GO_Character_Walk"
             });
             fadeOut("GO_Character_Run", 360_ms, animCon);
-            fadeIn("GO_Character_Walk", "GO_Character_Run", 360_ms, animCon);
+            fadeIn("GO_Character_Walk", "GO_Character_Run", 360_ms,
+                animCon, AnimInstance::ClipMode::Presampled
+            );
         });
         animCon.fsm().addTransition("Run", "Sprint", [&animCon](){
             animCon.restoreAnimSequences({
@@ -320,7 +328,9 @@ void initAnimations(
                 "GO_Character_Sprint"
             });
             fadeOut("GO_Character_Run", 220_ms, animCon);
-            fadeIn("GO_Character_Sprint", "GO_Character_Run", 220_ms, animCon);
+            fadeIn("GO_Character_Sprint", "GO_Character_Run", 220_ms,
+                animCon, AnimInstance::ClipMode::Presampled
+            );
         });
 
         animCon.fsm().addTransition("Sprint", "Idle", [&animCon](){
@@ -334,7 +344,8 @@ void initAnimations(
             softCircular( { "GO_Character_Idle",
                     "GO_Character_Idle1",
                     "GO_Character_Idle2"
-                }, "GO_Character_Walk", 360_ms, animCon
+                }, "GO_Character_Walk", 360_ms, animCon,
+                AnimInstance::ClipMode::Presampled
             );
         });
         animCon.fsm().addTransition("Sprint", "Walk", [&animCon](){
@@ -343,7 +354,9 @@ void initAnimations(
                 "GO_Character_Walk"
             });
             fadeOut("GO_Character_Sprint", 360_ms, animCon);
-            fadeIn("GO_Character_Walk", "GO_Character_Sprint", 360_ms, animCon);
+            fadeIn("GO_Character_Walk", "GO_Character_Sprint", 360_ms,
+                animCon, AnimInstance::ClipMode::Presampled
+            );
         });
         animCon.fsm().addTransition("Sprint", "Run", [&animCon](){
             animCon.restoreAnimSequences({
@@ -351,14 +364,17 @@ void initAnimations(
                 "GO_Character_Run"
             });
             fadeOut("GO_Character_Sprint", 220_ms, animCon);
-            fadeIn("GO_Character_Run", "GO_Character_Sprint", 220_ms, animCon);
+            fadeIn("GO_Character_Run", "GO_Character_Sprint", 220_ms,
+                animCon, AnimInstance::ClipMode::Presampled
+            );
         });
 
-         animCon.play("GO_Character_Idle");
+         animCon.play("GO_Character_Idle", 0_ms, AnimInstance::ClipMode::Presampled);
 
          softCircular( {
                 "GO_Character_Idle", "GO_Character_Idle1", "GO_Character_Idle2"
-            }, "GO_Character_Idle", 360_ms, animCon
+            }, "GO_Character_Idle", 360_ms, animCon,
+            AnimInstance::ClipMode::Presampled
         );
         break;
 
