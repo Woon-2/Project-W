@@ -177,7 +177,7 @@ public:
     CoroRAII(CoroRAII&& other) noexcept
         : h_(std::exchange(other.h_, nullptr)) {}
 
-    CoroRAII& operator=(CoroRAII&& other) {
+    CoroRAII& operator=(CoroRAII&& other) noexcept {
         if (this == &other) {
             return *this;
         }
