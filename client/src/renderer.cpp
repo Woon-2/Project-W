@@ -26,14 +26,6 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
         }, gfx::d3d12::InputLayout::Spec::separated
     ), renderPassShadowMap_( core.device(), shaderShadowMap_,
         gfx::d3d12::convClientToVP( core.window().client() )
-    ), shaderShadowMapAnimated_( core.device(), core.root(),
-        gfx::d3d12::ShaderShadowMapAnimated::Config{
-            .maxInstanceCnt = 0x1000u,
-            .maxDrawcallCnt = 0x1000u,
-            .maxBoneCnt = 10'000'000u
-        }, gfx::d3d12::InputLayout::Spec::separated
-    ), renderPassShadowMapAnimated_( core.device(), shaderShadowMapAnimated_,
-        gfx::d3d12::convClientToVP( core.window().client() )
     ), shaderCascadeShaodwMap_( core.device(), core.root(),
         gfx::d3d12::ShaderCascadeShadowMap::Config{
 			.maxInstanceCnt = 0x1000u,
@@ -214,7 +206,7 @@ void Renderer::layoutVBsPBRAnimated(gfx::d3d12::D3D12Device& device,
         shaderPBRAnimated_.inputLayout()
     );
     gfx::d3d12::arrangeVBs(refModel, device, cmdList, layoutIdx + 1u,
-        shaderShadowMapAnimated_.inputLayout()
+        shaderCascadeShaodwMap_.inputLayout()
     );
 }
 
