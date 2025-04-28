@@ -196,8 +196,7 @@ public:
     DefaultBuffer() = default;
 
     DefaultBuffer(D3D12Device& device, std::size_t byteWidth,
-        D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE,
-		D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_COMMON
+        D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE
     );
 };
 
@@ -206,8 +205,7 @@ public:
     ReadbackBuffer() = default;
 
     ReadbackBuffer(D3D12Device& device, std::size_t byteWidth,
-        D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE,
-        D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_COMMON
+        D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE
     );
 
     void readback(D3D12GfxCmdList& cmdList, DefaultBuffer& srcBuf) {

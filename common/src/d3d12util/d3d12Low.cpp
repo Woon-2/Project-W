@@ -87,9 +87,7 @@ void D3D12GfxCmdList::copyResource(D3D12Resource& srcRes, D3D12Resource& destRes
 	auto srcOldState = srcRes.state();
 	auto destOldState = destRes.state();
 
-	if (srcRes.state() != D3D12_RESOURCE_STATE_GENERIC_READ) {
-		srcRes.commitState(*this, D3D12_RESOURCE_STATE_COPY_SOURCE);
-	}
+	srcRes.commitState(*this, D3D12_RESOURCE_STATE_COPY_SOURCE);
 	destRes.commitState(*this, D3D12_RESOURCE_STATE_COPY_DEST);
 
 	DX_THROW_FAILED_VOID( get()->CopyResource(destRes.get().Get(), srcRes.get().Get()) );
