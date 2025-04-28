@@ -42,8 +42,8 @@ cbuffer PerDrawcallData : register(b1) {
 cbuffer PerFrameData : register(b2) {
     float3 globalAmbient;
     float padding0;
-    uint4 shadowMapRef;
-    float4x4 lightVP;
+    uint4 shadowMapRef[3];
+    float4x4 lightVP[3];
     uint lightCnt;
     uint3 padding1;
 };
@@ -158,7 +158,7 @@ HSConstantOutput HSConstant(InputPatch<VSOutput, 4> input)
 struct DSOutput {
 	float4 pos : SV_POSITION;
     float3 posV : POSITION_V;
-    float4 posL : POSITION_L;
+    float4 posL[3] : POSITION_L;
 	float3 normalV : NORMAL_V;
     float3 tangentV : TANGENT_V;
     float3 bitangentV : BITANGENT_V;
@@ -222,10 +222,14 @@ DSOutput DSMain(HSConstantOutput input, float2 uv : SV_DomainLocation, const Out
     output.posV = mul(output.pos, gInstances[instanceBase + input.instanceOffset].wv).xyz;
 
     // transform from local to light space
-    output.posL = mul( mul(
-        mul(output.pos, gInstances[instanceBase + input.instanceOffset].world),
-        lightVP
-    ), gmtxTexturize );
+    for (int i = 0; i < 3; i++)
+    {
+        output.posL[i] = mul(mul(
+            mul(output.pos, gInstances[instanceBase + input.instanceOffset].world),
+            lightVP[i]
+        ), gmtxTexturize);
+    }
+
     // transform from local to clip space
 	output.pos = mul(output.pos, gInstances[instanceBase + input.instanceOffset].wvp);
 

@@ -37,8 +37,8 @@ cbuffer PerDrawcallData : register(b1) {
 cbuffer PerFrameData : register(b2) {
     float3 globalAmbient;
     float padding0;
-    uint4 shadowMapRef;
-    float4x4 lightVP;
+    uint4 shadowMapRef[3];
+    float4x4 lightVP[3];
     uint lightCnt;
     uint3 padding1;
 };
@@ -57,7 +57,7 @@ StructuredBuffer<PerInstanceData> gInstances: register(t0);
 struct VSOutput {
 	float4 pos : SV_POSITION;
 	float3 posV : POSITION_V;
-	float4 posL : POSITION_L;
+	float4 posL[3] : POSITION_L;
 	float3 normalV : NORMAL_V;
 	float3 tangentV : TANGENT_V;
 	float3 bitangentV : BITANGENT_V;
@@ -80,10 +80,13 @@ VSOutput VSMain( float3 position : POSITION, float3 normal : NORMAL,
 
     result.pos = mul(float4(position, 1.0f), gInstances[instanceBase + instanceOffset].wvp);
 	result.posV = mul(float4(position, 1.0f), gInstances[instanceBase + instanceOffset].wv).xyz;
-	result.posL = mul( mul(
-		mul(float4(position, 1.0f), gInstances[instanceBase + instanceOffset].world),
-		lightVP
-	), gmtxTexturize );
+    for (int i = 0; i < 3; i++)
+    {
+        result.posL[i] = mul(mul(
+			mul(float4(position, 1.0f), gInstances[instanceBase + instanceOffset].world),
+			lightVP[i]
+		), gmtxTexturize);
+    }
 	result.normalV = mul(normal, gInstances[instanceBase + instanceOffset].wvNormal).xyz;
 	if (material.normalMapRef.x != uint(-1)) {
 		result.tangentV = mul(tangent, gInstances[instanceBase + instanceOffset].wvNormal).xyz;

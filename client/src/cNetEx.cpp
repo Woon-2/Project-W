@@ -167,7 +167,7 @@ void CNetExSystem::handleSCInitCreate(const SCInitCreate& scInitCreate) {
             gfx::d3d12engine::rp::PBRAnimatedIllumination::id
         );
         entity.as<gfx::d3d12engine::Model>().get().markRenderPass(
-            gfx::d3d12engine::rp::ShadowMap::id
+            gfx::d3d12engine::rp::CascadeShadowMap::id
         );
         addEntity(entity);
         break;
@@ -180,7 +180,7 @@ void CNetExSystem::handleSCInitCreate(const SCInitCreate& scInitCreate) {
             gfx::d3d12engine::rp::PBRIllumination::id
         );
         entity.as<gfx::d3d12engine::Model>().get().markRenderPass(
-            gfx::d3d12engine::rp::ShadowMap::id
+            gfx::d3d12engine::rp::CascadeShadowMap::id
         );
         addEntity(entity);
         break;
