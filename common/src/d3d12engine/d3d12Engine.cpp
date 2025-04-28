@@ -512,6 +512,46 @@ void ShadowMapTessellation::update(Scene& scene) {
     }
 }
 
+void CascadeShadowMap::init(Scene& scene)
+{
+    for (auto& pModel : models(scene)) {
+        const auto entityID = pModel->entityID().value();
+        if (auto pBV = BoundingVolume::atC(entityID)) {
+            trackModel(&pModel->get(), &pBV->root());
+        }
+        else {
+            trackModel(&pModel->get());
+        }
+    }
+    if (!cameras(scene).empty()) {
+        auto& pCamera = cameras(scene).front();
+        if (pCamera) {
+            setCamera(&cameras(scene).front()->get());
+        }
+    }
+    if (lights(scene).empty()) {
+        throw GFX_EXCEPT("No light found");
+    }
+    setLight(&lights(scene).front()->get());
+}
+
+void CascadeShadowMap::update(Scene& scene)
+{
+    for (auto& entityID : reservedEntities(scene)) {
+        if (auto pModel = Model::at(entityID)) {
+            if (auto pBV = BoundingVolume::atC(entityID)) {
+                trackModel(&pModel->get(), &pBV->root());
+            }
+            else {
+                trackModel(&pModel->get());
+            }
+        }
+        if (auto pCamera = Camera::at(entityID)) {
+            setCamera(&pCamera->get());
+        }
+    }
+}
+
 }   // namespace gfx::d3d12engine::rp
 
 }   // namespace gfx::d3d12engine

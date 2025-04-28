@@ -27,16 +27,15 @@ public:
         YawLeft,
         YawRight,
         SetRenderModeColor,
-        SetRenderModeAlbedo,
-        SetRenderModeNormal,
-        SetRenderModeDepth,
-        SetRenderModeDirectionalLightDepth,
+		SetRenderModeCascade0Depth,
+		SetRenderModeCascade1Depth,
+		SetRenderModeCascade2Depth
     };
 
     ENABLE_COMPONENT(PlayerController);
 
     PlayerController(const ecs::Entity& entity) NOEXCEPT
-        : Component(entity), forceStep_(2400.f), yawStep_(0.6f * mu::pi) {}
+        : Component(entity), forceStep_(1700.f), yawStep_(0.6f * mu::pi) {}
 
     void handleEvent(Event event, float deltaTime, const ControllerAdapters& controllerAdapters);
 
@@ -64,12 +63,12 @@ private:
     void moveUp(float deltaTime) {
         addForce( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
             ecs::Component::atC(ecs::Components::Model, entityID().value())
-        )->get().root()->coord().localXform().row(1u) ) ) * forceStep_ * deltaTime  );
+        )->get().root()->coord().localXform().row(1u) ) ) * forceStep_ * 0.55f * deltaTime  );
     }
     void moveDown(float deltaTime) {
         addForce( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
             ecs::Component::atC(ecs::Components::Model, entityID().value())
-        )->get().root()->coord().localXform().row(1u) ) ) * -forceStep_ * deltaTime  );
+        )->get().root()->coord().localXform().row(1u) ) ) * -forceStep_ * 0.55f * deltaTime  );
     }
     void yawLeft(float deltaTime);
     void yawRight(float deltaTime);

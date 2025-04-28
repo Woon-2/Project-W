@@ -7,10 +7,9 @@ class Renderer : public gfx::d3d12engine::IRenderer {
 public:
     enum class Mode {
         Color,
-        Albedo,
-        Normal,
-        Depth,
-        DirectionalLightDepth,
+        Cascade0Depth,
+        Cascade1Depth,
+        Cascade2Depth
     };
 
     Renderer(gfx::d3d12engine::Core& core);
@@ -47,8 +46,8 @@ private:
     gfx::d3d12::ShaderShadowMap shaderShadowMap_;
     gfx::d3d12engine::rp::ShadowMap renderPassShadowMap_;
 
-    gfx::d3d12::ShaderShadowMapAnimated shaderShadowMapAnimated_;
-    gfx::d3d12engine::rp::ShadowMapAnimated renderPassShadowMapAnimated_;
+    gfx::d3d12::ShaderCascadeShadowMap shaderCascadeShaodwMap_;
+    gfx::d3d12engine::rp::CascadeShadowMap renderPassCascadeShadowMap_;
 
     gfx::d3d12::ShaderScreenQuad shaderScreenQuad_;
     gfx::d3d12engine::rp::ScreenQuad renderPassScreenQuad_;

@@ -77,7 +77,7 @@ UploadBuffer::UploadBuffer( D3D12Device& device, std::size_t byteWidth,
         },
         .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
         .Flags = flags
-    }, D3D12_HEAP_TYPE_UPLOAD ) {
+    }, D3D12_HEAP_TYPE_UPLOAD) {
     get()->Map(0, nullptr, reinterpret_cast<void**>(&pMappedData_));
 }
 
@@ -105,7 +105,8 @@ DefaultBuffer::DefaultBuffer( D3D12Device& device, std::size_t byteWidth,
         },
         .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
         .Flags = flags
-    }, D3D12_HEAP_TYPE_DEFAULT ) {}
+    }, D3D12_HEAP_TYPE_DEFAULT) {
+}
 
 ReadbackBuffer::ReadbackBuffer(D3D12Device& device, std::size_t byteWidth,
     D3D12_RESOURCE_FLAGS flags
@@ -122,7 +123,8 @@ ReadbackBuffer::ReadbackBuffer(D3D12Device& device, std::size_t byteWidth,
         },
         .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
         .Flags = flags
-    }, D3D12_HEAP_TYPE_READBACK ) {}
+    }, D3D12_HEAP_TYPE_READBACK) {
+}
 
 TextureResource::TextureResource( D3D12Device& device, const Desc& texResDesc,
     D3D12_HEAP_TYPE heapType, D3D12_RESOURCE_STATES initialState
@@ -426,7 +428,7 @@ VertexBuffer::VertexBuffer( D3D12Device& device, D3D12GfxCmdList& cmdList,
 
 IndexBuffer::IndexBuffer(D3D12Device& device, D3D12GfxCmdList& cmdList,
     std::vector<std::uint8_t>&& pData, DXGI_FORMAT indexFormat, std::size_t indexCnt
-) : DefaultBuffer(device, indexCnt * indexByteWidth(indexFormat)), size_(indexCnt),
+) : DefaultBuffer(device, indexCnt* indexByteWidth(indexFormat)), size_(indexCnt),
     indexFormat_(indexFormat), cpuMem_(std::move(pData)) {
 
     auto upBufIdx = cmdList.emplaceXResource<UploadBuffer>(device, cpuMem_.data(), cpuMem_.size());

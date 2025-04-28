@@ -319,7 +319,7 @@ ShaderPBRIllumination::ShaderPBRIllumination( D3D12Device& device, const RootSig
 ) : Shader(root, makeInputLayout(ilSpec)),
 	cbDrawcallDataSize_( calcConstantBufferSize(sizeof(sr::PerDrawcallData0)) ),
 	perConfigurationData_(device, sizeof(sr::PerConfigurationData0)),
-	perFrameData_(device, sizeof(sr::PerFrameData0)),
+	perFrameData_(device, sizeof(sr::PerFrameData2)),
 	perDrawcallData_(device, cbDrawcallDataSize_ * config.maxDrawcallCnt),
 	perInstanceData_(device, sizeof(sr::PerInstanceData0) * config.maxInstanceCnt),
 	lightBuffer_(device, sizeof(sr::Light) * config.maxLightCnt),
@@ -453,7 +453,7 @@ ShaderPBRAnimatedIllumination::ShaderPBRAnimatedIllumination(
 ) : Shader(root, makeInputLayout(ilSpec)),
 	cbDrawcallDataSize_( calcConstantBufferSize(sizeof(sr::PerDrawcallData0)) ),
 	perConfigurationData_(device, sizeof(sr::PerConfigurationData0)),
-	perFrameData_(device, sizeof(sr::PerFrameData0)),
+	perFrameData_(device, sizeof(sr::PerFrameData2)),
 	perDrawcallData_(device, cbDrawcallDataSize_ * config.maxDrawcallCnt),
 	perInstanceData_(device, sizeof(sr::PerInstanceData5) * config.maxInstanceCnt),
 	lightBuffer_(device, sizeof(sr::Light) * config.maxLightCnt),
@@ -851,6 +851,92 @@ InputLayout ShaderShadowMap::makeInputLayoutSeparated() {
 	} );
 }
 
+// cascade shadow map
+ShaderCascadeShadowMap::ShaderCascadeShadowMap(D3D12Device& device,
+	const RootSignature& root, const Config& config,
+	InputLayout::Spec ilSpec
+) : Shader(root, makeInputLayout(ilSpec)),
+cbDrawcallDataSize_(calcConstantBufferSize(sizeof(sr::PerDrawcallData2))),
+perFrameData_{
+	UploadBuffer(device, sizeof(sr::PerFrameData1)),
+	UploadBuffer(device, sizeof(sr::PerFrameData1)),
+	UploadBuffer(device, sizeof(sr::PerFrameData1)),
+},
+perDrawcallData_(device, cbDrawcallDataSize_* config.maxDrawcallCnt),
+perInstanceData_(device, sizeof(sr::PerInstanceData2)* config.maxInstanceCnt),
+maxInstanceCnt_(config.maxInstanceCnt), maxDrawcallCnt_(config.maxDrawcallCnt) {
+	for (auto& uploadBuffer : perFrameData_) {
+		uploadBuffer.pullGpuAddr();
+	}
+	perDrawcallData_.pullGpuAddr();
+	perInstanceData_.pullGpuAddr();
+}
+
+void ShaderCascadeShadowMap::bindRootParams(D3D12GfxCmdList& cmdList) {
+	auto& root = UnifiedRoot::get();
+
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		root.params[UnifiedRoot::ParamIndices::b2],
+		perFrameData_[curCascadeIdx_].gpuAddr()
+	);
+	cmdList.get()->SetGraphicsRootShaderResourceView(
+		root.params[UnifiedRoot::ParamIndices::t0],
+		perInstanceData_.gpuAddr()
+	);
+}
+
+void ShaderCascadeShadowMap::bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCmdList& cmdList) {
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		UnifiedRoot::get().params[UnifiedRoot::ParamIndices::b1],
+		perDrawcallData_.gpuAddr() + cbDrawcallDataSize() * drawcallIdx
+	);
+}
+
+void ShaderCascadeShadowMap::loadBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
+		shaderPath / "cascadeShadow.hlsl", nullptr,
+		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
+	};
+}
+
+void ShaderCascadeShadowMap::releaseBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)].reset();
+}
+
+InputLayout ShaderCascadeShadowMap::makeInputLayout(InputLayout::Spec ilSpec) {
+	switch (ilSpec) {
+	case InputLayout::Spec::serial:
+		return makeInputLayoutSerial();
+	case InputLayout::Spec::separated:
+		return makeInputLayoutSeparated();
+	default:
+		throw GFX_EXCEPT("Invalid input layout specification.");
+	}
+}
+
+InputLayout ShaderCascadeShadowMap::makeInputLayoutSerial() {
+	return InputLayout(std::vector<InputLayout::Slot>{
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{.semanticName = "POSITION", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT }
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Position3D))
+		}
+	});
+}
+
+InputLayout ShaderCascadeShadowMap::makeInputLayoutSeparated() {
+	return InputLayout(std::vector<InputLayout::Slot>{
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{.semanticName = "POSITION", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT }
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Position3D))
+		}
+	});
+}
+// end cascade shadow map
+
 ShaderShadowMapAnimated::ShaderShadowMapAnimated( D3D12Device& device, 
 	const RootSignature& root, const Config& config,
 	InputLayout::Spec ilSpec
@@ -982,7 +1068,7 @@ ShaderTessellation::ShaderTessellation( D3D12Device& device, const RootSignature
 	cbDrawcallDataSize_( calcConstantBufferSize(sizeof(sr::PerDrawcallData4)) ),
 	perDrawcallData_(device, cbDrawcallDataSize_ * config.maxDrawcallCnt),
 	perInstanceData_(device, sizeof(sr::PerInstanceData0) * config.maxInstanceCnt),
-	perFrameData_(device, sizeof(sr::PerFrameData0)),
+	perFrameData_(device, sizeof(sr::PerFrameData2)),
 	maxInstanceCnt_(config.maxInstanceCnt), maxDrawcallCnt_(config.maxDrawcallCnt), maxLightCnt_(config.maxLightCnt),
 	lightBuffer_(device, sizeof(sr::Light) * config.maxLightCnt)
 {
@@ -1089,11 +1175,17 @@ ShaderShadowMapTessellation::ShaderShadowMapTessellation( D3D12Device& device,
 	cbDrawcallDataSize_( calcConstantBufferSize(sizeof(sr::PerDrawcallData4)) ),
 	perDrawcallData_(device, cbDrawcallDataSize_ * config.maxDrawcallCnt),
 	perInstanceData_(device, sizeof(sr::PerInstanceData4) * config.maxInstanceCnt),
-	perFrameData_(device, sizeof(sr::PerFrameData1)),
+	perFrameData_{
+		UploadBuffer(device, sizeof(sr::PerFrameData1)),
+		UploadBuffer(device, sizeof(sr::PerFrameData1)),
+		UploadBuffer(device, sizeof(sr::PerFrameData1)),
+	},
 	maxInstanceCnt_(config.maxInstanceCnt), maxDrawcallCnt_(config.maxDrawcallCnt) {
 	perDrawcallData_.pullGpuAddr();
 	perInstanceData_.pullGpuAddr();
-	perFrameData_.pullGpuAddr();
+	for (auto& uploadBuffer : perFrameData_) {
+		uploadBuffer.pullGpuAddr();
+	}
 }
 
 void ShaderShadowMapTessellation::bindRootParams(D3D12GfxCmdList& cmdList) {
@@ -1101,7 +1193,7 @@ void ShaderShadowMapTessellation::bindRootParams(D3D12GfxCmdList& cmdList) {
 
 	cmdList.get()->SetGraphicsRootConstantBufferView(
 		root.params[ UnifiedRoot::ParamIndices::b2 ],
-		perFrameData_.gpuAddr()
+		perFrameData_[curCascadeIdx_].gpuAddr()
 	);
 	cmdList.get()->SetGraphicsRootShaderResourceView(
 		root.params[ UnifiedRoot::ParamIndices::t0 ],
@@ -1181,7 +1273,7 @@ InputLayout ShaderShadowMapTessellation::makeInputLayoutSeparated() {
 ShaderMatMul::ShaderMatMul(D3D12Device& device, const RootSignature& root, const Config& config)
 	: ComputeShader(root), lhsMatrices_(device, sizeof(dx::XMFLOAT4X4) * config.maxMatrixCnt),
 	rhsMatrices_(device, sizeof(dx::XMFLOAT4X4) * config.maxMatrixCnt),
-	resultMatrices_(device, sizeof(dx::XMFLOAT4X4) * config.maxMatrixCnt),
+	resultMatrices_(device, sizeof(dx::XMFLOAT4X4)* config.maxMatrixCnt),
 	resultMatricesSrc_(device, sizeof(dx::XMFLOAT4X4) * config.maxMatrixCnt,
 		D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
 	), maxMatrixCnt_(config.maxMatrixCnt) {
@@ -1222,7 +1314,7 @@ ShaderAnimInterpolation::ShaderAnimInterpolation(D3D12Device& device, const Root
 	: ComputeShader(root),
 	lhsKeyFrames_(device, sizeof(sr::KeyFrame) * config.maxKeyFrameCnt),
 	rhsKeyFrames_(device, sizeof(sr::KeyFrame) * config.maxKeyFrameCnt),
-	resultMatrices_(device, sizeof(dx::XMFLOAT4X4) * config.maxKeyFrameCnt),
+	resultMatrices_(device, sizeof(dx::XMFLOAT4X4)* config.maxKeyFrameCnt),
 	resultMatricesSrc_(device, sizeof(dx::XMFLOAT4X4) * config.maxKeyFrameCnt,
 		D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
 	), maxKeyFrameCnt_(config.maxKeyFrameCnt) {

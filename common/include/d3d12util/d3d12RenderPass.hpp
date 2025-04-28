@@ -279,6 +279,10 @@ struct WorldLight {
         };
     };
 
+    float cascadeLevel[4] = { 0.0f, 40.0f, 100.0f, 1000.0f };
+
+    mu::Mat4x4 MU_CALLCONV calcCascadeViewProj(const Camera& camera, int cascadeLv) const;
+
     sr::Light toViewLight(const Camera& camera) const;
     // for directional lights
     mu::Mat4x4 MU_CALLCONV view(const Camera& camera) const;
@@ -370,13 +374,19 @@ public:
     );
 
     void initResources(
-        RenderPassTextures shadowMap, const DescriptorCPU* pDsv,
+        int cascadeIndex,
+        RenderPassTextures shadowMap,
+        const DescriptorCPU* pDsv,
         const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
         const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
     );
 
     std::vector<RenderPassTextures> requiredTextures() const {
-        return {RenderPassTextures::ShadowMap};
+        return { 
+            RenderPassTextures::ShadowCascade0,
+            RenderPassTextures::ShadowCascade1,
+            RenderPassTextures::ShadowCascade2
+        };
     }
 
     void setViewport(const D3D12_VIEWPORT& vp);
@@ -408,7 +418,7 @@ private:
 
     static RenderProtocol::Desc makeDesc();
 
-    ShadowMaterial shadowMaterial_;
+    ShadowMaterial shadowMaterial_[3];
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
     std::vector<const WorldLight*> lights_;
@@ -428,13 +438,19 @@ public:
     );
 
     void initResources(
-        RenderPassTextures shadowMap, const DescriptorCPU* pDsv,
+        int cascadeIndex,
+        RenderPassTextures shadowMap,
+        const DescriptorCPU* pDsv,
         const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
         const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
     );
 
     std::vector<RenderPassTextures> requiredTextures() const {
-        return {RenderPassTextures::ShadowMap};
+        return {
+            RenderPassTextures::ShadowCascade0,
+            RenderPassTextures::ShadowCascade1,
+            RenderPassTextures::ShadowCascade2
+        };
     }
 
     void setViewport(const D3D12_VIEWPORT& vp);
@@ -468,7 +484,7 @@ private:
 
     static RenderProtocol::Desc makeDesc();
 
-    ShadowMaterial shadowMaterial_;
+    ShadowMaterial shadowMaterial_[3];
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
     std::vector<const WorldLight*> lights_;
@@ -482,14 +498,13 @@ private:
 class ShadowMap : public gfx::d3d12::RenderPass {
 public:
     static constexpr const char* id = "ShadowMap";
-    friend class ShadowMapTessellation;
 
     ShadowMap( D3D12Device& device, ShaderShadowMap& shader,
         const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
     );
 
     void initResources(
-        RenderPassTextures shadowMap, const DescriptorCPU* pDsv,
+        const DescriptorCPU* pDsv,
         const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
         const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
     );
@@ -527,6 +542,68 @@ private:
     static RenderProtocol::Desc makeDesc();
 
     ShadowMaterial shadowMaterial_;
+    D3D12_VIEWPORT viewport_;
+    RenderProtocol protocol_;
+    const WorldLight* pLight_;
+    std::vector< std::tuple<bool, const BoundingVolumeNode*, Submesh*,
+        const coord::System*, VBLayoutIdx, mu::Mat4x4>
+    > batch_;
+    const Camera* pCamera_;
+};
+
+class CascadeShadowMap : public gfx::d3d12::RenderPass {
+public:
+    static constexpr const char* id = "CascadeShadowMap";
+
+    CascadeShadowMap(D3D12Device& device, ShaderCascadeShadowMap& shader,
+        const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
+    );
+
+    void initResources(
+        int cascadeIndex,
+        RenderPassTextures shadowMap, 
+        const DescriptorCPU* pDsv,
+        const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
+        const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
+    );
+
+    std::vector<RenderPassTextures> requiredTextures() const {
+        return { RenderPassTextures::ShadowCascade0,
+                 RenderPassTextures::ShadowCascade1,
+                 RenderPassTextures::ShadowCascade2
+        };
+    }
+
+
+    void setViewport(const D3D12_VIEWPORT& vp);
+
+    const D3D12_VIEWPORT& viewport() const NOEXCEPT {
+        return viewport_;
+    }
+
+    void preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+
+    void trackModel(Model* pModel);
+    void trackModel(Model* pModel, const BoundingVolumeNode* pBVNode);
+    void setCamera(const Camera* pCamera) NOEXCEPT {
+        pCamera_ = pCamera;
+    }
+    void setLight(const WorldLight* pLight);
+
+private:
+    ShaderCascadeShadowMap& shader() noexcept {
+        return static_cast<ShaderCascadeShadowMap&>(protocol_.shader());
+    }
+    const ShaderCascadeShadowMap& shader() const noexcept {
+        return static_cast<const ShaderCascadeShadowMap&>(protocol_.shader());
+    }
+
+    static RenderProtocol::Desc makeDesc();
+
+    ShadowMaterial shadowMaterial_[3];
+    int curCascadeLevel_;
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
     const WorldLight* pLight_;
@@ -637,13 +714,19 @@ public:
     );
 
     void initResources(
-        RenderPassTextures shadowMap, const DescriptorCPU* pDsv,
+        int cascadeIndex,
+        RenderPassTextures shadowMap,
+        const DescriptorCPU* pDsv,
         const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
         const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
     );
 
     std::vector<RenderPassTextures> requiredTextures() const {
-        return {RenderPassTextures::ShadowMap};
+        return { 
+          RenderPassTextures::ShadowCascade0,
+          RenderPassTextures::ShadowCascade1,
+          RenderPassTextures::ShadowCascade2
+        };
     }
 
     void setViewport(const D3D12_VIEWPORT& vp);
@@ -674,7 +757,7 @@ private:
 
     static RenderProtocol::Desc makeDesc();
 
-    ShadowMaterial shadowMaterial_;
+    ShadowMaterial shadowMaterial_[3];
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
     std::vector<const WorldLight*> lights_;
@@ -693,13 +776,19 @@ public:
     );
 
     void initResources(
-        RenderPassTextures shadowMap, const DescriptorCPU* pDsv,
+        int cascadeIndex,
+        RenderPassTextures shadowMap,
+        const DescriptorCPU* pDsv,
         const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
         const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
     );
 
     std::vector<RenderPassTextures> requiredTextures() const {
-        return {RenderPassTextures::ShadowMap};
+        return {
+          RenderPassTextures::ShadowCascade0,
+          RenderPassTextures::ShadowCascade1,
+          RenderPassTextures::ShadowCascade2
+        };
     }
 
     void setViewport(const D3D12_VIEWPORT& vp);
@@ -728,7 +817,8 @@ private:
 
     static RenderProtocol::Desc makeDesc();
 
-    ShadowMaterial shadowMaterial_;
+    ShadowMaterial shadowMaterial_[3];
+    int curCascadeLevel_;
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
     const WorldLight* pLight_;

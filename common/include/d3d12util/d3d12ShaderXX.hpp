@@ -538,7 +538,12 @@ struct PerFrameData1 {
 };
 
 struct PerFrameData2 {
-
+	dx::XMFLOAT3 globalAmbient;
+	float padding0;
+	dx::XMUINT4 shadowMapRef[3];
+	dx::XMFLOAT4X4 lightVP[3];
+	std::uint32_t lightCnt;
+	dx::XMUINT3 padding1;
 };
 
 struct KeyFrame {
@@ -808,6 +813,58 @@ private:
 	std::size_t maxDrawcallCnt_;
 };
 
+class ShaderCascadeShadowMap : public Shader {
+private:
+	std::size_t cbDrawcallDataSize_;
+
+public:
+	struct Config {
+		std::size_t maxInstanceCnt;
+		std::size_t maxDrawcallCnt;
+	};
+
+	ShaderCascadeShadowMap(D3D12Device& device, const RootSignature& root,
+		const Config& config, InputLayout::Spec ilSpec = InputLayout::Spec::serial
+	);
+
+	RenderProtocol makeProtocol(D3D12Device& device, const RenderProtocol::Desc& desc) {
+		return RenderProtocol(device, *this,
+			selectBlobsStrong<ShaderBlob::Type::Vertex>(), desc
+		);
+	}
+
+	std::size_t maxInstanceCnt() const noexcept {
+		return maxInstanceCnt_;
+	}
+
+	std::size_t maxDrawcallCnt() const noexcept {
+		return maxDrawcallCnt_;
+	}
+
+	void bindRootParams(D3D12GfxCmdList& cmdList) override;
+	void bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCmdList& cmdList);
+
+	void loadBlobs() override;
+	void releaseBlobs() override;
+
+	UploadBuffer perFrameData_[3];
+	UploadBuffer perDrawcallData_;
+	UploadBuffer perInstanceData_;
+	int curCascadeIdx_;
+
+	std::size_t cbDrawcallDataSize() const noexcept {
+		return cbDrawcallDataSize_;
+	}
+
+private:
+	static InputLayout makeInputLayout(InputLayout::Spec ilSpec);
+	static InputLayout makeInputLayoutSerial();
+	static InputLayout makeInputLayoutSeparated();
+
+	std::size_t maxInstanceCnt_;
+	std::size_t maxDrawcallCnt_;
+};
+
 class ShaderShadowMapAnimated : public Shader {
 private:
 	std::size_t cbDrawcallDataSize_;
@@ -992,9 +1049,10 @@ public:
 		chunk.draw(cmdList);
 	}
 
-	UploadBuffer perFrameData_;
+	UploadBuffer perFrameData_[3];
 	UploadBuffer perDrawcallData_;
 	UploadBuffer perInstanceData_;
+	int curCascadeIdx_;
 
 	std::size_t cbDrawcallDataSize() const noexcept {
 		return cbDrawcallDataSize_;

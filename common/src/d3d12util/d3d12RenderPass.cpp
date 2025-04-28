@@ -73,7 +73,7 @@ ShadowMaterial::ShadowMaterial( Texture* pMapResource,
     pMapResource_(pMapResource) {
     addMapRef(MapType::Shadow, MapRef{
         .type = etoi(ResourceType::Texture),
-        .resourceIdx = static_cast<std::uint32_t>( pMapResource_->idxSrv ),
+        .resourceIdx = static_cast<std::uint32_t>( pSrv_->offset() ),
     } );
 }
 
@@ -93,6 +93,85 @@ void ShadowMaterial::onClear(D3D12GfxCmdList& cmdList) {
     cmdList.get()->ClearDepthStencilView(
         pDsv_->cpuHandle(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0u, nullptr
     );
+}
+
+mu::Mat4x4 MU_CALLCONV WorldLight::calcCascadeViewProj(const Camera& camera, int cascadeLv) const
+{
+    // 시야각을 이용해서 수직 시야각을 구함
+    auto fov = mu::Radian(camera.defFov);
+
+    float tanHalfVFov = tanf( float(fov) * 0.5f);
+
+    // 수직 시야각을 이용해서 수평 시야각을 구함
+    float tanHalfHFov = tanHalfVFov * camera.defAspect;
+
+    // 절두체를 나누기 위한 각 부분 절두체의 끝 지점 선언
+    float cascadeEnd[4] = { camera.defNear, cascadeLevel[1], cascadeLevel[2], camera.defFar};
+
+    // +X, +Y 좌표에 수평, 수직 시야각을 이용하여 구함. 각 부분 절두체의 가까운, 먼 평면의 값을 곱하여 4개의 점을 구함
+    float xn = cascadeEnd[cascadeLv] * tanHalfHFov;
+    float xf = cascadeEnd[cascadeLv + 1] * tanHalfHFov;
+    float yn = cascadeEnd[cascadeLv] * tanHalfVFov;
+    float yf = cascadeEnd[cascadeLv + 1] * tanHalfVFov;
+
+    // 4개의 점을 이용하여 절두체의 8개의 점을 구함
+    mu::Vec4 frustumCorner[8] = {
+        mu::Vec4(xn, yn, cascadeEnd[cascadeLv], 1.0f),
+        mu::Vec4(-xn, yn, cascadeEnd[cascadeLv], 1.0f),
+        mu::Vec4(xn, -yn, cascadeEnd[cascadeLv], 1.0f),
+        mu::Vec4(-xn, -yn, cascadeEnd[cascadeLv], 1.0f),
+        mu::Vec4(xf, yf, cascadeEnd[cascadeLv + 1], 1.0f),
+        mu::Vec4(-xf, yf, cascadeEnd[cascadeLv + 1], 1.0f),
+        mu::Vec4(xf, -yf, cascadeEnd[cascadeLv + 1], 1.0f),
+        mu::Vec4(-xf, -yf, cascadeEnd[cascadeLv + 1], 1.0f)
+    };    
+
+    float minX = std::numeric_limits<float>::max();
+    float maxX = std::numeric_limits<float>::lowest();
+    float minY = std::numeric_limits<float>::max();
+    float maxY = std::numeric_limits<float>::lowest();
+    float minZ = std::numeric_limits<float>::max();
+    float maxZ = std::numeric_limits<float>::lowest();
+
+    for (int j = 0; j < 8; ++j)
+    {
+        minX = std::min(minX, frustumCorner[j].x());
+        maxX = std::max(maxX, frustumCorner[j].x());
+        minY = std::min(minY, frustumCorner[j].y());
+        maxY = std::max(maxY, frustumCorner[j].y());
+        minZ = std::min(minZ, frustumCorner[j].z());
+        maxZ = std::max(maxZ, frustumCorner[j].z());
+    }
+
+    // frustum center
+    mu::Vec4 frustumCenter = mu::Vec4(
+        (minX + maxX) * 0.5f,
+        (minY + maxY) * 0.5f,
+        (minZ + maxZ) * 0.5f,
+        1.0f
+    );
+
+    mu::Vec3 cameraTranslation = camera.repPos();
+    frustumCenter += mu::Vec4(cameraTranslation, 0.0f);
+
+    mu::Vec3 lightPos = mu::Vec3(frustumCenter.x(), frustumCenter.y(), frustumCenter.z());
+    lightPos -= dir * (cascadeEnd[cascadeLv] + (cascadeEnd[cascadeLv + 1] - cascadeEnd[cascadeLv]) / 2.f);
+
+    // Light view 행렬 계산 (lookAt 방식)
+    mu::Mat4x4 lightView = mu::lookAt(
+        lightPos,
+        lightPos + dir,
+        mu::Vec3(0.0f, 1.0f, 0.0f)
+    );
+
+    // Light projection 행렬 계산
+    mu::Mat4x4 lightProj = mu::ortho(
+        minX, maxX,
+        minY, maxY,
+        minZ, maxZ
+    );
+    
+    return lightView * lightProj;
 }
 
 sr::Light WorldLight::toViewLight(const Camera& camera) const {
@@ -157,13 +236,15 @@ PBRIllumination::PBRIllumination( D3D12Device& device, ShaderPBRIllumination& sh
 }
 
 void PBRIllumination::initResources(
-    RenderPassTextures shadowMap, const DescriptorCPU* pDsv,
+    int cascadeIndex,
+    RenderPassTextures shadowMap,
+    const DescriptorCPU* pDsv,
     const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
     const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
 ) {
     checkRequiredTextures();
-    shadowMaterial_ = ShadowMaterial(
-        getTexture(RenderPassTextures::ShadowMap),
+    shadowMaterial_[cascadeIndex] = ShadowMaterial(
+        getTexture(shadowMap),
         pDsv, dsvDesc, pSrv, srvDesc
     );
 }
@@ -314,21 +395,32 @@ void PBRIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderT
         }
     }
 
-    shadowMaterial_.texture().commitState(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    for (int i = 0; i < 3; ++i)
+    {
+        shadowMaterial_[i].texture().commitState(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    }
 
     // temporarilly directional light at first
     const auto pDirectionalLight = lights_.front();
 
-    const auto pfd = sr::PerFrameData0{
+    const auto pfd = sr::PerFrameData2{
         .globalAmbient = dx::XMFLOAT3(0.1f, 0.1f, 0.1f),
-        .shadowMapRef = shadowMaterial_.mapRef(Material::MapType::Shadow).toxm(),
-        .lightVP = mu::transpose( pDirectionalLight->viewProj(*pCamera_) ).getXmf(),
+        .shadowMapRef = {
+            shadowMaterial_[0].mapRef(Material::MapType::Shadow).toxm(),
+            shadowMaterial_[1].mapRef(Material::MapType::Shadow).toxm(),
+            shadowMaterial_[2].mapRef(Material::MapType::Shadow).toxm()
+        },
+        .lightVP = {
+            mu::transpose(pDirectionalLight->calcCascadeViewProj(*pCamera_, 0)).getXmf(),
+            mu::transpose(pDirectionalLight->calcCascadeViewProj(*pCamera_, 1)).getXmf(),
+            mu::transpose(pDirectionalLight->calcCascadeViewProj(*pCamera_, 2)).getXmf()
+        },
         .lightCnt = static_cast<std::uint32_t>( lightBuffer.size() )
     };
 
     shader().perInstanceData_.stage(pids.data(), pids.size() * sizeof(sr::PerInstanceData0));
     shader().lightBuffer_.stage(lightBuffer.data(), lightBuffer.size() * sizeof(sr::Light));
-    shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData0));
+    shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData2));
 }
 
 void PBRIllumination::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
@@ -386,7 +478,10 @@ void PBRIllumination::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTarg
 }
 
 void PBRIllumination::postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
-    shadowMaterial_.texture().commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    for (int i = 0; i < 3; ++i)
+    {
+        shadowMaterial_[i].texture().commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    }
 }
 
 void PBRIllumination::trackModel(Model* pModel) {
@@ -459,13 +554,15 @@ PBRAnimatedIllumination::PBRAnimatedIllumination(
 }
 
 void PBRAnimatedIllumination::initResources(
-    RenderPassTextures shadowMap, const DescriptorCPU* pDsv,
+    int cascadeIndex,
+    RenderPassTextures shadowMap,
+    const DescriptorCPU* pDsv,
     const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
     const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
 ) {
     checkRequiredTextures();
-    shadowMaterial_ = ShadowMaterial(
-        getTexture(RenderPassTextures::ShadowMap),
+    shadowMaterial_[cascadeIndex] = ShadowMaterial(
+        getTexture(shadowMap),
         pDsv, dsvDesc, pSrv, srvDesc
     );
 }
@@ -677,22 +774,32 @@ void PBRAnimatedIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets&
         }
     }
 
-
-    shadowMaterial_.texture().commitState(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    for(int i = 0; i < 3; ++i)
+	{
+		shadowMaterial_[i].texture().commitState(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	}
 
     // temporarilly directional light at first
     const auto pDirectionalLight = lights_.front();
 
-    const auto pfd = sr::PerFrameData0{
+    const auto pfd = sr::PerFrameData2{
         .globalAmbient = dx::XMFLOAT3(0.1f, 0.1f, 0.1f),
-        .shadowMapRef = shadowMaterial_.mapRef(Material::MapType::Shadow).toxm(),
-        .lightVP = mu::transpose( pDirectionalLight->viewProj(*pCamera_) ).getXmf(),
+		.shadowMapRef = {
+			shadowMaterial_[0].mapRef(Material::MapType::Shadow).toxm(),
+			shadowMaterial_[1].mapRef(Material::MapType::Shadow).toxm(),
+			shadowMaterial_[2].mapRef(Material::MapType::Shadow).toxm()
+		},
+		.lightVP = {
+			mu::transpose(pDirectionalLight->calcCascadeViewProj(*pCamera_, 0)).getXmf(),
+			mu::transpose(pDirectionalLight->calcCascadeViewProj(*pCamera_, 1)).getXmf(),
+			mu::transpose(pDirectionalLight->calcCascadeViewProj(*pCamera_, 2)).getXmf()
+		},
         .lightCnt = static_cast<std::uint32_t>( lightBuffer.size() )
     };
 
     shader().perInstanceData_.stage(pids.data(), pids.size() * sizeof(sr::PerInstanceData0));
     shader().lightBuffer_.stage(lightBuffer.data(), lightBuffer.size() * sizeof(sr::Light));
-    shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData0));
+    shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData2));
     shader().boneBuffer_.stage(bones.data(), bones.size() * sizeof(dx::XMFLOAT4X4));
 }
 
@@ -751,7 +858,9 @@ void PBRAnimatedIllumination::render(D3D12GfxCmdList& cmdList, RenderTargets& re
 }
 
 void PBRAnimatedIllumination::postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
-    shadowMaterial_.texture().commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    for (int i = 0; i < 3; ++i) {
+        shadowMaterial_[i].texture().commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    }
 }
 
 void PBRAnimatedIllumination::trackModel(Model* pModel, const AnimController* pAnimCon) {
@@ -821,7 +930,7 @@ ShadowMap::ShadowMap( D3D12Device& device,
 }
 
 void ShadowMap::initResources(
-    RenderPassTextures shadowMap, const DescriptorCPU* pDsv,
+    const DescriptorCPU* pDsv,
     const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
     const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
 ) {
@@ -1068,6 +1177,268 @@ void ShadowMap::trackModel(Model* pModel, const BoundingVolumeNode* pBVNode) {
 }
 
 void ShadowMap::setLight(const WorldLight* pLight) {
+    pLight_ = pLight;
+}
+
+CascadeShadowMap::CascadeShadowMap(D3D12Device& device,
+    ShaderCascadeShadowMap& shader, const D3D12_VIEWPORT& vp
+) : gfx::d3d12::RenderPass(id),
+    shadowMaterial_(), curCascadeLevel_(0),
+    viewport_(vp), protocol_(shader.makeProtocol(device,
+        RenderProtocol::Desc{ makeDesc() }
+    )), pLight_(nullptr), batch_(), pCamera_(nullptr) {}
+
+void CascadeShadowMap::initResources(int cascadeIndex, RenderPassTextures shadowMap, const DescriptorCPU* pDsv, const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc, const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc)
+{
+    checkRequiredTextures();
+
+    shadowMaterial_[cascadeIndex] = ShadowMaterial(
+        getTexture(shadowMap),
+        pDsv, dsvDesc, pSrv, srvDesc
+    );
+}
+
+RenderProtocol::Desc CascadeShadowMap::makeDesc()
+{
+    return RenderProtocol::Desc{
+        .blend = D3D12_BLEND_DESC{
+            .AlphaToCoverageEnable = false,
+            .IndependentBlendEnable = false,
+            .RenderTarget = {
+                D3D12_RENDER_TARGET_BLEND_DESC{
+                    .BlendEnable = false,
+                    .SrcBlend = D3D12_BLEND_ONE,
+                    .DestBlend = D3D12_BLEND_ZERO,
+                    .BlendOp = D3D12_BLEND_OP_ADD,
+                    .SrcBlendAlpha = D3D12_BLEND_ONE,
+                    .DestBlendAlpha = D3D12_BLEND_ZERO,
+                    .BlendOpAlpha = D3D12_BLEND_OP_ADD,
+                    .RenderTargetWriteMask = 0u
+                }
+            }
+        },
+        .sampleMask = UINT_MAX,
+        .rasterizerState = D3D12_RASTERIZER_DESC{
+            .FillMode = D3D12_FILL_MODE_SOLID,
+            .CullMode = D3D12_CULL_MODE_BACK,
+            .DepthBias = 1000,
+            .DepthBiasClamp = 0.0f,
+            .SlopeScaledDepthBias = 1.0f,
+            .DepthClipEnable = true
+        },
+        .depthStencilState = D3D12_DEPTH_STENCIL_DESC{
+            .DepthEnable = true,
+            .DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
+            .DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+            .StencilEnable = false
+        },
+        .primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+        .numRenderTargets = 1u,
+        .rtvFormats = { DXGI_FORMAT_R8G8B8A8_UNORM },
+        .dsvFormat = DXGI_FORMAT_D32_FLOAT,
+        .sampleDesc = DXGI_SAMPLE_DESC{.Count = 1u, .Quality = 0u },
+        .nodeMask = 0u
+    };
+}
+
+void CascadeShadowMap::setViewport(const D3D12_VIEWPORT& vp) {
+    viewport_ = vp;
+}
+
+void CascadeShadowMap::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
+    cmdList.get()->SetPipelineState(protocol_.get().Get());
+    cmdList.get()->RSSetViewports(1u, &viewport_);
+    auto scissorRect = D3D12_RECT{ 0, 0, static_cast<LONG>(viewport_.Width), static_cast<LONG>(viewport_.Height) };
+    cmdList.get()->RSSetScissorRects(1u, &scissorRect);
+
+    shadowMaterial_[curCascadeLevel_].texture().commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);    
+
+    // sort batch by bounding volume node and other properties
+    // to cull out the same bounding volume nodes
+    // that are out of the camera frustum.
+    auto proj = [this](const auto& tuple) {
+        return std::tuple(
+            std::get<const BoundingVolumeNode*>(tuple),
+            &std::get<gfx::d3d12::Submesh*>(tuple)->material(),
+            std::get<gfx::d3d12::Submesh*>(tuple)->refSubmesh()
+        );
+        };
+
+    std::ranges::sort(batch_, std::less<>{}, proj);
+
+    auto pids = std::vector<sr::PerInstanceData2>();
+    pids.reserve(shader().maxInstanceCnt());
+
+    const BoundingVolumeNode* pLastCulledBVNode = nullptr;
+
+    for (auto& [willNotDraw, pBVNode, pSubmesh, pCoord, vbLayoutIdx, xform] : batch_) {
+        // update xform
+        xform = pSubmesh->parent()->parent()->coord().xform();
+
+        // cull out instances that are out of the camera frustum.
+        // enhance performance by eliding collision check of the same bounding volume nodes.
+        if (pLastCulledBVNode && pLastCulledBVNode == pBVNode) {
+            willNotDraw = true;
+            continue;
+        }
+
+        if (pBVNode && !BoundingVolumeNode::collides(
+            pCamera_->coordRotation().xform(), pCamera_->bvNode(),
+            pCoord->xform(), *pBVNode
+        )) {
+            willNotDraw = true;
+            pLastCulledBVNode = pBVNode;
+            continue;
+        }
+    }
+
+    // finally sort batch by culled status and other properties
+    // to separate instances that are visible and invisible.
+    auto proj2 = [this](const auto& tuple) {
+        return std::tuple(
+            std::get<bool>(tuple),
+            &std::get<gfx::d3d12::Submesh*>(tuple)->material(),
+            std::get<gfx::d3d12::Submesh*>(tuple)->refSubmesh()
+        );
+        };
+
+    std::ranges::sort(batch_, std::less<>{}, proj2);
+
+    for (const auto& [willNotDraw, pBVNode, pSubmesh, pCoord, vbLayoutIdx, xform] : batch_) {
+        // as the first criterion of sorting is the culled status,
+        // if the first instance is culled, then all the rest are culled.
+        if (willNotDraw) {
+            break;
+        }
+
+        // upload per instance data
+        pids.emplace_back(
+            /* .world = */ mu::transpose(xform).getXmf()
+        );
+
+        if (pids.size() == shader().maxInstanceCnt()) [[unlikely]] {
+            break;
+        }
+    }
+
+    const auto pfd = sr::PerFrameData1{
+        .lightVP = mu::transpose(pLight_->calcCascadeViewProj(*pCamera_, curCascadeLevel_)).getXmf()
+    };
+
+    shader().perInstanceData_.stage(pids.data(), pids.size() * sizeof(sr::PerInstanceData2));
+    shader().perFrameData_[curCascadeLevel_].stage(&pfd, sizeof(sr::PerFrameData1));
+}
+
+void CascadeShadowMap::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
+    shadowMaterial_[curCascadeLevel_].texture().commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    cmdList.get()->OMSetRenderTargets(0u, nullptr, false, &shadowMaterial_[curCascadeLevel_].dsv().cpuHandle());
+    auto first = batch_.begin();
+    auto accDrawcallCnt = 0u;
+
+    // instances that are going to be drawn are at the front of the batch
+    // as the first criterion of sorting is the culled status.
+    auto proj = [this](const auto& tuple) {
+        return std::tuple(
+            std::get<bool>(tuple),
+            &std::get<gfx::d3d12::Submesh*>(tuple)->material(),
+            std::get<gfx::d3d12::Submesh*>(tuple)->refSubmesh()
+        );
+        };
+
+    while (first != batch_.end()) {
+        auto last = std::ranges::upper_bound(first, batch_.end(), proj(*first), std::less<>{}, proj);
+
+        // as the first criterion of sorting is the culled status,
+        // if the first instance is culled, then all the rest are culled.
+        auto willNotDraw = std::get<bool>(*first);
+        if (willNotDraw) {
+            break;
+        }
+
+        auto pSubmesh = std::get<gfx::d3d12::Submesh*>(*first);
+
+        auto pdd = sr::PerDrawcallData2{
+            .instanceBase = static_cast<std::uint32_t>(first - batch_.begin()),
+        };
+        shader().perDrawcallData_.stage(&pdd, sizeof(sr::PerDrawcallData2),
+            0u, accDrawcallCnt * shader().cbDrawcallDataSize()
+        );
+
+        shader().bindPerDrawcallData(accDrawcallCnt++, cmdList);
+
+        shader().draw(cmdList, *pSubmesh, static_cast<std::size_t>(last - first),
+            std::get<VBLayoutIdx>(*first)
+        );
+
+        if (accDrawcallCnt == shader().maxDrawcallCnt()) {
+            break;
+        }
+
+        first = last;
+    }
+}
+
+void CascadeShadowMap::postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
+    curCascadeLevel_ += 1;
+    if (curCascadeLevel_ > 2)
+    {
+        curCascadeLevel_ %= 3;
+    }
+}
+
+void CascadeShadowMap::trackModel(Model* pModel) {
+    if (!pModel->markedRenderPasses().empty()) {
+        auto it = std::ranges::find(pModel->markedRenderPasses(), renderPassID());
+        if (it == pModel->markedRenderPasses().end()) {
+            return;
+        }
+    }
+
+    auto& nodes = pModel->nodes();
+    const auto* pCoord = &pModel->root()->coord();
+
+    for (auto& node : nodes) {
+        auto xform = node.coord().xform();
+        for (auto& mesh : node.meshes()) {
+            auto vbLayoutIdx = protocol_.compatibleLayout(*mesh.refMesh());
+            if (!vbLayoutIdx) {
+                throw std::runtime_error("Incompatible mesh");
+            }
+
+            for (auto& submesh : mesh.submeshes()) {
+                batch_.emplace_back(false, nullptr, &submesh, pCoord, vbLayoutIdx.value(), xform);
+            }
+        }
+    }
+}
+
+void CascadeShadowMap::trackModel(Model* pModel, const BoundingVolumeNode* pBVNode) {
+    if (!pModel->markedRenderPasses().empty()) {
+        auto it = std::ranges::find(pModel->markedRenderPasses(), renderPassID());
+        if (it == pModel->markedRenderPasses().end()) {
+            return;
+        }
+    }
+
+    auto& nodes = pModel->nodes();
+    const auto* pCoord = &pModel->root()->coord();
+
+    for (auto& node : nodes) {
+        auto xform = node.coord().xform();
+        for (auto& mesh : node.meshes()) {
+            auto vbLayoutIdx = protocol_.compatibleLayout(*mesh.refMesh());
+            if (!vbLayoutIdx) {
+                throw std::runtime_error("Incompatible mesh");
+            }
+
+            for (auto& submesh : mesh.submeshes()) {
+                batch_.emplace_back(false, pBVNode, &submesh, pCoord, vbLayoutIdx.value(), xform);
+            }
+        }
+    }
+}
+
+void CascadeShadowMap::setLight(const WorldLight* pLight) {
     pLight_ = pLight;
 }
 
@@ -1451,13 +1822,15 @@ Tessellation::Tessellation( D3D12Device& device,
     pSamplerStorage_(&samplerStorage) {}
 
 void Tessellation::initResources(
-    RenderPassTextures shadowMap, const DescriptorCPU* pDsv,
+    int cascadeIndex,
+    RenderPassTextures shadowMap,
+    const DescriptorCPU* pDsv,
     const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
     const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
 ) {
     checkRequiredTextures();
-    shadowMaterial_ = ShadowMaterial(
-        getTexture(RenderPassTextures::ShadowMap),
+    shadowMaterial_[cascadeIndex] = ShadowMaterial(
+        getTexture(shadowMap),
         pDsv, dsvDesc, pSrv, srvDesc
     );
 }
@@ -1544,18 +1917,29 @@ void Tessellation::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTarg
     // temporarilly directional light at first
     const auto pDirectionalLight = lights_.front();
 
-    shadowMaterial_.texture().commitState(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    for (int i = 0; i < 3; ++i)
+    {
+        shadowMaterial_[i].texture().commitState(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    }
 
-    auto pfd = sr::PerFrameData0{
+    auto pfd = sr::PerFrameData2{
         .globalAmbient = dx::XMFLOAT3(0.1f, 0.1f, 0.1f),
-        .shadowMapRef = shadowMaterial_.mapRef(Material::MapType::Shadow).toxm(),
-        .lightVP = mu::transpose(pDirectionalLight->viewProj(*pCamera_)).getXmf(),
+        .shadowMapRef = {
+			shadowMaterial_[0].mapRef(Material::MapType::Shadow).toxm(),
+			shadowMaterial_[1].mapRef(Material::MapType::Shadow).toxm(),
+			shadowMaterial_[2].mapRef(Material::MapType::Shadow).toxm()
+        },
+        .lightVP = {
+			mu::transpose(pDirectionalLight->calcCascadeViewProj(*pCamera_, 0)).getXmf(),
+			mu::transpose(pDirectionalLight->calcCascadeViewProj(*pCamera_, 1)).getXmf(),
+			mu::transpose(pDirectionalLight->calcCascadeViewProj(*pCamera_, 2)).getXmf()
+		},
         .lightCnt = static_cast<std::uint32_t>( lightBuffer.size() ),
     };
 
     shader().perInstanceData_.stage(pids.data(), pids.size() * sizeof(sr::PerInstanceData0));
     shader().lightBuffer_.stage(lightBuffer.data(), lightBuffer.size() * sizeof(sr::Light));
-    shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData0));
+    shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData2));
 }
 
 void Tessellation::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
@@ -1589,7 +1973,10 @@ void Tessellation::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets
 }
 
 void Tessellation::postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
-    shadowMaterial_.texture().commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+	for (int i = 0; i < 3; ++i)
+	{
+		shadowMaterial_[i].texture().commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+	}
 }
 
 void Tessellation::trackChunk(const LevelChunkModel* pModel) {
@@ -1606,22 +1993,21 @@ void Tessellation::trackChunk(const LevelChunkModel* pModel) {
 ShadowMapTessellation::ShadowMapTessellation( D3D12Device& device,
     ShaderShadowMapTessellation& shader, const SamplerStorage& samplerStorage,
     const D3D12_VIEWPORT& vp
-) : gfx::d3d12::RenderPass(id),
+) : gfx::d3d12::RenderPass(id), curCascadeLevel_(0),
     viewport_(vp), protocol_( shader.makeProtocol( device,
         RenderProtocol::Desc{ makeDesc() }
-    ) ), pLight_(nullptr), batch_(), pCamera_(nullptr), pSamplerStorage_(&samplerStorage) {
-    viewport_.Width *= 8;
-    viewport_.Height *= 8;
-}
+    ) ), pLight_(nullptr), batch_(), pCamera_(nullptr), pSamplerStorage_(&samplerStorage) {}
 
 void ShadowMapTessellation::initResources(
-    RenderPassTextures shadowMap, const DescriptorCPU* pDsv,
+    int cascadeIndex,
+    RenderPassTextures shadowMap,
+    const DescriptorCPU* pDsv,
     const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
     const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
 ) {
     checkRequiredTextures();
-    shadowMaterial_ = ShadowMaterial(
-        getTexture(RenderPassTextures::ShadowMap),
+    shadowMaterial_[cascadeIndex] = ShadowMaterial(
+        getTexture(shadowMap),
         pDsv, dsvDesc, pSrv, srvDesc
     );
 }
@@ -1694,16 +2080,16 @@ void ShadowMapTessellation::preRender(D3D12GfxCmdList& cmdList, RenderTargets& r
     }
 
     const auto pfd = sr::PerFrameData1{
-        .lightVP = mu::transpose( pLight_->viewProj(*pCamera_) ).getXmf()
+        .lightVP = mu::transpose(pLight_->calcCascadeViewProj(*pCamera_, curCascadeLevel_)).getXmf()
     };
 
     shader().perInstanceData_.stage(pids.data(), pids.size() * sizeof(sr::PerInstanceData4));
-    shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData1));
+    shader().perFrameData_[curCascadeLevel_].stage(&pfd, sizeof(sr::PerFrameData1));
 }
 
 void ShadowMapTessellation::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
-    shadowMaterial_.texture().commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-    cmdList.get()->OMSetRenderTargets(0u, nullptr, false, &shadowMaterial_.dsv().cpuHandle());
+    shadowMaterial_[curCascadeLevel_].texture().commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    cmdList.get()->OMSetRenderTargets(0u, nullptr, false, &shadowMaterial_[curCascadeLevel_].dsv().cpuHandle());
 
     auto accDrawcallCnt = 0u;
     for (const auto& pChunk : batch_) {
@@ -1732,7 +2118,11 @@ void ShadowMapTessellation::render(D3D12GfxCmdList& cmdList, RenderTargets& rend
 }
 
 void ShadowMapTessellation::postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
-
+    curCascadeLevel_ += 1;
+    if (curCascadeLevel_ > 2)
+    {
+        curCascadeLevel_ %= 3;
+    }
 }
 
 void ShadowMapTessellation::trackChunk(const LevelChunkModel* pModel) {
@@ -1755,3 +2145,5 @@ void ShadowMapTessellation::setLight(const WorldLight* pLight) {
 }   // namespace gfx::d3d12
 
 }   // namespace gfx
+
+

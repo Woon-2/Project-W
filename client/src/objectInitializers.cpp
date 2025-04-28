@@ -640,7 +640,7 @@ ecs::Entity MU_CALLCONV createCharacter(
         gfx::d3d12engine::rp::PBRAnimatedIllumination::id
     );
     entity.as<gfx::d3d12engine::Model>().get().markRenderPass(
-        gfx::d3d12engine::rp::ShadowMapAnimated::id
+        gfx::d3d12engine::rp::CascadeShadowMap::id
     );
     return entity;
 }
@@ -662,7 +662,7 @@ ecs::Entity MU_CALLCONV createHelicopter(
         gfx::d3d12engine::rp::PBRIllumination::id
     );
     entity.as<gfx::d3d12engine::Model>().get().markRenderPass(
-        gfx::d3d12engine::rp::ShadowMap::id
+        gfx::d3d12engine::rp::CascadeShadowMap::id
     );
     return entity;
 }
@@ -684,7 +684,7 @@ ecs::Entity MU_CALLCONV createTree0(
         gfx::d3d12engine::rp::PBRIllumination::id
     );
     entity.as<gfx::d3d12engine::Model>().get().markRenderPass(
-        gfx::d3d12engine::rp::ShadowMap::id
+        gfx::d3d12engine::rp::CascadeShadowMap::id
     );
     return entity;
 }
@@ -706,7 +706,7 @@ ecs::Entity MU_CALLCONV createTree1(
         gfx::d3d12engine::rp::PBRIllumination::id
     );
     entity.as<gfx::d3d12engine::Model>().get().markRenderPass(
-        gfx::d3d12engine::rp::ShadowMap::id
+        gfx::d3d12engine::rp::CascadeShadowMap::id
     );
     return entity;
 }
@@ -728,7 +728,7 @@ ecs::Entity MU_CALLCONV createTree2(
         gfx::d3d12engine::rp::PBRIllumination::id
     );
     entity.as<gfx::d3d12engine::Model>().get().markRenderPass(
-        gfx::d3d12engine::rp::ShadowMap::id
+        gfx::d3d12engine::rp::CascadeShadowMap::id
     );
     return entity;
 }
