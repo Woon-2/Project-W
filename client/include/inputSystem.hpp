@@ -27,10 +27,9 @@ public:
         YawLeft,
         YawRight,
         SetRenderModeColor,
-        SetRenderModeAlbedo,
-        SetRenderModeNormal,
-        SetRenderModeDepth,
-        SetRenderModeDirectionalLightDepth,
+		SetRenderModeCascade0Depth,
+		SetRenderModeCascade1Depth,
+		SetRenderModeCascade2Depth
     };
 
     ENABLE_COMPONENT(PlayerController);

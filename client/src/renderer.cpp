@@ -34,6 +34,13 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
         }, gfx::d3d12::InputLayout::Spec::separated
     ), renderPassShadowMapAnimated_( core.device(), shaderShadowMapAnimated_,
         gfx::d3d12::convClientToVP( core.window().client() )
+    ), shaderCascadeShaodwMap_( core.device(), core.root(),
+        gfx::d3d12::ShaderCascadeShadowMap::Config{
+			.maxInstanceCnt = 0x1000u,
+			.maxDrawcallCnt = 0x1000u,
+		}, gfx::d3d12::InputLayout::Spec::separated
+		), renderPassCascadeShadowMap_(core.device(), shaderCascadeShaodwMap_,
+            gfx::d3d12::convClientToVP(core.window().client())
     ), shaderScreenQuad_(core.device(), core.root()),
     renderPassScreenQuad_( core.device(), shaderScreenQuad_,
         core.samStorage(), gfx::d3d12::convClientToVP(core.window().client())
@@ -60,54 +67,131 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
         gfx::d3d12::ResourceStorage::ResType::Texture
     );
 
-    auto [pTex, srvDesc, dsvDesc] = gfx::d3d12::loadShadowMapAt(
+    auto [pCascade0, srvDescC0, dsvDescC0] = gfx::d3d12::loadShadowMapAt(
         rendererTexStorage_.slot(slotKeyTexture),
-        "shadowMap",
+        "cascade0",    //
         core.device(), core.descRanges().srvRangeTex2D, core.descRanges().dsvRange,
         gfx::d3d12::Texture::Desc{
-            .width = static_cast<std::uint32_t>(core.window().client().width * 8),
-            .height = static_cast<std::uint32_t>(core.window().client().height * 8),
+            .width = static_cast<std::uint32_t>(core.window().client().width),      //
+            .height = static_cast<std::uint32_t>(core.window().client().height),    //
             .mipLevels = 1u,
             .format = DXGI_FORMAT_D32_FLOAT,
-            .sampleDesc = { .Count = 1u, .Quality = 0u },
+            .sampleDesc = {.Count = 1u, .Quality = 0u },
             .flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
         }
     );
 
-    renderPassPBR_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowMap, pTex);
+    auto [pCascade1, srvDescC1, dsvDescC1] = gfx::d3d12::loadShadowMapAt(
+        rendererTexStorage_.slot(slotKeyTexture),
+        "cascade1",    //
+        core.device(), core.descRanges().srvRangeTex2D, core.descRanges().dsvRange,
+        gfx::d3d12::Texture::Desc{
+            .width = static_cast<std::uint32_t>(core.window().client().width),      //
+            .height = static_cast<std::uint32_t>(core.window().client().height),    //
+            .mipLevels = 1u,
+            .format = DXGI_FORMAT_D32_FLOAT,
+            .sampleDesc = {.Count = 1u, .Quality = 0u },
+            .flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
+        }
+    );
+    
+    auto [pCascade2, srvDescC2, dsvDescC2] = gfx::d3d12::loadShadowMapAt(
+        rendererTexStorage_.slot(slotKeyTexture),
+        "cascade2",    //
+        core.device(), core.descRanges().srvRangeTex2D, core.descRanges().dsvRange,
+        gfx::d3d12::Texture::Desc{
+            .width = static_cast<std::uint32_t>(core.window().client().width),      //
+            .height = static_cast<std::uint32_t>(core.window().client().height),    //
+            .mipLevels = 1u,
+            .format = DXGI_FORMAT_D32_FLOAT,
+            .sampleDesc = {.Count = 1u, .Quality = 0u },
+            .flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
+        }
+    );
+
+    // Cascade Shadow Map
+    renderPassCascadeShadowMap_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowCascade0, pCascade0);
+    renderPassCascadeShadowMap_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowCascade1, pCascade1);
+    renderPassCascadeShadowMap_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowCascade2, pCascade2);
+    renderPassCascadeShadowMap_.initResources(
+        0, gfx::d3d12::RenderPassTextures::ShadowCascade0, &pCascade0->view(1u),
+        dsvDescC0, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pCascade0->view(0u)), srvDescC0
+    );
+    renderPassCascadeShadowMap_.initResources(
+        1, gfx::d3d12::RenderPassTextures::ShadowCascade1, &pCascade1->view(1u),
+        dsvDescC1, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pCascade1->view(0u)), srvDescC1
+    );
+    renderPassCascadeShadowMap_.initResources(
+        2, gfx::d3d12::RenderPassTextures::ShadowCascade2, &pCascade2->view(1u),
+        dsvDescC2, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pCascade2->view(0u)), srvDescC2
+    );
+
+    // PBR
+    renderPassPBR_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowCascade0, pCascade0);
+    renderPassPBR_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowCascade1, pCascade1);
+    renderPassPBR_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowCascade2, pCascade2);
     renderPassPBR_.initResources(
-        gfx::d3d12::RenderPassTextures::ShadowMap, &pTex->view(1u),
-        dsvDesc, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pTex->view(0u)), srvDesc
+        0, gfx::d3d12::RenderPassTextures::ShadowCascade0, &pCascade0->view(1u),
+        dsvDescC0, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pCascade0->view(0u)), srvDescC0
+    );
+	renderPassPBR_.initResources(
+		1, gfx::d3d12::RenderPassTextures::ShadowCascade1, &pCascade1->view(1u),
+		dsvDescC1, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pCascade1->view(0u)), srvDescC1
+	);
+    renderPassPBR_.initResources(
+        2, gfx::d3d12::RenderPassTextures::ShadowCascade2, &pCascade1->view(1u),
+        dsvDescC2, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pCascade2->view(0u)), srvDescC2
     );
 
-    renderPassPBRAnimated_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowMap, pTex);
+    // Animated PBR
+    renderPassPBRAnimated_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowCascade0, pCascade0);
+	renderPassPBRAnimated_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowCascade1, pCascade1);
+	renderPassPBRAnimated_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowCascade2, pCascade2);
     renderPassPBRAnimated_.initResources(
-        gfx::d3d12::RenderPassTextures::ShadowMap, &pTex->view(1u),
-        dsvDesc, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pTex->view(0u)), srvDesc
+        0, gfx::d3d12::RenderPassTextures::ShadowCascade0, &pCascade0->view(1u),
+        dsvDescC0, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pCascade0->view(0u)), srvDescC0
     );
-
-    renderPassShadowMap_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowMap, pTex);
-    renderPassShadowMap_.initResources(
-        gfx::d3d12::RenderPassTextures::ShadowMap, &pTex->view(1u),
-        dsvDesc, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pTex->view(0u)), srvDesc
+    renderPassPBRAnimated_.initResources(
+        1, gfx::d3d12::RenderPassTextures::ShadowCascade1, &pCascade1->view(1u),
+        dsvDescC1, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pCascade1->view(0u)), srvDescC1
     );
+	renderPassPBRAnimated_.initResources(
+		2, gfx::d3d12::RenderPassTextures::ShadowCascade2, &pCascade2->view(1u),
+		dsvDescC2, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pCascade2->view(0u)), srvDescC2
+	);
 
-    renderPassShadowMapAnimated_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowMap, pTex);
-    renderPassShadowMapAnimated_.initResources(
-        gfx::d3d12::RenderPassTextures::ShadowMap, &pTex->view(1u),
-        dsvDesc, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pTex->view(0u)), srvDesc
-    );
-
-    renderPassTessellation_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowMap, pTex);
+	// Tessellation
+    renderPassTessellation_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowCascade0, pCascade0);
+	renderPassTessellation_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowCascade1, pCascade1);
+	renderPassTessellation_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowCascade2, pCascade2);
     renderPassTessellation_.initResources(
-        gfx::d3d12::RenderPassTextures::ShadowMap, &pTex->view(1u),
-        dsvDesc, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pTex->view(0u)), srvDesc
+        0, gfx::d3d12::RenderPassTextures::ShadowCascade0, &pCascade0->view(1u),
+        dsvDescC0, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pCascade0->view(0u)), srvDescC0
     );
+	renderPassTessellation_.initResources(
+		1, gfx::d3d12::RenderPassTextures::ShadowCascade1, &pCascade1->view(1u),
+		dsvDescC1, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pCascade1->view(0u)), srvDescC1
+	);
+	renderPassTessellation_.initResources(
+		2, gfx::d3d12::RenderPassTextures::ShadowCascade2, &pCascade2->view(1u),
+		dsvDescC2, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pCascade2->view(0u)), srvDescC2
+	);
 
-    renderPassShadowMapTessellation_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowMap, pTex);
+	// Shadow Map Tessellation
+    renderPassShadowMapTessellation_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowCascade0, pCascade0);
+	renderPassShadowMapTessellation_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowCascade1, pCascade1);
+	renderPassShadowMapTessellation_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowCascade2, pCascade2);
     renderPassShadowMapTessellation_.initResources(
-        gfx::d3d12::RenderPassTextures::ShadowMap, &pTex->view(1u),
-        dsvDesc, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pTex->view(0u)), srvDesc
+        0, gfx::d3d12::RenderPassTextures::ShadowCascade0, &pCascade0->view(1u),
+        dsvDescC0, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pCascade0->view(0u)), srvDescC0
+    );
+    renderPassShadowMapTessellation_.initResources(
+        1, gfx::d3d12::RenderPassTextures::ShadowCascade1, &pCascade1->view(1u),
+        dsvDescC1, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pCascade1->view(0u)), srvDescC1
+    );
+    renderPassShadowMapTessellation_.initResources(
+        2, gfx::d3d12::RenderPassTextures::ShadowCascade2, &pCascade2->view(1u),
+        dsvDescC2, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pCascade2->view(0u)), srvDescC2
     );
 }
 
@@ -137,11 +221,10 @@ void Renderer::layoutVBsPBRAnimated(gfx::d3d12::D3D12Device& device,
 void Renderer::init(gfx::d3d12engine::Scene& scene) {
     renderPassPBR_.init(scene);
     renderPassPBRAnimated_.init(scene);
-    renderPassShadowMap_.init(scene);
-    renderPassShadowMapAnimated_.init(scene);
     renderPassScreenQuad_.init(scene);
     renderPassTessellation_.init(scene);
     renderPassShadowMapTessellation_.init(scene);
+	renderPassCascadeShadowMap_.init(scene);
 }
 
 void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& scene, gfx::d3d12::RenderTargets& renderTargets) {
@@ -149,8 +232,7 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
 
     renderPassPBR_.update(scene);
     renderPassPBRAnimated_.update(scene);
-    renderPassShadowMap_.update(scene);
-    renderPassShadowMapAnimated_.update(scene);
+	renderPassCascadeShadowMap_.update(scene);
     renderPassScreenQuad_.update(scene);
     renderPassTessellation_.update(scene);
     renderPassShadowMapTessellation_.update(scene);
@@ -158,24 +240,38 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
     switch (renderMode_) {
     case Mode::Color:
         cmdList.get()->ClearDepthStencilView(
-            rendererTexStorage_.slot(slotKeyTexture).get<gfx::d3d12::Texture>("shadowMap")->view(1u).cpuHandle(),
-            D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0u, nullptr   
+            rendererTexStorage_.slot(slotKeyTexture).get<gfx::d3d12::Texture>("cascade0")->view(1u).cpuHandle(),
+            D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0u, nullptr
         );
 
-        shaderShadowMapAnimated_.bindRootParams( cmdList );
-        renderPassShadowMapAnimated_.preRender( cmdList, renderTargets );
-        renderPassShadowMapAnimated_.render( cmdList, renderTargets );
-        renderPassShadowMapAnimated_.postRender( cmdList, renderTargets );
+        cmdList.get()->ClearDepthStencilView(
+            rendererTexStorage_.slot(slotKeyTexture).get<gfx::d3d12::Texture>("cascade1")->view(1u).cpuHandle(),
+            D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0u, nullptr
+        );
 
-        shaderShadowMap_.bindRootParams( cmdList );
-        renderPassShadowMap_.preRender( cmdList, renderTargets );
-        renderPassShadowMap_.render( cmdList, renderTargets );
-        renderPassShadowMap_.postRender( cmdList, renderTargets );
+        cmdList.get()->ClearDepthStencilView(
+            rendererTexStorage_.slot(slotKeyTexture).get<gfx::d3d12::Texture>("cascade2")->view(1u).cpuHandle(),
+            D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0u, nullptr
+        );
 
-        shaderShadowMapTessellation_.bindRootParams( cmdList );
-        renderPassShadowMapTessellation_.preRender( cmdList, renderTargets );
-        renderPassShadowMapTessellation_.render( cmdList, renderTargets );
-        renderPassShadowMapTessellation_.postRender( cmdList, renderTargets );
+
+        for (int i = 0; i < 3; ++i)
+        {
+			shaderCascadeShaodwMap_.curCascadeIdx_ = i;
+            shaderCascadeShaodwMap_.bindRootParams(cmdList);
+            renderPassCascadeShadowMap_.preRender(cmdList, renderTargets);
+            renderPassCascadeShadowMap_.render(cmdList, renderTargets);
+            renderPassCascadeShadowMap_.postRender(cmdList, renderTargets);
+        }
+
+        for (int i = 0; i < 3; ++i)
+        {
+			shaderShadowMapTessellation_.curCascadeIdx_ = i;
+            shaderShadowMapTessellation_.bindRootParams(cmdList);
+            renderPassShadowMapTessellation_.preRender(cmdList, renderTargets);
+            renderPassShadowMapTessellation_.render(cmdList, renderTargets);
+            renderPassShadowMapTessellation_.postRender(cmdList, renderTargets);
+        }
 
         shaderPBRAnimated_.bindRootParams( cmdList );
         renderPassPBRAnimated_.preRender( cmdList, renderTargets );
@@ -193,27 +289,124 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
         renderPassTessellation_.postRender( cmdList, renderTargets );
         break;
 
-    case Mode::DirectionalLightDepth:
-        cmdList.get()->ClearDepthStencilView(
-            rendererTexStorage_.slot(slotKeyTexture).get<gfx::d3d12::Texture>("shadowMap")->view(1u).cpuHandle(),
-            D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0u, nullptr   
-        );
+    case Mode::Cascade0Depth:
+		cmdList.get()->ClearDepthStencilView(
+			rendererTexStorage_.slot(slotKeyTexture).get<gfx::d3d12::Texture>("cascade0")->view(1u).cpuHandle(),
+			D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0u, nullptr
+		);
 
-        shaderShadowMap_.bindRootParams( cmdList );
-        renderPassShadowMap_.preRender( cmdList, renderTargets );
-        renderPassShadowMap_.render( cmdList, renderTargets );
-        renderPassShadowMap_.postRender( cmdList, renderTargets );
+		cmdList.get()->ClearDepthStencilView(
+			rendererTexStorage_.slot(slotKeyTexture).get<gfx::d3d12::Texture>("cascade1")->view(1u).cpuHandle(),
+			D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0u, nullptr
+		);
 
-        shaderShadowMapTessellation_.bindRootParams( cmdList );
-        renderPassShadowMapTessellation_.preRender( cmdList, renderTargets );
-        renderPassShadowMapTessellation_.render( cmdList, renderTargets );
-        renderPassShadowMapTessellation_.postRender( cmdList, renderTargets );
+		cmdList.get()->ClearDepthStencilView(
+			rendererTexStorage_.slot(slotKeyTexture).get<gfx::d3d12::Texture>("cascade2")->view(1u).cpuHandle(),
+			D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0u, nullptr
+		);
+
+        for (int i = 0; i < 3; ++i)
+        {
+            shaderCascadeShaodwMap_.curCascadeIdx_ = i;
+            shaderCascadeShaodwMap_.bindRootParams(cmdList);
+            renderPassCascadeShadowMap_.preRender(cmdList, renderTargets);
+            renderPassCascadeShadowMap_.render(cmdList, renderTargets);
+            renderPassCascadeShadowMap_.postRender(cmdList, renderTargets);
+        }
+
+        for (int i = 0; i < 3; ++i) {
+            shaderShadowMapTessellation_.curCascadeIdx_ = i;
+            shaderShadowMapTessellation_.bindRootParams(cmdList);
+            renderPassShadowMapTessellation_.preRender(cmdList, renderTargets);
+            renderPassShadowMapTessellation_.render(cmdList, renderTargets);
+            renderPassShadowMapTessellation_.postRender(cmdList, renderTargets);
+        }
 
         shaderScreenQuad_.bindRootParams( cmdList );
-        shaderScreenQuad_.screenQuad_.link(rendererTexStorage_.slot(slotKeyTexture).get<gfx::d3d12::Texture>("shadowMap"));
+        shaderScreenQuad_.screenQuad_.link(rendererTexStorage_.slot(slotKeyTexture).get<gfx::d3d12::Texture>("cascade0"));
         renderPassScreenQuad_.preRender( cmdList, renderTargets );
         renderPassScreenQuad_.render( cmdList, renderTargets );
         renderPassScreenQuad_.postRender( cmdList, renderTargets );
+        break;
+
+    case Mode::Cascade1Depth:
+        cmdList.get()->ClearDepthStencilView(
+            rendererTexStorage_.slot(slotKeyTexture).get<gfx::d3d12::Texture>("cascade0")->view(1u).cpuHandle(),
+            D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0u, nullptr
+        );
+
+        cmdList.get()->ClearDepthStencilView(
+            rendererTexStorage_.slot(slotKeyTexture).get<gfx::d3d12::Texture>("cascade1")->view(1u).cpuHandle(),
+            D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0u, nullptr
+        );
+
+        cmdList.get()->ClearDepthStencilView(
+            rendererTexStorage_.slot(slotKeyTexture).get<gfx::d3d12::Texture>("cascade2")->view(1u).cpuHandle(),
+            D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0u, nullptr
+        );
+
+        for (int i = 0; i < 3; ++i)
+        {
+            shaderCascadeShaodwMap_.curCascadeIdx_ = i;
+            shaderCascadeShaodwMap_.bindRootParams(cmdList);
+            renderPassCascadeShadowMap_.preRender(cmdList, renderTargets);
+            renderPassCascadeShadowMap_.render(cmdList, renderTargets);
+            renderPassCascadeShadowMap_.postRender(cmdList, renderTargets);
+        }
+
+        for (int i = 0; i < 3; ++i) {
+            shaderShadowMapTessellation_.curCascadeIdx_ = i;
+            shaderShadowMapTessellation_.bindRootParams(cmdList);
+            renderPassShadowMapTessellation_.preRender(cmdList, renderTargets);
+            renderPassShadowMapTessellation_.render(cmdList, renderTargets);
+            renderPassShadowMapTessellation_.postRender(cmdList, renderTargets);
+        }
+
+        shaderScreenQuad_.bindRootParams(cmdList);
+        shaderScreenQuad_.screenQuad_.link(rendererTexStorage_.slot(slotKeyTexture).get<gfx::d3d12::Texture>("cascade1"));
+        renderPassScreenQuad_.preRender(cmdList, renderTargets);
+        renderPassScreenQuad_.render(cmdList, renderTargets);
+        renderPassScreenQuad_.postRender(cmdList, renderTargets);
+        break;
+
+    case Mode::Cascade2Depth:
+        cmdList.get()->ClearDepthStencilView(
+            rendererTexStorage_.slot(slotKeyTexture).get<gfx::d3d12::Texture>("cascade0")->view(1u).cpuHandle(),
+            D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0u, nullptr
+        );
+
+        cmdList.get()->ClearDepthStencilView(
+            rendererTexStorage_.slot(slotKeyTexture).get<gfx::d3d12::Texture>("cascade1")->view(1u).cpuHandle(),
+            D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0u, nullptr
+        );
+
+        cmdList.get()->ClearDepthStencilView(
+            rendererTexStorage_.slot(slotKeyTexture).get<gfx::d3d12::Texture>("cascade2")->view(1u).cpuHandle(),
+            D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0u, 0u, nullptr
+        );
+
+        for (int i = 0; i < 3; ++i)
+        {
+            shaderCascadeShaodwMap_.curCascadeIdx_ = i;
+            shaderCascadeShaodwMap_.bindRootParams(cmdList);
+            renderPassCascadeShadowMap_.preRender(cmdList, renderTargets);
+            renderPassCascadeShadowMap_.render(cmdList, renderTargets);
+            renderPassCascadeShadowMap_.postRender(cmdList, renderTargets);
+        }
+
+        for (int i = 0; i < 3; ++i) {
+            shaderShadowMapTessellation_.curCascadeIdx_ = i;
+            shaderShadowMapTessellation_.bindRootParams(cmdList);
+            renderPassShadowMapTessellation_.preRender(cmdList, renderTargets);
+            renderPassShadowMapTessellation_.render(cmdList, renderTargets);
+            renderPassShadowMapTessellation_.postRender(cmdList, renderTargets);
+        }
+
+        shaderScreenQuad_.bindRootParams(cmdList);
+        shaderScreenQuad_.screenQuad_.link(rendererTexStorage_.slot(slotKeyTexture).get<gfx::d3d12::Texture>("cascade2"));
+        renderPassScreenQuad_.preRender(cmdList, renderTargets);
+        renderPassScreenQuad_.render(cmdList, renderTargets);
+        renderPassScreenQuad_.postRender(cmdList, renderTargets);
         break;
 
     default:

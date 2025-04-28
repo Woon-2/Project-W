@@ -162,7 +162,55 @@ float3 spotLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 norm
     return gLights[lightIdx].color * gLights[lightIdx].intensity * (kD + specular) * NL * atten * coneAtten;
 }
 
-float4 illuminate(float3 posV, float4 posL, float3 normalV, float2 tex)
+float PCF(uint4 mapRef, float4 posL, uint samIdx)
+{
+    posL.z = min(posL.z, 1.0f);
+    
+    float p00 = sampleCmpFromMapRef2DOffset(mapRef, posL.xy, posL.z, int2(-1, -1), samIdx).r;
+    float p01 = sampleCmpFromMapRef2DOffset(mapRef, posL.xy, posL.z, int2(-1, 0), samIdx).r;
+    float p02 = sampleCmpFromMapRef2DOffset(mapRef, posL.xy, posL.z, int2(-1, 1), samIdx).r;
+    float p10 = sampleCmpFromMapRef2DOffset(mapRef, posL.xy, posL.z, int2(0, -1), samIdx).r;
+    float p11 = sampleCmpFromMapRef2DOffset(mapRef, posL.xy, posL.z, int2(0, 0), samIdx).r;
+    float p12 = sampleCmpFromMapRef2DOffset(mapRef, posL.xy, posL.z, int2(0, 1), samIdx).r;
+    float p20 = sampleCmpFromMapRef2DOffset(mapRef, posL.xy, posL.z, int2(1, -1), samIdx).r;
+    float p21 = sampleCmpFromMapRef2DOffset(mapRef, posL.xy, posL.z, int2(1, 0), samIdx).r;
+    float p22 = sampleCmpFromMapRef2DOffset(mapRef, posL.xy, posL.z, int2(1, 1), samIdx).r;
+    
+    return (p00 + p01 + p02 + p10 + p11 + p12 + p20 + p21 + p22) / 9.f;
+}
+
+float calcSingleShadow(float3 posV, float4 posL)
+{
+    return PCF(shadowMapRef[0], posL, shadowSamplerIdx);
+}
+
+float calcCascadedShadow(float3 posV, float4 posL[3])
+{    
+    // texIndex = ... 계산
+    float viewDepth = posV.z;
+    int texIndex = 0;
+    
+    if(viewDepth <= 20.0f)
+    {
+        texIndex = 0;
+    }
+    else if (viewDepth <= 50.0f)
+    {
+        texIndex = 1;
+    }
+    else
+    {
+        texIndex = 2;
+    }
+    // posV가지고 viewDepth 구해서 계산하도록
+    float4 lightPos = posL[texIndex];
+    
+    lightPos.xyz /= lightPos.w;
+    
+    return PCF(shadowMapRef[texIndex], lightPos, shadowSamplerIdx);
+}
+
+float4 illuminate(float3 posV, float4 posL[3], float3 normalV, float2 tex)
 {
     float4 albedo = material.albedoConstant * material.albedoConstantMapRatio;
     albedo += sampleFromMapRef(material.albedoMapRef, tex, samplerIdx) * (1.f - material.albedoConstantMapRatio);
@@ -205,20 +253,29 @@ float4 illuminate(float3 posV, float4 posL, float3 normalV, float2 tex)
     }
     
     // calculate illumination factor from shadow map
-    posL.xyz /= posL.w;
+    // posL.xyz /= posL.w;
 
-    // PCF
-    float p00 = sampleCmpFromMapRef2DOffset(shadowMapRef, posL.xy, posL.z, int2(-1, -1), shadowSamplerIdx).r;
-    float p01 = sampleCmpFromMapRef2DOffset(shadowMapRef, posL.xy, posL.z, int2(-1, 0), shadowSamplerIdx).r;
-    float p02 = sampleCmpFromMapRef2DOffset(shadowMapRef, posL.xy, posL.z, int2(-1, 1), shadowSamplerIdx).r;
-    float p10 = sampleCmpFromMapRef2DOffset(shadowMapRef, posL.xy, posL.z, int2(0, -1), shadowSamplerIdx).r;
-    float p11 = sampleCmpFromMapRef2DOffset(shadowMapRef, posL.xy, posL.z, int2(0, 0), shadowSamplerIdx).r;
-    float p12 = sampleCmpFromMapRef2DOffset(shadowMapRef, posL.xy, posL.z, int2(0, 1), shadowSamplerIdx).r;
-    float p20 = sampleCmpFromMapRef2DOffset(shadowMapRef, posL.xy, posL.z, int2(1, -1), shadowSamplerIdx).r;
-    float p21 = sampleCmpFromMapRef2DOffset(shadowMapRef, posL.xy, posL.z, int2(1, 0), shadowSamplerIdx).r;
-    float p22 = sampleCmpFromMapRef2DOffset(shadowMapRef, posL.xy, posL.z, int2(1, 1), shadowSamplerIdx).r;
-
-    float illuminationFactor = (p00 + p01 + p02 + p10 + p11 + p12 + p20 + p21 + p22) / 9.f;
+    float illuminationFactor = calcCascadedShadow(posV, posL);
+    
+    float viewDepth = posV.z;
+    float4 colorFactor;
+    
+    if (viewDepth <= 20.0f)
+    {
+        colorFactor = float4(1.f, 0.6f, 0.6f, 1.0f);
+    }
+    else if (viewDepth <= 50.0f)
+    {
+        colorFactor = float4(0.6f, 1.0f, 0.6f, 1.0f);
+    }
+    else
+    {
+        colorFactor = float4(0.6f, 0.6f, 1.0f, 1.0f);
+    }
+        
+    //
+    // illuminationFactor = calcCascadedShadow(...);
+    //
     
     color *= illuminationFactor;
 
@@ -230,5 +287,5 @@ float4 illuminate(float3 posV, float4 posL, float3 normalV, float2 tex)
     // linear => sRGB
     color = pow( abs(color), 1.f/2.2f );
 
-    return float4(color, albedo.w);
+    return float4(color, albedo.w) * colorFactor;
 }
