@@ -30,9 +30,12 @@ public:
     static constexpr auto slotKeySkeleton = CNetExSystem::slotKeySkeleton;
     static constexpr auto slotKeyAnimClip = CNetExSystem::slotKeyAnimClip;
 
-    Stage(gfx::d3d12engine::Core& core, Systems& systems, Renderer& renderer, Session& session) NOEXCEPT
+    Stage( gfx::d3d12engine::Core& core, Systems& systems,
+        ControllerAdapters& controllerAdapters, Renderer& renderer, Session& session
+    ) NOEXCEPT
         : staticResStorage_(), directionalLight_(), level_(), scene_(), entities_(), pCore_(&core),
-        pPlayer_(nullptr), pSession_(&session), pSystems_(&systems), pRenderer_(&renderer) {
+        pControllerAdapters_(&controllerAdapters), pPlayer_(nullptr),
+        pSession_(&session), pSystems_(&systems), pRenderer_(&renderer) {
         init();
     }
 
@@ -63,6 +66,8 @@ private:
     std::vector<ecs::Entity> entities_;
 
     gfx::d3d12engine::Core* pCore_;
+    ControllerAdapters* pControllerAdapters_;
+
     ecs::Entity* pPlayer_;
     Session* pSession_;
     Systems* pSystems_;

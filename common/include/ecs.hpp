@@ -158,6 +158,16 @@ class Component {
 protected:
     friend class Entity;
 
+public:
+    Component(const Entity& entity)
+        : entityID_(entity.id()) {}
+
+    virtual ~Component() = default;
+    Component(const Component&) = delete;
+    Component& operator=(const Component&) = delete;
+    Component(Component&&) noexcept;
+    Component& operator=(Component&&) noexcept;
+
     static Component* at(Components type, Entity::ID idx) {
         if (static_cast<std::size_t>(idx) >= sComponents[etoi(type)].size()) {
             throw ECS_EXCEPT("Component index out of range");
@@ -173,16 +183,6 @@ protected:
 
         return sComponents[etoi(type)][idx].get();
     }
-
-public:
-    Component(const Entity& entity)
-        : entityID_(entity.id()) {}
-
-    virtual ~Component() = default;
-    Component(const Component&) = delete;
-    Component& operator=(const Component&) = delete;
-    Component(Component&&) noexcept;
-    Component& operator=(Component&&) noexcept;
 
     bool valid() const NOEXCEPT {
         return entityID_.has_value();

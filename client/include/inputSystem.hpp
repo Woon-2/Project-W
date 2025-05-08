@@ -4,8 +4,11 @@
 #include "ecs.hpp"
 
 #include "keyboardXX.hpp"
+#include "mouse.hpp"
 
 #include "renderer.hpp"
+#include "cNetEx.hpp"
+#include "Window.hpp"
 
 #include "d3d12engine/d3d12Engine.hpp"
 
@@ -13,86 +16,91 @@
 
 struct ControllerAdapters {
     RenderModeController renderModeController;
+    InputNetworkForwarder inputNetworkForwarder;
+};
+
+enum class CInputEvent : int {
+    MoveForward,
+    MoveBackward,
+    MoveLeft,
+    MoveRight,
+    MoveUp,
+    MoveDown,
+    Rotation,
+    SetRenderModeColor,
+    SetRenderModeCascade0Depth,
+    SetRenderModeCascade1Depth,
+    SetRenderModeCascade2Depth
+};
+
+class IPlayerInputHandler {
+public:
+    virtual ~IPlayerInputHandler() = default;
+    virtual void handleEvent( CInputEvent event, float floatVal0, float floatVal1,
+        const Win32::WndClient& client, ControllerAdapters& controllerAdapters
+    ) = 0;
 };
 
 class PlayerController : public ecs::Component {
 public:
-    enum class Event {
-        MoveForward,
-        MoveBackward,
-        MoveLeft,
-        MoveRight,
-        MoveUp,
-        MoveDown,
-        YawLeft,
-        YawRight,
-        SetRenderModeColor,
-		SetRenderModeCascade0Depth,
-		SetRenderModeCascade1Depth,
-		SetRenderModeCascade2Depth
-    };
-
     ENABLE_COMPONENT(PlayerController);
 
-    PlayerController(const ecs::Entity& entity) NOEXCEPT
-        : Component(entity), forceStep_(1700.f), yawStep_(0.6f * mu::pi) {}
+    PlayerController(const ecs::Entity& entity, std::unique_ptr<IPlayerInputHandler>&& inputHandler) NOEXCEPT
+        : Component(entity), pInputHandler_(std::move(inputHandler)), forceStep_(1700.f), yawStep_(0.6f * mu::pi) {}
 
-    void handleEvent(Event event, float deltaTime, const ControllerAdapters& controllerAdapters);
+    void handleEvent( CInputEvent event, float floatVal0, float floatVal1,
+        const Win32::WndClient& client, ControllerAdapters& controllerAdapters
+    ) {
+        if (pInputHandler_) {
+            pInputHandler_->handleEvent(event, floatVal0, floatVal1, client, controllerAdapters);
+        }
+    }
 
 private:
-    void moveForward(float deltaTime) {
-        addForce( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
-            ecs::Component::atC(ecs::Components::Model, entityID().value())
-        )->get().root()->coord().localXform().row(2u) ) ) * forceStep_ * deltaTime  );
-    }
-    void moveBackward(float deltaTime) {
-        addForce( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
-            ecs::Component::atC(ecs::Components::Model, entityID().value())
-        )->get().root()->coord().localXform().row(2u) ) ) * -forceStep_ * 0.45f * deltaTime  );
-    }
-    void moveLeft(float deltaTime) {
-        addForce( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
-            ecs::Component::atC(ecs::Components::Model, entityID().value())
-        )->get().root()->coord().localXform().row(0u) ) ) * -forceStep_ * deltaTime  );
-    }
-    void moveRight(float deltaTime) {
-        addForce( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
-            ecs::Component::atC(ecs::Components::Model, entityID().value())
-        )->get().root()->coord().localXform().row(0u) ) ) * forceStep_ * deltaTime  );
-    }
-    void moveUp(float deltaTime) {
-        addForce( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
-            ecs::Component::atC(ecs::Components::Model, entityID().value())
-        )->get().root()->coord().localXform().row(1u) ) ) * forceStep_ * 0.55f * deltaTime  );
-    }
-    void moveDown(float deltaTime) {
-        addForce( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
-            ecs::Component::atC(ecs::Components::Model, entityID().value())
-        )->get().root()->coord().localXform().row(1u) ) ) * -forceStep_ * 0.55f * deltaTime  );
-    }
-    void yawLeft(float deltaTime);
-    void yawRight(float deltaTime);
+    std::unique_ptr<IPlayerInputHandler> pInputHandler_;
+    float forceStep_;
+    mu::Radian yawStep_;
+};
+
+class StandAloneInputHandler : public IPlayerInputHandler {
+public:
+    StandAloneInputHandler(ecs::Entity::ID entityId) NOEXCEPT
+        : entityId_(entityId), forceStep_(1700.f) {}
+
+    void handleEvent(CInputEvent event, float floatVal0, float floatVal1,
+        const Win32::WndClient& client, ControllerAdapters& controllerAdapters
+    ) override;
+
+private:
+    void moveForward(float deltaTime);
+    void moveBackward(float deltaTime);
+    void moveLeft(float deltaTime);
+    void moveRight(float deltaTime);
+    void moveUp(float deltaTime);
+    void moveDown(float deltaTime);
+    void yaw(float yawValue, const Win32::WndClient& client);
 
     void MU_CALLCONV addForce(mu::Vec3 force);
 
+    ecs::Entity::ID entityId_;
     float forceStep_;
-    mu::Radian yawStep_;
 };
 
 
 class InputSystem : public ecs::System<PlayerController> {
 public:
-    InputSystem(ic::Keyboard& keyboard) : pKeyboard_(&keyboard) {
+    InputSystem(ic::Keyboard* pKeyboard, ic::Mouse* pMouse) : pKeyboard_(pKeyboard), pMouse_(pMouse) {
         initKeyMap();
     }
 
-	void update(float deltaTime, const ControllerAdapters& controllerAdapters);
+	void update(float deltaTime, const Win32::WndClient& client, ControllerAdapters& controllerAdapters) ;
 
 private:
     void initKeyMap();
 
-    std::map<std::uint8_t, PlayerController::Event> keyMap_;
+    std::map<std::uint8_t, CInputEvent> keyMap_;
 	ic::Keyboard* pKeyboard_;
+    ic::Mouse* pMouse_;
 };
 
 #endif // !__INPUTSYSTEM_HPP

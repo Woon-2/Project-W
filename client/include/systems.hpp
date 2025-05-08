@@ -16,8 +16,8 @@ struct Systems {
     CNetExSystem netSystem;
     AnimSystem animSystem;
 
-    Systems(gfx::d3d12engine::Core& core, ic::Keyboard& keyboard, std::size_t fenceIdx = 0)
-        : physicsSystem(), inputSystem(keyboard), coordRoot(),
+    Systems(gfx::d3d12engine::Core& core, ic::Keyboard* pKeyboard, ic::Mouse* pMouse, std::size_t fenceIdx = 0)
+        : physicsSystem(), inputSystem(pKeyboard, pMouse), coordRoot(),
         collisionSystem(), netSystem(),
         animSystem(core.device(), core.root()) {}
 };

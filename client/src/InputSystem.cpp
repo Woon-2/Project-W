@@ -3,44 +3,37 @@
 
 #include "keyboardXX.hpp"
 
-void PlayerController::handleEvent( Event event, float deltaTime,
-    const ControllerAdapters& controllerAdapters
+void StandAloneInputHandler::handleEvent( CInputEvent event,
+    float floatVal0, float floatVal1, const Win32::WndClient& client,
+    ControllerAdapters& controllerAdapters
 ) {
     switch (event) {
-    case Event::MoveForward:
-        moveForward(deltaTime);
+    case CInputEvent::MoveForward:
+        moveForward(floatVal0);
         break;
-    case Event::MoveBackward:
-        moveBackward(deltaTime);
+    case CInputEvent::MoveBackward:
+        moveBackward(floatVal0);
         break;
-    case Event::MoveLeft:
-        moveLeft(deltaTime);
+    case CInputEvent::MoveLeft:
+        moveLeft(floatVal0);
         break;
-    case Event::MoveRight:
-        moveRight(deltaTime);
+    case CInputEvent::MoveRight:
+        moveRight(floatVal0);
         break;
-    case Event::MoveUp:
-        moveUp(deltaTime);
+    case CInputEvent::Rotation:
+        yaw(floatVal0, client);
         break;
-    case Event::MoveDown:
-        moveDown(deltaTime);
-        break;
-    case Event::YawLeft:
-        yawLeft(deltaTime);
-        break;
-    case Event::YawRight:
-        yawRight(deltaTime);
-        break;
-    case Event::SetRenderModeColor:
+        
+    case CInputEvent::SetRenderModeColor:
         controllerAdapters.renderModeController.setMode(Renderer::Mode::Color);
         break;
-    case Event::SetRenderModeCascade0Depth:
+    case CInputEvent::SetRenderModeCascade0Depth:
 		controllerAdapters.renderModeController.setMode(Renderer::Mode::Cascade0Depth);
 		break;
-	case Event::SetRenderModeCascade1Depth:
+	case CInputEvent::SetRenderModeCascade1Depth:
 		controllerAdapters.renderModeController.setMode(Renderer::Mode::Cascade1Depth);
 		break;
-	case Event::SetRenderModeCascade2Depth:
+	case CInputEvent::SetRenderModeCascade2Depth:
 		controllerAdapters.renderModeController.setMode(Renderer::Mode::Cascade2Depth);
 		break;
     default:
@@ -49,12 +42,45 @@ void PlayerController::handleEvent( Event event, float deltaTime,
     }
 }
 
-void MU_CALLCONV PlayerController::addForce(mu::Vec3 force) {
-    if (!valid()) {
-        throw ECS_EXCEPT("Component is not valid");
-    }
+void StandAloneInputHandler::moveForward(float deltaTime) {
+    addForce( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
+        ecs::Component::atC(ecs::Components::Model, entityId_)
+    )->get().root()->coord().localXform().row(2u) ) ) * forceStep_ * deltaTime  );
+}
 
-    auto pRigidBody = RigidBody::at(entityID().value());
+void StandAloneInputHandler::moveBackward(float deltaTime) {
+    addForce( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
+        ecs::Component::atC(ecs::Components::Model, entityId_)
+    )->get().root()->coord().localXform().row(2u) ) ) * -forceStep_ * 0.45f * deltaTime  );
+}
+
+void StandAloneInputHandler::moveLeft(float deltaTime) {
+    addForce( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
+        ecs::Component::atC(ecs::Components::Model, entityId_)
+    )->get().root()->coord().localXform().row(0u) ) ) * -forceStep_ * deltaTime  );
+}
+
+void StandAloneInputHandler::moveRight(float deltaTime) {
+    addForce( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
+        ecs::Component::atC(ecs::Components::Model, entityId_)
+    )->get().root()->coord().localXform().row(0u) ) ) * forceStep_ * deltaTime  );
+}
+
+void StandAloneInputHandler::moveUp(float deltaTime) {
+    addForce( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
+        ecs::Component::atC(ecs::Components::Model, entityId_)
+    )->get().root()->coord().localXform().row(1u) ) ) * forceStep_ * 0.55f * deltaTime  );
+}
+
+void StandAloneInputHandler::moveDown(float deltaTime) {
+    addForce( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
+        ecs::Component::atC(ecs::Components::Model, entityId_)
+    )->get().root()->coord().localXform().row(1u) ) ) * -forceStep_ * 0.55f * deltaTime  );
+}
+
+
+void MU_CALLCONV StandAloneInputHandler::addForce(mu::Vec3 force) {
+    auto pRigidBody = RigidBody::at(entityId_);
     if (!pRigidBody) {
         throw ECS_EXCEPT("RigidBody component doesn't exist");
     }
@@ -62,39 +88,22 @@ void MU_CALLCONV PlayerController::addForce(mu::Vec3 force) {
     pRigidBody->addForce(force);
 }
 
-void PlayerController::yawLeft(float deltaTime) {
-    if (!valid()) {
-        throw ECS_EXCEPT("Component is not valid");
-    }
-
-    auto pModel = gfx::d3d12engine::Model::at(entityID().value());
+void StandAloneInputHandler::yaw(float yawValue, const Win32::WndClient& client) {
+    auto pModel = gfx::d3d12engine::Model::at(entityId_);
     if (!pModel) {
         throw ECS_EXCEPT("Model component doesn't exist");
     }
 
-    auto yaw = yawStep_;
-    yaw *= -deltaTime;
+    const auto mouseSensitivity = mu::pi * 2.f;
 
-    pModel->get().root()->coord() << mu::rotateYH(yaw);
+    pModel->get().root()->coord() << mu::rotateY(
+        mu::Radian(yawValue * mouseSensitivity / static_cast<float>(client.width))
+    );
 }
 
-void PlayerController::yawRight(float deltaTime) {
-    if (!valid()) {
-        throw ECS_EXCEPT("Component is not valid");
-    }
-
-    auto pModel = gfx::d3d12engine::Model::at(entityID().value());
-    if (!pModel) {
-        throw ECS_EXCEPT("Model component doesn't exist");
-    }
-
-    auto yaw = yawStep_;
-    yaw *= deltaTime;
-
-    pModel->get().root()->coord() << mu::rotateYH(yaw);
-}
-
-void InputSystem::update(float deltaTime, const ControllerAdapters& controllerAdapters) {
+void InputSystem::update( float deltaTime, const Win32::WndClient& client,
+    ControllerAdapters& controllerAdapters
+) {
 	pKeyboard_->patchKeyState();
 
     for (auto& playerController : components<PlayerController>()) {
@@ -104,24 +113,32 @@ void InputSystem::update(float deltaTime, const ControllerAdapters& controllerAd
 
         for (const auto& [key, event] : keyMap_) {
             if (pKeyboard_->pressed(key)) {
-                playerController->handleEvent(event, deltaTime, controllerAdapters);
+                playerController->handleEvent(event, deltaTime, 0.f, client, controllerAdapters);
+            }
+        }
+
+        while (auto oEv = pMouse_->read()) {
+            auto& ev = *oEv;
+            if (ev.type() == ic::Mouse::Event::Type::RawDelta) {
+                playerController->handleEvent( CInputEvent::Rotation,
+                    static_cast<float>(ev.rawDelta().x), static_cast<float>(ev.rawDelta().y),
+                    client, controllerAdapters
+                );
             }
         }
     }
 }
 
 void InputSystem::initKeyMap() {
-    keyMap_['W'] = PlayerController::Event::MoveForward;
-    keyMap_['S'] = PlayerController::Event::MoveBackward;
-    keyMap_['A'] = PlayerController::Event::MoveLeft;
-    keyMap_['D'] = PlayerController::Event::MoveRight;
-    keyMap_[VK_CONTROL] = PlayerController::Event::MoveDown;
-    keyMap_[VK_SPACE] = PlayerController::Event::MoveUp;
-    keyMap_['Q'] = PlayerController::Event::YawLeft;
-    keyMap_['E'] = PlayerController::Event::YawRight;
+    keyMap_['W'] = CInputEvent::MoveForward;
+    keyMap_['S'] = CInputEvent::MoveBackward;
+    keyMap_['A'] = CInputEvent::MoveLeft;
+    keyMap_['D'] = CInputEvent::MoveRight;
+    keyMap_[VK_CONTROL] = CInputEvent::MoveDown;
+    keyMap_[VK_SPACE] = CInputEvent::MoveUp;
 
-    keyMap_['1'] = PlayerController::Event::SetRenderModeColor;
-    keyMap_['2'] = PlayerController::Event::SetRenderModeCascade0Depth;
-    keyMap_['3'] = PlayerController::Event::SetRenderModeCascade1Depth;
-    keyMap_['4'] = PlayerController::Event::SetRenderModeCascade2Depth;
+    keyMap_['1'] = CInputEvent::SetRenderModeColor;
+    keyMap_['2'] = CInputEvent::SetRenderModeCascade0Depth;
+    keyMap_['3'] = CInputEvent::SetRenderModeCascade1Depth;
+    keyMap_['4'] = CInputEvent::SetRenderModeCascade2Depth;
 }

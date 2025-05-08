@@ -11,6 +11,7 @@
 #include "Timer.hpp"
 #include "systems.hpp"
 #include "renderer.hpp"
+#include "inputSystem.hpp"
 
 #include <vector>
 #include <memory>
@@ -48,6 +49,8 @@ private:
     Renderer renderer_;
 
     Systems systems_;
+
+    ControllerAdapters controllerAdapters_;
 
     Timer timer_;
 

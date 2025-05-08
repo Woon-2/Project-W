@@ -9,7 +9,8 @@
 using namespace std::literals;
 
 Game::Game()
-    : session_(), core_(), mouse_(), keyboard_(), renderer_(core_), systems_(core_, keyboard_),
+    : session_(), core_(), mouse_(), keyboard_(), renderer_(core_), systems_(core_, &keyboard_, &mouse_),
+    controllerAdapters_{ .renderModeController = RenderModeController(&renderer_) },
     timer_(), pStage_(), lockFPS_(defLockFPS) {
     setupWndMsgHandlers();
 }
@@ -19,7 +20,7 @@ int Game::run() {
 
     initNetwork();
 
-    pStage_ = std::make_unique<Stage>(core_, systems_, renderer_, session_);
+    pStage_ = std::make_unique<Stage>(core_, systems_, controllerAdapters_, renderer_, session_);
 
     for(;;) {
         if (auto returnCode = core_.window().processMessages()) {

@@ -52,7 +52,7 @@ void Stage::processPackets(double deltaTime) {
             const auto cameraOffset = mu::Vec3(0.f, 1.8f, -1.6f);
             const auto cameraTimeLag = 0.4f;
 
-            entt.createComponent<PlayerController>();
+            entt.createComponent<PlayerController>(std::make_unique<StandAloneInputHandler>(entt.id().value()));
             entt.createComponent<RigidBody>();
 
             entt.createComponent<gfx::d3d12engine::Camera>(gfx::d3d12::Camera::Config());
@@ -95,8 +95,8 @@ void Stage::updateNetwork(double deltaTime) {
 }
 
 void Stage::processInput(double deltaTime) {
-    pSystems_->inputSystem.update(static_cast<float>(deltaTime),
-        ControllerAdapters{ .renderModeController = RenderModeController(pRenderer_) }
+    pSystems_->inputSystem.update( static_cast<float>(deltaTime),
+        pCore_->window().client(), *pControllerAdapters_
     );
 }
 
