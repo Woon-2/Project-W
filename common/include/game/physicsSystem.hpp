@@ -87,7 +87,7 @@ inline mu::Vec3 MU_CALLCONV ClosestPointOnLineSegment(
 	mu::Vec3 A, mu::Vec3 B, mu::Vec3 point
 ) {
 	auto AB = B - A;
-	float t = mu::dot(point - A, AB) / dot(AB, AB);
+	float t = mu::dot(point - A, AB) / mu::dot(AB, AB);
 	return A + std::clamp(t, 0.f, 1.f) * AB; // saturate(t) can be written as: min((max(t, 0), 1)
 }
 
