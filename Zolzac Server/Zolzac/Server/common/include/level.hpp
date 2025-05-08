@@ -1,6 +1,8 @@
 #ifndef __LEVEL_HPP
 #define __LEVEL_HPP
 
+#define ECS_SERVER
+
 #include "ecs.hpp"
 
 #include "coord.hpp"

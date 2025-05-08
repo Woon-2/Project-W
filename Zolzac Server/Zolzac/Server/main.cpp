@@ -19,8 +19,12 @@ void worker( );
 HANDLE gIocpHandle;
 SOCKET listenSocket;
 OverlappedEx gAcceptOver{ IO_OP::IO_ACCEPT };
+std::array<char, bufferSize> acceptBuffer_;
+
 std::unordered_map<std::uint16_t, Session> gUsers;
 std::atomic_int16_t gId;
+
+SNetExSystem netSystem;
 
 // dummy model to store rotation coordinate system
 class DummyModel : public ecs::Component {
@@ -55,7 +59,9 @@ int main( ) {
 	float directionChangeCounter = 0.f;
 
 	ecs::init( ecs::InitDesc{ .threadCnt = 1u, .entityPoolSize = 0x160u } );
+	IDPool::initList( );
 
+	// initialize windows socket api ================================================
 	WSADATA wsaData{ };
 	if ( ::WSAStartup( MAKEWORD( 2, 2 ), &wsaData ) != 0 ) {
 		errorDisplay( "WSAStartup", WSAGetLastError( ) );
@@ -79,10 +85,10 @@ int main( ) {
 	if ( ::listen( listenSocket, SOMAXCONN ) == SOCKET_ERROR ) {
 		errorDisplay( "listen", WSAGetLastError( ) );
 	}
+	//===============================================================================
 
 	auto levelEntity = gameEngine::LevelRegion( "LevelGraph.bin" );
 
-	auto netSystem = SNetExSystem( );
 	auto physicsSystem = PhysicsSystem( );
 	auto coordRoot = gameEngine::CoordRoot( );
 
@@ -116,6 +122,7 @@ int main( ) {
 
 	auto lastTp = Clock::now( );
 	
+	// create IOCP handle & register listen socket & do accept ======================
 	gIocpHandle = ::CreateIoCompletionPort( INVALID_HANDLE_VALUE, nullptr, 0, 0 );
 	if ( gIocpHandle == nullptr ) {
 		errorDisplay( "CreateIoCompletionPort", GetLastError( ) );
@@ -124,14 +131,18 @@ int main( ) {
 	gId.fetch_add( 1 );
 
 	doAccept( listenSocket, &gAcceptOver );
+	//===============================================================================
 
-	auto threadCnt = std::thread::hardware_concurrency( ) / 2;
+	// create worker threads ========================================================
+	auto threadCnt = std::thread::hardware_concurrency( );
 	auto threads = std::vector<std::thread>( );
 	threads.reserve( threadCnt );
-	for ( auto i = 0; i < threadCnt; ++i ) {
+	for ( auto i = 0u; i < threadCnt; ++i ) {
 		threads.emplace_back( worker );
 	}
+	//===============================================================================
 
+	// game logic loop ==============================================================
 	while ( true ) {
 		auto tp = Clock::now( );
 		auto elapsed = std::chrono::duration_cast<Seconds>( tp - lastTp ).count( );
@@ -140,6 +151,8 @@ int main( ) {
 			std::this_thread::sleep_for( std::chrono::duration<float>( frameRate - elapsed ) );
 			elapsed = frameRate;
 		}
+
+		netSystem.preUpdate( );
 
 		// physically update
 		const float forceStep_ = 800.f;
@@ -171,11 +184,12 @@ int main( ) {
 
 		coordRoot.update( );
 
-		lastTp = tp;
-
-		// fill broadcast queue
 		netSystem.postUpdate( );
+		netSystem.doSend( );
+
+		lastTp = tp;
 	}
+	//===============================================================================
 
 	for ( auto& t : threads ) {
 		t.join( );
@@ -191,7 +205,7 @@ void doAccept( SOCKET listenSocket, OverlappedEx* acceptOver ) {
 		errorDisplay( "WSASocket(acceptSocket)", WSAGetLastError( ) );
 	}
 	
-	auto ret = ::AcceptEx( listenSocket, acceptOver->acceptSocket_, acceptOver->buffer_.data( ), 
+	auto ret = ::AcceptEx( listenSocket, acceptOver->acceptSocket_, acceptBuffer_.data( ), 
 		0, sizeof( sockaddr_in ) + 16, sizeof( sockaddr_in ) + 16, nullptr, &acceptOver->over_ );
 	if ( !ret ) {
 		if ( WSAGetLastError( ) != WSA_IO_PENDING ) {
@@ -212,10 +226,16 @@ void worker( ) {
 		case IO_OP::IO_ACCEPT: {
 			auto id = gId++;
 
-			// 요 자리에 SNetExSystem.addSession이 들어가면 되지 않을까?
-
 			::CreateIoCompletionPort( reinterpret_cast<HANDLE>( overEx->acceptSocket_ ), gIocpHandle, id, 0 );
-			gUsers.try_emplace( id, overEx->acceptSocket_, id );
+
+			if ( !gUsers.try_emplace( id, overEx->acceptSocket_, id ).second ) {
+				errorDisplay( "Session creation", WSAGetLastError( ) );
+				::closesocket( overEx->acceptSocket_ );
+			}
+			else {
+				netSystem.addSession( gUsers[ id ] );
+				gUsers[ id ].setAcceptFlag( );
+			}
 
 			doAccept( listenSocket, &gAcceptOver );
 			break;

@@ -21,7 +21,7 @@ void MU_CALLCONV RigidBody::updateRigid(float dt, float friction) NOEXCEPT
 	updateAngular(dt);
 }
 
-void RigidBody::updateForce(float dt, float friction) NOEXCEPT
+void MU_CALLCONV RigidBody::updateForce(float dt, float friction) NOEXCEPT
 {
 	oldPosition_ = position_;
 
@@ -37,7 +37,7 @@ void RigidBody::updateForce(float dt, float friction) NOEXCEPT
 
 	// 마찰력을 선운동량과 속도에 적용
 	momentum_ += frictionForce * dt;
-	velocity_ += (frictionForce / mass_) * dt;	// 가속도 적용
+	velocity_ += ( frictionForce / mass_ ) * dt;
 
 	// 속도가 아주 작을 경우 속도를 0으로 설정
 	static constexpr auto epsilon = 0.0002f;
@@ -50,7 +50,7 @@ void RigidBody::updateForce(float dt, float friction) NOEXCEPT
 	force_ = mu::Vec3(0.0f, 0.0f, 0.0f);
 }
 
-void RigidBody::updateAngular(float dt) NOEXCEPT
+void MU_CALLCONV RigidBody::updateAngular(float dt) NOEXCEPT
 {
 }
 

@@ -31,8 +31,8 @@ public:
 	float mass() const NOEXCEPT { return mass_; }
 
 private:
-	void updateForce(float dt, float friction) NOEXCEPT;
-	void updateAngular(float dt) NOEXCEPT;
+	void MU_CALLCONV updateForce(float dt, float friction) NOEXCEPT;
+	void MU_CALLCONV updateAngular(float dt) NOEXCEPT;
 
 	mu::Mat4x4 rotation_;
 	mu::Mat4x4 inertialMass_;
@@ -50,6 +50,8 @@ private:
 	
 	float mass_;
 	int cornerLocation_;
+
+	std::atomic_bool working_;
 };
 
 class PhysicsSystem : public ecs::System<RigidBody> {

@@ -3,11 +3,15 @@
 
 #include "protocol.hpp"
 
+#define NOMINMAX
+
 #include <iostream>
 #include <WS2tcpip.h>
 #include <MSWSock.h>
 #include <cstdint>
 #include <array>
+#include <vector>
+#include <deque>
 
 #pragma comment(lib, "WS2_32.LIB")
 #pragma comment(lib, "MSWSock.LIB")

@@ -14,12 +14,16 @@ void SNetExSystem::addEntity(ecs::Entity& entity) {
 }
 
 void SNetExSystem::addSession(Session& session) {
-    pSessions_.push_back(&session);
+	session.setNetSystem( this );
+    {
+        std::lock_guard<std::mutex> lock( addSessionLock_ );
+        pReservedSessions_.push_back( &session );
+    }
 
     session.enqueuePacket(
         Packet{
             .size = calcPacketSize<SCInitInfo>(),
-            .type = PacketType::SCInitInfo,
+            .type = PacketType::SC_InitInfo,
             .scInitInfo = SCInitInfo{
                 // N SCInitCreate Packet + 1 SCInitAssign Packet
                 .packetCnt = static_cast<std::uint32_t>(components<NetEx>().size() + 1u)
@@ -34,9 +38,9 @@ void SNetExSystem::addSession(Session& session) {
 
         session.enqueuePacket(
             Packet{
-                .size = calcPacketSize<SCInitCreate>(),
-                .type = PacketType::SCInitCreate,
-                .scInitCreate = SCInitCreate{
+                .size = calcPacketSize<SCCreate>(),
+                .type = PacketType::SC_InitCreate,
+                .scInitCreate = SCCreate{
                     .netId = pNetEx->netId(),
                     .objType = ObjectType::Character,
                     .xform = {
@@ -53,35 +57,36 @@ void SNetExSystem::addSession(Session& session) {
 
     session.enqueuePacket(
         Packet{
-            .size = calcPacketSize<SCInitAssign>(),
-            .type = PacketType::SCInitAssign,
+            .size = calcPacketSize<SCInitAssign>( ),
+            .type = PacketType::SC_InitAssign,
             .scInitAssign = SCInitAssign{
-                .netId = pNetEx->netId()
+				.netId = pNetEx->netId( )
             }
         }
     );
 }
 
-void SNetExSystem::preUpdate() {
-    for (auto& pSession : pSessions_) {
-        for (const auto& packet : pSession->getRecvQueue()) {
-            processPacket(packet);
-        }
-        pSession->getRecvQueue().clear();
+void SNetExSystem::preUpdate( ) {
+	std::lock_guard<std::mutex> lock( addSessionLock_ );
+    for ( auto& pSession : pReservedSessions_ ) {
+		pSessions_.push_back( pSession );
     }
+    pReservedSessions_.clear( );
 }
 
 void SNetExSystem::postUpdate() {
     for (auto& pSession : pSessions_) {
-        for (auto& pNetEx : components<NetEx>()) {
-            pNetEx->generatePackets(*pSession);
+        if ( pSession->getAcceptFlag( ) ) {
+            for ( auto& pNetEx : components<NetEx>( ) ) {
+                pNetEx->generatePackets( *pSession );
+            }
         }
     }
 }
 
 void SNetExSystem::processPacket(const Packet& packet) {
     switch (packet.type) {
-    case PacketType::CSWorld:
+    case PacketType::CS_World:
         if (!netIdToNetEx_.contains(packet.csWorld.netId)) {
             std::cerr << "NetEx not found for netId: " << packet.csWorld.netId << '\n';
             return;
@@ -99,7 +104,7 @@ void SNetExHelicopter::generatePackets(Session& session) {
         session.enqueuePacket(
             Packet{
                 .size = calcPacketSize<SCWorld>(),
-                .type = PacketType::SCWorld,
+                .type = PacketType::SC_World,
                 .scWorld = SCWorld {
                     .netId = lastReceivedWorld_.value().netId,
                     .xform = lastReceivedWorld_.value().xform
@@ -111,7 +116,7 @@ void SNetExHelicopter::generatePackets(Session& session) {
 
 void SNetExHelicopter::processPacket(const Packet& packet) {
     switch (packet.type) {
-    case PacketType::CSWorld:
+    case PacketType::CS_World:
         handleCSWorld(packet.csWorld);
         break;
 
@@ -133,7 +138,7 @@ void SNetExAI::generatePackets(Session& session) {
     session.enqueuePacket(
         Packet{
             .size = calcPacketSize<SCWorld>(),
-            .type = PacketType::SCWorld,
+            .type = PacketType::SC_World,
             .scWorld = SCWorld {
                 .netId = netId(),
                 .xform = {

@@ -1,4 +1,5 @@
 #include "Session.hpp"
+#include "sNetEx.hpp"
 
 #include <utility>
 #include <ranges>
@@ -31,8 +32,10 @@ void IDPool::deallocID( std::int16_t id ) {
 // Session ==========================================================================
 Session::Session( Session&& rhs ) noexcept
 	: clientSocket_{ std::exchange( rhs.clientSocket_, INVALID_SOCKET ) },
-	id_{ std::exchange( rhs.id_, -1 ) }, recvOver_{ std::move( rhs.recvOver_ ) },
-	recvBytesRemain_{ std::exchange( rhs.recvBytesRemain_, 0 ) } {
+	id_{ std::exchange( rhs.id_, -1 ) }, recvOver_( std::move( rhs.recvOver_ ) ), 
+	recvBuffer_( std::move( rhs.recvBuffer_ ) ), recvBytesRemain_{ std::exchange( rhs.recvBytesRemain_, 0 ) }, 
+	sendQueue_( std::move( rhs.sendQueue_ ) ) {
+	rhs.sendQueue_.clear( );
 }
 
 Session& Session::operator=( Session&& other ) noexcept {
@@ -43,7 +46,10 @@ Session& Session::operator=( Session&& other ) noexcept {
 	clientSocket_ = std::exchange( other.clientSocket_, INVALID_SOCKET );
 	id_ = std::exchange( other.id_, -1 );
 	recvOver_ = std::move( other.recvOver_ );
+	recvBuffer_ = std::move( other.recvBuffer_ );
 	recvBytesRemain_ = std::exchange( other.recvBytesRemain_, 0 );
+	sendQueue_ = std::move( other.sendQueue_ );
+	other.sendQueue_.clear( );
 
 	return *this;
 }
@@ -51,14 +57,28 @@ Session& Session::operator=( Session&& other ) noexcept {
 void Session::doRecv( ) {
 	DWORD recvFlag{ };
 	::ZeroMemory( &recvOver_.over_, sizeof( recvOver_.over_ ) );
-	recvOver_.wsaBuf_.len = bufferSize - recvBytesRemain_;
-	recvOver_.wsaBuf_.buf = recvOver_.buffer_.data( ) + recvBytesRemain_;
+	auto& wsaBuf = recvOver_.wsaBufs_[ 0 ];
 
-	auto ret = ::WSARecv( clientSocket_, &recvOver_.wsaBuf_, 1, 
+	wsaBuf.len = bufferSize - recvBytesRemain_;
+	wsaBuf.buf = recvBuffer_.data( ) + recvBytesRemain_;
+
+	auto ret = ::WSARecv( clientSocket_, &wsaBuf, 1, 
 		nullptr, &recvFlag, &recvOver_.over_, nullptr );
 	if ( ret == SOCKET_ERROR ) {
 		if ( WSAGetLastError( ) != WSA_IO_PENDING ) {
 			errorDisplay( "WSARecv", WSAGetLastError( ) );
+		}
+	}
+}
+
+void Session::doSend( ) {
+	auto overEx = new OverlappedEx{ IO_OP::IO_SEND, std::move(sendQueue_) };
+
+	auto ret = ::WSASend( clientSocket_, overEx->wsaBufs_.data( ), 
+		static_cast<DWORD>( overEx->wsaBufs_.size( ) ), nullptr, 0, &overEx->over_, nullptr );
+	if ( ret == SOCKET_ERROR ) {
+		if ( WSAGetLastError( ) != WSA_IO_PENDING ) {
+			errorDisplay( "WSASend", WSAGetLastError( ) );
 		}
 	}
 }
@@ -71,25 +91,37 @@ void Session::interpretData( DWORD bytesTransferred ) {
 	recvBytesRemain_ += static_cast<std::uint16_t>( bytesTransferred );
 
 	while ( recvBytesRemain_ >= sizeof( std::uint16_t ) ) {
-		auto packetSize = *reinterpret_cast<std::uint16_t*>( recvOver_.buffer_.data( ) + readOffset );
+		auto packetSize = reinterpret_cast<Packet*>( recvBuffer_.data( ) + readOffset )->size;
 
 		if ( recvBytesRemain_ < packetSize ) {
 			break;
 		}
 
-		processPacket( recvOver_.buffer_.data( ) + readOffset );
+		auto packet = *reinterpret_cast<Packet*>( recvBuffer_.data( ) + readOffset );
+		processPacket( packet );
 		readOffset += packetSize;
 		recvBytesRemain_ -= packetSize;
 	}
 	
 	if ( readOffset > 0 && recvBytesRemain_ > 0 ) {
-		std::memcpy( recvOver_.buffer_.data( ), recvOver_.buffer_.data( ) + readOffset, recvBytesRemain_ );
+		std::memcpy( recvBuffer_.data( ), recvBuffer_.data( ) + readOffset, recvBytesRemain_ );
 	}
 }
 
-void Session::processPacket( const char* ) {
-	// 패킷에 들어있는 NetId로 매핑된 NetEx를 찾는다.
-	// 그 NetEx에다 대고 processPacket을 호출한다.
-	// 그러면 그 NetEx가 갖고있는 NetExProcessor가 자신의 정의에 맞게 알아서 잘 처리해줄 것이다.
+void Session::setNetSystem( SNetExSystem* netSystem ) {
+	netSystem_ = netSystem;
+}
+
+void Session::processPacket( const Packet& packet ) {
+	switch ( packet.type ) {
+	case PacketType::CS_Login: {
+		
+		break;
+	}
+
+	case PacketType::CS_World:
+		netSystem_->getNetEx( packet.scWorld.netId )->processPacket( packet );
+		break;
+	}
 }
 // ==================================================================================
