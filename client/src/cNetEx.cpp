@@ -121,6 +121,9 @@ void CNetExSystem::handleSCInitCreate(const SCInitCreate& scInitCreate) {
     }
 
     if (pEntity) {
+        if (!pEntity->valid()) {
+            throw std::runtime_error("[Description] Entity pool ran out");
+        }
         netIdToNetEx_[scInitCreate.netId] = pEntity->get<NetEx>();
     }
     ++recvdInitPacketCnt_;
@@ -214,4 +217,36 @@ void CNetExHelicopter::handleSCWorld(const SCWorld& scWorld) {
 
     pCoord->get().setLocalXform(mu::translate(translation));
     pModel->get().root()->coord().setLocalXform(mu::Mat4x4(rotation));
+}
+
+void CNetExInput::generatePackets(Session& session) {
+    using IEType = InputEventType;
+
+    CSInput curPacket{};
+
+    for (const auto& ev : parent_->inputEvents_) {
+        curPacket.events[curPacket.eventCnt++] = ev;
+        if (curPacket.eventCnt == CSInput::maxEventCnt) {
+            session.enqueuePacket( Packet{
+                .size = calcPacketSize<CSInput>(CSInput::maxEventCnt),
+                .type = PacketType::CSInput,
+                .csInput = curPacket
+            } );
+            curPacket.eventCnt = 0u;
+        }
+    }
+
+    if (curPacket.eventCnt > 0) {
+        session.enqueuePacket( Packet{
+            .size = calcPacketSize<CSInput>(curPacket.eventCnt),
+            .type = PacketType::CSInput,
+            .csInput = curPacket
+        } );
+    }
+
+    parent_->inputEvents_.clear();
+}
+
+void CNetExInput::processPacket(const Packet& packet) {
+
 }

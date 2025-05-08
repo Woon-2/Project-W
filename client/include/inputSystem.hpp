@@ -86,6 +86,19 @@ private:
     float forceStep_;
 };
 
+class NetworkInputHandler : public IPlayerInputHandler {
+public:
+    NetworkInputHandler(ecs::Entity::ID entityId) NOEXCEPT
+        : entityId_(entityId) {}
+
+    void handleEvent(CInputEvent event, float floatVal0, float floatVal1,
+        const Win32::WndClient& client, ControllerAdapters& controllerAdapters
+    ) override;
+
+private:
+    ecs::Entity::ID entityId_;
+};
+
 
 class InputSystem : public ecs::System<PlayerController> {
 public:

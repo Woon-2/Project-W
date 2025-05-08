@@ -42,6 +42,62 @@ void StandAloneInputHandler::handleEvent( CInputEvent event,
     }
 }
 
+void NetworkInputHandler::handleEvent( CInputEvent event,
+    float floatVal0, float floatVal1, const Win32::WndClient& client,
+    ControllerAdapters& controllerAdapters
+) {
+    // Moving: floatVal0 = deltaTime, floatVal1 = None
+    // Rotation: floatVal0 = yawValue, floatVal1 = None
+    switch (event) {
+    case CInputEvent::MoveForward:
+        controllerAdapters.inputNetworkForwarder.pushInputEvent(
+            InputEvent{ InputEventType::MoveForward, floatVal0, floatVal1 }
+        );
+        break;
+    case CInputEvent::MoveBackward:
+        controllerAdapters.inputNetworkForwarder.pushInputEvent(
+            InputEvent{ InputEventType::MoveBackward, floatVal0, floatVal1 }
+        );
+        break;
+    case CInputEvent::MoveLeft:
+        controllerAdapters.inputNetworkForwarder.pushInputEvent(
+            InputEvent{ InputEventType::MoveLeft, floatVal0, floatVal1 }
+        );
+        break;
+    case CInputEvent::MoveRight:
+        controllerAdapters.inputNetworkForwarder.pushInputEvent(
+            InputEvent{ InputEventType::MoveRight, floatVal0, floatVal1 }
+        );
+        break;
+    case CInputEvent::Rotation: {
+        const auto mouseSensitivity = mu::pi * 2.f;
+        controllerAdapters.inputNetworkForwarder.pushInputEvent(
+            InputEvent{ InputEventType::Rotation,
+                floatVal0 * mouseSensitivity / static_cast<float>(client.width),
+                0.f
+            }
+        );
+        break;
+    }
+        
+    case CInputEvent::SetRenderModeColor:
+        controllerAdapters.renderModeController.setMode(Renderer::Mode::Color);
+        break;
+    case CInputEvent::SetRenderModeCascade0Depth:
+		controllerAdapters.renderModeController.setMode(Renderer::Mode::Cascade0Depth);
+		break;
+	case CInputEvent::SetRenderModeCascade1Depth:
+		controllerAdapters.renderModeController.setMode(Renderer::Mode::Cascade1Depth);
+		break;
+	case CInputEvent::SetRenderModeCascade2Depth:
+		controllerAdapters.renderModeController.setMode(Renderer::Mode::Cascade2Depth);
+		break;
+    default:
+        throw std::runtime_error("Invalid event");
+        break;
+    }
+}
+
 void StandAloneInputHandler::moveForward(float deltaTime) {
     addForce( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
         ecs::Component::atC(ecs::Components::Model, entityId_)

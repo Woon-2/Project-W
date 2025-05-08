@@ -24,6 +24,8 @@ enum class PacketType : std::uint8_t {
     SCInitInfo,
     SCInitCreate,
     SCInitAssign,
+
+    CSInput
 };
 
 enum class ObjectType : std::uint8_t {
@@ -75,6 +77,27 @@ struct CSWorld {
     RigidXform xform;
 };
 
+enum class InputEventType : std::uint8_t {
+    MoveForward,
+    MoveBackward,
+    MoveLeft,
+    MoveRight,
+    Rotation
+};
+
+struct InputEvent {
+    InputEventType type;
+    float floatVal0;
+    float floatVal1;
+};
+
+struct CSInput {
+    static constexpr std::uint8_t maxEventCnt = 16;
+
+    std::uint8_t eventCnt;
+    InputEvent events[maxEventCnt];
+};
+
 struct Packet {
     std::uint16_t size;
     PacketType type;
@@ -87,6 +110,7 @@ struct Packet {
         SCInitInfo scInitInfo;
         SCInitCreate scInitCreate;
         SCInitAssign scInitAssign;
+        CSInput csInput;
     };
 };
 #pragma pack(pop)
@@ -94,6 +118,16 @@ struct Packet {
 template <class T>
 constexpr std::uint16_t calcPacketSize() {
     return sizeof(PacketType) + sizeof(std::uint16_t) + sizeof(T);
+}
+
+template <class TPacket>
+constexpr std::uint16_t calcPacketSize(std::uint8_t u8Val) {
+	return 3u + sizeof(TPacket);
+}
+
+template<>
+constexpr std::uint16_t calcPacketSize<CSInput>(std::uint8_t inputCnt) {
+	return 3u + sizeof(std::uint8_t) + inputCnt * sizeof(InputEvent);
 }
 
 template <>

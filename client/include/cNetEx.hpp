@@ -11,6 +11,7 @@
 #include <vector>
 #include <map>
 #include <optional>
+#include <deque>
 
 class CNetExSystem : public ecs::System<NetEx> {
 public:
@@ -92,6 +93,40 @@ public:
 
     void generatePackets(Session& session) override {}
     void processPacket(const Packet& packet) override {}
+};
+
+class CNetExInput : public NetExProcessorBase {
+public:
+    CNetExInput(ecs::Entity::ID entityId, class InputNetworkForwarder* parent)
+        : NetExProcessorBase(entityId), parent_(parent) {}
+
+    void generatePackets(Session& session) override;
+    void processPacket(const Packet& packet) override;
+
+private:
+    InputNetworkForwarder* parent_;
+};
+
+class InputNetworkForwarder : public ecs::Entity {
+public:
+    friend class CNetExInput;
+
+    InputNetworkForwarder()
+        : pNetExSystem_(nullptr), inputEvents_() {}
+
+    InputNetworkForwarder(CNetExSystem* pNetExSystem)
+        : ecs::Entity(), pNetExSystem_(pNetExSystem) {
+        createComponent<NetEx>(std::make_unique<CNetExInput>(id().value(), this));
+        pNetExSystem_->addEntity(*this);
+    }
+
+    void pushInputEvent(const InputEvent& event) {
+        inputEvents_.push_back(event);
+    }
+
+private:
+    CNetExSystem* pNetExSystem_;
+    std::deque<InputEvent> inputEvents_;
 };
 
 #endif  // __CLIENT_NETEX_HPP
