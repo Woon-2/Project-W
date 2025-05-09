@@ -1,225 +1,256 @@
 #include "sNetEx.hpp"
-
-#include "net/netLow.hpp"
-#include "net/protocol.hpp"
 #include "net/netInclude.hpp"
-#include "net/session.hpp"
+#include "OverlappedEx.hpp"
+#include "Session.hpp"
 
-#include "game/level.hpp"
 #include "game/physicsSystem.hpp"
-#include "coord.hpp"
+
 #include "resourcePath.hpp"
 
-#include <iostream>
-#include <cstdint>
+#include <unordered_map>
 #include <vector>
-#include <optional>
-#include <limits>
-#include <numeric>
-#include <list>
-#include <forward_list>
-#include <map>
-#include <utility>
-#include <deque>
-#include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <random>
+
+void doAccept( SOCKET, OverlappedEx* );
+void worker( );
+
+HANDLE gIocpHandle;
+SOCKET listenSocket;
+OverlappedEx gAcceptOver{ IO_OP::IO_ACCEPT };
+std::array<char, Session::recvBufSize> acceptBuffer_;
+
+std::unordered_map<std::uint16_t, Session> gUsers;
+std::atomic_int16_t gId;
+
+SNetExSystem netSystem;
 
 // dummy model to store rotation coordinate system
 class DummyModel : public ecs::Component {
 public:
-    ENABLE_COMPONENT(DummyModel)
+	ENABLE_COMPONENT( DummyModel )
 
-    DummyModel(const ecs::Entity& entity, gameEngine::Coord& coordComp)
-        : Component(entity), coord_() {
-        coord_.setParent(&coordComp.get());
-    }
+	DummyModel( const ecs::Entity& entity, gameEngine::Coord& coordComp )
+	: Component( entity ), coord_( ) {
+		coord_.setParent( &coordComp.get( ) );
+	}
 
-    const gfx::coord::System& coord() const NOEXCEPT {
-        return coord_;
-    }
+	const gfx::coord::System& coord( ) const NOEXCEPT {
+		return coord_;
+	}
 
-    gfx::coord::System& coord() NOEXCEPT {
-        return coord_;
-    }
+	gfx::coord::System& coord( ) NOEXCEPT {
+		return coord_;
+	}
 
 private:
-    gfx::coord::System coord_;
+	gfx::coord::System coord_;
 };
 
-std::list<Session> gSessions;
-std::uniform_real_distribution<float> gDist(-1.f, 1.f);
-std::mt19937 gRng(std::random_device{}());
+std::uniform_real_distribution<float> gDist( -1.f, 1.f );
+std::mt19937 gRng( std::random_device{}( ) );
 
-int main()
-{
-    using Clock = std::chrono::high_resolution_clock;
-    using Seconds = std::chrono::duration<float>;
-    static constexpr auto frameRate = 0.016f;
-    static constexpr auto directionChangeRate = 2.f;
-    float directionChangeCounter = 0.f;
+int main( ) {
+	using Clock = std::chrono::high_resolution_clock;
+	using Seconds = std::chrono::duration<float>;
+	static constexpr auto frameRate = 0.016f;	// 60 FPS
+	static constexpr auto directionChangeRate = 2.f;
+	float directionChangeCounter = 0.f;
 
-    ecs::init( ecs::InitDesc{ .threadCnt = 1u, .entityPoolSize = 0x160u } );
-    net::initNet();
-    IDPool::initList();
+	ecs::init( ecs::InitDesc{ .threadCnt = 1u, .entityPoolSize = 0x160u } );
+	IDPool::initList( );
 
-    auto listenSocket = net::TcpSocket();
-    
-    listenSocket.bind(net::SockAddr(net::Ipv4Addr(), net::Port(PORT)));
-    listenSocket.listen(SOMAXCONN);
+	// initialize windows socket api ================================================
+	WSADATA wsaData{ };
+	if ( ::WSAStartup( MAKEWORD( 2, 2 ), &wsaData ) != 0 ) {
+		errorDisplay( "WSAStartup", WSAGetLastError( ) );
+	}
 
-    int flag = 1;
-    listenSocket.setSockOpt(SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&flag), sizeof(flag));
+	listenSocket = ::WSASocket( AF_INET, SOCK_STREAM, IPPROTO_TCP, nullptr, 0, WSA_FLAG_OVERLAPPED );
+	if ( listenSocket == INVALID_SOCKET ) {
+		errorDisplay( "WSASocket(listenSocket)", WSAGetLastError( ) );
+	}
 
-    flag = true;
-    listenSocket.setSockOpt(IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char*>(&flag), sizeof(flag));
+	auto serverAddr = sockaddr_in{
+		.sin_family = AF_INET,
+		.sin_port = ::htons( PORT )
+	};
+	serverAddr.sin_addr.s_addr = ::htonl( INADDR_ANY );
 
-  
-    int retVal{};
+	if ( ::bind( listenSocket, reinterpret_cast<sockaddr*>( &serverAddr ), sizeof( serverAddr ) ) == SOCKET_ERROR ) {
+		errorDisplay( "bind", WSAGetLastError( ) );
+	}
 
-    auto levelEntity = gameEngine::LevelRegion(resourcePath/"LevelGraph.bin");
-    
-    auto netSystem = SNetExSystem();
-    auto physicsSystem = PhysicsSystem();
-    auto coordRoot = gameEngine::CoordRoot();
+	if ( ::listen( listenSocket, SOMAXCONN ) == SOCKET_ERROR ) {
+		errorDisplay( "listen", WSAGetLastError( ) );
+	}
+	//===============================================================================
 
-    auto entities = levelEntity.instantiateAllObjects(coordRoot.get());
-    auto directions = std::vector<mu::Vec3>(entities.size() - 5u);
-    for (auto& dir : directions) {
-        dir = mu::Vec3(gDist(gRng), 0.f, gDist(gRng));
-    }
-    // add netEx, rigidBody
-    
-    for (std::size_t i = 0u; i < entities.size(); ++i) {
-        auto& entity = entities[i];
-        if (i < 5u) {
-            entity.createComponent<NetEx>(std::make_unique<SNetExHelicopter>(entity.id().value()));
-            entity.as<NetEx>().addCategory(NetExCategory::Player);
-            entity.as<NetEx>().addCategory(NetExCategory::Character);
-        }
-        else {
-            entity.createComponent<NetEx>(std::make_unique<SNetExAI>(entity.id().value()));
-            entity.as<NetEx>().addCategory(NetExCategory::AI);
-            entity.as<NetEx>().addCategory(NetExCategory::Character);
-        }
-        entity.createComponent<RigidBody>();
-        entity.createComponent<DummyModel>(entity.as<gameEngine::Coord>());
+	auto levelEntity = gameEngine::LevelRegion( resourcePath/"LevelGraph.bin" );
 
-        netSystem.addEntity(entity);
-        physicsSystem.addEntity(entity);
-        coordRoot.addEntity(entity);
-    }
+	auto physicsSystem = PhysicsSystem( );
+	auto coordRoot = gameEngine::CoordRoot( );
 
-    coordRoot.update();
+	auto entities = levelEntity.instantiateAllObjects( coordRoot.get( ) );
+	auto directions = std::vector<mu::Vec3>( entities.size( ) - 5u );
+	for ( auto& dir : directions ) {
+		dir = mu::Vec3( gDist( gRng ), 0.f, gDist( gRng ) );
+	}
 
-    auto lastTp = Clock::now();
+	for ( std::size_t i = 0u; i < entities.size( ); ++i ) {
+		auto& entity = entities[ i ];
+		if ( i < 5u ) {
+			entity.createComponent<NetEx>( std::make_unique<SNetExHelicopter>( entity.id( ).value( ) ) );
+			entity.as<NetEx>( ).addCategory( NetExCategory::Player );
+			entity.as<NetEx>( ).addCategory( NetExCategory::Character );
+		}
+		else {
+			entity.createComponent<NetEx>( std::make_unique<SNetExAI>( entity.id( ).value( ) ) );
+			entity.as<NetEx>( ).addCategory( NetExCategory::AI );
+			entity.as<NetEx>( ).addCategory( NetExCategory::Character );
+		}
+		entity.createComponent<RigidBody>( );
+		entity.createComponent<DummyModel>( entity.as<gameEngine::Coord>( ) );
 
-    while (true) {
-        auto recvRequestSocks = std::vector<net::TcpSocket*>();
-        auto recvReadySocks = std::vector<net::TcpSocket*>();
-        auto sendRequestSocks = std::vector<net::TcpSocket*>();
-        auto sendReadySocks = std::vector<net::TcpSocket*>();
+		netSystem.addEntity( entity );
+		physicsSystem.addEntity( entity );
+		coordRoot.addEntity( entity );
+	}
 
-		recvRequestSocks.push_back( &listenSocket );
+	coordRoot.update( );
 
-        for (auto& session : gSessions) {
-            recvRequestSocks.push_back(&session.sock());
-            sendRequestSocks.push_back(&session.sock());
-        }
+	auto lastTp = Clock::now( );
+	
+	// create IOCP handle & register listen socket & do accept ======================
+	gIocpHandle = ::CreateIoCompletionPort( INVALID_HANDLE_VALUE, nullptr, 0, 0 );
+	if ( gIocpHandle == nullptr ) {
+		errorDisplay( "CreateIoCompletionPort", GetLastError( ) );
+	}
+	::CreateIoCompletionPort( reinterpret_cast<HANDLE>( listenSocket ), gIocpHandle, gId.load( ), 0 );
+	gId.fetch_add( 1 );
 
-        net::select<decltype(recvRequestSocks)>(recvRequestSocks, sendRequestSocks, {}, recvReadySocks, sendReadySocks, {}, 100ms);
+	doAccept( listenSocket, &gAcceptOver );
+	//===============================================================================
 
-        for (auto& sock : recvReadySocks) {
-            if (sock->nativeHandle() == listenSocket.nativeHandle()) {
-                auto clientSocket = listenSocket.WSAAcceptUc();
-                if (clientSocket.nativeHandle() == INVALID_SOCKET) {
-                    std::cerr << "accept failed\n";
-                    break;
-                }
-                else {
-                    std::cout << "Client Connected\n";
-                }
+	// create worker threads ========================================================
+	auto threadCnt = std::thread::hardware_concurrency( );
+	auto threads = std::vector<std::thread>( );
+	threads.reserve( threadCnt );
+	for ( auto i = 0u; i < threadCnt; ++i ) {
+		threads.emplace_back( worker );
+	}
+	//===============================================================================
 
-                int flag = 1;
-                clientSocket.setSockOpt(IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char*>(&flag), sizeof(flag));
+	// game logic loop ==============================================================
+	while ( true ) {
+		auto tp = Clock::now( );
+		auto elapsed = std::chrono::duration_cast<Seconds>( tp - lastTp ).count( );
 
-                if (gSessions.emplace_back(std::move(clientSocket)).id() == -1) {
-                    ::closesocket(clientSocket.nativeHandle());
-                    gSessions.pop_back();
-                }
-                else {
-                    netSystem.addSession(gSessions.back());
-                }
-            }
-            else{
-                auto session = std::find_if(gSessions.begin(), gSessions.end(), [&sock](const auto& s) {
-                    return s.sock().nativeHandle() == sock->nativeHandle();
-                });
+		if ( elapsed < frameRate / 2.f ) {
+			std::this_thread::sleep_for( std::chrono::duration<float>( frameRate - elapsed ) );
+			elapsed = frameRate;
+		}
 
-                if (session != gSessions.end()) {
-                    session->recvPackets();
-                }
-            }
-        }
+		netSystem.preUpdate( );
 
-        // update game ===============
-        auto tp = Clock::now();
-        auto elapsed = std::chrono::duration_cast<Seconds>(tp - lastTp).count();
+		// physically update
+		const float forceStep_ = 800.f;
+		for ( std::size_t i = 5u; i < entities.size( ); ++i ) {
+			auto& entity = entities[ i ];
+			auto& coord = entity.as<gameEngine::Coord>( );
+			auto& rigidBody = entity.as<RigidBody>( );
+			auto& netEx = entity.as<NetEx>( );
 
-        if (elapsed < frameRate / 2.f) {
-            std::this_thread::sleep_for(std::chrono::duration<float>(frameRate - elapsed));
-            elapsed = frameRate;
-        }
+			rigidBody.addForce( directions[ i - 5u ] * forceStep_ * elapsed );
+		}
 
-        netSystem.preUpdate();
+		physicsSystem.update( elapsed );
 
-        // physically update
-        const float forceStep_ = 800.f;
-        for (std::size_t i = 5u; i < entities.size(); ++i) {
-            auto& entity = entities[i];
-            auto& coord = entity.as<gameEngine::Coord>();
-            auto& rigidBody = entity.as<RigidBody>();
-            auto& netEx = entity.as<NetEx>();
+		for ( std::size_t i = 5u; i < entities.size( ); ++i ) {
+			auto& entity = entities[ i ];
+			auto& coord = entity.as<gameEngine::Coord>( );
+			auto& rigidBody = entity.as<RigidBody>( );
+			coord.get( ) << mu::translate( rigidBody.deltaPosition( ) );
+		}
 
-            rigidBody.addForce(directions[i - 5u] * forceStep_ * elapsed);
-        }
+		directionChangeCounter += elapsed;
+		if ( directionChangeCounter > directionChangeRate ) {
+			directionChangeCounter = 0.f;
+			for ( auto& dir : directions ) {
+				dir = mu::Vec3( gDist( gRng ), 0.f, gDist( gRng ) );
+			}
+		}
 
-        physicsSystem.update(elapsed);
+		coordRoot.update( );
 
-        for (std::size_t i = 5u; i < entities.size(); ++i) {
-            auto& entity = entities[i];
-            auto& coord = entity.as<gameEngine::Coord>();
-            auto& rigidBody = entity.as<RigidBody>();
-            coord.get() << mu::translate( rigidBody.deltaPosition() );
-        }
+		netSystem.postUpdate( );
+		netSystem.doSend( );
 
-        directionChangeCounter += elapsed;
-        if (directionChangeCounter > directionChangeRate) {
-            directionChangeCounter = 0.f;
-            for (auto& dir : directions) {
-                dir = mu::Vec3(gDist(gRng), 0.f, gDist(gRng));
-            }
-        }
+		lastTp = tp;
+	}
+	//===============================================================================
 
-        coordRoot.update();
-        
-        lastTp = tp;
+	for ( auto& t : threads ) {
+		t.join( );
+	}
 
-        // fill broadcast queue
-        netSystem.postUpdate();
+	::closesocket( listenSocket );
+	::WSACleanup( );
+}
 
-        // ===========================
+void doAccept( SOCKET listenSocket, OverlappedEx* acceptOver ) {
+	acceptOver->acceptSocket_ = ::WSASocket( AF_INET, SOCK_STREAM, IPPROTO_TCP, nullptr, 0, WSA_FLAG_OVERLAPPED );
+	if ( acceptOver->acceptSocket_ == INVALID_SOCKET ) {
+		errorDisplay( "WSASocket(acceptSocket)", WSAGetLastError( ) );
+	}
+	
+	auto ret = ::AcceptEx( listenSocket, acceptOver->acceptSocket_, acceptBuffer_.data( ), 
+		0, sizeof( sockaddr_in ) + 16, sizeof( sockaddr_in ) + 16, nullptr, &acceptOver->over_ );
+	if ( !ret ) {
+		if ( WSAGetLastError( ) != WSA_IO_PENDING ) {
+			errorDisplay( "AcceptEx", WSAGetLastError( ) );
+		}
+	}
+}
 
-        for(const auto& sock : sendReadySocks) {
-            auto session = std::find_if(gSessions.begin(), gSessions.end(), [&sock](const auto& s) {
-                return s.sock().nativeHandle() == sock->nativeHandle();
-            });
+void worker( ) {
+	while ( true ) {
+		DWORD bytesTransferred{ };
+		ULONG_PTR completionKey{ };
+		OVERLAPPED* pOver = nullptr;
+		auto ret = GetQueuedCompletionStatus( gIocpHandle, &bytesTransferred, &completionKey, &pOver, INFINITE );
+		auto overEx = reinterpret_cast<OverlappedEx*>( pOver );
 
-            if (session != gSessions.end()) {
-                session->flushPackets();
-            }
-        }
-    }
+		switch ( overEx->type_ ) {
+		case IO_OP::IO_ACCEPT: {
+			auto id = gId++;
 
-    net::relNet();
+			::CreateIoCompletionPort( reinterpret_cast<HANDLE>( overEx->acceptSocket_ ), gIocpHandle, id, 0 );
+
+			if ( !gUsers.try_emplace( id, overEx->acceptSocket_, id ).second ) {
+				errorDisplay( "Session creation", WSAGetLastError( ) );
+				::closesocket( overEx->acceptSocket_ );
+			}
+			else {
+				netSystem.addSession( gUsers[ id ] );
+				gUsers[ id ].setAcceptFlag( );
+			}
+
+			doAccept( listenSocket, &gAcceptOver );
+			break;
+		}
+
+		case IO_OP::IO_RECV: {
+			auto id = static_cast<std::uint16_t>( completionKey );
+			gUsers[ id ].interpretData( bytesTransferred );
+			gUsers[ id ].doRecv( );
+			break;
+		}
+
+		case IO_OP::IO_SEND:
+			delete overEx;
+			break;
+		}
+	}
 }

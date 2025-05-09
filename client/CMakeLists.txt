@@ -48,6 +48,7 @@ target_sources(client
         src/renderer.cpp include/renderer.hpp
         src/cNetEx.cpp include/cNetEx.hpp
         src/objectInitializers.cpp include/objectInitializers.hpp
+        src/session.cpp include/session.hpp
 
         include/testInput.hpp
         include/systems.hpp

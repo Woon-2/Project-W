@@ -1,9 +1,10 @@
 #ifndef __CLIENT_NETEX_HPP
 #define __CLIENT_NETEX_HPP
 
+#include "session.hpp"
 #include "ecs.hpp"
 
-#include "net/session.hpp"
+#include "net/netEx.hpp"
 #include "game/level.hpp"
 
 #include "d3d12engine/d3d12Engine.hpp"

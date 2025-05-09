@@ -3,8 +3,8 @@
 
 #include "net/netInclude.hpp"
 #include "net/protocol.hpp"
-#include "net/session.hpp"
 
+#include "session.hpp"
 #include "ecs.hpp"
 #include "systems.hpp"
 #include "renderer.hpp"

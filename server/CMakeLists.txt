@@ -40,7 +40,11 @@ add_executable(server)
 target_sources(server
     PRIVATE
         src/main.cpp
+        src/Session.cpp include/Session.hpp
         src/sNetEx.cpp include/sNetEx.hpp
+        src/ShException.cpp include/ShException.hpp
+        
+        include/OverlappedEx.hpp
 )
 
 include(auto_configure)

@@ -2,6 +2,10 @@
 #define __Ecs_HPP
 
 #include "ecsExcept.hpp"
+#include "config.hpp"
+#include "enumUtil.hpp"
+#include "TMP.hpp"
+#include "concurrentqueue.h"
 
 #include <cstdint>
 #include <vector>
@@ -17,10 +21,6 @@
 #include <type_traits>
 
 #include <atomic>
-
-#include "config.hpp"
-#include "enumUtil.hpp"
-#include "TMP.hpp"
 
 #define ENABLE_COMPONENT(__ComponentType)    \
     friend class ecs::Entity; \
@@ -76,30 +76,39 @@ public:
     using ID = std::uint32_t;
 
     Entity()
-        : id_(fetch(std::this_thread::get_id())) {}
+        : id_(fetch()) {}
 
     ~Entity() {
-        release(std::this_thread::get_id());
+        release();
     }
 
     Entity(const Entity&) = delete;
     Entity& operator=(const Entity&) = delete;
 
     Entity(Entity&& other) NOEXCEPT
-        : id_(std::exchange(other.id_, std::nullopt)) {}
+        : id_(other.id_.load( )) {
+		other.id_.store( -1u );
+    }
 
     Entity& operator=(Entity&& other) NOEXCEPT {
         if (this == &other) {
             return *this;
         }
 
-        id_ = std::exchange(other.id_, std::nullopt);
+        auto id = other.id_.load( );
+        other.id_.store( -1u );
+
+        id_.store( id );
 
         return *this;
     }
 
-    const std::optional<ID>& id() const NOEXCEPT {
-        return id_;
+    std::optional<ID> id( ) const NOEXCEPT {
+        auto ret = id_.load( );
+        if ( ret != -1u ) {
+            return ret;
+        }
+        return {};
     }
 
     template <class ConcreteComponent>
@@ -125,33 +134,20 @@ public:
     void createComponent(Args&& ... args);
 
     bool valid() const NOEXCEPT {
-        return id_.has_value();
+        return id_ != -1u;
     }
 
-    void release(std::thread::id threadId);
-
-    auto operator<=>(const Entity& other) const NOEXCEPT = default;
+    void release();
 
 private:
     friend void init(const InitDesc& desc);
 
-    static void init(std::size_t threadCnt, std::size_t entityPoolSize);
-    static std::size_t poolIdx(std::thread::id threadId);
+    static void init(std::size_t entityPoolSize);
 
-    bool available(std::thread::id threadId) const NOEXCEPT {
-        return !sEntityPools[poolIdx(threadId)].empty();
-    }
-    bool available(std::thread::id threadId, std::size_t cnt) const NOEXCEPT {
-        return sEntityPools[poolIdx(threadId)].size() >= cnt;
-    }
+    static ID fetch();
 
-    static ID fetch(std::thread::id threadId);
-    static std::vector<ID> fetch(std::thread::id threadId, std::size_t cnt);
-
-    static std::vector<std::deque<ID>> sEntityPools;
-    static std::map<std::thread::id, std::size_t> sThreadMap;
-    static std::atomic_flag sLock;
-    std::optional<ID> id_;
+    static moodycamel::ConcurrentQueue<ID> idPool_;
+    std::atomic_uint id_;
 };
 
 class Component {
@@ -159,15 +155,6 @@ protected:
     friend class Entity;
 
 public:
-    Component(const Entity& entity)
-        : entityID_(entity.id()) {}
-
-    virtual ~Component() = default;
-    Component(const Component&) = delete;
-    Component& operator=(const Component&) = delete;
-    Component(Component&&) noexcept;
-    Component& operator=(Component&&) noexcept;
-
     static Component* at(Components type, Entity::ID idx) {
         if (static_cast<std::size_t>(idx) >= sComponents[etoi(type)].size()) {
             throw ECS_EXCEPT("Component index out of range");
@@ -183,6 +170,15 @@ public:
 
         return sComponents[etoi(type)][idx].get();
     }
+
+    Component(const Entity& entity)
+        : entityID_(entity.id()) {}
+
+    virtual ~Component() = default;
+    Component(const Component&) = delete;
+    Component& operator=(const Component&) = delete;
+    Component(Component&&) noexcept;
+    Component& operator=(Component&&) noexcept;
 
     bool valid() const NOEXCEPT {
         return entityID_.has_value();
@@ -215,7 +211,7 @@ void Entity::createComponent(Args&& ... args) {
         throw ECS_EXCEPT("Entity is invalid");
     }
 
-    Component::sComponents[ etoi(ConcreteComponent::type()) ][id_.value()]
+    Component::sComponents[ etoi(ConcreteComponent::type()) ][id_]
         = std::make_unique<ConcreteComponent>(*this, std::forward<Args>(args)...);
 }
 
@@ -225,7 +221,7 @@ ConcreteComponent& Entity::as() {
         throw ECS_EXCEPT("Entity is invalid");
     }
 
-    if (auto component = ConcreteComponent::at(id_.value())) {
+    if (auto component = ConcreteComponent::at(id_)) {
         return *component;
     }
 
@@ -238,7 +234,7 @@ const ConcreteComponent& Entity::as() const {
         throw ECS_EXCEPT("Entity is invalid");
     }
 
-    if (auto component = ConcreteComponent::atC(id_.value())) {
+    if (auto component = ConcreteComponent::atC(id_)) {
         return *component;
     }
 
@@ -251,7 +247,7 @@ ConcreteComponent* Entity::get() {
         return nullptr;
     }
 
-    return ConcreteComponent::at(id_.value());
+    return ConcreteComponent::at(id_);
 }
 
 template <class ConcreteComponent>
@@ -260,7 +256,7 @@ const ConcreteComponent* Entity::get() const {
         return nullptr;
     }
 
-    return ConcreteComponent::atC(id_.value());
+    return ConcreteComponent::atC(id_);
 }
 
 inline Component* Entity::get(Components type) {
@@ -268,7 +264,7 @@ inline Component* Entity::get(Components type) {
         return nullptr;
     }
 
-    return Component::at(type, id_.value());
+    return Component::at(type, id_);
 }
 
 inline const Component* Entity::get(Components type) const {
@@ -276,7 +272,7 @@ inline const Component* Entity::get(Components type) const {
         return nullptr;
     }
 
-    return Component::atC(type, id_.value());
+    return Component::atC(type, id_);
 }
 
 template <class T>

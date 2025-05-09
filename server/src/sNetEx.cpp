@@ -14,7 +14,11 @@ void SNetExSystem::addEntity(ecs::Entity& entity) {
 }
 
 void SNetExSystem::addSession(Session& session) {
-    pSessions_.push_back(&session);
+	session.setNetSystem( this );
+    {
+        std::lock_guard<std::mutex> lock( addSessionLock_ );
+        pReservedSessions_.push_back( &session );
+    }
 
     session.enqueuePacket(
         Packet{
@@ -53,28 +57,29 @@ void SNetExSystem::addSession(Session& session) {
 
     session.enqueuePacket(
         Packet{
-            .size = calcPacketSize<SCInitAssign>(),
+            .size = calcPacketSize<SCInitAssign>( ),
             .type = PacketType::SCInitAssign,
             .scInitAssign = SCInitAssign{
-                .netId = pNetEx->netId()
+				.netId = pNetEx->netId( )
             }
         }
     );
 }
 
-void SNetExSystem::preUpdate() {
-    for (auto& pSession : pSessions_) {
-        for (const auto& packet : pSession->getRecvQueue()) {
-            processPacket(packet);
-        }
-        pSession->getRecvQueue().clear();
+void SNetExSystem::preUpdate( ) {
+	std::lock_guard<std::mutex> lock( addSessionLock_ );
+    for ( auto& pSession : pReservedSessions_ ) {
+		pSessions_.push_back( pSession );
     }
+    pReservedSessions_.clear( );
 }
 
 void SNetExSystem::postUpdate() {
     for (auto& pSession : pSessions_) {
-        for (auto& pNetEx : components<NetEx>()) {
-            pNetEx->generatePackets(*pSession);
+        if ( pSession->getAcceptFlag( ) ) {
+            for ( auto& pNetEx : components<NetEx>( ) ) {
+                pNetEx->generatePackets( *pSession );
+            }
         }
     }
 }

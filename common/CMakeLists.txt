@@ -168,6 +168,7 @@ add_library(ecsClient
     include/ecsExcept.hpp
     include/enumUtil.hpp
     include/TMP.hpp
+    include/concurrentqueue.h
 )
 
 add_library(common::ecsClient ALIAS ecsClient)
@@ -200,6 +201,7 @@ add_library(ecsServer
     include/ecsExcept.hpp
     include/enumUtil.hpp
     include/TMP.hpp
+    include/concurrentqueue.h
 )
 
 add_library(common::ecsServer ALIAS ecsServer)
@@ -226,11 +228,12 @@ target_include_directories(ecsServer
 
 # === net ===
 add_library(netClient
-    src/net/session.cpp include/net/session.hpp
     src/net/netLow.cpp include/net/netLow.hpp
+    src/IDPool.cpp include/IDPool.hpp
 
     include/net/protocol.hpp
     include/net/netInclude.hpp
+    include/net/netEx.hpp
 )
 
 add_library(common::netClient ALIAS netClient)
@@ -252,11 +255,12 @@ target_include_directories(netClient
 )
 
 add_library(netServer
-    src/net/session.cpp include/net/session.hpp
     src/net/netLow.cpp include/net/netLow.hpp
+    src/IDPool.cpp include/IDPool.hpp
 
     include/net/protocol.hpp
     include/net/netInclude.hpp
+    include/net/netEx.hpp
 )
 
 add_library(common::netServer ALIAS netServer)
@@ -270,6 +274,7 @@ target_link_libraries(netServer
         common::ecsServer
         common::woon2exception
         ws2_32.lib
+        MSWSock.lib
 )
 
 target_include_directories(netServer
