@@ -19,7 +19,7 @@ void worker( );
 HANDLE gIocpHandle;
 SOCKET listenSocket;
 OverlappedEx gAcceptOver{ IO_OP::IO_ACCEPT };
-std::array<char, Session::recvBufSize> acceptBuffer_;
+std::array<char, (sizeof(sockaddr) + 16u) * 2u> acceptBuffer_;
 
 std::unordered_map<std::uint16_t, Session> gUsers;
 std::atomic_int16_t gId;
