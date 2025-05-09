@@ -1180,9 +1180,9 @@ InputLayout ShaderShadowMapTessellation::makeInputLayoutSeparated() {
 ShaderMatMul::ShaderMatMul(D3D12Device& device, const RootSignature& root, const Config& config)
 	: ComputeShader(root), lhsMatrices_(device, sizeof(dx::XMFLOAT4X4) * config.maxMatrixCnt),
 	rhsMatrices_(device, sizeof(dx::XMFLOAT4X4) * config.maxMatrixCnt),
-	resultMatrices_(device, sizeof(dx::XMFLOAT4X4)* config.maxMatrixCnt),
+	resultMatrices_(device, sizeof(dx::XMFLOAT4X4) * config.maxMatrixCnt, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST),
 	resultMatricesSrc_(device, sizeof(dx::XMFLOAT4X4) * config.maxMatrixCnt,
-		D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+		D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
 	), maxMatrixCnt_(config.maxMatrixCnt) {
 	lhsMatrices_.pullGpuAddr();
 	rhsMatrices_.pullGpuAddr();
@@ -1221,9 +1221,9 @@ ShaderAnimInterpolation::ShaderAnimInterpolation(D3D12Device& device, const Root
 	: ComputeShader(root),
 	lhsKeyFrames_(device, sizeof(sr::KeyFrame) * config.maxKeyFrameCnt),
 	rhsKeyFrames_(device, sizeof(sr::KeyFrame) * config.maxKeyFrameCnt),
-	resultMatrices_(device, sizeof(dx::XMFLOAT4X4)* config.maxKeyFrameCnt),
+	resultMatrices_(device, sizeof(dx::XMFLOAT4X4) * config.maxKeyFrameCnt, D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST),
 	resultMatricesSrc_(device, sizeof(dx::XMFLOAT4X4) * config.maxKeyFrameCnt,
-		D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+		D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
 	), maxKeyFrameCnt_(config.maxKeyFrameCnt) {
 	lhsKeyFrames_.pullGpuAddr();
 	rhsKeyFrames_.pullGpuAddr();
