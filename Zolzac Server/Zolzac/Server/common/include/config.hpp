@@ -1,7 +1,0 @@
-#ifndef __CONFIG_HPP
-#define __CONFIG_HPP
-
-#define NOEXCEPT noexcept
-#define NOEXCEPT_EXPR(expr) noexcept(expr)
-
-#endif	// __CONFIG_HPP
