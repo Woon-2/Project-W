@@ -771,6 +771,73 @@ const D3D12_DEPTH_STENCIL_VIEW_DESC makeShadowMapDsvDesc(
 		.Texture2D = D3D12_TEX2D_DSV{ .MipSlice = 0u }
 	};
 }
+
+const D3D12_SHADER_RESOURCE_VIEW_DESC makeShadowArrayMapSrvDesc(
+	const TextureArray::Desc& shadowArrayMapDesc
+) {
+	return D3D12_SHADER_RESOURCE_VIEW_DESC{
+		.Format = convertToColorFormat(shadowArrayMapDesc.format),
+		.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY,
+		.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+		.Texture2DArray = D3D12_TEX2D_ARRAY_SRV{
+			.MostDetailedMip = 0u,
+			.MipLevels = shadowArrayMapDesc.mipLevels,
+			.FirstArraySlice = 0u,
+			.ArraySize = shadowArrayMapDesc.arraySize,
+			.PlaneSlice = 0u,
+			.ResourceMinLODClamp = 0.0f
+		}
+	};
+}
+
+const D3D12_SHADER_RESOURCE_VIEW_DESC makeShadowArrayMapSrvDesc(
+	const D3D12_RESOURCE_DESC& shadowArrayMapDesc
+) {
+	return D3D12_SHADER_RESOURCE_VIEW_DESC{
+		.Format = convertToColorFormat(shadowArrayMapDesc.Format),
+		.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY,
+		.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+		.Texture2DArray = D3D12_TEX2D_ARRAY_SRV{
+			.MostDetailedMip = 0u,
+			.MipLevels = shadowArrayMapDesc.MipLevels,
+			.FirstArraySlice = 0u,
+			.ArraySize = shadowArrayMapDesc.DepthOrArraySize,
+			.PlaneSlice = 0u,
+			.ResourceMinLODClamp = 0.0f
+		}
+	};
+}
+
+const D3D12_DEPTH_STENCIL_VIEW_DESC makeShadowArrayMapDsvDesc(
+	const TextureArray::Desc& shadowArrayMapDesc
+) {
+	return D3D12_DEPTH_STENCIL_VIEW_DESC{
+		.Format = shadowArrayMapDesc.format,
+		.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY,
+		.Flags = D3D12_DSV_FLAG_NONE,
+		.Texture2DArray = D3D12_TEX2D_ARRAY_DSV{
+			.MipSlice = 0u,
+			.FirstArraySlice = 0u,
+			.ArraySize = shadowArrayMapDesc.arraySize
+		}
+	};
+}
+
+const D3D12_DEPTH_STENCIL_VIEW_DESC makeShadowArrayMapDsvDesc(
+	const D3D12_RESOURCE_DESC& shadowArrayMapDesc
+) {
+	return D3D12_DEPTH_STENCIL_VIEW_DESC{
+		.Format = shadowArrayMapDesc.Format,
+		.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY,
+		.Flags = D3D12_DSV_FLAG_NONE,
+			.Texture2DArray = D3D12_TEX2D_ARRAY_DSV{
+			.MipSlice = 0u,
+			.FirstArraySlice = 0u,
+			.ArraySize = shadowArrayMapDesc.DepthOrArraySize
+		}
+	};
+}
+
 }	// namespace gfx::d3d12::detail
 
 ShaderShadowMap::ShaderShadowMap( D3D12Device& device, 
@@ -857,17 +924,11 @@ ShaderCascadeShadowMap::ShaderCascadeShadowMap(D3D12Device& device,
 	InputLayout::Spec ilSpec
 ) : Shader(root, makeInputLayout(ilSpec)),
 cbDrawcallDataSize_(calcConstantBufferSize(sizeof(sr::PerDrawcallData2))),
-perFrameData_{
-	UploadBuffer(device, sizeof(sr::PerFrameData1)),
-	UploadBuffer(device, sizeof(sr::PerFrameData1)),
-	UploadBuffer(device, sizeof(sr::PerFrameData1)),
-},
+perFrameData_(device, sizeof(sr::PerFrameData1)),
 perDrawcallData_(device, cbDrawcallDataSize_* config.maxDrawcallCnt),
 perInstanceData_(device, sizeof(sr::PerInstanceData2)* config.maxInstanceCnt),
 maxInstanceCnt_(config.maxInstanceCnt), maxDrawcallCnt_(config.maxDrawcallCnt) {
-	for (auto& uploadBuffer : perFrameData_) {
-		uploadBuffer.pullGpuAddr();
-	}
+	perFrameData_.pullGpuAddr();
 	perDrawcallData_.pullGpuAddr();
 	perInstanceData_.pullGpuAddr();
 }
@@ -877,7 +938,7 @@ void ShaderCascadeShadowMap::bindRootParams(D3D12GfxCmdList& cmdList) {
 
 	cmdList.get()->SetGraphicsRootConstantBufferView(
 		root.params[UnifiedRoot::ParamIndices::b2],
-		perFrameData_[curCascadeIdx_].gpuAddr()
+		perFrameData_.gpuAddr()
 	);
 	cmdList.get()->SetGraphicsRootShaderResourceView(
 		root.params[UnifiedRoot::ParamIndices::t0],
@@ -896,6 +957,10 @@ void ShaderCascadeShadowMap::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
 		shaderPath / "cascadeShadow.hlsl", nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
+	};
+	blobs_[etoi(ShaderBlob::Type::Geometry)] = ShaderBlob{
+		shaderPath / "cascadeShadow.hlsl", nullptr,
+		"GSMain", "gs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Geometry
 	};
 }
 
@@ -1082,17 +1147,12 @@ ShaderShadowMapTessellation::ShaderShadowMapTessellation( D3D12Device& device,
 	cbDrawcallDataSize_( calcConstantBufferSize(sizeof(sr::PerDrawcallData4)) ),
 	perDrawcallData_(device, cbDrawcallDataSize_ * config.maxDrawcallCnt),
 	perInstanceData_(device, sizeof(sr::PerInstanceData4) * config.maxInstanceCnt),
-	perFrameData_{
-		UploadBuffer(device, sizeof(sr::PerFrameData1)),
-		UploadBuffer(device, sizeof(sr::PerFrameData1)),
-		UploadBuffer(device, sizeof(sr::PerFrameData1)),
-	},
+	perFrameData_(device, sizeof(sr::PerFrameData1)),
 	maxInstanceCnt_(config.maxInstanceCnt), maxDrawcallCnt_(config.maxDrawcallCnt) {
 	perDrawcallData_.pullGpuAddr();
 	perInstanceData_.pullGpuAddr();
-	for (auto& uploadBuffer : perFrameData_) {
-		uploadBuffer.pullGpuAddr();
-	}
+	perFrameData_.pullGpuAddr();
+
 }
 
 void ShaderShadowMapTessellation::bindRootParams(D3D12GfxCmdList& cmdList) {
@@ -1100,7 +1160,7 @@ void ShaderShadowMapTessellation::bindRootParams(D3D12GfxCmdList& cmdList) {
 
 	cmdList.get()->SetGraphicsRootConstantBufferView(
 		root.params[ UnifiedRoot::ParamIndices::b2 ],
-		perFrameData_[curCascadeIdx_].gpuAddr()
+		perFrameData_.gpuAddr()
 	);
 	cmdList.get()->SetGraphicsRootShaderResourceView(
 		root.params[ UnifiedRoot::ParamIndices::t0 ],
@@ -1128,12 +1188,17 @@ void ShaderShadowMapTessellation::loadBlobs() {
 		shaderPath/"shadowMapTerrain.hlsl", nullptr,
 		"DSMain", "ds_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Domain
 	};
+	blobs_[etoi(ShaderBlob::Type::Geometry)] = ShaderBlob{
+	shaderPath / "shadowMapTerrain.hlsl", nullptr,
+	"GSMain", "gs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Geometry
+	};
 }
 
 void ShaderShadowMapTessellation::releaseBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)].reset();
 	blobs_[etoi(ShaderBlob::Type::Hull)].reset();
 	blobs_[etoi(ShaderBlob::Type::Domain)].reset();
+	blobs_[etoi(ShaderBlob::Type::Geometry)].reset();
 }
 
 InputLayout ShaderShadowMapTessellation::makeInputLayout(InputLayout::Spec ilSpec) {

@@ -34,6 +34,7 @@ public:
 
 private:
     static constexpr auto slotKeyTexture = "texture";
+	static constexpr auto slotKeyTextureArray = "textureArray";
 
     gfx::d3d12::ResourceStorage rendererTexStorage_;
 

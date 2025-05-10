@@ -1941,6 +1941,38 @@ Texture& loadTextureAt( ResourceStorage::Slot& texSlot, const ResourceStorage::R
     return texSlot.load<Texture>(resID, device, tex2dRange, resDesc, srvDesc, heapType, initialState, optimizedClearValue);
 }
 
+// loadTextureArrayAt
+
+TextureArray& loadTextureArrayAt(ResourceStorage::Slot& texSlot, const ResourceStorage::ResID& resID, D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dArrRange, const TextureArray::Desc& resDesc, D3D12_HEAP_TYPE heapType)
+{
+	return texSlot.load<TextureArray>(resID, device, tex2dArrRange, resDesc, heapType);
+}
+
+TextureArray& loadTextureArrayAt(ResourceStorage::Slot& texSlot, const ResourceStorage::ResID& resID, D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dArrRange, const TextureArray::Desc& resDesc, D3D12_HEAP_TYPE heapType, D3D12_RESOURCE_STATES initialState)
+{
+    return texSlot.load<TextureArray>(resID, device, tex2dArrRange, resDesc, heapType, initialState);
+}
+
+TextureArray& loadTextureArrayAt(ResourceStorage::Slot& texSlot, const ResourceStorage::ResID& resID, D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dArrRange, const TextureArray::Desc& resDesc, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc, D3D12_HEAP_TYPE heapType)
+{
+	return texSlot.load<TextureArray>(resID, device, tex2dArrRange, resDesc, srvDesc, heapType);
+}
+
+TextureArray& loadTextureArrayAt(ResourceStorage::Slot& texSlot, const ResourceStorage::ResID& resID, D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dArrRange, const TextureArray::Desc& resDesc, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc, D3D12_HEAP_TYPE heapType, D3D12_RESOURCE_STATES initialState)
+{
+    return texSlot.load<TextureArray>(resID, device, tex2dArrRange, resDesc, srvDesc, heapType, initialState);
+}
+
+TextureArray& loadTextureArrayAt(ResourceStorage::Slot& texSlot, const ResourceStorage::ResID& resID, D3D12Device& device, D3D12GfxCmdList& cmdList, DescriptorRange<DescriptorHeapGPU>& tex2dRange, const std::filesystem::path& path)
+{
+	return texSlot.load<TextureArray>(resID, device, cmdList, tex2dRange, path);
+}
+
+TextureArray& loadTextureArrayAt(ResourceStorage::Slot& texSlot, const ResourceStorage::ResID& resID, D3D12Device& device, D3D12GfxCmdList& cmdList, DescriptorRange<DescriptorHeapGPU>& tex2dRange, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc, const std::filesystem::path& path)
+{
+	return texSlot.load<TextureArray>(resID, device, cmdList, tex2dRange, srvDesc, path);
+}
+
 RefModel& loadRefModelAt( ResourceStorage::Slot& modelSlot,
     const ResourceStorage::ResID& resID,
     D3D12Device& device, D3D12GfxCmdList& cmdList,
@@ -2075,6 +2107,39 @@ ShadowMapInfo loadShadowMapAt(
         .dsvDesc = detail::makeShadowMapDsvDesc(shadowMapDesc)
     };
 }
+
+TextureArray __makeShadowArrayMap(
+    const TextureArray::Desc& shadowMapArrayDesc,
+    D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dArrRange,
+    DescriptorRange<DescriptorHeapCPU>& dsvRange
+) {
+    const auto srvDesc = detail::makeShadowArrayMapSrvDesc(shadowMapArrayDesc);
+    const auto dsvDesc = detail::makeShadowArrayMapDsvDesc(shadowMapArrayDesc);
+    auto tex = TextureArray(device, tex2dArrRange, shadowMapArrayDesc,
+		srvDesc, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_DEPTH_WRITE
+    );
+
+    tex.makeDsv(dsvDesc, device, dsvRange.alloc());
+    return tex;
+}
+
+ShadowArrayMapInfo loadShadowArrayMapAt(
+    ResourceStorage::Slot& shadowMapSlot,
+    const ResourceStorage::ResID& resID,
+    D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dArrRange,
+    DescriptorRange<DescriptorHeapCPU>& dsvRange,
+    const TextureArray::Desc& shadowArrayMapDesc
+) {
+    return ShadowArrayMapInfo{
+        .pTexArray = &shadowMapSlot.load<TextureArray>(resID, __makeShadowArrayMap,
+            shadowArrayMapDesc, device, tex2dArrRange, dsvRange
+        ),
+        .srvDesc = detail::makeShadowArrayMapSrvDesc(shadowArrayMapDesc),
+        .dsvDesc = detail::makeShadowArrayMapDsvDesc(shadowArrayMapDesc)
+    };
+}
+
+
 
 VertexBuffer LevelChunkModel::sChunkVb;
 IndexBuffer LevelChunkModel::sChunkIb;

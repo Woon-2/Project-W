@@ -387,9 +387,24 @@ public:
     }
 
     TextureArray(D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dArrRange,
+        const Desc& texResDesc, D3D12_HEAP_TYPE heapType,
+        D3D12_RESOURCE_STATES initialState
+    ) : TextureResource(device, texResDesc, heapType, initialState) {
+        makeDefSrv(device, tex2dArrRange.alloc());
+    }
+
+    TextureArray(D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dArrRange,
         const Desc& texResDesc, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc,
         D3D12_HEAP_TYPE heapType
     ) : TextureResource(device, texResDesc, heapType) {
+        makeSrv(srvDesc, device, tex2dArrRange.alloc());
+    }
+
+    TextureArray(D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dArrRange,
+        const Desc& texResDesc, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc,
+        D3D12_HEAP_TYPE heapType,
+        D3D12_RESOURCE_STATES initialState
+    ) : TextureResource(device, texResDesc, heapType, initialState) {
         makeSrv(srvDesc, device, tex2dArrRange.alloc());
     }
 
@@ -493,6 +508,9 @@ public:
         Emmisive,
         AmbientOcclusion,
         Shadow,
+        ShadowCascade0,
+		ShadowCascade1,
+		ShadowCascade2,
         Size
     };
 
@@ -1162,6 +1180,31 @@ Texture& loadTextureAt( ResourceStorage::Slot& texSlot, const ResourceStorage::R
     const D3D12_CLEAR_VALUE& optimizedClearValue
 );
 
+// loadTextureArrayAt
+TextureArray& loadTextureArrayAt(ResourceStorage::Slot& texSlot, const ResourceStorage::ResID& resID,
+    D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dArrRange,
+    const TextureArray::Desc& resDesc, D3D12_HEAP_TYPE heapType
+);
+
+TextureArray& loadTextureArrayAt(ResourceStorage::Slot& texSlot, const ResourceStorage::ResID& resID,
+    D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dArrRange,
+    const TextureArray::Desc& resDesc, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc, 
+    D3D12_HEAP_TYPE heapType
+);
+
+TextureArray& loadTextureArrayAt(ResourceStorage::Slot& texSlot, const ResourceStorage::ResID& resID,
+    D3D12Device& device, D3D12GfxCmdList& cmdList,
+    DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+    const std::filesystem::path& path
+);
+
+TextureArray& loadTextureArrayAt(ResourceStorage::Slot& texSlot, const ResourceStorage::ResID& resID,
+    D3D12Device& device, D3D12GfxCmdList& cmdList,
+    DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+    const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc,
+    const std::filesystem::path& path
+);
+
 RefModel& loadRefModelAt( ResourceStorage::Slot& modelSlot,
     const ResourceStorage::ResID& resID,
     D3D12Device& device, D3D12GfxCmdList& cmdList,
@@ -1230,6 +1273,20 @@ ShadowMapInfo loadShadowMapAt(
     D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
     DescriptorRange<DescriptorHeapCPU>& dsvRange,
     const Texture::Desc& shadowMapDesc
+);
+
+struct ShadowArrayMapInfo {
+    TextureArray* pTexArray;
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
+    D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc;
+};
+
+ShadowArrayMapInfo loadShadowArrayMapAt(
+    ResourceStorage::Slot& shadowMapSlot,
+    const ResourceStorage::ResID& resID,
+    D3D12Device& device, DescriptorRange<DescriptorHeapGPU>& tex2dRange,
+    DescriptorRange<DescriptorHeapCPU>& dsvRange,
+    const TextureArray::Desc& shadowArrayMapDesc
 );
 
 }   // namespace gfx::d3d12

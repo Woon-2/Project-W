@@ -287,5 +287,5 @@ float4 illuminate(float3 posV, float4 posL[3], float3 normalV, float2 tex)
     // linear => sRGB
     color = pow( abs(color), 1.f/2.2f );
 
-    return float4(color, albedo.w) * colorFactor;
+    return float4(color, albedo.w) /** colorFactor*/;
 }

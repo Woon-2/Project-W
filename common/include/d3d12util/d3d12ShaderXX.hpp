@@ -522,7 +522,7 @@ struct PerFrameData0 {
 };
 
 struct PerFrameData1 {
-	dx::XMFLOAT4X4 lightVP;
+	dx::XMFLOAT4X4 lightVP[3];
 };
 
 struct PerFrameData2 {
@@ -748,6 +748,22 @@ const D3D12_DEPTH_STENCIL_VIEW_DESC makeShadowMapDsvDesc(
 const D3D12_DEPTH_STENCIL_VIEW_DESC makeShadowMapDsvDesc(
 	const D3D12_RESOURCE_DESC& shadowMapDesc
 );
+
+const D3D12_SHADER_RESOURCE_VIEW_DESC makeShadowArrayMapSrvDesc(
+	const TextureArray::Desc& shadowArrayMapDesc
+);
+
+const D3D12_SHADER_RESOURCE_VIEW_DESC makeShadowArrayMapSrvDesc(
+	const D3D12_RESOURCE_DESC& shadowArrayMapDesc
+);
+
+const D3D12_DEPTH_STENCIL_VIEW_DESC makeShadowArrayMapDsvDesc(
+	const TextureArray::Desc& shadowArrayMapDesc
+);
+
+const D3D12_DEPTH_STENCIL_VIEW_DESC makeShadowArrayMapDsvDesc(
+	const D3D12_RESOURCE_DESC& shadowArrayMapDesc
+);
 }   // namespace gfx::d3d12::detail
 
 class ShaderShadowMap : public Shader {
@@ -817,7 +833,7 @@ public:
 
 	RenderProtocol makeProtocol(D3D12Device& device, const RenderProtocol::Desc& desc) {
 		return RenderProtocol(device, *this,
-			selectBlobsStrong<ShaderBlob::Type::Vertex>(), desc
+			selectBlobsStrong<ShaderBlob::Type::Vertex, ShaderBlob::Type::Geometry>(), desc
 		);
 	}
 
@@ -835,10 +851,9 @@ public:
 	void loadBlobs() override;
 	void releaseBlobs() override;
 
-	UploadBuffer perFrameData_[3];
+	UploadBuffer perFrameData_;
 	UploadBuffer perDrawcallData_;
 	UploadBuffer perInstanceData_;
-	int curCascadeIdx_;
 
 	std::size_t cbDrawcallDataSize() const noexcept {
 		return cbDrawcallDataSize_;
@@ -958,7 +973,7 @@ public:
 
 	RenderProtocol makeProtocol( D3D12Device& device, const RenderProtocol::Desc& desc) {
 		return RenderProtocol( device, *this,
-			selectBlobsStrong<ShaderBlob::Type::Vertex, ShaderBlob::Type::Hull, ShaderBlob::Type::Domain>(), desc
+			selectBlobsStrong<ShaderBlob::Type::Vertex, ShaderBlob::Type::Hull, ShaderBlob::Type::Domain, ShaderBlob::Type::Geometry>(), desc
 		);
 	}
 
@@ -980,10 +995,9 @@ public:
 		chunk.draw(cmdList);
 	}
 
-	UploadBuffer perFrameData_[3];
+	UploadBuffer perFrameData_;
 	UploadBuffer perDrawcallData_;
 	UploadBuffer perInstanceData_;
-	int curCascadeIdx_;
 
 	std::size_t cbDrawcallDataSize() const noexcept {
 		return cbDrawcallDataSize_;

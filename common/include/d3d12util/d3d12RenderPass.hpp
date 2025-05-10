@@ -258,6 +258,56 @@ private:
     Texture* pMapResource_;
 };
 
+class ShadowArrayMaterial : public IRenderTarget, public Material {
+public:
+    ShadowArrayMaterial();
+    ShadowArrayMaterial(TextureArray* pMapResource, const DescriptorCPU* pDsv,
+        const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
+        const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
+    );
+
+    const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc() const NOEXCEPT {
+        return dsvDesc_;
+    }
+
+    const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc() const NOEXCEPT {
+        return srvDesc_;
+    }
+
+    const DescriptorGPU& srv() const NOEXCEPT {
+        return *pSrv_;
+    }
+
+    const DescriptorCPU& dsv() const NOEXCEPT {
+        return *pDsv_;
+    }
+
+    TextureArray& texture() NOEXCEPT {
+        return *pMapResource_;
+    }
+
+    const TextureArray& texture() const NOEXCEPT {
+        return *pMapResource_;
+    }
+
+    bool valid() const NOEXCEPT {
+        return pMapResource_ != nullptr && pSrv_ != nullptr && pDsv_ != nullptr;
+    }
+
+private:
+    void onPush(D3D12GfxCmdList& cmdList) override;
+    void onBind(D3D12GfxCmdList& cmdList) override;
+    void onPop(D3D12GfxCmdList& cmdList) override;
+    void onClear(D3D12GfxCmdList& cmdList) override;
+
+    D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc_;
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc_;
+    const DescriptorGPU* pSrv_;
+    const DescriptorCPU* pDsv_;
+    TextureArray* pMapResource_;
+};
+
+
 struct WorldLight {
     using Type = sr::Light::Type;
 
@@ -307,10 +357,10 @@ struct WorldLight {
 
 enum class RenderPassTextures {
     ShadowMap,
-    ShadowCascade0,
-    ShadowCascade1,
-    ShadowCascade2,
-    ShadowCascade3
+};
+
+enum class RenderPassTextureArrays {
+    ShadowMapArray,
 };
 
 class RenderPass {
@@ -345,7 +395,22 @@ public:
         return nullptr;
     }
 
+    void mapTextureArray(RenderPassTextureArrays type, TextureArray* pTextureArr) {
+        textureArrayMap_[type] = pTextureArr;
+    }
+    TextureArray* getTextureArray(RenderPassTextureArrays type) const {
+        auto it = textureArrayMap_.find(type);
+        if (it != textureArrayMap_.end()) {
+            return it->second;
+        }
+        return nullptr;
+    }
+
     virtual std::vector<RenderPassTextures> requiredTextures() const {
+        return {};
+    }
+
+    virtual std::vector<RenderPassTextureArrays> requiredTextureArrays() const {
         return {};
     }
 
@@ -358,8 +423,17 @@ protected:
         }
     }
 
+    void checkRequiredTextureArrays() const {
+        for (const auto& texID : requiredTextureArrays()) {
+            if (!textureArrayMap_.contains(texID)) {
+                throw std::runtime_error("Required texture array not found: " + renderPassID_);
+            }
+        }
+    }
+
 private:
     std::unordered_map<RenderPassTextures, Texture*> textureMap_;
+    std::unordered_map<RenderPassTextureArrays, TextureArray*> textureArrayMap_;
     std::string renderPassID_;
 };
 
@@ -374,18 +448,15 @@ public:
     );
 
     void initResources(
-        int cascadeIndex,
-        RenderPassTextures shadowMap,
+        RenderPassTextureArrays shadowMap,
         const DescriptorCPU* pDsv,
         const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
         const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
     );
 
-    std::vector<RenderPassTextures> requiredTextures() const {
+    std::vector<RenderPassTextureArrays> requiredTextureArrays() const {
         return { 
-            RenderPassTextures::ShadowCascade0,
-            RenderPassTextures::ShadowCascade1,
-            RenderPassTextures::ShadowCascade2
+            RenderPassTextureArrays::ShadowMapArray
         };
     }
 
@@ -418,7 +489,7 @@ private:
 
     static RenderProtocol::Desc makeDesc();
 
-    ShadowMaterial shadowMaterial_[3];
+    ShadowArrayMaterial shadowArrayMaterial_;
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
     std::vector<const WorldLight*> lights_;
@@ -438,18 +509,15 @@ public:
     );
 
     void initResources(
-        int cascadeIndex,
-        RenderPassTextures shadowMap,
+        RenderPassTextureArrays shadowMap,
         const DescriptorCPU* pDsv,
         const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
         const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
     );
 
-    std::vector<RenderPassTextures> requiredTextures() const {
+    std::vector<RenderPassTextureArrays> requiredTextureArrays() const {
         return {
-            RenderPassTextures::ShadowCascade0,
-            RenderPassTextures::ShadowCascade1,
-            RenderPassTextures::ShadowCascade2
+            RenderPassTextureArrays::ShadowMapArray
         };
     }
 
@@ -484,7 +552,7 @@ private:
 
     static RenderProtocol::Desc makeDesc();
 
-    ShadowMaterial shadowMaterial_[3];
+    ShadowArrayMaterial shadowArrayMaterial_;
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
     std::vector<const WorldLight*> lights_;
@@ -560,17 +628,14 @@ public:
     );
 
     void initResources(
-        int cascadeIndex,
-        RenderPassTextures shadowMap, 
+        RenderPassTextureArrays shadowArrayMap, 
         const DescriptorCPU* pDsv,
         const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
         const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
     );
 
-    std::vector<RenderPassTextures> requiredTextures() const {
-        return { RenderPassTextures::ShadowCascade0,
-                 RenderPassTextures::ShadowCascade1,
-                 RenderPassTextures::ShadowCascade2
+    std::vector<RenderPassTextureArrays> requiredTextureArrays() const {
+        return { RenderPassTextureArrays::ShadowMapArray
         };
     }
 
@@ -602,8 +667,7 @@ private:
 
     static RenderProtocol::Desc makeDesc();
 
-    ShadowMaterial shadowMaterial_[3];
-    int curCascadeLevel_;
+    ShadowArrayMaterial shadowArrayMaterial_;
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
     const WorldLight* pLight_;
@@ -657,18 +721,15 @@ public:
     );
 
     void initResources(
-        int cascadeIndex,
-        RenderPassTextures shadowMap,
+        RenderPassTextureArrays shadowMap,
         const DescriptorCPU* pDsv,
         const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
         const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
     );
 
-    std::vector<RenderPassTextures> requiredTextures() const {
+    std::vector<RenderPassTextureArrays> requiredTextureArrays() const {
         return { 
-          RenderPassTextures::ShadowCascade0,
-          RenderPassTextures::ShadowCascade1,
-          RenderPassTextures::ShadowCascade2
+          RenderPassTextureArrays::ShadowMapArray
         };
     }
 
@@ -700,7 +761,7 @@ private:
 
     static RenderProtocol::Desc makeDesc();
 
-    ShadowMaterial shadowMaterial_[3];
+    ShadowArrayMaterial shadowArrayMaterial_;
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
     std::vector<const WorldLight*> lights_;
@@ -719,18 +780,15 @@ public:
     );
 
     void initResources(
-        int cascadeIndex,
-        RenderPassTextures shadowMap,
+        RenderPassTextureArrays shadowArrayMap,
         const DescriptorCPU* pDsv,
         const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
         const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
     );
 
-    std::vector<RenderPassTextures> requiredTextures() const {
+    std::vector<RenderPassTextureArrays> requiredTextureArrays() const {
         return {
-          RenderPassTextures::ShadowCascade0,
-          RenderPassTextures::ShadowCascade1,
-          RenderPassTextures::ShadowCascade2
+          RenderPassTextureArrays::ShadowMapArray
         };
     }
 
@@ -760,8 +818,7 @@ private:
 
     static RenderProtocol::Desc makeDesc();
 
-    ShadowMaterial shadowMaterial_[3];
-    int curCascadeLevel_;
+    ShadowArrayMaterial shadowArrayMaterial_;
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
     const WorldLight* pLight_;

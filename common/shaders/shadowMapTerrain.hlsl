@@ -38,7 +38,7 @@ cbuffer PerDrawcallData : register(b1) {
 };
 
 cbuffer PerFrameData : register(b2) {
-    float4x4 lightVP;
+    float4x4 lightVP[3];
 };
 
 StructuredBuffer<PerInstanceData> gInstances: register(t0);
@@ -182,10 +182,31 @@ DSOutput DSMain(HSConstantOutput input, float2 uv : SV_DomainLocation, const Out
     output.pos.y += height;  // add the sampled height
 
     // transform from local to light space
-	output.pos = mul(
-        mul(output.pos, gInstances[instanceBase + input.instanceOffset].world),
-        lightVP    
-    );
+	output.pos = mul(output.pos, gInstances[instanceBase + input.instanceOffset].world);
 
 	return output;
+}
+
+struct GS_OUTPUT
+{
+    float4 position : SV_Position;
+    uint rtIndex : SV_RenderTargetArrayIndex;
+};
+
+[maxvertexcount(9)]
+void GSMain(triangle DSOutput input[3], inout TriangleStream<GS_OUTPUT> triStream)
+{
+    for (int cascadeLevel = 0; cascadeLevel < 3; cascadeLevel++)
+    {
+    
+        for (int vIdx = 0; vIdx < 3; vIdx++)
+        {
+            GS_OUTPUT output;
+            output.position = mul(input[vIdx].pos, lightVP[cascadeLevel]);
+            output.rtIndex = cascadeLevel;
+            triStream.Append(output);
+        }
+    
+        triStream.RestartStrip();
+    }
 }
