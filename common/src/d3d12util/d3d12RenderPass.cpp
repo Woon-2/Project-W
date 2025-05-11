@@ -797,7 +797,7 @@ void PBRAnimatedIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets&
         .lightCnt = static_cast<std::uint32_t>( lightBuffer.size() )
     };
 
-    shader().perInstanceData_.stage(pids.data(), pids.size() * sizeof(sr::PerInstanceData0));
+    shader().perInstanceData_.stage(pids.data(), pids.size() * sizeof(sr::PerInstanceData5));
     shader().lightBuffer_.stage(lightBuffer.data(), lightBuffer.size() * sizeof(sr::Light));
     shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData2));
     shader().boneBuffer_.stage(bones.data(), bones.size() * sizeof(dx::XMFLOAT4X4));
