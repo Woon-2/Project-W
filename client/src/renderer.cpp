@@ -33,7 +33,16 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
 		}, gfx::d3d12::InputLayout::Spec::separated
 		), renderPassCascadeShadowMap_(core.device(), shaderCascadeShaodwMap_,
             gfx::d3d12::convClientToVP(core.window().client())
-    ), shaderScreenQuad_(core.device(), core.root()),
+    ), shaderCascadeShadowMapAnimated_( core.device(), core.root(),
+        gfx::d3d12::ShaderCascadeShadowMapAnimated::Config{
+            .maxInstanceCnt = 0x1000u,
+            .maxDrawcallCnt = 0x1000u,
+        }, gfx::d3d12::InputLayout::Spec::separated
+    ), renderPassCascadeShadowMapAnimated_( core.device(),
+        shaderCascadeShadowMapAnimated_,
+        gfx::d3d12::convClientToVP(core.window().client())
+    ),
+    shaderScreenQuad_(core.device(), core.root()),
     renderPassScreenQuad_( core.device(), shaderScreenQuad_,
         core.samStorage(), gfx::d3d12::convClientToVP(core.window().client())
     ), renderMode_(Mode::Color
@@ -118,6 +127,23 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
         dsvDescC2, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pCascade2->view(0u)), srvDescC2
     );
 
+    // Animated Cascade Shadow Map
+    renderPassCascadeShadowMapAnimated_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowCascade0, pCascade0);
+    renderPassCascadeShadowMapAnimated_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowCascade1, pCascade1);
+    renderPassCascadeShadowMapAnimated_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowCascade2, pCascade2);
+    renderPassCascadeShadowMapAnimated_.initResources(
+        0, gfx::d3d12::RenderPassTextures::ShadowCascade0, &pCascade0->view(1u),
+        dsvDescC0, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pCascade0->view(0u)), srvDescC0
+    );
+    renderPassCascadeShadowMapAnimated_.initResources(
+        1, gfx::d3d12::RenderPassTextures::ShadowCascade1, &pCascade1->view(1u),
+        dsvDescC1, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pCascade1->view(0u)), srvDescC1
+    );
+    renderPassCascadeShadowMapAnimated_.initResources(
+        2, gfx::d3d12::RenderPassTextures::ShadowCascade2, &pCascade2->view(1u),
+        dsvDescC2, reinterpret_cast<const gfx::d3d12::DescriptorGPU*>(&pCascade2->view(0u)), srvDescC2
+    );
+
     // PBR
     renderPassPBR_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowCascade0, pCascade0);
     renderPassPBR_.mapTexture(gfx::d3d12::RenderPassTextures::ShadowCascade1, pCascade1);
@@ -195,6 +221,9 @@ void Renderer::layoutVBsPBR( gfx::d3d12::D3D12Device& device,
     gfx::d3d12::arrangeVBs(refModel, device, cmdList, layoutIdx,
         shaderPBR_.inputLayout()
     );
+    gfx::d3d12::arrangeVBs(refModel, device, cmdList, layoutIdx + 1u,
+        shaderCascadeShaodwMap_.inputLayout()
+    );
 }
 
 void Renderer::layoutVBsPBRAnimated(gfx::d3d12::D3D12Device& device,
@@ -206,7 +235,7 @@ void Renderer::layoutVBsPBRAnimated(gfx::d3d12::D3D12Device& device,
         shaderPBRAnimated_.inputLayout()
     );
     gfx::d3d12::arrangeVBs(refModel, device, cmdList, layoutIdx + 1u,
-        shaderCascadeShaodwMap_.inputLayout()
+        shaderCascadeShadowMapAnimated_.inputLayout()
     );
 }
 
@@ -217,6 +246,7 @@ void Renderer::init(gfx::d3d12engine::Scene& scene) {
     renderPassTessellation_.init(scene);
     renderPassShadowMapTessellation_.init(scene);
 	renderPassCascadeShadowMap_.init(scene);
+    renderPassCascadeShadowMapAnimated_.init(scene);
 }
 
 void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& scene, gfx::d3d12::RenderTargets& renderTargets) {
@@ -225,6 +255,7 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
     renderPassPBR_.update(scene);
     renderPassPBRAnimated_.update(scene);
 	renderPassCascadeShadowMap_.update(scene);
+    renderPassCascadeShadowMapAnimated_.update(scene);
     renderPassScreenQuad_.update(scene);
     renderPassTessellation_.update(scene);
     renderPassShadowMapTessellation_.update(scene);
@@ -254,6 +285,15 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
             renderPassCascadeShadowMap_.preRender(cmdList, renderTargets);
             renderPassCascadeShadowMap_.render(cmdList, renderTargets);
             renderPassCascadeShadowMap_.postRender(cmdList, renderTargets);
+        }
+
+        for (int i = 0; i < 3; ++i)
+        {
+            shaderCascadeShadowMapAnimated_.curCascadeIdx_ = i;
+            shaderCascadeShadowMapAnimated_.bindRootParams(cmdList);
+            renderPassCascadeShadowMapAnimated_.preRender(cmdList, renderTargets);
+            renderPassCascadeShadowMapAnimated_.render(cmdList, renderTargets);
+            renderPassCascadeShadowMapAnimated_.postRender(cmdList, renderTargets);
         }
 
         for (int i = 0; i < 3; ++i)
@@ -306,6 +346,15 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
             renderPassCascadeShadowMap_.postRender(cmdList, renderTargets);
         }
 
+        for (int i = 0; i < 3; ++i)
+        {
+            shaderCascadeShadowMapAnimated_.curCascadeIdx_ = i;
+            shaderCascadeShadowMapAnimated_.bindRootParams(cmdList);
+            renderPassCascadeShadowMapAnimated_.preRender(cmdList, renderTargets);
+            renderPassCascadeShadowMapAnimated_.render(cmdList, renderTargets);
+            renderPassCascadeShadowMapAnimated_.postRender(cmdList, renderTargets);
+        }
+
         for (int i = 0; i < 3; ++i) {
             shaderShadowMapTessellation_.curCascadeIdx_ = i;
             shaderShadowMapTessellation_.bindRootParams(cmdList);
@@ -346,6 +395,15 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
             renderPassCascadeShadowMap_.postRender(cmdList, renderTargets);
         }
 
+        for (int i = 0; i < 3; ++i)
+        {
+            shaderCascadeShadowMapAnimated_.curCascadeIdx_ = i;
+            shaderCascadeShadowMapAnimated_.bindRootParams(cmdList);
+            renderPassCascadeShadowMapAnimated_.preRender(cmdList, renderTargets);
+            renderPassCascadeShadowMapAnimated_.render(cmdList, renderTargets);
+            renderPassCascadeShadowMapAnimated_.postRender(cmdList, renderTargets);
+        }
+
         for (int i = 0; i < 3; ++i) {
             shaderShadowMapTessellation_.curCascadeIdx_ = i;
             shaderShadowMapTessellation_.bindRootParams(cmdList);
@@ -384,6 +442,15 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
             renderPassCascadeShadowMap_.preRender(cmdList, renderTargets);
             renderPassCascadeShadowMap_.render(cmdList, renderTargets);
             renderPassCascadeShadowMap_.postRender(cmdList, renderTargets);
+        }
+
+        for (int i = 0; i < 3; ++i)
+        {
+            shaderCascadeShadowMapAnimated_.curCascadeIdx_ = i;
+            shaderCascadeShadowMapAnimated_.bindRootParams(cmdList);
+            renderPassCascadeShadowMapAnimated_.preRender(cmdList, renderTargets);
+            renderPassCascadeShadowMapAnimated_.render(cmdList, renderTargets);
+            renderPassCascadeShadowMapAnimated_.postRender(cmdList, renderTargets);
         }
 
         for (int i = 0; i < 3; ++i) {

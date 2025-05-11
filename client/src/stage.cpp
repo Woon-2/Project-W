@@ -300,8 +300,6 @@ void Stage::simulate(double deltaTime) {
             const auto dp = pCoord->decodeDeltaPos(cdp);
             const auto dr = pCoord->decodeDeltaRot(cdr);
 
-            std::cout << "dp: " << dp.x() << ", " << dp.y() << ", " << dp.z() << "\n";
-
             pCoord->get() << mu::translate(dp);
             if (auto pModel = gfx::d3d12engine::Model::at(eid)) {
                 pModel->get().root()->coord() << mu::Mat4x4(dr);

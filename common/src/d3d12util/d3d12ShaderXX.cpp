@@ -1030,6 +1030,105 @@ InputLayout ShaderShadowMapAnimated::makeInputLayoutSeparated() {
 	} );
 }
 
+ShaderCascadeShadowMapAnimated::ShaderCascadeShadowMapAnimated( D3D12Device& device, 
+	const RootSignature& root, const Config& config,
+	InputLayout::Spec ilSpec
+) : Shader(root, makeInputLayout(ilSpec)),
+	cbDrawcallDataSize_( calcConstantBufferSize(sizeof(sr::PerDrawcallData2)) ),
+	perFrameData_{
+		UploadBuffer(device, sizeof(sr::PerFrameData1)),
+		UploadBuffer(device, sizeof(sr::PerFrameData1)),
+		UploadBuffer(device, sizeof(sr::PerFrameData1)),
+	},
+	perDrawcallData_(device, cbDrawcallDataSize_ * config.maxDrawcallCnt),
+	perInstanceData_(device, sizeof(sr::PerInstanceData6) * config.maxInstanceCnt),
+	maxInstanceCnt_(config.maxInstanceCnt), maxDrawcallCnt_(config.maxDrawcallCnt),
+	maxBoneCnt_(config.maxBoneCnt) {
+	perFrameData_[0].pullGpuAddr();
+	perFrameData_[1].pullGpuAddr();
+	perFrameData_[2].pullGpuAddr();
+	perDrawcallData_.pullGpuAddr();
+	perInstanceData_.pullGpuAddr();
+}
+
+void ShaderCascadeShadowMapAnimated::bindRootParams(D3D12GfxCmdList& cmdList) {
+	auto& root = UnifiedRoot::get();
+
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		root.params[ UnifiedRoot::ParamIndices::b2 ],
+		perFrameData_[curCascadeIdx_].gpuAddr()
+	);
+	cmdList.get()->SetGraphicsRootShaderResourceView(
+		root.params[ UnifiedRoot::ParamIndices::t0 ],
+		perInstanceData_.gpuAddr()
+	);
+}
+
+void ShaderCascadeShadowMapAnimated::bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCmdList& cmdList) {
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		UnifiedRoot::get().params[ UnifiedRoot::ParamIndices::b1 ],
+		perDrawcallData_.gpuAddr() + cbDrawcallDataSize() * drawcallIdx
+	);
+}
+
+void ShaderCascadeShadowMapAnimated::loadBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
+		shaderPath/"cascadeShadowMapAnimated.hlsl", nullptr,
+		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
+	};
+}
+
+void ShaderCascadeShadowMapAnimated::releaseBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)].reset();
+}
+
+InputLayout ShaderCascadeShadowMapAnimated::makeInputLayout(InputLayout::Spec ilSpec) {
+	switch (ilSpec) {
+	case InputLayout::Spec::serial:
+		return makeInputLayoutSerial();
+	case InputLayout::Spec::separated:
+		return makeInputLayoutSeparated();
+	default:
+		throw GFX_EXCEPT( "Invalid input layout specification." );
+	}
+}
+
+InputLayout ShaderCascadeShadowMapAnimated::makeInputLayoutSerial() {
+	return InputLayout( std::vector<InputLayout::Slot>{
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "POSITION", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+				InputLayout::Elem{ .semanticName = "BONE_INDICES", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32A32_UINT },
+				InputLayout::Elem{ .semanticName = "BONE_WEIGHTS", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32A32_FLOAT }
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Position3D))
+		}
+	} );
+}
+
+InputLayout ShaderCascadeShadowMapAnimated::makeInputLayoutSeparated() {
+	return InputLayout( std::vector<InputLayout::Slot>{
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "POSITION", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT }
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Position3D))
+		},
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "BONE_INDICES", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32A32_UINT }
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::BoneIndices4D))
+		},
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{ .semanticName = "BONE_WEIGHTS", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32A32_FLOAT }
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::BoneWeights4D))
+		}
+	} );
+}
+
 ShaderScreenQuad::ShaderScreenQuad(D3D12Device& device, const RootSignature& root)
 	: Shader(root, InputLayout()),
 	perDrawcallData_(device, sizeof(sr::PerDrawcallData3)),

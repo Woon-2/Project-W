@@ -386,7 +386,6 @@ void worker( ) {
 		}
 
 		case IO_OP::IO_SEND:
-			std::cout << "Sent " << bytesTransferred << " bytes\n";
 			delete overEx;
 			break;
 		}

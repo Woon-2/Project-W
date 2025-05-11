@@ -68,7 +68,6 @@ void Session::recvPackets() {
 
     if (!recvSize) { return; }
 
-    std::cout << "Received " << recvSize.value() << " bytes\n";
     auto readOffset = 0u;
     recvBytesRemain_ += static_cast<std::uint32_t>( recvSize.value( ) );
     

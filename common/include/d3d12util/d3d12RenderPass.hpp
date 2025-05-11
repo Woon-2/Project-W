@@ -667,6 +667,71 @@ private:
     const Camera* pCamera_;
 };
 
+class CascadeShadowMapAnimated : public gfx::d3d12::RenderPass {
+public:
+    static constexpr const char* id = "CascadeShadowMapAnimated";
+
+    CascadeShadowMapAnimated( D3D12Device& device, ShaderCascadeShadowMapAnimated& shader,
+        const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
+    );
+
+    void initResources(
+        int cascadeIndex,
+        RenderPassTextures shadowMap, 
+        const DescriptorCPU* pDsv,
+        const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
+        const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
+    );
+
+    std::vector<RenderPassTextures> requiredTextures() const {
+        return {
+            RenderPassTextures::ShadowCascade0,
+            RenderPassTextures::ShadowCascade1,
+            RenderPassTextures::ShadowCascade2
+        };
+    }
+
+    void setViewport(const D3D12_VIEWPORT& vp);
+
+    const D3D12_VIEWPORT& viewport() const NOEXCEPT {
+        return viewport_;
+    }
+
+    void preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+
+    void trackModel(Model* pModel, const AnimController* pAnimController);
+    void trackModel(Model* pModel, const AnimController* pAnimController,
+        const BoundingVolumeNode* pBVNode
+    );
+    void eraseModel(Model* pModel);
+    void setCamera(const Camera* pCamera) NOEXCEPT {
+        pCamera_ = pCamera;
+    }
+    void setLight(const WorldLight* pLight);
+
+private:
+    ShaderCascadeShadowMapAnimated& shader() noexcept {
+        return static_cast<ShaderCascadeShadowMapAnimated&>(protocol_.shader());
+    }
+    const ShaderCascadeShadowMapAnimated& shader() const noexcept {
+        return static_cast<const ShaderCascadeShadowMapAnimated&>(protocol_.shader());
+    }
+
+    static RenderProtocol::Desc makeDesc();
+
+    ShadowMaterial shadowMaterial_[3];
+    int curCascadeLevel_;
+    D3D12_VIEWPORT viewport_;
+    RenderProtocol protocol_;
+    const WorldLight* pLight_;
+    std::vector< std::tuple<bool, const BoundingVolumeNode*, Submesh*,
+        const coord::System*, VBLayoutIdx, mu::Mat4x4, const AnimController*>
+    > batch_;
+    const Camera* pCamera_;
+};
+
 class ScreenQuad : public gfx::d3d12::RenderPass {
 public:
     static constexpr const char* id = "ScreenQuad";
