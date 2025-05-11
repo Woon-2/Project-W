@@ -1,41 +1,25 @@
 #ifndef __SESSION_HPP
 #define __SESSION_HPP
 
+#include "stdafx.hpp"
+
+#include "game/level.hpp"
+
 #include "net/netInclude.hpp"
 #include "OverlappedEx.hpp"
 
-#include <optional>
-#include <forward_list>
-#include <set>
-#include <deque>
-#include <atomic>
-#include <array>
-#include <string_view>
-#include <iostream>
-
 void errorDisplay( std::string_view where, int error );
 
-class SNetExSystem;
-// Session ============================================================
+using ATOMIC_SOCKET = std::atomic<SOCKET>;
+
 class Session {
 public:
     static constexpr std::size_t recvBufSize = 40960u;
 
-	Session( ) : recvOver_( IO_OP::IO_RECV ) {
-		std::cout << "Session default constructor called\n";
-		exit( -1 );
-	}
+    using PacketProcessor = void(*)(Packet& packet, Session& session);
 
-	~Session( ) {
-		::closesocket( clientSocket_ );
-	}
-
-	Session( SOCKET socket, std::int16_t id )
-		: clientSocket_{ socket }, id_{ id }, recvOver_( IO_OP::IO_RECV ),
-		recvBytesRemain_{ 0 }, sendQueue_( ), recvBuffer_( ) {
-		recvOver_.wsaBufs_.resize( 1 );
-		doRecv( );
-	}
+	Session();
+	~Session( );
 
 	Session( const Session& ) = delete;
 	Session& operator=( const Session& ) = delete;
@@ -43,13 +27,32 @@ public:
 	Session( Session&& ) noexcept;
 	Session& operator=( Session&& ) noexcept;
 
+    // thread-unsafe
+    Session& init(SOCKET socket, i16t sessionId);
+    bool close();
+    bool valid() const {
+        return clientSocket_.load() != INVALID_SOCKET;
+    }
+    bool accessReady() const {
+        return valid() && completedAccept.load( );
+    }
+
 	void doRecv( );
     void doSend( );
+    static void doBroadcast( pmr::vector<Session*> sessions );
 	void interpretData( DWORD bytesTransferred );
 
-    void setNetSystem( SNetExSystem* netSystem );
     void enqueuePacket( const Packet& packet ) {
 		sendQueue_.push_back( packet );
+    }
+    static void enqueueBroadcastPacket( const Packet& packet ) {
+        sBroadcastQueue_.push( packet );
+    }
+
+    // do not call this function without serious consideration
+    // this function is used to revert the last enqueue packet
+    void revertEnqueuePacket( ) {
+        sendQueue_.pop_back( );
     }
 
     bool getAcceptFlag( ) const {
@@ -59,21 +62,59 @@ public:
         completedAccept.store( true );
     }
 
+    void setEntityId( ecs::Entity::ID entityId ) {
+        entityId_ = entityId;
+    }
+    ecs::Entity::ID getEntityId( ) const {
+        return entityId_;
+    }
+
+    void setPacketProcessor( PacketProcessor packetProcessor ) {
+        packetProcessor_ = packetProcessor;
+    }
+    PacketProcessor getPacketProcessor( ) const {
+        return packetProcessor_;
+    }
+
 private:
-	SOCKET clientSocket_;
-	std::int16_t id_;
+    static ccQueue<Packet> sBroadcastQueue_;
+
+    ATOMIC_SOCKET clientSocket_;
+	i16t id_;
+
+    ecs::Entity::ID entityId_;
 
     OverlappedEx recvOver_;
-    std::array<char, recvBufSize> recvBuffer_;
-	std::uint16_t recvBytesRemain_;
+    pmr::vector<char> recvBuffer_;
+	u16t recvBytesRemain_;
 
     std::deque<Packet> sendQueue_;
 
-    SNetExSystem* netSystem_ = nullptr;
-	std::atomic_bool completedAccept{ false };
+    PacketProcessor packetProcessor_;
 
-	void processPacket( const Packet& packet );
+	std::atomic_bool completedAccept;
 };
-//=====================================================================
+
+// dummy model to store rotation coordinate system
+class DummyModel : public ecs::Component {
+public:
+    ENABLE_COMPONENT( DummyModel )
+
+    DummyModel( const ecs::Entity& entity, gameEngine::Coord& coordComp )
+        : Component( entity ), coord_( ) {
+        coord_.setParent( &coordComp.get( ) );
+    }
+
+    const gfx::coord::System& coord( ) const NOEXCEPT {
+        return coord_;
+    }
+
+    gfx::coord::System& coord( ) NOEXCEPT {
+        return coord_;
+    }
+
+private:
+    gfx::coord::System coord_;
+};
 
 #endif	// __SESSION_HPP

@@ -1,7 +1,5 @@
 #include "ShException.hpp"
 
-#include <sstream>
-
 ShException::ShException( int lineNum, const char* fileName ) noexcept
 	: lineNum_{ lineNum }, fileName_{ fileName } {}
 

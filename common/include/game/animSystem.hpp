@@ -1,6 +1,8 @@
 #ifndef __AnimSystem_HPP
 #define __AnimSystem_HPP
 
+#include "stdafx.hpp"
+
 #include "FSM.hpp"
 #include "ecs.hpp"
 
@@ -17,12 +19,6 @@
 #endif
 #include "mathUtil.hpp"
 #include "enumUtil.hpp"
-
-#include <string>
-#include <vector>
-#include <filesystem>
-#include <fstream>
-#include <map>
 
 class Bone {
 public:
@@ -110,13 +106,13 @@ public:
         return keyFrames_[boneIdx].end();
     }
 
-    mu::Mat4x4 MU_CALLCONV sample(BoneIdx boneIdx, Milliseconds elapsed) const;
+    mu::Mat4x4 MU_CALLCONV sample(BoneIdx boneIdx, MilliSeconds elapsed) const;
     std::size_t keyFrameCnt(BoneIdx boneIdx) const { return keyFrames_[boneIdx].size(); }
     std::size_t sampleCnt() const { return sampleCnt_; }
     std::size_t boneCnt() const { return keyFrames_.size(); }
     const std::string& name() const { return name_; }
-    Milliseconds duration() const { return duration_; }
-    Milliseconds sampleInterval() const {
+    MilliSeconds duration() const { return duration_; }
+    MilliSeconds sampleInterval() const {
         return duration_ / static_cast<float>(sampleCnt());
     }
     int flags() const noexcept { return flags_; }
@@ -142,7 +138,7 @@ private:
     std::vector< std::vector<KeyFrame> > keyFrames_; // [boneIdx][keyFrameIdx]
     std::vector< std::vector<mu::Mat4x4> > samples_; // [boneIdx][sampleIdx]
     std::string name_;
-    Milliseconds duration_;
+    MilliSeconds duration_;
     std::size_t sampleCnt_;
     void* pCustomData_;
     int flags_;
@@ -194,24 +190,24 @@ public:
     AnimInstance(const Skeleton* pSkeleton, const AnimClip* pAnimClip, ClipMode clipMode)
         : AnimInstance(pSkeleton, pAnimClip, 0_ms, clipMode, pAnimClip->flags()) {}
     AnimInstance( const Skeleton* pSkeleton, const AnimClip* pAnimClip,
-        Milliseconds preElapsed, ClipMode clipMode
+        MilliSeconds preElapsed, ClipMode clipMode
     ) : AnimInstance(pSkeleton, pAnimClip, preElapsed, clipMode, pAnimClip->flags()) {}
     AnimInstance(const Skeleton* pSkeleton, const AnimClip* pAnimClip, ClipMode clipMode, int flags)
         : AnimInstance(pSkeleton, pAnimClip, 0_ms, clipMode, flags) {}
     AnimInstance( const Skeleton* pSkeleton, const AnimClip* pAnimClip,
-        Milliseconds preElapsed, ClipMode clipMode, int flags
+        MilliSeconds preElapsed, ClipMode clipMode, int flags
     );
 
-    void update(Milliseconds deltaTime);
+    void update(MilliSeconds deltaTime);
     TaskCompute calcLocals(AnimSystem& animSystem);
     void calcWorlds(AnimSystem& animSystem);
     TaskCompute calcFinals(AnimSystem& animSystem);
 
-    void setElapsed(Milliseconds elapsed) noexcept { elapsedTime_ = elapsed; }
+    void setElapsed(MilliSeconds elapsed) noexcept { elapsedTime_ = elapsed; }
     void setSpeed(float speed) noexcept { speed_ = speed; }
     void setWeight(float weight) noexcept { weight_ = weight; }
 
-    Milliseconds elapsed() const noexcept { return elapsedTime_; }
+    MilliSeconds elapsed() const noexcept { return elapsedTime_; }
     float speed() const noexcept { return speed_; }
     float weight() const noexcept { return weight_; }
 
@@ -235,7 +231,7 @@ private:
     std::vector< std::vector<KeyFrame>::const_iterator > keyFrameCache_;
     const AnimClip* pAnimClip_;
     const Skeleton* pSkeleton_;
-    Milliseconds elapsedTime_;
+    MilliSeconds elapsedTime_;
     Stage stage_;
     float speed_;
     float weight_;
@@ -301,14 +297,14 @@ public:
     ) {
         return play(key, 0_ms, seq, clipMode);
     }
-    std::coroutine_handle<> play( const std::string& key, Milliseconds preElapsed,
+    std::coroutine_handle<> play( const std::string& key, MilliSeconds preElapsed,
         AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
     );
-    std::coroutine_handle<> play( const std::string& key, Milliseconds preElapsed,
+    std::coroutine_handle<> play( const std::string& key, MilliSeconds preElapsed,
         std::coroutine_handle<> seq, AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
     );
 
-    void update(Milliseconds deltaTime);
+    void update(MilliSeconds deltaTime);
     std::coroutine_handle<> resetAnimSequence(
         const std::string& key, std::coroutine_handle<> animSequence
     );
@@ -352,12 +348,12 @@ private:
     // the last boolean value represents the sequence has been created in current frame
     std::list<std::tuple<std::string, std::coroutine_handle<>, bool>> animSequences_;
     std::vector<std::coroutine_handle<>> expireds_;
-    Milliseconds deltaTime_;
+    MilliSeconds deltaTime_;
     const Skeleton* pSkeleton_;
 };
 
 struct AnimConAttorney {
-    static Milliseconds getDeltaTime(const AnimController& con) {
+    static MilliSeconds getDeltaTime(const AnimController& con) {
         return con.deltaTime_;
     }
 
@@ -366,14 +362,14 @@ struct AnimConAttorney {
             != con.insts_.end();
     }
 
-    static Milliseconds getElapsed(const std::string& key, const AnimController& con) {
+    static MilliSeconds getElapsed(const std::string& key, const AnimController& con) {
         auto it = std::ranges::find_if(con.insts_, [&key](const auto& pair) { return pair.first == key; });
-        return (it != con.insts_.end()) ? it->second.elapsed() : Milliseconds(0.f);
+        return (it != con.insts_.end()) ? it->second.elapsed() : MilliSeconds(0.f);
     }
 
-    static Milliseconds getDuration(const std::string& key, const AnimController& con) {
+    static MilliSeconds getDuration(const std::string& key, const AnimController& con) {
         auto it = con.clipMap_.find(key);
-        return (it != con.clipMap_.end()) ? it->second->duration() : Milliseconds(0.f);
+        return (it != con.clipMap_.end()) ? it->second->duration() : MilliSeconds(0.f);
     }
 
     static float getSpeed(const std::string& key, const AnimController& con) {
@@ -403,7 +399,7 @@ struct AnimConAttorney {
         }
     }
 
-    static void setElapsed(const std::string& key, Milliseconds elapsed, AnimController& con) {
+    static void setElapsed(const std::string& key, MilliSeconds elapsed, AnimController& con) {
         for (auto& [k, inst] : con.insts_) {
             if (k == key) {
                 inst.setElapsed(elapsed);
@@ -441,25 +437,25 @@ struct AnimConAttorney {
     }
 };
 
-TaskAnim fadeInImpl( std::string key, Milliseconds fadeDuration,
+TaskAnim fadeInImpl( std::string key, MilliSeconds fadeDuration,
     std::coroutine_handle<> suspended, AnimController& con
 );
-TaskAnim fadeOutImpl( std::string key, Milliseconds fadeDuration,
+TaskAnim fadeOutImpl( std::string key, MilliSeconds fadeDuration,
     std::coroutine_handle<> suspended, AnimController& con
 );
 TaskAnim removeImpl(std::string key, std::coroutine_handle<> suspended, AnimController& con);
 TaskAnim loopImpl( std::string key, std::coroutine_handle<> suspended,
-    Milliseconds preElapsed, AnimController& con
+    MilliSeconds preElapsed, AnimController& con
 );
 TaskAnim onceImpl( std::string key, std::coroutine_handle<> suspended,
-    Milliseconds preElapsed, AnimController& con
+    MilliSeconds preElapsed, AnimController& con
 );
 TaskAnim partialImpl( std::string key, std::coroutine_handle<> suspended,
-    Milliseconds preElapsed, Milliseconds endPoint, AnimController& con
+    MilliSeconds preElapsed, MilliSeconds endPoint, AnimController& con
 );
 TaskAnim sequencialNodeImpl(const std::string& key, std::coroutine_handle<> suspended, AnimController& con);
 TaskAnim sequencialImpl( const std::vector<std::string>& keys,
-    Milliseconds preElapsed, std::coroutine_handle<> suspended, AnimController& con,
+    MilliSeconds preElapsed, std::coroutine_handle<> suspended, AnimController& con,
     AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
 );
 
@@ -474,8 +470,8 @@ struct FadeIn {
 
     AnimController* pAnimCon;
     std::string key;
-    Milliseconds fadeDuration;
-    Milliseconds preElapsed;
+    MilliSeconds fadeDuration;
+    MilliSeconds preElapsed;
     AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame;
 };
 
@@ -490,7 +486,7 @@ struct FadeOut {
 
     AnimController* pAnimCon;
     std::string key;
-    Milliseconds fadeDuration;
+    MilliSeconds fadeDuration;
 };
 
 struct FadeOutSelect {
@@ -518,7 +514,7 @@ struct FadeOutSelect {
 
     AnimController* pAnimCon;
     std::vector<std::string> keys;
-    Milliseconds fadeDuration;
+    MilliSeconds fadeDuration;
 };
 
 struct Loop {
@@ -533,7 +529,7 @@ struct Loop {
 
     AnimController* pAnimCon;
     std::string key;
-    Milliseconds preElapsed = AnimConAttorney::getElapsed(key, *pAnimCon);
+    MilliSeconds preElapsed = AnimConAttorney::getElapsed(key, *pAnimCon);
 };
 
 struct Once {
@@ -548,7 +544,7 @@ struct Once {
 
     AnimController* pAnimCon;
     std::string key;
-    Milliseconds preElapsed = AnimConAttorney::getElapsed(key, *pAnimCon);
+    MilliSeconds preElapsed = AnimConAttorney::getElapsed(key, *pAnimCon);
 };
 
 struct Partial {
@@ -562,8 +558,8 @@ struct Partial {
 
     AnimController* pAnimCon;
     std::string key;
-    Milliseconds endPoint;
-    Milliseconds preElapsed = AnimConAttorney::getElapsed(key, *pAnimCon);
+    MilliSeconds endPoint;
+    MilliSeconds preElapsed = AnimConAttorney::getElapsed(key, *pAnimCon);
 };
 
 struct Sequencial {
@@ -575,40 +571,40 @@ struct Sequencial {
 
     AnimController* pAnimCon;
     std::vector<std::string> keys;
-    Milliseconds preElapsed;
+    MilliSeconds preElapsed;
     AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame;
 };
 
 TaskAnimSequence fadeIn( std::string key, std::string prevKey,
-    Milliseconds fadeDuration, AnimController& animCon,
+    MilliSeconds fadeDuration, AnimController& animCon,
     AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
 );
 TaskAnimSequence fadeIn( std::string key, std::vector<std::string> possiblePrevKeys,
-    Milliseconds fadeDuration, AnimController& animCon,
+    MilliSeconds fadeDuration, AnimController& animCon,
     AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
 );
 TaskAnimSequence fadeInSequencial( std::vector<std::string> keys, std::string prevKey,
-    Milliseconds fadeDuration, AnimController& animCon,
+    MilliSeconds fadeDuration, AnimController& animCon,
     AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
 );
 TaskAnimSequence fadeInCircular( std::vector<std::string> keys, std::string prevKey,
-    Milliseconds fadeDuration, AnimController& animCon,
+    MilliSeconds fadeDuration, AnimController& animCon,
     AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
 );
-TaskAnimSequence fadeOut(std::string key, Milliseconds fadeDuration, AnimController& animCon);
+TaskAnimSequence fadeOut(std::string key, MilliSeconds fadeDuration, AnimController& animCon);
 TaskAnimSequence fadeOutSelect( std::vector<std::string> keys,
-    Milliseconds fadeDuration, AnimController& animCon
+    MilliSeconds fadeDuration, AnimController& animCon
 );
 TaskAnimSequence sequencial( std::vector<std::string> keys, AnimController& animCon,
-    Milliseconds preElapsed = 0_ms,
+    MilliSeconds preElapsed = 0_ms,
     AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
 );
 TaskAnimSequence circular( std::vector<std::string> keys, AnimController& animCon,
-    Milliseconds preElapsed = 0_ms,
+    MilliSeconds preElapsed = 0_ms,
     AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
 );
 TaskAnimSequence softCircular( std::vector<std::string> keys, std::string prevKey,
-    Milliseconds fadeDuration, AnimController& animCon,
+    MilliSeconds fadeDuration, AnimController& animCon,
     AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
 );
 
@@ -618,7 +614,7 @@ public:
     // the cmdList must be open before calling this function,
     // and it does not close the cmdList after executing the compute pass
     void update(gfx::d3d12::D3D12CmdQueue& cmdQueue,
-        gfx::d3d12::D3D12GfxCmdList& cmdList, Milliseconds deltaTime
+        gfx::d3d12::D3D12GfxCmdList& cmdList, MilliSeconds deltaTime
     );
 
     std::size_t MU_CALLCONV addKeyFramePair(const KeyFrame& lhs, const KeyFrame& rhs, float ratio) {

@@ -78,6 +78,9 @@ public:
     Entity()
         : id_(fetch()) {}
 
+    Entity(ID id)
+        : id_(id) {}
+
     ~Entity() {
         release();
     }

@@ -2609,9 +2609,7 @@ public:
     friend class Quat;
 
     NQuat() __MathUtil_NOEXCEPT
-        : quat_(dx::XMQuaternionIdentity()) {
-        normalize();
-    }
+        : quat_(dx::XMQuaternionIdentity()) {}
 
     NQuat(float x, float y, float z, float w) __MathUtil_NOEXCEPT
         : NQuat(x, y, z, w, NoNormalize_t{}) {

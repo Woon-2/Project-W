@@ -240,7 +240,7 @@ void AnimClip::loadKeyFrameClipFromStream(std::istream& in, AnimClip& animClip) 
 
     float duration{};
     readStream(in, duration);
-    animClip.duration_ = Milliseconds(duration * 1000.f);
+    animClip.duration_ = MilliSeconds(duration * 1000.f);
 
     readStream(in, nStrLength);
     readStream(in, pstrToken, nStrLength);
@@ -345,7 +345,7 @@ void AnimClip::loadPresampledClipFromStream(std::istream& in, AnimClip& animClip
 
     float duration{};
     readStream(in, duration);
-    animClip.duration_ = Milliseconds(duration * 1000.f);
+    animClip.duration_ = MilliSeconds(duration * 1000.f);
 
     readStream(in, nStrLength);
     readStream(in, pstrToken, nStrLength);
@@ -468,7 +468,7 @@ std::vector<AnimClip> AnimClip::loadClipsFromStream(std::istream& in) {
     return animClips;
 }
 
-mu::Mat4x4 MU_CALLCONV AnimClip::sample(BoneIdx boneIdx, Milliseconds elapsed) const {
+mu::Mat4x4 MU_CALLCONV AnimClip::sample(BoneIdx boneIdx, MilliSeconds elapsed) const {
     auto& samples = samples_[boneIdx];
     auto sampleIdx = static_cast<std::size_t>(elapsed / sampleInterval());
     if (sampleIdx >= samples.size()) {
@@ -491,7 +491,7 @@ SkeletonAnimClipsPair loadSkeletonAndAnimClipFromFile(
 }
 
 AnimInstance::AnimInstance( const Skeleton* pSkeleton, const AnimClip* pAnimClip,
-    Milliseconds preElapsed, ClipMode clipMode, int flags
+    MilliSeconds preElapsed, ClipMode clipMode, int flags
 ) : boneXformCache_(pSkeleton->bones().size()),
     keyFrameCache_(), pAnimClip_(pAnimClip), pSkeleton_(pSkeleton),
     elapsedTime_(preElapsed), stage_(Stage::None), speed_(1.f), weight_(0.f), clipMode_(clipMode),
@@ -517,7 +517,7 @@ AnimInstance::AnimInstance( const Skeleton* pSkeleton, const AnimClip* pAnimClip
     }
 }
 
-void AnimInstance::update(Milliseconds deltaTime) {
+void AnimInstance::update(MilliSeconds deltaTime) {
     if (stage_ != Stage::None) {
         throw std::runtime_error(
             "[Description] AnimInstance::update: expected AnimInstance stage: "
@@ -685,7 +685,7 @@ void AnimInstance::traverseBone(const Bone& bone, const mu::Mat4x4& parentXform)
 }
 
 std::coroutine_handle<> AnimController::play( const std::string& key,
-    Milliseconds preElapsed, AnimInstance::ClipMode clipMode
+    MilliSeconds preElapsed, AnimInstance::ClipMode clipMode
 ) {
     const auto& animClip = clipInfo(key);
 
@@ -722,7 +722,7 @@ std::coroutine_handle<> AnimController::play( const std::string& key,
     return nullptr;
 }
 
-std::coroutine_handle<> AnimController::play( const std::string& key, Milliseconds preElapsed,
+std::coroutine_handle<> AnimController::play( const std::string& key, MilliSeconds preElapsed,
     std::coroutine_handle<> seq, AnimInstance::ClipMode clipMode
 ) {
     const auto& animClip = clipInfo(key);
@@ -747,12 +747,12 @@ std::coroutine_handle<> AnimController::play( const std::string& key, Millisecon
     return nullptr;
 }
 
-void AnimController::update(Milliseconds deltaTime) {
+void AnimController::update(MilliSeconds deltaTime) {
     for (auto& [_, __, isNew] : animSequences_) {
         isNew = false;
     }
 
-    fsm_.pushEvent(fsm::Event::create<Milliseconds>(evAnimUpdate, deltaTime));
+    fsm_.pushEvent(fsm::Event::create<MilliSeconds>(evAnimUpdate, deltaTime));
 
     fsm_.update();
     deltaTime_ = deltaTime;
@@ -814,12 +814,12 @@ std::vector<std::coroutine_handle<>> AnimController::restoreAnimSequences(
     return ret;
 }
 
-TaskAnim fadeInImpl( std::string key, Milliseconds fadeDuration,
+TaskAnim fadeInImpl( std::string key, MilliSeconds fadeDuration,
     std::coroutine_handle<> suspended, AnimController& con
 ) {
     auto raii = CoroRAII(suspended);
 
-    auto accTime = Milliseconds(0.f);
+    auto accTime = MilliSeconds(0.f);
     while (accTime < fadeDuration) {
         AnimConAttorney::setWeight(key, std::clamp(accTime / fadeDuration, 0.f, 1.f), con);
         co_await std::suspend_always{};
@@ -836,12 +836,12 @@ TaskAnim fadeInImpl( std::string key, Milliseconds fadeDuration,
     suspended.resume();
 }
 
-TaskAnim fadeOutImpl( std::string key, Milliseconds fadeDuration,
+TaskAnim fadeOutImpl( std::string key, MilliSeconds fadeDuration,
     std::coroutine_handle<> suspended, AnimController& con
 ) {
     auto raii = CoroRAII(suspended);
 
-    auto accTime = Milliseconds(0.f);
+    auto accTime = MilliSeconds(0.f);
 
     while (accTime < fadeDuration) {
         AnimConAttorney::setWeight(key, 1.f - std::clamp(accTime / fadeDuration, 0.f, 1.f), con);
@@ -865,7 +865,7 @@ TaskAnim removeImpl(std::string key, std::coroutine_handle<> suspended, AnimCont
 }
 
 TaskAnim loopImpl( std::string key, std::coroutine_handle<> suspended,
-    Milliseconds preElapsed, AnimController& con
+    MilliSeconds preElapsed, AnimController& con
 ) {
     auto raii = CoroRAII(suspended);
 
@@ -879,7 +879,7 @@ TaskAnim loopImpl( std::string key, std::coroutine_handle<> suspended,
 }
 
 TaskAnim onceImpl( std::string key, std::coroutine_handle<> suspended,
-    Milliseconds preElapsed, AnimController& con
+    MilliSeconds preElapsed, AnimController& con
 ) {
     auto raii = CoroRAII(suspended);
 
@@ -896,7 +896,7 @@ TaskAnim onceImpl( std::string key, std::coroutine_handle<> suspended,
 }
 
 TaskAnim partialImpl( std::string key, std::coroutine_handle<> suspended,
-    Milliseconds preElapsed, Milliseconds endPoint, AnimController& con
+    MilliSeconds preElapsed, MilliSeconds endPoint, AnimController& con
 ) {
     auto raii = CoroRAII(suspended);
 
@@ -930,7 +930,7 @@ TaskAnim sequencialNodeImpl( const std::string& key,
 }
 
 TaskAnim sequencialImpl( const std::vector<std::string>& keys,
-    Milliseconds preElapsed, std::coroutine_handle<> suspended, AnimController& con,
+    MilliSeconds preElapsed, std::coroutine_handle<> suspended, AnimController& con,
     AnimInstance::ClipMode clipMode
 ) {
     auto raii = CoroRAII(suspended);
@@ -947,7 +947,7 @@ TaskAnim sequencialImpl( const std::vector<std::string>& keys,
     
         AnimController* pAnimCon;
         std::string key;
-        Milliseconds preElapsed;
+        MilliSeconds preElapsed;
         AnimInstance::ClipMode clipMode;
     };
     
@@ -966,7 +966,7 @@ TaskAnim sequencialImpl( const std::vector<std::string>& keys,
 }
 
 TaskAnimSequence fadeIn( std::string key, std::string prevKey,
-    Milliseconds fadeDuration, AnimController& animCon,
+    MilliSeconds fadeDuration, AnimController& animCon,
     AnimInstance::ClipMode clipMode
 ) {
     const auto preElapsed = AnimConAttorney::getDuration(key, animCon)
@@ -989,7 +989,7 @@ TaskAnimSequence fadeIn( std::string key, std::string prevKey,
 }
 
 TaskAnimSequence fadeIn( std::string key, std::vector<std::string> possiblePrevKeys,
-    Milliseconds fadeDuration, AnimController& animCon,
+    MilliSeconds fadeDuration, AnimController& animCon,
     AnimInstance::ClipMode clipMode
 ) {
     auto pPrevKey = std::ranges::find_if(possiblePrevKeys, [&animCon](const auto& key) {
@@ -1023,7 +1023,7 @@ TaskAnimSequence fadeIn( std::string key, std::vector<std::string> possiblePrevK
 }
 
 TaskAnimSequence fadeInSequencial( std::vector<std::string> keys,
-    std::string prevKey, Milliseconds fadeDuration, AnimController& animCon,
+    std::string prevKey, MilliSeconds fadeDuration, AnimController& animCon,
     AnimInstance::ClipMode clipMode
 ) {
     auto& key = *std::begin(keys);
@@ -1048,7 +1048,7 @@ TaskAnimSequence fadeInSequencial( std::vector<std::string> keys,
 }
 
 TaskAnimSequence fadeInCircular( std::vector<std::string> keys, std::string prevKey,
-    Milliseconds fadeDuration, AnimController& animCon,
+    MilliSeconds fadeDuration, AnimController& animCon,
     AnimInstance::ClipMode clipMode
 ) {
     auto& key = *std::begin(keys);
@@ -1077,12 +1077,12 @@ TaskAnimSequence fadeInCircular( std::vector<std::string> keys, std::string prev
     }
 }
 
-TaskAnimSequence fadeOut(std::string key, Milliseconds fadeDuration, AnimController& animCon) {
+TaskAnimSequence fadeOut(std::string key, MilliSeconds fadeDuration, AnimController& animCon) {
     co_await FadeOut{ .pAnimCon = &animCon, .key = key, .fadeDuration = fadeDuration };
 }
 
 TaskAnimSequence fadeOutSelect( std::vector<std::string> keys,
-    Milliseconds fadeDuration, AnimController& animCon
+    MilliSeconds fadeDuration, AnimController& animCon
 ) {
     co_await FadeOutSelect{
         .pAnimCon = &animCon, .keys = std::move(keys), .fadeDuration = fadeDuration
@@ -1090,7 +1090,7 @@ TaskAnimSequence fadeOutSelect( std::vector<std::string> keys,
 }
 
 TaskAnimSequence sequencial( std::vector<std::string> keys,
-    AnimController& animCon, Milliseconds preElapsed,
+    AnimController& animCon, MilliSeconds preElapsed,
     AnimInstance::ClipMode clipMode
 ) {
     co_await Sequencial{
@@ -1102,7 +1102,7 @@ TaskAnimSequence sequencial( std::vector<std::string> keys,
 }
 
 TaskAnimSequence circular( std::vector<std::string> keys,
-    AnimController& animCon, Milliseconds preElapsed,
+    AnimController& animCon, MilliSeconds preElapsed,
     AnimInstance::ClipMode clipMode
 ) {
     for (;;) {
@@ -1117,7 +1117,7 @@ TaskAnimSequence circular( std::vector<std::string> keys,
 }
 
 TaskAnimSequence softCircular( std::vector<std::string> keys, std::string prevKey,
-    Milliseconds fadeDuration, AnimController& animCon,
+    MilliSeconds fadeDuration, AnimController& animCon,
     AnimInstance::ClipMode clipMode
 ) {
     auto preElapsed = AnimConAttorney::getDuration(*std::begin(keys), animCon)
@@ -1175,7 +1175,7 @@ AnimSystem::AnimSystem( gfx::d3d12::D3D12Device& device,
 
 // on anim controller's play => register anim instances' matrices on anim system
 void AnimSystem::update( gfx::d3d12::D3D12CmdQueue& cmdQueue,
-    gfx::d3d12::D3D12GfxCmdList& cmdList, Milliseconds deltaTime
+    gfx::d3d12::D3D12GfxCmdList& cmdList, MilliSeconds deltaTime
 ) {
     // update timing and weights for all anim instances
     // and remove expired anim instances

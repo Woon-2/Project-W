@@ -1,17 +1,11 @@
-#include "sNetEx.hpp"
+#include "stdafx.hpp"
+
 #include "net/netInclude.hpp"
 #include "OverlappedEx.hpp"
 #include "Session.hpp"
 
 #include "game/physicsSystem.hpp"
-
 #include "resourcePath.hpp"
-
-#include <unordered_map>
-#include <vector>
-#include <atomic>
-#include <chrono>
-#include <random>
 
 void doAccept( SOCKET, OverlappedEx* );
 void worker( );
@@ -21,45 +15,24 @@ SOCKET listenSocket;
 OverlappedEx gAcceptOver{ IO_OP::IO_ACCEPT };
 std::array<char, (sizeof(sockaddr) + 16u) * 2u> acceptBuffer_;
 
-std::unordered_map<std::uint16_t, Session> gUsers;
+ccMap<std::uint16_t, Session> gUsers;
+ccQueue<ecs::Entity::ID> gReservedEntities;
 std::atomic_int16_t gId;
-
-SNetExSystem netSystem;
-
-// dummy model to store rotation coordinate system
-class DummyModel : public ecs::Component {
-public:
-	ENABLE_COMPONENT( DummyModel )
-
-	DummyModel( const ecs::Entity& entity, gameEngine::Coord& coordComp )
-	: Component( entity ), coord_( ) {
-		coord_.setParent( &coordComp.get( ) );
-	}
-
-	const gfx::coord::System& coord( ) const NOEXCEPT {
-		return coord_;
-	}
-
-	gfx::coord::System& coord( ) NOEXCEPT {
-		return coord_;
-	}
-
-private:
-	gfx::coord::System coord_;
-};
 
 std::uniform_real_distribution<float> gDist( -1.f, 1.f );
 std::mt19937 gRng( std::random_device{}( ) );
 
+void processPacket(Packet& packet, Session& session);
+void processCSInput(CSInput& csInput, Session& session);
+
 int main( ) {
 	using Clock = std::chrono::high_resolution_clock;
 	using Seconds = std::chrono::duration<float>;
-	static constexpr auto frameRate = 0.016f;	// 60 FPS
+	static constexpr auto frameRate = 33_ms;	// 30 FPS
 	static constexpr auto directionChangeRate = 2.f;
 	float directionChangeCounter = 0.f;
 
 	ecs::init( ecs::InitDesc{ .threadCnt = 1u, .entityPoolSize = 0x160u } );
-	IDPool::initList( );
 
 	// initialize windows socket api ================================================
 	WSADATA wsaData{ };
@@ -87,36 +60,8 @@ int main( ) {
 	}
 	//===============================================================================
 
-	auto levelEntity = gameEngine::LevelRegion( resourcePath/"LevelGraph.bin" );
-
 	auto physicsSystem = PhysicsSystem( );
 	auto coordRoot = gameEngine::CoordRoot( );
-
-	auto entities = levelEntity.instantiateAllObjects( coordRoot.get( ) );
-	auto directions = std::vector<mu::Vec3>( entities.size( ) - 5u );
-	for ( auto& dir : directions ) {
-		dir = mu::Vec3( gDist( gRng ), 0.f, gDist( gRng ) );
-	}
-
-	for ( std::size_t i = 0u; i < entities.size( ); ++i ) {
-		auto& entity = entities[ i ];
-		if ( i < 5u ) {
-			entity.createComponent<NetEx>( std::make_unique<SNetExHelicopter>( entity.id( ).value( ) ) );
-			entity.as<NetEx>( ).addCategory( NetExCategory::Player );
-			entity.as<NetEx>( ).addCategory( NetExCategory::Character );
-		}
-		else {
-			entity.createComponent<NetEx>( std::make_unique<SNetExAI>( entity.id( ).value( ) ) );
-			entity.as<NetEx>( ).addCategory( NetExCategory::AI );
-			entity.as<NetEx>( ).addCategory( NetExCategory::Character );
-		}
-		entity.createComponent<RigidBody>( );
-		entity.createComponent<DummyModel>( entity.as<gameEngine::Coord>( ) );
-
-		netSystem.addEntity( entity );
-		physicsSystem.addEntity( entity );
-		coordRoot.addEntity( entity );
-	}
 
 	coordRoot.update( );
 
@@ -145,47 +90,48 @@ int main( ) {
 	// game logic loop ==============================================================
 	while ( true ) {
 		auto tp = Clock::now( );
-		auto elapsed = std::chrono::duration_cast<Seconds>( tp - lastTp ).count( );
+		auto elapsed = std::chrono::duration_cast<MilliSeconds>( tp - lastTp );
 
 		if ( elapsed < frameRate / 2.f ) {
 			std::this_thread::sleep_for( std::chrono::duration<float>( frameRate - elapsed ) );
 			elapsed = frameRate;
 		}
 
-		netSystem.preUpdate( );
+		ecs::Entity::ID entityId{-1u};
+
+		while ( gReservedEntities.try_pop(entityId) ) {
+			auto entity = ecs::Entity(entityId);
+			if ( entity.valid() ) {
+				coordRoot.addEntity(entity);
+				physicsSystem.addEntity(entity);
+				entityId = -1u;
+			}
+		}
 
 		// physically update
-		const float forceStep_ = 800.f;
-		for ( std::size_t i = 5u; i < entities.size( ); ++i ) {
-			auto& entity = entities[ i ];
-			auto& coord = entity.as<gameEngine::Coord>( );
-			auto& rigidBody = entity.as<RigidBody>( );
-			auto& netEx = entity.as<NetEx>( );
-
-			rigidBody.addForce( directions[ i - 5u ] * forceStep_ * elapsed );
-		}
-
 		physicsSystem.update( elapsed );
 
-		for ( std::size_t i = 5u; i < entities.size( ); ++i ) {
-			auto& entity = entities[ i ];
-			auto& coord = entity.as<gameEngine::Coord>( );
-			auto& rigidBody = entity.as<RigidBody>( );
-			coord.get( ) << mu::translate( rigidBody.deltaPosition( ) );
-		}
+		for ( auto& [id, user] : gUsers ) {
+			if ( !user.accessReady( ) ) {
+				continue;
+			}
+			const auto eid = user.getEntityId();
 
-		directionChangeCounter += elapsed;
-		if ( directionChangeCounter > directionChangeRate ) {
-			directionChangeCounter = 0.f;
-			for ( auto& dir : directions ) {
-				dir = mu::Vec3( gDist( gRng ), 0.f, gDist( gRng ) );
+			if (auto pCoord = gameEngine::Coord::at(eid)) {
+				const auto cdp = pCoord->compressedDeltaPos();
+				const auto cdr = pCoord->compressedDeltaRot();
+
+				const auto dp = pCoord->decodeDeltaPos(cdp);
+				const auto dr = pCoord->decodeDeltaRot(cdr);
+
+				pCoord->get() << mu::translate(dp);
+				if (auto pModel = DummyModel::at(eid)) {
+					pModel->coord() << mu::Mat4x4(dr);
+				}
 			}
 		}
 
 		coordRoot.update( );
-
-		netSystem.postUpdate( );
-		netSystem.doSend( );
 
 		lastTp = tp;
 	}
@@ -228,14 +174,99 @@ void worker( ) {
 
 			::CreateIoCompletionPort( reinterpret_cast<HANDLE>( overEx->acceptSocket_ ), gIocpHandle, id, 0 );
 
-			if ( !gUsers.try_emplace( id, overEx->acceptSocket_, id ).second ) {
+			auto& initializingSession = gUsers[id].init( overEx->acceptSocket_, id );
+			// socket error check
+			if (!initializingSession.valid()) {
 				errorDisplay( "Session creation", WSAGetLastError( ) );
-				::closesocket( overEx->acceptSocket_ );
+				initializingSession.close();
+				doAccept( listenSocket, &gAcceptOver );
+				break;
 			}
-			else {
-				netSystem.addSession( gUsers[ id ] );
-				gUsers[ id ].setAcceptFlag( );
+
+			initializingSession.setPacketProcessor( processPacket );
+
+			auto entity = ecs::Entity( );
+			entity.createComponent<gameEngine::Coord>();
+			entity.createComponent<RigidBody>();
+			auto& rb = entity.as<RigidBody>();
+			rb.setInvMass( 50.f / 1.f );
+			rb.setKFriction( 0.5f );
+			rb.disableGravity( );
+			entity.createComponent<DummyModel>( entity.as<gameEngine::Coord>() );
+
+			initializingSession.setEntityId( entity.id( ).value( ) );
+
+			gReservedEntities.push(entity.id().value());
+
+			// add intialization packets
+			for (auto& [id, user] : gUsers) {
+				if (!user.accessReady()) {
+					continue;
+				}
+
+
+				auto trs = mu::Vec3();
+				auto rot = mu::NQuat();
+
+				if (auto pCoord = gameEngine::Coord::at(user.getEntityId())) {
+					// we endure data race of translation
+					trs = pCoord->get().localXform().row(3);
+				}
+				if (auto pModel = DummyModel::at(user.getEntityId())) {
+					rot = mu::quatRotMat(pModel->coord().localXform());
+					// if rotation is not near identity, recalculate rotation
+				}
+
+				// enqueue SCEnter packet
+				initializingSession.enqueuePacket(
+					Packet{
+						.size = calcPacketSize<SCEnter>(),
+						.type = PacketType::SCEnter,
+						.scEnter = SCEnter{
+							.netId = id,
+							.xform = RigidXform{
+								.translation = { trs.x(), trs.y(), trs.z() },
+								.rotation = { rot.x(), rot.y(), rot.z(), rot.w() }
+							},
+							.objType = ObjectType::Character
+						}
+					}
+				);
+
+				// the session may be destroyed in the process of enqueueing by other threads,
+				// so we need to check if the session is still accessible
+				if (!user.accessReady()) {
+					initializingSession.revertEnqueuePacket();
+				}
 			}
+
+			initializingSession.enqueuePacket(
+				Packet{
+					.size = calcPacketSize<SCAssign>(),
+					.type = PacketType::SCAssign,
+					.scAssign = SCAssign{
+						.netId = initializingSession.getEntityId()
+					}
+				}
+			);
+
+			Session::enqueueBroadcastPacket(
+				Packet{
+					.size = calcPacketSize<SCEnter>(),
+					.type = PacketType::SCEnter,
+					.scEnter = SCEnter{
+						.netId = initializingSession.getEntityId(),
+						.xform = RigidXform{
+							.translation = { 0.f, 100.f, 0.f },
+							.rotation = { 0.f, 0.f, 0.f, 1.f }
+						},
+						.objType = ObjectType::Character
+					}
+				}
+			);
+
+			// set accept flag
+			initializingSession.setAcceptFlag( );
 
 			doAccept( listenSocket, &gAcceptOver );
 			break;
@@ -250,6 +281,56 @@ void worker( ) {
 
 		case IO_OP::IO_SEND:
 			delete overEx;
+			break;
+		}
+	}
+}
+
+void processPacket(Packet& packet, Session& session) {
+	switch ( packet.type ) {
+	case PacketType::CSInput:
+		processCSInput( packet.csInput, session );
+	default:
+		break;
+	}
+}
+
+void processCSInput(CSInput& csInput, Session& session) {
+	static constexpr auto forceStep = 5000.f;
+
+	for ( std::uint8_t i = 0u; i < csInput.eventCnt; ++i ) {
+		auto& ev = csInput.events[ i ];
+		switch ( ev.type ) {
+		case InputEventType::MoveForward:
+			if (auto pRigidBody = RigidBody::at( session.getEntityId() )) {
+				pRigidBody->accMomentum( mu::Vec3(0.f, 0.f, forceStep * ev.floatVal0) );
+			}
+			break;
+
+		case InputEventType::MoveBackward:
+			if (auto pRigidBody = RigidBody::at( session.getEntityId() )) {
+				pRigidBody->accMomentum( mu::Vec3(0.f, 0.f, -forceStep * ev.floatVal0) );
+			}
+			break;
+
+		case InputEventType::MoveLeft:
+			if (auto pRigidBody = RigidBody::at( session.getEntityId() )) {
+				pRigidBody->accMomentum( mu::Vec3(-forceStep * ev.floatVal0, 0.f, 0.f) );
+			}
+			break;
+
+		case InputEventType::MoveRight:
+			if (auto pRigidBody = RigidBody::at( session.getEntityId() )) {
+				pRigidBody->accMomentum( mu::Vec3(forceStep * ev.floatVal0, 0.f, 0.f) );
+			}
+			break;
+
+		case InputEventType::Rotation:
+			if (auto pCoord = gameEngine::Coord::at( session.getEntityId() )) {
+				pCoord->accRotation( mu::quatRPY(0.f, 0.f, ev.floatVal0) );
+			}
+
+		default:
 			break;
 		}
 	}

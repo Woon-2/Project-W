@@ -6,44 +6,20 @@
 #include <iostream>
 #include <vector>
 
-void IDPool::initList() {
-    idList_.resize(0xFFFF);
-    std::iota(idList_.begin(), idList_.end(), 0u);
-}
-
-std::optional<std::uint16_t> IDPool::allocID() {
-    if(idList_.empty()){
-        return std::nullopt;
-    }
-
-    auto id = idList_.front();
-    idList_.pop_front();
-
-    return id;
-}
-
-Session::~Session() {
-    if (id_ != -1) {
-        IDPool::deallocID(id_);
-    }
-}
-
 Session::Session(net::TcpSocket&& sock)
-    : recvBuf_{}, sendQueue_{}, recvQueue_{}, sock_(std::move(sock)), id_(-1)
-    , recvBytesRemain_(0), recvOffset_(0) {
-    if (auto allocatedId = IDPool::allocID()) {
-        id_ = allocatedId.value();
-    }
-}
+    : recvBuf_{}, sendQueue_{}, sock_(std::move(sock)), id_(0)
+    , recvBytesRemain_(0), recvOffset_(0), packetProcessor_(nullptr),
+    entityId_(-1u) {}
 
 Session::Session(Session&& rhs) noexcept
     : recvBuf_(std::move(rhs.recvBuf_))
     , sendQueue_(std::move(rhs.sendQueue_))
-    , recvQueue_(std::move(rhs.recvQueue_))
     , sock_(std::move(rhs.sock_))
     , id_(std::exchange(rhs.id_, -1))
     , recvBytesRemain_(std::exchange(rhs.recvBytesRemain_, 0))
-    , recvOffset_(std::exchange(rhs.recvOffset_, 0)) {}
+    , recvOffset_(std::exchange(rhs.recvOffset_, 0)),
+    packetProcessor_(rhs.packetProcessor_),
+    entityId_(rhs.entityId_) {}
 
 Session& Session::operator=(Session&& other) noexcept {
     if (this == &other) {
@@ -52,17 +28,14 @@ Session& Session::operator=(Session&& other) noexcept {
 
     recvBuf_ = std::move(other.recvBuf_);
     sendQueue_ = std::move(other.sendQueue_);
-    recvQueue_ = std::move(other.recvQueue_);
     sock_ = std::move(other.sock_);
     id_ = std::exchange(other.id_, -1);
     recvBytesRemain_ = std::exchange(other.recvBytesRemain_, 0);
     recvOffset_ = std::exchange(other.recvOffset_, 0);
+    packetProcessor_ = other.packetProcessor_;
+    entityId_ = other.entityId_;
 
     return *this;
-}
-
-void IDPool::deallocID(std::uint16_t id) {
-    idList_.push_front(id);
 }
 
 void Session::flushPackets() {
@@ -113,13 +86,10 @@ void Session::recvPackets() {
             return;
         }
 
-        recvQueue_.emplace_back();
-        std::memcpy(&recvQueue_.back(), recvBuf_.data() + readOffset, requiredSize);
+        (*packetProcessor_)(*reinterpret_cast<Packet*>(recvBuf_.data() + readOffset), *this);
 
         readOffset += requiredSize;
         *recvSize -= (requiredSize - recvOffset_);
         recvOffset_ = 0u;
     }
 }
-
-std::forward_list<std::uint16_t> IDPool::idList_;

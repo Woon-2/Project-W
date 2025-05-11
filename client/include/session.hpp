@@ -5,7 +5,6 @@
 #include "net/protocol.hpp"
 
 #include "ecs.hpp"
-#include "IDPool.hpp"
 
 #include <iostream>
 #include <deque>
@@ -18,16 +17,20 @@ class Session {
 public:
     static constexpr std::size_t recvBufSize = 40960u;
 
-    Session()
-        : recvBuf_{}, sendQueue_{}, recvQueue_{}, sock_(INVALID_SOCKET), id_(-1)
-        , recvBytesRemain_(0), recvOffset_(0) {}
+    using PacketProcessor = void(*)(Packet& packet, Session& session);
 
-    ~Session();
+    Session()
+        : recvBuf_{}, sendQueue_{}, sock_(INVALID_SOCKET), id_(-1)
+        , recvBytesRemain_(0), recvOffset_(0), packetProcessor_(nullptr),
+        entityId_(-1u) {}
+
+    ~Session() = default;
 
     Session(net::TcpSocket&& sock);
     Session(net::TcpSocket&& sock, std::uint32_t id)
-        : recvBuf_{}, sendQueue_{}, recvQueue_{}, sock_(std::move(sock)), id_(id)
-        , recvBytesRemain_(0), recvOffset_(0) {}
+        : recvBuf_{}, sendQueue_{}, sock_(std::move(sock)), id_(id)
+        , recvBytesRemain_(0), recvOffset_(0), packetProcessor_(nullptr),
+        entityId_(-1u) {}
 
     Session(const Session&) = delete;
     Session& operator=(const Session&) = delete;
@@ -55,18 +58,26 @@ public:
         return id_ == other.id_;
     }
 
-    std::deque<Packet>& getRecvQueue() noexcept {
-        return recvQueue_;
+    void setPacketProcessor(PacketProcessor processor) noexcept {
+        packetProcessor_ = processor;
+    }
+
+    void setEntityId(ecs::Entity::ID entityId) noexcept {
+        entityId_ = entityId;
+    }
+    ecs::Entity::ID getEntityId() const noexcept {
+        return entityId_;
     }
 
 private:
     std::array< char, recvBufSize > recvBuf_;
     std::deque<Packet> sendQueue_;
-    std::deque<Packet> recvQueue_;
     net::TcpSocket sock_;
     std::uint32_t id_;
     std::uint32_t recvBytesRemain_;
     std::uint32_t recvOffset_;
+    PacketProcessor packetProcessor_;
+    ecs::Entity::ID entityId_;
 };
 
 

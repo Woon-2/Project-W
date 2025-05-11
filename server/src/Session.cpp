@@ -1,9 +1,5 @@
 #include "Session.hpp"
-#include "sNetEx.hpp"
-
-#include <utility>
-#include <ranges>
-#include <numeric>
+#include "game/level.hpp"
 
 void errorDisplay( std::string_view where, int error ) {
 	std::cerr << where << " failed : "
@@ -12,12 +8,32 @@ void errorDisplay( std::string_view where, int error ) {
 }
 
 // Session ==========================================================================
+Session::Session()
+	: clientSocket_{ INVALID_SOCKET }, id_( -1 ), entityId_( -1u ), recvOver_( IO_OP::IO_RECV ),
+	recvBytesRemain_{ 0u }, sendQueue_( ), recvBuffer_( ), completedAccept{ false } {}
+
+Session::~Session() {
+	close();
+}
+
 Session::Session( Session&& rhs ) noexcept
-	: clientSocket_{ std::exchange( rhs.clientSocket_, INVALID_SOCKET ) },
-	id_{ std::exchange( rhs.id_, -1 ) }, recvOver_( std::move( rhs.recvOver_ ) ), 
+	: clientSocket_{ rhs.clientSocket_.load( ) },
+	id_{ std::exchange( rhs.id_, -1 ) }, entityId_( std::exchange( rhs.entityId_, -1u ) ),
+	recvOver_( std::move( rhs.recvOver_ ) ), 
 	recvBuffer_( std::move( rhs.recvBuffer_ ) ), recvBytesRemain_{ std::exchange( rhs.recvBytesRemain_, 0 ) }, 
 	sendQueue_( std::move( rhs.sendQueue_ ) ) {
+
+	rhs.clientSocket_.store( INVALID_SOCKET );
+
+	rhs.recvOver_.pSendQueue_.reset();
+	rhs.recvOver_.wsaBufs_.clear( );
+	rhs.recvOver_.wsaBufs_.shrink_to_fit( );
+
+	rhs.recvBuffer_.clear( );
+	rhs.recvBuffer_.shrink_to_fit( );
+
 	rhs.sendQueue_.clear( );
+	rhs.sendQueue_.shrink_to_fit( );
 }
 
 Session& Session::operator=( Session&& other ) noexcept {
@@ -25,15 +41,68 @@ Session& Session::operator=( Session&& other ) noexcept {
 		return *this;
 	}
 
-	clientSocket_ = std::exchange( other.clientSocket_, INVALID_SOCKET );
+	clientSocket_ = other.clientSocket_.load();
+	other.clientSocket_.store( INVALID_SOCKET );
 	id_ = std::exchange( other.id_, -1 );
+
 	recvOver_ = std::move( other.recvOver_ );
+	other.recvOver_.pSendQueue_.reset();
+	other.recvOver_.wsaBufs_.clear( );
+	other.recvOver_.wsaBufs_.shrink_to_fit();
+
 	recvBuffer_ = std::move( other.recvBuffer_ );
+	other.recvBuffer_.clear( );
+	other.recvBuffer_.shrink_to_fit();
+
 	recvBytesRemain_ = std::exchange( other.recvBytesRemain_, 0 );
+
 	sendQueue_ = std::move( other.sendQueue_ );
 	other.sendQueue_.clear( );
+	other.sendQueue_.shrink_to_fit();
 
 	return *this;
+}
+
+Session& Session::init(SOCKET socket, i16t sessionId) {
+	clientSocket_ = socket;
+	id_ = sessionId;
+	recvOver_ = OverlappedEx{ IO_OP::IO_RECV };
+	recvOver_.wsaBufs_.resize(1u);
+	recvBuffer_.resize(recvBufSize);
+	recvBytesRemain_ = 0u;
+	sendQueue_.clear();
+	sendQueue_.shrink_to_fit();
+
+	doRecv();
+
+	return *this;
+}
+
+bool Session::close() {
+	auto oldSocket = clientSocket_.load();
+	if ( oldSocket == INVALID_SOCKET ) {
+		return false;
+	}
+
+	if ( clientSocket_.compare_exchange_strong( oldSocket, INVALID_SOCKET ) ) {
+		completedAccept.store(false);
+
+		::closesocket( oldSocket );
+
+		recvOver_.pSendQueue_.reset();
+		recvOver_.wsaBufs_.clear( );
+		recvOver_.wsaBufs_.shrink_to_fit( );
+
+		recvBuffer_.clear( );
+		recvBuffer_.shrink_to_fit( );
+
+		sendQueue_.clear();
+		sendQueue_.shrink_to_fit();
+
+		return true;
+	}
+
+	return false;
 }
 
 void Session::doRecv( ) {
@@ -54,13 +123,37 @@ void Session::doRecv( ) {
 }
 
 void Session::doSend( ) {
-	auto overEx = new OverlappedEx{ IO_OP::IO_SEND, std::move(sendQueue_) };
+	auto overEx = new OverlappedEx{ IO_OP::IO_SEND,
+		std::make_shared<decltype(sendQueue_)>( std::move(sendQueue_) )
+	};
 
 	auto ret = ::WSASend( clientSocket_, overEx->wsaBufs_.data( ), 
 		static_cast<DWORD>( overEx->wsaBufs_.size( ) ), nullptr, 0, &overEx->over_, nullptr );
 	if ( ret == SOCKET_ERROR ) {
 		if ( WSAGetLastError( ) != WSA_IO_PENDING ) {
 			errorDisplay( "WSASend", WSAGetLastError( ) );
+		}
+	}
+}
+
+void Session::doBroadcast( pmr::vector<Session*> sessions ) {
+	auto pBroadcastQ = std::make_shared<decltype(sendQueue_)>( );
+	auto& broadcastQ = *pBroadcastQ;
+
+	Packet packet{ };
+	while ( sBroadcastQueue_.try_pop( packet ) ) {
+		broadcastQ.push_back( packet );
+	}
+
+	for ( auto& pSession : sessions ) {
+		if (pSession->accessReady()) {
+			auto overEx = new OverlappedEx{ IO_OP::IO_SEND, pBroadcastQ };
+
+			auto ret = ::WSASend( pSession->clientSocket_, overEx->wsaBufs_.data( ), 
+				static_cast<DWORD>( overEx->wsaBufs_.size( ) ), nullptr, 0, &overEx->over_, nullptr );
+			if ( WSAGetLastError( ) != WSA_IO_PENDING ) {
+				errorDisplay( "WSASend", WSAGetLastError( ) );
+			}
 		}
 	}
 }
@@ -80,7 +173,7 @@ void Session::interpretData( DWORD bytesTransferred ) {
 		}
 
 		auto packet = *reinterpret_cast<Packet*>( recvBuffer_.data( ) + readOffset );
-		processPacket( packet );
+		(*packetProcessor_)( packet, *this );
 		readOffset += packetSize;
 		recvBytesRemain_ -= packetSize;
 	}
@@ -90,20 +183,5 @@ void Session::interpretData( DWORD bytesTransferred ) {
 	}
 }
 
-void Session::setNetSystem( SNetExSystem* netSystem ) {
-	netSystem_ = netSystem;
-}
-
-void Session::processPacket( const Packet& packet ) {
-	switch ( packet.type ) {
-	// case PacketType::CS_Login: {
-		
-	// 	break;
-	// }
-
-	case PacketType::CSWorld:
-		netSystem_->getNetEx( packet.scWorld.netId )->processPacket( packet );
-		break;
-	}
-}
+ccQueue<Packet> Session::sBroadcastQueue_;
 // ==================================================================================

@@ -41,6 +41,7 @@ include(win32_configuration)
 # === woon2exception ===
 add_library(woon2exception
     src/Woon2Exception.cpp include/Woon2Exception.hpp
+    include/stdafx.hpp
 )
 
 add_library(common::woon2exception ALIAS woon2exception)
@@ -55,6 +56,7 @@ target_include_directories(woon2exception
 # === win32 ===
 add_library(win32
     src/Window.cpp include/Window.hpp include/Window.inl
+    include/stdafx.hpp
 )
 
 add_library(common::win32 ALIAS win32)
@@ -76,6 +78,7 @@ target_link_libraries(win32
 add_library(mu
     INTERFACE
         include/mathUtil.hpp
+        include/stdafx.hpp
 )
 
 add_library(common::mu ALIAS mu)
@@ -93,6 +96,7 @@ add_library(coro
 
     include/generator.hpp
     include/resumable.hpp
+    include/stdafx.hpp
 )
 
 add_library(common::coro ALIAS coro)
@@ -108,6 +112,7 @@ target_include_directories(coro
 add_library(TMP
     INTERFACE
         include/TMP.hpp
+        include/stdafx.hpp
 )
 
 add_library(common::TMP ALIAS TMP)
@@ -127,6 +132,7 @@ add_library(input
     include/mouseWin32Adaptor.hpp
     
     include/config.hpp
+    include/stdafx.hpp
 )
 
 add_library(common::input ALIAS input)
@@ -147,6 +153,7 @@ target_link_libraries(input
 # === memory ===
 add_library(mem
     src/memUtil.cpp include/memUtil.hpp
+    include/stdafx.hpp
 )
 
 add_library(common::mem ALIAS mem)
@@ -169,6 +176,7 @@ add_library(ecsClient
     include/enumUtil.hpp
     include/TMP.hpp
     include/concurrentqueue.h
+    include/stdafx.hpp
 )
 
 add_library(common::ecsClient ALIAS ecsClient)
@@ -202,6 +210,8 @@ add_library(ecsServer
     include/enumUtil.hpp
     include/TMP.hpp
     include/concurrentqueue.h
+    include/stdafx.hpp
+    include/game/resStorage.hpp
 )
 
 add_library(common::ecsServer ALIAS ecsServer)
@@ -229,11 +239,11 @@ target_include_directories(ecsServer
 # === net ===
 add_library(netClient
     src/net/netLow.cpp include/net/netLow.hpp
-    src/IDPool.cpp include/IDPool.hpp
 
     include/net/protocol.hpp
     include/net/netInclude.hpp
     include/net/netEx.hpp
+    include/stdafx.hpp
 )
 
 add_library(common::netClient ALIAS netClient)
@@ -256,11 +266,11 @@ target_include_directories(netClient
 
 add_library(netServer
     src/net/netLow.cpp include/net/netLow.hpp
-    src/IDPool.cpp include/IDPool.hpp
 
     include/net/protocol.hpp
     include/net/netInclude.hpp
     include/net/netEx.hpp
+    include/stdafx.hpp
 )
 
 add_library(common::netServer ALIAS netServer)
@@ -300,6 +310,7 @@ add_library(gfx
     include/enumUtil.hpp
     include/d3d12engine/descriptorRangeSpec.hpp
     include/TMP.hpp
+    include/stdafx.hpp
 )
 
 add_library(common::gfx ALIAS gfx)

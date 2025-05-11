@@ -1,32 +1,21 @@
 #ifndef __netEx_HPP
 #define __netEx_HPP
 
+#include "stdafx.hpp"
+
 #include "ecs.hpp"
-#include "IDPool.hpp"
 
 #include "net/protocol.hpp"
 
-#include <set>
-#include <cstdint>
-#include <memory>
+enum class NetExCategory {
+    Player = 0x01,
+    AI = 0x02
+};
 
 class NetExProcessorBase {
 public:
-    NetExProcessorBase(ecs::Entity::ID entityID)
-        : entityID_(entityID), netId_(-1u) {
-        if (auto allocatedId = IDPool::allocID(); !allocatedId) {
-            std::cerr << "Failed to allocate netId\n";
-        }
-        else {
-            netId_ = allocatedId.value();
-        }
-    }
-
-    virtual ~NetExProcessorBase() {
-        if (netId_ != -1u) {
-            IDPool::deallocID(netId_);
-        }
-    }
+    NetExProcessorBase(ecs::Entity::ID entityID, u32t netId)
+        : entityID_(entityID), netId_(-netId) {}
 
     virtual void generatePackets(class Session& session) = 0;
     virtual void processPacket(const Packet& packet) = 0;

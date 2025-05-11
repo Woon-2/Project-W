@@ -46,7 +46,6 @@ target_sources(client
         src/stage.cpp include/stage.hpp
         src/Timer.cpp include/Timer.hpp
         src/renderer.cpp include/renderer.hpp
-        src/cNetEx.cpp include/cNetEx.hpp
         src/objectInitializers.cpp include/objectInitializers.hpp
         src/session.cpp include/session.hpp
 

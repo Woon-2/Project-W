@@ -1,17 +1,7 @@
 #ifndef __TMP_HPP
 #define __TMP_HPP
 
-#include <type_traits>
-#include <concepts>
-#include <ranges>
-#include <utility>
-#include <iostream>
-#include <memory>
-#include <stdexcept>
-#include <typeinfo>
-#include <chrono>
-#include <coroutine>
-#include <utility>
+#include "stdafx.hpp"
 
 template <class T>
 consteval int indexOf() {
@@ -147,17 +137,6 @@ T&& any_cast_move(AnyMoveOnly&& a) {
         throw std::bad_cast();
     }
     return std::move(static_cast<AnyMoveOnly::Holder<T>*>(a.holder.get())->value);
-}
-
-
-using Clock = std::chrono::high_resolution_clock;
-using Milliseconds = std::chrono::duration<float, std::milli>;
-
-inline Milliseconds operator"" _ms(unsigned long long int ms) {
-    return Milliseconds(static_cast<float>(ms));
-}
-inline Milliseconds operator"" _ms(long double ms) {
-    return Milliseconds(static_cast<float>(ms));
 }
 
 class CoroRAII {

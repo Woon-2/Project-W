@@ -1,18 +1,30 @@
 #ifndef __INPUTSYSTEM_HPP
 #define __INPUTSYSTEM_HPP
 
+#include "stdafx.hpp"
+
 #include "ecs.hpp"
 
 #include "keyboardXX.hpp"
 #include "mouse.hpp"
 
 #include "renderer.hpp"
-#include "cNetEx.hpp"
 #include "Window.hpp"
 
 #include "d3d12engine/d3d12Engine.hpp"
+#include "session.hpp"
+#include "net/protocol.hpp"
 
-#include <map>
+class InputNetworkForwarder {
+public:
+    void buildPackets(Session& session);
+    void pushInputEvent(const InputEvent& ev) {
+        inputEvents_.push_back(ev);
+    }
+
+private:
+    pmr::deque<InputEvent> inputEvents_;
+};
 
 struct ControllerAdapters {
     RenderModeController renderModeController;
@@ -72,15 +84,15 @@ public:
     ) override;
 
 private:
-    void moveForward(float deltaTime);
-    void moveBackward(float deltaTime);
-    void moveLeft(float deltaTime);
-    void moveRight(float deltaTime);
-    void moveUp(float deltaTime);
-    void moveDown(float deltaTime);
+    void moveForward(float deltaTimeSec);
+    void moveBackward(float deltaTimeSec);
+    void moveLeft(float deltaTimeSec);
+    void moveRight(float deltaTimeSec);
+    void moveUp(float deltaTimeSec);
+    void moveDown(float deltaTimeSec);
     void yaw(float yawValue, const Win32::WndClient& client);
 
-    void MU_CALLCONV addForce(mu::Vec3 force);
+    void MU_CALLCONV addMomentum(mu::Vec3 momentum);
 
     ecs::Entity::ID entityId_;
     float forceStep_;
@@ -106,7 +118,7 @@ public:
         initKeyMap();
     }
 
-	void update(float deltaTime, const Win32::WndClient& client, ControllerAdapters& controllerAdapters) ;
+	void update(MilliSeconds deltaTime, const Win32::WndClient& client, ControllerAdapters& controllerAdapters) ;
 
 private:
     void initKeyMap();

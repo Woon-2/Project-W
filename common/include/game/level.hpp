@@ -1,6 +1,8 @@
 #ifndef __LEVEL_HPP
 #define __LEVEL_HPP
 
+#include "stdafx.hpp"
+
 #include "ecs.hpp"
 
 #include "coord.hpp"
@@ -28,13 +30,40 @@ public:
     ENABLE_COMPONENT(Coord);
 
     Coord(const ecs::Entity& entity) NOEXCEPT
-        : ecs::Component(entity) {}
+        : ecs::Component(entity), coordSys_(), compressedDeltaPos_(), compressedDeltaRot_()
+        {
+        resetDeltaPos();
+        resetDeltaRot();
+    }
 
     gfx::coord::System& get() NOEXCEPT { return coordSys_; }
     const gfx::coord::System& get() const NOEXCEPT { return coordSys_; }
 
+    // be careful with overflow
+    void MU_CALLCONV accTranslation(mu::Vec3 deltaPos);
+    // be careful with overflow
+    void MU_CALLCONV accRotation(mu::NQuat deltaRot);
+
+    u64t compressedDeltaPos() const NOEXCEPT {
+        return compressedDeltaPos_.load();
+    }
+
+    u64t compressedDeltaRot() const NOEXCEPT {
+        return compressedDeltaRot_.load();
+    }
+
+    void resetDeltaPos();
+    void resetDeltaRot();
+
+    static mu::Vec3 MU_CALLCONV decodeDeltaPos(u64t compressedDeltaPos);
+    static mu::NQuat MU_CALLCONV decodeDeltaRot(u64t compressedDeltaRot);
+
 private:
-gfx::coord::System coordSys_;
+    gfx::coord::System coordSys_;
+    // 2-3: x, 4-5: y, 6-7: z, precision: 0.0003m
+    au64t compressedDeltaPos_;
+    // 0-1: vx, 2-3: vy, 4-5: vz, 6-7: w, precision: 0.0001rad
+    au64t compressedDeltaRot_;
 };
 
 class CoordRoot : public ecs::System<Coord> {

@@ -2,11 +2,142 @@
 
 #include "assetMap.hpp"
 #include "resourcePath.hpp"
+#include "objectInitializers.hpp"
 
-#include <ranges>
-#include <algorithm>
+pmr::unordered_map<ecs::Entity::ID, u32t> gEIdToNetId;
+pmr::unordered_map<u32t, ecs::Entity::ID> gNetIdToEId;
+
+Stage* gpStage = nullptr;
+
+// InputNetworkForwarder 만들기: pushInputEvent (PlayerController가 호출)
+// InputNetworkForwarder가 Session&에 대고 패킷을 넣어줌 (buildPackets)
+
+void processSCEnter(SCEnter& scEnter, Session& session, Stage& stage);
+void processSCMove(SCMove& scMove, Session& session, Stage& stage);
+void processSCLeave(SCLeave& scLeave, Session& session, Stage& stage);
+void processSCAssign(SCAssign& scAssign, Session& session, Stage& stage);
+
+void processPacket(Packet& packet, Session& session) {
+    switch (packet.type) {
+    case PacketType::SCEnter:
+        processSCEnter(packet.scEnter, session, *gpStage);
+        break;
+
+    case PacketType::SCMove:
+        processSCMove(packet.scMove, session, *gpStage);
+        break;
+
+    case PacketType::SCLeave:
+        break;
+
+    case PacketType::SCAssign:
+        processSCAssign(packet.scAssign, session, *gpStage);
+        break;
+
+    default:
+        break;
+    }
+}
+
+void processSCEnter(SCEnter& scEnter, Session& session, Stage& stage) {
+    const auto translation = mu::Vec3(
+        scEnter.xform.translation[0],
+        scEnter.xform.translation[1],
+        scEnter.xform.translation[2]
+    );
+
+    const auto rotation = mu::NQuat(
+        scEnter.xform.rotation[0],
+        scEnter.xform.rotation[1],
+        scEnter.xform.rotation[2],
+        scEnter.xform.rotation[3],
+        mu::NQuat::NoNormalize_t{}
+    );
+
+    switch (scEnter.objType) {
+    case ObjectType::Character: {
+        auto entt = createCharacter( 
+            translation,
+            rotation,
+            stage.resStorage(),
+            Stage::slotKeyModel,
+            Stage::slotKeyBVHPath,
+            Stage::slotKeyAnimClip
+        );
+
+        entt.createComponent<RigidBody>();
+        auto& rb = entt.as<RigidBody>();
+        rb.setInvMass( 50.f / 1.f );
+        rb.setKFriction( 0.5f );
+        rb.disableGravity( );
+        
+        gNetIdToEId[scEnter.netId] = entt.id().value();
+        gEIdToNetId[entt.id().value()] = scEnter.netId;
+
+        stage.addEntity( std::move(entt) );
+        break;
+    }
+
+    default:
+        break;
+    }
+}
+
+void processSCMove(SCMove& scMove, Session& session, Stage& stage) {
+
+}
+
+void processSCAssign(SCAssign& scAssign, Session& session, Stage& stage) {
+    for (auto& entt : stage.entities()) {
+        if (entt.valid()) {
+            if (gEIdToNetId.at(entt.id().value()) == scAssign.netId) {
+                session.setEntityId(entt.id().value());
+                stage.setPlayer(&entt);
+
+                entt.createComponent<PlayerController>(std::make_unique<StandAloneInputHandler>(entt.id().value()));
+
+                entt.createComponent<gfx::d3d12engine::Camera>(gfx::d3d12::Camera::Config());
+                auto& camera = entt.as<gfx::d3d12engine::Camera>();
+
+                const auto cameraOffset = mu::Vec3(0.f, 1.8f, -1.6f);
+                const auto cameraTimeLag = 0.4f;
+
+                camera.get().coordMovement() << mu::translate(cameraOffset);
+                camera.get().coordRotation().setLocalXform(
+                    mu::transpose(mu::lookAt(mu::Vec3(), -cameraOffset, mu::Vec3(0.f, 1.f, 0.f)))
+                );
+                camera.get().coordMovement().setParent(&stage.pSystems()->coordRoot.get());
+                camera.setOffset(cameraOffset);
+                camera.setTimeLag(cameraTimeLag);
+                camera.attach(entt.as<gfx::d3d12engine::Model>());
+
+                stage.pSystems()->inputSystem.addEntity(entt);
+                stage.initScene();
+                break;
+            }
+        }
+    }
+}
+
+void Stage::addEntity(ecs::Entity&& entt) {
+    if (entt.valid()) {
+        if (entt.get<AnimController>()) {
+            pSystems_->animSystem.addEntity(entt);
+        }
+
+        pSystems_->coordRoot.addEntity(entt);
+        pSystems_->physicsSystem.addEntity(entt);
+        pSystems_->collisionSystem.addEntity(entt);
+        scene_.addEntity(entt);
+
+        entities_.emplace_back(std::move(entt));
+    }
+}
 
 void Stage::init() {
+    pSession_->setPacketProcessor(processPacket);
+    gpStage = this;
+
     prepareResStorage();
     loadAssets();
 
@@ -30,90 +161,53 @@ void Stage::render() {
 
 void Stage::processPackets(double deltaTime) {
     pSession_->recvPackets();
-
-    bool alreadyInitialized = pSystems_->netSystem.hasInitialized();
-
-    pSystems_->netSystem.preUpdate();
-
-    if (!pSystems_->netSystem.hasInitialized()) {
-        return;
-    }
-
-    auto v = pSystems_->netSystem.retreiveCreatedEntities();
-    auto playerIdx = -1u;
-    const auto oldEntitySize = entities_.size();
-
-    for (auto& entt : v) {
-        if (entt.as<NetEx>().hasCategory(NetExCategory::Player)) {
-            // as a vector is a contiguous range,
-            // address gap between two element represents the gap of the indices.
-            playerIdx = static_cast<std::uint32_t>(&entt - v.data());
-
-            const auto cameraOffset = mu::Vec3(0.f, 1.8f, -1.6f);
-            const auto cameraTimeLag = 0.4f;
-
-            entt.createComponent<PlayerController>(std::make_unique<StandAloneInputHandler>(entt.id().value()));
-            entt.createComponent<RigidBody>();
-
-            entt.createComponent<gfx::d3d12engine::Camera>(gfx::d3d12::Camera::Config());
-            auto& camera = entt.as<gfx::d3d12engine::Camera>();
-            camera.get().coordMovement() << mu::translate(cameraOffset);
-            camera.get().coordRotation().setLocalXform(
-                mu::transpose(mu::lookAt(mu::Vec3(), -cameraOffset, mu::Vec3(0.f, 1.f, 0.f)))
-            );
-            camera.get().coordMovement().setParent(&pSystems_->coordRoot.get());
-            camera.setOffset(cameraOffset);
-            camera.setTimeLag(cameraTimeLag);
-            camera.attach(entt.as<gfx::d3d12engine::Model>());
-
-            pSystems_->inputSystem.addEntity(entt);
-            pSystems_->physicsSystem.addEntity(entt);
-        }
-
-        if (entt.get<AnimController>()) {
-            pSystems_->animSystem.addEntity(entt);
-        }
-
-        pSystems_->coordRoot.addEntity(entt);
-        pSystems_->collisionSystem.addEntity(entt);
-        scene_.addEntity(entt);
-    }
-    
-    std::ranges::move(v, std::back_inserter(entities_));
-
-    if (!alreadyInitialized && pSystems_->netSystem.hasInitialized()) {
-        pPlayer_ = &entities_[oldEntitySize + playerIdx];
-        initScene();
-    }
 }
 
 void Stage::updateNetwork(double deltaTime) {
-    if (pPlayer_) {
-        pPlayer_->as<NetEx>().generatePackets(*pSession_);
-    }
+    pControllerAdapters_->inputNetworkForwarder.buildPackets(*pSession_);
     pSession_->flushPackets();
 }
 
 void Stage::processInput(double deltaTime) {
-    pSystems_->inputSystem.update( static_cast<float>(deltaTime),
+    pSystems_->inputSystem.update( MilliSeconds( static_cast<float>(deltaTime) * 1000.f ),
         pCore_->window().client(), *pControllerAdapters_
     );
 }
 
 void Stage::simulate(double deltaTime) {
-    pSystems_->physicsSystem.update(static_cast<float>(deltaTime));
+    pSystems_->physicsSystem.update( MilliSeconds( static_cast<float>(deltaTime) * 1000.f ) );
+
+    for (auto& entity : entities_) {
+        if (!entity.valid()) {
+            continue;
+        }
+
+        const auto eid = entity.id().value();
+
+        if (auto pCoord = gameEngine::Coord::at(eid)) {
+            const auto cdp = pCoord->compressedDeltaPos();
+            const auto cdr = pCoord->compressedDeltaRot();
+
+            const auto dp = pCoord->decodeDeltaPos(cdp);
+            const auto dr = pCoord->decodeDeltaRot(cdr);
+
+            pCoord->get() << mu::translate(dp);
+            if (auto pModel = gfx::d3d12engine::Model::at(eid)) {
+                pModel->get().root()->coord() << mu::Mat4x4(dr);
+            }
+        }
+    }
+
+    pSystems_->coordRoot.update( );
     
     if (pPlayer_) {
-        pPlayer_->as<gameEngine::Coord>().get()
-            << mu::translate( pPlayer_->as<RigidBody>().deltaPosition() );
         pPlayer_->as<AnimController>().print();
     }
 
-    pSystems_->coordRoot.update();
     auto cmdList = pCore_->fetchCmdList();
     cmdList.reset();
     pSystems_->animSystem.update( pCore_->cmdQueue(), cmdList,
-        Milliseconds(static_cast<float>(deltaTime * 1000.f))
+        MilliSeconds(static_cast<float>(deltaTime) * 1000.f)
     );
     cmdList.close();
     pSystems_->collisionSystem.update();
@@ -168,8 +262,6 @@ void Stage::prepareResStorage() {
     staticResStorage_.addSlot(slotKeyBVHPath, gfx::d3d12::ResourceStorage::ResType::BVHPath);
     staticResStorage_.addSlot(slotKeySkeleton, gfx::d3d12::ResourceStorage::ResType::Skeleton);
     staticResStorage_.addSlot(slotKeyAnimClip, gfx::d3d12::ResourceStorage::ResType::AnimClip);
-
-    pSystems_->netSystem.linkResStorage(&staticResStorage_);
 }
 
 void Stage::loadAssets() {

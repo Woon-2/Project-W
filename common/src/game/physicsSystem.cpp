@@ -5,60 +5,91 @@
 #include "TMP.hpp"
 
 RigidBody::RigidBody(const ecs::Entity& entity) NOEXCEPT
-	: Component(entity) {
-	mass_ = 1;
-	cornerLocation_ = 0;
-}
+	: Component(entity), velocity_(), momentum_(), compressedDeltaVelocity_(0),
+	invMass_(0.f), kFriction_(0.f), willSimulateGravity_(false) {}
 
-void MU_CALLCONV RigidBody::addForce(mu::Vec3 force) NOEXCEPT
-{
-	force_ += force;
-}
-
-void MU_CALLCONV RigidBody::updateRigid(float dt, float friction) NOEXCEPT
-{
-	updateForce(dt, friction);
-	updateAngular(dt);
-}
-
-void RigidBody::updateForce(float dt, float friction) NOEXCEPT
-{
-	oldPosition_ = position_;
-
-	// 선운동량과 위치
-	position_ += momentum_ / mass_ * dt;
-	momentum_ += force_ * dt;
-
-	// 속도 계산
-	velocity_ += (force_ / mass_) * dt;	// 가속도 적용 - acceleration = force / mass;
-
-	// 마찰력 적용 (속도에 비례하는 반대 방향의 힘)
-	mu::Vec3 frictionForce = -friction * velocity_;
-
-	// 마찰력을 선운동량과 속도에 적용
-	momentum_ += frictionForce * dt;
-	velocity_ += (frictionForce / mass_) * dt;	// 가속도 적용
-
-	// 속도가 아주 작을 경우 속도를 0으로 설정
-	static constexpr auto epsilon = 0.0002f;
-	if (velocity_.len() < epsilon) {
-		velocity_ = mu::Vec3(0.0f, 0.0f, 0.0f); // 속도를 0으로 설정
-		momentum_ = mu::Vec3(0.0f, 0.0f, 0.0f); // 운동량도 0으로 설정
+void MU_CALLCONV RigidBody::accMomentum(mu::Vec3 momentum) NOEXCEPT {
+	if (invMass_ <= minInvMass) {
+		return;
 	}
 
-	// 힘을 다 사용했으므로 초기화
-	force_ = mu::Vec3(0.0f, 0.0f, 0.0f);
+	// 2-3: x, 4-5: y, 6-7: z, precision: 0.0003m
+	static constexpr auto precision = 0.0003f;
+	const auto oldV = compressedDeltaVelocity_.load();
+
+	const auto deltaAccV = momentum * invMass_;
+
+	auto deltaVx = static_cast<i16t>(oldV >> 32);
+	deltaVx += static_cast<i16t>(deltaAccV.x() / precision);
+
+	auto deltaVy = static_cast<i16t>(oldV >> 16);
+	deltaVy += static_cast<i16t>(deltaAccV.y() / precision);
+
+	auto deltaVz = static_cast<i16t>(oldV);
+	deltaVz += static_cast<i16t>(deltaAccV.z() / precision);
+
+	const auto newV = static_cast<u64t>(deltaVx) << 32 |
+		static_cast<u64t>(deltaVy) << 16 |
+		static_cast<u64t>(deltaVz);
+
+	compressedDeltaVelocity_.store(newV);
 }
 
-void RigidBody::updateAngular(float dt) NOEXCEPT
-{
+void RigidBody::update(MilliSeconds deltaTime) {
+	const auto detlaTimeSec = std::chrono::duration_cast<Seconds>(deltaTime);
+
+	if (invMass_ <= minInvMass) {
+		return;
+	}
+
+	// 2-3: x, 4-5: y, 6-7: z, precision: 0.0003m
+	static constexpr auto precision = 0.0003f;
+
+	const auto dvCompressed = compressedDeltaVelocity_.load();
+	compressedDeltaVelocity_.store(0);
+
+	const auto dvx = static_cast<i16t>(dvCompressed >> 32) * precision;
+	const auto dvy = static_cast<i16t>(dvCompressed >> 16) * precision;
+	const auto dvz = static_cast<i16t>(dvCompressed) * precision;
+
+	auto deltaV = mu::Vec3(dvx, dvy, dvz);
+	velocity_ += deltaV * detlaTimeSec.count();
+
+	// apply friction
+	if (kFriction_ > 0) {
+		auto frictionDir = mu::NVec3(velocity_);
+		auto friction = mu::Vec3(frictionDir) * (kFriction_ * gravityConst * detlaTimeSec.count());
+
+		const auto newV = velocity_ - friction;
+		if (mu::dot(newV, velocity_) < 0) {
+			velocity_ = mu::Vec3(0, 0, 0);
+		}
+		else {
+			velocity_ = newV;
+		}
+	}
+
+	// apply gravity
+	if (willSimulateGravity_) {
+		velocity_ += mu::Vec3(0, -gravityConst, 0) * detlaTimeSec.count();
+	}
+
+	// apply air drag
+
+	momentum_ = velocity_ * mass();
 }
 
-void PhysicsSystem::update(float deltaTime)
+void PhysicsSystem::update(MilliSeconds deltaTime)
 {
 	for (auto& pRigidBody : components<RigidBody>()) {
 		if (pRigidBody) {
-			pRigidBody->updateRigid(deltaTime, 4.5f);
+			pRigidBody->update(deltaTime);
+
+			if (auto pCoord = gameEngine::Coord::at(pRigidBody->entityID().value())) {
+				const auto detlaTimeSec = std::chrono::duration_cast<Seconds>(deltaTime);
+				const auto dp = pRigidBody->velocity() * detlaTimeSec.count();
+				pCoord->accTranslation(dp);
+			}
 		}
 	}
 }

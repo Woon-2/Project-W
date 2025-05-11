@@ -1,6 +1,8 @@
 #ifndef __PHYSICSSYSTEM_HPP
 #define __PHYSICSSYSTEM_HPP
 
+#include "stdafx.hpp"
+
 #include "ecs.hpp"
 #include "coord.hpp"
 
@@ -8,53 +10,52 @@
 
 #include <DirectXCollision.h>
 
-#include <array>
-#include <vector>
-#include <numeric>
-#include <filesystem>
-#include <fstream>
+inline constexpr float gravityConst = 9.81f;
 
 class RigidBody : public ecs::Component {
 public:
+	static constexpr auto minInvMass = 1e-7f;
 	ENABLE_COMPONENT(RigidBody);
 
 	RigidBody(const ecs::Entity& entity) NOEXCEPT;
 
-	void MU_CALLCONV addForce(mu::Vec3 force) NOEXCEPT;
-	void MU_CALLCONV updateRigid(float dt, float friction) NOEXCEPT;
+	void setInvMass(float invMass) NOEXCEPT {
+		invMass_ = invMass;
+	}
+	void setKFriction(float kFriction) NOEXCEPT {
+		kFriction_ = kFriction;
+	}
+	void enableGravity() NOEXCEPT {
+		willSimulateGravity_ = true;
+	}
+	void disableGravity() NOEXCEPT {
+		willSimulateGravity_ = false;
+	}
+
+	void MU_CALLCONV accMomentum(mu::Vec3 momentum) NOEXCEPT;
+	void update(MilliSeconds deltaTime);
 	
-	void MU_CALLCONV setPosition(mu::Vec3 pos) NOEXCEPT { position_ = pos; }
-	const mu::Vec3 MU_CALLCONV position() const NOEXCEPT { return position_; }
-	const mu::Vec3 MU_CALLCONV deltaPosition() const NOEXCEPT { return position_ - oldPosition_; }
-	const mu::Vec3 MU_CALLCONV force() const NOEXCEPT { return force_; }
-	const mu::Vec3 MU_CALLCONV velocity() const NOEXCEPT { return velocity_; }
-	float mass() const NOEXCEPT { return mass_; }
+	mu::Vec3 MU_CALLCONV velocity() const NOEXCEPT { return velocity_; }
+	float mass() const NOEXCEPT { return (invMass_ <= minInvMass) ? std::numeric_limits<float>::max() : 1.f / invMass_; }
+	float invMass() const NOEXCEPT { return invMass_; }
+	float kFriction() const NOEXCEPT { return kFriction_; }
+	bool gravityEnabled() const NOEXCEPT { return willSimulateGravity_; }
 
 private:
-	void updateForce(float dt, float friction) NOEXCEPT;
-	void updateAngular(float dt) NOEXCEPT;
+	mu::Vec3 velocity_;
+	mu::Vec3 momentum_;
 
-	mu::Mat4x4 rotation_;
-	mu::Mat4x4 inertialMass_;
-
-	mu::Vec3 velocity_;	// v
-	mu::Vec3 angVelocity_;	// w
-	mu::Vec3 momentum_;	// p
-	mu::Vec3 angMomentum_; // L
-	mu::Vec3 torque_; // t
-	mu::Vec3 force_;
-	mu::Vec3 position_;	// curPosition
-	mu::Vec3 oldPosition_;
-	mu::Vec3 size_;
-	std::array<mu::Vec3, 8> corner_;
+	// 2-3: x, 4-5: y, 6-7: z, precision: 0.0003m
+	au64t compressedDeltaVelocity_;
 	
-	float mass_;
-	int cornerLocation_;
+	float invMass_;
+	float kFriction_;
+	bool willSimulateGravity_;
 };
 
 class PhysicsSystem : public ecs::System<RigidBody> {
 public:
-	void update(float deltaTime);
+	void update(MilliSeconds deltaTime);
 };
 
 struct BoundingCapsule {

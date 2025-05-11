@@ -3,6 +3,30 @@
 
 #include "keyboardXX.hpp"
 
+void InputNetworkForwarder::buildPackets(Session& session) {
+    CSInput curPacket{};
+    
+    for (const auto& ev : inputEvents_) {
+        curPacket.events[curPacket.eventCnt++] = ev;
+        if (curPacket.eventCnt >= CSInput::maxEventCnt) {
+            session.enqueuePacket(Packet{
+                .size = calcPacketSize<CSInput>(CSInput::maxEventCnt),
+                .type = PacketType::CSInput,
+                .csInput = curPacket
+            });
+            curPacket.eventCnt = 0;
+        }
+    }
+
+    if (curPacket.eventCnt > 0) {
+        session.enqueuePacket(Packet{
+            .size = calcPacketSize<CSInput>(curPacket.eventCnt),
+            .type = PacketType::CSInput,
+            .csInput = curPacket
+        });
+    }
+}
+
 void StandAloneInputHandler::handleEvent( CInputEvent event,
     float floatVal0, float floatVal1, const Win32::WndClient& client,
     ControllerAdapters& controllerAdapters
@@ -98,66 +122,68 @@ void NetworkInputHandler::handleEvent( CInputEvent event,
     }
 }
 
-void StandAloneInputHandler::moveForward(float deltaTime) {
-    addForce( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
+void StandAloneInputHandler::moveForward(float deltaTimeSec) {
+    addMomentum( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
         ecs::Component::atC(ecs::Components::Model, entityId_)
-    )->get().root()->coord().localXform().row(2u) ) ) * forceStep_ * deltaTime  );
+    )->get().root()->coord().localXform().row(2u) ) ) * forceStep_ * deltaTimeSec  );
 }
 
-void StandAloneInputHandler::moveBackward(float deltaTime) {
-    addForce( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
+void StandAloneInputHandler::moveBackward(float deltaTimeSec) {
+    addMomentum( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
         ecs::Component::atC(ecs::Components::Model, entityId_)
-    )->get().root()->coord().localXform().row(2u) ) ) * -forceStep_ * 0.45f * deltaTime  );
+    )->get().root()->coord().localXform().row(2u) ) ) * -forceStep_ * 0.45f * deltaTimeSec  );
 }
 
-void StandAloneInputHandler::moveLeft(float deltaTime) {
-    addForce( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
+void StandAloneInputHandler::moveLeft(float deltaTimeSec) {
+    addMomentum( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
         ecs::Component::atC(ecs::Components::Model, entityId_)
-    )->get().root()->coord().localXform().row(0u) ) ) * -forceStep_ * deltaTime  );
+    )->get().root()->coord().localXform().row(0u) ) ) * -forceStep_ * deltaTimeSec  );
 }
 
-void StandAloneInputHandler::moveRight(float deltaTime) {
-    addForce( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
+void StandAloneInputHandler::moveRight(float deltaTimeSec) {
+    addMomentum( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
         ecs::Component::atC(ecs::Components::Model, entityId_)
-    )->get().root()->coord().localXform().row(0u) ) ) * forceStep_ * deltaTime  );
+    )->get().root()->coord().localXform().row(0u) ) ) * forceStep_ * deltaTimeSec  );
 }
 
-void StandAloneInputHandler::moveUp(float deltaTime) {
-    addForce( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
+void StandAloneInputHandler::moveUp(float deltaTimeSec) {
+    addMomentum( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
         ecs::Component::atC(ecs::Components::Model, entityId_)
-    )->get().root()->coord().localXform().row(1u) ) ) * forceStep_ * 0.55f * deltaTime  );
+    )->get().root()->coord().localXform().row(1u) ) ) * forceStep_ * 0.55f * deltaTimeSec  );
 }
 
-void StandAloneInputHandler::moveDown(float deltaTime) {
-    addForce( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
+void StandAloneInputHandler::moveDown(float deltaTimeSec) {
+    addMomentum( mu::Vec3( mu::NVec3( static_cast<const gfx::d3d12engine::Model*>(
         ecs::Component::atC(ecs::Components::Model, entityId_)
-    )->get().root()->coord().localXform().row(1u) ) ) * -forceStep_ * 0.55f * deltaTime  );
+    )->get().root()->coord().localXform().row(1u) ) ) * -forceStep_ * 0.55f * deltaTimeSec  );
 }
 
 
-void MU_CALLCONV StandAloneInputHandler::addForce(mu::Vec3 force) {
+void MU_CALLCONV StandAloneInputHandler::addMomentum(mu::Vec3 momentum) {
     auto pRigidBody = RigidBody::at(entityId_);
     if (!pRigidBody) {
         throw ECS_EXCEPT("RigidBody component doesn't exist");
     }
 
-    pRigidBody->addForce(force);
+    pRigidBody->accMomentum(momentum);
 }
 
 void StandAloneInputHandler::yaw(float yawValue, const Win32::WndClient& client) {
-    auto pModel = gfx::d3d12engine::Model::at(entityId_);
-    if (!pModel) {
-        throw ECS_EXCEPT("Model component doesn't exist");
+    auto pCoord = gameEngine::Coord::at(entityId_);
+    if (!pCoord) {
+        throw ECS_EXCEPT("Coord component doesn't exist");
     }
 
     const auto mouseSensitivity = mu::pi * 2.f;
 
-    pModel->get().root()->coord() << mu::rotateY(
-        mu::Radian(yawValue * mouseSensitivity / static_cast<float>(client.width))
+    pCoord->accRotation(
+        mu::NQuat(mu::quatRotMat(mu::rotateY(
+            mu::Radian(yawValue * mouseSensitivity / static_cast<float>(client.width))
+        )))
     );
 }
 
-void InputSystem::update( float deltaTime, const Win32::WndClient& client,
+void InputSystem::update( MilliSeconds deltaTime, const Win32::WndClient& client,
     ControllerAdapters& controllerAdapters
 ) {
 	pKeyboard_->patchKeyState();
@@ -169,7 +195,8 @@ void InputSystem::update( float deltaTime, const Win32::WndClient& client,
 
         for (const auto& [key, event] : keyMap_) {
             if (pKeyboard_->pressed(key)) {
-                playerController->handleEvent(event, deltaTime, 0.f, client, controllerAdapters);
+                const auto deltaTimeSec = std::chrono::duration_cast<Seconds>(deltaTime).count();
+                playerController->handleEvent(event, deltaTimeSec, 0.f, client, controllerAdapters);
             }
         }
 

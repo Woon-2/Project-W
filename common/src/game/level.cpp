@@ -60,6 +60,101 @@ ObjectDisposition::ObjectDisposition(std::ifstream& is)
     }
 }
 
+void MU_CALLCONV Coord::accTranslation(mu::Vec3 deltaPos) {
+    // 2-3: x, 4-5: y, 6-7: z, precision: 0.0003m
+    static constexpr auto precision = 0.0003f;
+    const auto oldV = compressedDeltaPos_.load();
+
+    auto dx = static_cast<i16t>(oldV >> 32);
+    // convert cm to m then devide by precision
+    dx += static_cast<i16t>(deltaPos.x() / precision);
+
+    auto dy = static_cast<i16t>(oldV >> 16);
+    dy += static_cast<i16t>(deltaPos.y() / precision);
+
+    auto dz = static_cast<i16t>(oldV);
+    dz += static_cast<i16t>(deltaPos.z() / precision);
+
+    const auto newV = static_cast<u64t>(dx) << 32 | static_cast<u64t>(dy) << 16 | static_cast<u64t>(dz);
+
+    compressedDeltaPos_.store(newV);
+}
+
+void MU_CALLCONV Coord::accRotation(mu::NQuat deltaRot) {
+    // 0-1: vx, 2-3: vy, 4-5: vz, 6-7: w, precision: 0.0001rad
+    static constexpr auto precision = 0.0001f;
+    const auto oldV = compressedDeltaRot_.load();
+
+    const auto x = static_cast<float>(
+        static_cast<i16t>((oldV >> 48) & 0xFFFF)
+        * precision   
+    );
+
+    const auto y = static_cast<float>(
+        static_cast<i16t>((oldV >> 32) & 0xFFFF)
+        * precision
+    );
+
+    const auto z = static_cast<float>(
+        static_cast<i16t>((oldV >> 16) & 0xFFFF)
+        * precision
+    );
+
+    const auto w = static_cast<float>(
+        static_cast<i16t>(oldV & 0xFFFF)
+        * precision
+    );
+
+    auto quat = mu::NQuat(x, y, z, w, mu::NQuat::NoNormalize_t{});
+    quat *= deltaRot;
+
+    const auto newV = static_cast<u64t>(static_cast<i16t>(quat.x() / precision)) << 48
+        | static_cast<u64t>(static_cast<i16t>(quat.y() / precision)) << 32
+        | static_cast<u64t>(static_cast<i16t>(quat.z() / precision)) << 16
+        | static_cast<u64t>(static_cast<i16t>(quat.w() / precision));
+
+    compressedDeltaRot_.store(newV);
+}
+
+void Coord::resetDeltaPos() {
+    compressedDeltaPos_.store(0);
+}
+void Coord::resetDeltaRot() {
+    // 0-1: vx, 2-3: vy, 4-5: vz, 6-7: w, precision: 0.0001rad
+    static constexpr auto precision = 0.0001f;
+
+    const auto identity = mu::NQuat();
+
+    const auto newV = static_cast<u64t>(static_cast<i16t>(identity.x() / precision)) << 48
+        | static_cast<u64t>(static_cast<i16t>(identity.y() / precision)) << 32
+        | static_cast<u64t>(static_cast<i16t>(identity.z() / precision)) << 16
+        | static_cast<u64t>(static_cast<i16t>(identity.w() / precision));
+
+    compressedDeltaRot_.store(newV);
+}
+
+mu::Vec3 MU_CALLCONV Coord::decodeDeltaPos(u64t compressedDeltaPos) {
+    // 2-3: x, 4-5: y, 6-7: z, precision: 0.03cm
+    static constexpr auto precision = 0.03f;
+    auto dx = static_cast<i16t>((compressedDeltaPos >> 32) & 0xFFFF);
+    auto dy = static_cast<i16t>((compressedDeltaPos >> 16) & 0xFFFF);
+    auto dz = static_cast<i16t>(compressedDeltaPos & 0xFFFF);
+
+    return mu::Vec3(dx * precision, dy * precision, dz * precision);
+}
+
+mu::NQuat MU_CALLCONV Coord::decodeDeltaRot(u64t compressedDeltaRot) {
+    // 0-1: vx, 2-3: vy, 4-5: vz, 6-7: w, precision: 0.0001rad
+    static constexpr auto precision = 0.0001f;
+    auto x = static_cast<i16t>((compressedDeltaRot >> 48) & 0xFFFF);
+    auto y = static_cast<i16t>((compressedDeltaRot >> 32) & 0xFFFF);
+    auto z = static_cast<i16t>((compressedDeltaRot >> 16) & 0xFFFF);
+    auto w = static_cast<i16t>(compressedDeltaRot & 0xFFFF);
+
+    return mu::NQuat(x * precision, y * precision, z * precision, w * precision, mu::NQuat::NoNormalize_t{});
+}
+
+
 void CoordRoot::addEntity(ecs::Entity& entity) {
     ecs::System<Coord>::addEntity(entity);
     auto pCoord = entity.get<Coord>();

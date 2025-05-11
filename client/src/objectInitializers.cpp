@@ -13,7 +13,7 @@ inline constexpr auto characterMoveLb2 = 0.12f * 0.12f;
 inline constexpr auto characterWalkUb2 = 1.6f * 1.6f;
 inline constexpr auto characterRunUb2 = 10.f * 10.f;
 
-void characterStateIdleUpdate(fsm::FSM& fsm, AnimController& con, Milliseconds deltaTime) {
+void characterStateIdleUpdate(fsm::FSM& fsm, AnimController& con, MilliSeconds deltaTime) {
     const auto entityId = con.entityID().value();
     const auto rigidBody = RigidBody::atC(entityId);
     if (!rigidBody) {
@@ -49,7 +49,7 @@ fsm::State characterStateIdle(fsm::FSM& fsm, AnimController& con) {
             while (auto ev = events.pop()) {
                 if (ev->evType() == AnimController::evAnimUpdate) {
                     characterStateIdleUpdate(
-                        fsm, con, ev->get<Milliseconds>()
+                        fsm, con, ev->get<MilliSeconds>()
                     );
                 }
                 // do something
@@ -60,7 +60,7 @@ fsm::State characterStateIdle(fsm::FSM& fsm, AnimController& con) {
     }
 }
 
-void characterStateWalkUpdate(fsm::FSM& fsm, AnimController& con, Milliseconds deltaTime) {
+void characterStateWalkUpdate(fsm::FSM& fsm, AnimController& con, MilliSeconds deltaTime) {
     const auto entityId = con.entityID().value();
     const auto rigidBody = RigidBody::atC(entityId);
     if (!rigidBody) {
@@ -97,7 +97,7 @@ fsm::State characterStateWalk(fsm::FSM& fsm, AnimController& con) {
             while (auto ev = events.pop()) {
                 if (ev->evType() == AnimController::evAnimUpdate) {
                     characterStateWalkUpdate(
-                        fsm, con, ev->get<Milliseconds>()
+                        fsm, con, ev->get<MilliSeconds>()
                     );
                 }
                 // do something
@@ -108,7 +108,7 @@ fsm::State characterStateWalk(fsm::FSM& fsm, AnimController& con) {
     }
 }
 
-void characterStateRunUpdate(fsm::FSM& fsm, AnimController& con, Milliseconds deltaTime) {
+void characterStateRunUpdate(fsm::FSM& fsm, AnimController& con, MilliSeconds deltaTime) {
     const auto entityId = con.entityID().value();
     const auto rigidBody = RigidBody::atC(entityId);
     if (!rigidBody) {
@@ -145,7 +145,7 @@ fsm::State characterStateRun(fsm::FSM& fsm, AnimController& con) {
             while (auto ev = events.pop()) {
                 if (ev->evType() == AnimController::evAnimUpdate) {
                     characterStateRunUpdate(
-                        fsm, con, ev->get<Milliseconds>()
+                        fsm, con, ev->get<MilliSeconds>()
                     );
                 }
                 // do something
@@ -156,7 +156,7 @@ fsm::State characterStateRun(fsm::FSM& fsm, AnimController& con) {
     }
 }
 
-void characterStateSprintUpdate(fsm::FSM& fsm, AnimController& con, Milliseconds deltaTime) {
+void characterStateSprintUpdate(fsm::FSM& fsm, AnimController& con, MilliSeconds deltaTime) {
     const auto entityId = con.entityID().value();
     const auto rigidBody = RigidBody::atC(entityId);
     if (!rigidBody) {
@@ -193,7 +193,7 @@ fsm::State characterStateSprint(fsm::FSM& fsm, AnimController& con) {
             while (auto ev = events.pop()) {
                 if (ev->evType() == AnimController::evAnimUpdate) {
                     characterStateSprintUpdate(
-                        fsm, con, ev->get<Milliseconds>()
+                        fsm, con, ev->get<MilliSeconds>()
                     );
                 }
                 // do something
@@ -204,7 +204,7 @@ fsm::State characterStateSprint(fsm::FSM& fsm, AnimController& con) {
     }
 }
 
-void characterStateBackMoveUpdate(fsm::FSM& fsm, AnimController& con, Milliseconds deltaTime) {
+void characterStateBackMoveUpdate(fsm::FSM& fsm, AnimController& con, MilliSeconds deltaTime) {
     const auto entityId = con.entityID().value();
     const auto rigidBody = RigidBody::atC(entityId);
     if (!rigidBody) {
@@ -243,7 +243,7 @@ fsm::State characterStateBackMove(fsm::FSM& fsm, AnimController& con) {
             while (auto ev = events.pop()) {
                 if (ev->evType() == AnimController::evAnimUpdate) {
                     characterStateBackMoveUpdate(
-                        fsm, con, ev->get<Milliseconds>()
+                        fsm, con, ev->get<MilliSeconds>()
                     );
                 }
                 // do something

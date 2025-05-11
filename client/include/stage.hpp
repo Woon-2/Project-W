@@ -1,6 +1,8 @@
 #ifndef __Stage_HPP
 #define __Stage_HPP
 
+#include "stdafx.hpp"
+
 #include "net/netInclude.hpp"
 #include "net/protocol.hpp"
 
@@ -11,7 +13,6 @@
 
 #include "d3d12engine/d3d12Engine.hpp"
 
-#include <vector>
 
 class LightEntity : public ecs::Entity {
 public:
@@ -22,13 +23,13 @@ public:
 
 class Stage {
 public:
-    static constexpr auto slotKeyTexture = CNetExSystem::slotKeyTexture;
-    static constexpr auto slotKeyTexArray = CNetExSystem::slotKeyTexArray;
-    static constexpr auto slotKeyTexCube = CNetExSystem::slotKeyTexCube;
-    static constexpr auto slotKeyModel = CNetExSystem::slotKeyModel;
-    static constexpr auto slotKeyBVHPath = CNetExSystem::slotKeyBVHPath;
-    static constexpr auto slotKeySkeleton = CNetExSystem::slotKeySkeleton;
-    static constexpr auto slotKeyAnimClip = CNetExSystem::slotKeyAnimClip;
+    static constexpr auto slotKeyTexture = "Texture";
+    static constexpr auto slotKeyTexArray = "TextureArray";
+    static constexpr auto slotKeyTexCube = "TextureCube";
+    static constexpr auto slotKeyModel = "Model";
+    static constexpr auto slotKeyBVHPath = "BVHPath";
+    static constexpr auto slotKeySkeleton = "Skeleton";
+    static constexpr auto slotKeyAnimClip = "AnimClip";
 
     Stage( gfx::d3d12engine::Core& core, Systems& systems,
         ControllerAdapters& controllerAdapters, Renderer& renderer, Session& session
@@ -39,8 +40,27 @@ public:
         init();
     }
 
+    void addEntity(ecs::Entity&& entity);
     void update(double deltaTime);
     void render();
+
+    gfx::d3d12::ResourceStorage& resStorage() NOEXCEPT {
+        return staticResStorage_;
+    }
+
+    void setPlayer(ecs::Entity* player) NOEXCEPT {
+        pPlayer_ = player;
+    }
+
+    auto& entities() NOEXCEPT {
+        return entities_;
+    }
+
+    auto pSystems() NOEXCEPT {
+        return pSystems_;
+    }
+
+    void initScene();
 
 private:
     void init();
@@ -56,7 +76,6 @@ private:
     void simulate(double deltaTime);
 
     void initEntities();
-    void initScene();
 
     gfx::d3d12::ResourceStorage staticResStorage_;
 

@@ -1,8 +1,7 @@
 #ifndef __SH_EXCEPTION_HPP
 #define __SH_EXCEPTION_HPP
 
-#include <exception>
-#include <string>
+#include "stdafx.hpp"
 
 class ShException : public std::exception {
 public:
