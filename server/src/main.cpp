@@ -351,25 +351,37 @@ void processCSInput(CSInput& csInput, Session& session) {
 		switch ( ev.type ) {
 		case InputEventType::MoveForward:
 			if (auto pRigidBody = RigidBody::at( session.getEntityId() )) {
-				pRigidBody->accMomentum( mu::Vec3(0.f, 0.f, forceStep * ev.floatVal0) );
+				auto pModel = DummyModel::at( session.getEntityId() );
+				pRigidBody->accMomentum( forceStep * ev.floatVal0 * mu::Vec3(
+					pModel->coord().xform().row(2u)
+				) );
 			}
 			break;
 
 		case InputEventType::MoveBackward:
 			if (auto pRigidBody = RigidBody::at( session.getEntityId() )) {
-				pRigidBody->accMomentum( mu::Vec3(0.f, 0.f, -forceStep * ev.floatVal0) );
+				auto pModel = DummyModel::at( session.getEntityId() );
+				pRigidBody->accMomentum( -forceStep * ev.floatVal0 * mu::Vec3(
+					pModel->coord().xform().row(2u)
+				) );
 			}
 			break;
 
 		case InputEventType::MoveLeft:
 			if (auto pRigidBody = RigidBody::at( session.getEntityId() )) {
-				pRigidBody->accMomentum( mu::Vec3(-forceStep * ev.floatVal0, 0.f, 0.f) );
+				auto pModel = DummyModel::at( session.getEntityId() );
+				pRigidBody->accMomentum( -forceStep * ev.floatVal0 * mu::Vec3(
+					pModel->coord().xform().row(0u)
+				) );
 			}
 			break;
 
 		case InputEventType::MoveRight:
 			if (auto pRigidBody = RigidBody::at( session.getEntityId() )) {
-				pRigidBody->accMomentum( mu::Vec3(forceStep * ev.floatVal0, 0.f, 0.f) );
+				auto pModel = DummyModel::at( session.getEntityId() );
+				pRigidBody->accMomentum( forceStep * ev.floatVal0 * mu::Vec3(
+					pModel->coord().xform().row(0u)
+				) );
 			}
 			break;
 

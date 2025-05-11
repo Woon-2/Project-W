@@ -128,7 +128,7 @@ void Camera::update(float deltaTime) {
         camera_.coordMovement() << mu::translate(movement);
         const auto updatedPos = curPos + movement;
         const auto augmentedLook = mu::normalize(targetPos - updatedPos);
-        const auto cameraLook = mu::normalize(targetPos - curPos);
+        const auto cameraLook = camera_.repFwd();
 
         if (movement.len2() > 0.f) {
             auto up = mu::Vec3(0.f, 1.f, 0.f);
@@ -136,14 +136,17 @@ void Camera::update(float deltaTime) {
             static constexpr auto endurance = 0.000001f;
             if (std::abs(mu::dot(cameraLook, augmentedLook) - 1.0f) >= endurance) {
                 const auto rotAxis = mu::cross(cameraLook, augmentedLook);
-
                 const auto rotAngle = mu::acos(mu::dot(cameraLook, augmentedLook));
                 up *= mu::rotate(rotAngle, rotAxis);
             }
 
+            const auto newLook = mu::lerp( mu::Vec3(cameraLook), mu::Vec3(augmentedLook),
+                std::clamp(deltaTime / (timeLag_ * 0.25f), 0.f, 1.f)
+            );
+
             // view transform's rotation part is inverse matrix of the camera's rotation matrix
             camera_.coordRotation().setLocalXform(
-                mu::transpose( mu::lookAt(mu::Vec3(), mu::Vec3(augmentedLook), mu::Vec3(0.f, 1.f, 0.f)) )
+                mu::transpose( mu::lookAt(mu::Vec3(), newLook, mu::Vec3(0.f, 1.f, 0.f)) )
             );
         }
     }
