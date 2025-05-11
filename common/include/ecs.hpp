@@ -355,6 +355,30 @@ public:
         addEntity(entity);
     }
 
+    void eraseEntity( const ecs::Entity& entity ) {
+        if ( !entity.valid( ) ) {
+            throw ECS_EXCEPT( "Entity is invalid" );
+        }
+
+        auto erase = [&entity]( auto& components ) {
+            if ( auto component = entity.get<std::remove_pointer_t< std::ranges::range_value_t<decltype( components )> >>( ) ) {
+                std::erase_if( components, [&entity]( auto pComp ) {
+                    if ( auto eid = pComp->entityID( ) ) {
+                        return eid == entity.id( ).value( );
+                    }
+                    return false;
+                } );
+            }
+        };
+
+        std::apply(
+            [&erase]( auto& ... components ) {
+                ( erase( components ), ... );
+            },
+            componentsTuple_
+        );
+    }
+
 private:
     std::tuple< SysCompCont<ConcreteComponents*>... > componentsTuple_;
 };

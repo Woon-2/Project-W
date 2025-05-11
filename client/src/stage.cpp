@@ -29,6 +29,7 @@ void processPacket(Packet& packet, Session& session) {
         break;
 
     case PacketType::SCLeave:
+		processSCLeave( packet.scLeave, session, *gpStage );
         break;
 
     case PacketType::SCAssign:
@@ -129,6 +130,32 @@ void processSCMove(SCMove& scMove, Session& session, Stage& stage) {
                 .scMove = delayed
             }
         );
+    }
+}
+
+void processSCLeave( SCLeave& scLeave, Session& session, Stage& stage ) {
+    for ( auto i = 0u; i < scLeave.leaveCnt; ++i ) {
+		auto netId = scLeave.leavedIds[ i ];
+        if ( !gNetIdToEId.contains( netId ) ) {
+            continue;
+        }
+
+		auto eId = gNetIdToEId.at( netId );
+		auto entt = ecs::Entity( eId );
+        if ( !entt.valid( ) ) {
+            continue;
+        }
+        
+		gNetIdToEId.erase( netId );
+		gEIdToNetId.erase( eId );
+
+		stage.pScene( )->eraseEntity( entt );
+		stage.pSystems( )->animSystem.eraseEntity( entt );
+		stage.pSystems( )->coordRoot.eraseEntity( entt );
+		stage.pSystems( )->physicsSystem.eraseEntity( entt );
+		stage.pSystems( )->collisionSystem.eraseEntity( entt );
+		stage.pSystems( )->inputSystem.eraseEntity( entt );
+        entt.reset( );
     }
 }
 

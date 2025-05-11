@@ -8,7 +8,7 @@
 
 Session::Session(net::TcpSocket&& sock)
     : recvBuf_{}, sendQueue_{}, sock_(std::move(sock)), id_(0)
-    , recvBytesRemain_(0), recvOffset_(0), packetProcessor_(nullptr),
+    , recvBytesRemain_(0), packetProcessor_(nullptr),
     entityId_(-1u) {}
 
 Session::Session(Session&& rhs) noexcept
@@ -17,8 +17,7 @@ Session::Session(Session&& rhs) noexcept
     , sock_(std::move(rhs.sock_))
     , id_(std::exchange(rhs.id_, -1))
     , recvBytesRemain_(std::exchange(rhs.recvBytesRemain_, 0))
-    , recvOffset_(std::exchange(rhs.recvOffset_, 0)),
-    packetProcessor_(rhs.packetProcessor_),
+    , packetProcessor_(rhs.packetProcessor_),
     entityId_(rhs.entityId_) {}
 
 Session& Session::operator=(Session&& other) noexcept {
@@ -31,7 +30,6 @@ Session& Session::operator=(Session&& other) noexcept {
     sock_ = std::move(other.sock_);
     id_ = std::exchange(other.id_, -1);
     recvBytesRemain_ = std::exchange(other.recvBytesRemain_, 0);
-    recvOffset_ = std::exchange(other.recvOffset_, 0);
     packetProcessor_ = other.packetProcessor_;
     entityId_ = other.entityId_;
 
@@ -62,8 +60,8 @@ void Session::flushPackets() {
 
 void Session::recvPackets() {
     auto wsaBuf = WSABUF{
-        .len = static_cast<ULONG>(recvBufSize - recvOffset_),
-        .buf = recvBuf_.data() + recvOffset_
+        .len = static_cast<ULONG>(recvBufSize - recvBytesRemain_),
+        .buf = recvBuf_.data() + recvBytesRemain_
     };
 
     auto recvSize = sock_.WSARecvUc(std::views::single(wsaBuf));
@@ -72,24 +70,22 @@ void Session::recvPackets() {
 
     std::cout << "Received " << recvSize.value() << " bytes\n";
     auto readOffset = 0u;
+    recvBytesRemain_ += static_cast<std::uint32_t>( recvSize.value( ) );
+    
+    while ( recvBytesRemain_ >= sizeof( std::uint16_t ) ) {
+        auto packetSize = reinterpret_cast<Packet*>( recvBuf_.data( ) + readOffset )->size;
 
-    // recvOffset_ + recvSize.value() represents
-    // previously received bytes + currently received bytes
-    while (recvOffset_ + recvSize.value() >= sizeof(std::uint16_t)) {  // at least it should be able to receive packet size
-        const auto requiredSize = reinterpret_cast<const Packet*>(recvBuf_.data() + readOffset)->size;
-
-        if (recvOffset_ + recvSize.value() < requiredSize) {
-            // packet fragmentized, reassemble required.
-            recvBytesRemain_ = requiredSize - (recvOffset_ + recvSize.value());
-            std::memmove(recvBuf_.data() + recvOffset_, recvBuf_.data() + recvOffset_ + readOffset, recvSize.value());
-            recvOffset_ += recvSize.value();
-            return;
+        if ( recvBytesRemain_ < packetSize ) {
+            break;
         }
 
-        (*packetProcessor_)(*reinterpret_cast<Packet*>(recvBuf_.data() + readOffset), *this);
+        auto packet = *reinterpret_cast<Packet*>( recvBuf_.data( ) + readOffset );
+        ( *packetProcessor_ )( packet, *this );
+        readOffset += packetSize;
+        recvBytesRemain_ -= packetSize;
+    }
 
-        readOffset += requiredSize;
-        *recvSize -= (requiredSize - recvOffset_);
-        recvOffset_ = 0u;
+    if ( readOffset > 0 && recvBytesRemain_ > 0 ) {
+        std::memcpy( recvBuf_.data( ), recvBuf_.data( ) + readOffset, recvBytesRemain_ );
     }
 }
