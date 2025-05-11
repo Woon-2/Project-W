@@ -17,7 +17,7 @@ std::array<char, (sizeof(sockaddr) + 16u) * 2u> acceptBuffer_;
 
 ccMap<std::uint16_t, Session> gUsers;
 ccQueue<ecs::Entity::ID> gReservedEntities;
-std::atomic_int16_t gId;
+ccQueue<u16t> gIdPool;
 
 std::uniform_real_distribution<float> gDist( -1.f, 1.f );
 std::mt19937 gRng( std::random_device{}( ) );
@@ -31,6 +31,10 @@ int main( ) {
 	static constexpr auto frameRate = 33_ms;	// 30 FPS
 	static constexpr auto directionChangeRate = 2.f;
 	float directionChangeCounter = 0.f;
+
+	for ( auto i = 0u; i < 0xFFFF; ++i ) {
+		gIdPool.push( i );
+	}
 
 	ecs::init( ecs::InitDesc{ .threadCnt = 1u, .entityPoolSize = 0x160u } );
 
@@ -72,14 +76,12 @@ int main( ) {
 	if ( gIocpHandle == nullptr ) {
 		errorDisplay( "CreateIoCompletionPort", GetLastError( ) );
 	}
-	::CreateIoCompletionPort( reinterpret_cast<HANDLE>( listenSocket ), gIocpHandle, gId.load( ), 0 );
-	gId.fetch_add( 1 );
-
+	::CreateIoCompletionPort( reinterpret_cast<HANDLE>( listenSocket ), gIocpHandle, -1, 0 );
 	doAccept( listenSocket, &gAcceptOver );
 	//===============================================================================
 
 	// create worker threads ========================================================
-	auto threadCnt = std::thread::hardware_concurrency( );
+	auto threadCnt = std::thread::hardware_concurrency( ) / 2;
 	auto threads = std::vector<std::thread>( );
 	threads.reserve( threadCnt );
 	for ( auto i = 0u; i < threadCnt; ++i ) {
@@ -93,8 +95,10 @@ int main( ) {
 		auto elapsed = std::chrono::duration_cast<MilliSeconds>( tp - lastTp );
 
 		if ( elapsed < frameRate / 2.f ) {
-			std::this_thread::sleep_for( std::chrono::duration<float>( frameRate - elapsed ) );
-			elapsed = frameRate;
+			Sleep( static_cast<DWORD>( frameRate.count() / 2.f - elapsed.count() ) );
+			// std::cout << "sleep\n";
+			// std::this_thread::sleep_for( std::chrono::duration<float>( frameRate / 2.f - elapsed ) );
+			elapsed = frameRate / 2.f;
 		}
 
 		ecs::Entity::ID entityId{-1u};
@@ -168,10 +172,12 @@ int main( ) {
 		auto lUsers = pmr::vector<Session*>();
 		for (auto& [id, session] : gUsers) {
 			if (session.accessReady()) {
+				// std::cout << "Send!\n";
 				session.doSend();
 				lUsers.push_back(&session);
 			}
 		}
+		//std::cout << lUsers.size( ) << " users\n";
 		Session::doBroadcast(std::move(lUsers));
 
 		lastTp = tp;
@@ -209,9 +215,63 @@ void worker( ) {
 		auto ret = GetQueuedCompletionStatus( gIocpHandle, &bytesTransferred, &completionKey, &pOver, INFINITE );
 		auto overEx = reinterpret_cast<OverlappedEx*>( pOver );
 
+		if ( !ret ) {
+			auto err = GetLastError( );
+			if ( err != WAIT_TIMEOUT ) {
+				//errorDisplay( "GetQueuedCompletionStatus", err );
+
+				auto eId = gUsers[ static_cast<u16t>( completionKey ) ].getEntityId( );
+				auto packet = Packet{
+					.size = calcPacketSize<SCLeave>( ),
+					.type = PacketType::SCLeave,
+					.scLeave = SCLeave{
+						.leaveCnt = 1u,
+						.leavedIds = { eId }
+					}
+				};
+
+				Session::enqueueBroadcastPacket( packet );
+
+				if ( gUsers[ static_cast<u16t>( completionKey ) ].close( ) ) {
+					gIdPool.push( static_cast<u16t>( completionKey ) );
+				}
+			}
+			continue;
+		}
+
+		if ( ( overEx->type_ == IO_OP::IO_RECV || overEx->type_ == IO_OP::IO_SEND )
+			&& bytesTransferred == 0 ) {
+			auto eId = gUsers[ static_cast<u16t>( completionKey ) ].getEntityId( );
+			auto packet = Packet{
+				.size = calcPacketSize<SCLeave>( ),
+				.type = PacketType::SCLeave,
+				.scLeave = SCLeave{
+					.leaveCnt = 1u,
+					.leavedIds = { eId }
+				}
+			};
+
+			Session::enqueueBroadcastPacket( packet );
+
+			if ( gUsers[ static_cast<u16t>( completionKey ) ].close( ) ) {
+				gIdPool.push( static_cast<u16t>( completionKey ) );
+			}
+
+			if ( overEx->type_ == IO_OP::IO_SEND ) {
+				delete overEx;
+			}
+			continue;
+		}
+
 		switch ( overEx->type_ ) {
 		case IO_OP::IO_ACCEPT: {
-			auto id = gId++;
+			u16t id{ };
+			if ( !gIdPool.try_pop( id ) ) {
+				std::cerr << "Failed to pop id from pool\n";
+				closesocket( overEx->acceptSocket_ );
+				doAccept( listenSocket, &gAcceptOver );
+				break;
+			}
 
 			::CreateIoCompletionPort( reinterpret_cast<HANDLE>( overEx->acceptSocket_ ), gIocpHandle, id, 0 );
 
@@ -326,6 +386,7 @@ void worker( ) {
 		}
 
 		case IO_OP::IO_SEND:
+			std::cout << "Sent " << bytesTransferred << " bytes\n";
 			delete overEx;
 			break;
 		}
@@ -337,6 +398,26 @@ void processPacket(Packet& packet, Session& session) {
 	case PacketType::CSInput:
 		processCSInput( packet.csInput, session );
 		break;
+
+	case PacketType::CSLeave: {
+		auto eId = session.getEntityId( );
+		auto packet = Packet{
+			.size = calcPacketSize<SCLeave>( ),
+			.type = PacketType::SCLeave,
+			.scLeave = SCLeave{
+				.leaveCnt = 1u,
+				.leavedIds = { eId }
+			}
+		};
+
+		Session::enqueueBroadcastPacket( packet );
+
+		if ( session.close( ) ) {
+			gIdPool.push( session.getEntityId( ) );
+		}
+		break;
+	}
+
 	default:
 		break;
 	}

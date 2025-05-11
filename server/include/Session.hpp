@@ -76,6 +76,10 @@ public:
         return packetProcessor_;
     }
 
+    u16t id( ) const {
+        return id_;
+    }
+
 private:
     static ccQueue<Packet> sBroadcastQueue_;
 

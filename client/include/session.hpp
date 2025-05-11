@@ -21,7 +21,7 @@ public:
 
     Session()
         : recvBuf_{}, sendQueue_{}, sock_(INVALID_SOCKET), id_(-1)
-        , recvBytesRemain_(0), recvOffset_(0), packetProcessor_(nullptr),
+        , recvBytesRemain_(0), packetProcessor_(nullptr),
         entityId_(-1u) {}
 
     ~Session() = default;
@@ -29,7 +29,7 @@ public:
     Session(net::TcpSocket&& sock);
     Session(net::TcpSocket&& sock, std::uint32_t id)
         : recvBuf_{}, sendQueue_{}, sock_(std::move(sock)), id_(id)
-        , recvBytesRemain_(0), recvOffset_(0), packetProcessor_(nullptr),
+        , recvBytesRemain_(0), packetProcessor_(nullptr),
         entityId_(-1u) {}
 
     Session(const Session&) = delete;
@@ -84,7 +84,6 @@ private:
     net::TcpSocket sock_;
     std::uint32_t id_;
     std::uint32_t recvBytesRemain_;
-    std::uint32_t recvOffset_;
     PacketProcessor packetProcessor_;
     ecs::Entity::ID entityId_;
 };

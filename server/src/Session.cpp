@@ -1,10 +1,11 @@
 #include "Session.hpp"
 #include "game/level.hpp"
 
+extern ccQueue <u16t> gIdPool;
+
 void errorDisplay( std::string_view where, int error ) {
 	std::cerr << where << " failed : "
 		<< std::system_category( ).message( error ) << '\n';
-	exit( -1 );
 }
 
 // Session ==========================================================================
@@ -114,8 +115,25 @@ void Session::doRecv( ) {
 	auto ret = ::WSARecv( clientSocket_, &wsaBuf, 1, 
 		nullptr, &recvFlag, &recvOver_.over_, nullptr );
 	if ( ret == SOCKET_ERROR ) {
-		if ( WSAGetLastError( ) != WSA_IO_PENDING ) {
+		auto err = WSAGetLastError( );
+		if ( err != WSA_IO_PENDING && err != WSAECONNRESET ) {
 			errorDisplay( "WSARecv", WSAGetLastError( ) );
+
+			auto eId = getEntityId( );
+			auto packet = Packet{
+				.size = calcPacketSize<SCLeave>( ),
+				.type = PacketType::SCLeave,
+				.scLeave = SCLeave{
+					.leaveCnt = 1u,
+					.leavedIds = { eId }
+				}
+			};
+
+			Session::enqueueBroadcastPacket( packet );
+
+			if ( close( ) ) {
+				gIdPool.push( eId );
+			}
 		}
 	}
 }
@@ -132,8 +150,25 @@ void Session::doSend( ) {
 	auto ret = ::WSASend( clientSocket_, overEx->wsaBufs_.data( ), 
 		static_cast<DWORD>( overEx->wsaBufs_.size( ) ), nullptr, 0, &overEx->over_, nullptr );
 	if ( ret == SOCKET_ERROR ) {
-		if ( WSAGetLastError( ) != WSA_IO_PENDING ) {
+		auto err = WSAGetLastError( );
+		if ( err != WSA_IO_PENDING && err != WSAECONNRESET ) {
 			errorDisplay( "WSASend", WSAGetLastError( ) );
+
+			auto eId = getEntityId( );
+			auto packet = Packet{
+				.size = calcPacketSize<SCLeave>( ),
+				.type = PacketType::SCLeave,
+				.scLeave = SCLeave{
+					.leaveCnt = 1u,
+					.leavedIds = { eId }
+				}
+			};
+
+			Session::enqueueBroadcastPacket( packet );
+
+			if ( close( ) ) {
+				gIdPool.push( eId );
+			}
 		}
 	}
 }
@@ -157,8 +192,27 @@ void Session::doBroadcast( pmr::vector<Session*> sessions ) {
 
 			auto ret = ::WSASend( pSession->clientSocket_, overEx->wsaBufs_.data( ), 
 				static_cast<DWORD>( overEx->wsaBufs_.size( ) ), nullptr, 0, &overEx->over_, nullptr );
-			if ( ret == SOCKET_ERROR && WSAGetLastError( ) != WSA_IO_PENDING ) {
-				errorDisplay( "WSASend", WSAGetLastError( ) );
+			if ( ret == SOCKET_ERROR ){
+				auto err = WSAGetLastError( );
+				if( err != WSA_IO_PENDING && err != WSAECONNRESET ) {
+					errorDisplay( "WSASend", WSAGetLastError( ) );
+
+					auto eId = pSession->getEntityId( );
+					auto packet = Packet{
+						.size = calcPacketSize<SCLeave>( ),
+						.type = PacketType::SCLeave,
+						.scLeave = SCLeave{
+							.leaveCnt = 1u,
+							.leavedIds = { eId }
+						}
+					};
+
+					Session::enqueueBroadcastPacket( packet );
+
+					if ( pSession->close( ) ) {
+						gIdPool.push( eId );
+					}
+				}
 			}
 		}
 	}

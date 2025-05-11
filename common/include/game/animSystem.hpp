@@ -325,7 +325,7 @@ public:
     const auto& fsm() const { return fsm_; }
 
     void print() const {
-        system("cls");
+        // system("cls");
         for (const auto& [key, inst] : insts_) {
             std::cout << "playing animation \"" << inst.animClip()->name()
                 << "\", elapsed: " << inst.elapsed()
