@@ -13,8 +13,8 @@ void MU_CALLCONV RigidBody::accMomentum(mu::Vec3 momentum) NOEXCEPT {
 		return;
 	}
 
-	// 2-3: x, 4-5: y, 6-7: z, precision: 0.0003m
-	static constexpr auto precision = 0.0003f;
+	// 2-3: x, 4-5: y, 6-7: z, precision: 0.00003m
+	static constexpr auto precision = 0.00003f;
 	const auto oldV = compressedDeltaVelocity_.load();
 
 	const auto deltaAccV = momentum * invMass_;
@@ -43,8 +43,8 @@ void RigidBody::update(MilliSeconds deltaTime) {
 		return;
 	}
 
-	// 2-3: x, 4-5: y, 6-7: z, precision: 0.0003m
-	static constexpr auto precision = 0.0003f;
+	// 2-3: x, 4-5: y, 6-7: z, precision: 0.00003m
+	static constexpr auto precision = 0.00003f;
 
 	const auto dvCompressed = compressedDeltaVelocity_.load();
 	compressedDeltaVelocity_.store(0);

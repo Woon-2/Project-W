@@ -6,6 +6,7 @@
 
 pmr::unordered_map<ecs::Entity::ID, u32t> gEIdToNetId;
 pmr::unordered_map<u32t, ecs::Entity::ID> gNetIdToEId;
+pmr::unordered_map<ecs::Entity::ID, mu::Vec3> gDestPoses;
 
 Stage* gpStage = nullptr;
 
@@ -73,6 +74,7 @@ void processSCEnter(SCEnter& scEnter, Session& session, Stage& stage) {
         
         gNetIdToEId[scEnter.netId] = entt.id().value();
         gEIdToNetId[entt.id().value()] = scEnter.netId;
+        gDestPoses[entt.id().value()] = translation;
 
         stage.addEntity( std::move(entt) );
         break;
@@ -109,7 +111,13 @@ void processSCMove(SCMove& scMove, Session& session, Stage& stage) {
         const auto dp = gameEngine::Coord::decodeDeltaPos(move.compressedDeltaPos);
         const auto dr = gameEngine::Coord::decodeDeltaRot(move.compressedDeltaRot);
 
-        gameEngine::Coord::at(eid)->get() << mu::translate(dp);
+        const auto curPos = mu::Vec3(gameEngine::Coord::at(eid)->get().xform().row(3));
+        const auto destPos = gDestPoses.at(eid) + dp;
+
+        auto& rb = *RigidBody::at(eid);
+        rb.setVelocity((destPos - curPos) / 0.033f); // server tick time
+
+        gDestPoses.at(eid) = destPos;
         gfx::d3d12engine::Model::at(eid)->get().root()->coord() << mu::Mat4x4(dr);
     }
 
@@ -258,9 +266,13 @@ void Stage::simulate(double deltaTime) {
         if (auto pCoord = gameEngine::Coord::at(eid)) {
             const auto cdp = pCoord->compressedDeltaPos();
             const auto cdr = pCoord->compressedDeltaRot();
+            pCoord->resetDeltaPos();
+            pCoord->resetDeltaRot();
 
             const auto dp = pCoord->decodeDeltaPos(cdp);
             const auto dr = pCoord->decodeDeltaRot(cdr);
+
+            std::cout << "dp: " << dp.x() << ", " << dp.y() << ", " << dp.z() << "\n";
 
             pCoord->get() << mu::translate(dp);
             if (auto pModel = gfx::d3d12engine::Model::at(eid)) {

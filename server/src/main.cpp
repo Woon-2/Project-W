@@ -28,7 +28,7 @@ void processCSInput(CSInput& csInput, Session& session);
 int main( ) {
 	using Clock = std::chrono::high_resolution_clock;
 	using Seconds = std::chrono::duration<float>;
-	static constexpr auto frameRate = 16_ms;	// 60 FPS
+	static constexpr auto frameRate = 33_ms;	// 30 FPS
 	static constexpr auto directionChangeRate = 2.f;
 	float directionChangeCounter = 0.f;
 
@@ -119,7 +119,6 @@ int main( ) {
 				continue;
 			}
 			const auto eid = user.getEntityId();
-			std::cout << "eid: " << eid << "\n";
 
 			if (auto pCoord = gameEngine::Coord::at(eid)) {
 				const auto cdp = pCoord->compressedDeltaPos();
@@ -344,7 +343,7 @@ void processPacket(Packet& packet, Session& session) {
 }
 
 void processCSInput(CSInput& csInput, Session& session) {
-	static constexpr auto forceStep = 250.f;
+	static constexpr auto forceStep = 600.f;
 
 	for ( std::uint8_t i = 0u; i < csInput.eventCnt; ++i ) {
 		auto& ev = csInput.events[ i ];

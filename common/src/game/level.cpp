@@ -61,8 +61,8 @@ ObjectDisposition::ObjectDisposition(std::ifstream& is)
 }
 
 void MU_CALLCONV Coord::accTranslation(mu::Vec3 deltaPos) {
-    // 2-3: x, 4-5: y, 6-7: z, precision: 0.0003m
-    static constexpr auto precision = 0.0003f;
+    // 2-3: x, 4-5: y, 6-7: z, precision: 0.00003m
+    static constexpr auto precision = 0.00003f;
     const auto oldV = compressedDeltaPos_.load();
 
     auto dx = static_cast<i16t>(oldV >> 32);
@@ -134,11 +134,11 @@ void Coord::resetDeltaRot() {
 }
 
 mu::Vec3 MU_CALLCONV Coord::decodeDeltaPos(u64t compressedDeltaPos) {
-    // 2-3: x, 4-5: y, 6-7: z, precision: 0.03cm
-    static constexpr auto precision = 0.03f;
-    auto dx = static_cast<i16t>((compressedDeltaPos >> 32) & 0xFFFF);
-    auto dy = static_cast<i16t>((compressedDeltaPos >> 16) & 0xFFFF);
-    auto dz = static_cast<i16t>(compressedDeltaPos & 0xFFFF);
+    // 2-3: x, 4-5: y, 6-7: z, precision: 0.00003m
+    static constexpr auto precision = 0.00003f;
+    auto dx = static_cast<i16t>(compressedDeltaPos >> 32);
+    auto dy = static_cast<i16t>(compressedDeltaPos >> 16);
+    auto dz = static_cast<i16t>(compressedDeltaPos);
 
     return mu::Vec3(dx * precision, dy * precision, dz * precision);
 }

@@ -19,6 +19,9 @@ public:
 
 	RigidBody(const ecs::Entity& entity) NOEXCEPT;
 
+	void MU_CALLCONV setVelocity(mu::Vec3 velocity) NOEXCEPT {
+		velocity_ = velocity;
+	}
 	void setInvMass(float invMass) NOEXCEPT {
 		invMass_ = invMass;
 	}
@@ -45,7 +48,7 @@ private:
 	mu::Vec3 velocity_;
 	mu::Vec3 momentum_;
 
-	// 2-3: x, 4-5: y, 6-7: z, precision: 0.0003m
+	// 2-3: x, 4-5: y, 6-7: z, precision: 0.00003m
 	au64t compressedDeltaVelocity_;
 	
 	float invMass_;

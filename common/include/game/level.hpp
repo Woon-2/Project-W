@@ -60,7 +60,7 @@ public:
 
 private:
     gfx::coord::System coordSys_;
-    // 2-3: x, 4-5: y, 6-7: z, precision: 0.0003m
+    // 2-3: x, 4-5: y, 6-7: z, precision: 0.00003m
     au64t compressedDeltaPos_;
     // 0-1: vx, 2-3: vy, 4-5: vz, 6-7: w, precision: 0.0001rad
     au64t compressedDeltaRot_;
