@@ -325,7 +325,6 @@ public:
     const auto& fsm() const { return fsm_; }
 
     void print() const {
-        system("cls");
         for (const auto& [key, inst] : insts_) {
             std::cout << "playing animation \"" << inst.animClip()->name()
                 << "\", elapsed: " << inst.elapsed()
@@ -370,6 +369,11 @@ struct AnimConAttorney {
     static MilliSeconds getDuration(const std::string& key, const AnimController& con) {
         auto it = con.clipMap_.find(key);
         return (it != con.clipMap_.end()) ? it->second->duration() : MilliSeconds(0.f);
+    }
+
+    static float getWeight(const std::string& key, const AnimController& con) {
+        auto it = std::ranges::find_if(con.insts_, [&key](const auto& pair) { return pair.first == key; });
+        return (it != con.insts_.end()) ? it->second.weight() : 0.f;
     }
 
     static float getSpeed(const std::string& key, const AnimController& con) {
@@ -437,7 +441,7 @@ struct AnimConAttorney {
     }
 };
 
-TaskAnim fadeInImpl( std::string key, MilliSeconds fadeDuration,
+TaskAnim fadeInImpl( std::string key, MilliSeconds fadeDuration, float startWeight,
     std::coroutine_handle<> suspended, AnimController& con
 );
 TaskAnim fadeOutImpl( std::string key, MilliSeconds fadeDuration,
@@ -463,7 +467,7 @@ struct FadeIn {
     bool await_ready() { return false; }
     void await_suspend(std::coroutine_handle<> suspended) {
         pAnimCon->free(
-            pAnimCon->play(key, preElapsed, fadeInImpl(key, fadeDuration, suspended, *pAnimCon), clipMode)
+            pAnimCon->play(key, preElapsed, fadeInImpl(key, fadeDuration, startWeight, suspended, *pAnimCon), clipMode)
         );
     }
     void await_resume() {}
@@ -472,6 +476,7 @@ struct FadeIn {
     std::string key;
     MilliSeconds fadeDuration;
     MilliSeconds preElapsed;
+    float startWeight = 0.f;
     AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame;
 };
 

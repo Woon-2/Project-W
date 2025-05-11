@@ -764,6 +764,12 @@ void AnimController::update(MilliSeconds deltaTime) {
     while (cur != animSequences_.end()) {
         auto& [key, coro, isNew] = *cur;
         if (!isNew) {
+            if (coro.done()) {
+                insts_.erase(std::next(insts_.begin(), std::distance(animSequences_.begin(), cur)));
+                coro.destroy();
+                cur = animSequences_.erase(cur);
+                continue;
+            }
             coro.resume();
         }
         if (coro.done()) {
@@ -814,14 +820,20 @@ std::vector<std::coroutine_handle<>> AnimController::restoreAnimSequences(
     return ret;
 }
 
-TaskAnim fadeInImpl( std::string key, MilliSeconds fadeDuration,
+TaskAnim fadeInImpl( std::string key, MilliSeconds fadeDuration, float startWeight,
     std::coroutine_handle<> suspended, AnimController& con
 ) {
     auto raii = CoroRAII(suspended);
 
     auto accTime = MilliSeconds(0.f);
+    auto weight = startWeight;
+
     while (accTime < fadeDuration) {
-        AnimConAttorney::setWeight(key, std::clamp(accTime / fadeDuration, 0.f, 1.f), con);
+        weight = std::min(startWeight + std::clamp(accTime / fadeDuration, 0.f, 1.f), 1.f);
+        AnimConAttorney::setWeight(key, weight, con);
+        if (weight >= 1.f) {
+            break;
+        }
         co_await std::suspend_always{};
         accTime += AnimConAttorney::getDeltaTime(con);
 
@@ -842,9 +854,15 @@ TaskAnim fadeOutImpl( std::string key, MilliSeconds fadeDuration,
     auto raii = CoroRAII(suspended);
 
     auto accTime = MilliSeconds(0.f);
+    const auto oldWeight = AnimConAttorney::getWeight(key, con);
+    auto weight = oldWeight;
 
     while (accTime < fadeDuration) {
-        AnimConAttorney::setWeight(key, 1.f - std::clamp(accTime / fadeDuration, 0.f, 1.f), con);
+        weight = std::max(oldWeight - std::clamp(accTime / fadeDuration, 0.f, 1.f), 0.f);
+        AnimConAttorney::setWeight(key, weight, con);
+        if (weight == 0.f) {
+            break;
+        }
         co_await std::suspend_always{};
         accTime += AnimConAttorney::getDeltaTime(con) * AnimConAttorney::getSpeed(key, con);
     }
@@ -971,12 +989,14 @@ TaskAnimSequence fadeIn( std::string key, std::string prevKey,
 ) {
     const auto preElapsed = AnimConAttorney::getDuration(key, animCon)
         * (AnimConAttorney::getElapsed(prevKey, animCon) / AnimConAttorney::getDuration(prevKey, animCon));
+    const auto startWeight = 1.f - AnimConAttorney::getWeight(prevKey, animCon);
 
     co_await FadeIn{
         .pAnimCon = &animCon,
         .key = key,
         .fadeDuration = fadeDuration,
         .preElapsed = preElapsed,
+        .startWeight = startWeight,
         .clipMode = clipMode
     };
 
@@ -1004,12 +1024,14 @@ TaskAnimSequence fadeIn( std::string key, std::vector<std::string> possiblePrevK
     if (prevKey != key) {
         const auto preElapsed = AnimConAttorney::getDuration(key, animCon)
             * (AnimConAttorney::getElapsed(prevKey, animCon) / AnimConAttorney::getDuration(prevKey, animCon));
+        const auto startWeight = 1.f - AnimConAttorney::getWeight(prevKey, animCon);
 
         co_await FadeIn{
             .pAnimCon = &animCon,
             .key = key,
             .fadeDuration = fadeDuration,
             .preElapsed = preElapsed,
+            .startWeight = startWeight,
             .clipMode = clipMode
         };
     }
@@ -1031,12 +1053,14 @@ TaskAnimSequence fadeInSequencial( std::vector<std::string> keys,
     const auto firstDuration = AnimConAttorney::getDuration(key, animCon);
     const auto preElapsed = firstDuration * (AnimConAttorney::getElapsed(prevKey, animCon)
         / AnimConAttorney::getDuration(prevKey, animCon));
+    const auto startWeight = 1.f - AnimConAttorney::getWeight(prevKey, animCon);
 
     co_await FadeIn{
         .pAnimCon = &animCon,
         .key = key,
         .fadeDuration = fadeDuration,
         .preElapsed = preElapsed,
+        .startWeight = startWeight,
         .clipMode = clipMode
     };
     co_await Sequencial{
@@ -1056,12 +1080,14 @@ TaskAnimSequence fadeInCircular( std::vector<std::string> keys, std::string prev
     const auto firstDuration = AnimConAttorney::getDuration(key, animCon);
     auto preElapsed = firstDuration * (AnimConAttorney::getElapsed(prevKey, animCon)
         / AnimConAttorney::getDuration(prevKey, animCon));
+    const auto startWeight = 1.f - AnimConAttorney::getWeight(prevKey, animCon);
 
     co_await FadeIn{
         .pAnimCon = &animCon,
         .key = key,
         .fadeDuration = fadeDuration,
         .preElapsed = preElapsed,
+        .startWeight = startWeight,
         .clipMode = clipMode
     };
 
@@ -1138,12 +1164,14 @@ TaskAnimSequence softCircular( std::vector<std::string> keys, std::string prevKe
                 continue;
             }
 
+            const auto startWeight = 1.f - AnimConAttorney::getWeight(prevKey, animCon);
             fadeOut(std::move(prevKey), fadeDuration, animCon);
             co_await FadeIn{
                 .pAnimCon = &animCon,
                 .key = key,
                 .fadeDuration = fadeDuration,
                 .preElapsed = preElapsed,
+                .startWeight = startWeight,
                 .clipMode = clipMode
             };
             prevKey = key;
