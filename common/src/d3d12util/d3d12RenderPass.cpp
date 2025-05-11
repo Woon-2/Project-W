@@ -917,6 +917,18 @@ void PBRAnimatedIllumination::trackModel( Model* pModel,
     }
 }
 
+void PBRAnimatedIllumination::eraseModel( Model* pModel ) {
+    for (auto it = batch_.begin(); it != batch_.end();) {
+        auto pSubmesh = std::get<gfx::d3d12::Submesh*>(*it);
+        if (pSubmesh->parent()->parent()->model() == pModel) {
+            it = batch_.erase(it);
+        }
+        else {
+            ++it;
+        }
+    }
+}
+
 
 ShadowMap::ShadowMap( D3D12Device& device,
     ShaderShadowMap& shader, const D3D12_VIEWPORT& vp
@@ -1434,6 +1446,18 @@ void CascadeShadowMap::trackModel(Model* pModel, const BoundingVolumeNode* pBVNo
             for (auto& submesh : mesh.submeshes()) {
                 batch_.emplace_back(false, pBVNode, &submesh, pCoord, vbLayoutIdx.value(), xform);
             }
+        }
+    }
+}
+
+void CascadeShadowMap::eraseModel(Model* pModel) {
+    for (auto it = batch_.begin(); it != batch_.end();) {
+        auto pSubmesh = std::get<gfx::d3d12::Submesh*>(*it);
+        if (pSubmesh->parent()->parent()->model() == pModel) {
+            it = batch_.erase(it);
+        }
+        else {
+            ++it;
         }
     }
 }

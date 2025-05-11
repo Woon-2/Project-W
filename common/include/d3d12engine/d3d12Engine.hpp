@@ -196,6 +196,7 @@ protected:
     ecs::SysCompCont<Camera*>& cameras(Scene& scene);
     ecs::SysCompCont<Light*>& lights(Scene& scene);
     std::vector<ecs::Entity::ID>& reservedEntities(Scene& scene);
+    std::vector<ecs::Entity::ID>& expiredEntities(Scene& scene);
 
 public:
     virtual void init(Scene& scene) = 0;
@@ -210,10 +211,12 @@ public:
     using MyBase = ecs::System<Model, Camera, Light, LevelChunkModel>;
 
     void addEntity(ecs::Entity& entity);
+    void eraseEntity(const ecs::Entity& entity);
     void clearStash();
 
 private:
     std::vector<ecs::Entity::ID> reservedEntities_;
+    std::vector<ecs::Entity::ID> expiredEntities_;
 };
 
 class LevelChunk : public ecs::Entity {
@@ -282,6 +285,10 @@ inline ecs::SysCompCont<Light*>& IRenderPass::lights(Scene& scene) {
 
 inline std::vector<ecs::Entity::ID>& IRenderPass::reservedEntities(Scene& scene) {
     return scene.reservedEntities_;
+}
+
+inline std::vector<ecs::Entity::ID>& IRenderPass::expiredEntities(Scene& scene) {
+    return scene.expiredEntities_;
 }
 
 namespace rp {

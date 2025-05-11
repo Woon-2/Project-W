@@ -1,18 +1,13 @@
 #ifndef __d3d12RenderPass_HPP
 #define __d3d12RenderPass_HPP
 
+#include "stdafx.hpp"
+
 #include "d3d12util/d3d12ShaderXX.hpp"
 #include "d3d12util/d3d12Low.hpp"
 #include "d3d12util/d3d12ResourceXX.hpp"
 #include "coord.hpp"
 #include "game/physicsSystem.hpp"
-
-#include <string>
-#include <string_view>
-#include <vector>
-#include <map>
-#include <unordered_map>
-#include <type_traits>
 
 class AnimController;
 
@@ -467,6 +462,7 @@ public:
     void trackModel(Model* pModel, const AnimController* pAnimController,
         const BoundingVolumeNode* pBVNode
     );
+    void eraseModel(Model* pModel);
     void setCamera(const Camera* pCamera) NOEXCEPT {
         pCamera_ = pCamera;
     }
@@ -587,6 +583,7 @@ public:
 
     void trackModel(Model* pModel);
     void trackModel(Model* pModel, const BoundingVolumeNode* pBVNode);
+    void eraseModel(Model* pModel);
     void setCamera(const Camera* pCamera) NOEXCEPT {
         pCamera_ = pCamera;
     }

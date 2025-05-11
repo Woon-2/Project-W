@@ -171,8 +171,20 @@ void Scene::addEntity(ecs::Entity& entity) {
     reservedEntities_.push_back(entity.id().value());
 }
 
+void Scene::eraseEntity(const ecs::Entity& entity) {
+    MyBase::eraseEntity(entity);
+    if (!std::erase(reservedEntities_, entity.id().value())) {
+        expiredEntities_.push_back(entity.id().value());
+    }
+}
+
 void Scene::clearStash() {
     reservedEntities_.clear();
+    for (auto eid : expiredEntities_) {
+        auto entt = ecs::Entity(eid);
+        entt.reset();
+    }
+    expiredEntities_.clear();
 }
 
 LevelRegion::LevelRegion( const d3d12::ResourceStorage::Slot& heightmapSlot,
@@ -348,6 +360,12 @@ void PBRAnimatedIllumination::update(Scene& scene) {
         }
         if ( auto pLight = Light::at(entityID) ) {
             addLight(&pLight->get());
+        }
+    }
+
+    for (auto& entityID : expiredEntities(scene)) {
+        if ( auto pModel = Model::at(entityID) ) {
+            eraseModel(&pModel->get());
         }
     }
 }
@@ -551,6 +569,12 @@ void CascadeShadowMap::update(Scene& scene)
         }
         if (auto pCamera = Camera::at(entityID)) {
             setCamera(&pCamera->get());
+        }
+    }
+
+    for (auto& entityID : expiredEntities(scene)) {
+        if (auto pModel = Model::at(entityID)) {
+            eraseModel(&pModel->get());
         }
     }
 }

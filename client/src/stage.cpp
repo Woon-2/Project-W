@@ -155,7 +155,8 @@ void processSCLeave( SCLeave& scLeave, Session& session, Stage& stage ) {
 		stage.pSystems( )->physicsSystem.eraseEntity( entt );
 		stage.pSystems( )->collisionSystem.eraseEntity( entt );
 		stage.pSystems( )->inputSystem.eraseEntity( entt );
-        entt.reset( );
+        entt.release();
+        // entt.reset( );
     }
 }
 
