@@ -619,7 +619,7 @@ void buildEntityWithAsset( mu::Vec3 translation,
             throw GFX_EXCEPT("BVH path not found: " + key);
         }
 
-        entity.createComponent<BoundingVolume>(*bvhPathSlot.get<std::filesystem::path>(key));
+        // entity.createComponent<BoundingVolume>(*bvhPathSlot.get<std::filesystem::path>(key));
     }
 }
 

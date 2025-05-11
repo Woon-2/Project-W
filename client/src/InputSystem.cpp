@@ -25,6 +25,8 @@ void InputNetworkForwarder::buildPackets(Session& session) {
             .csInput = curPacket
         });
     }
+
+    inputEvents_.clear();
 }
 
 void StandAloneInputHandler::handleEvent( CInputEvent event,

@@ -28,7 +28,7 @@ void processCSInput(CSInput& csInput, Session& session);
 int main( ) {
 	using Clock = std::chrono::high_resolution_clock;
 	using Seconds = std::chrono::duration<float>;
-	static constexpr auto frameRate = 33_ms;	// 30 FPS
+	static constexpr auto frameRate = 16_ms;	// 60 FPS
 	static constexpr auto directionChangeRate = 2.f;
 	float directionChangeCounter = 0.f;
 
@@ -112,15 +112,37 @@ int main( ) {
 		// physically update
 		physicsSystem.update( elapsed );
 
+		SCMove curPacket{};
+
 		for ( auto& [id, user] : gUsers ) {
 			if ( !user.accessReady( ) ) {
 				continue;
 			}
 			const auto eid = user.getEntityId();
+			std::cout << "eid: " << eid << "\n";
 
 			if (auto pCoord = gameEngine::Coord::at(eid)) {
 				const auto cdp = pCoord->compressedDeltaPos();
 				const auto cdr = pCoord->compressedDeltaRot();
+				pCoord->resetDeltaPos();
+				pCoord->resetDeltaRot();
+
+				curPacket.moves[curPacket.moveCnt++] = SCMove::Value{
+					.netId = eid,
+					.compressedDeltaPos = cdp,
+					.compressedDeltaRot = cdr
+				};
+
+				if (curPacket.moveCnt == SCMove::maxMoveCnt) {
+					Session::enqueueBroadcastPacket(
+						Packet{
+							.size = calcPacketSize<SCMove>(SCMove::maxMoveCnt),
+							.type = PacketType::SCMove,
+							.scMove = curPacket
+						}
+					);
+					curPacket.moveCnt = 0;
+				}
 
 				const auto dp = pCoord->decodeDeltaPos(cdp);
 				const auto dr = pCoord->decodeDeltaRot(cdr);
@@ -130,6 +152,16 @@ int main( ) {
 					pModel->coord() << mu::Mat4x4(dr);
 				}
 			}
+		}
+
+		if (curPacket.moveCnt > 0) {
+			Session::enqueueBroadcastPacket(
+				Packet{
+					.size = calcPacketSize<SCMove>(curPacket.moveCnt),
+					.type = PacketType::SCMove,
+					.scMove = curPacket
+				}
+			);
 		}
 
 		coordRoot.update( );
@@ -199,7 +231,7 @@ void worker( ) {
 			entity.createComponent<gameEngine::Coord>();
 			entity.createComponent<RigidBody>();
 			auto& rb = entity.as<RigidBody>();
-			rb.setInvMass( 50.f / 1.f );
+			rb.setInvMass( 1.f / 50.f );
 			rb.setKFriction( 0.5f );
 			rb.disableGravity( );
 			entity.createComponent<DummyModel>( entity.as<gameEngine::Coord>() );
@@ -235,7 +267,7 @@ void worker( ) {
 						.size = calcPacketSize<SCEnter>(),
 						.type = PacketType::SCEnter,
 						.scEnter = SCEnter{
-							.netId = id,
+							.netId = user.getEntityId(),
 							.xform = RigidXform{
 								.translation = { trs.x(), trs.y(), trs.z() },
 								.rotation = { rot.x(), rot.y(), rot.z(), rot.w() }
@@ -279,6 +311,7 @@ void worker( ) {
 
 			// set accept flag
 			initializingSession.setAcceptFlag( );
+			initializingSession.doRecv();
 
 			doAccept( listenSocket, &gAcceptOver );
 			break;
@@ -304,13 +337,14 @@ void processPacket(Packet& packet, Session& session) {
 	switch ( packet.type ) {
 	case PacketType::CSInput:
 		processCSInput( packet.csInput, session );
+		break;
 	default:
 		break;
 	}
 }
 
 void processCSInput(CSInput& csInput, Session& session) {
-	static constexpr auto forceStep = 5000.f;
+	static constexpr auto forceStep = 250.f;
 
 	for ( std::uint8_t i = 0u; i < csInput.eventCnt; ++i ) {
 		auto& ev = csInput.events[ i ];
@@ -343,6 +377,7 @@ void processCSInput(CSInput& csInput, Session& session) {
 			if (auto pCoord = gameEngine::Coord::at( session.getEntityId() )) {
 				pCoord->accRotation( mu::quatRPY(0.f, 0.f, ev.floatVal0) );
 			}
+			break;
 
 		default:
 			break;

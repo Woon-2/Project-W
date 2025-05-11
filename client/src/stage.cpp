@@ -67,7 +67,7 @@ void processSCEnter(SCEnter& scEnter, Session& session, Stage& stage) {
 
         entt.createComponent<RigidBody>();
         auto& rb = entt.as<RigidBody>();
-        rb.setInvMass( 50.f / 1.f );
+        rb.setInvMass( 1.f / 50.f );
         rb.setKFriction( 0.5f );
         rb.disableGravity( );
         
@@ -89,7 +89,7 @@ void processSCMove(SCMove& scMove, Session& session, Stage& stage) {
     for (u8t i = 0u; i < scMove.moveCnt; ++i) {
         if (!gNetIdToEId.contains(scMove.moves[i].netId)) {
             delayed.moves[delayed.moveCnt++] = scMove.moves[i];
-            if (delayed.moveCnt >= SCMove::maxMoveCnt) {
+            if (delayed.moveCnt == SCMove::maxMoveCnt) {
                 session.delayPacket(
                     Packet{
                         .size = calcPacketSize<SCMove>(SCMove::maxMoveCnt   ),
@@ -109,8 +109,8 @@ void processSCMove(SCMove& scMove, Session& session, Stage& stage) {
         const auto dp = gameEngine::Coord::decodeDeltaPos(move.compressedDeltaPos);
         const auto dr = gameEngine::Coord::decodeDeltaRot(move.compressedDeltaRot);
 
-        gameEngine::Coord::at(eid)->accTranslation(dp);
-        gameEngine::Coord::at(eid)->accRotation(dr);
+        gameEngine::Coord::at(eid)->get() << mu::translate(dp);
+        gfx::d3d12engine::Model::at(eid)->get().root()->coord() << mu::Mat4x4(dr);
     }
 
     if (delayed.moveCnt > 0) {
@@ -158,7 +158,7 @@ void processSCAssign(SCAssign& scAssign, Session& session, Stage& stage) {
     } );
     stage.setPlayer(&*it);
 
-    entt.createComponent<PlayerController>(std::make_unique<StandAloneInputHandler>(entt.id().value()));
+    entt.createComponent<PlayerController>(std::make_unique<NetworkInputHandler>(entt.id().value()));
 
     entt.createComponent<gfx::d3d12engine::Camera>(gfx::d3d12::Camera::Config());
     auto& camera = entt.as<gfx::d3d12engine::Camera>();

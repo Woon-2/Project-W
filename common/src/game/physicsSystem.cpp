@@ -25,12 +25,13 @@ void MU_CALLCONV RigidBody::accMomentum(mu::Vec3 momentum) NOEXCEPT {
 	auto deltaVy = static_cast<i16t>(oldV >> 16);
 	deltaVy += static_cast<i16t>(deltaAccV.y() / precision);
 
+	
 	auto deltaVz = static_cast<i16t>(oldV);
 	deltaVz += static_cast<i16t>(deltaAccV.z() / precision);
 
-	const auto newV = static_cast<u64t>(deltaVx) << 32 |
-		static_cast<u64t>(deltaVy) << 16 |
-		static_cast<u64t>(deltaVz);
+	const auto newV = static_cast<u64t>(static_cast<u16t>(deltaVx)) << 32 |
+		static_cast<u64t>(static_cast<u16t>(deltaVy)) << 16 |
+		static_cast<u64t>(static_cast<u16t>(deltaVz));
 
 	compressedDeltaVelocity_.store(newV);
 }
@@ -53,7 +54,7 @@ void RigidBody::update(MilliSeconds deltaTime) {
 	const auto dvz = static_cast<i16t>(dvCompressed) * precision;
 
 	auto deltaV = mu::Vec3(dvx, dvy, dvz);
-	velocity_ += deltaV * detlaTimeSec.count();
+	velocity_ += deltaV;
 
 	// apply friction
 	if (kFriction_ > 0) {

@@ -73,8 +73,6 @@ Session& Session::init(SOCKET socket, i16t sessionId) {
 	sendQueue_.clear();
 	sendQueue_.shrink_to_fit();
 
-	doRecv();
-
 	return *this;
 }
 
@@ -123,6 +121,10 @@ void Session::doRecv( ) {
 }
 
 void Session::doSend( ) {
+	if (sendQueue_.empty()) {
+		return;
+	}
+
 	auto overEx = new OverlappedEx{ IO_OP::IO_SEND,
 		std::make_shared<decltype(sendQueue_)>( std::move(sendQueue_) )
 	};
@@ -145,13 +147,17 @@ void Session::doBroadcast( pmr::vector<Session*> sessions ) {
 		broadcastQ.push_back( packet );
 	}
 
+	if (broadcastQ.empty()) {
+		return;
+	}
+
 	for ( auto& pSession : sessions ) {
 		if (pSession->accessReady()) {
 			auto overEx = new OverlappedEx{ IO_OP::IO_SEND, pBroadcastQ };
 
 			auto ret = ::WSASend( pSession->clientSocket_, overEx->wsaBufs_.data( ), 
 				static_cast<DWORD>( overEx->wsaBufs_.size( ) ), nullptr, 0, &overEx->over_, nullptr );
-			if ( WSAGetLastError( ) != WSA_IO_PENDING ) {
+			if ( ret == SOCKET_ERROR && WSAGetLastError( ) != WSA_IO_PENDING ) {
 				errorDisplay( "WSASend", WSAGetLastError( ) );
 			}
 		}

@@ -86,7 +86,7 @@ private:
     LightEntity directionalLight_;
     gfx::d3d12engine::LevelRegion level_;
     gfx::d3d12engine::Scene scene_;
-    std::vector<ecs::Entity> entities_;
+    std::list<ecs::Entity> entities_;
 
     gfx::d3d12engine::Core* pCore_;
     ControllerAdapters* pControllerAdapters_;
