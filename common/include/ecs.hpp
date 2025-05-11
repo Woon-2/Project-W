@@ -82,7 +82,7 @@ public:
         : id_(id) {}
 
     ~Entity() {
-        release();
+        reset();
     }
 
     Entity(const Entity&) = delete;
@@ -140,7 +140,8 @@ public:
         return id_ != -1u;
     }
 
-    void release();
+    ID release();
+    void reset();
 
 private:
     friend void init(const InitDesc& desc);
@@ -326,6 +327,32 @@ public:
             },
             componentsTuple_
         );
+    }
+
+    void updateEntity(Entity& entity) {
+        if (!entity.valid()) {
+            throw ECS_EXCEPT("Entity is invalid");
+        }
+
+        auto erase = [&entity](auto& components) {
+            if ( auto component = entity.get<std::remove_pointer_t< std::ranges::range_value_t<decltype(components)> >>() ) {
+                std::erase_if( components, [&entity](auto pComp) {
+                    if (auto eid = pComp->entityID()) {
+                        return eid == entity.id().value();
+                    }
+                    return false;
+                } );
+            }
+        };
+
+        std::apply(
+            [&erase](auto& ... components) {
+                (erase(components), ...);
+            },
+            componentsTuple_
+        );
+
+        addEntity(entity);
     }
 
 private:

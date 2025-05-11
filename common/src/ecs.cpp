@@ -35,7 +35,17 @@ Entity::ID Entity::fetch() {
     return id;
 }
 
-void Entity::release() {
+Entity::ID Entity::release() {
+    const auto oldId = id_.load();
+    if (oldId == -1u) {
+        return -1u;
+    }
+
+    id_.store(-1u);
+    return oldId;
+}
+
+void Entity::reset() {
     const auto oldId = id_.load( );
     if ( oldId == -1u ) {
         return;

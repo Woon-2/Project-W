@@ -84,39 +84,103 @@ void processSCEnter(SCEnter& scEnter, Session& session, Stage& stage) {
 }
 
 void processSCMove(SCMove& scMove, Session& session, Stage& stage) {
+    SCMove delayed{};
 
+    for (u8t i = 0u; i < scMove.moveCnt; ++i) {
+        if (!gNetIdToEId.contains(scMove.moves[i].netId)) {
+            delayed.moves[delayed.moveCnt++] = scMove.moves[i];
+            if (delayed.moveCnt >= SCMove::maxMoveCnt) {
+                session.delayPacket(
+                    Packet{
+                        .size = calcPacketSize<SCMove>(SCMove::maxMoveCnt   ),
+                        .type = PacketType::SCMove,
+                        .scMove = delayed
+                    }
+                );
+                delayed.moveCnt = 0;
+            }
+            continue;
+        }
+
+        const auto eid = gNetIdToEId.at(scMove.moves[i].netId);
+
+        const auto& move = scMove.moves[i];
+
+        const auto dp = gameEngine::Coord::decodeDeltaPos(move.compressedDeltaPos);
+        const auto dr = gameEngine::Coord::decodeDeltaRot(move.compressedDeltaRot);
+
+        gameEngine::Coord::at(eid)->accTranslation(dp);
+        gameEngine::Coord::at(eid)->accRotation(dr);
+    }
+
+    if (delayed.moveCnt > 0) {
+        session.delayPacket(
+            Packet{
+                .size = calcPacketSize<SCMove>(delayed.moveCnt),
+                .type = PacketType::SCMove,
+                .scMove = delayed
+            }
+        );
+    }
 }
 
 void processSCAssign(SCAssign& scAssign, Session& session, Stage& stage) {
-    for (auto& entt : stage.entities()) {
-        if (entt.valid()) {
-            if (gEIdToNetId.at(entt.id().value()) == scAssign.netId) {
-                session.setEntityId(entt.id().value());
-                stage.setPlayer(&entt);
-
-                entt.createComponent<PlayerController>(std::make_unique<StandAloneInputHandler>(entt.id().value()));
-
-                entt.createComponent<gfx::d3d12engine::Camera>(gfx::d3d12::Camera::Config());
-                auto& camera = entt.as<gfx::d3d12engine::Camera>();
-
-                const auto cameraOffset = mu::Vec3(0.f, 1.8f, -1.6f);
-                const auto cameraTimeLag = 0.4f;
-
-                camera.get().coordMovement() << mu::translate(cameraOffset);
-                camera.get().coordRotation().setLocalXform(
-                    mu::transpose(mu::lookAt(mu::Vec3(), -cameraOffset, mu::Vec3(0.f, 1.f, 0.f)))
-                );
-                camera.get().coordMovement().setParent(&stage.pSystems()->coordRoot.get());
-                camera.setOffset(cameraOffset);
-                camera.setTimeLag(cameraTimeLag);
-                camera.attach(entt.as<gfx::d3d12engine::Model>());
-
-                stage.pSystems()->inputSystem.addEntity(entt);
-                stage.initScene();
-                break;
+    if (!gNetIdToEId.contains(scAssign.netId)) {
+        session.delayPacket(
+            Packet{
+                .size = calcPacketSize<SCAssign>(),
+                .type = PacketType::SCAssign,
+                .scAssign = scAssign
             }
-        }
+        );
+        return;
     }
+
+    auto entt = ecs::Entity(gNetIdToEId.at(scAssign.netId));
+
+    if (!entt.valid()) {
+        session.delayPacket(
+            Packet{
+                .size = calcPacketSize<SCAssign>(),
+                .type = PacketType::SCAssign,
+                .scAssign = scAssign
+            }
+        );
+        return;
+    }
+
+    session.setEntityId(entt.id().value());
+    auto it = std::ranges::find_if(stage.entities(), [playerId = entt.id().value()](const auto& e) {
+        if (!e.valid()) {
+            return false;
+        }
+        return e.id().value() == playerId;
+    } );
+    stage.setPlayer(&*it);
+
+    entt.createComponent<PlayerController>(std::make_unique<StandAloneInputHandler>(entt.id().value()));
+
+    entt.createComponent<gfx::d3d12engine::Camera>(gfx::d3d12::Camera::Config());
+    auto& camera = entt.as<gfx::d3d12engine::Camera>();
+
+    const auto cameraOffset = mu::Vec3(0.f, 1.8f, -1.6f);
+    const auto cameraTimeLag = 0.4f;
+
+    camera.get().coordMovement() << mu::translate(cameraOffset);
+    camera.get().coordRotation().setLocalXform(
+        mu::transpose(mu::lookAt(mu::Vec3(), -cameraOffset, mu::Vec3(0.f, 1.f, 0.f)))
+    );
+    camera.get().coordMovement().setParent(&stage.pSystems()->coordRoot.get());
+    camera.setOffset(cameraOffset);
+    camera.setTimeLag(cameraTimeLag);
+    camera.attach(entt.as<gfx::d3d12engine::Model>());
+
+    stage.pSystems()->inputSystem.addEntity(entt);
+    stage.pScene()->updateEntity(entt);
+
+    stage.initScene();
+
+    entt.release();
 }
 
 void Stage::addEntity(ecs::Entity&& entt) {
@@ -161,6 +225,13 @@ void Stage::render() {
 
 void Stage::processPackets(double deltaTime) {
     pSession_->recvPackets();
+
+    auto packetQ = std::move(pSession_->getDelayedQueue());
+    pSession_->getDelayedQueue().clear();
+
+    for (auto& packet : packetQ) {
+        processPacket(packet, *pSession_);
+    }
 }
 
 void Stage::updateNetwork(double deltaTime) {

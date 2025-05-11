@@ -54,6 +54,14 @@ public:
 
     void recvPackets();
 
+    void delayPacket(const Packet& packet) {
+        delayedQueue_.push_back(packet);
+    }
+
+    auto& getDelayedQueue() noexcept {
+        return delayedQueue_;
+    }
+
     bool operator==(const Session& other) const noexcept {
         return id_ == other.id_;
     }
@@ -72,6 +80,7 @@ public:
 private:
     std::array< char, recvBufSize > recvBuf_;
     std::deque<Packet> sendQueue_;
+    std::deque<Packet> delayedQueue_;
     net::TcpSocket sock_;
     std::uint32_t id_;
     std::uint32_t recvBytesRemain_;

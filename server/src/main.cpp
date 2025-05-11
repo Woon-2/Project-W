@@ -105,6 +105,7 @@ int main( ) {
 				coordRoot.addEntity(entity);
 				physicsSystem.addEntity(entity);
 				entityId = -1u;
+				entity.release();
 			}
 		}
 
@@ -132,6 +133,15 @@ int main( ) {
 		}
 
 		coordRoot.update( );
+
+		auto lUsers = pmr::vector<Session*>();
+		for (auto& [id, session] : gUsers) {
+			if (session.accessReady()) {
+				session.doSend();
+				lUsers.push_back(&session);
+			}
+		}
+		Session::doBroadcast(std::move(lUsers));
 
 		lastTp = tp;
 	}
@@ -198,6 +208,8 @@ void worker( ) {
 
 			gReservedEntities.push(entity.id().value());
 
+			entity.release();
+
 			// add intialization packets
 			for (auto& [id, user] : gUsers) {
 				if (!user.accessReady()) {
@@ -257,7 +269,7 @@ void worker( ) {
 					.scEnter = SCEnter{
 						.netId = initializingSession.getEntityId(),
 						.xform = RigidXform{
-							.translation = { 0.f, 100.f, 0.f },
+							.translation = { 0.f, 0.f, 0.f },
 							.rotation = { 0.f, 0.f, 0.f, 1.f }
 						},
 						.objType = ObjectType::Character
@@ -274,8 +286,10 @@ void worker( ) {
 
 		case IO_OP::IO_RECV: {
 			auto id = static_cast<std::uint16_t>( completionKey );
-			gUsers[ id ].interpretData( bytesTransferred );
-			gUsers[ id ].doRecv( );
+			if (gUsers[id].accessReady()) {
+				gUsers[id].interpretData(bytesTransferred);
+				gUsers[id].doRecv();
+			}
 			break;
 		}
 

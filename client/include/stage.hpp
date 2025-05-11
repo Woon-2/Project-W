@@ -60,6 +60,10 @@ public:
         return pSystems_;
     }
 
+    auto pScene() NOEXCEPT {
+        return &scene_;
+    }
+
     void initScene();
 
 private:
