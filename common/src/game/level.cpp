@@ -65,17 +65,17 @@ void MU_CALLCONV Coord::accTranslation(mu::Vec3 deltaPos) {
     static constexpr auto precision = 0.00003f;
     const auto oldV = compressedDeltaPos_.load();
 
-    auto dx = static_cast<i16t>(oldV >> 48);
+    auto dx = static_cast<i16t>(oldV >> 32);
     // convert cm to m then devide by precision
     dx += static_cast<i16t>(deltaPos.x() / precision);
 
-    auto dy = static_cast<i32t>(oldV >> 16);
-    dy += static_cast<i32t>(deltaPos.y() / precision);
+    auto dy = static_cast<i16t>(oldV >> 16);
+    dy += static_cast<i16t>(deltaPos.y() / precision);
 
     auto dz = static_cast<i16t>(oldV);
     dz += static_cast<i16t>(deltaPos.z() / precision);
 
-    const auto newV = static_cast<u64t>(static_cast<u16t>(dx)) << 48 | static_cast<u64t>(static_cast<u32t>(dy)) << 16 | static_cast<u64t>(static_cast<u16t>(dz));
+    const auto newV = static_cast<u64t>(static_cast<u16t>(dx)) << 32 | static_cast<u64t>(static_cast<u16t>(dy)) << 16 | static_cast<u64t>(static_cast<u16t>(dz));
 
     compressedDeltaPos_.store(newV);
 }
@@ -136,8 +136,8 @@ void Coord::resetDeltaRot() {
 mu::Vec3 MU_CALLCONV Coord::decodeDeltaPos(u64t compressedDeltaPos) {
     // 2-3: x, 4-5: y, 6-7: z, precision: 0.00003m
     static constexpr auto precision = 0.00003f;
-    auto dx = static_cast<i16t>(compressedDeltaPos >> 48);
-    auto dy = static_cast<i32t>(compressedDeltaPos >> 16);
+    auto dx = static_cast<i16t>(compressedDeltaPos >> 32);
+    auto dy = static_cast<i16t>(compressedDeltaPos >> 16);
     auto dz = static_cast<i16t>(compressedDeltaPos);
 
     return mu::Vec3(dx * precision, dy * precision, dz * precision);

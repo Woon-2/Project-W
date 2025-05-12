@@ -7,126 +7,6 @@
 #include "game/physicsSystem.hpp"
 #include "resourcePath.hpp"
 
-#include "FreeImage.h"
-
-class Bitmap {
-public:
-	Bitmap()
-		: pBitmap_(nullptr), width_(0u), height_(0u), bits_(nullptr) {}
-
-	Bitmap( const std::filesystem::path& path )
-		: pBitmap_(nullptr), width_(0u), height_(0u), bits_(nullptr) {
-		load( path );
-	}
-
-	Bitmap(const Bitmap&) = delete;
-	Bitmap& operator=(const Bitmap&) = delete;
-	Bitmap(Bitmap&& other) noexcept;
-	Bitmap& operator=(Bitmap&& other) noexcept;
-
-	~Bitmap() {
-		unload();
-	}
-
-	void load( const std::filesystem::path& path );
-	BYTE getGreyscalePixel( size_t x, size_t y ) const;
-	void unload();
-
-	std::size_t width() const noexcept {
-		return width_;
-	}
-
-	std::size_t height() const noexcept {
-		return height_;
-	}
-
-private:
-	FIBITMAP* pBitmap_;
-	std::size_t width_;
-	std::size_t height_;
-	unsigned char* bits_;
-};
-
-Bitmap::Bitmap(Bitmap&& other) noexcept
-    : pBitmap_(std::exchange(other.pBitmap_, nullptr)),
-    width_(std::exchange(other.width_, 0)),
-    height_(std::exchange(other.height_, 0)),
-    bits_(std::exchange(other.bits_, nullptr)) {}
-
-Bitmap& Bitmap::operator=(Bitmap&& other) noexcept {
-    if (this == &other) {
-        return *this;
-    }
-
-    pBitmap_ = std::exchange(other.pBitmap_, nullptr);
-    width_ = std::exchange(other.width_, 0);
-    height_ = std::exchange(other.height_, 0);
-    bits_ = std::exchange(other.bits_, nullptr);
-
-    return *this;
-}
-
-void Bitmap::load( const std::filesystem::path& path ) {
-    auto strFileName = path.string();
-    auto cstrFileName = strFileName.c_str();
-
-    FREE_IMAGE_FORMAT format = FreeImage_GetFileType( cstrFileName );
-
-    if ( format == -1 )
-    {
-        std::cerr << "Could not find image: \"" << path << "\"\n";
-        return;
-    }
-    else if ( format == FIF_UNKNOWN )
-    {
-        std::cerr << "Couldn't determine file format - attempting to get from file extension...\n";
-        format = FreeImage_GetFIFFromFilename( cstrFileName );
-
-        if ( !FreeImage_FIFSupportsReading( format ) )
-        {
-            std::cerr << "Detected image format cannot be read!\n";
-            return;
-        }
-    }
-
-    FIBITMAP* bitmap = FreeImage_Load( format, cstrFileName );
-    int bits_per_pixel = FreeImage_GetBPP( bitmap );
-
-    if ( bits_per_pixel == 32 )
-    {
-        pBitmap_ = bitmap;
-    }
-    else
-    {
-        pBitmap_ = FreeImage_ConvertTo32Bits( bitmap );
-    }
-
-    width_ = FreeImage_GetWidth( pBitmap_ );
-    height_ = FreeImage_GetHeight( pBitmap_ );
-    bits_ = FreeImage_GetBits( pBitmap_ );
-}
-
-BYTE Bitmap::getGreyscalePixel( size_t x, size_t y ) const {
-    RGBQUAD ret{};
-    if ( !FreeImage_GetPixelColor( pBitmap_, static_cast<unsigned int>(x), 
-        static_cast<unsigned int>(y), &ret 
-    ) ) {
-        std::cerr << "Failed to get pixel\n";
-    }
-    return ret.rgbRed;
-}
-
-void Bitmap::unload() {
-    if ( pBitmap_ )
-    {
-        FreeImage_Unload( pBitmap_ );
-        pBitmap_ = nullptr;
-        width_ = 0;
-        height_ = 0;
-        bits_ = nullptr;
-    }
-}
-
 void doAccept( SOCKET, OverlappedEx* );
 void worker( );
 
@@ -138,7 +18,6 @@ std::array<char, (sizeof(sockaddr) + 16u) * 2u> acceptBuffer_;
 ccMap<std::uint16_t, Session> gUsers;
 ccQueue<ecs::Entity::ID> gReservedEntities;
 ccQueue<u16t> gIdPool;
-std::vector<std::vector<Bitmap>> gHeightmaps;
 
 std::uniform_real_distribution<float> gDist( -1.f, 1.f );
 std::mt19937 gRng( std::random_device{}( ) );
@@ -158,14 +37,6 @@ int main( ) {
 	}
 
 	ecs::init( ecs::InitDesc{ .threadCnt = 1u, .entityPoolSize = 0x160u } );
-
-	gHeightmaps.resize( 3u );
-	for ( auto i = 0u; i < gHeightmaps.size( ); ++i ) {
-		gHeightmaps[ i ].reserve( 3u );
-		for ( auto j = 0u; j < 3u; ++j ) {
-			gHeightmaps[ i ].emplace_back( resourcePath/ ("terrains/HeightMaps/Terrain_"+std::to_string( i )+"_"+std::to_string( j )+"_HeightMapGrey.dds") );
-		}
-	}
 
 	// initialize windows socket api ================================================
 	WSADATA wsaData{ };
@@ -254,82 +125,10 @@ int main( ) {
 			const auto eid = user.getEntityId();
 
 			if (auto pCoord = gameEngine::Coord::at(eid)) {
-				auto cdp = pCoord->compressedDeltaPos();
+				const auto cdp = pCoord->compressedDeltaPos();
 				const auto cdr = pCoord->compressedDeltaRot();
 				pCoord->resetDeltaPos();
 				pCoord->resetDeltaRot();
-
-				const auto trs = pCoord->get().xform().row(3);
-
-				auto heightmapRow = std::clamp(
-					static_cast<std::size_t>(trs.x() / 100.f),
-					0ull, 3ull
-				);
-				auto heightmapCol = std::clamp(
-					static_cast<std::size_t>(trs.z() / 100.f),
-					0ull, 3ull
-				);
-
-				auto dp = pCoord->decodeDeltaPos(cdp);
-
-				auto y00 = gHeightmaps[heightmapRow][heightmapCol].getGreyscalePixel(
-					static_cast<std::size_t>(trs.x()) % 100u * gHeightmaps[heightmapRow][heightmapCol].width() / 100u,
-					static_cast<std::size_t>(trs.z()) % 100u * gHeightmaps[heightmapRow][heightmapCol].height() / 100u
-				) * 200.f / 255.f - 25.f - trs.y();
-
-				auto y01 = 0.f;
-				if ((static_cast<std::size_t>(trs.z()) % 100u + 1u) >= 100u) {
-					y01 = y00;
-				}
-				else {
-					y01 = gHeightmaps[heightmapRow][heightmapCol].getGreyscalePixel(
-						static_cast<std::size_t>(trs.x()) % 100u * gHeightmaps[heightmapRow][heightmapCol].width() / 100u,
-						(static_cast<std::size_t>(trs.z()) % 100u + 1u) * gHeightmaps[heightmapRow][heightmapCol].height() / 100u
-					) * 200.f / 255.f - 25.f - trs.y();
-				}
-
-				auto y10 = 0.f;
-				if ((static_cast<std::size_t>(trs.x()) % 100u + 1u) >= 100u) {
-					y10 = y00;
-				}
-				else {
-					y10 = gHeightmaps[heightmapRow][heightmapCol].getGreyscalePixel(
-						(static_cast<std::size_t>(trs.x()) % 100u + 1u) * gHeightmaps[heightmapRow][heightmapCol].width() / 100u,
-						static_cast<std::size_t>(trs.z()) % 100u * gHeightmaps[heightmapRow][heightmapCol].height() / 100u
-					) * 200.f / 255.f - 25.f - trs.y();
-				}
-
-				auto y11 = 0.f;
-				if ((static_cast<std::size_t>(trs.x()) % 100u + 1u) == 100u &&
-					(static_cast<std::size_t>(trs.z()) % 100u + 1u) == 100u) {
-					y11 = y00;
-				}
-				else if ((static_cast<std::size_t>(trs.x()) % 100u + 1u) >= 100u) {
-					y11 = y01;
-				}
-				else if ((static_cast<std::size_t>(trs.z()) % 100u + 1u) >= 100u) {
-					y11 = y10;
-				}
-				else {
-					y11 = gHeightmaps[heightmapRow][heightmapCol].getGreyscalePixel(
-						(static_cast<std::size_t>(trs.x()) % 100u + 1u) * gHeightmaps[heightmapRow][heightmapCol].width() / 100u,
-						(static_cast<std::size_t>(trs.z()) % 100u + 1u) * gHeightmaps[heightmapRow][heightmapCol].height() / 100u
-					) * 200.f / 255.f - 25.f - trs.y();
-				}
-
-				auto u = trs.x() - static_cast<std::size_t>(trs.x()) % 100u;
-				auto v = trs.z() - static_cast<std::size_t>(trs.z()) % 100u;
-				auto h00 = y00 * (1.f - u) + y10 * u;
-				auto h01 = y01 * (1.f - u) + y11 * u;
-				auto h = h00 * (1.f - v) + h01 * v;
-
-				dp = mu::Vec3(dp.x(),
-					h,
-					dp.z()
-				);
-				pCoord->accTranslation(dp);
-				cdp = pCoord->compressedDeltaPos();
-				pCoord->resetDeltaPos();
 
 				curPacket.moves[curPacket.moveCnt++] = SCMove::Value{
 					.netId = eid,
@@ -348,7 +147,7 @@ int main( ) {
 					curPacket.moveCnt = 0;
 				}
 
-
+				const auto dp = pCoord->decodeDeltaPos(cdp);
 				const auto dr = pCoord->decodeDeltaRot(cdr);
 
 				pCoord->get() << mu::translate(dp);
@@ -489,7 +288,6 @@ void worker( ) {
 
 			auto entity = ecs::Entity( );
 			entity.createComponent<gameEngine::Coord>();
-			entity.as<gameEngine::Coord>().get() << mu::translate( 0.f, -25.f, 0.f );
 			entity.createComponent<RigidBody>();
 			auto& rb = entity.as<RigidBody>();
 			rb.setInvMass( 1.f / 50.f );
@@ -562,7 +360,7 @@ void worker( ) {
 					.scEnter = SCEnter{
 						.netId = initializingSession.getEntityId(),
 						.xform = RigidXform{
-							.translation = { 0.f, -25.f, 0.f },
+							.translation = { 0.f, 0.f, 0.f },
 							.rotation = { 0.f, 0.f, 0.f, 1.f }
 						},
 						.objType = ObjectType::Character

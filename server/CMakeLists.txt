@@ -54,7 +54,6 @@ auto_configure(server PRIVATE)
 target_include_directories(server
     PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
-        "${FREEIMAGE_INCLUDE}"
 )
 
 target_link_libraries(server
@@ -62,13 +61,4 @@ target_link_libraries(server
         common::mu
         common::ecsServer
         common::netServer
-        freeImage
-)
-
-file(COPY "${PROJECT_SOURCE_DIR}/extern/FreeImage/x64/FreeImage.dll"
-    DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/Debug"
-)
-
-file(COPY "${PROJECT_SOURCE_DIR}/extern/FreeImage/x64/FreeImage.dll"
-    DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/Release"
 )
