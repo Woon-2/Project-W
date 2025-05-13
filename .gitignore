@@ -490,3 +490,5 @@ common/include/resourcePath.hpp
 !extern/FreeImage/*
 !extern/FreeImage/x64/*
 !resource/*/*/*.obj
+
+!*.ini
