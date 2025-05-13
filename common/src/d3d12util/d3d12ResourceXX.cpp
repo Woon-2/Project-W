@@ -1788,9 +1788,9 @@ void LevelChunkModel::draw(D3D12GfxCmdList& cmdList) const {
 mu::Mat4x4 MU_CALLCONV LevelChunkModel::idxToWorld() const {
     // temporary
     return mu::translate(
-        0.f + (100.f - 100.f / 32.f) * static_cast<float>(idx_.x),
+        0.f + (100.f) * static_cast<float>(idx_.x),
         -25.f + 0.f,
-        0.f + (100.f - 100.f / 32.f) * static_cast<float>(idx_.y)
+        0.f + (100.f) * static_cast<float>(idx_.y)
     );
 }
 
@@ -1806,7 +1806,7 @@ void LevelChunkModel::initChunkMesh(D3D12Device& device, D3D12GfxCmdList& cmdLis
         for (int x = 0; x < patchWidth; ++x) {
             const auto vertex = PatchVertex{
                 .pos = dx::XMFLOAT3(
-                    static_cast<float>(x) / patchWidth * 100.f, 0.f, static_cast<float>(z) / patchLength * 100.f
+                    static_cast<float>(x) / (patchWidth - 1) * 100.f, 0.f, static_cast<float>(z) / (patchLength - 1) * 100.f
                 ),
                 .texCoord = dx::XMFLOAT2(
                     static_cast<float>(x) / (patchWidth - 1), 1.f - static_cast<float>(z) / (patchLength - 1)
