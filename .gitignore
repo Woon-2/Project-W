@@ -491,7 +491,4 @@ common/include/resourcePath.hpp
 !extern/FreeImage/x64/*
 !resource/*/*/*.obj
 
-!*.ini
-!resourcePath.ini
-!build/resourcePath.ini
-!network.ini
+*.ini
