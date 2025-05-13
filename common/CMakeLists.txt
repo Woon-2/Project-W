@@ -170,6 +170,7 @@ add_library(ecsClient
     src/game/level.cpp include/game/level.hpp
     src/coord.cpp include/coord.hpp
     src/game/physicsSystem.cpp include/game/physicsSystem.hpp
+    src/bitmap.cpp include/bitmap.hpp
 
     src/ecs.cpp include/ecs.hpp
     include/ecsExcept.hpp
@@ -193,17 +194,20 @@ target_link_libraries(ecsClient
         common::mu
         common::TMP
         common::coro
+        freeImage
 )
 
 target_include_directories(ecsClient
     PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
+        "${FREEIMAGE_INCLUDE}"
 )
 
 add_library(ecsServer
     src/game/level.cpp include/game/level.hpp
     src/coord.cpp include/coord.hpp
     src/game/physicsSystem.cpp include/game/physicsSystem.hpp
+    src/bitmap.cpp include/bitmap.hpp
 
     src/ecs.cpp include/ecs.hpp
     include/ecsExcept.hpp
@@ -229,11 +233,13 @@ target_link_libraries(ecsServer
         common::woon2exception
         common::TMP
         common::coro
+        freeImage
 )
 
 target_include_directories(ecsServer
     PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
+        "${FREEIMAGE_INCLUDE}"
 )
 
 # === net ===
