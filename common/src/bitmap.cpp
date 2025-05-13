@@ -15,7 +15,7 @@ Bitmap::~Bitmap() {
 void Bitmap::load(const std::filesystem::path& path) {
     unload();
 
-    bitmap_ = FreeImage_Load(FIF_PNG, path.string().c_str(), PNG_DEFAULT);
+    bitmap_ = FreeImage_Load(FIF_DDS, path.string().c_str());
     if (!bitmap_) {
         throw std::runtime_error("Failed to load bitmap: " + path.string());
     }

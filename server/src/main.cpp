@@ -7,6 +7,8 @@
 #include "game/physicsSystem.hpp"
 #include "resourcePath.hpp"
 
+#include "bitmap.hpp"
+
 void doAccept( SOCKET, OverlappedEx* );
 void worker( );
 
@@ -22,8 +24,21 @@ ccQueue<u16t> gIdPool;
 std::uniform_real_distribution<float> gDist( -1.f, 1.f );
 std::mt19937 gRng( std::random_device{}( ) );
 
+std::vector< std::vector<Bitmap> > gHeightmaps;
+
 void processPacket(Packet& packet, Session& session);
 void processCSInput(CSInput& csInput, Session& session);
+
+float readHeight(RGBQUAD bits) {
+	u32t uHeight = 0;
+	uHeight |= static_cast<u32t>(bits.rgbReserved);
+	uHeight |= static_cast<u32t>(bits.rgbRed) << 8;
+	uHeight |= static_cast<u32t>(bits.rgbGreen) << 16;
+	uHeight |= static_cast<u32t>(bits.rgbBlue) << 24;
+
+	float fHeight = uHeight / ( static_cast<float>(std::numeric_limits<u32t>::max()) / 200.f );
+	return fHeight - 25.f;
+}
 
 int main( ) {
 	using Clock = std::chrono::high_resolution_clock;
@@ -37,6 +52,16 @@ int main( ) {
 	}
 
 	ecs::init( ecs::InitDesc{ .threadCnt = 1u, .entityPoolSize = 0x160u } );
+
+	gHeightmaps.resize( 3u );
+	for (int i = 0; i < 3; ++i) {
+		gHeightmaps[i].reserve(3u);
+		for (int j = 0; j < 3; ++j) {
+			gHeightmaps[i].emplace_back( getResourcePath()/("terrains\\HeightMaps\\Terrain_"
+				+ std::to_string(i) + "_" + std::to_string(j) + "_HeightMap.dds")
+			);
+		}
+	}
 
 	// initialize windows socket api ================================================
 	WSADATA wsaData{ };
@@ -98,7 +123,8 @@ int main( ) {
 			Sleep( static_cast<DWORD>( frameRate.count() / 2.f - elapsed.count() ) );
 			// std::cout << "sleep\n";
 			// std::this_thread::sleep_for( std::chrono::duration<float>( frameRate / 2.f - elapsed ) );
-			elapsed = frameRate / 2.f;
+			tp = Clock::now( );
+			elapsed = std::chrono::duration_cast<MilliSeconds>( tp - lastTp );
 		}
 
 		ecs::Entity::ID entityId{-1u};
@@ -130,9 +156,161 @@ int main( ) {
 				pCoord->resetDeltaPos();
 				pCoord->resetDeltaRot();
 
+				const auto dp = pCoord->decodeDeltaPos(cdp);
+				const auto dr = pCoord->decodeDeltaRot(cdr);
+
+				const auto beforePos = mu::Vec3(pCoord->get().xform().row(3));
+				const auto expectedPos = beforePos + dp;
+
+				const auto chunkRow = std::clamp(static_cast<int>(expectedPos.x() / 100.f), 0, 2);
+				const auto chunkCol = std::clamp(static_cast<int>(expectedPos.z() / 100.f), 0, 2);
+
+				auto y00 = readHeight( gHeightmaps[chunkRow][chunkCol].getPixel(
+					static_cast<int>(std::fmod(expectedPos.x(), 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol].getWidth() - 1))),
+					static_cast<int>(std::fmod(expectedPos.z(), 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol].getHeight() - 1)))
+				).value() );
+
+				auto y10 = 0.f;
+				if ( static_cast<int>(expectedPos.x() + 1.f) / 100
+					!= static_cast<int>(expectedPos.x()) / 100
+				) {
+					if (chunkRow < 2) {
+						y10 = readHeight( gHeightmaps[chunkRow + 1][chunkCol].getPixel(
+							static_cast<int>(std::fmod(expectedPos.x() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow + 1][chunkCol].getWidth() - 1))),
+							static_cast<int>(std::fmod(expectedPos.z(), 100.f) / 100.f * ((gHeightmaps[chunkRow + 1][chunkCol].getHeight() - 1)))
+						).value() );
+					}
+					else {
+						y10 = readHeight( gHeightmaps[chunkRow][chunkCol].getPixel(
+							gHeightmaps[chunkRow][chunkCol].getWidth() - 1,
+							static_cast<int>(std::fmod(expectedPos.z(), 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol].getHeight() - 1)))
+						).value() );
+					}
+				}
+				else {
+					y10 = readHeight( gHeightmaps[chunkRow][chunkCol].getPixel(
+						static_cast<int>(std::fmod(expectedPos.x() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol].getWidth() - 1))),
+						static_cast<int>(std::fmod(expectedPos.z(), 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol].getHeight() - 1)))
+					).value() );
+				}
+
+				auto y01 = 0.f;
+				if ( static_cast<int>(expectedPos.z() + 1.f) / 100
+					!= static_cast<int>(expectedPos.z()) / 100
+				) {
+					if (chunkCol < 2) {
+						y01 = readHeight( gHeightmaps[chunkRow][chunkCol + 1].getPixel(
+							static_cast<int>(std::fmod(expectedPos.x(), 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol + 1].getWidth() - 1))),
+							static_cast<int>(std::fmod(expectedPos.z() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol + 1].getHeight() - 1)))
+						).value() );
+					}
+					else {
+						y01 = readHeight( gHeightmaps[chunkRow][chunkCol].getPixel(
+							static_cast<int>(std::fmod(expectedPos.x(), 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol].getWidth() - 1))),
+							gHeightmaps[chunkRow][chunkCol].getHeight() - 1
+						).value() );
+					}
+				}
+				else {
+					y01 = readHeight( gHeightmaps[chunkRow][chunkCol].getPixel(
+						static_cast<int>(std::fmod(expectedPos.x(), 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol].getWidth() - 1))),
+						static_cast<int>(std::fmod(expectedPos.z() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol].getHeight() - 1)))
+					).value() );
+				}
+
+				auto y11 = 0.f;
+				if ( static_cast<int>(expectedPos.x() + 1.f) / 100
+					!= static_cast<int>(expectedPos.x()) / 100
+					&& static_cast<int>(expectedPos.z() + 1.f) / 100
+					!= static_cast<int>(expectedPos.z()) / 100
+				) {
+					if (chunkRow < 2 && chunkCol < 2) {
+						y11 = readHeight( gHeightmaps[chunkRow + 1][chunkCol + 1].getPixel(
+							static_cast<int>(std::fmod(expectedPos.x() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow + 1][chunkCol + 1].getWidth() - 1))),
+							static_cast<int>(std::fmod(expectedPos.z() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow + 1][chunkCol + 1].getHeight() - 1)))
+						).value() );
+					}
+					else if (chunkRow < 2) {
+						y11 = readHeight( gHeightmaps[chunkRow + 1][chunkCol].getPixel(
+							static_cast<int>(std::fmod(expectedPos.x() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow + 1][chunkCol].getWidth() - 1))),
+							gHeightmaps[chunkRow + 1][chunkCol].getHeight() - 1
+						).value() );
+					}
+					else if (chunkCol < 2) {
+						y11 = readHeight( gHeightmaps[chunkRow][chunkCol + 1].getPixel(
+							gHeightmaps[chunkRow][chunkCol + 1].getWidth() - 1,
+							static_cast<int>(std::fmod(expectedPos.z() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol + 1].getHeight() - 1)))
+						).value() );
+					}
+					else {
+						y11 = readHeight( gHeightmaps[chunkRow][chunkCol].getPixel(
+							gHeightmaps[chunkRow][chunkCol].getWidth() - 1,
+							gHeightmaps[chunkRow][chunkCol].getHeight() - 1
+						).value() );
+					}
+				}
+				else if ( static_cast<int>(expectedPos.x() + 1.f) / 100
+					!= static_cast<int>(expectedPos.x()) / 100
+				) {
+					if (chunkRow < 2) {
+						y11 = readHeight( gHeightmaps[chunkRow + 1][chunkCol].getPixel(
+							static_cast<int>(std::fmod(expectedPos.x() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow + 1][chunkCol].getWidth() - 1))),
+							static_cast<int>(std::fmod(expectedPos.z() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow + 1][chunkCol].getHeight() - 1)))
+						).value() );
+					}
+					else {
+						y11 = readHeight( gHeightmaps[chunkRow][chunkCol].getPixel(
+							gHeightmaps[chunkRow][chunkCol].getWidth() - 1,
+							static_cast<int>(std::fmod(expectedPos.z() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol].getHeight() - 1)))
+						).value() );
+					}
+				}
+				else if ( static_cast<int>(expectedPos.z() + 1.f) / 100
+					!= static_cast<int>(expectedPos.z()) / 100
+				) {
+					if (chunkCol < 2) {
+						y11 = readHeight( gHeightmaps[chunkRow][chunkCol + 1].getPixel(
+							static_cast<int>(std::fmod(expectedPos.x() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol + 1].getWidth() - 1))),
+							static_cast<int>(std::fmod(expectedPos.z() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol + 1].getHeight() - 1)))
+						).value() );
+					}
+					else {
+						y11 = readHeight( gHeightmaps[chunkRow][chunkCol].getPixel(
+							static_cast<int>(std::fmod(expectedPos.x() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol].getWidth() - 1))),
+							gHeightmaps[chunkRow][chunkCol].getHeight() - 1
+						).value() );
+					}
+				}
+				else {
+					y11 = readHeight( gHeightmaps[chunkRow][chunkCol].getPixel(
+						static_cast<int>(std::fmod(expectedPos.x() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol].getWidth() - 1))),
+						static_cast<int>(std::fmod(expectedPos.z() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol].getHeight() - 1)))
+					).value() );
+				}
+
+				const auto hx = expectedPos.x() - std::floor(expectedPos.x());
+				const auto hz = expectedPos.z() - std::floor(expectedPos.z());
+
+				if (hx + hz < 1.f) {
+					y11 = y00;
+				}
+				else {
+					y00 = y11;
+				}
+
+				const auto y0 = std::lerp(y00, y01, hz);
+				const auto y1 = std::lerp(y10, y11, hz);
+				const auto y = std::lerp(y0, y1, hx);
+
+				const auto realDp = mu::Vec3(dp.x(), y00 - beforePos.y(), dp.z());
+
+				pCoord->accTranslation(realDp);
+				const auto realCdp = pCoord->compressedDeltaPos();
+				pCoord->resetDeltaPos();
+
 				curPacket.moves[curPacket.moveCnt++] = SCMove::Value{
 					.netId = eid,
-					.compressedDeltaPos = cdp,
+					.compressedDeltaPos = realCdp,
 					.compressedDeltaRot = cdr
 				};
 
@@ -147,10 +325,7 @@ int main( ) {
 					curPacket.moveCnt = 0;
 				}
 
-				const auto dp = pCoord->decodeDeltaPos(cdp);
-				const auto dr = pCoord->decodeDeltaRot(cdr);
-
-				pCoord->get() << mu::translate(dp);
+				pCoord->get() << mu::translate(realDp);
 				if (auto pModel = DummyModel::at(eid)) {
 					pModel->coord() << mu::Mat4x4(dr);
 				}
@@ -288,6 +463,7 @@ void worker( ) {
 
 			auto entity = ecs::Entity( );
 			entity.createComponent<gameEngine::Coord>();
+			entity.as<gameEngine::Coord>().get() << mu::translate(0.f, -25.f, 0.f);
 			entity.createComponent<RigidBody>();
 			auto& rb = entity.as<RigidBody>();
 			rb.setInvMass( 1.f / 50.f );
@@ -360,7 +536,7 @@ void worker( ) {
 					.scEnter = SCEnter{
 						.netId = initializingSession.getEntityId(),
 						.xform = RigidXform{
-							.translation = { 0.f, 0.f, 0.f },
+							.translation = { 0.f, -25.f, 0.f },
 							.rotation = { 0.f, 0.f, 0.f, 1.f }
 						},
 						.objType = ObjectType::Character
