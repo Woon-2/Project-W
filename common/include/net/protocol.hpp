@@ -4,7 +4,6 @@
 #include "stdafx.hpp"
 #include "netInclude.hpp"
 
-inline constexpr const char* SERVERIP = "127.0.0.1";
 inline constexpr u16t PORT = 7777;
 inline constexpr auto maxConnection = 5;
 
@@ -138,6 +137,21 @@ constexpr u16t calcPacketSize<CSHello>() {
 template <>
 constexpr u16t calcPacketSize<CSLeave>() {
     return sizeof(PacketType) + sizeof(u16t);
+}
+
+inline std::string loadServerIP() {
+    auto iniFile = std::ifstream("network.ini");
+    if (!iniFile) {
+        throw std::runtime_error("Failed to open network.ini");
+    }
+
+    std::string line;
+    std::getline(iniFile, line);
+    if (!line.starts_with("serverIP=\"")) {
+        throw std::runtime_error("Invalid format in network.ini");
+    }
+    line = line.substr(10, line.size() - 11); // Remove "serverIP=\"" and "\""
+    return line;
 }
 
 #endif // __PROTOCOL_HPP

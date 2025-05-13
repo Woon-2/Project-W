@@ -528,7 +528,7 @@ void Stage::loadBVHPaths() {
 void Stage::loadLevel(gfx::d3d12::D3D12GfxCmdList& cmdList) {
     level_ = gfx::d3d12engine::LevelRegion(
         staticResStorage_.slot(Stage::slotKeyTexture),
-        resourcePath/"LevelGraph.bin",
-        resourcePath/"LevelGraph_Terrain.bin"
+        getResourcePath()/"LevelGraph.bin",
+        getResourcePath()/"LevelGraph_Terrain.bin"
     );
 }

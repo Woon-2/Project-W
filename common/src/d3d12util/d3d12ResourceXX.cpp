@@ -1092,7 +1092,7 @@ RefModel RefModel::loadHierarchyFromFile( const std::filesystem::path& path,
             auto texRelativePath = std::string(nStrLength, '\0');
             nReads = (UINT)::fread(texRelativePath.data(), sizeof(char), nStrLength, pInFile);
 
-            auto texPath = resourcePath / std::move(texRelativePath);
+            auto texPath = getResourcePath() / std::move(texRelativePath);
 
             bool found = false;
 
@@ -1558,7 +1558,7 @@ LevelRegionModel::LevelRegionModel(const ResourceStorage::Slot& heightmapSlot, s
             auto texRelativePath = std::string(nStrLength, '\0');
             is.read(texRelativePath.data(), nStrLength);
 
-            auto texPath = resourcePath / std::move(texRelativePath);
+            auto texPath = getResourcePath() / std::move(texRelativePath);
 
             if (!heightmapSlot.contains<Texture>(texPath.string())) {
                 throw std::runtime_error("Texture not found: " + texPath.string());
@@ -1667,7 +1667,7 @@ void LevelChunkModel::load( const ResourceStorage::Slot& heightmapSlot,
     idx_.y = std::stoi(chunkName.substr(zStrPos));
 
     // HeightMap
-    const auto heightMapPath = resourcePath/"terrains\\HeightMaps"/(chunkName + "_HeightMap.dds");
+    const auto heightMapPath = getResourcePath()/"terrains\\HeightMaps"/(chunkName + "_HeightMap.dds");
     if ( !heightmapSlot.contains<Texture>(heightMapPath.string()) ) {
         throw std::runtime_error(std::string("HeightMap not found: ") + heightMapPath.string());
     }

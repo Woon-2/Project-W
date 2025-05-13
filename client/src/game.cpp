@@ -73,7 +73,7 @@ void Game::initNetwork() {
 		return;
 	}
 
-    sock.connect( net::SockAddr( net::Ipv4Addr( ), net::Port( PORT ) ) );
+    sock.connect( net::SockAddr( net::Ipv4Addr( loadServerIP() ), net::Port( PORT ) ) );
 
     session_ = Session(std::move(sock), -1);
 

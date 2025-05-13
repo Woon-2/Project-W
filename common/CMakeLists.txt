@@ -350,42 +350,4 @@ target_include_directories(gfx
         "${ASSIMP_INCLUDE}"
         "${TEXLOADER_INCLUDE}"
         "${D3D12_INCLUDE}"
-        "${FREEIMAGE_INCLUDE}"
 )
-
-# === shaders ===
-include(find_hlsl_compiler)
-
-set(SHADER_PATH ${CMAKE_CURRENT_SOURCE_DIR}/shaders CACHE PATH
-    "Write path to populate shaders."
-)
-
-set(COMPILED_SHADER_PATH "${CMAKE_CURRENT_BINARY_DIR}/shaders" CACHE PATH
-    "Write path to populate compiled shaders."
-)
-
-compile_hlsl("${SHADER_PATH}/pbrShader.hlsl"
-    "${COMPILED_SHADER_PATH}/pbrShader_vs.cso"
-    "vs_5_1"
-    "VSMain"
-    /enable_unbounded_descriptor_tables
-)
-
-compile_hlsl("${SHADER_PATH}/pbrShader.hlsl"
-    "${COMPILED_SHADER_PATH}/pbrShader_ps.cso"
-    "ps_5_1"
-    "PSMain"
-    /enable_unbounded_descriptor_tables
-)
-
-add_hlsl_target("${HLSL_COMPILED_SHADERS}")
-
-include(configure_paths)
-gen_shader_path()
-
-add_dependencies(gfx hlsl)
-
-
-gen_resource_path()
-
-configure_file("${CMAKE_CURRENT_SOURCE_DIR}/config.hpp.in" "${CMAKE_CURRENT_SOURCE_DIR}/include/config.hpp")
