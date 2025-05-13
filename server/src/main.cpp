@@ -29,6 +29,20 @@ std::vector< std::vector<Bitmap> > gHeightmaps;
 void processPacket(Packet& packet, Session& session);
 void processCSInput(CSInput& csInput, Session& session);
 
+std::pair<int, int> chunkIdx(float x, float z) {
+	int chunkX = std::clamp(static_cast<int>(x / 100.f), 0, 2);
+	int chunkZ = std::clamp(static_cast<int>(z / 100.f), 0, 2);
+
+	return { chunkX, chunkZ };
+}
+
+std::pair<float, float> heightmapTexcoord(float x, float z) {
+	auto u = std::fmod(x, 100.f) / 100.f;
+	auto v = std::fmod(z, 100.f) / 100.f;
+
+	return { u, v };
+}
+
 float readHeight(RGBQUAD bits) {
 	u32t uHeight = 0;
 	uHeight |= static_cast<u32t>(bits.rgbReserved);
@@ -165,128 +179,39 @@ int main( ) {
 				const auto chunkRow = std::clamp(static_cast<int>(expectedPos.x() / 100.f), 0, 2);
 				const auto chunkCol = std::clamp(static_cast<int>(expectedPos.z() / 100.f), 0, 2);
 
+				const auto pixelSize = 100.f / gHeightmaps[chunkRow][chunkCol].getWidth();
+				const auto pixelLength = gHeightmaps[0][0].getWidth() - 1;
+
+				auto [y00u, y00v] = heightmapTexcoord(expectedPos.x(), expectedPos.z());
+
 				auto y00 = readHeight( gHeightmaps[chunkRow][chunkCol].getPixel(
-					static_cast<int>(std::fmod(expectedPos.x(), 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol].getWidth() - 1))),
-					static_cast<int>(std::fmod(expectedPos.z(), 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol].getHeight() - 1)))
+					y00u * pixelLength,
+					y00v * pixelLength
 				).value() );
 
-				auto y10 = 0.f;
-				if ( static_cast<int>(expectedPos.x() + 1.f) / 100
-					!= static_cast<int>(expectedPos.x()) / 100
-				) {
-					if (chunkRow < 2) {
-						y10 = readHeight( gHeightmaps[chunkRow + 1][chunkCol].getPixel(
-							static_cast<int>(std::fmod(expectedPos.x() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow + 1][chunkCol].getWidth() - 1))),
-							static_cast<int>(std::fmod(expectedPos.z(), 100.f) / 100.f * ((gHeightmaps[chunkRow + 1][chunkCol].getHeight() - 1)))
-						).value() );
-					}
-					else {
-						y10 = readHeight( gHeightmaps[chunkRow][chunkCol].getPixel(
-							gHeightmaps[chunkRow][chunkCol].getWidth() - 1,
-							static_cast<int>(std::fmod(expectedPos.z(), 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol].getHeight() - 1)))
-						).value() );
-					}
-				}
-				else {
-					y10 = readHeight( gHeightmaps[chunkRow][chunkCol].getPixel(
-						static_cast<int>(std::fmod(expectedPos.x() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol].getWidth() - 1))),
-						static_cast<int>(std::fmod(expectedPos.z(), 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol].getHeight() - 1)))
-					).value() );
-				}
+				auto [y01x, y01y] = chunkIdx(expectedPos.x() + pixelSize, expectedPos.z());
+				auto [y01u, y01v] = heightmapTexcoord(expectedPos.x() + pixelSize, expectedPos.z());
 
-				auto y01 = 0.f;
-				if ( static_cast<int>(expectedPos.z() + 1.f) / 100
-					!= static_cast<int>(expectedPos.z()) / 100
-				) {
-					if (chunkCol < 2) {
-						y01 = readHeight( gHeightmaps[chunkRow][chunkCol + 1].getPixel(
-							static_cast<int>(std::fmod(expectedPos.x(), 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol + 1].getWidth() - 1))),
-							static_cast<int>(std::fmod(expectedPos.z() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol + 1].getHeight() - 1)))
-						).value() );
-					}
-					else {
-						y01 = readHeight( gHeightmaps[chunkRow][chunkCol].getPixel(
-							static_cast<int>(std::fmod(expectedPos.x(), 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol].getWidth() - 1))),
-							gHeightmaps[chunkRow][chunkCol].getHeight() - 1
-						).value() );
-					}
-				}
-				else {
-					y01 = readHeight( gHeightmaps[chunkRow][chunkCol].getPixel(
-						static_cast<int>(std::fmod(expectedPos.x(), 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol].getWidth() - 1))),
-						static_cast<int>(std::fmod(expectedPos.z() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol].getHeight() - 1)))
-					).value() );
-				}
+				auto y01 = readHeight( gHeightmaps[y01x][y01y].getPixel(
+					y01u * pixelLength,
+					y01v * pixelLength
+				).value() );
 
-				auto y11 = 0.f;
-				if ( static_cast<int>(expectedPos.x() + 1.f) / 100
-					!= static_cast<int>(expectedPos.x()) / 100
-					&& static_cast<int>(expectedPos.z() + 1.f) / 100
-					!= static_cast<int>(expectedPos.z()) / 100
-				) {
-					if (chunkRow < 2 && chunkCol < 2) {
-						y11 = readHeight( gHeightmaps[chunkRow + 1][chunkCol + 1].getPixel(
-							static_cast<int>(std::fmod(expectedPos.x() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow + 1][chunkCol + 1].getWidth() - 1))),
-							static_cast<int>(std::fmod(expectedPos.z() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow + 1][chunkCol + 1].getHeight() - 1)))
-						).value() );
-					}
-					else if (chunkRow < 2) {
-						y11 = readHeight( gHeightmaps[chunkRow + 1][chunkCol].getPixel(
-							static_cast<int>(std::fmod(expectedPos.x() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow + 1][chunkCol].getWidth() - 1))),
-							gHeightmaps[chunkRow + 1][chunkCol].getHeight() - 1
-						).value() );
-					}
-					else if (chunkCol < 2) {
-						y11 = readHeight( gHeightmaps[chunkRow][chunkCol + 1].getPixel(
-							gHeightmaps[chunkRow][chunkCol + 1].getWidth() - 1,
-							static_cast<int>(std::fmod(expectedPos.z() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol + 1].getHeight() - 1)))
-						).value() );
-					}
-					else {
-						y11 = readHeight( gHeightmaps[chunkRow][chunkCol].getPixel(
-							gHeightmaps[chunkRow][chunkCol].getWidth() - 1,
-							gHeightmaps[chunkRow][chunkCol].getHeight() - 1
-						).value() );
-					}
-				}
-				else if ( static_cast<int>(expectedPos.x() + 1.f) / 100
-					!= static_cast<int>(expectedPos.x()) / 100
-				) {
-					if (chunkRow < 2) {
-						y11 = readHeight( gHeightmaps[chunkRow + 1][chunkCol].getPixel(
-							static_cast<int>(std::fmod(expectedPos.x() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow + 1][chunkCol].getWidth() - 1))),
-							static_cast<int>(std::fmod(expectedPos.z() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow + 1][chunkCol].getHeight() - 1)))
-						).value() );
-					}
-					else {
-						y11 = readHeight( gHeightmaps[chunkRow][chunkCol].getPixel(
-							gHeightmaps[chunkRow][chunkCol].getWidth() - 1,
-							static_cast<int>(std::fmod(expectedPos.z() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol].getHeight() - 1)))
-						).value() );
-					}
-				}
-				else if ( static_cast<int>(expectedPos.z() + 1.f) / 100
-					!= static_cast<int>(expectedPos.z()) / 100
-				) {
-					if (chunkCol < 2) {
-						y11 = readHeight( gHeightmaps[chunkRow][chunkCol + 1].getPixel(
-							static_cast<int>(std::fmod(expectedPos.x() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol + 1].getWidth() - 1))),
-							static_cast<int>(std::fmod(expectedPos.z() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol + 1].getHeight() - 1)))
-						).value() );
-					}
-					else {
-						y11 = readHeight( gHeightmaps[chunkRow][chunkCol].getPixel(
-							static_cast<int>(std::fmod(expectedPos.x() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol].getWidth() - 1))),
-							gHeightmaps[chunkRow][chunkCol].getHeight() - 1
-						).value() );
-					}
-				}
-				else {
-					y11 = readHeight( gHeightmaps[chunkRow][chunkCol].getPixel(
-						static_cast<int>(std::fmod(expectedPos.x() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol].getWidth() - 1))),
-						static_cast<int>(std::fmod(expectedPos.z() + 1.f, 100.f) / 100.f * ((gHeightmaps[chunkRow][chunkCol].getHeight() - 1)))
-					).value() );
-				}
+				auto [y10x, y10y] = chunkIdx(expectedPos.x(), expectedPos.z() + pixelSize);
+				auto [y10u, y10v] = heightmapTexcoord(expectedPos.x(), expectedPos.z() + pixelSize);
+
+				auto y10 = readHeight( gHeightmaps[y10x][y10y].getPixel(
+					y10u * pixelLength,
+					y10v * pixelLength
+				).value() );
+
+				auto [y11x, y11y] = chunkIdx(expectedPos.x() + pixelSize, expectedPos.z() + pixelSize);
+				auto [y11u, y11v] = heightmapTexcoord(expectedPos.x() + pixelSize, expectedPos.z() + pixelSize);
+
+				auto y11 = readHeight( gHeightmaps[y11x][y11y].getPixel(
+					y11u * pixelLength,
+					y11v * pixelLength
+				).value() );
 
 				const auto hx = expectedPos.x() - std::floor(expectedPos.x());
 				const auto hz = expectedPos.z() - std::floor(expectedPos.z());
