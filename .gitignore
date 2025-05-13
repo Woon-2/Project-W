@@ -492,3 +492,6 @@ common/include/resourcePath.hpp
 !resource/*/*/*.obj
 
 !*.ini
+!resourcePath.ini
+!build/resourcePath.ini
+!network.ini
