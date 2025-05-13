@@ -185,32 +185,32 @@ int main( ) {
 				auto [y00u, y00v] = heightmapTexcoord(expectedPos.x(), expectedPos.z());
 
 				auto y00 = readHeight( gHeightmaps[chunkRow][chunkCol].getPixel(
-					y00u * pixelLength,
-					y00v * pixelLength
+					static_cast<int>(y00u * pixelLength),
+					static_cast<int>(y00v * pixelLength)
 				).value() );
 
 				auto [y01x, y01y] = chunkIdx(expectedPos.x() + pixelSize, expectedPos.z());
 				auto [y01u, y01v] = heightmapTexcoord(expectedPos.x() + pixelSize, expectedPos.z());
 
 				auto y01 = readHeight( gHeightmaps[y01x][y01y].getPixel(
-					y01u * pixelLength,
-					y01v * pixelLength
+					static_cast<int>(y01u * pixelLength),
+					static_cast<int>(y01v * pixelLength)
 				).value() );
 
 				auto [y10x, y10y] = chunkIdx(expectedPos.x(), expectedPos.z() + pixelSize);
 				auto [y10u, y10v] = heightmapTexcoord(expectedPos.x(), expectedPos.z() + pixelSize);
 
 				auto y10 = readHeight( gHeightmaps[y10x][y10y].getPixel(
-					y10u * pixelLength,
-					y10v * pixelLength
+					static_cast<int>(y10u * pixelLength),
+					static_cast<int>(y10v * pixelLength)
 				).value() );
 
 				auto [y11x, y11y] = chunkIdx(expectedPos.x() + pixelSize, expectedPos.z() + pixelSize);
 				auto [y11u, y11v] = heightmapTexcoord(expectedPos.x() + pixelSize, expectedPos.z() + pixelSize);
 
 				auto y11 = readHeight( gHeightmaps[y11x][y11y].getPixel(
-					y11u * pixelLength,
-					y11v * pixelLength
+					static_cast<int>(y11u * pixelLength),
+					static_cast<int>(y11v * pixelLength)
 				).value() );
 
 				const auto hx = expectedPos.x() - std::floor(expectedPos.x());
