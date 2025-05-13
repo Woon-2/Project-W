@@ -2185,6 +2185,14 @@ const Vec<D> MU_CALLCONV refract(
 }
 
 template <std::size_t D>
+    requires (D >= 2 && D <= 3)
+const Vec<D> MU_CALLCONV slide(
+    Vec<D> vec, NVec<D> normal
+) __MathUtil_NOEXCEPT {
+    return vec - dot(vec, normal) * normal;
+}
+
+template <std::size_t D>
     requires (D >= 1 && D <= 4)
 const Vec<D> MU_CALLCONV lerp(
     Vec<D> lhs, Vec<D> rhs, float t
