@@ -488,7 +488,7 @@ void initAnimationsCharacter(
             "GO_Character_Idle2",
             "GO_Character_Walk"
         }, "GO_Character_Walk",
-            360_ms, AnimInstance::ClipMode::KeyFrame, animCon
+            600_ms, AnimInstance::ClipMode::KeyFrame, animCon
         );
     });
     animCon.fsm().addTransition("Idle", "Run", [&animCon](){
@@ -498,7 +498,7 @@ void initAnimationsCharacter(
             "GO_Character_Idle2",
             "GO_Character_Run"
         }, "GO_Character_Run",
-            360_ms, AnimInstance::ClipMode::KeyFrame, animCon
+            600_ms, AnimInstance::ClipMode::KeyFrame, animCon
         );
     });
     animCon.fsm().addTransition("Idle", "Sprint", [&animCon](){
@@ -508,7 +508,7 @@ void initAnimationsCharacter(
             "GO_Character_Idle2",
             "GO_Character_Sprint"
         }, "GO_Character_Sprint",
-            360_ms, AnimInstance::ClipMode::KeyFrame, animCon
+            600_ms, AnimInstance::ClipMode::KeyFrame, animCon
         );
     });
 
@@ -527,7 +527,7 @@ void initAnimationsCharacter(
         softCircular( { "GO_Character_Idle",
                 "GO_Character_Idle1",
                 "GO_Character_Idle2"
-            }, std::move(possiblePrevKeys), 360_ms, animCon,
+            }, std::move(possiblePrevKeys), 600_ms, animCon,
             AnimInstance::ClipMode::KeyFrame
         );
     });
@@ -559,7 +559,7 @@ void initAnimationsCharacter(
         softCircular( { "GO_Character_Idle",
                 "GO_Character_Idle1",
                 "GO_Character_Idle2"
-            }, std::move(possiblePrevKeys), 360_ms, animCon,
+            }, std::move(possiblePrevKeys), 600_ms, animCon,
             AnimInstance::ClipMode::KeyFrame
         );
     });
@@ -591,7 +591,7 @@ void initAnimationsCharacter(
         softCircular( { "GO_Character_Idle",
                 "GO_Character_Idle1",
                 "GO_Character_Idle2"
-            }, std::move(possiblePrevKeys), 360_ms, animCon,
+            }, std::move(possiblePrevKeys), 600_ms, animCon,
             AnimInstance::ClipMode::KeyFrame
         );
     });
