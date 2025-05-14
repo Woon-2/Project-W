@@ -13,6 +13,135 @@ inline constexpr auto characterMoveLb2 = 0.12f * 0.12f;
 inline constexpr auto characterWalkUb2 = 1.6f * 1.6f;
 inline constexpr auto characterRunUb2 = 10.f * 10.f;
 
+// this function finds the appropriate animation clip from velocity,
+// with the state name followed by the direction suffix.
+// like:
+// {state name}+"ForwardLeft|Forward|ForwardRight|Left|Right|BackwardLeft|Backward|BackwardRight"
+void __8moveTransition(std::string_view fromState, std::string_view toState,
+    MilliSeconds fadeDuration, AnimInstance::ClipMode clipMode,
+    AnimController& con) {
+    const auto entityId = con.entityID().value();
+    const auto rigidBody = RigidBody::atC(entityId);
+    if (!rigidBody) {
+        return;
+    }
+    const auto velocity = rigidBody->velocity();
+    const auto model = gfx::d3d12engine::Model::atC(entityId);
+    const auto forward = mu::Vec3(model->get().root()->coord().xform().row(2u));
+    const auto look = mu::quatFromTo(forward, mu::Vec3(0.f, 0.f, 1.f)).rotate(velocity);
+
+    struct __Direction {
+        std::string_view name;
+        mu::Vec3 direction;
+    };
+
+    static const std::vector<__Direction> directions = {
+        {"Forward",       mu::Vec3( 0.f, 0.f, 1.f )},
+        {"ForwardRight",  mu::NVec3( 1.f, 0.f, 1.f )},
+        {"Right",         mu::Vec3( 1.f, 0.f, 0.f )},
+        {"BackwardRight", mu::NVec3( 1.f, 0.f, -1.f )},
+        {"Backward",      mu::Vec3( 0.f, 0.f, -1.f )},
+        {"BackwardLeft",  mu::NVec3( 1.f, 0.f, -1.f)},
+        {"Left",          mu::Vec3( -1.f, 0.f, 0.f )},
+        {"ForwardLeft",   mu::NVec3( 1.f, 0.f, 1.f )}
+    };
+
+    auto possiblePrevKeys = std::vector<std::string>();
+    possiblePrevKeys.reserve(directions.size() + 1u);   // + 1u for additional current key
+    for (const auto& dir : directions) {
+        possiblePrevKeys.push_back(std::string(fromState) + dir.name.data());
+    }
+
+    auto curKey = std::string(toState)
+        + std::ranges::max_element(
+            directions, {}, [&](const __Direction& dir) {
+                return mu::dot(look, dir.direction);
+            }
+        )->name.data();
+
+    // reuse the possiblePrevKeys vector for optimization
+    possiblePrevKeys.push_back(curKey);
+
+    con.restoreAnimSequences(possiblePrevKeys);
+    possiblePrevKeys.pop_back(); // remove the last element
+    fadeOutSelect(possiblePrevKeys, fadeDuration, con);
+    fadeIn( curKey, possiblePrevKeys, fadeDuration, con, clipMode );
+}
+
+// this function finds the appropriate animation clip from velocity,
+// with the state name followed by the direction suffix.
+// like:
+// {state name}+"ForwardLeft|Forward|ForwardRight|Left|Right|BackwardLeft|Backward|BackwardRight"
+void __8moveTransition(std::vector<std::string> possiblePrevKeys, std::string_view toState,
+    MilliSeconds fadeDuration, AnimInstance::ClipMode clipMode,
+    AnimController& con) {
+    const auto entityId = con.entityID().value();
+    const auto rigidBody = RigidBody::atC(entityId);
+    if (!rigidBody) {
+        return;
+    }
+    const auto velocity = rigidBody->velocity();
+    const auto model = gfx::d3d12engine::Model::atC(entityId);
+    const auto forward = mu::Vec3(model->get().root()->coord().xform().row(2u));
+    const auto look = mu::quatFromTo(forward, mu::Vec3(0.f, 0.f, 1.f)).rotate(velocity);
+
+    struct __Direction {
+        std::string_view name;
+        mu::Vec3 direction;
+    };
+
+    static const std::vector<__Direction> directions = {
+        {"Forward",       mu::Vec3( 0.f, 0.f, 1.f )},
+        {"ForwardRight",  mu::NVec3( 1.f, 0.f, 1.f )},
+        {"Right",         mu::Vec3( 1.f, 0.f, 0.f )},
+        {"BackwardRight", mu::NVec3( 1.f, 0.f, -1.f )},
+        {"Backward",      mu::Vec3( 0.f, 0.f, -1.f )},
+        {"BackwardLeft",  mu::NVec3( 1.f, 0.f, -1.f)},
+        {"Left",          mu::Vec3( -1.f, 0.f, 0.f )},
+        {"ForwardLeft",   mu::NVec3( 1.f, 0.f, 1.f )}
+    };
+
+    auto curKey = std::string(toState)
+        + std::ranges::max_element(
+            directions, {}, [&](const __Direction& dir) {
+                return mu::dot(look, dir.direction);
+            }
+        )->name.data();
+
+    // reuse the possiblePrevKeys vector for optimization
+    possiblePrevKeys.push_back(curKey);
+
+    con.restoreAnimSequences(possiblePrevKeys);
+    possiblePrevKeys.pop_back(); // remove the last element
+    fadeOutSelect(possiblePrevKeys, fadeDuration, con);
+    fadeIn( std::move(curKey), std::move(possiblePrevKeys), fadeDuration, con, clipMode );
+}
+
+std::vector<std::string> __8movePossibleKeys(std::string_view fromState) {
+    struct __Direction {
+        std::string_view name;
+        mu::Vec3 direction;
+    };
+
+    static const std::vector<__Direction> directions = {
+        {"Forward",       mu::Vec3( 0.f, 0.f, 1.f )},
+        {"ForwardRight",  mu::NVec3( 1.f, 0.f, 1.f )},
+        {"Right",         mu::Vec3( 1.f, 0.f, 0.f )},
+        {"BackwardRight", mu::NVec3( 1.f, 0.f, -1.f )},
+        {"Backward",      mu::Vec3( 0.f, 0.f, -1.f )},
+        {"BackwardLeft",  mu::NVec3( 1.f, 0.f, -1.f)},
+        {"Left",          mu::Vec3( -1.f, 0.f, 0.f )},
+        {"ForwardLeft",   mu::NVec3( 1.f, 0.f, 1.f )}
+    };
+
+    auto possiblePrevKeys = std::vector<std::string>();
+    possiblePrevKeys.reserve(directions.size() + 1u);   // + 1u for additional current key
+    for (const auto& dir : directions) {
+        possiblePrevKeys.push_back(std::string(fromState) + dir.name.data());
+    }
+    return possiblePrevKeys;
+}
+
 void characterStateIdleUpdate(fsm::FSM& fsm, AnimController& con, MilliSeconds deltaTime) {
     const auto entityId = con.entityID().value();
     const auto rigidBody = RigidBody::atC(entityId);
@@ -170,135 +299,6 @@ fsm::State characterStateSprint(fsm::FSM& fsm, AnimController& con) {
     
         co_await fsm.completeStateUpdate();
     }
-}
-
-// this function finds the appropriate animation clip from velocity,
-// with the state name followed by the direction suffix.
-// like:
-// {state name}+"ForwardLeft|Forward|ForwardRight|Left|Right|BackwardLeft|Backward|BackwardRight"
-void __8moveTransition(std::string_view fromState, std::string_view toState,
-    MilliSeconds fadeDuration, AnimInstance::ClipMode clipMode,
-    AnimController& con) {
-    const auto entityId = con.entityID().value();
-    const auto rigidBody = RigidBody::atC(entityId);
-    if (!rigidBody) {
-        return;
-    }
-    const auto velocity = rigidBody->velocity();
-    const auto model = gfx::d3d12engine::Model::atC(entityId);
-    const auto forward = mu::Vec3(model->get().root()->coord().xform().row(2u));
-    const auto look = mu::quatFromTo(forward, mu::Vec3(0.f, 0.f, 1.f)).rotate(velocity);
-
-    struct __Direction {
-        std::string_view name;
-        mu::Vec3 direction;
-    };
-
-    static const std::vector<__Direction> directions = {
-        {"Forward",       mu::Vec3( 0.f, 0.f, 1.f )},
-        {"ForwardRight",  mu::NVec3( 1.f, 0.f, 1.f )},
-        {"Right",         mu::Vec3( 1.f, 0.f, 0.f )},
-        {"BackwardRight", mu::NVec3( 1.f, 0.f, -1.f )},
-        {"Backward",      mu::Vec3( 0.f, 0.f, -1.f )},
-        {"BackwardLeft",  mu::NVec3( 1.f, 0.f, -1.f)},
-        {"Left",          mu::Vec3( -1.f, 0.f, 0.f )},
-        {"ForwardLeft",   mu::NVec3( 1.f, 0.f, 1.f )}
-    };
-
-    auto possiblePrevKeys = std::vector<std::string>();
-    possiblePrevKeys.reserve(directions.size() + 1u);   // + 1u for additional current key
-    for (const auto& dir : directions) {
-        possiblePrevKeys.push_back(std::string(fromState) + dir.name.data());
-    }
-
-    auto curKey = std::string(toState)
-        + std::ranges::max_element(
-            directions, {}, [&](const __Direction& dir) {
-                return mu::dot(look, dir.direction);
-            }
-        )->name.data();
-
-    // reuse the possiblePrevKeys vector for optimization
-    possiblePrevKeys.push_back(curKey);
-
-    con.restoreAnimSequences(possiblePrevKeys);
-    possiblePrevKeys.pop_back(); // remove the last element
-    fadeOutSelect(possiblePrevKeys, fadeDuration, con);
-    fadeIn( curKey, possiblePrevKeys, fadeDuration, con, clipMode );
-}
-
-// this function finds the appropriate animation clip from velocity,
-// with the state name followed by the direction suffix.
-// like:
-// {state name}+"ForwardLeft|Forward|ForwardRight|Left|Right|BackwardLeft|Backward|BackwardRight"
-void __8moveTransition(std::vector<std::string> possiblePrevKeys, std::string_view toState,
-    MilliSeconds fadeDuration, AnimInstance::ClipMode clipMode,
-    AnimController& con) {
-    const auto entityId = con.entityID().value();
-    const auto rigidBody = RigidBody::atC(entityId);
-    if (!rigidBody) {
-        return;
-    }
-    const auto velocity = rigidBody->velocity();
-    const auto model = gfx::d3d12engine::Model::atC(entityId);
-    const auto forward = mu::Vec3(model->get().root()->coord().xform().row(2u));
-    const auto look = mu::quatFromTo(forward, mu::Vec3(0.f, 0.f, 1.f)).rotate(velocity);
-
-    struct __Direction {
-        std::string_view name;
-        mu::Vec3 direction;
-    };
-
-    static const std::vector<__Direction> directions = {
-        {"Forward",       mu::Vec3( 0.f, 0.f, 1.f )},
-        {"ForwardRight",  mu::NVec3( 1.f, 0.f, 1.f )},
-        {"Right",         mu::Vec3( 1.f, 0.f, 0.f )},
-        {"BackwardRight", mu::NVec3( 1.f, 0.f, -1.f )},
-        {"Backward",      mu::Vec3( 0.f, 0.f, -1.f )},
-        {"BackwardLeft",  mu::NVec3( 1.f, 0.f, -1.f)},
-        {"Left",          mu::Vec3( -1.f, 0.f, 0.f )},
-        {"ForwardLeft",   mu::NVec3( 1.f, 0.f, 1.f )}
-    };
-
-    auto curKey = std::string(toState)
-        + std::ranges::max_element(
-            directions, {}, [&](const __Direction& dir) {
-                return mu::dot(look, dir.direction);
-            }
-        )->name.data();
-
-    // reuse the possiblePrevKeys vector for optimization
-    possiblePrevKeys.push_back(curKey);
-
-    con.restoreAnimSequences(possiblePrevKeys);
-    possiblePrevKeys.pop_back(); // remove the last element
-    fadeOutSelect(possiblePrevKeys, fadeDuration, con);
-    fadeIn( std::move(curKey), std::move(possiblePrevKeys), fadeDuration, con, clipMode );
-}
-
-std::vector<std::string> __8movePossibleKeys(std::string_view fromState) {
-    struct __Direction {
-        std::string_view name;
-        mu::Vec3 direction;
-    };
-
-    static const std::vector<__Direction> directions = {
-        {"Forward",       mu::Vec3( 0.f, 0.f, 1.f )},
-        {"ForwardRight",  mu::NVec3( 1.f, 0.f, 1.f )},
-        {"Right",         mu::Vec3( 1.f, 0.f, 0.f )},
-        {"BackwardRight", mu::NVec3( 1.f, 0.f, -1.f )},
-        {"Backward",      mu::Vec3( 0.f, 0.f, -1.f )},
-        {"BackwardLeft",  mu::NVec3( 1.f, 0.f, -1.f)},
-        {"Left",          mu::Vec3( -1.f, 0.f, 0.f )},
-        {"ForwardLeft",   mu::NVec3( 1.f, 0.f, 1.f )}
-    };
-
-    auto possiblePrevKeys = std::vector<std::string>();
-    possiblePrevKeys.reserve(directions.size() + 1u);   // + 1u for additional current key
-    for (const auto& dir : directions) {
-        possiblePrevKeys.push_back(std::string(fromState) + dir.name.data());
-    }
-    return possiblePrevKeys;
 }
 
 void initAnimationsCharacter(
