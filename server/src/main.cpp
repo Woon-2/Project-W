@@ -261,6 +261,8 @@ int main( ) {
 				}
 
 				pCoord->get() << mu::translate(dp);
+				const auto xx = pCoord->get().localXform().row(3);
+				std::cout << "x: " << xx.x() << ", y: " << xx.y() << ", z: " << xx.z() << "\n";
 				if (auto pModel = DummyModel::at(eid)) {
 					pModel->coord() << mu::Mat4x4(dr);
 				}
@@ -403,6 +405,8 @@ void worker( ) {
 			auto& rb = entity.as<RigidBody>();
 			rb.setInvMass( 1.f / 50.f );
 			rb.setKFriction( 0.5f );
+			rb.setKAirdrag( 1.25f );
+			rb.setKConstantAirDrag( 3.f );
 			rb.disableGravity( );
 			entity.createComponent<DummyModel>( entity.as<gameEngine::Coord>() );
 
@@ -534,7 +538,7 @@ void processPacket(Packet& packet, Session& session) {
 }
 
 void processCSInput(CSInput& csInput, Session& session) {
-	static constexpr auto forceStep = 600.f;
+	static constexpr auto forceStep = 450.f;
 
 	for ( std::uint8_t i = 0u; i < csInput.eventCnt; ++i ) {
 		auto& ev = csInput.events[ i ];

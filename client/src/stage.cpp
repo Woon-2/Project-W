@@ -71,6 +71,7 @@ void processSCEnter(SCEnter& scEnter, Session& session, Stage& stage) {
         auto& rb = entt.as<RigidBody>();
         rb.setInvMass( 1.f / 50.f );
         rb.setKFriction( 0.5f );
+        // rb.setKAirdrag( 1.f );
         rb.disableGravity( );
         
         gNetIdToEId[scEnter.netId] = entt.id().value();

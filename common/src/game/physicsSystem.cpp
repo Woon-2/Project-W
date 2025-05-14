@@ -6,7 +6,8 @@
 
 RigidBody::RigidBody(const ecs::Entity& entity) NOEXCEPT
 	: Component(entity), velocity_(), momentum_(), compressedDeltaVelocity_(0),
-	invMass_(0.f), kFriction_(0.f), willSimulateGravity_(false) {}
+	invMass_(0.f), kFriction_(0.f), kAirdrag_(0.f), kConstantAirDrag_(0.f),
+	willSimulateGravity_(false) {}
 
 void MU_CALLCONV RigidBody::accMomentum(mu::Vec3 momentum) NOEXCEPT {
 	if (invMass_ <= minInvMass) {
@@ -57,16 +58,12 @@ void RigidBody::update(MilliSeconds deltaTime) {
 	velocity_ += deltaV;
 
 	// apply friction
-	if (kFriction_ > 0) {
-		auto frictionDir = mu::NVec3(velocity_);
-		auto friction = mu::Vec3(frictionDir) * (kFriction_ * gravityConst * detlaTimeSec.count());
-
-		const auto newV = velocity_ - friction;
-		if (mu::dot(newV, velocity_) < 0) {
+	if (kFriction_ > 0.f && velocity_.len2() > 0.01f) {
+		auto frictionDir = -mu::NVec3(velocity_);
+		auto friction = mu::Vec3(frictionDir) * kFriction_ * gravityConst;
+		velocity_ += friction * detlaTimeSec.count();
+		if (velocity_.len2() < 0.01f) {
 			velocity_ = mu::Vec3(0, 0, 0);
-		}
-		else {
-			velocity_ = newV;
 		}
 	}
 
@@ -76,6 +73,15 @@ void RigidBody::update(MilliSeconds deltaTime) {
 	}
 
 	// apply air drag
+	if (kAirdrag_ > 0.f && velocity_.len2() > 0.01f) {
+		auto airDrag = -0.5f * kAirdrag_ * 1.225f * 0.85f * velocity_.len() * velocity_;	// TODO: multiply volume's surface area correctly
+		auto airDragDir = mu::NVec3(airDrag);
+		airDrag += mu::Vec3(airDrag) * kConstantAirDrag_;
+		velocity_ += airDrag * detlaTimeSec.count() * invMass_;
+		if (velocity_.len2() < 0.01f) {
+			velocity_ = mu::Vec3(0, 0, 0);
+		}
+	}
 
 	momentum_ = velocity_ * mass();
 }

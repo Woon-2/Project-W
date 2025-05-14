@@ -11,7 +11,7 @@
 inline constexpr auto characterMoveLb2 = 0.12f * 0.12f;
 // walk upper bound
 inline constexpr auto characterWalkUb2 = 1.6f * 1.6f;
-inline constexpr auto characterRunUb2 = 10.f * 10.f;
+inline constexpr auto characterRunUb2 = 7.4f * 7.4f;
 
 void __8moveUpdate(std::string_view state,
     MilliSeconds fadeDuration, AnimInstance::ClipMode clipMode,
