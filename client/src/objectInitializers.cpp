@@ -13,6 +13,64 @@ inline constexpr auto characterMoveLb2 = 0.12f * 0.12f;
 inline constexpr auto characterWalkUb2 = 1.6f * 1.6f;
 inline constexpr auto characterRunUb2 = 10.f * 10.f;
 
+void __8moveUpdate(std::string_view state,
+    MilliSeconds fadeDuration, AnimInstance::ClipMode clipMode,
+    AnimController& con
+) {
+    const auto entityId = con.entityID().value();
+    const auto rigidBody = RigidBody::atC(entityId);
+    if (!rigidBody) {
+        return;
+    }
+    const auto velocity = rigidBody->velocity();
+    const auto model = gfx::d3d12engine::Model::atC(entityId);
+    const auto forward = mu::Vec3(model->get().root()->coord().xform().row(2u));
+    const auto moveDir = mu::quatFromTo(forward, mu::Vec3(0.f, 0.f, 1.f)).rotate(velocity);
+
+    struct __Direction {
+        std::string_view name;
+        mu::Vec3 direction;
+    };
+
+    static const std::vector<__Direction> directions = {
+        {"Forward",       mu::Vec3( 0.f, 0.f, 1.f )},
+        {"ForwardRight",  mu::NVec3( 1.f, 0.f, 1.f )},
+        {"Right",         mu::Vec3( 1.f, 0.f, 0.f )},
+        {"BackwardRight", mu::NVec3( 1.f, 0.f, -1.f )},
+        {"Backward",      mu::Vec3( 0.f, 0.f, -1.f )},
+        {"BackwardLeft",  mu::NVec3( 1.f, 0.f, -1.f)},
+        {"Left",          mu::Vec3( -1.f, 0.f, 0.f )},
+        {"ForwardLeft",   mu::NVec3( 1.f, 0.f, 1.f )}
+    };
+
+    auto newKey = std::string(state)
+        + std::ranges::max_element(
+            directions, {}, [&](const __Direction& dir) {
+                return mu::dot(moveDir, dir.direction);
+            }
+        )->name.data();
+
+    if (!AnimConAttorney::playing(newKey, con)) {
+        auto possiblePrevKeys = std::vector<std::string>();
+        possiblePrevKeys.reserve(directions.size());
+        for (const auto& dir : directions) {
+            auto key = std::string(state) + dir.name.data();
+            if (key != newKey) {
+                possiblePrevKeys.push_back(std::move(key));
+            }
+        }
+
+        possiblePrevKeys.push_back(newKey);
+
+        con.restoreAnimSequences(possiblePrevKeys);
+
+        possiblePrevKeys.pop_back();
+
+        fadeOutSelect(possiblePrevKeys, fadeDuration, con);
+        fadeIn(newKey, possiblePrevKeys, fadeDuration, con, clipMode);
+    }
+}
+
 // this function finds the appropriate animation clip from velocity,
 // with the state name followed by the direction suffix.
 // like:
@@ -28,7 +86,7 @@ void __8moveTransition(std::string_view fromState, std::string_view toState,
     const auto velocity = rigidBody->velocity();
     const auto model = gfx::d3d12engine::Model::atC(entityId);
     const auto forward = mu::Vec3(model->get().root()->coord().xform().row(2u));
-    const auto look = mu::quatFromTo(forward, mu::Vec3(0.f, 0.f, 1.f)).rotate(velocity);
+    const auto moveDir = mu::quatFromTo(forward, mu::Vec3(0.f, 0.f, 1.f)).rotate(velocity);
 
     struct __Direction {
         std::string_view name;
@@ -47,25 +105,25 @@ void __8moveTransition(std::string_view fromState, std::string_view toState,
     };
 
     auto possiblePrevKeys = std::vector<std::string>();
-    possiblePrevKeys.reserve(directions.size() + 1u);   // + 1u for additional current key
+    possiblePrevKeys.reserve(directions.size() + 1u);   // + 1u for additional key
     for (const auto& dir : directions) {
         possiblePrevKeys.push_back(std::string(fromState) + dir.name.data());
     }
 
-    auto curKey = std::string(toState)
+    auto newKey = std::string(toState)
         + std::ranges::max_element(
             directions, {}, [&](const __Direction& dir) {
-                return mu::dot(look, dir.direction);
+                return mu::dot(moveDir, dir.direction);
             }
         )->name.data();
 
     // reuse the possiblePrevKeys vector for optimization
-    possiblePrevKeys.push_back(curKey);
+    possiblePrevKeys.push_back(newKey);
 
     con.restoreAnimSequences(possiblePrevKeys);
     possiblePrevKeys.pop_back(); // remove the last element
     fadeOutSelect(possiblePrevKeys, fadeDuration, con);
-    fadeIn( curKey, possiblePrevKeys, fadeDuration, con, clipMode );
+    fadeIn( newKey, possiblePrevKeys, fadeDuration, con, clipMode );
 }
 
 // this function finds the appropriate animation clip from velocity,
@@ -83,7 +141,7 @@ void __8moveTransition(std::vector<std::string> possiblePrevKeys, std::string_vi
     const auto velocity = rigidBody->velocity();
     const auto model = gfx::d3d12engine::Model::atC(entityId);
     const auto forward = mu::Vec3(model->get().root()->coord().xform().row(2u));
-    const auto look = mu::quatFromTo(forward, mu::Vec3(0.f, 0.f, 1.f)).rotate(velocity);
+    const auto moveDir = mu::quatFromTo(forward, mu::Vec3(0.f, 0.f, 1.f)).rotate(velocity);
 
     struct __Direction {
         std::string_view name;
@@ -101,20 +159,20 @@ void __8moveTransition(std::vector<std::string> possiblePrevKeys, std::string_vi
         {"ForwardLeft",   mu::NVec3( 1.f, 0.f, 1.f )}
     };
 
-    auto curKey = std::string(toState)
+    auto newKey = std::string(toState)
         + std::ranges::max_element(
             directions, {}, [&](const __Direction& dir) {
-                return mu::dot(look, dir.direction);
+                return mu::dot(moveDir, dir.direction);
             }
         )->name.data();
 
     // reuse the possiblePrevKeys vector for optimization
-    possiblePrevKeys.push_back(curKey);
+    possiblePrevKeys.push_back(newKey);
 
     con.restoreAnimSequences(possiblePrevKeys);
     possiblePrevKeys.pop_back(); // remove the last element
     fadeOutSelect(possiblePrevKeys, fadeDuration, con);
-    fadeIn( std::move(curKey), std::move(possiblePrevKeys), fadeDuration, con, clipMode );
+    fadeIn( std::move(newKey), std::move(possiblePrevKeys), fadeDuration, con, clipMode );
 }
 
 std::vector<std::string> __8movePossibleKeys(std::string_view fromState) {
@@ -135,14 +193,14 @@ std::vector<std::string> __8movePossibleKeys(std::string_view fromState) {
     };
 
     auto possiblePrevKeys = std::vector<std::string>();
-    possiblePrevKeys.reserve(directions.size() + 1u);   // + 1u for additional current key
+    possiblePrevKeys.reserve(directions.size() + 1u);   // + 1u for additional key
     for (const auto& dir : directions) {
         possiblePrevKeys.push_back(std::string(fromState) + dir.name.data());
     }
     return possiblePrevKeys;
 }
 
-void characterStateIdleUpdate(fsm::FSM& fsm, AnimController& con, MilliSeconds deltaTime) {
+void characterStateIdleUpdate(fsm::FSM& fsm, AnimController& con, MilliSeconds fadeDuration) {
     const auto entityId = con.entityID().value();
     const auto rigidBody = RigidBody::atC(entityId);
     if (!rigidBody) {
@@ -181,7 +239,9 @@ fsm::State characterStateIdle(fsm::FSM& fsm, AnimController& con) {
     }
 }
 
-void characterStateWalkUpdate(fsm::FSM& fsm, AnimController& con, MilliSeconds deltaTime) {
+void characterStateWalkUpdate(fsm::FSM& fsm, MilliSeconds fadeDuration,
+    AnimInstance::ClipMode clipMode, AnimController& con
+) {
     const auto entityId = con.entityID().value();
     const auto rigidBody = RigidBody::atC(entityId);
     if (!rigidBody) {
@@ -194,14 +254,19 @@ void characterStateWalkUpdate(fsm::FSM& fsm, AnimController& con, MilliSeconds d
     if (speed2 >= characterMoveLb2) {
         if (speed2 >= characterWalkUb2) {
             fsm.pushDeferredEvent(fsm::Event::transition("Walk", "Run"));
+            return;
         }
         else if (speed2 >= characterRunUb2) {
             fsm.pushDeferredEvent(fsm::Event::transition("Walk", "Sprint"));
+            return;
         }
     }
     else  {
         fsm.pushDeferredEvent(fsm::Event::transition("Walk", "Idle"));
+        return;
     }
+
+    __8moveUpdate("GO_Character_Walk", fadeDuration, clipMode, con);
 }
 
 fsm::State characterStateWalk(fsm::FSM& fsm, AnimController& con) {
@@ -210,7 +275,7 @@ fsm::State characterStateWalk(fsm::FSM& fsm, AnimController& con) {
             while (auto ev = events.pop()) {
                 if (ev->evType() == AnimController::evAnimUpdate) {
                     characterStateWalkUpdate(
-                        fsm, con, ev->get<MilliSeconds>()
+                        fsm, 330_ms, AnimInstance::ClipMode::KeyFrame, con
                     );
                 }
                 // do something
@@ -221,7 +286,9 @@ fsm::State characterStateWalk(fsm::FSM& fsm, AnimController& con) {
     }
 }
 
-void characterStateRunUpdate(fsm::FSM& fsm, AnimController& con, MilliSeconds deltaTime) {
+void characterStateRunUpdate( fsm::FSM& fsm, MilliSeconds fadeDuration,
+    AnimInstance::ClipMode clipMode, AnimController& con
+) {
     const auto entityId = con.entityID().value();
     const auto rigidBody = RigidBody::atC(entityId);
     if (!rigidBody) {
@@ -234,14 +301,19 @@ void characterStateRunUpdate(fsm::FSM& fsm, AnimController& con, MilliSeconds de
     if (speed2 >= characterMoveLb2) {
         if (speed2 < characterWalkUb2) {
             fsm.pushDeferredEvent(fsm::Event::transition("Run", "Walk"));
+            return;
         }
         else if (speed2 >= characterRunUb2) {
             fsm.pushDeferredEvent(fsm::Event::transition("Run", "Sprint"));
+            return;
         }
     }
     else {
         fsm.pushDeferredEvent(fsm::Event::transition("Run", "Idle"));
+        return;
     }
+
+    __8moveUpdate("GO_Character_Run", fadeDuration, clipMode, con);
 }
 
 fsm::State characterStateRun(fsm::FSM& fsm, AnimController& con) {
@@ -250,7 +322,7 @@ fsm::State characterStateRun(fsm::FSM& fsm, AnimController& con) {
             while (auto ev = events.pop()) {
                 if (ev->evType() == AnimController::evAnimUpdate) {
                     characterStateRunUpdate(
-                        fsm, con, ev->get<MilliSeconds>()
+                        fsm, 330_ms, AnimInstance::ClipMode::KeyFrame, con
                     );
                 }
                 // do something
@@ -261,7 +333,9 @@ fsm::State characterStateRun(fsm::FSM& fsm, AnimController& con) {
     }
 }
 
-void characterStateSprintUpdate(fsm::FSM& fsm, AnimController& con, MilliSeconds deltaTime) {
+void characterStateSprintUpdate(fsm::FSM& fsm, MilliSeconds fadeDuration,
+    AnimInstance::ClipMode clipMode, AnimController& con
+) {
     const auto entityId = con.entityID().value();
     const auto rigidBody = RigidBody::atC(entityId);
     if (!rigidBody) {
@@ -274,14 +348,19 @@ void characterStateSprintUpdate(fsm::FSM& fsm, AnimController& con, MilliSeconds
     if (speed2 >= characterMoveLb2) {
         if (speed2 < characterWalkUb2) {
             fsm.pushDeferredEvent(fsm::Event::transition("Sprint", "Walk"));
+            return;
         }
         else if (speed2 < characterRunUb2) {
             fsm.pushDeferredEvent(fsm::Event::transition("Sprint", "Run"));
+            return;
         }
     }
     else {
         fsm.pushDeferredEvent(fsm::Event::transition("Sprint", "Idle"));
+        return;
     }
+
+    __8moveUpdate("GO_Character_Sprint", fadeDuration, clipMode, con);
 }
 
 fsm::State characterStateSprint(fsm::FSM& fsm, AnimController& con) {
@@ -290,7 +369,7 @@ fsm::State characterStateSprint(fsm::FSM& fsm, AnimController& con) {
             while (auto ev = events.pop()) {
                 if (ev->evType() == AnimController::evAnimUpdate) {
                     characterStateSprintUpdate(
-                        fsm, con, ev->get<MilliSeconds>()
+                        fsm, 240_ms, AnimInstance::ClipMode::KeyFrame, con
                     );
                 }
                 // do something
