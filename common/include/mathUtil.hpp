@@ -3254,6 +3254,27 @@ inline const Quat MU_CALLCONV quatRotMat(
     return quatRotMat(mat.get());
 }
 
+inline const NQuat MU_CALLCONV quatFromTo(
+    NVec<3> nFrom, NVec<3> nTo
+) __MathUtil_NOEXCEPT {
+    const auto d = dot(nFrom, nTo);
+    if (d >= 1.f) {
+        return NQuat();
+    } else if (d <= -1.f) {
+        // use axis perpendicular to from
+        auto axis = cross(nFrom, NVec<3>(1.f, 0.f, 0.f, NVec<3>::NoNormalize_t{}));
+        if (axis.len2() < 0.0001f) {
+            axis = cross(nFrom, NVec<3>(0.f, 1.f, 0.f, NVec<3>::NoNormalize_t{}));
+        }
+
+        return quatRotAxis(axis, Radian(pi));
+    }
+
+    const auto axis = cross(nFrom, nTo);
+    const auto angle = acos(d);
+    return quatRotAxis(axis, angle);
+}
+
 inline const Mat<3, 3> MU_CALLCONV transpose(Mat<3, 3> mat) __MathUtil_NOEXCEPT {
     return dx::XMMatrixTranspose(mat.get());
 }

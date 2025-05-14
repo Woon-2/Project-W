@@ -1187,6 +1187,22 @@ TaskAnimSequence softCircular( std::vector<std::string> keys, std::string prevKe
     }
 }
 
+void softCircular( std::vector<std::string> keys,
+    std::vector<std::string> possiblePrevKeys,
+    MilliSeconds fadeDuration, AnimController& animCon,
+    AnimInstance::ClipMode clipMode
+) {
+    std::string prevKey{};
+    for (const auto& key : possiblePrevKeys) {
+        if (AnimConAttorney::playing(key, animCon)) {
+            prevKey = key;
+            break;
+        }
+    }
+
+    softCircular(std::move(keys), std::move(prevKey), fadeDuration, animCon, clipMode);
+}
+
 AnimSystem::AnimSystem( gfx::d3d12::D3D12Device& device,
     const gfx::d3d12::RootSignature& root
 ) : shaderAnimInterpolation_(device, root, gfx::d3d12::ShaderAnimInterpolation::Config{
