@@ -170,7 +170,7 @@ int main( ) {
 				pCoord->resetDeltaPos();
 				pCoord->resetDeltaRot();
 
-				const auto dp = pCoord->decodeDeltaPos(cdp);
+				auto dp = pCoord->decodeDeltaPos(cdp);
 				const auto dr = pCoord->decodeDeltaRot(cdr);
 
 				const auto beforePos = mu::Vec3(pCoord->get().xform().row(3));
@@ -227,9 +227,19 @@ int main( ) {
 				const auto y1 = std::lerp(y10, y11, hz);
 				const auto y = std::lerp(y0, y1, hx);
 
-				const auto realDp = mu::Vec3(dp.x(), y00 - beforePos.y(), dp.z());
+				// sliding
+				if (expectedPos.y() + 0.001f < y) {
+					auto c = mu::Vec3();
 
-				pCoord->accTranslation(realDp);
+					mu::NVec3 v = mu::Vec3(expectedPos.x(), y, expectedPos.z()) - beforePos;
+					if (mu::dot(v, mu::Vec3(0.f, 1.f, 0.f)) <+ 0.9999f) {
+						auto tangent = mu::cross(mu::Vec3(0.f, 1.f, 0.f), v);
+						mu::NVec3 N = mu::cross(v, tangent);
+						dp = mu::slide(dp, N);
+					}
+				}
+
+				pCoord->accTranslation(dp);
 				const auto realCdp = pCoord->compressedDeltaPos();
 				pCoord->resetDeltaPos();
 
@@ -250,7 +260,7 @@ int main( ) {
 					curPacket.moveCnt = 0;
 				}
 
-				pCoord->get() << mu::translate(realDp);
+				pCoord->get() << mu::translate(dp);
 				if (auto pModel = DummyModel::at(eid)) {
 					pModel->coord() << mu::Mat4x4(dr);
 				}

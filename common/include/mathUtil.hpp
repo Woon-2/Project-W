@@ -2189,7 +2189,7 @@ template <std::size_t D>
 const Vec<D> MU_CALLCONV slide(
     Vec<D> vec, NVec<D> normal
 ) __MathUtil_NOEXCEPT {
-    return vec - dot(vec, normal) * normal;
+    return vec - dot(vec, normal) * mu::Vec<D>(normal);
 }
 
 template <std::size_t D>
@@ -2224,6 +2224,106 @@ const Vec<D> MU_CALLCONV catmullrom(
     Vec<D> v0, Vec<D> v1, Vec<D> v2, Vec<D> v3, float s
 ) __MathUtil_NOEXCEPT {
     return dx::XMVectorCatmullRom(v0.get(), v1.get(), v2.get(), v3.get(), s);
+}
+
+template <std::size_t D>
+    requires (D >= 2 && D <= 3)
+bool intersectLineSegments(
+    Vec<D> a1, Vec<D> a2,
+    Vec<D> b1, Vec<D> b2,
+    Vec<D>& ip, float* pt = nullptr, float* pu = nullptr
+) __MathUtil_NOEXCEPT {
+    const auto d1 = a2 - a1;
+    const auto d2 = b2 - b1;
+
+    const auto n = cross(d1, d2);
+    const auto det = n.len2();
+
+    // Check if lines are parallel
+    if (det < 1e-5f) {
+        return false;
+    }
+
+    const auto r = b1 - a1;
+    const auto t = dot(cross(r, d2), n) / det;
+
+    // Check if lines are collinear
+    if (t < 0.f || t > 1.f) {
+        return false;
+    }
+
+    const auto u = dot(cross(r, d1), n) / det;
+    if (u < 0.f || u > 1.f) {
+        return false;
+    }
+
+    // Lines intersect
+    ip = a1 + t * d1;
+
+    if (pt) {
+        *pt = t;
+    }
+
+    if (pu) {
+        *pu = u;
+    }
+
+    return true;
+}
+
+template <std::size_t D>
+    requires (D == 3)
+bool intersectLineAndPlane(
+    Vec<D> a1, Vec<D> a2,
+    NVec<D> N, float d, Vec<D>& ip, float* pt = nullptr
+) __MathUtil_NOEXCEPT {
+    const NVec<D> v = a2 - a1;
+
+    auto denom = dot(N, v);
+
+    if (std::abs(denom) < 1e-5f) {
+        return false; // Line is parallel to plane
+    }
+
+    auto t = -(d + dot(N, a1)) / denom;
+
+    // Line segment intersects plane
+    ip = a1 + t * mu::Vec<D>(v);
+
+    if (pt) {
+        *pt = t;
+    }
+
+    return true;
+}
+
+template <std::size_t D>
+    requires (D == 3)
+bool intersectLineSegmentAndPlane(
+    Vec<D> a1, Vec<D> a2,
+    NVec<D> N, float d, Vec<D>& ip, float* pt = nullptr
+) __MathUtil_NOEXCEPT {
+    const NVec<D> v = a2 - a1;
+
+    auto denom = dot(N, v);
+
+    if (std::abs(denom) < 1e-5f) {
+        return false; // Line is parallel to plane
+    }
+
+    auto t = -(d + dot(N, a1)) / denom;
+    if (t < 0.f || t > 1.f) {
+        return false; // Line segment does not intersect plane
+    }
+
+    // Line segment intersects plane
+    ip = a1 + t * mu::Vec<D>(v);
+
+    if (pt) {
+        *pt = t;
+    }
+
+    return true;
 }
 
 template <std::size_t D>
