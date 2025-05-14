@@ -1323,6 +1323,92 @@ void ShaderAnimInterpolation::releaseBlob() {
 	blob_.reset();
 }
 
+ShaderSkybox::ShaderSkybox(D3D12Device& device, const RootSignature& root,
+	const Config& config, InputLayout::Spec ilSpec
+) : Shader(root, makeInputLayout(ilSpec)),
+cbDrawcallDataSize_(calcConstantBufferSize(sizeof(sr::PerDrawcallData5))),
+perFrameData_(device, sizeof(sr::PerFrameData3)),
+perDrawcallData_(device, cbDrawcallDataSize_* config.maxDrawcallCnt),
+maxDrawcallCnt_(config.maxDrawcallCnt) {
+	perFrameData_.pullGpuAddr();
+	perDrawcallData_.pullGpuAddr();
+}
+
+void ShaderSkybox::bindRootParams(D3D12GfxCmdList& cmdList) {
+	auto& root = UnifiedRoot::get();
+
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		root.params[UnifiedRoot::ParamIndices::b2],
+		perFrameData_.gpuAddr()
+	);
+}
+
+void ShaderSkybox::bindPerDrawcallData(
+	std::size_t drawcallIdx, D3D12GfxCmdList& cmdList
+) {
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		UnifiedRoot::get().params[UnifiedRoot::ParamIndices::b1],
+		perDrawcallData_.gpuAddr() + cbDrawcallDataSize() * drawcallIdx
+	);
+}
+
+void ShaderSkybox::loadBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
+		shaderPath / "skybox.hlsl", nullptr,
+		"VS_Main", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
+	};
+	blobs_[etoi(ShaderBlob::Type::Pixel)] = ShaderBlob{
+		shaderPath / "skybox.hlsl", nullptr,
+		"PS_Main", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Pixel
+	};
+}
+
+void ShaderSkybox::releaseBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)].reset();
+	blobs_[etoi(ShaderBlob::Type::Pixel)].reset();
+}
+
+InputLayout ShaderSkybox::makeInputLayout(InputLayout::Spec ilSpec) {
+	switch (ilSpec) {
+	case InputLayout::Spec::serial:
+		return makeInputLayoutSerial();
+	case InputLayout::Spec::separated:
+		return makeInputLayoutSeparated();
+	default:
+		throw GFX_EXCEPT("Invalid input layout specification.");
+	}
+}
+
+InputLayout ShaderSkybox::makeInputLayoutSerial() {
+	return InputLayout(std::vector<InputLayout::Slot>{
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{.semanticName = "POSITION", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+				InputLayout::Elem{.semanticName = "TEXCOORD", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32_FLOAT }
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Position3D))
+				| (1ull << etoi(Vertex::Properties::TexCoord2D0))
+		}
+	});
+}
+
+InputLayout ShaderSkybox::makeInputLayoutSeparated() {
+	return InputLayout(std::vector<InputLayout::Slot>{
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{.semanticName = "POSITION", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Position3D))
+		},
+			InputLayout::Slot{
+				.elems = {
+					InputLayout::Elem{.semanticName = "TEXCOORD", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32_FLOAT },
+				},
+				.attributes = (1ull << etoi(Vertex::Properties::TexCoord2D0))
+		}
+	});
+}
+
 }   // namespace gfx::d3d12
 
 }   // namespace gfx

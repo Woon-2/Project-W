@@ -1049,6 +1049,143 @@ RefModel& RefModel::operator=(RefModel&& other) noexcept {
     return *this;
 }
 
+RefModel RefModel::buildSphereModel(D3D12Device& device, D3D12GfxCmdList& cmdList) {
+    auto model = RefModel();
+
+    auto& node = model.nodeStorage_.emplace_back(&model);
+    model.pRoot_ = &node;
+    model.pSkeleton_ = nullptr;
+
+	auto& mesh = node.meshes_.emplace_back(&node);
+
+	mesh.name_ = "Sphere";
+    mesh.vbLayouts_.emplace_back();    // vertex buffer 만들어서 채워넣기
+
+    // 어디까지나 예시
+    // vbLayouts_[0]: 슬롯 0번에 Pos, 슬롯 1번에 Normal, 슬롯 2번에 Tex
+    auto& primaryVBs = mesh.vbLayouts_.back();
+
+	auto vbMemPos = std::vector<std::uint8_t>();
+    auto vbMemTex = std::vector<std::uint8_t>();
+
+    int nPositions = 0, nTextureCoords = 0;
+
+    float radius = 0.5f; // 구의 반지름
+    UINT32 stackCount = 20; // 가로 분할
+    UINT32 sliceCount = 20; // 세로 분할
+
+    float stackAngle = mu::pi / stackCount;
+    float sliceAngle = (2 * mu::pi) / sliceCount;
+
+    float deltaU = 1.f / static_cast<float>(sliceCount);
+    float deltaV = 1.f / static_cast<float>(stackCount);
+
+    // 점 개수가 몇 개가 필요한지 계산 -> nPositions
+    nPositions = nTextureCoords = 1 + (stackCount - 1) * (sliceCount + 1) + 1;
+
+    vbMemPos.resize(sizeof(dx::XMFLOAT3) * nPositions);
+    vbMemTex.resize(sizeof(dx::XMFLOAT3) * nTextureCoords);
+
+    int k = 0;
+    
+	// 북극
+    // Position
+	auto src = dx::XMFLOAT3(0.f, radius, 0.f);
+    std::memcpy((vbMemPos.data() + (k++) * sizeof(dx::XMFLOAT3)), static_cast<const void*>(&src), sizeof(dx::XMFLOAT3));
+	// TexCoord
+	auto texCoord = dx::XMFLOAT2(0.5f, 0.f);
+	std::memcpy((vbMemTex.data() + (k++) * sizeof(dx::XMFLOAT2)), static_cast<const void*>(&texCoord), sizeof(dx::XMFLOAT2));
+
+    for (UINT y = 1; y <= stackCount - 1; ++y)
+    {
+        float phi = y * stackAngle;
+
+        for (UINT x = 0; x <= sliceCount; ++x)
+        {
+			float theta = x * sliceAngle;
+
+			src = dx::XMFLOAT3(
+				radius * std::sin(phi) * std::cos(theta),
+				radius * std::cos(phi),
+				radius * std::sin(phi) * std::sin(theta)
+			);
+			std::memcpy((vbMemPos.data() + (k++) * sizeof(dx::XMFLOAT3)), static_cast<const void*>(&src), sizeof(dx::XMFLOAT3));
+
+			texCoord = dx::XMFLOAT2(
+				static_cast<float>(x) * deltaU,
+				static_cast<float>(y) * deltaV
+			);
+			std::memcpy((vbMemTex.data() + (k++) * sizeof(dx::XMFLOAT2)), static_cast<const void*>(&texCoord), sizeof(dx::XMFLOAT2));
+        }
+    }
+
+	// 남극
+    // Position
+	src = dx::XMFLOAT3(0.f, -radius, 0.f);
+	std::memcpy((vbMemPos.data() + (k++) * sizeof(dx::XMFLOAT3)), static_cast<const void*>(&src), sizeof(dx::XMFLOAT3));
+	// TexCoord
+	texCoord = dx::XMFLOAT2(0.5f, 1.f);
+	std::memcpy((vbMemTex.data() + (k++) * sizeof(dx::XMFLOAT2)), static_cast<const void*>(&texCoord), sizeof(dx::XMFLOAT2));
+
+    auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
+    tmp.set(etoi(Vertex::Properties::Position3D));
+    primaryVBs.emplace_back(device, cmdList, std::move(vbMemPos),
+        sizeof(dx::XMFLOAT3) * nPositions, sizeof(dx::XMFLOAT3), tmp
+    );
+
+	tmp.reset();
+	tmp.set(etoi(Vertex::Properties::TexCoord2D0));
+	primaryVBs.emplace_back(device, cmdList, std::move(vbMemTex),
+		sizeof(dx::XMFLOAT2) * nTextureCoords, sizeof(dx::XMFLOAT2), tmp
+	);
+
+    auto& submesh = mesh.submeshes_.emplace_back(&mesh, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    
+	int nSubIndices = 3 * (2 * sliceCount * (stackCount - 1) + 1);
+	auto indices = std::vector<std::uint16_t>(nSubIndices);
+    
+    // 북극 인덱스
+    for (UINT i = 0; i <= sliceCount; ++i)
+    {
+        indices.push_back(static_cast<std::uint16_t>(0));
+        indices.push_back(static_cast<std::uint16_t>(i + 2));
+        indices.push_back(static_cast<std::uint16_t>(i + 1));
+    }
+
+    UINT ringVertexCount = sliceCount + 1;
+    for (UINT y = 0; y < stackCount - 2; ++y)
+    {
+        for (UINT x = 0; x < sliceCount; ++x)
+        {
+            indices.push_back(static_cast<std::uint16_t>(1 + (y)*ringVertexCount + (x)));
+            indices.push_back(static_cast<std::uint16_t>(1 + (y)*ringVertexCount + (x + 1)));
+            indices.push_back(static_cast<std::uint16_t>(1 + (y + 1) * ringVertexCount + (x)));
+
+            indices.push_back(static_cast<std::uint16_t>(1 + (y + 1) * ringVertexCount + (x)));
+            indices.push_back(static_cast<std::uint16_t>(1 + (y)*ringVertexCount + (x + 1)));
+            indices.push_back(static_cast<std::uint16_t>(1 + (y + 1) * ringVertexCount + (x + 1)));
+        }
+    }
+
+    // 남극 인덱스
+    UINT bottomIndex = nPositions - 1;
+    UINT lastRingStartIndex = bottomIndex - ringVertexCount;
+    for (UINT i = 0; i < sliceCount; ++i)
+    {
+        //  [last+i]-[last+i+1]
+        //  |      /
+        //  [bottom]
+        indices.push_back(static_cast<std::uint16_t>(bottomIndex));
+        indices.push_back(static_cast<std::uint16_t>(lastRingStartIndex + i));
+        indices.push_back(static_cast<std::uint16_t>(lastRingStartIndex + i + 1));
+    }
+
+    submesh.ib_;    // index buffer 만들어서 채워넣기    
+    submesh.ib_ = IndexBuffer(device, cmdList, indices.data(), DXGI_FORMAT_R16_UINT, nSubIndices);
+
+    return model;
+}
+
 RefModel RefModel::loadHierarchyFromFile( const std::filesystem::path& path,
     D3D12Device& device, D3D12GfxCmdList& cmdList,
     const ResourceStorage::Slot& texSlot,

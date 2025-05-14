@@ -827,6 +827,49 @@ private:
     const SamplerStorage* pSamplerStorage_;
 };
 
+class Skybox : public gfx::d3d12::RenderPass {
+public:
+    static constexpr const char* id = "Skybox";
+
+    Skybox(D3D12Device& device, ShaderSkybox& shader,
+        const SamplerStorage& samplerStorage, const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
+    );
+
+    void setViewport(const D3D12_VIEWPORT& vp);
+
+    const D3D12_VIEWPORT& viewport() const NOEXCEPT {
+        return viewport_;
+    }
+
+    void preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+
+    void trackModel(Model* pModel);
+    void trackModel(Model* pModel, const BoundingVolumeNode* pBVNode);
+    void setCamera(const Camera* pCamera) NOEXCEPT {
+        pCamera_ = pCamera;
+    }
+
+private:
+    ShaderSkybox& shader() noexcept {
+        return static_cast<ShaderSkybox&>(protocol_.shader());
+    }
+    const ShaderSkybox& shader() const noexcept {
+        return static_cast<const ShaderSkybox&>(protocol_.shader());
+    }
+
+    static RenderProtocol::Desc makeDesc();
+
+    D3D12_VIEWPORT viewport_;
+    RenderProtocol protocol_;
+    std::vector< std::tuple<bool, const BoundingVolumeNode*, Submesh*,
+        const coord::System*, VBLayoutIdx, mu::Mat4x4>
+    > batch_;
+    const Camera* pCamera_;
+    const SamplerStorage* pSamplerStorage_;
+};
+
 }   // namespace gfx::d3d12::rp
 
 }   // namespace gfx::d3d12

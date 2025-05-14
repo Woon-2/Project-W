@@ -500,6 +500,28 @@ void CascadeShadowMap::update(Scene& scene)
     }
 }
 
+void Skybox::init(Scene& scene) {
+    for (auto& entityID : reservedEntities(scene)) {
+        if (auto pModel = Model::at(entityID)) {
+            trackModel(&pModel->get());
+        }
+        if (auto pCamera = Camera::at(entityID)) {
+            setCamera(&pCamera->get());
+        }
+    }
+}
+
+void Skybox::update(Scene& scene) {
+    for (auto& entityID : reservedEntities(scene)) {
+        if (auto pModel = Model::at(entityID)) {
+            trackModel(&pModel->get());
+        }
+        if (auto pCamera = Camera::at(entityID)) {
+            setCamera(&pCamera->get());
+        }
+    }
+}
+
 }   // namespace gfx::d3d12engine::rp
 
 }   // namespace gfx::d3d12engine

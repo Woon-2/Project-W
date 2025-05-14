@@ -755,6 +755,7 @@ public:
         const ResourceStorage::Slot& texArraySlot,
         const ResourceStorage::Slot& texCubeSlot
     );
+    static RefModel buildSphereModel(D3D12Device& device, D3D12GfxCmdList& cmdList);
 
     void arrangeVBs( D3D12Device& device, D3D12GfxCmdList& cmdList,
         std::size_t layoutIdx, const std::vector<std::vector<Vertex::Properties>>& vbProps

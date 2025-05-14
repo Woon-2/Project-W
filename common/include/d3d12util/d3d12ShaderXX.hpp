@@ -512,6 +512,11 @@ struct PerDrawcallData4 {
     dx::XMFLOAT2 padding;
 };
 
+struct PerDrawcallData5 {
+	PBRMaterial material;
+	std::uint32_t samplerIdx;
+};
+
 struct PerFrameData0 {
 	dx::XMFLOAT3 globalAmbient;
 	float padding0;
@@ -532,6 +537,10 @@ struct PerFrameData2 {
 	dx::XMFLOAT4X4 lightVP[3];
 	std::uint32_t lightCnt;
 	dx::XMUINT3 padding1;
+};
+
+struct PerFrameData3 {
+	dx::XMFLOAT4X4 vp;
 };
 
 struct KeyFrame {
@@ -1093,6 +1102,51 @@ public:
 
 private:
 	std::size_t maxKeyFrameCnt_;
+};
+
+class ShaderSkybox : public Shader {
+private:
+	std::size_t cbDrawcallDataSize_;
+
+public:
+	struct Config {
+		std::size_t maxDrawcallCnt;
+	};
+
+	ShaderSkybox(D3D12Device& device, const RootSignature& root,
+		const Config& config, InputLayout::Spec ilSpec = InputLayout::Spec::serial
+	);
+
+	RenderProtocol makeProtocol(D3D12Device& device, const RenderProtocol::Desc& desc) {
+		return RenderProtocol(device, *this,
+			selectBlobsStrong<ShaderBlob::Type::Vertex, ShaderBlob::Type::Pixel>(), desc
+		);
+	}
+
+	std::size_t maxDrawcallCnt() const noexcept {
+		return maxDrawcallCnt_;
+	}
+
+
+	void bindRootParams(D3D12GfxCmdList& cmdList) override;
+	void bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCmdList& cmdList);
+
+	std::size_t cbDrawcallDataSize() const noexcept {
+		return cbDrawcallDataSize_;
+	}
+
+	void loadBlobs() override;
+	void releaseBlobs() override;
+
+	UploadBuffer perFrameData_;
+	UploadBuffer perDrawcallData_;
+
+private:
+	static InputLayout makeInputLayout(InputLayout::Spec ilSpec);
+	static InputLayout makeInputLayoutSerial();
+	static InputLayout makeInputLayoutSeparated();
+
+	std::size_t maxDrawcallCnt_;
 };
 
 }   // namespace gfx::d3d12

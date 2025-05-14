@@ -59,6 +59,9 @@ private:
     gfx::d3d12::ShaderShadowMapTessellation shaderShadowMapTessellation_;
     gfx::d3d12engine::rp::ShadowMapTessellation renderPassShadowMapTessellation_;
 
+    gfx::d3d12::ShaderSkybox shaderSkybox_;
+    gfx::d3d12engine::rp::Skybox renderPassSkybox_;
+
     Mode renderMode_;
 };
 

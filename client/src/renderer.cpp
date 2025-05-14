@@ -53,6 +53,12 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
     ), renderPassShadowMapTessellation_(core.device(),
         shaderShadowMapTessellation_, core.samStorage(),
         gfx::d3d12::convClientToVP(core.window().client())
+    ), shaderSkybox_(core.device(), core.root(),
+        gfx::d3d12::ShaderSkybox::Config{
+            .maxDrawcallCnt = 0x1000u,
+        }, gfx::d3d12::InputLayout::Spec::serial
+    ), renderPassSkybox_(core.device(), shaderSkybox_,
+        core.samStorage(), gfx::d3d12::convClientToVP(core.window().client())
     ) {
     rendererTexStorage_.addSlot(
         slotKeyTexture,
@@ -141,6 +147,7 @@ void Renderer::init(gfx::d3d12engine::Scene& scene) {
     renderPassTessellation_.init(scene);
     renderPassShadowMapTessellation_.init(scene);
 	renderPassCascadeShadowMap_.init(scene);
+    renderPassSkybox_.init(scene);
 }
 
 void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& scene, gfx::d3d12::RenderTargets& renderTargets) {
@@ -152,6 +159,7 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
     renderPassScreenQuad_.update(scene);
     renderPassTessellation_.update(scene);
     renderPassShadowMapTessellation_.update(scene);
+	renderPassSkybox_.update(scene);
 
     switch (renderMode_) {
     case Mode::Color:
@@ -184,6 +192,11 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
         renderPassTessellation_.preRender( cmdList, renderTargets );
         renderPassTessellation_.render( cmdList, renderTargets );
         renderPassTessellation_.postRender( cmdList, renderTargets );
+
+		//shaderSkybox_.bindRootParams(cmdList);
+		//renderPassSkybox_.preRender(cmdList, renderTargets);
+		//renderPassSkybox_.render(cmdList, renderTargets);
+		//renderPassSkybox_.postRender(cmdList, renderTargets);
         break;
 
     case Mode::Cascade0Depth:
@@ -207,6 +220,11 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
         renderPassScreenQuad_.preRender( cmdList, renderTargets );
         renderPassScreenQuad_.render( cmdList, renderTargets );
         renderPassScreenQuad_.postRender( cmdList, renderTargets );
+
+        //shaderSkybox_.bindRootParams(cmdList);
+        //renderPassSkybox_.preRender(cmdList, renderTargets);
+        //renderPassSkybox_.render(cmdList, renderTargets);
+        //renderPassSkybox_.postRender(cmdList, renderTargets);
         break;
 
     case Mode::Cascade1Depth:
@@ -230,6 +248,11 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
         renderPassScreenQuad_.preRender(cmdList, renderTargets);
         renderPassScreenQuad_.render(cmdList, renderTargets);
         renderPassScreenQuad_.postRender(cmdList, renderTargets);
+
+        //shaderSkybox_.bindRootParams(cmdList);
+        //renderPassSkybox_.preRender(cmdList, renderTargets);
+        //renderPassSkybox_.render(cmdList, renderTargets);
+        //renderPassSkybox_.postRender(cmdList, renderTargets);
         break;
 
     case Mode::Cascade2Depth:
@@ -253,6 +276,11 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
         renderPassScreenQuad_.preRender(cmdList, renderTargets);
         renderPassScreenQuad_.render(cmdList, renderTargets);
         renderPassScreenQuad_.postRender(cmdList, renderTargets);
+
+        //shaderSkybox_.bindRootParams(cmdList);
+        //renderPassSkybox_.preRender(cmdList, renderTargets);
+        //renderPassSkybox_.render(cmdList, renderTargets);
+        //renderPassSkybox_.postRender(cmdList, renderTargets);
         break;
 
     default:
