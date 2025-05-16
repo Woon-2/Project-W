@@ -34,6 +34,7 @@ public:
 
 private:
     static constexpr auto slotKeyTexture = "texture";
+	static constexpr auto slotKeyTextureArray = "textureArray";
 
     gfx::d3d12::ResourceStorage rendererTexStorage_;
 
@@ -60,6 +61,9 @@ private:
 
     gfx::d3d12::ShaderShadowMapTessellation shaderShadowMapTessellation_;
     gfx::d3d12engine::rp::ShadowMapTessellation renderPassShadowMapTessellation_;
+
+    gfx::d3d12::ShaderSkybox shaderSkybox_;
+    gfx::d3d12engine::rp::Skybox renderPassSkybox_;
 
     Mode renderMode_;
 };
