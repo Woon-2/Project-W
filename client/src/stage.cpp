@@ -383,6 +383,10 @@ void Stage::loadAssets() {
     loadBVHPaths();
     loadLevel(cmdList);
 
+	auto pTex = staticResStorage_.slot(slotKeyTexture).get<gfx::d3d12::Texture>(assetTextureInfo(AssetTexture::SkySphere).paths.front().string());
+
+    pRenderer_->initResources(pCore_->device(), cmdList, pTex);
+
     pCore_->finishGPUResLoad();
 }
 
@@ -443,6 +447,10 @@ void Stage::loadTextures(gfx::d3d12::D3D12GfxCmdList& cmdList) {
     loadHeightmapTexture( staticResStorage_, pCore_->descRanges(),
         pCore_->device(), cmdList, AssetTexture::TerrainHeightmap
     );
+
+	loadTexture(staticResStorage_, pCore_->descRanges(),
+		pCore_->device(), cmdList, AssetTexture::SkySphere
+	);
 }
 
 void loadModel( gfx::d3d12::ResourceStorage& storage,

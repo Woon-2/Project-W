@@ -756,6 +756,7 @@ public:
         const ResourceStorage::Slot& texCubeSlot
     );
     static RefModel buildSphereModel(D3D12Device& device, D3D12GfxCmdList& cmdList);
+    static RefModel buildSkySphere(D3D12Device& device, D3D12GfxCmdList& cmdList, Texture* pTex);
 
     void arrangeVBs( D3D12Device& device, D3D12GfxCmdList& cmdList,
         std::size_t layoutIdx, const std::vector<std::vector<Vertex::Properties>>& vbProps
@@ -814,6 +815,10 @@ public:
 
     std::size_t vbLayoutCnt() const noexcept {
         return vbLayouts_.size();
+    }
+
+    auto& submeshes() noexcept {
+        return submeshes_;
     }
 
     const auto& submeshes() const noexcept {

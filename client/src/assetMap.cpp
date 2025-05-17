@@ -185,7 +185,16 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
                 getResourcePath()/"terrains\\HeightMaps\\Terrain_2_2_HeightMap.dds",
             },
             .type = gfx::d3d12::TextureResource::Type::Texture
-        }
+		},
+		TextureInfo{
+			.keys = {
+				"SkySphere"
+			},
+			.paths = {
+				getResourcePath() / "models\\SkySphere\\Textures\\Sky02.dds",
+			},
+			.type = gfx::d3d12::TextureResource::Type::Texture
+		}
     };
 
     return sTextureInfos[etoi(asset)];

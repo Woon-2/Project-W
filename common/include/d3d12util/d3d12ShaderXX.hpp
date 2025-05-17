@@ -1254,6 +1254,17 @@ public:
 		return maxDrawcallCnt_;
 	}
 
+	const RefModel& model() const noexcept {
+		return skyboxModel_;
+	}
+
+	void draw(D3D12GfxCmdList& cmdList) const {
+		skyboxModel_.root()->meshes().begin()->submeshes().begin()->draw(cmdList, 1, 0);
+	}
+
+	void initSkySphere(D3D12Device& device, D3D12GfxCmdList& cmdList, gfx::d3d12::Texture* pTex) {
+		skyboxModel_ = RefModel::buildSkySphere(device, cmdList, pTex);		
+	}
 
 	void bindRootParams(D3D12GfxCmdList& cmdList) override;
 	void bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCmdList& cmdList);
@@ -1274,6 +1285,8 @@ private:
 	static InputLayout makeInputLayoutSeparated();
 
 	std::size_t maxDrawcallCnt_;
+
+	RefModel skyboxModel_;
 };
 
 }   // namespace gfx::d3d12

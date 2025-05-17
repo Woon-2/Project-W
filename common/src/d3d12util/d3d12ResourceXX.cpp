@@ -185,18 +185,28 @@ TextureResource::LoadDDSReturnType TextureResource::loadDDS(
     auto alphaMode = DirectX::DDS_ALPHA_MODE_UNKNOWN;
     auto blsCubemap = false;
 
-    DX_THROW_FAILED( DirectX::LoadDDSTextureFromFileEx(
-        device.get().Get(),
-        path.wstring().c_str(),
-        0,
-        D3D12_RESOURCE_FLAG_NONE,
-        DirectX::DDS_LOADER_DEFAULT,
-        &ret.res,
-        ret.ddsData,
-        ret.subresources,
-        &alphaMode,
-        &blsCubemap
-    ) );
+    try {
+        DX_THROW_FAILED(DirectX::LoadDDSTextureFromFileEx(
+            device.get().Get(),
+            path.wstring().c_str(),
+            0,
+            D3D12_RESOURCE_FLAG_NONE,
+            DirectX::DDS_LOADER_DEFAULT,
+            &ret.res,
+            ret.ddsData,
+            ret.subresources,
+            &alphaMode,
+            &blsCubemap
+        ));
+	}
+	catch (gfx::DXException& e) {
+		MessageBoxA(
+			nullptr,
+			e.what(),
+			"Error loading DDS texture",
+			MB_OK | MB_ICONERROR
+		);
+	}
 
     auto requiredBytes = GetRequiredIntermediateSize(ret.res.Get(), 0, static_cast<UINT>(ret.subresources.size()));
 
@@ -1087,14 +1097,15 @@ RefModel RefModel::buildSphereModel(D3D12Device& device, D3D12GfxCmdList& cmdLis
     vbMemTex.resize(sizeof(dx::XMFLOAT3) * nTextureCoords);
 
     int k = 0;
-    
+    int l = 0;
+
 	// ∫œ±ÿ
     // Position
 	auto src = dx::XMFLOAT3(0.f, radius, 0.f);
     std::memcpy((vbMemPos.data() + (k++) * sizeof(dx::XMFLOAT3)), static_cast<const void*>(&src), sizeof(dx::XMFLOAT3));
 	// TexCoord
 	auto texCoord = dx::XMFLOAT2(0.5f, 0.f);
-	std::memcpy((vbMemTex.data() + (k++) * sizeof(dx::XMFLOAT2)), static_cast<const void*>(&texCoord), sizeof(dx::XMFLOAT2));
+	std::memcpy((vbMemTex.data() + (l++) * sizeof(dx::XMFLOAT2)), static_cast<const void*>(&texCoord), sizeof(dx::XMFLOAT2));
 
     for (UINT y = 1; y <= stackCount - 1; ++y)
     {
@@ -1115,7 +1126,7 @@ RefModel RefModel::buildSphereModel(D3D12Device& device, D3D12GfxCmdList& cmdLis
 				static_cast<float>(x) * deltaU,
 				static_cast<float>(y) * deltaV
 			);
-			std::memcpy((vbMemTex.data() + (k++) * sizeof(dx::XMFLOAT2)), static_cast<const void*>(&texCoord), sizeof(dx::XMFLOAT2));
+			std::memcpy((vbMemTex.data() + (l++) * sizeof(dx::XMFLOAT2)), static_cast<const void*>(&texCoord), sizeof(dx::XMFLOAT2));
         }
     }
 
@@ -1125,24 +1136,26 @@ RefModel RefModel::buildSphereModel(D3D12Device& device, D3D12GfxCmdList& cmdLis
 	std::memcpy((vbMemPos.data() + (k++) * sizeof(dx::XMFLOAT3)), static_cast<const void*>(&src), sizeof(dx::XMFLOAT3));
 	// TexCoord
 	texCoord = dx::XMFLOAT2(0.5f, 1.f);
-	std::memcpy((vbMemTex.data() + (k++) * sizeof(dx::XMFLOAT2)), static_cast<const void*>(&texCoord), sizeof(dx::XMFLOAT2));
+	std::memcpy((vbMemTex.data() + (l++) * sizeof(dx::XMFLOAT2)), static_cast<const void*>(&texCoord), sizeof(dx::XMFLOAT2));
 
     auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
     tmp.set(etoi(Vertex::Properties::Position3D));
     primaryVBs.emplace_back(device, cmdList, std::move(vbMemPos),
         sizeof(dx::XMFLOAT3) * nPositions, sizeof(dx::XMFLOAT3), tmp
     );
+    assert(k == nPositions);
 
 	tmp.reset();
 	tmp.set(etoi(Vertex::Properties::TexCoord2D0));
 	primaryVBs.emplace_back(device, cmdList, std::move(vbMemTex),
 		sizeof(dx::XMFLOAT2) * nTextureCoords, sizeof(dx::XMFLOAT2), tmp
 	);
+    assert(l == nTextureCoords);
 
     auto& submesh = mesh.submeshes_.emplace_back(&mesh, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     
 	int nSubIndices = 3 * (2 * sliceCount * (stackCount - 1) + 1);
-	auto indices = std::vector<std::uint16_t>(nSubIndices);
+	auto indices = std::vector<std::uint16_t>();
     
     // ∫œ±ÿ ¿Œµ¶Ω∫
     for (UINT i = 0; i <= sliceCount; ++i)
@@ -1184,6 +1197,17 @@ RefModel RefModel::buildSphereModel(D3D12Device& device, D3D12GfxCmdList& cmdLis
     submesh.ib_ = IndexBuffer(device, cmdList, indices.data(), DXGI_FORMAT_R16_UINT, nSubIndices);
 
     return model;
+}
+
+RefModel RefModel::buildSkySphere(D3D12Device& device, D3D12GfxCmdList& cmdList, Texture* pTex) {
+	auto ret = buildSphereModel(device, cmdList);
+
+    // ≈ÿΩ∫√≥∑Œ Material ∏∏µÈ±‚
+   ret.root()->meshes().begin()->submeshes().begin()->material_.addTexRes(
+	   Material::MapType::Albedo, *pTex
+   );
+
+   return ret;
 }
 
 RefModel RefModel::loadHierarchyFromFile( const std::filesystem::path& path,

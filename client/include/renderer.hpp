@@ -32,6 +32,10 @@ public:
         renderMode_ = renderMode;
     }
 
+    void initResources(gfx::d3d12::D3D12Device& device, gfx::d3d12::D3D12GfxCmdList& cmdList, gfx::d3d12::Texture* pTex) {
+        shaderSkybox_.initSkySphere(device, cmdList, pTex);
+    }
+
 private:
     static constexpr auto slotKeyTexture = "texture";
 	static constexpr auto slotKeyTextureArray = "textureArray";
@@ -50,8 +54,8 @@ private:
     gfx::d3d12::ShaderCascadeShadowMap shaderCascadeShaodwMap_;
     gfx::d3d12engine::rp::CascadeShadowMap renderPassCascadeShadowMap_;
 
-    gfx::d3d12::ShaderCascadeShadowMapAnimated shaderCascadeShadowMapAnimated_;
-    gfx::d3d12engine::rp::CascadeShadowMapAnimated renderPassCascadeShadowMapAnimated_;
+    //gfx::d3d12::ShaderCascadeShadowMapAnimated shaderCascadeShadowMapAnimated_;
+    //gfx::d3d12engine::rp::CascadeShadowMapAnimated renderPassCascadeShadowMapAnimated_;
 
     gfx::d3d12::ShaderScreenQuad shaderScreenQuad_;
     gfx::d3d12engine::rp::ScreenQuad renderPassScreenQuad_;
