@@ -2170,7 +2170,7 @@ void ScreenQuad::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) 
     renderTargets.clear(cmdList, RenderTargets::Specifier::Main);
 
     const auto pdd = sr::PerDrawcallData3{
-        .frameMapRef = shader().screenQuad_.mapRef().toxm(),
+        .frameMapRef = shader().screenQuad_.mapRefArrayIndex().toxm(),
         .samplerIdx = pSamplerStorage_->get( SamplerStorage::Indices::TrilinearBorder).index()
     };
 

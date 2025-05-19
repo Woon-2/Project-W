@@ -991,17 +991,27 @@ private:
 class ScreenQuad {
 public:
     ScreenQuad() NOEXCEPT
-        : pTex_(nullptr) {}
+        : pTex_(nullptr), pTexArray_(nullptr) {}
 
     ScreenQuad(const Texture* pTex) NOEXCEPT
-        : pTex_(pTex) {}
+        : pTex_(pTex), pTexArray_(nullptr) {}
+
+	ScreenQuad(const TextureArray* pTexArray) NOEXCEPT
+		: pTex_(nullptr), pTexArray_(pTexArray) {
+	}
 
     void link(const Texture* pTex) NOEXCEPT {
         pTex_ = pTex;
     }
 
+	void link(const TextureArray* pTexArray, int drawIdx) NOEXCEPT {
+		pTexArray_ = pTexArray;
+		arrayIdx_ = drawIdx;
+	}
+
     void unlink() NOEXCEPT {
         pTex_ = nullptr;
+		pTexArray_ = nullptr;
     }
 
     void draw(D3D12GfxCmdList& cmdList) const;
@@ -1015,8 +1025,19 @@ public:
         };
     }
 
+	Material::MapRef mapRefArrayIndex() const {
+		return Material::MapRef{
+			.type = etoi(Material::ResourceType::TextureArray),
+			.resourceIdx = static_cast<std::uint32_t>(pTexArray_->view(pTexArray_->idxSrv).offset()),
+			.arrayIdx = arrayIdx_,
+			.colorSpace = etoi(Material::ColorSpace::SRGB)
+		};
+	}
+
 private:
     const Texture* pTex_;
+    const TextureArray* pTexArray_;
+    UINT arrayIdx_;
 };
 
 class LevelChunkModel {

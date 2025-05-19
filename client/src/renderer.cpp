@@ -240,15 +240,15 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
         renderPassShadowMapTessellation_.postRender(cmdList, renderTargets);
 
         shaderScreenQuad_.bindRootParams( cmdList );
-        shaderScreenQuad_.screenQuad_.link(rendererTexStorage_.slot(slotKeyTexture).get<gfx::d3d12::Texture>("shadowArray"));
+        shaderScreenQuad_.screenQuad_.link(rendererTexStorage_.slot(slotKeyTextureArray).get<gfx::d3d12::TextureArray>("shadowArray"), 0);
         renderPassScreenQuad_.preRender( cmdList, renderTargets );
         renderPassScreenQuad_.render( cmdList, renderTargets );
         renderPassScreenQuad_.postRender( cmdList, renderTargets );
 
-        shaderSkybox_.bindRootParams(cmdList);
-        renderPassSkybox_.preRender(cmdList, renderTargets);
-        renderPassSkybox_.render(cmdList, renderTargets);
-        renderPassSkybox_.postRender(cmdList, renderTargets);
+        //shaderSkybox_.bindRootParams(cmdList);
+        //renderPassSkybox_.preRender(cmdList, renderTargets);
+        //renderPassSkybox_.render(cmdList, renderTargets);
+        //renderPassSkybox_.postRender(cmdList, renderTargets);
         break;
 
     case Mode::Cascade1Depth:
@@ -268,15 +268,15 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
         renderPassShadowMapTessellation_.postRender(cmdList, renderTargets);
 
         shaderScreenQuad_.bindRootParams(cmdList);
-        shaderScreenQuad_.screenQuad_.link(rendererTexStorage_.slot(slotKeyTexture).get<gfx::d3d12::Texture>("TextureArray"));
+        shaderScreenQuad_.screenQuad_.link(rendererTexStorage_.slot(slotKeyTextureArray).get<gfx::d3d12::TextureArray>("shadowArray"), 1);
         renderPassScreenQuad_.preRender(cmdList, renderTargets);
         renderPassScreenQuad_.render(cmdList, renderTargets);
         renderPassScreenQuad_.postRender(cmdList, renderTargets);
 
-        shaderSkybox_.bindRootParams(cmdList);
-        renderPassSkybox_.preRender(cmdList, renderTargets);
-        renderPassSkybox_.render(cmdList, renderTargets);
-        renderPassSkybox_.postRender(cmdList, renderTargets);
+        //shaderSkybox_.bindRootParams(cmdList);
+        //renderPassSkybox_.preRender(cmdList, renderTargets);
+        //renderPassSkybox_.render(cmdList, renderTargets);
+        //renderPassSkybox_.postRender(cmdList, renderTargets);
         break;
 
     case Mode::Cascade2Depth:
@@ -296,15 +296,15 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
         renderPassShadowMapTessellation_.postRender(cmdList, renderTargets);
 
         shaderScreenQuad_.bindRootParams(cmdList);
-        shaderScreenQuad_.screenQuad_.link(rendererTexStorage_.slot(slotKeyTexture).get<gfx::d3d12::Texture>("TextureArray"));
+        shaderScreenQuad_.screenQuad_.link(rendererTexStorage_.slot(slotKeyTextureArray).get<gfx::d3d12::TextureArray>("shadowArray"), 2);
         renderPassScreenQuad_.preRender(cmdList, renderTargets);
         renderPassScreenQuad_.render(cmdList, renderTargets);
         renderPassScreenQuad_.postRender(cmdList, renderTargets);
 
-        shaderSkybox_.bindRootParams(cmdList);
-        renderPassSkybox_.preRender(cmdList, renderTargets);
-        renderPassSkybox_.render(cmdList, renderTargets);
-        renderPassSkybox_.postRender(cmdList, renderTargets);
+        //shaderSkybox_.bindRootParams(cmdList);
+        //renderPassSkybox_.preRender(cmdList, renderTargets);
+        //renderPassSkybox_.render(cmdList, renderTargets);
+        //renderPassSkybox_.postRender(cmdList, renderTargets);
         break;
 
     default:
