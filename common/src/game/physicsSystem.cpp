@@ -1020,6 +1020,8 @@ void CollisionSystem::update() {
 				continue;
 			}
 
+			// TODO: check only once per each pair
+			// (if the bvs are not colliding, we can't skip the duplicated check with below code.)
 			if (std::ranges::find(pBV->collisionCache(), pOtherBV) != pBV->collisionCache().end()
 				|| std::ranges::find(pOtherBV->collisionCache(), pBV) != pOtherBV->collisionCache().end()
 			) {
@@ -1027,6 +1029,7 @@ void CollisionSystem::update() {
 				continue;
 			}
 
+			// TODO: do this work at caller side
 			auto xform = mu::Mat4x4();
 			if (auto pCoord = gameEngine::Coord::atC(pBV->entityID().value())) {
 				xform = pCoord->get().xform();
