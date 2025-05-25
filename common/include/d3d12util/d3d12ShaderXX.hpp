@@ -963,7 +963,7 @@ public:
 
 	RenderProtocol makeProtocol( D3D12Device& device, const RenderProtocol::Desc& desc) {
 		return RenderProtocol( device, *this,
-			selectBlobsStrong<ShaderBlob::Type::Vertex(), ShaderBlob::Type::Geometry>(), desc
+			selectBlobsStrong<ShaderBlob::Type::Vertex, ShaderBlob::Type::Geometry>(), desc
 		);
 	}
 

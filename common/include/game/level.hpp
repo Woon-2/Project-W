@@ -30,7 +30,7 @@ public:
     ENABLE_COMPONENT(Coord);
 
     Coord(const ecs::Entity& entity) NOEXCEPT
-        : ecs::Component(entity), coordSys_(), compressedDeltaPos_(), compressedDeltaRot_()
+        : ecs::Component(entity), coordSys_(), compressedDeltaPos_(0), compressedDeltaRot_(0)
         {
         resetDeltaPos();
         resetDeltaRot();

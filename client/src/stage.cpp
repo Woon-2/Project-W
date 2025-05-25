@@ -10,9 +10,6 @@ pmr::unordered_map<ecs::Entity::ID, mu::Vec3> gDestPoses;
 
 Stage* gpStage = nullptr;
 
-// InputNetworkForwarder 만들기: pushInputEvent (PlayerController가 호출)
-// InputNetworkForwarder가 Session&에 대고 패킷을 넣어줌 (buildPackets)
-
 void processSCEnter(SCEnter& scEnter, Session& session, Stage& stage);
 void processSCMove(SCMove& scMove, Session& session, Stage& stage);
 void processSCLeave(SCLeave& scLeave, Session& session, Stage& stage);
@@ -203,7 +200,9 @@ void processSCAssign(SCAssign& scAssign, Session& session, Stage& stage) {
     const auto cameraOffset = mu::Vec3(0.f, 1.8f, -1.6f);
     const auto cameraTimeLag = 0.4f;
 
-    camera.get().coordMovement() << mu::translate(cameraOffset);
+    stage.pSystems()->coordRoot.update();
+
+    camera.get().coordMovement() << mu::translate(cameraOffset + mu::Vec3(entt.as<gameEngine::Coord>().get().xform().row(3)));
     camera.get().coordRotation().setLocalXform(
         mu::transpose(mu::lookAt(mu::Vec3(), -cameraOffset, mu::Vec3(0.f, 1.f, 0.f)))
     );
