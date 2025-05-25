@@ -240,6 +240,12 @@ int main( ) {
 						mu::NVec3 N = mu::cross(v, tangent);
 						dp = mu::slide(dp, N);
 					}
+
+					if ( auto pRigidBody = RigidBody::at(eid) ) {
+						auto oldV = pRigidBody->velocity();
+						auto newV = mu::Vec3(oldV.x(), 0.f, oldV.z());
+						pRigidBody->setVelocity(newV);
+					}
 				}
 
 				pCoord->accTranslation(dp);
@@ -264,8 +270,6 @@ int main( ) {
 				}
 
 				pCoord->get() << mu::translate(dp);
-				const auto xx = pCoord->get().localXform().row(3);
-				std::cout << "x: " << xx.x() << ", y: " << xx.y() << ", z: " << xx.z() << "\n";
 				if (auto pModel = DummyModel::at(eid)) {
 					pModel->coord() << mu::Mat4x4(dr);
 				}
@@ -411,7 +415,7 @@ void worker( ) {
 			rb.setKFriction( 0.5f );
 			rb.setKAirdrag( 1.25f );
 			rb.setKConstantAirDrag( 3.f );
-			rb.disableGravity( );
+			rb.enableGravity( );
 			entity.createComponent<DummyModel>( entity.as<gameEngine::Coord>() );
 
 			entity.createComponent<BoundingVolume>(

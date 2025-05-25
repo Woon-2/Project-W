@@ -10,6 +10,15 @@
 
 #include <DirectXCollision.h>
 
+// Collider - BoundingHeightmap
+// FreeImage 필요
+// BoundingOrientedBox <-> BoundingHeightmap
+// extents로 꼭짓점 8개 build하고 center, orientation으로 변환
+// 꼭짓점의 y좌표 중 가장 작은 값을 읽었을 때 Heightmap의 높이보다 작으면 충돌
+// 
+// 충돌 피드백: 높이를 Heightmap의 높이로 설정, RigidBody의 velocity.y를 0으로 설정
+// 피드백 타입 지정
+
 inline constexpr float gravityConst = 9.81f;
 
 class RigidBody : public ecs::Component {
