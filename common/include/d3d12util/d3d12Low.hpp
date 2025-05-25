@@ -712,10 +712,10 @@ void Window<Traits>::buildViews( D3D12Device& device,
 template <class Traits>
 void Window<Traits>::rebuildViews(D3D12Device& device) {
 	for (auto i = 0u; i < backBuffers_.size(); ++i) {
-		backBuffers_[i].remakeDefRtv(i, device);
+		backBuffers_[i].makeDefRtv(device, rtvs_[i]);
 	}
 
-	depthBuffer_.remakeDefDsv(0u, device);
+	depthBuffer_.makeDefDsv(device, dsv_);
 }
 
 template <class Traits>
@@ -728,6 +728,7 @@ template <class Traits>
 void Window<Traits>::postResizeBuffers(void* pContext) {
 	buildBuffers(*static_cast<D3D12Device*>(pContext), rtvClearValue_, dsvClearValue_);
 	rebuildViews(*static_cast<D3D12Device*>(pContext));
+	backBufIdx_ = get()->GetCurrentBackBufferIndex();
 }
 
 template <Win32::Win32Char T>

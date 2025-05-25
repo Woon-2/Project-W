@@ -11,9 +11,196 @@
 inline constexpr auto characterMoveLb2 = 0.12f * 0.12f;
 // walk upper bound
 inline constexpr auto characterWalkUb2 = 1.6f * 1.6f;
-inline constexpr auto characterRunUb2 = 10.f * 10.f;
+inline constexpr auto characterRunUb2 = 7.4f * 7.4f;
 
-void characterStateIdleUpdate(fsm::FSM& fsm, AnimController& con, MilliSeconds deltaTime) {
+void __8moveUpdate(std::string_view state,
+    MilliSeconds fadeDuration, AnimInstance::ClipMode clipMode,
+    AnimController& con
+) {
+    const auto entityId = con.entityID().value();
+    const auto rigidBody = RigidBody::atC(entityId);
+    if (!rigidBody) {
+        return;
+    }
+    const auto velocity = rigidBody->velocity();
+    const auto model = gfx::d3d12engine::Model::atC(entityId);
+    const auto forward = mu::Vec3(model->get().root()->coord().xform().row(2u));
+    const auto moveDir = mu::quatFromTo(forward, mu::Vec3(0.f, 0.f, 1.f)).rotate(velocity);
+
+    struct __Direction {
+        std::string_view name;
+        mu::Vec3 direction;
+    };
+
+    static const std::vector<__Direction> directions = {
+        {"Forward",       mu::Vec3( 0.f, 0.f, 1.f )},
+        {"ForwardRight",  mu::NVec3( 1.f, 0.f, 1.f )},
+        {"Right",         mu::Vec3( 1.f, 0.f, 0.f )},
+        {"BackwardRight", mu::NVec3( 1.f, 0.f, -1.f )},
+        {"Backward",      mu::Vec3( 0.f, 0.f, -1.f )},
+        {"BackwardLeft",  mu::NVec3( 1.f, 0.f, -1.f)},
+        {"Left",          mu::Vec3( -1.f, 0.f, 0.f )},
+        {"ForwardLeft",   mu::NVec3( 1.f, 0.f, 1.f )}
+    };
+
+    auto newKey = std::string(state)
+        + std::ranges::max_element(
+            directions, {}, [&](const __Direction& dir) {
+                return mu::dot(moveDir, dir.direction);
+            }
+        )->name.data();
+
+    if (!AnimConAttorney::playing(newKey, con)) {
+        auto possiblePrevKeys = std::vector<std::string>();
+        possiblePrevKeys.reserve(directions.size());
+        for (const auto& dir : directions) {
+            auto key = std::string(state) + dir.name.data();
+            if (key != newKey) {
+                possiblePrevKeys.push_back(std::move(key));
+            }
+        }
+
+        possiblePrevKeys.push_back(newKey);
+
+        con.restoreAnimSequences(possiblePrevKeys);
+
+        possiblePrevKeys.pop_back();
+
+        fadeOutSelect(possiblePrevKeys, fadeDuration, con);
+        fadeIn(newKey, possiblePrevKeys, fadeDuration, con, clipMode);
+    }
+}
+
+// this function finds the appropriate animation clip from velocity,
+// with the state name followed by the direction suffix.
+// like:
+// {state name}+"ForwardLeft|Forward|ForwardRight|Left|Right|BackwardLeft|Backward|BackwardRight"
+void __8moveTransition(std::string_view fromState, std::string_view toState,
+    MilliSeconds fadeDuration, AnimInstance::ClipMode clipMode,
+    AnimController& con) {
+    const auto entityId = con.entityID().value();
+    const auto rigidBody = RigidBody::atC(entityId);
+    if (!rigidBody) {
+        return;
+    }
+    const auto velocity = rigidBody->velocity();
+    const auto model = gfx::d3d12engine::Model::atC(entityId);
+    const auto forward = mu::Vec3(model->get().root()->coord().xform().row(2u));
+    const auto moveDir = mu::quatFromTo(forward, mu::Vec3(0.f, 0.f, 1.f)).rotate(velocity);
+
+    struct __Direction {
+        std::string_view name;
+        mu::Vec3 direction;
+    };
+
+    static const std::vector<__Direction> directions = {
+        {"Forward",       mu::Vec3( 0.f, 0.f, 1.f )},
+        {"ForwardRight",  mu::NVec3( 1.f, 0.f, 1.f )},
+        {"Right",         mu::Vec3( 1.f, 0.f, 0.f )},
+        {"BackwardRight", mu::NVec3( 1.f, 0.f, -1.f )},
+        {"Backward",      mu::Vec3( 0.f, 0.f, -1.f )},
+        {"BackwardLeft",  mu::NVec3( 1.f, 0.f, -1.f)},
+        {"Left",          mu::Vec3( -1.f, 0.f, 0.f )},
+        {"ForwardLeft",   mu::NVec3( 1.f, 0.f, 1.f )}
+    };
+
+    auto possiblePrevKeys = std::vector<std::string>();
+    possiblePrevKeys.reserve(directions.size() + 1u);   // + 1u for additional key
+    for (const auto& dir : directions) {
+        possiblePrevKeys.push_back(std::string(fromState) + dir.name.data());
+    }
+
+    auto newKey = std::string(toState)
+        + std::ranges::max_element(
+            directions, {}, [&](const __Direction& dir) {
+                return mu::dot(moveDir, dir.direction);
+            }
+        )->name.data();
+
+    // reuse the possiblePrevKeys vector for optimization
+    possiblePrevKeys.push_back(newKey);
+
+    con.restoreAnimSequences(possiblePrevKeys);
+    possiblePrevKeys.pop_back(); // remove the last element
+    fadeOutSelect(possiblePrevKeys, fadeDuration, con);
+    fadeIn( newKey, possiblePrevKeys, fadeDuration, con, clipMode );
+}
+
+// this function finds the appropriate animation clip from velocity,
+// with the state name followed by the direction suffix.
+// like:
+// {state name}+"ForwardLeft|Forward|ForwardRight|Left|Right|BackwardLeft|Backward|BackwardRight"
+void __8moveTransition(std::vector<std::string> possiblePrevKeys, std::string_view toState,
+    MilliSeconds fadeDuration, AnimInstance::ClipMode clipMode,
+    AnimController& con) {
+    const auto entityId = con.entityID().value();
+    const auto rigidBody = RigidBody::atC(entityId);
+    if (!rigidBody) {
+        return;
+    }
+    const auto velocity = rigidBody->velocity();
+    const auto model = gfx::d3d12engine::Model::atC(entityId);
+    const auto forward = mu::Vec3(model->get().root()->coord().xform().row(2u));
+    const auto moveDir = mu::quatFromTo(forward, mu::Vec3(0.f, 0.f, 1.f)).rotate(velocity);
+
+    struct __Direction {
+        std::string_view name;
+        mu::Vec3 direction;
+    };
+
+    static const std::vector<__Direction> directions = {
+        {"Forward",       mu::Vec3( 0.f, 0.f, 1.f )},
+        {"ForwardRight",  mu::NVec3( 1.f, 0.f, 1.f )},
+        {"Right",         mu::Vec3( 1.f, 0.f, 0.f )},
+        {"BackwardRight", mu::NVec3( 1.f, 0.f, -1.f )},
+        {"Backward",      mu::Vec3( 0.f, 0.f, -1.f )},
+        {"BackwardLeft",  mu::NVec3( 1.f, 0.f, -1.f)},
+        {"Left",          mu::Vec3( -1.f, 0.f, 0.f )},
+        {"ForwardLeft",   mu::NVec3( 1.f, 0.f, 1.f )}
+    };
+
+    auto newKey = std::string(toState)
+        + std::ranges::max_element(
+            directions, {}, [&](const __Direction& dir) {
+                return mu::dot(moveDir, dir.direction);
+            }
+        )->name.data();
+
+    // reuse the possiblePrevKeys vector for optimization
+    possiblePrevKeys.push_back(newKey);
+
+    con.restoreAnimSequences(possiblePrevKeys);
+    possiblePrevKeys.pop_back(); // remove the last element
+    fadeOutSelect(possiblePrevKeys, fadeDuration, con);
+    fadeIn( std::move(newKey), std::move(possiblePrevKeys), fadeDuration, con, clipMode );
+}
+
+std::vector<std::string> __8movePossibleKeys(std::string_view fromState) {
+    struct __Direction {
+        std::string_view name;
+        mu::Vec3 direction;
+    };
+
+    static const std::vector<__Direction> directions = {
+        {"Forward",       mu::Vec3( 0.f, 0.f, 1.f )},
+        {"ForwardRight",  mu::NVec3( 1.f, 0.f, 1.f )},
+        {"Right",         mu::Vec3( 1.f, 0.f, 0.f )},
+        {"BackwardRight", mu::NVec3( 1.f, 0.f, -1.f )},
+        {"Backward",      mu::Vec3( 0.f, 0.f, -1.f )},
+        {"BackwardLeft",  mu::NVec3( 1.f, 0.f, -1.f)},
+        {"Left",          mu::Vec3( -1.f, 0.f, 0.f )},
+        {"ForwardLeft",   mu::NVec3( 1.f, 0.f, 1.f )}
+    };
+
+    auto possiblePrevKeys = std::vector<std::string>();
+    possiblePrevKeys.reserve(directions.size() + 1u);   // + 1u for additional key
+    for (const auto& dir : directions) {
+        possiblePrevKeys.push_back(std::string(fromState) + dir.name.data());
+    }
+    return possiblePrevKeys;
+}
+
+void characterStateIdleUpdate(fsm::FSM& fsm, AnimController& con, MilliSeconds fadeDuration) {
     const auto entityId = con.entityID().value();
     const auto rigidBody = RigidBody::atC(entityId);
     if (!rigidBody) {
@@ -23,14 +210,6 @@ void characterStateIdleUpdate(fsm::FSM& fsm, AnimController& con, MilliSeconds d
     const auto speed2 = velocity.len2();
     
     if (speed2 >= characterMoveLb2) {
-        const auto model = gfx::d3d12engine::Model::atC(entityId);
-        const auto forward = mu::Vec3(model->get().root()->coord().xform().row(2u));
-
-        if (mu::dot(forward, velocity) < 0.f) {
-            fsm.pushDeferredEvent(fsm::Event::transition("Idle", "BackMove"));
-            return;
-        }
-
         if (speed2 < characterWalkUb2) {
             fsm.pushDeferredEvent(fsm::Event::transition("Idle", "Walk"));
         }
@@ -60,7 +239,9 @@ fsm::State characterStateIdle(fsm::FSM& fsm, AnimController& con) {
     }
 }
 
-void characterStateWalkUpdate(fsm::FSM& fsm, AnimController& con, MilliSeconds deltaTime) {
+void characterStateWalkUpdate(fsm::FSM& fsm, MilliSeconds fadeDuration,
+    AnimInstance::ClipMode clipMode, AnimController& con
+) {
     const auto entityId = con.entityID().value();
     const auto rigidBody = RigidBody::atC(entityId);
     if (!rigidBody) {
@@ -71,24 +252,21 @@ void characterStateWalkUpdate(fsm::FSM& fsm, AnimController& con, MilliSeconds d
     const auto speed2 = velocity.len2();
 
     if (speed2 >= characterMoveLb2) {
-        const auto model = gfx::d3d12engine::Model::atC(entityId);
-        const auto forward = mu::Vec3(model->get().root()->coord().xform().row(2u));
-        
-        if (mu::dot(forward, velocity) < 0.f) {
-            fsm.pushDeferredEvent(fsm::Event::transition("Walk", "BackMove"));
-            return;
-        }
-
         if (speed2 >= characterWalkUb2) {
             fsm.pushDeferredEvent(fsm::Event::transition("Walk", "Run"));
+            return;
         }
         else if (speed2 >= characterRunUb2) {
             fsm.pushDeferredEvent(fsm::Event::transition("Walk", "Sprint"));
+            return;
         }
     }
     else  {
         fsm.pushDeferredEvent(fsm::Event::transition("Walk", "Idle"));
+        return;
     }
+
+    __8moveUpdate("GO_Character_Walk", fadeDuration, clipMode, con);
 }
 
 fsm::State characterStateWalk(fsm::FSM& fsm, AnimController& con) {
@@ -97,7 +275,7 @@ fsm::State characterStateWalk(fsm::FSM& fsm, AnimController& con) {
             while (auto ev = events.pop()) {
                 if (ev->evType() == AnimController::evAnimUpdate) {
                     characterStateWalkUpdate(
-                        fsm, con, ev->get<MilliSeconds>()
+                        fsm, 330_ms, AnimInstance::ClipMode::KeyFrame, con
                     );
                 }
                 // do something
@@ -108,7 +286,9 @@ fsm::State characterStateWalk(fsm::FSM& fsm, AnimController& con) {
     }
 }
 
-void characterStateRunUpdate(fsm::FSM& fsm, AnimController& con, MilliSeconds deltaTime) {
+void characterStateRunUpdate( fsm::FSM& fsm, MilliSeconds fadeDuration,
+    AnimInstance::ClipMode clipMode, AnimController& con
+) {
     const auto entityId = con.entityID().value();
     const auto rigidBody = RigidBody::atC(entityId);
     if (!rigidBody) {
@@ -119,24 +299,21 @@ void characterStateRunUpdate(fsm::FSM& fsm, AnimController& con, MilliSeconds de
     const auto speed2 = velocity.len2();
 
     if (speed2 >= characterMoveLb2) {
-        const auto model = gfx::d3d12engine::Model::atC(entityId);
-        const auto forward = mu::Vec3(model->get().root()->coord().xform().row(2u));
-        
-        if (mu::dot(forward, velocity) < 0.f) {
-            fsm.pushDeferredEvent(fsm::Event::transition("Run", "BackMove"));
-            return;
-        }
-
         if (speed2 < characterWalkUb2) {
             fsm.pushDeferredEvent(fsm::Event::transition("Run", "Walk"));
+            return;
         }
         else if (speed2 >= characterRunUb2) {
             fsm.pushDeferredEvent(fsm::Event::transition("Run", "Sprint"));
+            return;
         }
     }
     else {
         fsm.pushDeferredEvent(fsm::Event::transition("Run", "Idle"));
+        return;
     }
+
+    __8moveUpdate("GO_Character_Run", fadeDuration, clipMode, con);
 }
 
 fsm::State characterStateRun(fsm::FSM& fsm, AnimController& con) {
@@ -145,7 +322,7 @@ fsm::State characterStateRun(fsm::FSM& fsm, AnimController& con) {
             while (auto ev = events.pop()) {
                 if (ev->evType() == AnimController::evAnimUpdate) {
                     characterStateRunUpdate(
-                        fsm, con, ev->get<MilliSeconds>()
+                        fsm, 330_ms, AnimInstance::ClipMode::KeyFrame, con
                     );
                 }
                 // do something
@@ -156,7 +333,9 @@ fsm::State characterStateRun(fsm::FSM& fsm, AnimController& con) {
     }
 }
 
-void characterStateSprintUpdate(fsm::FSM& fsm, AnimController& con, MilliSeconds deltaTime) {
+void characterStateSprintUpdate(fsm::FSM& fsm, MilliSeconds fadeDuration,
+    AnimInstance::ClipMode clipMode, AnimController& con
+) {
     const auto entityId = con.entityID().value();
     const auto rigidBody = RigidBody::atC(entityId);
     if (!rigidBody) {
@@ -167,24 +346,21 @@ void characterStateSprintUpdate(fsm::FSM& fsm, AnimController& con, MilliSeconds
     const auto speed2 = velocity.len2();
 
     if (speed2 >= characterMoveLb2) {
-        const auto model = gfx::d3d12engine::Model::atC(entityId);
-        const auto forward = mu::Vec3(model->get().root()->coord().xform().row(2u));
-        
-        if (mu::dot(forward, velocity) < 0.f) {
-            fsm.pushDeferredEvent(fsm::Event::transition("Sprint", "BackMove"));
-            return;
-        }
-
         if (speed2 < characterWalkUb2) {
             fsm.pushDeferredEvent(fsm::Event::transition("Sprint", "Walk"));
+            return;
         }
         else if (speed2 < characterRunUb2) {
             fsm.pushDeferredEvent(fsm::Event::transition("Sprint", "Run"));
+            return;
         }
     }
     else {
         fsm.pushDeferredEvent(fsm::Event::transition("Sprint", "Idle"));
+        return;
     }
+
+    __8moveUpdate("GO_Character_Sprint", fadeDuration, clipMode, con);
 }
 
 fsm::State characterStateSprint(fsm::FSM& fsm, AnimController& con) {
@@ -193,57 +369,7 @@ fsm::State characterStateSprint(fsm::FSM& fsm, AnimController& con) {
             while (auto ev = events.pop()) {
                 if (ev->evType() == AnimController::evAnimUpdate) {
                     characterStateSprintUpdate(
-                        fsm, con, ev->get<MilliSeconds>()
-                    );
-                }
-                // do something
-            }
-        }
-    
-        co_await fsm.completeStateUpdate();
-    }
-}
-
-void characterStateBackMoveUpdate(fsm::FSM& fsm, AnimController& con, MilliSeconds deltaTime) {
-    const auto entityId = con.entityID().value();
-    const auto rigidBody = RigidBody::atC(entityId);
-    if (!rigidBody) {
-        fsm.pushDeferredEvent(fsm::Event::transition("BackMove", "Idle"));
-        return;
-    }
-    const auto velocity = rigidBody->velocity();
-    const auto speed2 = velocity.len2();
-
-    if (speed2 >= characterMoveLb2) {
-        const auto model = gfx::d3d12engine::Model::atC(entityId);
-        const auto forward = mu::Vec3(model->get().root()->coord().xform().row(2u));
-        
-        if (mu::dot(forward, velocity) < 0.f) {
-            return;
-        }
-
-        if (speed2 < characterWalkUb2) {
-            fsm.pushDeferredEvent(fsm::Event::transition("BackMove", "Walk"));
-        }
-        else if (speed2 < characterRunUb2) {
-            fsm.pushDeferredEvent(fsm::Event::transition("BackMove", "Run"));
-        }
-        else {
-            fsm.pushDeferredEvent(fsm::Event::transition("BackMove", "Sprint"));
-        }
-    }
-    else {
-        fsm.pushDeferredEvent(fsm::Event::transition("BackMove", "Idle"));
-    }
-}
-
-fsm::State characterStateBackMove(fsm::FSM& fsm, AnimController& con) {
-    for (;;) {
-        while (auto events = co_await fsm.getEvents()) {
-            while (auto ev = events.pop()) {
-                if (ev->evType() == AnimController::evAnimUpdate) {
-                    characterStateBackMoveUpdate(
-                        fsm, con, ev->get<MilliSeconds>()
+                        fsm, 240_ms, AnimInstance::ClipMode::KeyFrame, con
                     );
                 }
                 // do something
@@ -270,288 +396,221 @@ void initAnimationsCharacter(
     animCon.addClip("GO_Character_Idle2",
         animClipSlot.get<AnimClip>("GO_Character_Idle2")
     );
-    animCon.addClip("GO_Character_Walk",
-        animClipSlot.get<AnimClip>("GO_Character_Walk")
+    animCon.addClip("GO_Character_WalkForward",
+        animClipSlot.get<AnimClip>("GO_Character_WalkForward")
     );
-    animCon.addClip("GO_Character_Run",
-        animClipSlot.get<AnimClip>("GO_Character_Run")
+    animCon.addClip("GO_Character_RunForward",
+        animClipSlot.get<AnimClip>("GO_Character_RunForward")
     );
-    animCon.addClip("GO_Character_Sprint",
-        animClipSlot.get<AnimClip>("GO_Character_Sprint")
+    animCon.addClip("GO_Character_SprintForward",
+        animClipSlot.get<AnimClip>("GO_Character_SprintForward")
     );
-    animCon.addClip("GO_Character_BackMove",
-        animClipSlot.get<AnimClip>("GO_Character_BackMove")
+    animCon.addClip("GO_Character_WalkBackward",
+        animClipSlot.get<AnimClip>("GO_Character_WalkBackward")
     );
+    animCon.addClip("GO_Character_RunBackward",
+        animClipSlot.get<AnimClip>("GO_Character_RunBackward")
+    );
+    animCon.addClip("GO_Character_SprintBackward",
+        animClipSlot.get<AnimClip>("GO_Character_SprintBackward")
+    );
+    animCon.addClip("GO_Character_WalkLeft",
+        animClipSlot.get<AnimClip>("GO_Character_WalkLeft")
+    );
+    animCon.addClip("GO_Character_RunLeft",
+        animClipSlot.get<AnimClip>("GO_Character_RunLeft")
+    );
+    animCon.addClip("GO_Character_SprintLeft",
+        animClipSlot.get<AnimClip>("GO_Character_SprintLeft")
+    );
+    animCon.addClip("GO_Character_WalkRight",
+        animClipSlot.get<AnimClip>("GO_Character_WalkRight")
+    );
+    animCon.addClip("GO_Character_RunRight",
+        animClipSlot.get<AnimClip>("GO_Character_RunRight")
+    );
+    animCon.addClip("GO_Character_SprintRight",
+        animClipSlot.get<AnimClip>("GO_Character_SprintRight")
+    );
+    animCon.addClip("GO_Character_WalkForwardLeft",
+        animClipSlot.get<AnimClip>("GO_Character_WalkForwardLeft")
+    );
+    animCon.addClip("GO_Character_RunForwardLeft",
+        animClipSlot.get<AnimClip>("GO_Character_RunForwardLeft")
+    );
+    animCon.addClip("GO_Character_SprintForwardLeft",
+        animClipSlot.get<AnimClip>("GO_Character_SprintForwardLeft")
+    );
+    animCon.addClip("GO_Character_WalkForwardRight",
+        animClipSlot.get<AnimClip>("GO_Character_WalkForwardRight")
+    );
+    animCon.addClip("GO_Character_RunForwardRight",
+        animClipSlot.get<AnimClip>("GO_Character_RunForwardRight")
+    );
+    animCon.addClip("GO_Character_SprintForwardRight",
+        animClipSlot.get<AnimClip>("GO_Character_SprintForwardRight")
+    );
+    animCon.addClip("GO_Character_WalkBackwardLeft",
+        animClipSlot.get<AnimClip>("GO_Character_WalkBackwardLeft")
+    );
+    animCon.addClip("GO_Character_RunBackwardLeft",
+        animClipSlot.get<AnimClip>("GO_Character_RunBackwardLeft")
+    );
+    animCon.addClip("GO_Character_SprintBackwardLeft",
+        animClipSlot.get<AnimClip>("GO_Character_SprintBackwardLeft")
+    );
+    animCon.addClip("GO_Character_WalkBackwardRight",
+        animClipSlot.get<AnimClip>("GO_Character_WalkBackwardRight")
+    );
+    animCon.addClip("GO_Character_RunBackwardRight",
+        animClipSlot.get<AnimClip>("GO_Character_RunBackwardRight")
+    );
+    animCon.addClip("GO_Character_SprintBackwardRight",
+        animClipSlot.get<AnimClip>("GO_Character_SprintBackwardRight")
+    );
+
 
     animCon.fsm().addState("Idle", characterStateIdle, animCon);
     animCon.fsm().addState("Walk", characterStateWalk, animCon);
     animCon.fsm().addState("Run", characterStateRun, animCon);
     animCon.fsm().addState("Sprint", characterStateSprint, animCon);
-    animCon.fsm().addState("BackMove", characterStateBackMove, animCon);
     animCon.fsm().start("Idle");
 
     animCon.fsm().addTransition("Idle", "Idle", [](){});
     animCon.fsm().addTransition("Walk", "Walk", [](){});
     animCon.fsm().addTransition("Run", "Run", [](){});
     animCon.fsm().addTransition("Sprint", "Sprint", [](){});
-    animCon.fsm().addTransition("BackMove", "BackMove", [](){});
 
     animCon.fsm().addTransition("Idle", "Walk", [&animCon](){
-        animCon.restoreAnimSequences({
+        __8moveTransition({
             "GO_Character_Idle",
             "GO_Character_Idle1",
             "GO_Character_Idle2",
             "GO_Character_Walk"
-        });
-        fadeOutSelect( {"GO_Character_Idle",
-            "GO_Character_Idle1",
-            "GO_Character_Idle2"
-        }, 360_ms, animCon );
-        fadeIn( "GO_Character_Walk",
-            {"GO_Character_Idle",
-                "GO_Character_Idle1",
-                "GO_Character_Idle2"
-            }, 360_ms, animCon, AnimInstance::ClipMode::KeyFrame
+        }, "GO_Character_Walk",
+            600_ms, AnimInstance::ClipMode::KeyFrame, animCon
         );
     });
     animCon.fsm().addTransition("Idle", "Run", [&animCon](){
-        animCon.restoreAnimSequences({
+        __8moveTransition({
             "GO_Character_Idle",
             "GO_Character_Idle1",
             "GO_Character_Idle2",
             "GO_Character_Run"
-        });
-        fadeOutSelect( {"GO_Character_Idle",
-            "GO_Character_Idle1",
-            "GO_Character_Idle2"
-        }, 360_ms, animCon );
-        fadeIn( "GO_Character_Run",
-            {"GO_Character_Idle",
-                "GO_Character_Idle1",
-                "GO_Character_Idle2"
-            }, 360_ms, animCon, AnimInstance::ClipMode::KeyFrame
+        }, "GO_Character_Run",
+            600_ms, AnimInstance::ClipMode::KeyFrame, animCon
         );
     });
     animCon.fsm().addTransition("Idle", "Sprint", [&animCon](){
-        animCon.restoreAnimSequences({
+        __8moveTransition({
             "GO_Character_Idle",
             "GO_Character_Idle1",
             "GO_Character_Idle2",
             "GO_Character_Sprint"
-        });
-        fadeOutSelect( {"GO_Character_Idle",
-            "GO_Character_Idle1",
-            "GO_Character_Idle2"
-        }, 360_ms, animCon );
-        fadeIn( "GO_Character_Sprint",
-            {"GO_Character_Idle",
-                "GO_Character_Idle1",
-                "GO_Character_Idle2"
-            }, 360_ms, animCon, AnimInstance::ClipMode::KeyFrame
-        );
-    });
-    animCon.fsm().addTransition("Idle", "BackMove", [&animCon](){
-        animCon.restoreAnimSequences({
-            "GO_Character_Idle",
-            "GO_Character_Idle1",
-            "GO_Character_Idle2",
-            "GO_Character_BackMove"
-        });
-        fadeOutSelect( {"GO_Character_Idle",
-            "GO_Character_Idle1",
-            "GO_Character_Idle2"
-        }, 360_ms, animCon );
-        fadeIn( "GO_Character_BackMove",
-            {"GO_Character_Idle",
-                "GO_Character_Idle1",
-                "GO_Character_Idle2"
-            }, 360_ms, animCon, AnimInstance::ClipMode::KeyFrame
+        }, "GO_Character_Sprint",
+            600_ms, AnimInstance::ClipMode::KeyFrame, animCon
         );
     });
 
     animCon.fsm().addTransition("Walk", "Idle", [&animCon](){
-        animCon.restoreAnimSequences({
-            "GO_Character_Idle",
-            "GO_Character_Idle1",
-            "GO_Character_Idle2",
-            "GO_Character_Walk"
-        });
+        auto possiblePrevKeys = __8movePossibleKeys("GO_Character_Walk");
+        possiblePrevKeys.push_back("GO_Character_Idle");
+        possiblePrevKeys.push_back("GO_Character_Idle1");
+        possiblePrevKeys.push_back("GO_Character_Idle2");
+
+        animCon.restoreAnimSequences(possiblePrevKeys);
+
+        possiblePrevKeys.pop_back();
+        possiblePrevKeys.pop_back();
+        possiblePrevKeys.pop_back();
+
         softCircular( { "GO_Character_Idle",
                 "GO_Character_Idle1",
                 "GO_Character_Idle2"
-            }, "GO_Character_Walk", 360_ms, animCon,
+            }, std::move(possiblePrevKeys), 600_ms, animCon,
             AnimInstance::ClipMode::KeyFrame
         );
     });
     animCon.fsm().addTransition("Walk", "Run", [&animCon](){
-        animCon.restoreAnimSequences({
-            "GO_Character_Walk",
-            "GO_Character_Run"
-        });
-        fadeOut("GO_Character_Walk", 360_ms, animCon);
-        fadeIn("GO_Character_Run", "GO_Character_Walk", 360_ms, animCon,
-            AnimInstance::ClipMode::KeyFrame
+        __8moveTransition("GO_Character_Walk",
+            "GO_Character_Run", 360_ms,
+            AnimInstance::ClipMode::KeyFrame, animCon
         );
     });
     animCon.fsm().addTransition("Walk", "Sprint", [&animCon](){
-        animCon.restoreAnimSequences({
-            "GO_Character_Walk",
-            "GO_Character_Sprint"
-        });
-        fadeOut("GO_Character_Walk", 360_ms, animCon);
-        fadeIn("GO_Character_Sprint", "GO_Character_Walk", 360_ms,
-            animCon, AnimInstance::ClipMode::KeyFrame
-        );
-    });
-    animCon.fsm().addTransition("Walk", "BackMove", [&animCon](){
-        animCon.restoreAnimSequences({
-            "GO_Character_Walk",
-            "GO_Character_BackMove"
-        });
-        fadeOut("GO_Character_Walk", 360_ms, animCon);
-        fadeIn("GO_Character_BackMove", "GO_Character_Walk", 360_ms,
-            animCon, AnimInstance::ClipMode::KeyFrame
+        __8moveTransition("GO_Character_Walk",
+            "GO_Character_Sprint", 360_ms,
+            AnimInstance::ClipMode::KeyFrame, animCon
         );
     });
 
     animCon.fsm().addTransition("Run", "Idle", [&animCon](){
-        animCon.restoreAnimSequences({
-            "GO_Character_Idle",
-            "GO_Character_Idle1",
-            "GO_Character_Idle2",
-            "GO_Character_Run"
-        });
+        auto possiblePrevKeys = __8movePossibleKeys("GO_Character_Run");
+        possiblePrevKeys.push_back("GO_Character_Idle");
+        possiblePrevKeys.push_back("GO_Character_Idle1");
+        possiblePrevKeys.push_back("GO_Character_Idle2");
+
+        animCon.restoreAnimSequences(possiblePrevKeys);
+
+        possiblePrevKeys.pop_back();
+        possiblePrevKeys.pop_back();
+        possiblePrevKeys.pop_back();
+
         softCircular( { "GO_Character_Idle",
                 "GO_Character_Idle1",
                 "GO_Character_Idle2"
-            }, "GO_Character_Run", 360_ms, animCon,
+            }, std::move(possiblePrevKeys), 600_ms, animCon,
             AnimInstance::ClipMode::KeyFrame
         );
     });
     animCon.fsm().addTransition("Run", "Walk", [&animCon](){
-        animCon.restoreAnimSequences({
-            "GO_Character_Run",
-            "GO_Character_Walk"
-        });
-        fadeOut("GO_Character_Run", 360_ms, animCon);
-        fadeIn("GO_Character_Walk", "GO_Character_Run", 360_ms,
-            animCon, AnimInstance::ClipMode::KeyFrame
+        __8moveTransition("GO_Character_Run",
+            "GO_Character_Walk", 360_ms,
+            AnimInstance::ClipMode::KeyFrame, animCon
         );
     });
     animCon.fsm().addTransition("Run", "Sprint", [&animCon](){
-        animCon.restoreAnimSequences({
-            "GO_Character_Run",
-            "GO_Character_Sprint"
-        });
-        fadeOut("GO_Character_Run", 220_ms, animCon);
-        fadeIn("GO_Character_Sprint", "GO_Character_Run", 220_ms,
-            animCon, AnimInstance::ClipMode::KeyFrame
-        );
-    });
-    animCon.fsm().addTransition("Run", "BackMove", [&animCon](){
-        animCon.restoreAnimSequences({
-            "GO_Character_Run",
-            "GO_Character_BackMove"
-        });
-        fadeOut("GO_Character_Run", 360_ms, animCon);
-        fadeIn("GO_Character_BackMove", "GO_Character_Run", 360_ms,
-            animCon, AnimInstance::ClipMode::KeyFrame
+        __8moveTransition("GO_Character_Run",
+            "GO_Character_Sprint", 220_ms,
+            AnimInstance::ClipMode::KeyFrame, animCon
         );
     });
 
     animCon.fsm().addTransition("Sprint", "Idle", [&animCon](){
-        animCon.restoreAnimSequences({
-            "GO_Character_Idle",
-            "GO_Character_Idle1",
-            "GO_Character_Idle2",
-            "GO_Character_Sprint"
-        });
+        auto possiblePrevKeys = __8movePossibleKeys("GO_Character_Sprint");
+        possiblePrevKeys.push_back("GO_Character_Idle");
+        possiblePrevKeys.push_back("GO_Character_Idle1");
+        possiblePrevKeys.push_back("GO_Character_Idle2");
+
+        animCon.restoreAnimSequences(possiblePrevKeys);
+
+        possiblePrevKeys.pop_back();
+        possiblePrevKeys.pop_back();
+        possiblePrevKeys.pop_back();
+
         softCircular( { "GO_Character_Idle",
                 "GO_Character_Idle1",
                 "GO_Character_Idle2"
-            }, "GO_Character_Sprint", 360_ms, animCon,
+            }, std::move(possiblePrevKeys), 600_ms, animCon,
             AnimInstance::ClipMode::KeyFrame
         );
     });
     animCon.fsm().addTransition("Sprint", "Walk", [&animCon](){
-        animCon.restoreAnimSequences({
-            "GO_Character_Sprint",
-            "GO_Character_Walk"
-        });
-        fadeOut("GO_Character_Sprint", 360_ms, animCon);
-        fadeIn("GO_Character_Walk", "GO_Character_Sprint", 360_ms,
-            animCon, AnimInstance::ClipMode::KeyFrame
+        __8moveTransition("GO_Character_Sprint",
+            "GO_Character_Walk", 360_ms,
+            AnimInstance::ClipMode::KeyFrame, animCon
         );
     });
     animCon.fsm().addTransition("Sprint", "Run", [&animCon](){
-        animCon.restoreAnimSequences({
-            "GO_Character_Sprint",
-            "GO_Character_Run"
-        });
-        fadeOut("GO_Character_Sprint", 220_ms, animCon);
-        fadeIn("GO_Character_Run", "GO_Character_Sprint", 220_ms,
-            animCon, AnimInstance::ClipMode::KeyFrame
-        );
-    });
-    animCon.fsm().addTransition("Sprint", "BackMove", [&animCon](){
-        animCon.restoreAnimSequences({
-            "GO_Character_Sprint",
-            "GO_Character_BackMove"
-        });
-        fadeOut("GO_Character_Sprint", 360_ms, animCon);
-        fadeIn("GO_Character_BackMove", "GO_Character_Sprint", 360_ms,
-            animCon, AnimInstance::ClipMode::KeyFrame
+        __8moveTransition("GO_Character_Sprint",
+            "GO_Character_Run", 220_ms,
+            AnimInstance::ClipMode::KeyFrame, animCon
         );
     });
 
-    animCon.fsm().addTransition("BackMove", "Idle", [&animCon](){
-        animCon.restoreAnimSequences({
-            "GO_Character_Idle",
-            "GO_Character_Idle1",
-            "GO_Character_Idle2",
-            "GO_Character_BackMove"
-        });
-        softCircular( { "GO_Character_Idle",
-                "GO_Character_Idle1",
-                "GO_Character_Idle2"
-            }, "GO_Character_BackMove", 360_ms, animCon,
-            AnimInstance::ClipMode::KeyFrame
-        );
-    });
-    animCon.fsm().addTransition("BackMove", "Walk", [&animCon](){
-        animCon.restoreAnimSequences({
-            "GO_Character_BackMove",
-            "GO_Character_Walk"
-        });
-        fadeOut("GO_Character_BackMove", 360_ms, animCon);
-        fadeIn("GO_Character_Walk", "GO_Character_BackMove", 360_ms,
-            animCon, AnimInstance::ClipMode::KeyFrame
-        );
-    });
-    animCon.fsm().addTransition("BackMove", "Run", [&animCon](){
-        animCon.restoreAnimSequences({
-            "GO_Character_BackMove",
-            "GO_Character_Run"
-        });
-        fadeOut("GO_Character_BackMove", 360_ms, animCon);
-        fadeIn("GO_Character_Run", "GO_Character_BackMove", 360_ms,
-            animCon, AnimInstance::ClipMode::KeyFrame
-        );
-    });
-    animCon.fsm().addTransition("BackMove", "Sprint", [&animCon](){
-        animCon.restoreAnimSequences({
-            "GO_Character_BackMove",
-            "GO_Character_Sprint"
-        });
-        fadeOut("GO_Character_BackMove", 360_ms, animCon);
-        fadeIn("GO_Character_Sprint", "GO_Character_BackMove", 360_ms,
-            animCon, AnimInstance::ClipMode::KeyFrame
-        );
-    });
+    animCon.play("GO_Character_Idle", 0_ms, AnimInstance::ClipMode::KeyFrame);
 
-     animCon.play("GO_Character_Idle", 0_ms, AnimInstance::ClipMode::KeyFrame);
-
-     softCircular( {
+    softCircular( {
             "GO_Character_Idle", "GO_Character_Idle1", "GO_Character_Idle2"
         }, "GO_Character_Idle", 360_ms, animCon,
         AnimInstance::ClipMode::KeyFrame

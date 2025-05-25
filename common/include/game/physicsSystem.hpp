@@ -28,6 +28,12 @@ public:
 	void setKFriction(float kFriction) NOEXCEPT {
 		kFriction_ = kFriction;
 	}
+	void setKAirdrag(float kAirdrag) NOEXCEPT {
+		kAirdrag_ = kAirdrag;
+	}
+	void setKConstantAirDrag(float kConstantAirDrag) NOEXCEPT {
+		kConstantAirDrag_ = kConstantAirDrag;
+	}
 	void enableGravity() NOEXCEPT {
 		willSimulateGravity_ = true;
 	}
@@ -42,6 +48,8 @@ public:
 	float mass() const NOEXCEPT { return (invMass_ <= minInvMass) ? std::numeric_limits<float>::max() : 1.f / invMass_; }
 	float invMass() const NOEXCEPT { return invMass_; }
 	float kFriction() const NOEXCEPT { return kFriction_; }
+	float kAirdrag() const NOEXCEPT { return kAirdrag_; }
+	float kConstantAirDrag() const NOEXCEPT { return kConstantAirDrag_; }
 	bool gravityEnabled() const NOEXCEPT { return willSimulateGravity_; }
 
 private:
@@ -53,6 +61,8 @@ private:
 	
 	float invMass_;
 	float kFriction_;
+	float kAirdrag_;
+	float kConstantAirDrag_;
 	bool willSimulateGravity_;
 };
 

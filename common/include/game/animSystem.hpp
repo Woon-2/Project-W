@@ -613,6 +613,12 @@ TaskAnimSequence softCircular( std::vector<std::string> keys, std::string prevKe
     AnimInstance::ClipMode clipMode = AnimInstance::ClipMode::KeyFrame
 );
 
+void softCircular( std::vector<std::string> keys,
+    std::vector<std::string> possiblePrevKeys,
+    MilliSeconds fadeDuration, AnimController& animCon,
+    AnimInstance::ClipMode clipMode
+);
+
 class AnimSystem : public ecs::System<AnimController>{
 public:
     AnimSystem(gfx::d3d12::D3D12Device& device, const gfx::d3d12::RootSignature& root);
