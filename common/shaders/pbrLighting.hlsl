@@ -190,11 +190,11 @@ float calcCascadedShadow(float3 posV, float4 posL[3])
     float viewDepth = posV.z;
     int texIndex = 0;
     
-    if(viewDepth <= 20.0f)
+    if(viewDepth <= 10.0f)
     {
         texIndex = 0;
     }
-    else if (viewDepth <= 50.0f)
+    else if (viewDepth <= 25.0f)
     {
         texIndex = 1;
     }
@@ -260,11 +260,11 @@ float4 illuminate(float3 posV, float4 posL[3], float3 normalV, float2 tex)
     float viewDepth = posV.z;
     float4 colorFactor;
     
-    if (viewDepth <= 20.0f)
+    if (viewDepth <= 10.0f)
     {
         colorFactor = float4(1.f, 0.6f, 0.6f, 1.0f);
     }
-    else if (viewDepth <= 50.0f)
+    else if (viewDepth <= 25.0f)
     {
         colorFactor = float4(0.6f, 1.0f, 0.6f, 1.0f);
     }
@@ -278,6 +278,14 @@ float4 illuminate(float3 posV, float4 posL[3], float3 normalV, float2 tex)
     //
     
     color *= illuminationFactor;
+    
+    //if (illuminationFactor >= 1)
+    //    color = float4(1.0f, 0.0f, 0.0f, 1.0f);
+    //else if (illuminationFactor > 0)
+    //    color = float4(0.0f, 1.0f, 0.0f, 1.0f);
+    //else if (illuminationFactor == 0)
+    //    color = float4(0.0f, 0.0f, 1.0f, 1.0f);
+        
 
     float3 ambient = globalAmbient * albedo.rgb * ao;
     color += ambient + emmisive;

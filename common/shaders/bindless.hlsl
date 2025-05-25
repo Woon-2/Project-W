@@ -84,7 +84,11 @@ float sampleCmpFromMapRef(uint4 mapRef, float2 tex, float val, uint samIdx) {
 float sampleCmpFromMapRef2DOffset(uint4 mapRef, float2 tex, float val, int2 offset, uint samIdx) {
     if (mapRef.x == MAP_TYPE_TEXTURE2D) {
         return gTex2Ds[mapRef.y].SampleCmpLevelZero(gComparisonSamplers[samIdx], tex, val, offset);
-    } 
+    }
+    else if (mapRef.x == MAP_TYPE_TEXTUREARRAY)
+    {
+        return gTex2DArrays[mapRef.y].SampleCmpLevelZero(gComparisonSamplers[samIdx], float3(tex, mapRef.z), val, offset);
+    }
     return float4(0.f, 0.f, 0.f, 0.f);
 }
 

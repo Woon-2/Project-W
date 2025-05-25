@@ -195,7 +195,7 @@ struct GS_OUTPUT
 
 [maxvertexcount(9)]
 void GSMain(triangle DSOutput input[3], inout TriangleStream<GS_OUTPUT> triStream)
-{
+{    
     for (int cascadeLevel = 0; cascadeLevel < 3; cascadeLevel++)
     {
     
