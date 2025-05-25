@@ -168,12 +168,13 @@ int main( ) {
 			const auto eid = user.getEntityId();
 
 			if (auto pCoord = gameEngine::Coord::at(eid)) {
-				const auto cdp = pCoord->compressedDeltaPos();
+				const auto cdpxz = pCoord->compressedDeltaPosXZ();
+				const auto cdpy = pCoord->compressedDeltaPosY();
 				const auto cdr = pCoord->compressedDeltaRot();
 				pCoord->resetDeltaPos();
 				pCoord->resetDeltaRot();
 
-				auto dp = pCoord->decodeDeltaPos(cdp);
+				auto dp = pCoord->decodeDeltaPos(cdpxz, cdpy);
 				const auto dr = pCoord->decodeDeltaRot(cdr);
 
 				const auto beforePos = mu::Vec3(pCoord->get().xform().row(3));
@@ -249,12 +250,14 @@ int main( ) {
 				}
 
 				pCoord->accTranslation(dp);
-				const auto realCdp = pCoord->compressedDeltaPos();
+				const auto realCdpxz = pCoord->compressedDeltaPosXZ();
+				const auto realCdpy = pCoord->compressedDeltaPosY();
 				pCoord->resetDeltaPos();
 
 				curPacket.moves[curPacket.moveCnt++] = SCMove::Value{
 					.netId = eid,
-					.compressedDeltaPos = realCdp,
+					.compressedDeltaPosXZ = realCdpxz,
+					.compressedDeltaPosY = realCdpy,
 					.compressedDeltaRot = cdr
 				};
 

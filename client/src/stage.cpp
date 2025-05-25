@@ -93,7 +93,7 @@ void processSCMove(SCMove& scMove, Session& session, Stage& stage) {
             if (delayed.moveCnt == SCMove::maxMoveCnt) {
                 session.delayPacket(
                     Packet{
-                        .size = calcPacketSize<SCMove>(SCMove::maxMoveCnt   ),
+                        .size = calcPacketSize<SCMove>(SCMove::maxMoveCnt),
                         .type = PacketType::SCMove,
                         .scMove = delayed
                     }
@@ -107,7 +107,7 @@ void processSCMove(SCMove& scMove, Session& session, Stage& stage) {
 
         const auto& move = scMove.moves[i];
 
-        const auto dp = gameEngine::Coord::decodeDeltaPos(move.compressedDeltaPos);
+        const auto dp = gameEngine::Coord::decodeDeltaPos(move.compressedDeltaPosXZ, move.compressedDeltaPosY);
         const auto dr = gameEngine::Coord::decodeDeltaRot(move.compressedDeltaRot);
 
         const auto curPos = mu::Vec3(gameEngine::Coord::at(eid)->get().xform().row(3));
@@ -292,12 +292,13 @@ void Stage::simulate(double deltaTime) {
         const auto eid = entity.id().value();
 
         if (auto pCoord = gameEngine::Coord::at(eid)) {
-            const auto cdp = pCoord->compressedDeltaPos();
+            const auto cdpxz = pCoord->compressedDeltaPosXZ();
+            const auto cdpy = pCoord->compressedDeltaPosY();
             const auto cdr = pCoord->compressedDeltaRot();
             pCoord->resetDeltaPos();
             pCoord->resetDeltaRot();
 
-            const auto dp = pCoord->decodeDeltaPos(cdp);
+            const auto dp = pCoord->decodeDeltaPos(cdpxz, cdpy);
             const auto dr = pCoord->decodeDeltaRot(cdr);
 
             pCoord->get() << mu::translate(dp);

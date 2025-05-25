@@ -5,9 +5,9 @@
 #include "TMP.hpp"
 
 RigidBody::RigidBody(const ecs::Entity& entity) NOEXCEPT
-	: Component(entity), velocity_(), momentum_(), compressedDeltaVelocity_(0),
-	invMass_(0.f), kFriction_(0.f), kAirdrag_(0.f), kConstantAirDrag_(0.f),
-	willSimulateGravity_(false) {}
+	: Component(entity), velocity_(), momentum_(), compressedDeltaVelocityXZ_(0),
+	compressedDeltaVelocityY_(0), invMass_(0.f), kFriction_(0.f), kAirdrag_(0.f),
+	kConstantAirDrag_(0.f), willSimulateGravity_(false) {}
 
 void MU_CALLCONV RigidBody::accMomentum(mu::Vec3 momentum) NOEXCEPT {
 	if (invMass_ <= minInvMass) {
@@ -16,25 +16,23 @@ void MU_CALLCONV RigidBody::accMomentum(mu::Vec3 momentum) NOEXCEPT {
 
 	// 2-3: x, 4-5: y, 6-7: z, precision: 0.00003m
 	static constexpr auto precision = 0.00003f;
-	const auto oldV = compressedDeltaVelocity_.load();
+	const auto oldVXZ = compressedDeltaVelocityXZ_.load();
 
 	const auto deltaAccV = momentum * invMass_;
 
-	auto deltaVx = static_cast<i16t>(oldV >> 32);
-	deltaVx += static_cast<i16t>(deltaAccV.x() / precision);
-
-	auto deltaVy = static_cast<i16t>(oldV >> 16);
-	deltaVy += static_cast<i16t>(deltaAccV.y() / precision);
-
+	auto deltaVx = static_cast<i32t>(oldVXZ >> 32);
+	deltaVx += static_cast<i32t>(deltaAccV.x() / precision);
 	
-	auto deltaVz = static_cast<i16t>(oldV);
-	deltaVz += static_cast<i16t>(deltaAccV.z() / precision);
+	auto deltaVz = static_cast<i32t>(oldVXZ);
+	deltaVz += static_cast<i32t>(deltaAccV.z() / precision);
 
-	const auto newV = static_cast<u64t>(static_cast<u16t>(deltaVx)) << 32 |
-		static_cast<u64t>(static_cast<u16t>(deltaVy)) << 16 |
-		static_cast<u64t>(static_cast<u16t>(deltaVz));
+	auto deltaVy = compressedDeltaVelocityY_.load();
+	deltaVy += static_cast<i32t>(deltaAccV.y() / precision);
 
-	compressedDeltaVelocity_.store(newV);
+	const auto newVXZ = static_cast<u64t>(static_cast<u32t>(deltaVx)) << 32
+		| static_cast<u64t>(static_cast<u32t>(deltaVz));
+
+	compressedDeltaVelocityXZ_.store(newVXZ);
 }
 
 void RigidBody::update(MilliSeconds deltaTime) {
@@ -47,12 +45,13 @@ void RigidBody::update(MilliSeconds deltaTime) {
 	// 2-3: x, 4-5: y, 6-7: z, precision: 0.00003m
 	static constexpr auto precision = 0.00003f;
 
-	const auto dvCompressed = compressedDeltaVelocity_.load();
-	compressedDeltaVelocity_.store(0);
+	const auto dvxzCompressed = compressedDeltaVelocityXZ_.load();
+	compressedDeltaVelocityXZ_.store(0);
 
-	const auto dvx = static_cast<i16t>(dvCompressed >> 32) * precision;
-	const auto dvy = static_cast<i16t>(dvCompressed >> 16) * precision;
-	const auto dvz = static_cast<i16t>(dvCompressed) * precision;
+	const auto dvx = static_cast<i32t>(dvxzCompressed >> 32) * precision;
+	const auto dvz = static_cast<i32t>(dvxzCompressed) * precision;
+	const auto dvy = static_cast<i32t>(compressedDeltaVelocityY_.load()) * precision;
+	compressedDeltaVelocityY_.store(0);
 
 	auto deltaV = mu::Vec3(dvx, dvy, dvz);
 	velocity_ += deltaV;

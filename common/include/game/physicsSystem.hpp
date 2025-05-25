@@ -65,8 +65,9 @@ private:
 	mu::Vec3 velocity_;
 	mu::Vec3 momentum_;
 
-	// 2-3: x, 4-5: y, 6-7: z, precision: 0.00003m
-	au64t compressedDeltaVelocity_;
+	// 0-3: x, 4-7: z, precision: 0.00003m
+	au64t compressedDeltaVelocityXZ_;
+	ai32t compressedDeltaVelocityY_;
 	
 	float invMass_;
 	float kFriction_;

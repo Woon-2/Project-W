@@ -63,21 +63,21 @@ ObjectDisposition::ObjectDisposition(std::ifstream& is)
 void MU_CALLCONV Coord::accTranslation(mu::Vec3 deltaPos) {
     // 2-3: x, 4-5: y, 6-7: z, precision: 0.00003m
     static constexpr auto precision = 0.00003f;
-    const auto oldV = compressedDeltaPos_.load();
+    const auto oldXZ = compressedDeltaPosXZ_.load();
+    const auto oldY = compressedDeltaPosY_.load();
 
-    auto dx = static_cast<i16t>(oldV >> 48);
-    // convert cm to m then devide by precision
-    dx += static_cast<i16t>(deltaPos.x() / precision);
+    auto dx = static_cast<i32t>(oldXZ >> 32);
+    dx += static_cast<i32t>(deltaPos.x() / precision);
 
-    auto dy = static_cast<i32t>(oldV >> 16);
+    auto dz = static_cast<i32t>(oldXZ);
+    dz += static_cast<i32t>(deltaPos.z() / precision);
+
+    auto dy = oldY;
     dy += static_cast<i32t>(deltaPos.y() / precision);
 
-    auto dz = static_cast<i16t>(oldV);
-    dz += static_cast<i16t>(deltaPos.z() / precision);
-
-    const auto newV = static_cast<u64t>(static_cast<u16t>(dx)) << 48 | static_cast<u64t>(static_cast<u32t>(dy)) << 16 | static_cast<u64t>(static_cast<u16t>(dz));
-
-    compressedDeltaPos_.store(newV);
+    const auto newXZ = static_cast<u64t>(static_cast<u32t>(dx)) << 32 | static_cast<u64t>(static_cast<u32t>(dz));
+    compressedDeltaPosXZ_.store(newXZ);
+    compressedDeltaPosY_.store(dy);
 }
 
 void MU_CALLCONV Coord::accRotation(mu::NQuat deltaRot) {
@@ -117,7 +117,8 @@ void MU_CALLCONV Coord::accRotation(mu::NQuat deltaRot) {
 }
 
 void Coord::resetDeltaPos() {
-    compressedDeltaPos_.store(0);
+    compressedDeltaPosXZ_.store(0);
+    compressedDeltaPosY_.store(0);
 }
 void Coord::resetDeltaRot() {
     // 0-1: vx, 2-3: vy, 4-5: vz, 6-7: w, precision: 0.0001rad
@@ -133,12 +134,12 @@ void Coord::resetDeltaRot() {
     compressedDeltaRot_.store(newV);
 }
 
-mu::Vec3 MU_CALLCONV Coord::decodeDeltaPos(u64t compressedDeltaPos) {
-    // 2-3: x, 4-5: y, 6-7: z, precision: 0.00003m
+mu::Vec3 MU_CALLCONV Coord::decodeDeltaPos(u64t compressedDeltaPosXZ, i32t compressedDeltaPosY) {
+    // 0-3: x, 4-7: z, precision: 0.00003m
     static constexpr auto precision = 0.00003f;
-    auto dx = static_cast<i16t>(compressedDeltaPos >> 48);
-    auto dy = static_cast<i32t>(compressedDeltaPos >> 16);
-    auto dz = static_cast<i16t>(compressedDeltaPos);
+    auto dx = static_cast<i32t>(compressedDeltaPosXZ >> 32);
+    auto dz = static_cast<i32t>(compressedDeltaPosXZ);
+    auto dy = compressedDeltaPosY;
 
     return mu::Vec3(dx * precision, dy * precision, dz * precision);
 }

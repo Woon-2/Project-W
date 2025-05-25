@@ -60,7 +60,8 @@ struct SCMove {
 
     struct Value {
         u32t netId;
-        u64t compressedDeltaPos;
+        u64t compressedDeltaPosXZ;
+        i32t compressedDeltaPosY;
         u64t compressedDeltaRot;
     };
 
