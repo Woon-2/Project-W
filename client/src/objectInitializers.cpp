@@ -639,9 +639,9 @@ ecs::Entity MU_CALLCONV createCharacter(
     entity.as<gfx::d3d12engine::Model>().get().markRenderPass(
         gfx::d3d12engine::rp::PBRAnimatedIllumination::id
     );
-    //entity.as<gfx::d3d12engine::Model>().get().markRenderPass(
-    //    gfx::d3d12engine::rp::CascadeShadowMapAnimated::id
-    //);
+    entity.as<gfx::d3d12engine::Model>().get().markRenderPass(
+        gfx::d3d12engine::rp::CascadeShadowMapAnimated::id
+    );
     return entity;
 }
 

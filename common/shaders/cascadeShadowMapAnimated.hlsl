@@ -20,7 +20,7 @@ cbuffer PerDrawcallData : register(b1) {
 };
 
 cbuffer PerFrameData : register(b2) {
-    float4x4 lightVP;
+    float4x4 lightVP[3];
 };
 
 struct VSOutput {
@@ -88,13 +88,34 @@ VSOutput VSMain( float3 position : POSITION, uint4 boneIndices : BONE_INDICES,
 
     float4 animPos = mul(float4(position, 1.0f), anim);
 
-    result.pos = mul(
-        mul(animPos, gInstances[instanceBase + instanceOffset].world),
-        lightVP
-    );
+    result.pos = mul(animPos, gInstances[instanceBase + instanceOffset].world);
 
     const float nearZ = 0.1f;
     result.pos.z = max(result.pos.z, nearZ);
 
 	return result;
+}
+
+struct GS_OUTPUT
+{
+    float4 position : SV_Position;
+    uint rtIndex : SV_RenderTargetArrayIndex;
+};
+
+[maxvertexcount(9)]
+void GSMain(triangle VSOutput input[3], inout TriangleStream<GS_OUTPUT> triStream)
+{
+    for (int cascadeLevel = 0; cascadeLevel < 3; cascadeLevel++)
+    {
+    
+        for (int vIdx = 0; vIdx < 3; vIdx++)
+        {
+            GS_OUTPUT output;
+            output.position = mul(input[vIdx].pos, lightVP[cascadeLevel]);
+            output.rtIndex = cascadeLevel;
+            triStream.Append(output);
+        }
+    
+        triStream.RestartStrip();
+    }
 }

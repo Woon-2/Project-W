@@ -1102,16 +1102,12 @@ ShaderCascadeShadowMapAnimated::ShaderCascadeShadowMapAnimated( D3D12Device& dev
 	cbDrawcallDataSize_( calcConstantBufferSize(sizeof(sr::PerDrawcallData2)) ),
 	perFrameData_{
 		UploadBuffer(device, sizeof(sr::PerFrameData1)),
-		UploadBuffer(device, sizeof(sr::PerFrameData1)),
-		UploadBuffer(device, sizeof(sr::PerFrameData1)),
 	},
 	perDrawcallData_(device, cbDrawcallDataSize_ * config.maxDrawcallCnt),
 	perInstanceData_(device, sizeof(sr::PerInstanceData6) * config.maxInstanceCnt),
 	maxInstanceCnt_(config.maxInstanceCnt), maxDrawcallCnt_(config.maxDrawcallCnt),
 	maxBoneCnt_(config.maxBoneCnt) {
-	perFrameData_[0].pullGpuAddr();
-	perFrameData_[1].pullGpuAddr();
-	perFrameData_[2].pullGpuAddr();
+	perFrameData_.pullGpuAddr();
 	perDrawcallData_.pullGpuAddr();
 	perInstanceData_.pullGpuAddr();
 }
@@ -1121,7 +1117,7 @@ void ShaderCascadeShadowMapAnimated::bindRootParams(D3D12GfxCmdList& cmdList) {
 
 	cmdList.get()->SetGraphicsRootConstantBufferView(
 		root.params[ UnifiedRoot::ParamIndices::b2 ],
-		perFrameData_[curCascadeIdx_].gpuAddr()
+		perFrameData_.gpuAddr()
 	);
 	cmdList.get()->SetGraphicsRootShaderResourceView(
 		root.params[ UnifiedRoot::ParamIndices::t0 ],
@@ -1141,10 +1137,16 @@ void ShaderCascadeShadowMapAnimated::loadBlobs() {
 		shaderPath/"cascadeShadowMapAnimated.hlsl", nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
+
+	blobs_[etoi(ShaderBlob::Type::Geometry)] = ShaderBlob{
+		shaderPath / "cascadeShadowMapAnimated.hlsl", nullptr,
+		"GSMain", "gs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Geometry
+	};
 }
 
 void ShaderCascadeShadowMapAnimated::releaseBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)].reset();
+	blobs_[etoi(ShaderBlob::Type::Geometry)].reset();
 }
 
 InputLayout ShaderCascadeShadowMapAnimated::makeInputLayout(InputLayout::Spec ilSpec) {

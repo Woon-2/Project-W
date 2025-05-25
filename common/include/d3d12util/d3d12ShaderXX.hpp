@@ -963,7 +963,7 @@ public:
 
 	RenderProtocol makeProtocol( D3D12Device& device, const RenderProtocol::Desc& desc) {
 		return RenderProtocol( device, *this,
-			selectBlobsStrong<ShaderBlob::Type::Vertex>(), desc
+			selectBlobsStrong<ShaderBlob::Type::Vertex(), ShaderBlob::Type::Geometry>(), desc
 		);
 	}
 
@@ -985,10 +985,9 @@ public:
 	void loadBlobs() override;
 	void releaseBlobs() override;
 
-	UploadBuffer perFrameData_[3];
+	UploadBuffer perFrameData_;
 	UploadBuffer perDrawcallData_;
 	UploadBuffer perInstanceData_;
-	int curCascadeIdx_;
 
 	std::size_t cbDrawcallDataSize() const noexcept {
 		return cbDrawcallDataSize_;
