@@ -121,6 +121,10 @@ public:
 	Collider(const BoundingOrientedBox& box) : type_(Type::OrientedBox), obb_(box) {}
 	Collider(const BoundingFrustum& frustum) : type_(Type::Frustum), frustum_(frustum) {}
 
+	void MU_CALLCONV setXform(mu::Mat4x4 xform) {
+		*this = transformCollider(xform, *this);
+	}
+
 
 	bool intersects(const Collider& other) const;
 	bool MU_CALLCONV contains(const mu::Vec3 point) const;
@@ -146,7 +150,7 @@ public:
 	BoundingVolumeNode() = default;
 
 	BoundingVolumeNode(const BoundingVolumeNode& other)
-		: colliders_(other.colliders_), children_() {}
+		: colliders_(other.colliders_), worldColliders_(other.worldColliders_), children_() {}
 
 	BoundingVolumeNode& operator=(const BoundingVolumeNode& other) {
 		colliders_ = other.colliders_;
@@ -158,22 +162,27 @@ public:
 
 	void addCollider(const Collider& collider) {
 		colliders_.push_back(collider);
+		worldColliders_.push_back(collider);
 	}
 	
 	void addCollider(const BoundingCapsule& capsule) {
 		colliders_.emplace_back(capsule);
+		worldColliders_.emplace_back(capsule);
 	}
 
 	void addCollider(const BoundingOrientedBox& box) {
 		colliders_.emplace_back(box);
+		worldColliders_.emplace_back(box);
 	}
 
 	void addCollider(const BoundingFrustum& frustum) {
 		colliders_.emplace_back(frustum);
+		worldColliders_.emplace_back(frustum);
 	}
 
 	void reserveColliders(std::size_t size) {
 		colliders_.reserve(size);
+		worldColliders_.reserve(size);
 	}
 
 	[[maybe_unused]] BoundingVolumeNode& addChild() {
@@ -194,15 +203,22 @@ public:
 
 	bool collides(const BoundingVolumeNode& other) const;
 
-	static bool MU_CALLCONV collides(
-		const mu::Mat4x4 lhsTransform, const BoundingVolumeNode& lhs,
-		const mu::Mat4x4& rhsTransform, const BoundingVolumeNode& rhs
-	);
+	void MU_CALLCONV setXform(mu::Mat4x4 xform) {
+		for (auto& collider : worldColliders_) {
+			collider.setXform(xform);
+		}
+	}
 
-	BoundingVolumeNode MU_CALLCONV transform(mu::Mat4x4 transform) const;
+	void MU_CALLCONV setXformCascade(mu::Mat4x4 xform) {
+		setXform(xform);
+		for (auto& child : children_) {
+			child.setXformCascade(xform);
+		}
+	}
 
 private:
 	std::vector<Collider> colliders_;
+	std::vector<Collider> worldColliders_;
 	std::vector<BoundingVolumeNode> children_;
 };
 
@@ -232,6 +248,18 @@ public:
 
 	void markCollision(const BoundingVolume* pVolume) {
 		pCurrentlyCollidedVolumes_.push_back(pVolume);
+	}
+
+	void MU_CALLCONV setXformCascade(mu::Mat4x4 xform) {
+		root_.setXformCascade(xform);
+	}
+
+	auto& collisionCache() NOEXCEPT {
+		return pCurrentlyCollidedVolumes_;
+	}
+
+	const auto& collisionCache() const NOEXCEPT {
+		return pCurrentlyCollidedVolumes_;
 	}
 
 private:

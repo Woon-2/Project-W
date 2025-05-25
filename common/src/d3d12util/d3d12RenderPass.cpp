@@ -390,14 +390,14 @@ void PBRIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderT
             continue;
         }
 
-        if (pBVNode && !BoundingVolumeNode::collides(
-            pCamera_->coordRotation().xform(), pCamera_->bvNode(),
-            pCoord->xform(), *pBVNode
-        )) {
-            willNotDraw = true;
-            pLastCulledBVNode = pBVNode;
-            continue;
-        }
+        // if (pBVNode && !BoundingVolumeNode::collides(
+        //     pCamera_->coordRotation().xform(), pCamera_->bvNode(),
+        //     pCoord->xform(), *pBVNode
+        // )) {
+        //     willNotDraw = true;
+        //     pLastCulledBVNode = pBVNode;
+        //     continue;
+        // }
 
         willNotDraw = false;
     }
@@ -699,14 +699,14 @@ void PBRAnimatedIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets&
             continue;
         }
 
-        if (pBVNode && !BoundingVolumeNode::collides(
-            pCamera_->coordRotation().xform(), pCamera_->bvNode(),
-            pCoord->xform(), *pBVNode
-        )) {
-            willNotDraw = true;
-            pLastCulledBVNode = pBVNode;
-            continue;
-        }
+        // if (pBVNode && !BoundingVolumeNode::collides(
+        //     pCamera_->coordRotation().xform(), pCamera_->bvNode(),
+        //     pCoord->xform(), *pBVNode
+        // )) {
+        //     willNotDraw = true;
+        //     pLastCulledBVNode = pBVNode;
+        //     continue;
+        // }
 
         willNotDraw = false;
     }
@@ -1080,14 +1080,14 @@ void ShadowMap::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets
             continue;
         }
 
-        if (pBVNode && !BoundingVolumeNode::collides(
-            pCamera_->coordRotation().xform(), pCamera_->bvNode(),
-            pCoord->xform(), *pBVNode
-        )) {
-            willNotDraw = true;
-            pLastCulledBVNode = pBVNode;
-            continue;
-        }
+        // if (pBVNode && !BoundingVolumeNode::collides(
+        //     pCamera_->coordRotation().xform(), pCamera_->bvNode(),
+        //     pCoord->xform(), *pBVNode
+        // )) {
+        //     willNotDraw = true;
+        //     pLastCulledBVNode = pBVNode;
+        //     continue;
+        // }
     }
 
     // finally sort batch by culled status and other properties
@@ -1342,14 +1342,14 @@ void CascadeShadowMap::preRender(D3D12GfxCmdList& cmdList, RenderTargets& render
             continue;
         }
 
-        if (pBVNode && !BoundingVolumeNode::collides(
-            pCamera_->coordRotation().xform(), pCamera_->bvNode(),
-            pCoord->xform(), *pBVNode
-        )) {
-            willNotDraw = true;
-            pLastCulledBVNode = pBVNode;
-            continue;
-        }
+        // if (pBVNode && !BoundingVolumeNode::collides(
+        //     pCamera_->coordRotation().xform(), pCamera_->bvNode(),
+        //     pCoord->xform(), *pBVNode
+        // )) {
+        //     willNotDraw = true;
+        //     pLastCulledBVNode = pBVNode;
+        //     continue;
+        // }
     }
 
     // finally sort batch by culled status and other properties
@@ -1615,14 +1615,14 @@ void ShadowMapAnimated::preRender(D3D12GfxCmdList& cmdList, RenderTargets& rende
             continue;
         }
 
-        if (pBVNode && !BoundingVolumeNode::collides(
-            pCamera_->coordRotation().xform(), pCamera_->bvNode(),
-            pCoord->xform(), *pBVNode
-        )) {
-            willNotDraw = true;
-            pLastCulledBVNode = pBVNode;
-            continue;
-        }
+        // if (pBVNode && !BoundingVolumeNode::collides(
+        //     pCamera_->coordRotation().xform(), pCamera_->bvNode(),
+        //     pCoord->xform(), *pBVNode
+        // )) {
+        //     willNotDraw = true;
+        //     pLastCulledBVNode = pBVNode;
+        //     continue;
+        // }
     }
 
     // finally sort batch by culled status and other properties
@@ -1914,14 +1914,14 @@ void CascadeShadowMapAnimated::preRender(D3D12GfxCmdList& cmdList, RenderTargets
             continue;
         }
 
-        if (pBVNode && !BoundingVolumeNode::collides(
-            pCamera_->coordRotation().xform(), pCamera_->bvNode(),
-            pCoord->xform(), *pBVNode
-        )) {
-            willNotDraw = true;
-            pLastCulledBVNode = pBVNode;
-            continue;
-        }
+        // if (pBVNode && !BoundingVolumeNode::collides(
+        //     pCamera_->coordRotation().xform(), pCamera_->bvNode(),
+        //     pCoord->xform(), *pBVNode
+        // )) {
+        //     willNotDraw = true;
+        //     pLastCulledBVNode = pBVNode;
+        //     continue;
+        // }
     }
 
     // finally sort batch by culled status and other properties
@@ -2624,14 +2624,14 @@ void Skybox::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
             continue;
         }
 
-        if (pBVNode && !BoundingVolumeNode::collides(
-            pCamera_->coordRotation().xform(), pCamera_->bvNode(),
-            pCoord->xform(), *pBVNode
-        )) {
-            willNotDraw = true;
-            pLastCulledBVNode = pBVNode;
-            continue;
-        }
+        // if (pBVNode && !BoundingVolumeNode::collides(
+        //     pCamera_->coordRotation().xform(), pCamera_->bvNode(),
+        //     pCoord->xform(), *pBVNode
+        // )) {
+        //     willNotDraw = true;
+        //     pLastCulledBVNode = pBVNode;
+        //     continue;
+        // }
 
         willNotDraw = false;
     }

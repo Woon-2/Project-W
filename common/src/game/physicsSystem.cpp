@@ -764,8 +764,8 @@ BoundingFrustum MU_CALLCONV transformCollider(
 bool BoundingVolumeNode::collides(const BoundingVolumeNode& other) const {
 	auto collided = false;
 
-	for (const auto& collider : colliders_) {
-		for (const auto& otherCollider : other.colliders_) {
+	for (const auto& collider : worldColliders_) {
+		for (const auto& otherCollider : other.worldColliders_) {
 			if (collider.intersects(otherCollider)) {
 				collided = true;
 				break;
@@ -808,34 +808,6 @@ bool BoundingVolumeNode::collides(const BoundingVolumeNode& other) const {
 	}
 
 	return false;
-}
-
-bool MU_CALLCONV BoundingVolumeNode::collides(
-	mu::Mat4x4 lhsTransform, const BoundingVolumeNode& lhs,
-	const mu::Mat4x4& rhsTransform, const BoundingVolumeNode& rhs
-) {
-	auto worldLhs = lhs.transform(lhsTransform);
-	auto worldRhs = rhs.transform(rhsTransform);
-	
-	return worldLhs.collides(worldRhs);
-}
-
-BoundingVolumeNode MU_CALLCONV BoundingVolumeNode::transform(
-	mu::Mat4x4 transform
-) const {
-	BoundingVolumeNode ret{};
-
-	ret.reserveColliders(colliders_.size());
-	for (const auto& collider : colliders_) {
-		ret.addCollider(transformCollider(transform, collider));
-	}
-
-	ret.reserveChildren(children_.size());
-	for (const auto& child : children_) {
-		ret.addChild(child.transform(transform));
-	}
-
-	return ret;
 }
 
 BoundingVolume::BoundingVolume(const ecs::Entity& entity, std::ifstream& bvhStream)
@@ -1048,6 +1020,13 @@ void CollisionSystem::update() {
 				continue;
 			}
 
+			if (std::ranges::find(pBV->collisionCache(), pOtherBV) != pBV->collisionCache().end()
+				|| std::ranges::find(pOtherBV->collisionCache(), pBV) != pOtherBV->collisionCache().end()
+			) {
+				// already checked this pair
+				continue;
+			}
+
 			auto xform = mu::Mat4x4();
 			if (auto pCoord = gameEngine::Coord::atC(pBV->entityID().value())) {
 				xform = pCoord->get().xform();
@@ -1058,10 +1037,10 @@ void CollisionSystem::update() {
 				otherXform = pOtherCoord->get().xform();
 			}
 
-			if ( BoundingVolumeNode::collides(
-					xform, pBV->root(),
-					otherXform, pOtherBV->root()
-			) ) {
+			pBV->setXformCascade(xform);
+			pOtherBV->setXformCascade(otherXform);
+
+			if ( pBV->collides(*pOtherBV) ) {
 				pBV->markCollision(pOtherBV);
 				pOtherBV->markCollision(pBV);
 			}
