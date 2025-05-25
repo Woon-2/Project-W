@@ -105,6 +105,7 @@ int main( ) {
 	//===============================================================================
 
 	auto physicsSystem = PhysicsSystem( );
+	auto collisionSystem = CollisionSystem( );
 	auto coordRoot = gameEngine::CoordRoot( );
 
 	coordRoot.update( );
@@ -149,6 +150,7 @@ int main( ) {
 			if ( entity.valid() ) {
 				coordRoot.addEntity(entity);
 				physicsSystem.addEntity(entity);
+				collisionSystem.addEntity(entity);
 				entityId = -1u;
 				entity.release();
 			}
@@ -281,6 +283,7 @@ int main( ) {
 		}
 
 		coordRoot.update( );
+		collisionSystem.update( );
 
 		auto lUsers = pmr::vector<Session*>();
 		for (auto& [id, session] : gUsers) {
