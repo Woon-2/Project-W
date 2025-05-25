@@ -22,8 +22,8 @@ VSOutput VSMain(float3 position : POSITION, uint instanceOffset : SV_InstanceID)
   
     result.pos = mul(float4(position, 1.0f), gInstances[instanceBase + instanceOffset].world);
     
-    const float nearZ = 0.1f;
-    result.pos.z = max(result.pos.z, nearZ);
+    //const float nearZ = 0.1f;
+    //result.pos.z = max(result.pos.z, nearZ);
 
     return result;
 }

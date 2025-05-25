@@ -35,6 +35,7 @@ enum class AssetTexture {
     Tree2,
     Terrain,
     TerrainHeightmap,
+    SkySphere,
 };
 
 struct ModelInfo {
