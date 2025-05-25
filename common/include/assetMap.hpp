@@ -16,6 +16,7 @@ enum class AssetModel {
 
 enum class AssetBVH {
     Helicopter,
+    Character,
     Terrain_0_0,
     Terrain_0_1,
     Terrain_0_2,

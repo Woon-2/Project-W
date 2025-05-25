@@ -207,6 +207,10 @@ const BVHInfo& assetBVHInfo(AssetBVH asset) {
             .path = getResourcePath()/"models/HelicopterModel/GO_OH-58D.bvh"
         },
         BVHInfo{
+            .key = "GO_Character",
+            .path = getResourcePath()/"models/Character/GO_Character.bvh"
+        },
+        BVHInfo{
             .key = "Terrain_0_0",
             .path = getResourcePath()/"terrains/BVHs/Terrain_0_0.bvh"
         },

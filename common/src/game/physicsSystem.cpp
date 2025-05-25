@@ -810,9 +810,71 @@ bool BoundingVolumeNode::collides(const BoundingVolumeNode& other) const {
 	return false;
 }
 
-BoundingVolume::BoundingVolume(const ecs::Entity& entity, std::ifstream& bvhStream)
-	: Component(entity) {
-	importBVHNode(bvhStream, root_);
+BoundingVolume::BoundingVolume(const ecs::Entity& entity, const std::filesystem::path& bvhPath)
+	: Component(entity), pCurrentlyCollidedVolumes_(), root_() {
+	if (!std::filesystem::exists(bvhPath)) {
+		throw std::runtime_error("[BoundingVolume]: BVH file does not exist: " + bvhPath.string());
+	}
+
+	if (sBvhCache_.contains(bvhPath)) {
+		auto& refRoot = sBvhCache_.at(bvhPath);
+		copyBVH(refRoot, root_);
+		return;
+	}
+
+	auto bvhStream = std::ifstream(bvhPath, std::ios::binary);
+	if (!bvhStream) {
+		throw std::runtime_error("[BoundingVolume]: failed to open BVH file: " + bvhPath.string());
+	}
+
+	auto [it, _] = sBvhCache_.try_emplace(bvhPath, BoundingVolumeNode{});
+	auto& refRoot = it->second;
+
+	auto& is = bvhStream;
+
+	char pstrToken[64] = { '\0' };
+
+	std::uint8_t nStrLength = 0;
+	std::uint32_t nReads = 0;
+
+	int intVal{};
+
+	readStream(is, nStrLength);
+	readStream(is, pstrToken, nStrLength);
+
+	if (std::strcmp(pstrToken, "<ColliderCnt:>")) {
+		throw std::runtime_error("[BoundingVolume::importBVHNode]: <ColliderCnt:> token expected but not found.");
+	}
+
+	readStream(is, intVal);
+	refRoot.reserveColliders(static_cast<std::size_t>(intVal));
+
+	readStream(is, nStrLength);
+	readStream(is, pstrToken, nStrLength);
+	if (std::strcmp(pstrToken, "<Nodes:>")) {
+		throw std::runtime_error("[BoundingVolume::importBVHNode]: <Nodes:> token expected but not found.");
+	}
+
+	readStream(is, intVal);	// nodeCnt
+
+	importBVHNode(bvhStream, refRoot);
+
+	readStream(is, nStrLength);
+	readStream(is, pstrToken, nStrLength);
+	if (std::strcmp(pstrToken, "</Nodes>")) {
+		throw std::runtime_error("[BoundingVolume::importBVHNode]: </Nodes> token expected but not found.");
+	}
+
+	copyBVH(refRoot, root_);
+}
+
+void BoundingVolume::copyBVH(const BoundingVolumeNode& src, BoundingVolumeNode& dst) {
+	dst = src;
+
+	for (const auto& child : src.children()) {
+		auto& newChild = dst.addChild();
+		copyBVH(child, newChild);
+	}
 }
 
 void BoundingVolume::importBVHNode(std::ifstream& bvhStream, BoundingVolumeNode& node) {
@@ -1006,6 +1068,9 @@ void BoundingVolume::readOBBCollider(std::ifstream& is, BoundingVolumeNode& node
 		.center = center, .extents = extents, .orientation = orientation
 	} );
 }
+
+std::unordered_map<std::filesystem::path, BoundingVolumeNode> BoundingVolume::sBvhCache_;
+
 
 void CollisionSystem::update() {
 	// reset collisions from previous frame

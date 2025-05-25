@@ -154,7 +154,10 @@ public:
 
 	BoundingVolumeNode& operator=(const BoundingVolumeNode& other) {
 		colliders_ = other.colliders_;
+		worldColliders_ = other.worldColliders_;
 		children_.clear();
+
+		return *this;
 	}
 
 	BoundingVolumeNode(BoundingVolumeNode&& other) noexcept = default;
@@ -216,6 +219,22 @@ public:
 		}
 	}
 
+	auto& colliders() NOEXCEPT {
+		return colliders_;
+	}	
+
+	const auto& colliders() const NOEXCEPT {
+		return colliders_;
+	}
+
+	auto& children() NOEXCEPT {
+		return children_;
+	}
+
+	const auto& children() const NOEXCEPT {
+		return children_;
+	}
+
 private:
 	std::vector<Collider> colliders_;
 	std::vector<Collider> worldColliders_;
@@ -229,11 +248,7 @@ public:
 	BoundingVolume(const ecs::Entity& entity) NOEXCEPT
 		: Component(entity) {}
 
-	BoundingVolume(const ecs::Entity& entity, const std::filesystem::path& bvhPath)
-		: BoundingVolume(entity, std::ifstream(bvhPath, std::ios::binary)) {}
-	BoundingVolume(const ecs::Entity& entity, std::ifstream& bvhStream);
-	BoundingVolume(const ecs::Entity& entity, std::ifstream&& bvhStream)
-		: BoundingVolume(entity, bvhStream) {}
+	BoundingVolume(const ecs::Entity& entity, const std::filesystem::path& bvhPath);
 
 	BoundingVolumeNode& root() NOEXCEPT { return root_; }
 	const BoundingVolumeNode& root() const NOEXCEPT { return root_; }
@@ -264,9 +279,12 @@ public:
 
 private:
 	static void importBVHNode(std::ifstream& bvhStream, BoundingVolumeNode& node);
+	static void copyBVH(const BoundingVolumeNode& src, BoundingVolumeNode& dst);
 	static void readColliders(std::ifstream& bvhStream, BoundingVolumeNode& node, std::size_t colliderCnt);
 	static void readCapsuleCollider(std::ifstream& bvhStream, BoundingVolumeNode& node);
 	static void readOBBCollider(std::ifstream& bvhStream, BoundingVolumeNode& node);
+
+	static std::unordered_map<std::filesystem::path, BoundingVolumeNode> sBvhCache_;
 
 	BoundingVolumeNode root_;
 	std::vector<const BoundingVolume*> pCurrentlyCollidedVolumes_;

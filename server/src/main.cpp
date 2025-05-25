@@ -8,6 +8,7 @@
 #include "resourcePath.hpp"
 
 #include "bitmap.hpp"
+#include "assetMap.hpp"
 
 void doAccept( SOCKET, OverlappedEx* );
 void worker( );
@@ -409,6 +410,10 @@ void worker( ) {
 			rb.setKConstantAirDrag( 3.f );
 			rb.disableGravity( );
 			entity.createComponent<DummyModel>( entity.as<gameEngine::Coord>() );
+
+			entity.createComponent<BoundingVolume>(
+				assetBVHInfo(AssetBVH::Character).path	
+			);
 
 			initializingSession.setEntityId( entity.id( ).value( ) );
 

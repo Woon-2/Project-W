@@ -219,8 +219,8 @@ void LevelRegion::activateChunk( std::size_t xIdx, std::size_t zIdx,
     }
 
     activateChunk(xIdx, zIdx, scene);
-    chunks_.back().createComponent<BoundingVolume>(bvhPath);
-    collisionSystem.addEntity(chunks_.back());
+    // chunks_.back().createComponent<BoundingVolume>(bvhPath);
+    // collisionSystem.addEntity(chunks_.back());
 }
 
 std::vector<ecs::Entity> LevelRegion::instantiateAllObjects(
