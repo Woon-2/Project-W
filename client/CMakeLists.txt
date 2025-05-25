@@ -42,7 +42,6 @@ target_sources(client
         src/main.cpp
         src/game.cpp include/game.hpp
         src/inputSystem.cpp include/inputSystem.hpp
-        src/assetMap.cpp include/assetMap.hpp
         src/stage.cpp include/stage.hpp
         src/Timer.cpp include/Timer.hpp
         src/renderer.cpp include/renderer.hpp

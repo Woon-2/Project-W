@@ -171,6 +171,7 @@ add_library(ecsClient
     src/coord.cpp include/coord.hpp
     src/game/physicsSystem.cpp include/game/physicsSystem.hpp
     src/bitmap.cpp include/bitmap.hpp
+    src/assetMap.cpp include/assetMap.hpp
 
     src/ecs.cpp include/ecs.hpp
     include/ecsExcept.hpp
@@ -208,6 +209,7 @@ add_library(ecsServer
     src/coord.cpp include/coord.hpp
     src/game/physicsSystem.cpp include/game/physicsSystem.hpp
     src/bitmap.cpp include/bitmap.hpp
+    src/assetMap.cpp include/assetMap.hpp
 
     src/ecs.cpp include/ecs.hpp
     include/ecsExcept.hpp

@@ -1,10 +1,10 @@
 #ifndef __AssetMap_HPP
 #define __AssetMap_HPP
 
-#include "d3d12engine/d3d12Engine.hpp"
-
 #include <filesystem>
 #include <vector>
+
+using AssetID = std::string;
 
 enum class AssetModel {
     Helicopter,
@@ -39,19 +39,25 @@ enum class AssetTexture {
 };
 
 struct ModelInfo {
-    gfx::d3d12::ResourceStorage::ResID key;
+    AssetID key;
     std::filesystem::path geometryPath;
     std::filesystem::path animationPath;
 };
 
 struct TextureInfo {
-    std::vector<gfx::d3d12::ResourceStorage::ResID> keys;
+    enum class Type {
+        Texture,
+        TextureArray,
+        TextureCube
+    };
+
+    std::vector<AssetID> keys;
     std::vector<std::filesystem::path> paths;
-    gfx::d3d12::TextureResource::Type type;
+    Type type;
 };
 
 struct BVHInfo {
-    gfx::d3d12::ResourceStorage::ResID key;
+    AssetID key;
     std::filesystem::path path;
 };
 
