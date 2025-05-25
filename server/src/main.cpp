@@ -236,10 +236,13 @@ int main( ) {
 					auto c = mu::Vec3();
 
 					mu::NVec3 v = mu::Vec3(expectedPos.x(), y, expectedPos.z()) - beforePos;
-					if (mu::dot(v, mu::Vec3(0.f, 1.f, 0.f)) <+ 0.9999f) {
+					if (mu::dot(v, mu::Vec3(0.f, 1.f, 0.f)) < 0.95f) {
 						auto tangent = mu::cross(mu::Vec3(0.f, 1.f, 0.f), v);
 						mu::NVec3 N = mu::cross(v, tangent);
 						dp = mu::slide(dp, N);
+					}
+					else {
+						dp = mu::Vec3();
 					}
 
 					if ( auto pRigidBody = RigidBody::at(eid) ) {
