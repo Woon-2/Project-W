@@ -491,3 +491,5 @@ common/include/shaderPath.hpp
 !resource/*/*/*.obj
 
 *.ini
+!network.ini
+!resourcePath.ini
