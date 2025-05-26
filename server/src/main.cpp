@@ -55,6 +55,51 @@ float readHeight(RGBQUAD bits) {
 	return fHeight - 25.f;
 }
 
+ecs::Entity instantiateCharacter(const gameEngine::ObjectDisposition& disposition) {
+	ecs::Entity entity;
+
+	entity.createComponent<gameEngine::Coord>();
+
+	const auto translation = mu::Vec3(disposition.xform_.row(3));
+	entity.as<gameEngine::Coord>().get().setLocalXform(disposition.xform_);
+
+	entity.createComponent<DummyModel>( entity.as<gameEngine::Coord>().get() );
+	auto rotationScale = mu::Mat4x4();
+	rotationScale.setRow(0, mu::Vec3(disposition.xform_.row(0)));
+	rotationScale.setRow(1, mu::Vec3(disposition.xform_.row(1)));
+	rotationScale.setRow(2, mu::Vec3(disposition.xform_.row(2)));
+	rotationScale.setRow(3, mu::Vec4(0.f, 0.f, 0.f, 1.f));
+	entity.as<DummyModel>().coord().setLocalXform(rotationScale);
+
+	entity.createComponent<RigidBody>();
+	auto& rb = entity.as<RigidBody>();
+	rb.setInvMass( 1.f / 50.f );
+	rb.setKFriction( 0.5f );
+	rb.setKAirdrag( 1.25f );
+	rb.setKConstantAirDrag( 3.f );
+	rb.enableGravity( );
+
+	entity.createComponent<BoundingVolume>( getResourcePath()/"models/Character.bvh" );
+}
+
+void instantiateObjectHierarchy(const gameEngine::ObjectDisposition& disposition, std::vector<ecs::Entity>& out) {
+	if (disposition.prefabName_ == "P_GO_Character") {
+		out.push_back(instantiateCharacter(disposition));
+	}
+
+	for (const auto& child : disposition.children_) {
+		instantiateObjectHierarchy(child, out);
+	}
+}
+
+std::vector<ecs::Entity> instantiateAllObjects(const gameEngine::ObjectDisposition& disposition) {
+	auto ret = std::vector<ecs::Entity>();
+
+	instantiateObjectHierarchy(disposition, ret);
+
+	return ret;
+}
+
 int main( ) {
 	using Clock = std::chrono::high_resolution_clock;
 	using Seconds = std::chrono::duration<float>;
@@ -109,6 +154,15 @@ int main( ) {
 	auto coordRoot = gameEngine::CoordRoot( );
 
 	coordRoot.update( );
+
+	auto level = gameEngine::LevelRegion( getResourcePath()/"LevelGraph.bin" );
+	auto entities = instantiateAllObjects( level.dispositionRoot() );
+
+	for ( auto& entity : entities ) {
+		coordRoot.addEntity( entity );
+		physicsSystem.addEntity( entity );
+		collisionSystem.addEntity( entity );
+	}
 
 	auto lastTp = Clock::now( );
 	
