@@ -26,6 +26,7 @@ std::uniform_real_distribution<float> gDist( -1.f, 1.f );
 std::mt19937 gRng( std::random_device{}( ) );
 
 std::vector< std::vector<Bitmap> > gHeightmaps;
+std::vector<ecs::Entity> gNPCs;
 
 void processPacket(Packet& packet, Session& session);
 void processCSInput(CSInput& csInput, Session& session);
@@ -60,10 +61,10 @@ ecs::Entity instantiateCharacter(const gameEngine::ObjectDisposition& dispositio
 
 	entity.createComponent<gameEngine::Coord>();
 
-	const auto translation = mu::Vec3(disposition.xform_.row(3));
+	const auto translation = mu::Vec3(disposition.xform_.row(3)) + mu::Vec3(0.f ,-25.f, 0.f);
 	entity.as<gameEngine::Coord>().get().setLocalXform(disposition.xform_);
 
-	entity.createComponent<DummyModel>( entity.as<gameEngine::Coord>().get() );
+	entity.createComponent<DummyModel>( entity.as<gameEngine::Coord>() );
 	auto rotationScale = mu::Mat4x4();
 	rotationScale.setRow(0, mu::Vec3(disposition.xform_.row(0)));
 	rotationScale.setRow(1, mu::Vec3(disposition.xform_.row(1)));
@@ -79,7 +80,9 @@ ecs::Entity instantiateCharacter(const gameEngine::ObjectDisposition& dispositio
 	rb.setKConstantAirDrag( 3.f );
 	rb.enableGravity( );
 
-	entity.createComponent<BoundingVolume>( getResourcePath()/"models/Character.bvh" );
+	entity.createComponent<BoundingVolume>( assetBVHInfo(AssetBVH::Character).path );
+
+	return entity;
 }
 
 void instantiateObjectHierarchy(const gameEngine::ObjectDisposition& disposition, std::vector<ecs::Entity>& out) {
@@ -98,6 +101,107 @@ std::vector<ecs::Entity> instantiateAllObjects(const gameEngine::ObjectDispositi
 	instantiateObjectHierarchy(disposition, ret);
 
 	return ret;
+}
+
+template <std::ranges::range R>
+void simulate(R&& entitieIDs) {
+	for (auto&& eid : entitieIDs) {
+		auto pCoord = gameEngine::Coord::at(eid);
+		if (!pCoord) {
+			continue;
+		}
+
+		const auto cdpxz = pCoord->compressedDeltaPosXZ();
+		const auto cdpy = pCoord->compressedDeltaPosY();
+		const auto cdr = pCoord->compressedDeltaRot();
+		pCoord->resetDeltaPos();
+
+		auto dp = pCoord->decodeDeltaPos(cdpxz, cdpy);
+		const auto dr = pCoord->decodeDeltaRot(cdr);
+
+		const auto beforePos = mu::Vec3(pCoord->get().xform().row(3));
+		const auto expectedPos = beforePos + dp;
+
+		const auto chunkRow = std::clamp(static_cast<int>(expectedPos.x() / 100.f), 0, 2);
+		const auto chunkCol = std::clamp(static_cast<int>(expectedPos.z() / 100.f), 0, 2);
+
+		const auto pixelSize = 100.f / gHeightmaps[chunkRow][chunkCol].getWidth();
+		const auto pixelLength = gHeightmaps[0][0].getWidth() - 1;
+
+		auto [y00u, y00v] = heightmapTexcoord(expectedPos.x(), expectedPos.z());
+
+		auto y00 = readHeight( gHeightmaps[chunkRow][chunkCol].getPixel(
+			static_cast<int>(y00u * pixelLength),
+			static_cast<int>(y00v * pixelLength)
+		).value() );
+
+		auto [y01x, y01y] = chunkIdx(expectedPos.x() + pixelSize, expectedPos.z());
+		auto [y01u, y01v] = heightmapTexcoord(expectedPos.x() + pixelSize, expectedPos.z());
+
+		auto y01 = readHeight( gHeightmaps[y01x][y01y].getPixel(
+			static_cast<int>(y01u * pixelLength),
+			static_cast<int>(y01v * pixelLength)
+		).value() );
+
+		auto [y10x, y10y] = chunkIdx(expectedPos.x(), expectedPos.z() + pixelSize);
+		auto [y10u, y10v] = heightmapTexcoord(expectedPos.x(), expectedPos.z() + pixelSize);
+
+		auto y10 = readHeight( gHeightmaps[y10x][y10y].getPixel(
+			static_cast<int>(y10u * pixelLength),
+			static_cast<int>(y10v * pixelLength)
+		).value() );
+
+		auto [y11x, y11y] = chunkIdx(expectedPos.x() + pixelSize, expectedPos.z() + pixelSize);
+		auto [y11u, y11v] = heightmapTexcoord(expectedPos.x() + pixelSize, expectedPos.z() + pixelSize);
+
+		auto y11 = readHeight( gHeightmaps[y11x][y11y].getPixel(
+			static_cast<int>(y11u * pixelLength),
+			static_cast<int>(y11v * pixelLength)
+		).value() );
+
+		const auto hx = expectedPos.x() - std::floor(expectedPos.x());
+		const auto hz = expectedPos.z() - std::floor(expectedPos.z());
+
+		if (hx + hz < 1.f) {
+			y11 = y00;
+		}
+		else {
+			y00 = y11;
+		}
+
+		const auto y0 = std::lerp(y00, y01, hz);
+		const auto y1 = std::lerp(y10, y11, hz);
+		const auto y = std::lerp(y0, y1, hx);
+
+		// sliding
+		if (expectedPos.y() + 0.001f < y) {
+			auto c = mu::Vec3();
+
+			mu::NVec3 v = mu::Vec3(expectedPos.x(), y, expectedPos.z()) - beforePos;
+			if (mu::dot(v, mu::Vec3(0.f, 1.f, 0.f)) < 0.95f) {
+				auto tangent = mu::cross(mu::Vec3(0.f, 1.f, 0.f), v);
+				mu::NVec3 N = mu::cross(v, tangent);
+				dp = mu::slide(dp, N);
+			}
+			else {
+				dp = mu::Vec3();
+			}
+
+			if ( auto pRigidBody = RigidBody::at(eid) ) {
+				auto oldV = pRigidBody->velocity();
+				auto newV = mu::Vec3(oldV.x(), 0.f, oldV.z());
+				pRigidBody->setVelocity(newV);
+			}
+		}
+
+		pCoord->accTranslation(dp);
+
+		pCoord->get() << mu::translate(dp);
+		if (auto pModel = DummyModel::at(eid)) {
+			pModel->coord() << mu::Mat4x4(dr);
+		}
+	}
+	
 }
 
 int main( ) {
@@ -156,9 +260,9 @@ int main( ) {
 	coordRoot.update( );
 
 	auto level = gameEngine::LevelRegion( getResourcePath()/"LevelGraph.bin" );
-	auto entities = instantiateAllObjects( level.dispositionRoot() );
+	gNPCs = instantiateAllObjects( level.dispositionRoot() );
 
-	for ( auto& entity : entities ) {
+	for ( auto& entity : gNPCs ) {
 		coordRoot.addEntity( entity );
 		physicsSystem.addEntity( entity );
 		collisionSystem.addEntity( entity );
@@ -215,6 +319,44 @@ int main( ) {
 
 		SCMove curPacket{};
 
+		simulate(gNPCs | std::views::transform([](ecs::Entity& entity) {
+			return entity.id().value();
+		}));
+		simulate(gUsers | std::views::transform([](auto& pair) {
+			return pair.second.getEntityId();
+		}));
+
+		for ( auto& eid : gNPCs ) {
+			const auto pCoord = gameEngine::Coord::at(eid.id().value());
+			if (!pCoord) {
+				continue;
+			}
+
+			const auto cdr = pCoord->compressedDeltaRot();
+			const auto cdpxz = pCoord->compressedDeltaPosXZ();
+			const auto cdpy = pCoord->compressedDeltaPosY();
+			pCoord->resetDeltaPos();
+			pCoord->resetDeltaRot();
+
+			curPacket.moves[curPacket.moveCnt++] = SCMove::Value{
+				.netId = eid.id().value(),
+				.compressedDeltaPosXZ = cdpxz,
+				.compressedDeltaPosY = cdpy,
+				.compressedDeltaRot = cdr
+			};
+
+			if (curPacket.moveCnt == SCMove::maxMoveCnt) {
+				Session::enqueueBroadcastPacket(
+					Packet{
+						.size = calcPacketSize<SCMove>(SCMove::maxMoveCnt),
+						.type = PacketType::SCMove,
+						.scMove = curPacket
+					}
+				);
+				curPacket.moveCnt = 0;
+			}
+		}
+
 		for ( auto& [id, user] : gUsers ) {
 			if ( !user.accessReady( ) ) {
 				continue;
@@ -222,99 +364,16 @@ int main( ) {
 			const auto eid = user.getEntityId();
 
 			if (auto pCoord = gameEngine::Coord::at(eid)) {
+				const auto cdr = pCoord->compressedDeltaRot();
 				const auto cdpxz = pCoord->compressedDeltaPosXZ();
 				const auto cdpy = pCoord->compressedDeltaPosY();
-				const auto cdr = pCoord->compressedDeltaRot();
 				pCoord->resetDeltaPos();
 				pCoord->resetDeltaRot();
 
-				auto dp = pCoord->decodeDeltaPos(cdpxz, cdpy);
-				const auto dr = pCoord->decodeDeltaRot(cdr);
-
-				const auto beforePos = mu::Vec3(pCoord->get().xform().row(3));
-				const auto expectedPos = beforePos + dp;
-
-				const auto chunkRow = std::clamp(static_cast<int>(expectedPos.x() / 100.f), 0, 2);
-				const auto chunkCol = std::clamp(static_cast<int>(expectedPos.z() / 100.f), 0, 2);
-
-				const auto pixelSize = 100.f / gHeightmaps[chunkRow][chunkCol].getWidth();
-				const auto pixelLength = gHeightmaps[0][0].getWidth() - 1;
-
-				auto [y00u, y00v] = heightmapTexcoord(expectedPos.x(), expectedPos.z());
-
-				auto y00 = readHeight( gHeightmaps[chunkRow][chunkCol].getPixel(
-					static_cast<int>(y00u * pixelLength),
-					static_cast<int>(y00v * pixelLength)
-				).value() );
-
-				auto [y01x, y01y] = chunkIdx(expectedPos.x() + pixelSize, expectedPos.z());
-				auto [y01u, y01v] = heightmapTexcoord(expectedPos.x() + pixelSize, expectedPos.z());
-
-				auto y01 = readHeight( gHeightmaps[y01x][y01y].getPixel(
-					static_cast<int>(y01u * pixelLength),
-					static_cast<int>(y01v * pixelLength)
-				).value() );
-
-				auto [y10x, y10y] = chunkIdx(expectedPos.x(), expectedPos.z() + pixelSize);
-				auto [y10u, y10v] = heightmapTexcoord(expectedPos.x(), expectedPos.z() + pixelSize);
-
-				auto y10 = readHeight( gHeightmaps[y10x][y10y].getPixel(
-					static_cast<int>(y10u * pixelLength),
-					static_cast<int>(y10v * pixelLength)
-				).value() );
-
-				auto [y11x, y11y] = chunkIdx(expectedPos.x() + pixelSize, expectedPos.z() + pixelSize);
-				auto [y11u, y11v] = heightmapTexcoord(expectedPos.x() + pixelSize, expectedPos.z() + pixelSize);
-
-				auto y11 = readHeight( gHeightmaps[y11x][y11y].getPixel(
-					static_cast<int>(y11u * pixelLength),
-					static_cast<int>(y11v * pixelLength)
-				).value() );
-
-				const auto hx = expectedPos.x() - std::floor(expectedPos.x());
-				const auto hz = expectedPos.z() - std::floor(expectedPos.z());
-
-				if (hx + hz < 1.f) {
-					y11 = y00;
-				}
-				else {
-					y00 = y11;
-				}
-
-				const auto y0 = std::lerp(y00, y01, hz);
-				const auto y1 = std::lerp(y10, y11, hz);
-				const auto y = std::lerp(y0, y1, hx);
-
-				// sliding
-				if (expectedPos.y() + 0.001f < y) {
-					auto c = mu::Vec3();
-
-					mu::NVec3 v = mu::Vec3(expectedPos.x(), y, expectedPos.z()) - beforePos;
-					if (mu::dot(v, mu::Vec3(0.f, 1.f, 0.f)) < 0.95f) {
-						auto tangent = mu::cross(mu::Vec3(0.f, 1.f, 0.f), v);
-						mu::NVec3 N = mu::cross(v, tangent);
-						dp = mu::slide(dp, N);
-					}
-					else {
-						dp = mu::Vec3();
-					}
-
-					if ( auto pRigidBody = RigidBody::at(eid) ) {
-						auto oldV = pRigidBody->velocity();
-						auto newV = mu::Vec3(oldV.x(), 0.f, oldV.z());
-						pRigidBody->setVelocity(newV);
-					}
-				}
-
-				pCoord->accTranslation(dp);
-				const auto realCdpxz = pCoord->compressedDeltaPosXZ();
-				const auto realCdpy = pCoord->compressedDeltaPosY();
-				pCoord->resetDeltaPos();
-
 				curPacket.moves[curPacket.moveCnt++] = SCMove::Value{
 					.netId = eid,
-					.compressedDeltaPosXZ = realCdpxz,
-					.compressedDeltaPosY = realCdpy,
+					.compressedDeltaPosXZ = cdpxz,
+					.compressedDeltaPosY = cdpy,
 					.compressedDeltaRot = cdr
 				};
 
@@ -327,11 +386,6 @@ int main( ) {
 						}
 					);
 					curPacket.moveCnt = 0;
-				}
-
-				pCoord->get() << mu::translate(dp);
-				if (auto pModel = DummyModel::at(eid)) {
-					pModel->coord() << mu::Mat4x4(dr);
 				}
 			}
 		}
@@ -489,6 +543,39 @@ void worker( ) {
 			entity.release();
 
 			// add intialization packets
+			for (auto& npc : gNPCs) {
+				if (!npc.valid()) {
+					continue;
+				}
+
+				auto trs = mu::Vec3();
+				auto rot = mu::NQuat();
+
+				if (auto pCoord = gameEngine::Coord::at(npc.id().value())) {
+					// we endure data race of translation
+					trs = pCoord->get().localXform().row(3);
+				}
+				if (auto pModel = DummyModel::at(npc.id().value())) {
+					rot = mu::quatRotMat(pModel->coord().localXform());
+				}
+
+				// enqueue SCEnter packet
+				initializingSession.enqueuePacket(
+					Packet{
+						.size = calcPacketSize<SCEnter>(),
+						.type = PacketType::SCEnter,
+						.scEnter = SCEnter{
+							.netId = npc.id().value(),
+							.xform = RigidXform{
+								.translation = { trs.x(), trs.y(), trs.z() },
+								.rotation = { rot.x(), rot.y(), rot.z(), rot.w() }
+							},
+							.objType = ObjectType::Character
+						}
+					}
+				);
+			}
+
 			for (auto& [id, user] : gUsers) {
 				if (!user.accessReady()) {
 					continue;
@@ -504,7 +591,6 @@ void worker( ) {
 				}
 				if (auto pModel = DummyModel::at(user.getEntityId())) {
 					rot = mu::quatRotMat(pModel->coord().localXform());
-					// if rotation is not near identity, recalculate rotation
 				}
 
 				// enqueue SCEnter packet
