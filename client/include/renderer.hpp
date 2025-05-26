@@ -54,8 +54,8 @@ private:
     gfx::d3d12::ShaderCascadeShadowMap shaderCascadeShaodwMap_;
     gfx::d3d12engine::rp::CascadeShadowMap renderPassCascadeShadowMap_;
 
-    //gfx::d3d12::ShaderCascadeShadowMapAnimated shaderCascadeShadowMapAnimated_;
-    //gfx::d3d12engine::rp::CascadeShadowMapAnimated renderPassCascadeShadowMapAnimated_;
+    gfx::d3d12::ShaderCascadeShadowMapAnimated shaderCascadeShadowMapAnimated_;
+    gfx::d3d12engine::rp::CascadeShadowMapAnimated renderPassCascadeShadowMapAnimated_;
 
     gfx::d3d12::ShaderScreenQuad shaderScreenQuad_;
     gfx::d3d12engine::rp::ScreenQuad renderPassScreenQuad_;

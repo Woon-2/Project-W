@@ -10,6 +10,15 @@
 
 #include <DirectXCollision.h>
 
+// Collider - BoundingHeightmap
+// FreeImage 필요
+// BoundingOrientedBox <-> BoundingHeightmap
+// extents로 꼭짓점 8개 build하고 center, orientation으로 변환
+// 꼭짓점의 y좌표 중 가장 작은 값을 읽었을 때 Heightmap의 높이보다 작으면 충돌
+// 
+// 충돌 피드백: 높이를 Heightmap의 높이로 설정, RigidBody의 velocity.y를 0으로 설정
+// 피드백 타입 지정
+
 inline constexpr float gravityConst = 9.81f;
 
 class RigidBody : public ecs::Component {
@@ -56,8 +65,9 @@ private:
 	mu::Vec3 velocity_;
 	mu::Vec3 momentum_;
 
-	// 2-3: x, 4-5: y, 6-7: z, precision: 0.00003m
-	au64t compressedDeltaVelocity_;
+	// 0-3: x, 4-7: z, precision: 0.00003m
+	au64t compressedDeltaVelocityXZ_;
+	ai32t compressedDeltaVelocityY_;
 	
 	float invMass_;
 	float kFriction_;
@@ -121,6 +131,10 @@ public:
 	Collider(const BoundingOrientedBox& box) : type_(Type::OrientedBox), obb_(box) {}
 	Collider(const BoundingFrustum& frustum) : type_(Type::Frustum), frustum_(frustum) {}
 
+	void MU_CALLCONV setXform(mu::Mat4x4 xform) {
+		*this = transformCollider(xform, *this);
+	}
+
 
 	bool intersects(const Collider& other) const;
 	bool MU_CALLCONV contains(const mu::Vec3 point) const;
@@ -146,11 +160,14 @@ public:
 	BoundingVolumeNode() = default;
 
 	BoundingVolumeNode(const BoundingVolumeNode& other)
-		: colliders_(other.colliders_), children_() {}
+		: colliders_(other.colliders_), worldColliders_(other.worldColliders_), children_() {}
 
 	BoundingVolumeNode& operator=(const BoundingVolumeNode& other) {
 		colliders_ = other.colliders_;
+		worldColliders_ = other.worldColliders_;
 		children_.clear();
+
+		return *this;
 	}
 
 	BoundingVolumeNode(BoundingVolumeNode&& other) noexcept = default;
@@ -158,22 +175,27 @@ public:
 
 	void addCollider(const Collider& collider) {
 		colliders_.push_back(collider);
+		worldColliders_.push_back(collider);
 	}
 	
 	void addCollider(const BoundingCapsule& capsule) {
 		colliders_.emplace_back(capsule);
+		worldColliders_.emplace_back(capsule);
 	}
 
 	void addCollider(const BoundingOrientedBox& box) {
 		colliders_.emplace_back(box);
+		worldColliders_.emplace_back(box);
 	}
 
 	void addCollider(const BoundingFrustum& frustum) {
 		colliders_.emplace_back(frustum);
+		worldColliders_.emplace_back(frustum);
 	}
 
 	void reserveColliders(std::size_t size) {
 		colliders_.reserve(size);
+		worldColliders_.reserve(size);
 	}
 
 	[[maybe_unused]] BoundingVolumeNode& addChild() {
@@ -194,15 +216,38 @@ public:
 
 	bool collides(const BoundingVolumeNode& other) const;
 
-	static bool MU_CALLCONV collides(
-		const mu::Mat4x4 lhsTransform, const BoundingVolumeNode& lhs,
-		const mu::Mat4x4& rhsTransform, const BoundingVolumeNode& rhs
-	);
+	void MU_CALLCONV setXform(mu::Mat4x4 xform) {
+		for (auto& collider : worldColliders_) {
+			collider.setXform(xform);
+		}
+	}
 
-	BoundingVolumeNode MU_CALLCONV transform(mu::Mat4x4 transform) const;
+	void MU_CALLCONV setXformCascade(mu::Mat4x4 xform) {
+		setXform(xform);
+		for (auto& child : children_) {
+			child.setXformCascade(xform);
+		}
+	}
+
+	auto& colliders() NOEXCEPT {
+		return colliders_;
+	}	
+
+	const auto& colliders() const NOEXCEPT {
+		return colliders_;
+	}
+
+	auto& children() NOEXCEPT {
+		return children_;
+	}
+
+	const auto& children() const NOEXCEPT {
+		return children_;
+	}
 
 private:
 	std::vector<Collider> colliders_;
+	std::vector<Collider> worldColliders_;
 	std::vector<BoundingVolumeNode> children_;
 };
 
@@ -213,11 +258,7 @@ public:
 	BoundingVolume(const ecs::Entity& entity) NOEXCEPT
 		: Component(entity) {}
 
-	BoundingVolume(const ecs::Entity& entity, const std::filesystem::path& bvhPath)
-		: BoundingVolume(entity, std::ifstream(bvhPath, std::ios::binary)) {}
-	BoundingVolume(const ecs::Entity& entity, std::ifstream& bvhStream);
-	BoundingVolume(const ecs::Entity& entity, std::ifstream&& bvhStream)
-		: BoundingVolume(entity, bvhStream) {}
+	BoundingVolume(const ecs::Entity& entity, const std::filesystem::path& bvhPath);
 
 	BoundingVolumeNode& root() NOEXCEPT { return root_; }
 	const BoundingVolumeNode& root() const NOEXCEPT { return root_; }
@@ -234,11 +275,26 @@ public:
 		pCurrentlyCollidedVolumes_.push_back(pVolume);
 	}
 
+	void MU_CALLCONV setXformCascade(mu::Mat4x4 xform) {
+		root_.setXformCascade(xform);
+	}
+
+	auto& collisionCache() NOEXCEPT {
+		return pCurrentlyCollidedVolumes_;
+	}
+
+	const auto& collisionCache() const NOEXCEPT {
+		return pCurrentlyCollidedVolumes_;
+	}
+
 private:
 	static void importBVHNode(std::ifstream& bvhStream, BoundingVolumeNode& node);
+	static void copyBVH(const BoundingVolumeNode& src, BoundingVolumeNode& dst);
 	static void readColliders(std::ifstream& bvhStream, BoundingVolumeNode& node, std::size_t colliderCnt);
 	static void readCapsuleCollider(std::ifstream& bvhStream, BoundingVolumeNode& node);
 	static void readOBBCollider(std::ifstream& bvhStream, BoundingVolumeNode& node);
+
+	static std::unordered_map<std::filesystem::path, BoundingVolumeNode> sBvhCache_;
 
 	BoundingVolumeNode root_;
 	std::vector<const BoundingVolume*> pCurrentlyCollidedVolumes_;

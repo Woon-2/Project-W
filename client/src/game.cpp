@@ -21,6 +21,7 @@ int Game::run() {
     initNetwork();
 
     pStage_ = std::make_unique<Stage>(core_, systems_, controllerAdapters_, renderer_, session_);
+    timer_.update();
 
     for(;;) {
         if (auto returnCode = core_.window().processMessages()) {

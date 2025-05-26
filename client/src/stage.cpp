@@ -10,9 +10,6 @@ pmr::unordered_map<ecs::Entity::ID, mu::Vec3> gDestPoses;
 
 Stage* gpStage = nullptr;
 
-// InputNetworkForwarder 만들기: pushInputEvent (PlayerController가 호출)
-// InputNetworkForwarder가 Session&에 대고 패킷을 넣어줌 (buildPackets)
-
 void processSCEnter(SCEnter& scEnter, Session& session, Stage& stage);
 void processSCMove(SCMove& scMove, Session& session, Stage& stage);
 void processSCLeave(SCLeave& scLeave, Session& session, Stage& stage);
@@ -96,7 +93,7 @@ void processSCMove(SCMove& scMove, Session& session, Stage& stage) {
             if (delayed.moveCnt == SCMove::maxMoveCnt) {
                 session.delayPacket(
                     Packet{
-                        .size = calcPacketSize<SCMove>(SCMove::maxMoveCnt   ),
+                        .size = calcPacketSize<SCMove>(SCMove::maxMoveCnt),
                         .type = PacketType::SCMove,
                         .scMove = delayed
                     }
@@ -110,7 +107,7 @@ void processSCMove(SCMove& scMove, Session& session, Stage& stage) {
 
         const auto& move = scMove.moves[i];
 
-        const auto dp = gameEngine::Coord::decodeDeltaPos(move.compressedDeltaPos);
+        const auto dp = gameEngine::Coord::decodeDeltaPos(move.compressedDeltaPosXZ, move.compressedDeltaPosY);
         const auto dr = gameEngine::Coord::decodeDeltaRot(move.compressedDeltaRot);
 
         const auto curPos = mu::Vec3(gameEngine::Coord::at(eid)->get().xform().row(3));
@@ -203,7 +200,9 @@ void processSCAssign(SCAssign& scAssign, Session& session, Stage& stage) {
     const auto cameraOffset = mu::Vec3(0.f, 1.8f, -1.6f);
     const auto cameraTimeLag = 0.4f;
 
-    camera.get().coordMovement() << mu::translate(cameraOffset);
+    stage.pSystems()->coordRoot.update();
+
+    camera.get().coordMovement() << mu::translate(cameraOffset + mu::Vec3(entt.as<gameEngine::Coord>().get().xform().row(3)));
     camera.get().coordRotation().setLocalXform(
         mu::transpose(mu::lookAt(mu::Vec3(), -cameraOffset, mu::Vec3(0.f, 1.f, 0.f)))
     );
@@ -293,12 +292,13 @@ void Stage::simulate(double deltaTime) {
         const auto eid = entity.id().value();
 
         if (auto pCoord = gameEngine::Coord::at(eid)) {
-            const auto cdp = pCoord->compressedDeltaPos();
+            const auto cdpxz = pCoord->compressedDeltaPosXZ();
+            const auto cdpy = pCoord->compressedDeltaPosY();
             const auto cdr = pCoord->compressedDeltaRot();
             pCoord->resetDeltaPos();
             pCoord->resetDeltaRot();
 
-            const auto dp = pCoord->decodeDeltaPos(cdp);
+            const auto dp = pCoord->decodeDeltaPos(cdpxz, cdpy);
             const auto dr = pCoord->decodeDeltaRot(cdr);
 
             pCoord->get() << mu::translate(dp);

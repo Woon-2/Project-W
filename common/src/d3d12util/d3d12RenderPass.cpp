@@ -144,7 +144,7 @@ mu::Mat4x4 MU_CALLCONV WorldLight::calcCascadeViewProj(const Camera& camera, int
     // 시야각을 이용해서 수직 시야각을 구함
     auto fov = mu::Radian(camera.defFov);
 
-    float tanHalfVFov = tanf( float(fov) * 0.5f);
+    float tanHalfVFov = tanf( float(fov) * 0.5f );
 
     // 수직 시야각을 이용해서 수평 시야각을 구함
     float tanHalfHFov = tanHalfVFov * camera.defAspect;
@@ -171,11 +171,11 @@ mu::Mat4x4 MU_CALLCONV WorldLight::calcCascadeViewProj(const Camera& camera, int
     };    
 
     float minX = std::numeric_limits<float>::max();
-    float maxX = std::numeric_limits<float>::lowest();
+    float maxX = std::numeric_limits<float>::min();
     float minY = std::numeric_limits<float>::max();
-    float maxY = std::numeric_limits<float>::lowest();
+    float maxY = std::numeric_limits<float>::min();
     float minZ = std::numeric_limits<float>::max();
-    float maxZ = std::numeric_limits<float>::lowest();
+    float maxZ = std::numeric_limits<float>::min();
 
     for (int j = 0; j < 8; ++j)
     {
@@ -195,11 +195,21 @@ mu::Mat4x4 MU_CALLCONV WorldLight::calcCascadeViewProj(const Camera& camera, int
         1.0f
     );
 
+    mu::Mat4x4 fuck = mu::transpose( mu::lookAt(
+        mu::Vec3(),
+        dir,
+        mu::Vec3(0.0f, 1.0f, 0.0f)
+    ) );
+
+    frustumCenter *= fuck;
+
+    // mu::Vec3 cameraTranslation{};
     mu::Vec3 cameraTranslation = camera.repPos();
     frustumCenter += mu::Vec4(cameraTranslation, 0.0f);
 
     mu::Vec3 lightPos = mu::Vec3(frustumCenter.x(), frustumCenter.y(), frustumCenter.z());
-    lightPos -= dir * (cascadeEnd[cascadeLv] + (cascadeEnd[cascadeLv + 1] - cascadeEnd[cascadeLv]) / 2.f);
+    lightPos -= dir * (cascadeEnd[cascadeLv] + (cascadeEnd[cascadeLv + 1] - cascadeEnd[cascadeLv]) / 2.f) * 2.f;
+    // lightPos -= camera.repFwd() * (maxY - minY) / 4.f;
 
     // Light view 행렬 계산 (lookAt 방식)
     mu::Mat4x4 lightView = mu::lookAt(
@@ -212,7 +222,7 @@ mu::Mat4x4 MU_CALLCONV WorldLight::calcCascadeViewProj(const Camera& camera, int
     mu::Mat4x4 lightProj = mu::ortho(
         minX, maxX,
         minY, maxY,
-        minZ, maxZ
+        0.1f, maxZ * 2.f
     );
     
     return lightView * lightProj;
@@ -380,14 +390,14 @@ void PBRIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderT
             continue;
         }
 
-        if (pBVNode && !BoundingVolumeNode::collides(
-            pCamera_->coordRotation().xform(), pCamera_->bvNode(),
-            pCoord->xform(), *pBVNode
-        )) {
-            willNotDraw = true;
-            pLastCulledBVNode = pBVNode;
-            continue;
-        }
+        // if (pBVNode && !BoundingVolumeNode::collides(
+        //     pCamera_->coordRotation().xform(), pCamera_->bvNode(),
+        //     pCoord->xform(), *pBVNode
+        // )) {
+        //     willNotDraw = true;
+        //     pLastCulledBVNode = pBVNode;
+        //     continue;
+        // }
 
         willNotDraw = false;
     }
@@ -689,14 +699,14 @@ void PBRAnimatedIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets&
             continue;
         }
 
-        if (pBVNode && !BoundingVolumeNode::collides(
-            pCamera_->coordRotation().xform(), pCamera_->bvNode(),
-            pCoord->xform(), *pBVNode
-        )) {
-            willNotDraw = true;
-            pLastCulledBVNode = pBVNode;
-            continue;
-        }
+        // if (pBVNode && !BoundingVolumeNode::collides(
+        //     pCamera_->coordRotation().xform(), pCamera_->bvNode(),
+        //     pCoord->xform(), *pBVNode
+        // )) {
+        //     willNotDraw = true;
+        //     pLastCulledBVNode = pBVNode;
+        //     continue;
+        // }
 
         willNotDraw = false;
     }
@@ -1070,14 +1080,14 @@ void ShadowMap::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets
             continue;
         }
 
-        if (pBVNode && !BoundingVolumeNode::collides(
-            pCamera_->coordRotation().xform(), pCamera_->bvNode(),
-            pCoord->xform(), *pBVNode
-        )) {
-            willNotDraw = true;
-            pLastCulledBVNode = pBVNode;
-            continue;
-        }
+        // if (pBVNode && !BoundingVolumeNode::collides(
+        //     pCamera_->coordRotation().xform(), pCamera_->bvNode(),
+        //     pCoord->xform(), *pBVNode
+        // )) {
+        //     willNotDraw = true;
+        //     pLastCulledBVNode = pBVNode;
+        //     continue;
+        // }
     }
 
     // finally sort batch by culled status and other properties
@@ -1233,7 +1243,10 @@ CascadeShadowMap::CascadeShadowMap(D3D12Device& device,
     shadowArrayMaterial_(),
     viewport_(vp), protocol_(shader.makeProtocol(device,
         RenderProtocol::Desc{ makeDesc() }
-    )), pLight_(nullptr), batch_(), pCamera_(nullptr) {}
+    )), pLight_(nullptr), batch_(), pCamera_(nullptr) {
+    viewport_.Width *= 4u;
+    viewport_.Height *= 4u;
+}
 
 void CascadeShadowMap::initResources(RenderPassTextureArrays shadowArrayMap, const DescriptorCPU* pDsv, const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc, const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc)
 {
@@ -1329,14 +1342,14 @@ void CascadeShadowMap::preRender(D3D12GfxCmdList& cmdList, RenderTargets& render
             continue;
         }
 
-        if (pBVNode && !BoundingVolumeNode::collides(
-            pCamera_->coordRotation().xform(), pCamera_->bvNode(),
-            pCoord->xform(), *pBVNode
-        )) {
-            willNotDraw = true;
-            pLastCulledBVNode = pBVNode;
-            continue;
-        }
+        // if (pBVNode && !BoundingVolumeNode::collides(
+        //     pCamera_->coordRotation().xform(), pCamera_->bvNode(),
+        //     pCoord->xform(), *pBVNode
+        // )) {
+        //     willNotDraw = true;
+        //     pLastCulledBVNode = pBVNode;
+        //     continue;
+        // }
     }
 
     // finally sort batch by culled status and other properties
@@ -1602,14 +1615,14 @@ void ShadowMapAnimated::preRender(D3D12GfxCmdList& cmdList, RenderTargets& rende
             continue;
         }
 
-        if (pBVNode && !BoundingVolumeNode::collides(
-            pCamera_->coordRotation().xform(), pCamera_->bvNode(),
-            pCoord->xform(), *pBVNode
-        )) {
-            willNotDraw = true;
-            pLastCulledBVNode = pBVNode;
-            continue;
-        }
+        // if (pBVNode && !BoundingVolumeNode::collides(
+        //     pCamera_->coordRotation().xform(), pCamera_->bvNode(),
+        //     pCoord->xform(), *pBVNode
+        // )) {
+        //     willNotDraw = true;
+        //     pLastCulledBVNode = pBVNode;
+        //     continue;
+        // }
     }
 
     // finally sort batch by culled status and other properties
@@ -1797,316 +1810,319 @@ void ShadowMapAnimated::setLight(const WorldLight* pLight) {
     pLight_ = pLight;
 }
 
-//CascadeShadowMapAnimated::CascadeShadowMapAnimated( D3D12Device& device,
-//    ShaderCascadeShadowMapAnimated& shader, const D3D12_VIEWPORT& vp
-//) : gfx::d3d12::RenderPass(id),
-//    shadowMaterial_(),
-//    viewport_(vp), protocol_( shader.makeProtocol( device,
-//        RenderProtocol::Desc{ makeDesc() }
-//    ) ), pLight_(nullptr), batch_(), pCamera_(nullptr) {}
-//
-//void CascadeShadowMapAnimated::initResources(
-//    RenderPassTextureArrays shadowMap, 
-//    const DescriptorCPU* pDsv,
-//    const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
-//    const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
-//) {
-//    checkRequiredTextures();
-//
-//    shadowMaterial_ = ShadowArrayMaterial(
-//        getTextureArray(shadowMap),
-//        pDsv, dsvDesc, pSrv, srvDesc
-//    );
-//}
-//
-//RenderProtocol::Desc CascadeShadowMapAnimated::makeDesc() {
-//    return RenderProtocol::Desc {
-//        .blend = D3D12_BLEND_DESC{
-//            .AlphaToCoverageEnable = false,
-//            .IndependentBlendEnable = false,
-//            .RenderTarget = {
-//                D3D12_RENDER_TARGET_BLEND_DESC{
-//                    .BlendEnable = false,
-//                    .SrcBlend = D3D12_BLEND_ONE,
-//                    .DestBlend = D3D12_BLEND_ZERO,
-//                    .BlendOp = D3D12_BLEND_OP_ADD,
-//                    .SrcBlendAlpha = D3D12_BLEND_ONE,
-//                    .DestBlendAlpha = D3D12_BLEND_ZERO,
-//                    .BlendOpAlpha = D3D12_BLEND_OP_ADD,
-//                    .RenderTargetWriteMask = 0u
-//                }
-//            }
-//        },
-//        .sampleMask = UINT_MAX,
-//        .rasterizerState = D3D12_RASTERIZER_DESC{
-//            .FillMode = D3D12_FILL_MODE_SOLID,
-//            .CullMode = D3D12_CULL_MODE_BACK,
-//            .DepthBias = 1000,
-//            .DepthBiasClamp = 0.0f,
-//            .SlopeScaledDepthBias = 1.0f,
-//            .DepthClipEnable = true
-//        },
-//        .depthStencilState = D3D12_DEPTH_STENCIL_DESC{
-//            .DepthEnable = true,
-//            .DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
-//            .DepthFunc = D3D12_COMPARISON_FUNC_LESS,
-//            .StencilEnable = false
-//        },
-//        .primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
-//        .numRenderTargets = 1u,
-//        .rtvFormats = { DXGI_FORMAT_R8G8B8A8_UNORM },
-//        .dsvFormat = DXGI_FORMAT_D32_FLOAT,
-//        .sampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
-//        .nodeMask = 0u
-//    };
-//}
+CascadeShadowMapAnimated::CascadeShadowMapAnimated( D3D12Device& device,
+    ShaderCascadeShadowMapAnimated& shader, const D3D12_VIEWPORT& vp
+) : gfx::d3d12::RenderPass(id),
+    shadowMaterial_(),
+    viewport_(vp), protocol_( shader.makeProtocol( device,
+        RenderProtocol::Desc{ makeDesc() }
+    ) ), pLight_(nullptr), batch_(), pCamera_(nullptr) {
+    viewport_.Width *= 4u;
+    viewport_.Height *= 4u;
+}
 
-//void CascadeShadowMapAnimated::setViewport(const D3D12_VIEWPORT& vp) {
-//    viewport_ = vp;
-//}
-//
-//void CascadeShadowMapAnimated::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
-//    cmdList.get()->SetPipelineState( protocol_.get().Get() );
-//    cmdList.get()->RSSetViewports(1u, &viewport_);
-//    auto scissorRect = D3D12_RECT{ 0, 0, static_cast<LONG>(viewport_.Width), static_cast<LONG>(viewport_.Height) };
-//    cmdList.get()->RSSetScissorRects(1u, &scissorRect);
-//    shadowMaterial_.texture().commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-//
-//    // sort batch by bounding volume node and other properties
-//    // to cull out the same bounding volume nodes
-//    // that are out of the camera frustum.
-//    auto proj = [this](const auto& tuple) {
-//        return std::tuple(
-//            std::get<const BoundingVolumeNode*>(tuple),
-//            &std::get<gfx::d3d12::Submesh*>(tuple)->material(),
-//            std::get<gfx::d3d12::Submesh*>(tuple)->refSubmesh()
-//        );
-//    };
-//
-//    std::ranges::sort(batch_, std::less<>{}, proj);
-//
-//    const BoundingVolumeNode* pLastCulledBVNode = nullptr;
-//
-//    for (auto& [willNotDraw, pBVNode, pSubmesh, pCoord, vbLayoutIdx, xform, pAnimCon] : batch_) {
-//        // update xform
-//        xform = pSubmesh->parent()->parent()->model()->root()->coord().xform();
-//
-//        // cull out instances that are out of the camera frustum.
-//        // enhance performance by eliding collision check of the same bounding volume nodes.
-//        if (pLastCulledBVNode && pLastCulledBVNode == pBVNode) {
-//            willNotDraw = true;
-//            continue;
-//        }
-//
-//        if (pBVNode && !BoundingVolumeNode::collides(
-//            pCamera_->coordRotation().xform(), pCamera_->bvNode(),
-//            pCoord->xform(), *pBVNode
-//        )) {
-//            willNotDraw = true;
-//            pLastCulledBVNode = pBVNode;
-//            continue;
-//        }
-//    }
-//
-//    // finally sort batch by culled status and other properties
-//    // to separate instances that are visible and invisible.
-//    auto proj2 = [this](const auto& tuple) {
-//        return std::tuple(
-//            std::get<bool>(tuple),
-//            &std::get<gfx::d3d12::Submesh*>(tuple)->material(),
-//            std::get<gfx::d3d12::Submesh*>(tuple)->refSubmesh()
-//        );
-//    };
-//
-//    std::ranges::sort(batch_, std::less<>{}, proj2);
-//
-//
-//    auto pids = std::vector<sr::PerInstanceData6>();
-//    pids.reserve( shader().maxInstanceCnt() );
-//
-//    static constexpr std::size_t targetAnimCntExpected = 4u;
-//
-//    for (const auto& [willNotDraw, pBVNode, pSubmesh, pCoord, vbLayoutIdx, xform, pAnimCon] : batch_) {
-//        // as the first criterion of sorting is the culled status,
-//        // if the first instance is culled, then all the rest are culled.
-//        if (willNotDraw) {
-//            break;
-//        }
-//
-//        auto weights = std::vector<float>();
-//        weights.reserve( targetAnimCntExpected );
-//        auto sampleIndices = std::vector<int>();
-//        sampleIndices.reserve( targetAnimCntExpected );
-//        auto animIndices = std::vector<std::uint32_t>();
-//        animIndices.reserve( targetAnimCntExpected );
-//
-//        std::size_t boneCntInSkeleton = pAnimCon->skeleton().bones().size();
-//
-//        for (const auto& [key, animInst] : pAnimCon->instances()) {
-//            weights.push_back(animInst.weight());
-//
-//            auto bakedXforms = static_cast<Texture*>(animInst.animClip()->customData());
-//            if (!bakedXforms) {
-//                throw GFX_EXCEPT( "[Description]: Presampled animation clip has no baked xforms." );
-//            }
-//
-//            animIndices.push_back(static_cast<std::uint32_t>(bakedXforms->view(bakedXforms->idxSrv).offset()));
-//            sampleIndices.push_back( static_cast<int>(
-//                animInst.elapsed() / animInst.animClip()->sampleInterval()
-//            ) );
-//        }
-//
-//        // upload per instance data
-//        pids.emplace_back(
-//            /* .world = */ mu::transpose( xform ).getXmf(),
-//            /* .animIdx0 = */ (animIndices.size() > 0) ? animIndices[0] : 0u,
-//            /* .animIdx1 = */ (animIndices.size() > 1) ? animIndices[1] : 0u,
-//            /* .animWeight0 = */ (weights.size() > 0) ? weights[0] : 0.0f,
-//            /* .animWeight1 = */ (weights.size() > 1) ? weights[1] : 0.0f,
-//            /* .sampleIdx0 = */ (sampleIndices.size() > 0) ? sampleIndices[0] : 0,
-//            /* .sampleIdx1 = */ (sampleIndices.size() > 1) ? sampleIndices[1] : 0,
-//            /* .boneCnt = */ static_cast<std::uint32_t>(boneCntInSkeleton)
-//        );
-//
-//        if (pids.size() == shader().maxInstanceCnt()) [[unlikely]] {
-//            break;
-//        }
-//    }
-//
-//
-//    const auto pfd = sr::PerFrameData1{
-//        .lightVP = {
-//            mu::transpose(pLight_->calcCascadeViewProj(*pCamera_, 0)).getXmf(),
-//            mu::transpose(pLight_->calcCascadeViewProj(*pCamera_, 1)).getXmf(),
-//            mu::transpose(pLight_->calcCascadeViewProj(*pCamera_, 2)).getXmf()
-//        },
-//    };
-//
-//    shader().perInstanceData_.stage(pids.data(), pids.size() * sizeof(sr::PerInstanceData6));
-//    shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData1));
-//}
-//
-//void CascadeShadowMapAnimated::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
-//    shadowMaterial_.texture().commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-//    cmdList.get()->OMSetRenderTargets(0u, nullptr, false, &shadowMaterial_.dsv().cpuHandle());
-//    auto first = batch_.begin();
-//    auto accDrawcallCnt = 0u;
-//
-//    // instances that are going to be drawn are at the front of the batch
-//    // as the first criterion of sorting is the culled status.
-//    auto proj = [this](const auto& tuple) {
-//        return std::tuple(
-//            std::get<bool>(tuple),
-//            &std::get<gfx::d3d12::Submesh*>(tuple)->material(),
-//            std::get<gfx::d3d12::Submesh*>(tuple)->refSubmesh()
-//        );
-//    };
-//
-//    while (first != batch_.end()) {
-//        auto last = std::ranges::upper_bound(first, batch_.end(), proj(*first), std::less<>{}, proj);
-//
-//        // as the first criterion of sorting is the culled status,
-//        // if the first instance is culled, then all the rest are culled.
-//        auto willNotDraw = std::get<bool>(*first);
-//        if (willNotDraw) {
-//            break;
-//        }
-//
-//        auto pSubmesh = std::get<gfx::d3d12::Submesh*>(*first);
-//
-//        auto pdd = sr::PerDrawcallData2{
-//            .instanceBase = static_cast<std::uint32_t>(first - batch_.begin()),
-//        };
-//        shader().perDrawcallData_.stage( &pdd, sizeof(sr::PerDrawcallData2),
-//            0u, accDrawcallCnt * shader().cbDrawcallDataSize()
-//        );
-//
-//        shader().bindPerDrawcallData(accDrawcallCnt++, cmdList);
-//
-//        shader().draw( cmdList, *pSubmesh, static_cast<std::size_t>(last - first),
-//            std::get<VBLayoutIdx>(*first)
-//        );
-//
-//        if (accDrawcallCnt == shader().maxDrawcallCnt()) {
-//            break;
-//        }
-//
-//        first = last;
-//    }
-//}
-//
-//void CascadeShadowMapAnimated::postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
-//}
-//
-//void CascadeShadowMapAnimated::trackModel(Model* pModel, const AnimController* pAnimCon) {
-//    if (!pModel->markedRenderPasses().empty()) {
-//        auto it = std::ranges::find(pModel->markedRenderPasses(), renderPassID());
-//        if (it == pModel->markedRenderPasses().end()) {
-//            return;
-//        }
-//    }
-//
-//    auto& nodes = pModel->nodes();
-//    const auto* pCoord = &pModel->root()->coord();
-//
-//    for (auto& node : nodes) {
-//        auto xform = node.coord().xform();
-//        for (auto& mesh : node.meshes()) {
-//            auto vbLayoutIdx = protocol_.compatibleLayout(*mesh.refMesh());
-//            if (!vbLayoutIdx) {
-//                throw std::runtime_error("Incompatible mesh");
-//            }
-//
-//            for (auto& submesh : mesh.submeshes()) {
-//                batch_.emplace_back(false, nullptr, &submesh, pCoord, vbLayoutIdx.value(), xform, pAnimCon);
-//            }
-//        }
-//    }
-//}
-//
-//void CascadeShadowMapAnimated::trackModel( Model* pModel, const AnimController* pAnimCon,
-//    const BoundingVolumeNode* pBVNode
-//) {
-//    if (!pModel->markedRenderPasses().empty()) {
-//        auto it = std::ranges::find(pModel->markedRenderPasses(), renderPassID());
-//        if (it == pModel->markedRenderPasses().end()) {
-//            return;
-//        }
-//    }
-//
-//    auto& nodes = pModel->nodes();
-//    const auto* pCoord = &pModel->root()->coord();
-//
-//    for (auto& node : nodes) {
-//        auto xform = node.coord().xform();
-//        for (auto& mesh : node.meshes()) {
-//            auto vbLayoutIdx = protocol_.compatibleLayout(*mesh.refMesh());
-//            if (!vbLayoutIdx) {
-//                throw std::runtime_error("Incompatible mesh");
-//            }
-//
-//            for (auto& submesh : mesh.submeshes()) {
-//                batch_.emplace_back(false, pBVNode, &submesh, pCoord, vbLayoutIdx.value(), xform, pAnimCon);
-//            }
-//        }
-//    }
-//}
-//
-//void CascadeShadowMapAnimated::eraseModel(Model* pModel) {
-//    for (auto it = batch_.begin(); it != batch_.end();) {
-//        auto pSubmesh = std::get<gfx::d3d12::Submesh*>(*it);
-//        if (pSubmesh->parent()->parent()->model() == pModel) {
-//            it = batch_.erase(it);
-//        }
-//        else {
-//            ++it;
-//        }
-//    }
-//}
-//
-//void CascadeShadowMapAnimated::setLight(const WorldLight* pLight) {
-//    pLight_ = pLight;
-//}
+void CascadeShadowMapAnimated::initResources(
+    RenderPassTextureArrays shadowMap, 
+    const DescriptorCPU* pDsv,
+    const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc,
+    const DescriptorGPU* pSrv, const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc
+) {
+    checkRequiredTextureArrays();
+
+    shadowMaterial_ = ShadowArrayMaterial(
+        getTextureArray(shadowMap),
+        pDsv, dsvDesc, pSrv, srvDesc
+    );
+}
+
+RenderProtocol::Desc CascadeShadowMapAnimated::makeDesc() {
+    return RenderProtocol::Desc {
+        .blend = D3D12_BLEND_DESC{
+            .AlphaToCoverageEnable = false,
+            .IndependentBlendEnable = false,
+            .RenderTarget = {
+                D3D12_RENDER_TARGET_BLEND_DESC{
+                    .BlendEnable = false,
+                    .SrcBlend = D3D12_BLEND_ONE,
+                    .DestBlend = D3D12_BLEND_ZERO,
+                    .BlendOp = D3D12_BLEND_OP_ADD,
+                    .SrcBlendAlpha = D3D12_BLEND_ONE,
+                    .DestBlendAlpha = D3D12_BLEND_ZERO,
+                    .BlendOpAlpha = D3D12_BLEND_OP_ADD,
+                    .RenderTargetWriteMask = 0u
+                }
+            }
+        },
+        .sampleMask = UINT_MAX,
+        .rasterizerState = D3D12_RASTERIZER_DESC{
+            .FillMode = D3D12_FILL_MODE_SOLID,
+            .CullMode = D3D12_CULL_MODE_BACK,
+            .DepthBias = 1000,
+            .DepthBiasClamp = 0.0f,
+            .SlopeScaledDepthBias = 1.0f,
+            .DepthClipEnable = true
+        },
+        .depthStencilState = D3D12_DEPTH_STENCIL_DESC{
+            .DepthEnable = true,
+            .DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
+            .DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+            .StencilEnable = false
+        },
+        .primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+        .numRenderTargets = 1u,
+        .rtvFormats = { DXGI_FORMAT_R8G8B8A8_UNORM },
+        .dsvFormat = DXGI_FORMAT_D32_FLOAT,
+        .sampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
+        .nodeMask = 0u
+    };
+}
+
+void CascadeShadowMapAnimated::setViewport(const D3D12_VIEWPORT& vp) {
+    viewport_ = vp;
+}
+
+void CascadeShadowMapAnimated::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
+    cmdList.get()->SetPipelineState( protocol_.get().Get() );
+    cmdList.get()->RSSetViewports(1u, &viewport_);
+    auto scissorRect = D3D12_RECT{ 0, 0, static_cast<LONG>(viewport_.Width), static_cast<LONG>(viewport_.Height) };
+    cmdList.get()->RSSetScissorRects(1u, &scissorRect);
+    shadowMaterial_.texture().commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+
+    // sort batch by bounding volume node and other properties
+    // to cull out the same bounding volume nodes
+    // that are out of the camera frustum.
+    auto proj = [this](const auto& tuple) {
+        return std::tuple(
+            std::get<const BoundingVolumeNode*>(tuple),
+            &std::get<gfx::d3d12::Submesh*>(tuple)->material(),
+            std::get<gfx::d3d12::Submesh*>(tuple)->refSubmesh()
+        );
+    };
+
+    std::ranges::sort(batch_, std::less<>{}, proj);
+
+    const BoundingVolumeNode* pLastCulledBVNode = nullptr;
+
+    for (auto& [willNotDraw, pBVNode, pSubmesh, pCoord, vbLayoutIdx, xform, pAnimCon] : batch_) {
+        // update xform
+        xform = pSubmesh->parent()->parent()->model()->root()->coord().xform();
+
+        // cull out instances that are out of the camera frustum.
+        // enhance performance by eliding collision check of the same bounding volume nodes.
+        if (pLastCulledBVNode && pLastCulledBVNode == pBVNode) {
+            willNotDraw = true;
+            continue;
+        }
+
+        // if (pBVNode && !BoundingVolumeNode::collides(
+        //     pCamera_->coordRotation().xform(), pCamera_->bvNode(),
+        //     pCoord->xform(), *pBVNode
+        // )) {
+        //     willNotDraw = true;
+        //     pLastCulledBVNode = pBVNode;
+        //     continue;
+        // }
+    }
+
+    // finally sort batch by culled status and other properties
+    // to separate instances that are visible and invisible.
+    auto proj2 = [this](const auto& tuple) {
+        return std::tuple(
+            std::get<bool>(tuple),
+            &std::get<gfx::d3d12::Submesh*>(tuple)->material(),
+            std::get<gfx::d3d12::Submesh*>(tuple)->refSubmesh()
+        );
+    };
+
+    std::ranges::sort(batch_, std::less<>{}, proj2);
+
+
+    auto pids = std::vector<sr::PerInstanceData6>();
+    pids.reserve( shader().maxInstanceCnt() );
+
+    static constexpr std::size_t targetAnimCntExpected = 4u;
+
+    for (const auto& [willNotDraw, pBVNode, pSubmesh, pCoord, vbLayoutIdx, xform, pAnimCon] : batch_) {
+        // as the first criterion of sorting is the culled status,
+        // if the first instance is culled, then all the rest are culled.
+        if (willNotDraw) {
+            break;
+        }
+
+        auto weights = std::vector<float>();
+        weights.reserve( targetAnimCntExpected );
+        auto sampleIndices = std::vector<int>();
+        sampleIndices.reserve( targetAnimCntExpected );
+        auto animIndices = std::vector<std::uint32_t>();
+        animIndices.reserve( targetAnimCntExpected );
+
+        std::size_t boneCntInSkeleton = pAnimCon->skeleton().bones().size();
+
+        for (const auto& [key, animInst] : pAnimCon->instances()) {
+            weights.push_back(animInst.weight());
+
+            auto bakedXforms = static_cast<Texture*>(animInst.animClip()->customData());
+            if (!bakedXforms) {
+                throw GFX_EXCEPT( "[Description]: Presampled animation clip has no baked xforms." );
+            }
+
+            animIndices.push_back(static_cast<std::uint32_t>(bakedXforms->view(bakedXforms->idxSrv).offset()));
+            sampleIndices.push_back( static_cast<int>(
+                animInst.elapsed() / animInst.animClip()->sampleInterval()
+            ) );
+        }
+
+        // upload per instance data
+        pids.emplace_back(
+            /* .world = */ mu::transpose( xform ).getXmf(),
+            /* .animIdx0 = */ (animIndices.size() > 0) ? animIndices[0] : 0u,
+            /* .animIdx1 = */ (animIndices.size() > 1) ? animIndices[1] : 0u,
+            /* .animWeight0 = */ (weights.size() > 0) ? weights[0] : 0.0f,
+            /* .animWeight1 = */ (weights.size() > 1) ? weights[1] : 0.0f,
+            /* .sampleIdx0 = */ (sampleIndices.size() > 0) ? sampleIndices[0] : 0,
+            /* .sampleIdx1 = */ (sampleIndices.size() > 1) ? sampleIndices[1] : 0,
+            /* .boneCnt = */ static_cast<std::uint32_t>(boneCntInSkeleton)
+        );
+
+        if (pids.size() == shader().maxInstanceCnt()) [[unlikely]] {
+            break;
+        }
+    }
+
+
+    const auto pfd = sr::PerFrameData1{
+        .lightVP = {
+            mu::transpose(pLight_->calcCascadeViewProj(*pCamera_, 0)).getXmf(),
+            mu::transpose(pLight_->calcCascadeViewProj(*pCamera_, 1)).getXmf(),
+            mu::transpose(pLight_->calcCascadeViewProj(*pCamera_, 2)).getXmf()
+        },
+    };
+
+    shader().perInstanceData_.stage(pids.data(), pids.size() * sizeof(sr::PerInstanceData6));
+    shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData1));
+}
+
+void CascadeShadowMapAnimated::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
+    shadowMaterial_.texture().commitState(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    cmdList.get()->OMSetRenderTargets(0u, nullptr, false, &shadowMaterial_.dsv().cpuHandle());
+    auto first = batch_.begin();
+    auto accDrawcallCnt = 0u;
+
+    // instances that are going to be drawn are at the front of the batch
+    // as the first criterion of sorting is the culled status.
+    auto proj = [this](const auto& tuple) {
+        return std::tuple(
+            std::get<bool>(tuple),
+            &std::get<gfx::d3d12::Submesh*>(tuple)->material(),
+            std::get<gfx::d3d12::Submesh*>(tuple)->refSubmesh()
+        );
+    };
+
+    while (first != batch_.end()) {
+        auto last = std::ranges::upper_bound(first, batch_.end(), proj(*first), std::less<>{}, proj);
+
+        // as the first criterion of sorting is the culled status,
+        // if the first instance is culled, then all the rest are culled.
+        auto willNotDraw = std::get<bool>(*first);
+        if (willNotDraw) {
+            break;
+        }
+
+        auto pSubmesh = std::get<gfx::d3d12::Submesh*>(*first);
+
+        auto pdd = sr::PerDrawcallData2{
+            .instanceBase = static_cast<std::uint32_t>(first - batch_.begin()),
+        };
+        shader().perDrawcallData_.stage( &pdd, sizeof(sr::PerDrawcallData2),
+            0u, accDrawcallCnt * shader().cbDrawcallDataSize()
+        );
+
+        shader().bindPerDrawcallData(accDrawcallCnt++, cmdList);
+
+        shader().draw( cmdList, *pSubmesh, static_cast<std::size_t>(last - first),
+            std::get<VBLayoutIdx>(*first)
+        );
+
+        if (accDrawcallCnt == shader().maxDrawcallCnt()) {
+            break;
+        }
+
+        first = last;
+    }
+}
+
+void CascadeShadowMapAnimated::postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
+}
+
+void CascadeShadowMapAnimated::trackModel(Model* pModel, const AnimController* pAnimCon) {
+    if (!pModel->markedRenderPasses().empty()) {
+        auto it = std::ranges::find(pModel->markedRenderPasses(), renderPassID());
+        if (it == pModel->markedRenderPasses().end()) {
+            return;
+        }
+    }
+
+    auto& nodes = pModel->nodes();
+    const auto* pCoord = &pModel->root()->coord();
+
+    for (auto& node : nodes) {
+        auto xform = node.coord().xform();
+        for (auto& mesh : node.meshes()) {
+            auto vbLayoutIdx = protocol_.compatibleLayout(*mesh.refMesh());
+            if (!vbLayoutIdx) {
+                throw std::runtime_error("Incompatible mesh");
+            }
+
+            for (auto& submesh : mesh.submeshes()) {
+                batch_.emplace_back(false, nullptr, &submesh, pCoord, vbLayoutIdx.value(), xform, pAnimCon);
+            }
+        }
+    }
+}
+
+void CascadeShadowMapAnimated::trackModel( Model* pModel, const AnimController* pAnimCon,
+    const BoundingVolumeNode* pBVNode
+) {
+    if (!pModel->markedRenderPasses().empty()) {
+        auto it = std::ranges::find(pModel->markedRenderPasses(), renderPassID());
+        if (it == pModel->markedRenderPasses().end()) {
+            return;
+        }
+    }
+
+    auto& nodes = pModel->nodes();
+    const auto* pCoord = &pModel->root()->coord();
+
+    for (auto& node : nodes) {
+        auto xform = node.coord().xform();
+        for (auto& mesh : node.meshes()) {
+            auto vbLayoutIdx = protocol_.compatibleLayout(*mesh.refMesh());
+            if (!vbLayoutIdx) {
+                throw std::runtime_error("Incompatible mesh");
+            }
+
+            for (auto& submesh : mesh.submeshes()) {
+                batch_.emplace_back(false, pBVNode, &submesh, pCoord, vbLayoutIdx.value(), xform, pAnimCon);
+            }
+        }
+    }
+}
+
+void CascadeShadowMapAnimated::eraseModel(Model* pModel) {
+    for (auto it = batch_.begin(); it != batch_.end();) {
+        auto pSubmesh = std::get<gfx::d3d12::Submesh*>(*it);
+        if (pSubmesh->parent()->parent()->model() == pModel) {
+            it = batch_.erase(it);
+        }
+        else {
+            ++it;
+        }
+    }
+}
+
+void CascadeShadowMapAnimated::setLight(const WorldLight* pLight) {
+    pLight_ = pLight;
+}
 
 ScreenQuad::ScreenQuad( D3D12Device& device, ShaderScreenQuad& shader,
     const SamplerStorage& samplerStorage, const D3D12_VIEWPORT& vp
@@ -2360,7 +2376,10 @@ ShadowMapTessellation::ShadowMapTessellation( D3D12Device& device,
 ) : gfx::d3d12::RenderPass(id),
     viewport_(vp), protocol_( shader.makeProtocol( device,
         RenderProtocol::Desc{ makeDesc() }
-    ) ), pLight_(nullptr), batch_(), pCamera_(nullptr), pSamplerStorage_(&samplerStorage) {}
+    ) ), pLight_(nullptr), batch_(), pCamera_(nullptr), pSamplerStorage_(&samplerStorage) {
+    viewport_.Width *= 4u;
+    viewport_.Height *= 4u;
+}
 
 void ShadowMapTessellation::initResources(
     RenderPassTextureArrays shadowArrayMap,
@@ -2397,7 +2416,7 @@ RenderProtocol::Desc ShadowMapTessellation::makeDesc() {
         .rasterizerState = D3D12_RASTERIZER_DESC{
             .FillMode = D3D12_FILL_MODE_SOLID,
             .CullMode = D3D12_CULL_MODE_BACK,
-            .DepthBias = 20000,
+            .DepthBias = 2000,
             .DepthBiasClamp = 0.0f,
             .SlopeScaledDepthBias = 2.0f,
             .DepthClipEnable = true
@@ -2605,14 +2624,14 @@ void Skybox::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
             continue;
         }
 
-        if (pBVNode && !BoundingVolumeNode::collides(
-            pCamera_->coordRotation().xform(), pCamera_->bvNode(),
-            pCoord->xform(), *pBVNode
-        )) {
-            willNotDraw = true;
-            pLastCulledBVNode = pBVNode;
-            continue;
-        }
+        // if (pBVNode && !BoundingVolumeNode::collides(
+        //     pCamera_->coordRotation().xform(), pCamera_->bvNode(),
+        //     pCoord->xform(), *pBVNode
+        // )) {
+        //     willNotDraw = true;
+        //     pLastCulledBVNode = pBVNode;
+        //     continue;
+        // }
 
         willNotDraw = false;
     }

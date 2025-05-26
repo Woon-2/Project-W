@@ -48,7 +48,7 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
                 getResourcePath()/"models\\HelicopterModel\\Textures\\Hydra.dds",
                 getResourcePath()/"models\\HelicopterModel\\Textures\\Texture.dds"
             },
-            .type = gfx::d3d12::TextureResource::Type::Texture
+            .type = TextureInfo::Type::Texture
         },
         TextureInfo{
             .keys = {
@@ -115,7 +115,7 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
                 getResourcePath()/"models\\Character\\Textures\\T_Set_Peasant_N.dds",
                 getResourcePath()/"models\\Character\\Textures\\T_Set_Peasant_Rd_D.dds",
             },
-            .type = gfx::d3d12::TextureResource::Type::Texture
+            .type = TextureInfo::Type::Texture
         },
         TextureInfo{
             .keys = {
@@ -126,7 +126,7 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
                 getResourcePath()/"models\\Trees\\Textures\\URP_1_Leaf.dds",
                 getResourcePath()/"models\\Trees\\Textures\\URP_1_Trunk.dds",
             },
-            .type = gfx::d3d12::TextureResource::Type::Texture
+            .type = TextureInfo::Type::Texture
         },
         TextureInfo{
             .keys = {
@@ -137,7 +137,7 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
                 getResourcePath()/"models\\Trees\\Textures\\URP_2_Leaf.dds",
                 getResourcePath()/"models\\Trees\\Textures\\URP_2_Trunk.dds",
             },
-            .type = gfx::d3d12::TextureResource::Type::Texture
+            .type = TextureInfo::Type::Texture
         },
         TextureInfo{
             .keys = {
@@ -148,7 +148,7 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
                 getResourcePath()/"models\\Trees\\Textures\\URP_3_Leaf.dds",
                 getResourcePath()/"models\\Trees\\Textures\\URP_3_Trunk.dds",
             },
-            .type = gfx::d3d12::TextureResource::Type::Texture
+            .type = TextureInfo::Type::Texture
         },
         TextureInfo{
             .keys = {
@@ -159,7 +159,7 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
                 getResourcePath()/"terrains\\Textures\\Grass_A_BaseColor.dds",
                 getResourcePath()/"terrains\\Textures\\Grass_A_Normal.dds",
             },
-            .type = gfx::d3d12::TextureResource::Type::Texture
+            .type = TextureInfo::Type::Texture
         },
         TextureInfo{
             .keys = {
@@ -184,7 +184,7 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
                 getResourcePath()/"terrains\\HeightMaps\\Terrain_2_1_HeightMap.dds",
                 getResourcePath()/"terrains\\HeightMaps\\Terrain_2_2_HeightMap.dds",
             },
-            .type = gfx::d3d12::TextureResource::Type::Texture
+            .type = TextureInfo::Type::Texture
 		},
 		TextureInfo{
 			.keys = {
@@ -193,7 +193,7 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
 			.paths = {
 				getResourcePath() / "models\\SkySphere\\Textures\\Sky02.dds",
 			},
-			.type = gfx::d3d12::TextureResource::Type::Texture
+			.type = TextureInfo::Type::Texture
 		}
     };
 
@@ -205,6 +205,10 @@ const BVHInfo& assetBVHInfo(AssetBVH asset) {
         BVHInfo{
             .key = "GO_OH-58D",
             .path = getResourcePath()/"models/HelicopterModel/GO_OH-58D.bvh"
+        },
+        BVHInfo{
+            .key = "GO_Character",
+            .path = getResourcePath()/"models/Character/GO_Character.bvh"
         },
         BVHInfo{
             .key = "Terrain_0_0",

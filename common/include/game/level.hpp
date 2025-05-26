@@ -30,8 +30,8 @@ public:
     ENABLE_COMPONENT(Coord);
 
     Coord(const ecs::Entity& entity) NOEXCEPT
-        : ecs::Component(entity), coordSys_(), compressedDeltaPos_(), compressedDeltaRot_()
-        {
+        : ecs::Component(entity), coordSys_(), compressedDeltaPosXZ_(0),
+        compressedDeltaPosY_(0), compressedDeltaRot_(0) {
         resetDeltaPos();
         resetDeltaRot();
     }
@@ -44,8 +44,12 @@ public:
     // be careful with overflow
     void MU_CALLCONV accRotation(mu::NQuat deltaRot);
 
-    u64t compressedDeltaPos() const NOEXCEPT {
-        return compressedDeltaPos_.load();
+    u64t compressedDeltaPosXZ() const NOEXCEPT {
+        return compressedDeltaPosXZ_.load();
+    }
+
+    i32t compressedDeltaPosY() const NOEXCEPT {
+        return compressedDeltaPosY_.load();
     }
 
     u64t compressedDeltaRot() const NOEXCEPT {
@@ -55,13 +59,14 @@ public:
     void resetDeltaPos();
     void resetDeltaRot();
 
-    static mu::Vec3 MU_CALLCONV decodeDeltaPos(u64t compressedDeltaPos);
+    static mu::Vec3 MU_CALLCONV decodeDeltaPos(u64t compressedDeltaPosXZ, i32t compressedDeltaPosY);
     static mu::NQuat MU_CALLCONV decodeDeltaRot(u64t compressedDeltaRot);
 
 private:
     gfx::coord::System coordSys_;
-    // 2-3: x, 4-5: y, 6-7: z, precision: 0.00003m
-    au64t compressedDeltaPos_;
+    // 0-3: x, 4-7: z, precision: 0.00003m
+    au64t compressedDeltaPosXZ_;
+    ai32t compressedDeltaPosY_;
     // 0-1: vx, 2-3: vy, 4-5: vz, 6-7: w, precision: 0.0001rad
     au64t compressedDeltaRot_;
 };

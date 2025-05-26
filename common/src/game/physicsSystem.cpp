@@ -5,9 +5,9 @@
 #include "TMP.hpp"
 
 RigidBody::RigidBody(const ecs::Entity& entity) NOEXCEPT
-	: Component(entity), velocity_(), momentum_(), compressedDeltaVelocity_(0),
-	invMass_(0.f), kFriction_(0.f), kAirdrag_(0.f), kConstantAirDrag_(0.f),
-	willSimulateGravity_(false) {}
+	: Component(entity), velocity_(), momentum_(), compressedDeltaVelocityXZ_(0),
+	compressedDeltaVelocityY_(0), invMass_(0.f), kFriction_(0.f), kAirdrag_(0.f),
+	kConstantAirDrag_(0.f), willSimulateGravity_(false) {}
 
 void MU_CALLCONV RigidBody::accMomentum(mu::Vec3 momentum) NOEXCEPT {
 	if (invMass_ <= minInvMass) {
@@ -16,25 +16,23 @@ void MU_CALLCONV RigidBody::accMomentum(mu::Vec3 momentum) NOEXCEPT {
 
 	// 2-3: x, 4-5: y, 6-7: z, precision: 0.00003m
 	static constexpr auto precision = 0.00003f;
-	const auto oldV = compressedDeltaVelocity_.load();
+	const auto oldVXZ = compressedDeltaVelocityXZ_.load();
 
 	const auto deltaAccV = momentum * invMass_;
 
-	auto deltaVx = static_cast<i16t>(oldV >> 32);
-	deltaVx += static_cast<i16t>(deltaAccV.x() / precision);
-
-	auto deltaVy = static_cast<i16t>(oldV >> 16);
-	deltaVy += static_cast<i16t>(deltaAccV.y() / precision);
-
+	auto deltaVx = static_cast<i32t>(oldVXZ >> 32);
+	deltaVx += static_cast<i32t>(deltaAccV.x() / precision);
 	
-	auto deltaVz = static_cast<i16t>(oldV);
-	deltaVz += static_cast<i16t>(deltaAccV.z() / precision);
+	auto deltaVz = static_cast<i32t>(oldVXZ);
+	deltaVz += static_cast<i32t>(deltaAccV.z() / precision);
 
-	const auto newV = static_cast<u64t>(static_cast<u16t>(deltaVx)) << 32 |
-		static_cast<u64t>(static_cast<u16t>(deltaVy)) << 16 |
-		static_cast<u64t>(static_cast<u16t>(deltaVz));
+	auto deltaVy = compressedDeltaVelocityY_.load();
+	deltaVy += static_cast<i32t>(deltaAccV.y() / precision);
 
-	compressedDeltaVelocity_.store(newV);
+	const auto newVXZ = static_cast<u64t>(static_cast<u32t>(deltaVx)) << 32
+		| static_cast<u64t>(static_cast<u32t>(deltaVz));
+
+	compressedDeltaVelocityXZ_.store(newVXZ);
 }
 
 void RigidBody::update(MilliSeconds deltaTime) {
@@ -47,12 +45,13 @@ void RigidBody::update(MilliSeconds deltaTime) {
 	// 2-3: x, 4-5: y, 6-7: z, precision: 0.00003m
 	static constexpr auto precision = 0.00003f;
 
-	const auto dvCompressed = compressedDeltaVelocity_.load();
-	compressedDeltaVelocity_.store(0);
+	const auto dvxzCompressed = compressedDeltaVelocityXZ_.load();
+	compressedDeltaVelocityXZ_.store(0);
 
-	const auto dvx = static_cast<i16t>(dvCompressed >> 32) * precision;
-	const auto dvy = static_cast<i16t>(dvCompressed >> 16) * precision;
-	const auto dvz = static_cast<i16t>(dvCompressed) * precision;
+	const auto dvx = static_cast<i32t>(dvxzCompressed >> 32) * precision;
+	const auto dvz = static_cast<i32t>(dvxzCompressed) * precision;
+	const auto dvy = static_cast<i32t>(compressedDeltaVelocityY_.load()) * precision;
+	compressedDeltaVelocityY_.store(0);
 
 	auto deltaV = mu::Vec3(dvx, dvy, dvz);
 	velocity_ += deltaV;
@@ -764,8 +763,8 @@ BoundingFrustum MU_CALLCONV transformCollider(
 bool BoundingVolumeNode::collides(const BoundingVolumeNode& other) const {
 	auto collided = false;
 
-	for (const auto& collider : colliders_) {
-		for (const auto& otherCollider : other.colliders_) {
+	for (const auto& collider : worldColliders_) {
+		for (const auto& otherCollider : other.worldColliders_) {
 			if (collider.intersects(otherCollider)) {
 				collided = true;
 				break;
@@ -810,37 +809,71 @@ bool BoundingVolumeNode::collides(const BoundingVolumeNode& other) const {
 	return false;
 }
 
-bool MU_CALLCONV BoundingVolumeNode::collides(
-	mu::Mat4x4 lhsTransform, const BoundingVolumeNode& lhs,
-	const mu::Mat4x4& rhsTransform, const BoundingVolumeNode& rhs
-) {
-	auto worldLhs = lhs.transform(lhsTransform);
-	auto worldRhs = rhs.transform(rhsTransform);
-	
-	return worldLhs.collides(worldRhs);
-}
-
-BoundingVolumeNode MU_CALLCONV BoundingVolumeNode::transform(
-	mu::Mat4x4 transform
-) const {
-	BoundingVolumeNode ret{};
-
-	ret.reserveColliders(colliders_.size());
-	for (const auto& collider : colliders_) {
-		ret.addCollider(transformCollider(transform, collider));
+BoundingVolume::BoundingVolume(const ecs::Entity& entity, const std::filesystem::path& bvhPath)
+	: Component(entity), pCurrentlyCollidedVolumes_(), root_() {
+	if (!std::filesystem::exists(bvhPath)) {
+		throw std::runtime_error("[BoundingVolume]: BVH file does not exist: " + bvhPath.string());
 	}
 
-	ret.reserveChildren(children_.size());
-	for (const auto& child : children_) {
-		ret.addChild(child.transform(transform));
+	if (sBvhCache_.contains(bvhPath)) {
+		auto& refRoot = sBvhCache_.at(bvhPath);
+		copyBVH(refRoot, root_);
+		return;
 	}
 
-	return ret;
+	auto bvhStream = std::ifstream(bvhPath, std::ios::binary);
+	if (!bvhStream) {
+		throw std::runtime_error("[BoundingVolume]: failed to open BVH file: " + bvhPath.string());
+	}
+
+	auto [it, _] = sBvhCache_.try_emplace(bvhPath, BoundingVolumeNode{});
+	auto& refRoot = it->second;
+
+	auto& is = bvhStream;
+
+	char pstrToken[64] = { '\0' };
+
+	std::uint8_t nStrLength = 0;
+	std::uint32_t nReads = 0;
+
+	int intVal{};
+
+	readStream(is, nStrLength);
+	readStream(is, pstrToken, nStrLength);
+
+	if (std::strcmp(pstrToken, "<ColliderCnt:>")) {
+		throw std::runtime_error("[BoundingVolume::importBVHNode]: <ColliderCnt:> token expected but not found.");
+	}
+
+	readStream(is, intVal);
+	refRoot.reserveColliders(static_cast<std::size_t>(intVal));
+
+	readStream(is, nStrLength);
+	readStream(is, pstrToken, nStrLength);
+	if (std::strcmp(pstrToken, "<Nodes:>")) {
+		throw std::runtime_error("[BoundingVolume::importBVHNode]: <Nodes:> token expected but not found.");
+	}
+
+	readStream(is, intVal);	// nodeCnt
+
+	importBVHNode(bvhStream, refRoot);
+
+	readStream(is, nStrLength);
+	readStream(is, pstrToken, nStrLength);
+	if (std::strcmp(pstrToken, "</Nodes>")) {
+		throw std::runtime_error("[BoundingVolume::importBVHNode]: </Nodes> token expected but not found.");
+	}
+
+	copyBVH(refRoot, root_);
 }
 
-BoundingVolume::BoundingVolume(const ecs::Entity& entity, std::ifstream& bvhStream)
-	: Component(entity) {
-	importBVHNode(bvhStream, root_);
+void BoundingVolume::copyBVH(const BoundingVolumeNode& src, BoundingVolumeNode& dst) {
+	dst = src;
+
+	for (const auto& child : src.children()) {
+		auto& newChild = dst.addChild();
+		copyBVH(child, newChild);
+	}
 }
 
 void BoundingVolume::importBVHNode(std::ifstream& bvhStream, BoundingVolumeNode& node) {
@@ -1035,6 +1068,9 @@ void BoundingVolume::readOBBCollider(std::ifstream& is, BoundingVolumeNode& node
 	} );
 }
 
+std::unordered_map<std::filesystem::path, BoundingVolumeNode> BoundingVolume::sBvhCache_;
+
+
 void CollisionSystem::update() {
 	// reset collisions from previous frame
 	for (auto pBV : components<BoundingVolume>()) {
@@ -1048,6 +1084,16 @@ void CollisionSystem::update() {
 				continue;
 			}
 
+			// TODO: check only once per each pair
+			// (if the bvs are not colliding, we can't skip the duplicated check with below code.)
+			if (std::ranges::find(pBV->collisionCache(), pOtherBV) != pBV->collisionCache().end()
+				|| std::ranges::find(pOtherBV->collisionCache(), pBV) != pOtherBV->collisionCache().end()
+			) {
+				// already checked this pair
+				continue;
+			}
+
+			// TODO: do this work at caller side
 			auto xform = mu::Mat4x4();
 			if (auto pCoord = gameEngine::Coord::atC(pBV->entityID().value())) {
 				xform = pCoord->get().xform();
@@ -1058,10 +1104,10 @@ void CollisionSystem::update() {
 				otherXform = pOtherCoord->get().xform();
 			}
 
-			if ( BoundingVolumeNode::collides(
-					xform, pBV->root(),
-					otherXform, pOtherBV->root()
-			) ) {
+			pBV->setXformCascade(xform);
+			pOtherBV->setXformCascade(otherXform);
+
+			if ( pBV->collides(*pOtherBV) ) {
 				pBV->markCollision(pOtherBV);
 				pOtherBV->markCollision(pBV);
 			}
