@@ -26,6 +26,7 @@ enum class PacketType : std::uint8_t {
 enum class ObjectType : std::uint8_t {
     Character,
     Helicopter,
+    Goblin,
     Tree0,
     Tree1,
     Tree2,

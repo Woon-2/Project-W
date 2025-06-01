@@ -192,7 +192,7 @@ float calcCascadedShadow(float3 posV, float4 posL[3])
     
     if(viewDepth <= 10.0f)
     {
-        texIndex = 0;
+        texIndex = 1;
     }
     else if (viewDepth <= 25.0f)
     {
@@ -200,7 +200,7 @@ float calcCascadedShadow(float3 posV, float4 posL[3])
     }
     else
     {
-        texIndex = 2;
+        texIndex = 1;
     }
     // posV가지고 viewDepth 구해서 계산하도록
     float4 lightPos = posL[texIndex];

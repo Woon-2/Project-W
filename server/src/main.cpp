@@ -71,6 +71,97 @@ ecs::Entity instantiateCharacter(const gameEngine::ObjectDisposition& dispositio
 	rotationScale.setRow(2, mu::Vec3(disposition.xform_.row(2)));
 	rotationScale.setRow(3, mu::Vec4(0.f, 0.f, 0.f, 1.f));
 	entity.as<DummyModel>().coord().setLocalXform(rotationScale);
+	entity.as<DummyModel>().setName("Character");
+
+	entity.createComponent<RigidBody>();
+	auto& rb = entity.as<RigidBody>();
+	rb.setInvMass( 1.f / 50.f );
+	rb.setKFriction( 0.5f );
+	rb.setKAirdrag( 1.25f );
+	rb.setKConstantAirDrag( 3.f );
+	rb.enableGravity( );
+
+	entity.createComponent<BoundingVolume>( assetBVHInfo(AssetBVH::Character).path );
+
+	return entity;
+}
+
+ecs::Entity instantiateTree0(const gameEngine::ObjectDisposition& disposition) {
+	ecs::Entity entity;
+
+	entity.createComponent<gameEngine::Coord>();
+	entity.as<gameEngine::Coord>().get().setLocalXform(disposition.xform_);
+
+	entity.createComponent<DummyModel>( entity.as<gameEngine::Coord>() );
+	auto rotationScale = mu::Mat4x4();
+	rotationScale.setRow(0, mu::Vec3(disposition.xform_.row(0)));
+	rotationScale.setRow(1, mu::Vec3(disposition.xform_.row(1)));
+	rotationScale.setRow(2, mu::Vec3(disposition.xform_.row(2)));
+	rotationScale.setRow(3, mu::Vec4(0.f, 0.f, 0.f, 1.f));
+	entity.as<DummyModel>().coord().setLocalXform(rotationScale);
+	entity.as<DummyModel>().setName("Tree0");
+
+	entity.createComponent<BoundingVolume>( assetBVHInfo(AssetBVH::Tree0).path );
+
+	return entity;
+}
+
+ecs::Entity instantiateTree1(const gameEngine::ObjectDisposition& disposition) {
+	ecs::Entity entity;
+
+	entity.createComponent<gameEngine::Coord>();
+	entity.as<gameEngine::Coord>().get().setLocalXform(disposition.xform_);
+
+	entity.createComponent<DummyModel>( entity.as<gameEngine::Coord>() );
+	auto rotationScale = mu::Mat4x4();
+	rotationScale.setRow(0, mu::Vec3(disposition.xform_.row(0)));
+	rotationScale.setRow(1, mu::Vec3(disposition.xform_.row(1)));
+	rotationScale.setRow(2, mu::Vec3(disposition.xform_.row(2)));
+	rotationScale.setRow(3, mu::Vec4(0.f, 0.f, 0.f, 1.f));
+	entity.as<DummyModel>().coord().setLocalXform(rotationScale);
+	entity.as<DummyModel>().setName("Tree1");
+
+	entity.createComponent<BoundingVolume>( assetBVHInfo(AssetBVH::Tree1).path );
+
+	return entity;
+}
+
+ecs::Entity instantiateTree2(const gameEngine::ObjectDisposition& disposition) {
+	ecs::Entity entity;
+
+	entity.createComponent<gameEngine::Coord>();
+	entity.as<gameEngine::Coord>().get().setLocalXform(disposition.xform_);
+
+	entity.createComponent<DummyModel>( entity.as<gameEngine::Coord>() );
+	auto rotationScale = mu::Mat4x4();
+	rotationScale.setRow(0, mu::Vec3(disposition.xform_.row(0)));
+	rotationScale.setRow(1, mu::Vec3(disposition.xform_.row(1)));
+	rotationScale.setRow(2, mu::Vec3(disposition.xform_.row(2)));
+	rotationScale.setRow(3, mu::Vec4(0.f, 0.f, 0.f, 1.f));
+	entity.as<DummyModel>().coord().setLocalXform(rotationScale);
+	entity.as<DummyModel>().setName("Tree2");
+
+	entity.createComponent<BoundingVolume>( assetBVHInfo(AssetBVH::Tree2).path );
+
+	return entity;
+}
+
+ecs::Entity instantiateGoblin(const gameEngine::ObjectDisposition& disposition) {
+	ecs::Entity entity;
+
+	entity.createComponent<gameEngine::Coord>();
+
+	const auto translation = mu::Vec3(disposition.xform_.row(3)) + mu::Vec3(0.f ,-25.f, 0.f);
+	entity.as<gameEngine::Coord>().get().setLocalXform(disposition.xform_);
+
+	entity.createComponent<DummyModel>( entity.as<gameEngine::Coord>() );
+	auto rotationScale = mu::Mat4x4();
+	rotationScale.setRow(0, mu::Vec3(disposition.xform_.row(0)));
+	rotationScale.setRow(1, mu::Vec3(disposition.xform_.row(1)));
+	rotationScale.setRow(2, mu::Vec3(disposition.xform_.row(2)));
+	rotationScale.setRow(3, mu::Vec4(0.f, 0.f, 0.f, 1.f));
+	entity.as<DummyModel>().coord().setLocalXform(rotationScale);
+	entity.as<DummyModel>().setName("Goblin");
 
 	entity.createComponent<RigidBody>();
 	auto& rb = entity.as<RigidBody>();
@@ -88,6 +179,18 @@ ecs::Entity instantiateCharacter(const gameEngine::ObjectDisposition& dispositio
 void instantiateObjectHierarchy(const gameEngine::ObjectDisposition& disposition, std::vector<ecs::Entity>& out) {
 	if (disposition.prefabName_ == "P_GO_Character") {
 		out.push_back(instantiateCharacter(disposition));
+	}
+	else if (disposition.prefabName_ == "P_GO_URP_Tree_0") {
+		// out.push_back(instantiateTree0(disposition));
+	}
+	else if (disposition.prefabName_ == "P_GO_URP_Tree_1") {
+		// out.push_back(instantiateTree1(disposition));
+	}
+	else if (disposition.prefabName_ == "P_GO_URP_Tree_2") {
+		// out.push_back(instantiateTree2(disposition));
+	}
+	else if (disposition.prefabName_ == "P_GO_Goblin") {
+		out.push_back(instantiateGoblin(disposition));
 	}
 
 	for (const auto& child : disposition.children_) {
@@ -332,6 +435,10 @@ int main( ) {
 				continue;
 			}
 
+			if ( !RigidBody::at(eid.id().value()) ) {
+				continue;
+			}
+
 			const auto cdr = pCoord->compressedDeltaRot();
 			const auto cdpxz = pCoord->compressedDeltaPosXZ();
 			const auto cdpy = pCoord->compressedDeltaPosY();
@@ -555,7 +662,24 @@ void worker( ) {
 					// we endure data race of translation
 					trs = pCoord->get().localXform().row(3);
 				}
+				ObjectType objType = ObjectType::Character;
 				if (auto pModel = DummyModel::at(npc.id().value())) {
+					if (pModel->name() == "Character") {
+						objType = ObjectType::Character;
+					}
+					else if (pModel->name() == "Tree0") {
+						objType = ObjectType::Tree0;
+					}
+					else if (pModel->name() == "Tree1") {
+						objType = ObjectType::Tree1;
+					}
+					else if (pModel->name() == "Tree2") {
+						objType = ObjectType::Tree2;
+					}
+					else if (pModel->name() == "Goblin") {
+						objType = ObjectType::Goblin;
+					}
+
 					rot = mu::quatRotMat(pModel->coord().localXform());
 				}
 
@@ -570,7 +694,7 @@ void worker( ) {
 								.translation = { trs.x(), trs.y(), trs.z() },
 								.rotation = { rot.x(), rot.y(), rot.z(), rot.w() }
 							},
-							.objType = ObjectType::Character
+							.objType = objType
 						}
 					}
 				);

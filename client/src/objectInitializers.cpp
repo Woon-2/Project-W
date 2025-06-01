@@ -491,6 +491,7 @@ void initAnimationsCharacter(
             600_ms, AnimInstance::ClipMode::KeyFrame, animCon
         );
     });
+
     animCon.fsm().addTransition("Idle", "Run", [&animCon](){
         __8moveTransition({
             "GO_Character_Idle",
@@ -617,6 +618,107 @@ void initAnimationsCharacter(
     );
 }
 
+void goblinStateIdleUpdate(fsm::FSM& fsm, AnimController& con) {
+    const auto entityId = con.entityID().value();
+    const auto rigidBody = RigidBody::atC(entityId);
+    if (!rigidBody) {
+        return;
+    }
+    const auto velocity = rigidBody->velocity();
+    const auto speed2 = velocity.len2();
+    
+    if (speed2 >= characterMoveLb2) {
+        if (speed2 < characterWalkUb2) {
+            fsm.pushDeferredEvent(fsm::Event::transition("Idle", "Walk"));
+        }
+    }
+}
+
+fsm::State goblinStateIdle(fsm::FSM& fsm, AnimController& con) {
+    for (;;) {
+        while (auto events = co_await fsm.getEvents()) {
+            while (auto ev = events.pop()) {
+                if (ev->evType() == AnimController::evAnimUpdate) {
+                    goblinStateIdleUpdate(
+                        fsm, con
+                    );
+                }
+                // do something
+            }
+        }
+    
+        co_await fsm.completeStateUpdate();
+    }
+}
+
+void goblinStateWalkUpdate(fsm::FSM& fsm,
+    AnimInstance::ClipMode clipMode, AnimController& con
+) {
+    const auto entityId = con.entityID().value();
+    const auto rigidBody = RigidBody::atC(entityId);
+    if (!rigidBody) {
+        fsm.pushDeferredEvent(fsm::Event::transition("Walk", "Idle"));
+        return;
+    }
+    const auto velocity = rigidBody->velocity();
+    const auto speed2 = velocity.len2();
+
+    if (speed2 < characterMoveLb2) {
+        fsm.pushDeferredEvent(fsm::Event::transition("Walk", "Idle"));
+        return;
+    }
+}
+
+fsm::State goblinStateWalk(fsm::FSM& fsm, AnimController& con) {
+    for (;;) {
+        while (auto events = co_await fsm.getEvents()) {
+            while (auto ev = events.pop()) {
+                if (ev->evType() == AnimController::evAnimUpdate) {
+                    goblinStateWalkUpdate(
+                        fsm, AnimInstance::ClipMode::KeyFrame, con
+                    );
+                }
+                // do something
+            }
+        }
+    
+        co_await fsm.completeStateUpdate();
+    }
+}
+
+void initAnimationsGoblin(
+    const gfx::d3d12::ResourceStorage& resStorage,
+    const gfx::d3d12::ResourceStorage::SlotID& slotKeyAnimClip,
+    AnimController& animCon
+) {
+    const auto& animClipSlot = resStorage.slot(slotKeyAnimClip);
+
+    animCon.addClip("GO_Goblin_Idle",
+        animClipSlot.get<AnimClip>("GO_Goblin_Idle")
+    );
+    animCon.addClip("GO_Goblin_Walk",
+        animClipSlot.get<AnimClip>("GO_Goblin_Walk")
+    );
+
+    animCon.fsm().addState("Idle", goblinStateIdle, animCon);
+    animCon.fsm().addState("Walk", goblinStateWalk, animCon);
+    animCon.fsm().start("Idle");
+    
+    animCon.fsm().addTransition("Idle", "Idle", [](){});
+    animCon.fsm().addTransition("Walk", "Walk", [](){});
+    
+    animCon.fsm().addTransition("Idle", "Walk", [&animCon](){
+        fadeOut("GO_Goblin_Idle", 330_ms, animCon);
+        fadeIn("GO_Goblin_Walk", std::vector<std::string>{"GO_Goblin_Idle"}, 330_ms, animCon, AnimInstance::ClipMode::KeyFrame);
+    });
+    animCon.fsm().addTransition("Walk", "Idle", [&animCon](){
+        fadeOut("GO_Goblin_Walk", 330_ms, animCon);
+        fadeIn("GO_Goblin_Idle", std::vector<std::string>{"GO_Goblin_Walk"}, 330_ms, animCon, AnimInstance::ClipMode::KeyFrame);
+    });
+
+    animCon.play("GO_Goblin_Idle", 0_ms, AnimInstance::ClipMode::KeyFrame);
+}
+
 void initAnimations(
     const gfx::d3d12::ResourceStorage& resStorage,
     const gfx::d3d12::ResourceStorage::SlotID& slotKeyAnimClip,
@@ -627,6 +729,10 @@ void initAnimations(
     switch (assetModel) {
     case AssetModel::Character:
         initAnimationsCharacter(resStorage, slotKeyAnimClip, animCon);
+        break;
+
+    case AssetModel::Goblin:
+        initAnimationsGoblin(resStorage, slotKeyAnimClip, animCon);
         break;
 
     default:
@@ -678,7 +784,7 @@ void buildEntityWithAsset( mu::Vec3 translation,
             throw GFX_EXCEPT("BVH path not found: " + key);
         }
 
-        // entity.createComponent<BoundingVolume>(*bvhPathSlot.get<std::filesystem::path>(key));
+        entity.createComponent<BoundingVolume>(*bvhPathSlot.get<std::filesystem::path>(key));
     }
 }
 
@@ -694,6 +800,28 @@ ecs::Entity MU_CALLCONV createCharacter(
     buildEntityWithAsset(translation, rotation, resStorage,
         slotKeyModel, slotKeyBVHPath, slotKeyAnimClip,
         AssetModel::Character, {}, entity
+    );
+    entity.as<gfx::d3d12engine::Model>().get().markRenderPass(
+        gfx::d3d12engine::rp::PBRAnimatedIllumination::id
+    );
+    entity.as<gfx::d3d12engine::Model>().get().markRenderPass(
+        gfx::d3d12engine::rp::CascadeShadowMapAnimated::id
+    );
+    return entity;
+}
+
+ecs::Entity MU_CALLCONV createGoblin(
+    mu::Vec3 translation,
+    mu::NQuat rotation,
+    const gfx::d3d12::ResourceStorage& resStorage,
+    const gfx::d3d12::ResourceStorage::SlotID& slotKeyModel,
+    const gfx::d3d12::ResourceStorage::SlotID& slotKeyBVHPath,
+    const gfx::d3d12::ResourceStorage::SlotID& slotKeyAnimClip
+) {
+    auto entity = ecs::Entity();
+    buildEntityWithAsset(translation, rotation, resStorage,
+        slotKeyModel, slotKeyBVHPath, slotKeyAnimClip,
+        AssetModel::Goblin, {}, entity
     );
     entity.as<gfx::d3d12engine::Model>().get().markRenderPass(
         gfx::d3d12engine::rp::PBRAnimatedIllumination::id
