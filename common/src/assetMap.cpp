@@ -17,7 +17,7 @@ const ModelInfo& assetModelInfo(AssetModel asset) {
             .animationPath = getResourcePath()/"models\\Character\\GO_Character.anim"
         },
         ModelInfo{
-            .key = "GO_Character",
+            .key = "GO_Goblin",
             .geometryPath = getResourcePath()/"models\\Goblin\\GO_Goblin.bin",
             .animationPath = getResourcePath()/"models\\Goblin\\GO_Goblin.anim"
         },
@@ -230,15 +230,15 @@ const BVHInfo& assetBVHInfo(AssetBVH asset) {
         },
         BVHInfo{
             .key = "GO_URP_Tree_0",
-            .path = getResourcePath()/"models/Goblin/GO_URP_Tree_0.bvh"
+            .path = getResourcePath()/"models/Trees/GO_URP_Tree_0.bvh"
         },
         BVHInfo{
             .key = "GO_URP_Tree_1",
-            .path = getResourcePath()/"models/Goblin/GO_URP_Tree_1.bvh"
+            .path = getResourcePath()/"models/Trees/GO_URP_Tree_1.bvh"
         },
         BVHInfo{
             .key = "GO_URP_Tree_2",
-            .path = getResourcePath()/"models/Goblin/GO_URP_Tree_2.bvh"
+            .path = getResourcePath()/"models/Trees/GO_URP_Tree_2.bvh"
         },
         BVHInfo{
             .key = "Terrain_0_0",
