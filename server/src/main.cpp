@@ -508,7 +508,7 @@ int main( ) {
 		}
 
 		coordRoot.update( );
-		collisionSystem.update( );
+		collisionSystem.update( elapsed );
 
 		auto lUsers = pmr::vector<Session*>();
 		for (auto& [id, session] : gUsers) {

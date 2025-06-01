@@ -399,7 +399,6 @@ void Stage::simulate(double deltaTime) {
         MilliSeconds(static_cast<float>(deltaTime) * 1000.f)
     );
     cmdList.close();
-    pSystems_->collisionSystem.update();
 
     if (pPlayer_) {
         pPlayer_->as<gfx::d3d12engine::Camera>().update(static_cast<float>(deltaTime));
