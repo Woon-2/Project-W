@@ -2687,6 +2687,183 @@ void Skybox::postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) 
 
 }
 
+PlayerUI::PlayerUI(D3D12Device& device, ShaderPlayerUI& shader,
+    const SamplerStorage& samplerStorage, const D3D12_VIEWPORT& vp
+) : gfx::d3d12::RenderPass(id),
+viewport_(vp),
+protocol_(shader.makeProtocol(device,
+    RenderProtocol::Desc{ makeDesc() }
+)), batch_(), pCamera_(nullptr),
+pSamplerStorage_(&samplerStorage) {
+}
+
+RenderProtocol::Desc PlayerUI::makeDesc() {
+    return RenderProtocol::Desc{
+        .blend = D3D12_BLEND_DESC{
+            .AlphaToCoverageEnable = false,
+            .IndependentBlendEnable = false,
+            .RenderTarget = {
+                D3D12_RENDER_TARGET_BLEND_DESC{
+                    .BlendEnable = true,
+                    .LogicOpEnable = false,
+                    .SrcBlend = D3D12_BLEND_SRC_ALPHA,
+                    .DestBlend = D3D12_BLEND_INV_SRC_ALPHA,
+                    .BlendOp = D3D12_BLEND_OP_ADD,
+                    .SrcBlendAlpha = D3D12_BLEND_ONE,
+                    .DestBlendAlpha = D3D12_BLEND_ZERO,
+                    .BlendOpAlpha = D3D12_BLEND_OP_ADD,
+                    .LogicOp = D3D12_LOGIC_OP_NOOP,
+                    .RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL
+                }
+            }
+        },
+        .sampleMask = UINT_MAX,
+        .rasterizerState = D3D12_RASTERIZER_DESC{
+            .FillMode = D3D12_FILL_MODE_SOLID,
+            .CullMode = D3D12_CULL_MODE_NONE,
+            .FrontCounterClockwise = false,
+            .DepthClipEnable = true
+        },
+        .depthStencilState = D3D12_DEPTH_STENCIL_DESC{
+            .DepthEnable = true,
+            .DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
+            .DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL,
+            .StencilEnable = false,
+            .StencilReadMask = 0xff,
+            .StencilWriteMask = 0xff,
+            .FrontFace = D3D12_DEPTH_STENCILOP_DESC{
+                .StencilFailOp = D3D12_STENCIL_OP_KEEP,
+                .StencilDepthFailOp = D3D12_STENCIL_OP_KEEP,
+                .StencilPassOp = D3D12_STENCIL_OP_KEEP,
+                .StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS,
+            },
+            .BackFace = D3D12_DEPTH_STENCILOP_DESC{
+                .StencilFailOp = D3D12_STENCIL_OP_KEEP,
+                .StencilDepthFailOp = D3D12_STENCIL_OP_KEEP,
+                .StencilPassOp = D3D12_STENCIL_OP_KEEP,
+                .StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS,
+            }
+        },
+        .primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+        .numRenderTargets = 1u,
+        .rtvFormats = { DXGI_FORMAT_R8G8B8A8_UNORM },
+        .dsvFormat = DXGI_FORMAT_D32_FLOAT,
+        .sampleDesc = DXGI_SAMPLE_DESC{.Count = 1u, .Quality = 0u },
+        .nodeMask = 0u
+    };
+}
+
+void PlayerUI::setViewport(const D3D12_VIEWPORT& vp) {
+    viewport_ = vp;
+}
+
+
+void PlayerUI::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
+    cmdList.get()->SetPipelineState(protocol_.get().Get());
+    cmdList.get()->RSSetViewports(1u, &viewport_);
+    auto scissorRect = D3D12_RECT{ 0, 0, static_cast<LONG>(viewport_.Width), static_cast<LONG>(viewport_.Height) };
+    cmdList.get()->RSSetScissorRects(1u, &scissorRect);
+
+    // firstly sort batch by bounding volume node and other properties
+    // to cull out the same bounding volume nodes
+    // that are out of the camera frustum.
+    auto proj = [this](const auto& tuple) {
+        return std::tuple(
+            std::get<const BoundingVolumeNode*>(tuple),
+            &std::get<gfx::d3d12::Submesh*>(tuple)->material(),
+            std::get<gfx::d3d12::Submesh*>(tuple)->refSubmesh()
+        );
+        };
+
+    std::ranges::sort(batch_, std::less<>{}, proj);
+
+    const BoundingVolumeNode* pLastCulledBVNode = nullptr;
+
+    for (auto& [willNotDraw, pBVNode, pSubmesh, pCoord, vbLayoutIdx, xform] : batch_) {
+        // update xform
+        xform = pSubmesh->parent()->parent()->coord().xform();
+
+        // cull out instances that are out of the camera frustum.
+        // enhance performance by eliding collision check of the same bounding volume nodes.
+        if (pLastCulledBVNode && pLastCulledBVNode == pBVNode) {
+            willNotDraw = true;
+            continue;
+        }
+
+        // if (pBVNode && !BoundingVolumeNode::collides(
+        //     pCamera_->coordRotation().xform(), pCamera_->bvNode(),
+        //     pCoord->xform(), *pBVNode
+        // )) {
+        //     willNotDraw = true;
+        //     pLastCulledBVNode = pBVNode;
+        //     continue;
+        // }
+
+        willNotDraw = false;
+    }
+
+    // finally sort batch by culled status and other properties
+    // to separate instances that are visible and invisible.
+    auto proj2 = [this](const auto& tuple) {
+        return std::tuple(
+            std::get<bool>(tuple),
+            &std::get<gfx::d3d12::Submesh*>(tuple)->material(),
+            std::get<gfx::d3d12::Submesh*>(tuple)->refSubmesh()
+        );
+        };
+
+    std::ranges::sort(batch_, std::less<>{}, proj2);
+
+    auto pids = std::vector<sr::PerInstanceData2>();
+    pids.reserve(shader().maxInstanceCnt());
+
+    for (const auto& [willNotDraw, pBVNode, pSubmesh, pCoord, vbLayoutIdx, xform] : batch_) {
+        // as the first criterion of sorting is the culled status,
+        // if the first instance is culled, then all the rest are culled.
+        if (willNotDraw) {
+            break;
+        }
+
+        // upload per instance data
+                // upload per instance data
+        pids.emplace_back(
+            /* .world = */ mu::transpose(xform).getXmf()
+        );
+
+        if (pids.size() == shader().maxInstanceCnt()) [[unlikely]] {
+            break;
+        }
+    }
+
+    shader().perInstanceData_.stage(pids.data(), pids.size() * sizeof(sr::PerInstanceData2));
+}
+
+void PlayerUI::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
+    renderTargets.bind(cmdList, RenderTargets::Specifier::Main);
+
+    for (int i = 0; i < 2; ++i)
+    {
+        auto& refModel = shader().model(i);
+
+        auto material = refModel.root()->meshes().begin()->submeshes().begin()->material_;
+
+        auto pdd = sr::PerDrawcallData6{
+            .material = sr::PBRMaterial::convert(material),
+            .samplerIdx = pSamplerStorage_->get(SamplerStorage::Indices::TrilinearWrap).index(),
+            .instanceBase = static_cast<u32t>(i)
+        };
+        shader().perDrawcallData_.stage(&pdd, sizeof(sr::PerDrawcallData6));
+
+        shader().bindPerDrawcallData(static_cast<std::size_t>(i), cmdList);
+
+        shader().draw(cmdList, i);
+    }
+}
+
+void PlayerUI::postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
+
+}
+
 }   // namespace gfx::d3d12::rp
 
 }   // namespace gfx::d3d12

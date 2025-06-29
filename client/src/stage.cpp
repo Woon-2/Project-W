@@ -388,6 +388,14 @@ void Stage::loadAssets() {
 
     pRenderer_->initResources(pCore_->device(), cmdList, pTex);
 
+    pTex = staticResStorage_.slot(slotKeyTexture).get<gfx::d3d12::Texture>(assetTextureInfo(AssetTexture::Hp).paths.at(0).string());
+
+	pRenderer_->initPlayerUIResources(pCore_->device(), cmdList, 0, pTex);
+
+	pTex = staticResStorage_.slot(slotKeyTexture).get<gfx::d3d12::Texture>(assetTextureInfo(AssetTexture::Hp).paths.at(1).string());
+
+	pRenderer_->initPlayerUIResources(pCore_->device(), cmdList, 1, pTex);
+
     pCore_->finishGPUResLoad();
 }
 
@@ -452,6 +460,10 @@ void Stage::loadTextures(gfx::d3d12::D3D12GfxCmdList& cmdList) {
 	loadTexture(staticResStorage_, pCore_->descRanges(),
 		pCore_->device(), cmdList, AssetTexture::SkySphere
 	);
+
+    loadTexture(staticResStorage_, pCore_->descRanges(),
+        pCore_->device(), cmdList, AssetTexture::Hp
+    );
 }
 
 void loadModel( gfx::d3d12::ResourceStorage& storage,

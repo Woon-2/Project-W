@@ -757,6 +757,8 @@ public:
     );
     static RefModel buildSphereModel(D3D12Device& device, D3D12GfxCmdList& cmdList);
     static RefModel buildSkySphere(D3D12Device& device, D3D12GfxCmdList& cmdList, Texture* pTex);
+	static RefModel buildQuadModel(D3D12Device& device, D3D12GfxCmdList& cmdList);
+    static RefModel buildQuad(D3D12Device& device, D3D12GfxCmdList& cmdList, Texture* pTex);
 
     void arrangeVBs( D3D12Device& device, D3D12GfxCmdList& cmdList,
         std::size_t layoutIdx, const std::vector<std::vector<Vertex::Properties>>& vbProps

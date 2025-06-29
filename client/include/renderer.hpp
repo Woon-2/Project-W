@@ -36,6 +36,11 @@ public:
         shaderSkybox_.initSkySphere(device, cmdList, pTex);
     }
 
+    void initPlayerUIResources(gfx::d3d12::D3D12Device& device, gfx::d3d12::D3D12GfxCmdList& cmdList, const int index, gfx::d3d12::Texture* pTex)
+    {
+        shaderPlayerUI_.initQuads(device, cmdList, index, pTex);
+    }
+
 private:
     static constexpr auto slotKeyTexture = "texture";
 	static constexpr auto slotKeyTextureArray = "textureArray";
@@ -68,6 +73,9 @@ private:
 
     gfx::d3d12::ShaderSkybox shaderSkybox_;
     gfx::d3d12engine::rp::Skybox renderPassSkybox_;
+
+	gfx::d3d12::ShaderPlayerUI shaderPlayerUI_;
+	gfx::d3d12engine::rp::PlayerUI renderPassPlayerUI_;
 
     Mode renderMode_;
 };
