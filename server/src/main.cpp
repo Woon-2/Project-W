@@ -9,6 +9,71 @@
 
 #include "bitmap.hpp"
 #include "assetMap.hpp"
+#include "FSM.hpp"
+
+class AI;
+
+fsm::State AIStateIdle(fsm::FSM& fsm, AI& ai);
+fsm::State AIStateAgro(fsm::FSM& fsm, AI& ai);
+
+class AI : ecs::Component {
+public:
+	ENABLE_COMPONENT(AI)
+
+	static constexpr int evAIUpdate = 0x01;
+
+	AI( const ecs::Entity& entity, const std::string& fsmKey )
+        : Component( entity ), fsm_(fsmKey) {
+		fsm_.addState("Idle", AIStateIdle, *this);
+		fsm_.addState("Agro", AIStateAgro, *this);
+		fsm_.start("Idle");
+	}
+
+private:
+	fsm::FSM fsm_;
+};
+
+void AIStateIdleUpdate(fsm::FSM& fsm, AI& ai, MilliSeconds deltaTime) {
+	
+}
+
+fsm::State AIStateIdle(fsm::FSM& fsm, AI& ai) {
+    for (;;) {
+        while (auto events = co_await fsm.getEvents()) {
+            while (auto ev = events.pop()) {
+                if (ev->evType() == AI::evAIUpdate) {
+                    AIStateIdleUpdate(
+                        fsm, ai, ev->get<MilliSeconds>()
+                    );
+                }
+                // do something
+            }
+        }
+    
+        co_await fsm.completeStateUpdate();
+    }
+}
+
+void AIStateAgroUpdate(fsm::FSM& fsm, AI& ai, MilliSeconds deltaTime) {
+	// do something
+}
+
+fsm::State AIStateAgro(fsm::FSM& fsm, AI& ai) {
+	for (;;) {
+		while (auto events = co_await fsm.getEvents()) {
+			while (auto ev = events.pop()) {
+				if (ev->evType() == AI::evAIUpdate) {
+					AIStateAgroUpdate(
+						fsm, ai, ev->get<MilliSeconds>()
+					);
+				}
+				// do something
+			}
+		}
+	
+		co_await fsm.completeStateUpdate();
+	}
+}
 
 void doAccept( SOCKET, OverlappedEx* );
 void worker( );
@@ -61,7 +126,7 @@ ecs::Entity instantiateCharacter(const gameEngine::ObjectDisposition& dispositio
 
 	entity.createComponent<gameEngine::Coord>();
 
-	const auto translation = mu::Vec3(disposition.xform_.row(3)) + mu::Vec3(0.f ,-25.f, 0.f);
+	const auto translation = mu::Vec3(disposition.xform_.row(3)) + mu::Vec3(0.f ,-24.5f, 0.f);
 	entity.as<gameEngine::Coord>().get().setLocalXform(disposition.xform_);
 
 	entity.createComponent<DummyModel>( entity.as<gameEngine::Coord>() );
@@ -151,7 +216,7 @@ ecs::Entity instantiateGoblin(const gameEngine::ObjectDisposition& disposition) 
 
 	entity.createComponent<gameEngine::Coord>();
 
-	const auto translation = mu::Vec3(disposition.xform_.row(3)) + mu::Vec3(0.f ,-25.f, 0.f);
+	const auto translation = mu::Vec3(disposition.xform_.row(3)) + mu::Vec3(0.f ,-21.5f, 0.f);
 	entity.as<gameEngine::Coord>().get().setLocalXform(disposition.xform_);
 
 	entity.createComponent<DummyModel>( entity.as<gameEngine::Coord>() );
@@ -310,7 +375,7 @@ void simulate(R&& entitieIDs) {
 int main( ) {
 	using Clock = std::chrono::high_resolution_clock;
 	using Seconds = std::chrono::duration<float>;
-	static constexpr auto frameRate = 33_ms;	// 30 FPS
+	static constexpr auto frameRate = 120_ms;	// 30 FPS
 	static constexpr auto directionChangeRate = 2.f;
 	float directionChangeCounter = 0.f;
 
@@ -403,6 +468,8 @@ int main( ) {
 			tp = Clock::now( );
 			elapsed = std::chrono::duration_cast<MilliSeconds>( tp - lastTp );
 		}
+
+		elapsed = std::min(elapsed, frameRate * 1.8f);
 
 		ecs::Entity::ID entityId{-1u};
 
@@ -629,7 +696,7 @@ void worker( ) {
 
 			auto entity = ecs::Entity( );
 			entity.createComponent<gameEngine::Coord>();
-			entity.as<gameEngine::Coord>().get() << mu::translate(0.f, -25.f, 0.f);
+			entity.as<gameEngine::Coord>().get() << mu::translate(0.f, -24.5f, 0.f);
 			entity.createComponent<RigidBody>();
 			auto& rb = entity.as<RigidBody>();
 			rb.setInvMass( 1.f / 50.f );
@@ -757,7 +824,7 @@ void worker( ) {
 					.scEnter = SCEnter{
 						.netId = initializingSession.getEntityId(),
 						.xform = RigidXform{
-							.translation = { 0.f, -25.f, 0.f },
+							.translation = { 0.f, -24.5f, 0.f },
 							.rotation = { 0.f, 0.f, 0.f, 1.f }
 						},
 						.objType = ObjectType::Character

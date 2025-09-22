@@ -189,7 +189,7 @@ void processSCMove(SCMove& scMove, Session& session, Stage& stage) {
         const auto destPos = gDestPoses.at(eid) + dp;
 
         auto& rb = *RigidBody::at(eid);
-        rb.setVelocity((destPos - curPos) / 0.033f); // server tick time
+        rb.setVelocity((destPos - curPos) / 0.12f); // server tick time
 
         gDestPoses.at(eid) = destPos;
         gfx::d3d12engine::Model::at(eid)->get().root()->coord() << mu::Mat4x4(dr);
@@ -272,7 +272,7 @@ void processSCAssign(SCAssign& scAssign, Session& session, Stage& stage) {
     entt.createComponent<gfx::d3d12engine::Camera>(gfx::d3d12::Camera::Config());
     auto& camera = entt.as<gfx::d3d12engine::Camera>();
 
-    const auto cameraOffset = mu::Vec3(0.f, 1.8f, -1.6f);
+    const auto cameraOffset = mu::Vec3(0.f, 2.3f, -1.6f);
     const auto cameraTimeLag = 0.4f;
 
     stage.pSystems()->coordRoot.update();
@@ -321,13 +321,9 @@ void Stage::init() {
 }
 
 void Stage::update(double deltaTime) {
-    std::cout << "process packet start\n";
     processPackets(deltaTime);
-    std::cout << "process packet end\n";
     processInput(deltaTime);
-    std::cout << "simulate start\n";
     simulate(deltaTime);
-    std::cout << "simulate end\n";
     updateNetwork(deltaTime);
 }
 

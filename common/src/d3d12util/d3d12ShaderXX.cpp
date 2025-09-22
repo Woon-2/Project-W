@@ -368,11 +368,11 @@ void ShaderPBRIllumination::bindPerDrawcallData(
 
 void ShaderPBRIllumination::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath/"pbrShader.hlsl", nullptr,
+		getShaderPath()/"pbrShader.hlsl", nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 	blobs_[etoi(ShaderBlob::Type::Pixel)] = ShaderBlob{
-		shaderPath/"pbrShader.hlsl", nullptr,
+		getShaderPath()/"pbrShader.hlsl", nullptr,
 		"PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Pixel
 	};
 }
@@ -508,11 +508,11 @@ void ShaderPBRAnimatedIllumination::bindPerDrawcallData(
 
 void ShaderPBRAnimatedIllumination::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath/"pbrAnimatingShader.hlsl", nullptr,
+		getShaderPath()/"pbrAnimatingShader.hlsl", nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 	blobs_[etoi(ShaderBlob::Type::Pixel)] = ShaderBlob{
-		shaderPath/"pbrAnimatingShader.hlsl", nullptr,
+		getShaderPath()/"pbrAnimatingShader.hlsl", nullptr,
 		"PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Pixel
 	};
 }
@@ -653,19 +653,19 @@ void ShaderPBRIlluminationTerrain::bindPerDrawcallData(
 
 void ShaderPBRIlluminationTerrain::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath/"pbrShaderTerrain.hlsl", nullptr,
+		getShaderPath()/"pbrShaderTerrain.hlsl", nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 	blobs_[etoi(ShaderBlob::Type::Pixel)] = ShaderBlob{
-		shaderPath/"pbrShaderTerrain.hlsl", nullptr,
+		getShaderPath()/"pbrShaderTerrain.hlsl", nullptr,
 		"PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Pixel
 	};
 	blobs_[etoi(ShaderBlob::Type::Hull)] = ShaderBlob{
-		shaderPath/"pbrShaderTerrain.hlsl", nullptr,
+		getShaderPath()/"pbrShaderTerrain.hlsl", nullptr,
 		"HSMain", "hs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Hull
 	};
 	blobs_[etoi(ShaderBlob::Type::Domain)] = ShaderBlob{
-		shaderPath/"pbrShaderTerrain.hlsl", nullptr,
+		getShaderPath()/"pbrShaderTerrain.hlsl", nullptr,
 		"DSMain", "ds_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Domain
 	};
 }
@@ -876,7 +876,7 @@ void ShaderShadowMap::bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCmdLi
 
 void ShaderShadowMap::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath/"shadowMap.hlsl", nullptr,
+		getShaderPath()/"shadowMap.hlsl", nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 }
@@ -955,11 +955,11 @@ void ShaderCascadeShadowMap::bindPerDrawcallData(std::size_t drawcallIdx, D3D12G
 
 void ShaderCascadeShadowMap::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath / "cascadeShadow.hlsl", nullptr,
+		getShaderPath() / "cascadeShadow.hlsl", nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 	blobs_[etoi(ShaderBlob::Type::Geometry)] = ShaderBlob{
-		shaderPath / "cascadeShadow.hlsl", nullptr,
+		getShaderPath() / "cascadeShadow.hlsl", nullptr,
 		"GSMain", "gs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Geometry
 	};
 }
@@ -1039,7 +1039,7 @@ void ShaderShadowMapAnimated::bindPerDrawcallData(std::size_t drawcallIdx, D3D12
 
 void ShaderShadowMapAnimated::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath/"shadowMapAnimated.hlsl", nullptr,
+		getShaderPath()/"shadowMapAnimated.hlsl", nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 }
@@ -1134,12 +1134,12 @@ void ShaderCascadeShadowMapAnimated::bindPerDrawcallData(std::size_t drawcallIdx
 
 void ShaderCascadeShadowMapAnimated::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath/"cascadeShadowMapAnimated.hlsl", nullptr,
+		getShaderPath()/"cascadeShadowMapAnimated.hlsl", nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 
 	blobs_[etoi(ShaderBlob::Type::Geometry)] = ShaderBlob{
-		shaderPath / "cascadeShadowMapAnimated.hlsl", nullptr,
+		getShaderPath() / "cascadeShadowMapAnimated.hlsl", nullptr,
 		"GSMain", "gs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Geometry
 	};
 }
@@ -1214,11 +1214,11 @@ void ShaderScreenQuad::bindRootParams(D3D12GfxCmdList& cmdList) {
 
 void ShaderScreenQuad::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath/"screenQuad.hlsl", nullptr,
+		getShaderPath()/"screenQuad.hlsl", nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 	blobs_[etoi(ShaderBlob::Type::Pixel)] = ShaderBlob{
-		shaderPath/"screenQuad.hlsl", nullptr,
+		getShaderPath()/"screenQuad.hlsl", nullptr,
 		"PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Pixel
 	};
 }
@@ -1270,19 +1270,19 @@ void ShaderTessellation::bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCm
 
 void ShaderTessellation::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath/"tessellation.hlsl", nullptr,
+		getShaderPath()/"tessellation.hlsl", nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 	blobs_[etoi(ShaderBlob::Type::Pixel)] = ShaderBlob{
-		shaderPath/"tessellation.hlsl", nullptr,
+		getShaderPath()/"tessellation.hlsl", nullptr,
 		"PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Pixel
 	};
 	blobs_[etoi(ShaderBlob::Type::Hull)] = ShaderBlob{
-		shaderPath/"tessellation.hlsl", nullptr,
+		getShaderPath()/"tessellation.hlsl", nullptr,
 		"HSMain", "hs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Hull
 	};
 	blobs_[etoi(ShaderBlob::Type::Domain)] = ShaderBlob{
-		shaderPath/"tessellation.hlsl", nullptr,
+		getShaderPath()/"tessellation.hlsl", nullptr,
 		"DSMain", "ds_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Domain
 	};
 }
@@ -1371,19 +1371,19 @@ void ShaderShadowMapTessellation::bindPerDrawcallData(std::size_t drawcallIdx, D
 
 void ShaderShadowMapTessellation::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath/"shadowMapTerrain.hlsl", nullptr,
+		getShaderPath()/"shadowMapTerrain.hlsl", nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 	blobs_[etoi(ShaderBlob::Type::Hull)] = ShaderBlob{
-		shaderPath/"shadowMapTerrain.hlsl", nullptr,
+		getShaderPath()/"shadowMapTerrain.hlsl", nullptr,
 		"HSMain", "hs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Hull
 	};
 	blobs_[etoi(ShaderBlob::Type::Domain)] = ShaderBlob{
-		shaderPath/"shadowMapTerrain.hlsl", nullptr,
+		getShaderPath()/"shadowMapTerrain.hlsl", nullptr,
 		"DSMain", "ds_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Domain
 	};
 	blobs_[etoi(ShaderBlob::Type::Geometry)] = ShaderBlob{
-	shaderPath / "shadowMapTerrain.hlsl", nullptr,
+	getShaderPath() / "shadowMapTerrain.hlsl", nullptr,
 	"GSMain", "gs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Geometry
 	};
 }
@@ -1467,7 +1467,7 @@ void ShaderMatMul::bindRootParams(D3D12GfxCmdList& cmdList) {
 
 void ShaderMatMul::loadBlob() {
 	blob_ = ShaderBlob{
-		shaderPath/"matMul.hlsl", nullptr,
+		getShaderPath()/"matMul.hlsl", nullptr,
 		"CSMain", "cs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Compute
 	};
 }
@@ -1508,7 +1508,7 @@ void ShaderAnimInterpolation::bindRootParams(D3D12GfxCmdList& cmdList) {
 
 void ShaderAnimInterpolation::loadBlob() {
 	blob_ = ShaderBlob{
-		shaderPath/"animInterpolation.hlsl", nullptr,
+		getShaderPath()/"animInterpolation.hlsl", nullptr,
 		"CSMain", "cs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Compute
 	};
 }
@@ -1548,11 +1548,11 @@ void ShaderSkybox::bindPerDrawcallData(
 
 void ShaderSkybox::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath / "skybox.hlsl", nullptr,
+		getShaderPath() / "skybox.hlsl", nullptr,
 		"VS_Main", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 	blobs_[etoi(ShaderBlob::Type::Pixel)] = ShaderBlob{
-		shaderPath / "skybox.hlsl", nullptr,
+		getShaderPath() / "skybox.hlsl", nullptr,
 		"PS_Main", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Pixel
 	};
 }

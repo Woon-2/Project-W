@@ -251,7 +251,7 @@ void characterStateWalkUpdate(fsm::FSM& fsm, MilliSeconds fadeDuration,
     const auto velocity = rigidBody->velocity();
     const auto speed2 = velocity.len2();
 
-    if (speed2 >= characterMoveLb2) {
+    if (speed2 >= characterMoveLb2 - 0.01f) {
         if (speed2 >= characterWalkUb2) {
             fsm.pushDeferredEvent(fsm::Event::transition("Walk", "Run"));
             return;
@@ -298,8 +298,8 @@ void characterStateRunUpdate( fsm::FSM& fsm, MilliSeconds fadeDuration,
     const auto velocity = rigidBody->velocity();
     const auto speed2 = velocity.len2();
 
-    if (speed2 >= characterMoveLb2) {
-        if (speed2 < characterWalkUb2) {
+    if (speed2 >= characterMoveLb2 - 0.01f) {
+        if (speed2 < characterWalkUb2 - 0.05f) {
             fsm.pushDeferredEvent(fsm::Event::transition("Run", "Walk"));
             return;
         }
@@ -345,12 +345,12 @@ void characterStateSprintUpdate(fsm::FSM& fsm, MilliSeconds fadeDuration,
     const auto velocity = rigidBody->velocity();
     const auto speed2 = velocity.len2();
 
-    if (speed2 >= characterMoveLb2) {
-        if (speed2 < characterWalkUb2) {
+    if (speed2 >= characterMoveLb2 - 0.01f) {
+        if (speed2 < characterWalkUb2 - 0.05f) {
             fsm.pushDeferredEvent(fsm::Event::transition("Sprint", "Walk"));
             return;
         }
-        else if (speed2 < characterRunUb2) {
+        else if (speed2 < characterRunUb2 - 0.1f) {
             fsm.pushDeferredEvent(fsm::Event::transition("Sprint", "Run"));
             return;
         }
@@ -675,7 +675,7 @@ fsm::State goblinStateWalk(fsm::FSM& fsm, AnimController& con) {
             while (auto ev = events.pop()) {
                 if (ev->evType() == AnimController::evAnimUpdate) {
                     goblinStateWalkUpdate(
-                        fsm, AnimInstance::ClipMode::KeyFrame, con
+                        fsm, AnimInstance::ClipMode::Presampled, con
                     );
                 }
                 // do something
@@ -709,14 +709,14 @@ void initAnimationsGoblin(
     
     animCon.fsm().addTransition("Idle", "Walk", [&animCon](){
         fadeOut("GO_Goblin_Idle", 330_ms, animCon);
-        fadeIn("GO_Goblin_Walk", std::vector<std::string>{"GO_Goblin_Idle"}, 330_ms, animCon, AnimInstance::ClipMode::KeyFrame);
+        fadeIn("GO_Goblin_Walk", std::vector<std::string>{"GO_Goblin_Idle"}, 330_ms, animCon, AnimInstance::ClipMode::Presampled);
     });
     animCon.fsm().addTransition("Walk", "Idle", [&animCon](){
         fadeOut("GO_Goblin_Walk", 330_ms, animCon);
-        fadeIn("GO_Goblin_Idle", std::vector<std::string>{"GO_Goblin_Walk"}, 330_ms, animCon, AnimInstance::ClipMode::KeyFrame);
+        fadeIn("GO_Goblin_Idle", std::vector<std::string>{"GO_Goblin_Walk"}, 330_ms, animCon, AnimInstance::ClipMode::Presampled);
     });
 
-    animCon.play("GO_Goblin_Idle", 0_ms, AnimInstance::ClipMode::KeyFrame);
+    animCon.play("GO_Goblin_Idle", 0_ms, AnimInstance::ClipMode::Presampled);
 }
 
 void initAnimations(

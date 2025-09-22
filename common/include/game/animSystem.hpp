@@ -325,13 +325,13 @@ public:
     const auto& fsm() const { return fsm_; }
 
     void print() const {
-        for (const auto& [key, inst] : insts_) {
-            std::cout << "playing animation \"" << inst.animClip()->name()
-                << "\", elapsed: " << inst.elapsed()
-                << ", duration: " << inst.animClip()->duration()
-                << ", speed: " << inst.speed()
-                << ", weight: " << inst.weight() << '\n';
-        }
+        // for (const auto& [key, inst] : insts_) {
+        //     std::cout << "playing animation \"" << inst.animClip()->name()
+        //         << "\", elapsed: " << inst.elapsed()
+        //         << ", duration: " << inst.animClip()->duration()
+        //         << ", speed: " << inst.speed()
+        //         << ", weight: " << inst.weight() << '\n';
+        // }
     }
 
     void free(std::coroutine_handle<> expired) {
