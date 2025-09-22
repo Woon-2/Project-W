@@ -491,6 +491,10 @@ private:
     std::vector< std::tuple<bool, const BoundingVolumeNode*, Submesh*,
         const coord::System*, VBLayoutIdx, mu::Mat4x4>
     > batch_;
+    
+    std::vector<sr::PerInstanceData0> pidCache_;
+    std::vector<sr::Light> lightCache_;
+
     const Camera* pCamera_;
     const SamplerStorage* pSamplerStorage_;
 };
@@ -555,6 +559,11 @@ private:
     std::vector< std::tuple<bool, const BoundingVolumeNode*, Submesh*,
         const coord::System*, VBLayoutIdx, mu::Mat4x4, const AnimController*>
     > batch_;
+
+    std::vector<sr::PerInstanceData5> pidCache_;
+    std::vector<sr::Light> lightCache_;
+    std::vector<dx::XMFLOAT4X4> boneCache_;
+
     const Camera* pCamera_;
     const SamplerStorage* pSamplerStorage_;
 };
@@ -612,6 +621,9 @@ private:
     std::vector< std::tuple<bool, const BoundingVolumeNode*, Submesh*,
         const coord::System*, VBLayoutIdx, mu::Mat4x4>
     > batch_;
+
+    std::vector<sr::PerInstanceData2> pidCache_;
+
     const Camera* pCamera_;
 };
 
@@ -671,6 +683,9 @@ private:
     std::vector< std::tuple<bool, const BoundingVolumeNode*, Submesh*,
         const coord::System*, VBLayoutIdx, mu::Mat4x4>
     > batch_;
+
+    std::vector<sr::PerInstanceData2> pidCache_;
+
     const Camera* pCamera_;
 };
 
@@ -728,6 +743,9 @@ private:
     std::vector< std::tuple<bool, const BoundingVolumeNode*, Submesh*,
         const coord::System*, VBLayoutIdx, mu::Mat4x4, const AnimController*>
     > batch_;
+
+    std::vector<sr::PerInstanceData6> pidCache_;
+
     const Camera* pCamera_;
 };
 
@@ -789,6 +807,9 @@ private:
     std::vector< std::tuple<bool, const BoundingVolumeNode*, Submesh*,
         const coord::System*, VBLayoutIdx, mu::Mat4x4, const AnimController*>
     > batch_;
+
+    std::vector<sr::PerInstanceData6> pidCache_;
+
     const Camera* pCamera_;
 };
 
@@ -881,6 +902,10 @@ private:
     RenderProtocol protocol_;
     std::vector<const WorldLight*> lights_;
     std::vector<const LevelChunkModel*> batch_;
+
+    std::vector<sr::PerInstanceData0> pidCache_;
+    std::vector<sr::Light> lightCache_;
+
     const Camera* pCamera_;
     const SamplerStorage* pSamplerStorage_;
 };
@@ -938,6 +963,9 @@ private:
     RenderProtocol protocol_;
     const WorldLight* pLight_;
     std::vector<const LevelChunkModel*> batch_;
+
+    std::vector<sr::PerInstanceData4> pidCache_;
+
     const Camera* pCamera_;
     const SamplerStorage* pSamplerStorage_;
 };

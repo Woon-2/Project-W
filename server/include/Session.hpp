@@ -105,8 +105,16 @@ public:
     ENABLE_COMPONENT( DummyModel )
 
     DummyModel( const ecs::Entity& entity, gameEngine::Coord& coordComp )
-        : Component( entity ), coord_( ) {
+        : Component( entity ), coord_( ), name_() {
         coord_.setParent( &coordComp.get( ) );
+    }
+
+    void setName( const std::string& name ) {
+        name_ = name;
+    }
+
+    const std::string& name( ) const NOEXCEPT {
+        return name_;
     }
 
     const gfx::coord::System& coord( ) const NOEXCEPT {
@@ -119,6 +127,7 @@ public:
 
 private:
     gfx::coord::System coord_;
+    std::string name_;
 };
 
 #endif	// __SESSION_HPP

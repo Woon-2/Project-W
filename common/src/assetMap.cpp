@@ -17,6 +17,11 @@ const ModelInfo& assetModelInfo(AssetModel asset) {
             .animationPath = getResourcePath()/"models\\Character\\GO_Character.anim"
         },
         ModelInfo{
+            .key = "GO_Goblin",
+            .geometryPath = getResourcePath()/"models\\Goblin\\GO_Goblin.bin",
+            .animationPath = getResourcePath()/"models\\Goblin\\GO_Goblin.anim"
+        },
+        ModelInfo{
             .key = "GO_URP_Tree_0",
             .geometryPath = getResourcePath()/"models\\Trees\\GO_URP_Tree_0.bin"
         },
@@ -119,6 +124,15 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
         },
         TextureInfo{
             .keys = {
+                "GO_Goblin_ColorSet",
+            },
+            .paths = {
+                getResourcePath()/"models\\Goblin\\Textures\\Color_Set_1.dds",
+            },
+            .type = TextureInfo::Type::Texture
+        },
+        TextureInfo{
+            .keys = {
                 "GO_URP_Tree_0_Leaf",
                 "GO_URP_Tree_0_Trunk"
             },
@@ -209,6 +223,22 @@ const BVHInfo& assetBVHInfo(AssetBVH asset) {
         BVHInfo{
             .key = "GO_Character",
             .path = getResourcePath()/"models/Character/GO_Character.bvh"
+        },
+        BVHInfo{
+            .key = "GO_Goblin",
+            .path = getResourcePath()/"models/Goblin/GO_Goblin.bvh"
+        },
+        BVHInfo{
+            .key = "GO_URP_Tree_0",
+            .path = getResourcePath()/"models/Trees/GO_URP_Tree_0.bvh"
+        },
+        BVHInfo{
+            .key = "GO_URP_Tree_1",
+            .path = getResourcePath()/"models/Trees/GO_URP_Tree_1.bvh"
+        },
+        BVHInfo{
+            .key = "GO_URP_Tree_2",
+            .path = getResourcePath()/"models/Trees/GO_URP_Tree_2.bvh"
         },
         BVHInfo{
             .key = "Terrain_0_0",

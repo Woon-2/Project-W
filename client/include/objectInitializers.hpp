@@ -13,6 +13,15 @@ ecs::Entity MU_CALLCONV createCharacter(
     const gfx::d3d12::ResourceStorage::SlotID& slotKeyAnimClip
 );
 
+ecs::Entity MU_CALLCONV createGoblin(
+    mu::Vec3 translation,
+    mu::NQuat rotation,
+    const gfx::d3d12::ResourceStorage& resStorage,
+    const gfx::d3d12::ResourceStorage::SlotID& slotKeyModel,
+    const gfx::d3d12::ResourceStorage::SlotID& slotKeyBVHPath,
+    const gfx::d3d12::ResourceStorage::SlotID& slotKeyAnimClip
+);
+
 ecs::Entity MU_CALLCONV createHelicopter(
     mu::Vec3 translation,
     mu::NQuat rotation,

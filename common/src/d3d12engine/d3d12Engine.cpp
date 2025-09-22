@@ -320,8 +320,8 @@ void PBRAnimatedIllumination::init(Scene& scene) {
 
         auto pAnimCon = AnimController::atC(entityID);
         if (!pAnimCon) {
-            throw GFX_EXCEPT("[Description] PBRAnimatedIllumination::init: "
-                "AnimController not found for entity: " + std::to_string(entityID));
+            //throw GFX_EXCEPT("[Description] PBRAnimatedIllumination::init: "
+            //    "AnimController not found for entity: " + std::to_string(entityID));
         }
 
         if (auto pBV = BoundingVolume::atC(entityID)) {
@@ -344,8 +344,8 @@ void PBRAnimatedIllumination::update(Scene& scene) {
         if ( auto pModel = Model::at(entityID) ) {
             auto pAnimCon = AnimController::atC(entityID);
             if (!pAnimCon) {
-                throw GFX_EXCEPT("[Description] PBRAnimatedIllumination::init: "
-                    "AnimController not found for entity: " + std::to_string(entityID));
+                /*throw GFX_EXCEPT("[Description] PBRAnimatedIllumination::init: "
+                    "AnimController not found for entity: " + std::to_string(entityID));*/
             }
 
             if (auto pBV = BoundingVolume::atC(entityID)) {
@@ -414,8 +414,8 @@ void ShadowMapAnimated::init(Scene& scene) {
 
         auto pAnimCon = AnimController::atC(entityID);
         if (!pAnimCon) {
-            throw GFX_EXCEPT("[Description] PBRAnimatedIllumination::init: "
-                "AnimController not found for entity: " + std::to_string(entityID));
+            //throw GFX_EXCEPT("[Description] PBRAnimatedIllumination::init: "
+            //    "AnimController not found for entity: " + std::to_string(entityID));
         }
 
         if (auto pBV = BoundingVolume::atC(entityID)) {
@@ -442,8 +442,8 @@ void ShadowMapAnimated::update(Scene& scene) {
         if ( auto pModel = Model::at(entityID) ) {
             auto pAnimCon = AnimController::atC(entityID);
             if (!pAnimCon) {
-                throw GFX_EXCEPT("[Description] PBRAnimatedIllumination::init: "
-                    "AnimController not found for entity: " + std::to_string(entityID));
+                //throw GFX_EXCEPT("[Description] PBRAnimatedIllumination::init: "
+                //    "AnimController not found for entity: " + std::to_string(entityID));
             }
 
             if (auto pBV = BoundingVolume::atC(entityID)) {
@@ -585,8 +585,8 @@ void CascadeShadowMapAnimated::init(Scene& scene) {
 
         auto pAnimCon = AnimController::atC(entityID);
         if (!pAnimCon) {
-            throw GFX_EXCEPT("[Description] PBRAnimatedIllumination::init: "
-                "AnimController not found for entity: " + std::to_string(entityID));
+            //throw GFX_EXCEPT("[Description] PBRAnimatedIllumination::init: "
+            //    "AnimController not found for entity: " + std::to_string(entityID));
         }
 
         if (auto pBV = BoundingVolume::atC(entityID)) {
@@ -613,8 +613,8 @@ void CascadeShadowMapAnimated::update(Scene& scene) {
         if ( auto pModel = Model::at(entityID) ) {
             auto pAnimCon = AnimController::atC(entityID);
             if (!pAnimCon) {
-                throw GFX_EXCEPT("[Description] PBRAnimatedIllumination::init: "
-                    "AnimController not found for entity: " + std::to_string(entityID));
+                //throw GFX_EXCEPT("[Description] PBRAnimatedIllumination::init: "
+                //    "AnimController not found for entity: " + std::to_string(entityID));
             }
 
             if (auto pBV = BoundingVolume::atC(entityID)) {
