@@ -279,7 +279,7 @@ PBRIllumination::PBRIllumination( D3D12Device& device, ShaderPBRIllumination& sh
     shadowArrayMaterial_(), viewport_(vp),
     protocol_( shader.makeProtocol( device,
         RenderProtocol::Desc{ makeDesc() }
-    ) ), lights_(), batch_(), pCamera_(nullptr),
+    ) ), lights_(), batch_(), pidCache_(), lightCache_(), pCamera_(nullptr),
     pSamplerStorage_(&samplerStorage) {
     auto pcd = sr::PerConfigurationData0{
         .viewportWidth = vp.Width,
@@ -374,8 +374,9 @@ void PBRIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderT
 
     std::ranges::sort(batch_, std::less<>{}, proj);
 
-    auto pids = std::vector<sr::PerInstanceData0>();
-    pids.reserve( shader().maxInstanceCnt() );
+    // auto pidCache_ = std::vector<sr::PerInstanceData0>();
+    pidCache_.clear();
+    pidCache_.reserve( shader().maxInstanceCnt() );
 
     const BoundingVolumeNode* pLastCulledBVNode = nullptr;
 
@@ -422,7 +423,7 @@ void PBRIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderT
         }
 
         // upload per instance data
-        pids.emplace_back(
+        pidCache_.emplace_back(
             /* .wvp = */ mu::transpose( xform * pCamera_->view() * pCamera_->proj() ).getXmf(),
             /* .world = */ mu::transpose( xform ).getXmf(),
             /* .wv = */ mu::transpose( xform * pCamera_->view() ).getXmf(),
@@ -431,19 +432,20 @@ void PBRIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderT
             )
         );
 
-        if (pids.size() == shader().maxInstanceCnt()) [[unlikely]] {
+        if (pidCache_.size() == shader().maxInstanceCnt()) [[unlikely]] {
             break;
         }
     }
 
 
-    auto lightBuffer = std::vector<sr::Light>();
-    lightBuffer.reserve( lights_.size() );
+    // auto lightCache_ = std::vector<sr::Light>();
+    lightCache_.clear();
+    lightCache_.reserve( lights_.size() );
 
     for (const auto& light : lights_) {
-        lightBuffer.emplace_back( light->toViewLight(*pCamera_) );
+        lightCache_.emplace_back( light->toViewLight(*pCamera_) );
 
-        if (lightBuffer.size() == shader().maxLightCnt()) [[unlikely]] {
+        if (lightCache_.size() == shader().maxLightCnt()) [[unlikely]] {
             break;
         }
     }
@@ -467,11 +469,11 @@ void PBRIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderT
             mu::transpose(pDirectionalLight->calcCascadeViewProj(*pCamera_, 1)).getXmf(),
             mu::transpose(pDirectionalLight->calcCascadeViewProj(*pCamera_, 2)).getXmf()
         },
-        .lightCnt = static_cast<std::uint32_t>( lightBuffer.size() )
+        .lightCnt = static_cast<std::uint32_t>( lightCache_.size() )
     };
 
-    shader().perInstanceData_.stage(pids.data(), pids.size() * sizeof(sr::PerInstanceData0));
-    shader().lightBuffer_.stage(lightBuffer.data(), lightBuffer.size() * sizeof(sr::Light));
+    shader().perInstanceData_.stage(pidCache_.data(), pidCache_.size() * sizeof(sr::PerInstanceData0));
+    shader().lightBuffer_.stage(lightCache_.data(), lightCache_.size() * sizeof(sr::Light));
     shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData2));
 }
 
@@ -592,8 +594,8 @@ PBRAnimatedIllumination::PBRAnimatedIllumination(
     shadowArrayMaterial_(), viewport_(vp),
     protocol_( shader.makeProtocol( device,
         RenderProtocol::Desc{ makeDesc() }
-    ) ), lights_(), batch_(), pCamera_(nullptr),
-    pSamplerStorage_(&samplerStorage) {
+    ) ), lights_(), batch_(), pidCache_(), lightCache_(), boneCache_(),
+    pCamera_(nullptr), pSamplerStorage_(&samplerStorage) {
     auto pcd = sr::PerConfigurationData0{
         .viewportWidth = vp.Width,
         .viewportHeight = vp.Height
@@ -723,11 +725,13 @@ void PBRAnimatedIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets&
 
     std::ranges::sort(batch_, std::less<>{}, proj2);
 
-    auto pids = std::vector<sr::PerInstanceData5>();
-    pids.reserve( shader().maxInstanceCnt() );
+    // auto pidCache_ = std::vector<sr::PerInstanceData5>();
+    pidCache_.clear();
+    pidCache_.reserve( shader().maxInstanceCnt() );
 
-    auto bones = std::vector<dx::XMFLOAT4X4>();
-    bones.reserve( shader().maxBoneCnt() );
+    // auto boneCache_ = std::vector<dx::XMFLOAT4X4>();
+    boneCache_.clear();
+    boneCache_.reserve( shader().maxBoneCnt() );
 
     static constexpr std::size_t targetAnimCntExpected = 4u;
 
@@ -756,14 +760,14 @@ void PBRAnimatedIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets&
             weights.push_back(animInst.weight());
 
             if (clipmodes.emplace_back(animInst.clipMode()) == AnimInstance::ClipMode::KeyFrame) {
-                firstBoneIndices.push_back(static_cast<std::uint32_t>(bones.size()));
+                firstBoneIndices.push_back(static_cast<std::uint32_t>(boneCache_.size()));
                 animIndices.push_back(firstBoneIndices.back());
 
                 for (const auto& bone: animInst.boneXformCache()) {
-                    bones.push_back( mu::transpose(bone).getXmf() );
+                    boneCache_.push_back( mu::transpose(bone).getXmf() );
                 }
 
-                if (bones.size() == shader().maxBoneCnt()) {
+                if (boneCache_.size() == shader().maxBoneCnt()) {
                     boneFull = true;
                     break;
                 }
@@ -788,7 +792,7 @@ void PBRAnimatedIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets&
 
 
         // upload per instance data
-        pids.emplace_back(
+        pidCache_.emplace_back(
             /* .wvp = */ mu::transpose( xform * pCamera_->view() * pCamera_->proj() ).getXmf(),
             /* .world = */ mu::transpose( xform ).getXmf(),
             /* .wv = */ mu::transpose( xform * pCamera_->view() ).getXmf(),
@@ -805,19 +809,20 @@ void PBRAnimatedIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets&
             /* .usePresampled = */ clipmodes.size() > 0 ? (clipmodes[0] == AnimInstance::ClipMode::Presampled) : false
         );
 
-        if (pids.size() == shader().maxInstanceCnt()) [[unlikely]] {
+        if (pidCache_.size() == shader().maxInstanceCnt()) [[unlikely]] {
             break;
         }
     }
 
 
-    auto lightBuffer = std::vector<sr::Light>();
-    lightBuffer.reserve( lights_.size() );
+    // auto lightCache_ = std::vector<sr::Light>();
+    lightCache_.clear();
+    lightCache_.reserve( lights_.size() );
 
     for (const auto& light : lights_) {
-        lightBuffer.emplace_back( light->toViewLight(*pCamera_) );
+        lightCache_.emplace_back( light->toViewLight(*pCamera_) );
 
-        if (lightBuffer.size() == shader().maxLightCnt()) [[unlikely]] {
+        if (lightCache_.size() == shader().maxLightCnt()) [[unlikely]] {
             break;
         }
     }
@@ -841,13 +846,13 @@ void PBRAnimatedIllumination::preRender(D3D12GfxCmdList& cmdList, RenderTargets&
 			mu::transpose(pDirectionalLight->calcCascadeViewProj(*pCamera_, 1)).getXmf(),
 			mu::transpose(pDirectionalLight->calcCascadeViewProj(*pCamera_, 2)).getXmf()
 		},
-        .lightCnt = static_cast<std::uint32_t>( lightBuffer.size() )
+        .lightCnt = static_cast<std::uint32_t>( lightCache_.size() )
     };
 
-    shader().perInstanceData_.stage(pids.data(), pids.size() * sizeof(sr::PerInstanceData5));
-    shader().lightBuffer_.stage(lightBuffer.data(), lightBuffer.size() * sizeof(sr::Light));
+    shader().perInstanceData_.stage(pidCache_.data(), pidCache_.size() * sizeof(sr::PerInstanceData5));
+    shader().lightBuffer_.stage(lightCache_.data(), lightCache_.size() * sizeof(sr::Light));
     shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData2));
-    shader().boneBuffer_.stage(bones.data(), bones.size() * sizeof(dx::XMFLOAT4X4));
+    shader().boneBuffer_.stage(boneCache_.data(), boneCache_.size() * sizeof(dx::XMFLOAT4X4));
 }
 
 void PBRAnimatedIllumination::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
@@ -981,7 +986,7 @@ ShadowMap::ShadowMap( D3D12Device& device,
     shadowMaterial_(),
     viewport_(vp), protocol_( shader.makeProtocol( device,
         RenderProtocol::Desc{ makeDesc() }
-    ) ), pLight_(nullptr), batch_(), pCamera_(nullptr) {
+    ) ), pLight_(nullptr), batch_(), pidCache_(), pCamera_(nullptr) {
     viewport_.Width *= 8;
     viewport_.Height *= 8;
 }
@@ -1064,8 +1069,9 @@ void ShadowMap::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets
 
     std::ranges::sort(batch_, std::less<>{}, proj);
 
-    auto pids = std::vector<sr::PerInstanceData2>();
-    pids.reserve( shader().maxInstanceCnt() );
+    // auto pidCache_ = std::vector<sr::PerInstanceData2>();
+    pidCache_.clear();
+    pidCache_.reserve( shader().maxInstanceCnt() );
 
     const BoundingVolumeNode* pLastCulledBVNode = nullptr;
 
@@ -1110,11 +1116,11 @@ void ShadowMap::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets
         }
 
         // upload per instance data
-        pids.emplace_back(
+        pidCache_.emplace_back(
             /* .world = */ mu::transpose( xform ).getXmf()
         );
 
-        if (pids.size() == shader().maxInstanceCnt()) [[unlikely]] {
+        if (pidCache_.size() == shader().maxInstanceCnt()) [[unlikely]] {
             break;
         }
     }
@@ -1124,7 +1130,7 @@ void ShadowMap::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets
         .lightVP = mu::transpose( pLight_->viewProj(*pCamera_) ).getXmf()
     };
 
-    shader().perInstanceData_.stage(pids.data(), pids.size() * sizeof(sr::PerInstanceData2));
+    shader().perInstanceData_.stage(pidCache_.data(), pidCache_.size() * sizeof(sr::PerInstanceData2));
     shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData1));
 }
 
@@ -1243,7 +1249,7 @@ CascadeShadowMap::CascadeShadowMap(D3D12Device& device,
     shadowArrayMaterial_(),
     viewport_(vp), protocol_(shader.makeProtocol(device,
         RenderProtocol::Desc{ makeDesc() }
-    )), pLight_(nullptr), batch_(), pCamera_(nullptr) {
+    )), pLight_(nullptr), batch_(), pidCache_(), pCamera_(nullptr) {
     viewport_.Width *= 4u;
     viewport_.Height *= 4u;
 }
@@ -1326,8 +1332,9 @@ void CascadeShadowMap::preRender(D3D12GfxCmdList& cmdList, RenderTargets& render
 
     std::ranges::sort(batch_, std::less<>{}, proj);
 
-    auto pids = std::vector<sr::PerInstanceData2>();
-    pids.reserve(shader().maxInstanceCnt());
+    // auto pidCache_ = std::vector<sr::PerInstanceData2>();
+    pidCache_.clear();
+    pidCache_.reserve(shader().maxInstanceCnt());
 
     const BoundingVolumeNode* pLastCulledBVNode = nullptr;
 
@@ -1372,11 +1379,11 @@ void CascadeShadowMap::preRender(D3D12GfxCmdList& cmdList, RenderTargets& render
         }
 
         // upload per instance data
-        pids.emplace_back(
+        pidCache_.emplace_back(
             /* .world = */ mu::transpose(xform).getXmf()
         );
 
-        if (pids.size() == shader().maxInstanceCnt()) [[unlikely]] {
+        if (pidCache_.size() == shader().maxInstanceCnt()) [[unlikely]] {
             break;
         }
     }
@@ -1389,7 +1396,7 @@ void CascadeShadowMap::preRender(D3D12GfxCmdList& cmdList, RenderTargets& render
         }
     };
 
-    shader().perInstanceData_.stage(pids.data(), pids.size() * sizeof(sr::PerInstanceData2));
+    shader().perInstanceData_.stage(pidCache_.data(), pidCache_.size() * sizeof(sr::PerInstanceData2));
     shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData1));
 }
 
@@ -1519,7 +1526,7 @@ ShadowMapAnimated::ShadowMapAnimated( D3D12Device& device,
     shadowMaterial_(),
     viewport_(vp), protocol_( shader.makeProtocol( device,
         RenderProtocol::Desc{ makeDesc() }
-    ) ), pLight_(nullptr), batch_(), pCamera_(nullptr) {
+    ) ), pLight_(nullptr), batch_(), pidCache_(), pCamera_(nullptr) {
     viewport_.Width *= 8;
     viewport_.Height *= 8;
 }
@@ -1638,8 +1645,9 @@ void ShadowMapAnimated::preRender(D3D12GfxCmdList& cmdList, RenderTargets& rende
     std::ranges::sort(batch_, std::less<>{}, proj2);
 
 
-    auto pids = std::vector<sr::PerInstanceData6>();
-    pids.reserve( shader().maxInstanceCnt() );
+    // auto pidCache_ = std::vector<sr::PerInstanceData6>();
+    pidCache_.clear();
+    pidCache_.reserve( shader().maxInstanceCnt() );
 
     static constexpr std::size_t targetAnimCntExpected = 4u;
 
@@ -1674,7 +1682,7 @@ void ShadowMapAnimated::preRender(D3D12GfxCmdList& cmdList, RenderTargets& rende
         }
 
         // upload per instance data
-        pids.emplace_back(
+        pidCache_.emplace_back(
             /* .world = */ mu::transpose( xform ).getXmf(),
             /* .animIdx0 = */ (animIndices.size() > 0) ? animIndices[0] : 0u,
             /* .animIdx1 = */ (animIndices.size() > 1) ? animIndices[1] : 0u,
@@ -1685,7 +1693,7 @@ void ShadowMapAnimated::preRender(D3D12GfxCmdList& cmdList, RenderTargets& rende
             /* .boneCnt = */ static_cast<std::uint32_t>(boneCntInSkeleton)
         );
 
-        if (pids.size() == shader().maxInstanceCnt()) [[unlikely]] {
+        if (pidCache_.size() == shader().maxInstanceCnt()) [[unlikely]] {
             break;
         }
     }
@@ -1695,7 +1703,7 @@ void ShadowMapAnimated::preRender(D3D12GfxCmdList& cmdList, RenderTargets& rende
         .lightVP = mu::transpose( pLight_->viewProj(*pCamera_) ).getXmf()
     };
 
-    shader().perInstanceData_.stage(pids.data(), pids.size() * sizeof(sr::PerInstanceData6));
+    shader().perInstanceData_.stage(pidCache_.data(), pidCache_.size() * sizeof(sr::PerInstanceData6));
     shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData1));
 }
 
@@ -1816,7 +1824,7 @@ CascadeShadowMapAnimated::CascadeShadowMapAnimated( D3D12Device& device,
     shadowMaterial_(),
     viewport_(vp), protocol_( shader.makeProtocol( device,
         RenderProtocol::Desc{ makeDesc() }
-    ) ), pLight_(nullptr), batch_(), pCamera_(nullptr) {
+    ) ), pLight_(nullptr), batch_(), pidCache_(), pCamera_(nullptr) {
     viewport_.Width *= 4u;
     viewport_.Height *= 4u;
 }
@@ -1937,8 +1945,9 @@ void CascadeShadowMapAnimated::preRender(D3D12GfxCmdList& cmdList, RenderTargets
     std::ranges::sort(batch_, std::less<>{}, proj2);
 
 
-    auto pids = std::vector<sr::PerInstanceData6>();
-    pids.reserve( shader().maxInstanceCnt() );
+    /// auto pidCache_ = std::vector<sr::PerInstanceData6>();
+    pidCache_.clear();
+    pidCache_.reserve( shader().maxInstanceCnt() );
 
     static constexpr std::size_t targetAnimCntExpected = 4u;
 
@@ -1973,7 +1982,7 @@ void CascadeShadowMapAnimated::preRender(D3D12GfxCmdList& cmdList, RenderTargets
         }
 
         // upload per instance data
-        pids.emplace_back(
+        pidCache_.emplace_back(
             /* .world = */ mu::transpose( xform ).getXmf(),
             /* .animIdx0 = */ (animIndices.size() > 0) ? animIndices[0] : 0u,
             /* .animIdx1 = */ (animIndices.size() > 1) ? animIndices[1] : 0u,
@@ -1984,7 +1993,7 @@ void CascadeShadowMapAnimated::preRender(D3D12GfxCmdList& cmdList, RenderTargets
             /* .boneCnt = */ static_cast<std::uint32_t>(boneCntInSkeleton)
         );
 
-        if (pids.size() == shader().maxInstanceCnt()) [[unlikely]] {
+        if (pidCache_.size() == shader().maxInstanceCnt()) [[unlikely]] {
             break;
         }
     }
@@ -1998,7 +2007,7 @@ void CascadeShadowMapAnimated::preRender(D3D12GfxCmdList& cmdList, RenderTargets
         },
     };
 
-    shader().perInstanceData_.stage(pids.data(), pids.size() * sizeof(sr::PerInstanceData6));
+    shader().perInstanceData_.stage(pidCache_.data(), pidCache_.size() * sizeof(sr::PerInstanceData6));
     shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData1));
 }
 
@@ -2203,7 +2212,7 @@ Tessellation::Tessellation( D3D12Device& device,
 ) : gfx::d3d12::RenderPass(id), shadowArrayMaterial_(),
     viewport_(vp), protocol_( shader.makeProtocol( device,
         RenderProtocol::Desc{ makeDesc() }
-    ) ), lights_(), batch_(), pCamera_(nullptr),
+    ) ), lights_(), batch_(), pidCache_(), lightCache_(), pCamera_(nullptr),
     pSamplerStorage_(&samplerStorage) {}
 
 void Tessellation::initResources(
@@ -2268,12 +2277,13 @@ void Tessellation::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTarg
     auto scissorRect = D3D12_RECT{ 0, 0, static_cast<LONG>(viewport_.Width), static_cast<LONG>(viewport_.Height) };
     cmdList.get()->RSSetScissorRects(1u, &scissorRect);
 
-    auto pids = std::vector<sr::PerInstanceData0>();
-    pids.reserve( shader().maxInstanceCnt() );
+    // auto pidCache_ = std::vector<sr::PerInstanceData0>();
+    pidCache_.clear();
+    pidCache_.reserve( shader().maxInstanceCnt() );
 
     for (const auto& pChunk : batch_) {
         auto xform = pChunk->idxToWorld();
-        pids.emplace_back(
+        pidCache_.emplace_back(
             /* .wvp = */ mu::transpose( xform * pCamera_->view() * pCamera_->proj() ).getXmf(),
             /* .world = */ mu::transpose( xform ).getXmf(),
             /* .wv = */ mu::transpose( xform * pCamera_->view() ).getXmf(),
@@ -2282,18 +2292,19 @@ void Tessellation::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTarg
             )
         );
 
-        if (pids.size() == shader().maxInstanceCnt()) [[unlikely]] {
+        if (pidCache_.size() == shader().maxInstanceCnt()) [[unlikely]] {
             break;
         }
     }
 
-    auto lightBuffer = std::vector<sr::Light>();
-    lightBuffer.reserve( lights_.size() );
+    //  auto lightCache_ = std::vector<sr::Light>();
+    lightCache_.clear();
+    lightCache_.reserve( lights_.size() );
 
     for (const auto& light : lights_) {
-        lightBuffer.emplace_back( light->toViewLight(*pCamera_) );
+        lightCache_.emplace_back( light->toViewLight(*pCamera_) );
 
-        if (lightBuffer.size() == shader().maxLightCnt()) [[unlikely]] {
+        if (lightCache_.size() == shader().maxLightCnt()) [[unlikely]] {
             break;
         }
     }
@@ -2317,11 +2328,11 @@ void Tessellation::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTarg
 			mu::transpose(pDirectionalLight->calcCascadeViewProj(*pCamera_, 1)).getXmf(),
 			mu::transpose(pDirectionalLight->calcCascadeViewProj(*pCamera_, 2)).getXmf()
 		},
-        .lightCnt = static_cast<std::uint32_t>( lightBuffer.size() ),
+        .lightCnt = static_cast<std::uint32_t>( lightCache_.size() ),
     };
 
-    shader().perInstanceData_.stage(pids.data(), pids.size() * sizeof(sr::PerInstanceData0));
-    shader().lightBuffer_.stage(lightBuffer.data(), lightBuffer.size() * sizeof(sr::Light));
+    shader().perInstanceData_.stage(pidCache_.data(), pidCache_.size() * sizeof(sr::PerInstanceData0));
+    shader().lightBuffer_.stage(lightCache_.data(), lightCache_.size() * sizeof(sr::Light));
     shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData2));
 }
 
@@ -2376,7 +2387,8 @@ ShadowMapTessellation::ShadowMapTessellation( D3D12Device& device,
 ) : gfx::d3d12::RenderPass(id),
     viewport_(vp), protocol_( shader.makeProtocol( device,
         RenderProtocol::Desc{ makeDesc() }
-    ) ), pLight_(nullptr), batch_(), pCamera_(nullptr), pSamplerStorage_(&samplerStorage) {
+    ) ), pLight_(nullptr), batch_(), pidCache_(),
+    pCamera_(nullptr), pSamplerStorage_(&samplerStorage) {
     viewport_.Width *= 4u;
     viewport_.Height *= 4u;
 }
@@ -2446,17 +2458,18 @@ void ShadowMapTessellation::preRender(D3D12GfxCmdList& cmdList, RenderTargets& r
     auto scissorRect = D3D12_RECT{ 0, 0, static_cast<LONG>(viewport_.Width), static_cast<LONG>(viewport_.Height) };
     cmdList.get()->RSSetScissorRects(1u, &scissorRect);
 
-    auto pids = std::vector<sr::PerInstanceData4>();
-    pids.reserve( shader().maxInstanceCnt() );
+    // auto pidCache_ = std::vector<sr::PerInstanceData4>();
+    pidCache_.clear();
+    pidCache_.reserve( shader().maxInstanceCnt() );
 
     for (const auto& pChunk : batch_) {
         auto xform = pChunk->idxToWorld();
-        pids.emplace_back(
+        pidCache_.emplace_back(
             /* .world = */ mu::transpose( xform ).getXmf(),
             /* .wv = */ mu::transpose( xform * pCamera_->view() ).getXmf()
         );
 
-        if (pids.size() == shader().maxInstanceCnt()) [[unlikely]] {
+        if (pidCache_.size() == shader().maxInstanceCnt()) [[unlikely]] {
             break;
         }
     }
@@ -2469,7 +2482,7 @@ void ShadowMapTessellation::preRender(D3D12GfxCmdList& cmdList, RenderTargets& r
         }
     };
 
-    shader().perInstanceData_.stage(pids.data(), pids.size() * sizeof(sr::PerInstanceData4));
+    shader().perInstanceData_.stage(pidCache_.data(), pidCache_.size() * sizeof(sr::PerInstanceData4));
     shader().perFrameData_.stage(&pfd, sizeof(sr::PerFrameData1));
 }
 

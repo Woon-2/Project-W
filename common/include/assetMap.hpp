@@ -9,6 +9,7 @@ using AssetID = std::string;
 enum class AssetModel {
     Helicopter,
     Character,
+    Goblin,
     Tree0,
     Tree1,
     Tree2
@@ -17,6 +18,10 @@ enum class AssetModel {
 enum class AssetBVH {
     Helicopter,
     Character,
+    Goblin,
+    Tree0,
+    Tree1,
+    Tree2,
     Terrain_0_0,
     Terrain_0_1,
     Terrain_0_2,
@@ -31,6 +36,7 @@ enum class AssetBVH {
 enum class AssetTexture {
     Helicopter,
     Character,
+    Goblin,
     Tree0,
     Tree1,
     Tree2,

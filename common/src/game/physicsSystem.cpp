@@ -1071,7 +1071,7 @@ void BoundingVolume::readOBBCollider(std::ifstream& is, BoundingVolumeNode& node
 std::unordered_map<std::filesystem::path, BoundingVolumeNode> BoundingVolume::sBvhCache_;
 
 
-void CollisionSystem::update() {
+void CollisionSystem::update(MilliSeconds deltaTime) {
 	// reset collisions from previous frame
 	for (auto pBV : components<BoundingVolume>()) {
 		pBV->resetCollisions();
@@ -1111,6 +1111,43 @@ void CollisionSystem::update() {
 				pBV->markCollision(pOtherBV);
 				pOtherBV->markCollision(pBV);
 			}
+		}
+	}
+
+	for (auto pBV : components<BoundingVolume>()) {
+		for (auto opponent : pBV->collisionCache()) {
+			auto myEid = pBV->entityID().value();
+			auto opponentEid = opponent->entityID().value();
+
+			auto myRb = RigidBody::at(myEid);
+			auto opponentRb = RigidBody::at(opponentEid);
+
+			auto myMomentum = myRb->velocity() * myRb->mass();
+			auto opponentMomentum = opponentRb->velocity() * opponentRb->mass();
+
+			auto totalMomentum = myMomentum + opponentMomentum;
+			
+			myRb->accMomentum((totalMomentum / 2.f - myMomentum) * 0.66f);
+			opponentRb->accMomentum((totalMomentum / 2.f - opponentMomentum) * 0.66f);
+
+			auto myCoord = gameEngine::Coord::at(myEid);
+			auto opponentCoord = gameEngine::Coord::at(opponentEid);
+
+			auto myPos = mu::Vec3(myCoord->get().xform().row(3));
+			auto opponentPos = mu::Vec3(opponentCoord->get().xform().row(3));
+			auto myDir = mu::NVec3(myPos - opponentPos);
+			if (myDir.len2() < 1e-6f) {
+				myDir = mu::NVec3(0.f, 0.f, 1.f, mu::NVec3::NoNormalize_t{});
+			}
+			auto opponentDir = -myDir;
+
+			myCoord->accTranslation(
+				mu::Vec3(myDir) * 1.0f * 0.033f
+			);
+			opponentCoord->accTranslation(
+				mu::Vec3(opponentDir) * 1.0f * 0.033f
+			);
+		
 		}
 	}
 }

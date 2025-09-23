@@ -481,7 +481,6 @@ FodyWeavers.xsd
 build/*
 .vscode/*
 docs/*
-common/include/shaderPath.hpp
 !extern/assimp/*
 !extern/zlib/*
 !extern/d3dx12/lib/*

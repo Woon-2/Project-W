@@ -79,6 +79,81 @@ void processSCEnter(SCEnter& scEnter, Session& session, Stage& stage) {
         break;
     }
 
+    case ObjectType::Tree0: {
+        auto entt = createTree0(
+            translation,
+            rotation,
+            stage.resStorage(),
+            Stage::slotKeyModel,
+            Stage::slotKeyBVHPath,
+            Stage::slotKeyAnimClip
+        );
+
+        gNetIdToEId[scEnter.netId] = entt.id().value();
+        gEIdToNetId[entt.id().value()] = scEnter.netId;
+        
+        stage.addEntity( std::move(entt) );
+        break;
+    }
+
+    case ObjectType::Tree1: {
+        auto entt = createTree1(
+            translation,
+            rotation,
+            stage.resStorage(),
+            Stage::slotKeyModel,
+            Stage::slotKeyBVHPath,
+            Stage::slotKeyAnimClip
+        );
+
+        gNetIdToEId[scEnter.netId] = entt.id().value();
+        gEIdToNetId[entt.id().value()] = scEnter.netId;
+
+        stage.addEntity( std::move(entt) );
+        break;
+    }
+
+    case ObjectType::Tree2: {
+        auto entt = createTree2(
+            translation,
+            rotation,
+            stage.resStorage(),
+            Stage::slotKeyModel,
+            Stage::slotKeyBVHPath,
+            Stage::slotKeyAnimClip
+        );
+
+        gNetIdToEId[scEnter.netId] = entt.id().value();
+        gEIdToNetId[entt.id().value()] = scEnter.netId;
+
+        stage.addEntity( std::move(entt) );
+        break;
+    }
+
+    case ObjectType::Goblin: {
+        auto entt = createGoblin(
+            translation,
+            rotation,
+            stage.resStorage(),
+            Stage::slotKeyModel,
+            Stage::slotKeyBVHPath,
+            Stage::slotKeyAnimClip
+        );
+
+        entt.createComponent<RigidBody>();
+        auto& rb = entt.as<RigidBody>();
+        rb.setInvMass(1.f / 50.f);
+        rb.setKFriction(0.5f);
+        // rb.setKAirdrag(1.f);
+        rb.disableGravity();
+        gNetIdToEId[scEnter.netId] = entt.id().value();
+        gEIdToNetId[entt.id().value()] = scEnter.netId;
+        gDestPoses[entt.id().value()] = translation;
+
+        stage.addEntity(std::move(entt));
+        break;
+    }
+
     default:
         break;
     }
@@ -114,7 +189,7 @@ void processSCMove(SCMove& scMove, Session& session, Stage& stage) {
         const auto destPos = gDestPoses.at(eid) + dp;
 
         auto& rb = *RigidBody::at(eid);
-        rb.setVelocity((destPos - curPos) / 0.033f); // server tick time
+        rb.setVelocity((destPos - curPos) / 0.12f); // server tick time
 
         gDestPoses.at(eid) = destPos;
         gfx::d3d12engine::Model::at(eid)->get().root()->coord() << mu::Mat4x4(dr);
@@ -197,7 +272,7 @@ void processSCAssign(SCAssign& scAssign, Session& session, Stage& stage) {
     entt.createComponent<gfx::d3d12engine::Camera>(gfx::d3d12::Camera::Config());
     auto& camera = entt.as<gfx::d3d12engine::Camera>();
 
-    const auto cameraOffset = mu::Vec3(0.f, 1.8f, -1.6f);
+    const auto cameraOffset = mu::Vec3(0.f, 2.3f, -1.6f);
     const auto cameraTimeLag = 0.4f;
 
     stage.pSystems()->coordRoot.update();
@@ -320,7 +395,6 @@ void Stage::simulate(double deltaTime) {
         MilliSeconds(static_cast<float>(deltaTime) * 1000.f)
     );
     cmdList.close();
-    pSystems_->collisionSystem.update();
 
     if (pPlayer_) {
         pPlayer_->as<gfx::d3d12engine::Camera>().update(static_cast<float>(deltaTime));
@@ -441,6 +515,9 @@ void Stage::loadTextures(gfx::d3d12::D3D12GfxCmdList& cmdList) {
         pCore_->device(), cmdList, AssetTexture::Character
     );
     loadTexture( staticResStorage_, pCore_->descRanges(),
+        pCore_->device(), cmdList, AssetTexture::Goblin
+    );
+    loadTexture( staticResStorage_, pCore_->descRanges(),
         pCore_->device(), cmdList, AssetTexture::Tree0
     );
     loadTexture( staticResStorage_, pCore_->descRanges(),
@@ -512,6 +589,9 @@ void Stage::loadModels(gfx::d3d12::D3D12GfxCmdList& cmdList) {
     loadModel( staticResStorage_, *pCore_, cmdList,
         AssetModel::Character, *pRenderer_
     );
+    loadModel( staticResStorage_, *pCore_, cmdList,
+        AssetModel::Goblin, *pRenderer_
+    );
 
     loadModel( staticResStorage_, *pCore_, cmdList,
         AssetModel::Tree0, *pRenderer_
@@ -534,6 +614,11 @@ void loadBVHPath(gfx::d3d12::ResourceStorage& storage, AssetBVH key) {
 }
 
 void Stage::loadBVHPaths() {
+    loadBVHPath(staticResStorage_, AssetBVH::Character);
+    loadBVHPath(staticResStorage_, AssetBVH::Goblin);
+    loadBVHPath(staticResStorage_, AssetBVH::Tree0);
+    loadBVHPath(staticResStorage_, AssetBVH::Tree1);
+    loadBVHPath(staticResStorage_, AssetBVH::Tree2);
     loadBVHPath(staticResStorage_, AssetBVH::Helicopter);
     loadBVHPath(staticResStorage_, AssetBVH::Terrain_0_0);
     loadBVHPath(staticResStorage_, AssetBVH::Terrain_0_1);

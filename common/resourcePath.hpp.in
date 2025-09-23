@@ -1,8 +1,0 @@
-#ifndef __RESOURCEPATH_HPP
-#define __RESOURCEPATH_HPP
-
-#include <filesystem>
-
-const auto resourcePath = std::filesystem::path("@PROJECT_SOURCE_DIR@")/"resource";
-
-#endif  // __RESOURCEPATH_HPP

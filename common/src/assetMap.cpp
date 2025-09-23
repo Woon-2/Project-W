@@ -17,6 +17,11 @@ const ModelInfo& assetModelInfo(AssetModel asset) {
             .animationPath = getResourcePath()/"models\\Character\\GO_Character.anim"
         },
         ModelInfo{
+            .key = "GO_Goblin",
+            .geometryPath = getResourcePath()/"models\\Goblin\\GO_Goblin.bin",
+            .animationPath = getResourcePath()/"models\\Goblin\\GO_Goblin.anim"
+        },
+        ModelInfo{
             .key = "GO_URP_Tree_0",
             .geometryPath = getResourcePath()/"models\\Trees\\GO_URP_Tree_0.bin"
         },
@@ -114,6 +119,15 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
                 getResourcePath()/"models\\Character\\Textures\\T_Set_Peasant_MR.dds",
                 getResourcePath()/"models\\Character\\Textures\\T_Set_Peasant_N.dds",
                 getResourcePath()/"models\\Character\\Textures\\T_Set_Peasant_Rd_D.dds",
+            },
+            .type = TextureInfo::Type::Texture
+        },
+        TextureInfo{
+            .keys = {
+                "GO_Goblin_ColorSet",
+            },
+            .paths = {
+                getResourcePath()/"models\\Goblin\\Textures\\Color_Set_1.dds",
             },
             .type = TextureInfo::Type::Texture
         },
@@ -220,6 +234,22 @@ const BVHInfo& assetBVHInfo(AssetBVH asset) {
         BVHInfo{
             .key = "GO_Character",
             .path = getResourcePath()/"models/Character/GO_Character.bvh"
+        },
+        BVHInfo{
+            .key = "GO_Goblin",
+            .path = getResourcePath()/"models/Goblin/GO_Goblin.bvh"
+        },
+        BVHInfo{
+            .key = "GO_URP_Tree_0",
+            .path = getResourcePath()/"models/Trees/GO_URP_Tree_0.bvh"
+        },
+        BVHInfo{
+            .key = "GO_URP_Tree_1",
+            .path = getResourcePath()/"models/Trees/GO_URP_Tree_1.bvh"
+        },
+        BVHInfo{
+            .key = "GO_URP_Tree_2",
+            .path = getResourcePath()/"models/Trees/GO_URP_Tree_2.bvh"
         },
         BVHInfo{
             .key = "Terrain_0_0",

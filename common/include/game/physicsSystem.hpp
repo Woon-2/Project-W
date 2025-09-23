@@ -217,8 +217,8 @@ public:
 	bool collides(const BoundingVolumeNode& other) const;
 
 	void MU_CALLCONV setXform(mu::Mat4x4 xform) {
-		for (auto& collider : worldColliders_) {
-			collider.setXform(xform);
+		for (std::size_t i = 0; i < colliders_.size(); ++i) {
+			worldColliders_[i] = transformCollider(xform, colliders_[i]);
 		}
 	}
 
@@ -302,7 +302,7 @@ private:
 
 class CollisionSystem : public ecs::System<BoundingVolume> {
 public:
-	void update();
+	void update(MilliSeconds deltaTime);
 };
 
 #endif

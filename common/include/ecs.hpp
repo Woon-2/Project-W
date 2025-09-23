@@ -58,6 +58,7 @@ enum class Components {
 #endif
 #ifdef ECS_SERVER
     DummyModel,
+    AI,
 #endif
     RigidBody,
     Coord,

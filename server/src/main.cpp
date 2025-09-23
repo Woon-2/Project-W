@@ -9,6 +9,71 @@
 
 #include "bitmap.hpp"
 #include "assetMap.hpp"
+#include "FSM.hpp"
+
+class AI;
+
+fsm::State AIStateIdle(fsm::FSM& fsm, AI& ai);
+fsm::State AIStateAgro(fsm::FSM& fsm, AI& ai);
+
+class AI : ecs::Component {
+public:
+	ENABLE_COMPONENT(AI)
+
+	static constexpr int evAIUpdate = 0x01;
+
+	AI( const ecs::Entity& entity, const std::string& fsmKey )
+        : Component( entity ), fsm_(fsmKey) {
+		fsm_.addState("Idle", AIStateIdle, *this);
+		fsm_.addState("Agro", AIStateAgro, *this);
+		fsm_.start("Idle");
+	}
+
+private:
+	fsm::FSM fsm_;
+};
+
+void AIStateIdleUpdate(fsm::FSM& fsm, AI& ai, MilliSeconds deltaTime) {
+	
+}
+
+fsm::State AIStateIdle(fsm::FSM& fsm, AI& ai) {
+    for (;;) {
+        while (auto events = co_await fsm.getEvents()) {
+            while (auto ev = events.pop()) {
+                if (ev->evType() == AI::evAIUpdate) {
+                    AIStateIdleUpdate(
+                        fsm, ai, ev->get<MilliSeconds>()
+                    );
+                }
+                // do something
+            }
+        }
+    
+        co_await fsm.completeStateUpdate();
+    }
+}
+
+void AIStateAgroUpdate(fsm::FSM& fsm, AI& ai, MilliSeconds deltaTime) {
+	// do something
+}
+
+fsm::State AIStateAgro(fsm::FSM& fsm, AI& ai) {
+	for (;;) {
+		while (auto events = co_await fsm.getEvents()) {
+			while (auto ev = events.pop()) {
+				if (ev->evType() == AI::evAIUpdate) {
+					AIStateAgroUpdate(
+						fsm, ai, ev->get<MilliSeconds>()
+					);
+				}
+				// do something
+			}
+		}
+	
+		co_await fsm.completeStateUpdate();
+	}
+}
 
 void doAccept( SOCKET, OverlappedEx* );
 void worker( );
@@ -61,7 +126,7 @@ ecs::Entity instantiateCharacter(const gameEngine::ObjectDisposition& dispositio
 
 	entity.createComponent<gameEngine::Coord>();
 
-	const auto translation = mu::Vec3(disposition.xform_.row(3)) + mu::Vec3(0.f ,-25.f, 0.f);
+	const auto translation = mu::Vec3(disposition.xform_.row(3)) + mu::Vec3(0.f ,-24.5f, 0.f);
 	entity.as<gameEngine::Coord>().get().setLocalXform(disposition.xform_);
 
 	entity.createComponent<DummyModel>( entity.as<gameEngine::Coord>() );
@@ -71,6 +136,97 @@ ecs::Entity instantiateCharacter(const gameEngine::ObjectDisposition& dispositio
 	rotationScale.setRow(2, mu::Vec3(disposition.xform_.row(2)));
 	rotationScale.setRow(3, mu::Vec4(0.f, 0.f, 0.f, 1.f));
 	entity.as<DummyModel>().coord().setLocalXform(rotationScale);
+	entity.as<DummyModel>().setName("Character");
+
+	entity.createComponent<RigidBody>();
+	auto& rb = entity.as<RigidBody>();
+	rb.setInvMass( 1.f / 50.f );
+	rb.setKFriction( 0.5f );
+	rb.setKAirdrag( 1.25f );
+	rb.setKConstantAirDrag( 3.f );
+	rb.enableGravity( );
+
+	entity.createComponent<BoundingVolume>( assetBVHInfo(AssetBVH::Character).path );
+
+	return entity;
+}
+
+ecs::Entity instantiateTree0(const gameEngine::ObjectDisposition& disposition) {
+	ecs::Entity entity;
+
+	entity.createComponent<gameEngine::Coord>();
+	entity.as<gameEngine::Coord>().get().setLocalXform(disposition.xform_);
+
+	entity.createComponent<DummyModel>( entity.as<gameEngine::Coord>() );
+	auto rotationScale = mu::Mat4x4();
+	rotationScale.setRow(0, mu::Vec3(disposition.xform_.row(0)));
+	rotationScale.setRow(1, mu::Vec3(disposition.xform_.row(1)));
+	rotationScale.setRow(2, mu::Vec3(disposition.xform_.row(2)));
+	rotationScale.setRow(3, mu::Vec4(0.f, 0.f, 0.f, 1.f));
+	entity.as<DummyModel>().coord().setLocalXform(rotationScale);
+	entity.as<DummyModel>().setName("Tree0");
+
+	entity.createComponent<BoundingVolume>( assetBVHInfo(AssetBVH::Tree0).path );
+
+	return entity;
+}
+
+ecs::Entity instantiateTree1(const gameEngine::ObjectDisposition& disposition) {
+	ecs::Entity entity;
+
+	entity.createComponent<gameEngine::Coord>();
+	entity.as<gameEngine::Coord>().get().setLocalXform(disposition.xform_);
+
+	entity.createComponent<DummyModel>( entity.as<gameEngine::Coord>() );
+	auto rotationScale = mu::Mat4x4();
+	rotationScale.setRow(0, mu::Vec3(disposition.xform_.row(0)));
+	rotationScale.setRow(1, mu::Vec3(disposition.xform_.row(1)));
+	rotationScale.setRow(2, mu::Vec3(disposition.xform_.row(2)));
+	rotationScale.setRow(3, mu::Vec4(0.f, 0.f, 0.f, 1.f));
+	entity.as<DummyModel>().coord().setLocalXform(rotationScale);
+	entity.as<DummyModel>().setName("Tree1");
+
+	entity.createComponent<BoundingVolume>( assetBVHInfo(AssetBVH::Tree1).path );
+
+	return entity;
+}
+
+ecs::Entity instantiateTree2(const gameEngine::ObjectDisposition& disposition) {
+	ecs::Entity entity;
+
+	entity.createComponent<gameEngine::Coord>();
+	entity.as<gameEngine::Coord>().get().setLocalXform(disposition.xform_);
+
+	entity.createComponent<DummyModel>( entity.as<gameEngine::Coord>() );
+	auto rotationScale = mu::Mat4x4();
+	rotationScale.setRow(0, mu::Vec3(disposition.xform_.row(0)));
+	rotationScale.setRow(1, mu::Vec3(disposition.xform_.row(1)));
+	rotationScale.setRow(2, mu::Vec3(disposition.xform_.row(2)));
+	rotationScale.setRow(3, mu::Vec4(0.f, 0.f, 0.f, 1.f));
+	entity.as<DummyModel>().coord().setLocalXform(rotationScale);
+	entity.as<DummyModel>().setName("Tree2");
+
+	entity.createComponent<BoundingVolume>( assetBVHInfo(AssetBVH::Tree2).path );
+
+	return entity;
+}
+
+ecs::Entity instantiateGoblin(const gameEngine::ObjectDisposition& disposition) {
+	ecs::Entity entity;
+
+	entity.createComponent<gameEngine::Coord>();
+
+	const auto translation = mu::Vec3(disposition.xform_.row(3)) + mu::Vec3(0.f ,-21.5f, 0.f);
+	entity.as<gameEngine::Coord>().get().setLocalXform(disposition.xform_);
+
+	entity.createComponent<DummyModel>( entity.as<gameEngine::Coord>() );
+	auto rotationScale = mu::Mat4x4();
+	rotationScale.setRow(0, mu::Vec3(disposition.xform_.row(0)));
+	rotationScale.setRow(1, mu::Vec3(disposition.xform_.row(1)));
+	rotationScale.setRow(2, mu::Vec3(disposition.xform_.row(2)));
+	rotationScale.setRow(3, mu::Vec4(0.f, 0.f, 0.f, 1.f));
+	entity.as<DummyModel>().coord().setLocalXform(rotationScale);
+	entity.as<DummyModel>().setName("Goblin");
 
 	entity.createComponent<RigidBody>();
 	auto& rb = entity.as<RigidBody>();
@@ -88,6 +244,18 @@ ecs::Entity instantiateCharacter(const gameEngine::ObjectDisposition& dispositio
 void instantiateObjectHierarchy(const gameEngine::ObjectDisposition& disposition, std::vector<ecs::Entity>& out) {
 	if (disposition.prefabName_ == "P_GO_Character") {
 		out.push_back(instantiateCharacter(disposition));
+	}
+	else if (disposition.prefabName_ == "P_GO_URP_Tree_0") {
+		// out.push_back(instantiateTree0(disposition));
+	}
+	else if (disposition.prefabName_ == "P_GO_URP_Tree_1") {
+		// out.push_back(instantiateTree1(disposition));
+	}
+	else if (disposition.prefabName_ == "P_GO_URP_Tree_2") {
+		// out.push_back(instantiateTree2(disposition));
+	}
+	else if (disposition.prefabName_ == "P_GO_Goblin") {
+		out.push_back(instantiateGoblin(disposition));
 	}
 
 	for (const auto& child : disposition.children_) {
@@ -207,7 +375,7 @@ void simulate(R&& entitieIDs) {
 int main( ) {
 	using Clock = std::chrono::high_resolution_clock;
 	using Seconds = std::chrono::duration<float>;
-	static constexpr auto frameRate = 33_ms;	// 30 FPS
+	static constexpr auto frameRate = 120_ms;	// 30 FPS
 	static constexpr auto directionChangeRate = 2.f;
 	float directionChangeCounter = 0.f;
 
@@ -301,6 +469,8 @@ int main( ) {
 			elapsed = std::chrono::duration_cast<MilliSeconds>( tp - lastTp );
 		}
 
+		elapsed = std::min(elapsed, frameRate * 1.8f);
+
 		ecs::Entity::ID entityId{-1u};
 
 		while ( gReservedEntities.try_pop(entityId) ) {
@@ -329,6 +499,10 @@ int main( ) {
 		for ( auto& eid : gNPCs ) {
 			const auto pCoord = gameEngine::Coord::at(eid.id().value());
 			if (!pCoord) {
+				continue;
+			}
+
+			if ( !RigidBody::at(eid.id().value()) ) {
 				continue;
 			}
 
@@ -401,7 +575,7 @@ int main( ) {
 		}
 
 		coordRoot.update( );
-		collisionSystem.update( );
+		collisionSystem.update( elapsed );
 
 		auto lUsers = pmr::vector<Session*>();
 		for (auto& [id, session] : gUsers) {
@@ -522,7 +696,7 @@ void worker( ) {
 
 			auto entity = ecs::Entity( );
 			entity.createComponent<gameEngine::Coord>();
-			entity.as<gameEngine::Coord>().get() << mu::translate(0.f, -25.f, 0.f);
+			entity.as<gameEngine::Coord>().get() << mu::translate(0.f, -24.5f, 0.f);
 			entity.createComponent<RigidBody>();
 			auto& rb = entity.as<RigidBody>();
 			rb.setInvMass( 1.f / 50.f );
@@ -555,7 +729,24 @@ void worker( ) {
 					// we endure data race of translation
 					trs = pCoord->get().localXform().row(3);
 				}
+				ObjectType objType = ObjectType::Character;
 				if (auto pModel = DummyModel::at(npc.id().value())) {
+					if (pModel->name() == "Character") {
+						objType = ObjectType::Character;
+					}
+					else if (pModel->name() == "Tree0") {
+						objType = ObjectType::Tree0;
+					}
+					else if (pModel->name() == "Tree1") {
+						objType = ObjectType::Tree1;
+					}
+					else if (pModel->name() == "Tree2") {
+						objType = ObjectType::Tree2;
+					}
+					else if (pModel->name() == "Goblin") {
+						objType = ObjectType::Goblin;
+					}
+
 					rot = mu::quatRotMat(pModel->coord().localXform());
 				}
 
@@ -570,7 +761,7 @@ void worker( ) {
 								.translation = { trs.x(), trs.y(), trs.z() },
 								.rotation = { rot.x(), rot.y(), rot.z(), rot.w() }
 							},
-							.objType = ObjectType::Character
+							.objType = objType
 						}
 					}
 				);
@@ -633,7 +824,7 @@ void worker( ) {
 					.scEnter = SCEnter{
 						.netId = initializingSession.getEntityId(),
 						.xform = RigidXform{
-							.translation = { 0.f, -25.f, 0.f },
+							.translation = { 0.f, -24.5f, 0.f },
 							.rotation = { 0.f, 0.f, 0.f, 1.f }
 						},
 						.objType = ObjectType::Character
