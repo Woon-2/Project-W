@@ -1025,6 +1025,8 @@ public:
         return viewport_;
     }
 
+    void trackModel(Model* model);
+
     void preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
     void render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
     void postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
@@ -1045,7 +1047,7 @@ private:
 
     D3D12_VIEWPORT viewport_;
     RenderProtocol protocol_;
-    std::vector< std::tuple<bool, const BoundingVolumeNode*, Submesh*,
+    std::vector< std::tuple<bool, Submesh*,
         const coord::System*, VBLayoutIdx, mu::Mat4x4>
     > batch_;
     const Camera* pCamera_;

@@ -238,10 +238,10 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
 		renderPassSkybox_.postRender(cmdList, renderTargets);
 
 
-		/*shaderPlayerUI_.bindRootParams(cmdList);
+		shaderPlayerUI_.bindRootParams(cmdList);
 		renderPassPlayerUI_.preRender(cmdList, renderTargets);
 		renderPassPlayerUI_.render(cmdList, renderTargets);
-		renderPassPlayerUI_.postRender(cmdList, renderTargets);*/
+		renderPassPlayerUI_.postRender(cmdList, renderTargets);
 
         break;
 

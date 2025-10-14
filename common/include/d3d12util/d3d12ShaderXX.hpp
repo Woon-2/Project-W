@@ -1324,16 +1324,10 @@ public:
 		return maxInstanceCnt_;
 	}
 
-	const RefModel& model(const int index) const noexcept {
-		return playerHP_[index];
-	}
-
-	void draw(D3D12GfxCmdList& cmdList, const int index) const {
-		playerHP_[index].root()->meshes().begin()->submeshes().begin()->draw(cmdList, 1, 0);
-	}
-
-	void initQuads(D3D12Device& device, D3D12GfxCmdList& cmdList, const int index, gfx::d3d12::Texture* pTex) {
-		playerHP_[index] = RefModel::buildQuad(device, cmdList, pTex);
+	void draw( D3D12GfxCmdList& cmdList, const Submesh& submesh,
+		std::size_t instanceCnt, std::size_t vbLayoutIdx
+	) {
+		submesh.draw( cmdList, instanceCnt, vbLayoutIdx );
 	}
 
 	void bindRootParams(D3D12GfxCmdList& cmdList) override;
@@ -1348,6 +1342,7 @@ public:
 
 	UploadBuffer perInstanceData_;
 	UploadBuffer perDrawcallData_;
+	UploadBuffer perConfigurationData_;
 
 private:
 	static InputLayout makeInputLayout(InputLayout::Spec ilSpec);
@@ -1356,8 +1351,6 @@ private:
 
 	std::size_t maxDrawcallCnt_;
 	std::size_t maxInstanceCnt_;
-
-	RefModel playerHP_[2];
 };
 
 }   // namespace gfx::d3d12

@@ -2708,6 +2708,12 @@ protocol_(shader.makeProtocol(device,
     RenderProtocol::Desc{ makeDesc() }
 )), batch_(), pCamera_(nullptr),
 pSamplerStorage_(&samplerStorage) {
+    auto pcd = sr::PerConfigurationData0{
+    .viewportWidth = vp.Width,
+    .viewportHeight = vp.Height
+    };
+
+    shader.perConfigurationData_.stage( &pcd, sizeof( sr::PerConfigurationData0 ) );
 }
 
 RenderProtocol::Desc PlayerUI::makeDesc() {
@@ -2768,8 +2774,47 @@ RenderProtocol::Desc PlayerUI::makeDesc() {
 
 void PlayerUI::setViewport(const D3D12_VIEWPORT& vp) {
     viewport_ = vp;
+
+    auto pcd = sr::PerConfigurationData0{
+    .viewportWidth = vp.Width,
+    .viewportHeight = vp.Height
+    };
+
+    shader().perConfigurationData_.stage( &pcd, sizeof( sr::PerConfigurationData0 ) );
 }
 
+void PlayerUI::trackModel( Model* pModel ) 
+{
+    if ( !pModel->markedRenderPasses().empty() ) {
+        auto it = std::ranges::find( pModel->markedRenderPasses(), renderPassID() );
+        if ( it == pModel->markedRenderPasses().end() ) {
+            return;
+        }
+    }
+
+    auto& nodes = pModel->nodes();
+    const auto* pCoord = &pModel->root()->coord();
+
+    for ( auto& node : nodes ) {
+        auto xform = node.coord().xform();
+        for ( auto& mesh : node.meshes() ) {
+            auto vbLayoutIdx = protocol_.compatibleLayout( *mesh.refMesh() );
+            if ( !vbLayoutIdx ) {
+                throw std::runtime_error( "Incompatible mesh" );
+            }
+
+            for ( auto& submesh : mesh.submeshes() ) {
+                batch_.emplace_back(
+                    false,
+                    &submesh,  // ← 2번째( Submesh* )
+                    pCoord,    // ← 3번째( const System* )
+                    static_cast<gfx::d3d12::RenderPass::VBLayoutIdx>(vbLayoutIdx.value()),
+                    xform
+                );
+            }
+        }
+    }
+}
 
 void PlayerUI::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
     cmdList.get()->SetPipelineState(protocol_.get().Get());
@@ -2777,60 +2822,17 @@ void PlayerUI::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets)
     auto scissorRect = D3D12_RECT{ 0, 0, static_cast<LONG>(viewport_.Width), static_cast<LONG>(viewport_.Height) };
     cmdList.get()->RSSetScissorRects(1u, &scissorRect);
 
-    // firstly sort batch by bounding volume node and other properties
-    // to cull out the same bounding volume nodes
-    // that are out of the camera frustum.
-    auto proj = [this](const auto& tuple) {
-        return std::tuple(
-            std::get<const BoundingVolumeNode*>(tuple),
-            &std::get<gfx::d3d12::Submesh*>(tuple)->material(),
-            std::get<gfx::d3d12::Submesh*>(tuple)->refSubmesh()
-        );
-        };
-
-    std::ranges::sort(batch_, std::less<>{}, proj);
-
-    const BoundingVolumeNode* pLastCulledBVNode = nullptr;
-
-    for (auto& [willNotDraw, pBVNode, pSubmesh, pCoord, vbLayoutIdx, xform] : batch_) {
+    for (auto& [willNotDraw, pSubmesh, pCoord, vbLayoutIdx, xform] : batch_) {
         // update xform
         xform = pSubmesh->parent()->parent()->coord().xform();
-
-        // cull out instances that are out of the camera frustum.
-        // enhance performance by eliding collision check of the same bounding volume nodes.
-        if (pLastCulledBVNode && pLastCulledBVNode == pBVNode) {
-            willNotDraw = true;
-            continue;
-        }
-
-        // if (pBVNode && !BoundingVolumeNode::collides(
-        //     pCamera_->coordRotation().xform(), pCamera_->bvNode(),
-        //     pCoord->xform(), *pBVNode
-        // )) {
-        //     willNotDraw = true;
-        //     pLastCulledBVNode = pBVNode;
-        //     continue;
-        // }
 
         willNotDraw = false;
     }
 
-    // finally sort batch by culled status and other properties
-    // to separate instances that are visible and invisible.
-    auto proj2 = [this](const auto& tuple) {
-        return std::tuple(
-            std::get<bool>(tuple),
-            &std::get<gfx::d3d12::Submesh*>(tuple)->material(),
-            std::get<gfx::d3d12::Submesh*>(tuple)->refSubmesh()
-        );
-        };
-
-    std::ranges::sort(batch_, std::less<>{}, proj2);
-
     auto pids = std::vector<sr::PerInstanceData2>();
     pids.reserve(shader().maxInstanceCnt());
 
-    for (const auto& [willNotDraw, pBVNode, pSubmesh, pCoord, vbLayoutIdx, xform] : batch_) {
+    for (const auto& [willNotDraw, pSubmesh, pCoord, vbLayoutIdx, xform] : batch_) {
         // as the first criterion of sorting is the culled status,
         // if the first instance is culled, then all the rest are culled.
         if (willNotDraw) {
@@ -2852,24 +2854,55 @@ void PlayerUI::preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets)
 }
 
 void PlayerUI::render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) {
-    renderTargets.bind(cmdList, RenderTargets::Specifier::Main);
+    renderTargets.bind( cmdList, RenderTargets::Specifier::Main );
 
-    for (int i = 0; i < 2; ++i)
-    {
-        auto& refModel = shader().model(i);
+    auto first = batch_.begin();
+    auto accDrawcallCnt = 0u;
 
-        auto material = refModel.root()->meshes().begin()->submeshes().begin()->material_;
+    // instances that are going to be drawn are at the front of the batch
+    // as the first criterion of sorting is the culled status.
+    auto proj = [this]( const auto& tuple ) {
+        return std::tuple(
+            std::get<bool>( tuple ),
+            &std::get<gfx::d3d12::Submesh*>( tuple )->material(),
+            std::get<gfx::d3d12::Submesh*>( tuple )->refSubmesh()
+        );
+        };
+
+    while ( first != batch_.end() ) {
+        auto last = std::ranges::upper_bound( first, batch_.end(), proj( *first ), std::less<>{}, proj );
+
+        // as the first criterion of sorting is the culled status,
+        // if the first instance is culled, then all the rest are culled.
+        auto willNotDraw = std::get<bool>( *first );
+        if ( willNotDraw ) {
+            break;
+        }
+
+        auto pSubmesh = std::get<gfx::d3d12::Submesh*>( *first );
+
+        auto material = sr::PBRMaterial::convert( pSubmesh->material() );
 
         auto pdd = sr::PerDrawcallData6{
-            .material = sr::PBRMaterial::convert(material),
-            .samplerIdx = pSamplerStorage_->get(SamplerStorage::Indices::TrilinearWrap).index(),
-            .instanceBase = static_cast<u32t>(i)
+            .material = material,
+            .samplerIdx = pSamplerStorage_->get( SamplerStorage::Indices::TrilinearWrap ).index(),
+            .instanceBase = static_cast<std::uint32_t>(first - batch_.begin()),
         };
-        shader().perDrawcallData_.stage(&pdd, sizeof(sr::PerDrawcallData6));
+        shader().perDrawcallData_.stage( &pdd, sizeof( sr::PerDrawcallData6 ),
+            0u, accDrawcallCnt * shader().cbDrawcallDataSize()
+        );
 
-        shader().bindPerDrawcallData(static_cast<std::size_t>(i), cmdList);
+        shader().bindPerDrawcallData( accDrawcallCnt++, cmdList );
 
-        shader().draw(cmdList, i);
+        shader().draw( cmdList, *pSubmesh, static_cast<std::size_t>(last - first),
+            std::get<VBLayoutIdx>( *first )
+        );
+
+        if ( accDrawcallCnt == shader().maxDrawcallCnt() ) {
+            break;
+        }
+
+        first = last;
     }
 }
 

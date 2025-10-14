@@ -38,7 +38,7 @@ public:
 
     void initPlayerUIResources(gfx::d3d12::D3D12Device& device, gfx::d3d12::D3D12GfxCmdList& cmdList, const int index, gfx::d3d12::Texture* pTex)
     {
-        shaderPlayerUI_.initQuads(device, cmdList, index, pTex);
+       // gfx::d3d12::QuadModel::initQuadModel( device, cmdList );    ///////
     }
 
 private:

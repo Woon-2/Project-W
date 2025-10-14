@@ -652,6 +652,10 @@ void Skybox::update(Scene& scene) {
 
 void PlayerUI::init(Scene& scene)
 {
+    for ( auto& pModel : models( scene ) ) {
+        const auto entityID = pModel->entityID().value();
+        trackModel( &pModel->get() );        
+    }
     if (!cameras(scene).empty()) {
         setCamera(&cameras(scene).front()->get());
     }
@@ -660,6 +664,9 @@ void PlayerUI::init(Scene& scene)
 void PlayerUI::update(Scene& scene)
 {
     for (auto& entityID : reservedEntities(scene)) {
+        if ( auto pModel = Model::at( entityID ) ) {
+            trackModel( &pModel->get() );            
+        }
         if (auto pCamera = Camera::at(entityID)) {
             setCamera(&pCamera->get());
         }

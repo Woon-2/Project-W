@@ -26,6 +26,12 @@ struct Material
     uint4 ambientOcclusionMapRef;
 };
 
+cbuffer PerConfigurationData : register(b0)
+{
+    float viewportWidth;
+    float viewportHeight;
+};
+
 cbuffer PerDrawcallData : register(b1)
 {
     Material material;
@@ -47,15 +53,23 @@ struct VSOutput {
 
 VSOutput VSMain(float3 position : POSITION, float2 uv : TEXCOORD, uint instanceOffset : SV_InstanceID) {
     VSOutput result;
-  
+    
     result.pos = mul(float4(position, 1.0f), gInstances[instanceBase + instanceOffset].world);
     result.uv = uv;
+    
+    float2 ndc;
+    ndc.x = (result.pos.x / viewportWidth) * 2.0f - 1.0f;
+    ndc.y = 1.0f - (result.pos.y / viewportHeight) * 2.0f;
+    
+    result.pos = float4(ndc, result.pos.z, 1.0f);
 
     return result;
 }
 
 float4 PSMain(VSOutput input) : SV_Target
 {
+    // clip(0.5 - input.uv.x); // <= 0 ÀÌ¸י discard
+    
     float4 color = sampleFromMapRef(material.albedoMapRef, input.uv, samplerIdx);
     
     return color;

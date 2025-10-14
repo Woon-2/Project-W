@@ -1607,18 +1607,25 @@ ShaderPlayerUI::ShaderPlayerUI(D3D12Device& device, const RootSignature& root,
 	const Config& config, InputLayout::Spec ilSpec
 ) : Shader(root, makeInputLayout(ilSpec)),
 cbDrawcallDataSize_(calcConstantBufferSize(sizeof(sr::PerDrawcallData6))),
+perConfigurationData_( device, sizeof( sr::PerConfigurationData0 ) ),
 perDrawcallData_(device, cbDrawcallDataSize_* config.maxDrawcallCnt),
 maxDrawcallCnt_(config.maxDrawcallCnt),
 cbInstanceDataSize_(calcConstantBufferSize(sizeof(sr::PerInstanceData2))),
 perInstanceData_(device, sizeof(sr::PerInstanceData2)* config.maxInstanceCnt),
 maxInstanceCnt_(config.maxInstanceCnt)
 {
+	perConfigurationData_.pullGpuAddr();
 	perDrawcallData_.pullGpuAddr();
 	perInstanceData_.pullGpuAddr();
 }
 
 void ShaderPlayerUI::bindRootParams(D3D12GfxCmdList& cmdList) {
 	auto& root = UnifiedRoot::get();
+
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		root.params[UnifiedRoot::ParamIndices::b0],
+		perConfigurationData_.gpuAddr()
+	);
 
 	cmdList.get()->SetGraphicsRootShaderResourceView(
 		root.params[UnifiedRoot::ParamIndices::t0],
@@ -1637,11 +1644,11 @@ void ShaderPlayerUI::bindPerDrawcallData(
 
 void ShaderPlayerUI::loadBlobs() {
 	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
-		shaderPath / "playerUI.hlsl", nullptr,
+		getShaderPath() / "playerUI.hlsl", nullptr,
 		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
 	};
 	blobs_[etoi(ShaderBlob::Type::Pixel)] = ShaderBlob{
-		shaderPath / "playerUI.hlsl", nullptr,
+		getShaderPath() / "playerUI.hlsl", nullptr,
 		"PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Pixel
 	};
 }

@@ -87,6 +87,10 @@ public:
         window_.setWindowed(&device_);
     }
 
+    void initQuadModel(d3d12::D3D12Device& device, d3d12::D3D12GfxCmdList& cmdList) {
+        d3d12::QuadModel::initQuadModel( device, cmdList );
+	}
+
     void initChunkMesh(d3d12::D3D12GfxCmdList& cmdList) {
         d3d12::LevelChunkModel::initChunkMesh(device_, cmdList);
     }
