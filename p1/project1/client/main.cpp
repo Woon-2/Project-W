@@ -7,6 +7,7 @@ inline constexpr const char* wndName = "Project1";
 
 HWND ghWnd = nullptr;
 RECT gWndRect{ 0, 0, 1024, 768 };
+RECT gClientRect{ 0, 0, 1024, 768 };
 
 LRESULT wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -53,6 +54,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 			if (msg.message == WM_QUIT) {
 				return static_cast<int>(msg.wParam);
 			}
+
+			gfx.render();
 
 			TranslateMessage(&msg);
 			DispatchMessageA(&msg);

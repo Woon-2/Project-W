@@ -5,6 +5,7 @@
 #include "errorHandling.hpp"
 
 extern RECT gWndRect;
+extern RECT gClientRect;
 
 // ComPtr<ID3D12DescriptorHeap> 객체와 부가 정보들을 한꺼번에 저장하기 위한 구조체
 struct DescriptorHeap {
@@ -63,6 +64,14 @@ ComPtr<ID3D12Resource> createDepthBuffer( ID3D12Device* device,
 	DXGI_FORMAT format, const DXGI_SAMPLE_DESC& sampleDesc
 );
 
+// ID3D12GraphicsCommandList::ResourceBarrier 인터페이스를 통해
+// 리소스의 상태를 beforeState에서 afterState로 전환한다.
+// 사용되는 기본값들은 본문을 참조하자.
+void transitionResourceState( ID3D12GraphicsCommandList* cmdList,
+	ID3D12Resource* resource, D3D12_RESOURCE_STATES beforeState,
+	D3D12_RESOURCE_STATES afterState
+);
+
 class GFX {
 public:
 	// 장치 초기화: setupDXGI, init, createSwapChain 순으로 호출한다.
@@ -75,6 +84,8 @@ public:
 	void init(std::size_t cmdListPoolSize);
 	// 윈도우와 연결된 SwapChain을 만든다.
 	void createSwapChain(HWND hWnd);
+
+	void render();
 
 
 private:

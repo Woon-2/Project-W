@@ -79,6 +79,10 @@ void dump(std::ostream& os, bool willClear) {
 			pMsg->pDescription, pMsg->DescriptionByteLength
 		) << '\n';
 	}
+
+	if (willClear) {
+		infoQ->ClearStoredMessages(DXGI_DEBUG_ALL);
+	}
 }
 
 }	 // namespace DXGIDebugInfo

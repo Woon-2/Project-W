@@ -62,8 +62,8 @@ ComPtr<ID3D12Resource> createDepthBuffer(
 	auto desc = D3D12_RESOURCE_DESC{
 		.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
 		.Alignment = 0u,
-		.Width = static_cast<UINT64>(gWndRect.right - gWndRect.left),
-		.Height = static_cast<UINT>(gWndRect.bottom - gWndRect.top),
+		.Width = static_cast<UINT64>(gClientRect.right - gClientRect.left),
+		.Height = static_cast<UINT>(gClientRect.bottom - gClientRect.top),
 		.DepthOrArraySize = 1u,
 		.MipLevels = 1u,
 		.Format = format,
@@ -87,6 +87,26 @@ ComPtr<ID3D12Resource> createDepthBuffer(
 	);
 
 	return ret;
+}
+
+// ID3D12GraphicsCommandList::ResourceBarrier 인터페이스를 통해
+// 리소스의 상태를 beforeState에서 afterState로 전환한다.
+// 사용되는 기본값들은 본문을 참조하자.
+void transitionResourceState( ID3D12GraphicsCommandList* cmdList,
+	ID3D12Resource* resource, D3D12_RESOURCE_STATES beforeState,
+	D3D12_RESOURCE_STATES afterState
+) {
+	auto barrier = D3D12_RESOURCE_BARRIER{
+		.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+		.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+		.Transition = D3D12_RESOURCE_TRANSITION_BARRIER{
+			.pResource = resource,
+			.Subresource = 0u,
+			.StateBefore = beforeState,
+			.StateAfter = afterState
+		}
+	};
+	DISPLAY_ERROR_DX_VOID( cmdList->ResourceBarrier(1u, &barrier), false );
 }
 
 
@@ -214,6 +234,10 @@ void GFX::init(std::size_t cmdListPoolSize) {
 			true
 		);
 		setD3DName(cmdList.Get(), std::wstring(L"CommandList") + std::to_wstring(i));
+		// 생성됐을 땐 open 상태이므로,
+		// render 호출 시 이미 open 상태인 Command List를 open할 수 있다.
+		// 따라서 여기서 close 해준다.
+		cmdList->Close();
 	}
 
 	// Descriptor Heap 및 Pool들 생성
@@ -247,8 +271,8 @@ void GFX::init(std::size_t cmdListPoolSize) {
 void GFX::createSwapChain(HWND hWnd) {
 	// 스왑체인 생성
 	scd_ = DXGI_SWAP_CHAIN_DESC1{
-		.Width = static_cast<UINT>(gWndRect.right - gWndRect.left),
-		.Height = static_cast<UINT>(gWndRect.bottom - gWndRect.top),
+		.Width = static_cast<UINT>(gClientRect.right - gClientRect.left),
+		.Height = static_cast<UINT>(gClientRect.bottom - gClientRect.top),
 		.Format = DXGI_FORMAT_R8G8B8A8_UNORM,
 		.Stereo = false,
 		.SampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
@@ -316,4 +340,100 @@ void GFX::createSwapChain(HWND hWnd) {
 			true
 		);
 	}
+}
+
+void GFX::render() {
+	// 예외 검사
+	DISPLAY_ERROR_STR(curAdapter_, "[GFX Error] 활성화된 그래픽 어댑터가 없습니다. "
+		"GFX::setupDXGI의 호출이 이루어졌는지 확인하세요.", false);
+
+	DISPLAY_ERROR_STR(device_, "[GFX Error] 장치 초기화가 이루어지지 않았습니다. "
+		"GFX::init 호출이 이루어졌는지 확인하세요.", false);
+
+	DISPLAY_ERROR_STR(cmdQ_, "[GFX Error] 명령 큐가 활성화되지 않았습니다. "
+		"GFX::init 호출이 이루어졌는지 확인하세요.", false);
+
+	DISPLAY_ERROR_STR(swapChain_, "[GFX Error] 스왑 체인이 활성화되지 않았습니다. "
+		"GFX::createSwapChain 호출이 이루어졌는지 확인하세요.", false);
+
+	if (!curAdapter_ || !device_ || !cmdQ_ || !swapChain_) {
+		return;
+	}
+
+	DISPLAY_ERROR_STR(!freeCmdLists_.empty(), "[GFX Error] 사용 가능한 명령 리스트가 없습니다. "
+		"GFX::init 호출이 이루어지지 않았거나, 할당받은 명령 리스트를 반납해야 합니다.", false);
+
+	DISPLAY_ERROR_STR(!freeCmdAllocators_.empty(), "[GFX Error] 사용 가능한 명령 할당자가 없습니다. "
+		"GFX::init 호출이 이루어지지 않았거나, 할당받은 명령 할당자를 반납해야 합니다.", false);
+	if (freeCmdLists_.empty() || freeCmdAllocators_.empty()) {
+		return;
+	}
+
+	// 명령 리스트와 명령 할당자 할당
+	auto cmdList = freeCmdLists_.front();
+	freeCmdLists_.pop_front();
+
+	auto cmdAlloc = freeCmdAllocators_.front();
+	freeCmdAllocators_.pop_front();
+
+	// 명령 리스트 초기화
+	DISPLAY_ERROR_DX_VOID( cmdAlloc->Reset(), false );
+	DISPLAY_ERROR_DX_VOID( cmdList->Reset(cmdAlloc.Get(), nullptr), false );
+
+	// 명령 기록 시작
+	const auto backbufIdx = swapChain_->GetCurrentBackBufferIndex();
+
+	transitionResourceState(cmdList.Get(), backBuffers_[backbufIdx].Get(),
+		D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET
+	);
+
+	DISPLAY_ERROR_DX_VOID(
+		cmdList->OMSetRenderTargets(1u, &backBufferRtvs_[backbufIdx], false, &depthBufferDsvs_[backbufIdx]),
+		false
+	);
+
+	FLOAT clearColor[4] = { 0.25f, 0.3f, 0.85f, 1.f };
+	DISPLAY_ERROR_DX_VOID(
+		cmdList->ClearRenderTargetView(backBufferRtvs_[backbufIdx], clearColor, 0u, nullptr),
+		false
+	);
+	
+	DISPLAY_ERROR_DX_VOID(
+		cmdList->ClearDepthStencilView(depthBufferDsvs_[backbufIdx],
+			D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
+			1.0f, 0u, 0u, nullptr
+		), false
+	);
+
+	const auto viewport = D3D12_VIEWPORT{
+		.TopLeftX = static_cast<FLOAT>(gClientRect.left),
+		.TopLeftY = static_cast<FLOAT>(gClientRect.top),
+		.Width = static_cast<FLOAT>(gClientRect.right - gClientRect.left),
+		.Height = static_cast<FLOAT>(gClientRect.bottom - gClientRect.top),
+		.MinDepth = 0.f,
+		.MaxDepth = 0.f
+	};
+
+	DISPLAY_ERROR_DX_VOID( cmdList->RSSetViewports(1u, &viewport), false );
+
+	const auto scissorRect = gClientRect;
+
+	DISPLAY_ERROR_DX_VOID( cmdList->RSSetScissorRects(1u, &scissorRect), false );
+
+	transitionResourceState(cmdList.Get(), backBuffers_[backbufIdx].Get(),
+		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT
+	);
+
+	// 명령 기록 끝, 화면에 출력
+	DISPLAY_ERROR_DX_VOID( cmdList->Close(), false );
+
+	ID3D12CommandList* tmpCmdLists[] = { cmdList.Get() };
+
+	DISPLAY_ERROR_DX_VOID( cmdQ_->ExecuteCommandLists(1u, tmpCmdLists), false );
+
+	DISPLAY_ERROR_DX_VOID( swapChain_->Present(0, 0), false );
+	Sleep(1000);
+
+	freeCmdLists_.push_back(std::move(cmdList));
+	freeCmdAllocators_.push_back(std::move(cmdAlloc));
 }
