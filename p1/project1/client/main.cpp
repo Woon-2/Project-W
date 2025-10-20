@@ -6,6 +6,7 @@ inline constexpr const char* wndClsName = "wndCls";
 inline constexpr const char* wndName = "Project1";
 
 HWND ghWnd = nullptr;
+RECT gWndRect{ 0, 0, 1024, 768 };
 
 LRESULT wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -29,14 +30,17 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
 	DISPLAY_ERROR_GLE(RegisterClassExA(&cls), true);
 
+	AdjustWindowRect(&gWndRect, WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, false);
+
 	ghWnd = CreateWindowExA(0, wndClsName, wndName, WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-		0, 0, 1024, 768,	// 윈도우의 시작 위치, 크기 설정
+		0, 0, gWndRect.right - gWndRect.left, gWndRect.bottom - gWndRect.top,	// 윈도우의 시작 위치, 크기 설정
 		nullptr, nullptr, hInstance, nullptr
 	);
 
 	DISPLAY_ERROR_GLE(ghWnd, true);
 	DISPLAY_ERROR_GLE(!ShowWindow(ghWnd, SW_SHOW), true);
 
+	// 그래픽스 초기화 - DXGI, D3D12
 	GFX gfx{};
 	gfx.setupDXGI(D3D_FEATURE_LEVEL_12_1);
 	gfx.init(1);

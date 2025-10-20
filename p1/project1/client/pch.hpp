@@ -46,12 +46,24 @@
 #include <dxgi1_6.h>
 #include <d3d12.h>
 
+#ifdef DXGI_DEBUG_INFO
+#include <dxgidebug.h>
+#endif
+
 #include <wrl.h>
 
 #include <iostream>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <list>
+#include <set>
+#include <map>
+#include <unordered_set>
+#include <unordered_map>
+#include <numeric>
+#include <ranges>
+#include <algorithm>
 
 #undef min
 #undef max
@@ -60,6 +72,7 @@
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
+#pragma comment(lib, "dxguid.lib")
 
 template <class T>
 using ComPtr = Microsoft::WRL::ComPtr<T>;
