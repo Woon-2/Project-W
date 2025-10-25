@@ -1,4 +1,5 @@
 #include "gfx.hpp"
+#include "errorHandling.hpp"
 
 DescriptorHeap::DescriptorHeap(ID3D12Device* device, const D3D12_DESCRIPTOR_HEAP_DESC& desc)
 	: desc(desc) {
@@ -185,6 +186,7 @@ void GFX::setupDXGI(D3D_FEATURE_LEVEL d3dFeatureLevel) {
 
 // D3D12 Device와 Command Queue, Descriptor Heap들을 만든다.
 // 그리고 인자로 전달받은 개수만큼 CommandList와 Command Allocator를 만든다.
+// Fence들을 만든다. 그리고 Root Signature와 Shader(PSO)들을 만든다.
 void GFX::init(std::size_t cmdListPoolSize) {
 #ifdef DXGI_DEBUG_INFO
 	// D3D12 디버그 계층 활성화
@@ -264,6 +266,25 @@ void GFX::init(std::size_t cmdListPoolSize) {
 		dsvHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 		device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV)
 	);
+
+	// Fence들 생성
+	fences_.resize(3u);
+	for (std::size_t i = 0u; i < 3u; ++i) {
+		device_->CreateFence(0u, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence), &fences_[i]);
+	}
+	fenceValues_.assign(3u, 0u);
+	fenceEvents_.resize(3u);
+	for (std::size_t i = 0u; i < 3u; ++i) {
+		fenceEvents_[i] = CreateEvent(nullptr, false, false, (L"FenceEvent"s + std::to_wstring(i)).c_str());
+	}
+
+	// Root Signatures & Shaders 생성
+	auto defaultRootSig = DefaultRootSig{};
+	defaultRootSig.build(device_.Get());
+
+	shaders_.try_emplace(L"SampleShader", createSampleShader(device_.Get(), defaultRootSig.get()));
+
+	rootSigs_.try_emplace(L"DefaultRootSignature", std::make_unique<DefaultRootSig>(std::move(defaultRootSig)));
 }
 
 // 윈도우와 연결된 SwapChain을 만든다.
@@ -420,11 +441,13 @@ void GFX::render() {
 
 	DISPLAY_ERROR_DX_VOID( cmdList->RSSetScissorRects(1u, &scissorRect), false );
 
+	renderSampleShader(cmdList.Get());
+
+	// 명령 기록 끝, 화면에 출력
 	transitionResourceState(cmdList.Get(), backBuffers_[backbufIdx].Get(),
 		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT
 	);
 
-	// 명령 기록 끝, 화면에 출력
 	DISPLAY_ERROR_DX_VOID( cmdList->Close(), false );
 
 	ID3D12CommandList* tmpCmdLists[] = { cmdList.Get() };
@@ -432,8 +455,34 @@ void GFX::render() {
 	DISPLAY_ERROR_DX_VOID( cmdQ_->ExecuteCommandLists(1u, tmpCmdLists), false );
 
 	DISPLAY_ERROR_DX_VOID( swapChain_->Present(0, 0), false );
-	Sleep(1000);
+	signalFence(0u, fenceValues_[0] + 1);
+	waitOnFence(0u);
 
 	freeCmdLists_.push_back(std::move(cmdList));
 	freeCmdAllocators_.push_back(std::move(cmdAlloc));
+}
+
+void GFX::renderSampleShader(ID3D12GraphicsCommandList* cmdList) {
+	cmdList->SetGraphicsRootSignature(rootSigs_.at(L"DefaultRootSignature")->get());
+	cmdList->SetPipelineState(shaders_.at(L"SampleShader").Get());
+	
+	// 메시(IA) 그리기(Draw Call)
+}
+
+void GFX::signalFence(std::size_t idx, UINT64 fenceValue) {
+	DISPLAY_ERROR_DX_HR(
+		cmdQ_->Signal(fences_[idx].Get(), fenceValue),
+		false
+	);
+
+	fenceValues_[idx] = fenceValue;
+}
+
+void GFX::waitOnFence(std::size_t idx) {
+	if (fences_[idx]->GetCompletedValue() == fenceValues_[idx]) {
+		return;
+	}
+
+	fences_[idx]->SetEventOnCompletion(fenceValues_[idx], fenceEvents_[idx]);
+	WaitForSingleObject(fenceEvents_[idx], INFINITE);
 }

@@ -1,0 +1,185 @@
+#include "shader.hpp"
+
+#include "errorHandling.hpp"
+
+// 셰이더를 컴파일하여 D3D Blob 객체, 그리고 그 객체와 연결된
+// D3D12_SHADER_BYTECODE 객체를 리턴한다.
+CompiledShaderOutput compileShader(const std::filesystem::path& path,
+	const D3D_SHADER_MACRO* macros,
+	std::string_view entryPoint, std::string_view target,
+	UINT flag1, UINT flag2
+) {
+	auto ret = CompiledShaderOutput{};
+	auto errorBlob = ComPtr<ID3DBlob>{};
+	DISPLAY_ERROR_DX_HR(
+		D3DCompileFromFile(path.wstring().c_str(), macros, D3D_COMPILE_STANDARD_FILE_INCLUDE,
+			entryPoint.data(), target.data(), flag1, flag2, &ret.blob, &errorBlob
+		), false
+	);
+
+	DISPLAY_ERROR_STR(!errorBlob, "[GFX Error] compileShader: 셰이더 컴파일 중 오류가 발생했습니다.\n"s
+		+ static_cast<const char*>(errorBlob->GetBufferPointer()), false
+	);
+
+	ret.byteCode = D3D12_SHADER_BYTECODE{
+		.pShaderBytecode = ret.blob->GetBufferPointer(),
+		.BytecodeLength = ret.blob->GetBufferSize()
+	};
+
+	return ret;
+}
+
+ComPtr<ID3D12PipelineState> createSampleShader(ID3D12Device* device, ID3D12RootSignature* rootSig) {
+	ComPtr<ID3D12PipelineState> ret{};
+
+	// 셰이더 컴파일
+	auto vsCode = compileShader("shaders.hlsl", nullptr, "VSMain", "vs_5_1", 0u, 0u);
+	auto psCode = compileShader("shaders.hlsl", nullptr, "PSMain", "ps_5_1", 0u, 0u);
+
+	// 입력 조립기 설정
+	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
+		D3D12_INPUT_ELEMENT_DESC{
+			.SemanticName = "POSITION",
+			.SemanticIndex = 0u,
+			.Format = DXGI_FORMAT_R32G32B32_FLOAT,
+			.InputSlot = 0u,
+			.AlignedByteOffset = 0u,
+			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			.InstanceDataStepRate = 0u
+		}
+	};
+
+	auto inputLayoutDesc = D3D12_INPUT_LAYOUT_DESC{
+		.pInputElementDescs = elemDescs.data(),
+		.NumElements = static_cast<UINT>(elemDescs.size())
+	};
+
+	auto psoDesc = D3D12_GRAPHICS_PIPELINE_STATE_DESC{
+		.pRootSignature = rootSig,
+		.VS = vsCode.byteCode,
+		.PS = psCode.byteCode,
+		// 블렌드 상태 설정
+		.BlendState = D3D12_BLEND_DESC{
+			.AlphaToCoverageEnable = false,
+			.IndependentBlendEnable = false
+		},
+		.SampleMask = 0u,
+		// 래스터라이저 설정
+		.RasterizerState = D3D12_RASTERIZER_DESC{
+			.FillMode = D3D12_FILL_MODE_SOLID,
+			.CullMode = D3D12_CULL_MODE_BACK,
+			.FrontCounterClockwise = false,
+			.DepthBias = 0,
+			.DepthBiasClamp = 0.f,
+			.SlopeScaledDepthBias = 0.f,
+			.DepthClipEnable = true,
+			.MultisampleEnable = false,
+			.AntialiasedLineEnable = false,
+			.ForcedSampleCount = 0u
+		},
+		// 깊이 스텐실 설정
+		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
+			.DepthEnable = true,
+			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
+			.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+			.StencilEnable = false,
+			.StencilReadMask = 0u,
+			.StencilWriteMask = 0u,
+			.FrontFace = D3D12_DEPTH_STENCILOP_DESC{},
+			.BackFace = D3D12_DEPTH_STENCILOP_DESC{}
+		},
+		.InputLayout = inputLayoutDesc,
+		// 프리미티브 토폴로지 설정
+		.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+		.SampleDesc = DXGI_SAMPLE_DESC{
+			.Count = 1u, .Quality = 0u
+		},
+		.NodeMask = 0u,
+		.Flags = D3D12_PIPELINE_STATE_FLAG_NONE
+	};
+
+	DISPLAY_ERROR_DX_HR(
+		device->CreateGraphicsPipelineState(&psoDesc, __uuidof(ID3D12PipelineState), &ret),
+		false
+	);
+
+	setD3DName(ret.Get(), L"SampleShader");
+
+	return ret;
+}
+
+void RootSig::addParam(std::string paramName,
+	UINT paramIdx, const D3D12_ROOT_PARAMETER& paramDesc
+) {
+	auto [_, added] = paramMap_.try_emplace(paramName, paramIdx, paramDesc);
+	DISPLAY_ERROR_STR(added, "[GFX Error] RootSig::addParam: 매개변수 "s + paramName
+		+ "은(는) 이미 루트 시그너처에 "s + std::to_string(paramMap_.at(paramName).first)
+		+ "번 인덱스로 등록되어 있습니다.\n"s, false
+	);
+}
+
+UINT RootSig::paramIdx(std::string_view paramName) const {
+	return paramMap_.at(paramName.data()).first;
+}
+
+const D3D12_ROOT_PARAMETER& RootSig::paramDesc(std::string_view paramName) const {
+	return paramMap_.at(paramName.data()).second;
+}
+
+void DefaultRootSig::build(ID3D12Device* device) {
+	// b0: PerDrawcallData
+	addParam( "PerDrawcallData", 0, D3D12_ROOT_PARAMETER{
+		.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV,
+		.Descriptor = D3D12_ROOT_DESCRIPTOR{
+			.ShaderRegister = 0u,
+			.RegisterSpace = 0u
+		},
+		.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+	} );
+
+	// 루트 파라미터들을 d3d12 api에 배열로 넘겨주기 위해
+	// 벡터를 만들고, 저장된 파라미터 개수 만큼의 공간을 확보한다.
+	// 맵에 저장된 파라미터의 인덱스를 보고 임의 접근하여
+	// 파라미터 정보를 채워넣는다.
+	auto params = std::vector<D3D12_ROOT_PARAMETER>(paramMap_.size());
+
+	for (const auto& [paramName, paramPair] : paramMap_) {
+		auto& paramDesc = paramPair.second;
+		auto paramIdx = paramPair.first;
+
+		params[paramIdx] = paramDesc;
+	}
+
+	// 루트 시그너처를 직렬화하고 객체로 생성한다.
+	auto rootSigDesc = D3D12_ROOT_SIGNATURE_DESC{
+		.NumParameters = static_cast<UINT>(params.size()),
+		.pParameters = params.data(),
+		.NumStaticSamplers = 0u,
+		.pStaticSamplers = nullptr,
+		.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
+	};
+
+	auto rootSigBlob = ComPtr<ID3DBlob>{};
+	auto errorBlob = ComPtr<ID3DBlob>{};
+
+	DISPLAY_ERROR_DX_VOID(
+		D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &rootSigBlob, &errorBlob),
+		false
+	);
+
+	DISPLAY_ERROR_STR(!errorBlob, "[GFX Error] DefaultRootSig::build: 루트 시그너처 직렬화 중 오류가 발생했습니다.\n"s
+		+ static_cast<const char*>(errorBlob->GetBufferPointer()), false
+	);
+
+	device->CreateRootSignature( 0u, rootSigBlob->GetBufferPointer(), rootSigBlob->GetBufferSize(),
+		__uuidof(ID3D12RootSignature), &rootSig_
+	);
+
+	// 이름 설정
+	name_ = L"DefaultRootSignature";
+	setD3DName(rootSig_.Get(), name_);
+}
+
+const std::wstring& DefaultRootSig::name() const {
+	return name_;
+}

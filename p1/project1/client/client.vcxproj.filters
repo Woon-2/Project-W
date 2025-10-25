@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="셰이더 파일">
+      <UniqueIdentifier>{89db8676-e45c-4f45-9074-a868d495d197}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.hpp">
@@ -22,6 +25,9 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="gfx.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="shader.hpp">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
@@ -35,5 +41,11 @@
     <ClCompile Include="errorHandling.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="shader.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="shaders.hlsl" />
   </ItemGroup>
 </Project>

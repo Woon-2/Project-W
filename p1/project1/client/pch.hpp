@@ -45,6 +45,7 @@
 #include <Windows.h>
 #include <dxgi1_6.h>
 #include <d3d12.h>
+#include <d3dcompiler.h>
 
 #ifdef DXGI_DEBUG_INFO
 #include <dxgidebug.h>
@@ -64,6 +65,10 @@
 #include <numeric>
 #include <ranges>
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
+#include <memory>
+#include <utility>
 
 #undef min
 #undef max
@@ -73,6 +78,9 @@
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "dxguid.lib")
+#pragma comment(lib, "D3DCompiler.lib")
+
+using namespace std::literals;
 
 template <class T>
 using ComPtr = Microsoft::WRL::ComPtr<T>;

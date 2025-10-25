@@ -2,7 +2,7 @@
 #define __GFX_HPP
 
 #include "pch.hpp"
-#include "errorHandling.hpp"
+#include "shader.hpp"
 
 extern RECT gWndRect;
 extern RECT gClientRect;
@@ -80,7 +80,8 @@ public:
 	// 그리고 그 중 하나를 선택하여 curAdapter_에 저장한다.
 	void setupDXGI(D3D_FEATURE_LEVEL d3dFeatureLevel);
 	// D3D12 Device와 Command Queue, Descriptor Heap들을 만든다.
-	// 그리고 인자로 전달받은 개수만큼 CommandList와 Command Allocator를 만든다.
+	// 인자로 전달받은 개수만큼 CommandList와 Command Allocator를 만든다.
+	// Fence들을 만든다. 그리고 Root Signature와 Shader(PSO)들을 만든다.
 	void init(std::size_t cmdListPoolSize);
 	// 윈도우와 연결된 SwapChain을 만든다.
 	void createSwapChain(HWND hWnd);
@@ -89,6 +90,11 @@ public:
 
 
 private:
+	void renderSampleShader(ID3D12GraphicsCommandList* cmdList);
+
+	void signalFence(std::size_t idx, UINT64 fenceValue);
+	void waitOnFence(std::size_t idx);
+
 	ComPtr<IDXGIFactory4> dxgiFactory_ = nullptr;
 	ComPtr<IDXGIAdapter1> curAdapter_ = nullptr;
 	std::vector< ComPtr<IDXGIAdapter1> > adapters_{};
@@ -117,6 +123,13 @@ private:
 	DescriptorPool rtvPool_{};
 	DescriptorHeap dsvHeap_{};
 	DescriptorPool dsvPool_{};
+
+	std::map<std::wstring, std::unique_ptr<RootSig>> rootSigs_{};
+	std::map<std::wstring, ComPtr<ID3D12PipelineState>> shaders_{};
+
+	std::vector<ComPtr<ID3D12Fence>> fences_{};
+	std::vector<UINT64> fenceValues_{};
+	std::vector<HANDLE> fenceEvents_{};
 };
 
 #endif	// __GFX_HPP
