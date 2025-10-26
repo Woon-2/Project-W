@@ -1,6 +1,8 @@
 #ifndef __PCF_HPP
 #define __PCF_HPP
 
+#define _CRT_SECURE_NO_WARNINGS
+
 // #define UNICODE
 // #define _UNICODE
 #define WIN32_LEAN_AND_MEAN

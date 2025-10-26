@@ -11,15 +11,25 @@ CompiledShaderOutput compileShader(const std::filesystem::path& path,
 ) {
 	auto ret = CompiledShaderOutput{};
 	auto errorBlob = ComPtr<ID3DBlob>{};
+	auto errorStr = std::wstring{};
 	DISPLAY_ERROR_DX_HR(
 		D3DCompileFromFile(path.wstring().c_str(), macros, D3D_COMPILE_STANDARD_FILE_INCLUDE,
 			entryPoint.data(), target.data(), flag1, flag2, &ret.blob, &errorBlob
 		), false
 	);
 
-	DISPLAY_ERROR_STR(!errorBlob, "[GFX Error] compileShader: 셰이더 컴파일 중 오류가 발생했습니다.\n"s
-		+ static_cast<const char*>(errorBlob->GetBufferPointer()), false
+	if (errorBlob) {
+		errorStr.assign(errorBlob->GetBufferSize(), L'\0');
+		std::mbstowcs(errorStr.data(), static_cast<const char*>(errorBlob->GetBufferPointer()),
+			errorBlob->GetBufferSize()
+		);
+	}
+
+	DISPLAY_ERROR_STR(!errorBlob, L"[GFX Error] compileShader: 셰이더 컴파일 중 오류가 발생했습니다.\n"s
+		+ errorStr, false
 	);
+
+	
 
 	ret.byteCode = D3D12_SHADER_BYTECODE{
 		.pShaderBytecode = ret.blob->GetBufferPointer(),
@@ -63,7 +73,7 @@ ComPtr<ID3D12PipelineState> createSampleShader(ID3D12Device* device, ID3D12RootS
 			.AlphaToCoverageEnable = false,
 			.IndependentBlendEnable = false
 		},
-		.SampleMask = 0u,
+		.SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
 		// 래스터라이저 설정
 		.RasterizerState = D3D12_RASTERIZER_DESC{
 			.FillMode = D3D12_FILL_MODE_SOLID,
@@ -98,6 +108,11 @@ ComPtr<ID3D12PipelineState> createSampleShader(ID3D12Device* device, ID3D12RootS
 		.Flags = D3D12_PIPELINE_STATE_FLAG_NONE
 	};
 
+	// 렌더 타겟 관련 설정
+	psoDesc.NumRenderTargets = 1u;
+	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+	psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+
 	DISPLAY_ERROR_DX_HR(
 		device->CreateGraphicsPipelineState(&psoDesc, __uuidof(ID3D12PipelineState), &ret),
 		false
@@ -108,27 +123,27 @@ ComPtr<ID3D12PipelineState> createSampleShader(ID3D12Device* device, ID3D12RootS
 	return ret;
 }
 
-void RootSig::addParam(std::string paramName,
+void RootSig::addParam(const std::wstring& paramName,
 	UINT paramIdx, const D3D12_ROOT_PARAMETER& paramDesc
 ) {
 	auto [_, added] = paramMap_.try_emplace(paramName, paramIdx, paramDesc);
-	DISPLAY_ERROR_STR(added, "[GFX Error] RootSig::addParam: 매개변수 "s + paramName
-		+ "은(는) 이미 루트 시그너처에 "s + std::to_string(paramMap_.at(paramName).first)
-		+ "번 인덱스로 등록되어 있습니다.\n"s, false
+	DISPLAY_ERROR_STR(added, L"[GFX Error] RootSig::addParam: 매개변수 "s + paramName
+		+ L"은(는) 이미 루트 시그너처에 "s + std::to_wstring(paramMap_.at(paramName).first)
+		+ L"번 인덱스로 등록되어 있습니다.\n"s, false
 	);
 }
 
-UINT RootSig::paramIdx(std::string_view paramName) const {
+UINT RootSig::paramIdx(std::wstring_view paramName) const {
 	return paramMap_.at(paramName.data()).first;
 }
 
-const D3D12_ROOT_PARAMETER& RootSig::paramDesc(std::string_view paramName) const {
+const D3D12_ROOT_PARAMETER& RootSig::paramDesc(std::wstring_view paramName) const {
 	return paramMap_.at(paramName.data()).second;
 }
 
 void DefaultRootSig::build(ID3D12Device* device) {
 	// b0: PerDrawcallData
-	addParam( "PerDrawcallData", 0, D3D12_ROOT_PARAMETER{
+	addParam( L"PerDrawcallData", 0, D3D12_ROOT_PARAMETER{
 		.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV,
 		.Descriptor = D3D12_ROOT_DESCRIPTOR{
 			.ShaderRegister = 0u,
@@ -161,14 +176,22 @@ void DefaultRootSig::build(ID3D12Device* device) {
 
 	auto rootSigBlob = ComPtr<ID3DBlob>{};
 	auto errorBlob = ComPtr<ID3DBlob>{};
+	auto errorStr = std::wstring{};
 
 	DISPLAY_ERROR_DX_VOID(
 		D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &rootSigBlob, &errorBlob),
 		false
 	);
 
-	DISPLAY_ERROR_STR(!errorBlob, "[GFX Error] DefaultRootSig::build: 루트 시그너처 직렬화 중 오류가 발생했습니다.\n"s
-		+ static_cast<const char*>(errorBlob->GetBufferPointer()), false
+	if (errorBlob) {
+		errorStr.assign(errorBlob->GetBufferSize(), L'\0');
+		std::mbstowcs(errorStr.data(), static_cast<const char*>(errorBlob->GetBufferPointer()),
+			errorBlob->GetBufferSize()
+		);
+	}
+
+	DISPLAY_ERROR_STR(!errorBlob, L"[GFX Error] DefaultRootSig::build: 루트 시그너처 직렬화 중 오류가 발생했습니다.\n"s
+		+ errorStr, false
 	);
 
 	device->CreateRootSignature( 0u, rootSigBlob->GetBufferPointer(), rootSigBlob->GetBufferSize(),

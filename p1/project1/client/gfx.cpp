@@ -267,17 +267,6 @@ void GFX::init(std::size_t cmdListPoolSize) {
 		device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV)
 	);
 
-	// Fence들 생성
-	fences_.resize(3u);
-	for (std::size_t i = 0u; i < 3u; ++i) {
-		device_->CreateFence(0u, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence), &fences_[i]);
-	}
-	fenceValues_.assign(3u, 0u);
-	fenceEvents_.resize(3u);
-	for (std::size_t i = 0u; i < 3u; ++i) {
-		fenceEvents_[i] = CreateEvent(nullptr, false, false, (L"FenceEvent"s + std::to_wstring(i)).c_str());
-	}
-
 	// Root Signatures & Shaders 생성
 	auto defaultRootSig = DefaultRootSig{};
 	defaultRootSig.build(device_.Get());
@@ -359,6 +348,20 @@ void GFX::createSwapChain(HWND hWnd) {
 		DISPLAY_ERROR_DX_VOID(
 			device_->CreateDepthStencilView(depthBuffers_[i].Get(), nullptr, cpuHandle),
 			true
+		);
+	}
+
+	// Fence들 생성
+	for (std::size_t i = 0u; i < backBuffers_.size(); ++i) {
+		const auto fenceName = L"FrameFence"s + std::to_wstring(i);
+		fences_.try_emplace(fenceName, Fence{});
+		DISPLAY_ERROR_DX_HR(
+			device_->CreateFence(0u, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence), &fences_.at(fenceName).fence),
+			false
+		);
+		setD3DName(fences_.at(fenceName).fence.Get(), fenceName);
+		fences_.at(fenceName).event = CreateEvent(
+			nullptr, false, false, (L"FrameFenceEvent"s + std::to_wstring(i)).c_str()
 		);
 	}
 }
@@ -455,11 +458,20 @@ void GFX::render() {
 	DISPLAY_ERROR_DX_VOID( cmdQ_->ExecuteCommandLists(1u, tmpCmdLists), false );
 
 	DISPLAY_ERROR_DX_VOID( swapChain_->Present(0, 0), false );
-	signalFence(0u, fenceValues_[0] + 1);
-	waitOnFence(0u);
 
-	freeCmdLists_.push_back(std::move(cmdList));
-	freeCmdAllocators_.push_back(std::move(cmdAlloc));
+	// 렌더링할 수 있는 백버퍼가 있다면,
+	// wait하지 않고 이어서 렌더링을 하도록 한다.
+	// 백버퍼는 순차적으로 사용되므로, (백버퍼 개수 - 1) 프레임 전의 렌더링에 대한
+	// Fence를 wait하면 이를 구현할 수 있다.
+	auto idxFenceToSignal = frameIdx % backBuffers_.size();
+	auto idxFenceToWait = (frameIdx - (backBuffers_.size() - 1)) % backBuffers_.size();
+	auto fenceNameToSignal = L"FrameFence" + std::to_wstring(idxFenceToSignal);
+	fences_.at(fenceNameToSignal).associatedCmdLists_.push_back(std::move(cmdList));
+	fences_.at(fenceNameToSignal).associatedCmdAllocators_.push_back(std::move(cmdAlloc));
+	signalFence(L"FrameFence" + std::to_wstring(idxFenceToSignal));
+	waitOnFence(L"FrameFence" + std::to_wstring(idxFenceToWait));
+
+	++frameIdx;
 }
 
 void GFX::renderSampleShader(ID3D12GraphicsCommandList* cmdList) {
@@ -469,20 +481,38 @@ void GFX::renderSampleShader(ID3D12GraphicsCommandList* cmdList) {
 	// 메시(IA) 그리기(Draw Call)
 }
 
-void GFX::signalFence(std::size_t idx, UINT64 fenceValue) {
-	DISPLAY_ERROR_DX_HR(
-		cmdQ_->Signal(fences_[idx].Get(), fenceValue),
-		false
-	);
-
-	fenceValues_[idx] = fenceValue;
-}
-
-void GFX::waitOnFence(std::size_t idx) {
-	if (fences_[idx]->GetCompletedValue() == fenceValues_[idx]) {
+void GFX::signalFence(const std::wstring& fenceName) {
+	auto validFenceName = fences_.contains(fenceName);
+	DISPLAY_ERROR_STR(validFenceName, L"[GFX Error] GFX::signalFence: 펜스 "s + fenceName + L"를 찾을 수 없습니다.\n", false);
+	if (!validFenceName) {
 		return;
 	}
 
-	fences_[idx]->SetEventOnCompletion(fenceValues_[idx], fenceEvents_[idx]);
-	WaitForSingleObject(fenceEvents_[idx], INFINITE);
+	auto& fence = fences_.at(fenceName);
+	++fence.desiredValue;
+	DISPLAY_ERROR_DX_HR(
+		cmdQ_->Signal(fence.fence.Get(), fence.desiredValue),
+		false
+	);
+}
+
+void GFX::waitOnFence(const std::wstring& fenceName) {
+	auto validFenceName = fences_.contains(fenceName);
+	DISPLAY_ERROR_STR(validFenceName, L"[GFX Error] GFX::waitOnFence: 펜스 "s + fenceName + L"를 찾을 수 없습니다.\n", false);
+	if (!validFenceName) {
+		return;
+	}
+
+	auto& fence = fences_.at(fenceName);
+	if (fence.fence->GetCompletedValue() == fence.desiredValue) {
+		freeCmdLists_.merge(std::move(fence.associatedCmdLists_));
+		freeCmdAllocators_.merge(std::move(fence.associatedCmdAllocators_));
+		return;
+	}
+
+	fence.fence->SetEventOnCompletion(fence.desiredValue, fence.event);
+	WaitForSingleObject(fence.event, INFINITE);
+
+	freeCmdLists_.merge(std::move(fence.associatedCmdLists_));
+	freeCmdAllocators_.merge(std::move(fence.associatedCmdAllocators_));
 }
