@@ -23,13 +23,11 @@ CompiledShaderOutput compileShader(const std::filesystem::path& path,
 		std::mbstowcs(errorStr.data(), static_cast<const char*>(errorBlob->GetBufferPointer()),
 			errorBlob->GetBufferSize()
 		);
+		DISPLAY_ERROR_STR( false, L"[GFX Error] compileShader: 셰이더 컴파일 중 오류가 발생했습니다.\n"s
+			+ errorStr, false
+		);
+		return ret;
 	}
-
-	DISPLAY_ERROR_STR(!errorBlob, L"[GFX Error] compileShader: 셰이더 컴파일 중 오류가 발생했습니다.\n"s
-		+ errorStr, false
-	);
-
-	
 
 	ret.byteCode = D3D12_SHADER_BYTECODE{
 		.pShaderBytecode = ret.blob->GetBufferPointer(),
@@ -53,6 +51,15 @@ ComPtr<ID3D12PipelineState> createSampleShader(ID3D12Device* device, ID3D12RootS
 			.SemanticIndex = 0u,
 			.Format = DXGI_FORMAT_R32G32B32_FLOAT,
 			.InputSlot = 0u,
+			.AlignedByteOffset = 0u,
+			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			.InstanceDataStepRate = 0u
+		},
+		D3D12_INPUT_ELEMENT_DESC{
+			.SemanticName = "UV",
+			.SemanticIndex = 0u,
+			.Format = DXGI_FORMAT_R32G32_FLOAT,
+			.InputSlot = 1u,
 			.AlignedByteOffset = 0u,
 			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
 			.InstanceDataStepRate = 0u
@@ -110,6 +117,14 @@ ComPtr<ID3D12PipelineState> createSampleShader(ID3D12Device* device, ID3D12RootS
 
 	// 렌더 타겟 관련 설정
 	psoDesc.NumRenderTargets = 1u;
+	psoDesc.BlendState.RenderTarget[0].BlendEnable = false;
+	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
+	psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
+	psoDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+	psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+	psoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+	psoDesc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 	psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
@@ -188,11 +203,11 @@ void DefaultRootSig::build(ID3D12Device* device) {
 		std::mbstowcs(errorStr.data(), static_cast<const char*>(errorBlob->GetBufferPointer()),
 			errorBlob->GetBufferSize()
 		);
+		DISPLAY_ERROR_STR(false, L"[GFX Error] DefaultRootSig::build: 루트 시그너처 직렬화 중 오류가 발생했습니다.\n"s
+			+ errorStr, false
+		);
+		return;
 	}
-
-	DISPLAY_ERROR_STR(!errorBlob, L"[GFX Error] DefaultRootSig::build: 루트 시그너처 직렬화 중 오류가 발생했습니다.\n"s
-		+ errorStr, false
-	);
 
 	device->CreateRootSignature( 0u, rootSigBlob->GetBufferPointer(), rootSigBlob->GetBufferSize(),
 		__uuidof(ID3D12RootSignature), &rootSig_

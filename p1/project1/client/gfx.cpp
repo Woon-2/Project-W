@@ -190,7 +190,7 @@ void GFX::init(std::size_t cmdListPoolSize) {
 // Back Buffer 개수 만큼의 room을 가지는 Constant Buffer들을 만든다.
 // 그리고 Back Buffer 개수 만큼의 Frame Fence들을 만든다.
 // Scaling, BufferCount는 후에 매개변수로 전달받도록 하자.
-void GFX::createSwapChain(HWND hWnd) {
+void GFX::createSwapChain() {
 	// 스왑체인 생성
 	scd_ = DXGI_SWAP_CHAIN_DESC1{
 		.Width = static_cast<UINT>(gClientRect.right - gClientRect.left),
@@ -216,11 +216,11 @@ void GFX::createSwapChain(HWND hWnd) {
 	ComPtr<IDXGISwapChain1> tmp = nullptr;
 
 	DISPLAY_ERROR_DX_HR(
-		dxgiFactory_->CreateSwapChainForHwnd(cmdQ_.Get(), hWnd, &scd_, &scfd_, nullptr, &tmp),
+		dxgiFactory_->CreateSwapChainForHwnd(cmdQ_.Get(), ghWnd, &scd_, &scfd_, nullptr, &tmp),
 		true
 	);
 	tmp.As(&swapChain_);
-	DISPLAY_ERROR_DX_HR(dxgiFactory_->MakeWindowAssociation(hWnd, DXGI_MWA_NO_ALT_ENTER), false);
+	DISPLAY_ERROR_DX_HR(dxgiFactory_->MakeWindowAssociation(ghWnd, DXGI_MWA_NO_ALT_ENTER), false);
 
 	setDXName(swapChain_.Get(), L"SwapChain");
 
@@ -383,7 +383,7 @@ void GFX::render() {
 		.Width = static_cast<FLOAT>(gClientRect.right - gClientRect.left),
 		.Height = static_cast<FLOAT>(gClientRect.bottom - gClientRect.top),
 		.MinDepth = 0.f,
-		.MaxDepth = 0.f
+		.MaxDepth = 1.f
 	};
 
 	DISPLAY_ERROR_DX_VOID( cmdList->RSSetViewports(1u, &viewport), false );
@@ -427,14 +427,29 @@ void GFX::renderSampleShader(ID3D12GraphicsCommandList* cmdList) {
 	auto& pRootSig = rootSigs_.at(L"DefaultRootSignature");
 	auto& shader = shaders_.at(L"SampleShader");
 
-	cmdList->SetGraphicsRootSignature(pRootSig->get());
-	cmdList->SetPipelineState(shader.Get());
+	DISPLAY_ERROR_DX_VOID( cmdList->SetGraphicsRootSignature(pRootSig->get()), false );
+	DISPLAY_ERROR_DX_VOID( cmdList->SetPipelineState(shader.Get()), false );
 
 	const auto roomIdx = frameIdx % backBuffers_.size();
 	
 	// 메시(IA) 그리기(Draw Call)
 	cbCube_.bind(cmdList, pRootSig->paramIdx(L"PerDrawcallData"), roomIdx);
-	// ...
+	auto perDrawcallData = SampleShader::PerDrawcallData{
+		.wvp = mu::transpose(mu::Mat4x4() * mu::Mat4x4(mu::rotate(mu::Degree(30.f), mu::NVec3(0.f, 1.f, 0.f)))
+			* mu::Mat4x4(mu::rotate(mu::Degree(30.f), mu::NVec3(1.f, 0.f, 0.f))) * mu::translate(mu::Vec3(0.f, -0.2f, 0.6f))
+			* mu::Mat4x4(mu::scale(0.25f, 0.25f, 0.25f))).getXmf(),
+		.color = XMFLOAT4{ 1.f, 0.f, 0.f, 1.f }
+	};
+	cbCube_.stage(roomIdx, &perDrawcallData, 1u);
+	
+	DISPLAY_ERROR_DX_VOID( cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST), false );
+	DISPLAY_ERROR_DX_VOID( cmdList->IASetVertexBuffers(0u, 2u, meshCube_.vbViews.data()), false );
+	DISPLAY_ERROR_DX_VOID( cmdList->IASetIndexBuffer(&meshCube_.ibViews.at(L"CubeMesh_IB")), false );
+
+	DISPLAY_ERROR_DX_VOID( cmdList->DrawIndexedInstanced(
+		static_cast<UINT>(meshCube_.ibViews.at(L"CubeMesh_IB").SizeInBytes / sizeof(u16t)),
+		1u, 0u, 0, 0u
+	), false );
 }
 
 // fenceName을 갖는 Fence의 desiredValue 값을 1 증가시키고

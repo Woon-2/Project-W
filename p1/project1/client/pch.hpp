@@ -58,6 +58,7 @@
 #include <wrl.h>
 
 #include <iostream>
+#include <locale>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -76,6 +77,8 @@
 #include <utility>
 #include <cstdint>
 #include <type_traits>
+
+#include "mathUtil.hpp"
 
 #undef min
 #undef max

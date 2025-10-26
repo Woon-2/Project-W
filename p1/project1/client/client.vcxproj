@@ -134,6 +134,7 @@
     <ClInclude Include="errorHandling.hpp" />
     <ClInclude Include="gfx.hpp" />
     <ClInclude Include="gfxUtil.hpp" />
+    <ClInclude Include="mathUtil.hpp" />
     <ClInclude Include="mesh.hpp" />
     <ClInclude Include="pch.hpp" />
     <ClInclude Include="shader.hpp" />

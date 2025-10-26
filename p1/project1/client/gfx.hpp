@@ -23,6 +23,8 @@
 // 카메라 구현, WASD 이동
 // 멀티스레드 로드 & 렌더링
 
+extern HWND ghWnd;
+
 
 // ID3D12Fence 객체와 연관된 변수들을 모아놓기 위한 구조체
 struct Fence {
@@ -46,6 +48,7 @@ public:
 	GFX& operator=(const GFX&) = delete;
 	GFX(GFX&&) noexcept = delete;
 	GFX& operator=(GFX&&) noexcept = delete;
+	// GFX가 소멸할 때, 제출된 모든 GPU작업이 완료되고 나서 소멸하도록 한다.
 	~GFX();
 
 	// 장치 초기화: setupDXGI, init, createSwapChain 순으로 호출한다.
@@ -61,7 +64,7 @@ public:
 	// 윈도우와 연결된 SwapChain을 만든다.
 	// Back Buffer 개수 만큼의 room을 가지는 Constant Buffer들을 만든다.
 	// 그리고 Back Buffer 개수 만큼의 Frame Fence들을 만든다.
-	void createSwapChain(HWND hWnd);
+	void createSwapChain();
 
 	void loadMeshes();
 

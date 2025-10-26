@@ -13,6 +13,8 @@ LRESULT wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) 
 {
+	std::locale::global(std::locale("ko-KR"));
+
 	// 윈도우 클래스 설정 및 윈도우 생성
 	auto cls = WNDCLASSEXA{
 		.cbSize = sizeof(WNDCLASSEXA),
@@ -45,7 +47,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	GFX gfx{};
 	gfx.setupDXGI(D3D_FEATURE_LEVEL_12_1);
 	gfx.init(4);
-	gfx.createSwapChain(ghWnd);
+	gfx.createSwapChain();
 
 	gfx.loadMeshes();
 
@@ -57,11 +59,12 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 				return static_cast<int>(msg.wParam);
 			}
 
-			gfx.render();
 
 			TranslateMessage(&msg);
 			DispatchMessageA(&msg);
 		}
+
+		gfx.render();
 	}
 }
 
