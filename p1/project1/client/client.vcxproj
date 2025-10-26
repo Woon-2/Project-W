@@ -133,13 +133,17 @@
   <ItemGroup>
     <ClInclude Include="errorHandling.hpp" />
     <ClInclude Include="gfx.hpp" />
+    <ClInclude Include="gfxUtil.hpp" />
+    <ClInclude Include="mesh.hpp" />
     <ClInclude Include="pch.hpp" />
     <ClInclude Include="shader.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="errorHandling.cpp" />
     <ClCompile Include="gfx.cpp" />
+    <ClCompile Include="gfxUtil.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="mesh.cpp" />
     <ClCompile Include="shader.cpp" />
   </ItemGroup>
   <ItemGroup>

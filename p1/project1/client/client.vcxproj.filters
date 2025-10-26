@@ -30,6 +30,12 @@
     <ClInclude Include="shader.hpp">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="mesh.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="gfxUtil.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -42,6 +48,12 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="shader.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="mesh.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="gfxUtil.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>

@@ -49,6 +49,8 @@
 #include <d3d12.h>
 #include <d3dcompiler.h>
 
+#include <DirectXMath.h>
+
 #ifdef DXGI_DEBUG_INFO
 #include <dxgidebug.h>
 #endif
@@ -71,6 +73,8 @@
 #include <fstream>
 #include <memory>
 #include <utility>
+#include <cstdint>
+#include <type_traits>
 
 #undef min
 #undef max
@@ -86,6 +90,30 @@ using namespace std::literals;
 
 template <class T>
 using ComPtr = Microsoft::WRL::ComPtr<T>;
+
+using i8t = std::int8_t;
+using i16t = std::int16_t;
+using i32t = std::int32_t;
+using i64t = std::int64_t;
+using u8t = std::uint8_t;
+using u16t = std::uint16_t;
+using u32t = std::uint32_t;
+using u64t = std::uint64_t;
+
+using XMFLOAT2 = DirectX::XMFLOAT2;
+using XMFLOAT3 = DirectX::XMFLOAT3;
+using XMFLOAT4 = DirectX::XMFLOAT4;
+using XMUINT2 = DirectX::XMUINT2;
+using XMUINT3 = DirectX::XMUINT3;
+using XMUINT4 = DirectX::XMUINT4;
+using XMINT2 = DirectX::XMINT2;
+using XMINT3 = DirectX::XMINT3;
+using XMINT4 = DirectX::XMINT4;
+
+template <class TEnum>
+constexpr std::underlying_type_t<TEnum> etoi(TEnum e) {
+	return static_cast<std::underlying_type_t<TEnum>>(e);
+}
 
 
 #endif	// __PCF_HPP

@@ -44,8 +44,10 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	// 그래픽스 초기화 - DXGI, D3D12
 	GFX gfx{};
 	gfx.setupDXGI(D3D_FEATURE_LEVEL_12_1);
-	gfx.init(3);
+	gfx.init(4);
 	gfx.createSwapChain(ghWnd);
+
+	gfx.loadMeshes();
 
 	// 윈도우 메시지 루프
 	MSG msg;

@@ -1,116 +1,6 @@
 #include "gfx.hpp"
 #include "errorHandling.hpp"
 
-DescriptorHeap::DescriptorHeap(ID3D12Device* device, const D3D12_DESCRIPTOR_HEAP_DESC& desc)
-	: desc(desc) {
-
-	DISPLAY_ERROR_DX_HR(
-		device->CreateDescriptorHeap(&desc, __uuidof(ID3D12DescriptorHeap), &heap),
-		true
-	);
-	cpuStart = heap->GetCPUDescriptorHandleForHeapStart();
-	gpuVisible = desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-	if (gpuVisible) {
-		gpuStart = heap->GetGPUDescriptorHandleForHeapStart();
-	}
-}
-
-DescriptorPool::DescriptorPool(std::size_t viewCnt,
-	D3D12_CPU_DESCRIPTOR_HANDLE cpuStart, D3D12_GPU_DESCRIPTOR_HANDLE gpuStart,
-	D3D12_DESCRIPTOR_HEAP_TYPE type, bool gpuVisible, UINT incrementSize
-) : freeIndices_(viewCnt), cpuStart_(cpuStart), gpuStart_(gpuStart),
-	type_(type), gpuVisible_(gpuVisible), incrementSize_(incrementSize) {
-
-	std::iota(freeIndices_.begin(), freeIndices_.end(), 0);
-}
-
-int DescriptorPool::alloc() {
-	auto ret = freeIndices_.front();
-	freeIndices_.pop_front();
-	return ret;
-}
-
-void DescriptorPool::free(int idx) {
-	freeIndices_.push_back(idx);
-}
-
-D3D12_CPU_DESCRIPTOR_HANDLE DescriptorPool::cpuHandle(int idx) const {
-	auto ret = cpuStart_;
-	ret.ptr += idx * incrementSize_;
-	return ret;
-}
-
-D3D12_GPU_DESCRIPTOR_HANDLE DescriptorPool::gpuHandle(int idx) const {
-	DISPLAY_ERROR_STR(gpuVisible_, "[DescriptorPool] gpuVisible 플래그가 활성화되지 않은"
-		"디스크립터 힙에서 gpuHandle 할당을 시도했습니다.", false
-	);
-	auto ret = gpuStart_;
-	ret.ptr += idx * incrementSize_;
-	return ret;
-}
-
-// 깊이 버퍼를 쉽게 생성하는 유틸리티 함수
-ComPtr<ID3D12Resource> createDepthBuffer(
-	ID3D12Device* device,
-	DXGI_FORMAT format, const DXGI_SAMPLE_DESC& sampleDesc
-) {
-	ComPtr<ID3D12Resource> ret{};
-
-	auto heapProperties = D3D12_HEAP_PROPERTIES{
-		.Type = D3D12_HEAP_TYPE_DEFAULT
-	};
-
-	auto desc = D3D12_RESOURCE_DESC{
-		.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
-		.Alignment = 0u,
-		.Width = static_cast<UINT64>(gClientRect.right - gClientRect.left),
-		.Height = static_cast<UINT>(gClientRect.bottom - gClientRect.top),
-		.DepthOrArraySize = 1u,
-		.MipLevels = 1u,
-		.Format = format,
-		.SampleDesc = sampleDesc,
-		.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
-		.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
-	};
-
-	auto cv = D3D12_CLEAR_VALUE{
-		.Format = format,
-		.DepthStencil = D3D12_DEPTH_STENCIL_VALUE{
-			.Depth = 1.0f,
-			.Stencil = 0u
-		}
-	};
-
-	DISPLAY_ERROR_DX_HR(
-		device->CreateCommittedResource( &heapProperties, D3D12_HEAP_FLAG_NONE, &desc,
-			D3D12_RESOURCE_STATE_DEPTH_WRITE, &cv, __uuidof(ID3D12Resource), &ret
-		), false
-	);
-
-	return ret;
-}
-
-// ID3D12GraphicsCommandList::ResourceBarrier 인터페이스를 통해
-// 리소스의 상태를 beforeState에서 afterState로 전환한다.
-// 사용되는 기본값들은 본문을 참조하자.
-void transitionResourceState( ID3D12GraphicsCommandList* cmdList,
-	ID3D12Resource* resource, D3D12_RESOURCE_STATES beforeState,
-	D3D12_RESOURCE_STATES afterState
-) {
-	auto barrier = D3D12_RESOURCE_BARRIER{
-		.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-		.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
-		.Transition = D3D12_RESOURCE_TRANSITION_BARRIER{
-			.pResource = resource,
-			.Subresource = 0u,
-			.StateBefore = beforeState,
-			.StateAfter = afterState
-		}
-	};
-	DISPLAY_ERROR_DX_VOID( cmdList->ResourceBarrier(1u, &barrier), false );
-}
-
-
 // DXGI Factory를 초기화하고, DXGI Adapter들을 열거한다.
 // 그리고 그 중 하나를 선택하여 curAdapter_에 저장한다.
 void GFX::setupDXGI(D3D_FEATURE_LEVEL d3dFeatureLevel) {
@@ -274,6 +164,18 @@ void GFX::init(std::size_t cmdListPoolSize) {
 	shaders_.try_emplace(L"SampleShader", createSampleShader(device_.Get(), defaultRootSig.get()));
 
 	rootSigs_.try_emplace(L"DefaultRootSignature", std::make_unique<DefaultRootSig>(std::move(defaultRootSig)));
+
+	// Load Fence 추가
+	const auto fenceName = L"LoadFence"s;
+	fences_.try_emplace(fenceName, Fence{});
+	DISPLAY_ERROR_DX_HR(
+		device_->CreateFence(0u, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence), &fences_.at(fenceName).fence),
+		false
+	);
+	setD3DName(fences_.at(fenceName).fence.Get(), fenceName);
+	fences_.at(fenceName).event = CreateEvent(
+		nullptr, false, false, fenceName.c_str()
+	);
 }
 
 // 윈도우와 연결된 SwapChain을 만든다.
@@ -366,6 +268,39 @@ void GFX::createSwapChain(HWND hWnd) {
 	}
 }
 
+void GFX::loadMeshes() {
+	auto& fence = fences_.at(L"LoadFence");
+
+	// 명령 리스트와 명령 할당자 할당
+	auto cmdList = freeCmdLists_.front();
+	freeCmdLists_.pop_front();
+
+	auto cmdAlloc = freeCmdAllocators_.front();
+	freeCmdAllocators_.pop_front();
+
+	// 명령 리스트 초기화
+	DISPLAY_ERROR_DX_VOID(cmdAlloc->Reset(), false);
+	DISPLAY_ERROR_DX_VOID(cmdList->Reset(cmdAlloc.Get(), nullptr), false);
+
+	// 명령 기록 시작
+	auto [mesh, auxUploadBuffers] = buildCubeMesh(device_.Get(), cmdList.Get());
+	meshCube_ = std::move(mesh);
+
+	// 명령 기록 끝, 명령 실행
+	DISPLAY_ERROR_DX_VOID(cmdList->Close(), false);
+
+	ID3D12CommandList* tmpCmdLists[] = { cmdList.Get() };
+
+	DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, tmpCmdLists), false);
+
+	// 펜스 동기화
+	fence.associatedCmdLists_.push_back(std::move(cmdList));
+	fence.associatedCmdAllocators_.push_back(std::move(cmdAlloc));
+	fence.associatedResources_.append_range(std::move(auxUploadBuffers));
+	signalFence(L"LoadFence");
+	waitOnFence(L"LoadFence");
+}
+
 void GFX::render() {
 	// 예외 검사
 	DISPLAY_ERROR_STR(curAdapter_, "[GFX Error] 활성화된 그래픽 어댑터가 없습니다. "
@@ -446,7 +381,7 @@ void GFX::render() {
 
 	renderSampleShader(cmdList.Get());
 
-	// 명령 기록 끝, 화면에 출력
+	// 명령 기록 끝, 명령 실행 및 화면에 출력
 	transitionResourceState(cmdList.Get(), backBuffers_[backbufIdx].Get(),
 		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT
 	);
@@ -459,6 +394,7 @@ void GFX::render() {
 
 	DISPLAY_ERROR_DX_VOID( swapChain_->Present(0, 0), false );
 
+	// 펜스 동기화
 	// 렌더링할 수 있는 백버퍼가 있다면,
 	// wait하지 않고 이어서 렌더링을 하도록 한다.
 	// 백버퍼는 순차적으로 사용되므로, (백버퍼 개수 - 1) 프레임 전의 렌더링에 대한
@@ -496,6 +432,8 @@ void GFX::signalFence(const std::wstring& fenceName) {
 	);
 }
 
+// fenceName을 갖는 Fence에 대해서 wait하고,
+// 사용이 끝난 명령 리스트, 명령 할당자, 업로드 버퍼 등을 반환한다.
 void GFX::waitOnFence(const std::wstring& fenceName) {
 	auto validFenceName = fences_.contains(fenceName);
 	DISPLAY_ERROR_STR(validFenceName, L"[GFX Error] GFX::waitOnFence: 펜스 "s + fenceName + L"를 찾을 수 없습니다.\n", false);
@@ -505,14 +443,16 @@ void GFX::waitOnFence(const std::wstring& fenceName) {
 
 	auto& fence = fences_.at(fenceName);
 	if (fence.fence->GetCompletedValue() == fence.desiredValue) {
-		freeCmdLists_.merge(std::move(fence.associatedCmdLists_));
-		freeCmdAllocators_.merge(std::move(fence.associatedCmdAllocators_));
+		freeCmdLists_.splice(freeCmdLists_.end(), std::move(fence.associatedCmdLists_));
+		freeCmdAllocators_.splice(freeCmdAllocators_.end(), std::move(fence.associatedCmdAllocators_));
+		fence.associatedResources_.clear();
 		return;
 	}
 
 	fence.fence->SetEventOnCompletion(fence.desiredValue, fence.event);
 	WaitForSingleObject(fence.event, INFINITE);
 
-	freeCmdLists_.merge(std::move(fence.associatedCmdLists_));
-	freeCmdAllocators_.merge(std::move(fence.associatedCmdAllocators_));
+	freeCmdLists_.splice(freeCmdLists_.end(), std::move(fence.associatedCmdLists_));
+	freeCmdAllocators_.splice(freeCmdAllocators_.end(), std::move(fence.associatedCmdAllocators_));
+	fence.associatedResources_.clear();
 }
