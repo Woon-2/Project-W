@@ -1,12 +1,5 @@
 #include "object.hpp"
 
-
-/*
-mu::transpose(mu::Mat4x4() * mu::Mat4x4(mu::rotate(mu::Degree(30.f), mu::NVec3(0.f, 1.f, 0.f)))
-				* mu::Mat4x4(mu::rotate(mu::Degree(30.f), mu::NVec3(1.f, 0.f, 0.f))) * mu::translate(mu::Vec3(0.f, -0.2f, 0.6f))
-				* mu::Mat4x4(mu::scale(0.25f, 0.25f, 0.25f)))
-*/
-
 Object::Object()
 	: world_( mu::Mat4x4(mu::scale(0.25f, 0.25f, 0.25f))
 		* mu::translate(mu::Vec3(0.f, -0.2f, 0.6f))

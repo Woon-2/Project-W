@@ -210,7 +210,7 @@ void GFX::createSwapChain() {
 	};
 
 	scfd_ = DXGI_SWAP_CHAIN_FULLSCREEN_DESC{
-		.RefreshRate = DXGI_RATIONAL{ .Numerator = 60, .Denominator = 1 },
+		.RefreshRate = DXGI_RATIONAL{ .Numerator = 144, .Denominator = 1 },
 		.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED,
 		.Scaling = DXGI_MODE_SCALING_UNSPECIFIED,
 		.Windowed = true
@@ -427,6 +427,10 @@ void GFX::render() {
 	signalFence(L"FrameFence" + std::to_wstring(idxFenceToSignal));
 	waitOnFence(L"FrameFence" + std::to_wstring(idxFenceToWait));
 
+	// 처리한 DrawEvent들 제거
+	drawEventsSamplePipeline_.clear();
+
+	// 프레임 인덱스 갱신
 	++frameIdx;
 }
 

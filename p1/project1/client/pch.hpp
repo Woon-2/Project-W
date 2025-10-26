@@ -105,10 +105,13 @@ using u16t = std::uint16_t;
 using u32t = std::uint32_t;
 using u64t = std::uint64_t;
 
-using NanoSeconds = std::chrono::duration<float, std::nano>;
-using MicroSeconds = std::chrono::duration<float, std::micro>;
+using Nanoseconds = std::chrono::duration<float, std::nano>;
+using Microseconds = std::chrono::duration<float, std::micro>;
 using Milliseconds = std::chrono::duration<float, std::milli>;
 using Seconds = std::chrono::duration<float>;
+
+using SystemClock = std::chrono::system_clock;
+using HighResolutionClock = std::chrono::high_resolution_clock;
 
 using XMFLOAT2 = DirectX::XMFLOAT2;
 using XMFLOAT3 = DirectX::XMFLOAT3;

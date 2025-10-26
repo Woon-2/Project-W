@@ -2,6 +2,7 @@
 #include "errorHandling.hpp"
 #include "gfx.hpp"
 #include "object.hpp"
+#include "timer.hpp"
 
 inline constexpr const char* wndClsName = "wndCls";
 inline constexpr const char* wndName = "Project1";
@@ -56,6 +57,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
 	gCube.setMesh(gfx.cubeMesh());
 
+	Timer timer{};
+
 	// 윈도우 메시지 루프
 	MSG msg;
 	while (true) {
@@ -64,13 +67,17 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 				return static_cast<int>(msg.wParam);
 			}
 
-
 			TranslateMessage(&msg);
 			DispatchMessageA(&msg);
 		}
 
-		gCube.update(16ms);
+		timer.tick();
+
+		gCube.update(timer.deltaTime<Milliseconds>());
 		gCube.render(gfx);
+
+		auto title = wndName + "(FPS: "s + std::to_string(timer.fps()) + ")"s;
+		SetWindowTextA(ghWnd, title.c_str());
 
 		gfx.render();
 	}
