@@ -56,6 +56,20 @@ struct PerDrawcallData {
 	XMFLOAT4 color;
 };
 
-}
+}	// namespace SampleShader
+
+struct Mesh;
+struct SubMesh;
+
+// 렌더링 파이프라인별 구조체 -------------------------
+namespace SamplePipeline {
+
+struct DrawEvent {
+	mu::Mat4x4 world;
+	const Mesh* mesh;
+	const SubMesh* subMesh;
+};
+
+}	// namespace SamplePipeline
 
 #endif	// __shader_HPP

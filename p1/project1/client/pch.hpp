@@ -77,6 +77,7 @@
 #include <utility>
 #include <cstdint>
 #include <type_traits>
+#include <chrono>
 
 #include "mathUtil.hpp"
 
@@ -103,6 +104,11 @@ using u8t = std::uint8_t;
 using u16t = std::uint16_t;
 using u32t = std::uint32_t;
 using u64t = std::uint64_t;
+
+using NanoSeconds = std::chrono::duration<float, std::nano>;
+using MicroSeconds = std::chrono::duration<float, std::micro>;
+using Milliseconds = std::chrono::duration<float, std::milli>;
+using Seconds = std::chrono::duration<float>;
 
 using XMFLOAT2 = DirectX::XMFLOAT2;
 using XMFLOAT3 = DirectX::XMFLOAT3;

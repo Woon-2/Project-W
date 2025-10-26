@@ -59,14 +59,18 @@ public:
 	// D3D12 Device와 Command Queue, Descriptor Heap들을 만든다.
 	// 인자로 전달받은 개수만큼 CommandList와 Command Allocator를 만든다.
 	// Root Signature와 Shader(PSO)들을 만든다.
-	// 그리고 Load Fence를 만든다.
+	// Load Fence를 만든다.
+	// 그리고 DrawEvent들을 저장하기 위한 메모리를 예약한다.
 	void init(std::size_t cmdListPoolSize);
 	// 윈도우와 연결된 SwapChain을 만든다.
 	// Back Buffer 개수 만큼의 room을 가지는 Constant Buffer들을 만든다.
 	// 그리고 Back Buffer 개수 만큼의 Frame Fence들을 만든다.
 	void createSwapChain();
 
+	void addDrawEvent(const SamplePipeline::DrawEvent& drawEvent);
+
 	void loadMeshes();
+	const Mesh* cubeMesh() const { return &meshCube_; }
 
 	void render();
 
@@ -114,6 +118,8 @@ private:
 	std::map<std::wstring, ComPtr<ID3D12PipelineState>> shaders_{};
 
 	std::map<std::wstring, Fence> fences_{};
+
+	std::vector<SamplePipeline::DrawEvent> drawEventsSamplePipeline_{};
 
 	std::size_t frameIdx = 0u;
 

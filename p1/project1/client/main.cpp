@@ -1,6 +1,7 @@
 #include "pch.hpp"
 #include "errorHandling.hpp"
 #include "gfx.hpp"
+#include "object.hpp"
 
 inline constexpr const char* wndClsName = "wndCls";
 inline constexpr const char* wndName = "Project1";
@@ -8,6 +9,8 @@ inline constexpr const char* wndName = "Project1";
 HWND ghWnd = nullptr;
 RECT gWndRect{ 0, 0, 1024, 768 };
 RECT gClientRect{ 0, 0, 1024, 768 };
+
+Object gCube{};
 
 LRESULT wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -51,6 +54,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
 	gfx.loadMeshes();
 
+	gCube.setMesh(gfx.cubeMesh());
+
 	// 윈도우 메시지 루프
 	MSG msg;
 	while (true) {
@@ -63,6 +68,9 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 			TranslateMessage(&msg);
 			DispatchMessageA(&msg);
 		}
+
+		gCube.update(16ms);
+		gCube.render(gfx);
 
 		gfx.render();
 	}

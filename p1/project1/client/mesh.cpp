@@ -141,20 +141,25 @@ std::pair<Mesh, std::vector<ComPtr<ID3D12Resource>>> buildCubeMesh(
         /* .StrideInBytes = */ static_cast<UINT>( sizeof(XMFLOAT2) )
     );
 
-    // Index Buffer View 구성
-    mesh.ibViews.try_emplace( L"CubeMesh_IB",
-        /* .BufferLocation = */ ib->GetGPUVirtualAddress(),
-        /* .SizeInBytes = */ static_cast<UINT>(indices.size() * sizeof(u16t)),
-        /* .Format = */ DXGI_FORMAT_R16_UINT
+    // SubMesh 구성
+    mesh.subMeshes.try_emplace(
+        L"CubeMesh_SubMesh", SubMesh{
+            .name = L"CubeMesh_SubMesh",
+            .ibView = D3D12_INDEX_BUFFER_VIEW {
+                .BufferLocation = ib->GetGPUVirtualAddress(),
+                .SizeInBytes = static_cast<UINT>(indices.size() * sizeof(u16t)),
+                .Format = DXGI_FORMAT_R16_UINT
+            },
+            .material = 0u
+        }
     );
 
-    // 자료구조 등록 (view들은 위에서 등록하였음)
+    // 자료구조 등록 (Vertex Buffer View와 SubMesh는 위에서 등록하였음)
 	mesh.vbs.push_back(std::move(vbPosition));
     mesh.vbIdxMap.try_emplace(L"CubeMesh_VB_Position", 0u);
     mesh.vbs.push_back(std::move(vbUV));
     mesh.vbIdxMap.try_emplace(L"CubeMesh_VB_UV", 1u);
 	mesh.ibs.try_emplace(L"CubeMesh_IB", std::move(ib));
-	mesh.materials.try_emplace(L"CubeMesh_Material", 0u);
 
 	auxUploadBuffers.push_back(std::move(vbPositionu));
     auxUploadBuffers.push_back(std::move(vbUVu));
