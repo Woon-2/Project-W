@@ -137,6 +137,7 @@
     <ClInclude Include="mesh.hpp" />
     <ClInclude Include="pch.hpp" />
     <ClInclude Include="shader.hpp" />
+    <ClInclude Include="timsort.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="errorHandling.cpp" />

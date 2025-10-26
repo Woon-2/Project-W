@@ -200,3 +200,48 @@ void copyResource(ID3D12GraphicsCommandList* cmdList,
 	transitionResourceState(cmdList, destRes, D3D12_RESOURCE_STATE_COPY_DEST, destResState);
 	transitionResourceState(cmdList, srcRes, D3D12_RESOURCE_STATE_COPY_SOURCE, srcResState);
 }
+
+// 기본 생성자를 호출하고 init을 호출하는 것과 같다.
+ShaderInputBuffer::ShaderInputBuffer( ID3D12Device* device, UINT64 byteWidth,
+	std::size_t roomCnt, const std::wstring& name
+) : ShaderInputBuffer() {
+	init(device, byteWidth, roomCnt, name);
+}
+
+// byteWidth 크기의 리소스를 roomCnt 개 만큼 만든다.
+void ShaderInputBuffer::init( ID3D12Device* device, UINT64 byteWidth,
+	std::size_t roomCnt, const std::wstring& name
+) {
+	for (std::size_t i = 0u; i < roomCnt; ++i) {
+		auto res = createBufferResource(device, nullptr, byteWidth, BufferCreationType::UploadBuffer);
+		setD3DName(res.Get(), name + std::to_wstring(i));
+		auto address = res->GetGPUVirtualAddress();
+		void* mappedRegion = nullptr;
+		DISPLAY_ERROR_DX_HR( res->Map(0u, nullptr, &mappedRegion), false );
+
+		resources_.push_back(std::move(res));
+		addresses_.push_back(address);
+		mappedRegions_.push_back(mappedRegion);
+	}
+}
+
+// roomIdx 리소스의 gpu 데이터를 data와 동기화한다.
+void ShaderInputBuffer::stage(std::size_t roomIdx, const void* data, std::size_t byteWidth) {
+	std::memcpy(mappedRegions_.at(roomIdx), data, byteWidth);
+}
+
+// roomIdx의 리소스를 루트 시그너처에 바인드한다.
+void ConstantBuffer::bind(ID3D12GraphicsCommandList* cmdList, UINT rootParamIdx, std::size_t roomIdx) {
+	DISPLAY_ERROR_DX_VOID(
+		cmdList->SetGraphicsRootConstantBufferView(rootParamIdx, addresses_.at(roomIdx)),
+		false
+	);
+}
+
+// roomIdx의 리소스를 루트 시그너처에 바인드한다.
+void StructuredBuffer::bind(ID3D12GraphicsCommandList* cmdList, UINT rootParamIdx, std::size_t roomIdx) {
+	DISPLAY_ERROR_DX_VOID(
+		cmdList->SetGraphicsRootShaderResourceView(rootParamIdx, addresses_.at(roomIdx)),
+		false
+	);
+}

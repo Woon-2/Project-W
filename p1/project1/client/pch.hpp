@@ -68,6 +68,7 @@
 #include <unordered_map>
 #include <numeric>
 #include <ranges>
+#include <concepts>
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -109,6 +110,8 @@ using XMUINT4 = DirectX::XMUINT4;
 using XMINT2 = DirectX::XMINT2;
 using XMINT3 = DirectX::XMINT3;
 using XMINT4 = DirectX::XMINT4;
+using XMFLOAT3X3 = DirectX::XMFLOAT3X3;
+using XMFLOAT4X4 = DirectX::XMFLOAT4X4;
 
 template <class TEnum>
 constexpr std::underlying_type_t<TEnum> etoi(TEnum e) {

@@ -1,6 +1,14 @@
 #include "gfx.hpp"
 #include "errorHandling.hpp"
 
+// GFX가 소멸할 때, 제출된 모든 GPU작업이 완료되고 나서 소멸하도록 한다.
+GFX::~GFX() {
+	for (std::size_t i = 0u; i < backBuffers_.size(); ++i) {
+		waitOnFence(L"FrameFence"s + std::to_wstring(i));
+	}
+	waitOnFence(L"LoadFence");
+}
+
 // DXGI Factory를 초기화하고, DXGI Adapter들을 열거한다.
 // 그리고 그 중 하나를 선택하여 curAdapter_에 저장한다.
 void GFX::setupDXGI(D3D_FEATURE_LEVEL d3dFeatureLevel) {
@@ -179,6 +187,8 @@ void GFX::init(std::size_t cmdListPoolSize) {
 }
 
 // 윈도우와 연결된 SwapChain을 만든다.
+// Back Buffer 개수 만큼의 room을 가지는 Constant Buffer들을 만든다.
+// 그리고 Back Buffer 개수 만큼의 Frame Fence들을 만든다.
 // Scaling, BufferCount는 후에 매개변수로 전달받도록 하자.
 void GFX::createSwapChain(HWND hWnd) {
 	// 스왑체인 생성
@@ -252,6 +262,9 @@ void GFX::createSwapChain(HWND hWnd) {
 			true
 		);
 	}
+
+	// 백버퍼 개수 만큼의 room을 가지는 상수 버퍼들 생성
+	cbCube_.init(device_.Get(), sizeof(SampleShader::PerDrawcallData), backBuffers_.size(), L"ConstantBuffer_Cube");
 
 	// Fence들 생성
 	for (std::size_t i = 0u; i < backBuffers_.size(); ++i) {
@@ -411,12 +424,21 @@ void GFX::render() {
 }
 
 void GFX::renderSampleShader(ID3D12GraphicsCommandList* cmdList) {
-	cmdList->SetGraphicsRootSignature(rootSigs_.at(L"DefaultRootSignature")->get());
-	cmdList->SetPipelineState(shaders_.at(L"SampleShader").Get());
+	auto& pRootSig = rootSigs_.at(L"DefaultRootSignature");
+	auto& shader = shaders_.at(L"SampleShader");
+
+	cmdList->SetGraphicsRootSignature(pRootSig->get());
+	cmdList->SetPipelineState(shader.Get());
+
+	const auto roomIdx = frameIdx % backBuffers_.size();
 	
 	// 메시(IA) 그리기(Draw Call)
+	cbCube_.bind(cmdList, pRootSig->paramIdx(L"PerDrawcallData"), roomIdx);
+	// ...
 }
 
+// fenceName을 갖는 Fence의 desiredValue 값을 1 증가시키고
+// GPU 큐에 그 갱신 명령을 삽입한다.
 void GFX::signalFence(const std::wstring& fenceName) {
 	auto validFenceName = fences_.contains(fenceName);
 	DISPLAY_ERROR_STR(validFenceName, L"[GFX Error] GFX::signalFence: 펜스 "s + fenceName + L"를 찾을 수 없습니다.\n", false);

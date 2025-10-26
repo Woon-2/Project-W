@@ -47,4 +47,15 @@ public:
 private:
 };
 
+// 셰이더별 구조체 ------------------------------------
+// SampleShader
+namespace SampleShader {
+
+struct PerDrawcallData {
+	XMFLOAT4X4 wvp;
+	XMFLOAT4 color;
+};
+
+}
+
 #endif	// __shader_HPP

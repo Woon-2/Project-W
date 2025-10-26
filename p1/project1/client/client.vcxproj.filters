@@ -16,6 +16,12 @@
     <Filter Include="셰이더 파일">
       <UniqueIdentifier>{89db8676-e45c-4f45-9074-a868d495d197}</UniqueIdentifier>
     </Filter>
+    <Filter Include="외부 소스 파일">
+      <UniqueIdentifier>{21a79c58-a2be-4643-a3f5-6e6d43bb35d6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="외부 헤더 파일">
+      <UniqueIdentifier>{553b86c3-6001-4477-ae47-86d5fcb3b29c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.hpp">
@@ -35,6 +41,9 @@
     </ClInclude>
     <ClInclude Include="gfxUtil.hpp">
       <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="timsort.hpp">
+      <Filter>외부 헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

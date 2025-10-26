@@ -41,6 +41,13 @@ struct Fence {
 
 class GFX {
 public:
+	GFX() = default;
+	GFX(const GFX&) = delete;
+	GFX& operator=(const GFX&) = delete;
+	GFX(GFX&&) noexcept = delete;
+	GFX& operator=(GFX&&) noexcept = delete;
+	~GFX();
+
 	// 장치 초기화: setupDXGI, init, createSwapChain 순으로 호출한다.
 
 	// DXGI Factory를 초기화하고, DXGI Adapter들을 열거한다.
@@ -52,6 +59,7 @@ public:
 	// 그리고 Load Fence를 만든다.
 	void init(std::size_t cmdListPoolSize);
 	// 윈도우와 연결된 SwapChain을 만든다.
+	// Back Buffer 개수 만큼의 room을 가지는 Constant Buffer들을 만든다.
 	// 그리고 Back Buffer 개수 만큼의 Frame Fence들을 만든다.
 	void createSwapChain(HWND hWnd);
 
@@ -63,6 +71,8 @@ public:
 private:
 	void renderSampleShader(ID3D12GraphicsCommandList* cmdList);
 
+	// fenceName을 갖는 Fence의 desiredValue 값을 1 증가시키고
+	// GPU 큐에 그 갱신 명령을 삽입한다.
 	void signalFence(const std::wstring& fenceName);
 	// fenceName을 갖는 Fence에 대해서 wait하고,
 	// 사용이 끝난 명령 리스트, 명령 할당자, 업로드 버퍼 등을 반환한다.
@@ -105,7 +115,7 @@ private:
 	std::size_t frameIdx = 0u;
 
 	Mesh meshCube_{};
-	ComPtr<ID3D12Resource> cbvCube_{};
+	ConstantBuffer cbCube_{};
 };
 
 #endif	// __GFX_HPP

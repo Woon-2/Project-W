@@ -92,4 +92,53 @@ void copyResource( ID3D12GraphicsCommandList* cmdList,
 	D3D12_RESOURCE_STATES srcResState, D3D12_RESOURCE_STATES destResState
 );
 
+// ConstantBuffer, StructuredBuffer 등
+// 셰이더의 입력으로 쓰이는 버퍼들을 대표한다.
+// 여러 개의 CommandList에서 쓰이고,
+// 각각의 CommandList에서 개별적인 데이터를 사용하고 싶을 때
+// roomCnt를 그러한 CommandList의 개수로 설정한다.
+// 각각의 room이 반드시 의도된 CommandList에서만 사용되도록 주의하자.
+class ShaderInputBuffer {
+public:
+	ShaderInputBuffer() = default;
+	// 기본 생성자를 호출하고 init을 호출하는 것과 같다.
+	ShaderInputBuffer(ID3D12Device* device, UINT64 byteWidth, std::size_t roomCnt, const std::wstring& name);
+
+	// byteWidth 크기의 리소스를 roomCnt 개 만큼 만든다.
+	void init(ID3D12Device* device, UINT64 byteWidth, std::size_t roomCnt, const std::wstring& name);
+	// roomIdx의 리소스를 루트 시그너처에 바인드한다.
+	virtual void bind(ID3D12GraphicsCommandList* cmdList, UINT rootParamIdx, std::size_t roomIdx) = 0;
+
+	// roomIdx 리소스의 gpu 데이터를 range와 동기화한다.
+	template <std::ranges::sized_range R>
+	void stage(std::size_t roomIdx, const R& range) {
+		stage(roomIdx, std::data(range), std::size(range));
+	}
+	// roomIdx 리소스의 gpu 데이터를 elems와 동기화한다.
+	template <class T>
+	void stage(std::size_t roomIdx, const T* elems, std::size_t elemCnt) {
+		stage(roomIdx, static_cast<const void*>(elems), elemCnt * sizeof(T));
+	}
+	// roomIdx 리소스의 gpu 데이터를 data와 동기화한다.
+	void stage(std::size_t roomIdx, const void* data, std::size_t byteWidth);
+
+protected:
+	std::vector<D3D12_GPU_VIRTUAL_ADDRESS> addresses_{};
+
+private:
+	std::vector<ComPtr<ID3D12Resource>> resources_{};
+	std::vector<void*> mappedRegions_{};
+	std::wstring name_{};
+};
+
+class ConstantBuffer : public ShaderInputBuffer {
+public:
+	void bind(ID3D12GraphicsCommandList* cmdList, UINT rootParamIdx, std::size_t roomIdx) override;
+};
+
+class StructuredBuffer : public ShaderInputBuffer {
+public:
+	void bind(ID3D12GraphicsCommandList* cmdList, UINT rootParamIdx, std::size_t roomIdx) override;
+};
+
 #endif	// __gfxUtil_HPP
