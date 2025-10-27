@@ -11,8 +11,6 @@ HWND ghWnd = nullptr;
 RECT gWndRect{ 0, 0, 1024, 768 };
 RECT gClientRect{ 0, 0, 1024, 768 };
 
-Object gCube{};
-
 LRESULT wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) 
@@ -55,7 +53,29 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
 	gfx.loadMeshes();
 
-	gCube.setMesh(gfx.cubeMesh());
+	auto cubes = std::vector<std::vector<std::vector<Object>>>(10u);
+	for (auto& plane : cubes) {
+		plane.resize(10u);
+		for (auto& row : plane) {
+			row.resize(10u);
+		}
+	}
+
+	for (std::size_t i = 0u; i < cubes.size(); ++i) {
+		for (std::size_t j = 0u; j < cubes[i].size(); ++j) {
+			for (std::size_t k = 0u; k < cubes[i][j].size(); ++k) {
+				cubes[i][j][k].setMesh(gfx.cubeMesh());
+				cubes[i][j][k].pos_ = mu::Vec3(
+					(static_cast<int>(k) - static_cast<int>(cubes.size() / 2)) * 0.25f,
+					(static_cast<int>(j) - static_cast<int>(cubes.size() / 2)) * 0.25f,
+					(static_cast<int>(i) - static_cast<int>(cubes.size() / 2)) * 0.25f
+				);
+				cubes[i][j][k].omega_ = mu::Vec3(rand(-1.f, 1.f), rand(-1.f, 1.f), rand(-1.f, 1.f));
+				cubes[i][j][k].scale_ = 0.1f;
+			}
+			
+		}
+	}
 
 	Timer timer{};
 
@@ -73,8 +93,21 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
 		timer.tick();
 
-		gCube.update(timer.deltaTime<Milliseconds>());
-		gCube.render(gfx);
+		for (auto& plane : cubes) {
+			for (auto& row : plane) {
+				for (auto& cube : row) {
+					cube.update(timer.deltaTime<Milliseconds>());
+				}
+			}
+		}
+
+		for (auto& plane : cubes) {
+			for (auto& row : plane) {
+				for (auto& cube : row) {
+					cube.render(gfx);
+				}
+			}
+		}
 
 		auto title = wndName + "(FPS: "s + std::to_string(timer.fps()) + ")"s;
 		SetWindowTextA(ghWnd, title.c_str());

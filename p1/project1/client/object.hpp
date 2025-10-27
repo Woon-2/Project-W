@@ -6,7 +6,10 @@
 
 class Object {
 public:
-	Object();
+	mu::Vec3 pos_{};
+	mu::Vec3 omega_{};
+	mu::NQuat orient_{};
+	float scale_ = 0.f;
 
 	void setMesh(const Mesh* pMesh) { pMesh_ = pMesh; }
 	void update(Milliseconds deltaTime);
@@ -14,7 +17,6 @@ public:
 
 private:
 	mu::Mat4x4 world_{};
-	mu::Degree rotationDegree_{0.f};
 	const Mesh* pMesh_ = nullptr;
 };
 

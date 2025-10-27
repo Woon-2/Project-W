@@ -1,23 +1,15 @@
 #include "object.hpp"
 
-Object::Object()
-	: world_( mu::Mat4x4(mu::scale(0.25f, 0.25f, 0.25f))
-		* mu::translate(mu::Vec3(0.f, -0.2f, 0.6f))
-		* mu::Mat4x4(mu::rotate(mu::Degree(30.f), mu::NVec3(0.f, 1.f, 0.f, mu::NVec3::NoNormalize_t{})))
-		* mu::Mat4x4(mu::rotate(mu::Degree(30.f), mu::NVec3(1.f, 0.f, 0.f, mu::NVec3::NoNormalize_t{})))
-	) {}
-
 void Object::update(Milliseconds deltaTime) {
-	rotationDegree_ += (deltaTime / 1000ms) * 360.f;
-	if (rotationDegree_ >= mu::Degree(360.f)) {
-		rotationDegree_ -= 360.f;
-	}
+	// 쿼터니언 갱신: q' = 0.5 * ω_q * q
 
-	world_ = mu::Mat4x4(mu::scale(0.25f, 0.25f, 0.25f))
-		* mu::Mat4x4(mu::rotate(rotationDegree_, mu::NVec3(0.f, 1.f, 0.f, mu::NVec3::NoNormalize_t{})))
-		* mu::translate(mu::Vec3(0.f, -0.2f, 0.6f))
-		* mu::Mat4x4(mu::rotate(mu::Degree(30.f), mu::NVec3(0.f, 1.f, 0.f, mu::NVec3::NoNormalize_t{})))
-		* mu::Mat4x4(mu::rotate(mu::Degree(30.f), mu::NVec3(1.f, 0.f, 0.f, mu::NVec3::NoNormalize_t{})));
+	auto wq = mu::Quat(omega_, 0.f);
+	auto dq = orient_ * wq * 0.5f;
+	orient_ = orient_ + dq * std::chrono::duration_cast<Seconds>(deltaTime).count();
+
+	// 월드변환 행렬 갱신
+	world_ = mu::Mat4x4(mu::scale(scale_, scale_, scale_))
+		* mu::Mat4x4(orient_) * mu::translate(pos_);
 }
 
 void Object::render(GFX& gfx) {
