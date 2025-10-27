@@ -2,6 +2,7 @@
 #define TYPES_HPP
 
 #include <cstdint>
+#include <memory>
 
 using byte = std::uint8_t;
 using int16 = std::int16_t;

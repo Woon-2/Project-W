@@ -13,6 +13,20 @@ enum class IoType : byte {
 class IoEvent {
 public:
 	IoEvent( ) : over_( ), type_( IoType::None ) {}
+	IoEvent( IoType type ) : over_( ), type_( type ) {}
+
+	void clear( ) {
+		::ZeroMemory( &over_, sizeof( WSAOVERLAPPED ) );
+		type_ = IoType::None;
+	}
+
+	IoType getType( ) const {
+		return type_;
+	}
+
+	void setType( IoType type ) {
+		type_ = type;
+	}
 
 private:
 	WSAOVERLAPPED over_;
