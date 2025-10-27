@@ -201,6 +201,10 @@ void copyResource(ID3D12GraphicsCommandList* cmdList,
 	transitionResourceState(cmdList, srcRes, D3D12_RESOURCE_STATE_COPY_SOURCE, srcResState);
 }
 
+// 이미 만들어진 리소스를 가져와서, 메모리 영역을 분배받아 사용하는 경우
+// 이 생성자를 호출한다.
+// 리소스의 [addressOffset, addressOffset + allowedByteWidth) 영역을 분배받는다.
+// CreateCommittedResource 호출을 줄이고 gpu 메모리 사용량을 줄이는 이점이 있다.
 ShaderInputBuffer::ShaderInputBuffer( const std::vector<ComPtr<ID3D12Resource>>& premadeResources,
 	std::size_t addressOffset, std::size_t allowedByteWidth, const std::wstring& name
 ) : ShaderInputBuffer() {
@@ -257,7 +261,7 @@ void ShaderInputBuffer::stage(std::size_t roomIdx, const void* data, std::size_t
 	std::memcpy(mappedRegions_.at(roomIdx), data, byteWidth);
 }
 
-// roomIdx의 리소스를 루트 시그너처에 바인드한다.
+// roomIdx의 리소스를 루트 시그너처에 cbv로 연결한다.
 void ConstantBuffer::bind(ID3D12GraphicsCommandList* cmdList, UINT rootParamIdx, std::size_t roomIdx) {
 	DISPLAY_ERROR_DX_VOID(
 		cmdList->SetGraphicsRootConstantBufferView(rootParamIdx, addresses_.at(roomIdx)),
@@ -265,7 +269,7 @@ void ConstantBuffer::bind(ID3D12GraphicsCommandList* cmdList, UINT rootParamIdx,
 	);
 }
 
-// roomIdx의 리소스를 루트 시그너처에 바인드한다.
+// roomIdx의 리소스를 루트 시그너처에 srv로 연결한다.
 void StructuredBuffer::bind(ID3D12GraphicsCommandList* cmdList, UINT rootParamIdx, std::size_t roomIdx) {
 	DISPLAY_ERROR_DX_VOID(
 		cmdList->SetGraphicsRootShaderResourceView(rootParamIdx, addresses_.at(roomIdx)),
@@ -273,6 +277,9 @@ void StructuredBuffer::bind(ID3D12GraphicsCommandList* cmdList, UINT rootParamId
 	);
 }
 
+// ConstantBufferArray 객체를 생성한다.
+// room 개수만큼의 큰 리소스들을 생성하고
+// 그 리소스들을 기반으로 ConstantBuffer들을 생성해 담는다.
 ConstantBufferArray createConstantBufferArray( ID3D12Device* device, UINT64 elemByteWidth,
 	std::size_t elemCnt, std::size_t roomCnt, const std::wstring& name
 ) {

@@ -16,13 +16,12 @@
 // 1인칭 카메라 구현
 
 
-// Batching & Instancing 구현으로 큐브 여러 개 그려보기
-// 1000개의 큐브 렌더링
-// 1000개의 큐브 멀티스레드 렌더링
+// 멀티 스레딩
+// Batching & Instancing 구현
 // 큐브에 면별 재질 입혀보기
 // Constant Buffer와 메시 관리 주체 정하기
 // 카메라 구현, WASD 이동
-// 멀티스레드 로드 & 렌더링
+// 멀티스레드 로딩
 
 extern HWND ghWnd;
 
@@ -42,6 +41,10 @@ struct Fence {
 	HANDLE event;
 };
 
+// 렌더링을 총괄 책임지는 클래스
+// - 장치 초기화: setupDXGI, init, createSwapChain
+// - 객체 그리기: addDrawEvent로 객체마다 그려지길 원하는 파이프라인에 등록,
+//					이후 render 함수를 호출해 한번에 전부 그리기
 class GFX {
 public:
 	GFX() = default;
@@ -68,11 +71,13 @@ public:
 	// 그리고 Back Buffer 개수 만큼의 Frame Fence들을 만든다.
 	void createSwapChain();
 
+	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 	void addDrawEvent(const SamplePipeline::DrawEvent& drawEvent);
 
 	void loadMeshes();
 	const Mesh* cubeMesh() const { return &meshCube_; }
 
+	// 요청된 드로우콜들을 모아 객체들을 그리고 화면에 띄운다.
 	void render();
 
 
@@ -100,6 +105,7 @@ private:
 	std::list< ComPtr<ID3D12GraphicsCommandList> > freeCmdLists_{};
 	std::list< ComPtr<ID3D12CommandAllocator> > freeCmdAllocators_{};
 
+	// 스왑 체인 관련 변수들
 	DXGI_SWAP_CHAIN_DESC1 scd_{};
 	DXGI_SWAP_CHAIN_FULLSCREEN_DESC scfd_{};
 	ComPtr<IDXGISwapChain3> swapChain_ = nullptr;
@@ -110,18 +116,21 @@ private:
 	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> depthBufferDsvs_{};
 	std::vector<int> allocatedDsvIndices_{};
 
+	// 디스크립터 힙과 디스크립터 풀
 	DescriptorHeap rtvHeap_{};
 	DescriptorPool rtvPool_{};
 	DescriptorHeap dsvHeap_{};
 	DescriptorPool dsvPool_{};
 
+	// 루트 시그너처와 셰이더들
 	std::map<std::wstring, std::unique_ptr<RootSig>> rootSigs_{};
 	std::map<std::wstring, ComPtr<ID3D12PipelineState>> shaders_{};
 
-	std::map<std::wstring, Fence> fences_{};
-
+	// 파이프라인 관련 변수들
 	std::vector<SamplePipeline::DrawEvent> drawEventsSamplePipeline_{};
 	SamplePipeline::Resources resourcesSamplePipeline_{};
+
+	std::map<std::wstring, Fence> fences_{};
 
 	std::size_t frameIdx = 0u;
 

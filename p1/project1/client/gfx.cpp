@@ -230,6 +230,8 @@ void GFX::createSwapChain() {
 	// 백버퍼 및 깊이버퍼 리소스와 뷰 생성
 	backBuffers_.resize(3u);
 
+	// 백버퍼는 스왑체인에서 이미 만들었으므로,
+	// swapChain_->GetBuffer를 통해 가져와 디스크립터만 만든다.
 	for (int i = 0; i < 3; ++i) {
 		DISPLAY_ERROR_DX_HR(
 			swapChain_->GetBuffer(i, __uuidof(ID3D12Resource), &backBuffers_[i]),
@@ -246,6 +248,7 @@ void GFX::createSwapChain() {
 		);
 	}
 
+	// 깊이 버퍼는 우리가 따로 만들어주어야 한다.
 	for (int i = 0; i < 3; ++i) {
 		depthBuffers_.push_back(
 			createDepthBuffer( device_.Get(), DXGI_FORMAT_D24_UNORM_S8_UINT,
@@ -275,7 +278,8 @@ void GFX::createSwapChain() {
 		device_.Get(), sizeof(SampleShader::PerDrawcallData), 1000u, backBuffers_.size(), L"Sample_PerDrawcallData"
 	);
 
-	// Fence들 생성
+	// 프레임 펜스 생성
+	// i번째 프레임을 렌더링한 후 i-(백버퍼 수 - 1)번째 프레임의 펜스를 기다리도록 한다.
 	for (std::size_t i = 0u; i < backBuffers_.size(); ++i) {
 		const auto fenceName = L"FrameFence"s + std::to_wstring(i);
 		fences_.try_emplace(fenceName, Fence{});
@@ -290,6 +294,7 @@ void GFX::createSwapChain() {
 	}
 }
 
+// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 void GFX::addDrawEvent(const SamplePipeline::DrawEvent& drawEvent) {
 	drawEventsSamplePipeline_.push_back(drawEvent);
 }

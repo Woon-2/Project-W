@@ -101,6 +101,10 @@ void copyResource( ID3D12GraphicsCommandList* cmdList,
 class ShaderInputBuffer {
 public:
 	ShaderInputBuffer() = default;
+	// 이미 만들어진 리소스를 가져와서, 메모리 영역을 분배받아 사용하는 경우
+	// 이 생성자를 호출한다.
+	// 리소스의 [addressOffset, addressOffset + allowedByteWidth) 영역을 분배받는다.
+	// CreateCommittedResource 호출을 줄이고 gpu 메모리 사용량을 줄이는 이점이 있다.
 	ShaderInputBuffer( const std::vector<ComPtr<ID3D12Resource>>& premadeResource,
 		std::size_t addressOffset, std::size_t allowedByteWidth, const std::wstring& name
 	);
@@ -128,38 +132,57 @@ public:
 	void stage(std::size_t roomIdx, const void* data, std::size_t byteWidth);
 
 protected:
+	// 자식 클래스들의 bind 함수에서 접근해야 하므로 protected로 둔다.
+	// (SetGraphicsRootConstantBufferView 등의 함수는 D3D12_GPU_VIRTUAL_ADDRESS를 인자로 받는다.)
 	std::vector<D3D12_GPU_VIRTUAL_ADDRESS> addresses_{};
 
 private:
 	std::vector<ComPtr<ID3D12Resource>> resources_{};
 	std::vector<void*> mappedRegions_{};
 	std::wstring name_{};
-	UINT64 byteWidth_ = 0u;
+	UINT64 byteWidth_ = 0u;	// stage 함수에서 할당(분배)된 영역 바깥을 참조하는지 검사할 때 사용
 };
 
+// 셰이더의 ConstantBuffer와 연동되는 클래스,
+// 자세한 내용은 ShaderInputBuffer 클래스를 참조
+// bind 호출 시 루트 시그너처에 cbv로 바인딩된다.
 class ConstantBuffer : public ShaderInputBuffer {
 public:
 	using ShaderInputBuffer::ShaderInputBuffer;
 
+	// roomIdx의 리소스를 루트 시그너처에 cbv로 연결한다.
 	void bind( ID3D12GraphicsCommandList* cmdList,
 		UINT rootParamIdx, std::size_t roomIdx
 	) override;
 };
 
+// 셰이더의 StructuredBuffer와 연동되는 클래스,
+// 자세한 내용은 ShaderInputBuffer 클래스를 참조
+// bind 호출 시 루트 시그너처에 srv로 바인딩된다.
 class StructuredBuffer : public ShaderInputBuffer {
 public:
 	using ShaderInputBuffer::ShaderInputBuffer;
 
+	// roomIdx의 리소스를 루트 시그너처에 srv로 연결한다.
 	void bind( ID3D12GraphicsCommandList* cmdList,
 		UINT rootParamIdx, std::size_t roomIdx
 	) override;
 };
 
+// 크기가 작지 않은 ConstantBuffer 여러 개를 사용해야 할 경우,
+// 성능 최적화를 위해 ConstantBufferArray를 사용한다.
+// room 개수만큼의 리소스만 실제로 생성하고,
+// 내부의 ConstantBuffer 객체들은 그 리소스의 메모리 영역을 분할해 사용한다.
+// * createConstantBufferrArray 함수를 사용해서 생성한 뒤에,
+//	딱히 주의할 점은 없고, cbuffers 멤버에 접근 해 일반 ConstantBuffer 사용하듯이 사용하면 된다.
 struct ConstantBufferArray {
 	std::vector<ComPtr<ID3D12Resource>> sharedResources;
 	std::vector<ConstantBuffer> cbuffers;
 };
 
+// ConstantBufferArray 객체를 생성한다.
+// room 개수만큼의 큰 리소스들을 생성하고
+// 그 리소스들을 기반으로 ConstantBuffer들을 생성해 담는다.
 ConstantBufferArray createConstantBufferArray( ID3D12Device* device, UINT64 elemByteWidth,
 	std::size_t elemCnt, std::size_t roomCnt, const std::wstring& name
 );
