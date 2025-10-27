@@ -461,9 +461,12 @@ void GFX::renderSampleShader(ID3D12GraphicsCommandList* cmdList) {
 		});
 	}
 
+	const auto rootParamIdxPID = pRootSig->paramIdx(L"PerInstanceData");
+	const auto rootParamIdxPDD = pRootSig->paramIdx(L"PerDrawcallData");
+
 	resourcesSamplePipeline_.perInstanceData.stage(roomIdx, perInstanceData);
 	resourcesSamplePipeline_.perInstanceData.bind( cmdList, 
-		pRootSig->paramIdx(L"PerInstanceData"), roomIdx
+		rootParamIdxPID, roomIdx
 	);
 
 	// 메시 그리기(Draw Call)
@@ -473,7 +476,7 @@ void GFX::renderSampleShader(ID3D12GraphicsCommandList* cmdList) {
 
 	for (const auto& drawEvent : drawEventsSamplePipeline_) {
 		resourcesSamplePipeline_.perDrawcallData.cbuffers[idxDrawcall].bind(
-			cmdList, pRootSig->paramIdx(L"PerDrawcallData"), roomIdx
+			cmdList, rootParamIdxPDD, roomIdx
 		);
 
 		auto perDrawcallData = SampleShader::PerDrawcallData{
