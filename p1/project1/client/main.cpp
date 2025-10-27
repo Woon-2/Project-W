@@ -65,13 +65,13 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 		for (std::size_t j = 0u; j < cubes[i].size(); ++j) {
 			for (std::size_t k = 0u; k < cubes[i][j].size(); ++k) {
 				cubes[i][j][k].setMesh(gfx.cubeMesh());
-				cubes[i][j][k].pos_ = mu::Vec3(
+				cubes[i][j][k].setPos( mu::Vec3(
 					(static_cast<int>(k) - static_cast<int>(cubes.size() / 2)) * 0.25f,
 					(static_cast<int>(j) - static_cast<int>(cubes.size() / 2)) * 0.25f,
 					(static_cast<int>(i) - static_cast<int>(cubes.size() / 2)) * 0.25f
-				);
-				cubes[i][j][k].omega_ = mu::Vec3(rand(-1.f, 1.f), rand(-1.f, 1.f), rand(-1.f, 1.f));
-				cubes[i][j][k].scale_ = 0.1f;
+				) );
+				cubes[i][j][k].setOmega( mu::Vec3(rand(-1.f, 1.f), rand(-1.f, 1.f), rand(-1.f, 1.f)) );
+				cubes[i][j][k].setScale(0.1f);
 			}
 			
 		}
