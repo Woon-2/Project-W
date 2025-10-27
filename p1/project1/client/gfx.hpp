@@ -25,22 +25,6 @@
 
 extern HWND ghWnd;
 
-
-// ID3D12Fence 객체와 연관된 변수들을 모아놓기 위한 구조체
-struct Fence {
-	// Command List와 Command Allocator의 반납은 gpu에서의 사용이 끝난 후 이루어져야 한다.
-	// 즉, Fence의 Wait이 끝났을 때 반납되어야 한다.
-	// 따라서 Fence와 함께 그 Fence의 Wait이 끝날 때 반납할 Command List와 Command Allocator들을
-	// 같이 보관하면 용이하다.
-	// Copy 등에 사용되는 일회용 리소스들도 Fence의 Wait이 끝난 후 폐기한다.
-	std::list<ComPtr<ID3D12GraphicsCommandList>> associatedCmdLists_;
-	std::list<ComPtr<ID3D12CommandAllocator>> associatedCmdAllocators_;
-	std::vector<ComPtr<ID3D12Resource>> associatedResources_;
-	ComPtr<ID3D12Fence> fence;
-	UINT64 desiredValue;
-	HANDLE event;
-};
-
 // 렌더링을 총괄 책임지는 클래스
 // - 장치 초기화: setupDXGI, init, createSwapChain
 // - 객체 그리기: addDrawEvent로 객체마다 그려지길 원하는 파이프라인에 등록,
