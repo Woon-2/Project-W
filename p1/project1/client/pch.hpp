@@ -80,6 +80,10 @@
 #include <chrono>
 
 #include "mathUtil.hpp"
+#include "function.hpp"
+#include "threadPool.hpp"
+
+#include "concurrentqueue.h"
 
 #undef min
 #undef max

@@ -131,7 +131,9 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="concurrentqueue.h" />
     <ClInclude Include="errorHandling.hpp" />
+    <ClInclude Include="function.hpp" />
     <ClInclude Include="gfx.hpp" />
     <ClInclude Include="gfxUtil.hpp" />
     <ClInclude Include="mathUtil.hpp" />
@@ -139,6 +141,7 @@
     <ClInclude Include="object.hpp" />
     <ClInclude Include="pch.hpp" />
     <ClInclude Include="shader.hpp" />
+    <ClInclude Include="threadPool.hpp" />
     <ClInclude Include="timer.hpp" />
     <ClInclude Include="timsort.hpp" />
   </ItemGroup>
@@ -150,6 +153,7 @@
     <ClCompile Include="mesh.cpp" />
     <ClCompile Include="object.cpp" />
     <ClCompile Include="shader.cpp" />
+    <ClCompile Include="threadPool.cpp" />
     <ClCompile Include="timer.cpp" />
   </ItemGroup>
   <ItemGroup>

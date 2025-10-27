@@ -22,6 +22,15 @@
     <Filter Include="외부 헤더 파일">
       <UniqueIdentifier>{553b86c3-6001-4477-ae47-86d5fcb3b29c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="독립 구현체">
+      <UniqueIdentifier>{5b05f40f-b2be-416d-978a-3132bc92d12a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="독립 구현체\헤더 파일">
+      <UniqueIdentifier>{496e49d8-3f10-4804-8ed0-429b64be9e8d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="독립 구현체\소스 파일">
+      <UniqueIdentifier>{9117bb22-4458-4858-9ffa-1cdfb32f8575}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.hpp">
@@ -45,14 +54,23 @@
     <ClInclude Include="timsort.hpp">
       <Filter>외부 헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="mathUtil.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
     <ClInclude Include="object.hpp">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="timer.hpp">
       <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="concurrentqueue.h">
+      <Filter>외부 헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="mathUtil.hpp">
+      <Filter>독립 구현체\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="threadPool.hpp">
+      <Filter>독립 구현체\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="function.hpp">
+      <Filter>독립 구현체\헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -79,6 +97,9 @@
     </ClCompile>
     <ClCompile Include="timer.cpp">
       <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="threadPool.cpp">
+      <Filter>독립 구현체\소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
