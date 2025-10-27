@@ -40,7 +40,7 @@ private:
 	std::vector<moodycamel::ProducerToken> producerTokens_{};
 	std::vector<std::jthread> workerThreads_{};
 	std::atomic<int> roundRobinCounter_ = 0;
-	bool done_ = false;
+	std::atomic<bool> done_ = false;
 };
 
 #endif	// __threadPool_HPP

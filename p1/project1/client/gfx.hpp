@@ -15,11 +15,12 @@
 // 모델 로드
 // 1인칭 카메라 구현
 
-// 큐브 메시 완벽 생성
-// GFX에 큐브 메시와 Constant Buffer 곧바로 놓고 임시 월드변환 줘서 그려보기
-// DrawEvent, LoadEvent 구현
-// Constant Buffer와 메시 관리 주체 정하기, Batching & Instancing 구현으로 큐브 여러 개 그려보기
-// 큐브들 실시간으로 회전시켜보기
+
+// 1000개의 큐브 렌더링
+// 1000개의 큐브 멀티스레드 렌더링
+// 큐브에 면별 재질 입혀보기
+// Constant Buffer와 메시 관리 주체 정하기
+// Batching & Instancing 구현으로 큐브 여러 개 그려보기
 // 카메라 구현, WASD 이동
 // 멀티스레드 로드 & 렌더링
 
