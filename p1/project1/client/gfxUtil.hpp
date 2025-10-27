@@ -101,13 +101,18 @@ void copyResource( ID3D12GraphicsCommandList* cmdList,
 class ShaderInputBuffer {
 public:
 	ShaderInputBuffer() = default;
+	ShaderInputBuffer( const std::vector<ComPtr<ID3D12Resource>>& premadeResource,
+		std::size_t addressOffset, std::size_t allowedByteWidth, const std::wstring& name
+	);
 	// 기본 생성자를 호출하고 init을 호출하는 것과 같다.
 	ShaderInputBuffer(ID3D12Device* device, UINT64 byteWidth, std::size_t roomCnt, const std::wstring& name);
 
 	// byteWidth 크기의 리소스를 roomCnt 개 만큼 만든다.
 	void init(ID3D12Device* device, UINT64 byteWidth, std::size_t roomCnt, const std::wstring& name);
 	// roomIdx의 리소스를 루트 시그너처에 바인드한다.
-	virtual void bind(ID3D12GraphicsCommandList* cmdList, UINT rootParamIdx, std::size_t roomIdx) = 0;
+	virtual void bind( ID3D12GraphicsCommandList* cmdList,
+		UINT rootParamIdx, std::size_t roomIdx
+	) = 0;
 
 	// roomIdx 리소스의 gpu 데이터를 range와 동기화한다.
 	template <std::ranges::sized_range R>
@@ -129,16 +134,34 @@ private:
 	std::vector<ComPtr<ID3D12Resource>> resources_{};
 	std::vector<void*> mappedRegions_{};
 	std::wstring name_{};
+	UINT64 byteWidth_ = 0u;
 };
 
 class ConstantBuffer : public ShaderInputBuffer {
 public:
-	void bind(ID3D12GraphicsCommandList* cmdList, UINT rootParamIdx, std::size_t roomIdx) override;
+	using ShaderInputBuffer::ShaderInputBuffer;
+
+	void bind( ID3D12GraphicsCommandList* cmdList,
+		UINT rootParamIdx, std::size_t roomIdx
+	) override;
 };
 
 class StructuredBuffer : public ShaderInputBuffer {
 public:
-	void bind(ID3D12GraphicsCommandList* cmdList, UINT rootParamIdx, std::size_t roomIdx) override;
+	using ShaderInputBuffer::ShaderInputBuffer;
+
+	void bind( ID3D12GraphicsCommandList* cmdList,
+		UINT rootParamIdx, std::size_t roomIdx
+	) override;
 };
+
+struct ConstantBufferArray {
+	std::vector<ComPtr<ID3D12Resource>> sharedResources;
+	std::vector<ConstantBuffer> cbuffers;
+};
+
+ConstantBufferArray createConstantBufferArray( ID3D12Device* device, UINT64 elemByteWidth,
+	std::size_t elemCnt, std::size_t roomCnt, const std::wstring& name
+);
 
 #endif	// __gfxUtil_HPP

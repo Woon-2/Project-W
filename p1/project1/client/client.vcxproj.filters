@@ -101,6 +101,9 @@
     <ClCompile Include="threadPool.cpp">
       <Filter>독립 구현체\소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="pch.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders.hlsl">

@@ -2,6 +2,7 @@
 #define __shader_HPP
 
 #include "pch.hpp"
+#include "gfxUtil.hpp"
 
 struct CompiledShaderOutput {
 	ComPtr<ID3DBlob> blob;
@@ -51,9 +52,12 @@ private:
 // SampleShader
 namespace SampleShader {
 
-struct PerDrawcallData {
+struct PerInstanceData {
 	XMFLOAT4X4 wvp;
-	XMFLOAT4 color;
+};
+
+struct PerDrawcallData {
+	u32t firstInstanceIdx;
 };
 
 }	// namespace SampleShader
@@ -68,6 +72,19 @@ struct DrawEvent {
 	mu::Mat4x4 world;
 	const Mesh* mesh;
 	const SubMesh* subMesh;
+
+	auto operator<=>(const DrawEvent& rhs) const noexcept {
+		auto e = mesh <=> rhs.mesh;
+		if ( (mesh <=> rhs.mesh) == std::strong_ordering::equal ) {
+			return subMesh <=> rhs.subMesh;
+		}
+		return e;
+	}
+};
+
+struct Resources {
+	StructuredBuffer perInstanceData;
+	ConstantBufferArray perDrawcallData;
 };
 
 }	// namespace SamplePipeline

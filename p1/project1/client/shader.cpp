@@ -167,6 +167,16 @@ void DefaultRootSig::build(ID3D12Device* device) {
 		.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
 	} );
 
+	// t0: PerInstanceData
+	addParam( L"PerInstanceData", 1, D3D12_ROOT_PARAMETER{
+		.ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV,
+		.Descriptor = D3D12_ROOT_DESCRIPTOR{
+			.ShaderRegister = 0u,
+			.RegisterSpace = 0u
+		},
+		.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+	} );
+
 	// 루트 파라미터들을 d3d12 api에 배열로 넘겨주기 위해
 	// 벡터를 만들고, 저장된 파라미터 개수 만큼의 공간을 확보한다.
 	// 맵에 저장된 파라미터의 인덱스를 보고 임의 접근하여

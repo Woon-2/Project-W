@@ -16,11 +16,11 @@
 // 1인칭 카메라 구현
 
 
+// Batching & Instancing 구현으로 큐브 여러 개 그려보기
 // 1000개의 큐브 렌더링
 // 1000개의 큐브 멀티스레드 렌더링
 // 큐브에 면별 재질 입혀보기
 // Constant Buffer와 메시 관리 주체 정하기
-// Batching & Instancing 구현으로 큐브 여러 개 그려보기
 // 카메라 구현, WASD 이동
 // 멀티스레드 로드 & 렌더링
 
@@ -121,11 +121,11 @@ private:
 	std::map<std::wstring, Fence> fences_{};
 
 	std::vector<SamplePipeline::DrawEvent> drawEventsSamplePipeline_{};
+	SamplePipeline::Resources resourcesSamplePipeline_{};
 
 	std::size_t frameIdx = 0u;
 
 	Mesh meshCube_{};
-	ConstantBuffer cbCube_{};
 };
 
 #endif	// __GFX_HPP

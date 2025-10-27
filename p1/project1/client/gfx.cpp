@@ -266,8 +266,14 @@ void GFX::createSwapChain() {
 		);
 	}
 
-	// 백버퍼 개수 만큼의 room을 가지는 상수 버퍼들 생성
-	cbCube_.init(device_.Get(), sizeof(SampleShader::PerDrawcallData), backBuffers_.size(), L"ConstantBuffer_Cube");
+	// 백버퍼 개수만큼의 room을 가지는 파이프라인별 리소스들 생성
+	// 1000u를 변수로 대체하기
+	resourcesSamplePipeline_.perInstanceData.init(
+		device_.Get(), sizeof(SampleShader::PerInstanceData) * 1000u, backBuffers_.size(), L"Sample_PerInstanceData"
+	);
+	resourcesSamplePipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof(SampleShader::PerDrawcallData), 1000u, backBuffers_.size(), L"Sample_PerDrawcallData"
+	);
 
 	// Fence들 생성
 	for (std::size_t i = 0u; i < backBuffers_.size(); ++i) {
@@ -443,15 +449,39 @@ void GFX::renderSampleShader(ID3D12GraphicsCommandList* cmdList) {
 
 	const auto roomIdx = frameIdx % backBuffers_.size();
 	
+	// 메시 데이터 업로드
+	// 정렬을 통해 인스턴싱이 가능하도록 한다.
+	std::sort(drawEventsSamplePipeline_.begin(), drawEventsSamplePipeline_.end());
+	
+	/* thread_local */ auto perInstanceData = std::vector<SampleShader::PerInstanceData>();
+	perInstanceData.reserve(drawEventsSamplePipeline_.size());
+	for (const auto& drawEvent : drawEventsSamplePipeline_) {
+		perInstanceData.push_back(SampleShader::PerInstanceData{
+			.wvp = mu::transpose(drawEvent.world).getXmf()
+		});
+	}
+
+	resourcesSamplePipeline_.perInstanceData.stage(roomIdx, perInstanceData);
+	resourcesSamplePipeline_.perInstanceData.bind( cmdList, 
+		pRootSig->paramIdx(L"PerInstanceData"), roomIdx
+	);
+
 	// 메시 그리기(Draw Call)
 	DISPLAY_ERROR_DX_VOID( cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST), false );
+
+	u32t idxDrawcall = 0u;
+
 	for (const auto& drawEvent : drawEventsSamplePipeline_) {
-		cbCube_.bind(cmdList, pRootSig->paramIdx(L"PerDrawcallData"), roomIdx);
+		resourcesSamplePipeline_.perDrawcallData.cbuffers[idxDrawcall].bind(
+			cmdList, pRootSig->paramIdx(L"PerDrawcallData"), roomIdx
+		);
+
 		auto perDrawcallData = SampleShader::PerDrawcallData{
-			.wvp = mu::transpose(drawEvent.world).getXmf(),
-			.color = XMFLOAT4{ 1.f, 0.f, 0.f, 1.f }
+			.firstInstanceIdx = idxDrawcall
 		};
-		cbCube_.stage(roomIdx, &perDrawcallData, 1u);
+		resourcesSamplePipeline_.perDrawcallData.cbuffers[idxDrawcall].stage(
+			roomIdx, &perDrawcallData, 1u
+		);
 
 		DISPLAY_ERROR_DX_VOID(
 			cmdList->IASetVertexBuffers(0u, static_cast<UINT>(drawEvent.mesh->vbViews.size()),
@@ -464,6 +494,8 @@ void GFX::renderSampleShader(ID3D12GraphicsCommandList* cmdList) {
 			static_cast<UINT>(drawEvent.subMesh->ibView.SizeInBytes / sizeof(u16t)),
 			1u, 0u, 0, 0u
 		), false );
+
+		++idxDrawcall;
 	}
 }
 
