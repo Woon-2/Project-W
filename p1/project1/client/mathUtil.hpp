@@ -2598,6 +2598,16 @@ public:
         return *this;
     }
 
+    Quat& MU_CALLCONV operator*=(float rhs) __MathUtil_NOEXCEPT {
+        quat_ = dx::XMVectorMultiply(quat_, dx::XMVectorReplicate(rhs));
+        return *this;
+    }
+
+    Quat& MU_CALLCONV operator/=(float rhs) __MathUtil_NOEXCEPT {
+        quat_ = dx::XMVectorDivide(quat_, dx::XMVectorReplicate(rhs));
+        return *this;
+    }
+
     dx::XMVECTOR& get() __MathUtil_NOEXCEPT {
         return quat_;
     }
@@ -2841,6 +2851,18 @@ inline const Quat MU_CALLCONV operator*(Quat lhs, Quat rhs) __MathUtil_NOEXCEPT 
 
 inline const Quat MU_CALLCONV operator/(Quat lhs, Quat rhs) __MathUtil_NOEXCEPT {
     return dx::XMQuaternionMultiply(lhs.get(), dx::XMQuaternionInverse(rhs.get()));
+}
+
+inline const Quat MU_CALLCONV operator*(Quat lhs, float rhs) __MathUtil_NOEXCEPT {
+    return dx::XMVectorMultiply(lhs.get(), dx::XMVectorReplicate(rhs));
+}
+
+inline const Quat MU_CALLCONV operator*(float lhs, Quat rhs) __MathUtil_NOEXCEPT {
+    return rhs * lhs;
+}
+
+inline const Quat MU_CALLCONV operator/(Quat lhs, float rhs) __MathUtil_NOEXCEPT {
+    return dx::XMVectorDivide(lhs.get(), dx::XMVectorReplicate(rhs));
 }
 
 inline const Quat MU_CALLCONV quatRPY(
