@@ -78,6 +78,7 @@
 #include <cstdint>
 #include <type_traits>
 #include <chrono>
+#include <random>
 
 #include "mathUtil.hpp"
 #include "function.hpp"
@@ -129,9 +130,23 @@ using XMINT4 = DirectX::XMINT4;
 using XMFLOAT3X3 = DirectX::XMFLOAT3X3;
 using XMFLOAT4X4 = DirectX::XMFLOAT4X4;
 
+extern std::mt19937 gRandomEngine;
+
 template <class TEnum>
 constexpr std::underlying_type_t<TEnum> etoi(TEnum e) {
 	return static_cast<std::underlying_type_t<TEnum>>(e);
+}
+
+template <std::floating_point T, class TDist = std::uniform_real_distribution<T>>
+inline T rand(T closedBegin, T closedEnd) {
+	auto rng = TDist(closedBegin, closedEnd);
+	return rng(gRandomEngine);
+}
+
+template <std::integral T, class TDist = std::uniform_int_distribution<T>>
+inline T rand(T closedBegin, T closedEnd) {
+	auto rng = TDist(closedBegin, closedEnd);
+	return rng(gRandomEngine);
 }
 
 
