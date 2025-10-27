@@ -6,6 +6,7 @@
 // pSrc의 내용이 리소스에 복사된다.
 // creationType에 관계없이 srcByteWidth는 버퍼의 크기를 나타내므로,
 // 반드시 srcByteWidth에 유효한 값을 전달하여야 한다.
+// creationType에 따라 힙 타입과 리소스 초기 상태를 다르게 설정한다.
 ComPtr<ID3D12Resource> createBufferResource(
 	ID3D12Device* device, const void* pSrc, UINT64 srcByteWidth,
 	BufferCreationType creationType
