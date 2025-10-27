@@ -13,7 +13,8 @@ enum class BufferCreationType {
 };
 
 // 버퍼 리소스를 생성하는 함수
-// creationType이 UploadBuffer인 경우에만 pSrc의 내용을 반영한다.
+// creationType이 UploadBuffer이고 pSrc != nullptr인 경우에만
+// pSrc의 내용이 리소스에 복사된다.
 // creationType에 관계없이 srcByteWidth는 버퍼의 크기를 나타내므로,
 // 반드시 srcByteWidth에 유효한 값을 전달하여야 한다.
 ComPtr<ID3D12Resource> createBufferResource(
