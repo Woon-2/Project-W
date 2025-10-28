@@ -12,5 +12,6 @@
 #include <WS2tcpip.h>
 #include <MSWSock.h>
 #pragma comment(lib, "Ws2_32.lib")
+#pragma comment(lib, "Mswsock.lib")
 
 #endif // SIMPLIFIED_WINDOWS_HPP
