@@ -85,7 +85,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
 	auto player = std::make_shared<Object>();
 	player->setMesh(gfx.cubeMesh());
-	player->setScale(0.25f);
+	player->setScale(0.15f);
 
 	auto camera = Camera{};
 	camera.setTargetObject(player);
@@ -143,6 +143,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 				}
 			}
 		}
+		player->render(gfx);
 
 		auto title = wndName + "(FPS: "s + std::to_string(timer.fps()) + ")"s;
 		SetWindowTextA(ghWnd, title.c_str());
