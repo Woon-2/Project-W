@@ -5,8 +5,11 @@ void ThreadPool::run(std::size_t threadCnt) {
 	producerTokens_.reserve(threadCnt);
 
 	for (std::size_t i = 0u; i < threadCnt; ++i) {
-		workerThreads_.emplace_back([this, i](){ this->worker(i); });
 		producerTokens_.emplace_back(jobQ_);
+	}
+
+	for (std::size_t i = 0u; i < threadCnt; ++i) {
+		workerThreads_.emplace_back([this, i](){ this->worker(i); });
 	}
 }
 
@@ -24,9 +27,9 @@ void ThreadPool::worker(std::size_t threadIdx) {
 		// 2. Failing that, use the bulk methods without tokens
 		// 3. Failing that, use the single-item methods with tokens
 		// 4. Failing that, use the single-item methods without tokens
-		const auto bulkSize = 4u;
+		static constexpr auto bulkSize = 4u;
 
-		auto jobs = std::vector<Function128<void()>>(bulkSize);
+		thread_local auto jobs = std::vector<Function128<void()>>(bulkSize);
 
 		if ( auto jobCnt = jobQ_.try_dequeue_bulk_from_producer(
 			producerTokens_[threadIdx], jobs.begin(), bulkSize
@@ -45,6 +48,10 @@ void ThreadPool::worker(std::size_t threadIdx) {
 		}
 		else if (jobQ_.try_dequeue(jobs[0])) {
 			jobs[0]();
+		}
+		else {
+			std::this_thread::yield();
+			// std::this_thread::sleep_for(std::chrono::microseconds(50));
 		}
 	} 
 }
