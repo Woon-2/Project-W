@@ -1,14 +1,20 @@
 #ifndef SERVER_PCH_HPP
 #define SERVER_PCH_HPP
 
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif // WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif // NOMINMAX
 
-#include <WinSock2.h>
-#include <WS2tcpip.h>
-#include <MSWSock.h>
-#pragma comment(lib, "Ws2_32.lib")
+#include "windows.hpp"
+
+#include <string>
+#include <vector>
 
 #include "macro.hpp"
+#include "NetAddress.hpp"
+#include "SocketUtils.hpp"
 
 #endif // SERVER_PCH_HPP

@@ -1,10 +1,6 @@
 #ifndef SOCKET_UTILS_HPP
 #define SOCKET_UTILS_HPP
 
-#include "pch.hpp"
-
-class NetAddress;
-
 class SocketUtils {
 public:
 	static void init( );

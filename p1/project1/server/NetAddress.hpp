@@ -1,7 +1,8 @@
 #ifndef NET_ADDRESS_HPP
 #define NET_ADDRESS_HPP
 
-#include "pch.hpp"
+#include "windows.hpp"
+#include "types.hpp"
 #include <string>
 
 class NetAddress {
@@ -19,7 +20,6 @@ public:
 	}
 	NetAddress( const SOCKADDR_IN& sockAddr ) : sockAddr_( sockAddr ) {}
 
-public:
 	const SOCKADDR_IN& getSockAddr( ) const {
 		return sockAddr_;
 	}
