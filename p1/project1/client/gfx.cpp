@@ -288,6 +288,11 @@ void GFX::addDrawEvent(const SamplePipeline::DrawEvent& drawEvent) {
 	drawEventsSamplePipeline_.push_back(drawEvent);
 }
 
+// 카메라 데이터를 입력한다.
+void GFX::addCameraData(const SamplePipeline::CameraData& cameraData) {
+	cameraDataSamplePipeline_ = cameraData;
+}
+
 void GFX::loadMeshes() {
 	auto& fence = fences_.at(L"LoadFence");
 
@@ -428,6 +433,7 @@ void GFX::render() {
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesSamplePipeline_, threadPool_,
 		&cmdListPool_, std::move(drawEventsSamplePipeline_),
+		cameraDataSamplePipeline_,
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 

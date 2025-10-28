@@ -3,6 +3,7 @@
 #include "gfx.hpp"
 #include "object.hpp"
 #include "timer.hpp"
+#include "camera.hpp"
 
 inline constexpr const char* wndClsName = "wndCls";
 inline constexpr const char* wndName = "Project1";
@@ -58,11 +59,11 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	gfx.loadMeshes();
 	gfx.setThreadPool(&threadPool);
 
-	auto cubes = std::vector<std::vector<std::vector<Object>>>(10u);
+	auto cubes = std::vector<std::vector<std::vector<Object>>>(8u);
 	for (auto& plane : cubes) {
-		plane.resize(10u);
+		plane.resize(8u);
 		for (auto& row : plane) {
-			row.resize(10u);
+			row.resize(8u);
 		}
 	}
 
@@ -71,16 +72,28 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 			for (std::size_t k = 0u; k < cubes[i][j].size(); ++k) {
 				cubes[i][j][k].setMesh(gfx.cubeMesh());
 				cubes[i][j][k].setPos( mu::Vec3(
-					(static_cast<int>(k) - static_cast<int>(cubes.size() / 2)) * 0.25f,
-					(static_cast<int>(j) - static_cast<int>(cubes.size() / 2)) * 0.25f,
-					(static_cast<int>(i) - static_cast<int>(cubes.size() / 2)) * 0.25f
+					(static_cast<int>(k) - static_cast<int>(cubes.size() / 2)) * 0.5f,
+					(static_cast<int>(j) - static_cast<int>(cubes.size() / 2)) * 0.5f,
+					(static_cast<int>(i) - static_cast<int>(cubes.size() / 2)) * 0.5f
 				) );
 				cubes[i][j][k].setOmega( mu::Vec3(rand(-1.f, 1.f), rand(-1.f, 1.f), rand(-1.f, 1.f)) );
-				cubes[i][j][k].setScale(0.1f);
+				cubes[i][j][k].setScale(0.05f);
 			}
 			
 		}
 	}
+
+	auto player = std::make_shared<Object>();
+	player->setMesh(gfx.cubeMesh());
+	player->setScale(0.25f);
+
+	auto camera = Camera{};
+	camera.setTargetObject(player);
+	camera.setOffsetFromTarget(mu::Vec3(0.f, 0.2f, -0.5f));
+	camera.setPerspective( mu::Degree(90.f),
+		static_cast<float>(gWndRect.right - gWndRect.left) / (gWndRect.bottom - gWndRect.top),
+		0.025f, 8.f
+	);
 
 	Timer timer{};
 
@@ -105,6 +118,23 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 				}
 			}
 		}
+
+		if (GetAsyncKeyState('W') & 0x8000) {
+			player->setPos(player->pos() + mu::Vec3(0.f, 0.f, 0.01f));
+		}
+		if (GetAsyncKeyState('A') & 0x8000) {
+			player->setPos(player->pos() + mu::Vec3(-0.01f, 0.f, 0.f));
+		}
+		if (GetAsyncKeyState('S') & 0x8000) {
+			player->setPos(player->pos() + mu::Vec3(0.f, 0.f, -0.01f));
+		}
+		if (GetAsyncKeyState('D') & 0x8000) {
+			player->setPos(player->pos() + mu::Vec3(0.01f, 0.f, 0.f));
+		}
+
+		player->update(timer.deltaTime<Milliseconds>());
+		camera.update();
+		camera.updateGFX(gfx);
 
 		for (auto& plane : cubes) {
 			for (auto& row : plane) {

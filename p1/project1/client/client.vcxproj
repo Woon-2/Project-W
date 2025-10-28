@@ -131,6 +131,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="camera.hpp" />
     <ClInclude Include="concurrentqueue.h" />
     <ClInclude Include="errorHandling.hpp" />
     <ClInclude Include="function.hpp" />
@@ -140,6 +141,7 @@
     <ClInclude Include="mesh.hpp" />
     <ClInclude Include="object.hpp" />
     <ClInclude Include="pch.hpp" />
+    <ClInclude Include="physics.hpp" />
     <ClInclude Include="samplePipeline.hpp" />
     <ClInclude Include="shader.hpp" />
     <ClInclude Include="threadPool.hpp" />
@@ -147,6 +149,7 @@
     <ClInclude Include="timsort.hpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="camera.cpp" />
     <ClCompile Include="errorHandling.cpp" />
     <ClCompile Include="gfx.cpp" />
     <ClCompile Include="gfxUtil.cpp" />
@@ -154,6 +157,7 @@
     <ClCompile Include="mesh.cpp" />
     <ClCompile Include="object.cpp" />
     <ClCompile Include="pch.cpp" />
+    <ClCompile Include="physics.cpp" />
     <ClCompile Include="samplePipeline.cpp" />
     <ClCompile Include="shader.cpp" />
     <ClCompile Include="threadPool.cpp" />

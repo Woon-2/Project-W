@@ -15,6 +15,11 @@ namespace SampleShader {
 // 렌더링 파이프라인별 구조체 -------------------------
 namespace SamplePipeline {
 
+struct CameraData {
+	mu::Mat4x4 view;
+	mu::Mat4x4 proj;
+};
+
 struct DrawEvent {
 	mu::Mat4x4 world;
 	const Mesh* mesh;
@@ -55,7 +60,8 @@ public:
 		D3D12_CPU_DESCRIPTOR_HANDLE dsv, Fence* pFence,
 		Resources* pResources, ThreadPool* threadPool,
 		CommandListPool* commandListPool,
-		std::vector<DrawEvent>&& drawEvent, std::size_t roomIdx
+		std::vector<DrawEvent>&& drawEvent,
+		const CameraData& cameraData, std::size_t roomIdx
 	);
 
 	// 셰이더에서 사용하는 GPU 데이터를 갱신한다.
@@ -82,8 +88,8 @@ public:
 private:
 	// 멀티스레드 작업 시, GPU 데이터 갱신 작업에 대해
 	// 단위 작업을 생성하여 스레드에 할당하는데 사용된다.
-	void addJobUpdate( const DrawEvent* pFirst, const DrawEvent* pLast,
-		SampleShader::PerInstanceData* pOut, std::latch& latch
+	void MU_CALLCONV addJobUpdate( mu::Mat4x4 viewProj, const DrawEvent* pFirst,
+		const DrawEvent* pLast, SampleShader::PerInstanceData* pOut, std::latch& latch
 	);
 	// 멀티스레드 작업 시, 드로우콜들에 대해
 	// 단위 작업을 생성하여 스레드에 할당하는데 사용된다.
@@ -105,6 +111,7 @@ private:
 	CommandListPool* cmdListPool_ = nullptr;
 	Resources* pResources_ = nullptr;
 	std::vector<DrawEvent> drawEvents_{};
+	CameraData cameraData_{};
 	std::size_t roomIdx_{};
 	
 	// GFX로부터 전달된 것들은 통해 얻어지는 변수들

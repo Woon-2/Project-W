@@ -18,7 +18,6 @@
 // 1인칭 카메라 구현
 
 
-// 주석 업데이트
 // 카메라 구현
 // WASD 이동 추가
 // Batching & Instancing 구현
@@ -67,6 +66,8 @@ public:
 
 	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 	void addDrawEvent(const SamplePipeline::DrawEvent& drawEvent);
+	// 카메라 데이터를 입력한다.
+	void addCameraData(const SamplePipeline::CameraData& cameraData);
 
 	void loadMeshes();
 	const Mesh* cubeMesh() const { return &meshCube_; }
@@ -118,6 +119,7 @@ private:
 	// 파이프라인 관련 변수들
 	std::vector<SamplePipeline::DrawEvent> drawEventsSamplePipeline_{};
 	SamplePipeline::Resources resourcesSamplePipeline_{};
+	SamplePipeline::CameraData cameraDataSamplePipeline_{};
 
 	std::map<std::wstring, Fence> fences_{};
 

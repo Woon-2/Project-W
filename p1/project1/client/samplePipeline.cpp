@@ -9,10 +9,11 @@ namespace SamplePipeline {
 Dispatcher::Dispatcher( const std::shared_ptr<RootSig>& rootSig, const ComPtr<ID3D12PipelineState>& shader,
 	const ComPtr<ID3D12CommandQueue>& cmdQ, const D3D12_VIEWPORT& viewport, const D3D12_RECT& scissorRect,
 	D3D12_CPU_DESCRIPTOR_HANDLE rtv, D3D12_CPU_DESCRIPTOR_HANDLE dsv, Fence* pFence, Resources* pResources,
-	ThreadPool* threadPool, CommandListPool* commandListPool, std::vector<DrawEvent>&& drawEvents, std::size_t roomIdx
+	ThreadPool* threadPool, CommandListPool* commandListPool, std::vector<DrawEvent>&& drawEvents,
+	const CameraData& cameraData, std::size_t roomIdx
 ) : rootSig_(rootSig), shader_(shader), cmdQ_(cmdQ), viewport_(viewport), scissorRect_(scissorRect),
 	rtv_(rtv), dsv_(dsv), pFence_(pFence), pResources_(pResources), threadPool_(threadPool),
-	cmdListPool_(commandListPool), drawEvents_(std::move(drawEvents)), roomIdx_(roomIdx),
+	cmdListPool_(commandListPool), drawEvents_(std::move(drawEvents)), cameraData_(cameraData), roomIdx_(roomIdx),
 	rootParamIdxPDD_(rootSig->paramIdx(L"PerDrawcallData")),
 	rootParamIdxPID_(rootSig->paramIdx(L"PerInstanceData")) {}
 
@@ -31,11 +32,13 @@ void Dispatcher::updateGPUDataSingleThreaded() {
 	static auto perInstanceData = std::vector<SampleShader::PerInstanceData>();
 	perInstanceData.resize(drawEvents_.size());
 
+	const auto viewProj = cameraData_.view * cameraData_.proj;
+
 	// DrawEvents에 담겨있는 정보를 가공해 perInstanceData에 저장한다.
 	std::ranges::transform(drawEvents_, perInstanceData.begin(),
-		[](const SamplePipeline::DrawEvent& drawEvent) {
+		[viewProj](const SamplePipeline::DrawEvent& drawEvent) {
 			return SampleShader::PerInstanceData{
-				.wvp = mu::transpose(drawEvent.world).getXmf()
+				.wvp = mu::transpose(drawEvent.world * viewProj).getXmf()
 			};
 		}	
 	);
@@ -67,12 +70,14 @@ void Dispatcher::updateGPUDataMultiThreaded() {
 		+ ((drawEvents_.size() % jobSizeUpdate_) != 0)
 	);
 
+	const auto viewProj = cameraData_.view * cameraData_.proj;
+
 	// drawEvents의 [accEventCnt, accEventCnt + jobSizeUpdate_) 범위의
 	// 데이터를 가공해 perInstanceData의 대응되는 영역에 저장한다.
 	std::size_t accEventCnt = 0u;
 	while (accEventCnt + (jobSizeUpdate_ - 1) < drawEvents_.size()) {
-		addJobUpdate( drawEvents_.data() + accEventCnt,
-			drawEvents_.data() + accEventCnt + (jobSizeUpdate_ - 1),
+		addJobUpdate( viewProj, drawEvents_.data() + accEventCnt,
+			drawEvents_.data() + accEventCnt + jobSizeUpdate_,
 			perInstanceData.data() + accEventCnt, latch
 		);
 
@@ -83,8 +88,8 @@ void Dispatcher::updateGPUDataMultiThreaded() {
 	if (accEventCnt != drawEvents_.size()) {
 		const auto lastJobSize = drawEvents_.size() - accEventCnt;
 
-		addJobUpdate( drawEvents_.data() + accEventCnt,
-			drawEvents_.data() + accEventCnt + (lastJobSize - 1),
+		addJobUpdate( viewProj, drawEvents_.data() + accEventCnt,
+			drawEvents_.data() + accEventCnt + lastJobSize,
 			perInstanceData.data() + accEventCnt, latch
 		);
 	}
@@ -212,7 +217,7 @@ void Dispatcher::drawMultiThreaded() {
 
 		// 명령 기록
 		addJobDraw(currCmdCtx->cmdList.Get(), drawEvents_.data() + accEventCnt,
-			drawEvents_.data() + accEventCnt + (jobSizeDraw_ - 1), accEventCnt, latch
+			drawEvents_.data() + accEventCnt + jobSizeDraw_, accEventCnt, latch
 		);
 		
 		accEventCnt += jobSizeDraw_;
@@ -222,10 +227,13 @@ void Dispatcher::drawMultiThreaded() {
 	// 찌꺼기 처리
 	if (accEventCnt != drawEvents_.size()) {
 		const auto lastJobSize = drawEvents_.size() - accEventCnt;
+		// 명령 컨텍스트 초기화
+		currCmdCtx->cmdAlloc->Reset();
+		currCmdCtx->cmdList->Reset(currCmdCtx->cmdAlloc.Get(), nullptr);
 
 		// 명령 기록
 		addJobDraw(currCmdCtx->cmdList.Get(), drawEvents_.data() + accEventCnt,
-			drawEvents_.data() + accEventCnt + (lastJobSize - 1), accEventCnt, latch
+			drawEvents_.data() + accEventCnt + lastJobSize , accEventCnt, latch
 		);
 	}
 
@@ -247,14 +255,14 @@ void Dispatcher::drawMultiThreaded() {
 
 // 멀티스레드 작업 시, GPU 데이터 갱신 작업에 대해
 // 단위 작업을 생성하여 스레드에 할당하는데 사용된다.
-void Dispatcher::addJobUpdate( const DrawEvent* pFirst, const DrawEvent* pLast,
-	SampleShader::PerInstanceData* pOut, std::latch& latch
+void MU_CALLCONV Dispatcher::addJobUpdate( mu::Mat4x4 viewProj, const DrawEvent* pFirst,
+	const DrawEvent* pLast, SampleShader::PerInstanceData* pOut, std::latch& latch
 ) {
 	threadPool_->addJob( [=, &latch](){
 		std::transform( pFirst, pLast, pOut,
-			[](const SamplePipeline::DrawEvent& drawEvent) {
+			[viewProj](const SamplePipeline::DrawEvent& drawEvent) {
 				return SampleShader::PerInstanceData{
-					.wvp = mu::transpose(drawEvent.world).getXmf()
+					.wvp = mu::transpose(drawEvent.world * viewProj).getXmf()
 				};
 			}	
 		);
@@ -269,6 +277,8 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 	const DrawEvent* pFirst, const DrawEvent* pLast,
 	std::size_t firstInstanceIdx, std::latch& latch
 ) {
+	const auto jobSize = pLast - pFirst;
+
 	threadPool_->addJob([=, &latch]() {
 		// 명령 컨텍스트마다 개별적으로 파이프라인 설정을 해주어야 한다.
 		// (파이프라인 설정은 공유되지 않는다. 그렇더라.)
@@ -288,7 +298,7 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 		pResources_->perInstanceData.bind(threadCmdList, rootParamIdxPID_, roomIdx_);
 
 		for ( auto idxDrawcall = firstInstanceIdx;
-			idxDrawcall < firstInstanceIdx + jobSizeDraw_;
+			idxDrawcall < firstInstanceIdx + jobSize;
 			++idxDrawcall
 		) {
 			// PerDrawcallData 바인드

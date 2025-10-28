@@ -31,6 +31,36 @@
     <Filter Include="독립 구현체\소스 파일">
       <UniqueIdentifier>{9117bb22-4458-4858-9ffa-1cdfb32f8575}</UniqueIdentifier>
     </Filter>
+    <Filter Include="그래픽스">
+      <UniqueIdentifier>{e35e4092-d3b6-4c16-894a-1b9c2c687f60}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="그래픽스\코어">
+      <UniqueIdentifier>{914d2fc7-002c-42dd-b8cb-28cb0d277d5e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="그래픽스\파이프라인">
+      <UniqueIdentifier>{0776449a-a1f4-4dd9-8fb3-292baad750a5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="그래픽스\코어\소스 파일">
+      <UniqueIdentifier>{c50fd26b-0f87-4ed6-b008-55b3a7178467}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="그래픽스\코어\헤더 파일">
+      <UniqueIdentifier>{e943d003-978d-408c-9804-99580add594a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="그래픽스\파이프라인\소스 파일">
+      <UniqueIdentifier>{29fb9e81-4bcb-4d5d-b691-0a3032d6d43e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="그래픽스\파이프라인\헤더 파일">
+      <UniqueIdentifier>{7f81fbed-2d79-48ef-8cca-f67b7b2f7e31}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="게임">
+      <UniqueIdentifier>{1a85b5be-99d2-4aa7-a37d-1aa278dd53bc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="게임\소스 파일">
+      <UniqueIdentifier>{98acee41-42e0-4854-a72e-e6691062f3b7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="게임\헤더 파일">
+      <UniqueIdentifier>{fc1b10d9-20b6-442b-b956-a9cb98bf05da}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.hpp">
@@ -39,26 +69,8 @@
     <ClInclude Include="errorHandling.hpp">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="gfx.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="shader.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="mesh.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="gfxUtil.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
     <ClInclude Include="timsort.hpp">
       <Filter>외부 헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="object.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="timer.hpp">
-      <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="concurrentqueue.h">
       <Filter>외부 헤더 파일</Filter>
@@ -72,33 +84,39 @@
     <ClInclude Include="function.hpp">
       <Filter>독립 구현체\헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="gfx.hpp">
+      <Filter>그래픽스\코어\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="gfxUtil.hpp">
+      <Filter>그래픽스\코어\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="mesh.hpp">
+      <Filter>그래픽스\코어\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="shader.hpp">
+      <Filter>그래픽스\코어\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="object.hpp">
+      <Filter>게임\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="camera.hpp">
+      <Filter>게임\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="timer.hpp">
+      <Filter>게임\헤더 파일</Filter>
+    </ClInclude>
     <ClInclude Include="samplePipeline.hpp">
-      <Filter>헤더 파일</Filter>
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="physics.hpp">
+      <Filter>게임\헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="gfx.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
     <ClCompile Include="errorHandling.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="shader.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="mesh.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="gfxUtil.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="object.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="timer.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="threadPool.cpp">
@@ -107,8 +125,32 @@
     <ClCompile Include="pch.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="gfx.cpp">
+      <Filter>그래픽스\코어\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="gfxUtil.cpp">
+      <Filter>그래픽스\코어\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="mesh.cpp">
+      <Filter>그래픽스\코어\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="shader.cpp">
+      <Filter>그래픽스\코어\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="timer.cpp">
+      <Filter>게임\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="object.cpp">
+      <Filter>게임\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="camera.cpp">
+      <Filter>게임\소스 파일</Filter>
+    </ClCompile>
     <ClCompile Include="samplePipeline.cpp">
-      <Filter>소스 파일</Filter>
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="physics.cpp">
+      <Filter>게임\소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
