@@ -62,31 +62,4 @@ struct PerDrawcallData {
 
 }	// namespace SampleShader
 
-struct Mesh;
-struct SubMesh;
-
-// 렌더링 파이프라인별 구조체 -------------------------
-namespace SamplePipeline {
-
-struct DrawEvent {
-	mu::Mat4x4 world;
-	const Mesh* mesh;
-	const SubMesh* subMesh;
-
-	auto operator<=>(const DrawEvent& rhs) const noexcept {
-		auto e = mesh <=> rhs.mesh;
-		if ( (mesh <=> rhs.mesh) == std::strong_ordering::equal ) {
-			return subMesh <=> rhs.subMesh;
-		}
-		return e;
-	}
-};
-
-struct Resources {
-	StructuredBuffer perInstanceData;
-	ConstantBufferArray perDrawcallData;
-};
-
-}	// namespace SamplePipeline
-
 #endif	// __shader_HPP

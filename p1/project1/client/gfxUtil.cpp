@@ -118,7 +118,7 @@ void CommandListPool::init(ID3D12Device* device, CommandListUsage usage, std::si
 				__uuidof(ID3D12GraphicsCommandList), &ctx.cmdList
 			), true
 		);
-		setD3DName(ctx.cmdAlloc.Get(), std::wstring(L"CommandList_") + usageName + std::to_wstring(i));
+		setD3DName(ctx.cmdList.Get(), std::wstring(L"CommandList_") + usageName + std::to_wstring(i));
 		// 생성됐을 땐 open 상태이므로,
 		// render 호출 시 이미 open 상태인 Command List를 open할 수 있다.
 		// 따라서 여기서 close 해준다.

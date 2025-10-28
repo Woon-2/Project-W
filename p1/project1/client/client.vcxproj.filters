@@ -72,6 +72,9 @@
     <ClInclude Include="function.hpp">
       <Filter>독립 구현체\헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="samplePipeline.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -102,6 +105,9 @@
       <Filter>독립 구현체\소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="pch.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="samplePipeline.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>

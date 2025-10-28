@@ -6,6 +6,8 @@
 #include "shader.hpp"
 #include "mesh.hpp"
 
+#include "samplePipeline.hpp"
+
 // 큐브 메시 그리기 (버퍼, 텍스처 리소스 소유자 및 중첩 갯수 등 결정 필요)
 // 유니티로 메시 추출 스크립트 작성 (유니티에서 생성한 파일을 읽기위한 API 구현)
 // 셰이딩 (조명 구현, 셰이더 구현)
@@ -45,15 +47,19 @@ public:
 	// 그리고 그 중 하나를 선택하여 curAdapter_에 저장한다.
 	void setupDXGI(D3D_FEATURE_LEVEL d3dFeatureLevel);
 	// D3D12 Device와 Command Queue, Descriptor Heap들을 만든다.
-	// 인자로 전달받은 개수만큼 CommandList와 Command Allocator를 만든다.
+	// Command List Pool을 초기화한다.
 	// Root Signature와 Shader(PSO)들을 만든다.
 	// Load Fence를 만든다.
 	// 그리고 DrawEvent들을 저장하기 위한 메모리를 예약한다.
-	void init(std::size_t cmdListPoolSize);
+	void init();
 	// 윈도우와 연결된 SwapChain을 만든다.
 	// Back Buffer 개수 만큼의 room을 가지는 Constant Buffer들을 만든다.
 	// 그리고 Back Buffer 개수 만큼의 Frame Fence들을 만든다.
 	void createSwapChain();
+
+	// 스레드 풀을 설정한다.
+	// GFX는 스레드 풀이 설정되어있을 경우 멀티스레드로 동작한다.
+	void setThreadPool(ThreadPool* threadPool) { threadPool_ = threadPool; }
 
 	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 	void addDrawEvent(const SamplePipeline::DrawEvent& drawEvent);
@@ -66,8 +72,6 @@ public:
 
 
 private:
-	void renderSampleShader(ID3D12GraphicsCommandList* cmdList);
-
 	// fenceName을 갖는 Fence의 desiredValue 값을 1 증가시키고
 	// GPU 큐에 그 갱신 명령을 삽입한다.
 	void signalFence(const std::wstring& fenceName);
@@ -84,10 +88,7 @@ private:
 	ComPtr<ID3D12Device> device_ = nullptr;
 	ComPtr<ID3D12CommandQueue> cmdQ_ = nullptr;
 
-	// Command List와 Command Allocator는 서로 짝을 지어 할당/해제하도록 한다.
-	// 꺼낼 땐 앞에서 꺼내고 넣을 땐 뒤에 넣기 (큐처럼 쓰자)
-	std::list< ComPtr<ID3D12GraphicsCommandList> > freeCmdLists_{};
-	std::list< ComPtr<ID3D12CommandAllocator> > freeCmdAllocators_{};
+	CommandListPool cmdListPool_{};
 
 	// 스왑 체인 관련 변수들
 	DXGI_SWAP_CHAIN_DESC1 scd_{};
@@ -107,7 +108,7 @@ private:
 	DescriptorPool dsvPool_{};
 
 	// 루트 시그너처와 셰이더들
-	std::map<std::wstring, std::unique_ptr<RootSig>> rootSigs_{};
+	std::map<std::wstring, std::shared_ptr<RootSig>> rootSigs_{};
 	std::map<std::wstring, ComPtr<ID3D12PipelineState>> shaders_{};
 
 	// 파이프라인 관련 변수들
@@ -116,9 +117,11 @@ private:
 
 	std::map<std::wstring, Fence> fences_{};
 
-	std::size_t frameIdx = 0u;
+	std::size_t frameIdx_ = 0u;
 
 	Mesh meshCube_{};
+
+	ThreadPool* threadPool_;	// 설정되어있을 경우 멀티스레드로 동작한다.
 };
 
 #endif	// __GFX_HPP

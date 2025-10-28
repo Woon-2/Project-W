@@ -45,13 +45,17 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	DISPLAY_ERROR_GLE(ghWnd, true);
 	DISPLAY_ERROR_GLE(!ShowWindow(ghWnd, SW_SHOW), true);
 
+	auto threadPool = ThreadPool();
+	threadPool.run(6u);
+
 	// 그래픽스 초기화 - DXGI, D3D12
 	GFX gfx{};
 	gfx.setupDXGI(D3D_FEATURE_LEVEL_12_1);
-	gfx.init(4);
+	gfx.init();
 	gfx.createSwapChain();
 
 	gfx.loadMeshes();
+	gfx.setThreadPool(&threadPool);
 
 	auto cubes = std::vector<std::vector<std::vector<Object>>>(10u);
 	for (auto& plane : cubes) {
