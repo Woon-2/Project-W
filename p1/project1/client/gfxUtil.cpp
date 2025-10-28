@@ -81,6 +81,97 @@ ComPtr<ID3D12Resource> createBufferResource(
 	return ret;
 }
 
+void CommandListPool::init(ID3D12Device* device, CommandListUsage usage, std::size_t cnt) {
+	std::wstring usageName{};
+
+	switch (usage) {
+	case CommandListUsage::RenderingMaster:
+		usageName = L"RenderingMaster_";
+		break;
+
+	case CommandListUsage::RenderingSlave:
+		usageName = L"RenderingSlave_";
+		break;
+
+	case CommandListUsage::ResourceLoading:
+		usageName = L"ResourceLoading_";
+		break;
+
+	default:
+		DISPLAY_ERROR_STR( false, L"[GFX Error]: CommandListPool::init: 존재하지 않는 CommandListUsage 값"s
+			+ std::to_wstring(etoi(usage)) + L"이(가) 전달되었습니다.", true
+		);
+		break;
+	}
+
+	for (std::size_t i = 0; i < cnt; ++i) {
+		auto& ctx = cmdCtxs_[etoi(usage)].emplace_back();
+		DISPLAY_ERROR_DX_HR(
+			device->CreateCommandAllocator(
+				D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), &ctx.cmdAlloc
+			), true
+		);
+		setD3DName(ctx.cmdAlloc.Get(), std::wstring(L"CommandAllocator_") + usageName + std::to_wstring(i));
+
+		DISPLAY_ERROR_DX_HR(
+			device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, ctx.cmdAlloc.Get(), nullptr,
+				__uuidof(ID3D12GraphicsCommandList), &ctx.cmdList
+			), true
+		);
+		setD3DName(ctx.cmdAlloc.Get(), std::wstring(L"CommandList_") + usageName + std::to_wstring(i));
+		// 생성됐을 땐 open 상태이므로,
+		// render 호출 시 이미 open 상태인 Command List를 open할 수 있다.
+		// 따라서 여기서 close 해준다.
+		ctx.cmdList->Close();
+	}
+}
+
+std::size_t CommandListPool::alloc( std::size_t cnt,
+	CommandListUsage usage, std::list<CommandContext>& output
+) {
+	std::size_t allocCnt = 0u;
+
+	auto& pool = cmdCtxs_[etoi(usage)];
+
+	auto pLast = pool.end();
+	if (pool.size() >= cnt) {
+		pLast = std::next(pool.begin(), cnt);
+		allocCnt = cnt;
+	}
+	else {
+		allocCnt = std::distance(pool.begin(), pool.end());
+	}
+
+	output.splice(output.end(), pool, pool.begin(), pLast);
+
+	return allocCnt;
+}
+
+bool CommandListPool::allocOne(CommandListUsage usage, CommandContext& output) {
+	auto& pool = cmdCtxs_[etoi(usage)];
+	if (pool.empty()) {
+		return false;
+	}
+
+	output = std::move(pool.front());
+	pool.pop_front();
+	return true;
+}
+
+void CommandListPool::free(CommandListUsage usage, std::list<CommandContext>&& expired) {
+	free(etoi(usage), std::move(expired));
+}
+
+void CommandListPool::free(int usage, std::list<CommandContext>&& expired) {
+	auto& pool = cmdCtxs_[usage];
+	pool.splice(pool.end(), std::move(expired));
+}
+
+void CommandListPool::freeOne(CommandListUsage usage, CommandContext&& expired) {
+	auto& pool = cmdCtxs_[etoi(usage)];
+	pool.push_back(std::move(expired));
+}
+
 DescriptorHeap::DescriptorHeap(ID3D12Device* device, const D3D12_DESCRIPTOR_HEAP_DESC& desc)
 	: desc(desc) {
 

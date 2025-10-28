@@ -25,15 +25,40 @@ ComPtr<ID3D12Resource> createBufferResource(
 	BufferCreationType creationType
 );
 
+enum class CommandListUsage {
+	ResourceLoading,
+	RenderingMaster,
+	RenderingSlave,
+	SIZE
+};
+
+struct CommandContext {
+	ComPtr<ID3D12GraphicsCommandList> cmdList;
+	ComPtr<ID3D12CommandAllocator> cmdAlloc;
+};
+
+class CommandListPool {
+public:
+	void init(ID3D12Device* device, CommandListUsage usage, std::size_t cnt);
+	std::size_t alloc(std::size_t cnt, CommandListUsage usage, std::list<CommandContext>& output);
+	bool allocOne(CommandListUsage usage, CommandContext& output);
+	void free(CommandListUsage usage, std::list<CommandContext>&& expired);
+	void free(int usage, std::list<CommandContext>&& expired);
+	void freeOne(CommandListUsage usage, CommandContext&& expired);
+
+private:
+	std::array< std::list<CommandContext>, etoi(CommandListUsage::SIZE) > cmdCtxs_{};
+};
+
 // ID3D12Fence 객체와 연관된 변수들을 모아놓기 위한 구조체
 struct Fence {
 	// Command List와 Command Allocator의 반납은 gpu에서의 사용이 끝난 후 이루어져야 한다.
 	// 즉, Fence의 Wait이 끝났을 때 반납되어야 한다.
-	// 따라서 Fence와 함께 그 Fence의 Wait이 끝날 때 반납할 Command List와 Command Allocator들을
-	// 같이 보관하면 용이하다.
+	// 따라서 Fence와 함께 그 Fence의 Wait이 끝날 때 반납할
+	// Command List와 Command Allocator들을 같이 보관하면 용이하다.
+	// CommandListUsage별 CommandContext의 리스트로 저장한다.
+	std::array< std::list<CommandContext>, etoi(CommandListUsage::SIZE) > associatedCmdCtxs_;
 	// Copy 등에 사용되는 일회용 리소스들도 Fence의 Wait이 끝난 후 폐기한다.
-	std::list<ComPtr<ID3D12GraphicsCommandList>> associatedCmdLists_;
-	std::list<ComPtr<ID3D12CommandAllocator>> associatedCmdAllocators_;
 	std::vector<ComPtr<ID3D12Resource>> associatedResources_;
 	ComPtr<ID3D12Fence> fence;
 	UINT64 desiredValue;

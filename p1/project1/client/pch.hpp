@@ -79,6 +79,9 @@
 #include <type_traits>
 #include <chrono>
 #include <random>
+#include <thread>
+#include <latch>
+#include <array>
 
 #include "mathUtil.hpp"
 #include "function.hpp"
