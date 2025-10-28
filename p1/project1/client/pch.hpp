@@ -152,5 +152,6 @@ inline T rand(T closedBegin, T closedEnd) {
 	return rng(gRandomEngine);
 }
 
+size_t numberOfPhysicalCores() noexcept;
 
 #endif	// __PCF_HPP

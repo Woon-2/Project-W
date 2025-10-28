@@ -18,7 +18,9 @@
 // 1인칭 카메라 구현
 
 
-// 멀티 스레딩
+// 주석 업데이트
+// 카메라 구현
+// WASD 이동 추가
 // Batching & Instancing 구현
 // 큐브에 면별 재질 입혀보기
 // Constant Buffer와 메시 관리 주체 정하기
@@ -47,13 +49,15 @@ public:
 	// 그리고 그 중 하나를 선택하여 curAdapter_에 저장한다.
 	void setupDXGI(D3D_FEATURE_LEVEL d3dFeatureLevel);
 	// D3D12 Device와 Command Queue, Descriptor Heap들을 만든다.
-	// Command List Pool을 초기화한다.
+	// RenderingSlave, ResourceLoading 카테고리의 Command List Pool을 초기화한다.
 	// Root Signature와 Shader(PSO)들을 만든다.
 	// Load Fence를 만든다.
 	// 그리고 DrawEvent들을 저장하기 위한 메모리를 예약한다.
 	void init();
 	// 윈도우와 연결된 SwapChain을 만든다.
 	// Back Buffer 개수 만큼의 room을 가지는 Constant Buffer들을 만든다.
+	// RenderingMaster 카테고리의 Command List Pool을
+	// Back Buffer 개수 * 2의 크기를 갖도록 초기화한다.
 	// 그리고 Back Buffer 개수 만큼의 Frame Fence들을 만든다.
 	void createSwapChain();
 
@@ -76,7 +80,7 @@ private:
 	// GPU 큐에 그 갱신 명령을 삽입한다.
 	void signalFence(const std::wstring& fenceName);
 	// fenceName을 갖는 Fence에 대해서 wait하고,
-	// 사용이 끝난 명령 리스트, 명령 할당자, 업로드 버퍼 등을 반환한다.
+	// 사용이 끝난 명령 컨텍스트, 업로드 버퍼 등을 반환한다.
 	void waitOnFence(const std::wstring& fenceName);
 
 	ComPtr<IDXGIFactory4> dxgiFactory_ = nullptr;

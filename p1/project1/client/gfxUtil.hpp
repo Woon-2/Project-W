@@ -25,6 +25,9 @@ ComPtr<ID3D12Resource> createBufferResource(
 	BufferCreationType creationType
 );
 
+// CommandListUsage는 명령 리스트의 쓰임새를 나타낸다.
+// CommandListPool을 만들 때, 명령의 쓰임새에 따라
+// 다른 개수의 명령 리스트들을 만들어놓기 위해 쓰인다.
 enum class CommandListUsage {
 	ResourceLoading,
 	RenderingMaster,
@@ -32,18 +35,45 @@ enum class CommandListUsage {
 	SIZE
 };
 
+// Command List와 그 Command List의 Command Allocator를 페어링한다.
+// CommandListPool은 Command List를 CommandContext 단위로 관리한다.
 struct CommandContext {
 	ComPtr<ID3D12GraphicsCommandList> cmdList;
 	ComPtr<ID3D12CommandAllocator> cmdAlloc;
 };
 
+// 용도별로 Command List들을 저장하고, 분배하는 클래스
+// 용도별로 구분하는 이유는, 할당에 반드시 성공해야 하는 명령 컨텍스트가 있고
+// 다른 용도에 비해 우선순위가 밀리는 명령 컨텍스트도 있기 때문이다.
+//
+// thread-unsafe하니 작업 분배자가 한꺼번에 명령 리스트를 할당하여
+// 각 스레드에 분배하도록 해야 한다.
+//
+// Reset이나 Close, ExecuteCommandLists 함수들을 호출하지 않으므로,
+// 명령 컨텍스트를 할당했을 때 가장 먼저 Reset을 하고,
+// 명령 기록이 끝났을 때 Close와 ExecuteCommandLists 함수들을 호출한다.
+// * 한편, 명령의 기록이 끝났다고 해서 GPU에서의 사용이 끝난 것이 아니므로,
+// 반납은 반드시 Fence를 통해 GPU의 작업 종료를 확인한 후 이루어지도록 주의하자.
 class CommandListPool {
 public:
+	// 특정 용도 usage의 명령 컨텍스트 cnt개를 풀 내부에 확충해놓는다.
 	void init(ID3D12Device* device, CommandListUsage usage, std::size_t cnt);
+	// 특정 용도 usage의 명령 컨텍스트를 cnt개 할당해 output에 채워넣는다.
+	// @return 실제로 할당한 명령 컨텍스트 수, 요청 받은 개수 cnt와 다를 수 있다.
 	std::size_t alloc(std::size_t cnt, CommandListUsage usage, std::list<CommandContext>& output);
+	// 특정 용도 usage의 명령 컨텍스트 1개를 output에 채워넣는다.
+	// @return 명령 컨텍스트의 할당 성공 여부, 실패할 수도 있다.
 	bool allocOne(CommandListUsage usage, CommandContext& output);
+	// 특정 용도 usage의 명령 컨텍스트들 expired를 풀에 반납한다.
+	// 반드시 GPU에서도 사용이 끝난 명령 컨텍스트들임을 확인하자.
 	void free(CommandListUsage usage, std::list<CommandContext>&& expired);
+	// 특정 용도 usage의 명령 컨텍스트들 expired를 풀에 반납한다.
+	// 반드시 GPU에서도 사용이 끝난 명령 컨텍스트들임을 확인하자.
+	// * 반복문에서의 쓰임을 상정해 enum 대신 int를 받는 버전을 마련하였다.
+	//   범위 점검을 따로 하지 않으므로 주의해서 쓰자.
 	void free(int usage, std::list<CommandContext>&& expired);
+	// 특정 용도 usage의 명령 컨텍스트 expired를 풀에 반납한다.
+	// 반드시 GPU에서도 사용이 끝난 명령 컨텍스트임을 확인하자.
 	void freeOne(CommandListUsage usage, CommandContext&& expired);
 
 private:
@@ -55,7 +85,7 @@ struct Fence {
 	// Command List와 Command Allocator의 반납은 gpu에서의 사용이 끝난 후 이루어져야 한다.
 	// 즉, Fence의 Wait이 끝났을 때 반납되어야 한다.
 	// 따라서 Fence와 함께 그 Fence의 Wait이 끝날 때 반납할
-	// Command List와 Command Allocator들을 같이 보관하면 용이하다.
+	// 명령 컨텍스트들을 보관하면 용이하다.
 	// CommandListUsage별 CommandContext의 리스트로 저장한다.
 	std::array< std::list<CommandContext>, etoi(CommandListUsage::SIZE) > associatedCmdCtxs_;
 	// Copy 등에 사용되는 일회용 리소스들도 Fence의 Wait이 끝난 후 폐기한다.

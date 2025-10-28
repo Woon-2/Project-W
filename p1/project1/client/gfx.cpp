@@ -83,7 +83,7 @@ void GFX::setupDXGI(D3D_FEATURE_LEVEL d3dFeatureLevel) {
 }
 
 // D3D12 Device와 Command Queue, Descriptor Heap들을 만든다.
-// Command List Pool을 초기화한다.
+// RenderingSlave, ResourceLoading 카테고리의 Command List Pool을 초기화한다.
 // Root Signature와 Shader(PSO)들을 만든다.
 // Load Fence를 만든다.
 // 그리고 DrawEvent들을 저장하기 위한 메모리를 예약한다.
@@ -119,6 +119,7 @@ void GFX::init() {
 	);
 	setD3DName(cmdQ_.Get(), L"CommandQueue");
 
+	// RenderingSlave, ResourceLoading 카테고리의 Command List Pool 초기화
 	cmdListPool_.init(device_.Get(), CommandListUsage::RenderingSlave, 64u);
 	cmdListPool_.init(device_.Get(), CommandListUsage::ResourceLoading, 16u);
 
@@ -173,6 +174,8 @@ void GFX::init() {
 
 // 윈도우와 연결된 SwapChain을 만든다.
 // Back Buffer 개수 만큼의 room을 가지는 Constant Buffer들을 만든다.
+// RenderingMaster 카테고리의 Command List Pool을
+// Back Buffer 개수 * 2의 크기를 갖도록 초기화한다.
 // 그리고 Back Buffer 개수 만큼의 Frame Fence들을 만든다.
 // Scaling, BufferCount는 후에 매개변수로 전달받도록 하자.
 void GFX::createSwapChain() {
@@ -249,6 +252,10 @@ void GFX::createSwapChain() {
 		);
 	}
 
+	// RenderingMaster 카테고리의 Command List Pool을
+	// Back Buffer 개수 * 2의 크기를 갖도록 초기화한다.
+	// RenderingMaster 카테고리의 명령 컨텍스트는 한 프레임의 렌더링에
+	// 클리어용, 출력용으로 두 개가 쓰인다.
 	cmdListPool_.init(device_.Get(), CommandListUsage::RenderingMaster, backBuffers_.size() * 2);
 
 	// 백버퍼 개수만큼의 room을 가지는 파이프라인별 리소스들 생성
@@ -336,6 +343,7 @@ void GFX::render() {
 		return;
 	}
 
+	// 렌더 타겟 클리어를 위한 명령 컨텍스트 할당
 	CommandContext cmdCtxClear{};
 	DISPLAY_ERROR_STR(
 		cmdListPool_.allocOne(CommandListUsage::RenderingMaster, cmdCtxClear),
@@ -350,11 +358,11 @@ void GFX::render() {
 		return;
 	}
 
-	// 명령 리스트 초기화
+	// 클리어 명령 리스트 초기화
 	DISPLAY_ERROR_DX_VOID( cmdAllocClear->Reset(), false );
 	DISPLAY_ERROR_DX_VOID( cmdListClear->Reset(cmdAllocClear, nullptr), false );
 
-	// 명령 기록 시작
+	// 클리어 명령 기록 시작
 	const auto backbufIdx = swapChain_->GetCurrentBackBufferIndex();
 
 	transitionResourceState(cmdListClear, backBuffers_[backbufIdx].Get(),
@@ -393,24 +401,37 @@ void GFX::render() {
 	DISPLAY_ERROR_DX_VOID( cmdListClear->RSSetViewports(1u, &viewport), false );
 	DISPLAY_ERROR_DX_VOID( cmdListClear->RSSetScissorRects(1u, &clRect), false );
 
+	// 클리어 명령 기록 끝
+	// 클리어 명령 리스트는 곧바로 실행한다.
+	// Dispatcher들에서 드로우콜들을 수행할 때
+	// 명령 큐를 사용해 실행까지 하기 때문에,
+	// 클리어 명령 리스트를 Dispatcher들의 드로우콜들 수행 이후
+	// 실행하게 되면 그려진 것들이 전부 지워지게 된다.
 	DISPLAY_ERROR_DX_VOID( cmdListClear->Close(), false );
 
 	ID3D12CommandList* clearCmdLists[] = { cmdListClear };
 
+	// 클리어 명령 리스트 실행
 	DISPLAY_ERROR_DX_VOID( cmdQ_->ExecuteCommandLists(1u, clearCmdLists), false );
 
+	// Dispatcher들은 명령 리스트 풀에서 스스로 명령 컨텍스트를 할당하고 기록, 실행한다.
+	// 사용이 끝난 명령 컨텍스트는 펜스와 연관되어 gpu 사용이 끝남을 감지한 후
+	// 반환되는 게 규칙이므로, Dispatcher에 명령 컨텍스트와 연관시킬 펜스를 전달해야 한다.
 	auto idxFenceToSignal = frameIdx_ % backBuffers_.size();
 	auto fenceNameToSignal = L"FrameFence" + std::to_wstring(idxFenceToSignal);
 	auto& fenceToSignal = fences_.at(fenceNameToSignal);
 
+	// SamplePipeline의 Dispatch
 	auto samplePipelineDispatcher = SamplePipeline::Dispatcher(
 		rootSigs_.at(L"DefaultRootSignature"), shaders_.at(L"SampleShader"),
 		cmdQ_, viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesSamplePipeline_, threadPool_,
-		&cmdListPool_, std::move(drawEventsSamplePipeline_), frameIdx_ % backBuffers_.size()
+		&cmdListPool_, std::move(drawEventsSamplePipeline_),
+		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	// threadPool_이 활성화된 경우엔 멀티스레드로 처리한다.
 	if (!threadPool_) {
 		samplePipelineDispatcher.updateGPUDataSingleThreaded();
 		samplePipelineDispatcher.drawSingleThreaded();
@@ -420,7 +441,7 @@ void GFX::render() {
 		samplePipelineDispatcher.drawMultiThreaded();
 	}
 
-	// 명령 기록 끝, 명령 실행 및 화면에 출력
+	// 출력 명령 컨텍스트 할당
 	CommandContext cmdCtxPresent{};
 	DISPLAY_ERROR_STR(
 		cmdListPool_.allocOne(CommandListUsage::RenderingMaster, cmdCtxPresent),
@@ -439,14 +460,16 @@ void GFX::render() {
 	cmdAllocPresent->Reset();
 	cmdListPresent->Reset(cmdAllocPresent, nullptr);
 
+	// 출력 명령 기록 시작
 	transitionResourceState(cmdListPresent, backBuffers_[backbufIdx].Get(),
 		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT
 	);
 
+	// 출력 명령 기록 끝
 	DISPLAY_ERROR_DX_VOID( cmdListPresent->Close(), false );
 
+	// 출력 명령 리스트 실행
 	ID3D12CommandList* presentCmdLists[] = { cmdListPresent };
-
 	DISPLAY_ERROR_DX_VOID( cmdQ_->ExecuteCommandLists(1u, presentCmdLists), false );
 
 	
@@ -457,6 +480,8 @@ void GFX::render() {
 	// wait하지 않고 이어서 렌더링을 하도록 한다.
 	// 백버퍼는 순차적으로 사용되므로, (백버퍼 개수 - 1) 프레임 전의 렌더링에 대한
 	// Fence를 wait하면 이를 구현할 수 있다.
+	// idxFenceToSignal이나 fenceNameToSignal 등의 변수는 위에서
+	// Dispatcher에게 전달하기 위해 미리 만들어두었다.
 	auto idxFenceToWait = (frameIdx_ - (backBuffers_.size() - 1)) % backBuffers_.size();
 	fences_.at(fenceNameToSignal).associatedCmdCtxs_[etoi(CommandListUsage::RenderingMaster)]
 		.push_back(std::move(cmdCtxClear));
@@ -487,7 +512,7 @@ void GFX::signalFence(const std::wstring& fenceName) {
 }
 
 // fenceName을 갖는 Fence에 대해서 wait하고,
-// 사용이 끝난 명령 리스트, 명령 할당자, 업로드 버퍼 등을 반환한다.
+// 사용이 끝난 명령 컨텍스트, 업로드 버퍼 등을 반환한다.
 void GFX::waitOnFence(const std::wstring& fenceName) {
 	auto validFenceName = fences_.contains(fenceName);
 	DISPLAY_ERROR_STR(validFenceName, L"[GFX Error] GFX::waitOnFence: 펜스 "s + fenceName + L"를 찾을 수 없습니다.\n", false);
@@ -497,6 +522,7 @@ void GFX::waitOnFence(const std::wstring& fenceName) {
 
 	auto& fence = fences_.at(fenceName);
 	if (fence.fence->GetCompletedValue() == fence.desiredValue) {
+		// GPU에서 사용이 끝난 명령 컨텍스트와 리소스를 반환한다.
 		for (int idxUsage = 0; idxUsage < etoi(CommandListUsage::SIZE); ++idxUsage) {
 			cmdListPool_.free(idxUsage, std::move(fence.associatedCmdCtxs_[idxUsage]));
 		}
@@ -507,6 +533,7 @@ void GFX::waitOnFence(const std::wstring& fenceName) {
 	fence.fence->SetEventOnCompletion(fence.desiredValue, fence.event);
 	WaitForSingleObject(fence.event, INFINITE);
 
+	// GPU에서 사용이 끝난 명령 컨텍스트와 리소스를 반환한다.
 	for (int idxUsage = 0; idxUsage < etoi(CommandListUsage::SIZE); ++idxUsage) {
 		cmdListPool_.free(idxUsage, std::move(fence.associatedCmdCtxs_[idxUsage]));
 	}

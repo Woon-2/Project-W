@@ -5,6 +5,7 @@
 
 namespace SamplePipeline {
 
+// GFX 객체로부터 필요한 인자들을 전달받자.
 Dispatcher::Dispatcher( const std::shared_ptr<RootSig>& rootSig, const ComPtr<ID3D12PipelineState>& shader,
 	const ComPtr<ID3D12CommandQueue>& cmdQ, const D3D12_VIEWPORT& viewport, const D3D12_RECT& scissorRect,
 	D3D12_CPU_DESCRIPTOR_HANDLE rtv, D3D12_CPU_DESCRIPTOR_HANDLE dsv, Fence* pFence, Resources* pResources,
@@ -15,6 +16,11 @@ Dispatcher::Dispatcher( const std::shared_ptr<RootSig>& rootSig, const ComPtr<ID
 	rootParamIdxPDD_(rootSig->paramIdx(L"PerDrawcallData")),
 	rootParamIdxPID_(rootSig->paramIdx(L"PerInstanceData")) {}
 
+// 셰이더에서 사용하는 GPU 데이터를 갱신한다.
+// DrawEvents에 담겨있는 정보를 가공하여
+// Resources 객체에 담긴,
+// ShaderInputBuffer 인터페이스를 가지는 객체들에 옮겨담는다.
+// 싱글스레드로 동작한다.
 void Dispatcher::updateGPUDataSingleThreaded() {
 	// 메시 데이터 업로드
 	// 정렬을 통해 인스턴싱이 가능하도록 한다.
@@ -25,6 +31,7 @@ void Dispatcher::updateGPUDataSingleThreaded() {
 	static auto perInstanceData = std::vector<SampleShader::PerInstanceData>();
 	perInstanceData.resize(drawEvents_.size());
 
+	// DrawEvents에 담겨있는 정보를 가공해 perInstanceData에 저장한다.
 	std::ranges::transform(drawEvents_, perInstanceData.begin(),
 		[](const SamplePipeline::DrawEvent& drawEvent) {
 			return SampleShader::PerInstanceData{
@@ -33,10 +40,16 @@ void Dispatcher::updateGPUDataSingleThreaded() {
 		}	
 	);
 
+	// perInstanceData의 내용을 바탕으로 GPU 데이터를 갱신한다.
 	pResources_->perInstanceData.stage(roomIdx_, perInstanceData);
 	perInstanceData.clear();
 }
 
+// 셰이더에서 사용하는 GPU 데이터를 갱신한다.
+// DrawEvents에 담겨있는 정보를 가공하여
+// Resources 객체에 담긴,
+// ShaderInputBuffer 인터페이스를 가지는 객체들에 옮겨담는다.
+// 멀티스레드로 동작한다.
 void Dispatcher::updateGPUDataMultiThreaded() {
 	// 메시 데이터 업로드
 	// 정렬을 통해 인스턴싱이 가능하도록 한다.
@@ -47,10 +60,15 @@ void Dispatcher::updateGPUDataMultiThreaded() {
 	static auto perInstanceData = std::vector<SampleShader::PerInstanceData>();
 	perInstanceData.resize(drawEvents_.size());
 
+	// DrawEvent는 jobSize 단위로 스레드들에 분배될 것이므로,
+	// 동기화를 위한 latch를 준비한다.
+	// 이때, DrawEvent의 개수가 jobSize로 나누어 떨어지지 않을 경우를 대비한다.
 	auto latch = std::latch( drawEvents_.size() / jobSizeUpdate_
 		+ ((drawEvents_.size() % jobSizeUpdate_) != 0)
 	);
 
+	// drawEvents의 [accEventCnt, accEventCnt + jobSizeUpdate_) 범위의
+	// 데이터를 가공해 perInstanceData의 대응되는 영역에 저장한다.
 	std::size_t accEventCnt = 0u;
 	while (accEventCnt + (jobSizeUpdate_ - 1) < drawEvents_.size()) {
 		addJobUpdate( drawEvents_.data() + accEventCnt,
@@ -60,7 +78,8 @@ void Dispatcher::updateGPUDataMultiThreaded() {
 
 		accEventCnt += jobSizeUpdate_;
 	}
-
+	
+	// 찌꺼기 처리
 	if (accEventCnt != drawEvents_.size()) {
 		const auto lastJobSize = drawEvents_.size() - accEventCnt;
 
@@ -70,12 +89,18 @@ void Dispatcher::updateGPUDataMultiThreaded() {
 		);
 	}
 
+	// 동기화
 	latch.wait();
+	// 모든 데이터가 가공된 이후, GPU 데이터를 갱신한다.
 	pResources_->perInstanceData.stage(roomIdx_, perInstanceData);
 	perInstanceData.clear();
 }
 
+// DrawEvents의 정보들을 참고하여
+// 드로우콜들을 수행한다.
+// 싱글스레드로 동작한다.
 void Dispatcher::drawSingleThreaded() {
+	// 명령 컨텍스트 할당
 	CommandContext cmdCtx{};
 	DISPLAY_ERROR_STR( cmdListPool_->allocOne(CommandListUsage::RenderingSlave, cmdCtx),
 		L"[GFX Error] GFX::drawSingleThreaded: 요청한 명령 리스트를 할당받지 못했습니다.", false
@@ -84,11 +109,13 @@ void Dispatcher::drawSingleThreaded() {
 		return;
 	}
 
+	// 명령 컨텍스트 초기화
 	auto cmdList = cmdCtx.cmdList.Get();
 	auto cmdAlloc = cmdCtx.cmdAlloc.Get();
 	cmdAlloc->Reset();
 	cmdList->Reset(cmdAlloc, nullptr);
 
+	// 명령 기록 시작
 	cmdList->SetGraphicsRootSignature(rootSig_->get());
 	cmdList->SetPipelineState(shader_.Get());
 	cmdList->OMSetRenderTargets(1u, &rtv_, false, &dsv_);
@@ -101,6 +128,7 @@ void Dispatcher::drawSingleThreaded() {
 
 	u32t idxDrawcall = 0u;
 
+	// DrawEvent들을 하나씩 처리한다.
 	for (const auto& drawEvent : drawEvents_) {
 		pResources_->perDrawcallData.cbuffers[idxDrawcall].bind(
 			cmdList, rootParamIdxPDD_, roomIdx_
@@ -129,23 +157,30 @@ void Dispatcher::drawSingleThreaded() {
 	}
 
 	cmdList->Close();
+
+	// 명령 기록 끝, 실행
 	ID3D12CommandList* stagedCmdLists[] = {cmdList};
 
 	cmdQ_->ExecuteCommandLists(1u, stagedCmdLists);
-
+	
+	// Fence 객체에 사용한 명령 컨텍스트를 연관시켜 놓는다.
 	pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)]
 		.push_back(std::move(cmdCtx));
 }
 
+// DrawEvents의 정보들을 참고하여
+// 드로우콜들을 수행한다.
+// 멀티스레드로 동작한다.
 void Dispatcher::drawMultiThreaded() {
-	std::size_t accEventCnt = 0u;
+	// DrawEvent는 jobSize 단위로 스레드들에 분배될 것이므로,
+	// 동기화를 위한 latch를 준비한다.
+	// 이때, DrawEvent의 개수가 jobSize로 나누어 떨어지지 않을 경우를 대비한다.
+	const std::size_t jobCnt = (drawEvents_.size() + (jobSizeDraw_ - 1)) / jobSizeDraw_;
+	auto latch = std::latch(jobCnt);
 
-	auto latch = std::latch( drawEvents_.size() / jobSizeDraw_
-		+ ((drawEvents_.size() % jobSizeDraw_) != 0)
-	);
-
+	// 파악된 작업의 개수에 맞게 명령 컨텍스트들을 할당한다.
 	std::list<CommandContext> cmdCtxs{};
-	const auto requiredCmdListCnt = (drawEvents_.size() + (jobSizeDraw_ - 1)) / jobSizeDraw_;
+	const auto requiredCmdListCnt = jobCnt;
 
 	const auto allocatedCmdListCnt = cmdListPool_->alloc(
 		requiredCmdListCnt, CommandListUsage::RenderingSlave, cmdCtxs
@@ -156,16 +191,26 @@ void Dispatcher::drawMultiThreaded() {
 		false
 	);
 	if (allocatedCmdListCnt != requiredCmdListCnt) {
+		// 필요한 만큼 명령 컨텍스트가 할당되지 않았을 경우,
+		// 명령 컨텍스트들을 사용하지 않고 그대로 반납하며,
+		// 함수도 그대로 반환한다.
+		// 추후 이 경우에도 동작할 수 있도록 대응하도록 한다..
 		cmdListPool_->free(CommandListUsage::RenderingSlave, std::move(cmdCtxs));
 		return;
 	}
 
+	// drawEvents의 [accEventCnt, accEventCnt + jobSizeUpdate_) 범위의
+	// 데이터를 가공해 perDrawcallData를 구축하고, 드로우콜을 수행한다.
+	std::size_t accEventCnt = 0u;
+	// 각 작업마다 명령 컨텍스트를 분배한다.
 	auto currCmdCtx = cmdCtxs.begin();
 
 	while (accEventCnt + (jobSizeDraw_ - 1) < drawEvents_.size()) {
+		// 명령 컨텍스트 초기화
 		currCmdCtx->cmdAlloc->Reset();
 		currCmdCtx->cmdList->Reset(currCmdCtx->cmdAlloc.Get(), nullptr);
 
+		// 명령 기록
 		addJobDraw(currCmdCtx->cmdList.Get(), drawEvents_.data() + accEventCnt,
 			drawEvents_.data() + accEventCnt + (jobSizeDraw_ - 1), accEventCnt, latch
 		);
@@ -174,16 +219,20 @@ void Dispatcher::drawMultiThreaded() {
 		++currCmdCtx;
 	}
 
+	// 찌꺼기 처리
 	if (accEventCnt != drawEvents_.size()) {
 		const auto lastJobSize = drawEvents_.size() - accEventCnt;
 
+		// 명령 기록
 		addJobDraw(currCmdCtx->cmdList.Get(), drawEvents_.data() + accEventCnt,
 			drawEvents_.data() + accEventCnt + (lastJobSize - 1), accEventCnt, latch
 		);
 	}
 
+	// 동기화
 	latch.wait();
 
+	// 명령 기록 끝, 실행
 	auto stagedCmdLists = std::vector<ID3D12CommandList*>(cmdCtxs.size(), nullptr);
 	std::ranges::transform(cmdCtxs, stagedCmdLists.begin(),
 		[](const CommandContext& cmdCtx) { return cmdCtx.cmdList.Get(); }	
@@ -191,10 +240,13 @@ void Dispatcher::drawMultiThreaded() {
 
 	cmdQ_->ExecuteCommandLists(static_cast<UINT>(stagedCmdLists.size()), stagedCmdLists.data());
 
+	// Fence 객체에 사용한 명령 컨텍스트들을 연관시켜 놓는다.
 	pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)]
 		.splice( pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].end(), std::move(cmdCtxs) );
 }
 
+// 멀티스레드 작업 시, GPU 데이터 갱신 작업에 대해
+// 단위 작업을 생성하여 스레드에 할당하는데 사용된다.
 void Dispatcher::addJobUpdate( const DrawEvent* pFirst, const DrawEvent* pLast,
 	SampleShader::PerInstanceData* pOut, std::latch& latch
 ) {
@@ -211,11 +263,15 @@ void Dispatcher::addJobUpdate( const DrawEvent* pFirst, const DrawEvent* pLast,
 	});
 }
 
+// 멀티스레드 작업 시, 드로우콜들에 대해
+// 단위 작업을 생성하여 스레드에 할당하는데 사용된다.
 void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 	const DrawEvent* pFirst, const DrawEvent* pLast,
 	std::size_t firstInstanceIdx, std::latch& latch
 ) {
 	threadPool_->addJob([=, &latch]() {
+		// 명령 컨텍스트마다 개별적으로 파이프라인 설정을 해주어야 한다.
+		// (파이프라인 설정은 공유되지 않는다. 그렇더라.)
 		threadCmdList->SetGraphicsRootSignature(rootSig_->get());
 		threadCmdList->SetPipelineState(shader_.Get());
 		threadCmdList->OMSetRenderTargets(1u, &rtv_, false, &dsv_);
@@ -224,12 +280,18 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 				
 		DISPLAY_ERROR_DX_VOID( threadCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST), false );
 
+		// 바인드해야 하는 GPU 데이터는 다음 두 종류다. (셰이더 참고)
+		// - PerInstanceData
+		// - PerDrawcallData
+
+		// PerInstanceData 바인드
 		pResources_->perInstanceData.bind(threadCmdList, rootParamIdxPID_, roomIdx_);
 
 		for ( auto idxDrawcall = firstInstanceIdx;
 			idxDrawcall < firstInstanceIdx + jobSizeDraw_;
 			++idxDrawcall
 		) {
+			// PerDrawcallData 바인드
 			pResources_->perDrawcallData.cbuffers[idxDrawcall].bind(
 				threadCmdList, rootParamIdxPDD_, roomIdx_
 			);
@@ -237,10 +299,14 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 			auto perDrawcallData = SampleShader::PerDrawcallData{
 				.firstInstanceIdx = static_cast<u32t>(idxDrawcall)
 			};
+			// PerDrawcallData GPU 데이터 갱신
+			// (바인드와 GPU 데이터 갱신 순서는 상관없다.
+			//  어차피 바인드는 GPU 명령이라 바로 실행되지 않기 때문에)
 			pResources_->perDrawcallData.cbuffers[idxDrawcall].stage(
 				roomIdx_, &perDrawcallData, 1u
 			);
 
+			// DrawEvent의 정보를 기반으로 입력 조립기 설정을 하고 드로우콜을 수행한다.
 			const auto& drawEvent = drawEvents_[idxDrawcall];
 
 			DISPLAY_ERROR_DX_VOID(
@@ -256,6 +322,7 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 			), false );
 		}
 
+		// 명령 기록 종료
 		threadCmdList->Close();
 		latch.count_down();
 	} );

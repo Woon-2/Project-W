@@ -81,7 +81,10 @@ ComPtr<ID3D12Resource> createBufferResource(
 	return ret;
 }
 
+// 특정 용도 usage의 명령 컨텍스트 cnt개를 풀 내부에 확충해놓는다.
 void CommandListPool::init(ID3D12Device* device, CommandListUsage usage, std::size_t cnt) {
+	// 디버깅을 위해 usage enum을 문자열로 매핑한다.
+	// 추후 D3D12 객체 이름 지정 및 오류 메시지 출력에 쓰인다.
 	std::wstring usageName{};
 
 	switch (usage) {
@@ -126,9 +129,12 @@ void CommandListPool::init(ID3D12Device* device, CommandListUsage usage, std::si
 	}
 }
 
+// 특정 용도 usage의 명령 컨텍스트를 cnt개 할당해 output에 채워넣는다.
+// @return 실제로 할당한 명령 컨텍스트 수, 요청 받은 개수 cnt와 다를 수 있다.
 std::size_t CommandListPool::alloc( std::size_t cnt,
 	CommandListUsage usage, std::list<CommandContext>& output
 ) {
+	// 할당 가능한 만큼만 할당한다.
 	std::size_t allocCnt = 0u;
 
 	auto& pool = cmdCtxs_[etoi(usage)];
@@ -147,6 +153,8 @@ std::size_t CommandListPool::alloc( std::size_t cnt,
 	return allocCnt;
 }
 
+// 특정 용도 usage의 명령 컨텍스트 1개를 output에 채워넣는다.
+// @return 명령 컨텍스트의 할당 성공 여부, 실패할 수도 있다.
 bool CommandListPool::allocOne(CommandListUsage usage, CommandContext& output) {
 	auto& pool = cmdCtxs_[etoi(usage)];
 	if (pool.empty()) {
@@ -158,15 +166,23 @@ bool CommandListPool::allocOne(CommandListUsage usage, CommandContext& output) {
 	return true;
 }
 
+// 특정 용도 usage의 명령 컨텍스트들 expired를 풀에 반납한다.
+// 반드시 GPU에서도 사용이 끝난 명령 컨텍스트들임을 확인하자.
 void CommandListPool::free(CommandListUsage usage, std::list<CommandContext>&& expired) {
 	free(etoi(usage), std::move(expired));
 }
 
+// 특정 용도 usage의 명령 컨텍스트들 expired를 풀에 반납한다.
+// 반드시 GPU에서도 사용이 끝난 명령 컨텍스트들임을 확인하자.
+// * 반복문에서의 쓰임을 상정해 enum 대신 int를 받는 버전을 마련하였다.
+//   범위 점검을 따로 하지 않으므로 주의해서 쓰자.
 void CommandListPool::free(int usage, std::list<CommandContext>&& expired) {
 	auto& pool = cmdCtxs_[usage];
 	pool.splice(pool.end(), std::move(expired));
 }
 
+// 특정 용도 usage의 명령 컨텍스트 expired를 풀에 반납한다.
+// 반드시 GPU에서도 사용이 끝난 명령 컨텍스트임을 확인하자.
 void CommandListPool::freeOne(CommandListUsage usage, CommandContext&& expired) {
 	auto& pool = cmdCtxs_[etoi(usage)];
 	pool.push_back(std::move(expired));
@@ -182,6 +198,8 @@ DescriptorHeap::DescriptorHeap(ID3D12Device* device, const D3D12_DESCRIPTOR_HEAP
 	cpuStart = heap->GetCPUDescriptorHandleForHeapStart();
 	gpuVisible = desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	if (gpuVisible) {
+		// gpuVisible 플래그가 활성화되어있을 때에만
+		// gpuStart 값을 유효한 값으로 채운다.
 		gpuStart = heap->GetGPUDescriptorHandleForHeapStart();
 	}
 }
@@ -190,7 +208,7 @@ DescriptorPool::DescriptorPool(std::size_t viewCnt,
 	D3D12_CPU_DESCRIPTOR_HANDLE cpuStart, D3D12_GPU_DESCRIPTOR_HANDLE gpuStart,
 	D3D12_DESCRIPTOR_HEAP_TYPE type, bool gpuVisible, UINT incrementSize
 ) : freeIndices_(viewCnt), cpuStart_(cpuStart), gpuStart_(gpuStart),
-type_(type), gpuVisible_(gpuVisible), incrementSize_(incrementSize) {
+	type_(type), gpuVisible_(gpuVisible), incrementSize_(incrementSize) {
 
 	std::iota(freeIndices_.begin(), freeIndices_.end(), 0);
 }

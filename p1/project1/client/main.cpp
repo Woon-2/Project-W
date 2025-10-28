@@ -46,7 +46,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	DISPLAY_ERROR_GLE(!ShowWindow(ghWnd, SW_SHOW), true);
 
 	auto threadPool = ThreadPool();
-	threadPool.run(6u);
+	threadPool.run(numberOfPhysicalCores() - 1u);
+	std::cout << "ThreadPool runs with " << numberOfPhysicalCores() << " threads (the physical core count - 1)\n";
 
 	// 그래픽스 초기화 - DXGI, D3D12
 	GFX gfx{};
