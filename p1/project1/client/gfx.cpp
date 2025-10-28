@@ -458,7 +458,9 @@ void GFX::renderSampleShader(ID3D12GraphicsCommandList* cmdList) {
 	// 정렬을 통해 인스턴싱이 가능하도록 한다.
 	std::sort(drawEventsSamplePipeline_.begin(), drawEventsSamplePipeline_.end());
 	
-	/* thread_local */ auto perInstanceData = std::vector<SampleShader::PerInstanceData>();
+	// perInstanceData를 thread_local로 선언하여
+	// 매번 처음부터 메모리를 구축하지 않고 재사용할 수 있도록 한다.
+	thread_local auto perInstanceData = std::vector<SampleShader::PerInstanceData>();
 	perInstanceData.reserve(drawEventsSamplePipeline_.size());
 	for (const auto& drawEvent : drawEventsSamplePipeline_) {
 		perInstanceData.push_back(SampleShader::PerInstanceData{
@@ -470,6 +472,8 @@ void GFX::renderSampleShader(ID3D12GraphicsCommandList* cmdList) {
 	const auto rootParamIdxPDD = pRootSig->paramIdx(L"PerDrawcallData");
 
 	resourcesSamplePipeline_.perInstanceData.stage(roomIdx, perInstanceData);
+	perInstanceData.clear();
+
 	resourcesSamplePipeline_.perInstanceData.bind( cmdList, 
 		rootParamIdxPID, roomIdx
 	);
