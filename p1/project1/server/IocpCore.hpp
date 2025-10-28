@@ -2,7 +2,7 @@
 #define IOCP_CORE_HPP
 
 #include "pch.hpp"
-#include "IocpObject.hpp"
+#include "IoEvent.hpp"
 
 class IocpCore {
 public:
@@ -14,8 +14,8 @@ public:
 		::CloseHandle( iocpHandle_ );
 	}
 
-	bool registerHandle( IocpObject& iocpObject ) {
-		return ::CreateIoCompletionPort( iocpObject.getHandle( ), iocpHandle_, 0, 0 );
+	bool registerHandle( IocpObject* iocpObject ) {
+		return ::CreateIoCompletionPort( iocpObject->getHandle( ), iocpHandle_, 0, 0 );
 	}
 
 	bool dispatch( uint32 timeoutMs = INFINITE ) {
@@ -26,7 +26,8 @@ public:
 		if ( ::GetQueuedCompletionStatus( iocpHandle_, &numBytes, &key,
 			reinterpret_cast<LPOVERLAPPED*>( &event ), timeoutMs )
 		) {
-
+			auto iocpObject = event->getOwner( );
+			iocpObject->dispatch( event, numBytes );
 		}
 		else {
 			const int32 errCode = ::WSAGetLastError( );
@@ -35,9 +36,13 @@ public:
 				return false;
 
 			default:
+				auto iocpObject = event->getOwner( );
+				iocpObject->dispatch( event, numBytes );
 				break;
 			}
 		}
+
+		return true;
 	}
 
 	HANDLE getHandle( ) const {
@@ -46,6 +51,6 @@ public:
 
 private:
 	HANDLE iocpHandle_;
-};
+} gIocpCore;
 
 #endif // IOCP_CORE_HPP
