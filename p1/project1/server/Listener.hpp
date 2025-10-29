@@ -5,7 +5,8 @@
 
 class Listener : public IocpObject {
 public:
-	Listener( ) : listenSock_( SocketUtils::createSocket( ) ), acceptEvents_( ) {}
+	Listener( ) : listenSock_( SocketUtils::createSocket( ) ),
+		acceptEvents_( ), service_( ) {}
 
 	virtual ~Listener( ) {
 		SocketUtils::closeSocket( listenSock_ );
@@ -15,7 +16,7 @@ public:
 		}
 	}
 
-	void startAccept( const NetAddress& netAddr );
+	void startAccept( const SPServerService& service );
 	virtual void dispatch( IoEvent* event, int32 numBytes ) override;
 	void registerAccept( IoEvent* event );
 	void processAccept( IoEvent* event );
@@ -31,8 +32,7 @@ public:
 private:
 	SOCKET listenSock_;
 	std::vector<IoEvent*> acceptEvents_;
+	SPServerService service_;
 };
-
-void worker( );
 
 #endif // LISTENER_HPP

@@ -2,21 +2,19 @@
 #include "IocpCore.hpp"
 #include "Listener.hpp"
 #include "Session.hpp"
+#include "Service.hpp"
 
-void worker( ) {
-	while ( true ) {
-		gIocpCore.dispatch( );
-	}
-}
+void Listener::startAccept( const SPServerService& service ) {
+	service_ = service;
+	ASSERT_CRASH( service_ != nullptr );
 
-void Listener::startAccept( const NetAddress& netAddr ) {
+	ASSERT_CRASH( service_->getIocpCore( )->registerHandle( shared_from_this( ) ) );
+
 	SocketUtils::setReuseAddr( listenSock_, true );
-	SocketUtils::bindAnyAddr( listenSock_, serverPort );
+	SocketUtils::bind( listenSock_, service_->getNetAddress( ) );
 	SocketUtils::listen( listenSock_ );
 
-	gIocpCore.registerHandle( this );
-
-	const int32 acceptCount = 1;
+	const int32 acceptCount = service_->getMaxSessionCount( );
 	for( auto i = 0; i < acceptCount; ++i ) {
 		IoEvent* event = new IoEvent( IoType::Accept );
 		event->setOwner( shared_from_this( ) );
@@ -39,12 +37,10 @@ void Listener::dispatch( IoEvent* event, int32 numBytes ) {
 }
 
 void Listener::registerAccept( IoEvent* event ) {
-	auto session = std::make_shared<Session>( );
+	auto session = service_->createSession( );
 
 	event->clear( );
 	event->setSession( session );
-
-	gIocpCore.registerHandle( session.get( ) );
 
 	if ( !::AcceptEx( listenSock_, session->getSock( ), session->recvBuf_.data( ),
 		0, sizeof( SOCKADDR_IN ) + 16, sizeof( SOCKADDR_IN ) + 16,

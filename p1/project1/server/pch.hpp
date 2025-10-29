@@ -21,7 +21,10 @@
 #include <string>
 #include <vector>
 #include <array>
+#include <set>
 #include <thread>
 #include <atomic>
+#include <mutex>
+#include <functional>
 
 #endif // SERVER_PCH_HPP
