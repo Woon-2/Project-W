@@ -14,7 +14,7 @@ public:
 		::CloseHandle( iocpHandle_ );
 	}
 
-	bool registerHandle( IocpObject* iocpObject ) {
+	bool registerHandle( SPIocpObject iocpObject ) {
 		return ::CreateIoCompletionPort( iocpObject->getHandle( ), iocpHandle_, 0, 0 );
 	}
 
@@ -51,6 +51,6 @@ public:
 
 private:
 	HANDLE iocpHandle_;
-} gIocpCore;
+};
 
 #endif // IOCP_CORE_HPP

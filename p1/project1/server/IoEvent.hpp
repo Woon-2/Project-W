@@ -29,27 +29,27 @@ public:
 		return type_;
 	}
 
-	void setOwner( const IocpObjectSP& iocpObject ) {
+	void setOwner( const SPIocpObject& iocpObject ) {
 		owner_ = iocpObject;
 	}
 
-	IocpObjectSP getOwner( ) const {
+	SPIocpObject getOwner( ) const {
 		return owner_;
 	}
 
-	void setSession( const SessionSP& session ) {
+	void setSession( const SPSession& session ) {
 		session_ = session;
 	}
 
-	SessionSP getSession( ) const {
+	SPSession getSession( ) const {
 		return session_;
 	}
 
 private:
 	WSAOVERLAPPED over_;
 	IoType type_;
-	IocpObjectSP owner_;
-	SessionSP session_;
+	SPIocpObject owner_;
+	SPSession session_;
 };
 
 

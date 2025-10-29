@@ -13,8 +13,11 @@ using uint32 = std::uint32_t;
 using int64 = std::int64_t;
 using uint64 = std::uint64_t;
 
-using IocpObjectSP = std::shared_ptr<class IocpObject>;
-using ListenerSP = std::shared_ptr<class Listener>;
-using SessionSP = std::shared_ptr<class Session>;
+using SPIocpCore = std::shared_ptr<class IocpCore>;
+using SPIocpObject = std::shared_ptr<class IocpObject>;
+using SPListener = std::shared_ptr<class Listener>;
+using SPSession = std::shared_ptr<class Session>;
+using SPClientService = std::shared_ptr<class ClientService>;
+using SPServerService = std::shared_ptr<class ServerService>;
 
 #endif // TYPES_HPP
