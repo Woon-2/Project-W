@@ -61,9 +61,9 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
 	auto cubes = std::vector<std::vector<std::vector<Object>>>(8u);
 	for (auto& plane : cubes) {
-		plane.resize(8u);
+		plane.resize(9u);
 		for (auto& row : plane) {
-			row.resize(8u);
+			row.resize(9u);
 		}
 	}
 
