@@ -2,6 +2,7 @@
 #define LISTENER_HPP
 
 #include "IoEvent.hpp"
+#include "IocpObject.hpp"
 
 class Listener : public IocpObject {
 public:

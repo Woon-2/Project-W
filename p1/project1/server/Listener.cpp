@@ -60,10 +60,7 @@ void Listener::processAccept( AcceptEvent* event ) {
 	}
 
 	session->setNetAddress( NetAddress( sockAddr ) );
-
-	std::cout << "Client connected!\n";
-
-	// TODO
+	session->processConnect( );
 
 	registerAccept( event );
 }

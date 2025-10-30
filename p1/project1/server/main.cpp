@@ -3,6 +3,21 @@
 #include "IocpCore.hpp"
 #include "Session.hpp"
 
+class GameSession : public Session {
+public:
+	GameSession( ) : Session( ) {}
+	virtual ~GameSession( ) { }
+
+	virtual void onConnected( ) override {
+		std::cout << "GameSession connected.\n";
+	}
+
+	virtual int32 onRecv( char* buffer, int32 len ) override {
+		std::cout << "GameSession received " << len << " bytes.\n";
+		return len;
+	}
+};
+
 int main( )
 {
 	SocketUtils::init( );
@@ -14,7 +29,7 @@ int main( )
 
 	// temporary
 	service->setSessionFactory( []( ) {
-		return std::make_shared<Session>( );
+		return std::make_shared<GameSession>( );
 	} );
 
 	ASSERT_CRASH( service->start( ) );

@@ -2,6 +2,7 @@
 #include "IocpCore.hpp"
 #include "Listener.hpp"
 #include "Service.hpp"
+#include "Session.hpp"
 
 /*---------------
      Service
@@ -9,6 +10,7 @@
 
 SPSession Service::createSession( ) {
     auto session = factory_( );
+	session->setService( shared_from_this( ) );
 
     if ( iocpCore_->registerHandle( session ) == false ) {
         return nullptr;
