@@ -14,9 +14,9 @@ void Listener::startAccept( const SPServerService& service ) {
 	SocketUtils::bind( listenSock_, service_->getNetAddress( ) );
 	SocketUtils::listen( listenSock_ );
 
-	const int32 acceptCount = service_->getMaxSessionCount( );
+	const auto acceptCount = service_->getMaxSessionCount( );
 	for( auto i = 0; i < acceptCount; ++i ) {
-		IoEvent* event = new IoEvent( IoType::Accept );
+		auto event = new AcceptEvent( );
 		event->setOwner( shared_from_this( ) );
 		acceptEvents_.push_back( event );
 		registerAccept( event );
@@ -24,19 +24,12 @@ void Listener::startAccept( const SPServerService& service ) {
 }
 
 void Listener::dispatch( IoEvent* event, int32 numBytes ) {
-	auto ioType = event->getType( );
-
-	switch ( ioType ) {
-	case IoType::Accept:
-		processAccept( event );
-		break;
-
-	default:
-		break;
-	}
+	ASSERT_CRASH( event->getType( ) == IoType::Accept );
+	auto acceptEvent = static_cast<AcceptEvent*>( event );
+	processAccept( acceptEvent );
 }
 
-void Listener::registerAccept( IoEvent* event ) {
+void Listener::registerAccept( AcceptEvent* event ) {
 	auto session = service_->createSession( );
 
 	event->clear( );
@@ -53,7 +46,7 @@ void Listener::registerAccept( IoEvent* event ) {
 	}
 }
 
-void Listener::processAccept( IoEvent* event ) {
+void Listener::processAccept( AcceptEvent* event ) {
 	auto session = event->getSession( );
 	SocketUtils::setUpdateAcceptContext( session->getSock( ), listenSock_ );
 

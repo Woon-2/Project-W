@@ -18,8 +18,8 @@ public:
 
 	void startAccept( const SPServerService& service );
 	virtual void dispatch( IoEvent* event, int32 numBytes ) override;
-	void registerAccept( IoEvent* event );
-	void processAccept( IoEvent* event );
+	void registerAccept( AcceptEvent* event );
+	void processAccept( AcceptEvent* event );
 
 	virtual HANDLE getHandle( ) const override {
 		return reinterpret_cast<HANDLE>( listenSock_ );
@@ -31,7 +31,7 @@ public:
 	
 private:
 	SOCKET listenSock_;
-	std::vector<IoEvent*> acceptEvents_;
+	std::vector<AcceptEvent*> acceptEvents_;
 	SPServerService service_;
 };
 

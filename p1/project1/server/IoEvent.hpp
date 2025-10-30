@@ -5,8 +5,14 @@
 #include "IocpObject.hpp"
 #include "Session.hpp"
 
+/*---------------
+     IoEvent
+---------------*/
+
 enum class IoType : int8 {
 	None,
+	Connect,
+	Disconnect,
 	Accept,
 	Recv,
 	Send
@@ -14,8 +20,8 @@ enum class IoType : int8 {
 
 class IoEvent {
 public:
-	IoEvent( ) : over_( ), type_( IoType::None ), owner_( ), session_( ) {}
-	IoEvent( IoType type ) : over_( ), type_( type ), owner_( ), session_( ) {}
+	IoEvent( ) : over_( ), type_( IoType::None ), owner_( ) {}
+	IoEvent( IoType type ) : over_( ), type_( type ), owner_( ) {}
 
 	void clear( ) {
 		::ZeroMemory( &over_, sizeof( WSAOVERLAPPED ) );
@@ -37,6 +43,38 @@ public:
 		return owner_;
 	}
 
+private:
+	WSAOVERLAPPED over_;
+	IoType type_;
+	SPIocpObject owner_;
+};
+
+/*--------------------
+	 ConnectEvent
+--------------------*/
+
+class ConnectEvent : public IoEvent {
+public:
+	ConnectEvent( ) : IoEvent( IoType::Connect ) {}
+};
+
+/*-----------------------
+	 DisconnectEvent
+-----------------------*/
+
+class DisconnectEvent : public IoEvent {
+public:
+	DisconnectEvent( ) : IoEvent( IoType::Disconnect ) {}
+};
+
+/*-------------------
+	 AcceptEvent
+-------------------*/
+
+class AcceptEvent : public IoEvent {
+public:
+	AcceptEvent( ) : IoEvent( IoType::Accept ), session_( ) {}
+
 	void setSession( const SPSession& session ) {
 		session_ = session;
 	}
@@ -46,11 +84,25 @@ public:
 	}
 
 private:
-	WSAOVERLAPPED over_;
-	IoType type_;
-	SPIocpObject owner_;
 	SPSession session_;
 };
 
+/*-----------------
+	 RecvEvent
+-----------------*/
+
+class RecvEvent : public IoEvent {
+public:
+	RecvEvent( ) : IoEvent( IoType::Recv ) {}
+};
+
+/*-----------------
+	 SendEvent
+-----------------*/
+
+class SendEvent : public IoEvent {
+public:
+	SendEvent( ) : IoEvent( IoType::Send ) {}
+};
 
 #endif // IO_EVENT_HPP
