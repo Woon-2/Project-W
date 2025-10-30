@@ -2,14 +2,12 @@
 #define IO_EVENT_HPP
 
 #include "pch.hpp"
-#include "IocpObject.hpp"
-#include "Session.hpp"
 
 /*---------------
      IoEvent
 ---------------*/
 
-enum class IoType : int8 {
+enum class IoType : uint8 {
 	None,
 	Connect,
 	Disconnect,

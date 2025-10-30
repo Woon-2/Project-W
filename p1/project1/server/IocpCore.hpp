@@ -3,6 +3,7 @@
 
 #include "pch.hpp"
 #include "IoEvent.hpp"
+#include "IocpObject.hpp"
 
 class IocpCore {
 public:
@@ -14,7 +15,7 @@ public:
 		::CloseHandle( iocpHandle_ );
 	}
 
-	bool registerHandle( SPIocpObject iocpObject ) {
+	bool registerHandle( const SPIocpObject& iocpObject ) {
 		return ::CreateIoCompletionPort( iocpObject->getHandle( ), iocpHandle_, 0, 0 );
 	}
 
