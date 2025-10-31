@@ -10,8 +10,7 @@ void Session::disconnect( const std::string& cause ) {
 	std::cout << "Disconnected: " << cause << '\n';	// temporary
 
 	onDisconnected( );	// used by content side
-	SocketUtils::closeSocket( sock_ );
-	getService( )->releaseSession( getSPSession( ) );
+	registerDisconnect( );
 }
 
 void Session::dispatch( IoEvent* event, int32 numBytes ) {
@@ -20,8 +19,16 @@ void Session::dispatch( IoEvent* event, int32 numBytes ) {
 		processConnect( );
 		break;
 
+	case IoType::Disconnect:
+		processDisconnect( );
+		break;
+
 	case IoType::Recv:
 		processRecv( numBytes );
+		break;
+
+	case IoType::Send:
+		processSend( numBytes );
 		break;
 
 	default:
@@ -29,8 +36,48 @@ void Session::dispatch( IoEvent* event, int32 numBytes ) {
 	}
 }
 
-void Session::registerConnect( )
-{
+bool Session::registerConnect( ) {
+	if ( isConnected( ) ) {
+		return false;
+	}
+	if ( getService( )->getType( ) != ServiceType::Client ) {
+		return false;
+	}
+
+	SocketUtils::setReuseAddr( sock_, true );
+	SocketUtils::bindAnyAddr( sock_, 0 );	// if port is 0, system assigns an available port
+
+	connectEvent_.clear( );
+	connectEvent_.setOwner( shared_from_this( ) );	// add reference
+
+	DWORD numBytes{ };
+	auto sockAddr = getService( )->getNetAddress( ).getSockAddr( );
+	if ( false == SocketUtils::ConnectEx( sock_, reinterpret_cast<SOCKADDR*>( &sockAddr ),
+		sizeof( sockAddr ), nullptr, 0, &numBytes, reinterpret_cast<WSAOVERLAPPED*>( &connectEvent_ ) )
+	) {
+		auto errCode = ::WSAGetLastError( );
+		if ( errCode != WSA_IO_PENDING ) {
+			connectEvent_.setOwner( nullptr );	// release reference
+			return false;
+		}
+	}
+
+	return true;
+}
+
+void Session::registerDisconnect( ) {
+	disconnectEvent_.clear( );
+	disconnectEvent_.setOwner( shared_from_this( ) );	// add reference
+
+	if ( false == SocketUtils::DisconnectEx( sock_,
+		reinterpret_cast<WSAOVERLAPPED*>( &disconnectEvent_ ), TF_REUSE_SOCKET, 0 )
+	) {
+		auto errCode = ::WSAGetLastError( );
+		if ( errCode != ERROR_IO_PENDING ) {
+			handleError( errCode );
+			disconnectEvent_.setOwner( nullptr );	// release reference
+		}
+	}
 }
 
 void Session::registerRecv( ) {
@@ -70,6 +117,11 @@ void Session::processConnect( ) {
 	getService( )->addSession( getSPSession( ) );
 	onConnected( );	// used by content side
 	registerRecv( );
+}
+
+void Session::processDisconnect( ) {
+	disconnectEvent_.setOwner( nullptr );	// release reference
+	getService( )->releaseSession( getSPSession( ) );
 }
 
 void Session::processRecv( int32 numBytes ) {

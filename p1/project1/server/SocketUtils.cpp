@@ -4,6 +4,11 @@
 void SocketUtils::init( ) {
 	WSADATA wsaData{ };
 	ASSERT_CRASH( WSAStartup( MAKEWORD( 2, 2 ), &wsaData ) == 0 );
+
+	auto dummySock = createSocket( );
+	ASSERT_CRASH( bindWindowsFunctionEx( dummySock, WSAID_CONNECTEX, reinterpret_cast<LPVOID*>( &ConnectEx ) ) );
+	ASSERT_CRASH( bindWindowsFunctionEx( dummySock, WSAID_DISCONNECTEX, reinterpret_cast<LPVOID*>( &DisconnectEx ) ) );
+	closeSocket( dummySock );
 }
 
 void SocketUtils::rel( ) {
@@ -28,6 +33,12 @@ void SocketUtils::closeSocket( SOCKET& sock ) {
 
 	::closesocket( sock );
 	sock = INVALID_SOCKET;
+}
+
+bool SocketUtils::bindWindowsFunctionEx( SOCKET sock, GUID guid, LPVOID* fn ) {
+	DWORD bytes{ };
+	return ( ::WSAIoctl( sock, SIO_GET_EXTENSION_FUNCTION_POINTER, &guid, sizeof( guid ),
+		fn, sizeof( *fn ), &bytes, nullptr, nullptr ) != SOCKET_ERROR );
 }
 
 void SocketUtils::setReuseAddr( SOCKET sock, bool reuse ) {
@@ -60,3 +71,6 @@ void SocketUtils::bindAnyAddr( SOCKET sock, uint16 port ) {
 void SocketUtils::listen( SOCKET sock, int backlog ) {
 	ASSERT_CRASH( ::listen( sock, backlog ) != SOCKET_ERROR );
 }
+
+LPFN_CONNECTEX SocketUtils::ConnectEx = nullptr;
+LPFN_DISCONNECTEX SocketUtils::DisconnectEx = nullptr;

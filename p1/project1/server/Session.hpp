@@ -9,12 +9,15 @@ class Session : public IocpObject {
 public:
 	Session( ) : service_( ), sock_( SocketUtils::createSocket( ) ),
 		netAddr_( ), connected_( false ), connectEvent_( ),
-		recvEvent_( ), recvBuf_( ) {}
+		disconnectEvent_( ), recvEvent_( ), recvBuf_( ) {}
 
 	virtual ~Session( ) {
 		SocketUtils::closeSocket( sock_ );
 	}
 
+	bool connect( ) {
+		return registerConnect( );
+	}
 	void disconnect( const std::string& cause );
 
 	// Setters and Getters
@@ -56,11 +59,13 @@ private:
 	}
 
 	// For transmission events
-	void registerConnect( );
+	bool registerConnect( );
+	void registerDisconnect( );
 	void registerRecv( );
 	void registerSend( );
 
 	void processConnect( );
+	void processDisconnect( );
 	void processRecv( int32 numBytes );
 	void processSend( int32 numBytes );
 
@@ -69,11 +74,11 @@ private:
 protected:
 	// Will be overridden by content side
 	virtual void onConnected( ) {}
+	virtual void onDisconnected( ) {}
 	virtual int32 onRecv( char* buffer, int32 len ) {
 		return len;
 	}
 	virtual void onSend( int32 len ) {}
-	virtual void onDisconnected( ) {}
 
 private:
 	std::weak_ptr<Service> service_;
@@ -82,6 +87,7 @@ private:
 	std::atomic_bool connected_;
 
 	ConnectEvent connectEvent_;
+	DisconnectEvent disconnectEvent_;
 	RecvEvent recvEvent_;
 
 public:
