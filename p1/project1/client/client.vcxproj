@@ -70,6 +70,12 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <IncludePath>$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IncludePath>$(IncludePath)</IncludePath>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -133,6 +139,30 @@
   <ItemGroup>
     <ClInclude Include="camera.hpp" />
     <ClInclude Include="concurrentqueue.h" />
+    <ClInclude Include="d3dx12\include\directx\d3d12.h" />
+    <ClInclude Include="d3dx12\include\directx\d3d12compatibility.h" />
+    <ClInclude Include="d3dx12\include\directx\d3d12sdklayers.h" />
+    <ClInclude Include="d3dx12\include\directx\d3d12shader.h" />
+    <ClInclude Include="d3dx12\include\directx\D3D12TokenizedProgramFormat.hpp" />
+    <ClInclude Include="d3dx12\include\directx\d3d12video.h" />
+    <ClInclude Include="d3dx12\include\directx\d3dcommon.h" />
+    <ClInclude Include="d3dx12\include\directx\d3dx12.h" />
+    <ClInclude Include="d3dx12\include\directx\d3dx12_barriers.h" />
+    <ClInclude Include="d3dx12\include\directx\d3dx12_check_feature_support.h" />
+    <ClInclude Include="d3dx12\include\directx\d3dx12_core.h" />
+    <ClInclude Include="d3dx12\include\directx\d3dx12_default.h" />
+    <ClInclude Include="d3dx12\include\directx\d3dx12_pipeline_state_stream.h" />
+    <ClInclude Include="d3dx12\include\directx\d3dx12_property_format_table.h" />
+    <ClInclude Include="d3dx12\include\directx\d3dx12_render_pass.h" />
+    <ClInclude Include="d3dx12\include\directx\d3dx12_resource_helpers.h" />
+    <ClInclude Include="d3dx12\include\directx\d3dx12_root_signature.h" />
+    <ClInclude Include="d3dx12\include\directx\d3dx12_state_object.h" />
+    <ClInclude Include="d3dx12\include\directx\DirectML.h" />
+    <ClInclude Include="d3dx12\include\directx\dxcore.h" />
+    <ClInclude Include="d3dx12\include\directx\dxcore_interface.h" />
+    <ClInclude Include="d3dx12\include\directx\dxgicommon.h" />
+    <ClInclude Include="d3dx12\include\directx\dxgiformat.h" />
+    <ClInclude Include="d3dx12\include\dxguids\dxguids.h" />
     <ClInclude Include="errorHandling.hpp" />
     <ClInclude Include="function.hpp" />
     <ClInclude Include="gfx.hpp" />
@@ -150,6 +180,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="camera.cpp" />
+    <ClCompile Include="d3dx12\src\d3dx12_property_format_table.cpp" />
+    <ClCompile Include="d3dx12\src\dxguids.cpp" />
     <ClCompile Include="errorHandling.cpp" />
     <ClCompile Include="gfx.cpp" />
     <ClCompile Include="gfxUtil.cpp" />

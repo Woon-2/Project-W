@@ -9,7 +9,9 @@
 #include "samplePipeline.hpp"
 
 
-// 셰이딩 - 목 저녁
+// 큐브 bindless 텍스처 입히기 (Material, MapRef 구현)
+// 큐브 노멀 계산
+// 큐브 pbr 셰이딩
 // 유니티에서 모델 로드 - 금, 토
 // 유니티에서 월드 로드 - 토, 일
 // Batching & Instancing 구현

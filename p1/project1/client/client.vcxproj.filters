@@ -61,6 +61,9 @@
     <Filter Include="게임\헤더 파일">
       <UniqueIdentifier>{fc1b10d9-20b6-442b-b956-a9cb98bf05da}</UniqueIdentifier>
     </Filter>
+    <Filter Include="d3dx12">
+      <UniqueIdentifier>{6f72bce9-a034-4814-bd19-a95c42e5fd62}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.hpp">
@@ -111,6 +114,78 @@
     <ClInclude Include="physics.hpp">
       <Filter>게임\헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3d12.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3d12compatibility.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3d12sdklayers.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3d12shader.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\D3D12TokenizedProgramFormat.hpp">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3d12video.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3dcommon.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3dx12.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3dx12_barriers.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3dx12_check_feature_support.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3dx12_core.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3dx12_default.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3dx12_pipeline_state_stream.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3dx12_property_format_table.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3dx12_render_pass.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3dx12_resource_helpers.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3dx12_root_signature.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3dx12_state_object.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\DirectML.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\dxcore.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\dxcore_interface.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\dxgicommon.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\dxgiformat.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\dxguids\dxguids.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -151,6 +226,12 @@
     </ClCompile>
     <ClCompile Include="physics.cpp">
       <Filter>게임\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="d3dx12\src\dxguids.cpp">
+      <Filter>d3dx12</Filter>
+    </ClCompile>
+    <ClCompile Include="d3dx12\src\d3dx12_property_format_table.cpp">
+      <Filter>d3dx12</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
