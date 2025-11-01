@@ -25,12 +25,14 @@
 #include <wsl/wrladapter.h>
 #endif
 
-#if !defined(_WIN32) || defined(USING_DIRECTX_HEADERS)
-#include <directx/d3d12.h>
-#include <dxguids/dxguids.h>
-#else
-#include <d3d12.h>
-#endif
+#include "../d3dx12/include/directx/d3d12.h"
+
+//#if !defined(_WIN32) || defined(USING_DIRECTX_HEADERS)
+//#include <directx/d3d12.h>
+//#include <dxguids/dxguids.h>
+//#else
+//#include <d3d12.h>
+//#endif
 
 #include <cstddef>
 #include <cstdint>
