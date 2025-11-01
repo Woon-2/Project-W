@@ -9,7 +9,7 @@ void Session::disconnect( const std::string& cause ) {
 
 	std::cout << "Disconnected: " << cause << '\n';	// temporary
 
-	onDisconnected( );	// used by content side
+	onDisconnected( );	// 컨텐츠 쪽에서 사용
 	registerDisconnect( );
 }
 
@@ -45,7 +45,7 @@ bool Session::registerConnect( ) {
 	}
 
 	SocketUtils::setReuseAddr( sock_, true );
-	SocketUtils::bindAnyAddr( sock_, 0 );	// if port is 0, system assigns an available port
+	SocketUtils::bindAnyAddr( sock_, 0 );	// 0번 포트를 사용하면, 운영체제가 빈 포트를 자동으로 할당
 
 	connectEvent_.clear( );
 	connectEvent_.setOwner( shared_from_this( ) );	// add reference
@@ -89,8 +89,8 @@ void Session::registerRecv( ) {
 	recvEvent_.setOwner( shared_from_this( ) );	// add reference
 
 	auto wsaBuf = WSABUF{
-		.len = static_cast<ULONG>( recvBuf_.size( ) ),
-		.buf = recvBuf_.data( )
+		.len = static_cast<ULONG>( recvBuf_.freeSize( ) ),
+		.buf = reinterpret_cast<char*>( recvBuf_.writePos( ) )
 	};
 
 	DWORD numBytes{ };
@@ -132,7 +132,22 @@ void Session::processRecv( int32 numBytes ) {
 		return;
 	}
 
-	onRecv( recvBuf_.data( ), numBytes );	// used by content side
+	if ( recvBuf_.moveWritePos( numBytes ) == false ) {
+		disconnect( "RecvBuffer Move WritePos Failed" );
+		return;
+	}
+
+	auto dataSize = recvBuf_.dataSize( );
+	auto readBytes = onRecv( recvBuf_.readPos( ), dataSize );	// 컨텐츠 쪽에서 사용
+
+	if( readBytes < 0 || readBytes > dataSize || recvBuf_.moveReadPos( readBytes ) == false ) {
+		disconnect( "RecvBuffer Move ReadPos Failed" );
+		return;
+	}
+
+	// readPos, writePos 정리
+	recvBuf_.clean( );
+
 	registerRecv( );
 }
 

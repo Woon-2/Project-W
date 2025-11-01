@@ -35,7 +35,7 @@ void Listener::registerAccept( AcceptEvent* event ) {
 	event->clear( );
 	event->setSession( session );
 
-	if ( !::AcceptEx( listenSock_, session->getSock( ), session->recvBuf_.data( ),
+	if ( !::AcceptEx( listenSock_, session->getSock( ), session->recvBuf_.writePos( ),
 		0, sizeof( SOCKADDR_IN ) + 16, sizeof( SOCKADDR_IN ) + 16,
 		nullptr, reinterpret_cast<OVERLAPPED*>( event ) )
 	) {

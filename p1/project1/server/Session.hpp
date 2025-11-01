@@ -3,18 +3,24 @@
 
 #include "IoEvent.hpp"
 #include "IocpObject.hpp"
+#include "RecvBuffer.hpp"
 
 class Service;
 class Session : public IocpObject {
+	enum {
+		bufferSize = 0x10000	// 64KB
+	};
+
 public:
 	Session( ) : service_( ), sock_( SocketUtils::createSocket( ) ),
 		netAddr_( ), connected_( false ), connectEvent_( ),
-		disconnectEvent_( ), recvEvent_( ), recvBuf_( ) {}
+		disconnectEvent_( ), recvEvent_( ), recvBuf_( bufferSize ) {}
 
 	virtual ~Session( ) {
 		SocketUtils::closeSocket( sock_ );
 	}
 
+	// 외부에서 사용
 	bool connect( ) {
 		return registerConnect( );
 	}
@@ -41,13 +47,13 @@ public:
 		return std::static_pointer_cast<Session>( shared_from_this( ) );
 	}
 
-	// Connection State
+	// 연결 상태 확인
 	bool isConnected( ) const {
 		return connected_.load( );
 	}
 
 private:
-	// Interface overrides
+	// 인터페이스 구현
 	virtual void dispatch( IoEvent* event, int32 numBytes ) override;
 
 	virtual HANDLE getHandle( ) const override {
@@ -58,7 +64,7 @@ private:
 		return sock_;
 	}
 
-	// For transmission events
+	// 통신 관련 함수
 	bool registerConnect( );
 	void registerDisconnect( );
 	void registerRecv( );
@@ -72,10 +78,10 @@ private:
 	void handleError( int32 errCode );
 
 protected:
-	// Will be overridden by content side
+	// 컨텐츠 쪽에서 오버라이드해서 사용
 	virtual void onConnected( ) {}
 	virtual void onDisconnected( ) {}
-	virtual int32 onRecv( char* buffer, int32 len ) {
+	virtual int32 onRecv( uint8* buffer, int32 len ) {
 		return len;
 	}
 	virtual void onSend( int32 len ) {}
@@ -90,8 +96,7 @@ private:
 	DisconnectEvent disconnectEvent_;
 	RecvEvent recvEvent_;
 
-public:
-	std::array<char, bufSize> recvBuf_;
+	RecvBuffer recvBuf_;
 
 	friend class Listener;
 	friend class IocpCore;

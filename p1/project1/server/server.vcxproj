@@ -156,6 +156,7 @@
     <ClInclude Include="NetAddress.hpp" />
     <ClInclude Include="pch.hpp" />
     <ClInclude Include="protocol.hpp" />
+    <ClInclude Include="RecvBuffer.hpp" />
     <ClInclude Include="Service.hpp" />
     <ClInclude Include="Session.hpp" />
     <ClInclude Include="SocketUtils.hpp" />

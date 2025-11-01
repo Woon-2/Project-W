@@ -16,7 +16,7 @@ public:
 		std::cout << "GameSession disconnected.\n";
 	}
 
-	virtual int32 onRecv( char* buffer, int32 len ) override {
+	virtual int32 onRecv( uint8* buffer, int32 len ) override {
 		std::cout << "GameSession received " << len << " bytes.\n";
 		return len;
 	}
