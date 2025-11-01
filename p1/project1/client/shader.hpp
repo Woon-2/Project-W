@@ -52,11 +52,22 @@ private:
 // SampleShader
 namespace SampleShader {
 
+struct Material {
+	BindlessIndex idxAlbedo;
+	BindlessIndex idxRoughness;
+	BindlessIndex idxMetallic;
+
+	XMFLOAT4 cAlbedo;
+	float cRoughness;
+	float cMetallic;
+};
+
 struct PerInstanceData {
 	XMFLOAT4X4 wvp;
 };
 
 struct PerDrawcallData {
+	Material material;
 	u32t firstInstanceIdx;
 };
 

@@ -12,21 +12,29 @@ CompiledShaderOutput compileShader(const std::filesystem::path& path,
 	auto ret = CompiledShaderOutput{};
 	auto errorBlob = ComPtr<ID3DBlob>{};
 	auto errorStr = std::wstring{};
-	DISPLAY_ERROR_DX_HR(
-		D3DCompileFromFile(path.wstring().c_str(), macros, D3D_COMPILE_STANDARD_FILE_INCLUDE,
-			entryPoint.data(), target.data(), flag1, flag2, &ret.blob, &errorBlob
-		), false
+
+	auto hr = D3DCompileFromFile(path.wstring().c_str(), macros, D3D_COMPILE_STANDARD_FILE_INCLUDE,
+		entryPoint.data(), target.data(), flag1, flag2, &ret.blob, &errorBlob
 	);
+	DISPLAY_ERROR_DX_HR(hr, false);
 
 	if (errorBlob) {
 		errorStr.assign(errorBlob->GetBufferSize(), L'\0');
 		std::mbstowcs(errorStr.data(), static_cast<const char*>(errorBlob->GetBufferPointer()),
 			errorBlob->GetBufferSize()
 		);
-		DISPLAY_ERROR_STR( false, L"[GFX Error] compileShader: 셰이더 컴파일 중 오류가 발생했습니다.\n"s
-			+ errorStr, false
-		);
-		return ret;
+
+		if (hr >= 0) {
+			DISPLAY_ERROR_STR( false, L"[GFX Warning] compileShader: 셰이더 컴파일 중 경고가 발생했습니다.\n"s
+				+ errorStr, false
+			);
+		}
+		else {
+			DISPLAY_ERROR_STR( false, L"[GFX Error] compileShader: 셰이더 컴파일 중 오류가 발생했습니다.\n"s
+				+ errorStr, false
+			);
+			return ret;
+		}
 	}
 
 	ret.byteCode = D3D12_SHADER_BYTECODE{
@@ -41,8 +49,8 @@ ComPtr<ID3D12PipelineState> createSampleShader(ID3D12Device* device, ID3D12RootS
 	ComPtr<ID3D12PipelineState> ret{};
 
 	// 셰이더 컴파일
-	auto vsCode = compileShader("shaders.hlsl", nullptr, "VSMain", "vs_5_1", 0u, 0u);
-	auto psCode = compileShader("shaders.hlsl", nullptr, "PSMain", "ps_5_1", 0u, 0u);
+	auto vsCode = compileShader("shaders.hlsl", nullptr, "VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
+	auto psCode = compileShader("shaders.hlsl", nullptr, "PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
 
 	// 입력 조립기 설정
 	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
@@ -157,8 +165,10 @@ const D3D12_ROOT_PARAMETER& RootSig::paramDesc(std::wstring_view paramName) cons
 }
 
 void DefaultRootSig::build(ID3D12Device* device) {
+	auto idxRootParam = 0u;
+
 	// b0: PerDrawcallData
-	addParam( L"PerDrawcallData", 0, D3D12_ROOT_PARAMETER{
+	addParam( L"PerDrawcallData", idxRootParam++, D3D12_ROOT_PARAMETER{
 		.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV,
 		.Descriptor = D3D12_ROOT_DESCRIPTOR{
 			.ShaderRegister = 0u,
@@ -168,7 +178,7 @@ void DefaultRootSig::build(ID3D12Device* device) {
 	} );
 
 	// t0: PerInstanceData
-	addParam( L"PerInstanceData", 1, D3D12_ROOT_PARAMETER{
+	addParam( L"PerInstanceData", idxRootParam++, D3D12_ROOT_PARAMETER{
 		.ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV,
 		.Descriptor = D3D12_ROOT_DESCRIPTOR{
 			.ShaderRegister = 0u,
@@ -176,6 +186,100 @@ void DefaultRootSig::build(ID3D12Device* device) {
 		},
 		.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
 	} );
+
+	const auto tex2dRange = D3D12_DESCRIPTOR_RANGE {
+		.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+		.NumDescriptors = UINT(-1),
+		.BaseShaderRegister = 10u,
+		.RegisterSpace = 1u,
+		.OffsetInDescriptorsFromTableStart = 0u
+	};
+
+	// ==== bindless 환경을 고려한 루트 파라미터들 =========
+
+	// t10, space1: TexturePool
+	addParam( L"TexturePool", idxRootParam++, D3D12_ROOT_PARAMETER{
+		.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
+		.DescriptorTable = D3D12_ROOT_DESCRIPTOR_TABLE{
+			.NumDescriptorRanges = 1u,
+			.pDescriptorRanges = &tex2dRange
+		},
+		.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+	} );
+
+	const auto texArrayRange = D3D12_DESCRIPTOR_RANGE {
+		.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+		.NumDescriptors = UINT(-1),
+		.BaseShaderRegister = 10u,
+		.RegisterSpace = 2u,
+		.OffsetInDescriptorsFromTableStart = 0u
+	};
+
+	// t10, space2: TextureArrayPool
+	addParam( L"TextureArrayPool", idxRootParam++, D3D12_ROOT_PARAMETER{
+		.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
+		.DescriptorTable = D3D12_ROOT_DESCRIPTOR_TABLE{
+			.NumDescriptorRanges = 1u,
+			.pDescriptorRanges = &texArrayRange
+		},
+		.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+	} );
+
+	const auto texCubeRange = D3D12_DESCRIPTOR_RANGE {
+		.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+		.NumDescriptors = UINT(-1),
+		.BaseShaderRegister = 10u,
+		.RegisterSpace = 3u,
+		.OffsetInDescriptorsFromTableStart = 0u
+	};
+
+	// t10, space3: TextureCubePool
+	addParam( L"TextureCubePool", idxRootParam++, D3D12_ROOT_PARAMETER{
+		.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
+		.DescriptorTable = D3D12_ROOT_DESCRIPTOR_TABLE{
+			.NumDescriptorRanges = 1u,
+			.pDescriptorRanges = &texCubeRange
+		},
+		.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+	} );
+
+	const auto samRange = D3D12_DESCRIPTOR_RANGE {
+		.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
+		.NumDescriptors = UINT(-1),
+		.BaseShaderRegister = 0u,
+		.RegisterSpace = 1u,
+		.OffsetInDescriptorsFromTableStart = 0u
+	};
+
+	// s0, space1: SamplerPool
+	addParam( L"SamplerPool", idxRootParam++, D3D12_ROOT_PARAMETER{
+		.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
+		.DescriptorTable = D3D12_ROOT_DESCRIPTOR_TABLE{
+			.NumDescriptorRanges = 1u,
+			.pDescriptorRanges = &samRange
+		},
+		.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+	} );
+
+	const auto samCmpRange = D3D12_DESCRIPTOR_RANGE {
+		.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
+		.NumDescriptors = UINT(-1),
+		.BaseShaderRegister = 0u,
+		.RegisterSpace = 2u,
+		.OffsetInDescriptorsFromTableStart = 0u
+	};
+
+	// s0, space2: ComparisonSamplerPool
+	addParam( L"ComparisonSamplerPool", idxRootParam++, D3D12_ROOT_PARAMETER{
+		.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
+		.DescriptorTable = D3D12_ROOT_DESCRIPTOR_TABLE{
+			.NumDescriptorRanges = 1u,
+			.pDescriptorRanges = &samCmpRange
+		},
+		.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+	} );
+
+	// ==============================================
 
 	// 루트 파라미터들을 d3d12 api에 배열로 넘겨주기 위해
 	// 벡터를 만들고, 저장된 파라미터 개수 만큼의 공간을 확보한다.
@@ -219,9 +323,10 @@ void DefaultRootSig::build(ID3D12Device* device) {
 		return;
 	}
 
-	device->CreateRootSignature( 0u, rootSigBlob->GetBufferPointer(), rootSigBlob->GetBufferSize(),
+	DISPLAY_ERROR_DX_HR( device->CreateRootSignature(
+		0u, rootSigBlob->GetBufferPointer(), rootSigBlob->GetBufferSize(),
 		__uuidof(ID3D12RootSignature), &rootSig_
-	);
+	), false );
 
 	// 이름 설정
 	name_ = L"DefaultRootSignature";

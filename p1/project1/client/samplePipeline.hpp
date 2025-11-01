@@ -52,7 +52,12 @@ class Dispatcher {
 public:
 	Dispatcher() = default;
 	// GFX 객체로부터 필요한 인자들을 전달받자.
-	Dispatcher(const std::shared_ptr<RootSig>& rootSig,
+	Dispatcher(
+		std::vector<ComPtr<ID3D12DescriptorHeap>>&& descriptorHeaps,
+		DescriptorPool* pTexPool, DescriptorPool* pTexArrayPool,
+		DescriptorPool* pTexCubePool, DescriptorPool* pSamPool,
+		DescriptorPool* pCmpSamPool,
+		const std::shared_ptr<RootSig>& rootSig,
 		const ComPtr<ID3D12PipelineState>& shader,
 		const ComPtr<ID3D12CommandQueue>& cmdQ,
 		const D3D12_VIEWPORT& viewport,
@@ -99,6 +104,12 @@ private:
 	);
 
 	// GFX로부터 전달되어 그대로 사용하는 변수들
+	std::vector<ComPtr<ID3D12DescriptorHeap>> descriptorHeaps_{};
+	DescriptorPool* pTexPool_ = nullptr;
+	DescriptorPool* pTexArrayPool_ = nullptr;
+	DescriptorPool* pTexCubePool_ = nullptr;
+	DescriptorPool* pSamPool_ = nullptr;
+	DescriptorPool* pCmpSamPool_ = nullptr;
 	std::shared_ptr<RootSig> rootSig_ = nullptr;
 	ComPtr<ID3D12PipelineState> shader_ = nullptr;
 	ComPtr<ID3D12CommandQueue> cmdQ_ = nullptr;
@@ -117,6 +128,11 @@ private:
 	// GFX로부터 전달된 것들은 통해 얻어지는 변수들
 	UINT rootParamIdxPID_{};
 	UINT rootParamIdxPDD_{};
+	UINT rootParamIdxTexPool_{};
+	UINT rootParamIdxTexArrayPool_{};
+	UINT rootParamIdxTexCubePool_{};
+	UINT rootParamIdxSamPool_{};
+	UINT rootParamIdxCmpSamPool_{};
 
 	// 멀티스레드 동작 시 작업 카테고리별 분배 단위
 	std::size_t jobSizeUpdate_ = 4000u;

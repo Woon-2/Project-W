@@ -2,6 +2,19 @@
 #define __mesh_HPP
 
 #include "pch.hpp"
+#include "gfxUtil.hpp"
+
+// 재질 정보를 표현하는 구조체
+// SubMesh에 담겨, 드로우콜 시 사용할 텍스처나 상수를 지정한다.
+struct Material {
+	Texture mapAlbedo;
+	Texture mapRoughness;
+	Texture mapMetallic;
+
+	XMFLOAT4 constantAlbedo;
+	float constantRoughness;
+	float constantMetallic;
+};
 
 // 드로우콜 시 사용할 인덱스 버퍼 뷰와 재질 정보를 담는 구조체
 // 정점 버퍼는 parentMesh에서 가져와 사용한다.
@@ -11,7 +24,7 @@
 struct SubMesh {
 	std::wstring name;
 	D3D12_INDEX_BUFFER_VIEW ibView;
-	u32t material;
+	Material material;
 };
 
 // 정점 버퍼들과 인덱스 버퍼들, 그리고 재질 정보들을 저장하는 구조체
@@ -31,11 +44,14 @@ struct Mesh {
 };
 
 // 1x1x1 큐브 메시를 생성한다.
-// @return std::pair<Mesh, std::vector<ComPtr<ID3D12Resource>>
-//     생성된 메시와, 메시를 생성하는데 사용된 업로드 버퍼들의 벡터,
-//     Fence 객체와 연관시키는 등으로 업로드 버퍼들이 적절한 수명을 갖도록 하자.
-std::pair<Mesh, std::vector<ComPtr<ID3D12Resource>>> buildCubeMesh(
-	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList
+// @return Mesh
+// 메시 로드에 임시 업로드 버퍼들이 사용된다.
+// 사용된 업로드 버퍼들은 전달된 펜스에 연관되므로,
+// 펜스에서 GPU 작업 완료를 검사한 후 이 업로드 버퍼들을 해제하도록 하자.
+Mesh buildCubeMesh(
+	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
+	std::unordered_map<std::wstring, Texture>& texHashMap,
+	DescriptorPool& texPool, Fence& fenceToAssociate
 );
 
 #endif	// __mesh_HPP

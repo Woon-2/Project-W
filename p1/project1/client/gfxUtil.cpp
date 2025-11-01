@@ -238,6 +238,14 @@ D3D12_GPU_DESCRIPTOR_HANDLE DescriptorPool::gpuHandle(int idx) const {
 	return ret;
 }
 
+// 루트 시그너처의 idxRootParam 번째 루트 파라미터에
+// SetGraphicsRootDescriptorTable 함수를 통해 풀을 바인드한다.
+void DescriptorPool::bind(ID3D12GraphicsCommandList* cmdList, UINT idxRootParam) const {
+	DISPLAY_ERROR_DX_VOID(
+		cmdList->SetGraphicsRootDescriptorTable(idxRootParam, gpuStart_), false
+	);
+}
+
 // 깊이 버퍼를 쉽게 생성하는 유틸리티 함수
 ComPtr<ID3D12Resource> createDepthBuffer(
 	ID3D12Device* device,
@@ -414,4 +422,206 @@ ConstantBufferArray createConstantBufferArray( ID3D12Device* device, UINT64 elem
 	}
 
 	return ret;
+}
+
+// dds 포맷의 이미지 파일을 로드한다.
+// UpdateSubresources 함수에서 쓰인 임시 업로드 버퍼가 펜스에 연관되므로,
+// 펜스에서 gpu 작업 완료를 확인하고 난 뒤에 임시 업로드 버퍼들을 해제할 필요가 있다.
+LoadDDSReturnType loadDDS(
+    ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
+    const std::filesystem::path& path, Fence& fenceToAssociate
+) {
+	auto ret = LoadDDSReturnType{};
+
+    auto alphaMode = DirectX::DDS_ALPHA_MODE_UNKNOWN;
+    auto blsCubemap = false;
+
+	DISPLAY_ERROR_DX_HR(
+		DirectX::LoadDDSTextureFromFileEx(
+            device,
+            path.wstring().c_str(),
+            0,
+            D3D12_RESOURCE_FLAG_NONE,
+            DirectX::DDS_LOADER_DEFAULT,
+            &ret.res,
+            ret.ddsData,
+            ret.subresources,
+            &alphaMode,
+            &blsCubemap
+        ), false
+	);
+
+	if (ret.subresources.empty()) {
+		return ret;
+	}
+
+    auto requiredBytes = GetRequiredIntermediateSize(ret.res.Get(), 0, static_cast<UINT>(ret.subresources.size()));
+
+	auto uploadBuffer = createBufferResource(device, nullptr, requiredBytes, BufferCreationType::UploadBuffer);
+
+	DISPLAY_ERROR_DX_VOID(
+		UpdateSubresources(cmdList, ret.res.Get(), uploadBuffer.Get(),
+			0, 0, static_cast<UINT>(ret.subresources.size()), ret.subresources.data()
+		), false
+	);
+
+    fenceToAssociate.associatedResources_.push_back(std::move(uploadBuffer));
+
+    return ret;
+}
+
+// dds 포맷의 파일로부터 텍스처를 로드한다.
+// UpdateSubresources 함수에서 쓰인 임시 업로드 버퍼가 펜스에 연관되므로,
+// 펜스에서 gpu 작업 완료를 확인하고 난 뒤에 임시 업로드 버퍼들을 해제할 필요가 있다.
+Texture loadTexture( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
+	const std::filesystem::path& path, Fence& fenceToAssociate
+) {
+	Texture ret{};
+
+	auto tmp = loadDDS(device, cmdList, path, fenceToAssociate);
+	ret.res = std::move(tmp.res);
+
+	return ret;
+}
+
+// 텍스처의 gpu 리소스를 담는 ComPtr 부분은 제외하고,
+// Bindless 셰이더에서 인덱싱하기 위한 인덱스들만 복사한 텍스처를 반환한다.
+// 리소스 자체에 접근할 일은 거의 없기 때문에, 인덱스들만 복사하는 것이
+// 대부분의 상황에서 용이하다.
+Texture cloneTextureIdxOnly(const Texture& tex) {
+	Texture ret{};
+
+	ret.idxRtv = tex.idxRtv;
+	ret.idxDsv = tex.idxDsv;
+	ret.idxSrv = tex.idxSrv;
+	ret.idxUav = tex.idxUav;
+
+	return ret;
+}
+
+void __createRTV( ID3D12Device* device, Texture& tex,
+	const D3D12_RENDER_TARGET_VIEW_DESC* rtvDesc, DescriptorPool& pool
+) {
+	tex.idxRtv = pool.alloc();
+	auto rtvHandle = pool.cpuHandle(tex.idxRtv);
+	DISPLAY_ERROR_DX_VOID(
+		device->CreateRenderTargetView(tex.res.Get(), rtvDesc, rtvHandle), false
+	);
+}
+
+// DescriptorPool 객체에서 디스크립터를 할당받아 그 자리에 텍스처의 RTV를 만든다.
+// 텍스처의 idxRtv에 풀에서의 인덱스가 저장된다.
+void createRTV(ID3D12Device* device, Texture& tex, DescriptorPool& pool) {
+	__createRTV(device, tex, nullptr, pool);
+}
+
+// DescriptorPool 객체에서 디스크립터를 할당받아 그 자리에 텍스처의 RTV를 만든다.
+// 텍스처의 idxRtv에 풀에서의 인덱스가 저장된다.
+void createRTV( ID3D12Device* device, Texture& tex,
+	const D3D12_RENDER_TARGET_VIEW_DESC& rtvDesc, DescriptorPool& pool
+) {
+	__createRTV(device, tex, &rtvDesc, pool);
+}
+
+void __createDSV( ID3D12Device* device, Texture& tex,
+	const D3D12_DEPTH_STENCIL_VIEW_DESC* dsvDesc, DescriptorPool& pool
+) {
+	tex.idxDsv = pool.alloc();
+	auto dsvHandle = pool.cpuHandle(tex.idxDsv);
+	
+	DISPLAY_ERROR_DX_VOID(
+		device->CreateDepthStencilView(tex.res.Get(), dsvDesc, dsvHandle), false
+	);
+}
+
+void createDSV(ID3D12Device* device, Texture& tex, DescriptorPool& pool) {
+	__createDSV(device, tex, nullptr, pool);
+}
+
+// DescriptorPool 객체에서 디스크립터를 할당받아 그 자리에 텍스처의 DSV를 만든다.
+// 텍스처의 idxDsv에 풀에서의 인덱스가 저장된다.
+void createDSV( ID3D12Device* device, Texture& tex,
+	const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc, DescriptorPool& pool
+) {
+	__createDSV(device, tex, &dsvDesc, pool);
+}
+
+// DescriptorPool 객체에서 디스크립터를 할당받아 그 자리에 텍스처의 DSV를 만든다.
+// 텍스처의 idxDsv에 풀에서의 인덱스가 저장된다.
+void __createSRV( ID3D12Device* device, Texture& tex,
+	const D3D12_SHADER_RESOURCE_VIEW_DESC* srvDesc, DescriptorPool& pool
+) {
+	tex.idxSrv.idxResource = pool.alloc();
+	auto srvHandle = pool.cpuHandle(tex.idxSrv.idxResource);
+
+	DISPLAY_ERROR_DX_VOID(
+		device->CreateShaderResourceView(tex.res.Get(), srvDesc, srvHandle), false
+	);
+}
+
+// DescriptorPool 객체에서 디스크립터를 할당받아 그 자리에 텍스처의 SRV를 만든다.
+// 텍스처의 idxSrv.idxResource에 풀에서의 인덱스가 저장된다.
+void createSRV(ID3D12Device* device, Texture& tex, DescriptorPool& pool) {
+	__createSRV(device, tex, nullptr, pool);
+}
+
+// DescriptorPool 객체에서 디스크립터를 할당받아 그 자리에 텍스처의 SRV를 만든다.
+// 텍스처의 idxSrv.idxResource에 풀에서의 인덱스가 저장된다.
+void createSRV( ID3D12Device* device, Texture& tex,
+	const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc, DescriptorPool& pool
+) {
+	__createSRV(device, tex, &srvDesc, pool);
+}
+
+void __createUAV( ID3D12Device* device, Texture& tex,
+	const D3D12_UNORDERED_ACCESS_VIEW_DESC* uavDesc, DescriptorPool& pool
+) {
+	tex.idxUav.idxResource = pool.alloc();
+	auto uavHandle = pool.cpuHandle(tex.idxUav.idxResource);
+
+	DISPLAY_ERROR_DX_VOID(
+		device->CreateUnorderedAccessView(tex.res.Get(), nullptr, uavDesc, uavHandle), false
+	);
+}
+
+// DescriptorPool 객체에서 디스크립터를 할당받아 그 자리에 텍스처의 UAV를 만든다.
+// 텍스처의 idxUav.idxResource에 풀에서의 인덱스가 저장된다.
+void createUAV(ID3D12Device* device, Texture& tex, DescriptorPool& pool){ 
+	__createUAV(device, tex, nullptr, pool);
+}
+
+// DescriptorPool 객체에서 디스크립터를 할당받아 그 자리에 텍스처의 UAV를 만든다.
+// 텍스처의 idxUav.idxResource에 풀에서의 인덱스가 저장된다.
+void createUAV( ID3D12Device* device, Texture& tex,
+	const D3D12_UNORDERED_ACCESS_VIEW_DESC& uavDesc, DescriptorPool& pool
+) {
+	__createUAV(device, tex, &uavDesc, pool);
+}
+
+// 텍스처의 RTV 용도로 DescriptorPool 객체에서 할당받았던 디스크립터를 반납한다.
+// 텍스처 내에 저장되었던 인덱스에 변화가 없어야 하고, 할당한 풀과 반납한 풀이 같아야 한다.
+// 이 함수는 그것을 검사하지 않는다.
+void freeRTV(const Texture& tex, DescriptorPool& pool) {
+	pool.free(tex.idxRtv);
+}
+
+// 텍스처의 DSV 용도로 DescriptorPool 객체에서 할당받았던 디스크립터를 반납한다.
+// 텍스처 내에 저장되었던 인덱스에 변화가 없어야 하고, 할당한 풀과 반납한 풀이 같아야 한다.
+// 이 함수는 그것을 검사하지 않는다.
+void freeDSV(const Texture& tex, DescriptorPool& pool) {
+	pool.free(tex.idxDsv);
+}
+
+// 텍스처의 SRV 용도로 DescriptorPool 객체에서 할당받았던 디스크립터를 반납한다.
+// 텍스처 내에 저장되었던 인덱스에 변화가 없어야 하고, 할당한 풀과 반납한 풀이 같아야 한다.
+// 이 함수는 그것을 검사하지 않는다.
+void freeSRV(const Texture& tex, DescriptorPool& pool) {
+	pool.free(tex.idxSrv.idxResource);
+}
+
+// 텍스처의 UAV 용도로 DescriptorPool 객체에서 할당받았던 디스크립터를 반납한다.
+// 텍스처 내에 저장되었던 인덱스에 변화가 없어야 하고, 할당한 풀과 반납한 풀이 같아야 한다.
+// 이 함수는 그것을 검사하지 않는다.
+void freeUAV(const Texture& tex, DescriptorPool& pool) {
+	pool.free(tex.idxUav.idxResource);
 }

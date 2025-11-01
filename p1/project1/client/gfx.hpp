@@ -41,7 +41,8 @@ public:
 	// DXGI Factory를 초기화하고, DXGI Adapter들을 열거한다.
 	// 그리고 그 중 하나를 선택하여 curAdapter_에 저장한다.
 	void setupDXGI(D3D_FEATURE_LEVEL d3dFeatureLevel);
-	// D3D12 Device와 Command Queue, Descriptor Heap들을 만든다.
+	// D3D12 Device와 Command Queue, Descriptor Heap, Descriptor Pool들을 만든다.
+	// 공용 샘플러들을 생성한다.
 	// RenderingSlave, ResourceLoading 카테고리의 Command List Pool을 초기화한다.
 	// Root Signature와 Shader(PSO)들을 만든다.
 	// Load Fence를 만든다.
@@ -71,6 +72,8 @@ public:
 
 
 private:
+	// 공용 샘플러들 생성
+	void createSamplers();
 	// fenceName을 갖는 Fence의 desiredValue 값을 1 증가시키고
 	// GPU 큐에 그 갱신 명령을 삽입한다.
 	void signalFence(const std::wstring& fenceName);
@@ -105,6 +108,15 @@ private:
 	DescriptorPool rtvPool_{};
 	DescriptorHeap dsvHeap_{};
 	DescriptorPool dsvPool_{};
+	DescriptorHeap srvCbvUavHeap_{};	// gpuVisible, SetDescriptorHeaps 함수 호출 필요
+	DescriptorPool srvTexPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
+	DescriptorPool srvTexArrayPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
+	DescriptorPool srvTexCubePool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
+	DescriptorHeap samHeap_{};	// gpuVisible, SetDescriptorHeaps 함수 호출 필요
+	DescriptorPool samPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
+	DescriptorPool cmpSamPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
+
+	std::unordered_map<std::wstring, Texture> texHashMap_{};
 
 	// 루트 시그너처와 셰이더들
 	std::map<std::wstring, std::shared_ptr<RootSig>> rootSigs_{};

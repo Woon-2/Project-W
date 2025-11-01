@@ -138,6 +138,10 @@ public:
 	// 인덱스로부터 D3D12_GPU_DESCRIPTOR_HANDLE을 계산해낸다.
 	D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle(int idx) const;
 
+	// 루트 시그너처의 idxRootParam 번째 루트 파라미터에
+	// SetGraphicsRootDescriptorTable 함수를 통해 풀을 바인드한다.
+	void bind(ID3D12GraphicsCommandList* cmdList, UINT idxRootParam) const;
+
 private:
 	std::list<int> freeIndices_{};
 	D3D12_CPU_DESCRIPTOR_HANDLE cpuStart_{};
@@ -260,5 +264,112 @@ struct ConstantBufferArray {
 ConstantBufferArray createConstantBufferArray( ID3D12Device* device, UINT64 elemByteWidth,
 	std::size_t elemCnt, std::size_t roomCnt, const std::wstring& name
 );
+
+struct LoadDDSReturnType {
+    ComPtr<ID3D12Resource> res;
+    std::unique_ptr<std::uint8_t[]> ddsData;
+    std::vector<D3D12_SUBRESOURCE_DATA> subresources;
+};
+
+// dds 포맷의 이미지 파일을 로드한다.
+// UpdateSubresources 함수에서 쓰인 임시 업로드 버퍼가 펜스에 연관되므로,
+// 펜스에서 gpu 작업 완료를 확인하고 난 뒤에 임시 업로드 버퍼들을 해제할 필요가 있다.
+LoadDDSReturnType loadDDS(
+    ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
+    const std::filesystem::path& path, Fence& fenceToAssociate
+);
+
+// Bindless 환경에서 특정한 텍스처를 샘플링하기 위한 종합적 인덱스
+struct BindlessIndex {
+	i32t idxRange;	// 텍스처의 srv가 존재하는 풀 인덱스(Texture, TextureArray, TextureCube)
+	i32t idxResource;	// 풀 내에서 srv의 인덱스
+	i32t idxInArray;	// Texture Array에서 특정한 텍스처를 샘플링할 때 사용하는, 배열 인덱스
+	i32t idxSampler;	// 사용할 샘플러의 인덱스
+};
+
+// 공용 샘플러 종류 목록,
+// etoi 함수를 이용해 BindlessIndex 등에서 사용할 샘플러 인덱스를 얻어내자.
+enum class Samplers {
+	NearestWrap,
+	TrilinearWrap,
+	NearestBorder,
+	TrilinerBorder,
+	NearestClamp,
+	TrilinearClamp,
+	NearestComparison,
+	BilinearComparison
+};
+
+// 텍스처와 관련된 정보를 담는 구조체
+// gpu 리소스를 담는 ComPtr 객체와 Bindless 셰이더에서 인덱싱하기 위한 인덱스들이 저장된다.
+struct Texture {
+	ComPtr<ID3D12Resource> res;
+	int idxRtv;
+	int idxDsv;
+	BindlessIndex idxSrv;
+	BindlessIndex idxUav;
+};
+
+// dds 포맷의 파일로부터 텍스처를 로드한다.
+// UpdateSubresources 함수에서 쓰인 임시 업로드 버퍼가 펜스에 연관되므로,
+// 펜스에서 gpu 작업 완료를 확인하고 난 뒤에 임시 업로드 버퍼들을 해제할 필요가 있다.
+Texture loadTexture( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
+	const std::filesystem::path& path, Fence& fenceToAssociate
+);
+
+// 텍스처의 gpu 리소스를 담는 ComPtr 부분은 제외하고,
+// Bindless 셰이더에서 인덱싱하기 위한 인덱스들만 복사한 텍스처를 반환한다.
+// 리소스 자체에 접근할 일은 거의 없기 때문에, 인덱스들만 복사하는 것이
+// 대부분의 상황에서 용이하다.
+Texture cloneTextureIdxOnly(const Texture& tex);
+
+// DescriptorPool 객체에서 디스크립터를 할당받아 그 자리에 텍스처의 RTV를 만든다.
+// 텍스처의 idxRtv에 풀에서의 인덱스가 저장된다.
+void createRTV(ID3D12Device* device, Texture& tex, DescriptorPool& pool);
+// DescriptorPool 객체에서 디스크립터를 할당받아 그 자리에 텍스처의 RTV를 만든다.
+// 텍스처의 idxRtv에 풀에서의 인덱스가 저장된다.
+void createRTV( ID3D12Device* device, Texture& tex,
+	const D3D12_RENDER_TARGET_VIEW_DESC& rtvDesc, DescriptorPool& pool
+);
+// DescriptorPool 객체에서 디스크립터를 할당받아 그 자리에 텍스처의 DSV를 만든다.
+// 텍스처의 idxDsv에 풀에서의 인덱스가 저장된다.
+void createDSV(ID3D12Device* device, Texture& tex, DescriptorPool& pool);
+// DescriptorPool 객체에서 디스크립터를 할당받아 그 자리에 텍스처의 DSV를 만든다.
+// 텍스처의 idxDsv에 풀에서의 인덱스가 저장된다.
+void createDSV( ID3D12Device* device, Texture& tex,
+	const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc, DescriptorPool& pool
+);
+// DescriptorPool 객체에서 디스크립터를 할당받아 그 자리에 텍스처의 SRV를 만든다.
+// 텍스처의 idxSrv.idxResource에 풀에서의 인덱스가 저장된다.
+void createSRV(ID3D12Device* device, Texture& tex, DescriptorPool& pool);
+// DescriptorPool 객체에서 디스크립터를 할당받아 그 자리에 텍스처의 SRV를 만든다.
+// 텍스처의 idxSrv.idxResource에 풀에서의 인덱스가 저장된다.
+void createSRV( ID3D12Device* device, Texture& tex,
+	const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc, DescriptorPool& pool
+);
+// DescriptorPool 객체에서 디스크립터를 할당받아 그 자리에 텍스처의 UAV를 만든다.
+// 텍스처의 idxUav.idxResource에 풀에서의 인덱스가 저장된다.
+void createUAV(ID3D12Device* device, Texture& tex, DescriptorPool& pool);
+// DescriptorPool 객체에서 디스크립터를 할당받아 그 자리에 텍스처의 UAV를 만든다.
+// 텍스처의 idxUav.idxResource에 풀에서의 인덱스가 저장된다.
+void createUAV( ID3D12Device* device, Texture& tex,
+	const D3D12_UNORDERED_ACCESS_VIEW_DESC& uavDesc, DescriptorPool& pool
+);
+// 텍스처의 RTV 용도로 DescriptorPool 객체에서 할당받았던 디스크립터를 반납한다.
+// 텍스처 내에 저장되었던 인덱스에 변화가 없어야 하고, 할당한 풀과 반납한 풀이 같아야 한다.
+// 이 함수는 그것을 검사하지 않는다.
+void freeRTV(const Texture& tex, DescriptorPool& pool);
+// 텍스처의 DSV 용도로 DescriptorPool 객체에서 할당받았던 디스크립터를 반납한다.
+// 텍스처 내에 저장되었던 인덱스에 변화가 없어야 하고, 할당한 풀과 반납한 풀이 같아야 한다.
+// 이 함수는 그것을 검사하지 않는다.
+void freeDSV(const Texture& tex, DescriptorPool& pool);
+// 텍스처의 SRV 용도로 DescriptorPool 객체에서 할당받았던 디스크립터를 반납한다.
+// 텍스처 내에 저장되었던 인덱스에 변화가 없어야 하고, 할당한 풀과 반납한 풀이 같아야 한다.
+// 이 함수는 그것을 검사하지 않는다.
+void freeSRV(const Texture& tex, DescriptorPool& pool);
+// 텍스처의 UAV 용도로 DescriptorPool 객체에서 할당받았던 디스크립터를 반납한다.
+// 텍스처 내에 저장되었던 인덱스에 변화가 없어야 하고, 할당한 풀과 반납한 풀이 같아야 한다.
+// 이 함수는 그것을 검사하지 않는다.
+void freeUAV(const Texture& tex, DescriptorPool& pool);
 
 #endif	// __gfxUtil_HPP

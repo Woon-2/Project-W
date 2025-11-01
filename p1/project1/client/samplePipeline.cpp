@@ -6,16 +6,29 @@
 namespace SamplePipeline {
 
 // GFX 객체로부터 필요한 인자들을 전달받자.
-Dispatcher::Dispatcher( const std::shared_ptr<RootSig>& rootSig, const ComPtr<ID3D12PipelineState>& shader,
+Dispatcher::Dispatcher(
+	std::vector<ComPtr<ID3D12DescriptorHeap>>&& descriptorHeaps,
+	DescriptorPool* pTexPool, DescriptorPool* pTexArrayPool,
+	DescriptorPool* pTexCubePool, DescriptorPool* pSamPool,
+	DescriptorPool* pCmpSamPool,
+	const std::shared_ptr<RootSig>& rootSig, const ComPtr<ID3D12PipelineState>& shader,
 	const ComPtr<ID3D12CommandQueue>& cmdQ, const D3D12_VIEWPORT& viewport, const D3D12_RECT& scissorRect,
 	D3D12_CPU_DESCRIPTOR_HANDLE rtv, D3D12_CPU_DESCRIPTOR_HANDLE dsv, Fence* pFence, Resources* pResources,
 	ThreadPool* threadPool, CommandListPool* commandListPool, std::vector<DrawEvent>&& drawEvents,
 	const CameraData& cameraData, std::size_t roomIdx
-) : rootSig_(rootSig), shader_(shader), cmdQ_(cmdQ), viewport_(viewport), scissorRect_(scissorRect),
-	rtv_(rtv), dsv_(dsv), pFence_(pFence), pResources_(pResources), threadPool_(threadPool),
-	cmdListPool_(commandListPool), drawEvents_(std::move(drawEvents)), cameraData_(cameraData), roomIdx_(roomIdx),
+) : descriptorHeaps_(std::move(descriptorHeaps)), pTexPool_(pTexPool), pTexArrayPool_(pTexArrayPool),
+	pTexCubePool_(pTexCubePool), pSamPool_(pSamPool), pCmpSamPool_(pCmpSamPool),
+	rootSig_(rootSig), shader_(shader), cmdQ_(cmdQ),
+	viewport_(viewport), scissorRect_(scissorRect), rtv_(rtv), dsv_(dsv), pFence_(pFence),
+	pResources_(pResources), threadPool_(threadPool), cmdListPool_(commandListPool), drawEvents_(std::move(drawEvents)),
+	cameraData_(cameraData), roomIdx_(roomIdx),
 	rootParamIdxPDD_(rootSig->paramIdx(L"PerDrawcallData")),
-	rootParamIdxPID_(rootSig->paramIdx(L"PerInstanceData")) {}
+	rootParamIdxPID_(rootSig->paramIdx(L"PerInstanceData")),
+	rootParamIdxTexPool_(rootSig->paramIdx(L"TexturePool")),
+	rootParamIdxTexArrayPool_(rootSig->paramIdx(L"TextureArrayPool")),
+	rootParamIdxTexCubePool_(rootSig->paramIdx(L"TextureCubePool")),
+	rootParamIdxSamPool_(rootSig->paramIdx(L"SamplerPool")),
+	rootParamIdxCmpSamPool_(rootSig->paramIdx(L"ComparisonSamplerPool")) {}
 
 // 셰이더에서 사용하는 GPU 데이터를 갱신한다.
 // DrawEvents에 담겨있는 정보를 가공하여
@@ -117,29 +130,67 @@ void Dispatcher::drawSingleThreaded() {
 	// 명령 컨텍스트 초기화
 	auto cmdList = cmdCtx.cmdList.Get();
 	auto cmdAlloc = cmdCtx.cmdAlloc.Get();
-	cmdAlloc->Reset();
-	cmdList->Reset(cmdAlloc, nullptr);
+	auto hrCmdAllocReset = cmdAlloc->Reset();
+	DISPLAY_ERROR_DX_HR( hrCmdAllocReset, false );
+	if (hrCmdAllocReset < 0) {
+		cmdListPool_->freeOne(CommandListUsage::RenderingSlave, std::move(cmdCtx));
+		return;
+	}
+	auto hrCmdListReset = cmdList->Reset(cmdAlloc, nullptr);
+	DISPLAY_ERROR_DX_HR( hrCmdListReset, false );
+	if (hrCmdListReset < 0) {
+		cmdListPool_->freeOne(CommandListUsage::RenderingSlave, std::move(cmdCtx));
+		return;
+	}
 
 	// 명령 기록 시작
-	cmdList->SetGraphicsRootSignature(rootSig_->get());
-	cmdList->SetPipelineState(shader_.Get());
-	cmdList->OMSetRenderTargets(1u, &rtv_, false, &dsv_);
-	cmdList->RSSetViewports(1u, &viewport_);
-	cmdList->RSSetScissorRects(1u, &scissorRect_);
+	DISPLAY_ERROR_DX_VOID(cmdList->SetGraphicsRootSignature(rootSig_->get()), false);
+	DISPLAY_ERROR_DX_VOID(cmdList->SetPipelineState(shader_.Get()), false);
+	DISPLAY_ERROR_DX_VOID(cmdList->OMSetRenderTargets(1u, &rtv_, false, &dsv_), false);
+	DISPLAY_ERROR_DX_VOID(cmdList->RSSetViewports(1u, &viewport_), false);
+	DISPLAY_ERROR_DX_VOID(cmdList->RSSetScissorRects(1u, &scissorRect_), false);
+
+	// bindless 환경 세팅
+	// d3d12단 Descriptor Heap, Descriptor Table 설정
+	auto descriptorHeapsRaw = std::vector<ID3D12DescriptorHeap*>(descriptorHeaps_.size());
+	std::ranges::transform(descriptorHeaps_, descriptorHeapsRaw.begin(),
+		[](ComPtr<ID3D12DescriptorHeap>& comPtrHeap) { return comPtrHeap.Get(); }	
+	);
+	DISPLAY_ERROR_DX_VOID( cmdList->SetDescriptorHeaps(
+		static_cast<UINT>(descriptorHeapsRaw.size()), descriptorHeapsRaw.data()
+	), false );
+
+	pTexPool_->bind(cmdList, rootParamIdxTexPool_);
+	pTexArrayPool_->bind(cmdList, rootParamIdxTexArrayPool_);
+	pTexCubePool_->bind(cmdList, rootParamIdxTexCubePool_);
+	pSamPool_->bind(cmdList, rootParamIdxSamPool_);
+	pCmpSamPool_->bind(cmdList, rootParamIdxCmpSamPool_);
 
 	DISPLAY_ERROR_DX_VOID( cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST), false );
 
+	// 바인드해야 하는 GPU 데이터는 다음 두 종류다. (셰이더 참고)
+	// - PerInstanceData
+	// - PerDrawcallData
+
+	// PerInstanceData 바인드
 	pResources_->perInstanceData.bind(cmdList, rootParamIdxPID_, roomIdx_);
 
 	u32t idxDrawcall = 0u;
 
 	// DrawEvent들을 하나씩 처리한다.
 	for (const auto& drawEvent : drawEvents_) {
+		// PerDrawcallData 바인드
 		pResources_->perDrawcallData.cbuffers[idxDrawcall].bind(
 			cmdList, rootParamIdxPDD_, roomIdx_
 		);
 
+		// PerDrawcallData GPU 데이터 갱신
+		// (바인드와 GPU 데이터 갱신 순서는 상관없다.
+		//  어차피 바인드는 GPU 명령이라 바로 실행되지 않기 때문에)
 		auto perDrawcallData = SampleShader::PerDrawcallData{
+			.material = SampleShader::Material{
+				.idxAlbedo = drawEvent.subMesh->material.mapAlbedo.idxSrv
+			},
 			.firstInstanceIdx = idxDrawcall
 		};
 		pResources_->perDrawcallData.cbuffers[idxDrawcall].stage(
@@ -161,12 +212,17 @@ void Dispatcher::drawSingleThreaded() {
 		++idxDrawcall;
 	}
 
-	cmdList->Close();
+	auto hrClose = cmdList->Close();
+	DISPLAY_ERROR_DX_HR( hrClose, false );
+	if (hrClose < 0) {
+		cmdListPool_->freeOne(CommandListUsage::RenderingSlave, std::move(cmdCtx));
+		return;
+	}
 
 	// 명령 기록 끝, 실행
 	ID3D12CommandList* stagedCmdLists[] = {cmdList};
 
-	cmdQ_->ExecuteCommandLists(1u, stagedCmdLists);
+	DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, stagedCmdLists), false);
 	
 	// Fence 객체에 사용한 명령 컨텍스트를 연관시켜 놓는다.
 	pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)]
@@ -212,8 +268,18 @@ void Dispatcher::drawMultiThreaded() {
 
 	while (accEventCnt + (jobSizeDraw_ - 1) < drawEvents_.size()) {
 		// 명령 컨텍스트 초기화
-		currCmdCtx->cmdAlloc->Reset();
-		currCmdCtx->cmdList->Reset(currCmdCtx->cmdAlloc.Get(), nullptr);
+		auto hrCmdAllocReset = currCmdCtx->cmdAlloc->Reset();
+		DISPLAY_ERROR_DX_HR( hrCmdAllocReset, false );
+		if (hrCmdAllocReset < 0) {
+			cmdListPool_->free(CommandListUsage::RenderingSlave, std::move(cmdCtxs));
+			return;
+		}
+		auto hrCmdListReset = currCmdCtx->cmdList->Reset(currCmdCtx->cmdAlloc.Get(), nullptr);
+		DISPLAY_ERROR_DX_HR( hrCmdListReset, false );
+		if (hrCmdListReset < 0) {
+			cmdListPool_->free(CommandListUsage::RenderingSlave, std::move(cmdCtxs));
+			return;
+		}
 
 		// 명령 기록
 		addJobDraw(currCmdCtx->cmdList.Get(), drawEvents_.data() + accEventCnt,
@@ -228,8 +294,18 @@ void Dispatcher::drawMultiThreaded() {
 	if (accEventCnt != drawEvents_.size()) {
 		const auto lastJobSize = drawEvents_.size() - accEventCnt;
 		// 명령 컨텍스트 초기화
-		currCmdCtx->cmdAlloc->Reset();
-		currCmdCtx->cmdList->Reset(currCmdCtx->cmdAlloc.Get(), nullptr);
+		auto hrCmdAllocReset = currCmdCtx->cmdAlloc->Reset();
+		DISPLAY_ERROR_DX_HR( hrCmdAllocReset, false );
+		if (hrCmdAllocReset < 0) {
+			cmdListPool_->free(CommandListUsage::RenderingSlave, std::move(cmdCtxs));
+			return;
+		}
+		auto hrCmdListReset = currCmdCtx->cmdList->Reset(currCmdCtx->cmdAlloc.Get(), nullptr);
+		DISPLAY_ERROR_DX_HR( hrCmdListReset, false );
+		if (hrCmdListReset < 0) {
+			cmdListPool_->free(CommandListUsage::RenderingSlave, std::move(cmdCtxs));
+			return;
+		}
 
 		// 명령 기록
 		addJobDraw(currCmdCtx->cmdList.Get(), drawEvents_.data() + accEventCnt,
@@ -246,7 +322,9 @@ void Dispatcher::drawMultiThreaded() {
 		[](const CommandContext& cmdCtx) { return cmdCtx.cmdList.Get(); }	
 	);
 
-	cmdQ_->ExecuteCommandLists(static_cast<UINT>(stagedCmdLists.size()), stagedCmdLists.data());
+	DISPLAY_ERROR_DX_VOID( cmdQ_->ExecuteCommandLists(
+		static_cast<UINT>(stagedCmdLists.size()), stagedCmdLists.data()
+	), false );
 
 	// Fence 객체에 사용한 명령 컨텍스트들을 연관시켜 놓는다.
 	pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)]
@@ -282,11 +360,27 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 	threadPool_->addJob([=, &latch]() {
 		// 명령 컨텍스트마다 개별적으로 파이프라인 설정을 해주어야 한다.
 		// (파이프라인 설정은 공유되지 않는다. 그렇더라.)
-		threadCmdList->SetGraphicsRootSignature(rootSig_->get());
-		threadCmdList->SetPipelineState(shader_.Get());
-		threadCmdList->OMSetRenderTargets(1u, &rtv_, false, &dsv_);
-		threadCmdList->RSSetViewports(1u, &viewport_);
-		threadCmdList->RSSetScissorRects(1u, &scissorRect_);
+		DISPLAY_ERROR_DX_VOID(threadCmdList->SetGraphicsRootSignature(rootSig_->get()), false);
+		DISPLAY_ERROR_DX_VOID(threadCmdList->SetPipelineState(shader_.Get()), false);
+		DISPLAY_ERROR_DX_VOID(threadCmdList->OMSetRenderTargets(1u, &rtv_, false, &dsv_), false);
+		DISPLAY_ERROR_DX_VOID(threadCmdList->RSSetViewports(1u, &viewport_), false);
+		DISPLAY_ERROR_DX_VOID(threadCmdList->RSSetScissorRects(1u, &scissorRect_), false);
+
+		// bindless 환경 세팅
+		// d3d12단 Descriptor Heap, Descriptor Table 설정
+		auto descriptorHeapsRaw = std::vector<ID3D12DescriptorHeap*>(descriptorHeaps_.size());
+		std::ranges::transform(descriptorHeaps_, descriptorHeapsRaw.begin(),
+			[](ComPtr<ID3D12DescriptorHeap>& comPtrHeap) { return comPtrHeap.Get(); }	
+		);
+		DISPLAY_ERROR_DX_VOID( threadCmdList->SetDescriptorHeaps(
+			static_cast<UINT>(descriptorHeapsRaw.size()), descriptorHeapsRaw.data()
+		), false );
+
+		pTexPool_->bind(threadCmdList, rootParamIdxTexPool_);
+		pTexArrayPool_->bind(threadCmdList, rootParamIdxTexArrayPool_);
+		pTexCubePool_->bind(threadCmdList, rootParamIdxTexCubePool_);
+		pSamPool_->bind(threadCmdList, rootParamIdxSamPool_);
+		pCmpSamPool_->bind(threadCmdList, rootParamIdxCmpSamPool_);
 				
 		DISPLAY_ERROR_DX_VOID( threadCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST), false );
 
@@ -301,12 +395,19 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 			idxDrawcall < firstInstanceIdx + jobSize;
 			++idxDrawcall
 		) {
+			// DrawEvent의 정보를 기반으로 GPU 데이터 업데이트 및
+			// 입력 조립기 설정을 하고 드로우콜을 수행한다.
+			const auto& drawEvent = drawEvents_[idxDrawcall];
+
 			// PerDrawcallData 바인드
 			pResources_->perDrawcallData.cbuffers[idxDrawcall].bind(
 				threadCmdList, rootParamIdxPDD_, roomIdx_
 			);
 
 			auto perDrawcallData = SampleShader::PerDrawcallData{
+				.material = SampleShader::Material{
+					.idxAlbedo = drawEvent.subMesh->material.mapAlbedo.idxSrv
+				},
 				.firstInstanceIdx = static_cast<u32t>(idxDrawcall)
 			};
 			// PerDrawcallData GPU 데이터 갱신
@@ -315,9 +416,6 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 			pResources_->perDrawcallData.cbuffers[idxDrawcall].stage(
 				roomIdx_, &perDrawcallData, 1u
 			);
-
-			// DrawEvent의 정보를 기반으로 입력 조립기 설정을 하고 드로우콜을 수행한다.
-			const auto& drawEvent = drawEvents_[idxDrawcall];
 
 			DISPLAY_ERROR_DX_VOID(
 				threadCmdList->IASetVertexBuffers(0u, static_cast<UINT>(drawEvent.mesh->vbViews.size()),
@@ -333,7 +431,7 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 		}
 
 		// 명령 기록 종료
-		threadCmdList->Close();
+		DISPLAY_ERROR_DX_HR( threadCmdList->Close(), false );
 		latch.count_down();
 	} );
 }

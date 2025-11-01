@@ -82,7 +82,8 @@ void GFX::setupDXGI(D3D_FEATURE_LEVEL d3dFeatureLevel) {
 	curAdapter_ = adapters_[idx];
 }
 
-// D3D12 Device와 Command Queue, Descriptor Heap들을 만든다.
+// D3D12 Device와 Command Queue, Descriptor Heap, Descriptor Pool들을 만든다.
+// 공용 샘플러들을 생성한다.
 // RenderingSlave, ResourceLoading 카테고리의 Command List Pool을 초기화한다.
 // Root Signature와 Shader(PSO)들을 만든다.
 // Load Fence를 만든다.
@@ -131,9 +132,10 @@ void GFX::init() {
 		.NodeMask = 0
 	} );
 
+	// RTV Pool: RTVHeap의 [0, 4) 범위
 	rtvPool_ = DescriptorPool( 4u, rtvHeap_.cpuStart, rtvHeap_.gpuStart, rtvHeap_.desc.Type,
 		rtvHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
-		device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV)
+		device_->GetDescriptorHandleIncrementSize(rtvHeap_.desc.Type)
 	);
 
 	dsvHeap_ = DescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_DESC{
@@ -143,10 +145,79 @@ void GFX::init() {
 		.NodeMask = 0
 	} );
 
+	// DSV Pool: DSVHeap의 [0, 4) 범위
 	dsvPool_ = DescriptorPool( 4u, dsvHeap_.cpuStart, dsvHeap_.gpuStart, dsvHeap_.desc.Type,
 		dsvHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
-		device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV)
+		device_->GetDescriptorHandleIncrementSize(dsvHeap_.desc.Type)
 	);
+
+	// SRV & CBV & UAV Heap은 GPU Visible, bind 필요
+	srvCbvUavHeap_ = DescriptorHeap( device_.Get(), D3D12_DESCRIPTOR_HEAP_DESC{
+		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+		.NumDescriptors = 2000u,
+		.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+		.NodeMask = 0
+	} );
+
+	const auto cbvSrvUavIncSize = device_->GetDescriptorHandleIncrementSize(srvCbvUavHeap_.desc.Type);
+	auto cpuStart = srvCbvUavHeap_.cpuStart;
+	auto gpuStart = srvCbvUavHeap_.gpuStart;
+
+	// SRV Texture Pool: SRVHeap의 [0, 1800) 범위
+	// 텍스처 리소스 중 기본 Texture2D가 대부분이다.
+	srvTexPool_ = DescriptorPool(1800u, cpuStart, gpuStart,
+		srvCbvUavHeap_.desc.Type, srvCbvUavHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+		cbvSrvUavIncSize
+	);
+
+	cpuStart.ptr += 1800u * cbvSrvUavIncSize;
+	gpuStart.ptr += 1800u * cbvSrvUavIncSize;
+
+	// SRV Texture Array Pool: SRVHeap의 [1800, 1900) 범위
+	srvTexArrayPool_ = DescriptorPool(100u, cpuStart, gpuStart,
+		srvCbvUavHeap_.desc.Type, srvCbvUavHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+		cbvSrvUavIncSize
+	);
+
+	cpuStart.ptr += 100u * cbvSrvUavIncSize;
+	gpuStart.ptr += 100u * cbvSrvUavIncSize;
+
+	// SRV Texture Cube Pool: SRVHeap의 [1900, 2000) 범위
+	srvTexCubePool_ = DescriptorPool(100u, cpuStart, gpuStart,
+		srvCbvUavHeap_.desc.Type, srvCbvUavHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+		cbvSrvUavIncSize
+	);
+
+	// Sampler Heap은 GPU Visible, bind 필요
+	samHeap_ = DescriptorHeap( device_.Get(), D3D12_DESCRIPTOR_HEAP_DESC{
+		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
+		.NumDescriptors = 16u,
+		.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+		.NodeMask = 0
+	} );
+
+	const auto samIncSize = device_->GetDescriptorHandleIncrementSize(samHeap_.desc.Type);
+	cpuStart = samHeap_.cpuStart;
+	gpuStart = samHeap_.gpuStart;
+
+	// Sampler Pool: SAMHeap의 [0, 14) 범위
+	samPool_ = DescriptorPool(14u, cpuStart, gpuStart, samHeap_.desc.Type,
+		samHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+		device_->GetDescriptorHandleIncrementSize(samHeap_.desc.Type)
+	);
+
+	cpuStart.ptr += 14u * samIncSize;
+	gpuStart.ptr += 14u * samIncSize;
+
+	// Comparison Sampler Pool: SAMHeap의 [14, 16) 범위
+	// 그림자 구현을 위해 예약된 샘플러
+	cmpSamPool_ = DescriptorPool(2u, cpuStart, gpuStart, samHeap_.desc.Type,
+		samHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+		device_->GetDescriptorHandleIncrementSize(samHeap_.desc.Type)
+	);
+
+	// 공용 샘플러들 생성
+	createSamplers();
 
 	// Root Signatures & Shaders 생성
 	auto defaultRootSig = DefaultRootSig{};
@@ -313,8 +384,7 @@ void GFX::loadMeshes() {
 	DISPLAY_ERROR_DX_VOID(cmdList->Reset(cmdAlloc.Get(), nullptr), false);
 
 	// 명령 기록 시작
-	auto [mesh, auxUploadBuffers] = buildCubeMesh(device_.Get(), cmdList.Get());
-	meshCube_ = std::move(mesh);
+	meshCube_ = buildCubeMesh(device_.Get(), cmdList.Get(), texHashMap_, srvTexPool_, fence);
 
 	// 명령 기록 끝, 명령 실행
 	DISPLAY_ERROR_DX_VOID(cmdList->Close(), false);
@@ -325,7 +395,6 @@ void GFX::loadMeshes() {
 
 	// 펜스 동기화
 	fence.associatedCmdCtxs_[etoi(CommandListUsage::ResourceLoading)].push_back(std::move(cmdCtx));
-	fence.associatedResources_.append_range(std::move(auxUploadBuffers));
 	signalFence(L"LoadFence");
 	waitOnFence(L"LoadFence");
 }
@@ -426,8 +495,15 @@ void GFX::render() {
 	auto fenceNameToSignal = L"FrameFence" + std::to_wstring(idxFenceToSignal);
 	auto& fenceToSignal = fences_.at(fenceNameToSignal);
 
+	auto tmpDescriptorHeaps = std::vector<ComPtr<ID3D12DescriptorHeap>>{};
+	tmpDescriptorHeaps.push_back(srvCbvUavHeap_.heap);
+	tmpDescriptorHeaps.push_back(samHeap_.heap);
+
 	// SamplePipeline의 Dispatch
 	auto samplePipelineDispatcher = SamplePipeline::Dispatcher(
+		std::move(tmpDescriptorHeaps),
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
 		rootSigs_.at(L"DefaultRootSignature"), shaders_.at(L"SampleShader"),
 		cmdQ_, viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
@@ -498,6 +574,82 @@ void GFX::render() {
 
 	// 프레임 인덱스 갱신
 	++frameIdx_;
+}
+
+// 공용 샘플러들 생성
+void GFX::createSamplers() {
+	// 0 - Nearest Wrap
+	auto samDesc = D3D12_SAMPLER_DESC{
+		.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT,
+        .AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+        .AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+        .AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+        .MipLODBias = 0.f,
+        .MaxAnisotropy = 0u,
+        .ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER,
+        .BorderColor = { 0.f, 0.f, 0.f, 1.f },
+        .MinLOD = 0.f,
+        .MaxLOD = std::numeric_limits<float>::max()
+	};
+	auto idx = samPool_.alloc();
+	auto handle = samPool_.cpuHandle(idx);
+	device_->CreateSampler(&samDesc, handle);
+
+	// 1 - Trilinear Wrap
+	samDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+	idx = samPool_.alloc();
+	handle = samPool_.cpuHandle(idx);
+	device_->CreateSampler(&samDesc, handle);
+
+	// 2 - Nearest Border
+	samDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+	samDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+	samDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+	samDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+	idx = samPool_.alloc();
+	handle = samPool_.cpuHandle(idx);
+	device_->CreateSampler(&samDesc, handle);
+
+	// 3 - Trilinear Border
+	samDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+	idx = samPool_.alloc();
+	handle = samPool_.cpuHandle(idx);
+	device_->CreateSampler(&samDesc, handle);
+
+	// 4 - Nearest Clamp
+	samDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+	samDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+	samDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+	samDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+	idx = samPool_.alloc();
+	handle = samPool_.cpuHandle(idx);
+	device_->CreateSampler(&samDesc, handle);
+
+	// 5 - Trilinear Clamp
+	samDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+	idx = samPool_.alloc();
+	handle = samPool_.cpuHandle(idx);
+	device_->CreateSampler(&samDesc, handle);
+
+	// 6 - Nearest Comparison
+	samDesc.Filter = D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT;
+	samDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+	samDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+	samDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+	samDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+	samDesc.BorderColor[0] = 1.f;
+	samDesc.BorderColor[1] = 1.f;
+	samDesc.BorderColor[2] = 1.f;
+	samDesc.BorderColor[3] = 1.f;
+	idx = cmpSamPool_.alloc();
+	handle = cmpSamPool_.cpuHandle(idx);
+	device_->CreateSampler(&samDesc, handle);
+
+	// 7 - Bilinear Comparison
+	samDesc.Filter = D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
+	idx = cmpSamPool_.alloc();
+	handle = cmpSamPool_.cpuHandle(idx);
+	device_->CreateSampler(&samDesc, handle);
 }
 
 // fenceName을 갖는 Fence의 desiredValue 값을 1 증가시키고

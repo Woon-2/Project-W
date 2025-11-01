@@ -3,11 +3,14 @@
 #include "errorHandling.hpp"
 
 // 1x1x1 큐브 메시를 생성한다.
-// @return std::pair<Mesh, std::vector<ComPtr<ID3D12Resource>>
-//     생성된 메시와, 메시를 생성하는데 사용된 업로드 버퍼들의 벡터,
-//     Fence 객체와 연관시키는 등으로 업로드 버퍼들이 적절한 수명을 갖도록 하자.
-std::pair<Mesh, std::vector<ComPtr<ID3D12Resource>>> buildCubeMesh(
-	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList
+// @return Mesh
+// 메시 로드에 임시 업로드 버퍼들이 사용된다.
+// 사용된 업로드 버퍼들은 전달된 펜스에 연관되므로,
+// 펜스에서 GPU 작업 완료를 검사한 후 이 업로드 버퍼들을 해제하도록 하자.
+Mesh buildCubeMesh(
+	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
+    std::unordered_map<std::wstring, Texture>& texHashMap,
+    DescriptorPool& texPool, Fence& fenceToAssociate
 ) {
     static const auto positions = std::vector<XMFLOAT3>{
         XMFLOAT3(-0.5f,-0.5f,-0.5f),    // triangle 1
@@ -141,6 +144,12 @@ std::pair<Mesh, std::vector<ComPtr<ID3D12Resource>>> buildCubeMesh(
         /* .StrideInBytes = */ static_cast<UINT>( sizeof(XMFLOAT2) )
     );
 
+    if (!texHashMap.contains(L"CubeMesh_Albedo")) {
+        auto [pPair, _] = texHashMap.try_emplace(L"CubeMesh_Albedo", loadTexture(device, cmdList, L"CubeMesh_Albedo.dds", fenceToAssociate));
+        createSRV(device, pPair->second, texPool);
+        pPair->second.idxSrv.idxSampler = etoi(Samplers::TrilinearWrap);
+    }
+
     // SubMesh 구성
     mesh.subMeshes.try_emplace(
         L"CubeMesh_SubMesh", SubMesh{
@@ -150,7 +159,11 @@ std::pair<Mesh, std::vector<ComPtr<ID3D12Resource>>> buildCubeMesh(
                 .SizeInBytes = static_cast<UINT>(indices.size() * sizeof(u16t)),
                 .Format = DXGI_FORMAT_R16_UINT
             },
-            .material = 0u
+            .material = Material {
+                .mapAlbedo = cloneTextureIdxOnly(texHashMap.at(L"CubeMesh_Albedo")),
+                .constantRoughness = 0.3f,
+                .constantMetallic = 0.15f
+            }
         }
     );
 
@@ -161,9 +174,9 @@ std::pair<Mesh, std::vector<ComPtr<ID3D12Resource>>> buildCubeMesh(
     mesh.vbIdxMap.try_emplace(L"CubeMesh_VB_UV", 1u);
 	mesh.ibs.try_emplace(L"CubeMesh_IB", std::move(ib));
 
-	auxUploadBuffers.push_back(std::move(vbPositionu));
-    auxUploadBuffers.push_back(std::move(vbUVu));
-	auxUploadBuffers.push_back(std::move(ibu));
+    fenceToAssociate.associatedResources_.push_back(std::move(vbPositionu));
+    fenceToAssociate.associatedResources_.push_back(std::move(vbUVu));
+    fenceToAssociate.associatedResources_.push_back(std::move(ibu));
 
-    return std::pair(mesh, auxUploadBuffers);
+    return mesh;
 }
