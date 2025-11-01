@@ -9,11 +9,12 @@
 #include "samplePipeline.hpp"
 
 
-// 큐브 bindless 텍스처 입히기 (Material, MapRef 구현)
 // 큐브 노멀 계산
+// Light 구조체 구현
 // 큐브 pbr 셰이딩
 // 유니티에서 모델 로드 - 금, 토
 // 유니티에서 월드 로드 - 토, 일
+// Mesh Vertex Buffer Standard Layout: 슬롯 인덱스 유기적으로 결정하게 만들기
 // Batching & Instancing 구현
 // 멀티스레드 최적화
 // Rigidbody Physics 구현

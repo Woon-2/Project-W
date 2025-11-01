@@ -49,8 +49,8 @@ ComPtr<ID3D12PipelineState> createSampleShader(ID3D12Device* device, ID3D12RootS
 	ComPtr<ID3D12PipelineState> ret{};
 
 	// 셰이더 컴파일
-	auto vsCode = compileShader("shaders.hlsl", nullptr, "VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
-	auto psCode = compileShader("shaders.hlsl", nullptr, "PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
+	auto vsCode = compileShader("sampleShader.hlsl", nullptr, "VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
+	auto psCode = compileShader("sampleShader.hlsl", nullptr, "PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
 
 	// 입력 조립기 설정
 	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
