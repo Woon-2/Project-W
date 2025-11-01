@@ -1,19 +1,42 @@
+#include "bindless.hlsl"
+
 struct PerInstanceData {
     float4x4 wvp;
 };
 
+struct Material {
+    int4 idxAlbedo;
+    int4 idxRoughness;
+    int4 idxMetallic;
+    
+    float4 cAlbedo;
+    float cRoughness;
+    float cMetallic;
+};
+
+struct VSOutput {
+    float4 pos : SV_Position;
+    float2 uv : UV;
+};
+
 cbuffer PerDrawcallData : register(b0) {
+    Material material;
     uint idxDrawcall;
 };
 
 StructuredBuffer<PerInstanceData> gInstances : register(t0);
 
-float4 VSMain( float3 position : POSITION, float2 uv : UV,
+VSOutput VSMain( float3 position : POSITION, float2 uv : UV,
     uint idxInst : SV_InstanceID
-) : SV_POSITION {
-    return mul(float4(position, 1.0f), gInstances[idxInst + idxDrawcall].wvp);
+) {
+    VSOutput ret;
+    
+    ret.pos = mul(float4(position, 1.0f), gInstances[idxInst + idxDrawcall].wvp);
+    ret.uv = uv;
+    
+    return ret;
 }
 
-float4 PSMain() : SV_TARGET {
-    return float4(1.f, 0.f, 0.f, 1.f);
+float4 PSMain(VSOutput input) : SV_TARGET {
+    return sampleBindless(material.idxAlbedo, input.uv);
 }
