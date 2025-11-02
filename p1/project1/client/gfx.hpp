@@ -10,11 +10,9 @@
 #include "pbrPipeline.hpp"
 
 
-// object, light의 render에서 gfx의 적절한 함수 호출
-// 파이프라인 dispatcher들이 자신이 처리할 drawEvent가 없으면 early return하도록
-// 큐브 pbr 셰이딩
-// 유니티에서 모델 로드 - 금, 토
-// 유니티에서 월드 로드 - 토, 일
+// 텍스처 이름-경로 매핑 어떻게 할지 설계 (Unity Editor에서 자동으로 텍스처들 찾아서 지정할 수 있으면 좋겠다)
+// 모델 추출 스크립트 작성
+// 모델 클래스 작성, 모델 임포트 코드 작성
 // light data, lights 이름 일관적으로
 // Mesh Vertex Buffer Standard Layout: 슬롯 인덱스 유기적으로 결정하게 만들기
 // Batching & Instancing 구현
