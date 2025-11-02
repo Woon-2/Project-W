@@ -261,16 +261,15 @@ int32 PacketSession::onRecv( uint8* buffer, int32 len ) {
 			break;
 		}
 
-		//auto header = reinterpret_cast<PacketHeader*>( &buffer[ recvLen ] );
-		auto sendBuffer = reinterpret_cast<SendBuffer*>( &buffer[ recvLen ] );
+		auto header = reinterpret_cast<PacketHeader*>( &buffer[ recvLen ] );
 		// 패킷 전체 크기보다 데이터 크기가 작으면 중단
-		if ( dataSize < sendBuffer->header.size ) {
+		if ( dataSize < header->size ) {
 			break;
 		}
 
 		// 패킷 처리
-		onRecvPacket( &buffer[ recvLen ], sendBuffer->header.size );
-		recvLen += sendBuffer->header.size;
+		onRecvPacket( &buffer[ recvLen ], header->size );
+		recvLen += header->size;
 	}
 	return recvLen;
 }
