@@ -1,115 +1,13 @@
 #include "gfx.hpp"
 #include "errorHandling.hpp"
 
-DescriptorHeap::DescriptorHeap(ID3D12Device* device, const D3D12_DESCRIPTOR_HEAP_DESC& desc)
-	: desc(desc) {
-
-	DISPLAY_ERROR_DX_HR(
-		device->CreateDescriptorHeap(&desc, __uuidof(ID3D12DescriptorHeap), &heap),
-		true
-	);
-	cpuStart = heap->GetCPUDescriptorHandleForHeapStart();
-	gpuVisible = desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-	if (gpuVisible) {
-		gpuStart = heap->GetGPUDescriptorHandleForHeapStart();
+// GFX가 소멸할 때, 제출된 모든 GPU작업이 완료되고 나서 소멸하도록 한다.
+GFX::~GFX() {
+	for (std::size_t i = 0u; i < backBuffers_.size(); ++i) {
+		waitOnFence(L"FrameFence"s + std::to_wstring(i));
 	}
+	waitOnFence(L"LoadFence");
 }
-
-DescriptorPool::DescriptorPool(std::size_t viewCnt,
-	D3D12_CPU_DESCRIPTOR_HANDLE cpuStart, D3D12_GPU_DESCRIPTOR_HANDLE gpuStart,
-	D3D12_DESCRIPTOR_HEAP_TYPE type, bool gpuVisible, UINT incrementSize
-) : freeIndices_(viewCnt), cpuStart_(cpuStart), gpuStart_(gpuStart),
-	type_(type), gpuVisible_(gpuVisible), incrementSize_(incrementSize) {
-
-	std::iota(freeIndices_.begin(), freeIndices_.end(), 0);
-}
-
-int DescriptorPool::alloc() {
-	auto ret = freeIndices_.front();
-	freeIndices_.pop_front();
-	return ret;
-}
-
-void DescriptorPool::free(int idx) {
-	freeIndices_.push_back(idx);
-}
-
-D3D12_CPU_DESCRIPTOR_HANDLE DescriptorPool::cpuHandle(int idx) const {
-	auto ret = cpuStart_;
-	ret.ptr += idx * incrementSize_;
-	return ret;
-}
-
-D3D12_GPU_DESCRIPTOR_HANDLE DescriptorPool::gpuHandle(int idx) const {
-	DISPLAY_ERROR_STR(gpuVisible_, "[DescriptorPool] gpuVisible 플래그가 활성화되지 않은"
-		"디스크립터 힙에서 gpuHandle 할당을 시도했습니다.", false
-	);
-	auto ret = gpuStart_;
-	ret.ptr += idx * incrementSize_;
-	return ret;
-}
-
-// 깊이 버퍼를 쉽게 생성하는 유틸리티 함수
-ComPtr<ID3D12Resource> createDepthBuffer(
-	ID3D12Device* device,
-	DXGI_FORMAT format, const DXGI_SAMPLE_DESC& sampleDesc
-) {
-	ComPtr<ID3D12Resource> ret{};
-
-	auto heapProperties = D3D12_HEAP_PROPERTIES{
-		.Type = D3D12_HEAP_TYPE_DEFAULT
-	};
-
-	auto desc = D3D12_RESOURCE_DESC{
-		.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
-		.Alignment = 0u,
-		.Width = static_cast<UINT64>(gClientRect.right - gClientRect.left),
-		.Height = static_cast<UINT>(gClientRect.bottom - gClientRect.top),
-		.DepthOrArraySize = 1u,
-		.MipLevels = 1u,
-		.Format = format,
-		.SampleDesc = sampleDesc,
-		.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
-		.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
-	};
-
-	auto cv = D3D12_CLEAR_VALUE{
-		.Format = format,
-		.DepthStencil = D3D12_DEPTH_STENCIL_VALUE{
-			.Depth = 1.0f,
-			.Stencil = 0u
-		}
-	};
-
-	DISPLAY_ERROR_DX_HR(
-		device->CreateCommittedResource( &heapProperties, D3D12_HEAP_FLAG_NONE, &desc,
-			D3D12_RESOURCE_STATE_DEPTH_WRITE, &cv, __uuidof(ID3D12Resource), &ret
-		), false
-	);
-
-	return ret;
-}
-
-// ID3D12GraphicsCommandList::ResourceBarrier 인터페이스를 통해
-// 리소스의 상태를 beforeState에서 afterState로 전환한다.
-// 사용되는 기본값들은 본문을 참조하자.
-void transitionResourceState( ID3D12GraphicsCommandList* cmdList,
-	ID3D12Resource* resource, D3D12_RESOURCE_STATES beforeState,
-	D3D12_RESOURCE_STATES afterState
-) {
-	auto barrier = D3D12_RESOURCE_BARRIER{
-		.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-		.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
-		.Transition = D3D12_RESOURCE_TRANSITION_BARRIER{
-			.pResource = resource,
-			.Subresource = 0u,
-			.StateBefore = beforeState,
-			.StateAfter = afterState
-		}
-	};
-	DISPLAY_ERROR_DX_VOID( cmdList->ResourceBarrier(1u, &barrier), false );
-}
-
 
 // DXGI Factory를 초기화하고, DXGI Adapter들을 열거한다.
 // 그리고 그 중 하나를 선택하여 curAdapter_에 저장한다.
@@ -184,10 +82,13 @@ void GFX::setupDXGI(D3D_FEATURE_LEVEL d3dFeatureLevel) {
 	curAdapter_ = adapters_[idx];
 }
 
-// D3D12 Device와 Command Queue, Descriptor Heap들을 만든다.
-// 그리고 인자로 전달받은 개수만큼 CommandList와 Command Allocator를 만든다.
-// Fence들을 만든다. 그리고 Root Signature와 Shader(PSO)들을 만든다.
-void GFX::init(std::size_t cmdListPoolSize) {
+// D3D12 Device와 Command Queue, Descriptor Heap, Descriptor Pool들을 만든다.
+// 공용 샘플러들을 생성한다.
+// RenderingSlave, ResourceLoading 카테고리의 Command List Pool을 초기화한다.
+// Root Signature와 Shader(PSO)들을 만든다.
+// Load Fence를 만든다.
+// 그리고 DrawEvent들을 저장하기 위한 메모리를 예약한다.
+void GFX::init() {
 #ifdef DXGI_DEBUG_INFO
 	// D3D12 디버그 계층 활성화
 	ComPtr<ID3D12Debug> pDebug = nullptr;
@@ -219,28 +120,9 @@ void GFX::init(std::size_t cmdListPoolSize) {
 	);
 	setD3DName(cmdQ_.Get(), L"CommandQueue");
 
-	// Command Allocator와 Command List들 생성
-	for (std::size_t i = 0; i < cmdListPoolSize; ++i) {
-		auto& alloc = freeCmdAllocators_.emplace_back();
-		DISPLAY_ERROR_DX_HR(
-			device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), &alloc),
-			true
-		);
-		setD3DName(alloc.Get(), std::wstring(L"CommandAllocator") + std::to_wstring(i));
-
-		auto& cmdList = freeCmdLists_.emplace_back();
-		DISPLAY_ERROR_DX_HR(
-			device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, alloc.Get(), nullptr,
-				__uuidof(ID3D12GraphicsCommandList), &cmdList
-			),
-			true
-		);
-		setD3DName(cmdList.Get(), std::wstring(L"CommandList") + std::to_wstring(i));
-		// 생성됐을 땐 open 상태이므로,
-		// render 호출 시 이미 open 상태인 Command List를 open할 수 있다.
-		// 따라서 여기서 close 해준다.
-		cmdList->Close();
-	}
+	// RenderingSlave, ResourceLoading 카테고리의 Command List Pool 초기화
+	cmdListPool_.init(device_.Get(), CommandListUsage::RenderingSlave, 64u);
+	cmdListPool_.init(device_.Get(), CommandListUsage::ResourceLoading, 16u);
 
 	// Descriptor Heap 및 Pool들 생성
 	rtvHeap_ = DescriptorHeap( device_.Get(), D3D12_DESCRIPTOR_HEAP_DESC{
@@ -250,9 +132,10 @@ void GFX::init(std::size_t cmdListPoolSize) {
 		.NodeMask = 0
 	} );
 
+	// RTV Pool: RTVHeap의 [0, 4) 범위
 	rtvPool_ = DescriptorPool( 4u, rtvHeap_.cpuStart, rtvHeap_.gpuStart, rtvHeap_.desc.Type,
 		rtvHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
-		device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV)
+		device_->GetDescriptorHandleIncrementSize(rtvHeap_.desc.Type)
 	);
 
 	dsvHeap_ = DescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_DESC{
@@ -262,23 +145,112 @@ void GFX::init(std::size_t cmdListPoolSize) {
 		.NodeMask = 0
 	} );
 
+	// DSV Pool: DSVHeap의 [0, 4) 범위
 	dsvPool_ = DescriptorPool( 4u, dsvHeap_.cpuStart, dsvHeap_.gpuStart, dsvHeap_.desc.Type,
 		dsvHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
-		device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV)
+		device_->GetDescriptorHandleIncrementSize(dsvHeap_.desc.Type)
 	);
+
+	// SRV & CBV & UAV Heap은 GPU Visible, bind 필요
+	srvCbvUavHeap_ = DescriptorHeap( device_.Get(), D3D12_DESCRIPTOR_HEAP_DESC{
+		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+		.NumDescriptors = 2000u,
+		.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+		.NodeMask = 0
+	} );
+
+	const auto cbvSrvUavIncSize = device_->GetDescriptorHandleIncrementSize(srvCbvUavHeap_.desc.Type);
+	auto cpuStart = srvCbvUavHeap_.cpuStart;
+	auto gpuStart = srvCbvUavHeap_.gpuStart;
+
+	// SRV Texture Pool: SRVHeap의 [0, 1800) 범위
+	// 텍스처 리소스 중 기본 Texture2D가 대부분이다.
+	srvTexPool_ = DescriptorPool(1800u, cpuStart, gpuStart,
+		srvCbvUavHeap_.desc.Type, srvCbvUavHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+		cbvSrvUavIncSize
+	);
+
+	cpuStart.ptr += 1800u * cbvSrvUavIncSize;
+	gpuStart.ptr += 1800u * cbvSrvUavIncSize;
+
+	// SRV Texture Array Pool: SRVHeap의 [1800, 1900) 범위
+	srvTexArrayPool_ = DescriptorPool(100u, cpuStart, gpuStart,
+		srvCbvUavHeap_.desc.Type, srvCbvUavHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+		cbvSrvUavIncSize
+	);
+
+	cpuStart.ptr += 100u * cbvSrvUavIncSize;
+	gpuStart.ptr += 100u * cbvSrvUavIncSize;
+
+	// SRV Texture Cube Pool: SRVHeap의 [1900, 2000) 범위
+	srvTexCubePool_ = DescriptorPool(100u, cpuStart, gpuStart,
+		srvCbvUavHeap_.desc.Type, srvCbvUavHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+		cbvSrvUavIncSize
+	);
+
+	// Sampler Heap은 GPU Visible, bind 필요
+	samHeap_ = DescriptorHeap( device_.Get(), D3D12_DESCRIPTOR_HEAP_DESC{
+		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
+		.NumDescriptors = 16u,
+		.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+		.NodeMask = 0
+	} );
+
+	const auto samIncSize = device_->GetDescriptorHandleIncrementSize(samHeap_.desc.Type);
+	cpuStart = samHeap_.cpuStart;
+	gpuStart = samHeap_.gpuStart;
+
+	// Sampler Pool: SAMHeap의 [0, 14) 범위
+	samPool_ = DescriptorPool(14u, cpuStart, gpuStart, samHeap_.desc.Type,
+		samHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+		device_->GetDescriptorHandleIncrementSize(samHeap_.desc.Type)
+	);
+
+	cpuStart.ptr += 14u * samIncSize;
+	gpuStart.ptr += 14u * samIncSize;
+
+	// Comparison Sampler Pool: SAMHeap의 [14, 16) 범위
+	// 그림자 구현을 위해 예약된 샘플러
+	cmpSamPool_ = DescriptorPool(2u, cpuStart, gpuStart, samHeap_.desc.Type,
+		samHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+		device_->GetDescriptorHandleIncrementSize(samHeap_.desc.Type)
+	);
+
+	// 공용 샘플러들 생성
+	createSamplers();
 
 	// Root Signatures & Shaders 생성
 	auto defaultRootSig = DefaultRootSig{};
 	defaultRootSig.build(device_.Get());
 
 	shaders_.try_emplace(L"SampleShader", createSampleShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace(L"PBRShader", createPBRShader(device_.Get(), defaultRootSig.get()));
 
-	rootSigs_.try_emplace(L"DefaultRootSignature", std::make_unique<DefaultRootSig>(std::move(defaultRootSig)));
+	rootSigs_.try_emplace(L"DefaultRootSignature", std::make_shared<DefaultRootSig>(std::move(defaultRootSig)));
+
+	// Load Fence 추가
+	const auto fenceName = L"LoadFence"s;
+	fences_.try_emplace(fenceName, Fence{});
+	DISPLAY_ERROR_DX_HR(
+		device_->CreateFence(0u, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence), &fences_.at(fenceName).fence),
+		false
+	);
+	setD3DName(fences_.at(fenceName).fence.Get(), fenceName);
+	fences_.at(fenceName).event = CreateEvent(
+		nullptr, false, false, fenceName.c_str()
+	);
+
+	// Draw Event들을 저장할 메모리 예약
+	drawEventsSamplePipeline_.reserve(1000u);
 }
 
 // 윈도우와 연결된 SwapChain을 만든다.
+// Back Buffer 개수 만큼의 room을 가지는 Constant Buffer들을 만든다.
+// RenderingMaster 카테고리의 Command List Pool을
+// Back Buffer 개수 * 2의 크기를 갖도록 초기화한다.
+// 그리고 Back Buffer 개수 만큼의 Frame Fence들을 만든다.
 // Scaling, BufferCount는 후에 매개변수로 전달받도록 하자.
-void GFX::createSwapChain(HWND hWnd) {
+void GFX::createSwapChain() {
 	// 스왑체인 생성
 	scd_ = DXGI_SWAP_CHAIN_DESC1{
 		.Width = static_cast<UINT>(gClientRect.right - gClientRect.left),
@@ -295,7 +267,7 @@ void GFX::createSwapChain(HWND hWnd) {
 	};
 
 	scfd_ = DXGI_SWAP_CHAIN_FULLSCREEN_DESC{
-		.RefreshRate = DXGI_RATIONAL{ .Numerator = 60, .Denominator = 1 },
+		.RefreshRate = DXGI_RATIONAL{ .Numerator = 144, .Denominator = 1 },
 		.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED,
 		.Scaling = DXGI_MODE_SCALING_UNSPECIFIED,
 		.Windowed = true
@@ -304,22 +276,25 @@ void GFX::createSwapChain(HWND hWnd) {
 	ComPtr<IDXGISwapChain1> tmp = nullptr;
 
 	DISPLAY_ERROR_DX_HR(
-		dxgiFactory_->CreateSwapChainForHwnd(cmdQ_.Get(), hWnd, &scd_, &scfd_, nullptr, &tmp),
+		dxgiFactory_->CreateSwapChainForHwnd(cmdQ_.Get(), ghWnd, &scd_, &scfd_, nullptr, &tmp),
 		true
 	);
 	tmp.As(&swapChain_);
-	DISPLAY_ERROR_DX_HR(dxgiFactory_->MakeWindowAssociation(hWnd, DXGI_MWA_NO_ALT_ENTER), false);
+	DISPLAY_ERROR_DX_HR(dxgiFactory_->MakeWindowAssociation(ghWnd, DXGI_MWA_NO_ALT_ENTER), false);
 
 	setDXName(swapChain_.Get(), L"SwapChain");
 
 	// 백버퍼 및 깊이버퍼 리소스와 뷰 생성
 	backBuffers_.resize(3u);
 
+	// 백버퍼는 스왑체인에서 이미 만들었으므로,
+	// swapChain_->GetBuffer를 통해 가져와 디스크립터만 만든다.
 	for (int i = 0; i < 3; ++i) {
 		DISPLAY_ERROR_DX_HR(
 			swapChain_->GetBuffer(i, __uuidof(ID3D12Resource), &backBuffers_[i]),
 			true
 		);
+		setD3DName(backBuffers_[i].Get(), L"BackBuffer"s + std::to_wstring(i));
 	}
 
 	for (int i = 0; i < 3; ++i) {
@@ -331,15 +306,13 @@ void GFX::createSwapChain(HWND hWnd) {
 		);
 	}
 
+	// 깊이 버퍼는 우리가 따로 만들어주어야 한다.
 	for (int i = 0; i < 3; ++i) {
-		depthBuffers_.push_back(
-			createDepthBuffer( device_.Get(), DXGI_FORMAT_D24_UNORM_S8_UINT,
-				DXGI_SAMPLE_DESC{
-					.Count = 1u,
-					.Quality = 0u
-				}
-			)
+		auto depthBuffer = createDepthBuffer( device_.Get(), DXGI_FORMAT_D24_UNORM_S8_UINT,
+			DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u }
 		);
+		setD3DName(depthBuffer.Get(), L"DepthBuffer"s + std::to_wstring(i));
+		depthBuffers_.push_back(std::move(depthBuffer));
 	}
 
 	for (int i = 0; i < 3; ++i) {
@@ -351,7 +324,35 @@ void GFX::createSwapChain(HWND hWnd) {
 		);
 	}
 
-	// Fence들 생성
+	// RenderingMaster 카테고리의 Command List Pool을
+	// Back Buffer 개수 * 2의 크기를 갖도록 초기화한다.
+	// RenderingMaster 카테고리의 명령 컨텍스트는 한 프레임의 렌더링에
+	// 클리어용, 출력용으로 두 개가 쓰인다.
+	cmdListPool_.init(device_.Get(), CommandListUsage::RenderingMaster, backBuffers_.size() * 2);
+
+	// 백버퍼 개수만큼의 room을 가지는 파이프라인별 리소스들 생성
+	// 1000u, 32u를 변수로 대체하기
+	resourcesSamplePipeline_.perInstanceData.init(
+		device_.Get(), sizeof(SampleShader::PerInstanceData) * 1000u, backBuffers_.size(), L"Sample_PerInstanceData"
+	);
+	resourcesSamplePipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof(SampleShader::PerDrawcallData), 1000u, backBuffers_.size(), L"Sample_PerDrawcallData"
+	);
+	resourcesPBRPipeline_.perInstanceData.init(
+		device_.Get(), sizeof(PBRShader::PerInstanceData) * 1000u, backBuffers_.size(), L"PBR_PerInstanceData"
+	);
+	resourcesPBRPipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof(PBRShader::PerDrawcallData), 1000u, backBuffers_.size(), L"PBR_PerDrawcallData"
+	);
+	resourcesPBRPipeline_.lightData.init(
+		device_.Get(), sizeof(PBRShader::Light) * 32u, backBuffers_.size(), L"PBR_Lights"
+	);
+	resourcesPBRPipeline_.perFrameData.init(
+		device_.Get(), sizeof(PBRShader::PerFrameData), backBuffers_.size(), L"PBR_PerFrameData"
+	);
+
+	// 프레임 펜스 생성
+	// i번째 프레임을 렌더링한 후 i-(백버퍼 수 - 1)번째 프레임의 펜스를 기다리도록 한다.
 	for (std::size_t i = 0u; i < backBuffers_.size(); ++i) {
 		const auto fenceName = L"FrameFence"s + std::to_wstring(i);
 		fences_.try_emplace(fenceName, Fence{});
@@ -366,121 +367,346 @@ void GFX::createSwapChain(HWND hWnd) {
 	}
 }
 
+// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+void GFX::addDrawEvent(const SamplePipeline::DrawEvent& drawEvent) {
+	drawEventsSamplePipeline_.push_back(drawEvent);
+}
+
+// 카메라 데이터를 입력한다.
+void GFX::addCameraData(const SamplePipeline::CameraData& cameraData) {
+	cameraDataSamplePipeline_ = cameraData;
+}
+
+// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+void GFX::addDrawEvent(const PBRPipeline::DrawEvent& drawEvent) {
+	drawEventsPBRPipeline_.push_back(drawEvent);
+}
+
+// 카메라 데이터를 입력한다.
+void GFX::addCameraData(const PBRPipeline::CameraData& cameraData) {
+	cameraDataPBRPipeline_ = cameraData;
+}
+
+// 조명 데이터를 입력한다.
+void GFX::addLightData(const PBRPipeline::LightData& lightData) {
+	lightDataPBRPipeline_.push_back(lightData);
+}
+
+// 프레임 데이터를 입력한다.
+void GFX::addFrameData(const PBRPipeline::FrameData& frameData) {
+	frameDataPBRPipeline_ = frameData;
+}
+
+void GFX::loadMeshes() {
+	auto& fence = fences_.at(L"LoadFence");
+
+	// 명령 리스트와 명령 할당자 할당
+	CommandContext cmdCtx{};
+	DISPLAY_ERROR_STR(
+		cmdListPool_.allocOne(CommandListUsage::ResourceLoading, cmdCtx),
+		L"[GFX Error] GFX::loadMeshes: 사용 가능한 명령 리스트가 없습니다. "
+		L"CommandListPool::init 호출이 이루어지지 않았거나, 할당받은 명령 리스트가 반납되지 않았거나,"
+		L"너무 많은 명령 리스트의 할당이 요청되었습니다.",
+		false
+	);
+	auto& cmdList = cmdCtx.cmdList;
+	auto& cmdAlloc = cmdCtx.cmdAlloc;
+
+	// 명령 리스트 초기화
+	DISPLAY_ERROR_DX_VOID(cmdAlloc->Reset(), false);
+	DISPLAY_ERROR_DX_VOID(cmdList->Reset(cmdAlloc.Get(), nullptr), false);
+
+	// 명령 기록 시작
+	meshCube_ = buildCubeMesh(device_.Get(), cmdList.Get(), texHashMap_, srvTexPool_, fence);
+
+	// 명령 기록 끝, 명령 실행
+	DISPLAY_ERROR_DX_VOID(cmdList->Close(), false);
+
+	ID3D12CommandList* tmpCmdLists[] = { cmdList.Get() };
+
+	DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, tmpCmdLists), false);
+
+	// 펜스 동기화
+	fence.associatedCmdCtxs_[etoi(CommandListUsage::ResourceLoading)].push_back(std::move(cmdCtx));
+	signalFence(L"LoadFence");
+	waitOnFence(L"LoadFence");
+}
+
 void GFX::render() {
 	// 예외 검사
-	DISPLAY_ERROR_STR(curAdapter_, "[GFX Error] 활성화된 그래픽 어댑터가 없습니다. "
-		"GFX::setupDXGI의 호출이 이루어졌는지 확인하세요.", false);
+	DISPLAY_ERROR_STR(curAdapter_, L"[GFX Error] GFX::render: 활성화된 그래픽 어댑터가 없습니다. "
+		L"GFX::setupDXGI의 호출이 이루어졌는지 확인하세요.", false);
 
-	DISPLAY_ERROR_STR(device_, "[GFX Error] 장치 초기화가 이루어지지 않았습니다. "
-		"GFX::init 호출이 이루어졌는지 확인하세요.", false);
+	DISPLAY_ERROR_STR(device_, L"[GFX Error] GFX::render: 장치 초기화가 이루어지지 않았습니다. "
+		L"GFX::init 호출이 이루어졌는지 확인하세요.", false);
 
-	DISPLAY_ERROR_STR(cmdQ_, "[GFX Error] 명령 큐가 활성화되지 않았습니다. "
-		"GFX::init 호출이 이루어졌는지 확인하세요.", false);
+	DISPLAY_ERROR_STR(cmdQ_, L"[GFX Error] GFX::render: 명령 큐가 활성화되지 않았습니다. "
+		L"GFX::init 호출이 이루어졌는지 확인하세요.", false);
 
-	DISPLAY_ERROR_STR(swapChain_, "[GFX Error] 스왑 체인이 활성화되지 않았습니다. "
-		"GFX::createSwapChain 호출이 이루어졌는지 확인하세요.", false);
+	DISPLAY_ERROR_STR(swapChain_, L"[GFX Error] GFX::render: 스왑 체인이 활성화되지 않았습니다. "
+		L"GFX::createSwapChain 호출이 이루어졌는지 확인하세요.", false);
 
 	if (!curAdapter_ || !device_ || !cmdQ_ || !swapChain_) {
 		return;
 	}
 
-	DISPLAY_ERROR_STR(!freeCmdLists_.empty(), "[GFX Error] 사용 가능한 명령 리스트가 없습니다. "
-		"GFX::init 호출이 이루어지지 않았거나, 할당받은 명령 리스트를 반납해야 합니다.", false);
+	// 렌더 타겟 클리어를 위한 명령 컨텍스트 할당
+	CommandContext cmdCtxClear{};
+	DISPLAY_ERROR_STR(
+		cmdListPool_.allocOne(CommandListUsage::RenderingMaster, cmdCtxClear),
+		L"[GFX Error] GFX::render: 사용 가능한 명령 리스트가 없습니다. "
+		L"CommandListPool::init 호출이 이루어지지 않았거나, 할당받은 명령 리스트가 반납되지 않았습니다.",
+		false
+	);
+	auto cmdListClear = cmdCtxClear.cmdList.Get();
+	auto cmdAllocClear = cmdCtxClear.cmdAlloc.Get();
 
-	DISPLAY_ERROR_STR(!freeCmdAllocators_.empty(), "[GFX Error] 사용 가능한 명령 할당자가 없습니다. "
-		"GFX::init 호출이 이루어지지 않았거나, 할당받은 명령 할당자를 반납해야 합니다.", false);
-	if (freeCmdLists_.empty() || freeCmdAllocators_.empty()) {
+	if (!cmdListClear) {
 		return;
 	}
 
-	// 명령 리스트와 명령 할당자 할당
-	auto cmdList = freeCmdLists_.front();
-	freeCmdLists_.pop_front();
+	// 클리어 명령 리스트 초기화
+	DISPLAY_ERROR_DX_VOID( cmdAllocClear->Reset(), false );
+	DISPLAY_ERROR_DX_VOID( cmdListClear->Reset(cmdAllocClear, nullptr), false );
 
-	auto cmdAlloc = freeCmdAllocators_.front();
-	freeCmdAllocators_.pop_front();
-
-	// 명령 리스트 초기화
-	DISPLAY_ERROR_DX_VOID( cmdAlloc->Reset(), false );
-	DISPLAY_ERROR_DX_VOID( cmdList->Reset(cmdAlloc.Get(), nullptr), false );
-
-	// 명령 기록 시작
+	// 클리어 명령 기록 시작
 	const auto backbufIdx = swapChain_->GetCurrentBackBufferIndex();
 
-	transitionResourceState(cmdList.Get(), backBuffers_[backbufIdx].Get(),
+	transitionResourceState(cmdListClear, backBuffers_[backbufIdx].Get(),
 		D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET
 	);
 
 	DISPLAY_ERROR_DX_VOID(
-		cmdList->OMSetRenderTargets(1u, &backBufferRtvs_[backbufIdx], false, &depthBufferDsvs_[backbufIdx]),
+		cmdListClear->OMSetRenderTargets(1u, &backBufferRtvs_[backbufIdx], false, &depthBufferDsvs_[backbufIdx]),
 		false
 	);
 
 	FLOAT clearColor[4] = { 0.25f, 0.3f, 0.85f, 1.f };
 	DISPLAY_ERROR_DX_VOID(
-		cmdList->ClearRenderTargetView(backBufferRtvs_[backbufIdx], clearColor, 0u, nullptr),
+		cmdListClear->ClearRenderTargetView(backBufferRtvs_[backbufIdx], clearColor, 0u, nullptr),
 		false
 	);
 	
 	DISPLAY_ERROR_DX_VOID(
-		cmdList->ClearDepthStencilView(depthBufferDsvs_[backbufIdx],
+		cmdListClear->ClearDepthStencilView(depthBufferDsvs_[backbufIdx],
 			D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
 			1.0f, 0u, 0u, nullptr
 		), false
 	);
 
+	const auto clRect = gClientRect;
+
 	const auto viewport = D3D12_VIEWPORT{
-		.TopLeftX = static_cast<FLOAT>(gClientRect.left),
-		.TopLeftY = static_cast<FLOAT>(gClientRect.top),
-		.Width = static_cast<FLOAT>(gClientRect.right - gClientRect.left),
-		.Height = static_cast<FLOAT>(gClientRect.bottom - gClientRect.top),
+		.TopLeftX = static_cast<FLOAT>(clRect.left),
+		.TopLeftY = static_cast<FLOAT>(clRect.top),
+		.Width = static_cast<FLOAT>(clRect.right - clRect.left),
+		.Height = static_cast<FLOAT>(clRect.bottom - clRect.top),
 		.MinDepth = 0.f,
-		.MaxDepth = 0.f
+		.MaxDepth = 1.f
 	};
 
-	DISPLAY_ERROR_DX_VOID( cmdList->RSSetViewports(1u, &viewport), false );
+	DISPLAY_ERROR_DX_VOID( cmdListClear->RSSetViewports(1u, &viewport), false );
+	DISPLAY_ERROR_DX_VOID( cmdListClear->RSSetScissorRects(1u, &clRect), false );
 
-	const auto scissorRect = gClientRect;
+	// 클리어 명령 기록 끝
+	// 클리어 명령 리스트는 곧바로 실행한다.
+	// Dispatcher들에서 드로우콜들을 수행할 때
+	// 명령 큐를 사용해 실행까지 하기 때문에,
+	// 클리어 명령 리스트를 Dispatcher들의 드로우콜들 수행 이후
+	// 실행하게 되면 그려진 것들이 전부 지워지게 된다.
+	DISPLAY_ERROR_DX_VOID( cmdListClear->Close(), false );
 
-	DISPLAY_ERROR_DX_VOID( cmdList->RSSetScissorRects(1u, &scissorRect), false );
+	ID3D12CommandList* clearCmdLists[] = { cmdListClear };
 
-	renderSampleShader(cmdList.Get());
+	// 클리어 명령 리스트 실행
+	DISPLAY_ERROR_DX_VOID( cmdQ_->ExecuteCommandLists(1u, clearCmdLists), false );
 
-	// 명령 기록 끝, 화면에 출력
-	transitionResourceState(cmdList.Get(), backBuffers_[backbufIdx].Get(),
+	// Dispatcher들은 명령 리스트 풀에서 스스로 명령 컨텍스트를 할당하고 기록, 실행한다.
+	// 사용이 끝난 명령 컨텍스트는 펜스와 연관되어 gpu 사용이 끝남을 감지한 후
+	// 반환되는 게 규칙이므로, Dispatcher에 명령 컨텍스트와 연관시킬 펜스를 전달해야 한다.
+	auto idxFenceToSignal = frameIdx_ % backBuffers_.size();
+	auto fenceNameToSignal = L"FrameFence" + std::to_wstring(idxFenceToSignal);
+	auto& fenceToSignal = fences_.at(fenceNameToSignal);
+
+	auto tmpDescriptorHeaps = std::vector<ComPtr<ID3D12DescriptorHeap>>{};
+	tmpDescriptorHeaps.push_back(srvCbvUavHeap_.heap);
+	tmpDescriptorHeaps.push_back(samHeap_.heap);
+
+	// Sample Pipeline의 Dispatch
+	auto samplePipelineDispatcher = SamplePipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at(L"DefaultRootSignature"), shaders_.at(L"SampleShader"),
+		cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesSamplePipeline_, threadPool_,
+		&cmdListPool_, std::move(drawEventsSamplePipeline_),
+		cameraDataSamplePipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
+	// PBR Pipeline의 Dispatch
+	auto pbrPipelineDispatcher = PBRPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at(L"DefaultRootSignature"), shaders_.at(L"PBRShader"),
+		cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesPBRPipeline_, threadPool_, &cmdListPool_,
+		std::move(drawEventsPBRPipeline_), std::move(lightDataPBRPipeline_),
+		cameraDataPBRPipeline_, frameDataPBRPipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
+	// threadPool_이 활성화된 경우엔 멀티스레드로 처리한다.
+	if (!threadPool_) {
+		samplePipelineDispatcher.updateGPUDataSingleThreaded();
+		samplePipelineDispatcher.drawSingleThreaded();
+
+		pbrPipelineDispatcher.updateGPUDataSingleThreaded();
+		pbrPipelineDispatcher.drawSingleThreaded();
+	}
+	else {
+		samplePipelineDispatcher.updateGPUDataMultiThreaded();
+		samplePipelineDispatcher.drawMultiThreaded();
+
+		pbrPipelineDispatcher.updateGPUDataMultiThreaded();
+		pbrPipelineDispatcher.drawMultiThreaded();
+	}
+
+	// 출력 명령 컨텍스트 할당
+	CommandContext cmdCtxPresent{};
+	DISPLAY_ERROR_STR(
+		cmdListPool_.allocOne(CommandListUsage::RenderingMaster, cmdCtxPresent),
+		L"[GFX Error] GFX::render: 사용 가능한 명령 리스트가 없습니다. "
+		L"CommandListPool::init 호출이 이루어지지 않았거나, 할당받은 명령 리스트가 반납되지 않았습니다.",
+		false
+	);
+	auto cmdListPresent = cmdCtxPresent.cmdList.Get();
+	auto cmdAllocPresent = cmdCtxPresent.cmdAlloc.Get();
+
+	if (!cmdListPresent) {
+		////
+		return;
+	}
+
+	cmdAllocPresent->Reset();
+	cmdListPresent->Reset(cmdAllocPresent, nullptr);
+
+	// 출력 명령 기록 시작
+	transitionResourceState(cmdListPresent, backBuffers_[backbufIdx].Get(),
 		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT
 	);
 
-	DISPLAY_ERROR_DX_VOID( cmdList->Close(), false );
+	// 출력 명령 기록 끝
+	DISPLAY_ERROR_DX_VOID( cmdListPresent->Close(), false );
 
-	ID3D12CommandList* tmpCmdLists[] = { cmdList.Get() };
+	// 출력 명령 리스트 실행
+	ID3D12CommandList* presentCmdLists[] = { cmdListPresent };
+	DISPLAY_ERROR_DX_VOID( cmdQ_->ExecuteCommandLists(1u, presentCmdLists), false );
 
-	DISPLAY_ERROR_DX_VOID( cmdQ_->ExecuteCommandLists(1u, tmpCmdLists), false );
-
+	
 	DISPLAY_ERROR_DX_VOID( swapChain_->Present(0, 0), false );
 
+	// 펜스 동기화
 	// 렌더링할 수 있는 백버퍼가 있다면,
 	// wait하지 않고 이어서 렌더링을 하도록 한다.
 	// 백버퍼는 순차적으로 사용되므로, (백버퍼 개수 - 1) 프레임 전의 렌더링에 대한
 	// Fence를 wait하면 이를 구현할 수 있다.
-	auto idxFenceToSignal = frameIdx % backBuffers_.size();
-	auto idxFenceToWait = (frameIdx - (backBuffers_.size() - 1)) % backBuffers_.size();
-	auto fenceNameToSignal = L"FrameFence" + std::to_wstring(idxFenceToSignal);
-	fences_.at(fenceNameToSignal).associatedCmdLists_.push_back(std::move(cmdList));
-	fences_.at(fenceNameToSignal).associatedCmdAllocators_.push_back(std::move(cmdAlloc));
+	// idxFenceToSignal이나 fenceNameToSignal 등의 변수는 위에서
+	// Dispatcher에게 전달하기 위해 미리 만들어두었다.
+	auto idxFenceToWait = (frameIdx_ - (backBuffers_.size() - 1)) % backBuffers_.size();
+	fences_.at(fenceNameToSignal).associatedCmdCtxs_[etoi(CommandListUsage::RenderingMaster)]
+		.push_back(std::move(cmdCtxClear));
+	fences_.at(fenceNameToSignal).associatedCmdCtxs_[etoi(CommandListUsage::RenderingMaster)]
+		.push_back(std::move(cmdCtxPresent));
 	signalFence(L"FrameFence" + std::to_wstring(idxFenceToSignal));
 	waitOnFence(L"FrameFence" + std::to_wstring(idxFenceToWait));
 
-	++frameIdx;
+	// 프레임 인덱스 갱신
+	++frameIdx_;
 }
 
-void GFX::renderSampleShader(ID3D12GraphicsCommandList* cmdList) {
-	cmdList->SetGraphicsRootSignature(rootSigs_.at(L"DefaultRootSignature")->get());
-	cmdList->SetPipelineState(shaders_.at(L"SampleShader").Get());
-	
-	// 메시(IA) 그리기(Draw Call)
+// 공용 샘플러들 생성
+void GFX::createSamplers() {
+	// 0 - Nearest Wrap
+	auto samDesc = D3D12_SAMPLER_DESC{
+		.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT,
+        .AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+        .AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+        .AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+        .MipLODBias = 0.f,
+        .MaxAnisotropy = 0u,
+        .ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER,
+        .BorderColor = { 0.f, 0.f, 0.f, 1.f },
+        .MinLOD = 0.f,
+        .MaxLOD = std::numeric_limits<float>::max()
+	};
+	auto idx = samPool_.alloc();
+	auto handle = samPool_.cpuHandle(idx);
+	device_->CreateSampler(&samDesc, handle);
+
+	// 1 - Trilinear Wrap
+	samDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+	idx = samPool_.alloc();
+	handle = samPool_.cpuHandle(idx);
+	device_->CreateSampler(&samDesc, handle);
+
+	// 2 - Nearest Border
+	samDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+	samDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+	samDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+	samDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+	idx = samPool_.alloc();
+	handle = samPool_.cpuHandle(idx);
+	device_->CreateSampler(&samDesc, handle);
+
+	// 3 - Trilinear Border
+	samDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+	idx = samPool_.alloc();
+	handle = samPool_.cpuHandle(idx);
+	device_->CreateSampler(&samDesc, handle);
+
+	// 4 - Nearest Clamp
+	samDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+	samDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+	samDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+	samDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+	idx = samPool_.alloc();
+	handle = samPool_.cpuHandle(idx);
+	device_->CreateSampler(&samDesc, handle);
+
+	// 5 - Trilinear Clamp
+	samDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+	idx = samPool_.alloc();
+	handle = samPool_.cpuHandle(idx);
+	device_->CreateSampler(&samDesc, handle);
+
+	// 6 - Nearest Comparison
+	samDesc.Filter = D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT;
+	samDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+	samDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+	samDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+	samDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+	samDesc.BorderColor[0] = 1.f;
+	samDesc.BorderColor[1] = 1.f;
+	samDesc.BorderColor[2] = 1.f;
+	samDesc.BorderColor[3] = 1.f;
+	idx = cmpSamPool_.alloc();
+	handle = cmpSamPool_.cpuHandle(idx);
+	device_->CreateSampler(&samDesc, handle);
+
+	// 7 - Bilinear Comparison
+	samDesc.Filter = D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
+	idx = cmpSamPool_.alloc();
+	handle = cmpSamPool_.cpuHandle(idx);
+	device_->CreateSampler(&samDesc, handle);
 }
 
+// fenceName을 갖는 Fence의 desiredValue 값을 1 증가시키고
+// GPU 큐에 그 갱신 명령을 삽입한다.
 void GFX::signalFence(const std::wstring& fenceName) {
 	auto validFenceName = fences_.contains(fenceName);
 	DISPLAY_ERROR_STR(validFenceName, L"[GFX Error] GFX::signalFence: 펜스 "s + fenceName + L"를 찾을 수 없습니다.\n", false);
@@ -496,6 +722,8 @@ void GFX::signalFence(const std::wstring& fenceName) {
 	);
 }
 
+// fenceName을 갖는 Fence에 대해서 wait하고,
+// 사용이 끝난 명령 컨텍스트, 업로드 버퍼 등을 반환한다.
 void GFX::waitOnFence(const std::wstring& fenceName) {
 	auto validFenceName = fences_.contains(fenceName);
 	DISPLAY_ERROR_STR(validFenceName, L"[GFX Error] GFX::waitOnFence: 펜스 "s + fenceName + L"를 찾을 수 없습니다.\n", false);
@@ -505,14 +733,20 @@ void GFX::waitOnFence(const std::wstring& fenceName) {
 
 	auto& fence = fences_.at(fenceName);
 	if (fence.fence->GetCompletedValue() == fence.desiredValue) {
-		freeCmdLists_.merge(std::move(fence.associatedCmdLists_));
-		freeCmdAllocators_.merge(std::move(fence.associatedCmdAllocators_));
+		// GPU에서 사용이 끝난 명령 컨텍스트와 리소스를 반환한다.
+		for (int idxUsage = 0; idxUsage < etoi(CommandListUsage::SIZE); ++idxUsage) {
+			cmdListPool_.free(idxUsage, std::move(fence.associatedCmdCtxs_[idxUsage]));
+		}
+		fence.associatedResources_.clear();
 		return;
 	}
 
 	fence.fence->SetEventOnCompletion(fence.desiredValue, fence.event);
 	WaitForSingleObject(fence.event, INFINITE);
 
-	freeCmdLists_.merge(std::move(fence.associatedCmdLists_));
-	freeCmdAllocators_.merge(std::move(fence.associatedCmdAllocators_));
+	// GPU에서 사용이 끝난 명령 컨텍스트와 리소스를 반환한다.
+	for (int idxUsage = 0; idxUsage < etoi(CommandListUsage::SIZE); ++idxUsage) {
+		cmdListPool_.free(idxUsage, std::move(fence.associatedCmdCtxs_[idxUsage]));
+	}
+	fence.associatedResources_.clear();
 }

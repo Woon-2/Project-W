@@ -46,8 +46,12 @@
 
 #include <Windows.h>
 #include <dxgi1_6.h>
-#include <d3d12.h>
+#include "d3dx12/include/directx/d3dx12.h"
+#include "d3dx12/include/directx/d3d12.h"
+#include "texloader/DDSTextureLoader12.h"
 #include <d3dcompiler.h>
+
+#include <DirectXMath.h>
 
 #ifdef DXGI_DEBUG_INFO
 #include <dxgidebug.h>
@@ -56,6 +60,7 @@
 #include <wrl.h>
 
 #include <iostream>
+#include <locale>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -66,11 +71,25 @@
 #include <unordered_map>
 #include <numeric>
 #include <ranges>
+#include <concepts>
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <memory>
 #include <utility>
+#include <cstdint>
+#include <type_traits>
+#include <chrono>
+#include <random>
+#include <thread>
+#include <latch>
+#include <array>
+
+#include "mathUtil.hpp"
+#include "function.hpp"
+#include "threadPool.hpp"
+
+#include "concurrentqueue.h"
 
 #undef min
 #undef max
@@ -87,5 +106,54 @@ using namespace std::literals;
 template <class T>
 using ComPtr = Microsoft::WRL::ComPtr<T>;
 
+using i8t = std::int8_t;
+using i16t = std::int16_t;
+using i32t = std::int32_t;
+using i64t = std::int64_t;
+using u8t = std::uint8_t;
+using u16t = std::uint16_t;
+using u32t = std::uint32_t;
+using u64t = std::uint64_t;
+
+using Nanoseconds = std::chrono::duration<float, std::nano>;
+using Microseconds = std::chrono::duration<float, std::micro>;
+using Milliseconds = std::chrono::duration<float, std::milli>;
+using Seconds = std::chrono::duration<float>;
+
+using SystemClock = std::chrono::system_clock;
+using HighResolutionClock = std::chrono::high_resolution_clock;
+
+using XMFLOAT2 = DirectX::XMFLOAT2;
+using XMFLOAT3 = DirectX::XMFLOAT3;
+using XMFLOAT4 = DirectX::XMFLOAT4;
+using XMUINT2 = DirectX::XMUINT2;
+using XMUINT3 = DirectX::XMUINT3;
+using XMUINT4 = DirectX::XMUINT4;
+using XMINT2 = DirectX::XMINT2;
+using XMINT3 = DirectX::XMINT3;
+using XMINT4 = DirectX::XMINT4;
+using XMFLOAT3X3 = DirectX::XMFLOAT3X3;
+using XMFLOAT4X4 = DirectX::XMFLOAT4X4;
+
+extern std::mt19937 gRandomEngine;
+
+template <class TEnum>
+constexpr std::underlying_type_t<TEnum> etoi(TEnum e) {
+	return static_cast<std::underlying_type_t<TEnum>>(e);
+}
+
+template <std::floating_point T, class TDist = std::uniform_real_distribution<T>>
+inline T rand(T closedBegin, T closedEnd) {
+	auto rng = TDist(closedBegin, closedEnd);
+	return rng(gRandomEngine);
+}
+
+template <std::integral T, class TDist = std::uniform_int_distribution<T>>
+inline T rand(T closedBegin, T closedEnd) {
+	auto rng = TDist(closedBegin, closedEnd);
+	return rng(gRandomEngine);
+}
+
+size_t numberOfPhysicalCores() noexcept;
 
 #endif	// __PCF_HPP

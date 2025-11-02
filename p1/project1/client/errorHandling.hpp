@@ -46,7 +46,7 @@
 	{	\
 		auto __dp_e_str_condition = (condition);	\
 		if (!__dp_e_str_condition) {	\
-			std::wcout << msg << L", from file " << __FILE__ << L", line " << __LINE__ << '\n';	\
+			std::wcout << (msg) << L", from file " << __FILE__ << L", line " << __LINE__ << '\n';	\
 			if (willExit) {	\
 				std::exit(-1);	\
 			}	\

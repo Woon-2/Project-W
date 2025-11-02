@@ -1,0 +1,241 @@
+#include "mesh.hpp"
+#include "gfxUtil.hpp"
+#include "errorHandling.hpp"
+
+// 1x1x1 큐브 메시를 생성한다.
+// @return Mesh
+// 메시 로드에 임시 업로드 버퍼들이 사용된다.
+// 사용된 업로드 버퍼들은 전달된 펜스에 연관되므로,
+// 펜스에서 GPU 작업 완료를 검사한 후 이 업로드 버퍼들을 해제하도록 하자.
+Mesh buildCubeMesh(
+	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
+    std::unordered_map<std::wstring, Texture>& texHashMap,
+    DescriptorPool& texPool, Fence& fenceToAssociate
+) {
+    static const auto positions = std::vector<XMFLOAT3>{
+        XMFLOAT3(-0.5f,-0.5f,-0.5f),    // triangle 1
+        XMFLOAT3(-0.5f,-0.5f, 0.5f),
+        XMFLOAT3(-0.5f, 0.5f, 0.5f),
+        XMFLOAT3(0.5f, 0.5f,-0.5f),     // triangle 2 ...
+        XMFLOAT3(-0.5f,-0.5f,-0.5f),
+        XMFLOAT3(-0.5f, 0.5f,-0.5f), 
+        XMFLOAT3(0.5f,-0.5f, 0.5f),     
+        XMFLOAT3(-0.5f,-0.5f,-0.5f),
+        XMFLOAT3(0.5f,-0.5f,-0.5f),
+        XMFLOAT3(0.5f, 0.5f,-0.5f),     
+        XMFLOAT3(0.5f,-0.5f,-0.5f),
+        XMFLOAT3(-0.5f,-0.5f,-0.5f),
+        XMFLOAT3(-0.5f,-0.5f,-0.5f),    
+        XMFLOAT3(-0.5f, 0.5f, 0.5f),
+        XMFLOAT3(-0.5f, 0.5f,-0.5f),
+        XMFLOAT3(0.5f,-0.5f, 0.5f),     
+        XMFLOAT3(-0.5f,-0.5f, 0.5f),
+        XMFLOAT3(-0.5f,-0.5f,-0.5f),
+        XMFLOAT3(-0.5f, 0.5f, 0.5f),    
+        XMFLOAT3(-0.5f,-0.5f, 0.5f),
+        XMFLOAT3(0.5f,-0.5f, 0.5f),
+        XMFLOAT3(0.5f, 0.5f, 0.5f),     
+        XMFLOAT3(0.5f,-0.5f,-0.5f),
+        XMFLOAT3(0.5f, 0.5f,-0.5f),
+        XMFLOAT3(0.5f,-0.5f,-0.5f),     
+        XMFLOAT3(0.5f, 0.5f, 0.5f),
+        XMFLOAT3(0.5f,-0.5f, 0.5f),
+        XMFLOAT3(0.5f, 0.5f, 0.5f),     
+        XMFLOAT3(0.5f, 0.5f,-0.5f),
+        XMFLOAT3(-0.5f, 0.5f,-0.5f),
+        XMFLOAT3(0.5f, 0.5f, 0.5f),     
+        XMFLOAT3(-0.5f, 0.5f,-0.5f),
+        XMFLOAT3(-0.5f, 0.5f, 0.5f),
+        XMFLOAT3(0.5f, 0.5f, 0.5f),     
+        XMFLOAT3(-0.5f, 0.5f, 0.5f),
+        XMFLOAT3(0.5f,-0.5f, 0.5f)
+    };
+
+    static const auto normals = std::vector<XMFLOAT3>{
+        XMFLOAT3(-1.f, 0.f, 0.f),   // triangle 1
+        XMFLOAT3(-1.f, 0.f, 0.f),
+        XMFLOAT3(-1.f, 0.f, 0.f),
+        XMFLOAT3(0.f, 0.f, -1.f),   // triangle 2 ...
+        XMFLOAT3(0.f, 0.f, -1.f),
+        XMFLOAT3(0.f, 0.f, -1.f),
+        XMFLOAT3(0.f, -1.f, 0.f),
+        XMFLOAT3(0.f, -1.f, 0.f),
+        XMFLOAT3(0.f, -1.f, 0.f),
+        XMFLOAT3(0.f, 0.f, -1.f),
+        XMFLOAT3(0.f, 0.f, -1.f),
+        XMFLOAT3(0.f, 0.f, -1.f),
+        XMFLOAT3(-1.f, 0.f, 0.f),
+        XMFLOAT3(-1.f, 0.f, 0.f),
+        XMFLOAT3(-1.f, 0.f, 0.f),
+        XMFLOAT3(0.f, -1.f, 0.f),
+        XMFLOAT3(0.f, -1.f, 0.f),
+        XMFLOAT3(0.f, -1.f, 0.f),
+        XMFLOAT3(0.f, 0.f, 1.f),
+        XMFLOAT3(0.f, 0.f, 1.f),
+        XMFLOAT3(0.f, 0.f, 1.f),
+        XMFLOAT3(1.f, 0.f, 0.f),
+        XMFLOAT3(1.f, 0.f, 0.f),
+        XMFLOAT3(1.f, 0.f, 0.f),
+        XMFLOAT3(1.f, 0.f, 0.f),
+        XMFLOAT3(1.f, 0.f, 0.f),
+        XMFLOAT3(1.f, 0.f, 0.f),
+        XMFLOAT3(0.f, 1.f, 0.f),
+        XMFLOAT3(0.f, 1.f, 0.f),
+        XMFLOAT3(0.f, 1.f, 0.f),
+        XMFLOAT3(0.f, 1.f, 0.f),
+        XMFLOAT3(0.f, 1.f, 0.f),
+        XMFLOAT3(0.f, 1.f, 0.f),
+        XMFLOAT3(0.f, 0.f, 1.f),
+        XMFLOAT3(0.f, 0.f, 1.f),
+        XMFLOAT3(0.f, 0.f, 1.f),
+    };
+
+    static const auto uvs = std::vector<XMFLOAT2>{
+        XMFLOAT2(0.000059f, 1.0f - 0.000004f),  // triangle 1
+        XMFLOAT2(0.335973f, 1.0f - 0.335903f),
+        XMFLOAT2(0.000103f, 1.0f - 0.336048f),
+        XMFLOAT2(1.000023f, 1.0f - 0.000013f),  // triangle 2 ...
+        XMFLOAT2(0.999958f, 1.0f - 0.336064f),
+        XMFLOAT2(0.667979f, 1.0f - 0.335851f),
+        XMFLOAT2(0.667979f, 1.0f - 0.335851f),  
+        XMFLOAT2(0.667969f, 1.0f - 0.671889f),
+        XMFLOAT2(0.336024f, 1.0f - 0.671877f),
+        XMFLOAT2(1.000023f, 1.0f - 0.000013f),  
+        XMFLOAT2(0.667979f, 1.0f - 0.335851f),
+        XMFLOAT2(0.668104f, 1.0f - 0.000013f),
+        XMFLOAT2(0.000059f, 1.0f - 0.000004f),  
+        XMFLOAT2(0.336098f, 1.0f - 0.000071f),
+        XMFLOAT2(0.335973f, 1.0f - 0.335903f),
+        XMFLOAT2(0.667979f, 1.0f - 0.335851f),  
+        XMFLOAT2(0.336024f, 1.0f - 0.671877f),
+        XMFLOAT2(0.335973f, 1.0f - 0.335903f),
+        XMFLOAT2(1.000004f, 1.0f - 0.671847f),  
+        XMFLOAT2(0.667979f, 1.0f - 0.335851f),
+        XMFLOAT2(0.999958f, 1.0f - 0.336064f),
+        XMFLOAT2(0.668104f, 1.0f - 0.000013f),  
+        XMFLOAT2(0.667979f, 1.0f - 0.335851f),
+        XMFLOAT2(0.335973f, 1.0f - 0.335903f),
+        XMFLOAT2(0.335973f, 1.0f - 0.335903f),  
+        XMFLOAT2(0.336098f, 1.0f - 0.000071f),
+        XMFLOAT2(0.668104f, 1.0f - 0.000013f),
+        XMFLOAT2(0.000103f, 1.0f - 0.336048f),  
+        XMFLOAT2(0.336024f, 1.0f - 0.671877f),
+        XMFLOAT2(0.000004f, 1.0f - 0.671870f),
+        XMFLOAT2(0.000103f, 1.0f - 0.336048f),  
+        XMFLOAT2(0.335973f, 1.0f - 0.335903f),
+        XMFLOAT2(0.336024f, 1.0f - 0.671877f),
+        XMFLOAT2(0.667969f, 1.0f - 0.671889f),  
+        XMFLOAT2(0.667979f, 1.0f - 0.335851f),
+        XMFLOAT2(1.000004f, 1.0f - 0.671847f)
+    };
+
+    static const auto indices = std::vector<u16t>{
+        0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u, 16u, 17u,
+        18u, 19u, 20u, 21u, 22u, 23u, 24u, 25u, 26u, 27u, 28u, 29u, 30u, 31u, 32u, 33u, 34u, 35u
+    };
+
+    // 정점 버퍼들 구축
+    // 속성마다 별도의 버퍼를 만든다.
+	auto vbPosition = createBufferResource(device, nullptr, positions.size() * sizeof(XMFLOAT3), BufferCreationType::VertexBuffer);
+    setD3DName(vbPosition.Get(), L"CubeMesh_VB_Position");
+	auto vbPositionu = createBufferResource(device, positions.data(), positions.size() * sizeof(XMFLOAT3), BufferCreationType::UploadBuffer);
+    setD3DName(vbPositionu.Get(), L"CubeMesh_VB_Position_Upload");
+
+	copyResource( cmdList, vbPositionu.Get(), vbPosition.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
+		D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+	);
+
+    auto vbNormal = createBufferResource(device, nullptr, normals.size() * sizeof(XMFLOAT3), BufferCreationType::VertexBuffer);
+    setD3DName(vbNormal.Get(), L"CubeMesh_VB_Normal");
+    auto vbNormalu = createBufferResource(device, normals.data(), normals.size() * sizeof(XMFLOAT3), BufferCreationType::UploadBuffer);
+    setD3DName(vbNormalu.Get(), L"CubeMesh_VB_Normal_Upload");
+
+    copyResource( cmdList, vbNormalu.Get(), vbNormal.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
+        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+    );
+
+    auto vbUV = createBufferResource(device, nullptr, uvs.size() * sizeof(XMFLOAT3), BufferCreationType::VertexBuffer);
+    setD3DName(vbUV.Get(), L"CubeMesh_VB_UV");
+    auto vbUVu = createBufferResource(device, uvs.data(), uvs.size() * sizeof(XMFLOAT3), BufferCreationType::UploadBuffer);
+    setD3DName(vbUVu.Get(), L"CubeMesh_VB_UV_Upload");
+
+    copyResource( cmdList, vbUVu.Get(), vbUV.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
+        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+    );
+
+    // 인덱스 버퍼 구축
+	auto ib = createBufferResource(device, nullptr, indices.size() * sizeof(u16t), BufferCreationType::IndexBuffer);
+    setD3DName(ib.Get(), L"CubeMesh_IB");
+	auto ibu = createBufferResource(device, indices.data(), indices.size() * sizeof(u16t), BufferCreationType::UploadBuffer);
+    setD3DName(ibu.Get(), L"CubeMesh_IB_Upload");
+
+	copyResource( cmdList, ibu.Get(), ib.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
+		D3D12_RESOURCE_STATE_INDEX_BUFFER
+	);
+
+    // 만든 버퍼들을 조합하여 메시 구축
+    // 사용한 업로드 버퍼들을 별도로 리턴값에 포함시켜
+    // 업로드 버퍼들이 소멸하지 않게 한다.
+    // (업로드 버퍼들은 gpu가 실제로 copy를 수행할 때까지 살아있어야 한다.)
+	auto mesh = Mesh{};
+	auto auxUploadBuffers = std::vector<ComPtr<ID3D12Resource>>{};
+
+    // Vertex Buffer View 구성
+    mesh.vbViews.emplace_back(
+        /* .BufferLocation = */ vbPosition->GetGPUVirtualAddress(),
+        /* .SizeInBytes = */ static_cast<UINT>(positions.size() * sizeof(XMFLOAT3)),
+        /* .StrideInBytes = */ static_cast<UINT>( sizeof(XMFLOAT3) )
+    );
+    mesh.vbViews.emplace_back(
+        /* .BufferLocation = */ vbNormal->GetGPUVirtualAddress(),
+        /* .SizeInBytes = */ static_cast<UINT>(normals.size() * sizeof(XMFLOAT3)),
+        /* .StrideInBytes = */ static_cast<UINT>( sizeof(XMFLOAT3) )
+    );
+    mesh.vbViews.emplace_back(
+        /* .BufferLocation = */ vbUV->GetGPUVirtualAddress(),
+        /* .SizeInBytes = */ static_cast<UINT>(uvs.size() * sizeof(XMFLOAT2)),
+        /* .StrideInBytes = */ static_cast<UINT>( sizeof(XMFLOAT2) )
+    );
+
+    if (!texHashMap.contains(L"CubeMesh_Albedo")) {
+        auto [pPair, _] = texHashMap.try_emplace(L"CubeMesh_Albedo", loadTexture(device, cmdList, L"CubeMesh_Albedo.dds", fenceToAssociate));
+        createSRV(device, pPair->second, texPool);
+        pPair->second.idxSrv.idxSampler = etoi(Samplers::TrilinearWrap);
+    }
+
+    // SubMesh 구성
+    mesh.subMeshes.try_emplace(
+        L"CubeMesh_SubMesh", SubMesh{
+            .name = L"CubeMesh_SubMesh",
+            .ibView = D3D12_INDEX_BUFFER_VIEW {
+                .BufferLocation = ib->GetGPUVirtualAddress(),
+                .SizeInBytes = static_cast<UINT>(indices.size() * sizeof(u16t)),
+                .Format = DXGI_FORMAT_R16_UINT
+            },
+            .material = Material {
+                .mapAlbedo = cloneTextureIdxOnly(texHashMap.at(L"CubeMesh_Albedo")),
+                .constantAlbedo = XMFLOAT4(0.f, 0.f, 0.f, -1.f),
+                .constantRoughness = 0.3f,
+                .constantMetallic = 0.15f,
+                .constantAmbientOcllusion = 0.1f,
+                .constantEmmisive = XMFLOAT3(0.f, 0.f, 0.f)
+            }
+        }
+    );
+
+    // 자료구조 등록 (Vertex Buffer View와 SubMesh는 위에서 등록하였음)
+	mesh.vbs.push_back(std::move(vbPosition));
+    mesh.vbIdxMap.try_emplace(L"CubeMesh_VB_Position", 0u);
+    mesh.vbs.push_back(std::move(vbNormal));
+    mesh.vbIdxMap.try_emplace(L"CubeMesh_VB_Normal", 1u);
+    mesh.vbs.push_back(std::move(vbUV));
+    mesh.vbIdxMap.try_emplace(L"CubeMesh_VB_UV", 2u);
+	mesh.ibs.try_emplace(L"CubeMesh_IB", std::move(ib));
+
+    fenceToAssociate.associatedResources_.push_back(std::move(vbPositionu));
+    fenceToAssociate.associatedResources_.push_back(std::move(vbNormalu));
+    fenceToAssociate.associatedResources_.push_back(std::move(vbUVu));
+    fenceToAssociate.associatedResources_.push_back(std::move(ibu));
+
+    return mesh;
+}

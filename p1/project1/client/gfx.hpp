@@ -2,121 +2,94 @@
 #define __GFX_HPP
 
 #include "pch.hpp"
+#include "gfxUtil.hpp"
 #include "shader.hpp"
+#include "mesh.hpp"
 
-// Fence 정책 결정후 구체적인 주석 필요
-// 큐브 메시 그리기 (버퍼, 텍스처 리소스 소유자 및 중첩 갯수 등 결정 필요)
-// 유니티로 메시 추출 스크립트 작성 (유니티에서 생성한 파일을 읽기위한 API 구현)
-// 셰이딩 (조명 구현, 셰이더 구현)
-// WASD 이동 (GetAsyncKeyState로 임시 구현, 입력과 반응 분리해 이후 네트워크 대응)
-// 멀티스레드 렌더링 (커맨드 리스트 풀, 스레드 연관)
-// 텍스처링
-// 모델 로드
-// 1인칭 카메라 구현
+#include "samplePipeline.hpp"
+#include "pbrPipeline.hpp"
 
-extern RECT gWndRect;
-extern RECT gClientRect;
 
-// ComPtr<ID3D12DescriptorHeap> 객체와 부가 정보들을 한꺼번에 저장하기 위한 구조체
-struct DescriptorHeap {
-	DescriptorHeap() = default;
-	DescriptorHeap(ID3D12Device* device, const D3D12_DESCRIPTOR_HEAP_DESC& desc);
+// object, light의 render에서 gfx의 적절한 함수 호출
+// 파이프라인 dispatcher들이 자신이 처리할 drawEvent가 없으면 early return하도록
+// 큐브 pbr 셰이딩
+// 유니티에서 모델 로드 - 금, 토
+// 유니티에서 월드 로드 - 토, 일
+// light data, lights 이름 일관적으로
+// Mesh Vertex Buffer Standard Layout: 슬롯 인덱스 유기적으로 결정하게 만들기
+// Batching & Instancing 구현
+// 멀티스레드 최적화
+// Rigidbody Physics 구현
+// Alpha Blending으로 이펙트 구현(빌보드)
+// 나무, 수풀 렌더링(빌보드, LOD모델)
 
-	D3D12_DESCRIPTOR_HEAP_DESC desc{};
-	ComPtr<ID3D12DescriptorHeap> heap = nullptr;
-	D3D12_CPU_DESCRIPTOR_HANDLE cpuStart{};
-	D3D12_GPU_DESCRIPTOR_HANDLE gpuStart{};
-	bool gpuVisible = false;
-};
+extern HWND ghWnd;
 
-// 뷰들을 할당하기 위한 클래스
-// free list를 통해 할당 가능한 인덱스들을 관리한다.
-// 인덱스로부터 D3D12_CPU_DESCRIPTOR_HANDLE이나 D3D12_GPU_DESCRIPTOR_HANDLE을
-// 계산해서 얻어낼 수 있는 유틸리티를 제공한다.
-// 이때 뷰의 인덱스는, 그것을 할당한 DescriptorPool 객체 내에서 해당 뷰의 순번이다. (0-based)
-class DescriptorPool {
-public:
-	DescriptorPool() = default;
-	// @param viewCnt 풀에서 관리할 인덱스(뷰)의 수
-	// @param cpuStart 해당 풀의 Descriptor Heap에서의 시작 cpu 영역
-	// @param gpuStart 해당 풀의 Descriptor Heap에서의 시작 gpu 영역
-	// @param type 해당 풀이 관리하는 뷰 타입
-	// @param gpuVisible 셰이더에서 사용 가능하도록 할 건지 여부
-	// @param incrementSize D3D12 Device로부터 얻어지는, 뷰의 메모리 크기
-	// @brief DescriptorPool 객체끼리 관리하는 힙 영역이 겹치지 않도록 주의한다.
-	//		cpuStart와 gpuStart, gpuVisible은 Descriptor Heap으로부터,
-	//		incrementSize는 device로부터 얻어오도록 한다.
-	DescriptorPool( std::size_t viewCnt, D3D12_CPU_DESCRIPTOR_HANDLE cpuStart,
-		D3D12_GPU_DESCRIPTOR_HANDLE gpuStart, D3D12_DESCRIPTOR_HEAP_TYPE type,
-		bool gpuVisible, UINT incrementSize
-	);
-
-	// 인덱스를 할당한다.
-	int alloc();
-	// 인덱스를 반납한다.
-	void free(int idx);
-	// 인덱스로부터 D3D12_CPU_DESCRIPTOR_HANDLE을 계산해낸다.
-	D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle(int idx) const;
-	// 인덱스로부터 D3D12_GPU_DESCRIPTOR_HANDLE을 계산해낸다.
-	D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle(int idx) const;
-
-private:
-	std::list<int> freeIndices_{};
-	D3D12_CPU_DESCRIPTOR_HANDLE cpuStart_{};
-	D3D12_GPU_DESCRIPTOR_HANDLE gpuStart_{};
-	D3D12_DESCRIPTOR_HEAP_TYPE type_{};
-	UINT incrementSize_{};
-	bool gpuVisible_ = false;
-};
-
-// 깊이 버퍼를 쉽게 생성하는 유틸리티 함수
-ComPtr<ID3D12Resource> createDepthBuffer( ID3D12Device* device, 
-	DXGI_FORMAT format, const DXGI_SAMPLE_DESC& sampleDesc
-);
-
-// ID3D12GraphicsCommandList::ResourceBarrier 인터페이스를 통해
-// 리소스의 상태를 beforeState에서 afterState로 전환한다.
-// 사용되는 기본값들은 본문을 참조하자.
-void transitionResourceState( ID3D12GraphicsCommandList* cmdList,
-	ID3D12Resource* resource, D3D12_RESOURCE_STATES beforeState,
-	D3D12_RESOURCE_STATES afterState
-);
-
-// ID3D12Fence 객체와 연관된 변수들을 모아놓기 위한 구조체
-struct Fence {
-	// Command List와 Command Allocator의 반납은 gpu에서의 사용이 끝난 후 이루어져야 한다.
-	// 즉, Fence의 Wait이 끝났을 때 반납되어야 한다.
-	// 따라서 Fence와 함께 그 Fence의 Wait이 끝날 때 반납할 Command List와 Command Allocator들을
-	// 같이 보관하면 용이하다.
-	std::list<ComPtr<ID3D12GraphicsCommandList>> associatedCmdLists_;
-	std::list<ComPtr<ID3D12CommandAllocator>> associatedCmdAllocators_;
-	ComPtr<ID3D12Fence> fence;
-	UINT64 desiredValue;
-	HANDLE event;
-};
-
+// 렌더링을 총괄 책임지는 클래스
+// - 장치 초기화: setupDXGI, init, createSwapChain
+// - 객체 그리기: addDrawEvent로 객체마다 그려지길 원하는 파이프라인에 등록,
+//					이후 render 함수를 호출해 한번에 전부 그리기
 class GFX {
 public:
+	GFX() = default;
+	GFX(const GFX&) = delete;
+	GFX& operator=(const GFX&) = delete;
+	GFX(GFX&&) noexcept = delete;
+	GFX& operator=(GFX&&) noexcept = delete;
+	// GFX가 소멸할 때, 제출된 모든 GPU작업이 완료되고 나서 소멸하도록 한다.
+	~GFX();
+
 	// 장치 초기화: setupDXGI, init, createSwapChain 순으로 호출한다.
 
 	// DXGI Factory를 초기화하고, DXGI Adapter들을 열거한다.
 	// 그리고 그 중 하나를 선택하여 curAdapter_에 저장한다.
 	void setupDXGI(D3D_FEATURE_LEVEL d3dFeatureLevel);
-	// D3D12 Device와 Command Queue, Descriptor Heap들을 만든다.
-	// 인자로 전달받은 개수만큼 CommandList와 Command Allocator를 만든다.
-	// 그리고 Root Signature와 Shader(PSO)들을 만든다.
-	void init(std::size_t cmdListPoolSize);
+	// D3D12 Device와 Command Queue, Descriptor Heap, Descriptor Pool들을 만든다.
+	// 공용 샘플러들을 생성한다.
+	// RenderingSlave, ResourceLoading 카테고리의 Command List Pool을 초기화한다.
+	// Root Signature와 Shader(PSO)들을 만든다.
+	// Load Fence를 만든다.
+	// 그리고 DrawEvent들을 저장하기 위한 메모리를 예약한다.
+	void init();
 	// 윈도우와 연결된 SwapChain을 만든다.
-	// 그리고 Back Buffer 개수 만큼의 Fence들을 만든다.
-	void createSwapChain(HWND hWnd);
+	// Back Buffer 개수 만큼의 room을 가지는 Constant Buffer들을 만든다.
+	// RenderingMaster 카테고리의 Command List Pool을
+	// Back Buffer 개수 * 2의 크기를 갖도록 초기화한다.
+	// 그리고 Back Buffer 개수 만큼의 Frame Fence들을 만든다.
+	void createSwapChain();
 
+	// 스레드 풀을 설정한다.
+	// GFX는 스레드 풀이 설정되어있을 경우 멀티스레드로 동작한다.
+	void setThreadPool(ThreadPool* threadPool) { threadPool_ = threadPool; }
+
+	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+	void addDrawEvent(const SamplePipeline::DrawEvent& drawEvent);
+	// 카메라 데이터를 입력한다.
+	void addCameraData(const SamplePipeline::CameraData& cameraData);
+	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+	void addDrawEvent(const PBRPipeline::DrawEvent& drawEvent);
+	// 카메라 데이터를 입력한다.
+	void addCameraData(const PBRPipeline::CameraData& cameraData);
+	// 조명 데이터를 입력한다.
+	void addLightData(const PBRPipeline::LightData& lightData);
+	// 프레임 데이터를 입력한다.
+	void addFrameData(const PBRPipeline::FrameData& frameData);
+
+	void loadMeshes();
+	const Mesh* cubeMesh() const { return &meshCube_; }
+
+	// 요청된 드로우콜들을 모아 객체들을 그리고 화면에 띄운다.
 	void render();
 
 
 private:
-	void renderSampleShader(ID3D12GraphicsCommandList* cmdList);
-
+	// 공용 샘플러들 생성
+	void createSamplers();
+	// fenceName을 갖는 Fence의 desiredValue 값을 1 증가시키고
+	// GPU 큐에 그 갱신 명령을 삽입한다.
 	void signalFence(const std::wstring& fenceName);
+	// fenceName을 갖는 Fence에 대해서 wait하고,
+	// 사용이 끝난 명령 컨텍스트, 업로드 버퍼 등을 반환한다.
 	void waitOnFence(const std::wstring& fenceName);
 
 	ComPtr<IDXGIFactory4> dxgiFactory_ = nullptr;
@@ -128,11 +101,9 @@ private:
 	ComPtr<ID3D12Device> device_ = nullptr;
 	ComPtr<ID3D12CommandQueue> cmdQ_ = nullptr;
 
-	// Command List와 Command Allocator는 서로 짝을 지어 할당/해제하도록 한다.
-	// 꺼낼 땐 앞에서 꺼내고 넣을 땐 뒤에 넣기 (큐처럼 쓰자)
-	std::list< ComPtr<ID3D12GraphicsCommandList> > freeCmdLists_{};
-	std::list< ComPtr<ID3D12CommandAllocator> > freeCmdAllocators_{};
+	CommandListPool cmdListPool_{};
 
+	// 스왑 체인 관련 변수들
 	DXGI_SWAP_CHAIN_DESC1 scd_{};
 	DXGI_SWAP_CHAIN_FULLSCREEN_DESC scfd_{};
 	ComPtr<IDXGISwapChain3> swapChain_ = nullptr;
@@ -143,17 +114,44 @@ private:
 	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> depthBufferDsvs_{};
 	std::vector<int> allocatedDsvIndices_{};
 
+	// 디스크립터 힙과 디스크립터 풀
 	DescriptorHeap rtvHeap_{};
 	DescriptorPool rtvPool_{};
 	DescriptorHeap dsvHeap_{};
 	DescriptorPool dsvPool_{};
+	DescriptorHeap srvCbvUavHeap_{};	// gpuVisible, SetDescriptorHeaps 함수 호출 필요
+	DescriptorPool srvTexPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
+	DescriptorPool srvTexArrayPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
+	DescriptorPool srvTexCubePool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
+	DescriptorHeap samHeap_{};	// gpuVisible, SetDescriptorHeaps 함수 호출 필요
+	DescriptorPool samPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
+	DescriptorPool cmpSamPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
 
-	std::map<std::wstring, std::unique_ptr<RootSig>> rootSigs_{};
+	std::unordered_map<std::wstring, Texture> texHashMap_{};
+
+	// 루트 시그너처와 셰이더들
+	std::map<std::wstring, std::shared_ptr<RootSig>> rootSigs_{};
 	std::map<std::wstring, ComPtr<ID3D12PipelineState>> shaders_{};
+
+	// 파이프라인 관련 변수들
+	// Sample Pipeline
+	std::vector<SamplePipeline::DrawEvent> drawEventsSamplePipeline_{};
+	SamplePipeline::Resources resourcesSamplePipeline_{};
+	SamplePipeline::CameraData cameraDataSamplePipeline_{};
+	// PBR Pipeline
+	std::vector<PBRPipeline::DrawEvent> drawEventsPBRPipeline_{};
+	PBRPipeline::Resources resourcesPBRPipeline_{};
+	PBRPipeline::CameraData cameraDataPBRPipeline_{};
+	std::vector<PBRPipeline::LightData> lightDataPBRPipeline_{};
+	PBRPipeline::FrameData frameDataPBRPipeline_{};
 
 	std::map<std::wstring, Fence> fences_{};
 
-	std::size_t frameIdx = 0u;
+	std::size_t frameIdx_ = 0u;
+
+	Mesh meshCube_{};
+
+	ThreadPool* threadPool_;	// 설정되어있을 경우 멀티스레드로 동작한다.
 };
 
 #endif	// __GFX_HPP
