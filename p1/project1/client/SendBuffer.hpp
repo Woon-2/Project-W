@@ -3,7 +3,7 @@
 
 class SendBuffer : public std::enable_shared_from_this<SendBuffer> {
 public:
-	SendBuffer( int32 bufferSize ) : writeSize_( 0 ), buffer_( bufferSize ) {}
+	SendBuffer( int32 bufferSize ) : header( ), writeSize_( 0 ), buffer_( bufferSize ) {}
 
 	uint8* data( ){
 		return buffer_.data( );
@@ -22,6 +22,8 @@ public:
 		::memcpy( buffer_.data( ), data, len );
 		writeSize_ = len;
 	}
+
+	PacketHeader header;
 
 private:
 	int32 writeSize_;

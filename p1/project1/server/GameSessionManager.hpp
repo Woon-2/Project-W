@@ -7,6 +7,8 @@ public:
 	static void remove( const SPGameSession& session );
 	static void broadcast( const SPSendBuffer& sendBuffer );
 
+	static const std::set<SPGameSession>& getSessions( ) { return sessions_; }
+
 private:
 	static std::mutex mtx_;
 	static std::set<SPGameSession> sessions_;

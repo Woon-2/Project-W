@@ -20,6 +20,9 @@ public:
 	void setScale(float newScale);
 	float scale() const { return physicSnapshots_.back().scale; }
 
+	void setId( i32t id ) {	id_ = id; }
+	i32t getId( ) const { return id_; }
+
 private:
 	// 물리량들을 갱신해 PhysicSnapshot 객체를 생성, 저장한다.
 	// 그리고 더 이상 유효하지 않은 PhysicSnapshot 객체를 제거한다.
@@ -39,6 +42,8 @@ private:
 
 	Seconds physicUpdateAcc_{0s};	// 물리 업데이트를 위한 시간 누산기
 	Seconds physicUpdateInterval_{1s/60.f};	// 60 FPS로 물리 업데이트
+
+	i32t id_{ -1 };
 };
 
 #endif	// __object_HPP

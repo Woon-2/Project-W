@@ -4,8 +4,6 @@
 #include "Session.hpp"
 #include "Service.hpp"
 
-std::atomic_int32_t gPlayerId{ 0 };
-
 void Listener::startAccept( const SPServerService& service ) {
 	service_ = service;
 	ASSERT_CRASH( service_ != nullptr );
@@ -62,7 +60,6 @@ void Listener::processAccept( AcceptEvent* event ) {
 	}
 
 	session->setNetAddress( NetAddress( sockAddr ) );
-	session->setId( gPlayerId.fetch_add( 1 ) );
 	session->processConnect( );
 
 	registerAccept( event );

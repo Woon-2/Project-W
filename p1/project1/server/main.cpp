@@ -33,17 +33,17 @@ int main( )
 		} );
 	}
 
-	// temporary
-	char sendData[ ] = "Hello, World!";
-	while ( true ) {
-		auto sendBuffer = std::make_shared<SendBuffer>( 100 );
-		sendBuffer->header.size = ( sizeof( sendData ) + sizeof( PacketHeader ) );
-		sendBuffer->header.id = 1; // temporary
-		sendBuffer->copyData( sendData, sizeof( sendData ) );
-		GameSessionManager::broadcast( sendBuffer );
+	//// temporary
+	//char sendData[ ] = "Hello, World!";
+	//while ( true ) {
+	//	auto sendBuffer = std::make_shared<SendBuffer>( 100 );
+	//	sendBuffer->header.size = ( sizeof( sendData ) + sizeof( PacketHeader ) );
+	//	sendBuffer->header.id = 1; // temporary
+	//	sendBuffer->copyData( sendData, sizeof( sendData ) );
+	//	GameSessionManager::broadcast( sendBuffer );
 
-		std::this_thread::sleep_for( 250ms );
-	}
+	//	std::this_thread::sleep_for( 250ms );
+	//}
 
 	for ( auto& thread : threads ) {
 		thread.join( );

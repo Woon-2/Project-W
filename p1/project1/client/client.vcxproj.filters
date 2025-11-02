@@ -67,6 +67,9 @@
     <Filter Include="texloader">
       <UniqueIdentifier>{de745857-9f09-42e7-adaa-d9ae0651f7a7}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Network">
+      <UniqueIdentifier>{2b18a6e3-21d5-429a-b0ed-c003783e9e4a}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.hpp">
@@ -195,6 +198,51 @@
     <ClInclude Include="light.hpp">
       <Filter>게임\헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="SendBuffer.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="Service.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="Session.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="SocketUtils.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="IocpCore.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="Listener.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="IocpObject.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="IoEvent.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="macro.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="NetAddress.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="types.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="SessionManager.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="ServerSession.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="global.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="protocol.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -247,6 +295,27 @@
     </ClCompile>
     <ClCompile Include="light.cpp">
       <Filter>게임\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="SendBuffer.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="Service.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="Session.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="SocketUtils.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="Listener.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="SessionManager.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="global.cpp">
+      <Filter>Network</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
