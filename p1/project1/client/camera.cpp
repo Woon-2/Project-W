@@ -12,7 +12,7 @@ void Camera::update() {
 }
 
 void Camera::updateGFX(GFX& gfx) {
-	gfx.addCameraData(SamplePipeline::CameraData{
+	gfx.addCameraData(PBRPipeline::CameraData{
 		.view = view_,
 		.proj = proj_
 	});

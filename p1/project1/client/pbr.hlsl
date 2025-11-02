@@ -12,8 +12,10 @@ struct Material {
     float4 cAlbedo;
     float cRoughness;
     float cMetallic;
-    float ao;
-    float3 emmisive;
+    float cAO;
+    float padding0;
+    float3 cEmmisive;
+    float padding1;
 };
 
 struct VSOutput {
@@ -29,7 +31,10 @@ cbuffer PerDrawcallData : register(b0) {
 };
 
 cbuffer PerFrameData : register(b1) {
-   float3 globalAmbient;
+    float3 globalAmbient;
+    float padding0;
+    uint lightCnt;
+    uint3 padding1;
 }
 
 StructuredBuffer<PerInstanceData> gInstances : register(t0);
@@ -46,7 +51,7 @@ VSOutput VSMain(
     
     ret.pos = mul(float4(position, 1.0f), gInstances[idxInst + idxDrawcall].wvp);
     ret.posV = mul(float4(position, 1.0f), gInstances[idxInst + idxDrawcall].wv).xyz;
-    ret.normalV = mul(float4(position, 1.0f), gInstances[idxInst + idxDrawcall].wvNormal).xyz;
+    ret.normalV = mul(normal, gInstances[idxInst + idxDrawcall].wvNormal);
     ret.uv = uv;
     
     return ret;

@@ -1,7 +1,7 @@
-#include "object.hpp"
+#include "light.hpp"
 #include "errorHandling.hpp"
 
-void Object::update(Milliseconds deltaTime) {
+void Light::update(Milliseconds deltaTime) {
 	// 물리 업데이트를 위한 시간 누산
 	physicUpdateAcc_ += deltaTime;
 	// physicalUpdate를 주기에 맞춰서 호출하는 건
@@ -45,39 +45,41 @@ void Object::update(Milliseconds deltaTime) {
 		);
 		break;
 	}
-
-	// 월드변환 행렬 갱신
-	world_ = mu::Mat4x4(mu::scale(evaluated.scale, evaluated.scale, evaluated.scale))
-		* mu::Mat4x4(evaluated.orient) * mu::translate(evaluated.pos);
 }
 
-void Object::render(GFX& gfx) {
-	gfx.addDrawEvent(PBRPipeline::DrawEvent{
-		.world = world_,
-		.mesh = pMesh_,
-		.subMesh = &pMesh_->subMeshes.at(L"CubeMesh_SubMesh")	// 임시 값
+void Light::render(GFX& gfx) {
+	gfx.addLightData(PBRPipeline::LightData{
+		.pos = pos(),
+		.dir = mu::NVec3(orient().rotate(mu::Vec3(0.f, 0.f, 1.f))),
+		.color = color,
+		.intensity = intensity,
+		.cosTheta = cosTheta,
+		.cosPhi = cosPhi,
+		.falloff = falloff,
+		.atten = atten,
+		.type = type
 	});
 }
 
-void MU_CALLCONV Object::setPos(mu::Vec3 newPos) {
+void MU_CALLCONV Light::setPos(mu::Vec3 newPos) {
 	for (auto& snapshot : physicSnapshots_) {
 		snapshot.pos = newPos;
 	}
 }
 
-void MU_CALLCONV Object::setOmega(mu::Vec3 newOmega) {
+void MU_CALLCONV Light::setOmega(mu::Vec3 newOmega) {
 	for (auto& snapshot : physicSnapshots_) {
 		snapshot.omega = newOmega;
 	}
 }
 
-void MU_CALLCONV Object::setOrient(mu::NQuat newOrient) {
+void MU_CALLCONV Light::setOrient(mu::NQuat newOrient) {
 	for (auto& snapshot : physicSnapshots_) {
 		snapshot.orient = newOrient;
 	}
 }
 
-void Object::setScale(float newScale) {
+void Light::setScale(float newScale) {
 	for (auto& snapshot : physicSnapshots_) {
 		snapshot.scale = newScale;
 	}
@@ -90,7 +92,7 @@ void Object::setScale(float newScale) {
 // 너무 유동적인 delta time으로 인한 시뮬레이션의 불안정성과
 // 물리 업데이트의 성능적 비용 문제를 해결한다.
 // 물리 업데이트 주기는 physicUpdateInterval_ 변수에 저장된다.
-void Object::physicalUpdate() {
+void Light::physicalUpdate() {
 	const auto& lastSnapshot = physicSnapshots_.back();
 
 	const auto pos = lastSnapshot.pos;

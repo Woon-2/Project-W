@@ -192,6 +192,12 @@
     <ClInclude Include="texloader\DDSTextureLoader12.h">
       <Filter>texloader</Filter>
     </ClInclude>
+    <ClInclude Include="pbrPipeline.hpp">
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="light.hpp">
+      <Filter>게임\헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -242,13 +248,27 @@
     <ClCompile Include="texloader\DDSTextureLoader12.cpp">
       <Filter>texloader</Filter>
     </ClCompile>
+    <ClCompile Include="pbrPipeline.cpp">
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="light.cpp">
+      <Filter>게임\소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="sampleShader.hlsl">
+    <FxCompile Include="sample.hlsl">
       <Filter>셰이더 파일</Filter>
     </FxCompile>
-    <FxCompile Include="bindless.hlsl">
+    <FxCompile Include="bindless.hlsli">
       <Filter>셰이더 파일</Filter>
     </FxCompile>
+    <FxCompile Include="pbr.hlsl">
+      <Filter>셰이더 파일</Filter>
+    </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="pbrLighting.hlsli">
+      <Filter>셰이더 파일</Filter>
+    </None>
   </ItemGroup>
 </Project>

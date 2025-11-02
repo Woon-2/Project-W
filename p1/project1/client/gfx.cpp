@@ -224,6 +224,7 @@ void GFX::init() {
 	defaultRootSig.build(device_.Get());
 
 	shaders_.try_emplace(L"SampleShader", createSampleShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace(L"PBRShader", createPBRShader(device_.Get(), defaultRootSig.get()));
 
 	rootSigs_.try_emplace(L"DefaultRootSignature", std::make_shared<DefaultRootSig>(std::move(defaultRootSig)));
 
@@ -330,12 +331,24 @@ void GFX::createSwapChain() {
 	cmdListPool_.init(device_.Get(), CommandListUsage::RenderingMaster, backBuffers_.size() * 2);
 
 	// 백버퍼 개수만큼의 room을 가지는 파이프라인별 리소스들 생성
-	// 1000u를 변수로 대체하기
+	// 1000u, 32u를 변수로 대체하기
 	resourcesSamplePipeline_.perInstanceData.init(
 		device_.Get(), sizeof(SampleShader::PerInstanceData) * 1000u, backBuffers_.size(), L"Sample_PerInstanceData"
 	);
 	resourcesSamplePipeline_.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(SampleShader::PerDrawcallData), 1000u, backBuffers_.size(), L"Sample_PerDrawcallData"
+	);
+	resourcesPBRPipeline_.perInstanceData.init(
+		device_.Get(), sizeof(PBRShader::PerInstanceData) * 1000u, backBuffers_.size(), L"PBR_PerInstanceData"
+	);
+	resourcesPBRPipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof(PBRShader::PerDrawcallData), 1000u, backBuffers_.size(), L"PBR_PerDrawcallData"
+	);
+	resourcesPBRPipeline_.lightData.init(
+		device_.Get(), sizeof(PBRShader::Light) * 32u, backBuffers_.size(), L"PBR_Lights"
+	);
+	resourcesPBRPipeline_.perFrameData.init(
+		device_.Get(), sizeof(PBRShader::PerFrameData), backBuffers_.size(), L"PBR_PerFrameData"
 	);
 
 	// 프레임 펜스 생성
@@ -362,6 +375,26 @@ void GFX::addDrawEvent(const SamplePipeline::DrawEvent& drawEvent) {
 // 카메라 데이터를 입력한다.
 void GFX::addCameraData(const SamplePipeline::CameraData& cameraData) {
 	cameraDataSamplePipeline_ = cameraData;
+}
+
+// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+void GFX::addDrawEvent(const PBRPipeline::DrawEvent& drawEvent) {
+	drawEventsPBRPipeline_.push_back(drawEvent);
+}
+
+// 카메라 데이터를 입력한다.
+void GFX::addCameraData(const PBRPipeline::CameraData& cameraData) {
+	cameraDataPBRPipeline_ = cameraData;
+}
+
+// 조명 데이터를 입력한다.
+void GFX::addLightData(const PBRPipeline::LightData& lightData) {
+	lightDataPBRPipeline_.push_back(lightData);
+}
+
+// 프레임 데이터를 입력한다.
+void GFX::addFrameData(const PBRPipeline::FrameData& frameData) {
+	frameDataPBRPipeline_ = frameData;
 }
 
 void GFX::loadMeshes() {
@@ -499,9 +532,9 @@ void GFX::render() {
 	tmpDescriptorHeaps.push_back(srvCbvUavHeap_.heap);
 	tmpDescriptorHeaps.push_back(samHeap_.heap);
 
-	// SamplePipeline의 Dispatch
+	// Sample Pipeline의 Dispatch
 	auto samplePipelineDispatcher = SamplePipeline::Dispatcher(
-		std::move(tmpDescriptorHeaps),
+		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_,
 		rootSigs_.at(L"DefaultRootSignature"), shaders_.at(L"SampleShader"),
@@ -513,14 +546,34 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	// PBR Pipeline의 Dispatch
+	auto pbrPipelineDispatcher = PBRPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at(L"DefaultRootSignature"), shaders_.at(L"PBRShader"),
+		cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesPBRPipeline_, threadPool_, &cmdListPool_,
+		std::move(drawEventsPBRPipeline_), std::move(lightDataPBRPipeline_),
+		cameraDataPBRPipeline_, frameDataPBRPipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
 	// threadPool_이 활성화된 경우엔 멀티스레드로 처리한다.
 	if (!threadPool_) {
 		samplePipelineDispatcher.updateGPUDataSingleThreaded();
 		samplePipelineDispatcher.drawSingleThreaded();
+
+		pbrPipelineDispatcher.updateGPUDataSingleThreaded();
+		pbrPipelineDispatcher.drawSingleThreaded();
 	}
 	else {
 		samplePipelineDispatcher.updateGPUDataMultiThreaded();
 		samplePipelineDispatcher.drawMultiThreaded();
+
+		pbrPipelineDispatcher.updateGPUDataMultiThreaded();
+		pbrPipelineDispatcher.drawMultiThreaded();
 	}
 
 	// 출력 명령 컨텍스트 할당

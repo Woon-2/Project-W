@@ -4,6 +4,7 @@
 #include "object.hpp"
 #include "timer.hpp"
 #include "camera.hpp"
+#include "light.hpp"
 
 inline constexpr const char* wndClsName = "wndCls";
 inline constexpr const char* wndName = "Project1";
@@ -87,6 +88,12 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	player->setMesh(gfx.cubeMesh());
 	player->setScale(0.15f);
 
+	auto dirLight = std::make_shared<Light>();
+	dirLight->setOrient(mu::NQuat(mu::Degree(0.f), mu::Degree(-45.f), mu::Degree(15.f)));
+	dirLight->color = mu::Vec3(0.8f, 0.8f, 0.8f);
+	dirLight->intensity = 1.f;
+	dirLight->type = PBRPipeline::LightData::Type::DirectionalLight;
+
 	auto camera = Camera{};
 	camera.setTargetObject(player);
 	camera.setOffsetFromTarget(mu::Vec3(0.f, 0.2f, -0.5f));
@@ -133,6 +140,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 		}
 
 		player->update(timer.deltaTime<Milliseconds>());
+		dirLight->update(timer.deltaTime<Milliseconds>());
 		camera.update();
 		camera.updateGFX(gfx);
 
@@ -144,9 +152,15 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 			}
 		}
 		player->render(gfx);
+		dirLight->render(gfx);
 
 		auto title = wndName + "(FPS: "s + std::to_string(timer.fps()) + ")"s;
 		SetWindowTextA(ghWnd, title.c_str());
+
+		auto frameData = PBRPipeline::FrameData{
+			.globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f)
+		};
+		gfx.addFrameData(frameData);
 
 		gfx.render();
 	}

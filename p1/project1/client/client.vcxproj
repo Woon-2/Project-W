@@ -167,9 +167,11 @@
     <ClInclude Include="function.hpp" />
     <ClInclude Include="gfx.hpp" />
     <ClInclude Include="gfxUtil.hpp" />
+    <ClInclude Include="light.hpp" />
     <ClInclude Include="mathUtil.hpp" />
     <ClInclude Include="mesh.hpp" />
     <ClInclude Include="object.hpp" />
+    <ClInclude Include="pbrPipeline.hpp" />
     <ClInclude Include="pch.hpp" />
     <ClInclude Include="physics.hpp" />
     <ClInclude Include="samplePipeline.hpp" />
@@ -186,9 +188,11 @@
     <ClCompile Include="errorHandling.cpp" />
     <ClCompile Include="gfx.cpp" />
     <ClCompile Include="gfxUtil.cpp" />
+    <ClCompile Include="light.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="mesh.cpp" />
     <ClCompile Include="object.cpp" />
+    <ClCompile Include="pbrPipeline.cpp" />
     <ClCompile Include="pch.cpp" />
     <ClCompile Include="physics.cpp" />
     <ClCompile Include="samplePipeline.cpp" />
@@ -198,11 +202,15 @@
     <ClCompile Include="timer.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="bindless.hlsl">
+    <FxCompile Include="bindless.hlsli">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
-    <FxCompile Include="sampleShader.hlsl">
+    <FxCompile Include="pbr.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="sample.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">VSMain</EntryPointName>
@@ -212,6 +220,12 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.1</ShaderModel>
     </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="pbrLighting.hlsli">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </None>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

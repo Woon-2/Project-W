@@ -18,6 +18,7 @@ CompiledShaderOutput compileShader(const std::filesystem::path& path,
 );
 
 ComPtr<ID3D12PipelineState> createSampleShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createPBRShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 
 // 루트 파라미터 접근을 이해하기 쉽도록 하기 위해 만든 클래스
 // 루트 파라미터에 이름을 지어 그 인덱스 및 D3D12_ROOT_PARAMETER 구조체와 매핑한다.
@@ -72,5 +73,59 @@ struct PerDrawcallData {
 };
 
 }	// namespace SampleShader
+
+// PBRShader
+namespace PBRShader {
+struct Light {
+	enum class Type {
+		PointLight,
+		Spotlight,
+		DirectionalLight
+	};
+
+	XMFLOAT3 color;
+	float falloff;
+	XMFLOAT3 posV;
+	float cosTheta;
+	XMFLOAT3 dirV;
+	float cosPhi;
+	XMFLOAT3 atten;
+	float intensity;
+	int type;
+	XMINT3 padding;
+};
+
+struct Material {
+	BindlessIndex idxAlbedo;
+	BindlessIndex idxRoughness;
+	BindlessIndex idxMetallic;
+
+	XMFLOAT4 cAlbedo;
+	float cRoughness;
+	float cMetallic;
+	float cAmbientOcllusion;
+	float padding0;
+	XMFLOAT3 cEmmisive;
+	float padding1;
+};
+
+struct PerInstanceData {
+	XMFLOAT4X4 wvp;
+	XMFLOAT4X4 wv;
+	XMFLOAT3X3 wvNormal;
+};
+
+struct PerDrawcallData {
+	Material material;
+	u32t firstInstanceIdx;
+};
+
+struct PerFrameData {
+	XMFLOAT3 globalAmbient;
+	float padding0;
+	u32t lightCnt;
+	XMUINT3 padding1;
+};
+}	// namespace PBRShader
 
 #endif	// __shader_HPP

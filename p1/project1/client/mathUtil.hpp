@@ -3035,13 +3035,13 @@ const Mat<R, C> MU_CALLCONV operator/(Mat<R, C> lhs, Mat<R, C> rhs) __MathUtil_N
 
 template <std::size_t R, std::size_t C>
 const Vec<C> MU_CALLCONV operator*(Vec<R> lhs, Mat<R, C> rhs) __MathUtil_NOEXCEPT {
-    return dx::XMVector3Transform(lhs.get(), rhs.get());
+    return dx::XMVector4Transform(lhs.get(), rhs.get());
 }
 
 template <std::size_t D>
     requires (D >= 1 && D <= 4)
 Vec<D>& MU_CALLCONV Vec<D>::operator*=(Mat<D, D> rhs) __MathUtil_NOEXCEPT {
-    vec_ = dx::XMVector3Transform(vec_, rhs.get());
+    vec_ = dx::XMVector4Transform(vec_, rhs.get());
     return *this;
 }
 

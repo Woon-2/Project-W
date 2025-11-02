@@ -14,6 +14,8 @@ struct Material {
 	XMFLOAT4 constantAlbedo;
 	float constantRoughness;
 	float constantMetallic;
+	float constantAmbientOcllusion;
+	XMFLOAT3 constantEmmisive;
 };
 
 // 드로우콜 시 사용할 인덱스 버퍼 뷰와 재질 정보를 담는 구조체

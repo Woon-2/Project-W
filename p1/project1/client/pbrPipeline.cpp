@@ -1,9 +1,9 @@
-#include "samplePipeline.hpp"
+#include "pbrPipeline.hpp"
 #include "shader.hpp"
 #include "mesh.hpp"
 #include "errorHandling.hpp"
 
-namespace SamplePipeline {
+namespace PBRPipeline {
 
 // GFX 객체로부터 필요한 인자들을 전달받자.
 Dispatcher::Dispatcher(
@@ -15,15 +15,18 @@ Dispatcher::Dispatcher(
 	const ComPtr<ID3D12CommandQueue>& cmdQ, const D3D12_VIEWPORT& viewport, const D3D12_RECT& scissorRect,
 	D3D12_CPU_DESCRIPTOR_HANDLE rtv, D3D12_CPU_DESCRIPTOR_HANDLE dsv, Fence* pFence, Resources* pResources,
 	ThreadPool* threadPool, CommandListPool* commandListPool, std::vector<DrawEvent>&& drawEvents,
-	const CameraData& cameraData, std::size_t roomIdx
+	std::vector<LightData>&& lightData, const CameraData& cameraData, const FrameData& frameData,
+	std::size_t roomIdx
 ) : descriptorHeaps_(descriptorHeaps), pTexPool_(pTexPool), pTexArrayPool_(pTexArrayPool),
 	pTexCubePool_(pTexCubePool), pSamPool_(pSamPool), pCmpSamPool_(pCmpSamPool),
 	rootSig_(rootSig), shader_(shader), cmdQ_(cmdQ),
 	viewport_(viewport), scissorRect_(scissorRect), rtv_(rtv), dsv_(dsv), pFence_(pFence),
 	pResources_(pResources), threadPool_(threadPool), cmdListPool_(commandListPool), drawEvents_(std::move(drawEvents)),
-	cameraData_(cameraData), roomIdx_(roomIdx),
+	lightData_(std::move(lightData)), cameraData_(cameraData), frameData_(frameData), roomIdx_(roomIdx),
 	rootParamIdxPDD_(rootSig->paramIdx(L"PerDrawcallData")),
 	rootParamIdxPID_(rootSig->paramIdx(L"PerInstanceData")),
+	rootParamIdxPFD_(rootSig->paramIdx(L"PerFrameData")),
+	rootParamIdxLights_(rootSig->paramIdx(L"Lights")),
 	rootParamIdxTexPool_(rootSig->paramIdx(L"TexturePool")),
 	rootParamIdxTexArrayPool_(rootSig->paramIdx(L"TextureArrayPool")),
 	rootParamIdxTexCubePool_(rootSig->paramIdx(L"TextureCubePool")),
@@ -31,9 +34,8 @@ Dispatcher::Dispatcher(
 	rootParamIdxCmpSamPool_(rootSig->paramIdx(L"ComparisonSamplerPool")) {}
 
 // 셰이더에서 사용하는 GPU 데이터를 갱신한다.
-// DrawEvents, CameraData에 담겨있는 정보를 가공하여
-// Resources 객체에 담긴,
-// ShaderInputBuffer 인터페이스를 가지는 객체들에 옮겨담는다.
+// DrawEvents, CameraData, LightData, FrameData에 담겨있는 정보를 가공하여
+// Resources 객체에 담긴, ShaderInputBuffer 인터페이스를 가지는 객체들에 옮겨담는다.
 // 싱글스레드로 동작한다.
 // DrawEvents가 비어있다면 아무 동작도 하지 않는다.
 void Dispatcher::updateGPUDataSingleThreaded() {
@@ -47,16 +49,19 @@ void Dispatcher::updateGPUDataSingleThreaded() {
 	
 	// perInstanceData를 static으로 선언하여
 	// 매번 처음부터 메모리를 구축하지 않고 재사용할 수 있도록 한다.
-	static auto perInstanceData = std::vector<SampleShader::PerInstanceData>();
+	static auto perInstanceData = std::vector<PBRShader::PerInstanceData>();
 	perInstanceData.resize(drawEvents_.size());
 
+	const auto view = cameraData_.view;
 	const auto viewProj = cameraData_.view * cameraData_.proj;
 
 	// DrawEvents에 담겨있는 정보를 가공해 perInstanceData에 저장한다.
 	std::ranges::transform(drawEvents_, perInstanceData.begin(),
-		[viewProj](const SamplePipeline::DrawEvent& drawEvent) {
-			return SampleShader::PerInstanceData{
-				.wvp = mu::transpose(drawEvent.world * viewProj).getXmf()
+		[view, viewProj](const PBRPipeline::DrawEvent& drawEvent) {
+			return PBRShader::PerInstanceData{
+				.wvp = mu::transpose(drawEvent.world * viewProj).getXmf(),
+				.wv = mu::transpose(drawEvent.world * view).getXmf(),
+				.wvNormal = mu::inverse(mu::Mat3x3(drawEvent.world * view)).getXmf()
 			};
 		}	
 	);
@@ -64,12 +69,46 @@ void Dispatcher::updateGPUDataSingleThreaded() {
 	// perInstanceData의 내용을 바탕으로 GPU 데이터를 갱신한다.
 	pResources_->perInstanceData.stage(roomIdx_, perInstanceData);
 	perInstanceData.clear();
+
+	// lights를 static으로 선언하여
+	// 매번 처음부터 메모리를 구축하지 않고 재사용할 수 있도록 한다.
+	static auto lights = std::vector<PBRShader::Light>();
+	lights.resize(lightData_.size());
+
+	// LightData에 담겨있는 정보를 가공해 lights에 저장한다.
+	std::ranges::transform(lightData_, lights.begin(),
+		[view](const PBRPipeline::LightData& lightData) {
+			return PBRShader::Light{
+				.color = lightData.color.getXmf(),
+				.falloff = lightData.falloff,
+				.posV = mu::Vec3(mu::Vec4(lightData.pos, 1.f) * view).getXmf(),
+				.cosTheta = lightData.cosTheta,
+				.dirV = mu::NVec3(mu::Vec4(lightData.dir, 0.f) * view).getXmf(),
+				.cosPhi = lightData.cosPhi,
+				.atten = lightData.atten.getXmf(),
+				.intensity = lightData.intensity,
+				.type = etoi(lightData.type)
+			};
+		}	
+	);
+
+	// FrameData에 담겨있는 정보를 가공해 pfd에 저장한다.
+	auto pfd = PBRShader::PerFrameData{
+		.globalAmbient = frameData_.globalAmbient.getXmf(),
+		.lightCnt = static_cast<u32t>(lights.size())	// 여기서 lights.size()를 호출하므로 
+														// 이전에 lights.clear()를 호출하면 안된다.
+	};
+	// pfd의 내용을 바탕으로 GPU 데이터를 갱신한다.
+	pResources_->perFrameData.stage(roomIdx_, &pfd, 1u);
+
+	// lights의 내용을 바탕으로 GPU 데이터를 갱신한다.
+	pResources_->lightData.stage(roomIdx_, lights);
+	lights.clear();
 }
 
 // 셰이더에서 사용하는 GPU 데이터를 갱신한다.
-// DrawEvents, CameraData에 담겨있는 정보를 가공하여
-// Resources 객체에 담긴,
-// ShaderInputBuffer 인터페이스를 가지는 객체들에 옮겨담는다.
+// DrawEvents, CameraData, LightData, FrameData에 담겨있는 정보를 가공하여
+// Resources 객체에 담긴, ShaderInputBuffer 인터페이스를 가지는 객체들에 옮겨담는다.
 // 싱글스레드로 동작한다.
 // DrawEvents가 비어있다면 아무 동작도 하지 않는다.
 void Dispatcher::updateGPUDataMultiThreaded() {
@@ -83,12 +122,14 @@ void Dispatcher::updateGPUDataMultiThreaded() {
 	
 	// perInstanceData를 static으로 선언하여
 	// 매번 처음부터 메모리를 구축하지 않고 재사용할 수 있도록 한다.
-	static auto perInstanceData = std::vector<SampleShader::PerInstanceData>();
+	static auto perInstanceData = std::vector<PBRShader::PerInstanceData>();
 	perInstanceData.resize(drawEvents_.size());
 
 	// DrawEvent는 jobSize 단위로 스레드들에 분배될 것이므로,
 	// 동기화를 위한 latch를 준비한다.
 	// 이때, DrawEvent의 개수가 jobSize로 나누어 떨어지지 않을 경우를 대비한다.
+	// perInstanceData의 양에 비해 lights나 pfd의 양은 미미하다.
+	// lights와 pfd의 처리는 구태여 멀티스레드로 하지 않는다.
 	auto latch = std::latch( drawEvents_.size() / jobSizeUpdate_
 		+ ((drawEvents_.size() % jobSizeUpdate_) != 0)
 	);
@@ -99,7 +140,7 @@ void Dispatcher::updateGPUDataMultiThreaded() {
 	// 데이터를 가공해 perInstanceData의 대응되는 영역에 저장한다.
 	std::size_t accEventCnt = 0u;
 	while (accEventCnt + (jobSizeUpdate_ - 1) < drawEvents_.size()) {
-		addJobUpdate( viewProj, drawEvents_.data() + accEventCnt,
+		addJobUpdate( cameraData_.view, viewProj, drawEvents_.data() + accEventCnt,
 			drawEvents_.data() + accEventCnt + jobSizeUpdate_,
 			perInstanceData.data() + accEventCnt, latch
 		);
@@ -111,11 +152,46 @@ void Dispatcher::updateGPUDataMultiThreaded() {
 	if (accEventCnt != drawEvents_.size()) {
 		const auto lastJobSize = drawEvents_.size() - accEventCnt;
 
-		addJobUpdate( viewProj, drawEvents_.data() + accEventCnt,
+		addJobUpdate( cameraData_.view, viewProj, drawEvents_.data() + accEventCnt,
 			drawEvents_.data() + accEventCnt + lastJobSize,
 			perInstanceData.data() + accEventCnt, latch
 		);
 	}
+
+	// lights를 static으로 선언하여
+	// 매번 처음부터 메모리를 구축하지 않고 재사용할 수 있도록 한다.
+	static auto lights = std::vector<PBRShader::Light>();
+	lights.resize(lightData_.size());
+
+	// LightData에 담겨있는 정보를 가공해 lights에 저장한다.
+	std::ranges::transform(lightData_, lights.begin(),
+		[view = cameraData_.view](const PBRPipeline::LightData& lightData) {
+			return PBRShader::Light{
+				.color = lightData.color.getXmf(),
+				.falloff = lightData.falloff,
+				.posV = mu::Vec3(mu::Vec4(lightData.pos, 1.f) * view).getXmf(),
+				.cosTheta = lightData.cosTheta,
+				.dirV = mu::NVec3(mu::Vec4(lightData.dir, 0.f) * view).getXmf(),
+				.cosPhi = lightData.cosPhi,
+				.atten = lightData.atten.getXmf(),
+				.intensity = lightData.intensity,
+				.type = etoi(lightData.type)
+			};
+		}	
+	);
+
+	// FrameData에 담겨있는 정보를 가공해 pfd에 저장한다.
+	auto pfd = PBRShader::PerFrameData{
+		.globalAmbient = frameData_.globalAmbient.getXmf(),
+		.lightCnt = static_cast<u32t>(lights.size())	// 여기서 lights.size()를 호출하므로 
+														// 이전에 lights.clear()를 호출하면 안된다.
+	};
+	// pfd의 내용을 바탕으로 GPU 데이터를 갱신한다.
+	pResources_->perFrameData.stage(roomIdx_, &pfd, 1u);
+
+	// lights의 내용을 바탕으로 GPU 데이터를 갱신한다.
+	pResources_->lightData.stage(roomIdx_, lights);
+	lights.clear();
 
 	// 동기화
 	latch.wait();
@@ -127,7 +203,6 @@ void Dispatcher::updateGPUDataMultiThreaded() {
 // DrawEvents의 정보들을 참고하여
 // 드로우콜들을 수행한다.
 // 싱글스레드로 동작한다.
-// DrawEvents가 비어있다면 아무 동작도 하지 않는다.
 void Dispatcher::drawSingleThreaded() {
 	if (drawEvents_.empty()) {
 		return;
@@ -183,12 +258,18 @@ void Dispatcher::drawSingleThreaded() {
 
 	DISPLAY_ERROR_DX_VOID( cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST), false );
 
-	// 바인드해야 하는 GPU 데이터는 다음 두 종류다. (셰이더 참고)
+	// 바인드해야 하는 GPU 데이터는 다음 네 종류다. (셰이더 참고)
 	// - PerInstanceData
 	// - PerDrawcallData
+	// - PerFrameData
+	// - Lights
 
 	// PerInstanceData 바인드
 	pResources_->perInstanceData.bind(cmdList, rootParamIdxPID_, roomIdx_);
+	// Lights 바인드
+	pResources_->lightData.bind(cmdList, rootParamIdxLights_, roomIdx_);
+	// PerFrameData 바인드
+	pResources_->perFrameData.bind(cmdList, rootParamIdxPFD_, roomIdx_);
 
 	u32t idxDrawcall = 0u;
 
@@ -202,11 +283,18 @@ void Dispatcher::drawSingleThreaded() {
 		// PerDrawcallData GPU 데이터 갱신
 		// (바인드와 GPU 데이터 갱신 순서는 상관없다.
 		//  어차피 바인드는 GPU 명령이라 바로 실행되지 않기 때문에)
-		auto perDrawcallData = SampleShader::PerDrawcallData{
-			.material = SampleShader::Material{
-				.idxAlbedo = drawEvent.subMesh->material.mapAlbedo.idxSrv
+		auto perDrawcallData = PBRShader::PerDrawcallData{
+			.material = PBRShader::Material{
+				.idxAlbedo = drawEvent.subMesh->material.mapAlbedo.idxSrv,
+				.idxRoughness = drawEvent.subMesh->material.mapRoughness.idxSrv,
+				.idxMetallic = drawEvent.subMesh->material.mapMetallic.idxSrv,
+				.cAlbedo = drawEvent.subMesh->material.constantAlbedo,
+				.cRoughness = drawEvent.subMesh->material.constantRoughness,
+				.cMetallic = drawEvent.subMesh->material.constantMetallic,
+				.cAmbientOcllusion = drawEvent.subMesh->material.constantAmbientOcllusion,
+				.cEmmisive = drawEvent.subMesh->material.constantEmmisive
 			},
-			.firstInstanceIdx = idxDrawcall
+			.firstInstanceIdx = static_cast<u32t>(idxDrawcall)
 		};
 		pResources_->perDrawcallData.cbuffers[idxDrawcall].stage(
 			roomIdx_, &perDrawcallData, 1u
@@ -247,7 +335,6 @@ void Dispatcher::drawSingleThreaded() {
 // DrawEvents의 정보들을 참고하여
 // 드로우콜들을 수행한다.
 // 멀티스레드로 동작한다.
-// DrawEvents가 비어있다면 아무 동작도 하지 않는다.
 void Dispatcher::drawMultiThreaded() {
 	if (drawEvents_.empty()) {
 		return;
@@ -353,14 +440,17 @@ void Dispatcher::drawMultiThreaded() {
 
 // 멀티스레드 작업 시, GPU 데이터 갱신 작업에 대해
 // 단위 작업을 생성하여 스레드에 할당하는데 사용된다.
-void MU_CALLCONV Dispatcher::addJobUpdate( mu::Mat4x4 viewProj, const DrawEvent* pFirst,
-	const DrawEvent* pLast, SampleShader::PerInstanceData* pOut, std::latch& latch
+void MU_CALLCONV Dispatcher::addJobUpdate( mu::Mat4x4 view, const mu::Mat4x4& viewProj,
+	const DrawEvent* pFirst, const DrawEvent* pLast, PBRShader::PerInstanceData* pOut,
+	std::latch& latch
 ) {
 	threadPool_->addJob( [=, &latch](){
 		std::transform( pFirst, pLast, pOut,
-			[viewProj](const SamplePipeline::DrawEvent& drawEvent) {
-				return SampleShader::PerInstanceData{
-					.wvp = mu::transpose(drawEvent.world * viewProj).getXmf()
+			[view, viewProj](const PBRPipeline::DrawEvent& drawEvent) {
+				return PBRShader::PerInstanceData{
+					.wvp = mu::transpose(drawEvent.world * viewProj).getXmf(),
+					.wv = mu::transpose(drawEvent.world * view).getXmf(),
+					.wvNormal = mu::inverse(mu::Mat3x3(drawEvent.world * view)).getXmf()
 				};
 			}	
 		);
@@ -404,12 +494,18 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 				
 		DISPLAY_ERROR_DX_VOID( threadCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST), false );
 
-		// 바인드해야 하는 GPU 데이터는 다음 두 종류다. (셰이더 참고)
+		// 바인드해야 하는 GPU 데이터는 다음 네 종류다. (셰이더 참고)
 		// - PerInstanceData
 		// - PerDrawcallData
+		// - PerFrameData
+		// - Lights
 
 		// PerInstanceData 바인드
 		pResources_->perInstanceData.bind(threadCmdList, rootParamIdxPID_, roomIdx_);
+		// Lights 바인드
+		pResources_->lightData.bind(threadCmdList, rootParamIdxLights_, roomIdx_);
+		// PerFrameData 바인드
+		pResources_->perFrameData.bind(threadCmdList, rootParamIdxPFD_, roomIdx_);
 
 		for ( auto idxDrawcall = firstInstanceIdx;
 			idxDrawcall < firstInstanceIdx + jobSize;
@@ -424,9 +520,16 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 				threadCmdList, rootParamIdxPDD_, roomIdx_
 			);
 
-			auto perDrawcallData = SampleShader::PerDrawcallData{
-				.material = SampleShader::Material{
-					.idxAlbedo = drawEvent.subMesh->material.mapAlbedo.idxSrv
+			auto perDrawcallData = PBRShader::PerDrawcallData{
+				.material = PBRShader::Material{
+					.idxAlbedo = drawEvent.subMesh->material.mapAlbedo.idxSrv,
+					.idxRoughness = drawEvent.subMesh->material.mapRoughness.idxSrv,
+					.idxMetallic = drawEvent.subMesh->material.mapMetallic.idxSrv,
+					.cAlbedo = drawEvent.subMesh->material.constantAlbedo,
+					.cRoughness = drawEvent.subMesh->material.constantRoughness,
+					.cMetallic = drawEvent.subMesh->material.constantMetallic,
+					.cAmbientOcllusion = drawEvent.subMesh->material.constantAmbientOcllusion,
+					.cEmmisive = drawEvent.subMesh->material.constantEmmisive
 				},
 				.firstInstanceIdx = static_cast<u32t>(idxDrawcall)
 			};
@@ -456,4 +559,4 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 	} );
 }
 
-}	// namespace SamplePipeline
+}	// namespace PBRPipeline

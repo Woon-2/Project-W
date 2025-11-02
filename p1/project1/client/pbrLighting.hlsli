@@ -13,6 +13,7 @@
 // - cMetallic: float (물체의 금속성을 나타내는 상수)
 // - ao: float (물체의 주변광 차폐율을 나타내는 상수)
 // - emmisive: float3 (물체의 자체발광에 대해 색상을 나타내는 상수)
+// 그리고 uint 타입의 lightCnt가 전역적으로 접근이 가능함이 가정된다.
 
 #define PI 3.14159f
 // 빛의 종류 목록, Light 객체의 type 멤버에 이 값들을 쓴다.

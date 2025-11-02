@@ -7,13 +7,15 @@
 #include "mesh.hpp"
 
 #include "samplePipeline.hpp"
+#include "pbrPipeline.hpp"
 
 
-// 큐브 노멀 계산
-// Light 구조체 구현
+// object, light의 render에서 gfx의 적절한 함수 호출
+// 파이프라인 dispatcher들이 자신이 처리할 drawEvent가 없으면 early return하도록
 // 큐브 pbr 셰이딩
 // 유니티에서 모델 로드 - 금, 토
 // 유니티에서 월드 로드 - 토, 일
+// light data, lights 이름 일관적으로
 // Mesh Vertex Buffer Standard Layout: 슬롯 인덱스 유기적으로 결정하게 만들기
 // Batching & Instancing 구현
 // 멀티스레드 최적화
@@ -64,6 +66,14 @@ public:
 	void addDrawEvent(const SamplePipeline::DrawEvent& drawEvent);
 	// 카메라 데이터를 입력한다.
 	void addCameraData(const SamplePipeline::CameraData& cameraData);
+	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+	void addDrawEvent(const PBRPipeline::DrawEvent& drawEvent);
+	// 카메라 데이터를 입력한다.
+	void addCameraData(const PBRPipeline::CameraData& cameraData);
+	// 조명 데이터를 입력한다.
+	void addLightData(const PBRPipeline::LightData& lightData);
+	// 프레임 데이터를 입력한다.
+	void addFrameData(const PBRPipeline::FrameData& frameData);
 
 	void loadMeshes();
 	const Mesh* cubeMesh() const { return &meshCube_; }
@@ -124,9 +134,16 @@ private:
 	std::map<std::wstring, ComPtr<ID3D12PipelineState>> shaders_{};
 
 	// 파이프라인 관련 변수들
+	// Sample Pipeline
 	std::vector<SamplePipeline::DrawEvent> drawEventsSamplePipeline_{};
 	SamplePipeline::Resources resourcesSamplePipeline_{};
 	SamplePipeline::CameraData cameraDataSamplePipeline_{};
+	// PBR Pipeline
+	std::vector<PBRPipeline::DrawEvent> drawEventsPBRPipeline_{};
+	PBRPipeline::Resources resourcesPBRPipeline_{};
+	PBRPipeline::CameraData cameraDataPBRPipeline_{};
+	std::vector<PBRPipeline::LightData> lightDataPBRPipeline_{};
+	PBRPipeline::FrameData frameDataPBRPipeline_{};
 
 	std::map<std::wstring, Fence> fences_{};
 
