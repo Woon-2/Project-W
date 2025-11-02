@@ -135,6 +135,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="GameSessionManager.cpp" />
     <ClCompile Include="Listener.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="pch.cpp">
@@ -143,11 +144,15 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="SendBuffer.cpp" />
     <ClCompile Include="Service.cpp" />
     <ClCompile Include="Session.cpp" />
     <ClCompile Include="SocketUtils.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="concurrentqueue.h" />
+    <ClInclude Include="GameSession.hpp" />
+    <ClInclude Include="GameSessionManager.hpp" />
     <ClInclude Include="IocpCore.hpp" />
     <ClInclude Include="IocpObject.hpp" />
     <ClInclude Include="IoEvent.hpp" />
@@ -157,6 +162,7 @@
     <ClInclude Include="pch.hpp" />
     <ClInclude Include="protocol.hpp" />
     <ClInclude Include="RecvBuffer.hpp" />
+    <ClInclude Include="SendBuffer.hpp" />
     <ClInclude Include="Service.hpp" />
     <ClInclude Include="Session.hpp" />
     <ClInclude Include="SocketUtils.hpp" />

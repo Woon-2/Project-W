@@ -33,6 +33,12 @@
     <ClCompile Include="Service.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="SendBuffer.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="GameSessionManager.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="SocketUtils.hpp">
@@ -75,6 +81,18 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="RecvBuffer.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="concurrentqueue.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="SendBuffer.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="GameSession.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="GameSessionManager.hpp">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
