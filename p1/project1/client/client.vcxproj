@@ -162,7 +162,6 @@
     <ClInclude Include="d3dx12\include\directx\dxcore_interface.h" />
     <ClInclude Include="d3dx12\include\directx\dxgicommon.h" />
     <ClInclude Include="d3dx12\include\directx\dxgiformat.h" />
-    <ClInclude Include="d3dx12\include\dxguids\dxguids.h" />
     <ClInclude Include="errorHandling.hpp" />
     <ClInclude Include="function.hpp" />
     <ClInclude Include="gfx.hpp" />
@@ -184,7 +183,6 @@
   <ItemGroup>
     <ClCompile Include="camera.cpp" />
     <ClCompile Include="d3dx12\src\d3dx12_property_format_table.cpp" />
-    <ClCompile Include="d3dx12\src\dxguids.cpp" />
     <ClCompile Include="errorHandling.cpp" />
     <ClCompile Include="gfx.cpp" />
     <ClCompile Include="gfxUtil.cpp" />

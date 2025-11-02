@@ -186,9 +186,6 @@
     <ClInclude Include="d3dx12\include\directx\dxgiformat.h">
       <Filter>d3dx12</Filter>
     </ClInclude>
-    <ClInclude Include="d3dx12\include\dxguids\dxguids.h">
-      <Filter>d3dx12</Filter>
-    </ClInclude>
     <ClInclude Include="texloader\DDSTextureLoader12.h">
       <Filter>texloader</Filter>
     </ClInclude>
@@ -238,9 +235,6 @@
     </ClCompile>
     <ClCompile Include="physics.cpp">
       <Filter>게임\소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="d3dx12\src\dxguids.cpp">
-      <Filter>d3dx12</Filter>
     </ClCompile>
     <ClCompile Include="d3dx12\src\d3dx12_property_format_table.cpp">
       <Filter>d3dx12</Filter>
