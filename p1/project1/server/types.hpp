@@ -1,6 +1,8 @@
 #ifndef TYPES_HPP
 #define TYPES_HPP
 
+#include "concurrentqueue.h"
+
 #include <cstdint>
 #include <memory>
 
@@ -17,7 +19,13 @@ using SPIocpCore = std::shared_ptr<class IocpCore>;
 using SPIocpObject = std::shared_ptr<class IocpObject>;
 using SPListener = std::shared_ptr<class Listener>;
 using SPSession = std::shared_ptr<class Session>;
+using SPGameSession = std::shared_ptr<class GameSession>;
+using SPPacketSession = std::shared_ptr<class PacketSession>;
 using SPClientService = std::shared_ptr<class ClientService>;
 using SPServerService = std::shared_ptr<class ServerService>;
+using SPSendBuffer = std::shared_ptr<class SendBuffer>;
+
+template<class T>
+using CCQueue = moodycamel::ConcurrentQueue<T>;
 
 #endif // TYPES_HPP

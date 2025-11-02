@@ -101,6 +101,8 @@ public:
 class SendEvent : public IoEvent {
 public:
 	SendEvent( ) : IoEvent( IoType::Send ) {}
+
+	std::vector<SPSendBuffer> sendBuffers_;
 };
 
 #endif // IO_EVENT_HPP

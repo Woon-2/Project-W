@@ -1,15 +1,33 @@
 #include "pch.hpp"
 #include "Session.hpp"
 #include "Service.hpp"
+#include "SendBuffer.hpp"
+
+void Session::send( const SPSendBuffer& sendBuffer ) {
+	if ( !isConnected( ) ) {
+		return;
+	}
+
+	bool canSend{ false };
+	{
+		std::lock_guard<std::mutex> lock( sendMtx_ );
+		sendQueue_.push( sendBuffer );
+		if ( sending_.exchange( true ) == false ) {
+			canSend = true;
+		}
+	}
+
+	if ( canSend ) {
+		registerSend( );
+	}
+}
 
 void Session::disconnect( const std::string& cause ) {
 	if ( connected_.exchange( false ) == false ) {
 		return;
 	}
-
+	
 	std::cout << "Disconnected: " << cause << '\n';	// temporary
-
-	onDisconnected( );	// 컨텐츠 쪽에서 사용
 	registerDisconnect( );
 }
 
@@ -106,8 +124,49 @@ void Session::registerRecv( ) {
 	}
 }
 
-void Session::registerSend( )
-{
+void Session::registerSend( ) {
+	if ( !isConnected( ) ) {
+		return;
+	}
+
+	sendEvent_.clear( );
+	sendEvent_.setOwner( shared_from_this( ) );	// add reference
+
+	{
+		//std::lock_guard<std::mutex> lock( sendMtx_ );
+
+		int32 writeSize{ };
+		while ( !sendQueue_.empty( ) ) {
+			auto sendBuffer = sendQueue_.front( );
+
+			writeSize += sendBuffer->writeSize( );	// 나중에 send size 제한에 사용할 수도 있음
+
+			sendQueue_.pop( );
+			sendEvent_.sendBuffers_.push_back( sendBuffer );
+		}
+	}
+
+	std::vector<WSABUF> wsaBufs;
+	wsaBufs.reserve( sendEvent_.sendBuffers_.size( ) );
+	for ( const auto& sendBuffer : sendEvent_.sendBuffers_ ) {
+		wsaBufs.push_back( WSABUF{
+			.len = static_cast<ULONG>( sendBuffer->writeSize( ) ),
+			.buf = reinterpret_cast<char*>( sendBuffer->data( ) )
+		} );
+	}
+
+	DWORD numBytes{ };
+	if ( ::WSASend( sock_, wsaBufs.data( ), static_cast<DWORD>( wsaBufs.size( ) ),
+		&numBytes, 0, reinterpret_cast<WSAOVERLAPPED*>( &sendEvent_ ), nullptr ) == SOCKET_ERROR
+	) {
+		auto errCode = ::WSAGetLastError( );
+		if ( errCode != ERROR_IO_PENDING ) {
+			handleError( errCode );
+			sendEvent_.setOwner( nullptr );	// release reference
+			sendEvent_.sendBuffers_.clear( );
+			sending_.store( false );
+		}
+	}
 }
 
 void Session::processConnect( ) {
@@ -121,6 +180,7 @@ void Session::processConnect( ) {
 
 void Session::processDisconnect( ) {
 	disconnectEvent_.setOwner( nullptr );	// release reference
+	onDisconnected( );	// 컨텐츠 쪽에서 사용
 	getService( )->releaseSession( getSPSession( ) );
 }
 
@@ -151,8 +211,25 @@ void Session::processRecv( int32 numBytes ) {
 	registerRecv( );
 }
 
-void Session::processSend( int32 numBytes )
-{
+void Session::processSend( int32 numBytes ) {
+	sendEvent_.setOwner( nullptr );	// release reference
+	sendEvent_.sendBuffers_.clear( );
+
+	if ( numBytes == 0 ) {
+		disconnect( "Send 0" );
+		return;
+	}
+
+	// 컨텐츠 쪽에서 사용
+	onSend( numBytes );
+
+	std::lock_guard<std::mutex> lock( sendMtx_ );
+	if ( sendQueue_.empty( ) ) {
+		sending_.store( false );
+	}
+	else {
+		registerSend( );
+	}
 }
 
 void Session::handleError( int32 errCode ) {
@@ -167,4 +244,33 @@ void Session::handleError( int32 errCode ) {
 		std::cout << std::system_category( ).message( errCode ) << '\n';	// temporary
 		break;
 	}
+}
+
+/*---------------------
+	 PacketSession
+---------------------*/
+
+int32 PacketSession::onRecv( uint8* buffer, int32 len ) {
+	int32 recvLen{ };
+
+	while ( true ) {
+		int32 dataSize = len - recvLen;
+
+		// 헤더 크기보다 데이터 크기가 작으면 중단
+		if ( dataSize < static_cast<int32>( sizeof( PacketHeader ) ) ) {
+			break;
+		}
+
+		//auto header = reinterpret_cast<PacketHeader*>( &buffer[ recvLen ] );
+		auto sendBuffer = reinterpret_cast<SendBuffer*>( &buffer[ recvLen ] );
+		// 패킷 전체 크기보다 데이터 크기가 작으면 중단
+		if ( dataSize < sendBuffer->header.size ) {
+			break;
+		}
+
+		// 패킷 처리
+		onRecvPacket( &buffer[ recvLen ], sendBuffer->header.size );
+		recvLen += sendBuffer->header.size;
+	}
+	return recvLen;
 }

@@ -22,6 +22,7 @@
 #include <vector>
 #include <array>
 #include <set>
+#include <queue>
 #include <thread>
 #include <atomic>
 #include <mutex>

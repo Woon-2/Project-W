@@ -5,6 +5,10 @@
 #include "IocpObject.hpp"
 #include "RecvBuffer.hpp"
 
+/*---------------
+     Session
+---------------*/
+
 class Service;
 class Session : public IocpObject {
 	enum {
@@ -12,18 +16,21 @@ class Session : public IocpObject {
 	};
 
 public:
-	Session( ) : service_( ), sock_( SocketUtils::createSocket( ) ),
-		netAddr_( ), connected_( false ), connectEvent_( ),
-		disconnectEvent_( ), recvEvent_( ), recvBuf_( bufferSize ) {}
+	Session( ) : service_( ), sock_( SocketUtils::createSocket( ) ), netAddr_( ),
+		connected_( false ), connectEvent_( ), disconnectEvent_( ),	sendEvent_( ),
+		recvEvent_( ), recvBuf_( bufferSize ), sendQueue_( ), sendMtx_( ), sending_( false ) {}
 
 	virtual ~Session( ) {
 		SocketUtils::closeSocket( sock_ );
 	}
 
 	// 외부에서 사용
+	void send( const SPSendBuffer& sendBuffer );
+
 	bool connect( ) {
 		return registerConnect( );
 	}
+
 	void disconnect( const std::string& cause );
 
 	// Setters and Getters
@@ -95,12 +102,34 @@ private:
 	ConnectEvent connectEvent_;
 	DisconnectEvent disconnectEvent_;
 	RecvEvent recvEvent_;
+	SendEvent sendEvent_;
 
 	RecvBuffer recvBuf_;
+	std::queue<SPSendBuffer> sendQueue_;
+	std::mutex sendMtx_;	// temporary
+	std::atomic_bool sending_;
 
 	friend class Listener;
 	friend class IocpCore;
 	friend class Service;
+};
+
+/*---------------------
+	 PacketSession
+---------------------*/
+
+class PacketSession : public Session {
+public:
+	PacketSession( ) {}
+	virtual ~PacketSession( ) {}
+
+	SPPacketSession getSPPacketSession( ) {
+		return std::static_pointer_cast<PacketSession>( shared_from_this( ) );
+	}
+
+protected:
+	virtual int32 onRecv( uint8* buffer, int32 len ) sealed;
+	virtual int32 onRecvPacket( uint8* buffer, int32 len ) = 0;
 };
 
 #endif // SESSION_HPP
