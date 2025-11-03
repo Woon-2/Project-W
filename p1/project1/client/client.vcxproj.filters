@@ -1,0 +1,337 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="소스 파일">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="헤더 파일">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="리소스 파일">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="셰이더 파일">
+      <UniqueIdentifier>{89db8676-e45c-4f45-9074-a868d495d197}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="외부 소스 파일">
+      <UniqueIdentifier>{21a79c58-a2be-4643-a3f5-6e6d43bb35d6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="외부 헤더 파일">
+      <UniqueIdentifier>{553b86c3-6001-4477-ae47-86d5fcb3b29c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="독립 구현체">
+      <UniqueIdentifier>{5b05f40f-b2be-416d-978a-3132bc92d12a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="독립 구현체\헤더 파일">
+      <UniqueIdentifier>{496e49d8-3f10-4804-8ed0-429b64be9e8d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="독립 구현체\소스 파일">
+      <UniqueIdentifier>{9117bb22-4458-4858-9ffa-1cdfb32f8575}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="그래픽스">
+      <UniqueIdentifier>{e35e4092-d3b6-4c16-894a-1b9c2c687f60}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="그래픽스\코어">
+      <UniqueIdentifier>{914d2fc7-002c-42dd-b8cb-28cb0d277d5e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="그래픽스\파이프라인">
+      <UniqueIdentifier>{0776449a-a1f4-4dd9-8fb3-292baad750a5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="그래픽스\코어\소스 파일">
+      <UniqueIdentifier>{c50fd26b-0f87-4ed6-b008-55b3a7178467}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="그래픽스\코어\헤더 파일">
+      <UniqueIdentifier>{e943d003-978d-408c-9804-99580add594a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="그래픽스\파이프라인\소스 파일">
+      <UniqueIdentifier>{29fb9e81-4bcb-4d5d-b691-0a3032d6d43e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="그래픽스\파이프라인\헤더 파일">
+      <UniqueIdentifier>{7f81fbed-2d79-48ef-8cca-f67b7b2f7e31}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="게임">
+      <UniqueIdentifier>{1a85b5be-99d2-4aa7-a37d-1aa278dd53bc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="게임\소스 파일">
+      <UniqueIdentifier>{98acee41-42e0-4854-a72e-e6691062f3b7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="게임\헤더 파일">
+      <UniqueIdentifier>{fc1b10d9-20b6-442b-b956-a9cb98bf05da}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="d3dx12">
+      <UniqueIdentifier>{6f72bce9-a034-4814-bd19-a95c42e5fd62}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="texloader">
+      <UniqueIdentifier>{de745857-9f09-42e7-adaa-d9ae0651f7a7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Network">
+      <UniqueIdentifier>{2b18a6e3-21d5-429a-b0ed-c003783e9e4a}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="pch.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="errorHandling.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="timsort.hpp">
+      <Filter>외부 헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="concurrentqueue.h">
+      <Filter>외부 헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="mathUtil.hpp">
+      <Filter>독립 구현체\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="threadPool.hpp">
+      <Filter>독립 구현체\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="function.hpp">
+      <Filter>독립 구현체\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="gfx.hpp">
+      <Filter>그래픽스\코어\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="gfxUtil.hpp">
+      <Filter>그래픽스\코어\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="mesh.hpp">
+      <Filter>그래픽스\코어\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="shader.hpp">
+      <Filter>그래픽스\코어\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="object.hpp">
+      <Filter>게임\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="camera.hpp">
+      <Filter>게임\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="timer.hpp">
+      <Filter>게임\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="samplePipeline.hpp">
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="physics.hpp">
+      <Filter>게임\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3d12.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3d12compatibility.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3d12sdklayers.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3d12shader.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\D3D12TokenizedProgramFormat.hpp">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3d12video.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3dcommon.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3dx12.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3dx12_barriers.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3dx12_check_feature_support.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3dx12_core.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3dx12_default.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3dx12_pipeline_state_stream.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3dx12_property_format_table.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3dx12_render_pass.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3dx12_resource_helpers.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3dx12_root_signature.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\d3dx12_state_object.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\DirectML.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\dxcore.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\dxcore_interface.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\dxgicommon.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="d3dx12\include\directx\dxgiformat.h">
+      <Filter>d3dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="texloader\DDSTextureLoader12.h">
+      <Filter>texloader</Filter>
+    </ClInclude>
+    <ClInclude Include="pbrPipeline.hpp">
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="light.hpp">
+      <Filter>게임\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="SendBuffer.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="Service.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="Session.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="SocketUtils.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="IocpCore.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="Listener.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="IocpObject.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="IoEvent.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="macro.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="NetAddress.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="types.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="SessionManager.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="ServerSession.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="global.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="protocol.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="errorHandling.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="threadPool.cpp">
+      <Filter>독립 구현체\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="pch.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="gfx.cpp">
+      <Filter>그래픽스\코어\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="gfxUtil.cpp">
+      <Filter>그래픽스\코어\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="mesh.cpp">
+      <Filter>그래픽스\코어\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="shader.cpp">
+      <Filter>그래픽스\코어\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="timer.cpp">
+      <Filter>게임\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="object.cpp">
+      <Filter>게임\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="camera.cpp">
+      <Filter>게임\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="samplePipeline.cpp">
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="physics.cpp">
+      <Filter>게임\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="d3dx12\src\d3dx12_property_format_table.cpp">
+      <Filter>d3dx12</Filter>
+    </ClCompile>
+    <ClCompile Include="texloader\DDSTextureLoader12.cpp">
+      <Filter>texloader</Filter>
+    </ClCompile>
+    <ClCompile Include="pbrPipeline.cpp">
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="light.cpp">
+      <Filter>게임\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="SendBuffer.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="Service.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="Session.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="SocketUtils.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="Listener.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="SessionManager.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="global.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="sample.hlsl">
+      <Filter>셰이더 파일</Filter>
+    </FxCompile>
+    <FxCompile Include="bindless.hlsli">
+      <Filter>셰이더 파일</Filter>
+    </FxCompile>
+    <FxCompile Include="pbr.hlsl">
+      <Filter>셰이더 파일</Filter>
+    </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="pbrLighting.hlsli">
+      <Filter>셰이더 파일</Filter>
+    </None>
+  </ItemGroup>
+</Project>
