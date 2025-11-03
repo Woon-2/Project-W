@@ -63,7 +63,7 @@ public:
 						packet->scEnter.y[ i ],
 						packet->scEnter.z[ i ]
 					) );
-					newObject->setMesh( gGfx.cubeMesh( ) );
+					newObject->setModel( gGfx.modelPlayer() );
 					newObject->setScale( 0.15f );
 
 					std::lock_guard<std::mutex> lock( gMtx );

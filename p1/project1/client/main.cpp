@@ -88,9 +88,9 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 		}
 	}
 
-	auto player = std::make_shared<Object>();
-	player->setModel(gfx.modelPlayer());
-	player->setScale(0.15f);
+	gPlayer = std::make_shared<Object>();
+	gPlayer->setModel(gGfx.modelPlayer());
+	gPlayer->setScale(0.15f);
 
 	auto dirLight = std::make_shared<Light>();
 	dirLight->setOrient(mu::NQuat(mu::Degree(0.f), mu::Degree(60.f), mu::Degree(15.f)));
