@@ -10,16 +10,29 @@
 #include "pbrPipeline.hpp"
 
 
-// 텍스처 이름-경로 매핑 어떻게 할지 설계 (Unity Editor에서 자동으로 텍스처들 찾아서 지정할 수 있으면 좋겠다)
 // 모델 추출 스크립트 작성
 // 모델 클래스 작성, 모델 임포트 코드 작성
+// Roughness, Metallic -> MetallicGloss
+// 레벨 서버 단에서 임시 배치, Enter 패킷들 보내기
+// 
+// 임포트 로그
 // light data, lights 이름 일관적으로
+// 메시, 서브메시 이름 처리
 // Mesh Vertex Buffer Standard Layout: 슬롯 인덱스 유기적으로 결정하게 만들기
 // Batching & Instancing 구현
-// 멀티스레드 최적화
+// Deferred Shading 구현
+// 노멀 매핑 구현
+// 멀티스레드 최적화 (ExecuteCommandLists 별도 스레드에서)
+// 충돌체 형태 구현 및 렌더링
 // Rigidbody Physics 구현
 // Alpha Blending으로 이펙트 구현(빌보드)
+// 사운드 프로그래밍
+// 
+// SkySphere
 // 나무, 수풀 렌더링(빌보드, LOD모델)
+// 애니메이션, 그림자
+// 멀티스레드 업데이트 구현
+// Software Culling
 
 extern HWND ghWnd;
 
@@ -75,6 +88,7 @@ public:
 
 	void loadMeshes();
 	const Mesh* cubeMesh() const { return &meshCube_; }
+	const Model* modelPlayer() const { return &modelPlayer_; }
 
 	// 요청된 드로우콜들을 모아 객체들을 그리고 화면에 띄운다.
 	void render();
@@ -148,6 +162,7 @@ private:
 	std::size_t frameIdx_ = 0u;
 
 	Mesh meshCube_{};
+	Model modelPlayer_{};
 
 	ThreadPool* threadPool_;	// 설정되어있을 경우 멀티스레드로 동작한다.
 };

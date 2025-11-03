@@ -8,6 +8,7 @@
 class Object {
 public:
 	void setMesh(const Mesh* pMesh) { pMesh_ = pMesh; }
+	void setModel(const Model* pModel) { pModel_ = pModel; }
 	void update(Milliseconds deltaTime);
 	void render(GFX& gfx);
 
@@ -31,6 +32,7 @@ private:
 	void physicalUpdate();
 
 	mu::Mat4x4 world_{};	// GFX에 행렬을 전달할 때만 사용된다.
+	const Model* pModel_ = nullptr;
 	const Mesh* pMesh_ = nullptr;
 
 	std::list<PhysicSnapshot> physicSnapshots_ = std::list<PhysicSnapshot>(1u);

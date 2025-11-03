@@ -56,4 +56,19 @@ Mesh buildCubeMesh(
 	DescriptorPool& texPool, Fence& fenceToAssociate
 );
 
+struct MeshWithDressXform {
+	Mesh mesh;
+	mu::Mat4x4 dressXform;
+};
+
+struct Model {
+	std::vector<MeshWithDressXform> meshWithDressXforms;
+};
+
+Model loadModelFromFile( const std::filesystem::path& path,
+	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
+	std::unordered_map<std::wstring, Texture>& texHashMap,
+	DescriptorPool& texPool, Fence& fenceToAssociate	
+);
+
 #endif	// __mesh_HPP

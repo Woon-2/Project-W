@@ -85,11 +85,11 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	}
 
 	auto player = std::make_shared<Object>();
-	player->setMesh(gfx.cubeMesh());
+	player->setModel(gfx.modelPlayer());
 	player->setScale(0.15f);
 
 	auto dirLight = std::make_shared<Light>();
-	dirLight->setOrient(mu::NQuat(mu::Degree(0.f), mu::Degree(-45.f), mu::Degree(15.f)));
+	dirLight->setOrient(mu::NQuat(mu::Degree(0.f), mu::Degree(60.f), mu::Degree(15.f)));
 	dirLight->color = mu::Vec3(0.8f, 0.8f, 0.8f);
 	dirLight->intensity = 1.f;
 	dirLight->type = PBRPipeline::LightData::Type::DirectionalLight;

@@ -52,11 +52,25 @@ void Object::update(Milliseconds deltaTime) {
 }
 
 void Object::render(GFX& gfx) {
-	gfx.addDrawEvent(PBRPipeline::DrawEvent{
-		.world = world_,
-		.mesh = pMesh_,
-		.subMesh = &pMesh_->subMeshes.at(L"CubeMesh_SubMesh")	// 임시 값
-	});
+	if (pMesh_) {
+		gfx.addDrawEvent(PBRPipeline::DrawEvent{
+			.world = world_,
+			.mesh = pMesh_,
+			.subMesh = &pMesh_->subMeshes.at(L"CubeMesh_SubMesh")	// 임시 값
+		});
+	}
+
+	if (pModel_) {
+		for (auto& [mesh, dressXform] : pModel_->meshWithDressXforms) {
+			for (auto& [submeshKey, submesh] : mesh.subMeshes) {
+				gfx.addDrawEvent(PBRPipeline::DrawEvent{
+					.world = dressXform * world_,
+					.mesh = &mesh,
+					.subMesh = &submesh
+				});
+			}
+		}
+	}
 }
 
 void MU_CALLCONV Object::setPos(mu::Vec3 newPos) {
