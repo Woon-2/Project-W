@@ -7,6 +7,8 @@
 constexpr const char* serverIp = "127.0.0.1";
 constexpr int serverPort = 7777;
 
+#pragma pack( push, 1 )
+
 struct PacketHeader {
 	std::uint16_t size;
 	std::uint16_t id;	// packet type (protocol id)
@@ -75,5 +77,7 @@ struct Packet {
 		SCMovePacket scMove;
 	};
 };
+
+#pragma pack( pop )
 
 #endif // PROTOCOL_HPP

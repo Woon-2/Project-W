@@ -54,6 +54,20 @@ public:
 	}
 
 	virtual void onDisconnected( ) override {
+		auto packet = Packet{
+			.header = {
+				.size = sizeof( PacketHeader ) + sizeof( SCLeavePacket ),
+				.id = static_cast<uint16>( PacketType::scLeave )
+			},
+			.scLeave = {
+				.playerId = getId( )
+			}
+		};
+
+		auto sendBuffer = std::make_shared<SendBuffer>( sizeof( Packet ) );
+		sendBuffer->copyData( &packet, sizeof( Packet ) );
+		GameSessionManager::broadcast( sendBuffer );
+
 		GameSessionManager::remove( std::static_pointer_cast<GameSession>( shared_from_this( ) ) );
 	}
 

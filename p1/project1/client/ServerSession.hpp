@@ -19,6 +19,17 @@ public:
 
 	virtual void onDisconnected( ) override {
 		std::cout << "[Client] Disconnected from server.\n";
+
+		auto packet = Packet{
+			.header = {
+				.size = sizeof( PacketHeader ) + sizeof( CSLeavePacket ),
+				.id = static_cast<std::uint16_t>( PacketType::csLeave )
+			}
+		};
+
+		auto sendBuffer = std::make_shared<SendBuffer>( sizeof( Packet ) );
+		sendBuffer->copyData( &packet, sizeof( Packet ) );
+		send( sendBuffer );
 	}
 
 	virtual int32 onRecvPacket( uint8* buffer, int32 len ) override {
@@ -62,7 +73,11 @@ public:
 		}
 			break;
 
-		case PacketType::scLeave:
+		case PacketType::scLeave: {
+			auto pId = packet->scLeave.playerId;
+			std::lock_guard<std::mutex> lock( gMtx );
+			gObjects.erase( pId );
+		}
 			break;
 
 		case PacketType::scMove: {
