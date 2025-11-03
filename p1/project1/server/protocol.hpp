@@ -37,11 +37,11 @@ struct SCAssignIdPacket {
 };
 
 struct SCEnterPacket {
-	std::array<std::int32_t, 100> pIds;
-	// 우선 동일한 위치에 생성
-	float x;
-	float y;
-	float z;
+	std::int32_t playerCount;
+	std::array<std::int32_t, 50> pIds;
+	std::array<float, 50> x;
+	std::array<float, 50> y;
+	std::array<float, 50> z;
 };
 
 struct CSLeavePacket {

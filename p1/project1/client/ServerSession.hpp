@@ -6,6 +6,8 @@
 #include "SessionManager.hpp"
 #include "object.hpp"
 
+extern GFX gGfx;
+
 class ServerSession : public PacketSession {
 public:
 	ServerSession( ) : player_( nullptr ) {}
@@ -23,21 +25,38 @@ public:
 		auto packet = reinterpret_cast<Packet*>( buffer );
 		switch ( static_cast<PacketType>( packet->header.id ) ) {
 		case PacketType::scAssignId: {
-			if ( player_ ) {
-				player_->setId( packet->scAssignId.playerId );
-			}
+			player_ = gPlayer;
+			player_->setId( packet->scAssignId.playerId );
+
+			//std::lock_guard<std::mutex> lock( gMtx );
+			gObjects[ player_->getId( ) ] = player_;
 		}
 			break;
 
 		case PacketType::scEnter: {
-			for( i32t pId : packet->scEnter.pIds ) {
-				if( pId == player_->getId( ) ) {
-					player_->setPos( mu::Vec3( packet->scEnter.x, packet->scEnter.y, packet->scEnter.z ) );
+			i32t playerCount = packet->scEnter.playerCount;
+			for ( i32t i = 0; i < playerCount; ++i ) {
+				bool found = false;
+				for( auto it = gObjects.begin( ); it != gObjects.end( ); ++it ) {
+					if ( it->first == packet->scEnter.pIds[ i ] ) {
+						found = true;
+						break;
+					}
 				}
-				if ( pId != player_->getId( ) ) {
-					//std::lock_guard<std::mutex> lock( gMtx );
-					gObjects[ pId ] = std::make_shared<Object>( );
-					gObjects[ pId ]->setPos( mu::Vec3( packet->scEnter.x, packet->scEnter.y, packet->scEnter.z ) );
+
+				if ( !found ) {
+					auto newObject = std::make_shared<Object>( );
+					newObject->setId( packet->scEnter.pIds[ i ] );
+					newObject->setPos( mu::Vec3(
+						packet->scEnter.x[ i ],
+						packet->scEnter.y[ i ],
+						packet->scEnter.z[ i ]
+					) );
+					newObject->setMesh( gGfx.cubeMesh( ) );
+					newObject->setScale( 0.15f );
+
+					std::lock_guard<std::mutex> lock( gMtx );
+					gObjects[ packet->scEnter.pIds[ i ] ] = newObject;
 				}
 			}
 		}
@@ -52,7 +71,7 @@ public:
 				player_->setPos( mu::Vec3( packet->scMove.x, packet->scMove.y, packet->scMove.z ) );
 			}
 			else {
-				//std::lock_guard<std::mutex> lock( gMtx );
+				std::lock_guard<std::mutex> lock( gMtx );
 				auto it = gObjects.find( pId );
 				if ( it != gObjects.end( ) ) {
 					it->second->setPos( mu::Vec3( packet->scMove.x, packet->scMove.y, packet->scMove.z ) );
@@ -70,6 +89,9 @@ public:
 
 	void setPlayer( const std::shared_ptr<Object>& player ) {
 		player_ = player;
+
+		std::lock_guard<std::mutex> lock( gMtx );
+		gObjects[ player->getId( ) ] = player;
 	}
 
 	std::shared_ptr<Object> getPlayer( ) const {

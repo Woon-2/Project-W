@@ -4,6 +4,7 @@
 using SPServerSession = std::shared_ptr<class ServerSession>;
 extern SPServerSession gServerSession;
 
+extern std::shared_ptr<class Object> gPlayer;
 extern std::unordered_map<int, std::shared_ptr<class Object>> gObjects;
 extern std::mutex gMtx;
 
