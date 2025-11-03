@@ -38,6 +38,7 @@ struct SCAssignIdPacket {
 
 struct SCEnterPacket {
 	std::array<std::int32_t, 100> pIds;
+	// 우선 동일한 위치에 생성
 	float x;
 	float y;
 	float z;

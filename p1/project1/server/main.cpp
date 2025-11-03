@@ -25,7 +25,7 @@ int main( )
 	ASSERT_CRASH( service->start( ) );
 
 	std::vector<std::thread> threads;
-	for ( auto i = 0; i < 5; ++i ) {
+	for ( auto i = 0; i < 4; ++i ) {	// TODO: 쓰레드 개수 조정해야 됨
 		threads.emplace_back( [ &service ]( ) {
 			while ( true ) {
 				service->getIocpCore( )->dispatch( );

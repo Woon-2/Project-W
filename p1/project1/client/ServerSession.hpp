@@ -30,12 +30,15 @@ public:
 			break;
 
 		case PacketType::scEnter: {
-			auto pId = packet->scEnter.playerId;
-			if ( pId == player_->getId( ) ) {
-				player_->setPos( mu::Vec3( packet->scEnter.x, packet->scEnter.y, packet->scEnter.z ) );
-			}
-			else {
-				std::cout << "[Client] Another player entered: ID " << pId << "\n";
+			for( i32t pId : packet->scEnter.pIds ) {
+				if( pId == player_->getId( ) ) {
+					player_->setPos( mu::Vec3( packet->scEnter.x, packet->scEnter.y, packet->scEnter.z ) );
+				}
+				if ( pId != player_->getId( ) ) {
+					//std::lock_guard<std::mutex> lock( gMtx );
+					gObjects[ pId ] = std::make_shared<Object>( );
+					gObjects[ pId ]->setPos( mu::Vec3( packet->scEnter.x, packet->scEnter.y, packet->scEnter.z ) );
+				}
 			}
 		}
 			break;
@@ -49,7 +52,11 @@ public:
 				player_->setPos( mu::Vec3( packet->scMove.x, packet->scMove.y, packet->scMove.z ) );
 			}
 			else {
-				std::cout << "ID " << pId << "\n";
+				//std::lock_guard<std::mutex> lock( gMtx );
+				auto it = gObjects.find( pId );
+				if ( it != gObjects.end( ) ) {
+					it->second->setPos( mu::Vec3( packet->scMove.x, packet->scMove.y, packet->scMove.z ) );
+				}
 			}
 		}
 			break;

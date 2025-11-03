@@ -44,9 +44,9 @@ public:
 			packet.scEnter.z = 0.f;
 		}
 
-		/*x_ = packet.scEnter.x;
+		x_ = packet.scEnter.x;
 		y_ = packet.scEnter.y;
-		z_ = packet.scEnter.z;*/
+		z_ = packet.scEnter.z;
 
 		sendBuffer = std::make_shared<SendBuffer>( sizeof( Packet ) );
 		sendBuffer->copyData( &enterPacket, sizeof( Packet ) );
