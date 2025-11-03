@@ -3747,4 +3747,4 @@ inline void swap(typename ConcurrentQueue<T, Traits>::ImplicitProducerKVP& a, ty
 #pragma GCC diagnostic pop
 #endif
 
-#endif	// __concurrentqueue_h
+#endif // __concurrentqueue_h

@@ -166,19 +166,34 @@
     <ClInclude Include="function.hpp" />
     <ClInclude Include="gfx.hpp" />
     <ClInclude Include="gfxUtil.hpp" />
+    <ClInclude Include="global.hpp" />
+    <ClInclude Include="IocpCore.hpp" />
+    <ClInclude Include="IocpObject.hpp" />
+    <ClInclude Include="IoEvent.hpp" />
     <ClInclude Include="light.hpp" />
+    <ClInclude Include="Listener.hpp" />
+    <ClInclude Include="macro.hpp" />
     <ClInclude Include="mathUtil.hpp" />
     <ClInclude Include="mesh.hpp" />
+    <ClInclude Include="NetAddress.hpp" />
     <ClInclude Include="object.hpp" />
     <ClInclude Include="pbrPipeline.hpp" />
     <ClInclude Include="pch.hpp" />
     <ClInclude Include="physics.hpp" />
+    <ClInclude Include="protocol.hpp" />
     <ClInclude Include="samplePipeline.hpp" />
+    <ClInclude Include="SendBuffer.hpp" />
+    <ClInclude Include="ServerSession.hpp" />
+    <ClInclude Include="Service.hpp" />
+    <ClInclude Include="Session.hpp" />
+    <ClInclude Include="SessionManager.hpp" />
     <ClInclude Include="shader.hpp" />
+    <ClInclude Include="SocketUtils.hpp" />
     <ClInclude Include="texloader\DDSTextureLoader12.h" />
     <ClInclude Include="threadPool.hpp" />
     <ClInclude Include="timer.hpp" />
     <ClInclude Include="timsort.hpp" />
+    <ClInclude Include="types.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="camera.cpp" />
@@ -186,7 +201,9 @@
     <ClCompile Include="errorHandling.cpp" />
     <ClCompile Include="gfx.cpp" />
     <ClCompile Include="gfxUtil.cpp" />
+    <ClCompile Include="global.cpp" />
     <ClCompile Include="light.cpp" />
+    <ClCompile Include="Listener.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="mesh.cpp" />
     <ClCompile Include="object.cpp" />
@@ -194,7 +211,12 @@
     <ClCompile Include="pch.cpp" />
     <ClCompile Include="physics.cpp" />
     <ClCompile Include="samplePipeline.cpp" />
+    <ClCompile Include="SendBuffer.cpp" />
+    <ClCompile Include="Service.cpp" />
+    <ClCompile Include="Session.cpp" />
+    <ClCompile Include="SessionManager.cpp" />
     <ClCompile Include="shader.cpp" />
+    <ClCompile Include="SocketUtils.cpp" />
     <ClCompile Include="texloader\DDSTextureLoader12.cpp" />
     <ClCompile Include="threadPool.cpp" />
     <ClCompile Include="timer.cpp" />
