@@ -383,6 +383,10 @@ std::vector<XMFLOAT4> readVec4s(std::ifstream& ifs) {
     return ret;
 }
 
+// 텍스처 매핑 정보를 읽어들인다.
+// 텍스처 매핑 정보에는 텍스처 이름과 텍스처 경로 쌍이 들어있다.
+// 텍스처 이름을 key로 삼아 texHashMap에 쿼리를 해보고,
+// 텍스처가 존재하지 않는다면 알아낸 경로를 통해 텍스처를 로드해 key와 함께 등록한다.
 void importTextureMapping( std::ifstream& ifs, ID3D12Device* device,
     ID3D12GraphicsCommandList* cmdList, std::unordered_map<std::wstring, Texture>& texHashMap,
     DescriptorPool& texPool, Fence& fenceToAssociate) {
@@ -395,6 +399,7 @@ void importTextureMapping( std::ifstream& ifs, ID3D12Device* device,
 
         const auto tag = untagHead(str);
 
+        // (텍스처 이름, 텍스처 경로) 쌍 읽기
         if (tag == "Item") {
             const auto key = readString(ifs);
             const auto path = readString(ifs);
@@ -402,6 +407,7 @@ void importTextureMapping( std::ifstream& ifs, ID3D12Device* device,
             auto wKey = std::wstring(key.size(), L'\0');
             mbstowcs(wKey.data(), key.data(), wKey.size());
             
+            // texHashMap에 없다면 알아낸 경로를 통해 텍스처를 load해 key와 함께 등록
             if (!texHashMap.contains(wKey)) {
                 auto [pPair, _] = texHashMap.try_emplace( wKey, loadTexture(device, cmdList, path, fenceToAssociate) );
                 createSRV(device, pPair->second, texPool);
@@ -418,12 +424,17 @@ void importTextureMapping( std::ifstream& ifs, ID3D12Device* device,
     }
 }
 
+// 메시 하나를 읽어들인다.
+// 메시의 정점 버퍼들을 구축하며,
+// 서브메시 정보를 읽어들여 서브메시 각각의 인덱스 버퍼를 구축한다.
+// 서브메시의 재질정보는 importMaterials에서 반영된다.
 void importMesh( std::ifstream& ifs, ID3D12Device* device,
     ID3D12GraphicsCommandList* cmdList, const std::wstring& name,
     Fence& fenceToAssociate, Mesh& mesh
 ) {
     readHeadTag(ifs, "Mesh");
 
+    // 정점 버퍼들 구축
     readHeadTag(ifs, "VertexBuffers");
     
     for (;;) {
@@ -434,6 +445,7 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
 
         const auto tag = untagHead(str);
 
+        // Positions: float3
         if (tag == "Positions") {
             auto positions = readVec3s(ifs);
 
@@ -458,10 +470,12 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
 
             readTailTag(ifs, "Positions");
         }
+        // Colors: float4
         else if (tag == "Colors") {
             auto colors = readVec4s(ifs);
             readTailTag(ifs, "Colors");
         }
+        // Normals: float3
         else if (tag == "Normals") {
             auto normals = readVec3s(ifs);
 
@@ -486,6 +500,7 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
 
             readTailTag(ifs, "Normals");
         }
+        // uv0s: float2
         else if (tag == "TextureCoords0") {
             auto uvs = readVec2s(ifs);
 
@@ -510,6 +525,7 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
 
             readTailTag(ifs, "TextureCoords0");
         }
+        // uv1s: float2
         else if (tag == "TextureCoords1") {
             auto uvs = readVec2s(ifs);
             readTailTag(ifs, "TextureCoords1");
@@ -523,11 +539,13 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
         }
     }
 
-
+    // 서브메시들 구축 (재질, 인덱스 버퍼 중 인덱스 버퍼만 생성)
     readHeadTag(ifs, "Submeshes");
     const auto submeshCnt = readInteger(ifs, "SubmeshCnt");
     const auto maxIdx = readInteger(ifs, "MaxIndex");
 
+    // 최고 인덱스가 65536 미만이라면 uint16_t로 인덱스를 표현할 수 있다.
+    // 그렇게 표현하면 인덱스 버퍼에 쓰이는 gpu 메모리 크기를 절반으로 절약할 수 있다.
     if (maxIdx < 65536) {
         for (int i = 0; i < submeshCnt; ++i) {
             auto indices = readU16s(ifs, "Submesh");
@@ -559,6 +577,7 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
             fenceToAssociate.associatedResources_.push_back(std::move(ibu));
         }
     }
+    // 최고 인덱스가 65536 이상인 경우
     else {
         for (int i = 0; i < submeshCnt; ++i) {
             auto indices = readIntegers(ifs, "Submesh");
@@ -595,6 +614,9 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
     readTailTag(ifs, "Mesh");
 }
 
+// 노드의 재질 정보를 읽어들인다.
+// 현재 읽어들인 재질 정보는 모델의 모든 메시의 모든 서브메시에
+// 일괄적으로 저장되도록 구현되어있다.
 void importMaterials( std::ifstream& ifs, ID3D12Device* device,
     ID3D12GraphicsCommandList* cmdList, 
     std::unordered_map<std::wstring, Texture>& texHashMap,
@@ -614,6 +636,8 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
             }
 
             const auto tag = untagHead(str);
+            // 상수 읽어들이기 ======================
+            // 알베도 색상 상수
             if (tag == "cAlbedo") {
                 const auto albedo = readColor(ifs);
                 for (auto& [mesh, _] : model.meshWithDressXforms) {
@@ -623,18 +647,27 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
                 }
                 readTailTag(ifs, "cAlbedo");
             }
+            // 자체발광 색상 상수
             else if (tag == "cEmmisive") {
                 const auto emmisive = readColor(ifs);
                 readTailTag(ifs, "cEmmisive");
             }
+            // 매끄러움 상수 (거칠기 상수의 역)
             else if (tag == "cSmoothness") {
                 const auto smoothness = readFloat(ifs);
                 readTailTag(ifs, "cSmoothness");
             }
+            // 금속성 상수
             else if (tag == "cMetallic") {
                 const auto metallic = readFloat(ifs);
                 readTailTag(ifs, "cMetallic");
             }
+            // ======================================
+            // 텍스처 읽어들이기 ====================
+            // 텍스처 매핑 정보를 통해 미리 로드했던 텍스처들을
+            // texHashMap에서 찾아 모든 메시의 모든 서브메시에 연결한다.
+            
+            // 알베도 텍스처
             else if (tag == "AlbedoMap") {
                 const auto albedoMapKey = readString(ifs);
                 auto wKey = std::wstring(albedoMapKey.size(), L'\0');
@@ -647,18 +680,22 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
                 
                 readTailTag(ifs, "AlbedoMap");
             }
+            // 노멀 텍스처
             else if (tag == "NormalMap") {
                 const auto normalMapKey = readString(ifs);
                 readTailTag(ifs, "NormalMap");
             }
+            // 금속성과 매끄러움 텍스처
             else if (tag == "MetallicSmoothnessMap") {
                 const auto metallicSmoothnessMapKey = readString(ifs);
                 readTailTag(ifs, "MetallicSmoothnessMap");
             }
+            // 자체발광 텍스처
             else if (tag == "EmmisiveMap") {
                 const auto emmisiveMapKey = readString(ifs);
                 readTailTag(ifs, "EmmisiveMap");
             }
+            // ======================================
             else {
                 std::wstring wTag{};
                 wTag.assign(tag.begin(), tag.end());
@@ -673,16 +710,24 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
     readTailTag(ifs, "Materials");
 }
 
+// 기하 계층구조의 특정 노드를 읽어들이고
+// 그 자식 노드들을 재귀적으로 읽어들인다.
+// 노드에는 변환 행렬, 메시와 재질 정보가 담겨 있다.
+// 텍스처 매핑 정보를 통해 미리 로드했던 텍스처들이 서브메시들의 재질과 연결된다.
+// 노드와 메시, 변환 행렬은 각각 일대일 대응이고,
+// 노드와 재질(서브메시에 포함)은 일대다 대응이다.
 void importTransform( std::ifstream& ifs, ID3D12Device* device,
     ID3D12GraphicsCommandList* cmdList, 
     std::unordered_map<std::wstring, Texture>& texHashMap,
     Fence& fenceToAssociate, Model& model
 ) {
     readHeadTag(ifs, "Node");
+    // 노드의 이름
     const auto name = readString(ifs);
     auto wName = std::wstring(name.size(), L'\0');
     std::mbstowcs(wName.data(), name.data(), wName.size());
 
+    // 노드의 변환 행렬들
     const auto localMat = readMatrix(ifs, "LocalMatrix");
     const auto dressMat = readMatrix(ifs, "DressMatrix");
 
@@ -691,9 +736,12 @@ void importTransform( std::ifstream& ifs, ID3D12Device* device,
         /* .dressXform = */ mu::Mat4x4(XMLoadFloat4x4(&dressMat))
     );
 
+    // 메시를 읽어들인다.
     importMesh(ifs, device, cmdList, wName, fenceToAssociate, pair.mesh);
+    // 재질들을 읽어들인다.
     importMaterials(ifs, device, cmdList, texHashMap, fenceToAssociate, model);
 
+    // 자식노드들을 읽어들인다.
     const auto childCnt = readInteger(ifs, "ChildCnt");
     readHeadTag(ifs, "Children");
     for (int i = 0; i < childCnt; ++i) {
@@ -704,6 +752,8 @@ void importTransform( std::ifstream& ifs, ID3D12Device* device,
     readTailTag(ifs, "Node");
 }
 
+// 기하구조를 읽어들인다.
+// 기하구조의 루트노드에 대한 importTransform 호출을 수행한다.
 void importGeometry( std::ifstream& ifs, ID3D12Device* device,
     ID3D12GraphicsCommandList* cmdList,
     std::unordered_map<std::wstring, Texture>& texHashMap,
@@ -715,6 +765,11 @@ void importGeometry( std::ifstream& ifs, ID3D12Device* device,
     readTailTag(ifs, "Geometry");
 }
 
+// 바이너리 파일로부터 모델을 읽어온다.
+// 메시들을 생성하며 각 메시들의 버텍스 버퍼와 서브메시(인덱스버퍼, 재질)을 생성한다.
+// 그 과정에서 필요한 텍스처들이 texHashMap에 존재하지 않는다면, 로드한다.
+// (로드되는 텍스처의 경로들은 바이너리 파일 내에 적혀있다.)
+// * 수정 시 주의사항: 유니티의 추출 스크립트와 구조가 대칭이어야 한다.
 Model loadModelFromFile( const std::filesystem::path& path,
 	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
 	std::unordered_map<std::wstring, Texture>& texHashMap,

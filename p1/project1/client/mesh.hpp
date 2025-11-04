@@ -56,15 +56,24 @@ Mesh buildCubeMesh(
 	DescriptorPool& texPool, Fence& fenceToAssociate
 );
 
+// Model 구조체에서 메시와 드레스 공간 변환을 함께 저장하기 위해 쓰인다.
 struct MeshWithDressXform {
 	Mesh mesh;
 	mu::Mat4x4 dressXform;
 };
 
+// 현재 게임 내에서 모델의 계층 구조 내부의 변환을 변경할 일은 없으므로,
+// 메시를 그 메시를 메시 로컬 공간에서 드레스 공간으로 변환시켜 주는 변환 행렬과 함께
+// std::vector에 저장하여 모델을 표현한다.
 struct Model {
 	std::vector<MeshWithDressXform> meshWithDressXforms;
 };
 
+// 바이너리 파일로부터 모델을 읽어온다.
+// 메시들을 생성하며 각 메시들의 버텍스 버퍼와 서브메시(인덱스버퍼, 재질)을 생성한다.
+// 그 과정에서 필요한 텍스처들이 texHashMap에 존재하지 않는다면, 로드한다.
+// (로드되는 텍스처의 경로들은 바이너리 파일 내에 적혀있다.)
+// * 수정 시 주의사항: 유니티의 추출 스크립트와 구조가 대칭이어야 한다.
 Model loadModelFromFile( const std::filesystem::path& path,
 	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
 	std::unordered_map<std::wstring, Texture>& texHashMap,
