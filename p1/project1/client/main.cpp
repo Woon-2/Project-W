@@ -22,6 +22,9 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 	SocketUtils::init( );
 	std::locale::global( std::locale( "ko-KR" ) );
 
+	pushLoggerA("standard", &std::cout);
+	pushLoggerW("standard", &std::wcout);
+
 	// 윈도우 클래스 설정 및 윈도우 생성
 	auto cls = WNDCLASSEXA{
 		.cbSize = sizeof( WNDCLASSEXA ),

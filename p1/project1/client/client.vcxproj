@@ -173,6 +173,7 @@
     <ClInclude Include="IoEvent.hpp" />
     <ClInclude Include="light.hpp" />
     <ClInclude Include="Listener.hpp" />
+    <ClInclude Include="log.hpp" />
     <ClInclude Include="macro.hpp" />
     <ClInclude Include="mathUtil.hpp" />
     <ClInclude Include="mesh.hpp" />
@@ -206,6 +207,7 @@
     <ClCompile Include="global.cpp" />
     <ClCompile Include="light.cpp" />
     <ClCompile Include="Listener.cpp" />
+    <ClCompile Include="log.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="mesh.cpp" />
     <ClCompile Include="object.cpp" />

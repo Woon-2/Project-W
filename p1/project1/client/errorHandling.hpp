@@ -13,8 +13,9 @@
 	{	\
 		auto __dp_e_gle_result = (result);	\
 		if (!__dp_e_gle_result) {	\
-			std::wcout << L"[Error Code: " << GetLastError() << L"] - " << errorMsgGLE()	\
+			gwSharedLog << L"[Error Code: " << GetLastError() << L"] - " << errorMsgGLE()	\
 				<< L", from file " << __FILE__ << L", line " << __LINE__ << '\n';	\
+			dumpLog();	\
 			if (willExit) {	\
 				std::exit(-1);	\
 			}	\
@@ -29,8 +30,9 @@
 	{	\
 		auto __dp_e_hr_result = (hr);	\
 		if (__dp_e_hr_result < 0) {	\
-			std::wcout << L"[Error Code: " << __dp_e_hr_result << L"] - " << errorMsgHR(__dp_e_hr_result)	\
+			gwSharedLog << L"[Error Code: " << __dp_e_hr_result << L"] - " << errorMsgHR(__dp_e_hr_result)	\
 				<< L", from file " << __FILE__ << L", line " << __LINE__ << '\n';	\
+			dumpLog();	\
 			if (willExit) {	\
 				std::exit(-1);	\
 			}	\
@@ -46,7 +48,8 @@
 	{	\
 		auto __dp_e_str_condition = (condition);	\
 		if (!__dp_e_str_condition) {	\
-			std::wcout << (msg) << L", from file " << __FILE__ << L", line " << __LINE__ << '\n';	\
+			gwSharedLog << (msg) << L", from file " << __FILE__ << L", line " << __LINE__ << '\n';	\
+			dumpLog();	\
 			if (willExit) {	\
 				std::exit(-1);	\
 			}	\
@@ -65,15 +68,17 @@
 	{	\
 		auto __dp_e_hr_result = (hr);	\
 		if (__dp_e_hr_result < 0) {	\
-			std::wcout << L"[Error Code: " << __dp_e_hr_result << L"] - " << errorMsgHR(__dp_e_hr_result)	\
+			gwSharedLog << L"[Error Code: " << __dp_e_hr_result << L"] - " << errorMsgHR(__dp_e_hr_result)	\
 				<< L", from file " << __FILE__ << L", line " << __LINE__ << '\n';	\
 			if (!DXGIDebugInfo::infoQ) {	\
-				std::wcout << L"[DXGIDebugInfo] DXGIDebugInfo::infoQ가 활성화되지 않았습니다. "	\
+				gwSharedLog << L"[DXGIDebugInfo] DXGIDebugInfo::infoQ가 활성화되지 않았습니다. "	\
 					L"DXGI에서 발생한 자세한 예외의 정보를 확인할 수 없습니다.\n";	\
 			}	\
 			else {	\
-				DXGIDebugInfo::dump(std::cout, true);	\
+				DXGIDebugInfo::dump(gSharedLog, true);	\
 			}	\
+				\
+			dumpLog();	\
 				\
 			if (willExit) {	\
 				std::exit(-1);	\
@@ -89,9 +94,10 @@
 #define DISPLAY_ERROR_DX_VOID(voidCall, willExit)	\
 	{	\
 		if (!DXGIDebugInfo::infoQ) {	\
-			std::wcout << L"[DXGIDebugInfo] DXGIDebugInfo::infoQ가 활성화되지 않았습니다. "	\
+			gwSharedLog << L"[DXGIDebugInfo] DXGIDebugInfo::infoQ가 활성화되지 않았습니다. "	\
 				L"DISPLAY_ERROR_DX_VOID로 예외를 감지할 수 없습니다."	\
 				L", from file " << __FILE__ << L", line " << __LINE__ << '\n';	\
+			dumpLog();	\
 			(voidCall);	\
 		}	\
 		else {	\
@@ -101,9 +107,12 @@
 			auto __dp_e_vc_numMsg_After = DXGIDebugInfo::infoQ	\
 				->GetNumStoredMessagesAllowedByRetrievalFilters(DXGI_DEBUG_ALL);	\
 			if (__dp_e_vc_numMsg_After > __dp_e_vc_numMsg) {	\
-				std::wcout << L"[DXVoid]: " << L#voidCall << L"] - 예외발생"	\
+				gwSharedLog << L"[DXVoid]: " << L#voidCall << L"] - 예외발생"	\
 					<< L", from file " << __FILE__ << L", line " << __LINE__ << '\n';	\
 				DXGIDebugInfo::dump(std::cout, true);	\
+					\
+				dumpLog();	\
+					\
 				if (willExit) {	\
 					std::exit(-1);	\
 				}	\

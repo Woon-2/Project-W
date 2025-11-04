@@ -63,6 +63,7 @@
 #include <locale>
 #include <string>
 #include <string_view>
+#include <sstream>
 #include <vector>
 #include <list>
 #include <set>
@@ -88,6 +89,7 @@
 #include "mathUtil.hpp"
 #include "function.hpp"
 #include "threadPool.hpp"
+#include "log.hpp"
 
 #include "concurrentqueue.h"
 

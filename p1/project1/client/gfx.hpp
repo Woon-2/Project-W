@@ -10,13 +10,13 @@
 #include "pbrPipeline.hpp"
 
 
-// 스탠드 얼론 실행 가능하게
+// 임포트 로그 남기기
+// virtual 소멸자들 작성
 // 전역변수들 점검
 // 임포트 주석 쓰기
 // Roughness, Metallic -> MetallicGloss
 // 레벨 서버 단에서 임시 배치, Enter 패킷들 보내기
 // 
-// 임포트 로그
 // light data, lights 이름 일관적으로
 // 메시, 서브메시 이름 처리
 // Mesh Vertex Buffer Standard Layout: 슬롯 인덱스 유기적으로 결정하게 만들기

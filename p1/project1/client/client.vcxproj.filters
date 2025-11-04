@@ -267,6 +267,9 @@
     <ClInclude Include="IGame.hpp">
       <Filter>게임%28공용%29\헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="log.hpp">
+      <Filter>독립 구현체\헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -343,6 +346,9 @@
     </ClCompile>
     <ClCompile Include="standalone\game.cpp">
       <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="log.cpp">
+      <Filter>독립 구현체\소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
