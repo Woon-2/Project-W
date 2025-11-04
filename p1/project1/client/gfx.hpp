@@ -10,8 +10,9 @@
 #include "pbrPipeline.hpp"
 
 
-// 모델 추출 스크립트 작성
-// 모델 클래스 작성, 모델 임포트 코드 작성
+// 스탠드 얼론 실행 가능하게
+// 전역변수들 점검
+// 임포트 주석 쓰기
 // Roughness, Metallic -> MetallicGloss
 // 레벨 서버 단에서 임시 배치, Enter 패킷들 보내기
 // 

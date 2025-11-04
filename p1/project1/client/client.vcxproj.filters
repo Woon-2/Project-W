@@ -52,15 +52,6 @@
     <Filter Include="그래픽스\파이프라인\헤더 파일">
       <UniqueIdentifier>{7f81fbed-2d79-48ef-8cca-f67b7b2f7e31}</UniqueIdentifier>
     </Filter>
-    <Filter Include="게임">
-      <UniqueIdentifier>{1a85b5be-99d2-4aa7-a37d-1aa278dd53bc}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="게임\소스 파일">
-      <UniqueIdentifier>{98acee41-42e0-4854-a72e-e6691062f3b7}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="게임\헤더 파일">
-      <UniqueIdentifier>{fc1b10d9-20b6-442b-b956-a9cb98bf05da}</UniqueIdentifier>
-    </Filter>
     <Filter Include="d3dx12">
       <UniqueIdentifier>{6f72bce9-a034-4814-bd19-a95c42e5fd62}</UniqueIdentifier>
     </Filter>
@@ -69,6 +60,33 @@
     </Filter>
     <Filter Include="Network">
       <UniqueIdentifier>{2b18a6e3-21d5-429a-b0ed-c003783e9e4a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="게임%28스탠드얼론%29">
+      <UniqueIdentifier>{1a85b5be-99d2-4aa7-a37d-1aa278dd53bc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="게임%28스탠드얼론%29\소스 파일">
+      <UniqueIdentifier>{98acee41-42e0-4854-a72e-e6691062f3b7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="게임%28스탠드얼론%29\헤더 파일">
+      <UniqueIdentifier>{fc1b10d9-20b6-442b-b956-a9cb98bf05da}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="게임%28온라인%29">
+      <UniqueIdentifier>{94b86b44-1ef0-4609-83d3-38c22eabaeff}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="게임%28공용%29">
+      <UniqueIdentifier>{7b44f872-6723-4edb-9813-940ea60ccc1d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="게임%28온라인%29\소스 파일">
+      <UniqueIdentifier>{e4ed7c09-721a-4e90-a84e-7da7f8724029}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="게임%28온라인%29\헤더 파일">
+      <UniqueIdentifier>{65b08843-f35d-4c0d-b8e0-314a33eb40d9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="게임%28공용%29\소스 파일">
+      <UniqueIdentifier>{967b39ea-d741-4cbb-838a-787f63d185b6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="게임%28공용%29\헤더 파일">
+      <UniqueIdentifier>{a4868bba-aade-4e38-b243-6f7d2b070bad}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -106,19 +124,19 @@
       <Filter>그래픽스\코어\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="object.hpp">
-      <Filter>게임\헤더 파일</Filter>
+      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="camera.hpp">
-      <Filter>게임\헤더 파일</Filter>
+      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="timer.hpp">
-      <Filter>게임\헤더 파일</Filter>
+      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="samplePipeline.hpp">
       <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="physics.hpp">
-      <Filter>게임\헤더 파일</Filter>
+      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="d3dx12\include\directx\d3d12.h">
       <Filter>d3dx12</Filter>
@@ -196,7 +214,7 @@
       <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="light.hpp">
-      <Filter>게임\헤더 파일</Filter>
+      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="SendBuffer.hpp">
       <Filter>Network</Filter>
@@ -243,6 +261,12 @@
     <ClInclude Include="protocol.hpp">
       <Filter>Network</Filter>
     </ClInclude>
+    <ClInclude Include="standalone\game.hpp">
+      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="IGame.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -270,19 +294,19 @@
       <Filter>그래픽스\코어\소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="timer.cpp">
-      <Filter>게임\소스 파일</Filter>
+      <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="object.cpp">
-      <Filter>게임\소스 파일</Filter>
+      <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="camera.cpp">
-      <Filter>게임\소스 파일</Filter>
+      <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="samplePipeline.cpp">
       <Filter>그래픽스\파이프라인\소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="physics.cpp">
-      <Filter>게임\소스 파일</Filter>
+      <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="d3dx12\src\d3dx12_property_format_table.cpp">
       <Filter>d3dx12</Filter>
@@ -294,7 +318,7 @@
       <Filter>그래픽스\파이프라인\소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="light.cpp">
-      <Filter>게임\소스 파일</Filter>
+      <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="SendBuffer.cpp">
       <Filter>Network</Filter>
@@ -316,6 +340,9 @@
     </ClCompile>
     <ClCompile Include="global.cpp">
       <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="standalone\game.cpp">
+      <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
