@@ -239,6 +239,7 @@ Mesh buildCubeMesh(
     return mesh;
 }
 
+// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
 void readHeadTag(std::ifstream& ifs, const std::string& expectedSource) {
     char tmpBuffer[32]{'\0'};
     unsigned char sz{};
@@ -259,6 +260,7 @@ void readHeadTag(std::ifstream& ifs, const std::string& expectedSource) {
     );
 }
 
+// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
 void readTailTag(std::ifstream& ifs, const std::string& expectedSource) {
     char tmpBuffer[32]{'\0'};
     unsigned char sz{};
@@ -279,11 +281,13 @@ void readTailTag(std::ifstream& ifs, const std::string& expectedSource) {
     );
 }
 
+// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
 bool isTailTag(const std::string& str, const std::string& expectedSource) {
     const auto expected = "</"s + expectedSource + ">"s;
     return str == expected;
 }
 
+// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
 std::string readString(std::ifstream& ifs) {
     char tmpBuffer[64]{'\0'};
     unsigned char sz{};
@@ -294,10 +298,12 @@ std::string readString(std::ifstream& ifs) {
     return std::string(tmpBuffer, tmpBuffer + sz);
 }
 
+// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
 std::string untagHead(const std::string& tag) {
     return tag.substr(1u, tag.size() - 1u - 2u);
 }
 
+// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
 int readInteger(std::ifstream& ifs, const char* tagSource) {
     readHeadTag(ifs, tagSource);
     int ret{};
@@ -306,6 +312,7 @@ int readInteger(std::ifstream& ifs, const char* tagSource) {
     return ret;
 }
 
+// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
 std::vector<int> readIntegers(std::ifstream& ifs, const char* tagSource) {
     readHeadTag(ifs, tagSource);
     auto cnt = readInteger(ifs, "Cnt");
@@ -317,6 +324,7 @@ std::vector<int> readIntegers(std::ifstream& ifs, const char* tagSource) {
     return ret;
 }
 
+// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
 std::vector<u16t> readU16s(std::ifstream& ifs, const char* tagSource) {
     readHeadTag(ifs, tagSource);
     auto cnt = readInteger(ifs, "Cnt");
@@ -328,12 +336,14 @@ std::vector<u16t> readU16s(std::ifstream& ifs, const char* tagSource) {
     return ret;
 }
 
+// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
 float readFloat(std::ifstream& ifs) {
     float ret{};
     ifs.read(reinterpret_cast<char*>(&ret), sizeof(float));
     return ret;
 }
 
+// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
 float readFloat(std::ifstream& ifs, const char* tagSource) {
     readHeadTag(ifs, tagSource);
     float ret{};
@@ -342,12 +352,14 @@ float readFloat(std::ifstream& ifs, const char* tagSource) {
     return ret;
 }
 
+// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
 XMFLOAT4 readColor(std::ifstream& ifs) {
     XMFLOAT4 ret{};
     ifs.read(reinterpret_cast<char*>(&ret), sizeof(XMFLOAT4));
     return ret;
 }
 
+// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
 XMFLOAT4X4 readMatrix(std::ifstream& ifs, const char* tagSource) {
     readHeadTag(ifs, tagSource);
     XMFLOAT4X4 ret{};
@@ -356,6 +368,7 @@ XMFLOAT4X4 readMatrix(std::ifstream& ifs, const char* tagSource) {
     return ret;
 }
 
+// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
 std::vector<XMFLOAT2> readVec2s(std::ifstream& ifs) {
     auto cnt = readInteger(ifs, "Cnt");
     auto ret = std::vector<XMFLOAT2>(cnt);
@@ -365,6 +378,7 @@ std::vector<XMFLOAT2> readVec2s(std::ifstream& ifs) {
     return ret;
 }
 
+// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
 std::vector<XMFLOAT3> readVec3s(std::ifstream& ifs) {
     auto cnt = readInteger(ifs, "Cnt");
     auto ret = std::vector<XMFLOAT3>(cnt);
@@ -374,6 +388,7 @@ std::vector<XMFLOAT3> readVec3s(std::ifstream& ifs) {
     return ret;
 }
 
+// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
 std::vector<XMFLOAT4> readVec4s(std::ifstream& ifs) {
     auto cnt = readInteger(ifs, "Cnt");
     auto ret = std::vector<XMFLOAT4>(cnt);
