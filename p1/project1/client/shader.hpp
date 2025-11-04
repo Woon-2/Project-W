@@ -24,6 +24,8 @@ ComPtr<ID3D12PipelineState> createPBRShader(ID3D12Device* device, ID3D12RootSign
 // 루트 파라미터에 이름을 지어 그 인덱스 및 D3D12_ROOT_PARAMETER 구조체와 매핑한다.
 class RootSig {
 public:
+	virtual ~RootSig() = default;
+
 	virtual void build(ID3D12Device* device) = 0;
 	virtual const std::wstring& name() const = 0;
 

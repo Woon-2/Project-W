@@ -179,6 +179,8 @@ void copyResource( ID3D12GraphicsCommandList* cmdList,
 class ShaderInputBuffer {
 public:
 	ShaderInputBuffer() = default;
+	virtual ~ShaderInputBuffer() = default;
+
 	// 이미 만들어진 리소스를 가져와서, 메모리 영역을 분배받아 사용하는 경우
 	// 이 생성자를 호출한다.
 	// 리소스의 [addressOffset, addressOffset + allowedByteWidth) 영역을 분배받는다.

@@ -5,7 +5,7 @@
 
 class IGame {
 public:
-	virtual ~IGame() {}
+	virtual ~IGame() = default;
 
 	virtual void update(Milliseconds deltaTime) = 0;
 	virtual void render() = 0;
