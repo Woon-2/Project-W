@@ -198,6 +198,7 @@ Mesh buildCubeMesh(
 
     if (!texHashMap.contains(L"CubeMesh_Albedo")) {
         auto [pPair, _] = texHashMap.try_emplace(L"CubeMesh_Albedo", loadTexture(device, cmdList, L"CubeMesh_Albedo.dds", fenceToAssociate));
+        gSharedLog << "[Resource Load] File I/O: 텍스처 CubeMesh_Albedo 로드 완료 - CubeMesh_Albedo.dds\n";
         createSRV(device, pPair->second, texPool);
         pPair->second.idxSrv.idxSampler = etoi(Samplers::TrilinearWrap);
     }
@@ -230,6 +231,8 @@ Mesh buildCubeMesh(
     mesh.vbs.push_back(std::move(vbUV));
     mesh.vbIdxMap.try_emplace(L"CubeMesh_VB_UV", 2u);
 	mesh.ibs.try_emplace(L"CubeMesh_IB", std::move(ib));
+
+    gSharedLog << "[Resource Load] CubeMesh 구축 완료\n";
 
     fenceToAssociate.associatedResources_.push_back(std::move(vbPositionu));
     fenceToAssociate.associatedResources_.push_back(std::move(vbNormalu));
@@ -425,6 +428,7 @@ void importTextureMapping( std::ifstream& ifs, ID3D12Device* device,
             // texHashMap에 없다면 알아낸 경로를 통해 텍스처를 load해 key와 함께 등록
             if (!texHashMap.contains(wKey)) {
                 auto [pPair, _] = texHashMap.try_emplace( wKey, loadTexture(device, cmdList, path, fenceToAssociate) );
+                gSharedLog << "[Resource Load] File I/O: 텍스처 " + key + " 로드 완료 - " + path << '\n';
                 createSRV(device, pPair->second, texPool);
             }
             readTailTag(ifs, "Item");
@@ -756,6 +760,8 @@ void importTransform( std::ifstream& ifs, ID3D12Device* device,
     // 재질들을 읽어들인다.
     importMaterials(ifs, device, cmdList, texHashMap, fenceToAssociate, model);
 
+    gSharedLog << "[Resource Load] 모델 노드 " << name << " 구축 완료\n";
+
     // 자식노드들을 읽어들인다.
     const auto childCnt = readInteger(ifs, "ChildCnt");
     readHeadTag(ifs, "Children");
@@ -800,6 +806,7 @@ Model loadModelFromFile( const std::filesystem::path& path,
 
     importTextureMapping(ifs, device, cmdList, texHashMap, texPool, fenceToAssociate);
     importGeometry(ifs, device, cmdList, texHashMap, fenceToAssociate, ret);
+    gSharedLog << "[Resource Load] File I/O: 모델 " << path << " 로드 완료\n";
 
     return ret;
 }

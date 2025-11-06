@@ -420,6 +420,8 @@ void GFX::loadMeshes() {
 	meshCube_ = buildCubeMesh(device_.Get(), cmdList.Get(), texHashMap_, srvTexPool_, fence);
 	modelPlayer_ = loadModelFromFile("../resources/models/output.bin", device_.Get(), cmdList.Get(), texHashMap_, srvTexPool_, fence);
 
+	dumpLog();
+
 	// 명령 기록 끝, 명령 실행
 	DISPLAY_ERROR_DX_VOID(cmdList->Close(), false);
 

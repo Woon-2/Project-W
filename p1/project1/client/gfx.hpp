@@ -10,29 +10,40 @@
 #include "pbrPipeline.hpp"
 
 
-// 임포트 로그 남기기
-// 전역변수들 점검
 // Roughness, Metallic -> MetallicGloss
-// 레벨 서버 단에서 임시 배치, Enter 패킷들 보내기
-// 
 // light data, lights 이름 일관적으로
 // 메시, 서브메시 이름 처리
+// 멀티스레드 최적화 (ExecuteCommandLists 별도 스레드에서)
+// 유니티에서 레벨 추출하는 스크립트 작성 - 11.07.
+// 
 // Mesh Vertex Buffer Standard Layout: 슬롯 인덱스 유기적으로 결정하게 만들기
 // 텍스처 샘플링 방법도 유니티에서 추출할 수 있도록 하기
-// Batching & Instancing 구현
+// 마우스 움직임으로 카메라 조작 구현
+// SkySphere 구현 - 11.08.
+// Batching & Instancing 구현 - 11.09.
 // Deferred Shading 구현
-// 노멀 매핑 구현
-// 멀티스레드 최적화 (ExecuteCommandLists 별도 스레드에서)
-// 충돌체 형태 구현 및 렌더링
-// Rigidbody Physics 구현
-// Alpha Blending으로 이펙트 구현(빌보드)
-// 사운드 프로그래밍
-// 
-// SkySphere
-// 나무, 수풀 렌더링(빌보드, LOD모델)
-// 애니메이션, 그림자
-// 멀티스레드 업데이트 구현
+// 노멀 매핑 구현 - 11.10.
+// Rigidbody Physics 구현 - 11.11.-11.12.
+// 네트워크로 받는 운동 정보 보간/외삽 - 11.13.-11.14.
+// 그림자 매핑
+// 1인칭 & 3인칭 카메라 분리 구현 - 11.15.
+// 애니메이션 + 총 달기 - 11.16.-11.17.
+// Alpha Blending으로 이펙트 구현(빌보드) - 11.18.
+// 사운드 프로그래밍 - 11.19.
+// CSM
+// 나무, 수풀 LOD써서 넣기
+// 멀티스레드 업데이트
+// 충돌체 렌더링 및 구현 (컬링용)
 // Software Culling
+
+// 서버
+// 로그인-로그아웃, 룸 구조 만들기
+// 2D맵 충돌처리
+// ray scanning으로 사격, 피격 처리
+// hp, 장탄수, 사격 쿨타임 등 전투 구조 구현
+// 로그인 정보 db 연동
+// 테스트 가능하도록 더미 로그인 데이터와 더미 플레이어 구현
+// 테스트 프로그램 구현
 
 extern HWND ghWnd;
 

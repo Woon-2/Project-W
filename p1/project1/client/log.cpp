@@ -32,11 +32,15 @@ void dumpLog() {
 	for (auto& [key, logger] : gLoggers) {
 		logger->write(log.data(), log.size());
 	}
+	gSharedLog.str("");
+	gSharedLog.clear();
 
 	auto wlog = gwSharedLog.rdbuf()->str();
 	for (auto& [key, logger] : gwLoggers) {
 		logger->write(wlog.data(), wlog.size());
 	}
+	gwSharedLog.str(L"");
+	gwSharedLog.clear();
 }
 #else
 // gSharedLog와 gwSharedLog에 기록된 로그들을
