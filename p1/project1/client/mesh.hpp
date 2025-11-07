@@ -8,8 +8,8 @@
 // SubMesh에 담겨, 드로우콜 시 사용할 텍스처나 상수를 지정한다.
 struct Material {
 	Texture mapAlbedo;
-	Texture mapRoughness;
-	Texture mapMetallic;
+	Texture mapMetallicSmoothness;	// 유니티 익스포터를 사용하기 때문에 유니티와 텍스처 포맷 맞춰준다.
+									// R 채널에 metallic, A 채널에 Smoothness (1 - roughness) 값이 들어있게 된다.
 
 	XMFLOAT4 constantAlbedo;
 	float constantRoughness;

@@ -286,8 +286,7 @@ void Dispatcher::drawSingleThreaded() {
 		auto perDrawcallData = PBRShader::PerDrawcallData{
 			.material = PBRShader::Material{
 				.idxAlbedo = drawEvent.subMesh->material.mapAlbedo.idxSrv,
-				.idxRoughness = drawEvent.subMesh->material.mapRoughness.idxSrv,
-				.idxMetallic = drawEvent.subMesh->material.mapMetallic.idxSrv,
+				.idxMetallicSmoothness = drawEvent.subMesh->material.mapMetallicSmoothness.idxSrv,
 				.cAlbedo = drawEvent.subMesh->material.constantAlbedo,
 				.cRoughness = drawEvent.subMesh->material.constantRoughness,
 				.cMetallic = drawEvent.subMesh->material.constantMetallic,
@@ -523,9 +522,7 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 			auto perDrawcallData = PBRShader::PerDrawcallData{
 				.material = PBRShader::Material{
 					.idxAlbedo = drawEvent.subMesh->material.mapAlbedo.idxSrv,
-					.idxRoughness = drawEvent.subMesh->material.mapRoughness.idxSrv,
-					.idxMetallic = drawEvent.subMesh->material.mapMetallic.idxSrv,
-					.cAlbedo = drawEvent.subMesh->material.constantAlbedo,
+					.idxMetallicSmoothness = drawEvent.subMesh->material.mapMetallicSmoothness.idxSrv,
 					.cRoughness = drawEvent.subMesh->material.constantRoughness,
 					.cMetallic = drawEvent.subMesh->material.constantMetallic,
 					.cAmbientOcllusion = drawEvent.subMesh->material.constantAmbientOcllusion,

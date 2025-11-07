@@ -10,10 +10,10 @@
 #include "pbrPipeline.hpp"
 
 
-// Roughness, Metallic -> MetallicGloss
 // light data, lights 이름 일관적으로
 // 메시, 서브메시 이름 처리
 // 멀티스레드 최적화 (ExecuteCommandLists 별도 스레드에서)
+// emmisive 맵도 추출하도록
 // 유니티에서 레벨 추출하는 스크립트 작성 - 11.07.
 // 
 // Mesh Vertex Buffer Standard Layout: 슬롯 인덱스 유기적으로 결정하게 만들기

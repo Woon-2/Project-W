@@ -215,20 +215,23 @@ float4 illuminate(float3 posV, float3 normalV, float2 tex)
 {
     // 조명 반사 계산을 위한 변수들을 계산한다.
     float4 albedo = material.cAlbedo;
-    if (albedo.w < 0.f) {
+    // bindless index가 음수인 것은 텍스처가 없음을 의미한다.
+    // 따라서 bindless index가 양수일 때만 텍스처를 샘플링한다.
+    if (material.idxAlbedo.x >= 0) {
         albedo = sampleBindless(material.idxAlbedo, tex);
         // sRGB => linear
         albedo.rgb = pow( abs(albedo.rgb), 2.2f );
     }
     
     float roughness = material.cRoughness;
-    if (roughness < 0.f) {
-        roughness = sampleBindless(material.idxRoughness, tex);
-    }
-    
     float metallic = material.cMetallic;
-    if (metallic < 0.f) {
-        metallic = sampleBindless(material.idxMetallic, tex);
+    if (material.idxMetallicSmoothness.x >= 0) {
+        // 유니티 익스포터를 사용하므로 유니티 텍스처 포맷을 상정한다.
+        // 유니티에서 metallicSmoothness 텍스처는
+        // r채널에 metallic 값, a채널에 smoothness 값을 저장한다.
+        float4 metallicSmoothness = sampleBindless(material.idxMetallicSmoothness, tex);
+        metallic = metallicSmoothness.r;
+        roughness = 1.f - metallicSmoothness.a; // roughness = 1.f - smoothness
     }
     
     float ao = material.cAO;

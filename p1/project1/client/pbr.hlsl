@@ -6,8 +6,7 @@ struct PerInstanceData {
 
 struct Material {
     int4 idxAlbedo;
-    int4 idxRoughness;
-    int4 idxMetallic;
+    int4 idxMetallicSmoothness;
     
     float4 cAlbedo;
     float cRoughness;

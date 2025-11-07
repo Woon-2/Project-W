@@ -643,6 +643,17 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
 ) {
     readHeadTag(ifs, "Materials");
 
+    // Bindless Index 초기화
+    // idxRange를 -1로 써주는 것으로 그 텍스처가 존재하지 않음을 표현한다.
+    for (auto& [mesh, _] : model.meshWithDressXforms) {
+        for (auto& [submeshKey, submesh] : mesh.subMeshes) {
+            submesh.material.mapAlbedo.idxSrv.idxRange = -1;
+            submesh.material.mapAlbedo.idxUav.idxRange = -1;
+            submesh.material.mapMetallicSmoothness.idxSrv.idxRange = -1;
+            submesh.material.mapMetallicSmoothness.idxUav.idxRange = -1;
+        }
+    }
+
     auto materialCnt = readInteger(ifs, "MaterialCnt");
 
     for (int i = 0; i < materialCnt; ++i) {
@@ -661,7 +672,7 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
                 const auto albedo = readColor(ifs);
                 for (auto& [mesh, _] : model.meshWithDressXforms) {
                     for (auto& [submeshKey, submesh] : mesh.subMeshes) {
-                        submesh.material.constantAlbedo = XMFLOAT4(0.f, 0.f, 0.f, -1.f);
+                        submesh.material.constantAlbedo = albedo;
                     }
                 }
                 readTailTag(ifs, "cAlbedo");
@@ -707,6 +718,14 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
             // 금속성과 매끄러움 텍스처
             else if (tag == "MetallicSmoothnessMap") {
                 const auto metallicSmoothnessMapKey = readString(ifs);
+                auto wKey = std::wstring(metallicSmoothnessMapKey.size(), L'\0');
+                std::mbstowcs(wKey.data(), metallicSmoothnessMapKey.data(), wKey.size());
+                for (auto& [mesh, _] : model.meshWithDressXforms) {
+                    for (auto& [submeshKey, submesh] : mesh.subMeshes) {
+                        submesh.material.mapMetallicSmoothness = texHashMap.at(wKey);
+                    }
+                }
+
                 readTailTag(ifs, "MetallicSmoothnessMap");
             }
             // 자체발광 텍스처
