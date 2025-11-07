@@ -24,7 +24,7 @@ struct Material {
 // Mesh의 정점 버퍼들을 여러 SubMesh가 공유하면서
 // 부분적 렌더링, 재질 분리 교체, 중복 정점 방지 등의 효과가 가능해진다.
 struct SubMesh {
-	std::wstring name;
+	std::string name;
 	D3D12_INDEX_BUFFER_VIEW ibView;
 	Material material;
 };
@@ -39,10 +39,10 @@ struct SubMesh {
 struct Mesh {
 	std::vector<ComPtr<ID3D12Resource>> vbs;
 	std::vector<D3D12_VERTEX_BUFFER_VIEW> vbViews;
-	std::map<std::wstring, u32t> vbIdxMap;
+	std::map<std::string, u32t> vbIdxMap;
 
-	std::map<std::wstring, ComPtr<ID3D12Resource>> ibs;
-	std::map<std::wstring, SubMesh> subMeshes;
+	std::map<std::string, ComPtr<ID3D12Resource>> ibs;
+	std::map<std::string, SubMesh> subMeshes;
 };
 
 // 1x1x1 큐브 메시를 생성한다.
@@ -52,7 +52,7 @@ struct Mesh {
 // 펜스에서 GPU 작업 완료를 검사한 후 이 업로드 버퍼들을 해제하도록 하자.
 Mesh buildCubeMesh(
 	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
-	std::unordered_map<std::wstring, Texture>& texHashMap,
+	std::unordered_map<std::string, Texture>& texHashMap,
 	DescriptorPool& texPool, Fence& fenceToAssociate
 );
 
@@ -76,7 +76,7 @@ struct Model {
 // * 수정 시 주의사항: 유니티의 추출 스크립트와 구조가 대칭이어야 한다.
 Model loadModelFromFile( const std::filesystem::path& path,
 	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
-	std::unordered_map<std::wstring, Texture>& texHashMap,
+	std::unordered_map<std::string, Texture>& texHashMap,
 	DescriptorPool& texPool, Fence& fenceToAssociate	
 );
 

@@ -39,9 +39,9 @@ void Object::update(Milliseconds deltaTime) {
 	}
 	
 	default:
-		DISPLAY_ERROR_STR( false, L"[Physics Error] Object::update: 물리량 평가 방법에 "s
-			+ L"허용되지 않는 값이 들어있습니다.: "s + std::to_wstring(etoi(physicEvaluationMethod_))
-			+ L"\n", false
+		DISPLAY_ERROR_STR( false, "[Physics Error] Object::update: 물리량 평가 방법에 "s
+			+ "허용되지 않는 값이 들어있습니다.: "s + std::to_string(etoi(physicEvaluationMethod_))
+			+ "\n", false
 		);
 		break;
 	}
@@ -56,7 +56,7 @@ void Object::render(GFX& gfx) {
 		gfx.addDrawEvent(PBRPipeline::DrawEvent{
 			.world = world_,
 			.mesh = pMesh_,
-			.subMesh = &pMesh_->subMeshes.at(L"CubeMesh_SubMesh")	// 임시 값
+			.subMesh = &pMesh_->subMeshes.at("CubeMesh_SubMesh")	// 임시 값
 		});
 	}
 
@@ -127,9 +127,9 @@ void Object::physicalUpdate() {
 		break;
 	
 	default:
-		DISPLAY_ERROR_STR( false, L"[Physics Error] Object::physicalUpdate: 물리량 평가 방법에 "s
-			+ L"허용되지 않는 값이 들어있습니다.: "s + std::to_wstring(etoi(physicEvaluationMethod_))
-			+ L"\n", false
+		DISPLAY_ERROR_STR( false, "[Physics Error] Object::physicalUpdate: 물리량 평가 방법에 "s
+			+ "허용되지 않는 값이 들어있습니다.: "s + std::to_string(etoi(physicEvaluationMethod_))
+			+ "\n", false
 		);
 		break;
 	}

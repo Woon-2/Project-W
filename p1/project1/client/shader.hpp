@@ -27,26 +27,26 @@ public:
 	virtual ~RootSig() = default;
 
 	virtual void build(ID3D12Device* device) = 0;
-	virtual const std::wstring& name() const = 0;
+	virtual const std::string& name() const = 0;
 
-	UINT paramIdx(std::wstring_view paramName) const;
-	const D3D12_ROOT_PARAMETER& paramDesc(std::wstring_view paramName) const;
+	UINT paramIdx(std::string_view paramName) const;
+	const D3D12_ROOT_PARAMETER& paramDesc(std::string_view paramName) const;
 
 	ID3D12RootSignature* get() const { return rootSig_.Get(); }
 
 protected:
-	void addParam(const std::wstring& paramName, UINT paramIdx, const D3D12_ROOT_PARAMETER& paramDesc);
+	void addParam(const std::string& paramName, UINT paramIdx, const D3D12_ROOT_PARAMETER& paramDesc);
 
 	ComPtr<ID3D12RootSignature> rootSig_ = nullptr;
 	// key: 루트 파라미터 이름, value: 루트 파라미터 인덱스와 루트 파라미터 구조체의 pair
-	std::map<std::wstring, std::pair<UINT, D3D12_ROOT_PARAMETER>> paramMap_{};
-	std::wstring name_{L"unbuilt root signature"};
+	std::map<std::string, std::pair<UINT, D3D12_ROOT_PARAMETER>> paramMap_{};
+	std::string name_{"unbuilt root signature"};
 };
 
 class DefaultRootSig : public RootSig {
 public:
 	void build(ID3D12Device* device) override;
-	const std::wstring& name() const override;
+	const std::string& name() const override;
 
 private:
 };

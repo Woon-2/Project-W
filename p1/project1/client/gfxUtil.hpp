@@ -186,13 +186,13 @@ public:
 	// 리소스의 [addressOffset, addressOffset + allowedByteWidth) 영역을 분배받는다.
 	// CreateCommittedResource 호출을 줄이고 gpu 메모리 사용량을 줄이는 이점이 있다.
 	ShaderInputBuffer( const std::vector<ComPtr<ID3D12Resource>>& premadeResource,
-		std::size_t addressOffset, std::size_t allowedByteWidth, const std::wstring& name
+		std::size_t addressOffset, std::size_t allowedByteWidth, const std::string& name
 	);
 	// 기본 생성자를 호출하고 init을 호출하는 것과 같다.
-	ShaderInputBuffer(ID3D12Device* device, UINT64 byteWidth, std::size_t roomCnt, const std::wstring& name);
+	ShaderInputBuffer(ID3D12Device* device, UINT64 byteWidth, std::size_t roomCnt, const std::string& name);
 
 	// byteWidth 크기의 리소스를 roomCnt 개 만큼 만든다.
-	void init(ID3D12Device* device, UINT64 byteWidth, std::size_t roomCnt, const std::wstring& name);
+	void init(ID3D12Device* device, UINT64 byteWidth, std::size_t roomCnt, const std::string& name);
 	// roomIdx의 리소스를 루트 시그너처에 바인드한다.
 	virtual void bind( ID3D12GraphicsCommandList* cmdList,
 		UINT rootParamIdx, std::size_t roomIdx
@@ -219,7 +219,7 @@ protected:
 private:
 	std::vector<ComPtr<ID3D12Resource>> resources_{};
 	std::vector<void*> mappedRegions_{};
-	std::wstring name_{};
+	std::string name_{};
 	UINT64 byteWidth_ = 0u;	// stage 함수에서 할당(분배)된 영역 바깥을 참조하는지 검사할 때 사용
 };
 
@@ -264,7 +264,7 @@ struct ConstantBufferArray {
 // room 개수만큼의 큰 리소스들을 생성하고
 // 그 리소스들을 기반으로 ConstantBuffer들을 생성해 담는다.
 ConstantBufferArray createConstantBufferArray( ID3D12Device* device, UINT64 elemByteWidth,
-	std::size_t elemCnt, std::size_t roomCnt, const std::wstring& name
+	std::size_t elemCnt, std::size_t roomCnt, const std::string& name
 );
 
 struct LoadDDSReturnType {

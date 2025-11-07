@@ -9,7 +9,7 @@
 // 펜스에서 GPU 작업 완료를 검사한 후 이 업로드 버퍼들을 해제하도록 하자.
 Mesh buildCubeMesh(
 	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
-    std::unordered_map<std::wstring, Texture>& texHashMap,
+    std::unordered_map<std::string, Texture>& texHashMap,
     DescriptorPool& texPool, Fence& fenceToAssociate
 ) {
     static const auto positions = std::vector<XMFLOAT3>{
@@ -137,27 +137,27 @@ Mesh buildCubeMesh(
     // 정점 버퍼들 구축
     // 속성마다 별도의 버퍼를 만든다.
 	auto vbPosition = createBufferResource(device, nullptr, positions.size() * sizeof(XMFLOAT3), BufferCreationType::VertexBuffer);
-    setD3DName(vbPosition.Get(), L"CubeMesh_VB_Position");
+    setD3DName(vbPosition.Get(), "CubeMesh_VB_Position");
 	auto vbPositionu = createBufferResource(device, positions.data(), positions.size() * sizeof(XMFLOAT3), BufferCreationType::UploadBuffer);
-    setD3DName(vbPositionu.Get(), L"CubeMesh_VB_Position_Upload");
+    setD3DName(vbPositionu.Get(), "CubeMesh_VB_Position_Upload");
 
 	copyResource( cmdList, vbPositionu.Get(), vbPosition.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
 		D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
 	);
 
     auto vbNormal = createBufferResource(device, nullptr, normals.size() * sizeof(XMFLOAT3), BufferCreationType::VertexBuffer);
-    setD3DName(vbNormal.Get(), L"CubeMesh_VB_Normal");
+    setD3DName(vbNormal.Get(), "CubeMesh_VB_Normal");
     auto vbNormalu = createBufferResource(device, normals.data(), normals.size() * sizeof(XMFLOAT3), BufferCreationType::UploadBuffer);
-    setD3DName(vbNormalu.Get(), L"CubeMesh_VB_Normal_Upload");
+    setD3DName(vbNormalu.Get(), "CubeMesh_VB_Normal_Upload");
 
     copyResource( cmdList, vbNormalu.Get(), vbNormal.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
         D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
     );
 
     auto vbUV = createBufferResource(device, nullptr, uvs.size() * sizeof(XMFLOAT3), BufferCreationType::VertexBuffer);
-    setD3DName(vbUV.Get(), L"CubeMesh_VB_UV");
+    setD3DName(vbUV.Get(), "CubeMesh_VB_UV");
     auto vbUVu = createBufferResource(device, uvs.data(), uvs.size() * sizeof(XMFLOAT3), BufferCreationType::UploadBuffer);
-    setD3DName(vbUVu.Get(), L"CubeMesh_VB_UV_Upload");
+    setD3DName(vbUVu.Get(), "CubeMesh_VB_UV_Upload");
 
     copyResource( cmdList, vbUVu.Get(), vbUV.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
         D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
@@ -165,9 +165,9 @@ Mesh buildCubeMesh(
 
     // 인덱스 버퍼 구축
 	auto ib = createBufferResource(device, nullptr, indices.size() * sizeof(u16t), BufferCreationType::IndexBuffer);
-    setD3DName(ib.Get(), L"CubeMesh_IB");
+    setD3DName(ib.Get(), "CubeMesh_IB");
 	auto ibu = createBufferResource(device, indices.data(), indices.size() * sizeof(u16t), BufferCreationType::UploadBuffer);
-    setD3DName(ibu.Get(), L"CubeMesh_IB_Upload");
+    setD3DName(ibu.Get(), "CubeMesh_IB_Upload");
 
 	copyResource( cmdList, ibu.Get(), ib.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
 		D3D12_RESOURCE_STATE_INDEX_BUFFER
@@ -196,8 +196,8 @@ Mesh buildCubeMesh(
         /* .StrideInBytes = */ static_cast<UINT>( sizeof(XMFLOAT2) )
     );
 
-    if (!texHashMap.contains(L"CubeMesh_Albedo")) {
-        auto [pPair, _] = texHashMap.try_emplace(L"CubeMesh_Albedo", loadTexture(device, cmdList, L"CubeMesh_Albedo.dds", fenceToAssociate));
+    if (!texHashMap.contains("CubeMesh_Albedo")) {
+        auto [pPair, _] = texHashMap.try_emplace("CubeMesh_Albedo", loadTexture(device, cmdList, "CubeMesh_Albedo.dds", fenceToAssociate));
         gSharedLog << "[Resource Load] File I/O: 텍스처 CubeMesh_Albedo 로드 완료 - CubeMesh_Albedo.dds\n";
         createSRV(device, pPair->second, texPool);
         pPair->second.idxSrv.idxSampler = etoi(Samplers::TrilinearWrap);
@@ -205,15 +205,15 @@ Mesh buildCubeMesh(
 
     // SubMesh 구성
     mesh.subMeshes.try_emplace(
-        L"CubeMesh_SubMesh", SubMesh{
-            .name = L"CubeMesh_SubMesh",
+        "CubeMesh_SubMesh", SubMesh{
+            .name = "CubeMesh_SubMesh",
             .ibView = D3D12_INDEX_BUFFER_VIEW {
                 .BufferLocation = ib->GetGPUVirtualAddress(),
                 .SizeInBytes = static_cast<UINT>(indices.size() * sizeof(u16t)),
                 .Format = DXGI_FORMAT_R16_UINT
             },
             .material = Material {
-                .mapAlbedo = cloneTextureIdxOnly(texHashMap.at(L"CubeMesh_Albedo")),
+                .mapAlbedo = cloneTextureIdxOnly(texHashMap.at("CubeMesh_Albedo")),
                 .constantAlbedo = XMFLOAT4(0.f, 0.f, 0.f, -1.f),
                 .constantRoughness = 0.3f,
                 .constantMetallic = 0.15f,
@@ -225,12 +225,12 @@ Mesh buildCubeMesh(
 
     // 자료구조 등록 (Vertex Buffer View와 SubMesh는 위에서 등록하였음)
 	mesh.vbs.push_back(std::move(vbPosition));
-    mesh.vbIdxMap.try_emplace(L"CubeMesh_VB_Position", 0u);
+    mesh.vbIdxMap.try_emplace("CubeMesh_VB_Position", 0u);
     mesh.vbs.push_back(std::move(vbNormal));
-    mesh.vbIdxMap.try_emplace(L"CubeMesh_VB_Normal", 1u);
+    mesh.vbIdxMap.try_emplace("CubeMesh_VB_Normal", 1u);
     mesh.vbs.push_back(std::move(vbUV));
-    mesh.vbIdxMap.try_emplace(L"CubeMesh_VB_UV", 2u);
-	mesh.ibs.try_emplace(L"CubeMesh_IB", std::move(ib));
+    mesh.vbIdxMap.try_emplace("CubeMesh_VB_UV", 2u);
+	mesh.ibs.try_emplace("CubeMesh_IB", std::move(ib));
 
     gSharedLog << "[Resource Load] CubeMesh 구축 완료\n";
 
@@ -251,15 +251,15 @@ void readHeadTag(std::ifstream& ifs, const std::string& expectedSource) {
     ifs.read(reinterpret_cast<char*>(&sz), sizeof(unsigned char));
     ifs.read(tmpBuffer, sz);
 
-    std::wstring wExpected{};
+    std::string wExpected{};
     wExpected.assign(expected.begin(), expected.end());
 
-    std::wstring wReceived{};
+    std::string wReceived{};
     wReceived.assign(tmpBuffer, tmpBuffer + sz);
 
     DISPLAY_ERROR_STR(expected == tmpBuffer,
-        L"[File I/O Error] readHeadTag: "s + wExpected + L" 토큰을 기대했지만 "s
-        + wReceived + L" 토큰을 받았습니다.", true
+        "[File I/O Error] readHeadTag: "s + wExpected + " 토큰을 기대했지만 "s
+        + wReceived + " 토큰을 받았습니다.", true
     );
 }
 
@@ -272,15 +272,15 @@ void readTailTag(std::ifstream& ifs, const std::string& expectedSource) {
     ifs.read(reinterpret_cast<char*>(&sz), sizeof(unsigned char));
     ifs.read(tmpBuffer, sz);
 
-    std::wstring wExpected{};
+    std::string wExpected{};
     wExpected.assign(expected.begin(), expected.end());
 
-    std::wstring wReceived{};
+    std::string wReceived{};
     wReceived.assign(tmpBuffer, tmpBuffer + sz);
 
     DISPLAY_ERROR_STR(expected == tmpBuffer,
-        L"[File I/O Error] readTailTag: "s + wExpected + L" 토큰을 기대했지만 "s
-        + wReceived + L" 토큰을 받았습니다.", true
+        "[File I/O Error] readTailTag: "s + wExpected + " 토큰을 기대했지만 "s
+        + wReceived + " 토큰을 받았습니다.", true
     );
 }
 
@@ -406,7 +406,7 @@ std::vector<XMFLOAT4> readVec4s(std::ifstream& ifs) {
 // 텍스처 이름을 key로 삼아 texHashMap에 쿼리를 해보고,
 // 텍스처가 존재하지 않는다면 알아낸 경로를 통해 텍스처를 로드해 key와 함께 등록한다.
 void importTextureMapping( std::ifstream& ifs, ID3D12Device* device,
-    ID3D12GraphicsCommandList* cmdList, std::unordered_map<std::wstring, Texture>& texHashMap,
+    ID3D12GraphicsCommandList* cmdList, std::unordered_map<std::string, Texture>& texHashMap,
     DescriptorPool& texPool, Fence& fenceToAssociate) {
     readHeadTag(ifs, "TextureMapping");
     for (;;) {
@@ -422,22 +422,17 @@ void importTextureMapping( std::ifstream& ifs, ID3D12Device* device,
             const auto key = readString(ifs);
             const auto path = readString(ifs);
 
-            auto wKey = std::wstring(key.size(), L'\0');
-            mbstowcs(wKey.data(), key.data(), wKey.size());
-            
             // texHashMap에 없다면 알아낸 경로를 통해 텍스처를 load해 key와 함께 등록
-            if (!texHashMap.contains(wKey)) {
-                auto [pPair, _] = texHashMap.try_emplace( wKey, loadTexture(device, cmdList, path, fenceToAssociate) );
+            if (!texHashMap.contains(key)) {
+                auto [pPair, _] = texHashMap.try_emplace( key, loadTexture(device, cmdList, path, fenceToAssociate) );
                 gSharedLog << "[Resource Load] File I/O: 텍스처 " + key + " 로드 완료 - " + path << '\n';
                 createSRV(device, pPair->second, texPool);
             }
             readTailTag(ifs, "Item");
         }
         else {
-            std::wstring wTag{};
-            wTag.assign(tag.begin(), tag.end());
-            DISPLAY_ERROR_STR(false, L"[File I/O Error] importTextureMapping: 알 수 없는 태그 "s
-                + wTag + L"를 읽었습니다.", true
+            DISPLAY_ERROR_STR(false, "[File I/O Error] importTextureMapping: 알 수 없는 태그 "s
+                + tag + "를 읽었습니다.", true
             );
         }
     }
@@ -448,7 +443,7 @@ void importTextureMapping( std::ifstream& ifs, ID3D12Device* device,
 // 서브메시 정보를 읽어들여 서브메시 각각의 인덱스 버퍼를 구축한다.
 // 서브메시의 재질정보는 importMaterials에서 반영된다.
 void importMesh( std::ifstream& ifs, ID3D12Device* device,
-    ID3D12GraphicsCommandList* cmdList, const std::wstring& name,
+    ID3D12GraphicsCommandList* cmdList, const std::string& name,
     Fence& fenceToAssociate, Mesh& mesh
 ) {
     readHeadTag(ifs, "Mesh");
@@ -469,9 +464,9 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
             auto positions = readVec3s(ifs);
 
             auto vbPosition = createBufferResource(device, nullptr, positions.size() * sizeof(XMFLOAT3), BufferCreationType::VertexBuffer);
-            setD3DName(vbPosition.Get(), name + L"_VB_Position"s);
+            setD3DName(vbPosition.Get(), name + "_VB_Position"s);
 	        auto vbPositionu = createBufferResource(device, positions.data(), positions.size() * sizeof(XMFLOAT3), BufferCreationType::UploadBuffer);
-            setD3DName(vbPositionu.Get(), name + L"_VB_Position_Upload"s);
+            setD3DName(vbPositionu.Get(), name + "_VB_Position_Upload"s);
 
 	        copyResource( cmdList, vbPositionu.Get(), vbPosition.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
 		        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
@@ -482,7 +477,7 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
                 /* .SizeInBytes = */ static_cast<UINT>(positions.size() * sizeof(XMFLOAT3)),
                 /* .StrideInBytes = */ static_cast<UINT>( sizeof(XMFLOAT3) )
             );
-            mesh.vbIdxMap.try_emplace(name + L"_VB_Position"s, static_cast<u32t>(mesh.vbs.size()));
+            mesh.vbIdxMap.try_emplace(name + "_VB_Position"s, static_cast<u32t>(mesh.vbs.size()));
 
             mesh.vbs.push_back(std::move(vbPosition));
             fenceToAssociate.associatedResources_.push_back(std::move(vbPositionu));
@@ -499,9 +494,9 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
             auto normals = readVec3s(ifs);
 
             auto vbNormal = createBufferResource(device, nullptr, normals.size() * sizeof(XMFLOAT3), BufferCreationType::VertexBuffer);
-            setD3DName(vbNormal.Get(), name + L"_VB_Normal"s);
+            setD3DName(vbNormal.Get(), name + "_VB_Normal"s);
 	        auto vbNormalu = createBufferResource(device, normals.data(), normals.size() * sizeof(XMFLOAT3), BufferCreationType::UploadBuffer);
-            setD3DName(vbNormalu.Get(), name + L"_VB_Normal_Upload"s);
+            setD3DName(vbNormalu.Get(), name + "_VB_Normal_Upload"s);
 
 	        copyResource( cmdList, vbNormalu.Get(), vbNormal.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
 		        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
@@ -512,7 +507,7 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
                 /* .SizeInBytes = */ static_cast<UINT>(normals.size() * sizeof(XMFLOAT3)),
                 /* .StrideInBytes = */ static_cast<UINT>( sizeof(XMFLOAT3) )
             );
-            mesh.vbIdxMap.try_emplace(name + L"_VB_Normal"s, static_cast<u32t>(mesh.vbs.size()));
+            mesh.vbIdxMap.try_emplace(name + "_VB_Normal"s, static_cast<u32t>(mesh.vbs.size()));
 
             mesh.vbs.push_back(std::move(vbNormal));
             fenceToAssociate.associatedResources_.push_back(std::move(vbNormalu));
@@ -524,9 +519,9 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
             auto uvs = readVec2s(ifs);
 
             auto vbUV = createBufferResource(device, nullptr, uvs.size() * sizeof(XMFLOAT2), BufferCreationType::VertexBuffer);
-            setD3DName(vbUV.Get(), name + L"_VB_UV"s);
+            setD3DName(vbUV.Get(), name + "_VB_UV"s);
 	        auto vbUVu = createBufferResource(device, uvs.data(), uvs.size() * sizeof(XMFLOAT2), BufferCreationType::UploadBuffer);
-            setD3DName(vbUVu.Get(), name + L"_VB_UV_Upload"s);
+            setD3DName(vbUVu.Get(), name + "_VB_UV_Upload"s);
 
 	        copyResource( cmdList, vbUVu.Get(), vbUV.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
 		        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
@@ -537,7 +532,7 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
                 /* .SizeInBytes = */ static_cast<UINT>(uvs.size() * sizeof(XMFLOAT2)),
                 /* .StrideInBytes = */ static_cast<UINT>( sizeof(XMFLOAT2) )
             );
-            mesh.vbIdxMap.try_emplace(name + L"_VB_UV"s, static_cast<u32t>(mesh.vbs.size()));
+            mesh.vbIdxMap.try_emplace(name + "_VB_UV"s, static_cast<u32t>(mesh.vbs.size()));
 
             mesh.vbs.push_back(std::move(vbUV));
             fenceToAssociate.associatedResources_.push_back(std::move(vbUVu));
@@ -550,10 +545,10 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
             readTailTag(ifs, "TextureCoords1");
         }
         else {
-            std::wstring wTag{};
+            std::string wTag{};
             wTag.assign(tag.begin(), tag.end());
-            DISPLAY_ERROR_STR(false, L"[File I/O Error] importMesh: 알 수 없는 태그 "s
-                + wTag + L"를 읽었습니다.", true
+            DISPLAY_ERROR_STR(false, "[File I/O Error] importMesh: 알 수 없는 태그 "s
+                + wTag + "를 읽었습니다.", true
             );
         }
     }
@@ -570,15 +565,15 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
             auto indices = readU16s(ifs, "Submesh");
 
             auto ib = createBufferResource(device, nullptr, indices.size() * sizeof(u16t), BufferCreationType::IndexBuffer);
-            setD3DName(ib.Get(), name + L"_IB"s);
+            setD3DName(ib.Get(), name + "_IB"s);
 	        auto ibu = createBufferResource(device, indices.data(), indices.size() * sizeof(u16t), BufferCreationType::UploadBuffer);
-            setD3DName(ibu.Get(), name + L"_IB_Upload"s);
+            setD3DName(ibu.Get(), name + "_IB_Upload"s);
 
 	        copyResource( cmdList, ibu.Get(), ib.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
 		        D3D12_RESOURCE_STATE_INDEX_BUFFER
 	        );
 
-            const auto subMeshName = name + L"_SubMesh"s + std::to_wstring(i);
+            const auto subMeshName = name + "_SubMesh"s + std::to_string(i);
 
             // SubMesh의 Material은 별도 반영
             mesh.subMeshes.try_emplace(
@@ -592,7 +587,7 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
                 }
             );
 
-            mesh.ibs.try_emplace(subMeshName + L"_IB", std::move(ib));
+            mesh.ibs.try_emplace(subMeshName + "_IB", std::move(ib));
             fenceToAssociate.associatedResources_.push_back(std::move(ibu));
         }
     }
@@ -602,15 +597,15 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
             auto indices = readIntegers(ifs, "Submesh");
 
             auto ib = createBufferResource(device, nullptr, indices.size() * sizeof(i32t), BufferCreationType::IndexBuffer);
-            setD3DName(ib.Get(), name + L"_IB"s);
+            setD3DName(ib.Get(), name + "_IB"s);
 	        auto ibu = createBufferResource(device, indices.data(), indices.size() * sizeof(i32t), BufferCreationType::UploadBuffer);
-            setD3DName(ibu.Get(), name + L"_IB_Upload"s);
+            setD3DName(ibu.Get(), name + "_IB_Upload"s);
 
 	        copyResource( cmdList, ibu.Get(), ib.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
 		        D3D12_RESOURCE_STATE_INDEX_BUFFER
 	        );
 
-            const auto subMeshName = name + L"_SubMesh"s + std::to_wstring(i);
+            const auto subMeshName = name + "_SubMesh"s + std::to_string(i);
 
             // SubMesh의 Material은 별도 반영
             mesh.subMeshes.try_emplace(
@@ -624,7 +619,7 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
                 }
             );
 
-            mesh.ibs.try_emplace(subMeshName + L"_IB", std::move(ib));
+            mesh.ibs.try_emplace(subMeshName + "_IB", std::move(ib));
             fenceToAssociate.associatedResources_.push_back(std::move(ibu));
         }
     }
@@ -638,7 +633,7 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
 // 일괄적으로 저장되도록 구현되어있다.
 void importMaterials( std::ifstream& ifs, ID3D12Device* device,
     ID3D12GraphicsCommandList* cmdList, 
-    std::unordered_map<std::wstring, Texture>& texHashMap,
+    std::unordered_map<std::string, Texture>& texHashMap,
     Fence& fenceToAssociate, Model& model
 ) {
     readHeadTag(ifs, "Materials");
@@ -700,11 +695,9 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
             // 알베도 텍스처
             else if (tag == "AlbedoMap") {
                 const auto albedoMapKey = readString(ifs);
-                auto wKey = std::wstring(albedoMapKey.size(), L'\0');
-                std::mbstowcs(wKey.data(), albedoMapKey.data(), wKey.size());
                 for (auto& [mesh, _] : model.meshWithDressXforms) {
                     for (auto& [submeshKey, submesh] : mesh.subMeshes) {
-                        submesh.material.mapAlbedo = texHashMap.at(wKey);
+                        submesh.material.mapAlbedo = texHashMap.at(albedoMapKey);
                     }
                 }
                 
@@ -718,11 +711,9 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
             // 금속성과 매끄러움 텍스처
             else if (tag == "MetallicSmoothnessMap") {
                 const auto metallicSmoothnessMapKey = readString(ifs);
-                auto wKey = std::wstring(metallicSmoothnessMapKey.size(), L'\0');
-                std::mbstowcs(wKey.data(), metallicSmoothnessMapKey.data(), wKey.size());
                 for (auto& [mesh, _] : model.meshWithDressXforms) {
                     for (auto& [submeshKey, submesh] : mesh.subMeshes) {
-                        submesh.material.mapMetallicSmoothness = texHashMap.at(wKey);
+                        submesh.material.mapMetallicSmoothness = texHashMap.at(metallicSmoothnessMapKey);
                     }
                 }
 
@@ -735,10 +726,10 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
             }
             // ======================================
             else {
-                std::wstring wTag{};
+                std::string wTag{};
                 wTag.assign(tag.begin(), tag.end());
-                DISPLAY_ERROR_STR(false, L"[File I/O Error] importMaterials: 알 수 없는 태그 "s
-                    + wTag + L"를 읽었습니다.", true
+                DISPLAY_ERROR_STR(false, "[File I/O Error] importMaterials: 알 수 없는 태그 "s
+                    + wTag + "를 읽었습니다.", true
                 );
             }
         }
@@ -756,14 +747,12 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
 // 노드와 재질(서브메시에 포함)은 일대다 대응이다.
 void importTransform( std::ifstream& ifs, ID3D12Device* device,
     ID3D12GraphicsCommandList* cmdList, 
-    std::unordered_map<std::wstring, Texture>& texHashMap,
+    std::unordered_map<std::string, Texture>& texHashMap,
     Fence& fenceToAssociate, Model& model
 ) {
     readHeadTag(ifs, "Node");
     // 노드의 이름
     const auto name = readString(ifs);
-    auto wName = std::wstring(name.size(), L'\0');
-    std::mbstowcs(wName.data(), name.data(), wName.size());
 
     // 노드의 변환 행렬들
     const auto localMat = readMatrix(ifs, "LocalMatrix");
@@ -775,7 +764,7 @@ void importTransform( std::ifstream& ifs, ID3D12Device* device,
     );
 
     // 메시를 읽어들인다.
-    importMesh(ifs, device, cmdList, wName, fenceToAssociate, pair.mesh);
+    importMesh(ifs, device, cmdList, name, fenceToAssociate, pair.mesh);
     // 재질들을 읽어들인다.
     importMaterials(ifs, device, cmdList, texHashMap, fenceToAssociate, model);
 
@@ -796,7 +785,7 @@ void importTransform( std::ifstream& ifs, ID3D12Device* device,
 // 기하구조의 루트노드에 대한 importTransform 호출을 수행한다.
 void importGeometry( std::ifstream& ifs, ID3D12Device* device,
     ID3D12GraphicsCommandList* cmdList,
-    std::unordered_map<std::wstring, Texture>& texHashMap,
+    std::unordered_map<std::string, Texture>& texHashMap,
     Fence& fenceToAssociate, Model& model
 ) {
     readHeadTag(ifs, "Geometry");
@@ -812,13 +801,13 @@ void importGeometry( std::ifstream& ifs, ID3D12Device* device,
 // * 수정 시 주의사항: 유니티의 추출 스크립트와 구조가 대칭이어야 한다.
 Model loadModelFromFile( const std::filesystem::path& path,
 	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
-	std::unordered_map<std::wstring, Texture>& texHashMap,
+	std::unordered_map<std::string, Texture>& texHashMap,
 	DescriptorPool& texPool, Fence& fenceToAssociate	
 ) {
     Model ret{};
 
     auto ifs = std::ifstream(path, std::ios::binary);
-    DISPLAY_ERROR_STR(ifs.good(), L"[File I/O Error]: loadModelFromFile: "s + path.wstring() + L" 파일을 열 수 없습니다."s, false);
+    DISPLAY_ERROR_STR(ifs.good(), "[File I/O Error]: loadModelFromFile: "s + path.string() + " 파일을 열 수 없습니다."s, false);
     if (!ifs) {
         return ret;
     }

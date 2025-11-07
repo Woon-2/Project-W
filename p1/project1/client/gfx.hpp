@@ -109,10 +109,10 @@ private:
 	void createSamplers();
 	// fenceName을 갖는 Fence의 desiredValue 값을 1 증가시키고
 	// GPU 큐에 그 갱신 명령을 삽입한다.
-	void signalFence(const std::wstring& fenceName);
+	void signalFence(const std::string& fenceName);
 	// fenceName을 갖는 Fence에 대해서 wait하고,
 	// 사용이 끝난 명령 컨텍스트, 업로드 버퍼 등을 반환한다.
-	void waitOnFence(const std::wstring& fenceName);
+	void waitOnFence(const std::string& fenceName);
 
 	ComPtr<IDXGIFactory4> dxgiFactory_ = nullptr;
 	ComPtr<IDXGIAdapter1> curAdapter_ = nullptr;
@@ -149,11 +149,11 @@ private:
 	DescriptorPool samPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
 	DescriptorPool cmpSamPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
 
-	std::unordered_map<std::wstring, Texture> texHashMap_{};
+	std::unordered_map<std::string, Texture> texHashMap_{};
 
 	// 루트 시그너처와 셰이더들
-	std::map<std::wstring, std::shared_ptr<RootSig>> rootSigs_{};
-	std::map<std::wstring, ComPtr<ID3D12PipelineState>> shaders_{};
+	std::map<std::string, std::shared_ptr<RootSig>> rootSigs_{};
+	std::map<std::string, ComPtr<ID3D12PipelineState>> shaders_{};
 
 	// 파이프라인 관련 변수들
 	// Sample Pipeline
@@ -167,7 +167,7 @@ private:
 	std::vector<PBRPipeline::LightData> lightDataPBRPipeline_{};
 	PBRPipeline::FrameData frameDataPBRPipeline_{};
 
-	std::map<std::wstring, Fence> fences_{};
+	std::map<std::string, Fence> fences_{};
 
 	std::size_t frameIdx_ = 0u;
 
