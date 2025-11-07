@@ -307,8 +307,8 @@ void DefaultRootSig::build(ID3D12Device* device) {
 		.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
 	} );
 
-	// t1: Lights
-	addParam( L"Lights", idxRootParam++, D3D12_ROOT_PARAMETER{
+	// t1: LightData
+	addParam( L"LightData", idxRootParam++, D3D12_ROOT_PARAMETER{
 		.ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV,
 		.Descriptor = D3D12_ROOT_DESCRIPTOR{
 			.ShaderRegister = 1u,

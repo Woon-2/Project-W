@@ -34,7 +34,7 @@ struct Light {
     int3 padding;
 };
 
-StructuredBuffer<Light> gLights : register(t1);
+StructuredBuffer<Light> gLightData : register(t1);
 
 // 프레넬 항을 계산한다.
 // @param F0: 물체를 수직에서 바라본 반사율 값
@@ -90,7 +90,7 @@ float3 pointLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 nor
     float3 N = normalV;
     float3 V = -posVNormalized;
 
-    float3 L = gLights[lightIdx].posV - posV;
+    float3 L = gLightData[lightIdx].posV - posV;
     float dist = length(L);
     L /= dist;
 
@@ -116,10 +116,10 @@ float3 pointLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 nor
     float3 specular = F * D * G / max(4 * NV * NL, 0.001f);
 
     // 감쇠 적용
-    float atten = 1.f / dot(gLights[lightIdx].atten, float3(1.f, dist, dist * dist));
+    float atten = 1.f / dot(gLightData[lightIdx].atten, float3(1.f, dist, dist * dist));
 
     // 조명 반사 계산
-    return gLights[lightIdx].color * gLights[lightIdx].intensity * (kD + specular) * NL * atten;
+    return gLightData[lightIdx].color * gLightData[lightIdx].intensity * (kD + specular) * NL * atten;
 }
 
 // 방향광에 대한 조명 반사 계산
@@ -129,7 +129,7 @@ float3 dirLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 norma
     // Cook-Torrance BRDF 계산을 위한 벡터와 내적값들을 마련해놓는다.
     float3 N = normalV;
     float3 V = -posVNormalized;
-    float3 L = -gLights[lightIdx].dirV;
+    float3 L = -gLightData[lightIdx].dirV;
 
     float3 H = normalize(L + V);
 
@@ -153,7 +153,7 @@ float3 dirLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 norma
     float3 specular = F * D * G / max(4 * NV * NL, 0.0001f);
 
     // 조명 반사 계산 (방향광은 감쇠가 없다.)
-    return gLights[lightIdx].color * gLights[lightIdx].intensity * (kD + specular) * NL;
+    return gLightData[lightIdx].color * gLightData[lightIdx].intensity * (kD + specular) * NL;
 }
 
 // 집중조명에 대한 조명 반사 계산
@@ -164,7 +164,7 @@ float3 spotLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 norm
     float3 N = normalV;
     float3 V = -posVNormalized;
 
-    float3 L = gLights[lightIdx].posV - posV;
+    float3 L = gLightData[lightIdx].posV - posV;
     float dist = length(L);
     L /= dist;
 
@@ -189,23 +189,23 @@ float3 spotLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 norm
     float3 specular = F * D * G / max(4 * NV * NL, 0.001f);
 
     // 감쇠 적용
-    float atten = 1.f / dot(gLights[lightIdx].atten, float3(1.f, dist, dist * dist));
+    float atten = 1.f / dot(gLightData[lightIdx].atten, float3(1.f, dist, dist * dist));
 
-    float cosChi = max(dot(-L, gLights[lightIdx].dirV), 0.f);
+    float cosChi = max(dot(-L, gLightData[lightIdx].dirV), 0.f);
 
     float coneAtten = pow(
-        max( (cosChi - gLights[lightIdx].cosPhi)
-                / (gLights[lightIdx].cosTheta - gLights[lightIdx].cosPhi),
+        max( (cosChi - gLightData[lightIdx].cosPhi)
+                / (gLightData[lightIdx].cosTheta - gLightData[lightIdx].cosPhi),
             0.f
         ),
-        gLights[lightIdx].falloff
+        gLightData[lightIdx].falloff
     );
 
     // 조명 반사 계산
-    return gLights[lightIdx].color * gLights[lightIdx].intensity * (kD + specular) * NL * atten * coneAtten;
+    return gLightData[lightIdx].color * gLightData[lightIdx].intensity * (kD + specular) * NL * atten * coneAtten;
 }
 
-// 장면에 존재하는 모든 조명들(gLights)에 대해 조명 반사를 계산하여
+// 장면에 존재하는 모든 조명들(gLightData)에 대해 조명 반사를 계산하여
 // 물체의 겉보기 색상을 결정한다.
 // 재질 속성 상수값의 특정 요소가 0보다 작으면, 해당 속성은 텍스처 매핑을 사용하는 것으로 간주한다.
 // Albedo: material.cAlbedo.w < 0.f
@@ -243,11 +243,11 @@ float4 illuminate(float3 posV, float3 normalV, float2 tex)
     float3 color = float3(0.f, 0.f, 0.f);
 
     for (uint i = 0; i < lightCnt; i++) {
-        if (gLights[i].type == LIGHT_TYPE_POINT) {
+        if (gLightData[i].type == LIGHT_TYPE_POINT) {
             color += pointLight(i, posV, posVNormalized, normalV, tex, albedo.rgb, roughness, metallic, ao);
-        } else if (gLights[i].type == LIGHT_TYPE_SPOT) {
+        } else if (gLightData[i].type == LIGHT_TYPE_SPOT) {
             color += spotLight(i, posV, posVNormalized, normalV, tex, albedo.rgb, roughness, metallic, ao);
-        } else if (gLights[i].type == LIGHT_TYPE_DIRECTIONAL) {
+        } else if (gLightData[i].type == LIGHT_TYPE_DIRECTIONAL) {
             color += dirLight(i, posV, posVNormalized, normalV, tex, albedo.rgb, roughness, metallic, ao);
         }
     }

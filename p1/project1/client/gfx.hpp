@@ -10,7 +10,6 @@
 #include "pbrPipeline.hpp"
 
 
-// light data, lights 이름 일관적으로
 // 메시, 서브메시 이름 처리
 // 멀티스레드 최적화 (ExecuteCommandLists 별도 스레드에서)
 // emmisive 맵도 추출하도록

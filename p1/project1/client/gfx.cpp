@@ -345,7 +345,7 @@ void GFX::createSwapChain() {
 		device_.Get(), sizeof(PBRShader::PerDrawcallData), 1000u, backBuffers_.size(), L"PBR_PerDrawcallData"
 	);
 	resourcesPBRPipeline_.lightData.init(
-		device_.Get(), sizeof(PBRShader::Light) * 32u, backBuffers_.size(), L"PBR_Lights"
+		device_.Get(), sizeof(PBRShader::Light) * 32u, backBuffers_.size(), L"PBR_LightData"
 	);
 	resourcesPBRPipeline_.perFrameData.init(
 		device_.Get(), sizeof(PBRShader::PerFrameData), backBuffers_.size(), L"PBR_PerFrameData"

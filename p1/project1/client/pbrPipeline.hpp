@@ -158,7 +158,7 @@ private:
 	UINT rootParamIdxPID_{};
 	UINT rootParamIdxPDD_{};
 	UINT rootParamIdxPFD_{};
-	UINT rootParamIdxLights_{};
+	UINT rootParamIdxLightData_{};
 	UINT rootParamIdxTexPool_{};
 	UINT rootParamIdxTexArrayPool_{};
 	UINT rootParamIdxTexCubePool_{};

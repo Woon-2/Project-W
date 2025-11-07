@@ -26,7 +26,7 @@ Dispatcher::Dispatcher(
 	rootParamIdxPDD_(rootSig->paramIdx(L"PerDrawcallData")),
 	rootParamIdxPID_(rootSig->paramIdx(L"PerInstanceData")),
 	rootParamIdxPFD_(rootSig->paramIdx(L"PerFrameData")),
-	rootParamIdxLights_(rootSig->paramIdx(L"Lights")),
+	rootParamIdxLightData_(rootSig->paramIdx(L"LightData")),
 	rootParamIdxTexPool_(rootSig->paramIdx(L"TexturePool")),
 	rootParamIdxTexArrayPool_(rootSig->paramIdx(L"TextureArrayPool")),
 	rootParamIdxTexCubePool_(rootSig->paramIdx(L"TextureCubePool")),
@@ -70,13 +70,13 @@ void Dispatcher::updateGPUDataSingleThreaded() {
 	pResources_->perInstanceData.stage(roomIdx_, perInstanceData);
 	perInstanceData.clear();
 
-	// lights를 static으로 선언하여
+	// lightData를 static으로 선언하여
 	// 매번 처음부터 메모리를 구축하지 않고 재사용할 수 있도록 한다.
-	static auto lights = std::vector<PBRShader::Light>();
-	lights.resize(lightData_.size());
+	static auto lightData = std::vector<PBRShader::Light>();
+	lightData.resize(lightData_.size());
 
-	// LightData에 담겨있는 정보를 가공해 lights에 저장한다.
-	std::ranges::transform(lightData_, lights.begin(),
+	// LightData에 담겨있는 정보를 가공해 lightData에 저장한다.
+	std::ranges::transform(lightData_, lightData.begin(),
 		[view](const PBRPipeline::LightData& lightData) {
 			return PBRShader::Light{
 				.color = lightData.color.getXmf(),
@@ -95,15 +95,15 @@ void Dispatcher::updateGPUDataSingleThreaded() {
 	// FrameData에 담겨있는 정보를 가공해 pfd에 저장한다.
 	auto pfd = PBRShader::PerFrameData{
 		.globalAmbient = frameData_.globalAmbient.getXmf(),
-		.lightCnt = static_cast<u32t>(lights.size())	// 여기서 lights.size()를 호출하므로 
-														// 이전에 lights.clear()를 호출하면 안된다.
+		.lightCnt = static_cast<u32t>(lightData.size())	// 여기서 lightData.size()를 호출하므로 
+														// 이전에 lightData.clear()를 호출하면 안된다.
 	};
 	// pfd의 내용을 바탕으로 GPU 데이터를 갱신한다.
 	pResources_->perFrameData.stage(roomIdx_, &pfd, 1u);
 
-	// lights의 내용을 바탕으로 GPU 데이터를 갱신한다.
-	pResources_->lightData.stage(roomIdx_, lights);
-	lights.clear();
+	// lightData의 내용을 바탕으로 GPU 데이터를 갱신한다.
+	pResources_->lightData.stage(roomIdx_, lightData);
+	lightData.clear();
 }
 
 // 셰이더에서 사용하는 GPU 데이터를 갱신한다.
@@ -128,8 +128,8 @@ void Dispatcher::updateGPUDataMultiThreaded() {
 	// DrawEvent는 jobSize 단위로 스레드들에 분배될 것이므로,
 	// 동기화를 위한 latch를 준비한다.
 	// 이때, DrawEvent의 개수가 jobSize로 나누어 떨어지지 않을 경우를 대비한다.
-	// perInstanceData의 양에 비해 lights나 pfd의 양은 미미하다.
-	// lights와 pfd의 처리는 구태여 멀티스레드로 하지 않는다.
+	// perInstanceData의 양에 비해 lightData나 pfd의 양은 미미하다.
+	// lightData와 pfd의 처리는 구태여 멀티스레드로 하지 않는다.
 	auto latch = std::latch( drawEvents_.size() / jobSizeUpdate_
 		+ ((drawEvents_.size() % jobSizeUpdate_) != 0)
 	);
@@ -158,13 +158,13 @@ void Dispatcher::updateGPUDataMultiThreaded() {
 		);
 	}
 
-	// lights를 static으로 선언하여
+	// lightData를 static으로 선언하여
 	// 매번 처음부터 메모리를 구축하지 않고 재사용할 수 있도록 한다.
-	static auto lights = std::vector<PBRShader::Light>();
-	lights.resize(lightData_.size());
+	static auto lightData = std::vector<PBRShader::Light>();
+	lightData.resize(lightData_.size());
 
-	// LightData에 담겨있는 정보를 가공해 lights에 저장한다.
-	std::ranges::transform(lightData_, lights.begin(),
+	// LightData에 담겨있는 정보를 가공해 lightData에 저장한다.
+	std::ranges::transform(lightData_, lightData.begin(),
 		[view = cameraData_.view](const PBRPipeline::LightData& lightData) {
 			return PBRShader::Light{
 				.color = lightData.color.getXmf(),
@@ -183,15 +183,15 @@ void Dispatcher::updateGPUDataMultiThreaded() {
 	// FrameData에 담겨있는 정보를 가공해 pfd에 저장한다.
 	auto pfd = PBRShader::PerFrameData{
 		.globalAmbient = frameData_.globalAmbient.getXmf(),
-		.lightCnt = static_cast<u32t>(lights.size())	// 여기서 lights.size()를 호출하므로 
-														// 이전에 lights.clear()를 호출하면 안된다.
+		.lightCnt = static_cast<u32t>(lightData.size())	// 여기서 lightData.size()를 호출하므로 
+														// 이전에 lightData.clear()를 호출하면 안된다.
 	};
 	// pfd의 내용을 바탕으로 GPU 데이터를 갱신한다.
 	pResources_->perFrameData.stage(roomIdx_, &pfd, 1u);
 
-	// lights의 내용을 바탕으로 GPU 데이터를 갱신한다.
-	pResources_->lightData.stage(roomIdx_, lights);
-	lights.clear();
+	// lightData의 내용을 바탕으로 GPU 데이터를 갱신한다.
+	pResources_->lightData.stage(roomIdx_, lightData);
+	lightData.clear();
 
 	// 동기화
 	latch.wait();
@@ -262,12 +262,12 @@ void Dispatcher::drawSingleThreaded() {
 	// - PerInstanceData
 	// - PerDrawcallData
 	// - PerFrameData
-	// - Lights
+	// - LightData
 
 	// PerInstanceData 바인드
 	pResources_->perInstanceData.bind(cmdList, rootParamIdxPID_, roomIdx_);
-	// Lights 바인드
-	pResources_->lightData.bind(cmdList, rootParamIdxLights_, roomIdx_);
+	// LightData 바인드
+	pResources_->lightData.bind(cmdList, rootParamIdxLightData_, roomIdx_);
 	// PerFrameData 바인드
 	pResources_->perFrameData.bind(cmdList, rootParamIdxPFD_, roomIdx_);
 
@@ -497,12 +497,12 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 		// - PerInstanceData
 		// - PerDrawcallData
 		// - PerFrameData
-		// - Lights
+		// - LightData
 
 		// PerInstanceData 바인드
 		pResources_->perInstanceData.bind(threadCmdList, rootParamIdxPID_, roomIdx_);
-		// Lights 바인드
-		pResources_->lightData.bind(threadCmdList, rootParamIdxLights_, roomIdx_);
+		// LightData 바인드
+		pResources_->lightData.bind(threadCmdList, rootParamIdxLightData_, roomIdx_);
 		// PerFrameData 바인드
 		pResources_->perFrameData.bind(threadCmdList, rootParamIdxPFD_, roomIdx_);
 
