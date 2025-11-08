@@ -17,6 +17,7 @@
 #include "protocol.hpp"
 
 #include <iostream>
+#include <fstream>
 #include <system_error>
 #include <string>
 #include <vector>
