@@ -1,6 +1,8 @@
 #ifndef GAME_SESSION_HPP
 #define GAME_SESSION_HPP
 
+#include "Session.hpp"
+
 class GameSession : public PacketSession {
 public:
 	GameSession( ) : x_( 0.0f ), y_( 0.0f ), z_( 0.0f ), signupAndLoginMtx_( ) {}

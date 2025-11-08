@@ -1,5 +1,4 @@
 #include "pch.hpp"
-#include "Session.hpp"
 #include "SendBuffer.hpp"
 #include "GameSessionManager.hpp"
 #include "Service.hpp"
@@ -19,8 +18,9 @@ void GameSession::onConnected( ) {
 		}
 	};
 
-	auto sendBuffer = std::make_shared<SendBuffer>( sizeof( Packet ) );
-	sendBuffer->copyData( &packet, sizeof( Packet ) );
+	int32 packetSize = sizeof( Packet );
+	auto sendBuffer = std::make_shared<SendBuffer>( packetSize );
+	sendBuffer->copyData( &packet, packetSize );
 	send( sendBuffer );
 
 	auto enterPacket = Packet{
@@ -40,8 +40,8 @@ void GameSession::onConnected( ) {
 		++index;
 	}
 
-	sendBuffer = std::make_shared<SendBuffer>( sizeof( Packet ) );
-	sendBuffer->copyData( &enterPacket, sizeof( Packet ) );
+	sendBuffer = std::make_shared<SendBuffer>( packetSize );
+	sendBuffer->copyData( &enterPacket, packetSize );
 	GameSessionManager::broadcast( sendBuffer );
 }
 
@@ -56,8 +56,9 @@ void GameSession::onDisconnected( ) {
 			}
 	};
 
-	auto sendBuffer = std::make_shared<SendBuffer>( sizeof( Packet ) );
-	sendBuffer->copyData( &packet, sizeof( Packet ) );
+	int32 packetSize = sizeof( Packet );
+	auto sendBuffer = std::make_shared<SendBuffer>( packetSize );
+	sendBuffer->copyData( &packet, packetSize );
 	GameSessionManager::broadcast( sendBuffer );
 
 	GameSessionManager::remove( std::static_pointer_cast<GameSession>( shared_from_this( ) ) );
@@ -169,8 +170,9 @@ int32 GameSession::onRecvPacket( uint8* buffer, int32 len ) {
 		y_ = sendPacket.scMove.y;
 		z_ = sendPacket.scMove.z;
 
-		auto sendBuffer = std::make_shared<SendBuffer>( sizeof( Packet ) );
-		sendBuffer->copyData( &sendPacket, sizeof( Packet ) );
+		int32 packetSize = sizeof( Packet );
+		auto sendBuffer = std::make_shared<SendBuffer>( packetSize );
+		sendBuffer->copyData( &sendPacket, packetSize );
 		GameSessionManager::broadcast( sendBuffer );
 	}
 		break;
