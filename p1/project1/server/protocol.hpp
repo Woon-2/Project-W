@@ -19,6 +19,12 @@ enum class direction : std::uint8_t {
 };
 
 enum class PacketType : std::uint16_t {
+	csSignup,
+	scSignup,
+	
+	csLogin,
+	scLogin,
+
 	csEnter,
 	scAssignId,
 	scEnter,
@@ -28,6 +34,26 @@ enum class PacketType : std::uint16_t {
 
 	csMove,
 	scMove
+};
+
+struct CSSignupPacket {
+	std::array<char, 20> id;
+	std::array<char, 20> pw;
+};
+
+struct SCSignupPacket {
+	bool isOk;
+	std::array<char, 50> reason;
+};
+
+struct CSLoginPacket {
+	std::array<char, 20> id;
+	std::array<char, 20> pw;
+};
+
+struct SCLoginPacket {
+	bool isOk;
+	std::array<char, 50> reason;
 };
 
 struct CSEnterPacket {
@@ -68,6 +94,10 @@ struct SCMovePacket {
 struct Packet {
 	PacketHeader header;
 	union {
+		CSSignupPacket csSignup;
+		SCSignupPacket scSignup;
+		CSLoginPacket csLogin;
+		SCLoginPacket scLogin;
 		CSEnterPacket csEnter;
 		SCAssignIdPacket scAssignId;
 		SCEnterPacket scEnter;
