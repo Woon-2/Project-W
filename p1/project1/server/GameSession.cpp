@@ -8,7 +8,7 @@ void GameSession::onConnected( ) {
 	std::cout << "GameSession " << getId( ) << " connected.\n";
 	GameSessionManager::add( std::static_pointer_cast<GameSession>( shared_from_this( ) ) );
 
-	auto packet = Packet{
+	/*auto packet = Packet{
 		.header = {
 			.size = sizeof( PacketHeader ) + sizeof( SCAssignIdPacket ),
 			.id = static_cast<uint16>( PacketType::scAssignId )
@@ -42,7 +42,7 @@ void GameSession::onConnected( ) {
 
 	sendBuffer = std::make_shared<SendBuffer>( packetSize );
 	sendBuffer->copyData( &enterPacket, packetSize );
-	GameSessionManager::broadcast( sendBuffer );
+	GameSessionManager::broadcast( sendBuffer );*/
 }
 
 void GameSession::onDisconnected( ) {
