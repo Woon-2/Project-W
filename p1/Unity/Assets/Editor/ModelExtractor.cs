@@ -11,6 +11,7 @@ public class ModelExtractorWindow : EditorWindow
     private GameObject targetObject;
     private Dictionary<string, string> textureMappings = new Dictionary<string, string>();
     private Vector2 scrollPos;
+    private string targetName = "";
 
     private BinaryWriter geometryWriter = null;
 
@@ -26,6 +27,9 @@ public class ModelExtractorWindow : EditorWindow
         EditorGUILayout.Space();
 
         targetObject = (GameObject)EditorGUILayout.ObjectField("Target Object", targetObject, typeof(GameObject), true);
+        EditorGUILayout.Space();
+
+        targetName = (string)EditorGUILayout.TextField("Object Name: ", targetName);
         EditorGUILayout.Space();
 
         if (GUILayout.Button("🔍 Scan Textures") && targetObject != null)
@@ -578,6 +582,8 @@ public class ModelExtractorWindow : EditorWindow
     {
         string path = EditorUtility.SaveFilePanel("Export Binary", "ExportedAssets", "output.bin", "bin");
         geometryWriter = new BinaryWriter(File.Open(path, FileMode.Create));
+
+        WriteText(geometryWriter, "ModelName", targetName);
 
         // 텍스처 매핑 정보를 가장 먼저 출력한다.
         // 나중에 임포트할 때, 중복되는 텍스처들을 다시 로드하지 않기 위해 필요하다.

@@ -37,6 +37,7 @@ struct SubMesh {
 // 
 // * 드로우콜 시에는 Mesh가 아니라 SubMesh를 활용하도록 한다.
 struct Mesh {
+	std::string name;
 	std::vector<ComPtr<ID3D12Resource>> vbs;
 	std::vector<D3D12_VERTEX_BUFFER_VIEW> vbViews;
 	std::map<std::string, u32t> vbIdxMap;
@@ -66,6 +67,7 @@ struct MeshWithDressXform {
 // 메시를 그 메시를 메시 로컬 공간에서 드레스 공간으로 변환시켜 주는 변환 행렬과 함께
 // std::vector에 저장하여 모델을 표현한다.
 struct Model {
+	std::string name;
 	std::vector<MeshWithDressXform> meshWithDressXforms;
 };
 

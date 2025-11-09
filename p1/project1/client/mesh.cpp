@@ -177,7 +177,7 @@ Mesh buildCubeMesh(
     // 사용한 업로드 버퍼들을 별도로 리턴값에 포함시켜
     // 업로드 버퍼들이 소멸하지 않게 한다.
     // (업로드 버퍼들은 gpu가 실제로 copy를 수행할 때까지 살아있어야 한다.)
-	auto mesh = Mesh{};
+	auto mesh = Mesh{ .name = "CubeMesh" };
 
     // Vertex Buffer View 구성
     mesh.vbViews.emplace_back(
@@ -299,6 +299,14 @@ std::string readString(std::ifstream& ifs) {
     ifs.read(tmpBuffer, sz);
 
     return std::string(tmpBuffer, tmpBuffer + sz);
+}
+
+// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
+std::string readText(std::ifstream& ifs, const char* tagSource) {
+    readHeadTag(ifs, tagSource);
+    auto ret = readString(ifs);
+    readTailTag(ifs, tagSource);
+    return ret;
 }
 
 // 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
@@ -759,7 +767,7 @@ void importTransform( std::ifstream& ifs, ID3D12Device* device,
     const auto dressMat = readMatrix(ifs, "DressMatrix");
 
     auto& pair = model.meshWithDressXforms.emplace_back(
-        /* .mesh = */ Mesh{},
+        /* .mesh = */ Mesh{ .name = name }, // 모델 노드와 메시는 이름을 공유한다.
         /* .dressXform = */ mu::Mat4x4(XMLoadFloat4x4(&dressMat))
     );
 
@@ -812,9 +820,10 @@ Model loadModelFromFile( const std::filesystem::path& path,
         return ret;
     }
 
+    ret.name = readText(ifs, "ModelName");
     importTextureMapping(ifs, device, cmdList, texHashMap, texPool, fenceToAssociate);
     importGeometry(ifs, device, cmdList, texHashMap, fenceToAssociate, ret);
-    gSharedLog << "[Resource Load] File I/O: 모델 " << path << " 로드 완료\n";
+    gSharedLog << "[Resource Load] File I/O: 모델 " << ret.name << '(' << path << ") 로드 완료\n";
 
     return ret;
 }
