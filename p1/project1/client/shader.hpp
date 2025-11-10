@@ -101,11 +101,14 @@ struct Material {
 	BindlessIndex idxAlbedo;
 	BindlessIndex idxMetallicSmoothness;	// 유니티 익스포터를 사용하기 때문에 유니티와 텍스처 포맷 맞춰준다.
 											// R 채널에 metallic, A 채널에 Smoothness (1 - roughness) 값이 들어있게 된다.
+	BindlessIndex idxNormal;
+	BindlessIndex idxEmmisive;
+	BindlessIndex idxAmbientOcllusion;
 
 	XMFLOAT4 cAlbedo;
 	float cRoughness;
 	float cMetallic;
-	float cAmbientOcllusion;
+	float cAOStrength;
 	float padding0;
 	XMFLOAT3 cEmmisive;
 	float padding1;

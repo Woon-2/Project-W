@@ -7,11 +7,14 @@ struct PerInstanceData {
 struct Material {
     int4 idxAlbedo;
     int4 idxMetallicSmoothness;
+    int4 idxNormal;
+    int4 idxEmmisive;
+    int4 idxAmbientOcclusion;
     
     float4 cAlbedo;
     float cRoughness;
     float cMetallic;
-    float cAO;
+    float cAOStrength;
     float padding0;
     float3 cEmmisive;
     float padding1;

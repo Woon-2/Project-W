@@ -217,7 +217,7 @@ Mesh buildCubeMesh(
                 .constantAlbedo = XMFLOAT4(0.f, 0.f, 0.f, -1.f),
                 .constantRoughness = 0.3f,
                 .constantMetallic = 0.15f,
-                .constantAmbientOcllusion = 0.1f,
+                .constantAOStrength = 0.f,
                 .constantEmmisive = XMFLOAT3(0.f, 0.f, 0.f)
             }
         }
@@ -653,6 +653,12 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
         submesh.material.mapAlbedo.idxUav.idxRange = -1;
         submesh.material.mapMetallicSmoothness.idxSrv.idxRange = -1;
         submesh.material.mapMetallicSmoothness.idxUav.idxRange = -1;
+        submesh.material.mapNormal.idxSrv.idxRange = -1;
+        submesh.material.mapNormal.idxUav.idxRange = -1;
+        submesh.material.mapEmmisive.idxSrv.idxRange = -1;
+        submesh.material.mapEmmisive.idxUav.idxRange = -1;
+        submesh.material.mapAmbientOcclusion.idxSrv.idxRange = -1;
+        submesh.material.mapAmbientOcclusion.idxUav.idxRange = -1;
     }
     auto materialCnt = readInteger(ifs, "MaterialCnt");
 
@@ -678,17 +684,34 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
             // 자체발광 색상 상수
             else if (tag == "cEmmisive") {
                 const auto emmisive = readColor(ifs);
+                for (auto& [submeshKey, submesh] : mesh.subMeshes) {
+                    submesh.material.constantEmmisive = XMFLOAT3(emmisive.x, emmisive.y, emmisive.z);
+                }
                 readTailTag(ifs, "cEmmisive");
             }
             // 매끄러움 상수 (거칠기 상수의 역)
             else if (tag == "cSmoothness") {
                 const auto smoothness = readFloat(ifs);
+                for (auto& [submeshKey, submesh] : mesh.subMeshes) {
+                    submesh.material.constantRoughness = 1.f - smoothness;
+                }
                 readTailTag(ifs, "cSmoothness");
             }
             // 금속성 상수
             else if (tag == "cMetallic") {
                 const auto metallic = readFloat(ifs);
+                for (auto& [submeshKey, submesh] : mesh.subMeshes) {
+                    submesh.material.constantRoughness = 1.f - metallic;
+                }
                 readTailTag(ifs, "cMetallic");
+            }
+            // 주변광 차폐 적용 강도 상수
+            else if (tag == "cAOStrength") {
+                const auto aoStrength = readFloat(ifs);
+                for (auto& [submeshKey, submesh] : mesh.subMeshes) {
+                    submesh.material.constantAOStrength = aoStrength;
+                }
+                readTailTag(ifs, "cAOStrength");
             }
             // ======================================
             // 텍스처 읽어들이기 ====================
@@ -706,6 +729,9 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
             // 노멀 텍스처
             else if (tag == "NormalMap") {
                 const auto normalMapKey = readString(ifs);
+                for (auto& [submeshKey, submesh] : mesh.subMeshes) {
+                    submesh.material.mapNormal= texHashMap.at(normalMapKey);
+                }
                 readTailTag(ifs, "NormalMap");
             }
             // 금속성과 매끄러움 텍스처
@@ -719,7 +745,18 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
             // 자체발광 텍스처
             else if (tag == "EmmisiveMap") {
                 const auto emmisiveMapKey = readString(ifs);
+                for (auto& [submeshKey, submesh] : mesh.subMeshes) {
+                    submesh.material.mapEmmisive = texHashMap.at(emmisiveMapKey);
+                }
                 readTailTag(ifs, "EmmisiveMap");
+            }
+            // 차폐도 텍스처
+            else if (tag == "AOMap") {
+                const auto aoMapKey = readString(ifs);
+                for (auto& [submeshKey, submesh] : mesh.subMeshes) {
+                    submesh.material.mapAmbientOcclusion = texHashMap.at(aoMapKey);
+                }
+                readTailTag(ifs, "AOMap");
             }
             // ======================================
             else {

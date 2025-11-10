@@ -6,13 +6,15 @@
 // 이 hlsl 코드에 대한 include문 전에
 // 다음과 같은 멤버를 갖는 객체 material이 정의되어 전역적으로 접근이 가능함이 가정된다.
 // - idxAlbedo: int4 (Albedo Map에 대한 Bindless Index)
-// - idxRoughness: int4 (Roughness Map에 대한 Bindless Index)
-// - idxMetallic: int4 (Metallic Map에 대한 Bindless Index)
+// - idxMetallicSmoothness: int4 (MetallicSmoothnessMap에 대한 Bindless Index - 유니티 대응)
+// - idxNormal: int4 (Normal Map에 대한 Bindless Index)
+// - idxEmmisive: int4 (Emmisive Map에 대한 Bindless Index)
+// - idxAmbientOcclusion: int4 (Ambient Occlusion Map에 대한 Bindless Index)
 // - cAlbedo: float4 (물체의 색상을 나타내는 상수)
 // - cRoughness: float (물체의 거칠기를 나타내는 상수)
 // - cMetallic: float (물체의 금속성을 나타내는 상수)
-// - ao: float (물체의 주변광 차폐율을 나타내는 상수)
-// - emmisive: float3 (물체의 자체발광에 대해 색상을 나타내는 상수)
+// - cAOStrength: float (물체에 대해 주변광 차폐의 적용 강도를 나타내는 상수)
+// - cEmmisive: float3 (물체의 자체발광에 대해 색상을 나타내는 상수)
 // 그리고 uint 타입의 lightCnt가 전역적으로 접근이 가능함이 가정된다.
 
 #define PI 3.14159f
@@ -234,8 +236,15 @@ float4 illuminate(float3 posV, float3 normalV, float2 tex)
         roughness = 1.f - metallicSmoothness.a; // roughness = 1.f - smoothness
     }
     
-    float ao = material.cAO;
+    float ao = 0.f;
+    if (material.idxAmbientOcclusion.x >= 0) {
+        ao = material.cAOStrength * sampleBindless(material.idxAmbientOcclusion, tex).r;
+    }
+
     float3 emmisive = material.cEmmisive;
+    if (material.idxEmmisive.x >= 0) {
+        emmisive = sampleBindless(material.idxEmmisive, tex).rgb;
+    }
 
     float3 posVNormalized = normalize(posV);
 

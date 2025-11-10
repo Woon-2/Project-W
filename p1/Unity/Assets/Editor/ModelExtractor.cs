@@ -468,10 +468,19 @@ public class ModelExtractorWindow : EditorWindow
             {
                 WriteFloat(geometryWriter, "cSmoothness", materials[i].GetFloat("_Smoothness"));
             }
+            else if (materials[i].HasProperty("_Glossiness"))
+            {
+                WriteFloat(geometryWriter, "cSmoothness", materials[i].GetFloat("_Glossiness"));
+            }
             // cMetallic
             if (materials[i].HasProperty("_Metallic"))
             {
                 WriteFloat(geometryWriter, "cMetallic", materials[i].GetFloat("_Metallic"));
+            }
+            // cAOStrength
+            if (materials[i].HasProperty("_OcclusionStrength"))
+            {
+                WriteFloat(geometryWriter, "cAOStrength", materials[i].GetFloat("_OcclusionStrength"));
             }
 
             // 텍스처들 추출
@@ -511,6 +520,16 @@ public class ModelExtractorWindow : EditorWindow
                     WriteText(geometryWriter, "EmmisiveMap", emmisionMap.name);
                 }
             }
+            // AOMap
+            if (materials[i].HasProperty("_OcclusionMap"))
+            {
+                Texture aoMap = materials[i].GetTexture("_OcclusionMap");
+                if (aoMap != null)
+                {
+                    WriteText(geometryWriter, "AOMap", aoMap.name);
+                }
+            }
+
 
             WriteTailTag(geometryWriter, "Material");
         }

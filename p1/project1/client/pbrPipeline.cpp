@@ -287,10 +287,13 @@ void Dispatcher::drawSingleThreaded() {
 			.material = PBRShader::Material{
 				.idxAlbedo = drawEvent.subMesh->material.mapAlbedo.idxSrv,
 				.idxMetallicSmoothness = drawEvent.subMesh->material.mapMetallicSmoothness.idxSrv,
+				.idxNormal = drawEvent.subMesh->material.mapNormal.idxSrv,
+				.idxEmmisive = drawEvent.subMesh->material.mapEmmisive.idxSrv,
+				.idxAmbientOcllusion = drawEvent.subMesh->material.mapAmbientOcclusion.idxSrv,
 				.cAlbedo = drawEvent.subMesh->material.constantAlbedo,
 				.cRoughness = drawEvent.subMesh->material.constantRoughness,
 				.cMetallic = drawEvent.subMesh->material.constantMetallic,
-				.cAmbientOcllusion = drawEvent.subMesh->material.constantAmbientOcllusion,
+				.cAOStrength = drawEvent.subMesh->material.constantAOStrength,
 				.cEmmisive = drawEvent.subMesh->material.constantEmmisive
 			},
 			.firstInstanceIdx = static_cast<u32t>(idxDrawcall)
@@ -523,9 +526,13 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 				.material = PBRShader::Material{
 					.idxAlbedo = drawEvent.subMesh->material.mapAlbedo.idxSrv,
 					.idxMetallicSmoothness = drawEvent.subMesh->material.mapMetallicSmoothness.idxSrv,
+					.idxNormal = drawEvent.subMesh->material.mapNormal.idxSrv,
+					.idxEmmisive = drawEvent.subMesh->material.mapEmmisive.idxSrv,
+					.idxAmbientOcllusion = drawEvent.subMesh->material.mapAmbientOcclusion.idxSrv,
+					.cAlbedo = drawEvent.subMesh->material.constantAlbedo,
 					.cRoughness = drawEvent.subMesh->material.constantRoughness,
 					.cMetallic = drawEvent.subMesh->material.constantMetallic,
-					.cAmbientOcllusion = drawEvent.subMesh->material.constantAmbientOcllusion,
+					.cAOStrength = drawEvent.subMesh->material.constantAOStrength,
 					.cEmmisive = drawEvent.subMesh->material.constantEmmisive
 				},
 				.firstInstanceIdx = static_cast<u32t>(idxDrawcall)
