@@ -8,7 +8,7 @@ void GameSession::onConnected( ) {
 	std::cout << "GameSession " << getId( ) << " connected.\n";
 	GameSessionManager::add( std::static_pointer_cast<GameSession>( shared_from_this( ) ) );
 
-	/*auto packet = Packet{
+	auto packet = Packet{
 		.header = {
 			.size = sizeof( PacketHeader ) + sizeof( SCAssignIdPacket ),
 			.id = static_cast<uint16>( PacketType::scAssignId )
@@ -42,7 +42,7 @@ void GameSession::onConnected( ) {
 
 	sendBuffer = std::make_shared<SendBuffer>( packetSize );
 	sendBuffer->copyData( &enterPacket, packetSize );
-	GameSessionManager::broadcast( sendBuffer );*/
+	GameSessionManager::broadcast( sendBuffer );
 }
 
 void GameSession::onDisconnected( ) {
@@ -140,35 +140,70 @@ int32 GameSession::onRecvPacket( uint8* buffer, int32 len ) {
 		if ( packet->csMove.dir == direction::w ) {
 			sendPacket.header.size = sizeof( PacketHeader ) + sizeof( SCMovePacket );
 			sendPacket.header.id = static_cast<uint16>( PacketType::scMove );
-			sendPacket.scMove.x = x_;
-			sendPacket.scMove.y = y_;
-			sendPacket.scMove.z = z_ + 0.01f;
+
+			z_ += 0.01f;
+			for( auto session : GameSessionManager::getSessions( ) ) {
+				if ( session.get( ) == this ) {
+					continue;
+				}
+
+				if( checkCollision( *session ) ) {
+					z_ -= 0.01f;
+					break;
+				}
+			}
 		}
 		else if ( packet->csMove.dir == direction::a ) {
 			sendPacket.header.size = sizeof( PacketHeader ) + sizeof( SCMovePacket );
 			sendPacket.header.id = static_cast<uint16>( PacketType::scMove );
-			sendPacket.scMove.x = x_ - 0.01f;
-			sendPacket.scMove.y = y_;
-			sendPacket.scMove.z = z_;
+
+			x_ -= 0.01f;
+			for( auto session : GameSessionManager::getSessions( ) ) {
+				if ( session.get( ) == this ) {
+					continue;
+				}
+
+				if( checkCollision( *session ) ) {
+					x_ += 0.01f;
+					break;
+				}
+			}
 		}
 		else if ( packet->csMove.dir == direction::s ) {
 			sendPacket.header.size = sizeof( PacketHeader ) + sizeof( SCMovePacket );
 			sendPacket.header.id = static_cast<uint16>( PacketType::scMove );
-			sendPacket.scMove.x = x_;
-			sendPacket.scMove.y = y_;
-			sendPacket.scMove.z = z_ - 0.01f;
+
+			z_ -= 0.01f;
+			for( auto session : GameSessionManager::getSessions( ) ) {
+				if ( session.get( ) == this ) {
+					continue;
+				}
+
+				if( checkCollision( *session ) ) {
+					z_ += 0.01f;
+					break;
+				}
+			}
 		}
 		else if ( packet->csMove.dir == direction::d ) {
 			sendPacket.header.size = sizeof( PacketHeader ) + sizeof( SCMovePacket );
 			sendPacket.header.id = static_cast<uint16>( PacketType::scMove );
-			sendPacket.scMove.x = x_ + 0.01f;
-			sendPacket.scMove.y = y_;
-			sendPacket.scMove.z = z_;
+
+			x_ += 0.01f;
+			for( auto session : GameSessionManager::getSessions( ) ) {
+				if ( session.get( ) == this ) {
+					continue;
+				}
+				if( checkCollision( *session ) ) {
+					x_ -= 0.01f;
+					break;
+				}
+			}
 		}
 
-		x_ = sendPacket.scMove.x;
-		y_ = sendPacket.scMove.y;
-		z_ = sendPacket.scMove.z;
+		sendPacket.scMove.x = x_;
+		sendPacket.scMove.y = y_;
+		sendPacket.scMove.z = z_;
 
 		int32 packetSize = sizeof( Packet );
 		auto sendBuffer = std::make_shared<SendBuffer>( packetSize );
@@ -239,4 +274,11 @@ bool GameSession::loginUser( const std::string& id, const std::string& pw, std::
 
 	err = "Invalid ID or password.";
 	return false;
+}
+
+bool GameSession::checkCollision( const GameSession& other ) const {
+	float dx = x_ - other.x_;
+	float dz = z_ - other.z_;
+	float dist = std::sqrt( dx * dx + dz * dz );
+	return dist < ( radius_ + other.radius_ );
 }

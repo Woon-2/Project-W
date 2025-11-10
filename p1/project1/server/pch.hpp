@@ -28,5 +28,6 @@
 #include <atomic>
 #include <mutex>
 #include <functional>
+#include <cmath>
 
 #endif // SERVER_PCH_HPP
