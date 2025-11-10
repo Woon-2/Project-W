@@ -10,19 +10,16 @@
 #include "pbrPipeline.hpp"
 
 
-// 멀티스레드 최적화 (번들 활용)
 // emmisive 맵도 추출하도록
-// 재질 임포트 제대로
-// 유니티에서 레벨 추출하는 스크립트 작성 - 11.07.
-// 
+// 유니티에서 레벨 추출하는 스크립트 작성
 // Mesh Vertex Buffer Standard Layout: 슬롯 인덱스 유기적으로 결정하게 만들기
 // 텍스처 샘플링 방법도 유니티에서 추출할 수 있도록 하기
-// 마우스 움직임으로 카메라 조작 구현
-// SkySphere 구현 - 11.08.
-// Batching & Instancing 구현 - 11.09.
+// 마우스 움직임으로 카메라 조작 구현 - 11.10.
+// SkySphere 구현
+// Batching & Instancing 구현
 // Deferred Shading 구현
-// 노멀 매핑 구현 - 11.10.
-// Rigidbody Physics 구현 - 11.11.-11.12.
+// 노멀 매핑 구현 - 11.11.
+// Rigidbody Physics 구현 - 11.12.
 // 네트워크로 받는 운동 정보 보간/외삽 - 11.13.-11.14.
 // 그림자 매핑
 // 1인칭 & 3인칭 카메라 분리 구현 - 11.15.

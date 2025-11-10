@@ -637,26 +637,23 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
 }
 
 // 노드의 재질 정보를 읽어들인다.
-// 현재 읽어들인 재질 정보는 모델의 모든 메시의 모든 서브메시에
+// 현재 읽어들인 재질 정보는 노드의 메시의 모든 서브메시에
 // 일괄적으로 저장되도록 구현되어있다.
 void importMaterials( std::ifstream& ifs, ID3D12Device* device,
     ID3D12GraphicsCommandList* cmdList, 
     std::unordered_map<std::string, Texture>& texHashMap,
-    Fence& fenceToAssociate, Model& model
+    Fence& fenceToAssociate, Mesh& mesh
 ) {
     readHeadTag(ifs, "Materials");
 
     // Bindless Index 초기화
     // idxRange를 -1로 써주는 것으로 그 텍스처가 존재하지 않음을 표현한다.
-    for (auto& [mesh, _] : model.meshWithDressXforms) {
-        for (auto& [submeshKey, submesh] : mesh.subMeshes) {
-            submesh.material.mapAlbedo.idxSrv.idxRange = -1;
-            submesh.material.mapAlbedo.idxUav.idxRange = -1;
-            submesh.material.mapMetallicSmoothness.idxSrv.idxRange = -1;
-            submesh.material.mapMetallicSmoothness.idxUav.idxRange = -1;
-        }
+    for (auto& [submeshKey, submesh] : mesh.subMeshes) {
+        submesh.material.mapAlbedo.idxSrv.idxRange = -1;
+        submesh.material.mapAlbedo.idxUav.idxRange = -1;
+        submesh.material.mapMetallicSmoothness.idxSrv.idxRange = -1;
+        submesh.material.mapMetallicSmoothness.idxUav.idxRange = -1;
     }
-
     auto materialCnt = readInteger(ifs, "MaterialCnt");
 
     for (int i = 0; i < materialCnt; ++i) {
@@ -673,10 +670,8 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
             // 알베도 색상 상수
             if (tag == "cAlbedo") {
                 const auto albedo = readColor(ifs);
-                for (auto& [mesh, _] : model.meshWithDressXforms) {
-                    for (auto& [submeshKey, submesh] : mesh.subMeshes) {
-                        submesh.material.constantAlbedo = albedo;
-                    }
+                for (auto& [submeshKey, submesh] : mesh.subMeshes) {
+                    submesh.material.constantAlbedo = albedo;
                 }
                 readTailTag(ifs, "cAlbedo");
             }
@@ -698,17 +693,14 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
             // ======================================
             // 텍스처 읽어들이기 ====================
             // 텍스처 매핑 정보를 통해 미리 로드했던 텍스처들을
-            // texHashMap에서 찾아 모든 메시의 모든 서브메시에 연결한다.
+            // texHashMap에서 찾아 메시의 모든 서브메시에 연결한다.
             
             // 알베도 텍스처
             else if (tag == "AlbedoMap") {
                 const auto albedoMapKey = readString(ifs);
-                for (auto& [mesh, _] : model.meshWithDressXforms) {
-                    for (auto& [submeshKey, submesh] : mesh.subMeshes) {
-                        submesh.material.mapAlbedo = texHashMap.at(albedoMapKey);
-                    }
+                for (auto& [submeshKey, submesh] : mesh.subMeshes) {
+                    submesh.material.mapAlbedo = texHashMap.at(albedoMapKey);
                 }
-                
                 readTailTag(ifs, "AlbedoMap");
             }
             // 노멀 텍스처
@@ -719,12 +711,9 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
             // 금속성과 매끄러움 텍스처
             else if (tag == "MetallicSmoothnessMap") {
                 const auto metallicSmoothnessMapKey = readString(ifs);
-                for (auto& [mesh, _] : model.meshWithDressXforms) {
-                    for (auto& [submeshKey, submesh] : mesh.subMeshes) {
-                        submesh.material.mapMetallicSmoothness = texHashMap.at(metallicSmoothnessMapKey);
-                    }
+                for (auto& [submeshKey, submesh] : mesh.subMeshes) {
+                    submesh.material.mapMetallicSmoothness = texHashMap.at(metallicSmoothnessMapKey);
                 }
-
                 readTailTag(ifs, "MetallicSmoothnessMap");
             }
             // 자체발광 텍스처
@@ -774,7 +763,7 @@ void importTransform( std::ifstream& ifs, ID3D12Device* device,
     // 메시를 읽어들인다.
     importMesh(ifs, device, cmdList, name, fenceToAssociate, pair.mesh);
     // 재질들을 읽어들인다.
-    importMaterials(ifs, device, cmdList, texHashMap, fenceToAssociate, model);
+    importMaterials(ifs, device, cmdList, texHashMap, fenceToAssociate, pair.mesh);
 
     gSharedLog << "[Resource Load] 모델 노드 " << name << " 구축 완료\n";
 
