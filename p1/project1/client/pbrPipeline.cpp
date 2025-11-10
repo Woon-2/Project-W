@@ -5,6 +5,43 @@
 
 namespace PBRPipeline {
 
+// PBR Pipeline의 input layout을 위한 Vertex Buffer View 배열이
+// mesh에 존재하지 않는다면, 추가한다.
+// 0: position, 1: normal, 2: uv
+void layoutMeshIfNeeded(const Mesh& mesh) {
+	if (mesh.vbViewsByPipeline.contains("PBRPipeline")) {
+		return;
+	}
+
+	auto [pvbViews, _] = mesh.vbViewsByPipeline.try_emplace("PBRPipeline");
+	auto& vbViews = pvbViews->second;
+	vbViews.reserve(3u);	// position, normal, uv
+
+	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_Position"),
+		"[GFX Error] PBRPipeline::layoutMeshIfNeeded: " + mesh.name + "_VB_Position"
+		"의 이름을 가진 정점 버퍼가 요구되었으나, 존재하지 않습니다.",
+		false
+	);
+	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_Normal"),
+		"[GFX Error] PBRPipeline::layoutMeshIfNeeded: " + mesh.name + "_VB_Normal"
+		"의 이름을 가진 정점 버퍼가 요구되었으나, 존재하지 않습니다.",
+		false
+	);
+	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_UV"),
+		"[GFX Error] PBRPipeline::layoutMeshIfNeeded: " + mesh.name + "_VB_UV"
+		"의 이름을 가진 정점 버퍼가 요구되었으나, 존재하지 않습니다.",
+		false
+	);
+
+	auto& vbViewPos = mesh.vbViews[ mesh.vbIdxMap.at(mesh.name + "_VB_Position") ];
+	auto& vbViewNormal = mesh.vbViews[ mesh.vbIdxMap.at(mesh.name + "_VB_Normal") ];
+	auto& vbViewUV = mesh.vbViews[ mesh.vbIdxMap.at(mesh.name + "_VB_UV") ];
+
+	vbViews.push_back(vbViewPos);
+	vbViews.push_back(vbViewNormal);
+	vbViews.push_back(vbViewUV);
+}
+
 // GFX 객체로부터 필요한 인자들을 전달받자.
 Dispatcher::Dispatcher(
 	const std::vector<ComPtr<ID3D12DescriptorHeap>>& descriptorHeaps,
@@ -302,11 +339,12 @@ void Dispatcher::drawSingleThreaded() {
 			roomIdx_, &perDrawcallData, 1u
 		);
 
-		DISPLAY_ERROR_DX_VOID(
-			cmdList->IASetVertexBuffers(0u, static_cast<UINT>(drawEvent.mesh->vbViews.size()),
-				drawEvent.mesh->vbViews.data()	
-			), false
-		);
+		layoutMeshIfNeeded(*drawEvent.mesh);
+		auto& vbViews = drawEvent.mesh->vbViewsByPipeline.at("PBRPipeline");
+
+		DISPLAY_ERROR_DX_VOID( cmdList->IASetVertexBuffers(
+			0u, static_cast<UINT>(vbViews.size()), vbViews.data()
+		), false );
 		DISPLAY_ERROR_DX_VOID( cmdList->IASetIndexBuffer(&drawEvent.subMesh->ibView), false );
 
 		DISPLAY_ERROR_DX_VOID( cmdList->DrawIndexedInstanced(
@@ -544,11 +582,12 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 				roomIdx_, &perDrawcallData, 1u
 			);
 
-			DISPLAY_ERROR_DX_VOID(
-				threadCmdList->IASetVertexBuffers(0u, static_cast<UINT>(drawEvent.mesh->vbViews.size()),
-					drawEvent.mesh->vbViews.data()	
-				), false
-			);
+			layoutMeshIfNeeded(*drawEvent.mesh);
+			auto& vbViews = drawEvent.mesh->vbViewsByPipeline.at("PBRPipeline");
+
+			DISPLAY_ERROR_DX_VOID( threadCmdList->IASetVertexBuffers(
+				0u, static_cast<UINT>(vbViews.size()), vbViews.data()
+			), false );
 			DISPLAY_ERROR_DX_VOID( threadCmdList->IASetIndexBuffer(&drawEvent.subMesh->ibView), false );
 
 			DISPLAY_ERROR_DX_VOID( threadCmdList->DrawIndexedInstanced(

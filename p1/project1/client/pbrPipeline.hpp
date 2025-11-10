@@ -65,6 +65,11 @@ struct Resources {
 	ConstantBuffer perFrameData;	// b1
 };
 
+// PBR Pipeline의 input layout을 위한 Vertex Buffer View 배열이
+// mesh에 존재하지 않는다면, 추가한다.
+// 0: position, 1: normal, 2: uv
+void layoutMeshIfNeeded(const Mesh& mesh);
+
 // PBR Pipeline의 Dispatcher
 // Dispatcher 클래스는 GFX에서 필요한 인자들을 받아
 // 파이프라인의 특정 단계를 싱글스레드 혹은 멀티스레드로 수행한다.

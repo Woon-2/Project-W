@@ -42,8 +42,25 @@ struct SubMesh {
 struct Mesh {
 	std::string name;
 	std::vector<ComPtr<ID3D12Resource>> vbs;
+	// 파이프라인에 바인드할 용도라면 vbViewsByPipeline 멤버를 사용한다.
 	std::vector<D3D12_VERTEX_BUFFER_VIEW> vbViews;
+	// 정점 버퍼들은 속성에 따라 {메시 이름}_VB_{정점 속성}의 양식을 갖는 key에 매핑된다.
+	// ex) CubeMesh_VB_Position, Vangaurd_Mesh_VB_Normal
+	// vbs[ vbViews.at("CubeMesh_VB_Position") ]와 같이 위치 속성에 해당하는 정점 버퍼를 얻는다.
 	std::map<std::string, u32t> vbIdxMap;
+
+	// 파이프라인마다 Input Layout이 다르다.
+	// 메시의 정점 버퍼들을 바인드할 때에는 vbViewsByPipeline에서 각 파이프라인에 맞는
+	// Vertex Buffer View 배열을 쿼리해서 바인드해야 한다.
+	// 
+	// 각 파이프라인은 특정 메시를 최초로 그릴 때
+	// vbViewsByPipeline에서 그 파이프라인에 맞는 Vertex Buffer View 배열을
+	// 적절한 key(파이프라인의 이름)와 함께 만든다.
+	// (Vertex Buffer View의 인덱스가 해당 정점 속성의 slot 인덱스와 같아야 한다.)
+	// 이때 vbViews와 vbIdxMap을 이용한다.
+	// 파이프라인의 그리기 함수에는 const Mesh*가 전달되는데,
+	// 이 멤버는 그리기 함수에서 최초에 한번 수정되기 때문에 mutable일 필요가 있다.
+	mutable std::map<std::string, std::vector<D3D12_VERTEX_BUFFER_VIEW>> vbViewsByPipeline;
 
 	std::map<std::string, ComPtr<ID3D12Resource>> ibs;
 	std::map<std::string, SubMesh> subMeshes;

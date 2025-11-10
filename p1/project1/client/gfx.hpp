@@ -10,9 +10,7 @@
 #include "pbrPipeline.hpp"
 
 
-// emmisive 맵도 추출하도록
 // 유니티에서 레벨 추출하는 스크립트 작성
-// Mesh Vertex Buffer Standard Layout: 슬롯 인덱스 유기적으로 결정하게 만들기
 // 텍스처 샘플링 방법도 유니티에서 추출할 수 있도록 하기
 // 마우스 움직임으로 카메라 조작 구현 - 11.10.
 // SkySphere 구현
