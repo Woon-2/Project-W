@@ -145,6 +145,8 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="Room.cpp" />
+    <ClCompile Include="RoomManager.cpp" />
     <ClCompile Include="SendBuffer.cpp" />
     <ClCompile Include="Service.cpp" />
     <ClCompile Include="Session.cpp" />
@@ -163,6 +165,8 @@
     <ClInclude Include="pch.hpp" />
     <ClInclude Include="protocol.hpp" />
     <ClInclude Include="RecvBuffer.hpp" />
+    <ClInclude Include="Room.hpp" />
+    <ClInclude Include="RoomManager.hpp" />
     <ClInclude Include="SendBuffer.hpp" />
     <ClInclude Include="Service.hpp" />
     <ClInclude Include="Session.hpp" />

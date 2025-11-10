@@ -24,9 +24,6 @@
     <ClCompile Include="main.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="pch.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
     <ClCompile Include="SocketUtils.cpp">
       <Filter>Utils</Filter>
     </ClCompile>
@@ -47,6 +44,15 @@
     </ClCompile>
     <ClCompile Include="GameSession.cpp">
       <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="Room.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="RoomManager.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="pch.cpp">
+      <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -102,6 +108,12 @@
       <Filter>Network</Filter>
     </ClInclude>
     <ClInclude Include="protocol.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="Room.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="RoomManager.hpp">
       <Filter>Network</Filter>
     </ClInclude>
   </ItemGroup>

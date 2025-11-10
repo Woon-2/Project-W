@@ -24,6 +24,7 @@ using SPPacketSession = std::shared_ptr<class PacketSession>;
 using SPClientService = std::shared_ptr<class ClientService>;
 using SPServerService = std::shared_ptr<class ServerService>;
 using SPSendBuffer = std::shared_ptr<class SendBuffer>;
+using SPRoom = std::shared_ptr<class Room>;
 
 template<class T>
 using CCQueue = moodycamel::ConcurrentQueue<T>;
