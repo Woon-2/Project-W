@@ -137,6 +137,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="billboard.hpp" />
+    <ClInclude Include="billboardPipeline.hpp" />
     <ClInclude Include="camera.hpp" />
     <ClInclude Include="concurrentqueue.h" />
     <ClInclude Include="d3dx12\include\directx\d3d12.h" />
@@ -199,6 +201,8 @@
     <ClInclude Include="types.hpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="billboard.cpp" />
+    <ClCompile Include="billboardPipeline.cpp" />
     <ClCompile Include="camera.cpp" />
     <ClCompile Include="d3dx12\src\d3dx12_property_format_table.cpp" />
     <ClCompile Include="errorHandling.cpp" />
@@ -227,6 +231,10 @@
     <ClCompile Include="timer.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <FxCompile Include="billboard.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </FxCompile>
     <FxCompile Include="bindless.hlsli">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>

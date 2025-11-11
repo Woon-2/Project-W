@@ -56,6 +56,14 @@ Mesh buildCubeMesh(
 	DescriptorPool& texPool, Fence& fenceToAssociate
 );
 
+// 빌보드를 위한 점 한개짜리 메시를 생성한다.
+// @return Mesh
+Mesh buildPointMesh(
+	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
+	std::unordered_map<std::wstring, Texture>& texHashMap,
+	DescriptorPool& texPool, Fence& fenceToAssociate
+);
+
 // Model 구조체에서 메시와 드레스 공간 변환을 함께 저장하기 위해 쓰인다.
 struct MeshWithDressXform {
 	Mesh mesh;

@@ -239,6 +239,105 @@ Mesh buildCubeMesh(
     return mesh;
 }
 
+Mesh buildPointMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, std::unordered_map<std::wstring, Texture>& texHashMap, DescriptorPool& texPool, Fence& fenceToAssociate )
+{
+    static const auto positions = std::vector<XMFLOAT3>{
+        XMFLOAT3(0.f, 0.f, 0.f)
+	};
+
+    static const auto sizes = std::vector<float>{
+        1.f
+	};
+
+    static const auto indices = std::vector<u16t>{
+		0u
+	};
+
+	// 정점 버퍼들 구축
+	auto vbPosition = createBufferResource( device, nullptr, positions.size() * sizeof( XMFLOAT3 ), BufferCreationType::VertexBuffer );
+	setD3DName( vbPosition.Get(), L"PointMesh_VB_Position" );
+	auto vbPositionu = createBufferResource( device, positions.data(), positions.size() * sizeof( XMFLOAT3 ), BufferCreationType::UploadBuffer );
+	setD3DName( vbPositionu.Get(), L"PointMesh_VB_Position_Upload" );
+
+    copyResource( cmdList, vbPositionu.Get(), vbPosition.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
+        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+    );
+
+	auto vbSize = createBufferResource( device, nullptr, sizes.size() * sizeof( float ), BufferCreationType::VertexBuffer );
+	setD3DName( vbSize.Get(), L"PointMesh_VB_Size" );
+	auto vbSizeu = createBufferResource( device, sizes.data(), sizes.size() * sizeof( float ), BufferCreationType::UploadBuffer );
+	setD3DName( vbSizeu.Get(), L"PointMesh_VB_Size_Upload" );
+
+	copyResource( cmdList, vbSizeu.Get(), vbSize.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
+        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+    );
+
+	// 인덱스 버퍼 구축
+	auto ib = createBufferResource( device, nullptr, indices.size() * sizeof( u16t ), BufferCreationType::IndexBuffer );
+	setD3DName( ib.Get(), L"PointMesh_IB" );
+	auto ibu = createBufferResource( device, indices.data(), indices.size() * sizeof( u16t ), BufferCreationType::UploadBuffer );
+	setD3DName( ibu.Get(), L"PointMesh_IB_Upload" );
+
+	copyResource( cmdList, ibu.Get(), ib.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
+        D3D12_RESOURCE_STATE_INDEX_BUFFER 
+    );
+
+	// 만든 버퍼들을 조합하여 메시 구축
+	auto mesh = Mesh{};
+
+	// Vertex Buffer View 구성
+	mesh.vbViews.emplace_back(
+		/* .BufferLocation = */ vbPosition->GetGPUVirtualAddress(),
+		/* .SizeInBytes = */ static_cast<UINT>(positions.size() * sizeof( XMFLOAT3 )),
+		/* .StrideInBytes = */ static_cast<UINT>(sizeof( XMFLOAT3 ))
+	);
+
+	mesh.vbViews.emplace_back(
+		/* .BufferLocation = */ vbSize->GetGPUVirtualAddress(),
+		/* .SizeInBytes = */ static_cast<UINT>(sizes.size() * sizeof( float )),
+		/* .StrideInBytes = */ static_cast<UINT>(sizeof( float ))
+	);
+
+    if ( !texHashMap.contains( L"PointMesh_Albedo" ) ) {
+        auto [pPair, _] = texHashMap.try_emplace( L"PointMesh_Albedo", loadTexture( device, cmdList, L"PointMesh_Albedo.dds", fenceToAssociate ) );
+        createSRV( device, pPair->second, texPool );
+        pPair->second.idxSrv.idxSampler = etoi( Samplers::TrilinearWrap );
+    }
+
+	// SubMesh 구성
+	mesh.subMeshes.try_emplace(
+		L"PointMesh_SubMesh", SubMesh{
+			.name = L"PointMesh_SubMesh",
+			.ibView = D3D12_INDEX_BUFFER_VIEW{
+			.BufferLocation = ib->GetGPUVirtualAddress(),
+			.SizeInBytes = static_cast<UINT>(indices.size() * sizeof( u16t )),
+			.Format = DXGI_FORMAT_R16_UINT
+			},
+		.material = Material{
+			.mapAlbedo = cloneTextureIdxOnly( texHashMap.at( L"PointMesh_Albedo" ) ),
+			.constantAlbedo = XMFLOAT4( 0.f, 0.f, 0.f, -1.f ),
+			.constantRoughness = 0.3f,
+			.constantMetallic = 0.15f,
+			.constantAmbientOcllusion = 0.1f,
+			.constantEmmisive = XMFLOAT3( 0.f, 0.f, 0.f )
+			}
+		}
+	);
+
+	// 자료구조 등록 (Vertex Buffer View와 SubMesh는 위에서 등록하였음)
+	mesh.vbs.push_back( std::move( vbPosition ) );
+	mesh.vbIdxMap.try_emplace( L"PointMesh_VB_Position", 0u );
+	mesh.vbs.push_back( std::move( vbSize ) );
+	mesh.vbIdxMap.try_emplace( L"PointMesh_VB_Size", 1u );
+	mesh.ibs.try_emplace( L"PointMesh_IB", std::move( ib ) );
+
+	fenceToAssociate.associatedResources_.push_back( std::move( vbPositionu ) );
+	fenceToAssociate.associatedResources_.push_back( std::move( vbSizeu ) );
+	fenceToAssociate.associatedResources_.push_back( std::move( ibu ) );
+
+	return mesh;
+}
+
 // 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
 void readHeadTag(std::ifstream& ifs, const std::string& expectedSource) {
     char tmpBuffer[32]{'\0'};

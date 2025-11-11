@@ -225,6 +225,7 @@ void GFX::init() {
 
 	shaders_.try_emplace(L"SampleShader", createSampleShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace(L"PBRShader", createPBRShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace( L"BillboardShader", createBillboardShader( device_.Get(), defaultRootSig.get() ) );
 
 	rootSigs_.try_emplace(L"DefaultRootSignature", std::make_shared<DefaultRootSig>(std::move(defaultRootSig)));
 
@@ -332,6 +333,7 @@ void GFX::createSwapChain() {
 
 	// 백버퍼 개수만큼의 room을 가지는 파이프라인별 리소스들 생성
 	// 1000u, 32u를 변수로 대체하기
+	// lcat: billbaord 파이프라인 리소스 1개 추가함.
 	resourcesSamplePipeline_.perInstanceData.init(
 		device_.Get(), sizeof(SampleShader::PerInstanceData) * 1000u, backBuffers_.size(), L"Sample_PerInstanceData"
 	);
@@ -350,6 +352,16 @@ void GFX::createSwapChain() {
 	resourcesPBRPipeline_.perFrameData.init(
 		device_.Get(), sizeof(PBRShader::PerFrameData), backBuffers_.size(), L"PBR_PerFrameData"
 	);
+	resourcesBillboardPipeline_.perInstanceData.init(
+		device_.Get(), sizeof( BillboardShader::PerInstanceData ) * 1u, backBuffers_.size(), L"Billboard_PerInstanceData"
+	);
+	resourcesBillboardPipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof( BillboardShader::PerDrawcallData ), 1u, backBuffers_.size(), L"Billboard_PerDrawcallData"
+	);
+	resourcesBillboardPipeline_.perFrameData.init(
+		device_.Get(), sizeof( BillboardShader::PerFrameData ), backBuffers_.size(), L"Billboard_PerFrameData"
+	);
+
 
 	// 프레임 펜스 생성
 	// i번째 프레임을 렌더링한 후 i-(백버퍼 수 - 1)번째 프레임의 펜스를 기다리도록 한다.
@@ -397,6 +409,21 @@ void GFX::addFrameData(const PBRPipeline::FrameData& frameData) {
 	frameDataPBRPipeline_ = frameData;
 }
 
+// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+void GFX::addDrawEvent( const BillboardPipeline::DrawEvent& drawEvent ) {
+	drawEventsBillboardPipeline_.push_back( drawEvent );
+}
+
+// 카메라 데이터를 입력한다.
+void GFX::addCameraData( const BillboardPipeline::CameraData& cameraData ) {
+	cameraDataBillboardPipeline_ = cameraData;
+}
+
+// 프레임 데이터를 입력한다.
+void GFX::addFrameData( const BillboardPipeline::FrameData& frameData ) {
+	frameDataBillboardPipeline_ = frameData;
+}
+
 void GFX::loadMeshes() {
 	auto& fence = fences_.at(L"LoadFence");
 
@@ -419,6 +446,7 @@ void GFX::loadMeshes() {
 	// 명령 기록 시작
 	meshCube_ = buildCubeMesh(device_.Get(), cmdList.Get(), texHashMap_, srvTexPool_, fence);
 	modelPlayer_ = loadModelFromFile("../resources/models/output.bin", device_.Get(), cmdList.Get(), texHashMap_, srvTexPool_, fence);
+	meshBillboard_ = buildPointMesh( device_.Get(), cmdList.Get(), texHashMap_, srvTexPool_, fence );
 
 	// 명령 기록 끝, 명령 실행
 	DISPLAY_ERROR_DX_VOID(cmdList->Close(), false);
@@ -561,6 +589,20 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	// Billboard Pipeline의 Dispatch
+	auto billboardPipelineDispatcher = BillboardPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at( L"DefaultRootSignature" ), shaders_.at( L"BillboardShader" ),
+		cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesBillboardPipeline_, threadPool_, 
+		&cmdListPool_, std::move( drawEventsBillboardPipeline_ ),
+		cameraDataBillboardPipeline_, frameDataBillboardPipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
 	// threadPool_이 활성화된 경우엔 멀티스레드로 처리한다.
 	if (!threadPool_) {
 		samplePipelineDispatcher.updateGPUDataSingleThreaded();
@@ -568,6 +610,9 @@ void GFX::render() {
 
 		pbrPipelineDispatcher.updateGPUDataSingleThreaded();
 		pbrPipelineDispatcher.drawSingleThreaded();
+
+		billboardPipelineDispatcher.updateGPUDataSingleThreaded();
+		billboardPipelineDispatcher.drawSingleThreaded();
 	}
 	else {
 		samplePipelineDispatcher.updateGPUDataMultiThreaded();
@@ -575,6 +620,9 @@ void GFX::render() {
 
 		pbrPipelineDispatcher.updateGPUDataMultiThreaded();
 		pbrPipelineDispatcher.drawMultiThreaded();
+
+		billboardPipelineDispatcher.updateGPUDataMultiThreaded();
+		billboardPipelineDispatcher.drawMultiThreaded();
 	}
 
 	// 출력 명령 컨텍스트 할당

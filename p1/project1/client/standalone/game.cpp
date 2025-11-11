@@ -21,7 +21,7 @@ Game::Game() {
 	gfx_.setupDXGI(D3D_FEATURE_LEVEL_12_1);
 	gfx_.init();
 	gfx_.createSwapChain();
-	gfx_.setThreadPool(&threadPool_);
+	// gfx_.setThreadPool(&threadPool_);
 
 	gfx_.loadMeshes();
 }
@@ -67,6 +67,10 @@ void Game::setupStage() {
 		static_cast<float>( gClientRect.right - gClientRect.left ) / ( gClientRect.bottom - gClientRect.top ),
 		0.025f, 8.f
 	);
+
+	billboard_ = std::make_shared<Billboard>();
+	billboard_->setMesh( gfx_.billboardMesh() );
+	billboard_->setPos( mu::Vec3( 1.5f, 0.0f, 0.f ) );
 }
 
 void Game::update(Milliseconds deltaTime) {
@@ -82,6 +86,7 @@ void Game::update(Milliseconds deltaTime) {
 	player_->update(deltaTime);
 	camera_.update();
 	dirLight_.update(deltaTime);
+	billboard_->update( deltaTime );
 }
 
 void Game::render() {
@@ -95,6 +100,7 @@ void Game::render() {
 	player_->render(gfx_);
 	camera_.updateGFX(gfx_);
 	dirLight_.render(gfx_);
+	billboard_->render( gfx_ );
 
 	auto frameData = PBRPipeline::FrameData{
 		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )

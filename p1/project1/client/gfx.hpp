@@ -8,6 +8,7 @@
 
 #include "samplePipeline.hpp"
 #include "pbrPipeline.hpp"
+#include "billboardPipeline.hpp"
 
 
 // 임포트 로그 남기기
@@ -85,10 +86,17 @@ public:
 	void addLightData(const PBRPipeline::LightData& lightData);
 	// 프레임 데이터를 입력한다.
 	void addFrameData(const PBRPipeline::FrameData& frameData);
+	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+	void addDrawEvent( const BillboardPipeline::DrawEvent& drawEvent );
+	// 카메라 데이터를 입력한다.
+	void addCameraData( const BillboardPipeline::CameraData& cameraData );
+	// 프레임 데이터를 입력한다.
+	void addFrameData( const BillboardPipeline::FrameData& frameData );
 
 	void loadMeshes();
 	const Mesh* cubeMesh() const { return &meshCube_; }
 	const Model* modelPlayer() const { return &modelPlayer_; }
+	const Mesh* billboardMesh() const { return &meshBillboard_; }
 
 	// 요청된 드로우콜들을 모아 객체들을 그리고 화면에 띄운다.
 	void render();
@@ -156,6 +164,11 @@ private:
 	PBRPipeline::CameraData cameraDataPBRPipeline_{};
 	std::vector<PBRPipeline::LightData> lightDataPBRPipeline_{};
 	PBRPipeline::FrameData frameDataPBRPipeline_{};
+	// Billboard Pipeline
+	std::vector<BillboardPipeline::DrawEvent> drawEventsBillboardPipeline_{};
+	BillboardPipeline::Resources resourcesBillboardPipeline_{};
+	BillboardPipeline::CameraData cameraDataBillboardPipeline_{};
+	BillboardPipeline::FrameData frameDataBillboardPipeline_{};
 
 	std::map<std::wstring, Fence> fences_{};
 
@@ -163,6 +176,7 @@ private:
 
 	Mesh meshCube_{};
 	Model modelPlayer_{};
+	Mesh meshBillboard_{};
 
 	ThreadPool* threadPool_;	// 설정되어있을 경우 멀티스레드로 동작한다.
 };

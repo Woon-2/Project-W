@@ -8,13 +8,19 @@ void Camera::update() {
 
 	auto rotatedOffset = pTarget->orient().rotate(offsetFromTarget_);
 
-	view_ = mu::lookAt(pTarget->pos() + rotatedOffset, pTarget->pos(), mu::NVec3(0.f, 1.f, 0.f));
+	position_ = pTarget->pos() + rotatedOffset;
+	view_ = mu::lookAt( position_, pTarget->pos(), mu::NVec3(0.f, 1.f, 0.f));
 }
 
 void Camera::updateGFX(GFX& gfx) {
 	gfx.addCameraData(PBRPipeline::CameraData{
 		.view = view_,
 		.proj = proj_
+	});
+	gfx.addCameraData(BillboardPipeline::CameraData{
+		.view = view_,
+		.proj = proj_,
+		.pos = position_
 	});
 }
 

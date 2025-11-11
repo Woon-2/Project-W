@@ -8,6 +8,7 @@
 #include "../object.hpp"
 #include "../camera.hpp"
 #include "../light.hpp"
+#include "../billboard.hpp"
 
 namespace StandAlone {
 
@@ -31,6 +32,7 @@ private:
 	std::shared_ptr<Object> player_{};
 	Camera camera_{};
 	Light dirLight_{};
+	std::shared_ptr<Billboard> billboard_{};
 };
 
 }	// namespace StandAlone

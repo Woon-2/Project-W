@@ -19,6 +19,7 @@ CompiledShaderOutput compileShader(const std::filesystem::path& path,
 
 ComPtr<ID3D12PipelineState> createSampleShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createBillboardShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 
 // 루트 파라미터 접근을 이해하기 쉽도록 하기 위해 만든 클래스
 // 루트 파라미터에 이름을 지어 그 인덱스 및 D3D12_ROOT_PARAMETER 구조체와 매핑한다.
@@ -129,5 +130,35 @@ struct PerFrameData {
 	XMUINT3 padding1;
 };
 }	// namespace PBRShader
+
+// BillboardShader
+namespace BillboardShader {
+
+struct Material {
+	BindlessIndex idxAlbedo;
+	BindlessIndex idxRoughness;
+	BindlessIndex idxMetallic;
+
+	XMFLOAT4 cAlbedo;
+	float cRoughness;
+	float cMetallic;
+};
+
+struct PerInstanceData {
+	XMFLOAT4X4 world;
+};
+
+struct PerDrawcallData {
+	Material material;
+	u32t firstInstanceIdx;
+};
+
+struct PerFrameData {
+	XMFLOAT4X4 vp;
+	XMFLOAT3 cameraPosV;
+	float padding0;
+};
+
+}	// namespace BillboardShader
 
 #endif	// __shader_HPP

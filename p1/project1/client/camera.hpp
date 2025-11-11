@@ -18,9 +18,13 @@ public:
 	void setPerspective(mu::Degree fovy, float aspect, float nearz, float farz);
 	void setOrtho(float minX, float minY, float maxX, float maxY, float minZ, float maxZ);
 	
+	mu::Vec3 MU_CALLCONV pos() const { return position_; }
+
 private:
 	std::weak_ptr<Object> pTargetObject_{};
 	mu::Vec3 offsetFromTarget_{};
+
+	mu::Vec3 position_{};
 
 	// perspective¿ë
 	float fovy_;
