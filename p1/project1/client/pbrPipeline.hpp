@@ -131,8 +131,9 @@ private:
 	// 멀티스레드 작업 시, 드로우콜들에 대해
 	// 단위 작업을 생성하여 스레드에 할당하는데 사용된다.
 	void addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
-		const DrawEvent* pFirst, const DrawEvent* pLast,
-		std::size_t firstInstanceIdx, std::latch& latch
+		const std::vector<DrawEvent>::const_iterator* pItFirst,
+		const std::vector<DrawEvent>::const_iterator* pItLast,
+		std::size_t firstDrawcallIdx, std::latch& latch
 	);
 
 	// GFX로부터 전달되어 그대로 사용하는 변수들

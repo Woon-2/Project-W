@@ -310,8 +310,17 @@ void Dispatcher::drawSingleThreaded() {
 
 	u32t idxDrawcall = 0u;
 
-	// DrawEvent들을 하나씩 처리한다.
-	for (const auto& drawEvent : drawEvents_) {
+	// 인스턴싱을 적용한다.
+	// equivalent하게 평가되는 DrawEvent들을 (같은 메시와 서브메시 사용)
+	// 묶어서 instancing group으로 삼아 하나의 드로우콜로 처리한다.
+	// 
+	// [groupFirst, groupLast)는 하나의 instancing group을 표현한다.
+	auto groupFirst = drawEvents_.begin();
+	while (groupFirst != drawEvents_.end()) {
+		auto& drawEvent = *groupFirst;
+
+		auto groupLast = std::upper_bound(groupFirst, drawEvents_.end(), drawEvent);
+
 		// PerDrawcallData 바인드
 		pResources_->perDrawcallData.cbuffers[idxDrawcall].bind(
 			cmdList, rootParamIdxPDD_, roomIdx_
@@ -333,7 +342,8 @@ void Dispatcher::drawSingleThreaded() {
 				.cAOStrength = drawEvent.subMesh->material.constantAOStrength,
 				.cEmmisive = drawEvent.subMesh->material.constantEmmisive
 			},
-			.firstInstanceIdx = static_cast<u32t>(idxDrawcall)
+			// perInstanceData에서 현재 instancing group의 첫 번째 인스턴스의 인덱스
+			.firstInstanceIdx = static_cast<u32t>(groupFirst - drawEvents_.begin())
 		};
 		pResources_->perDrawcallData.cbuffers[idxDrawcall].stage(
 			roomIdx_, &perDrawcallData, 1u
@@ -349,10 +359,12 @@ void Dispatcher::drawSingleThreaded() {
 
 		DISPLAY_ERROR_DX_VOID( cmdList->DrawIndexedInstanced(
 			static_cast<UINT>(drawEvent.subMesh->ibView.SizeInBytes / sizeof(u16t)),
-			1u, 0u, 0, 0u
+			static_cast<UINT>(groupLast - groupFirst), 0u, 0, 0u
 		), false );
 
 		++idxDrawcall;
+
+		groupFirst = groupLast;
 	}
 
 	auto hrClose = cmdList->Close();
@@ -375,15 +387,37 @@ void Dispatcher::drawSingleThreaded() {
 // DrawEvents의 정보들을 참고하여
 // 드로우콜들을 수행한다.
 // 멀티스레드로 동작한다.
+// DrawEvents가 비어있다면 아무 동작도 하지 않는다.
 void Dispatcher::drawMultiThreaded() {
 	if (drawEvents_.empty()) {
 		return;
 	}
 
-	// DrawEvent는 jobSize 단위로 스레드들에 분배될 것이므로,
+	// 인스턴싱을 적용한다.
+	// equivalent하게 평가되는 DrawEvent들을 (같은 메시와 서브메시 사용)
+	// 묶어서 instancing group으로 삼아 하나의 드로우콜로 처리한다.
+	// 
+	// instancingGroups는 drawEvents_에서 각 instancing group의 첫 원소를 가리키는 iterator들을 저장한다.
+	// 그리고 sentinel 값으로 drawEvents_.end()를 저장한다.
+	// * 때문에 instancing group의 총 개수는 instancingGroups.size()가 아닌 instancingGroups.size() - 1이다.
+	// 
+	// instancingGroups[k]와 instancingGroups[k+1]은
+	// k번째 instancingGroup의 begin, end가 된다.
+	// 이를 위해 sentinel 값을 추가하였다.
+	static auto instancingGroups = std::vector<decltype(drawEvents_)::const_iterator>();
+	
+	auto itFirst = drawEvents_.cbegin();
+	while (itFirst != drawEvents_.cend()) {
+		auto itLast = std::upper_bound(itFirst, drawEvents_.cend(), *itFirst);
+		instancingGroups.push_back(itFirst);
+		itFirst = itLast;
+	}
+	instancingGroups.push_back(drawEvents_.cend());
+
+	// instancing group들은 jobSize 단위로 스레드들에 분배될 것이므로,
 	// 동기화를 위한 latch를 준비한다.
 	// 이때, DrawEvent의 개수가 jobSize로 나누어 떨어지지 않을 경우를 대비한다.
-	const std::size_t jobCnt = (drawEvents_.size() + (jobSizeDraw_ - 1)) / jobSizeDraw_;
+	const std::size_t jobCnt = ( (instancingGroups.size() - 1u) + (jobSizeDraw_ - 1u)) / jobSizeDraw_;
 	auto latch = std::latch(jobCnt);
 
 	// 파악된 작업의 개수에 맞게 명령 컨텍스트들을 할당한다.
@@ -407,13 +441,21 @@ void Dispatcher::drawMultiThreaded() {
 		return;
 	}
 
-	// drawEvents의 [accEventCnt, accEventCnt + jobSizeUpdate_) 범위의
-	// 데이터를 가공해 perDrawcallData를 구축하고, 드로우콜을 수행한다.
-	std::size_t accEventCnt = 0u;
+	
+	// 각 스레드는 instancingGroups 내 jobSizeDraw_ 개의 instancing group을 맡아
+	// 드로우콜 명령을 기록한다.
+	// 
+	// accDrawcallCnt 변수를 이용하여 이 변수의 값을 jobSizeDraw_만큼 증가시켜가며
+	// instancingGroups의 [accDrawcallCnt, accDrawcallCnt + jobSizeDraw_) 범위의
+	// 데이터를 가공해 각 instancing group의 드로우콜 명령을 기록하는 것으로 구현한다.
+	//
+	// jobSizeDraw_ 개로 나누어 떨어지지 않을 상황에 대응하기 위해
+	// 별도의 찌꺼기 처리 코드를 둔다.
+	std::size_t accDrawcallCnt = 0u;
 	// 각 작업마다 명령 컨텍스트를 분배한다.
 	auto currCmdCtx = cmdCtxs.begin();
 
-	while (accEventCnt + (jobSizeDraw_ - 1) < drawEvents_.size()) {
+	while (accDrawcallCnt + (jobSizeDraw_ - 1) < instancingGroups.size() - 1u) {
 		// 명령 컨텍스트 초기화
 		auto hrCmdAllocReset = currCmdCtx->cmdAlloc->Reset();
 		DISPLAY_ERROR_DX_HR( hrCmdAllocReset, false );
@@ -429,17 +471,17 @@ void Dispatcher::drawMultiThreaded() {
 		}
 
 		// 명령 기록
-		addJobDraw(currCmdCtx->cmdList.Get(), drawEvents_.data() + accEventCnt,
-			drawEvents_.data() + accEventCnt + jobSizeDraw_, accEventCnt, latch
+		addJobDraw( currCmdCtx->cmdList.Get(), instancingGroups.data() + accDrawcallCnt,
+			instancingGroups.data() + accDrawcallCnt + jobSizeDraw_, accDrawcallCnt, latch
 		);
-		
-		accEventCnt += jobSizeDraw_;
+
+		accDrawcallCnt += jobSizeDraw_;
 		++currCmdCtx;
 	}
 
 	// 찌꺼기 처리
-	if (accEventCnt != drawEvents_.size()) {
-		const auto lastJobSize = drawEvents_.size() - accEventCnt;
+	if (accDrawcallCnt != instancingGroups.size() - 1u) {
+		const auto lastJobSize = instancingGroups.size() - 1u - accDrawcallCnt;
 		// 명령 컨텍스트 초기화
 		auto hrCmdAllocReset = currCmdCtx->cmdAlloc->Reset();
 		DISPLAY_ERROR_DX_HR( hrCmdAllocReset, false );
@@ -455,13 +497,15 @@ void Dispatcher::drawMultiThreaded() {
 		}
 
 		// 명령 기록
-		addJobDraw(currCmdCtx->cmdList.Get(), drawEvents_.data() + accEventCnt,
-			drawEvents_.data() + accEventCnt + lastJobSize , accEventCnt, latch
+		addJobDraw( currCmdCtx->cmdList.Get(), instancingGroups.data() + accDrawcallCnt,
+			instancingGroups.data() + accDrawcallCnt + lastJobSize, accDrawcallCnt, latch
 		);
 	}
 
 	// 동기화
 	latch.wait();
+
+	instancingGroups.clear();
 
 	// 명령 기록 끝, 실행
 	auto stagedCmdLists = std::vector<ID3D12CommandList*>(cmdCtxs.size(), nullptr);
@@ -502,11 +546,10 @@ void MU_CALLCONV Dispatcher::addJobUpdate( mu::Mat4x4 view, const mu::Mat4x4& vi
 // 멀티스레드 작업 시, 드로우콜들에 대해
 // 단위 작업을 생성하여 스레드에 할당하는데 사용된다.
 void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
-	const DrawEvent* pFirst, const DrawEvent* pLast,
-	std::size_t firstInstanceIdx, std::latch& latch
+	const std::vector<DrawEvent>::const_iterator* pItFirst,
+	const std::vector<DrawEvent>::const_iterator* pItLast,
+	std::size_t firstDrawcallIdx, std::latch& latch
 ) {
-	const auto jobSize = pLast - pFirst;
-
 	threadPool_->addJob([=, &latch]() {
 		// 명령 컨텍스트마다 개별적으로 파이프라인 설정을 해주어야 한다.
 		// (파이프라인 설정은 공유되지 않는다. 그렇더라.)
@@ -547,13 +590,18 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 		// PerFrameData 바인드
 		pResources_->perFrameData.bind(threadCmdList, rootParamIdxPFD_, roomIdx_);
 
-		for ( auto idxDrawcall = firstInstanceIdx;
-			idxDrawcall < firstInstanceIdx + jobSize;
-			++idxDrawcall
-		) {
-			// DrawEvent의 정보를 기반으로 GPU 데이터 업데이트 및
-			// 입력 조립기 설정을 하고 드로우콜을 수행한다.
-			const auto& drawEvent = drawEvents_[idxDrawcall];
+		std::size_t idxDrawcall = firstDrawcallIdx;
+
+		// [pItFirst, pItLast]는 각 instancing group의 시작점(혹은 sentinel)이 되는
+		// iterator들을 표현한다.
+		auto pGroup = pItFirst;
+
+		while (pGroup != pItLast) {
+			// [groupFirst, groupLast)는 하나의 instancing group을 표현한다.
+			auto groupFirst = *pGroup;
+			auto groupLast = *(pGroup + 1);
+
+			const auto& drawEvent = *groupFirst;
 
 			// PerDrawcallData 바인드
 			pResources_->perDrawcallData.cbuffers[idxDrawcall].bind(
@@ -573,7 +621,8 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 					.cAOStrength = drawEvent.subMesh->material.constantAOStrength,
 					.cEmmisive = drawEvent.subMesh->material.constantEmmisive
 				},
-				.firstInstanceIdx = static_cast<u32t>(idxDrawcall)
+				// perInstanceData에서 현재 instancing group의 첫 번째 인스턴스의 인덱스
+				.firstInstanceIdx = static_cast<u32t>(groupFirst - drawEvents_.begin())
 			};
 			// PerDrawcallData GPU 데이터 갱신
 			// (바인드와 GPU 데이터 갱신 순서는 상관없다.
@@ -592,8 +641,11 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 
 			DISPLAY_ERROR_DX_VOID( threadCmdList->DrawIndexedInstanced(
 				static_cast<UINT>(drawEvent.subMesh->ibView.SizeInBytes / sizeof(u16t)),
-				1u, 0u, 0, 0u
+				static_cast<UINT>(groupLast - groupFirst), 0u, 0, 0u
 			), false );
+
+			++idxDrawcall;
+			++pGroup;
 		}
 
 		// 명령 기록 종료
