@@ -600,8 +600,6 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
     ID3D12GraphicsCommandList* cmdList, const std::string& name,
     Fence& fenceToAssociate, Mesh& mesh
 ) {
-    readHeadTag(ifs, "Mesh");
-
     // 정점 버퍼들 구축
     readHeadTag(ifs, "VertexBuffers");
     
@@ -699,10 +697,8 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
             readTailTag(ifs, "TextureCoords1");
         }
         else {
-            std::string wTag{};
-            wTag.assign(tag.begin(), tag.end());
             DISPLAY_ERROR_STR(false, "[File I/O Error] importMesh: 알 수 없는 태그 "s
-                + wTag + "를 읽었습니다.", true
+                + tag + "를 읽었습니다.", true
             );
         }
     }
@@ -790,8 +786,6 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
     std::unordered_map<std::string, Texture>& texHashMap,
     Fence& fenceToAssociate, Mesh& mesh
 ) {
-    readHeadTag(ifs, "Materials");
-
     // Bindless Index 초기화
     // idxRange를 -1로 써주는 것으로 그 텍스처가 존재하지 않음을 표현한다.
     for (auto& [submeshKey, submesh] : mesh.subMeshes) {
@@ -908,10 +902,8 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
             }
             // ======================================
             else {
-                std::string wTag{};
-                wTag.assign(tag.begin(), tag.end());
                 DISPLAY_ERROR_STR(false, "[File I/O Error] importMaterials: 알 수 없는 태그 "s
-                    + wTag + "를 읽었습니다.", true
+                    + tag + "를 읽었습니다.", true
                 );
             }
         }
@@ -945,22 +937,37 @@ void importTransform( std::ifstream& ifs, ID3D12Device* device,
         /* .dressXform = */ mu::Mat4x4(XMLoadFloat4x4(&dressMat))
     );
 
-    // 메시를 읽어들인다.
-    importMesh(ifs, device, cmdList, name, fenceToAssociate, pair.mesh);
-    // 재질들을 읽어들인다.
-    importMaterials(ifs, device, cmdList, texHashMap, fenceToAssociate, pair.mesh);
+    for (;;) {
+        const auto str = readString(ifs);
+        if (isTailTag(str, "Node")) {
+            break;
+        }
+
+        const auto tag = untagHead(str);
+
+        if (tag == "Mesh") {
+            importMesh(ifs, device, cmdList, name, fenceToAssociate, pair.mesh);
+        }
+        else if (tag == "Materials") {
+            importMaterials(ifs, device, cmdList, texHashMap, fenceToAssociate, pair.mesh);    
+        }
+        else if (tag == "ChildCnt") {
+            const auto childCnt = readInteger(ifs);
+            readTailTag(ifs, "ChildCnt");
+            readHeadTag(ifs, "Children");
+            for (int i = 0; i < childCnt; ++i) {
+                importTransform(ifs, device, cmdList, texHashMap, fenceToAssociate, model);
+            }
+            readTailTag(ifs, "Children");
+        }
+        else {
+            DISPLAY_ERROR_STR(false, "[File I/O Error] importMaterials: 알 수 없는 태그 "s
+                + tag + "를 읽었습니다.", true
+            );
+        }
+    }
 
     gSharedLog << "[Resource Load] 모델 노드 " << name << " 구축 완료\n";
-
-    // 자식노드들을 읽어들인다.
-    const auto childCnt = readInteger(ifs, "ChildCnt");
-    readHeadTag(ifs, "Children");
-    for (int i = 0; i < childCnt; ++i) {
-        importTransform(ifs, device, cmdList, texHashMap, fenceToAssociate, model);
-    }
-    readTailTag(ifs, "Children");
-
-    readTailTag(ifs, "Node");
 }
 
 // 기하구조를 읽어들인다.

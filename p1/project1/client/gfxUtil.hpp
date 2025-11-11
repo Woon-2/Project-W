@@ -305,6 +305,9 @@ enum class Samplers {
 	BilinearComparison
 };
 
+// 인자로 전달받은 샘플러 속성에 맞는 샘플러의 bindless 인덱스를 계산한다.
+// 위의 Samplers enum 중 하나의 값이 리턴된다.
+// 만약, 해당하는 샘플러가 없다면 0이 리턴되고 오류 메시지를 출력한다.
 UINT calcIdxBindlessSampler( D3D12_FILTER filterMode,
 	D3D12_TEXTURE_ADDRESS_MODE addrModeU, D3D12_TEXTURE_ADDRESS_MODE addrModeV,
 	D3D12_TEXTURE_ADDRESS_MODE addrModeW, UINT anisoLevel
