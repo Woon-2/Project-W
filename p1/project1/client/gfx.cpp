@@ -636,6 +636,7 @@ void GFX::render() {
 }
 
 // 공용 샘플러들 생성
+// gfxUtil.hpp의 Samplers enum과 인덱스를 맞춰주어야 한다.
 void GFX::createSamplers() {
 	// 0 - Nearest Wrap
 	auto samDesc = D3D12_SAMPLER_DESC{
@@ -654,13 +655,19 @@ void GFX::createSamplers() {
 	auto handle = samPool_.cpuHandle(idx);
 	device_->CreateSampler(&samDesc, handle);
 
-	// 1 - Trilinear Wrap
+	// 1 - Bilinear Wrap
+	samDesc.Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+	idx = samPool_.alloc();
+	handle = samPool_.cpuHandle(idx);
+	device_->CreateSampler(&samDesc, handle);
+
+	// 2 - Trilinear Wrap
 	samDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
 	idx = samPool_.alloc();
 	handle = samPool_.cpuHandle(idx);
 	device_->CreateSampler(&samDesc, handle);
 
-	// 2 - Nearest Border
+	// 3 - Nearest Border
 	samDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
 	samDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
 	samDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
@@ -669,13 +676,19 @@ void GFX::createSamplers() {
 	handle = samPool_.cpuHandle(idx);
 	device_->CreateSampler(&samDesc, handle);
 
-	// 3 - Trilinear Border
+	// 4 - Bilinear Border
+	samDesc.Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+	idx = samPool_.alloc();
+	handle = samPool_.cpuHandle(idx);
+	device_->CreateSampler(&samDesc, handle);
+
+	// 5 - Trilinear Border
 	samDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
 	idx = samPool_.alloc();
 	handle = samPool_.cpuHandle(idx);
 	device_->CreateSampler(&samDesc, handle);
 
-	// 4 - Nearest Clamp
+	// 6 - Nearest Clamp
 	samDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
 	samDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
 	samDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
@@ -684,13 +697,19 @@ void GFX::createSamplers() {
 	handle = samPool_.cpuHandle(idx);
 	device_->CreateSampler(&samDesc, handle);
 
-	// 5 - Trilinear Clamp
+	// 7 - Bilinear Clamp
+	samDesc.Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+	idx = samPool_.alloc();
+	handle = samPool_.cpuHandle(idx);
+	device_->CreateSampler(&samDesc, handle);
+
+	// 8 - Trilinear Clamp
 	samDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
 	idx = samPool_.alloc();
 	handle = samPool_.cpuHandle(idx);
 	device_->CreateSampler(&samDesc, handle);
 
-	// 6 - Nearest Comparison
+	// 9 - Nearest Comparison
 	samDesc.Filter = D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT;
 	samDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
 	samDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
@@ -704,7 +723,7 @@ void GFX::createSamplers() {
 	handle = cmpSamPool_.cpuHandle(idx);
 	device_->CreateSampler(&samDesc, handle);
 
-	// 7 - Bilinear Comparison
+	// 10 - Bilinear Comparison
 	samDesc.Filter = D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
 	idx = cmpSamPool_.alloc();
 	handle = cmpSamPool_.cpuHandle(idx);

@@ -315,6 +315,13 @@ std::string untagHead(const std::string& tag) {
 }
 
 // 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
+int readInteger(std::ifstream& ifs) {
+    int ret{};
+    ifs.read(reinterpret_cast<char*>(&ret), sizeof(int));
+    return ret;
+}
+
+// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
 int readInteger(std::ifstream& ifs, const char* tagSource) {
     readHeadTag(ifs, tagSource);
     int ret{};
@@ -410,12 +417,160 @@ std::vector<XMFLOAT4> readVec4s(std::ifstream& ifs) {
 }
 
 // 텍스처 매핑 정보를 읽어들인다.
-// 텍스처 매핑 정보에는 텍스처 이름과 텍스처 경로 쌍이 들어있다.
 // 텍스처 이름을 key로 삼아 texHashMap에 쿼리를 해보고,
 // 텍스처가 존재하지 않는다면 알아낸 경로를 통해 텍스처를 로드해 key와 함께 등록한다.
+// 로드된 텍스처로 texPool에서 srv를 할당받아 생성하고, 샘플링 정보를 추출한다.
+// 그리고 텍스처의 srv와 uav에 해당하는 bindless index에
+// 풀에서의 인덱스와 샘플러 인덱스를 채워넣는다.
+void importTexture( std::ifstream& ifs, ID3D12Device* device,
+    ID3D12GraphicsCommandList* cmdList, std::unordered_map<std::string, Texture>& texHashMap,
+    DescriptorPool& texPool, Fence& fenceToAssociate
+) {
+    std::string key{};
+    std::string path{};
+    // 기본값들로 초기화
+    D3D12_FILTER filterMode = D3D12_FILTER_MIN_MAG_MIP_POINT;
+    D3D12_TEXTURE_ADDRESS_MODE addrModeU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    D3D12_TEXTURE_ADDRESS_MODE addrModeV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    D3D12_TEXTURE_ADDRESS_MODE addrModeW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    UINT anisoLevel = 1u;
+
+    for (;;) {
+        const auto str = readString(ifs);
+        if (isTailTag(str, "Item")) {
+            break;
+        }
+
+        const auto tag = untagHead(str);
+
+        // 텍스처 이름 추출
+        if (tag == "TextureName") {
+            key = readString(ifs);
+            readTailTag(ifs, "TextureName");
+        }
+        // Address Mode(Wrap Mode) 추출
+        else if (tag == "WrapModeU") {
+            const auto wrapModeUStr = readString(ifs);
+            if (wrapModeUStr == "Repeat") {
+                addrModeU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+            }
+            else if (wrapModeUStr == "Clamp") {
+                addrModeU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            }
+            else if (wrapModeUStr == "Mirror") {
+                addrModeU = D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+            }
+            else {
+                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: 알수 없는 텍스처 wrap mode "s
+                    + wrapModeUStr + "을 읽었습니다.", false
+                );
+            }
+
+            readTailTag(ifs, "WrapModeU");
+        }
+        else if (tag == "WrapModeV") {
+            const auto wrapModeVStr = readString(ifs);
+            if (wrapModeVStr == "Repeat") {
+                addrModeV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+            }
+            else if (wrapModeVStr == "Clamp") {
+                addrModeV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            }
+            else if (wrapModeVStr == "Mirror") {
+                addrModeV = D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+            }
+            else {
+                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: 알수 없는 텍스처 wrap mode "s
+                    + wrapModeVStr + "을 읽었습니다.", false
+                );
+            }
+
+            readTailTag(ifs, "WrapModeV");
+        }
+        else if (tag == "WrapModeW") {
+            const auto wrapModeWStr = readString(ifs);
+            if (wrapModeWStr == "Repeat") {
+                addrModeW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+            }
+            else if (wrapModeWStr == "Clamp") {
+                addrModeW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            }
+            else if (wrapModeWStr == "Mirror") {
+                addrModeW = D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+            }
+            else {
+                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: 알수 없는 텍스처 wrap mode "s
+                    + wrapModeWStr + "을 읽었습니다.", false
+                );
+            }
+
+            readTailTag(ifs, "WrapModeW");
+        }
+        // Filter Mode 추출
+        else if (tag == "FilterMode") {
+            const auto filterModeStr = readString(ifs);
+            if (filterModeStr == "Point") {
+                filterMode = D3D12_FILTER_MIN_MAG_MIP_POINT;
+            }
+            else if (filterModeStr == "Bilinear") {
+                filterMode = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+            }
+            else if (filterModeStr == "Trilinear") {
+                filterMode = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+            }
+            else if (filterModeStr == "Anisotropic") {
+                filterMode = D3D12_FILTER_ANISOTROPIC;
+            }
+            else {
+                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: 알수 없는 텍스처 filter mode "s
+                    + filterModeStr + "을 읽었습니다.", false
+                );
+            }
+
+            readTailTag(ifs, "FilterMode");
+        }
+        // 비등방성 필터링 레벨(최대 레벨) 추출
+        else if (tag == "AnisoLevel") {
+            anisoLevel = static_cast<UINT>(readInteger(ifs));
+            readTailTag(ifs, "AnisoLevel");
+        }
+        // 경로 추출
+        else if (tag == "Path") {
+            path = readString(ifs);
+            readTailTag(ifs, "Path");
+        }
+        else {
+            DISPLAY_ERROR_STR(false, "[File I/O Error] importTextureMapping: 알 수 없는 태그 "s
+                + tag + "를 읽었습니다.", true
+            );
+        }
+    }
+
+    // texHashMap에 없다면 알아낸 경로를 통해 텍스처를 load해 key와 함께 등록
+    if (!texHashMap.contains(key)) {
+        auto [pPair, _] = texHashMap.try_emplace( key, loadTexture(device, cmdList, path, fenceToAssociate) );
+        gSharedLog << "[Resource Load] File I/O: 텍스처 " + key + " 로드 완료 - " + path << '\n';
+
+        // 풀에서 srv를 할당받아 생성
+        createSRV(device, pPair->second, texPool);
+        
+        // 샘플러 인덱스를 계산해서 채워넣기
+        const auto samplerIdx = calcIdxBindlessSampler(filterMode, addrModeU, addrModeV, addrModeW, anisoLevel);
+        pPair->second.idxSrv.idxSampler = samplerIdx;
+        pPair->second.idxUav.idxSampler = samplerIdx;
+    }
+}
+
+// 텍스처 매핑 정보를 읽어들인다.
+// 텍스처 이름을 key로 삼아 texHashMap에 쿼리를 해보고,
+// 텍스처가 존재하지 않는다면 알아낸 경로를 통해 텍스처를 로드해 key와 함께 등록한다.
+// 로드된 텍스처로 texPool에서 srv를 할당받아 생성하고, 샘플링 정보를 추출한다.
+// 그리고 텍스처의 srv와 uav에 해당하는 bindless index에
+// 풀에서의 인덱스와 샘플러 인덱스를 채워넣는다.
 void importTextureMapping( std::ifstream& ifs, ID3D12Device* device,
     ID3D12GraphicsCommandList* cmdList, std::unordered_map<std::string, Texture>& texHashMap,
-    DescriptorPool& texPool, Fence& fenceToAssociate) {
+    DescriptorPool& texPool, Fence& fenceToAssociate
+) {
     readHeadTag(ifs, "TextureMapping");
     for (;;) {
         const auto str = readString(ifs);
@@ -427,16 +582,7 @@ void importTextureMapping( std::ifstream& ifs, ID3D12Device* device,
 
         // (텍스처 이름, 텍스처 경로) 쌍 읽기
         if (tag == "Item") {
-            const auto key = readString(ifs);
-            const auto path = readString(ifs);
-
-            // texHashMap에 없다면 알아낸 경로를 통해 텍스처를 load해 key와 함께 등록
-            if (!texHashMap.contains(key)) {
-                auto [pPair, _] = texHashMap.try_emplace( key, loadTexture(device, cmdList, path, fenceToAssociate) );
-                gSharedLog << "[Resource Load] File I/O: 텍스처 " + key + " 로드 완료 - " + path << '\n';
-                createSRV(device, pPair->second, texPool);
-            }
-            readTailTag(ifs, "Item");
+            importTexture(ifs, device, cmdList, texHashMap, texPool, fenceToAssociate);
         }
         else {
             DISPLAY_ERROR_STR(false, "[File I/O Error] importTextureMapping: 알 수 없는 태그 "s
@@ -722,7 +868,7 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
             else if (tag == "AlbedoMap") {
                 const auto albedoMapKey = readString(ifs);
                 for (auto& [submeshKey, submesh] : mesh.subMeshes) {
-                    submesh.material.mapAlbedo = texHashMap.at(albedoMapKey);
+                    submesh.material.mapAlbedo = cloneTextureIdxOnly(texHashMap.at(albedoMapKey));
                 }
                 readTailTag(ifs, "AlbedoMap");
             }
@@ -730,7 +876,7 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
             else if (tag == "NormalMap") {
                 const auto normalMapKey = readString(ifs);
                 for (auto& [submeshKey, submesh] : mesh.subMeshes) {
-                    submesh.material.mapNormal= texHashMap.at(normalMapKey);
+                    submesh.material.mapNormal = cloneTextureIdxOnly(texHashMap.at(normalMapKey));
                 }
                 readTailTag(ifs, "NormalMap");
             }
@@ -738,7 +884,8 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
             else if (tag == "MetallicSmoothnessMap") {
                 const auto metallicSmoothnessMapKey = readString(ifs);
                 for (auto& [submeshKey, submesh] : mesh.subMeshes) {
-                    submesh.material.mapMetallicSmoothness = texHashMap.at(metallicSmoothnessMapKey);
+                    submesh.material.mapMetallicSmoothness
+                        = cloneTextureIdxOnly(texHashMap.at(metallicSmoothnessMapKey));
                 }
                 readTailTag(ifs, "MetallicSmoothnessMap");
             }
@@ -746,7 +893,7 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
             else if (tag == "EmmisiveMap") {
                 const auto emmisiveMapKey = readString(ifs);
                 for (auto& [submeshKey, submesh] : mesh.subMeshes) {
-                    submesh.material.mapEmmisive = texHashMap.at(emmisiveMapKey);
+                    submesh.material.mapEmmisive = cloneTextureIdxOnly(texHashMap.at(emmisiveMapKey));
                 }
                 readTailTag(ifs, "EmmisiveMap");
             }
@@ -754,7 +901,8 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
             else if (tag == "AOMap") {
                 const auto aoMapKey = readString(ifs);
                 for (auto& [submeshKey, submesh] : mesh.subMeshes) {
-                    submesh.material.mapAmbientOcclusion = texHashMap.at(aoMapKey);
+                    submesh.material.mapAmbientOcclusion
+                        = cloneTextureIdxOnly(texHashMap.at(aoMapKey));
                 }
                 readTailTag(ifs, "AOMap");
             }

@@ -11,7 +11,7 @@
 
 
 // 유니티에서 레벨 추출하는 스크립트 작성
-// 텍스처 샘플링 방법도 유니티에서 추출할 수 있도록 하기
+// 메시나 재질이 없는 모델 노드 대응
 // 마우스 움직임으로 카메라 조작 구현 - 11.10.
 // SkySphere 구현
 // Batching & Instancing 구현
@@ -101,6 +101,7 @@ public:
 
 private:
 	// 공용 샘플러들 생성
+	// gfxUtil.hpp의 Samplers enum과 인덱스를 맞춰주어야 한다.
 	void createSamplers();
 	// fenceName을 갖는 Fence의 desiredValue 값을 1 증가시키고
 	// GPU 큐에 그 갱신 명령을 삽입한다.

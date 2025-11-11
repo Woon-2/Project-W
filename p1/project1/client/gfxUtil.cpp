@@ -470,6 +470,109 @@ LoadDDSReturnType loadDDS(
     return ret;
 }
 
+// 인자로 전달받은 샘플러 속성에 맞는 샘플러의 bindless 인덱스를 계산한다.
+// 위의 Samplers enum 중 하나의 값이 리턴된다.
+// 만약, 해당하는 샘플러가 없다면 0이 리턴되고 오류 메시지를 출력한다.
+UINT calcIdxBindlessSampler( D3D12_FILTER filterMode,
+	D3D12_TEXTURE_ADDRESS_MODE addrModeU, D3D12_TEXTURE_ADDRESS_MODE addrModeV,
+	D3D12_TEXTURE_ADDRESS_MODE addrModeW, UINT anisoLevel
+) {
+	// 0 - NearestWrap
+	if (filterMode == D3D12_FILTER_MIN_MAG_MIP_POINT
+		&& addrModeU == D3D12_TEXTURE_ADDRESS_MODE_WRAP
+		&& addrModeV == D3D12_TEXTURE_ADDRESS_MODE_WRAP
+		&& addrModeW == D3D12_TEXTURE_ADDRESS_MODE_WRAP
+	) {
+		return 0;
+	}
+	// 1 - BilinearWrap
+	else if (filterMode == D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT
+		&& addrModeU == D3D12_TEXTURE_ADDRESS_MODE_WRAP
+		&& addrModeV == D3D12_TEXTURE_ADDRESS_MODE_WRAP
+		&& addrModeW == D3D12_TEXTURE_ADDRESS_MODE_WRAP
+	) {
+		return 1;
+	}
+	// 2 - TrilinearWrap
+	else if (filterMode == D3D12_FILTER_MIN_MAG_MIP_LINEAR
+		&& addrModeU == D3D12_TEXTURE_ADDRESS_MODE_WRAP
+		&& addrModeV == D3D12_TEXTURE_ADDRESS_MODE_WRAP
+		&& addrModeW == D3D12_TEXTURE_ADDRESS_MODE_WRAP
+	) {
+		return 2;
+	}
+	// 3 - NearestBorder
+	else if (filterMode == D3D12_FILTER_MIN_MAG_MIP_POINT
+		&& addrModeU == D3D12_TEXTURE_ADDRESS_MODE_BORDER
+		&& addrModeV == D3D12_TEXTURE_ADDRESS_MODE_BORDER
+		&& addrModeW == D3D12_TEXTURE_ADDRESS_MODE_BORDER
+	) {
+		return 3;
+	}
+	// 4 - BilinearBorder
+	else if (filterMode == D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT
+		&& addrModeU == D3D12_TEXTURE_ADDRESS_MODE_BORDER
+		&& addrModeV == D3D12_TEXTURE_ADDRESS_MODE_BORDER
+		&& addrModeW == D3D12_TEXTURE_ADDRESS_MODE_BORDER
+	) {
+		return 4;
+	}
+	// 5 - TrilinerBorder
+	else if (filterMode == D3D12_FILTER_MIN_MAG_MIP_LINEAR
+		&& addrModeU == D3D12_TEXTURE_ADDRESS_MODE_BORDER
+		&& addrModeV == D3D12_TEXTURE_ADDRESS_MODE_BORDER
+		&& addrModeW == D3D12_TEXTURE_ADDRESS_MODE_BORDER
+	) {
+		return 5;
+	}
+	// 6 - NearestClamp
+	else if (filterMode == D3D12_FILTER_MIN_MAG_MIP_POINT
+		&& addrModeU == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+		&& addrModeV == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+		&& addrModeW == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+	) {
+		return 6;
+	}
+	// 7 - BilinearClamp
+	else if (filterMode == D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT
+		&& addrModeU == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+		&& addrModeV == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+		&& addrModeW == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+	) {
+		return 7;
+	}
+	// 8 - TrilinearClamp
+	else if (filterMode == D3D12_FILTER_MIN_MAG_MIP_LINEAR
+		&& addrModeU == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+		&& addrModeV == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+		&& addrModeW == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+	) {
+		return 8;
+	}
+	// 9 - NearestComparison
+	else if (filterMode == D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT
+		&& addrModeU == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+		&& addrModeV == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+		&& addrModeW == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+	) {
+		return 9;
+	}
+	// 10 - BilinearComparison
+	else if (filterMode == D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT
+		&& addrModeU == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+		&& addrModeV == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+		&& addrModeW == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+	) {
+		return 10;
+	}
+	else {
+		DISPLAY_ERROR_STR(false, "[GFX Error] calcIdxBindlessSampler: 요구된 샘플링 방식에 대응되는 샘플러가 없습니다.\n"
+			"Samplers enum과 calcIdxBindlessSampler 함수, 그리고 createSampler 함수를 업데이트하세요.", false
+		);
+		return 0;
+	}
+}
+
 // dds 포맷의 파일로부터 텍스처를 로드한다.
 // UpdateSubresources 함수에서 쓰인 임시 업로드 버퍼가 펜스에 연관되므로,
 // 펜스에서 gpu 작업 완료를 확인하고 난 뒤에 임시 업로드 버퍼들을 해제할 필요가 있다.

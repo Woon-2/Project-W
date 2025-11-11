@@ -9,7 +9,7 @@ using System.Text;
 public class ModelExtractorWindow : EditorWindow
 {
     private GameObject targetObject;
-    private Dictionary<string, string> textureMappings = new Dictionary<string, string>();
+    private Dictionary<Texture, string> textureMappings = new Dictionary<Texture, string>();
     private Vector2 scrollPos;
     private string targetName = "";
 
@@ -43,12 +43,13 @@ public class ModelExtractorWindow : EditorWindow
             EditorGUILayout.LabelField("🧾 Texture List", EditorStyles.boldLabel);
             scrollPos = EditorGUILayout.BeginScrollView(scrollPos, GUILayout.Height(300));
 
-            var keys = new List<string>(textureMappings.Keys);
-            foreach (var texName in keys)
+            var keys = new List<Texture>(textureMappings.Keys);
+            foreach (var tex in keys)
             {
+                string texName = tex.name;
                 EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.LabelField(texName, GUILayout.Width(200));
-                textureMappings[texName] = EditorGUILayout.TextField(textureMappings[texName]);
+                textureMappings[tex] = EditorGUILayout.TextField(textureMappings[tex]);
                 EditorGUILayout.EndHorizontal();
             }
 
@@ -80,9 +81,9 @@ public class ModelExtractorWindow : EditorWindow
                     {
                         string propName = ShaderUtil.GetPropertyName(shader, i);
                         Texture tex = mat.GetTexture(propName);
-                        if (tex != null && !textureMappings.ContainsKey(tex.name))
+                        if (tex != null && !textureMappings.ContainsKey(tex))
                         {
-                            textureMappings[tex.name] = AssetDatabase.GetAssetPath(tex);
+                            textureMappings[tex] = AssetDatabase.GetAssetPath(tex);
                         }
                     }
                 }
@@ -374,8 +375,21 @@ public class ModelExtractorWindow : EditorWindow
         foreach (var kvp in textureMappings)
         {
             WriteHeadTag(geometryWriter, "Item");
-            WriteString(geometryWriter, kvp.Key);
-            WriteString(geometryWriter, kvp.Value);
+            Texture tex = kvp.Key;
+            WriteText(geometryWriter, "TextureName", tex.name);
+            WriteText(geometryWriter, "WrapModeU", tex.wrapModeU.ToString());
+            WriteText(geometryWriter, "WrapModeV", tex.wrapModeV.ToString());
+            WriteText(geometryWriter, "WrapModeW", tex.wrapModeV.ToString());
+            if (tex.anisoLevel > 1)
+            {
+                WriteText(geometryWriter, "FilterMode", "Anisotropic");
+            }
+            else
+            {
+                WriteText(geometryWriter, "FilterMode", tex.filterMode.ToString());
+            }
+            WriteInteger(geometryWriter, "AnisoLevel", tex.anisoLevel);
+            WriteText(geometryWriter, "Path", kvp.Value);
             WriteTailTag(geometryWriter, "Item");
         }
 

@@ -293,14 +293,22 @@ struct BindlessIndex {
 // etoi 함수를 이용해 BindlessIndex 등에서 사용할 샘플러 인덱스를 얻어내자.
 enum class Samplers {
 	NearestWrap,
+	BilinearWrap,
 	TrilinearWrap,
 	NearestBorder,
+	BilinearBorder,
 	TrilinerBorder,
 	NearestClamp,
+	BilinearClamp,
 	TrilinearClamp,
 	NearestComparison,
 	BilinearComparison
 };
+
+UINT calcIdxBindlessSampler( D3D12_FILTER filterMode,
+	D3D12_TEXTURE_ADDRESS_MODE addrModeU, D3D12_TEXTURE_ADDRESS_MODE addrModeV,
+	D3D12_TEXTURE_ADDRESS_MODE addrModeW, UINT anisoLevel
+);
 
 // 텍스처와 관련된 정보를 담는 구조체
 // gpu 리소스를 담는 ComPtr 객체와 Bindless 셰이더에서 인덱싱하기 위한 인덱스들이 저장된다.
