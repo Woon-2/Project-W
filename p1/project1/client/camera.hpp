@@ -23,18 +23,18 @@ private:
 	mu::Vec3 offsetFromTarget_{};
 
 	// perspective¿ë
-	float fovy_;
-	float aspect_;
-	float nearz_;
-	float farz_;
+	mu::Degree fovy_ = 90.f;
+	float aspect_ = 1.f;
+	float nearz_ = 0.01f;
+	float farz_ = 500.f;
 
 	// ortho¿ë
-	float minX_;
-	float maxX_;
-	float minY_;
-	float maxY_;
-	float minZ_;
-	float maxZ_;
+	float minX_ = -100.f;
+	float maxX_ = 100.f;
+	float minY_ = -100.f;
+	float maxY_ = 100.f;
+	float minZ_ = -100.f;
+	float maxZ_ = 100.f;
 
 	mu::Mat4x4 view_{};
 	mu::Mat4x4 proj_{};

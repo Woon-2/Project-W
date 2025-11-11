@@ -47,7 +47,7 @@ class Function128<R(Args...)> {
         }
     };
 
-    alignas(BUFFER_ALIGN) unsigned char buffer_[BUFFER_SIZE];
+    alignas(BUFFER_ALIGN) unsigned char buffer_[BUFFER_SIZE]{};
     ICallable* callable_ = nullptr;
     bool inBuffer_ = false;
 

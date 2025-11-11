@@ -7,12 +7,12 @@
 
 class Light {
 public:
-	mu::Vec3 color;
-	float intensity;
-	mu::Vec3 atten;
-	float cosTheta;
-	float cosPhi;
-	float falloff;
+	mu::Vec3 color{};
+	float intensity = 0.f;
+	mu::Vec3 atten{};
+	float cosTheta = 0.f;
+	float cosPhi = 0.f;
+	float falloff = 0.f;
 	PBRPipeline::LightData::Type type;
 
 	void update(Milliseconds deltaTime);
