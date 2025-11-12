@@ -1,8 +1,12 @@
 #include "pch.hpp"
 #include "errorHandling.hpp"
+#include "online/onlineGame.hpp"
 #include "standalone/game.hpp"
 #include "timer.hpp"
 #include "ServerSession.hpp"
+
+extern SPServerSession gServerSession;
+extern std::shared_ptr<Object> gPlayer;
 
 inline constexpr const char* wndClsName = "wndCls";
 inline constexpr const char* wndName = "Project1";
@@ -14,8 +18,6 @@ RECT gClientRect{ 0, 0, 1024, 768 };
 LRESULT wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 SPClientService tryConnectToServer();
 std::thread makeIOCPLoopThread(SPClientService& clientService);
-
-GFX gGfx{};
 
 int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow )
 {
@@ -57,15 +59,17 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 
 	std::thread iocpLoopThread{};
 	std::unique_ptr<IGame> pGame = nullptr;
+	gPlayer = std::make_shared<Object>( );
 
 	auto clientService = tryConnectToServer();
-	if (false /*clientService*/) {
+	if (clientService) {
 		iocpLoopThread = makeIOCPLoopThread(clientService);
-		// pGame = std::make_unique<Online::Game>();
+		pGame = std::make_unique<Online::OnlineGame>();
+		static_cast<Online::OnlineGame*>( pGame.get( ) )->setupStage( );
 	}
 	else {
-		pGame = std::make_unique<StandAlone::Game>();
-		static_cast<StandAlone::Game*>(pGame.get())->setupStage();
+		//pGame = std::make_unique<StandAlone::Game>();
+		//static_cast<StandAlone::Game*>(pGame.get())->setupStage();
 	}
 
 	auto& game = *pGame;
@@ -75,10 +79,10 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 	while ( true ) {
 		while ( PeekMessageA( &msg, nullptr, 0, 0, PM_REMOVE ) ) {
 			if ( msg.message == WM_QUIT ) {
-				/*if (clientService) {
+				if (clientService) {
 					iocpLoopThread.join();
 					SocketUtils::rel( );
-				}*/
+				}
 				return static_cast<int>( msg.wParam );
 			}
 

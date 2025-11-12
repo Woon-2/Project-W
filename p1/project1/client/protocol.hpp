@@ -14,7 +14,7 @@ struct PacketHeader {
 	std::uint16_t id;	// packet type (protocol id)
 };
 
-enum class direction : std::uint8_t {
+enum class Direction : std::uint8_t {
 	w, a, s, d
 };
 
@@ -55,7 +55,7 @@ struct SCLeavePacket {
 };
 
 struct CSMovePacket {
-	direction dir;
+	Direction dir;
 };
 
 struct SCMovePacket {

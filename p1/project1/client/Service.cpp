@@ -50,6 +50,7 @@ bool ClientService::start( ) {
         }
         if ( sessionCount == 1 ) {
 			gServerSession = std::static_pointer_cast<ServerSession>( session );
+			gServerSession->setPlayer( gPlayer );
         }
     }
     

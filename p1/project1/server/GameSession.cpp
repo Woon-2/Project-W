@@ -137,7 +137,7 @@ int32 GameSession::onRecvPacket( uint8* buffer, int32 len ) {
 	case PacketType::csMove: {
 		Packet sendPacket{ };
 		sendPacket.scMove.playerId = getId( );
-		if ( packet->csMove.dir == direction::w ) {
+		if ( packet->csMove.dir == Direction::w ) {
 			sendPacket.header.size = sizeof( PacketHeader ) + sizeof( SCMovePacket );
 			sendPacket.header.id = static_cast<uint16>( PacketType::scMove );
 
@@ -153,7 +153,7 @@ int32 GameSession::onRecvPacket( uint8* buffer, int32 len ) {
 				}
 			}
 		}
-		else if ( packet->csMove.dir == direction::a ) {
+		else if ( packet->csMove.dir == Direction::a ) {
 			sendPacket.header.size = sizeof( PacketHeader ) + sizeof( SCMovePacket );
 			sendPacket.header.id = static_cast<uint16>( PacketType::scMove );
 
@@ -169,7 +169,7 @@ int32 GameSession::onRecvPacket( uint8* buffer, int32 len ) {
 				}
 			}
 		}
-		else if ( packet->csMove.dir == direction::s ) {
+		else if ( packet->csMove.dir == Direction::s ) {
 			sendPacket.header.size = sizeof( PacketHeader ) + sizeof( SCMovePacket );
 			sendPacket.header.id = static_cast<uint16>( PacketType::scMove );
 
@@ -185,7 +185,7 @@ int32 GameSession::onRecvPacket( uint8* buffer, int32 len ) {
 				}
 			}
 		}
-		else if ( packet->csMove.dir == direction::d ) {
+		else if ( packet->csMove.dir == Direction::d ) {
 			sendPacket.header.size = sizeof( PacketHeader ) + sizeof( SCMovePacket );
 			sendPacket.header.id = static_cast<uint16>( PacketType::scMove );
 

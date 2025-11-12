@@ -129,9 +129,6 @@
     <ClInclude Include="camera.hpp">
       <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="timer.hpp">
-      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
-    </ClInclude>
     <ClInclude Include="samplePipeline.hpp">
       <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
@@ -270,6 +267,12 @@
     <ClInclude Include="log.hpp">
       <Filter>독립 구현체\헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="timer.hpp">
+      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="online\onlineGame.hpp">
+      <Filter>게임%28온라인%29\헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -349,6 +352,9 @@
     </ClCompile>
     <ClCompile Include="log.cpp">
       <Filter>독립 구현체\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="online\onlineGame.cpp">
+      <Filter>게임%28온라인%29\소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

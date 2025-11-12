@@ -7,7 +7,7 @@ class GameSession : public PacketSession {
 public:
 	GameSession( )
 		: x_( 0.0f ), y_( 0.0f ), z_( 0.0f ),
-		radius_( 0.5f ), signupAndLoginMtx_( ) {}
+		radius_( 0.1f ), signupAndLoginMtx_( ) {}
 
 	virtual ~GameSession( ) {
 		std::cout << "GameSession " << getId( ) << " destructed.\n";

@@ -36,7 +36,7 @@ public:
 		auto packet = reinterpret_cast<Packet*>( buffer );
 		switch ( static_cast<PacketType>( packet->header.id ) ) {
 		case PacketType::scAssignId: {
-			player_ = gPlayer;
+			//player_ = gPlayer;
 			player_->setId( packet->scAssignId.playerId );
 
 			//std::lock_guard<std::mutex> lock( gMtx );
@@ -105,8 +105,8 @@ public:
 	void setPlayer( const std::shared_ptr<Object>& player ) {
 		player_ = player;
 
-		std::lock_guard<std::mutex> lock( gMtx );
-		gObjects[ player->getId( ) ] = player;
+		/*std::lock_guard<std::mutex> lock( gMtx );
+		gObjects[ player->getId( ) ] = player;*/
 	}
 
 	std::shared_ptr<Object> getPlayer( ) const {

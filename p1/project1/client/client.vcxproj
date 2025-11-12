@@ -179,6 +179,7 @@
     <ClInclude Include="mesh.hpp" />
     <ClInclude Include="NetAddress.hpp" />
     <ClInclude Include="object.hpp" />
+    <ClInclude Include="online\onlineGame.hpp" />
     <ClInclude Include="pbrPipeline.hpp" />
     <ClInclude Include="pch.hpp" />
     <ClInclude Include="physics.hpp" />
@@ -211,6 +212,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="mesh.cpp" />
     <ClCompile Include="object.cpp" />
+    <ClCompile Include="online\onlineGame.cpp" />
     <ClCompile Include="pbrPipeline.cpp" />
     <ClCompile Include="pch.cpp" />
     <ClCompile Include="physics.cpp" />
