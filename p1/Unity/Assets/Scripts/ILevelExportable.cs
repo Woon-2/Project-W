@@ -11,8 +11,8 @@ public abstract class ILevelExportable : MonoBehaviour
         ExtractUtil.WriteHeadTag(binaryWriter, "Node");
         ExtractUtil.WriteText(binaryWriter, "Type", type);
         ExtractUtil.WriteText(binaryWriter, "Name", gameObject.name);
-        ExtractUtil.WriteLocalMatrix(binaryWriter, "LocalMatrix", transform);
-        ExtractUtil.WriteDressMatrix(binaryWriter, "WorldMatrix", root, transform);
+        ExtractUtil.WriteLocalTRS(binaryWriter, "LocalTRS", transform);
+        ExtractUtil.WriteRelativeTRS(binaryWriter, "WorldTRS", root, transform);
     }
 
     protected void ExportLevelNodeFooter(BinaryWriter binaryWriter, Transform root)

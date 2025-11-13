@@ -1,6 +1,7 @@
 #include "mesh.hpp"
 #include "gfxUtil.hpp"
 #include "errorHandling.hpp"
+#include "binaryImport.hpp"
 
 // 1x1x1 큐브 메시를 생성한다.
 // @return Mesh
@@ -204,17 +205,20 @@ Mesh buildCubeMesh(
     }
 
     // SubMesh 구성
-    mesh.subMeshes.try_emplace(
-        "CubeMesh_SubMesh", SubMesh{
-            .name = "CubeMesh_SubMesh",
-            .ibView = D3D12_INDEX_BUFFER_VIEW {
-                .BufferLocation = ib->GetGPUVirtualAddress(),
-                .SizeInBytes = static_cast<UINT>(indices.size() * sizeof(u16t)),
-                .Format = DXGI_FORMAT_R16_UINT
-            },
-            .material = Material {
-                .mapAlbedo = cloneTextureIdxOnly(texHashMap.at("CubeMesh_Albedo")),
-                .constantAlbedo = XMFLOAT4(0.f, 0.f, 0.f, -1.f),
+    mesh.subMeshes.emplace_back(
+        /* .name = */ "CubeMesh_SubMesh",
+        /* .ibView = */ D3D12_INDEX_BUFFER_VIEW {
+            .BufferLocation = ib->GetGPUVirtualAddress(),
+            .SizeInBytes = static_cast<UINT>(indices.size() * sizeof(u16t)),
+            .Format = DXGI_FORMAT_R16_UINT
+        }
+    );
+
+    auto& defMaterialSet = mesh.materialSets.emplace_back(
+        /* .name = */ "CubeMesh_DefaultMaterialSet",
+        /* .materials = */ std::vector<Material>{
+            Material{
+                .constantAlbedo = XMFLOAT4(0.9f, 0.9f ,0.9f, 1.f),
                 .constantRoughness = 0.3f,
                 .constantMetallic = 0.15f,
                 .constantAOStrength = 0.f,
@@ -222,6 +226,16 @@ Mesh buildCubeMesh(
             }
         }
     );
+    defMaterialSet.materials[0].mapAlbedo.idxSrv.idxRange = -1;
+    defMaterialSet.materials[0].mapAlbedo.idxUav.idxRange = -1;
+    defMaterialSet.materials[0].mapMetallicSmoothness.idxSrv.idxRange = -1;
+    defMaterialSet.materials[0].mapMetallicSmoothness.idxUav.idxRange = -1;
+    defMaterialSet.materials[0].mapNormal.idxSrv.idxRange = -1;
+    defMaterialSet.materials[0].mapNormal.idxUav.idxRange = -1;
+    defMaterialSet.materials[0].mapEmmisive.idxSrv.idxRange = -1;
+    defMaterialSet.materials[0].mapEmmisive.idxUav.idxRange = -1;
+    defMaterialSet.materials[0].mapAmbientOcclusion.idxSrv.idxRange = -1;
+    defMaterialSet.materials[0].mapAmbientOcclusion.idxUav.idxRange = -1;
 
     // 자료구조 등록 (Vertex Buffer View와 SubMesh는 위에서 등록하였음)
 	mesh.vbs.push_back(std::move(vbPosition));
@@ -230,7 +244,7 @@ Mesh buildCubeMesh(
     mesh.vbIdxMap.try_emplace("CubeMesh_VB_Normal", 1u);
     mesh.vbs.push_back(std::move(vbUV));
     mesh.vbIdxMap.try_emplace("CubeMesh_VB_UV", 2u);
-	mesh.ibs.try_emplace("CubeMesh_IB", std::move(ib));
+    mesh.ibs.push_back(std::move(ib));
 
     gSharedLog << "[Resource Load] CubeMesh 구축 완료\n";
 
@@ -242,179 +256,6 @@ Mesh buildCubeMesh(
     return mesh;
 }
 
-// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
-void readHeadTag(std::ifstream& ifs, const std::string& expectedSource) {
-    char tmpBuffer[32]{'\0'};
-    unsigned char sz{};
-
-    const auto expected = "<"s + expectedSource + ":>"s;
-    ifs.read(reinterpret_cast<char*>(&sz), sizeof(unsigned char));
-    ifs.read(tmpBuffer, sz);
-
-    std::string wExpected{};
-    wExpected.assign(expected.begin(), expected.end());
-
-    std::string wReceived{};
-    wReceived.assign(tmpBuffer, tmpBuffer + sz);
-
-    DISPLAY_ERROR_STR(expected == tmpBuffer,
-        "[File I/O Error] readHeadTag: "s + wExpected + " 토큰을 기대했지만 "s
-        + wReceived + " 토큰을 받았습니다.", true
-    );
-}
-
-// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
-void readTailTag(std::ifstream& ifs, const std::string& expectedSource) {
-    char tmpBuffer[32]{'\0'};
-    unsigned char sz{};
-
-    const auto expected = "</"s + expectedSource + ">"s;
-    ifs.read(reinterpret_cast<char*>(&sz), sizeof(unsigned char));
-    ifs.read(tmpBuffer, sz);
-
-    std::string wExpected{};
-    wExpected.assign(expected.begin(), expected.end());
-
-    std::string wReceived{};
-    wReceived.assign(tmpBuffer, tmpBuffer + sz);
-
-    DISPLAY_ERROR_STR(expected == tmpBuffer,
-        "[File I/O Error] readTailTag: "s + wExpected + " 토큰을 기대했지만 "s
-        + wReceived + " 토큰을 받았습니다.", true
-    );
-}
-
-// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
-bool isTailTag(const std::string& str, const std::string& expectedSource) {
-    const auto expected = "</"s + expectedSource + ">"s;
-    return str == expected;
-}
-
-// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
-std::string readString(std::ifstream& ifs) {
-    char tmpBuffer[64]{'\0'};
-    unsigned char sz{};
-
-    ifs.read(reinterpret_cast<char*>(&sz), sizeof(unsigned char));
-    ifs.read(tmpBuffer, sz);
-
-    return std::string(tmpBuffer, tmpBuffer + sz);
-}
-
-// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
-std::string readText(std::ifstream& ifs, const char* tagSource) {
-    readHeadTag(ifs, tagSource);
-    auto ret = readString(ifs);
-    readTailTag(ifs, tagSource);
-    return ret;
-}
-
-// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
-std::string untagHead(const std::string& tag) {
-    return tag.substr(1u, tag.size() - 1u - 2u);
-}
-
-// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
-int readInteger(std::ifstream& ifs) {
-    int ret{};
-    ifs.read(reinterpret_cast<char*>(&ret), sizeof(int));
-    return ret;
-}
-
-// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
-int readInteger(std::ifstream& ifs, const char* tagSource) {
-    readHeadTag(ifs, tagSource);
-    int ret{};
-    ifs.read(reinterpret_cast<char*>(&ret), sizeof(int));
-    readTailTag(ifs, tagSource);
-    return ret;
-}
-
-// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
-std::vector<int> readIntegers(std::ifstream& ifs, const char* tagSource) {
-    readHeadTag(ifs, tagSource);
-    auto cnt = readInteger(ifs, "Cnt");
-    auto ret = std::vector<int>(cnt);
-    for (int i = 0; i < cnt; ++i) {
-        ifs.read(reinterpret_cast<char*>(&ret[i]), sizeof(int));
-    }
-    readTailTag(ifs, tagSource);
-    return ret;
-}
-
-// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
-std::vector<u16t> readU16s(std::ifstream& ifs, const char* tagSource) {
-    readHeadTag(ifs, tagSource);
-    auto cnt = readInteger(ifs, "Cnt");
-    auto ret = std::vector<u16t>(cnt);
-    for (int i = 0; i < cnt; ++i) {
-        ifs.read(reinterpret_cast<char*>(&ret[i]), sizeof(u16t));
-    }
-    readTailTag(ifs, tagSource);
-    return ret;
-}
-
-// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
-float readFloat(std::ifstream& ifs) {
-    float ret{};
-    ifs.read(reinterpret_cast<char*>(&ret), sizeof(float));
-    return ret;
-}
-
-// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
-float readFloat(std::ifstream& ifs, const char* tagSource) {
-    readHeadTag(ifs, tagSource);
-    float ret{};
-    ifs.read(reinterpret_cast<char*>(&ret), sizeof(float));
-    readTailTag(ifs, tagSource);
-    return ret;
-}
-
-// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
-XMFLOAT4 readColor(std::ifstream& ifs) {
-    XMFLOAT4 ret{};
-    ifs.read(reinterpret_cast<char*>(&ret), sizeof(XMFLOAT4));
-    return ret;
-}
-
-// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
-XMFLOAT4X4 readMatrix(std::ifstream& ifs, const char* tagSource) {
-    readHeadTag(ifs, tagSource);
-    XMFLOAT4X4 ret{};
-    ifs.read(reinterpret_cast<char*>(&ret), sizeof(XMFLOAT4X4));
-    readTailTag(ifs, tagSource);
-    return ret;
-}
-
-// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
-std::vector<XMFLOAT2> readVec2s(std::ifstream& ifs) {
-    auto cnt = readInteger(ifs, "Cnt");
-    auto ret = std::vector<XMFLOAT2>(cnt);
-    for (int i = 0; i < cnt; ++i) {
-        ifs.read(reinterpret_cast<char*>(&ret[i]), sizeof(XMFLOAT2));
-    }
-    return ret;
-}
-
-// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
-std::vector<XMFLOAT3> readVec3s(std::ifstream& ifs) {
-    auto cnt = readInteger(ifs, "Cnt");
-    auto ret = std::vector<XMFLOAT3>(cnt);
-    for (int i = 0; i < cnt; ++i) {
-        ifs.read(reinterpret_cast<char*>(&ret[i]), sizeof(XMFLOAT3));
-    }
-    return ret;
-}
-
-// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
-std::vector<XMFLOAT4> readVec4s(std::ifstream& ifs) {
-    auto cnt = readInteger(ifs, "Cnt");
-    auto ret = std::vector<XMFLOAT4>(cnt);
-    for (int i = 0; i < cnt; ++i) {
-        ifs.read(reinterpret_cast<char*>(&ret[i]), sizeof(XMFLOAT4));
-    }
-    return ret;
-}
 
 // 텍스처 매핑 정보를 읽어들인다.
 // 텍스처 이름을 key로 삼아 texHashMap에 쿼리를 해보고,
@@ -726,18 +567,16 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
             const auto subMeshName = name + "_SubMesh"s + std::to_string(i);
 
             // SubMesh의 Material은 별도 반영
-            mesh.subMeshes.try_emplace(
-                subMeshName, SubMesh{
-                    .name = subMeshName,
-                    .ibView = D3D12_INDEX_BUFFER_VIEW {
-                        .BufferLocation = ib->GetGPUVirtualAddress(),
-                        .SizeInBytes = static_cast<UINT>(indices.size() * sizeof(u16t)),
-                        .Format = DXGI_FORMAT_R16_UINT
-                    }
+            mesh.subMeshes.emplace_back(
+                /* .name = */ subMeshName,
+                /* .ibView = */ D3D12_INDEX_BUFFER_VIEW {
+                    .BufferLocation = ib->GetGPUVirtualAddress(),
+                    .SizeInBytes = static_cast<UINT>(indices.size() * sizeof(u16t)),
+                    .Format = DXGI_FORMAT_R16_UINT
                 }
             );
 
-            mesh.ibs.try_emplace(subMeshName + "_IB", std::move(ib));
+            mesh.ibs.push_back(std::move(ib));
             fenceToAssociate.associatedResources_.push_back(std::move(ibu));
         }
     }
@@ -758,18 +597,16 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
             const auto subMeshName = name + "_SubMesh"s + std::to_string(i);
 
             // SubMesh의 Material은 별도 반영
-            mesh.subMeshes.try_emplace(
-                subMeshName, SubMesh{
-                    .name = subMeshName,
-                    .ibView = D3D12_INDEX_BUFFER_VIEW {
-                        .BufferLocation = ib->GetGPUVirtualAddress(),
-                        .SizeInBytes = static_cast<UINT>(indices.size() * sizeof(i32t)),
-                        .Format = DXGI_FORMAT_R16_UINT
-                    }
+            mesh.subMeshes.emplace_back(
+                /* .name = */ subMeshName,
+                /* .ibView = */ D3D12_INDEX_BUFFER_VIEW {
+                    .BufferLocation = ib->GetGPUVirtualAddress(),
+                    .SizeInBytes = static_cast<UINT>(indices.size() * sizeof(i32t)),
+                    .Format = DXGI_FORMAT_R16_UINT
                 }
             );
 
-            mesh.ibs.try_emplace(subMeshName + "_IB", std::move(ib));
+            mesh.ibs.push_back(std::move(ib));
             fenceToAssociate.associatedResources_.push_back(std::move(ibu));
         }
     }
@@ -784,26 +621,28 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
 void importMaterials( std::ifstream& ifs, ID3D12Device* device,
     ID3D12GraphicsCommandList* cmdList, 
     std::unordered_map<std::string, Texture>& texHashMap,
-    Fence& fenceToAssociate, Mesh& mesh
+    Fence& fenceToAssociate, MaterialSet& materialSet
 ) {
+    auto materialCnt = readInteger(ifs, "MaterialCnt");
+    materialSet.materials.resize(materialCnt);
     // Bindless Index 초기화
     // idxRange를 -1로 써주는 것으로 그 텍스처가 존재하지 않음을 표현한다.
-    for (auto& [submeshKey, submesh] : mesh.subMeshes) {
-        submesh.material.mapAlbedo.idxSrv.idxRange = -1;
-        submesh.material.mapAlbedo.idxUav.idxRange = -1;
-        submesh.material.mapMetallicSmoothness.idxSrv.idxRange = -1;
-        submesh.material.mapMetallicSmoothness.idxUav.idxRange = -1;
-        submesh.material.mapNormal.idxSrv.idxRange = -1;
-        submesh.material.mapNormal.idxUav.idxRange = -1;
-        submesh.material.mapEmmisive.idxSrv.idxRange = -1;
-        submesh.material.mapEmmisive.idxUav.idxRange = -1;
-        submesh.material.mapAmbientOcclusion.idxSrv.idxRange = -1;
-        submesh.material.mapAmbientOcclusion.idxUav.idxRange = -1;
+    for (auto& material : materialSet.materials) {
+        material.mapAlbedo.idxSrv.idxRange = -1;
+        material.mapAlbedo.idxUav.idxRange = -1;
+        material.mapMetallicSmoothness.idxSrv.idxRange = -1;
+        material.mapMetallicSmoothness.idxUav.idxRange = -1;
+        material.mapNormal.idxSrv.idxRange = -1;
+        material.mapNormal.idxUav.idxRange = -1;
+        material.mapEmmisive.idxSrv.idxRange = -1;
+        material.mapEmmisive.idxUav.idxRange = -1;
+        material.mapAmbientOcclusion.idxSrv.idxRange = -1;
+        material.mapAmbientOcclusion.idxUav.idxRange = -1;
     }
-    auto materialCnt = readInteger(ifs, "MaterialCnt");
 
     for (int i = 0; i < materialCnt; ++i) {
         readHeadTag(ifs, "Material");
+        auto& material = materialSet.materials[i];
 
         for (;;) {
             const auto str = readString(ifs);
@@ -816,41 +655,31 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
             // 알베도 색상 상수
             if (tag == "cAlbedo") {
                 const auto albedo = readColor(ifs);
-                for (auto& [submeshKey, submesh] : mesh.subMeshes) {
-                    submesh.material.constantAlbedo = albedo;
-                }
+                material.constantAlbedo = albedo;
                 readTailTag(ifs, "cAlbedo");
             }
             // 자체발광 색상 상수
             else if (tag == "cEmmisive") {
                 const auto emmisive = readColor(ifs);
-                for (auto& [submeshKey, submesh] : mesh.subMeshes) {
-                    submesh.material.constantEmmisive = XMFLOAT3(emmisive.x, emmisive.y, emmisive.z);
-                }
+                material.constantEmmisive = XMFLOAT3(emmisive.x, emmisive.y, emmisive.z);
                 readTailTag(ifs, "cEmmisive");
             }
             // 매끄러움 상수 (거칠기 상수의 역)
             else if (tag == "cSmoothness") {
                 const auto smoothness = readFloat(ifs);
-                for (auto& [submeshKey, submesh] : mesh.subMeshes) {
-                    submesh.material.constantRoughness = 1.f - smoothness;
-                }
+                material.constantRoughness = 1.f - smoothness;
                 readTailTag(ifs, "cSmoothness");
             }
             // 금속성 상수
             else if (tag == "cMetallic") {
                 const auto metallic = readFloat(ifs);
-                for (auto& [submeshKey, submesh] : mesh.subMeshes) {
-                    submesh.material.constantRoughness = 1.f - metallic;
-                }
+                material.constantRoughness = 1.f - metallic;
                 readTailTag(ifs, "cMetallic");
             }
             // 주변광 차폐 적용 강도 상수
             else if (tag == "cAOStrength") {
                 const auto aoStrength = readFloat(ifs);
-                for (auto& [submeshKey, submesh] : mesh.subMeshes) {
-                    submesh.material.constantAOStrength = aoStrength;
-                }
+                material.constantAOStrength = aoStrength;
                 readTailTag(ifs, "cAOStrength");
             }
             // ======================================
@@ -861,43 +690,33 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
             // 알베도 텍스처
             else if (tag == "AlbedoMap") {
                 const auto albedoMapKey = readString(ifs);
-                for (auto& [submeshKey, submesh] : mesh.subMeshes) {
-                    submesh.material.mapAlbedo = cloneTextureIdxOnly(texHashMap.at(albedoMapKey));
-                }
+                material.mapAlbedo = cloneTextureIdxOnly(texHashMap.at(albedoMapKey));
                 readTailTag(ifs, "AlbedoMap");
             }
             // 노멀 텍스처
             else if (tag == "NormalMap") {
                 const auto normalMapKey = readString(ifs);
-                for (auto& [submeshKey, submesh] : mesh.subMeshes) {
-                    submesh.material.mapNormal = cloneTextureIdxOnly(texHashMap.at(normalMapKey));
-                }
+                material.mapNormal = cloneTextureIdxOnly(texHashMap.at(normalMapKey));
                 readTailTag(ifs, "NormalMap");
             }
             // 금속성과 매끄러움 텍스처
             else if (tag == "MetallicSmoothnessMap") {
                 const auto metallicSmoothnessMapKey = readString(ifs);
-                for (auto& [submeshKey, submesh] : mesh.subMeshes) {
-                    submesh.material.mapMetallicSmoothness
-                        = cloneTextureIdxOnly(texHashMap.at(metallicSmoothnessMapKey));
-                }
+                material.mapMetallicSmoothness
+                    = cloneTextureIdxOnly(texHashMap.at(metallicSmoothnessMapKey));
                 readTailTag(ifs, "MetallicSmoothnessMap");
             }
             // 자체발광 텍스처
             else if (tag == "EmmisiveMap") {
                 const auto emmisiveMapKey = readString(ifs);
-                for (auto& [submeshKey, submesh] : mesh.subMeshes) {
-                    submesh.material.mapEmmisive = cloneTextureIdxOnly(texHashMap.at(emmisiveMapKey));
-                }
+                material.mapEmmisive = cloneTextureIdxOnly(texHashMap.at(emmisiveMapKey));
                 readTailTag(ifs, "EmmisiveMap");
             }
             // 차폐도 텍스처
             else if (tag == "AOMap") {
                 const auto aoMapKey = readString(ifs);
-                for (auto& [submeshKey, submesh] : mesh.subMeshes) {
-                    submesh.material.mapAmbientOcclusion
-                        = cloneTextureIdxOnly(texHashMap.at(aoMapKey));
-                }
+                material.mapAmbientOcclusion
+                    = cloneTextureIdxOnly(texHashMap.at(aoMapKey));
                 readTailTag(ifs, "AOMap");
             }
             // ======================================
@@ -911,6 +730,31 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
     }
 
     readTailTag(ifs, "Materials");
+}
+
+void importMaterialSets( std::ifstream& ifs, ID3D12Device* device,
+    ID3D12GraphicsCommandList* cmdList, 
+    std::unordered_map<std::string, Texture>& texHashMap,
+    Fence& fenceToAssociate, Mesh& mesh
+) {
+    const auto materialSetCnt = readInteger(ifs, "MaterialSetCnt");
+
+    for (int i = 0; i < materialSetCnt; ++i) {
+        readHeadTag(ifs, "MaterialSet");
+        const auto materialSetName = readText(ifs, "Name");
+
+        readHeadTag(ifs, "Materials");
+        auto& newMaterialSet = mesh.materialSets.emplace_back(
+            /* .name = */ materialSetName,
+            /* .materials = */ std::vector<Material>(mesh.subMeshes.size())
+        );
+        newMaterialSet.materials.reserve(mesh.subMeshes.size());
+        importMaterials(ifs, device, cmdList, texHashMap, fenceToAssociate, newMaterialSet);
+
+        readTailTag(ifs, "MaterialSet");
+    }
+
+    readTailTag(ifs, "MaterialSets");
 }
 
 // 기하 계층구조의 특정 노드를 읽어들이고
@@ -948,8 +792,17 @@ void importTransform( std::ifstream& ifs, ID3D12Device* device,
         if (tag == "Mesh") {
             importMesh(ifs, device, cmdList, name, fenceToAssociate, pair.mesh);
         }
+        else if (tag == "MaterialSets") {
+            importMaterialSets(ifs, device, cmdList, texHashMap, fenceToAssociate, pair.mesh);
+        }
         else if (tag == "Materials") {
-            importMaterials(ifs, device, cmdList, texHashMap, fenceToAssociate, pair.mesh);    
+            // 기본 MaterialSet 생성
+            auto& defMaterialSet = pair.mesh.materialSets.emplace_back(
+                /* .name = */ pair.mesh.name + "_MaterialSet_Default",
+                /* .materials = */ std::vector<Material>()
+            );
+            defMaterialSet.materials.reserve(pair.mesh.subMeshes.size());
+            importMaterials(ifs, device, cmdList, texHashMap, fenceToAssociate, defMaterialSet);
         }
         else if (tag == "ChildCnt") {
             const auto childCnt = readInteger(ifs);

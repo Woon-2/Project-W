@@ -314,22 +314,58 @@ public class ModelExtractorWindow : EditorWindow
         MeshFilter meshFilter = xform.gameObject.GetComponent<MeshFilter>();
         SkinnedMeshRenderer skinnedMeshRenderer = xform.gameObject.GetComponent<SkinnedMeshRenderer>();
 
-        if (meshRenderer && meshFilter)
+        Mesh mesh = null;
+        if (meshRenderer && meshFilter && meshRenderer.enabled)
         {
-            if (meshRenderer.enabled)
-            {
-                ExtractMesh(meshFilter.sharedMesh);
-
-                Material[] materials = meshRenderer.sharedMaterials;
-                if (materials.Length > 0) ExtractMaterials(materials);
-            }
+            mesh = meshFilter.sharedMesh;
         }
-        else if (skinnedMeshRenderer && skinnedMeshRenderer.enabled == true)
+        else if (skinnedMeshRenderer && skinnedMeshRenderer.enabled)
         {
-            ExtractMesh(skinnedMeshRenderer.sharedMesh);
+            mesh = skinnedMeshRenderer.sharedMesh;
+        }
 
-            Material[] materials = skinnedMeshRenderer.sharedMaterials;
-            if (materials.Length > 0) ExtractMaterials(materials);
+        if (mesh != null)
+        {
+            ExtractMesh(mesh);
+        }
+
+        // --- MaterialSetSelector 지원 ---
+        MaterialSetSelector selector = xform.GetComponent<MaterialSetSelector>();
+        if (selector != null && selector.materialSets != null && selector.materialSets.Count > 0)
+        {
+            ExtractUtil.WriteHeadTag(geometryWriter, "MaterialSets");
+            ExtractUtil.WriteInteger(geometryWriter, "MaterialSetCnt", selector.materialSets.Count);
+
+            foreach (var set in selector.materialSets)
+            {
+                ExtractUtil.WriteHeadTag(geometryWriter, "MaterialSet");
+                ExtractUtil.WriteText(geometryWriter, "Name", set.name);
+
+                if (set.materials != null && set.materials.Length > 0)
+                    ExtractMaterials(set.materials);
+
+                ExtractUtil.WriteTailTag(geometryWriter, "MaterialSet");
+            }
+
+            ExtractUtil.WriteTailTag(geometryWriter, "MaterialSets");
+        }
+        else
+        {
+            // MaterialSetSelector가 없다면 기본으로 메시에 적용된 재질들 추출
+            Material[] materials = null;
+            if (meshRenderer && meshRenderer.enabled)
+            {
+                materials = meshRenderer.sharedMaterials;
+            }
+            else if (skinnedMeshRenderer && skinnedMeshRenderer.enabled)
+            {
+                materials = skinnedMeshRenderer.sharedMaterials;
+            }
+
+            if (materials != null && materials.Length > 0)
+            {
+                ExtractMaterials(materials);
+            }
         }
 
         // 자식 노드들 추출
@@ -345,7 +381,6 @@ public class ModelExtractorWindow : EditorWindow
         }
 
         ExtractUtil.WriteTailTag(geometryWriter, "Children");
-
         ExtractUtil.WriteTailTag(geometryWriter, "Node");
     }
 

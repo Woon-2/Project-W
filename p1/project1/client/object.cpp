@@ -56,17 +56,21 @@ void Object::render(GFX& gfx) {
 		gfx.addDrawEvent(PBRPipeline::DrawEvent{
 			.world = world_,
 			.mesh = pMesh_,
-			.subMesh = &pMesh_->subMeshes.at("CubeMesh_SubMesh")	// ÀÓ½Ã °ª
+			.subMesh = &pMesh_->subMeshes[0],
+			.material = &pMesh_->materialSets[0].materials[0]
 		});
 	}
 
+	const std::size_t materialSetIdx = 0u;
+
 	if (pModel_) {
 		for (auto& [mesh, dressXform] : pModel_->meshWithDressXforms) {
-			for (auto& [submeshKey, submesh] : mesh.subMeshes) {
+			for (std::size_t i = 0u; i < mesh.subMeshes.size(); ++i) {
 				gfx.addDrawEvent(PBRPipeline::DrawEvent{
 					.world = dressXform * world_,
 					.mesh = &mesh,
-					.subMesh = &submesh
+					.subMesh = &mesh.subMeshes[i],
+					.material = &mesh.materialSets[materialSetIdx].materials[i]
 				});
 			}
 		}

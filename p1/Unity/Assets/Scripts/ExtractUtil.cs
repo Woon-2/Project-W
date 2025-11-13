@@ -165,6 +165,62 @@ public static class ExtractUtil
         WriteMatrix(binaryWriter, tagSource, matrix);
     }
 
+    public static void GetRelativeTRS(
+        Transform target, Transform reference,
+        out Vector3 relativePosition,
+        out Quaternion relativeRotation,
+        out Vector3 relativeScale)
+    {
+        // 두 Transform의 월드 행렬
+        Matrix4x4 targetMatrix = target.localToWorldMatrix;
+        Matrix4x4 referenceMatrix = reference.localToWorldMatrix;
+
+        // B의 역행렬 * A = A를 B 기준으로 변환
+        Matrix4x4 relativeMatrix = referenceMatrix.inverse * targetMatrix;
+
+        // 행렬을 position, rotation, scale로 분해
+        relativePosition = relativeMatrix.GetColumn(3);
+
+        // 스케일 추출 (열 벡터 길이)
+        relativeScale = new Vector3(
+            relativeMatrix.GetColumn(0).magnitude,
+            relativeMatrix.GetColumn(1).magnitude,
+            relativeMatrix.GetColumn(2).magnitude
+        );
+
+        // 정규화 후 회전 추출
+        Quaternion rot = Quaternion.LookRotation(
+            relativeMatrix.GetColumn(2).normalized,
+            relativeMatrix.GetColumn(1).normalized
+        );
+        relativeRotation = rot;
+    }
+
+    public static void WriteLocalTRS(BinaryWriter binaryWriter, string tagSource, Transform target)
+    {
+        WriteHeadTag(binaryWriter, tagSource);
+        WriteVector(binaryWriter, "Position", target.localPosition);
+        WriteQuaternion(binaryWriter, "Rotation", target.localRotation);
+        WriteVector(binaryWriter, "Scale", target.localScale);
+        WriteTailTag(binaryWriter, tagSource);
+    }
+
+    public static void WriteRelativeTRS( BinaryWriter binaryWriter, string tagSource, 
+        Transform reference, Transform target
+    )
+    {
+        Vector3 T = target.localPosition;
+        Quaternion R = target.localRotation;
+        Vector3 S = target.localScale;
+        GetRelativeTRS(target, reference, out T, out R, out S);
+
+        WriteHeadTag(binaryWriter, tagSource);
+        WriteVector(binaryWriter, "Position", T);
+        WriteQuaternion(binaryWriter, "Rotation", R);
+        WriteVector(binaryWriter, "Scale", S);
+        WriteTailTag(binaryWriter, tagSource);
+    }
+
     public static void WriteDressMatrix(BinaryWriter binaryWriter, string tagSource, Transform dressXform, Transform xform)
     {
         WriteMatrix(binaryWriter, tagSource, dressXform.worldToLocalMatrix * xform.localToWorldMatrix);
@@ -222,6 +278,21 @@ public static class ExtractUtil
                 WriteVector(binaryWriter, v);
             }
         }
+        WriteTailTag(binaryWriter, tagSource);
+    }
+
+    public static void WriteQuaternion(BinaryWriter binaryWriter, Quaternion quat)
+    {
+        binaryWriter.Write(quat.x);
+        binaryWriter.Write(quat.y);
+        binaryWriter.Write(quat.z);
+        binaryWriter.Write(quat.w);
+    }
+
+    public static void WriteQuaternion(BinaryWriter binaryWriter, string tagSource, Quaternion quat)
+    {
+        WriteHeadTag(binaryWriter, tagSource);
+        WriteQuaternion(binaryWriter, quat);
         WriteTailTag(binaryWriter, tagSource);
     }
 

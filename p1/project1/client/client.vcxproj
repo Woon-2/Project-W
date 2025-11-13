@@ -137,6 +137,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="binaryImport.hpp" />
     <ClInclude Include="camera.hpp" />
     <ClInclude Include="concurrentqueue.h" />
     <ClInclude Include="d3dx12\include\directx\d3d12.h" />
@@ -199,6 +200,7 @@
     <ClInclude Include="types.hpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="binaryImport.cpp" />
     <ClCompile Include="camera.cpp" />
     <ClCompile Include="d3dx12\src\d3dx12_property_format_table.cpp" />
     <ClCompile Include="errorHandling.cpp" />

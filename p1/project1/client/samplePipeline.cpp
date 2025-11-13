@@ -234,7 +234,7 @@ void Dispatcher::drawSingleThreaded() {
 		//  어차피 바인드는 GPU 명령이라 바로 실행되지 않기 때문에)
 		auto perDrawcallData = SampleShader::PerDrawcallData{
 			.material = SampleShader::Material{
-				.idxAlbedo = drawEvent.subMesh->material.mapAlbedo.idxSrv
+				.idxAlbedo = drawEvent.material->mapAlbedo.idxSrv
 			},
 			.firstInstanceIdx = idxDrawcall
 		};
@@ -457,7 +457,7 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 
 			auto perDrawcallData = SampleShader::PerDrawcallData{
 				.material = SampleShader::Material{
-					.idxAlbedo = drawEvent.subMesh->material.mapAlbedo.idxSrv
+					.idxAlbedo = drawEvent.material->mapAlbedo.idxSrv
 				},
 				.firstInstanceIdx = static_cast<u32t>(idxDrawcall)
 			};

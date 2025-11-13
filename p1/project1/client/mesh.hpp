@@ -21,6 +21,11 @@ struct Material {
 	XMFLOAT3 constantEmmisive;
 };
 
+struct MaterialSet {
+	std::string name;
+	std::vector<Material> materials;
+};
+
 // 드로우콜 시 사용할 인덱스 버퍼 뷰와 재질 정보를 담는 구조체
 // 정점 버퍼는 parentMesh에서 가져와 사용한다.
 // 인스턴싱(드로우콜)의 단위가 된다.
@@ -29,7 +34,6 @@ struct Material {
 struct SubMesh {
 	std::string name;
 	D3D12_INDEX_BUFFER_VIEW ibView;
-	Material material;
 };
 
 // 정점 버퍼들과 인덱스 버퍼들, 그리고 재질 정보들을 저장하는 구조체
@@ -62,8 +66,9 @@ struct Mesh {
 	// 이 멤버는 그리기 함수에서 최초에 한번 수정되기 때문에 mutable일 필요가 있다.
 	mutable std::map<std::string, std::vector<D3D12_VERTEX_BUFFER_VIEW>> vbViewsByPipeline;
 
-	std::map<std::string, ComPtr<ID3D12Resource>> ibs;
-	std::map<std::string, SubMesh> subMeshes;
+	std::vector<ComPtr<ID3D12Resource>> ibs;
+	std::vector<SubMesh> subMeshes;
+	std::vector<MaterialSet> materialSets;
 };
 
 // 1x1x1 큐브 메시를 생성한다.

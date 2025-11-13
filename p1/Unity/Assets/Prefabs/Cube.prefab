@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 8411211021848653138}
   - component: {fileID: 5361437437225311138}
   - component: {fileID: 4372045970817422158}
+  - component: {fileID: -2750162900182691177}
   m_Layer: 0
   m_Name: Cube
   m_TagString: Untagged
@@ -66,7 +67,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 10303, guid: 0000000000000000f000000000000000, type: 0}
+  - {fileID: 2100000, guid: db9b18c09a5603a4ab6a788c1864a62e, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -122,3 +123,23 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   type: Cube
+--- !u!114 &-2750162900182691177
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3243395702479288958}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 61f3e218c1115b9469fb36ecad6ddf6a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  materialSets:
+  - name: cubeMaterial
+    materials:
+    - {fileID: 2100000, guid: db9b18c09a5603a4ab6a788c1864a62e, type: 2}
+  - name: groundMaterial
+    materials:
+    - {fileID: 2100000, guid: 676e706a9e3b2094eb5816f4ae3c7d5b, type: 2}
+  currentSetIndex: 0

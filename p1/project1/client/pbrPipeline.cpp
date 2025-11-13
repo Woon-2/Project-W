@@ -331,16 +331,16 @@ void Dispatcher::drawSingleThreaded() {
 		//  어차피 바인드는 GPU 명령이라 바로 실행되지 않기 때문에)
 		auto perDrawcallData = PBRShader::PerDrawcallData{
 			.material = PBRShader::Material{
-				.idxAlbedo = drawEvent.subMesh->material.mapAlbedo.idxSrv,
-				.idxMetallicSmoothness = drawEvent.subMesh->material.mapMetallicSmoothness.idxSrv,
-				.idxNormal = drawEvent.subMesh->material.mapNormal.idxSrv,
-				.idxEmmisive = drawEvent.subMesh->material.mapEmmisive.idxSrv,
-				.idxAmbientOcllusion = drawEvent.subMesh->material.mapAmbientOcclusion.idxSrv,
-				.cAlbedo = drawEvent.subMesh->material.constantAlbedo,
-				.cRoughness = drawEvent.subMesh->material.constantRoughness,
-				.cMetallic = drawEvent.subMesh->material.constantMetallic,
-				.cAOStrength = drawEvent.subMesh->material.constantAOStrength,
-				.cEmmisive = drawEvent.subMesh->material.constantEmmisive
+				.idxAlbedo = drawEvent.material->mapAlbedo.idxSrv,
+				.idxMetallicSmoothness = drawEvent.material->mapMetallicSmoothness.idxSrv,
+				.idxNormal = drawEvent.material->mapNormal.idxSrv,
+				.idxEmmisive = drawEvent.material->mapEmmisive.idxSrv,
+				.idxAmbientOcllusion = drawEvent.material->mapAmbientOcclusion.idxSrv,
+				.cAlbedo = drawEvent.material->constantAlbedo,
+				.cRoughness = drawEvent.material->constantRoughness,
+				.cMetallic = drawEvent.material->constantMetallic,
+				.cAOStrength = drawEvent.material->constantAOStrength,
+				.cEmmisive = drawEvent.material->constantEmmisive
 			},
 			// perInstanceData에서 현재 instancing group의 첫 번째 인스턴스의 인덱스
 			.firstInstanceIdx = static_cast<u32t>(groupFirst - drawEvents_.begin())
@@ -610,16 +610,16 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 
 			auto perDrawcallData = PBRShader::PerDrawcallData{
 				.material = PBRShader::Material{
-					.idxAlbedo = drawEvent.subMesh->material.mapAlbedo.idxSrv,
-					.idxMetallicSmoothness = drawEvent.subMesh->material.mapMetallicSmoothness.idxSrv,
-					.idxNormal = drawEvent.subMesh->material.mapNormal.idxSrv,
-					.idxEmmisive = drawEvent.subMesh->material.mapEmmisive.idxSrv,
-					.idxAmbientOcllusion = drawEvent.subMesh->material.mapAmbientOcclusion.idxSrv,
-					.cAlbedo = drawEvent.subMesh->material.constantAlbedo,
-					.cRoughness = drawEvent.subMesh->material.constantRoughness,
-					.cMetallic = drawEvent.subMesh->material.constantMetallic,
-					.cAOStrength = drawEvent.subMesh->material.constantAOStrength,
-					.cEmmisive = drawEvent.subMesh->material.constantEmmisive
+					.idxAlbedo = drawEvent.material->mapAlbedo.idxSrv,
+					.idxMetallicSmoothness = drawEvent.material->mapMetallicSmoothness.idxSrv,
+					.idxNormal = drawEvent.material->mapNormal.idxSrv,
+					.idxEmmisive = drawEvent.material->mapEmmisive.idxSrv,
+					.idxAmbientOcllusion = drawEvent.material->mapAmbientOcclusion.idxSrv,
+					.cAlbedo = drawEvent.material->constantAlbedo,
+					.cRoughness = drawEvent.material->constantRoughness,
+					.cMetallic = drawEvent.material->constantMetallic,
+					.cAOStrength = drawEvent.material->constantAOStrength,
+					.cEmmisive = drawEvent.material->constantEmmisive
 				},
 				// perInstanceData에서 현재 instancing group의 첫 번째 인스턴스의 인덱스
 				.firstInstanceIdx = static_cast<u32t>(groupFirst - drawEvents_.begin())
