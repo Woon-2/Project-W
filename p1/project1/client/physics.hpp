@@ -11,7 +11,7 @@ struct PhysicSnapshot {
 	mu::Vec3 pos{};
 	mu::Vec3 omega{};
 	mu::NQuat orient{};
-	float scale = 0.f;
+	mu::Vec3 scale{};
 };
 
 // PhysicSnapshot들을 조합하여 update 함수에서 최종 물리량을 결정할 때 사용할 정책

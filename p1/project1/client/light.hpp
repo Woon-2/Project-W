@@ -24,8 +24,6 @@ public:
 	mu::Vec3 MU_CALLCONV omega() const { return physicSnapshots_.back().omega; }
 	void MU_CALLCONV setOrient(mu::NQuat newOrient);
 	mu::NQuat MU_CALLCONV orient() const { return physicSnapshots_.back().orient; }
-	void setScale(float newScale);
-	float scale() const { return physicSnapshots_.back().scale; }
 
 private:
 	// 물리량들을 갱신해 PhysicSnapshot 객체를 생성, 저장한다.

@@ -34,7 +34,6 @@ void Light::update(Milliseconds deltaTime) {
 		evaluated.pos = mu::lerp(prev.pos, curr.pos, t);
 		evaluated.omega = mu::lerp(prev.omega, curr.omega, t);
 		evaluated.orient = mu::slerp(prev.orient, curr.orient, t);	// ÄõÅÍ´Ï¾ð
-		evaluated.scale = std::lerp(prev.scale, curr.scale, t);
 		break;
 	}
 	
@@ -76,12 +75,6 @@ void MU_CALLCONV Light::setOmega(mu::Vec3 newOmega) {
 void MU_CALLCONV Light::setOrient(mu::NQuat newOrient) {
 	for (auto& snapshot : physicSnapshots_) {
 		snapshot.orient = newOrient;
-	}
-}
-
-void Light::setScale(float newScale) {
-	for (auto& snapshot : physicSnapshots_) {
-		snapshot.scale = newScale;
 	}
 }
 

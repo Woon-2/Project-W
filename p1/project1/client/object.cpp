@@ -12,13 +12,18 @@ void Object::update(Milliseconds deltaTime) {
 		physicUpdateAcc_ -= deltaTime;
 	}
 
-	auto evaluated = PhysicSnapshot{};	// 최종 평가된 물리량들을 담는다.
-
 	switch (physicEvaluationMethod_) {
 	case PhysicEvaluationMethod::LinearInterpolation: {
 		if (physicSnapshots_.size() < 2u) {
 			// 선형보간할 대상이 없다.
-			evaluated = physicSnapshots_.back();
+			const auto& curr = physicSnapshots_.back();
+			pos_ = curr.pos;
+			omega_ = curr.omega;
+			orient_ = curr.orient;
+			scale_ = curr.scale;
+			right_ = orient_.rotate(mu::Vec3(1.f, 0.f, 0.f));
+			up_ = orient_.rotate(mu::Vec3(0.f, 1.f, 0.f));
+			forward_ = orient_.rotate(mu::Vec3(0.f, 0.f, 1.f));
 			break;
 		}
 
@@ -31,10 +36,13 @@ void Object::update(Milliseconds deltaTime) {
 		const auto& prev = physicSnapshots_.front();
 
 		auto t = physicUpdateAcc_ / physicUpdateInterval_;
-		evaluated.pos = mu::lerp(prev.pos, curr.pos, t);
-		evaluated.omega = mu::lerp(prev.omega, curr.omega, t);
-		evaluated.orient = mu::slerp(prev.orient, curr.orient, t);	// 쿼터니언
-		evaluated.scale = std::lerp(prev.scale, curr.scale, t);
+		pos_ = mu::lerp(prev.pos, curr.pos, t);
+		omega_ = mu::lerp(prev.omega, curr.omega, t);
+		orient_ = mu::slerp(prev.orient, curr.orient, t);	// 쿼터니언
+		scale_ = mu::lerp(prev.scale, curr.scale, t);
+		right_ = orient_.rotate(mu::Vec3(1.f, 0.f, 0.f));
+		up_ = orient_.rotate(mu::Vec3(0.f, 1.f, 0.f));
+		forward_ = orient_.rotate(mu::Vec3(0.f, 0.f, 1.f));
 		break;
 	}
 	
@@ -47,22 +55,10 @@ void Object::update(Milliseconds deltaTime) {
 	}
 
 	// 월드변환 행렬 갱신
-	world_ = mu::Mat4x4(mu::scale(evaluated.scale, evaluated.scale, evaluated.scale))
-		* mu::Mat4x4(evaluated.orient) * mu::translate(evaluated.pos);
+	world_ = mu::Mat4x4(mu::scale(scale_)) * mu::Mat4x4(orient_) * mu::translate(pos_);
 }
 
 void Object::render(GFX& gfx) {
-	if (pMesh_) {
-		gfx.addDrawEvent(PBRPipeline::DrawEvent{
-			.world = world_,
-			.mesh = pMesh_,
-			.subMesh = &pMesh_->subMeshes[0],
-			.material = &pMesh_->materialSets[0].materials[0]
-		});
-	}
-
-	const std::size_t materialSetIdx = 0u;
-
 	if (pModel_) {
 		for (auto& [mesh, dressXform] : pModel_->meshWithDressXforms) {
 			for (std::size_t i = 0u; i < mesh.subMeshes.size(); ++i) {
@@ -70,7 +66,7 @@ void Object::render(GFX& gfx) {
 					.world = dressXform * world_,
 					.mesh = &mesh,
 					.subMesh = &mesh.subMeshes[i],
-					.material = &mesh.materialSets[materialSetIdx].materials[i]
+					.material = &mesh.materialSets[materialSetIdx_].materials[i]
 				});
 			}
 		}
@@ -81,24 +77,31 @@ void MU_CALLCONV Object::setPos(mu::Vec3 newPos) {
 	for (auto& snapshot : physicSnapshots_) {
 		snapshot.pos = newPos;
 	}
+	pos_ = newPos;
 }
 
 void MU_CALLCONV Object::setOmega(mu::Vec3 newOmega) {
 	for (auto& snapshot : physicSnapshots_) {
 		snapshot.omega = newOmega;
 	}
+	omega_ = newOmega;
 }
 
 void MU_CALLCONV Object::setOrient(mu::NQuat newOrient) {
 	for (auto& snapshot : physicSnapshots_) {
 		snapshot.orient = newOrient;
 	}
+	orient_ = newOrient;
+	right_ = orient_.rotate(mu::Vec3(1.f, 0.f, 0.f));
+	up_ = orient_.rotate(mu::Vec3(0.f, 1.f, 0.f));
+	forward_ = orient_.rotate(mu::Vec3(0.f, 0.f, 1.f));
 }
 
-void Object::setScale(float newScale) {
+void MU_CALLCONV Object::setScale(mu::Vec3 newScale) {
 	for (auto& snapshot : physicSnapshots_) {
 		snapshot.scale = newScale;
 	}
+	scale_ = newScale;
 }
 
 // 물리량들을 갱신해 PhysicSnapshot 객체를 생성, 저장한다.
