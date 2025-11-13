@@ -37,28 +37,25 @@ public class ModelExtractorWindow : EditorWindow
             ScanTextures(targetObject);
         }
 
-        if (textureMappings.Count > 0)
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("🧾 Texture List", EditorStyles.boldLabel);
+        scrollPos = EditorGUILayout.BeginScrollView(scrollPos, GUILayout.Height(300));
+
+        var keys = new List<Texture>(textureMappings.Keys);
+        foreach (var tex in keys)
         {
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField("🧾 Texture List", EditorStyles.boldLabel);
-            scrollPos = EditorGUILayout.BeginScrollView(scrollPos, GUILayout.Height(300));
+            string texName = tex.name;
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField(texName, GUILayout.Width(200));
+            textureMappings[tex] = EditorGUILayout.TextField(textureMappings[tex]);
+            EditorGUILayout.EndHorizontal();
+        }
 
-            var keys = new List<Texture>(textureMappings.Keys);
-            foreach (var tex in keys)
-            {
-                string texName = tex.name;
-                EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.LabelField(texName, GUILayout.Width(200));
-                textureMappings[tex] = EditorGUILayout.TextField(textureMappings[tex]);
-                EditorGUILayout.EndHorizontal();
-            }
+        EditorGUILayout.EndScrollView();
 
-            EditorGUILayout.EndScrollView();
-
-            if (GUILayout.Button("💾 Export as a binary(.bin)"))
-            {
-                ExportBinary();
-            }
+        if (GUILayout.Button("💾 Export as a binary(.bin)"))
+        {
+            ExportBinary();
         }
     }
 

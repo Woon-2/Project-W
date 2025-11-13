@@ -10,10 +10,6 @@
 #include "pbrPipeline.hpp"
 
 
-// submesh와 material set 분리
-// material set 임포트 코드 작성
-// 큐브 익스포트
-// 레벨 임포트
 // 마우스 움직임으로 카메라 조작 구현
 // SkySphere 구현
 // 노멀 매핑 구현 - 11.12.
@@ -40,6 +36,11 @@
 // 테스트 프로그램 구현
 
 extern HWND ghWnd;
+
+struct RequestModelLoad {
+	std::filesystem::path modelPath;
+	Model* pDest;
+};
 
 // 렌더링을 총괄 책임지는 클래스
 // - 장치 초기화: setupDXGI, init, createSwapChain
@@ -91,9 +92,9 @@ public:
 	// 프레임 데이터를 입력한다.
 	void addFrameData(const PBRPipeline::FrameData& frameData);
 
-	void loadMeshes();
-	const Mesh* cubeMesh() const { return &meshCube_; }
-	const Model* modelPlayer() const { return &modelPlayer_; }
+	void addRequestModelLoad(const RequestModelLoad& request);
+
+	void loadModels();
 
 	// 요청된 드로우콜들을 모아 객체들을 그리고 화면에 띄운다.
 	void render();
@@ -167,8 +168,7 @@ private:
 
 	std::size_t frameIdx_ = 0u;
 
-	Mesh meshCube_{};
-	Model modelPlayer_{};
+	std::vector<RequestModelLoad> requestsModelLoad_{};
 
 	ThreadPool* threadPool_;	// 설정되어있을 경우 멀티스레드로 동작한다.
 };

@@ -273,6 +273,9 @@
     <ClInclude Include="binaryImport.hpp">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="AssetManager.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -355,6 +358,9 @@
     </ClCompile>
     <ClCompile Include="binaryImport.cpp">
       <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="AssetManager.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

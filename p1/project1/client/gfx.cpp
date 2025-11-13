@@ -400,7 +400,11 @@ void GFX::addFrameData(const PBRPipeline::FrameData& frameData) {
 	frameDataPBRPipeline_ = frameData;
 }
 
-void GFX::loadMeshes() {
+void GFX::addRequestModelLoad(const RequestModelLoad& request) {
+	requestsModelLoad_.push_back(request);
+}
+
+void GFX::loadModels() {
 	auto& fence = fences_.at("LoadFence");
 
 	// 명령 리스트와 명령 할당자 할당
@@ -420,8 +424,9 @@ void GFX::loadMeshes() {
 	DISPLAY_ERROR_DX_VOID(cmdList->Reset(cmdAlloc.Get(), nullptr), false);
 
 	// 명령 기록 시작
-	meshCube_ = buildCubeMesh(device_.Get(), cmdList.Get(), texHashMap_, srvTexPool_, fence);
-	modelPlayer_ = loadModelFromFile("../resources/models/output.bin", device_.Get(), cmdList.Get(), texHashMap_, srvTexPool_, fence);
+	for (auto& request : requestsModelLoad_) {
+		*request.pDest = loadModelFromFile(request.modelPath, device_.Get(), cmdList.Get(), texHashMap_, srvTexPool_, fence);
+	}
 
 	dumpLog();
 

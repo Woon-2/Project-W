@@ -15,6 +15,9 @@ public class CubeExporter : ILevelExportable
             ExtractUtil.WriteText( binaryWriter, "MaterialSet",
                 materialSetSelector.materialSets[materialSetSelector.currentSetIndex].name
             );
+            ExtractUtil.WriteInteger(binaryWriter, "MaterialSetIndex",
+                materialSetSelector.currentSetIndex
+            );
         }
         else
         {

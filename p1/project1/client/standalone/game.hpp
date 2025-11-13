@@ -4,6 +4,7 @@
 #include "../pch.hpp"
 #include "../IGame.hpp"
 
+#include "../AssetManager.hpp"
 #include "../gfx.hpp"
 #include "../object.hpp"
 #include "../camera.hpp"
@@ -24,13 +25,20 @@ public:
 private:
 	void processInput(Milliseconds deltaTime);
 
+	void importNode(std::ifstream& ifs);
+	void importCube(std::ifstream& ifs, Object& cube);
+	void importPlayerStart(std::ifstream& ifs, Object& player);
+
+	AssetManager assetManager_{};
+
 	GFX gfx_{};
 	ThreadPool threadPool_{};
 
-	std::vector<std::vector<std::vector<Object>>> cubes_{};
+	std::vector<Object> cubes_{};
 	std::shared_ptr<Object> player_{};
 	Camera camera_{};
 	Light dirLight_{};
+	bool playerSpawned_ = false;
 };
 
 }	// namespace StandAlone
