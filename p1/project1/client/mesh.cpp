@@ -436,7 +436,6 @@ void importTextureMapping( std::ifstream& ifs, ID3D12Device* device,
 // 메시 하나를 읽어들인다.
 // 메시의 정점 버퍼들을 구축하며,
 // 서브메시 정보를 읽어들여 서브메시 각각의 인덱스 버퍼를 구축한다.
-// 서브메시의 재질정보는 importMaterials에서 반영된다.
 void importMesh( std::ifstream& ifs, ID3D12Device* device,
     ID3D12GraphicsCommandList* cmdList, const std::string& name,
     Fence& fenceToAssociate, Mesh& mesh
@@ -544,7 +543,7 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
         }
     }
 
-    // 서브메시들 구축 (재질, 인덱스 버퍼 중 인덱스 버퍼만 생성)
+    // 서브메시들 구축
     readHeadTag(ifs, "Submeshes");
     const auto submeshCnt = readInteger(ifs, "SubmeshCnt");
     const auto maxIdx = readInteger(ifs, "MaxIndex");
@@ -566,7 +565,6 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
 
             const auto subMeshName = name + "_SubMesh"s + std::to_string(i);
 
-            // SubMesh의 Material은 별도 반영
             mesh.subMeshes.emplace_back(
                 /* .name = */ subMeshName,
                 /* .ibView = */ D3D12_INDEX_BUFFER_VIEW {
@@ -596,7 +594,6 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
 
             const auto subMeshName = name + "_SubMesh"s + std::to_string(i);
 
-            // SubMesh의 Material은 별도 반영
             mesh.subMeshes.emplace_back(
                 /* .name = */ subMeshName,
                 /* .ibView = */ D3D12_INDEX_BUFFER_VIEW {
@@ -615,9 +612,13 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
     readTailTag(ifs, "Mesh");
 }
 
-// 노드의 재질 정보를 읽어들인다.
-// 현재 읽어들인 재질 정보는 노드의 메시의 모든 서브메시에
-// 일괄적으로 저장되도록 구현되어있다.
+// 재질 집합의 내용을 읽어들인다.
+// 텍스처 매핑 정보를 통해 미리 로드했던 텍스처들이
+// 각 재질에 연결된다.
+// 
+// 한 재질 집합의 재질의 개수는 메시의 서브메시 개수와 같고,
+// 각 재질은 동일한 인덱스의 서브메시에 대응된다.
+// * 커스터마이징 프리셋 개념이라 이해하면 편하다.
 void importMaterials( std::ifstream& ifs, ID3D12Device* device,
     ID3D12GraphicsCommandList* cmdList, 
     std::unordered_map<std::string, Texture>& texHashMap,
@@ -685,7 +686,7 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
             // ======================================
             // 텍스처 읽어들이기 ====================
             // 텍스처 매핑 정보를 통해 미리 로드했던 텍스처들을
-            // texHashMap에서 찾아 메시의 모든 서브메시에 연결한다.
+            // texHashMap에서 찾아 재질에 연결한다.
             
             // 알베도 텍스처
             else if (tag == "AlbedoMap") {
@@ -732,6 +733,13 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
     readTailTag(ifs, "Materials");
 }
 
+// 재질 집합 정보를 읽어서 메시에 반영한다.
+// 여러 개의 재질 집합을 사용하는 메시는
+// 메시를 그릴 때에 어떤 재질 집합을 사용할지 선택해서 그리도록 한다.
+// 
+// 한 재질 집합의 재질의 개수는 메시의 서브메시 개수와 같고,
+// 각 재질은 동일한 인덱스의 서브메시에 대응된다.
+// * 커스터마이징 프리셋 개념이라 이해하면 편하다.
 void importMaterialSets( std::ifstream& ifs, ID3D12Device* device,
     ID3D12GraphicsCommandList* cmdList, 
     std::unordered_map<std::string, Texture>& texHashMap,
@@ -760,9 +768,10 @@ void importMaterialSets( std::ifstream& ifs, ID3D12Device* device,
 // 기하 계층구조의 특정 노드를 읽어들이고
 // 그 자식 노드들을 재귀적으로 읽어들인다.
 // 노드에는 변환 행렬, 메시와 재질 정보가 담겨 있다.
-// 텍스처 매핑 정보를 통해 미리 로드했던 텍스처들이 서브메시들의 재질과 연결된다.
-// 노드와 메시, 변환 행렬은 각각 일대일 대응이고,
-// 노드와 재질(서브메시에 포함)은 일대다 대응이다.
+// 노드와 메시, 변환 행렬은 각각 일대일 대응이다.
+// 메시는 여러 개의 재질 집합을 가질 수 있는데,
+// 하나의 재질 집합 내의 재질들은 모두 메시의 각 서브메시와 일대일 대응된다.
+// 재질 집합을 교체하는 것으로 전체 메시의 질감을 바꿀 수 있다.
 void importTransform( std::ifstream& ifs, ID3D12Device* device,
     ID3D12GraphicsCommandList* cmdList, 
     std::unordered_map<std::string, Texture>& texHashMap,
@@ -789,14 +798,17 @@ void importTransform( std::ifstream& ifs, ID3D12Device* device,
 
         const auto tag = untagHead(str);
 
+        // 메시 읽어들이기
         if (tag == "Mesh") {
             importMesh(ifs, device, cmdList, name, fenceToAssociate, pair.mesh);
         }
+        // 여러 개의 재질 집합을 지원하는 경우
         else if (tag == "MaterialSets") {
             importMaterialSets(ifs, device, cmdList, texHashMap, fenceToAssociate, pair.mesh);
         }
+        // 여러 개의 재질 집합을 지원하지 않는 경우
+        // 기본 재질 집합을 구축해 사용 (0번 인덱스)
         else if (tag == "Materials") {
-            // 기본 MaterialSet 생성
             auto& defMaterialSet = pair.mesh.materialSets.emplace_back(
                 /* .name = */ pair.mesh.name + "_MaterialSet_Default",
                 /* .materials = */ std::vector<Material>()
@@ -804,6 +816,7 @@ void importTransform( std::ifstream& ifs, ID3D12Device* device,
             defMaterialSet.materials.reserve(pair.mesh.subMeshes.size());
             importMaterials(ifs, device, cmdList, texHashMap, fenceToAssociate, defMaterialSet);
         }
+        // 자식 노드 읽어들이기
         else if (tag == "ChildCnt") {
             const auto childCnt = readInteger(ifs);
             readTailTag(ifs, "ChildCnt");
@@ -814,7 +827,7 @@ void importTransform( std::ifstream& ifs, ID3D12Device* device,
             readTailTag(ifs, "Children");
         }
         else {
-            DISPLAY_ERROR_STR(false, "[File I/O Error] importMaterials: 알 수 없는 태그 "s
+            DISPLAY_ERROR_STR(false, "[File I/O Error] importTransform: 알 수 없는 태그 "s
                 + tag + "를 읽었습니다.", true
             );
         }
@@ -837,7 +850,7 @@ void importGeometry( std::ifstream& ifs, ID3D12Device* device,
 }
 
 // 바이너리 파일로부터 모델을 읽어온다.
-// 메시들을 생성하며 각 메시들의 버텍스 버퍼와 서브메시(인덱스버퍼, 재질)을 생성한다.
+// 메시들을 생성하며 각 메시들의 버텍스 버퍼와 서브메시, 그리고 재질 집합을 생성한다.
 // 그 과정에서 필요한 텍스처들이 texHashMap에 존재하지 않는다면, 로드한다.
 // (로드되는 텍스처의 경로들은 바이너리 파일 내에 적혀있다.)
 // * 수정 시 주의사항: 유니티의 추출 스크립트와 구조가 대칭이어야 한다.
