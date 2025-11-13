@@ -221,9 +221,9 @@ float4 illuminate(float3 posV, float3 normalV, float2 tex)
     // 따라서 bindless index가 양수일 때만 텍스처를 샘플링한다.
     if (material.idxAlbedo.x >= 0) {
         albedo = sampleBindless(material.idxAlbedo, tex);
-        // sRGB => linear
-        albedo.rgb = pow( abs(albedo.rgb), 2.2f );
     }
+    // sRGB => linear
+    albedo.rgb = pow( abs(albedo.rgb), 2.2f );
     
     float roughness = material.cRoughness;
     float metallic = material.cMetallic;
