@@ -264,8 +264,8 @@ float4 illuminate(float3 posV, float3 normalV, float2 tex)
     float3 ambient = globalAmbient * albedo.rgb * (1.f - ao);
     color += ambient + emmisive;
 
-    // // 톤매핑을 수행한다.
-	// color = color / (color + float3(1.f, 1.f, 1.f));
+    // 톤매핑을 수행한다.
+	color = color / (color + float3(1.f, 1.f, 1.f));
     // linear => sRGB
     color = pow( abs(color), 1.f/2.2f );
 

@@ -168,10 +168,28 @@ ComPtr<ID3D12PipelineState> createPBRShader(ID3D12Device* device, ID3D12RootSign
 			.InstanceDataStepRate = 0u
 		},
 		D3D12_INPUT_ELEMENT_DESC{
+			.SemanticName = "TANGENT",
+			.SemanticIndex = 0u,
+			.Format = DXGI_FORMAT_R32G32B32_FLOAT,
+			.InputSlot = 2u,
+			.AlignedByteOffset = 0u,
+			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			.InstanceDataStepRate = 0u
+		},
+		D3D12_INPUT_ELEMENT_DESC{
+			.SemanticName = "BITANGENT",
+			.SemanticIndex = 0u,
+			.Format = DXGI_FORMAT_R32G32B32_FLOAT,
+			.InputSlot = 3u,
+			.AlignedByteOffset = 0u,
+			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			.InstanceDataStepRate = 0u
+		},
+		D3D12_INPUT_ELEMENT_DESC{
 			.SemanticName = "UV",
 			.SemanticIndex = 0u,
 			.Format = DXGI_FORMAT_R32G32_FLOAT,
-			.InputSlot = 2u,
+			.InputSlot = 4u,
 			.AlignedByteOffset = 0u,
 			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
 			.InstanceDataStepRate = 0u

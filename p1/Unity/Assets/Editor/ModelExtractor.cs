@@ -151,6 +151,20 @@ public class ModelExtractorWindow : EditorWindow
         if ((mesh.vertices != null) && (mesh.vertices.Length > 0)) ExtractUtil.WriteVectors(geometryWriter, "Positions", mesh.vertices);
         if ((mesh.colors != null) && (mesh.colors.Length > 0)) ExtractUtil.WriteColors(geometryWriter, "Colors", mesh.colors);
         if ((mesh.normals != null) && (mesh.normals.Length > 0)) ExtractUtil.WriteVectors(geometryWriter, "Normals", mesh.normals);
+        if ( (mesh.normals != null) && (mesh.normals.Length > 0)
+            && (mesh.tangents != null) && (mesh.tangents.Length > 0)
+        )
+        {
+            Vector3[] tangents = new Vector3[mesh.tangents.Length];
+            Vector3[] bitangents = new Vector3[mesh.tangents.Length];
+            for (int i = 0; i < mesh.tangents.Length; i++)
+            {
+                tangents[i] = new Vector3(mesh.tangents[i].x, mesh.tangents[i].y, mesh.tangents[i].z);
+                bitangents[i] = Vector3.Normalize(Vector3.Cross(mesh.normals[i], tangents[i])) * mesh.tangents[i].w;
+            }
+            ExtractUtil.WriteVectors(geometryWriter, "Tangents", tangents);
+            ExtractUtil.WriteVectors(geometryWriter, "Bitangents", bitangents);
+        }
         if ((mesh.uv != null) && (mesh.uv.Length > 0)) ExtractUtil.WriteVectors(geometryWriter, "TextureCoords0", mesh.uv);
         if ((mesh.uv2 != null) && (mesh.uv2.Length > 0)) ExtractUtil.WriteVectors(geometryWriter, "TextureCoords1", mesh.uv2);
         ExtractUtil.WriteTailTag(geometryWriter, "VertexBuffers");

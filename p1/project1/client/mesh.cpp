@@ -506,6 +506,56 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
 
             readTailTag(ifs, "Normals");
         }
+        // Tangents: float3
+        else if (tag == "Tangents") {
+            auto tangents = readVec3s(ifs);
+
+            auto vbTangent = createBufferResource(device, nullptr, tangents.size() * sizeof(XMFLOAT3), BufferCreationType::VertexBuffer);
+            setD3DName(vbTangent.Get(), name + "_VB_Tangent"s);
+	        auto vbTangentu = createBufferResource(device, tangents.data(), tangents.size() * sizeof(XMFLOAT3), BufferCreationType::UploadBuffer);
+            setD3DName(vbTangentu.Get(), name + "_VB_Tangent_Upload"s);
+
+	        copyResource( cmdList, vbTangentu.Get(), vbTangent.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
+		        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+	        );
+
+            mesh.vbViews.emplace_back(
+                /* .BufferLocation = */ vbTangent->GetGPUVirtualAddress(),
+                /* .SizeInBytes = */ static_cast<UINT>(tangents.size() * sizeof(XMFLOAT3)),
+                /* .StrideInBytes = */ static_cast<UINT>( sizeof(XMFLOAT3) )
+            );
+            mesh.vbIdxMap.try_emplace(name + "_VB_Tangent"s, static_cast<u32t>(mesh.vbs.size()));
+
+            mesh.vbs.push_back(std::move(vbTangent));
+            fenceToAssociate.associatedResources_.push_back(std::move(vbTangentu));
+
+            readTailTag(ifs, "Tangents");
+        }
+        // Bitangents: float3
+        else if (tag == "Bitangents") {
+            auto bitangents = readVec3s(ifs);
+
+            auto vbBitangent = createBufferResource(device, nullptr, bitangents.size() * sizeof(XMFLOAT3), BufferCreationType::VertexBuffer);
+            setD3DName(vbBitangent.Get(), name + "_VB_Bitangent"s);
+	        auto vbBitangentu = createBufferResource(device, bitangents.data(), bitangents.size() * sizeof(XMFLOAT3), BufferCreationType::UploadBuffer);
+            setD3DName(vbBitangentu.Get(), name + "_VB_Bitangent_Upload"s);
+
+	        copyResource( cmdList, vbBitangentu.Get(), vbBitangent.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
+		        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+	        );
+
+            mesh.vbViews.emplace_back(
+                /* .BufferLocation = */ vbBitangent->GetGPUVirtualAddress(),
+                /* .SizeInBytes = */ static_cast<UINT>(bitangents.size() * sizeof(XMFLOAT3)),
+                /* .StrideInBytes = */ static_cast<UINT>( sizeof(XMFLOAT3) )
+            );
+            mesh.vbIdxMap.try_emplace(name + "_VB_Bitangent"s, static_cast<u32t>(mesh.vbs.size()));
+
+            mesh.vbs.push_back(std::move(vbBitangent));
+            fenceToAssociate.associatedResources_.push_back(std::move(vbBitangentu));
+
+            readTailTag(ifs, "Bitangents");
+        }
         // uv0s: float2
         else if (tag == "TextureCoords0") {
             auto uvs = readVec2s(ifs);

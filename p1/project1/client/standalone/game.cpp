@@ -44,11 +44,11 @@ void Game::setupStage() {
 
 	dirLight_.setOrient(mu::NQuat(mu::Degree(0.f), mu::Degree(60.f), mu::Degree(15.f)));
 	dirLight_.color = mu::Vec3(0.8f, 0.8f, 0.8f);
-	dirLight_.intensity = 1.f;
+	dirLight_.intensity = 2.f;
 	dirLight_.type = PBRPipeline::LightData::Type::DirectionalLight;
 
 	camera_.setTargetObject( player_ );
-	camera_.setOffsetFromTarget( mu::Vec3( 0.f, 3.2f, -3.5f ) );
+	camera_.setOffsetFromTarget( mu::Vec3( 0.f, 2.3f, -2.5f ) );
 	camera_.setPerspective( mu::Degree( 90.f ),
 		static_cast<float>( gClientRect.right - gClientRect.left ) / ( gClientRect.bottom - gClientRect.top ),
 		0.1f, 500.f

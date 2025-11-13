@@ -7,7 +7,7 @@ namespace PBRPipeline {
 
 // PBR Pipeline의 input layout을 위한 Vertex Buffer View 배열이
 // mesh에 존재하지 않는다면, 추가한다.
-// 0: position, 1: normal, 2: uv
+// 0: position, 1: normal, 2: tangent, 3: bitangent, 4: uv
 void layoutMeshIfNeeded(const Mesh& mesh) {
 	if (mesh.vbViewsByPipeline.contains("PBRPipeline")) {
 		return;
@@ -15,7 +15,7 @@ void layoutMeshIfNeeded(const Mesh& mesh) {
 
 	auto [pvbViews, _] = mesh.vbViewsByPipeline.try_emplace("PBRPipeline");
 	auto& vbViews = pvbViews->second;
-	vbViews.reserve(3u);	// position, normal, uv
+	vbViews.reserve(5u);	// position, normal, tangent, bitangent, uv
 
 	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_Position"),
 		"[GFX Error] PBRPipeline::layoutMeshIfNeeded: " + mesh.name + "_VB_Position"
@@ -27,6 +27,16 @@ void layoutMeshIfNeeded(const Mesh& mesh) {
 		"의 이름을 가진 정점 버퍼가 요구되었으나, 존재하지 않습니다.",
 		false
 	);
+	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_Tangent"),
+		"[GFX Error] PBRPipeline::layoutMeshIfNeeded: " + mesh.name + "_VB_Tangent"
+		"의 이름을 가진 정점 버퍼가 요구되었으나, 존재하지 않습니다.",
+		false
+	);
+	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_Bitangent"),
+		"[GFX Error] PBRPipeline::layoutMeshIfNeeded: " + mesh.name + "_VB_Bitangent"
+		"의 이름을 가진 정점 버퍼가 요구되었으나, 존재하지 않습니다.",
+		false
+	);
 	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_UV"),
 		"[GFX Error] PBRPipeline::layoutMeshIfNeeded: " + mesh.name + "_VB_UV"
 		"의 이름을 가진 정점 버퍼가 요구되었으나, 존재하지 않습니다.",
@@ -35,10 +45,14 @@ void layoutMeshIfNeeded(const Mesh& mesh) {
 
 	auto& vbViewPos = mesh.vbViews[ mesh.vbIdxMap.at(mesh.name + "_VB_Position") ];
 	auto& vbViewNormal = mesh.vbViews[ mesh.vbIdxMap.at(mesh.name + "_VB_Normal") ];
+	auto& vbViewTangent = mesh.vbViews[ mesh.vbIdxMap.at(mesh.name + "_VB_Tangent") ];
+	auto& vbViewBitangent = mesh.vbViews[ mesh.vbIdxMap.at(mesh.name + "_VB_Bitangent") ];
 	auto& vbViewUV = mesh.vbViews[ mesh.vbIdxMap.at(mesh.name + "_VB_UV") ];
 
 	vbViews.push_back(vbViewPos);
 	vbViews.push_back(vbViewNormal);
+	vbViews.push_back(vbViewTangent);
+	vbViews.push_back(vbViewBitangent);
 	vbViews.push_back(vbViewUV);
 }
 

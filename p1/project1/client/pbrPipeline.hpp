@@ -75,7 +75,7 @@ struct Resources {
 
 // PBR Pipeline의 input layout을 위한 Vertex Buffer View 배열이
 // mesh에 존재하지 않는다면, 추가한다.
-// 0: position, 1: normal, 2: uv
+// 0: position, 1: normal, 2: tangent, 3: bitangent, 4: uv
 void layoutMeshIfNeeded(const Mesh& mesh);
 
 // PBR Pipeline의 Dispatcher
