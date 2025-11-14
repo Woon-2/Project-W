@@ -464,7 +464,7 @@ void GFX::loadAssets() {
 			// Texture Cube는 default로 SRV를 생성할 수 없다.
 			request.pDest->idxSrv.idxRange = etoi(Texture::Type::TexCube);
 			createSRV(device_.Get(), *request.pDest, D3D12_SHADER_RESOURCE_VIEW_DESC{
-				.Format = DXGI_FORMAT_R32G32B32A32_FLOAT,
+				.Format = DXGI_FORMAT_R8G8B8A8_UNORM,
 				.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE,
 				.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
 				.TextureCube = D3D12_TEXCUBE_SRV{
