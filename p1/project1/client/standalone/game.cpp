@@ -145,19 +145,86 @@ void Game::render() {
 	gfx_.render();
 }
 
+// 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
+LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+	switch (msg) {
+	// WM_INPUT 메시지
+	// 마우스 움직임의 경우 WM_MOUSEMOVE 메시지 대신 이 메시지로 처리하는 것이
+	// 정확하고 안정적인 처리가 가능하다.
+	// 윈도우 경계로부터 영향을 받지 않고, 가상 커서 속도/가속도 설정을 무시하며,
+	// Alt-Tab / 창 이동 후에도 상태 복구가 명확하다.
+	// (DPI 스케일링 환경에서도 입력이 왜곡되지 않는다고 한다.)
+	case WM_INPUT: {
+		static auto sRawInputBuffer = std::vector<std::uint8_t>(256);
+		UINT rawInputSize{};
+		UINT rawInputResult{};
+
+		// 입력 구조체 크기 수신
+		rawInputResult = GetRawInputData( reinterpret_cast<HRAWINPUT>(lParam),
+			RID_INPUT, nullptr, &rawInputSize, sizeof(RAWINPUTHEADER)
+		);
+		DISPLAY_ERROR_GLE(rawInputResult != -1, true);
+
+		if (rawInputSize > sRawInputBuffer.size()) {
+			sRawInputBuffer.resize(rawInputSize);
+		}
+
+		// 입력 구조체 내용 수신
+		rawInputResult = GetRawInputData( reinterpret_cast<HRAWINPUT>(lParam),
+			RID_INPUT, sRawInputBuffer.data(), &rawInputSize, sizeof(RAWINPUTHEADER)
+		);
+		DISPLAY_ERROR_GLE(rawInputResult == rawInputSize, true);
+
+		auto ri = reinterpret_cast<const RAWINPUT*>(sRawInputBuffer.data());
+		if (ri->header.dwType == RIM_TYPEMOUSE) {
+			// 마우스에 대한 입력 내용이 상대 좌표여야 한다.
+			DISPLAY_ERROR_STR( !(ri->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE),
+				"[Input Error] Game::receiveWndMsg: 마우스 입력 장치가 게임과 호환되지 않습니다.\n"
+				"RAWMOUSE의 플래그 중 MOUSE_MOVE_ABSOLUTE가 활성화되어있습니다.",
+				true
+			);
+
+			// 마우스 이동량 기록
+			mouseDeltaX_ += ri->data.mouse.lLastX;
+			mouseDeltaY_ += ri->data.mouse.lLastY;
+		}
+		return 0;
+	}
+
+	case WM_SIZE:
+		break;
+
+	default:
+		return DefWindowProcA(hWnd, msg, wParam, lParam);
+	}
+};
+
 void Game::processInput(Milliseconds deltaTime) {
-	if ( GetAsyncKeyState('W') & 0x8000 ) {
+	DISPLAY_ERROR_GLE( GetKeyboardState(keyboardState_.data()), false );
+
+	if ( keyboardState_['W'] & 0x80 ) {
 		player_->setPos( player_->pos( ) + player_->forward() * 0.01f );
 	}
-	if ( GetAsyncKeyState('A') & 0x8000 ) {
+	if ( keyboardState_['A'] & 0x80 ) {
 		player_->setPos( player_->pos( ) - player_->right() * 0.01f );
 	}
-	if ( GetAsyncKeyState('S') & 0x8000 ) {
+	if ( keyboardState_['S'] & 0x80 ) {
 		player_->setPos( player_->pos( ) - player_->forward() * 0.01f );
 	}
-	if ( GetAsyncKeyState('D') & 0x8000 ) {
+	if ( keyboardState_['D'] & 0x80 ) {
 		player_->setPos( player_->pos( ) + player_->right() * 0.01f );
 	}
+
+    const auto mouseSensitivity = mu::pi * 2.f;
+
+	auto rotation = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f),
+		mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left))	
+	);
+
+	player_->setOrient(player_->orient() * rotation);
+
+	mouseDeltaX_ = 0;
+	mouseDeltaY_ = 0;
 }
 
 }	// namespace StandAlone

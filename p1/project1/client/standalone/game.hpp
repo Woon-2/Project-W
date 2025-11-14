@@ -21,6 +21,7 @@ public:
 
 	void update(Milliseconds deltaTime) override;
 	void render() override;
+	LRESULT receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) override;
 
 private:
 	void processInput(Milliseconds deltaTime);
@@ -39,6 +40,10 @@ private:
 	Camera camera_{};
 	Light dirLight_{};
 	bool playerSpawned_ = false;
+
+	LONG mouseDeltaX_{};
+	LONG mouseDeltaY_{};
+	std::array<BYTE, std::numeric_limits<u8t>::max()> keyboardState_{};
 };
 
 }	// namespace StandAlone

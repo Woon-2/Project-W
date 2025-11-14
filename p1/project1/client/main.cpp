@@ -31,7 +31,8 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 		.style = CS_OWNDC,
 		.lpfnWndProc = wndProc,
 		.cbClsExtra = 0,
-		.cbWndExtra = 0,
+		// 윈도우의 커스텀 데이터로 게임 객체의 포인터를 들고 있게 하기 위함
+		.cbWndExtra = sizeof( IGame* ),
 		.hInstance = hInstance,
 		.hIcon = nullptr,
 		.hCursor = nullptr,
@@ -53,6 +54,19 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 	DISPLAY_ERROR_GLE( ghWnd, true );
 	DISPLAY_ERROR_GLE( !ShowWindow( ghWnd, SW_SHOW ), true );
 
+
+	// 윈도우 프로시저에서 WM_INPUT 메시지 수신을 위한 Raw Input Device 등록(마우스)
+	auto rid = RAWINPUTDEVICE{
+        .usUsagePage = 0x01,    // Generic Desktop Controls
+        .usUsage = 0x02,    // Mouse
+        .dwFlags = 0,
+        .hwndTarget = nullptr   // NULL for the whole system
+    };
+
+	DISPLAY_ERROR_GLE(RegisterRawInputDevices(&rid, 1, sizeof(rid)), true);
+
+
+	// 게임 초기화
 	Timer timer{};
 
 	std::thread iocpLoopThread{};
@@ -67,6 +81,9 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 		pGame = std::make_unique<StandAlone::Game>();
 		static_cast<StandAlone::Game*>(pGame.get())->setupStage();
 	}
+
+	// 윈도우의 커스텀 데이터로 게임 객체 포인터 등록
+	SetWindowLongPtrA(ghWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pGame.get()));
 
 	auto& game = *pGame;
 
@@ -107,7 +124,13 @@ LRESULT wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		return 0;
 
 	default:
-		return DefWindowProcA(hWnd, msg, wParam, lParam);
+		auto pGame = reinterpret_cast<IGame*>(GetWindowLongPtrA(hWnd, GWLP_USERDATA));
+		if (pGame) {
+			return pGame->receiveWndMsg(hWnd, msg, wParam, lParam);
+		}
+		else {
+			return DefWindowProcA(hWnd, msg, wParam, lParam);
+		}
 	}
 }
 
