@@ -7,6 +7,7 @@
 #include "../AssetManager.hpp"
 #include "../gfx.hpp"
 #include "../object.hpp"
+#include "../skybox.hpp"
 #include "../camera.hpp"
 #include "../light.hpp"
 
@@ -39,6 +40,7 @@ private:
 
 	std::vector<Object> cubes_{};
 	std::shared_ptr<Object> player_{};
+	Skybox skybox_{};
 	Camera camera_{};
 	Light dirLight_{};
 	bool playerSpawned_ = false;

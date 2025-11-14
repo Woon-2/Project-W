@@ -192,6 +192,8 @@
     <ClInclude Include="Session.hpp" />
     <ClInclude Include="SessionManager.hpp" />
     <ClInclude Include="shader.hpp" />
+    <ClInclude Include="skybox.hpp" />
+    <ClInclude Include="skyboxPipeline.hpp" />
     <ClInclude Include="SocketUtils.hpp" />
     <ClInclude Include="standalone\game.hpp" />
     <ClInclude Include="texloader\DDSTextureLoader12.h" />
@@ -224,6 +226,8 @@
     <ClCompile Include="Session.cpp" />
     <ClCompile Include="SessionManager.cpp" />
     <ClCompile Include="shader.cpp" />
+    <ClCompile Include="skybox.cpp" />
+    <ClCompile Include="skyboxPipeline.cpp" />
     <ClCompile Include="SocketUtils.cpp" />
     <ClCompile Include="standalone\game.cpp" />
     <ClCompile Include="texloader\DDSTextureLoader12.cpp" />
@@ -248,6 +252,10 @@
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">VSMain</EntryPointName>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.1</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="skybox.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>

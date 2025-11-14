@@ -10,6 +10,7 @@ public:
 
 	const Model* modelCube() const { return &modelCube_; }
 	const Model* modelPlayer() const { return &modelPlayer_; }
+	const Texture* textureSkybox() const { return &texSkybox_; }
 
 private:
 	Model modelCube_;

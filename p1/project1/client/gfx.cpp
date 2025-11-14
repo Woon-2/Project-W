@@ -228,6 +228,7 @@ void GFX::init() {
 
 	shaders_.try_emplace("SampleShader", createSampleShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRShader", createPBRShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("SkyboxShader", createSkyboxShader(device_.Get(), defaultRootSig.get()));
 
 	rootSigs_.try_emplace("DefaultRootSignature", std::make_shared<DefaultRootSig>(std::move(defaultRootSig)));
 
@@ -353,6 +354,12 @@ void GFX::createSwapChain() {
 	resourcesPBRPipeline_.perFrameData.init(
 		device_.Get(), sizeof(PBRShader::PerFrameData), backBuffers_.size(), "PBR_PerFrameData"
 	);
+	resourcesSkyboxPipeline_.perFrameData.init(
+		device_.Get(), sizeof(SkyboxShader::PerFrameData), backBuffers_.size(), "Skybox_PerFrameData"
+	);
+	resourcesSkyboxPipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof(SkyboxShader::PerDrawcallData), 32u, backBuffers_.size(), "Skybox_PerDrawcallData"
+	);
 
 	// 프레임 펜스 생성
 	// i번째 프레임을 렌더링한 후 i-(백버퍼 수 - 1)번째 프레임의 펜스를 기다리도록 한다.
@@ -408,6 +415,16 @@ void GFX::addRequestTextureLoad(const RequestTextureLoad& request) {
 	requestsTextureLoad_.push_back(request);
 }
 
+// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+void GFX::addDrawEvent(const SkyboxPipeline::DrawEvent& drawEvent) {
+	drawEventsSkyboxPipeline_.push_back(drawEvent);
+}
+
+// 카메라 데이터를 입력한다.
+void GFX::addCameraData(const SkyboxPipeline::CameraData& cameraData) {
+	cameraDataSkyboxPipeline_ = cameraData;
+}
+
 void GFX::loadAssets() {
 	auto& fence = fences_.at("LoadFence");
 
@@ -436,13 +453,25 @@ void GFX::loadAssets() {
 
 		*request.pDest = loadTexture(device_.Get(), cmdList.Get(), request.texPath, fence, texType);
 		if (texType == Texture::Type::Tex2D) {
+			request.pDest->idxSrv.idxRange = etoi(Texture::Type::Tex2D);
 			createSRV(device_.Get(), *request.pDest, srvTexPool_);
 		}
 		else if (texType == Texture::Type::Tex2DArray) {
+			request.pDest->idxSrv.idxRange = etoi(Texture::Type::Tex2DArray);
 			createSRV(device_.Get(), *request.pDest, srvTexArrayPool_);
 		}
 		else if (texType == Texture::Type::TexCube) {
-			createSRV(device_.Get(), *request.pDest, srvTexCubePool_);
+			// Texture Cube는 default로 SRV를 생성할 수 없다.
+			request.pDest->idxSrv.idxRange = etoi(Texture::Type::TexCube);
+			createSRV(device_.Get(), *request.pDest, D3D12_SHADER_RESOURCE_VIEW_DESC{
+				.Format = DXGI_FORMAT_R32G32B32A32_FLOAT,
+				.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE,
+				.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+				.TextureCube = D3D12_TEXCUBE_SRV{
+					.MostDetailedMip = 0u,
+					.MipLevels = 1u
+				}
+			}, srvTexCubePool_);
 		}
 		else {
 			DISPLAY_ERROR_STR(false, "[GFX Error] GFX::loadAssets: loadTexture의 결과로 얻어진 "s
@@ -609,6 +638,23 @@ void GFX::render() {
 		pbrPipelineDispatcher.updateGPUDataMultiThreaded();
 		pbrPipelineDispatcher.drawMultiThreaded();
 	}
+
+	// Skybox Pipeline의 Dispatch
+	// 스카이박스 하나 그리는 파이프라인이라, 멀티스레드일 필요가 없다.
+	auto skyboxPipelineDispatcher = SkyboxPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at("DefaultRootSignature"), shaders_.at("SkyboxShader"),
+		cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesSkyboxPipeline_, &cmdListPool_,
+		std::move(drawEventsSkyboxPipeline_), cameraDataSkyboxPipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
+	skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
+	skyboxPipelineDispatcher.drawSingleThreaded();
 
 	// 출력 명령 컨텍스트 할당
 	CommandContext cmdCtxPresent{};

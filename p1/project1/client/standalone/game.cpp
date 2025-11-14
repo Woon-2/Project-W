@@ -44,13 +44,16 @@ void Game::setupStage() {
 
 	dumpLog();
 
-	dirLight_.setOrient(mu::NQuat(mu::Degree(0.f), mu::Degree(60.f), mu::Degree(15.f)));
+	skybox_.setModel(assetManager_.modelCube());
+	skybox_.setTexture(assetManager_.textureSkybox());
+
+	dirLight_.setOrient(mu::NQuat(mu::Degree(0.f), mu::Degree(120.f), mu::Degree(15.f)));
 	dirLight_.color = mu::Vec3(0.8f, 0.8f, 0.8f);
 	dirLight_.intensity = 2.f;
 	dirLight_.type = PBRPipeline::LightData::Type::DirectionalLight;
 
 	camera_.setTargetObject( player_ );
-	camera_.setOffsetFromTarget( mu::Vec3( 0.f, 2.3f, -2.5f ) );
+	camera_.setOffsetFromTarget( mu::Vec3( 0.f, 1.8f, -2.5f ) );
 	camera_.setPerspective( mu::Degree( 90.f ),
 		static_cast<float>( gClientRect.right - gClientRect.left ) / ( gClientRect.bottom - gClientRect.top ),
 		0.1f, 500.f
@@ -136,6 +139,7 @@ void Game::render() {
 		cube.render( gfx_ );
 	}
 	player_->render(gfx_);
+	skybox_.render(gfx_);
 	camera_.updateGFX(gfx_);
 	dirLight_.render(gfx_);
 

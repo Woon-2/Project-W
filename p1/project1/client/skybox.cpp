@@ -1,0 +1,13 @@
+#include "skybox.hpp"
+
+void Skybox::render(GFX& gfx) {
+	for (auto& [mesh, _] : pModel_->meshWithDressXforms) {
+		for (std::size_t i = 0u; i < mesh.subMeshes.size(); ++i) {
+			gfx.addDrawEvent( SkyboxPipeline::DrawEvent{
+				.mesh = &mesh,
+				.subMesh = &mesh.subMeshes[i],
+				.texSkybox = pTexSkybox_
+			} );
+		}
+	}
+}

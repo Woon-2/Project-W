@@ -8,14 +8,18 @@
 
 #include "samplePipeline.hpp"
 #include "pbrPipeline.hpp"
+#include "skyboxPipeline.hpp"
 
 
 
-// Defered Shading 구현
-// 그림자 매핑 - 11.13.
-// Rigidbody Physics 구현 - 11.14.
+// skybox에 샘플링 방법 반영
+// 카메라에 타겟 오프셋 반영
+// 그림자 매핑 - 11.14.
+// Rigidbody Physics 구현
 // 1인칭 & 3인칭 카메라 분리 구현 - 11.15.
 // 애니메이션 + 총 달기 - 11.16.-11.17.
+// gfx에 있는 texHashMap game쪽으로 옮기기
+// deferred shading 구현
 // 사운드 프로그래밍
 // 네트워크에서 받는 물리 정보 보간/외삽
 // CSM
@@ -23,6 +27,7 @@
 // 멀티스레드 업데이트
 // 충돌체 렌더링 및 구현 (컬링용)
 // Software Culling
+// 밉맵 정보도 만들어서 추출
 
 // 서버
 // 로그인-로그아웃, 룸 구조 만들기
@@ -94,6 +99,10 @@ public:
 	void addLightData(const PBRPipeline::LightData& lightData);
 	// 프레임 데이터를 입력한다.
 	void addFrameData(const PBRPipeline::FrameData& frameData);
+	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+	void addDrawEvent(const SkyboxPipeline::DrawEvent& drawEvent);
+	// 카메라 데이터를 입력한다.
+	void addCameraData(const SkyboxPipeline::CameraData& cameraData);
 
 	void addRequestModelLoad(const RequestModelLoad& request);
 	void addRequestTextureLoad(const RequestTextureLoad& request);
@@ -167,6 +176,10 @@ private:
 	PBRPipeline::CameraData cameraDataPBRPipeline_{};
 	std::vector<PBRPipeline::LightData> lightDataPBRPipeline_{};
 	PBRPipeline::FrameData frameDataPBRPipeline_{};
+	// Skybox Pipeline
+	std::vector<SkyboxPipeline::DrawEvent> drawEventsSkyboxPipeline_{};
+	SkyboxPipeline::Resources resourcesSkyboxPipeline_{};
+	SkyboxPipeline::CameraData cameraDataSkyboxPipeline_{};
 
 	std::map<std::string, Fence> fences_{};
 
