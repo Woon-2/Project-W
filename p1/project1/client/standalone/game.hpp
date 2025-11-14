@@ -21,6 +21,8 @@ public:
 
 	void update(Milliseconds deltaTime) override;
 	void render() override;
+
+	// 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
 	LRESULT receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) override;
 
 private:
