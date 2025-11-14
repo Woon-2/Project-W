@@ -50,9 +50,37 @@ public class LevelExtractorWindow : EditorWindow
         binaryWriter = new BinaryWriter(File.Open(path, FileMode.Create));
 
         ExtractNodes();
+        ExtractSixSidedSkyboxTextureNames();
 
         binaryWriter.Flush();
         binaryWriter.Close();
         Debug.Log("Level Binary Write Completed");
+    }
+
+    void ExtractSixSidedSkyboxTextureNames()
+    {
+        Material skyMat = RenderSettings.skybox;
+        if (skyMat == null)
+        {
+            Debug.LogWarning("No skybox material found in the scene.");
+            return;
+        }
+
+        Debug.Log("Skybox Material: " + skyMat.name);
+        ExtractUtil.WriteHeadTag(binaryWriter, "Skybox");
+        ExtractUtil.WriteText(binaryWriter, "Name", skyMat.name);
+
+        string[] faces = { "_FrontTex", "_BackTex", "_LeftTex", "_RightTex", "_UpTex", "_DownTex" };
+        string[] faceNames = { "+Z", "-Z", "+X", "-X", "+Y", "-Y" };
+
+        for (int i = 0; i < faces.Length; i++)
+        {
+            if (skyMat.HasProperty(faces[i]))
+            {
+                Texture tex = skyMat.GetTexture(faces[i]);
+                string texName = tex != null ? tex.name : "None";
+                ExtractUtil.WriteText(binaryWriter, faceNames[i], texName);
+            }
+        }
     }
 }
