@@ -198,7 +198,8 @@ Mesh buildCubeMesh(
     );
 
     if (!texHashMap.contains("CubeMesh_Albedo")) {
-        auto [pPair, _] = texHashMap.try_emplace("CubeMesh_Albedo", loadTexture(device, cmdList, "CubeMesh_Albedo.dds", fenceToAssociate));
+        Texture::Type type{};
+        auto [pPair, _] = texHashMap.try_emplace("CubeMesh_Albedo", loadTexture(device, cmdList, "CubeMesh_Albedo.dds", fenceToAssociate, type));
         gSharedLog << "[Resource Load] File I/O: 텍스처 CubeMesh_Albedo 로드 완료 - CubeMesh_Albedo.dds\n";
         createSRV(device, pPair->second, texPool);
         pPair->second.idxSrv.idxSampler = etoi(Samplers::TrilinearWrap);
@@ -389,8 +390,8 @@ void importTexture( std::ifstream& ifs, ID3D12Device* device,
 
     // texHashMap에 없다면 알아낸 경로를 통해 텍스처를 load해 key와 함께 등록
     if (!texHashMap.contains(key)) {
-        auto [pPair, _] = texHashMap.try_emplace( key, loadTexture(device, cmdList, path, fenceToAssociate) );
-        gSharedLog << "[Resource Load] File I/O: 텍스처 " + key + " 로드 완료 - " + path << '\n';
+        Texture::Type type{};
+        auto [pPair, _] = texHashMap.try_emplace( key, loadTexture(device, cmdList, path, fenceToAssociate, type) );
 
         // 풀에서 srv를 할당받아 생성
         createSRV(device, pPair->second, texPool);

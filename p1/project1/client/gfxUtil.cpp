@@ -434,7 +434,7 @@ LoadDDSReturnType loadDDS(
 	auto ret = LoadDDSReturnType{};
 
     auto alphaMode = DirectX::DDS_ALPHA_MODE_UNKNOWN;
-    auto blsCubemap = false;
+    ret.isCubemap = false;
 
 	DISPLAY_ERROR_DX_HR(
 		DirectX::LoadDDSTextureFromFileEx(
@@ -447,7 +447,7 @@ LoadDDSReturnType loadDDS(
             ret.ddsData,
             ret.subresources,
             &alphaMode,
-            &blsCubemap
+            &ret.isCubemap
         ), false
 	);
 
@@ -577,12 +577,24 @@ UINT calcIdxBindlessSampler( D3D12_FILTER filterMode,
 // UpdateSubresources 함수에서 쓰인 임시 업로드 버퍼가 펜스에 연관되므로,
 // 펜스에서 gpu 작업 완료를 확인하고 난 뒤에 임시 업로드 버퍼들을 해제할 필요가 있다.
 Texture loadTexture( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
-	const std::filesystem::path& path, Fence& fenceToAssociate
+	const std::filesystem::path& path, Fence& fenceToAssociate, Texture::Type& texType
 ) {
 	Texture ret{};
 
 	auto tmp = loadDDS(device, cmdList, path, fenceToAssociate);
 	ret.res = std::move(tmp.res);
+
+	if (tmp.subresources.size() == 1u) {
+		texType = Texture::Type::Tex2D;
+	}
+	else if (tmp.isCubemap) {
+		texType = Texture::Type::TexCube;
+	}
+	else {
+		texType = Texture::Type::Tex2DArray;
+	}
+
+	gSharedLog << "[Resource Load] File I/O: 텍스처 " << path << " 로드 완료\n";
 
 	return ret;
 }

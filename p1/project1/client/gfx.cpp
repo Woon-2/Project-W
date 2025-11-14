@@ -404,7 +404,11 @@ void GFX::addRequestModelLoad(const RequestModelLoad& request) {
 	requestsModelLoad_.push_back(request);
 }
 
-void GFX::loadModels() {
+void GFX::addRequestTextureLoad(const RequestTextureLoad& request) {
+	requestsTextureLoad_.push_back(request);
+}
+
+void GFX::loadAssets() {
 	auto& fence = fences_.at("LoadFence");
 
 	// 명령 리스트와 명령 할당자 할당
@@ -426,6 +430,25 @@ void GFX::loadModels() {
 	// 명령 기록 시작
 	for (auto& request : requestsModelLoad_) {
 		*request.pDest = loadModelFromFile(request.modelPath, device_.Get(), cmdList.Get(), texHashMap_, srvTexPool_, fence);
+	}
+	for (auto& request : requestsTextureLoad_) {
+		Texture::Type texType{};
+
+		*request.pDest = loadTexture(device_.Get(), cmdList.Get(), request.texPath, fence, texType);
+		if (texType == Texture::Type::Tex2D) {
+			createSRV(device_.Get(), *request.pDest, srvTexPool_);
+		}
+		else if (texType == Texture::Type::Tex2DArray) {
+			createSRV(device_.Get(), *request.pDest, srvTexArrayPool_);
+		}
+		else if (texType == Texture::Type::TexCube) {
+			createSRV(device_.Get(), *request.pDest, srvTexCubePool_);
+		}
+		else {
+			DISPLAY_ERROR_STR(false, "[GFX Error] GFX::loadAssets: loadTexture의 결과로 얻어진 "s
+				+ "텍스처의 타입이 알 수 없는 타입입니다.", true);
+		}
+		
 	}
 
 	dumpLog();

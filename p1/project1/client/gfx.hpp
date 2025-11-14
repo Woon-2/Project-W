@@ -10,9 +10,7 @@
 #include "pbrPipeline.hpp"
 
 
-// 마우스 움직임으로 카메라 조작 구현
-// SkySphere 구현
-// 노멀 매핑 구현 - 11.12.
+
 // Defered Shading 구현
 // 그림자 매핑 - 11.13.
 // Rigidbody Physics 구현 - 11.14.
@@ -40,6 +38,11 @@ extern HWND ghWnd;
 struct RequestModelLoad {
 	std::filesystem::path modelPath;
 	Model* pDest;
+};
+
+struct RequestTextureLoad {
+	std::filesystem::path texPath;
+	Texture* pDest;
 };
 
 // 렌더링을 총괄 책임지는 클래스
@@ -93,8 +96,9 @@ public:
 	void addFrameData(const PBRPipeline::FrameData& frameData);
 
 	void addRequestModelLoad(const RequestModelLoad& request);
+	void addRequestTextureLoad(const RequestTextureLoad& request);
 
-	void loadModels();
+	void loadAssets();
 
 	// 요청된 드로우콜들을 모아 객체들을 그리고 화면에 띄운다.
 	void render();
@@ -169,6 +173,7 @@ private:
 	std::size_t frameIdx_ = 0u;
 
 	std::vector<RequestModelLoad> requestsModelLoad_{};
+	std::vector<RequestTextureLoad> requestsTextureLoad_{};
 
 	ThreadPool* threadPool_;	// 설정되어있을 경우 멀티스레드로 동작한다.
 };

@@ -6,7 +6,7 @@
 
 class AssetManager {
 public:
-	void loadModels(GFX& gfx);
+	void loadGFXAssets(GFX& gfx);
 
 	const Model* modelCube() const { return &modelCube_; }
 	const Model* modelPlayer() const { return &modelPlayer_; }
@@ -14,6 +14,7 @@ public:
 private:
 	Model modelCube_;
 	Model modelPlayer_;
+	Texture texSkybox_;
 };
 
 #endif	// __AssetManager_HPP

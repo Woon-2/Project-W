@@ -26,7 +26,7 @@ Game::Game() {
 	gfx_.createSwapChain();
 	gfx_.setThreadPool(&threadPool_);
 
-	assetManager_.loadModels(gfx_);
+	assetManager_.loadGFXAssets(gfx_);
 }
 
 void Game::setupStage() {
@@ -41,6 +41,8 @@ void Game::setupStage() {
 
 	readTailTag(ifs, "Level");
 	gSharedLog << "[Level Load] File I/O: 레벨 " << path << "로드 완료\n";
+
+	dumpLog();
 
 	dirLight_.setOrient(mu::NQuat(mu::Degree(0.f), mu::Degree(60.f), mu::Degree(15.f)));
 	dirLight_.color = mu::Vec3(0.8f, 0.8f, 0.8f);
@@ -60,7 +62,7 @@ void Game::importNode(std::ifstream& ifs) {
 	const auto type = readText(ifs, "Type");
 	const auto name = readText(ifs, "Name");
 
-	std::cout << "[Level Load] 레벨 노드 " << name << " 로드\n";
+	gSharedLog << "[Level Load] 레벨 노드 " << name << " 로드 완료\n";
 
 	readHeadTag(ifs, "LocalTRS");
 	const auto localT = readVec3(ifs, "Position");
@@ -192,7 +194,7 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	}
 
 	case WM_SIZE:
-		break;
+		return DefWindowProcA(hWnd, msg, wParam, lParam);
 
 	default:
 		return DefWindowProcA(hWnd, msg, wParam, lParam);

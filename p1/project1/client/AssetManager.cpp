@@ -1,6 +1,6 @@
 #include "AssetManager.hpp"
 
-void AssetManager::loadModels(GFX& gfx) {
+void AssetManager::loadGFXAssets(GFX& gfx) {
 	gfx.addRequestModelLoad( RequestModelLoad{
 		.modelPath = "../resources/models/cube.bin",
 		.pDest = &modelCube_
@@ -10,6 +10,11 @@ void AssetManager::loadModels(GFX& gfx) {
 		.modelPath = "../resources/models/vanguard.bin",
 		.pDest = &modelPlayer_
 	} );
+	
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.texPath = "../resources/models/textures/skybox.dds",
+		.pDest = &texSkybox_
+	} );
 
-	gfx.loadModels();
+	gfx.loadAssets();
 }

@@ -271,6 +271,7 @@ struct LoadDDSReturnType {
     ComPtr<ID3D12Resource> res;
     std::unique_ptr<std::uint8_t[]> ddsData;
     std::vector<D3D12_SUBRESOURCE_DATA> subresources;
+	bool isCubemap;
 };
 
 // dds 포맷의 이미지 파일을 로드한다.
@@ -316,6 +317,11 @@ UINT calcIdxBindlessSampler( D3D12_FILTER filterMode,
 // 텍스처와 관련된 정보를 담는 구조체
 // gpu 리소스를 담는 ComPtr 객체와 Bindless 셰이더에서 인덱싱하기 위한 인덱스들이 저장된다.
 struct Texture {
+	enum class Type {
+		Tex2D,
+		Tex2DArray,
+		TexCube
+	};
 	ComPtr<ID3D12Resource> res;
 	int idxRtv;
 	int idxDsv;
@@ -327,7 +333,7 @@ struct Texture {
 // UpdateSubresources 함수에서 쓰인 임시 업로드 버퍼가 펜스에 연관되므로,
 // 펜스에서 gpu 작업 완료를 확인하고 난 뒤에 임시 업로드 버퍼들을 해제할 필요가 있다.
 Texture loadTexture( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
-	const std::filesystem::path& path, Fence& fenceToAssociate
+	const std::filesystem::path& path, Fence& fenceToAssociate, Texture::Type& texType
 );
 
 // 텍스처의 gpu 리소스를 담는 ComPtr 부분은 제외하고,
