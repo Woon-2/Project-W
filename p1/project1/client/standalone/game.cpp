@@ -228,11 +228,19 @@ void Game::processInput(Milliseconds deltaTime) {
 
     const auto mouseSensitivity = mu::pi * 2.f;
 
-	auto rotation = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f),
+	auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f),
 		mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left))	
 	);
 
-	player_->setOrient(player_->orient() * rotation);
+	player_->setOrient(player_->orient() * yaw);
+
+	cameraPitch_ = std::clamp(
+		static_cast<float>(cameraPitch_) + mouseDeltaY_ * mouseSensitivity / static_cast<float>(gClientRect.bottom - gClientRect.top),
+		-mu::pi * 0.16f,
+		mu::pi * 0.24f
+	);
+
+	camera_.setOffsetFromTargetPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, mu::Radian(0.f)) );
 
 	mouseDeltaX_ = 0;
 	mouseDeltaY_ = 0;

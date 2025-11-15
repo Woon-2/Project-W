@@ -42,6 +42,7 @@ private:
 	std::shared_ptr<Object> player_{};
 	SkyboxObject skybox_{};
 	Camera camera_{};
+	mu::Radian cameraPitch_ = 0.f;
 	Light dirLight_{};
 	bool playerSpawned_ = false;
 
