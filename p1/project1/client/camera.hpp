@@ -9,8 +9,12 @@ class Camera {
 public:
 	void setTargetObject(const std::shared_ptr<Object>& pObject) { pTargetObject_ = pObject; }
 	std::shared_ptr<Object> pTargetObject() const { return pTargetObject_.lock(); }
+	// 타겟 오브젝트에 대한 카메라의 위치 오프셋을 설정한다.
 	void MU_CALLCONV setOffsetFromTarget(mu::Vec3 offset) { offsetFromTarget_ = offset; }
 	mu::Vec3 MU_CALLCONV offsetFromTarget() const { return offsetFromTarget_; }
+	// 타겟 오브젝트에 대한 카메라의 초점 오프셋을 설정한다.
+	void MU_CALLCONV setOffsetTargetPivot(mu::Vec3 offset) { offsetTargetPivot_ = offset; }
+	mu::Vec3 MU_CALLCONV offsetTargetPivot() const { return offsetTargetPivot_; }
 
 	void update();
 	void updateGFX(GFX& gfx);
@@ -20,7 +24,10 @@ public:
 	
 private:
 	std::weak_ptr<Object> pTargetObject_{};
+	// 타겟 오브젝트에 대한 카메라의 위치 오프셋
 	mu::Vec3 offsetFromTarget_{};
+	// 타겟 오브젝트에 대한 카메라의 초점 오프셋
+	mu::Vec3 offsetTargetPivot_{};
 
 	// perspective용
 	mu::Degree fovy_ = 90.f;

@@ -11,7 +11,6 @@
 #include "skyboxPipeline.hpp"
 
 
-// 카메라에 타겟 오프셋 반영
 // 카메라 pitch 조작 추가
 // 그림자 매핑 - 11.14.
 // Rigidbody Physics 구현

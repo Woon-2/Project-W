@@ -7,8 +7,9 @@ void Camera::update() {
 	}
 
 	auto rotatedOffset = pTarget->orient().rotate(offsetFromTarget_);
+	auto rotatedOffsetTargetPivot = pTarget->orient().rotate(offsetTargetPivot_);
 
-	view_ = mu::lookAt(pTarget->pos() + rotatedOffset, pTarget->pos(), mu::NVec3(0.f, 1.f, 0.f));
+	view_ = mu::lookAt(pTarget->pos() + rotatedOffset, pTarget->pos() + rotatedOffsetTargetPivot, mu::NVec3(0.f, 1.f, 0.f));
 }
 
 void Camera::updateGFX(GFX& gfx) {
