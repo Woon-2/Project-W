@@ -1,9 +1,14 @@
 #include "pch.hpp"
 #include "global.hpp"
+#include "online/onlineGame.hpp"
+#include "ServerSession.hpp"
 #include "object.hpp"
 
-SPServerSession gServerSession = nullptr;
+GFX gGfx{};
 
-std::shared_ptr<class Object> gPlayer = nullptr;
-std::unordered_map<i32t, std::shared_ptr<class Object>> gObjects;
+std::unique_ptr<IGame> pGame = nullptr;
+std::atomic_bool gReady = false;
+
+std::shared_ptr<Object> gPlayer = nullptr;
+std::unordered_map<i32t, std::shared_ptr<Object>> gObjects;
 std::mutex gMtx;

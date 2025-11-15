@@ -1,8 +1,11 @@
 #include "pch.hpp"
 #include "errorHandling.hpp"
+#include "global.hpp"
 #include "online/onlineGame.hpp"
 #include "standalone/game.hpp"
 #include "timer.hpp"
+#include "IocpCore.hpp"
+#include "Service.hpp"
 #include "ServerSession.hpp"
 
 extern SPServerSession gServerSession;
@@ -58,21 +61,12 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 	Timer timer{};
 
 	std::thread iocpLoopThread{};
-	std::unique_ptr<IGame> pGame = nullptr;
 	gPlayer = std::make_shared<Object>( );
 
 	auto clientService = tryConnectToServer();
-	if (clientService) {
-		iocpLoopThread = makeIOCPLoopThread(clientService);
-		pGame = std::make_unique<Online::OnlineGame>();
-		static_cast<Online::OnlineGame*>( pGame.get( ) )->setupStage( );
-	}
-	else {
-		//pGame = std::make_unique<StandAlone::Game>();
-		//static_cast<StandAlone::Game*>(pGame.get())->setupStage();
-	}
-
-	auto& game = *pGame;
+	iocpLoopThread = makeIOCPLoopThread( clientService );
+	
+	while ( !gReady );
 
 	// 윈도우 메시지 루프
 	MSG msg;
@@ -94,8 +88,8 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 		auto title = wndName + "(FPS: "s + std::to_string( timer.fps( ) ) + ")"s;
 		SetWindowTextA( ghWnd, title.c_str( ) );
 
-		game.update(timer.deltaTime<Milliseconds>());
-		game.render();
+		pGame->update(timer.deltaTime<Milliseconds>());
+		pGame->render();
 	}
 }
 
@@ -133,7 +127,9 @@ SPClientService tryConnectToServer() {
 std::thread makeIOCPLoopThread(SPClientService& clientService) {
 	return std::thread( [&clientService]( ) {
 		while ( true ) {
-			clientService->getIocpCore( )->dispatch( );
+			if ( !clientService->getIocpCore( )->dispatch( ) ) {
+				break;
+			}
 		}
 	} );
 }

@@ -1,15 +1,14 @@
 #include "onlineGame.hpp"
+#include "../global.hpp"
 #include "../ServerSession.hpp"
 #include "../SendBuffer.hpp"
 
 extern HWND ghWnd;
 extern RECT gClientRect;
 
-GFX gGfx{ };
-
 namespace Online {
 
-OnlineGame::OnlineGame() {
+Game::Game() {
 	// 스레드 풀 초기화
 	std::cout << "----------[게임 초기화 설정]----------\n";
 	std::cout << "스레드 풀에 사용할 스레드 수를 입력해 주세요.\n";
@@ -31,7 +30,7 @@ OnlineGame::OnlineGame() {
 	gGfx.loadMeshes();
 }
 
-void OnlineGame::setupStage() {
+void Game::setupStage() {
 	cubes_.resize(8u);
 	for ( auto& plane : cubes_ ) {
 		plane.resize( 9u );
@@ -74,7 +73,7 @@ void OnlineGame::setupStage() {
 	);
 }
 
-void OnlineGame::update(Milliseconds deltaTime) {
+void Game::update(Milliseconds deltaTime) {
 	processInput(deltaTime);
 
 	for ( auto& plane : cubes_ ) {
@@ -96,7 +95,7 @@ void OnlineGame::update(Milliseconds deltaTime) {
 	dirLight_.update(deltaTime);
 }
 
-void OnlineGame::render() {
+void Game::render() {
 	for ( auto& plane : cubes_ ) {
 		for ( auto& row : plane ) {
 			for ( auto& cube : row ) {
@@ -123,7 +122,7 @@ void OnlineGame::render() {
 	gGfx.render();
 }
 
-void OnlineGame::processInput(Milliseconds deltaTime) {
+void Game::processInput(Milliseconds deltaTime) {
 	auto packet = Packet{
 		.header = {
 			.size = sizeof( PacketHeader ) + sizeof( CSMovePacket ),

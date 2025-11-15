@@ -356,6 +356,12 @@
     <ClCompile Include="online\onlineGame.cpp">
       <Filter>게임%28온라인%29\소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="IocpCore.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="ServerSession.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="sample.hlsl">

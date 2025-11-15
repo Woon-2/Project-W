@@ -1,4 +1,5 @@
 #include "pch.hpp"
+#include "global.hpp"  
 #include "IocpCore.hpp"
 #include "Listener.hpp"
 #include "Service.hpp"

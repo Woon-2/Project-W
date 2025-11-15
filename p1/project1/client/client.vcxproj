@@ -206,6 +206,7 @@
     <ClCompile Include="gfx.cpp" />
     <ClCompile Include="gfxUtil.cpp" />
     <ClCompile Include="global.cpp" />
+    <ClCompile Include="IocpCore.cpp" />
     <ClCompile Include="light.cpp" />
     <ClCompile Include="Listener.cpp" />
     <ClCompile Include="log.cpp" />
@@ -218,6 +219,7 @@
     <ClCompile Include="physics.cpp" />
     <ClCompile Include="samplePipeline.cpp" />
     <ClCompile Include="SendBuffer.cpp" />
+    <ClCompile Include="ServerSession.cpp" />
     <ClCompile Include="Service.cpp" />
     <ClCompile Include="Session.cpp" />
     <ClCompile Include="SessionManager.cpp" />

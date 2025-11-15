@@ -1,8 +1,6 @@
 #ifndef IOCP_CORE_HPP
 #define IOCP_CORE_HPP
 
-#include "pch.hpp"
-#include "IoEvent.hpp"
 #include "IocpObject.hpp"
 
 class IocpCore {
@@ -11,6 +9,7 @@ public:
 		: iocpHandle_( ::CreateIoCompletionPort( INVALID_HANDLE_VALUE, nullptr, 0, 0 ) ) {
 		ASSERT_CRASH( iocpHandle_ != nullptr );
 	}
+
 	~IocpCore( ) {
 		::CloseHandle( iocpHandle_ );
 	}
@@ -18,37 +17,9 @@ public:
 	bool registerHandle( const SPIocpObject& iocpObject ) {
 		return ::CreateIoCompletionPort( iocpObject->getHandle( ), iocpHandle_, 0, 0 );
 	}
+	bool dispatch( uint32 timeoutMs = INFINITE );
 
-	bool dispatch( uint32 timeoutMs = INFINITE ) {
-		DWORD numBytes{ };
-		ULONG_PTR key{ };
-		IoEvent* event = nullptr;
-
-		if ( ::GetQueuedCompletionStatus( iocpHandle_, &numBytes, &key,
-			reinterpret_cast<LPOVERLAPPED*>( &event ), timeoutMs )
-		) {
-			auto iocpObject = event->getOwner( );
-			iocpObject->dispatch( event, numBytes );
-		}
-		else {
-			const int32 errCode = ::WSAGetLastError( );
-			switch ( errCode ) {
-			case WAIT_TIMEOUT:
-				return false;
-
-			default:
-				auto iocpObject = event->getOwner( );
-				iocpObject->dispatch( event, numBytes );
-				break;
-			}
-		}
-
-		return true;
-	}
-
-	HANDLE getHandle( ) const {
-		return iocpHandle_;
-	}
+	HANDLE getHandle( ) const { return iocpHandle_;	}
 
 private:
 	HANDLE iocpHandle_;

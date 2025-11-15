@@ -93,13 +93,6 @@
 
 #include "concurrentqueue.h"
 
-#include "../server/pch.hpp"
-#include "Service.hpp"
-#include "IocpCore.hpp"
-#include "Session.hpp"
-#include "SendBuffer.hpp"
-#include "global.hpp"
-
 #undef min
 #undef max
 #undef near
