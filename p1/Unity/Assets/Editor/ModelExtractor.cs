@@ -125,7 +125,7 @@ public class ModelExtractorWindow : EditorWindow
             ExtractUtil.WriteText(geometryWriter, "TextureName", tex.name);
             ExtractUtil.WriteText(geometryWriter, "WrapModeU", tex.wrapModeU.ToString());
             ExtractUtil.WriteText(geometryWriter, "WrapModeV", tex.wrapModeV.ToString());
-            ExtractUtil.WriteText(geometryWriter, "WrapModeW", tex.wrapModeV.ToString());
+            ExtractUtil.WriteText(geometryWriter, "WrapModeW", tex.wrapModeW.ToString());
             if (tex.anisoLevel > 1)
             {
                 ExtractUtil.WriteText(geometryWriter, "FilterMode", "Anisotropic");

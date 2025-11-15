@@ -411,8 +411,8 @@ void GFX::addRequestModelLoad(const RequestModelLoad& request) {
 	requestsModelLoad_.push_back(request);
 }
 
-void GFX::addRequestTextureLoad(const RequestTextureLoad& request) {
-	requestsTextureLoad_.push_back(request);
+void GFX::addRequestSkyboxLoad(const RequestSkyboxLoad& request) {
+	requestsSkyboxLoad_.push_back(request);
 }
 
 // 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
@@ -448,36 +448,11 @@ void GFX::loadAssets() {
 	for (auto& request : requestsModelLoad_) {
 		*request.pDest = loadModelFromFile(request.modelPath, device_.Get(), cmdList.Get(), texHashMap_, srvTexPool_, fence);
 	}
-	for (auto& request : requestsTextureLoad_) {
-		Texture::Type texType{};
 
-		*request.pDest = loadTexture(device_.Get(), cmdList.Get(), request.texPath, fence, texType);
-		if (texType == Texture::Type::Tex2D) {
-			request.pDest->idxSrv.idxRange = etoi(Texture::Type::Tex2D);
-			createSRV(device_.Get(), *request.pDest, srvTexPool_);
-		}
-		else if (texType == Texture::Type::Tex2DArray) {
-			request.pDest->idxSrv.idxRange = etoi(Texture::Type::Tex2DArray);
-			createSRV(device_.Get(), *request.pDest, srvTexArrayPool_);
-		}
-		else if (texType == Texture::Type::TexCube) {
-			// Texture Cube는 default로 SRV를 생성할 수 없다.
-			request.pDest->idxSrv.idxRange = etoi(Texture::Type::TexCube);
-			createSRV(device_.Get(), *request.pDest, D3D12_SHADER_RESOURCE_VIEW_DESC{
-				.Format = DXGI_FORMAT_R8G8B8A8_UNORM,
-				.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE,
-				.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-				.TextureCube = D3D12_TEXCUBE_SRV{
-					.MostDetailedMip = 0u,
-					.MipLevels = 1u
-				}
-			}, srvTexCubePool_);
-		}
-		else {
-			DISPLAY_ERROR_STR(false, "[GFX Error] GFX::loadAssets: loadTexture의 결과로 얻어진 "s
-				+ "텍스처의 타입이 알 수 없는 타입입니다.", true);
-		}
-		
+	dumpLog();
+
+	for (auto& request : requestsSkyboxLoad_) {
+		*request.pDest = loadSkyboxFromFile(request.skyboxPath, device_.Get(), cmdList.Get(), srvTexCubePool_, fence);
 	}
 
 	dumpLog();

@@ -4,15 +4,15 @@
 #include "pch.hpp"
 #include "gfx.hpp"
 
-class Skybox {
+class SkyboxObject {
 public:
 	void setModel(const Model* pModel) { pModel_ = pModel; }
-	void setTexture(const Texture* pTex) { pTexSkybox_ = pTex; }
+	void setSkyboxMaterial(const Skybox* pSkyboxMaterial) { pSkyboxMaterial_ = pSkyboxMaterial; }
 	void render(GFX& gfx);
 
 private:
 	const Model* pModel_ = nullptr;
-	const Texture* pTexSkybox_ = nullptr;
+	const Skybox* pSkyboxMaterial_ = nullptr;
 };
 
 #endif	// __skybox_HPP

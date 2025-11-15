@@ -10,12 +10,12 @@ public:
 
 	const Model* modelCube() const { return &modelCube_; }
 	const Model* modelPlayer() const { return &modelPlayer_; }
-	const Texture* textureSkybox() const { return &texSkybox_; }
+	const Skybox* skyboxMaterial() const { return &skyboxMaterial_; }
 
 private:
 	Model modelCube_;
 	Model modelPlayer_;
-	Texture texSkybox_;
+	Skybox skyboxMaterial_;
 };
 
 #endif	// __AssetManager_HPP

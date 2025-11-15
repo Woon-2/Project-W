@@ -422,7 +422,7 @@ void importTextureMapping( std::ifstream& ifs, ID3D12Device* device,
 
         const auto tag = untagHead(str);
 
-        // (텍스처 이름, 텍스처 경로) 쌍 읽기
+        // 텍스처 이름, 텍스처 샘플링 정보, 텍스처 경로 읽기
         if (tag == "Item") {
             importTexture(ifs, device, cmdList, texHashMap, texPool, fenceToAssociate);
         }
@@ -922,6 +922,222 @@ Model loadModelFromFile( const std::filesystem::path& path,
     importTextureMapping(ifs, device, cmdList, texHashMap, texPool, fenceToAssociate);
     importGeometry(ifs, device, cmdList, texHashMap, fenceToAssociate, ret);
     gSharedLog << "[Resource Load] File I/O: 모델 " << ret.name << '(' << path << ") 로드 완료\n";
+
+    return ret;
+}
+
+// 샘플링 정보, 경로 정보를 읽어 텍스처 객체를 구축한다.
+// 스카이박스의 이름도 지정한다.
+void importSkyboxCubemap( std::ifstream& ifs,
+	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
+	DescriptorPool& texCubePool, Fence& fenceToAssociate,
+    Skybox& skybox
+) {
+    std::string name{};
+    std::string path{};
+    // 기본값들로 초기화
+    D3D12_FILTER filterMode = D3D12_FILTER_MIN_MAG_MIP_POINT;
+    D3D12_TEXTURE_ADDRESS_MODE addrModeU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    D3D12_TEXTURE_ADDRESS_MODE addrModeV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    D3D12_TEXTURE_ADDRESS_MODE addrModeW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    UINT anisoLevel = 1u;
+
+    for (;;) {
+        const auto str = readString(ifs);
+        if (isTailTag(str, "Cube")) {
+            break;
+        }
+
+        const auto tag = untagHead(str);
+
+        // 텍스처 이름 추출
+        if (tag == "Name") {
+            name = readString(ifs);
+            readTailTag(ifs, "Name");
+        }
+        // Address Mode(Wrap Mode) 추출
+        else if (tag == "WrapModeU") {
+            const auto wrapModeUStr = readString(ifs);
+            if (wrapModeUStr == "Repeat") {
+                addrModeU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+            }
+            else if (wrapModeUStr == "Clamp") {
+                addrModeU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            }
+            else if (wrapModeUStr == "Mirror") {
+                addrModeU = D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+            }
+            else {
+                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: 알수 없는 텍스처 wrap mode "s
+                    + wrapModeUStr + "을 읽었습니다.", false
+                );
+            }
+
+            readTailTag(ifs, "WrapModeU");
+        }
+        else if (tag == "WrapModeV") {
+            const auto wrapModeVStr = readString(ifs);
+            if (wrapModeVStr == "Repeat") {
+                addrModeV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+            }
+            else if (wrapModeVStr == "Clamp") {
+                addrModeV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            }
+            else if (wrapModeVStr == "Mirror") {
+                addrModeV = D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+            }
+            else {
+                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: 알수 없는 텍스처 wrap mode "s
+                    + wrapModeVStr + "을 읽었습니다.", false
+                );
+            }
+
+            readTailTag(ifs, "WrapModeV");
+        }
+        else if (tag == "WrapModeW") {
+            const auto wrapModeWStr = readString(ifs);
+            if (wrapModeWStr == "Repeat") {
+                addrModeW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+            }
+            else if (wrapModeWStr == "Clamp") {
+                addrModeW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            }
+            else if (wrapModeWStr == "Mirror") {
+                addrModeW = D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+            }
+            else {
+                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: 알수 없는 텍스처 wrap mode "s
+                    + wrapModeWStr + "을 읽었습니다.", false
+                );
+            }
+
+            readTailTag(ifs, "WrapModeW");
+        }
+        // Filter Mode 추출
+        else if (tag == "FilterMode") {
+            const auto filterModeStr = readString(ifs);
+            if (filterModeStr == "Point") {
+                filterMode = D3D12_FILTER_MIN_MAG_MIP_POINT;
+            }
+            else if (filterModeStr == "Bilinear") {
+                filterMode = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+            }
+            else if (filterModeStr == "Trilinear") {
+                filterMode = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+            }
+            else if (filterModeStr == "Anisotropic") {
+                filterMode = D3D12_FILTER_ANISOTROPIC;
+            }
+            else {
+                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: 알수 없는 텍스처 filter mode "s
+                    + filterModeStr + "을 읽었습니다.", false
+                );
+            }
+
+            readTailTag(ifs, "FilterMode");
+        }
+        // 비등방성 필터링 레벨(최대 레벨) 추출
+        else if (tag == "AnisoLevel") {
+            anisoLevel = static_cast<UINT>(readInteger(ifs));
+            readTailTag(ifs, "AnisoLevel");
+        }
+        // 경로 추출
+        else if (tag == "DDSPath") {
+            path = readString(ifs);
+            readTailTag(ifs, "DDSPath");
+        }
+        else {
+            DISPLAY_ERROR_STR(false, "[File I/O Error] importTextureMapping: 알 수 없는 태그 "s
+                + tag + "를 읽었습니다.", true
+            );
+        }
+    }
+
+    // 텍스처 구축
+    Texture::Type type{};
+    skybox.texSkybox = loadTexture(device, cmdList, path, fenceToAssociate, type);
+    skybox.name = name;
+
+    // 큐브맵 텍스처는 D3D12_SHADER_RESOURCE_VIEW_DESC를 기본값(null)으로 사용하면 안 그려진다.
+    // 직접 작성해서 넘겨주어야 한다.
+    createSRV( device, skybox.texSkybox, D3D12_SHADER_RESOURCE_VIEW_DESC{
+		.Format = DXGI_FORMAT_R8G8B8A8_UNORM,
+		.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE,
+		.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+		.TextureCube = D3D12_TEXCUBE_SRV{
+			.MostDetailedMip = 0u,
+			.MipLevels = 1u
+		}
+	}, texCubePool );
+
+    skybox.texSkybox.idxSrv.idxRange = etoi(Texture::Type::TexCube);
+    skybox.texSkybox.idxUav.idxRange = etoi(Texture::Type::TexCube);
+
+    // 샘플러 인덱스를 계산해서 채워넣기
+    const auto samplerIdx = calcIdxBindlessSampler(filterMode, addrModeU, addrModeV, addrModeW, anisoLevel);
+    skybox.texSkybox.idxSrv.idxSampler = samplerIdx;
+    skybox.texSkybox.idxUav.idxSampler = samplerIdx;
+}
+
+// 스카이박스에서 사용되는 텍스처들에 대한 텍스처 매핑 정보를 읽어들인다.
+// 각 매핑 정보에서 얻어낸 샘플링 정보, 경로 정보를 바탕으로
+// 텍스처 객체를 구축한다.
+void importSkyboxTextureMapping( std::ifstream& ifs,
+	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
+	DescriptorPool& texCubePool, Fence& fenceToAssociate,
+    Skybox& skybox
+) {
+    readHeadTag(ifs, "TextureMapping");
+
+    for (;;) {
+        const auto str = readString(ifs);
+        if (isTailTag(str, "TextureMapping")) {
+            break;
+        }
+
+        const auto tag = untagHead(str);
+        if (tag == "Cube") {
+            importSkyboxCubemap(ifs, device, cmdList, texCubePool, fenceToAssociate, skybox);
+        }
+        else {
+            DISPLAY_ERROR_STR(false, "[File I/O Error] importSkyboxTextureMapping: 알 수 없는 태그 "s
+                + tag + "를 읽었습니다.", true
+            );
+        }
+    }
+}
+
+// 스카이박스에 담겨 있는 재질 정보들을 읽어들인다.
+void importSkyboxMaterials(std::ifstream& ifs) {
+    const auto materialCnt = readInteger(ifs, "MaterialCnt");
+
+    for (int i = 0; i < materialCnt; ++i) {
+        readHeadTag(ifs, "Material");
+        const auto matName = readText(ifs, "Cubemap");
+        readTailTag(ifs, "Material");
+    }
+}
+
+// 바이너리 파일로부터 스카이박스를 읽어온다.
+// 파일에 적혀있는 큐브맵 텍스처 정보를 통해 스카이박스 재질을 완성한다.
+// 이 함수는 무조건 연관된 텍스처를 로드하므로, 중복호출되지 않도록 주의한다.
+// * 수정 시 주의사항: 유니티의 추출 스크립트와 구조가 대칭이어야 한다.
+Skybox loadSkyboxFromFile( const std::filesystem::path& path,
+	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
+	DescriptorPool& texCubePool, Fence& fenceToAssociate
+) {
+    Skybox ret{};
+
+    auto ifs = std::ifstream(path, std::ios::binary);
+    DISPLAY_ERROR_STR(ifs.good(), "[File I/O Error]: loadSkyboxFromFile: "s + path.string() + " 파일을 열 수 없습니다."s, false);
+    if (!ifs) {
+        return ret;
+    }
+
+    importSkyboxTextureMapping(ifs, device, cmdList, texCubePool, fenceToAssociate, ret);
+    importSkyboxMaterials(ifs);
+
+    gSharedLog << "[Resource Load] File I/O: 스카이박스 " << ret.name << '(' << path << ") 로드 완료\n";
 
     return ret;
 }

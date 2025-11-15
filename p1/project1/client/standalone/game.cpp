@@ -40,12 +40,16 @@ void Game::setupStage() {
 	importNode(ifs);
 
 	readTailTag(ifs, "Level");
+
+	// 이후 레벨에서 사용하는 스카이박스 정보들을 읽어들일 수 있지만
+	// 스카이박스 재질을 하나만 사용하므로 굳이 읽지 않는다.
+
 	gSharedLog << "[Level Load] File I/O: 레벨 " << path << "로드 완료\n";
 
 	dumpLog();
 
 	skybox_.setModel(assetManager_.modelCube());
-	skybox_.setTexture(assetManager_.textureSkybox());
+	skybox_.setSkyboxMaterial(assetManager_.skyboxMaterial());
 
 	dirLight_.setOrient(mu::NQuat(mu::Degree(0.f), mu::Degree(120.f), mu::Degree(15.f)));
 	dirLight_.color = mu::Vec3(0.8f, 0.8f, 0.8f);

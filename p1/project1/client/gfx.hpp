@@ -11,7 +11,6 @@
 #include "skyboxPipeline.hpp"
 
 
-// skybox에 샘플링 방법 반영
 // 카메라에 타겟 오프셋 반영
 // 카메라 pitch 조작 추가
 // 그림자 매핑 - 11.14.
@@ -19,6 +18,7 @@
 // 1인칭 & 3인칭 카메라 분리 구현 - 11.15.
 // 애니메이션 + 총 달기 - 11.16.-11.17.
 // gfx에 있는 texHashMap game쪽으로 옮기기
+// 텍스처 포맷, 밉 개수도 추출
 // deferred shading 구현
 // 사운드 프로그래밍
 // 네트워크에서 받는 물리 정보 보간/외삽
@@ -27,7 +27,11 @@
 // 멀티스레드 업데이트
 // 충돌체 렌더링 및 구현 (컬링용)
 // Software Culling
-// 밉맵 정보도 만들어서 추출
+// * 임포트 관련
+//   texHashMap 등 에셋 관련 자료구조가 클라이언트쪽에 있을 필요가 있음.
+//   스카이박스 임포트 불완전
+//   예외처리 좀 더 추가
+// * Texture srv/uav의 idxRange 좀 더 표현력 있게 넣는 법 없을까.
 
 // 서버
 // 로그인-로그아웃, 룸 구조 만들기
@@ -45,9 +49,9 @@ struct RequestModelLoad {
 	Model* pDest;
 };
 
-struct RequestTextureLoad {
-	std::filesystem::path texPath;
-	Texture* pDest;
+struct RequestSkyboxLoad {
+	std::filesystem::path skyboxPath;
+	Skybox* pDest;
 };
 
 // 렌더링을 총괄 책임지는 클래스
@@ -105,7 +109,7 @@ public:
 	void addCameraData(const SkyboxPipeline::CameraData& cameraData);
 
 	void addRequestModelLoad(const RequestModelLoad& request);
-	void addRequestTextureLoad(const RequestTextureLoad& request);
+	void addRequestSkyboxLoad(const RequestSkyboxLoad& request);
 
 	void loadAssets();
 
@@ -186,7 +190,7 @@ private:
 	std::size_t frameIdx_ = 0u;
 
 	std::vector<RequestModelLoad> requestsModelLoad_{};
-	std::vector<RequestTextureLoad> requestsTextureLoad_{};
+	std::vector<RequestSkyboxLoad> requestsSkyboxLoad_{};
 
 	ThreadPool* threadPool_;	// 설정되어있을 경우 멀티스레드로 동작한다.
 };

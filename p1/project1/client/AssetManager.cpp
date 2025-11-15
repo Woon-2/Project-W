@@ -11,9 +11,9 @@ void AssetManager::loadGFXAssets(GFX& gfx) {
 		.pDest = &modelPlayer_
 	} );
 	
-	gfx.addRequestTextureLoad( RequestTextureLoad{
-		.texPath = "../resources/models/textures/skybox.dds",
-		.pDest = &texSkybox_
+	gfx.addRequestSkyboxLoad( RequestSkyboxLoad{
+		.skyboxPath = "../resources/models/skybox.bin",
+		.pDest = &skyboxMaterial_
 	} );
 
 	gfx.loadAssets();

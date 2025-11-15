@@ -125,7 +125,7 @@ public class SkyboxExtractorWindow : EditorWindow
             ExtractUtil.WriteText(binaryWriter, "TextureName", tex.name);
             ExtractUtil.WriteText(binaryWriter, "WrapModeU", tex.wrapModeU.ToString());
             ExtractUtil.WriteText(binaryWriter, "WrapModeV", tex.wrapModeV.ToString());
-            ExtractUtil.WriteText(binaryWriter, "WrapModeW", tex.wrapModeV.ToString());
+            ExtractUtil.WriteText(binaryWriter, "WrapModeW", tex.wrapModeW.ToString());
             if (tex.anisoLevel > 1)
             {
                 ExtractUtil.WriteText(binaryWriter, "FilterMode", "Anisotropic");

@@ -107,4 +107,18 @@ Model loadModelFromFile( const std::filesystem::path& path,
 	DescriptorPool& texPool, Fence& fenceToAssociate	
 );
 
+struct Skybox {
+	std::string name;
+	Texture texSkybox;
+};
+
+// 바이너리 파일로부터 스카이박스를 읽어온다.
+// 파일에 적혀있는 큐브맵 텍스처 정보를 통해 스카이박스 재질을 완성한다.
+// 이 함수는 무조건 연관된 텍스처를 로드하므로, 중복호출되지 않도록 주의한다.
+// * 수정 시 주의사항: 유니티의 추출 스크립트와 구조가 대칭이어야 한다.
+Skybox loadSkyboxFromFile( const std::filesystem::path& path,
+	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
+	DescriptorPool& texCubePool, Fence& fenceToAssociate
+);
+
 #endif	// __mesh_HPP

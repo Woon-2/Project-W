@@ -23,6 +23,7 @@ public class SkyboxDDSExtractorWindow : EditorWindow
         public string ddsPath;
         public TextureWrapMode wrapU;
         public TextureWrapMode wrapV;
+        public TextureWrapMode wrapW;
         public string filterMode;
         public int anisoLevel;
     }
@@ -112,6 +113,7 @@ public class SkyboxDDSExtractorWindow : EditorWindow
                         ddsPath = "Assets/Textures/" + cubeName + ".dds",
                         wrapU = sample.wrapModeU,
                         wrapV = sample.wrapModeV,
+                        wrapW = sample.wrapModeW,
                         filterMode = sample.filterMode.ToString(),
                         anisoLevel = sample.anisoLevel
                     };
@@ -137,6 +139,7 @@ public class SkyboxDDSExtractorWindow : EditorWindow
             ExtractUtil.WriteText(binaryWriter, "Name", cube.cubemapName);
             ExtractUtil.WriteText(binaryWriter, "WrapModeU", cube.wrapU.ToString());
             ExtractUtil.WriteText(binaryWriter, "WrapModeV", cube.wrapV.ToString());
+            ExtractUtil.WriteText(binaryWriter, "WrapModeW", cube.wrapW.ToString());
             ExtractUtil.WriteText(binaryWriter, "FilterMode", cube.filterMode);
             ExtractUtil.WriteInteger(binaryWriter, "AnisoLevel", cube.anisoLevel);
             ExtractUtil.WriteText(binaryWriter, "DDSPath", cube.ddsPath);

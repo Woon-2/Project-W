@@ -40,7 +40,7 @@ private:
 
 	std::vector<Object> cubes_{};
 	std::shared_ptr<Object> player_{};
-	Skybox skybox_{};
+	SkyboxObject skybox_{};
 	Camera camera_{};
 	Light dirLight_{};
 	bool playerSpawned_ = false;
