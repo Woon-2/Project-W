@@ -140,6 +140,7 @@
     <ClInclude Include="AssetManager.hpp" />
     <ClInclude Include="binaryImport.hpp" />
     <ClInclude Include="camera.hpp" />
+    <ClInclude Include="collision.hpp" />
     <ClInclude Include="concurrentqueue.h" />
     <ClInclude Include="d3dx12\include\directx\d3d12.h" />
     <ClInclude Include="d3dx12\include\directx\d3d12compatibility.h" />
@@ -206,6 +207,7 @@
     <ClCompile Include="AssetManager.cpp" />
     <ClCompile Include="binaryImport.cpp" />
     <ClCompile Include="camera.cpp" />
+    <ClCompile Include="collision.cpp" />
     <ClCompile Include="d3dx12\src\d3dx12_property_format_table.cpp" />
     <ClCompile Include="errorHandling.cpp" />
     <ClCompile Include="gfx.cpp" />
