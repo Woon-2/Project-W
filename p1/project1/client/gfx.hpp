@@ -9,9 +9,13 @@
 #include "samplePipeline.hpp"
 #include "pbrPipeline.hpp"
 #include "skyboxPipeline.hpp"
+#include "BVPipeline.hpp"
 
 
-// 카메라 pitch 조작 추가
+// 캐릭터 바운딩 볼륨 추출(사각형, 몸통 박스, 머리 박스)
+// AABB 구현
+// AABB 렌더링
+// index buffer view u16t로 고정하는 거 수정
 // 그림자 매핑 - 11.14.
 // Rigidbody Physics 구현
 // 1인칭 & 3인칭 카메라 분리 구현 - 11.15.
@@ -107,6 +111,10 @@ public:
 	void addDrawEvent(const SkyboxPipeline::DrawEvent& drawEvent);
 	// 카메라 데이터를 입력한다.
 	void addCameraData(const SkyboxPipeline::CameraData& cameraData);
+	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+	void addDrawEvent(const BVPipeline::DrawEvent& drawEvent);
+	// 카메라 데이터를 입력한다.
+	void addCameraData(const BVPipeline::CameraData& cameraData);
 
 	void addRequestModelLoad(const RequestModelLoad& request);
 	void addRequestSkyboxLoad(const RequestSkyboxLoad& request);
@@ -184,6 +192,10 @@ private:
 	std::vector<SkyboxPipeline::DrawEvent> drawEventsSkyboxPipeline_{};
 	SkyboxPipeline::Resources resourcesSkyboxPipeline_{};
 	SkyboxPipeline::CameraData cameraDataSkyboxPipeline_{};
+	// Bounding Volume Pipeline
+	std::vector<BVPipeline::DrawEvent> drawEventsBVPipeline_{};
+	BVPipeline::Resources resourcesBVPipeline_{};
+	BVPipeline::CameraData cameraDataBVPipeline_{};
 
 	std::map<std::string, Fence> fences_{};
 

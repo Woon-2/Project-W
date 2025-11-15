@@ -3,6 +3,7 @@
 
 #include "pch.hpp"
 #include "gfxUtil.hpp"
+#include "collision.hpp"
 
 // 재질 정보를 표현하는 구조체
 // SubMesh에 담겨, 드로우콜 시 사용할 텍스처나 상수를 지정한다.
@@ -94,6 +95,8 @@ struct MeshWithDressXform {
 struct Model {
 	std::string name;
 	std::vector<MeshWithDressXform> meshWithDressXforms;
+	std::vector<AABB> aabbs;
+	std::map<std::string, int> aabbIdxMap;
 };
 
 // 바이너리 파일로부터 모델을 읽어온다.

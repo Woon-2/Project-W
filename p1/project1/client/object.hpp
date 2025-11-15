@@ -7,7 +7,7 @@
 
 class Object {
 public:
-	void setModel(const Model* pModel) { pModel_ = pModel; }
+	void setModel(const Model* pModel);
 	void update(Milliseconds deltaTime);
 	void render(GFX& gfx);
 
@@ -26,6 +26,9 @@ public:
 	void setMaterialSetIdx(u32t idx) { materialSetIdx_ = idx; }
 	u32t mateiralSetIdx() const { return materialSetIdx_; }
 
+	void enableBVRendering() { willRenderBV_ = true; }
+	void disableBVRendering() { willRenderBV_ = false; }
+
 	void setId( i32t id ) {	id_ = id; }
 	i32t getId( ) const { return id_; }
 
@@ -41,6 +44,9 @@ private:
 
 	mu::Mat4x4 world_{};	// GFX에 행렬을 전달할 때만 사용된다.
 	const Model* pModel_ = nullptr;
+
+	std::vector<AABB> aabbs_{};
+	bool willRenderBV_ = false;
 
 	std::list<PhysicSnapshot> physicSnapshots_ = std::list<PhysicSnapshot>(1u);
 	PhysicEvaluationMethod physicEvaluationMethod_

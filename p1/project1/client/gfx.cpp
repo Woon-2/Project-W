@@ -229,6 +229,7 @@ void GFX::init() {
 	shaders_.try_emplace("SampleShader", createSampleShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRShader", createPBRShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("SkyboxShader", createSkyboxShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("BVShader", createBVShader(device_.Get(), defaultRootSig.get()));
 
 	rootSigs_.try_emplace("DefaultRootSignature", std::make_shared<DefaultRootSig>(std::move(defaultRootSig)));
 
@@ -360,6 +361,12 @@ void GFX::createSwapChain() {
 	resourcesSkyboxPipeline_.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(SkyboxShader::PerDrawcallData), 32u, backBuffers_.size(), "Skybox_PerDrawcallData"
 	);
+	resourcesBVPipeline_.perInstanceData.init(
+		device_.Get(), sizeof(BVShader::PerInstanceData) * 1000u, backBuffers_.size(), "BV_PerInstanceData"
+	);
+	resourcesBVPipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof(BVShader::PerDrawcallData), 1000u, backBuffers_.size(), "BV_PerDrawcallData"
+	);
 
 	// 프레임 펜스 생성
 	// i번째 프레임을 렌더링한 후 i-(백버퍼 수 - 1)번째 프레임의 펜스를 기다리도록 한다.
@@ -425,6 +432,16 @@ void GFX::addCameraData(const SkyboxPipeline::CameraData& cameraData) {
 	cameraDataSkyboxPipeline_ = cameraData;
 }
 
+// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+void GFX::addDrawEvent(const BVPipeline::DrawEvent& drawEvent) {
+	drawEventsBVPipeline_.push_back(drawEvent);
+}
+
+// 카메라 데이터를 입력한다.
+void GFX::addCameraData(const BVPipeline::CameraData& cameraData) {
+	cameraDataBVPipeline_ = cameraData;
+}
+
 void GFX::loadAssets() {
 	auto& fence = fences_.at("LoadFence");
 
@@ -443,6 +460,10 @@ void GFX::loadAssets() {
 	// 명령 리스트 초기화
 	DISPLAY_ERROR_DX_VOID(cmdAlloc->Reset(), false);
 	DISPLAY_ERROR_DX_VOID(cmdList->Reset(cmdAlloc.Get(), nullptr), false);
+
+	BVPipeline::initStaticModels(device_.Get(), cmdList.Get(), fence);
+
+	dumpLog();
 
 	// 명령 기록 시작
 	for (auto& request : requestsModelLoad_) {
@@ -598,6 +619,16 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	// Bounding Volume Pipeline의 Dispatch
+	auto bvPipelineDispatcher = BVPipeline::Dispatcher(
+		tmpDescriptorHeaps, rootSigs_.at("DefaultRootSignature"),
+		shaders_.at("BVShader"), cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesBVPipeline_, threadPool_, &cmdListPool_,
+		std::move(drawEventsBVPipeline_), cameraDataBVPipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
 	// threadPool_이 활성화된 경우엔 멀티스레드로 처리한다.
 	if (!threadPool_) {
 		samplePipelineDispatcher.updateGPUDataSingleThreaded();
@@ -605,6 +636,9 @@ void GFX::render() {
 
 		pbrPipelineDispatcher.updateGPUDataSingleThreaded();
 		pbrPipelineDispatcher.drawSingleThreaded();
+
+		bvPipelineDispatcher.updateGPUDataSingleThreaded();
+		bvPipelineDispatcher.drawSingleThreaded();
 	}
 	else {
 		samplePipelineDispatcher.updateGPUDataMultiThreaded();
@@ -612,6 +646,9 @@ void GFX::render() {
 
 		pbrPipelineDispatcher.updateGPUDataMultiThreaded();
 		pbrPipelineDispatcher.drawMultiThreaded();
+
+		bvPipelineDispatcher.updateGPUDataMultiThreaded();
+		bvPipelineDispatcher.drawMultiThreaded();
 	}
 
 	// Skybox Pipeline의 Dispatch

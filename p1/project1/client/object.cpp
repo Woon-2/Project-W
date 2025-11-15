@@ -1,6 +1,11 @@
 #include "object.hpp"
 #include "errorHandling.hpp"
 
+void Object::setModel(const Model* pModel){
+	pModel_ = pModel;
+	aabbs_ = pModel_->aabbs;
+}
+
 void Object::update(Milliseconds deltaTime) {
 	// 물리 업데이트를 위한 시간 누산
 	physicUpdateAcc_ += deltaTime;
@@ -56,6 +61,11 @@ void Object::update(Milliseconds deltaTime) {
 
 	// 월드변환 행렬 갱신
 	world_ = mu::Mat4x4(mu::scale(scale_)) * mu::Mat4x4(orient_) * mu::translate(pos_);
+	// 바운딩 볼륨 갱신
+	for (std::size_t i = 0; i < aabbs_.size(); ++i) {
+		aabbs_[i].center = pModel_->aabbs[i].center * scale_ + pos_;
+		aabbs_[i].size = pModel_->aabbs[i].size * scale_;
+	}
 }
 
 void Object::render(GFX& gfx) {
@@ -69,6 +79,16 @@ void Object::render(GFX& gfx) {
 					.material = &mesh.materialSets[materialSetIdx_].materials[i]
 				});
 			}
+		}
+	}
+
+	if (willRenderBV_) {
+		for (const auto& aabb : aabbs_) {
+			auto aabbXform = mu::Mat4x4(mu::scale(aabb.size)) * mu::translate(aabb.center);
+			gfx.addDrawEvent(BVPipeline::DrawEvent{
+				.world = aabbXform,
+				.bvModel = BVPipeline::BVModel::Box
+			});
 		}
 	}
 }

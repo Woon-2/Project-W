@@ -407,6 +407,50 @@ public class ModelExtractorWindow : EditorWindow
         ExtractUtil.WriteTailTag(geometryWriter, "Geometry");
     }
 
+    // 바운딩 볼륨들 추출
+    // 후에 바운딩 볼륨의 계층구조 추출이 필요할 것이다.
+    void ExtractBoundingVolumes()
+    {
+        // BoundingVolume 컴포넌트 찾기
+        BoundingVolume bvComponent = targetObject.GetComponent<BoundingVolume>();
+        if (bvComponent == null || bvComponent.boundingVolumes == null || bvComponent.boundingVolumes.Count == 0)
+        {
+            ExtractUtil.WriteHeadTag(geometryWriter, "BoundingVolumes");
+            ExtractUtil.WriteInteger(geometryWriter, "Count", 0);
+            ExtractUtil.WriteTailTag(geometryWriter, "BoundingVolumes");
+            return;
+        }
+
+        ExtractUtil.WriteHeadTag(geometryWriter, "BoundingVolumes");
+        ExtractUtil.WriteInteger(geometryWriter, "Count", bvComponent.boundingVolumes.Count);
+
+        foreach (var bv in bvComponent.boundingVolumes)
+        {
+            if (bv == null || bv.BVBox == null)
+                continue;
+
+            ExtractUtil.WriteHeadTag(geometryWriter, "BoundingVolume");
+
+            // 이름
+            ExtractUtil.WriteText(geometryWriter, "Name", bv.BVName);
+
+            BoxCollider box = bv.BVBox;
+            Transform t = box.transform;
+
+            // Transform 정보 저장 (로컬 기준)
+            ExtractUtil.WriteLocalMatrix(geometryWriter, "LocalMatrix", t);
+            ExtractUtil.WriteLocalTRS(geometryWriter, "LocalTRS", t);
+
+            // BoxCollider 고유 값들 저장
+            ExtractUtil.WriteVector(geometryWriter, "Center", box.center);
+            ExtractUtil.WriteVector(geometryWriter, "Size", box.size);
+
+            ExtractUtil.WriteTailTag(geometryWriter, "BoundingVolume");
+        }
+
+        ExtractUtil.WriteTailTag(geometryWriter, "BoundingVolumes");
+    }
+
     void ExportBinary()
     {
         string path = EditorUtility.SaveFilePanel("Export Binary", "ExportedAssets", "output.bin", "bin");
@@ -422,6 +466,7 @@ public class ModelExtractorWindow : EditorWindow
         // (대신, 서로 다른 리소스간 중복된 텍스처 이름이 없어야 할 것.)
         ExtractTextureMapping();
         ExtractGeometry();
+        ExtractBoundingVolumes();
 
         geometryWriter.Flush();
         geometryWriter.Close();

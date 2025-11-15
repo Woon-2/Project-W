@@ -28,6 +28,10 @@ void Camera::updateGFX(GFX& gfx) {
 		.view = view_,
 		.proj = proj_
 	});
+	gfx.addCameraData(BVPipeline::CameraData{
+		.view = view_,
+		.proj = proj_
+	});
 }
 
 void Camera::setPerspective(mu::Degree fovy, float aspect, float nearz, float farz) {

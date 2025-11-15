@@ -63,6 +63,12 @@ void Game::setupStage() {
 		static_cast<float>( gClientRect.right - gClientRect.left ) / ( gClientRect.bottom - gClientRect.top ),
 		0.1f, 500.f
 	);
+
+	for (auto& cube : cubes_) {
+		cube.enableBVRendering();
+	}
+
+	player_->enableBVRendering();
 }
 
 void Game::importNode(std::ifstream& ifs) {
