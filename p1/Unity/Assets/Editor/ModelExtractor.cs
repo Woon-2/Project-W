@@ -425,6 +425,6 @@ public class ModelExtractorWindow : EditorWindow
 
         geometryWriter.Flush();
         geometryWriter.Close();
-        Debug.Log("Model Binary ExtractUtil.Write Completed");
+        Debug.Log("Model Binary Write Completed");
     }
 }

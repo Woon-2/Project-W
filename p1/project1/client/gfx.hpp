@@ -11,9 +11,9 @@
 #include "skyboxPipeline.hpp"
 
 
-
 // skybox에 샘플링 방법 반영
 // 카메라에 타겟 오프셋 반영
+// 카메라 pitch 조작 추가
 // 그림자 매핑 - 11.14.
 // Rigidbody Physics 구현
 // 1인칭 & 3인칭 카메라 분리 구현 - 11.15.

@@ -50,37 +50,47 @@ public class LevelExtractorWindow : EditorWindow
         binaryWriter = new BinaryWriter(File.Open(path, FileMode.Create));
 
         ExtractNodes();
-        ExtractSixSidedSkyboxTextureNames();
+        ExtractSkybox();
 
         binaryWriter.Flush();
         binaryWriter.Close();
         Debug.Log("Level Binary Write Completed");
     }
 
-    void ExtractSixSidedSkyboxTextureNames()
+    void ExtractSkybox()
     {
-        Material skyMat = RenderSettings.skybox;
-        if (skyMat == null)
+        SkyboxSelector skyboxSelector = levelRoot.GetComponent<SkyboxSelector>();
+        if (skyboxSelector == null)
         {
-            Debug.LogWarning("No skybox material found in the scene.");
+            Debug.LogWarning(levelRoot.name + " doesn't have SkyboxSelector Component, "
+                + "the level will be exported without skybox info.");
             return;
         }
 
-        Debug.Log("Skybox Material: " + skyMat.name);
-        ExtractUtil.WriteHeadTag(binaryWriter, "Skybox");
-        ExtractUtil.WriteText(binaryWriter, "Name", skyMat.name);
+        ExtractUtil.WriteHeadTag(binaryWriter, "Skyboxes");
 
-        string[] faces = { "_FrontTex", "_BackTex", "_LeftTex", "_RightTex", "_UpTex", "_DownTex" };
-        string[] faceNames = { "+Z", "-Z", "+X", "-X", "+Y", "-Y" };
-
-        for (int i = 0; i < faces.Length; i++)
+        ExtractUtil.WriteInteger(binaryWriter, "SkyboxCnt", skyboxSelector.skyboxMaterials.Count);
+        for (int i = 0; i < skyboxSelector.skyboxMaterials.Count; ++i)
         {
-            if (skyMat.HasProperty(faces[i]))
+            ExtractUtil.WriteHeadTag(binaryWriter, "Skybox");
+
+            int materialCnt = 1;
+            ExtractUtil.WriteInteger(binaryWriter, "MaterialCnt", materialCnt);
+            for (int j = 0; j < materialCnt; ++j)
             {
-                Texture tex = skyMat.GetTexture(faces[i]);
-                string texName = tex != null ? tex.name : "None";
-                ExtractUtil.WriteText(binaryWriter, faceNames[i], texName);
+                ExtractUtil.WriteHeadTag(binaryWriter, "Material");
+                ExtractUtil.WriteText(binaryWriter, "Cubemap", skyboxSelector.skyboxMaterials[i].name + "_Cubemap");
+                ExtractUtil.WriteTailTag(binaryWriter, "Material");
             }
+
+            ExtractUtil.WriteTailTag(binaryWriter, "Skybox");
         }
+
+        ExtractUtil.WriteTailTag(binaryWriter, "Skyboxes");
+
+        ExtractUtil.WriteHeadTag(binaryWriter, "SelectedSkybox");
+        ExtractUtil.WriteText(binaryWriter, "Name", skyboxSelector.skyboxMaterials[skyboxSelector.currentMaterialIdx].name + "_Cubemap");
+        ExtractUtil.WriteInteger(binaryWriter, "Index", skyboxSelector.currentMaterialIdx);
+        ExtractUtil.WriteTailTag(binaryWriter, "SelectedSkybox");
     }
 }
