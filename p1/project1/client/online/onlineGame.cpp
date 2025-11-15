@@ -22,12 +22,12 @@ Game::Game() {
 	threadPool_.run(threadCnt);
 
 	// GFX ∞¥√º √ ±‚»≠
-	gGfx.setupDXGI(D3D_FEATURE_LEVEL_12_1);
-	gGfx.init();
-	gGfx.createSwapChain();
-	gGfx.setThreadPool(&threadPool_);
+	gfx_.setupDXGI(D3D_FEATURE_LEVEL_12_1);
+	gfx_.init();
+	gfx_.createSwapChain();
+	gfx_.setThreadPool(&threadPool_);
 
-	gGfx.loadMeshes();
+	gfx_.loadMeshes();
 }
 
 void Game::setupStage() {
@@ -42,7 +42,7 @@ void Game::setupStage() {
 	for ( std::size_t i = 0u; i < cubes_.size( ); ++i ) {
 		for ( std::size_t j = 0u; j < cubes_[ i ].size( ); ++j ) {
 			for ( std::size_t k = 0u; k < cubes_[ i ][ j ].size( ); ++k ) {
-				cubes_[ i ][ j ][ k ].setMesh( gGfx.cubeMesh( ) );
+				cubes_[ i ][ j ][ k ].setMesh( gfx_.cubeMesh( ) );
 				cubes_[ i ][ j ][ k ].setPos( mu::Vec3(
 					( static_cast<int>( k ) - static_cast<int>( cubes_.size( ) / 2 ) ) * 0.5f,
 					( static_cast<int>( j ) - static_cast<int>( cubes_.size( ) / 2 ) ) * 0.5f,
@@ -55,17 +55,17 @@ void Game::setupStage() {
 		}
 	}
 
-	//gPlayer = std::make_shared<Object>();
-	gPlayer->setPos(mu::Vec3(0.f, 0.f, 0.f));
-	gPlayer->setModel(gGfx.modelPlayer());
-	gPlayer->setScale(0.15f);
+	player_ = std::make_shared<Object>();
+	player_->setPos(mu::Vec3(0.f, 0.f, 0.f));
+	player_->setModel(gfx_.modelPlayer());
+	player_->setScale(0.15f);
 
 	dirLight_.setOrient(mu::NQuat(mu::Degree(0.f), mu::Degree(60.f), mu::Degree(15.f)));
 	dirLight_.color = mu::Vec3(0.8f, 0.8f, 0.8f);
 	dirLight_.intensity = 1.f;
 	dirLight_.type = PBRPipeline::LightData::Type::DirectionalLight;
 
-	camera_.setTargetObject( gPlayer );
+	camera_.setTargetObject( player_ );
 	camera_.setOffsetFromTarget( mu::Vec3( 0.f, 0.2f, -0.5f ) );
 	camera_.setPerspective( mu::Degree( 90.f ),
 		static_cast<float>( gClientRect.right - gClientRect.left ) / ( gClientRect.bottom - gClientRect.top ),
@@ -84,42 +84,49 @@ void Game::update(Milliseconds deltaTime) {
 		}
 	}
 
-	gPlayer->update(deltaTime);
-	for( auto& [id, object] : gObjects ) {
-		if( object != gPlayer ) {
-			object->update( deltaTime );
+	player_->update(deltaTime);
+	objectsMtx_.lock( );
+	for ( auto& obj : otherPlayers_ ) {
+		if( obj != player_ ) {
+			obj->update( deltaTime );
 		}
 	}
+	objectsMtx_.unlock( );
 
 	camera_.update();
 	dirLight_.update(deltaTime);
+
+	std::cout << otherPlayers_.size( ) << " players in the game.\n";
+	std::cout << idPlayerMap_.size( ) << " players in the map.\n";
 }
 
 void Game::render() {
 	for ( auto& plane : cubes_ ) {
 		for ( auto& row : plane ) {
 			for ( auto& cube : row ) {
-				cube.render( gGfx );
+				cube.render( gfx_ );
 			}
 		}
 	}
 
-	gPlayer->render(gGfx);
-	for( auto& [id, object] : gObjects ) {
-		if( object != gPlayer ) {
-			object->render( gGfx );
+	player_->render(gfx_);
+	objectsMtx_.lock( );
+	for ( auto& obj : otherPlayers_ ) {
+		if( obj != player_ ) {
+			obj->render( gfx_ );
 		}
 	}
+	objectsMtx_.unlock( );
 
-	camera_.updateGFX(gGfx);
-	dirLight_.render(gGfx);
+	camera_.updateGFX(gfx_);
+	dirLight_.render(gfx_);
 
 	auto frameData = PBRPipeline::FrameData{
 		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
 	};
-	gGfx.addFrameData( frameData );
+	gfx_.addFrameData( frameData );
 
-	gGfx.render();
+	gfx_.render();
 }
 
 void Game::processInput(Milliseconds deltaTime) {
@@ -133,27 +140,42 @@ void Game::processInput(Milliseconds deltaTime) {
 		}
 	};
 
+	bool readyToSend = false;
+
 	if ( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState('W') & 0x8000 ) {
 		packet.csMove.dir = Direction::w;
+		readyToSend = true;
 	}
 	if ( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState('A') & 0x8000 ) {
 		packet.csMove.dir = Direction::a;
+		readyToSend = true;
 	}
 	if ( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState('S') & 0x8000 ) {
 		packet.csMove.dir = Direction::s;
+		readyToSend = true;
 	}
 	if ( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState('D') & 0x8000 ) {
 		packet.csMove.dir = Direction::d;
+		readyToSend = true;
+	}
+	if ( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState( 'I' ) & 0x8000 ) {
+		packet = Packet{
+			.header = {
+				.size = sizeof( PacketHeader ) + sizeof( CSEnterPacket ),
+				.id = static_cast<std::uint16_t>( PacketType::csEnter )
+			}
+		};
+		readyToSend = true;
 	}
 
-	if ( packet.csMove.dir == Direction::none ) {
+	if( !readyToSend ) {
 		return;
 	}
 
 	i32t packetSize = sizeof( Packet );
 	auto buffer = std::make_shared<SendBuffer>( packetSize );
 	buffer->copyData( &packet, packetSize );
-	gServerSession->send( buffer );
+	serverSession_->send( buffer );
 }
 
 }	// namespace Online

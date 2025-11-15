@@ -198,6 +198,7 @@
     <ClInclude Include="timer.hpp" />
     <ClInclude Include="timsort.hpp" />
     <ClInclude Include="types.hpp" />
+    <ClInclude Include="windows.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="camera.cpp" />

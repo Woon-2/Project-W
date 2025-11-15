@@ -22,9 +22,6 @@ bool IocpCore::dispatch( uint32 timeoutMs ) {
 			return false;
 
 		case ERROR_CONNECTION_REFUSED:	// 서버가 오프라인 상태라면 standalone 모드로 전환
-			std::cout << "[IocpCore] GetQueuedCompletionStatus failed with error (error code - " << errCode << ") : "
-				<< std::system_category( ).message( errCode ) << '\n';
-
 			pGame = std::make_unique<StandAlone::Game>( );
 			static_cast<StandAlone::Game*>( pGame.get( ) )->setupStage( );
 			gReady.store( true );
@@ -34,7 +31,7 @@ bool IocpCore::dispatch( uint32 timeoutMs ) {
 		default:
 			std::cout << "[IocpCore] GetQueuedCompletionStatus failed with error (error code - " << errCode << ") : "
 				<< std::system_category( ).message( errCode ) << '\n';
-			return false;
+			break;
 		}
 	}
 

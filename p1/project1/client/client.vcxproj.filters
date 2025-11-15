@@ -273,6 +273,9 @@
     <ClInclude Include="online\onlineGame.hpp">
       <Filter>게임%28온라인%29\헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="windows.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">

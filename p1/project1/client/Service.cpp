@@ -49,10 +49,6 @@ bool ClientService::start( ) {
         if ( !session->connect( ) ) {
             return false;
         }
-        if ( sessionCount == 1 ) {
-			gServerSession = std::static_pointer_cast<ServerSession>( session );
-			gServerSession->setPlayer( gPlayer );
-        }
     }
     
     return true;

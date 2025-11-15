@@ -41,7 +41,6 @@
 #define NOMINMAX
 #define STRICT
 
-
 #define DXGI_DEBUG_INFO		// DXGI에서 발생한 예외 정보들을 출력할 경우 활성화
 
 #include <Windows.h>
@@ -65,6 +64,7 @@
 #include <string_view>
 #include <sstream>
 #include <vector>
+#include <queue>
 #include <list>
 #include <set>
 #include <map>
@@ -85,6 +85,7 @@
 #include <thread>
 #include <latch>
 #include <array>
+#include <mutex>
 
 #include "mathUtil.hpp"
 #include "function.hpp"
@@ -92,6 +93,12 @@
 #include "log.hpp"
 
 #include "concurrentqueue.h"
+
+#include "windows.hpp"
+#include "macro.hpp"
+#include "NetAddress.hpp"
+#include "SocketUtils.hpp"
+#include "protocol.hpp"
 
 #undef min
 #undef max

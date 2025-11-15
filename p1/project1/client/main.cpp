@@ -8,9 +8,6 @@
 #include "Service.hpp"
 #include "ServerSession.hpp"
 
-extern SPServerSession gServerSession;
-extern std::shared_ptr<Object> gPlayer;
-
 inline constexpr const char* wndClsName = "wndCls";
 inline constexpr const char* wndName = "Project1";
 
@@ -60,11 +57,9 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 
 	Timer timer{};
 
-	std::thread iocpLoopThread{};
-	gPlayer = std::make_shared<Object>( );
-
 	auto clientService = tryConnectToServer();
-	iocpLoopThread = makeIOCPLoopThread( clientService );
+	ASSERT_CRASH( clientService != nullptr );
+	std::thread iocpLoopThread{ makeIOCPLoopThread( clientService ) };
 	
 	while ( !gReady );
 
