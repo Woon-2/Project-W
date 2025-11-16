@@ -12,7 +12,6 @@
 #include "BVPipeline.hpp"
 
 
-// 충돌 처리 구현
 // index buffer view u16t로 고정하는 거 수정
 // 그림자 매핑 - 11.14.
 // 1인칭 & 3인칭 카메라 분리 구현 - 11.15.

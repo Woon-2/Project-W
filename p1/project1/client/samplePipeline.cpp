@@ -250,8 +250,11 @@ void Dispatcher::drawSingleThreaded() {
 		), false );
 		DISPLAY_ERROR_DX_VOID( cmdList->IASetIndexBuffer(&drawEvent.subMesh->ibView), false );
 
+		const auto indexStride = drawEvent.subMesh->ibView.Format == DXGI_FORMAT_R16_UINT
+			? sizeof(u16t) : sizeof(u32t);
+
 		DISPLAY_ERROR_DX_VOID( cmdList->DrawIndexedInstanced(
-			static_cast<UINT>(drawEvent.subMesh->ibView.SizeInBytes / sizeof(u16t)),
+			static_cast<UINT>(drawEvent.subMesh->ibView.SizeInBytes / indexStride),
 			1u, 0u, 0, 0u
 		), false );
 
@@ -476,8 +479,11 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 			), false );
 			DISPLAY_ERROR_DX_VOID( threadCmdList->IASetIndexBuffer(&drawEvent.subMesh->ibView), false );
 
+			const auto indexStride = drawEvent.subMesh->ibView.Format == DXGI_FORMAT_R16_UINT
+				? sizeof(u16t) : sizeof(u32t);
+
 			DISPLAY_ERROR_DX_VOID( threadCmdList->DrawIndexedInstanced(
-				static_cast<UINT>(drawEvent.subMesh->ibView.SizeInBytes / sizeof(u16t)),
+				static_cast<UINT>(drawEvent.subMesh->ibView.SizeInBytes / indexStride),
 				1u, 0u, 0, 0u
 			), false );
 		}
