@@ -8,6 +8,8 @@ class RootSig;
 
 struct Mesh;
 struct SubMesh;
+struct Material;
+
 namespace PBRShader { 
 	struct PerInstanceData;
 }
@@ -44,15 +46,21 @@ struct DrawEvent {
 	mu::Mat4x4 world;
 	const Mesh* mesh;
 	const SubMesh* subMesh;
+	const Material* material;
 
 	// 이 함수로 인해 DrawEvent 정렬 시
 	// 같은 메시를 공유하는 DrawEvent들끼리 1차적,
-	// 같은 서브메시를 공유하는 DrawEvent들끼리 2차적으로 모이게 된다.
+	// 같은 서브메시를 공유하는 DrawEvent들끼리 2차적,
+	// 같은 재질을 공유하는 DrawEvent들끼리 3차적으로 모이게 된다.
 	// 이는 인스턴싱에 용이하다.
 	auto operator<=>(const DrawEvent& rhs) const noexcept {
 		auto e = mesh <=> rhs.mesh;
-		if ( (mesh <=> rhs.mesh) == std::strong_ordering::equal ) {
-			return subMesh <=> rhs.subMesh;
+		if ( e == std::strong_ordering::equal ) {
+			auto e2 = subMesh <=> rhs.subMesh;
+			if (e2 == std::strong_ordering::equal) {
+				return material <=> rhs.material;
+			}
+			return e2;
 		}
 		return e;
 	}
@@ -64,6 +72,11 @@ struct Resources {
 	ConstantBufferArray perDrawcallData;	// b0
 	ConstantBuffer perFrameData;	// b1
 };
+
+// PBR Pipeline의 input layout을 위한 Vertex Buffer View 배열이
+// mesh에 존재하지 않는다면, 추가한다.
+// 0: position, 1: normal, 2: tangent, 3: bitangent, 4: uv
+void layoutMeshIfNeeded(const Mesh& mesh);
 
 // PBR Pipeline의 Dispatcher
 // Dispatcher 클래스는 GFX에서 필요한 인자들을 받아
@@ -126,8 +139,9 @@ private:
 	// 멀티스레드 작업 시, 드로우콜들에 대해
 	// 단위 작업을 생성하여 스레드에 할당하는데 사용된다.
 	void addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
-		const DrawEvent* pFirst, const DrawEvent* pLast,
-		std::size_t firstInstanceIdx, std::latch& latch
+		const std::vector<DrawEvent>::const_iterator* pItFirst,
+		const std::vector<DrawEvent>::const_iterator* pItLast,
+		std::size_t firstDrawcallIdx, std::latch& latch
 	);
 
 	// GFX로부터 전달되어 그대로 사용하는 변수들
@@ -158,7 +172,7 @@ private:
 	UINT rootParamIdxPID_{};
 	UINT rootParamIdxPDD_{};
 	UINT rootParamIdxPFD_{};
-	UINT rootParamIdxLights_{};
+	UINT rootParamIdxLightData_{};
 	UINT rootParamIdxTexPool_{};
 	UINT rootParamIdxTexArrayPool_{};
 	UINT rootParamIdxTexCubePool_{};

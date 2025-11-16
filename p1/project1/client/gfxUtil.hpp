@@ -186,13 +186,13 @@ public:
 	// 리소스의 [addressOffset, addressOffset + allowedByteWidth) 영역을 분배받는다.
 	// CreateCommittedResource 호출을 줄이고 gpu 메모리 사용량을 줄이는 이점이 있다.
 	ShaderInputBuffer( const std::vector<ComPtr<ID3D12Resource>>& premadeResource,
-		std::size_t addressOffset, std::size_t allowedByteWidth, const std::wstring& name
+		std::size_t addressOffset, std::size_t allowedByteWidth, const std::string& name
 	);
 	// 기본 생성자를 호출하고 init을 호출하는 것과 같다.
-	ShaderInputBuffer(ID3D12Device* device, UINT64 byteWidth, std::size_t roomCnt, const std::wstring& name);
+	ShaderInputBuffer(ID3D12Device* device, UINT64 byteWidth, std::size_t roomCnt, const std::string& name);
 
 	// byteWidth 크기의 리소스를 roomCnt 개 만큼 만든다.
-	void init(ID3D12Device* device, UINT64 byteWidth, std::size_t roomCnt, const std::wstring& name);
+	void init(ID3D12Device* device, UINT64 byteWidth, std::size_t roomCnt, const std::string& name);
 	// roomIdx의 리소스를 루트 시그너처에 바인드한다.
 	virtual void bind( ID3D12GraphicsCommandList* cmdList,
 		UINT rootParamIdx, std::size_t roomIdx
@@ -219,7 +219,7 @@ protected:
 private:
 	std::vector<ComPtr<ID3D12Resource>> resources_{};
 	std::vector<void*> mappedRegions_{};
-	std::wstring name_{};
+	std::string name_{};
 	UINT64 byteWidth_ = 0u;	// stage 함수에서 할당(분배)된 영역 바깥을 참조하는지 검사할 때 사용
 };
 
@@ -264,13 +264,14 @@ struct ConstantBufferArray {
 // room 개수만큼의 큰 리소스들을 생성하고
 // 그 리소스들을 기반으로 ConstantBuffer들을 생성해 담는다.
 ConstantBufferArray createConstantBufferArray( ID3D12Device* device, UINT64 elemByteWidth,
-	std::size_t elemCnt, std::size_t roomCnt, const std::wstring& name
+	std::size_t elemCnt, std::size_t roomCnt, const std::string& name
 );
 
 struct LoadDDSReturnType {
     ComPtr<ID3D12Resource> res;
     std::unique_ptr<std::uint8_t[]> ddsData;
     std::vector<D3D12_SUBRESOURCE_DATA> subresources;
+	bool isCubemap;
 };
 
 // dds 포맷의 이미지 파일을 로드한다.
@@ -293,18 +294,34 @@ struct BindlessIndex {
 // etoi 함수를 이용해 BindlessIndex 등에서 사용할 샘플러 인덱스를 얻어내자.
 enum class Samplers {
 	NearestWrap,
+	BilinearWrap,
 	TrilinearWrap,
 	NearestBorder,
+	BilinearBorder,
 	TrilinerBorder,
 	NearestClamp,
+	BilinearClamp,
 	TrilinearClamp,
 	NearestComparison,
 	BilinearComparison
 };
 
+// 인자로 전달받은 샘플러 속성에 맞는 샘플러의 bindless 인덱스를 계산한다.
+// 위의 Samplers enum 중 하나의 값이 리턴된다.
+// 만약, 해당하는 샘플러가 없다면 0이 리턴되고 오류 메시지를 출력한다.
+UINT calcIdxBindlessSampler( D3D12_FILTER filterMode,
+	D3D12_TEXTURE_ADDRESS_MODE addrModeU, D3D12_TEXTURE_ADDRESS_MODE addrModeV,
+	D3D12_TEXTURE_ADDRESS_MODE addrModeW, UINT anisoLevel
+);
+
 // 텍스처와 관련된 정보를 담는 구조체
 // gpu 리소스를 담는 ComPtr 객체와 Bindless 셰이더에서 인덱싱하기 위한 인덱스들이 저장된다.
 struct Texture {
+	enum class Type {
+		Tex2D,
+		Tex2DArray,
+		TexCube
+	};
 	ComPtr<ID3D12Resource> res;
 	int idxRtv;
 	int idxDsv;
@@ -316,7 +333,7 @@ struct Texture {
 // UpdateSubresources 함수에서 쓰인 임시 업로드 버퍼가 펜스에 연관되므로,
 // 펜스에서 gpu 작업 완료를 확인하고 난 뒤에 임시 업로드 버퍼들을 해제할 필요가 있다.
 Texture loadTexture( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
-	const std::filesystem::path& path, Fence& fenceToAssociate
+	const std::filesystem::path& path, Fence& fenceToAssociate, Texture::Type& texType
 );
 
 // 텍스처의 gpu 리소스를 담는 ComPtr 부분은 제외하고,

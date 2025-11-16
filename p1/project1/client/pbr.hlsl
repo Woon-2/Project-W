@@ -6,13 +6,15 @@ struct PerInstanceData {
 
 struct Material {
     int4 idxAlbedo;
-    int4 idxRoughness;
-    int4 idxMetallic;
+    int4 idxMetallicSmoothness;
+    int4 idxNormal;
+    int4 idxEmmisive;
+    int4 idxAmbientOcclusion;
     
     float4 cAlbedo;
     float cRoughness;
     float cMetallic;
-    float cAO;
+    float cAOStrength;
     float padding0;
     float3 cEmmisive;
     float padding1;
@@ -22,6 +24,8 @@ struct VSOutput {
     float4 pos : SV_Position;
     float3 posV : POSITION_V;
     float3 normalV : NORMAL_V;
+    float3 tangentV : TANGENT_V;
+    float3 bitangentV : BITANGENT_V;
     float2 uv : UV;
 };
 
@@ -44,19 +48,40 @@ StructuredBuffer<PerInstanceData> gInstances : register(t0);
 VSOutput VSMain(
     float3 position : POSITION,
     float3 normal : NORMAL,
+    float3 tangent : TANGENT,
+    float3 bitangent : BITANGENT,
     float2 uv : UV,
     uint idxInst : SV_InstanceID
 ) {
     VSOutput ret;
     
+    uv.y = 1.f - uv.y;
+    
     ret.pos = mul(float4(position, 1.0f), gInstances[idxInst + idxDrawcall].wvp);
     ret.posV = mul(float4(position, 1.0f), gInstances[idxInst + idxDrawcall].wv).xyz;
     ret.normalV = mul(normal, gInstances[idxInst + idxDrawcall].wvNormal);
+    if (material.idxAlbedo.x >= 0) {
+		ret.tangentV = mul(tangent, gInstances[idxInst + idxDrawcall].wvNormal).xyz;
+		ret.bitangentV = mul(bitangent, gInstances[idxInst + idxDrawcall].wvNormal).xyz;
+	}
     ret.uv = uv;
     
     return ret;
 }
 
 float4 PSMain(VSOutput input) : SV_TARGET {
+    input.normalV = normalize(input.normalV);
+
+	if (material.idxAlbedo.x >= 0) {
+		input.tangentV = normalize(input.tangentV);
+		input.bitangentV = normalize(input.bitangentV);
+
+		float3 normal = sampleBindless(material.idxNormal, input.uv).rgb;
+		normal = normal * 2.0f - 1.0f;
+		
+		float3x3 TBN = float3x3(input.tangentV, input.bitangentV, input.normalV);
+		input.normalV = mul(normal, TBN);
+	}
+    
     return illuminate(input.posV, input.normalV, input.uv);
 }

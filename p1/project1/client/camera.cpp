@@ -6,13 +6,29 @@ void Camera::update() {
 		return;
 	}
 
-	auto rotatedOffset = pTarget->orient().rotate(offsetFromTarget_);
+	// 카메라 자체의 회전 적용
+	auto rotatedOffsetFromTarget = offsetFromTargetPreRotation_.rotate(offsetFromTarget_);
+	// 타겟 오브젝트의 회전 적용
+	rotatedOffsetFromTarget = pTarget->orient().rotate(rotatedOffsetFromTarget);
+	// 타겟 오브젝트에 대한 카메라의 초점 오프셋 적용
+	auto rotatedOffsetTargetPivot = pTarget->orient().rotate(offsetTargetPivot_);
 
-	view_ = mu::lookAt(pTarget->pos() + rotatedOffset, pTarget->pos(), mu::NVec3(0.f, 1.f, 0.f));
+	view_ = mu::lookAt( pTarget->pos() + rotatedOffsetFromTarget,
+		pTarget->pos() + rotatedOffsetTargetPivot,
+		mu::NVec3(0.f, 1.f, 0.f)
+	);
 }
 
 void Camera::updateGFX(GFX& gfx) {
 	gfx.addCameraData(PBRPipeline::CameraData{
+		.view = view_,
+		.proj = proj_
+	});
+	gfx.addCameraData(SkyboxPipeline::CameraData{
+		.view = view_,
+		.proj = proj_
+	});
+	gfx.addCameraData(BVPipeline::CameraData{
 		.view = view_,
 		.proj = proj_
 	});

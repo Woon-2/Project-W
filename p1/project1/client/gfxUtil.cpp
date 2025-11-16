@@ -34,8 +34,8 @@ ComPtr<ID3D12Resource> createBufferResource(
 		break;
 
 	default:
-		DISPLAY_ERROR_STR(false, L"[GFX Error] createBufferResource: creationType이 알 수 없는 값입니다: "s +
-			std::to_wstring(etoi(creationType)) + L"\n"s, false
+		DISPLAY_ERROR_STR(false, "[GFX Error] createBufferResource: creationType이 알 수 없는 값입니다: "s +
+			std::to_string(etoi(creationType)) + "\n"s, false
 		);
 		return ret;
 	}
@@ -85,24 +85,24 @@ ComPtr<ID3D12Resource> createBufferResource(
 void CommandListPool::init(ID3D12Device* device, CommandListUsage usage, std::size_t cnt) {
 	// 디버깅을 위해 usage enum을 문자열로 매핑한다.
 	// 추후 D3D12 객체 이름 지정 및 오류 메시지 출력에 쓰인다.
-	std::wstring usageName{};
+	std::string usageName{};
 
 	switch (usage) {
 	case CommandListUsage::RenderingMaster:
-		usageName = L"RenderingMaster_";
+		usageName = "RenderingMaster_";
 		break;
 
 	case CommandListUsage::RenderingSlave:
-		usageName = L"RenderingSlave_";
+		usageName = "RenderingSlave_";
 		break;
 
 	case CommandListUsage::ResourceLoading:
-		usageName = L"ResourceLoading_";
+		usageName = "ResourceLoading_";
 		break;
 
 	default:
-		DISPLAY_ERROR_STR( false, L"[GFX Error]: CommandListPool::init: 존재하지 않는 CommandListUsage 값"s
-			+ std::to_wstring(etoi(usage)) + L"이(가) 전달되었습니다.", true
+		DISPLAY_ERROR_STR( false, "[GFX Error]: CommandListPool::init: 존재하지 않는 CommandListUsage 값"s
+			+ std::to_string(etoi(usage)) + "이(가) 전달되었습니다.", true
 		);
 		break;
 	}
@@ -114,14 +114,14 @@ void CommandListPool::init(ID3D12Device* device, CommandListUsage usage, std::si
 				D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), &ctx.cmdAlloc
 			), true
 		);
-		setD3DName(ctx.cmdAlloc.Get(), std::wstring(L"CommandAllocator_") + usageName + std::to_wstring(i));
+		setD3DName(ctx.cmdAlloc.Get(), std::string("CommandAllocator_") + usageName + std::to_string(i));
 
 		DISPLAY_ERROR_DX_HR(
 			device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, ctx.cmdAlloc.Get(), nullptr,
 				__uuidof(ID3D12GraphicsCommandList), &ctx.cmdList
 			), true
 		);
-		setD3DName(ctx.cmdList.Get(), std::wstring(L"CommandList_") + usageName + std::to_wstring(i));
+		setD3DName(ctx.cmdList.Get(), std::string("CommandList_") + usageName + std::to_string(i));
 		// 생성됐을 땐 open 상태이므로,
 		// render 호출 시 이미 open 상태인 Command List를 open할 수 있다.
 		// 따라서 여기서 close 해준다.
@@ -324,7 +324,7 @@ void copyResource(ID3D12GraphicsCommandList* cmdList,
 // 리소스의 [addressOffset, addressOffset + allowedByteWidth) 영역을 분배받는다.
 // CreateCommittedResource 호출을 줄이고 gpu 메모리 사용량을 줄이는 이점이 있다.
 ShaderInputBuffer::ShaderInputBuffer( const std::vector<ComPtr<ID3D12Resource>>& premadeResources,
-	std::size_t addressOffset, std::size_t allowedByteWidth, const std::wstring& name
+	std::size_t addressOffset, std::size_t allowedByteWidth, const std::string& name
 ) : ShaderInputBuffer() {
 	for (const auto& premadeRes : premadeResources) {
 		auto address = premadeRes->GetGPUVirtualAddress();
@@ -343,18 +343,18 @@ ShaderInputBuffer::ShaderInputBuffer( const std::vector<ComPtr<ID3D12Resource>>&
 
 // 기본 생성자를 호출하고 init을 호출하는 것과 같다.
 ShaderInputBuffer::ShaderInputBuffer( ID3D12Device* device, UINT64 byteWidth,
-	std::size_t roomCnt, const std::wstring& name
+	std::size_t roomCnt, const std::string& name
 ) : ShaderInputBuffer() {
 	init(device, byteWidth, roomCnt, name);
 }
 
 // byteWidth 크기의 리소스를 roomCnt 개 만큼 만든다.
 void ShaderInputBuffer::init( ID3D12Device* device, UINT64 byteWidth,
-	std::size_t roomCnt, const std::wstring& name
+	std::size_t roomCnt, const std::string& name
 ) {
 	for (std::size_t i = 0u; i < roomCnt; ++i) {
 		auto res = createBufferResource(device, nullptr, byteWidth, BufferCreationType::UploadBuffer);
-		setD3DName(res.Get(), name + std::to_wstring(i));
+		setD3DName(res.Get(), name + std::to_string(i));
 		auto address = res->GetGPUVirtualAddress();
 		void* mappedRegion = nullptr;
 		DISPLAY_ERROR_DX_HR( res->Map(0u, nullptr, &mappedRegion), false );
@@ -370,9 +370,9 @@ void ShaderInputBuffer::init( ID3D12Device* device, UINT64 byteWidth,
 // roomIdx 리소스의 gpu 데이터를 data와 동기화한다.
 void ShaderInputBuffer::stage(std::size_t roomIdx, const void* data, std::size_t byteWidth) {
 	if (byteWidth > byteWidth_) {
-		DISPLAY_ERROR_STR(byteWidth > byteWidth_, L"[GFX Error] ShaderInputBuffer::stage: "s +
-			L"버퍼에 할당된 "s + std::to_wstring(byteWidth_) + L" 바이트를 넘어 "s
-			+ std::to_wstring(byteWidth) + L" 바이트를 복사하려고 시도했습니다.\n", false
+		DISPLAY_ERROR_STR(byteWidth > byteWidth_, "[GFX Error] ShaderInputBuffer::stage: "s +
+			"버퍼에 할당된 "s + std::to_string(byteWidth_) + " 바이트를 넘어 "s
+			+ std::to_string(byteWidth) + " 바이트를 복사하려고 시도했습니다.\n", false
 		);
 		return;
 	}
@@ -399,7 +399,7 @@ void StructuredBuffer::bind(ID3D12GraphicsCommandList* cmdList, UINT rootParamId
 // room 개수만큼의 큰 리소스들을 생성하고
 // 그 리소스들을 기반으로 ConstantBuffer들을 생성해 담는다.
 ConstantBufferArray createConstantBufferArray( ID3D12Device* device, UINT64 elemByteWidth,
-	std::size_t elemCnt, std::size_t roomCnt, const std::wstring& name
+	std::size_t elemCnt, std::size_t roomCnt, const std::string& name
 ) {
 	// ConstantBuffer의 주소는 256바이트 단위로 정렬되어 있어야 한다.
 	elemByteWidth = (elemByteWidth + 255ull) & ~255ull;
@@ -410,14 +410,14 @@ ConstantBufferArray createConstantBufferArray( ID3D12Device* device, UINT64 elem
 		auto res = createBufferResource( device, nullptr, 
 			static_cast<UINT64>(elemByteWidth * elemCnt), BufferCreationType::UploadBuffer
 		);
-		setD3DName(res.Get(), name + std::to_wstring(i));
+		setD3DName(res.Get(), name + std::to_string(i));
 		ret.sharedResources.push_back(std::move(res));
 	}
 
 	ret.cbuffers.reserve(elemCnt);
 	for (std::size_t i = 0u; i < elemCnt; ++i) {
 		ret.cbuffers.emplace_back( ret.sharedResources, elemByteWidth * i, static_cast<UINT64>(elemByteWidth),
-			name + std::to_wstring(i)
+			name + std::to_string(i)
 		);
 	}
 
@@ -434,7 +434,7 @@ LoadDDSReturnType loadDDS(
 	auto ret = LoadDDSReturnType{};
 
     auto alphaMode = DirectX::DDS_ALPHA_MODE_UNKNOWN;
-    auto blsCubemap = false;
+    ret.isCubemap = false;
 
 	DISPLAY_ERROR_DX_HR(
 		DirectX::LoadDDSTextureFromFileEx(
@@ -447,7 +447,7 @@ LoadDDSReturnType loadDDS(
             ret.ddsData,
             ret.subresources,
             &alphaMode,
-            &blsCubemap
+            &ret.isCubemap
         ), false
 	);
 
@@ -470,16 +470,131 @@ LoadDDSReturnType loadDDS(
     return ret;
 }
 
+// 인자로 전달받은 샘플러 속성에 맞는 샘플러의 bindless 인덱스를 계산한다.
+// 위의 Samplers enum 중 하나의 값이 리턴된다.
+// 만약, 해당하는 샘플러가 없다면 0이 리턴되고 오류 메시지를 출력한다.
+UINT calcIdxBindlessSampler( D3D12_FILTER filterMode,
+	D3D12_TEXTURE_ADDRESS_MODE addrModeU, D3D12_TEXTURE_ADDRESS_MODE addrModeV,
+	D3D12_TEXTURE_ADDRESS_MODE addrModeW, UINT anisoLevel
+) {
+	// 0 - NearestWrap
+	if (filterMode == D3D12_FILTER_MIN_MAG_MIP_POINT
+		&& addrModeU == D3D12_TEXTURE_ADDRESS_MODE_WRAP
+		&& addrModeV == D3D12_TEXTURE_ADDRESS_MODE_WRAP
+		&& addrModeW == D3D12_TEXTURE_ADDRESS_MODE_WRAP
+	) {
+		return 0;
+	}
+	// 1 - BilinearWrap
+	else if (filterMode == D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT
+		&& addrModeU == D3D12_TEXTURE_ADDRESS_MODE_WRAP
+		&& addrModeV == D3D12_TEXTURE_ADDRESS_MODE_WRAP
+		&& addrModeW == D3D12_TEXTURE_ADDRESS_MODE_WRAP
+	) {
+		return 1;
+	}
+	// 2 - TrilinearWrap
+	else if (filterMode == D3D12_FILTER_MIN_MAG_MIP_LINEAR
+		&& addrModeU == D3D12_TEXTURE_ADDRESS_MODE_WRAP
+		&& addrModeV == D3D12_TEXTURE_ADDRESS_MODE_WRAP
+		&& addrModeW == D3D12_TEXTURE_ADDRESS_MODE_WRAP
+	) {
+		return 2;
+	}
+	// 3 - NearestBorder
+	else if (filterMode == D3D12_FILTER_MIN_MAG_MIP_POINT
+		&& addrModeU == D3D12_TEXTURE_ADDRESS_MODE_BORDER
+		&& addrModeV == D3D12_TEXTURE_ADDRESS_MODE_BORDER
+		&& addrModeW == D3D12_TEXTURE_ADDRESS_MODE_BORDER
+	) {
+		return 3;
+	}
+	// 4 - BilinearBorder
+	else if (filterMode == D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT
+		&& addrModeU == D3D12_TEXTURE_ADDRESS_MODE_BORDER
+		&& addrModeV == D3D12_TEXTURE_ADDRESS_MODE_BORDER
+		&& addrModeW == D3D12_TEXTURE_ADDRESS_MODE_BORDER
+	) {
+		return 4;
+	}
+	// 5 - TrilinerBorder
+	else if (filterMode == D3D12_FILTER_MIN_MAG_MIP_LINEAR
+		&& addrModeU == D3D12_TEXTURE_ADDRESS_MODE_BORDER
+		&& addrModeV == D3D12_TEXTURE_ADDRESS_MODE_BORDER
+		&& addrModeW == D3D12_TEXTURE_ADDRESS_MODE_BORDER
+	) {
+		return 5;
+	}
+	// 6 - NearestClamp
+	else if (filterMode == D3D12_FILTER_MIN_MAG_MIP_POINT
+		&& addrModeU == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+		&& addrModeV == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+		&& addrModeW == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+	) {
+		return 6;
+	}
+	// 7 - BilinearClamp
+	else if (filterMode == D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT
+		&& addrModeU == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+		&& addrModeV == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+		&& addrModeW == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+	) {
+		return 7;
+	}
+	// 8 - TrilinearClamp
+	else if (filterMode == D3D12_FILTER_MIN_MAG_MIP_LINEAR
+		&& addrModeU == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+		&& addrModeV == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+		&& addrModeW == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+	) {
+		return 8;
+	}
+	// 9 - NearestComparison
+	else if (filterMode == D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT
+		&& addrModeU == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+		&& addrModeV == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+		&& addrModeW == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+	) {
+		return 9;
+	}
+	// 10 - BilinearComparison
+	else if (filterMode == D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT
+		&& addrModeU == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+		&& addrModeV == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+		&& addrModeW == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+	) {
+		return 10;
+	}
+	else {
+		DISPLAY_ERROR_STR(false, "[GFX Error] calcIdxBindlessSampler: 요구된 샘플링 방식에 대응되는 샘플러가 없습니다.\n"
+			"Samplers enum과 calcIdxBindlessSampler 함수, 그리고 createSampler 함수를 업데이트하세요.", false
+		);
+		return 0;
+	}
+}
+
 // dds 포맷의 파일로부터 텍스처를 로드한다.
 // UpdateSubresources 함수에서 쓰인 임시 업로드 버퍼가 펜스에 연관되므로,
 // 펜스에서 gpu 작업 완료를 확인하고 난 뒤에 임시 업로드 버퍼들을 해제할 필요가 있다.
 Texture loadTexture( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
-	const std::filesystem::path& path, Fence& fenceToAssociate
+	const std::filesystem::path& path, Fence& fenceToAssociate, Texture::Type& texType
 ) {
 	Texture ret{};
 
 	auto tmp = loadDDS(device, cmdList, path, fenceToAssociate);
 	ret.res = std::move(tmp.res);
+
+	if (tmp.subresources.size() == 1u) {
+		texType = Texture::Type::Tex2D;
+	}
+	else if (tmp.isCubemap) {
+		texType = Texture::Type::TexCube;
+	}
+	else {
+		texType = Texture::Type::Tex2DArray;
+	}
+
+	gSharedLog << "[Resource Load] File I/O: 텍스처 " << path << " 로드 완료\n";
 
 	return ret;
 }

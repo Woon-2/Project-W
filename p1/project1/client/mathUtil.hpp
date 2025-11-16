@@ -291,6 +291,11 @@ public:
 
     Vec& MU_CALLCONV operator*=(Mat<D, D> rhs) __MathUtil_NOEXCEPT;
 
+    void setComponent(std::size_t idx, float value) __MathUtil_NOEXCEPT {
+        assert(idx >= 0 && idx < D);
+        vec_ = dx::XMVectorSetByIndex(vec_, value, idx);
+    }
+
     dx::XMVECTOR& get() __MathUtil_NOEXCEPT {
         return vec_;
     }

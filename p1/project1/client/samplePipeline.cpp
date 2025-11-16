@@ -5,6 +5,36 @@
 
 namespace SamplePipeline {
 
+// Sample Pipeline의 input layout을 위한 Vertex Buffer View 배열이
+// mesh에 존재하지 않는다면, 추가한다.
+// 0: position, 1: uv
+void layoutMeshIfNeeded(const Mesh& mesh) {
+	if (mesh.vbViewsByPipeline.contains("SamplePipeline")) {
+		return;
+	}
+
+	auto [pvbViews, _] = mesh.vbViewsByPipeline.try_emplace("SamplePipeline");
+	auto& vbViews = pvbViews->second;
+	vbViews.reserve(2u);	// position, uv
+
+	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_Position"),
+		"[GFX Error] SamplePipeline::layoutMeshIfNeeded: " + mesh.name + "_VB_Position"
+		"의 이름을 가진 정점 버퍼가 요구되었으나, 존재하지 않습니다.",
+		false
+	);
+	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_UV"),
+		"[GFX Error] SamplePipeline::layoutMeshIfNeeded: " + mesh.name + "_VB_UV"
+		"의 이름을 가진 정점 버퍼가 요구되었으나, 존재하지 않습니다.",
+		false
+	);
+
+	auto& vbViewPos = mesh.vbViews[ mesh.vbIdxMap.at(mesh.name + "_VB_Position") ];
+	auto& vbViewUV = mesh.vbViews[ mesh.vbIdxMap.at(mesh.name + "_VB_UV") ];
+
+	vbViews.push_back(vbViewPos);
+	vbViews.push_back(vbViewUV);
+}
+
 // GFX 객체로부터 필요한 인자들을 전달받자.
 Dispatcher::Dispatcher(
 	const std::vector<ComPtr<ID3D12DescriptorHeap>>& descriptorHeaps,
@@ -22,13 +52,13 @@ Dispatcher::Dispatcher(
 	viewport_(viewport), scissorRect_(scissorRect), rtv_(rtv), dsv_(dsv), pFence_(pFence),
 	pResources_(pResources), threadPool_(threadPool), cmdListPool_(commandListPool), drawEvents_(std::move(drawEvents)),
 	cameraData_(cameraData), roomIdx_(roomIdx),
-	rootParamIdxPDD_(rootSig->paramIdx(L"PerDrawcallData")),
-	rootParamIdxPID_(rootSig->paramIdx(L"PerInstanceData")),
-	rootParamIdxTexPool_(rootSig->paramIdx(L"TexturePool")),
-	rootParamIdxTexArrayPool_(rootSig->paramIdx(L"TextureArrayPool")),
-	rootParamIdxTexCubePool_(rootSig->paramIdx(L"TextureCubePool")),
-	rootParamIdxSamPool_(rootSig->paramIdx(L"SamplerPool")),
-	rootParamIdxCmpSamPool_(rootSig->paramIdx(L"ComparisonSamplerPool")) {}
+	rootParamIdxPDD_(rootSig->paramIdx("PerDrawcallData")),
+	rootParamIdxPID_(rootSig->paramIdx("PerInstanceData")),
+	rootParamIdxTexPool_(rootSig->paramIdx("TexturePool")),
+	rootParamIdxTexArrayPool_(rootSig->paramIdx("TextureArrayPool")),
+	rootParamIdxTexCubePool_(rootSig->paramIdx("TextureCubePool")),
+	rootParamIdxSamPool_(rootSig->paramIdx("SamplerPool")),
+	rootParamIdxCmpSamPool_(rootSig->paramIdx("ComparisonSamplerPool")) {}
 
 // 셰이더에서 사용하는 GPU 데이터를 갱신한다.
 // DrawEvents, CameraData에 담겨있는 정보를 가공하여
@@ -136,7 +166,7 @@ void Dispatcher::drawSingleThreaded() {
 	// 명령 컨텍스트 할당
 	CommandContext cmdCtx{};
 	DISPLAY_ERROR_STR( cmdListPool_->allocOne(CommandListUsage::RenderingSlave, cmdCtx),
-		L"[GFX Error] GFX::drawSingleThreaded: 요청한 명령 리스트를 할당받지 못했습니다.", false
+		"[GFX Error] GFX::drawSingleThreaded: 요청한 명령 리스트를 할당받지 못했습니다.", false
 	);
 	if (!cmdCtx.cmdList) {
 		return;
@@ -204,7 +234,7 @@ void Dispatcher::drawSingleThreaded() {
 		//  어차피 바인드는 GPU 명령이라 바로 실행되지 않기 때문에)
 		auto perDrawcallData = SampleShader::PerDrawcallData{
 			.material = SampleShader::Material{
-				.idxAlbedo = drawEvent.subMesh->material.mapAlbedo.idxSrv
+				.idxAlbedo = drawEvent.material->mapAlbedo.idxSrv
 			},
 			.firstInstanceIdx = idxDrawcall
 		};
@@ -212,15 +242,19 @@ void Dispatcher::drawSingleThreaded() {
 			roomIdx_, &perDrawcallData, 1u
 		);
 
-		DISPLAY_ERROR_DX_VOID(
-			cmdList->IASetVertexBuffers(0u, static_cast<UINT>(drawEvent.mesh->vbViews.size()),
-				drawEvent.mesh->vbViews.data()	
-			), false
-		);
+		layoutMeshIfNeeded(*drawEvent.mesh);
+		auto& vbViews = drawEvent.mesh->vbViewsByPipeline.at("SamplePipeline");
+
+		DISPLAY_ERROR_DX_VOID( cmdList->IASetVertexBuffers(
+			0u, static_cast<UINT>(vbViews.size()), vbViews.data()
+		), false );
 		DISPLAY_ERROR_DX_VOID( cmdList->IASetIndexBuffer(&drawEvent.subMesh->ibView), false );
 
+		const auto indexStride = drawEvent.subMesh->ibView.Format == DXGI_FORMAT_R16_UINT
+			? sizeof(u16t) : sizeof(u32t);
+
 		DISPLAY_ERROR_DX_VOID( cmdList->DrawIndexedInstanced(
-			static_cast<UINT>(drawEvent.subMesh->ibView.SizeInBytes / sizeof(u16t)),
+			static_cast<UINT>(drawEvent.subMesh->ibView.SizeInBytes / indexStride),
 			1u, 0u, 0, 0u
 		), false );
 
@@ -268,7 +302,7 @@ void Dispatcher::drawMultiThreaded() {
 	);
 
 	DISPLAY_ERROR_STR( allocatedCmdListCnt == requiredCmdListCnt,
-		L"[GFX Error] GFX::renderSampleShaderDispatch: 요청한 수 만큼의 명령 리스트를 할당받지 못했습니다.",
+		"[GFX Error] GFX::renderSampleShaderDispatch: 요청한 수 만큼의 명령 리스트를 할당받지 못했습니다.",
 		false
 	);
 	if (allocatedCmdListCnt != requiredCmdListCnt) {
@@ -426,7 +460,7 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 
 			auto perDrawcallData = SampleShader::PerDrawcallData{
 				.material = SampleShader::Material{
-					.idxAlbedo = drawEvent.subMesh->material.mapAlbedo.idxSrv
+					.idxAlbedo = drawEvent.material->mapAlbedo.idxSrv
 				},
 				.firstInstanceIdx = static_cast<u32t>(idxDrawcall)
 			};
@@ -437,15 +471,19 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 				roomIdx_, &perDrawcallData, 1u
 			);
 
-			DISPLAY_ERROR_DX_VOID(
-				threadCmdList->IASetVertexBuffers(0u, static_cast<UINT>(drawEvent.mesh->vbViews.size()),
-					drawEvent.mesh->vbViews.data()	
-				), false
-			);
+			layoutMeshIfNeeded(*drawEvent.mesh);
+			auto& vbViews = drawEvent.mesh->vbViewsByPipeline.at("SamplePipeline");
+
+			DISPLAY_ERROR_DX_VOID( threadCmdList->IASetVertexBuffers(
+				0u, static_cast<UINT>(vbViews.size()), vbViews.data()
+			), false );
 			DISPLAY_ERROR_DX_VOID( threadCmdList->IASetIndexBuffer(&drawEvent.subMesh->ibView), false );
 
+			const auto indexStride = drawEvent.subMesh->ibView.Format == DXGI_FORMAT_R16_UINT
+				? sizeof(u16t) : sizeof(u32t);
+
 			DISPLAY_ERROR_DX_VOID( threadCmdList->DrawIndexedInstanced(
-				static_cast<UINT>(drawEvent.subMesh->ibView.SizeInBytes / sizeof(u16t)),
+				static_cast<UINT>(drawEvent.subMesh->ibView.SizeInBytes / indexStride),
 				1u, 0u, 0, 0u
 			), false );
 		}

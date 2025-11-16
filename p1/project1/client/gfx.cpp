@@ -4,9 +4,9 @@
 // GFX가 소멸할 때, 제출된 모든 GPU작업이 완료되고 나서 소멸하도록 한다.
 GFX::~GFX() {
 	for (std::size_t i = 0u; i < backBuffers_.size(); ++i) {
-		waitOnFence(L"FrameFence"s + std::to_wstring(i));
+		waitOnFence("FrameFence"s + std::to_string(i));
 	}
-	waitOnFence(L"LoadFence");
+	waitOnFence("LoadFence");
 }
 
 // DXGI Factory를 초기화하고, DXGI Adapter들을 열거한다.
@@ -31,7 +31,7 @@ void GFX::setupDXGI(D3D_FEATURE_LEVEL d3dFeatureLevel) {
 #endif
 
 
-	setDXName(dxgiFactory_.Get(), L"DXGIFactory");
+	setDXName(dxgiFactory_.Get(), "DXGIFactory");
 
 	// 출력 인자가 nullptr인 D3D12CreateDevice의 호출은 해당 그래픽 어댑터가
 	// d3d12를 지원하는지 검사할 수 있다.
@@ -42,7 +42,10 @@ void GFX::setupDXGI(D3D_FEATURE_LEVEL d3dFeatureLevel) {
 	for (UINT i = 0; dxgiFactory_->EnumAdapters1(i, &pAdapter) != DXGI_ERROR_NOT_FOUND; ++i) {
 		pAdapter->GetDesc1(&desc);
 
-		setDXName(pAdapter.Get(), desc.Description);
+		auto adapterName = std::string(std::wcslen(desc.Description) * 2, '\0');
+		std::wcstombs(adapterName.data(), desc.Description, adapterName.size());
+
+		setDXName(pAdapter.Get(), adapterName);
 
 		if ( D3D12CreateDevice(pAdapter.Get(), d3dFeatureLevel,
 			__uuidof(ID3D12Device), nullptr) >= 0
@@ -70,12 +73,12 @@ void GFX::setupDXGI(D3D_FEATURE_LEVEL d3dFeatureLevel) {
 	std::cout << "사용할 그래픽 어댑터를 골라주세요.\n";
 
 	for (std::size_t i = 0u; i < adapters_.size(); ++i) {
-		std::wcout << i << L" - " << adapterDescs_[i].Description << L'\n';
+		std::wcout << i << " - " << adapterDescs_[i].Description << '\n';
 	}
 	std::cout << "선택: ";
 	int idx{};
 	std::cin >> idx;
-	std::wcout << idx << L" - " << adapterDescs_[idx].Description;
+	std::wcout << idx << " - " << adapterDescs_[idx].Description;
 	std::cout << "이 선택되었습니다.\n";
 	std::cout << "----------------------------------------\n";
 
@@ -104,7 +107,7 @@ void GFX::init() {
 		D3D12CreateDevice(curAdapter_.Get(), d3dFeatureLevel_, __uuidof(ID3D12Device), &device_),
 		true
 	);
-	setD3DName(device_.Get(), L"Device");
+	setD3DName(device_.Get(), "Device");
 
 	auto qDesc = D3D12_COMMAND_QUEUE_DESC{
 		.Type = D3D12_COMMAND_LIST_TYPE_DIRECT,
@@ -118,7 +121,7 @@ void GFX::init() {
 		device_->CreateCommandQueue(&qDesc, __uuidof(ID3D12CommandQueue), &cmdQ_),
 		true
 	);
-	setD3DName(cmdQ_.Get(), L"CommandQueue");
+	setD3DName(cmdQ_.Get(), "CommandQueue");
 
 	// RenderingSlave, ResourceLoading 카테고리의 Command List Pool 초기화
 	cmdListPool_.init(device_.Get(), CommandListUsage::RenderingSlave, 64u);
@@ -223,20 +226,22 @@ void GFX::init() {
 	auto defaultRootSig = DefaultRootSig{};
 	defaultRootSig.build(device_.Get());
 
-	shaders_.try_emplace(L"SampleShader", createSampleShader(device_.Get(), defaultRootSig.get()));
-	shaders_.try_emplace(L"PBRShader", createPBRShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("SampleShader", createSampleShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("PBRShader", createPBRShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("SkyboxShader", createSkyboxShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("BVShader", createBVShader(device_.Get(), defaultRootSig.get()));
 
-	rootSigs_.try_emplace(L"DefaultRootSignature", std::make_shared<DefaultRootSig>(std::move(defaultRootSig)));
+	rootSigs_.try_emplace("DefaultRootSignature", std::make_shared<DefaultRootSig>(std::move(defaultRootSig)));
 
 	// Load Fence 추가
-	const auto fenceName = L"LoadFence"s;
+	const auto fenceName = "LoadFence"s;
 	fences_.try_emplace(fenceName, Fence{});
 	DISPLAY_ERROR_DX_HR(
 		device_->CreateFence(0u, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence), &fences_.at(fenceName).fence),
 		false
 	);
 	setD3DName(fences_.at(fenceName).fence.Get(), fenceName);
-	fences_.at(fenceName).event = CreateEvent(
+	fences_.at(fenceName).event = CreateEventA(
 		nullptr, false, false, fenceName.c_str()
 	);
 
@@ -282,7 +287,7 @@ void GFX::createSwapChain() {
 	tmp.As(&swapChain_);
 	DISPLAY_ERROR_DX_HR(dxgiFactory_->MakeWindowAssociation(ghWnd, DXGI_MWA_NO_ALT_ENTER), false);
 
-	setDXName(swapChain_.Get(), L"SwapChain");
+	setDXName(swapChain_.Get(), "SwapChain");
 
 	// 백버퍼 및 깊이버퍼 리소스와 뷰 생성
 	backBuffers_.resize(3u);
@@ -294,7 +299,7 @@ void GFX::createSwapChain() {
 			swapChain_->GetBuffer(i, __uuidof(ID3D12Resource), &backBuffers_[i]),
 			true
 		);
-		setD3DName(backBuffers_[i].Get(), L"BackBuffer"s + std::to_wstring(i));
+		setD3DName(backBuffers_[i].Get(), "BackBuffer"s + std::to_string(i));
 	}
 
 	for (int i = 0; i < 3; ++i) {
@@ -311,7 +316,7 @@ void GFX::createSwapChain() {
 		auto depthBuffer = createDepthBuffer( device_.Get(), DXGI_FORMAT_D24_UNORM_S8_UINT,
 			DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u }
 		);
-		setD3DName(depthBuffer.Get(), L"DepthBuffer"s + std::to_wstring(i));
+		setD3DName(depthBuffer.Get(), "DepthBuffer"s + std::to_string(i));
 		depthBuffers_.push_back(std::move(depthBuffer));
 	}
 
@@ -333,36 +338,48 @@ void GFX::createSwapChain() {
 	// 백버퍼 개수만큼의 room을 가지는 파이프라인별 리소스들 생성
 	// 1000u, 32u를 변수로 대체하기
 	resourcesSamplePipeline_.perInstanceData.init(
-		device_.Get(), sizeof(SampleShader::PerInstanceData) * 1000u, backBuffers_.size(), L"Sample_PerInstanceData"
+		device_.Get(), sizeof(SampleShader::PerInstanceData) * 1000u, backBuffers_.size(), "Sample_PerInstanceData"
 	);
 	resourcesSamplePipeline_.perDrawcallData = createConstantBufferArray(
-		device_.Get(), sizeof(SampleShader::PerDrawcallData), 1000u, backBuffers_.size(), L"Sample_PerDrawcallData"
+		device_.Get(), sizeof(SampleShader::PerDrawcallData), 1000u, backBuffers_.size(), "Sample_PerDrawcallData"
 	);
 	resourcesPBRPipeline_.perInstanceData.init(
-		device_.Get(), sizeof(PBRShader::PerInstanceData) * 1000u, backBuffers_.size(), L"PBR_PerInstanceData"
+		device_.Get(), sizeof(PBRShader::PerInstanceData) * 1000u, backBuffers_.size(), "PBR_PerInstanceData"
 	);
 	resourcesPBRPipeline_.perDrawcallData = createConstantBufferArray(
-		device_.Get(), sizeof(PBRShader::PerDrawcallData), 1000u, backBuffers_.size(), L"PBR_PerDrawcallData"
+		device_.Get(), sizeof(PBRShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBR_PerDrawcallData"
 	);
 	resourcesPBRPipeline_.lightData.init(
-		device_.Get(), sizeof(PBRShader::Light) * 32u, backBuffers_.size(), L"PBR_Lights"
+		device_.Get(), sizeof(PBRShader::Light) * 32u, backBuffers_.size(), "PBR_LightData"
 	);
 	resourcesPBRPipeline_.perFrameData.init(
-		device_.Get(), sizeof(PBRShader::PerFrameData), backBuffers_.size(), L"PBR_PerFrameData"
+		device_.Get(), sizeof(PBRShader::PerFrameData), backBuffers_.size(), "PBR_PerFrameData"
+	);
+	resourcesSkyboxPipeline_.perFrameData.init(
+		device_.Get(), sizeof(SkyboxShader::PerFrameData), backBuffers_.size(), "Skybox_PerFrameData"
+	);
+	resourcesSkyboxPipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof(SkyboxShader::PerDrawcallData), 32u, backBuffers_.size(), "Skybox_PerDrawcallData"
+	);
+	resourcesBVPipeline_.perInstanceData.init(
+		device_.Get(), sizeof(BVShader::PerInstanceData) * 1000u, backBuffers_.size(), "BV_PerInstanceData"
+	);
+	resourcesBVPipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof(BVShader::PerDrawcallData), 1000u, backBuffers_.size(), "BV_PerDrawcallData"
 	);
 
 	// 프레임 펜스 생성
 	// i번째 프레임을 렌더링한 후 i-(백버퍼 수 - 1)번째 프레임의 펜스를 기다리도록 한다.
 	for (std::size_t i = 0u; i < backBuffers_.size(); ++i) {
-		const auto fenceName = L"FrameFence"s + std::to_wstring(i);
+		const auto fenceName = "FrameFence"s + std::to_string(i);
 		fences_.try_emplace(fenceName, Fence{});
 		DISPLAY_ERROR_DX_HR(
 			device_->CreateFence(0u, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence), &fences_.at(fenceName).fence),
 			false
 		);
 		setD3DName(fences_.at(fenceName).fence.Get(), fenceName);
-		fences_.at(fenceName).event = CreateEvent(
-			nullptr, false, false, (L"FrameFenceEvent"s + std::to_wstring(i)).c_str()
+		fences_.at(fenceName).event = CreateEventA(
+			nullptr, false, false, ("FrameFenceEvent"s + std::to_string(i)).c_str()
 		);
 	}
 }
@@ -397,16 +414,44 @@ void GFX::addFrameData(const PBRPipeline::FrameData& frameData) {
 	frameDataPBRPipeline_ = frameData;
 }
 
-void GFX::loadMeshes() {
-	auto& fence = fences_.at(L"LoadFence");
+void GFX::addRequestModelLoad(const RequestModelLoad& request) {
+	requestsModelLoad_.push_back(request);
+}
+
+void GFX::addRequestSkyboxLoad(const RequestSkyboxLoad& request) {
+	requestsSkyboxLoad_.push_back(request);
+}
+
+// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+void GFX::addDrawEvent(const SkyboxPipeline::DrawEvent& drawEvent) {
+	drawEventsSkyboxPipeline_.push_back(drawEvent);
+}
+
+// 카메라 데이터를 입력한다.
+void GFX::addCameraData(const SkyboxPipeline::CameraData& cameraData) {
+	cameraDataSkyboxPipeline_ = cameraData;
+}
+
+// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+void GFX::addDrawEvent(const BVPipeline::DrawEvent& drawEvent) {
+	drawEventsBVPipeline_.push_back(drawEvent);
+}
+
+// 카메라 데이터를 입력한다.
+void GFX::addCameraData(const BVPipeline::CameraData& cameraData) {
+	cameraDataBVPipeline_ = cameraData;
+}
+
+void GFX::loadAssets() {
+	auto& fence = fences_.at("LoadFence");
 
 	// 명령 리스트와 명령 할당자 할당
 	CommandContext cmdCtx{};
 	DISPLAY_ERROR_STR(
 		cmdListPool_.allocOne(CommandListUsage::ResourceLoading, cmdCtx),
-		L"[GFX Error] GFX::loadMeshes: 사용 가능한 명령 리스트가 없습니다. "
-		L"CommandListPool::init 호출이 이루어지지 않았거나, 할당받은 명령 리스트가 반납되지 않았거나,"
-		L"너무 많은 명령 리스트의 할당이 요청되었습니다.",
+		"[GFX Error] GFX::loadMeshes: 사용 가능한 명령 리스트가 없습니다. "
+		"CommandListPool::init 호출이 이루어지지 않았거나, 할당받은 명령 리스트가 반납되지 않았거나,"
+		"너무 많은 명령 리스트의 할당이 요청되었습니다.",
 		false
 	);
 	auto& cmdList = cmdCtx.cmdList;
@@ -416,9 +461,22 @@ void GFX::loadMeshes() {
 	DISPLAY_ERROR_DX_VOID(cmdAlloc->Reset(), false);
 	DISPLAY_ERROR_DX_VOID(cmdList->Reset(cmdAlloc.Get(), nullptr), false);
 
+	BVPipeline::initStaticModels(device_.Get(), cmdList.Get(), fence);
+
+	dumpLog();
+
 	// 명령 기록 시작
-	meshCube_ = buildCubeMesh(device_.Get(), cmdList.Get(), texHashMap_, srvTexPool_, fence);
-	modelPlayer_ = loadModelFromFile("../resources/models/output.bin", device_.Get(), cmdList.Get(), texHashMap_, srvTexPool_, fence);
+	for (auto& request : requestsModelLoad_) {
+		*request.pDest = loadModelFromFile(request.modelPath, device_.Get(), cmdList.Get(), texHashMap_, srvTexPool_, fence);
+	}
+
+	dumpLog();
+
+	for (auto& request : requestsSkyboxLoad_) {
+		*request.pDest = loadSkyboxFromFile(request.skyboxPath, device_.Get(), cmdList.Get(), srvTexCubePool_, fence);
+	}
+
+	dumpLog();
 
 	// 명령 기록 끝, 명령 실행
 	DISPLAY_ERROR_DX_VOID(cmdList->Close(), false);
@@ -429,23 +487,23 @@ void GFX::loadMeshes() {
 
 	// 펜스 동기화
 	fence.associatedCmdCtxs_[etoi(CommandListUsage::ResourceLoading)].push_back(std::move(cmdCtx));
-	signalFence(L"LoadFence");
-	waitOnFence(L"LoadFence");
+	signalFence("LoadFence");
+	waitOnFence("LoadFence");
 }
 
 void GFX::render() {
 	// 예외 검사
-	DISPLAY_ERROR_STR(curAdapter_, L"[GFX Error] GFX::render: 활성화된 그래픽 어댑터가 없습니다. "
-		L"GFX::setupDXGI의 호출이 이루어졌는지 확인하세요.", false);
+	DISPLAY_ERROR_STR(curAdapter_, "[GFX Error] GFX::render: 활성화된 그래픽 어댑터가 없습니다. "
+		"GFX::setupDXGI의 호출이 이루어졌는지 확인하세요.", false);
 
-	DISPLAY_ERROR_STR(device_, L"[GFX Error] GFX::render: 장치 초기화가 이루어지지 않았습니다. "
-		L"GFX::init 호출이 이루어졌는지 확인하세요.", false);
+	DISPLAY_ERROR_STR(device_, "[GFX Error] GFX::render: 장치 초기화가 이루어지지 않았습니다. "
+		"GFX::init 호출이 이루어졌는지 확인하세요.", false);
 
-	DISPLAY_ERROR_STR(cmdQ_, L"[GFX Error] GFX::render: 명령 큐가 활성화되지 않았습니다. "
-		L"GFX::init 호출이 이루어졌는지 확인하세요.", false);
+	DISPLAY_ERROR_STR(cmdQ_, "[GFX Error] GFX::render: 명령 큐가 활성화되지 않았습니다. "
+		"GFX::init 호출이 이루어졌는지 확인하세요.", false);
 
-	DISPLAY_ERROR_STR(swapChain_, L"[GFX Error] GFX::render: 스왑 체인이 활성화되지 않았습니다. "
-		L"GFX::createSwapChain 호출이 이루어졌는지 확인하세요.", false);
+	DISPLAY_ERROR_STR(swapChain_, "[GFX Error] GFX::render: 스왑 체인이 활성화되지 않았습니다. "
+		"GFX::createSwapChain 호출이 이루어졌는지 확인하세요.", false);
 
 	if (!curAdapter_ || !device_ || !cmdQ_ || !swapChain_) {
 		return;
@@ -455,8 +513,8 @@ void GFX::render() {
 	CommandContext cmdCtxClear{};
 	DISPLAY_ERROR_STR(
 		cmdListPool_.allocOne(CommandListUsage::RenderingMaster, cmdCtxClear),
-		L"[GFX Error] GFX::render: 사용 가능한 명령 리스트가 없습니다. "
-		L"CommandListPool::init 호출이 이루어지지 않았거나, 할당받은 명령 리스트가 반납되지 않았습니다.",
+		"[GFX Error] GFX::render: 사용 가능한 명령 리스트가 없습니다. "
+		"CommandListPool::init 호출이 이루어지지 않았거나, 할당받은 명령 리스트가 반납되지 않았습니다.",
 		false
 	);
 	auto cmdListClear = cmdCtxClear.cmdList.Get();
@@ -526,7 +584,7 @@ void GFX::render() {
 	// 사용이 끝난 명령 컨텍스트는 펜스와 연관되어 gpu 사용이 끝남을 감지한 후
 	// 반환되는 게 규칙이므로, Dispatcher에 명령 컨텍스트와 연관시킬 펜스를 전달해야 한다.
 	auto idxFenceToSignal = frameIdx_ % backBuffers_.size();
-	auto fenceNameToSignal = L"FrameFence" + std::to_wstring(idxFenceToSignal);
+	auto fenceNameToSignal = "FrameFence" + std::to_string(idxFenceToSignal);
 	auto& fenceToSignal = fences_.at(fenceNameToSignal);
 
 	auto tmpDescriptorHeaps = std::vector<ComPtr<ID3D12DescriptorHeap>>{};
@@ -538,7 +596,7 @@ void GFX::render() {
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_,
-		rootSigs_.at(L"DefaultRootSignature"), shaders_.at(L"SampleShader"),
+		rootSigs_.at("DefaultRootSignature"), shaders_.at("SampleShader"),
 		cmdQ_, viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesSamplePipeline_, threadPool_,
@@ -552,12 +610,22 @@ void GFX::render() {
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_,
-		rootSigs_.at(L"DefaultRootSignature"), shaders_.at(L"PBRShader"),
+		rootSigs_.at("DefaultRootSignature"), shaders_.at("PBRShader"),
 		cmdQ_, viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesPBRPipeline_, threadPool_, &cmdListPool_,
 		std::move(drawEventsPBRPipeline_), std::move(lightDataPBRPipeline_),
 		cameraDataPBRPipeline_, frameDataPBRPipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
+	// Bounding Volume Pipeline의 Dispatch
+	auto bvPipelineDispatcher = BVPipeline::Dispatcher(
+		tmpDescriptorHeaps, rootSigs_.at("DefaultRootSignature"),
+		shaders_.at("BVShader"), cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesBVPipeline_, threadPool_, &cmdListPool_,
+		std::move(drawEventsBVPipeline_), cameraDataBVPipeline_,
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
@@ -568,6 +636,9 @@ void GFX::render() {
 
 		pbrPipelineDispatcher.updateGPUDataSingleThreaded();
 		pbrPipelineDispatcher.drawSingleThreaded();
+
+		bvPipelineDispatcher.updateGPUDataSingleThreaded();
+		bvPipelineDispatcher.drawSingleThreaded();
 	}
 	else {
 		samplePipelineDispatcher.updateGPUDataMultiThreaded();
@@ -575,14 +646,34 @@ void GFX::render() {
 
 		pbrPipelineDispatcher.updateGPUDataMultiThreaded();
 		pbrPipelineDispatcher.drawMultiThreaded();
+
+		bvPipelineDispatcher.updateGPUDataMultiThreaded();
+		bvPipelineDispatcher.drawMultiThreaded();
 	}
+
+	// Skybox Pipeline의 Dispatch
+	// 스카이박스 하나 그리는 파이프라인이라, 멀티스레드일 필요가 없다.
+	auto skyboxPipelineDispatcher = SkyboxPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at("DefaultRootSignature"), shaders_.at("SkyboxShader"),
+		cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesSkyboxPipeline_, &cmdListPool_,
+		std::move(drawEventsSkyboxPipeline_), cameraDataSkyboxPipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
+	skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
+	skyboxPipelineDispatcher.drawSingleThreaded();
 
 	// 출력 명령 컨텍스트 할당
 	CommandContext cmdCtxPresent{};
 	DISPLAY_ERROR_STR(
 		cmdListPool_.allocOne(CommandListUsage::RenderingMaster, cmdCtxPresent),
-		L"[GFX Error] GFX::render: 사용 가능한 명령 리스트가 없습니다. "
-		L"CommandListPool::init 호출이 이루어지지 않았거나, 할당받은 명령 리스트가 반납되지 않았습니다.",
+		"[GFX Error] GFX::render: 사용 가능한 명령 리스트가 없습니다. "
+		"CommandListPool::init 호출이 이루어지지 않았거나, 할당받은 명령 리스트가 반납되지 않았습니다.",
 		false
 	);
 	auto cmdListPresent = cmdCtxPresent.cmdList.Get();
@@ -623,14 +714,15 @@ void GFX::render() {
 		.push_back(std::move(cmdCtxClear));
 	fences_.at(fenceNameToSignal).associatedCmdCtxs_[etoi(CommandListUsage::RenderingMaster)]
 		.push_back(std::move(cmdCtxPresent));
-	signalFence(L"FrameFence" + std::to_wstring(idxFenceToSignal));
-	waitOnFence(L"FrameFence" + std::to_wstring(idxFenceToWait));
+	signalFence("FrameFence" + std::to_string(idxFenceToSignal));
+	waitOnFence("FrameFence" + std::to_string(idxFenceToWait));
 
 	// 프레임 인덱스 갱신
 	++frameIdx_;
 }
 
 // 공용 샘플러들 생성
+// gfxUtil.hpp의 Samplers enum과 인덱스를 맞춰주어야 한다.
 void GFX::createSamplers() {
 	// 0 - Nearest Wrap
 	auto samDesc = D3D12_SAMPLER_DESC{
@@ -649,13 +741,19 @@ void GFX::createSamplers() {
 	auto handle = samPool_.cpuHandle(idx);
 	device_->CreateSampler(&samDesc, handle);
 
-	// 1 - Trilinear Wrap
+	// 1 - Bilinear Wrap
+	samDesc.Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+	idx = samPool_.alloc();
+	handle = samPool_.cpuHandle(idx);
+	device_->CreateSampler(&samDesc, handle);
+
+	// 2 - Trilinear Wrap
 	samDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
 	idx = samPool_.alloc();
 	handle = samPool_.cpuHandle(idx);
 	device_->CreateSampler(&samDesc, handle);
 
-	// 2 - Nearest Border
+	// 3 - Nearest Border
 	samDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
 	samDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
 	samDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
@@ -664,13 +762,19 @@ void GFX::createSamplers() {
 	handle = samPool_.cpuHandle(idx);
 	device_->CreateSampler(&samDesc, handle);
 
-	// 3 - Trilinear Border
+	// 4 - Bilinear Border
+	samDesc.Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+	idx = samPool_.alloc();
+	handle = samPool_.cpuHandle(idx);
+	device_->CreateSampler(&samDesc, handle);
+
+	// 5 - Trilinear Border
 	samDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
 	idx = samPool_.alloc();
 	handle = samPool_.cpuHandle(idx);
 	device_->CreateSampler(&samDesc, handle);
 
-	// 4 - Nearest Clamp
+	// 6 - Nearest Clamp
 	samDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
 	samDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
 	samDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
@@ -679,13 +783,19 @@ void GFX::createSamplers() {
 	handle = samPool_.cpuHandle(idx);
 	device_->CreateSampler(&samDesc, handle);
 
-	// 5 - Trilinear Clamp
+	// 7 - Bilinear Clamp
+	samDesc.Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+	idx = samPool_.alloc();
+	handle = samPool_.cpuHandle(idx);
+	device_->CreateSampler(&samDesc, handle);
+
+	// 8 - Trilinear Clamp
 	samDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
 	idx = samPool_.alloc();
 	handle = samPool_.cpuHandle(idx);
 	device_->CreateSampler(&samDesc, handle);
 
-	// 6 - Nearest Comparison
+	// 9 - Nearest Comparison
 	samDesc.Filter = D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT;
 	samDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
 	samDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
@@ -699,7 +809,7 @@ void GFX::createSamplers() {
 	handle = cmpSamPool_.cpuHandle(idx);
 	device_->CreateSampler(&samDesc, handle);
 
-	// 7 - Bilinear Comparison
+	// 10 - Bilinear Comparison
 	samDesc.Filter = D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
 	idx = cmpSamPool_.alloc();
 	handle = cmpSamPool_.cpuHandle(idx);
@@ -708,9 +818,9 @@ void GFX::createSamplers() {
 
 // fenceName을 갖는 Fence의 desiredValue 값을 1 증가시키고
 // GPU 큐에 그 갱신 명령을 삽입한다.
-void GFX::signalFence(const std::wstring& fenceName) {
+void GFX::signalFence(const std::string& fenceName) {
 	auto validFenceName = fences_.contains(fenceName);
-	DISPLAY_ERROR_STR(validFenceName, L"[GFX Error] GFX::signalFence: 펜스 "s + fenceName + L"를 찾을 수 없습니다.\n", false);
+	DISPLAY_ERROR_STR(validFenceName, "[GFX Error] GFX::signalFence: 펜스 "s + fenceName + "를 찾을 수 없습니다.\n", false);
 	if (!validFenceName) {
 		return;
 	}
@@ -725,9 +835,9 @@ void GFX::signalFence(const std::wstring& fenceName) {
 
 // fenceName을 갖는 Fence에 대해서 wait하고,
 // 사용이 끝난 명령 컨텍스트, 업로드 버퍼 등을 반환한다.
-void GFX::waitOnFence(const std::wstring& fenceName) {
+void GFX::waitOnFence(const std::string& fenceName) {
 	auto validFenceName = fences_.contains(fenceName);
-	DISPLAY_ERROR_STR(validFenceName, L"[GFX Error] GFX::waitOnFence: 펜스 "s + fenceName + L"를 찾을 수 없습니다.\n", false);
+	DISPLAY_ERROR_STR(validFenceName, "[GFX Error] GFX::waitOnFence: 펜스 "s + fenceName + "를 찾을 수 없습니다.\n", false);
 	if (!validFenceName) {
 		return;
 	}

@@ -275,6 +275,23 @@
     </ClInclude>
     <ClInclude Include="windows.hpp">
       <Filter>Network</Filter>
+    <ClInclude Include="binaryImport.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="AssetManager.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="skyboxPipeline.hpp">
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="skybox.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="collision.hpp">
+      <Filter>그래픽스\코어\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="BVPipeline.hpp">
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -364,6 +381,23 @@
     </ClCompile>
     <ClCompile Include="ServerSession.cpp">
       <Filter>Network</Filter>
+    <ClCompile Include="binaryImport.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="AssetManager.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="skyboxPipeline.cpp">
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="skybox.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="collision.cpp">
+      <Filter>그래픽스\코어\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="bvPipeline.cpp">
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -374,6 +408,12 @@
       <Filter>셰이더 파일</Filter>
     </FxCompile>
     <FxCompile Include="pbr.hlsl">
+      <Filter>셰이더 파일</Filter>
+    </FxCompile>
+    <FxCompile Include="skybox.hlsl">
+      <Filter>셰이더 파일</Filter>
+    </FxCompile>
+    <FxCompile Include="boundingVolume.hlsl">
       <Filter>셰이더 파일</Filter>
     </FxCompile>
   </ItemGroup>

@@ -9,8 +9,18 @@ class Camera {
 public:
 	void setTargetObject(const std::shared_ptr<Object>& pObject) { pTargetObject_ = pObject; }
 	std::shared_ptr<Object> pTargetObject() const { return pTargetObject_.lock(); }
+	// 타겟 오브젝트에 대한 카메라의 위치 오프셋을 설정한다.
 	void MU_CALLCONV setOffsetFromTarget(mu::Vec3 offset) { offsetFromTarget_ = offset; }
 	mu::Vec3 MU_CALLCONV offsetFromTarget() const { return offsetFromTarget_; }
+	// 카메라 자체의 회전을 설정한다.
+	// (이 회전과 타겟 오브젝트의 회전이 순서대로 offsetFromTarget에 대해 적용되어 뷰 행렬이 만들어진다.)
+	void MU_CALLCONV setOffsetFromTargetPreRotation(mu::NQuat rotation) { offsetFromTargetPreRotation_ = rotation; }
+	mu::NQuat MU_CALLCONV offsetFromTargetPreRotation() const { return offsetFromTargetPreRotation_; }
+	// 타겟 오브젝트에 대한 카메라의 초점 오프셋을 설정한다.
+	// (예를 들어 인간형 모델의 경우 타겟 오브젝트의 중심은 골반쪽이므로,
+	// 카메라가 얼굴을 쳐다볼 수 있도록 초점 오프셋을 위로 주면 좋을 것이다.)
+	void MU_CALLCONV setOffsetTargetPivot(mu::Vec3 offset) { offsetTargetPivot_ = offset; }
+	mu::Vec3 MU_CALLCONV offsetTargetPivot() const { return offsetTargetPivot_; }
 
 	void update();
 	void updateGFX(GFX& gfx);
@@ -20,21 +30,26 @@ public:
 	
 private:
 	std::weak_ptr<Object> pTargetObject_{};
+	// 타겟 오브젝트에 대한 카메라의 위치 오프셋
 	mu::Vec3 offsetFromTarget_{};
+	// 카메라 자체의 회전 (offsetFromTarget_ 벡터를 회전시킨다.)
+	mu::NQuat offsetFromTargetPreRotation_{};
+	// 타겟 오브젝트에 대한 카메라의 초점 오프셋
+	mu::Vec3 offsetTargetPivot_{};
 
 	// perspective용
-	float fovy_;
-	float aspect_;
-	float nearz_;
-	float farz_;
+	mu::Degree fovy_ = 90.f;
+	float aspect_ = 1.f;
+	float nearz_ = 0.01f;
+	float farz_ = 500.f;
 
 	// ortho용
-	float minX_;
-	float maxX_;
-	float minY_;
-	float maxY_;
-	float minZ_;
-	float maxZ_;
+	float minX_ = -100.f;
+	float maxX_ = 100.f;
+	float minY_ = -100.f;
+	float maxY_ = 100.f;
+	float minZ_ = -100.f;
+	float maxZ_ = 100.f;
 
 	mu::Mat4x4 view_{};
 	mu::Mat4x4 proj_{};

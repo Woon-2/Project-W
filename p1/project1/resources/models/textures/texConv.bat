@@ -10,7 +10,7 @@ set "texconv_path=texconv.exe"
 
 REM transform all images
 for %%f in ("%input_folder%\*.png" "%input_folder%\*.jpg" "%input_folder%\*.jpeg" "%input_folder%\*.bmp" "%input_folder%\*.tga" "%input_folder%\*.tif") do (
-    "%texconv_path%" -o "%output_folder%" "%%f" -f R32G32B32A32_FLOAT -y
+    "%texconv_path%" -o "%output_folder%" "%%f" -f R8G8B8A8_UNORM -y
 )
 
 echo transformation complete!
