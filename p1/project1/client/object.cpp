@@ -2,19 +2,30 @@
 #include "errorHandling.hpp"
 
 void Object::setModel(const Model* pModel){
-	pModel_ = pModel;
-	currPhysicState_.aabbs.resize(pModel_->aabbs.size());
+	DISPLAY_ERROR_STR(pModel != nullptr, "[Game Error] Object::setModel: 널 모델이 전달되었습니다.", false);
+	if (pModel == nullptr) {
+		return;
+	}
+
+	renderState_.pModel = pModel;
+	currPhysicState_.aabbs.resize(pModel->aabbs.size());
 	for (std::size_t i = 0u; i < currPhysicState_.aabbs.size(); ++i) {
 		currPhysicState_.aabbs[i].center
-			= pModel_->aabbs[i].center * currPhysicState_.scale
+			= pModel->aabbs[i].center * currPhysicState_.scale
 			+ currPhysicState_.pos;
 		currPhysicState_.aabbs[i].size
-			= pModel_->aabbs[i].size * currPhysicState_.scale;
+			= pModel->aabbs[i].size * currPhysicState_.scale;
 	}
 	prevPhysicState_.aabbs = currPhysicState_.aabbs;
 	renderState_.worldBVs.resize(currPhysicState_.aabbs.size());
 }
 
+// @brief 게임 객체의 RenderState와 방향 벡터들을 갱신한다.
+//		RenderState는 이전 PhysicState와 현재 PhysicState를 보간하여 얻어지고,
+//      방향 벡터들은 현재 PhysicState의 내용으로 계산한다.
+// @param deltaTime 마지막 프레임으로부터 경과한 시간
+// @param tPhysicInterpolation 이전 PhysicState와 현재 PhysicState의 보간 비율
+//		(게임 객체가 계산해서 일괄적으로 전달해야 한다.)
 void Object::update(Milliseconds deltaTime, float tPhysicInterpolation) {
 	const auto& prev = prevPhysicState_;
 	const auto& curr = currPhysicState_;
@@ -30,17 +41,20 @@ void Object::update(Milliseconds deltaTime, float tPhysicInterpolation) {
 	const auto orient = mu::slerp(prev.orient, curr.orient, t);	// 쿼터니언
 	const auto scale = mu::lerp(prev.scale, curr.scale, t);
 
+	const auto pModel = renderState_.pModel;
+
 	renderState_.world = mu::Mat4x4(mu::scale(scale)) * mu::Mat4x4(orient) * mu::translate(pos);
 	for (std::size_t i = 0; i < currPhysicState_.aabbs.size(); ++i) {
-		const auto center = pModel_->aabbs[i].center * scale + pos;
-		const auto size = pModel_->aabbs[i].size * scale;
+		const auto center = pModel->aabbs[i].center * scale + pos;
+		const auto size = pModel->aabbs[i].size * scale;
 		renderState_.worldBVs[i] = mu::Mat4x4(mu::scale(size)) * mu::translate(center);
 	}
 }
 
 void Object::render(GFX& gfx) {
-	if (pModel_) {
-		for (auto& [mesh, dressXform] : pModel_->meshWithDressXforms) {
+	const auto pModel = renderState_.pModel;
+	if (pModel) {
+		for (auto& [mesh, dressXform] : pModel->meshWithDressXforms) {
 			for (std::size_t i = 0u; i < mesh.subMeshes.size(); ++i) {
 				gfx.addDrawEvent(PBRPipeline::DrawEvent{
 					.world = dressXform * renderState_.world,
@@ -66,14 +80,16 @@ void MU_CALLCONV Object::setPos(mu::Vec3 newPos) {
 	prevPhysicState_.pos = newPos;
 	currPhysicState_.pos = newPos;
 
-	if (pModel_) {
-		currPhysicState_.aabbs.resize(pModel_->aabbs.size());
+	const auto pModel = renderState_.pModel;
+
+	if (pModel) {
+		currPhysicState_.aabbs.resize(pModel->aabbs.size());
 		for (std::size_t i = 0u; i < currPhysicState_.aabbs.size(); ++i) {
 			currPhysicState_.aabbs[i].center
-				= pModel_->aabbs[i].center * currPhysicState_.scale
+				= pModel->aabbs[i].center * currPhysicState_.scale
 				+ currPhysicState_.pos;
 			currPhysicState_.aabbs[i].size
-				= pModel_->aabbs[i].size * currPhysicState_.scale;
+				= pModel->aabbs[i].size * currPhysicState_.scale;
 		}
 		prevPhysicState_.aabbs = currPhysicState_.aabbs;
 	}
@@ -96,14 +112,16 @@ void MU_CALLCONV Object::setScale(mu::Vec3 newScale) {
 	prevPhysicState_.scale = newScale;
 	currPhysicState_.scale = newScale;
 
-	if (pModel_) {
-		currPhysicState_.aabbs.resize(pModel_->aabbs.size());
+	const auto pModel = renderState_.pModel;
+
+	if (pModel) {
+		currPhysicState_.aabbs.resize(pModel->aabbs.size());
 		for (std::size_t i = 0u; i < currPhysicState_.aabbs.size(); ++i) {
 			currPhysicState_.aabbs[i].center
-				= pModel_->aabbs[i].center * currPhysicState_.scale
+				= pModel->aabbs[i].center * currPhysicState_.scale
 				+ currPhysicState_.pos;
 			currPhysicState_.aabbs[i].size
-				= pModel_->aabbs[i].size * currPhysicState_.scale;
+				= pModel->aabbs[i].size * currPhysicState_.scale;
 		}
 		prevPhysicState_.aabbs = currPhysicState_.aabbs;
 	}

@@ -15,11 +15,6 @@ struct PhysicState {
 	std::vector<AABB> aabbs{};
 };
 
-// PhysicSnapshot들을 조합하여 update 함수에서 최종 물리량을 결정할 때 사용할 정책
-enum class PhysicEvaluationMethod {
-	LinearInterpolation
-};
-
 struct CollisionManifold
 {
     Object* a;

@@ -137,9 +137,20 @@ void Game::importPlayerStart(std::ifstream& ifs, Object& player) {
 void Game::update(Milliseconds deltaTime) {
 	processInput(deltaTime);
 
+	// 물리량 갱신은 게임 갱신과 다르게 고정 주기로 수행한다.
+	// 이를 통해 너무 유동적인 delta time으로 인한 시뮬레이션의 불안정성과
+	// 물리 업데이트의 성능적 비용 문제를 해결한다.
+	// 물리 업데이트 주기는 physicUpdateInterval_ 변수에 저장된다.
+	//
+	// update 함수에서 physicUpdateAcc_ 변수를 통해
+	// 물리량 갱신의 주기가 돌아왔는지 판단하고
+	// 주기가 되었다면 물리량 갱신을 수행한다.
 	physicUpdateAcc_ += deltaTime;
 
 	if (physicUpdateAcc_ >= physicUpdateInterval) {
+		// 물리 시뮬레이션을 위해
+		// 물리 시뮬레이션의 대상이 되는 객체들을
+		// 한 곳에 모아 PhysicSystem 객체에 전달한다.
 		static std::vector<Object*> allObjects{};
 		allObjects.resize(cubes_.size() + 1u);
 		std::ranges::transform(cubes_, allObjects.begin(),
@@ -155,6 +166,10 @@ void Game::update(Milliseconds deltaTime) {
 		allObjects.clear();
 	}
 
+	// 물리량 갱신 주기에 대해,
+	// 마지막 물리량 갱신으로부터 얼마나 지났는지의 비율로
+	// RenderState 갱신을 위한 PhysicState 보간 계수를 설정한다.
+	// 게임 객체의 update 함수에 전달된다.
 	const auto tPhysicInterpolation = physicUpdateAcc_ / physicUpdateInterval;
 
 
