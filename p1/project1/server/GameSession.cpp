@@ -3,6 +3,8 @@
 #include "GameSessionManager.hpp"
 #include "Service.hpp"
 #include "GameSession.hpp"
+#include "Room.hpp"
+#include "RoomManager.hpp"
 
 void GameSession::onConnected( ) {
 	std::cout << "GameSession " << getId( ) << " connected.\n";
@@ -22,27 +24,6 @@ void GameSession::onConnected( ) {
 	auto sendBuffer = std::make_shared<SendBuffer>( packetSize );
 	sendBuffer->copyData( &packet, packetSize );
 	send( sendBuffer );
-
-	auto enterPacket = Packet{
-		.header{
-			.size = sizeof( PacketHeader ) + sizeof( SCEnterPacket ),
-			.id = static_cast<uint16>( PacketType::scEnter )
-		},
-	};
-	enterPacket.scEnter.playerCount = getService( )->getSessionCount( );
-
-	int32 index = 0;
-	for ( const auto& session : GameSessionManager::getSessions( ) ) {
-		enterPacket.scEnter.pIds[ index ] = session->getId( );
-		enterPacket.scEnter.x[ index ] = session->x( );
-		enterPacket.scEnter.y[ index ] = session->y( );
-		enterPacket.scEnter.z[ index ] = session->z( );
-		++index;
-	}
-
-	sendBuffer = std::make_shared<SendBuffer>( packetSize );
-	sendBuffer->copyData( &enterPacket, packetSize );
-	GameSessionManager::broadcast( sendBuffer );
 }
 
 void GameSession::onDisconnected( ) {
@@ -59,7 +40,11 @@ void GameSession::onDisconnected( ) {
 	int32 packetSize = sizeof( Packet );
 	auto sendBuffer = std::make_shared<SendBuffer>( packetSize );
 	sendBuffer->copyData( &packet, packetSize );
-	GameSessionManager::broadcast( sendBuffer );
+	//GameSessionManager::broadcast( sendBuffer );
+	auto room = myRoom_.lock( );
+	if ( room ) {
+		room->leave( std::static_pointer_cast<GameSession>( shared_from_this( ) ) );
+	}
 
 	GameSessionManager::remove( std::static_pointer_cast<GameSession>( shared_from_this( ) ) );
 }
@@ -96,8 +81,8 @@ int32 GameSession::onRecvPacket( uint8* buffer, int32 len ) {
 		auto sendBuffer = std::make_shared<SendBuffer>( packetSize );
 		sendBuffer->copyData( &sendPacket, packetSize );
 		send( sendBuffer );
-	}
 		break;
+	}
 
 	case PacketType::csLogin: {
 		auto id = std::string( packet->csLogin.id.data( ) );
@@ -125,78 +110,115 @@ int32 GameSession::onRecvPacket( uint8* buffer, int32 len ) {
 		auto sendBuffer = std::make_shared<SendBuffer>( packetSize );
 		sendBuffer->copyData( &sendPacket, packetSize );
 		send( sendBuffer );
+		break;
 	}
-		break;
 
-	case PacketType::csEnter:
+	case PacketType::csEnter: {
+		/*auto packet = Packet{
+			.header = {
+				.size = sizeof( PacketHeader ) + sizeof( SCEnterPacket ),
+				.id = static_cast<uint16>( PacketType::scEnter )
+			},
+			.scEnter = {
+				.playerCount = getService( )->getSessionCount( )
+			}
+		};
+
+		int32 index = 0;
+		auto sessions = GameSessionManager::getSessions( );
+		for ( const auto& session : GameSessionManager::getSessions( ) ) {
+			packet.scEnter.pIds[ index ] = session->getId( );
+			packet.scEnter.x[ index ] = session->x( );
+			packet.scEnter.y[ index ] = session->y( );
+			packet.scEnter.z[ index ] = session->z( );
+			++index;
+		}
+
+		int32 packetSize = sizeof( Packet );
+		auto sendBuffer = std::make_shared<SendBuffer>( packetSize );
+		sendBuffer->copyData( &packet, packetSize );
+		GameSessionManager::broadcast( sendBuffer );*/
 		break;
+	}
 
 	case PacketType::csLeave:
 		break;
 
 	case PacketType::csMove: {
-		Packet sendPacket{ };
-		sendPacket.scMove.playerId = getId( );
-		if ( packet->csMove.dir == Direction::w ) {
-			sendPacket.header.size = sizeof( PacketHeader ) + sizeof( SCMovePacket );
-			sendPacket.header.id = static_cast<uint16>( PacketType::scMove );
+		auto sendPacket = Packet{
+			.header = {
+				.size = sizeof( PacketHeader ) + sizeof( SCMovePacket ),
+				.id = static_cast<uint16>( PacketType::scMove )
+			},
+			.scMove = {
+				.playerId = getId( )
+			}
+		};
 
-			z_ += 0.01f;
-			for( auto session : GameSessionManager::getSessions( ) ) {
-				if ( session.get( ) == this ) {
-					continue;
-				}
+		const auto& room = myRoom_.lock( );
+		//ASSERT_CRASH( room );
 
-				if( checkCollision( *session ) ) {
-					z_ -= 0.01f;
-					break;
-				}
+		if ( !room ) {
+			if ( packet->csMove.dir == Direction::w ) {
+				z_ += 0.01f;
+			}
+			if( packet->csMove.dir == Direction::a ) {
+				x_ -= 0.01f;
+			}
+			if( packet->csMove.dir == Direction::s ) {
+				z_ -= 0.01f;
+			}
+			if( packet->csMove.dir == Direction::d ) {
+				x_ += 0.01f;
 			}
 		}
-		else if ( packet->csMove.dir == Direction::a ) {
-			sendPacket.header.size = sizeof( PacketHeader ) + sizeof( SCMovePacket );
-			sendPacket.header.id = static_cast<uint16>( PacketType::scMove );
-
-			x_ -= 0.01f;
-			for( auto session : GameSessionManager::getSessions( ) ) {
-				if ( session.get( ) == this ) {
-					continue;
-				}
-
-				if( checkCollision( *session ) ) {
-					x_ += 0.01f;
-					break;
+		else {
+			if ( packet->csMove.dir == Direction::w ) {
+				z_ += 0.01f;
+				for ( const auto& session : room->getUsers( ) ) {
+					if ( session.get( ) == this ) {
+						continue;
+					}
+					if ( checkCollision( *session ) ) {
+						z_ -= 0.01f;
+						break;
+					}
 				}
 			}
-		}
-		else if ( packet->csMove.dir == Direction::s ) {
-			sendPacket.header.size = sizeof( PacketHeader ) + sizeof( SCMovePacket );
-			sendPacket.header.id = static_cast<uint16>( PacketType::scMove );
-
-			z_ -= 0.01f;
-			for( auto session : GameSessionManager::getSessions( ) ) {
-				if ( session.get( ) == this ) {
-					continue;
-				}
-
-				if( checkCollision( *session ) ) {
-					z_ += 0.01f;
-					break;
+			else if ( packet->csMove.dir == Direction::a ) {
+				x_ -= 0.01f;
+				for ( const auto& session : room->getUsers( ) ) {
+					if ( session.get( ) == this ) {
+						continue;
+					}
+					if ( checkCollision( *session ) ) {
+						x_ += 0.01f;
+						break;
+					}
 				}
 			}
-		}
-		else if ( packet->csMove.dir == Direction::d ) {
-			sendPacket.header.size = sizeof( PacketHeader ) + sizeof( SCMovePacket );
-			sendPacket.header.id = static_cast<uint16>( PacketType::scMove );
-
-			x_ += 0.01f;
-			for( auto session : GameSessionManager::getSessions( ) ) {
-				if ( session.get( ) == this ) {
-					continue;
+			else if ( packet->csMove.dir == Direction::s ) {
+				z_ -= 0.01f;
+				for ( const auto& session : room->getUsers( ) ) {
+					if ( session.get( ) == this ) {
+						continue;
+					}
+					if ( checkCollision( *session ) ) {
+						z_ += 0.01f;
+						break;
+					}
 				}
-				if( checkCollision( *session ) ) {
-					x_ -= 0.01f;
-					break;
+			}
+			else if ( packet->csMove.dir == Direction::d ) {
+				x_ += 0.01f;
+				for ( const auto& session : room->getUsers( ) ) {
+					if ( session.get( ) == this ) {
+						continue;
+					}
+					if ( checkCollision( *session ) ) {
+						x_ -= 0.01f;
+						break;
+					}
 				}
 			}
 		}
@@ -208,9 +230,31 @@ int32 GameSession::onRecvPacket( uint8* buffer, int32 len ) {
 		int32 packetSize = sizeof( Packet );
 		auto sendBuffer = std::make_shared<SendBuffer>( packetSize );
 		sendBuffer->copyData( &sendPacket, packetSize );
-		GameSessionManager::broadcast( sendBuffer );
-	}
+
+		if ( !room ) {
+			send( sendBuffer );
+		}
+		else {
+			room->broadcast( sendBuffer );
+		}
 		break;
+	}
+
+	case PacketType::csFindRoom: {
+		if ( myRoom_.lock( ) ) {
+			break;
+		}
+
+		auto room = RoomManager::findRoom( packet->csFindRoom.roomId );
+		if ( !room ) {
+			room = RoomManager::createRoom( packet->csFindRoom.roomId );
+		}
+		ASSERT_CRASH( room );
+
+		myRoom_ = room;
+		myRoom_.lock( )->enter( std::static_pointer_cast<GameSession>( shared_from_this( ) ) );
+		break;
+	}
 	}
 
 	return len;

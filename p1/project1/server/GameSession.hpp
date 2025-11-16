@@ -36,6 +36,8 @@ private:
 	float radius_;
 
 	std::mutex signupAndLoginMtx_;
+
+	std::weak_ptr<Room> myRoom_{ };
 };
 
 #endif // GAME_SESSION_HPP

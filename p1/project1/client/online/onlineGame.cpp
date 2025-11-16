@@ -95,9 +95,6 @@ void Game::update(Milliseconds deltaTime) {
 
 	camera_.update();
 	dirLight_.update(deltaTime);
-
-	std::cout << otherPlayers_.size( ) << " players in the game.\n";
-	std::cout << idPlayerMap_.size( ) << " players in the map.\n";
 }
 
 void Game::render() {
@@ -158,11 +155,59 @@ void Game::processInput(Milliseconds deltaTime) {
 		packet.csMove.dir = Direction::d;
 		readyToSend = true;
 	}
-	if ( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState( 'I' ) & 0x8000 ) {
+	/*if ( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState( 'I' ) & 0x8000 ) {
 		packet = Packet{
 			.header = {
 				.size = sizeof( PacketHeader ) + sizeof( CSEnterPacket ),
 				.id = static_cast<std::uint16_t>( PacketType::csEnter )
+			}
+		};
+		readyToSend = true;
+	}*/
+	if ( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState( '1' ) & 0x8000 ) {
+		packet = Packet{
+			.header = {
+				.size = sizeof( PacketHeader ) + sizeof( CSFindRoomPacket ),
+				.id = static_cast<std::uint16_t>( PacketType::csFindRoom )
+			},
+			.csFindRoom = {
+				.roomId = 1
+			}
+		};
+		readyToSend = true;
+	}
+	if( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState( '2' ) & 0x8000 ) {
+		packet = Packet{
+			.header = {
+				.size = sizeof( PacketHeader ) + sizeof( CSFindRoomPacket ),
+				.id = static_cast<std::uint16_t>( PacketType::csFindRoom )
+			},
+			.csFindRoom = {
+				.roomId = 2
+			}
+		};
+		readyToSend = true;
+	}
+	if( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState( '3' ) & 0x8000 ) {
+		packet = Packet{
+			.header = {
+				.size = sizeof( PacketHeader ) + sizeof( CSFindRoomPacket ),
+				.id = static_cast<std::uint16_t>( PacketType::csFindRoom )
+			},
+			.csFindRoom = {
+				.roomId = 3
+			}
+		};
+		readyToSend = true;
+	}
+	if( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState( '4' ) & 0x8000 ) {
+		packet = Packet{
+			.header = {
+				.size = sizeof( PacketHeader ) + sizeof( CSFindRoomPacket ),
+				.id = static_cast<std::uint16_t>( PacketType::csFindRoom )
+			},
+			.csFindRoom = {
+				.roomId = 4
 			}
 		};
 		readyToSend = true;

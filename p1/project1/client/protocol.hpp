@@ -33,7 +33,10 @@ enum class PacketType : std::uint16_t {
 	scLeave,
 
 	csMove,
-	scMove
+	scMove,
+
+	csFindRoom,
+
 };
 
 struct CSSignupPacket {
@@ -91,6 +94,10 @@ struct SCMovePacket {
 	float z;
 };
 
+struct CSFindRoomPacket {
+	std::int32_t roomId;
+};
+
 struct Packet {
 	PacketHeader header;
 	union {
@@ -105,6 +112,7 @@ struct Packet {
 		SCLeavePacket scLeave;
 		CSMovePacket csMove;
 		SCMovePacket scMove;
+		CSFindRoomPacket csFindRoom;
 	};
 };
 

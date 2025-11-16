@@ -31,5 +31,6 @@
 #include <functional>
 #include <cmath>
 #include <algorithm>
+#include <ranges>
 
 #endif // SERVER_PCH_HPP
