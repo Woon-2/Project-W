@@ -12,15 +12,13 @@
 #include "BVPipeline.hpp"
 
 
-// 캐릭터 바운딩 볼륨 추출(사각형, 몸통 박스, 머리 박스)
-// AABB 구현
-// AABB 렌더링
+// 충돌 처리 구현
 // index buffer view u16t로 고정하는 거 수정
 // 그림자 매핑 - 11.14.
-// Rigidbody Physics 구현
 // 1인칭 & 3인칭 카메라 분리 구현 - 11.15.
 // 애니메이션 + 총 달기 - 11.16.-11.17.
 // gfx에 있는 texHashMap game쪽으로 옮기기
+// Rigidbody Physics 구현
 // 텍스처 포맷, 밉 개수도 추출
 // deferred shading 구현
 // 사운드 프로그래밍

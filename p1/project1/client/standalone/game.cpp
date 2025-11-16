@@ -137,10 +137,31 @@ void Game::importPlayerStart(std::ifstream& ifs, Object& player) {
 void Game::update(Milliseconds deltaTime) {
 	processInput(deltaTime);
 
-	for ( auto& cube : cubes_ ) {
-		cube.update( deltaTime );
+	physicUpdateAcc_ += deltaTime;
+
+	if (physicUpdateAcc_ >= physicUpdateInterval) {
+		static std::vector<Object*> allObjects{};
+		allObjects.resize(cubes_.size() + 1u);
+		std::ranges::transform(cubes_, allObjects.begin(),
+			[](Object& cube) { return &cube; }	
+		);
+		allObjects[cubes_.size()] = player_.get();
+
+		while (physicUpdateAcc_ >= physicUpdateInterval) {
+			physicSystem_.step(allObjects, physicUpdateInterval);
+			physicUpdateAcc_ -= physicUpdateInterval;
+		}
+
+		allObjects.clear();
 	}
-	player_->update(deltaTime);
+
+	const auto tPhysicInterpolation = physicUpdateAcc_ / physicUpdateInterval;
+
+
+	for ( auto& cube : cubes_ ) {
+		cube.update(deltaTime, tPhysicInterpolation);
+	}
+	player_->update(deltaTime, tPhysicInterpolation);
 	camera_.update();
 	dirLight_.update(deltaTime);
 }

@@ -11,6 +11,8 @@
 #include "../camera.hpp"
 #include "../light.hpp"
 
+#include "../physics.hpp"
+
 namespace StandAlone {
 
 class Game : public IGame {
@@ -34,6 +36,10 @@ private:
 	void importPlayerStart(std::ifstream& ifs, Object& player);
 
 	AssetManager assetManager_{};
+
+	PhysicSystem physicSystem_{};
+	Seconds physicUpdateAcc_{0s};	// 물리 업데이트를 위한 시간 누산기
+	Seconds physicUpdateInterval{1s/60.f};	// 60fps로 물리 업데이트
 
 	GFX gfx_{};
 	ThreadPool threadPool_{};

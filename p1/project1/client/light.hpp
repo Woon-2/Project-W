@@ -19,28 +19,13 @@ public:
 	void render(GFX& gfx);
 
 	void MU_CALLCONV setPos(mu::Vec3 newPos);
-	mu::Vec3 MU_CALLCONV pos() const { return physicSnapshots_.back().pos; }
-	void MU_CALLCONV setOmega(mu::Vec3 newOmega);
-	mu::Vec3 MU_CALLCONV omega() const { return physicSnapshots_.back().omega; }
+	mu::Vec3 MU_CALLCONV pos() const { return pos_; }
 	void MU_CALLCONV setOrient(mu::NQuat newOrient);
-	mu::NQuat MU_CALLCONV orient() const { return physicSnapshots_.back().orient; }
+	mu::NQuat MU_CALLCONV orient() const { return orient_; }
 
 private:
-	// 물리량들을 갱신해 PhysicSnapshot 객체를 생성, 저장한다.
-	// 그리고 더 이상 유효하지 않은 PhysicSnapshot 객체를 제거한다.
-	// 
-	// 물리 업데이트를 고정 시간 간격으로 이루어지게 해
-	// 너무 유동적인 delta time으로 인한 시뮬레이션의 불안정성과
-	// 물리 업데이트의 성능적 비용 문제를 해결한다.
-	// 물리 업데이트 주기는 physicUpdateInterval_ 변수에 저장된다.
-	void physicalUpdate();
-
-	std::list<PhysicSnapshot> physicSnapshots_ = std::list<PhysicSnapshot>(1u);
-	PhysicEvaluationMethod physicEvaluationMethod_
-		= PhysicEvaluationMethod::LinearInterpolation;
-
-	Seconds physicUpdateAcc_{0s};	// 물리 업데이트를 위한 시간 누산기
-	Seconds physicUpdateInterval_{1s/60.f};	// 60 FPS로 물리 업데이트
+	mu::Vec3 pos_;
+	mu::NQuat orient_;
 };
 
 #endif	// __light_HPP

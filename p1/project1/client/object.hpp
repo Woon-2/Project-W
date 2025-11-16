@@ -5,23 +5,33 @@
 #include "gfx.hpp"
 #include "physics.hpp"
 
+struct RenderState {
+	mu::Mat4x4 world;
+	std::vector<mu::Mat4x4> worldBVs;
+};
+
 class Object {
 public:
-	void setModel(const Model* pModel);
-	void update(Milliseconds deltaTime);
+	void update(Milliseconds deltaTime, float tPhysicInterpolation);
 	void render(GFX& gfx);
 
+	void setModel(const Model* pModel);
+	const Model* model() const { return pModel_; }
+
 	void MU_CALLCONV setPos(mu::Vec3 newPos);
-	mu::Vec3 MU_CALLCONV pos() const { return pos_; }
+	mu::Vec3 MU_CALLCONV pos() const { return currPhysicState_.pos; }
 	void MU_CALLCONV setOmega(mu::Vec3 newOmega);
-	mu::Vec3 MU_CALLCONV omega() const { return omega_; }
+	mu::Vec3 MU_CALLCONV omega() const { return currPhysicState_.omega; }
 	void MU_CALLCONV setOrient(mu::NQuat newOrient);
-	mu::NQuat MU_CALLCONV orient() const { return orient_; }
+	mu::NQuat MU_CALLCONV orient() const { return currPhysicState_.orient; }
 	void MU_CALLCONV setScale(mu::Vec3 newScale);
-	mu::Vec3 MU_CALLCONV scale() const { return scale_; }
+	mu::Vec3 MU_CALLCONV scale() const { return currPhysicState_.scale; }
 	mu::Vec3 MU_CALLCONV forward() const { return forward_; }
 	mu::Vec3 MU_CALLCONV right() const { return right_; }
 	mu::Vec3 MU_CALLCONV up() const { return up_; }
+
+	PhysicState& physicState() { return currPhysicState_; }
+	void proceedPhysicState() { prevPhysicState_ = currPhysicState_; }
 
 	void setMaterialSetIdx(u32t idx) { materialSetIdx_ = idx; }
 	u32t mateiralSetIdx() const { return materialSetIdx_; }
@@ -33,35 +43,18 @@ public:
 	i32t getId( ) const { return id_; }
 
 private:
-	// 물리량들을 갱신해 PhysicSnapshot 객체를 생성, 저장한다.
-	// 그리고 더 이상 유효하지 않은 PhysicSnapshot 객체를 제거한다.
-	// 
-	// 물리 업데이트를 고정 시간 간격으로 이루어지게 해
-	// 너무 유동적인 delta time으로 인한 시뮬레이션의 불안정성과
-	// 물리 업데이트의 성능적 비용 문제를 해결한다.
-	// 물리 업데이트 주기는 physicUpdateInterval_ 변수에 저장된다.
-	void physicalUpdate();
-
-	mu::Mat4x4 world_{};	// GFX에 행렬을 전달할 때만 사용된다.
 	const Model* pModel_ = nullptr;
 
-	std::vector<AABB> aabbs_{};
+	PhysicState prevPhysicState_{};
+	PhysicState currPhysicState_{};
+
+	RenderState renderState_{};
+
 	bool willRenderBV_ = false;
 
-	std::list<PhysicSnapshot> physicSnapshots_ = std::list<PhysicSnapshot>(1u);
-	PhysicEvaluationMethod physicEvaluationMethod_
-		= PhysicEvaluationMethod::LinearInterpolation;
-
-	mu::Vec3 pos_;
-	mu::NVec3 forward_;
-	mu::NVec3 right_;
-	mu::NVec3 up_;
-	mu::Vec3 omega_{};
-	mu::NQuat orient_{};
-	mu::Vec3 scale_{};
-
-	Seconds physicUpdateAcc_{0s};	// 물리 업데이트를 위한 시간 누산기
-	Seconds physicUpdateInterval_{1s/60.f};	// 60 FPS로 물리 업데이트
+	mu::Vec3 forward_{};
+	mu::Vec3 right_{};
+	mu::Vec3 up_{};
 
 	u32t materialSetIdx_ = 0u;
 	i32t id_{ -1 };
