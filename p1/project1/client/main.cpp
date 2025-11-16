@@ -33,8 +33,7 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 		.style = CS_OWNDC,
 		.lpfnWndProc = wndProc,
 		.cbClsExtra = 0,
-		// 윈도우의 커스텀 데이터로 게임 객체의 포인터를 들고 있게 하기 위함
-		.cbWndExtra = sizeof( IGame* ),
+		.cbWndExtra = 0,
 		.hInstance = hInstance,
 		.hIcon = nullptr,
 		.hCursor = nullptr,
@@ -114,7 +113,6 @@ LRESULT wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		return 0;
 
 	default:
-		auto pGame = reinterpret_cast<IGame*>(GetWindowLongPtrA(hWnd, GWLP_USERDATA));
 		if (pGame) {
 			return pGame->receiveWndMsg(hWnd, msg, wParam, lParam);
 		}

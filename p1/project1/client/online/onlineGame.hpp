@@ -7,7 +7,9 @@
 #include "../gfx.hpp"
 #include "../object.hpp"
 #include "../camera.hpp"
+#include "../skybox.hpp"
 #include "../light.hpp"
+#include "../AssetManager.hpp"
 
 namespace Online {
 
@@ -20,6 +22,8 @@ public:
 
 	void update(Milliseconds deltaTime) override;
 	void render() override;
+	// 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
+	LRESULT receiveWndMsg( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam ) override;
 
 	void addPlayer( const std::shared_ptr<Object>& player ) {
 		std::lock_guard<std::mutex> lock( objectsMtx_ );
@@ -45,8 +49,8 @@ public:
 
 		newPlayer->setId( playerId );
 		newPlayer->setPos( mu::Vec3( x, y, z ) );
-		newPlayer->setModel( gfx_.modelPlayer( ) );
-		newPlayer->setScale( 0.15f );
+		newPlayer->setModel( assetManager_.modelPlayer( ) );
+		newPlayer->setScale( 1.f );
 
 		addPlayer( newPlayer );
 	}
@@ -62,6 +66,12 @@ public:
 private:
 	void processInput(Milliseconds deltaTime);
 
+	AssetManager assetManager_{};
+
+	PhysicSystem physicSystem_{};
+	Seconds physicUpdateAcc_{ 0s };	// 물리 업데이트를 위한 시간 누산기
+	Seconds physicUpdateInterval{ 1s / 60.f };	// 60fps로 물리 업데이트
+	
 	GFX gfx_{};
 	ThreadPool threadPool_{};
 
@@ -71,6 +81,8 @@ private:
 
 	std::shared_ptr<Object> player_{};
 	std::vector<std::shared_ptr<Object>> otherPlayers_{ };
+
+	SkyboxObject skybox_{};
 
 	std::mutex objectsMtx_{ };
 	std::unordered_map<i32t, std::shared_ptr<Object>> idPlayerMap_{ };
