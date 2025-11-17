@@ -20,10 +20,12 @@ using SPIocpObject = std::shared_ptr<class IocpObject>;
 using SPListener = std::shared_ptr<class Listener>;
 using SPSession = std::shared_ptr<class Session>;
 using SPGameSession = std::shared_ptr<class GameSession>;
+using SPServerSession = std::shared_ptr<class ServerSession>;
 using SPPacketSession = std::shared_ptr<class PacketSession>;
 using SPClientService = std::shared_ptr<class ClientService>;
 using SPServerService = std::shared_ptr<class ServerService>;
 using SPSendBuffer = std::shared_ptr<class SendBuffer>;
+using SPRoom = std::shared_ptr<class Room>;
 
 template<class T>
 using CCQueue = moodycamel::ConcurrentQueue<T>;

@@ -13,8 +13,9 @@
 	{	\
 		auto __dp_e_gle_result = (result);	\
 		if (!__dp_e_gle_result) {	\
-			std::wcout << L"[Error Code: " << GetLastError() << L"] - " << errorMsgGLE()	\
-				<< L", from file " << __FILE__ << L", line " << __LINE__ << '\n';	\
+			gSharedLog << "[Error Code: " << GetLastError() << "] - " << errorMsgGLE()	\
+				<< ", from file " << __FILE__ << ", line " << __LINE__ << '\n';	\
+			dumpLog();	\
 			if (willExit) {	\
 				std::exit(-1);	\
 			}	\
@@ -29,8 +30,9 @@
 	{	\
 		auto __dp_e_hr_result = (hr);	\
 		if (__dp_e_hr_result < 0) {	\
-			std::wcout << L"[Error Code: " << __dp_e_hr_result << L"] - " << errorMsgHR(__dp_e_hr_result)	\
-				<< L", from file " << __FILE__ << L", line " << __LINE__ << '\n';	\
+			gSharedLog << "[Error Code: " << __dp_e_hr_result << "] - " << errorMsgHR(__dp_e_hr_result)	\
+				<< ", from file " << __FILE__ << ", line " << __LINE__ << '\n';	\
+			dumpLog();	\
 			if (willExit) {	\
 				std::exit(-1);	\
 			}	\
@@ -46,7 +48,8 @@
 	{	\
 		auto __dp_e_str_condition = (condition);	\
 		if (!__dp_e_str_condition) {	\
-			std::wcout << (msg) << L", from file " << __FILE__ << L", line " << __LINE__ << '\n';	\
+			gSharedLog << (msg) << ", from file " << __FILE__ << ", line " << __LINE__ << '\n';	\
+			dumpLog();	\
 			if (willExit) {	\
 				std::exit(-1);	\
 			}	\
@@ -65,15 +68,17 @@
 	{	\
 		auto __dp_e_hr_result = (hr);	\
 		if (__dp_e_hr_result < 0) {	\
-			std::wcout << L"[Error Code: " << __dp_e_hr_result << L"] - " << errorMsgHR(__dp_e_hr_result)	\
-				<< L", from file " << __FILE__ << L", line " << __LINE__ << '\n';	\
+			gSharedLog << "[Error Code: " << __dp_e_hr_result << "] - " << errorMsgHR(__dp_e_hr_result)	\
+				<< ", from file " << __FILE__ << ", line " << __LINE__ << '\n';	\
 			if (!DXGIDebugInfo::infoQ) {	\
-				std::wcout << L"[DXGIDebugInfo] DXGIDebugInfo::infoQ가 활성화되지 않았습니다. "	\
-					L"DXGI에서 발생한 자세한 예외의 정보를 확인할 수 없습니다.\n";	\
+				gSharedLog << "[DXGIDebugInfo] DXGIDebugInfo::infoQ가 활성화되지 않았습니다. "	\
+					"DXGI에서 발생한 자세한 예외의 정보를 확인할 수 없습니다.\n";	\
 			}	\
 			else {	\
-				DXGIDebugInfo::dump(std::cout, true);	\
+				DXGIDebugInfo::dump(gSharedLog, true);	\
 			}	\
+				\
+			dumpLog();	\
 				\
 			if (willExit) {	\
 				std::exit(-1);	\
@@ -89,9 +94,10 @@
 #define DISPLAY_ERROR_DX_VOID(voidCall, willExit)	\
 	{	\
 		if (!DXGIDebugInfo::infoQ) {	\
-			std::wcout << L"[DXGIDebugInfo] DXGIDebugInfo::infoQ가 활성화되지 않았습니다. "	\
-				L"DISPLAY_ERROR_DX_VOID로 예외를 감지할 수 없습니다."	\
-				L", from file " << __FILE__ << L", line " << __LINE__ << '\n';	\
+			gSharedLog << "[DXGIDebugInfo] DXGIDebugInfo::infoQ가 활성화되지 않았습니다. "	\
+				"DISPLAY_ERROR_DX_VOID로 예외를 감지할 수 없습니다."	\
+				", from file " << __FILE__ << ", line " << __LINE__ << '\n';	\
+			dumpLog();	\
 			(voidCall);	\
 		}	\
 		else {	\
@@ -101,9 +107,12 @@
 			auto __dp_e_vc_numMsg_After = DXGIDebugInfo::infoQ	\
 				->GetNumStoredMessagesAllowedByRetrievalFilters(DXGI_DEBUG_ALL);	\
 			if (__dp_e_vc_numMsg_After > __dp_e_vc_numMsg) {	\
-				std::wcout << L"[DXVoid]: " << L#voidCall << L"] - 예외발생"	\
-					<< L", from file " << __FILE__ << L", line " << __LINE__ << '\n';	\
+				gSharedLog << "[DXVoid]: " << #voidCall << "] - 예외발생"	\
+					<< ", from file " << __FILE__ << ", line " << __LINE__ << '\n';	\
 				DXGIDebugInfo::dump(std::cout, true);	\
+					\
+				dumpLog();	\
+					\
 				if (willExit) {	\
 					std::exit(-1);	\
 				}	\
@@ -122,8 +131,8 @@
 	{	\
 		auto __dp_e_hr_result = (hr);	\
 		if (__dp_e_hr_result < 0) {	\
-			std::wcout << L"[Error Code: " << hr << L"] - " << errorMsgHR(hr)	\
-				<< L", from file " << __FILE__ << L", line " << __LINE__ << '\n';	\
+			std::wcout << "[Error Code: " << hr << "] - " << errorMsgHR(hr)	\
+				<< ", from file " << __FILE__ << ", line " << __LINE__ << '\n';	\
 			if (willExit) {	\
 				std::exit(-1);	\
 			}	\
@@ -139,21 +148,15 @@
 #endif	// DXGI_DEBUG_INFO
 
 // GetLastError 함수를 통해 발견되는 예외 코드를 자연어 문장으로 해석해
-// std::wstring으로 돌려준다.
-inline std::wstring errorMsgGLE() {
-	auto msg = std::system_category().message(GetLastError());
-	auto ret = std::wstring(msg.size(), L'\0');
-	std::mbstowcs(ret.data(), msg.data(), msg.size());
-	return ret;
+// std::string으로 돌려준다.
+inline std::string errorMsgGLE() {
+	return std::system_category().message(GetLastError());
 }
 
 // 예외 코드 값을 가진 HRESULT 변수를 전달받았을 때,
-// 해당 예외 코드를 자연어 문장으로 해석해 std::wstring으로 돌려준다.
-inline std::wstring errorMsgHR(HRESULT hResult) {
-	auto msg = std::system_category().message(hResult);
-	auto ret = std::wstring(msg.size(), L'\0');
-	std::mbstowcs(ret.data(), msg.data(), msg.size());
-	return ret;
+// 해당 예외 코드를 자연어 문장으로 해석해 std::string으로 돌려준다.
+inline std::string errorMsgHR(HRESULT hResult) {
+	return std::system_category().message(hResult);;
 }
 
 #ifdef DXGI_DEBUG_INFO
@@ -180,20 +183,22 @@ void dump(std::ostream& os, bool willClear);
 #endif	// DXGI_DEBUG_INFO
 
 template<typename T>
-inline void setD3DName(T* obj, const std::wstring& name)
+inline void setD3DName(T* obj, const std::string& name)
 {
 #ifdef DXGI_DEBUG_INFO
-	if (obj) obj->SetName(name.c_str());
+	auto wName = std::wstring(name.size(), L'\0');
+	mbstowcs(wName.data(), name.data(), wName.size());
+	if (obj) obj->SetName(wName.c_str());
 #endif
 }
 
 template<typename T>
-inline void setDXName(T* obj, const std::wstring& name)
+inline void setDXName(T* obj, const std::string& name)
 {
 #ifdef DXGI_DEBUG_INFO
 	if (obj) {
-		obj->SetPrivateData(WKPDID_D3DDebugObjectNameW,
-			static_cast<UINT>(name.size() * sizeof(wchar_t)), name.data()
+		obj->SetPrivateData(WKPDID_D3DDebugObjectName,
+			static_cast<UINT>(name.size()), name.data()
 		);
 	}
 #endif

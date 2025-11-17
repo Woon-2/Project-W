@@ -41,7 +41,6 @@
 #define NOMINMAX
 #define STRICT
 
-
 #define DXGI_DEBUG_INFO		// DXGI에서 발생한 예외 정보들을 출력할 경우 활성화
 
 #include <Windows.h>
@@ -63,7 +62,9 @@
 #include <locale>
 #include <string>
 #include <string_view>
+#include <sstream>
 #include <vector>
+#include <queue>
 #include <list>
 #include <set>
 #include <map>
@@ -84,19 +85,20 @@
 #include <thread>
 #include <latch>
 #include <array>
+#include <mutex>
 
 #include "mathUtil.hpp"
 #include "function.hpp"
 #include "threadPool.hpp"
+#include "log.hpp"
 
 #include "concurrentqueue.h"
 
-#include "../server/pch.hpp"
-#include "Service.hpp"
-#include "IocpCore.hpp"
-#include "Session.hpp"
-#include "SendBuffer.hpp"
-#include "global.hpp"
+#include "windows.hpp"
+#include "macro.hpp"
+#include "NetAddress.hpp"
+#include "SocketUtils.hpp"
+#include "protocol.hpp"
 
 #undef min
 #undef max

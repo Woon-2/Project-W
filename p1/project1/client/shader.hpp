@@ -18,33 +18,39 @@ CompiledShaderOutput compileShader(const std::filesystem::path& path,
 );
 
 ComPtr<ID3D12PipelineState> createSampleShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createShadowMapShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createBillboardShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 
 // 루트 파라미터 접근을 이해하기 쉽도록 하기 위해 만든 클래스
 // 루트 파라미터에 이름을 지어 그 인덱스 및 D3D12_ROOT_PARAMETER 구조체와 매핑한다.
 class RootSig {
 public:
-	virtual void build(ID3D12Device* device) = 0;
-	virtual const std::wstring& name() const = 0;
+	virtual ~RootSig() = default;
 
-	UINT paramIdx(std::wstring_view paramName) const;
-	const D3D12_ROOT_PARAMETER& paramDesc(std::wstring_view paramName) const;
+	virtual void build(ID3D12Device* device) = 0;
+	virtual const std::string& name() const = 0;
+
+	UINT paramIdx(std::string_view paramName) const;
+	const D3D12_ROOT_PARAMETER& paramDesc(std::string_view paramName) const;
 
 	ID3D12RootSignature* get() const { return rootSig_.Get(); }
 
 protected:
-	void addParam(const std::wstring& paramName, UINT paramIdx, const D3D12_ROOT_PARAMETER& paramDesc);
+	void addParam(const std::string& paramName, UINT paramIdx, const D3D12_ROOT_PARAMETER& paramDesc);
 
 	ComPtr<ID3D12RootSignature> rootSig_ = nullptr;
 	// key: 루트 파라미터 이름, value: 루트 파라미터 인덱스와 루트 파라미터 구조체의 pair
-	std::map<std::wstring, std::pair<UINT, D3D12_ROOT_PARAMETER>> paramMap_{};
-	std::wstring name_{L"unbuilt root signature"};
+	std::map<std::string, std::pair<UINT, D3D12_ROOT_PARAMETER>> paramMap_{};
+	std::string name_{"unbuilt root signature"};
 };
 
 class DefaultRootSig : public RootSig {
 public:
 	void build(ID3D12Device* device) override;
-	const std::wstring& name() const override;
+	const std::string& name() const override;
 
 private:
 };
@@ -97,19 +103,23 @@ struct Light {
 
 struct Material {
 	BindlessIndex idxAlbedo;
-	BindlessIndex idxRoughness;
-	BindlessIndex idxMetallic;
+	BindlessIndex idxMetallicSmoothness;	// 유니티 익스포터를 사용하기 때문에 유니티와 텍스처 포맷 맞춰준다.
+											// R 채널에 metallic, A 채널에 Smoothness (1 - roughness) 값이 들어있게 된다.
+	BindlessIndex idxNormal;
+	BindlessIndex idxEmmisive;
+	BindlessIndex idxAmbientOcllusion;
 
 	XMFLOAT4 cAlbedo;
 	float cRoughness;
 	float cMetallic;
-	float cAmbientOcllusion;
+	float cAOStrength;
 	float padding0;
 	XMFLOAT3 cEmmisive;
 	float padding1;
 };
 
 struct PerInstanceData {
+	XMFLOAT4X4 world;
 	XMFLOAT4X4 wvp;
 	XMFLOAT4X4 wv;
 	XMFLOAT3X3 wvNormal;
@@ -125,7 +135,83 @@ struct PerFrameData {
 	float padding0;
 	u32t lightCnt;
 	XMUINT3 padding1;
+	BindlessIndex idxShadowMap;
+	XMFLOAT4X4 lightVP;
 };
 }	// namespace PBRShader
+
+// BillboardShader
+namespace BillboardShader {
+
+struct Material {
+	BindlessIndex idxAlbedo;
+	BindlessIndex idxRoughness;
+	BindlessIndex idxMetallic;
+
+	XMFLOAT4 cAlbedo;
+	float cRoughness;
+	float cMetallic;
+};
+
+struct PerInstanceData {
+	XMFLOAT4X4 world;
+};
+
+struct PerDrawcallData {
+	Material material;
+	u32t firstInstanceIdx;
+};
+
+struct PerFrameData {
+	XMFLOAT4X4 vp;
+	XMFLOAT3 cameraPosV;
+	float padding0;
+};
+
+}	// namespace BillboardShader
+
+// ShadowMapShader
+namespace ShadowMapShader {
+struct PerInstanceData {
+	XMFLOAT4X4 world;
+};
+
+struct PerDrawcallData {
+	u32t firstInstanceIdx;
+	XMUINT3 padding;
+};
+
+struct PerFrameData {
+	XMFLOAT4X4 lightVP;
+};
+}	// namespace ShadowMapShader
+
+// SkyboxShader
+namespace SkyboxShader {
+struct Material {
+	BindlessIndex idxAlbedo;
+};
+
+struct PerDrawcallData {
+	Material material;
+};
+
+struct PerFrameData {
+	XMFLOAT4X4 viewProj;
+};
+}	// namespace SkyboxShader
+
+// BoundingVolumeShader
+namespace BVShader {
+struct PerInstanceData {
+	XMFLOAT4X4 wvp;
+	XMFLOAT4 color;
+};
+
+struct PerDrawcallData {
+	u32t firstInstanceIdx;
+	XMUINT3 padding;
+};
+}	// namespace SkyboxShader
 
 #endif	// __shader_HPP

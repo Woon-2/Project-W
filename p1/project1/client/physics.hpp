@@ -2,21 +2,49 @@
 #define __physics_HPP
 
 #include "pch.hpp"
+#include "collision.hpp"
 
-// 물리 업데이트와 일반 업데이트는 주기가 다르다.
-// 일반 업데이트에선 최근의 물리 업데이트 결과들을 이용해
-// 최종적으로 평가될 물리량을 결정한다.
-// 이때 물리 업데이트 결과들을 저장하기 위해 PhysicSnapshot 구조체를 활용한다.
-struct PhysicSnapshot {
+class Object;
+
+struct PhysicState {
 	mu::Vec3 pos{};
 	mu::Vec3 omega{};
 	mu::NQuat orient{};
-	float scale = 0.f;
+	mu::Vec3 scale{};
+
+	std::vector<AABB> aabbs{};
 };
 
-// PhysicSnapshot들을 조합하여 update 함수에서 최종 물리량을 결정할 때 사용할 정책
-enum class PhysicEvaluationMethod {
-	LinearInterpolation
+struct CollisionManifold
+{
+    Object* a;
+    Object* b;
+
+    bool colliding;
+	float penetrationDepth;
+    mu::Vec3 mtv;
+	mu::NVec3 normal;
+	mu::Vec3 contactPoint;
+};
+
+class PhysicSystem {
+public:
+	void step(const std::vector<Object*>& objects, Seconds dt);
+
+private:
+	void integrate(const std::vector<Object*>& objects, Seconds dt);
+	void broadPhase(const std::vector<Object*>& objects);
+	void narrowPhase();
+	void solveCollisions(std::size_t iterations);
+	void checkCollision(Object* a, Object* b);
+
+	struct PotentialPair {
+		Object* a;
+		Object* b;
+	};
+
+	std::vector<PotentialPair> broadPairs_{};
+	std::vector<CollisionManifold> contacts_{};
 };
 
 

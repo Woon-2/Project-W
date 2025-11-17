@@ -137,7 +137,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="billboard.hpp" />
+    <ClInclude Include="billboardPipeline.hpp" />
+    <ClInclude Include="AssetManager.hpp" />
+    <ClInclude Include="binaryImport.hpp" />
+    <ClInclude Include="BVPipeline.hpp" />
     <ClInclude Include="camera.hpp" />
+    <ClInclude Include="collision.hpp" />
     <ClInclude Include="concurrentqueue.h" />
     <ClInclude Include="d3dx12\include\directx\d3d12.h" />
     <ClInclude Include="d3dx12\include\directx\d3d12compatibility.h" />
@@ -167,16 +173,19 @@
     <ClInclude Include="gfx.hpp" />
     <ClInclude Include="gfxUtil.hpp" />
     <ClInclude Include="global.hpp" />
+    <ClInclude Include="IGame.hpp" />
     <ClInclude Include="IocpCore.hpp" />
     <ClInclude Include="IocpObject.hpp" />
     <ClInclude Include="IoEvent.hpp" />
     <ClInclude Include="light.hpp" />
     <ClInclude Include="Listener.hpp" />
+    <ClInclude Include="log.hpp" />
     <ClInclude Include="macro.hpp" />
     <ClInclude Include="mathUtil.hpp" />
     <ClInclude Include="mesh.hpp" />
     <ClInclude Include="NetAddress.hpp" />
     <ClInclude Include="object.hpp" />
+    <ClInclude Include="online\onlineGame.hpp" />
     <ClInclude Include="pbrPipeline.hpp" />
     <ClInclude Include="pch.hpp" />
     <ClInclude Include="physics.hpp" />
@@ -188,41 +197,66 @@
     <ClInclude Include="Session.hpp" />
     <ClInclude Include="SessionManager.hpp" />
     <ClInclude Include="shader.hpp" />
+    <ClInclude Include="skybox.hpp" />
+    <ClInclude Include="skyboxPipeline.hpp" />
     <ClInclude Include="SocketUtils.hpp" />
+    <ClInclude Include="standalone\game.hpp" />
     <ClInclude Include="texloader\DDSTextureLoader12.h" />
     <ClInclude Include="threadPool.hpp" />
     <ClInclude Include="timer.hpp" />
     <ClInclude Include="timsort.hpp" />
     <ClInclude Include="types.hpp" />
+    <ClInclude Include="windows.hpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="billboard.cpp" />
+    <ClCompile Include="billboardPipeline.cpp" />
+    <ClCompile Include="AssetManager.cpp" />
+    <ClCompile Include="binaryImport.cpp" />
+    <ClCompile Include="bvPipeline.cpp" />
     <ClCompile Include="camera.cpp" />
+    <ClCompile Include="collision.cpp" />
     <ClCompile Include="d3dx12\src\d3dx12_property_format_table.cpp" />
     <ClCompile Include="errorHandling.cpp" />
     <ClCompile Include="gfx.cpp" />
     <ClCompile Include="gfxUtil.cpp" />
     <ClCompile Include="global.cpp" />
+    <ClCompile Include="IocpCore.cpp" />
     <ClCompile Include="light.cpp" />
     <ClCompile Include="Listener.cpp" />
+    <ClCompile Include="log.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="mesh.cpp" />
     <ClCompile Include="object.cpp" />
+    <ClCompile Include="online\onlineGame.cpp" />
     <ClCompile Include="pbrPipeline.cpp" />
     <ClCompile Include="pch.cpp" />
     <ClCompile Include="physics.cpp" />
     <ClCompile Include="samplePipeline.cpp" />
     <ClCompile Include="SendBuffer.cpp" />
+    <ClCompile Include="ServerSession.cpp" />
     <ClCompile Include="Service.cpp" />
     <ClCompile Include="Session.cpp" />
     <ClCompile Include="SessionManager.cpp" />
     <ClCompile Include="shader.cpp" />
+    <ClCompile Include="skybox.cpp" />
+    <ClCompile Include="skyboxPipeline.cpp" />
     <ClCompile Include="SocketUtils.cpp" />
+    <ClCompile Include="standalone\game.cpp" />
     <ClCompile Include="texloader\DDSTextureLoader12.cpp" />
     <ClCompile Include="threadPool.cpp" />
     <ClCompile Include="timer.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <FxCompile Include="billboard.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </FxCompile>
     <FxCompile Include="bindless.hlsli">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="boundingVolume.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
@@ -239,6 +273,14 @@
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">VSMain</EntryPointName>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.1</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="shadowMap.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="skybox.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
