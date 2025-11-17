@@ -21,8 +21,8 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{91ff8f89-d42a-4ee0-97b7-e59e70230e61}</ProjectGuid>
-    <RootNamespace>server</RootNamespace>
+    <ProjectGuid>{06b2b06c-413e-42c5-8004-90525d0996ef}</ProjectGuid>
+    <RootNamespace>DummyClient</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -77,8 +77,6 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
-      <PrecompiledHeader>Use</PrecompiledHeader>
-      <PrecompiledHeaderFile>pch.hpp</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -94,8 +92,6 @@
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
-      <PrecompiledHeader>Use</PrecompiledHeader>
-      <PrecompiledHeaderFile>pch.hpp</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -109,8 +105,6 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
-      <PrecompiledHeader>Use</PrecompiledHeader>
-      <PrecompiledHeaderFile>pch.hpp</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -126,8 +120,6 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
-      <PrecompiledHeader>Use</PrecompiledHeader>
-      <PrecompiledHeaderFile>pch.hpp</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -135,44 +127,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="GameSession.cpp" />
-    <ClCompile Include="GameSessionManager.cpp" />
-    <ClCompile Include="Listener.cpp" />
-    <ClCompile Include="main.cpp" />
-    <ClCompile Include="pch.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
-    </ClCompile>
-    <ClCompile Include="Room.cpp" />
-    <ClCompile Include="RoomManager.cpp" />
-    <ClCompile Include="SendBuffer.cpp" />
-    <ClCompile Include="Service.cpp" />
-    <ClCompile Include="Session.cpp" />
-    <ClCompile Include="SocketUtils.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="concurrentqueue.h" />
-    <ClInclude Include="GameSession.hpp" />
-    <ClInclude Include="GameSessionManager.hpp" />
-    <ClInclude Include="IocpCore.hpp" />
-    <ClInclude Include="IocpObject.hpp" />
-    <ClInclude Include="IoEvent.hpp" />
-    <ClInclude Include="Listener.hpp" />
-    <ClInclude Include="macro.hpp" />
-    <ClInclude Include="NetAddress.hpp" />
-    <ClInclude Include="pch.hpp" />
-    <ClInclude Include="protocol.hpp" />
-    <ClInclude Include="RecvBuffer.hpp" />
-    <ClInclude Include="Room.hpp" />
-    <ClInclude Include="RoomManager.hpp" />
-    <ClInclude Include="SendBuffer.hpp" />
-    <ClInclude Include="Service.hpp" />
-    <ClInclude Include="Session.hpp" />
-    <ClInclude Include="SocketUtils.hpp" />
-    <ClInclude Include="types.hpp" />
-    <ClInclude Include="windows.hpp" />
+    <ClCompile Include="dummy_client_main.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

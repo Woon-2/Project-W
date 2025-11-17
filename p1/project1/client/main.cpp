@@ -1,7 +1,11 @@
 #include "pch.hpp"
 #include "errorHandling.hpp"
+#include "global.hpp"
+#include "online/onlineGame.hpp"
 #include "standalone/game.hpp"
 #include "timer.hpp"
+#include "IocpCore.hpp"
+#include "Service.hpp"
 #include "ServerSession.hpp"
 
 inline constexpr const char* wndClsName = "wndCls";
@@ -14,8 +18,6 @@ RECT gClientRect{ 0, 0, 1024, 768 };
 LRESULT wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 SPClientService tryConnectToServer();
 std::thread makeIOCPLoopThread(SPClientService& clientService);
-
-GFX gGfx{};
 
 int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow )
 {
@@ -31,8 +33,7 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 		.style = CS_OWNDC,
 		.lpfnWndProc = wndProc,
 		.cbClsExtra = 0,
-		// 윈도우의 커스텀 데이터로 게임 객체의 포인터를 들고 있게 하기 위함
-		.cbWndExtra = sizeof( IGame* ),
+		.cbWndExtra = 0,
 		.hInstance = hInstance,
 		.hIcon = nullptr,
 		.hCursor = nullptr,
@@ -69,33 +70,21 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 	// 게임 초기화
 	Timer timer{};
 
-	std::thread iocpLoopThread{};
-	std::unique_ptr<IGame> pGame = nullptr;
-
 	auto clientService = tryConnectToServer();
-	if (false /*clientService*/) {
-		iocpLoopThread = makeIOCPLoopThread(clientService);
-		// pGame = std::make_unique<Online::Game>();
-	}
-	else {
-		pGame = std::make_unique<StandAlone::Game>();
-		static_cast<StandAlone::Game*>(pGame.get())->setupStage();
-	}
-
-	// 윈도우의 커스텀 데이터로 게임 객체 포인터 등록
-	SetWindowLongPtrA(ghWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pGame.get()));
-
-	auto& game = *pGame;
+	ASSERT_CRASH( clientService != nullptr );
+	std::thread iocpLoopThread{ makeIOCPLoopThread( clientService ) };
+	
+	while ( !gReady );
 
 	// 윈도우 메시지 루프
 	MSG msg;
 	while ( true ) {
 		while ( PeekMessageA( &msg, nullptr, 0, 0, PM_REMOVE ) ) {
 			if ( msg.message == WM_QUIT ) {
-				/*if (clientService) {
+				if (clientService) {
 					iocpLoopThread.join();
 					SocketUtils::rel( );
-				}*/
+				}
 				return static_cast<int>( msg.wParam );
 			}
 
@@ -107,8 +96,8 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 		auto title = wndName + "(FPS: "s + std::to_string( timer.fps( ) ) + ")"s;
 		SetWindowTextA( ghWnd, title.c_str( ) );
 
-		game.update(timer.deltaTime<Milliseconds>());
-		game.render();
+		pGame->update(timer.deltaTime<Milliseconds>());
+		pGame->render();
 	}
 }
 
@@ -124,7 +113,6 @@ LRESULT wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		return 0;
 
 	default:
-		auto pGame = reinterpret_cast<IGame*>(GetWindowLongPtrA(hWnd, GWLP_USERDATA));
 		if (pGame) {
 			return pGame->receiveWndMsg(hWnd, msg, wParam, lParam);
 		}
@@ -152,7 +140,9 @@ SPClientService tryConnectToServer() {
 std::thread makeIOCPLoopThread(SPClientService& clientService) {
 	return std::thread( [&clientService]( ) {
 		while ( true ) {
-			clientService->getIocpCore( )->dispatch( );
+			if ( !clientService->getIocpCore( )->dispatch( ) ) {
+				break;
+			}
 		}
 	} );
 }

@@ -183,6 +183,7 @@
     <ClInclude Include="mesh.hpp" />
     <ClInclude Include="NetAddress.hpp" />
     <ClInclude Include="object.hpp" />
+    <ClInclude Include="online\onlineGame.hpp" />
     <ClInclude Include="pbrPipeline.hpp" />
     <ClInclude Include="pch.hpp" />
     <ClInclude Include="physics.hpp" />
@@ -203,6 +204,7 @@
     <ClInclude Include="timer.hpp" />
     <ClInclude Include="timsort.hpp" />
     <ClInclude Include="types.hpp" />
+    <ClInclude Include="windows.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AssetManager.cpp" />
@@ -215,17 +217,20 @@
     <ClCompile Include="gfx.cpp" />
     <ClCompile Include="gfxUtil.cpp" />
     <ClCompile Include="global.cpp" />
+    <ClCompile Include="IocpCore.cpp" />
     <ClCompile Include="light.cpp" />
     <ClCompile Include="Listener.cpp" />
     <ClCompile Include="log.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="mesh.cpp" />
     <ClCompile Include="object.cpp" />
+    <ClCompile Include="online\onlineGame.cpp" />
     <ClCompile Include="pbrPipeline.cpp" />
     <ClCompile Include="pch.cpp" />
     <ClCompile Include="physics.cpp" />
     <ClCompile Include="samplePipeline.cpp" />
     <ClCompile Include="SendBuffer.cpp" />
+    <ClCompile Include="ServerSession.cpp" />
     <ClCompile Include="Service.cpp" />
     <ClCompile Include="Session.cpp" />
     <ClCompile Include="SessionManager.cpp" />

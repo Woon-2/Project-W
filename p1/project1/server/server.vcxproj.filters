@@ -13,87 +13,108 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Utils">
+      <UniqueIdentifier>{8e4e822e-ffc6-498c-a31f-670eddb207c0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Network">
+      <UniqueIdentifier>{7133715a-d4e4-4f93-953b-aac69d06fef3}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="SocketUtils.cpp">
-      <Filter>소스 파일</Filter>
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="SendBuffer.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="Session.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="Service.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="GameSessionManager.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="Listener.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="GameSession.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="Room.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="RoomManager.cpp">
+      <Filter>Network</Filter>
     </ClCompile>
     <ClCompile Include="pch.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="Listener.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="Session.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="Service.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="SendBuffer.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="GameSessionManager.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="SocketUtils.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
     <ClInclude Include="pch.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="macro.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="types.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="NetAddress.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="IoEvent.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="IocpCore.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="IocpObject.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="Listener.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="Session.hpp">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="windows.hpp">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="protocol.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="Service.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="RecvBuffer.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
     <ClInclude Include="concurrentqueue.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="SendBuffer.hpp">
-      <Filter>헤더 파일</Filter>
+    <ClInclude Include="SocketUtils.hpp">
+      <Filter>Utils</Filter>
     </ClInclude>
-    <ClInclude Include="GameSession.hpp">
-      <Filter>헤더 파일</Filter>
+    <ClInclude Include="types.hpp">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="macro.hpp">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="SendBuffer.hpp">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="RecvBuffer.hpp">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="NetAddress.hpp">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="IocpCore.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="IocpObject.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="IoEvent.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="Session.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="Service.hpp">
+      <Filter>Network</Filter>
     </ClInclude>
     <ClInclude Include="GameSessionManager.hpp">
-      <Filter>헤더 파일</Filter>
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="GameSession.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="Listener.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="protocol.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="Room.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="RoomManager.hpp">
+      <Filter>Network</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

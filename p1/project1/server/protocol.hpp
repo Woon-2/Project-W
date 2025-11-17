@@ -14,11 +14,17 @@ struct PacketHeader {
 	std::uint16_t id;	// packet type (protocol id)
 };
 
-enum class direction : std::uint8_t {
-	w, a, s, d
+enum class Direction : std::uint8_t {
+	none, w, a, s, d
 };
 
 enum class PacketType : std::uint16_t {
+	csSignup,
+	scSignup,
+
+	csLogin,
+	scLogin,
+
 	csEnter,
 	scAssignId,
 	scEnter,
@@ -27,7 +33,30 @@ enum class PacketType : std::uint16_t {
 	scLeave,
 
 	csMove,
-	scMove
+	scMove,
+
+	csFindRoom,
+
+};
+
+struct CSSignupPacket {
+	std::array<char, 20> id;
+	std::array<char, 20> pw;
+};
+
+struct SCSignupPacket {
+	bool isOk;
+	std::array<char, 50> reason;
+};
+
+struct CSLoginPacket {
+	std::array<char, 20> id;
+	std::array<char, 20> pw;
+};
+
+struct SCLoginPacket {
+	bool isOk;
+	std::array<char, 50> reason;
 };
 
 struct CSEnterPacket {
@@ -55,7 +84,7 @@ struct SCLeavePacket {
 };
 
 struct CSMovePacket {
-	direction dir;
+	Direction dir;
 };
 
 struct SCMovePacket {
@@ -65,9 +94,17 @@ struct SCMovePacket {
 	float z;
 };
 
+struct CSFindRoomPacket {
+	std::int32_t roomId;
+};
+
 struct Packet {
 	PacketHeader header;
 	union {
+		CSSignupPacket csSignup;
+		SCSignupPacket scSignup;
+		CSLoginPacket csLogin;
+		SCLoginPacket scLogin;
 		CSEnterPacket csEnter;
 		SCAssignIdPacket scAssignId;
 		SCEnterPacket scEnter;
@@ -75,6 +112,7 @@ struct Packet {
 		SCLeavePacket scLeave;
 		CSMovePacket csMove;
 		SCMovePacket scMove;
+		CSFindRoomPacket csFindRoom;
 	};
 };
 
