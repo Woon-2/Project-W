@@ -13,16 +13,17 @@ void Camera::update() {
 	// 타겟 오브젝트에 대한 카메라의 초점 오프셋 적용
 	auto rotatedOffsetTargetPivot = pTarget->orient().rotate(offsetTargetPivot_);
 
-	view_ = mu::lookAt( pTarget->pos() + rotatedOffsetFromTarget,
-		pTarget->pos() + rotatedOffsetTargetPivot,
-		mu::NVec3(0.f, 1.f, 0.f)
-	);
+	eye_ = pTarget->pos() + rotatedOffsetFromTarget;
+	at_ = pTarget->pos() + rotatedOffsetTargetPivot;
+
+	view_ = mu::lookAt(eye_, at_, mu::NVec3(0.f, 1.f, 0.f));
 }
 
 void Camera::updateGFX(GFX& gfx) {
 	gfx.addCameraData(PBRPipeline::CameraData{
 		.view = view_,
-		.proj = proj_
+		.proj = proj_,
+		.pos = eye_
 	});
 	gfx.addCameraData(SkyboxPipeline::CameraData{
 		.view = view_,

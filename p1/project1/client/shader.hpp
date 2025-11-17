@@ -18,6 +18,7 @@ CompiledShaderOutput compileShader(const std::filesystem::path& path,
 );
 
 ComPtr<ID3D12PipelineState> createSampleShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createShadowMapShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
@@ -117,6 +118,7 @@ struct Material {
 };
 
 struct PerInstanceData {
+	XMFLOAT4X4 world;
 	XMFLOAT4X4 wvp;
 	XMFLOAT4X4 wv;
 	XMFLOAT3X3 wvNormal;
@@ -132,8 +134,26 @@ struct PerFrameData {
 	float padding0;
 	u32t lightCnt;
 	XMUINT3 padding1;
+	BindlessIndex idxShadowMap;
+	XMFLOAT4X4 lightVP;
 };
 }	// namespace PBRShader
+
+// ShadowMapShader
+namespace ShadowMapShader {
+struct PerInstanceData {
+	XMFLOAT4X4 world;
+};
+
+struct PerDrawcallData {
+	u32t firstInstanceIdx;
+	XMUINT3 padding;
+};
+
+struct PerFrameData {
+	XMFLOAT4X4 lightVP;
+};
+}	// namespace ShadowMapShader
 
 // SkyboxShader
 namespace SkyboxShader {

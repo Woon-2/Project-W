@@ -3,8 +3,8 @@
 // 이 hlsl 코드에서 조명의 BRDF 모델은
 // Cook-Torrance BRDF 모델을 따른다.
 
-// 이 hlsl 코드에 대한 include문 전에
-// 다음과 같은 멤버를 갖는 객체 material이 정의되어 전역적으로 접근이 가능함이 가정된다.
+// 이 hlsl 코드에 대한 include문 전에 다음의 객체들이 정의되어 전역적으로 접근이 가능함이 가정된다.
+// {material}
 // - idxAlbedo: int4 (Albedo Map에 대한 Bindless Index)
 // - idxMetallicSmoothness: int4 (MetallicSmoothnessMap에 대한 Bindless Index - 유니티 대응)
 // - idxNormal: int4 (Normal Map에 대한 Bindless Index)
@@ -15,7 +15,8 @@
 // - cMetallic: float (물체의 금속성을 나타내는 상수)
 // - cAOStrength: float (물체에 대해 주변광 차폐의 적용 강도를 나타내는 상수)
 // - cEmmisive: float3 (물체의 자체발광에 대해 색상을 나타내는 상수)
-// 그리고 uint 타입의 lightCnt가 전역적으로 접근이 가능함이 가정된다.
+// {lightCnt}: uint
+// {idxShadowMap}: int4 (bindless index)
 
 #define PI 3.14159f
 // 빛의 종류 목록, Light 객체의 type 멤버에 이 값들을 쓴다.
@@ -207,14 +208,31 @@ float3 spotLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 norm
     return gLightData[lightIdx].color * gLightData[lightIdx].intensity * (kD + specular) * NL * atten * coneAtten;
 }
 
+float PCF(int4 idx, float4 posL) {
+    posL.xyz /= posL.w;
+    
+    posL.z = min(posL.z, 1.0f);
+    
+    float p00 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(-1, -1)).r;
+    float p01 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(-1, 0)).r;
+    float p02 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(-1, 1)).r;
+    float p10 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(0, -1)).r;
+    float p11 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(0, 0)).r;
+    float p12 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(0, 1)).r;
+    float p20 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(1, -1)).r;
+    float p21 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(1, 0)).r;
+    float p22 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(1, 1)).r;
+    
+    return (p00 + p01 + p02 + p10 + p11 + p12 + p20 + p21 + p22) / 9.f;
+}
+
+float calcSingleShadow(float3 posV, float4 posL) {
+    return PCF(idxShadowMap, posL);
+}
+
 // 장면에 존재하는 모든 조명들(gLightData)에 대해 조명 반사를 계산하여
 // 물체의 겉보기 색상을 결정한다.
-// 재질 속성 상수값의 특정 요소가 0보다 작으면, 해당 속성은 텍스처 매핑을 사용하는 것으로 간주한다.
-// Albedo: material.cAlbedo.w < 0.f
-// Roughness: material.cRoughness < 0.f
-// Metallic: material.cMetallic < 0.f
-float4 illuminate(float3 posV, float3 normalV, float2 tex)
-{
+float4 illuminate(float3 posV, float4 posL, float3 normalV, float2 tex) {
     // 조명 반사 계산을 위한 변수들을 계산한다.
     float4 albedo = material.cAlbedo;
     // bindless index가 음수인 것은 텍스처가 없음을 의미한다.
@@ -260,6 +278,9 @@ float4 illuminate(float3 posV, float3 normalV, float2 tex)
             color += dirLight(i, posV, posVNormalized, normalV, tex, albedo.rgb, roughness, metallic, ao);
         }
     }
+    
+    float directFactor = calcSingleShadow(posV, posL);
+    color *= directFactor;
 
     float3 ambient = globalAmbient * albedo.rgb * (1.f - ao);
     color += ambient + emmisive;
@@ -268,6 +289,9 @@ float4 illuminate(float3 posV, float3 normalV, float2 tex)
 	color = color / (color + float3(1.f, 1.f, 1.f));
     // linear => sRGB
     color = pow( abs(color), 1.f/2.2f );
-
+    
+    posL.xyz /= posL.w;
+    posL.z = min(posL.z, 1.0f);
+    
     return float4(color, albedo.w);
 }

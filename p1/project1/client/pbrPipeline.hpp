@@ -10,11 +10,20 @@ struct Mesh;
 struct SubMesh;
 struct Material;
 
+namespace ShadowMapShader {
+	struct PerInstanceData;
+}
+
 namespace PBRShader { 
 	struct PerInstanceData;
 }
 
 namespace PBRPipeline {
+
+// PBR Pipeline 내부적으로 사용하는 그림자 텍스처를 초기화한다.
+void initShadowTextures( ID3D12Device* device, u32t width, u32t height, std::size_t roomCnt,
+	DescriptorPool& srvTexPool, DescriptorPool& dsvPool	
+);
 
 struct LightData {
 	enum class Type {
@@ -36,6 +45,7 @@ struct LightData {
 struct CameraData {
 	mu::Mat4x4 view;
 	mu::Mat4x4 proj;
+	mu::Vec3 pos;
 };
 
 struct FrameData {
@@ -67,10 +77,18 @@ struct DrawEvent {
 };
 
 struct Resources {
-	StructuredBuffer perInstanceData;	// t0
-	StructuredBuffer lightData;	// t1
-	ConstantBufferArray perDrawcallData;	// b0
-	ConstantBuffer perFrameData;	// b1
+	struct ShadowPass {
+		StructuredBuffer perInstanceData;	// t0
+		ConstantBufferArray perDrawcallData;	// b0
+		ConstantBuffer perFrameData;	// b1
+	} shadowPass;
+
+	struct MainPass {
+		StructuredBuffer perInstanceData;	// t0
+		StructuredBuffer lightData;	// t1
+		ConstantBufferArray perDrawcallData;	// b0
+		ConstantBuffer perFrameData;	// b1
+	} mainPass;
 };
 
 // PBR Pipeline의 input layout을 위한 Vertex Buffer View 배열이
@@ -83,6 +101,15 @@ void layoutMeshIfNeeded(const Mesh& mesh);
 // 파이프라인의 특정 단계를 싱글스레드 혹은 멀티스레드로 수행한다.
 // 몇 개의 함수에서 공유하는 데이터들을 따로 모아 보관하는 동시에
 // 멀티스레드 작업 분배 과정을 좀 더 쉽게 작성하기 위해 만들어졌다.
+// 
+// PBR Pipeline은 H/W 인스턴싱을 상정하므로,
+// 미리 draw event들을 그룹화(정렬)할 필요가 있다.
+// Dispatcher::sortDrawEvents 함수를 제일 먼저 호출하도록 하자.
+//
+// PBR Pipeline은 2-pass 렌더링이다.
+// - shadow pass
+// - main pass
+// shadow pass를 먼저 수행한 뒤 main pass를 수행하도록 한다.
 class Dispatcher {
 public:
 	Dispatcher() = default;
@@ -91,9 +118,10 @@ public:
 		const std::vector<ComPtr<ID3D12DescriptorHeap>>& descriptorHeaps,
 		DescriptorPool* pTexPool, DescriptorPool* pTexArrayPool,
 		DescriptorPool* pTexCubePool, DescriptorPool* pSamPool,
-		DescriptorPool* pCmpSamPool,
+		DescriptorPool* pCmpSamPool, DescriptorPool* pDsvPool,
 		const std::shared_ptr<RootSig>& rootSig,
-		const ComPtr<ID3D12PipelineState>& shader,
+		const ComPtr<ID3D12PipelineState>& mainShader,
+		const ComPtr<ID3D12PipelineState>& shadowShader,
 		const ComPtr<ID3D12CommandQueue>& cmdQ,
 		const D3D12_VIEWPORT& viewport,
 		const D3D12_RECT& scissorRect, D3D12_CPU_DESCRIPTOR_HANDLE rtv,
@@ -106,39 +134,83 @@ public:
 		std::size_t roomIdx
 	);
 
-	// 셰이더에서 사용하는 GPU 데이터를 갱신한다.
+	// draw event들을 H/W 인스턴싱을 위해 그룹화(정렬)한다.
+	// 가장 먼저 호출되어야 한다.
+	void sortDrawEvents();
+	// shadow pass를 싱글 스레드로 수행한다.
+	// 1번째 렌더패스에 해당한다.
+	void shadowPass();
+	// shadow pass를 멀티 스레드로 수행한다.
+	// 1번째 렌더패스에 해당한다.
+	void shadowPassMT();
+	// main pass를 싱글 스레드로 수행한다.
+	// 2번째 렌더패스에 해당한다.
+	void mainPass();
+	// main pass를 멀티 스레드로 수행한다.
+	// 2번째 렌더패스에 해당한다.
+	void mainPassMT();
+
+private:
+	// shadow pass에서 사용하는 GPU 데이터를 갱신한다.
+	// DrawEvents, CameraData, LightData에 담겨있는 정보를 가공하여
+	// Resources 객체에 담긴, ShaderInputBuffer 인터페이스를 가지는 객체들에 옮겨담는다.
+	// 싱글스레드로 동작한다.
+	// DrawEvents가 비어있다면 아무 동작도 하지 않는다.
+	void shadowUpdate();
+	// shadow pass에서 사용하는 GPU 데이터를 갱신한다.
+	// DrawEvents, CameraData, LightData에 담겨있는 정보를 가공하여
+	// Resources 객체에 담긴, ShaderInputBuffer 인터페이스를 가지는 객체들에 옮겨담는다.
+	// 멀티스레드로 동작한다.
+	// DrawEvents가 비어있다면 아무 동작도 하지 않는다.
+	void shadowUpdateMT();
+	void shadowDraw();
+	void shadowDrawMT();
+
+	// main pass에서 사용하는 GPU 데이터를 갱신한다.
 	// DrawEvents, CameraData, LightData, FrameData에 담겨있는 정보를 가공하여
 	// Resources 객체에 담긴, ShaderInputBuffer 인터페이스를 가지는 객체들에 옮겨담는다.
 	// 싱글스레드로 동작한다.
 	// DrawEvents가 비어있다면 아무 동작도 하지 않는다.
-	void updateGPUDataSingleThreaded();
-	// 셰이더에서 사용하는 GPU 데이터를 갱신한다.
+	void mainUpdate();
+	// main pass에서 사용하는 GPU 데이터를 갱신한다.
 	// DrawEvents, CameraData, LightData, FrameData에 담겨있는 정보를 가공하여
 	// Resources 객체에 담긴, ShaderInputBuffer 인터페이스를 가지는 객체들에 옮겨담는다.
-	// 싱글스레드로 동작한다.
+	// 멀티스레드로 동작한다.
 	// DrawEvents가 비어있다면 아무 동작도 하지 않는다.
-	void updateGPUDataMultiThreaded();
+	void mainUpdateMT();
 	// DrawEvents의 정보들을 참고하여
 	// 드로우콜들을 수행한다.
 	// 싱글스레드로 동작한다.
 	// DrawEvents가 비어있다면 아무 동작도 하지 않는다.
-	void drawSingleThreaded();
+	void mainDraw();
 	// DrawEvents의 정보들을 참고하여
 	// 드로우콜들을 수행한다.
 	// 멀티스레드로 동작한다.
 	// DrawEvents가 비어있다면 아무 동작도 하지 않는다.
-	void drawMultiThreaded();
+	void mainDrawMT();
 
-private:
 	// 멀티스레드 작업 시, GPU 데이터 갱신 작업에 대해
 	// 단위 작업을 생성하여 스레드에 할당하는데 사용된다.
-	void MU_CALLCONV addJobUpdate( mu::Mat4x4 view, const mu::Mat4x4& viewProj,
+	void MU_CALLCONV addJobMainUpdate( mu::Mat4x4 view, const mu::Mat4x4& viewProj,
 		const DrawEvent* pFirst, const DrawEvent* pLast, PBRShader::PerInstanceData* pOut,
 		std::latch& latch
 	);
 	// 멀티스레드 작업 시, 드로우콜들에 대해
 	// 단위 작업을 생성하여 스레드에 할당하는데 사용된다.
-	void addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
+	void addJobMainDraw( ID3D12GraphicsCommandList* threadCmdList,
+		const std::vector<DrawEvent>::const_iterator* pItFirst,
+		const std::vector<DrawEvent>::const_iterator* pItLast,
+		std::size_t firstDrawcallIdx, std::latch& latch
+	);
+	// 멀티스레드 작업 시, GPU 데이터 갱신 작업에 대해
+	// 단위 작업을 생성하여 스레드에 할당하는데 사용된다.
+	void addJobShadowUpdate( const DrawEvent* pFirst,
+		const DrawEvent* pLast, ShadowMapShader::PerInstanceData* pOut,
+		std::latch& latch
+	);
+	// 멀티스레드 작업 시, 드로우콜들에 대해
+	// 단위 작업을 생성하여 스레드에 할당하는데 사용된다.
+	void addJobShadowDraw( ID3D12GraphicsCommandList* threadCmdList,
 		const std::vector<DrawEvent>::const_iterator* pItFirst,
 		const std::vector<DrawEvent>::const_iterator* pItLast,
 		std::size_t firstDrawcallIdx, std::latch& latch
@@ -151,8 +223,10 @@ private:
 	DescriptorPool* pTexCubePool_ = nullptr;
 	DescriptorPool* pSamPool_ = nullptr;
 	DescriptorPool* pCmpSamPool_ = nullptr;
+	DescriptorPool* pDsvPool_ = nullptr;
 	std::shared_ptr<RootSig> rootSig_ = nullptr;
-	ComPtr<ID3D12PipelineState> shader_ = nullptr;
+	ComPtr<ID3D12PipelineState> mainShader_ = nullptr;
+	ComPtr<ID3D12PipelineState> shadowShader_ = nullptr;
 	ComPtr<ID3D12CommandQueue> cmdQ_ = nullptr;
 	D3D12_VIEWPORT viewport_{};
 	D3D12_RECT scissorRect_{};
@@ -183,6 +257,10 @@ private:
 	std::size_t jobSizeUpdate_ = 120u;
 	std::size_t jobSizeDraw_ = 200u;
 };
+
+namespace Detail {
+	extern std::vector<Texture> shadowMaps_;
+}	// namespace PBRPipeline::Detail
 
 }	// namespace PBRPipeline
 

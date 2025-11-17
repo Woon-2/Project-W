@@ -549,21 +549,21 @@ UINT calcIdxBindlessSampler( D3D12_FILTER filterMode,
 	) {
 		return 8;
 	}
-	// 9 - NearestComparison
+	// 0 - NearestComparison
 	else if (filterMode == D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT
-		&& addrModeU == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
-		&& addrModeV == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
-		&& addrModeW == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+		&& addrModeU == D3D12_TEXTURE_ADDRESS_MODE_BORDER
+		&& addrModeV == D3D12_TEXTURE_ADDRESS_MODE_BORDER
+		&& addrModeW == D3D12_TEXTURE_ADDRESS_MODE_BORDER
 	) {
-		return 9;
+		return 0;
 	}
-	// 10 - BilinearComparison
+	// 1 - BilinearComparison
 	else if (filterMode == D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT
-		&& addrModeU == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
-		&& addrModeV == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
-		&& addrModeW == D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+		&& addrModeU == D3D12_TEXTURE_ADDRESS_MODE_BORDER
+		&& addrModeV == D3D12_TEXTURE_ADDRESS_MODE_BORDER
+		&& addrModeW == D3D12_TEXTURE_ADDRESS_MODE_BORDER
 	) {
-		return 10;
+		return 1;
 	}
 	else {
 		DISPLAY_ERROR_STR(false, "[GFX Error] calcIdxBindlessSampler: 요구된 샘플링 방식에 대응되는 샘플러가 없습니다.\n"
@@ -595,6 +595,48 @@ Texture loadTexture( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
 	}
 
 	gSharedLog << "[Resource Load] File I/O: 텍스처 " << path << " 로드 완료\n";
+
+	return ret;
+}
+
+// 커스텀 텍스처(Texture2D)를 생성한다.
+// bindless index 관련 설정은 하지 않으므로
+// createSRV, calcIdxBindlessSampler와 같은 함수를 적절히 활용하여
+// bindless index들을 설정하자.
+Texture createTexture( ID3D12Device* device, std::uint32_t width, std::uint32_t height,
+	DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES initialState,
+	const D3D12_CLEAR_VALUE& optimizedClearValue
+) {
+	Texture ret{};
+
+	// 결정된 인자들을 바탕으로 리소스 생성
+	auto heapProperties = D3D12_HEAP_PROPERTIES{
+		.Type = D3D12_HEAP_TYPE_DEFAULT,
+		.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+		.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+		.CreationNodeMask = 0u,
+		.VisibleNodeMask = 0u
+	};
+
+	auto desc = D3D12_RESOURCE_DESC{
+		.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+		.Alignment = 0u,
+		.Width = width,
+		.Height = height,
+		.DepthOrArraySize = 1u,
+		.MipLevels = 1u,
+		.Format = format,
+		.SampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
+		.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+		.Flags = flags
+	};
+
+	DISPLAY_ERROR_DX_HR(
+		device->CreateCommittedResource(
+			&heapProperties, D3D12_HEAP_FLAG_NONE, &desc, initialState, &optimizedClearValue,
+			__uuidof(ID3D12Resource), &ret.res
+		), false
+	);
 
 	return ret;
 }

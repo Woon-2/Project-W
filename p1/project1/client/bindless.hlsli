@@ -92,7 +92,7 @@ float sampleCmpBindless2DOffset(uint4 bindlessIdx, float2 tex, float val, int2 o
     {
         return gTex2DArrays[bindlessIdx.y].SampleCmpLevelZero(gComparisonSamplers[bindlessIdx.w], float3(tex, bindlessIdx.z), val, offset);
     }
-    return float4(0.f, 0.f, 0.f, 1.f);
+    return 0.f;
 }
 
 #endif // __bindless_hlsl__

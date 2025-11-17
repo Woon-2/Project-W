@@ -51,6 +51,10 @@ private:
 	float minZ_ = -100.f;
 	float maxZ_ = 100.f;
 
+	// 셰이더 전달용으로만 쓰이는 변수들,
+	// 카메라의 위치 갱신은 타겟 오브젝트와 오프셋들 및 회전으로 결정된다.
+	mu::Vec3 eye_{};
+	mu::Vec3 at_{};
 	mu::Mat4x4 view_{};
 	mu::Mat4x4 proj_{};
 };

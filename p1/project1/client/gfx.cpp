@@ -143,13 +143,13 @@ void GFX::init() {
 
 	dsvHeap_ = DescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_DESC{
 		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
-		.NumDescriptors = 4u,
+		.NumDescriptors = 10u,
 		.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
 		.NodeMask = 0
 	} );
 
-	// DSV Pool: DSVHeap의 [0, 4) 범위
-	dsvPool_ = DescriptorPool( 4u, dsvHeap_.cpuStart, dsvHeap_.gpuStart, dsvHeap_.desc.Type,
+	// DSV Pool: DSVHeap의 [0, 10) 범위
+	dsvPool_ = DescriptorPool( 10u, dsvHeap_.cpuStart, dsvHeap_.gpuStart, dsvHeap_.desc.Type,
 		dsvHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 		device_->GetDescriptorHandleIncrementSize(dsvHeap_.desc.Type)
 	);
@@ -227,6 +227,7 @@ void GFX::init() {
 	defaultRootSig.build(device_.Get());
 
 	shaders_.try_emplace("SampleShader", createSampleShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("ShadowMapShader", createShadowMapShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRShader", createPBRShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("SkyboxShader", createSkyboxShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("BVShader", createBVShader(device_.Get(), defaultRootSig.get()));
@@ -313,7 +314,7 @@ void GFX::createSwapChain() {
 
 	// 깊이 버퍼는 우리가 따로 만들어주어야 한다.
 	for (int i = 0; i < 3; ++i) {
-		auto depthBuffer = createDepthBuffer( device_.Get(), DXGI_FORMAT_D24_UNORM_S8_UINT,
+		auto depthBuffer = createDepthBuffer( device_.Get(), DXGI_FORMAT_D32_FLOAT,
 			DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u }
 		);
 		setD3DName(depthBuffer.Get(), "DepthBuffer"s + std::to_string(i));
@@ -337,30 +338,43 @@ void GFX::createSwapChain() {
 
 	// 백버퍼 개수만큼의 room을 가지는 파이프라인별 리소스들 생성
 	// 1000u, 32u를 변수로 대체하기
+	// Sample Pipeline ----
 	resourcesSamplePipeline_.perInstanceData.init(
 		device_.Get(), sizeof(SampleShader::PerInstanceData) * 1000u, backBuffers_.size(), "Sample_PerInstanceData"
 	);
 	resourcesSamplePipeline_.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(SampleShader::PerDrawcallData), 1000u, backBuffers_.size(), "Sample_PerDrawcallData"
 	);
-	resourcesPBRPipeline_.perInstanceData.init(
-		device_.Get(), sizeof(PBRShader::PerInstanceData) * 1000u, backBuffers_.size(), "PBR_PerInstanceData"
+	// PBR Pipeline ----
+	resourcesPBRPipeline_.shadowPass.perInstanceData.init(
+		device_.Get(), sizeof(ShadowMapShader::PerInstanceData) * 1000u, backBuffers_.size(), "PBR_Shadow_PerInstanceData"
 	);
-	resourcesPBRPipeline_.perDrawcallData = createConstantBufferArray(
-		device_.Get(), sizeof(PBRShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBR_PerDrawcallData"
+	resourcesPBRPipeline_.shadowPass.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof(ShadowMapShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBR_Shadow_PerDrawcallData"
 	);
-	resourcesPBRPipeline_.lightData.init(
-		device_.Get(), sizeof(PBRShader::Light) * 32u, backBuffers_.size(), "PBR_LightData"
+	resourcesPBRPipeline_.shadowPass.perFrameData.init(
+		device_.Get(), sizeof(ShadowMapShader::PerFrameData), backBuffers_.size(), "PBR_Shadow_PerFrameData"
 	);
-	resourcesPBRPipeline_.perFrameData.init(
-		device_.Get(), sizeof(PBRShader::PerFrameData), backBuffers_.size(), "PBR_PerFrameData"
+	resourcesPBRPipeline_.mainPass.perInstanceData.init(
+		device_.Get(), sizeof(PBRShader::PerInstanceData) * 1000u, backBuffers_.size(), "PBR_Main_PerInstanceData"
 	);
+	resourcesPBRPipeline_.mainPass.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof(PBRShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBR_Main_PerDrawcallData"
+	);
+	resourcesPBRPipeline_.mainPass.lightData.init(
+		device_.Get(), sizeof(PBRShader::Light) * 32u, backBuffers_.size(), "PBR_Main_LightData"
+	);
+	resourcesPBRPipeline_.mainPass.perFrameData.init(
+		device_.Get(), sizeof(PBRShader::PerFrameData), backBuffers_.size(), "PBR_Main_PerFrameData"
+	);
+	// Skybox Pipeline ----
 	resourcesSkyboxPipeline_.perFrameData.init(
 		device_.Get(), sizeof(SkyboxShader::PerFrameData), backBuffers_.size(), "Skybox_PerFrameData"
 	);
 	resourcesSkyboxPipeline_.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(SkyboxShader::PerDrawcallData), 32u, backBuffers_.size(), "Skybox_PerDrawcallData"
 	);
+	// Bounding Volume Pipeline ----
 	resourcesBVPipeline_.perInstanceData.init(
 		device_.Get(), sizeof(BVShader::PerInstanceData) * 1000u, backBuffers_.size(), "BV_PerInstanceData"
 	);
@@ -442,6 +456,9 @@ void GFX::addCameraData(const BVPipeline::CameraData& cameraData) {
 	cameraDataBVPipeline_ = cameraData;
 }
 
+// 파이프라인들이 자체적으로 사용하는 리소스들과
+// addRequestXXLoad 꼴의 함수로 요청된 리소스들을 로드/생성한다.
+// 반드시 모든 장치 초기화가 끝나고 호출되어야 한다.
 void GFX::loadAssets() {
 	auto& fence = fences_.at("LoadFence");
 
@@ -462,6 +479,7 @@ void GFX::loadAssets() {
 	DISPLAY_ERROR_DX_VOID(cmdList->Reset(cmdAlloc.Get(), nullptr), false);
 
 	BVPipeline::initStaticModels(device_.Get(), cmdList.Get(), fence);
+	PBRPipeline::initShadowTextures(device_.Get(), 2000u, 2000u, backBuffers_.size(), srvTexPool_, dsvPool_);
 
 	dumpLog();
 
@@ -609,9 +627,9 @@ void GFX::render() {
 	auto pbrPipelineDispatcher = PBRPipeline::Dispatcher(
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
-		&samPool_, &cmpSamPool_,
+		&samPool_, &cmpSamPool_, &dsvPool_,
 		rootSigs_.at("DefaultRootSignature"), shaders_.at("PBRShader"),
-		cmdQ_, viewport, clRect,
+		shaders_.at("ShadowMapShader"), cmdQ_, viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesPBRPipeline_, threadPool_, &cmdListPool_,
 		std::move(drawEventsPBRPipeline_), std::move(lightDataPBRPipeline_),
@@ -633,22 +651,30 @@ void GFX::render() {
 	if (!threadPool_) {
 		samplePipelineDispatcher.updateGPUDataSingleThreaded();
 		samplePipelineDispatcher.drawSingleThreaded();
+		dumpLog();
 
-		pbrPipelineDispatcher.updateGPUDataSingleThreaded();
-		pbrPipelineDispatcher.drawSingleThreaded();
+		pbrPipelineDispatcher.sortDrawEvents();
+		pbrPipelineDispatcher.shadowPass();
+		pbrPipelineDispatcher.mainPass();
+		dumpLog();
 
 		bvPipelineDispatcher.updateGPUDataSingleThreaded();
 		bvPipelineDispatcher.drawSingleThreaded();
+		dumpLog();
 	}
 	else {
 		samplePipelineDispatcher.updateGPUDataMultiThreaded();
 		samplePipelineDispatcher.drawMultiThreaded();
+		dumpLog();
 
-		pbrPipelineDispatcher.updateGPUDataMultiThreaded();
-		pbrPipelineDispatcher.drawMultiThreaded();
+		pbrPipelineDispatcher.sortDrawEvents();
+		pbrPipelineDispatcher.shadowPassMT();
+		pbrPipelineDispatcher.mainPassMT();
+		dumpLog();
 
 		bvPipelineDispatcher.updateGPUDataMultiThreaded();
 		bvPipelineDispatcher.drawMultiThreaded();
+		dumpLog();
 	}
 
 	// Skybox Pipeline의 Dispatch

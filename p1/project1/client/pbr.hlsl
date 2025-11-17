@@ -1,4 +1,5 @@
 struct PerInstanceData {
+    float4x4 world;
     float4x4 wvp;
     float4x4 wv;
     float3x3 wvNormal;
@@ -23,6 +24,7 @@ struct Material {
 struct VSOutput {
     float4 pos : SV_Position;
     float3 posV : POSITION_V;
+    float4 posL : POSITION_L;
     float3 normalV : NORMAL_V;
     float3 tangentV : TANGENT_V;
     float3 bitangentV : BITANGENT_V;
@@ -39,9 +41,18 @@ cbuffer PerFrameData : register(b1) {
     float padding0;
     uint lightCnt;
     uint3 padding1;
+    int4 idxShadowMap;
+    float4x4 lightVP;
 }
 
 StructuredBuffer<PerInstanceData> gInstances : register(t0);
+
+static float4x4 gmtxTexturize = {
+	0.5f, 0.0f, 0.0f, 0.0f,
+	0.0f, -0.5f, 0.0f, 0.0f,
+	0.0f, 0.0f, 1.0f, 0.0f,
+	0.5f, 0.5f, 0.0f, 1.0f
+};
 
 #include "pbrLighting.hlsli"
 
@@ -59,6 +70,13 @@ VSOutput VSMain(
     
     ret.pos = mul(float4(position, 1.0f), gInstances[idxInst + idxDrawcall].wvp);
     ret.posV = mul(float4(position, 1.0f), gInstances[idxInst + idxDrawcall].wv).xyz;
+    ret.posL = mul(
+        mul(
+            mul(float4(position, 1.0f), gInstances[idxInst + idxDrawcall].world),
+            lightVP
+        ),
+        gmtxTexturize
+    );
     ret.normalV = mul(normal, gInstances[idxInst + idxDrawcall].wvNormal);
     if (material.idxAlbedo.x >= 0) {
 		ret.tangentV = mul(tangent, gInstances[idxInst + idxDrawcall].wvNormal).xyz;
@@ -83,5 +101,5 @@ float4 PSMain(VSOutput input) : SV_TARGET {
 		input.normalV = mul(normal, TBN);
 	}
     
-    return illuminate(input.posV, input.normalV, input.uv);
+    return illuminate(input.posV, input.posL, input.normalV, input.uv);
 }

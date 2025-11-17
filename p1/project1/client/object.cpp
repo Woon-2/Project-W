@@ -1,6 +1,11 @@
 #include "object.hpp"
 #include "errorHandling.hpp"
 
+// 모델을 설정한다.
+// 모델이 있는 게임 객체는 render 시 GFX에 DrawEvent를 제출한다.
+// 모델에 바운딩 볼륨이 존재할 경우, 월드 공간 바운딩 볼륨을 구축한다.
+// (모델의 바운딩 볼륨을 기반으로 게임 객체의 월드 변환을 적용한
+//  월드 공간 바운딩 볼륨을 따로 두어야 월드 공간 충돌 처리가 가능하다.)
 void Object::setModel(const Model* pModel){
 	DISPLAY_ERROR_STR(pModel != nullptr, "[Game Error] Object::setModel: 널 모델이 전달되었습니다.", false);
 	if (pModel == nullptr) {
@@ -76,6 +81,9 @@ void Object::render(GFX& gfx) {
 	}
 }
 
+// 게임 객체의 위치를 갱신한다.
+// 이전 PhysicState와 현재 PhysicState의 위치가 모두 갱신된다.
+// 각 PhysicState의 AABB 역시 갱신된다.
 void MU_CALLCONV Object::setPos(mu::Vec3 newPos) {
 	prevPhysicState_.pos = newPos;
 	currPhysicState_.pos = newPos;
@@ -95,11 +103,16 @@ void MU_CALLCONV Object::setPos(mu::Vec3 newPos) {
 	}
 }
 
+// 게임 객체의 각속도를 갱신한다.
+// 이전 PhysicState와 현재 PhysicState의 각속도가 모두 갱신된다.
 void MU_CALLCONV Object::setOmega(mu::Vec3 newOmega) {
 	prevPhysicState_.omega = newOmega;
 	currPhysicState_.omega = newOmega;
 }
 
+// 게임 객체의 방향을 갱신한다.
+// 이전 PhysicState와 현재 PhysicState의 방향이 모두 갱신된다.
+// 게임 객체의 방향 벡터들도 전부 갱신된다.
 void MU_CALLCONV Object::setOrient(mu::NQuat newOrient) {
 	prevPhysicState_.orient = newOrient;
 	currPhysicState_.orient = newOrient;
@@ -108,6 +121,9 @@ void MU_CALLCONV Object::setOrient(mu::NQuat newOrient) {
 	forward_ = currPhysicState_.orient.rotate(mu::Vec3(0.f, 0.f, 1.f));
 }
 
+// 게임 객체의 크기를 갱신한다.
+// 이전 PhysicState와 현재 PhysicState의 크기가 모두 갱신된다.
+// 각 PhysicState의 AABB 역시 갱신된다.
 void MU_CALLCONV Object::setScale(mu::Vec3 newScale) {
 	prevPhysicState_.scale = newScale;
 	currPhysicState_.scale = newScale;

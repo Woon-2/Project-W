@@ -12,13 +12,15 @@
 #include "BVPipeline.hpp"
 
 
-// index buffer view u16t로 고정하는 거 수정
-// 그림자 매핑 - 11.14.
-// 1인칭 & 3인칭 카메라 분리 구현 - 11.15.
-// 애니메이션 + 총 달기 - 11.16.-11.17.
+// 그림자맵 주석 작성
+// 2000, lightPos 처리 등 좀 더 표현력, 일반성 있게 구성
+// 텍스처 vflip
+// 1인칭 & 3인칭 카메라 분리 구현
+// 애니메이션 + 총 달기
 // gfx에 있는 texHashMap game쪽으로 옮기기
 // Rigidbody Physics 구현
 // 텍스처 포맷, 밉 개수도 추출
+// 그림자맵 서로 다른 파이프라인간 공유할 수 있도록 바꾸기
 // deferred shading 구현
 // 사운드 프로그래밍
 // 네트워크에서 받는 물리 정보 보간/외삽
@@ -82,7 +84,7 @@ public:
 	// 그리고 DrawEvent들을 저장하기 위한 메모리를 예약한다.
 	void init();
 	// 윈도우와 연결된 SwapChain을 만든다.
-	// Back Buffer 개수 만큼의 room을 가지는 Constant Buffer들을 만든다.
+	// Back Buffer 개수 만큼의 room을 가지는 파이프라인별 ShaderInputBuffer들을 만든다.
 	// RenderingMaster 카테고리의 Command List Pool을
 	// Back Buffer 개수 * 2의 크기를 갖도록 초기화한다.
 	// 그리고 Back Buffer 개수 만큼의 Frame Fence들을 만든다.
@@ -116,6 +118,9 @@ public:
 	void addRequestModelLoad(const RequestModelLoad& request);
 	void addRequestSkyboxLoad(const RequestSkyboxLoad& request);
 
+	// 파이프라인들이 자체적으로 사용하는 리소스들과
+	// addRequestXXLoad 꼴의 함수로 요청된 리소스들을 로드한다.
+	// 
 	void loadAssets();
 
 	// 요청된 드로우콜들을 모아 객체들을 그리고 화면에 띄운다.

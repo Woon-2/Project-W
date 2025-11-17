@@ -336,6 +336,15 @@ Texture loadTexture( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
 	const std::filesystem::path& path, Fence& fenceToAssociate, Texture::Type& texType
 );
 
+// 커스텀 텍스처(Texture2D)를 생성한다.
+// bindless index 관련 설정은 하지 않으므로
+// createSRV, calcIdxBindlessSampler와 같은 함수를 적절히 활용하여
+// bindless index들을 설정하자.
+Texture createTexture( ID3D12Device* device, std::uint32_t width, std::uint32_t height,
+	DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES initialState,
+	const D3D12_CLEAR_VALUE& optimizedClearValue
+);
+
 // 텍스처의 gpu 리소스를 담는 ComPtr 부분은 제외하고,
 // Bindless 셰이더에서 인덱싱하기 위한 인덱스들만 복사한 텍스처를 반환한다.
 // 리소스 자체에 접근할 일은 거의 없기 때문에, 인덱스들만 복사하는 것이
