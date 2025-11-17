@@ -455,21 +455,6 @@ void GFX::addFrameData( const BillboardPipeline::FrameData& frameData ) {
 	frameDataBillboardPipeline_ = frameData;
 }
 
-// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
-void GFX::addDrawEvent( const BillboardPipeline::DrawEvent& drawEvent ) {
-	drawEventsBillboardPipeline_.push_back( drawEvent );
-}
-
-// 카메라 데이터를 입력한다.
-void GFX::addCameraData( const BillboardPipeline::CameraData& cameraData ) {
-	cameraDataBillboardPipeline_ = cameraData;
-}
-
-// 프레임 데이터를 입력한다.
-void GFX::addFrameData( const BillboardPipeline::FrameData& frameData ) {
-	frameDataBillboardPipeline_ = frameData;
-}
-
 void GFX::addRequestModelLoad(const RequestModelLoad& request) {
 	requestsModelLoad_.push_back(request);
 }
@@ -537,6 +522,8 @@ void GFX::loadAssets() {
 	}
 
 	dumpLog();
+
+	pointMesh_ = buildPointMesh(device_.Get(), cmdList.Get(), texHashMap_, srvTexPool_, fence);
 
 	// 명령 기록 끝, 명령 실행
 	DISPLAY_ERROR_DX_VOID(cmdList->Close(), false);
@@ -684,7 +671,7 @@ void GFX::render() {
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_,
-		rootSigs_.at( L"DefaultRootSignature" ), shaders_.at( L"BillboardShader" ),
+		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "BillboardShader" ),
 		cmdQ_, viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesBillboardPipeline_, threadPool_, 

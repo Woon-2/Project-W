@@ -13,6 +13,11 @@
 #include "BVPipeline.hpp"
 
 
+// 2000, lightPos 처리 등 좀 더 표현력, 일반성 있게 구성
+// 텍스처 vflip
+// 1인칭 & 3인칭 카메라 분리 구현
+// 애니메이션 + 총 달기
+// gfx에 있는 texHashMap game쪽으로 옮기기
 // Rigidbody Physics 구현
 // 텍스처 포맷, 밉 개수도 추출
 // 그림자맵 서로 다른 파이프라인간 공유할 수 있도록 바꾸기
@@ -126,6 +131,8 @@ public:
 	// 요청된 드로우콜들을 모아 객체들을 그리고 화면에 띄운다.
 	void render();
 
+	const Mesh* pointMesh() { return &pointMesh_; }
+
 
 private:
 	// 공용 샘플러들 생성
@@ -211,7 +218,9 @@ private:
 	std::vector<RequestModelLoad> requestsModelLoad_{};
 	std::vector<RequestSkyboxLoad> requestsSkyboxLoad_{};
 
-	ThreadPool* threadPool_;	// 설정되어있을 경우 멀티스레드로 동작한다.
+	Mesh pointMesh_{};
+
+	ThreadPool* threadPool_ = nullptr;	// 설정되어있을 경우 멀티스레드로 동작한다.
 };
 
 #endif	// __GFX_HPP

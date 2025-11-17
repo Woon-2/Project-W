@@ -37,7 +37,7 @@ void Camera::updateGFX(GFX& gfx) {
 	gfx.addCameraData(BillboardPipeline::CameraData{
 		.view = view_,
 		.proj = proj_,
-		.pos = position_
+		.pos = eye_
 	});
 }
 

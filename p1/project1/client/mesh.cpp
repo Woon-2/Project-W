@@ -257,7 +257,7 @@ Mesh buildCubeMesh(
     return mesh;
 }
 
-Mesh buildPointMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, std::unordered_map<std::wstring, Texture>& texHashMap, DescriptorPool& texPool, Fence& fenceToAssociate )
+Mesh buildPointMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, std::unordered_map<std::string, Texture>& texHashMap, DescriptorPool& texPool, Fence& fenceToAssociate )
 {
     static const auto positions = std::vector<XMFLOAT3>{
         XMFLOAT3(0.f, 0.f, 0.f)
@@ -273,18 +273,18 @@ Mesh buildPointMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, s
 
 	// 정점 버퍼들 구축
 	auto vbPosition = createBufferResource( device, nullptr, positions.size() * sizeof( XMFLOAT3 ), BufferCreationType::VertexBuffer );
-	setD3DName( vbPosition.Get(), L"PointMesh_VB_Position" );
+	setD3DName( vbPosition.Get(), "PointMesh_VB_Position" );
 	auto vbPositionu = createBufferResource( device, positions.data(), positions.size() * sizeof( XMFLOAT3 ), BufferCreationType::UploadBuffer );
-	setD3DName( vbPositionu.Get(), L"PointMesh_VB_Position_Upload" );
+	setD3DName( vbPositionu.Get(), "PointMesh_VB_Position_Upload" );
 
     copyResource( cmdList, vbPositionu.Get(), vbPosition.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
         D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
     );
 
 	auto vbSize = createBufferResource( device, nullptr, sizes.size() * sizeof( float ), BufferCreationType::VertexBuffer );
-	setD3DName( vbSize.Get(), L"PointMesh_VB_Size" );
+	setD3DName( vbSize.Get(), "PointMesh_VB_Size" );
 	auto vbSizeu = createBufferResource( device, sizes.data(), sizes.size() * sizeof( float ), BufferCreationType::UploadBuffer );
-	setD3DName( vbSizeu.Get(), L"PointMesh_VB_Size_Upload" );
+	setD3DName( vbSizeu.Get(), "PointMesh_VB_Size_Upload" );
 
 	copyResource( cmdList, vbSizeu.Get(), vbSize.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
         D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
@@ -292,9 +292,9 @@ Mesh buildPointMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, s
 
 	// 인덱스 버퍼 구축
 	auto ib = createBufferResource( device, nullptr, indices.size() * sizeof( u16t ), BufferCreationType::IndexBuffer );
-	setD3DName( ib.Get(), L"PointMesh_IB" );
+	setD3DName( ib.Get(), "PointMesh_IB" );
 	auto ibu = createBufferResource( device, indices.data(), indices.size() * sizeof( u16t ), BufferCreationType::UploadBuffer );
-	setD3DName( ibu.Get(), L"PointMesh_IB_Upload" );
+	setD3DName( ibu.Get(), "PointMesh_IB_Upload" );
 
 	copyResource( cmdList, ibu.Get(), ib.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
         D3D12_RESOURCE_STATE_INDEX_BUFFER 
@@ -316,38 +316,57 @@ Mesh buildPointMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, s
 		/* .StrideInBytes = */ static_cast<UINT>(sizeof( float ))
 	);
 
-    if ( !texHashMap.contains( L"PointMesh_Albedo" ) ) {
-        auto [pPair, _] = texHashMap.try_emplace( L"PointMesh_Albedo", loadTexture( device, cmdList, L"PointMesh_Albedo.dds", fenceToAssociate ) );
+    if ( !texHashMap.contains( "PointMesh_Albedo" ) ) {
+        Texture::Type type{};
+        auto [pPair, _] = texHashMap.try_emplace( "PointMesh_Albedo", loadTexture( device, cmdList, "PointMesh_Albedo.dds", fenceToAssociate, type ) );
         createSRV( device, pPair->second, texPool );
         pPair->second.idxSrv.idxSampler = etoi( Samplers::TrilinearWrap );
     }
 
 	// SubMesh 구성
-	mesh.subMeshes.try_emplace(
-		L"PointMesh_SubMesh", SubMesh{
-			.name = L"PointMesh_SubMesh",
-			.ibView = D3D12_INDEX_BUFFER_VIEW{
-			.BufferLocation = ib->GetGPUVirtualAddress(),
-			.SizeInBytes = static_cast<UINT>(indices.size() * sizeof( u16t )),
-			.Format = DXGI_FORMAT_R16_UINT
-			},
-		.material = Material{
-			.mapAlbedo = cloneTextureIdxOnly( texHashMap.at( L"PointMesh_Albedo" ) ),
-			.constantAlbedo = XMFLOAT4( 0.f, 0.f, 0.f, -1.f ),
-			.constantRoughness = 0.3f,
-			.constantMetallic = 0.15f,
-			.constantAmbientOcllusion = 0.1f,
-			.constantEmmisive = XMFLOAT3( 0.f, 0.f, 0.f )
-			}
-		}
-	);
+    // SubMesh 구성
+    mesh.subMeshes.emplace_back(
+        /* .name = */ "PointMesh_SubMesh",
+        /* .ibView = */ D3D12_INDEX_BUFFER_VIEW {
+            .BufferLocation = ib->GetGPUVirtualAddress(),
+            .SizeInBytes = static_cast<UINT>(indices.size() * sizeof(u16t)),
+            .Format = DXGI_FORMAT_R16_UINT
+        }
+    );
+
+    auto& defMaterialSet = mesh.materialSets.emplace_back(
+        /* .name = */ "PointMesh_DefaultMaterialSet",
+        /* .materials = */ std::vector<Material>{
+            Material{
+                .constantAlbedo = XMFLOAT4(0.9f, 0.9f ,0.9f, 1.f),
+                .constantRoughness = 0.3f,
+                .constantMetallic = 0.15f,
+                .constantAOStrength = 0.f,
+                .constantEmmisive = XMFLOAT3(0.f, 0.f, 0.f)
+            }
+        }
+    );
+    defMaterialSet.materials[0].mapAlbedo.idxSrv.idxRange = -1;
+    defMaterialSet.materials[0].mapAlbedo.idxUav.idxRange = -1;
+    defMaterialSet.materials[0].mapMetallicSmoothness.idxSrv.idxRange = -1;
+    defMaterialSet.materials[0].mapMetallicSmoothness.idxUav.idxRange = -1;
+    defMaterialSet.materials[0].mapNormal.idxSrv.idxRange = -1;
+    defMaterialSet.materials[0].mapNormal.idxUav.idxRange = -1;
+    defMaterialSet.materials[0].mapEmmisive.idxSrv.idxRange = -1;
+    defMaterialSet.materials[0].mapEmmisive.idxUav.idxRange = -1;
+    defMaterialSet.materials[0].mapAmbientOcclusion.idxSrv.idxRange = -1;
+    defMaterialSet.materials[0].mapAmbientOcclusion.idxUav.idxRange = -1;
+
+    defMaterialSet.materials[0].mapAlbedo = cloneTextureIdxOnly( texHashMap.at( "PointMesh_Albedo" ) );
 
 	// 자료구조 등록 (Vertex Buffer View와 SubMesh는 위에서 등록하였음)
 	mesh.vbs.push_back( std::move( vbPosition ) );
-	mesh.vbIdxMap.try_emplace( L"PointMesh_VB_Position", 0u );
+	mesh.vbIdxMap.try_emplace( "PointMesh_VB_Position", 0u );
 	mesh.vbs.push_back( std::move( vbSize ) );
-	mesh.vbIdxMap.try_emplace( L"PointMesh_VB_Size", 1u );
-	mesh.ibs.try_emplace( L"PointMesh_IB", std::move( ib ) );
+	mesh.vbIdxMap.try_emplace( "PointMesh_VB_Size", 1u );
+    mesh.ibs.push_back(std::move(ib));
+
+    gSharedLog << "[Resource Load] PointMesh 구축 완료\n";
 
 	fenceToAssociate.associatedResources_.push_back( std::move( vbPositionu ) );
 	fenceToAssociate.associatedResources_.push_back( std::move( vbSizeu ) );
@@ -356,175 +375,148 @@ Mesh buildPointMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, s
 	return mesh;
 }
 
-Mesh buildPointMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, std::unordered_map<std::wstring, Texture>& texHashMap, DescriptorPool& texPool, Fence& fenceToAssociate )
-{
-    static const auto positions = std::vector<XMFLOAT3>{
-        XMFLOAT3(0.f, 0.f, 0.f)
-	};
+// 텍스처 매핑 정보를 읽어들인다.
+// 텍스처 이름을 key로 삼아 texHashMap에 쿼리를 해보고,
+// 텍스처가 존재하지 않는다면 알아낸 경로를 통해 텍스처를 로드해 key와 함께 등록한다.
+// 로드된 텍스처로 texPool에서 srv를 할당받아 생성하고, 샘플링 정보를 추출한다.
+// 그리고 텍스처의 srv와 uav에 해당하는 bindless index에
+// 풀에서의 인덱스와 샘플러 인덱스를 채워넣는다.
+void importTexture( std::ifstream& ifs, ID3D12Device* device,
+    ID3D12GraphicsCommandList* cmdList, std::unordered_map<std::string, Texture>& texHashMap,
+    DescriptorPool& texPool, Fence& fenceToAssociate
+) {
+    std::string key{};
+    std::string path{};
+    // 기본값들로 초기화
+    D3D12_FILTER filterMode = D3D12_FILTER_MIN_MAG_MIP_POINT;
+    D3D12_TEXTURE_ADDRESS_MODE addrModeU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    D3D12_TEXTURE_ADDRESS_MODE addrModeV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    D3D12_TEXTURE_ADDRESS_MODE addrModeW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    UINT anisoLevel = 1u;
 
-    static const auto sizes = std::vector<float>{
-        1.f
-	};
+    for (;;) {
+        const auto str = readString(ifs);
+        if (isTailTag(str, "Item")) {
+            break;
+        }
 
-    static const auto indices = std::vector<u16t>{
-		0u
-	};
+        const auto tag = untagHead(str);
 
-	// 정점 버퍼들 구축
-	auto vbPosition = createBufferResource( device, nullptr, positions.size() * sizeof( XMFLOAT3 ), BufferCreationType::VertexBuffer );
-	setD3DName( vbPosition.Get(), L"PointMesh_VB_Position" );
-	auto vbPositionu = createBufferResource( device, positions.data(), positions.size() * sizeof( XMFLOAT3 ), BufferCreationType::UploadBuffer );
-	setD3DName( vbPositionu.Get(), L"PointMesh_VB_Position_Upload" );
+        // 텍스처 이름 추출
+        if (tag == "TextureName") {
+            key = readString(ifs);
+            readTailTag(ifs, "TextureName");
+        }
+        // Address Mode(Wrap Mode) 추출
+        else if (tag == "WrapModeU") {
+            const auto wrapModeUStr = readString(ifs);
+            if (wrapModeUStr == "Repeat") {
+                addrModeU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+            }
+            else if (wrapModeUStr == "Clamp") {
+                addrModeU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            }
+            else if (wrapModeUStr == "Mirror") {
+                addrModeU = D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+            }
+            else {
+                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: 알수 없는 텍스처 wrap mode "s
+                    + wrapModeUStr + "을 읽었습니다.", false
+                );
+            }
 
-    copyResource( cmdList, vbPositionu.Get(), vbPosition.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
-        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
-    );
+            readTailTag(ifs, "WrapModeU");
+        }
+        else if (tag == "WrapModeV") {
+            const auto wrapModeVStr = readString(ifs);
+            if (wrapModeVStr == "Repeat") {
+                addrModeV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+            }
+            else if (wrapModeVStr == "Clamp") {
+                addrModeV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            }
+            else if (wrapModeVStr == "Mirror") {
+                addrModeV = D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+            }
+            else {
+                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: 알수 없는 텍스처 wrap mode "s
+                    + wrapModeVStr + "을 읽었습니다.", false
+                );
+            }
 
-	auto vbSize = createBufferResource( device, nullptr, sizes.size() * sizeof( float ), BufferCreationType::VertexBuffer );
-	setD3DName( vbSize.Get(), L"PointMesh_VB_Size" );
-	auto vbSizeu = createBufferResource( device, sizes.data(), sizes.size() * sizeof( float ), BufferCreationType::UploadBuffer );
-	setD3DName( vbSizeu.Get(), L"PointMesh_VB_Size_Upload" );
+            readTailTag(ifs, "WrapModeV");
+        }
+        else if (tag == "WrapModeW") {
+            const auto wrapModeWStr = readString(ifs);
+            if (wrapModeWStr == "Repeat") {
+                addrModeW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+            }
+            else if (wrapModeWStr == "Clamp") {
+                addrModeW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            }
+            else if (wrapModeWStr == "Mirror") {
+                addrModeW = D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+            }
+            else {
+                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: 알수 없는 텍스처 wrap mode "s
+                    + wrapModeWStr + "을 읽었습니다.", false
+                );
+            }
 
-	copyResource( cmdList, vbSizeu.Get(), vbSize.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
-        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
-    );
+            readTailTag(ifs, "WrapModeW");
+        }
+        // Filter Mode 추출
+        else if (tag == "FilterMode") {
+            const auto filterModeStr = readString(ifs);
+            if (filterModeStr == "Point") {
+                filterMode = D3D12_FILTER_MIN_MAG_MIP_POINT;
+            }
+            else if (filterModeStr == "Bilinear") {
+                filterMode = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+            }
+            else if (filterModeStr == "Trilinear") {
+                filterMode = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+            }
+            else if (filterModeStr == "Anisotropic") {
+                filterMode = D3D12_FILTER_ANISOTROPIC;
+            }
+            else {
+                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: 알수 없는 텍스처 filter mode "s
+                    + filterModeStr + "을 읽었습니다.", false
+                );
+            }
 
-	// 인덱스 버퍼 구축
-	auto ib = createBufferResource( device, nullptr, indices.size() * sizeof( u16t ), BufferCreationType::IndexBuffer );
-	setD3DName( ib.Get(), L"PointMesh_IB" );
-	auto ibu = createBufferResource( device, indices.data(), indices.size() * sizeof( u16t ), BufferCreationType::UploadBuffer );
-	setD3DName( ibu.Get(), L"PointMesh_IB_Upload" );
-
-	copyResource( cmdList, ibu.Get(), ib.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
-        D3D12_RESOURCE_STATE_INDEX_BUFFER 
-    );
-
-	// 만든 버퍼들을 조합하여 메시 구축
-	auto mesh = Mesh{};
-
-	// Vertex Buffer View 구성
-	mesh.vbViews.emplace_back(
-		/* .BufferLocation = */ vbPosition->GetGPUVirtualAddress(),
-		/* .SizeInBytes = */ static_cast<UINT>(positions.size() * sizeof( XMFLOAT3 )),
-		/* .StrideInBytes = */ static_cast<UINT>(sizeof( XMFLOAT3 ))
-	);
-
-	mesh.vbViews.emplace_back(
-		/* .BufferLocation = */ vbSize->GetGPUVirtualAddress(),
-		/* .SizeInBytes = */ static_cast<UINT>(sizes.size() * sizeof( float )),
-		/* .StrideInBytes = */ static_cast<UINT>(sizeof( float ))
-	);
-
-    if ( !texHashMap.contains( L"PointMesh_Albedo" ) ) {
-        auto [pPair, _] = texHashMap.try_emplace( L"PointMesh_Albedo", loadTexture( device, cmdList, L"PointMesh_Albedo.dds", fenceToAssociate ) );
-        createSRV( device, pPair->second, texPool );
-        pPair->second.idxSrv.idxSampler = etoi( Samplers::TrilinearWrap );
+            readTailTag(ifs, "FilterMode");
+        }
+        // 비등방성 필터링 레벨(최대 레벨) 추출
+        else if (tag == "AnisoLevel") {
+            anisoLevel = static_cast<UINT>(readInteger(ifs));
+            readTailTag(ifs, "AnisoLevel");
+        }
+        // 경로 추출
+        else if (tag == "Path") {
+            path = readString(ifs);
+            readTailTag(ifs, "Path");
+        }
+        else {
+            DISPLAY_ERROR_STR(false, "[File I/O Error] importTextureMapping: 알 수 없는 태그 "s
+                + tag + "를 읽었습니다.", true
+            );
+        }
     }
 
-	// SubMesh 구성
-	mesh.subMeshes.try_emplace(
-		L"PointMesh_SubMesh", SubMesh{
-			.name = L"PointMesh_SubMesh",
-			.ibView = D3D12_INDEX_BUFFER_VIEW{
-			.BufferLocation = ib->GetGPUVirtualAddress(),
-			.SizeInBytes = static_cast<UINT>(indices.size() * sizeof( u16t )),
-			.Format = DXGI_FORMAT_R16_UINT
-			},
-		.material = Material{
-			.mapAlbedo = cloneTextureIdxOnly( texHashMap.at( L"PointMesh_Albedo" ) ),
-			.constantAlbedo = XMFLOAT4( 0.f, 0.f, 0.f, -1.f ),
-			.constantRoughness = 0.3f,
-			.constantMetallic = 0.15f,
-			.constantAmbientOcllusion = 0.1f,
-			.constantEmmisive = XMFLOAT3( 0.f, 0.f, 0.f )
-			}
-		}
-	);
+    // texHashMap에 없다면 알아낸 경로를 통해 텍스처를 load해 key와 함께 등록
+    if (!texHashMap.contains(key)) {
+        Texture::Type type{};
+        auto [pPair, _] = texHashMap.try_emplace( key, loadTexture(device, cmdList, path, fenceToAssociate, type) );
 
-	// 자료구조 등록 (Vertex Buffer View와 SubMesh는 위에서 등록하였음)
-	mesh.vbs.push_back( std::move( vbPosition ) );
-	mesh.vbIdxMap.try_emplace( L"PointMesh_VB_Position", 0u );
-	mesh.vbs.push_back( std::move( vbSize ) );
-	mesh.vbIdxMap.try_emplace( L"PointMesh_VB_Size", 1u );
-	mesh.ibs.try_emplace( L"PointMesh_IB", std::move( ib ) );
-
-	fenceToAssociate.associatedResources_.push_back( std::move( vbPositionu ) );
-	fenceToAssociate.associatedResources_.push_back( std::move( vbSizeu ) );
-	fenceToAssociate.associatedResources_.push_back( std::move( ibu ) );
-
-	return mesh;
-}
-
-// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
-std::vector<u16t> readU16s(std::ifstream& ifs, const char* tagSource) {
-    readHeadTag(ifs, tagSource);
-    auto cnt = readInteger(ifs, "Cnt");
-    auto ret = std::vector<u16t>(cnt);
-    for (int i = 0; i < cnt; ++i) {
-        ifs.read(reinterpret_cast<char*>(&ret[i]), sizeof(u16t));
-    }
-    readTailTag(ifs, tagSource);
-    return ret;
-}
-
-// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
-float readFloat(std::ifstream& ifs) {
-    float ret{};
-    ifs.read(reinterpret_cast<char*>(&ret), sizeof(float));
-    return ret;
-}
-
-// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
-float readFloat(std::ifstream& ifs, const char* tagSource) {
-    readHeadTag(ifs, tagSource);
-    float ret{};
-    ifs.read(reinterpret_cast<char*>(&ret), sizeof(float));
-    readTailTag(ifs, tagSource);
-    return ret;
-}
-
-// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
-XMFLOAT4 readColor(std::ifstream& ifs) {
-    XMFLOAT4 ret{};
-    ifs.read(reinterpret_cast<char*>(&ret), sizeof(XMFLOAT4));
-    return ret;
-}
-
-// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
-XMFLOAT4X4 readMatrix(std::ifstream& ifs, const char* tagSource) {
-    readHeadTag(ifs, tagSource);
-    XMFLOAT4X4 ret{};
-    ifs.read(reinterpret_cast<char*>(&ret), sizeof(XMFLOAT4X4));
-    readTailTag(ifs, tagSource);
-    return ret;
-}
-
-// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
-std::vector<XMFLOAT2> readVec2s(std::ifstream& ifs) {
-    auto cnt = readInteger(ifs, "Cnt");
-    auto ret = std::vector<XMFLOAT2>(cnt);
-    for (int i = 0; i < cnt; ++i) {
-        ifs.read(reinterpret_cast<char*>(&ret[i]), sizeof(XMFLOAT2));
-    }
-    return ret;
-}
-
-// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
-std::vector<XMFLOAT3> readVec3s(std::ifstream& ifs) {
-    auto cnt = readInteger(ifs, "Cnt");
-    auto ret = std::vector<XMFLOAT3>(cnt);
-    for (int i = 0; i < cnt; ++i) {
-        ifs.read(reinterpret_cast<char*>(&ret[i]), sizeof(XMFLOAT3));
-    }
-    return ret;
-}
-
-// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
-std::vector<XMFLOAT4> readVec4s(std::ifstream& ifs) {
-    auto cnt = readInteger(ifs, "Cnt");
-    auto ret = std::vector<XMFLOAT4>(cnt);
-    for (int i = 0; i < cnt; ++i) {
-        ifs.read(reinterpret_cast<char*>(&ret[i]), sizeof(XMFLOAT4));
+        // 풀에서 srv를 할당받아 생성
+        createSRV(device, pPair->second, texPool);
+        
+        // 샘플러 인덱스를 계산해서 채워넣기
+        const auto samplerIdx = calcIdxBindlessSampler(filterMode, addrModeU, addrModeV, addrModeW, anisoLevel);
+        pPair->second.idxSrv.idxSampler = samplerIdx;
+        pPair->second.idxUav.idxSampler = samplerIdx;
     }
 }
 

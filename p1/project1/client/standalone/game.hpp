@@ -13,6 +13,8 @@
 
 #include "../physics.hpp"
 
+#include "../billboard.hpp"
+
 namespace StandAlone {
 
 class Game : public IGame {
@@ -57,6 +59,8 @@ private:
 	Light dirLight_{};
 	bool playerSpawned_ = false;
 	CameraMode cameraMode_ = CameraMode::ThirdPerson;
+
+	Billboard billboard_{};
 
 	LONG mouseDeltaX_{};
 	LONG mouseDeltaY_{};

@@ -22,14 +22,14 @@ Dispatcher::Dispatcher(
 	viewport_(viewport), scissorRect_(scissorRect), rtv_(rtv), dsv_(dsv), pFence_(pFence),
 	pResources_(pResources), threadPool_(threadPool), cmdListPool_(commandListPool), drawEvents_(std::move(drawEvents)),
 	cameraData_(cameraData), frameData_( frameData ), roomIdx_(roomIdx),
-	rootParamIdxPDD_(rootSig->paramIdx(L"PerDrawcallData")),
-	rootParamIdxPID_(rootSig->paramIdx(L"PerInstanceData")),
-	rootParamIdxPFD_( rootSig->paramIdx( L"PerFrameData" ) ),
-	rootParamIdxTexPool_(rootSig->paramIdx(L"TexturePool")),
-	rootParamIdxTexArrayPool_(rootSig->paramIdx(L"TextureArrayPool")),
-	rootParamIdxTexCubePool_(rootSig->paramIdx(L"TextureCubePool")),
-	rootParamIdxSamPool_(rootSig->paramIdx(L"SamplerPool")),
-	rootParamIdxCmpSamPool_( rootSig->paramIdx( L"ComparisonSamplerPool" ) ) {}
+	rootParamIdxPDD_(rootSig->paramIdx("PerDrawcallData")),
+	rootParamIdxPID_(rootSig->paramIdx("PerInstanceData")),
+	rootParamIdxPFD_( rootSig->paramIdx( "PerFrameData" ) ),
+	rootParamIdxTexPool_(rootSig->paramIdx("TexturePool")),
+	rootParamIdxTexArrayPool_(rootSig->paramIdx("TextureArrayPool")),
+	rootParamIdxTexCubePool_(rootSig->paramIdx("TextureCubePool")),
+	rootParamIdxSamPool_(rootSig->paramIdx("SamplerPool")),
+	rootParamIdxCmpSamPool_( rootSig->paramIdx( "ComparisonSamplerPool" ) ) {}
 
 // 셰이더에서 사용하는 GPU 데이터를 갱신한다.
 // DrawEvents, CameraData에 담겨있는 정보를 가공하여
@@ -155,7 +155,7 @@ void Dispatcher::drawSingleThreaded() {
 	// 명령 컨텍스트 할당
 	CommandContext cmdCtx{};
 	DISPLAY_ERROR_STR( cmdListPool_->allocOne( CommandListUsage::RenderingSlave, cmdCtx ),
-		L"[GFX Error] GFX::drawSingleThreaded: 요청한 명령 리스트를 할당받지 못했습니다.", false
+		"[GFX Error] GFX::drawSingleThreaded: 요청한 명령 리스트를 할당받지 못했습니다.", false
 	);
 	if ( !cmdCtx.cmdList ) {
 		return;
@@ -226,7 +226,7 @@ void Dispatcher::drawSingleThreaded() {
 		//  어차피 바인드는 GPU 명령이라 바로 실행되지 않기 때문에)
 		auto perDrawcallData = BillboardShader::PerDrawcallData{
 			.material = BillboardShader::Material{
-				.idxAlbedo = drawEvent.subMesh->material.mapAlbedo.idxSrv
+				.idxAlbedo = drawEvent.material->mapAlbedo.idxSrv
 			},
 			.firstInstanceIdx = idxDrawcall
 		};
@@ -290,7 +290,7 @@ void Dispatcher::drawMultiThreaded() {
 	);
 
 	DISPLAY_ERROR_STR( allocatedCmdListCnt == requiredCmdListCnt,
-		L"[GFX Error] GFX::renderSampleShaderDispatch: 요청한 수 만큼의 명령 리스트를 할당받지 못했습니다.",
+		"[GFX Error] GFX::renderSampleShaderDispatch: 요청한 수 만큼의 명령 리스트를 할당받지 못했습니다.",
 		false
 	);
 	if ( allocatedCmdListCnt != requiredCmdListCnt ) {
@@ -451,7 +451,7 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 
 			auto perDrawcallData = BillboardShader::PerDrawcallData{
 				.material = BillboardShader::Material{
-					.idxAlbedo = drawEvent.subMesh->material.mapAlbedo.idxSrv
+					.idxAlbedo = drawEvent.material->mapAlbedo.idxSrv
 				},
 				.firstInstanceIdx = static_cast<u32t>(idxDrawcall)
 			};

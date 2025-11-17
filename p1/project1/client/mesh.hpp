@@ -87,7 +87,7 @@ Mesh buildCubeMesh(
 // @return Mesh
 Mesh buildPointMesh(
 	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
-	std::unordered_map<std::wstring, Texture>& texHashMap,
+	std::unordered_map<std::string, Texture>& texHashMap,
 	DescriptorPool& texPool, Fence& fenceToAssociate
 );
 

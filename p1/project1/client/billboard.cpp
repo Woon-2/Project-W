@@ -10,13 +10,8 @@ void Billboard::render( GFX& gfx ) {
 		gfx.addDrawEvent( BillboardPipeline::DrawEvent{
 			.world = world_,
 			.mesh = pMesh_,
-			.subMesh = &pMesh_->subMeshes.at( L"PointMesh_SubMesh" )
+			.subMesh = &pMesh_->subMeshes[0],
+			.material = &pMesh_->materialSets[0].materials[0]
 		} );
-	}
-}
-
-void MU_CALLCONV Billboard::setPos( mu::Vec3 newPos ) {
-	for ( auto& snapshot : physicSnapshots_ ) {
-		snapshot.pos = newPos;
 	}
 }

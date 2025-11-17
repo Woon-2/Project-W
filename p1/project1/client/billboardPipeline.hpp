@@ -8,6 +8,8 @@ class RootSig;
 
 struct Mesh;
 struct SubMesh;
+struct Material;
+
 namespace BillboardShader { 
 	struct PerInstanceData;
 }
@@ -30,15 +32,21 @@ struct DrawEvent {
 	mu::Mat4x4 world;
 	const Mesh* mesh;
 	const SubMesh* subMesh;
+	const Material* material;
 
 	// 이 함수로 인해 DrawEvent 정렬 시
 	// 같은 메시를 공유하는 DrawEvent들끼리 1차적,
-	// 같은 서브메시를 공유하는 DrawEvent들끼리 2차적으로 모이게 된다.
+	// 같은 서브메시를 공유하는 DrawEvent들끼리 2차적,
+	// 같은 재질을 공유하는 DrawEvent들끼리 3차적으로 모이게 된다.
 	// 이는 인스턴싱에 용이하다.
 	auto operator<=>(const DrawEvent& rhs) const noexcept {
 		auto e = mesh <=> rhs.mesh;
-		if ( (mesh <=> rhs.mesh) == std::strong_ordering::equal ) {
-			return subMesh <=> rhs.subMesh;
+		if ( e == std::strong_ordering::equal ) {
+			auto e2 = subMesh <=> rhs.subMesh;
+			if (e2 == std::strong_ordering::equal) {
+				return material <=> rhs.material;
+			}
+			return e2;
 		}
 		return e;
 	}
