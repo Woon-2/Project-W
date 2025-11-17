@@ -29,6 +29,11 @@ public:
 	LRESULT receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) override;
 
 private:
+	enum class CameraMode {
+		FirstPerson,
+		ThirdPerson
+	};
+
 	void processInput(Milliseconds deltaTime);
 
 	void importNode(std::ifstream& ifs);
@@ -51,6 +56,7 @@ private:
 	mu::Radian cameraPitch_ = 0.f;
 	Light dirLight_{};
 	bool playerSpawned_ = false;
+	CameraMode cameraMode_ = CameraMode::ThirdPerson;
 
 	LONG mouseDeltaX_{};
 	LONG mouseDeltaY_{};

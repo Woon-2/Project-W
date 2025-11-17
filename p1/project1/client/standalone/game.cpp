@@ -267,25 +267,61 @@ void Game::processInput(Milliseconds deltaTime) {
 	if ( keyboardState_['D'] & 0x80 ) {
 		player_->setPos( player_->pos( ) + player_->right() * 0.01f );
 	}
+	if ( keyboardState_['1'] & 0x80 ) {
+		camera_.setOffsetFromTargetPreRotation( mu::NQuat{} );
+		camera_.setOffsetFromTarget( mu::Vec3( 0.f, 2.f, 0.5f ) );
+		camera_.setOffsetTargetPivot( mu::Vec3(0.f, 2.f, 8.f));
+		cameraMode_ = CameraMode::FirstPerson;
+	} 
+	if ( keyboardState_['3'] & 0x80 ) {
+		camera_.setXXPreRotation( mu::NQuat{} );
+		camera_.setOffsetFromTarget( mu::Vec3( 0.f, 1.8f, -2.5f ) );
+		camera_.setOffsetTargetPivot( mu::Vec3(0.f, 1.f, 0.f));
+		cameraMode_ = CameraMode::ThirdPerson;
+	} 
 
     const auto mouseSensitivity = mu::pi * 2.f;
 
-	auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f),
-		mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left))	
-	);
+	switch (cameraMode_) {
+	case CameraMode::ThirdPerson: {
+		auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f),
+			mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left))	
+		);
 
-	player_->setOrient(player_->orient() * yaw);
+		player_->setOrient(player_->orient() * yaw);
 
-	cameraPitch_ = std::clamp(
-		static_cast<float>(cameraPitch_) + mouseDeltaY_ * mouseSensitivity / static_cast<float>(gClientRect.bottom - gClientRect.top),
-		-mu::pi * 0.16f,
-		mu::pi * 0.24f
-	);
+		cameraPitch_ = std::clamp(
+			static_cast<float>(cameraPitch_) + mouseDeltaY_ * mouseSensitivity / static_cast<float>(gClientRect.bottom - gClientRect.top),
+			-mu::pi * 0.16f,
+			mu::pi * 0.3f
+		);
 
-	camera_.setOffsetFromTargetPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, mu::Radian(0.f)) );
+		camera_.setOffsetFromTargetPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, mu::Radian(0.f)) );
 
-	mouseDeltaX_ = 0;
-	mouseDeltaY_ = 0;
+		mouseDeltaX_ = 0;
+		mouseDeltaY_ = 0;
+		break;
+	}
+	case CameraMode::FirstPerson: {
+		auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f),
+			mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left))	
+		);
+
+		player_->setOrient(player_->orient() * yaw);
+
+		cameraPitch_ = std::clamp(
+			static_cast<float>(cameraPitch_) + mouseDeltaY_ * mouseSensitivity / static_cast<float>(gClientRect.bottom - gClientRect.top),
+			-mu::pi * 0.16f,
+			mu::pi * 0.3f
+		);
+
+		camera_.setXXPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, mu::Radian(0.f)) );
+
+		mouseDeltaX_ = 0;
+		mouseDeltaY_ = 0;
+		break;
+	}
+	}
 }
 
 }	// namespace StandAlone

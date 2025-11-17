@@ -12,7 +12,6 @@
 #include "BVPipeline.hpp"
 
 
-// 그림자맵 주석 작성
 // 2000, lightPos 처리 등 좀 더 표현력, 일반성 있게 구성
 // 텍스처 vflip
 // 1인칭 & 3인칭 카메라 분리 구현

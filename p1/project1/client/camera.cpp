@@ -11,7 +11,8 @@ void Camera::update() {
 	// 타겟 오브젝트의 회전 적용
 	rotatedOffsetFromTarget = pTarget->orient().rotate(rotatedOffsetFromTarget);
 	// 타겟 오브젝트에 대한 카메라의 초점 오프셋 적용
-	auto rotatedOffsetTargetPivot = pTarget->orient().rotate(offsetTargetPivot_);
+	auto rotatedOffsetTargetPivot = xxPreRotation_.rotate(offsetTargetPivot_);
+	rotatedOffsetTargetPivot = pTarget->orient().rotate(rotatedOffsetTargetPivot);
 
 	eye_ = pTarget->pos() + rotatedOffsetFromTarget;
 	at_ = pTarget->pos() + rotatedOffsetTargetPivot;
