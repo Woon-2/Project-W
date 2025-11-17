@@ -24,7 +24,7 @@ Game::Game() {
 	gfx_.setupDXGI(D3D_FEATURE_LEVEL_12_1);
 	gfx_.init();
 	gfx_.createSwapChain();
-	gfx_.setThreadPool(&threadPool_);
+	// gfx_.setThreadPool(&threadPool_);
 
 	assetManager_.loadGFXAssets(gfx_);
 }
@@ -179,6 +179,7 @@ void Game::update(Milliseconds deltaTime) {
 	player_->update(deltaTime, tPhysicInterpolation);
 	camera_.update();
 	dirLight_.update(deltaTime);
+	billboard_->update( deltaTime );
 }
 
 void Game::render() {
@@ -189,6 +190,7 @@ void Game::render() {
 	skybox_.render(gfx_);
 	camera_.updateGFX(gfx_);
 	dirLight_.render(gfx_);
+	billboard_->render( gfx_ );
 
 	auto frameData = PBRPipeline::FrameData{
 		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )

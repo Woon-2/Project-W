@@ -20,6 +20,7 @@ CompiledShaderOutput compileShader(const std::filesystem::path& path,
 ComPtr<ID3D12PipelineState> createSampleShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createShadowMapShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createBillboardShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 
@@ -138,6 +139,36 @@ struct PerFrameData {
 	XMFLOAT4X4 lightVP;
 };
 }	// namespace PBRShader
+
+// BillboardShader
+namespace BillboardShader {
+
+struct Material {
+	BindlessIndex idxAlbedo;
+	BindlessIndex idxRoughness;
+	BindlessIndex idxMetallic;
+
+	XMFLOAT4 cAlbedo;
+	float cRoughness;
+	float cMetallic;
+};
+
+struct PerInstanceData {
+	XMFLOAT4X4 world;
+};
+
+struct PerDrawcallData {
+	Material material;
+	u32t firstInstanceIdx;
+};
+
+struct PerFrameData {
+	XMFLOAT4X4 vp;
+	XMFLOAT3 cameraPosV;
+	float padding0;
+};
+
+}	// namespace BillboardShader
 
 // ShadowMapShader
 namespace ShadowMapShader {

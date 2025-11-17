@@ -229,6 +229,7 @@ void GFX::init() {
 	shaders_.try_emplace("SampleShader", createSampleShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("ShadowMapShader", createShadowMapShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRShader", createPBRShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("BillboardShader", createBillboardShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("SkyboxShader", createSkyboxShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("BVShader", createBVShader(device_.Get(), defaultRootSig.get()));
 
@@ -381,6 +382,17 @@ void GFX::createSwapChain() {
 	resourcesBVPipeline_.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(BVShader::PerDrawcallData), 1000u, backBuffers_.size(), "BV_PerDrawcallData"
 	);
+	// Billboard Pipeline ----
+	resourcesBillboardPipeline_.perInstanceData.init(
+		device_.Get(), sizeof( BillboardShader::PerInstanceData ) * 1u, backBuffers_.size(), "Billboard_PerInstanceData"
+	);
+	resourcesBillboardPipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof( BillboardShader::PerDrawcallData ), 1u, backBuffers_.size(), "Billboard_PerDrawcallData"
+	);
+	resourcesBillboardPipeline_.perFrameData.init(
+		device_.Get(), sizeof( BillboardShader::PerFrameData ), backBuffers_.size(), "Billboard_PerFrameData"
+	);
+
 
 	// 프레임 펜스 생성
 	// i번째 프레임을 렌더링한 후 i-(백버퍼 수 - 1)번째 프레임의 펜스를 기다리도록 한다.
@@ -426,6 +438,36 @@ void GFX::addLightData(const PBRPipeline::LightData& lightData) {
 // 프레임 데이터를 입력한다.
 void GFX::addFrameData(const PBRPipeline::FrameData& frameData) {
 	frameDataPBRPipeline_ = frameData;
+}
+
+// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+void GFX::addDrawEvent( const BillboardPipeline::DrawEvent& drawEvent ) {
+	drawEventsBillboardPipeline_.push_back( drawEvent );
+}
+
+// 카메라 데이터를 입력한다.
+void GFX::addCameraData( const BillboardPipeline::CameraData& cameraData ) {
+	cameraDataBillboardPipeline_ = cameraData;
+}
+
+// 프레임 데이터를 입력한다.
+void GFX::addFrameData( const BillboardPipeline::FrameData& frameData ) {
+	frameDataBillboardPipeline_ = frameData;
+}
+
+// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+void GFX::addDrawEvent( const BillboardPipeline::DrawEvent& drawEvent ) {
+	drawEventsBillboardPipeline_.push_back( drawEvent );
+}
+
+// 카메라 데이터를 입력한다.
+void GFX::addCameraData( const BillboardPipeline::CameraData& cameraData ) {
+	cameraDataBillboardPipeline_ = cameraData;
+}
+
+// 프레임 데이터를 입력한다.
+void GFX::addFrameData( const BillboardPipeline::FrameData& frameData ) {
+	frameDataBillboardPipeline_ = frameData;
 }
 
 void GFX::addRequestModelLoad(const RequestModelLoad& request) {
@@ -637,6 +679,20 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	// Billboard Pipeline의 Dispatch
+	auto billboardPipelineDispatcher = BillboardPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at( L"DefaultRootSignature" ), shaders_.at( L"BillboardShader" ),
+		cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesBillboardPipeline_, threadPool_, 
+		&cmdListPool_, std::move( drawEventsBillboardPipeline_ ),
+		cameraDataBillboardPipeline_, frameDataBillboardPipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
 	// Bounding Volume Pipeline의 Dispatch
 	auto bvPipelineDispatcher = BVPipeline::Dispatcher(
 		tmpDescriptorHeaps, rootSigs_.at("DefaultRootSignature"),
@@ -661,6 +717,10 @@ void GFX::render() {
 		bvPipelineDispatcher.updateGPUDataSingleThreaded();
 		bvPipelineDispatcher.drawSingleThreaded();
 		dumpLog();
+
+		billboardPipelineDispatcher.updateGPUDataSingleThreaded();
+		billboardPipelineDispatcher.drawSingleThreaded();
+		dumpLog();
 	}
 	else {
 		samplePipelineDispatcher.updateGPUDataMultiThreaded();
@@ -674,6 +734,10 @@ void GFX::render() {
 
 		bvPipelineDispatcher.updateGPUDataMultiThreaded();
 		bvPipelineDispatcher.drawMultiThreaded();
+		dumpLog();
+
+		billboardPipelineDispatcher.updateGPUDataMultiThreaded();
+		billboardPipelineDispatcher.drawMultiThreaded();
 		dumpLog();
 	}
 

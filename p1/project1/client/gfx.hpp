@@ -8,15 +8,11 @@
 
 #include "samplePipeline.hpp"
 #include "pbrPipeline.hpp"
+#include "billboardPipeline.hpp"
 #include "skyboxPipeline.hpp"
 #include "BVPipeline.hpp"
 
 
-// 2000, lightPos 처리 등 좀 더 표현력, 일반성 있게 구성
-// 텍스처 vflip
-// 1인칭 & 3인칭 카메라 분리 구현
-// 애니메이션 + 총 달기
-// gfx에 있는 texHashMap game쪽으로 옮기기
 // Rigidbody Physics 구현
 // 텍스처 포맷, 밉 개수도 추출
 // 그림자맵 서로 다른 파이프라인간 공유할 수 있도록 바꾸기
@@ -106,6 +102,12 @@ public:
 	// 프레임 데이터를 입력한다.
 	void addFrameData(const PBRPipeline::FrameData& frameData);
 	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+	void addDrawEvent( const BillboardPipeline::DrawEvent& drawEvent );
+	// 카메라 데이터를 입력한다.
+	void addCameraData( const BillboardPipeline::CameraData& cameraData );
+	// 프레임 데이터를 입력한다.
+	void addFrameData( const BillboardPipeline::FrameData& frameData );
+	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 	void addDrawEvent(const SkyboxPipeline::DrawEvent& drawEvent);
 	// 카메라 데이터를 입력한다.
 	void addCameraData(const SkyboxPipeline::CameraData& cameraData);
@@ -119,7 +121,6 @@ public:
 
 	// 파이프라인들이 자체적으로 사용하는 리소스들과
 	// addRequestXXLoad 꼴의 함수로 요청된 리소스들을 로드한다.
-	// 
 	void loadAssets();
 
 	// 요청된 드로우콜들을 모아 객체들을 그리고 화면에 띄운다.
@@ -197,6 +198,11 @@ private:
 	std::vector<BVPipeline::DrawEvent> drawEventsBVPipeline_{};
 	BVPipeline::Resources resourcesBVPipeline_{};
 	BVPipeline::CameraData cameraDataBVPipeline_{};
+	// Billboard Pipeline
+	std::vector<BillboardPipeline::DrawEvent> drawEventsBillboardPipeline_{};
+	BillboardPipeline::Resources resourcesBillboardPipeline_{};
+	BillboardPipeline::CameraData cameraDataBillboardPipeline_{};
+	BillboardPipeline::FrameData frameDataBillboardPipeline_{};
 
 	std::map<std::string, Fence> fences_{};
 
