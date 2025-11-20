@@ -5,6 +5,91 @@
 
 namespace BillboardPipeline {
 
+namespace Detail {
+	std::vector<ComPtr<ID3D12Resource>> staticVBPoints;
+	std::vector<D3D12_VERTEX_BUFFER_VIEW> staticVBViewPoints;
+	std::map<std::string, u32t> staticVBIdxMapPoints;
+	ComPtr<ID3D12Resource> staticIBPoint;
+	D3D12_INDEX_BUFFER_VIEW staticIBViewPoint;
+}	// namespace BillboardPipeline::Detail
+
+void initStaticPointMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, Fence& fenceToAssociate ) {
+	static const auto positions = std::vector<XMFLOAT3>{
+	XMFLOAT3( 0.f, 0.f, 0.f )
+	};
+
+	static const auto sizes = std::vector<float>{
+		1.f
+	};
+
+	static const auto indices = std::vector<u16t>{
+		0u
+	};
+
+	// 정점 버퍼들 구축
+	auto vbPosition = createBufferResource( device, nullptr, positions.size() * sizeof( XMFLOAT3 ), BufferCreationType::VertexBuffer );
+	setD3DName( vbPosition.Get(), "PointMesh_VB_Position" );
+	auto vbPositionu = createBufferResource( device, positions.data(), positions.size() * sizeof( XMFLOAT3 ), BufferCreationType::UploadBuffer );
+	setD3DName( vbPositionu.Get(), "PointMesh_VB_Position_Upload" );
+
+	copyResource( cmdList, vbPositionu.Get(), vbPosition.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
+		D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+	);
+
+	auto vbSize = createBufferResource( device, nullptr, sizes.size() * sizeof( float ), BufferCreationType::VertexBuffer );
+	setD3DName( vbSize.Get(), "PointMesh_VB_Size" );
+	auto vbSizeu = createBufferResource( device, sizes.data(), sizes.size() * sizeof( float ), BufferCreationType::UploadBuffer );
+	setD3DName( vbSizeu.Get(), "PointMesh_VB_Size_Upload" );
+
+	copyResource( cmdList, vbSizeu.Get(), vbSize.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
+		D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+	);
+
+	// 인덱스 버퍼 구축
+	auto ib = createBufferResource( device, nullptr, indices.size() * sizeof( u16t ), BufferCreationType::IndexBuffer );
+	setD3DName( ib.Get(), "PointMesh_IB" );
+	auto ibu = createBufferResource( device, indices.data(), indices.size() * sizeof( u16t ), BufferCreationType::UploadBuffer );
+	setD3DName( ibu.Get(), "PointMesh_IB_Upload" );
+
+	copyResource( cmdList, ibu.Get(), ib.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
+		D3D12_RESOURCE_STATE_INDEX_BUFFER
+	);
+
+	// 만든 버퍼들을 조합하여 메시 구축
+	// Vertex Buffer View 구성
+	Detail::staticVBViewPoints.emplace_back(
+		/* .BufferLocation = */ vbPosition->GetGPUVirtualAddress(),
+		/* .SizeInBytes = */ static_cast<UINT>(positions.size() * sizeof( XMFLOAT3 )),
+		/* .StrideInBytes = */ static_cast<UINT>(sizeof( XMFLOAT3 ))
+	);
+
+	Detail::staticVBViewPoints.emplace_back(
+		/* .BufferLocation = */ vbSize->GetGPUVirtualAddress(),
+		/* .SizeInBytes = */ static_cast<UINT>(sizes.size() * sizeof( float )),
+		/* .StrideInBytes = */ static_cast<UINT>(sizeof( float ))
+	);
+
+	// SubMesh 구성
+	Detail::staticIBViewPoint = D3D12_INDEX_BUFFER_VIEW{
+		.BufferLocation = ib->GetGPUVirtualAddress(),
+		.SizeInBytes = static_cast<UINT>(indices.size() * sizeof( u16t )),
+		.Format = DXGI_FORMAT_R16_UINT
+	};
+
+	// 자료구조 등록 (Vertex Buffer View와 SubMesh는 위에서 등록하였음)
+	Detail::staticVBPoints.push_back( std::move( vbPosition ) );
+	Detail::staticVBIdxMapPoints.try_emplace( "PointMesh_VB_Position", 0u );
+	Detail::staticVBPoints.push_back( std::move( vbSize ) );
+	Detail::staticVBIdxMapPoints.try_emplace( "PointMesh_VB_Size", 1u );
+	Detail::staticIBPoint = std::move( ib );
+
+	gSharedLog << "[Resource Load] BillboardPipeline Static Point Mesh 구축 완료\n";
+
+	fenceToAssociate.associatedResources_.push_back( std::move( vbPositionu ) );
+	fenceToAssociate.associatedResources_.push_back( std::move( vbSizeu ) );
+	fenceToAssociate.associatedResources_.push_back( std::move( ibu ) );
+}
+
 // GFX 객체로부터 필요한 인자들을 전달받자.
 Dispatcher::Dispatcher(
 	const std::vector<ComPtr<ID3D12DescriptorHeap>>& descriptorHeaps,
@@ -226,7 +311,7 @@ void Dispatcher::drawSingleThreaded() {
 		//  어차피 바인드는 GPU 명령이라 바로 실행되지 않기 때문에)
 		auto perDrawcallData = BillboardShader::PerDrawcallData{
 			.material = BillboardShader::Material{
-				.idxAlbedo = drawEvent.material->mapAlbedo.idxSrv
+				.idxAlbedo = drawEvent.pTex->idxSrv,
 			},
 			.firstInstanceIdx = idxDrawcall
 		};
@@ -234,15 +319,15 @@ void Dispatcher::drawSingleThreaded() {
 			roomIdx_, &perDrawcallData, 1u
 		);
 
-		DISPLAY_ERROR_DX_VOID(
-			cmdList->IASetVertexBuffers( 0u, static_cast<UINT>(drawEvent.mesh->vbViews.size()),
-				drawEvent.mesh->vbViews.data()
-			), false
+		DISPLAY_ERROR_DX_VOID( 
+			cmdList->IASetVertexBuffers( 0u, static_cast<UINT>(Detail::staticVBViewPoints.size()),
+				Detail::staticVBViewPoints.data()
+			),	false 
 		);
-		DISPLAY_ERROR_DX_VOID( cmdList->IASetIndexBuffer( &drawEvent.subMesh->ibView ), false );
+		DISPLAY_ERROR_DX_VOID( cmdList->IASetIndexBuffer( &Detail::staticIBViewPoint ), false );
 
 		DISPLAY_ERROR_DX_VOID( cmdList->DrawIndexedInstanced(
-			static_cast<UINT>(drawEvent.subMesh->ibView.SizeInBytes / sizeof( u16t )),
+			static_cast<UINT>(Detail::staticIBViewPoint.SizeInBytes / sizeof( u16t )),
 			1u, 0u, 0, 0u
 		), false );
 
@@ -451,7 +536,7 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 
 			auto perDrawcallData = BillboardShader::PerDrawcallData{
 				.material = BillboardShader::Material{
-					.idxAlbedo = drawEvent.material->mapAlbedo.idxSrv
+					.idxAlbedo = drawEvent.pTex->idxSrv
 				},
 				.firstInstanceIdx = static_cast<u32t>(idxDrawcall)
 			};
@@ -463,14 +548,14 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 			);
 
 			DISPLAY_ERROR_DX_VOID(
-				threadCmdList->IASetVertexBuffers( 0u, static_cast<UINT>(drawEvent.mesh->vbViews.size()),
-					drawEvent.mesh->vbViews.data()
+				threadCmdList->IASetVertexBuffers( 0u, static_cast<UINT>(Detail::staticVBViewPoints.size()),
+					Detail::staticVBViewPoints.data()
 				), false
 			);
-			DISPLAY_ERROR_DX_VOID( threadCmdList->IASetIndexBuffer( &drawEvent.subMesh->ibView ), false );
+			DISPLAY_ERROR_DX_VOID( threadCmdList->IASetIndexBuffer( &Detail::staticIBViewPoint ), false );
 
 			DISPLAY_ERROR_DX_VOID( threadCmdList->DrawIndexedInstanced(
-				static_cast<UINT>(drawEvent.subMesh->ibView.SizeInBytes / sizeof( u16t )),
+				static_cast<UINT>(Detail::staticIBViewPoint.SizeInBytes / sizeof( u16t )),
 				1u, 0u, 0, 0u
 			), false );
 		}

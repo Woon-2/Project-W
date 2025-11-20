@@ -200,6 +200,7 @@
     <ClInclude Include="skybox.hpp" />
     <ClInclude Include="skyboxPipeline.hpp" />
     <ClInclude Include="SocketUtils.hpp" />
+    <ClInclude Include="spriteAnimation.hpp" />
     <ClInclude Include="standalone\game.hpp" />
     <ClInclude Include="texloader\DDSTextureLoader12.h" />
     <ClInclude Include="threadPool.hpp" />
@@ -242,6 +243,7 @@
     <ClCompile Include="skybox.cpp" />
     <ClCompile Include="skyboxPipeline.cpp" />
     <ClCompile Include="SocketUtils.cpp" />
+    <ClCompile Include="spriteAnimation.cpp" />
     <ClCompile Include="standalone\game.cpp" />
     <ClCompile Include="texloader\DDSTextureLoader12.cpp" />
     <ClCompile Include="threadPool.cpp" />

@@ -57,6 +57,10 @@ struct RequestSkyboxLoad {
 	Skybox* pDest;
 };
 
+struct RequestTextureLoad {
+	Texture* pDest;
+};
+
 // 렌더링을 총괄 책임지는 클래스
 // - 장치 초기화: setupDXGI, init, createSwapChain
 // - 객체 그리기: addDrawEvent로 객체마다 그려지길 원하는 파이프라인에 등록,
@@ -123,6 +127,7 @@ public:
 
 	void addRequestModelLoad(const RequestModelLoad& request);
 	void addRequestSkyboxLoad(const RequestSkyboxLoad& request);
+	void addRequestTextureLoad( const RequestTextureLoad& request );
 
 	// 파이프라인들이 자체적으로 사용하는 리소스들과
 	// addRequestXXLoad 꼴의 함수로 요청된 리소스들을 로드한다.
@@ -130,9 +135,6 @@ public:
 
 	// 요청된 드로우콜들을 모아 객체들을 그리고 화면에 띄운다.
 	void render();
-
-	const Mesh* pointMesh() { return &pointMesh_; }
-
 
 private:
 	// 공용 샘플러들 생성
@@ -181,6 +183,7 @@ private:
 	DescriptorPool cmpSamPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
 
 	std::unordered_map<std::string, Texture> texHashMap_{};
+	std::unordered_map<std::string, std::vector<Texture>> texAnimHashMap_{};
 
 	// 루트 시그너처와 셰이더들
 	std::map<std::string, std::shared_ptr<RootSig>> rootSigs_{};
@@ -217,8 +220,8 @@ private:
 
 	std::vector<RequestModelLoad> requestsModelLoad_{};
 	std::vector<RequestSkyboxLoad> requestsSkyboxLoad_{};
-
-	Mesh pointMesh_{};
+	std::vector<RequestTextureLoad> requestsTextureLoad_{};
+	
 
 	ThreadPool* threadPool_ = nullptr;	// 설정되어있을 경우 멀티스레드로 동작한다.
 };

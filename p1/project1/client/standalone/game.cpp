@@ -64,13 +64,13 @@ void Game::setupStage() {
 		0.1f, 500.f
 	);
 
-	billboard_.setMesh(gfx_.pointMesh());
-
 	for (auto& cube : cubes_) {
 		cube.enableBVRendering();
 	}
 
 	player_->enableBVRendering();
+
+	billboard_.setTexture( assetManager_.billBoard0() );
 }
 
 void Game::importNode(std::ifstream& ifs) {

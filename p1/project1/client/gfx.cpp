@@ -384,10 +384,10 @@ void GFX::createSwapChain() {
 	);
 	// Billboard Pipeline ----
 	resourcesBillboardPipeline_.perInstanceData.init(
-		device_.Get(), sizeof( BillboardShader::PerInstanceData ) * 1u, backBuffers_.size(), "Billboard_PerInstanceData"
+		device_.Get(), sizeof( BillboardShader::PerInstanceData ) * 2u, backBuffers_.size(), "Billboard_PerInstanceData"
 	);
 	resourcesBillboardPipeline_.perDrawcallData = createConstantBufferArray(
-		device_.Get(), sizeof( BillboardShader::PerDrawcallData ), 1u, backBuffers_.size(), "Billboard_PerDrawcallData"
+		device_.Get(), sizeof( BillboardShader::PerDrawcallData ), 2u, backBuffers_.size(), "Billboard_PerDrawcallData"
 	);
 	resourcesBillboardPipeline_.perFrameData.init(
 		device_.Get(), sizeof( BillboardShader::PerFrameData ), backBuffers_.size(), "Billboard_PerFrameData"
@@ -463,6 +463,11 @@ void GFX::addRequestSkyboxLoad(const RequestSkyboxLoad& request) {
 	requestsSkyboxLoad_.push_back(request);
 }
 
+void GFX::addRequestTextureLoad( const RequestTextureLoad& request )
+{
+	requestsTextureLoad_.push_back( request );
+}
+
 // 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 void GFX::addDrawEvent(const SkyboxPipeline::DrawEvent& drawEvent) {
 	drawEventsSkyboxPipeline_.push_back(drawEvent);
@@ -504,7 +509,8 @@ void GFX::loadAssets() {
 	// 명령 리스트 초기화
 	DISPLAY_ERROR_DX_VOID(cmdAlloc->Reset(), false);
 	DISPLAY_ERROR_DX_VOID(cmdList->Reset(cmdAlloc.Get(), nullptr), false);
-
+	
+	BillboardPipeline::initStaticPointMesh( device_.Get(), cmdList.Get(), fence );
 	BVPipeline::initStaticModels(device_.Get(), cmdList.Get(), fence);
 	PBRPipeline::initShadowTextures(device_.Get(), 2000u, 2000u, backBuffers_.size(), srvTexPool_, dsvPool_);
 
@@ -523,7 +529,18 @@ void GFX::loadAssets() {
 
 	dumpLog();
 
-	pointMesh_ = buildPointMesh(device_.Get(), cmdList.Get(), texHashMap_, srvTexPool_, fence);
+	if ( !texHashMap_.contains( "PointMesh_Albedo" ) ) {
+		Texture::Type type{};
+		auto [pPair, _] = texHashMap_.try_emplace( "PointMesh_Albedo", loadTexture( device_.Get(), cmdList.Get(), "PointMesh_Albedo.dds", fence, type));
+		createSRV( device_.Get(), pPair->second, srvTexPool_ );
+		pPair->second.idxSrv.idxSampler = etoi( Samplers::TrilinearWrap );
+	}
+	
+	for ( auto& request : requestsTextureLoad_ ) {
+		*request.pDest = texHashMap_.at( "PointMesh_Albedo" );
+	}
+
+	dumpLog();
 
 	// 명령 기록 끝, 명령 실행
 	DISPLAY_ERROR_DX_VOID(cmdList->Close(), false);

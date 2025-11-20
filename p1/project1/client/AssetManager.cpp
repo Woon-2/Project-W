@@ -16,5 +16,9 @@ void AssetManager::loadGFXAssets(GFX& gfx) {
 		.pDest = &skyboxMaterial_
 	} );
 
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.pDest = &billBoard0_
+		} );
+
 	gfx.loadAssets();
 }

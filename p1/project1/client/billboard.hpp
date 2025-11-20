@@ -6,13 +6,13 @@
 
 class Billboard {
 public:
-	void setMesh( const Mesh* pMesh ) { pMesh_ = pMesh; }
+	void setTexture( const Texture* pTex ) { pTex_ = pTex; }
 	void update( Milliseconds deltaTime );
 	void render( GFX& gfx );
 
 private:
 	mu::Mat4x4 world_{};	// GFX에 행렬을 전달할 때만 사용된다.
-	const Mesh* pMesh_ = nullptr;
+	const Texture* pTex_ = nullptr;
 };
 
 

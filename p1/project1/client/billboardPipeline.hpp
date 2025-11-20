@@ -16,6 +16,8 @@ namespace BillboardShader {
 
 namespace BillboardPipeline {
 
+void initStaticPointMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, Fence& fenceToAssociate );
+
 struct CameraData {
 	mu::Mat4x4 view;
 	mu::Mat4x4 proj;
@@ -30,25 +32,10 @@ struct FrameData {
 
 struct DrawEvent {
 	mu::Mat4x4 world;
-	const Mesh* mesh;
-	const SubMesh* subMesh;
-	const Material* material;
+	const Texture* pTex;
 
-	// 이 함수로 인해 DrawEvent 정렬 시
-	// 같은 메시를 공유하는 DrawEvent들끼리 1차적,
-	// 같은 서브메시를 공유하는 DrawEvent들끼리 2차적,
-	// 같은 재질을 공유하는 DrawEvent들끼리 3차적으로 모이게 된다.
-	// 이는 인스턴싱에 용이하다.
-	auto operator<=>(const DrawEvent& rhs) const noexcept {
-		auto e = mesh <=> rhs.mesh;
-		if ( e == std::strong_ordering::equal ) {
-			auto e2 = subMesh <=> rhs.subMesh;
-			if (e2 == std::strong_ordering::equal) {
-				return material <=> rhs.material;
-			}
-			return e2;
-		}
-		return e;
+	auto operator<=>( const DrawEvent& rhs ) const noexcept {
+		return std::strong_ordering::equal;
 	}
 };
 
@@ -162,5 +149,12 @@ private:
 
 }	// namespace BillboardPipeline
 
+namespace Detail {
+	extern std::vector<ComPtr<ID3D12Resource>> staticVBPoints;
+	extern std::vector<D3D12_VERTEX_BUFFER_VIEW> staticVBViewPoints;
+	extern std::map<std::string, u32t> staticVBIdxMapPoints;
+	extern ComPtr<ID3D12Resource> staticIBPoint;
+	extern D3D12_INDEX_BUFFER_VIEW staticIBViewPoint;
+}	// namespace BillboardPipeline::Detail
 
 #endif	// __billboardPipeline_HPP

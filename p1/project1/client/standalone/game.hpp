@@ -62,6 +62,7 @@ private:
 
 	Billboard billboard_{};
 
+
 	LONG mouseDeltaX_{};
 	LONG mouseDeltaY_{};
 	std::array<BYTE, std::numeric_limits<u8t>::max()> keyboardState_{};
