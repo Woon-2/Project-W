@@ -335,7 +335,7 @@ void GFX::createSwapChain() {
 	// Back Buffer 개수 * 2의 크기를 갖도록 초기화한다.
 	// RenderingMaster 카테고리의 명령 컨텍스트는 한 프레임의 렌더링에
 	// 클리어용, 출력용으로 두 개가 쓰인다.
-	cmdListPool_.init(device_.Get(), CommandListUsage::RenderingMaster, backBuffers_.size() * 2);
+	cmdListPool_.init(device_.Get(), CommandListUsage::RenderingMaster, (backBuffers_.size()) * 2);
 
 	// 백버퍼 개수만큼의 room을 가지는 파이프라인별 리소스들 생성
 	// 1000u, 32u를 변수로 대체하기
@@ -556,6 +556,14 @@ void GFX::render() {
 		return;
 	}
 
+	// 펜스 동기화
+	// 렌더링할 수 있는 백버퍼가 있다면,
+	// wait하지 않고 이어서 렌더링을 하도록 한다.
+	// 백버퍼는 순차적으로 사용되므로, (백버퍼 개수 - 1) 프레임 전의 렌더링에 대한
+	// Fence를 wait하면 이를 구현할 수 있다.
+	auto idxFenceToWait = (frameIdx_ - (backBuffers_.size() - 1)) % backBuffers_.size();
+	waitOnFence("FrameFence" + std::to_string(idxFenceToWait));
+
 	// 렌더 타겟 클리어를 위한 명령 컨텍스트 할당
 	CommandContext cmdCtxClear{};
 	DISPLAY_ERROR_STR(
@@ -757,12 +765,11 @@ void GFX::render() {
 	auto cmdAllocPresent = cmdCtxPresent.cmdAlloc.Get();
 
 	if (!cmdListPresent) {
-		////
 		return;
 	}
 
-	cmdAllocPresent->Reset();
-	cmdListPresent->Reset(cmdAllocPresent, nullptr);
+	DISPLAY_ERROR_DX_HR( cmdAllocPresent->Reset(), false );
+	DISPLAY_ERROR_DX_HR( cmdListPresent->Reset(cmdAllocPresent, nullptr), false );
 
 	// 출력 명령 기록 시작
 	transitionResourceState(cmdListPresent, backBuffers_[backbufIdx].Get(),
@@ -779,20 +786,12 @@ void GFX::render() {
 	
 	DISPLAY_ERROR_DX_VOID( swapChain_->Present(0, 0), false );
 
-	// 펜스 동기화
-	// 렌더링할 수 있는 백버퍼가 있다면,
-	// wait하지 않고 이어서 렌더링을 하도록 한다.
-	// 백버퍼는 순차적으로 사용되므로, (백버퍼 개수 - 1) 프레임 전의 렌더링에 대한
-	// Fence를 wait하면 이를 구현할 수 있다.
-	// idxFenceToSignal이나 fenceNameToSignal 등의 변수는 위에서
-	// Dispatcher에게 전달하기 위해 미리 만들어두었다.
-	auto idxFenceToWait = (frameIdx_ - (backBuffers_.size() - 1)) % backBuffers_.size();
+	
 	fences_.at(fenceNameToSignal).associatedCmdCtxs_[etoi(CommandListUsage::RenderingMaster)]
 		.push_back(std::move(cmdCtxClear));
 	fences_.at(fenceNameToSignal).associatedCmdCtxs_[etoi(CommandListUsage::RenderingMaster)]
 		.push_back(std::move(cmdCtxPresent));
 	signalFence("FrameFence" + std::to_string(idxFenceToSignal));
-	waitOnFence("FrameFence" + std::to_string(idxFenceToWait));
 
 	// 프레임 인덱스 갱신
 	++frameIdx_;

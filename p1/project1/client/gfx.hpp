@@ -13,28 +13,46 @@
 #include "BVPipeline.hpp"
 
 
+// 바운딩 사각형 추출
+// 서버에서 레벨 로드하는 코드 작성
 // 2000, lightPos 처리 등 좀 더 표현력, 일반성 있게 구성
 // 텍스처 vflip
-// 1인칭 & 3인칭 카메라 분리 구현
-// 애니메이션 + 총 달기
-// gfx에 있는 texHashMap game쪽으로 옮기기
-// Rigidbody Physics 구현
-// 텍스처 포맷, 밉 개수도 추출
 // 그림자맵 서로 다른 파이프라인간 공유할 수 있도록 바꾸기
-// deferred shading 구현
+// gfx에 있는 texHashMap game쪽으로 옮기기
+// 텍스처 포맷, 밉 개수도 추출 - 11.21.
+// 인공지능 과제 - 11.23.
+// CPU 보간 기반 애니메이션 구현(블렌딩까지) - 11.25.
+// 캐릭터에 총 붙이기 - 11.26.
+// Cascaded Shadow Mapping - 11.28.
+// 게임 완성(여유되면 3D Sound) - 12.1.
+// 
+// 스프링 팔로잉 카메라 구현 - 12.2.
+// Bounding Volume Hierarchy 구현
+// Software Culling 구현
+// Deferred Shading 구현
+// Rigidbody Physics 구현
+// Active Ragdoll 구현
+// Image Based Lighting 구현
+// pn triangles tesselation 구현
+// 
+// Chunk 분리
+// 렌더링 LOD, 업데이트 LOD, 애니메이션 LOD(본 개수, baked animation)
+// Terrain Tessellation
+// 파티클 시뮬레이션
+// Bloom
+// HDR
+// Subsuface Scattering
+// SSAO, HBAO+
+// Screen Space Reflection
+// Volumetric Rendering
+// Atmosphere Rendering
+// EVSM
+// TAA
+// 
 // 사운드 프로그래밍
 // 네트워크에서 받는 물리 정보 보간/외삽
-// CSM
 // 나무, 수풀 LOD써서 넣기
 // 멀티스레드 업데이트
-// 충돌체 렌더링 및 구현 (컬링용)
-// Software Culling
-// 스프링 팔로잉 카메라 구현
-// * 임포트 관련
-//   texHashMap 등 에셋 관련 자료구조가 클라이언트쪽에 있을 필요가 있음.
-//   스카이박스 임포트 불완전
-//   예외처리 좀 더 추가
-// * Texture srv/uav의 idxRange 좀 더 표현력 있게 넣는 법 없을까.
 
 // 서버
 // 로그인-로그아웃, 룸 구조 만들기
