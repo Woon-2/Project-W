@@ -4,6 +4,29 @@
 #include "pch.hpp"
 #include "gfx.hpp"
 
+struct FrameInfo
+{
+	std::string name;
+	std::uint32_t width = 0;
+	std::uint32_t height = 0;
+};
+
+enum class AnimType : std::uint32_t
+{
+	Loop = 0,
+	Once = 1,
+	SIZE
+};
+
+struct AnimationData
+{
+	std::string name;
+	AnimType type = AnimType::Loop;
+	std::uint32_t frameCount = 0;
+	std::uint32_t frameTimeMs = 0;
+	std::vector<FrameInfo> frames;
+};
+
 class SpriteAnimation {
 public:
 	void setTexture( const std::vector<Texture>& textures );
@@ -15,7 +38,7 @@ private:
 	Texture pCurrentTexture_;
 	std::vector<Texture> sprites_{};
 
-	float frmaeDuration_ = 1000.f / 24.f; // 24fps
+	float frmaeDuration_ = 1000.f / 12.f; // 12fps
 	float frameAcc_ = 0.f;
 	std::size_t currentFrameIdx_ = 0;
 };

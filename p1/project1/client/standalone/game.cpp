@@ -183,7 +183,6 @@ void Game::update(Milliseconds deltaTime) {
 	player_->update(deltaTime, tPhysicInterpolation);
 	camera_.update();
 	dirLight_.update(deltaTime);
-	//  billboard_->update( deltaTime );
 	slimeSprite_.update( deltaTime );
 }
 
