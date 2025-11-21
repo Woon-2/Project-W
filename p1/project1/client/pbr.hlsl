@@ -66,8 +66,6 @@ VSOutput VSMain(
 ) {
     VSOutput ret;
     
-    uv.y = 1.f - uv.y;
-    
     ret.pos = mul(float4(position, 1.0f), gInstances[idxInst + idxDrawcall].wvp);
     ret.posV = mul(float4(position, 1.0f), gInstances[idxInst + idxDrawcall].wv).xyz;
     ret.posL = mul(
