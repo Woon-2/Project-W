@@ -45,11 +45,13 @@ void addShadowMap( const std::string& key, ID3D12Device* device,
 				.DepthStencil = D3D12_DEPTH_STENCIL_VALUE{ .Depth = 1.f, .Stencil = 0u }
 			}
 		), format, width, height );
-		auto& tex = pPair->second.tex;
-
-		tex.idxSrv.idxRange = etoi(Texture::Type::Tex2D);
+		auto& data = pPair->second;
+		auto& tex = data.tex;
 
 		createDSV(device, tex, dsvPool);
+		data.dsv = dsvPool.cpuHandle(tex.idxDsv);
+
+		tex.idxSrv.idxRange = etoi(Texture::Type::Tex2D);
 		createSRV( device, tex, D3D12_SHADER_RESOURCE_VIEW_DESC{
 			.Format = convertDepthToColorFormat(format),
 			.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
@@ -65,6 +67,23 @@ void addShadowMap( const std::string& key, ID3D12Device* device,
 			D3D12_TEXTURE_ADDRESS_MODE_BORDER, 1u
 		);
 	}
+}
+
+void clearShadowMap(const std::string& key, ID3D12GraphicsCommandList* cmdList) {
+	DISPLAY_ERROR_STR(shadowMapData.contains(key), "[GFX Error] SharedResources::ShadowMap::clearShadowMap: \""s
+		+ key + "\" 키의 그림자 맵이 존재하지 않습니다.", false
+	);
+
+	if (!shadowMapData.contains(key)) {
+		return;
+	}
+
+	auto& data = shadowMapData.at(key);
+
+	// shadow map 텍스처를 depth=1.f로 clear한다.
+	DISPLAY_ERROR_DX_VOID( cmdList->ClearDepthStencilView(
+		data.dsv, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0u, 0u, nullptr
+	), false );
 }
 
 }	// namespace SharedResources::ShadowMap

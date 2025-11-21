@@ -595,6 +595,7 @@ void GFX::render() {
 	// 클리어 명령 기록 시작
 	const auto backbufIdx = swapChain_->GetCurrentBackBufferIndex();
 
+	// 메인 렌더 타겟에 대한 클리어
 	transitionResourceState(cmdListClear, backBuffers_[backbufIdx].Get(),
 		D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET
 	);
@@ -616,6 +617,9 @@ void GFX::render() {
 			1.0f, 0u, 0u, nullptr
 		), false
 	);
+
+	// 그림자맵 클리어
+	SharedResources::ShadowMap::clearShadowMap("ShadowMap", cmdListClear);
 
 	const auto clRect = gClientRect;
 
@@ -651,11 +655,12 @@ void GFX::render() {
 	auto fenceNameToSignal = "FrameFence" + std::to_string(idxFenceToSignal);
 	auto& fenceToSignal = fences_.at(fenceNameToSignal);
 
+	// 디스크립터 힙 바인딩 명령을 위한 gpu-visible 디스크립터 힙 모음,
+	// Dispatcher들에 전달한다.
 	auto tmpDescriptorHeaps = std::vector<ComPtr<ID3D12DescriptorHeap>>{};
 	tmpDescriptorHeaps.push_back(srvCbvUavHeap_.heap);
 	tmpDescriptorHeaps.push_back(samHeap_.heap);
 
-	// Sample Pipeline의 Dispatch
 	auto samplePipelineDispatcher = SamplePipeline::Dispatcher(
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
@@ -669,7 +674,6 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
-	// PBR Pipeline의 Dispatch
 	auto pbrPipelineDispatcher = PBRPipeline::Dispatcher(
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
@@ -683,7 +687,6 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
-	// Billboard Pipeline의 Dispatch
 	auto billboardPipelineDispatcher = BillboardPipeline::Dispatcher(
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
@@ -697,7 +700,6 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
-	// Bounding Volume Pipeline의 Dispatch
 	auto bvPipelineDispatcher = BVPipeline::Dispatcher(
 		tmpDescriptorHeaps, rootSigs_.at("DefaultRootSignature"),
 		shaders_.at("BVShader"), cmdQ_, viewport, clRect,
@@ -706,6 +708,11 @@ void GFX::render() {
 		std::move(drawEventsBVPipeline_), cameraDataBVPipeline_,
 		frameIdx_ % backBuffers_.size()	// room index
 	);
+
+	// 의존 관계가 있는 파이프라인별 함수들 사이의 호출 순서는 중요하다.
+	// 예를 들어 그림자를 지원하는 파이프라인들은
+	// 각 파이프라인의 모든 그림자 패스를 수행한 후에 동기화되어
+	// 각 파이프라인의 모든 메인 패스를 수행해야 한다.
 
 	// threadPool_이 활성화된 경우엔 멀티스레드로 처리한다.
 	if (!threadPool_) {
@@ -745,8 +752,6 @@ void GFX::render() {
 		dumpLog();
 	}
 
-	// Skybox Pipeline의 Dispatch
-	// 스카이박스 하나 그리는 파이프라인이라, 멀티스레드일 필요가 없다.
 	auto skyboxPipelineDispatcher = SkyboxPipeline::Dispatcher(
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
@@ -759,6 +764,8 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	// Skybox Pipeline의 Dispatch
+	// 스카이박스 하나 그리는 파이프라인이라, 멀티스레드일 필요가 없다.
 	skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
 	skyboxPipelineDispatcher.drawSingleThreaded();
 

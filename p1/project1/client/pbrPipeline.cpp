@@ -315,11 +315,6 @@ void Dispatcher::shadowDraw() {
 	DISPLAY_ERROR_DX_VOID(cmdList->RSSetViewports(1u, &shadowViewport), false);
 	DISPLAY_ERROR_DX_VOID(cmdList->RSSetScissorRects(1u, &shadowScissorRect), false);
 
-	// shadow map 텍스처를 depth=1.f로 clear한다.
-	DISPLAY_ERROR_DX_VOID( cmdList->ClearDepthStencilView(
-		shadowMapDsv, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0u, 0u, nullptr
-	), false );
-
 	// bindless 환경 세팅
 	// d3d12단 Descriptor Heap 설정
 	auto descriptorHeapsRaw = std::vector<ID3D12DescriptorHeap*>(descriptorHeaps_.size());
@@ -1318,10 +1313,6 @@ void Dispatcher::addJobShadowDraw( ID3D12GraphicsCommandList* threadCmdList,
 
 		DISPLAY_ERROR_DX_VOID(threadCmdList->RSSetViewports(1u, &shadowViewport), false);
 		DISPLAY_ERROR_DX_VOID(threadCmdList->RSSetScissorRects(1u, &shadowScissorRect), false);
-
-		DISPLAY_ERROR_DX_VOID( threadCmdList->ClearDepthStencilView(
-			shadowMapDsv, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0u, 0u, nullptr
-		), false );
 
 		// bindless 환경 세팅
 		// d3d12단 Descriptor Heap 설정
