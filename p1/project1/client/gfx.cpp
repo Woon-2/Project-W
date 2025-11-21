@@ -433,6 +433,9 @@ void GFX::addCameraData(const PBRPipeline::CameraData& cameraData) {
 // 조명 데이터를 입력한다.
 void GFX::addLightData(const PBRPipeline::LightData& lightData) {
 	lightDataPBRPipeline_.push_back(lightData);
+	if (lightData.isMainDirectionalLight) {
+		mainDirectionalLightPBRPipeline_ = lightData;
+	}
 }
 
 // 프레임 데이터를 입력한다.
@@ -676,7 +679,7 @@ void GFX::render() {
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesPBRPipeline_, threadPool_, &cmdListPool_,
 		std::move(drawEventsPBRPipeline_), std::move(lightDataPBRPipeline_),
-		cameraDataPBRPipeline_, frameDataPBRPipeline_,
+		mainDirectionalLightPBRPipeline_, cameraDataPBRPipeline_, frameDataPBRPipeline_,
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 

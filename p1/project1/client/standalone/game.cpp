@@ -55,6 +55,7 @@ void Game::setupStage() {
 	dirLight_.color = mu::Vec3(0.8f, 0.8f, 0.8f);
 	dirLight_.intensity = 2.f;
 	dirLight_.type = PBRPipeline::LightData::Type::DirectionalLight;
+	dirLight_.isMainDirectionalLight = true;
 
 	camera_.setTargetObject( player_ );
 	camera_.setOffsetFromTarget( mu::Vec3( 0.f, 1.8f, -2.5f ) );
@@ -181,6 +182,7 @@ void Game::update(Milliseconds deltaTime) {
 	player_->update(deltaTime, tPhysicInterpolation);
 	camera_.update();
 	dirLight_.update(deltaTime);
+	dirLight_.updateShadowAuxDirectional(camera_.eye(), 100.f, -10.f, 10.f, -10.f, 10.f, 50.f, 200.f);
 	//  billboard_->update( deltaTime );
 }
 

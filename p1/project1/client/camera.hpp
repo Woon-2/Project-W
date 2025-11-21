@@ -30,6 +30,9 @@ public:
 	void setPerspective(mu::Degree fovy, float aspect, float nearz, float farz);
 	void setOrtho(float minX, float minY, float maxX, float maxY, float minZ, float maxZ);
 
+	mu::Vec3 MU_CALLCONV eye() const { return eye_; }
+	mu::Vec3 MU_CALLCONV at() const { return at_; }
+
 private:
 	std::weak_ptr<Object> pTargetObject_{};
 	// 타겟 오브젝트에 대한 카메라의 위치 오프셋

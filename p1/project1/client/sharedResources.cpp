@@ -20,6 +20,11 @@ DXGI_FORMAT convertDepthToColorFormat(DXGI_FORMAT depthFormat) {
 
 std::unordered_map<std::string, ShadowMapData> shadowMapData;
 
+// SharedResources::ShadowMap::shadowMapData에 특정 key로
+// 주어진 인자로 생성된 그림자맵을 등록한다.
+// 이미 해당 key가 등록되어 있다면 오류를 출력하고 아무 동작도 하지 않는다.
+// (그림자맵 생성이 일어나지 않는다.)
+// format 인자는 depth format이어야 한다. ex) DXGI_FORMAT_D32_FLOAT
 void addShadowMap( const std::string& key, ID3D12Device* device,
 	DXGI_FORMAT format, u32t width, u32t height,
 	std::size_t roomCnt, DescriptorPool& srvTexPool, DescriptorPool& dsvPool	

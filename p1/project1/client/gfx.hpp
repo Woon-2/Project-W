@@ -17,8 +17,7 @@
 // 바운딩 사각형 추출
 // 서버에서 레벨 로드하는 코드 작성
 // 2000, lightPos 처리 등 좀 더 표현력, 일반성 있게 구성
-// gfx에 있는 texHashMap game쪽으로 옮기기
-// 텍스처 포맷, 밉 개수도 추출 - 11.21.
+// gfx에 있는 texHashMap game쪽으로 옮기기 - 11.21.
 // 인공지능 과제 - 11.23.
 // CPU 보간 기반 애니메이션 구현(블렌딩까지) - 11.25.
 // 캐릭터에 총 붙이기 - 11.26.
@@ -213,6 +212,7 @@ private:
 	PBRPipeline::Resources resourcesPBRPipeline_{};
 	PBRPipeline::CameraData cameraDataPBRPipeline_{};
 	std::vector<PBRPipeline::LightData> lightDataPBRPipeline_{};
+	PBRPipeline::LightData mainDirectionalLightPBRPipeline_{};
 	PBRPipeline::FrameData frameDataPBRPipeline_{};
 	// Skybox Pipeline
 	std::vector<SkyboxPipeline::DrawEvent> drawEventsSkyboxPipeline_{};

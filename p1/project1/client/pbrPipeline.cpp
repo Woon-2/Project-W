@@ -96,14 +96,16 @@ Dispatcher::Dispatcher(
 	const ComPtr<ID3D12CommandQueue>& cmdQ, const D3D12_VIEWPORT& viewport, const D3D12_RECT& scissorRect,
 	D3D12_CPU_DESCRIPTOR_HANDLE rtv, D3D12_CPU_DESCRIPTOR_HANDLE dsv, Fence* pFence, Resources* pResources,
 	ThreadPool* threadPool, CommandListPool* commandListPool, std::vector<DrawEvent>&& drawEvents,
-	std::vector<LightData>&& lightData, const CameraData& cameraData, const FrameData& frameData,
+	std::vector<LightData>&& lightData, const LightData& mainDirectionalLightData,
+	const CameraData& cameraData, const FrameData& frameData,
 	std::size_t roomIdx
 ) : descriptorHeaps_(descriptorHeaps), pTexPool_(pTexPool), pTexArrayPool_(pTexArrayPool),
 	pTexCubePool_(pTexCubePool), pSamPool_(pSamPool), pCmpSamPool_(pCmpSamPool), pDsvPool_(pDsvPool),
 	rootSig_(rootSig), mainShader_(mainShader), shadowShader_(shadowShader), cmdQ_(cmdQ),
 	viewport_(viewport), scissorRect_(scissorRect), rtv_(rtv), dsv_(dsv), pFence_(pFence),
 	pResources_(pResources), threadPool_(threadPool), cmdListPool_(commandListPool), drawEvents_(std::move(drawEvents)),
-	lightData_(std::move(lightData)), cameraData_(cameraData), frameData_(frameData), roomIdx_(roomIdx),
+	lightData_(std::move(lightData)), mainDirectionalLightData_(mainDirectionalLightData),
+	cameraData_(cameraData), frameData_(frameData), roomIdx_(roomIdx),
 	rootParamIdxPDD_(rootSig->paramIdx("PerDrawcallData")),
 	rootParamIdxPID_(rootSig->paramIdx("PerInstanceData")),
 	rootParamIdxPFD_(rootSig->paramIdx("PerFrameData")),
@@ -176,15 +178,11 @@ void Dispatcher::shadowUpdate() {
 	pResources_->shadowPass.perInstanceData.stage(roomIdx_, perInstanceData);
 	perInstanceData.clear();
 
-	// LightData의 첫 번째 원소의 내용(방향광)을 바탕으로
-	// lightVP를 계산한다.
-	lightData_[0].pos = cameraData_.pos - lightData_[0].dir * 100.f;
-	auto lightView = mu::lookAt(lightData_[0].pos, cameraData_.pos, mu::NVec3(0.f, 1.f, 0.f));
-	auto lightProj = mu::ortho(-10.f, 10.f, -10.f, 10.f, 50.f, 200.f);
-
-	// FrameData에 담겨있는 정보를 가공해 pfd에 저장한다.
+	// main directional light의 내용을 가공해 pfd에 저장한다.
 	auto pfd = ShadowMapShader::PerFrameData{
-		.lightVP = mu::transpose(lightView * lightProj).getXmf()
+		.lightVP = mu::transpose(
+			mainDirectionalLightData_.view * mainDirectionalLightData_.proj
+		).getXmf()
 	};
 	// pfd의 내용을 바탕으로 GPU 데이터를 갱신한다.
 	pResources_->shadowPass.perFrameData.stage(roomIdx_, &pfd, 1u);
@@ -234,15 +232,11 @@ void Dispatcher::shadowUpdateMT() {
 		);
 	}
 
-	// LightData의 첫 번째 원소의 내용(방향광)을 바탕으로
-	// lightVP를 계산한다.
-	lightData_[0].pos = cameraData_.pos - lightData_[0].dir * 100.f;
-	auto lightView = mu::lookAt(lightData_[0].pos, cameraData_.pos, mu::NVec3(0.f, 1.f, 0.f));
-	auto lightProj = mu::ortho(-10.f, 10.f, -10.f, 10.f, 50.f, 200.f);
-
-	// FrameData에 담겨있는 정보를 가공해 pfd에 저장한다.
+	// main directional light의 내용을 가공해 pfd에 저장한다.
 	auto pfd = ShadowMapShader::PerFrameData{
-		.lightVP = mu::transpose(lightView * lightProj).getXmf()
+		.lightVP = mu::transpose(
+			mainDirectionalLightData_.view * mainDirectionalLightData_.proj
+		).getXmf()
 	};
 	// pfd의 내용을 바탕으로 GPU 데이터를 갱신한다.
 	pResources_->shadowPass.perFrameData.stage(roomIdx_, &pfd, 1u);
@@ -288,15 +282,16 @@ void Dispatcher::shadowDraw() {
 		return;
 	}
 
+	// shadow map data를 미리 쿼리해놓는다.
+	// (동일한 검색 연산의 반복을 피한다.)
+	auto& shadowMapData = SharedResources::ShadowMap::shadowMapData.at("ShadowMap");
 
 	// 명령 기록 시작
 	DISPLAY_ERROR_DX_VOID(cmdList->SetGraphicsRootSignature(rootSig_->get()), false);
 	DISPLAY_ERROR_DX_VOID(cmdList->SetPipelineState(shadowShader_.Get()), false);
 
 	// shadow pass에서는 자체적인 shadow map 텍스처의 dsv를 사용한다.
-	auto shadowMapDsv = pDsvPool_->cpuHandle(
-		SharedResources::ShadowMap::shadowMapData.at("ShadowMap").tex.idxDsv
-	);
+	auto shadowMapDsv = pDsvPool_->cpuHandle(shadowMapData.tex.idxDsv);
 	DISPLAY_ERROR_DX_VOID( cmdList->OMSetRenderTargets(
 		0u, nullptr, false, &shadowMapDsv
 	), false );
@@ -306,13 +301,15 @@ void Dispatcher::shadowDraw() {
 	auto shadowViewport = D3D12_VIEWPORT{
 		.TopLeftX = 0.f,
 		.TopLeftY = 0.f,
-		.Width = 2000.f,
-		.Height = 2000.f,
+		.Width = static_cast<float>(shadowMapData.width),
+		.Height = static_cast<float>(shadowMapData.height),
 		.MinDepth = 0.f,
 		.MaxDepth = 1.f
 	};
 	auto shadowScissorRect = D3D12_RECT{
-		.left = 0, .top = 0, .right = 2000, .bottom = 2000
+		.left = 0, .top = 0,
+		.right = static_cast<LONG>(shadowMapData.width),
+		.bottom = static_cast<LONG>(shadowMapData.height)
 	};
 
 	DISPLAY_ERROR_DX_VOID(cmdList->RSSetViewports(1u, &shadowViewport), false);
@@ -399,7 +396,7 @@ void Dispatcher::shadowDraw() {
 
 	// 다음 단계인 main pass에서 shadow map 텍스처를 셰이더 리소스로 참조할 것이므로
 	// shadow 텍스처의 상태를 D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE로 전환한다.
-	transitionResourceState(cmdList, SharedResources::ShadowMap::shadowMapData.at("ShadowMap").tex.res.Get(),
+	transitionResourceState(cmdList, shadowMapData.tex.res.Get(),
 		D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
 	);
 
@@ -491,6 +488,10 @@ void Dispatcher::shadowDrawMT() {
 	// 각 작업마다 명령 컨텍스트를 분배한다.
 	auto currCmdCtx = cmdCtxs.begin();
 
+	// shadow map data를 미리 쿼리해놓는다.
+	// (동일한 검색 연산의 반복을 피한다.)
+	auto& shadowMapData = SharedResources::ShadowMap::shadowMapData.at("ShadowMap");
+
 	while (accDrawcallCnt + (jobSizeDraw_ - 1) < instancingGroups.size() - 1u) {
 		// 명령 컨텍스트 초기화
 		auto hrCmdAllocReset = currCmdCtx->cmdAlloc->Reset();
@@ -508,7 +509,7 @@ void Dispatcher::shadowDrawMT() {
 
 		// 명령 기록
 		addJobShadowDraw( currCmdCtx->cmdList.Get(), instancingGroups.data() + accDrawcallCnt,
-			instancingGroups.data() + accDrawcallCnt + jobSizeDraw_, accDrawcallCnt, latch
+			instancingGroups.data() + accDrawcallCnt + jobSizeDraw_, accDrawcallCnt, shadowMapData, latch
 		);
 
 		accDrawcallCnt += jobSizeDraw_;
@@ -534,7 +535,7 @@ void Dispatcher::shadowDrawMT() {
 
 		// 명령 기록
 		addJobShadowDraw( currCmdCtx->cmdList.Get(), instancingGroups.data() + accDrawcallCnt,
-			instancingGroups.data() + accDrawcallCnt + lastJobSize, accDrawcallCnt, latch
+			instancingGroups.data() + accDrawcallCnt + lastJobSize, accDrawcallCnt, shadowMapData, latch
 		);
 		++currCmdCtx;
 	}
@@ -584,7 +585,7 @@ void Dispatcher::shadowDrawMT() {
 	// 다음 단계인 main pass에서 shadow map 텍스처를 셰이더 리소스로 참조할 것이므로
 	// shadow 텍스처의 상태를 D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE로 전환한다.
 	transitionResourceState( currCmdCtx->cmdList.Get(),
-		SharedResources::ShadowMap::shadowMapData.at("ShadowMap").tex.res.Get(),
+		shadowMapData.tex.res.Get(),
 		D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
 	);
 	
@@ -661,19 +662,19 @@ void Dispatcher::mainUpdate() {
 		}	
 	);
 
-	// LightData의 첫 번째 원소의 내용(방향광)을 바탕으로
-	// lightVP를 계산한다.
-	lightData_[0].pos = cameraData_.pos - lightData_[0].dir * 100.f;
-	auto lightView = mu::lookAt(lightData_[0].pos, cameraData_.pos, mu::NVec3(0.f, 1.f, 0.f));
-	auto lightProj = mu::ortho(-10.f, 10.f, -10.f, 10.f, 50.f, 200.f);
+	// shadow map data를 미리 쿼리해놓는다.
+	// (동일한 검색 연산의 반복을 피한다.)
+	auto& shadowMapData = SharedResources::ShadowMap::shadowMapData.at("ShadowMap");
 
-	// FrameData에 담겨있는 정보를 가공해 pfd에 저장한다.
+	// FrameData와 main directional light의 내용을 가공해 pfd에 저장한다.
 	auto pfd = PBRShader::PerFrameData{
 		.globalAmbient = frameData_.globalAmbient.getXmf(),
 		.lightCnt = static_cast<u32t>(lightData.size()),	// 여기서 lightData.size()를 호출하므로 
 														// 이전에 lightData.clear()를 호출하면 안된다.
-		.idxShadowMap = SharedResources::ShadowMap::shadowMapData.at("ShadowMap").tex.idxSrv,
-		.lightVP = mu::transpose(lightView * lightProj).getXmf()
+		.idxShadowMap = shadowMapData.tex.idxSrv,
+		.lightVP = mu::transpose(
+			mainDirectionalLightData_.view * mainDirectionalLightData_.proj
+		).getXmf()
 	};
 	// pfd의 내용을 바탕으로 GPU 데이터를 갱신한다.
 	pResources_->mainPass.perFrameData.stage(roomIdx_, &pfd, 1u);
@@ -755,19 +756,19 @@ void Dispatcher::mainUpdateMT() {
 		}	
 	);
 
-	// LightData의 첫 번째 원소의 내용(방향광)을 바탕으로
-	// lightVP를 계산한다.
-	lightData_[0].pos = cameraData_.pos - lightData_[0].dir * 100.f;
-	auto lightView = mu::lookAt(lightData_[0].pos, cameraData_.pos, mu::NVec3(0.f, 1.f, 0.f));
-	auto lightProj = mu::ortho(-10.f, 10.f, -10.f, 10.f, 50.f, 200.f);
+	// shadow map data를 미리 쿼리해놓는다.
+	// (동일한 검색 연산의 반복을 피한다.)
+	auto& shadowMapData = SharedResources::ShadowMap::shadowMapData.at("ShadowMap");
 
-	// FrameData에 담겨있는 정보를 가공해 pfd에 저장한다.
+	// FrameData와 main directional light의 내용을 가공해 pfd에 저장한다.
 	auto pfd = PBRShader::PerFrameData{
 		.globalAmbient = frameData_.globalAmbient.getXmf(),
 		.lightCnt = static_cast<u32t>(lightData.size()),	// 여기서 lightData.size()를 호출하므로 
 														// 이전에 lightData.clear()를 호출하면 안된다.
-		.idxShadowMap = SharedResources::ShadowMap::shadowMapData.at("ShadowMap").tex.idxSrv,
-		.lightVP = mu::transpose(lightView * lightProj).getXmf()
+		.idxShadowMap = shadowMapData.tex.idxSrv,
+		.lightVP = mu::transpose(
+			mainDirectionalLightData_.view * mainDirectionalLightData_.proj
+		).getXmf()
 	};
 	// pfd의 내용을 바탕으로 GPU 데이터를 갱신한다.
 	pResources_->mainPass.perFrameData.stage(roomIdx_, &pfd, 1u);
@@ -1283,19 +1284,24 @@ void Dispatcher::addJobShadowUpdate( const DrawEvent* pFirst,
 void Dispatcher::addJobShadowDraw( ID3D12GraphicsCommandList* threadCmdList,
 	const std::vector<DrawEvent>::const_iterator* pItFirst,
 	const std::vector<DrawEvent>::const_iterator* pItLast,
-	std::size_t firstDrawcallIdx, std::latch& latch
+	std::size_t firstDrawcallIdx, const ShadowMapData& shadowMapData,
+	std::latch& latch
 ) {
-	threadPool_->addJob([=, &latch]() {
+	threadPool_->addJob([=, &latch, &shadowMapData]() {
+		// shadow map을 렌더링할 때 쓰는 viewport와 scissor rectangle의 크기는
+		// shadow map 텍스처의 크기와 같아야 한다.
 		auto shadowViewport = D3D12_VIEWPORT{
 			.TopLeftX = 0.f,
 			.TopLeftY = 0.f,
-			.Width = 2000.f,
-			.Height = 2000.f,
+			.Width = static_cast<float>(shadowMapData.width),
+			.Height = static_cast<float>(shadowMapData.height),
 			.MinDepth = 0.f,
 			.MaxDepth = 1.f
 		};
 		auto shadowScissorRect = D3D12_RECT{
-			.left = 0, .top = 0, .right = 2000, .bottom = 2000
+			.left = 0, .top = 0,
+			.right = static_cast<LONG>(shadowMapData.width),
+			.bottom = static_cast<LONG>(shadowMapData.height)
 		};
 
 		// 명령 컨텍스트마다 개별적으로 파이프라인 설정을 해주어야 한다.
@@ -1304,7 +1310,7 @@ void Dispatcher::addJobShadowDraw( ID3D12GraphicsCommandList* threadCmdList,
 		DISPLAY_ERROR_DX_VOID(threadCmdList->SetPipelineState(shadowShader_.Get()), false);
 
 		auto shadowMapDsv = pDsvPool_->cpuHandle(
-			SharedResources::ShadowMap::shadowMapData.at("ShadowMap").tex.idxDsv
+			shadowMapData.tex.idxDsv
 		);
 		DISPLAY_ERROR_DX_VOID( threadCmdList->OMSetRenderTargets(
 			0u, nullptr, false, &shadowMapDsv

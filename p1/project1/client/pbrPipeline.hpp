@@ -10,6 +10,8 @@ struct Mesh;
 struct SubMesh;
 struct Material;
 
+struct ShadowMapData;
+
 namespace ShadowMapShader {
 	struct PerInstanceData;
 }
@@ -35,6 +37,9 @@ struct LightData {
 	float falloff;
 	mu::Vec3 atten;
 	Type type;
+	bool isMainDirectionalLight;
+	mu::Mat4x4 view;
+	mu::Mat4x4 proj;
 };
 
 struct CameraData {
@@ -125,6 +130,7 @@ public:
 		CommandListPool* commandListPool,
 		std::vector<DrawEvent>&& drawEvent,
 		std::vector<LightData>&& lightData,
+		const LightData& mainDirectionalLightData,
 		const CameraData& cameraData, const FrameData& frameData,
 		std::size_t roomIdx
 	);
@@ -208,7 +214,8 @@ private:
 	void addJobShadowDraw( ID3D12GraphicsCommandList* threadCmdList,
 		const std::vector<DrawEvent>::const_iterator* pItFirst,
 		const std::vector<DrawEvent>::const_iterator* pItLast,
-		std::size_t firstDrawcallIdx, std::latch& latch
+		std::size_t firstDrawcallIdx, const ShadowMapData& shadowMapData,
+		std::latch& latch
 	);
 
 	// GFX로부터 전달되어 그대로 사용하는 변수들
@@ -233,6 +240,7 @@ private:
 	Resources* pResources_ = nullptr;
 	std::vector<DrawEvent> drawEvents_{};
 	std::vector<LightData> lightData_{};
+	LightData mainDirectionalLightData_{};
 	CameraData cameraData_{};
 	FrameData frameData_{};
 	std::size_t roomIdx_{};
