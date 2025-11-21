@@ -3,6 +3,12 @@
 #include "GameSession.hpp"
 #include "SendBuffer.hpp"
 #include "RoomManager.hpp"
+#include "level.hpp"
+
+void Room::init( const Level& levelData ) {
+	cubes_ = levelData.cubes;
+	playerStarts_ = levelData.playerStarts;
+}
 
 void Room::enter( const SPGameSession& user ) {
 	std::lock_guard<std::recursive_mutex> lock( mtx_ );

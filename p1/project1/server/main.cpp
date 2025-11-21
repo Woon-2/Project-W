@@ -5,11 +5,18 @@
 #include "SendBuffer.hpp"
 #include "GameSession.hpp"
 #include "GameSessionManager.hpp"
+
+#include "level.hpp"
+#include "RoomManager.hpp"
+
 #include <chrono>
 using namespace std::chrono_literals;
 
 int main( )
 {
+	auto level = Level("../resources/levels/level.bin");
+	RoomManager::setLevelData(&level);
+
 	SocketUtils::init( );
 
 	auto service = std::make_shared<ServerService>(

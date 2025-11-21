@@ -3,6 +3,7 @@
 
 #include "pch.hpp"
 #include "gfx.hpp"
+#include "collision.hpp"
 
 struct PhysicState {
 	mu::Vec3 pos{};

@@ -18,6 +18,9 @@ SPRoom RoomManager::createRoom( int32 roomId ) {
 
 	auto newRoom = std::make_shared<Room>( roomId );
 	rooms_[ roomId ] = newRoom;
+	
+	ASSERT_CRASH(pLevel_ != nullptr);
+	newRoom->init(*pLevel_);
 
 	return newRoom;
 }
@@ -29,3 +32,4 @@ void RoomManager::removeRoom( int32 roomId ) {
 
 std::mutex RoomManager::mtx_;
 std::unordered_map<int32, SPRoom> RoomManager::rooms_;
+Level* RoomManager::pLevel_;
