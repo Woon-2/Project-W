@@ -197,6 +197,7 @@
     <ClInclude Include="Session.hpp" />
     <ClInclude Include="SessionManager.hpp" />
     <ClInclude Include="shader.hpp" />
+    <ClInclude Include="sharedResources.hpp" />
     <ClInclude Include="skybox.hpp" />
     <ClInclude Include="skyboxPipeline.hpp" />
     <ClInclude Include="SocketUtils.hpp" />
@@ -239,6 +240,7 @@
     <ClCompile Include="Session.cpp" />
     <ClCompile Include="SessionManager.cpp" />
     <ClCompile Include="shader.cpp" />
+    <ClCompile Include="sharedResources.cpp" />
     <ClCompile Include="skybox.cpp" />
     <ClCompile Include="skyboxPipeline.cpp" />
     <ClCompile Include="SocketUtils.cpp" />

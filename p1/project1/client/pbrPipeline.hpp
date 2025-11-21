@@ -20,11 +20,6 @@ namespace PBRShader {
 
 namespace PBRPipeline {
 
-// PBR Pipeline 내부적으로 사용하는 그림자 텍스처를 초기화한다.
-void initShadowTextures( ID3D12Device* device, u32t width, u32t height, std::size_t roomCnt,
-	DescriptorPool& srvTexPool, DescriptorPool& dsvPool	
-);
-
 struct LightData {
 	enum class Type {
 		PointLight,
@@ -257,10 +252,6 @@ private:
 	std::size_t jobSizeUpdate_ = 120u;
 	std::size_t jobSizeDraw_ = 200u;
 };
-
-namespace Detail {
-	extern std::vector<Texture> shadowMaps_;
-}	// namespace PBRPipeline::Detail
 
 }	// namespace PBRPipeline
 

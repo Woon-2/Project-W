@@ -505,8 +505,14 @@ void GFX::loadAssets() {
 	DISPLAY_ERROR_DX_VOID(cmdAlloc->Reset(), false);
 	DISPLAY_ERROR_DX_VOID(cmdList->Reset(cmdAlloc.Get(), nullptr), false);
 
+	// 파이프라인 공용 리소스 로드
+	SharedResources::ShadowMap::addShadowMap("ShadowMap", device_.Get(),
+		DXGI_FORMAT_D32_FLOAT, 2000u, 2000u, backBuffers_.size(),
+		srvTexPool_, dsvPool_
+	);
+	// 파이프라인 자체 리소스 로드
+	// BVPipeline
 	BVPipeline::initStaticModels(device_.Get(), cmdList.Get(), fence);
-	PBRPipeline::initShadowTextures(device_.Get(), 2000u, 2000u, backBuffers_.size(), srvTexPool_, dsvPool_);
 
 	dumpLog();
 

@@ -6,6 +6,7 @@
 #include "shader.hpp"
 #include "mesh.hpp"
 
+#include "sharedResources.hpp"
 #include "samplePipeline.hpp"
 #include "pbrPipeline.hpp"
 #include "billboardPipeline.hpp"
@@ -16,7 +17,6 @@
 // 바운딩 사각형 추출
 // 서버에서 레벨 로드하는 코드 작성
 // 2000, lightPos 처리 등 좀 더 표현력, 일반성 있게 구성
-// 그림자맵 서로 다른 파이프라인간 공유할 수 있도록 바꾸기
 // gfx에 있는 texHashMap game쪽으로 옮기기
 // 텍스처 포맷, 밉 개수도 추출 - 11.21.
 // 인공지능 과제 - 11.23.

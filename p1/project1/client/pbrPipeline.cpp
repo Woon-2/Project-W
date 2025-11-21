@@ -1,46 +1,10 @@
 #include "pbrPipeline.hpp"
+#include "sharedResources.hpp"
 #include "shader.hpp"
 #include "mesh.hpp"
 #include "errorHandling.hpp"
 
 namespace PBRPipeline {
-
-namespace Detail {
-	std::vector<Texture> shadowMaps_;
-}	// namespace PBRPipeline::Detail
-
-void initShadowTextures( ID3D12Device* device, u32t width, u32t height, std::size_t roomCnt,
-	DescriptorPool& srvTexPool, DescriptorPool& dsvPool	
-) {
-	Detail::shadowMaps_.reserve(roomCnt);
-	for (std::size_t i = 0u; i < roomCnt; ++i) {
-		auto& tex = Detail::shadowMaps_.emplace_back( createTexture( device, width, height, DXGI_FORMAT_D32_FLOAT,
-			D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL, D3D12_RESOURCE_STATE_DEPTH_WRITE,
-			D3D12_CLEAR_VALUE{
-				.Format = DXGI_FORMAT_D32_FLOAT,
-				.DepthStencil = D3D12_DEPTH_STENCIL_VALUE{ .Depth = 1.f, .Stencil = 0u }
-			}
-		) );
-
-		tex.idxSrv.idxRange = etoi(Texture::Type::Tex2D);
-
-		createDSV(device, tex, dsvPool);
-		createSRV( device, tex, D3D12_SHADER_RESOURCE_VIEW_DESC{
-			.Format = DXGI_FORMAT_R32_FLOAT,
-			.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
-			.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-			.Texture2D = D3D12_TEX2D_SRV{
-				.MostDetailedMip = 0u,
-				.MipLevels = 1u
-			}
-		}, srvTexPool );
-
-		tex.idxSrv.idxSampler = calcIdxBindlessSampler(D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT,
-			D3D12_TEXTURE_ADDRESS_MODE_BORDER, D3D12_TEXTURE_ADDRESS_MODE_BORDER,
-			D3D12_TEXTURE_ADDRESS_MODE_BORDER, 1u
-		);
-	}
-}
 
 // PBR Pipeline 그림자 패스의 input layout을 위한 Vertex Buffer View 배열이
 // mesh에 존재하지 않는다면, 추가한다.
@@ -330,7 +294,9 @@ void Dispatcher::shadowDraw() {
 	DISPLAY_ERROR_DX_VOID(cmdList->SetPipelineState(shadowShader_.Get()), false);
 
 	// shadow pass에서는 자체적인 shadow map 텍스처의 dsv를 사용한다.
-	auto shadowMapDsv = pDsvPool_->cpuHandle(Detail::shadowMaps_[roomIdx_].idxDsv);
+	auto shadowMapDsv = pDsvPool_->cpuHandle(
+		SharedResources::ShadowMap::shadowMapData.at("ShadowMap").tex.idxDsv
+	);
 	DISPLAY_ERROR_DX_VOID( cmdList->OMSetRenderTargets(
 		0u, nullptr, false, &shadowMapDsv
 	), false );
@@ -433,7 +399,7 @@ void Dispatcher::shadowDraw() {
 
 	// 다음 단계인 main pass에서 shadow map 텍스처를 셰이더 리소스로 참조할 것이므로
 	// shadow 텍스처의 상태를 D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE로 전환한다.
-	transitionResourceState(cmdList, Detail::shadowMaps_[roomIdx_].res.Get(),
+	transitionResourceState(cmdList, SharedResources::ShadowMap::shadowMapData.at("ShadowMap").tex.res.Get(),
 		D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
 	);
 
@@ -617,7 +583,8 @@ void Dispatcher::shadowDrawMT() {
 
 	// 다음 단계인 main pass에서 shadow map 텍스처를 셰이더 리소스로 참조할 것이므로
 	// shadow 텍스처의 상태를 D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE로 전환한다.
-	transitionResourceState( currCmdCtx->cmdList.Get(), Detail::shadowMaps_[roomIdx_].res.Get(),
+	transitionResourceState( currCmdCtx->cmdList.Get(),
+		SharedResources::ShadowMap::shadowMapData.at("ShadowMap").tex.res.Get(),
 		D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
 	);
 	
@@ -705,7 +672,7 @@ void Dispatcher::mainUpdate() {
 		.globalAmbient = frameData_.globalAmbient.getXmf(),
 		.lightCnt = static_cast<u32t>(lightData.size()),	// 여기서 lightData.size()를 호출하므로 
 														// 이전에 lightData.clear()를 호출하면 안된다.
-		.idxShadowMap = Detail::shadowMaps_[roomIdx_].idxSrv,
+		.idxShadowMap = SharedResources::ShadowMap::shadowMapData.at("ShadowMap").tex.idxSrv,
 		.lightVP = mu::transpose(lightView * lightProj).getXmf()
 	};
 	// pfd의 내용을 바탕으로 GPU 데이터를 갱신한다.
@@ -799,7 +766,7 @@ void Dispatcher::mainUpdateMT() {
 		.globalAmbient = frameData_.globalAmbient.getXmf(),
 		.lightCnt = static_cast<u32t>(lightData.size()),	// 여기서 lightData.size()를 호출하므로 
 														// 이전에 lightData.clear()를 호출하면 안된다.
-		.idxShadowMap = Detail::shadowMaps_[roomIdx_].idxSrv,
+		.idxShadowMap = SharedResources::ShadowMap::shadowMapData.at("ShadowMap").tex.idxSrv,
 		.lightVP = mu::transpose(lightView * lightProj).getXmf()
 	};
 	// pfd의 내용을 바탕으로 GPU 데이터를 갱신한다.
@@ -952,7 +919,7 @@ void Dispatcher::mainDraw() {
 
 	// 다음 단계인 shadow pass에서 shadow map 텍스처를 깊이 버퍼로 사용할 것이므로
 	// shadow 텍스처의 상태를 D3D12_RESOURCE_STATE_DEPTH_WRITE로 전환한다.
-	transitionResourceState(cmdList, Detail::shadowMaps_[roomIdx_].res.Get(),
+	transitionResourceState(cmdList, SharedResources::ShadowMap::shadowMapData.at("ShadowMap").tex.res.Get(),
 		D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE
 	);
 
@@ -1136,7 +1103,7 @@ void Dispatcher::mainDrawMT() {
 
 	// 다음 단계인 shadow pass에서 shadow map 텍스처를 깊이 버퍼로 사용할 것이므로
 	// shadow 텍스처의 상태를 D3D12_RESOURCE_STATE_DEPTH_WRITE로 전환한다.
-	transitionResourceState( currCmdCtx->cmdList.Get(), Detail::shadowMaps_[roomIdx_].res.Get(),
+	transitionResourceState( currCmdCtx->cmdList.Get(), SharedResources::ShadowMap::shadowMapData.at("ShadowMap").tex.res.Get(),
 		D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE
 	);
 
@@ -1336,7 +1303,9 @@ void Dispatcher::addJobShadowDraw( ID3D12GraphicsCommandList* threadCmdList,
 		DISPLAY_ERROR_DX_VOID(threadCmdList->SetGraphicsRootSignature(rootSig_->get()), false);
 		DISPLAY_ERROR_DX_VOID(threadCmdList->SetPipelineState(shadowShader_.Get()), false);
 
-		auto shadowMapDsv = pDsvPool_->cpuHandle(Detail::shadowMaps_[roomIdx_].idxDsv);
+		auto shadowMapDsv = pDsvPool_->cpuHandle(
+			SharedResources::ShadowMap::shadowMapData.at("ShadowMap").tex.idxDsv
+		);
 		DISPLAY_ERROR_DX_VOID( threadCmdList->OMSetRenderTargets(
 			0u, nullptr, false, &shadowMapDsv
 		), false );
