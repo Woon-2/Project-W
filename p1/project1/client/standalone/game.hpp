@@ -14,6 +14,7 @@
 #include "../physics.hpp"
 
 #include "../billboard.hpp"
+#include "../spriteAnimation.hpp"
 
 namespace StandAlone {
 
@@ -61,7 +62,7 @@ private:
 	CameraMode cameraMode_ = CameraMode::ThirdPerson;
 
 	Billboard billboard_{};
-
+	SpriteAnimation slimeSprite_{};
 
 	LONG mouseDeltaX_{};
 	LONG mouseDeltaY_{};

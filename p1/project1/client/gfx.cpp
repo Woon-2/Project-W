@@ -468,6 +468,11 @@ void GFX::addRequestTextureLoad( const RequestTextureLoad& request )
 	requestsTextureLoad_.push_back( request );
 }
 
+void GFX::addRequestSpritesLoad( const RequestSpritesLoad& request )
+{
+	requestsSpritesLoad_.push_back( request );
+}
+
 // 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 void GFX::addDrawEvent(const SkyboxPipeline::DrawEvent& drawEvent) {
 	drawEventsSkyboxPipeline_.push_back(drawEvent);
@@ -541,6 +546,22 @@ void GFX::loadAssets() {
 	}
 
 	dumpLog();
+
+	// load slime textures
+	std::vector<Texture> slimeTextures;
+	for( int i = 0; i < 16; ++i ) {
+		std::string texturePath = "../resources/Sprites/Slime/Slime_" + std::to_string( i ) + ".dds";
+		Texture::Type type{};
+		auto texture = loadTexture( device_.Get(), cmdList.Get(), texturePath, fence, type );
+		createSRV( device_.Get(), texture, srvTexPool_ );
+		texture.idxSrv.idxSampler = etoi( Samplers::TrilinearWrap );
+		slimeTextures.push_back( texture );
+	}
+	texAnimHashMap_.try_emplace( "Slime", slimeTextures );
+
+	for ( auto& request : requestsSpritesLoad_ ) {
+		*request.pDest = texAnimHashMap_.at( "Slime" );
+	}
 
 	// 명령 기록 끝, 명령 실행
 	DISPLAY_ERROR_DX_VOID(cmdList->Close(), false);

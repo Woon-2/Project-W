@@ -61,6 +61,10 @@ struct RequestTextureLoad {
 	Texture* pDest;
 };
 
+struct RequestSpritesLoad {
+	std::vector<Texture>* pDest;
+};
+
 // 렌더링을 총괄 책임지는 클래스
 // - 장치 초기화: setupDXGI, init, createSwapChain
 // - 객체 그리기: addDrawEvent로 객체마다 그려지길 원하는 파이프라인에 등록,
@@ -128,6 +132,7 @@ public:
 	void addRequestModelLoad(const RequestModelLoad& request);
 	void addRequestSkyboxLoad(const RequestSkyboxLoad& request);
 	void addRequestTextureLoad( const RequestTextureLoad& request );
+	void addRequestSpritesLoad( const RequestSpritesLoad& request );
 
 	// 파이프라인들이 자체적으로 사용하는 리소스들과
 	// addRequestXXLoad 꼴의 함수로 요청된 리소스들을 로드한다.
@@ -221,6 +226,7 @@ private:
 	std::vector<RequestModelLoad> requestsModelLoad_{};
 	std::vector<RequestSkyboxLoad> requestsSkyboxLoad_{};
 	std::vector<RequestTextureLoad> requestsTextureLoad_{};
+	std::vector<RequestSpritesLoad> requestsSpritesLoad_{};
 	
 
 	ThreadPool* threadPool_ = nullptr;	// 설정되어있을 경우 멀티스레드로 동작한다.

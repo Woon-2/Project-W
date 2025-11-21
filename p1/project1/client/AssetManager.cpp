@@ -20,5 +20,9 @@ void AssetManager::loadGFXAssets(GFX& gfx) {
 		.pDest = &billBoard0_
 		} );
 
+	gfx.addRequestSpritesLoad( RequestSpritesLoad{
+		.pDest = &slimeSprites_
+		} );
+
 	gfx.loadAssets();
 }
