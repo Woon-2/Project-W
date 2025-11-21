@@ -188,7 +188,6 @@
     <ClInclude Include="online\onlineGame.hpp" />
     <ClInclude Include="pbrPipeline.hpp" />
     <ClInclude Include="pch.hpp" />
-    <ClInclude Include="physics.hpp" />
     <ClInclude Include="protocol.hpp" />
     <ClInclude Include="samplePipeline.hpp" />
     <ClInclude Include="SendBuffer.hpp" />
@@ -202,6 +201,7 @@
     <ClInclude Include="skyboxPipeline.hpp" />
     <ClInclude Include="SocketUtils.hpp" />
     <ClInclude Include="standalone\game.hpp" />
+    <ClInclude Include="standalone\physics.hpp" />
     <ClInclude Include="texloader\DDSTextureLoader12.h" />
     <ClInclude Include="threadPool.hpp" />
     <ClInclude Include="timer.hpp" />
@@ -232,7 +232,6 @@
     <ClCompile Include="online\onlineGame.cpp" />
     <ClCompile Include="pbrPipeline.cpp" />
     <ClCompile Include="pch.cpp" />
-    <ClCompile Include="physics.cpp" />
     <ClCompile Include="samplePipeline.cpp" />
     <ClCompile Include="SendBuffer.cpp" />
     <ClCompile Include="ServerSession.cpp" />
@@ -245,6 +244,7 @@
     <ClCompile Include="skyboxPipeline.cpp" />
     <ClCompile Include="SocketUtils.cpp" />
     <ClCompile Include="standalone\game.cpp" />
+    <ClCompile Include="standalone\physics.cpp" />
     <ClCompile Include="texloader\DDSTextureLoader12.cpp" />
     <ClCompile Include="threadPool.cpp" />
     <ClCompile Include="timer.cpp" />

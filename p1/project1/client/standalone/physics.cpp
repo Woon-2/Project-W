@@ -1,5 +1,5 @@
 #include "physics.hpp"
-#include "object.hpp"
+#include "../object.hpp"
 
 void PhysicSystem::step(const std::vector<Object*>& objects, Seconds dt)
 {

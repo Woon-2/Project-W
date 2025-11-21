@@ -10,6 +10,7 @@
 #include "../skybox.hpp"
 #include "../light.hpp"
 #include "../AssetManager.hpp"
+#include "../standalone/physics.hpp"
 
 namespace Online {
 

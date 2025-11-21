@@ -11,7 +11,7 @@
 #include "../camera.hpp"
 #include "../light.hpp"
 
-#include "../physics.hpp"
+#include "physics.hpp"
 
 #include "../billboard.hpp"
 

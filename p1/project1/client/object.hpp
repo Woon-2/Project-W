@@ -3,7 +3,15 @@
 
 #include "pch.hpp"
 #include "gfx.hpp"
-#include "physics.hpp"
+
+struct PhysicState {
+	mu::Vec3 pos{};
+	mu::Vec3 omega{};
+	mu::NQuat orient{};
+	mu::Vec3 scale{};
+
+	std::vector<AABB> aabbs{};
+};
 
 // 물체의 렌더링과 관련된 상태
 // 물체를 렌더링하는데 필요한 월드 변환 행렬,
