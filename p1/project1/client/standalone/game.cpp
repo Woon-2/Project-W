@@ -65,7 +65,7 @@ void Game::setupStage() {
 		0.1f, 500.f
 	);
 
-	billboard_.setMesh(gfx_.pointMesh());
+	// billboard_.setMesh(gfx_.pointMesh());
 
 	for (auto& cube : cubes_) {
 		cube.enableBVRendering();
@@ -194,7 +194,7 @@ void Game::render() {
 	skybox_.render(gfx_);
 	camera_.updateGFX(gfx_);
 	dirLight_.render(gfx_);
-	billboard_.render( gfx_ );
+	// billboard_.render( gfx_ );
 
 	auto frameData = PBRPipeline::FrameData{
 		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )

@@ -521,7 +521,9 @@ void GFX::loadAssets() {
 
 	// 명령 기록 시작
 	for (auto& request : requestsModelLoad_) {
-		*request.pDest = loadModelFromFile(request.modelPath, device_.Get(), cmdList.Get(), texHashMap_, srvTexPool_, fence);
+		*request.pDest = loadModelFromFile( request.modelPath,
+			device_.Get(), cmdList.Get(), *request.pTexHashMap, srvTexPool_, fence
+		);
 	}
 
 	dumpLog();
@@ -532,7 +534,7 @@ void GFX::loadAssets() {
 
 	dumpLog();
 
-	pointMesh_ = buildPointMesh(device_.Get(), cmdList.Get(), texHashMap_, srvTexPool_, fence);
+	// pointMesh_ = buildPointMesh(device_.Get(), cmdList.Get(), texHashMap_, srvTexPool_, fence);
 
 	// 명령 기록 끝, 명령 실행
 	DISPLAY_ERROR_DX_VOID(cmdList->Close(), false);

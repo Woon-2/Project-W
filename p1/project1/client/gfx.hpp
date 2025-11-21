@@ -14,9 +14,7 @@
 #include "BVPipeline.hpp"
 
 
-// 바운딩 사각형 추출
-// 서버에서 레벨 로드하는 코드 작성
-// gfx에 있는 texHashMap game쪽으로 옮기기 - 11.21.
+// 서버에서 레벨 로드하는 코드 작성 - 11.21.
 // 인공지능 과제 - 11.23.
 // CPU 보간 기반 애니메이션 구현(블렌딩까지) - 11.25.
 // 캐릭터에 총 붙이기 - 11.26.
@@ -64,6 +62,7 @@ extern HWND ghWnd;
 
 struct RequestModelLoad {
 	std::filesystem::path modelPath;
+	std::unordered_map<std::string, Texture>* pTexHashMap;
 	Model* pDest;
 };
 
@@ -194,8 +193,6 @@ private:
 	DescriptorHeap samHeap_{};	// gpuVisible, SetDescriptorHeaps 함수 호출 필요
 	DescriptorPool samPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
 	DescriptorPool cmpSamPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
-
-	std::unordered_map<std::string, Texture> texHashMap_{};
 
 	// 루트 시그너처와 셰이더들
 	std::map<std::string, std::shared_ptr<RootSig>> rootSigs_{};

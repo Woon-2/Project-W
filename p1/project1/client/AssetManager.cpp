@@ -3,11 +3,13 @@
 void AssetManager::loadGFXAssets(GFX& gfx) {
 	gfx.addRequestModelLoad( RequestModelLoad{
 		.modelPath = "../resources/models/cube.bin",
+		.pTexHashMap = &texHashMap_,
 		.pDest = &modelCube_
 	} );
 
 	gfx.addRequestModelLoad( RequestModelLoad{
 		.modelPath = "../resources/models/vanguard.bin",
+		.pTexHashMap = &texHashMap_,
 		.pDest = &modelPlayer_
 	} );
 	

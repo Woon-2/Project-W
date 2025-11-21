@@ -13,9 +13,10 @@ public:
 	const Skybox* skyboxMaterial() const { return &skyboxMaterial_; }
 
 private:
-	Model modelCube_;
-	Model modelPlayer_;
-	Skybox skyboxMaterial_;
+	std::unordered_map<std::string, Texture> texHashMap_{};
+	Model modelCube_{};
+	Model modelPlayer_{};
+	Skybox skyboxMaterial_{};
 };
 
 #endif	// __AssetManager_HPP
