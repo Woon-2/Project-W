@@ -78,6 +78,9 @@
     <ClCompile Include="..\common\log.cpp">
       <Filter>Utils</Filter>
     </ClCompile>
+    <ClCompile Include="model.cpp">
+      <Filter>Content</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.hpp">
@@ -163,6 +166,9 @@
     </ClInclude>
     <ClInclude Include="..\common\log.hpp">
       <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="model.hpp">
+      <Filter>Content</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

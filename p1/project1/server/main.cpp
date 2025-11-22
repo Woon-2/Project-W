@@ -8,14 +8,22 @@
 
 #include "level.hpp"
 #include "RoomManager.hpp"
+#include "model.hpp"
 
 #include <chrono>
 using namespace std::chrono_literals;
 
 int main( )
 {
+	pushLoggerA("standard", &std::cout);
+	pushLoggerW("standard", &std::wcout);
+
 	auto level = Level("../resources/levels/level.bin");
 	RoomManager::setLevelData(&level);
+
+	auto characterModel = loadModelFromFile("../resources/models/vanguardServer.bin");
+	auto cubeModel = loadModelFromFile("../resources/models/cubeServer.bin");
+	dumpLog();
 
 	SocketUtils::init( );
 

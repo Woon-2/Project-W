@@ -1,9 +1,12 @@
 #ifndef __collision_HPP
 #define __collision_HPP
 
-// 모델에 AABB 벡터
-// 충돌 처리할 때 월드 변환 적용
-// 기본 박스 모델에 center, size의 로컬 변환 먼저 적용 -> 모델 변환 적용 -> 월드 변환 적용 (TRS 분리된 거에서 TS만 가져와야겠다)
+struct BoundingRect {
+    float minX;
+    float minY;
+    float maxX;
+    float maxY;
+};
 
 struct AABB {
 	mu::Vec3 center;
