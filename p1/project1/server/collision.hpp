@@ -2,10 +2,8 @@
 #define __collision_HPP
 
 struct BoundingRect {
-    float minX;
-    float minY;
-    float maxX;
-    float maxY;
+    mu::Vec2 center;
+    mu::Vec2 size;
 };
 
 struct AABB {

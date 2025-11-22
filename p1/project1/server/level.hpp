@@ -3,20 +3,13 @@
 
 #include "object.hpp"
 
-class Level {
-public:
-	Level(const std::filesystem::path& path) : cubes( ), playerStarts ( ) {
-		loadFromFile(path);
-	}
+class AssetManager;
 
-	void loadFromFile(const std::filesystem::path& path);
-
+struct Level {
 	std::vector<Object> cubes;
 	std::vector<Object> playerStarts;
-
-private:
-	void importNode(std::ifstream& ifs);
-	void importCube(std::ifstream& ifs, Object& cube);
 };
+
+Level loadLevelFromFile(const std::filesystem::path& path, const AssetManager& assetManager);
 
 #endif	// __level_HPP

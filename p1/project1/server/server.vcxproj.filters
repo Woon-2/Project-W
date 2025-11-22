@@ -81,6 +81,9 @@
     <ClCompile Include="model.cpp">
       <Filter>Content</Filter>
     </ClCompile>
+    <ClCompile Include="assetManager.cpp">
+      <Filter>Content</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.hpp">
@@ -168,6 +171,9 @@
       <Filter>Utils</Filter>
     </ClInclude>
     <ClInclude Include="model.hpp">
+      <Filter>Content</Filter>
+    </ClInclude>
+    <ClInclude Include="assetManager.hpp">
       <Filter>Content</Filter>
     </ClInclude>
   </ItemGroup>

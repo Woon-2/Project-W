@@ -10,7 +10,10 @@ struct PhysicState {
 	mu::Vec3 scale{};
 
 	std::vector<AABB> aabbs{};
+	std::vector<BoundingRect> boundingRects{};
 };
+
+struct Model;
 
 // 물체의 상태는 PhysicState, RenderState 두 층위로 관리된다.
 // 위치, 방향, 크기와 같이 물리량에 관련된 정보는 PhysicState에 보관되고
@@ -28,8 +31,14 @@ public:
 	// 자체적인 갱신 루틴을 필요로 할 때 이 함수에 작성한다.
 	void update(Milliseconds deltaTime);
 
+	// 모델을 설정한다.
+	// 모델에 바운딩 볼륨이 존재할 경우, 월드 공간 바운딩 볼륨을 구축한다.
+	// (모델의 바운딩 볼륨을 기반으로 게임 객체의 월드 변환을 적용한
+	//  월드 공간 바운딩 볼륨을 따로 두어야 월드 공간 충돌 처리가 가능하다.)
+	void setModel(const Model* pModel);
+
 	// 게임 객체의 위치를 갱신한다.
-	// PhysicState의 AABB 역시 갱신된다.
+	// PhysicState의 AABB와 Bounding Rect 역시 갱신된다.
 	void MU_CALLCONV setPos(mu::Vec3 newPos);
 	mu::Vec3 MU_CALLCONV pos() const { return physicState_.pos; }
 	// 게임 객체의 각속도를 갱신한다.
@@ -40,7 +49,7 @@ public:
 	void MU_CALLCONV setOrient(mu::NQuat newOrient);
 	mu::NQuat MU_CALLCONV orient() const { return physicState_.orient; }
 	// 게임 객체의 크기를 갱신한다.
-	// PhysicState의 AABB 역시 갱신된다.
+	// PhysicState의 AABB와 Bounding Rect 역시 갱신된다.
 	void MU_CALLCONV setScale(mu::Vec3 newScale);
 	mu::Vec3 MU_CALLCONV scale() const { return physicState_.scale; }
 
@@ -63,6 +72,8 @@ private:
 	mu::Vec3 forward_{};
 	mu::Vec3 right_{};
 	mu::Vec3 up_{};
+
+	const Model* pModel_ = nullptr;
 
 	u32t materialSetIdx_ = 0u;
 	i32t id_{ -1 };

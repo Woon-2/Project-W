@@ -1,22 +1,19 @@
 #include "pch.hpp"
 #include "level.hpp"
 #include "binaryImport.hpp"
+#include "assetManager.hpp"
 
-void Level::loadFromFile(const std::filesystem::path& path) {
-	auto ifs = std::ifstream(path);
-	DISPLAY_ERROR_STR(ifs.good(), "[File I/O Error]: loadModelFromFile: "s + path.string() + " 파일을 열 수 없습니다."s, true);
+void importCube(std::ifstream& ifs, const AssetManager& assetManager, Object& cube) {
+	cube.setModel(assetManager.modelCube());
 
-	readHeadTag(ifs, "Level");
-	const auto nodeCnt = readInteger(ifs, "NodeCnt");
+	const auto meshName = readText(ifs, "Mesh");
+	const auto materialSetName = readText(ifs, "MaterialSet");
+	const auto materialSetIdx = readInteger(ifs, "MaterialSetIndex");
 
-	importNode(ifs);
-
-	readTailTag(ifs, "Level");
-
-	gSharedLog << "[Level Load] File I/O: 레벨 " << path << "로드 완료\n";
+	cube.setMaterialSetIdx(materialSetIdx);
 }
 
-void Level::importNode(std::ifstream& ifs) {
+void importNode(std::ifstream& ifs, const AssetManager& assetManager, Level& level) {
 	readHeadTag(ifs, "Node");
 	const auto type = readText(ifs, "Type");
 	const auto name = readText(ifs, "Name");
@@ -41,12 +38,11 @@ void Level::importNode(std::ifstream& ifs) {
 	object.setScale(DirectX::XMLoadFloat3(&worldS));
 
 	if (type == "Cube") {
-		auto& cube = cubes.emplace_back(std::move(object));
-		// cube.setModel(assetManager_.modelCube());
-		importCube(ifs, cube);
+		auto& cube = level.cubes.emplace_back(std::move(object));
+		importCube(ifs, assetManager, cube);
 	}
 	else if (type == "PlayerStart") {
-		playerStarts.push_back(std::move(object));
+		level.playerStarts.push_back(std::move(object));
 	}
 	else {
 		// no-op
@@ -55,17 +51,26 @@ void Level::importNode(std::ifstream& ifs) {
 	const auto childCnt = readInteger(ifs, "ChildCnt");
 	readHeadTag(ifs, "Children");
 	for (int i = 0; i < childCnt; ++i) {
-		importNode(ifs);
+		importNode(ifs, assetManager, level);
 	}
 	readTailTag(ifs, "Children");
 
 	readTailTag(ifs, "Node");
 }
 
-void Level::importCube(std::ifstream& ifs, Object& cube) {
-	const auto meshName = readText(ifs, "Mesh");
-	const auto materialSetName = readText(ifs, "MaterialSet");
-	const auto materialSetIdx = readInteger(ifs, "MaterialSetIndex");
+Level loadLevelFromFile(const std::filesystem::path& path, const AssetManager& assetManager) {
+	Level ret{};
 
-	cube.setMaterialSetIdx(materialSetIdx);
+	auto ifs = std::ifstream(path);
+	DISPLAY_ERROR_STR(ifs.good(), "[File I/O Error]: loadModelFromFile: "s + path.string() + " 파일을 열 수 없습니다."s, true);
+
+	readHeadTag(ifs, "Level");
+	const auto nodeCnt = readInteger(ifs, "NodeCnt");
+
+	importNode(ifs, assetManager, ret);
+
+	readTailTag(ifs, "Level");
+
+	gSharedLog << "[Level Load] File I/O: 레벨 " << path << "로드 완료\n";
+	return ret;
 }

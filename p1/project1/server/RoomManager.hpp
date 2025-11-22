@@ -1,7 +1,7 @@
 #ifndef ROOM_MANAGER_HPP
 #define ROOM_MANAGER_HPP
 
-class Level;
+struct Level;
 
 class RoomManager {
 public:
@@ -9,12 +9,12 @@ public:
 	static SPRoom createRoom( int32 roomId );
 	static void removeRoom( int32 roomId );
 
-	static void setLevelData(Level* pLevel) { pLevel_ = pLevel; }
+	static void setLevelData(const Level* pLevel) { pLevel_ = pLevel; }
 
 private:
 	static std::mutex mtx_;
 	static std::unordered_map<int32, SPRoom> rooms_;
-	static Level* pLevel_;
+	static const Level* pLevel_;
 };
 
 #endif // ROOM_MANAGER_HPP

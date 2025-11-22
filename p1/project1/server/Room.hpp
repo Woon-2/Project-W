@@ -4,7 +4,7 @@
 #include "physics.hpp"
 #include "object.hpp"
 
-class Level;
+struct Level;
 
 class Room : std::enable_shared_from_this<Room> {
 public:

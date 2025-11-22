@@ -31,13 +31,10 @@ void importBoundingRect(std::ifstream& ifs, Model& model) {
     );
 
 	const auto center = readVec2(ifs, "Center");
+    rect.center = DirectX::XMLoadFloat2(&center);
     const auto size = readVec2(ifs, "Size");
+    rect.size = DirectX::XMLoadFloat2(&size);
     const auto halfSize = XMFLOAT2(size.x * 0.5f, size.y * 0.5f);
-
-    rect.minX = center.x - halfSize.x;
-    rect.minY = center.y - halfSize.y;
-    rect.maxX = center.x + halfSize.x;
-    rect.maxY = center.y + halfSize.y;
 }
 
 // 모델의 바운딩 볼륨 하나의 정보를 읽어온다.

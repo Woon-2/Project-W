@@ -32,4 +32,4 @@ void RoomManager::removeRoom( int32 roomId ) {
 
 std::mutex RoomManager::mtx_;
 std::unordered_map<int32, SPRoom> RoomManager::rooms_;
-Level* RoomManager::pLevel_;
+const Level* RoomManager::pLevel_;
