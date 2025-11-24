@@ -142,6 +142,8 @@
     <ClCompile Include="assetManager.cpp" />
     <ClCompile Include="binaryImport.cpp" />
     <ClCompile Include="collision.cpp" />
+    <ClCompile Include="GameLogic.cpp" />
+    <ClCompile Include="GameLogicManager.cpp" />
     <ClCompile Include="GameSession.cpp" />
     <ClCompile Include="GameSessionManager.cpp" />
     <ClCompile Include="level.cpp" />
@@ -171,6 +173,8 @@
     <ClInclude Include="binaryImport.hpp" />
     <ClInclude Include="collision.hpp" />
     <ClInclude Include="concurrentqueue.h" />
+    <ClInclude Include="GameLogic.hpp" />
+    <ClInclude Include="GameLogicManager.hpp" />
     <ClInclude Include="GameSession.hpp" />
     <ClInclude Include="GameSessionManager.hpp" />
     <ClInclude Include="IocpCore.hpp" />

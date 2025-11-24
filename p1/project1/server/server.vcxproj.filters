@@ -84,6 +84,12 @@
     <ClCompile Include="assetManager.cpp">
       <Filter>Content</Filter>
     </ClCompile>
+    <ClCompile Include="GameLogicManager.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="GameLogic.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.hpp">
@@ -175,6 +181,12 @@
     </ClInclude>
     <ClInclude Include="assetManager.hpp">
       <Filter>Content</Filter>
+    </ClInclude>
+    <ClInclude Include="GameLogicManager.hpp">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="GameLogic.hpp">
+      <Filter>Network</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

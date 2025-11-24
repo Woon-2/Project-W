@@ -50,7 +50,7 @@ void GameSession::onDisconnected( ) {
 }
 
 int32 GameSession::onRecvPacket( uint8* buffer, int32 len ) {
-	std::cout << "GameSession " << getId( ) << " received packet of length " << len << ".\n";
+	//std::cout << "GameSession " << getId( ) << " received packet of length " << len << ".\n";
 
 	auto packet = reinterpret_cast<Packet*>( buffer );
 
