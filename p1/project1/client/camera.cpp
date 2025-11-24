@@ -1,3 +1,4 @@
+#include "pch.hpp"
 #include "camera.hpp"
 
 void Camera::update() {

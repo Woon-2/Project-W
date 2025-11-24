@@ -1,7 +1,6 @@
 #ifndef __mesh_HPP
 #define __mesh_HPP
 
-#include "pch.hpp"
 #include "gfxUtil.hpp"
 #include "collision.hpp"
 

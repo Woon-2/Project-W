@@ -1,7 +1,6 @@
 #ifndef __StandAlone_game_HPP
 #define __StandAlone_game_HPP
 
-#include "../pch.hpp"
 #include "../IGame.hpp"
 
 #include "../AssetManager.hpp"

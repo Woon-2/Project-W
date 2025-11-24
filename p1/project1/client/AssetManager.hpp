@@ -1,7 +1,6 @@
 #ifndef __AssetManager_HPP
 #define __AssetManager_HPP
 
-#include "pch.hpp"
 #include "gfx.hpp"
 
 class AssetManager {

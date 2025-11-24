@@ -1,7 +1,6 @@
 #ifndef __billboard_HPP
 #define __billboard_HPP
 
-#include "pch.hpp"
 #include "gfx.hpp"
 
 class Billboard {

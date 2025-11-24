@@ -1,8 +1,6 @@
 #ifndef __IGame_HPP
 #define __IGame_HPP
 
-#include "pch.hpp"
-
 class IGame {
 public:
 	virtual ~IGame() = default;

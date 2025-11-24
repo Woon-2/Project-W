@@ -1,7 +1,6 @@
 #ifndef __shader_HPP
 #define __shader_HPP
 
-#include "pch.hpp"
 #include "gfxUtil.hpp"
 
 struct CompiledShaderOutput {

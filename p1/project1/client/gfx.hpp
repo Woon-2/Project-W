@@ -1,7 +1,6 @@
 #ifndef __GFX_HPP
 #define __GFX_HPP
 
-#include "pch.hpp"
 #include "gfxUtil.hpp"
 #include "shader.hpp"
 #include "mesh.hpp"

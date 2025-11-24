@@ -1,7 +1,6 @@
 #ifndef __billboardPipeline_HPP
 #define __billboardPipeline_HPP
 
-#include "pch.hpp"
 #include "gfxUtil.hpp"
 
 class RootSig;

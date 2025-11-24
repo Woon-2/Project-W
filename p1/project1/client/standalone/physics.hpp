@@ -1,7 +1,6 @@
 #ifndef __physics_HPP
 #define __physics_HPP
 
-#include "../pch.hpp"
 #include "../collision.hpp"
 
 class Object;

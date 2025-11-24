@@ -1,3 +1,4 @@
+#include "pch.hpp"
 #include "timer.hpp"
 
 // 마지막 tick과 현재 tick과의 간격으로

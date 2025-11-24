@@ -1,7 +1,6 @@
 #ifndef __binaryImport_HPP
 #define __bianryImport_HPP
 
-#include "pch.hpp"
 
 // 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
 void readHeadTag(std::ifstream& ifs, const std::string& expectedSource);

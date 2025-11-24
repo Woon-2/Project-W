@@ -1,7 +1,6 @@
 #ifndef __camera_HPP
 #define __camera_HPP
 
-#include "pch.hpp"
 #include "gfx.hpp"
 #include "object.hpp"
 

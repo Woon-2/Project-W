@@ -1,3 +1,4 @@
+#include "pch.hpp"
 #include "mesh.hpp"
 #include "gfxUtil.hpp"
 #include "errorHandling.hpp"

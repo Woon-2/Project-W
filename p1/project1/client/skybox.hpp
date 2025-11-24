@@ -1,7 +1,6 @@
 #ifndef __skybox_HPP
 #define __skybox_HPP
 
-#include "pch.hpp"
 #include "gfx.hpp"
 
 class SkyboxObject {

@@ -1,7 +1,6 @@
 #ifndef __Online_game_HPP
 #define __Online_game_HPP
 
-#include "../pch.hpp"
 #include "../IGame.hpp"
 
 #include "../gfx.hpp"

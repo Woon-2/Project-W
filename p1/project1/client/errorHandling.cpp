@@ -1,3 +1,4 @@
+#include "pch.hpp"
 #include "errorHandling.hpp"
 
 #ifdef DXGI_DEBUG_INFO

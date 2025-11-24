@@ -1,8 +1,6 @@
 #ifndef __gfxUtil_HPP
 #define __gfxUtil_HPP
 
-#include "pch.hpp"
-
 extern RECT gWndRect;
 extern RECT gClientRect;
 

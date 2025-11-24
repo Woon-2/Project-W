@@ -1,8 +1,6 @@
 #ifndef __timer_HPP
 #define __timer_HPP
 
-#include "pch.hpp"
-
 class Timer {
 public:
 	// 마지막 tick과 현재 tick과의 간격으로

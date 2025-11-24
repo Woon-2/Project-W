@@ -1,3 +1,4 @@
+#include "../pch.hpp"
 #include "physics.hpp"
 #include "../object.hpp"
 

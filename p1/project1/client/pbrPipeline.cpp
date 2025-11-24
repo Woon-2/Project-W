@@ -1,3 +1,4 @@
+#include "pch.hpp"
 #include "pbrPipeline.hpp"
 #include "sharedResources.hpp"
 #include "shader.hpp"

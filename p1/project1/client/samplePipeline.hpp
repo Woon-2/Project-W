@@ -1,7 +1,6 @@
 #ifndef __samplePipeline_HPP
 #define __samplePipeline_HPP
 
-#include "pch.hpp"
 #include "gfxUtil.hpp"
 
 class RootSig;

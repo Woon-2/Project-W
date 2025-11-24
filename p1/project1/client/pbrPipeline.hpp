@@ -1,7 +1,6 @@
 #ifndef __pbrPipeline_HPP
 #define __pbrPipeline_HPP
 
-#include "pch.hpp"
 #include "gfxUtil.hpp"
 
 class RootSig;

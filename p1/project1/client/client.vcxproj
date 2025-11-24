@@ -127,6 +127,8 @@
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.hpp</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -137,6 +139,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="animation.hpp" />
     <ClInclude Include="billboard.hpp" />
     <ClInclude Include="billboardPipeline.hpp" />
     <ClInclude Include="AssetManager.hpp" />
@@ -210,6 +213,7 @@
     <ClInclude Include="windows.hpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="animation.cpp" />
     <ClCompile Include="billboard.cpp" />
     <ClCompile Include="billboardPipeline.cpp" />
     <ClCompile Include="AssetManager.cpp" />
@@ -231,7 +235,9 @@
     <ClCompile Include="object.cpp" />
     <ClCompile Include="online\onlineGame.cpp" />
     <ClCompile Include="pbrPipeline.cpp" />
-    <ClCompile Include="pch.cpp" />
+    <ClCompile Include="pch.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="samplePipeline.cpp" />
     <ClCompile Include="SendBuffer.cpp" />
     <ClCompile Include="ServerSession.cpp" />

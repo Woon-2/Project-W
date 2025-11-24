@@ -1,7 +1,6 @@
 #ifndef __sharedResources_HPP
 #define __sharedResources_HPP
 
-#include "pch.hpp"
 #include "gfxUtil.hpp"
 
 // 그림자맵 텍스처와 그와 관련된 자주 쓰이는 데이터들을 담는 구조체

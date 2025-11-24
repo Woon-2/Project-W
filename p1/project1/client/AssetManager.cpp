@@ -1,3 +1,4 @@
+#include "pch.hpp"
 #include "AssetManager.hpp"
 
 void AssetManager::loadGFXAssets(GFX& gfx) {

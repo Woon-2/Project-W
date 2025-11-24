@@ -1,3 +1,4 @@
+#include "pch.hpp"
 #include "binaryImport.hpp"
 #include "errorHandling.hpp"
 

@@ -1,3 +1,4 @@
+#include "pch.hpp"
 #include "shader.hpp"
 
 #include "errorHandling.hpp"

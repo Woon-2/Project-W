@@ -1,3 +1,4 @@
+#include "../pch.hpp"
 #include "onlineGame.hpp"
 #include "../global.hpp"
 #include "../ServerSession.hpp"

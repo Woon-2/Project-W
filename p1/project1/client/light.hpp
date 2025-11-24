@@ -1,7 +1,6 @@
 #ifndef __light_HPP
 #define __light_HPP
 
-#include "pch.hpp"
 #include "gfx.hpp"
 
 class Camera;

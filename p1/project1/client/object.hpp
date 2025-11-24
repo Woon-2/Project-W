@@ -1,7 +1,6 @@
 #ifndef __object_HPP
 #define __object_HPP
 
-#include "pch.hpp"
 #include "gfx.hpp"
 #include "collision.hpp"
 
