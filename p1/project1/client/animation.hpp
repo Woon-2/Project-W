@@ -1,6 +1,10 @@
 #ifndef __animation_HPP
 #define __animation_HPP
 
+// 애니메이션의 한 프레임의 정보를 담는 구조체
+// lerpAnimFrames 함수로 서로 다른 AnimFrame을 보간하거나
+// convertAnimFrameToMatrix 함수를 통해 AnimFrame을 행렬로 변환할 수 있다.
+// AnimBlender의 onCalcLocal 단계에서 주로 쓰인다.
 struct AnimFrame {
 	mu::Vec3 translation;
 	mu::NQuat rotation;
@@ -8,27 +12,44 @@ struct AnimFrame {
 	Seconds time;
 };
 
+// 전달된 애니메이션 프레임을 행렬로 변환한다.
+// lerpAnimFrames 함수로 여러 프레임을 보간한 최종 프레임을
+// 이 함수를 통해 행렬로 변환해서 사용해야 한다.
 mu::Mat4x4 MU_CALLCONV convertAnimFrameToMatrix(AnimFrame frame);
 
 struct Skeleton;
 
+// 애니메이션에 쓰이는 한 개의 본을 나타내는 구조체
+// 
+// 애니메이션 프레임은 로컬 공간(본 공간)에서의 변환을 표현하므로,
+// 드레스 공간에 있는 본을 Bone::toLocal 멤버를 통해 로컬 공간으로 변환한 뒤
+// 프레임 변환을 적용해야 올바른 변환이 출력된다.
 struct Bone {
-	mu::Mat4x4 toLocal;
-	mu::Mat4x4 toParent;
+	mu::Mat4x4 toLocal;	// 드레스 공간에서 로컬 공간으로의 변환
+	mu::Mat4x4 toParent;	// 로컬 공간에서 부모 로컬 공간으로의 변환 
 	std::string name;
-	std::vector<Bone*> children;
-	Skeleton* skeleton;
-	i32t boneIdx;
+	std::vector<Bone*> children;	// 이 본을 소유한 Skeleton::bones에 담긴 본을 가리킨다.
+	i32t boneIdx;	// 이 본을 소유한 Skeleton::bones에서 이 본의 인덱스
 };
 
+// 스켈레톤의 구조를 나타내는 열거형,
+// 애니메이션 클립이 대상으로 하는 스켈레톤 구조와
+// 모델에 부여된 스켈레톤 구조가 같아야만
+// 올바른 스키닝이 가능하다.
 enum class SkeletonEnumeration {
 	Humanoid,
 	SIZE
 };
 
+// 스키닝의 대상이 되는 스켈레톤을 나타내는 구조체
+// 본들과 스켈레톤 구조를 나타내는 열거형 값을 저장한다.
 struct Skeleton {
+	// 본이 자식 본을 생포인터로 저장하기 위해서는
+	// 스켈레톤이 복사되어도 본들의 메모리 공간이 변하지 않아야 한다.
+	// std::shared_ptr로 감싸 본들의 저장 공간을 별도의 free store에 구성한다.
+	// 이로 인해 부수적으로 Skeleton의 복사도 값싸진다.
 	std::shared_ptr< std::vector<Bone> > bones;
-	Bone* pRoot;
+	Bone* pRoot;	// 이 멤버를 통해 전체 본 트리를 순회할 수 있다.
 	SkeletonEnumeration skeletonEnumeration;
 };
 
@@ -37,89 +58,176 @@ enum class AnimClipFlag {
 	SIZE
 };
 
+// 한 개의 애니메이션 클립을 나타내는 구조체
+// 키프레임들과 재생 시간, 스켈레톤 구조, 플래그를 저장한다.
 struct AnimClip {
+	// 본별 키프레임들
+	// i번째 본의 j번째 키프레임은 keyFramesOfBones[i][j]이다.
 	std::vector< std::vector<AnimFrame> > keyFramesOfBones;
-	Seconds duration;
+	Seconds duration;	// 애니메이션이 지속될 시간
+	// 해당 클립이 대상으로 하는 스켈레톤 구조
 	SkeletonEnumeration skeletonEnumeration;
+	// AnimClipFlag에 해당하는 값들과 bitwise-or를 통해 플래그를 추가하고,
+	// bitwise-and를 통해 플래그를 검사한다.
 	u32t flags;
 };
 
+// 두 애니메이션 프레임을 인자 t로 선형보간한다.
+// translation과 scale에 대해선 mu::lerp가,
+// rotation에 대해선 mu::slerp가 사용된다.
 AnimFrame MU_CALLCONV lerpAnimFrames(AnimFrame lhs, AnimFrame rhs, float t);
 
 class AnimSystem;
 
+// 게임 객체에 부착되어 해당 객체의 애니메이션 설정 및 블렌딩을 책임지는 클래스
+// 개별 애니메이션이 필요한 게임 객체마다 AnimBlender 객체가 할당되어야 한다.
+// 
+// AnimBlender가 업데이트되기 위해서는 반드시 AnimSystem에 등록되어야 한다.
+// 애니메이션 계산은 비용이 비싼 작업이므로,
+// AnimBlender는 애니메이션 업데이트 방법을 정의하기만 하고,
+// AnimSystem 객체가 실제 애니메이션 업데이트들의 스케줄링을 책임지며
+// 로드밸런싱을 수행하도록 구현했다.
+// 
+// 사용 흐름은 다음과 같다.
+// - 초기화: setSkeleton 호출, pushTargetClip 필요한 만큼 호출
+// - 업데이트 루틴: priority getter에서 반환할 priority_ 갱신
+// - 렌더링: finalXformData 호출, 변환 정보를 셰이더 입력으로 복사
+// 
+// 구현하려는 게임 객체에 맞게 이 클래스를 상속하여
+// 각 게임 객체 타입마다의 AnimBlender를 만들도록 한다.
+// 상속한 클래스는 다음의 두 책임을 지닌다.
+// - onCalcLocal에서 프레임들을 업데이트하고 각 클립의 프레임들을 보간해 본의 로컬 변환 행렬들 생성
+// - priority getter에서 적절한 priority 값을 반환할 수 있도록 업데이트 루틴에서 priority_ 계산
+// 
+// 키프레임들을 보간해 현재 프레임들을 업데이트하고 읽을 수 있는 유틸리티와
+// 현재 애니메이션 업데이트 단계에서의 변환 행렬 캐시를 접근할 수 있는 유틸리티를
+// 상속한 클래스를 위해 protected로 제공한다.
 class AnimBlender {
 public:
 	enum class Stage {
 		noop,
 		committedLocal,
-		committedWorld,
+		committedDress,
 		committedFinal,
 		SIZE
 	};
 
 	virtual ~AnimBlender() = default;
 
+	// 대상 애니메이션 클립을 추가한다.
+	// 웬만하면 상속한 클래스에서 초기화시점에 사용할 클립들을 전부 push해놓고
+	// 게임 객체의 상태에 맞게 클립들을 선택해 프레임 업데이트 및 블렌딩을 수행하도록 한다.
 	void pushTargetClip(const std::string& key, const std::shared_ptr<const AnimClip>& pTargetClip);
+	// 대상 애니메이션 클립을 제거한다.
 	void popTargetClip(const std::string& key);
 
-	void setSkeleton(const std::shared_ptr<Skeleton>& pSkeleton);
+	// 스켈레톤을 설정한다.
+	// 애니메이션 클립들을 추가하기 전에 스켈레톤이 먼저 설정되어야 한다.
+	void setSkeleton(const Skeleton& skeleton);
 
-	virtual void requestUpdate(AnimSystem& animSystem) = 0;
+	float priority() const { return priority_; }
 
+	// 본들의 로컬 변환 행렬을 계산한다.
+	// 상속한 클래스는 updateFrames, curFrames, lerpAnimFrames 함수들을 적절히 활용하여
+	// 로컬 변환 행렬을 계산해 localXformData에 저장해야 한다.
 	virtual void onCalcLocal(PassKey<AnimSystem>) = 0;
-	void onCalcWorld(PassKey<AnimSystem>);
+	// 본들의 로컬 변환을 스켈레톤의 본 트리를 순회하며
+	// 드레스 공간 변환으로 환원한다.
+	void onCalcDress(PassKey<AnimSystem>);
+	// 본들의 최종 변환 행렬들을 계산한다.
+	// 스켈레톤의 본들은 기본적으로 드레스 공간에 있기 때문에, 업데이트 시
+	// 1. 드레스 공간 -> 본 공간 이전
+	// 2. 본 공간에서 애니메이션 프레임에 따른 변환 수행
+	// 3. 본 공간 -> 드레스 공간 이전
+	// 의 단계가 필요한데,
+	// onCalcLocal이 2., onCalcDress가 3.의 단계를 수행했다.
+	// 그 결과 행렬의 앞쪽에 본들의 toLocal 행렬을 곱해주어
+	// 1.의 단계를 수행한다.
 	void onCalcFinal(PassKey<AnimSystem>);
 
+	// 본들의 최종 변환 행렬들을 반환한다.
+	// 렌더링 시에는 이 행렬들을 참조한다.
 	std::vector<mu::Mat4x4>& finalXformData();
 
+	// AnimSystem에서, 이 AnimBlender 객체의 계산 단계를 설정하기 위해 만들어진 함수
 	void setStage(PassKey<AnimSystem>, Stage stage) { stage_ = stage; }
 	Stage stage() const { return stage_; }
 
 protected:
+	// 본들의 로컬 변환 행렬들에 접근한다.
+	// onCalcLocal에서 사용하도록 한다.
+	std::vector<mu::Mat4x4>& localXformData();
+	// 본들의 드레스 공간 변환 행렬들에 접근한다.
+	std::vector<mu::Mat4x4>& dressXformData();
+	// key에 해당하는 클립을 elapsed 만큼의 시간이 지났을 때의 프레임으로 갱신한다.
 	void updateFrames(const std::string& key, Seconds elapsed);
+	// key에 해당하는 클립의 현재 프레임들을 접근한다.
+	// 현재 프레임들은 updateFrames 함수를 통해서 갱신할 수 있다.
 	std::vector<AnimFrame>& curFrames(const std::string& key) {
 		return frameInfoMap_.at(key).frameCache_;
 	}
+	// key에 해당하는 클립의 현재 프레임들을 접근한다.
+	// 현재 프레임들은 updateFrames 함수를 통해서 갱신할 수 있다.
 	const std::vector<AnimFrame>& curFrames(const std::string& key) const {
 		return frameInfoMap_.at(key).frameCache_;
 	}
 
-	std::vector<mu::Mat4x4>& localXformData();
-	std::vector<mu::Mat4x4>& worldXformData();
-	const Skeleton* skeleton() const { return skeleton_.get(); }
+	const Skeleton& skeleton() const { return skeleton_; }
+
+	float priority_{};
 
 private:
+	// 특정한 클립의 현재 프레임 상태 및
+	// 현재 프레임 상태를 갱신하기 위한 정보를 저장하는 구조체
 	struct FrameInfo {
-		std::shared_ptr<const AnimClip> targetClip;
+		std::shared_ptr<const AnimClip> targetClip;	// 프레임 계산 대상이 되는 클립
+		// 본별로 현재 어느 키프레임을 참조하고 있는지 저장하는 벡터
+		// keyFrameIteratorCache_[i] == iteratorA일 때,
+		// i번째 본의 현재 프레임을 계산하는 데
+		// iteratorA와 std::next(iteratorA)가 가리키는 키프레임들을 보간해야 함이 표현된다.
 		std::vector< decltype(AnimClip::keyFramesOfBones)::value_type::const_iterator > keyFrameIteratorCache_{};
+		// 키프레임들을 보간하여 계산된 현재 프레임 정보를 저장한다.
 		std::vector<AnimFrame> frameCache_;
 	};
 
+	// onCalcDress에서, 본 트리를 순회하며 행렬들을 갱신하는데 사용된다.
 	void MU_CALLCONV traverseBone(const Bone& bone, mu::Mat4x4 parentXform = mu::Mat4x4());
 
 	std::vector<mu::Mat4x4> boneXformCache_{};
 	std::map<std::string, FrameInfo> frameInfoMap_{};
-	std::shared_ptr<Skeleton> skeleton_{};
+	Skeleton skeleton_{};
 	Stage stage_{Stage::noop};
 };
 
-struct RequestAnimationUpdate {
-	AnimBlender* blender;
-	float priority;
-
-	auto operator<=>(const RequestAnimationUpdate& rhs) const noexcept {
-		return priority <=> rhs.priority;
-	}
-};
-
+// 애니메이션 업데이트를 스케줄링하며 실행하는 클래스
+// trackAnimBlender 함수를 통해 AnimBlender를 AnimSystem에 등록할 수 있다.
 class AnimSystem {
 public:
+	// blender를 AnimSystem에 등록한다.
+	void trackAnimBlender(AnimBlender* blender) {
+		blenders_.push_back(blender);
+	}
+	// blender를 AnimSystem에서 제거한다.
+	void untrackAnimBlender(AnimBlender* blender) {
+		std::erase(blenders_, blender);
+	}
+	// 등록된 AnimBlender 객체들을 priority로 max-heapify하고
+	// 모든 AnimBlender 객체들을 업데이트하거나 주어진 timeSlice가 소진될 때까지
+	// AnimBlender 객체들을 업데이트한다.
+	// AnimBlender::onCalcLocal, AnimBlender::onCalcDress, AnimBlender::onCalcFinal이
+	// 순서대로 불리며 업데이트된다.
 	void update(Seconds timeSlice);
 
 private:
-	std::priority_queue<RequestAnimationUpdate> jobQueue_{};
-	std::size_t jobSize_{100u};
+	// priority에 따른 AnimBlender들의 max heap
+	std::vector<AnimBlender*> blenders_{};
+	// update에서 처리할 작업 단위(job)
+	// timeSlice에서 job 처리 횟수를 8회에 근접하게 맞추기 위해
+	// jobSize_를 유동적으로 갱신한다.
+	//
+	// (job의 개수가 너무 적으면 시간 검사를 덜 해 요청된 timeSlice를 초과할 가능성이 커지고,
+	// 너무 많으면 시간 검사를 너무 많이 해 시스템콜로 인한 오버헤드가 커진다.)
+	std::size_t jobSize_{40u};
 };
 
 #endif	// __animation_HPP

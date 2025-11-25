@@ -5,7 +5,7 @@
 #include "collision.hpp"
 
 // 재질 정보를 표현하는 구조체
-// SubMesh에 담겨, 드로우콜 시 사용할 텍스처나 상수를 지정한다.
+// 드로우콜 시 사용할 텍스처나 상수를 지정한다.
 struct Material {
 	Texture mapAlbedo;
 	Texture mapMetallicSmoothness;	// 유니티 익스포터를 사용하기 때문에 유니티와 텍스처 포맷 맞춰준다.
