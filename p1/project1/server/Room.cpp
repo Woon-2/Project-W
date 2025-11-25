@@ -4,10 +4,29 @@
 #include "SendBuffer.hpp"
 #include "RoomManager.hpp"
 #include "level.hpp"
+#include "GameSessionManager.hpp"
 
 void Room::init( const Level& levelData ) {
 	cubes_ = levelData.cubes;
 	playerStarts_ = levelData.playerStarts;
+}
+
+void Room::update() {
+	processMessage();
+}
+
+void Room::processMessage() {
+	const auto bulkSize = users_.size();
+
+	auto messages = std::vector<RoomMessage>(bulkSize);
+	const auto size = msgQueue_.try_dequeue_bulk(messages.begin(), bulkSize);
+
+	for (int32 i = 0; i < size; ++i) {
+		auto packetType = static_cast<PacketType>(messages[i].data.header.id);
+		switch (packetType) {
+		case PacketType::csEnter:
+		}
+	}
 }
 
 void Room::enter( const SPGameSession& user ) {
