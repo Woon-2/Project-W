@@ -7,6 +7,9 @@
 constexpr const char* serverIp = "127.0.0.1";
 constexpr int serverPort = 7777;
 
+// 한 방에 들어갈 수 있는 최대 유저 수
+constexpr std::uint16_t maxUserCount = 4u;
+
 #pragma pack( push, 1 )
 
 struct PacketHeader {
@@ -69,10 +72,10 @@ struct SCAssignIdPacket {
 
 struct SCEnterPacket {
 	std::int32_t playerCount;
-	std::array<std::int32_t, 50> pIds;
-	std::array<float, 50> x;
-	std::array<float, 50> y;
-	std::array<float, 50> z;
+	std::array<std::int32_t, maxUserCount> pIds;
+	std::array<float, maxUserCount> x;
+	std::array<float, maxUserCount> y;
+	std::array<float, maxUserCount> z;
 };
 
 struct CSLeavePacket {
