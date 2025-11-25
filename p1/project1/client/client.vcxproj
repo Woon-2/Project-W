@@ -213,7 +213,10 @@
     <ClInclude Include="windows.hpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="animation.cpp" />
+    <ClCompile Include="animation.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Use</PrecompiledHeader>
+      <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">pch.hpp</PrecompiledHeaderFile>
+    </ClCompile>
     <ClCompile Include="billboard.cpp" />
     <ClCompile Include="billboardPipeline.cpp" />
     <ClCompile Include="AssetManager.cpp" />
@@ -237,6 +240,8 @@
     <ClCompile Include="pbrPipeline.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">pch.hpp</PrecompiledHeaderFile>
     </ClCompile>
     <ClCompile Include="samplePipeline.cpp" />
     <ClCompile Include="SendBuffer.cpp" />

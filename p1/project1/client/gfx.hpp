@@ -13,10 +13,13 @@
 #include "BVPipeline.hpp"
 
 
-// 서버에서 레벨 로드하는 코드 작성 - 11.21.
-// 인공지능 과제 - 11.23.
-// CPU 보간 기반 애니메이션 구현(블렌딩까지) - 11.25.
-// 캐릭터에 총 붙이기 - 11.26.
+// 주석 작성
+// 애니메이션 구하기
+// 애니메이션 추출 스크립트 작성
+// 애니메이션 임포트
+// 애니메이션 임시 설정 시뮬레이션
+// 애니메이션 상태 머신 구현
+// 캐릭터에 총 붙이기 - 11.27.
 // Cascaded Shadow Mapping - 11.28.
 // 게임 완성(여유되면 3D Sound) - 12.1.
 // 
@@ -29,6 +32,7 @@
 // Image Based Lighting 구현
 // pn triangles tesselation 구현
 // 
+// 부하 관리 (업데이트, 애니메이션 생략)
 // Chunk 분리
 // 렌더링 LOD, 업데이트 LOD, 애니메이션 LOD(본 개수, baked animation)
 // Terrain Tessellation
