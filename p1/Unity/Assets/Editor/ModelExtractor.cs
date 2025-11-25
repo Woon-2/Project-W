@@ -9,11 +9,17 @@ using System.Text;
 public class ModelExtractorWindow : EditorWindow
 {
     private GameObject targetObject;
+    private GameObject targetSkeleton;
     private Dictionary<Texture, string> textureMappings = new Dictionary<Texture, string>();
     private Vector2 scrollPos;
-    private string targetName = "";
+    private string targetObjectName = "";
+    private string targetSkeletonName = "";
 
     private BinaryWriter geometryWriter = null;
+    private BinaryWriter skeletonWriter = null;
+
+    private List<Transform> bones = null;
+    private List<Matrix4x4> bindposes = null;
 
     [MenuItem("Tools/Model Extractor")]
     public static void OpenWindow()
@@ -29,7 +35,13 @@ public class ModelExtractorWindow : EditorWindow
         targetObject = (GameObject)EditorGUILayout.ObjectField("Target Object", targetObject, typeof(GameObject), true);
         EditorGUILayout.Space();
 
-        targetName = (string)EditorGUILayout.TextField("Object Name: ", targetName);
+        targetObjectName = (string)EditorGUILayout.TextField("Object Name: ", targetObjectName);
+        EditorGUILayout.Space();
+
+        targetSkeleton = (GameObject)EditorGUILayout.ObjectField("Target Skeleton(optional)", targetSkeleton, typeof(GameObject), true);
+        EditorGUILayout.Space();
+
+        targetSkeletonName = (string)EditorGUILayout.TextField("Skeleton Name(optional): ", targetSkeletonName);
         EditorGUILayout.Space();
 
         if (GUILayout.Button("🔍 Scan Textures") && targetObject != null)
@@ -451,12 +463,65 @@ public class ModelExtractorWindow : EditorWindow
         ExtractUtil.WriteTailTag(geometryWriter, "BoundingVolumes");
     }
 
+    void ProcessBoneHierarchy(Transform root, Transform bone)
+    {
+        bones.Add(bone);
+        bindposes.Add(bone.worldToLocalMatrix * root.localToWorldMatrix);
+
+        for (int i = 0; i < bone.childCount; ++i)
+        {
+            ProcessBoneHierarchy(root, bone.GetChild(i));
+        }
+    }
+
+    void ProcessBones()
+    {
+        bones = new List<Transform>();
+        ProcessBoneHierarchy(targetSkeleton.transform, targetSkeleton.transform);
+    }
+
+    void ExtractBoneHierarchy(Transform bone, ref int boneIdx)
+    {
+        ExtractUtil.WriteHeadTag(skeletonWriter, "Bone");
+        ExtractUtil.WriteText(skeletonWriter, "Name", bone.gameObject.name);
+        ExtractUtil.WriteLocalMatrix(skeletonWriter, "ToParent", bone);
+        ExtractUtil.WriteMatrix(skeletonWriter, "ToLocal", bindposes[boneIdx]);
+
+        ++boneIdx;
+
+        ExtractUtil.WriteHeadTag(skeletonWriter, "Children");
+        ExtractUtil.WriteInteger(skeletonWriter, "ChildCnt", bone.childCount);
+
+        for (int i = 0; i < bone.childCount; ++i)
+        {
+            ExtractBoneHierarchy(bone.GetChild(i), ref boneIdx);
+        }
+
+        ExtractUtil.WriteTailTag(skeletonWriter, "Children");
+
+        ExtractUtil.WriteTailTag(skeletonWriter, "Bone");
+    }
+
+    void ExtractSkeleton()
+    {
+        ProcessBones();
+        ExtractUtil.WriteHeadTag(skeletonWriter, "Skeleton");
+        ExtractUtil.WriteText(skeletonWriter, "Name", targetSkeletonName);
+
+        ExtractUtil.WriteInteger(skeletonWriter, "Count", bones.Count);
+        int n = 0;
+        ExtractBoneHierarchy(targetSkeleton.transform, ref n);
+
+        ExtractUtil.WriteTailTag(skeletonWriter, "Skeleton");
+    }
+
     void ExportBinary()
     {
         string path = EditorUtility.SaveFilePanel("Export Binary", "ExportedAssets", "output.bin", "bin");
         geometryWriter = new BinaryWriter(File.Open(path, FileMode.Create));
+        skeletonWriter = geometryWriter;
 
-        ExtractUtil.WriteText(geometryWriter, "ModelName", targetName);
+        ExtractUtil.WriteText(geometryWriter, "ModelName", targetObjectName);
 
         // 텍스처 매핑 정보를 가장 먼저 출력한다.
         // 나중에 임포트할 때, 중복되는 텍스처들을 다시 로드하지 않기 위해 필요하다.
@@ -467,6 +532,7 @@ public class ModelExtractorWindow : EditorWindow
         ExtractTextureMapping();
         ExtractGeometry();
         ExtractBoundingVolumes();
+        if (targetSkeleton != null) ExtractSkeleton();
 
         geometryWriter.Flush();
         geometryWriter.Close();
