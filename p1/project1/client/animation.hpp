@@ -28,7 +28,7 @@ struct Bone {
 	mu::Mat4x4 toLocal;	// 드레스 공간에서 로컬 공간으로의 변환
 	mu::Mat4x4 toParent;	// 로컬 공간에서 부모 로컬 공간으로의 변환 
 	std::string name;
-	std::vector<Bone*> children;	// 이 본을 소유한 Skeleton::bones에 담긴 본을 가리킨다.
+	std::vector<Bone*> children;	// 이 본을 소유한 Skeleton::bones에 담긴 자식 본들을 가리킨다.
 	i32t boneIdx;	// 이 본을 소유한 Skeleton::bones에서 이 본의 인덱스
 };
 
@@ -63,6 +63,7 @@ enum class AnimClipFlag {
 struct AnimClip {
 	// 본별 키프레임들
 	// i번째 본의 j번째 키프레임은 keyFramesOfBones[i][j]이다.
+	// sentinel 값으로 time이 +infinity인 프레임을 각 본의 마지막 키프레임으로 둔다.
 	std::vector< std::vector<AnimFrame> > keyFramesOfBones;
 	Seconds duration;	// 애니메이션이 지속될 시간
 	// 해당 클립이 대상으로 하는 스켈레톤 구조
