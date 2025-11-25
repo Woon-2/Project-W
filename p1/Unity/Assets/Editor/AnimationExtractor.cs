@@ -10,6 +10,7 @@ public class AnimationExtractorWindow : EditorWindow
     public class AnimInfo
     {
         public string name;
+        public string skeletonEnumeration;
         public float translationThreshold = 0.001f;
         public float rotationThreshold = 0.001f;
         public float scaleThreshold = 0.001f;
@@ -37,6 +38,7 @@ public class AnimationExtractorWindow : EditorWindow
     private ReorderableList animListUI;
 
     private GameObject skeleton;
+    private GameObject sampleTarget;
     private string targetName = "";
 
     private BinaryWriter binaryWriter = null;
@@ -86,6 +88,13 @@ public class AnimationExtractorWindow : EditorWindow
 
                 y += lineHeight + 2;
 
+                entry.info.skeletonEnumeration = EditorGUI.TextField(
+                    new Rect(rect.x + 10, y, rect.width - 10, lineHeight),
+                    "SkeletonEnumeration", entry.info.skeletonEnumeration
+                );
+
+                y += lineHeight + 2;
+
                 entry.info.translationThreshold = EditorGUI.FloatField(
                     new Rect(rect.x + 10, y, rect.width - 10, lineHeight),
                     "Translation Threshold",
@@ -117,8 +126,8 @@ public class AnimationExtractorWindow : EditorWindow
             if (entry.clip == null)
                 return EditorGUIUtility.singleLineHeight + 6;
 
-            // 1 clip field + 4 info fields
-            return EditorGUIUtility.singleLineHeight * 5 + 12;
+            // 1 clip field + 5 info fields
+            return EditorGUIUtility.singleLineHeight * 6 + 12;
         };
     }
 
@@ -128,6 +137,9 @@ public class AnimationExtractorWindow : EditorWindow
         EditorGUILayout.Space();
 
         skeleton = (GameObject)EditorGUILayout.ObjectField("Target Skeleton", skeleton, typeof(GameObject), true);
+        EditorGUILayout.Space();
+
+        sampleTarget = (GameObject)EditorGUILayout.ObjectField("Sample Target", sampleTarget, typeof(GameObject), true);
         EditorGUILayout.Space();
 
         targetName = EditorGUILayout.TextField("AnimationSet Name:", targetName);
@@ -151,7 +163,7 @@ public class AnimationExtractorWindow : EditorWindow
         {
             float t = i / clip.frameRate;
 
-            clip.SampleAnimation(skeleton, t);
+            clip.SampleAnimation(sampleTarget, t);
 
             samples.Add(new Sample
             {
@@ -235,6 +247,7 @@ public class AnimationExtractorWindow : EditorWindow
         ExtractUtil.WriteHeadTag(binaryWriter, "Clip");
 
         ExtractUtil.WriteText(binaryWriter, "Name", anim.info.name);
+        ExtractUtil.WriteText(binaryWriter, "SkeletonEnumeration", anim.info.skeletonEnumeration);
 
         ExtractUtil.WriteFloat(binaryWriter, "Duration", anim.clip.length * anim.clip.frameRate);
         ExtractUtil.WriteText(binaryWriter, "WrapMode", anim.clip.wrapMode.ToString());
