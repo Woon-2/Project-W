@@ -1,4 +1,4 @@
-#include "../pch.hpp"
+#include "pch.hpp"
 #include "game.hpp"
 
 #include "../errorHandling.hpp"
