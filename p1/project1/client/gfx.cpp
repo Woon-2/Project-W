@@ -548,20 +548,12 @@ void GFX::loadAssets() {
 	dumpLog();
 
 	// load slime textures
-	std::vector<Texture> slimeTextures;
-	for( int i = 0; i < 16; ++i ) {
-		std::string texturePath = "../resources/Sprites/Slime/Slime_" + std::to_string( i ) + ".dds";
-		Texture::Type type{};
-		auto texture = loadTexture( device_.Get(), cmdList.Get(), texturePath, fence, type );
-		createSRV( device_.Get(), texture, srvTexPool_ );
-		texture.idxSrv.idxSampler = etoi( Samplers::TrilinearWrap );
-		slimeTextures.push_back( texture );
-	}
-	texAnimHashMap_.try_emplace( "Slime", slimeTextures );
-
 	for ( auto& request : requestsSpritesLoad_ ) {
-		*request.pDest = texAnimHashMap_.at( "Slime" );
+		*request.pDest = loadSpritesFromFile( request.spritesPath, device_.Get(), cmdList.Get(), texAnimHashMap_, srvTexPool_, fence );
 	}
+
+	dumpLog();
+
 
 	// 명령 기록 끝, 명령 실행
 	DISPLAY_ERROR_DX_VOID(cmdList->Close(), false);

@@ -2,7 +2,9 @@
 #define __spriteAnimation_HPP
 
 #include "pch.hpp"
-#include "gfx.hpp"
+#include "gfxUtil.hpp"
+
+class GFX;
 
 struct FrameInfo
 {
@@ -26,6 +28,14 @@ struct AnimationData
 	std::uint32_t frameTimeMs = 0;
 	std::vector<FrameInfo> frames;
 };
+
+// 바이너리 파일로부터 스프라이트 애니메이션의 정보들을 로드하고 그것을 바탕으로 texAnimHashMap을 채운다.
+std::vector<Texture> loadSpritesFromFile(
+	const std::filesystem::path& path,
+	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
+	std::unordered_map<std::string, std::vector<Texture>>& texAnimHashMap,
+	DescriptorPool& texPool, Fence& fenceToAssociate
+);
 
 class SpriteAnimation {
 public:

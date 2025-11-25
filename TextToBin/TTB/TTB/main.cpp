@@ -3,6 +3,7 @@
 #include <string>
 #include <fstream>
 #include <vector>
+#include <string_view>
 
 struct FrameInfo
 {
@@ -33,13 +34,60 @@ void WriteUInt32( std::ofstream& out, std::uint32_t value )
     out.write( reinterpret_cast<const char*>(&value), sizeof( value ) );
 }
 
-// length + 문자열 쓰기 (null 없이)
-void WriteString( std::ofstream& out, const std::string& str )
+void WriteU8String( std::ofstream& out, std::string_view s )
 {
-    std::uint32_t len = static_cast<std::uint32_t>(str.size());
-    WriteUInt32( out, len );
-    if ( len > 0 )
-        out.write( str.data(), len );
+    if ( s.size() > 255 ) { /* 에러 처리 */ }
+    uint8_t len = static_cast<uint8_t>(s.size());
+    out.write( reinterpret_cast<const char*>(&len), 1 );
+    out.write( s.data(), len );
+}
+
+// length + 문자열 쓰기 (null 없이)
+void WriteString( std::ofstream& out, std::string_view str )
+{
+    if ( str.size() > 255 ) {
+        // 여기서 에러 처리/예외/로그 등
+        std::cerr << "[WriteStringU8] string too long: " << str.size() << "\n";
+        std::exit( -1 );
+    }
+
+    std::uint8_t len = static_cast<std::uint8_t>(str.size());
+    out.write( reinterpret_cast<const char*>(&len), sizeof( len ) );
+    if ( len > 0 ) out.write( str.data(), len );
+}
+
+inline void WriteHeadTag( std::ofstream& out, std::string_view tagSource )
+{
+    // "<Name>" 같은 열린 태그를 length + 문자열로 기록
+    std::string tag = "<";
+    tag += tagSource;
+    tag += ":>";
+    WriteU8String( out, tag );
+}
+
+inline void WriteTailTag( std::ofstream& out, std::string_view tagSource )
+{
+    // "</Name>" 같은 닫힌 태그를 length + 문자열로 기록
+    std::string tag = "</";
+    tag += tagSource;
+    tag += ">";
+    WriteU8String( out, tag );
+}
+
+// C#의 WriteText와 동일한 역할
+inline void WriteText( std::ofstream& out,
+    std::string_view tagSource,
+    std::string_view text )
+{
+    WriteHeadTag( out, tagSource );
+    WriteString( out, std::string( text ) );   // string_view → string
+    WriteTailTag( out, tagSource );
+}
+
+inline void WriteTextUInt32( std::ofstream& out, std::string_view tag, uint32_t v ) {
+    WriteHeadTag( out, tag );
+    out.write( reinterpret_cast<const char*>(&v), 4 );
+    WriteTailTag( out, tag );
 }
 
 bool ExportAnimationBinary( const AnimationData& anim, const std::string& outputPath )
@@ -52,24 +100,48 @@ bool ExportAnimationBinary( const AnimationData& anim, const std::string& output
     }
 
     // [Animation Info]
-    WriteString( out, anim.name );                      // Name
+	WriteText( out, "Name", anim.name );
 
     // Type
-    WriteUInt32( out, static_cast<std::uint32_t>(anim.type) );
+    WriteTextUInt32( out, "Type", static_cast<uint32_t>(anim.type) );
 
     // FrameCnt, FrameTime
-    WriteUInt32( out, anim.frameCount );
-    WriteUInt32( out, anim.frameTimeMs );
+    WriteTextUInt32( out, "FrameCount", anim.frameCount );
+    WriteTextUInt32( out, "FrameTime", anim.frameTimeMs );
 
     // [Frames]
+	WriteString( out, "<Frames:>" ); // Frames 시작 태그
     for ( const auto& frame : anim.frames )
     {
-        WriteString( out, frame.name );                 // Name
-        WriteUInt32( out, frame.width );               // Width
-        WriteUInt32( out, frame.height );              // Height
+		WriteString( out, "<Frame:>" ); // Frame 시작 태그
+        WriteText( out, "Name", frame.name );
+        WriteTextUInt32( out, "Width", frame.width  );
+        WriteTextUInt32( out, "Height",  frame.height );
+		WriteString( out, "</Frame>" ); // Frame 종료 태그
     }
+	WriteString( out, "</Frames>" ); // Frames 종료 태그
 
     return true;
+}
+
+// ----- 추가: 바이너리 덤프 함수 -----
+void DumpBinaryFileRaw_U8( const std::string& path )
+{
+    std::ifstream in( path, std::ios::binary );
+    if ( !in ) return;
+
+    std::size_t index = 0;
+    while ( true )
+    {
+        uint8_t len = 0;
+        if ( !in.read( reinterpret_cast<char*>(&len), 1 ) ) break;
+
+        std::string data;
+        data.resize( len );
+        if ( len > 0 && !in.read( data.data(), len ) ) break;
+
+        std::cout << index++ << ": [len(u8)=" << (int)len << "] \"" << data << "\"\n";
+    }
 }
 
 int main()
@@ -156,6 +228,9 @@ int main()
     if ( ExportAnimationBinary( anim, outputPath ) )
     {
         std::cout << "저장에 성공했습니다: " << outputPath << "\n";
+
+        // (191번째 줄 요구) 바이너리 파일 원시 구조 덤프
+        DumpBinaryFileRaw_U8( outputPath );
     }
     else
     {

@@ -11,6 +11,7 @@
 #include "billboardPipeline.hpp"
 #include "skyboxPipeline.hpp"
 #include "BVPipeline.hpp"
+#include "spriteAnimation.hpp"
 
 
 // 2000, lightPos 처리 등 좀 더 표현력, 일반성 있게 구성
@@ -62,6 +63,7 @@ struct RequestTextureLoad {
 };
 
 struct RequestSpritesLoad {
+	std::filesystem::path spritesPath;
 	std::vector<Texture>* pDest;
 };
 
@@ -227,7 +229,6 @@ private:
 	std::vector<RequestSkyboxLoad> requestsSkyboxLoad_{};
 	std::vector<RequestTextureLoad> requestsTextureLoad_{};
 	std::vector<RequestSpritesLoad> requestsSpritesLoad_{};
-	
 
 	ThreadPool* threadPool_ = nullptr;	// 설정되어있을 경우 멀티스레드로 동작한다.
 };

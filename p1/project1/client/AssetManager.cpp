@@ -21,6 +21,7 @@ void AssetManager::loadGFXAssets(GFX& gfx) {
 		} );
 
 	gfx.addRequestSpritesLoad( RequestSpritesLoad{
+		.spritesPath = "../resources/Sprites/slime_anim.bin",
 		.pDest = &slimeSprites_
 		} );
 
