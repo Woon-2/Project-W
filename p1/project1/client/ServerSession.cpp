@@ -21,17 +21,6 @@ void ServerSession::onConnected( ) {
 
 void ServerSession::onDisconnected( ) {
 	std::cout << "[Client] Disconnected from server.\n";
-
-	/*auto packet = Packet{
-		.header = {
-			.size = sizeof( PacketHeader ) + sizeof( CSLeavePacket ),
-			.id = static_cast<std::uint16_t>( PacketType::csLeave )
-		}
-	};
-
-	auto sendBuffer = std::make_shared<SendBuffer>( sizeof( Packet ) );
-	sendBuffer->copyData( &packet, sizeof( Packet ) );
-	send( sendBuffer );*/
 }
 
 int32 ServerSession::onRecvPacket( uint8* buffer, int32 len ) {
