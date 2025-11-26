@@ -2733,6 +2733,10 @@ public:
         normalize();
     }
 
+    // constructor omitting normalization
+    NQuat(dx::FXMVECTOR quat, NoNormalize_t) __MathUtil_NOEXCEPT
+        : quat_(quat) {}
+
     NQuat(Quat quat) __MathUtil_NOEXCEPT
         : quat_(quat.get()) {
         normalize();
@@ -2827,10 +2831,6 @@ public:
     }
 
 private:
-    // constructor omitting normalization
-    NQuat(dx::FXMVECTOR quat, NoNormalize_t) __MathUtil_NOEXCEPT
-        : quat_(quat) {}
-
     void normalize() __MathUtil_NOEXCEPT {
         quat_ = dx::XMQuaternionNormalize(quat_);
     }
