@@ -6,24 +6,22 @@
 enum class LogicMsgType : uint8 {
 	AddRoom,
 	RemoveRoom,
-	UserEvent
+	UserEnter,
+	UserLeave,
+	UserMove,
 };
 
 struct LogicMessage {
 	LogicMsgType type{};
+	Direction dir{};
 	int32 userId{};
 	int32 roomId{};
-	Packet data{};
 };
 
 class GameLogic {
 public:
 	GameLogic() : logicThread_(), running_(false), msgQueue_(),
 		rooms_(), idRoomMap_(), logicTimer_(), accTime_(0.f) {}
-
-	~GameLogic() {
-		stop();
-	}
 
 	void start() {
 		running_ = true;

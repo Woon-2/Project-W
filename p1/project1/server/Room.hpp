@@ -3,11 +3,7 @@
 
 #include "physics.hpp"
 #include "object.hpp"
-
-struct RoomMessage {
-	int32 userId{};
-	Packet data{};
-};
+#include "GameLogic.hpp"
 
 struct Level;
 
@@ -20,13 +16,17 @@ public:
 	void init(const Level& levelData);
 	void update();
 
-	void enqueueMessage(const RoomMessage& msg) { msgQueue_.enqueue(msg); }
+	void enqueueMessage(const LogicMessage& msg) { msgQueue_.enqueue(msg); }
 	void processMessage();
 	
 	void enter(const SPGameSession& user);
 	void leave(const SPGameSession& user);
 	void broadcast(const SPSendBuffer& packet);
 	bool empty();
+
+	bool checkCollision(const GameSession& other) const {
+		
+	}
 
 	void setRoomId(int32 roomId) { roomId_ = roomId; }
 	int32 getRoomId() const { return roomId_; }
@@ -40,7 +40,7 @@ private:
 	std::recursive_mutex mtx_;
 	std::vector<SPGameSession> users_;
 	std::unordered_map<int32, SPGameSession> idUserMap_;
-	CCQueue<RoomMessage> msgQueue_;
+	CCQueue<LogicMessage> msgQueue_;
 
 	std::vector<Object> cubes_;
 	std::vector<Object> playerStarts_;

@@ -30,7 +30,7 @@ public:
 
 	static void dispatchMessage(const LogicMessage& msg) {
 		int32 idx = msg.roomId % static_cast<int32>(logics_.size());
-		logics_[idx]->pushMessage(msg);
+		logics_[idx]->enqueueMessage(msg);
 	}
 
 private:

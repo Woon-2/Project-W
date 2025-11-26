@@ -24,7 +24,15 @@ public:
 	bool signupUser(const std::string& id, const std::string& pw, std::string& err);
 	bool loginUser(const std::string& id, const std::string& pw, std::string& err);
 
-	bool checkCollision(const GameSession& other) const;
+	void setPos(float x, float z) {
+		x_ = x;
+		z_ = z;
+	}
+
+	void moveForward() { z_ += 0.1f; }
+	void moveBackward() { z_ -= 0.1f; }
+	void moveLeft() { x_ -= 0.1f; }
+	void moveRight() { x_ += 0.1f; }
 
 	float x() const { return x_; }
 	float y() const { return y_; }

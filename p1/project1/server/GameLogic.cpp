@@ -12,7 +12,7 @@ void GameLogic::run() {
 
 		while (accTime_ >= logicUpdateInterval_) {
 			for (auto& room : rooms_) {
-				//room->update();
+				room->update();
 			}
 			accTime_ -= logicUpdateInterval_;
 		}
@@ -22,9 +22,15 @@ void GameLogic::run() {
 }
 
 void GameLogic::processMessage() {
-	const auto bulkSize = rooms_.size();
-	auto messages = std::vector<LogicMessage>(bulkSize);
+	uint32 bulkSize{};
+	if (rooms_.size() == 0) {
+		bulkSize = 1;
+	}
+	else {
+		bulkSize = static_cast<uint32>(rooms_.size());
+	}
 
+	auto messages = std::vector<LogicMessage>(bulkSize);
 	const auto size = msgQueue_.try_dequeue_bulk(messages.begin(), bulkSize);
 
 	for (int32 i = 0; i < size; ++i) {
@@ -56,13 +62,11 @@ void GameLogic::processMessage() {
 			break;
 		}
 
-		case LogicMsgType::UserEvent: {
-			auto roomMessage = RoomMessage{
-				.userId = messages[i].userId,
-				.data = messages[i].data
-			};
+		case LogicMsgType::UserEnter:
+		case LogicMsgType::UserLeave:
+		case LogicMsgType::UserMove:
+			idRoomMap_[messages[i].roomId]->enqueueMessage(messages[i]);
 			break;
-		}
 		}
 	}
 }

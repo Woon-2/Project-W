@@ -31,21 +31,12 @@ void GameSession::onConnected( ) {
 void GameSession::onDisconnected( ) {
 	if (myRoomId_ != -1) {
 		auto logicMsg = LogicMessage{
-			.type = LogicMsgType::UserEvent,
+			.type = LogicMsgType::UserLeave,
 			.userId = getId(),
-			.roomId = myRoomId_,
-			.data = Packet{
-				.header = {
-					.size = sizeof(PacketHeader) + sizeof(CSLeavePacket),
-					.id = static_cast<uint16>(PacketType::csLeave)
-				},
-				.csLeave = {}
-			}
+			.roomId = myRoomId_
 		};
 		GameLogicManager::dispatchMessage(logicMsg);
 	}
-
-	GameSessionManager::remove( std::static_pointer_cast<GameSession>( shared_from_this( ) ) );
 }
 
 int32 GameSession::onRecvPacket( uint8* buffer, int32 len ) {
@@ -149,10 +140,10 @@ int32 GameSession::onRecvPacket( uint8* buffer, int32 len ) {
 		}
 
 		auto logicMsg = LogicMessage{
-			.type = LogicMsgType::UserEvent,
+			.type = LogicMsgType::UserMove,
+			.dir = packet->csMove.dir,
 			.userId = getId( ),
 			.roomId = myRoomId_,
-			.data = *packet
 		};
 
 		GameLogicManager::dispatchMessage(logicMsg);
@@ -178,16 +169,9 @@ int32 GameSession::onRecvPacket( uint8* buffer, int32 len ) {
 			GameLogicManager::dispatchMessage(addRoomMsg);
 
 			auto enterRoomMsg = LogicMessage{
-				.type = LogicMsgType::UserEvent,
+				.type = LogicMsgType::UserEnter,
 				.userId = getId( ),
-				.roomId = myRoomId_,
-				.data = Packet{
-					.header = {
-						.size = sizeof(PacketHeader) + sizeof(CSEnterPacket),
-						.id = static_cast<uint16>(PacketType::csEnter)
-					},
-					.csEnter = {}
-				}
+				.roomId = myRoomId_
 			};
 			GameLogicManager::dispatchMessage(enterRoomMsg);
 		}
@@ -256,11 +240,4 @@ bool GameSession::loginUser( const std::string& id, const std::string& pw, std::
 
 	err = "Invalid ID or password.";
 	return false;
-}
-
-bool GameSession::checkCollision( const GameSession& other ) const {
-	float dx = x_ - other.x_;
-	float dz = z_ - other.z_;
-	float dist = std::sqrt( dx * dx + dz * dz );
-	return dist < ( radius_ + other.radius_ );
 }

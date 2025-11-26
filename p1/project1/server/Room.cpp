@@ -5,6 +5,7 @@
 #include "RoomManager.hpp"
 #include "level.hpp"
 #include "GameSessionManager.hpp"
+#include "GameLogicManager.hpp"
 
 void Room::init( const Level& levelData ) {
 	cubes_ = levelData.cubes;
@@ -16,15 +17,65 @@ void Room::update() {
 }
 
 void Room::processMessage() {
-	const auto bulkSize = users_.size();
+	uint32 bulkSize{};
+	if (users_.size() == 0) {
+		bulkSize = 1;
+	}
+	else {
+		bulkSize = static_cast<uint32>(users_.size());
+	}
 
-	auto messages = std::vector<RoomMessage>(bulkSize);
+	auto messages = std::vector<LogicMessage>(bulkSize);
 	const auto size = msgQueue_.try_dequeue_bulk(messages.begin(), bulkSize);
 
 	for (int32 i = 0; i < size; ++i) {
-		auto packetType = static_cast<PacketType>(messages[i].data.header.id);
-		switch (packetType) {
-		case PacketType::csEnter:
+		switch (messages[i].type) {
+		case LogicMsgType::UserEnter:
+			enter(GameSessionManager::findGameSession(messages[i].userId));
+			break;
+
+		case LogicMsgType::UserLeave:
+			leave(GameSessionManager::findGameSession(messages[i].userId));
+			break;
+
+		case LogicMsgType::UserMove: {
+			switch (messages[i].dir) {
+			case Direction::w:
+				idUserMap_[messages[i].userId]->moveForward();
+				break;
+
+			case Direction::a:
+				idUserMap_[messages[i].userId]->moveLeft();
+				break;
+
+			case Direction::s:
+				idUserMap_[messages[i].userId]->moveBackward();
+				break;
+
+			case Direction::d:
+				idUserMap_[messages[i].userId]->moveRight();
+				break;
+			}
+
+			auto packet = Packet{
+				.header = {
+					.size = sizeof( PacketHeader ) + sizeof( SCMovePacket ),
+					.id = static_cast<uint16>( PacketType::scMove )
+				},
+				.scMove = {
+					.playerId = messages[i].userId,
+					.x = idUserMap_[messages[i].userId]->x( ),
+					.y = idUserMap_[messages[i].userId]->y( ),
+					.z = idUserMap_[messages[i].userId]->z( )
+				}
+			};
+
+			int32 packetSize = sizeof(Packet);
+			auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+			sendBuffer->copyData(&packet, packetSize);	
+			broadcast(sendBuffer);
+			break;
+		}
 		}
 	}
 }
@@ -36,7 +87,8 @@ void Room::enter( const SPGameSession& user ) {
 	}
 
 	users_.push_back( user );
-	std::cout << "user count " << users_.size( ) << '\n';
+	idUserMap_[user->getId()] = user;
+	//std::cout << "user count " << users_.size( ) << '\n';
 
 	auto packet = Packet{
 		.header = {
@@ -83,8 +135,18 @@ void Room::leave( const SPGameSession& user ) {
 		return u == user;
 	} );
 
+	idUserMap_.erase(user->getId());
+
+	GameSessionManager::remove(user);
+
 	if ( empty( ) ) {
 		RoomManager::removeRoom( roomId_ );
+		
+		auto removeRoomMsg = LogicMessage{
+			.type = LogicMsgType::RemoveRoom,
+			.roomId = roomId_
+		};
+		GameLogicManager::dispatchMessage(removeRoomMsg);
 	}
 }
 
