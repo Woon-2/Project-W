@@ -12,8 +12,48 @@ void Room::init( const Level& levelData ) {
 	playerStarts_ = levelData.playerStarts;
 }
 
-void Room::update() {
+void Room::update(Milliseconds deltatime) {
 	processMessage();
+
+	// 위치 갱신
+	for (auto& [id, user] : idUserMap_) {
+		user->oldX_ = user->x_;
+		user->oldZ_ = user->z_;
+
+		if (user->keyMask_ & MoveW) {
+			user->z_ += 0.1f;
+		}
+		if (user->keyMask_ & MoveA) {
+			user->x_ -= 0.1f;
+		}
+		if (user->keyMask_ & MoveS) {
+			user->z_ -= 0.1f;
+		}
+		if (user->keyMask_ & MoveD) {
+			user->x_ += 0.1f;
+		}
+
+		// 불필요한 브로드캐스트를 줄이기 위해
+		// 위치가 변경되었을 때만 다른 유저들에게 알림
+		if(user->oldX_ != user->x_ || user->oldZ_ != user->z_) {
+			auto packet = Packet{
+				.header = {
+					.size = sizeof( PacketHeader ) + sizeof( SCMovePacket ),
+					.id = static_cast<uint16>( PacketType::scMove )
+				},
+				.scMove = {
+					.playerId = user->getId( ),
+					.x = user->x_,
+					.z = user->z_
+				}
+			};
+
+			int32 packetSize = sizeof( Packet );
+			auto sendBuffer = std::make_shared<SendBuffer>( packetSize );
+			sendBuffer->copyData( &packet, packetSize );
+			broadcast( sendBuffer );
+		}
+	}
 }
 
 void Room::processMessage() {
@@ -35,45 +75,46 @@ void Room::processMessage() {
 			break;
 
 		case LogicMsgType::UserLeave:
-			leave(GameSessionManager::findGameSession(messages[i].userId));
+			leave(idUserMap_[messages[i].userId]);
 			break;
 
-		case LogicMsgType::UserMove: {
+		case LogicMsgType::UserMoveStart: {
+			auto user = idUserMap_[messages[i].userId];
+
 			switch (messages[i].dir) {
-			case Direction::w:
-				idUserMap_[messages[i].userId]->moveForward();
+			case Direction::w: 
+				user->keyMask_ |= MoveW;
 				break;
-
 			case Direction::a:
-				idUserMap_[messages[i].userId]->moveLeft();
+				user->keyMask_ |= MoveA;
 				break;
-
-			case Direction::s:
-				idUserMap_[messages[i].userId]->moveBackward();
+			case Direction::s: 
+				user->keyMask_ |= MoveS;	
 				break;
-
 			case Direction::d:
-				idUserMap_[messages[i].userId]->moveRight();
+				user->keyMask_ |= MoveD;
 				break;
 			}
+			break;
+		}
 
-			auto packet = Packet{
-				.header = {
-					.size = sizeof( PacketHeader ) + sizeof( SCMovePacket ),
-					.id = static_cast<uint16>( PacketType::scMove )
-				},
-				.scMove = {
-					.playerId = messages[i].userId,
-					.x = idUserMap_[messages[i].userId]->x( ),
-					.y = idUserMap_[messages[i].userId]->y( ),
-					.z = idUserMap_[messages[i].userId]->z( )
-				}
-			};
+		case LogicMsgType::UserMoveStop: {
+			auto user = idUserMap_[messages[i].userId];
 
-			int32 packetSize = sizeof(Packet);
-			auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
-			sendBuffer->copyData(&packet, packetSize);	
-			broadcast(sendBuffer);
+			switch (messages[i].dir) {
+			case Direction::w:
+				user->keyMask_ &= ~MoveW;
+				break;
+			case Direction::a:
+				user->keyMask_ &= ~MoveA;
+				break;
+			case Direction::s:
+				user->keyMask_ &= ~MoveS;
+				break;
+			case Direction::d:
+				user->keyMask_ &= ~MoveD;
+				break;
+			}
 			break;
 		}
 		}
@@ -102,9 +143,8 @@ void Room::enter( const SPGameSession& user ) {
 
 	for ( auto i = 0; i < users_.size( ); ++i ) {
 		packet.scEnter.pIds[ i ] = users_[ i ]->getId( );
-		packet.scEnter.x[ i ] = users_[ i ]->x( );
-		packet.scEnter.y[ i ] = users_[ i ]->y( );
-		packet.scEnter.z[ i ] = users_[ i ]->z( );
+		packet.scEnter.x[ i ] = users_[ i ]->x_;
+		packet.scEnter.z[ i ] = users_[ i ]->z_;
 	}
 
 	int32 packetSize = sizeof( Packet );
@@ -137,11 +177,7 @@ void Room::leave( const SPGameSession& user ) {
 
 	idUserMap_.erase(user->getId());
 
-	GameSessionManager::remove(user);
-
 	if ( empty( ) ) {
-		RoomManager::removeRoom( roomId_ );
-		
 		auto removeRoomMsg = LogicMessage{
 			.type = LogicMsgType::RemoveRoom,
 			.roomId = roomId_

@@ -6,13 +6,15 @@
 void GameLogic::run() {
 	while (running_) {
 		logicTimer_.tick();
-		accTime_ += logicTimer_.deltaTime<Milliseconds>().count();
+		
+		auto dt = logicTimer_.deltaTime<Milliseconds>();
+		accTime_ += dt.count();
 
 		processMessage();
 
 		while (accTime_ >= logicUpdateInterval_) {
 			for (auto& room : rooms_) {
-				room->update();
+				room->update(dt);
 			}
 			accTime_ -= logicUpdateInterval_;
 		}
@@ -64,7 +66,8 @@ void GameLogic::processMessage() {
 
 		case LogicMsgType::UserEnter:
 		case LogicMsgType::UserLeave:
-		case LogicMsgType::UserMove:
+		case LogicMsgType::UserMoveStart:
+		case LogicMsgType::UserMoveStop:
 			idRoomMap_[messages[i].roomId]->enqueueMessage(messages[i]);
 			break;
 		}

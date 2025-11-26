@@ -37,6 +37,8 @@ void GameSession::onDisconnected( ) {
 		};
 		GameLogicManager::dispatchMessage(logicMsg);
 	}
+
+	GameSessionManager::remove(std::static_pointer_cast<GameSession>(shared_from_this()));
 }
 
 int32 GameSession::onRecvPacket( uint8* buffer, int32 len ) {
@@ -134,16 +136,32 @@ int32 GameSession::onRecvPacket( uint8* buffer, int32 len ) {
 	case PacketType::csLeave:
 		break;
 
-	case PacketType::csMove: {
+	case PacketType::csMoveStart: {
 		if(myRoomId_ == -1) {
 			break;
 		}
 
 		auto logicMsg = LogicMessage{
-			.type = LogicMsgType::UserMove,
-			.dir = packet->csMove.dir,
+			.type = LogicMsgType::UserMoveStart,
+			.dir = packet->csMoveStart.dir,
 			.userId = getId( ),
 			.roomId = myRoomId_,
+		};
+
+		GameLogicManager::dispatchMessage(logicMsg);
+		break;
+	}
+
+	case PacketType::csMoveStop: {
+		if (myRoomId_ == -1) {
+			break;
+		}
+
+		auto logicMsg = LogicMessage{
+			.type = LogicMsgType::UserMoveStop,
+			.dir = packet->csMoveStop.dir,
+			.userId = getId(),
+			.roomId = myRoomId_
 		};
 
 		GameLogicManager::dispatchMessage(logicMsg);
@@ -157,24 +175,24 @@ int32 GameSession::onRecvPacket( uint8* buffer, int32 len ) {
 
 		auto room = RoomManager::findRoom( packet->csFindRoom.roomId );
 		if ( !room ) {
-			auto newRoom = RoomManager::createRoom( packet->csFindRoom.roomId );
-			ASSERT_CRASH( newRoom );
-
-			myRoomId_ = newRoom->getRoomId();
-
-			auto addRoomMsg = LogicMessage{
-				.type = LogicMsgType::AddRoom,
-				.roomId = myRoomId_,
-			};
-			GameLogicManager::dispatchMessage(addRoomMsg);
-
-			auto enterRoomMsg = LogicMessage{
-				.type = LogicMsgType::UserEnter,
-				.userId = getId( ),
-				.roomId = myRoomId_
-			};
-			GameLogicManager::dispatchMessage(enterRoomMsg);
+			room = RoomManager::createRoom( packet->csFindRoom.roomId );
+			ASSERT_CRASH(room);
 		}
+
+		myRoomId_ = room->getRoomId();
+
+		auto addRoomMsg = LogicMessage{
+			.type = LogicMsgType::AddRoom,
+			.roomId = myRoomId_,
+		};
+		GameLogicManager::dispatchMessage(addRoomMsg);
+
+		auto enterRoomMsg = LogicMessage{
+			.type = LogicMsgType::UserEnter,
+			.userId = getId(),
+			.roomId = myRoomId_
+		};
+		GameLogicManager::dispatchMessage(enterRoomMsg);
 		break;
 	}
 	}

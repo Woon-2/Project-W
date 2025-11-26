@@ -6,9 +6,8 @@
 class GameSession : public PacketSession {
 public:
 	GameSession()
-		: x_(0.0f), y_(0.0f), z_(0.0f),
-		radius_(0.1f), signupAndLoginMtx_(), myRoomId_(-1) {
-	}
+		: keyMask_(), x_(0.0f), oldX_(0.f), z_(0.0f), oldZ_(0.f),
+		radius_(0.1f), signupAndLoginMtx_(), myRoomId_(-1) {}
 
 	virtual ~GameSession() {
 		std::cout << "GameSession " << getId() << " destructed.\n";
@@ -24,29 +23,22 @@ public:
 	bool signupUser(const std::string& id, const std::string& pw, std::string& err);
 	bool loginUser(const std::string& id, const std::string& pw, std::string& err);
 
-	void setPos(float x, float z) {
-		x_ = x;
-		z_ = z;
+	void move(float deltaTime) {
+
 	}
 
-	void moveForward() { z_ += 0.1f; }
-	void moveBackward() { z_ -= 0.1f; }
-	void moveLeft() { x_ -= 0.1f; }
-	void moveRight() { x_ += 0.1f; }
-
-	float x() const { return x_; }
-	float y() const { return y_; }
-	float z() const { return z_; }
-
-private:
+	// setter, getter 늘어나는 거 방지하기 위해 public으로 배치함
+	// user(player)의 좌표의 스냅샷을 저장하기 위해 oldX_, oldZ_ 추가
+	uint8 keyMask_;
 	float x_;
-	float y_;
+	float oldX_;
 	float z_;
+	float oldZ_;
 	float radius_;
 
-	std::mutex signupAndLoginMtx_;
-
+private:
 	int32 myRoomId_;
+	std::mutex signupAndLoginMtx_;
 };
 
 #endif // GAME_SESSION_HPP

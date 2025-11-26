@@ -14,7 +14,7 @@ public:
 		physicSystem_(), physicUpdateAcc_(0s), physicUpdateInterval(1s / 60.f) {}
 
 	void init(const Level& levelData);
-	void update();
+	void update(Milliseconds deltatime);
 
 	void enqueueMessage(const LogicMessage& msg) { msgQueue_.enqueue(msg); }
 	void processMessage();
@@ -36,6 +36,13 @@ public:
 	}
 
 private:
+	enum : uint8 {
+		MoveW = 0x1,
+		MoveA = 0x2,
+		MoveS = 0x4,
+		MoveD = 0x8
+	};
+
 	int32 roomId_;
 	std::recursive_mutex mtx_;
 	std::vector<SPGameSession> users_;

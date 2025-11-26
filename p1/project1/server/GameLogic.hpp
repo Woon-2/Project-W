@@ -8,7 +8,8 @@ enum class LogicMsgType : uint8 {
 	RemoveRoom,
 	UserEnter,
 	UserLeave,
-	UserMove,
+	UserMoveStart,
+	UserMoveStop
 };
 
 struct LogicMessage {
