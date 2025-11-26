@@ -18,7 +18,7 @@ struct PacketHeader {
 };
 
 enum class Direction : std::uint8_t {
-	none, w, a, s, d
+	w, a, s, d
 };
 
 enum class PacketType : std::uint16_t {
@@ -35,7 +35,8 @@ enum class PacketType : std::uint16_t {
 	csLeave,
 	scLeave,
 
-	csMove,
+	csMoveStart,
+	csMoveStop,
 	scMove,
 
 	csFindRoom,
@@ -74,7 +75,6 @@ struct SCEnterPacket {
 	std::int32_t playerCount;
 	std::array<std::int32_t, maxUserCount> pIds;
 	std::array<float, maxUserCount> x;
-	std::array<float, maxUserCount> y;
 	std::array<float, maxUserCount> z;
 };
 
@@ -86,14 +86,17 @@ struct SCLeavePacket {
 	std::int32_t playerId;
 };
 
-struct CSMovePacket {
+struct CSMoveStartPacket {
+	Direction dir;
+};
+
+struct CSMoveStopPacket {
 	Direction dir;
 };
 
 struct SCMovePacket {
 	std::int32_t playerId;
 	float x;
-	float y;
 	float z;
 };
 
@@ -113,7 +116,8 @@ struct Packet {
 		SCEnterPacket scEnter;
 		CSLeavePacket csLeave;
 		SCLeavePacket scLeave;
-		CSMovePacket csMove;
+		CSMoveStartPacket csMoveStart;
+		CSMoveStopPacket csMoveStop;
 		SCMovePacket scMove;
 		CSFindRoomPacket csFindRoom;
 	};
