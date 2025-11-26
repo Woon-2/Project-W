@@ -3,6 +3,8 @@ struct PerInstanceData {
     float4x4 wvp;
     float4x4 wv;
     float3x3 wvNormal;
+    uint rootBoneOffset;
+    uint3 padding;
 };
 
 struct Material {
@@ -46,6 +48,7 @@ cbuffer PerFrameData : register(b1) {
 }
 
 StructuredBuffer<PerInstanceData> gInstances : register(t0);
+StructuredBuffer<float4x4> gBones: register(t2);
 
 static float4x4 gmtxTexturize = {
 	0.5f, 0.0f, 0.0f, 0.0f,
@@ -53,6 +56,14 @@ static float4x4 gmtxTexturize = {
 	0.0f, 0.0f, 1.0f, 0.0f,
 	0.5f, 0.5f, 0.0f, 1.0f
 };
+
+float4x4 blendBoneTransform(uint rootBoneOffset, uint4 boneIndices, float4 boneWeights) {
+    return 
+        gBones[rootBoneOffset + boneIndices.x] * boneWeights.x +
+        gBones[rootBoneOffset + boneIndices.y] * boneWeights.y +
+        gBones[rootBoneOffset + boneIndices.z] * boneWeights.z +
+        gBones[rootBoneOffset + boneIndices.w] * boneWeights.w;
+}
 
 #include "pbrLighting.hlsli"
 
@@ -62,23 +73,35 @@ VSOutput VSMain(
     float3 tangent : TANGENT,
     float3 bitangent : BITANGENT,
     float2 uv : UV,
+    int4 boneIndices: BONE_INDICES,
+    float4 boneWeights: BONE_WEIGHTS,
     uint idxInst : SV_InstanceID
 ) {
     VSOutput ret;
     
-    ret.pos = mul(float4(position, 1.0f), gInstances[idxInst + firstInstanceOffset].wvp);
-    ret.posV = mul(float4(position, 1.0f), gInstances[idxInst + firstInstanceOffset].wv).xyz;
+    float4x4 anim = blendBoneTransform(
+        gInstances[idxInst + firstInstanceOffset].rootBoneOffset,
+        boneIndices, boneWeights
+    );
+    
+    float4 animatedPos = mul(float4(position, 1.0f), anim);
+    float4 animatedNormal = mul(float4(normal, 0.0f), anim);
+    
+    ret.pos = mul(animatedPos, gInstances[idxInst + firstInstanceOffset].wvp);
+    ret.posV = mul(animatedPos, gInstances[idxInst + firstInstanceOffset].wv).xyz;
     ret.posL = mul(
         mul(
-            mul(float4(position, 1.0f), gInstances[idxInst + firstInstanceOffset].world),
+            mul(animatedPos, gInstances[idxInst + firstInstanceOffset].world),
             lightVP
         ),
         gmtxTexturize
     );
-    ret.normalV = mul(normal, gInstances[idxInst + firstInstanceOffset].wvNormal);
+    ret.normalV = mul(animatedNormal.xyz, gInstances[idxInst + firstInstanceOffset].wvNormal);
     if (material.idxAlbedo.x >= 0) {
-		ret.tangentV = mul(tangent, gInstances[idxInst + firstInstanceOffset].wvNormal);
-		ret.bitangentV = mul(bitangent, gInstances[idxInst + firstInstanceOffset].wvNormal);
+        float4 animatedTangent = mul(float4(tangent, 0.0f), anim);
+        float4 animatedBitangent = mul(float4(bitangent, 0.0f), anim);
+		ret.tangentV = mul(animatedTangent.xyz, gInstances[idxInst + firstInstanceOffset].wvNormal);
+		ret.bitangentV = mul(animatedBitangent.xyz, gInstances[idxInst + firstInstanceOffset].wvNormal);
 	}
     ret.uv = uv;
     

@@ -363,7 +363,7 @@ void Dispatcher::shadowDraw() {
 		//  어차피 바인드는 GPU 명령이라 바로 실행되지 않기 때문에)
 		auto perDrawcallData = ShadowMapShader::PerDrawcallData{
 			// perInstanceData에서 현재 instancing group의 첫 번째 인스턴스의 인덱스
-			.firstInstanceIdx = static_cast<u32t>(groupFirst - drawEvents_.begin())
+			.firstInstanceOffset = static_cast<u32t>(groupFirst - drawEvents_.begin())
 		};
 		pResources_->shadowPass.perDrawcallData.cbuffers[idxDrawcall].stage(
 			roomIdx_, &perDrawcallData, 1u
@@ -887,7 +887,7 @@ void Dispatcher::mainDraw() {
 				.cEmmisive = drawEvent.material->constantEmmisive
 			},
 			// perInstanceData에서 현재 instancing group의 첫 번째 인스턴스의 인덱스
-			.firstInstanceIdx = static_cast<u32t>(groupFirst - drawEvents_.begin())
+			.firstInstanceOffset = static_cast<u32t>(groupFirst - drawEvents_.begin())
 		};
 		pResources_->mainPass.perDrawcallData.cbuffers[idxDrawcall].stage(
 			roomIdx_, &perDrawcallData, 1u
@@ -1221,7 +1221,7 @@ void Dispatcher::addJobMainDraw( ID3D12GraphicsCommandList* threadCmdList,
 					.cEmmisive = drawEvent.material->constantEmmisive
 				},
 				// perInstanceData에서 현재 instancing group의 첫 번째 인스턴스의 인덱스
-				.firstInstanceIdx = static_cast<u32t>(groupFirst - drawEvents_.begin())
+				.firstInstanceOffset = static_cast<u32t>(groupFirst - drawEvents_.begin())
 			};
 			// PerDrawcallData GPU 데이터 갱신
 			// (바인드와 GPU 데이터 갱신 순서는 상관없다.
@@ -1359,7 +1359,7 @@ void Dispatcher::addJobShadowDraw( ID3D12GraphicsCommandList* threadCmdList,
 
 			auto perDrawcallData = ShadowMapShader::PerDrawcallData{
 				// perInstanceData에서 현재 instancing group의 첫 번째 인스턴스의 인덱스
-				.firstInstanceIdx = static_cast<u32t>(groupFirst - drawEvents_.begin())
+				.firstInstanceOffset = static_cast<u32t>(groupFirst - drawEvents_.begin())
 			};
 			// PerDrawcallData GPU 데이터 갱신
 			// (바인드와 GPU 데이터 갱신 순서는 상관없다.

@@ -7,7 +7,7 @@ struct VSOutput {
 };
 
 cbuffer PerDrawcallData : register(b0) {
-    uint idxDrawcall;
+    uint firstInstanceOffset;
     uint3 padding;
 };
 
@@ -24,7 +24,7 @@ VSOutput VSMain(
     VSOutput ret;
     
     ret.pos = mul(
-        mul(float4(position, 1.0f), gInstances[idxInst + idxDrawcall].world),
+        mul(float4(position, 1.0f), gInstances[idxInst + firstInstanceOffset].world),
         lightVP
     );
     

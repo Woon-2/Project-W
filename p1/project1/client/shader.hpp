@@ -18,7 +18,9 @@ CompiledShaderOutput compileShader(const std::filesystem::path& path,
 
 ComPtr<ID3D12PipelineState> createSampleShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createShadowMapShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createShadowMapSkinnedShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createPBRSkinnedShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBillboardShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
@@ -74,7 +76,7 @@ struct PerInstanceData {
 
 struct PerDrawcallData {
 	Material material;
-	u32t firstInstanceIdx;
+	u32t firstInstanceOffset;
 };
 
 }	// namespace SampleShader
@@ -126,7 +128,7 @@ struct PerInstanceData {
 
 struct PerDrawcallData {
 	Material material;
-	u32t firstInstanceIdx;
+	u32t firstInstanceOffset;
 };
 
 struct PerFrameData {
@@ -158,7 +160,7 @@ struct PerInstanceData {
 
 struct PerDrawcallData {
 	Material material;
-	u32t firstInstanceIdx;
+	u32t firstInstanceOffset;
 };
 
 struct PerFrameData {
@@ -176,7 +178,7 @@ struct PerInstanceData {
 };
 
 struct PerDrawcallData {
-	u32t firstInstanceIdx;
+	u32t firstInstanceOffset;
 	XMUINT3 padding;
 };
 
@@ -208,7 +210,7 @@ struct PerInstanceData {
 };
 
 struct PerDrawcallData {
-	u32t firstInstanceIdx;
+	u32t firstInstanceOffset;
 	XMUINT3 padding;
 };
 }	// namespace SkyboxShader
