@@ -14,6 +14,7 @@ public class ModelExtractorWindow : EditorWindow
     private Vector2 scrollPos;
     private string targetObjectName = "";
     private string targetSkeletonName = "";
+    private string skeletonEnumeration = "";
 
     private BinaryWriter geometryWriter = null;
     private BinaryWriter skeletonWriter = null;
@@ -42,6 +43,9 @@ public class ModelExtractorWindow : EditorWindow
         EditorGUILayout.Space();
 
         targetSkeletonName = (string)EditorGUILayout.TextField("Skeleton Name(optional): ", targetSkeletonName);
+        EditorGUILayout.Space();
+
+        skeletonEnumeration = (string)EditorGUILayout.TextField("Skeleton Enumeration(optional): ", skeletonEnumeration);
         EditorGUILayout.Space();
 
         if (GUILayout.Button("🔍 Scan Textures") && targetObject != null)
@@ -477,6 +481,8 @@ public class ModelExtractorWindow : EditorWindow
     void ProcessBones()
     {
         bones = new List<Transform>();
+        bindposes = new List<Matrix4x4>();
+
         ProcessBoneHierarchy(targetSkeleton.transform, targetSkeleton.transform);
     }
 
@@ -507,6 +513,7 @@ public class ModelExtractorWindow : EditorWindow
         ProcessBones();
         ExtractUtil.WriteHeadTag(skeletonWriter, "Skeleton");
         ExtractUtil.WriteText(skeletonWriter, "Name", targetSkeletonName);
+        ExtractUtil.WriteText(skeletonWriter, "SkeletonEnumeration", skeletonEnumeration);
 
         ExtractUtil.WriteInteger(skeletonWriter, "Count", bones.Count);
         int n = 0;

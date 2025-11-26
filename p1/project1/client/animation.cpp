@@ -1,6 +1,7 @@
 #include "pch.hpp"
 #include "animation.hpp"
 #include "errorHandling.hpp"
+#include "binaryImport.hpp"
 
 // 전달된 애니메이션 프레임을 행렬로 변환한다.
 // lerpAnimFrames 함수로 여러 프레임을 보간한 최종 프레임을
@@ -19,6 +20,80 @@ AnimFrame MU_CALLCONV lerpAnimFrames(AnimFrame lhs, AnimFrame rhs, float t) {
 	ret.rotation = mu::slerp(lhs.rotation, rhs.rotation, t);
 	ret.scale = mu::lerp(lhs.scale, rhs.scale, t);
 	return ret;
+}
+
+void importAnimClip(std::ifstream& ifs, AnimClip& clip) {
+	readHeadTag(ifs, "Clip");
+
+	clip.name = readText(ifs, "Name");
+	const auto skeletonEnumerationString = readText(ifs, "SkeletonEnumeration");
+	clip.skeletonEnumeration = convertStrToSkeletonEnum(skeletonEnumerationString);
+	clip.duration = Seconds( readFloat(ifs, "Duration") );
+	const auto wrapModeStr = readText(ifs, "WrapMode");
+
+	if (wrapModeStr == "Default" || wrapModeStr == "Loop") {
+		clip.flags |= etoi(AnimClipFlag::Loop);	
+	}
+	else if (wrapModeStr == "Once") {
+		// no-op
+	}
+	else {
+		DISPLAY_ERROR_STR( false, "[File I/O Error] importAnimClip: 알 수 없는 wrapMode 값 \""s
+			+ wrapModeStr + "\"을 읽었습니다.",
+			false
+		);
+	}
+
+	for (auto& keyFrames : clip.keyFramesOfBones) {
+		const auto boneIdx = readInteger(ifs, "Bone");
+		const auto keyFrameCnt = readInteger(ifs, "KeyFrameCnt");
+
+		keyFrames.resize(keyFrameCnt);
+		for (auto& keyFrame : keyFrames) {
+			readHeadTag(ifs, "KeyFrame");
+
+			keyFrame.time = Seconds( readFloat(ifs, "Time") );
+
+			const auto trs = readVec3(ifs, "Translation");
+			keyFrame.translation = DirectX::XMLoadFloat3(&trs);
+
+			const auto rot = readVec4(ifs, "Rotation");
+			keyFrame.rotation = mu::NQuat(DirectX::XMLoadFloat4(&rot), mu::NQuat::NoNormalize_t{});
+
+			const auto scl = readVec3(ifs, "Scale");
+			keyFrame.scale = DirectX::XMLoadFloat3(&scl);
+
+			readTailTag(ifs, "KeyFrame");
+		}
+	}
+
+	readTailTag(ifs, "Clip");
+
+	gSharedLog << "[Resource Load] 애니메이션 클립 " << clip.name << " 로드 완료\n";
+}
+
+std::vector<AnimClip> loadAnimClipsFromFile(const std::filesystem::path& path) {
+	std::vector<AnimClip> ret{};
+
+    auto ifs = std::ifstream(path, std::ios::binary);
+    DISPLAY_ERROR_STR(ifs.good(), "[File I/O Error]: loadAnimClipsFromFile: "s + path.string() + " 파일을 열 수 없습니다."s, false);
+    if (!ifs) {
+        return ret;
+    }
+
+	const auto animationSetName = readText(ifs, "AnimationSetName");
+	const auto clipCnt = readInteger(ifs, "ClipCnt");
+	const auto boneCnt = readInteger(ifs, "BoneCnt");
+
+	for (int i = 0; i < clipCnt; ++i) {
+		auto& clip = ret.emplace_back();
+		clip.keyFramesOfBones.resize(boneCnt);
+		importAnimClip(ifs, clip);
+	}
+
+    gSharedLog << "[Resource Load] File I/O: 애니메이션 세트 " << animationSetName << '(' << path << ") 로드 완료\n";
+
+    return ret;
 }
 
 // 대상 애니메이션 클립을 추가한다.
@@ -212,6 +287,6 @@ void AnimSystem::update(Seconds timeSlice) {
 
 	static constexpr float Kp = 0.1f;
 
-	jobSize_ -= jobSize_ * error * Kp;
+	jobSize_ -= std::size_t(jobSize_ * error * Kp);
 	jobSize_ = std::max(jobSize_, 1ull);
 }

@@ -21,3 +21,7 @@ void AssetManager::loadGFXAssets(GFX& gfx) {
 
 	gfx.loadAssets();
 }
+
+void AssetManager::loadAnimations() {
+	vanguardAnimations_ = loadAnimClipsFromFile("../resources/animations/vanguardAnimations.anim");
+}

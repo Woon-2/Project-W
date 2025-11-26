@@ -1,6 +1,8 @@
 #ifndef __animation_HPP
 #define __animation_HPP
 
+#include "mesh.hpp"
+
 // 애니메이션의 한 프레임의 정보를 담는 구조체
 // lerpAnimFrames 함수로 서로 다른 AnimFrame을 보간하거나
 // convertAnimFrameToMatrix 함수를 통해 AnimFrame을 행렬로 변환할 수 있다.
@@ -17,41 +19,10 @@ struct AnimFrame {
 // 이 함수를 통해 행렬로 변환해서 사용해야 한다.
 mu::Mat4x4 MU_CALLCONV convertAnimFrameToMatrix(AnimFrame frame);
 
-struct Skeleton;
-
-// 애니메이션에 쓰이는 한 개의 본을 나타내는 구조체
-// 
-// 애니메이션 프레임은 로컬 공간(본 공간)에서의 변환을 표현하므로,
-// 드레스 공간에 있는 본을 Bone::toLocal 멤버를 통해 로컬 공간으로 변환한 뒤
-// 프레임 변환을 적용해야 올바른 변환이 출력된다.
-struct Bone {
-	mu::Mat4x4 toLocal;	// 드레스 공간에서 로컬 공간으로의 변환
-	mu::Mat4x4 toParent;	// 로컬 공간에서 부모 로컬 공간으로의 변환 
-	std::string name;
-	std::vector<Bone*> children;	// 이 본을 소유한 Skeleton::bones에 담긴 자식 본들을 가리킨다.
-	i32t boneIdx;	// 이 본을 소유한 Skeleton::bones에서 이 본의 인덱스
-};
-
-// 스켈레톤의 구조를 나타내는 열거형,
-// 애니메이션 클립이 대상으로 하는 스켈레톤 구조와
-// 모델에 부여된 스켈레톤 구조가 같아야만
-// 올바른 스키닝이 가능하다.
-enum class SkeletonEnumeration {
-	Humanoid,
-	SIZE
-};
-
-// 스키닝의 대상이 되는 스켈레톤을 나타내는 구조체
-// 본들과 스켈레톤 구조를 나타내는 열거형 값을 저장한다.
-struct Skeleton {
-	// 본이 자식 본을 생포인터로 저장하기 위해서는
-	// 스켈레톤이 복사되어도 본들의 메모리 공간이 변하지 않아야 한다.
-	// std::shared_ptr로 감싸 본들의 저장 공간을 별도의 free store에 구성한다.
-	// 이로 인해 부수적으로 Skeleton의 복사도 값싸진다.
-	std::shared_ptr< std::vector<Bone> > bones;
-	Bone* pRoot;	// 이 멤버를 통해 전체 본 트리를 순회할 수 있다.
-	SkeletonEnumeration skeletonEnumeration;
-};
+// 두 애니메이션 프레임을 인자 t로 선형보간한다.
+// translation과 scale에 대해선 mu::lerp가,
+// rotation에 대해선 mu::slerp가 사용된다.
+AnimFrame MU_CALLCONV lerpAnimFrames(AnimFrame lhs, AnimFrame rhs, float t);
 
 enum class AnimClipFlag {
 	Loop,
@@ -61,6 +32,7 @@ enum class AnimClipFlag {
 // 한 개의 애니메이션 클립을 나타내는 구조체
 // 키프레임들과 재생 시간, 스켈레톤 구조, 플래그를 저장한다.
 struct AnimClip {
+	std::string name;
 	// 본별 키프레임들
 	// i번째 본의 j번째 키프레임은 keyFramesOfBones[i][j]이다.
 	// sentinel 값으로 time이 +infinity인 프레임을 각 본의 마지막 키프레임으로 둔다.
@@ -73,10 +45,7 @@ struct AnimClip {
 	u32t flags;
 };
 
-// 두 애니메이션 프레임을 인자 t로 선형보간한다.
-// translation과 scale에 대해선 mu::lerp가,
-// rotation에 대해선 mu::slerp가 사용된다.
-AnimFrame MU_CALLCONV lerpAnimFrames(AnimFrame lhs, AnimFrame rhs, float t);
+std::vector<AnimClip> loadAnimClipsFromFile(const std::filesystem::path& path);
 
 class AnimSystem;
 

@@ -376,6 +376,18 @@ Mesh buildPointMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, s
 	return mesh;
 }
 
+SkeletonEnumeration convertStrToSkeletonEnum(const std::string& skeletonEnumerationStr) {
+    if (skeletonEnumerationStr == "Humanoid") {
+        return SkeletonEnumeration::Humanoid;
+    }
+
+    DISPLAY_ERROR_STR( false, "[GFX Error] convertStrToSkeletonEnum: 알 수 없는 SkeletonEnumeration 값 \""s
+        + skeletonEnumerationStr + "\"을 읽었습니다.\n",
+        false
+    );
+    return SkeletonEnumeration::Humanoid;
+}
+
 // 텍스처 매핑 정보를 읽어들인다.
 // 텍스처 이름을 key로 삼아 texHashMap에 쿼리를 해보고,
 // 텍스처가 존재하지 않는다면 알아낸 경로를 통해 텍스처를 로드해 key와 함께 등록한다.
@@ -1041,6 +1053,8 @@ void importBoundingVolume(std::ifstream& ifs, Model& model) {
     aabb.size = DirectX::XMLoadFloat3(&size);
 
     readTailTag(ifs, "BoundingVolume");
+
+    gSharedLog << "[Resource Load] 바운딩 볼륨 " << bvName << " 구축 완료\n";
 }
 
 // 모델의 바운딩 볼륨 정보를 읽어온다.
@@ -1055,6 +1069,61 @@ void importBoundingVolumes(std::ifstream& ifs, Model& model) {
     }
 
     readTailTag(ifs, "BoundingVolumes");
+}
+
+[[maybe_unused]] std::size_t importBone(
+    std::ifstream& ifs, Model& model, i32t& boneIdx
+) {
+    readHeadTag(ifs, "Bone");
+
+    auto& bone = (*model.skeleton.bones)[boneIdx];
+    bone.name = readText(ifs, "Name");
+    const auto toParent = readMatrix(ifs, "ToParent");
+    bone.toParent = DirectX::XMLoadFloat4x4(&toParent);
+    const auto toLocal = readMatrix(ifs, "ToLocal");
+    bone.toLocal = DirectX::XMLoadFloat4x4(&toLocal);
+
+    bone.boneIdx = boneIdx++;
+
+
+    readHeadTag(ifs, "Children");
+
+    const auto childCnt = readInteger(ifs, "ChildCnt");
+    bone.children.reserve(childCnt);
+
+    for (int i = 0; i < childCnt; ++i) {
+        auto& child = (*model.skeleton.bones)[ importBone(ifs, model, boneIdx) ];
+        bone.children.push_back(&child);
+    }
+
+    readTailTag(ifs, "Children");
+
+    readTailTag(ifs, "Bone");
+
+    gSharedLog << "[Resource Load] 본 " << bone.name << " 구축 완료\n";
+
+    return bone.boneIdx;
+}
+
+void importSkeleton(std::ifstream& ifs, Model& model) {
+    readHeadTag(ifs, "Skeleton");
+
+    auto& skeleton = model.skeleton;
+
+    skeleton.name = readText(ifs, "Name");
+
+    const auto skeletonEnumerationStr = readText(ifs, "SkeletonEnumeration");
+    skeleton.skeletonEnumeration = convertStrToSkeletonEnum(skeletonEnumerationStr);
+
+    const auto boneCnt = readInteger(ifs, "Count");
+    skeleton.bones = std::make_shared<std::vector<Bone>>(boneCnt);
+
+    i32t boneIdxAux{};
+    importBone(ifs, model, boneIdxAux);
+
+    readTailTag(ifs, "Skeleton");
+
+    gSharedLog << "[Resource Load] 스켈레톤 " << skeleton.name << "구축 완료\n";
 }
 
 // 바이너리 파일로부터 모델을 읽어온다.
@@ -1079,6 +1148,11 @@ Model loadModelFromFile( const std::filesystem::path& path,
     importTextureMapping(ifs, device, cmdList, texHashMap, texPool, fenceToAssociate);
     importGeometry(ifs, device, cmdList, texHashMap, fenceToAssociate, ret);
     importBoundingVolumes(ifs, ret);
+
+    if (ifs.peek() != EOF) {
+        importSkeleton(ifs, ret);
+    }
+
     gSharedLog << "[Resource Load] File I/O: 모델 " << ret.name << '(' << path << ") 로드 완료\n";
 
     return ret;
