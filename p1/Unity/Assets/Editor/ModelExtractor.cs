@@ -183,6 +183,11 @@ public class ModelExtractorWindow : EditorWindow
         }
         if ((mesh.uv != null) && (mesh.uv.Length > 0)) ExtractUtil.WriteVectors(geometryWriter, "TextureCoords0", mesh.uv);
         if ((mesh.uv2 != null) && (mesh.uv2.Length > 0)) ExtractUtil.WriteVectors(geometryWriter, "TextureCoords1", mesh.uv2);
+        if ((mesh.boneWeights != null) && (mesh.boneWeights.Length > 0))
+        {
+            ExtractUtil.WriteBoneIndices(geometryWriter, "BoneIndices", mesh.boneWeights);
+            ExtractUtil.WriteBoneWeights(geometryWriter, "BoneWeights", mesh.boneWeights);
+        }
         ExtractUtil.WriteTailTag(geometryWriter, "VertexBuffers");
 
         // 서브메시(인덱스 버퍼) 추출

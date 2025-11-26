@@ -71,4 +71,7 @@ std::vector<XMFLOAT3> readVec3s(std::ifstream& ifs);
 // 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
 std::vector<XMFLOAT4> readVec4s(std::ifstream& ifs);
 
+// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
+std::vector<XMINT4> readInt4s(std::ifstream& ifs);
+
 #endif	// __binaryImport_HPP

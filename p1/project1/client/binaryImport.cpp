@@ -220,3 +220,13 @@ std::vector<XMFLOAT4> readVec4s(std::ifstream& ifs) {
     }
     return ret;
 }
+
+// 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
+std::vector<XMINT4> readInt4s(std::ifstream& ifs) {
+    auto cnt = readInteger(ifs, "Cnt");
+    auto ret = std::vector<XMINT4>(cnt);
+    for (int i = 0; i < cnt; ++i) {
+        ifs.read(reinterpret_cast<char*>(&ret[i]), sizeof(XMINT4));
+    }
+    return ret;
+}

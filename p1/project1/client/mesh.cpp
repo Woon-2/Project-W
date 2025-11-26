@@ -717,6 +717,56 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
             auto uvs = readVec2s(ifs);
             readTailTag(ifs, "TextureCoords1");
         }
+        // boneIndices: uint4
+        else if (tag == "BoneIndices") {
+            auto boneIndices = readInt4s(ifs);
+
+            auto vbBoneIndices = createBufferResource(device, nullptr, boneIndices.size() * sizeof(XMUINT4), BufferCreationType::VertexBuffer);
+            setD3DName(vbBoneIndices.Get(), name + "_VB_BoneIndices"s);
+	        auto vbBoneIndicesu = createBufferResource(device, boneIndices.data(), boneIndices.size() * sizeof(XMUINT4), BufferCreationType::UploadBuffer);
+            setD3DName(vbBoneIndicesu.Get(), name + "_VB_BoneIndices_Upload"s);
+
+	        copyResource( cmdList, vbBoneIndicesu.Get(), vbBoneIndices.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
+		        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+	        );
+
+            mesh.vbViews.emplace_back(
+                /* .BufferLocation = */ vbBoneIndices->GetGPUVirtualAddress(),
+                /* .SizeInBytes = */ static_cast<UINT>(boneIndices.size() * sizeof(XMUINT4)),
+                /* .StrideInBytes = */ static_cast<UINT>( sizeof(XMUINT4) )
+            );
+            mesh.vbIdxMap.try_emplace(name + "_VB_BoneIndices"s, static_cast<u32t>(mesh.vbs.size()));
+
+            mesh.vbs.push_back(std::move(vbBoneIndices));
+            fenceToAssociate.associatedResources_.push_back(std::move(vbBoneIndicesu));
+
+            readTailTag(ifs, "BoneIndices");
+        }
+        // boneWeights: float4
+        else if (tag == "BoneWeights") {
+            auto boneWeights = readVec4s(ifs);
+
+            auto vbBoneWeights = createBufferResource(device, nullptr, boneWeights.size() * sizeof(XMFLOAT4), BufferCreationType::VertexBuffer);
+            setD3DName(vbBoneWeights.Get(), name + "_VB_BoneWeights"s);
+	        auto vbBoneWeightsu = createBufferResource(device, boneWeights.data(), boneWeights.size() * sizeof(XMFLOAT4), BufferCreationType::UploadBuffer);
+            setD3DName(vbBoneWeightsu.Get(), name + "_VB_BoneWeights_Upload"s);
+
+	        copyResource( cmdList, vbBoneWeightsu.Get(), vbBoneWeights.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
+		        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+	        );
+
+            mesh.vbViews.emplace_back(
+                /* .BufferLocation = */ vbBoneWeights->GetGPUVirtualAddress(),
+                /* .SizeInBytes = */ static_cast<UINT>(boneWeights.size() * sizeof(XMFLOAT4)),
+                /* .StrideInBytes = */ static_cast<UINT>( sizeof(XMFLOAT4) )
+            );
+            mesh.vbIdxMap.try_emplace(name + "_VB_BoneWeights"s, static_cast<u32t>(mesh.vbs.size()));
+
+            mesh.vbs.push_back(std::move(vbBoneWeights));
+            fenceToAssociate.associatedResources_.push_back(std::move(vbBoneWeightsu));
+
+            readTailTag(ifs, "BoneWeights");
+        }
         else {
             DISPLAY_ERROR_STR(false, "[File I/O Error] importMesh: 알 수 없는 태그 "s
                 + tag + "를 읽었습니다.", true
