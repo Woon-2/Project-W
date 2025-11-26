@@ -5,6 +5,7 @@
 #include "online/onlineGame.hpp"
 
 extern std::unique_ptr<IGame> pGame;
+extern moodycamel::ConcurrentQueue<Online::Message> messageQueue;
 
 void ServerSession::onConnected( ) {
 	std::cout << "[Client] Connected to server.\n";
@@ -44,9 +45,8 @@ int32 ServerSession::onRecvPacket( uint8* buffer, int32 len ) {
 			}
 
 			auto x = packet->scEnter.x[ i ];
-			auto y = packet->scEnter.y[ i ];
 			auto z = packet->scEnter.z[ i ];
-			static_cast<Online::Game*>( pGame.get( ) )->createPlayer( pId, x, y, z );
+			static_cast<Online::Game*>( pGame.get( ) )->createPlayer( pId, x, 0.f, z );
 		}
 		break;
 	}
@@ -59,19 +59,13 @@ int32 ServerSession::onRecvPacket( uint8* buffer, int32 len ) {
 	}
 
 	case PacketType::scMove: {
-		auto pId = packet->scMove.playerId;
-		if ( pId == player_->getId( ) ) {
-			player_->setPos( mu::Vec3( packet->scMove.x, packet->scMove.y, packet->scMove.z ) );
-		}
-		else {
-			//std::lock_guard<std::mutex> lock( gMtx );
-			auto otherPlayer = static_cast<Online::Game*>( pGame.get( ) )->getPlayerById( pId );
-			if ( !otherPlayer ) {
-				break;
-			}
-
-			otherPlayer->setPos( mu::Vec3( packet->scMove.x, packet->scMove.y, packet->scMove.z ) );
-		}
+		auto message = Online::Message{
+			.type = Online::MsgType::PlayerMove,
+			.playerId = packet->scMove.playerId,
+			.x = packet->scMove.x,
+			.z = packet->scMove.z
+		};
+		messageQueue.enqueue(message);
 		break;
 	}
 	}

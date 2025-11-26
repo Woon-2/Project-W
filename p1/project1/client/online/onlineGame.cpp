@@ -8,6 +8,12 @@ extern RECT gClientRect;
 
 namespace Online {
 
+	// online game에서 플레이어의 움직임에 쓰이는 key 값들을 전역으로 관리한다.
+	bool keyW = false;
+	bool keyA = false;
+	bool keyS = false;
+	bool keyD = false;
+
 Game::Game() {
 	// 스레드 풀 초기화
 	std::cout << "----------[게임 초기화 설정]----------\n";
@@ -137,6 +143,42 @@ void Game::update(Milliseconds deltaTime) {
 		}
 	}
 
+	// 플레이어 위치 예측
+	if (keyW) {
+		player_->physicState().pos.setComponent(2,
+			player_->physicState().pos.z() + (0.1f * deltaTime.count() / 16.6667f)
+		);
+	}
+	if (keyA) {
+		player_->physicState().pos.setComponent(0,
+			player_->physicState().pos.x() - (0.1f * deltaTime.count() / 16.6667f)
+		);
+	}
+	if (keyS) {
+		player_->physicState().pos.setComponent(2,
+			player_->physicState().pos.z() - (0.1f * deltaTime.count() / 16.6667f)
+		);
+	}
+	if (keyD) {
+		player_->physicState().pos.setComponent(0,
+			player_->physicState().pos.x() + (0.1f * deltaTime.count() / 16.6667f)
+		);
+	}
+
+	// 서버로부터 받은 메시지 처리
+	const auto bulkSize = 10u;
+	auto messages = std::vector<Message>(bulkSize);
+
+	auto size = messageQueue.try_dequeue_bulk(messages.data(), bulkSize);
+	for (auto i = 0u; i < size; ++i) {
+		const auto& msg = messages[i];
+		if( msg.type == MsgType::PlayerMove ) {
+			auto& player = idPlayerMap_[msg.playerId];
+			player->setServerPos(mu::Vec3(msg.x, 0.f, msg.z));
+		}
+	}
+
+	// 게임 객체들 갱신
 	player_->update(deltaTime, tPhysicInterpolation );
 	objectsMtx_.lock( );
 	for ( auto& obj : otherPlayers_ ) {
@@ -185,90 +227,81 @@ LRESULT Game::receiveWndMsg( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 	return DefWindowProcA( hWnd, msg, wParam, lParam );
 }
 
+// prev, 이전에 눌렸는지 판단한다.
+void CheckMoveState(int vk, bool& prev, Direction dir, Game* onlineGame) {
+	bool down = (GetForegroundWindow() == ghWnd && GetAsyncKeyState(vk) & 0x8000);
+
+	if (down && !prev) {
+		auto packet = Packet{
+			.header = {
+				.size = sizeof(PacketHeader) + sizeof(CSMoveStartPacket),
+				.id = static_cast<u16t>(PacketType::csMoveStart)
+			},
+			.csMoveStart = {
+				.dir = dir
+			}
+		};
+		
+		int32 packetSize = sizeof(Packet);
+		auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+		sendBuffer->copyData(&packet, packetSize);
+		onlineGame->serverSession_->send(sendBuffer);
+	}
+	if (!down && prev) {
+		auto packet = Packet{
+			.header = {
+				.size = sizeof(PacketHeader) + sizeof(CSMoveStopPacket),
+				.id = static_cast<u16t>(PacketType::csMoveStop)
+			},
+			.csMoveStop = {
+				.dir = dir
+			}
+		};
+
+		int32 packetSize = sizeof(Packet);
+		auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+		sendBuffer->copyData(&packet, packetSize);
+		onlineGame->serverSession_->send(sendBuffer);
+	}
+
+	prev = down;
+}
+
 void Game::processInput(Milliseconds deltaTime) {
+	if (inRoom_) {
+		CheckMoveState('W', keyW, Direction::w, this);
+		CheckMoveState('A', keyA, Direction::a, this);
+		CheckMoveState('S', keyS, Direction::s, this);
+		CheckMoveState('D', keyD, Direction::d, this);
+	}
+
 	auto packet = Packet{
 		.header = {
-			.size = sizeof( PacketHeader ) + sizeof( CSMovePacket ),
-			.id = static_cast<std::uint16_t>( PacketType::csMove )
-		},
-		.csMove = {
-			.dir = Direction::none
+			.size = sizeof(PacketHeader) + sizeof(CSFindRoomPacket),
+			.id = static_cast<std::uint16_t>(PacketType::csFindRoom)
 		}
 	};
 
 	bool readyToSend = false;
 
-	if ( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState('W') & 0x8000 ) {
-		packet.csMove.dir = Direction::w;
-		readyToSend = true;
-	}
-	if ( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState('A') & 0x8000 ) {
-		packet.csMove.dir = Direction::a;
-		readyToSend = true;
-	}
-	if ( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState('S') & 0x8000 ) {
-		packet.csMove.dir = Direction::s;
-		readyToSend = true;
-	}
-	if ( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState('D') & 0x8000 ) {
-		packet.csMove.dir = Direction::d;
-		readyToSend = true;
-	}
-	/*if ( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState( 'I' ) & 0x8000 ) {
-		packet = Packet{
-			.header = {
-				.size = sizeof( PacketHeader ) + sizeof( CSEnterPacket ),
-				.id = static_cast<std::uint16_t>( PacketType::csEnter )
-			}
-		};
-		readyToSend = true;
-	}*/
 	if ( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState( '1' ) & 0x8000 ) {
-		packet = Packet{
-			.header = {
-				.size = sizeof( PacketHeader ) + sizeof( CSFindRoomPacket ),
-				.id = static_cast<std::uint16_t>( PacketType::csFindRoom )
-			},
-			.csFindRoom = {
-				.roomId = 1
-			}
-		};
+		packet.csFindRoom.roomId = 1;
+		inRoom_ = true;
 		readyToSend = true;
 	}
 	if( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState( '2' ) & 0x8000 ) {
-		packet = Packet{
-			.header = {
-				.size = sizeof( PacketHeader ) + sizeof( CSFindRoomPacket ),
-				.id = static_cast<std::uint16_t>( PacketType::csFindRoom )
-			},
-			.csFindRoom = {
-				.roomId = 2
-			}
-		};
+		packet.csFindRoom.roomId = 2;
+		inRoom_ = true;
 		readyToSend = true;
 	}
 	if( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState( '3' ) & 0x8000 ) {
-		packet = Packet{
-			.header = {
-				.size = sizeof( PacketHeader ) + sizeof( CSFindRoomPacket ),
-				.id = static_cast<std::uint16_t>( PacketType::csFindRoom )
-			},
-			.csFindRoom = {
-				.roomId = 3
-			}
-		};
+		packet.csFindRoom.roomId = 3;
+		inRoom_ = true;
 		readyToSend = true;
 	}
 	if( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState( '4' ) & 0x8000 ) {
-		packet = Packet{
-			.header = {
-				.size = sizeof( PacketHeader ) + sizeof( CSFindRoomPacket ),
-				.id = static_cast<std::uint16_t>( PacketType::csFindRoom )
-			},
-			.csFindRoom = {
-				.roomId = 4
-			}
-		};
+		packet.csFindRoom.roomId = 4;
+		inRoom_ = true;
 		readyToSend = true;
 	}
 

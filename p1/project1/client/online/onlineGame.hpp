@@ -14,6 +14,17 @@
 
 namespace Online {
 
+enum class MsgType : u8t {
+	PlayerMove,
+};
+
+struct Message {
+	MsgType type;
+	i32t playerId;
+	float x;
+	float z;
+};
+
 class Game : public IGame {
 public:
 	// 사용자 입력을 받아 스레드 풀과 GFX 객체를 초기화한다.
@@ -64,7 +75,9 @@ public:
 		return idPlayerMap_[ playerId ];
 	}
 
+
 private:
+	friend void CheckMoveState(int vk, bool& prev, Direction dir, Game* onlineGame);
 	void processInput(Milliseconds deltaTime);
 
 	AssetManager assetManager_{};
@@ -90,6 +103,8 @@ private:
 
 	Camera camera_{};
 	Light dirLight_{};
+
+	bool inRoom_ = false;
 };
 
 }	// namespace Online

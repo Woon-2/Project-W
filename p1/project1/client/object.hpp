@@ -95,6 +95,13 @@ public:
 	void setId( i32t id ) {	id_ = id; }
 	i32t getId( ) const { return id_; }
 
+	void setServerPos( const mu::Vec3& pos ) {
+		prevPhysicState_ = currPhysicState_;
+		currPhysicState_.pos = pos;
+	}
+
+	mu::Vec3 predictedOffset_{};
+
 private:
 	PhysicState prevPhysicState_{};
 	PhysicState currPhysicState_{};
