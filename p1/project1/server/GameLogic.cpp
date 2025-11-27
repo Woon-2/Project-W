@@ -24,14 +24,7 @@ void GameLogic::run() {
 }
 
 void GameLogic::processMessage() {
-	uint32 bulkSize{};
-	if (rooms_.size() == 0) {
-		bulkSize = 1;
-	}
-	else {
-		bulkSize = static_cast<uint32>(rooms_.size());
-	}
-
+	const auto bulkSize = maxRoomCount_;
 	auto messages = std::vector<LogicMessage>(bulkSize);
 	const auto size = msgQueue_.try_dequeue_bulk(messages.begin(), bulkSize);
 

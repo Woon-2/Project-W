@@ -57,14 +57,7 @@ void Room::update(Milliseconds deltatime) {
 }
 
 void Room::processMessage() {
-	uint32 bulkSize{};
-	if (users_.size() == 0) {
-		bulkSize = 1;
-	}
-	else {
-		bulkSize = static_cast<uint32>(users_.size());
-	}
-
+	const auto bulkSize = 4u;
 	auto messages = std::vector<LogicMessage>(bulkSize);
 	const auto size = msgQueue_.try_dequeue_bulk(messages.begin(), bulkSize);
 
