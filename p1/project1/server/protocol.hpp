@@ -80,6 +80,7 @@ enum class ObjectType : std::uint8_t {
 
 struct ObjectData {
 	ObjectType type;
+
 };
 
 struct SCSetupPacket {
