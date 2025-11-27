@@ -37,7 +37,7 @@ Game::Game() {
 }
 
 void Game::setupStage() {
-	cubes_.resize( 2u );
+	/*cubes_.resize( 2u );
 	for ( auto& plane : cubes_ ) {
 		plane.resize( 2u );
 		for ( auto& row : plane ) {
@@ -67,16 +67,16 @@ void Game::setupStage() {
 				cube.enableBVRendering( );
 			}
 		}
-	}
+	}*/
 
 	skybox_.setModel( assetManager_.modelCube( ) );
 	skybox_.setSkyboxMaterial( assetManager_.skyboxMaterial( ) );
 
 	player_ = std::make_shared<Object>();
-	player_->setPos(mu::Vec3(0.f, 0.f, 0.f));
+	/*player_->setPos(mu::Vec3(0.f, 0.f, 0.f));
 	player_->setModel( assetManager_.modelPlayer());
 	player_->setScale(1.f);
-	player_->enableBVRendering( );
+	player_->enableBVRendering( );*/
 
 	dirLight_.setOrient( mu::NQuat( mu::Degree( 0.f ), mu::Degree( 120.f ), mu::Degree( 15.f ) ) );
 	dirLight_.color = mu::Vec3( 0.8f, 0.8f, 0.8f );
@@ -174,7 +174,13 @@ void Game::update(Milliseconds deltaTime) {
 		const auto& msg = messages[i];
 		if( msg.type == MsgType::PlayerMove ) {
 			auto& player = idPlayerMap_[msg.playerId];
-			player->setServerPos(mu::Vec3(msg.x, 0.f, msg.z));
+
+			if (player == player_) {
+				player->setServerPos(mu::Vec3(msg.x, 0.f, msg.z));
+			}
+			else {
+				player->setPos(mu::Vec3(msg.x, 0.f, msg.z));
+			}
 		}
 	}
 

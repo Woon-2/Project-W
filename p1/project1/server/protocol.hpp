@@ -28,8 +28,9 @@ enum class PacketType : std::uint16_t {
 	csLogin,
 	scLogin,
 
-	csEnter,
 	scAssignId,
+	csEnter,
+	scSetup,
 	scEnter,
 
 	csLeave,
@@ -63,12 +64,30 @@ struct SCLoginPacket {
 	std::array<char, 50> reason;
 };
 
+struct SCAssignIdPacket {
+	std::int32_t playerId;
+};
+
 struct CSEnterPacket {
 
 };
 
-struct SCAssignIdPacket {
-	std::int32_t playerId;
+enum class ObjectType : std::uint8_t {
+	Player,
+	Cube,
+
+};
+
+struct ObjectData {
+	ObjectType type;
+};
+
+struct SCSetupPacket {
+	std::int32_t objectCount;
+	std::array<XMFLOAT3, 6> pos;
+	std::array<XMFLOAT3, 6> orient;
+	std::array<XMFLOAT3, 6> scale;
+	std::array<std::int32_t, 6> materialSetIdx;
 };
 
 struct SCEnterPacket {
@@ -109,16 +128,22 @@ struct Packet {
 	union {
 		CSSignupPacket csSignup;
 		SCSignupPacket scSignup;
+
 		CSLoginPacket csLogin;
 		SCLoginPacket scLogin;
-		CSEnterPacket csEnter;
+
 		SCAssignIdPacket scAssignId;
+		CSEnterPacket csEnter;
+		SCSetupPacket scSetup;
 		SCEnterPacket scEnter;
+
 		CSLeavePacket csLeave;
 		SCLeavePacket scLeave;
+
 		CSMoveStartPacket csMoveStart;
 		CSMoveStopPacket csMoveStop;
 		SCMovePacket scMove;
+
 		CSFindRoomPacket csFindRoom;
 	};
 };
