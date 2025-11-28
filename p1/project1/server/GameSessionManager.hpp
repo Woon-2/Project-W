@@ -8,7 +8,12 @@ public:
 	static void broadcast( const SPSendBuffer& sendBuffer );
 
 	static SPGameSession findGameSession(int32 sessionId) {
-		return sessions_[sessionId];
+		if (sessions_.find(sessionId) != sessions_.end()) {
+			return sessions_[sessionId];
+		}
+		else {
+			return nullptr;
+		}
 	}
 
 private:
