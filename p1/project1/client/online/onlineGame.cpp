@@ -2,17 +2,12 @@
 #include "../global.hpp"
 #include "../ServerSession.hpp"
 #include "../SendBuffer.hpp"
+#include "../errorHandling.hpp"
 
 extern HWND ghWnd;
 extern RECT gClientRect;
 
 namespace Online {
-
-	// online game에서 플레이어의 움직임에 쓰이는 key 값들을 전역으로 관리한다.
-	bool keyW = false;
-	bool keyA = false;
-	bool keyS = false;
-	bool keyD = false;
 
 Game::Game() {
 	// 스레드 풀 초기화
@@ -174,22 +169,22 @@ void Game::update(Milliseconds deltaTime) {
 	}
 
 	// 플레이어 위치 예측
-	if (keyW) {
+	if (keyboardStateCurr_['W']) {
 		player_->physicState().pos.setComponent(2,
 			player_->physicState().pos.z() + (0.1f * deltaTime.count() / 16.6667f)
 		);
 	}
-	if (keyA) {
+	if (keyboardStateCurr_['A']) {
 		player_->physicState().pos.setComponent(0,
 			player_->physicState().pos.x() - (0.1f * deltaTime.count() / 16.6667f)
 		);
 	}
-	if (keyS) {
+	if (keyboardStateCurr_['S']) {
 		player_->physicState().pos.setComponent(2,
 			player_->physicState().pos.z() - (0.1f * deltaTime.count() / 16.6667f)
 		);
 	}
-	if (keyD) {
+	if (keyboardStateCurr_['D']) {
 		player_->physicState().pos.setComponent(0,
 			player_->physicState().pos.x() + (0.1f * deltaTime.count() / 16.6667f)
 		);
@@ -241,14 +236,64 @@ void Game::render() {
 
 // 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
 LRESULT Game::receiveWndMsg( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam ) {
-	return DefWindowProcA( hWnd, msg, wParam, lParam );
+	switch (msg) {
+	// WM_INPUT 메시지
+	// 마우스 움직임의 경우 WM_MOUSEMOVE 메시지 대신 이 메시지로 처리하는 것이
+	// 정확하고 안정적인 처리가 가능하다.
+	// 윈도우 경계로부터 영향을 받지 않고, 가상 커서 속도/가속도 설정을 무시하며,
+	// Alt-Tab / 창 이동 후에도 상태 복구가 명확하다.
+	// (DPI 스케일링 환경에서도 입력이 왜곡되지 않는다고 한다.)
+	case WM_INPUT: {
+		static auto sRawInputBuffer = std::vector<std::uint8_t>(256);
+		UINT rawInputSize{};
+		UINT rawInputResult{};
+
+		// 입력 구조체 크기 수신
+		rawInputResult = GetRawInputData( reinterpret_cast<HRAWINPUT>(lParam),
+			RID_INPUT, nullptr, &rawInputSize, sizeof(RAWINPUTHEADER)
+		);
+		DISPLAY_ERROR_GLE(rawInputResult != -1, true);
+
+		if (rawInputSize > sRawInputBuffer.size()) {
+			sRawInputBuffer.resize(rawInputSize);
+		}
+
+		// 입력 구조체 내용 수신
+		rawInputResult = GetRawInputData( reinterpret_cast<HRAWINPUT>(lParam),
+			RID_INPUT, sRawInputBuffer.data(), &rawInputSize, sizeof(RAWINPUTHEADER)
+		);
+		DISPLAY_ERROR_GLE(rawInputResult == rawInputSize, true);
+
+		auto ri = reinterpret_cast<const RAWINPUT*>(sRawInputBuffer.data());
+		if (ri->header.dwType == RIM_TYPEMOUSE) {
+			// 마우스에 대한 입력 내용이 상대 좌표여야 한다.
+			DISPLAY_ERROR_STR( !(ri->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE),
+				"[Input Error] Game::receiveWndMsg: 마우스 입력 장치가 게임과 호환되지 않습니다.\n"
+				"RAWMOUSE의 플래그 중 MOUSE_MOVE_ABSOLUTE가 활성화되어있습니다.",
+				true
+			);
+
+			// 마우스 이동량 기록
+			mouseDeltaX_ += ri->data.mouse.lLastX;
+			mouseDeltaY_ += ri->data.mouse.lLastY;
+		}
+		return 0;
+	}
+
+	case WM_SIZE:
+		return DefWindowProcA(hWnd, msg, wParam, lParam);
+
+	default:
+		return DefWindowProcA(hWnd, msg, wParam, lParam);
+	}
 }
 
 // prev, 이전에 눌렸는지 판단한다.
-void CheckMoveState(int vk, bool& prev, Direction dir, Game* onlineGame) {
-	bool down = (GetForegroundWindow() == ghWnd && GetAsyncKeyState(vk) & 0x8000);
+void Game::updateMoveState(int vk, Direction dir) {
+	const bool downCurr = keyboardStateCurr_[vk] & 0x80;
+	const bool downPrev = keyboardStatePrev_[vk] & 0x80;
 
-	if (down && !prev) {
+	if (downCurr && !downPrev) {
 		auto packet = Packet{
 			.header = {
 				.size = sizeof(PacketHeader) + sizeof(CSMoveStartPacket),
@@ -262,9 +307,9 @@ void CheckMoveState(int vk, bool& prev, Direction dir, Game* onlineGame) {
 		int32 packetSize = sizeof(Packet);
 		auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
 		sendBuffer->copyData(&packet, packetSize);
-		onlineGame->serverSession_->send(sendBuffer);
+		serverSession_->send(sendBuffer);
 	}
-	if (!down && prev) {
+	if (!downCurr && downPrev) {
 		auto packet = Packet{
 			.header = {
 				.size = sizeof(PacketHeader) + sizeof(CSMoveStopPacket),
@@ -278,20 +323,86 @@ void CheckMoveState(int vk, bool& prev, Direction dir, Game* onlineGame) {
 		int32 packetSize = sizeof(Packet);
 		auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
 		sendBuffer->copyData(&packet, packetSize);
-		onlineGame->serverSession_->send(sendBuffer);
+		serverSession_->send(sendBuffer);
 	}
-
-	prev = down;
 }
 
 void Game::processInput(Milliseconds deltaTime) {
-	if (inRoom_) {
-		CheckMoveState('W', keyW, Direction::w, this);
-		CheckMoveState('A', keyA, Direction::a, this);
-		CheckMoveState('S', keyS, Direction::s, this);
-		CheckMoveState('D', keyD, Direction::d, this);
+	if (GetForegroundWindow() != ghWnd) {
+		return;
 	}
 
+	keyboardStatePrev_ = keyboardStateCurr_;
+	DISPLAY_ERROR_GLE( GetKeyboardState(keyboardStateCurr_.data()), false );
+
+	// 플레이어 움직임 처리
+	if (inRoom_ && GetForegroundWindow() == ghWnd) {
+		updateMoveState('W', Direction::w);
+		updateMoveState('A', Direction::a);
+		updateMoveState('S', Direction::s);
+		updateMoveState('D', Direction::d);
+	}
+
+	// 1인칭 카메라 시점 설정
+	if ( keyboardStateCurr_['Q'] & 0x80 ) {
+		camera_.setOffsetFromTargetPreRotation( mu::NQuat{} );
+		camera_.setOffsetFromTarget( mu::Vec3( 0.f, 2.f, 0.5f ) );
+		camera_.setOffsetTargetPivot( mu::Vec3(0.f, 2.f, 8.f));
+		cameraMode_ = CameraMode::FirstPerson;
+	} 
+	// 3인칭 카메라 시점 설정
+	if ( keyboardStateCurr_['E'] & 0x80 ) {
+		camera_.setXXPreRotation( mu::NQuat{} );
+		camera_.setOffsetFromTarget( mu::Vec3( 0.f, 1.8f, -2.5f ) );
+		camera_.setOffsetTargetPivot( mu::Vec3(0.f, 1.f, 0.f));
+		cameraMode_ = CameraMode::ThirdPerson;
+	}
+
+	// 카메라 움직임 처리
+	const auto mouseSensitivity = mu::pi * 2.f;
+
+	switch (cameraMode_) {
+	case CameraMode::ThirdPerson: {
+		auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f),
+			mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left))	
+		);
+
+		player_->setOrient(player_->orient() * yaw);
+
+		cameraPitch_ = std::clamp(
+			static_cast<float>(cameraPitch_) + mouseDeltaY_ * mouseSensitivity / static_cast<float>(gClientRect.bottom - gClientRect.top),
+			-mu::pi * 0.16f,
+			mu::pi * 0.3f
+		);
+
+		camera_.setOffsetFromTargetPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, mu::Radian(0.f)) );
+
+		mouseDeltaX_ = 0;
+		mouseDeltaY_ = 0;
+		break;
+	}
+	case CameraMode::FirstPerson: {
+		auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f),
+			mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left))	
+		);
+
+		player_->setOrient(player_->orient() * yaw);
+
+		cameraPitch_ = std::clamp(
+			static_cast<float>(cameraPitch_) + mouseDeltaY_ * mouseSensitivity / static_cast<float>(gClientRect.bottom - gClientRect.top),
+			-mu::pi * 0.16f,
+			mu::pi * 0.3f
+		);
+
+		camera_.setXXPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, mu::Radian(0.f)) );
+
+		mouseDeltaX_ = 0;
+		mouseDeltaY_ = 0;
+		break;
+	}
+	}
+
+	// 패킷 처리
 	auto packet = Packet{
 		.header = {
 			.size = sizeof(PacketHeader) + sizeof(CSFindRoomPacket),

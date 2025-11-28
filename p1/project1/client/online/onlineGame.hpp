@@ -80,7 +80,12 @@ public:
 
 
 private:
-	friend void CheckMoveState(int vk, bool& prev, Direction dir, Game* onlineGame);
+	enum class CameraMode {
+		FirstPerson,
+		ThirdPerson
+	};
+
+	void updateMoveState(int vk, Direction dir);
 	void processInput(Milliseconds deltaTime);
 
 	AssetManager assetManager_{};
@@ -105,7 +110,15 @@ private:
 	std::unordered_map<i32t, std::shared_ptr<Object>> idPlayerMap_{ };
 
 	Camera camera_{};
+	mu::Radian cameraPitch_ = 0.f;
+	CameraMode cameraMode_ = CameraMode::ThirdPerson;
+
 	Light dirLight_{};
+
+	LONG mouseDeltaX_{};
+	LONG mouseDeltaY_{};
+	std::array<BYTE, std::numeric_limits<u8t>::max()> keyboardStateCurr_{};
+	std::array<BYTE, std::numeric_limits<u8t>::max()> keyboardStatePrev_{};
 
 	bool inRoom_ = false;
 };
