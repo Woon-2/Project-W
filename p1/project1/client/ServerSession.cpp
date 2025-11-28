@@ -26,12 +26,13 @@ void ServerSession::onDisconnected( ) {
 
 int32 ServerSession::onRecvPacket( uint8* buffer, int32 len ) {
 	//std::cout << "Client " << player_->getId( ) << '\n';
-	auto packet = reinterpret_cast<Packet*>( buffer );
+	auto packet = reinterpret_cast<Packet*>(buffer);
+	auto pOnlineGame = static_cast<Online::Game*>(pGame.get());
 
 	switch ( static_cast<PacketType>( packet->header.id ) ) {
 	case PacketType::scAssignId: {
 		player_->setId( packet->scAssignId.playerId );
-		static_cast<Online::Game*>( pGame.get( ) )->addPlayer( player_ );
+		pOnlineGame->addPlayer( player_ );
 		break;
 	}
 
@@ -40,13 +41,13 @@ int32 ServerSession::onRecvPacket( uint8* buffer, int32 len ) {
 		for ( std::int32_t i = 0; i < playerCount; ++i ) {
 			auto pId = packet->scEnter.pIds[ i ];
 
-			if ( static_cast<Online::Game*>( pGame.get( ) )->findPlayer( pId ) ) {
+			if ( pOnlineGame->findPlayer( pId ) ) {
 				continue;
 			}
 
 			auto x = packet->scEnter.x[ i ];
 			auto z = packet->scEnter.z[ i ];
-			static_cast<Online::Game*>( pGame.get( ) )->createPlayer( pId, x, 0.f, z );
+			pOnlineGame->createPlayer( pId, x, 0.f, z );
 		}
 		break;
 	}
@@ -54,7 +55,7 @@ int32 ServerSession::onRecvPacket( uint8* buffer, int32 len ) {
 	case PacketType::scLeave: {
 		auto pId = packet->scLeave.playerId;
 		//std::lock_guard<std::mutex> lock( gMtx );
-		static_cast<Online::Game*>( pGame.get( ) )->removePlayer( pId );
+		pOnlineGame->removePlayer( pId );
 		break;
 	}
 
