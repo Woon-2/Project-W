@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <array>
 
+#include "../common/mathUtil.hpp"
+
 constexpr const char* serverIp = "127.0.0.1";
 constexpr int serverPort = 7777;
 
@@ -72,8 +74,23 @@ struct CSEnterPacket {
 
 };
 
-struct SCSetupPacket {
+enum class ObjectType : std::uint8_t {
+	Player,
+	Cube,
 
+};
+
+struct ObjectData {
+	ObjectType type;
+	std::int32_t objectId;
+	std::int32_t materialSetIdx;
+	mu::Vec3 pos;
+	mu::NQuat orient;
+	mu::Vec3 scale;
+};
+
+struct SCSetupPacket {
+	std::int32_t objectCount;
 };
 
 struct SCEnterPacket {

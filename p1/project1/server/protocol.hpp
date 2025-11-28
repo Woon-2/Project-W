@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <array>
 
+#include "../common/mathUtil.hpp"
+
 constexpr const char* serverIp = "127.0.0.1";
 constexpr int serverPort = 7777;
 
@@ -80,15 +82,15 @@ enum class ObjectType : std::uint8_t {
 
 struct ObjectData {
 	ObjectType type;
-
+	std::int32_t objectId;
+	std::int32_t materialSetIdx;
+	mu::Vec3 pos;
+	mu::NQuat orient;
+	mu::Vec3 scale;
 };
 
 struct SCSetupPacket {
 	std::int32_t objectCount;
-	std::array<XMFLOAT3, 6> pos;
-	std::array<XMFLOAT3, 6> orient;
-	std::array<XMFLOAT3, 6> scale;
-	std::array<std::int32_t, 6> materialSetIdx;
 };
 
 struct SCEnterPacket {
