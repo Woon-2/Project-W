@@ -19,8 +19,8 @@ public:
 	void enqueueMessage(const LogicMessage& msg) { msgQueue_.enqueue(msg); }
 	void processMessage();
 	
-	void enter(const SPGameSession& user);
-	void leave(const SPGameSession& user);
+	void enter(int32 playerId);
+	void leave(int32 playerId);
 	void broadcast(const SPSendBuffer& packet);
 	bool empty();
 
@@ -30,10 +30,6 @@ public:
 
 	void setRoomId(int32 roomId) { roomId_ = roomId; }
 	int32 getRoomId() const { return roomId_; }
-	const std::vector<SPGameSession>& getUsers() {
-		std::lock_guard lock(mtx_);
-		return users_;
-	}
 
 private:
 	enum : uint8 {
@@ -45,8 +41,8 @@ private:
 
 	int32 roomId_;
 	std::recursive_mutex mtx_;
-	std::vector<SPGameSession> users_;
-	std::unordered_map<int32, SPGameSession> idUserMap_;
+	std::vector<std::shared_ptr<Object>> users_;
+	std::unordered_map<int32, std::shared_ptr<Object>> idUserMap_;
 	CCQueue<LogicMessage> msgQueue_;
 
 	std::vector<Object> cubes_;

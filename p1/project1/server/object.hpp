@@ -66,7 +66,20 @@ public:
 	void setId( i32t id ) {	id_ = id; }
 	i32t getId( ) const { return id_; }
 
+	void setOldPos(float x, float z) {
+		oldX_ = x;
+		oldZ_ = z;
+	}
+	float oldX() const { return oldX_; }
+	float oldZ() const { return oldZ_; }
+
+	void setKeyMask(uint8 keyMask) { keyMask_ = keyMask; }
+	uint8 keyMask() const { return keyMask_; }
+
 private:
+	// object(player) ÁÂÇ¥ÀÇ ½º³À¼¦À» ÀúÀåÇÏ±â À§ÇÑ oldX_, oldZ_
+	float oldX_{};
+	float oldZ_{};
 	PhysicState physicState_{};
 
 	mu::Vec3 forward_{};
@@ -77,6 +90,8 @@ private:
 
 	u32t materialSetIdx_ = 0u;
 	i32t id_{ -1 };
+
+	uint8 keyMask_;
 };
 
 #endif	// __object_HPP

@@ -6,8 +6,7 @@
 class GameSession : public PacketSession {
 public:
 	GameSession()
-		: keyMask_(), x_(0.0f), oldX_(0.f), z_(0.0f), oldZ_(0.f),
-		radius_(0.1f), signupAndLoginMtx_(), myRoomId_(-1) {}
+		: myRoomId_(-1), signupAndLoginMtx_() {}
 
 	virtual ~GameSession() {
 		std::cout << "GameSession " << getId() << " destructed.\n";
@@ -27,13 +26,6 @@ public:
 
 	}
 
-	// setter, getter 늘어나는 거 방지하기 위해 public으로 배치함
-	// user(player)의 좌표의 스냅샷을 저장하기 위해 oldX_, oldZ_ 추가
-	uint8 keyMask_;
-	float x_;
-	float oldX_;
-	float z_;
-	float oldZ_;
 	float radius_;
 
 private:
