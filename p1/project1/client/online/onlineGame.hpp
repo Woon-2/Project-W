@@ -15,14 +15,17 @@
 namespace Online {
 
 enum class MsgType : u8t {
+	SetupPlayer,
+	SetupCube,
 	PlayerMove,
 };
 
 struct Message {
 	MsgType type;
-	i32t playerId;
-	float x;
-	float z;
+	i32t objectId;
+	mu::Vec3 pos;
+	mu::NQuat orient;
+	mu::Vec3 scale;
 };
 
 class Game : public IGame {

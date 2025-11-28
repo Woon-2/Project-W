@@ -36,6 +36,31 @@ int32 ServerSession::onRecvPacket( uint8* buffer, int32 len ) {
 		break;
 	}
 
+	case PacketType::scSetup: {
+		const auto objCnt = packet->scSetup.objectCount;
+		auto size = packet->header.size;
+		auto objectDatas = reinterpret_cast<ObjectData*>(buffer + sizeof(Packet));
+
+		for (i32t i = 0; i < objCnt; ++i) {
+			auto message = Online::Message{
+				.objectId = objectDatas[i].objectId,
+				.pos = objectDatas[i].pos,
+				.orient = objectDatas[i].orient,
+				.scale = objectDatas[i].scale
+			};
+
+			if (objectDatas[i].type == ObjectType::Player) {
+				message.type = Online::MsgType::SetupPlayer;
+			}
+			else {
+				message.type = Online::MsgType::SetupCube;
+			}
+
+			messageQueue.enqueue(message);
+		}
+		break;
+	}
+
 	case PacketType::scEnter: {
 		auto playerCount = packet->scEnter.playerCount;
 		for ( std::int32_t i = 0; i < playerCount; ++i ) {
@@ -62,9 +87,8 @@ int32 ServerSession::onRecvPacket( uint8* buffer, int32 len ) {
 	case PacketType::scMove: {
 		auto message = Online::Message{
 			.type = Online::MsgType::PlayerMove,
-			.playerId = packet->scMove.playerId,
-			.x = packet->scMove.x,
-			.z = packet->scMove.z
+			.objectId = packet->scMove.playerId,
+			.pos = mu::Vec3(packet->scMove.x, 0.f, packet->scMove.z),
 		};
 		messageQueue.enqueue(message);
 		break;

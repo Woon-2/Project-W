@@ -73,10 +73,6 @@ void Game::setupStage() {
 	skybox_.setSkyboxMaterial( assetManager_.skyboxMaterial( ) );
 
 	player_ = std::make_shared<Object>();
-	/*player_->setPos(mu::Vec3(0.f, 0.f, 0.f));
-	player_->setModel( assetManager_.modelPlayer());
-	player_->setScale(1.f);
-	player_->enableBVRendering( );*/
 
 	dirLight_.setOrient( mu::NQuat( mu::Degree( 0.f ), mu::Degree( 120.f ), mu::Degree( 15.f ) ) );
 	dirLight_.color = mu::Vec3( 0.8f, 0.8f, 0.8f );
@@ -95,6 +91,40 @@ void Game::setupStage() {
 
 void Game::update(Milliseconds deltaTime) {
 	processInput(deltaTime);
+
+	// 서버로부터 받은 메시지 처리
+	const auto bulkSize = 10u;
+	auto messages = std::vector<Message>(bulkSize);
+
+	auto size = messageQueue.try_dequeue_bulk(messages.data(), bulkSize);
+	for (auto i = 0u; i < size; ++i) {
+		const auto& msg = messages[i];
+
+		switch (msg.type) {
+		case MsgType::SetupPlayer:
+			player_->setPos(msg.pos);
+			player_->setOrient(msg.orient);
+			player_->setScale(msg.scale);
+			player_->setModel(assetManager_.modelPlayer());
+			player_->enableBVRendering();
+			break;
+
+		case MsgType::SetupCube:
+			break;
+
+		case MsgType::PlayerMove: {
+			auto& player = idPlayerMap_[msg.objectId];
+
+			if (player == player_) {
+				player->setServerPos(msg.pos);
+			}
+			else {
+				player->setPos(msg.pos);
+			}
+			break;
+		}
+		}
+	}
 
 	// 물리량 갱신은 게임 갱신과 다르게 고정 주기로 수행한다.
 	// 이를 통해 너무 유동적인 delta time으로 인한 시뮬레이션의 불안정성과
@@ -163,25 +193,6 @@ void Game::update(Milliseconds deltaTime) {
 		player_->physicState().pos.setComponent(0,
 			player_->physicState().pos.x() + (0.1f * deltaTime.count() / 16.6667f)
 		);
-	}
-
-	// 서버로부터 받은 메시지 처리
-	const auto bulkSize = 10u;
-	auto messages = std::vector<Message>(bulkSize);
-
-	auto size = messageQueue.try_dequeue_bulk(messages.data(), bulkSize);
-	for (auto i = 0u; i < size; ++i) {
-		const auto& msg = messages[i];
-		if( msg.type == MsgType::PlayerMove ) {
-			auto& player = idPlayerMap_[msg.playerId];
-
-			if (player == player_) {
-				player->setServerPos(mu::Vec3(msg.x, 0.f, msg.z));
-			}
-			else {
-				player->setPos(mu::Vec3(msg.x, 0.f, msg.z));
-			}
-		}
 	}
 
 	// 게임 객체들 갱신
