@@ -83,7 +83,7 @@ enum class ObjectType : std::uint8_t {
 struct ObjectData {
 	ObjectType type;
 	std::int32_t objectId;
-	std::int32_t materialSetIdx;
+	std::uint32_t materialSetIdx;
 	mu::Vec3 pos;
 	mu::NQuat orient;
 	mu::Vec3 scale;
