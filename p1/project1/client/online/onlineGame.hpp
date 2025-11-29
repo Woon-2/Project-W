@@ -99,7 +99,7 @@ private:
 
 	SPServerSession serverSession_{ };
 
-	std::vector<std::vector<std::vector<Object>>> cubes_{};
+	std::vector<Object> cubes_{};
 
 	std::shared_ptr<Object> player_{};
 	std::vector<std::shared_ptr<Object>> otherPlayers_{ };

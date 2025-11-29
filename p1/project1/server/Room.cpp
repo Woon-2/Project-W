@@ -7,6 +7,8 @@
 #include "GameSessionManager.hpp"
 #include "GameLogicManager.hpp"
 
+extern std::atomic_int32_t gPlayerId;
+
 void Room::init( const Level& levelData ) {
 	cubes_ = levelData.cubes;
 	playerStarts_ = levelData.playerStarts;
@@ -18,17 +20,18 @@ void Room::update(Milliseconds deltatime) {
 	// 위치 갱신
 	for (auto& [id, user] : idUserMap_) {
 		user->setOldPos(user->pos().x(), user->pos().z());
+		auto keyMask = user->keyMask();
 
-		if (user->keyMask() & MoveW) {
+		if (keyMask & MoveW) {
 			user->setPos(mu::Vec3(user->pos().x(), 0.f, user->pos().z() + 0.1f));
 		}
-		if (user->keyMask() & MoveA) {
+		if (keyMask & MoveA) {
 			user->setPos(mu::Vec3(user->pos().x() - 0.1f, 0.f, user->pos().z()));
 		}
-		if (user->keyMask() & MoveS) {
+		if (keyMask & MoveS) {
 			user->setPos(mu::Vec3(user->pos().x(), 0.f, user->pos().z() - 0.1f));
 		}
-		if (user->keyMask() & MoveD) {
+		if (keyMask & MoveD) {
 			user->setPos(mu::Vec3(user->pos().x() + 0.1f, 0.f, user->pos().z()));
 		}
 
@@ -117,9 +120,6 @@ void Room::processMessage() {
 
 void Room::enter( int32 playerId ) {
 	std::lock_guard<std::recursive_mutex> lock( mtx_ );
-	/*if ( std::ranges::find( users_, user ) != users_.end( ) ) {
-		return;
-	}*/
 
 	// 방에 추가할 플레이어 오브젝트 생성
 	auto player = std::make_shared<Object>();
@@ -136,11 +136,12 @@ void Room::enter( int32 playerId ) {
 			.id = static_cast<uint16>( PacketType::scSetup )
 		},
 		.scSetup = {
-			.objectCount = 1	// player
+			.objectCount = 1 + static_cast<int32>(cubes_.size())	// 플레이어 오브젝트 + 큐브 오브젝트들
 		}
 	};
 	setupPacket.header.size = static_cast<uint16>(sizeof(Packet) + setupPacket.scSetup.objectCount * sizeof(ObjectData));
 
+	auto objectDatas = std::vector<ObjectData>();
 	auto playerData = ObjectData{
 		.type = ObjectType::Player,
 		.objectId = player->getId(),
@@ -148,11 +149,24 @@ void Room::enter( int32 playerId ) {
 		.orient = player->orient(),
 		.scale = player->scale(),
 	};
+	objectDatas.emplace_back(std::move(playerData));
+
+	for(auto i = 0; i < cubes_.size(); ++i) {
+		auto cubeData = ObjectData{
+			.type = ObjectType::Cube,
+			.objectId = gPlayerId.fetch_add(1),
+			.materialSetIdx = cubes_[i].materialSetIdx(),
+			.pos = cubes_[i].pos(),
+			.orient = cubes_[i].orient(),
+			.scale = cubes_[i].scale(),
+		};
+		objectDatas.emplace_back(std::move(cubeData));
+	}
 
 	auto setupSendBuffer = std::make_shared<SendBuffer>(setupPacket.header.size);
 	int32 packetSize = sizeof(Packet);
 	setupSendBuffer->copyData(&setupPacket, packetSize);
-	setupSendBuffer->copyData(&playerData, sizeof(ObjectData) * setupPacket.scSetup.objectCount);
+	setupSendBuffer->copyData(objectDatas.data(), sizeof(ObjectData) * setupPacket.scSetup.objectCount);
 	GameSessionManager::findGameSession(playerId)->send(setupSendBuffer);
 
 	idUserMap_[player->getId()] = player;

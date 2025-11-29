@@ -32,38 +32,6 @@ Game::Game() {
 }
 
 void Game::setupStage() {
-	/*cubes_.resize( 2u );
-	for ( auto& plane : cubes_ ) {
-		plane.resize( 2u );
-		for ( auto& row : plane ) {
-			row.resize( 2u );
-		}
-	}
-
-	for ( std::size_t i = 0u; i < cubes_.size( ); ++i ) {
-		for ( std::size_t j = 0u; j < cubes_[ i ].size( ); ++j ) {
-			for ( std::size_t k = 0u; k < cubes_[ i ][ j ].size( ); ++k ) {
-				cubes_[ i ][ j ][ k ].setModel( assetManager_.modelCube() );
-				cubes_[ i ][ j ][ k ].setPos( mu::Vec3(
-					( static_cast<int>( k ) - static_cast<int>( cubes_.size( ) / 2 ) ) * 2.5f,
-					( static_cast<int>( j ) - static_cast<int>( cubes_.size( ) / 2 ) ) * 2.5f,
-					( static_cast<int>( i ) - static_cast<int>( cubes_.size( ) / 2 ) ) * 2.5f
-				) );
-				cubes_[ i ][ j ][ k ].setOmega( mu::Vec3( rand( -1.f, 1.f ), rand( -1.f, 1.f ), rand( -1.f, 1.f ) ) );
-				cubes_[ i ][ j ][ k ].setScale( 1.f );
-			}
-
-		}
-	}
-
-	for ( auto& plane : cubes_ ) {
-		for ( auto& row : plane ) {
-			for ( auto& cube : row ) {
-				cube.enableBVRendering( );
-			}
-		}
-	}*/
-
 	skybox_.setModel( assetManager_.modelCube( ) );
 	skybox_.setSkyboxMaterial( assetManager_.skyboxMaterial( ) );
 
@@ -104,8 +72,17 @@ void Game::update(Milliseconds deltaTime) {
 			player_->enableBVRendering();
 			break;
 
-		case MsgType::SetupCube:
+		case MsgType::SetupCube: {
+			auto cube = Object{};
+			cube.setId(msg.objectId);
+			cube.setPos(msg.pos);
+			cube.setOrient(msg.orient);
+			cube.setScale(msg.scale);
+			cube.setModel(assetManager_.modelCube());
+			cube.enableBVRendering();
+			cubes_.emplace_back(std::move(cube));
 			break;
+		}
 
 		case MsgType::PlayerMove: {
 			auto& player = idPlayerMap_[msg.objectId];
@@ -136,15 +113,11 @@ void Game::update(Milliseconds deltaTime) {
 		// 물리 시뮬레이션의 대상이 되는 객체들을
 		// 한 곳에 모아 PhysicSystem 객체에 전달한다.
 		static std::vector<Object*> allObjects{};
-		for ( auto& plane : cubes_ ) {
-			for ( auto& row : plane ) {
-				for ( auto& cube : row ) {
-					allObjects.push_back( &cube );
-				}
-			}
-		}
-
-		allObjects.push_back( player_.get( ) );
+		allObjects.resize(cubes_.size() + 1);
+		std::ranges::transform(cubes_, allObjects.begin(),
+			[](Object& cube) { return &cube; }
+		);
+		allObjects[cubes_.size()] = player_.get();
 
 		while ( physicUpdateAcc_ >= physicUpdateInterval ) {
 			physicSystem_.step( allObjects, physicUpdateInterval );
@@ -160,31 +133,27 @@ void Game::update(Milliseconds deltaTime) {
 	// 게임 객체의 update 함수에 전달된다.
 	const auto tPhysicInterpolation = physicUpdateAcc_ / physicUpdateInterval;
 
-	for ( auto& plane : cubes_ ) {
-		for ( auto& row : plane ) {
-			for ( auto& cube : row ) {
-				cube.update( deltaTime, tPhysicInterpolation );
-			}
-		}
+	for (auto& cube : cubes_) {
+		cube.update(deltaTime, tPhysicInterpolation);
 	}
 
 	// 플레이어 위치 예측
-	if (keyboardStateCurr_['W']) {
+	if (keyboardStateCurr_['W'] & 0x80) {
 		player_->physicState().pos.setComponent(2,
 			player_->physicState().pos.z() + (0.1f * deltaTime.count() / 16.6667f)
 		);
 	}
-	if (keyboardStateCurr_['A']) {
+	if (keyboardStateCurr_['A'] & 0x80) {
 		player_->physicState().pos.setComponent(0,
 			player_->physicState().pos.x() - (0.1f * deltaTime.count() / 16.6667f)
 		);
 	}
-	if (keyboardStateCurr_['S']) {
+	if (keyboardStateCurr_['S'] & 0x80) {
 		player_->physicState().pos.setComponent(2,
 			player_->physicState().pos.z() - (0.1f * deltaTime.count() / 16.6667f)
 		);
 	}
-	if (keyboardStateCurr_['D']) {
+	if (keyboardStateCurr_['D'] & 0x80) {
 		player_->physicState().pos.setComponent(0,
 			player_->physicState().pos.x() + (0.1f * deltaTime.count() / 16.6667f)
 		);
@@ -205,12 +174,8 @@ void Game::update(Milliseconds deltaTime) {
 }
 
 void Game::render() {
-	for ( auto& plane : cubes_ ) {
-		for ( auto& row : plane ) {
-			for ( auto& cube : row ) {
-				cube.render( gfx_ );
-			}
-		}
+	for (auto& cube : cubes_) {
+		cube.render(gfx_);
 	}
 
 	player_->render(gfx_);
@@ -336,7 +301,7 @@ void Game::processInput(Milliseconds deltaTime) {
 	DISPLAY_ERROR_GLE( GetKeyboardState(keyboardStateCurr_.data()), false );
 
 	// 플레이어 움직임 처리
-	if (inRoom_ && GetForegroundWindow() == ghWnd) {
+	if (inRoom_) {
 		updateMoveState('W', Direction::w);
 		updateMoveState('A', Direction::a);
 		updateMoveState('S', Direction::s);
