@@ -61,7 +61,7 @@ public:
 
 	// 재질 집합 인덱스를 설정한다.
 	void setMaterialSetIdx(u32t idx) { materialSetIdx_ = idx; }
-	u32t mateiralSetIdx() const { return materialSetIdx_; }
+	u32t materialSetIdx() const { return materialSetIdx_; }
 
 	void setId( i32t id ) {	id_ = id; }
 	i32t getId( ) const { return id_; }
