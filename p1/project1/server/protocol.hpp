@@ -39,6 +39,7 @@ enum class PacketType : std::uint16_t {
 	scLeave,
 
 	csMoveStart,
+	csMoveUpdate,
 	csMoveStop,
 	scMove,
 
@@ -109,15 +110,24 @@ struct SCLeavePacket {
 };
 
 struct CSMoveStartPacket {
-	Direction dir;
+	float yaw;
+	float forward;
+	float right;
+};
+
+struct CSMoveUpdatePacket {
+	float yaw;
+	float forward;
+	float right;
 };
 
 struct CSMoveStopPacket {
-	Direction dir;
+	
 };
 
 struct SCMovePacket {
 	std::int32_t playerId;
+	float yaw;
 	float x;
 	float z;
 };
@@ -144,6 +154,7 @@ struct Packet {
 		SCLeavePacket scLeave;
 
 		CSMoveStartPacket csMoveStart;
+		CSMoveUpdatePacket csMoveUpdate;
 		CSMoveStopPacket csMoveStop;
 		SCMovePacket scMove;
 
