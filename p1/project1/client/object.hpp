@@ -18,9 +18,11 @@ private:
 	std::vector<AnimFrame> framesBlended_{};
 	Seconds elapsedIdle_ = 0s;
 	Seconds elapsedRun_ = 0s;
-	Seconds elapsedHit_ = 0s;
 	float tIdle_ = 0.f;
-	float tRun_ = 0.f;
+	float tRunForward_ = 0.f;
+	float tRunBackward_ = 0.f;
+	float tRunLeft_ = 0.f;
+	float tRunRight_ = 0.f;
 	float tHit_ = 0.f;
 };
 

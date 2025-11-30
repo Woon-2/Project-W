@@ -20,8 +20,8 @@ void AnimBlenderVanguard::update(Seconds deltaTime, void* pVoidOwner) {
 
 	const auto blendRangeStart = runThreshold - 0.05f;
 	const auto blendRangeEnd = runThreshold + 5.f;
-	tRun_ = std::clamp( (speed - blendRangeStart) / (blendRangeEnd - blendRangeStart), 0.f, 1.f );
-	tIdle_ = 1.f - tRun_;
+	const auto tRun = std::clamp( (speed - blendRangeStart) / (blendRangeEnd - blendRangeStart), 0.f, 1.f );
+	tIdle_ = 1.f - tRun;
 
 	elapsedIdle_ += deltaTime;
 	const auto durationIdle = targetClip("Vanguard_Idle")->duration;
@@ -29,14 +29,34 @@ void AnimBlenderVanguard::update(Seconds deltaTime, void* pVoidOwner) {
 		elapsedIdle_ -= durationIdle;
 	}
 
-	if (tRun_ > 0.01f) {
+	if (tRun > 0.f) {
+		const auto blendSpaceX = mu::dot(pOwner->physicState().velocity, pOwner->right());
+		const auto blendSpaceY = mu::dot(pOwner->physicState().velocity, pOwner->forward());
+	
+		const auto wForward = std::max(0.f, blendSpaceY);
+		const auto wBackward = std::max(0.f, -blendSpaceY);
+		const auto wLeft = std::max(0.f, -blendSpaceX);
+		const auto wRight = std::max(0.f, blendSpaceX);
+
+		float total = wForward + wBackward + wLeft + wRight;
+
+		tRunForward_ = tRun * wForward / total;
+		tRunBackward_ = tRun * wBackward / total;
+		tRunLeft_ = tRun * wLeft / total;
+		tRunRight_ = tRun * wRight / total;
+
 		elapsedRun_ += deltaTime;
 	}
 	else {
+		tRunForward_ = 0.f;
+		tRunBackward_ = 0.f;
+		tRunLeft_ = 0.f;
+		tRunRight_ = 0.f;
+
 		elapsedRun_ = 0s;
 	}
 
-	const auto durationRun = targetClip("Vanguard_Run")->duration;
+	const auto durationRun = targetClip("Vanguard_Run_Forward")->duration;
 	while (elapsedRun_ > durationRun) {
 		elapsedRun_ -= durationRun;
 	}
@@ -46,13 +66,27 @@ void AnimBlenderVanguard::update(Seconds deltaTime, void* pVoidOwner) {
 
 void AnimBlenderVanguard::onCalcLocal(PassKey<AnimSystem>) {
 	updateFrames("Vanguard_Idle", elapsedIdle_);
-	updateFrames("Vanguard_Run", elapsedRun_);
+	updateFrames("Vanguard_Run_Forward", elapsedRun_);
+	updateFrames("Vanguard_Run_Backward", elapsedRun_);
+	updateFrames("Vanguard_Run_Left", elapsedRun_);
+	updateFrames("Vanguard_Run_Right", elapsedRun_);
+
 	auto& localXforms = localXformData();
 	auto& framesIdle = curFrames("Vanguard_Idle");
-	auto& framesRun = curFrames("Vanguard_Run");
+	auto& framesRunForward = curFrames("Vanguard_Run_Forward");
+	auto& framesRunBackward = curFrames("Vanguard_Run_Backward");
+	auto& framesRunLeft = curFrames("Vanguard_Run_Left");
+	auto& framesRunRight = curFrames("Vanguard_Run_Right");
 
 	for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
-		framesBlended_[i] = lerpAnimFrames(framesIdle[i], framesRun[i], tRun_);
+		WeightedAnimFrame frames[] = {
+			WeightedAnimFrame{ .frame = framesIdle[i], .w = tIdle_ },
+			WeightedAnimFrame{ .frame = framesRunForward[i], .w = tRunForward_ },
+			WeightedAnimFrame{ .frame = framesRunBackward[i], .w = tRunBackward_ },
+			WeightedAnimFrame{ .frame = framesRunLeft[i], .w = tRunLeft_ },
+			WeightedAnimFrame{ .frame = framesRunRight[i], .w = tRunRight_ },
+		};
+		framesBlended_[i] = sumWeightedAnimFrames(frames);
 	}
 	std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
 }

@@ -14,6 +14,11 @@ struct AnimFrame {
 	Seconds time;
 };
 
+struct WeightedAnimFrame {
+	AnimFrame frame;
+	float w;
+};
+
 // 전달된 애니메이션 프레임을 행렬로 변환한다.
 // lerpAnimFrames 함수로 여러 프레임을 보간한 최종 프레임을
 // 이 함수를 통해 행렬로 변환해서 사용해야 한다.
@@ -23,6 +28,9 @@ mu::Mat4x4 MU_CALLCONV convertAnimFrameToMatrix(AnimFrame frame);
 // translation과 scale에 대해선 mu::lerp가,
 // rotation에 대해선 mu::slerp가 사용된다.
 AnimFrame MU_CALLCONV lerpAnimFrames(AnimFrame lhs, AnimFrame rhs, float t);
+// 전달된 애니메이션 프레임들의 가중합을 계산한다.
+// rotation은 normalized linear interpolation으로 계산된다.
+AnimFrame MU_CALLCONV sumWeightedAnimFrames(std::span<WeightedAnimFrame> frames);
 
 enum class AnimClipFlag {
 	Loop,

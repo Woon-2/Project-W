@@ -22,6 +22,22 @@ AnimFrame MU_CALLCONV lerpAnimFrames(AnimFrame lhs, AnimFrame rhs, float t) {
 	return ret;
 }
 
+// 전달된 애니메이션 프레임들의 가중합을 계산한다.
+// rotation은 normalized linear interpolation으로 계산된다.
+AnimFrame MU_CALLCONV sumWeightedAnimFrames(std::span<WeightedAnimFrame> frames) {
+	AnimFrame ret{};
+	auto tmpQuat = mu::Quat(0.f, 0.f, 0.f, 0.f);
+
+	for (auto& weightedFrame : frames) {
+		ret.translation += weightedFrame.frame.translation * weightedFrame.w;
+		tmpQuat += weightedFrame.frame.rotation * weightedFrame.w;
+		ret.scale += weightedFrame.frame.scale * weightedFrame.w;
+	}
+	ret.rotation = mu::NQuat(tmpQuat);
+
+	return ret;
+}
+
 void importAnimClip(std::ifstream& ifs, AnimClip& clip) {
 	readHeadTag(ifs, "Clip");
 
