@@ -14,7 +14,7 @@ public:
 		physicSystem_(), physicUpdateAcc_(0s), physicUpdateInterval(1s / 60.f) {}
 
 	void init(const Level& levelData);
-	void update(Milliseconds deltatime);
+	void update(Milliseconds deltaTime);
 
 	void enqueueMessage(const LogicMessage& msg) { msgQueue_.enqueue(msg); }
 	void processMessage();
