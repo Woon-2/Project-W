@@ -39,7 +39,6 @@ enum class PacketType : std::uint16_t {
 	scLeave,
 
 	csMoveStart,
-	csMoveUpdate,
 	csMoveStop,
 	scMove,
 
@@ -78,16 +77,15 @@ struct CSEnterPacket {
 enum class ObjectType : std::uint8_t {
 	Player,
 	Cube,
-
 };
 
 struct ObjectData {
 	ObjectType type;
 	std::int32_t objectId;
 	std::uint32_t materialSetIdx;
-	mu::Vec3 pos;
-	mu::NQuat orient;
-	mu::Vec3 scale;
+	DirectX::XMFLOAT3 pos;
+	DirectX::XMFLOAT4 orient;
+	DirectX::XMFLOAT3 scale;
 };
 
 struct SCSetupPacket {
@@ -98,6 +96,7 @@ struct SCEnterPacket {
 	std::int32_t playerCount;
 	std::array<std::int32_t, maxUserCount> pIds;
 	std::array<float, maxUserCount> x;
+	std::array<float, maxUserCount> y;
 	std::array<float, maxUserCount> z;
 };
 
@@ -110,26 +109,18 @@ struct SCLeavePacket {
 };
 
 struct CSMoveStartPacket {
-	float yaw;
-	float forward;
-	float right;
-};
-
-struct CSMoveUpdatePacket {
-	float yaw;
-	float forward;
-	float right;
+	Direction dir;
+	DirectX::XMFLOAT3 forward;
+	float cameraPitch;
 };
 
 struct CSMoveStopPacket {
-	
+	Direction dir;
 };
 
 struct SCMovePacket {
 	std::int32_t playerId;
-	float yaw;
-	float x;
-	float z;
+	DirectX::XMFLOAT3 pos;
 };
 
 struct CSFindRoomPacket {
@@ -154,7 +145,6 @@ struct Packet {
 		SCLeavePacket scLeave;
 
 		CSMoveStartPacket csMoveStart;
-		CSMoveUpdatePacket csMoveUpdate;
 		CSMoveStopPacket csMoveStop;
 		SCMovePacket scMove;
 
