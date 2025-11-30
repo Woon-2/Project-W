@@ -9,12 +9,12 @@
 
 extern std::atomic_int32_t gPlayerId;
 
-void Room::init( const Level& levelData ) {
+void Room::init(const Level& levelData) {
 	cubes_ = levelData.cubes;
 	playerStarts_ = levelData.playerStarts;
 }
 
-void Room::update(Milliseconds deltatime) {
+void Room::update(Milliseconds deltaTime) {
 	processMessage();
 
 	// 위치 갱신
@@ -23,37 +23,37 @@ void Room::update(Milliseconds deltatime) {
 		auto keyMask = user->keyMask();
 
 		if (keyMask & MoveW) {
-			user->setPos(mu::Vec3(user->pos().x(), 0.f, user->pos().z() + 0.1f));
+			user->setPos(user->pos() + user->forward() * 0.1f);
 		}
 		if (keyMask & MoveA) {
-			user->setPos(mu::Vec3(user->pos().x() - 0.1f, 0.f, user->pos().z()));
+			user->setPos(user->pos() - user->right() * 0.1f);
 		}
 		if (keyMask & MoveS) {
-			user->setPos(mu::Vec3(user->pos().x(), 0.f, user->pos().z() - 0.1f));
+			user->setPos(user->pos() - user->forward() * 0.1f);
 		}
 		if (keyMask & MoveD) {
-			user->setPos(mu::Vec3(user->pos().x() + 0.1f, 0.f, user->pos().z()));
+			user->setPos(user->pos() + user->right() * 0.1f);
 		}
 
 		// 불필요한 브로드캐스트를 줄이기 위해
 		// 위치가 변경되었을 때만 다른 유저들에게 알림
-		if(user->oldX() != user->pos().x() || user->oldZ() != user->pos().z()) {
+		//std::cout << "User " << user->getId() << " moved to (" << user->pos().x() << ", " << user->pos().z() << ")\n";
+		if (user->oldX() != user->pos().x() || user->oldZ() != user->pos().z()) {
 			auto packet = Packet{
 				.header = {
-					.size = sizeof( PacketHeader ) + sizeof( SCMovePacket ),
-					.id = static_cast<uint16>( PacketType::scMove )
+					.size = sizeof(PacketHeader) + sizeof(SCMovePacket),
+					.id = static_cast<uint16>(PacketType::scMove)
 				},
 				.scMove = {
-					.playerId = user->getId( ),
-					.x = user->pos().x(),
-					.z = user->pos().z()
+					.playerId = user->getId(),
+					.pos = user->pos().getXmf()
 				}
 			};
 
-			int32 packetSize = sizeof( Packet );
-			auto sendBuffer = std::make_shared<SendBuffer>( packetSize );
-			sendBuffer->copyData( &packet, packetSize );
-			broadcast( sendBuffer );
+			int32 packetSize = sizeof(Packet);
+			auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+			sendBuffer->copyData(&packet, packetSize);
+			broadcast(sendBuffer);
 		}
 	}
 }
@@ -75,16 +75,23 @@ void Room::processMessage() {
 
 		case LogicMsgType::UserMoveStart: {
 			auto user = idUserMap_[messages[i].userId];
+
+			auto yawf = std::atan2(messages[i].forward.x, messages[i].forward.z);
+			auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), mu::Radian(yawf));
+			user->setOrient(yaw);
+			//user->setPlayerYaw(messages[i].playerYaw);
+			user->setCameraPitch(messages[i].cameraPitch);
+
 			auto keyMask = user->keyMask();
 
 			switch (messages[i].dir) {
-			case Direction::w: 
+			case Direction::w:
 				user->setKeyMask(keyMask | MoveW);
 				break;
 			case Direction::a:
 				user->setKeyMask(keyMask | MoveA);
 				break;
-			case Direction::s: 
+			case Direction::s:
 				user->setKeyMask(keyMask | MoveS);
 				break;
 			case Direction::d:
@@ -118,8 +125,8 @@ void Room::processMessage() {
 	}
 }
 
-void Room::enter( int32 playerId ) {
-	std::lock_guard<std::recursive_mutex> lock( mtx_ );
+void Room::enter(int32 playerId) {
+	std::lock_guard<std::recursive_mutex> lock(mtx_);
 
 	// 방에 추가할 플레이어 오브젝트 생성
 	auto player = std::make_shared<Object>();
@@ -133,7 +140,7 @@ void Room::enter( int32 playerId ) {
 	// 플레이어 정보 및 오브젝트들 정보 보내기
 	auto setupPacket = Packet{
 		.header = {
-			.id = static_cast<uint16>( PacketType::scSetup )
+			.id = static_cast<uint16>(PacketType::scSetup)
 		},
 		.scSetup = {
 			.objectCount = 1 + static_cast<int32>(cubes_.size())	// 플레이어 오브젝트 + 큐브 오브젝트들
@@ -151,7 +158,7 @@ void Room::enter( int32 playerId ) {
 	};
 	objectDatas.emplace_back(std::move(playerData));
 
-	for(auto i = 0; i < cubes_.size(); ++i) {
+	for (auto i = 0; i < cubes_.size(); ++i) {
 		auto cubeData = ObjectData{
 			.type = ObjectType::Cube,
 			.objectId = gPlayerId.fetch_add(1),
@@ -176,24 +183,25 @@ void Room::enter( int32 playerId ) {
 	// enter 패킷 브로드캐스트
 	auto packet = Packet{
 		.header = {
-			.size = sizeof( PacketHeader ) + sizeof( SCEnterPacket ),
-			.id = static_cast<uint16>( PacketType::scEnter )
+			.size = sizeof(PacketHeader) + sizeof(SCEnterPacket),
+			.id = static_cast<uint16>(PacketType::scEnter)
 		},
 		.scEnter = {
-			.playerCount = static_cast<int32>( users_.size( ) )
+			.playerCount = static_cast<int32>(users_.size())
 		}
 	};
 
-	for ( auto i = 0; i < users_.size( ); ++i ) {
-		packet.scEnter.pIds[ i ] = users_[ i ]->getId( );
-		packet.scEnter.x[ i ] = users_[ i ]->pos().x();
-		packet.scEnter.z[ i ] = users_[ i ]->pos().z();
+	for (auto i = 0; i < users_.size(); ++i) {
+		packet.scEnter.pIds[i] = users_[i]->getId();
+		packet.scEnter.x[i] = users_[i]->pos().x();
+		packet.scEnter.y[i] = users_[i]->pos().y();
+		packet.scEnter.z[i] = users_[i]->pos().z();
 	}
 
-	packetSize = sizeof( Packet );
-	auto sendBuffer = std::make_shared<SendBuffer>( packetSize );
-	sendBuffer->copyData( &packet, packetSize );
-	broadcast( sendBuffer );
+	packetSize = sizeof(Packet);
+	auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+	sendBuffer->copyData(&packet, packetSize);
+	broadcast(sendBuffer);
 }
 
 // 현재 플레이어의 정보를 제거하는 순서는 
@@ -201,31 +209,31 @@ void Room::enter( int32 playerId ) {
 // Room에 있는 유저의 오브젝트를 제거하는 순서로 이루어짐
 // 따라서 leave 함수 내에서 broadcast를 호출했을 때 해당 플레이어의 GameSession이 이미 제거된 상태이므로
 // findGameSession이 nullptr을 반환할 수 있음
-void Room::leave( int32 playerId ) {
-	std::lock_guard<std::recursive_mutex> lock( mtx_ );
+void Room::leave(int32 playerId) {
+	std::lock_guard<std::recursive_mutex> lock(mtx_);
 
 	auto packet = Packet{
 		.header = {
-			.size = sizeof( PacketHeader ) + sizeof( SCLeavePacket ),
-			.id = static_cast<uint16>( PacketType::scLeave )
+			.size = sizeof(PacketHeader) + sizeof(SCLeavePacket),
+			.id = static_cast<uint16>(PacketType::scLeave)
 		},
 		.scLeave = {
 			.playerId = playerId
 		}
 	};
 
-	int32 packetSize = sizeof( Packet );
-	auto sendBuffer = std::make_shared<SendBuffer>( packetSize );
-	sendBuffer->copyData( &packet, packetSize );
-	broadcast( sendBuffer );
+	int32 packetSize = sizeof(Packet);
+	auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+	sendBuffer->copyData(&packet, packetSize);
+	broadcast(sendBuffer);
 
-	std::erase_if( users_, [&]( const auto& u ) {
+	std::erase_if(users_, [&](const auto& u) {
 		return u->getId() == playerId;
- 	} );
+		});
 
 	idUserMap_.erase(playerId);
 
-	if ( empty( ) ) {
+	if (empty()) {
 		auto removeRoomMsg = LogicMessage{
 			.type = LogicMsgType::RemoveRoom,
 			.roomId = roomId_
@@ -234,9 +242,9 @@ void Room::leave( int32 playerId ) {
 	}
 }
 
-void Room::broadcast( const SPSendBuffer& sendBuffer ) {
-	std::lock_guard<std::recursive_mutex> lock( mtx_ );
-	for(auto&[id, user] : idUserMap_) {
+void Room::broadcast(const SPSendBuffer& sendBuffer) {
+	std::lock_guard<std::recursive_mutex> lock(mtx_);
+	for (auto& [id, user] : idUserMap_) {
 		auto session = GameSessionManager::findGameSession(id);
 		if (session) {
 			session->send(sendBuffer);
@@ -244,7 +252,7 @@ void Room::broadcast( const SPSendBuffer& sendBuffer ) {
 	}
 }
 
-bool Room::empty( ) {
-	std::lock_guard<std::recursive_mutex> lock( mtx_ );
-	return users_.empty( );
+bool Room::empty() {
+	std::lock_guard<std::recursive_mutex> lock(mtx_);
+	return users_.empty();
 }

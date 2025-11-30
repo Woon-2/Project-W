@@ -17,6 +17,8 @@ struct LogicMessage {
 	Direction dir{};
 	int32 userId{};
 	int32 roomId{};
+	DirectX::XMFLOAT3 forward{};
+	float cameraPitch{};
 };
 
 class GameLogic {

@@ -37,7 +37,7 @@ void Game::setupStage() {
 
 	player_ = std::make_shared<Object>();
 
-	dirLight_.setOrient( mu::NQuat( mu::Degree( 0.f ), mu::Degree( 120.f ), mu::Degree( 15.f ) ) );
+	dirLight_.setOrient( mu::NQuat( mu::Degree( 0.f ), mu::Degree( 160.f ), mu::Degree( 0.f ) ) );
 	dirLight_.color = mu::Vec3( 0.8f, 0.8f, 0.8f );
 	dirLight_.intensity = 2.f;
 	dirLight_.type = PBRPipeline::LightData::Type::DirectionalLight;
@@ -75,6 +75,7 @@ void Game::update(Milliseconds deltaTime) {
 		case MsgType::SetupCube: {
 			auto cube = Object{};
 			cube.setId(msg.objectId);
+			cube.setMaterialSetIdx(msg.materialSetIdx);
 			cube.setPos(msg.pos);
 			cube.setOrient(msg.orient);
 			cube.setScale(msg.scale);
@@ -136,26 +137,26 @@ void Game::update(Milliseconds deltaTime) {
 	for (auto& cube : cubes_) {
 		cube.update(deltaTime, tPhysicInterpolation);
 	}
-
+	
 	// 플레이어 위치 예측
 	if (keyboardStateCurr_['W'] & 0x80) {
-		player_->physicState().pos.setComponent(2,
-			player_->physicState().pos.z() + (0.1f * deltaTime.count() / 16.6667f)
+		player_->setPos(
+			player_->pos() + player_->forward() * (0.1f * deltaTime.count() / 16.6667f)
 		);
 	}
 	if (keyboardStateCurr_['A'] & 0x80) {
-		player_->physicState().pos.setComponent(0,
-			player_->physicState().pos.x() - (0.1f * deltaTime.count() / 16.6667f)
+		player_->setPos(
+			player_->pos() - player_->right() * (0.1f * deltaTime.count() / 16.6667f)
 		);
 	}
 	if (keyboardStateCurr_['S'] & 0x80) {
-		player_->physicState().pos.setComponent(2,
-			player_->physicState().pos.z() - (0.1f * deltaTime.count() / 16.6667f)
+		player_->setPos(
+			player_->pos() - player_->forward() * (0.1f * deltaTime.count() / 16.6667f)
 		);
 	}
 	if (keyboardStateCurr_['D'] & 0x80) {
-		player_->physicState().pos.setComponent(0,
-			player_->physicState().pos.x() + (0.1f * deltaTime.count() / 16.6667f)
+		player_->setPos(
+			player_->pos() + player_->right() * (0.1f * deltaTime.count() / 16.6667f)
 		);
 	}
 
@@ -171,6 +172,7 @@ void Game::update(Milliseconds deltaTime) {
 
 	camera_.update();
 	dirLight_.update(deltaTime);
+	dirLight_.updateShadowAuxDirectional(camera_.eye(), 100.f, -10.f, 10.f, -10.f, 10.f, 50.f, 200.f);
 }
 
 void Game::render() {
@@ -200,21 +202,21 @@ void Game::render() {
 }
 
 // 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
-LRESULT Game::receiveWndMsg( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam ) {
+LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	switch (msg) {
-	// WM_INPUT 메시지
-	// 마우스 움직임의 경우 WM_MOUSEMOVE 메시지 대신 이 메시지로 처리하는 것이
-	// 정확하고 안정적인 처리가 가능하다.
-	// 윈도우 경계로부터 영향을 받지 않고, 가상 커서 속도/가속도 설정을 무시하며,
-	// Alt-Tab / 창 이동 후에도 상태 복구가 명확하다.
-	// (DPI 스케일링 환경에서도 입력이 왜곡되지 않는다고 한다.)
+		// WM_INPUT 메시지
+		// 마우스 움직임의 경우 WM_MOUSEMOVE 메시지 대신 이 메시지로 처리하는 것이
+		// 정확하고 안정적인 처리가 가능하다.
+		// 윈도우 경계로부터 영향을 받지 않고, 가상 커서 속도/가속도 설정을 무시하며,
+		// Alt-Tab / 창 이동 후에도 상태 복구가 명확하다.
+		// (DPI 스케일링 환경에서도 입력이 왜곡되지 않는다고 한다.)
 	case WM_INPUT: {
 		static auto sRawInputBuffer = std::vector<std::uint8_t>(256);
 		UINT rawInputSize{};
 		UINT rawInputResult{};
 
 		// 입력 구조체 크기 수신
-		rawInputResult = GetRawInputData( reinterpret_cast<HRAWINPUT>(lParam),
+		rawInputResult = GetRawInputData(reinterpret_cast<HRAWINPUT>(lParam),
 			RID_INPUT, nullptr, &rawInputSize, sizeof(RAWINPUTHEADER)
 		);
 		DISPLAY_ERROR_GLE(rawInputResult != -1, true);
@@ -224,7 +226,7 @@ LRESULT Game::receiveWndMsg( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 		}
 
 		// 입력 구조체 내용 수신
-		rawInputResult = GetRawInputData( reinterpret_cast<HRAWINPUT>(lParam),
+		rawInputResult = GetRawInputData(reinterpret_cast<HRAWINPUT>(lParam),
 			RID_INPUT, sRawInputBuffer.data(), &rawInputSize, sizeof(RAWINPUTHEADER)
 		);
 		DISPLAY_ERROR_GLE(rawInputResult == rawInputSize, true);
@@ -232,7 +234,7 @@ LRESULT Game::receiveWndMsg( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 		auto ri = reinterpret_cast<const RAWINPUT*>(sRawInputBuffer.data());
 		if (ri->header.dwType == RIM_TYPEMOUSE) {
 			// 마우스에 대한 입력 내용이 상대 좌표여야 한다.
-			DISPLAY_ERROR_STR( !(ri->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE),
+			DISPLAY_ERROR_STR(!(ri->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE),
 				"[Input Error] Game::receiveWndMsg: 마우스 입력 장치가 게임과 호환되지 않습니다.\n"
 				"RAWMOUSE의 플래그 중 MOUSE_MOVE_ABSOLUTE가 활성화되어있습니다.",
 				true
@@ -254,42 +256,62 @@ LRESULT Game::receiveWndMsg( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 }
 
 // prev, 이전에 눌렸는지 판단한다.
-void Game::updateMoveState(int vk, Direction dir) {
-	const bool downCurr = keyboardStateCurr_[vk] & 0x80;
-	const bool downPrev = keyboardStatePrev_[vk] & 0x80;
+void Game::updateMoveState(int vk, Direction dir, DirectX::XMFLOAT3 forward, float cameraPitch) {
+	auto downPrev = keyboardStatePrev_[vk] & 0x80;
+	auto downCurr = keyboardStateCurr_[vk] & 0x80;
 
-	if (downCurr && !downPrev) {
+	if (downCurr) {
 		auto packet = Packet{
 			.header = {
 				.size = sizeof(PacketHeader) + sizeof(CSMoveStartPacket),
-				.id = static_cast<u16t>(PacketType::csMoveStart)
+				.id = static_cast<std::uint16_t>(PacketType::csMoveStart)
 			},
 			.csMoveStart = {
-				.dir = dir
+				.dir = dir,
+				.forward = forward,
+				.cameraPitch = cameraPitch
 			}
 		};
-		
-		int32 packetSize = sizeof(Packet);
+
+		i32t packetSize = sizeof(Packet);
 		auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
 		sendBuffer->copyData(&packet, packetSize);
 		serverSession_->send(sendBuffer);
 	}
-	if (!downCurr && downPrev) {
+	if(!downCurr && downPrev) {
 		auto packet = Packet{
 			.header = {
 				.size = sizeof(PacketHeader) + sizeof(CSMoveStopPacket),
-				.id = static_cast<u16t>(PacketType::csMoveStop)
+				.id = static_cast<std::uint16_t>(PacketType::csMoveStop)
 			},
 			.csMoveStop = {
 				.dir = dir
 			}
 		};
 
-		int32 packetSize = sizeof(Packet);
+		i32t packetSize = sizeof(Packet);
 		auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
 		sendBuffer->copyData(&packet, packetSize);
 		serverSession_->send(sendBuffer);
 	}
+}
+
+void Game::sendEnterRoomPacket(i32t roomId) {
+	auto packet = Packet{
+		.header = {
+			.size = sizeof(PacketHeader) + sizeof(CSFindRoomPacket),
+			.id = static_cast<std::uint16_t>(PacketType::csFindRoom)
+		},
+		.csFindRoom = {
+			.roomId = roomId
+		}
+	};
+
+	i32t packetSize = sizeof(Packet);
+	auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+	sendBuffer->copyData(&packet, packetSize);
+	serverSession_->send(sendBuffer);
+	inRoom_ = true;
 }
 
 void Game::processInput(Milliseconds deltaTime) {
@@ -302,110 +324,93 @@ void Game::processInput(Milliseconds deltaTime) {
 
 	// 플레이어 움직임 처리
 	if (inRoom_) {
-		updateMoveState('W', Direction::w);
-		updateMoveState('A', Direction::a);
-		updateMoveState('S', Direction::s);
-		updateMoveState('D', Direction::d);
-	}
-
-	// 1인칭 카메라 시점 설정
-	if ( keyboardStateCurr_['Q'] & 0x80 ) {
-		camera_.setOffsetFromTargetPreRotation( mu::NQuat{} );
-		camera_.setOffsetFromTarget( mu::Vec3( 0.f, 2.f, 0.5f ) );
-		camera_.setOffsetTargetPivot( mu::Vec3(0.f, 2.f, 8.f));
-		cameraMode_ = CameraMode::FirstPerson;
-	} 
-	// 3인칭 카메라 시점 설정
-	if ( keyboardStateCurr_['E'] & 0x80 ) {
-		camera_.setXXPreRotation( mu::NQuat{} );
-		camera_.setOffsetFromTarget( mu::Vec3( 0.f, 1.8f, -2.5f ) );
-		camera_.setOffsetTargetPivot( mu::Vec3(0.f, 1.f, 0.f));
-		cameraMode_ = CameraMode::ThirdPerson;
-	}
-
-	// 카메라 움직임 처리
-	const auto mouseSensitivity = mu::pi * 2.f;
-
-	switch (cameraMode_) {
-	case CameraMode::ThirdPerson: {
-		auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f),
-			mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left))	
-		);
-
-		player_->setOrient(player_->orient() * yaw);
-
-		cameraPitch_ = std::clamp(
-			static_cast<float>(cameraPitch_) + mouseDeltaY_ * mouseSensitivity / static_cast<float>(gClientRect.bottom - gClientRect.top),
-			-mu::pi * 0.16f,
-			mu::pi * 0.3f
-		);
-
-		camera_.setOffsetFromTargetPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, mu::Radian(0.f)) );
-
-		mouseDeltaX_ = 0;
-		mouseDeltaY_ = 0;
-		break;
-	}
-	case CameraMode::FirstPerson: {
-		auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f),
-			mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left))	
-		);
-
-		player_->setOrient(player_->orient() * yaw);
-
-		cameraPitch_ = std::clamp(
-			static_cast<float>(cameraPitch_) + mouseDeltaY_ * mouseSensitivity / static_cast<float>(gClientRect.bottom - gClientRect.top),
-			-mu::pi * 0.16f,
-			mu::pi * 0.3f
-		);
-
-		camera_.setXXPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, mu::Radian(0.f)) );
-
-		mouseDeltaX_ = 0;
-		mouseDeltaY_ = 0;
-		break;
-	}
-	}
-
-	// 패킷 처리
-	auto packet = Packet{
-		.header = {
-			.size = sizeof(PacketHeader) + sizeof(CSFindRoomPacket),
-			.id = static_cast<std::uint16_t>(PacketType::csFindRoom)
+		// 1인칭 카메라 시점 설정
+		if (keyboardStateCurr_['Q'] & 0x80) {
+			camera_.setOffsetFromTargetPreRotation(mu::NQuat{});
+			camera_.setOffsetFromTarget(mu::Vec3(0.f, 2.f, 0.5f));
+			camera_.setOffsetTargetPivot(mu::Vec3(0.f, 2.f, 8.f));
+			cameraMode_ = CameraMode::FirstPerson;
 		}
-	};
+		// 3인칭 카메라 시점 설정
+		if (keyboardStateCurr_['E'] & 0x80) {
+			camera_.setXXPreRotation(mu::NQuat{});
+			camera_.setOffsetFromTarget(mu::Vec3(0.f, 1.8f, -2.5f));
+			camera_.setOffsetTargetPivot(mu::Vec3(0.f, 1.f, 0.f));
+			cameraMode_ = CameraMode::ThirdPerson;
+		}
 
-	bool readyToSend = false;
+		// 카메라 움직임 처리
+		const auto mouseSensitivity = mu::pi * 2.f;
 
-	if ( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState( '1' ) & 0x8000 ) {
-		packet.csFindRoom.roomId = 1;
-		inRoom_ = true;
-		readyToSend = true;
-	}
-	if( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState( '2' ) & 0x8000 ) {
-		packet.csFindRoom.roomId = 2;
-		inRoom_ = true;
-		readyToSend = true;
-	}
-	if( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState( '3' ) & 0x8000 ) {
-		packet.csFindRoom.roomId = 3;
-		inRoom_ = true;
-		readyToSend = true;
-	}
-	if( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState( '4' ) & 0x8000 ) {
-		packet.csFindRoom.roomId = 4;
-		inRoom_ = true;
-		readyToSend = true;
-	}
+		switch (cameraMode_) {
+		case CameraMode::ThirdPerson: {
+			auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f),
+				mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left))
+			);
+			
+			player_->setOrient(player_->orient() * yaw);
 
-	if( !readyToSend ) {
-		return;
-	}
+			cameraPitch_ = std::clamp(
+				static_cast<float>(cameraPitch_) + mouseDeltaY_ * mouseSensitivity / static_cast<float>(gClientRect.bottom - gClientRect.top),
+				-mu::pi * 0.16f,
+				mu::pi * 0.3f
+			);
 
-	i32t packetSize = sizeof( Packet );
-	auto buffer = std::make_shared<SendBuffer>( packetSize );
-	buffer->copyData( &packet, packetSize );
-	serverSession_->send( buffer );
+			camera_.setOffsetFromTargetPreRotation(mu::NQuat(mu::Radian(0.f), cameraPitch_, mu::Radian(0.f)));
+
+			mouseDeltaX_ = 0;
+			mouseDeltaY_ = 0;
+			break;
+		}
+		case CameraMode::FirstPerson: {
+			auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f),
+				mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left))
+			);
+
+			player_->setOrient(player_->orient() * yaw);
+
+			cameraPitch_ = std::clamp(
+				static_cast<float>(cameraPitch_) + mouseDeltaY_ * mouseSensitivity / static_cast<float>(gClientRect.bottom - gClientRect.top),
+				-mu::pi * 0.16f,
+				mu::pi * 0.3f
+			);
+
+			camera_.setXXPreRotation(mu::NQuat(mu::Radian(0.f), cameraPitch_, mu::Radian(0.f)));
+
+			mouseDeltaX_ = 0;
+			mouseDeltaY_ = 0;
+			break;
+		}
+		}
+
+		// 움직임
+		const auto& forward = player_->forward().getXmf();
+		updateMoveState('W', Direction::w, forward, cameraPitch_);
+		updateMoveState('A', Direction::a, forward, cameraPitch_);
+		updateMoveState('S', Direction::s, forward, cameraPitch_);
+		updateMoveState('D', Direction::d, forward, cameraPitch_);
+
+		if (keyboardStateCurr_[VK_LBUTTON] & 0x80) {
+
+		}
+	}
+	else {
+		// 방에 들어가지 않은 상태일 때
+		// 방 입장 키 처리
+
+		if (keyboardStateCurr_['1'] & 0x80) {
+			sendEnterRoomPacket(1);
+		}
+		if (keyboardStateCurr_['2'] & 0x80) {
+			sendEnterRoomPacket(2);
+		}
+		if (keyboardStateCurr_['3'] & 0x80) {
+			sendEnterRoomPacket(3);
+		}
+		if (keyboardStateCurr_['4'] & 0x80) {
+			sendEnterRoomPacket(4);
+		}
+	}
 }
 
 }	// namespace Online

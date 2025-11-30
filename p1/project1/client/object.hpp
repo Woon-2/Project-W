@@ -95,7 +95,7 @@ public:
 	void setId( i32t id ) {	id_ = id; }
 	i32t getId( ) const { return id_; }
 
-	void setServerPos( const mu::Vec3& pos ) {
+	void MU_CALLCONV setServerPos( mu::Vec3 pos ) {
 		prevPhysicState_ = currPhysicState_;
 		currPhysicState_.pos = pos;
 	}

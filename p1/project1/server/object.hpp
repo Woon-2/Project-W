@@ -73,6 +73,9 @@ public:
 	float oldX() const { return oldX_; }
 	float oldZ() const { return oldZ_; }
 
+	void setPlayerYaw(float yaw) { playerYaw_ = yaw; }
+	void setCameraPitch(float pitch) { cameraPitch_ = pitch; }
+
 	void setKeyMask(uint8 keyMask) { keyMask_ = keyMask; }
 	uint8 keyMask() const { return keyMask_; }
 
@@ -87,6 +90,9 @@ private:
 	mu::Vec3 up_{};
 
 	const Model* pModel_ = nullptr;
+
+	float playerYaw_{};
+	float cameraPitch_{};
 
 	u32t materialSetIdx_ = 0u;
 	i32t id_{ -1 };

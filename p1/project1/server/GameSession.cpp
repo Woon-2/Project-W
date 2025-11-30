@@ -45,7 +45,7 @@ int32 GameSession::onRecvPacket( uint8* buffer, int32 len ) {
 	//std::cout << "GameSession " << getId( ) << " received packet of length " << len << ".\n";
 
 	auto packet = reinterpret_cast<Packet*>( buffer );
-
+	
 	switch ( static_cast<PacketType>( packet->header.id ) ) {
 	case PacketType::csSignup: {
 		auto id = std::string( packet->csSignup.id.data( ) );
@@ -140,12 +140,14 @@ int32 GameSession::onRecvPacket( uint8* buffer, int32 len ) {
 		if(myRoomId_ == -1) {
 			break;
 		}
-
+		
 		auto logicMsg = LogicMessage{
 			.type = LogicMsgType::UserMoveStart,
 			.dir = packet->csMoveStart.dir,
 			.userId = getId( ),
 			.roomId = myRoomId_,
+			.forward = packet->csMoveStart.forward,
+			.cameraPitch = packet->csMoveStart.cameraPitch
 		};
 
 		GameLogicManager::dispatchMessage(logicMsg);
@@ -163,7 +165,6 @@ int32 GameSession::onRecvPacket( uint8* buffer, int32 len ) {
 			.userId = getId(),
 			.roomId = myRoomId_
 		};
-
 		GameLogicManager::dispatchMessage(logicMsg);
 		break;
 	}

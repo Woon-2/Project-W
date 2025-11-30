@@ -23,6 +23,7 @@ enum class MsgType : u8t {
 struct Message {
 	MsgType type;
 	i32t objectId;
+	u32t materialSetIdx;
 	mu::Vec3 pos;
 	mu::NQuat orient;
 	mu::Vec3 scale;
@@ -85,7 +86,8 @@ private:
 		ThirdPerson
 	};
 
-	void updateMoveState(int vk, Direction dir);
+	void updateMoveState(int vk, Direction dir, DirectX::XMFLOAT3 forward, float cameraPitch);
+	void sendEnterRoomPacket(i32t roomId);
 	void processInput(Milliseconds deltaTime);
 
 	AssetManager assetManager_{};
