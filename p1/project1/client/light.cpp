@@ -31,6 +31,20 @@ void Light::render(GFX& gfx) {
 		.view = view_,
 		.proj = proj_
 	});
+	gfx.addLightData(PBRSkinnedPipeline::LightData{
+		.pos = pos_,
+		.dir = mu::NVec3(orient().rotate(mu::Vec3(0.f, 0.f, 1.f))),
+		.color = color,
+		.intensity = intensity,
+		.cosTheta = cosTheta,
+		.cosPhi = cosPhi,
+		.falloff = falloff,
+		.atten = atten,
+		.type = static_cast<PBRSkinnedPipeline::LightData::Type>(type),
+		.isMainDirectionalLight = isMainDirectionalLight,
+		.view = view_,
+		.proj = proj_
+	});
 }
 
 void MU_CALLCONV Light::setPos(mu::Vec3 newPos) {

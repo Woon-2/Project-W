@@ -1,6 +1,30 @@
 #include "pch.hpp"
 #include "object.hpp"
 #include "errorHandling.hpp"
+#include "AssetManager.hpp"
+
+void AnimBlenderVanguard::init(const AssetManager& assetManager) {
+	setSkeleton(assetManager.modelPlayer()->skeleton);
+	for (auto& clip : assetManager.vanguardAnimations()) {
+		pushTargetClip(clip->name, clip);
+	}
+}
+
+void AnimBlenderVanguard::update(Seconds deltaTime) {
+	animTimeAcc_ += deltaTime;
+	const auto duration = targetClip("Vanguard_Idle")->duration;
+	while (animTimeAcc_ > duration) {
+		animTimeAcc_ -= duration;
+	}
+	priority_ = 0.f;
+}
+
+void AnimBlenderVanguard::onCalcLocal(PassKey<AnimSystem>) {
+	updateFrames("Vanguard_Idle", animTimeAcc_);
+	auto& localXforms = localXformData();
+	auto& frames = curFrames("Vanguard_Idle");
+	std::ranges::transform(frames, localXforms.begin(), convertAnimFrameToMatrix);
+}
 
 // 모델을 설정한다.
 // 모델이 있는 게임 객체는 render 시 GFX에 DrawEvent를 제출한다.
@@ -55,19 +79,38 @@ void Object::update(Milliseconds deltaTime, float tPhysicInterpolation) {
 		const auto size = pModel->aabbs[i].size * scale;
 		renderState_.worldBVs[i] = mu::Mat4x4(mu::scale(size)) * mu::translate(center);
 	}
+
+	if (renderState_.animBlender) {
+		renderState_.animBlender->update(deltaTime);
+	}
 }
 
 void Object::render(GFX& gfx) {
 	const auto pModel = renderState_.pModel;
 	if (pModel) {
-		for (auto& [mesh, dressXform] : pModel->meshWithDressXforms) {
-			for (std::size_t i = 0u; i < mesh.subMeshes.size(); ++i) {
-				gfx.addDrawEvent(PBRPipeline::DrawEvent{
-					.world = dressXform * renderState_.world,
-					.mesh = &mesh,
-					.subMesh = &mesh.subMeshes[i],
-					.material = &mesh.materialSets[materialSetIdx_].materials[i]
-				});
+		if (renderState_.animBlender) {
+			for (auto& [mesh, dressXform] : pModel->meshWithDressXforms) {
+				for (std::size_t i = 0u; i < mesh.subMeshes.size(); ++i) {
+					gfx.addDrawEvent(PBRSkinnedPipeline::DrawEvent{
+						.world = dressXform * renderState_.world,
+						.boneXforms = renderState_.animBlender->finalXformData(),
+						.mesh = &mesh,
+						.subMesh = &mesh.subMeshes[i],
+						.material = &mesh.materialSets[materialSetIdx_].materials[i],
+					});
+				}
+			}
+		}
+		else {
+			for (auto& [mesh, dressXform] : pModel->meshWithDressXforms) {
+				for (std::size_t i = 0u; i < mesh.subMeshes.size(); ++i) {
+					gfx.addDrawEvent(PBRPipeline::DrawEvent{
+						.world = dressXform * renderState_.world,
+						.mesh = &mesh,
+						.subMesh = &mesh.subMeshes[i],
+						.material = &mesh.materialSets[materialSetIdx_].materials[i]
+					});
+				}
 			}
 		}
 	}

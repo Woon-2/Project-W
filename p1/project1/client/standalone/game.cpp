@@ -134,9 +134,11 @@ void Game::importPlayerStart(std::ifstream& ifs, Object& player) {
 	if (playerSpawned_) {
 		return;
 	}
+	playerSpawned_ = true;
 
 	player_ = std::make_shared<Object>(std::move(player));
 	player_->setModel(assetManager_.modelPlayer());
+	player_->setAnimBlender(animSystem_, assetManager_);
 }
 
 void Game::update(Milliseconds deltaTime) {
@@ -186,6 +188,8 @@ void Game::update(Milliseconds deltaTime) {
 	dirLight_.update(deltaTime);
 	dirLight_.updateShadowAuxDirectional(camera_.eye(), 100.f, -10.f, 10.f, -10.f, 10.f, 50.f, 200.f);
 	//  billboard_->update( deltaTime );
+
+	animSystem_.update(0.016s);
 }
 
 void Game::render() {
@@ -198,10 +202,14 @@ void Game::render() {
 	dirLight_.render(gfx_);
 	// billboard_.render( gfx_ );
 
-	auto frameData = PBRPipeline::FrameData{
+	auto frameDataPBR = PBRPipeline::FrameData{
 		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
 	};
-	gfx_.addFrameData( frameData );
+	gfx_.addFrameData( frameDataPBR );
+	auto frameDataPBRSkinned = PBRSkinnedPipeline::FrameData{
+		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
+	};
+	gfx_.addFrameData( frameDataPBRSkinned );
 
 	gfx_.render();
 }

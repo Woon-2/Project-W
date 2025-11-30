@@ -249,7 +249,7 @@ public class AnimationExtractorWindow : EditorWindow
         ExtractUtil.WriteText(binaryWriter, "Name", anim.info.name);
         ExtractUtil.WriteText(binaryWriter, "SkeletonEnumeration", anim.info.skeletonEnumeration);
 
-        ExtractUtil.WriteFloat(binaryWriter, "Duration", anim.clip.length * anim.clip.frameRate);
+        ExtractUtil.WriteFloat(binaryWriter, "Duration", anim.clip.length);
         ExtractUtil.WriteText(binaryWriter, "WrapMode", anim.clip.wrapMode.ToString());
 
         int idxBone = 0;

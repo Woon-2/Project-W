@@ -3,6 +3,19 @@
 
 #include "gfx.hpp"
 #include "collision.hpp"
+#include "animation.hpp"
+
+class AssetManager;
+
+class AnimBlenderVanguard : public AnimBlender {
+public:
+	void init(const AssetManager& assetManager);
+	void update(Seconds deltaTime) override;
+	void onCalcLocal(PassKey<AnimSystem>) override;
+
+private:
+	Seconds animTimeAcc_ = 0s;
+};
 
 struct PhysicState {
 	mu::Vec3 pos{};
@@ -20,6 +33,7 @@ struct PhysicState {
 struct RenderState {
 	mu::Mat4x4 world;
 	std::vector<mu::Mat4x4> worldBVs;
+	std::unique_ptr<AnimBlender> animBlender;
 	const Model* pModel;
 };
 
@@ -43,6 +57,13 @@ public:
 	//		(게임 객체가 계산해서 일괄적으로 전달해야 한다.)
 	void update(Milliseconds deltaTime, float tPhysicInterpolation);
 	void render(GFX& gfx);
+
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) {
+		renderState_.animBlender = std::make_unique<AnimBlenderVanguard>();
+		static_cast<AnimBlenderVanguard*>(renderState_.animBlender.get())->init(assetManager);
+
+		animSystem.trackAnimBlender(renderState_.animBlender.get());
+	}
 
 	// 모델을 설정한다.
 	// 모델이 있는 게임 객체는 render 시 GFX에 DrawEvent를 제출한다.

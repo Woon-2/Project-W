@@ -23,5 +23,10 @@ void AssetManager::loadGFXAssets(GFX& gfx) {
 }
 
 void AssetManager::loadAnimations() {
-	vanguardAnimations_ = loadAnimClipsFromFile("../resources/animations/vanguardAnimations.anim");
+	auto tmp = loadAnimClipsFromFile("../resources/animations/vanguardAnimations.anim");
+	vanguardAnimations_.reserve(tmp.size());
+
+	for (auto& clip : tmp) {
+		vanguardAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+	}
 }

@@ -21,6 +21,7 @@ public class ModelExtractorWindow : EditorWindow
 
     private List<Transform> bones = null;
     private List<Matrix4x4> bindposes = null;
+    private int[] boneIdxMap = null;
 
     [MenuItem("Tools/Model Extractor")]
     public static void OpenWindow()
@@ -185,7 +186,7 @@ public class ModelExtractorWindow : EditorWindow
         if ((mesh.uv2 != null) && (mesh.uv2.Length > 0)) ExtractUtil.WriteVectors(geometryWriter, "TextureCoords1", mesh.uv2);
         if ((mesh.boneWeights != null) && (mesh.boneWeights.Length > 0))
         {
-            ExtractUtil.WriteBoneIndices(geometryWriter, "BoneIndices", mesh.boneWeights);
+            ExtractUtil.WriteBoneIndices(geometryWriter, "BoneIndices", mesh.boneWeights, boneIdxMap);
             ExtractUtil.WriteBoneWeights(geometryWriter, "BoneWeights", mesh.boneWeights);
         }
         ExtractUtil.WriteTailTag(geometryWriter, "VertexBuffers");
@@ -354,6 +355,25 @@ public class ModelExtractorWindow : EditorWindow
         else if (skinnedMeshRenderer && skinnedMeshRenderer.enabled)
         {
             mesh = skinnedMeshRenderer.sharedMesh;
+            boneIdxMap = new int[skinnedMeshRenderer.bones.Length];
+            for (int i = 0; i < skinnedMeshRenderer.bones.Length; i++)
+            {
+                bool found = false;
+                for (int j = 0; j < bones.Count; j++)
+                {
+                    if (skinnedMeshRenderer.bones[i].gameObject.name == bones[j].gameObject.name)
+                    {
+                        found = true;
+                        boneIdxMap[i] = j;
+                        break;
+                    }
+                }
+
+                if (!found)
+                {
+                    Debug.LogError("Bone not found: " + skinnedMeshRenderer.bones[i].gameObject.name);
+                }
+            }
         }
 
         if (mesh != null)
@@ -488,7 +508,7 @@ public class ModelExtractorWindow : EditorWindow
         bones = new List<Transform>();
         bindposes = new List<Matrix4x4>();
 
-        ProcessBoneHierarchy(targetSkeleton.transform, targetSkeleton.transform);
+        ProcessBoneHierarchy(targetObject.transform, targetSkeleton.transform);
     }
 
     void ExtractBoneHierarchy(Transform bone, ref int boneIdx)
@@ -515,7 +535,6 @@ public class ModelExtractorWindow : EditorWindow
 
     void ExtractSkeleton()
     {
-        ProcessBones();
         ExtractUtil.WriteHeadTag(skeletonWriter, "Skeleton");
         ExtractUtil.WriteText(skeletonWriter, "Name", targetSkeletonName);
         ExtractUtil.WriteText(skeletonWriter, "SkeletonEnumeration", skeletonEnumeration);
@@ -541,6 +560,7 @@ public class ModelExtractorWindow : EditorWindow
         // 텍스처 이름(Key)이 이미 맵에 있다면 해당 경로(Value)의 텍스처는 로드하지 않는다.
         // (경로가 Key인 것보단 이름이 Key인 것이 SSO에서 유리할 것이다.)
         // (대신, 서로 다른 리소스간 중복된 텍스처 이름이 없어야 할 것.)
+        if (targetSkeleton != null) ProcessBones();
         ExtractTextureMapping();
         ExtractGeometry();
         ExtractBoundingVolumes();

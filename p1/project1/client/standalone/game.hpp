@@ -9,6 +9,7 @@
 #include "../skybox.hpp"
 #include "../camera.hpp"
 #include "../light.hpp"
+#include "../animation.hpp"
 
 #include "physics.hpp"
 
@@ -42,6 +43,8 @@ private:
 	void importPlayerStart(std::ifstream& ifs, Object& player);
 
 	AssetManager assetManager_{};
+
+	AnimSystem animSystem_{};
 
 	PhysicSystem physicSystem_{};
 	Seconds physicUpdateAcc_{0s};	// 물리 업데이트를 위한 시간 누산기

@@ -1173,6 +1173,8 @@ void importSkeleton(std::ifstream& ifs, Model& model) {
 
     readTailTag(ifs, "Skeleton");
 
+    skeleton.pRoot = &(*skeleton.bones)[0];
+
     gSharedLog << "[Resource Load] ½ºÄÌ·¹Åæ " << skeleton.name << "±¸Ãà ¿Ï·á\n";
 }
 

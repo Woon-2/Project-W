@@ -27,6 +27,11 @@ void Camera::updateGFX(GFX& gfx) {
 		.proj = proj_,
 		.pos = eye_
 	});
+	gfx.addCameraData(PBRSkinnedPipeline::CameraData{
+		.view = view_,
+		.proj = proj_,
+		.pos = eye_
+	});
 	gfx.addCameraData(SkyboxPipeline::CameraData{
 		.view = view_,
 		.proj = proj_

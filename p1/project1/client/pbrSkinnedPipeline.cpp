@@ -225,7 +225,7 @@ void Dispatcher::shadowUpdate() {
 
 	std::ranges::for_each( drawEvents_, [itBoneOut](const PBRSkinnedPipeline::DrawEvent& drawEvent) mutable {
 		for (auto& boneXform : drawEvent.boneXforms) {
-			*itBoneOut = ShadowMapSkinnedShader::BoneData{ boneXform.getXmf() };
+			*itBoneOut = ShadowMapSkinnedShader::BoneData{ mu::transpose(boneXform).getXmf() };
 			++itBoneOut;
 		}
 	} );
@@ -316,7 +316,7 @@ void Dispatcher::shadowUpdateMT() {
 
 	std::ranges::for_each( drawEvents_, [itBoneOut](const PBRSkinnedPipeline::DrawEvent& drawEvent) mutable {
 		for (auto& boneXform : drawEvent.boneXforms) {
-			*itBoneOut = ShadowMapSkinnedShader::BoneData{ boneXform.getXmf() };
+			*itBoneOut = ShadowMapSkinnedShader::BoneData{ mu::transpose(boneXform).getXmf() };
 			++itBoneOut;
 		}
 	} );
@@ -733,12 +733,12 @@ void Dispatcher::mainUpdate() {
 
 	std::ranges::for_each( drawEvents_, [itBoneOut](const PBRSkinnedPipeline::DrawEvent& drawEvent) mutable {
 		for (auto& boneXform : drawEvent.boneXforms) {
-			*itBoneOut = PBRSkinnedShader::BoneData{ boneXform.getXmf() };
+			*itBoneOut = PBRSkinnedShader::BoneData{ mu::transpose(boneXform).getXmf() };
 			++itBoneOut;
 		}
 	} );
 
-	pResources_->shadowPass.boneData.stage(roomIdx_, boneData);
+	pResources_->mainPass.boneData.stage(roomIdx_, boneData);
 	boneData.clear();
 
 	// lightData를 static으로 선언하여
@@ -898,12 +898,12 @@ void Dispatcher::mainUpdateMT() {
 
 	std::ranges::for_each( drawEvents_, [itBoneOut](const PBRSkinnedPipeline::DrawEvent& drawEvent) mutable {
 		for (auto& boneXform : drawEvent.boneXforms) {
-			*itBoneOut = PBRSkinnedShader::BoneData{ boneXform.getXmf() };
+			*itBoneOut = PBRSkinnedShader::BoneData{ mu::transpose(boneXform).getXmf() };
 			++itBoneOut;
 		}
 	} );
 
-	pResources_->shadowPass.boneData.stage(roomIdx_, boneData);
+	pResources_->mainPass.boneData.stage(roomIdx_, boneData);
 	boneData.clear();
 
 	// 모든 데이터가 가공된 이후, GPU 데이터를 갱신한다.

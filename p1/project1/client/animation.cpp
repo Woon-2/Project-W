@@ -48,8 +48,10 @@ void importAnimClip(std::ifstream& ifs, AnimClip& clip) {
 		const auto boneIdx = readInteger(ifs, "Bone");
 		const auto keyFrameCnt = readInteger(ifs, "KeyFrameCnt");
 
-		keyFrames.resize(keyFrameCnt);
-		for (auto& keyFrame : keyFrames) {
+		keyFrames.resize(keyFrameCnt + 1u);	// sentinel 값을 위함
+		for (int i = 0; i < keyFrameCnt; ++i) {
+			auto& keyFrame = keyFrames[i];
+
 			readHeadTag(ifs, "KeyFrame");
 
 			keyFrame.time = Seconds( readFloat(ifs, "Time") );
@@ -65,6 +67,12 @@ void importAnimClip(std::ifstream& ifs, AnimClip& clip) {
 
 			readTailTag(ifs, "KeyFrame");
 		}
+
+		// sentinel 값 추가: 애니메이션 시간은 +inf, 변환은 마지막 프레임과 같음
+		keyFrames[keyFrameCnt].time = Seconds(std::numeric_limits<float>::max());
+		keyFrames[keyFrameCnt].translation = keyFrames[keyFrameCnt - 1].translation;
+		keyFrames[keyFrameCnt].rotation = keyFrames[keyFrameCnt - 1].rotation;
+		keyFrames[keyFrameCnt].scale = keyFrames[keyFrameCnt - 1].scale;
 	}
 
 	readTailTag(ifs, "Clip");
@@ -132,6 +140,9 @@ void AnimBlender::pushTargetClip(
 	frameInfo.targetClip = pTargetClip;
 	frameInfo.frameCache_.resize(skeleton_.bones->size());
 	frameInfo.keyFrameIteratorCache_.resize(skeleton_.bones->size());
+	for (std::size_t i = 0u; i < frameInfo.keyFrameIteratorCache_.size(); ++i) {
+		frameInfo.keyFrameIteratorCache_[i] = frameInfo.targetClip->keyFramesOfBones[i].begin();
+	}
 }
 
 // 대상 애니메이션 클립을 제거한다.
@@ -180,35 +191,35 @@ void AnimBlender::onCalcFinal(PassKey<AnimSystem>) {
 // 본들의 로컬 변환 행렬들에 접근한다.
 // onCalcLocal에서 사용하도록 한다.
 std::vector<mu::Mat4x4>& AnimBlender::localXformData() {
-	DISPLAY_ERROR_STR( stage_ == Stage::committedLocal,
-		"[Animation Error] AnimBlender::localXformData: "s
-		+ "localXformData에 접근하기 위해선 AnimBlender의 상태가 committedLocal이어야 합니다.\n"
-		+ "애니메이션이 다른 단계로 이미 전이했거나, 로컬 변환 계산이 끝나지 않아 캐시의 내용이 유효하지 않습니다.",
-		false
-	);
+	//DISPLAY_ERROR_STR( stage_ == Stage::committedLocal,
+	//	"[Animation Error] AnimBlender::localXformData: "s
+	//	+ "localXformData에 접근하기 위해선 AnimBlender의 상태가 committedLocal이어야 합니다.\n"
+	//	+ "애니메이션이 다른 단계로 이미 전이했거나, 로컬 변환 계산이 끝나지 않아 캐시의 내용이 유효하지 않습니다.",
+	//	false
+	//);
 	return boneXformCache_;
 }
 
 // 본들의 드레스 공간 변환 행렬들에 접근한다.
 std::vector<mu::Mat4x4>& AnimBlender::dressXformData() {
-	DISPLAY_ERROR_STR( stage_ == Stage::committedDress,
-		"[Animation Error] AnimBlender::dressXformData: "s
-		+ "dressXformData에 접근하기 위해선 AnimBlender의 상태가 committedDress이어야 합니다.\n"
-		+ "애니메이션이 다른 단계로 이미 전이했거나, 로컬 변환 계산이 끝나지 않아 캐시의 내용이 유효하지 않습니다.",
-		false
-	);
+	//DISPLAY_ERROR_STR( stage_ == Stage::committedDress,
+	//	"[Animation Error] AnimBlender::dressXformData: "s
+	//	+ "dressXformData에 접근하기 위해선 AnimBlender의 상태가 committedDress이어야 합니다.\n"
+	//	+ "애니메이션이 다른 단계로 이미 전이했거나, 로컬 변환 계산이 끝나지 않아 캐시의 내용이 유효하지 않습니다.",
+	//	false
+	//);
 	return boneXformCache_;
 }
 
 // 본들의 최종 변환 행렬들을 반환한다.
 // 렌더링 시에는 이 행렬들을 참조한다.
 std::vector<mu::Mat4x4>& AnimBlender::finalXformData() {
-	DISPLAY_ERROR_STR( stage_ == Stage::committedFinal,
-		"[Animation Error] AnimBlender::finalXformData: "s
-		+ "finalXformData에 접근하기 위해선 AnimBlender의 상태가 committedFinal이어야 합니다.\n"
-		+ "애니메이션이 다른 단계로 이미 전이했거나, 로컬 변환 계산이 끝나지 않아 캐시의 내용이 유효하지 않습니다.",
-		false
-	);
+	//DISPLAY_ERROR_STR( stage_ == Stage::committedFinal,
+	//	"[Animation Error] AnimBlender::finalXformData: "s
+	//	+ "finalXformData에 접근하기 위해선 AnimBlender의 상태가 committedFinal이어야 합니다.\n"
+	//	+ "애니메이션이 다른 단계로 이미 전이했거나, 로컬 변환 계산이 끝나지 않아 캐시의 내용이 유효하지 않습니다.",
+	//	false
+	//);
 	return boneXformCache_;
 }
 
@@ -230,7 +241,12 @@ void AnimBlender::updateFrames(const std::string& key, Seconds elapsed) {
 		auto itCurKeyFrame = frameInfo.keyFrameIteratorCache_[i];
 		auto itNextKeyFrame = std::next(itCurKeyFrame);
 
-		while (itNextKeyFrame->time > elapsed) {
+		while (elapsed < itCurKeyFrame->time) {
+			itNextKeyFrame = itCurKeyFrame;
+			itCurKeyFrame = std::prev(itCurKeyFrame);
+		}
+
+		while (elapsed > itNextKeyFrame->time) {
 			itCurKeyFrame = itNextKeyFrame;
 			itNextKeyFrame = std::next(itCurKeyFrame);
 		}

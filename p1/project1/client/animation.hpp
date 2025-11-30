@@ -67,7 +67,7 @@ class AnimSystem;
 // 각 게임 객체 타입마다의 AnimBlender를 만들도록 한다.
 // 상속한 클래스는 다음의 두 책임을 지닌다.
 // - onCalcLocal에서 프레임들을 업데이트하고 각 클립의 프레임들을 보간해 본의 로컬 변환 행렬들 생성
-// - priority getter에서 적절한 priority 값을 반환할 수 있도록 업데이트 루틴에서 priority_ 계산
+// - update에서 priority_ 및 애니메이션 시간 계산
 // 
 // 키프레임들을 보간해 현재 프레임들을 업데이트하고 읽을 수 있는 유틸리티와
 // 현재 애니메이션 업데이트 단계에서의 변환 행렬 캐시를 접근할 수 있는 유틸리티를
@@ -96,6 +96,11 @@ public:
 	void setSkeleton(const Skeleton& skeleton);
 
 	float priority() const { return priority_; }
+
+	// priority_ 및 애니메이션 시간 갱신, 그 외 상속한 클래스에서 필요한 작업들을 수행한다.
+	// AnimSystem에서 불리지 않는다.
+	// 오브젝트의 업데이트때 직접 호출해주어야 한다.
+	virtual void update(Seconds deltaTime) = 0;
 
 	// 본들의 로컬 변환 행렬을 계산한다.
 	// 상속한 클래스는 updateFrames, curFrames, lerpAnimFrames 함수들을 적절히 활용하여
@@ -140,6 +145,10 @@ protected:
 	// 현재 프레임들은 updateFrames 함수를 통해서 갱신할 수 있다.
 	const std::vector<AnimFrame>& curFrames(const std::string& key) const {
 		return frameInfoMap_.at(key).frameCache_;
+	}
+
+	const std::shared_ptr<const AnimClip>& targetClip(const std::string& key) const {
+		return frameInfoMap_.at(key).targetClip;
 	}
 
 	const Skeleton& skeleton() const { return skeleton_; }
