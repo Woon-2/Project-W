@@ -14,9 +14,6 @@
 #include "BVPipeline.hpp"
 
 
-// gfx에서 만들어진 파이프라인 리소스들 초기화하기
-// object, camera, light가 파이프라인 데이터 제출하도록
-// 애니메이션 임시 설정 시뮬레이션
 // 애니메이션 상태 머신 구현
 // 캐릭터에 총 붙이기 - 11.27.
 // Cascaded Shadow Mapping - 11.28.

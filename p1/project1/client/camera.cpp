@@ -15,8 +15,8 @@ void Camera::update() {
 	auto rotatedOffsetTargetPivot = xxPreRotation_.rotate(offsetTargetPivot_);
 	rotatedOffsetTargetPivot = pTarget->orient().rotate(rotatedOffsetTargetPivot);
 
-	eye_ = pTarget->pos() + rotatedOffsetFromTarget;
-	at_ = pTarget->pos() + rotatedOffsetTargetPivot;
+	eye_ = pTarget->renderState().pos + rotatedOffsetFromTarget;
+	at_ = pTarget->renderState().pos + rotatedOffsetTargetPivot;
 
 	view_ = mu::lookAt(eye_, at_, mu::NVec3(0.f, 1.f, 0.f));
 }

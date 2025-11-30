@@ -6,19 +6,27 @@
 #include "animation.hpp"
 
 class AssetManager;
+class Object;
 
 class AnimBlenderVanguard : public AnimBlender {
 public:
 	void init(const AssetManager& assetManager);
-	void update(Seconds deltaTime) override;
+	void update(Seconds deltaTime, void* pOwner) override;
 	void onCalcLocal(PassKey<AnimSystem>) override;
 
 private:
-	Seconds animTimeAcc_ = 0s;
+	std::vector<AnimFrame> framesBlended_{};
+	Seconds elapsedIdle_ = 0s;
+	Seconds elapsedRun_ = 0s;
+	Seconds elapsedHit_ = 0s;
+	float tIdle_ = 0.f;
+	float tRun_ = 0.f;
+	float tHit_ = 0.f;
 };
 
 struct PhysicState {
 	mu::Vec3 pos{};
+	mu::Vec3 velocity{};
 	mu::Vec3 omega{};
 	mu::NQuat orient{};
 	mu::Vec3 scale{};
@@ -32,6 +40,9 @@ struct PhysicState {
 // 모델 정보를 보관한다.
 struct RenderState {
 	mu::Mat4x4 world;
+	mu::Vec3 pos{};
+	mu::NQuat orient{};
+	mu::Vec3 scale{};
 	std::vector<mu::Mat4x4> worldBVs;
 	std::unique_ptr<AnimBlender> animBlender;
 	const Model* pModel;
@@ -78,6 +89,10 @@ public:
 	// 각 PhysicState의 AABB 역시 갱신된다.
 	void MU_CALLCONV setPos(mu::Vec3 newPos);
 	mu::Vec3 MU_CALLCONV pos() const { return currPhysicState_.pos; }
+	// 게임 객체의 속도를 갱신한다.
+	// 이전 PhysicState와 현재 PhysicState의 속도가 모두 갱신된다.
+	void MU_CALLCONV setVelocity(mu::Vec3 newVelocity);
+	mu::Vec3 MU_CALLCONV velocity() const { return currPhysicState_.velocity; }
 	// 게임 객체의 각속도를 갱신한다.
 	// 이전 PhysicState와 현재 PhysicState의 각속도가 모두 갱신된다.
 	void MU_CALLCONV setOmega(mu::Vec3 newOmega);
@@ -98,6 +113,7 @@ public:
 	mu::Vec3 MU_CALLCONV up() const { return up_; }
 
 	PhysicState& physicState() { return currPhysicState_; }
+	const RenderState& renderState() const { return renderState_; }
 	// PhysicState를 새로운 상태로 전환한다.
 	// 이 함수의 호출 시점의 PhysicState가 prevPhysicState로서 저장된다.
 	// 게임 객체에서 호출한다.

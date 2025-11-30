@@ -271,18 +271,41 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 void Game::processInput(Milliseconds deltaTime) {
 	DISPLAY_ERROR_GLE( GetKeyboardState(keyboardState_.data()), false );
 
-	if ( keyboardState_['W'] & 0x80 ) {
-		player_->setPos( player_->pos( ) + player_->forward() * 0.01f );
+	const auto maxSpeed = 10.f;	// 10m/s
+	const Seconds zeroToMax = 0.5s;
+	const Seconds maxToZero = 0.2s;
+
+	const auto moveXSign = (keyboardState_['D'] & 0x80) - (keyboardState_['A'] & 0x80);
+	const auto moveZSign = (keyboardState_['W'] & 0x80) - (keyboardState_['S'] & 0x80);
+	const auto moveThreshold = 0.1f;
+
+	if (moveXSign || moveZSign) {
+		const auto moveDirection = mu::NVec3(
+			moveXSign * player_->right() + moveZSign * player_->forward()
+		);
+		const auto moveAmount = Seconds(deltaTime).count() * maxSpeed / zeroToMax.count();
+
+		player_->physicState().velocity += mu::Vec3(moveDirection) * moveAmount;
+
+		if (player_->physicState().velocity.len2() > maxSpeed * maxSpeed) {
+			player_->physicState().velocity *= maxSpeed / player_->physicState().velocity.len();
+		}
 	}
-	if ( keyboardState_['A'] & 0x80 ) {
-		player_->setPos( player_->pos( ) - player_->right() * 0.01f );
+	else if (player_->physicState().velocity.len2() > moveThreshold * moveThreshold) {
+		const auto moveAmount = Seconds(deltaTime).count() * maxSpeed / maxToZero.count();
+
+		if (moveAmount * moveAmount > player_->physicState().velocity.len2()) {
+			player_->physicState().velocity = mu::Vec3();
+		}
+		else {
+			const auto moveDirection = mu::NVec3(-player_->physicState().velocity);
+			player_->physicState().velocity += mu::Vec3(moveDirection) * moveAmount;
+		}
 	}
-	if ( keyboardState_['S'] & 0x80 ) {
-		player_->setPos( player_->pos( ) - player_->forward() * 0.01f );
+	else {
+		player_->physicState().velocity = mu::Vec3();
 	}
-	if ( keyboardState_['D'] & 0x80 ) {
-		player_->setPos( player_->pos( ) + player_->right() * 0.01f );
-	}
+
 	if ( keyboardState_['1'] & 0x80 ) {
 		camera_.setOffsetFromTargetPreRotation( mu::NQuat{} );
 		camera_.setOffsetFromTarget( mu::Vec3( 0.f, 2.f, 0.5f ) );

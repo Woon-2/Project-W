@@ -5,25 +5,56 @@
 
 void AnimBlenderVanguard::init(const AssetManager& assetManager) {
 	setSkeleton(assetManager.modelPlayer()->skeleton);
+	framesBlended_.resize(skeleton().bones->size());
 	for (auto& clip : assetManager.vanguardAnimations()) {
 		pushTargetClip(clip->name, clip);
 	}
 }
 
-void AnimBlenderVanguard::update(Seconds deltaTime) {
-	animTimeAcc_ += deltaTime;
-	const auto duration = targetClip("Vanguard_Idle")->duration;
-	while (animTimeAcc_ > duration) {
-		animTimeAcc_ -= duration;
+void AnimBlenderVanguard::update(Seconds deltaTime, void* pVoidOwner) {
+	auto pOwner = static_cast<Object*>(pVoidOwner);
+	
+	const auto runThreshold = 0.1f;
+
+	const auto speed = pOwner->physicState().velocity.len();
+
+	const auto blendRangeStart = runThreshold - 0.05f;
+	const auto blendRangeEnd = runThreshold + 5.f;
+	tRun_ = std::clamp( (speed - blendRangeStart) / (blendRangeEnd - blendRangeStart), 0.f, 1.f );
+	tIdle_ = 1.f - tRun_;
+
+	elapsedIdle_ += deltaTime;
+	const auto durationIdle = targetClip("Vanguard_Idle")->duration;
+	while (elapsedIdle_ > durationIdle) {
+		elapsedIdle_ -= durationIdle;
 	}
+
+	if (tRun_ > 0.01f) {
+		elapsedRun_ += deltaTime;
+	}
+	else {
+		elapsedRun_ = 0s;
+	}
+
+	const auto durationRun = targetClip("Vanguard_Run")->duration;
+	while (elapsedRun_ > durationRun) {
+		elapsedRun_ -= durationRun;
+	}
+
 	priority_ = 0.f;
 }
 
 void AnimBlenderVanguard::onCalcLocal(PassKey<AnimSystem>) {
-	updateFrames("Vanguard_Idle", animTimeAcc_);
+	updateFrames("Vanguard_Idle", elapsedIdle_);
+	updateFrames("Vanguard_Run", elapsedRun_);
 	auto& localXforms = localXformData();
-	auto& frames = curFrames("Vanguard_Idle");
-	std::ranges::transform(frames, localXforms.begin(), convertAnimFrameToMatrix);
+	auto& framesIdle = curFrames("Vanguard_Idle");
+	auto& framesRun = curFrames("Vanguard_Run");
+
+	for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
+		framesBlended_[i] = lerpAnimFrames(framesIdle[i], framesRun[i], tRun_);
+	}
+	std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
 }
 
 // 모델을 설정한다.
@@ -67,9 +98,12 @@ void Object::update(Milliseconds deltaTime, float tPhysicInterpolation) {
 	forward_ = curr.orient.rotate(mu::Vec3(0.f, 0.f, 1.f));
 	
 	// 렌더 상태 갱신
-	const auto pos = mu::lerp(prev.pos, curr.pos, t);
-	const auto orient = mu::slerp(prev.orient, curr.orient, t);	// 쿼터니언
-	const auto scale = mu::lerp(prev.scale, curr.scale, t);
+	auto& pos = renderState_.pos;
+	pos = mu::lerp(prev.pos, curr.pos, t);
+	auto& orient = renderState_.orient;
+	orient = mu::slerp(prev.orient, curr.orient, t);	// 쿼터니언
+	auto& scale = renderState_.scale;
+	scale = mu::lerp(prev.scale, curr.scale, t);
 
 	const auto pModel = renderState_.pModel;
 
@@ -81,7 +115,7 @@ void Object::update(Milliseconds deltaTime, float tPhysicInterpolation) {
 	}
 
 	if (renderState_.animBlender) {
-		renderState_.animBlender->update(deltaTime);
+		renderState_.animBlender->update(deltaTime, this);
 	}
 }
 
@@ -145,6 +179,13 @@ void MU_CALLCONV Object::setPos(mu::Vec3 newPos) {
 		}
 		prevPhysicState_.aabbs = currPhysicState_.aabbs;
 	}
+}
+
+// 게임 객체의 속도를 갱신한다.
+// 이전 PhysicState와 현재 PhysicState의 속도가 모두 갱신된다.
+void MU_CALLCONV Object::setVelocity(mu::Vec3 newVelocity) {
+	prevPhysicState_.velocity = newVelocity;
+	currPhysicState_.velocity = newVelocity;
 }
 
 // 게임 객체의 각속도를 갱신한다.

@@ -100,7 +100,7 @@ public:
 	// priority_ 및 애니메이션 시간 갱신, 그 외 상속한 클래스에서 필요한 작업들을 수행한다.
 	// AnimSystem에서 불리지 않는다.
 	// 오브젝트의 업데이트때 직접 호출해주어야 한다.
-	virtual void update(Seconds deltaTime) = 0;
+	virtual void update(Seconds deltaTime, void* pOwner) = 0;
 
 	// 본들의 로컬 변환 행렬을 계산한다.
 	// 상속한 클래스는 updateFrames, curFrames, lerpAnimFrames 함수들을 적절히 활용하여
