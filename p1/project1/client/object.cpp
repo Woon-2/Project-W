@@ -11,33 +11,52 @@ void AnimBlenderVanguard::init(const AssetManager& assetManager) {
 	}
 }
 
+// pOwner의 물리 정보에 따라
+// 애니메이션 블렌딩 상태를 갱신한다.
 void AnimBlenderVanguard::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
 	
+	// 객체의 속력이 runThreshold를 넘는지를 기준으로
+	// run 애니메이션이 필요한지 idle 애니메이션이 필요한지 판단한다.
+	// runThreshold를 부드럽게 감싸는 blendRange를 설정하여
+	// 객체의 속력이 blendRange 내부에 있다면 0과 1 사이의 tRun 값이 구해진다.
+	// run 애니메이션의 가중치는 tRun, idle 애니메이션의 가중치는 1 - tRun이 된다.
 	const auto runThreshold = 0.1f;
 
+	// 객체의 속력 구하기
 	const auto speed = pOwner->physicState().velocity.len();
 
+	// blendRange 설정
 	const auto blendRangeStart = runThreshold - 0.05f;
 	const auto blendRangeEnd = runThreshold + 5.f;
+	// tRun 구하기
 	const auto tRun = std::clamp( (speed - blendRangeStart) / (blendRangeEnd - blendRangeStart), 0.f, 1.f );
+	// tIdle = 1 - tRun
 	tIdle_ = 1.f - tRun;
 
+	// Idle 애니메이션은 그냥 계속 돌린다.
+	// 딱히 멈추지 않아도 부자연스럽진 않다.
 	elapsedIdle_ += deltaTime;
 	const auto durationIdle = targetClip("Vanguard_Idle")->duration;
 	while (elapsedIdle_ > durationIdle) {
 		elapsedIdle_ -= durationIdle;
 	}
 
+	// run 애니메이션이 필요하다고 판단되었으면,
+	// 객체가 움직이고 있는 방향과 바라보고 있는 방향을 통해
+	// 좌우상하 움직임 애니메이션을 블렌딩한다.
 	if (tRun > 0.f) {
+		// 속도와 right 벡터의 내적을 통해 blend space에서의 좌표를 구할 수 있다.
 		const auto blendSpaceX = mu::dot(pOwner->physicState().velocity, pOwner->right());
 		const auto blendSpaceY = mu::dot(pOwner->physicState().velocity, pOwner->forward());
 	
+		// blend space 좌표를 바탕으로 각 애니메이션의 가중치를 정한다.
 		const auto wForward = std::max(0.f, blendSpaceY);
 		const auto wBackward = std::max(0.f, -blendSpaceY);
 		const auto wLeft = std::max(0.f, -blendSpaceX);
 		const auto wRight = std::max(0.f, blendSpaceX);
 
+		// 가중치의 총합이 1이 되게끔 한다.
 		float total = wForward + wBackward + wLeft + wRight;
 
 		tRunForward_ = tRun * wForward / total;
@@ -48,6 +67,8 @@ void AnimBlenderVanguard::update(Seconds deltaTime, void* pVoidOwner) {
 		elapsedRun_ += deltaTime;
 	}
 	else {
+		// 완전한 idle 애니메이션이 재생되고 있다면
+		// run 애니메이션과 연관된 변수들은 초기화한다.
 		tRunForward_ = 0.f;
 		tRunBackward_ = 0.f;
 		tRunLeft_ = 0.f;
@@ -56,6 +77,8 @@ void AnimBlenderVanguard::update(Seconds deltaTime, void* pVoidOwner) {
 		elapsedRun_ = 0s;
 	}
 
+	// 4방향 run 애니메이션들은 재생 시간이 비슷하다.
+	// Run_Forward 애니메이션의 duration을 대표로 사용해도 부자연스럽지 않다.
 	const auto durationRun = targetClip("Vanguard_Run_Forward")->duration;
 	while (elapsedRun_ > durationRun) {
 		elapsedRun_ -= durationRun;
@@ -65,6 +88,9 @@ void AnimBlenderVanguard::update(Seconds deltaTime, void* pVoidOwner) {
 }
 
 void AnimBlenderVanguard::onCalcLocal(PassKey<AnimSystem>) {
+	// update에서 구한 애니메이션 가중치들로 블렌딩을 수행한다.
+
+	// 개별 애니메이션의 프레임을 업데이트한다.
 	updateFrames("Vanguard_Idle", elapsedIdle_);
 	updateFrames("Vanguard_Run_Forward", elapsedRun_);
 	updateFrames("Vanguard_Run_Backward", elapsedRun_);
@@ -78,6 +104,7 @@ void AnimBlenderVanguard::onCalcLocal(PassKey<AnimSystem>) {
 	auto& framesRunLeft = curFrames("Vanguard_Run_Left");
 	auto& framesRunRight = curFrames("Vanguard_Run_Right");
 
+	// 애니메이션의 프레임들을 블렌딩한다.
 	for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
 		WeightedAnimFrame frames[] = {
 			WeightedAnimFrame{ .frame = framesIdle[i], .w = tIdle_ },

@@ -334,7 +334,7 @@ ComPtr<ID3D12PipelineState> createShadowMapSkinnedShader(ID3D12Device* device, I
 		false
 	);
 
-	setD3DName(ret.Get(), "ShadowMapShader");
+	setD3DName(ret.Get(), "ShadowMapSkinnedShader");
 
 	return ret;
 }
@@ -608,7 +608,7 @@ ComPtr<ID3D12PipelineState> createPBRSkinnedShader(ID3D12Device* device, ID3D12R
 		false
 	);
 
-	setD3DName(ret.Get(), "PBRShader");
+	setD3DName(ret.Get(), "PBRSkinnedShader");
 
 	return ret;
 }

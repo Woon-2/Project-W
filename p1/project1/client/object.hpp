@@ -11,6 +11,8 @@ class Object;
 class AnimBlenderVanguard : public AnimBlender {
 public:
 	void init(const AssetManager& assetManager);
+	// pOwner의 물리 정보에 따라
+	// 애니메이션 블렌딩 상태를 갱신한다.
 	void update(Seconds deltaTime, void* pOwner) override;
 	void onCalcLocal(PassKey<AnimSystem>) override;
 

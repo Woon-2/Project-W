@@ -14,6 +14,7 @@ struct ShadowMapData {
 	u32t width;
 	u32t height;
 	D3D12_CPU_DESCRIPTOR_HANDLE dsv;
+	D3D12_RESOURCE_STATES curState;
 };
 
 // 둘 이상의 파이프라인이 공유하는 리소스들과 그 초기화 함수들을 두는 네임스페이스
@@ -31,7 +32,23 @@ void addShadowMap( const std::string& key, ID3D12Device* device,
 	std::size_t roomCnt, DescriptorPool& srvTexPool, DescriptorPool& dsvPool	
 );
 
+// SharedResources::ShadowMap::shadowMapData의 특정 key에 매핑된
+// 그림자맵을 clear하는 명령을 기록한다.
+// 먼저 addShadowMap 함수를 통해 해당 key의 그림자맵이 추가되어 있어야 한다.
 void clearShadowMap(const std::string& key, ID3D12GraphicsCommandList* cmdList);
+
+// 그림자맵의 상태가 현재 Depth Write가 아니라면 Depth Write로 변경한다.
+void getReadyAsDepthWrite(const std::string& key, ID3D12GraphicsCommandList* cmdList);
+// 그림자맵의 상태가 현재 Depth Write가 아니라면 Depth Write로 변경한다.
+// cmdListPool에서 자체적으로 Rendering Slave 타입 명령 컨텍스트 하나를 할당해 명령을 기록하고
+// cmdQ를 실행한 뒤, 명령 컨텍스트를 fence에 연관시켜놓는다.
+void getReadyAsDepthWrite(const std::string& key, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence);
+// 그림자맵의 상태가 현재 Shader Resource가 아니라면 Shader Resource로 변경한다.
+void getReadyAsShaderResource(const std::string& key, ID3D12GraphicsCommandList* cmdList);
+// 그림자맵의 상태가 현재 Shader Resource가 아니라면 Shader Resource로 변경한다.
+// cmdListPool에서 자체적으로 Rendering Slave 타입 명령 컨텍스트 하나를 할당해 명령을 기록하고
+// cmdQ를 실행한 뒤, 명령 컨텍스트를 fence에 연관시켜놓는다.
+void getReadyAsShaderResource(const std::string& key, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence);
 
 extern std::unordered_map<std::string, ShadowMapData> shadowMapData;
 

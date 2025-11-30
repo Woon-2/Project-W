@@ -275,43 +275,59 @@ void Game::processInput(Milliseconds deltaTime) {
 	const Seconds zeroToMax = 0.5s;
 	const Seconds maxToZero = 0.2s;
 
+	// 서로 상쇄되는 입력들을 감안해서,
+	// 현재 이동 입력이 있으면 플레이어 객체의 속도를 변화시킨다.
+
 	const auto moveXSign = (keyboardState_['D'] & 0x80) - (keyboardState_['A'] & 0x80);
 	const auto moveZSign = (keyboardState_['W'] & 0x80) - (keyboardState_['S'] & 0x80);
 	const auto moveThreshold = 0.1f;
 
 	if (moveXSign || moveZSign) {
+		// 'W'/'S' 입력으로 판정된 Z 부호는 플레이어의 forward 벡터,
+		// 'D'/'A' 입력으로 판정된 X 부호는 플레이어의 right 벡터와 곱해 속도의 방향을 정한다.
 		const auto moveDirection = mu::NVec3(
-			moveXSign * player_->right() + moveZSign * player_->forward()
+			static_cast<float>(moveXSign) * player_->right() + static_cast<float>(moveZSign) * player_->forward()
 		);
-		const auto moveAmount = Seconds(deltaTime).count() * maxSpeed / zeroToMax.count();
 
+		// 플레이어 객체의 속력을 증가시킨다.
+		const auto moveAmount = Seconds(deltaTime).count() * maxSpeed / zeroToMax.count();
 		player_->physicState().velocity += mu::Vec3(moveDirection) * moveAmount;
 
+		// 플레이어 객체의 속력이 최대 속력을 넘지 못하게 한다.
 		if (player_->physicState().velocity.len2() > maxSpeed * maxSpeed) {
 			player_->physicState().velocity *= maxSpeed / player_->physicState().velocity.len();
 		}
 	}
+	// 이동 입력이 없으면 플레이어 객체의 속력을 감소시킨다. (마찰)
+	// 속력이 moveThreshold보다 작다면, 플레이어 객체를 멈춘다.
 	else if (player_->physicState().velocity.len2() > moveThreshold * moveThreshold) {
 		const auto moveAmount = Seconds(deltaTime).count() * maxSpeed / maxToZero.count();
 
+		// 속력 감소량이 현재 플레이어의 속력보다 크게 계산됐다면,
+		// 플레이어의 속력을 0으로 만든다.
 		if (moveAmount * moveAmount > player_->physicState().velocity.len2()) {
 			player_->physicState().velocity = mu::Vec3();
 		}
+		// 그렇지 않다면 플레이어가 움직이고 있는 반대 방향의 속도를 더해
+		// 플레이어의 속력을 감소시킨다.
 		else {
 			const auto moveDirection = mu::NVec3(-player_->physicState().velocity);
 			player_->physicState().velocity += mu::Vec3(moveDirection) * moveAmount;
 		}
 	}
+	// 플레이어 객체를 멈춘다.
 	else {
 		player_->physicState().velocity = mu::Vec3();
 	}
 
+	// 카메라 1인칭 모드 설정
 	if ( keyboardState_['1'] & 0x80 ) {
 		camera_.setOffsetFromTargetPreRotation( mu::NQuat{} );
 		camera_.setOffsetFromTarget( mu::Vec3( 0.f, 2.f, 0.5f ) );
 		camera_.setOffsetTargetPivot( mu::Vec3(0.f, 2.f, 8.f));
 		cameraMode_ = CameraMode::FirstPerson;
 	} 
+	// 카메라 3인칭 모드 설정
 	if ( keyboardState_['3'] & 0x80 ) {
 		camera_.setXXPreRotation( mu::NQuat{} );
 		camera_.setOffsetFromTarget( mu::Vec3( 0.f, 1.8f, -2.5f ) );
@@ -319,6 +335,9 @@ void Game::processInput(Milliseconds deltaTime) {
 		cameraMode_ = CameraMode::ThirdPerson;
 	} 
 
+	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때
+	// 각각의 플레이어 yaw, 카메라 pitch를 계산한다.
+	// (pitch를 플레이어에 적용하게 되면, 플레이어가 고개를 들고 내리는 게 아니라 굴러버린다.)
     const auto mouseSensitivity = mu::pi * 2.f;
 
 	switch (cameraMode_) {

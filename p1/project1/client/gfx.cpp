@@ -634,6 +634,13 @@ void GFX::render() {
 	auto idxFenceToWait = (frameIdx_ - (backBuffers_.size() - 1)) % backBuffers_.size();
 	waitOnFence("FrameFence" + std::to_string(idxFenceToWait));
 
+	// Dispatcher들은 명령 리스트 풀에서 스스로 명령 컨텍스트를 할당하고 기록, 실행한다.
+	// 사용이 끝난 명령 컨텍스트는 펜스와 연관되어 gpu 사용이 끝남을 감지한 후
+	// 반환되는 게 규칙이므로, Dispatcher에 명령 컨텍스트와 연관시킬 펜스를 전달해야 한다.
+	auto idxFenceToSignal = frameIdx_ % backBuffers_.size();
+	auto fenceNameToSignal = "FrameFence" + std::to_string(idxFenceToSignal);
+	auto& fenceToSignal = fences_.at(fenceNameToSignal);
+
 	// 렌더 타겟 클리어를 위한 명령 컨텍스트 할당
 	CommandContext cmdCtxClear{};
 	DISPLAY_ERROR_STR(
@@ -680,6 +687,9 @@ void GFX::render() {
 	);
 
 	// 그림자맵 클리어
+	SharedResources::ShadowMap::getReadyAsDepthWrite(
+		"ShadowMap", cmdListPool_, cmdQ_.Get(), fenceToSignal
+	);
 	SharedResources::ShadowMap::clearShadowMap("ShadowMap", cmdListClear);
 
 	const auto clRect = gClientRect;
@@ -708,13 +718,6 @@ void GFX::render() {
 
 	// 클리어 명령 리스트 실행
 	DISPLAY_ERROR_DX_VOID( cmdQ_->ExecuteCommandLists(1u, clearCmdLists), false );
-
-	// Dispatcher들은 명령 리스트 풀에서 스스로 명령 컨텍스트를 할당하고 기록, 실행한다.
-	// 사용이 끝난 명령 컨텍스트는 펜스와 연관되어 gpu 사용이 끝남을 감지한 후
-	// 반환되는 게 규칙이므로, Dispatcher에 명령 컨텍스트와 연관시킬 펜스를 전달해야 한다.
-	auto idxFenceToSignal = frameIdx_ % backBuffers_.size();
-	auto fenceNameToSignal = "FrameFence" + std::to_string(idxFenceToSignal);
-	auto& fenceToSignal = fences_.at(fenceNameToSignal);
 
 	// 디스크립터 힙 바인딩 명령을 위한 gpu-visible 디스크립터 힙 모음,
 	// Dispatcher들에 전달한다.
@@ -794,13 +797,26 @@ void GFX::render() {
 		samplePipelineDispatcher.drawSingleThreaded();
 		dumpLog();
 
+		// == 그림자 패스들 ==
+		SharedResources::ShadowMap::getReadyAsDepthWrite(
+			"ShadowMap", cmdListPool_, cmdQ_.Get(), fenceToSignal
+		);
+
 		pbrPipelineDispatcher.sortDrawEvents();
 		pbrPipelineDispatcher.shadowPass();
-		pbrPipelineDispatcher.mainPass();
 		dumpLog();
 
 		pbrSkinnedPipelineDispatcher.sortDrawEvents();
 		pbrSkinnedPipelineDispatcher.shadowPass();
+		dumpLog();
+
+		// == 메인 패스들 ==
+		SharedResources::ShadowMap::getReadyAsShaderResource(
+			"ShadowMap", cmdListPool_, cmdQ_.Get(), fenceToSignal
+		);
+
+		pbrPipelineDispatcher.mainPass();
+		dumpLog();
 		pbrSkinnedPipelineDispatcher.mainPass();
 		dumpLog();
 
@@ -817,13 +833,26 @@ void GFX::render() {
 		samplePipelineDispatcher.drawMultiThreaded();
 		dumpLog();
 
+		// == 그림자 패스들 ==
+		SharedResources::ShadowMap::getReadyAsDepthWrite(
+			"ShadowMap", cmdListPool_, cmdQ_.Get(), fenceToSignal
+		);
+
 		pbrPipelineDispatcher.sortDrawEvents();
 		pbrPipelineDispatcher.shadowPassMT();
-		pbrPipelineDispatcher.mainPassMT();
 		dumpLog();
 
 		pbrSkinnedPipelineDispatcher.sortDrawEvents();
 		pbrSkinnedPipelineDispatcher.shadowPassMT();
+		dumpLog();
+
+		// == 메인 패스들 ==
+		SharedResources::ShadowMap::getReadyAsShaderResource(
+			"ShadowMap", cmdListPool_, cmdQ_.Get(), fenceToSignal
+		);
+
+		pbrPipelineDispatcher.mainPassMT();
+		dumpLog();
 		pbrSkinnedPipelineDispatcher.mainPassMT();
 		dumpLog();
 

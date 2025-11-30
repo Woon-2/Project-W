@@ -390,12 +390,6 @@ void Dispatcher::shadowDraw() {
 		groupFirst = groupLast;
 	}
 
-	// 다음 단계인 main pass에서 shadow map 텍스처를 셰이더 리소스로 참조할 것이므로
-	// shadow 텍스처의 상태를 D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE로 전환한다.
-	transitionResourceState(cmdList, shadowMapData.tex.res.Get(),
-		D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
-	);
-
 	auto hrClose = cmdList->Close();
 	DISPLAY_ERROR_DX_HR( hrClose, false );
 	if (hrClose < 0) {
@@ -451,7 +445,7 @@ void Dispatcher::shadowDrawMT() {
 
 	// 파악된 작업의 개수에 맞게 명령 컨텍스트들을 할당한다.
 	std::list<CommandContext> cmdCtxs{};
-	const auto requiredCmdListCnt = jobCnt + 1u;	// 그림자 맵 리소스 상태 전환용 하나 추가
+	const auto requiredCmdListCnt = jobCnt;
 
 	const auto allocatedCmdListCnt = cmdListPool_->alloc(
 		requiredCmdListCnt, CommandListUsage::RenderingSlave, cmdCtxs
@@ -533,7 +527,6 @@ void Dispatcher::shadowDrawMT() {
 		addJobShadowDraw( currCmdCtx->cmdList.Get(), instancingGroups.data() + accDrawcallCnt,
 			instancingGroups.data() + accDrawcallCnt + lastJobSize, accDrawcallCnt, shadowMapData, latch
 		);
-		++currCmdCtx;
 	}
 
 	// 동기화
@@ -542,8 +535,8 @@ void Dispatcher::shadowDrawMT() {
 	instancingGroups.clear();
 
 	// 명령 기록 끝, 실행
-	auto stagedCmdLists = std::vector<ID3D12CommandList*>(cmdCtxs.size() - 1u, nullptr);
-	std::ranges::transform(cmdCtxs.begin(), std::prev(cmdCtxs.end()),
+	auto stagedCmdLists = std::vector<ID3D12CommandList*>(cmdCtxs.size(), nullptr);
+	std::ranges::transform(cmdCtxs.begin(), cmdCtxs.end(),
 		stagedCmdLists.begin(),
 		[](const CommandContext& cmdCtx) { return cmdCtx.cmdList.Get(); }	
 	);
@@ -551,51 +544,6 @@ void Dispatcher::shadowDrawMT() {
 	DISPLAY_ERROR_DX_VOID( cmdQ_->ExecuteCommandLists(
 		static_cast<UINT>(stagedCmdLists.size()), stagedCmdLists.data()
 	), false );
-
-	// --- 그림자맵 상태 전환 ---
-	// 그림자맵 상태 전환은 draw call을 수행했던 명령 리스트들이 담긴
-	// ExecuteCommandLists 호출과는 별도의 ExecuteCommandLists 호출로 실행해야 한다.
-	// 
-	// 싱글 스레드일 때에는 명령 리스트가 하나였기 때문에 문제가 없지만,
-	// 멀티 스레드 환경에서는 어떤 명령 리스트가 가장 마지막에 실행될지 알 수 없다.
-	// (그림자맵 상태 전환은 가장 마지막 명령이어야 한다.)
-	// 
-	// 다만 서로 다른 ExecuteCommandLists 호출은 gpu 상에서 순서대로 이루어짐이 보장되므로,
-	// 그림자맵 상태 전환 명령만 별도의 ExecuteCommandLists 호출로 수행함으로써
-	// 해당 명령이 마지막 순서임을 보장한다.
-	
-	// 명령 컨텍스트 초기화
-	auto hrCmdAllocReset = currCmdCtx->cmdAlloc->Reset();
-	DISPLAY_ERROR_DX_HR( hrCmdAllocReset, false );
-	if (hrCmdAllocReset < 0) {
-		cmdListPool_->free(CommandListUsage::RenderingSlave, std::move(cmdCtxs));
-		return;
-	}
-	auto hrCmdListReset = currCmdCtx->cmdList->Reset(currCmdCtx->cmdAlloc.Get(), nullptr);
-	DISPLAY_ERROR_DX_HR( hrCmdListReset, false );
-	if (hrCmdListReset < 0) {
-		cmdListPool_->free(CommandListUsage::RenderingSlave, std::move(cmdCtxs));
-		return;
-	}
-
-	// 다음 단계인 main pass에서 shadow map 텍스처를 셰이더 리소스로 참조할 것이므로
-	// shadow 텍스처의 상태를 D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE로 전환한다.
-	transitionResourceState( currCmdCtx->cmdList.Get(),
-		shadowMapData.tex.res.Get(),
-		D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
-	);
-	
-	// 명령 기록 끝, 실행
-	auto hrClose = currCmdCtx->cmdList->Close();
-
-	DISPLAY_ERROR_DX_HR( hrClose, false );
-	if (hrClose >= 0) {
-		ID3D12CommandList* tmpShadowMapTransitionCmdList[] = { currCmdCtx->cmdList.Get() };
-
-		DISPLAY_ERROR_DX_VOID( cmdQ_->ExecuteCommandLists(
-			1u, tmpShadowMapTransitionCmdList
-		), false );
-	}
 
 	// Fence 객체에 사용한 명령 컨텍스트들을 연관시켜 놓는다.
 	pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)]
@@ -914,12 +862,6 @@ void Dispatcher::mainDraw() {
 		groupFirst = groupLast;
 	}
 
-	// 다음 단계인 shadow pass에서 shadow map 텍스처를 깊이 버퍼로 사용할 것이므로
-	// shadow 텍스처의 상태를 D3D12_RESOURCE_STATE_DEPTH_WRITE로 전환한다.
-	transitionResourceState(cmdList, SharedResources::ShadowMap::shadowMapData.at("ShadowMap").tex.res.Get(),
-		D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE
-	);
-
 	auto hrClose = cmdList->Close();
 	DISPLAY_ERROR_DX_HR( hrClose, false );
 	if (hrClose < 0) {
@@ -975,7 +917,7 @@ void Dispatcher::mainDrawMT() {
 
 	// 파악된 작업의 개수에 맞게 명령 컨텍스트들을 할당한다.
 	std::list<CommandContext> cmdCtxs{};
-	const auto requiredCmdListCnt = jobCnt + 1u;	// 그림자 맵 리소스 상태 전환용 하나 추가
+	const auto requiredCmdListCnt = jobCnt;
 
 	const auto allocatedCmdListCnt = cmdListPool_->alloc(
 		requiredCmdListCnt, CommandListUsage::RenderingSlave, cmdCtxs
@@ -1053,7 +995,6 @@ void Dispatcher::mainDrawMT() {
 		addJobMainDraw( currCmdCtx->cmdList.Get(), instancingGroups.data() + accDrawcallCnt,
 			instancingGroups.data() + accDrawcallCnt + lastJobSize, accDrawcallCnt, latch
 		);
-		++currCmdCtx;
 	}
 
 	// 동기화
@@ -1062,8 +1003,8 @@ void Dispatcher::mainDrawMT() {
 	instancingGroups.clear();
 
 	// 명령 기록 끝, 실행
-	auto stagedCmdLists = std::vector<ID3D12CommandList*>(cmdCtxs.size() - 1u, nullptr);
-	std::ranges::transform(cmdCtxs.begin(), std::prev(cmdCtxs.end()),
+	auto stagedCmdLists = std::vector<ID3D12CommandList*>(cmdCtxs.size(), nullptr);
+	std::ranges::transform(cmdCtxs.begin(), cmdCtxs.end(),
 		stagedCmdLists.begin(),
 		[](const CommandContext& cmdCtx) { return cmdCtx.cmdList.Get(); }	
 	);
@@ -1071,49 +1012,6 @@ void Dispatcher::mainDrawMT() {
 	DISPLAY_ERROR_DX_VOID( cmdQ_->ExecuteCommandLists(
 		static_cast<UINT>(stagedCmdLists.size()), stagedCmdLists.data()
 	), false );
-
-	// --- 그림자맵 상태 전환 ---
-	// 그림자맵 상태 전환은 draw call을 수행했던 명령 리스트들이 담긴
-	// ExecuteCommandLists 호출과는 별도의 ExecuteCommandLists 호출로 실행해야 한다.
-	// 
-	// 싱글 스레드일 때에는 명령 리스트가 하나였기 때문에 문제가 없지만,
-	// 멀티 스레드 환경에서는 어떤 명령 리스트가 가장 마지막에 실행될지 알 수 없다.
-	// (그림자맵 상태 전환은 가장 마지막 명령이어야 한다.)
-	// 
-	// 다만 서로 다른 ExecuteCommandLists 호출은 gpu 상에서 순서대로 이루어짐이 보장되므로,
-	// 그림자맵 상태 전환 명령만 별도의 ExecuteCommandLists 호출로 수행함으로써
-	// 해당 명령이 마지막 순서임을 보장한다.
-	
-	// 명령 컨텍스트 초기화
-	auto hrCmdAllocReset = currCmdCtx->cmdAlloc->Reset();
-	DISPLAY_ERROR_DX_HR( hrCmdAllocReset, false );
-	if (hrCmdAllocReset < 0) {
-		cmdListPool_->free(CommandListUsage::RenderingSlave, std::move(cmdCtxs));
-		return;
-	}
-	auto hrCmdListReset = currCmdCtx->cmdList->Reset(currCmdCtx->cmdAlloc.Get(), nullptr);
-	DISPLAY_ERROR_DX_HR( hrCmdListReset, false );
-	if (hrCmdListReset < 0) {
-		cmdListPool_->free(CommandListUsage::RenderingSlave, std::move(cmdCtxs));
-		return;
-	}
-
-	// 다음 단계인 shadow pass에서 shadow map 텍스처를 깊이 버퍼로 사용할 것이므로
-	// shadow 텍스처의 상태를 D3D12_RESOURCE_STATE_DEPTH_WRITE로 전환한다.
-	transitionResourceState( currCmdCtx->cmdList.Get(), SharedResources::ShadowMap::shadowMapData.at("ShadowMap").tex.res.Get(),
-		D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE
-	);
-
-	auto hrClose = currCmdCtx->cmdList->Close();
-
-	DISPLAY_ERROR_DX_HR( hrClose, false );
-	if (hrClose >= 0) {
-		ID3D12CommandList* tmpShadowMapTransitionCmdList[] = { currCmdCtx->cmdList.Get() };
-
-		DISPLAY_ERROR_DX_VOID( cmdQ_->ExecuteCommandLists(
-			1u, tmpShadowMapTransitionCmdList
-		), false );
-	}
 
 	// Fence 객체에 사용한 명령 컨텍스트들을 연관시켜 놓는다.
 	pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)]
