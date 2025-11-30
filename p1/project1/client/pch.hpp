@@ -86,6 +86,7 @@
 #include <latch>
 #include <array>
 #include <mutex>
+#include <span>
 
 #include "mathUtil.hpp"
 #include "function.hpp"

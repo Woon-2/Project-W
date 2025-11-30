@@ -18,14 +18,14 @@ cbuffer PerFrameData : register(b1) {
 }
 
 StructuredBuffer<PerInstanceData> gInstances : register(t0);
-StructuredBuffer<float4x4> gBones: register(t2);
+StructuredBuffer<float4x4> gBoneData: register(t2);
 
 float4x4 blendBoneTransform(uint rootBoneOffset, uint4 boneIndices, float4 boneWeights) {
     return 
-        gBones[rootBoneOffset + boneIndices.x] * boneWeights.x +
-        gBones[rootBoneOffset + boneIndices.y] * boneWeights.y +
-        gBones[rootBoneOffset + boneIndices.z] * boneWeights.z +
-        gBones[rootBoneOffset + boneIndices.w] * boneWeights.w;
+        gBoneData[rootBoneOffset + boneIndices.x] * boneWeights.x +
+        gBoneData[rootBoneOffset + boneIndices.y] * boneWeights.y +
+        gBoneData[rootBoneOffset + boneIndices.z] * boneWeights.z +
+        gBoneData[rootBoneOffset + boneIndices.w] * boneWeights.w;
 }
 
 VSOutput VSMain(

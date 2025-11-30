@@ -8,12 +8,12 @@
 #include "sharedResources.hpp"
 #include "samplePipeline.hpp"
 #include "pbrPipeline.hpp"
+#include "pbrSkinnedPipeline.hpp"
 #include "billboardPipeline.hpp"
 #include "skyboxPipeline.hpp"
 #include "BVPipeline.hpp"
 
 
-// 파이프라인 만들기
 // gfx에서 만들어진 파이프라인 리소스들 초기화하기
 // object, camera, light가 파이프라인 데이터 제출하도록
 // 애니메이션 임시 설정 시뮬레이션
@@ -123,6 +123,14 @@ public:
 	// 프레임 데이터를 입력한다.
 	void addFrameData(const PBRPipeline::FrameData& frameData);
 	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+	void addDrawEvent(const PBRSkinnedPipeline::DrawEvent& drawEvent);
+	// 카메라 데이터를 입력한다.
+	void addCameraData(const PBRSkinnedPipeline::CameraData& cameraData);
+	// 조명 데이터를 입력한다.
+	void addLightData(const PBRSkinnedPipeline::LightData& lightData);
+	// 프레임 데이터를 입력한다.
+	void addFrameData(const PBRSkinnedPipeline::FrameData& frameData);
+	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 	void addDrawEvent( const BillboardPipeline::DrawEvent& drawEvent );
 	// 카메라 데이터를 입력한다.
 	void addCameraData( const BillboardPipeline::CameraData& cameraData );
@@ -212,6 +220,13 @@ private:
 	std::vector<PBRPipeline::LightData> lightDataPBRPipeline_{};
 	PBRPipeline::LightData mainDirectionalLightPBRPipeline_{};
 	PBRPipeline::FrameData frameDataPBRPipeline_{};
+	// PBR-skinned Pipeline
+	std::vector<PBRSkinnedPipeline::DrawEvent> drawEventsPBRSkinnedPipeline_{};
+	PBRSkinnedPipeline::Resources resourcesPBRSkinnedPipeline_{};
+	PBRSkinnedPipeline::CameraData cameraDataPBRSkinnedPipeline_{};
+	std::vector<PBRSkinnedPipeline::LightData> lightDataPBRSkinnedPipeline_{};
+	PBRSkinnedPipeline::LightData mainDirectionalLightPBRSkinnedPipeline_{};
+	PBRSkinnedPipeline::FrameData frameDataPBRSkinnedPipeline_{};
 	// Skybox Pipeline
 	std::vector<SkyboxPipeline::DrawEvent> drawEventsSkyboxPipeline_{};
 	SkyboxPipeline::Resources resourcesSkyboxPipeline_{};

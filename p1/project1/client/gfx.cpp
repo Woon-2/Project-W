@@ -252,6 +252,11 @@ void GFX::init() {
 
 	// Draw Event들을 저장할 메모리 예약
 	drawEventsSamplePipeline_.reserve(1000u);
+	drawEventsPBRPipeline_.reserve(1000u);
+	drawEventsPBRSkinnedPipeline_.reserve(1000u);
+	drawEventsBVPipeline_.reserve(1000u);
+	drawEventsBillboardPipeline_.reserve(1000u);
+	drawEventsSkyboxPipeline_.reserve(10u);
 }
 
 // 윈도우와 연결된 SwapChain을 만든다.
@@ -371,6 +376,34 @@ void GFX::createSwapChain() {
 	resourcesPBRPipeline_.mainPass.perFrameData.init(
 		device_.Get(), sizeof(PBRShader::PerFrameData), backBuffers_.size(), "PBR_Main_PerFrameData"
 	);
+	// PBR-skinned Pipeline ----
+	resourcesPBRSkinnedPipeline_.shadowPass.perInstanceData.init(
+		device_.Get(), sizeof(ShadowMapSkinnedShader::PerInstanceData) * 1000u, backBuffers_.size(), "PBRSkinned_Shadow_PerInstanceData"
+	);
+	resourcesPBRSkinnedPipeline_.shadowPass.boneData.init(
+		device_.Get(), sizeof(ShadowMapSkinnedShader::BoneData) * 100'000u, backBuffers_.size(), "PBRSkinned_Shadow_BoneData"
+	);
+	resourcesPBRSkinnedPipeline_.shadowPass.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof(ShadowMapSkinnedShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBRSkinned_Shadow_PerDrawcallData"
+	);
+	resourcesPBRSkinnedPipeline_.shadowPass.perFrameData.init(
+		device_.Get(), sizeof(ShadowMapSkinnedShader::PerFrameData), backBuffers_.size(), "PBRSkinned_Shadow_PerFrameData"
+	);
+	resourcesPBRSkinnedPipeline_.mainPass.perInstanceData.init(
+		device_.Get(), sizeof(PBRSkinnedShader::PerInstanceData) * 1000u, backBuffers_.size(), "PBRSkinned_Main_PerInstanceData"
+	);
+	resourcesPBRSkinnedPipeline_.mainPass.boneData.init(
+		device_.Get(), sizeof(PBRSkinnedShader::BoneData) * 100'000u, backBuffers_.size(), "PBRSkinned_Main_BoneData"
+	);
+	resourcesPBRSkinnedPipeline_.mainPass.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof(PBRSkinnedShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBRSkinned_Main_PerDrawcallData"
+	);
+	resourcesPBRSkinnedPipeline_.mainPass.lightData.init(
+		device_.Get(), sizeof(PBRSkinnedShader::Light) * 32u, backBuffers_.size(), "PBRSkinned_Main_LightData"
+	);
+	resourcesPBRSkinnedPipeline_.mainPass.perFrameData.init(
+		device_.Get(), sizeof(PBRSkinnedShader::PerFrameData), backBuffers_.size(), "PBRSkinned_Main_PerFrameData"
+	);
 	// Skybox Pipeline ----
 	resourcesSkyboxPipeline_.perFrameData.init(
 		device_.Get(), sizeof(SkyboxShader::PerFrameData), backBuffers_.size(), "Skybox_PerFrameData"
@@ -444,6 +477,29 @@ void GFX::addLightData(const PBRPipeline::LightData& lightData) {
 // 프레임 데이터를 입력한다.
 void GFX::addFrameData(const PBRPipeline::FrameData& frameData) {
 	frameDataPBRPipeline_ = frameData;
+}
+
+// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+void GFX::addDrawEvent(const PBRSkinnedPipeline::DrawEvent& drawEvent) {
+	drawEventsPBRSkinnedPipeline_.push_back(drawEvent);
+}
+
+// 카메라 데이터를 입력한다.
+void GFX::addCameraData(const PBRSkinnedPipeline::CameraData& cameraData) {
+	cameraDataPBRSkinnedPipeline_ = cameraData;
+}
+
+// 조명 데이터를 입력한다.
+void GFX::addLightData(const PBRSkinnedPipeline::LightData& lightData) {
+	lightDataPBRSkinnedPipeline_.push_back(lightData);
+	if (lightData.isMainDirectionalLight) {
+		mainDirectionalLightPBRSkinnedPipeline_ = lightData;
+	}
+}
+
+// 프레임 데이터를 입력한다.
+void GFX::addFrameData(const PBRSkinnedPipeline::FrameData& frameData) {
+	frameDataPBRSkinnedPipeline_ = frameData;
 }
 
 // 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
@@ -692,6 +748,19 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	auto pbrSkinnedPipelineDispatcher = PBRSkinnedPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_, &dsvPool_,
+		rootSigs_.at("DefaultRootSignature"), shaders_.at("PBRSkinnedShader"),
+		shaders_.at("ShadowMapSkinnedShader"), cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesPBRSkinnedPipeline_, threadPool_, &cmdListPool_,
+		std::move(drawEventsPBRSkinnedPipeline_), std::move(lightDataPBRSkinnedPipeline_),
+		mainDirectionalLightPBRSkinnedPipeline_, cameraDataPBRSkinnedPipeline_, frameDataPBRSkinnedPipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
 	auto billboardPipelineDispatcher = BillboardPipeline::Dispatcher(
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
@@ -730,6 +799,11 @@ void GFX::render() {
 		pbrPipelineDispatcher.mainPass();
 		dumpLog();
 
+		pbrSkinnedPipelineDispatcher.sortDrawEvents();
+		pbrSkinnedPipelineDispatcher.shadowPass();
+		pbrSkinnedPipelineDispatcher.mainPass();
+		dumpLog();
+
 		bvPipelineDispatcher.updateGPUDataSingleThreaded();
 		bvPipelineDispatcher.drawSingleThreaded();
 		dumpLog();
@@ -746,6 +820,11 @@ void GFX::render() {
 		pbrPipelineDispatcher.sortDrawEvents();
 		pbrPipelineDispatcher.shadowPassMT();
 		pbrPipelineDispatcher.mainPassMT();
+		dumpLog();
+
+		pbrSkinnedPipelineDispatcher.sortDrawEvents();
+		pbrSkinnedPipelineDispatcher.shadowPassMT();
+		pbrSkinnedPipelineDispatcher.mainPassMT();
 		dumpLog();
 
 		bvPipelineDispatcher.updateGPUDataMultiThreaded();

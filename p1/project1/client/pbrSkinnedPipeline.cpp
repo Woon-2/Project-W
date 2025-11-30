@@ -1,69 +1,93 @@
 #include "pch.hpp"
-#include "pbrPipeline.hpp"
+#include "pbrSkinnedPipeline.hpp"
 #include "sharedResources.hpp"
 #include "shader.hpp"
 #include "mesh.hpp"
 #include "errorHandling.hpp"
 
-namespace PBRPipeline {
+namespace PBRSkinnedPipeline {
 
-// PBR Pipeline 그림자 패스의 input layout을 위한 Vertex Buffer View 배열이
+// PBR-skinned Pipeline 그림자 패스의 input layout을 위한 Vertex Buffer View 배열이
 // mesh에 존재하지 않는다면, 추가한다.
 // 0: position
 void __layoutMeshIfNeededShadowPass(const Mesh& mesh) {
-	if (mesh.vbViewsByPipeline.contains("PBRPipeline_Shadow")) {
+	if (mesh.vbViewsByPipeline.contains("PBRSkinnedPipeline_Shadow")) {
 		return;
 	}
 
-	auto [pvbViews, _] = mesh.vbViewsByPipeline.try_emplace("PBRPipeline_Shadow");
+	auto [pvbViews, _] = mesh.vbViewsByPipeline.try_emplace("PBRSkinnedPipeline_Shadow");
 	auto& vbViews = pvbViews->second;
-	vbViews.reserve(1u);	// position
+	vbViews.reserve(3u);	// position, boneIndices, boneWeights
 
 	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_Position"),
-		"[GFX Error] PBRPipeline::__layoutMeshIfNeededShadowPass: " + mesh.name + "_VB_Position"
+		"[GFX Error] PBRSkinnedPipeline::__layoutMeshIfNeededShadowPass: " + mesh.name + "_VB_Position"
+		"의 이름을 가진 정점 버퍼가 요구되었으나, 존재하지 않습니다.",
+		false
+	);
+	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_BoneIndices"),
+		"[GFX Error] PBRSkinnedPipeline::__layoutMeshIfNeededShadowPass: " + mesh.name + "_VB_BoneIndices"
+		"의 이름을 가진 정점 버퍼가 요구되었으나, 존재하지 않습니다.",
+		false
+	);
+	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_BoneWeights"),
+		"[GFX Error] PBRSkinnedPipeline::__layoutMeshIfNeededShadowPass: " + mesh.name + "_VB_BoneWeights"
 		"의 이름을 가진 정점 버퍼가 요구되었으나, 존재하지 않습니다.",
 		false
 	);
 
 	auto& vbViewPos = mesh.vbViews[ mesh.vbIdxMap.at(mesh.name + "_VB_Position") ];
+	auto& vbViewBoneIndices = mesh.vbViews[ mesh.vbIdxMap.at(mesh.name + "_VB_BoneIndices") ];
+	auto& vbViewBoneWeights = mesh.vbViews[ mesh.vbIdxMap.at(mesh.name + "_VB_BoneWeights") ];
 
 	vbViews.push_back(vbViewPos);
+	vbViews.push_back(vbViewBoneIndices);
+	vbViews.push_back(vbViewBoneWeights);
 }
 
-// PBR Pipeline 메인 렌더 패스의 input layout을 위한 Vertex Buffer View 배열이
+// PBR-skinned Pipeline의 메인 렌더 패스의 input layout을 위한 Vertex Buffer View 배열이
 // mesh에 존재하지 않는다면, 추가한다.
-// 0: position, 1: normal, 2: tangent, 3: bitangent, 4: uv
+// 0: position, 1: normal, 2: tangent, 3: bitangent, 4: uv, 5: boneIndices, 6: boneWeights
 void __layoutMeshIfNeededMainPass(const Mesh& mesh) {
-	if (mesh.vbViewsByPipeline.contains("PBRPipeline_Main")) {
+	if (mesh.vbViewsByPipeline.contains("PBRSkinnedPipeline_Main")) {
 		return;
 	}
 
-	auto [pvbViews, _] = mesh.vbViewsByPipeline.try_emplace("PBRPipeline_Main");
+	auto [pvbViews, _] = mesh.vbViewsByPipeline.try_emplace("PBRSkinnedPipeline_Main");
 	auto& vbViews = pvbViews->second;
-	vbViews.reserve(5u);	// position, normal, tangent, bitangent, uv
+	vbViews.reserve(7u);	// position, normal, tangent, bitangent, uv, boneIndices, boneWeights
 
 	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_Position"),
-		"[GFX Error] PBRPipeline::__layoutMeshIfNeededMainPass: " + mesh.name + "_VB_Position"
+		"[GFX Error] PBRSkinnedPipeline::__layoutMeshIfNeededMainPass: " + mesh.name + "_VB_Position"
 		"의 이름을 가진 정점 버퍼가 요구되었으나, 존재하지 않습니다.",
 		false
 	);
 	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_Normal"),
-		"[GFX Error] PBRPipeline::__layoutMeshIfNeededMainPass: " + mesh.name + "_VB_Normal"
+		"[GFX Error] PBRSkinnedPipeline::__layoutMeshIfNeededMainPass: " + mesh.name + "_VB_Normal"
 		"의 이름을 가진 정점 버퍼가 요구되었으나, 존재하지 않습니다.",
 		false
 	);
 	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_Tangent"),
-		"[GFX Error] PBRPipeline::__layoutMeshIfNeededMainPass: " + mesh.name + "_VB_Tangent"
+		"[GFX Error] PBRSkinnedPipeline::__layoutMeshIfNeededMainPass: " + mesh.name + "_VB_Tangent"
 		"의 이름을 가진 정점 버퍼가 요구되었으나, 존재하지 않습니다.",
 		false
 	);
 	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_Bitangent"),
-		"[GFX Error] PBRPipeline::__layoutMeshIfNeededMainPass: " + mesh.name + "_VB_Bitangent"
+		"[GFX Error] PBRSkinnedPipeline::__layoutMeshIfNeededMainPass: " + mesh.name + "_VB_Bitangent"
 		"의 이름을 가진 정점 버퍼가 요구되었으나, 존재하지 않습니다.",
 		false
 	);
 	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_UV"),
-		"[GFX Error] PBRPipeline::__layoutMeshIfNeededMainPass: " + mesh.name + "_VB_UV"
+		"[GFX Error] PBRSkinnedPipeline::__layoutMeshIfNeededMainPass: " + mesh.name + "_VB_UV"
+		"의 이름을 가진 정점 버퍼가 요구되었으나, 존재하지 않습니다.",
+		false
+	);
+	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_BoneIndices"),
+		"[GFX Error] PBRSkinnedPipeline::__layoutMeshIfNeededMainPass: " + mesh.name + "_VB_BoneIndices"
+		"의 이름을 가진 정점 버퍼가 요구되었으나, 존재하지 않습니다.",
+		false
+	);
+	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_BoneWeights"),
+		"[GFX Error] PBRSkinnedPipeline::__layoutMeshIfNeededMainPass: " + mesh.name + "_VB_BoneWeights"
 		"의 이름을 가진 정점 버퍼가 요구되었으나, 존재하지 않습니다.",
 		false
 	);
@@ -73,14 +97,21 @@ void __layoutMeshIfNeededMainPass(const Mesh& mesh) {
 	auto& vbViewTangent = mesh.vbViews[ mesh.vbIdxMap.at(mesh.name + "_VB_Tangent") ];
 	auto& vbViewBitangent = mesh.vbViews[ mesh.vbIdxMap.at(mesh.name + "_VB_Bitangent") ];
 	auto& vbViewUV = mesh.vbViews[ mesh.vbIdxMap.at(mesh.name + "_VB_UV") ];
+	auto& vbViewBoneIndices = mesh.vbViews[ mesh.vbIdxMap.at(mesh.name + "_VB_BoneIndices") ];
+	auto& vbViewBoneWeights = mesh.vbViews[ mesh.vbIdxMap.at(mesh.name + "_VB_BoneWeights") ];
 
 	vbViews.push_back(vbViewPos);
 	vbViews.push_back(vbViewNormal);
 	vbViews.push_back(vbViewTangent);
 	vbViews.push_back(vbViewBitangent);
 	vbViews.push_back(vbViewUV);
+	vbViews.push_back(vbViewBoneIndices);
+	vbViews.push_back(vbViewBoneWeights);
 }
 
+// PBR-skinned Pipeline의 input layout을 위한 Vertex Buffer View 배열이
+// mesh에 존재하지 않는다면, 추가한다.
+// 0: position, 1: normal, 2: tangent, 3: bitangent, 4: uv, 5: boneIndices, 6: boneWeights
 void layoutMeshIfNeeded(const Mesh& mesh) {
 	__layoutMeshIfNeededShadowPass(mesh);
 	__layoutMeshIfNeededMainPass(mesh);
@@ -111,6 +142,7 @@ Dispatcher::Dispatcher(
 	rootParamIdxPID_(rootSig->paramIdx("PerInstanceData")),
 	rootParamIdxPFD_(rootSig->paramIdx("PerFrameData")),
 	rootParamIdxLightData_(rootSig->paramIdx("LightData")),
+	rootParamIdxBoneData_(rootSig->paramIdx("BoneData")),
 	rootParamIdxTexPool_(rootSig->paramIdx("TexturePool")),
 	rootParamIdxTexArrayPool_(rootSig->paramIdx("TextureArrayPool")),
 	rootParamIdxTexCubePool_(rootSig->paramIdx("TextureCubePool")),
@@ -163,15 +195,20 @@ void Dispatcher::shadowUpdate() {
 
 	// perInstanceData를 static으로 선언하여
 	// 매번 처음부터 메모리를 구축하지 않고 재사용할 수 있도록 한다.
-	static auto perInstanceData = std::vector<ShadowMapShader::PerInstanceData>();
+	static auto perInstanceData = std::vector<ShadowMapSkinnedShader::PerInstanceData>();
 	perInstanceData.resize(drawEvents_.size());
+
+	u32t boneUploadCnt = 0u;
 
 	// DrawEvents에 담겨있는 정보를 가공해 perInstanceData에 저장한다.
 	std::ranges::transform(drawEvents_, perInstanceData.begin(),
-		[](const PBRPipeline::DrawEvent& drawEvent) {
-			return ShadowMapShader::PerInstanceData{
-				.world = mu::transpose(drawEvent.world).getXmf()
+		[&boneUploadCnt](const PBRSkinnedPipeline::DrawEvent& drawEvent) {
+			const auto ret = ShadowMapSkinnedShader::PerInstanceData{
+				.world = mu::transpose(drawEvent.world).getXmf(),
+				.rootBoneOffset = boneUploadCnt
 			};
+			boneUploadCnt += static_cast<u32t>( drawEvent.boneXforms.size() );
+			return ret;
 		}	
 	);
 
@@ -179,8 +216,25 @@ void Dispatcher::shadowUpdate() {
 	pResources_->shadowPass.perInstanceData.stage(roomIdx_, perInstanceData);
 	perInstanceData.clear();
 
+	// boneData를 static으로 선언하여
+	// 매번 처음부터 메모리를 구축하지 않고 재사용할 수 있도록 한다.
+	static auto boneData = std::vector<ShadowMapSkinnedShader::BoneData>();
+	boneData.resize(boneUploadCnt);
+
+	auto itBoneOut = boneData.begin();
+
+	std::ranges::for_each( drawEvents_, [itBoneOut](const PBRSkinnedPipeline::DrawEvent& drawEvent) mutable {
+		for (auto& boneXform : drawEvent.boneXforms) {
+			*itBoneOut = ShadowMapSkinnedShader::BoneData{ boneXform.getXmf() };
+			++itBoneOut;
+		}
+	} );
+
+	pResources_->shadowPass.boneData.stage(roomIdx_, boneData);
+	boneData.clear();
+
 	// main directional light의 내용을 가공해 pfd에 저장한다.
-	auto pfd = ShadowMapShader::PerFrameData{
+	auto pfd = ShadowMapSkinnedShader::PerFrameData{
 		.lightVP = mu::transpose(
 			mainDirectionalLightData_.view * mainDirectionalLightData_.proj
 		).getXmf()
@@ -201,7 +255,7 @@ void Dispatcher::shadowUpdateMT() {
 
 	// perInstanceData를 static으로 선언하여
 	// 매번 처음부터 메모리를 구축하지 않고 재사용할 수 있도록 한다.
-	static auto perInstanceData = std::vector<ShadowMapShader::PerInstanceData>();
+	static auto perInstanceData = std::vector<ShadowMapSkinnedShader::PerInstanceData>();
 	perInstanceData.resize(drawEvents_.size());
 
 	// DrawEvent는 jobSize 단위로 스레드들에 분배될 것이므로,
@@ -244,6 +298,32 @@ void Dispatcher::shadowUpdateMT() {
 
 	// 동기화
 	latch.wait();
+
+	// rootBoneOffset 계산은 앞에서부터 순서대로 이루어져야 하므로 병렬로 수행할 수 없다.
+	// 따라서 동기화 후 rootBoneOffset 멤버를 갱신하도록 한다.
+	for (std::size_t i = 1u; i < drawEvents_.size(); ++i) {
+		perInstanceData[i].rootBoneOffset = static_cast<u32t>(
+			drawEvents_[i-1].boneXforms.size() + perInstanceData[i-1].rootBoneOffset
+		);
+	}
+
+	// boneData를 static으로 선언하여
+	// 매번 처음부터 메모리를 구축하지 않고 재사용할 수 있도록 한다.
+	static auto boneData = std::vector<ShadowMapSkinnedShader::BoneData>();
+	boneData.resize(perInstanceData.back().rootBoneOffset + drawEvents_.back().boneXforms.size());
+
+	auto itBoneOut = boneData.begin();
+
+	std::ranges::for_each( drawEvents_, [itBoneOut](const PBRSkinnedPipeline::DrawEvent& drawEvent) mutable {
+		for (auto& boneXform : drawEvent.boneXforms) {
+			*itBoneOut = ShadowMapSkinnedShader::BoneData{ boneXform.getXmf() };
+			++itBoneOut;
+		}
+	} );
+
+	pResources_->shadowPass.boneData.stage(roomIdx_, boneData);
+	boneData.clear();
+
 	// 모든 데이터가 가공된 이후, GPU 데이터를 갱신한다.
 	pResources_->shadowPass.perInstanceData.stage(roomIdx_, perInstanceData);
 	perInstanceData.clear();
@@ -330,15 +410,18 @@ void Dispatcher::shadowDraw() {
 
 	DISPLAY_ERROR_DX_VOID( cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST), false );
 
-	// 바인드해야 하는 GPU 데이터는 다음 세 종류다. (셰이더 참고)
+	// 바인드해야 하는 GPU 데이터는 다음 네 종류다. (셰이더 참고)
 	// - PerInstanceData
 	// - PerDrawcallData
 	// - PerFrameData
+	// - BoneData
 
 	// PerInstanceData 바인드
 	pResources_->shadowPass.perInstanceData.bind(cmdList, rootParamIdxPID_, roomIdx_);
 	// PerFrameData 바인드
 	pResources_->shadowPass.perFrameData.bind(cmdList, rootParamIdxPFD_, roomIdx_);
+	// BoneData 바인드
+	pResources_->shadowPass.boneData.bind(cmdList, rootParamIdxBoneData_, roomIdx_);
 
 	u32t idxDrawcall = 0u;
 
@@ -361,7 +444,7 @@ void Dispatcher::shadowDraw() {
 		// PerDrawcallData GPU 데이터 갱신
 		// (바인드와 GPU 데이터 갱신 순서는 상관없다.
 		//  어차피 바인드는 GPU 명령이라 바로 실행되지 않기 때문에)
-		auto perDrawcallData = ShadowMapShader::PerDrawcallData{
+		auto perDrawcallData = ShadowMapSkinnedShader::PerDrawcallData{
 			// perInstanceData에서 현재 instancing group의 첫 번째 인스턴스의 인덱스
 			.firstInstanceOffset = static_cast<u32t>(groupFirst - drawEvents_.begin())
 		};
@@ -370,7 +453,7 @@ void Dispatcher::shadowDraw() {
 		);
 
 		layoutMeshIfNeeded(*drawEvent.mesh);
-		auto& vbViews = drawEvent.mesh->vbViewsByPipeline.at("PBRPipeline_Shadow");
+		auto& vbViews = drawEvent.mesh->vbViewsByPipeline.at("PBRSkinnedPipeline_Shadow");
 
 		DISPLAY_ERROR_DX_VOID( cmdList->IASetVertexBuffers(
 			0u, static_cast<UINT>(vbViews.size()), vbViews.data()
@@ -458,7 +541,7 @@ void Dispatcher::shadowDrawMT() {
 	);
 
 	DISPLAY_ERROR_STR( allocatedCmdListCnt == requiredCmdListCnt,
-		"[GFX Error] PBRPipeline::Dispatcher::shadowDrawMT: 요청한 수 만큼의 명령 리스트를 할당받지 못했습니다.",
+		"[GFX Error] PBRSkinnedPipeline::Dispatcher::shadowDrawMT: 요청한 수 만큼의 명령 리스트를 할당받지 못했습니다.",
 		false
 	);
 	if (allocatedCmdListCnt != requiredCmdListCnt) {
@@ -614,21 +697,26 @@ void Dispatcher::mainUpdate() {
 
 	// perInstanceData를 static으로 선언하여
 	// 매번 처음부터 메모리를 구축하지 않고 재사용할 수 있도록 한다.
-	static auto perInstanceData = std::vector<PBRShader::PerInstanceData>();
+	static auto perInstanceData = std::vector<PBRSkinnedShader::PerInstanceData>();
 	perInstanceData.resize(drawEvents_.size());
 
 	const auto view = cameraData_.view;
 	const auto viewProj = cameraData_.view * cameraData_.proj;
 
+	u32t boneUploadCnt = 0u;
+
 	// DrawEvents에 담겨있는 정보를 가공해 perInstanceData에 저장한다.
 	std::ranges::transform(drawEvents_, perInstanceData.begin(),
-		[view, viewProj](const PBRPipeline::DrawEvent& drawEvent) {
-			return PBRShader::PerInstanceData{
+		[view, viewProj, &boneUploadCnt](const PBRSkinnedPipeline::DrawEvent& drawEvent) {
+			auto ret = PBRSkinnedShader::PerInstanceData{
 				.world = mu::transpose(drawEvent.world).getXmf(),
 				.wvp = mu::transpose(drawEvent.world * viewProj).getXmf(),
 				.wv = mu::transpose(drawEvent.world * view).getXmf(),
-				.wvNormal = mu::inverse(mu::Mat3x3(drawEvent.world * view)).getXmf()
+				.wvNormal = mu::inverse(mu::Mat3x3(drawEvent.world * view)).getXmf(),
+				.rootBoneOffset = boneUploadCnt
 			};
+			boneUploadCnt += static_cast<u32t>( drawEvent.boneXforms.size() );
+			return ret;
 		}	
 	);
 
@@ -636,15 +724,32 @@ void Dispatcher::mainUpdate() {
 	pResources_->mainPass.perInstanceData.stage(roomIdx_, perInstanceData);
 	perInstanceData.clear();
 
+	// boneData를 static으로 선언하여
+	// 매번 처음부터 메모리를 구축하지 않고 재사용할 수 있도록 한다.
+	static auto boneData = std::vector<PBRSkinnedShader::BoneData>();
+	boneData.resize(boneUploadCnt);
+
+	auto itBoneOut = boneData.begin();
+
+	std::ranges::for_each( drawEvents_, [itBoneOut](const PBRSkinnedPipeline::DrawEvent& drawEvent) mutable {
+		for (auto& boneXform : drawEvent.boneXforms) {
+			*itBoneOut = PBRSkinnedShader::BoneData{ boneXform.getXmf() };
+			++itBoneOut;
+		}
+	} );
+
+	pResources_->shadowPass.boneData.stage(roomIdx_, boneData);
+	boneData.clear();
+
 	// lightData를 static으로 선언하여
 	// 매번 처음부터 메모리를 구축하지 않고 재사용할 수 있도록 한다.
-	static auto lightData = std::vector<PBRShader::Light>();
+	static auto lightData = std::vector<PBRSkinnedShader::Light>();
 	lightData.resize(lightData_.size());
 
 	// LightData에 담겨있는 정보를 가공해 lightData에 저장한다.
 	std::ranges::transform(lightData_, lightData.begin(),
-		[view](const PBRPipeline::LightData& lightData) {
-			return PBRShader::Light{
+		[view](const PBRSkinnedPipeline::LightData& lightData) {
+			return PBRSkinnedShader::Light{
 				.color = lightData.color.getXmf(),
 				.falloff = lightData.falloff,
 				.posV = mu::Vec3(mu::Vec4(lightData.pos, 1.f) * view).getXmf(),
@@ -663,7 +768,7 @@ void Dispatcher::mainUpdate() {
 	auto& shadowMapData = SharedResources::ShadowMap::shadowMapData.at("ShadowMap");
 
 	// FrameData와 main directional light의 내용을 가공해 pfd에 저장한다.
-	auto pfd = PBRShader::PerFrameData{
+	auto pfd = PBRSkinnedShader::PerFrameData{
 		.globalAmbient = frameData_.globalAmbient.getXmf(),
 		.lightCnt = static_cast<u32t>(lightData.size()),	// 여기서 lightData.size()를 호출하므로 
 														// 이전에 lightData.clear()를 호출하면 안된다.
@@ -694,7 +799,7 @@ void Dispatcher::mainUpdateMT() {
 	
 	// perInstanceData를 static으로 선언하여
 	// 매번 처음부터 메모리를 구축하지 않고 재사용할 수 있도록 한다.
-	static auto perInstanceData = std::vector<PBRShader::PerInstanceData>();
+	static auto perInstanceData = std::vector<PBRSkinnedShader::PerInstanceData>();
 	perInstanceData.resize(drawEvents_.size());
 
 	// DrawEvent는 jobSize 단위로 스레드들에 분배될 것이므로,
@@ -732,13 +837,13 @@ void Dispatcher::mainUpdateMT() {
 
 	// lightData를 static으로 선언하여
 	// 매번 처음부터 메모리를 구축하지 않고 재사용할 수 있도록 한다.
-	static auto lightData = std::vector<PBRShader::Light>();
+	static auto lightData = std::vector<PBRSkinnedShader::Light>();
 	lightData.resize(lightData_.size());
 
 	// LightData에 담겨있는 정보를 가공해 lightData에 저장한다.
 	std::ranges::transform(lightData_, lightData.begin(),
-		[view = cameraData_.view](const PBRPipeline::LightData& lightData) {
-			return PBRShader::Light{
+		[view = cameraData_.view](const PBRSkinnedPipeline::LightData& lightData) {
+			return PBRSkinnedShader::Light{
 				.color = lightData.color.getXmf(),
 				.falloff = lightData.falloff,
 				.posV = mu::Vec3(mu::Vec4(lightData.pos, 1.f) * view).getXmf(),
@@ -757,7 +862,7 @@ void Dispatcher::mainUpdateMT() {
 	auto& shadowMapData = SharedResources::ShadowMap::shadowMapData.at("ShadowMap");
 
 	// FrameData와 main directional light의 내용을 가공해 pfd에 저장한다.
-	auto pfd = PBRShader::PerFrameData{
+	auto pfd = PBRSkinnedShader::PerFrameData{
 		.globalAmbient = frameData_.globalAmbient.getXmf(),
 		.lightCnt = static_cast<u32t>(lightData.size()),	// 여기서 lightData.size()를 호출하므로 
 														// 이전에 lightData.clear()를 호출하면 안된다.
@@ -775,6 +880,32 @@ void Dispatcher::mainUpdateMT() {
 
 	// 동기화
 	latch.wait();
+
+	// rootBoneOffset 계산은 앞에서부터 순서대로 이루어져야 하므로 병렬로 수행할 수 없다.
+	// 따라서 동기화 후 rootBoneOffset 멤버를 갱신하도록 한다.
+	for (std::size_t i = 1u; i < drawEvents_.size(); ++i) {
+		perInstanceData[i].rootBoneOffset = static_cast<u32t>(
+			drawEvents_[i-1].boneXforms.size() + perInstanceData[i-1].rootBoneOffset
+		);
+	}
+
+	// boneData를 static으로 선언하여
+	// 매번 처음부터 메모리를 구축하지 않고 재사용할 수 있도록 한다.
+	static auto boneData = std::vector<PBRSkinnedShader::BoneData>();
+	boneData.resize(perInstanceData.back().rootBoneOffset + drawEvents_.back().boneXforms.size());
+
+	auto itBoneOut = boneData.begin();
+
+	std::ranges::for_each( drawEvents_, [itBoneOut](const PBRSkinnedPipeline::DrawEvent& drawEvent) mutable {
+		for (auto& boneXform : drawEvent.boneXforms) {
+			*itBoneOut = PBRSkinnedShader::BoneData{ boneXform.getXmf() };
+			++itBoneOut;
+		}
+	} );
+
+	pResources_->shadowPass.boneData.stage(roomIdx_, boneData);
+	boneData.clear();
+
 	// 모든 데이터가 가공된 이후, GPU 데이터를 갱신한다.
 	pResources_->mainPass.perInstanceData.stage(roomIdx_, perInstanceData);
 	perInstanceData.clear();
@@ -839,18 +970,21 @@ void Dispatcher::mainDraw() {
 
 	DISPLAY_ERROR_DX_VOID( cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST), false );
 
-	// 바인드해야 하는 GPU 데이터는 다음 네 종류다. (셰이더 참고)
+	// 바인드해야 하는 GPU 데이터는 다음 다섯 종류다. (셰이더 참고)
 	// - PerInstanceData
 	// - PerDrawcallData
 	// - PerFrameData
 	// - LightData
+	// - BoneData
 
 	// PerInstanceData 바인드
 	pResources_->mainPass.perInstanceData.bind(cmdList, rootParamIdxPID_, roomIdx_);
-	// LightData 바인드
-	pResources_->mainPass.lightData.bind(cmdList, rootParamIdxLightData_, roomIdx_);
 	// PerFrameData 바인드
 	pResources_->mainPass.perFrameData.bind(cmdList, rootParamIdxPFD_, roomIdx_);
+	// LightData 바인드
+	pResources_->mainPass.lightData.bind(cmdList, rootParamIdxLightData_, roomIdx_);
+	// BoneData 바인드
+	pResources_->mainPass.boneData.bind(cmdList, rootParamIdxBoneData_, roomIdx_);
 
 	u32t idxDrawcall = 0u;
 
@@ -873,8 +1007,8 @@ void Dispatcher::mainDraw() {
 		// PerDrawcallData GPU 데이터 갱신
 		// (바인드와 GPU 데이터 갱신 순서는 상관없다.
 		//  어차피 바인드는 GPU 명령이라 바로 실행되지 않기 때문에)
-		auto perDrawcallData = PBRShader::PerDrawcallData{
-			.material = PBRShader::Material{
+		auto perDrawcallData = PBRSkinnedShader::PerDrawcallData{
+			.material = PBRSkinnedShader::Material{
 				.idxAlbedo = drawEvent.material->mapAlbedo.idxSrv,
 				.idxMetallicSmoothness = drawEvent.material->mapMetallicSmoothness.idxSrv,
 				.idxNormal = drawEvent.material->mapNormal.idxSrv,
@@ -894,7 +1028,7 @@ void Dispatcher::mainDraw() {
 		);
 
 		layoutMeshIfNeeded(*drawEvent.mesh);
-		auto& vbViews = drawEvent.mesh->vbViewsByPipeline.at("PBRPipeline_Main");
+		auto& vbViews = drawEvent.mesh->vbViewsByPipeline.at("PBRSkinnedPipeline_Main");
 
 		DISPLAY_ERROR_DX_VOID( cmdList->IASetVertexBuffers(
 			0u, static_cast<UINT>(vbViews.size()), vbViews.data()
@@ -982,7 +1116,7 @@ void Dispatcher::mainDrawMT() {
 	);
 
 	DISPLAY_ERROR_STR( allocatedCmdListCnt == requiredCmdListCnt,
-		"[GFX Error] PBRPipeline::Dispatcher::mainDrawMT: 요청한 수 만큼의 명령 리스트를 할당받지 못했습니다.",
+		"[GFX Error] PBRSkinnedPipeline::Dispatcher::mainDrawMT: 요청한 수 만큼의 명령 리스트를 할당받지 못했습니다.",
 		false
 	);
 	if (allocatedCmdListCnt != requiredCmdListCnt) {
@@ -1123,17 +1257,19 @@ void Dispatcher::mainDrawMT() {
 // 멀티스레드 작업 시, GPU 데이터 갱신 작업에 대해
 // 단위 작업을 생성하여 스레드에 할당하는데 사용된다.
 void MU_CALLCONV Dispatcher::addJobMainUpdate( mu::Mat4x4 view, const mu::Mat4x4& viewProj,
-	const DrawEvent* pFirst, const DrawEvent* pLast, PBRShader::PerInstanceData* pOut,
+	const DrawEvent* pFirst, const DrawEvent* pLast, PBRSkinnedShader::PerInstanceData* pOut,
 	std::latch& latch
 ) {
 	threadPool_->addJob( [=, &latch](){
 		std::transform( pFirst, pLast, pOut,
-			[view, viewProj](const PBRPipeline::DrawEvent& drawEvent) {
-				return PBRShader::PerInstanceData{
+			[view, viewProj](const PBRSkinnedPipeline::DrawEvent& drawEvent) {
+				return PBRSkinnedShader::PerInstanceData{
 					.world = mu::transpose(drawEvent.world).getXmf(),
 					.wvp = mu::transpose(drawEvent.world * viewProj).getXmf(),
 					.wv = mu::transpose(drawEvent.world * view).getXmf(),
 					.wvNormal = mu::inverse(mu::Mat3x3(drawEvent.world * view)).getXmf()
+					// rootBoneOffset 계산은 앞에서부터 순서대로 이루어져야 하므로 병렬로 수행할 수 없다.
+					// 따라서 동기화 후 rootBoneOffset 멤버를 갱신하도록 한다.
 				};
 			}	
 		);
@@ -1176,11 +1312,12 @@ void Dispatcher::addJobMainDraw( ID3D12GraphicsCommandList* threadCmdList,
 				
 		DISPLAY_ERROR_DX_VOID( threadCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST), false );
 
-		// 바인드해야 하는 GPU 데이터는 다음 네 종류다. (셰이더 참고)
+		// 바인드해야 하는 GPU 데이터는 다음 다섯 종류다. (셰이더 참고)
 		// - PerInstanceData
 		// - PerDrawcallData
 		// - PerFrameData
 		// - LightData
+		// - BoneData
 
 		// PerInstanceData 바인드
 		pResources_->mainPass.perInstanceData.bind(threadCmdList, rootParamIdxPID_, roomIdx_);
@@ -1188,6 +1325,8 @@ void Dispatcher::addJobMainDraw( ID3D12GraphicsCommandList* threadCmdList,
 		pResources_->mainPass.perFrameData.bind(threadCmdList, rootParamIdxPFD_, roomIdx_);
 		// LightData 바인드
 		pResources_->mainPass.lightData.bind(threadCmdList, rootParamIdxLightData_, roomIdx_);
+		// BoneData 바인드
+		pResources_->mainPass.boneData.bind(threadCmdList, rootParamIdxBoneData_, roomIdx_);
 
 		std::size_t idxDrawcall = firstDrawcallIdx;
 
@@ -1207,8 +1346,8 @@ void Dispatcher::addJobMainDraw( ID3D12GraphicsCommandList* threadCmdList,
 				threadCmdList, rootParamIdxPDD_, roomIdx_
 			);
 
-			auto perDrawcallData = PBRShader::PerDrawcallData{
-				.material = PBRShader::Material{
+			auto perDrawcallData = PBRSkinnedShader::PerDrawcallData{
+				.material = PBRSkinnedShader::Material{
 					.idxAlbedo = drawEvent.material->mapAlbedo.idxSrv,
 					.idxMetallicSmoothness = drawEvent.material->mapMetallicSmoothness.idxSrv,
 					.idxNormal = drawEvent.material->mapNormal.idxSrv,
@@ -1231,7 +1370,7 @@ void Dispatcher::addJobMainDraw( ID3D12GraphicsCommandList* threadCmdList,
 			);
 
 			layoutMeshIfNeeded(*drawEvent.mesh);
-			auto& vbViews = drawEvent.mesh->vbViewsByPipeline.at("PBRPipeline_Main");
+			auto& vbViews = drawEvent.mesh->vbViewsByPipeline.at("PBRSkinnedPipeline_Main");
 
 			DISPLAY_ERROR_DX_VOID( threadCmdList->IASetVertexBuffers(
 				0u, static_cast<UINT>(vbViews.size()), vbViews.data()
@@ -1259,14 +1398,16 @@ void Dispatcher::addJobMainDraw( ID3D12GraphicsCommandList* threadCmdList,
 // 멀티스레드 작업 시, GPU 데이터 갱신 작업에 대해
 // 단위 작업을 생성하여 스레드에 할당하는데 사용된다.
 void Dispatcher::addJobShadowUpdate( const DrawEvent* pFirst,
-	const DrawEvent* pLast, ShadowMapShader::PerInstanceData* pOut,
+	const DrawEvent* pLast, ShadowMapSkinnedShader::PerInstanceData* pOut,
 	std::latch& latch
 ) {
 	threadPool_->addJob( [=, &latch](){
 		std::transform( pFirst, pLast, pOut,
-			[](const PBRPipeline::DrawEvent& drawEvent) {
-				return ShadowMapShader::PerInstanceData{
-					.world = mu::transpose(drawEvent.world).getXmf(),
+			[](const PBRSkinnedPipeline::DrawEvent& drawEvent) {
+				return ShadowMapSkinnedShader::PerInstanceData{
+					.world = mu::transpose(drawEvent.world).getXmf()
+					// rootBoneOffset 계산은 앞에서부터 순서대로 이루어져야 하므로 병렬로 수행할 수 없다.
+					// 따라서 동기화 후 rootBoneOffset 멤버를 갱신하도록 한다.
 				};
 			}	
 		);
@@ -1329,15 +1470,18 @@ void Dispatcher::addJobShadowDraw( ID3D12GraphicsCommandList* threadCmdList,
 				
 		DISPLAY_ERROR_DX_VOID( threadCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST), false );
 
-		// 바인드해야 하는 GPU 데이터는 다음 세 종류다. (셰이더 참고)
+		// 바인드해야 하는 GPU 데이터는 다음 네 종류다. (셰이더 참고)
 		// - PerInstanceData
 		// - PerDrawcallData
 		// - PerFrameData
+		// - BoneData
 
 		// PerInstanceData 바인드
 		pResources_->shadowPass.perInstanceData.bind(threadCmdList, rootParamIdxPID_, roomIdx_);
 		// PerFrameData 바인드
 		pResources_->shadowPass.perFrameData.bind(threadCmdList, rootParamIdxPFD_, roomIdx_);
+		// BoneData 바인드
+		pResources_->shadowPass.boneData.bind(threadCmdList, rootParamIdxBoneData_, roomIdx_);
 
 		std::size_t idxDrawcall = firstDrawcallIdx;
 
@@ -1369,7 +1513,7 @@ void Dispatcher::addJobShadowDraw( ID3D12GraphicsCommandList* threadCmdList,
 			);
 
 			layoutMeshIfNeeded(*drawEvent.mesh);
-			auto& vbViews = drawEvent.mesh->vbViewsByPipeline.at("PBRPipeline_Shadow");
+			auto& vbViews = drawEvent.mesh->vbViewsByPipeline.at("PBRSkinnedPipeline_Shadow");
 
 			DISPLAY_ERROR_DX_VOID( threadCmdList->IASetVertexBuffers(
 				0u, static_cast<UINT>(vbViews.size()), vbViews.data()
@@ -1394,4 +1538,4 @@ void Dispatcher::addJobShadowDraw( ID3D12GraphicsCommandList* threadCmdList,
 	} );
 }
 
-}	// namespace PBRPipeline
+}	// namespace PBRSkinnedPipeline
