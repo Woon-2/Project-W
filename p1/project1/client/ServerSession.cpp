@@ -44,9 +44,10 @@ int32 ServerSession::onRecvPacket( uint8* buffer, int32 len ) {
 		for (i32t i = 0; i < objCnt; ++i) {
 			auto message = Online::Message{
 				.objectId = objectDatas[i].objectId,
-				.pos = objectDatas[i].pos,
-				.orient = objectDatas[i].orient,
-				.scale = objectDatas[i].scale
+				.materialSetIdx = objectDatas[i].materialSetIdx,
+				.pos = DirectX::XMLoadFloat3(&objectDatas[i].pos),
+				.orient = DirectX::XMLoadFloat4(&objectDatas[i].orient),
+				.scale = DirectX::XMLoadFloat3(&objectDatas[i].scale)
 			};
 
 			if (objectDatas[i].type == ObjectType::Player) {

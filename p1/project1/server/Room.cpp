@@ -145,9 +145,9 @@ void Room::enter( int32 playerId ) {
 	auto playerData = ObjectData{
 		.type = ObjectType::Player,
 		.objectId = player->getId(),
-		.pos = player->pos(),
-		.orient = player->orient(),
-		.scale = player->scale(),
+		.pos = player->pos().getXmf(),
+		.orient = player->orient().getXmf(),
+		.scale = player->scale().getXmf()
 	};
 	objectDatas.emplace_back(std::move(playerData));
 
@@ -156,9 +156,9 @@ void Room::enter( int32 playerId ) {
 			.type = ObjectType::Cube,
 			.objectId = gPlayerId.fetch_add(1),
 			.materialSetIdx = cubes_[i].materialSetIdx(),
-			.pos = cubes_[i].pos(),
-			.orient = cubes_[i].orient(),
-			.scale = cubes_[i].scale(),
+			.pos = cubes_[i].pos().getXmf(),
+			.orient = cubes_[i].orient().getXmf(),
+			.scale = cubes_[i].scale().getXmf()
 		};
 		objectDatas.emplace_back(std::move(cubeData));
 	}
