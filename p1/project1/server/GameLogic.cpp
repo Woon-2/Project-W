@@ -1,44 +1,71 @@
 #include "pch.hpp"
 #include "GameLogic.hpp"
+#include "Room.hpp"
+#include "RoomManager.hpp"
 
 void GameLogic::run() {
 	while (running_) {
 		logicTimer_.tick();
-		accTime_ += logicTimer_.deltaTime<Milliseconds>().count();
+		
+		auto dt = logicTimer_.deltaTime<Milliseconds>();
+		accTime_ += dt.count();
 
-		while( auto msg = msgQueue_.try_dequeue_bulk()) {
-			// Process logic messages here
-		}
+		processMessage();
 
 		while (accTime_ >= logicUpdateInterval_) {
 			for (auto& room : rooms_) {
-				// Update each room's game logic here
+				room->update(dt);
 			}
 			accTime_ -= logicUpdateInterval_;
 		}
 
 		std::this_thread::yield();
-
-		//-------------------------------------------------------------------
-
-		//logicTimer_.tick();
-		//accTime_ += logicTimer_.deltaTime<Milliseconds>().count();
-
-		//if (accTime_ < logicUpdateInterval_) {
-		//	const auto sleepTime = logicUpdateInterval_ - accTime_;
-		//	std::this_thread::sleep_for(Milliseconds(sleepTime));
-		//}
-
-		//while (auto msg = msgQueue_.try_dequeue_bulk()) {
-		//	// Process logic messages here
-		//}
-
-		//for (auto& room : rooms_) {
-		//	// Update each room's game logic here
-		//}
-
-		//accTime_ = 0.f;
 	}
 }
 
-const float GameLogic::logicUpdateInterval_ = 16.6667f;
+void GameLogic::processMessage() {
+	const auto bulkSize = maxRoomCount_;
+	auto messages = std::vector<LogicMessage>(bulkSize);
+	const auto size = msgQueue_.try_dequeue_bulk(messages.begin(), bulkSize);
+
+	for (int32 i = 0; i < size; ++i) {
+		auto msgType = messages[i].type;
+
+		switch (msgType) {
+		case LogicMsgType::AddRoom: {
+			if (rooms_.size() >= maxRoomCount_) {
+				// 최대 방 개수를 정해놓음. 방을 더 이상 만들 수 없을 때를 대비해야 함.
+				break;
+			}
+
+			auto room = RoomManager::findRoom(messages[i].roomId);
+			ASSERT_CRASH(room);
+			
+			rooms_.push_back(room);
+			idRoomMap_[room->getRoomId()] = room;
+			break;
+		}
+
+		case LogicMsgType::RemoveRoom: {
+			auto vEraseCnt = std::erase_if(rooms_, [&](const SPRoom& room) {
+				return room->getRoomId() == messages[i].roomId;
+			});
+
+			auto umEraseCnt = idRoomMap_.erase(messages[i].roomId);
+
+			ASSERT_CRASH(vEraseCnt > 0 && umEraseCnt == 1);
+			break;
+		}
+
+		case LogicMsgType::UserEnter:
+		case LogicMsgType::UserLeave:
+		case LogicMsgType::UserMoveStart:
+		case LogicMsgType::UserMoveStop:
+			idRoomMap_[messages[i].roomId]->enqueueMessage(messages[i]);
+			break;
+		}
+	}
+}
+
+const int32 GameLogic::maxRoomCount_ = 100;
+const float GameLogic::logicUpdateInterval_ = 16.6667f; // 60 FPS

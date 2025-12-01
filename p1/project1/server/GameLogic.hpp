@@ -3,15 +3,28 @@
 
 #include "timer.hpp"
 
-struct LogicMessage {
+enum class LogicMsgType : uint8 {
+	AddRoom,
+	RemoveRoom,
+	UserEnter,
+	UserLeave,
+	UserMoveStart,
+	UserMoveStop
+};
 
+struct LogicMessage {
+	LogicMsgType type{};
+	Direction dir{};
+	int32 userId{};
+	int32 roomId{};
+	DirectX::XMFLOAT3 forward{};
+	float cameraPitch{};
 };
 
 class GameLogic {
 public:
 	GameLogic() : logicThread_(), running_(false), msgQueue_(),
-		rooms_(), logicTimer_(), accTime_(0.f) {}
-
+		rooms_(), idRoomMap_(), logicTimer_(), accTime_(0.f) {}
 
 	void start() {
 		running_ = true;
@@ -28,12 +41,17 @@ public:
 
 	void run();
 
+	void enqueueMessage(const LogicMessage& msg) {	msgQueue_.enqueue(msg); }
+	void processMessage();
+
 private:
 	std::thread logicThread_;
 	std::atomic_bool running_;
 
 	CCQueue<LogicMessage> msgQueue_;
 	std::vector<SPRoom> rooms_;
+	static const int32 maxRoomCount_;
+	std::unordered_map<int32, SPRoom> idRoomMap_;
 
 	Timer logicTimer_;
 	float accTime_;

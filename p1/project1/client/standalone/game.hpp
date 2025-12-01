@@ -56,11 +56,13 @@ private:
 	std::vector<Object> cubes_{};
 	std::shared_ptr<Object> player_{};
 	SkyboxObject skybox_{};
+
 	Camera camera_{};
 	mu::Radian cameraPitch_ = 0.f;
+	CameraMode cameraMode_ = CameraMode::ThirdPerson;
+
 	Light dirLight_{};
 	bool playerSpawned_ = false;
-	CameraMode cameraMode_ = CameraMode::ThirdPerson;
 
 	Billboard billboard_{};
 

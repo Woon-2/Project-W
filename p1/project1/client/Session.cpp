@@ -269,7 +269,12 @@ int32 PacketSession::onRecv( uint8* buffer, int32 len ) {
 
 		// 패킷 처리
 		onRecvPacket( &buffer[ recvLen ], header->size );
-		recvLen += sizeof( Packet );
+		if (header->size <= sizeof(Packet)) {
+			recvLen += sizeof(Packet);
+		}
+		else {
+			recvLen += header->size;
+		}
 	}
 	return recvLen;
 }

@@ -3,6 +3,7 @@
 #include "../global.hpp"
 #include "../ServerSession.hpp"
 #include "../SendBuffer.hpp"
+#include "../errorHandling.hpp"
 
 extern HWND ghWnd;
 extern RECT gClientRect;
@@ -32,48 +33,12 @@ Game::Game() {
 }
 
 void Game::setupStage() {
-	cubes_.resize( 2u );
-	for ( auto& plane : cubes_ ) {
-		plane.resize( 2u );
-		for ( auto& row : plane ) {
-			row.resize( 2u );
-		}
-	}
-
-	for ( std::size_t i = 0u; i < cubes_.size( ); ++i ) {
-		for ( std::size_t j = 0u; j < cubes_[ i ].size( ); ++j ) {
-			for ( std::size_t k = 0u; k < cubes_[ i ][ j ].size( ); ++k ) {
-				cubes_[ i ][ j ][ k ].setModel( assetManager_.modelCube() );
-				cubes_[ i ][ j ][ k ].setPos( mu::Vec3(
-					( static_cast<int>( k ) - static_cast<int>( cubes_.size( ) / 2 ) ) * 2.5f,
-					( static_cast<int>( j ) - static_cast<int>( cubes_.size( ) / 2 ) ) * 2.5f,
-					( static_cast<int>( i ) - static_cast<int>( cubes_.size( ) / 2 ) ) * 2.5f
-				) );
-				cubes_[ i ][ j ][ k ].setOmega( mu::Vec3( rand( -1.f, 1.f ), rand( -1.f, 1.f ), rand( -1.f, 1.f ) ) );
-				cubes_[ i ][ j ][ k ].setScale( 1.f );
-			}
-
-		}
-	}
-
-	for ( auto& plane : cubes_ ) {
-		for ( auto& row : plane ) {
-			for ( auto& cube : row ) {
-				cube.enableBVRendering( );
-			}
-		}
-	}
-
 	skybox_.setModel( assetManager_.modelCube( ) );
 	skybox_.setSkyboxMaterial( assetManager_.skyboxMaterial( ) );
 
 	player_ = std::make_shared<Object>();
-	player_->setPos(mu::Vec3(0.f, 0.f, 0.f));
-	player_->setModel( assetManager_.modelPlayer());
-	player_->setScale(1.f);
-	player_->enableBVRendering( );
 
-	dirLight_.setOrient( mu::NQuat( mu::Degree( 0.f ), mu::Degree( 120.f ), mu::Degree( 15.f ) ) );
+	dirLight_.setOrient( mu::NQuat( mu::Degree( 0.f ), mu::Degree( 160.f ), mu::Degree( 0.f ) ) );
 	dirLight_.color = mu::Vec3( 0.8f, 0.8f, 0.8f );
 	dirLight_.intensity = 2.f;
 	dirLight_.type = PBRPipeline::LightData::Type::DirectionalLight;
@@ -91,6 +56,50 @@ void Game::setupStage() {
 void Game::update(Milliseconds deltaTime) {
 	processInput(deltaTime);
 
+	// 서버로부터 받은 메시지 처리
+	const auto bulkSize = 10u;
+	auto messages = std::vector<Message>(bulkSize);
+
+	auto size = messageQueue.try_dequeue_bulk(messages.data(), bulkSize);
+	for (auto i = 0u; i < size; ++i) {
+		const auto& msg = messages[i];
+
+		switch (msg.type) {
+		case MsgType::SetupPlayer:
+			player_->setPos(msg.pos);
+			player_->setOrient(msg.orient);
+			player_->setScale(msg.scale);
+			player_->setModel(assetManager_.modelPlayer());
+			player_->enableBVRendering();
+			break;
+
+		case MsgType::SetupCube: {
+			auto cube = Object{};
+			cube.setId(msg.objectId);
+			cube.setMaterialSetIdx(msg.materialSetIdx);
+			cube.setPos(msg.pos);
+			cube.setOrient(msg.orient);
+			cube.setScale(msg.scale);
+			cube.setModel(assetManager_.modelCube());
+			cube.enableBVRendering();
+			cubes_.emplace_back(std::move(cube));
+			break;
+		}
+
+		case MsgType::PlayerMove: {
+			auto& player = idPlayerMap_[msg.objectId];
+
+			if (player == player_) {
+				player->setServerPos(msg.pos);
+			}
+			else {
+				player->setPos(msg.pos);
+			}
+			break;
+		}
+		}
+	}
+
 	// 물리량 갱신은 게임 갱신과 다르게 고정 주기로 수행한다.
 	// 이를 통해 너무 유동적인 delta time으로 인한 시뮬레이션의 불안정성과
 	// 물리 업데이트의 성능적 비용 문제를 해결한다.
@@ -106,15 +115,11 @@ void Game::update(Milliseconds deltaTime) {
 		// 물리 시뮬레이션의 대상이 되는 객체들을
 		// 한 곳에 모아 PhysicSystem 객체에 전달한다.
 		static std::vector<Object*> allObjects{};
-		for ( auto& plane : cubes_ ) {
-			for ( auto& row : plane ) {
-				for ( auto& cube : row ) {
-					allObjects.push_back( &cube );
-				}
-			}
-		}
-
-		allObjects.push_back( player_.get( ) );
+		allObjects.resize(cubes_.size() + 1);
+		std::ranges::transform(cubes_, allObjects.begin(),
+			[](Object& cube) { return &cube; }
+		);
+		allObjects[cubes_.size()] = player_.get();
 
 		while ( physicUpdateAcc_ >= physicUpdateInterval ) {
 			physicSystem_.step( allObjects, physicUpdateInterval );
@@ -130,14 +135,33 @@ void Game::update(Milliseconds deltaTime) {
 	// 게임 객체의 update 함수에 전달된다.
 	const auto tPhysicInterpolation = physicUpdateAcc_ / physicUpdateInterval;
 
-	for ( auto& plane : cubes_ ) {
-		for ( auto& row : plane ) {
-			for ( auto& cube : row ) {
-				cube.update( deltaTime, tPhysicInterpolation );
-			}
-		}
+	for (auto& cube : cubes_) {
+		cube.update(deltaTime, tPhysicInterpolation);
+	}
+	
+	// 플레이어 위치 예측
+	if (keyboardStateCurr_['W'] & 0x80) {
+		player_->setPos(
+			player_->pos() + player_->forward() * (0.1f * deltaTime.count() / 16.6667f)
+		);
+	}
+	if (keyboardStateCurr_['A'] & 0x80) {
+		player_->setPos(
+			player_->pos() - player_->right() * (0.1f * deltaTime.count() / 16.6667f)
+		);
+	}
+	if (keyboardStateCurr_['S'] & 0x80) {
+		player_->setPos(
+			player_->pos() - player_->forward() * (0.1f * deltaTime.count() / 16.6667f)
+		);
+	}
+	if (keyboardStateCurr_['D'] & 0x80) {
+		player_->setPos(
+			player_->pos() + player_->right() * (0.1f * deltaTime.count() / 16.6667f)
+		);
 	}
 
+	// 게임 객체들 갱신
 	player_->update(deltaTime, tPhysicInterpolation );
 	objectsMtx_.lock( );
 	for ( auto& obj : otherPlayers_ ) {
@@ -149,15 +173,12 @@ void Game::update(Milliseconds deltaTime) {
 
 	camera_.update();
 	dirLight_.update(deltaTime);
+	dirLight_.updateShadowAuxDirectional(camera_.eye(), 100.f, -10.f, 10.f, -10.f, 10.f, 50.f, 200.f);
 }
 
 void Game::render() {
-	for ( auto& plane : cubes_ ) {
-		for ( auto& row : plane ) {
-			for ( auto& cube : row ) {
-				cube.render( gfx_ );
-			}
-		}
+	for (auto& cube : cubes_) {
+		cube.render(gfx_);
 	}
 
 	player_->render(gfx_);
@@ -182,105 +203,215 @@ void Game::render() {
 }
 
 // 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
-LRESULT Game::receiveWndMsg( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam ) {
-	return DefWindowProcA( hWnd, msg, wParam, lParam );
+LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+	switch (msg) {
+		// WM_INPUT 메시지
+		// 마우스 움직임의 경우 WM_MOUSEMOVE 메시지 대신 이 메시지로 처리하는 것이
+		// 정확하고 안정적인 처리가 가능하다.
+		// 윈도우 경계로부터 영향을 받지 않고, 가상 커서 속도/가속도 설정을 무시하며,
+		// Alt-Tab / 창 이동 후에도 상태 복구가 명확하다.
+		// (DPI 스케일링 환경에서도 입력이 왜곡되지 않는다고 한다.)
+	case WM_INPUT: {
+		static auto sRawInputBuffer = std::vector<std::uint8_t>(256);
+		UINT rawInputSize{};
+		UINT rawInputResult{};
+
+		// 입력 구조체 크기 수신
+		rawInputResult = GetRawInputData(reinterpret_cast<HRAWINPUT>(lParam),
+			RID_INPUT, nullptr, &rawInputSize, sizeof(RAWINPUTHEADER)
+		);
+		DISPLAY_ERROR_GLE(rawInputResult != -1, true);
+
+		if (rawInputSize > sRawInputBuffer.size()) {
+			sRawInputBuffer.resize(rawInputSize);
+		}
+
+		// 입력 구조체 내용 수신
+		rawInputResult = GetRawInputData(reinterpret_cast<HRAWINPUT>(lParam),
+			RID_INPUT, sRawInputBuffer.data(), &rawInputSize, sizeof(RAWINPUTHEADER)
+		);
+		DISPLAY_ERROR_GLE(rawInputResult == rawInputSize, true);
+
+		auto ri = reinterpret_cast<const RAWINPUT*>(sRawInputBuffer.data());
+		if (ri->header.dwType == RIM_TYPEMOUSE) {
+			// 마우스에 대한 입력 내용이 상대 좌표여야 한다.
+			DISPLAY_ERROR_STR(!(ri->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE),
+				"[Input Error] Game::receiveWndMsg: 마우스 입력 장치가 게임과 호환되지 않습니다.\n"
+				"RAWMOUSE의 플래그 중 MOUSE_MOVE_ABSOLUTE가 활성화되어있습니다.",
+				true
+			);
+
+			// 마우스 이동량 기록
+			mouseDeltaX_ += ri->data.mouse.lLastX;
+			mouseDeltaY_ += ri->data.mouse.lLastY;
+		}
+		return 0;
+	}
+
+	case WM_SIZE:
+		return DefWindowProcA(hWnd, msg, wParam, lParam);
+
+	default:
+		return DefWindowProcA(hWnd, msg, wParam, lParam);
+	}
 }
 
-void Game::processInput(Milliseconds deltaTime) {
+// prev, 이전에 눌렸는지 판단한다.
+void Game::updateMoveState(int vk, Direction dir, DirectX::XMFLOAT3 forward, float cameraPitch) {
+	auto downPrev = keyboardStatePrev_[vk] & 0x80;
+	auto downCurr = keyboardStateCurr_[vk] & 0x80;
+
+	if (downCurr) {
+		auto packet = Packet{
+			.header = {
+				.size = sizeof(PacketHeader) + sizeof(CSMoveStartPacket),
+				.id = static_cast<std::uint16_t>(PacketType::csMoveStart)
+			},
+			.csMoveStart = {
+				.dir = dir,
+				.forward = forward,
+				.cameraPitch = cameraPitch
+			}
+		};
+
+		i32t packetSize = sizeof(Packet);
+		auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+		sendBuffer->copyData(&packet, packetSize);
+		serverSession_->send(sendBuffer);
+	}
+	if(!downCurr && downPrev) {
+		auto packet = Packet{
+			.header = {
+				.size = sizeof(PacketHeader) + sizeof(CSMoveStopPacket),
+				.id = static_cast<std::uint16_t>(PacketType::csMoveStop)
+			},
+			.csMoveStop = {
+				.dir = dir
+			}
+		};
+
+		i32t packetSize = sizeof(Packet);
+		auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+		sendBuffer->copyData(&packet, packetSize);
+		serverSession_->send(sendBuffer);
+	}
+}
+
+void Game::sendEnterRoomPacket(i32t roomId) {
 	auto packet = Packet{
 		.header = {
-			.size = sizeof( PacketHeader ) + sizeof( CSMovePacket ),
-			.id = static_cast<std::uint16_t>( PacketType::csMove )
+			.size = sizeof(PacketHeader) + sizeof(CSFindRoomPacket),
+			.id = static_cast<std::uint16_t>(PacketType::csFindRoom)
 		},
-		.csMove = {
-			.dir = Direction::none
+		.csFindRoom = {
+			.roomId = roomId
 		}
 	};
 
-	bool readyToSend = false;
+	i32t packetSize = sizeof(Packet);
+	auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+	sendBuffer->copyData(&packet, packetSize);
+	serverSession_->send(sendBuffer);
+	inRoom_ = true;
+}
 
-	if ( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState('W') & 0x8000 ) {
-		packet.csMove.dir = Direction::w;
-		readyToSend = true;
-	}
-	if ( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState('A') & 0x8000 ) {
-		packet.csMove.dir = Direction::a;
-		readyToSend = true;
-	}
-	if ( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState('S') & 0x8000 ) {
-		packet.csMove.dir = Direction::s;
-		readyToSend = true;
-	}
-	if ( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState('D') & 0x8000 ) {
-		packet.csMove.dir = Direction::d;
-		readyToSend = true;
-	}
-	/*if ( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState( 'I' ) & 0x8000 ) {
-		packet = Packet{
-			.header = {
-				.size = sizeof( PacketHeader ) + sizeof( CSEnterPacket ),
-				.id = static_cast<std::uint16_t>( PacketType::csEnter )
-			}
-		};
-		readyToSend = true;
-	}*/
-	if ( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState( '1' ) & 0x8000 ) {
-		packet = Packet{
-			.header = {
-				.size = sizeof( PacketHeader ) + sizeof( CSFindRoomPacket ),
-				.id = static_cast<std::uint16_t>( PacketType::csFindRoom )
-			},
-			.csFindRoom = {
-				.roomId = 1
-			}
-		};
-		readyToSend = true;
-	}
-	if( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState( '2' ) & 0x8000 ) {
-		packet = Packet{
-			.header = {
-				.size = sizeof( PacketHeader ) + sizeof( CSFindRoomPacket ),
-				.id = static_cast<std::uint16_t>( PacketType::csFindRoom )
-			},
-			.csFindRoom = {
-				.roomId = 2
-			}
-		};
-		readyToSend = true;
-	}
-	if( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState( '3' ) & 0x8000 ) {
-		packet = Packet{
-			.header = {
-				.size = sizeof( PacketHeader ) + sizeof( CSFindRoomPacket ),
-				.id = static_cast<std::uint16_t>( PacketType::csFindRoom )
-			},
-			.csFindRoom = {
-				.roomId = 3
-			}
-		};
-		readyToSend = true;
-	}
-	if( GetForegroundWindow( ) == ghWnd && GetAsyncKeyState( '4' ) & 0x8000 ) {
-		packet = Packet{
-			.header = {
-				.size = sizeof( PacketHeader ) + sizeof( CSFindRoomPacket ),
-				.id = static_cast<std::uint16_t>( PacketType::csFindRoom )
-			},
-			.csFindRoom = {
-				.roomId = 4
-			}
-		};
-		readyToSend = true;
-	}
-
-	if( !readyToSend ) {
+void Game::processInput(Milliseconds deltaTime) {
+	if (GetForegroundWindow() != ghWnd) {
 		return;
 	}
 
-	i32t packetSize = sizeof( Packet );
-	auto buffer = std::make_shared<SendBuffer>( packetSize );
-	buffer->copyData( &packet, packetSize );
-	serverSession_->send( buffer );
+	keyboardStatePrev_ = keyboardStateCurr_;
+	DISPLAY_ERROR_GLE( GetKeyboardState(keyboardStateCurr_.data()), false );
+
+	// 플레이어 움직임 처리
+	if (inRoom_) {
+		// 1인칭 카메라 시점 설정
+		if (keyboardStateCurr_['Q'] & 0x80) {
+			camera_.setOffsetFromTargetPreRotation(mu::NQuat{});
+			camera_.setOffsetFromTarget(mu::Vec3(0.f, 2.f, 0.5f));
+			camera_.setOffsetTargetPivot(mu::Vec3(0.f, 2.f, 8.f));
+			cameraMode_ = CameraMode::FirstPerson;
+		}
+		// 3인칭 카메라 시점 설정
+		if (keyboardStateCurr_['E'] & 0x80) {
+			camera_.setXXPreRotation(mu::NQuat{});
+			camera_.setOffsetFromTarget(mu::Vec3(0.f, 1.8f, -2.5f));
+			camera_.setOffsetTargetPivot(mu::Vec3(0.f, 1.f, 0.f));
+			cameraMode_ = CameraMode::ThirdPerson;
+		}
+
+		// 카메라 움직임 처리
+		const auto mouseSensitivity = mu::pi * 2.f;
+
+		switch (cameraMode_) {
+		case CameraMode::ThirdPerson: {
+			auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f),
+				mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left))
+			);
+			
+			player_->setOrient(player_->orient() * yaw);
+
+			cameraPitch_ = std::clamp(
+				static_cast<float>(cameraPitch_) + mouseDeltaY_ * mouseSensitivity / static_cast<float>(gClientRect.bottom - gClientRect.top),
+				-mu::pi * 0.16f,
+				mu::pi * 0.3f
+			);
+
+			camera_.setOffsetFromTargetPreRotation(mu::NQuat(mu::Radian(0.f), cameraPitch_, mu::Radian(0.f)));
+
+			mouseDeltaX_ = 0;
+			mouseDeltaY_ = 0;
+			break;
+		}
+		case CameraMode::FirstPerson: {
+			auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f),
+				mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left))
+			);
+
+			player_->setOrient(player_->orient() * yaw);
+
+			cameraPitch_ = std::clamp(
+				static_cast<float>(cameraPitch_) + mouseDeltaY_ * mouseSensitivity / static_cast<float>(gClientRect.bottom - gClientRect.top),
+				-mu::pi * 0.16f,
+				mu::pi * 0.3f
+			);
+
+			camera_.setXXPreRotation(mu::NQuat(mu::Radian(0.f), cameraPitch_, mu::Radian(0.f)));
+
+			mouseDeltaX_ = 0;
+			mouseDeltaY_ = 0;
+			break;
+		}
+		}
+
+		// 움직임
+		const auto& forward = player_->forward().getXmf();
+		updateMoveState('W', Direction::w, forward, cameraPitch_);
+		updateMoveState('A', Direction::a, forward, cameraPitch_);
+		updateMoveState('S', Direction::s, forward, cameraPitch_);
+		updateMoveState('D', Direction::d, forward, cameraPitch_);
+
+		if (keyboardStateCurr_[VK_LBUTTON] & 0x80) {
+
+		}
+	}
+	else {
+		// 방에 들어가지 않은 상태일 때
+		// 방 입장 키 처리
+
+		if (keyboardStateCurr_['1'] & 0x80) {
+			sendEnterRoomPacket(1);
+		}
+		if (keyboardStateCurr_['2'] & 0x80) {
+			sendEnterRoomPacket(2);
+		}
+		if (keyboardStateCurr_['3'] & 0x80) {
+			sendEnterRoomPacket(3);
+		}
+		if (keyboardStateCurr_['4'] & 0x80) {
+			sendEnterRoomPacket(4);
+		}
+	}
 }
 
 }	// namespace Online
