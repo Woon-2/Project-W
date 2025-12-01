@@ -73,6 +73,10 @@ void Game::setupStage() {
 	billboard_.setTexture( assetManager_.billBoard0() );
 
 	slimeSprite_.setTexture( assetManager_.slimeSprites() );
+
+	playerHpUIs_.resize( 2u );
+	playerHpUIs_[0].setTexture( assetManager_.playerHpLine() );
+	playerHpUIs_[1].setTexture( assetManager_.playerHpFrame() );
 }
 
 void Game::importNode(std::ifstream& ifs) {
@@ -197,10 +201,20 @@ void Game::render() {
 	// billboard_.render( gfx_ );
 	slimeSprite_.render( gfx_); 
 
+	for ( auto& hpUI : playerHpUIs_ ) {
+		hpUI.render( gfx_ );
+	}
+
 	auto frameData = PBRPipeline::FrameData{
 		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
 	};
 	gfx_.addFrameData( frameData );
+
+	auto frameData1 = UIPipeline::FrameData{
+		.screenWidth = static_cast<float>( gClientRect.right - gClientRect.left ),
+		.screenHeight = static_cast<float>( gClientRect.bottom - gClientRect.top )
+	};
+	gfx_.addFrameData( frameData1 );
 
 	gfx_.render();
 }

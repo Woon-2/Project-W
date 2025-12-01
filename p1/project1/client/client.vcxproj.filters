@@ -303,6 +303,12 @@
     <ClInclude Include="spriteAnimation.hpp">
       <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
     </ClInclude>
+    <ClInclude Include="uiPipeline.hpp">
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="basicPlayerHpUI.hpp">
+      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -419,6 +425,12 @@
     <ClCompile Include="spriteAnimation.cpp">
       <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="uiPipeline.cpp">
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="basicPlayerHPUI.cpp">
+      <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="sample.hlsl">
@@ -440,6 +452,9 @@
       <Filter>셰이더 파일</Filter>
     </FxCompile>
     <FxCompile Include="shadowMap.hlsl">
+      <Filter>셰이더 파일</Filter>
+    </FxCompile>
+    <FxCompile Include="ui.hlsl">
       <Filter>셰이더 파일</Filter>
     </FxCompile>
   </ItemGroup>

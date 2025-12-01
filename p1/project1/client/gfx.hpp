@@ -11,6 +11,7 @@
 #include "billboardPipeline.hpp"
 #include "skyboxPipeline.hpp"
 #include "BVPipeline.hpp"
+#include "uiPipeline.hpp"
 #include "spriteAnimation.hpp"
 
 
@@ -59,6 +60,8 @@ struct RequestSkyboxLoad {
 };
 
 struct RequestTextureLoad {
+	std::string name;
+	std::filesystem::path texturePath;
 	Texture* pDest;
 };
 
@@ -130,6 +133,10 @@ public:
 	void addDrawEvent(const BVPipeline::DrawEvent& drawEvent);
 	// 카메라 데이터를 입력한다.
 	void addCameraData(const BVPipeline::CameraData& cameraData);
+	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+	void addDrawEvent( const UIPipeline::DrawEvent& drawEvent );
+	// 프레임 데이터를 입력한다.
+	void addFrameData( const UIPipeline::FrameData& frameData );
 
 	void addRequestModelLoad(const RequestModelLoad& request);
 	void addRequestSkyboxLoad(const RequestSkyboxLoad& request);
@@ -220,6 +227,11 @@ private:
 	BillboardPipeline::Resources resourcesBillboardPipeline_{};
 	BillboardPipeline::CameraData cameraDataBillboardPipeline_{};
 	BillboardPipeline::FrameData frameDataBillboardPipeline_{};
+	// UI Pipeline
+	std::vector<UIPipeline::DrawEvent> drawEventsUIPipeline_{};
+	UIPipeline::Resources resourcesUIPipeline_{};
+	UIPipeline::FrameData frameDataUIPipeline_{};
+
 
 	std::map<std::string, Fence> fences_{};
 

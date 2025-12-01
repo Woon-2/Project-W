@@ -23,6 +23,7 @@ ComPtr<ID3D12PipelineState> createPBRShader(ID3D12Device* device, ID3D12RootSign
 ComPtr<ID3D12PipelineState> createBillboardShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSignature* rootSig );
 
 // 루트 파라미터 접근을 이해하기 쉽도록 하기 위해 만든 클래스
 // 루트 파라미터에 이름을 지어 그 인덱스 및 D3D12_ROOT_PARAMETER 구조체와 매핑한다.
@@ -212,6 +213,34 @@ struct PerDrawcallData {
 	u32t firstInstanceIdx;
 	XMUINT3 padding;
 };
-}	// namespace SkyboxShader
+}	// namespace BoundingVolumeShader
+
+namespace UIShader {
+	struct Material {
+		BindlessIndex idxAlbedo;
+		BindlessIndex idxRoughness;
+		BindlessIndex idxMetallic;
+
+		XMFLOAT4 cAlbedo;
+		float cRoughness;
+		float cMetallic;
+	};
+
+	struct PerInstanceData {
+		XMFLOAT4X4 world;
+	};
+
+	struct PerDrawcallData {
+		Material material;
+		u32t firstInstanceIdx;
+	};
+
+	struct PerFrameData {
+		float screenWidth;
+		float screenHeight;
+		XMFLOAT2 padding;
+	};
+
+} // namespace UIShader
 
 #endif	// __shader_HPP

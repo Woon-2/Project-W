@@ -232,6 +232,7 @@ void GFX::init() {
 	shaders_.try_emplace("BillboardShader", createBillboardShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("SkyboxShader", createSkyboxShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("BVShader", createBVShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace( "UIShader", createUIShader( device_.Get(), defaultRootSig.get() ) );
 
 	rootSigs_.try_emplace("DefaultRootSignature", std::make_shared<DefaultRootSig>(std::move(defaultRootSig)));
 
@@ -392,6 +393,17 @@ void GFX::createSwapChain() {
 	resourcesBillboardPipeline_.perFrameData.init(
 		device_.Get(), sizeof( BillboardShader::PerFrameData ), backBuffers_.size(), "Billboard_PerFrameData"
 	);
+	// UI Pipeline ----
+	resourcesUIPipeline_.perInstanceData.init(
+		device_.Get(), sizeof( UIShader::PerInstanceData ) * 1000u, backBuffers_.size(), "UI_PerInstanceData"
+	);
+	resourcesUIPipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof( UIShader::PerDrawcallData ), 1000u, backBuffers_.size(), "UI_PerDrawcallData"
+	);
+	resourcesUIPipeline_.perFrameData.init(
+		device_.Get(), sizeof( UIShader::PerFrameData ), backBuffers_.size(), "UI_PerFrameData"
+	);
+
 
 
 	// 프레임 펜스 생성
@@ -455,6 +467,16 @@ void GFX::addFrameData( const BillboardPipeline::FrameData& frameData ) {
 	frameDataBillboardPipeline_ = frameData;
 }
 
+// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+void GFX::addDrawEvent(const UIPipeline::DrawEvent& drawEvent) {
+	drawEventsUIPipeline_.push_back(drawEvent);
+}
+
+// 프레임 데이터를 입력한다.
+void GFX::addFrameData(const UIPipeline::FrameData& frameData) {
+	frameDataUIPipeline_ = frameData;
+}
+
 void GFX::addRequestModelLoad(const RequestModelLoad& request) {
 	requestsModelLoad_.push_back(request);
 }
@@ -516,6 +538,7 @@ void GFX::loadAssets() {
 	DISPLAY_ERROR_DX_VOID(cmdList->Reset(cmdAlloc.Get(), nullptr), false);
 	
 	BillboardPipeline::initStaticPointMesh( device_.Get(), cmdList.Get(), fence );
+	UIPipeline::initStaticQuadMesh( device_.Get(), cmdList.Get(), fence );
 	BVPipeline::initStaticModels(device_.Get(), cmdList.Get(), fence);
 	PBRPipeline::initShadowTextures(device_.Get(), 2000u, 2000u, backBuffers_.size(), srvTexPool_, dsvPool_);
 
@@ -534,20 +557,20 @@ void GFX::loadAssets() {
 
 	dumpLog();
 
-	if ( !texHashMap_.contains( "PointMesh_Albedo" ) ) {
-		Texture::Type type{};
-		auto [pPair, _] = texHashMap_.try_emplace( "PointMesh_Albedo", loadTexture( device_.Get(), cmdList.Get(), "PointMesh_Albedo.dds", fence, type));
-		createSRV( device_.Get(), pPair->second, srvTexPool_ );
-		pPair->second.idxSrv.idxSampler = etoi( Samplers::TrilinearWrap );
-	}
-	
+	// load textures
 	for ( auto& request : requestsTextureLoad_ ) {
-		*request.pDest = texHashMap_.at( "PointMesh_Albedo" );
+		if ( !texHashMap_.contains( request.name ) ) {
+			Texture::Type type{};
+			auto [pPair, _] = texHashMap_.try_emplace( request.name, loadTexture( device_.Get(), cmdList.Get(), request.texturePath, fence, type ) );
+			createSRV( device_.Get(), pPair->second, srvTexPool_ );
+			pPair->second.idxSrv.idxSampler = etoi( Samplers::TrilinearWrap );
+			*request.pDest = pPair->second;
+		}
 	}
 
 	dumpLog();
 
-	// load slime textures
+	// load sprites
 	for ( auto& request : requestsSpritesLoad_ ) {
 		*request.pDest = loadSpritesFromFile( request.spritesPath, device_.Get(), cmdList.Get(), texAnimHashMap_, srvTexPool_, fence );
 	}
@@ -720,6 +743,20 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	// UI Pipeline의 Dispatch
+	auto uiPipelineDispatcher = UIPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at("DefaultRootSignature"), shaders_.at("UIShader"),
+		cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesUIPipeline_, threadPool_,
+		&cmdListPool_, std::move(drawEventsUIPipeline_),
+		frameDataUIPipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
 	// threadPool_이 활성화된 경우엔 멀티스레드로 처리한다.
 	if (!threadPool_) {
 		samplePipelineDispatcher.updateGPUDataSingleThreaded();
@@ -737,6 +774,10 @@ void GFX::render() {
 
 		billboardPipelineDispatcher.updateGPUDataSingleThreaded();
 		billboardPipelineDispatcher.drawSingleThreaded();
+		dumpLog();
+
+		uiPipelineDispatcher.updateGPUDataSingleThreaded();
+		uiPipelineDispatcher.drawSingleThreaded();
 		dumpLog();
 	}
 	else {
@@ -756,6 +797,10 @@ void GFX::render() {
 		billboardPipelineDispatcher.updateGPUDataMultiThreaded();
 		billboardPipelineDispatcher.drawMultiThreaded();
 		dumpLog();
+
+		uiPipelineDispatcher.updateGPUDataMultiThreaded();
+		uiPipelineDispatcher.drawMultiThreaded();
+
 	}
 
 	// Skybox Pipeline의 Dispatch
