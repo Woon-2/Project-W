@@ -376,6 +376,28 @@ Mesh buildPointMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, s
 	return mesh;
 }
 
+// 바이너리 파일의 Bone Socket Type을 나타내는 문자열로부터
+// 실제 열거형 값을 얻어낸다.
+Bone::SocketType convertStrToBoneSocketType(const std::string& boneSocketTypeStr) {
+    if (boneSocketTypeStr == "None") {
+        return Bone::SocketType::None;
+    }
+    else if (boneSocketTypeStr == "RightHand") {
+        return Bone::SocketType::RightHand;
+    }
+    else if (boneSocketTypeStr == "LeftHand") {
+        return Bone::SocketType::LeftHand;
+    }
+
+    DISPLAY_ERROR_STR( false, "[GFX Error] convertStrToBoneSocketType: 알 수 없는 BoneSocketType 값 \""s
+        + boneSocketTypeStr + "\"을 읽었습니다.\n",
+        false
+    );
+    return Bone::SocketType::None;
+}
+
+// 바이너리 파일의 Skeleton Enumeration을 나타내는 문자열로부터
+// 실제 열거형 값을 얻어낸다.
 SkeletonEnumeration convertStrToSkeletonEnum(const std::string& skeletonEnumerationStr) {
     if (skeletonEnumerationStr == "Humanoid") {
         return SkeletonEnumeration::Humanoid;
@@ -1121,6 +1143,8 @@ void importBoundingVolumes(std::ifstream& ifs, Model& model) {
     readTailTag(ifs, "BoundingVolumes");
 }
 
+// 모델의 본을 읽어들인다.
+// 대상 본의 임포트 이후, 자식 본들을 재귀적으로 임포트한다.
 [[maybe_unused]] std::size_t importBone(
     std::ifstream& ifs, Model& model, i32t& boneIdx
 ) {
@@ -1136,6 +1160,7 @@ void importBoundingVolumes(std::ifstream& ifs, Model& model) {
     bone.boneIdx = boneIdx++;
 
     const auto socketTypeStr = readText(ifs, "SocketType");
+    bone.socketType = convertStrToBoneSocketType(socketTypeStr);
 
     readHeadTag(ifs, "Children");
 
@@ -1156,6 +1181,9 @@ void importBoundingVolumes(std::ifstream& ifs, Model& model) {
     return bone.boneIdx;
 }
 
+// 모델의 스켈레톤을 읽어들인다.
+// 추출하는 과정에서 무조건 0번 본이 루트 본이므로,
+// 0번 본부터 본 트리를 순회하며 모든 본을 읽어들인다.
 void importSkeleton(std::ifstream& ifs, Model& model) {
     readHeadTag(ifs, "Skeleton");
 
@@ -1179,6 +1207,7 @@ void importSkeleton(std::ifstream& ifs, Model& model) {
     gSharedLog << "[Resource Load] 스켈레톤 " << skeleton.name << "구축 완료\n";
 }
 
+// 해당 모델의 socket으로부터의 offset들을 읽는다.
 void importSocketOffsets(std::ifstream& ifs, Model& model) {
     readHeadTag(ifs, "SocketOffsets");
 
@@ -1195,6 +1224,8 @@ void importSocketOffsets(std::ifstream& ifs, Model& model) {
     readTailTag(ifs, "SocketOffsets");
 }
 
+// 모델의 아이템 정보를 읽어들인다.
+// 현재는 socket으로부터의 offset들을 읽는다.
 void importItemData(std::ifstream& ifs, Model& model) {
     readHeadTag(ifs, "ItemData");
     importSocketOffsets(ifs, model);
@@ -1205,6 +1236,8 @@ void importItemData(std::ifstream& ifs, Model& model) {
 // 메시들을 생성하며 각 메시들의 버텍스 버퍼와 서브메시, 그리고 재질 집합을 생성한다.
 // 그 과정에서 필요한 텍스처들이 texHashMap에 존재하지 않는다면, 로드한다.
 // (로드되는 텍스처의 경로들은 바이너리 파일 내에 적혀있다.)
+// 모델에 스켈레톤이 있는 경우, 스켈레톤 정보도 로드한다.
+// 모델에 아이템 정보가 있는 경우, 아이템 정보도 로드한다.
 // * 수정 시 주의사항: 유니티의 추출 스크립트와 구조가 대칭이어야 한다.
 Model loadModelFromFile( const std::filesystem::path& path,
 	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
@@ -1220,7 +1253,10 @@ Model loadModelFromFile( const std::filesystem::path& path,
     }
 
     ret.name = readText(ifs, "ModelName");
+
+    // 텍스처의 물리적 로드는 여기서 이루어진다.
     importTextureMapping(ifs, device, cmdList, texHashMap, texPool, fenceToAssociate);
+
     importGeometry(ifs, device, cmdList, texHashMap, fenceToAssociate, ret);
     importBoundingVolumes(ifs, ret);
 
@@ -1228,6 +1264,10 @@ Model loadModelFromFile( const std::filesystem::path& path,
     if (hasSkeleton) {
         importSkeleton(ifs, ret);
     }
+
+    // 해당 모델이 아이템으로 쓰일 수 있는 모델이라면,
+    // 아이템 정보를 추출한다.
+    // (소켓에 장착 가능할 경우 소켓으로부터의 오프셋 등)
     const auto hasWeaponInfo = static_cast<bool>(readInteger(ifs, "HasWeaponInfo"));
     if (hasWeaponInfo) {
         importItemData(ifs, ret);

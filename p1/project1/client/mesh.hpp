@@ -98,12 +98,24 @@ struct Skeleton;
 // 드레스 공간에 있는 본을 Bone::toLocal 멤버를 통해 로컬 공간으로 변환한 뒤
 // 프레임 변환을 적용해야 올바른 변환이 출력된다.
 struct Bone {
+	enum class SocketType {
+		None,
+		RightHand,
+		LeftHand,
+		SIZE
+	};
+
 	mu::Mat4x4 toLocal;	// 드레스 공간에서 로컬 공간으로의 변환
 	mu::Mat4x4 toParent;	// 로컬 공간에서 부모 로컬 공간으로의 변환 
 	std::string name;
 	std::vector<Bone*> children;	// 이 본을 소유한 Skeleton::bones에 담긴 자식 본들을 가리킨다.
 	i32t boneIdx;	// 이 본을 소유한 Skeleton::bones에서 이 본의 인덱스
+	SocketType socketType;	// 해당 본이 소켓이 아니라면 None, 소켓이라면 소켓 타입
 };
+
+// 바이너리 파일의 Bone Socket Type을 나타내는 문자열로부터
+// 실제 열거형 값을 얻어낸다.
+Bone::SocketType convertStrToBoneSocketType(const std::string& boneSocketTypeStr);
 
 // 스켈레톤의 구조를 나타내는 열거형,
 // 애니메이션 클립이 대상으로 하는 스켈레톤 구조와
@@ -127,6 +139,8 @@ struct Skeleton {
 	SkeletonEnumeration skeletonEnumeration;
 };
 
+// 바이너리 파일의 Skeleton Enumeration을 나타내는 문자열로부터
+// 실제 열거형 값을 얻어낸다.
 SkeletonEnumeration convertStrToSkeletonEnum(const std::string& skeletonEnumerationStr);
 
 // Model 구조체에서 메시와 드레스 공간 변환을 함께 저장하기 위해 쓰인다.
@@ -147,9 +161,11 @@ struct Model {
 };
 
 // 바이너리 파일로부터 모델을 읽어온다.
-// 메시들을 생성하며 각 메시들의 버텍스 버퍼와 서브메시(인덱스버퍼, 재질)을 생성한다.
+// 메시들을 생성하며 각 메시들의 버텍스 버퍼와 서브메시, 그리고 재질 집합을 생성한다.
 // 그 과정에서 필요한 텍스처들이 texHashMap에 존재하지 않는다면, 로드한다.
 // (로드되는 텍스처의 경로들은 바이너리 파일 내에 적혀있다.)
+// 모델에 스켈레톤이 있는 경우, 스켈레톤 정보도 로드한다.
+// 모델에 아이템 정보가 있는 경우, 아이템 정보도 로드한다.
 // * 수정 시 주의사항: 유니티의 추출 스크립트와 구조가 대칭이어야 한다.
 Model loadModelFromFile( const std::filesystem::path& path,
 	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,

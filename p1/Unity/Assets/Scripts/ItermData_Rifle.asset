@@ -12,4 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 056938891630610479b7980e39b571ed, type: 3}
   m_Name: ItermData_Rifle
   m_EditorClassIdentifier: 
-  socketOffsets: []
+  socketOffsets:
+  - socketType: 1
+    translation: {x: 0.136, y: 0.287, z: 0.017}
+    rotation: {x: 86.126, y: -80.268, z: 5.067}
+    scale: {x: 1, y: 1, z: 1}
