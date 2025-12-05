@@ -590,7 +590,7 @@ ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSign
 		// 래스터라이저 설정
 		.RasterizerState = D3D12_RASTERIZER_DESC{
 			.FillMode = D3D12_FILL_MODE_SOLID,
-			.CullMode = D3D12_CULL_MODE_BACK,
+			.CullMode = D3D12_CULL_MODE_NONE,
 			.FrontCounterClockwise = false,
 			.DepthBias = 0,
 			.DepthBiasClamp = 0.f,
@@ -602,7 +602,7 @@ ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSign
 		},
 		// 깊이 스텐실 설정
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
-			.DepthEnable = true,
+			.DepthEnable = false,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
 			.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
 			.StencilEnable = false,
@@ -613,7 +613,7 @@ ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSign
 		},
 		.InputLayout = inputLayoutDesc,
 		// 프리미티브 토폴로지 설정
-		.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT,
+		.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
 		.SampleDesc = DXGI_SAMPLE_DESC{
 			.Count = 1u, .Quality = 0u
 		},
@@ -623,9 +623,9 @@ ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSign
 
 	// 렌더 타겟 관련 설정
 	psoDesc.NumRenderTargets = 1u;
-	psoDesc.BlendState.RenderTarget[0].BlendEnable = false;
-	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
-	psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
+	psoDesc.BlendState.RenderTarget[0].BlendEnable = true;
+	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+	psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
 	psoDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
 	psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
 	psoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;

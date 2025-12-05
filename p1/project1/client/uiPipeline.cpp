@@ -15,10 +15,10 @@ namespace UIPipeline {
 
 	void initStaticQuadMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, Fence& fenceToAssociate ) {
 		static const auto positions = std::vector<XMFLOAT3>{
-			XMFLOAT3( -0.5f, 0.5f, 0.1f ),
-			XMFLOAT3( 0.5f, 0.5f, 0.1f ),
-			XMFLOAT3( 0.5f, -0.5f, 0.1f ),
-			XMFLOAT3( -0.5f, -0.5f, 0.1f )
+			XMFLOAT3( -1.0f, 1.0f, 0.0f ),
+			XMFLOAT3( 1.0f, 1.0f, 0.0f ),
+			XMFLOAT3( 1.0f, -1.0f, 0.0f ),
+			XMFLOAT3( -1.0f, -1.0f, 0.0f )
 		};
 
 		static const auto uv = std::vector<XMFLOAT2>{
@@ -43,9 +43,9 @@ namespace UIPipeline {
 			D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
 		);
 
-		auto vbUv = createBufferResource( device, nullptr, uv.size() * sizeof( float ), BufferCreationType::VertexBuffer );
+		auto vbUv = createBufferResource( device, nullptr, uv.size() * sizeof( XMFLOAT2 ), BufferCreationType::VertexBuffer );
 		setD3DName( vbUv.Get(), "QuadMesh_VB_Uv" );
-		auto vbUvu = createBufferResource( device, uv.data(), uv.size() * sizeof( float ), BufferCreationType::UploadBuffer );
+		auto vbUvu = createBufferResource( device, uv.data(), uv.size() * sizeof( XMFLOAT2 ), BufferCreationType::UploadBuffer );
 		setD3DName( vbUvu.Get(), "QuadMesh_VB_Uv_Upload" );
 
 		copyResource( cmdList, vbUvu.Get(), vbUv.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
@@ -72,8 +72,8 @@ namespace UIPipeline {
 
 		Detail::staticVBViewQuads.emplace_back(
 			/* .BufferLocation = */ vbUv->GetGPUVirtualAddress(),
-			/* .SizeInBytes = */ static_cast<UINT>(uv.size() * sizeof( float )),
-			/* .StrideInBytes = */ static_cast<UINT>(sizeof( float ))
+			/* .SizeInBytes = */ static_cast<UINT>(uv.size() * sizeof( XMFLOAT2 )),
+			/* .StrideInBytes = */ static_cast<UINT>(sizeof( XMFLOAT2 ))
 		);
 
 		// SubMesh 구성
@@ -287,7 +287,7 @@ namespace UIPipeline {
 		pSamPool_->bind( cmdList, rootParamIdxSamPool_ );
 		pCmpSamPool_->bind( cmdList, rootParamIdxCmpSamPool_ );
 
-		DISPLAY_ERROR_DX_VOID( cmdList->IASetPrimitiveTopology( D3D_PRIMITIVE_TOPOLOGY_POINTLIST ), false );
+		DISPLAY_ERROR_DX_VOID( cmdList->IASetPrimitiveTopology( D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST ), false );
 
 		// 바인드해야 하는 GPU 데이터는 다음 세 종류다. (셰이더 참고)
 		// - PerInstanceData
@@ -511,7 +511,7 @@ namespace UIPipeline {
 			pSamPool_->bind( threadCmdList, rootParamIdxSamPool_ );
 			pCmpSamPool_->bind( threadCmdList, rootParamIdxCmpSamPool_ );
 
-			DISPLAY_ERROR_DX_VOID( threadCmdList->IASetPrimitiveTopology( D3D_PRIMITIVE_TOPOLOGY_POINTLIST ), false );
+			DISPLAY_ERROR_DX_VOID( threadCmdList->IASetPrimitiveTopology( D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST ), false );
 
 			// 바인드해야 하는 GPU 데이터는 다음 두 종류다. (셰이더 참고)
 			// - PerInstanceData

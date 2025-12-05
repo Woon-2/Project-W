@@ -775,10 +775,6 @@ void GFX::render() {
 		billboardPipelineDispatcher.updateGPUDataSingleThreaded();
 		billboardPipelineDispatcher.drawSingleThreaded();
 		dumpLog();
-
-		uiPipelineDispatcher.updateGPUDataSingleThreaded();
-		uiPipelineDispatcher.drawSingleThreaded();
-		dumpLog();
 	}
 	else {
 		samplePipelineDispatcher.updateGPUDataMultiThreaded();
@@ -797,10 +793,6 @@ void GFX::render() {
 		billboardPipelineDispatcher.updateGPUDataMultiThreaded();
 		billboardPipelineDispatcher.drawMultiThreaded();
 		dumpLog();
-
-		uiPipelineDispatcher.updateGPUDataMultiThreaded();
-		uiPipelineDispatcher.drawMultiThreaded();
-
 	}
 
 	// Skybox Pipeline의 Dispatch
@@ -819,6 +811,18 @@ void GFX::render() {
 
 	skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
 	skyboxPipelineDispatcher.drawSingleThreaded();
+
+	// Ui Pipeline의 rendering
+	if ( !threadPool_ ) {
+		uiPipelineDispatcher.updateGPUDataSingleThreaded();
+		uiPipelineDispatcher.drawSingleThreaded();
+		dumpLog();
+	}
+	else {
+		uiPipelineDispatcher.updateGPUDataMultiThreaded();
+		uiPipelineDispatcher.drawMultiThreaded();
+		dumpLog();
+	}
 
 	// 출력 명령 컨텍스트 할당
 	CommandContext cmdCtxPresent{};

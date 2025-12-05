@@ -6,6 +6,7 @@
 
 class BasicPlayerHpUI {
 public:
+	BasicPlayerHpUI();
 	void setTexture( const Texture* pTex ) { pTex_ = pTex; }
 	void update( Milliseconds deltaTime );
 	void render( GFX& gfx );
