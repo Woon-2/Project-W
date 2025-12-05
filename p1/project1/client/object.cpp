@@ -232,6 +232,7 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 			// 소켓이 달린 본의 변환을 반영해주어야 한다.
 			// animBlender의 finalXformData는 Dress->Local->Animation->Dress의 변환 내용을 담고 있으므로
 			// Local->Dress 변환을 앞에 넣어주어야 한다.
+			// (부속 객체를 부모 객체의 좌표계로 연결하는 과정이라 생각하면 좋다.)
 			//
 			// 또한, 아이템마다 각 소켓에 부착되었을 때 오프셋이 존재하므로,
 			// 해당 오프셋을 맨 앞에 곱해준다.

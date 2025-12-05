@@ -38,6 +38,15 @@ private:
 
 	void processInput(Milliseconds deltaTime);
 
+	// 커서가 클라이언트 영역 바깥으로 나가지 못하도록 한다.
+	// 한번 설정해놓으면, releaseCursor를 호출하기 전까지 커서는 계속 클라이언트 영역에 갇혀있는다.
+	void captureCursor();
+	// 커서 캡처가 설정되어있다면 해제한다.
+	// captureCursor로 활성화된 커서 캡처를 해제하는 역할을 한다.
+	void releaseCursor();
+	void hideCursor();
+	void showCursor();
+
 	void importNode(std::ifstream& ifs);
 	void importCube(std::ifstream& ifs, Object& cube);
 	void importPlayerStart(std::ifstream& ifs, Object& player);
@@ -68,7 +77,11 @@ private:
 
 	LONG mouseDeltaX_{};
 	LONG mouseDeltaY_{};
-	std::array<BYTE, std::numeric_limits<u8t>::max()> keyboardState_{};
+	bool cursorCaptureEnabled_ = false;
+	bool cursorShowEnabled_ = true;
+
+	std::array<BYTE, std::numeric_limits<u8t>::max()> keyboardStateCurr_{};
+	std::array<BYTE, std::numeric_limits<u8t>::max()> keyboardStatePrev_{};
 };
 
 }	// namespace StandAlone

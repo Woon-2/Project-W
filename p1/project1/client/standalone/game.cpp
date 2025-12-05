@@ -265,19 +265,50 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 			mouseDeltaX_ += ri->data.mouse.lLastX;
 			mouseDeltaY_ += ri->data.mouse.lLastY;
 		}
+
 		return 0;
 	}
 
+	// Alt+Tab 등으로 윈도우가 포커스를 잃었다가 되찾은 경우,
+	// 커서와 관련된 플래그들을 읽어 커서 캡처, 커서 숨기기 등을 다시 수행한다.
+	case WM_SETFOCUS:
+		if (cursorCaptureEnabled_) {
+			captureCursor();
+		}
+		if (!cursorShowEnabled_) {
+			hideCursor();
+		}
+		break;
+
+	// Alt+Tab 등으로 윈도우가 포커스를 잃은 경우
+	// 커서와 관련된 플래그들을 읽어 커서 캡처 해제, 커서 보이기 등을 수행한다.
+	// 다른 윈도우로 전환되었는데 커서가 보이지 않거나 안 움직여지면 곤란할 것이다.
+	case WM_KILLFOCUS:
+		if (cursorCaptureEnabled_) {
+			releaseCursor();
+		}
+		if (cursorShowEnabled_) {
+			showCursor();
+		}
+		break;
+
 	case WM_SIZE:
-		return DefWindowProcA(hWnd, msg, wParam, lParam);
+		break;
 
 	default:
-		return DefWindowProcA(hWnd, msg, wParam, lParam);
+		break;
 	}
+
+	return DefWindowProcA(hWnd, msg, wParam, lParam);
 };
 
 void Game::processInput(Milliseconds deltaTime) {
-	DISPLAY_ERROR_GLE( GetKeyboardState(keyboardState_.data()), false );
+	if (GetForegroundWindow() != ghWnd) {
+		return;
+	}
+
+	keyboardStatePrev_ = keyboardStateCurr_;
+	DISPLAY_ERROR_GLE( GetKeyboardState(keyboardStateCurr_.data()), false );
 
 	const auto maxSpeed = 10.f;	// 10m/s
 	const Seconds zeroToMax = 0.5s;
@@ -286,8 +317,8 @@ void Game::processInput(Milliseconds deltaTime) {
 	// 서로 상쇄되는 입력들을 감안해서,
 	// 현재 이동 입력이 있으면 플레이어 객체의 속도를 변화시킨다.
 
-	const auto moveXSign = (keyboardState_['D'] & 0x80) - (keyboardState_['A'] & 0x80);
-	const auto moveZSign = (keyboardState_['W'] & 0x80) - (keyboardState_['S'] & 0x80);
+	const auto moveXSign = (keyboardStateCurr_['D'] & 0x80) - (keyboardStateCurr_['A'] & 0x80);
+	const auto moveZSign = (keyboardStateCurr_['W'] & 0x80) - (keyboardStateCurr_['S'] & 0x80);
 	const auto moveThreshold = 0.1f;
 
 	if (moveXSign || moveZSign) {
@@ -329,19 +360,19 @@ void Game::processInput(Milliseconds deltaTime) {
 	}
 
 	// 카메라 1인칭 모드 설정
-	if ( keyboardState_['1'] & 0x80 ) {
+	if ( keyboardStateCurr_['1'] & 0x80 ) {
 		camera_.setOffsetFromTargetPreRotation( mu::NQuat{} );
 		camera_.setOffsetFromTarget( mu::Vec3( 0.f, 2.f, 0.5f ) );
 		camera_.setOffsetTargetPivot( mu::Vec3(0.f, 2.f, 8.f));
 		cameraMode_ = CameraMode::FirstPerson;
 	} 
 	// 카메라 3인칭 모드 설정
-	if ( keyboardState_['3'] & 0x80 ) {
+	if ( keyboardStateCurr_['3'] & 0x80 ) {
 		camera_.setXXPreRotation( mu::NQuat{} );
 		camera_.setOffsetFromTarget( mu::Vec3( 0.f, 1.8f, -2.5f ) );
 		camera_.setOffsetTargetPivot( mu::Vec3(0.f, 1.f, 0.f));
 		cameraMode_ = CameraMode::ThirdPerson;
-	} 
+	}
 
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때
 	// 각각의 플레이어 yaw, 카메라 pitch를 계산한다.
@@ -388,6 +419,61 @@ void Game::processInput(Milliseconds deltaTime) {
 		break;
 	}
 	}
+
+	// Enter 키를 누르면 커서 캡처 플래그를 활성화/비활성화한다.
+	if ( (keyboardStateCurr_[VK_RETURN] & 0x80) && !(keyboardStatePrev_[VK_RETURN] & 0x80) ) {
+		cursorCaptureEnabled_ = !cursorCaptureEnabled_;
+		if (cursorCaptureEnabled_) {
+			captureCursor();
+		}
+		else {
+			releaseCursor();
+		}
+	}
+
+	// Space 키를 누르면 커서 보이기 플래그를 활성화/비활성화한다.
+	if ( (keyboardStateCurr_[VK_SPACE] & 0x80) && !(keyboardStatePrev_[VK_SPACE] & 0x80) ) {
+		cursorShowEnabled_ = !cursorShowEnabled_;
+		if (cursorShowEnabled_) {
+			showCursor();
+		}
+		else {
+			hideCursor();
+		}
+	}
+}
+
+// 커서가 클라이언트 영역 바깥으로 나가지 못하도록 한다.
+// 한번 설정해놓으면, releaseCursor를 호출하기 전까지 커서는 계속 클라이언트 영역에 갇혀있는다.
+void Game::captureCursor() {
+    auto ul = POINT{ gClientRect.left, gClientRect.top };
+    auto lr = POINT{ gClientRect.right, gClientRect.bottom };
+
+    // 클라이언트의 외곽 좌표를 윈도우 좌표로 변환
+    MapWindowPoints(ghWnd, nullptr, &ul, 1);
+    MapWindowPoints(ghWnd, nullptr, &lr, 1);
+
+    auto clipRect = RECT{ ul.x, ul.y, lr.x, lr.y };
+
+    ClipCursor(&clipRect);
+}
+
+// 커서 캡처가 설정되어있다면 해제한다.
+// captureCursor로 활성화된 커서 캡처를 해제하는 역할을 한다.
+void Game::releaseCursor() {
+	ClipCursor(nullptr);
+}
+
+void Game::hideCursor() {
+	// ShowCursor()는 내부적으로 display counter를 증가/감소시키는 구조라서
+	// 반복 호출해 정확히 숨기거나 표시해야 한다.
+	while (ShowCursor(false) >= 0) {}
+}
+
+void Game::showCursor() {
+	// ShowCursor()는 내부적으로 display counter를 증가/감소시키는 구조라서
+	// 반복 호출해 정확히 숨기거나 표시해야 한다.
+	while (ShowCursor(true) < 0) {}
 }
 
 }	// namespace StandAlone
