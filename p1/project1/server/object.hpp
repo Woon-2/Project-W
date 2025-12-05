@@ -98,6 +98,8 @@ private:
 	i32t id_{ -1 };
 
 	uint8 keyMask_;
+	int32 moveXSign_{};
+	int32 moveZSign_{};
 };
 
 #endif	// __object_HPP
