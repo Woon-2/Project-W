@@ -19,6 +19,7 @@
 // 플레이어 체력 및 장탄수, 사격 쿨타임 갱신 함수 만들기 - 12.4.
 // Cascaded Shadow Mapping - 12.5.
 // 온라인 게임 손보기 및 스탠드얼론도 전투 구현 - 12.7.
+// ExecuteCommand 별도 스레드에서 호출
 // Deferred Shading - 12.10.
 // metallic, roughness map 별도로도 지원
 // UI와 3D 객체 겹치는 상황에서의 피킹
