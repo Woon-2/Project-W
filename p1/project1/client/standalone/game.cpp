@@ -67,13 +67,19 @@ void Game::setupStage() {
 		0.1f, 500.f
 	);
 
-	// billboard_.setMesh(gfx_.pointMesh());
-
 	for (auto& cube : cubes_) {
 		cube.enableBVRendering();
 	}
 
 	player_->enableBVRendering();
+
+	billboard_.setTexture( assetManager_.billBoard0() );
+
+	slimeSprite_.setTexture( assetManager_.slimeSprites() );
+
+	playerHpUIs_.resize( 2u );
+	playerHpUIs_[0].setTexture( assetManager_.playerHpLine() );
+	playerHpUIs_[1].setTexture( assetManager_.playerHpFrame() );
 }
 
 void Game::importNode(std::ifstream& ifs) {
@@ -195,7 +201,7 @@ void Game::update(Milliseconds deltaTime) {
 	camera_.update();
 	dirLight_.update(deltaTime);
 	dirLight_.updateShadowAuxDirectional(camera_.eye(), 100.f, -10.f, 10.f, -10.f, 10.f, 50.f, 200.f);
-	//  billboard_->update( deltaTime );
+	slimeSprite_.update( deltaTime );
 
 	animSystem_.update(0.016s);
 }
@@ -209,6 +215,11 @@ void Game::render() {
 	camera_.updateGFX(gfx_);
 	dirLight_.render(gfx_);
 	// billboard_.render( gfx_ );
+	slimeSprite_.render( gfx_); 
+
+	for ( auto& hpUI : playerHpUIs_ ) {
+		hpUI.render( gfx_ );
+	}
 
 	auto frameDataPBR = PBRPipeline::FrameData{
 		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
@@ -218,6 +229,12 @@ void Game::render() {
 		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
 	};
 	gfx_.addFrameData( frameDataPBRSkinned );
+
+	auto frameData1 = UIPipeline::FrameData{
+		.screenWidth = static_cast<float>( gClientRect.right - gClientRect.left ),
+		.screenHeight = static_cast<float>( gClientRect.bottom - gClientRect.top )
+	};
+	gfx_.addFrameData( frameData1 );
 
 	gfx_.render();
 }

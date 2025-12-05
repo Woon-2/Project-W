@@ -1,18 +1,18 @@
-#ifndef __billboard_HPP
-#define __billboard_HPP
+#ifndef __basicPlayerHpUI_HPP
+#define __basicPlayerHpUI_HPP
 
 #include "gfx.hpp"
 
-class Billboard {
+class BasicPlayerHpUI {
 public:
+	BasicPlayerHpUI();
 	void setTexture( const Texture* pTex ) { pTex_ = pTex; }
 	void update( Milliseconds deltaTime );
 	void render( GFX& gfx );
 
 private:
-	mu::Mat4x4 world_{};	// GFX에 행렬을 전달할 때만 사용된다.
+	mu::Mat4x4 world_{};
 	const Texture* pTex_ = nullptr;
 };
 
-
-#endif	// __billboard_HPP
+#endif	// __basicPlayerHpUI_HPP

@@ -12,7 +12,8 @@
 #include "billboardPipeline.hpp"
 #include "skyboxPipeline.hpp"
 #include "BVPipeline.hpp"
-
+#include "uiPipeline.hpp"
+#include "spriteAnimation.hpp"
 
 // 커서 숨기기 및 마우스 캡쳐
 // 클릭하면 플레이어의 앞에 스프라이트 애니메이션 재생하기 구현 - 12.3.
@@ -83,6 +84,17 @@ struct RequestModelLoad {
 struct RequestSkyboxLoad {
 	std::filesystem::path skyboxPath;
 	Skybox* pDest;
+};
+
+struct RequestTextureLoad {
+	std::string name;
+	std::filesystem::path texturePath;
+	Texture* pDest;
+};
+
+struct RequestSpritesLoad {
+	std::filesystem::path spritesPath;
+	std::vector<Texture>* pDest;
 };
 
 // 렌더링을 총괄 책임지는 클래스
@@ -156,9 +168,15 @@ public:
 	void addDrawEvent(const BVPipeline::DrawEvent& drawEvent);
 	// 카메라 데이터를 입력한다.
 	void addCameraData(const BVPipeline::CameraData& cameraData);
+	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+	void addDrawEvent( const UIPipeline::DrawEvent& drawEvent );
+	// 프레임 데이터를 입력한다.
+	void addFrameData( const UIPipeline::FrameData& frameData );
 
 	void addRequestModelLoad(const RequestModelLoad& request);
 	void addRequestSkyboxLoad(const RequestSkyboxLoad& request);
+	void addRequestTextureLoad( const RequestTextureLoad& request );
+	void addRequestSpritesLoad( const RequestSpritesLoad& request );
 
 	// 파이프라인들이 자체적으로 사용하는 리소스들과
 	// addRequestXXLoad 꼴의 함수로 요청된 리소스들을 로드한다.
@@ -166,9 +184,6 @@ public:
 
 	// 요청된 드로우콜들을 모아 객체들을 그리고 화면에 띄운다.
 	void render();
-
-	const Mesh* pointMesh() { return &pointMesh_; }
-
 
 private:
 	// 공용 샘플러들 생성
@@ -216,6 +231,9 @@ private:
 	DescriptorPool samPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
 	DescriptorPool cmpSamPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
 
+	std::unordered_map<std::string, Texture> texHashMap_{};
+	std::unordered_map<std::string, std::vector<Texture>> texAnimHashMap_{};
+
 	// 루트 시그너처와 셰이더들
 	std::map<std::string, std::shared_ptr<RootSig>> rootSigs_{};
 	std::map<std::string, ComPtr<ID3D12PipelineState>> shaders_{};
@@ -252,6 +270,11 @@ private:
 	BillboardPipeline::Resources resourcesBillboardPipeline_{};
 	BillboardPipeline::CameraData cameraDataBillboardPipeline_{};
 	BillboardPipeline::FrameData frameDataBillboardPipeline_{};
+	// UI Pipeline
+	std::vector<UIPipeline::DrawEvent> drawEventsUIPipeline_{};
+	UIPipeline::Resources resourcesUIPipeline_{};
+	UIPipeline::FrameData frameDataUIPipeline_{};
+
 
 	std::map<std::string, Fence> fences_{};
 
@@ -259,8 +282,8 @@ private:
 
 	std::vector<RequestModelLoad> requestsModelLoad_{};
 	std::vector<RequestSkyboxLoad> requestsSkyboxLoad_{};
-
-	Mesh pointMesh_{};
+	std::vector<RequestTextureLoad> requestsTextureLoad_{};
+	std::vector<RequestSpritesLoad> requestsSpritesLoad_{};
 
 	ThreadPool* threadPool_ = nullptr;	// 설정되어있을 경우 멀티스레드로 동작한다.
 };

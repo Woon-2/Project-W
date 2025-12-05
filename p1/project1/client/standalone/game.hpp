@@ -14,6 +14,8 @@
 #include "physics.hpp"
 
 #include "../billboard.hpp"
+#include "../spriteAnimation.hpp"
+#include "../basicPlayerHpUI.hpp"
 
 namespace StandAlone {
 
@@ -74,6 +76,8 @@ private:
 	bool playerSpawned_ = false;
 
 	Billboard billboard_{};
+	SpriteAnimation slimeSprite_{};
+	std::vector<BasicPlayerHpUI> playerHpUIs_{};
 
 	LONG mouseDeltaX_{};
 	LONG mouseDeltaY_{};

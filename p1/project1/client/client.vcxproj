@@ -142,6 +142,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="animation.hpp" />
+    <ClInclude Include="basicPlayerHpUI.hpp" />
     <ClInclude Include="billboard.hpp" />
     <ClInclude Include="billboardPipeline.hpp" />
     <ClInclude Include="AssetManager.hpp" />
@@ -206,6 +207,7 @@
     <ClInclude Include="skybox.hpp" />
     <ClInclude Include="skyboxPipeline.hpp" />
     <ClInclude Include="SocketUtils.hpp" />
+    <ClInclude Include="spriteAnimation.hpp" />
     <ClInclude Include="standalone\game.hpp" />
     <ClInclude Include="standalone\physics.hpp" />
     <ClInclude Include="texloader\DDSTextureLoader12.h" />
@@ -213,6 +215,7 @@
     <ClInclude Include="timer.hpp" />
     <ClInclude Include="timsort.hpp" />
     <ClInclude Include="types.hpp" />
+    <ClInclude Include="uiPipeline.hpp" />
     <ClInclude Include="windows.hpp" />
   </ItemGroup>
   <ItemGroup>
@@ -220,6 +223,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Use</PrecompiledHeader>
       <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">pch.hpp</PrecompiledHeaderFile>
     </ClCompile>
+    <ClCompile Include="basicPlayerHPUI.cpp" />
     <ClCompile Include="billboard.cpp" />
     <ClCompile Include="billboardPipeline.cpp" />
     <ClCompile Include="AssetManager.cpp" />
@@ -264,6 +268,7 @@
     <ClCompile Include="skybox.cpp" />
     <ClCompile Include="skyboxPipeline.cpp" />
     <ClCompile Include="SocketUtils.cpp" />
+    <ClCompile Include="spriteAnimation.cpp" />
     <ClCompile Include="standalone\game.cpp" />
     <ClCompile Include="standalone\physics.cpp" />
     <ClCompile Include="texloader\DDSTextureLoader12.cpp">
@@ -275,6 +280,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="timer.cpp" />
+    <ClCompile Include="uiPipeline.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="billboard.hlsl">
@@ -316,6 +322,10 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
     <FxCompile Include="skybox.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="ui.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>

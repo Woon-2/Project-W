@@ -235,6 +235,7 @@ void GFX::init() {
 	shaders_.try_emplace("BillboardShader", createBillboardShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("SkyboxShader", createSkyboxShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("BVShader", createBVShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace( "UIShader", createUIShader( device_.Get(), defaultRootSig.get() ) );
 
 	rootSigs_.try_emplace("DefaultRootSignature", std::make_shared<DefaultRootSig>(std::move(defaultRootSig)));
 
@@ -420,14 +421,25 @@ void GFX::createSwapChain() {
 	);
 	// Billboard Pipeline ----
 	resourcesBillboardPipeline_.perInstanceData.init(
-		device_.Get(), sizeof( BillboardShader::PerInstanceData ) * 1u, backBuffers_.size(), "Billboard_PerInstanceData"
+		device_.Get(), sizeof( BillboardShader::PerInstanceData ) * 2u, backBuffers_.size(), "Billboard_PerInstanceData"
 	);
 	resourcesBillboardPipeline_.perDrawcallData = createConstantBufferArray(
-		device_.Get(), sizeof( BillboardShader::PerDrawcallData ), 1u, backBuffers_.size(), "Billboard_PerDrawcallData"
+		device_.Get(), sizeof( BillboardShader::PerDrawcallData ), 2u, backBuffers_.size(), "Billboard_PerDrawcallData"
 	);
 	resourcesBillboardPipeline_.perFrameData.init(
 		device_.Get(), sizeof( BillboardShader::PerFrameData ), backBuffers_.size(), "Billboard_PerFrameData"
 	);
+	// UI Pipeline ----
+	resourcesUIPipeline_.perInstanceData.init(
+		device_.Get(), sizeof( UIShader::PerInstanceData ) * 1000u, backBuffers_.size(), "UI_PerInstanceData"
+	);
+	resourcesUIPipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof( UIShader::PerDrawcallData ), 1000u, backBuffers_.size(), "UI_PerDrawcallData"
+	);
+	resourcesUIPipeline_.perFrameData.init(
+		device_.Get(), sizeof( UIShader::PerFrameData ), backBuffers_.size(), "UI_PerFrameData"
+	);
+
 
 
 	// 프레임 펜스 생성
@@ -517,12 +529,32 @@ void GFX::addFrameData( const BillboardPipeline::FrameData& frameData ) {
 	frameDataBillboardPipeline_ = frameData;
 }
 
+// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+void GFX::addDrawEvent(const UIPipeline::DrawEvent& drawEvent) {
+	drawEventsUIPipeline_.push_back(drawEvent);
+}
+
+// 프레임 데이터를 입력한다.
+void GFX::addFrameData(const UIPipeline::FrameData& frameData) {
+	frameDataUIPipeline_ = frameData;
+}
+
 void GFX::addRequestModelLoad(const RequestModelLoad& request) {
 	requestsModelLoad_.push_back(request);
 }
 
 void GFX::addRequestSkyboxLoad(const RequestSkyboxLoad& request) {
 	requestsSkyboxLoad_.push_back(request);
+}
+
+void GFX::addRequestTextureLoad( const RequestTextureLoad& request )
+{
+	requestsTextureLoad_.push_back( request );
+}
+
+void GFX::addRequestSpritesLoad( const RequestSpritesLoad& request )
+{
+	requestsSpritesLoad_.push_back( request );
 }
 
 // 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
@@ -566,7 +598,7 @@ void GFX::loadAssets() {
 	// 명령 리스트 초기화
 	DISPLAY_ERROR_DX_VOID(cmdAlloc->Reset(), false);
 	DISPLAY_ERROR_DX_VOID(cmdList->Reset(cmdAlloc.Get(), nullptr), false);
-
+	
 	// 파이프라인 공용 리소스 로드
 	SharedResources::ShadowMap::addShadowMap("ShadowMap", device_.Get(),
 		DXGI_FORMAT_D32_FLOAT, 2000u, 2000u, backBuffers_.size(),
@@ -575,6 +607,10 @@ void GFX::loadAssets() {
 	// 파이프라인 자체 리소스 로드
 	// BVPipeline
 	BVPipeline::initStaticModels(device_.Get(), cmdList.Get(), fence);
+	// BillboardPipeline
+	BillboardPipeline::initStaticPointMesh( device_.Get(), cmdList.Get(), fence );
+	// UIPipeline
+	UIPipeline::initStaticQuadMesh( device_.Get(), cmdList.Get(), fence );
 
 	dumpLog();
 
@@ -593,7 +629,26 @@ void GFX::loadAssets() {
 
 	dumpLog();
 
-	// pointMesh_ = buildPointMesh(device_.Get(), cmdList.Get(), texHashMap_, srvTexPool_, fence);
+	// load textures
+	for ( auto& request : requestsTextureLoad_ ) {
+		if ( !texHashMap_.contains( request.name ) ) {
+			Texture::Type type{};
+			auto [pPair, _] = texHashMap_.try_emplace( request.name, loadTexture( device_.Get(), cmdList.Get(), request.texturePath, fence, type ) );
+			createSRV( device_.Get(), pPair->second, srvTexPool_ );
+			pPair->second.idxSrv.idxSampler = etoi( Samplers::TrilinearWrap );
+			*request.pDest = pPair->second;
+		}
+	}
+
+	dumpLog();
+
+	// load sprites
+	for ( auto& request : requestsSpritesLoad_ ) {
+		*request.pDest = loadSpritesFromFile( request.spritesPath, device_.Get(), cmdList.Get(), texAnimHashMap_, srvTexPool_, fence );
+	}
+
+	dumpLog();
+
 
 	// 명령 기록 끝, 명령 실행
 	DISPLAY_ERROR_DX_VOID(cmdList->Close(), false);
@@ -786,6 +841,20 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	// UI Pipeline의 Dispatch
+	auto uiPipelineDispatcher = UIPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at("DefaultRootSignature"), shaders_.at("UIShader"),
+		cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesUIPipeline_, threadPool_,
+		&cmdListPool_, std::move(drawEventsUIPipeline_),
+		frameDataUIPipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
 	// 의존 관계가 있는 파이프라인별 함수들 사이의 호출 순서는 중요하다.
 	// 예를 들어 그림자를 지원하는 파이프라인들은
 	// 각 파이프라인의 모든 그림자 패스를 수행한 후에 동기화되어
@@ -881,6 +950,18 @@ void GFX::render() {
 	// 스카이박스 하나 그리는 파이프라인이라, 멀티스레드일 필요가 없다.
 	skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
 	skyboxPipelineDispatcher.drawSingleThreaded();
+
+	// Ui Pipeline의 rendering
+	if ( !threadPool_ ) {
+		uiPipelineDispatcher.updateGPUDataSingleThreaded();
+		uiPipelineDispatcher.drawSingleThreaded();
+		dumpLog();
+	}
+	else {
+		uiPipelineDispatcher.updateGPUDataMultiThreaded();
+		uiPipelineDispatcher.drawMultiThreaded();
+		dumpLog();
+	}
 
 	// 출력 명령 컨텍스트 할당
 	CommandContext cmdCtxPresent{};
