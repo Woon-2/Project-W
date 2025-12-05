@@ -106,7 +106,7 @@ struct Bone {
 	};
 
 	mu::Mat4x4 toLocal;	// 드레스 공간에서 로컬 공간으로의 변환
-	mu::Mat4x4 toParent;	// 로컬 공간에서 부모 로컬 공간으로의 변환 
+	mu::Mat4x4 toDress;	// 로컬 공간에서 T-pose 드레스 공간으로의 변환
 	std::string name;
 	std::vector<Bone*> children;	// 이 본을 소유한 Skeleton::bones에 담긴 자식 본들을 가리킨다.
 	i32t boneIdx;	// 이 본을 소유한 Skeleton::bones에서 이 본의 인덱스
@@ -130,6 +130,7 @@ enum class SkeletonEnumeration {
 // 본들과 스켈레톤 구조를 나타내는 열거형 값을 저장한다.
 struct Skeleton {
 	std::string name;
+	std::map<Bone::SocketType, i32t> socketToBoneIdx;
 	// 본이 자식 본을 생포인터로 저장하기 위해서는
 	// 스켈레톤이 복사되어도 본들의 메모리 공간이 변하지 않아야 한다.
 	// std::shared_ptr로 감싸 본들의 저장 공간을 별도의 free store에 구성한다.
@@ -157,6 +158,7 @@ struct Model {
 	std::vector<MeshWithDressXform> meshWithDressXforms;
 	std::vector<AABB> aabbs;
 	std::map<std::string, int> aabbIdxMap;
+	std::map<Bone::SocketType, mu::Mat4x4> socketOffsets;
 	Skeleton skeleton;
 };
 

@@ -52,6 +52,11 @@ struct RenderState {
 	const Model* pModel;
 };
 
+struct Equipment {
+	Bone::SocketType socketType;
+	std::unique_ptr<Object> object;
+};
+
 // 물체의 상태는 PhysicState, RenderState 두 층위로 관리된다.
 // 위치, 방향, 크기와 같이 물리량에 관련된 정보는 PhysicState에 보관되고
 // 월드 변환 행렬, 모델 정보와 같이 렌더링에 관련된 정보는 RenderState에 보관된다.
@@ -71,7 +76,7 @@ public:
 	// @param tPhysicInterpolation 이전 PhysicState와 현재 PhysicState의 보간 비율
 	//		(게임 객체가 계산해서 일괄적으로 전달해야 한다.)
 	void update(Milliseconds deltaTime, float tPhysicInterpolation);
-	void render(GFX& gfx);
+	void MU_CALLCONV render(GFX& gfx, mu::Mat4x4 offsetXform = mu::Mat4x4());
 
 	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) {
 		renderState_.animBlender = std::make_unique<AnimBlenderVanguard>();
@@ -127,6 +132,9 @@ public:
 	void setMaterialSetIdx(u32t idx) { materialSetIdx_ = idx; }
 	u32t mateiralSetIdx() const { return materialSetIdx_; }
 
+	void equip(Equipment&& equipment);
+	void disequip(Bone::SocketType socketType);
+
 	// 바운딩 볼륨 렌더링을 활성화한다.
 	void enableBVRendering() { willRenderBV_ = true; }
 	// 바운딩 볼륨 렌더링을 비활성화한다.
@@ -147,6 +155,8 @@ private:
 	PhysicState currPhysicState_{};
 
 	RenderState renderState_{};
+
+	std::vector<Equipment> equipments_{};
 
 	bool willRenderBV_ = false;
 

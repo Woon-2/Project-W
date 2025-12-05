@@ -139,6 +139,14 @@ void Game::importPlayerStart(std::ifstream& ifs, Object& player) {
 	player_ = std::make_shared<Object>(std::move(player));
 	player_->setModel(assetManager_.modelPlayer());
 	player_->setAnimBlender(animSystem_, assetManager_);
+
+	Equipment rifle{};
+	rifle.socketType = Bone::SocketType::RightHand;
+	rifle.object = std::make_unique<Object>();
+	rifle.object->setModel(assetManager_.modelRifle());
+	rifle.object->setScale(mu::Vec3(1.f, 1.f, 1.f));
+
+	player_->equip(std::move(rifle));
 }
 
 void Game::update(Milliseconds deltaTime) {

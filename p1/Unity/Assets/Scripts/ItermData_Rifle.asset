@@ -14,6 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   socketOffsets:
   - socketType: 1
-    translation: {x: 0.136, y: 0.287, z: 0.017}
-    rotation: {x: 86.126, y: -80.268, z: 5.067}
+    translation: {x: 0.1369999, y: 0.2420001, z: 0.02100001}
+    rotation: {x: 79.087, y: -73.492, z: 10.288}
     scale: {x: 1, y: 1, z: 1}

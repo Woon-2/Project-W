@@ -1152,8 +1152,8 @@ void importBoundingVolumes(std::ifstream& ifs, Model& model) {
 
     auto& bone = (*model.skeleton.bones)[boneIdx];
     bone.name = readText(ifs, "Name");
-    const auto toParent = readMatrix(ifs, "ToParent");
-    bone.toParent = DirectX::XMLoadFloat4x4(&toParent);
+    const auto toDress = readMatrix(ifs, "Dress");
+    bone.toDress = DirectX::XMLoadFloat4x4(&toDress);
     const auto toLocal = readMatrix(ifs, "ToLocal");
     bone.toLocal = DirectX::XMLoadFloat4x4(&toLocal);
 
@@ -1161,6 +1161,9 @@ void importBoundingVolumes(std::ifstream& ifs, Model& model) {
 
     const auto socketTypeStr = readText(ifs, "SocketType");
     bone.socketType = convertStrToBoneSocketType(socketTypeStr);
+    if (bone.socketType != Bone::SocketType::None) {
+        model.skeleton.socketToBoneIdx.try_emplace(bone.socketType, bone.boneIdx);
+    }
 
     readHeadTag(ifs, "Children");
 
@@ -1214,10 +1217,19 @@ void importSocketOffsets(std::ifstream& ifs, Model& model) {
     const auto socketOffsetCnt = readInteger(ifs, "SocketOffsetCnt");
     for (int i = 0; i < socketOffsetCnt; ++i) {
         readHeadTag(ifs, "SocketOffset");
+
         const auto socketTypeStr = readText(ifs, "SocketType");
         const auto trs = readVec3(ifs, "Translation");
         const auto rot = readVec4(ifs, "Rotation");
         const auto scl = readVec3(ifs, "Scale");
+
+        const auto socketType = convertStrToBoneSocketType(socketTypeStr);
+        model.socketOffsets.try_emplace( socketType,
+            mu::Mat4x4(mu::scale(DirectX::XMLoadFloat3(&scl)))
+            * mu::Mat4x4(mu::NQuat(DirectX::XMLoadFloat4(&rot)))
+            * mu::translate(DirectX::XMLoadFloat3(&trs))
+        );
+
         readTailTag(ifs, "SocketOffset");
     }
 

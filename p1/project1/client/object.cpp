@@ -178,16 +178,21 @@ void Object::update(Milliseconds deltaTime, float tPhysicInterpolation) {
 	if (renderState_.animBlender) {
 		renderState_.animBlender->update(deltaTime, this);
 	}
+
+	// 부속 객체 갱신
+	for (auto& equipment : equipments_) {
+		equipment.object->update(deltaTime, tPhysicInterpolation);
+	}
 }
 
-void Object::render(GFX& gfx) {
+void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 	const auto pModel = renderState_.pModel;
 	if (pModel) {
 		if (renderState_.animBlender) {
-			for (auto& [mesh, dressXform] : pModel->meshWithDressXforms) {
+			for (auto& [mesh, meshXform] : pModel->meshWithDressXforms) {
 				for (std::size_t i = 0u; i < mesh.subMeshes.size(); ++i) {
 					gfx.addDrawEvent(PBRSkinnedPipeline::DrawEvent{
-						.world = dressXform * renderState_.world,
+						.world = meshXform * offsetXform * renderState_.world,
 						.boneXforms = renderState_.animBlender->finalXformData(),
 						.mesh = &mesh,
 						.subMesh = &mesh.subMeshes[i],
@@ -197,10 +202,10 @@ void Object::render(GFX& gfx) {
 			}
 		}
 		else {
-			for (auto& [mesh, dressXform] : pModel->meshWithDressXforms) {
+			for (auto& [mesh, meshXform] : pModel->meshWithDressXforms) {
 				for (std::size_t i = 0u; i < mesh.subMeshes.size(); ++i) {
 					gfx.addDrawEvent(PBRPipeline::DrawEvent{
-						.world = dressXform * renderState_.world,
+						.world = meshXform * offsetXform * renderState_.world,
 						.mesh = &mesh,
 						.subMesh = &mesh.subMeshes[i],
 						.material = &mesh.materialSets[materialSetIdx_].materials[i]
@@ -213,9 +218,37 @@ void Object::render(GFX& gfx) {
 	if (willRenderBV_) {
 		for (std::size_t i = 0u; i < currPhysicState_.aabbs.size(); ++i) {
 			gfx.addDrawEvent( BVPipeline::DrawEvent{
-				.world = renderState_.worldBVs[i],
+				.world = offsetXform * renderState_.worldBVs[i],
 				.bvModel = BVPipeline::BVModel::Box
 			} );
+		}
+	}
+
+	// 부속 객체 렌더링
+	if (renderState_.animBlender) {
+		auto& skeleton = renderState_.pModel->skeleton;
+
+		for (auto& equipment : equipments_) {
+			// 소켓이 달린 본의 변환을 반영해주어야 한다.
+			// animBlender의 finalXformData는 Dress->Local->Animation->Dress의 변환 내용을 담고 있으므로
+			// Local->Dress 변환을 앞에 넣어주어야 한다.
+			//
+			// 또한, 아이템마다 각 소켓에 부착되었을 때 오프셋이 존재하므로,
+			// 해당 오프셋을 맨 앞에 곱해준다.
+			//
+			// 따라서 행렬곱 적용 순서는
+			// 1. 아이템의 소켓으로부터의 offset 행렬
+			// 2. 소켓 본을 dress 공간으로 옮기는 행렬
+			// 3. 소켓 본의 애니메이션된 최종 행렬
+			// 4. 객체의 월드변환 행렬(renderState_.world) 또는 부모 부속 객체의 최종 오프셋 행렬(offsetXform)
+			// (둘 중 하나는 무조건 단위 행렬이다. 둘을 곱셈으로 이은 것에 헷갈리지 말자.)
+			// 이다.
+			equipment.object->render( gfx,
+				equipment.object->renderState_.pModel->socketOffsets.at(equipment.socketType)
+				* skeleton.bones->at( skeleton.socketToBoneIdx.at(equipment.socketType) ).toDress
+				* renderState_.animBlender->finalXformData()[ skeleton.socketToBoneIdx.at(equipment.socketType) ]
+				* offsetXform * renderState_.world
+			);
 		}
 	}
 }
@@ -287,4 +320,27 @@ void MU_CALLCONV Object::setScale(mu::Vec3 newScale) {
 		}
 		prevPhysicState_.aabbs = currPhysicState_.aabbs;
 	}
+}
+
+void Object::equip(Equipment&& equipment) { 
+	equipment.object->setPos(mu::Vec3());
+	equipment.object->setVelocity(mu::Vec3());
+	equipment.object->setOmega(mu::Vec3());
+	equipment.object->setOrient(mu::NQuat());
+	equipments_.push_back(std::move(equipment));
+}
+
+void Object::disequip(Bone::SocketType socketType) { 
+	auto toRemoves = std::ranges::remove_if( equipments_, [socketType](const Equipment& equipment) { 
+		return equipment.socketType == socketType; 
+	} );
+
+	for (auto& toRemove : toRemoves) {
+		toRemove.object->prevPhysicState_ = prevPhysicState_;
+		toRemove.object->currPhysicState_ = currPhysicState_;
+	}
+
+	equipments_.erase(toRemoves.begin(), toRemoves.end());
+	
+	// 필요하다면 본의 최종 변환으로부터 T, R을 추출해 분리된 오브젝트에 복원해내도록 한다.
 }

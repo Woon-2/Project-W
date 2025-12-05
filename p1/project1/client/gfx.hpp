@@ -14,7 +14,6 @@
 #include "BVPipeline.hpp"
 
 
-// 오브젝트 클래스에서 Cube, Vanguard, Rifle 클래스로 분리
 // 클릭하면 플레이어의 앞에 스프라이트 애니메이션 재생하기 구현 - 12.3.
 // 플레이어 체력 및 장탄수, 사격 쿨타임 갱신 함수 만들기 - 12.4.
 // Cascaded Shadow Mapping - 12.5.
