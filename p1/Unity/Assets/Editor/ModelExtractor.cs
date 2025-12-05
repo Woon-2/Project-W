@@ -18,6 +18,7 @@ public class ModelExtractorWindow : EditorWindow
 
     private BinaryWriter geometryWriter = null;
     private BinaryWriter skeletonWriter = null;
+    private BinaryWriter itemDataWriter = null;
 
     private List<Transform> bones = null;
     private List<Matrix4x4> bindposes = null;
@@ -517,6 +518,15 @@ public class ModelExtractorWindow : EditorWindow
         ExtractUtil.WriteText(skeletonWriter, "Name", bone.gameObject.name);
         ExtractUtil.WriteLocalMatrix(skeletonWriter, "ToParent", bone);
         ExtractUtil.WriteMatrix(skeletonWriter, "ToLocal", bindposes[boneIdx]);
+        BoneSocket socket = bone.gameObject.GetComponent<BoneSocket>();
+        if (socket != null)
+        {
+            ExtractUtil.WriteText(skeletonWriter, "SocketType", socket.socketType.ToString());
+        }
+        else
+        {
+            ExtractUtil.WriteText(skeletonWriter, "SocketType", "None");
+        }
 
         ++boneIdx;
 
@@ -551,6 +561,7 @@ public class ModelExtractorWindow : EditorWindow
         string path = EditorUtility.SaveFilePanel("Export Binary", "ExportedAssets", "output.bin", "bin");
         geometryWriter = new BinaryWriter(File.Open(path, FileMode.Create));
         skeletonWriter = geometryWriter;
+        itemDataWriter = geometryWriter;
 
         ExtractUtil.WriteText(geometryWriter, "ModelName", targetObjectName);
 
@@ -564,7 +575,15 @@ public class ModelExtractorWindow : EditorWindow
         ExtractTextureMapping();
         ExtractGeometry();
         ExtractBoundingVolumes();
+        ExtractUtil.WriteInteger(skeletonWriter, "HasSkeleton", Convert.ToInt32(targetSkeleton != null));
         if (targetSkeleton != null) ExtractSkeleton();
+        Weapon weapon = targetObject.GetComponent<Weapon>();
+        ExtractUtil.WriteInteger(skeletonWriter, "HasWeaponInfo", Convert.ToInt32(weapon != null));
+        if (weapon != null)
+        {
+            ItemData itemData = weapon.itemData;
+            itemData.WriteBinaryInfo(itemDataWriter);
+        }
 
         geometryWriter.Flush();
         geometryWriter.Close();

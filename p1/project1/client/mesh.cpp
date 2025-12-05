@@ -1135,6 +1135,7 @@ void importBoundingVolumes(std::ifstream& ifs, Model& model) {
 
     bone.boneIdx = boneIdx++;
 
+    const auto socketTypeStr = readText(ifs, "SocketType");
 
     readHeadTag(ifs, "Children");
 
@@ -1178,6 +1179,28 @@ void importSkeleton(std::ifstream& ifs, Model& model) {
     gSharedLog << "[Resource Load] 스켈레톤 " << skeleton.name << "구축 완료\n";
 }
 
+void importSocketOffsets(std::ifstream& ifs, Model& model) {
+    readHeadTag(ifs, "SocketOffsets");
+
+    const auto socketOffsetCnt = readInteger(ifs, "SocketOffsetCnt");
+    for (int i = 0; i < socketOffsetCnt; ++i) {
+        readHeadTag(ifs, "SocketOffset");
+        const auto socketTypeStr = readText(ifs, "SocketType");
+        const auto trs = readVec3(ifs, "Translation");
+        const auto rot = readVec4(ifs, "Rotation");
+        const auto scl = readVec3(ifs, "Scale");
+        readTailTag(ifs, "SocketOffset");
+    }
+
+    readTailTag(ifs, "SocketOffsets");
+}
+
+void importItemData(std::ifstream& ifs, Model& model) {
+    readHeadTag(ifs, "ItemData");
+    importSocketOffsets(ifs, model);
+    readTailTag(ifs, "ItemData");
+}
+
 // 바이너리 파일로부터 모델을 읽어온다.
 // 메시들을 생성하며 각 메시들의 버텍스 버퍼와 서브메시, 그리고 재질 집합을 생성한다.
 // 그 과정에서 필요한 텍스처들이 texHashMap에 존재하지 않는다면, 로드한다.
@@ -1201,8 +1224,13 @@ Model loadModelFromFile( const std::filesystem::path& path,
     importGeometry(ifs, device, cmdList, texHashMap, fenceToAssociate, ret);
     importBoundingVolumes(ifs, ret);
 
-    if (ifs.peek() != EOF) {
+    const auto hasSkeleton = static_cast<bool>(readInteger(ifs, "HasSkeleton"));
+    if (hasSkeleton) {
         importSkeleton(ifs, ret);
+    }
+    const auto hasWeaponInfo = static_cast<bool>(readInteger(ifs, "HasWeaponInfo"));
+    if (hasWeaponInfo) {
+        importItemData(ifs, ret);
     }
 
     gSharedLog << "[Resource Load] File I/O: 모델 " << ret.name << '(' << path << ") 로드 완료\n";

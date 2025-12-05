@@ -13,6 +13,12 @@ void AssetManager::loadGFXAssets(GFX& gfx) {
 		.pTexHashMap = &texHashMap_,
 		.pDest = &modelPlayer_
 	} );
+
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/rifle.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelRifle_
+	} );
 	
 	gfx.addRequestSkyboxLoad( RequestSkyboxLoad{
 		.skyboxPath = "../resources/models/skybox.bin",

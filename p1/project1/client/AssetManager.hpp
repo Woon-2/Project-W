@@ -11,6 +11,7 @@ public:
 
 	const Model* modelCube() const { return &modelCube_; }
 	const Model* modelPlayer() const { return &modelPlayer_; }
+	const Model* modelRifle() const { return &modelRifle_; }
 	const Skybox* skyboxMaterial() const { return &skyboxMaterial_; }
 	const std::vector<std::shared_ptr<AnimClip>>& vanguardAnimations() const { return vanguardAnimations_; }
 
@@ -19,6 +20,7 @@ private:
 	std::vector<std::shared_ptr<AnimClip>> vanguardAnimations_{};
 	Model modelCube_{};
 	Model modelPlayer_{};
+	Model modelRifle_{};
 	Skybox skyboxMaterial_{};
 };
 
