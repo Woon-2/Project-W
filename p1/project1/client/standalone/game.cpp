@@ -75,7 +75,7 @@ void Game::setupStage() {
 
 	billboard_.setTexture( assetManager_.billBoard0() );
 
-	slimeSprite_.setTexture( assetManager_.slimeSprites() );
+	slimeSprite_.init( assetManager_.slimeAnimation() );
 
 	playerHpUIs_.resize( 2u );
 	playerHpUIs_[0].setTexture( assetManager_.playerHpLine() );

@@ -552,7 +552,7 @@ void GFX::addRequestTextureLoad( const RequestTextureLoad& request )
 	requestsTextureLoad_.push_back( request );
 }
 
-void GFX::addRequestSpritesLoad( const RequestSpritesLoad& request )
+void GFX::addRequestSpritesLoad( const RequestSpriteAnimLoad& request )
 {
 	requestsSpritesLoad_.push_back( request );
 }
@@ -631,9 +631,9 @@ void GFX::loadAssets() {
 
 	// load textures
 	for ( auto& request : requestsTextureLoad_ ) {
-		if ( !texHashMap_.contains( request.name ) ) {
+		if ( !request.pTexHashMap->contains( request.name ) ) {
 			Texture::Type type{};
-			auto [pPair, _] = texHashMap_.try_emplace( request.name, loadTexture( device_.Get(), cmdList.Get(), request.texturePath, fence, type ) );
+			auto [pPair, _] = request.pTexHashMap->try_emplace( request.name, loadTexture( device_.Get(), cmdList.Get(), request.texturePath, fence, type ) );
 			createSRV( device_.Get(), pPair->second, srvTexPool_ );
 			pPair->second.idxSrv.idxSampler = etoi( Samplers::TrilinearWrap );
 			*request.pDest = pPair->second;
@@ -644,7 +644,7 @@ void GFX::loadAssets() {
 
 	// load sprites
 	for ( auto& request : requestsSpritesLoad_ ) {
-		*request.pDest = loadSpritesFromFile( request.spritesPath, device_.Get(), cmdList.Get(), texAnimHashMap_, srvTexPool_, fence );
+		*request.pDest = loadSpriteAnimationFromFile( request.spritesPath, device_.Get(), cmdList.Get(), *request.pSpritesHashMap, srvTexPool_, fence );
 	}
 
 	dumpLog();

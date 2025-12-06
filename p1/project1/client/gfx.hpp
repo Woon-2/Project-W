@@ -90,11 +90,13 @@ struct RequestTextureLoad {
 	std::string name;
 	std::filesystem::path texturePath;
 	Texture* pDest;
+	std::unordered_map<std::string, Texture>* pTexHashMap;
 };
 
-struct RequestSpritesLoad {
+struct RequestSpriteAnimLoad {
 	std::filesystem::path spritesPath;
-	std::vector<Texture>* pDest;
+	SpriteAnimationClip* pDest;
+	std::unordered_map<std::string, std::vector<Texture>>* pSpritesHashMap;
 };
 
 // 렌더링을 총괄 책임지는 클래스
@@ -176,7 +178,7 @@ public:
 	void addRequestModelLoad(const RequestModelLoad& request);
 	void addRequestSkyboxLoad(const RequestSkyboxLoad& request);
 	void addRequestTextureLoad( const RequestTextureLoad& request );
-	void addRequestSpritesLoad( const RequestSpritesLoad& request );
+	void addRequestSpritesLoad( const RequestSpriteAnimLoad& request );
 
 	// 파이프라인들이 자체적으로 사용하는 리소스들과
 	// addRequestXXLoad 꼴의 함수로 요청된 리소스들을 로드한다.
@@ -231,9 +233,6 @@ private:
 	DescriptorPool samPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
 	DescriptorPool cmpSamPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
 
-	std::unordered_map<std::string, Texture> texHashMap_{};
-	std::unordered_map<std::string, std::vector<Texture>> texAnimHashMap_{};
-
 	// 루트 시그너처와 셰이더들
 	std::map<std::string, std::shared_ptr<RootSig>> rootSigs_{};
 	std::map<std::string, ComPtr<ID3D12PipelineState>> shaders_{};
@@ -283,7 +282,7 @@ private:
 	std::vector<RequestModelLoad> requestsModelLoad_{};
 	std::vector<RequestSkyboxLoad> requestsSkyboxLoad_{};
 	std::vector<RequestTextureLoad> requestsTextureLoad_{};
-	std::vector<RequestSpritesLoad> requestsSpritesLoad_{};
+	std::vector<RequestSpriteAnimLoad> requestsSpritesLoad_{};
 
 	ThreadPool* threadPool_ = nullptr;	// 설정되어있을 경우 멀티스레드로 동작한다.
 };

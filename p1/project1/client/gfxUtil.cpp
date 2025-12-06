@@ -1,6 +1,7 @@
 #include "pch.hpp"
 #include "gfxUtil.hpp"
 #include "errorHandling.hpp"
+#include "binaryImport.hpp"
 
 // 버퍼 리소스를 생성하는 함수
 // creationType이 UploadBuffer이고 pSrc != nullptr인 경우에만
@@ -782,4 +783,79 @@ void freeSRV(const Texture& tex, DescriptorPool& pool) {
 // 이 함수는 그것을 검사하지 않는다.
 void freeUAV(const Texture& tex, DescriptorPool& pool) {
 	pool.free(tex.idxUav.idxResource);
+}
+
+SpriteAnimationClip loadSpriteAnimationFromFile( const std::filesystem::path& path, ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, 
+	std::unordered_map<std::string, std::vector<Texture>>& texAnimHashMap, DescriptorPool& texPool, Fence& fenceToAssociate ) {
+	SpriteAnimationClip ret{};
+
+	auto ifs = std::ifstream( path, std::ios::binary );
+	DISPLAY_ERROR_STR( ifs.good(), "[File I/O Error]: loadSpriteAnimationFromFile: "s + path.string() + " 파일을 열 수 없습니다."s, false );
+	if ( !ifs ) {
+		return ret;
+	}
+
+	ret.name = readText(ifs, "Name");
+	ret.type = static_cast<SpriteAnimType>(readInteger(ifs, "Type"));
+
+	const auto frameCount = readInteger(ifs, "FrameCount");
+	ret.frames.resize(frameCount + 1u);
+
+	ret.frameTime = Milliseconds( readInteger(ifs, "FrameTime") );
+
+	auto [pPair, emplaced] = texAnimHashMap.try_emplace(ret.name);
+	if (emplaced) {
+		auto& sprites = pPair->second;
+		sprites.reserve(ret.frames.size());
+	}
+
+	ret.duration = Milliseconds( readInteger(ifs, "Duration") );
+
+	readHeadTag( ifs, "Frames" );
+	for ( std::size_t i = 0u; i < ret.frames.size() - 1u; ++i ) {
+		readHeadTag( ifs, "Frame" );
+		
+		ret.frames[i].name = readText(ifs, "Name");
+		ret.frames[i].width = static_cast<u32t>(readInteger(ifs, "Width"));
+		ret.frames[i].height = static_cast<u32t>(readInteger(ifs, "Height"));
+		if (ret.type == SpriteAnimType::RandomAdvance) {
+			ret.frames[i].time = ret.frameTime;
+		}
+		else {
+			ret.frames[i].time = i * ret.frameTime;
+		}
+
+		auto& sprites = pPair->second;
+
+		if (emplaced) {
+			const auto texturePath = std::filesystem::path("../resources/Sprites/"s + ret.name + '/' + ret.frames[i].name);
+
+			Texture::Type type{};
+			auto texture = loadTexture(device, cmdList, texturePath, fenceToAssociate, type);
+
+			createSRV(device, texture, texPool);
+			// TODO: 샘플링 방법도 바이너리에 기록
+			texture.idxSrv.idxSampler = etoi(Samplers::TrilinearWrap);
+
+			sprites.push_back(std::move(texture));
+		}
+
+		ret.frames[i].sprite = cloneTextureIdxOnly(sprites[i]);
+
+		readTailTag( ifs, "Frame" );
+	}
+
+	// sentinel frame
+	auto& sentinelFrame = ret.frames.back();
+	sentinelFrame.name = "Sentinel";
+	sentinelFrame.width = ret.frames[ret.frames.size() - 2u].width;
+	sentinelFrame.height = ret.frames[ret.frames.size() - 2u].height;
+	sentinelFrame.sprite = ret.frames[ret.frames.size() - 2u].sprite;
+	sentinelFrame.time = Milliseconds(std::numeric_limits<float>::max());
+
+	readTailTag( ifs, "Frames" );
+
+	gSharedLog << "[Resource Load] File I/O: Sprites " << '(' << path << ") 로드 완료\n";
+
+	return ret;
 }

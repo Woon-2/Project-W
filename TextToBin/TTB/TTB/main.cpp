@@ -16,6 +16,7 @@ enum class AnimType : std::uint32_t
 {
 	Loop = 0,
 	Once = 1,
+    RandomAdvance = 2,
     SIZE
 };
 
@@ -25,6 +26,7 @@ struct AnimationData
 	AnimType type = AnimType::Loop;
 	std::uint32_t frameCount = 0;
 	std::uint32_t frameTimeMs = 0;
+    std::uint32_t durationMs = 0;
 	std::vector<FrameInfo> frames;
 };
 
@@ -105,9 +107,10 @@ bool ExportAnimationBinary( const AnimationData& anim, const std::string& output
     // Type
     WriteTextUInt32( out, "Type", static_cast<uint32_t>(anim.type) );
 
-    // FrameCnt, FrameTime
+    // FrameCnt, FrameTime, Duration
     WriteTextUInt32( out, "FrameCount", anim.frameCount );
     WriteTextUInt32( out, "FrameTime", anim.frameTimeMs );
+    WriteTextUInt32( out, "Duration", anim.durationMs );
 
     // [Frames]
 	WriteString( out, "<Frames:>" ); // Frames 시작 태그
@@ -153,15 +156,18 @@ int main()
     std::getline( std::cin, anim.name );
 
     int typeInput = 0;
-    std::cout << "타입을 선택하세요 (0: Loop, 1: Once): ";
+    std::cout << "타입을 선택하세요 (0: Loop, 1: Once, 2: RandomAdvance): ";
     std::cin >> typeInput;
-    anim.type = (typeInput == 1) ? AnimType::Once : AnimType::Loop;
+    anim.type = static_cast<AnimType>(typeInput);
 
     std::cout << "프레임 개수(FrameCnt)를 입력하세요: ";
     std::cin >> anim.frameCount;
 
     std::cout << "프레임 재생 시간(ms) (FrameTime)을 입력하세요: ";
     std::cin >> anim.frameTimeMs;
+
+    std::cout << "총 재생 시간(ms) (duration)을 입력하세요: ";
+    std::cin >> anim.durationMs;
 
     anim.frames.resize( anim.frameCount );
 

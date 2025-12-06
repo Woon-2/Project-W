@@ -398,4 +398,38 @@ void freeSRV(const Texture& tex, DescriptorPool& pool);
 // 이 함수는 그것을 검사하지 않는다.
 void freeUAV(const Texture& tex, DescriptorPool& pool);
 
+struct SpriteAnimFrame
+{
+	Texture sprite;
+	std::string name;
+	std::uint32_t width;
+	std::uint32_t height;
+	Milliseconds time;
+};
+
+enum class SpriteAnimType : std::uint32_t
+{
+	Loop = 0,
+	Once = 1,
+	RandomAdvance = 2,
+	SIZE
+};
+
+struct SpriteAnimationClip
+{
+	std::string name;
+	std::vector<SpriteAnimFrame> frames;
+	SpriteAnimType type;
+	Milliseconds frameTime;
+	Milliseconds duration;
+};
+
+// 바이너리 파일로부터 스프라이트 애니메이션의 정보들을 로드하고 그것을 바탕으로 texAnimHashMap을 채운다.
+SpriteAnimationClip loadSpriteAnimationFromFile(
+	const std::filesystem::path& path,
+	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
+	std::unordered_map<std::string, std::vector<Texture>>& texAnimHashMap,
+	DescriptorPool& texPool, Fence& fenceToAssociate
+);
+
 #endif	// __gfxUtil_HPP

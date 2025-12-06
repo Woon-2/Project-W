@@ -28,24 +28,28 @@ void AssetManager::loadGFXAssets(GFX& gfx) {
 	gfx.addRequestTextureLoad( RequestTextureLoad{
 		.name = "Billboard0",
 		.texturePath = "../client/CubeMesh_Albedo.dds",
-		.pDest = &billBoard0_
+		.pDest = &billBoard0_,
+		.pTexHashMap = &texHashMap_
 		} );
 
-	gfx.addRequestSpritesLoad( RequestSpritesLoad{
+	gfx.addRequestSpritesLoad( RequestSpriteAnimLoad{
 		.spritesPath = "../resources/Sprites/slime_anim.bin",
-		.pDest = &slimeSprites_
+		.pDest = &slimeAnimation_,
+		.pSpritesHashMap = &spritesHashMap_
 		} );
 
 	gfx.addRequestTextureLoad( RequestTextureLoad{
 		.name = "PlayerHpLine",
 		.texturePath = "../resources/UI/player_hp_line.dds",
-		.pDest = &playerHpLine_
+		.pDest = &playerHpLine_,
+		.pTexHashMap = &texHashMap_
 		} );
 
 	gfx.addRequestTextureLoad( RequestTextureLoad{
 		.name = "PlayerHpFrame",
 		.texturePath = "../resources/UI/player_hp_frame.dds",
-		.pDest = &playerHpFrame_
+		.pDest = &playerHpFrame_,
+		.pTexHashMap = &texHashMap_
 		} );
 
 	gfx.loadAssets();
