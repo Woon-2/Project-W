@@ -89,8 +89,7 @@ int32 ServerSession::onRecvPacket(uint8* buffer, int32 len) {
 	case PacketType::scMove: {
 		auto message = Online::Message{
 			.type = Online::MsgType::PlayerMove,
-			.objectId = packet->scMove.playerId,
-			.pos = DirectX::XMLoadFloat3(&packet->scMove.pos)
+			.objectId = packet->scMove.playerId
 		};
 		messageQueue.enqueue(message);
 		break;

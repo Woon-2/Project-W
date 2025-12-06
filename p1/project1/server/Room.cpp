@@ -78,26 +78,12 @@ void Room::processMessage() {
 
 			auto yawf = std::atan2(messages[i].forward.x, messages[i].forward.z);
 			auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), mu::Radian(yawf));
+
 			user->setOrient(yaw);
 			//user->setPlayerYaw(messages[i].playerYaw);
 			user->setCameraPitch(messages[i].cameraPitch);
 
-			auto keyMask = user->keyMask();
 
-			switch (messages[i].dir) {
-			case Direction::w:
-				user->setKeyMask(keyMask | MoveW);
-				break;
-			case Direction::a:
-				user->setKeyMask(keyMask | MoveA);
-				break;
-			case Direction::s:
-				user->setKeyMask(keyMask | MoveS);
-				break;
-			case Direction::d:
-				user->setKeyMask(keyMask | MoveD);
-				break;
-			}
 			break;
 		}
 
