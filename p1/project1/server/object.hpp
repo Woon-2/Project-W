@@ -5,6 +5,7 @@
 
 struct PhysicState {
 	mu::Vec3 pos{};
+	mu::Vec3 velocity{};
 	mu::Vec3 omega{};
 	mu::NQuat orient{};
 	mu::Vec3 scale{};
@@ -41,6 +42,10 @@ public:
 	// PhysicState의 AABB와 Bounding Rect 역시 갱신된다.
 	void MU_CALLCONV setPos(mu::Vec3 newPos);
 	mu::Vec3 MU_CALLCONV pos() const { return physicState_.pos; }
+	// 게임 객체의 속도를 갱신한다.
+	// 이전 PhysicState와 현재 PhysicState의 속도가 모두 갱신된다.
+	void MU_CALLCONV setVelocity(mu::Vec3 newVelocity);
+	mu::Vec3 MU_CALLCONV velocity() const { return physicState_.velocity; }
 	// 게임 객체의 각속도를 갱신한다.
 	void MU_CALLCONV setOmega(mu::Vec3 newOmega);
 	mu::Vec3 MU_CALLCONV omega() const { return physicState_.omega; }
@@ -73,11 +78,15 @@ public:
 	float oldX() const { return oldX_; }
 	float oldZ() const { return oldZ_; }
 
-	void setPlayerYaw(float yaw) { playerYaw_ = yaw; }
+	//void setPlayerYaw(float yaw) { playerYaw_ = yaw; }
 	void setCameraPitch(float pitch) { cameraPitch_ = pitch; }
 
-	void setKeyMask(uint8 keyMask) { keyMask_ = keyMask; }
-	uint8 keyMask() const { return keyMask_; }
+	void setMoveSign(int32 xSign, int32 zSign) {
+		moveXSign_ = xSign;
+		moveZSign_ = zSign;
+	}
+	int32 moveXSign() const { return moveXSign_; }
+	int32 moveZSign() const { return moveZSign_; }
 
 private:
 	// object(player) 좌표의 스냅샷을 저장하기 위한 oldX_, oldZ_
@@ -91,13 +100,12 @@ private:
 
 	const Model* pModel_ = nullptr;
 
-	float playerYaw_{};
+	//float playerYaw_{};
 	float cameraPitch_{};
 
 	u32t materialSetIdx_ = 0u;
 	i32t id_{ -1 };
 
-	uint8 keyMask_;
 	int32 moveXSign_{};
 	int32 moveZSign_{};
 };

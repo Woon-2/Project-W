@@ -136,35 +136,54 @@ int32 GameSession::onRecvPacket( uint8* buffer, int32 len ) {
 	case PacketType::csLeave:
 		break;
 
-	case PacketType::csMoveStart: {
+	case PacketType::csMoveInput: {
 		if(myRoomId_ == -1) {
 			break;
 		}
 		
 		auto logicMsg = LogicMessage{
-			.type = LogicMsgType::UserMoveStart,
-			.dir = packet->csMoveStart.dir,
-			.userId = getId( ),
+			.type = LogicMsgType::UserMoveInput,
+			.userId = getId(),
 			.roomId = myRoomId_,
-			.forward = packet->csMoveStart.forward,
-			.cameraPitch = packet->csMoveStart.cameraPitch
+			.moveXSign = packet->csMoveInput.moveXSign,
+			.moveZSign = packet->csMoveInput.moveZSign
 		};
 
 		GameLogicManager::dispatchMessage(logicMsg);
 		break;
 	}
 
-	case PacketType::csMoveStop: {
-		if (myRoomId_ == -1) {
+	case PacketType::csMouseMove: {
+		if(myRoomId_ == -1) {
 			break;
 		}
 
 		auto logicMsg = LogicMessage{
-			.type = LogicMsgType::UserMoveStop,
-			.dir = packet->csMoveStop.dir,
+			.type = LogicMsgType::UserMouseMove,
 			.userId = getId(),
-			.roomId = myRoomId_
+			.roomId = myRoomId_,
+			.playerYawRadian = packet->csMouseMove.playerYawRadian,
+			.cameraPitchRadian = packet->csMouseMove.cameraPitchRadian
 		};
+
+		GameLogicManager::dispatchMessage(logicMsg);
+		break;
+	}
+
+	case PacketType::csMoveState: {
+		if(myRoomId_ == -1) {
+			break;
+		}
+
+		auto logicMsg = LogicMessage{
+			.type = LogicMsgType::UserMoveState,
+			.userId = getId(),
+			.roomId = myRoomId_,
+			.position = packet->csMoveState.position,
+			.velocity = packet->csMoveState.velocity,
+			.forward = packet->csMoveState.forward
+		};
+
 		GameLogicManager::dispatchMessage(logicMsg);
 		break;
 	}

@@ -20,25 +20,46 @@ void Room::update(Milliseconds deltaTime) {
 	// 위치 갱신
 	for (auto& [id, user] : idUserMap_) {
 		user->setOldPos(user->pos().x(), user->pos().z());
-		auto keyMask = user->keyMask();
+		auto moveXSign = user->moveXSign();
+		auto moveZSign = user->moveZSign();
 
-		if (keyMask & MoveW) {
-			user->setPos(user->pos() + user->forward() * 0.1f);
+		const auto maxSpeed = 10.f;	// 10m/s
+		const Seconds zeroToMax = 0.5s;
+		const Seconds maxToZero = 0.2s;
+		const auto moveThreshold = 0.1f;
+
+		if (moveXSign || moveZSign) {
+			const auto moveDirection = mu::NVec3(
+				static_cast<float>(moveXSign) * user->right() + static_cast<float>(moveZSign) * user->forward()
+			);
+
+			const auto moveAmount = Seconds(deltaTime).count() * maxSpeed / zeroToMax.count();
+			user->physicState().velocity += mu::Vec3(moveDirection) * moveAmount;
+
+			if (user->physicState().velocity.len2() > maxSpeed * maxSpeed) {
+				user->physicState().velocity *= (maxSpeed / user->physicState().velocity.len());
+			}
 		}
-		if (keyMask & MoveA) {
-			user->setPos(user->pos() - user->right() * 0.1f);
+		else if(user->physicState().velocity.len2() > moveThreshold * moveThreshold) {
+			const auto moveAmount = Seconds(deltaTime).count() * maxSpeed / maxToZero.count();
+
+			if (moveAmount * moveAmount > user->physicState().velocity.len2()) {
+				user->physicState().velocity = mu::Vec3();
+			}
+			else {
+				const auto moveDirection = mu::NVec3(-user->physicState().velocity);
+				user->physicState().velocity += mu::Vec3(moveDirection) * moveAmount;
+			}
 		}
-		if (keyMask & MoveS) {
-			user->setPos(user->pos() - user->forward() * 0.1f);
-		}
-		if (keyMask & MoveD) {
-			user->setPos(user->pos() + user->right() * 0.1f);
+		else {
+			user->physicState().velocity = mu::Vec3();
 		}
 
 		// 불필요한 브로드캐스트를 줄이기 위해
 		// 위치가 변경되었을 때만 다른 유저들에게 알림
-		//std::cout << "User " << user->getId() << " moved to (" << user->pos().x() << ", " << user->pos().z() << ")\n";
-		if (user->oldX() != user->pos().x() || user->oldZ() != user->pos().z()) {
+		if(user->oldX() != user->pos().x() || user->oldZ() != user->pos().z())
+			std::cout << "User " << user->getId() << " moved to (" << user->pos().x() << ", " << user->pos().z() << ")\n";
+		/*if (user->oldX() != user->pos().x() || user->oldZ() != user->pos().z()) {
 			auto packet = Packet{
 				.header = {
 					.size = sizeof(PacketHeader) + sizeof(SCMovePacket),
@@ -54,8 +75,16 @@ void Room::update(Milliseconds deltaTime) {
 			auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
 			sendBuffer->copyData(&packet, packetSize);
 			broadcast(sendBuffer);
-		}
+		}*/
 	}
+
+	std::vector<Object*> allObjects;
+	allObjects.resize(users_.size());
+	std::ranges::transform(users_, allObjects.begin(),
+		[](const std::shared_ptr<Object>& obj) { return obj.get(); }
+	);
+
+	physicSystem_.step(allObjects, Seconds(deltaTime));
 }
 
 void Room::processMessage() {
@@ -73,37 +102,27 @@ void Room::processMessage() {
 			leave(messages[i].userId);
 			break;
 
-		case LogicMsgType::UserMoveStart: {
+		case LogicMsgType::UserMoveInput: {
 			auto user = idUserMap_[messages[i].userId];
-
-			auto yawf = std::atan2(messages[i].forward.x, messages[i].forward.z);
-			auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), mu::Radian(yawf));
-
-			user->setOrient(yaw);
-			//user->setPlayerYaw(messages[i].playerYaw);
-			user->setCameraPitch(messages[i].cameraPitch);
-
-
+			user->setMoveSign(messages[i].moveXSign, messages[i].moveZSign);
 			break;
 		}
 
-		case LogicMsgType::UserMoveStop: {
+		case LogicMsgType::UserMouseMove: {
 			auto user = idUserMap_[messages[i].userId];
-			auto keyMask = user->keyMask();
+			auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), mu::Radian(messages[i].playerYawRadian));
+			user->setOrient(yaw);
+			user->setCameraPitch(messages[i].cameraPitchRadian);
+			break;
+		}
 
-			switch (messages[i].dir) {
-			case Direction::w:
-				user->setKeyMask(keyMask & ~MoveW);
-				break;
-			case Direction::a:
-				user->setKeyMask(keyMask & ~MoveA);
-				break;
-			case Direction::s:
-				user->setKeyMask(keyMask & ~MoveS);
-				break;
-			case Direction::d:
-				user->setKeyMask(keyMask & ~MoveD);
-				break;
+		case LogicMsgType::UserMoveState: {
+			auto user = idUserMap_[messages[i].userId];
+
+			// 클라와 서버 간의 위치 동기화
+			auto diff = user->pos() - mu::Vec3(DirectX::XMLoadFloat3(&messages[i].position));
+			if (diff.len() > 0.2f) {
+
 			}
 			break;
 		}

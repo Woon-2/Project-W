@@ -121,13 +121,14 @@ struct CSMouseMovePacket {
 };
 
 struct CSMoveStatePacket {
+	DirectX::XMFLOAT3 position;
 	DirectX::XMFLOAT3 velocity;
 	DirectX::XMFLOAT3 forward;
 	std::uint32_t timeStamp;
 };
 
 struct SCMovePacket {
-
+	std::int32_t playerId;
 };
 
 struct CSFindRoomPacket {

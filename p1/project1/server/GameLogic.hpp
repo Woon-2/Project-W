@@ -8,17 +8,22 @@ enum class LogicMsgType : uint8 {
 	RemoveRoom,
 	UserEnter,
 	UserLeave,
-	UserMoveStart,
-	UserMoveStop
+	UserMoveInput,
+	UserMouseMove,
+	UserMoveState,
 };
 
 struct LogicMessage {
 	LogicMsgType type{};
-	Direction dir{};
 	int32 userId{};
 	int32 roomId{};
+	int16 moveXSign{};
+	int16 moveZSign{};
+	float playerYawRadian{};
+	float cameraPitchRadian{};
+	DirectX::XMFLOAT3 position{};
+	DirectX::XMFLOAT3 velocity{};
 	DirectX::XMFLOAT3 forward{};
-	float cameraPitch{};
 };
 
 class GameLogic {
