@@ -17,6 +17,10 @@ void SpriteAnimation::update( Milliseconds deltaTime ) {
 		return;
 	}
 
+	// 렌더링에 사용할 월드 변환 갱신
+	world_ = mu::translate(pos_);
+
+	// 스프라이트 갱신
 	timeAcc_ += deltaTime * speed_;
 
 	if (pAnimData_->type == SpriteAnimType::RandomAdvance) {
@@ -54,6 +58,7 @@ void SpriteAnimation::update( Milliseconds deltaTime ) {
 void SpriteAnimation::render( GFX& gfx ) const {
 	gfx.addDrawEvent( BillboardPipeline::DrawEvent{
 		.world = world_,
-		.pTex = &pAnimData_->frames[currFrameIdx_].sprite
+		.pTex = &pAnimData_->frames[currFrameIdx_].sprite,
+		.tint = tint_
 	} );
 }

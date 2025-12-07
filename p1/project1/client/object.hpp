@@ -135,6 +135,9 @@ public:
 	void equip(Equipment&& equipment);
 	void disequip(Bone::SocketType socketType);
 
+	Equipment* getEquipment(Bone::SocketType socketType);
+	const Equipment* getEquipment(Bone::SocketType socketType) const;
+
 	// 바운딩 볼륨 렌더링을 활성화한다.
 	void enableBVRendering() { willRenderBV_ = true; }
 	// 바운딩 볼륨 렌더링을 비활성화한다.

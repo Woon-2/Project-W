@@ -32,6 +32,7 @@ struct FrameData {
 struct DrawEvent {
 	mu::Mat4x4 world;
 	const Texture* pTex;
+	mu::Vec3 tint;
 
 	auto operator<=>( const DrawEvent& rhs ) const noexcept {
 		return std::strong_ordering::equal;

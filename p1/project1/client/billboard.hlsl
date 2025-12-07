@@ -6,13 +6,8 @@ struct PerInstanceData {
 
 struct Material
 {
-    int4 idxAlbedo;
-    int4 idxRoughness;
-    int4 idxMetallic;
-    
-    float4 cAlbedo;
-    float cRoughness;
-    float cMetallic;
+    int4 idxTex;
+    float3 tint;
 };
 
 struct VSOutput
@@ -82,5 +77,6 @@ void GSMain(point VSOutput input[1],
 }
 
 float4 PSMain(PSInput input) : SV_TARGET {
-    return sampleBindless(material.idxAlbedo, input.uv);
+    float4 src = sampleBindless(material.idxTex, input.uv);
+    return float4(src.xyz * material.tint, src.a);
 }

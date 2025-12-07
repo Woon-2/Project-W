@@ -213,13 +213,8 @@ struct PerFrameData {
 namespace BillboardShader {
 
 struct Material {
-	BindlessIndex idxAlbedo;
-	BindlessIndex idxRoughness;
-	BindlessIndex idxMetallic;
-
-	XMFLOAT4 cAlbedo;
-	float cRoughness;
-	float cMetallic;
+	BindlessIndex idxTex;
+	XMFLOAT3 tint;
 };
 
 struct PerInstanceData {

@@ -345,3 +345,27 @@ void Object::disequip(Bone::SocketType socketType) {
 	
 	// 필요하다면 본의 최종 변환으로부터 T, R을 추출해 분리된 오브젝트에 복원해내도록 한다.
 }
+
+Equipment* Object::getEquipment(Bone::SocketType socketType) {
+	auto it = std::ranges::find( equipments_, socketType,
+		[](const Equipment& equipment) { return equipment.socketType; }
+	);
+	
+	if (it == equipments_.end()) {
+		return nullptr;
+	}
+
+	return &*it;
+}
+
+const Equipment* Object::getEquipment(Bone::SocketType socketType) const {
+	auto it = std::ranges::find( equipments_, socketType,
+		[](const Equipment& equipment) { return equipment.socketType; }
+	);
+	
+	if (it == equipments_.end()) {
+		return nullptr;
+	}
+
+	return &*it;
+}

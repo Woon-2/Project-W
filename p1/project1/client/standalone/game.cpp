@@ -203,6 +203,13 @@ void Game::update(Milliseconds deltaTime) {
 	dirLight_.updateShadowAuxDirectional(camera_.eye(), 100.f, -10.f, 10.f, -10.f, 10.f, 50.f, 200.f);
 	slimeSprite_.update( deltaTime );
 	for (auto& muzzleFlash : muzzleFlashes_) {
+		// 총구 화염 스프라이트 애니메이션
+		// 플레이어에 대해서 오프셋 지정
+		muzzleFlash.setPos( player_->pos()
+			+ player_->up() * 1.3f
+			+ player_->forward() * 0.85f
+			+ player_->right() * 0.15f
+		);
 		muzzleFlash.update(deltaTime);
 	}
 
@@ -321,11 +328,14 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		}
 		break;
 
-	case WM_LBUTTONDOWN:
-		// 총 발사
-		muzzleFlashes_.emplace_back().init(assetManager_.muzzleFlashAnimation());
+	case WM_LBUTTONDOWN: {
+		// 총 발사: 총구 화염 애니메이션 재생
+		auto& muzzleFlash = muzzleFlashes_.emplace_back();
+		muzzleFlash.init(assetManager_.muzzleFlashAnimation());
+		muzzleFlash.setTint(mu::Vec3(0.8f, 0.4f, 0.1f));
 		fireCooldown_ = 200ms;
 		break;
+	}
 
 	case WM_SIZE:
 		break;
