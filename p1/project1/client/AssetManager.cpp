@@ -36,7 +36,13 @@ void AssetManager::loadGFXAssets(GFX& gfx) {
 		.spritesPath = "../resources/Sprites/slime_anim.bin",
 		.pDest = &slimeAnimation_,
 		.pSpritesHashMap = &spritesHashMap_
-		} );
+	} );
+
+	gfx.addRequestSpritesLoad( RequestSpriteAnimLoad{
+		.spritesPath = "../resources/Sprites/muzzle_flash.bin",
+		.pDest = &muzzleFlashAnimation_,
+		.pSpritesHashMap = &spritesHashMap_
+	} );
 
 	gfx.addRequestTextureLoad( RequestTextureLoad{
 		.name = "PlayerHpLine",

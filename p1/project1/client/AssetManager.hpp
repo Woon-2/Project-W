@@ -17,6 +17,7 @@ public:
 	const Skybox* skyboxMaterial() const { return &skyboxMaterial_; }
 	const Texture* billBoard0() const { return &billBoard0_; }
 	const SpriteAnimationClip* slimeAnimation() const { return &slimeAnimation_; }
+	const SpriteAnimationClip* muzzleFlashAnimation() const { return &muzzleFlashAnimation_; }
 	const Texture* playerHpLine() const { return &playerHpLine_; }
 	const Texture* playerHpFrame() const { return &playerHpFrame_; }
 	const std::vector<std::shared_ptr<AnimClip>>& vanguardAnimations() const { return vanguardAnimations_; }
@@ -33,6 +34,7 @@ private:
 	Texture playerHpLine_{};
 	Texture playerHpFrame_{};
 	SpriteAnimationClip slimeAnimation_{};
+	SpriteAnimationClip muzzleFlashAnimation_{};
 };
 
 #endif	// __AssetManager_HPP

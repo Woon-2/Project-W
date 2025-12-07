@@ -77,6 +77,8 @@ private:
 
 	Billboard billboard_{};
 	SpriteAnimation slimeSprite_{};
+	std::deque<SpriteAnimation> muzzleFlashes_{};
+	Milliseconds fireCooldown_{};
 	std::vector<BasicPlayerHpUI> playerHpUIs_{};
 
 	LONG mouseDeltaX_{};

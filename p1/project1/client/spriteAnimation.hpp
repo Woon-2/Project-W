@@ -9,7 +9,7 @@ class SpriteAnimation {
 public:
 	void init(const SpriteAnimationClip* pAnimData);
 	void update( Milliseconds deltaTime );
-	void render( GFX& gfx );
+	void render( GFX& gfx ) const;
 	bool done() const { return done_; }
 
 private:

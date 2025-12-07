@@ -202,8 +202,17 @@ void Game::update(Milliseconds deltaTime) {
 	dirLight_.update(deltaTime);
 	dirLight_.updateShadowAuxDirectional(camera_.eye(), 100.f, -10.f, 10.f, -10.f, 10.f, 50.f, 200.f);
 	slimeSprite_.update( deltaTime );
+	for (auto& muzzleFlash : muzzleFlashes_) {
+		muzzleFlash.update(deltaTime);
+	}
+
+	std::erase_if(muzzleFlashes_, [](const SpriteAnimation& anim) { return anim.done(); });
 
 	animSystem_.update(0.016s);
+
+	if (fireCooldown_ > 0ms) {
+		fireCooldown_ -= deltaTime;
+	}
 }
 
 void Game::render() {
@@ -216,6 +225,9 @@ void Game::render() {
 	dirLight_.render(gfx_);
 	// billboard_.render( gfx_ );
 	slimeSprite_.render( gfx_); 
+	for (const auto& muzzleFlash : muzzleFlashes_) {
+		muzzleFlash.render(gfx_);
+	}
 
 	for ( auto& hpUI : playerHpUIs_ ) {
 		hpUI.render( gfx_ );
@@ -307,6 +319,12 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		if (cursorShowEnabled_) {
 			showCursor();
 		}
+		break;
+
+	case WM_LBUTTONDOWN:
+		// รั น฿ป็
+		muzzleFlashes_.emplace_back().init(assetManager_.muzzleFlashAnimation());
+		fireCooldown_ = 200ms;
 		break;
 
 	case WM_SIZE:
