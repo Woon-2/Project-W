@@ -27,11 +27,11 @@ public:
 
 		for ( std::size_t i = 0; i < capacity; ++i ) {
 			next += safe_mem();
-			*cur = next;
-			cur = reinterpret_cast<char**>( next );
+			*curr = next;
+			curr = reinterpret_cast<char**>( next );
 		}
 
-		*cur = nullptr;
+		*curr = nullptr;
 	}
 
 	~Pool() {
