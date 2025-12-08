@@ -15,43 +15,74 @@
 #include "uiPipeline.hpp"
 #include "spriteAnimation.hpp"
 
-// 플레이어 체력 및 장탄수, 사격 쿨타임 갱신 함수 만들기
-// 움직이지 않는 상태에서의 공격 애니메이션 추가 - 12.7.
-// Cascaded Shadow Mapping
-// 다른 플레이어 체력바 표시 및 피격 이펙트 구현 - 12.8.
-// 행렬에서 TRS 추출 및 상대 변환 <-> 절대 변환 유틸리티 추가
-// 본 변환까지 반영해 특정 오브젝트의 상대 위치 알아낼 수 있게 구현
-// Non Skeletal Socket 구현
-// Object 훨씬 일반성 있게 구현 - 12.10.
-// metallic, roughness map 별도로도 지원
-// ExecuteCommand 별도 스레드에서 호출
-// Deferred Shading - 12.14.
-// UI와 3D 객체 겹치는 상황에서의 피킹 - 12.15.
-// 선택된 객체 아이콘 표시 및 테두리 그리기
-// 타워, 바리케이드 설치 (위치 고를때 반투명, 바닥에 색깔로 설치 가능 표시)
-// 타워 총알 발사 임시 구현
-// 랜덤하게 생성된 몹들이 기지로 길찾아 오도록 패킷을 받았을 때 대응 가능한 인터페이스 구현
-// Rigidbody Physics 구현 - 12.13.
-// Software Culling 구현(렌더링, 애니메이션 업데이트) - 12.15.
-// 애니메이션 우선순위 계산 알고리즘 - 12.16.
-// Active Ragdoll 구현 - 12.21.
-// (상훈) 서버사이드 속도기반 물리
-// (종진) 텍스트출력, 레벨디자인
+// Idle -> attack 애니메이션
+// hit 애니메이션
+// 레벨디자인 - 12.9.
+// Static Dynamic object 분리 추출 - 12.11.
+// CSM
+// 피격 패킷에 들어있는 위치에 이펙트 재생
+// 다른 플레이어 체력바 표시 - 12.13.
+// ==== 여기서부터 p2
+// metallic, roughness map 별도 지정 가능하도록 Texture Mapping 자유도 높이기
+// ExecuteCommands 별도 스레드 호출 - 12.14.
+// Clickable UI 구현 - 12.15.
+// 마우스 피킹
+// 오브젝트 배치 - 12.17.
+// CSM 섀도우맵 뷰
+// G버퍼 만들어서 특정 텍스처 볼 수 있도록 - 12.18.
+// Deferred Shading
+// G버퍼 뷰 - 12.19.
+// 점조명 그림자매핑 - 12.20.
+// 다중 그림자매핑 - 12.22.
+// 몬스터 에셋 원하는 아바타로 뽑아낼 수 있게 연구 - 12.24.
+// PhysicState에 충돌 감지 여부, 회복 방식 설정 가능하도록 구현 - 12.26.
+// 몬스터들 띄우기
+// 몬스터들의 랜덤 이동 - 12.28.
+// 청크 단위 지형 구현
+// 청크 하나 로드 & 테셀레이션 - 12.30.
+// 청크 파일 관리법 설계, 여러 청크 로드 - 1.2.
+// 파티클 이펙트 - 1.3.
+// 애니메이션된 위치와 방향 얻기, 상대 물리량 얻기 - 1.5.
+// 파일->리소스 함수 멀티스레드 구현 - 1.7.
+// Object 클래스 일반화
+// 애니메이션 priority 계산 - 1.8.
+// Rigidbody Physics - 1.10.
+// Active Ragdoll - 1.13.
+// frustum 충돌처리 구현
+// view frustum culling - 1.15.
+// software culling - 1.18.
+// 멀티스레드 물리 - 1.20.
+// 멀티스레드 애니메이션 - 1.21.
+// BoundingVolumeHierarchy-Unity
+// BoundingVolumeHierarchy-C++ - 1.23.
+// 그리드 공간분할 - 1.24.
+// 공간분할 충돌처리 최적화 - 1.26.
 // 
+// 물리 LOD 설정
+// 그래픽 LOD 설정 및 추출
+// 그래픽 LOD 구현
+// Vegetation (biome 표현)
+// 단순 근거리 원거리 공격 구현
+// 자연스러운 공격 충돌영역 표현
+// 공격 피드백 구현(넉백, 이펙트, 데미지)
+// 회피, 방어 기획 및 구현
 // 스프링 팔로잉 카메라 구현
-// Bounding Volume Hierarchy 구현
-// Software Culling 구현
-// Deferred Shading 구현
-// Rigidbody Physics 구현
-// Active Ragdoll 구현
-// Image Based Lighting 구현
-// pn triangles tesselation 구현
-// 
-// 부하 관리 (업데이트, 애니메이션 생략)
-// Chunk 분리
-// 렌더링 LOD, 업데이트 LOD, 애니메이션 LOD(본 개수, baked animation)
-// Terrain Tessellation
-// 파티클 시뮬레이션
+// 전투 UI 구현
+// 인벤토리 구현
+// 다양한 무기, 스킬 구현
+// 몬스터 집단 이동형태 구현
+// 몬스터 집단 AI 구현
+// 전술 시스템 보너스 구현
+// 네임드 전투 하나 구현
+// 맵 이동 구현
+// 보스 전투 하나 구현
+// 환경매핑
+// Irradiance map 등 빌드 후 표시
+// Light Probe 유니티에서 정의 및 추출
+// 완벽한 IBL
+// PCF 일반화
+// VSM, EVSM 등의 그림자 알고리즘
+// pn-triangle 테셀레이션
 // Bloom
 // HDR
 // Subsuface Scattering
@@ -59,22 +90,8 @@
 // Screen Space Reflection
 // Volumetric Rendering
 // Atmosphere Rendering
-// EVSM
 // TAA
-// 
-// 사운드 프로그래밍
-// 네트워크에서 받는 물리 정보 보간/외삽
-// 나무, 수풀 LOD써서 넣기
-// 멀티스레드 업데이트
-
-// 서버
-// 로그인-로그아웃, 룸 구조 만들기
-// 2D맵 충돌처리
-// ray scanning으로 사격, 피격 처리
-// hp, 장탄수, 사격 쿨타임 등 전투 구조 구현
-// 로그인 정보 db 연동
-// 테스트 가능하도록 더미 로그인 데이터와 더미 플레이어 구현
-// 테스트 프로그램 구현
+// fmod 사운드 프로그래밍
 
 extern HWND ghWnd;
 
