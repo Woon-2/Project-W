@@ -87,6 +87,10 @@ public:
         window_.setWindowed(&device_);
     }
 
+    void initQuadModel(d3d12::D3D12Device& device, d3d12::D3D12GfxCmdList& cmdList) {
+        d3d12::QuadModel::initQuadModel( device, cmdList );
+	}
+
     void initChunkMesh(d3d12::D3D12GfxCmdList& cmdList) {
         d3d12::LevelChunkModel::initChunkMesh(device_, cmdList);
     }
@@ -371,6 +375,14 @@ public:
 
     void init(Scene& scene) override;
     void update(Scene& scene) override;
+};
+
+class PlayerUI : public IRenderPass, public d3d12::rp::PlayerUI {
+public:
+	using d3d12::rp::PlayerUI::PlayerUI;
+
+	void init(Scene& scene) override;
+	void update(Scene& scene) override;
 };
 
 }   // namespace gfx::d3d12engine::rp

@@ -89,6 +89,7 @@
 #include <latch>
 #include <array>
 #include <mutex>
+#include <span>
 
 #include "mathUtil.hpp"
 #include "function.hpp"
@@ -168,6 +169,9 @@ inline T rand(T closedBegin, T closedEnd) {
 	auto rng = TDist(closedBegin, closedEnd);
 	return rng(gRandomEngine);
 }
+
+template <typename T>
+class PassKey { friend T;    PassKey() = default; };
 
 size_t numberOfPhysicalCores() noexcept;
 

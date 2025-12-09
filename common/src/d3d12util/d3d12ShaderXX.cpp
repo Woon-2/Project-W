@@ -1603,6 +1603,102 @@ InputLayout ShaderSkybox::makeInputLayoutSeparated() {
 	});
 }
 
+ShaderPlayerUI::ShaderPlayerUI(D3D12Device& device, const RootSignature& root,
+	const Config& config, InputLayout::Spec ilSpec
+) : Shader(root, makeInputLayout(ilSpec)),
+cbDrawcallDataSize_(calcConstantBufferSize(sizeof(sr::PerDrawcallData6))),
+perConfigurationData_( device, sizeof( sr::PerConfigurationData0 ) ),
+perDrawcallData_(device, cbDrawcallDataSize_* config.maxDrawcallCnt),
+maxDrawcallCnt_(config.maxDrawcallCnt),
+cbInstanceDataSize_(calcConstantBufferSize(sizeof(sr::PerInstanceData2))),
+perInstanceData_(device, sizeof(sr::PerInstanceData2)* config.maxInstanceCnt),
+maxInstanceCnt_(config.maxInstanceCnt)
+{
+	perConfigurationData_.pullGpuAddr();
+	perDrawcallData_.pullGpuAddr();
+	perInstanceData_.pullGpuAddr();
+}
+
+void ShaderPlayerUI::bindRootParams(D3D12GfxCmdList& cmdList) {
+	auto& root = UnifiedRoot::get();
+
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		root.params[UnifiedRoot::ParamIndices::b0],
+		perConfigurationData_.gpuAddr()
+	);
+
+	cmdList.get()->SetGraphicsRootShaderResourceView(
+		root.params[UnifiedRoot::ParamIndices::t0],
+		perInstanceData_.gpuAddr()
+	);
+}
+
+void ShaderPlayerUI::bindPerDrawcallData(
+	std::size_t drawcallIdx, D3D12GfxCmdList& cmdList
+) {
+	cmdList.get()->SetGraphicsRootConstantBufferView(
+		UnifiedRoot::get().params[UnifiedRoot::ParamIndices::b1],
+		perDrawcallData_.gpuAddr() + cbDrawcallDataSize() * drawcallIdx
+	);
+}
+
+void ShaderPlayerUI::loadBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)] = ShaderBlob{
+		getShaderPath() / "playerUI.hlsl", nullptr,
+		"VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Vertex
+	};
+	blobs_[etoi(ShaderBlob::Type::Pixel)] = ShaderBlob{
+		getShaderPath() / "playerUI.hlsl", nullptr,
+		"PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0, ShaderBlob::Type::Pixel
+	};
+}
+
+void ShaderPlayerUI::releaseBlobs() {
+	blobs_[etoi(ShaderBlob::Type::Vertex)].reset();
+	blobs_[etoi(ShaderBlob::Type::Pixel)].reset();
+}
+
+InputLayout ShaderPlayerUI::makeInputLayout(InputLayout::Spec ilSpec) {
+	switch (ilSpec) {
+	case InputLayout::Spec::serial:
+		return makeInputLayoutSerial();
+	case InputLayout::Spec::separated:
+		return makeInputLayoutSeparated();
+	default:
+		throw GFX_EXCEPT("Invalid input layout specification.");
+	}
+}
+
+InputLayout ShaderPlayerUI::makeInputLayoutSerial() {
+	return InputLayout(std::vector<InputLayout::Slot>{
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{.semanticName = "POSITION", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+				InputLayout::Elem{.semanticName = "TEXCOORD", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32_FLOAT }
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Position3D))
+				| (1ull << etoi(Vertex::Properties::TexCoord2D0))
+		}
+	});
+}
+
+InputLayout ShaderPlayerUI::makeInputLayoutSeparated() {
+	return InputLayout(std::vector<InputLayout::Slot>{
+		InputLayout::Slot{
+			.elems = {
+				InputLayout::Elem{.semanticName = "POSITION", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32B32_FLOAT },
+			},
+			.attributes = (1ull << etoi(Vertex::Properties::Position3D))
+		},
+			InputLayout::Slot{
+				.elems = {
+					InputLayout::Elem{.semanticName = "TEXCOORD", .semanticIndex = 0u, .format = DXGI_FORMAT_R32G32_FLOAT },
+				},
+				.attributes = (1ull << etoi(Vertex::Properties::TexCoord2D0))
+		}
+	});
+}
+
 }   // namespace gfx::d3d12
 
 }   // namespace gfx

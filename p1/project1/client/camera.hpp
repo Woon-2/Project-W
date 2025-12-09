@@ -1,7 +1,6 @@
 #ifndef __camera_HPP
 #define __camera_HPP
 
-#include "pch.hpp"
 #include "gfx.hpp"
 #include "object.hpp"
 
@@ -29,6 +28,9 @@ public:
 
 	void setPerspective(mu::Degree fovy, float aspect, float nearz, float farz);
 	void setOrtho(float minX, float minY, float maxX, float maxY, float minZ, float maxZ);
+
+	mu::Vec3 MU_CALLCONV eye() const { return eye_; }
+	mu::Vec3 MU_CALLCONV at() const { return at_; }
 
 private:
 	std::weak_ptr<Object> pTargetObject_{};

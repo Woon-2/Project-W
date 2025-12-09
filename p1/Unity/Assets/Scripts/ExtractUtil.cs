@@ -281,6 +281,57 @@ public static class ExtractUtil
         WriteTailTag(binaryWriter, tagSource);
     }
 
+    public static void WriteBoneIndices(BinaryWriter binaryWriter, string tagSource, BoneWeight[] boneWeights)
+    {
+        WriteHeadTag(binaryWriter, tagSource);
+        WriteInteger(binaryWriter, "Cnt", boneWeights.Length);
+        if (boneWeights.Length > 0)
+        {
+            foreach (BoneWeight w in boneWeights)
+            {
+                WriteInteger(binaryWriter, w.boneIndex0);
+                WriteInteger(binaryWriter, w.boneIndex1);
+                WriteInteger(binaryWriter, w.boneIndex2);
+                WriteInteger(binaryWriter, w.boneIndex3);
+            }
+        }
+        WriteTailTag(binaryWriter, tagSource);
+    }
+
+    public static void WriteBoneIndices(BinaryWriter binaryWriter, string tagSource, BoneWeight[] boneWeights, int[] boneIdxMap)
+    {
+        WriteHeadTag(binaryWriter, tagSource);
+        WriteInteger(binaryWriter, "Cnt", boneWeights.Length);
+        if (boneWeights.Length > 0)
+        {
+            foreach (BoneWeight w in boneWeights)
+            {
+                WriteInteger(binaryWriter, boneIdxMap[w.boneIndex0]);
+                WriteInteger(binaryWriter, boneIdxMap[w.boneIndex1]);
+                WriteInteger(binaryWriter, boneIdxMap[w.boneIndex2]);
+                WriteInteger(binaryWriter, boneIdxMap[w.boneIndex3]);
+            }
+        }
+        WriteTailTag(binaryWriter, tagSource);
+    }
+
+    public static void WriteBoneWeights(BinaryWriter binaryWriter, string tagSource, BoneWeight[] boneWeights)
+    {
+        WriteHeadTag(binaryWriter, tagSource);
+        WriteInteger(binaryWriter, "Cnt", boneWeights.Length);
+        if (boneWeights.Length > 0)
+        {
+            foreach (BoneWeight w in boneWeights)
+            {
+                WriteFloat(binaryWriter, w.weight0);
+                WriteFloat(binaryWriter, w.weight1);
+                WriteFloat(binaryWriter, w.weight2);
+                WriteFloat(binaryWriter, w.weight3);
+            }
+        }
+        WriteTailTag(binaryWriter, tagSource);
+    }
+
     public static void WriteQuaternion(BinaryWriter binaryWriter, Quaternion quat)
     {
         binaryWriter.Write(quat.x);

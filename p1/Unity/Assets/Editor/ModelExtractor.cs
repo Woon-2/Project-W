@@ -9,11 +9,20 @@ using System.Text;
 public class ModelExtractorWindow : EditorWindow
 {
     private GameObject targetObject;
+    private GameObject targetSkeleton;
     private Dictionary<Texture, string> textureMappings = new Dictionary<Texture, string>();
     private Vector2 scrollPos;
-    private string targetName = "";
+    private string targetObjectName = "";
+    private string targetSkeletonName = "";
+    private string skeletonEnumeration = "";
 
     private BinaryWriter geometryWriter = null;
+    private BinaryWriter skeletonWriter = null;
+    private BinaryWriter itemDataWriter = null;
+
+    private List<Transform> bones = null;
+    private List<Matrix4x4> bindposes = null;
+    private int[] boneIdxMap = null;
 
     [MenuItem("Tools/Model Extractor")]
     public static void OpenWindow()
@@ -29,7 +38,16 @@ public class ModelExtractorWindow : EditorWindow
         targetObject = (GameObject)EditorGUILayout.ObjectField("Target Object", targetObject, typeof(GameObject), true);
         EditorGUILayout.Space();
 
-        targetName = (string)EditorGUILayout.TextField("Object Name: ", targetName);
+        targetObjectName = (string)EditorGUILayout.TextField("Object Name: ", targetObjectName);
+        EditorGUILayout.Space();
+
+        targetSkeleton = (GameObject)EditorGUILayout.ObjectField("Target Skeleton(optional)", targetSkeleton, typeof(GameObject), true);
+        EditorGUILayout.Space();
+
+        targetSkeletonName = (string)EditorGUILayout.TextField("Skeleton Name(optional): ", targetSkeletonName);
+        EditorGUILayout.Space();
+
+        skeletonEnumeration = (string)EditorGUILayout.TextField("Skeleton Enumeration(optional): ", skeletonEnumeration);
         EditorGUILayout.Space();
 
         if (GUILayout.Button("🔍 Scan Textures") && targetObject != null)
@@ -167,6 +185,11 @@ public class ModelExtractorWindow : EditorWindow
         }
         if ((mesh.uv != null) && (mesh.uv.Length > 0)) ExtractUtil.WriteVectors(geometryWriter, "TextureCoords0", mesh.uv);
         if ((mesh.uv2 != null) && (mesh.uv2.Length > 0)) ExtractUtil.WriteVectors(geometryWriter, "TextureCoords1", mesh.uv2);
+        if ((mesh.boneWeights != null) && (mesh.boneWeights.Length > 0))
+        {
+            ExtractUtil.WriteBoneIndices(geometryWriter, "BoneIndices", mesh.boneWeights, boneIdxMap);
+            ExtractUtil.WriteBoneWeights(geometryWriter, "BoneWeights", mesh.boneWeights);
+        }
         ExtractUtil.WriteTailTag(geometryWriter, "VertexBuffers");
 
         // 서브메시(인덱스 버퍼) 추출
@@ -333,6 +356,25 @@ public class ModelExtractorWindow : EditorWindow
         else if (skinnedMeshRenderer && skinnedMeshRenderer.enabled)
         {
             mesh = skinnedMeshRenderer.sharedMesh;
+            boneIdxMap = new int[skinnedMeshRenderer.bones.Length];
+            for (int i = 0; i < skinnedMeshRenderer.bones.Length; i++)
+            {
+                bool found = false;
+                for (int j = 0; j < bones.Count; j++)
+                {
+                    if (skinnedMeshRenderer.bones[i].gameObject.name == bones[j].gameObject.name)
+                    {
+                        found = true;
+                        boneIdxMap[i] = j;
+                        break;
+                    }
+                }
+
+                if (!found)
+                {
+                    Debug.LogError("Bone not found: " + skinnedMeshRenderer.bones[i].gameObject.name);
+                }
+            }
         }
 
         if (mesh != null)
@@ -451,12 +493,77 @@ public class ModelExtractorWindow : EditorWindow
         ExtractUtil.WriteTailTag(geometryWriter, "BoundingVolumes");
     }
 
+    void ProcessBoneHierarchy(Transform root, Transform bone)
+    {
+        bones.Add(bone);
+        bindposes.Add(bone.worldToLocalMatrix * root.localToWorldMatrix);
+
+        for (int i = 0; i < bone.childCount; ++i)
+        {
+            ProcessBoneHierarchy(root, bone.GetChild(i));
+        }
+    }
+
+    void ProcessBones()
+    {
+        bones = new List<Transform>();
+        bindposes = new List<Matrix4x4>();
+
+        ProcessBoneHierarchy(targetObject.transform, targetSkeleton.transform);
+    }
+
+    void ExtractBoneHierarchy(Transform bone, ref int boneIdx)
+    {
+        ExtractUtil.WriteHeadTag(skeletonWriter, "Bone");
+        ExtractUtil.WriteText(skeletonWriter, "Name", bone.gameObject.name);
+        ExtractUtil.WriteDressMatrix(skeletonWriter, "Dress", targetObject.transform, bone);
+        ExtractUtil.WriteMatrix(skeletonWriter, "ToLocal", bindposes[boneIdx]);
+        BoneSocket socket = bone.gameObject.GetComponent<BoneSocket>();
+        if (socket != null)
+        {
+            ExtractUtil.WriteText(skeletonWriter, "SocketType", socket.socketType.ToString());
+        }
+        else
+        {
+            ExtractUtil.WriteText(skeletonWriter, "SocketType", "None");
+        }
+
+        ++boneIdx;
+
+        ExtractUtil.WriteHeadTag(skeletonWriter, "Children");
+        ExtractUtil.WriteInteger(skeletonWriter, "ChildCnt", bone.childCount);
+
+        for (int i = 0; i < bone.childCount; ++i)
+        {
+            ExtractBoneHierarchy(bone.GetChild(i), ref boneIdx);
+        }
+
+        ExtractUtil.WriteTailTag(skeletonWriter, "Children");
+
+        ExtractUtil.WriteTailTag(skeletonWriter, "Bone");
+    }
+
+    void ExtractSkeleton()
+    {
+        ExtractUtil.WriteHeadTag(skeletonWriter, "Skeleton");
+        ExtractUtil.WriteText(skeletonWriter, "Name", targetSkeletonName);
+        ExtractUtil.WriteText(skeletonWriter, "SkeletonEnumeration", skeletonEnumeration);
+
+        ExtractUtil.WriteInteger(skeletonWriter, "Count", bones.Count);
+        int n = 0;
+        ExtractBoneHierarchy(targetSkeleton.transform, ref n);
+
+        ExtractUtil.WriteTailTag(skeletonWriter, "Skeleton");
+    }
+
     void ExportBinary()
     {
         string path = EditorUtility.SaveFilePanel("Export Binary", "ExportedAssets", "output.bin", "bin");
         geometryWriter = new BinaryWriter(File.Open(path, FileMode.Create));
+        skeletonWriter = geometryWriter;
+        itemDataWriter = geometryWriter;
 
-        ExtractUtil.WriteText(geometryWriter, "ModelName", targetName);
+        ExtractUtil.WriteText(geometryWriter, "ModelName", targetObjectName);
 
         // 텍스처 매핑 정보를 가장 먼저 출력한다.
         // 나중에 임포트할 때, 중복되는 텍스처들을 다시 로드하지 않기 위해 필요하다.
@@ -464,9 +571,19 @@ public class ModelExtractorWindow : EditorWindow
         // 텍스처 이름(Key)이 이미 맵에 있다면 해당 경로(Value)의 텍스처는 로드하지 않는다.
         // (경로가 Key인 것보단 이름이 Key인 것이 SSO에서 유리할 것이다.)
         // (대신, 서로 다른 리소스간 중복된 텍스처 이름이 없어야 할 것.)
+        if (targetSkeleton != null) ProcessBones();
         ExtractTextureMapping();
         ExtractGeometry();
         ExtractBoundingVolumes();
+        ExtractUtil.WriteInteger(skeletonWriter, "HasSkeleton", Convert.ToInt32(targetSkeleton != null));
+        if (targetSkeleton != null) ExtractSkeleton();
+        Weapon weapon = targetObject.GetComponent<Weapon>();
+        ExtractUtil.WriteInteger(itemDataWriter, "HasWeaponInfo", Convert.ToInt32(weapon != null));
+        if (weapon != null)
+        {
+            ItemData itemData = weapon.itemData;
+            itemData.WriteBinaryInfo(itemDataWriter);
+        }
 
         geometryWriter.Flush();
         geometryWriter.Close();

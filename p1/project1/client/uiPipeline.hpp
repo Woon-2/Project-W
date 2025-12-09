@@ -1,7 +1,6 @@
 #ifndef __uiPipeline_HPP
 #define __uiPipeline_HPP
 
-#include "pch.hpp"
 #include "gfxUtil.hpp"
 
 class RootSig;

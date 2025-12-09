@@ -1210,6 +1210,146 @@ RefModel RefModel::buildSkySphere(D3D12Device& device, D3D12GfxCmdList& cmdList,
    return ret;
 }
 
+RefModel RefModel::buildQuadModel(D3D12Device& device, D3D12GfxCmdList& cmdList)
+{
+    auto model = RefModel();
+
+    auto& node = model.nodeStorage_.emplace_back(&model);
+    model.pRoot_ = &node;
+    model.pSkeleton_ = nullptr;
+
+    auto& mesh = node.meshes_.emplace_back(&node);
+
+    mesh.name_ = "Quad";
+    mesh.vbLayouts_.emplace_back();    // vertex buffer 만들어서 채워넣기
+
+    // 어디까지나 예시
+    // vbLayouts_[0]: 슬롯 0번에 Pos, 슬롯 1번에 Tex
+    auto& primaryVBs = mesh.vbLayouts_.back();
+
+    auto vbMemPos = std::vector<std::uint8_t>();
+    auto vbMemTex = std::vector<std::uint8_t>();
+
+    int nPositions = 0, nTextureCoords = 0;
+
+    // 점 개수가 몇 개가 필요한지 계산 -> nPositions
+    nPositions = nTextureCoords = 4;
+
+    vbMemPos.resize(sizeof(dx::XMFLOAT3) * nPositions);
+    vbMemTex.resize(sizeof(dx::XMFLOAT2) * nTextureCoords);
+
+    int k = 0;
+    int l = 0;
+
+    // Position
+    auto src = dx::XMFLOAT3(-0.5f, 0.5f, 0.f);
+    std::memcpy((vbMemPos.data() + (k++) * sizeof(dx::XMFLOAT3)), static_cast<const void*>(&src), sizeof(dx::XMFLOAT3));
+	src = dx::XMFLOAT3(0.5f, 0.5f, 0.f);
+	std::memcpy((vbMemPos.data() + (k++) * sizeof(dx::XMFLOAT3)), static_cast<const void*>(&src), sizeof(dx::XMFLOAT3));
+	src = dx::XMFLOAT3(0.5f, -0.5f, 0.f);
+	std::memcpy((vbMemPos.data() + (k++) * sizeof(dx::XMFLOAT3)), static_cast<const void*>(&src), sizeof(dx::XMFLOAT3));
+	src = dx::XMFLOAT3(-0.5f, -0.5f, 0.f);
+	std::memcpy((vbMemPos.data() + (k++) * sizeof(dx::XMFLOAT3)), static_cast<const void*>(&src), sizeof(dx::XMFLOAT3));
+    // TexCoord
+    auto texCoord = dx::XMFLOAT2(0.0f, 0.f);
+    std::memcpy((vbMemTex.data() + (l++) * sizeof(dx::XMFLOAT2)), static_cast<const void*>(&texCoord), sizeof(dx::XMFLOAT2));
+	texCoord = dx::XMFLOAT2(1.f, 0.f);
+	std::memcpy((vbMemTex.data() + (l++) * sizeof(dx::XMFLOAT2)), static_cast<const void*>(&texCoord), sizeof(dx::XMFLOAT2));
+	texCoord = dx::XMFLOAT2(1.f, 1.f);
+	std::memcpy((vbMemTex.data() + (l++) * sizeof(dx::XMFLOAT2)), static_cast<const void*>(&texCoord), sizeof(dx::XMFLOAT2));
+	texCoord = dx::XMFLOAT2(0.f, 1.f);
+	std::memcpy((vbMemTex.data() + (l++) * sizeof(dx::XMFLOAT2)), static_cast<const void*>(&texCoord), sizeof(dx::XMFLOAT2));
+
+    auto tmp = std::bitset<etoi(Vertex::Properties::SIZE)>{};
+    tmp.set(etoi(Vertex::Properties::Position3D));
+    primaryVBs.emplace_back(device, cmdList, std::move(vbMemPos),
+        sizeof(dx::XMFLOAT3) * nPositions, sizeof(dx::XMFLOAT3), tmp
+    );
+    assert(k == nPositions);
+
+    tmp.reset();
+    tmp.set(etoi(Vertex::Properties::TexCoord2D0));
+    primaryVBs.emplace_back(device, cmdList, std::move(vbMemTex),
+        sizeof(dx::XMFLOAT2) * nTextureCoords, sizeof(dx::XMFLOAT2), tmp
+    );
+    assert(l == nTextureCoords);
+
+    auto& submesh = mesh.submeshes_.emplace_back(&mesh, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    int nSubIndices = 6;
+    auto indices = std::vector<std::uint16_t>();
+
+    indices.push_back(static_cast<std::uint16_t>(0));
+	indices.push_back(static_cast<std::uint16_t>(1));
+	indices.push_back(static_cast<std::uint16_t>(2));
+
+	indices.push_back(static_cast<std::uint16_t>(0));
+	indices.push_back(static_cast<std::uint16_t>(2));
+	indices.push_back(static_cast<std::uint16_t>(3));
+
+    submesh.ib_;    // index buffer 만들어서 채워넣기    
+    submesh.ib_ = IndexBuffer(device, cmdList, indices.data(), DXGI_FORMAT_R16_UINT, nSubIndices);
+
+    return model;
+}
+
+RefModel RefModel::buildQuadModelLT(
+    D3D12Device& device,
+    D3D12GfxCmdList& cmdList
+)
+{
+    auto model = RefModel();
+
+    auto& node = model.nodeStorage_.emplace_back( &model );
+    model.pRoot_ = &node;
+    model.pSkeleton_ = nullptr;
+
+    auto& mesh = node.meshes_.emplace_back( &node );
+    mesh.name_ = "Quad";
+    mesh.vbLayouts_.emplace_back();
+    auto& primaryVBs = mesh.vbLayouts_.back();
+
+    std::vector<std::uint8_t> vbMemPos( sizeof( dx::XMFLOAT3 ) * 4 );
+    std::vector<std::uint8_t> vbMemTex( sizeof( dx::XMFLOAT2 ) * 4 );
+
+    dx::XMFLOAT3 posList[4] = {
+        { 0.f, 0.f, 0.f },  // 좌상
+        { 1.f, 0.f, 0.f },  // 우상
+        { 1.f, 1.f, 0.f },  // 우하
+        { 0.f, 1.f, 0.f },  // 좌하
+    };
+    std::memcpy( vbMemPos.data(), posList, sizeof( posList ) );
+
+    dx::XMFLOAT2 texList[4] = {
+        {0.f, 0.f}, {1.f, 0.f}, {1.f, 1.f}, {0.f, 1.f}
+    };
+    std::memcpy( vbMemTex.data(), texList, sizeof( texList ) );
+
+    auto tmp = std::bitset<etoi( Vertex::Properties::SIZE )>{};
+    tmp.set( etoi( Vertex::Properties::Position3D ) );
+    primaryVBs.emplace_back( device, cmdList, std::move( vbMemPos ),
+        sizeof( posList ), sizeof( dx::XMFLOAT3 ), tmp );
+
+    tmp.reset();
+    tmp.set( etoi( Vertex::Properties::TexCoord2D0 ) );
+    primaryVBs.emplace_back( device, cmdList, std::move( vbMemTex ),
+        sizeof( texList ), sizeof( dx::XMFLOAT2 ), tmp );
+
+    auto& submesh = mesh.submeshes_.emplace_back( &mesh, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST );
+    std::vector<std::uint16_t> indices = { 0,1,2, 0,2,3 };
+    submesh.ib_ = IndexBuffer( device, cmdList, indices.data(),
+        DXGI_FORMAT_R16_UINT, (UINT)indices.size() );
+
+    return model;
+}
+
+RefModel RefModel::buildQuad(D3D12Device& device, D3D12GfxCmdList& cmdList)
+{
+    auto ret = buildQuadModelLT( device, cmdList );
+
+    return ret;
+}
+
 RefModel RefModel::loadHierarchyFromFile( const std::filesystem::path& path,
     D3D12Device& device, D3D12GfxCmdList& cmdList,
     const ResourceStorage::Slot& texSlot,
@@ -2378,6 +2518,8 @@ ShadowArrayMapInfo loadShadowArrayMapAt(
 
 VertexBuffer LevelChunkModel::sChunkVb;
 IndexBuffer LevelChunkModel::sChunkIb;
+
+RefModel QuadModel::sRefQuadModel_;
 
 }   // namespace gfx::d3d12
 

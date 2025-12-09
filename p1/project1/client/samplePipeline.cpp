@@ -1,3 +1,4 @@
+#include "pch.hpp"
 #include "samplePipeline.hpp"
 #include "shader.hpp"
 #include "mesh.hpp"
@@ -236,7 +237,7 @@ void Dispatcher::drawSingleThreaded() {
 			.material = SampleShader::Material{
 				.idxAlbedo = drawEvent.material->mapAlbedo.idxSrv
 			},
-			.firstInstanceIdx = idxDrawcall
+			.firstInstanceOffset = idxDrawcall
 		};
 		pResources_->perDrawcallData.cbuffers[idxDrawcall].stage(
 			roomIdx_, &perDrawcallData, 1u
@@ -407,7 +408,7 @@ void MU_CALLCONV Dispatcher::addJobUpdate( mu::Mat4x4 viewProj, const DrawEvent*
 // 단위 작업을 생성하여 스레드에 할당하는데 사용된다.
 void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 	const DrawEvent* pFirst, const DrawEvent* pLast,
-	std::size_t firstInstanceIdx, std::latch& latch
+	std::size_t firstInstanceOffset, std::latch& latch
 ) {
 	const auto jobSize = pLast - pFirst;
 
@@ -445,8 +446,8 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 		// PerInstanceData 바인드
 		pResources_->perInstanceData.bind(threadCmdList, rootParamIdxPID_, roomIdx_);
 
-		for ( auto idxDrawcall = firstInstanceIdx;
-			idxDrawcall < firstInstanceIdx + jobSize;
+		for ( auto idxDrawcall = firstInstanceOffset;
+			idxDrawcall < firstInstanceOffset + jobSize;
 			++idxDrawcall
 		) {
 			// DrawEvent의 정보를 기반으로 GPU 데이터 업데이트 및
@@ -462,7 +463,7 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 				.material = SampleShader::Material{
 					.idxAlbedo = drawEvent.material->mapAlbedo.idxSrv
 				},
-				.firstInstanceIdx = static_cast<u32t>(idxDrawcall)
+				.firstInstanceOffset = static_cast<u32t>(idxDrawcall)
 			};
 			// PerDrawcallData GPU 데이터 갱신
 			// (바인드와 GPU 데이터 갱신 순서는 상관없다.

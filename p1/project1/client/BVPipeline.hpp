@@ -1,7 +1,6 @@
 #ifndef __BVPipeline_HPP
 #define __BVPipeline_HPP
 
-#include "pch.hpp"
 #include "gfxUtil.hpp"
 
 class RootSig;

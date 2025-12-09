@@ -1,5 +1,6 @@
+#include "pch.hpp"
 #include "physics.hpp"
-#include "object.hpp"
+#include "../object.hpp"
 
 void PhysicSystem::step(const std::vector<Object*>& objects, Seconds dt)
 {
@@ -27,10 +28,12 @@ void PhysicSystem::integrate(const std::vector<Object*>& objects, Seconds dt)
     for (auto* obj : objects) {
         auto& phys = obj->physicState();
 
-        const auto pos = phys.pos;
-	    const auto omega = phys.omega;
-	    auto orient = phys.orient;
-	    const auto scale = phys.scale;
+        auto& pos = phys.pos;
+	    auto& omega = phys.omega;
+	    auto& orient = phys.orient;
+	    auto& scale = phys.scale;
+
+        pos += phys.velocity * dt.count();
 
 	    // 쿼터니언 갱신: q' = 0.5 * ω_q * q
 	    auto wq = mu::Quat(omega, 0.f);
@@ -39,8 +42,8 @@ void PhysicSystem::integrate(const std::vector<Object*>& objects, Seconds dt)
 
         // 바운딩 볼륨 갱신
 	    for (std::size_t i = 0; i < phys.aabbs.size(); ++i) {
-		    phys.aabbs[i].center = obj->model()->aabbs[i].center * phys.scale + phys.pos;
-		    phys.aabbs[i].size = obj->model()->aabbs[i].size * phys.scale;
+		    phys.aabbs[i].center = obj->model()->aabbs[i].center * scale + pos;
+		    phys.aabbs[i].size = obj->model()->aabbs[i].size * scale;
 	    }
     }
 }

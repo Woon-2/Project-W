@@ -1,7 +1,6 @@
 #ifndef __spriteAnimation_HPP
 #define __spriteAnimation_HPP
 
-#include "pch.hpp"
 #include "gfxUtil.hpp"
 
 class GFX;

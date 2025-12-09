@@ -325,6 +325,7 @@ void Stage::update(double deltaTime) {
     processInput(deltaTime);
     simulate(deltaTime);
     updateNetwork(deltaTime);
+	playerHpUI_.update( deltaTime );
 }
 
 void Stage::render() {
@@ -431,7 +432,18 @@ void Stage::initScene() {
         }
     }
 
+    // ui
+    auto pTex = staticResStorage_.slot( slotKeyTexture ).get<gfx::d3d12::Texture>( assetTextureInfo( AssetTexture::Hp ).paths.at( 1 ).string() );
+    playerHpUI_.init( pTex );
+
+	pTex = staticResStorage_.slot( slotKeyTexture ).get<gfx::d3d12::Texture>( assetTextureInfo( AssetTexture::Hp ).paths.at( 0 ).string() );
+	playerHpFrameUI_.init( pTex );
+
     scene_.addEntity(directionalLight_);
+	scene_.addEntity( playerHpUI_ );
+	scene_.addEntity( playerHpFrameUI_ );
+    pSystems_->coordRoot.addEntity( playerHpUI_ );
+	pSystems_->coordRoot.addEntity( playerHpFrameUI_ );
 
     scene_.clearStash();
 
@@ -529,6 +541,10 @@ void Stage::loadTextures(gfx::d3d12::D3D12GfxCmdList& cmdList) {
 	loadTexture(staticResStorage_, pCore_->descRanges(),
 		pCore_->device(), cmdList, AssetTexture::SkySphere
 	);
+
+    loadTexture(staticResStorage_, pCore_->descRanges(),
+        pCore_->device(), cmdList, AssetTexture::Hp
+    );
 }
 
 void loadModel( gfx::d3d12::ResourceStorage& storage,
@@ -571,6 +587,8 @@ void loadModel( gfx::d3d12::ResourceStorage& storage,
 
 void Stage::loadModels(gfx::d3d12::D3D12GfxCmdList& cmdList) {
     pCore_->initChunkMesh(cmdList);
+    pCore_->initQuadModel( pCore_->device(), cmdList );
+
     loadModel( staticResStorage_, *pCore_, cmdList,
         AssetModel::Helicopter, *pRenderer_
     );

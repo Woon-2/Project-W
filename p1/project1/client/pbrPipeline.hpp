@@ -1,7 +1,6 @@
 #ifndef __pbrPipeline_HPP
 #define __pbrPipeline_HPP
 
-#include "pch.hpp"
 #include "gfxUtil.hpp"
 
 class RootSig;
@@ -9,6 +8,8 @@ class RootSig;
 struct Mesh;
 struct SubMesh;
 struct Material;
+
+struct ShadowMapData;
 
 namespace ShadowMapShader {
 	struct PerInstanceData;
@@ -19,11 +20,6 @@ namespace PBRShader {
 }
 
 namespace PBRPipeline {
-
-// PBR Pipeline 내부적으로 사용하는 그림자 텍스처를 초기화한다.
-void initShadowTextures( ID3D12Device* device, u32t width, u32t height, std::size_t roomCnt,
-	DescriptorPool& srvTexPool, DescriptorPool& dsvPool	
-);
 
 struct LightData {
 	enum class Type {
@@ -40,6 +36,9 @@ struct LightData {
 	float falloff;
 	mu::Vec3 atten;
 	Type type;
+	bool isMainDirectionalLight;
+	mu::Mat4x4 view;
+	mu::Mat4x4 proj;
 };
 
 struct CameraData {
@@ -130,6 +129,7 @@ public:
 		CommandListPool* commandListPool,
 		std::vector<DrawEvent>&& drawEvent,
 		std::vector<LightData>&& lightData,
+		const LightData& mainDirectionalLightData,
 		const CameraData& cameraData, const FrameData& frameData,
 		std::size_t roomIdx
 	);
@@ -213,7 +213,8 @@ private:
 	void addJobShadowDraw( ID3D12GraphicsCommandList* threadCmdList,
 		const std::vector<DrawEvent>::const_iterator* pItFirst,
 		const std::vector<DrawEvent>::const_iterator* pItLast,
-		std::size_t firstDrawcallIdx, std::latch& latch
+		std::size_t firstDrawcallIdx, const ShadowMapData& shadowMapData,
+		std::latch& latch
 	);
 
 	// GFX로부터 전달되어 그대로 사용하는 변수들
@@ -238,6 +239,7 @@ private:
 	Resources* pResources_ = nullptr;
 	std::vector<DrawEvent> drawEvents_{};
 	std::vector<LightData> lightData_{};
+	LightData mainDirectionalLightData_{};
 	CameraData cameraData_{};
 	FrameData frameData_{};
 	std::size_t roomIdx_{};
@@ -257,10 +259,6 @@ private:
 	std::size_t jobSizeUpdate_ = 120u;
 	std::size_t jobSizeDraw_ = 200u;
 };
-
-namespace Detail {
-	extern std::vector<Texture> shadowMaps_;
-}	// namespace PBRPipeline::Detail
 
 }	// namespace PBRPipeline
 

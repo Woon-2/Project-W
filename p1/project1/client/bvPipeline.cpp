@@ -1,3 +1,4 @@
+#include "pch.hpp"
 #include "bvPipeline.hpp"
 #include "shader.hpp"
 #include "errorHandling.hpp"
@@ -298,7 +299,7 @@ void Dispatcher::drawSingleThreaded() {
 		//  어차피 바인드는 GPU 명령이라 바로 실행되지 않기 때문에)
 		auto perDrawcallData = BVShader::PerDrawcallData{
 			// perInstanceData에서 현재 instancing group의 첫 번째 인스턴스의 인덱스
-			.firstInstanceIdx = static_cast<u32t>(groupFirst - drawEvents_.begin())
+			.firstInstanceOffset = static_cast<u32t>(groupFirst - drawEvents_.begin())
 		};
 		pResources_->perDrawcallData.cbuffers[idxDrawcall].stage(
 			roomIdx_, &perDrawcallData, 1u
@@ -561,7 +562,7 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 
 			auto perDrawcallData = BVShader::PerDrawcallData{
 				// perInstanceData에서 현재 instancing group의 첫 번째 인스턴스의 인덱스
-				.firstInstanceIdx = static_cast<u32t>(groupFirst - drawEvents_.begin())
+				.firstInstanceOffset = static_cast<u32t>(groupFirst - drawEvents_.begin())
 			};
 			// PerDrawcallData GPU 데이터 갱신
 			// (바인드와 GPU 데이터 갱신 순서는 상관없다.

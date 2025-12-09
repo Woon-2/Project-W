@@ -1,7 +1,6 @@
 #ifndef __collision_HPP
 #define __collision_HPP
 
-#include "pch.hpp"
 
 // 모델에 AABB 벡터
 // 충돌 처리할 때 월드 변환 적용

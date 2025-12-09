@@ -7,11 +7,18 @@ public:
 	static void remove( const SPGameSession& session );
 	static void broadcast( const SPSendBuffer& sendBuffer );
 
-	static const std::set<SPGameSession>& getSessions( ) { return sessions_; }
+	static SPGameSession findGameSession(int32 sessionId) {
+		if (sessions_.find(sessionId) != sessions_.end()) {
+			return sessions_[sessionId];
+		}
+		else {
+			return nullptr;
+		}
+	}
 
 private:
 	static std::mutex mtx_;
-	static std::set<SPGameSession> sessions_;
+	static std::unordered_map<int32, SPGameSession> sessions_;
 };
 
 #endif // GAME_SESSION_MANAGER_HPP

@@ -1,9 +1,42 @@
 #ifndef __object_HPP
 #define __object_HPP
 
-#include "pch.hpp"
 #include "gfx.hpp"
-#include "physics.hpp"
+#include "collision.hpp"
+#include "animation.hpp"
+
+class AssetManager;
+class Object;
+
+class AnimBlenderVanguard : public AnimBlender {
+public:
+	void init(const AssetManager& assetManager);
+	// pOwner의 물리 정보에 따라
+	// 애니메이션 블렌딩 상태를 갱신한다.
+	void update(Seconds deltaTime, void* pOwner) override;
+	void onCalcLocal(PassKey<AnimSystem>) override;
+
+private:
+	std::vector<AnimFrame> framesBlended_{};
+	Seconds elapsedIdle_ = 0s;
+	Seconds elapsedRun_ = 0s;
+	float tIdle_ = 0.f;
+	float tRunForward_ = 0.f;
+	float tRunBackward_ = 0.f;
+	float tRunLeft_ = 0.f;
+	float tRunRight_ = 0.f;
+	float tHit_ = 0.f;
+};
+
+struct PhysicState {
+	mu::Vec3 pos{};
+	mu::Vec3 velocity{};
+	mu::Vec3 omega{};
+	mu::NQuat orient{};
+	mu::Vec3 scale{};
+
+	std::vector<AABB> aabbs{};
+};
 
 // 물체의 렌더링과 관련된 상태
 // 물체를 렌더링하는데 필요한 월드 변환 행렬,
@@ -11,8 +44,17 @@
 // 모델 정보를 보관한다.
 struct RenderState {
 	mu::Mat4x4 world;
+	mu::Vec3 pos{};
+	mu::NQuat orient{};
+	mu::Vec3 scale{};
 	std::vector<mu::Mat4x4> worldBVs;
+	std::unique_ptr<AnimBlender> animBlender;
 	const Model* pModel;
+};
+
+struct Equipment {
+	Bone::SocketType socketType;
+	std::unique_ptr<Object> object;
 };
 
 // 물체의 상태는 PhysicState, RenderState 두 층위로 관리된다.
@@ -34,7 +76,14 @@ public:
 	// @param tPhysicInterpolation 이전 PhysicState와 현재 PhysicState의 보간 비율
 	//		(게임 객체가 계산해서 일괄적으로 전달해야 한다.)
 	void update(Milliseconds deltaTime, float tPhysicInterpolation);
-	void render(GFX& gfx);
+	void MU_CALLCONV render(GFX& gfx, mu::Mat4x4 offsetXform = mu::Mat4x4());
+
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) {
+		renderState_.animBlender = std::make_unique<AnimBlenderVanguard>();
+		static_cast<AnimBlenderVanguard*>(renderState_.animBlender.get())->init(assetManager);
+
+		animSystem.trackAnimBlender(renderState_.animBlender.get());
+	}
 
 	// 모델을 설정한다.
 	// 모델이 있는 게임 객체는 render 시 GFX에 DrawEvent를 제출한다.
@@ -49,6 +98,10 @@ public:
 	// 각 PhysicState의 AABB 역시 갱신된다.
 	void MU_CALLCONV setPos(mu::Vec3 newPos);
 	mu::Vec3 MU_CALLCONV pos() const { return currPhysicState_.pos; }
+	// 게임 객체의 속도를 갱신한다.
+	// 이전 PhysicState와 현재 PhysicState의 속도가 모두 갱신된다.
+	void MU_CALLCONV setVelocity(mu::Vec3 newVelocity);
+	mu::Vec3 MU_CALLCONV velocity() const { return currPhysicState_.velocity; }
 	// 게임 객체의 각속도를 갱신한다.
 	// 이전 PhysicState와 현재 PhysicState의 각속도가 모두 갱신된다.
 	void MU_CALLCONV setOmega(mu::Vec3 newOmega);
@@ -69,6 +122,7 @@ public:
 	mu::Vec3 MU_CALLCONV up() const { return up_; }
 
 	PhysicState& physicState() { return currPhysicState_; }
+	const RenderState& renderState() const { return renderState_; }
 	// PhysicState를 새로운 상태로 전환한다.
 	// 이 함수의 호출 시점의 PhysicState가 prevPhysicState로서 저장된다.
 	// 게임 객체에서 호출한다.
@@ -78,6 +132,9 @@ public:
 	void setMaterialSetIdx(u32t idx) { materialSetIdx_ = idx; }
 	u32t mateiralSetIdx() const { return materialSetIdx_; }
 
+	void equip(Equipment&& equipment);
+	void disequip(Bone::SocketType socketType);
+
 	// 바운딩 볼륨 렌더링을 활성화한다.
 	void enableBVRendering() { willRenderBV_ = true; }
 	// 바운딩 볼륨 렌더링을 비활성화한다.
@@ -86,11 +143,20 @@ public:
 	void setId( i32t id ) {	id_ = id; }
 	i32t getId( ) const { return id_; }
 
+	void MU_CALLCONV setServerPos( mu::Vec3 pos ) {
+		prevPhysicState_ = currPhysicState_;
+		currPhysicState_.pos = pos;
+	}
+
+	mu::Vec3 predictedOffset_{};
+
 private:
 	PhysicState prevPhysicState_{};
 	PhysicState currPhysicState_{};
 
 	RenderState renderState_{};
+
+	std::vector<Equipment> equipments_{};
 
 	bool willRenderBV_ = false;
 

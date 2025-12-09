@@ -5,6 +5,8 @@
 #include "GameSession.hpp"
 #include "Room.hpp"
 #include "RoomManager.hpp"
+#include "GameLogic.hpp"
+#include "GameLogicManager.hpp"
 
 void GameSession::onConnected( ) {
 	std::cout << "GameSession " << getId( ) << " connected.\n";
@@ -27,33 +29,23 @@ void GameSession::onConnected( ) {
 }
 
 void GameSession::onDisconnected( ) {
-	auto packet = Packet{
-			.header = {
-				.size = sizeof( PacketHeader ) + sizeof( SCLeavePacket ),
-				.id = static_cast<uint16>( PacketType::scLeave )
-			},
-			.scLeave = {
-				.playerId = getId( )
-			}
-	};
-
-	int32 packetSize = sizeof( Packet );
-	auto sendBuffer = std::make_shared<SendBuffer>( packetSize );
-	sendBuffer->copyData( &packet, packetSize );
-	//GameSessionManager::broadcast( sendBuffer );
-	auto room = myRoom_.lock( );
-	if ( room ) {
-		room->leave( std::static_pointer_cast<GameSession>( shared_from_this( ) ) );
+	if (myRoomId_ != -1) {
+		auto logicMsg = LogicMessage{
+			.type = LogicMsgType::UserLeave,
+			.userId = getId(),
+			.roomId = myRoomId_
+		};
+		GameLogicManager::dispatchMessage(logicMsg);
 	}
 
-	GameSessionManager::remove( std::static_pointer_cast<GameSession>( shared_from_this( ) ) );
+	GameSessionManager::remove(std::static_pointer_cast<GameSession>(shared_from_this()));
 }
 
 int32 GameSession::onRecvPacket( uint8* buffer, int32 len ) {
-	std::cout << "GameSession " << getId( ) << " received packet of length " << len << ".\n";
+	//std::cout << "GameSession " << getId( ) << " received packet of length " << len << ".\n";
 
 	auto packet = reinterpret_cast<Packet*>( buffer );
-
+	
 	switch ( static_cast<PacketType>( packet->header.id ) ) {
 	case PacketType::csSignup: {
 		auto id = std::string( packet->csSignup.id.data( ) );
@@ -144,115 +136,64 @@ int32 GameSession::onRecvPacket( uint8* buffer, int32 len ) {
 	case PacketType::csLeave:
 		break;
 
-	case PacketType::csMove: {
-		auto sendPacket = Packet{
-			.header = {
-				.size = sizeof( PacketHeader ) + sizeof( SCMovePacket ),
-				.id = static_cast<uint16>( PacketType::scMove )
-			},
-			.scMove = {
-				.playerId = getId( )
-			}
+	case PacketType::csMoveStart: {
+		if(myRoomId_ == -1) {
+			break;
+		}
+		
+		auto logicMsg = LogicMessage{
+			.type = LogicMsgType::UserMoveStart,
+			.dir = packet->csMoveStart.dir,
+			.userId = getId( ),
+			.roomId = myRoomId_,
+			.forward = packet->csMoveStart.forward,
+			.cameraPitch = packet->csMoveStart.cameraPitch
 		};
 
-		const auto& room = myRoom_.lock( );
-		//ASSERT_CRASH( room );
+		GameLogicManager::dispatchMessage(logicMsg);
+		break;
+	}
 
-		if ( !room ) {
-			if ( packet->csMove.dir == Direction::w ) {
-				z_ += 0.01f;
-			}
-			if( packet->csMove.dir == Direction::a ) {
-				x_ -= 0.01f;
-			}
-			if( packet->csMove.dir == Direction::s ) {
-				z_ -= 0.01f;
-			}
-			if( packet->csMove.dir == Direction::d ) {
-				x_ += 0.01f;
-			}
-		}
-		else {
-			if ( packet->csMove.dir == Direction::w ) {
-				z_ += 0.01f;
-				for ( const auto& session : room->getUsers( ) ) {
-					if ( session.get( ) == this ) {
-						continue;
-					}
-					if ( checkCollision( *session ) ) {
-						z_ -= 0.01f;
-						break;
-					}
-				}
-			}
-			else if ( packet->csMove.dir == Direction::a ) {
-				x_ -= 0.01f;
-				for ( const auto& session : room->getUsers( ) ) {
-					if ( session.get( ) == this ) {
-						continue;
-					}
-					if ( checkCollision( *session ) ) {
-						x_ += 0.01f;
-						break;
-					}
-				}
-			}
-			else if ( packet->csMove.dir == Direction::s ) {
-				z_ -= 0.01f;
-				for ( const auto& session : room->getUsers( ) ) {
-					if ( session.get( ) == this ) {
-						continue;
-					}
-					if ( checkCollision( *session ) ) {
-						z_ += 0.01f;
-						break;
-					}
-				}
-			}
-			else if ( packet->csMove.dir == Direction::d ) {
-				x_ += 0.01f;
-				for ( const auto& session : room->getUsers( ) ) {
-					if ( session.get( ) == this ) {
-						continue;
-					}
-					if ( checkCollision( *session ) ) {
-						x_ -= 0.01f;
-						break;
-					}
-				}
-			}
+	case PacketType::csMoveStop: {
+		if (myRoomId_ == -1) {
+			break;
 		}
 
-		sendPacket.scMove.x = x_;
-		sendPacket.scMove.y = y_;
-		sendPacket.scMove.z = z_;
-
-		int32 packetSize = sizeof( Packet );
-		auto sendBuffer = std::make_shared<SendBuffer>( packetSize );
-		sendBuffer->copyData( &sendPacket, packetSize );
-
-		if ( !room ) {
-			send( sendBuffer );
-		}
-		else {
-			room->broadcast( sendBuffer );
-		}
+		auto logicMsg = LogicMessage{
+			.type = LogicMsgType::UserMoveStop,
+			.dir = packet->csMoveStop.dir,
+			.userId = getId(),
+			.roomId = myRoomId_
+		};
+		GameLogicManager::dispatchMessage(logicMsg);
 		break;
 	}
 
 	case PacketType::csFindRoom: {
-		if ( myRoom_.lock( ) ) {
+		if( myRoomId_ != -1 ) {
 			break;
 		}
 
 		auto room = RoomManager::findRoom( packet->csFindRoom.roomId );
 		if ( !room ) {
 			room = RoomManager::createRoom( packet->csFindRoom.roomId );
+			ASSERT_CRASH(room);
 		}
-		ASSERT_CRASH( room );
 
-		myRoom_ = room;
-		myRoom_.lock( )->enter( std::static_pointer_cast<GameSession>( shared_from_this( ) ) );
+		myRoomId_ = room->getRoomId();
+
+		auto addRoomMsg = LogicMessage{
+			.type = LogicMsgType::AddRoom,
+			.roomId = myRoomId_,
+		};
+		GameLogicManager::dispatchMessage(addRoomMsg);
+
+		auto enterRoomMsg = LogicMessage{
+			.type = LogicMsgType::UserEnter,
+			.userId = getId(),
+			.roomId = myRoomId_
+		};
+		GameLogicManager::dispatchMessage(enterRoomMsg);
 		break;
 	}
 	}
@@ -318,11 +259,4 @@ bool GameSession::loginUser( const std::string& id, const std::string& pw, std::
 
 	err = "Invalid ID or password.";
 	return false;
-}
-
-bool GameSession::checkCollision( const GameSession& other ) const {
-	float dx = x_ - other.x_;
-	float dz = z_ - other.z_;
-	float dist = std::sqrt( dx * dx + dz * dz );
-	return dist < ( radius_ + other.radius_ );
 }

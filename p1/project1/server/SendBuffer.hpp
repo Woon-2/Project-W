@@ -19,8 +19,8 @@ public:
 
 	void copyData( void* data, int32 len ) {
 		ASSERT_CRASH( len <= capacity( ) );
-		::memcpy( buffer_.data( ), data, len );
-		writeSize_ = len;
+		::memcpy( buffer_.data( ) + writeSize_, data, len );
+		writeSize_ += len;
 	}
 
 private:

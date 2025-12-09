@@ -208,7 +208,18 @@ const TextureInfo& assetTextureInfo(AssetTexture asset) {
 				getResourcePath() / "models\\SkySphere\\Textures\\Sky02.dds",
 			},
 			.type = TextureInfo::Type::Texture
-		}
+		},
+        TextureInfo{
+			.keys = {
+				"HpFrame",
+				"HpLine"
+			},
+			.paths = {
+				getResourcePath() / "models\\UI\\Textures\\HP\\Hp_frame.dds",
+				getResourcePath() / "models\\UI\\Textures\\HP\\Hp_line.dds"
+			},
+			.type = TextureInfo::Type::Texture
+        }
     };
 
     return sTextureInfos[etoi(asset)];

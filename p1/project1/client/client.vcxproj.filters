@@ -123,17 +123,8 @@
     <ClInclude Include="shader.hpp">
       <Filter>그래픽스\코어\헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="object.hpp">
-      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="camera.hpp">
-      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
-    </ClInclude>
     <ClInclude Include="samplePipeline.hpp">
       <Filter>그래픽스\파이프라인\헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="physics.hpp">
-      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="d3dx12\include\directx\d3d12.h">
       <Filter>d3dx12</Filter>
@@ -210,9 +201,6 @@
     <ClInclude Include="pbrPipeline.hpp">
       <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="light.hpp">
-      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
-    </ClInclude>
     <ClInclude Include="SendBuffer.hpp">
       <Filter>Network</Filter>
     </ClInclude>
@@ -273,9 +261,6 @@
     <ClInclude Include="billboard.hpp">
       <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="timer.hpp">
-      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
-    </ClInclude>
     <ClInclude Include="online\onlineGame.hpp">
       <Filter>게임%28온라인%29\헤더 파일</Filter>
     </ClInclude>
@@ -300,9 +285,6 @@
     <ClInclude Include="BVPipeline.hpp">
       <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="spriteAnimation.hpp">
-      <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
-    </ClInclude>
     <ClInclude Include="uiPipeline.hpp">
       <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
@@ -311,6 +293,33 @@
     </ClInclude>
     <ClInclude Include="font.hpp">
       <Filter>그래픽스\코어\헤더 파일</Filter>
+	</ClInclude>
+    <ClInclude Include="sharedResources.hpp">
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="object.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="camera.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="standalone\physics.hpp">
+      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="light.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="timer.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="animation.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="pbrSkinnedPipeline.hpp">
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="spriteAnimation.hpp">
+      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -338,20 +347,8 @@
     <ClCompile Include="shader.cpp">
       <Filter>그래픽스\코어\소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="timer.cpp">
-      <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="object.cpp">
-      <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="camera.cpp">
-      <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
-    </ClCompile>
     <ClCompile Include="samplePipeline.cpp">
       <Filter>그래픽스\파이프라인\소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="physics.cpp">
-      <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="d3dx12\src\d3dx12_property_format_table.cpp">
       <Filter>d3dx12</Filter>
@@ -361,9 +358,6 @@
     </ClCompile>
     <ClCompile Include="pbrPipeline.cpp">
       <Filter>그래픽스\파이프라인\소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="light.cpp">
-      <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="SendBuffer.cpp">
       <Filter>Network</Filter>
@@ -436,6 +430,30 @@
     </ClCompile>
     <ClCompile Include="font.cpp">
       <Filter>그래픽스\코어\소스 파일</Filter>
+	</ClCompile>
+    <ClCompile Include="sharedResources.cpp">
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="object.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="camera.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="standalone\physics.cpp">
+      <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="light.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="timer.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="animation.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="pbrSkinnedPipeline.cpp">
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -461,6 +479,12 @@
       <Filter>셰이더 파일</Filter>
     </FxCompile>
     <FxCompile Include="ui.hlsl">
+      <Filter>셰이더 파일</Filter>
+    </FxCompile>
+    <FxCompile Include="pbrSkinned.hlsl">
+      <Filter>셰이더 파일</Filter>
+    </FxCompile>
+    <FxCompile Include="shadowMapSkinned.hlsl">
       <Filter>셰이더 파일</Filter>
     </FxCompile>
   </ItemGroup>

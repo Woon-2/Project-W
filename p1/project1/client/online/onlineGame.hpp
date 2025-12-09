@@ -1,7 +1,6 @@
 #ifndef __Online_game_HPP
 #define __Online_game_HPP
 
-#include "../pch.hpp"
 #include "../IGame.hpp"
 
 #include "../gfx.hpp"
@@ -10,8 +9,24 @@
 #include "../skybox.hpp"
 #include "../light.hpp"
 #include "../AssetManager.hpp"
+#include "../standalone/physics.hpp"
 
 namespace Online {
+
+enum class MsgType : u8t {
+	SetupPlayer,
+	SetupCube,
+	PlayerMove,
+};
+
+struct Message {
+	MsgType type;
+	i32t objectId;
+	u32t materialSetIdx;
+	mu::Vec3 pos;
+	mu::NQuat orient;
+	mu::Vec3 scale;
+};
 
 class Game : public IGame {
 public:
@@ -63,7 +78,15 @@ public:
 		return idPlayerMap_[ playerId ];
 	}
 
+
 private:
+	enum class CameraMode {
+		FirstPerson,
+		ThirdPerson
+	};
+
+	void updateMoveState(int vk, Direction dir, DirectX::XMFLOAT3 forward, float cameraPitch);
+	void sendEnterRoomPacket(i32t roomId);
 	void processInput(Milliseconds deltaTime);
 
 	AssetManager assetManager_{};
@@ -77,7 +100,7 @@ private:
 
 	SPServerSession serverSession_{ };
 
-	std::vector<std::vector<std::vector<Object>>> cubes_{};
+	std::vector<Object> cubes_{};
 
 	std::shared_ptr<Object> player_{};
 	std::vector<std::shared_ptr<Object>> otherPlayers_{ };
@@ -88,7 +111,17 @@ private:
 	std::unordered_map<i32t, std::shared_ptr<Object>> idPlayerMap_{ };
 
 	Camera camera_{};
+	mu::Radian cameraPitch_ = 0.f;
+	CameraMode cameraMode_ = CameraMode::ThirdPerson;
+
 	Light dirLight_{};
+
+	LONG mouseDeltaX_{};
+	LONG mouseDeltaY_{};
+	std::array<BYTE, std::numeric_limits<u8t>::max()> keyboardStateCurr_{};
+	std::array<BYTE, std::numeric_limits<u8t>::max()> keyboardStatePrev_{};
+
+	bool inRoom_ = false;
 };
 
 }	// namespace Online

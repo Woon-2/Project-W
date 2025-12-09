@@ -1,7 +1,6 @@
 #ifndef __billboardPipeline_HPP
 #define __billboardPipeline_HPP
 
-#include "pch.hpp"
 #include "gfxUtil.hpp"
 
 class RootSig;
@@ -107,7 +106,7 @@ private:
 	// 단위 작업을 생성하여 스레드에 할당하는데 사용된다.
 	void addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 		const DrawEvent* pFirst, const DrawEvent* pLast,
-		std::size_t firstInstanceIdx, std::latch& latch
+		std::size_t firstInstanceOffset, std::latch& latch
 	);
 
 	std::vector<ComPtr<ID3D12DescriptorHeap>> descriptorHeaps_{};

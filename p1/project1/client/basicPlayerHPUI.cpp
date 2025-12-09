@@ -1,3 +1,4 @@
+#include "pch.hpp"
 #include "basicPlayerHpUI.hpp"
 #include "errorHandling.hpp"
 #include "gfxUtil.hpp"

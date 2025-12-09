@@ -68,6 +68,14 @@ Renderer::Renderer(gfx::d3d12engine::Core& core)
         }, gfx::d3d12::InputLayout::Spec::separated
     ), renderPassSkybox_(core.device(), shaderSkybox_,
         core.samStorage(), gfx::d3d12::convClientToVP(core.window().client())
+    ), shaderPlayerUI_(core.device(), core.root(),
+        gfx::d3d12::ShaderPlayerUI::Config{
+            .maxDrawcallCnt = 0x1000u,
+			.maxInstanceCnt = 0x1000u
+        }, gfx::d3d12::InputLayout::Spec::separated
+        
+    ), renderPassPlayerUI_(core.device(), shaderPlayerUI_,
+        core.samStorage(), gfx::d3d12::convClientToVP(core.window().client())
     ) {
     rendererTexStorage_.addSlot(
         slotKeyTexture,
@@ -171,6 +179,7 @@ void Renderer::init(gfx::d3d12engine::Scene& scene) {
 	renderPassCascadeShadowMap_.init(scene);
     renderPassCascadeShadowMapAnimated_.init(scene);
     renderPassSkybox_.init(scene);
+	renderPassPlayerUI_.init(scene);
 }
 
 void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& scene, gfx::d3d12::RenderTargets& renderTargets) {
@@ -184,6 +193,7 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
     renderPassTessellation_.update(scene);
     renderPassShadowMapTessellation_.update(scene);
 	renderPassSkybox_.update(scene);
+	renderPassPlayerUI_.update(scene);
 
     switch (renderMode_) {
     case Mode::Color:
@@ -226,6 +236,13 @@ void Renderer::render(gfx::d3d12engine::Core& core, gfx::d3d12engine::Scene& sce
 		renderPassSkybox_.preRender(cmdList, renderTargets);
 		renderPassSkybox_.render(cmdList, renderTargets);
 		renderPassSkybox_.postRender(cmdList, renderTargets);
+
+
+		shaderPlayerUI_.bindRootParams(cmdList);
+		renderPassPlayerUI_.preRender(cmdList, renderTargets);
+		renderPassPlayerUI_.render(cmdList, renderTargets);
+		renderPassPlayerUI_.postRender(cmdList, renderTargets);
+
         break;
 
     case Mode::Cascade0Depth:

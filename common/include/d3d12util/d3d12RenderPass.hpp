@@ -1011,6 +1011,49 @@ private:
     const SamplerStorage* pSamplerStorage_;
 };
 
+class PlayerUI : public gfx::d3d12::RenderPass {
+public:
+    static constexpr const char* id = "PlayerUI";
+
+    PlayerUI(D3D12Device& device, ShaderPlayerUI& shader,
+        const SamplerStorage& samplerStorage, const D3D12_VIEWPORT& vp = D3D12_VIEWPORT{}
+    );
+
+    void setViewport(const D3D12_VIEWPORT& vp);
+
+    const D3D12_VIEWPORT& viewport() const NOEXCEPT {
+        return viewport_;
+    }
+
+    void trackModel(Model* model);
+
+    void preRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void render(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+    void postRender(D3D12GfxCmdList& cmdList, RenderTargets& renderTargets) override;
+
+    void setCamera(const Camera* pCamera) NOEXCEPT {
+        pCamera_ = pCamera;
+    }
+
+private:
+    ShaderPlayerUI& shader() noexcept {
+        return static_cast<ShaderPlayerUI&>(protocol_.shader());
+    }
+    const ShaderPlayerUI& shader() const noexcept {
+        return static_cast<const ShaderPlayerUI&>(protocol_.shader());
+    }
+
+    static RenderProtocol::Desc makeDesc();
+
+    D3D12_VIEWPORT viewport_;
+    RenderProtocol protocol_;
+    std::vector< std::tuple<bool, Submesh*,
+        const coord::System*, VBLayoutIdx, mu::Mat4x4>
+    > batch_;
+    const Camera* pCamera_;
+    const SamplerStorage* pSamplerStorage_;
+};
+
 }   // namespace gfx::d3d12::rp
 
 }   // namespace gfx::d3d12

@@ -1,12 +1,11 @@
 #ifndef __mesh_HPP
 #define __mesh_HPP
 
-#include "pch.hpp"
 #include "gfxUtil.hpp"
 #include "collision.hpp"
 
 // 재질 정보를 표현하는 구조체
-// SubMesh에 담겨, 드로우콜 시 사용할 텍스처나 상수를 지정한다.
+// 드로우콜 시 사용할 텍스처나 상수를 지정한다.
 struct Material {
 	Texture mapAlbedo;
 	Texture mapMetallicSmoothness;	// 유니티 익스포터를 사용하기 때문에 유니티와 텍스처 포맷 맞춰준다.
@@ -91,6 +90,60 @@ Mesh buildPointMesh(
 	DescriptorPool& texPool, Fence& fenceToAssociate
 );
 
+struct Skeleton;
+
+// 애니메이션에 쓰이는 한 개의 본을 나타내는 구조체
+// 
+// 애니메이션 프레임은 로컬 공간(본 공간)에서의 변환을 표현하므로,
+// 드레스 공간에 있는 본을 Bone::toLocal 멤버를 통해 로컬 공간으로 변환한 뒤
+// 프레임 변환을 적용해야 올바른 변환이 출력된다.
+struct Bone {
+	enum class SocketType {
+		None,
+		RightHand,
+		LeftHand,
+		SIZE
+	};
+
+	mu::Mat4x4 toLocal;	// 드레스 공간에서 로컬 공간으로의 변환
+	mu::Mat4x4 toDress;	// 로컬 공간에서 T-pose 드레스 공간으로의 변환
+	std::string name;
+	std::vector<Bone*> children;	// 이 본을 소유한 Skeleton::bones에 담긴 자식 본들을 가리킨다.
+	i32t boneIdx;	// 이 본을 소유한 Skeleton::bones에서 이 본의 인덱스
+	SocketType socketType;	// 해당 본이 소켓이 아니라면 None, 소켓이라면 소켓 타입
+};
+
+// 바이너리 파일의 Bone Socket Type을 나타내는 문자열로부터
+// 실제 열거형 값을 얻어낸다.
+Bone::SocketType convertStrToBoneSocketType(const std::string& boneSocketTypeStr);
+
+// 스켈레톤의 구조를 나타내는 열거형,
+// 애니메이션 클립이 대상으로 하는 스켈레톤 구조와
+// 모델에 부여된 스켈레톤 구조가 같아야만
+// 올바른 스키닝이 가능하다.
+enum class SkeletonEnumeration {
+	Humanoid,
+	SIZE
+};
+
+// 스키닝의 대상이 되는 스켈레톤을 나타내는 구조체
+// 본들과 스켈레톤 구조를 나타내는 열거형 값을 저장한다.
+struct Skeleton {
+	std::string name;
+	std::map<Bone::SocketType, i32t> socketToBoneIdx;
+	// 본이 자식 본을 생포인터로 저장하기 위해서는
+	// 스켈레톤이 복사되어도 본들의 메모리 공간이 변하지 않아야 한다.
+	// std::shared_ptr로 감싸 본들의 저장 공간을 별도의 free store에 구성한다.
+	// 이로 인해 부수적으로 Skeleton의 복사도 값싸진다.
+	std::shared_ptr< std::vector<Bone> > bones;
+	Bone* pRoot;	// 이 멤버를 통해 전체 본 트리를 순회할 수 있다.
+	SkeletonEnumeration skeletonEnumeration;
+};
+
+// 바이너리 파일의 Skeleton Enumeration을 나타내는 문자열로부터
+// 실제 열거형 값을 얻어낸다.
+SkeletonEnumeration convertStrToSkeletonEnum(const std::string& skeletonEnumerationStr);
+
 // Model 구조체에서 메시와 드레스 공간 변환을 함께 저장하기 위해 쓰인다.
 struct MeshWithDressXform {
 	Mesh mesh;
@@ -105,12 +158,16 @@ struct Model {
 	std::vector<MeshWithDressXform> meshWithDressXforms;
 	std::vector<AABB> aabbs;
 	std::map<std::string, int> aabbIdxMap;
+	std::map<Bone::SocketType, mu::Mat4x4> socketOffsets;
+	Skeleton skeleton;
 };
 
 // 바이너리 파일로부터 모델을 읽어온다.
-// 메시들을 생성하며 각 메시들의 버텍스 버퍼와 서브메시(인덱스버퍼, 재질)을 생성한다.
+// 메시들을 생성하며 각 메시들의 버텍스 버퍼와 서브메시, 그리고 재질 집합을 생성한다.
 // 그 과정에서 필요한 텍스처들이 texHashMap에 존재하지 않는다면, 로드한다.
 // (로드되는 텍스처의 경로들은 바이너리 파일 내에 적혀있다.)
+// 모델에 스켈레톤이 있는 경우, 스켈레톤 정보도 로드한다.
+// 모델에 아이템 정보가 있는 경우, 아이템 정보도 로드한다.
 // * 수정 시 주의사항: 유니티의 추출 스크립트와 구조가 대칭이어야 한다.
 Model loadModelFromFile( const std::filesystem::path& path,
 	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,

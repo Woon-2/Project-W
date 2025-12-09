@@ -4,8 +4,13 @@
 #include <cstdint>
 #include <array>
 
+#include "../common/mathUtil.hpp"
+
 constexpr const char* serverIp = "127.0.0.1";
 constexpr int serverPort = 7777;
+
+// 한 방에 들어갈 수 있는 최대 유저 수
+constexpr std::uint16_t maxUserCount = 4u;
 
 #pragma pack( push, 1 )
 
@@ -15,7 +20,7 @@ struct PacketHeader {
 };
 
 enum class Direction : std::uint8_t {
-	none, w, a, s, d
+	w, a, s, d
 };
 
 enum class PacketType : std::uint16_t {
@@ -25,14 +30,16 @@ enum class PacketType : std::uint16_t {
 	csLogin,
 	scLogin,
 
-	csEnter,
 	scAssignId,
+	csEnter,
+	scSetup,
 	scEnter,
 
 	csLeave,
 	scLeave,
 
-	csMove,
+	csMoveStart,
+	csMoveStop,
 	scMove,
 
 	csFindRoom,
@@ -59,20 +66,38 @@ struct SCLoginPacket {
 	std::array<char, 50> reason;
 };
 
-struct CSEnterPacket {
-
-};
-
 struct SCAssignIdPacket {
 	std::int32_t playerId;
 };
 
+struct CSEnterPacket {
+
+};
+
+enum class ObjectType : std::uint8_t {
+	Player,
+	Cube,
+};
+
+struct ObjectData {
+	ObjectType type;
+	std::int32_t objectId;
+	std::uint32_t materialSetIdx;
+	DirectX::XMFLOAT3 pos;
+	DirectX::XMFLOAT4 orient;
+	DirectX::XMFLOAT3 scale;
+};
+
+struct SCSetupPacket {
+	std::int32_t objectCount;
+};
+
 struct SCEnterPacket {
 	std::int32_t playerCount;
-	std::array<std::int32_t, 50> pIds;
-	std::array<float, 50> x;
-	std::array<float, 50> y;
-	std::array<float, 50> z;
+	std::array<std::int32_t, maxUserCount> pIds;
+	std::array<float, maxUserCount> x;
+	std::array<float, maxUserCount> y;
+	std::array<float, maxUserCount> z;
 };
 
 struct CSLeavePacket {
@@ -83,15 +108,19 @@ struct SCLeavePacket {
 	std::int32_t playerId;
 };
 
-struct CSMovePacket {
+struct CSMoveStartPacket {
+	Direction dir;
+	DirectX::XMFLOAT3 forward;
+	float cameraPitch;
+};
+
+struct CSMoveStopPacket {
 	Direction dir;
 };
 
 struct SCMovePacket {
 	std::int32_t playerId;
-	float x;
-	float y;
-	float z;
+	DirectX::XMFLOAT3 pos;
 };
 
 struct CSFindRoomPacket {
@@ -103,15 +132,22 @@ struct Packet {
 	union {
 		CSSignupPacket csSignup;
 		SCSignupPacket scSignup;
+
 		CSLoginPacket csLogin;
 		SCLoginPacket scLogin;
-		CSEnterPacket csEnter;
+
 		SCAssignIdPacket scAssignId;
+		CSEnterPacket csEnter;
+		SCSetupPacket scSetup;
 		SCEnterPacket scEnter;
+
 		CSLeavePacket csLeave;
 		SCLeavePacket scLeave;
-		CSMovePacket csMove;
+
+		CSMoveStartPacket csMoveStart;
+		CSMoveStopPacket csMoveStop;
 		SCMovePacket scMove;
+
 		CSFindRoomPacket csFindRoom;
 	};
 };

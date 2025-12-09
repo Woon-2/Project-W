@@ -529,6 +529,13 @@ struct PerDrawcallData5 {
 	std::uint32_t samplerIdx;
 };
 
+struct PerDrawcallData6 {
+	PBRMaterial material;
+	std::uint32_t samplerIdx;
+	std::uint32_t instanceBase;
+	dx::XMUINT2 padding;
+};
+
 struct PerFrameData0 {
 	dx::XMFLOAT3 globalAmbient;
 	float padding0;
@@ -1286,6 +1293,64 @@ private:
 	std::size_t maxDrawcallCnt_;
 
 	RefModel skyboxModel_;
+};
+
+class ShaderPlayerUI : public Shader {
+private:
+	std::size_t cbDrawcallDataSize_;
+	std::size_t cbInstanceDataSize_;
+
+public:
+	struct Config {
+		std::size_t maxDrawcallCnt;
+		std::size_t maxInstanceCnt;
+	};
+
+	ShaderPlayerUI(D3D12Device& device, const RootSignature& root,
+		const Config& config, InputLayout::Spec ilSpec = InputLayout::Spec::serial
+	);
+
+	RenderProtocol makeProtocol(D3D12Device& device, const RenderProtocol::Desc& desc) {
+		return RenderProtocol(device, *this,
+			selectBlobsStrong<ShaderBlob::Type::Vertex, ShaderBlob::Type::Pixel>(), desc
+		);
+	}
+
+	std::size_t maxDrawcallCnt() const noexcept {
+		return maxDrawcallCnt_;
+	}
+
+	std::size_t maxInstanceCnt() const noexcept {
+		return maxInstanceCnt_;
+	}
+
+	void draw( D3D12GfxCmdList& cmdList, const Submesh& submesh,
+		std::size_t instanceCnt, std::size_t vbLayoutIdx
+	) {
+		submesh.draw( cmdList, instanceCnt, vbLayoutIdx );
+	}
+
+	void bindRootParams(D3D12GfxCmdList& cmdList) override;
+	void bindPerDrawcallData(std::size_t drawcallIdx, D3D12GfxCmdList& cmdList);
+
+	std::size_t cbDrawcallDataSize() const noexcept {
+		return cbDrawcallDataSize_;
+	}
+
+	void loadBlobs() override;
+	void releaseBlobs() override;
+
+	UploadBuffer perInstanceData_;
+	UploadBuffer perDrawcallData_;
+	UploadBuffer perConfigurationData_;
+
+private:
+	static InputLayout makeInputLayout(InputLayout::Spec ilSpec);
+	static InputLayout makeInputLayoutSerial();
+	static InputLayout makeInputLayoutSeparated();
+
+	std::size_t maxDrawcallCnt_;
+	std::size_t maxInstanceCnt_;
 };
 
 }   // namespace gfx::d3d12

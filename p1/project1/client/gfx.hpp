@@ -1,43 +1,69 @@
 #ifndef __GFX_HPP
 #define __GFX_HPP
 
-#include "pch.hpp"
 #include "gfxUtil.hpp"
 #include "shader.hpp"
 #include "mesh.hpp"
 #include "font.hpp"
 
+#include "sharedResources.hpp"
 #include "samplePipeline.hpp"
 #include "pbrPipeline.hpp"
+#include "pbrSkinnedPipeline.hpp"
 #include "billboardPipeline.hpp"
 #include "skyboxPipeline.hpp"
 #include "BVPipeline.hpp"
 #include "uiPipeline.hpp"
 #include "spriteAnimation.hpp"
 
-
-// 2000, lightPos 처리 등 좀 더 표현력, 일반성 있게 구성
-// 텍스처 vflip
-// 1인칭 & 3인칭 카메라 분리 구현
-// 애니메이션 + 총 달기
-// gfx에 있는 texHashMap game쪽으로 옮기기
+// 커서 숨기기 및 마우스 캡쳐
+// 클릭하면 플레이어의 앞에 스프라이트 애니메이션 재생하기 구현 - 12.3.
+// 플레이어 체력 및 장탄수, 사격 쿨타임 갱신 함수 만들기 - 12.4.
+// Cascaded Shadow Mapping - 12.5.
+// 온라인 게임 손보기 및 스탠드얼론도 전투 구현 - 12.7.
+// ExecuteCommand 별도 스레드에서 호출
+// Deferred Shading - 12.10.
+// metallic, roughness map 별도로도 지원
+// UI와 3D 객체 겹치는 상황에서의 피킹
+// 선택된 객체 아이콘 표시 및 테두리 그리기
+// 타워, 바리케이드 설치 (위치 고를때 반투명, 바닥에 색깔로 설치 가능 표시)
+// 타워 총알 발사 임시 구현
+// 랜덤하게 생성된 몹들이 기지로 길찾아 오도록 패킷을 받았을 때 대응 가능한 인터페이스 구현
+// Rigidbody Physics 구현 - 12.13.
+// Software Culling 구현(렌더링, 애니메이션 업데이트) - 12.15.
+// 애니메이션 우선순위 계산 알고리즘 - 12.16.
+// Active Ragdoll 구현 - 12.21.
+// (상훈) 서버사이드 속도기반 물리
+// (종진) 텍스트출력, 레벨디자인
+// 
+// 스프링 팔로잉 카메라 구현
+// Bounding Volume Hierarchy 구현
+// Software Culling 구현
+// Deferred Shading 구현
 // Rigidbody Physics 구현
-// 텍스처 포맷, 밉 개수도 추출
-// 그림자맵 서로 다른 파이프라인간 공유할 수 있도록 바꾸기
-// deferred shading 구현
+// Active Ragdoll 구현
+// Image Based Lighting 구현
+// pn triangles tesselation 구현
+// 
+// 부하 관리 (업데이트, 애니메이션 생략)
+// Chunk 분리
+// 렌더링 LOD, 업데이트 LOD, 애니메이션 LOD(본 개수, baked animation)
+// Terrain Tessellation
+// 파티클 시뮬레이션
+// Bloom
+// HDR
+// Subsuface Scattering
+// SSAO, HBAO+
+// Screen Space Reflection
+// Volumetric Rendering
+// Atmosphere Rendering
+// EVSM
+// TAA
+// 
 // 사운드 프로그래밍
 // 네트워크에서 받는 물리 정보 보간/외삽
-// CSM
 // 나무, 수풀 LOD써서 넣기
 // 멀티스레드 업데이트
-// 충돌체 렌더링 및 구현 (컬링용)
-// Software Culling
-// 스프링 팔로잉 카메라 구현
-// * 임포트 관련
-//   texHashMap 등 에셋 관련 자료구조가 클라이언트쪽에 있을 필요가 있음.
-//   스카이박스 임포트 불완전
-//   예외처리 좀 더 추가
-// * Texture srv/uav의 idxRange 좀 더 표현력 있게 넣는 법 없을까.
 
 // 서버
 // 로그인-로그아웃, 룸 구조 만들기
@@ -52,6 +78,7 @@ extern HWND ghWnd;
 
 struct RequestModelLoad {
 	std::filesystem::path modelPath;
+	std::unordered_map<std::string, Texture>* pTexHashMap;
 	Model* pDest;
 };
 
@@ -126,6 +153,14 @@ public:
 	void addLightData(const PBRPipeline::LightData& lightData);
 	// 프레임 데이터를 입력한다.
 	void addFrameData(const PBRPipeline::FrameData& frameData);
+	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+	void addDrawEvent(const PBRSkinnedPipeline::DrawEvent& drawEvent);
+	// 카메라 데이터를 입력한다.
+	void addCameraData(const PBRSkinnedPipeline::CameraData& cameraData);
+	// 조명 데이터를 입력한다.
+	void addLightData(const PBRSkinnedPipeline::LightData& lightData);
+	// 프레임 데이터를 입력한다.
+	void addFrameData(const PBRSkinnedPipeline::FrameData& frameData);
 	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 	void addDrawEvent( const BillboardPipeline::DrawEvent& drawEvent );
 	// 카메라 데이터를 입력한다.
@@ -225,7 +260,15 @@ private:
 	PBRPipeline::Resources resourcesPBRPipeline_{};
 	PBRPipeline::CameraData cameraDataPBRPipeline_{};
 	std::vector<PBRPipeline::LightData> lightDataPBRPipeline_{};
+	PBRPipeline::LightData mainDirectionalLightPBRPipeline_{};
 	PBRPipeline::FrameData frameDataPBRPipeline_{};
+	// PBR-skinned Pipeline
+	std::vector<PBRSkinnedPipeline::DrawEvent> drawEventsPBRSkinnedPipeline_{};
+	PBRSkinnedPipeline::Resources resourcesPBRSkinnedPipeline_{};
+	PBRSkinnedPipeline::CameraData cameraDataPBRSkinnedPipeline_{};
+	std::vector<PBRSkinnedPipeline::LightData> lightDataPBRSkinnedPipeline_{};
+	PBRSkinnedPipeline::LightData mainDirectionalLightPBRSkinnedPipeline_{};
+	PBRSkinnedPipeline::FrameData frameDataPBRSkinnedPipeline_{};
 	// Skybox Pipeline
 	std::vector<SkyboxPipeline::DrawEvent> drawEventsSkyboxPipeline_{};
 	SkyboxPipeline::Resources resourcesSkyboxPipeline_{};

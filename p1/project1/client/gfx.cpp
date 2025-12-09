@@ -1,3 +1,4 @@
+#include "pch.hpp"
 #include "gfx.hpp"
 #include "errorHandling.hpp"
 
@@ -232,7 +233,9 @@ void GFX::init() {
 
 	shaders_.try_emplace("SampleShader", createSampleShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("ShadowMapShader", createShadowMapShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("ShadowMapSkinnedShader", createShadowMapSkinnedShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRShader", createPBRShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("PBRSkinnedShader", createPBRSkinnedShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("BillboardShader", createBillboardShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("SkyboxShader", createSkyboxShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("BVShader", createBVShader(device_.Get(), defaultRootSig.get()));
@@ -254,6 +257,11 @@ void GFX::init() {
 
 	// Draw Event들을 저장할 메모리 예약
 	drawEventsSamplePipeline_.reserve(1000u);
+	drawEventsPBRPipeline_.reserve(1000u);
+	drawEventsPBRSkinnedPipeline_.reserve(1000u);
+	drawEventsBVPipeline_.reserve(1000u);
+	drawEventsBillboardPipeline_.reserve(1000u);
+	drawEventsSkyboxPipeline_.reserve(10u);
 }
 
 // 윈도우와 연결된 SwapChain을 만든다.
@@ -340,7 +348,7 @@ void GFX::createSwapChain() {
 	// Back Buffer 개수 * 2의 크기를 갖도록 초기화한다.
 	// RenderingMaster 카테고리의 명령 컨텍스트는 한 프레임의 렌더링에
 	// 클리어용, 출력용으로 두 개가 쓰인다.
-	cmdListPool_.init(device_.Get(), CommandListUsage::RenderingMaster, backBuffers_.size() * 2);
+	cmdListPool_.init(device_.Get(), CommandListUsage::RenderingMaster, (backBuffers_.size()) * 2);
 
 	// 백버퍼 개수만큼의 room을 가지는 파이프라인별 리소스들 생성
 	// 1000u, 32u를 변수로 대체하기
@@ -372,6 +380,34 @@ void GFX::createSwapChain() {
 	);
 	resourcesPBRPipeline_.mainPass.perFrameData.init(
 		device_.Get(), sizeof(PBRShader::PerFrameData), backBuffers_.size(), "PBR_Main_PerFrameData"
+	);
+	// PBR-skinned Pipeline ----
+	resourcesPBRSkinnedPipeline_.shadowPass.perInstanceData.init(
+		device_.Get(), sizeof(ShadowMapSkinnedShader::PerInstanceData) * 1000u, backBuffers_.size(), "PBRSkinned_Shadow_PerInstanceData"
+	);
+	resourcesPBRSkinnedPipeline_.shadowPass.boneData.init(
+		device_.Get(), sizeof(ShadowMapSkinnedShader::BoneData) * 100'000u, backBuffers_.size(), "PBRSkinned_Shadow_BoneData"
+	);
+	resourcesPBRSkinnedPipeline_.shadowPass.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof(ShadowMapSkinnedShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBRSkinned_Shadow_PerDrawcallData"
+	);
+	resourcesPBRSkinnedPipeline_.shadowPass.perFrameData.init(
+		device_.Get(), sizeof(ShadowMapSkinnedShader::PerFrameData), backBuffers_.size(), "PBRSkinned_Shadow_PerFrameData"
+	);
+	resourcesPBRSkinnedPipeline_.mainPass.perInstanceData.init(
+		device_.Get(), sizeof(PBRSkinnedShader::PerInstanceData) * 1000u, backBuffers_.size(), "PBRSkinned_Main_PerInstanceData"
+	);
+	resourcesPBRSkinnedPipeline_.mainPass.boneData.init(
+		device_.Get(), sizeof(PBRSkinnedShader::BoneData) * 100'000u, backBuffers_.size(), "PBRSkinned_Main_BoneData"
+	);
+	resourcesPBRSkinnedPipeline_.mainPass.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof(PBRSkinnedShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBRSkinned_Main_PerDrawcallData"
+	);
+	resourcesPBRSkinnedPipeline_.mainPass.lightData.init(
+		device_.Get(), sizeof(PBRSkinnedShader::Light) * 32u, backBuffers_.size(), "PBRSkinned_Main_LightData"
+	);
+	resourcesPBRSkinnedPipeline_.mainPass.perFrameData.init(
+		device_.Get(), sizeof(PBRSkinnedShader::PerFrameData), backBuffers_.size(), "PBRSkinned_Main_PerFrameData"
 	);
 	// Skybox Pipeline ----
 	resourcesSkyboxPipeline_.perFrameData.init(
@@ -449,11 +485,37 @@ void GFX::addCameraData(const PBRPipeline::CameraData& cameraData) {
 // 조명 데이터를 입력한다.
 void GFX::addLightData(const PBRPipeline::LightData& lightData) {
 	lightDataPBRPipeline_.push_back(lightData);
+	if (lightData.isMainDirectionalLight) {
+		mainDirectionalLightPBRPipeline_ = lightData;
+	}
 }
 
 // 프레임 데이터를 입력한다.
 void GFX::addFrameData(const PBRPipeline::FrameData& frameData) {
 	frameDataPBRPipeline_ = frameData;
+}
+
+// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+void GFX::addDrawEvent(const PBRSkinnedPipeline::DrawEvent& drawEvent) {
+	drawEventsPBRSkinnedPipeline_.push_back(drawEvent);
+}
+
+// 카메라 데이터를 입력한다.
+void GFX::addCameraData(const PBRSkinnedPipeline::CameraData& cameraData) {
+	cameraDataPBRSkinnedPipeline_ = cameraData;
+}
+
+// 조명 데이터를 입력한다.
+void GFX::addLightData(const PBRSkinnedPipeline::LightData& lightData) {
+	lightDataPBRSkinnedPipeline_.push_back(lightData);
+	if (lightData.isMainDirectionalLight) {
+		mainDirectionalLightPBRSkinnedPipeline_ = lightData;
+	}
+}
+
+// 프레임 데이터를 입력한다.
+void GFX::addFrameData(const PBRSkinnedPipeline::FrameData& frameData) {
+	frameDataPBRSkinnedPipeline_ = frameData;
 }
 
 // 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
@@ -546,16 +608,26 @@ void GFX::loadAssets() {
 	DISPLAY_ERROR_DX_VOID(cmdAlloc->Reset(), false);
 	DISPLAY_ERROR_DX_VOID(cmdList->Reset(cmdAlloc.Get(), nullptr), false);
 	
-	BillboardPipeline::initStaticPointMesh( device_.Get(), cmdList.Get(), fence );
-	UIPipeline::initStaticQuadMesh( device_.Get(), cmdList.Get(), fence );
+	// 파이프라인 공용 리소스 로드
+	SharedResources::ShadowMap::addShadowMap("ShadowMap", device_.Get(),
+		DXGI_FORMAT_D32_FLOAT, 2000u, 2000u, backBuffers_.size(),
+		srvTexPool_, dsvPool_
+	);
+	// 파이프라인 자체 리소스 로드
+	// BVPipeline
 	BVPipeline::initStaticModels(device_.Get(), cmdList.Get(), fence);
-	PBRPipeline::initShadowTextures(device_.Get(), 2000u, 2000u, backBuffers_.size(), srvTexPool_, dsvPool_);
+	// BillboardPipeline
+	BillboardPipeline::initStaticPointMesh( device_.Get(), cmdList.Get(), fence );
+	// UIPipeline
+	UIPipeline::initStaticQuadMesh( device_.Get(), cmdList.Get(), fence );
 
 	dumpLog();
 
 	// 명령 기록 시작
 	for (auto& request : requestsModelLoad_) {
-		*request.pDest = loadModelFromFile(request.modelPath, device_.Get(), cmdList.Get(), texHashMap_, srvTexPool_, fence);
+		*request.pDest = loadModelFromFile( request.modelPath,
+			device_.Get(), cmdList.Get(), *request.pTexHashMap, srvTexPool_, fence
+		);
 	}
 
 	dumpLog();
@@ -624,6 +696,21 @@ void GFX::render() {
 		return;
 	}
 
+	// 펜스 동기화
+	// 렌더링할 수 있는 백버퍼가 있다면,
+	// wait하지 않고 이어서 렌더링을 하도록 한다.
+	// 백버퍼는 순차적으로 사용되므로, (백버퍼 개수 - 1) 프레임 전의 렌더링에 대한
+	// Fence를 wait하면 이를 구현할 수 있다.
+	auto idxFenceToWait = (frameIdx_ - (backBuffers_.size() - 1)) % backBuffers_.size();
+	waitOnFence("FrameFence" + std::to_string(idxFenceToWait));
+
+	// Dispatcher들은 명령 리스트 풀에서 스스로 명령 컨텍스트를 할당하고 기록, 실행한다.
+	// 사용이 끝난 명령 컨텍스트는 펜스와 연관되어 gpu 사용이 끝남을 감지한 후
+	// 반환되는 게 규칙이므로, Dispatcher에 명령 컨텍스트와 연관시킬 펜스를 전달해야 한다.
+	auto idxFenceToSignal = frameIdx_ % backBuffers_.size();
+	auto fenceNameToSignal = "FrameFence" + std::to_string(idxFenceToSignal);
+	auto& fenceToSignal = fences_.at(fenceNameToSignal);
+
 	// 렌더 타겟 클리어를 위한 명령 컨텍스트 할당
 	CommandContext cmdCtxClear{};
 	DISPLAY_ERROR_STR(
@@ -646,6 +733,7 @@ void GFX::render() {
 	// 클리어 명령 기록 시작
 	const auto backbufIdx = swapChain_->GetCurrentBackBufferIndex();
 
+	// 메인 렌더 타겟에 대한 클리어
 	transitionResourceState(cmdListClear, backBuffers_[backbufIdx].Get(),
 		D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET
 	);
@@ -667,6 +755,12 @@ void GFX::render() {
 			1.0f, 0u, 0u, nullptr
 		), false
 	);
+
+	// 그림자맵 클리어
+	SharedResources::ShadowMap::getReadyAsDepthWrite(
+		"ShadowMap", cmdListPool_, cmdQ_.Get(), fenceToSignal
+	);
+	SharedResources::ShadowMap::clearShadowMap("ShadowMap", cmdListClear);
 
 	const auto clRect = gClientRect;
 
@@ -695,18 +789,12 @@ void GFX::render() {
 	// 클리어 명령 리스트 실행
 	DISPLAY_ERROR_DX_VOID( cmdQ_->ExecuteCommandLists(1u, clearCmdLists), false );
 
-	// Dispatcher들은 명령 리스트 풀에서 스스로 명령 컨텍스트를 할당하고 기록, 실행한다.
-	// 사용이 끝난 명령 컨텍스트는 펜스와 연관되어 gpu 사용이 끝남을 감지한 후
-	// 반환되는 게 규칙이므로, Dispatcher에 명령 컨텍스트와 연관시킬 펜스를 전달해야 한다.
-	auto idxFenceToSignal = frameIdx_ % backBuffers_.size();
-	auto fenceNameToSignal = "FrameFence" + std::to_string(idxFenceToSignal);
-	auto& fenceToSignal = fences_.at(fenceNameToSignal);
-
+	// 디스크립터 힙 바인딩 명령을 위한 gpu-visible 디스크립터 힙 모음,
+	// Dispatcher들에 전달한다.
 	auto tmpDescriptorHeaps = std::vector<ComPtr<ID3D12DescriptorHeap>>{};
 	tmpDescriptorHeaps.push_back(srvCbvUavHeap_.heap);
 	tmpDescriptorHeaps.push_back(samHeap_.heap);
 
-	// Sample Pipeline의 Dispatch
 	auto samplePipelineDispatcher = SamplePipeline::Dispatcher(
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
@@ -720,7 +808,6 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
-	// PBR Pipeline의 Dispatch
 	auto pbrPipelineDispatcher = PBRPipeline::Dispatcher(
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
@@ -730,11 +817,23 @@ void GFX::render() {
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesPBRPipeline_, threadPool_, &cmdListPool_,
 		std::move(drawEventsPBRPipeline_), std::move(lightDataPBRPipeline_),
-		cameraDataPBRPipeline_, frameDataPBRPipeline_,
+		mainDirectionalLightPBRPipeline_, cameraDataPBRPipeline_, frameDataPBRPipeline_,
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
-	// Billboard Pipeline의 Dispatch
+	auto pbrSkinnedPipelineDispatcher = PBRSkinnedPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_, &dsvPool_,
+		rootSigs_.at("DefaultRootSignature"), shaders_.at("PBRSkinnedShader"),
+		shaders_.at("ShadowMapSkinnedShader"), cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesPBRSkinnedPipeline_, threadPool_, &cmdListPool_,
+		std::move(drawEventsPBRSkinnedPipeline_), std::move(lightDataPBRSkinnedPipeline_),
+		mainDirectionalLightPBRSkinnedPipeline_, cameraDataPBRSkinnedPipeline_, frameDataPBRSkinnedPipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
 	auto billboardPipelineDispatcher = BillboardPipeline::Dispatcher(
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
@@ -748,7 +847,6 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
-	// Bounding Volume Pipeline의 Dispatch
 	auto bvPipelineDispatcher = BVPipeline::Dispatcher(
 		tmpDescriptorHeaps, rootSigs_.at("DefaultRootSignature"),
 		shaders_.at("BVShader"), cmdQ_, viewport, clRect,
@@ -772,15 +870,38 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	// 의존 관계가 있는 파이프라인별 함수들 사이의 호출 순서는 중요하다.
+	// 예를 들어 그림자를 지원하는 파이프라인들은
+	// 각 파이프라인의 모든 그림자 패스를 수행한 후에 동기화되어
+	// 각 파이프라인의 모든 메인 패스를 수행해야 한다.
+
 	// threadPool_이 활성화된 경우엔 멀티스레드로 처리한다.
 	if (!threadPool_) {
 		samplePipelineDispatcher.updateGPUDataSingleThreaded();
 		samplePipelineDispatcher.drawSingleThreaded();
 		dumpLog();
 
+		// == 그림자 패스들 ==
+		SharedResources::ShadowMap::getReadyAsDepthWrite(
+			"ShadowMap", cmdListPool_, cmdQ_.Get(), fenceToSignal
+		);
+
 		pbrPipelineDispatcher.sortDrawEvents();
 		pbrPipelineDispatcher.shadowPass();
+		dumpLog();
+
+		pbrSkinnedPipelineDispatcher.sortDrawEvents();
+		pbrSkinnedPipelineDispatcher.shadowPass();
+		dumpLog();
+
+		// == 메인 패스들 ==
+		SharedResources::ShadowMap::getReadyAsShaderResource(
+			"ShadowMap", cmdListPool_, cmdQ_.Get(), fenceToSignal
+		);
+
 		pbrPipelineDispatcher.mainPass();
+		dumpLog();
+		pbrSkinnedPipelineDispatcher.mainPass();
 		dumpLog();
 
 		bvPipelineDispatcher.updateGPUDataSingleThreaded();
@@ -796,9 +917,27 @@ void GFX::render() {
 		samplePipelineDispatcher.drawMultiThreaded();
 		dumpLog();
 
+		// == 그림자 패스들 ==
+		SharedResources::ShadowMap::getReadyAsDepthWrite(
+			"ShadowMap", cmdListPool_, cmdQ_.Get(), fenceToSignal
+		);
+
 		pbrPipelineDispatcher.sortDrawEvents();
 		pbrPipelineDispatcher.shadowPassMT();
+		dumpLog();
+
+		pbrSkinnedPipelineDispatcher.sortDrawEvents();
+		pbrSkinnedPipelineDispatcher.shadowPassMT();
+		dumpLog();
+
+		// == 메인 패스들 ==
+		SharedResources::ShadowMap::getReadyAsShaderResource(
+			"ShadowMap", cmdListPool_, cmdQ_.Get(), fenceToSignal
+		);
+
 		pbrPipelineDispatcher.mainPassMT();
+		dumpLog();
+		pbrSkinnedPipelineDispatcher.mainPassMT();
 		dumpLog();
 
 		bvPipelineDispatcher.updateGPUDataMultiThreaded();
@@ -810,8 +949,6 @@ void GFX::render() {
 		dumpLog();
 	}
 
-	// Skybox Pipeline의 Dispatch
-	// 스카이박스 하나 그리는 파이프라인이라, 멀티스레드일 필요가 없다.
 	auto skyboxPipelineDispatcher = SkyboxPipeline::Dispatcher(
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
@@ -824,6 +961,8 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	// Skybox Pipeline의 Dispatch
+	// 스카이박스 하나 그리는 파이프라인이라, 멀티스레드일 필요가 없다.
 	skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
 	skyboxPipelineDispatcher.drawSingleThreaded();
 
@@ -851,12 +990,11 @@ void GFX::render() {
 	auto cmdAllocPresent = cmdCtxPresent.cmdAlloc.Get();
 
 	if (!cmdListPresent) {
-		////
 		return;
 	}
 
-	cmdAllocPresent->Reset();
-	cmdListPresent->Reset(cmdAllocPresent, nullptr);
+	DISPLAY_ERROR_DX_HR( cmdAllocPresent->Reset(), false );
+	DISPLAY_ERROR_DX_HR( cmdListPresent->Reset(cmdAllocPresent, nullptr), false );
 
 	// 출력 명령 기록 시작
 	transitionResourceState(cmdListPresent, backBuffers_[backbufIdx].Get(),
@@ -873,20 +1011,12 @@ void GFX::render() {
 	
 	DISPLAY_ERROR_DX_VOID( swapChain_->Present(0, 0), false );
 
-	// 펜스 동기화
-	// 렌더링할 수 있는 백버퍼가 있다면,
-	// wait하지 않고 이어서 렌더링을 하도록 한다.
-	// 백버퍼는 순차적으로 사용되므로, (백버퍼 개수 - 1) 프레임 전의 렌더링에 대한
-	// Fence를 wait하면 이를 구현할 수 있다.
-	// idxFenceToSignal이나 fenceNameToSignal 등의 변수는 위에서
-	// Dispatcher에게 전달하기 위해 미리 만들어두었다.
-	auto idxFenceToWait = (frameIdx_ - (backBuffers_.size() - 1)) % backBuffers_.size();
+	
 	fences_.at(fenceNameToSignal).associatedCmdCtxs_[etoi(CommandListUsage::RenderingMaster)]
 		.push_back(std::move(cmdCtxClear));
 	fences_.at(fenceNameToSignal).associatedCmdCtxs_[etoi(CommandListUsage::RenderingMaster)]
 		.push_back(std::move(cmdCtxPresent));
 	signalFence("FrameFence" + std::to_string(idxFenceToSignal));
-	waitOnFence("FrameFence" + std::to_string(idxFenceToWait));
 
 	// 프레임 인덱스 갱신
 	++frameIdx_;

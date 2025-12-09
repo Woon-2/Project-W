@@ -1,7 +1,6 @@
 #ifndef __shader_HPP
 #define __shader_HPP
 
-#include "pch.hpp"
 #include "gfxUtil.hpp"
 
 struct CompiledShaderOutput {
@@ -19,7 +18,9 @@ CompiledShaderOutput compileShader(const std::filesystem::path& path,
 
 ComPtr<ID3D12PipelineState> createSampleShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createShadowMapShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createShadowMapSkinnedShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createPBRSkinnedShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBillboardShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
@@ -76,7 +77,7 @@ struct PerInstanceData {
 
 struct PerDrawcallData {
 	Material material;
-	u32t firstInstanceIdx;
+	u32t firstInstanceOffset;
 };
 
 }	// namespace SampleShader
@@ -128,7 +129,7 @@ struct PerInstanceData {
 
 struct PerDrawcallData {
 	Material material;
-	u32t firstInstanceIdx;
+	u32t firstInstanceOffset;
 };
 
 struct PerFrameData {
@@ -140,6 +141,73 @@ struct PerFrameData {
 	XMFLOAT4X4 lightVP;
 };
 }	// namespace PBRShader
+
+// PBRSkinnedShader
+namespace PBRSkinnedShader {
+struct Light {
+	enum class Type {
+		PointLight,
+		Spotlight,
+		DirectionalLight
+	};
+
+	XMFLOAT3 color;
+	float falloff;
+	XMFLOAT3 posV;
+	float cosTheta;
+	XMFLOAT3 dirV;
+	float cosPhi;
+	XMFLOAT3 atten;
+	float intensity;
+	int type;
+	XMINT3 padding;
+};
+
+struct Material {
+	BindlessIndex idxAlbedo;
+	BindlessIndex idxMetallicSmoothness;	// 유니티 익스포터를 사용하기 때문에 유니티와 텍스처 포맷 맞춰준다.
+											// R 채널에 metallic, A 채널에 Smoothness (1 - roughness) 값이 들어있게 된다.
+	BindlessIndex idxNormal;
+	BindlessIndex idxEmmisive;
+	BindlessIndex idxAmbientOcllusion;
+
+	XMFLOAT4 cAlbedo;
+	float cRoughness;
+	float cMetallic;
+	float cAOStrength;
+	float padding0;
+	XMFLOAT3 cEmmisive;
+	float padding1;
+};
+
+struct BoneData {
+	XMFLOAT4X4 xform;
+};
+
+struct PerInstanceData {
+	XMFLOAT4X4 world;
+	XMFLOAT4X4 wvp;
+	XMFLOAT4X4 wv;
+	XMFLOAT3X3 wvNormal;
+	u32t rootBoneOffset;
+	XMUINT3 padding;
+};
+
+struct PerDrawcallData {
+	Material material;
+	u32t firstInstanceOffset;
+};
+
+struct PerFrameData {
+	XMFLOAT3 globalAmbient;
+	float padding0;
+	u32t lightCnt;
+	XMUINT3 padding1;
+	BindlessIndex idxShadowMap;
+	XMFLOAT4X4 lightVP;
+};
+
+}	// namespace PBRSkinnedShader
 
 // BillboardShader
 namespace BillboardShader {
@@ -160,7 +228,7 @@ struct PerInstanceData {
 
 struct PerDrawcallData {
 	Material material;
-	u32t firstInstanceIdx;
+	u32t firstInstanceOffset;
 };
 
 struct PerFrameData {
@@ -178,7 +246,29 @@ struct PerInstanceData {
 };
 
 struct PerDrawcallData {
-	u32t firstInstanceIdx;
+	u32t firstInstanceOffset;
+	XMUINT3 padding;
+};
+
+struct PerFrameData {
+	XMFLOAT4X4 lightVP;
+};
+}	// namespace ShadowMapShader
+
+// ShadowMapSkinnedShader
+namespace ShadowMapSkinnedShader {
+struct BoneData {
+	XMFLOAT4X4 xform;
+};
+
+struct PerInstanceData {
+	XMFLOAT4X4 world;
+	u32t rootBoneOffset;
+	XMUINT3 padding;
+};
+
+struct PerDrawcallData {
+	u32t firstInstanceOffset;
 	XMUINT3 padding;
 };
 
@@ -210,7 +300,7 @@ struct PerInstanceData {
 };
 
 struct PerDrawcallData {
-	u32t firstInstanceIdx;
+	u32t firstInstanceOffset;
 	XMUINT3 padding;
 };
 }	// namespace BoundingVolumeShader

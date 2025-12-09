@@ -16,7 +16,7 @@ struct Systems {
 
     Systems(gfx::d3d12engine::Core& core, ic::Keyboard* pKeyboard, ic::Mouse* pMouse, std::size_t fenceIdx = 0)
         : physicsSystem(), inputSystem(pKeyboard, pMouse), coordRoot(), collisionSystem(),
-        animSystem(core.device(), core.root()) {}
+        animSystem(core.device(), core.root()){}
 };
 
 #endif  // __Systems_HPP

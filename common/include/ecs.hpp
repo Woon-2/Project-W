@@ -65,7 +65,8 @@ enum class Components {
     NetEx,
     BoundingVolume,
     AnimController,
-    Size,
+    UImage,
+    Size
 };
 
 void init(const InitDesc& desc);

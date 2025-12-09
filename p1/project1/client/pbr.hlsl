@@ -33,7 +33,7 @@ struct VSOutput {
 
 cbuffer PerDrawcallData : register(b0) {
     Material material;
-    uint idxDrawcall;
+    uint firstInstanceOffset;
 };
 
 cbuffer PerFrameData : register(b1) {
@@ -66,21 +66,19 @@ VSOutput VSMain(
 ) {
     VSOutput ret;
     
-    uv.y = 1.f - uv.y;
-    
-    ret.pos = mul(float4(position, 1.0f), gInstances[idxInst + idxDrawcall].wvp);
-    ret.posV = mul(float4(position, 1.0f), gInstances[idxInst + idxDrawcall].wv).xyz;
+    ret.pos = mul(float4(position, 1.0f), gInstances[idxInst + firstInstanceOffset].wvp);
+    ret.posV = mul(float4(position, 1.0f), gInstances[idxInst + firstInstanceOffset].wv).xyz;
     ret.posL = mul(
         mul(
-            mul(float4(position, 1.0f), gInstances[idxInst + idxDrawcall].world),
+            mul(float4(position, 1.0f), gInstances[idxInst + firstInstanceOffset].world),
             lightVP
         ),
         gmtxTexturize
     );
-    ret.normalV = mul(normal, gInstances[idxInst + idxDrawcall].wvNormal);
+    ret.normalV = mul(normal, gInstances[idxInst + firstInstanceOffset].wvNormal);
     if (material.idxAlbedo.x >= 0) {
-		ret.tangentV = mul(tangent, gInstances[idxInst + idxDrawcall].wvNormal).xyz;
-		ret.bitangentV = mul(bitangent, gInstances[idxInst + idxDrawcall].wvNormal).xyz;
+		ret.tangentV = mul(tangent, gInstances[idxInst + firstInstanceOffset].wvNormal);
+		ret.bitangentV = mul(bitangent, gInstances[idxInst + firstInstanceOffset].wvNormal);
 	}
     ret.uv = uv;
     

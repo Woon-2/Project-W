@@ -757,6 +757,9 @@ public:
     );
     static RefModel buildSphereModel(D3D12Device& device, D3D12GfxCmdList& cmdList);
     static RefModel buildSkySphere(D3D12Device& device, D3D12GfxCmdList& cmdList, Texture* pTex);
+	static RefModel buildQuadModel(D3D12Device& device, D3D12GfxCmdList& cmdList);
+	static RefModel buildQuadModelLT(D3D12Device& device, D3D12GfxCmdList& cmdList);
+    static RefModel buildQuad(D3D12Device& device, D3D12GfxCmdList& cmdList);
 
     void arrangeVBs( D3D12Device& device, D3D12GfxCmdList& cmdList,
         std::size_t layoutIdx, const std::vector<std::vector<Vertex::Properties>>& vbProps
@@ -1038,6 +1041,29 @@ private:
     const Texture* pTex_;
     const TextureArray* pTexArray_;
     UINT arrayIdx_;
+};
+
+class QuadModel : public Model {
+public:
+    QuadModel() = default;
+    QuadModel(D3D12Device& device, D3D12GfxCmdList& cmdList);
+    QuadModel(D3D12Device& device, D3D12GfxCmdList& cmdList, Texture* pTex);
+    QuadModel(D3D12Device& device, D3D12GfxCmdList& cmdList, TextureArray* pTexArray, int drawIdx);
+
+    // (0, 0, 1, 1) 사이즈의 사각형 RefModel을 만든다.
+    static void initQuadModel( D3D12Device& device, D3D12GfxCmdList& cmdList )
+    {
+		sRefQuadModel_ = RefModel::buildQuad( device, cmdList ); 
+    }
+
+	// void draw( D3D12GfxCmdList& cmdList ) const;
+
+    static const RefModel& instance() NOEXCEPT {
+        return sRefQuadModel_;
+	}
+
+private:
+	static RefModel sRefQuadModel_;
 };
 
 class LevelChunkModel {

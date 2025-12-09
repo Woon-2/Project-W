@@ -1,19 +1,9 @@
 #ifndef __physics_HPP
 #define __physics_HPP
 
-#include "pch.hpp"
 #include "collision.hpp"
 
 class Object;
-
-struct PhysicState {
-	mu::Vec3 pos{};
-	mu::Vec3 omega{};
-	mu::NQuat orient{};
-	mu::Vec3 scale{};
-
-	std::vector<AABB> aabbs{};
-};
 
 struct CollisionManifold
 {

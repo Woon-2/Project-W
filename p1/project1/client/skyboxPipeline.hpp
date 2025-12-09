@@ -1,7 +1,6 @@
 #ifndef __skyboxPipeline_HPP
 #define __skyboxPipeline_HPP
 
-#include "pch.hpp"
 #include "gfxUtil.hpp"
 
 class RootSig;

@@ -1,3 +1,4 @@
+#include "pch.hpp"
 #include "game.hpp"
 
 #include "../errorHandling.hpp"
@@ -24,9 +25,10 @@ Game::Game() {
 	gfx_.setupDXGI(D3D_FEATURE_LEVEL_12_1);
 	gfx_.init();
 	gfx_.createSwapChain();
-	// gfx_.setThreadPool(&threadPool_);
+	gfx_.setThreadPool(&threadPool_);
 
 	assetManager_.loadGFXAssets(gfx_);
+	assetManager_.loadAnimations();
 }
 
 void Game::setupStage() {
@@ -55,6 +57,7 @@ void Game::setupStage() {
 	dirLight_.color = mu::Vec3(0.8f, 0.8f, 0.8f);
 	dirLight_.intensity = 2.f;
 	dirLight_.type = PBRPipeline::LightData::Type::DirectionalLight;
+	dirLight_.isMainDirectionalLight = true;
 
 	camera_.setTargetObject( player_ );
 	camera_.setOffsetFromTarget( mu::Vec3( 0.f, 1.8f, -2.5f ) );
@@ -138,9 +141,19 @@ void Game::importPlayerStart(std::ifstream& ifs, Object& player) {
 	if (playerSpawned_) {
 		return;
 	}
+	playerSpawned_ = true;
 
 	player_ = std::make_shared<Object>(std::move(player));
 	player_->setModel(assetManager_.modelPlayer());
+	player_->setAnimBlender(animSystem_, assetManager_);
+
+	Equipment rifle{};
+	rifle.socketType = Bone::SocketType::RightHand;
+	rifle.object = std::make_unique<Object>();
+	rifle.object->setModel(assetManager_.modelRifle());
+	rifle.object->setScale(mu::Vec3(1.f, 1.f, 1.f));
+
+	player_->equip(std::move(rifle));
 }
 
 void Game::update(Milliseconds deltaTime) {
@@ -188,10 +201,13 @@ void Game::update(Milliseconds deltaTime) {
 	player_->update(deltaTime, tPhysicInterpolation);
 	camera_.update();
 	dirLight_.update(deltaTime);
+	dirLight_.updateShadowAuxDirectional(camera_.eye(), 100.f, -10.f, 10.f, -10.f, 10.f, 50.f, 200.f);
 	slimeSprite_.update( deltaTime );
 	for ( auto& hpUI : playerHpUIs_ ) {
 		hpUI.update( deltaTime, gfx_, nullptr );
 	}
+
+	animSystem_.update(0.016s);
 }
 
 void Game::render() {
@@ -209,10 +225,14 @@ void Game::render() {
 		hpUI.render( gfx_ );
 	}
 
-	auto frameData = PBRPipeline::FrameData{
+	auto frameDataPBR = PBRPipeline::FrameData{
 		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
 	};
-	gfx_.addFrameData( frameData );
+	gfx_.addFrameData( frameDataPBR );
+	auto frameDataPBRSkinned = PBRSkinnedPipeline::FrameData{
+		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
+	};
+	gfx_.addFrameData( frameDataPBRSkinned );
 
 	auto frameData1 = UIPipeline::FrameData{
 		.screenWidth = static_cast<float>( gClientRect.right - gClientRect.left ),
@@ -266,45 +286,118 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 			mouseDeltaX_ += ri->data.mouse.lLastX;
 			mouseDeltaY_ += ri->data.mouse.lLastY;
 		}
+
 		return 0;
 	}
 
+	// Alt+Tab 등으로 윈도우가 포커스를 잃었다가 되찾은 경우,
+	// 커서와 관련된 플래그들을 읽어 커서 캡처, 커서 숨기기 등을 다시 수행한다.
+	case WM_SETFOCUS:
+		if (cursorCaptureEnabled_) {
+			captureCursor();
+		}
+		if (!cursorShowEnabled_) {
+			hideCursor();
+		}
+		break;
+
+	// Alt+Tab 등으로 윈도우가 포커스를 잃은 경우
+	// 커서와 관련된 플래그들을 읽어 커서 캡처 해제, 커서 보이기 등을 수행한다.
+	// 다른 윈도우로 전환되었는데 커서가 보이지 않거나 안 움직여지면 곤란할 것이다.
+	case WM_KILLFOCUS:
+		if (cursorCaptureEnabled_) {
+			releaseCursor();
+		}
+		if (cursorShowEnabled_) {
+			showCursor();
+		}
+		break;
+
 	case WM_SIZE:
-		return DefWindowProcA(hWnd, msg, wParam, lParam);
+		break;
 
 	default:
-		return DefWindowProcA(hWnd, msg, wParam, lParam);
+		break;
 	}
+
+	return DefWindowProcA(hWnd, msg, wParam, lParam);
 };
 
 void Game::processInput(Milliseconds deltaTime) {
-	DISPLAY_ERROR_GLE( GetKeyboardState(keyboardState_.data()), false );
+	if (GetForegroundWindow() != ghWnd) {
+		return;
+	}
 
-	if ( keyboardState_['W'] & 0x80 ) {
-		player_->setPos( player_->pos( ) + player_->forward() * 0.01f );
+	keyboardStatePrev_ = keyboardStateCurr_;
+	DISPLAY_ERROR_GLE( GetKeyboardState(keyboardStateCurr_.data()), false );
+
+	const auto maxSpeed = 10.f;	// 10m/s
+	const Seconds zeroToMax = 0.5s;
+	const Seconds maxToZero = 0.2s;
+
+	// 서로 상쇄되는 입력들을 감안해서,
+	// 현재 이동 입력이 있으면 플레이어 객체의 속도를 변화시킨다.
+
+	const auto moveXSign = (keyboardStateCurr_['D'] & 0x80) - (keyboardStateCurr_['A'] & 0x80);
+	const auto moveZSign = (keyboardStateCurr_['W'] & 0x80) - (keyboardStateCurr_['S'] & 0x80);
+	const auto moveThreshold = 0.1f;
+
+	if (moveXSign || moveZSign) {
+		// 'W'/'S' 입력으로 판정된 Z 부호는 플레이어의 forward 벡터,
+		// 'D'/'A' 입력으로 판정된 X 부호는 플레이어의 right 벡터와 곱해 속도의 방향을 정한다.
+		const auto moveDirection = mu::NVec3(
+			static_cast<float>(moveXSign) * player_->right() + static_cast<float>(moveZSign) * player_->forward()
+		);
+
+		// 플레이어 객체의 속력을 증가시킨다.
+		const auto moveAmount = Seconds(deltaTime).count() * maxSpeed / zeroToMax.count();
+		player_->physicState().velocity += mu::Vec3(moveDirection) * moveAmount;
+
+		// 플레이어 객체의 속력이 최대 속력을 넘지 못하게 한다.
+		if (player_->physicState().velocity.len2() > maxSpeed * maxSpeed) {
+			player_->physicState().velocity *= maxSpeed / player_->physicState().velocity.len();
+		}
 	}
-	if ( keyboardState_['A'] & 0x80 ) {
-		player_->setPos( player_->pos( ) - player_->right() * 0.01f );
+	// 이동 입력이 없으면 플레이어 객체의 속력을 감소시킨다. (마찰)
+	// 속력이 moveThreshold보다 작다면, 플레이어 객체를 멈춘다.
+	else if (player_->physicState().velocity.len2() > moveThreshold * moveThreshold) {
+		const auto moveAmount = Seconds(deltaTime).count() * maxSpeed / maxToZero.count();
+
+		// 속력 감소량이 현재 플레이어의 속력보다 크게 계산됐다면,
+		// 플레이어의 속력을 0으로 만든다.
+		if (moveAmount * moveAmount > player_->physicState().velocity.len2()) {
+			player_->physicState().velocity = mu::Vec3();
+		}
+		// 그렇지 않다면 플레이어가 움직이고 있는 반대 방향의 속도를 더해
+		// 플레이어의 속력을 감소시킨다.
+		else {
+			const auto moveDirection = mu::NVec3(-player_->physicState().velocity);
+			player_->physicState().velocity += mu::Vec3(moveDirection) * moveAmount;
+		}
 	}
-	if ( keyboardState_['S'] & 0x80 ) {
-		player_->setPos( player_->pos( ) - player_->forward() * 0.01f );
+	// 플레이어 객체를 멈춘다.
+	else {
+		player_->physicState().velocity = mu::Vec3();
 	}
-	if ( keyboardState_['D'] & 0x80 ) {
-		player_->setPos( player_->pos( ) + player_->right() * 0.01f );
-	}
-	if ( keyboardState_['1'] & 0x80 ) {
+
+	// 카메라 1인칭 모드 설정
+	if ( keyboardStateCurr_['1'] & 0x80 ) {
 		camera_.setOffsetFromTargetPreRotation( mu::NQuat{} );
 		camera_.setOffsetFromTarget( mu::Vec3( 0.f, 2.f, 0.5f ) );
 		camera_.setOffsetTargetPivot( mu::Vec3(0.f, 2.f, 8.f));
 		cameraMode_ = CameraMode::FirstPerson;
 	} 
-	if ( keyboardState_['3'] & 0x80 ) {
+	// 카메라 3인칭 모드 설정
+	if ( keyboardStateCurr_['3'] & 0x80 ) {
 		camera_.setXXPreRotation( mu::NQuat{} );
 		camera_.setOffsetFromTarget( mu::Vec3( 0.f, 1.8f, -2.5f ) );
 		camera_.setOffsetTargetPivot( mu::Vec3(0.f, 1.f, 0.f));
 		cameraMode_ = CameraMode::ThirdPerson;
-	} 
+	}
 
+	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때
+	// 각각의 플레이어 yaw, 카메라 pitch를 계산한다.
+	// (pitch를 플레이어에 적용하게 되면, 플레이어가 고개를 들고 내리는 게 아니라 굴러버린다.)
     const auto mouseSensitivity = mu::pi * 2.f;
 
 	switch (cameraMode_) {
@@ -347,6 +440,61 @@ void Game::processInput(Milliseconds deltaTime) {
 		break;
 	}
 	}
+
+	// Enter 키를 누르면 커서 캡처 플래그를 활성화/비활성화한다.
+	if ( (keyboardStateCurr_[VK_RETURN] & 0x80) && !(keyboardStatePrev_[VK_RETURN] & 0x80) ) {
+		cursorCaptureEnabled_ = !cursorCaptureEnabled_;
+		if (cursorCaptureEnabled_) {
+			captureCursor();
+		}
+		else {
+			releaseCursor();
+		}
+	}
+
+	// Space 키를 누르면 커서 보이기 플래그를 활성화/비활성화한다.
+	if ( (keyboardStateCurr_[VK_SPACE] & 0x80) && !(keyboardStatePrev_[VK_SPACE] & 0x80) ) {
+		cursorShowEnabled_ = !cursorShowEnabled_;
+		if (cursorShowEnabled_) {
+			showCursor();
+		}
+		else {
+			hideCursor();
+		}
+	}
+}
+
+// 커서가 클라이언트 영역 바깥으로 나가지 못하도록 한다.
+// 한번 설정해놓으면, releaseCursor를 호출하기 전까지 커서는 계속 클라이언트 영역에 갇혀있는다.
+void Game::captureCursor() {
+    auto ul = POINT{ gClientRect.left, gClientRect.top };
+    auto lr = POINT{ gClientRect.right, gClientRect.bottom };
+
+    // 클라이언트의 외곽 좌표를 윈도우 좌표로 변환
+    MapWindowPoints(ghWnd, nullptr, &ul, 1);
+    MapWindowPoints(ghWnd, nullptr, &lr, 1);
+
+    auto clipRect = RECT{ ul.x, ul.y, lr.x, lr.y };
+
+    ClipCursor(&clipRect);
+}
+
+// 커서 캡처가 설정되어있다면 해제한다.
+// captureCursor로 활성화된 커서 캡처를 해제하는 역할을 한다.
+void Game::releaseCursor() {
+	ClipCursor(nullptr);
+}
+
+void Game::hideCursor() {
+	// ShowCursor()는 내부적으로 display counter를 증가/감소시키는 구조라서
+	// 반복 호출해 정확히 숨기거나 표시해야 한다.
+	while (ShowCursor(false) >= 0) {}
+}
+
+void Game::showCursor() {
+	// ShowCursor()는 내부적으로 display counter를 증가/감소시키는 구조라서
+	// 반복 호출해 정확히 숨기거나 표시해야 한다.
+	while (ShowCursor(true) < 0) {}
 }
 
 }	// namespace StandAlone

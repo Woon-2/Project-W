@@ -1,7 +1,6 @@
 #ifndef __StandAlone_game_HPP
 #define __StandAlone_game_HPP
 
-#include "../pch.hpp"
 #include "../IGame.hpp"
 
 #include "../AssetManager.hpp"
@@ -10,8 +9,9 @@
 #include "../skybox.hpp"
 #include "../camera.hpp"
 #include "../light.hpp"
+#include "../animation.hpp"
 
-#include "../physics.hpp"
+#include "physics.hpp"
 
 #include "../billboard.hpp"
 #include "../spriteAnimation.hpp"
@@ -40,11 +40,22 @@ private:
 
 	void processInput(Milliseconds deltaTime);
 
+	// 커서가 클라이언트 영역 바깥으로 나가지 못하도록 한다.
+	// 한번 설정해놓으면, releaseCursor를 호출하기 전까지 커서는 계속 클라이언트 영역에 갇혀있는다.
+	void captureCursor();
+	// 커서 캡처가 설정되어있다면 해제한다.
+	// captureCursor로 활성화된 커서 캡처를 해제하는 역할을 한다.
+	void releaseCursor();
+	void hideCursor();
+	void showCursor();
+
 	void importNode(std::ifstream& ifs);
 	void importCube(std::ifstream& ifs, Object& cube);
 	void importPlayerStart(std::ifstream& ifs, Object& player);
 
 	AssetManager assetManager_{};
+
+	AnimSystem animSystem_{};
 
 	PhysicSystem physicSystem_{};
 	Seconds physicUpdateAcc_{0s};	// 물리 업데이트를 위한 시간 누산기
@@ -56,11 +67,13 @@ private:
 	std::vector<Object> cubes_{};
 	std::shared_ptr<Object> player_{};
 	SkyboxObject skybox_{};
+
 	Camera camera_{};
 	mu::Radian cameraPitch_ = 0.f;
+	CameraMode cameraMode_ = CameraMode::ThirdPerson;
+
 	Light dirLight_{};
 	bool playerSpawned_ = false;
-	CameraMode cameraMode_ = CameraMode::ThirdPerson;
 
 	Billboard billboard_{};
 	SpriteAnimation slimeSprite_{};
@@ -69,7 +82,11 @@ private:
 
 	LONG mouseDeltaX_{};
 	LONG mouseDeltaY_{};
-	std::array<BYTE, std::numeric_limits<u8t>::max()> keyboardState_{};
+	bool cursorCaptureEnabled_ = false;
+	bool cursorShowEnabled_ = true;
+
+	std::array<BYTE, std::numeric_limits<u8t>::max()> keyboardStateCurr_{};
+	std::array<BYTE, std::numeric_limits<u8t>::max()> keyboardStatePrev_{};
 };
 
 }	// namespace StandAlone

@@ -1,3 +1,4 @@
+#include "pch.hpp"
 #include "camera.hpp"
 
 void Camera::update() {
@@ -14,14 +15,19 @@ void Camera::update() {
 	auto rotatedOffsetTargetPivot = xxPreRotation_.rotate(offsetTargetPivot_);
 	rotatedOffsetTargetPivot = pTarget->orient().rotate(rotatedOffsetTargetPivot);
 
-	eye_ = pTarget->pos() + rotatedOffsetFromTarget;
-	at_ = pTarget->pos() + rotatedOffsetTargetPivot;
+	eye_ = pTarget->renderState().pos + rotatedOffsetFromTarget;
+	at_ = pTarget->renderState().pos + rotatedOffsetTargetPivot;
 
 	view_ = mu::lookAt(eye_, at_, mu::NVec3(0.f, 1.f, 0.f));
 }
 
 void Camera::updateGFX(GFX& gfx) {
 	gfx.addCameraData(PBRPipeline::CameraData{
+		.view = view_,
+		.proj = proj_,
+		.pos = eye_
+	});
+	gfx.addCameraData(PBRSkinnedPipeline::CameraData{
 		.view = view_,
 		.proj = proj_,
 		.pos = eye_

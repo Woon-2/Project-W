@@ -1,3 +1,4 @@
+#include "pch.hpp"
 #include "mesh.hpp"
 #include "gfxUtil.hpp"
 #include "errorHandling.hpp"
@@ -375,6 +376,40 @@ Mesh buildPointMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, s
 	return mesh;
 }
 
+// 바이너리 파일의 Bone Socket Type을 나타내는 문자열로부터
+// 실제 열거형 값을 얻어낸다.
+Bone::SocketType convertStrToBoneSocketType(const std::string& boneSocketTypeStr) {
+    if (boneSocketTypeStr == "None") {
+        return Bone::SocketType::None;
+    }
+    else if (boneSocketTypeStr == "RightHand") {
+        return Bone::SocketType::RightHand;
+    }
+    else if (boneSocketTypeStr == "LeftHand") {
+        return Bone::SocketType::LeftHand;
+    }
+
+    DISPLAY_ERROR_STR( false, "[GFX Error] convertStrToBoneSocketType: 알 수 없는 BoneSocketType 값 \""s
+        + boneSocketTypeStr + "\"을 읽었습니다.\n",
+        false
+    );
+    return Bone::SocketType::None;
+}
+
+// 바이너리 파일의 Skeleton Enumeration을 나타내는 문자열로부터
+// 실제 열거형 값을 얻어낸다.
+SkeletonEnumeration convertStrToSkeletonEnum(const std::string& skeletonEnumerationStr) {
+    if (skeletonEnumerationStr == "Humanoid") {
+        return SkeletonEnumeration::Humanoid;
+    }
+
+    DISPLAY_ERROR_STR( false, "[GFX Error] convertStrToSkeletonEnum: 알 수 없는 SkeletonEnumeration 값 \""s
+        + skeletonEnumerationStr + "\"을 읽었습니다.\n",
+        false
+    );
+    return SkeletonEnumeration::Humanoid;
+}
+
 // 텍스처 매핑 정보를 읽어들인다.
 // 텍스처 이름을 key로 삼아 texHashMap에 쿼리를 해보고,
 // 텍스처가 존재하지 않는다면 알아낸 경로를 통해 텍스처를 로드해 key와 함께 등록한다.
@@ -703,6 +738,56 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
         else if (tag == "TextureCoords1") {
             auto uvs = readVec2s(ifs);
             readTailTag(ifs, "TextureCoords1");
+        }
+        // boneIndices: uint4
+        else if (tag == "BoneIndices") {
+            auto boneIndices = readInt4s(ifs);
+
+            auto vbBoneIndices = createBufferResource(device, nullptr, boneIndices.size() * sizeof(XMUINT4), BufferCreationType::VertexBuffer);
+            setD3DName(vbBoneIndices.Get(), name + "_VB_BoneIndices"s);
+	        auto vbBoneIndicesu = createBufferResource(device, boneIndices.data(), boneIndices.size() * sizeof(XMUINT4), BufferCreationType::UploadBuffer);
+            setD3DName(vbBoneIndicesu.Get(), name + "_VB_BoneIndices_Upload"s);
+
+	        copyResource( cmdList, vbBoneIndicesu.Get(), vbBoneIndices.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
+		        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+	        );
+
+            mesh.vbViews.emplace_back(
+                /* .BufferLocation = */ vbBoneIndices->GetGPUVirtualAddress(),
+                /* .SizeInBytes = */ static_cast<UINT>(boneIndices.size() * sizeof(XMUINT4)),
+                /* .StrideInBytes = */ static_cast<UINT>( sizeof(XMUINT4) )
+            );
+            mesh.vbIdxMap.try_emplace(name + "_VB_BoneIndices"s, static_cast<u32t>(mesh.vbs.size()));
+
+            mesh.vbs.push_back(std::move(vbBoneIndices));
+            fenceToAssociate.associatedResources_.push_back(std::move(vbBoneIndicesu));
+
+            readTailTag(ifs, "BoneIndices");
+        }
+        // boneWeights: float4
+        else if (tag == "BoneWeights") {
+            auto boneWeights = readVec4s(ifs);
+
+            auto vbBoneWeights = createBufferResource(device, nullptr, boneWeights.size() * sizeof(XMFLOAT4), BufferCreationType::VertexBuffer);
+            setD3DName(vbBoneWeights.Get(), name + "_VB_BoneWeights"s);
+	        auto vbBoneWeightsu = createBufferResource(device, boneWeights.data(), boneWeights.size() * sizeof(XMFLOAT4), BufferCreationType::UploadBuffer);
+            setD3DName(vbBoneWeightsu.Get(), name + "_VB_BoneWeights_Upload"s);
+
+	        copyResource( cmdList, vbBoneWeightsu.Get(), vbBoneWeights.Get(), D3D12_RESOURCE_STATE_GENERIC_READ,
+		        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+	        );
+
+            mesh.vbViews.emplace_back(
+                /* .BufferLocation = */ vbBoneWeights->GetGPUVirtualAddress(),
+                /* .SizeInBytes = */ static_cast<UINT>(boneWeights.size() * sizeof(XMFLOAT4)),
+                /* .StrideInBytes = */ static_cast<UINT>( sizeof(XMFLOAT4) )
+            );
+            mesh.vbIdxMap.try_emplace(name + "_VB_BoneWeights"s, static_cast<u32t>(mesh.vbs.size()));
+
+            mesh.vbs.push_back(std::move(vbBoneWeights));
+            fenceToAssociate.associatedResources_.push_back(std::move(vbBoneWeightsu));
+
+            readTailTag(ifs, "BoneWeights");
         }
         else {
             DISPLAY_ERROR_STR(false, "[File I/O Error] importMesh: 알 수 없는 태그 "s
@@ -1040,6 +1125,8 @@ void importBoundingVolume(std::ifstream& ifs, Model& model) {
     aabb.size = DirectX::XMLoadFloat3(&size);
 
     readTailTag(ifs, "BoundingVolume");
+
+    gSharedLog << "[Resource Load] 바운딩 볼륨 " << bvName << " 구축 완료\n";
 }
 
 // 모델의 바운딩 볼륨 정보를 읽어온다.
@@ -1056,10 +1143,113 @@ void importBoundingVolumes(std::ifstream& ifs, Model& model) {
     readTailTag(ifs, "BoundingVolumes");
 }
 
+// 모델의 본을 읽어들인다.
+// 대상 본의 임포트 이후, 자식 본들을 재귀적으로 임포트한다.
+[[maybe_unused]] std::size_t importBone(
+    std::ifstream& ifs, Model& model, i32t& boneIdx
+) {
+    readHeadTag(ifs, "Bone");
+
+    auto& bone = (*model.skeleton.bones)[boneIdx];
+    bone.name = readText(ifs, "Name");
+    const auto toDress = readMatrix(ifs, "Dress");
+    bone.toDress = DirectX::XMLoadFloat4x4(&toDress);
+    const auto toLocal = readMatrix(ifs, "ToLocal");
+    bone.toLocal = DirectX::XMLoadFloat4x4(&toLocal);
+
+    bone.boneIdx = boneIdx++;
+
+    const auto socketTypeStr = readText(ifs, "SocketType");
+    bone.socketType = convertStrToBoneSocketType(socketTypeStr);
+    if (bone.socketType != Bone::SocketType::None) {
+        model.skeleton.socketToBoneIdx.try_emplace(bone.socketType, bone.boneIdx);
+    }
+
+    readHeadTag(ifs, "Children");
+
+    const auto childCnt = readInteger(ifs, "ChildCnt");
+    bone.children.reserve(childCnt);
+
+    for (int i = 0; i < childCnt; ++i) {
+        auto& child = (*model.skeleton.bones)[ importBone(ifs, model, boneIdx) ];
+        bone.children.push_back(&child);
+    }
+
+    readTailTag(ifs, "Children");
+
+    readTailTag(ifs, "Bone");
+
+    gSharedLog << "[Resource Load] 본 " << bone.name << " 구축 완료\n";
+
+    return bone.boneIdx;
+}
+
+// 모델의 스켈레톤을 읽어들인다.
+// 추출하는 과정에서 무조건 0번 본이 루트 본이므로,
+// 0번 본부터 본 트리를 순회하며 모든 본을 읽어들인다.
+void importSkeleton(std::ifstream& ifs, Model& model) {
+    readHeadTag(ifs, "Skeleton");
+
+    auto& skeleton = model.skeleton;
+
+    skeleton.name = readText(ifs, "Name");
+
+    const auto skeletonEnumerationStr = readText(ifs, "SkeletonEnumeration");
+    skeleton.skeletonEnumeration = convertStrToSkeletonEnum(skeletonEnumerationStr);
+
+    const auto boneCnt = readInteger(ifs, "Count");
+    skeleton.bones = std::make_shared<std::vector<Bone>>(boneCnt);
+
+    i32t boneIdxAux{};
+    importBone(ifs, model, boneIdxAux);
+
+    readTailTag(ifs, "Skeleton");
+
+    skeleton.pRoot = &(*skeleton.bones)[0];
+
+    gSharedLog << "[Resource Load] 스켈레톤 " << skeleton.name << "구축 완료\n";
+}
+
+// 해당 모델의 socket으로부터의 offset들을 읽는다.
+void importSocketOffsets(std::ifstream& ifs, Model& model) {
+    readHeadTag(ifs, "SocketOffsets");
+
+    const auto socketOffsetCnt = readInteger(ifs, "SocketOffsetCnt");
+    for (int i = 0; i < socketOffsetCnt; ++i) {
+        readHeadTag(ifs, "SocketOffset");
+
+        const auto socketTypeStr = readText(ifs, "SocketType");
+        const auto trs = readVec3(ifs, "Translation");
+        const auto rot = readVec4(ifs, "Rotation");
+        const auto scl = readVec3(ifs, "Scale");
+
+        const auto socketType = convertStrToBoneSocketType(socketTypeStr);
+        model.socketOffsets.try_emplace( socketType,
+            mu::Mat4x4(mu::scale(DirectX::XMLoadFloat3(&scl)))
+            * mu::Mat4x4(mu::NQuat(DirectX::XMLoadFloat4(&rot)))
+            * mu::translate(DirectX::XMLoadFloat3(&trs))
+        );
+
+        readTailTag(ifs, "SocketOffset");
+    }
+
+    readTailTag(ifs, "SocketOffsets");
+}
+
+// 모델의 아이템 정보를 읽어들인다.
+// 현재는 socket으로부터의 offset들을 읽는다.
+void importItemData(std::ifstream& ifs, Model& model) {
+    readHeadTag(ifs, "ItemData");
+    importSocketOffsets(ifs, model);
+    readTailTag(ifs, "ItemData");
+}
+
 // 바이너리 파일로부터 모델을 읽어온다.
 // 메시들을 생성하며 각 메시들의 버텍스 버퍼와 서브메시, 그리고 재질 집합을 생성한다.
 // 그 과정에서 필요한 텍스처들이 texHashMap에 존재하지 않는다면, 로드한다.
 // (로드되는 텍스처의 경로들은 바이너리 파일 내에 적혀있다.)
+// 모델에 스켈레톤이 있는 경우, 스켈레톤 정보도 로드한다.
+// 모델에 아이템 정보가 있는 경우, 아이템 정보도 로드한다.
 // * 수정 시 주의사항: 유니티의 추출 스크립트와 구조가 대칭이어야 한다.
 Model loadModelFromFile( const std::filesystem::path& path,
 	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
@@ -1075,9 +1265,26 @@ Model loadModelFromFile( const std::filesystem::path& path,
     }
 
     ret.name = readText(ifs, "ModelName");
+
+    // 텍스처의 물리적 로드는 여기서 이루어진다.
     importTextureMapping(ifs, device, cmdList, texHashMap, texPool, fenceToAssociate);
+
     importGeometry(ifs, device, cmdList, texHashMap, fenceToAssociate, ret);
     importBoundingVolumes(ifs, ret);
+
+    const auto hasSkeleton = static_cast<bool>(readInteger(ifs, "HasSkeleton"));
+    if (hasSkeleton) {
+        importSkeleton(ifs, ret);
+    }
+
+    // 해당 모델이 아이템으로 쓰일 수 있는 모델이라면,
+    // 아이템 정보를 추출한다.
+    // (소켓에 장착 가능할 경우 소켓으로부터의 오프셋 등)
+    const auto hasWeaponInfo = static_cast<bool>(readInteger(ifs, "HasWeaponInfo"));
+    if (hasWeaponInfo) {
+        importItemData(ifs, ret);
+    }
+
     gSharedLog << "[Resource Load] File I/O: 모델 " << ret.name << '(' << path << ") 로드 완료\n";
 
     return ret;

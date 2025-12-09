@@ -9,7 +9,7 @@ struct VSOutput {
 };
 
 cbuffer PerDrawcallData : register(b0) {
-    uint idxDrawcall;
+    uint firstInstanceOffset;
     uint3 padding;
 };
 
@@ -18,12 +18,12 @@ StructuredBuffer<PerInstanceData> gInstances : register(t0);
 VSOutput VSMain(float3 position : POSITION, uint idxInst : SV_InstanceID) {
     VSOutput ret;
     
-    ret.pos = mul(float4(position, 1.0f), gInstances[idxInst + idxDrawcall].wvp);
+    ret.pos = mul(float4(position, 1.0f), gInstances[idxInst + firstInstanceOffset].wvp);
     ret.idxInst = idxInst;
     
     return ret;
 }
 
 float4 PSMain(VSOutput input) : SV_TARGET {
-    return gInstances[input.idxInst + idxDrawcall].color;
+    return gInstances[input.idxInst + firstInstanceOffset].color;
 }

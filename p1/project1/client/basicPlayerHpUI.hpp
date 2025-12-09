@@ -1,7 +1,6 @@
 #ifndef __basicPlayerHpUI_HPP
 #define __basicPlayerHpUI_HPP
 
-#include "pch.hpp"
 #include "gfx.hpp"
 
 class BasicPlayerHpUI {
