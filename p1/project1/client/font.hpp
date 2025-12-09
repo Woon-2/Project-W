@@ -1,7 +1,6 @@
 #ifndef __FONT_HPP
 #define __FONT_HPP
 
-#include "pch.hpp"
 #include "gfxUtil.hpp"
 
 struct FontHandle {

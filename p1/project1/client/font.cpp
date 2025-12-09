@@ -1,3 +1,4 @@
+#include "pch.hpp"
 #include "font.hpp"
 #include "errorHandling.hpp"
 
