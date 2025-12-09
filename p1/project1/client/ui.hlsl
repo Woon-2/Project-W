@@ -61,5 +61,7 @@ VS_OUTPUT VSMain(VS_INPUT input, uint idxInst : SV_InstanceID)
 
 float4 PSMain(VS_OUTPUT input) : SV_TARGET
 {
-    return sampleBindless(material.idxAlbedo, input.uv);
+    float4 color = sampleBindless(material.idxAlbedo, input.uv);
+    // return sampleBindless(material.idxAlbedo, input.uv);
+    return float4(color.rgb, 1.0f);
 }

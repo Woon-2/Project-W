@@ -205,8 +205,7 @@ void Font::WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHe
 		iTextHeight = (int)DestHeight;
 
 	D2D1_MAPPED_RECT	mappedRect;
-	if ( FAILED( pD2DTargetBitmapRead_->Map( D2D1_MAP_OPTIONS_READ, &mappedRect ) ) )
-		__debugbreak();
+	DISPLAY_ERROR_HR( pD2DTargetBitmapRead_->Map( D2D1_MAP_OPTIONS_READ, &mappedRect ), true );
 
 	BYTE* pDest = pDestImage->pData.data();
 	char* pSrc = (char*)mappedRect.bits;
