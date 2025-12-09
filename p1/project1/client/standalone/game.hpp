@@ -65,6 +65,7 @@ private:
 	Billboard billboard_{};
 	SpriteAnimation slimeSprite_{};
 	std::vector<BasicPlayerHpUI> playerHpUIs_{};
+	TextImage textFPS_{};
 
 	LONG mouseDeltaX_{};
 	LONG mouseDeltaY_{};

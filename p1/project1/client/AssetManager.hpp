@@ -17,6 +17,7 @@ public:
 	const std::vector<Texture>& slimeSprites() const { return slimeSprites_; }
 	const Texture* playerHpLine() const { return &playerHpLine_; }
 	const Texture* playerHpFrame() const { return &playerHpFrame_; }
+	TextImage* textPlayerHp() { return &textPlayerHp_; }
 
 private:
 	Model modelCube_;
@@ -26,6 +27,7 @@ private:
 	std::vector<Texture> slimeSprites_;
 	Texture playerHpLine_;
 	Texture playerHpFrame_;
+	TextImage textPlayerHp_;
 };
 
 #endif	// __AssetManager_HPP

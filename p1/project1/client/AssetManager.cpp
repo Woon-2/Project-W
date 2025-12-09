@@ -39,5 +39,11 @@ void AssetManager::loadGFXAssets(GFX& gfx) {
 		.pDest = &playerHpFrame_
 		} );
 
+	gfx.addRequestTextImageLoad( RequestTextImageLoad{
+		.width = 512,
+		.height = 256,
+		.pDest = &textPlayerHp_
+		} );
+
 	gfx.loadAssets();
 }

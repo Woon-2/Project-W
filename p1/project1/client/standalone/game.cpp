@@ -74,9 +74,10 @@ void Game::setupStage() {
 
 	slimeSprite_.setTexture( assetManager_.slimeSprites() );
 
-	playerHpUIs_.resize( 2u );
+	playerHpUIs_.resize( 1u );
 	playerHpUIs_[0].setTexture( assetManager_.playerHpLine() );
-	playerHpUIs_[1].setTexture( assetManager_.playerHpFrame() );
+	// playerHpUIs_[1].setTexture( assetManager_.playerHpFrame() );
+	playerHpUIs_[0].setTextImage( assetManager_.textPlayerHp() );
 }
 
 void Game::importNode(std::ifstream& ifs) {
@@ -188,6 +189,9 @@ void Game::update(Milliseconds deltaTime) {
 	camera_.update();
 	dirLight_.update(deltaTime);
 	slimeSprite_.update( deltaTime );
+	for ( auto& hpUI : playerHpUIs_ ) {
+		hpUI.update( deltaTime, gfx_, nullptr );
+	}
 }
 
 void Game::render() {

@@ -170,6 +170,7 @@
     <ClInclude Include="d3dx12\include\directx\dxgicommon.h" />
     <ClInclude Include="d3dx12\include\directx\dxgiformat.h" />
     <ClInclude Include="errorHandling.hpp" />
+    <ClInclude Include="font.hpp" />
     <ClInclude Include="function.hpp" />
     <ClInclude Include="gfx.hpp" />
     <ClInclude Include="gfxUtil.hpp" />
@@ -222,6 +223,7 @@
     <ClCompile Include="collision.cpp" />
     <ClCompile Include="d3dx12\src\d3dx12_property_format_table.cpp" />
     <ClCompile Include="errorHandling.cpp" />
+    <ClCompile Include="font.cpp" />
     <ClCompile Include="gfx.cpp" />
     <ClCompile Include="gfxUtil.cpp" />
     <ClCompile Include="global.cpp" />

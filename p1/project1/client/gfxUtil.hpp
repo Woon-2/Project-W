@@ -351,6 +351,17 @@ Texture createTexture( ID3D12Device* device, std::uint32_t width, std::uint32_t 
 // 대부분의 상황에서 용이하다.
 Texture cloneTextureIdxOnly(const Texture& tex);
 
+// Dynamic Texure 생성를 생성한다.
+// Default 힙으로 한 개, Upload 힙으로 한 개의 리소스를 생성한다.
+void createResourcePair(ID3D12Resource** outDefaultTex,
+	ID3D12Resource** outUploadTex, ID3D12Device* device,
+	std::uint32_t width, std::uint32_t height,
+	DXGI_FORMAT format
+);
+
+// 업로드 힙에 생성된 텍스처를 디폴트 힙 테그처로 복사하는 함수
+void UpdateTexture( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, ID3D12Resource* pDestTexResource, ID3D12Resource* pSrcTexResource );
+
 // DescriptorPool 객체에서 디스크립터를 할당받아 그 자리에 텍스처의 RTV를 만든다.
 // 텍스처의 idxRtv에 풀에서의 인덱스가 저장된다.
 void createRTV(ID3D12Device* device, Texture& tex, DescriptorPool& pool);

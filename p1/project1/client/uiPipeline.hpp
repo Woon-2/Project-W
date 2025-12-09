@@ -9,6 +9,7 @@ class RootSig;
 struct Mesh;
 struct SubMesh;
 struct Material;
+struct TextImage;
 
 namespace UIShader {
 	struct PerInstanceData;
@@ -27,6 +28,7 @@ namespace UIPipeline {
 	struct DrawEvent {
 		mu::Mat4x4 world;
 		const Texture* pTex;
+		TextImage* pTextImage;
 
 		auto operator<=>( const DrawEvent& rhs ) const noexcept {
 			return std::strong_ordering::equal;
