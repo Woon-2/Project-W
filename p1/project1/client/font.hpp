@@ -44,6 +44,7 @@ private:
 	ComPtr<ID2D1Bitmap1> pD2DTargetBitmap_ = nullptr;
 	ComPtr<ID2D1Bitmap1> pD2DTargetBitmapRead_ = nullptr;
 	ComPtr<ID2D1SolidColorBrush> pWhiteBrush_ = nullptr;
+	ComPtr<ID2D1SolidColorBrush> pBlackBrush_ = nullptr;
 
 	ComPtr<IDWriteFactory5> pDWFactory_ = nullptr;
 	UINT	D2DBitmapWidth_ = 0;

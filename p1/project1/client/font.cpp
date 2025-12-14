@@ -90,6 +90,7 @@ void Font::createDWrite( ID3D12Device* device, UINT TexWidth, UINT TexHeight, fl
 	DISPLAY_ERROR_DX_HR( pD2DDeviceContext_->CreateBitmap( size, nullptr, 0, &bitmapProperties, &pD2DTargetBitmapRead_ ), true );
 
 	DISPLAY_ERROR_DX_HR( pD2DDeviceContext_->CreateSolidColorBrush( ColorF( ColorF::White ), &pWhiteBrush_ ), true );
+	DISPLAY_ERROR_DX_HR( pD2DDeviceContext_->CreateSolidColorBrush( ColorF( ColorF::Black ), &pBlackBrush_ ), true );
 
 	DISPLAY_ERROR_DX_HR( DWriteCreateFactory( DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory5), (IUnknown**)&pDWFactory_ ), true );
 }
@@ -124,10 +125,10 @@ void Font::CreateBitmapFromText( int* piOutWidth, int* piOutHeight, IDWriteTextF
 		// 텍스트 렌더링
 		pD2DDeviceContext->BeginDraw();
 
-		pD2DDeviceContext->Clear( D2D1::ColorF( D2D1::ColorF::Black ) );
+		pD2DDeviceContext->Clear( D2D1::ColorF( 0.0f, 0.0f, 0.0f, 0.0f ) );
 		pD2DDeviceContext->SetTransform( D2D1::Matrix3x2F::Identity() );
 
-		DISPLAY_ERROR_DX_VOID( pD2DDeviceContext->DrawTextLayout( D2D1::Point2F( 0.0f, 0.0f ), pTextLayout, pWhiteBrush_.Get() ), true);
+		DISPLAY_ERROR_DX_VOID( pD2DDeviceContext->DrawTextLayout( D2D1::Point2F( 0.0f, 0.0f ), pTextLayout, pBlackBrush_.Get() ), true);
 
 		// We ignore D2DERR_RECREATE_TARGET here. This error indicates that the device
 		// is lost. It will be handled during the next call to Present.
@@ -242,6 +243,6 @@ TextImage::TextImage( ID3D12Device* device, UINT textWidth, UINT textHeight, Des
 	SRVDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 	SRVDesc.Texture2D.MipLevels = 1;
 	createSRV( device, texture, SRVDesc, srvTexPool );
-	texture.idxSrv.idxSampler = etoi(Samplers::BilinearWrap);
+	texture.idxSrv.idxSampler = etoi(Samplers::BilinearClamp);
 	texture.idxSrv.idxRange = etoi( Texture::Type::Tex2D );
 }

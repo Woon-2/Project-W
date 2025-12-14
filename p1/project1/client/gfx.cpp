@@ -225,7 +225,7 @@ void GFX::init() {
 
 	// Font 초기화
 	font_.init( device_.Get(), cmdQ_.Get(), 1024u, 256u, ghWnd );
-	tahomaFont_ = font_.CreateFontObject( L"Tahoma", 16.f );
+	tahomaFont_ = font_.CreateFontObject( L"Tahoma", 16.0f);
 
 	// Root Signatures & Shaders 생성
 	auto defaultRootSig = DefaultRootSig{};

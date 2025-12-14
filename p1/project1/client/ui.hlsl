@@ -52,7 +52,7 @@ VS_OUTPUT VSMain(VS_INPUT input, uint idxInst : SV_InstanceID)
     
     float2 ndc;
     ndc.x = (ret.pos.x / screenWidth) * 2.0f - 1.0f;
-    ndc.y = 1.0f - (ret.pos.y / screenHeight) * 2.0f;
+    ndc.y = (ret.pos.y / screenHeight) * 2.0f - 1.0f;
     
     ret.pos = float4(ndc, ret.pos.z, 1.0f);
     
@@ -61,7 +61,5 @@ VS_OUTPUT VSMain(VS_INPUT input, uint idxInst : SV_InstanceID)
 
 float4 PSMain(VS_OUTPUT input) : SV_TARGET
 {
-    float4 color = sampleBindless(material.idxAlbedo, input.uv);
-    // return sampleBindless(material.idxAlbedo, input.uv);
-    return float4(color.rgb, 1.0f);
+    return sampleBindless(material.idxAlbedo, input.uv);
 }

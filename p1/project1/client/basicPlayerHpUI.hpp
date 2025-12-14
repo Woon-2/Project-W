@@ -16,6 +16,9 @@ private:
 	mu::Mat4x4 textWorld_{};
 	const Texture* pTex_ = nullptr;
 	TextImage* pTextHp_ = nullptr;
+
+	int hp_ = 100;
+	int bullet_ = 100;
 };
 
 #endif	// __basicPlayerHpUI_HPP
