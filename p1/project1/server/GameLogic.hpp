@@ -24,6 +24,7 @@ struct LogicMessage {
 	DirectX::XMFLOAT3 position{};
 	DirectX::XMFLOAT3 velocity{};
 	DirectX::XMFLOAT3 forward{};
+	std::uint32_t timeStamp{};
 };
 
 class GameLogic {

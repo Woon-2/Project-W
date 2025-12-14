@@ -181,7 +181,8 @@ int32 GameSession::onRecvPacket( uint8* buffer, int32 len ) {
 			.roomId = myRoomId_,
 			.position = packet->csMoveState.position,
 			.velocity = packet->csMoveState.velocity,
-			.forward = packet->csMoveState.forward
+			.forward = packet->csMoveState.forward,
+			.timeStamp = packet->csMoveState.timeStamp
 		};
 
 		GameLogicManager::dispatchMessage(logicMsg);
