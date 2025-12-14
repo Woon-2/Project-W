@@ -17,9 +17,9 @@ void Room::init(const Level& levelData) {
 void Room::update(Milliseconds deltaTime) {
 	processMessage();
 
-	// 위치 갱신
+	// 속도 갱신
 	for (auto& [id, user] : idUserMap_) {
-		user->setOldPos(user->pos().x(), user->pos().z());
+		//user->setOldPos(user->pos().x(), user->pos().z());
 		auto moveXSign = user->moveXSign();
 		auto moveZSign = user->moveZSign();
 
@@ -40,7 +40,7 @@ void Room::update(Milliseconds deltaTime) {
 				user->physicState().velocity *= (maxSpeed / user->physicState().velocity.len());
 			}
 		}
-		else if(user->physicState().velocity.len2() > moveThreshold * moveThreshold) {
+		else if (user->physicState().velocity.len2() > moveThreshold * moveThreshold) {
 			const auto moveAmount = Seconds(deltaTime).count() * maxSpeed / maxToZero.count();
 
 			if (moveAmount * moveAmount > user->physicState().velocity.len2()) {
@@ -54,30 +54,9 @@ void Room::update(Milliseconds deltaTime) {
 		else {
 			user->physicState().velocity = mu::Vec3();
 		}
-
-		// 불필요한 브로드캐스트를 줄이기 위해
-		// 위치가 변경되었을 때만 다른 유저들에게 알림
-		if(user->oldX() != user->pos().x() || user->oldZ() != user->pos().z())
-			std::cout << "User " << user->getId() << " moved to (" << user->pos().x() << ", " << user->pos().z() << ")\n";
-		/*if (user->oldX() != user->pos().x() || user->oldZ() != user->pos().z()) {
-			auto packet = Packet{
-				.header = {
-					.size = sizeof(PacketHeader) + sizeof(SCMovePacket),
-					.id = static_cast<uint16>(PacketType::scMove)
-				},
-				.scMove = {
-					.playerId = user->getId(),
-					.pos = user->pos().getXmf()
-				}
-			};
-
-			int32 packetSize = sizeof(Packet);
-			auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
-			sendBuffer->copyData(&packet, packetSize);
-			broadcast(sendBuffer);
-		}*/
 	}
 
+	// 물리 시뮬레이션
 	std::vector<Object*> allObjects;
 	allObjects.resize(users_.size());
 	std::ranges::transform(users_, allObjects.begin(),
@@ -85,12 +64,25 @@ void Room::update(Milliseconds deltaTime) {
 	);
 
 	physicSystem_.step(allObjects, Seconds(deltaTime));
+
+	for(auto& [id, user] : idUserMap_) {
+		std::cout << "user " << id << " pos(" << user->pos().x() << ", " << user->pos().y() << ", " << user->pos().z() << ")\n";
+	}
 }
 
 void Room::processMessage() {
-	const auto bulkSize = 4u;
+	const auto bulkSize = 1000u;
 	auto messages = std::vector<LogicMessage>(bulkSize);
-	const auto size = msgQueue_.try_dequeue_bulk(messages.begin(), bulkSize);
+
+	// 최대 bulkSize 개수만큼 메시지 꺼내기
+	auto size = msgQueue_.try_dequeue_bulk(messages.begin(), bulkSize);
+
+	// 남은 메시지가 있으면 모두 꺼내기
+	LogicMessage msg;
+	while (msgQueue_.try_dequeue(msg)) {
+		messages.push_back(msg);
+		++size;
+	}
 
 	for (int32 i = 0; i < size; ++i) {
 		switch (messages[i].type) {
@@ -118,12 +110,13 @@ void Room::processMessage() {
 
 		case LogicMsgType::UserMoveState: {
 			auto user = idUserMap_[messages[i].userId];
-
-			// 클라와 서버 간의 위치 동기화
-			auto diff = user->pos() - mu::Vec3(DirectX::XMLoadFloat3(&messages[i].position));
-			if (diff.len() > 0.2f) {
-
-			}
+			//user->setPos(mu::Vec3(DirectX::XMLoadFloat3(&messages[i].position)));
+			//user->setVelocity(mu::Vec3(DirectX::XMLoadFloat3(&messages[i].velocity)));
+			//
+			//const auto forward = mu::NVec3(DirectX::XMLoadFloat3(&messages[i].forward));
+			//const auto yawRadian = std::atan2(forward.x(), forward.z());
+			//const auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), mu::Radian(yawRadian));
+			//user->setOrient(yaw);
 			break;
 		}
 		}

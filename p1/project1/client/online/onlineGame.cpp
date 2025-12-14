@@ -61,6 +61,14 @@ void Game::update(Milliseconds deltaTime) {
 	auto messages = std::vector<Message>(bulkSize);
 
 	auto size = messageQueue.try_dequeue_bulk(messages.data(), bulkSize);
+
+	// 남은 메시지가 있으면 모두 꺼내기
+	Message msg;
+	while (messageQueue.try_dequeue(msg)) {
+		messageQueue.enqueue(msg);
+		++size;
+	}
+
 	for (auto i = 0u; i < size; ++i) {
 		const auto& msg = messages[i];
 
@@ -288,6 +296,7 @@ void Game::sendMoveStatePacket() {
 			.id = static_cast<std::uint16_t>(PacketType::csMoveState)
 		},
 		.csMoveState = {
+			.position = player_->physicState().pos.getXmf(),
 			.velocity = player_->physicState().velocity.getXmf(),
 			.forward = player_->forward().getXmf(),
 			.timeStamp = static_cast<u32t>(HighResolutionClock::now().time_since_epoch().count())
