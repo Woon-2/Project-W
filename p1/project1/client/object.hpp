@@ -31,7 +31,9 @@ private:
 
 	Seconds accMotionless_ = 0s;
 	Milliseconds cooldownFire_ = 0ms;
+	Milliseconds cooldownHit_ = 0ms;
 	Seconds animTimeIdle_ = 0s;
+	Seconds animTimeHit_ = 0s;
 	Seconds animTimeIdleAim_ = 0s;
 	Seconds animTimeRun_ = 0s;
 	float tIdle_ = 0.f;
@@ -40,6 +42,10 @@ private:
 	float tRunBackward_ = 0.f;
 	float tRunLeft_ = 0.f;
 	float tRunRight_ = 0.f;
+	// hit 애니메이션 블렌딩 비율은 가장 우선순위가 높게 계산된다.
+	// 다른 모든 애니메이션의 블렌딩 비율을 낮추고 최대 0.5만큼의 비율을 차지한다.
+	// 모든 블렌딩이 일어난 후에 결과 프레임과 hit 애니메이션 프레임을
+	// tHit_으로 보간하게 된다.
 	float tHit_ = 0.f;
 };
 

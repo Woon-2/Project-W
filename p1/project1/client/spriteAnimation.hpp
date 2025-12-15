@@ -12,6 +12,9 @@ public:
 	void render( GFX& gfx ) const;
 	bool done() const { return done_; }
 
+	void setSpeed(float speed) { speed_ = speed; }
+	float speed() const { return speed_; }
+
 	mu::Vec3 MU_CALLCONV pos() const { return pos_; }
 	void MU_CALLCONV setPos(mu::Vec3 pos) { pos_ = pos; }
 

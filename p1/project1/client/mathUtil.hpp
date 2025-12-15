@@ -2906,6 +2906,10 @@ inline const Quat MU_CALLCONV squad(
     return dx::XMQuaternionSquad(q0.get(), q1.get(), a.get(), b.get(), t);
 }
 
+inline float MU_CALLCONV dot(Quat lhs, Quat rhs) __MathUtil_NOEXCEPT {
+    return dx::XMVectorGetX(dx::XMVector4Dot(lhs.get(), rhs.get()));
+}
+
 template <std::size_t R, std::size_t C>
     requires (R >= 1 && R <= 4) && (C >= 1 && C <= 4)
 class alignas(16) Mat {

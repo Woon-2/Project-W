@@ -173,10 +173,22 @@ void Game::update(Milliseconds deltaTime) {
 			player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
 			break;
 
+		case EventType::Hit:
+			player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
+			break;
+
 		case EventType::MuzzleFlash: {
 			auto& muzzleFlash = muzzleFlashes_.emplace_back();
 			muzzleFlash.init(assetManager_.muzzleFlashAnimation());
 			muzzleFlash.setTint(mu::Vec3(0.8f, 0.4f, 0.1f));
+			break;
+		}
+
+		case EventType::Blood: {
+			auto& bloodSplash = bloodSplashes_.emplace_back();
+			bloodSplash.init(assetManager_.muzzleFlashAnimation());
+			bloodSplash.setSpeed(0.75f);
+			bloodSplash.setTint(mu::Vec3(0.92f, 0.04f, 0.01f));
 			break;
 		}
 
@@ -232,7 +244,10 @@ void Game::update(Milliseconds deltaTime) {
 	camera_.update();
 	dirLight_.update(deltaTime);
 	dirLight_.updateShadowAuxDirectional(camera_.eye(), 100.f, -10.f, 10.f, -10.f, 10.f, 50.f, 200.f);
+
+	// 애니메이션 업데이트
 	slimeSprite_.update( deltaTime );
+
 	for (auto& muzzleFlash : muzzleFlashes_) {
 		// 총구 화염 스프라이트 애니메이션
 		// 플레이어에 대해서 오프셋 지정
@@ -246,7 +261,16 @@ void Game::update(Milliseconds deltaTime) {
 
 	std::erase_if(muzzleFlashes_, [](const SpriteAnimation& anim) { return anim.done(); });
 
-	// 애니메이션 업데이트
+	for (auto& bloodSplash : bloodSplashes_) {
+		bloodSplash.setPos( player_->pos()
+			+ player_->up() * 1.25f
+			- player_->forward() * 0.1f
+		);
+		bloodSplash.update(deltaTime);
+	}
+
+	std::erase_if(bloodSplashes_, [](const SpriteAnimation& anim) { return anim.done(); });
+
 	animSystem_.update(0.016s);
 
 	// 총 발사 쿨타임 계산
@@ -269,6 +293,9 @@ void Game::render() {
 	slimeSprite_.render( gfx_); 
 	for (const auto& muzzleFlash : muzzleFlashes_) {
 		muzzleFlash.render(gfx_);
+	}
+	for (const auto& bloodSplash : bloodSplashes_) {
+		bloodSplash.render(gfx_);
 	}
 
 	for ( auto& hpUI : playerHpUIs_ ) {
@@ -451,6 +478,13 @@ void Game::processInput(Milliseconds deltaTime) {
 	) {
 		fireCooldown_ = 200ms;
 		holdEvent(eventList_, EvFire{});
+	}
+
+	// 임시: 피격, 피격 애니메이션 및 이펙트 재생
+	if ( (keyboardStateCurr_[VK_RBUTTON] & 0x80)
+		&& !(keyboardStatePrev_[VK_RBUTTON] & 0x80)
+	) {
+		holdEvent(eventList_, EvHit{});
 	}
 
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때

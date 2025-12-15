@@ -108,6 +108,22 @@ void AnimBlenderVanguard::update(Seconds deltaTime, void* pVoidOwner) {
 		accMotionless_ += deltaTime;
 	}
 
+	if (cooldownHit_ > 0ms) {
+		// 3배속 재생
+		animTimeHit_ += deltaTime * 3.f;
+		// hit 애니메이션 블렌딩 비율은 가장 우선순위가 높게 계산된다.
+		// 다른 모든 애니메이션의 블렌딩 비율을 낮추고 최대 0.75만큼의 비율을 차지한다.
+		// 모든 블렌딩이 일어난 후에 결과 프레임과 hit 애니메이션 프레임을
+		// tHit_으로 보간하게 된다.
+		tHit_ = 0.75f * std::clamp( cooldownHit_ / 600ms, 0.f, 1.f );
+
+		cooldownHit_ -= deltaTime;
+	}
+	else {
+		animTimeHit_ = 0s;
+		tHit_ = 0.f;
+	}
+
 	// 4방향 run 애니메이션들은 재생 시간이 비슷하다.
 	// Run_Forward 애니메이션의 duration을 대표로 사용해도 부자연스럽지 않다.
 	const auto durationRun = targetClip("Vanguard_Run_Forward")->duration;
@@ -124,6 +140,7 @@ void AnimBlenderVanguard::onCalcLocal(PassKey<AnimSystem>) {
 	// 개별 애니메이션의 프레임을 업데이트한다.
 	updateFrames("Vanguard_Idle", animTimeIdle_);
 	updateFrames("Vanguard_Idle_Aim", animTimeIdle_);
+	updateFrames("Vanguard_Hit", animTimeHit_);
 	updateFrames("Vanguard_Run_Forward", animTimeRun_);
 	updateFrames("Vanguard_Run_Backward", animTimeRun_);
 	updateFrames("Vanguard_Run_Left", animTimeRun_);
@@ -132,6 +149,7 @@ void AnimBlenderVanguard::onCalcLocal(PassKey<AnimSystem>) {
 	auto& localXforms = localXformData();
 	auto& framesIdle = curFrames("Vanguard_Idle");
 	auto& framesIdleAim = curFrames("Vanguard_Idle_Aim");
+	auto& framesHit = curFrames("Vanguard_Hit");
 	auto& framesRunForward = curFrames("Vanguard_Run_Forward");
 	auto& framesRunBackward = curFrames("Vanguard_Run_Backward");
 	auto& framesRunLeft = curFrames("Vanguard_Run_Left");
@@ -148,6 +166,8 @@ void AnimBlenderVanguard::onCalcLocal(PassKey<AnimSystem>) {
 			WeightedAnimFrame{ .frame = framesRunRight[i], .w = tRunRight_ },
 		};
 		framesBlended_[i] = sumWeightedAnimFrames(frames);
+		// hit animation 보간 (nlerp 쓰면 팔꿈치 꼬임)
+		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i], tHit_);
 	}
 	std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
 }
@@ -173,6 +193,12 @@ void AnimBlenderVanguard::EventBus::receive(const BasicEvent* event, Seconds del
 		else {
 			holdEvent(evList, EvMuzzleFlash{});
 		}
+		break;
+
+	case EventType::Hit:
+		pOwner->animTimeHit_ = 0s;
+		pOwner->cooldownHit_ = 600ms;
+		holdEvent(evList, EvBlood{});
 		break;
 
 	default:
@@ -441,6 +467,17 @@ void Object::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Event
 				event, deltaTime, evList, timer,
 				pOwner->renderState_.animBlender.get()
 			);
+		}
+		break;
+
+	case EventType::Hit:
+		if (pOwner) {
+			if (pOwner->renderState_.animBlender) {
+				pOwner->renderState_.animBlender->eventBus()->receive(
+					event, deltaTime, evList, timer,
+					pOwner->renderState_.animBlender.get()
+				);
+			}
 		}
 		break;
 	

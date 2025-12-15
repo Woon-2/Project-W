@@ -33,6 +33,12 @@ public:
 	// 객체들을 생성한다.
 	void setupStage();
 
+	// 게임의 업데이트는 다음 순서대로 이루어진다.
+	// 입력 처리
+	// 이벤트 처리
+	// 물리 업데이트 루틴
+	// 객체별 업데이트 루틴
+	// 애니메이션 업데이트
 	void update(Milliseconds deltaTime) override;
 	void render() override;
 
@@ -88,6 +94,7 @@ private:
 	Billboard billboard_{};
 	SpriteAnimation slimeSprite_{};
 	std::deque<SpriteAnimation> muzzleFlashes_{};
+	std::deque<SpriteAnimation> bloodSplashes_{};
 	Milliseconds fireCooldown_{};
 	std::vector<BasicPlayerHpUI> playerHpUIs_{};
 
