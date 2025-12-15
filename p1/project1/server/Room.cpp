@@ -19,7 +19,7 @@ void Room::update(Milliseconds deltaTime) {
 
 	// 속도 갱신
 	for (auto& [id, user] : idUserMap_) {
-		//user->setOldPos(user->pos().x(), user->pos().z());
+		user->setOldPos(user->pos().x(), user->pos().z());
 		auto moveXSign = user->moveXSign();
 		auto moveZSign = user->moveZSign();
 
@@ -63,10 +63,30 @@ void Room::update(Milliseconds deltaTime) {
 		[](const std::shared_ptr<Object>& obj) { return obj.get(); }
 	);
 
-	physicSystem_.step(allObjects, Seconds(deltaTime));
+	physicSystem_.step(allObjects, 1s / 60.f);
 
 	for(auto& [id, user] : idUserMap_) {
-		std::cout << "user " << id << " pos(" << user->pos().x() << ", " << user->pos().y() << ", " << user->pos().z() << ")\n";
+		if(user->oldX() != user->pos().x() || user->oldZ() != user->pos().z()) {
+			/*std::cout << "Player " << user->getId() << " moved to (" 
+				<< user->pos().x() << ", " << user->pos().y() << ", " << user->pos().z() << ")\n";*/
+			auto scMovePacket = Packet{
+				.header = {
+					.size = sizeof(PacketHeader) + sizeof(SCMovePacket),
+					.id = static_cast<uint16>(PacketType::scMove)
+				},
+				.scMove = {
+					.playerId = user->getId(),
+					.pos = user->pos().getXmf(),
+					.playerYawRadian = std::atan2(user->forward().x(), user->forward().z()),
+					.cameraPitchRadian = user->cameraPitch()
+				}
+			};
+
+			int32 packetSize = sizeof(Packet);
+			auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+			sendBuffer->copyData(&scMovePacket, packetSize);
+			broadcast(sendBuffer);
+		}
 	}
 }
 
@@ -105,20 +125,64 @@ void Room::processMessage() {
 			auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), mu::Radian(messages[i].playerYawRadian));
 			user->setOrient(yaw);
 			user->setCameraPitch(messages[i].cameraPitchRadian);
+
+			auto scMouseMovePacket = Packet{
+				.header = {
+					.size = sizeof(PacketHeader) + sizeof(SCMouseMovePacket),
+					.id = static_cast<uint16>(PacketType::scMouseMove)
+				},
+				.scMouseMove = {
+					.playerId = user->getId(),
+					.playerYawRadian = messages[i].playerYawRadian,
+					.cameraPitchRadian = messages[i].cameraPitchRadian
+				}
+			};
+
+			int32 packetSize = sizeof(Packet);
+			auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+			sendBuffer->copyData(&scMouseMovePacket, packetSize);
+			broadcast(sendBuffer);
 			break;
 		}
 
 		case LogicMsgType::UserMoveState: {
 			auto user = idUserMap_[messages[i].userId];
-			//user->setPos(mu::Vec3(DirectX::XMLoadFloat3(&messages[i].position)));
-			//user->setVelocity(mu::Vec3(DirectX::XMLoadFloat3(&messages[i].velocity)));
-			//
-			//const auto forward = mu::NVec3(DirectX::XMLoadFloat3(&messages[i].forward));
-			//const auto yawRadian = std::atan2(forward.x(), forward.z());
-			//const auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), mu::Radian(yawRadian));
-			//user->setOrient(yaw);
+
+			auto clientPos = mu::Vec3(DirectX::XMLoadFloat3(&messages[i].position));
+			auto serverPos = user->pos();
+
+			const auto positionDiff = clientPos - serverPos;
+			if (positionDiff.len() > 0.2f) {
+				auto scCorrectPosPacket = Packet{
+					.header = {
+						.size = sizeof(PacketHeader) + sizeof(SCCorrectPosPacket),
+						.id = static_cast<uint16>(PacketType::scCorrectPos)
+					},
+					.scCorrectPos = {
+						.playerId = user->getId(),
+						.pos = serverPos.getXmf()
+					}
+				};
+
+				int32 packetSize = sizeof(Packet);
+				auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+				sendBuffer->copyData(&scCorrectPosPacket, packetSize);
+				GameSessionManager::findGameSession(user->getId())->send(sendBuffer);
+			}
+			else {
+				user->setPos(mu::Vec3(DirectX::XMLoadFloat3(&messages[i].position)));
+				//user->setVelocity(mu::Vec3(DirectX::XMLoadFloat3(&messages[i].velocity)));
+				
+				const auto forward = mu::NVec3(DirectX::XMLoadFloat3(&messages[i].forward));
+				const auto yawRadian = std::atan2(forward.x(), forward.z());
+				const auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), mu::Radian(yawRadian));
+				user->setOrient(yaw);
+			}
 			break;
 		}
+
+		default:
+			break;
 		}
 	}
 }

@@ -57,7 +57,7 @@ void Game::update(Milliseconds deltaTime) {
 	processInput(deltaTime);
 
 	// 서버로부터 받은 메시지 처리
-	const auto bulkSize = 10u;
+	const auto bulkSize = 100u;
 	auto messages = std::vector<Message>(bulkSize);
 
 	auto size = messageQueue.try_dequeue_bulk(messages.data(), bulkSize);
@@ -94,6 +94,15 @@ void Game::update(Milliseconds deltaTime) {
 			break;
 		}
 
+		case MsgType::PlayerMouseMove: {
+			auto& player = idPlayerMap_[msg.objectId];
+
+			if (player != player_) {
+				player->setOrient(msg.orient);
+			}
+			break;
+		}
+
 		case MsgType::PlayerMove: {
 			auto& player = idPlayerMap_[msg.objectId];
 
@@ -102,9 +111,13 @@ void Game::update(Milliseconds deltaTime) {
 			}
 			else {
 				player->setPos(msg.pos);
+				player->setOrient(msg.orient);
 			}
 			break;
 		}
+
+		default:
+			break;
 		}
 	}
 
@@ -137,6 +150,8 @@ void Game::update(Milliseconds deltaTime) {
 
 		allObjects.clear( );
 	}
+
+	std::cout << "player pos : " << player_->pos().x() << ", " << player_->pos().y() << ", " << player_->pos().z() << '\n';
 
 	if (moveStateSendAcc_ >= moveStateSendInterval_) {
 		sendMoveStatePacket();

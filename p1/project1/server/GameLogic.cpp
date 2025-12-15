@@ -8,13 +8,13 @@ void GameLogic::run() {
 		logicTimer_.tick();
 		
 		auto dt = logicTimer_.deltaTime<Milliseconds>();
-		accTime_ += dt.count();
+		accTime_ += dt;
 
 		processMessage();
 
 		while (accTime_ >= logicUpdateInterval_) {
 			for (auto& room : rooms_) {
-				room->update(dt);
+				room->update(logicUpdateInterval_);
 			}
 			accTime_ -= logicUpdateInterval_;
 		}
@@ -24,9 +24,15 @@ void GameLogic::run() {
 }
 
 void GameLogic::processMessage() {
-	const auto bulkSize = maxRoomCount_;
+	const auto bulkSize = 1000u;
 	auto messages = std::vector<LogicMessage>(bulkSize);
-	const auto size = msgQueue_.try_dequeue_bulk(messages.begin(), bulkSize);
+	auto size = msgQueue_.try_dequeue_bulk(messages.begin(), bulkSize);
+
+	LogicMessage msg;
+	while (msgQueue_.try_dequeue(msg)) {
+		messages.push_back(msg);
+		++size;
+	}
 
 	for (int32 i = 0; i < size; ++i) {
 		auto msgType = messages[i].type;
@@ -64,9 +70,11 @@ void GameLogic::processMessage() {
 		case LogicMsgType::UserMoveState:
 			idRoomMap_[messages[i].roomId]->enqueueMessage(messages[i]);
 			break;
+
+		default:
+			break;
 		}
 	}
 }
 
 const int32 GameLogic::maxRoomCount_ = 100;
-const float GameLogic::logicUpdateInterval_ = 16.6667f; // 60 FPS

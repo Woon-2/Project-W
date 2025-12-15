@@ -80,6 +80,7 @@ public:
 
 	//void setPlayerYaw(float yaw) { playerYaw_ = yaw; }
 	void setCameraPitch(float pitch) { cameraPitch_ = pitch; }
+	float cameraPitch() const { return cameraPitch_; }
 
 	void setMoveSign(int32 xSign, int32 zSign) {
 		moveXSign_ = xSign;

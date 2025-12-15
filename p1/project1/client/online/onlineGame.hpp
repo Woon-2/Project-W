@@ -14,18 +14,21 @@
 namespace Online {
 
 enum class MsgType : u8t {
+	None,
 	SetupPlayer,
 	SetupCube,
+	PlayerMouseMove,
 	PlayerMove,
 };
 
 struct Message {
-	MsgType type;
+	MsgType type{MsgType::None};
 	i32t objectId;
 	u32t materialSetIdx;
 	mu::Vec3 pos;
 	mu::NQuat orient;
 	mu::Vec3 scale;
+	float cameraPitch{0.f};
 };
 
 class Game : public IGame {
