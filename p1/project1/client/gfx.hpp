@@ -15,14 +15,19 @@
 #include "uiPipeline.hpp"
 #include "spriteAnimation.hpp"
 
-// Idle -> attack 애니메이션
 // hit 애니메이션
-// 레벨디자인 - 12.9.
+// 피격 이펙트
+// 텍스트 머지
+// 장전
+// 크로스헤어
+// 레벨디자인 - 12.15.
 // Static Dynamic object 분리 추출 - 12.11.
 // CSM
 // 피격 패킷에 들어있는 위치에 이펙트 재생
 // 다른 플레이어 체력바 표시 - 12.13.
 // ==== 여기서부터 p2
+// timer game이 완전 소유하도록 수정
+// function도 사이즈별로 pool 쓰게
 // metallic, roughness map 별도 지정 가능하도록 Texture Mapping 자유도 높이기
 // ExecuteCommands 별도 스레드 호출 - 12.14.
 // Clickable UI 구현 - 12.15.

@@ -12,6 +12,12 @@ void Timer::tick() {
 
 	const auto tp = HighResolutionClock::now();
 
+	// 처리할 시간이 된 작업들을 처리한다.
+	while ( !jobQueue_.empty() && jobQueue_.top().executeAt < tp ) {
+		jobQueue_.top().job();
+		jobQueue_.pop();
+	}
+
 	// delta time 계산
 	lastDeltaTime_ = stopAccDeltaTime_ + (tp - lastTp_);
 	stopAccDeltaTime_ = 0ms;

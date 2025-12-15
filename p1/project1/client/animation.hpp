@@ -56,6 +56,7 @@ struct AnimClip {
 std::vector<AnimClip> loadAnimClipsFromFile(const std::filesystem::path& path);
 
 class AnimSystem;
+class IEventBus;
 
 // 게임 객체에 부착되어 해당 객체의 애니메이션 설정 및 블렌딩을 책임지는 클래스
 // 개별 애니메이션이 필요한 게임 객체마다 AnimBlender 객체가 할당되어야 한다.
@@ -104,6 +105,10 @@ public:
 	void setSkeleton(const Skeleton& skeleton);
 
 	float priority() const { return priority_; }
+
+	// 이벤트 수신을 지원하려면 상속 클래스에서 이 함수를 오버라이드해
+	// 자신만의 EventBus 구현에 대한 포인터를 리턴하도록 한다.
+	virtual IEventBus* eventBus() { return nullptr; }
 
 	// priority_ 및 애니메이션 시간 갱신, 그 외 상속한 클래스에서 필요한 작업들을 수행한다.
 	// AnimSystem에서 불리지 않는다.

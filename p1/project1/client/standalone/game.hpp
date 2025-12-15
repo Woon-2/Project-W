@@ -16,6 +16,9 @@
 #include "../billboard.hpp"
 #include "../spriteAnimation.hpp"
 #include "../basicPlayerHpUI.hpp"
+#include "../event.hpp"
+
+class Timer;
 
 namespace StandAlone {
 
@@ -23,6 +26,10 @@ class Game : public IGame {
 public:
 	// 사용자 입력을 받아 스레드 풀과 GFX 객체를 초기화한다.
 	Game();
+
+	GameType type() const override { return GameType::StandAlone; }
+
+	void setTimer(Timer* pTimer) { pTimer_ = pTimer; }
 	// 객체들을 생성한다.
 	void setupStage();
 
@@ -63,6 +70,9 @@ private:
 
 	GFX gfx_{};
 	ThreadPool threadPool_{};
+
+	EventList eventList_{};
+	Timer* pTimer_ = nullptr;
 
 	std::vector<Object> cubes_{};
 	std::shared_ptr<Object> player_{};

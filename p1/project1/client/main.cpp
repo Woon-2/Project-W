@@ -76,6 +76,19 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 	
 	while ( !gReady );
 
+	switch ( pGame->type() ) {
+	case GameType::StandAlone:
+		static_cast<StandAlone::Game*>(pGame.get())->setTimer(&timer);
+		break;
+
+	case GameType::Online:
+		break;
+
+	default:
+		DISPLAY_ERROR_STR(false, "[Initialization Error] 게임 타입은 StandAlone, Online 둘 중 하나여야 합니다.", true);
+		break;
+	}
+
 	// 윈도우 메시지 루프
 	MSG msg;
 	while ( true ) {

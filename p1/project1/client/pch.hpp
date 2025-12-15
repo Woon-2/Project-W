@@ -92,6 +92,7 @@
 #include "function.hpp"
 #include "threadPool.hpp"
 #include "log.hpp"
+#include "pool.hpp"
 
 #include "concurrentqueue.h"
 

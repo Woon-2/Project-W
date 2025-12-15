@@ -71,10 +71,10 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>$(ProjectDir);$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)/../common;$(ProjectDir);$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>$(ProjectDir);$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)/../common;$(ProjectDir);$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -141,6 +141,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="..\common\pool.hpp" />
     <ClInclude Include="animation.hpp" />
     <ClInclude Include="basicPlayerHpUI.hpp" />
     <ClInclude Include="billboard.hpp" />
@@ -175,6 +176,7 @@
     <ClInclude Include="d3dx12\include\directx\dxgicommon.h" />
     <ClInclude Include="d3dx12\include\directx\dxgiformat.h" />
     <ClInclude Include="errorHandling.hpp" />
+    <ClInclude Include="event.hpp" />
     <ClInclude Include="function.hpp" />
     <ClInclude Include="gfx.hpp" />
     <ClInclude Include="gfxUtil.hpp" />
@@ -236,6 +238,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="errorHandling.cpp" />
+    <ClCompile Include="event.cpp" />
     <ClCompile Include="gfx.cpp" />
     <ClCompile Include="gfxUtil.cpp" />
     <ClCompile Include="global.cpp" />

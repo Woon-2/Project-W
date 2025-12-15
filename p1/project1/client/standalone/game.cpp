@@ -155,9 +155,38 @@ void Game::importPlayerStart(std::ifstream& ifs, Object& player) {
 	player_->equip(std::move(rifle));
 }
 
+// 게임의 업데이트는 다음 순서대로 이루어진다.
+// 입력 처리
+// 이벤트 처리
+// 물리 업데이트 루틴
+// 객체별 업데이트 루틴
+// 애니메이션 업데이트
 void Game::update(Milliseconds deltaTime) {
+	// 입력 처리
 	processInput(deltaTime);
 
+	// 이벤트 처리
+	for (auto pEvRaw : eventList_) {
+		auto pEv = reinterpret_cast<BasicEvent*>(pEvRaw);
+		switch (pEv->type) {
+		case EventType::Fire:
+			player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
+			break;
+
+		case EventType::MuzzleFlash: {
+			auto& muzzleFlash = muzzleFlashes_.emplace_back();
+			muzzleFlash.init(assetManager_.muzzleFlashAnimation());
+			muzzleFlash.setTint(mu::Vec3(0.8f, 0.4f, 0.1f));
+			break;
+		}
+
+		default:
+			break;
+		}
+	}
+
+	// 물리 업데이트 루틴
+	// 
 	// 물리량 갱신은 게임 갱신과 다르게 고정 주기로 수행한다.
 	// 이를 통해 너무 유동적인 delta time으로 인한 시뮬레이션의 불안정성과
 	// 물리 업데이트의 성능적 비용 문제를 해결한다.
@@ -187,6 +216,8 @@ void Game::update(Milliseconds deltaTime) {
 		allObjects.clear();
 	}
 
+	// 객체별 업데이트 루틴
+	//
 	// 물리량 갱신 주기에 대해,
 	// 마지막 물리량 갱신으로부터 얼마나 지났는지의 비율로
 	// RenderState 갱신을 위한 PhysicState 보간 계수를 설정한다.
@@ -215,11 +246,15 @@ void Game::update(Milliseconds deltaTime) {
 
 	std::erase_if(muzzleFlashes_, [](const SpriteAnimation& anim) { return anim.done(); });
 
+	// 애니메이션 업데이트
 	animSystem_.update(0.016s);
 
+	// 총 발사 쿨타임 계산
 	if (fireCooldown_ > 0ms) {
 		fireCooldown_ -= deltaTime;
 	}
+
+	clearEvents(eventList_);
 }
 
 void Game::render() {
@@ -328,15 +363,6 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		}
 		break;
 
-	case WM_LBUTTONDOWN: {
-		// 총 발사: 총구 화염 애니메이션 재생
-		auto& muzzleFlash = muzzleFlashes_.emplace_back();
-		muzzleFlash.init(assetManager_.muzzleFlashAnimation());
-		muzzleFlash.setTint(mu::Vec3(0.8f, 0.4f, 0.1f));
-		fireCooldown_ = 200ms;
-		break;
-	}
-
 	case WM_SIZE:
 		break;
 
@@ -417,6 +443,14 @@ void Game::processInput(Milliseconds deltaTime) {
 		camera_.setOffsetFromTarget( mu::Vec3( 0.f, 1.8f, -2.5f ) );
 		camera_.setOffsetTargetPivot( mu::Vec3(0.f, 1.f, 0.f));
 		cameraMode_ = CameraMode::ThirdPerson;
+	}
+
+	// 총 발사: 총구 화염 애니메이션 재생
+	if ( (keyboardStateCurr_[VK_LBUTTON] & 0x80)
+		&& !(keyboardStatePrev_[VK_LBUTTON] & 0x80)
+	) {
+		fireCooldown_ = 200ms;
+		holdEvent(eventList_, EvFire{});
 	}
 
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때

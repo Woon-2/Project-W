@@ -4,23 +4,38 @@
 #include "gfx.hpp"
 #include "collision.hpp"
 #include "animation.hpp"
+#include "event.hpp"
 
 class AssetManager;
 class Object;
+class Timer;
 
 class AnimBlenderVanguard : public AnimBlender {
 public:
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
 	void init(const AssetManager& assetManager);
 	// pOwner의 물리 정보에 따라
 	// 애니메이션 블렌딩 상태를 갱신한다.
 	void update(Seconds deltaTime, void* pOwner) override;
 	void onCalcLocal(PassKey<AnimSystem>) override;
 
+	IEventBus* eventBus() override { return &eventBus_; }
+
 private:
 	std::vector<AnimFrame> framesBlended_{};
-	Seconds elapsedIdle_ = 0s;
-	Seconds elapsedRun_ = 0s;
+	EventBus eventBus_{};
+
+	Seconds accMotionless_ = 0s;
+	Milliseconds cooldownFire_ = 0ms;
+	Seconds animTimeIdle_ = 0s;
+	Seconds animTimeIdleAim_ = 0s;
+	Seconds animTimeRun_ = 0s;
 	float tIdle_ = 0.f;
+	float tIdleAim_ = 0.f;
 	float tRunForward_ = 0.f;
 	float tRunBackward_ = 0.f;
 	float tRunLeft_ = 0.f;
@@ -69,6 +84,11 @@ struct Equipment {
 // Object::update를 호출한 시점에 맞게 두 PhysicState를 보간해 월드변환들을 갱신한다.
 class Object {
 public:
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
 	// @brief 게임 객체의 RenderState와 방향 벡터들을 갱신한다.
 	//		RenderState는 이전 PhysicState와 현재 PhysicState를 보간하여 얻어지고,
 	//      방향 벡터들은 현재 PhysicState의 내용으로 계산한다.
@@ -151,7 +171,8 @@ public:
 		currPhysicState_.pos = pos;
 	}
 
-	mu::Vec3 predictedOffset_{};
+	IEventBus* eventBus() { return &eventBus_; }
+
 
 private:
 	PhysicState prevPhysicState_{};
@@ -160,6 +181,8 @@ private:
 	RenderState renderState_{};
 
 	std::vector<Equipment> equipments_{};
+
+	EventBus eventBus_{};
 
 	bool willRenderBV_ = false;
 

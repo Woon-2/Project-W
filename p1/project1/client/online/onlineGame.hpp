@@ -32,6 +32,9 @@ class Game : public IGame {
 public:
 	// 사용자 입력을 받아 스레드 풀과 GFX 객체를 초기화한다.
 	Game();
+
+	GameType type() const override { return GameType::StandAlone; }
+
 	// 객체들을 생성한다.
 	void setupStage();
 

@@ -318,6 +318,12 @@
     <ClInclude Include="spriteAnimation.hpp">
       <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="..\common\pool.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="event.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -448,6 +454,9 @@
     </ClCompile>
     <ClCompile Include="pbrSkinnedPipeline.cpp">
       <Filter>그래픽스\파이프라인\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="event.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

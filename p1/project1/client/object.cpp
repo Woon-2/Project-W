@@ -2,6 +2,7 @@
 #include "object.hpp"
 #include "errorHandling.hpp"
 #include "AssetManager.hpp"
+#include "Timer.hpp"
 
 void AnimBlenderVanguard::init(const AssetManager& assetManager) {
 	setSkeleton(assetManager.modelPlayer()->skeleton);
@@ -27,19 +28,43 @@ void AnimBlenderVanguard::update(Seconds deltaTime, void* pVoidOwner) {
 	const auto speed = pOwner->physicState().velocity.len();
 
 	// blendRange 설정
-	const auto blendRangeStart = runThreshold - 0.05f;
-	const auto blendRangeEnd = runThreshold + 5.f;
+	const auto runBlendRangeStart = runThreshold - 0.05f;
+	const auto runBlendRangeEnd = runThreshold + 5.f;
 	// tRun 구하기
-	const auto tRun = std::clamp( (speed - blendRangeStart) / (blendRangeEnd - blendRangeStart), 0.f, 1.f );
-	// tIdle = 1 - tRun
-	tIdle_ = 1.f - tRun;
+	const auto tRun = std::clamp( (speed - runBlendRangeStart) / (runBlendRangeEnd - runBlendRangeStart), 0.f, 1.f );
 
-	// Idle 애니메이션은 그냥 계속 돌린다.
+	// tIdle 구하기 (tIdle_ 및 tIdleAim_)
+	// 움직이지 않은 채 aimlessThreshold 시간이 지났다면 비조준 Idle 애니메이션을,
+	// 그렇지 않으면 조준 Idle 애니메이션을 재생하도록 한다.
+	const auto aimlessThreshold = 2s;
+	const auto aimBlendRangeStart = aimlessThreshold - 100ms;
+	const auto aimBlendRangeEnd = aimlessThreshold + 400ms;
+
+	const auto tIdleBase = 1.f - tRun;
+	// cooldownFire_이 0보다 크다는 건 발사 이벤트(EvFire)로 인해
+	// 비조준 idle -> 조준 idle 애니메이션 전환이 일어났다는 말이다.
+	// cooldownFire_이 0에 가까울수록 조준 idle 애니메이션의 비율이 더 높아진다.
+	if (cooldownFire_ > 0ms) {
+		cooldownFire_ -= deltaTime;
+		tIdle_ = tIdleBase * std::clamp( cooldownFire_ / 120ms, 0.f, 1.f );
+		tIdleAim_ = tIdleBase - tIdle_;
+	}
+	else {
+		tIdle_ = tIdleBase * std::clamp( (accMotionless_ - aimBlendRangeStart) / (aimBlendRangeEnd - aimBlendRangeStart), 0.f, 1.f );
+		tIdleAim_ = tIdleBase - tIdle_;
+	}
+
+	// Idle 애니메이션들은 그냥 계속 돌린다.
 	// 딱히 멈추지 않아도 부자연스럽진 않다.
-	elapsedIdle_ += deltaTime;
+	animTimeIdle_ += deltaTime;
 	const auto durationIdle = targetClip("Vanguard_Idle")->duration;
-	while (elapsedIdle_ > durationIdle) {
-		elapsedIdle_ -= durationIdle;
+	while (animTimeIdle_ > durationIdle) {
+		animTimeIdle_ -= durationIdle;
+	}
+	animTimeIdleAim_ += deltaTime;
+	const auto durationIdleAim = targetClip("Vanguard_Idle_Aim")->duration;
+	while (animTimeIdleAim_ > durationIdle) {
+		animTimeIdleAim_ -= durationIdle;
 	}
 
 	// run 애니메이션이 필요하다고 판단되었으면,
@@ -64,7 +89,11 @@ void AnimBlenderVanguard::update(Seconds deltaTime, void* pVoidOwner) {
 		tRunLeft_ = tRun * wLeft / total;
 		tRunRight_ = tRun * wRight / total;
 
-		elapsedRun_ += deltaTime;
+		animTimeRun_ += deltaTime;
+
+		if (tRun >= 1.f) {
+			accMotionless_ = 0s;
+		}
 	}
 	else {
 		// 완전한 idle 애니메이션이 재생되고 있다면
@@ -74,14 +103,16 @@ void AnimBlenderVanguard::update(Seconds deltaTime, void* pVoidOwner) {
 		tRunLeft_ = 0.f;
 		tRunRight_ = 0.f;
 
-		elapsedRun_ = 0s;
+		animTimeRun_ = 0s;
+
+		accMotionless_ += deltaTime;
 	}
 
 	// 4방향 run 애니메이션들은 재생 시간이 비슷하다.
 	// Run_Forward 애니메이션의 duration을 대표로 사용해도 부자연스럽지 않다.
 	const auto durationRun = targetClip("Vanguard_Run_Forward")->duration;
-	while (elapsedRun_ > durationRun) {
-		elapsedRun_ -= durationRun;
+	while (animTimeRun_ > durationRun) {
+		animTimeRun_ -= durationRun;
 	}
 
 	priority_ = 0.f;
@@ -91,14 +122,16 @@ void AnimBlenderVanguard::onCalcLocal(PassKey<AnimSystem>) {
 	// update에서 구한 애니메이션 가중치들로 블렌딩을 수행한다.
 
 	// 개별 애니메이션의 프레임을 업데이트한다.
-	updateFrames("Vanguard_Idle", elapsedIdle_);
-	updateFrames("Vanguard_Run_Forward", elapsedRun_);
-	updateFrames("Vanguard_Run_Backward", elapsedRun_);
-	updateFrames("Vanguard_Run_Left", elapsedRun_);
-	updateFrames("Vanguard_Run_Right", elapsedRun_);
+	updateFrames("Vanguard_Idle", animTimeIdle_);
+	updateFrames("Vanguard_Idle_Aim", animTimeIdle_);
+	updateFrames("Vanguard_Run_Forward", animTimeRun_);
+	updateFrames("Vanguard_Run_Backward", animTimeRun_);
+	updateFrames("Vanguard_Run_Left", animTimeRun_);
+	updateFrames("Vanguard_Run_Right", animTimeRun_);
 
 	auto& localXforms = localXformData();
 	auto& framesIdle = curFrames("Vanguard_Idle");
+	auto& framesIdleAim = curFrames("Vanguard_Idle_Aim");
 	auto& framesRunForward = curFrames("Vanguard_Run_Forward");
 	auto& framesRunBackward = curFrames("Vanguard_Run_Backward");
 	auto& framesRunLeft = curFrames("Vanguard_Run_Left");
@@ -108,6 +141,7 @@ void AnimBlenderVanguard::onCalcLocal(PassKey<AnimSystem>) {
 	for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
 		WeightedAnimFrame frames[] = {
 			WeightedAnimFrame{ .frame = framesIdle[i], .w = tIdle_ },
+			WeightedAnimFrame{ .frame = framesIdleAim[i], .w = tIdleAim_ },
 			WeightedAnimFrame{ .frame = framesRunForward[i], .w = tRunForward_ },
 			WeightedAnimFrame{ .frame = framesRunBackward[i], .w = tRunBackward_ },
 			WeightedAnimFrame{ .frame = framesRunLeft[i], .w = tRunLeft_ },
@@ -116,6 +150,34 @@ void AnimBlenderVanguard::onCalcLocal(PassKey<AnimSystem>) {
 		framesBlended_[i] = sumWeightedAnimFrames(frames);
 	}
 	std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
+}
+
+void AnimBlenderVanguard::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
+	auto pOwner = static_cast<AnimBlenderVanguard*>(pVoidOwner);
+
+	switch (event->type) {
+	case EventType::Fire:
+		// 조준 여부와 관계없이 발사 시
+		// 움직임이 없었던 시간을 누산하는 accMotionless_를 0으로 만든다.
+		pOwner->accMotionless_ = 0s;
+		// 비조준 상태였다면, 조준한 후 사격해야 하므로
+		// 발사까지 딜레이가 있다.
+		if (pOwner->tIdle_ > 0.1f) {
+			pOwner->cooldownFire_ = 120ms;
+			timer.enqueueJob( DelayedJob{
+				.job = [&evList](){ holdEvent(evList, EvMuzzleFlash{}); },
+				.executeAt = timer.lastTp() + 120ms
+			} );
+		}
+		// 조준 상태였다면, 딜레이 없이 바로 사격한다.
+		else {
+			holdEvent(evList, EvMuzzleFlash{});
+		}
+		break;
+
+	default:
+		break;
+	}
 }
 
 // 모델을 설정한다.
@@ -368,4 +430,21 @@ const Equipment* Object::getEquipment(Bone::SocketType socketType) const {
 	}
 
 	return &*it;
+}
+
+void Object::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
+	auto pOwner = static_cast<Object*>(pVoidOwner);
+	switch (event->type) {
+	case EventType::Fire:
+		if (pOwner && pOwner->renderState_.animBlender) {
+			pOwner->renderState_.animBlender->eventBus()->receive(
+				event, deltaTime, evList, timer,
+				pOwner->renderState_.animBlender.get()
+			);
+		}
+		break;
+	
+	default:
+		break;
+	}
 }
