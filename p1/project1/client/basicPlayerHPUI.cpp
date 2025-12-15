@@ -2,6 +2,7 @@
 #include "basicPlayerHpUI.hpp"
 #include "errorHandling.hpp"
 #include "gfxUtil.hpp"
+#include "timer.hpp"
 
 // 현재 스크린 사이즈 : 1024 x 768
 
@@ -16,6 +17,10 @@ BasicPlayerHpUI::BasicPlayerHpUI() {
 }
 
 void BasicPlayerHpUI::update( Milliseconds deltaTime, GFX& gfx, FontHandle* pFontHandle ) {
+	mu::Vec3 scale{ 1024.0f / 2.0f * ( static_cast<float>(hp_) / 100.f ), 64.0f / 2.0f, 1.0f };
+	mu::Vec3 translation{ 512.f * ( static_cast<float>(hp_) / 100.f ), 768.0f - 40.0f, 0.0f };
+	world_ = mu::Mat4x4( mu::scale( scale ) ) * mu::translate( translation );
+
 	int iTextWidth = 0;
 	int iTextHeight = 0;
 	WCHAR	wchTxt[64] = {};
@@ -43,3 +48,30 @@ void BasicPlayerHpUI::render( GFX& gfx ) {
 	}
 }
 
+void BasicPlayerHpUI::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
+	auto pOwner = static_cast<BasicPlayerHpUI*>(pVoidOwner);
+
+	switch (event->type) {
+	case EventType::Hit:
+		pOwner->hp_ -= 10;
+		break;
+
+	case EventType::Fire:
+		--pOwner->bullet_;
+		if (pOwner->bullet_ == 0) {
+			holdEvent(evList, EvReloading{});
+			timer.enqueueJob( DelayedJob{
+				.job = [&evList](){ holdEvent(evList, EvReloadComplete{}); },
+				.executeAt = timer.lastTp() + 2s
+			} );
+		}
+		break;
+
+	case EventType::ReloadComplete:
+		pOwner->bullet_ = 30;
+		break;
+
+	default:
+		break;
+	}
+}

@@ -67,6 +67,8 @@ enum class EventType : u32t {
 	Fire,
 	MuzzleFlash,
 	Blood,
+	Reloading,
+	ReloadComplete,
 	SIZE
 };
 
@@ -82,6 +84,8 @@ struct EvHit : BasicEvent { EvHit() : BasicEvent{EventType::Hit} {} };
 struct EvFire : BasicEvent { EvFire() : BasicEvent{EventType::Fire} {} };
 struct EvMuzzleFlash : BasicEvent { EvMuzzleFlash() : BasicEvent{EventType::MuzzleFlash} {} };
 struct EvBlood : BasicEvent { EvBlood() : BasicEvent{EventType::Blood} {} };
+struct EvReloading : BasicEvent { EvReloading() : BasicEvent{EventType::Reloading} {} };
+struct EvReloadComplete : BasicEvent { EvReloadComplete() : BasicEvent{EventType::ReloadComplete} {} };
 
 class Timer;
 

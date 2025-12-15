@@ -3,6 +3,7 @@
 
 #include "../errorHandling.hpp"
 #include "../binaryImport.hpp"
+#include "../timer.hpp"
 
 extern RECT gClientRect;
 
@@ -172,10 +173,16 @@ void Game::update(Milliseconds deltaTime) {
 		switch (pEv->type) {
 		case EventType::Fire:
 			player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
+			for (auto& ui : playerHpUIs_) {
+				ui.eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, &ui);
+			}
 			break;
 
 		case EventType::Hit:
 			player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
+			for (auto& ui : playerHpUIs_) {
+				ui.eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, &ui);
+			}
 			break;
 
 		case EventType::MuzzleFlash: {
@@ -192,6 +199,16 @@ void Game::update(Milliseconds deltaTime) {
 			bloodSplash.setTint(mu::Vec3(0.92f, 0.04f, 0.01f));
 			break;
 		}
+
+		case EventType::Reloading:
+			reloading_ = true;
+			break;
+
+		case EventType::ReloadComplete:
+			reloading_ = false;
+			for (auto& ui : playerHpUIs_) {
+				ui.eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, &ui);
+			}
 
 		default:
 			break;
@@ -476,12 +493,25 @@ void Game::processInput(Milliseconds deltaTime) {
 		cameraMode_ = CameraMode::ThirdPerson;
 	}
 
+	// 총 장전
+	if ( keyboardStateCurr_['R'] & 0x80 ) {
+		if (!reloading_) {
+			holdEvent(eventList_, EvReloading{});
+			pTimer_->enqueueJob( DelayedJob{
+				.job = [this](){ holdEvent(eventList_, EvReloadComplete{}); },
+				.executeAt = pTimer_->lastTp() + 2s
+			} );
+		}
+	}
+
 	// 총 발사: 총구 화염 애니메이션 재생
 	if ( (keyboardStateCurr_[VK_LBUTTON] & 0x80)
 		&& !(keyboardStatePrev_[VK_LBUTTON] & 0x80)
 	) {
-		fireCooldown_ = 200ms;
-		holdEvent(eventList_, EvFire{});
+		if (!reloading_) {
+			fireCooldown_ = 200ms;
+			holdEvent(eventList_, EvFire{});
+		}
 	}
 
 	// 임시: 피격, 피격 애니메이션 및 이펙트 재생

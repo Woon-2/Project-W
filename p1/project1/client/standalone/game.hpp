@@ -95,7 +95,10 @@ private:
 	SpriteAnimation slimeSprite_{};
 	std::deque<SpriteAnimation> muzzleFlashes_{};
 	std::deque<SpriteAnimation> bloodSplashes_{};
+
 	Milliseconds fireCooldown_{};
+	bool reloading_{};
+
 	std::vector<BasicPlayerHpUI> playerHpUIs_{};
 	TextImage textFPS_{};
 
