@@ -291,6 +291,9 @@
     <ClInclude Include="basicPlayerHpUI.hpp">
       <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="font.hpp">
+      <Filter>그래픽스\코어\헤더 파일</Filter>
+	</ClInclude>
     <ClInclude Include="sharedResources.hpp">
       <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
@@ -431,6 +434,9 @@
     <ClCompile Include="basicPlayerHPUI.cpp">
       <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="font.cpp">
+      <Filter>그래픽스\코어\소스 파일</Filter>
+	</ClCompile>
     <ClCompile Include="sharedResources.cpp">
       <Filter>그래픽스\파이프라인\소스 파일</Filter>
     </ClCompile>

@@ -177,6 +177,7 @@
     <ClInclude Include="d3dx12\include\directx\dxgiformat.h" />
     <ClInclude Include="errorHandling.hpp" />
     <ClInclude Include="event.hpp" />
+    <ClInclude Include="font.hpp" />
     <ClInclude Include="function.hpp" />
     <ClInclude Include="gfx.hpp" />
     <ClInclude Include="gfxUtil.hpp" />
@@ -239,6 +240,7 @@
     </ClCompile>
     <ClCompile Include="errorHandling.cpp" />
     <ClCompile Include="event.cpp" />
+    <ClCompile Include="font.cpp" />
     <ClCompile Include="gfx.cpp" />
     <ClCompile Include="gfxUtil.cpp" />
     <ClCompile Include="global.cpp" />

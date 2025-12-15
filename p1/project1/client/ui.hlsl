@@ -52,7 +52,7 @@ VS_OUTPUT VSMain(VS_INPUT input, uint idxInst : SV_InstanceID)
     
     float2 ndc;
     ndc.x = (ret.pos.x / screenWidth) * 2.0f - 1.0f;
-    ndc.y = 1.0f - (ret.pos.y / screenHeight) * 2.0f;
+    ndc.y = (ret.pos.y / screenHeight) * 2.0f - 1.0f;
     
     ret.pos = float4(ndc, ret.pos.z, 1.0f);
     

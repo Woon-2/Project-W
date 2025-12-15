@@ -97,6 +97,7 @@ private:
 	std::deque<SpriteAnimation> bloodSplashes_{};
 	Milliseconds fireCooldown_{};
 	std::vector<BasicPlayerHpUI> playerHpUIs_{};
+	TextImage textFPS_{};
 
 	LONG mouseDeltaX_{};
 	LONG mouseDeltaY_{};

@@ -658,6 +658,98 @@ Texture cloneTextureIdxOnly(const Texture& tex) {
 	return ret;
 }
 
+void createResourcePair( ID3D12Resource** outDefaultTex, ID3D12Resource** outUploadTex, ID3D12Device* device, std::uint32_t width, std::uint32_t height, DXGI_FORMAT format )
+{
+	ID3D12Resource* pTexResource = nullptr;
+	ID3D12Resource* pUploadBuffer = nullptr;
+	
+	auto heapProperties = D3D12_HEAP_PROPERTIES{
+		.Type = D3D12_HEAP_TYPE_DEFAULT,
+		.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+		.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+		.CreationNodeMask = 1u,
+		.VisibleNodeMask = 1u
+	};
+
+	auto desc = D3D12_RESOURCE_DESC{
+		.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+		.Alignment = 0u,
+		.Width = width,
+		.Height = height,
+		.DepthOrArraySize = 1u,
+		.MipLevels = 1u,
+		.Format = format,
+		.SampleDesc = DXGI_SAMPLE_DESC{.Count = 1u, .Quality = 0u },
+		.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+		.Flags = D3D12_RESOURCE_FLAG_NONE
+	};
+
+	DISPLAY_ERROR_DX_HR(
+		device->CreateCommittedResource(
+			&heapProperties, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, nullptr,
+			IID_PPV_ARGS( &pTexResource )
+		), true
+	);
+
+	UINT64 uploadBufferSize = GetRequiredIntermediateSize( pTexResource, 0, 1 );
+	heapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
+
+	desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	desc.Alignment = 0;                          
+	desc.Width = uploadBufferSize;           // 버퍼 바이트 크기
+	desc.Height = 1;
+	desc.DepthOrArraySize = 1;
+	desc.MipLevels = 1;
+	desc.Format = DXGI_FORMAT_UNKNOWN;        // 버퍼는 UNKNOWN
+	desc.SampleDesc.Count = 1;
+	desc.SampleDesc.Quality = 0;
+	desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR; // 버퍼는 ROW_MAJOR
+	desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+	DISPLAY_ERROR_DX_HR(
+		device->CreateCommittedResource(
+			&heapProperties, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+			IID_PPV_ARGS( &pUploadBuffer )
+		), false
+	);
+
+	*outDefaultTex = pTexResource;
+	*outUploadTex = pUploadBuffer;
+}
+
+void UpdateTexture( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, ID3D12Resource* pDestTexResource, ID3D12Resource* pSrcTexResource )
+{
+	const DWORD MAX_SUB_RESOURCE_NUM = 32;
+	D3D12_PLACED_SUBRESOURCE_FOOTPRINT Footprint[MAX_SUB_RESOURCE_NUM] = {};
+	UINT	Rows[MAX_SUB_RESOURCE_NUM] = {};
+	UINT64	RowSize[MAX_SUB_RESOURCE_NUM] = {};
+	UINT64	TotalBytes = 0;
+
+	D3D12_RESOURCE_DESC Desc = pDestTexResource->GetDesc();
+	if ( Desc.MipLevels > (UINT)_countof( Footprint ) )
+		__debugbreak();
+
+	device->GetCopyableFootprints( &Desc, 0, Desc.MipLevels, 0, Footprint, Rows, RowSize, &TotalBytes );
+
+	transitionResourceState( cmdList, pDestTexResource, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST );
+	for ( DWORD i = 0; i < Desc.MipLevels; i++ )
+	{
+		D3D12_TEXTURE_COPY_LOCATION	destLocation = {};
+		destLocation.PlacedFootprint = Footprint[i];
+		destLocation.pResource = pDestTexResource;
+		destLocation.SubresourceIndex = i;
+		destLocation.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+
+		D3D12_TEXTURE_COPY_LOCATION	srcLocation = {};
+		srcLocation.PlacedFootprint = Footprint[i];
+		srcLocation.pResource = pSrcTexResource;
+		srcLocation.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+
+		cmdList->CopyTextureRegion( &destLocation, 0, 0, 0, &srcLocation, nullptr );
+	}
+	transitionResourceState( cmdList, pDestTexResource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
+}
+
 void __createRTV( ID3D12Device* device, Texture& tex,
 	const D3D12_RENDER_TARGET_VIEW_DESC* rtvDesc, DescriptorPool& pool
 ) {

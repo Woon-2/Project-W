@@ -4,6 +4,7 @@
 #include "gfxUtil.hpp"
 #include "shader.hpp"
 #include "mesh.hpp"
+#include "font.hpp"
 
 #include "sharedResources.hpp"
 #include "samplePipeline.hpp"
@@ -122,6 +123,12 @@ struct RequestSpriteAnimLoad {
 	std::unordered_map<std::string, std::vector<Texture>>* pSpritesHashMap;
 };
 
+struct RequestTextImageLoad {
+	UINT width;
+	UINT height;
+	TextImage* pDest;
+};
+
 // 렌더링을 총괄 책임지는 클래스
 // - 장치 초기화: setupDXGI, init, createSwapChain
 // - 객체 그리기: addDrawEvent로 객체마다 그려지길 원하는 파이프라인에 등록,
@@ -202,6 +209,7 @@ public:
 	void addRequestSkyboxLoad(const RequestSkyboxLoad& request);
 	void addRequestTextureLoad( const RequestTextureLoad& request );
 	void addRequestSpritesLoad( const RequestSpriteAnimLoad& request );
+	void addRequestTextImageLoad( const RequestTextImageLoad& request );
 
 	// 파이프라인들이 자체적으로 사용하는 리소스들과
 	// addRequestXXLoad 꼴의 함수로 요청된 리소스들을 로드한다.
@@ -209,6 +217,10 @@ public:
 
 	// 요청된 드로우콜들을 모아 객체들을 그리고 화면에 띄운다.
 	void render();
+
+	void WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, void* pFontObjHandle, const WCHAR* wchString, DWORD dwLen );
+	void UpdateTextureWithTextImage( TextImage* srcImage, UINT srcWidth, UINT srcHeight );
+	void UpdateTexure( ID3D12Resource* pDestTexResource, ID3D12Resource* pSrcTexResource );
 
 private:
 	// 공용 샘플러들 생성
@@ -297,6 +309,9 @@ private:
 	UIPipeline::Resources resourcesUIPipeline_{};
 	UIPipeline::FrameData frameDataUIPipeline_{};
 
+	// Font
+	Font font_{};
+	FontHandle tahomaFont_{};
 
 	std::map<std::string, Fence> fences_{};
 
@@ -306,6 +321,7 @@ private:
 	std::vector<RequestSkyboxLoad> requestsSkyboxLoad_{};
 	std::vector<RequestTextureLoad> requestsTextureLoad_{};
 	std::vector<RequestSpriteAnimLoad> requestsSpritesLoad_{};
+	std::vector<RequestTextImageLoad> requestsTextImageLoad_{};
 
 	ThreadPool* threadPool_ = nullptr;	// 설정되어있을 경우 멀티스레드로 동작한다.
 };

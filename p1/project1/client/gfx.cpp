@@ -223,6 +223,10 @@ void GFX::init() {
 	// 공용 샘플러들 생성
 	createSamplers();
 
+	// Font 초기화
+	font_.init( device_.Get(), cmdQ_.Get(), 1024u, 256u, ghWnd );
+	tahomaFont_ = font_.CreateFontObject( L"Tahoma", 16.0f);
+
 	// Root Signatures & Shaders 생성
 	auto defaultRootSig = DefaultRootSig{};
 	defaultRootSig.build(device_.Get());
@@ -557,6 +561,11 @@ void GFX::addRequestSpritesLoad( const RequestSpriteAnimLoad& request )
 	requestsSpritesLoad_.push_back( request );
 }
 
+void GFX::addRequestTextImageLoad( const RequestTextImageLoad& request )
+{
+	requestsTextImageLoad_.push_back( request );
+}
+
 // 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 void GFX::addDrawEvent(const SkyboxPipeline::DrawEvent& drawEvent) {
 	drawEventsSkyboxPipeline_.push_back(drawEvent);
@@ -649,6 +658,12 @@ void GFX::loadAssets() {
 
 	dumpLog();
 
+	// load text texture
+	for( auto& request : requestsTextImageLoad_ ) {
+		*request.pDest = TextImage( device_.Get(), request.width, request.height, srvTexPool_ );
+	}
+
+	dumpLog();
 
 	// 명령 기록 끝, 명령 실행
 	DISPLAY_ERROR_DX_VOID(cmdList->Close(), false);
@@ -1005,6 +1020,84 @@ void GFX::render() {
 
 	// 프레임 인덱스 갱신
 	++frameIdx_;
+}
+
+void GFX::WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, void* pFontObjHandle, const WCHAR* wchString, DWORD dwLen )
+{
+	font_.WriteTextToBitmap( pDestImage, DestWidth, DestHeight, DestPitch, piOutWidth, piOutHeight, &tahomaFont_, wchString, dwLen );
+}
+
+void GFX::UpdateTextureWithTextImage( TextImage* srcImage, UINT srcWidth, UINT srcHeight )
+{
+	ID3D12Resource* pDestTexResource = srcImage->texture.res.Get();
+	ID3D12Resource* pUploadBuffer = srcImage->textureUpload.res.Get();
+
+	D3D12_RESOURCE_DESC Desc = pDestTexResource->GetDesc();
+	if ( srcWidth > Desc.Width )
+	{
+		DISPLAY_ERROR_STR( false, "[GFX Error] GFX::UpdateTextureWithTextImage: 소스 이미지의 너비가 대상 텍스처의 너비보다 큽니다.", true );
+	}
+	if ( srcHeight > Desc.Height )
+	{
+		DISPLAY_ERROR_STR( false, "[GFX Error] GFX::UpdateTextureWithTextImage: 소스 이미지의 높이가 대상 텍스처의 높이보다 큽니다.", true );
+	}
+	D3D12_PLACED_SUBRESOURCE_FOOTPRINT Footprint;
+	UINT	Rows = 0;
+	UINT64	RowSize = 0;
+	UINT64	TotalBytes = 0;
+
+	device_->GetCopyableFootprints( &Desc, 0, 1, 0, &Footprint, &Rows, &RowSize, &TotalBytes );
+
+	BYTE* pMappedPtr = nullptr;
+	CD3DX12_RANGE readRange( 0, 0 );
+
+	DISPLAY_ERROR_DX_HR( pUploadBuffer->Map( 0, &readRange, reinterpret_cast<void**>(&pMappedPtr) ), true );
+
+	const BYTE* pSrc = srcImage->pData.data();
+
+	BYTE* pDest = pMappedPtr;
+	for ( UINT y = 0; y < srcHeight; y++ )
+	{
+		memcpy( pDest, pSrc, srcWidth * 4 );
+		pSrc += (srcWidth * 4);
+		pDest += Footprint.Footprint.RowPitch;
+	}
+	// Unmap
+	pUploadBuffer->Unmap( 0, nullptr );
+}
+
+void GFX::UpdateTexure( ID3D12Resource* pDestTexResource, ID3D12Resource* pSrcTexResource )
+{
+	auto& fence = fences_.at( "LoadFence" );
+
+	// 명령 리스트와 명령 할당자 할당
+	CommandContext cmdCtx{};
+	DISPLAY_ERROR_STR(
+		cmdListPool_.allocOne( CommandListUsage::ResourceLoading, cmdCtx ),
+		"[GFX Error] GFX::loadMeshes: 사용 가능한 명령 리스트가 없습니다. "
+		"CommandListPool::init 호출이 이루어지지 않았거나, 할당받은 명령 리스트가 반납되지 않았거나,"
+		"너무 많은 명령 리스트의 할당이 요청되었습니다.",
+		false
+	);
+	auto& cmdList = cmdCtx.cmdList;
+	auto& cmdAlloc = cmdCtx.cmdAlloc;
+
+	// 명령 리스트 초기화
+	DISPLAY_ERROR_DX_VOID( cmdAlloc->Reset(), false );
+	DISPLAY_ERROR_DX_VOID( cmdList->Reset( cmdAlloc.Get(), nullptr ), false );
+
+	::UpdateTexture( device_.Get(), cmdList.Get(), pDestTexResource, pSrcTexResource);
+
+	// 명령 기록 끝, 명령 실행
+	DISPLAY_ERROR_DX_VOID( cmdList->Close(), false );
+
+	ID3D12CommandList* tmpCmdLists[] = { cmdList.Get() };
+
+	DISPLAY_ERROR_DX_VOID( cmdQ_->ExecuteCommandLists( 1u, tmpCmdLists ), false );
+
+	fence.associatedCmdCtxs_[etoi( CommandListUsage::ResourceLoading )].push_back( std::move( cmdCtx ) );
+	signalFence( "LoadFence" );
+	waitOnFence( "LoadFence" );
 }
 
 // 공용 샘플러들 생성

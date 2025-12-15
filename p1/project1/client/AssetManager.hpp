@@ -20,6 +20,7 @@ public:
 	const SpriteAnimationClip* muzzleFlashAnimation() const { return &muzzleFlashAnimation_; }
 	const Texture* playerHpLine() const { return &playerHpLine_; }
 	const Texture* playerHpFrame() const { return &playerHpFrame_; }
+	TextImage* textPlayerHp() { return &textPlayerHp_; }
 	const std::vector<std::shared_ptr<AnimClip>>& vanguardAnimations() const { return vanguardAnimations_; }
 
 private:
@@ -35,6 +36,7 @@ private:
 	Texture playerHpFrame_{};
 	SpriteAnimationClip slimeAnimation_{};
 	SpriteAnimationClip muzzleFlashAnimation_{};
+	TextImage textPlayerHp_;
 };
 
 #endif	// __AssetManager_HPP

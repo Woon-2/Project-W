@@ -29,6 +29,13 @@ namespace UIPipeline {
 			XMFLOAT2( 0.0f, 1.0f )
 		};
 
+		//static const auto uv = std::vector<XMFLOAT2>{
+		//	XMFLOAT2( 0.0f, 1.0f ),
+		//	XMFLOAT2( 0.0f, 0.0f ),
+		//	XMFLOAT2( 1.0f, 0.0f ),
+		//	XMFLOAT2( 1.0f, 1.0f )
+		//};
+
 		static const auto indices = std::vector<u16t>{
 			0u, 1u, 2u,
 			0u, 2u, 3u
