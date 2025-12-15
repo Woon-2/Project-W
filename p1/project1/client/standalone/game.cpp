@@ -183,6 +183,13 @@ void Game::update(Milliseconds deltaTime) {
 			for (auto& ui : playerHpUIs_) {
 				ui.eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, &ui);
 			}
+
+			for (auto& ui : playerHpUIs_) {
+				if (ui.hp() == 0) {
+					holdEvent(eventList_, EvDeath{});
+					playerDead_ = true;
+				}
+			}
 			break;
 
 		case EventType::MuzzleFlash: {
@@ -209,6 +216,11 @@ void Game::update(Milliseconds deltaTime) {
 			for (auto& ui : playerHpUIs_) {
 				ui.eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, &ui);
 			}
+			break;
+
+		case EventType::Death:
+			player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
+			break;
 
 		default:
 			break;
@@ -435,9 +447,10 @@ void Game::processInput(Milliseconds deltaTime) {
 
 	// 서로 상쇄되는 입력들을 감안해서,
 	// 현재 이동 입력이 있으면 플레이어 객체의 속도를 변화시킨다.
+	// + 플레이어가 죽으면 움직이지 않는다.
 
-	const auto moveXSign = (keyboardStateCurr_['D'] & 0x80) - (keyboardStateCurr_['A'] & 0x80);
-	const auto moveZSign = (keyboardStateCurr_['W'] & 0x80) - (keyboardStateCurr_['S'] & 0x80);
+	const auto moveXSign = !playerDead_ * ( (keyboardStateCurr_['D'] & 0x80) - (keyboardStateCurr_['A'] & 0x80) );
+	const auto moveZSign = !playerDead_ * ( (keyboardStateCurr_['W'] & 0x80) - (keyboardStateCurr_['S'] & 0x80) );
 	const auto moveThreshold = 0.1f;
 
 	if (moveXSign || moveZSign) {
@@ -494,7 +507,7 @@ void Game::processInput(Milliseconds deltaTime) {
 	}
 
 	// 총 장전
-	if ( keyboardStateCurr_['R'] & 0x80 ) {
+	if ( !playerDead_ && keyboardStateCurr_['R'] & 0x80 ) {
 		if (!reloading_) {
 			holdEvent(eventList_, EvReloading{});
 			pTimer_->enqueueJob( DelayedJob{
@@ -505,7 +518,7 @@ void Game::processInput(Milliseconds deltaTime) {
 	}
 
 	// 총 발사: 총구 화염 애니메이션 재생
-	if ( (keyboardStateCurr_[VK_LBUTTON] & 0x80)
+	if ( !playerDead_ && (keyboardStateCurr_[VK_LBUTTON] & 0x80)
 		&& !(keyboardStatePrev_[VK_LBUTTON] & 0x80)
 	) {
 		if (!reloading_) {
@@ -515,7 +528,7 @@ void Game::processInput(Milliseconds deltaTime) {
 	}
 
 	// 임시: 피격, 피격 애니메이션 및 이펙트 재생
-	if ( (keyboardStateCurr_[VK_RBUTTON] & 0x80)
+	if ( !playerDead_ && (keyboardStateCurr_[VK_RBUTTON] & 0x80)
 		&& !(keyboardStatePrev_[VK_RBUTTON] & 0x80)
 	) {
 		holdEvent(eventList_, EvHit{});
@@ -528,11 +541,8 @@ void Game::processInput(Milliseconds deltaTime) {
 
 	switch (cameraMode_) {
 	case CameraMode::ThirdPerson: {
-		auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f),
-			mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left))	
-		);
-
-		player_->setOrient(player_->orient() * yaw);
+		const auto yaw = mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left));
+		auto yawRotation = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), yaw);
 
 		cameraPitch_ = std::clamp(
 			static_cast<float>(cameraPitch_) + mouseDeltaY_ * mouseSensitivity / static_cast<float>(gClientRect.bottom - gClientRect.top),
@@ -540,18 +550,26 @@ void Game::processInput(Milliseconds deltaTime) {
 			mu::pi * 0.3f
 		);
 
-		camera_.setOffsetFromTargetPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, mu::Radian(0.f)) );
+		if (!playerDead_) {
+			player_->setOrient(player_->orient() * yawRotation);
+			camera_.setOffsetFromTargetPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, mu::Radian(0.f)) );
+		}
+		else {
+			cameraYaw_ += yaw;
+			camera_.setOffsetFromTargetPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, cameraYaw_) );
+		}
 
 		mouseDeltaX_ = 0;
 		mouseDeltaY_ = 0;
 		break;
 	}
 	case CameraMode::FirstPerson: {
-		auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f),
-			mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left))	
-		);
+		const auto yaw = mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left));
+		auto yawRotation = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), yaw);
 
-		player_->setOrient(player_->orient() * yaw);
+		if (!playerDead_) {
+			player_->setOrient(player_->orient() * yawRotation);
+		}
 
 		cameraPitch_ = std::clamp(
 			static_cast<float>(cameraPitch_) + mouseDeltaY_ * mouseSensitivity / static_cast<float>(gClientRect.bottom - gClientRect.top),
@@ -559,7 +577,14 @@ void Game::processInput(Milliseconds deltaTime) {
 			mu::pi * 0.3f
 		);
 
-		camera_.setXXPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, mu::Radian(0.f)) );
+		if (!playerDead_) {
+			player_->setOrient(player_->orient() * yawRotation);
+			camera_.setXXPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, mu::Radian(0.f)) );
+		}
+		else {
+			cameraYaw_ += yaw;
+			camera_.setXXPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, cameraYaw_) );
+		}
 
 		mouseDeltaX_ = 0;
 		mouseDeltaY_ = 0;

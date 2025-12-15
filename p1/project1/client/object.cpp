@@ -108,13 +108,30 @@ void AnimBlenderVanguard::update(Seconds deltaTime, void* pVoidOwner) {
 		accMotionless_ += deltaTime;
 	}
 
-	if (cooldownHit_ > 0ms) {
+	// death 애니메이션은 가장 우선순위가 높게 계산된다.
+	// cooldownDeath_의 값이 0보다 큰 동안은 다른 애니메이션과 최종적으로 블렌딩되며
+	// 페이드인이 이루어지고, cooldownDeath_의 값이 0이 되면 완전히 1의 비율을 차지한다.
+	if (dead_) {
+		// 1.5배속 재생
+		animTimeDeath_ += deltaTime * 1.5f;
+
+		if (cooldownDeath_ > 0ms) {
+			tDeath_ = 1.f - std::clamp( cooldownDeath_ / 300ms, 0.f, 1.f );
+		}
+		else {
+			tDeath_ = 1.f;
+		}
+
+		cooldownDeath_ -= deltaTime;
+	}
+	// hit 애니메이션 블렌딩 비율은 death 다음으로 가장 우선순위가 높게 계산된다.
+	// 다른 모든 애니메이션의 블렌딩 비율을 낮추고 최대 0.75만큼의 비율을 차지한다.
+	// 모든 블렌딩이 일어난 후에 결과 프레임과 hit 애니메이션 프레임을
+	// tHit_으로 보간하게 된다.
+	else if (cooldownHit_ > 0ms) {
 		// 3배속 재생
 		animTimeHit_ += deltaTime * 3.f;
-		// hit 애니메이션 블렌딩 비율은 가장 우선순위가 높게 계산된다.
-		// 다른 모든 애니메이션의 블렌딩 비율을 낮추고 최대 0.75만큼의 비율을 차지한다.
-		// 모든 블렌딩이 일어난 후에 결과 프레임과 hit 애니메이션 프레임을
-		// tHit_으로 보간하게 된다.
+		
 		tHit_ = 0.75f * std::clamp( cooldownHit_ / 600ms, 0.f, 1.f );
 
 		cooldownHit_ -= deltaTime;
@@ -141,6 +158,7 @@ void AnimBlenderVanguard::onCalcLocal(PassKey<AnimSystem>) {
 	updateFrames("Vanguard_Idle", animTimeIdle_);
 	updateFrames("Vanguard_Idle_Aim", animTimeIdle_);
 	updateFrames("Vanguard_Hit", animTimeHit_);
+	updateFrames("Vanguard_Death", animTimeDeath_);
 	updateFrames("Vanguard_Run_Forward", animTimeRun_);
 	updateFrames("Vanguard_Run_Backward", animTimeRun_);
 	updateFrames("Vanguard_Run_Left", animTimeRun_);
@@ -150,6 +168,7 @@ void AnimBlenderVanguard::onCalcLocal(PassKey<AnimSystem>) {
 	auto& framesIdle = curFrames("Vanguard_Idle");
 	auto& framesIdleAim = curFrames("Vanguard_Idle_Aim");
 	auto& framesHit = curFrames("Vanguard_Hit");
+	auto& framesDeath = curFrames("Vanguard_Death");
 	auto& framesRunForward = curFrames("Vanguard_Run_Forward");
 	auto& framesRunBackward = curFrames("Vanguard_Run_Backward");
 	auto& framesRunLeft = curFrames("Vanguard_Run_Left");
@@ -168,6 +187,8 @@ void AnimBlenderVanguard::onCalcLocal(PassKey<AnimSystem>) {
 		framesBlended_[i] = sumWeightedAnimFrames(frames);
 		// hit animation 보간 (nlerp 쓰면 팔꿈치 꼬임)
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i], tHit_);
+		// death animation 보간
+		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i], tDeath_);
 	}
 	std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
 }
@@ -199,6 +220,12 @@ void AnimBlenderVanguard::EventBus::receive(const BasicEvent* event, Seconds del
 		pOwner->animTimeHit_ = 0s;
 		pOwner->cooldownHit_ = 600ms;
 		holdEvent(evList, EvBlood{});
+		break;
+
+	case EventType::Death:
+		pOwner->animTimeDeath_ = 0s;
+		pOwner->cooldownDeath_ = 200ms;
+		pOwner->dead_ = true;
 		break;
 
 	default:
@@ -471,6 +498,17 @@ void Object::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Event
 		break;
 
 	case EventType::Hit:
+		if (pOwner) {
+			if (pOwner->renderState_.animBlender) {
+				pOwner->renderState_.animBlender->eventBus()->receive(
+					event, deltaTime, evList, timer,
+					pOwner->renderState_.animBlender.get()
+				);
+			}
+		}
+		break;
+
+	case EventType::Death:
 		if (pOwner) {
 			if (pOwner->renderState_.animBlender) {
 				pOwner->renderState_.animBlender->eventBus()->receive(

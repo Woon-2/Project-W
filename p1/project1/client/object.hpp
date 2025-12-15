@@ -32,21 +32,28 @@ private:
 	Seconds accMotionless_ = 0s;
 	Milliseconds cooldownFire_ = 0ms;
 	Milliseconds cooldownHit_ = 0ms;
+	Milliseconds cooldownDeath_ = 0ms;
 	Seconds animTimeIdle_ = 0s;
 	Seconds animTimeHit_ = 0s;
 	Seconds animTimeIdleAim_ = 0s;
 	Seconds animTimeRun_ = 0s;
+	Seconds animTimeDeath_ = 0s;
 	float tIdle_ = 0.f;
 	float tIdleAim_ = 0.f;
 	float tRunForward_ = 0.f;
 	float tRunBackward_ = 0.f;
 	float tRunLeft_ = 0.f;
 	float tRunRight_ = 0.f;
-	// hit 애니메이션 블렌딩 비율은 가장 우선순위가 높게 계산된다.
-	// 다른 모든 애니메이션의 블렌딩 비율을 낮추고 최대 0.5만큼의 비율을 차지한다.
+	// hit 애니메이션 블렌딩 비율은 death 다음으로 가장 우선순위가 높게 계산된다.
+	// 다른 모든 애니메이션의 블렌딩 비율을 낮추고 최대 0.75만큼의 비율을 차지한다.
 	// 모든 블렌딩이 일어난 후에 결과 프레임과 hit 애니메이션 프레임을
 	// tHit_으로 보간하게 된다.
 	float tHit_ = 0.f;
+	// death 애니메이션은 가장 우선순위가 높게 계산된다.
+	// cooldownDeath_의 값이 0보다 큰 동안은 다른 애니메이션과 최종적으로 블렌딩되며
+	// 페이드인이 이루어지고, cooldownDeath_의 값이 0이 되면 완전히 1의 비율을 차지한다.
+	float tDeath_ = 0.f;
+	bool dead_ = false;
 };
 
 struct PhysicState {
