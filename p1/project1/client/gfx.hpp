@@ -15,8 +15,6 @@
 #include "uiPipeline.hpp"
 #include "spriteAnimation.hpp"
 
-// hit 애니메이션
-// 피격 이펙트
 // 텍스트 머지
 // 장전
 // 크로스헤어
