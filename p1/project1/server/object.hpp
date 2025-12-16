@@ -82,13 +82,6 @@ public:
 	void setCameraPitch(float pitch) { cameraPitch_ = pitch; }
 	float cameraPitch() const { return cameraPitch_; }
 
-	void setMoveSign(int32 xSign, int32 zSign) {
-		moveXSign_ = xSign;
-		moveZSign_ = zSign;
-	}
-	int32 moveXSign() const { return moveXSign_; }
-	int32 moveZSign() const { return moveZSign_; }
-
 private:
 	// object(player) ¡¬«•¿« Ω∫≥¿º¶¿ª ¿˙¿Â«œ±‚ ¿ß«— oldX_, oldZ_
 	float oldX_{};
@@ -106,9 +99,6 @@ private:
 
 	u32t materialSetIdx_ = 0u;
 	i32t id_{ -1 };
-
-	int32 moveXSign_{};
-	int32 moveZSign_{};
 };
 
 #endif	// __object_HPP

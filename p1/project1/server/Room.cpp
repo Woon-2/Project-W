@@ -15,46 +15,7 @@ void Room::init(const Level& levelData) {
 }
 
 void Room::update(Milliseconds deltaTime) {
-	processMessage();
-
-	// 속도 갱신
-	for (auto& [id, user] : idUserMap_) {
-		user->setOldPos(user->pos().x(), user->pos().z());
-		auto moveXSign = user->moveXSign();
-		auto moveZSign = user->moveZSign();
-
-		const auto maxSpeed = 10.f;	// 10m/s
-		const Seconds zeroToMax = 0.5s;
-		const Seconds maxToZero = 0.2s;
-		const auto moveThreshold = 0.1f;
-
-		if (moveXSign || moveZSign) {
-			const auto moveDirection = mu::NVec3(
-				static_cast<float>(moveXSign) * user->right() + static_cast<float>(moveZSign) * user->forward()
-			);
-
-			const auto moveAmount = Seconds(deltaTime).count() * maxSpeed / zeroToMax.count();
-			user->physicState().velocity += mu::Vec3(moveDirection) * moveAmount;
-
-			if (user->physicState().velocity.len2() > maxSpeed * maxSpeed) {
-				user->physicState().velocity *= (maxSpeed / user->physicState().velocity.len());
-			}
-		}
-		else if (user->physicState().velocity.len2() > moveThreshold * moveThreshold) {
-			const auto moveAmount = Seconds(deltaTime).count() * maxSpeed / maxToZero.count();
-
-			if (moveAmount * moveAmount > user->physicState().velocity.len2()) {
-				user->physicState().velocity = mu::Vec3();
-			}
-			else {
-				const auto moveDirection = mu::NVec3(-user->physicState().velocity);
-				user->physicState().velocity += mu::Vec3(moveDirection) * moveAmount;
-			}
-		}
-		else {
-			user->physicState().velocity = mu::Vec3();
-		}
-	}
+	processMessage(deltaTime);
 
 	// 물리 시뮬레이션
 	std::vector<Object*> allObjects;
@@ -90,7 +51,7 @@ void Room::update(Milliseconds deltaTime) {
 	}
 }
 
-void Room::processMessage() {
+void Room::processMessage(Milliseconds deltaTime) {
 	const auto bulkSize = 1000u;
 	auto messages = std::vector<LogicMessage>(bulkSize);
 
@@ -113,12 +74,6 @@ void Room::processMessage() {
 		case LogicMsgType::UserLeave:
 			leave(messages[i].userId);
 			break;
-
-		case LogicMsgType::UserMoveInput: {
-			auto user = idUserMap_[messages[i].userId];
-			user->setMoveSign(messages[i].moveXSign, messages[i].moveZSign);
-			break;
-		}
 
 		case LogicMsgType::UserMouseMove: {
 			auto user = idUserMap_[messages[i].userId];
@@ -149,34 +104,14 @@ void Room::processMessage() {
 			auto user = idUserMap_[messages[i].userId];
 
 			auto clientPos = mu::Vec3(DirectX::XMLoadFloat3(&messages[i].position));
-			auto serverPos = user->pos();
+			auto clientVel = mu::Vec3(DirectX::XMLoadFloat3(&messages[i].velocity));
+			const auto dist = (clientPos - user->pos()).len();
+			const auto maxSpeed = 10.f;
+			const auto speed = std::min(clientVel.len(), maxSpeed);
+			const auto inferredTime = dist / speed;
+			
+			if (inferredTime > deltaTime.count()) {
 
-			const auto positionDiff = clientPos - serverPos;
-			if (positionDiff.len() > 0.2f) {
-				auto scCorrectPosPacket = Packet{
-					.header = {
-						.size = sizeof(PacketHeader) + sizeof(SCCorrectPosPacket),
-						.id = static_cast<uint16>(PacketType::scCorrectPos)
-					},
-					.scCorrectPos = {
-						.playerId = user->getId(),
-						.pos = serverPos.getXmf()
-					}
-				};
-
-				int32 packetSize = sizeof(Packet);
-				auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
-				sendBuffer->copyData(&scCorrectPosPacket, packetSize);
-				GameSessionManager::findGameSession(user->getId())->send(sendBuffer);
-			}
-			else {
-				user->setPos(mu::Vec3(DirectX::XMLoadFloat3(&messages[i].position)));
-				//user->setVelocity(mu::Vec3(DirectX::XMLoadFloat3(&messages[i].velocity)));
-				
-				const auto forward = mu::NVec3(DirectX::XMLoadFloat3(&messages[i].forward));
-				const auto yawRadian = std::atan2(forward.x(), forward.z());
-				const auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), mu::Radian(yawRadian));
-				user->setOrient(yaw);
 			}
 			break;
 		}
@@ -317,4 +252,8 @@ void Room::broadcast(const SPSendBuffer& sendBuffer) {
 bool Room::empty() {
 	std::lock_guard<std::recursive_mutex> lock(mtx_);
 	return users_.empty();
+}
+
+bool Room::validateMove(mu::Vec3 clientPos, mu::Vec3 clientVel, Milliseconds deltaTime) {
+	return false;
 }

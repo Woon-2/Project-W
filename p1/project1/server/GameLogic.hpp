@@ -9,7 +9,6 @@ enum class LogicMsgType : uint8 {
 	RemoveRoom,
 	UserEnter,
 	UserLeave,
-	UserMoveInput,
 	UserMouseMove,
 	UserMoveState,
 };
@@ -18,8 +17,6 @@ struct LogicMessage {
 	LogicMsgType type{LogicMsgType::None};
 	int32 userId{};
 	int32 roomId{};
-	int16 moveXSign{};
-	int16 moveZSign{};
 	float playerYawRadian{};
 	float cameraPitchRadian{};
 	DirectX::XMFLOAT3 position{};

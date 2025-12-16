@@ -65,7 +65,6 @@ void GameLogic::processMessage() {
 
 		case LogicMsgType::UserEnter:
 		case LogicMsgType::UserLeave:
-		case LogicMsgType::UserMoveInput:
 		case LogicMsgType::UserMouseMove:
 		case LogicMsgType::UserMoveState:
 			idRoomMap_[messages[i].roomId]->enqueueMessage(messages[i]);

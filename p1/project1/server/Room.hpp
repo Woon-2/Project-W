@@ -17,16 +17,14 @@ public:
 	void update(Milliseconds deltaTime);
 
 	void enqueueMessage(const LogicMessage& msg) { msgQueue_.enqueue(msg); }
-	void processMessage();
+	void processMessage(Milliseconds deltaTime);
 	
 	void enter(int32 playerId);
 	void leave(int32 playerId);
 	void broadcast(const SPSendBuffer& packet);
 	bool empty();
 
-	bool checkCollision(const GameSession& other) const {
-		
-	}
+	bool validateMove(mu::Vec3 clientPos, mu::Vec3 clientVel, Milliseconds deltaTime);
 
 	void setRoomId(int32 roomId) { roomId_ = roomId; }
 	int32 getRoomId() const { return roomId_; }

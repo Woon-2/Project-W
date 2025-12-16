@@ -110,12 +110,6 @@ struct SCLeavePacket {
 	std::int32_t playerId;
 };
 
-struct CSMoveInputPacket {
-	std::int16_t moveXSign;
-	std::int16_t moveZSign;
-	std::uint32_t timeStamp;
-};
-
 struct CSMouseMovePacket {
 	float playerYawRadian;
 	float cameraPitchRadian;
@@ -168,7 +162,6 @@ struct Packet {
 		CSLeavePacket csLeave;
 		SCLeavePacket scLeave;
 
-		CSMoveInputPacket csMoveInput;
 		CSMouseMovePacket csMouseMove;
 		CSMoveStatePacket csMoveState;
 		SCMouseMovePacket scMouseMove;
