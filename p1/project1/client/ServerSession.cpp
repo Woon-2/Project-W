@@ -97,6 +97,16 @@ int32 ServerSession::onRecvPacket(uint8* buffer, int32 len) {
 		break;
 	}
 
+	case PacketType::scRollback: {
+		auto message = Online::Message{
+			.type = Online::MsgType::PlayerRollback,
+			.objectId = packet->scRollback.playerId,
+			.pos = DirectX::XMLoadFloat3(&packet->scRollback.pos)
+		};
+		messageQueue.enqueue(message);
+		break;
+	}
+
 	case PacketType::scMove: {
 		auto message = Online::Message{
 			.type = Online::MsgType::PlayerMove,

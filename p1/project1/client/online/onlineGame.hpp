@@ -18,6 +18,7 @@ enum class MsgType : u8t {
 	SetupPlayer,
 	SetupCube,
 	PlayerMouseMove,
+	PlayerRollback,
 	PlayerMove,
 };
 
@@ -88,7 +89,6 @@ private:
 		ThirdPerson
 	};
 
-	void sendMoveInputPacket(i32t moveXSign, i32t moveZSign);
 	void sendMouseMovePacket();
 	void sendMoveStatePacket();
 	void sendEnterRoomPacket(i32t roomId);

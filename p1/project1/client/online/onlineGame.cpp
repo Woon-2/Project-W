@@ -65,7 +65,7 @@ void Game::update(Milliseconds deltaTime) {
 	// 남은 메시지가 있으면 모두 꺼내기
 	Message msg;
 	while (messageQueue.try_dequeue(msg)) {
-		messageQueue.enqueue(msg);
+		messages.push_back(msg);
 		++size;
 	}
 
@@ -103,6 +103,12 @@ void Game::update(Milliseconds deltaTime) {
 			break;
 		}
 
+		case MsgType::PlayerRollback: {
+			auto& player = idPlayerMap_[msg.objectId];
+			player->setPos(msg.pos);
+			break;
+		}
+
 		case MsgType::PlayerMove: {
 			auto& player = idPlayerMap_[msg.objectId];
 
@@ -130,7 +136,6 @@ void Game::update(Milliseconds deltaTime) {
 	// 물리량 갱신의 주기가 돌아왔는지 판단하고
 	// 주기가 되었다면 물리량 갱신을 수행한다.
 	physicUpdateAcc_ += deltaTime;
-	moveStateSendAcc_ += deltaTime;
 
 	if ( physicUpdateAcc_ >= physicUpdateInterval ) {
 		// 물리 시뮬레이션을 위해
@@ -151,11 +156,13 @@ void Game::update(Milliseconds deltaTime) {
 		allObjects.clear( );
 	}
 
-	std::cout << "player pos : " << player_->pos().x() << ", " << player_->pos().y() << ", " << player_->pos().z() << '\n';
-
-	if (moveStateSendAcc_ >= moveStateSendInterval_) {
+	//std::cout << "player pos : " << player_->pos().x() << ", " << player_->pos().y() << ", " << player_->pos().z() << '\n';
+	if (keyboardStateCurr_['W'] & 0x80 ||
+		keyboardStateCurr_['A'] & 0x80 ||
+		keyboardStateCurr_['S'] & 0x80 ||
+		keyboardStateCurr_['D'] & 0x80
+	) {
 		sendMoveStatePacket();
-		moveStateSendAcc_ -= moveStateSendInterval_;
 	}
 
 	// 물리량 갱신 주기에 대해,
@@ -261,25 +268,6 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	default:
 		return DefWindowProcA(hWnd, msg, wParam, lParam);
 	}
-}
-
-void Game::sendMoveInputPacket(i32t moveXSign, i32t moveZSign) {
-	auto moveStartPacket = Packet{
-		.header = {
-			.size = sizeof(PacketHeader) + sizeof(CSMoveInputPacket),
-			.id = static_cast<std::uint16_t>(PacketType::csMoveInput)
-		},
-		.csMoveInput = {
-			.moveXSign = static_cast<std::int16_t>(moveXSign),
-			.moveZSign = static_cast<std::int16_t>(moveZSign),
-			.timeStamp = static_cast<u32t>(HighResolutionClock::now().time_since_epoch().count())
-		}
-	};
-
-	i32t packetSize = sizeof(Packet);
-	auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
-	sendBuffer->copyData(&moveStartPacket, packetSize);
-	serverSession_->send(sendBuffer);
 }
 
 void Game::sendMouseMovePacket() {
@@ -462,9 +450,6 @@ void Game::processInput(Milliseconds deltaTime) {
 			break;
 		}
 		}
-
-		// 이동 입력 패킷 전송
-		sendMoveInputPacket(moveXSign, moveZSign);
 
 		if (keyboardStateCurr_[VK_LBUTTON] & 0x80) {
 
