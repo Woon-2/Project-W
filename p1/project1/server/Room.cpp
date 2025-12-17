@@ -25,30 +25,6 @@ void Room::update(Milliseconds deltaTime) {
 	);
 
 	physicSystem_.step(allObjects, 1s / 60.f);
-
-	for(auto& [id, user] : idUserMap_) {
-		if(user->oldX() != user->pos().x() || user->oldZ() != user->pos().z()) {
-			/*std::cout << "Player " << user->getId() << " moved to (" 
-				<< user->pos().x() << ", " << user->pos().y() << ", " << user->pos().z() << ")\n";*/
-			auto scMovePacket = Packet{
-				.header = {
-					.size = sizeof(PacketHeader) + sizeof(SCMovePacket),
-					.id = static_cast<uint16>(PacketType::scMove)
-				},
-				.scMove = {
-					.playerId = user->getId(),
-					.pos = user->pos().getXmf(),
-					.playerYawRadian = std::atan2(user->forward().x(), user->forward().z()),
-					.cameraPitchRadian = user->cameraPitch()
-				}
-			};
-
-			int32 packetSize = sizeof(Packet);
-			auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
-			sendBuffer->copyData(&scMovePacket, packetSize);
-			broadcast(sendBuffer);
-		}
-	}
 }
 
 void Room::processMessage(Milliseconds deltaTime) {
@@ -103,15 +79,57 @@ void Room::processMessage(Milliseconds deltaTime) {
 		case LogicMsgType::UserMoveState: {
 			auto user = idUserMap_[messages[i].userId];
 
-			auto clientPos = mu::Vec3(DirectX::XMLoadFloat3(&messages[i].position));
-			auto clientVel = mu::Vec3(DirectX::XMLoadFloat3(&messages[i].velocity));
-			const auto dist = (clientPos - user->pos()).len();
-			const auto maxSpeed = 10.f;
-			const auto speed = std::min(clientVel.len(), maxSpeed);
-			const auto inferredTime = dist / speed;
-			
-			if (inferredTime > deltaTime.count()) {
+			auto clientCurrPos = mu::Vec3(DirectX::XMLoadFloat3(&messages[i].position));
+			auto clientCurrVel = mu::Vec3(DirectX::XMLoadFloat3(&messages[i].velocity));
 
+			if (clientCurrPos == user->pos()) {
+				// 위치 변화 없음
+				break;
+			}
+			
+			auto valid = validateMove(clientCurrPos, clientCurrVel, deltaTime, user);
+			if (valid) {
+				//std::cout << "valid\n";
+				user->setPos(clientCurrPos);
+				auto yawRadian = std::atan2(messages[i].forward.x, messages[i].forward.z);
+				auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), mu::Radian(yawRadian));
+				user->setOrient(yaw);
+
+				auto scMovePacket = Packet{
+					.header = {
+						.size = sizeof(PacketHeader) + sizeof(SCMovePacket),
+						.id = static_cast<uint16>(PacketType::scMove)
+					},
+					.scMove = {
+						.playerId = user->getId(),
+						.pos = user->pos().getXmf(),
+						.playerYawRadian = yawRadian,
+						.cameraPitchRadian = user->cameraPitch()
+					}
+				};
+
+				int32 packetSize = sizeof(Packet);
+				auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+				sendBuffer->copyData(&scMovePacket, packetSize);
+				broadcast(sendBuffer);
+			}
+			else {
+				//std::cout << "invalid\n";
+				auto scRollbackPacket = Packet{
+					.header = {
+						.size = sizeof(PacketHeader) + sizeof(SCRollbackPacket),
+						.id = static_cast<uint16>(PacketType::scRollback)
+					},
+					.scRollback = {
+						.playerId = user->getId(),
+						.pos = user->pos().getXmf()
+					}
+				};
+
+				int32 packetSize = sizeof(Packet);
+				auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+				sendBuffer->copyData(&scRollbackPacket, packetSize);
+				broadcast(sendBuffer);
 			}
 			break;
 		}
@@ -254,6 +272,18 @@ bool Room::empty() {
 	return users_.empty();
 }
 
-bool Room::validateMove(mu::Vec3 clientPos, mu::Vec3 clientVel, Milliseconds deltaTime) {
-	return false;
+bool Room::validateMove(mu::Vec3 clientCurrPos, mu::Vec3 clientCurrVel,
+	Milliseconds deltaTime, const std::shared_ptr<Object>& serverUserObj
+) {
+	const auto posDiff = clientCurrPos - serverUserObj->pos();
+	//std::cout << "posDiff len2 : " << posDiff.len2() << '\n';
+	const auto calculatedVel = posDiff / Seconds(deltaTime).count();
+	const auto maxSpeed = 12.f;
+
+	std::cout << "calculatedVel len2 : " << calculatedVel.len2() << '\n';
+
+	if (calculatedVel.len2() > maxSpeed * maxSpeed) {
+		return false;
+	}
+	return true;
 }

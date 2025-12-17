@@ -42,7 +42,7 @@ enum class PacketType : std::uint16_t {
 	csMouseMove,
 	csMoveState,
 	scMouseMove,
-	scCorrectPos,
+	scRollback,
 	scMove,
 
 	csFindRoom,
@@ -129,7 +129,7 @@ struct SCMouseMovePacket {
 	float cameraPitchRadian;
 };
 
-struct SCCorrectPosPacket {
+struct SCRollbackPacket {
 	std::int32_t playerId;
 	DirectX::XMFLOAT3 pos;
 };
@@ -165,7 +165,7 @@ struct Packet {
 		CSMouseMovePacket csMouseMove;
 		CSMoveStatePacket csMoveState;
 		SCMouseMovePacket scMouseMove;
-		SCCorrectPosPacket scCorrectPos;
+		SCRollbackPacket scRollback;
 		SCMovePacket scMove;
 
 		CSFindRoomPacket csFindRoom;

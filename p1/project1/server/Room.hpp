@@ -24,7 +24,8 @@ public:
 	void broadcast(const SPSendBuffer& packet);
 	bool empty();
 
-	bool validateMove(mu::Vec3 clientPos, mu::Vec3 clientVel, Milliseconds deltaTime);
+	bool validateMove(mu::Vec3 clientCurrPos, mu::Vec3 clientCurrVel,
+		Milliseconds deltaTime, const std::shared_ptr<Object>& serverUserObj);
 
 	void setRoomId(int32 roomId) { roomId_ = roomId; }
 	int32 getRoomId() const { return roomId_; }
