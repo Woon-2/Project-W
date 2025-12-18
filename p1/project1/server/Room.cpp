@@ -15,53 +15,31 @@ void Room::init(const Level& levelData) {
 }
 
 void Room::update(Milliseconds deltaTime) {
-	processMessage();
+	processMessage(deltaTime);
 
-	// 위치 갱신
-	for (auto& [id, user] : idUserMap_) {
-		user->setOldPos(user->pos().x(), user->pos().z());
-		auto keyMask = user->keyMask();
+	// 물리 시뮬레이션
+	std::vector<Object*> allObjects;
+	allObjects.resize(users_.size());
+	std::ranges::transform(users_, allObjects.begin(),
+		[](const std::shared_ptr<Object>& obj) { return obj.get(); }
+	);
 
-		if (keyMask & MoveW) {
-			user->setPos(user->pos() + user->forward() * 0.1f);
-		}
-		if (keyMask & MoveA) {
-			user->setPos(user->pos() - user->right() * 0.1f);
-		}
-		if (keyMask & MoveS) {
-			user->setPos(user->pos() - user->forward() * 0.1f);
-		}
-		if (keyMask & MoveD) {
-			user->setPos(user->pos() + user->right() * 0.1f);
-		}
-
-		// 불필요한 브로드캐스트를 줄이기 위해
-		// 위치가 변경되었을 때만 다른 유저들에게 알림
-		//std::cout << "User " << user->getId() << " moved to (" << user->pos().x() << ", " << user->pos().z() << ")\n";
-		if (user->oldX() != user->pos().x() || user->oldZ() != user->pos().z()) {
-			auto packet = Packet{
-				.header = {
-					.size = sizeof(PacketHeader) + sizeof(SCMovePacket),
-					.id = static_cast<uint16>(PacketType::scMove)
-				},
-				.scMove = {
-					.playerId = user->getId(),
-					.pos = user->pos().getXmf()
-				}
-			};
-
-			int32 packetSize = sizeof(Packet);
-			auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
-			sendBuffer->copyData(&packet, packetSize);
-			broadcast(sendBuffer);
-		}
-	}
+	physicSystem_.step(allObjects, 1s / 60.f);
 }
 
-void Room::processMessage() {
-	const auto bulkSize = 4u;
+void Room::processMessage(Milliseconds deltaTime) {
+	const auto bulkSize = 1000u;
 	auto messages = std::vector<LogicMessage>(bulkSize);
-	const auto size = msgQueue_.try_dequeue_bulk(messages.begin(), bulkSize);
+
+	// 최대 bulkSize 개수만큼 메시지 꺼내기
+	auto size = msgQueue_.try_dequeue_bulk(messages.begin(), bulkSize);
+
+	// 남은 메시지가 있으면 모두 꺼내기
+	LogicMessage msg;
+	while (msgQueue_.try_dequeue(msg)) {
+		messages.push_back(msg);
+		++size;
+	}
 
 	for (int32 i = 0; i < size; ++i) {
 		switch (messages[i].type) {
@@ -73,54 +51,93 @@ void Room::processMessage() {
 			leave(messages[i].userId);
 			break;
 
-		case LogicMsgType::UserMoveStart: {
+		case LogicMsgType::UserMouseMove: {
 			auto user = idUserMap_[messages[i].userId];
-
-			auto yawf = std::atan2(messages[i].forward.x, messages[i].forward.z);
-			auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), mu::Radian(yawf));
+			auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), mu::Radian(messages[i].playerYawRadian));
 			user->setOrient(yaw);
-			//user->setPlayerYaw(messages[i].playerYaw);
-			user->setCameraPitch(messages[i].cameraPitch);
+			user->setCameraPitch(messages[i].cameraPitchRadian);
 
-			auto keyMask = user->keyMask();
+			auto scMouseMovePacket = Packet{
+				.header = {
+					.size = sizeof(PacketHeader) + sizeof(SCMouseMovePacket),
+					.id = static_cast<uint16>(PacketType::scMouseMove)
+				},
+				.scMouseMove = {
+					.playerId = user->getId(),
+					.playerYawRadian = messages[i].playerYawRadian,
+					.cameraPitchRadian = messages[i].cameraPitchRadian
+				}
+			};
 
-			switch (messages[i].dir) {
-			case Direction::w:
-				user->setKeyMask(keyMask | MoveW);
-				break;
-			case Direction::a:
-				user->setKeyMask(keyMask | MoveA);
-				break;
-			case Direction::s:
-				user->setKeyMask(keyMask | MoveS);
-				break;
-			case Direction::d:
-				user->setKeyMask(keyMask | MoveD);
-				break;
-			}
+			int32 packetSize = sizeof(Packet);
+			auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+			sendBuffer->copyData(&scMouseMovePacket, packetSize);
+			broadcast(sendBuffer);
 			break;
 		}
 
-		case LogicMsgType::UserMoveStop: {
+		case LogicMsgType::UserMoveState: {
 			auto user = idUserMap_[messages[i].userId];
-			auto keyMask = user->keyMask();
 
-			switch (messages[i].dir) {
-			case Direction::w:
-				user->setKeyMask(keyMask & ~MoveW);
+			auto clientCurrPos = mu::Vec3(DirectX::XMLoadFloat3(&messages[i].position));
+			auto clientCurrVel = mu::Vec3(DirectX::XMLoadFloat3(&messages[i].velocity));
+			auto clientTimeStamp = messages[i].timeStamp;
+
+			if (clientCurrPos == user->pos()) {
+				// 위치 변화 없음
 				break;
-			case Direction::a:
-				user->setKeyMask(keyMask & ~MoveA);
-				break;
-			case Direction::s:
-				user->setKeyMask(keyMask & ~MoveS);
-				break;
-			case Direction::d:
-				user->setKeyMask(keyMask & ~MoveD);
-				break;
+			}
+			
+			auto valid = validateMove(clientCurrPos, clientCurrVel, clientTimeStamp, deltaTime, user);
+			if (valid) {
+				std::cout << "valid\n";
+				user->setLastMoveTimestamp(clientTimeStamp);
+				user->setPos(clientCurrPos);
+				auto yawRadian = std::atan2(messages[i].forward.x, messages[i].forward.z);
+				auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), mu::Radian(yawRadian));
+				user->setOrient(yaw);
+
+				auto scMovePacket = Packet{
+					.header = {
+						.size = sizeof(PacketHeader) + sizeof(SCMovePacket),
+						.id = static_cast<uint16>(PacketType::scMove)
+					},
+					.scMove = {
+						.playerId = user->getId(),
+						.pos = user->pos().getXmf(),
+						.playerYawRadian = yawRadian,
+						.cameraPitchRadian = user->cameraPitch()
+					}
+				};
+
+				int32 packetSize = sizeof(Packet);
+				auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+				sendBuffer->copyData(&scMovePacket, packetSize);
+				broadcast(sendBuffer);
+			}
+			else {
+				std::cout << "invalid\n";
+				auto scRollbackPacket = Packet{
+					.header = {
+						.size = sizeof(PacketHeader) + sizeof(SCRollbackPacket),
+						.id = static_cast<uint16>(PacketType::scRollback)
+					},
+					.scRollback = {
+						.playerId = user->getId(),
+						.pos = user->pos().getXmf()
+					}
+				};
+
+				int32 packetSize = sizeof(Packet);
+				auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+				sendBuffer->copyData(&scRollbackPacket, packetSize);
+				broadcast(sendBuffer);
 			}
 			break;
 		}
+
+		default:
+			break;
 		}
 	}
 }
@@ -255,4 +272,30 @@ void Room::broadcast(const SPSendBuffer& sendBuffer) {
 bool Room::empty() {
 	std::lock_guard<std::recursive_mutex> lock(mtx_);
 	return users_.empty();
+}
+
+bool Room::validateMove(mu::Vec3 clientCurrPos, mu::Vec3 clientCurrVel, uint32 clientTimeStamp,
+	Milliseconds deltaTime, const std::shared_ptr<Object>& serverUserObj
+) {
+	/*std::cout << "prev pos : " << serverUserObj->pos().x() << ", "
+		<< serverUserObj->pos().y() << ", " << serverUserObj->pos().z() << '\n';
+	std::cout << "curr pos : " << clientCurrPos.x() << ", "
+		<< clientCurrPos.y() << ", " << clientCurrPos.z() << '\n';*/
+
+	const auto posDiff = clientCurrPos - serverUserObj->pos();
+	//std::cout << "posDiff len2 : " << posDiff.len2() << '\n';
+
+	auto lastMoveTimestamp = serverUserObj->lastMoveTimestamp();
+	auto timeStampDiff = static_cast<float>(lastMoveTimestamp - clientTimeStamp);
+	deltaTime *= timeStampDiff;
+
+	const auto calculatedVel = posDiff / Seconds(deltaTime).count();
+	const auto maxSpeed = 10.f;
+
+	//std::cout << "calculatedVel len2 : " << calculatedVel.len2() << '\n';
+
+	if (calculatedVel.len2() > maxSpeed * maxSpeed) {
+		return false;
+	}
+	return true;
 }

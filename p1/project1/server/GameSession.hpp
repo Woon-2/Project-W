@@ -22,12 +22,6 @@ public:
 	bool signupUser(const std::string& id, const std::string& pw, std::string& err);
 	bool loginUser(const std::string& id, const std::string& pw, std::string& err);
 
-	void move(float deltaTime) {
-
-	}
-
-	float radius_;
-
 private:
 	int32 myRoomId_;
 	std::mutex signupAndLoginMtx_;

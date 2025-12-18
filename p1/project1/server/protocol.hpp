@@ -38,12 +38,14 @@ enum class PacketType : std::uint16_t {
 	csLeave,
 	scLeave,
 
-	csMoveStart,
-	csMoveStop,
+	csMoveInput,
+	csMouseMove,
+	csMoveState,
+	scMouseMove,
+	scRollback,
 	scMove,
 
 	csFindRoom,
-
 };
 
 struct CSSignupPacket {
@@ -108,19 +110,35 @@ struct SCLeavePacket {
 	std::int32_t playerId;
 };
 
-struct CSMoveStartPacket {
-	Direction dir;
-	DirectX::XMFLOAT3 forward;
-	float cameraPitch;
+struct CSMouseMovePacket {
+	float playerYawRadian;
+	float cameraPitchRadian;
+	std::uint32_t timeStamp;
 };
 
-struct CSMoveStopPacket {
-	Direction dir;
+struct CSMoveStatePacket {
+	DirectX::XMFLOAT3 position;
+	DirectX::XMFLOAT3 velocity;
+	DirectX::XMFLOAT3 forward;
+	std::uint32_t timeStamp;
+};
+
+struct SCMouseMovePacket {
+	std::int32_t playerId;
+	float playerYawRadian;
+	float cameraPitchRadian;
+};
+
+struct SCRollbackPacket {
+	std::int32_t playerId;
+	DirectX::XMFLOAT3 pos;
 };
 
 struct SCMovePacket {
 	std::int32_t playerId;
 	DirectX::XMFLOAT3 pos;
+	float playerYawRadian;
+	float cameraPitchRadian;
 };
 
 struct CSFindRoomPacket {
@@ -144,8 +162,10 @@ struct Packet {
 		CSLeavePacket csLeave;
 		SCLeavePacket scLeave;
 
-		CSMoveStartPacket csMoveStart;
-		CSMoveStopPacket csMoveStop;
+		CSMouseMovePacket csMouseMove;
+		CSMoveStatePacket csMoveState;
+		SCMouseMovePacket scMouseMove;
+		SCRollbackPacket scRollback;
 		SCMovePacket scMove;
 
 		CSFindRoomPacket csFindRoom;

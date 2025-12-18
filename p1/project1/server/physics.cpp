@@ -24,10 +24,15 @@ void PhysicSystem::integrate(const std::vector<Object*>& objects, Seconds dt)
     for (auto* obj : objects) {
         auto& phys = obj->physicState();
 
-        const auto pos = phys.pos;
-	    const auto omega = phys.omega;
-	    auto orient = phys.orient;
-	    const auto scale = phys.scale;
+        auto& pos = phys.pos;
+        auto& omega = phys.omega;
+        auto& orient = phys.orient;
+        auto& scale = phys.scale;
+
+        /*std::cout << "player vel : " << phys.velocity.x() << ", "
+                  << phys.velocity.y() << ", "
+			<< phys.velocity.z() << "\n";*/
+        pos += phys.velocity * dt.count();
 
 	    // 쿼터니언 갱신: q' = 0.5 * ω_q * q
 	    auto wq = mu::Quat(omega, 0.f);

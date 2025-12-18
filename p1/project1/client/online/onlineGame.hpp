@@ -14,18 +14,22 @@
 namespace Online {
 
 enum class MsgType : u8t {
+	None,
 	SetupPlayer,
 	SetupCube,
+	PlayerMouseMove,
+	PlayerRollback,
 	PlayerMove,
 };
 
 struct Message {
-	MsgType type;
+	MsgType type{MsgType::None};
 	i32t objectId;
 	u32t materialSetIdx;
 	mu::Vec3 pos;
 	mu::NQuat orient;
 	mu::Vec3 scale;
+	float cameraPitch{0.f};
 };
 
 class Game : public IGame {
@@ -88,7 +92,8 @@ private:
 		ThirdPerson
 	};
 
-	void updateMoveState(int vk, Direction dir, DirectX::XMFLOAT3 forward, float cameraPitch);
+	void sendMouseMovePacket();
+	void sendMoveStatePacket();
 	void sendEnterRoomPacket(i32t roomId);
 	void processInput(Milliseconds deltaTime);
 
@@ -97,6 +102,9 @@ private:
 	PhysicSystem physicSystem_{};
 	Seconds physicUpdateAcc_{ 0s };	// 물리 업데이트를 위한 시간 누산기
 	Seconds physicUpdateInterval{ 1s / 60.f };	// 60fps로 물리 업데이트
+
+	Seconds moveStateSendAcc_{0s};
+	Seconds moveStateSendInterval_{1s / 20.f};	// 20fps로 이동 상태 패킷 전송
 	
 	GFX gfx_{};
 	ThreadPool threadPool_{};

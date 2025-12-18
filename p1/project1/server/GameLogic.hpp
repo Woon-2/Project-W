@@ -4,27 +4,31 @@
 #include "timer.hpp"
 
 enum class LogicMsgType : uint8 {
+	None,
 	AddRoom,
 	RemoveRoom,
 	UserEnter,
 	UserLeave,
-	UserMoveStart,
-	UserMoveStop
+	UserMouseMove,
+	UserMoveState,
 };
 
 struct LogicMessage {
-	LogicMsgType type{};
-	Direction dir{};
+	LogicMsgType type{LogicMsgType::None};
 	int32 userId{};
 	int32 roomId{};
+	float playerYawRadian{};
+	float cameraPitchRadian{};
+	DirectX::XMFLOAT3 position{};
+	DirectX::XMFLOAT3 velocity{};
 	DirectX::XMFLOAT3 forward{};
-	float cameraPitch{};
+	std::uint32_t timeStamp{};
 };
 
 class GameLogic {
 public:
 	GameLogic() : logicThread_(), running_(false), msgQueue_(),
-		rooms_(), idRoomMap_(), logicTimer_(), accTime_(0.f) {}
+		rooms_(), idRoomMap_(), logicTimer_(), accTime_(0.f), logicUpdateInterval_(16.6667f) {}
 
 	void start() {
 		running_ = true;
@@ -41,7 +45,7 @@ public:
 
 	void run();
 
-	void enqueueMessage(const LogicMessage& msg) {	msgQueue_.enqueue(msg); }
+	void enqueueMessage(const LogicMessage& msg) { msgQueue_.enqueue(msg); }
 	void processMessage();
 
 private:
@@ -54,8 +58,8 @@ private:
 	std::unordered_map<int32, SPRoom> idRoomMap_;
 
 	Timer logicTimer_;
-	float accTime_;
-	static const float logicUpdateInterval_;
+	Milliseconds accTime_;
+	Milliseconds logicUpdateInterval_;
 };
 
 #endif // GAME_LOGIC_HPP

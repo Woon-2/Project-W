@@ -105,66 +105,38 @@ int32 GameSession::onRecvPacket( uint8* buffer, int32 len ) {
 		break;
 	}
 
-	case PacketType::csEnter: {
-		/*auto packet = Packet{
-			.header = {
-				.size = sizeof( PacketHeader ) + sizeof( SCEnterPacket ),
-				.id = static_cast<uint16>( PacketType::scEnter )
-			},
-			.scEnter = {
-				.playerCount = getService( )->getSessionCount( )
-			}
-		};
-
-		int32 index = 0;
-		auto sessions = GameSessionManager::getSessions( );
-		for ( const auto& session : GameSessionManager::getSessions( ) ) {
-			packet.scEnter.pIds[ index ] = session->getId( );
-			packet.scEnter.x[ index ] = session->x( );
-			packet.scEnter.y[ index ] = session->y( );
-			packet.scEnter.z[ index ] = session->z( );
-			++index;
-		}
-
-		int32 packetSize = sizeof( Packet );
-		auto sendBuffer = std::make_shared<SendBuffer>( packetSize );
-		sendBuffer->copyData( &packet, packetSize );
-		GameSessionManager::broadcast( sendBuffer );*/
-		break;
-	}
-
-	case PacketType::csLeave:
-		break;
-
-	case PacketType::csMoveStart: {
+	case PacketType::csMouseMove: {
 		if(myRoomId_ == -1) {
 			break;
 		}
-		
+
 		auto logicMsg = LogicMessage{
-			.type = LogicMsgType::UserMoveStart,
-			.dir = packet->csMoveStart.dir,
-			.userId = getId( ),
+			.type = LogicMsgType::UserMouseMove,
+			.userId = getId(),
 			.roomId = myRoomId_,
-			.forward = packet->csMoveStart.forward,
-			.cameraPitch = packet->csMoveStart.cameraPitch
+			.playerYawRadian = packet->csMouseMove.playerYawRadian,
+			.cameraPitchRadian = packet->csMouseMove.cameraPitchRadian
 		};
 
 		GameLogicManager::dispatchMessage(logicMsg);
 		break;
 	}
 
-	case PacketType::csMoveStop: {
-		if (myRoomId_ == -1) {
+	case PacketType::csMoveState: {
+		if(myRoomId_ == -1) {
 			break;
 		}
 
 		auto logicMsg = LogicMessage{
-			.type = LogicMsgType::UserMoveStop,
-			.dir = packet->csMoveStop.dir,
+			.type = LogicMsgType::UserMoveState,
 			.userId = getId(),
-			.roomId = myRoomId_
+			.roomId = myRoomId_,
+			.position = packet->csMoveState.position,
+			.velocity = packet->csMoveState.velocity,
+			.forward = packet->csMoveState.forward,
+			.timeStamp = packet->csMoveState.timeStamp
 		};
+
 		GameLogicManager::dispatchMessage(logicMsg);
 		break;
 	}

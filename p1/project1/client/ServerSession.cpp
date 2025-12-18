@@ -86,11 +86,34 @@ int32 ServerSession::onRecvPacket(uint8* buffer, int32 len) {
 		break;
 	}
 
+	case PacketType::scMouseMove: {
+		auto message = Online::Message{
+			.type = Online::MsgType::PlayerMouseMove,
+			.objectId = packet->scMouseMove.playerId,
+			.orient = mu::NQuat(mu::Radian(), mu::Radian(),	mu::Radian(packet->scMouseMove.playerYawRadian)),
+			.cameraPitch = packet->scMouseMove.cameraPitchRadian
+		};
+		messageQueue.enqueue(message);
+		break;
+	}
+
+	case PacketType::scRollback: {
+		auto message = Online::Message{
+			.type = Online::MsgType::PlayerRollback,
+			.objectId = packet->scRollback.playerId,
+			.pos = DirectX::XMLoadFloat3(&packet->scRollback.pos)
+		};
+		messageQueue.enqueue(message);
+		break;
+	}
+
 	case PacketType::scMove: {
 		auto message = Online::Message{
 			.type = Online::MsgType::PlayerMove,
 			.objectId = packet->scMove.playerId,
-			.pos = DirectX::XMLoadFloat3(&packet->scMove.pos)
+			.pos = DirectX::XMLoadFloat3(&packet->scMove.pos),
+			.orient = mu::NQuat(mu::Radian(), mu::Radian(),	mu::Radian(packet->scMove.playerYawRadian)),
+			.cameraPitch = packet->scMove.cameraPitchRadian
 		};
 		messageQueue.enqueue(message);
 		break;

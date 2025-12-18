@@ -57,10 +57,18 @@ void Game::update(Milliseconds deltaTime) {
 	processInput(deltaTime);
 
 	// 서버로부터 받은 메시지 처리
-	const auto bulkSize = 10u;
+	const auto bulkSize = 100u;
 	auto messages = std::vector<Message>(bulkSize);
 
 	auto size = messageQueue.try_dequeue_bulk(messages.data(), bulkSize);
+
+	// 남은 메시지가 있으면 모두 꺼내기
+	Message msg;
+	while (messageQueue.try_dequeue(msg)) {
+		messages.push_back(msg);
+		++size;
+	}
+
 	for (auto i = 0u; i < size; ++i) {
 		const auto& msg = messages[i];
 
@@ -86,6 +94,21 @@ void Game::update(Milliseconds deltaTime) {
 			break;
 		}
 
+		case MsgType::PlayerMouseMove: {
+			auto& player = idPlayerMap_[msg.objectId];
+
+			if (player != player_) {
+				player->setOrient(msg.orient);
+			}
+			break;
+		}
+
+		case MsgType::PlayerRollback: {
+			auto& player = idPlayerMap_[msg.objectId];
+			player->setPos(msg.pos);
+			break;
+		}
+
 		case MsgType::PlayerMove: {
 			auto& player = idPlayerMap_[msg.objectId];
 
@@ -94,9 +117,13 @@ void Game::update(Milliseconds deltaTime) {
 			}
 			else {
 				player->setPos(msg.pos);
+				player->setOrient(msg.orient);
 			}
 			break;
 		}
+
+		default:
+			break;
 		}
 	}
 
@@ -129,6 +156,15 @@ void Game::update(Milliseconds deltaTime) {
 		allObjects.clear( );
 	}
 
+	//std::cout << "player pos : " << player_->pos().x() << ", " << player_->pos().y() << ", " << player_->pos().z() << '\n';
+	if (keyboardStateCurr_['W'] & 0x80 ||
+		keyboardStateCurr_['A'] & 0x80 ||
+		keyboardStateCurr_['S'] & 0x80 ||
+		keyboardStateCurr_['D'] & 0x80
+	) {
+		sendMoveStatePacket();
+	}
+
 	// 물리량 갱신 주기에 대해,
 	// 마지막 물리량 갱신으로부터 얼마나 지났는지의 비율로
 	// RenderState 갱신을 위한 PhysicState 보간 계수를 설정한다.
@@ -137,28 +173,6 @@ void Game::update(Milliseconds deltaTime) {
 
 	for (auto& cube : cubes_) {
 		cube.update(deltaTime, tPhysicInterpolation);
-	}
-	
-	// 플레이어 위치 예측
-	if (keyboardStateCurr_['W'] & 0x80) {
-		player_->setPos(
-			player_->pos() + player_->forward() * (0.1f * deltaTime.count() / 16.6667f)
-		);
-	}
-	if (keyboardStateCurr_['A'] & 0x80) {
-		player_->setPos(
-			player_->pos() - player_->right() * (0.1f * deltaTime.count() / 16.6667f)
-		);
-	}
-	if (keyboardStateCurr_['S'] & 0x80) {
-		player_->setPos(
-			player_->pos() - player_->forward() * (0.1f * deltaTime.count() / 16.6667f)
-		);
-	}
-	if (keyboardStateCurr_['D'] & 0x80) {
-		player_->setPos(
-			player_->pos() + player_->right() * (0.1f * deltaTime.count() / 16.6667f)
-		);
 	}
 
 	// 게임 객체들 갱신
@@ -256,45 +270,46 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	}
 }
 
-// prev, 이전에 눌렸는지 판단한다.
-void Game::updateMoveState(int vk, Direction dir, DirectX::XMFLOAT3 forward, float cameraPitch) {
-	auto downPrev = keyboardStatePrev_[vk] & 0x80;
-	auto downCurr = keyboardStateCurr_[vk] & 0x80;
+void Game::sendMouseMovePacket() {
+	const auto forward = player_->forward();
+	const auto yaw = std::atan2(forward.x(), forward.z());
 
-	if (downCurr) {
-		auto packet = Packet{
-			.header = {
-				.size = sizeof(PacketHeader) + sizeof(CSMoveStartPacket),
-				.id = static_cast<std::uint16_t>(PacketType::csMoveStart)
-			},
-			.csMoveStart = {
-				.dir = dir,
-				.forward = forward,
-				.cameraPitch = cameraPitch
-			}
-		};
+	auto mouseMovePacket = Packet{
+		.header = {
+			.size = sizeof(PacketHeader) + sizeof(CSMouseMovePacket),
+			.id = static_cast<std::uint16_t>(PacketType::csMouseMove)
+		},
+		.csMouseMove = {
+			.playerYawRadian = yaw,
+			.cameraPitchRadian = cameraPitch_,
+			.timeStamp = static_cast<u32t>(HighResolutionClock::now().time_since_epoch().count())
+		}
+	};
 
-		i32t packetSize = sizeof(Packet);
-		auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
-		sendBuffer->copyData(&packet, packetSize);
-		serverSession_->send(sendBuffer);
-	}
-	if(!downCurr && downPrev) {
-		auto packet = Packet{
-			.header = {
-				.size = sizeof(PacketHeader) + sizeof(CSMoveStopPacket),
-				.id = static_cast<std::uint16_t>(PacketType::csMoveStop)
-			},
-			.csMoveStop = {
-				.dir = dir
-			}
-		};
+	i32t packetSize = sizeof(Packet);
+	auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+	sendBuffer->copyData(&mouseMovePacket, packetSize);
+	serverSession_->send(sendBuffer);
+}
 
-		i32t packetSize = sizeof(Packet);
-		auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
-		sendBuffer->copyData(&packet, packetSize);
-		serverSession_->send(sendBuffer);
-	}
+void Game::sendMoveStatePacket() {
+	auto moveStatePacket = Packet{
+		.header = {
+			.size = sizeof(PacketHeader) + sizeof(CSMoveStatePacket),
+			.id = static_cast<std::uint16_t>(PacketType::csMoveState)
+		},
+		.csMoveState = {
+			.position = player_->physicState().pos.getXmf(),
+			.velocity = player_->physicState().velocity.getXmf(),
+			.forward = player_->forward().getXmf(),
+			.timeStamp = static_cast<u32t>(HighResolutionClock::now().time_since_epoch().count())
+		}
+	};
+
+	i32t packetSize = sizeof(Packet);
+	auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+	sendBuffer->copyData(&moveStatePacket, packetSize);
+	serverSession_->send(sendBuffer);
 }
 
 void Game::sendEnterRoomPacket(i32t roomId) {
@@ -323,8 +338,56 @@ void Game::processInput(Milliseconds deltaTime) {
 	keyboardStatePrev_ = keyboardStateCurr_;
 	DISPLAY_ERROR_GLE( GetKeyboardState(keyboardStateCurr_.data()), false );
 
-	// 플레이어 움직임 처리
 	if (inRoom_) {
+		const auto maxSpeed = 10.f;	// 10m/s
+		const Seconds zeroToMax = 0.5s;
+		const Seconds maxToZero = 0.2s;
+
+		// 서로 상쇄되는 입력들을 감안해서,
+		// 현재 이동 입력이 있으면 플레이어 객체의 속도를 변화시킨다.
+
+		const auto moveXSign = (keyboardStateCurr_['D'] & 0x80) - (keyboardStateCurr_['A'] & 0x80);
+		const auto moveZSign = (keyboardStateCurr_['W'] & 0x80) - (keyboardStateCurr_['S'] & 0x80);
+		const auto moveThreshold = 0.1f;
+
+		if (moveXSign || moveZSign) {
+			// 'W'/'S' 입력으로 판정된 Z 부호는 플레이어의 forward 벡터,
+			// 'D'/'A' 입력으로 판정된 X 부호는 플레이어의 right 벡터와 곱해 속도의 방향을 정한다.
+			const auto moveDirection = mu::NVec3(
+				static_cast<float>(moveXSign) * player_->right() + static_cast<float>(moveZSign) * player_->forward()
+			);
+
+			// 플레이어 객체의 속력을 증가시킨다.
+			const auto moveAmount = Seconds(deltaTime).count() * maxSpeed / zeroToMax.count();
+			player_->physicState().velocity += mu::Vec3(moveDirection) * moveAmount;
+
+			// 플레이어 객체의 속력이 최대 속력을 넘지 못하게 한다.
+			if (player_->physicState().velocity.len2() > maxSpeed * maxSpeed) {
+				player_->physicState().velocity *= maxSpeed / player_->physicState().velocity.len();
+			}
+		}
+		// 이동 입력이 없으면 플레이어 객체의 속력을 감소시킨다. (마찰)
+		// 속력이 moveThreshold보다 작다면, 플레이어 객체를 멈춘다.
+		else if (player_->physicState().velocity.len2() > moveThreshold * moveThreshold) {
+			const auto moveAmount = Seconds(deltaTime).count() * maxSpeed / maxToZero.count();
+
+			// 속력 감소량이 현재 플레이어의 속력보다 크게 계산됐다면,
+			// 플레이어의 속력을 0으로 만든다.
+			if (moveAmount * moveAmount > player_->physicState().velocity.len2()) {
+				player_->physicState().velocity = mu::Vec3();
+			}
+			// 그렇지 않다면 플레이어가 움직이고 있는 반대 방향의 속도를 더해
+			// 플레이어의 속력을 감소시킨다.
+			else {
+				const auto moveDirection = mu::NVec3(-player_->physicState().velocity);
+				player_->physicState().velocity += mu::Vec3(moveDirection) * moveAmount;
+			}
+		}
+		// 플레이어 객체를 멈춘다.
+		else {
+			player_->physicState().velocity = mu::Vec3();
+		}
+
 		// 1인칭 카메라 시점 설정
 		if (keyboardStateCurr_['Q'] & 0x80) {
 			camera_.setOffsetFromTargetPreRotation(mu::NQuat{});
@@ -359,6 +422,8 @@ void Game::processInput(Milliseconds deltaTime) {
 
 			camera_.setOffsetFromTargetPreRotation(mu::NQuat(mu::Radian(0.f), cameraPitch_, mu::Radian(0.f)));
 
+			sendMouseMovePacket();
+
 			mouseDeltaX_ = 0;
 			mouseDeltaY_ = 0;
 			break;
@@ -378,18 +443,13 @@ void Game::processInput(Milliseconds deltaTime) {
 
 			camera_.setXXPreRotation(mu::NQuat(mu::Radian(0.f), cameraPitch_, mu::Radian(0.f)));
 
+			sendMouseMovePacket();
+
 			mouseDeltaX_ = 0;
 			mouseDeltaY_ = 0;
 			break;
 		}
 		}
-
-		// 움직임
-		const auto& forward = player_->forward().getXmf();
-		updateMoveState('W', Direction::w, forward, cameraPitch_);
-		updateMoveState('A', Direction::a, forward, cameraPitch_);
-		updateMoveState('S', Direction::s, forward, cameraPitch_);
-		updateMoveState('D', Direction::d, forward, cameraPitch_);
 
 		if (keyboardStateCurr_[VK_LBUTTON] & 0x80) {
 

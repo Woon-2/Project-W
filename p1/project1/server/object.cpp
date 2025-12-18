@@ -72,6 +72,12 @@ void MU_CALLCONV Object::setPos(mu::Vec3 newPos) {
 	}
 }
 
+// 게임 객체의 속도를 갱신한다.
+// 이전 PhysicState와 현재 PhysicState의 속도가 모두 갱신된다.
+void MU_CALLCONV Object::setVelocity(mu::Vec3 newVelocity) {
+	physicState_.velocity = newVelocity;
+}
+
 // 게임 객체의 각속도를 갱신한다.
 void MU_CALLCONV Object::setOmega(mu::Vec3 newOmega) {
 	physicState_.omega = newOmega;
