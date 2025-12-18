@@ -81,15 +81,17 @@ void Room::processMessage(Milliseconds deltaTime) {
 
 			auto clientCurrPos = mu::Vec3(DirectX::XMLoadFloat3(&messages[i].position));
 			auto clientCurrVel = mu::Vec3(DirectX::XMLoadFloat3(&messages[i].velocity));
+			auto clientTimeStamp = messages[i].timeStamp;
 
 			if (clientCurrPos == user->pos()) {
 				// 위치 변화 없음
 				break;
 			}
 			
-			auto valid = validateMove(clientCurrPos, clientCurrVel, deltaTime, user);
+			auto valid = validateMove(clientCurrPos, clientCurrVel, clientTimeStamp, deltaTime, user);
 			if (valid) {
-				//std::cout << "valid\n";
+				std::cout << "valid\n";
+				user->setLastMoveTimestamp(clientTimeStamp);
 				user->setPos(clientCurrPos);
 				auto yawRadian = std::atan2(messages[i].forward.x, messages[i].forward.z);
 				auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), mu::Radian(yawRadian));
@@ -114,7 +116,7 @@ void Room::processMessage(Milliseconds deltaTime) {
 				broadcast(sendBuffer);
 			}
 			else {
-				//std::cout << "invalid\n";
+				std::cout << "invalid\n";
 				auto scRollbackPacket = Packet{
 					.header = {
 						.size = sizeof(PacketHeader) + sizeof(SCRollbackPacket),
@@ -272,15 +274,25 @@ bool Room::empty() {
 	return users_.empty();
 }
 
-bool Room::validateMove(mu::Vec3 clientCurrPos, mu::Vec3 clientCurrVel,
+bool Room::validateMove(mu::Vec3 clientCurrPos, mu::Vec3 clientCurrVel, uint32 clientTimeStamp,
 	Milliseconds deltaTime, const std::shared_ptr<Object>& serverUserObj
 ) {
+	/*std::cout << "prev pos : " << serverUserObj->pos().x() << ", "
+		<< serverUserObj->pos().y() << ", " << serverUserObj->pos().z() << '\n';
+	std::cout << "curr pos : " << clientCurrPos.x() << ", "
+		<< clientCurrPos.y() << ", " << clientCurrPos.z() << '\n';*/
+
 	const auto posDiff = clientCurrPos - serverUserObj->pos();
 	//std::cout << "posDiff len2 : " << posDiff.len2() << '\n';
-	const auto calculatedVel = posDiff / Seconds(deltaTime).count();
-	const auto maxSpeed = 12.f;
 
-	std::cout << "calculatedVel len2 : " << calculatedVel.len2() << '\n';
+	auto lastMoveTimestamp = serverUserObj->lastMoveTimestamp();
+	auto timeStampDiff = static_cast<float>(lastMoveTimestamp - clientTimeStamp);
+	deltaTime *= timeStampDiff;
+
+	const auto calculatedVel = posDiff / Seconds(deltaTime).count();
+	const auto maxSpeed = 10.f;
+
+	//std::cout << "calculatedVel len2 : " << calculatedVel.len2() << '\n';
 
 	if (calculatedVel.len2() > maxSpeed * maxSpeed) {
 		return false;

@@ -82,6 +82,9 @@ public:
 	void setCameraPitch(float pitch) { cameraPitch_ = pitch; }
 	float cameraPitch() const { return cameraPitch_; }
 
+	void setLastMoveTimestamp(uint32 timestamp) { lastMoveTimestamp_ = timestamp; }
+	uint32 lastMoveTimestamp() const { return lastMoveTimestamp_; }
+
 private:
 	// object(player) ¡¬«•¿« Ω∫≥¿º¶¿ª ¿˙¿Â«œ±‚ ¿ß«— oldX_, oldZ_
 	float oldX_{};
@@ -99,6 +102,8 @@ private:
 
 	u32t materialSetIdx_ = 0u;
 	i32t id_{ -1 };
+
+	uint32 lastMoveTimestamp_{0u};
 };
 
 #endif	// __object_HPP
