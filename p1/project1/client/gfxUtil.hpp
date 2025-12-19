@@ -90,7 +90,6 @@ struct Fence {
 	std::vector<ComPtr<ID3D12Resource>> associatedResources_;
 	ComPtr<ID3D12Fence> fence;
 	UINT64 desiredValue;
-	HANDLE event;
 };
 
 // ComPtr<ID3D12DescriptorHeap> 객체와 부가 정보들을 한꺼번에 저장하기 위한 구조체

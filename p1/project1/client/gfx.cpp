@@ -251,9 +251,6 @@ void GFX::init() {
 		false
 	);
 	setD3DName(fences_.at(fenceName).fence.Get(), fenceName);
-	fences_.at(fenceName).event = CreateEventA(
-		nullptr, false, false, fenceName.c_str()
-	);
 
 	// Draw Event들을 저장할 메모리 예약
 	drawEventsSamplePipeline_.reserve(1000u);
@@ -456,9 +453,6 @@ void GFX::createSwapChain() {
 			false
 		);
 		setD3DName(fences_.at(fenceName).fence.Get(), fenceName);
-		fences_.at(fenceName).event = CreateEventA(
-			nullptr, false, false, ("FrameFenceEvent"s + std::to_string(i)).c_str()
-		);
 	}
 }
 
@@ -1231,8 +1225,7 @@ void GFX::waitOnFence(const std::string& fenceName) {
 		return;
 	}
 
-	fence.fence->SetEventOnCompletion(fence.desiredValue, fence.event);
-	WaitForSingleObject(fence.event, INFINITE);
+	fence.fence->SetEventOnCompletion(fence.desiredValue, nullptr);
 
 	// GPU에서 사용이 끝난 명령 컨텍스트와 리소스를 반환한다.
 	for (int idxUsage = 0; idxUsage < etoi(CommandListUsage::SIZE); ++idxUsage) {
