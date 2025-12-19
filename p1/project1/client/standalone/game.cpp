@@ -520,6 +520,7 @@ void Game::processInput(Milliseconds deltaTime) {
 	// ÃÑ ¹ß»ç: ÃÑ±¸ È­¿° ¾Ö´Ï¸ÞÀÌ¼Ç Àç»ý
 	if ( !playerDead_ && (keyboardStateCurr_[VK_LBUTTON] & 0x80)
 		&& !(keyboardStatePrev_[VK_LBUTTON] & 0x80)
+		&& fireCooldown_ <= 0ms
 	) {
 		if (!reloading_) {
 			fireCooldown_ = 200ms;

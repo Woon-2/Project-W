@@ -82,6 +82,7 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 		break;
 
 	case GameType::Online:
+		static_cast<Online::Game*>(pGame.get())->setTimer(&timer);
 		break;
 
 	default:
