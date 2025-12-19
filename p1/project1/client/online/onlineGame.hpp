@@ -87,6 +87,16 @@ public:
 		newPlayer->setPos( mu::Vec3( x, y, z ) );
 		newPlayer->setModel( assetManager_.modelPlayer( ) );
 		newPlayer->setScale( 1.f );
+		newPlayer->setAnimBlender(animSystem_, assetManager_);
+		newPlayer->enableBVRendering();
+
+		Equipment rifle{};
+		rifle.socketType = Bone::SocketType::RightHand;
+		rifle.object = std::make_unique<Object>();
+		rifle.object->setModel(assetManager_.modelRifle());
+		rifle.object->setScale(mu::Vec3(1.f, 1.f, 1.f));
+
+		newPlayer->equip(std::move(rifle));
 
 		addPlayer( newPlayer );
 	}
