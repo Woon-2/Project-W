@@ -90,7 +90,7 @@ void Room::processMessage(Milliseconds deltaTime) {
 			
 			auto valid = validateMove(clientCurrPos, clientCurrVel, clientTimeStamp, deltaTime, user);
 			if (valid) {
-				std::cout << "valid\n";
+				//std::cout << "valid\n";
 				user->setLastMoveTimestamp(clientTimeStamp);
 				user->setPos(clientCurrPos);
 				auto yawRadian = std::atan2(messages[i].forward.x, messages[i].forward.z);
@@ -133,6 +133,11 @@ void Room::processMessage(Milliseconds deltaTime) {
 				sendBuffer->copyData(&scRollbackPacket, packetSize);
 				broadcast(sendBuffer);
 			}
+			break;
+		}
+
+		case LogicMsgType::UserFire: {
+			auto shooter = idUserMap_[messages[i].userId];
 			break;
 		}
 
@@ -286,7 +291,7 @@ bool Room::validateMove(mu::Vec3 clientCurrPos, mu::Vec3 clientCurrVel, uint32 c
 	//std::cout << "posDiff len2 : " << posDiff.len2() << '\n';
 
 	auto lastMoveTimestamp = serverUserObj->lastMoveTimestamp();
-	auto timeStampDiff = static_cast<float>(lastMoveTimestamp - clientTimeStamp);
+	auto timeStampDiff = static_cast<float>(clientTimeStamp - lastMoveTimestamp);
 	deltaTime *= timeStampDiff;
 
 	const auto calculatedVel = posDiff / Seconds(deltaTime).count();

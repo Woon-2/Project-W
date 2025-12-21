@@ -11,6 +11,7 @@ enum class LogicMsgType : uint8 {
 	UserLeave,
 	UserMouseMove,
 	UserMoveState,
+	UserFire
 };
 
 struct LogicMessage {
@@ -19,9 +20,10 @@ struct LogicMessage {
 	int32 roomId{};
 	float playerYawRadian{};
 	float cameraPitchRadian{};
-	DirectX::XMFLOAT3 position{};
+	DirectX::XMFLOAT3 position{};	// user pos or fire pos
 	DirectX::XMFLOAT3 velocity{};
 	DirectX::XMFLOAT3 forward{};
+	DirectX::XMFLOAT3 fireDir{};
 	std::uint32_t timeStamp{};
 };
 
