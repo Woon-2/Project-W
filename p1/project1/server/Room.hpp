@@ -26,18 +26,13 @@ public:
 
 	bool validateMove(mu::Vec3 clientCurrPos, mu::Vec3 clientCurrVel, uint32 clientTimeStamp,
 		Milliseconds deltaTime, const std::shared_ptr<Object>& serverUserObj);
+	bool validateFire(mu::Vec3 firePos, mu::Vec3 fireDir, const std::shared_ptr<Object>& serverUserObj);
+	bool intersectRay(Ray ray, const std::shared_ptr<Object>& target, float& dist);
 
 	void setRoomId(int32 roomId) { roomId_ = roomId; }
 	int32 getRoomId() const { return roomId_; }
 
 private:
-	enum : uint8 {
-		MoveW = 0x1,
-		MoveA = 0x2,
-		MoveS = 0x4,
-		MoveD = 0x8
-	};
-
 	int32 roomId_;
 	std::recursive_mutex mtx_;
 	std::vector<std::shared_ptr<Object>> users_;

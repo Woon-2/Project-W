@@ -137,7 +137,30 @@ void Room::processMessage(Milliseconds deltaTime) {
 		}
 
 		case LogicMsgType::UserFire: {
-			auto shooter = idUserMap_[messages[i].userId];
+			const auto shooterId = messages[i].userId;
+			auto shooter = idUserMap_[shooterId];
+
+			if(!validateFire(mu::Vec3(DirectX::XMLoadFloat3(&messages[i].position)),
+				mu::Vec3(DirectX::XMLoadFloat3(&messages[i].fireDir)), shooter)
+			) {
+				std::cout << "invalid fire\n";
+				break;
+			}
+
+			auto ray = Ray{
+				.origin = mu::Vec3(DirectX::XMLoadFloat3(&messages[i].position)),
+				.dir = mu::NVec3(DirectX::XMLoadFloat3(&messages[i].fireDir))
+			};
+
+			for (auto& [id, user] : idUserMap_) {
+				if(id == shooterId) {
+					continue;
+				}
+
+				if (!intersectRay(ray, user)) {
+					continue;
+				}
+			}
 			break;
 		}
 
@@ -303,4 +326,30 @@ bool Room::validateMove(mu::Vec3 clientCurrPos, mu::Vec3 clientCurrVel, uint32 c
 		return false;
 	}
 	return true;
+}
+
+bool Room::validateFire(mu::Vec3 firePos, mu::Vec3 fireDir, const std::shared_ptr<Object>& serverUserObj) {
+	auto userPos = serverUserObj->pos();
+
+	const auto maxFireXZOffset = 0.6f;
+	const auto maxFireYOffset = 1.5f;
+	const auto minFireYOffset = 0.8f;
+	const float maxFireAngleRad = mu::Radian(8.f);
+
+	const auto dx = firePos.x() - userPos.x();
+	const auto dz = firePos.z() - userPos.z();
+	const auto distSqXZ = dx * dx + dz * dz;
+
+	if (distSqXZ > maxFireXZOffset * maxFireXZOffset) {
+		return false;
+	}
+	if (firePos.y() < minFireYOffset || firePos.y() > maxFireYOffset) {
+		return false;
+	}
+
+	return true;
+}
+
+bool Room::intersectRay(Ray ray, const std::shared_ptr<Object>& target, float& dist) {
+
 }
