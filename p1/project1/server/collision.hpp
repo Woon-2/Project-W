@@ -34,5 +34,6 @@ struct RayHit {
 };
 
 RayHit RaycastAABB(const AABB& box, const Ray& ray);
+RayHit RaycastBoundingRect(const BoundingRect& rect, const Ray& ray);
 
 #endif	// __collision_HPP

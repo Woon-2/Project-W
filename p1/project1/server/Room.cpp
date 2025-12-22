@@ -157,9 +157,7 @@ void Room::processMessage(Milliseconds deltaTime) {
 					continue;
 				}
 
-				if (!intersectRay(ray, user)) {
-					continue;
-				}
+				
 			}
 			break;
 		}
