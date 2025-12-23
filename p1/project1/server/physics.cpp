@@ -29,9 +29,6 @@ void PhysicSystem::integrate(const std::vector<Object*>& objects, Seconds dt)
         auto& orient = phys.orient;
         auto& scale = phys.scale;
 
-        /*std::cout << "player vel : " << phys.velocity.x() << ", "
-                  << phys.velocity.y() << ", "
-			<< phys.velocity.z() << "\n";*/
         pos += phys.velocity * dt.count();
 
 	    // 쿼터니언 갱신: q' = 0.5 * ω_q * q
