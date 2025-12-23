@@ -82,8 +82,32 @@ public:
 	void setCameraPitch(float pitch) { cameraPitch_ = pitch; }
 	float cameraPitch() const { return cameraPitch_; }
 
+	void setHp(int32 hp) { hp_ = hp; }
+	int32 hp() const { return hp_; }
+	void setBullet(int32 bullet) { bullet_ = bullet; }
+	int32 bullet() const { return bullet_; }
+
 	void setLastMoveTimestamp(uint32 timestamp) { lastMoveTimestamp_ = timestamp; }
 	uint32 lastMoveTimestamp() const { return lastMoveTimestamp_; }
+
+	void setLastFireTime(Milliseconds time) { lastFireTime_ = time; }
+	Milliseconds lastFireTime() const { return lastFireTime_; }
+	Milliseconds fireCooldown() const { return fireCooldown_; }
+
+	bool reloading() const { return reloading_; }
+	void startReloading() { 
+		reloading_ = true;
+		reloadStartTime_ = SteadyClock::now().time_since_epoch();
+	}
+	bool finishReloading() { 
+		Milliseconds currTime = SteadyClock::now().time_since_epoch();
+		if (currTime - reloadStartTime_ >= reloadCooldown_) {
+			reloading_ = false;
+			bullet_ = 30;
+			return true;
+		}
+		return false;
+	}
 
 private:
 	// object(player) 좌표의 스냅샷을 저장하기 위한 oldX_, oldZ_
@@ -103,7 +127,18 @@ private:
 	u32t materialSetIdx_ = 0u;
 	i32t id_{ -1 };
 
+	int32 hp_{100};
+	int32 bullet_{30};
+
 	uint32 lastMoveTimestamp_{0u};
+
+	// 서버 시간을 사용한다.
+	Milliseconds lastFireTime_{0ms};
+	Milliseconds fireCooldown_{200ms};
+
+	bool reloading_{false};
+	Milliseconds reloadStartTime_{0ms};
+	Milliseconds reloadCooldown_{2000ms};
 };
 
 #endif	// __object_HPP

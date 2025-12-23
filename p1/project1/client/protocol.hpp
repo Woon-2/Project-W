@@ -44,6 +44,9 @@ enum class PacketType : std::uint16_t {
 	csFindRoom,
 
 	csFire,
+	scFire,
+	csReload,
+	scReload,
 	scHitResult,
 };
 
@@ -147,6 +150,21 @@ struct CSFindRoomPacket {
 struct CSFirePacket {
 	DirectX::XMFLOAT3 firePos;
 	DirectX::XMFLOAT3 fireDir;
+	std::uint32_t timeStamp;
+};
+
+struct SCFirePacket {
+	std::int32_t shooterId;
+	std::int32_t bulletCount;
+};
+
+struct CSReloadPacket {
+
+};
+
+struct SCReloadPacket {
+	std::int32_t shooterId;
+	std::int32_t bulletCount;
 };
 
 enum class HitResult : std::uint8_t {
@@ -187,6 +205,9 @@ struct Packet {
 		CSFindRoomPacket csFindRoom;
 
 		CSFirePacket csFire;
+		SCFirePacket scFire;
+		CSReloadPacket csReload;
+		SCReloadPacket scReload;
 		SCHitResultPacket scHitResult;
 	};
 };

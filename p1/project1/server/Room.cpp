@@ -137,8 +137,50 @@ void Room::processMessage(Milliseconds deltaTime) {
 		}
 
 		case LogicMsgType::UserFire: {
-			const auto shooterId = messages[i].userId;
-			auto shooter = idUserMap_[shooterId];
+			const int32 shooterId = messages[i].userId;
+			const auto shooter = idUserMap_[shooterId];
+
+			if(shooter->reloading()) {
+				// ÀçÀåÀü Áß
+				break;
+			}
+
+			const int32 shooterHp = shooter->hp();
+			const int32 shooterBullet = shooter->bullet();
+			if(shooterBullet <= 0 || shooterHp <= 0) {
+				// ÃÑ¾ËÀÌ ¾ø°Å³ª Á×Àº »óÅÂ
+				break;
+			}
+
+			Milliseconds currFireTime = SteadyClock::now().time_since_epoch();
+			Milliseconds lastFireTime = shooter->lastFireTime();
+			Milliseconds fireCooldown = shooter->fireCooldown();
+
+			Milliseconds delta = currFireTime - lastFireTime;
+			if (delta < fireCooldown) {
+				// ½ò ¼ö ¾ø´Â »óÅÂ
+				break;
+			}
+
+			shooter->setLastFireTime(currFireTime);
+			shooter->setBullet(shooterBullet - 1);
+
+			auto scFirePacket = Packet{
+				.header = {
+					.size = sizeof(PacketHeader) + sizeof(SCFirePacket),
+					.id = static_cast<uint16>(PacketType::scFire)
+				},
+				.scFire = {
+					.shooterId = shooterId,
+					.bulletCount = shooterBullet - 1
+				}
+			};
+
+			int32 packetSize = sizeof(Packet);
+			auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+			sendBuffer->copyData(&scFirePacket, packetSize);
+			broadcast(sendBuffer);
+			break;
 
 			if(!validateFire(mu::Vec3(DirectX::XMLoadFloat3(&messages[i].position)),
 				mu::Vec3(DirectX::XMLoadFloat3(&messages[i].fireDir)), shooter)
@@ -180,6 +222,58 @@ void Room::processMessage(Milliseconds deltaTime) {
 						broadcast(sendBuffer);
 						break;
 					}
+				}
+			}
+			break;
+		}
+
+		case LogicMsgType::UserReload: {
+			const int32 shooterId = messages[i].userId;
+			const auto shooter = idUserMap_[shooterId];
+
+			const int32 shooterHp = shooter->hp();
+			const int32 shooterBullet = shooter->bullet();
+			if (shooterBullet == 30 || shooterHp <= 0) {
+				// ÀÌ¹Ì	ÃÑ¾ËÀÌ °¡µæ Ã¡°Å³ª Á×Àº »óÅÂ
+				break;
+			}
+
+			bool reloaded = shooter->reloading();
+			if (!reloaded) {
+				shooter->startReloading();
+
+				auto message = LogicMessage{
+						.type = LogicMsgType::UserReload,
+						.userId = shooterId,
+						.roomId = roomId_
+				};
+				GameLogicManager::dispatchMessage(message);
+			}
+			else {
+				if (shooter->finishReloading()) {
+					auto scReloadPacket = Packet{
+						.header = {
+							.size = sizeof(PacketHeader) + sizeof(SCReloadPacket),
+							.id = static_cast<uint16>(PacketType::scReload)
+						},
+						.scReload = {
+							.shooterId = shooterId,
+							.bulletCount = shooter->bullet()
+						}
+					};
+
+					int32 packetSize = sizeof(Packet);
+					auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+					sendBuffer->copyData(&scReloadPacket, packetSize);
+					broadcast(sendBuffer);
+				}
+				else {
+					auto message = LogicMessage{
+						.type = LogicMsgType::UserReload,
+						.userId = shooterId,
+						.roomId = roomId_
+					};
+					GameLogicManager::dispatchMessage(message);
 				}
 			}
 			break;

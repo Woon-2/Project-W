@@ -11,7 +11,8 @@ enum class LogicMsgType : uint8 {
 	UserLeave,
 	UserMouseMove,
 	UserMoveState,
-	UserFire
+	UserFire,
+	UserReload,
 };
 
 struct LogicMessage {

@@ -26,19 +26,22 @@ enum class MsgType : u8t {
 	PlayerMouseMove,
 	PlayerRollback,
 	PlayerMove,
-	HitResult
+	Fire,
+	Reload,
+	HitResult,
 };
 
 struct Message {
 	MsgType type{MsgType::None};
+	HitResult hitResult;
 	i32t objectId;
 	i32t targetId;
-	HitResult hitResult;
 	u32t materialSetIdx;
 	mu::Vec3 pos;
 	mu::NQuat orient;
 	mu::Vec3 scale;
 	float cameraPitch{0.f};
+	i32t bulletCnt{0};
 };
 
 class Game : public IGame {

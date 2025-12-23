@@ -82,11 +82,24 @@ struct BasicEvent {
 };
 
 struct EvHit : BasicEvent { EvHit() : BasicEvent{EventType::Hit} {} };
-struct EvFire : BasicEvent { EvFire() : BasicEvent{EventType::Fire} {} };
+struct EvFire : BasicEvent {
+	EvFire() : BasicEvent{EventType::Fire} {}
+	EvFire(i32t shooterId, i32t bulletCnt)
+		: BasicEvent{EventType::Fire}, shooterId{shooterId}, bulletCount{bulletCnt} {}
+
+	i32t shooterId{-1};
+	i32t bulletCount{-1};
+};
 struct EvMuzzleFlash : BasicEvent { EvMuzzleFlash() : BasicEvent{EventType::MuzzleFlash} {} };
 struct EvBlood : BasicEvent { EvBlood() : BasicEvent{EventType::Blood} {} };
 struct EvReloading : BasicEvent { EvReloading() : BasicEvent{EventType::Reloading} {} };
-struct EvReloadComplete : BasicEvent { EvReloadComplete() : BasicEvent{EventType::ReloadComplete} {} };
+struct EvReloadComplete : BasicEvent { 
+	EvReloadComplete() : BasicEvent{EventType::ReloadComplete} {}
+	EvReloadComplete(i32t bulletCnt)
+		: BasicEvent{EventType::ReloadComplete}, bulletCount{bulletCnt} {}
+
+	i32t bulletCount{-1};
+};
 struct EvDeath : BasicEvent { EvDeath() : BasicEvent{EventType::Death} {} };
 
 class Timer;
