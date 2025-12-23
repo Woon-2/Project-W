@@ -157,7 +157,30 @@ void Room::processMessage(Milliseconds deltaTime) {
 					continue;
 				}
 
-				
+				auto size = user->physicState().boundingRects.size();
+				for (auto i = 0; i < size; ++i) {
+					auto rayHit = RaycastBoundingRect(user->physicState().boundingRects[i], ray);
+					if (rayHit.hit) {
+						std::cout << "player " << shooterId << " hit player " << id << '\n';
+						auto scHitResultPacket = Packet{
+							.header = {
+								.size = sizeof(PacketHeader) + sizeof(SCHitResultPacket),
+								.id = static_cast<uint16>(PacketType::scHitResult)
+							},
+							.scHitResult = {
+								.shooterId = shooterId,
+								.targetId = id,
+								.hitResult = HitResult::Body
+							}
+						};
+
+						int32 packetSize = sizeof(Packet);
+						auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+						sendBuffer->copyData(&scHitResultPacket, packetSize);
+						broadcast(sendBuffer);
+						break;
+					}
+				}
 			}
 			break;
 		}
@@ -179,6 +202,9 @@ void Room::enter(int32 playerId) {
 	player->setPos(playerStarts_[userIdx].pos());
 	player->setOrient(playerStarts_[userIdx].orient());
 	player->setScale(playerStarts_[userIdx].scale());
+
+	auto playerModel = RoomManager::playerModelData();
+	player->setModel(playerModel);
 
 	// 플레이어 정보 및 오브젝트들 정보 보내기
 	auto setupPacket = Packet{
@@ -329,9 +355,9 @@ bool Room::validateMove(mu::Vec3 clientCurrPos, mu::Vec3 clientCurrVel, uint32 c
 bool Room::validateFire(mu::Vec3 firePos, mu::Vec3 fireDir, const std::shared_ptr<Object>& serverUserObj) {
 	auto userPos = serverUserObj->pos();
 
-	const auto maxFireXZOffset = 0.6f;
-	const auto maxFireYOffset = 1.5f;
-	const auto minFireYOffset = 0.8f;
+	const auto maxFireXZOffset = 0.9f;
+	const auto maxFireYOffset = 0.5f;
+	const auto minFireYOffset = 0.2f;
 	const float maxFireAngleRad = mu::Radian(8.f);
 
 	const auto dx = firePos.x() - userPos.x();
@@ -346,8 +372,4 @@ bool Room::validateFire(mu::Vec3 firePos, mu::Vec3 fireDir, const std::shared_pt
 	}
 
 	return true;
-}
-
-bool Room::intersectRay(Ray ray, const std::shared_ptr<Object>& target, float& dist) {
-
 }
