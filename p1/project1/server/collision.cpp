@@ -156,5 +156,6 @@ RayHit RaycastBoundingRect(const BoundingRect& rect, const Ray& ray) {
 
 	hit.hit = true;
 	hit.t = tMin;
+	hit.point = ray.origin + ray.dir * tMin;
 	return hit;
 }
