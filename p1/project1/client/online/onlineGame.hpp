@@ -26,11 +26,14 @@ enum class MsgType : u8t {
 	PlayerMouseMove,
 	PlayerRollback,
 	PlayerMove,
+	HitResult
 };
 
 struct Message {
 	MsgType type{MsgType::None};
 	i32t objectId;
+	i32t targetId;
+	HitResult hitResult;
 	u32t materialSetIdx;
 	mu::Vec3 pos;
 	mu::NQuat orient;

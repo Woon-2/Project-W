@@ -118,6 +118,17 @@ int32 ServerSession::onRecvPacket(uint8* buffer, int32 len) {
 		messageQueue.enqueue(message);
 		break;
 	}
+
+	case PacketType::scHitResult: {
+		auto message = Online::Message{
+			.type = Online::MsgType::HitResult,
+			.objectId = packet->scHitResult.shooterId,
+			.targetId = packet->scHitResult.targetId,
+			.hitResult = packet->scHitResult.hitResult
+		};
+		messageQueue.enqueue(message);
+		break;
+	}
 	}
 	return len;
 }

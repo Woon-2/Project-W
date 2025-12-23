@@ -148,6 +148,24 @@ void Game::update(Milliseconds deltaTime) {
 			break;
 		}
 
+		case MsgType::HitResult: {
+			auto& shooter = idPlayerMap_[msg.objectId];
+			auto& target = idPlayerMap_[msg.targetId];
+			shooter->eventBus()->receive(
+				reinterpret_cast<BasicEvent*>(const_cast<Message*>(&msg)),
+				deltaTime, eventList_, *pTimer_, shooter.get()
+			);
+			if (msg.hitResult == HitResult::Body) {
+				if (shooter != player_) {
+					holdEvent(eventList_, EvFire{});
+				}
+			}
+			else if(msg.hitResult == HitResult::Head) {
+
+			}
+			break;
+		}
+
 		default:
 			break;
 		}
@@ -643,15 +661,38 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		if (!reloading_) {
 			fireCooldown_ = 200ms;
 			holdEvent(eventList_, EvFire{});
+
+			sendMoveStatePacket();
+
+			auto firePos = player_->pos()
+				+ player_->up() * 1.3f
+				+ player_->forward() * 0.85f
+				+ player_->right() * 0.15f;
+
+			auto csFirePacket = Packet{
+				.header = {
+					.size = sizeof(PacketHeader) + sizeof(CSFirePacket),
+					.id = static_cast<std::uint16_t>(PacketType::csFire)
+				},
+				.csFire = {
+					.firePos = firePos.getXmf(),
+					.fireDir = player_->forward().getXmf(),
+				}
+			};
+
+			i32t packetSize = sizeof(Packet);
+			auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+			sendBuffer->copyData(&csFirePacket, packetSize);
+			serverSession_->send(sendBuffer);
 		}
 	}
 
 	// 임시: 피격, 피격 애니메이션 및 이펙트 재생
-	if ( !playerDead_ && (keyboardStateCurr_[VK_RBUTTON] & 0x80)
+	/*if ( !playerDead_ && (keyboardStateCurr_[VK_RBUTTON] & 0x80)
 		&& !(keyboardStatePrev_[VK_RBUTTON] & 0x80)
 	) {
 		holdEvent(eventList_, EvHit{});
-	}
+	}*/
 
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때
 	// 각각의 플레이어 yaw, 카메라 pitch를 계산한다.
