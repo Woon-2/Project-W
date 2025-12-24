@@ -336,7 +336,9 @@ void Room::enter(int32 playerId) {
 		.objectId = player->getId(),
 		.pos = player->pos().getXmf(),
 		.orient = player->orient().getXmf(),
-		.scale = player->scale().getXmf()
+		.scale = player->scale().getXmf(),
+		.hp = player->hp(),
+		.bullet = player->bullet()
 	};
 	objectDatas.emplace_back(std::move(playerData));
 
@@ -378,6 +380,7 @@ void Room::enter(int32 playerId) {
 		packet.scEnter.x[i] = users_[i]->pos().x();
 		packet.scEnter.y[i] = users_[i]->pos().y();
 		packet.scEnter.z[i] = users_[i]->pos().z();
+		packet.scEnter.hp[i] = users_[i]->hp();
 	}
 
 	packetSize = sizeof(Packet);

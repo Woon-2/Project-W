@@ -91,6 +91,8 @@ struct ObjectData {
 	DirectX::XMFLOAT3 pos;
 	DirectX::XMFLOAT4 orient;
 	DirectX::XMFLOAT3 scale;
+	std::int32_t hp;
+	std::int32_t bullet;
 };
 
 struct SCSetupPacket {
@@ -103,6 +105,7 @@ struct SCEnterPacket {
 	std::array<float, maxUserCount> x;
 	std::array<float, maxUserCount> y;
 	std::array<float, maxUserCount> z;
+	std::array<std::int32_t, maxUserCount> hp;
 };
 
 struct CSLeavePacket {

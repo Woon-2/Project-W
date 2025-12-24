@@ -41,8 +41,8 @@ struct Message {
 	mu::NQuat orient;
 	mu::Vec3 scale;
 	float cameraPitch{0.f};
-	i32t bulletCnt{0};
 	i32t currHp{0};
+	i32t bulletCnt{0};
 };
 
 class Game : public IGame {

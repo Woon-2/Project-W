@@ -47,7 +47,9 @@ int32 ServerSession::onRecvPacket(uint8* buffer, int32 len) {
 				.materialSetIdx = objectDatas[i].materialSetIdx,
 				.pos = DirectX::XMLoadFloat3(&objectDatas[i].pos),
 				.orient = DirectX::XMLoadFloat4(&objectDatas[i].orient),
-				.scale = DirectX::XMLoadFloat3(&objectDatas[i].scale)
+				.scale = DirectX::XMLoadFloat3(&objectDatas[i].scale),
+				.currHp = objectDatas[i].hp,
+				.bulletCnt = objectDatas[i].bullet
 			};
 
 			if (objectDatas[i].type == ObjectType::Player) {
@@ -74,6 +76,10 @@ int32 ServerSession::onRecvPacket(uint8* buffer, int32 len) {
 			auto x = packet->scEnter.x[i];
 			auto y = packet->scEnter.y[i];
 			auto z = packet->scEnter.z[i];
+
+			// 모든 플레이어의 hp 정보
+			auto hp = packet->scEnter.hp[i];
+
 			pOnlineGame->createPlayer(pId, x, y, z);
 		}
 		break;

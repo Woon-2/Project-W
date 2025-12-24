@@ -96,6 +96,8 @@ void Game::update(Milliseconds deltaTime) {
 			player_->setModel(assetManager_.modelPlayer());
 			player_->setAnimBlender(animSystem_, assetManager_);
 			player_->enableBVRendering();
+			playerHpUI_.setHp(msg.currHp);
+			playerHpUI_.setAmmo(msg.bulletCnt);
 
 			Equipment rifle{};
 			rifle.socketType = Bone::SocketType::RightHand;
