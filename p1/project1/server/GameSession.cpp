@@ -178,9 +178,9 @@ int32 GameSession::onRecvPacket( uint8* buffer, int32 len ) {
 			.type = LogicMsgType::UserFire,
 			.userId = getId(),
 			.roomId = myRoomId_,
+			.cameraPitchRadian = packet->csFire.cameraPitchRadian,
 			.position = packet->csFire.firePos,
-			.fireDir = packet->csFire.fireDir,
-			.timeStamp = packet->csFire.timeStamp
+			.forward = packet->csFire.forward,
 		};
 		GameLogicManager::dispatchMessage(logicMsg);
 		break;

@@ -719,8 +719,8 @@ void Game::processInputGame(Milliseconds deltaTime) {
 			},
 			.csFire = {
 				.firePos = firePos.getXmf(),
-				.fireDir = player_->forward().getXmf(),
-				.timeStamp = static_cast<u32t>(HighResolutionClock::now().time_since_epoch().count())
+				.forward = player_->forward().getXmf(),
+				.cameraPitchRadian = cameraPitch_,
 			}
 		};
 

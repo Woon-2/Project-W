@@ -24,7 +24,6 @@ struct LogicMessage {
 	DirectX::XMFLOAT3 position{};	// user pos or fire pos
 	DirectX::XMFLOAT3 velocity{};
 	DirectX::XMFLOAT3 forward{};
-	DirectX::XMFLOAT3 fireDir{};
 	std::uint32_t timeStamp{};
 };
 

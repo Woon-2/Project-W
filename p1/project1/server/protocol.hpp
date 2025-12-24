@@ -153,8 +153,8 @@ struct CSFindRoomPacket {
 
 struct CSFirePacket {
 	DirectX::XMFLOAT3 firePos;
-	DirectX::XMFLOAT3 fireDir;
-	std::uint32_t timeStamp;
+	DirectX::XMFLOAT3 forward;
+	float cameraPitchRadian;
 };
 
 struct SCFirePacket {

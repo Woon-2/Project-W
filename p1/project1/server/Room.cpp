@@ -182,15 +182,23 @@ void Room::processMessage(Milliseconds deltaTime) {
 			broadcast(sendBuffer);
 
 			if(!validateFire(mu::Vec3(DirectX::XMLoadFloat3(&messages[i].position)),
-				mu::Vec3(DirectX::XMLoadFloat3(&messages[i].fireDir)), shooter)
+				mu::Vec3(DirectX::XMLoadFloat3(&messages[i].forward)), messages[i].cameraPitchRadian, shooter)
 			) {
 				std::cout << "invalid fire\n";
 				break;
 			}
 
+			auto shooterForward = shooter->forward();
+			auto shooterPitch = shooter->cameraPitch();
+			auto fireDir = mu::NVec3(
+				shooterForward.x() * std::cos(shooterPitch),
+				-std::sin(shooterPitch),
+				shooterForward.z() * std::cos(shooterPitch)
+			);
+
 			auto ray = Ray{
 				.origin = mu::Vec3(DirectX::XMLoadFloat3(&messages[i].position)),
-				.dir = mu::NVec3(DirectX::XMLoadFloat3(&messages[i].fireDir))
+				.dir = fireDir
 			};
 
 			for (auto& [id, user] : idUserMap_) {
@@ -202,8 +210,18 @@ void Room::processMessage(Milliseconds deltaTime) {
 				for (auto i = 0; i < size; ++i) {
 					auto rayHit = RaycastBoundingRect(user->physicState().boundingRects[i], ray);
 					if (rayHit.hit) {
-						std::cout << "player " << shooterId << " hit player " << id << '\n';
-						user->setHp(user->hp() - 10);
+						//std::cout << "player " << shooterId << " hit player " << id << '\n';
+						if(rayHit.point.y() > user->physicState().pos.y() + 1.8f) {
+							// 머리 위를 맞춤
+							break;
+						}
+
+						if(isHeadshot(user->physicState().pos.y(), rayHit.point)) {
+							user->setHp(user->hp() - 50);
+						}
+						else {
+							user->setHp(user->hp() - 10);
+						}
 
 						auto scHitResultPacket = Packet{
 							.header = {
@@ -468,7 +486,7 @@ bool Room::validateMove(mu::Vec3 clientCurrPos, mu::Vec3 clientCurrVel, uint32 c
 	return true;
 }
 
-bool Room::validateFire(mu::Vec3 firePos, mu::Vec3 fireDir, const std::shared_ptr<Object>& serverUserObj) {
+bool Room::validateFire(mu::Vec3 firePos, mu::Vec3 forward, float clientCameraPitchRadian, const std::shared_ptr<Object>& serverUserObj) {
 	auto userPos = serverUserObj->pos();
 
 	const auto maxFireXZOffset = 0.9f;
@@ -487,5 +505,43 @@ bool Room::validateFire(mu::Vec3 firePos, mu::Vec3 fireDir, const std::shared_pt
 		return false;
 	}
 
+	if(!validateForward(forward, serverUserObj)) {
+		return false;
+	}
+	if(!validatePitch(clientCameraPitchRadian, serverUserObj)) {
+		return false;
+	}
+
+	auto yawRadian = std::atan2(forward.x(), forward.z());
+	auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), mu::Radian(yawRadian));
+	serverUserObj->setOrient(yaw);
+	serverUserObj->setCameraPitch(clientCameraPitchRadian);
+
 	return true;
+}
+
+bool Room::validateForward(mu::Vec3 forward, const std::shared_ptr<Object>& serverUserObj) {
+	if (forward.len2() < 1e-6f) {
+		return false;
+	}
+
+	auto nvclientForward = mu::NVec3(forward);
+	auto nvServerForward = mu::NVec3(serverUserObj->forward());
+	float dot = mu::dot(nvclientForward, nvServerForward);
+
+	const float cosMaxAngle = 0.98f; // 약 11.5도
+	return dot >= cosMaxAngle;
+}
+
+bool Room::validatePitch(float cameraPitchRadian, const std::shared_ptr<Object>& serverUserObj) {
+	const float maxPitchRadian = mu::Radian(89.f);
+	if(std::fabs(cameraPitchRadian) > maxPitchRadian) {
+		return false;
+	}
+
+	float serverPitchRadian = serverUserObj->cameraPitch();
+	float diff = std::fabs(cameraPitchRadian - serverPitchRadian);
+
+	const float maxDiffRadian = mu::Radian(10.f);
+	return diff <= maxDiffRadian;
 }
