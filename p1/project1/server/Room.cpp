@@ -180,7 +180,6 @@ void Room::processMessage(Milliseconds deltaTime) {
 			auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
 			sendBuffer->copyData(&scFirePacket, packetSize);
 			broadcast(sendBuffer);
-			break;
 
 			if(!validateFire(mu::Vec3(DirectX::XMLoadFloat3(&messages[i].position)),
 				mu::Vec3(DirectX::XMLoadFloat3(&messages[i].fireDir)), shooter)
@@ -195,7 +194,7 @@ void Room::processMessage(Milliseconds deltaTime) {
 			};
 
 			for (auto& [id, user] : idUserMap_) {
-				if(id == shooterId) {
+				if(id == shooterId || user->hp() <= 0) {
 					continue;
 				}
 
@@ -204,6 +203,8 @@ void Room::processMessage(Milliseconds deltaTime) {
 					auto rayHit = RaycastBoundingRect(user->physicState().boundingRects[i], ray);
 					if (rayHit.hit) {
 						std::cout << "player " << shooterId << " hit player " << id << '\n';
+						user->setHp(user->hp() - 10);
+
 						auto scHitResultPacket = Packet{
 							.header = {
 								.size = sizeof(PacketHeader) + sizeof(SCHitResultPacket),
@@ -212,7 +213,7 @@ void Room::processMessage(Milliseconds deltaTime) {
 							.scHitResult = {
 								.shooterId = shooterId,
 								.targetId = id,
-								.hitResult = HitResult::Body
+								.currHp = user->hp()
 							}
 						};
 
@@ -220,6 +221,24 @@ void Room::processMessage(Milliseconds deltaTime) {
 						auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
 						sendBuffer->copyData(&scHitResultPacket, packetSize);
 						broadcast(sendBuffer);
+
+						if (user->hp() <= 0) {
+							std::cout << "player " << id << " died\n";
+							auto scDeathPacket = Packet{
+								.header = {
+									.size = sizeof(PacketHeader) + sizeof(SCDeathPacket),
+									.id = static_cast<uint16>(PacketType::scDeath)
+								},
+								.scDeath = {
+									.playerId = id
+								}
+							};
+
+							int32 packetSize = sizeof(Packet);
+							auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+							sendBuffer->copyData(&scDeathPacket, packetSize);
+							broadcast(sendBuffer);
+						}
 						break;
 					}
 				}

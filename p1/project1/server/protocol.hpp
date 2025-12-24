@@ -48,6 +48,7 @@ enum class PacketType : std::uint16_t {
 	csReload,
 	scReload,
 	scHitResult,
+	scDeath,
 };
 
 struct CSSignupPacket {
@@ -176,8 +177,12 @@ enum class HitResult : std::uint8_t {
 struct SCHitResultPacket {
 	std::int32_t shooterId;
 	std::int32_t targetId;
-	HitResult hitResult;
+	std::int32_t currHp;
 };
+
+struct SCDeathPacket {
+	std::int32_t playerId;
+};;
 
 struct Packet {
 	PacketHeader header;
@@ -209,6 +214,7 @@ struct Packet {
 		CSReloadPacket csReload;
 		SCReloadPacket scReload;
 		SCHitResultPacket scHitResult;
+		SCDeathPacket scDeath;
 	};
 };
 

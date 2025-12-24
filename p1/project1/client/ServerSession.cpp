@@ -122,9 +122,9 @@ int32 ServerSession::onRecvPacket(uint8* buffer, int32 len) {
 	case PacketType::scHitResult: {
 		auto message = Online::Message{
 			.type = Online::MsgType::HitResult,
-			.hitResult = packet->scHitResult.hitResult,
 			.objectId = packet->scHitResult.shooterId,
-			.targetId = packet->scHitResult.targetId
+			.targetId = packet->scHitResult.targetId,
+			.currHp = packet->scHitResult.currHp
 		};
 		messageQueue.enqueue(message);
 		break;
@@ -145,6 +145,15 @@ int32 ServerSession::onRecvPacket(uint8* buffer, int32 len) {
 			.type = Online::MsgType::Reload,
 			.objectId = packet->scReload.shooterId,
 			.bulletCnt = packet->scReload.bulletCount
+		};
+		messageQueue.enqueue(message);
+		break;
+	}
+
+	case PacketType::scDeath: {
+		auto message = Online::Message{
+			.type = Online::MsgType::Death,
+			.objectId = packet->scDeath.playerId,
 		};
 		messageQueue.enqueue(message);
 		break;

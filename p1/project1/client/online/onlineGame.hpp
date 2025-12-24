@@ -29,11 +29,11 @@ enum class MsgType : u8t {
 	Fire,
 	Reload,
 	HitResult,
+	Death
 };
 
 struct Message {
 	MsgType type{MsgType::None};
-	HitResult hitResult;
 	i32t objectId;
 	i32t targetId;
 	u32t materialSetIdx;
@@ -42,6 +42,7 @@ struct Message {
 	mu::Vec3 scale;
 	float cameraPitch{0.f};
 	i32t bulletCnt{0};
+	i32t currHp{0};
 };
 
 class Game : public IGame {

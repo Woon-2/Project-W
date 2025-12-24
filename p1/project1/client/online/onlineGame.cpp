@@ -163,20 +163,20 @@ void Game::update(Milliseconds deltaTime) {
 		case MsgType::HitResult: {
 			auto& shooter = idPlayerMap_[msg.objectId];
 			auto& target = idPlayerMap_[msg.targetId];
-			shooter->eventBus()->receive(
-				reinterpret_cast<BasicEvent*>(const_cast<Message*>(&msg)),
-				deltaTime, eventList_, *pTimer_, shooter.get()
-			);
-			if (msg.hitResult == HitResult::Body) {
-				if (shooter != player_) {
-					//holdEvent(eventList_, EvFire{});
-				}
+			
+			if (shooter != player_) {
+				holdEvent(eventList_, EvFire{msg.objectId});
 			}
-			else if(msg.hitResult == HitResult::Head) {
-
-			}
+			holdEvent(eventList_, EvHit(msg.targetId, msg.currHp));
 			break;
 		}
+
+		case MsgType::Death:
+			holdEvent(eventList_, EvDeath{msg.objectId});
+			if (msg.objectId == player_->getId()) {
+				playerDead_ = true;
+			}
+			break;
 
 		default:
 			break;
@@ -200,15 +200,24 @@ void Game::update(Milliseconds deltaTime) {
 			break;
 		}
 
-		case EventType::Hit:
-			player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
-			playerHpUI_.eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, &playerHpUI_);
+		case EventType::Hit: {
+			auto pHitEv = reinterpret_cast<EvHit*>(pEv);
+			auto& target = idPlayerMap_[pHitEv->targetId];
 
-			if (playerHpUI_.hp() == 0) {
-				holdEvent(eventList_, EvDeath{});
-				playerDead_ = true;
+			target->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, target.get());
+			if (target == player_) {
+				playerHpUI_.eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, &playerHpUI_);
 			}
+
+			//player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
+			//playerHpUI_.eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, &playerHpUI_);
+
+			//if (playerHpUI_.hp() == 0) {
+			//	holdEvent(eventList_, EvDeath{});
+			//	playerDead_ = true;
+			//}
 			break;
+		}
 
 		case EventType::MuzzleFlash: {
 			auto& muzzleFlash = muzzleFlashes_.emplace_back();
@@ -234,9 +243,13 @@ void Game::update(Milliseconds deltaTime) {
 			playerHpUI_.eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, &playerHpUI_);
 			break;
 
-		case EventType::Death:
-			player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
+		case EventType::Death: {
+			auto pDeathEv = reinterpret_cast<EvDeath*>(pEv);
+			auto& deadPlayer = idPlayerMap_[pDeathEv->playerId];
+			deadPlayer->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, deadPlayer.get());
+			//player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
 			break;
+		}
 
 		default:
 			break;
@@ -340,9 +353,9 @@ void Game::update(Milliseconds deltaTime) {
 	animSystem_.update(0.016s);
 
 	// ÃÑ ¹ß»ç ÄðÅ¸ÀÓ °è»ê
-	if (fireCooldown_ > 0ms) {
+	/*if (fireCooldown_ > 0ms) {
 		fireCooldown_ -= deltaTime;
-	}
+	}*/
 
 	clearEvents(eventList_);
 }
