@@ -80,7 +80,6 @@ void Room::processMessage(Milliseconds deltaTime) {
 			auto user = idUserMap_[messages[i].userId];
 
 			auto clientCurrPos = mu::Vec3(DirectX::XMLoadFloat3(&messages[i].position));
-			auto clientCurrVel = mu::Vec3(DirectX::XMLoadFloat3(&messages[i].velocity));
 			auto clientTimeStamp = messages[i].timeStamp;
 
 			if (clientCurrPos == user->pos()) {
@@ -88,7 +87,7 @@ void Room::processMessage(Milliseconds deltaTime) {
 				break;
 			}
 			
-			auto valid = validateMove(clientCurrPos, clientCurrVel, clientTimeStamp, deltaTime, user);
+			auto valid = validateMove(clientCurrPos, clientTimeStamp, deltaTime, user);
 			if (valid) {
 				//std::cout << "valid\n";
 				user->setLastMoveTimestamp(clientTimeStamp);
@@ -460,9 +459,11 @@ bool Room::empty() {
 	return users_.empty();
 }
 
-bool Room::validateMove(mu::Vec3 clientCurrPos, mu::Vec3 clientCurrVel, uint32 clientTimeStamp,
-	Milliseconds deltaTime, const std::shared_ptr<Object>& serverUserObj
-) {
+bool Room::validateMove(mu::Vec3 clientCurrPos, uint32 clientTimeStamp, Milliseconds deltaTime, const std::shared_ptr<Object>& serverUserObj) {
+	// 충돌 처리가 필요함
+
+
+
 	/*std::cout << "prev pos : " << serverUserObj->pos().x() << ", "
 		<< serverUserObj->pos().y() << ", " << serverUserObj->pos().z() << '\n';
 	std::cout << "curr pos : " << clientCurrPos.x() << ", "
