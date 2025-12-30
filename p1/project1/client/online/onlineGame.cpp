@@ -275,11 +275,7 @@ void Game::update(Milliseconds deltaTime) {
 		// 물리 시뮬레이션의 대상이 되는 객체들을
 		// 한 곳에 모아 PhysicSystem 객체에 전달한다.
 		static std::vector<Object*> allObjects{};
-		allObjects.resize(cubes_.size() + 1);
-		std::ranges::transform(cubes_, allObjects.begin(),
-			[](Object& cube) { return &cube; }
-		);
-		allObjects[cubes_.size()] = player_.get();
+		allObjects.push_back(player_.get());
 
 		while ( physicUpdateAcc_ >= physicUpdateInterval ) {
 			physicSystem_.step( allObjects, physicUpdateInterval );
