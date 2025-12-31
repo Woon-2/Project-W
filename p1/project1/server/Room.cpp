@@ -18,13 +18,13 @@ void Room::update(Milliseconds deltaTime) {
 	processMessage(deltaTime);
 
 	// 물리 시뮬레이션
-	std::vector<Object*> allObjects;
+	/*std::vector<Object*> allObjects;
 	allObjects.resize(users_.size());
 	std::ranges::transform(users_, allObjects.begin(),
 		[](const std::shared_ptr<Object>& obj) { return obj.get(); }
 	);
 
-	physicSystem_.step(allObjects, 1s / 60.f);
+	physicSystem_.step(allObjects, 1s / 60.f);*/
 }
 
 void Room::processMessage(Milliseconds deltaTime) {
@@ -116,6 +116,13 @@ void Room::processMessage(Milliseconds deltaTime) {
 			}
 			else {
 				std::cout << "invalid\n";
+				
+				// 이동 방향 반대 방향으로 약간 롤백 시킨 뒤 클라이언트에 전송
+				auto dir = mu::NVec3(user->pos() - clientCurrPos);
+				const float rollbackDistance = 0.05f;
+				auto rollbackPos = user->pos() + mu::Vec3(dir) * rollbackDistance;
+				user->setPos(rollbackPos);
+
 				auto scRollbackPacket = Packet{
 					.header = {
 						.size = sizeof(PacketHeader) + sizeof(SCRollbackPacket),
@@ -171,7 +178,8 @@ void Room::processMessage(Milliseconds deltaTime) {
 				},
 				.scFire = {
 					.shooterId = shooterId,
-					.bulletCount = shooterBullet - 1
+					.bulletCount = shooterBullet - 1,
+					.firePos = messages[i].position
 				}
 			};
 
@@ -230,7 +238,8 @@ void Room::processMessage(Milliseconds deltaTime) {
 							.scHitResult = {
 								.shooterId = shooterId,
 								.targetId = id,
-								.currHp = user->hp()
+								.currHp = user->hp(),
+								.hitPos = rayHit.point.getXmf()
 							}
 						};
 
@@ -461,8 +470,27 @@ bool Room::empty() {
 
 bool Room::validateMove(mu::Vec3 clientCurrPos, uint32 clientTimeStamp, Milliseconds deltaTime, const std::shared_ptr<Object>& serverUserObj) {
 	// 충돌 처리가 필요함
+	std::vector<Object*> allObjects;
+	allObjects.reserve(cubes_.size() + users_.size() - 1);
+	for (auto& cube : cubes_) {
+		allObjects.emplace_back(&cube);
+	}
+	for (auto& user : users_) {
+		if (user != serverUserObj) {
+			allObjects.emplace_back(user.get());
+		}
+	}
 
-
+	for (auto& obj : allObjects) {
+		for (int i = 0; i < serverUserObj->physicState().aabbs.size(); ++i) {
+			for(int j = 0; j < obj->physicState().aabbs.size(); ++j) {
+				auto c = collides(serverUserObj->physicState().aabbs[i], obj->physicState().aabbs[j]);
+				if (c.hit) {
+					return false;
+				}
+			}
+		}
+	}
 
 	/*std::cout << "prev pos : " << serverUserObj->pos().x() << ", "
 		<< serverUserObj->pos().y() << ", " << serverUserObj->pos().z() << '\n';

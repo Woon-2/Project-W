@@ -197,6 +197,9 @@ private:
 	std::array<BYTE, std::numeric_limits<u8t>::max()> keyboardStatePrev_{};
 
 	bool inRoom_ = false;
+
+	mu::Vec3 prevVelocity_{};
+	mu::Vec3 currVelocity_{};
 };
 
 }	// namespace Online

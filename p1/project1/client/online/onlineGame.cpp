@@ -286,11 +286,7 @@ void Game::update(Milliseconds deltaTime) {
 	}
 
 	//std::cout << "player pos : " << player_->pos().x() << ", " << player_->pos().y() << ", " << player_->pos().z() << '\n';
-	if (keyboardStateCurr_['W'] & 0x80 ||
-		keyboardStateCurr_['A'] & 0x80 ||
-		keyboardStateCurr_['S'] & 0x80 ||
-		keyboardStateCurr_['D'] & 0x80
-	) {
+	if (prevVelocity_ != currVelocity_) {
 		sendMoveStatePacket();
 	}
 
@@ -616,6 +612,8 @@ void Game::processInputGame(Milliseconds deltaTime) {
 	const auto moveZSign = !playerDead_ * (keyboardStateCurr_['W'] & 0x80) - (keyboardStateCurr_['S'] & 0x80);
 	const auto moveThreshold = 0.1f;
 
+	prevVelocity_ = currVelocity_;
+
 	if (moveXSign || moveZSign) {
 		// 'W'/'S' 입력으로 판정된 Z 부호는 플레이어의 forward 벡터,
 		// 'D'/'A' 입력으로 판정된 X 부호는 플레이어의 right 벡터와 곱해 속도의 방향을 정한다.
@@ -653,6 +651,8 @@ void Game::processInputGame(Milliseconds deltaTime) {
 	else {
 		player_->physicState().velocity = mu::Vec3();
 	}
+
+	currVelocity_ = player_->physicState().velocity;
 
 	// 카메라 1인칭 모드 설정
 	if ( !(keyboardStatePrev_['1'] & 0x80)

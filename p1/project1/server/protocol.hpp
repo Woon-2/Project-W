@@ -160,6 +160,7 @@ struct CSFirePacket {
 struct SCFirePacket {
 	std::int32_t shooterId;
 	std::int32_t bulletCount;
+	DirectX::XMFLOAT3 firePos;
 };
 
 struct CSReloadPacket {
@@ -181,6 +182,7 @@ struct SCHitResultPacket {
 	std::int32_t shooterId;
 	std::int32_t targetId;
 	std::int32_t currHp;
+	DirectX::XMFLOAT3 hitPos;
 };
 
 struct SCDeathPacket {

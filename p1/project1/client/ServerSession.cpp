@@ -130,6 +130,7 @@ int32 ServerSession::onRecvPacket(uint8* buffer, int32 len) {
 			.type = Online::MsgType::HitResult,
 			.objectId = packet->scHitResult.shooterId,
 			.targetId = packet->scHitResult.targetId,
+			.pos = DirectX::XMLoadFloat3(&packet->scHitResult.hitPos),
 			.currHp = packet->scHitResult.currHp
 		};
 		messageQueue.enqueue(message);
@@ -140,6 +141,7 @@ int32 ServerSession::onRecvPacket(uint8* buffer, int32 len) {
 		auto message = Online::Message{
 			.type = Online::MsgType::Fire,
 			.objectId = packet->scFire.shooterId,
+			.pos = DirectX::XMLoadFloat3(&packet->scFire.firePos),
 			.bulletCnt = packet->scFire.bulletCount
 		};
 		messageQueue.enqueue(message);
