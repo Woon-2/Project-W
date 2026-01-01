@@ -71,6 +71,7 @@ public:
 
 	void addPlayer( const std::shared_ptr<Object>& player ) {
 		std::lock_guard<std::mutex> lock( objectsMtx_ );
+		player->setAnimBlender(animSystem_, assetManager_);
 		otherPlayers_.push_back( player );
 		idPlayerMap_[ player->getId( ) ] = player;
 	}
@@ -89,7 +90,6 @@ public:
 		newPlayer->setPos( mu::Vec3( x, y, z ) );
 		newPlayer->setModel( assetManager_.modelPlayer( ) );
 		newPlayer->setScale( 1.f );
-		newPlayer->setAnimBlender(animSystem_, assetManager_);
 		newPlayer->enableBVRendering();
 
 		Equipment rifle{};
