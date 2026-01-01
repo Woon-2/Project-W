@@ -48,21 +48,23 @@ void AssetManager::loadGFXAssets(GFX& gfx) {
 		.name = "PlayerHpLine",
 		.texturePath = "../resources/UI/player_hp_line.dds",
 		.pDest = &playerHpLine_,
-		.pTexHashMap = &texHashMap_
-		} );
+		.pTexHashMap = &texHashMap_,
+		.needsUploadInfo = false
+	} );
 
 	gfx.addRequestTextureLoad( RequestTextureLoad{
 		.name = "PlayerHpFrame",
 		.texturePath = "../resources/UI/player_hp_frame.dds",
 		.pDest = &playerHpFrame_,
-		.pTexHashMap = &texHashMap_
-		} );
+		.pTexHashMap = &texHashMap_,
+		.needsUploadInfo = false
+	} );
 
 	gfx.addRequestTextImageLoad( RequestTextImageLoad{
 		.width = 512,
 		.height = 256,
 		.pDest = &textPlayerHp_
-		} );
+	} );
 
 	gfx.loadAssets();
 }

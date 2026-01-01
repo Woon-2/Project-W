@@ -27,7 +27,7 @@ namespace UIPipeline {
 	struct DrawEvent {
 		mu::Mat4x4 world;
 		const Texture* pTex;
-		TextImage* pTextImage;
+		const Texture* pCopySrc;	// nullptr가 아닐 경우 이 텍스처를 원본으로 복사를 수행
 
 		auto operator<=>( const DrawEvent& rhs ) const noexcept {
 			return std::strong_ordering::equal;

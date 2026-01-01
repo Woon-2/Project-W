@@ -137,6 +137,7 @@ struct RequestTextureLoad {
 	std::filesystem::path texturePath;
 	Texture* pDest;
 	std::unordered_map<std::string, Texture>* pTexHashMap;
+	bool needsUploadInfo;
 };
 
 struct RequestSpriteAnimLoad {
@@ -242,7 +243,6 @@ public:
 
 	void WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, void* pFontObjHandle, const WCHAR* wchString, DWORD dwLen );
 	void UpdateTextureWithTextImage( TextImage* srcImage, UINT srcWidth, UINT srcHeight );
-	void UpdateTexure( ID3D12Resource* pDestTexResource, ID3D12Resource* pSrcTexResource );
 
 private:
 	// 공용 샘플러들 생성

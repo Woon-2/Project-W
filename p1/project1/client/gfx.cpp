@@ -637,9 +637,23 @@ void GFX::loadAssets() {
 		if ( !request.pTexHashMap->contains( request.name ) ) {
 			Texture::Type type{};
 			auto [pPair, _] = request.pTexHashMap->try_emplace( request.name, loadTexture( device_.Get(), cmdList.Get(), request.texturePath, fence, type ) );
-			createSRV( device_.Get(), pPair->second, srvTexPool_ );
-			pPair->second.idxSrv.idxSampler = etoi( Samplers::TrilinearWrap );
-			*request.pDest = pPair->second;
+			auto& tex = pPair->second;
+			createSRV( device_.Get(), tex, srvTexPool_ );
+			tex.idxSrv.idxSampler = etoi( Samplers::TrilinearWrap );
+			*request.pDest = tex;
+
+			if (request.needsUploadInfo) {
+				tex.uploadInfo = std::make_shared<TextureUploadInfo>();
+				tex.uploadInfo->resDesc = tex.res->GetDesc();
+
+				if ( tex.uploadInfo->resDesc.MipLevels > static_cast<UINT16>( tex.uploadInfo->footprints.size() ) )
+					__debugbreak();
+
+				device_->GetCopyableFootprints( &tex.uploadInfo->resDesc, 0, tex.uploadInfo->resDesc.MipLevels,
+					0, tex.uploadInfo->footprints.data(), tex.uploadInfo->rowCounts.data(),
+					tex.uploadInfo->rowSizes.data(), &tex.uploadInfo->totalSize
+				);
+			}
 		}
 	}
 
@@ -1058,40 +1072,6 @@ void GFX::UpdateTextureWithTextImage( TextImage* srcImage, UINT srcWidth, UINT s
 	}
 	// Unmap
 	pUploadBuffer->Unmap( 0, nullptr );
-}
-
-void GFX::UpdateTexure( ID3D12Resource* pDestTexResource, ID3D12Resource* pSrcTexResource )
-{
-	auto& fence = fences_.at( "LoadFence" );
-
-	// 명령 리스트와 명령 할당자 할당
-	CommandContext cmdCtx{};
-	DISPLAY_ERROR_STR(
-		cmdListPool_.allocOne( CommandListUsage::ResourceLoading, cmdCtx ),
-		"[GFX Error] GFX::loadMeshes: 사용 가능한 명령 리스트가 없습니다. "
-		"CommandListPool::init 호출이 이루어지지 않았거나, 할당받은 명령 리스트가 반납되지 않았거나,"
-		"너무 많은 명령 리스트의 할당이 요청되었습니다.",
-		false
-	);
-	auto& cmdList = cmdCtx.cmdList;
-	auto& cmdAlloc = cmdCtx.cmdAlloc;
-
-	// 명령 리스트 초기화
-	DISPLAY_ERROR_DX_VOID( cmdAlloc->Reset(), false );
-	DISPLAY_ERROR_DX_VOID( cmdList->Reset( cmdAlloc.Get(), nullptr ), false );
-
-	::UpdateTexture( device_.Get(), cmdList.Get(), pDestTexResource, pSrcTexResource);
-
-	// 명령 기록 끝, 명령 실행
-	DISPLAY_ERROR_DX_VOID( cmdList->Close(), false );
-
-	ID3D12CommandList* tmpCmdLists[] = { cmdList.Get() };
-
-	DISPLAY_ERROR_DX_VOID( cmdQ_->ExecuteCommandLists( 1u, tmpCmdLists ), false );
-
-	fence.associatedCmdCtxs_[etoi( CommandListUsage::ResourceLoading )].push_back( std::move( cmdCtx ) );
-	signalFence( "LoadFence" );
-	waitOnFence( "LoadFence" );
 }
 
 // 공용 샘플러들 생성

@@ -311,6 +311,18 @@ UINT calcIdxBindlessSampler( D3D12_FILTER filterMode,
 	D3D12_TEXTURE_ADDRESS_MODE addrModeW, UINT anisoLevel
 );
 
+// 텍스처를 복사를 통해 동적으로 업데이트할 필요가 있는 경우 이 구조체를 사용한다.
+// UpdateTexture 함수에서 필요로 하는 정보들을 제공한다.
+// 필요한 경우 Texture 객체를 생성 후 별도로 Texture 객체의 uploadInfo 멤버를 활성화한다.
+struct TextureUploadInfo {
+	static constexpr auto MAX_SUB_RESOURCE_NUM = 32u;
+	D3D12_RESOURCE_DESC resDesc;
+    std::array<D3D12_PLACED_SUBRESOURCE_FOOTPRINT, MAX_SUB_RESOURCE_NUM> footprints;
+    std::array<UINT, MAX_SUB_RESOURCE_NUM> rowCounts;
+    std::array<UINT64, MAX_SUB_RESOURCE_NUM> rowSizes;
+    UINT64 totalSize;
+};
+
 // 텍스처와 관련된 정보를 담는 구조체
 // gpu 리소스를 담는 ComPtr 객체와 Bindless 셰이더에서 인덱싱하기 위한 인덱스들이 저장된다.
 struct Texture {
@@ -320,6 +332,7 @@ struct Texture {
 		TexCube
 	};
 	ComPtr<ID3D12Resource> res;
+	std::shared_ptr<TextureUploadInfo> uploadInfo;	// UpdateTexture 함수의 대상이 되는 경우 생성 후 사용
 	int idxRtv;
 	int idxDsv;
 	BindlessIndex idxSrv;
@@ -356,8 +369,8 @@ void createResourcePair(ID3D12Resource** outDefaultTex,
 	DXGI_FORMAT format
 );
 
-// 업로드 힙에 생성된 텍스처를 디폴트 힙 테그처로 복사하는 함수
-void UpdateTexture( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, ID3D12Resource* pDestTexResource, ID3D12Resource* pSrcTexResource );
+// 업로드 힙에 생성된 텍스처를 디폴트 힙 텍스처로 복사하는 함수
+void UpdateTexture( ID3D12GraphicsCommandList* cmdList, const Texture& srcTex, const Texture& destTex );
 
 // DescriptorPool 객체에서 디스크립터를 할당받아 그 자리에 텍스처의 RTV를 만든다.
 // 텍스처의 idxRtv에 풀에서의 인덱스가 저장된다.

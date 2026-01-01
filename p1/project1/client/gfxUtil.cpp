@@ -717,37 +717,25 @@ void createResourcePair( ID3D12Resource** outDefaultTex, ID3D12Resource** outUpl
 	*outUploadTex = pUploadBuffer;
 }
 
-void UpdateTexture( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, ID3D12Resource* pDestTexResource, ID3D12Resource* pSrcTexResource )
-{
-	const DWORD MAX_SUB_RESOURCE_NUM = 32;
-	D3D12_PLACED_SUBRESOURCE_FOOTPRINT Footprint[MAX_SUB_RESOURCE_NUM] = {};
-	UINT	Rows[MAX_SUB_RESOURCE_NUM] = {};
-	UINT64	RowSize[MAX_SUB_RESOURCE_NUM] = {};
-	UINT64	TotalBytes = 0;
-
-	D3D12_RESOURCE_DESC Desc = pDestTexResource->GetDesc();
-	if ( Desc.MipLevels > (UINT)_countof( Footprint ) )
-		__debugbreak();
-
-	device->GetCopyableFootprints( &Desc, 0, Desc.MipLevels, 0, Footprint, Rows, RowSize, &TotalBytes );
-
-	transitionResourceState( cmdList, pDestTexResource, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST );
-	for ( DWORD i = 0; i < Desc.MipLevels; i++ )
+// 업로드 힙에 생성된 텍스처를 디폴트 힙 텍스처로 복사하는 함수
+void UpdateTexture( ID3D12GraphicsCommandList* cmdList, const Texture& srcTex, const Texture& destTex ) {
+	transitionResourceState( cmdList, destTex.res.Get(), D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST );
+	for ( DWORD i = 0; i < destTex.uploadInfo->resDesc.MipLevels; i++ )
 	{
 		D3D12_TEXTURE_COPY_LOCATION	destLocation = {};
-		destLocation.PlacedFootprint = Footprint[i];
-		destLocation.pResource = pDestTexResource;
+		destLocation.PlacedFootprint = destTex.uploadInfo->footprints[i];
+		destLocation.pResource = destTex.res.Get();
 		destLocation.SubresourceIndex = i;
 		destLocation.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
 
 		D3D12_TEXTURE_COPY_LOCATION	srcLocation = {};
-		srcLocation.PlacedFootprint = Footprint[i];
-		srcLocation.pResource = pSrcTexResource;
+		srcLocation.PlacedFootprint = destTex.uploadInfo->footprints[i];
+		srcLocation.pResource = srcTex.res.Get();
 		srcLocation.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
 
 		cmdList->CopyTextureRegion( &destLocation, 0, 0, 0, &srcLocation, nullptr );
 	}
-	transitionResourceState( cmdList, pDestTexResource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
+	transitionResourceState( cmdList, destTex.res.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE );
 }
 
 void __createRTV( ID3D12Device* device, Texture& tex,

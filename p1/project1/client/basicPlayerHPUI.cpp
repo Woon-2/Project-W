@@ -28,7 +28,6 @@ void BasicPlayerHpUI::update( Milliseconds deltaTime, GFX& gfx, FontHandle* pFon
 	std::ranges::fill( pTextHp_->pData, 0 );
 	gfx.WriteTextToBitmap( pTextHp_, pTextHp_->width, pTextHp_->height, pTextHp_->width * 4, &iTextWidth, &iTextHeight, nullptr, wchTxt, dwTxtLen );
 	gfx.UpdateTextureWithTextImage( pTextHp_, pTextHp_->width, pTextHp_->height );
-	gfx.UpdateTexure( pTextHp_->texture.res.Get(), pTextHp_->textureUpload.res.Get() );
 }
 
 void BasicPlayerHpUI::render( GFX& gfx ) {
@@ -43,7 +42,7 @@ void BasicPlayerHpUI::render( GFX& gfx ) {
 		gfx.addDrawEvent( UIPipeline::DrawEvent{
 			.world = textWorld_,
 			.pTex = &pTextHp_->texture,
-			.pTextImage = pTextHp_
+			.pCopySrc = &pTextHp_->textureUpload
 		} );
 	}
 }

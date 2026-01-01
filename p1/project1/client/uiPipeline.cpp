@@ -329,6 +329,10 @@ namespace UIPipeline {
 				roomIdx_, &perDrawcallData, 1u
 			);
 
+			if (drawEvent.pCopySrc) {
+				::UpdateTexture(cmdList, *drawEvent.pCopySrc, *drawEvent.pTex);
+			}
+
 			DISPLAY_ERROR_DX_VOID(
 				cmdList->IASetVertexBuffers( 0u, static_cast<UINT>(Detail::staticVBViewQuads.size()),
 					Detail::staticVBViewQuads.data()
@@ -556,6 +560,10 @@ namespace UIPipeline {
 				pResources_->perDrawcallData.cbuffers[idxDrawcall].stage(
 					roomIdx_, &perDrawcallData, 1u
 				);
+
+				if (drawEvent.pCopySrc) {
+					::UpdateTexture(threadCmdList, *drawEvent.pCopySrc, *drawEvent.pTex);
+				}
 
 				DISPLAY_ERROR_DX_VOID(
 					threadCmdList->IASetVertexBuffers( 0u, static_cast<UINT>(Detail::staticVBViewQuads.size()),

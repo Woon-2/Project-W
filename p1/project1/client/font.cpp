@@ -236,6 +236,17 @@ TextImage::TextImage( ID3D12Device* device, UINT textWidth, UINT textHeight, Des
 
 	createResourcePair( &texture.res, &textureUpload.res, device, width, height, TexFormat );
 
+	texture.uploadInfo = std::make_shared<TextureUploadInfo>();
+	texture.uploadInfo->resDesc = texture.res->GetDesc();
+
+	if ( texture.uploadInfo->resDesc.MipLevels > static_cast<UINT16>( texture.uploadInfo->footprints.size() ) )
+		__debugbreak();
+
+	device->GetCopyableFootprints( &texture.uploadInfo->resDesc, 0, texture.uploadInfo->resDesc.MipLevels,
+		0, texture.uploadInfo->footprints.data(), texture.uploadInfo->rowCounts.data(),
+		texture.uploadInfo->rowSizes.data(), &texture.uploadInfo->totalSize
+	);
+
 	// default heap에 대한 리소스만 srv 생성
 	D3D12_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
 	SRVDesc.Format = TexFormat;
