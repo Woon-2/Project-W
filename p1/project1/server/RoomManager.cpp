@@ -33,3 +33,4 @@ void RoomManager::removeRoom( int32 roomId ) {
 std::mutex RoomManager::mtx_;
 std::unordered_map<int32, SPRoom> RoomManager::rooms_;
 const Level* RoomManager::pLevel_;
+const Model* RoomManager::pPlayerModel_;

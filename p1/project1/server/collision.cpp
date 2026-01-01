@@ -97,3 +97,65 @@ RayHit RaycastAABB(const AABB& box, const Ray& ray) {
 
     return hit;
 }
+
+// BoundingRect는 XZ 평면에 평행
+RayHit RaycastBoundingRect(const BoundingRect& rect, const Ray& ray) {
+    RayHit hit{.hit = false};
+
+    float tMin = 0.f;
+    float tMax = std::numeric_limits<float>::max();
+
+	float minX = rect.center.x() - rect.size.x() * 0.5f;
+	float maxX = rect.center.x() + rect.size.x() * 0.5f;
+	float minZ = rect.center.y() - rect.size.y() * 0.5f;
+	float maxZ = rect.center.y() + rect.size.y() * 0.5f;
+
+    // x slab
+    if (std::fabs(ray.dir.x()) < 1e-6f) {
+        if (ray.origin.x() < minX || ray.origin.x() > maxX) {
+			return hit;
+        }
+    }
+    else {
+        float invD = 1.f / ray.dir.x();
+        float t1 = (minX - ray.origin.x()) * invD;
+        float t2 = (maxX - ray.origin.x()) * invD;
+
+        if (t1 > t2) {
+            std::swap(t1, t2);
+        }
+
+        tMin = std::max(tMin, t1);
+        tMax = std::min(tMax, t2);
+        if (tMin > tMax) {
+            return hit;
+        }
+    }
+
+	// z slab
+    if (std::fabs(ray.dir.z()) < 1e-6f) {
+        if (ray.origin.z() < minZ || ray.origin.z() > maxZ) {
+			return hit;
+        }
+    }
+    else {
+        float invD = 1.f / ray.dir.z();
+        float t1 = (minZ - ray.origin.z()) * invD;
+        float t2 = (maxZ - ray.origin.z()) * invD;
+
+        if (t1 > t2) {
+            std::swap(t1, t2);
+        }
+
+        tMin = std::max(tMin, t1);
+        tMax = std::min(tMax, t2);
+        if (tMin > tMax) {
+            return hit;
+		}
+    }
+
+	hit.hit = true;
+	hit.t = tMin;
+	hit.point = ray.origin + ray.dir * tMin;
+	return hit;
+}

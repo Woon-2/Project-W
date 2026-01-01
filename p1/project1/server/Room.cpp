@@ -90,7 +90,7 @@ void Room::processMessage(Milliseconds deltaTime) {
 			
 			auto valid = validateMove(clientCurrPos, clientCurrVel, clientTimeStamp, deltaTime, user);
 			if (valid) {
-				std::cout << "valid\n";
+				//std::cout << "valid\n";
 				user->setLastMoveTimestamp(clientTimeStamp);
 				user->setPos(clientCurrPos);
 				auto yawRadian = std::atan2(messages[i].forward.x, messages[i].forward.z);
@@ -136,6 +136,149 @@ void Room::processMessage(Milliseconds deltaTime) {
 			break;
 		}
 
+		case LogicMsgType::UserFire: {
+			const int32 shooterId = messages[i].userId;
+			const auto shooter = idUserMap_[shooterId];
+
+			if(shooter->reloading()) {
+				// 재장전 중
+				break;
+			}
+
+			const int32 shooterHp = shooter->hp();
+			const int32 shooterBullet = shooter->bullet();
+			if(shooterBullet <= 0 || shooterHp <= 0) {
+				// 총알이 없거나 죽은 상태
+				break;
+			}
+
+			Milliseconds currFireTime = SteadyClock::now().time_since_epoch();
+			Milliseconds lastFireTime = shooter->lastFireTime();
+			Milliseconds fireCooldown = shooter->fireCooldown();
+
+			Milliseconds delta = currFireTime - lastFireTime;
+			if (delta < fireCooldown) {
+				// 쏠 수 없는 상태
+				break;
+			}
+
+			shooter->setLastFireTime(currFireTime);
+			shooter->setBullet(shooterBullet - 1);
+
+			auto scFirePacket = Packet{
+				.header = {
+					.size = sizeof(PacketHeader) + sizeof(SCFirePacket),
+					.id = static_cast<uint16>(PacketType::scFire)
+				},
+				.scFire = {
+					.shooterId = shooterId,
+					.bulletCount = shooterBullet - 1
+				}
+			};
+
+			int32 packetSize = sizeof(Packet);
+			auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+			sendBuffer->copyData(&scFirePacket, packetSize);
+			broadcast(sendBuffer);
+			break;
+
+			if(!validateFire(mu::Vec3(DirectX::XMLoadFloat3(&messages[i].position)),
+				mu::Vec3(DirectX::XMLoadFloat3(&messages[i].fireDir)), shooter)
+			) {
+				std::cout << "invalid fire\n";
+				break;
+			}
+
+			auto ray = Ray{
+				.origin = mu::Vec3(DirectX::XMLoadFloat3(&messages[i].position)),
+				.dir = mu::NVec3(DirectX::XMLoadFloat3(&messages[i].fireDir))
+			};
+
+			for (auto& [id, user] : idUserMap_) {
+				if(id == shooterId) {
+					continue;
+				}
+
+				auto size = user->physicState().boundingRects.size();
+				for (auto i = 0; i < size; ++i) {
+					auto rayHit = RaycastBoundingRect(user->physicState().boundingRects[i], ray);
+					if (rayHit.hit) {
+						std::cout << "player " << shooterId << " hit player " << id << '\n';
+						auto scHitResultPacket = Packet{
+							.header = {
+								.size = sizeof(PacketHeader) + sizeof(SCHitResultPacket),
+								.id = static_cast<uint16>(PacketType::scHitResult)
+							},
+							.scHitResult = {
+								.shooterId = shooterId,
+								.targetId = id,
+								.hitResult = HitResult::Body
+							}
+						};
+
+						int32 packetSize = sizeof(Packet);
+						auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+						sendBuffer->copyData(&scHitResultPacket, packetSize);
+						broadcast(sendBuffer);
+						break;
+					}
+				}
+			}
+			break;
+		}
+
+		case LogicMsgType::UserReload: {
+			const int32 shooterId = messages[i].userId;
+			const auto shooter = idUserMap_[shooterId];
+
+			const int32 shooterHp = shooter->hp();
+			const int32 shooterBullet = shooter->bullet();
+			if (shooterBullet == 30 || shooterHp <= 0) {
+				// 이미	총알이 가득 찼거나 죽은 상태
+				break;
+			}
+
+			bool reloaded = shooter->reloading();
+			if (!reloaded) {
+				shooter->startReloading();
+
+				auto message = LogicMessage{
+						.type = LogicMsgType::UserReload,
+						.userId = shooterId,
+						.roomId = roomId_
+				};
+				GameLogicManager::dispatchMessage(message);
+			}
+			else {
+				if (shooter->finishReloading()) {
+					auto scReloadPacket = Packet{
+						.header = {
+							.size = sizeof(PacketHeader) + sizeof(SCReloadPacket),
+							.id = static_cast<uint16>(PacketType::scReload)
+						},
+						.scReload = {
+							.shooterId = shooterId,
+							.bulletCount = shooter->bullet()
+						}
+					};
+
+					int32 packetSize = sizeof(Packet);
+					auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+					sendBuffer->copyData(&scReloadPacket, packetSize);
+					broadcast(sendBuffer);
+				}
+				else {
+					auto message = LogicMessage{
+						.type = LogicMsgType::UserReload,
+						.userId = shooterId,
+						.roomId = roomId_
+					};
+					GameLogicManager::dispatchMessage(message);
+				}
+			}
+			break;
+		}
+
 		default:
 			break;
 		}
@@ -153,6 +296,9 @@ void Room::enter(int32 playerId) {
 	player->setPos(playerStarts_[userIdx].pos());
 	player->setOrient(playerStarts_[userIdx].orient());
 	player->setScale(playerStarts_[userIdx].scale());
+
+	auto playerModel = RoomManager::playerModelData();
+	player->setModel(playerModel);
 
 	// 플레이어 정보 및 오브젝트들 정보 보내기
 	auto setupPacket = Packet{
@@ -286,7 +432,7 @@ bool Room::validateMove(mu::Vec3 clientCurrPos, mu::Vec3 clientCurrVel, uint32 c
 	//std::cout << "posDiff len2 : " << posDiff.len2() << '\n';
 
 	auto lastMoveTimestamp = serverUserObj->lastMoveTimestamp();
-	auto timeStampDiff = static_cast<float>(lastMoveTimestamp - clientTimeStamp);
+	auto timeStampDiff = static_cast<float>(clientTimeStamp - lastMoveTimestamp);
 	deltaTime *= timeStampDiff;
 
 	const auto calculatedVel = posDiff / Seconds(deltaTime).count();
@@ -297,5 +443,27 @@ bool Room::validateMove(mu::Vec3 clientCurrPos, mu::Vec3 clientCurrVel, uint32 c
 	if (calculatedVel.len2() > maxSpeed * maxSpeed) {
 		return false;
 	}
+	return true;
+}
+
+bool Room::validateFire(mu::Vec3 firePos, mu::Vec3 fireDir, const std::shared_ptr<Object>& serverUserObj) {
+	auto userPos = serverUserObj->pos();
+
+	const auto maxFireXZOffset = 0.9f;
+	const auto maxFireYOffset = 0.5f;
+	const auto minFireYOffset = 0.2f;
+	const float maxFireAngleRad = mu::Radian(8.f);
+
+	const auto dx = firePos.x() - userPos.x();
+	const auto dz = firePos.z() - userPos.z();
+	const auto distSqXZ = dx * dx + dz * dz;
+
+	if (distSqXZ > maxFireXZOffset * maxFireXZOffset) {
+		return false;
+	}
+	if (firePos.y() < minFireYOffset || firePos.y() > maxFireYOffset) {
+		return false;
+	}
+
 	return true;
 }

@@ -56,16 +56,11 @@ void BasicPlayerHpUI::EventBus::receive(const BasicEvent* event, Seconds deltaTi
 		pOwner->hp_ -= 10;
 		break;
 
-	case EventType::Fire:
-		--pOwner->bullet_;
-		if (pOwner->bullet_ == 0) {
-			holdEvent(evList, EvReloading{});
-			timer.enqueueJob( DelayedJob{
-				.job = [&evList](){ holdEvent(evList, EvReloadComplete{}); },
-				.executeAt = timer.lastTp() + 2s
-			} );
-		}
+	case EventType::Fire: {
+		auto pFireEv = reinterpret_cast<const EvFire*>(event);
+		pOwner->bullet_ = pFireEv->bulletCount;
 		break;
+	}
 
 	case EventType::ReloadComplete:
 		pOwner->bullet_ = 30;

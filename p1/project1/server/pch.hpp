@@ -45,6 +45,7 @@ using Seconds = std::chrono::duration<float>;
 
 using SystemClock = std::chrono::system_clock;
 using HighResolutionClock = std::chrono::high_resolution_clock;
+using SteadyClock = std::chrono::steady_clock;
 
 using i8t = std::int8_t;
 using i16t = std::int16_t;

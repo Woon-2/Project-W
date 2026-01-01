@@ -19,10 +19,6 @@ struct PacketHeader {
 	std::uint16_t id;	// packet type (protocol id)
 };
 
-enum class Direction : std::uint8_t {
-	w, a, s, d
-};
-
 enum class PacketType : std::uint16_t {
 	csSignup,
 	scSignup,
@@ -46,6 +42,12 @@ enum class PacketType : std::uint16_t {
 	scMove,
 
 	csFindRoom,
+
+	csFire,
+	scFire,
+	csReload,
+	scReload,
+	scHitResult,
 };
 
 struct CSSignupPacket {
@@ -145,6 +147,38 @@ struct CSFindRoomPacket {
 	std::int32_t roomId;
 };
 
+struct CSFirePacket {
+	DirectX::XMFLOAT3 firePos;
+	DirectX::XMFLOAT3 fireDir;
+	std::uint32_t timeStamp;
+};
+
+struct SCFirePacket {
+	std::int32_t shooterId;
+	std::int32_t bulletCount;
+};
+
+struct CSReloadPacket {
+
+};
+
+struct SCReloadPacket {
+	std::int32_t shooterId;
+	std::int32_t bulletCount;
+};
+
+enum class HitResult : std::uint8_t {
+	Miss,
+	Body,
+	Head,
+};
+
+struct SCHitResultPacket {
+	std::int32_t shooterId;
+	std::int32_t targetId;
+	HitResult hitResult;
+};
+
 struct Packet {
 	PacketHeader header;
 	union {
@@ -169,6 +203,12 @@ struct Packet {
 		SCMovePacket scMove;
 
 		CSFindRoomPacket csFindRoom;
+
+		CSFirePacket csFire;
+		SCFirePacket scFire;
+		CSReloadPacket csReload;
+		SCReloadPacket scReload;
+		SCHitResultPacket scHitResult;
 	};
 };
 

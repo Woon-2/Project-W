@@ -118,6 +118,37 @@ int32 ServerSession::onRecvPacket(uint8* buffer, int32 len) {
 		messageQueue.enqueue(message);
 		break;
 	}
+
+	case PacketType::scHitResult: {
+		auto message = Online::Message{
+			.type = Online::MsgType::HitResult,
+			.hitResult = packet->scHitResult.hitResult,
+			.objectId = packet->scHitResult.shooterId,
+			.targetId = packet->scHitResult.targetId
+		};
+		messageQueue.enqueue(message);
+		break;
+	}
+
+	case PacketType::scFire: {
+		auto message = Online::Message{
+			.type = Online::MsgType::Fire,
+			.objectId = packet->scFire.shooterId,
+			.bulletCnt = packet->scFire.bulletCount
+		};
+		messageQueue.enqueue(message);
+		break;
+	}
+
+	case PacketType::scReload: {
+		auto message = Online::Message{
+			.type = Online::MsgType::Reload,
+			.objectId = packet->scReload.shooterId,
+			.bulletCnt = packet->scReload.bulletCount
+		};
+		messageQueue.enqueue(message);
+		break;
+	}
 	}
 	return len;
 }

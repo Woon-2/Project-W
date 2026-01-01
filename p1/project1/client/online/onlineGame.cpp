@@ -148,6 +148,36 @@ void Game::update(Milliseconds deltaTime) {
 			break;
 		}
 
+		case MsgType::Fire:
+			holdEvent(eventList_, EvFire(msg.objectId, msg.bulletCnt));
+			break;
+
+		case MsgType::Reload: {
+			auto& shooter = idPlayerMap_[msg.objectId];
+			if (shooter == player_) {
+				holdEvent(eventList_, EvReloadComplete{msg.bulletCnt});
+			}
+			break;
+		}
+
+		case MsgType::HitResult: {
+			auto& shooter = idPlayerMap_[msg.objectId];
+			auto& target = idPlayerMap_[msg.targetId];
+			shooter->eventBus()->receive(
+				reinterpret_cast<BasicEvent*>(const_cast<Message*>(&msg)),
+				deltaTime, eventList_, *pTimer_, shooter.get()
+			);
+			if (msg.hitResult == HitResult::Body) {
+				if (shooter != player_) {
+					//holdEvent(eventList_, EvFire{});
+				}
+			}
+			else if(msg.hitResult == HitResult::Head) {
+
+			}
+			break;
+		}
+
 		default:
 			break;
 		}
@@ -157,10 +187,18 @@ void Game::update(Milliseconds deltaTime) {
 	for (auto pEvRaw : eventList_) {
 		auto pEv = reinterpret_cast<BasicEvent*>(pEvRaw);
 		switch (pEv->type) {
-		case EventType::Fire:
-			player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
-			playerHpUI_.eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, &playerHpUI_);
+		case EventType::Fire: {
+			auto pFireEv = reinterpret_cast<EvFire*>(pEv);
+			auto& shooter = idPlayerMap_[pFireEv->shooterId];
+
+			shooter->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, shooter.get());
+			if (shooter == player_) {
+				playerHpUI_.eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, &playerHpUI_);
+			}
+			//player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
+			//playerHpUI_.eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, &playerHpUI_);
 			break;
+		}
 
 		case EventType::Hit:
 			player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
@@ -188,11 +226,11 @@ void Game::update(Milliseconds deltaTime) {
 		}
 
 		case EventType::Reloading:
-			reloading_ = true;
+			//reloading_ = true;
 			break;
 
 		case EventType::ReloadComplete:
-			reloading_ = false;
+			//reloading_ = false;
 			playerHpUI_.eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, &playerHpUI_);
 			break;
 
@@ -626,32 +664,63 @@ void Game::processInputGame(Milliseconds deltaTime) {
 
 	// 총 장전
 	if ( !playerDead_ && keyboardStateCurr_['R'] & 0x80 ) {
-		if (!reloading_) {
+		auto csReloadPacket = Packet{
+			.header = {
+				.size = sizeof(PacketHeader) + sizeof(CSReloadPacket),
+				.id = static_cast<std::uint16_t>(PacketType::csReload)
+			},
+			.csReload = {}
+		};
+
+		i32t packetSize = sizeof(Packet);
+		auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+		sendBuffer->copyData(&csReloadPacket, packetSize);
+		serverSession_->send(sendBuffer);
+
+		/*if (!reloading_) {
 			holdEvent(eventList_, EvReloading{});
 			pTimer_->enqueueJob( DelayedJob{
 				.job = [this](){ holdEvent(eventList_, EvReloadComplete{}); },
 				.executeAt = pTimer_->lastTp() + 2s
 			} );
-		}
+		}*/
 	}
 
 	// 총 발사: 총구 화염 애니메이션 재생
 	if ( !playerDead_ && (keyboardStateCurr_[VK_LBUTTON] & 0x80)
 		&& !(keyboardStatePrev_[VK_LBUTTON] & 0x80)
-		&& fireCooldown_ <= 0ms
 	) {
-		if (!reloading_) {
-			fireCooldown_ = 200ms;
-			holdEvent(eventList_, EvFire{});
-		}
+		sendMoveStatePacket();
+
+		auto firePos = player_->pos()
+			+ player_->up() * 1.3f
+			+ player_->forward() * 0.85f
+			+ player_->right() * 0.15f;
+
+		auto csFirePacket = Packet{
+			.header = {
+				.size = sizeof(PacketHeader) + sizeof(CSFirePacket),
+				.id = static_cast<std::uint16_t>(PacketType::csFire)
+			},
+			.csFire = {
+				.firePos = firePos.getXmf(),
+				.fireDir = player_->forward().getXmf(),
+				.timeStamp = static_cast<u32t>(HighResolutionClock::now().time_since_epoch().count())
+			}
+		};
+
+		i32t packetSize = sizeof(Packet);
+		auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+		sendBuffer->copyData(&csFirePacket, packetSize);
+		serverSession_->send(sendBuffer);
 	}
 
 	// 임시: 피격, 피격 애니메이션 및 이펙트 재생
-	if ( !playerDead_ && (keyboardStateCurr_[VK_RBUTTON] & 0x80)
+	/*if ( !playerDead_ && (keyboardStateCurr_[VK_RBUTTON] & 0x80)
 		&& !(keyboardStatePrev_[VK_RBUTTON] & 0x80)
 	) {
 		holdEvent(eventList_, EvHit{});
-	}
+	}*/
 
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때
 	// 각각의 플레이어 yaw, 카메라 pitch를 계산한다.

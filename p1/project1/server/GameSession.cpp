@@ -168,6 +168,37 @@ int32 GameSession::onRecvPacket( uint8* buffer, int32 len ) {
 		GameLogicManager::dispatchMessage(enterRoomMsg);
 		break;
 	}
+
+	case PacketType::csFire: {
+		if(myRoomId_ == -1) {
+			break;
+		}
+
+		auto logicMsg = LogicMessage{
+			.type = LogicMsgType::UserFire,
+			.userId = getId(),
+			.roomId = myRoomId_,
+			.position = packet->csFire.firePos,
+			.fireDir = packet->csFire.fireDir,
+			.timeStamp = packet->csFire.timeStamp
+		};
+		GameLogicManager::dispatchMessage(logicMsg);
+		break;
+	}
+
+	case PacketType::csReload: {
+		if(myRoomId_ == -1) {
+			break;
+		}
+
+		auto logicMsg = LogicMessage{
+			.type = LogicMsgType::UserReload,
+			.userId = getId(),
+			.roomId = myRoomId_
+		};
+		GameLogicManager::dispatchMessage(logicMsg);
+		break;
+	}
 	}
 
 	return len;

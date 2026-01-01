@@ -67,6 +67,8 @@ void GameLogic::processMessage() {
 		case LogicMsgType::UserLeave:
 		case LogicMsgType::UserMouseMove:
 		case LogicMsgType::UserMoveState:
+		case LogicMsgType::UserFire:
+		case LogicMsgType::UserReload:
 			idRoomMap_[messages[i].roomId]->enqueueMessage(messages[i]);
 			break;
 

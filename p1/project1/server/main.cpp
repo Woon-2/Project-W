@@ -41,6 +41,7 @@ int main( )
 	assetManager.loadAssets();
 
 	RoomManager::setLevelData(assetManager.level());
+	RoomManager::setPlayerModelData(assetManager.modelPlayer());
 
 	dumpLog();
 
