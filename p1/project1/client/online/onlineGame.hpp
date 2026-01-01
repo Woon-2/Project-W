@@ -74,13 +74,7 @@ public:
 		idPlayerMap_[ player->getId( ) ] = player;
 	}
 
-	void removePlayer( i32t playerId ) {
-		std::lock_guard<std::mutex> lock( objectsMtx_ );
-		std::erase_if( otherPlayers_, [ playerId ]( const std::shared_ptr<Object>& obj ) {
-			return obj->getId( ) == playerId;
-		} );
-		idPlayerMap_.erase( playerId );
-	}
+	void removePlayer( i32t playerId );
 
 	bool findPlayer( i32t playerId ) {
 		std::lock_guard<std::mutex> lock( objectsMtx_ );

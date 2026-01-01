@@ -344,7 +344,9 @@ void Game::update(Milliseconds deltaTime) {
 
 	std::erase_if(bloodSplashes_, [](const SpriteAnimation& anim) { return anim.done(); });
 
+	objectsMtx_.lock();
 	animSystem_.update(0.016s);
+	objectsMtx_.unlock();
 
 	// 총 발사 쿨타임 계산
 	/*if (fireCooldown_ > 0ms) {
@@ -401,6 +403,29 @@ void Game::render() {
 	}
 
 	gfx_.render();
+}
+
+void Game::removePlayer( i32t playerId ) {
+	std::lock_guard<std::mutex> lock( objectsMtx_ );
+	auto itPlayer = std::ranges::find_if(
+		otherPlayers_, [ playerId ]( const std::shared_ptr<Object>& obj ) {
+			return obj->getId( ) == playerId;
+		}
+	);
+
+	DISPLAY_ERROR_STR( itPlayer != otherPlayers_.end(),
+		"[Game Error] Game::removePlayer: 제거하려는 플레이어가 존재하지 않습니다.\n",
+		false
+	);
+
+	if (itPlayer == otherPlayers_.end()) {
+		return;
+	}
+
+	animSystem_.untrackAnimBlender(itPlayer->get()->renderState().animBlender.get());
+
+	otherPlayers_.erase(itPlayer);
+	idPlayerMap_.erase( playerId );
 }
 
 // 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
