@@ -16,31 +16,33 @@
 #include "uiPipeline.hpp"
 #include "spriteAnimation.hpp"
 
-// 크로스헤어
-// 레벨디자인
-// 화면에 피격 효과
 // 스프라이트 시트 애니메이션 기능
-// Static Dynamic object 분리 추출 - 12.19.
-// CSM - 12.20.
+// - append 가능하도록
+// - C++ 코드 수정
+// 크로스헤어
+// 화면에 피격 효과
+// 레벨디자인
+// Static Dynamic object 분리 추출
+// CSM
 // timer game이 완전 소유하도록 수정
-// metallic, roughness map 별도 지정 가능하도록 Texture Mapping 자유도 높이기
-// function도 사이즈별로 pool 쓰게 - 12.21.
-// Object 클래스 일반화
-// 피격 패킷에 들어있는 위치에 이펙트 재생
-// 다른 플레이어 체력바 표시
-// ExecuteCommands 별도 스레드 호출 - 12.22.
+// metallic, roughness map 별도 지정 가능하도록 Texture Mapping 자유도 높이기 - 12.24.
+// function도 사이즈별로 pool 쓰게
+// ExecuteCommands 별도 스레드 호출
 // Clickable UI 구현
 // 마우스 피킹
-// 오브젝트 배치 - 12.23.
+// 오브젝트 배치 - 12.25.
 // CSM 섀도우맵 뷰
 // G버퍼 만들어서 특정 텍스처 볼 수 있도록 - 12.24.
 // Deferred Shading
-// G버퍼 뷰 - 12.25.
+// G버퍼 뷰 - 12.26.
 // 점조명 그림자매핑
-// 다중 그림자매핑 - 12.26.
-// 몬스터 에셋 원하는 아바타로 뽑아낼 수 있게 연구 - 12.27.
+// 다중 그림자매핑 - 12.27.
+// Object 클래스 일반화
+// 피격 패킷에 들어있는 위치에 이펙트 재생
+// 다른 플레이어 체력바 표시
+// 몬스터 에셋 원하는 아바타로 뽑아낼 수 있게 연구 - 12.28.
 // PhysicState에 충돌 감지 여부, 회복 방식 설정 가능하도록 구현
-// 몬스터들 띄우기 - 12.28.
+// 몬스터들 띄우기
 // 몬스터들의 랜덤 이동 - 12.29.
 // 청크 단위 지형 구현
 // 청크 하나 로드 & 테셀레이션
