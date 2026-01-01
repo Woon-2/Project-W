@@ -132,6 +132,9 @@ public:
 	// 이전 PhysicState와 현재 PhysicState의 위치가 모두 갱신된다.
 	// 각 PhysicState의 AABB 역시 갱신된다.
 	void MU_CALLCONV setPos(mu::Vec3 newPos);
+	// 게임 객체의 위치를 갱신한다.
+	// 현재 PhysicState의 위치만 갱신된다.
+	void MU_CALLCONV setCurrPos(mu::Vec3 pos);
 	mu::Vec3 MU_CALLCONV pos() const { return currPhysicState_.pos; }
 	// 게임 객체의 속도를 갱신한다.
 	// 이전 PhysicState와 현재 PhysicState의 속도가 모두 갱신된다.
@@ -180,11 +183,6 @@ public:
 
 	void setId( i32t id ) {	id_ = id; }
 	i32t getId( ) const { return id_; }
-
-	void MU_CALLCONV setServerPos( mu::Vec3 pos ) {
-		prevPhysicState_ = currPhysicState_;
-		currPhysicState_.pos = pos;
-	}
 
 	IEventBus* eventBus() { return &eventBus_; }
 

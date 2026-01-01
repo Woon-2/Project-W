@@ -118,6 +118,7 @@ int32 ServerSession::onRecvPacket(uint8* buffer, int32 len) {
 			.type = Online::MsgType::PlayerMove,
 			.objectId = packet->scMove.playerId,
 			.pos = DirectX::XMLoadFloat3(&packet->scMove.pos),
+			.evVelocity = DirectX::XMLoadFloat3(&packet->scMove.evVelocity),
 			.orient = mu::NQuat(mu::Radian(), mu::Radian(),	mu::Radian(packet->scMove.playerYawRadian)),
 			.cameraPitch = packet->scMove.cameraPitchRadian
 		};

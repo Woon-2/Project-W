@@ -38,6 +38,7 @@ struct Message {
 	i32t targetId;
 	u32t materialSetIdx;
 	mu::Vec3 pos;
+	mu::Vec3 evVelocity;
 	mu::NQuat orient;
 	mu::Vec3 scale;
 	float cameraPitch{0.f};
@@ -174,9 +175,6 @@ private:
 	SpriteAnimation slimeSprite_{};
 	std::deque<SpriteAnimation> muzzleFlashes_{};
 	std::deque<SpriteAnimation> bloodSplashes_{};
-
-	Milliseconds fireCooldown_{};
-	bool reloading_{};
 
 	bool playerDead_{};
 

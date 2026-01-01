@@ -143,6 +143,7 @@ struct SCRollbackPacket {
 struct SCMovePacket {
 	std::int32_t playerId;
 	DirectX::XMFLOAT3 pos;
+	DirectX::XMFLOAT3 evVelocity;
 	float playerYawRadian;
 	float cameraPitchRadian;
 };

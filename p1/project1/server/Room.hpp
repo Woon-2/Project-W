@@ -5,6 +5,8 @@
 #include "object.hpp"
 #include "GameLogic.hpp"
 
+class Timer;
+
 struct Level;
 
 class Room : std::enable_shared_from_this<Room> {
@@ -19,6 +21,8 @@ public:
 	void enqueueMessage(const LogicMessage& msg) { msgQueue_.enqueue(msg); }
 	void processMessage(Milliseconds deltaTime);
 	
+	void setTimer(Timer* pTimer) { pTimer_ = pTimer; }
+
 	void enter(int32 playerId);
 	void leave(int32 playerId);
 	void broadcast(const SPSendBuffer& packet);
@@ -41,6 +45,8 @@ private:
 
 	std::vector<Object> cubes_;
 	std::vector<Object> playerStarts_;
+
+	Timer* pTimer_;
 
 	PhysicSystem physicSystem_;
 	Seconds physicUpdateAcc_;	// 물리 업데이트를 위한 시간 누산기

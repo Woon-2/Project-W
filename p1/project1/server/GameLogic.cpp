@@ -48,6 +48,7 @@ void GameLogic::processMessage() {
 			ASSERT_CRASH(room);
 			
 			rooms_.push_back(room);
+			room->setTimer(&logicTimer_);
 			idRoomMap_[room->getRoomId()] = room;
 			break;
 		}

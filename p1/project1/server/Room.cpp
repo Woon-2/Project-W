@@ -6,6 +6,7 @@
 #include "level.hpp"
 #include "GameSessionManager.hpp"
 #include "GameLogicManager.hpp"
+#include "timer.hpp"
 
 extern std::atomic_int32_t gPlayerId;
 
@@ -80,10 +81,11 @@ void Room::processMessage(Milliseconds deltaTime) {
 			auto user = idUserMap_[messages[i].userId];
 
 			auto clientCurrPos = mu::Vec3(DirectX::XMLoadFloat3(&messages[i].position));
+			auto clientCurrVel = mu::Vec3(DirectX::XMLoadFloat3(&messages[i].velocity));
 			auto clientTimeStamp = messages[i].timeStamp;
 
-			if (clientCurrPos == user->pos()) {
-				// 위치 변화 없음
+			if (clientCurrPos == user->pos() && clientCurrVel == user->physicState().evVelocity) {
+				// 위치 및 속도 변화 없음
 				break;
 			}
 			
@@ -91,10 +93,13 @@ void Room::processMessage(Milliseconds deltaTime) {
 			if (valid) {
 				//std::cout << "valid\n";
 				user->setLastMoveTimestamp(clientTimeStamp);
+				auto clientOldPos = user->pos();
 				user->setPos(clientCurrPos);
 				auto yawRadian = std::atan2(messages[i].forward.x, messages[i].forward.z);
 				auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), mu::Radian(yawRadian));
 				user->setOrient(yaw);
+
+				user->physicState().evVelocity = clientCurrVel;
 
 				auto scMovePacket = Packet{
 					.header = {
@@ -103,7 +108,8 @@ void Room::processMessage(Milliseconds deltaTime) {
 					},
 					.scMove = {
 						.playerId = user->getId(),
-						.pos = user->pos().getXmf(),
+						.pos = clientCurrPos.getXmf(),
+						.evVelocity = user->physicState().evVelocity.getXmf(),
 						.playerYawRadian = yawRadian,
 						.cameraPitchRadian = user->cameraPitch()
 					}
@@ -500,18 +506,19 @@ bool Room::validateMove(mu::Vec3 clientCurrPos, uint32 clientTimeStamp, Millisec
 	const auto posDiff = clientCurrPos - serverUserObj->pos();
 	//std::cout << "posDiff len2 : " << posDiff.len2() << '\n';
 
-	auto lastMoveTimestamp = serverUserObj->lastMoveTimestamp();
-	auto timeStampDiff = static_cast<float>(clientTimeStamp - lastMoveTimestamp);
-	deltaTime *= timeStampDiff;
+	// 이거 뭐임??? 코파일럿 코드임?
+	//auto lastMoveTimestamp = serverUserObj->lastMoveTimestamp();
+	//auto timeStampDiff = static_cast<float>(clientTimeStamp - lastMoveTimestamp);
+	//deltaTime *= timeStampDiff;
 
 	const auto calculatedVel = posDiff / Seconds(deltaTime).count();
 	const auto maxSpeed = 10.f;
 
 	//std::cout << "calculatedVel len2 : " << calculatedVel.len2() << '\n';
 
-	if (calculatedVel.len2() > maxSpeed * maxSpeed) {
+	/*if (calculatedVel.len2() > maxSpeed * maxSpeed) {
 		return false;
-	}
+	}*/
 	return true;
 }
 

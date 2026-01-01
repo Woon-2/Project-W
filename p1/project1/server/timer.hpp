@@ -27,6 +27,8 @@ public:
 	// 지난 maxStamps_ 프레임 동안의 평균 fps를 반환한다.
 	float fps() const { return fps_; }
 
+	HighResolutionClock::time_point lastTp() const { return lastTp_; }
+
 private:
 	std::vector<Milliseconds> dtStamps_{};
 	HighResolutionClock::time_point lastTp_{ HighResolutionClock::now() };

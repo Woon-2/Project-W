@@ -23,6 +23,7 @@
 // 변경된 이벤트 데이터에 맞게 holdEvent 수정
 
 // physic state에 evVelocity, evOmega 별도 추가 - 물리 계산 적용 X
+
 // 물리 업데이트에 evXX 누산, 메시지 처리 시에 evXX 계산
 // evXX로 애니메이션 재생하도록 수정 (~01:00)
 

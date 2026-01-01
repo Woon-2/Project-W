@@ -391,6 +391,26 @@ void MU_CALLCONV Object::setPos(mu::Vec3 newPos) {
 	}
 }
 
+// 게임 객체의 위치를 갱신한다.
+// 현재 PhysicState의 위치만 갱신된다.
+void MU_CALLCONV Object::setCurrPos(mu::Vec3 newPos) {
+	currPhysicState_.pos = newPos;
+
+	const auto pModel = renderState_.pModel;
+
+	if (pModel) {
+		currPhysicState_.aabbs.resize(pModel->aabbs.size());
+		for (std::size_t i = 0u; i < currPhysicState_.aabbs.size(); ++i) {
+			currPhysicState_.aabbs[i].center
+				= pModel->aabbs[i].center * currPhysicState_.scale
+				+ currPhysicState_.pos;
+			currPhysicState_.aabbs[i].size
+				= pModel->aabbs[i].size * currPhysicState_.scale;
+		}
+		prevPhysicState_.aabbs = currPhysicState_.aabbs;
+	}
+}
+
 // 게임 객체의 속도를 갱신한다.
 // 이전 PhysicState와 현재 PhysicState의 속도가 모두 갱신된다.
 void MU_CALLCONV Object::setVelocity(mu::Vec3 newVelocity) {
