@@ -236,10 +236,6 @@ void Game::update(Milliseconds deltaTime) {
 			break;
 		}
 
-		case EventType::Reloading:
-			//reloading_ = true;
-			break;
-
 		case EventType::ReloadComplete:
 			//reloading_ = false;
 			playerHpUI_.eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, &playerHpUI_);
@@ -537,7 +533,7 @@ void Game::sendMoveStatePacket() {
 		},
 		.csMoveState = {
 			.position = player_->physicState().pos.getXmf(),
-			.velocity = player_->physicState().velocity.getXmf(),
+			.velocity = player_->physicState().evVelocity.getXmf(),
 			.forward = player_->forward().getXmf(),
 			.timeStamp = static_cast<u32t>(HighResolutionClock::now().time_since_epoch().count())
 		}

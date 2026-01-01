@@ -104,7 +104,7 @@ private:
 
 	bool playerDead_{};
 
-	std::vector<BasicPlayerHpUI> playerHpUIs_{};
+	BasicPlayerHpUI playerHpUI_{};
 	TextImage textFPS_{};
 
 	LONG mouseDeltaX_{};

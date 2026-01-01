@@ -58,8 +58,10 @@ private:
 
 struct PhysicState {
 	mu::Vec3 pos{};
-	mu::Vec3 velocity{};
-	mu::Vec3 omega{};
+	mu::Vec3 velocity{};	// Physic System의 step 단계에서 적분될 속도
+	mu::Vec3 omega{};	// Physic System의 step 단계에서 적분될 각속도
+	mu::Vec3 evVelocity{};	// Physic System 및 그 외 갱신 과정을 거쳐 최종 평가된 속도
+	mu::Vec3 evOmega{};	// Physic System 및 그 외 갱신 과정을 거쳐 최종 평가된 속도
 	mu::NQuat orient{};
 	mu::Vec3 scale{};
 
@@ -186,6 +188,10 @@ public:
 
 	IEventBus* eventBus() { return &eventBus_; }
 
+	void setHp(i32t hp) { hp_ = hp; }
+	i32t hp() const { return hp_; }
+	void setAmmo(i32t ammo) { ammo_ = ammo; }
+	i32t ammo() const { return ammo_; }
 
 private:
 	PhysicState prevPhysicState_{};
@@ -205,6 +211,9 @@ private:
 
 	u32t materialSetIdx_ = 0u;
 	i32t id_{ -1 };
+
+	i32t hp_{};
+	i32t ammo_{};
 };
 
 #endif	// __object_HPP

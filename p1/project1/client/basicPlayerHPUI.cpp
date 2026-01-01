@@ -50,27 +50,4 @@ void BasicPlayerHpUI::render( GFX& gfx ) {
 
 void BasicPlayerHpUI::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
 	auto pOwner = static_cast<BasicPlayerHpUI*>(pVoidOwner);
-
-	switch (event->type) {
-	case EventType::Hit: {
-		auto pHitEv = reinterpret_cast<const EvHit*>(event);
-		pOwner->hp_ = pHitEv->hp;
-		break;
-	}
-
-	case EventType::Fire: {
-		auto pFireEv = reinterpret_cast<const EvFire*>(event);
-		pOwner->bullet_ = pFireEv->bulletCount;
-		break;
-	}
-
-	case EventType::ReloadComplete: {
-		auto pReloadEv = reinterpret_cast<const EvReloadComplete*>(event);
-		pOwner->bullet_ = pReloadEv->bulletCount;
-		break;
-	}
-
-	default:
-		break;
-	}
 }

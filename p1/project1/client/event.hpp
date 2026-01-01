@@ -38,10 +38,12 @@ char* fetchFromPool() {
 //     ex) holdEvent( myEventList, MyEvent{ .myArg = arg } );
 // @param eventList 생성된 이벤트를 저장할 이벤트 리스트, EventList 타입이어야 한다.
 // @param exprEventInit 이벤트 생성 표현식
-#define holdEvent(eventList, exprEventInit)	\
-	new (	\
-		eventList.emplace_back(	detail::fetchFromPool<decltype(exprEventInit)>() )	\
-	) exprEventInit
+#define holdEvent(eventList, ...) \
+    new ( \
+        eventList.emplace_back( \
+            detail::fetchFromPool<decltype(__VA_ARGS__)>() \
+        ) \
+    ) __VA_ARGS__
 
 #define clearEvents(eventList)	\
 	for (auto p : eventList) {	\
@@ -67,7 +69,6 @@ enum class EventType : u32t {
 	Fire,
 	MuzzleFlash,
 	Blood,
-	Reloading,
 	ReloadComplete,
 	Death,
 	SIZE
@@ -100,7 +101,6 @@ struct EvFire : BasicEvent {
 };
 struct EvMuzzleFlash : BasicEvent { EvMuzzleFlash() : BasicEvent{EventType::MuzzleFlash} {} };
 struct EvBlood : BasicEvent { EvBlood() : BasicEvent{EventType::Blood} {} };
-struct EvReloading : BasicEvent { EvReloading() : BasicEvent{EventType::Reloading} {} };
 struct EvReloadComplete : BasicEvent { 
 	EvReloadComplete() : BasicEvent{EventType::ReloadComplete} {}
 	EvReloadComplete(i32t bulletCnt)

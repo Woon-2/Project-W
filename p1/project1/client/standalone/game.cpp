@@ -78,10 +78,10 @@ void Game::setupStage() {
 
 	slimeSprite_.init( assetManager_.slimeAnimation() );
 
-	playerHpUIs_.resize( 1u );
-	playerHpUIs_[0].setTexture( assetManager_.playerHpLine() );
-	// playerHpUIs_[1].setTexture( assetManager_.playerHpFrame() );
-	playerHpUIs_[0].setTextImage( assetManager_.textPlayerHp() );
+	playerHpUI_.setTexture( assetManager_.playerHpLine() );
+	playerHpUI_.setTextImage( assetManager_.textPlayerHp() );
+	playerHpUI_.setHp( player_->hp() );
+	playerHpUI_.setAmmo( player_->ammo() );
 }
 
 void Game::importNode(std::ifstream& ifs) {
@@ -147,6 +147,8 @@ void Game::importPlayerStart(std::ifstream& ifs, Object& player) {
 	player_ = std::make_shared<Object>(std::move(player));
 	player_->setModel(assetManager_.modelPlayer());
 	player_->setAnimBlender(animSystem_, assetManager_);
+	player_->setHp(100);
+	player_->setAmmo(30);
 
 	Equipment rifle{};
 	rifle.socketType = Bone::SocketType::RightHand;
@@ -164,8 +166,16 @@ void Game::importPlayerStart(std::ifstream& ifs, Object& player) {
 // 객체별 업데이트 루틴
 // 애니메이션 업데이트
 void Game::update(Milliseconds deltaTime) {
+	// 평가 물리량 초기화
+	player_->physicState().evVelocity = mu::Vec3();
+	player_->physicState().evOmega = mu::Vec3();
+
 	// 입력 처리
 	processInput(deltaTime);
+
+	// 평가 물리량 갱신
+	player_->physicState().evVelocity += player_->physicState().velocity;
+	player_->physicState().evOmega += player_->physicState().omega;
 
 	// 이벤트 처리
 	for (auto pEvRaw : eventList_) {
@@ -173,22 +183,12 @@ void Game::update(Milliseconds deltaTime) {
 		switch (pEv->type) {
 		case EventType::Fire:
 			player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
-			for (auto& ui : playerHpUIs_) {
-				ui.eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, &ui);
-			}
 			break;
 
 		case EventType::Hit:
 			player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
-			for (auto& ui : playerHpUIs_) {
-				ui.eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, &ui);
-			}
-
-			for (auto& ui : playerHpUIs_) {
-				if (ui.hp() == 0) {
-					holdEvent(eventList_, EvDeath{});
-					playerDead_ = true;
-				}
+			if (player_->hp() == 0) {
+				playerDead_ = true;
 			}
 			break;
 
@@ -207,15 +207,9 @@ void Game::update(Milliseconds deltaTime) {
 			break;
 		}
 
-		case EventType::Reloading:
-			reloading_ = true;
-			break;
-
 		case EventType::ReloadComplete:
 			reloading_ = false;
-			for (auto& ui : playerHpUIs_) {
-				ui.eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, &ui);
-			}
+			player_->setAmmo( static_cast<EvReloadComplete*>(pEv)->bulletCount );
 			break;
 
 		case EventType::Death:
@@ -243,19 +237,19 @@ void Game::update(Milliseconds deltaTime) {
 		// 물리 시뮬레이션을 위해
 		// 물리 시뮬레이션의 대상이 되는 객체들을
 		// 한 곳에 모아 PhysicSystem 객체에 전달한다.
-		static std::vector<Object*> allObjects{};
-		allObjects.resize(cubes_.size() + 1u);
-		std::ranges::transform(cubes_, allObjects.begin(),
+		static std::vector<Object*> targetObjects{};
+		targetObjects.resize(cubes_.size() + 1u);
+		std::ranges::transform(cubes_, targetObjects.begin(),
 			[](Object& cube) { return &cube; }	
 		);
-		allObjects[cubes_.size()] = player_.get();
+		targetObjects[cubes_.size()] = player_.get();
 
 		while (physicUpdateAcc_ >= physicUpdateInterval) {
-			physicSystem_.step(allObjects, physicUpdateInterval);
+			physicSystem_.step(targetObjects, physicUpdateInterval);
 			physicUpdateAcc_ -= physicUpdateInterval;
 		}
 
-		allObjects.clear();
+		targetObjects.clear();
 	}
 
 	// 객체별 업데이트 루틴
@@ -277,9 +271,7 @@ void Game::update(Milliseconds deltaTime) {
 
 	// 애니메이션 업데이트
 	slimeSprite_.update( deltaTime );
-	for ( auto& hpUI : playerHpUIs_ ) {
-		hpUI.update( deltaTime, gfx_, nullptr );
-	}
+	playerHpUI_.update( deltaTime, gfx_, nullptr );
 
 	for (auto& muzzleFlash : muzzleFlashes_) {
 		// 총구 화염 스프라이트 애니메이션
@@ -311,6 +303,10 @@ void Game::update(Milliseconds deltaTime) {
 		fireCooldown_ -= deltaTime;
 	}
 
+	// UI 동기화
+	playerHpUI_.setHp(player_->hp());
+	playerHpUI_.setAmmo(player_->ammo());
+
 	clearEvents(eventList_);
 }
 
@@ -331,9 +327,7 @@ void Game::render() {
 		bloodSplash.render(gfx_);
 	}
 
-	for ( auto& hpUI : playerHpUIs_ ) {
-		hpUI.render( gfx_ );
-	}
+	playerHpUI_.render( gfx_ );
 
 	auto frameDataPBR = PBRPipeline::FrameData{
 		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
@@ -509,9 +503,9 @@ void Game::processInput(Milliseconds deltaTime) {
 	// 총 장전
 	if ( !playerDead_ && keyboardStateCurr_['R'] & 0x80 ) {
 		if (!reloading_) {
-			holdEvent(eventList_, EvReloading{});
+			reloading_ = true;
 			pTimer_->enqueueJob( DelayedJob{
-				.job = [this](){ holdEvent(eventList_, EvReloadComplete{}); },
+				.job = [this](){ holdEvent(eventList_, EvReloadComplete(30)); },
 				.executeAt = pTimer_->lastTp() + 2s
 			} );
 		}
@@ -523,8 +517,17 @@ void Game::processInput(Milliseconds deltaTime) {
 		&& fireCooldown_ <= 0ms
 	) {
 		if (!reloading_) {
-			fireCooldown_ = 200ms;
-			holdEvent(eventList_, EvFire{});
+			if (player_->ammo() == 0) {
+				reloading_ = true;
+				pTimer_->enqueueJob( DelayedJob{
+					.job = [this](){ holdEvent(eventList_, EvReloadComplete(30)); },
+					.executeAt = pTimer_->lastTp() + 2s
+				} );
+			}
+			else {
+				fireCooldown_ = 200ms;
+				holdEvent(eventList_, EvFire(player_->getId(), player_->ammo() - 1));
+			}
 		}
 	}
 
@@ -532,7 +535,7 @@ void Game::processInput(Milliseconds deltaTime) {
 	if ( !playerDead_ && (keyboardStateCurr_[VK_RBUTTON] & 0x80)
 		&& !(keyboardStatePrev_[VK_RBUTTON] & 0x80)
 	) {
-		holdEvent(eventList_, EvHit{});
+		holdEvent(eventList_, EvHit(player_->getId(), player_->hp() - 10));
 	}
 
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때

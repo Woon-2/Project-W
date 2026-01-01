@@ -25,7 +25,7 @@ void AnimBlenderVanguard::update(Seconds deltaTime, void* pVoidOwner) {
 	const auto runThreshold = 0.1f;
 
 	// 객체의 속력 구하기
-	const auto speed = pOwner->physicState().velocity.len();
+	const auto speed = pOwner->physicState().evVelocity.len();
 
 	// blendRange 설정
 	const auto runBlendRangeStart = runThreshold - 0.05f;
@@ -72,8 +72,8 @@ void AnimBlenderVanguard::update(Seconds deltaTime, void* pVoidOwner) {
 	// 좌우상하 움직임 애니메이션을 블렌딩한다.
 	if (tRun > 0.f) {
 		// 속도와 right 벡터의 내적을 통해 blend space에서의 좌표를 구할 수 있다.
-		const auto blendSpaceX = mu::dot(pOwner->physicState().velocity, pOwner->right());
-		const auto blendSpaceY = mu::dot(pOwner->physicState().velocity, pOwner->forward());
+		const auto blendSpaceX = mu::dot(pOwner->physicState().evVelocity, pOwner->right());
+		const auto blendSpaceY = mu::dot(pOwner->physicState().evVelocity, pOwner->forward());
 	
 		// blend space 좌표를 바탕으로 각 애니메이션의 가중치를 정한다.
 		const auto wForward = std::max(0.f, blendSpaceY);
@@ -494,6 +494,7 @@ void Object::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Event
 				event, deltaTime, evList, timer,
 				pOwner->renderState_.animBlender.get()
 			);
+			pOwner->ammo_ = static_cast<const EvFire*>(event)->bulletCount;
 		}
 		break;
 
@@ -504,6 +505,10 @@ void Object::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Event
 					event, deltaTime, evList, timer,
 					pOwner->renderState_.animBlender.get()
 				);
+			}
+			pOwner->hp_ = std::max( static_cast<const EvHit*>(event)->hp, 0 );
+			if (pOwner->hp_ == 0) {
+				holdEvent( evList, EvDeath(pOwner->getId()) );
 			}
 		}
 		break;
@@ -516,6 +521,7 @@ void Object::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Event
 					pOwner->renderState_.animBlender.get()
 				);
 			}
+			pOwner->hp_ = 0;
 		}
 		break;
 	
