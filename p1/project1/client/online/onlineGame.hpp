@@ -29,11 +29,11 @@ enum class MsgType : u8t {
 	Fire,
 	Reload,
 	HitResult,
+	Death
 };
 
 struct Message {
 	MsgType type{MsgType::None};
-	HitResult hitResult;
 	i32t objectId;
 	i32t targetId;
 	u32t materialSetIdx;
@@ -41,6 +41,7 @@ struct Message {
 	mu::NQuat orient;
 	mu::Vec3 scale;
 	float cameraPitch{0.f};
+	i32t currHp{0};
 	i32t bulletCnt{0};
 };
 
@@ -196,6 +197,9 @@ private:
 	std::array<BYTE, std::numeric_limits<u8t>::max()> keyboardStatePrev_{};
 
 	bool inRoom_ = false;
+
+	mu::Vec3 prevVelocity_{};
+	mu::Vec3 currVelocity_{};
 };
 
 }	// namespace Online

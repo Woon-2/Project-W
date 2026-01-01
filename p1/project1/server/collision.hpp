@@ -35,5 +35,6 @@ struct RayHit {
 
 RayHit RaycastAABB(const AABB& box, const Ray& ray);
 RayHit RaycastBoundingRect(const BoundingRect& rect, const Ray& ray);
+bool isHeadshot(float userYPos, mu::Vec3 hitPoint);
 
 #endif	// __collision_HPP

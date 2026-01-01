@@ -96,6 +96,8 @@ void Game::update(Milliseconds deltaTime) {
 			player_->setModel(assetManager_.modelPlayer());
 			player_->setAnimBlender(animSystem_, assetManager_);
 			player_->enableBVRendering();
+			playerHpUI_.setHp(msg.currHp);
+			playerHpUI_.setAmmo(msg.bulletCnt);
 
 			Equipment rifle{};
 			rifle.socketType = Bone::SocketType::RightHand;
@@ -163,20 +165,20 @@ void Game::update(Milliseconds deltaTime) {
 		case MsgType::HitResult: {
 			auto& shooter = idPlayerMap_[msg.objectId];
 			auto& target = idPlayerMap_[msg.targetId];
-			shooter->eventBus()->receive(
-				reinterpret_cast<BasicEvent*>(const_cast<Message*>(&msg)),
-				deltaTime, eventList_, *pTimer_, shooter.get()
-			);
-			if (msg.hitResult == HitResult::Body) {
-				if (shooter != player_) {
-					//holdEvent(eventList_, EvFire{});
-				}
+			
+			if (shooter != player_) {
+				holdEvent(eventList_, EvFire{msg.objectId});
 			}
-			else if(msg.hitResult == HitResult::Head) {
-
-			}
+			holdEvent(eventList_, EvHit(msg.targetId, msg.currHp));
 			break;
 		}
+
+		case MsgType::Death:
+			holdEvent(eventList_, EvDeath{msg.objectId});
+			if (msg.objectId == player_->getId()) {
+				playerDead_ = true;
+			}
+			break;
 
 		default:
 			break;
@@ -200,15 +202,24 @@ void Game::update(Milliseconds deltaTime) {
 			break;
 		}
 
-		case EventType::Hit:
-			player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
-			playerHpUI_.eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, &playerHpUI_);
+		case EventType::Hit: {
+			auto pHitEv = reinterpret_cast<EvHit*>(pEv);
+			auto& target = idPlayerMap_[pHitEv->targetId];
 
-			if (playerHpUI_.hp() == 0) {
-				holdEvent(eventList_, EvDeath{});
-				playerDead_ = true;
+			target->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, target.get());
+			if (target == player_) {
+				playerHpUI_.eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, &playerHpUI_);
 			}
+
+			//player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
+			//playerHpUI_.eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, &playerHpUI_);
+
+			//if (playerHpUI_.hp() == 0) {
+			//	holdEvent(eventList_, EvDeath{});
+			//	playerDead_ = true;
+			//}
 			break;
+		}
 
 		case EventType::MuzzleFlash: {
 			auto& muzzleFlash = muzzleFlashes_.emplace_back();
@@ -234,9 +245,13 @@ void Game::update(Milliseconds deltaTime) {
 			playerHpUI_.eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, &playerHpUI_);
 			break;
 
-		case EventType::Death:
-			player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
+		case EventType::Death: {
+			auto pDeathEv = reinterpret_cast<EvDeath*>(pEv);
+			auto& deadPlayer = idPlayerMap_[pDeathEv->playerId];
+			deadPlayer->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, deadPlayer.get());
+			//player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
 			break;
+		}
 
 		default:
 			break;
@@ -260,11 +275,7 @@ void Game::update(Milliseconds deltaTime) {
 		// 물리 시뮬레이션의 대상이 되는 객체들을
 		// 한 곳에 모아 PhysicSystem 객체에 전달한다.
 		static std::vector<Object*> allObjects{};
-		allObjects.resize(cubes_.size() + 1);
-		std::ranges::transform(cubes_, allObjects.begin(),
-			[](Object& cube) { return &cube; }
-		);
-		allObjects[cubes_.size()] = player_.get();
+		allObjects.push_back(player_.get());
 
 		while ( physicUpdateAcc_ >= physicUpdateInterval ) {
 			physicSystem_.step( allObjects, physicUpdateInterval );
@@ -275,11 +286,7 @@ void Game::update(Milliseconds deltaTime) {
 	}
 
 	//std::cout << "player pos : " << player_->pos().x() << ", " << player_->pos().y() << ", " << player_->pos().z() << '\n';
-	if (keyboardStateCurr_['W'] & 0x80 ||
-		keyboardStateCurr_['A'] & 0x80 ||
-		keyboardStateCurr_['S'] & 0x80 ||
-		keyboardStateCurr_['D'] & 0x80
-	) {
+	if (prevVelocity_ != currVelocity_) {
 		sendMoveStatePacket();
 	}
 
@@ -340,9 +347,9 @@ void Game::update(Milliseconds deltaTime) {
 	animSystem_.update(0.016s);
 
 	// 총 발사 쿨타임 계산
-	if (fireCooldown_ > 0ms) {
+	/*if (fireCooldown_ > 0ms) {
 		fireCooldown_ -= deltaTime;
-	}
+	}*/
 
 	clearEvents(eventList_);
 }
@@ -605,6 +612,8 @@ void Game::processInputGame(Milliseconds deltaTime) {
 	const auto moveZSign = !playerDead_ * (keyboardStateCurr_['W'] & 0x80) - (keyboardStateCurr_['S'] & 0x80);
 	const auto moveThreshold = 0.1f;
 
+	prevVelocity_ = currVelocity_;
+
 	if (moveXSign || moveZSign) {
 		// 'W'/'S' 입력으로 판정된 Z 부호는 플레이어의 forward 벡터,
 		// 'D'/'A' 입력으로 판정된 X 부호는 플레이어의 right 벡터와 곱해 속도의 방향을 정한다.
@@ -642,6 +651,8 @@ void Game::processInputGame(Milliseconds deltaTime) {
 	else {
 		player_->physicState().velocity = mu::Vec3();
 	}
+
+	currVelocity_ = player_->physicState().velocity;
 
 	// 카메라 1인칭 모드 설정
 	if ( !(keyboardStatePrev_['1'] & 0x80)
@@ -704,8 +715,8 @@ void Game::processInputGame(Milliseconds deltaTime) {
 			},
 			.csFire = {
 				.firePos = firePos.getXmf(),
-				.fireDir = player_->forward().getXmf(),
-				.timeStamp = static_cast<u32t>(HighResolutionClock::now().time_since_epoch().count())
+				.forward = player_->forward().getXmf(),
+				.cameraPitchRadian = cameraPitch_,
 			}
 		};
 

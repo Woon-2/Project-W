@@ -18,13 +18,13 @@ void Room::update(Milliseconds deltaTime) {
 	processMessage(deltaTime);
 
 	// 물리 시뮬레이션
-	std::vector<Object*> allObjects;
+	/*std::vector<Object*> allObjects;
 	allObjects.resize(users_.size());
 	std::ranges::transform(users_, allObjects.begin(),
 		[](const std::shared_ptr<Object>& obj) { return obj.get(); }
 	);
 
-	physicSystem_.step(allObjects, 1s / 60.f);
+	physicSystem_.step(allObjects, 1s / 60.f);*/
 }
 
 void Room::processMessage(Milliseconds deltaTime) {
@@ -80,7 +80,6 @@ void Room::processMessage(Milliseconds deltaTime) {
 			auto user = idUserMap_[messages[i].userId];
 
 			auto clientCurrPos = mu::Vec3(DirectX::XMLoadFloat3(&messages[i].position));
-			auto clientCurrVel = mu::Vec3(DirectX::XMLoadFloat3(&messages[i].velocity));
 			auto clientTimeStamp = messages[i].timeStamp;
 
 			if (clientCurrPos == user->pos()) {
@@ -88,7 +87,7 @@ void Room::processMessage(Milliseconds deltaTime) {
 				break;
 			}
 			
-			auto valid = validateMove(clientCurrPos, clientCurrVel, clientTimeStamp, deltaTime, user);
+			auto valid = validateMove(clientCurrPos, clientTimeStamp, deltaTime, user);
 			if (valid) {
 				//std::cout << "valid\n";
 				user->setLastMoveTimestamp(clientTimeStamp);
@@ -117,6 +116,13 @@ void Room::processMessage(Milliseconds deltaTime) {
 			}
 			else {
 				std::cout << "invalid\n";
+				
+				// 이동 방향 반대 방향으로 약간 롤백 시킨 뒤 클라이언트에 전송
+				auto dir = mu::NVec3(user->pos() - clientCurrPos);
+				const float rollbackDistance = 0.05f;
+				auto rollbackPos = user->pos() + mu::Vec3(dir) * rollbackDistance;
+				user->setPos(rollbackPos);
+
 				auto scRollbackPacket = Packet{
 					.header = {
 						.size = sizeof(PacketHeader) + sizeof(SCRollbackPacket),
@@ -172,7 +178,8 @@ void Room::processMessage(Milliseconds deltaTime) {
 				},
 				.scFire = {
 					.shooterId = shooterId,
-					.bulletCount = shooterBullet - 1
+					.bulletCount = shooterBullet - 1,
+					.firePos = messages[i].position
 				}
 			};
 
@@ -180,22 +187,29 @@ void Room::processMessage(Milliseconds deltaTime) {
 			auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
 			sendBuffer->copyData(&scFirePacket, packetSize);
 			broadcast(sendBuffer);
-			break;
 
 			if(!validateFire(mu::Vec3(DirectX::XMLoadFloat3(&messages[i].position)),
-				mu::Vec3(DirectX::XMLoadFloat3(&messages[i].fireDir)), shooter)
+				mu::Vec3(DirectX::XMLoadFloat3(&messages[i].forward)), messages[i].cameraPitchRadian, shooter)
 			) {
 				std::cout << "invalid fire\n";
 				break;
 			}
 
+			auto shooterForward = shooter->forward();
+			auto shooterPitch = shooter->cameraPitch();
+			auto fireDir = mu::NVec3(
+				shooterForward.x() * std::cos(shooterPitch),
+				-std::sin(shooterPitch),
+				shooterForward.z() * std::cos(shooterPitch)
+			);
+
 			auto ray = Ray{
 				.origin = mu::Vec3(DirectX::XMLoadFloat3(&messages[i].position)),
-				.dir = mu::NVec3(DirectX::XMLoadFloat3(&messages[i].fireDir))
+				.dir = fireDir
 			};
 
 			for (auto& [id, user] : idUserMap_) {
-				if(id == shooterId) {
+				if(id == shooterId || user->hp() <= 0) {
 					continue;
 				}
 
@@ -203,7 +217,19 @@ void Room::processMessage(Milliseconds deltaTime) {
 				for (auto i = 0; i < size; ++i) {
 					auto rayHit = RaycastBoundingRect(user->physicState().boundingRects[i], ray);
 					if (rayHit.hit) {
-						std::cout << "player " << shooterId << " hit player " << id << '\n';
+						//std::cout << "player " << shooterId << " hit player " << id << '\n';
+						if(rayHit.point.y() > user->physicState().pos.y() + 1.8f) {
+							// 머리 위를 맞춤
+							break;
+						}
+
+						if(isHeadshot(user->physicState().pos.y(), rayHit.point)) {
+							user->setHp(user->hp() - 50);
+						}
+						else {
+							user->setHp(user->hp() - 10);
+						}
+
 						auto scHitResultPacket = Packet{
 							.header = {
 								.size = sizeof(PacketHeader) + sizeof(SCHitResultPacket),
@@ -212,7 +238,8 @@ void Room::processMessage(Milliseconds deltaTime) {
 							.scHitResult = {
 								.shooterId = shooterId,
 								.targetId = id,
-								.hitResult = HitResult::Body
+								.currHp = user->hp(),
+								.hitPos = rayHit.point.getXmf()
 							}
 						};
 
@@ -220,6 +247,24 @@ void Room::processMessage(Milliseconds deltaTime) {
 						auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
 						sendBuffer->copyData(&scHitResultPacket, packetSize);
 						broadcast(sendBuffer);
+
+						if (user->hp() <= 0) {
+							std::cout << "player " << id << " died\n";
+							auto scDeathPacket = Packet{
+								.header = {
+									.size = sizeof(PacketHeader) + sizeof(SCDeathPacket),
+									.id = static_cast<uint16>(PacketType::scDeath)
+								},
+								.scDeath = {
+									.playerId = id
+								}
+							};
+
+							int32 packetSize = sizeof(Packet);
+							auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
+							sendBuffer->copyData(&scDeathPacket, packetSize);
+							broadcast(sendBuffer);
+						}
 						break;
 					}
 				}
@@ -317,7 +362,9 @@ void Room::enter(int32 playerId) {
 		.objectId = player->getId(),
 		.pos = player->pos().getXmf(),
 		.orient = player->orient().getXmf(),
-		.scale = player->scale().getXmf()
+		.scale = player->scale().getXmf(),
+		.hp = player->hp(),
+		.bullet = player->bullet()
 	};
 	objectDatas.emplace_back(std::move(playerData));
 
@@ -359,6 +406,7 @@ void Room::enter(int32 playerId) {
 		packet.scEnter.x[i] = users_[i]->pos().x();
 		packet.scEnter.y[i] = users_[i]->pos().y();
 		packet.scEnter.z[i] = users_[i]->pos().z();
+		packet.scEnter.hp[i] = users_[i]->hp();
 	}
 
 	packetSize = sizeof(Packet);
@@ -420,9 +468,30 @@ bool Room::empty() {
 	return users_.empty();
 }
 
-bool Room::validateMove(mu::Vec3 clientCurrPos, mu::Vec3 clientCurrVel, uint32 clientTimeStamp,
-	Milliseconds deltaTime, const std::shared_ptr<Object>& serverUserObj
-) {
+bool Room::validateMove(mu::Vec3 clientCurrPos, uint32 clientTimeStamp, Milliseconds deltaTime, const std::shared_ptr<Object>& serverUserObj) {
+	// 충돌 처리가 필요함
+	std::vector<Object*> allObjects;
+	allObjects.reserve(cubes_.size() + users_.size() - 1);
+	for (auto& cube : cubes_) {
+		allObjects.emplace_back(&cube);
+	}
+	for (auto& user : users_) {
+		if (user != serverUserObj) {
+			allObjects.emplace_back(user.get());
+		}
+	}
+
+	for (auto& obj : allObjects) {
+		for (int i = 0; i < serverUserObj->physicState().aabbs.size(); ++i) {
+			for(int j = 0; j < obj->physicState().aabbs.size(); ++j) {
+				auto c = collides(serverUserObj->physicState().aabbs[i], obj->physicState().aabbs[j]);
+				if (c.hit) {
+					return false;
+				}
+			}
+		}
+	}
+
 	/*std::cout << "prev pos : " << serverUserObj->pos().x() << ", "
 		<< serverUserObj->pos().y() << ", " << serverUserObj->pos().z() << '\n';
 	std::cout << "curr pos : " << clientCurrPos.x() << ", "
@@ -446,7 +515,7 @@ bool Room::validateMove(mu::Vec3 clientCurrPos, mu::Vec3 clientCurrVel, uint32 c
 	return true;
 }
 
-bool Room::validateFire(mu::Vec3 firePos, mu::Vec3 fireDir, const std::shared_ptr<Object>& serverUserObj) {
+bool Room::validateFire(mu::Vec3 firePos, mu::Vec3 forward, float clientCameraPitchRadian, const std::shared_ptr<Object>& serverUserObj) {
 	auto userPos = serverUserObj->pos();
 
 	const auto maxFireXZOffset = 0.9f;
@@ -465,5 +534,43 @@ bool Room::validateFire(mu::Vec3 firePos, mu::Vec3 fireDir, const std::shared_pt
 		return false;
 	}
 
+	if(!validateForward(forward, serverUserObj)) {
+		return false;
+	}
+	if(!validatePitch(clientCameraPitchRadian, serverUserObj)) {
+		return false;
+	}
+
+	auto yawRadian = std::atan2(forward.x(), forward.z());
+	auto yaw = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), mu::Radian(yawRadian));
+	serverUserObj->setOrient(yaw);
+	serverUserObj->setCameraPitch(clientCameraPitchRadian);
+
 	return true;
+}
+
+bool Room::validateForward(mu::Vec3 forward, const std::shared_ptr<Object>& serverUserObj) {
+	if (forward.len2() < 1e-6f) {
+		return false;
+	}
+
+	auto nvclientForward = mu::NVec3(forward);
+	auto nvServerForward = mu::NVec3(serverUserObj->forward());
+	float dot = mu::dot(nvclientForward, nvServerForward);
+
+	const float cosMaxAngle = 0.98f; // 약 11.5도
+	return dot >= cosMaxAngle;
+}
+
+bool Room::validatePitch(float cameraPitchRadian, const std::shared_ptr<Object>& serverUserObj) {
+	const float maxPitchRadian = mu::Radian(89.f);
+	if(std::fabs(cameraPitchRadian) > maxPitchRadian) {
+		return false;
+	}
+
+	float serverPitchRadian = serverUserObj->cameraPitch();
+	float diff = std::fabs(cameraPitchRadian - serverPitchRadian);
+
+	const float maxDiffRadian = mu::Radian(10.f);
+	return diff <= maxDiffRadian;
 }

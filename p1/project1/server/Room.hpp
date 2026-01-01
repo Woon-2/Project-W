@@ -24,9 +24,10 @@ public:
 	void broadcast(const SPSendBuffer& packet);
 	bool empty();
 
-	bool validateMove(mu::Vec3 clientCurrPos, mu::Vec3 clientCurrVel, uint32 clientTimeStamp,
-		Milliseconds deltaTime, const std::shared_ptr<Object>& serverUserObj);
-	bool validateFire(mu::Vec3 firePos, mu::Vec3 fireDir, const std::shared_ptr<Object>& serverUserObj);
+	bool validateMove(mu::Vec3 clientCurrPos,uint32 clientTimeStamp, Milliseconds deltaTime, const std::shared_ptr<Object>& serverUserObj);
+	bool validateFire(mu::Vec3 firePos, mu::Vec3 forward, float clientCameraPitchRadian, const std::shared_ptr<Object>& serverUserObj);
+	bool validateForward(mu::Vec3 forward, const std::shared_ptr<Object>& serverUserObj);
+	bool validatePitch(float cameraPitchRadian, const std::shared_ptr<Object>& serverUserObj);
 
 	void setRoomId(int32 roomId) { roomId_ = roomId; }
 	int32 getRoomId() const { return roomId_; }

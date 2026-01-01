@@ -48,6 +48,7 @@ enum class PacketType : std::uint16_t {
 	csReload,
 	scReload,
 	scHitResult,
+	scDeath,
 };
 
 struct CSSignupPacket {
@@ -90,6 +91,8 @@ struct ObjectData {
 	DirectX::XMFLOAT3 pos;
 	DirectX::XMFLOAT4 orient;
 	DirectX::XMFLOAT3 scale;
+	std::int32_t hp;
+	std::int32_t bullet;
 };
 
 struct SCSetupPacket {
@@ -102,6 +105,7 @@ struct SCEnterPacket {
 	std::array<float, maxUserCount> x;
 	std::array<float, maxUserCount> y;
 	std::array<float, maxUserCount> z;
+	std::array<std::int32_t, maxUserCount> hp;
 };
 
 struct CSLeavePacket {
@@ -149,13 +153,14 @@ struct CSFindRoomPacket {
 
 struct CSFirePacket {
 	DirectX::XMFLOAT3 firePos;
-	DirectX::XMFLOAT3 fireDir;
-	std::uint32_t timeStamp;
+	DirectX::XMFLOAT3 forward;
+	float cameraPitchRadian;
 };
 
 struct SCFirePacket {
 	std::int32_t shooterId;
 	std::int32_t bulletCount;
+	DirectX::XMFLOAT3 firePos;
 };
 
 struct CSReloadPacket {
@@ -176,8 +181,13 @@ enum class HitResult : std::uint8_t {
 struct SCHitResultPacket {
 	std::int32_t shooterId;
 	std::int32_t targetId;
-	HitResult hitResult;
+	std::int32_t currHp;
+	DirectX::XMFLOAT3 hitPos;
 };
+
+struct SCDeathPacket {
+	std::int32_t playerId;
+};;
 
 struct Packet {
 	PacketHeader header;
@@ -209,6 +219,7 @@ struct Packet {
 		CSReloadPacket csReload;
 		SCReloadPacket scReload;
 		SCHitResultPacket scHitResult;
+		SCDeathPacket scDeath;
 	};
 };
 

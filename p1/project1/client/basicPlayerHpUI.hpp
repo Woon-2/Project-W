@@ -17,7 +17,9 @@ public:
 	void update( Milliseconds deltaTime, GFX& gfx, FontHandle* pFontHandle );
 	void render( GFX& gfx );
 
+	void setHp(int hp) { hp_ = hp; }
 	int hp() const { return hp_; }
+	void setAmmo(int ammo) { bullet_ = ammo; }
 	int ammo() const { return bullet_; }
 
 	EventBus* eventBus() { return &eventBus_; }
@@ -30,8 +32,8 @@ private:
 
 	EventBus eventBus_{};
 
-	int hp_ = 100;
-	int bullet_ = 30;
+	int hp_{};
+	int bullet_{};
 };
 
 #endif	// __basicPlayerHpUI_HPP

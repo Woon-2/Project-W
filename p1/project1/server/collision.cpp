@@ -156,6 +156,16 @@ RayHit RaycastBoundingRect(const BoundingRect& rect, const Ray& ray) {
 
 	hit.hit = true;
 	hit.t = tMin;
+	std::cout << "ray origin : " << ray.origin.x() << ", " << ray.origin.y() << ", " << ray.origin.z() << '\n';
 	hit.point = ray.origin + ray.dir * tMin;
+	std::cout << "hit point : " << hit.point.x() << ", " << hit.point.y() << ", " << hit.point.z() << '\n';
 	return hit;
+}
+
+bool isHeadshot(float userYPos, mu::Vec3 hitPoint) {
+	const auto headYMin = userYPos + 1.65f;
+	const auto headYMax = userYPos + 1.8f;
+	std::cout << "headYMin: " << headYMin << ", headYMax: " << headYMax << ", hitPoint.y: " << hitPoint.y() << '\n';
+
+	return hitPoint.y() >= headYMin && hitPoint.y() <= headYMax;
 }
