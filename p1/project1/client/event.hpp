@@ -99,8 +99,18 @@ struct EvFire : BasicEvent {
 	i32t shooterId{-1};
 	i32t bulletCount{-1};
 };
-struct EvMuzzleFlash : BasicEvent { EvMuzzleFlash() : BasicEvent{EventType::MuzzleFlash} {} };
-struct EvBlood : BasicEvent { EvBlood() : BasicEvent{EventType::Blood} {} };
+struct EvMuzzleFlash : BasicEvent {
+	EvMuzzleFlash() : BasicEvent{EventType::MuzzleFlash} {}
+	EvMuzzleFlash(i32t shooterId) : BasicEvent{EventType::MuzzleFlash}, shooterId{shooterId} {}
+
+	i32t shooterId{-1};
+};
+struct EvBlood : BasicEvent {
+	EvBlood() : BasicEvent{EventType::Blood} {}
+	EvBlood(i32t victimId) : BasicEvent{EventType::Blood}, victimId{victimId} {}
+
+	i32t victimId{-1};
+};
 struct EvReloadComplete : BasicEvent { 
 	EvReloadComplete() : BasicEvent{EventType::ReloadComplete} {}
 	EvReloadComplete(i32t bulletCnt)

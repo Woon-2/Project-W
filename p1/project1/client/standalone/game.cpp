@@ -187,7 +187,9 @@ void Game::update(Milliseconds deltaTime) {
 
 		case EventType::Hit:
 			player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
+			
 			if (player_->hp() == 0) {
+				holdEvent( eventList_, EvDeath(player_->getId()) );
 				playerDead_ = true;
 			}
 			break;

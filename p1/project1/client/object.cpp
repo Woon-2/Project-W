@@ -206,20 +206,21 @@ void AnimBlenderVanguard::EventBus::receive(const BasicEvent* event, Seconds del
 		if (pOwner->tIdle_ > 0.1f) {
 			pOwner->cooldownFire_ = 120ms;
 			timer.enqueueJob( DelayedJob{
-				.job = [&evList](){ holdEvent(evList, EvMuzzleFlash{}); },
+				.job = [&evList, shooterId = static_cast<const EvFire*>(event)->shooterId](){
+					holdEvent(evList, EvMuzzleFlash(shooterId));
+				},
 				.executeAt = timer.lastTp() + 120ms
 			} );
 		}
 		// 조준 상태였다면, 딜레이 없이 바로 사격한다.
 		else {
-			holdEvent(evList, EvMuzzleFlash{});
+			holdEvent(evList, EvMuzzleFlash(static_cast<const EvFire*>(event)->shooterId));
 		}
 		break;
 
 	case EventType::Hit:
 		pOwner->animTimeHit_ = 0s;
 		pOwner->cooldownHit_ = 600ms;
-		holdEvent(evList, EvBlood{});
 		break;
 
 	case EventType::Death:
@@ -526,10 +527,11 @@ void Object::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Event
 					pOwner->renderState_.animBlender.get()
 				);
 			}
+			holdEvent(evList, EvBlood(pOwner->getId()));
 			pOwner->hp_ = std::max( static_cast<const EvHit*>(event)->hp, 0 );
-			if (pOwner->hp_ == 0) {
-				holdEvent( evList, EvDeath(pOwner->getId()) );
-			}
+
+			// 온라인 게임의 경우 서버에서 죽음 판정을 수행하므로
+			// 공용 코드인 이곳에서 death event를 다루지 않는다.
 		}
 		break;
 

@@ -118,6 +118,11 @@ private:
 		ThirdPerson
 	};
 
+	struct SpriteAnimationOwned {
+		SpriteAnimation anim;
+		std::shared_ptr<Object> pOwner;
+	};
+
 	void sendMouseMovePacket();
 	void sendMoveStatePacket();
 	void sendEnterRoomPacket(i32t roomId);
@@ -173,8 +178,8 @@ private:
 	Light dirLight_{};
 
 	SpriteAnimation slimeSprite_{};
-	std::deque<SpriteAnimation> muzzleFlashes_{};
-	std::deque<SpriteAnimation> bloodSplashes_{};
+	std::deque<SpriteAnimationOwned> muzzleFlashes_{};
+	std::deque<SpriteAnimationOwned> bloodSplashes_{};
 
 	bool playerDead_{};
 

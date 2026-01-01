@@ -167,10 +167,9 @@ void Game::update(Milliseconds deltaTime) {
 		}
 
 		case MsgType::HitResult: {
+			holdEvent(eventList_, EvHit(msg.targetId, msg.currHp));
 			auto& shooter = idPlayerMap_[msg.objectId];
 			auto& target = idPlayerMap_[msg.targetId];
-
-			target->setHp(msg.currHp);
 			break;
 		}
 
@@ -208,16 +207,18 @@ void Game::update(Milliseconds deltaTime) {
 
 		case EventType::MuzzleFlash: {
 			auto& muzzleFlash = muzzleFlashes_.emplace_back();
-			muzzleFlash.init(assetManager_.muzzleFlashAnimation());
-			muzzleFlash.setTint(mu::Vec3(0.8f, 0.4f, 0.1f));
+			muzzleFlash.anim.init(assetManager_.muzzleFlashAnimation());
+			muzzleFlash.anim.setTint(mu::Vec3(0.8f, 0.4f, 0.1f));
+			muzzleFlash.pOwner = idPlayerMap_[static_cast<EvMuzzleFlash*>(pEv)->shooterId];
 			break;
 		}
 
 		case EventType::Blood: {
 			auto& bloodSplash = bloodSplashes_.emplace_back();
-			bloodSplash.init(assetManager_.muzzleFlashAnimation());
-			bloodSplash.setSpeed(0.75f);
-			bloodSplash.setTint(mu::Vec3(0.92f, 0.04f, 0.01f));
+			bloodSplash.anim.init(assetManager_.muzzleFlashAnimation());
+			bloodSplash.anim.setSpeed(0.75f);
+			bloodSplash.anim.setTint(mu::Vec3(0.92f, 0.04f, 0.01f));
+			bloodSplash.pOwner = idPlayerMap_[static_cast<EvBlood*>(pEv)->victimId];
 			break;
 		}
 
@@ -300,28 +301,34 @@ void Game::update(Milliseconds deltaTime) {
 	// 애니메이션 업데이트
 	slimeSprite_.update( deltaTime );
 
+	objectsMtx_.lock();
 	for (auto& muzzleFlash : muzzleFlashes_) {
+		auto pOwner = muzzleFlash.pOwner;
 		// 총구 화염 스프라이트 애니메이션
 		// 플레이어에 대해서 오프셋 지정
-		muzzleFlash.setPos( player_->pos()
-			+ player_->up() * 1.3f
-			+ player_->forward() * 0.85f
-			+ player_->right() * 0.15f
+		muzzleFlash.anim.setPos( pOwner->pos()
+			+ pOwner->up() * 1.4f
+			+ pOwner->forward() * 0.85f
+			+ pOwner->right() * 0.15f
 		);
-		muzzleFlash.update(deltaTime);
+		muzzleFlash.anim.update(deltaTime);
 	}
+	objectsMtx_.unlock();
 
-	std::erase_if(muzzleFlashes_, [](const SpriteAnimation& anim) { return anim.done(); });
+	std::erase_if(muzzleFlashes_, [](const SpriteAnimationOwned& animOwned) { return animOwned.anim.done(); });
 
+	objectsMtx_.lock();
 	for (auto& bloodSplash : bloodSplashes_) {
-		bloodSplash.setPos( player_->pos()
-			+ player_->up() * 1.25f
-			- player_->forward() * 0.1f
+		auto pOwner = bloodSplash.pOwner;
+		bloodSplash.anim.setPos( pOwner->pos()
+			+ pOwner->up() * 1.25f
+			- pOwner->forward() * 0.1f
 		);
-		bloodSplash.update(deltaTime);
+		bloodSplash.anim.update(deltaTime);
 	}
+	objectsMtx_.unlock();
 
-	std::erase_if(bloodSplashes_, [](const SpriteAnimation& anim) { return anim.done(); });
+	std::erase_if(bloodSplashes_, [](const SpriteAnimationOwned& animOwned) { return animOwned.anim.done(); });
 
 	objectsMtx_.lock();
 	animSystem_.update(0.016s);
@@ -363,10 +370,10 @@ void Game::render() {
 
 	if (inRoom_) {
 		for (const auto& muzzleFlash : muzzleFlashes_) {
-			muzzleFlash.render(gfx_);
+			muzzleFlash.anim.render(gfx_);
 		}
 		for (const auto& bloodSplash : bloodSplashes_) {
-			bloodSplash.render(gfx_);
+			bloodSplash.anim.render(gfx_);
 		}
 
 		playerHpUI_.render(gfx_);
