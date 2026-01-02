@@ -507,18 +507,18 @@ bool Room::validateMove(mu::Vec3 clientCurrPos, uint32 clientTimeStamp, Millisec
 	//std::cout << "posDiff len2 : " << posDiff.len2() << '\n';
 
 	// 이거 뭐임??? 코파일럿 코드임?
-	//auto lastMoveTimestamp = serverUserObj->lastMoveTimestamp();
+	auto lastMoveTimestamp = serverUserObj->lastMoveTimestamp();
 	//auto timeStampDiff = static_cast<float>(clientTimeStamp - lastMoveTimestamp);
 	//deltaTime *= timeStampDiff;
 
-	const auto calculatedVel = posDiff / Seconds(deltaTime).count();
-	const auto maxSpeed = 10.f;
+	const auto calculatedVel = posDiff / ( static_cast<float>(clientTimeStamp - lastMoveTimestamp) * 1000.f );
+	const auto maxSpeed = 10.01f;
 
 	//std::cout << "calculatedVel len2 : " << calculatedVel.len2() << '\n';
 
-	/*if (calculatedVel.len2() > maxSpeed * maxSpeed) {
-		return false;
-	}*/
+	//if (calculatedVel.len2() > maxSpeed * maxSpeed) {
+	//	return false;
+	//}
 	return true;
 }
 

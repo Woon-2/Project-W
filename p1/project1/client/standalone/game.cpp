@@ -34,7 +34,7 @@ Game::Game() {
 
 void Game::setupStage() {
 	const auto path = std::filesystem::path("../resources/levels/level.bin");
-	auto ifs = std::ifstream(path);
+	auto ifs = std::ifstream(path, std::ios::binary);
 	DISPLAY_ERROR_STR(ifs.good(), "[File I/O Error]: loadModelFromFile: "s + path.string() + " 파일을 열 수 없습니다."s, true);
 
 	readHeadTag(ifs, "Level");
@@ -470,7 +470,6 @@ void Game::processInput(Milliseconds deltaTime) {
 
 		// 플레이어 객체의 속력을 증가시킨다.
 		const auto moveAmount = Seconds(deltaTime).count() * maxSpeed / zeroToMax.count();
-		player_->physicState().velocity += mu::Vec3(moveDirection) * moveAmount;
 
 		// 플레이어 객체의 속력이 최대 속력을 넘지 못하게 한다.
 		if (player_->physicState().velocity.len2() > maxSpeed * maxSpeed) {

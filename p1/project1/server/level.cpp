@@ -19,6 +19,7 @@ void importNode(std::ifstream& ifs, const AssetManager& assetManager, Level& lev
 	const auto name = readText(ifs, "Name");
 
 	gSharedLog << "[Level Load] 레벨 노드 " << name << " 로드 완료\n";
+	dumpLog();
 
 	readHeadTag(ifs, "LocalTRS");
 	const auto localT = readVec3(ifs, "Position");
@@ -61,7 +62,7 @@ void importNode(std::ifstream& ifs, const AssetManager& assetManager, Level& lev
 Level loadLevelFromFile(const std::filesystem::path& path, const AssetManager& assetManager) {
 	Level ret{};
 
-	auto ifs = std::ifstream(path);
+	auto ifs = std::ifstream(path, std::ios::binary);
 	DISPLAY_ERROR_STR(ifs.good(), "[File I/O Error]: loadModelFromFile: "s + path.string() + " 파일을 열 수 없습니다."s, true);
 
 	readHeadTag(ifs, "Level");

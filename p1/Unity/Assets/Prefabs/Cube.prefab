@@ -159,4 +159,13 @@ MonoBehaviour:
   - name: groundMaterial
     materials:
     - {fileID: 2100000, guid: 676e706a9e3b2094eb5816f4ae3c7d5b, type: 2}
+  - name: cubeMaterial 1
+    materials:
+    - {fileID: 2100000, guid: 3693db82440db3843959b82df28f861d, type: 2}
+  - name: cubeMaterial 2
+    materials:
+    - {fileID: 2100000, guid: 7452150287450a7488db92f7d07ed6a3, type: 2}
+  - name: cubeMaterial 3
+    materials:
+    - {fileID: 2100000, guid: fac4b006b8a5b404682acf95bca86ee4, type: 2}
   currentSetIndex: 0
