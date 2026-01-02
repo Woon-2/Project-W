@@ -32,6 +32,9 @@ public:
 	mu::Vec3 MU_CALLCONV eye() const { return eye_; }
 	mu::Vec3 MU_CALLCONV at() const { return at_; }
 
+	mu::Mat4x4 MU_CALLCONV view() const { return view_; }
+	mu::Mat4x4 MU_CALLCONV proj() const { return proj_; }
+
 private:
 	std::weak_ptr<Object> pTargetObject_{};
 	// 타겟 오브젝트에 대한 카메라의 위치 오프셋

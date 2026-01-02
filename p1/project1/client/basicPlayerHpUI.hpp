@@ -18,6 +18,9 @@ public:
 	void render( GFX& gfx );
 
 	void setHp(int hp) { hp_ = hp; }
+	void setCulled(bool culled) { culled_ = culled; }
+	void MU_CALLCONV setPivot(mu::Vec2 pivot) { pivot_ = pivot; }
+	void MU_CALLCONV setScale(mu::Vec2 scale) { scale_ = scale; }
 	int hp() const { return hp_; }
 	void setAmmo(int ammo) { bullet_ = ammo; }
 	int ammo() const { return bullet_; }
@@ -27,6 +30,10 @@ public:
 private:
 	mu::Mat4x4 world_{};
 	mu::Mat4x4 textWorld_{};
+
+	mu::Vec2 pivot_{};
+	mu::Vec2 scale_{};
+
 	const Texture* pTex_ = nullptr;
 	TextImage* pTextHp_ = nullptr;
 
@@ -34,6 +41,8 @@ private:
 
 	int hp_{};
 	int bullet_{};
+
+	bool culled_ = false;
 };
 
 #endif	// __basicPlayerHpUI_HPP

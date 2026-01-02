@@ -78,7 +78,8 @@ void GFX::setupDXGI(D3D_FEATURE_LEVEL d3dFeatureLevel) {
 	}
 	std::cout << "선택: ";
 	int idx{};
-	std::cin >> idx;
+	std::cout << idx << '\n';
+	// std::cin >> idx;
 	std::wcout << idx << " - " << adapterDescs_[idx].Description;
 	std::cout << "이 선택되었습니다.\n";
 	std::cout << "----------------------------------------\n";

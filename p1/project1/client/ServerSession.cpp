@@ -32,7 +32,6 @@ int32 ServerSession::onRecvPacket(uint8* buffer, int32 len) {
 	switch (static_cast<PacketType>(packet->header.id)) {
 	case PacketType::scAssignId: {
 		player_->setId(packet->scAssignId.playerId);
-		pOnlineGame->addPlayer(player_);
 		break;
 	}
 
@@ -69,18 +68,20 @@ int32 ServerSession::onRecvPacket(uint8* buffer, int32 len) {
 		for (std::int32_t i = 0; i < playerCount; ++i) {
 			auto pId = packet->scEnter.pIds[i];
 
-			if (pOnlineGame->findPlayer(pId)) {
-				continue;
-			}
-
 			auto x = packet->scEnter.x[i];
 			auto y = packet->scEnter.y[i];
 			auto z = packet->scEnter.z[i];
 
-			// 모든 플레이어의 hp 정보
-			auto hp = packet->scEnter.hp[i];
+			if (pOnlineGame->findPlayer(pId)) {
+				continue;
+			}
 
-			pOnlineGame->createPlayer(pId, x, y, z);
+			if (player_->getId() == pId) {
+				pOnlineGame->addClientPlayer(pId, x, y, z);
+				continue;
+			}
+
+			pOnlineGame->createOtherPlayer(pId, x, y, z);
 		}
 		break;
 	}

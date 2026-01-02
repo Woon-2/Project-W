@@ -69,11 +69,23 @@ public:
 	// 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
 	LRESULT receiveWndMsg( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam ) override;
 
-	void addPlayer( const std::shared_ptr<Object>& player ) {
+	void addClientPlayer( i32t playerId, float x, float y, float z ) {
+		std::lock_guard<std::mutex> lock( objectsMtx_ );
+
+		player_ = std::make_shared<Object>( );
+
+		player_->setId( playerId );
+		idPlayerMap_[ player_->getId( ) ] = player_;
+	}
+
+	void addOtherPlayer( const std::shared_ptr<Object>& player ) {
 		std::lock_guard<std::mutex> lock( objectsMtx_ );
 		player->setAnimBlender(animSystem_, assetManager_);
 		otherPlayers_.push_back( player );
 		idPlayerMap_[ player->getId( ) ] = player;
+		auto [pPair, _] = otherPlayerHpUIs_.try_emplace(player->getId());
+		auto& ui = pPair->second;
+		ui.setTexture(assetManager_.playerHpLine());
 	}
 
 	void removePlayer( i32t playerId );
@@ -83,7 +95,7 @@ public:
 		return idPlayerMap_.find( playerId ) != idPlayerMap_.end( );
 	}
 
-	void createPlayer( i32t playerId, float x, float y, float z ) {
+	void createOtherPlayer( i32t playerId, float x, float y, float z ) {
 		auto newPlayer = std::make_shared<Object>( );
 
 		newPlayer->setId( playerId );
@@ -91,6 +103,9 @@ public:
 		newPlayer->setModel( assetManager_.modelPlayer( ) );
 		newPlayer->setScale( 1.f );
 		newPlayer->enableBVRendering();
+		// 임시
+		newPlayer->setHp(100);
+		newPlayer->setAmmo(30);
 
 		Equipment rifle{};
 		rifle.socketType = Bone::SocketType::RightHand;
@@ -100,7 +115,7 @@ public:
 
 		newPlayer->equip(std::move(rifle));
 
-		addPlayer( newPlayer );
+		addOtherPlayer( newPlayer );
 	}
 
 	void setServerSession( const SPServerSession& serverSession ) {	serverSession_ = serverSession;	}
@@ -184,6 +199,7 @@ private:
 	bool playerDead_{};
 
 	BasicPlayerHpUI playerHpUI_{};
+	std::unordered_map<i32t, BasicPlayerHpUI> otherPlayerHpUIs_{};
 
 	LONG mouseDeltaX_{};
 	LONG mouseDeltaY_{};

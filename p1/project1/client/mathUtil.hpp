@@ -399,13 +399,14 @@ public:
     }
 
     Vec<2> MU_CALLCONV xx() const __MathUtil_NOEXCEPT requires (D >= 2) {
-        return Vec<2>(dx::XMVectorSwizzle<0, 0>(vec_));
+        return Vec<2>(dx::XMVectorSwizzle<0, 0, 0, 0>(vec_));
     }
 
     Vec<2> MU_CALLCONV xy() const __MathUtil_NOEXCEPT requires (D >= 2) {
-        return Vec<2>(dx::XMVectorSwizzle<0, 1>(vec_));
+        return Vec<2>(dx::XMVectorSwizzle<0, 1, 0, 0>(vec_));
     }
 
+    // TODO: 여기서부터 쭉 수정해야 함...
     Vec<2> MU_CALLCONV yx() const __MathUtil_NOEXCEPT requires (D >= 2) {
         return Vec<2>(dx::XMVectorSwizzle<1, 0>(vec_));
     }
@@ -435,7 +436,7 @@ public:
     }
 
     Vec<3> MU_CALLCONV xyz() const __MathUtil_NOEXCEPT requires (D >= 3) {
-        return Vec<3>(dx::XMVectorSwizzle<0, 1, 2>(vec_));
+        return Vec<3>(dx::XMVectorSwizzle<0, 1, 2, 0>(vec_));
     }
 
     Vec<3> MU_CALLCONV xzx() const __MathUtil_NOEXCEPT requires (D >= 3) {

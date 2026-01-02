@@ -82,6 +82,8 @@ void Game::setupStage() {
 	playerHpUI_.setTextImage( assetManager_.textPlayerHp() );
 	playerHpUI_.setHp( player_->hp() );
 	playerHpUI_.setAmmo( player_->ammo() );
+	playerHpUI_.setPivot( mu::Vec2(512.f, 768.f - 40.f) );
+	playerHpUI_.setScale( mu::Vec2(1024.f, 64.f) );
 }
 
 void Game::importNode(std::ifstream& ifs) {

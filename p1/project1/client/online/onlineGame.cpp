@@ -19,8 +19,9 @@ Game::Game() {
 	std::cout << "사용 가능한 물리 코어 수: " << numberOfPhysicalCores() - 1 << " (1개 - 메인 스레드)\n";
 	std::cout << "스레드 수: ";
 
-	std::size_t threadCnt{};
-	std::cin >> threadCnt;
+	std::size_t threadCnt{ 4u };
+	std::cout << threadCnt << '\n';
+	// std::cin >> threadCnt;
 
 	threadPool_.run(threadCnt);
 
@@ -35,6 +36,8 @@ Game::Game() {
 }
 
 void Game::setupStage() {
+	auto lock = std::lock_guard(objectsMtx_);
+
 	skybox_.setModel( assetManager_.modelCube( ) );
 	skybox_.setSkyboxMaterial( assetManager_.skyboxMaterial( ) );
 
@@ -55,9 +58,6 @@ void Game::setupStage() {
 	);
 
 	slimeSprite_.init( assetManager_.slimeAnimation() );
-
-	playerHpUI_.setTexture( assetManager_.playerHpLine() );
-	playerHpUI_.setTextImage( assetManager_.textPlayerHp() );
 }
 
 // 게임의 업데이트는 다음 순서대로 이루어진다.
@@ -68,6 +68,7 @@ void Game::setupStage() {
 // 객체별 업데이트 루틴
 // 애니메이션 업데이트
 void Game::update(Milliseconds deltaTime) {
+	auto lock = std::lock_guard(objectsMtx_);
 	// 평가 물리량 초기화
 	player_->physicState().evVelocity = mu::Vec3();
 	player_->physicState().evOmega = mu::Vec3();
@@ -114,6 +115,19 @@ void Game::update(Milliseconds deltaTime) {
 			rifle.object->setScale(mu::Vec3(1.f, 1.f, 1.f));
 
 			player_->equip(std::move(rifle));
+
+			camera_.setTargetObject( player_ );
+			camera_.setOffsetFromTarget( mu::Vec3( 0.f, 1.8f, -2.5f ) );
+			camera_.setOffsetTargetPivot( mu::Vec3( 0.f, 1.f, 0.f ) );
+			camera_.setPerspective( mu::Degree( 90.f ),
+				static_cast<float>( gClientRect.right - gClientRect.left ) / ( gClientRect.bottom - gClientRect.top ),
+				0.1f, 500.f
+			);
+
+			playerHpUI_.setTexture( assetManager_.playerHpLine() );
+			playerHpUI_.setTextImage( assetManager_.textPlayerHp() );
+			playerHpUI_.setPivot( mu::Vec2(512.f, 768.f - 40.f) );
+			playerHpUI_.setScale( mu::Vec2(1024.f, 64.f) );
 			break;
 		}
 
@@ -284,24 +298,37 @@ void Game::update(Milliseconds deltaTime) {
 
 	// 게임 객체들 갱신
 	player_->update(deltaTime, tPhysicInterpolation );
-	objectsMtx_.lock( );
 	for ( auto& obj : otherPlayers_ ) {
 		if( obj != player_ ) {
 			obj->update( deltaTime, tPhysicInterpolation );
 		}
 	}
-	objectsMtx_.unlock( );
 
 	camera_.update();
 	dirLight_.update(deltaTime);
 	dirLight_.updateShadowAuxDirectional(camera_.eye(), 100.f, -10.f, 10.f, -10.f, 10.f, 50.f, 200.f);
 
 	playerHpUI_.update(deltaTime, gfx_, nullptr);
+	for (auto& [id, ui] : otherPlayerHpUIs_) {
+		auto pPlayer = idPlayerMap_.at(id);
+		auto projPos = mu::Vec4(pPlayer->pos(), 1.0f) * camera_.view() * camera_.proj();
+		if (projPos.z() < 0.f) {
+			ui.setCulled(true);
+			continue;
+		}
+		ui.setCulled(false);
+		ui.setPivot( ( projPos.xy() / projPos.w() + mu::Vec2(1.f, 1.f) ) * 0.5f
+			* mu::Vec2(1024.f, 768.f)
+		);
+		auto d = std::max( (pPlayer->pos() - camera_.eye()).len(), 0.001f );
+		ui.setScale( mu::Vec2(100.f, 20.f) * std::min(1.f, 5.f / d));
+
+		ui.update(deltaTime, gfx_, nullptr);
+	}
 
 	// 애니메이션 업데이트
 	slimeSprite_.update( deltaTime );
 
-	objectsMtx_.lock();
 	for (auto& muzzleFlash : muzzleFlashes_) {
 		auto pOwner = muzzleFlash.pOwner;
 		// 총구 화염 스프라이트 애니메이션
@@ -313,11 +340,9 @@ void Game::update(Milliseconds deltaTime) {
 		);
 		muzzleFlash.anim.update(deltaTime);
 	}
-	objectsMtx_.unlock();
 
 	std::erase_if(muzzleFlashes_, [](const SpriteAnimationOwned& animOwned) { return animOwned.anim.done(); });
 
-	objectsMtx_.lock();
 	for (auto& bloodSplash : bloodSplashes_) {
 		auto pOwner = bloodSplash.pOwner;
 		bloodSplash.anim.setPos( pOwner->pos()
@@ -326,35 +351,36 @@ void Game::update(Milliseconds deltaTime) {
 		);
 		bloodSplash.anim.update(deltaTime);
 	}
-	objectsMtx_.unlock();
 
 	std::erase_if(bloodSplashes_, [](const SpriteAnimationOwned& animOwned) { return animOwned.anim.done(); });
 
-	objectsMtx_.lock();
 	animSystem_.update(0.016s);
-	objectsMtx_.unlock();
 
 	// UI 동기화
 	playerHpUI_.setHp(player_->hp());
 	playerHpUI_.setAmmo(player_->ammo());
 
+	for (auto& [id, ui] : otherPlayerHpUIs_) {
+		ui.setHp(idPlayerMap_.at(id)->hp());
+		ui.setAmmo(idPlayerMap_.at(id)->ammo());
+	}
+
 	clearEvents(eventList_);
 }
 
 void Game::render() {
+	auto lock = std::lock_guard(objectsMtx_);
 	for (auto& cube : cubes_) {
 		cube.render(gfx_);
 	}
 
 	player_->render(gfx_);
 	skybox_.render( gfx_ );
-	objectsMtx_.lock( );
 	for ( auto& obj : otherPlayers_ ) {
 		if( obj != player_ ) {
 			obj->render( gfx_ );
 		}
 	}
-	objectsMtx_.unlock( );
 
 	camera_.updateGFX(gfx_);
 	dirLight_.render(gfx_);
@@ -377,6 +403,9 @@ void Game::render() {
 		}
 
 		playerHpUI_.render(gfx_);
+		for (auto& [id, ui] : otherPlayerHpUIs_) {
+			ui.render(gfx_);
+		}
 
 		auto frameDataUI = UIPipeline::FrameData{
 			.screenWidth = static_cast<float>( gClientRect.right - gClientRect.left ),
@@ -411,6 +440,7 @@ void Game::removePlayer( i32t playerId ) {
 
 	otherPlayers_.erase(itPlayer);
 	idPlayerMap_.erase( playerId );
+	otherPlayerHpUIs_.erase( playerId );
 }
 
 // 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
