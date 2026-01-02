@@ -20,6 +20,7 @@ public:
 	const SpriteAnimationClip* muzzleFlashAnimation() const { return &muzzleFlashAnimation_; }
 	const Texture* playerHpLine() const { return &playerHpLine_; }
 	const Texture* playerHpFrame() const { return &playerHpFrame_; }
+	const Texture* crosshair() const { return &crosshair_; }
 	TextImage* textPlayerHp() { return &textPlayerHp_; }
 	const std::vector<std::shared_ptr<AnimClip>>& vanguardAnimations() const { return vanguardAnimations_; }
 
@@ -34,6 +35,7 @@ private:
 	Texture billBoard0_{};
 	Texture playerHpLine_{};
 	Texture playerHpFrame_{};
+	Texture crosshair_{};
 	SpriteAnimationClip slimeAnimation_{};
 	SpriteAnimationClip muzzleFlashAnimation_{};
 	TextImage textPlayerHp_;

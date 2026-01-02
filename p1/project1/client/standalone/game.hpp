@@ -17,6 +17,7 @@
 #include "../spriteAnimation.hpp"
 #include "../basicPlayerHpUI.hpp"
 #include "../event.hpp"
+#include "../crosshair.hpp"
 
 class Timer;
 
@@ -106,6 +107,7 @@ private:
 
 	BasicPlayerHpUI playerHpUI_{};
 	TextImage textFPS_{};
+	Crosshair crosshair_{};
 
 	LONG mouseDeltaX_{};
 	LONG mouseDeltaY_{};

@@ -58,6 +58,10 @@ void Game::setupStage() {
 	);
 
 	slimeSprite_.init( assetManager_.slimeAnimation() );
+
+	crosshair_.setTexture( assetManager_.crosshair() );
+	crosshair_.setPivot(mu::Vec2(1024.f / 2.f + 15.f, 768.f / 2.f));
+	crosshair_.setScale(mu::Vec2(50.f, 50.f));
 }
 
 // 게임의 업데이트는 다음 순서대로 이루어진다.
@@ -327,6 +331,8 @@ void Game::update(Milliseconds deltaTime) {
 		ui.update(deltaTime, gfx_, nullptr);
 	}
 
+	crosshair_.update(deltaTime);
+
 	// 애니메이션 업데이트
 	slimeSprite_.update( deltaTime );
 
@@ -405,6 +411,10 @@ void Game::render() {
 		playerHpUI_.render(gfx_);
 		for (auto& [id, ui] : otherPlayerHpUIs_) {
 			ui.render(gfx_);
+		}
+
+		if (cameraMode_ == CameraMode::FirstPerson) {
+			crosshair_.render(gfx_);
 		}
 
 		auto frameDataUI = UIPipeline::FrameData{

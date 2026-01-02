@@ -14,6 +14,7 @@
 #include "../basicPlayerHpUI.hpp"
 #include "../event.hpp"
 #include "../spriteAnimation.hpp"
+#include "../crosshair.hpp"
 
 class Timer;
 
@@ -200,6 +201,7 @@ private:
 
 	BasicPlayerHpUI playerHpUI_{};
 	std::unordered_map<i32t, BasicPlayerHpUI> otherPlayerHpUIs_{};
+	Crosshair crosshair_{};
 
 	LONG mouseDeltaX_{};
 	LONG mouseDeltaY_{};

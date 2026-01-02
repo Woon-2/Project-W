@@ -60,6 +60,14 @@ void AssetManager::loadGFXAssets(GFX& gfx) {
 		.needsUploadInfo = false
 	} );
 
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name = "Crosshair",
+		.texturePath = "../resources/UI/crosshair.dds",
+		.pDest = &crosshair_,
+		.pTexHashMap = &texHashMap_,
+		.needsUploadInfo = false
+	} );
+
 	gfx.addRequestTextImageLoad( RequestTextImageLoad{
 		.width = 512,
 		.height = 256,

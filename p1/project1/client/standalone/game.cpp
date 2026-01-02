@@ -84,6 +84,10 @@ void Game::setupStage() {
 	playerHpUI_.setAmmo( player_->ammo() );
 	playerHpUI_.setPivot( mu::Vec2(512.f, 768.f - 40.f) );
 	playerHpUI_.setScale( mu::Vec2(1024.f, 64.f) );
+
+	crosshair_.setTexture( assetManager_.crosshair() );
+	crosshair_.setPivot(mu::Vec2(1024.f / 2.f + 15.f, 768.f / 2.f));
+	crosshair_.setScale(mu::Vec2(50.f, 50.f));
 }
 
 void Game::importNode(std::ifstream& ifs) {
@@ -273,9 +277,11 @@ void Game::update(Milliseconds deltaTime) {
 	dirLight_.update(deltaTime);
 	dirLight_.updateShadowAuxDirectional(camera_.eye(), 100.f, -10.f, 10.f, -10.f, 10.f, 50.f, 200.f);
 
+	playerHpUI_.update( deltaTime, gfx_, nullptr );
+	crosshair_.update(deltaTime);
+
 	// 애니메이션 업데이트
 	slimeSprite_.update( deltaTime );
-	playerHpUI_.update( deltaTime, gfx_, nullptr );
 
 	for (auto& muzzleFlash : muzzleFlashes_) {
 		// 총구 화염 스프라이트 애니메이션
@@ -332,6 +338,10 @@ void Game::render() {
 	}
 
 	playerHpUI_.render( gfx_ );
+
+	if (cameraMode_ == CameraMode::FirstPerson) {
+		crosshair_.render(gfx_);
+	}
 
 	auto frameDataPBR = PBRPipeline::FrameData{
 		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )

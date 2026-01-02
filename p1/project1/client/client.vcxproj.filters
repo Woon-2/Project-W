@@ -293,7 +293,7 @@
     </ClInclude>
     <ClInclude Include="font.hpp">
       <Filter>그래픽스\코어\헤더 파일</Filter>
-	</ClInclude>
+    </ClInclude>
     <ClInclude Include="sharedResources.hpp">
       <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
@@ -325,6 +325,9 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="event.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="crosshair.hpp">
       <Filter>게임%28공용%29\헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
@@ -436,7 +439,7 @@
     </ClCompile>
     <ClCompile Include="font.cpp">
       <Filter>그래픽스\코어\소스 파일</Filter>
-	</ClCompile>
+    </ClCompile>
     <ClCompile Include="sharedResources.cpp">
       <Filter>그래픽스\파이프라인\소스 파일</Filter>
     </ClCompile>
@@ -462,6 +465,9 @@
       <Filter>그래픽스\파이프라인\소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="event.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="crosshair.cpp">
       <Filter>게임%28공용%29\소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
