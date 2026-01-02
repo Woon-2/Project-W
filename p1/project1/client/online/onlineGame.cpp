@@ -230,6 +230,7 @@ void Game::update(Milliseconds deltaTime) {
 		case EventType::Blood: {
 			auto& bloodSplash = bloodSplashes_.emplace_back();
 			bloodSplash.anim.init(assetManager_.muzzleFlashAnimation());
+			bloodSplash.anim.setScale(mu::Vec2(1.5f, 1.5f));
 			bloodSplash.anim.setSpeed(0.75f);
 			bloodSplash.anim.setTint(mu::Vec3(0.92f, 0.04f, 0.01f));
 			bloodSplash.pOwner = idPlayerMap_[static_cast<EvBlood*>(pEv)->victimId];
@@ -347,7 +348,6 @@ void Game::update(Milliseconds deltaTime) {
 		auto pOwner = bloodSplash.pOwner;
 		bloodSplash.anim.setPos( pOwner->pos()
 			+ pOwner->up() * 1.25f
-			- pOwner->forward() * 0.1f
 		);
 		bloodSplash.anim.update(deltaTime);
 	}
@@ -699,8 +699,8 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		&& keyboardStateCurr_['1'] & 0x80
 	) {
 		camera_.setOffsetFromTargetPreRotation( mu::NQuat{} );
-		camera_.setOffsetFromTarget( mu::Vec3( 0.f, 2.f, 0.5f ) );
-		camera_.setOffsetTargetPivot( mu::Vec3(0.f, 2.f, 8.f));
+		camera_.setOffsetFromTarget( mu::Vec3( 0.f, 1.6f, 0.25f ) );
+		camera_.setOffsetTargetPivot( mu::Vec3(0.f, 1.6f, 8.f));
 		cameraMode_ = CameraMode::FirstPerson;
 	} 
 	// 카메라 3인칭 모드 설정
