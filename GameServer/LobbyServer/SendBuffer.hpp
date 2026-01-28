@@ -10,8 +10,7 @@
 class SendBufferChunk;
 class SendBuffer : std::enable_shared_from_this<SendBuffer> {
 public:
-	SendBuffer(uint8* buffer, uint32 allocSize, SendBufferChunk* owner)
-		: buffer_(buffer), allocSize_(allocSize), writeSize_(0), owner_(owner) {}
+	SendBuffer(uint32 size) {}
 
 	uint8* data() { return buffer_; }
 	int32 size() const { return writeSize_; }
