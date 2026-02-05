@@ -2,6 +2,7 @@
 #include "Memory.hpp"
 #include "Server.hpp"
 #include "IdPool.hpp"
+#include "SendBuffer.hpp"
 
 int main()
 {
@@ -28,6 +29,7 @@ int main()
 
 	Server::stop();
 
+	SendBufferManager::clear();
 	Memory::release();
 	SocketUtils::release();
 }

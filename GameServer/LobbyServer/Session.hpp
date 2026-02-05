@@ -53,8 +53,7 @@ protected:
 	// 컨텐츠 쪽에서 오버라이드해서 사용
 	virtual void onConnected() {}
 	virtual void onDisconnected() {}
-	virtual int32 onRecv(uint8* buffer, int32 len) sealed;
-	virtual void processPacket(uint8* buffer, int32 len) = 0;
+	virtual int32 onRecv(uint8* buffer, int32 len) { return len; }
 	virtual void onSend(int32 len) {}
 
 private:
@@ -74,5 +73,14 @@ private:
 
 	friend class Listener;
 };
+
+/*---------------------
+	 PacketSession
+---------------------*/
+
+//class PacketSession : public Session {
+//public:
+//
+//}
 
 #endif	// session_hpp

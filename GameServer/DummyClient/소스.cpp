@@ -17,12 +17,22 @@ int main()
 		reinterpret_cast<const SOCKADDR*>(&serverAddr.sockAddr()), sizeof(SOCKADDR_IN))
 	) {
 		int32 errCode = ::WSAGetLastError();
-		std::cerr << "Connect failed with error: " << errCode << '\n'
-			<< "Error message: " << std::system_category().message(errCode) << '\n';
-		::exit(errCode);
+		if (errCode != WSAEWOULDBLOCK) {
+			std::cerr << "Connect failed with error: " << errCode << '\n'
+				<< "Error message: " << std::system_category().message(errCode) << '\n';
+			::exit(errCode);
+		}
 	}
 
-	while (true);
+	while (true) {
+		char msg[]{"Hello, Lobby Server!"};
+		::send(clientSock, msg, sizeof(msg), 0);
+
+		::recv(clientSock, msg, sizeof(msg), 0);
+		std::cout << "Received from server: " << msg << '\n';
+
+		std::this_thread::sleep_for(1s);
+	}
 
 	SocketUtils::release();
 }

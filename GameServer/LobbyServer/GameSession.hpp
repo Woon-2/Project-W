@@ -14,7 +14,7 @@ public:
 protected:
 	virtual void onConnected() override;
 	virtual void onDisconnected() override;
-	virtual void processPacket(uint8* buffer, int32 len) override;
+	virtual int32 onRecv(uint8* buffer, int32 len) override;
 	virtual void onSend(int32 len) override {}
 };
 

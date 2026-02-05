@@ -192,11 +192,3 @@ void Session::handleError(std::string_view where, int32 errCode) {
 		break;
 	}
 }
-
-int32 Session::onRecv(uint8* buffer, int32 len) {
-	int32 recvLen{};
-
-	while (true) {
-
-	}
-}

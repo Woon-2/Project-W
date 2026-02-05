@@ -1,40 +1,36 @@
 #include "pch.hpp"
 #include "SendBuffer.hpp"
 
+/*------------------
+	 SendBuffer
+------------------*/
+
+void SendBuffer::close(uint32 writeSize) {
+	ASSERT_CRASH(writeSize <= allocSize_);
+	writeSize_ = writeSize;
+	owner_->close(writeSize_);
+}
+
 /*-------------------------
 	 SendBufferManager
 -------------------------*/
 
 SendBuffer* SendBufferManager::open(uint32 size) {
 	if (LSendBufferChunk == nullptr) {
-		LSendBufferChunk = pop();
+		LSendBufferChunk = xnew<SendBufferChunk>();
+	}
+	else if (LSendBufferChunk->freeSize() < size) {
 		LSendBufferChunk->reset();
 	}
 
-	ASSERT_CRASH(!LSendBufferChunk->isOpen());
-
-	if (LSendBufferChunk->freeSize() < size) {
-		push(LSendBufferChunk);
-		LSendBufferChunk = pop();
-		LSendBufferChunk->reset();
-	}
-
-	std::cout << "Free Size: " << LSendBufferChunk->freeSize() << '\n';
+	//std::cout << "Free Size: " << LSendBufferChunk->freeSize() << '\n';
 
 	return LSendBufferChunk->open(size);
 }
 
-SendBufferChunk* SendBufferManager::pop() {
-	SendBufferChunk* chunk = nullptr;
-	if (sendBufferChunks_.try_dequeue(chunk)) {
-		return chunk;
+void SendBufferManager::clear() {
+	if (LSendBufferChunk != nullptr) {
+		xdelete(LSendBufferChunk);
+		LSendBufferChunk = nullptr;
 	}
-
-	return xnew<SendBufferChunk>();
 }
-
-void SendBufferManager::push(SendBufferChunk* buffer) {
-	ASSERT_CRASH(sendBufferChunks_.enqueue(buffer));
-}
-
-ccqueue<SendBufferChunk*> SendBufferManager::sendBufferChunks_;
