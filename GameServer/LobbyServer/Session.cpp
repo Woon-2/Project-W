@@ -2,6 +2,10 @@
 #include "Session.hpp"
 #include "Memory.hpp"
 
+/*---------------
+	 Session
+---------------*/
+
 void Session::disconnect(std::string_view cause) {
 	if (connected_.exchange(false) == false) {
 		return;
@@ -191,4 +195,32 @@ void Session::handleError(std::string_view where, int32 errCode) {
 			<< "Error Message : " << std::system_category().message(errCode) << '\n';
 		break;
 	}
+}
+
+/*---------------------
+	 PacketSession
+---------------------*/
+
+int32 PacketSession::onRecv(uint8* buffer, int32 len) {
+	int32 recvLen{};
+
+	while (true) {
+		int32 dataSize = len - recvLen;
+
+		// 최소한 헤더는 파싱할 수 있어야 한다.
+		if (dataSize < static_cast<int32>(sizeof(PacketHeader))) {
+			break;
+		}
+
+		auto header = reinterpret_cast<PacketHeader*>(buffer + recvLen);
+		// 헤더에 기록된 패킷 크기만큼 파싱할 수 있어야 한다.
+		if (dataSize < header->size) {
+			break;
+		}
+
+		processPacket(buffer + recvLen, header->size);
+		recvLen += header->size;
+	}
+
+	return recvLen;
 }

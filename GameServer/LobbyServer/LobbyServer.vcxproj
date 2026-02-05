@@ -157,6 +157,7 @@
   <ItemGroup>
     <ClInclude Include="..\common\concurrentqueue.h" />
     <ClInclude Include="..\common\macro.hpp" />
+    <ClInclude Include="..\common\protocol.hpp" />
     <ClInclude Include="..\common\types.hpp" />
     <ClInclude Include="GameSession.hpp" />
     <ClInclude Include="GameSessionManager.hpp" />
@@ -171,7 +172,6 @@
     <ClInclude Include="NetAddress.hpp" />
     <ClInclude Include="ObjectPool.hpp" />
     <ClInclude Include="pch.hpp" />
-    <ClInclude Include="protocol.hpp" />
     <ClInclude Include="RecvBuffer.hpp" />
     <ClInclude Include="SendBuffer.hpp" />
     <ClInclude Include="Server.hpp" />

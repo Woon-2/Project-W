@@ -4,7 +4,7 @@
 #include <system_error>
 
 
-#include "../LobbyServer/protocol.hpp"
+#include "../common/protocol.hpp"
 
 int main()
 {
@@ -17,7 +17,10 @@ int main()
 		reinterpret_cast<const SOCKADDR*>(&serverAddr.sockAddr()), sizeof(SOCKADDR_IN))
 	) {
 		int32 errCode = ::WSAGetLastError();
-		if (errCode != WSAEWOULDBLOCK) {
+		if(errCode == WSAEWOULDBLOCK) {
+			std::cout << "Connect is in progress...\n";
+		}
+		else {
 			std::cerr << "Connect failed with error: " << errCode << '\n'
 				<< "Error message: " << std::system_category().message(errCode) << '\n';
 			::exit(errCode);

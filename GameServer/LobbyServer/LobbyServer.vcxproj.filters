@@ -45,9 +45,6 @@
     <Filter Include="utils\Memory">
       <UniqueIdentifier>{4360e37c-94c4-4ac2-9cb4-404123b9f869}</UniqueIdentifier>
     </Filter>
-    <Filter Include="network\Protocol">
-      <UniqueIdentifier>{77fed47d-9ecf-4e6d-b1fc-4808fedffb0d}</UniqueIdentifier>
-    </Filter>
     <Filter Include="network\Server">
       <UniqueIdentifier>{d9bce966-3e52-4e65-8a0c-7f1e46f43350}</UniqueIdentifier>
     </Filter>
@@ -154,9 +151,6 @@
     <ClInclude Include="ObjectPool.hpp">
       <Filter>utils\Memory</Filter>
     </ClInclude>
-    <ClInclude Include="protocol.hpp">
-      <Filter>network\Protocol</Filter>
-    </ClInclude>
     <ClInclude Include="Listener.hpp">
       <Filter>network\IocpObject\Listener</Filter>
     </ClInclude>
@@ -174,6 +168,9 @@
     </ClInclude>
     <ClInclude Include="globalTLS.hpp">
       <Filter>utils\GlobalTLS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\protocol.hpp">
+      <Filter>common</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

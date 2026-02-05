@@ -26,15 +26,15 @@
 #include <map>
 #include <unordered_map>
 
-#include "protocol.hpp"
+#include "../common/protocol.hpp"
+#include "../common/concurrentqueue.h"
+#include "../common/macro.hpp"
+#include "../common/types.hpp"
+
 #include "NetAddress.hpp"
 #include "SocketUtils.hpp"
 #include "RecvBuffer.hpp"
 #include "globalTLS.hpp"
-
-#include "../common/concurrentqueue.h"
-#include "../common/macro.hpp"
-#include "../common/types.hpp"
 
 using namespace std::literals;
 

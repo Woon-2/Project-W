@@ -78,9 +78,14 @@ private:
 	 PacketSession
 ---------------------*/
 
-//class PacketSession : public Session {
-//public:
-//
-//}
+class PacketSession : public Session {
+public:
+	PacketSession() = default;
+	virtual ~PacketSession() = default;
+
+protected:
+	virtual int32 onRecv(uint8* buffer, int32 len) override sealed;
+	virtual void processPacket(uint8* buffer, int32 len) = 0;
+};
 
 #endif	// session_hpp
