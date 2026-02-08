@@ -1,0 +1,87 @@
+#include "pch.hpp"
+#include "AssetManager.hpp"
+
+void AssetManager::loadGFXAssets(GFX& gfx) {
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/cube.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelCube_
+	} );
+
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/vanguard.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelPlayer_
+	} );
+
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/rifle.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelRifle_
+	} );
+	
+	gfx.addRequestSkyboxLoad( RequestSkyboxLoad{
+		.skyboxPath = "../resources/models/skybox.bin",
+		.pDest = &skyboxMaterial_
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name = "Billboard0",
+		.texturePath = "../client/CubeMesh_Albedo.dds",
+		.pDest = &billBoard0_,
+		.pTexHashMap = &texHashMap_
+		} );
+
+	gfx.addRequestSpritesLoad( RequestSpriteAnimLoad{
+		.spritesPath = "../resources/Sprites/slime_anim.bin",
+		.pDest = &slimeAnimation_,
+		.pSpritesHashMap = &spritesHashMap_
+	} );
+
+	gfx.addRequestSpritesLoad( RequestSpriteAnimLoad{
+		.spritesPath = "../resources/Sprites/muzzle_flash.bin",
+		.pDest = &muzzleFlashAnimation_,
+		.pSpritesHashMap = &spritesHashMap_
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name = "PlayerHpLine",
+		.texturePath = "../resources/UI/player_hp_line.dds",
+		.pDest = &playerHpLine_,
+		.pTexHashMap = &texHashMap_,
+		.needsUploadInfo = false
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name = "PlayerHpFrame",
+		.texturePath = "../resources/UI/player_hp_frame.dds",
+		.pDest = &playerHpFrame_,
+		.pTexHashMap = &texHashMap_,
+		.needsUploadInfo = false
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name = "Crosshair",
+		.texturePath = "../resources/UI/crosshair.dds",
+		.pDest = &crosshair_,
+		.pTexHashMap = &texHashMap_,
+		.needsUploadInfo = false
+	} );
+
+	gfx.addRequestTextImageLoad( RequestTextImageLoad{
+		.width = 512,
+		.height = 256,
+		.pDest = &textPlayerHp_
+	} );
+
+	gfx.loadAssets();
+}
+
+void AssetManager::loadAnimations() {
+	auto tmp = loadAnimClipsFromFile("../resources/animations/vanguardAnimations.anim");
+	vanguardAnimations_.reserve(tmp.size());
+
+	for (auto& clip : tmp) {
+		vanguardAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+	}
+}
