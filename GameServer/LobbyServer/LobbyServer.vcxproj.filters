@@ -60,6 +60,9 @@
     <Filter Include="utils\GlobalTLS">
       <UniqueIdentifier>{4380def8-e736-46ca-a998-bfc5597dd3e5}</UniqueIdentifier>
     </Filter>
+    <Filter Include="utils\BufferHelper">
+      <UniqueIdentifier>{32c45ada-a83e-49bc-8ff8-2905521175e4}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="lobbyServerMain.cpp">
@@ -171,6 +174,12 @@
     </ClInclude>
     <ClInclude Include="..\common\protocol.hpp">
       <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="BufferReader.hpp">
+      <Filter>utils\BufferHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="BufferWriter.hpp">
+      <Filter>utils\BufferHelper</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

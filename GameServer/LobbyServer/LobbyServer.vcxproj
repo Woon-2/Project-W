@@ -159,6 +159,8 @@
     <ClInclude Include="..\common\macro.hpp" />
     <ClInclude Include="..\common\protocol.hpp" />
     <ClInclude Include="..\common\types.hpp" />
+    <ClInclude Include="BufferReader.hpp" />
+    <ClInclude Include="BufferWriter.hpp" />
     <ClInclude Include="GameSession.hpp" />
     <ClInclude Include="GameSessionManager.hpp" />
     <ClInclude Include="globalTLS.hpp" />
