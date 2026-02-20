@@ -151,6 +151,8 @@
     </ClCompile>
     <ClCompile Include="SendBuffer.cpp" />
     <ClCompile Include="Server.cpp" />
+    <ClCompile Include="ServerPacketFactory.cpp" />
+    <ClCompile Include="ServerPacketHandler.cpp" />
     <ClCompile Include="Session.cpp" />
     <ClCompile Include="SocketUtils.cpp" />
   </ItemGroup>
@@ -177,6 +179,8 @@
     <ClInclude Include="RecvBuffer.hpp" />
     <ClInclude Include="SendBuffer.hpp" />
     <ClInclude Include="Server.hpp" />
+    <ClInclude Include="ServerPacketFactory.hpp" />
+    <ClInclude Include="ServerPacketHandler.hpp" />
     <ClInclude Include="Session.hpp" />
     <ClInclude Include="simpleWindows.hpp" />
     <ClInclude Include="SocketUtils.hpp" />
