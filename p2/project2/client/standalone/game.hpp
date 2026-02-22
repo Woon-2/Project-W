@@ -64,8 +64,8 @@ private:
 	void showCursor();
 
 	void importNode(std::ifstream& ifs);
-	void importCube(std::ifstream& ifs, Object& cube);
-	void importPlayerStart(std::ifstream& ifs, Object& player);
+	void importCube(std::ifstream& ifs, Cube& cube);
+	void importPlayerStart(std::ifstream& ifs, Player& player);
 
 	AssetManager assetManager_{};
 
@@ -81,8 +81,8 @@ private:
 	EventList eventList_{};
 	Timer* pTimer_ = nullptr;
 
-	std::vector<Object> cubes_{};
-	std::shared_ptr<Object> player_{};
+	std::shared_ptr<Cube> ground_{};
+	std::shared_ptr<Player> player_{};
 	SkyboxObject skybox_{};
 
 	Camera camera_{};
@@ -95,19 +95,13 @@ private:
 	Light dirLight_{};
 	bool playerSpawned_ = false;
 
-	Billboard billboard_{};
-	SpriteAnimation slimeSprite_{};
-	std::deque<SpriteAnimation> muzzleFlashes_{};
 	std::deque<SpriteAnimation> bloodSplashes_{};
 
-	Milliseconds fireCooldown_{};
-	bool reloading_{};
 
 	bool playerDead_{};
 
 	BasicPlayerHpUI playerHpUI_{};
 	TextImage textFPS_{};
-	Crosshair crosshair_{};
 
 	LONG mouseDeltaX_{};
 	LONG mouseDeltaY_{};

@@ -4,17 +4,17 @@
 #include "AssetManager.hpp"
 #include "Timer.hpp"
 
-void AnimBlenderVanguard::init(const AssetManager& assetManager) {
+void AnimBlenderPlayer::init(const AssetManager& assetManager) {
 	setSkeleton(assetManager.modelPlayer()->skeleton);
 	framesBlended_.resize(skeleton().bones->size());
-	for (auto& clip : assetManager.vanguardAnimations()) {
+	for (auto& clip : assetManager.playerAnimations()) {
 		pushTargetClip(clip->name, clip);
 	}
 }
 
 // pOwner의 물리 정보에 따라
 // 애니메이션 블렌딩 상태를 갱신한다.
-void AnimBlenderVanguard::update(Seconds deltaTime, void* pVoidOwner) {
+void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
 	
 	// 객체의 속력이 runThreshold를 넘는지를 기준으로
@@ -33,39 +33,28 @@ void AnimBlenderVanguard::update(Seconds deltaTime, void* pVoidOwner) {
 	// tRun 구하기
 	const auto tRun = std::clamp( (speed - runBlendRangeStart) / (runBlendRangeEnd - runBlendRangeStart), 0.f, 1.f );
 
-	// tIdle 구하기 (tIdle_ 및 tIdleAim_)
-	// 움직이지 않은 채 aimlessThreshold 시간이 지났다면 비조준 Idle 애니메이션을,
-	// 그렇지 않으면 조준 Idle 애니메이션을 재생하도록 한다.
+	// tIdle 구하기 (tIdle0_ 및 tIdle1_)
+	// 움직이지 않은 채 motionlessThreshold 시간이 지났다면 idle1 애니메이션을,
+	// 그렇지 않으면 조준 idle0 애니메이션을 재생하도록 한다.
 	const auto aimlessThreshold = 2s;
 	const auto aimBlendRangeStart = aimlessThreshold - 100ms;
 	const auto aimBlendRangeEnd = aimlessThreshold + 400ms;
 
 	const auto tIdleBase = 1.f - tRun;
-	// cooldownFire_이 0보다 크다는 건 발사 이벤트(EvFire)로 인해
-	// 비조준 idle -> 조준 idle 애니메이션 전환이 일어났다는 말이다.
-	// cooldownFire_이 0에 가까울수록 조준 idle 애니메이션의 비율이 더 높아진다.
-	if (cooldownFire_ > 0ms) {
-		cooldownFire_ -= deltaTime;
-		tIdle_ = tIdleBase * std::clamp( cooldownFire_ / 120ms, 0.f, 1.f );
-		tIdleAim_ = tIdleBase - tIdle_;
-	}
-	else {
-		tIdle_ = tIdleBase * std::clamp( (accMotionless_ - aimBlendRangeStart) / (aimBlendRangeEnd - aimBlendRangeStart), 0.f, 1.f );
-		tIdleAim_ = tIdleBase - tIdle_;
-	}
 
 	// Idle 애니메이션들은 그냥 계속 돌린다.
 	// 딱히 멈추지 않아도 부자연스럽진 않다.
-	animTimeIdle_ += deltaTime;
-	const auto durationIdle = targetClip("Vanguard_Idle")->duration;
-	while (animTimeIdle_ > durationIdle) {
-		animTimeIdle_ -= durationIdle;
+	animTimeIdle0_ += deltaTime;
+	const auto durationIdle = targetClip("Player_Idle0")->duration;
+	while (animTimeIdle0_ > durationIdle) {
+		animTimeIdle0_ -= durationIdle;
 	}
-	animTimeIdleAim_ += deltaTime;
-	const auto durationIdleAim = targetClip("Vanguard_Idle_Aim")->duration;
-	while (animTimeIdleAim_ > durationIdle) {
-		animTimeIdleAim_ -= durationIdle;
+	animTimeIdle1_ += deltaTime;
+	const auto durationIdleAim = targetClip("Player_Idle1")->duration;
+	while (animTimeIdle1_ > durationIdle) {
+		animTimeIdle1_ -= durationIdle;
 	}
+	tIdle0_ = tIdleBase;
 
 	// run 애니메이션이 필요하다고 판단되었으면,
 	// 객체가 움직이고 있는 방향과 바라보고 있는 방향을 통해
@@ -112,8 +101,7 @@ void AnimBlenderVanguard::update(Seconds deltaTime, void* pVoidOwner) {
 	// cooldownDeath_의 값이 0보다 큰 동안은 다른 애니메이션과 최종적으로 블렌딩되며
 	// 페이드인이 이루어지고, cooldownDeath_의 값이 0이 되면 완전히 1의 비율을 차지한다.
 	if (dead_) {
-		// 1.5배속 재생
-		animTimeDeath_ += deltaTime * 1.5f;
+		animTimeDeath_ += deltaTime;
 
 		if (cooldownDeath_ > 0ms) {
 			tDeath_ = 1.f - std::clamp( cooldownDeath_ / 300ms, 0.f, 1.f );
@@ -129,8 +117,8 @@ void AnimBlenderVanguard::update(Seconds deltaTime, void* pVoidOwner) {
 	// 모든 블렌딩이 일어난 후에 결과 프레임과 hit 애니메이션 프레임을
 	// tHit_으로 보간하게 된다.
 	else if (cooldownHit_ > 0ms) {
-		// 3배속 재생
-		animTimeHit_ += deltaTime * 3.f;
+		// 2배속 재생
+		animTimeHit_ += deltaTime * 2.f;
 		
 		tHit_ = 0.75f * std::clamp( cooldownHit_ / 600ms, 0.f, 1.f );
 
@@ -143,7 +131,7 @@ void AnimBlenderVanguard::update(Seconds deltaTime, void* pVoidOwner) {
 
 	// 4방향 run 애니메이션들은 재생 시간이 비슷하다.
 	// Run_Forward 애니메이션의 duration을 대표로 사용해도 부자연스럽지 않다.
-	const auto durationRun = targetClip("Vanguard_Run_Forward")->duration;
+	const auto durationRun = targetClip("Player_Run_Forward")->duration;
 	while (animTimeRun_ > durationRun) {
 		animTimeRun_ -= durationRun;
 	}
@@ -151,34 +139,34 @@ void AnimBlenderVanguard::update(Seconds deltaTime, void* pVoidOwner) {
 	priority_ = 0.f;
 }
 
-void AnimBlenderVanguard::onCalcLocal(PassKey<AnimSystem>) {
+void AnimBlenderPlayer::onCalcLocal(PassKey<AnimSystem>) {
 	// update에서 구한 애니메이션 가중치들로 블렌딩을 수행한다.
 
 	// 개별 애니메이션의 프레임을 업데이트한다.
-	updateFrames("Vanguard_Idle", animTimeIdle_);
-	updateFrames("Vanguard_Idle_Aim", animTimeIdle_);
-	updateFrames("Vanguard_Hit", animTimeHit_);
-	updateFrames("Vanguard_Death", animTimeDeath_);
-	updateFrames("Vanguard_Run_Forward", animTimeRun_);
-	updateFrames("Vanguard_Run_Backward", animTimeRun_);
-	updateFrames("Vanguard_Run_Left", animTimeRun_);
-	updateFrames("Vanguard_Run_Right", animTimeRun_);
+	updateFrames("Player_Idle0", animTimeIdle0_);
+	updateFrames("Player_Idle1", animTimeIdle1_);
+	updateFrames("Player_Hit", animTimeHit_);
+	updateFrames("Player_Death", animTimeDeath_);
+	updateFrames("Player_Run_Forward", animTimeRun_);
+	updateFrames("Player_Run_Backward", animTimeRun_);
+	updateFrames("Player_Run_Left", animTimeRun_);
+	updateFrames("Player_Run_Right", animTimeRun_);
 
 	auto& localXforms = localXformData();
-	auto& framesIdle = curFrames("Vanguard_Idle");
-	auto& framesIdleAim = curFrames("Vanguard_Idle_Aim");
-	auto& framesHit = curFrames("Vanguard_Hit");
-	auto& framesDeath = curFrames("Vanguard_Death");
-	auto& framesRunForward = curFrames("Vanguard_Run_Forward");
-	auto& framesRunBackward = curFrames("Vanguard_Run_Backward");
-	auto& framesRunLeft = curFrames("Vanguard_Run_Left");
-	auto& framesRunRight = curFrames("Vanguard_Run_Right");
+	auto& framesIdle0 = curFrames("Player_Idle0");
+	auto& framesIdle1 = curFrames("Player_Idle1");
+	auto& framesHit = curFrames("Player_Hit");
+	auto& framesDeath = curFrames("Player_Death");
+	auto& framesRunForward = curFrames("Player_Run_Forward");
+	auto& framesRunBackward = curFrames("Player_Run_Backward");
+	auto& framesRunLeft = curFrames("Player_Run_Left");
+	auto& framesRunRight = curFrames("Player_Run_Right");
 
 	// 애니메이션의 프레임들을 블렌딩한다.
 	for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
 		WeightedAnimFrame frames[] = {
-			WeightedAnimFrame{ .frame = framesIdle[i], .w = tIdle_ },
-			WeightedAnimFrame{ .frame = framesIdleAim[i], .w = tIdleAim_ },
+			WeightedAnimFrame{ .frame = framesIdle0[i], .w = tIdle0_ },
+			WeightedAnimFrame{ .frame = framesIdle1[i], .w = tIdle1_ },
 			WeightedAnimFrame{ .frame = framesRunForward[i], .w = tRunForward_ },
 			WeightedAnimFrame{ .frame = framesRunBackward[i], .w = tRunBackward_ },
 			WeightedAnimFrame{ .frame = framesRunLeft[i], .w = tRunLeft_ },
@@ -193,30 +181,30 @@ void AnimBlenderVanguard::onCalcLocal(PassKey<AnimSystem>) {
 	std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
 }
 
-void AnimBlenderVanguard::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
-	auto pOwner = static_cast<AnimBlenderVanguard*>(pVoidOwner);
+void AnimBlenderPlayer::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
+	auto pOwner = static_cast<AnimBlenderPlayer*>(pVoidOwner);
 
 	switch (event->type) {
-	case EventType::Fire:
-		// 조준 여부와 관계없이 발사 시
-		// 움직임이 없었던 시간을 누산하는 accMotionless_를 0으로 만든다.
-		pOwner->accMotionless_ = 0s;
-		// 비조준 상태였다면, 조준한 후 사격해야 하므로
-		// 발사까지 딜레이가 있다.
-		if (pOwner->tIdle_ > 0.1f) {
-			pOwner->cooldownFire_ = 120ms;
-			timer.enqueueJob( DelayedJob{
-				.job = [&evList, shooterId = static_cast<const EvFire*>(event)->shooterId](){
-					holdEvent(evList, EvMuzzleFlash(shooterId));
-				},
-				.executeAt = timer.lastTp() + 120ms
-			} );
-		}
-		// 조준 상태였다면, 딜레이 없이 바로 사격한다.
-		else {
-			holdEvent(evList, EvMuzzleFlash(static_cast<const EvFire*>(event)->shooterId));
-		}
-		break;
+	//case EventType::Fire:
+	//	// 조준 여부와 관계없이 발사 시
+	//	// 움직임이 없었던 시간을 누산하는 accMotionless_를 0으로 만든다.
+	//	pOwner->accMotionless_ = 0s;
+	//	// 비조준 상태였다면, 조준한 후 사격해야 하므로
+	//	// 발사까지 딜레이가 있다.
+	//	if (pOwner->tIdle_ > 0.1f) {
+	//		pOwner->cooldownFire_ = 120ms;
+	//		timer.enqueueJob( DelayedJob{
+	//			.job = [&evList, shooterId = static_cast<const EvFire*>(event)->shooterId](){
+	//				holdEvent(evList, EvMuzzleFlash(shooterId));
+	//			},
+	//			.executeAt = timer.lastTp() + 120ms
+	//		} );
+	//	}
+	//	// 조준 상태였다면, 딜레이 없이 바로 사격한다.
+	//	else {
+	//		holdEvent(evList, EvMuzzleFlash(static_cast<const EvFire*>(event)->shooterId));
+	//	}
+	//	break;
 
 	case EventType::Hit:
 		pOwner->animTimeHit_ = 0s;
@@ -506,46 +494,36 @@ const Equipment* Object::getEquipment(Bone::SocketType socketType) const {
 	return &*it;
 }
 
-void Object::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
+void Player::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
 	switch (event->type) {
-	case EventType::Fire:
-		if (pOwner && pOwner->renderState_.animBlender) {
-			pOwner->renderState_.animBlender->eventBus()->receive(
-				event, deltaTime, evList, timer,
-				pOwner->renderState_.animBlender.get()
-			);
-			pOwner->ammo_ = static_cast<const EvFire*>(event)->bulletCount;
-		}
-		break;
+	//case EventType::Hit:
+	//	if (pOwner) {
+	//		if (pOwner->renderState_.animBlender) {
+	//			pOwner->renderState_.animBlender->eventBus()->receive(
+	//				event, deltaTime, evList, timer,
+	//				pOwner->renderState_.animBlender.get()
+	//			);
+	//		}
+	//		holdEvent(evList, EvBlood(pOwner->getId()));
+	//		pOwner->hp_ = std::max( static_cast<const EvHit*>(event)->hp, 0 );
 
-	case EventType::Hit:
-		if (pOwner) {
-			if (pOwner->renderState_.animBlender) {
-				pOwner->renderState_.animBlender->eventBus()->receive(
-					event, deltaTime, evList, timer,
-					pOwner->renderState_.animBlender.get()
-				);
-			}
-			holdEvent(evList, EvBlood(pOwner->getId()));
-			pOwner->hp_ = std::max( static_cast<const EvHit*>(event)->hp, 0 );
+	//		// 온라인 게임의 경우 서버에서 죽음 판정을 수행하므로
+	//		// 공용 코드인 이곳에서 death event를 다루지 않는다.
+	//	}
+	//	break;
 
-			// 온라인 게임의 경우 서버에서 죽음 판정을 수행하므로
-			// 공용 코드인 이곳에서 death event를 다루지 않는다.
-		}
-		break;
-
-	case EventType::Death:
-		if (pOwner) {
-			if (pOwner->renderState_.animBlender) {
-				pOwner->renderState_.animBlender->eventBus()->receive(
-					event, deltaTime, evList, timer,
-					pOwner->renderState_.animBlender.get()
-				);
-			}
-			pOwner->hp_ = 0;
-		}
-		break;
+	//case EventType::Death:
+	//	if (pOwner) {
+	//		if (pOwner->renderState_.animBlender) {
+	//			pOwner->renderState_.animBlender->eventBus()->receive(
+	//				event, deltaTime, evList, timer,
+	//				pOwner->renderState_.animBlender.get()
+	//			);
+	//		}
+	//		pOwner->hp_ = 0;
+	//	}
+	//	break;
 	
 	default:
 		break;

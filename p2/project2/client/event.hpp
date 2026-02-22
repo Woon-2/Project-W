@@ -66,10 +66,7 @@ using EventList = std::list<char*>;
 // 어떻게 처리할지를 결정한다.
 enum class EventType : u32t {
 	Hit,
-	Fire,
-	MuzzleFlash,
 	Blood,
-	ReloadComplete,
 	Death,
 	SIZE
 };
@@ -90,33 +87,11 @@ struct EvHit : BasicEvent {
 	i32t targetId{-1};
 	i32t hp{-1};
 };
-struct EvFire : BasicEvent {
-	EvFire() : BasicEvent{EventType::Fire} {}
-	EvFire(i32t shooterId) : BasicEvent{EventType::Fire}, shooterId{shooterId} {}
-	EvFire(i32t shooterId, i32t bulletCnt)
-		: BasicEvent{EventType::Fire}, shooterId{shooterId}, bulletCount{bulletCnt} {}
-
-	i32t shooterId{-1};
-	i32t bulletCount{-1};
-};
-struct EvMuzzleFlash : BasicEvent {
-	EvMuzzleFlash() : BasicEvent{EventType::MuzzleFlash} {}
-	EvMuzzleFlash(i32t shooterId) : BasicEvent{EventType::MuzzleFlash}, shooterId{shooterId} {}
-
-	i32t shooterId{-1};
-};
 struct EvBlood : BasicEvent {
 	EvBlood() : BasicEvent{EventType::Blood} {}
 	EvBlood(i32t victimId) : BasicEvent{EventType::Blood}, victimId{victimId} {}
 
 	i32t victimId{-1};
-};
-struct EvReloadComplete : BasicEvent { 
-	EvReloadComplete() : BasicEvent{EventType::ReloadComplete} {}
-	EvReloadComplete(i32t bulletCnt)
-		: BasicEvent{EventType::ReloadComplete}, bulletCount{bulletCnt} {}
-
-	i32t bulletCount{-1};
 };
 struct EvDeath : BasicEvent { 
 	EvDeath() : BasicEvent{EventType::Death} {}
@@ -150,6 +125,13 @@ public:
 	//     용례가 보기 불편해도 어쩔 수 없다.
 	virtual void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) = 0;
 };
+
+class NullEventBus : public IEventBus {
+public:
+	void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override {}
+};
+
+extern NullEventBus gNullEventBus;
 
 
 #endif	// __event_HPP

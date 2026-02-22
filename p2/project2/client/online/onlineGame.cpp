@@ -56,12 +56,6 @@ void Game::setupStage() {
 		static_cast<float>( gClientRect.right - gClientRect.left ) / ( gClientRect.bottom - gClientRect.top ),
 		0.1f, 500.f
 	);
-
-	slimeSprite_.init( assetManager_.slimeAnimation() );
-
-	crosshair_.setTexture( assetManager_.crosshair() );
-	crosshair_.setPivot(mu::Vec2(1024.f / 2.f + 15.f, 768.f / 2.f));
-	crosshair_.setScale(mu::Vec2(50.f, 50.f));
 }
 
 // 게임의 업데이트는 다음 순서대로 이루어진다.
@@ -96,165 +90,6 @@ void Game::update(Milliseconds deltaTime) {
 	while (messageQueue.try_dequeue(msg)) {
 		messages.push_back(msg);
 		++size;
-	}
-
-	for (auto i = 0u; i < size; ++i) {
-		const auto& msg = messages[i];
-
-		switch (msg.type) {
-		case MsgType::SetupPlayer: {
-			player_->setPos(msg.pos);
-			player_->setOrient(msg.orient);
-			player_->setScale(msg.scale);
-			player_->setModel(assetManager_.modelPlayer());
-			player_->setAnimBlender(animSystem_, assetManager_);
-			player_->enableBVRendering();
-			player_->setHp(msg.currHp);
-			player_->setAmmo(msg.bulletCnt);
-
-			Equipment rifle{};
-			rifle.socketType = Bone::SocketType::RightHand;
-			rifle.object = std::make_unique<Object>();
-			rifle.object->setModel(assetManager_.modelRifle());
-			rifle.object->setScale(mu::Vec3(1.f, 1.f, 1.f));
-
-			player_->equip(std::move(rifle));
-
-			camera_.setTargetObject( player_ );
-			camera_.setOffsetFromTarget( mu::Vec3( 0.f, 1.8f, -2.5f ) );
-			camera_.setOffsetTargetPivot( mu::Vec3( 0.f, 1.f, 0.f ) );
-			camera_.setPerspective( mu::Degree( 90.f ),
-				static_cast<float>( gClientRect.right - gClientRect.left ) / ( gClientRect.bottom - gClientRect.top ),
-				0.1f, 500.f
-			);
-
-			playerHpUI_.setTexture( assetManager_.playerHpLine() );
-			playerHpUI_.setTextImage( assetManager_.textPlayerHp() );
-			playerHpUI_.setPivot( mu::Vec2(512.f, 768.f - 40.f) );
-			playerHpUI_.setScale( mu::Vec2(1024.f, 64.f) );
-			break;
-		}
-
-		case MsgType::SetupCube: {
-			auto cube = Object{};
-			cube.setId(msg.objectId);
-			cube.setMaterialSetIdx(msg.materialSetIdx);
-			cube.setPos(msg.pos);
-			cube.setOrient(msg.orient);
-			cube.setScale(msg.scale);
-			cube.setModel(assetManager_.modelCube());
-			cube.enableBVRendering();
-			cubes_.emplace_back(std::move(cube));
-			break;
-		}
-
-		case MsgType::PlayerMouseMove: {
-			auto& player = idPlayerMap_[msg.objectId];
-
-			if (player != player_) {
-				player->setOrient(msg.orient);
-			}
-			break;
-		}
-
-		case MsgType::PlayerRollback: {
-			auto& player = idPlayerMap_[msg.objectId];
-			player->setPos(msg.pos);
-			break;
-		}
-
-		case MsgType::PlayerMove: {
-			auto& player = idPlayerMap_[msg.objectId];
-
-			if (player != player_) {
-				player->setPos(msg.pos);
-				player->physicState().evVelocity = msg.evVelocity;
-				player->setOrient(msg.orient);
-			}
-			break;
-		}
-
-		case MsgType::Fire:
-			holdEvent(eventList_, EvFire(msg.objectId, msg.bulletCnt));
-			break;
-
-		case MsgType::Reload: {
-			auto& shooter = idPlayerMap_[msg.objectId];
-			shooter->setAmmo(msg.bulletCnt);
-			break;
-		}
-
-		case MsgType::HitResult: {
-			holdEvent(eventList_, EvHit(msg.targetId, msg.currHp));
-			auto& shooter = idPlayerMap_[msg.objectId];
-			auto& target = idPlayerMap_[msg.targetId];
-			break;
-		}
-
-		case MsgType::Death:
-			holdEvent(eventList_, EvDeath{msg.objectId});
-			if (msg.objectId == player_->getId()) {
-				playerDead_ = true;
-			}
-			break;
-
-		default:
-			break;
-		}
-	}
-
-	// 이벤트 처리
-	for (auto pEvRaw : eventList_) {
-		auto pEv = reinterpret_cast<BasicEvent*>(pEvRaw);
-		switch (pEv->type) {
-		case EventType::Fire: {
-			auto pFireEv = reinterpret_cast<EvFire*>(pEv);
-			auto& shooter = idPlayerMap_[pFireEv->shooterId];
-
-			shooter->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, shooter.get());
-			break;
-		}
-
-		case EventType::Hit: {
-			auto pHitEv = reinterpret_cast<EvHit*>(pEv);
-			auto& target = idPlayerMap_[pHitEv->targetId];
-
-			target->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, target.get());
-			break;
-		}
-
-		case EventType::MuzzleFlash: {
-			auto& muzzleFlash = muzzleFlashes_.emplace_back();
-			muzzleFlash.anim.init(assetManager_.muzzleFlashAnimation());
-			muzzleFlash.anim.setTint(mu::Vec3(0.8f, 0.4f, 0.1f));
-			muzzleFlash.pOwner = idPlayerMap_[static_cast<EvMuzzleFlash*>(pEv)->shooterId];
-			break;
-		}
-
-		case EventType::Blood: {
-			auto& bloodSplash = bloodSplashes_.emplace_back();
-			bloodSplash.anim.init(assetManager_.muzzleFlashAnimation());
-			bloodSplash.anim.setScale(mu::Vec2(1.5f, 1.5f));
-			bloodSplash.anim.setSpeed(0.75f);
-			bloodSplash.anim.setTint(mu::Vec3(0.92f, 0.04f, 0.01f));
-			bloodSplash.pOwner = idPlayerMap_[static_cast<EvBlood*>(pEv)->victimId];
-			break;
-		}
-
-		case EventType::ReloadComplete:
-			player_->setAmmo( static_cast<EvReloadComplete*>(pEv)->bulletCount );
-			break;
-
-		case EventType::Death: {
-			auto pDeathEv = reinterpret_cast<EvDeath*>(pEv);
-			auto& deadPlayer = idPlayerMap_[pDeathEv->playerId];
-			deadPlayer->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, deadPlayer.get());
-			break;
-		}
-
-		default:
-			break;
-		}
 	}
 
 	// 물리 업데이트 루틴
@@ -364,11 +199,9 @@ void Game::update(Milliseconds deltaTime) {
 
 	// UI 동기화
 	playerHpUI_.setHp(player_->hp());
-	playerHpUI_.setAmmo(player_->ammo());
 
 	for (auto& [id, ui] : otherPlayerHpUIs_) {
 		ui.setHp(idPlayerMap_.at(id)->hp());
-		ui.setAmmo(idPlayerMap_.at(id)->ammo());
 	}
 
 	clearEvents(eventList_);

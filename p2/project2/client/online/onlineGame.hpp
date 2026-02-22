@@ -106,12 +106,12 @@ public:
 		newPlayer->enableBVRendering();
 		// юс╫ц
 		newPlayer->setHp(100);
-		newPlayer->setAmmo(30);
+		// newPlayer->setAmmo(30);
 
 		Equipment rifle{};
 		rifle.socketType = Bone::SocketType::RightHand;
 		rifle.object = std::make_unique<Object>();
-		rifle.object->setModel(assetManager_.modelRifle());
+		// rifle.object->setModel(assetManager_.modelRifle());
 		rifle.object->setScale(mu::Vec3(1.f, 1.f, 1.f));
 
 		newPlayer->equip(std::move(rifle));

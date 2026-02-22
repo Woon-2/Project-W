@@ -28,31 +28,31 @@ Game::Game() {
 	gfx_.createSwapChain();
 	gfx_.setThreadPool(&threadPool_);
 
-	// assetManager_.loadGFXAssets(gfx_);
-	// assetManager_.loadAnimations();
+	assetManager_.loadGFXAssets(gfx_);
+	assetManager_.loadAnimations();
 }
 
 void Game::setupStage() {
-	//const auto path = std::filesystem::path("../resources/levels/level.bin");
-	//auto ifs = std::ifstream(path, std::ios::binary);
-	//DISPLAY_ERROR_STR(ifs.good(), "[File I/O Error]: loadModelFromFile: "s + path.string() + " 파일을 열 수 없습니다."s, true);
+	const auto path = std::filesystem::path("../resources/levels/level.bin");
+	auto ifs = std::ifstream(path, std::ios::binary);
+	DISPLAY_ERROR_STR(ifs.good(), "[File I/O Error]: loadModelFromFile: "s + path.string() + " 파일을 열 수 없습니다."s, true);
 
-	//readHeadTag(ifs, "Level");
-	//const auto nodeCnt = readInteger(ifs, "NodeCnt");
+	readHeadTag(ifs, "Level");
+	const auto nodeCnt = readInteger(ifs, "NodeCnt");
 
-	//importNode(ifs);
+	importNode(ifs);
 
-	//readTailTag(ifs, "Level");
+	readTailTag(ifs, "Level");
 
 	// 이후 레벨에서 사용하는 스카이박스 정보들을 읽어들일 수 있지만
 	// 스카이박스 재질을 하나만 사용하므로 굳이 읽지 않는다.
 
-	// gSharedLog << "[Level Load] File I/O: 레벨 " << path << "로드 완료\n";
+	gSharedLog << "[Level Load] File I/O: 레벨 " << path << "로드 완료\n";
 
 	dumpLog();
 
-	//skybox_.setModel(assetManager_.modelCube());
-	//skybox_.setSkyboxMaterial(assetManager_.skyboxMaterial());
+	skybox_.setModel(assetManager_.modelCube());
+	skybox_.setSkyboxMaterial(assetManager_.skyboxMaterial());
 
 	dirLight_.setOrient(mu::NQuat(mu::Degree(0.f), mu::Degree(160.f), mu::Degree(0.f)));
 	dirLight_.color = mu::Vec3(0.8f, 0.8f, 0.8f);
@@ -72,11 +72,7 @@ void Game::setupStage() {
 	//	cube.enableBVRendering();
 	//}
 
-	//player_->enableBVRendering();
-
-	//billboard_.setTexture( assetManager_.billBoard0() );
-
-	//slimeSprite_.init( assetManager_.slimeAnimation() );
+	player_->enableBVRendering();
 
 	//playerHpUI_.setTexture( assetManager_.playerHpLine() );
 	//playerHpUI_.setTextImage( assetManager_.textPlayerHp() );
@@ -84,10 +80,6 @@ void Game::setupStage() {
 	//playerHpUI_.setAmmo( player_->ammo() );
 	playerHpUI_.setPivot( mu::Vec2(512.f, 768.f - 40.f) );
 	playerHpUI_.setScale( mu::Vec2(1024.f, 64.f) );
-
-	//crosshair_.setTexture( assetManager_.crosshair() );
-	//crosshair_.setPivot(mu::Vec2(1024.f / 2.f + 15.f, 768.f / 2.f));
-	//crosshair_.setScale(mu::Vec2(50.f, 50.f));
 }
 
 void Game::importNode(std::ifstream& ifs) {
@@ -115,12 +107,16 @@ void Game::importNode(std::ifstream& ifs) {
 	object.setScale(DirectX::XMLoadFloat3(&worldS));
 
 	if (type == "Cube") {
-		auto& cube = cubes_.emplace_back(std::move(object));
-		cube.setModel(assetManager_.modelCube());
-		importCube(ifs, cube);
+		ground_ = std::make_shared<Cube>(std::move(object));
+		ground_->setModel(assetManager_.modelCube());
+		importCube(ifs, *ground_);
 	}
 	else if (type == "PlayerStart") {
-		importPlayerStart(ifs, object);
+		if (!playerSpawned_) {
+			player_ = std::make_shared<Player>(std::move(object));
+			playerSpawned_ = true;
+			importPlayerStart(ifs, *player_);
+		}
 	}
 	else {
 		// no-op
@@ -136,7 +132,7 @@ void Game::importNode(std::ifstream& ifs) {
 	readTailTag(ifs, "Node");
 }
 
-void Game::importCube(std::ifstream& ifs, Object& cube) {
+void Game::importCube(std::ifstream& ifs, Cube& cube) {
 	const auto meshName = readText(ifs, "Mesh");
 	const auto materialSetName = readText(ifs, "MaterialSet");
 	const auto materialSetIdx = readInteger(ifs, "MaterialSetIndex");
@@ -144,25 +140,18 @@ void Game::importCube(std::ifstream& ifs, Object& cube) {
 	cube.setMaterialSetIdx(materialSetIdx);
 }
 
-void Game::importPlayerStart(std::ifstream& ifs, Object& player) {
-	if (playerSpawned_) {
-		return;
-	}
-	playerSpawned_ = true;
+void Game::importPlayerStart(std::ifstream& ifs, Player& player) {
+	player.setModel(assetManager_.modelPlayer());
+	player.setAnimBlender(animSystem_, assetManager_);
+	player.setHp(100);
 
-	player_ = std::make_shared<Object>(std::move(player));
-	player_->setModel(assetManager_.modelPlayer());
-	player_->setAnimBlender(animSystem_, assetManager_);
-	player_->setHp(100);
-	player_->setAmmo(30);
+	//Equipment rifle{};
+	//rifle.socketType = Bone::SocketType::RightHand;
+	//rifle.object = std::make_unique<Object>();
+	//rifle.object->setModel(assetManager_.modelRifle());
+	//rifle.object->setScale(mu::Vec3(1.f, 1.f, 1.f));
 
-	Equipment rifle{};
-	rifle.socketType = Bone::SocketType::RightHand;
-	rifle.object = std::make_unique<Object>();
-	rifle.object->setModel(assetManager_.modelRifle());
-	rifle.object->setScale(mu::Vec3(1.f, 1.f, 1.f));
-
-	player_->equip(std::move(rifle));
+	//player.equip(std::move(rifle));
 }
 
 // 게임의 업데이트는 다음 순서대로 이루어진다.
@@ -187,10 +176,6 @@ void Game::update(Milliseconds deltaTime) {
 	for (auto pEvRaw : eventList_) {
 		auto pEv = reinterpret_cast<BasicEvent*>(pEvRaw);
 		switch (pEv->type) {
-		case EventType::Fire:
-			player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
-			break;
-
 		case EventType::Hit:
 			player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
 			
@@ -200,25 +185,13 @@ void Game::update(Milliseconds deltaTime) {
 			}
 			break;
 
-		case EventType::MuzzleFlash: {
-			auto& muzzleFlash = muzzleFlashes_.emplace_back();
-			muzzleFlash.init(assetManager_.muzzleFlashAnimation());
-			muzzleFlash.setTint(mu::Vec3(0.8f, 0.4f, 0.1f));
-			break;
-		}
-
 		case EventType::Blood: {
 			auto& bloodSplash = bloodSplashes_.emplace_back();
-			bloodSplash.init(assetManager_.muzzleFlashAnimation());
+			// bloodSplash.init(assetManager_.muzzleFlashAnimation());
 			bloodSplash.setSpeed(0.75f);
 			bloodSplash.setTint(mu::Vec3(0.92f, 0.04f, 0.01f));
 			break;
 		}
-
-		case EventType::ReloadComplete:
-			reloading_ = false;
-			player_->setAmmo( static_cast<EvReloadComplete*>(pEv)->bulletCount );
-			break;
 
 		case EventType::Death:
 			player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
@@ -246,11 +219,9 @@ void Game::update(Milliseconds deltaTime) {
 		// 물리 시뮬레이션의 대상이 되는 객체들을
 		// 한 곳에 모아 PhysicSystem 객체에 전달한다.
 		static std::vector<Object*> targetObjects{};
-		targetObjects.resize(cubes_.size() + 1u);
-		std::ranges::transform(cubes_, targetObjects.begin(),
-			[](Object& cube) { return &cube; }	
-		);
-		targetObjects[cubes_.size()] = player_.get();
+		targetObjects.resize(2u);
+		targetObjects[0] = ground_.get();
+		targetObjects[1] = player_.get();
 
 		while (physicUpdateAcc_ >= physicUpdateInterval) {
 			physicSystem_.step(targetObjects, physicUpdateInterval);
@@ -268,34 +239,15 @@ void Game::update(Milliseconds deltaTime) {
 	// 게임 객체의 update 함수에 전달된다.
 	const auto tPhysicInterpolation = physicUpdateAcc_ / physicUpdateInterval;
 
-
-	for ( auto& cube : cubes_ ) {
-		cube.update(deltaTime, tPhysicInterpolation);
-	}
+	ground_->update(deltaTime, tPhysicInterpolation);
 	player_->update(deltaTime, tPhysicInterpolation);
 	camera_.update();
 	dirLight_.update(deltaTime);
 	dirLight_.updateShadowAuxDirectional(camera_.eye(), 100.f, -10.f, 10.f, -10.f, 10.f, 50.f, 200.f);
 
-	playerHpUI_.update( deltaTime, gfx_, nullptr );
-	crosshair_.update(deltaTime);
+	// playerHpUI_.update( deltaTime, gfx_, nullptr );
 
 	// 애니메이션 업데이트
-	slimeSprite_.update( deltaTime );
-
-	for (auto& muzzleFlash : muzzleFlashes_) {
-		// 총구 화염 스프라이트 애니메이션
-		// 플레이어에 대해서 오프셋 지정
-		muzzleFlash.setPos( player_->pos()
-			+ player_->up() * 1.3f
-			+ player_->forward() * 0.85f
-			+ player_->right() * 0.15f
-		);
-		muzzleFlash.update(deltaTime);
-	}
-
-	std::erase_if(muzzleFlashes_, [](const SpriteAnimation& anim) { return anim.done(); });
-
 	for (auto& bloodSplash : bloodSplashes_) {
 		bloodSplash.setPos( player_->pos()
 			+ player_->up() * 1.25f
@@ -308,40 +260,24 @@ void Game::update(Milliseconds deltaTime) {
 
 	animSystem_.update(0.016s);
 
-	// 총 발사 쿨타임 계산
-	if (fireCooldown_ > 0ms) {
-		fireCooldown_ -= deltaTime;
-	}
-
 	// UI 동기화
-	playerHpUI_.setHp(player_->hp());
-	playerHpUI_.setAmmo(player_->ammo());
+	// playerHpUI_.setHp(player_->hp());
 
 	clearEvents(eventList_);
 }
 
 void Game::render() {
-	for ( auto& cube : cubes_ ) {
-		cube.render( gfx_ );
-	}
+	ground_->render(gfx_);
 	player_->render(gfx_);
 	skybox_.render(gfx_);
 	camera_.updateGFX(gfx_);
 	dirLight_.render(gfx_);
-	// billboard_.render( gfx_ );
-	slimeSprite_.render( gfx_); 
-	for (const auto& muzzleFlash : muzzleFlashes_) {
-		muzzleFlash.render(gfx_);
-	}
+
 	for (const auto& bloodSplash : bloodSplashes_) {
 		bloodSplash.render(gfx_);
 	}
 
 	playerHpUI_.render( gfx_ );
-
-	if (cameraMode_ == CameraMode::FirstPerson) {
-		crosshair_.render(gfx_);
-	}
 
 	auto frameDataPBR = PBRPipeline::FrameData{
 		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
@@ -470,6 +406,7 @@ void Game::processInput(Milliseconds deltaTime) {
 
 		// 플레이어 객체의 속력을 증가시킨다.
 		const auto moveAmount = Seconds(deltaTime).count() * maxSpeed / zeroToMax.count();
+		player_->physicState().velocity += mu::Vec3(moveDirection) * moveAmount;
 
 		// 플레이어 객체의 속력이 최대 속력을 넘지 못하게 한다.
 		if (player_->physicState().velocity.len2() > maxSpeed * maxSpeed) {
@@ -511,37 +448,6 @@ void Game::processInput(Milliseconds deltaTime) {
 		camera_.setOffsetFromTarget( mu::Vec3( 0.f, 1.8f, -2.5f ) );
 		camera_.setOffsetTargetPivot( mu::Vec3(0.f, 1.f, 0.f));
 		cameraMode_ = CameraMode::ThirdPerson;
-	}
-
-	// 총 장전
-	if ( !playerDead_ && keyboardStateCurr_['R'] & 0x80 ) {
-		if (!reloading_) {
-			reloading_ = true;
-			pTimer_->enqueueJob( DelayedJob{
-				.job = [this](){ holdEvent(eventList_, EvReloadComplete(30)); },
-				.executeAt = pTimer_->lastTp() + 2s
-			} );
-		}
-	}
-
-	// 총 발사: 총구 화염 애니메이션 재생
-	if ( !playerDead_ && (keyboardStateCurr_[VK_LBUTTON] & 0x80)
-		&& !(keyboardStatePrev_[VK_LBUTTON] & 0x80)
-		&& fireCooldown_ <= 0ms
-	) {
-		if (!reloading_) {
-			if (player_->ammo() == 0) {
-				reloading_ = true;
-				pTimer_->enqueueJob( DelayedJob{
-					.job = [this](){ holdEvent(eventList_, EvReloadComplete(30)); },
-					.executeAt = pTimer_->lastTp() + 2s
-				} );
-			}
-			else {
-				fireCooldown_ = 200ms;
-				holdEvent(eventList_, EvFire(player_->getId(), player_->ammo() - 1));
-			}
-		}
 	}
 
 	// 임시: 피격, 피격 애니메이션 및 이펙트 재생

@@ -10,7 +10,7 @@ class AssetManager;
 class Object;
 class Timer;
 
-class AnimBlenderVanguard : public AnimBlender {
+class AnimBlenderPlayer : public AnimBlender {
 public:
 	class EventBus : public IEventBus {
 	public:
@@ -30,16 +30,15 @@ private:
 	EventBus eventBus_{};
 
 	Seconds accMotionless_ = 0s;
-	Milliseconds cooldownFire_ = 0ms;
 	Milliseconds cooldownHit_ = 0ms;
 	Milliseconds cooldownDeath_ = 0ms;
-	Seconds animTimeIdle_ = 0s;
+	Seconds animTimeIdle0_ = 0s;
+	Seconds animTimeIdle1_ = 0s;
 	Seconds animTimeHit_ = 0s;
-	Seconds animTimeIdleAim_ = 0s;
 	Seconds animTimeRun_ = 0s;
 	Seconds animTimeDeath_ = 0s;
-	float tIdle_ = 0.f;
-	float tIdleAim_ = 0.f;
+	float tIdle0_ = 0.f;
+	float tIdle1_ = 0.f;
 	float tRunForward_ = 0.f;
 	float tRunBackward_ = 0.f;
 	float tRunLeft_ = 0.f;
@@ -99,23 +98,23 @@ struct Equipment {
 // Object::update를 호출한 시점에 맞게 두 PhysicState를 보간해 월드변환들을 갱신한다.
 class Object {
 public:
-	class EventBus : public IEventBus {
-	public:
-		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
-	};
-
+	Object() = default;
+	virtual ~Object() = default;
+	Object(Object&&) noexcept = default;
+	Object& operator=(Object&&) noexcept = default;
+		 
 	// @brief 게임 객체의 RenderState와 방향 벡터들을 갱신한다.
 	//		RenderState는 이전 PhysicState와 현재 PhysicState를 보간하여 얻어지고,
 	//      방향 벡터들은 현재 PhysicState의 내용으로 계산한다.
 	// @param deltaTime 마지막 프레임으로부터 경과한 시간
 	// @param tPhysicInterpolation 이전 PhysicState와 현재 PhysicState의 보간 비율
 	//		(게임 객체가 계산해서 일괄적으로 전달해야 한다.)
-	void update(Milliseconds deltaTime, float tPhysicInterpolation);
-	void MU_CALLCONV render(GFX& gfx, mu::Mat4x4 offsetXform = mu::Mat4x4());
+	virtual void update(Milliseconds deltaTime, float tPhysicInterpolation);
+	virtual void MU_CALLCONV render(GFX& gfx, mu::Mat4x4 offsetXform = mu::Mat4x4());
 
 	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) {
-		renderState_.animBlender = std::make_unique<AnimBlenderVanguard>();
-		static_cast<AnimBlenderVanguard*>(renderState_.animBlender.get())->init(assetManager);
+		renderState_.animBlender = std::make_unique<AnimBlenderPlayer>();
+		static_cast<AnimBlenderPlayer*>(renderState_.animBlender.get())->init(assetManager);
 
 		animSystem.trackAnimBlender(renderState_.animBlender.get());
 	}
@@ -184,12 +183,10 @@ public:
 	void setId( i32t id ) {	id_ = id; }
 	i32t getId( ) const { return id_; }
 
-	IEventBus* eventBus() { return &eventBus_; }
+	virtual IEventBus* eventBus() { return &gNullEventBus; }
 
 	void setHp(i32t hp) { hp_ = hp; }
 	i32t hp() const { return hp_; }
-	void setAmmo(i32t ammo) { ammo_ = ammo; }
-	i32t ammo() const { return ammo_; }
 
 private:
 	PhysicState prevPhysicState_{};
@@ -198,8 +195,6 @@ private:
 	RenderState renderState_{};
 
 	std::vector<Equipment> equipments_{};
-
-	EventBus eventBus_{};
 
 	bool willRenderBV_ = false;
 
@@ -211,7 +206,30 @@ private:
 	i32t id_{ -1 };
 
 	i32t hp_{};
-	i32t ammo_{};
+};
+
+class Cube : public Object {
+public:
+	Cube() = default;
+	Cube(Object&& base)
+		: Object(std::move(base)) {}
+private:
+
+};
+
+class Player : public Object {
+public:
+	Player() = default;
+	Player(Object&& base)
+		: Object(std::move(base)) {}
+
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+private:
+
 };
 
 #endif	// __object_HPP

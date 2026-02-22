@@ -16,26 +16,13 @@
 #include "uiPipeline.hpp"
 #include "spriteAnimation.hpp"
 
-// animation update lock
-// animBlender도 erase (~23:00)
+// 필요없는 이벤트 제거
+// 유니티 스크립트들 들여오고 에셋 제작 및 추출
+// 유니티 레벨 제작 및 추출
+// 맨 바닥 위에 플레이어 캐릭터 띄우기
+// 플레이어 움직임 애니메이션 추출 및 재생
+// 
 
-// stand alone playerHpUis 한 개로 수정
-// 변경된 이벤트 데이터에 맞게 holdEvent 수정
-
-// physic state에 evVelocity, evOmega 별도 추가 - 물리 계산 적용 X
-
-// 물리 업데이트에 evXX 누산, 메시지 처리 시에 evXX 계산
-// evXX로 애니메이션 재생하도록 수정 (~01:00)
-
-// UI Fence 대신 Resource Barrier (~01:30)
-
-// Muzzle Flash 이펙트 올바른 위치에 재생
-// 메시지의 pos 꺼내서 피격 이펙트 출력
-// player dead 플래그 제대로 하도록 (~03:00)
-
-// 다른 플레이어 hp ui 출력? (~07:00)
-
-// 레벨 디자인? (~09:30)
 
 // 스프라이트 시트 애니메이션 기능
 // - append 가능하도록

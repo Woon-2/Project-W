@@ -479,6 +479,7 @@ FodyWeavers.xsd
 *.3
 
 build/*
+p2/Unity/*
 .vscode/*
 docs/*
 !extern/assimp/*
