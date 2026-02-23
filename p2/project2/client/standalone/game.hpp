@@ -66,6 +66,7 @@ private:
 	void importNode(std::ifstream& ifs);
 	void importCube(std::ifstream& ifs, Cube& cube);
 	void importPlayerStart(std::ifstream& ifs, Player& player);
+	void importGoblinSpawner(std::ifstream& ifs, Goblin& goblin);
 
 	AssetManager assetManager_{};
 
@@ -83,6 +84,7 @@ private:
 
 	std::shared_ptr<Cube> ground_{};
 	std::shared_ptr<Player> player_{};
+	std::shared_ptr<Goblin> goblin_{};
 	SkyboxObject skybox_{};
 
 	Camera camera_{};

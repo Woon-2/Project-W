@@ -76,7 +76,7 @@ VSOutput VSMain(
         gmtxTexturize
     );
     ret.normalV = mul(normal, gInstances[idxInst + firstInstanceOffset].wvNormal);
-    if (material.idxAlbedo.x >= 0) {
+    if (material.idxNormal.x >= 0) {
 		ret.tangentV = mul(tangent, gInstances[idxInst + firstInstanceOffset].wvNormal);
 		ret.bitangentV = mul(bitangent, gInstances[idxInst + firstInstanceOffset].wvNormal);
 	}
@@ -88,7 +88,7 @@ VSOutput VSMain(
 float4 PSMain(VSOutput input) : SV_TARGET {
     input.normalV = normalize(input.normalV);
 
-	if (material.idxAlbedo.x >= 0) {
+	if (material.idxNormal.x >= 0) {
 		input.tangentV = normalize(input.tangentV);
 		input.bitangentV = normalize(input.bitangentV);
 

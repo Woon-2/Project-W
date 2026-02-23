@@ -55,6 +55,43 @@ private:
 	bool dead_ = false;
 };
 
+class AnimBlenderGoblin : public AnimBlender {
+public:
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	void init(const AssetManager& assetManager);
+	// pOwner의 물리 정보에 따라
+	// 애니메이션 블렌딩 상태를 갱신한다.
+	void update(Seconds deltaTime, void* pOwner) override;
+	void onCalcLocal(PassKey<AnimSystem>) override;
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+private:
+	std::vector<AnimFrame> framesBlended_{};
+	EventBus eventBus_{};
+
+	Milliseconds cooldownHit_ = 0ms;
+	Milliseconds cooldownDeath_ = 0ms;
+	Seconds animTimeIdle_ = 0s;
+	Seconds animTimeHit_ = 0s;
+	Seconds animTimeDeath_ = 0s;
+	float tIdle_ = 0.f;
+	// hit 애니메이션 블렌딩 비율은 death 다음으로 가장 우선순위가 높게 계산된다.
+	// 다른 모든 애니메이션의 블렌딩 비율을 낮추고 최대 0.75만큼의 비율을 차지한다.
+	// 모든 블렌딩이 일어난 후에 결과 프레임과 hit 애니메이션 프레임을
+	// tHit_으로 보간하게 된다.
+	float tHit_ = 0.f;
+	// death 애니메이션은 가장 우선순위가 높게 계산된다.
+	// cooldownDeath_의 값이 0보다 큰 동안은 다른 애니메이션과 최종적으로 블렌딩되며
+	// 페이드인이 이루어지고, cooldownDeath_의 값이 0이 되면 완전히 1의 비율을 차지한다.
+	float tDeath_ = 0.f;
+	bool dead_ = false;
+};
+
 struct PhysicState {
 	mu::Vec3 pos{};
 	mu::Vec3 velocity{};	// Physic System의 step 단계에서 적분될 속도
@@ -112,12 +149,7 @@ public:
 	virtual void update(Milliseconds deltaTime, float tPhysicInterpolation);
 	virtual void MU_CALLCONV render(GFX& gfx, mu::Mat4x4 offsetXform = mu::Mat4x4());
 
-	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) {
-		renderState_.animBlender = std::make_unique<AnimBlenderPlayer>();
-		static_cast<AnimBlenderPlayer*>(renderState_.animBlender.get())->init(assetManager);
-
-		animSystem.trackAnimBlender(renderState_.animBlender.get());
-	}
+	virtual void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) {}
 
 	// 모델을 설정한다.
 	// 모델이 있는 게임 객체는 render 시 GFX에 DrawEvent를 제출한다.
@@ -188,7 +220,7 @@ public:
 	void setHp(i32t hp) { hp_ = hp; }
 	i32t hp() const { return hp_; }
 
-private:
+protected:
 	PhysicState prevPhysicState_{};
 	PhysicState currPhysicState_{};
 
@@ -206,6 +238,8 @@ private:
 	i32t id_{ -1 };
 
 	i32t hp_{};
+
+private:
 };
 
 class Cube : public Object {
@@ -227,6 +261,35 @@ public:
 	public:
 		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
 	};
+
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override {
+		renderState_.animBlender = std::make_unique<AnimBlenderPlayer>();
+		static_cast<AnimBlenderPlayer*>(renderState_.animBlender.get())->init(assetManager);
+
+		animSystem.trackAnimBlender(renderState_.animBlender.get());
+	}
+
+private:
+
+};
+
+class Goblin : public Object {
+public:
+	Goblin() = default;
+	Goblin(Object&& base)
+		: Object(std::move(base)) {}
+
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override {
+		renderState_.animBlender = std::make_unique<AnimBlenderGoblin>();
+		static_cast<AnimBlenderGoblin*>(renderState_.animBlender.get())->init(assetManager);
+
+		animSystem.trackAnimBlender(renderState_.animBlender.get());
+	}
 
 private:
 

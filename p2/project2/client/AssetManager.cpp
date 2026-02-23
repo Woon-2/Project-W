@@ -13,6 +13,12 @@ void AssetManager::loadGFXAssets(GFX& gfx) {
 		.pTexHashMap = &texHashMap_,
 		.pDest = &modelPlayer_
 	} );
+
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/goblin/goblin.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelGoblin_
+	} );
 	
 	gfx.addRequestSkyboxLoad( RequestSkyboxLoad{
 		.skyboxPath = "../resources/skyboxes/skybox.bin",
@@ -45,10 +51,17 @@ void AssetManager::loadGFXAssets(GFX& gfx) {
 }
 
 void AssetManager::loadAnimations() {
-	auto tmp = loadAnimClipsFromFile("../resources/animations/playerAnimations.anim");
-	playerAnimations_.reserve(tmp.size());
+	auto tmpPlayerAnims = loadAnimClipsFromFile("../resources/animations/playerAnimations.anim");
+	playerAnimations_.reserve(tmpPlayerAnims.size());
 
-	for (auto& clip : tmp) {
+	for (auto& clip : tmpPlayerAnims) {
 		playerAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+	}
+
+	auto tmpGoblinAnims = loadAnimClipsFromFile("../resources/animations/goblinAnimations.anim");
+	goblinAnimations_.reserve(tmpGoblinAnims.size());
+
+	for (auto& clip : tmpGoblinAnims) {
+		goblinAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
 	}
 }

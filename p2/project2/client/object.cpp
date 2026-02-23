@@ -222,6 +222,110 @@ void AnimBlenderPlayer::EventBus::receive(const BasicEvent* event, Seconds delta
 	}
 }
 
+void AnimBlenderGoblin::init(const AssetManager& assetManager) {
+	setSkeleton(assetManager.modelGoblin()->skeleton);
+	framesBlended_.resize(skeleton().bones->size());
+	for (auto& clip : assetManager.goblinAnimations()) {
+		pushTargetClip(clip->name, clip);
+	}
+}
+
+// pOwner의 물리 정보에 따라
+// 애니메이션 블렌딩 상태를 갱신한다.
+void AnimBlenderGoblin::update(Seconds deltaTime, void* pVoidOwner) {
+	auto pOwner = static_cast<Object*>(pVoidOwner);
+
+	// Idle 애니메이션들은 그냥 계속 돌린다.
+	// 딱히 멈추지 않아도 부자연스럽진 않다.
+	tIdle_ = 1.f;
+	animTimeIdle_ += deltaTime;
+	const auto durationIdle = targetClip("Goblin_Idle")->duration;
+	while (animTimeIdle_ > durationIdle) {
+		animTimeIdle_ -= durationIdle;
+	}
+
+	// death 애니메이션은 가장 우선순위가 높게 계산된다.
+	// cooldownDeath_의 값이 0보다 큰 동안은 다른 애니메이션과 최종적으로 블렌딩되며
+	// 페이드인이 이루어지고, cooldownDeath_의 값이 0이 되면 완전히 1의 비율을 차지한다.
+	if (dead_) {
+		animTimeDeath_ += deltaTime;
+
+		if (cooldownDeath_ > 0ms) {
+			tDeath_ = 1.f - std::clamp( cooldownDeath_ / 300ms, 0.f, 1.f );
+		}
+		else {
+			tDeath_ = 1.f;
+		}
+
+		cooldownDeath_ -= deltaTime;
+	}
+	// hit 애니메이션 블렌딩 비율은 death 다음으로 가장 우선순위가 높게 계산된다.
+	// 다른 모든 애니메이션의 블렌딩 비율을 낮추고 최대 0.75만큼의 비율을 차지한다.
+	// 모든 블렌딩이 일어난 후에 결과 프레임과 hit 애니메이션 프레임을
+	// tHit_으로 보간하게 된다.
+	else if (cooldownHit_ > 0ms) {
+		// 2배속 재생
+		animTimeHit_ += deltaTime * 2.f;
+		
+		tHit_ = 0.75f * std::clamp( cooldownHit_ / 600ms, 0.f, 1.f );
+
+		cooldownHit_ -= deltaTime;
+	}
+	else {
+		animTimeHit_ = 0s;
+		tHit_ = 0.f;
+	}
+
+	priority_ = 0.f;
+}
+
+void AnimBlenderGoblin::onCalcLocal(PassKey<AnimSystem>) {
+	// update에서 구한 애니메이션 가중치들로 블렌딩을 수행한다.
+
+	// 개별 애니메이션의 프레임을 업데이트한다.
+	updateFrames("Goblin_Idle", animTimeIdle_);
+	updateFrames("Goblin_Hit", animTimeHit_);
+	updateFrames("Goblin_Death", animTimeDeath_);
+
+	auto& localXforms = localXformData();
+	auto& framesIdle = curFrames("Goblin_Idle");
+	auto& framesHit = curFrames("Goblin_Hit");
+	auto& framesDeath = curFrames("Goblin_Death");
+
+	// 애니메이션의 프레임들을 블렌딩한다.
+	for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
+		WeightedAnimFrame frames[] = {
+			WeightedAnimFrame{ .frame = framesIdle[i], .w = tIdle_ }
+		};
+		framesBlended_[i] = sumWeightedAnimFrames(frames);
+		// hit animation 보간 (nlerp 쓰면 팔꿈치 꼬임)
+		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i], tHit_);
+		// death animation 보간
+		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i], tDeath_);
+	}
+	std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
+}
+
+void AnimBlenderGoblin::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
+	auto pOwner = static_cast<AnimBlenderGoblin*>(pVoidOwner);
+
+	switch (event->type) {
+	case EventType::Hit:
+		pOwner->animTimeHit_ = 0s;
+		pOwner->cooldownHit_ = 600ms;
+		break;
+
+	case EventType::Death:
+		pOwner->animTimeDeath_ = 0s;
+		pOwner->cooldownDeath_ = 200ms;
+		pOwner->dead_ = true;
+		break;
+
+	default:
+		break;
+	}
+}
+
 // 모델을 설정한다.
 // 모델이 있는 게임 객체는 render 시 GFX에 DrawEvent를 제출한다.
 // 모델에 바운딩 볼륨이 존재할 경우, 월드 공간 바운딩 볼륨을 구축한다.
@@ -524,6 +628,15 @@ void Player::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Event
 	//		pOwner->hp_ = 0;
 	//	}
 	//	break;
+	
+	default:
+		break;
+	}
+}
+
+void Goblin::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
+	auto pOwner = static_cast<Object*>(pVoidOwner);
+	switch (event->type) {
 	
 	default:
 		break;

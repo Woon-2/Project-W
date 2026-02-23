@@ -118,6 +118,10 @@ void Game::importNode(std::ifstream& ifs) {
 			importPlayerStart(ifs, *player_);
 		}
 	}
+	else if (type == "GoblinSpawner") {
+		goblin_ = std::make_shared<Goblin>(std::move(object));
+		importGoblinSpawner(ifs, *goblin_);
+	}
 	else {
 		// no-op
 	}
@@ -154,6 +158,12 @@ void Game::importPlayerStart(std::ifstream& ifs, Player& player) {
 	//player.equip(std::move(rifle));
 }
 
+void Game::importGoblinSpawner(std::ifstream& ifs, Goblin& goblin) {
+	goblin.setModel(assetManager_.modelGoblin());
+	goblin.setAnimBlender(animSystem_, assetManager_);
+	goblin.setHp(100);
+}
+
 // 게임의 업데이트는 다음 순서대로 이루어진다.
 // 입력 처리
 // 이벤트 처리
@@ -164,6 +174,8 @@ void Game::update(Milliseconds deltaTime) {
 	// 평가 물리량 초기화
 	player_->physicState().evVelocity = mu::Vec3();
 	player_->physicState().evOmega = mu::Vec3();
+	goblin_->physicState().evVelocity = mu::Vec3();
+	goblin_->physicState().evOmega = mu::Vec3();
 
 	// 입력 처리
 	processInput(deltaTime);
@@ -177,11 +189,10 @@ void Game::update(Milliseconds deltaTime) {
 		auto pEv = reinterpret_cast<BasicEvent*>(pEvRaw);
 		switch (pEv->type) {
 		case EventType::Hit:
-			player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
+			goblin_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, goblin_.get());
 			
-			if (player_->hp() == 0) {
-				holdEvent( eventList_, EvDeath(player_->getId()) );
-				playerDead_ = true;
+			if (goblin_->hp() == 0) {
+				holdEvent( eventList_, EvDeath(goblin_->getId()) );
 			}
 			break;
 
@@ -194,7 +205,7 @@ void Game::update(Milliseconds deltaTime) {
 		}
 
 		case EventType::Death:
-			player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
+			goblin_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, goblin_.get());
 			break;
 
 		default:
@@ -219,9 +230,10 @@ void Game::update(Milliseconds deltaTime) {
 		// 물리 시뮬레이션의 대상이 되는 객체들을
 		// 한 곳에 모아 PhysicSystem 객체에 전달한다.
 		static std::vector<Object*> targetObjects{};
-		targetObjects.resize(2u);
+		targetObjects.resize(3u);
 		targetObjects[0] = ground_.get();
 		targetObjects[1] = player_.get();
+		targetObjects[2] = goblin_.get();
 
 		while (physicUpdateAcc_ >= physicUpdateInterval) {
 			physicSystem_.step(targetObjects, physicUpdateInterval);
@@ -241,6 +253,7 @@ void Game::update(Milliseconds deltaTime) {
 
 	ground_->update(deltaTime, tPhysicInterpolation);
 	player_->update(deltaTime, tPhysicInterpolation);
+	goblin_->update(deltaTime, tPhysicInterpolation);
 	camera_.update();
 	dirLight_.update(deltaTime);
 	dirLight_.updateShadowAuxDirectional(camera_.eye(), 100.f, -10.f, 10.f, -10.f, 10.f, 50.f, 200.f);
@@ -269,6 +282,7 @@ void Game::update(Milliseconds deltaTime) {
 void Game::render() {
 	ground_->render(gfx_);
 	player_->render(gfx_);
+	goblin_->render(gfx_);
 	skybox_.render(gfx_);
 	camera_.updateGFX(gfx_);
 	dirLight_.render(gfx_);
