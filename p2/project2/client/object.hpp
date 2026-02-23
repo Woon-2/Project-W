@@ -262,6 +262,8 @@ public:
 		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
 	};
 
+	IEventBus* eventBus() override { return &eventBus_; }
+
 	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override {
 		renderState_.animBlender = std::make_unique<AnimBlenderPlayer>();
 		static_cast<AnimBlenderPlayer*>(renderState_.animBlender.get())->init(assetManager);
@@ -270,7 +272,7 @@ public:
 	}
 
 private:
-
+	EventBus eventBus_{};
 };
 
 class Goblin : public Object {
@@ -284,6 +286,8 @@ public:
 		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
 	};
 
+	IEventBus* eventBus() override { return &eventBus_; }
+
 	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override {
 		renderState_.animBlender = std::make_unique<AnimBlenderGoblin>();
 		static_cast<AnimBlenderGoblin*>(renderState_.animBlender.get())->init(assetManager);
@@ -292,7 +296,7 @@ public:
 	}
 
 private:
-
+	EventBus eventBus_{};
 };
 
 #endif	// __object_HPP

@@ -465,10 +465,12 @@ void Game::processInput(Milliseconds deltaTime) {
 	}
 
 	// 임시: 피격, 피격 애니메이션 및 이펙트 재생
-	if ( !playerDead_ && (keyboardStateCurr_[VK_RBUTTON] & 0x80)
-		&& !(keyboardStatePrev_[VK_RBUTTON] & 0x80)
+	if ( !playerDead_ && (keyboardStateCurr_[VK_LBUTTON] & 0x80)
+		&& !(keyboardStatePrev_[VK_LBUTTON] & 0x80)
 	) {
-		holdEvent(eventList_, EvHit(player_->getId(), player_->hp() - 10));
+		if (goblin_->hp() > 0) {
+			holdEvent(eventList_, EvHit(goblin_->getId(), goblin_->hp() - 10));
+		}
 	}
 
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때

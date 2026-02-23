@@ -635,8 +635,35 @@ void Player::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Event
 }
 
 void Goblin::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
-	auto pOwner = static_cast<Object*>(pVoidOwner);
+	auto pOwner = static_cast<Goblin*>(pVoidOwner);
 	switch (event->type) {
+	case EventType::Hit:
+		if (pOwner) {
+			if (pOwner->renderState_.animBlender) {
+				pOwner->renderState_.animBlender->eventBus()->receive(
+					event, deltaTime, evList, timer,
+					pOwner->renderState_.animBlender.get()
+				);
+			}
+			// holdEvent(evList, EvBlood(pOwner->getId()));
+			pOwner->hp_ = std::max( static_cast<const EvHit*>(event)->hp, 0 );
+
+			// 온라인 게임의 경우 서버에서 죽음 판정을 수행하므로
+			// 공용 코드인 이곳에서 death event를 다루지 않는다.
+		}
+		break;
+
+	case EventType::Death:
+		if (pOwner) {
+			if (pOwner->renderState_.animBlender) {
+				pOwner->renderState_.animBlender->eventBus()->receive(
+					event, deltaTime, evList, timer,
+					pOwner->renderState_.animBlender.get()
+				);
+			}
+			pOwner->hp_ = 0;
+		}
+		break;
 	
 	default:
 		break;
