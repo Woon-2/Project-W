@@ -1,0 +1,66 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="common">
+      <UniqueIdentifier>{04f95d2e-6345-4812-bf84-6fbc41f0bf69}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="utils">
+      <UniqueIdentifier>{c9266a01-0200-4be9-a039-3e630a25eec4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="utils\SocketUtils">
+      <UniqueIdentifier>{d9a3afdb-9d7b-4948-a1f2-2021d59d86a1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="utils\NetAddress">
+      <UniqueIdentifier>{e61eec7e-827f-4a01-9972-b57d836ef02c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="network">
+      <UniqueIdentifier>{cfacdea5-a1c7-4b46-ade0-f3463b7303e2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="utils\Memory">
+      <UniqueIdentifier>{c6afd776-1164-48f4-8514-10fd47f396df}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="pch.hpp">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="simpleWindows.hpp">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="concurrentqueue.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="macro.hpp">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="types.hpp">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="SocketUtils.hpp">
+      <Filter>utils\SocketUtils</Filter>
+    </ClInclude>
+    <ClInclude Include="NetAddress.hpp">
+      <Filter>utils\NetAddress</Filter>
+    </ClInclude>
+    <ClInclude Include="MemoryManager.hpp">
+      <Filter>utils\Memory</Filter>
+    </ClInclude>
+    <ClInclude Include="MemoryPool.hpp">
+      <Filter>utils\Memory</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="pch.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="SocketUtils.cpp">
+      <Filter>utils\SocketUtils</Filter>
+    </ClCompile>
+    <ClCompile Include="MemoryManager.cpp">
+      <Filter>utils\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="MemoryPool.cpp">
+      <Filter>utils\Memory</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
