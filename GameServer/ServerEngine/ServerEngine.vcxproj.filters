@@ -19,6 +19,18 @@
     <Filter Include="utils\Memory">
       <UniqueIdentifier>{c6afd776-1164-48f4-8514-10fd47f396df}</UniqueIdentifier>
     </Filter>
+    <Filter Include="utils\Buffer">
+      <UniqueIdentifier>{9b28bad1-e317-4bf9-ac98-ee79d75a56f4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="utils\GlobalTLS">
+      <UniqueIdentifier>{949455c9-b918-41a7-a67f-9c849f12a739}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="utils\BufferHelper">
+      <UniqueIdentifier>{42dfa833-76ea-40d9-a7da-dda11e84581a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="utils\IdPool">
+      <UniqueIdentifier>{6e9acca6-a710-42b3-ae0f-ce095d76a3ff}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.hpp">
@@ -48,6 +60,27 @@
     <ClInclude Include="MemoryPool.hpp">
       <Filter>utils\Memory</Filter>
     </ClInclude>
+    <ClInclude Include="ObjectPool.hpp">
+      <Filter>utils\Memory</Filter>
+    </ClInclude>
+    <ClInclude Include="RecvBuffer.hpp">
+      <Filter>utils\Buffer</Filter>
+    </ClInclude>
+    <ClInclude Include="SendBuffer.hpp">
+      <Filter>utils\Buffer</Filter>
+    </ClInclude>
+    <ClInclude Include="globalTLS.hpp">
+      <Filter>utils\GlobalTLS</Filter>
+    </ClInclude>
+    <ClInclude Include="BufferReader.hpp">
+      <Filter>utils\BufferHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="BufferWriter.hpp">
+      <Filter>utils\BufferHelper</Filter>
+    </ClInclude>
+    <ClInclude Include="IdPool.hpp">
+      <Filter>utils\IdPool</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -61,6 +94,15 @@
     </ClCompile>
     <ClCompile Include="MemoryPool.cpp">
       <Filter>utils\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="SendBuffer.cpp">
+      <Filter>utils\Buffer</Filter>
+    </ClCompile>
+    <ClCompile Include="globalTLS.cpp">
+      <Filter>utils\GlobalTLS</Filter>
+    </ClCompile>
+    <ClCompile Include="IdPool.cpp">
+      <Filter>utils\IdPool</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

@@ -39,8 +39,7 @@
 
 #include "NetAddress.hpp"
 #include "SocketUtils.hpp"
-//#include "RecvBuffer.hpp"
-//#include "globalTLS.hpp"
+#include "globalTLS.hpp"
 
 using namespace std::literals;
 
