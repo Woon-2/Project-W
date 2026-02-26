@@ -31,6 +31,12 @@
     <Filter Include="utils\IdPool">
       <UniqueIdentifier>{6e9acca6-a710-42b3-ae0f-ce095d76a3ff}</UniqueIdentifier>
     </Filter>
+    <Filter Include="network\I/O">
+      <UniqueIdentifier>{64176dcc-62c4-4f20-b492-d6e298698671}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="network\Session">
+      <UniqueIdentifier>{2d71437c-ad5e-410e-917d-c3ce4e74a800}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.hpp">
@@ -81,6 +87,18 @@
     <ClInclude Include="IdPool.hpp">
       <Filter>utils\IdPool</Filter>
     </ClInclude>
+    <ClInclude Include="IoEvent.hpp">
+      <Filter>network\I/O</Filter>
+    </ClInclude>
+    <ClInclude Include="IocpDispatchable.hpp">
+      <Filter>network\I/O</Filter>
+    </ClInclude>
+    <ClInclude Include="Session.hpp">
+      <Filter>network\Session</Filter>
+    </ClInclude>
+    <ClInclude Include="Listener.hpp">
+      <Filter>network\I/O</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -103,6 +121,12 @@
     </ClCompile>
     <ClCompile Include="IdPool.cpp">
       <Filter>utils\IdPool</Filter>
+    </ClCompile>
+    <ClCompile Include="Session.cpp">
+      <Filter>network\Session</Filter>
+    </ClCompile>
+    <ClCompile Include="Listener.cpp">
+      <Filter>network\I/O</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

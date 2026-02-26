@@ -156,6 +156,9 @@
     <ClInclude Include="concurrentqueue.h" />
     <ClInclude Include="globalTLS.hpp" />
     <ClInclude Include="IdPool.hpp" />
+    <ClInclude Include="IocpDispatchable.hpp" />
+    <ClInclude Include="IoEvent.hpp" />
+    <ClInclude Include="Listener.hpp" />
     <ClInclude Include="macro.hpp" />
     <ClInclude Include="MemoryManager.hpp" />
     <ClInclude Include="MemoryPool.hpp" />
@@ -164,6 +167,7 @@
     <ClInclude Include="pch.hpp" />
     <ClInclude Include="RecvBuffer.hpp" />
     <ClInclude Include="SendBuffer.hpp" />
+    <ClInclude Include="Session.hpp" />
     <ClInclude Include="simpleWindows.hpp" />
     <ClInclude Include="SocketUtils.hpp" />
     <ClInclude Include="types.hpp" />
@@ -171,6 +175,7 @@
   <ItemGroup>
     <ClCompile Include="globalTLS.cpp" />
     <ClCompile Include="IdPool.cpp" />
+    <ClCompile Include="Listener.cpp" />
     <ClCompile Include="MemoryManager.cpp" />
     <ClCompile Include="MemoryPool.cpp" />
     <ClCompile Include="pch.cpp">
@@ -180,6 +185,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="SendBuffer.cpp" />
+    <ClCompile Include="Session.cpp" />
     <ClCompile Include="SocketUtils.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

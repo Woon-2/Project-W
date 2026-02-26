@@ -2,6 +2,7 @@
 #define io_event_hpp
 
 #include "simpleWindows.hpp"
+#include <vector>
 #include "types.hpp"
 
 enum class IoType : uint8 {
@@ -51,17 +52,39 @@ public:
 	 AcceptEvent
 -------------------*/
 
-class AcceptEvent : public IoEvent {
-private:
+class Session;
 
+class AcceptEvent : public IoEvent {
+public:
+	AcceptEvent() : IoEvent(IoType::accept), session_(nullptr) {}
+
+	void setSession(Session* session) { session_ = session; }
+	Session* session() { return session_; }
+
+private:
+	Session* session_;
 };
 
 /*-----------------
 	 RecvEvent
 -----------------*/
 
+class RecvEvent : public IoEvent {
+public:
+	RecvEvent() : IoEvent(IoType::recv) {}
+};
+
 /*-----------------
 	 SendEvent
 -----------------*/
+
+class SendBuffer;
+
+class SendEvent : public IoEvent {
+public:
+	SendEvent() : IoEvent(IoType::send), sendBuffers_() {}
+
+	std::vector<SendBuffer*> sendBuffers_;
+};
 
 #endif // io_event_hpp
