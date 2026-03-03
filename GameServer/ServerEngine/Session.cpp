@@ -199,5 +199,26 @@ void Session::handleError(std::string_view where, int32 errCode) {
 ---------------------*/
 
 int32 PacketSession::onRecv(byte* buffer, int32 len) {
-	return int32();
+	int32 recvLen{};
+
+	while (true) {
+		int32 dataSize = len - recvLen;
+
+		// 최소한 패킷 헤더 크기만큼의 데이터가 수신되어야 한다.
+		if (dataSize < sizeof(PacketHeader)) {
+			break;
+		}
+
+		auto header = reinterpret_cast<PacketHeader*>(buffer + recvLen);
+		// 패킷 헤더에 명시된 크기만큼의 데이터가 수신되어야 한다.
+		// size는 패킷 헤더 크기 + 패킷 크기
+		if (dataSize < header->size) {
+			break;
+		}
+
+		processPacket(buffer + recvLen, header->size);
+		recvLen += header->size;
+	}
+
+	return recvLen;
 }

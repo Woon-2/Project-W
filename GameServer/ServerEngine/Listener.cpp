@@ -3,7 +3,6 @@
 #include "IoEvent.hpp"
 #include "Session.hpp"
 
-
 void Listener::startAccept() {
 	SocketUtils::setReuseAddr(listenSock_, true);
 	SocketUtils::setTcpNoDelay(listenSock_, true);
@@ -31,6 +30,20 @@ void Listener::dispatch(IoEvent* event, int32 numBytes) {
 
 void Listener::registerAccept(AcceptEvent* event) {
 	auto session = onew<Session>();
+	event->setSession(session);
+
+	if (SOCKET_ERROR == AcceptEx(listenSock_, session->getSocket(), session->recvBuf_.writePos(), 0,
+		sizeof(SOCKADDR_IN) + 16, sizeof(SOCKADDR_IN) + 16, nullptr, reinterpret_cast<WSAOVERLAPPED*>(event))
+	) {
+		int32 errCode = ::WSAGetLastError();
+		if (errCode != ERROR_IO_PENDING) {
+			std::cerr << "Failed to accept (Error Code - " << errCode << ")\n"
+				<< "Error Message - " << std::system_category().message(errCode) << '\n';
+
+			odelete(session);
+			registerAccept(event);
+		}
+	}
 }
 
 void Listener::processAccept(AcceptEvent* event) {

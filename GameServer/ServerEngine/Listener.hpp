@@ -21,6 +21,7 @@ public:
 	virtual void dispatch(IoEvent* event, int32 numBytes) override;
 
 	virtual HANDLE getHandle() const override { return reinterpret_cast<HANDLE>(listenSock_); }
+	virtual SOCKET getSocket() const override { return listenSock_; }
 
 private:
 	void registerAccept(AcceptEvent* acceptEv);

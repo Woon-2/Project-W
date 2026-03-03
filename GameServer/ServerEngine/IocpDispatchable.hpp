@@ -23,9 +23,9 @@ public:
 	virtual void dispatch(IoEvent* ioEvent, int32 numBytes) = 0;
 
 	// SOCKET 타입을 HANDLE 타입으로 변환하여 반환하는 멤버 함수
-	virtual HANDLE getHandle() const {}
+	virtual HANDLE getHandle() const = 0;
 	// SOCKET을 반환하는 멤버 함수
-	virtual SOCKET getSocket() const {}
+	virtual SOCKET getSocket() const = 0;
 };
 
 #endif // iocp_dispatchable_hpp
