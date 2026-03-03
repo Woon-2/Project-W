@@ -3,7 +3,7 @@
 
 void SocketUtils::init() {
 	WSADATA wsaData{};
-	ASSERT_CRASH(::WSAStartup(MAKEWORD(2, 2), &wsaData) == 0);
+	ASSERT_CRASH(WSAStartup(MAKEWORD(2, 2), &wsaData) == 0);
 
 	auto dummySock = createSocket();
 	bindWindowsFuncEx(dummySock, WSAID_CONNECTEX, reinterpret_cast<LPVOID*>(&ConnectEx));
@@ -12,11 +12,11 @@ void SocketUtils::init() {
 }
 
 void SocketUtils::release() {
-	::WSACleanup();
+	WSACleanup();
 }
 
 SOCKET SocketUtils::createSocket() {
-	auto sock = ::WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, nullptr, 0, WSA_FLAG_OVERLAPPED);
+	auto sock = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, nullptr, 0, WSA_FLAG_OVERLAPPED);
 	if (sock == INVALID_SOCKET) {
 		CRASH("WSASocket failed.");
 	}
@@ -29,13 +29,13 @@ void SocketUtils::closeSocket(SOCKET& sock) {
 		return;
 	}
 
-	::closesocket(sock);
+	closesocket(sock);
 	sock = INVALID_SOCKET;
 }
 
 void SocketUtils::bindWindowsFuncEx(SOCKET sock, GUID guid, LPVOID* fn) {
 	DWORD bytes{};
-	ASSERT_CRASH(::WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
+	ASSERT_CRASH(WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
 		&guid, sizeof(guid), fn, sizeof(*fn), &bytes, nullptr, nullptr) != SOCKET_ERROR);
 }
 

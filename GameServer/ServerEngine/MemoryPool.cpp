@@ -18,7 +18,7 @@ MemoryHeader* MemoryPool::pop() {
         ASSERT_CRASH(header->allocSize == 0);
     }
     else {
-        header = reinterpret_cast<MemoryHeader*>(::malloc(poolSize_));
+        header = reinterpret_cast<MemoryHeader*>(malloc(poolSize_));
     }
 
     ++useCount_;

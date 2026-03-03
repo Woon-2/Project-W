@@ -52,7 +52,7 @@ void* MemoryManager::allocate(int32 size) {
 
 	if (allocSize > maxAllocSize_) {
 		// 메모리 풀링 최대 크기를 벗어나면 일반 할당
-		header = reinterpret_cast<MemoryHeader*>(::malloc(allocSize));
+		header = reinterpret_cast<MemoryHeader*>(malloc(allocSize));
 	}
 	else {
 		header = poolTable_[allocSize]->pop();
@@ -69,7 +69,7 @@ void MemoryManager::deallocate(void* ptr) {
 
 	if (allocSize > maxAllocSize_) {
 		// 메모리 풀링 최대 크기를 벗어나면 일단 해제
-		::free(header);
+		free(header);
 	}
 	else {
 		poolTable_[allocSize]->push(header);

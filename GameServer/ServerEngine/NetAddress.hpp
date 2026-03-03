@@ -15,8 +15,8 @@ public:
 	// 일반적으로 서버 listen 소켓의 bind() 호출에 사용된다.
 	NetAddress(std::uint16_t port) : ip_("127.0.0.1"), port_(port), sockAddr_() {
 		sockAddr_.sin_family = AF_INET;
-		sockAddr_.sin_port = ::htons(port);
-		sockAddr_.sin_addr.s_addr = ::htonl(INADDR_ANY);
+		sockAddr_.sin_port = htons(port);
+		sockAddr_.sin_addr.s_addr = htonl(INADDR_ANY);
 	}
 
 	// 특정 IPv4 주소와 포트로 네트워크 주소를 생성한다.
@@ -26,13 +26,13 @@ public:
 	// 사용할 수 있다.
 	NetAddress(std::string_view ip, std::uint16_t port) : ip_(ip), port_(port), sockAddr_() {
 		sockAddr_.sin_family = AF_INET;
-		sockAddr_.sin_port = ::htons(port);
-		::inet_pton(AF_INET, ip.data(), &sockAddr_.sin_addr);
+		sockAddr_.sin_port = htons(port);
+		inet_pton(AF_INET, ip.data(), &sockAddr_.sin_addr);
 	}
 
-	NetAddress(const SOCKADDR_IN& sockAddr) : ip_(), port_(::ntohs(sockAddr.sin_port)), sockAddr_(sockAddr) {
+	NetAddress(const SOCKADDR_IN& sockAddr) : ip_(), port_(ntohs(sockAddr.sin_port)), sockAddr_(sockAddr) {
 		auto buffer = std::array<char, INET_ADDRSTRLEN>();
-		::inet_ntop(AF_INET, &sockAddr_.sin_addr, buffer.data(), buffer.size());
+		inet_ntop(AF_INET, &sockAddr_.sin_addr, buffer.data(), buffer.size());
 		ip_ = buffer.data();
 	}
 

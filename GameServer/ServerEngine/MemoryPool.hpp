@@ -33,7 +33,7 @@ public:
     ~MemoryPool() {
         MemoryHeader* header = nullptr;
         while (pool_.try_dequeue(header)) {
-            ::free(header);
+            free(header);
         }
     }
 

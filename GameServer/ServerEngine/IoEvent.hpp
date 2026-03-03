@@ -25,7 +25,7 @@ public:
 	IoEvent(IoType type) : over_(), type_(type), owner_(nullptr) {}
 
 	void clear() {
-		::ZeroMemory(&over_, sizeof(WSAOVERLAPPED));
+		ZeroMemory(&over_, sizeof(WSAOVERLAPPED));
 	}
 
 	void setIoType(IoType type) { type_ = type; }
