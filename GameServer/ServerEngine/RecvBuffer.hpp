@@ -19,7 +19,7 @@ public:
 		: capacity_(bufferSize * bufferCnt_), bufferSize_(bufferSize),
 		readPos_(0), writePos_(0), buffer_(capacity_) {}
 
-	bool read(int32 numBytes) {
+	bool moveReadPos(int32 numBytes) {
 		if (numBytes > dataSize()) {
 			return false;
 		}
@@ -28,7 +28,7 @@ public:
 		return true;
 	}
 
-	bool write(int32 numBytes) {
+	bool moveWritePos(int32 numBytes) {
 		if (numBytes > freeSize()) {
 			return false;
 		}

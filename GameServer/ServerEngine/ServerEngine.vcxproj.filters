@@ -37,6 +37,9 @@
     <Filter Include="network\Session">
       <UniqueIdentifier>{2d71437c-ad5e-410e-917d-c3ce4e74a800}</UniqueIdentifier>
     </Filter>
+    <Filter Include="network\Protocol">
+      <UniqueIdentifier>{51d84db5-266c-42a5-8348-c82b9f835b6a}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.hpp">
@@ -98,6 +101,12 @@
     </ClInclude>
     <ClInclude Include="Listener.hpp">
       <Filter>network\I/O</Filter>
+    </ClInclude>
+    <ClInclude Include="IocpReactor.hpp">
+      <Filter>network\I/O</Filter>
+    </ClInclude>
+    <ClInclude Include="protocol.hpp">
+      <Filter>network\Protocol</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

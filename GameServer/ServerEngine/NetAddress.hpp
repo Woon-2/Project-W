@@ -10,6 +10,8 @@
 
 class NetAddress {
 public:
+	NetAddress() : ip_(), port_(0u), sockAddr_() {}
+
 	// INADDR_ANY(0.0.0.0)를 사용하여 로컬 호스트의 특정 포트로 바인드할 주소를 생성한다.
 	// 소켓을 모든 로컬 네트워크 인터페이스에 바인드할 수 있도록 한다.
 	// 일반적으로 서버 listen 소켓의 bind() 호출에 사용된다.

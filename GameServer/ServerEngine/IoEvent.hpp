@@ -28,10 +28,10 @@ public:
 		ZeroMemory(&over_, sizeof(WSAOVERLAPPED));
 	}
 
-	void setIoType(IoType type) { type_ = type; }
+	void setType(IoType type) { type_ = type; }
 	IoType type() const { return type_; }
 	void setOwner(IocpDispatchable* owner) { owner_ = owner; }
-	const IocpDispatchable* owner() const { return owner_; }
+	IocpDispatchable* owner() const { return owner_; }
 
 private:
 	WSAOVERLAPPED over_;

@@ -32,7 +32,7 @@
 #include <map>
 #include <unordered_map>
 
-//#include "../common/protocol.hpp"
+#include "protocol.hpp"
 #include "concurrentqueue.h"
 #include "macro.hpp"
 #include "types.hpp"
