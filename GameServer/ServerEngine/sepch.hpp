@@ -40,6 +40,9 @@
 #include "NetAddress.hpp"
 #include "SocketUtils.hpp"
 #include "globalTLS.hpp"
+#include "MemoryManager.hpp"
+#include "ObjectPool.hpp"
+#include "IdPool.hpp"
 
 using namespace std::literals;
 

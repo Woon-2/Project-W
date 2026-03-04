@@ -1,8 +1,6 @@
 #ifndef send_buffer_hpp
 #define send_buffer_hpp
 
-#include "MemoryManager.hpp"
-
 /*
 * 사용자의 입장에서 볼 때, 괜찮은 인터페이스가 되지 못할 수도 있다.
 * SendBufferManager는 open할 때, thread local인 SendBufferChunk에게 메모리를 할당해준다.

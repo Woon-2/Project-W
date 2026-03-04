@@ -159,7 +159,6 @@
     <ClInclude Include="IocpDispatchable.hpp" />
     <ClInclude Include="IocpReactor.hpp" />
     <ClInclude Include="IoEvent.hpp" />
-    <ClInclude Include="Listener.hpp" />
     <ClInclude Include="macro.hpp" />
     <ClInclude Include="MemoryManager.hpp" />
     <ClInclude Include="MemoryPool.hpp" />
@@ -177,7 +176,6 @@
   <ItemGroup>
     <ClCompile Include="globalTLS.cpp" />
     <ClCompile Include="IdPool.cpp" />
-    <ClCompile Include="Listener.cpp" />
     <ClCompile Include="MemoryManager.cpp" />
     <ClCompile Include="MemoryPool.cpp" />
     <ClCompile Include="sepch.cpp">

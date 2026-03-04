@@ -51,6 +51,8 @@ public:
 		return true;
 	}
 
+	HANDLE iocpHandle() const { return iocpHandle_; }
+
 private:
 	HANDLE iocpHandle_;
 };

@@ -99,9 +99,6 @@
     <ClInclude Include="Session.hpp">
       <Filter>network\Session</Filter>
     </ClInclude>
-    <ClInclude Include="Listener.hpp">
-      <Filter>network\I/O</Filter>
-    </ClInclude>
     <ClInclude Include="IocpReactor.hpp">
       <Filter>network\I/O</Filter>
     </ClInclude>
@@ -133,9 +130,6 @@
     </ClCompile>
     <ClCompile Include="Session.cpp">
       <Filter>network\Session</Filter>
-    </ClCompile>
-    <ClCompile Include="Listener.cpp">
-      <Filter>network\I/O</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

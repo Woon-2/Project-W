@@ -1,26 +1,42 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="소스 파일">
-      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
-      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    <Filter Include="network">
+      <UniqueIdentifier>{59d5a149-357e-4c4f-b951-4241e88d0c9c}</UniqueIdentifier>
     </Filter>
-    <Filter Include="헤더 파일">
-      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    <Filter Include="network\Listener">
+      <UniqueIdentifier>{ecf11875-54da-44c7-ba50-c8507a4341a6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="network\Server">
+      <UniqueIdentifier>{b25b3266-6a93-4a3f-a329-b99ca3c3555a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="default">
+      <UniqueIdentifier>{0f0e6b0d-4639-4230-9412-2961bb2427dc}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Listener.cpp">
+      <Filter>network\Listener</Filter>
+    </ClCompile>
     <ClCompile Include="roomServerMain.cpp">
-      <Filter>소스 파일</Filter>
+      <Filter>default</Filter>
     </ClCompile>
     <ClCompile Include="rspch.cpp">
-      <Filter>소스 파일</Filter>
+      <Filter>default</Filter>
+    </ClCompile>
+    <ClCompile Include="RoomServer.cpp">
+      <Filter>network\Server</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Listener.hpp">
+      <Filter>network\Listener</Filter>
+    </ClInclude>
     <ClInclude Include="rspch.hpp">
-      <Filter>헤더 파일</Filter>
+      <Filter>default</Filter>
+    </ClInclude>
+    <ClInclude Include="RoomServer.hpp">
+      <Filter>network\Server</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
