@@ -42,7 +42,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="pch.hpp">
+    <ClInclude Include="sepch.hpp">
       <Filter>common</Filter>
     </ClInclude>
     <ClInclude Include="simpleWindows.hpp">
@@ -110,7 +110,7 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="pch.cpp">
+    <ClCompile Include="sepch.cpp">
       <Filter>common</Filter>
     </ClCompile>
     <ClCompile Include="SocketUtils.cpp">
