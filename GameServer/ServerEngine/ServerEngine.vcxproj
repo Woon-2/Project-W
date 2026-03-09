@@ -154,11 +154,14 @@
     <ClInclude Include="BufferReader.hpp" />
     <ClInclude Include="BufferWriter.hpp" />
     <ClInclude Include="concurrentqueue.h" />
+    <ClInclude Include="JobQueuePool.hpp" />
     <ClInclude Include="globalTLS.hpp" />
     <ClInclude Include="IdPool.hpp" />
     <ClInclude Include="IocpDispatchable.hpp" />
     <ClInclude Include="IocpReactor.hpp" />
     <ClInclude Include="IoEvent.hpp" />
+    <ClInclude Include="Job.hpp" />
+    <ClInclude Include="JobQueue.hpp" />
     <ClInclude Include="macro.hpp" />
     <ClInclude Include="MemoryManager.hpp" />
     <ClInclude Include="MemoryPool.hpp" />
@@ -174,8 +177,10 @@
     <ClInclude Include="types.hpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="JobQueuePool.cpp" />
     <ClCompile Include="globalTLS.cpp" />
     <ClCompile Include="IdPool.cpp" />
+    <ClCompile Include="JobQueue.cpp" />
     <ClCompile Include="MemoryManager.cpp" />
     <ClCompile Include="MemoryPool.cpp" />
     <ClCompile Include="sepch.cpp">

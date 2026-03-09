@@ -13,6 +13,12 @@
     <Filter Include="default">
       <UniqueIdentifier>{0f0e6b0d-4639-4230-9412-2961bb2427dc}</UniqueIdentifier>
     </Filter>
+    <Filter Include="contents">
+      <UniqueIdentifier>{08a57b58-0104-4234-9c67-784dd04d7ae7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="network\GameSession">
+      <UniqueIdentifier>{5a645dfd-2161-4073-89e0-1b9724ec01f4}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Listener.cpp">
@@ -27,6 +33,9 @@
     <ClCompile Include="RoomServer.cpp">
       <Filter>network\Server</Filter>
     </ClCompile>
+    <ClCompile Include="GameSession.cpp">
+      <Filter>network\GameSession</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Listener.hpp">
@@ -37,6 +46,9 @@
     </ClInclude>
     <ClInclude Include="RoomServer.hpp">
       <Filter>network\Server</Filter>
+    </ClInclude>
+    <ClInclude Include="GameSession.hpp">
+      <Filter>network\GameSession</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

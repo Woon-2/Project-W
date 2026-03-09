@@ -22,9 +22,6 @@
     <Filter Include="utils\Buffer">
       <UniqueIdentifier>{9b28bad1-e317-4bf9-ac98-ee79d75a56f4}</UniqueIdentifier>
     </Filter>
-    <Filter Include="utils\GlobalTLS">
-      <UniqueIdentifier>{949455c9-b918-41a7-a67f-9c849f12a739}</UniqueIdentifier>
-    </Filter>
     <Filter Include="utils\BufferHelper">
       <UniqueIdentifier>{42dfa833-76ea-40d9-a7da-dda11e84581a}</UniqueIdentifier>
     </Filter>
@@ -39,6 +36,12 @@
     </Filter>
     <Filter Include="network\Protocol">
       <UniqueIdentifier>{51d84db5-266c-42a5-8348-c82b9f835b6a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="utils\Job">
+      <UniqueIdentifier>{a0b64acb-40ea-4b3f-a349-b28242ba82cf}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="utils\Global">
+      <UniqueIdentifier>{949455c9-b918-41a7-a67f-9c849f12a739}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -79,7 +82,7 @@
       <Filter>utils\Buffer</Filter>
     </ClInclude>
     <ClInclude Include="globalTLS.hpp">
-      <Filter>utils\GlobalTLS</Filter>
+      <Filter>utils\Global</Filter>
     </ClInclude>
     <ClInclude Include="BufferReader.hpp">
       <Filter>utils\BufferHelper</Filter>
@@ -105,6 +108,15 @@
     <ClInclude Include="protocol.hpp">
       <Filter>network\Protocol</Filter>
     </ClInclude>
+    <ClInclude Include="Job.hpp">
+      <Filter>utils\Job</Filter>
+    </ClInclude>
+    <ClInclude Include="JobQueue.hpp">
+      <Filter>utils\Job</Filter>
+    </ClInclude>
+    <ClInclude Include="JobQueuePool.hpp">
+      <Filter>utils\Job</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="sepch.cpp">
@@ -123,13 +135,19 @@
       <Filter>utils\Buffer</Filter>
     </ClCompile>
     <ClCompile Include="globalTLS.cpp">
-      <Filter>utils\GlobalTLS</Filter>
+      <Filter>utils\Global</Filter>
     </ClCompile>
     <ClCompile Include="IdPool.cpp">
       <Filter>utils\IdPool</Filter>
     </ClCompile>
     <ClCompile Include="Session.cpp">
       <Filter>network\Session</Filter>
+    </ClCompile>
+    <ClCompile Include="JobQueue.cpp">
+      <Filter>utils\Job</Filter>
+    </ClCompile>
+    <ClCompile Include="JobQueuePool.cpp">
+      <Filter>utils\Job</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>
