@@ -67,6 +67,14 @@ private:
 	void importCube(std::ifstream& ifs, Cube& cube);
 	void importPlayerStart(std::ifstream& ifs, Player& player);
 	void importGoblinSpawner(std::ifstream& ifs, Goblin& goblin);
+	void importAnubisSpawner(std::ifstream& ifs, Anubis& anubis);
+	void importBatSpawner(std::ifstream& ifs, Bat& bat);
+	void importBomberSpawner(std::ifstream& ifs, Bomber& bomber);
+	void importDemonSpawner(std::ifstream& ifs, Demon& demon);
+	void importDragonSpawner(std::ifstream& ifs, Dragon& dragon);
+	void importEyeballSpawner(std::ifstream& ifs, Eyeball& eyeball);
+	void importFishmanSpawner(std::ifstream& ifs, Fishman& fishman);
+	void importGargoyleSpawner(std::ifstream& ifs, Gargoyle& gargoyle);
 
 	AssetManager assetManager_{};
 
@@ -85,6 +93,15 @@ private:
 	std::shared_ptr<Cube> ground_{};
 	std::shared_ptr<Player> player_{};
 	std::shared_ptr<Goblin> goblin_{};
+	std::shared_ptr<Anubis> anubis_{};
+	std::shared_ptr<Bat> bat_{};
+	std::shared_ptr<Bomber> bomber_{};
+	std::shared_ptr<Demon> demon_{};
+	std::shared_ptr<Dragon> dragon_{};
+	std::shared_ptr<Eyeball> eyeball_{};
+	std::shared_ptr<Fishman> fishman_{};
+	std::shared_ptr<Gargoyle> gargoyle_{};
+
 	SkyboxObject skybox_{};
 
 	Camera camera_{};

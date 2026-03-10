@@ -74,12 +74,353 @@ private:
 	std::vector<AnimFrame> framesBlended_{};
 	EventBus eventBus_{};
 
+	Milliseconds cooldownAttack_ = 0ms;
 	Milliseconds cooldownHit_ = 0ms;
 	Milliseconds cooldownDeath_ = 0ms;
 	Seconds animTimeIdle_ = 0s;
+	Seconds animTimeWalk_ = 0s;
+	Seconds animTimeAttack_ = 0s;
 	Seconds animTimeHit_ = 0s;
 	Seconds animTimeDeath_ = 0s;
 	float tIdle_ = 0.f;
+	float tWalk_ = 0.f;
+	float tAttack_ = 0.f;
+	// hit 애니메이션 블렌딩 비율은 death 다음으로 가장 우선순위가 높게 계산된다.
+	// 다른 모든 애니메이션의 블렌딩 비율을 낮추고 최대 0.75만큼의 비율을 차지한다.
+	// 모든 블렌딩이 일어난 후에 결과 프레임과 hit 애니메이션 프레임을
+	// tHit_으로 보간하게 된다.
+	float tHit_ = 0.f;
+	// death 애니메이션은 가장 우선순위가 높게 계산된다.
+	// cooldownDeath_의 값이 0보다 큰 동안은 다른 애니메이션과 최종적으로 블렌딩되며
+	// 페이드인이 이루어지고, cooldownDeath_의 값이 0이 되면 완전히 1의 비율을 차지한다.
+	float tDeath_ = 0.f;
+	bool dead_ = false;
+};
+
+class AnimBlenderAnubis : public AnimBlender {
+public:
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	void init(const AssetManager& assetManager);
+	// pOwner의 물리 정보에 따라
+	// 애니메이션 블렌딩 상태를 갱신한다.
+	void update(Seconds deltaTime, void* pOwner) override;
+	void onCalcLocal(PassKey<AnimSystem>) override;
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+private:
+	std::vector<AnimFrame> framesBlended_{};
+	EventBus eventBus_{};
+
+	Milliseconds cooldownAttack_ = 0ms;
+	Milliseconds cooldownHit_ = 0ms;
+	Milliseconds cooldownDeath_ = 0ms;
+	Seconds animTimeIdle_ = 0s;
+	Seconds animTimeWalk_ = 0s;
+	Seconds animTimeAttack_ = 0s;
+	Seconds animTimeHit_ = 0s;
+	Seconds animTimeDeath_ = 0s;
+	float tIdle_ = 0.f;
+	float tWalk_ = 0.f;
+	float tAttack_ = 0.f;
+	// hit 애니메이션 블렌딩 비율은 death 다음으로 가장 우선순위가 높게 계산된다.
+	// 다른 모든 애니메이션의 블렌딩 비율을 낮추고 최대 0.75만큼의 비율을 차지한다.
+	// 모든 블렌딩이 일어난 후에 결과 프레임과 hit 애니메이션 프레임을
+	// tHit_으로 보간하게 된다.
+	float tHit_ = 0.f;
+	// death 애니메이션은 가장 우선순위가 높게 계산된다.
+	// cooldownDeath_의 값이 0보다 큰 동안은 다른 애니메이션과 최종적으로 블렌딩되며
+	// 페이드인이 이루어지고, cooldownDeath_의 값이 0이 되면 완전히 1의 비율을 차지한다.
+	float tDeath_ = 0.f;
+	bool dead_ = false;
+};
+
+class AnimBlenderBat : public AnimBlender {
+public:
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	void init(const AssetManager& assetManager);
+	// pOwner의 물리 정보에 따라
+	// 애니메이션 블렌딩 상태를 갱신한다.
+	void update(Seconds deltaTime, void* pOwner) override;
+	void onCalcLocal(PassKey<AnimSystem>) override;
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+private:
+	std::vector<AnimFrame> framesBlended_{};
+	EventBus eventBus_{};
+
+	Milliseconds cooldownAttack_ = 0ms;
+	Milliseconds cooldownHit_ = 0ms;
+	Milliseconds cooldownDeath_ = 0ms;
+	Seconds animTimeIdle_ = 0s;
+	Seconds animTimeWalk_ = 0s;
+	Seconds animTimeAttack_ = 0s;
+	Seconds animTimeHit_ = 0s;
+	Seconds animTimeDeath_ = 0s;
+	float tIdle_ = 0.f;
+	float tWalk_ = 0.f;
+	float tAttack_ = 0.f;
+	// hit 애니메이션 블렌딩 비율은 death 다음으로 가장 우선순위가 높게 계산된다.
+	// 다른 모든 애니메이션의 블렌딩 비율을 낮추고 최대 0.75만큼의 비율을 차지한다.
+	// 모든 블렌딩이 일어난 후에 결과 프레임과 hit 애니메이션 프레임을
+	// tHit_으로 보간하게 된다.
+	float tHit_ = 0.f;
+	// death 애니메이션은 가장 우선순위가 높게 계산된다.
+	// cooldownDeath_의 값이 0보다 큰 동안은 다른 애니메이션과 최종적으로 블렌딩되며
+	// 페이드인이 이루어지고, cooldownDeath_의 값이 0이 되면 완전히 1의 비율을 차지한다.
+	float tDeath_ = 0.f;
+	bool dead_ = false;
+};
+
+class AnimBlenderBomber : public AnimBlender {
+public:
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	void init(const AssetManager& assetManager);
+	// pOwner의 물리 정보에 따라
+	// 애니메이션 블렌딩 상태를 갱신한다.
+	void update(Seconds deltaTime, void* pOwner) override;
+	void onCalcLocal(PassKey<AnimSystem>) override;
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+private:
+	std::vector<AnimFrame> framesBlended_{};
+	EventBus eventBus_{};
+
+	Milliseconds cooldownAttack_ = 0ms;
+	Milliseconds cooldownHit_ = 0ms;
+	Milliseconds cooldownDeath_ = 0ms;
+	Seconds animTimeIdle_ = 0s;
+	Seconds animTimeWalk_ = 0s;
+	Seconds animTimeAttack_ = 0s;
+	Seconds animTimeHit_ = 0s;
+	Seconds animTimeDeath_ = 0s;
+	float tIdle_ = 0.f;
+	float tWalk_ = 0.f;
+	float tAttack_ = 0.f;
+	// hit 애니메이션 블렌딩 비율은 death 다음으로 가장 우선순위가 높게 계산된다.
+	// 다른 모든 애니메이션의 블렌딩 비율을 낮추고 최대 0.75만큼의 비율을 차지한다.
+	// 모든 블렌딩이 일어난 후에 결과 프레임과 hit 애니메이션 프레임을
+	// tHit_으로 보간하게 된다.
+	float tHit_ = 0.f;
+	// death 애니메이션은 가장 우선순위가 높게 계산된다.
+	// cooldownDeath_의 값이 0보다 큰 동안은 다른 애니메이션과 최종적으로 블렌딩되며
+	// 페이드인이 이루어지고, cooldownDeath_의 값이 0이 되면 완전히 1의 비율을 차지한다.
+	float tDeath_ = 0.f;
+	bool dead_ = false;
+};
+
+class AnimBlenderDemon : public AnimBlender {
+public:
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	void init(const AssetManager& assetManager);
+	// pOwner의 물리 정보에 따라
+	// 애니메이션 블렌딩 상태를 갱신한다.
+	void update(Seconds deltaTime, void* pOwner) override;
+	void onCalcLocal(PassKey<AnimSystem>) override;
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+private:
+	std::vector<AnimFrame> framesBlended_{};
+	EventBus eventBus_{};
+
+	Milliseconds cooldownAttack_ = 0ms;
+	Milliseconds cooldownHit_ = 0ms;
+	Milliseconds cooldownDeath_ = 0ms;
+	Seconds animTimeIdle_ = 0s;
+	Seconds animTimeWalk_ = 0s;
+	Seconds animTimeAttack_ = 0s;
+	Seconds animTimeHit_ = 0s;
+	Seconds animTimeDeath_ = 0s;
+	float tIdle_ = 0.f;
+	float tWalk_ = 0.f;
+	float tAttack_ = 0.f;
+	// hit 애니메이션 블렌딩 비율은 death 다음으로 가장 우선순위가 높게 계산된다.
+	// 다른 모든 애니메이션의 블렌딩 비율을 낮추고 최대 0.75만큼의 비율을 차지한다.
+	// 모든 블렌딩이 일어난 후에 결과 프레임과 hit 애니메이션 프레임을
+	// tHit_으로 보간하게 된다.
+	float tHit_ = 0.f;
+	// death 애니메이션은 가장 우선순위가 높게 계산된다.
+	// cooldownDeath_의 값이 0보다 큰 동안은 다른 애니메이션과 최종적으로 블렌딩되며
+	// 페이드인이 이루어지고, cooldownDeath_의 값이 0이 되면 완전히 1의 비율을 차지한다.
+	float tDeath_ = 0.f;
+	bool dead_ = false;
+};
+
+class AnimBlenderDragon : public AnimBlender {
+public:
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	void init(const AssetManager& assetManager);
+	// pOwner의 물리 정보에 따라
+	// 애니메이션 블렌딩 상태를 갱신한다.
+	void update(Seconds deltaTime, void* pOwner) override;
+	void onCalcLocal(PassKey<AnimSystem>) override;
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+private:
+	std::vector<AnimFrame> framesBlended_{};
+	EventBus eventBus_{};
+
+	Milliseconds cooldownAttack_ = 0ms;
+	Milliseconds cooldownHit_ = 0ms;
+	Milliseconds cooldownDeath_ = 0ms;
+	Seconds animTimeIdle_ = 0s;
+	Seconds animTimeWalk_ = 0s;
+	Seconds animTimeAttack_ = 0s;
+	Seconds animTimeHit_ = 0s;
+	Seconds animTimeDeath_ = 0s;
+	float tIdle_ = 0.f;
+	float tWalk_ = 0.f;
+	float tAttack_ = 0.f;
+	// hit 애니메이션 블렌딩 비율은 death 다음으로 가장 우선순위가 높게 계산된다.
+	// 다른 모든 애니메이션의 블렌딩 비율을 낮추고 최대 0.75만큼의 비율을 차지한다.
+	// 모든 블렌딩이 일어난 후에 결과 프레임과 hit 애니메이션 프레임을
+	// tHit_으로 보간하게 된다.
+	float tHit_ = 0.f;
+	// death 애니메이션은 가장 우선순위가 높게 계산된다.
+	// cooldownDeath_의 값이 0보다 큰 동안은 다른 애니메이션과 최종적으로 블렌딩되며
+	// 페이드인이 이루어지고, cooldownDeath_의 값이 0이 되면 완전히 1의 비율을 차지한다.
+	float tDeath_ = 0.f;
+	bool dead_ = false;
+};
+
+class AnimBlenderEyeball : public AnimBlender {
+public:
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	void init(const AssetManager& assetManager);
+	// pOwner의 물리 정보에 따라
+	// 애니메이션 블렌딩 상태를 갱신한다.
+	void update(Seconds deltaTime, void* pOwner) override;
+	void onCalcLocal(PassKey<AnimSystem>) override;
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+private:
+	std::vector<AnimFrame> framesBlended_{};
+	EventBus eventBus_{};
+
+	Milliseconds cooldownAttack_ = 0ms;
+	Milliseconds cooldownHit_ = 0ms;
+	Milliseconds cooldownDeath_ = 0ms;
+	Seconds animTimeIdle_ = 0s;
+	Seconds animTimeWalk_ = 0s;
+	Seconds animTimeAttack_ = 0s;
+	Seconds animTimeHit_ = 0s;
+	Seconds animTimeDeath_ = 0s;
+	float tIdle_ = 0.f;
+	float tWalk_ = 0.f;
+	float tAttack_ = 0.f;
+	// hit 애니메이션 블렌딩 비율은 death 다음으로 가장 우선순위가 높게 계산된다.
+	// 다른 모든 애니메이션의 블렌딩 비율을 낮추고 최대 0.75만큼의 비율을 차지한다.
+	// 모든 블렌딩이 일어난 후에 결과 프레임과 hit 애니메이션 프레임을
+	// tHit_으로 보간하게 된다.
+	float tHit_ = 0.f;
+	// death 애니메이션은 가장 우선순위가 높게 계산된다.
+	// cooldownDeath_의 값이 0보다 큰 동안은 다른 애니메이션과 최종적으로 블렌딩되며
+	// 페이드인이 이루어지고, cooldownDeath_의 값이 0이 되면 완전히 1의 비율을 차지한다.
+	float tDeath_ = 0.f;
+	bool dead_ = false;
+};
+
+class AnimBlenderFishman : public AnimBlender {
+public:
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	void init(const AssetManager& assetManager);
+	// pOwner의 물리 정보에 따라
+	// 애니메이션 블렌딩 상태를 갱신한다.
+	void update(Seconds deltaTime, void* pOwner) override;
+	void onCalcLocal(PassKey<AnimSystem>) override;
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+private:
+	std::vector<AnimFrame> framesBlended_{};
+	EventBus eventBus_{};
+
+	Milliseconds cooldownAttack_ = 0ms;
+	Milliseconds cooldownHit_ = 0ms;
+	Milliseconds cooldownDeath_ = 0ms;
+	Seconds animTimeIdle_ = 0s;
+	Seconds animTimeWalk_ = 0s;
+	Seconds animTimeAttack_ = 0s;
+	Seconds animTimeHit_ = 0s;
+	Seconds animTimeDeath_ = 0s;
+	float tIdle_ = 0.f;
+	float tWalk_ = 0.f;
+	float tAttack_ = 0.f;
+	// hit 애니메이션 블렌딩 비율은 death 다음으로 가장 우선순위가 높게 계산된다.
+	// 다른 모든 애니메이션의 블렌딩 비율을 낮추고 최대 0.75만큼의 비율을 차지한다.
+	// 모든 블렌딩이 일어난 후에 결과 프레임과 hit 애니메이션 프레임을
+	// tHit_으로 보간하게 된다.
+	float tHit_ = 0.f;
+	// death 애니메이션은 가장 우선순위가 높게 계산된다.
+	// cooldownDeath_의 값이 0보다 큰 동안은 다른 애니메이션과 최종적으로 블렌딩되며
+	// 페이드인이 이루어지고, cooldownDeath_의 값이 0이 되면 완전히 1의 비율을 차지한다.
+	float tDeath_ = 0.f;
+	bool dead_ = false;
+};
+
+class AnimBlenderGargoyle : public AnimBlender {
+public:
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	void init(const AssetManager& assetManager);
+	// pOwner의 물리 정보에 따라
+	// 애니메이션 블렌딩 상태를 갱신한다.
+	void update(Seconds deltaTime, void* pOwner) override;
+	void onCalcLocal(PassKey<AnimSystem>) override;
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+private:
+	std::vector<AnimFrame> framesBlended_{};
+	EventBus eventBus_{};
+
+	Milliseconds cooldownAttack_ = 0ms;
+	Milliseconds cooldownHit_ = 0ms;
+	Milliseconds cooldownDeath_ = 0ms;
+	Seconds animTimeIdle_ = 0s;
+	Seconds animTimeWalk_ = 0s;
+	Seconds animTimeAttack_ = 0s;
+	Seconds animTimeHit_ = 0s;
+	Seconds animTimeDeath_ = 0s;
+	float tIdle_ = 0.f;
+	float tWalk_ = 0.f;
+	float tAttack_ = 0.f;
 	// hit 애니메이션 블렌딩 비율은 death 다음으로 가장 우선순위가 높게 계산된다.
 	// 다른 모든 애니메이션의 블렌딩 비율을 낮추고 최대 0.75만큼의 비율을 차지한다.
 	// 모든 블렌딩이 일어난 후에 결과 프레임과 hit 애니메이션 프레임을
@@ -291,6 +632,198 @@ public:
 	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override {
 		renderState_.animBlender = std::make_unique<AnimBlenderGoblin>();
 		static_cast<AnimBlenderGoblin*>(renderState_.animBlender.get())->init(assetManager);
+
+		animSystem.trackAnimBlender(renderState_.animBlender.get());
+	}
+
+private:
+	EventBus eventBus_{};
+};
+
+class Anubis : public Object {
+public:
+	Anubis() = default;
+	Anubis(Object&& base)
+		: Object(std::move(base)) {}
+
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override {
+		renderState_.animBlender = std::make_unique<AnimBlenderAnubis>();
+		static_cast<AnimBlenderAnubis*>(renderState_.animBlender.get())->init(assetManager);
+
+		animSystem.trackAnimBlender(renderState_.animBlender.get());
+	}
+
+private:
+	EventBus eventBus_{};
+};
+
+class Bat : public Object {
+public:
+	Bat() = default;
+	Bat(Object&& base)
+		: Object(std::move(base)) {}
+
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override {
+		renderState_.animBlender = std::make_unique<AnimBlenderBat>();
+		static_cast<AnimBlenderBat*>(renderState_.animBlender.get())->init(assetManager);
+
+		animSystem.trackAnimBlender(renderState_.animBlender.get());
+	}
+
+private:
+	EventBus eventBus_{};
+};
+
+class Bomber : public Object {
+public:
+	Bomber() = default;
+	Bomber(Object&& base)
+		: Object(std::move(base)) {}
+
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override {
+		renderState_.animBlender = std::make_unique<AnimBlenderBomber>();
+		static_cast<AnimBlenderBomber*>(renderState_.animBlender.get())->init(assetManager);
+
+		animSystem.trackAnimBlender(renderState_.animBlender.get());
+	}
+
+private:
+	EventBus eventBus_{};
+};
+
+class Demon : public Object {
+public:
+	Demon() = default;
+	Demon(Object&& base)
+		: Object(std::move(base)) {}
+
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override {
+		renderState_.animBlender = std::make_unique<AnimBlenderDemon>();
+		static_cast<AnimBlenderDemon*>(renderState_.animBlender.get())->init(assetManager);
+
+		animSystem.trackAnimBlender(renderState_.animBlender.get());
+	}
+
+private:
+	EventBus eventBus_{};
+};
+
+class Dragon : public Object {
+public:
+	Dragon() = default;
+	Dragon(Object&& base)
+		: Object(std::move(base)) {}
+
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override {
+		renderState_.animBlender = std::make_unique<AnimBlenderDragon>();
+		static_cast<AnimBlenderDragon*>(renderState_.animBlender.get())->init(assetManager);
+
+		animSystem.trackAnimBlender(renderState_.animBlender.get());
+	}
+
+private:
+	EventBus eventBus_{};
+};
+
+class Eyeball : public Object {
+public:
+	Eyeball() = default;
+	Eyeball(Object&& base)
+		: Object(std::move(base)) {}
+
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override {
+		renderState_.animBlender = std::make_unique<AnimBlenderEyeball>();
+		static_cast<AnimBlenderEyeball*>(renderState_.animBlender.get())->init(assetManager);
+
+		animSystem.trackAnimBlender(renderState_.animBlender.get());
+	}
+
+private:
+	EventBus eventBus_{};
+};
+
+class Fishman : public Object {
+public:
+	Fishman() = default;
+	Fishman(Object&& base)
+		: Object(std::move(base)) {}
+
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override {
+		renderState_.animBlender = std::make_unique<AnimBlenderFishman>();
+		static_cast<AnimBlenderFishman*>(renderState_.animBlender.get())->init(assetManager);
+
+		animSystem.trackAnimBlender(renderState_.animBlender.get());
+	}
+
+private:
+	EventBus eventBus_{};
+};
+
+class Gargoyle : public Object {
+public:
+	Gargoyle() = default;
+	Gargoyle(Object&& base)
+		: Object(std::move(base)) {}
+
+	class EventBus : public IEventBus {
+	public:
+		void receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) override;
+	};
+
+	IEventBus* eventBus() override { return &eventBus_; }
+
+	void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) override {
+		renderState_.animBlender = std::make_unique<AnimBlenderGargoyle>();
+		static_cast<AnimBlenderGargoyle*>(renderState_.animBlender.get())->init(assetManager);
 
 		animSystem.trackAnimBlender(renderState_.animBlender.get());
 	}
