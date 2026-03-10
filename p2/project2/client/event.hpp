@@ -68,6 +68,7 @@ enum class EventType : u32t {
 	Hit,
 	Blood,
 	Death,
+	Attack,
 	SIZE
 };
 
@@ -95,9 +96,15 @@ struct EvBlood : BasicEvent {
 };
 struct EvDeath : BasicEvent { 
 	EvDeath() : BasicEvent{EventType::Death} {}
-	EvDeath(i32t playerId) : BasicEvent{EventType::Death}, playerId{playerId} {}
+	EvDeath(i32t playerId) : BasicEvent{EventType::Death}, victimId{playerId} {}
 
-	i32t playerId{-1};
+	i32t victimId{-1};
+};
+struct EvAttack : BasicEvent { 
+	EvAttack() : BasicEvent{EventType::Attack} {}
+	EvAttack(i32t attackerId) : BasicEvent{EventType::Attack}, attackerId{attackerId} {}
+
+	i32t attackerId{-1};
 };
 
 class Timer;

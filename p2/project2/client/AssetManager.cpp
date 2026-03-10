@@ -19,6 +19,54 @@ void AssetManager::loadGFXAssets(GFX& gfx) {
 		.pTexHashMap = &texHashMap_,
 		.pDest = &modelGoblin_
 	} );
+
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/anubis/anubis.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelAnubis_
+	} );
+
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/bat/bat.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelBat_
+	} );
+
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/bomber/bomber.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelBomber_
+	} );
+
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/demon/demon.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelDemon_
+	} );
+
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/dragon/dragon.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelDragon_
+	} );
+
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/eyeball/eyeball.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelEyeball_
+	} );
+
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/fishman/fishman.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelFishman_
+	} );
+
+	gfx.addRequestModelLoad( RequestModelLoad{
+		.modelPath = "../resources/models/gargoyle/gargoyle.bin",
+		.pTexHashMap = &texHashMap_,
+		.pDest = &modelGargoyle_
+	} );
 	
 	gfx.addRequestSkyboxLoad( RequestSkyboxLoad{
 		.skyboxPath = "../resources/skyboxes/skybox.bin",
@@ -63,5 +111,61 @@ void AssetManager::loadAnimations() {
 
 	for (auto& clip : tmpGoblinAnims) {
 		goblinAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+	}
+
+	auto tmpAnubisAnims = loadAnimClipsFromFile("../resources/animations/anubisAnimations.anim");
+	anubisAnimations_.reserve(tmpAnubisAnims.size());
+
+	for (auto& clip : tmpAnubisAnims) {
+		anubisAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+	}
+
+	auto tmpBatAnims = loadAnimClipsFromFile("../resources/animations/batAnimations.anim");
+	batAnimations_.reserve(tmpBatAnims.size());
+
+	for (auto& clip : tmpBatAnims) {
+		batAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+	}
+
+	auto tmpBomberAnims = loadAnimClipsFromFile("../resources/animations/bomberAnimations.anim");
+	bomberAnimations_.reserve(tmpBomberAnims.size());
+
+	for (auto& clip : tmpBomberAnims) {
+		bomberAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+	}
+
+	auto tmpDemonAnims = loadAnimClipsFromFile("../resources/animations/demonAnimations.anim");
+	demonAnimations_.reserve(tmpDemonAnims.size());
+
+	for (auto& clip : tmpDemonAnims) {
+		demonAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+	}
+
+	auto tmpDragonAnims = loadAnimClipsFromFile("../resources/animations/dragonAnimations.anim");
+	dragonAnimations_.reserve(tmpDragonAnims.size());
+
+	for (auto& clip : tmpDragonAnims) {
+		dragonAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+	}
+
+	auto tmpEyeballAnims = loadAnimClipsFromFile("../resources/animations/eyeballAnimations.anim");
+	eyeballAnimations_.reserve(tmpEyeballAnims.size());
+
+	for (auto& clip : tmpEyeballAnims) {
+		eyeballAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+	}
+
+	auto tmpFishmanAnims = loadAnimClipsFromFile("../resources/animations/fishmanAnimations.anim");
+	fishmanAnimations_.reserve(tmpFishmanAnims.size());
+
+	for (auto& clip : tmpFishmanAnims) {
+		fishmanAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+	}
+
+	auto tmpGargoyleAnims = loadAnimClipsFromFile("../resources/animations/gargoyleAnimations.anim");
+	gargoyleAnimations_.reserve(tmpFishmanAnims.size());
+
+	for (auto& clip : tmpGargoyleAnims) {
+		gargoyleAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
 	}
 }

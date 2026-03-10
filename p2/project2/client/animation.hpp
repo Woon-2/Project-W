@@ -195,6 +195,10 @@ private:
 // trackAnimBlender 함수를 통해 AnimBlender를 AnimSystem에 등록할 수 있다.
 class AnimSystem {
 public:
+	AnimSystem() {
+		blenders_.reserve(16u);
+	}
+
 	// blender를 AnimSystem에 등록한다.
 	void trackAnimBlender(AnimBlender* blender) {
 		blenders_.push_back(blender);
