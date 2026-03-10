@@ -36,6 +36,15 @@
     <ClCompile Include="GameSession.cpp">
       <Filter>network\GameSession</Filter>
     </ClCompile>
+    <ClCompile Include="Room.cpp">
+      <Filter>contents</Filter>
+    </ClCompile>
+    <ClCompile Include="Player.cpp">
+      <Filter>contents</Filter>
+    </ClCompile>
+    <ClCompile Include="RoomManager.cpp">
+      <Filter>contents</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Listener.hpp">
@@ -49,6 +58,15 @@
     </ClInclude>
     <ClInclude Include="GameSession.hpp">
       <Filter>network\GameSession</Filter>
+    </ClInclude>
+    <ClInclude Include="Room.hpp">
+      <Filter>contents</Filter>
+    </ClInclude>
+    <ClInclude Include="Player.hpp">
+      <Filter>contents</Filter>
+    </ClInclude>
+    <ClInclude Include="RoomManager.hpp">
+      <Filter>contents</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

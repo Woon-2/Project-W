@@ -2,6 +2,7 @@
 #define game_session_hpp
 
 #include "Session.hpp"
+#include "IdPool.hpp"
 
 class GameSession : public PacketSession {
 public:
@@ -9,6 +10,7 @@ public:
 	
 	virtual ~GameSession() {
 		std::cout << "GameSession destroyed. ID: " << id() << '\n';
+		IdPool::push(id());
 	}
 
 protected:

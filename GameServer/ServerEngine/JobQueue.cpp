@@ -24,10 +24,11 @@ void JobQueue::execute() {
 	while (true) {
 		const int32 bulkSize = 100;
 		auto jobs = std::vector<Job*>(bulkSize);
-		auto jobCount = queue_.try_dequeue_bulk(jobs.begin(), bulkSize);
+		auto jobCount = static_cast<int32>(queue_.try_dequeue_bulk(jobs.begin(), bulkSize));
 
 		for (int32 i = 0; i < jobCount; ++i) {
 			jobs[i]->execute();
+			ObjectPool<Job>::push(jobs[i]);
 		}
 
 		if (jobCount_.fetch_sub(jobCount) == jobCount) {

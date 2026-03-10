@@ -153,6 +153,9 @@
   <ItemGroup>
     <ClCompile Include="GameSession.cpp" />
     <ClCompile Include="Listener.cpp" />
+    <ClCompile Include="Player.cpp" />
+    <ClCompile Include="Room.cpp" />
+    <ClCompile Include="RoomManager.cpp" />
     <ClCompile Include="RoomServer.cpp" />
     <ClCompile Include="rspch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
@@ -165,6 +168,9 @@
   <ItemGroup>
     <ClInclude Include="GameSession.hpp" />
     <ClInclude Include="Listener.hpp" />
+    <ClInclude Include="Player.hpp" />
+    <ClInclude Include="Room.hpp" />
+    <ClInclude Include="RoomManager.hpp" />
     <ClInclude Include="RoomServer.hpp" />
     <ClInclude Include="rspch.hpp" />
   </ItemGroup>
