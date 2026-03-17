@@ -119,7 +119,7 @@ public:
 		addOtherPlayer( newPlayer );
 	}
 
-	void setServerSession( const SPServerSession& serverSession ) {	serverSession_ = serverSession;	}
+	//void setServerSession( const SPServerSession& serverSession ) {	serverSession_ = serverSession;	}
 
 	const std::shared_ptr<Object>& getPlayer( ) const { return player_; }
 	std::shared_ptr<Object>& getPlayerById( i32t playerId ) {
@@ -172,7 +172,7 @@ private:
 	EventList eventList_{};
 	Timer* pTimer_ = nullptr;
 
-	SPServerSession serverSession_{ };
+	//SPServerSession serverSession_{ };
 
 	std::vector<Object> cubes_{};
 

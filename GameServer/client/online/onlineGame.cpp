@@ -1,8 +1,5 @@
 #include "pch.hpp"
 #include "onlineGame.hpp"
-#include "../global.hpp"
-#include "../ServerSession.hpp"
-#include "../SendBuffer.hpp"
 #include "../errorHandling.hpp"
 #include "../timer.hpp"
 
@@ -83,14 +80,14 @@ void Game::update(Milliseconds deltaTime) {
 	const auto bulkSize = 100u;
 	auto messages = std::vector<Message>(bulkSize);
 
-	auto size = messageQueue.try_dequeue_bulk(messages.data(), bulkSize);
+	auto size = 10; // messageQueue.try_dequeue_bulk(messages.data(), bulkSize);
 
 	// 남은 메시지가 있으면 모두 꺼내기
 	Message msg;
-	while (messageQueue.try_dequeue(msg)) {
+	/*while (messageQueue.try_dequeue(msg)) {
 		messages.push_back(msg);
 		++size;
-	}
+	}*/
 
 	// 물리 업데이트 루틴
 	//
@@ -366,7 +363,7 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 }
 
 void Game::sendMouseMovePacket() {
-	const auto forward = player_->forward();
+	/*const auto forward = player_->forward();
 	const auto yaw = std::atan2(forward.x(), forward.z());
 
 	auto mouseMovePacket = Packet{
@@ -384,11 +381,11 @@ void Game::sendMouseMovePacket() {
 	i32t packetSize = sizeof(Packet);
 	auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
 	sendBuffer->copyData(&mouseMovePacket, packetSize);
-	serverSession_->send(sendBuffer);
+	serverSession_->send(sendBuffer);*/
 }
 
 void Game::sendMoveStatePacket() {
-	auto moveStatePacket = Packet{
+	/*auto moveStatePacket = Packet{
 		.header = {
 			.size = sizeof(PacketHeader) + sizeof(CSMoveStatePacket),
 			.id = static_cast<std::uint16_t>(PacketType::csMoveState)
@@ -404,11 +401,11 @@ void Game::sendMoveStatePacket() {
 	i32t packetSize = sizeof(Packet);
 	auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
 	sendBuffer->copyData(&moveStatePacket, packetSize);
-	serverSession_->send(sendBuffer);
+	serverSession_->send(sendBuffer);*/
 }
 
 void Game::sendEnterRoomPacket(i32t roomId) {
-	auto packet = Packet{
+	/*auto packet = Packet{
 		.header = {
 			.size = sizeof(PacketHeader) + sizeof(CSFindRoomPacket),
 			.id = static_cast<std::uint16_t>(PacketType::csFindRoom)
@@ -422,7 +419,7 @@ void Game::sendEnterRoomPacket(i32t roomId) {
 	auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
 	sendBuffer->copyData(&packet, packetSize);
 	serverSession_->send(sendBuffer);
-	inRoom_ = true;
+	inRoom_ = true;*/
 }
 
 void Game::processInput(Milliseconds deltaTime) {
@@ -558,7 +555,7 @@ void Game::processInputGame(Milliseconds deltaTime) {
 
 	// 총 장전
 	if ( !playerDead_ && keyboardStateCurr_['R'] & 0x80 ) {
-		auto csReloadPacket = Packet{
+		/*auto csReloadPacket = Packet{
 			.header = {
 				.size = sizeof(PacketHeader) + sizeof(CSReloadPacket),
 				.id = static_cast<std::uint16_t>(PacketType::csReload)
@@ -569,7 +566,7 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		i32t packetSize = sizeof(Packet);
 		auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
 		sendBuffer->copyData(&csReloadPacket, packetSize);
-		serverSession_->send(sendBuffer);
+		serverSession_->send(sendBuffer);*/
 	}
 
 	// 총 발사: 총구 화염 애니메이션 재생
@@ -583,7 +580,7 @@ void Game::processInputGame(Milliseconds deltaTime) {
 			+ player_->forward() * 0.85f
 			+ player_->right() * 0.15f;
 
-		auto csFirePacket = Packet{
+		/*auto csFirePacket = Packet{
 			.header = {
 				.size = sizeof(PacketHeader) + sizeof(CSFirePacket),
 				.id = static_cast<std::uint16_t>(PacketType::csFire)
@@ -598,7 +595,7 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		i32t packetSize = sizeof(Packet);
 		auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
 		sendBuffer->copyData(&csFirePacket, packetSize);
-		serverSession_->send(sendBuffer);
+		serverSession_->send(sendBuffer);*/
 	}
 
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때
