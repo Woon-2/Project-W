@@ -13,4 +13,4 @@
 	}\
 }
 
-#endif	// macro_hpp
+#endif // macro_hpp

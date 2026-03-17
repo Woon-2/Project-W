@@ -43,7 +43,13 @@
 
 #define DXGI_DEBUG_INFO		// DXGI에서 발생한 예외 정보들을 출력할 경우 활성화
 
-#include "simpleWindows.hpp"
+#ifdef _DEBUG
+#pragma comment(lib, "Debug/ServerEngine.lib")
+#else
+#pragma comment(lib, "Release/ServerEngine.lib")
+#endif
+
+#include "sepch.hpp"
 
 #include <Windows.h>
 #include <dxgi1_6.h>
@@ -100,11 +106,6 @@
 #include "pool.hpp"
 
 #include "concurrentqueue.h"
-
-#include "macro.hpp"
-#include "NetAddress.hpp"
-#include "SocketUtils.hpp"
-//#include "protocol.hpp"
 
 #undef min
 #undef max
