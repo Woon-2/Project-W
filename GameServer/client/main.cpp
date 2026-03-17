@@ -12,8 +12,6 @@ RECT gWndRect{ 0, 0, 1024, 768 };
 RECT gClientRect{ 0, 0, 1024, 768 };
 
 LRESULT wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-SPClientService tryConnectToServer();
-std::thread makeIOCPLoopThread(SPClientService& clientService);
 
 int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow )
 {
@@ -63,40 +61,40 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 	DISPLAY_ERROR_GLE(RegisterRawInputDevices(&rid, 1, sizeof(rid)), true);
 
 
-	// 게임 초기화
+	// 서버 연결 및 게임 초기화
 	Timer timer{};
 
+	std::unique_ptr<IGame> pGame = nullptr;
+
 	auto serverSocket = SocketUtils::createSocket();
+	auto serverAddr = NetAddress(serverIp, serverPort);
 
-	auto clientService = tryConnectToServer();
-	ASSERT_CRASH( clientService != nullptr );
-	std::thread iocpLoopThread{ makeIOCPLoopThread( clientService ) };
-	
-	while ( !gReady );
+	std::cout << "[Main] 서버 연결 중...\n";
+	if (SOCKET_ERROR == connect(serverSocket, reinterpret_cast<const SOCKADDR*>(&serverAddr.sockAddr()), sizeof(serverAddr))) {
+		std::cout << "[Main] 서버 연결 실패\n";
+		pGame = std::make_unique<StandAlone::Game>();
 
-	switch ( pGame->type() ) {
-	case GameType::StandAlone:
-		static_cast<StandAlone::Game*>(pGame.get())->setTimer(&timer);
-		break;
-
-	case GameType::Online:
-		static_cast<Online::Game*>(pGame.get())->setTimer(&timer);
-		break;
-
-	default:
-		DISPLAY_ERROR_STR(false, "[Initialization Error] 게임 타입은 StandAlone, Online 둘 중 하나여야 합니다.", true);
-		break;
+		auto standAloneGame = static_cast<StandAlone::Game*>(pGame.get());
+		standAloneGame->setupStage();
+		standAloneGame->setTimer(&timer);
+		exit(-1);
 	}
+	else {
+		std::cout << "[Main] 서버 연결 성공\n" << "서버 IP: " << serverAddr.ip() << ", 서버 Port: " << serverAddr.port() << '\n';
+		pGame = std::make_unique<Online::Game>(serverSocket);
 
+		auto onlineGame = static_cast<Online::Game*>(pGame.get());
+		onlineGame->setupStage();
+		onlineGame->setTimer(&timer);
+		exit(-1);
+	}
+	
 	// 윈도우 메시지 루프
 	MSG msg;
 	while ( true ) {
 		while ( PeekMessageA( &msg, nullptr, 0, 0, PM_REMOVE ) ) {
 			if ( msg.message == WM_QUIT ) {
-				if (clientService) {
-					iocpLoopThread.join();
-					SocketUtils::release( );
-				}
+				SocketUtils::release( );
 				return static_cast<int>( msg.wParam );
 			}
 
@@ -125,36 +123,11 @@ LRESULT wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		return 0;
 
 	default:
-		if (pGame) {
+			return DefWindowProcA(hWnd, msg, wParam, lParam);
+		/*if (pGame) {
 			return pGame->receiveWndMsg(hWnd, msg, wParam, lParam);
 		}
 		else {
-			return DefWindowProcA(hWnd, msg, wParam, lParam);
-		}
+		}*/
 	}
-}
-
-SPClientService tryConnectToServer() {
-	auto clientService = std::make_shared<ClientService>(
-		NetAddress( serverIp, serverPort ), std::make_shared<IocpCore>( ),
-		nullptr, 1 );
-
-	clientService->setSessionFactory( []( ) {
-		return std::make_shared<ServerSession>( );
-	} );
-
-	if ( clientService->start( ) ) {
-		return clientService;
-	}
-	return nullptr;
-}
-
-std::thread makeIOCPLoopThread(SPClientService& clientService) {
-	return std::thread( [&clientService]( ) {
-		while ( true ) {
-			if ( !clientService->getIocpCore( )->dispatch( ) ) {
-				break;
-			}
-		}
-	} );
 }
