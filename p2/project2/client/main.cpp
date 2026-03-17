@@ -1,12 +1,8 @@
 #include "pch.hpp"
 #include "errorHandling.hpp"
-#include "global.hpp"
 #include "online/onlineGame.hpp"
 #include "standalone/game.hpp"
 #include "timer.hpp"
-#include "IocpCore.hpp"
-#include "Service.hpp"
-#include "ServerSession.hpp"
 
 inline constexpr const char* wndClsName = "wndCls";
 inline constexpr const char* wndName = "Project1";
@@ -69,6 +65,8 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 
 	// 게임 초기화
 	Timer timer{};
+
+	auto serverSocket = SocketUtils::createSocket();
 
 	auto clientService = tryConnectToServer();
 	ASSERT_CRASH( clientService != nullptr );
