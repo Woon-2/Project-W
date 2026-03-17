@@ -176,6 +176,6 @@ inline T rand(T closedBegin, T closedEnd) {
 template <typename T>
 class PassKey { friend T;    PassKey() = default; };
 
-size_t numberOfPhysicalCores() noexcept;
+//size_t numberOfPhysicalCores() noexcept;
 
 #endif	// __PCF_HPP
