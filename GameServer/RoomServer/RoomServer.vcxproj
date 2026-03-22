@@ -153,6 +153,7 @@
   <ItemGroup>
     <ClCompile Include="GameSession.cpp" />
     <ClCompile Include="Listener.cpp" />
+    <ClCompile Include="PacketManager.cpp" />
     <ClCompile Include="Player.cpp" />
     <ClCompile Include="Room.cpp" />
     <ClCompile Include="RoomManager.cpp" />
@@ -168,6 +169,7 @@
   <ItemGroup>
     <ClInclude Include="GameSession.hpp" />
     <ClInclude Include="Listener.hpp" />
+    <ClInclude Include="PacketManager.hpp" />
     <ClInclude Include="Player.hpp" />
     <ClInclude Include="Room.hpp" />
     <ClInclude Include="RoomManager.hpp" />

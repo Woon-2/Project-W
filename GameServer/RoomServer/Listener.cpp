@@ -1,7 +1,7 @@
 #include "rspch.hpp"
 #include "Listener.hpp"
 #include "IoEvent.hpp"
-#include "Session.hpp"
+#include "GameSession.hpp"
 
 void Listener::startAccept() {
 	SocketUtils::setReuseAddr(listenSock_, true);
@@ -28,7 +28,7 @@ void Listener::dispatch(IoEvent* event, int32 numBytes) {
 }
 
 void Listener::registerAccept(AcceptEvent* event) {
-	auto session = onew<Session>();
+	auto session = onew<GameSession>();
 	CreateIoCompletionPort(session->getHandle(), iocpHandle_, 0, 0);
 
 	event->clear();
@@ -64,6 +64,7 @@ void Listener::processAccept(AcceptEvent* event) {
 
 	session->setNetAddress(NetAddress(clientAddr));
 	session->setId(IdPool::pop());
+	std::cout << "New client connected. Assigned GameSession ID: " << session->id() << '\n';
 	session->processConnect();
 
 	registerAccept(event);

@@ -2,6 +2,18 @@
 #include "RoomServer.hpp"
 #include "IocpReactor.hpp"
 #include "Listener.hpp"
+#include "JobQueuePool.hpp"
+
+void DoJob() {
+	while (true) {
+		auto jobQueue = JobQueuePool::pop();
+		if (jobQueue == nullptr) {
+			break;
+		}
+
+		jobQueue->execute();
+	}
+}
 
 void RoomServer::start() {
 	reactor_.registerHandle(listener_.getHandle());
@@ -13,9 +25,8 @@ void RoomServer::start() {
 	for (int32 i = 0; i < threadCnt; ++i) {
 		workerThreads_.emplace_back([this]() {
 			while (true) {
-				if (!reactor_.dispatch()) {
-					break;
-				}
+				reactor_.dispatch(10);
+				DoJob();
 			}
 		});
 	}

@@ -19,6 +19,9 @@
     <Filter Include="network\GameSession">
       <UniqueIdentifier>{5a645dfd-2161-4073-89e0-1b9724ec01f4}</UniqueIdentifier>
     </Filter>
+    <Filter Include="network\PacketManager">
+      <UniqueIdentifier>{de48db76-0d3f-4df5-b5ca-eec5b2106eba}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Listener.cpp">
@@ -45,6 +48,9 @@
     <ClCompile Include="RoomManager.cpp">
       <Filter>contents</Filter>
     </ClCompile>
+    <ClCompile Include="PacketManager.cpp">
+      <Filter>network\PacketManager</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Listener.hpp">
@@ -67,6 +73,9 @@
     </ClInclude>
     <ClInclude Include="RoomManager.hpp">
       <Filter>contents</Filter>
+    </ClInclude>
+    <ClInclude Include="PacketManager.hpp">
+      <Filter>network\PacketManager</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

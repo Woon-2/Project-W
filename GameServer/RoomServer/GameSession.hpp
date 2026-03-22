@@ -3,10 +3,13 @@
 
 #include "Session.hpp"
 #include "IdPool.hpp"
+//#include "Player.hpp"
+
+class Room;
 
 class GameSession : public PacketSession {
 public:
-	GameSession() = default;
+	GameSession() : myRoom_(nullptr) {}
 	
 	virtual ~GameSession() {
 		std::cout << "GameSession destroyed. ID: " << id() << '\n';
@@ -20,7 +23,8 @@ protected:
 	virtual void onSend(int32 len) override;
 
 private:
-
+	Room* myRoom_;
+	//Player myPlayer_;
 };
 
 #endif // game_session_hpp

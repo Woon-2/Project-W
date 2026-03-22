@@ -1,9 +1,16 @@
 #ifndef player_hpp
 #define player_hpp
 
-#include "GameSession.hpp"
+class GameSession;
+class SendBuffer;
 
 class Player {
+public:
+	Player() : ownerSession_(nullptr) {}
+
+	void send(SendBuffer* sendBuffer);
+	int32 id() const;
+
 private:
 	GameSession* ownerSession_;
 };
