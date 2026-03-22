@@ -10,7 +10,7 @@ class PacketManager {
 public:
 	static void handlePacket(byte* buffer, int32 len);
 
-	static SendBuffer* makeSEnterPacket(int32 playerId, int32 playerCnt);
+	static SendBuffer* makeSEnterPacket(int32 playerId, const std::vector<PlayerInfo>& Infos);
 };
 
 #endif // packet_manager_hpp

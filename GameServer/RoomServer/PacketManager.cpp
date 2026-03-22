@@ -15,7 +15,8 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 	}
 }
 
-SendBuffer* PacketManager::makeSEnterPacket(int32 playerId, int32 playerCnt) {
+SendBuffer* PacketManager::makeSEnterPacket(int32 playerId, const std::vector<PlayerInfo>& Infos) {
+	int32 playerCnt = Infos.size();
 	auto sendBuffer = SendBufferManager::open(sizeof(SEnterPacket) + sizeof(PlayerInfo) * playerCnt);
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
@@ -24,6 +25,18 @@ SendBuffer* PacketManager::makeSEnterPacket(int32 playerId, int32 playerCnt) {
 	enterPacket->playerCnt = playerCnt;
 
 	auto playerInfos = bw.reserve<PlayerInfo>(playerCnt);
-	playerInfos[0].playerId = playerId;
-	playerInfos[0].materialSetIdx = 0;
+	for (int32 i = 0; i < playerCnt; ++i) {
+		playerInfos[i].playerId = Infos[i].playerId;
+		playerInfos[i].materialSetIdx = Infos[i].materialSetIdx;
+		playerInfos[i].pos = Infos[i].pos;
+		playerInfos[i].orient = Infos[i].orient;
+		playerInfos[i].scale = Infos[i].scale;
+	}
+
+	enterPacket->playersOffset = reinterpret_cast<uint64>(playerInfos) - reinterpret_cast<uint64>(enterPacket);
+	enterPacket->size = bw.writeSize();
+	enterPacket->type = PacketType::S_Enter;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
 }

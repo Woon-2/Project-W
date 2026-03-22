@@ -103,7 +103,7 @@ void Session::registerSend() {
 	wsaBufs.reserve(size);
 	for (auto sb : sendEv_.sendBuffers_) {
 		wsaBufs.emplace_back(WSABUF{
-			.len = static_cast<ULONG>(sb->size()),
+			.len = static_cast<ULONG>(sb->writeSize()),
 			.buf = reinterpret_cast<char*>(sb->data())
 		});
 	}

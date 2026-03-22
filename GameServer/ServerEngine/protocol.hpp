@@ -44,7 +44,7 @@ struct CEnterPacket : public PacketHeader {
 
 struct PlayerInfo {
 	uint16 playerId;
-	uint32 materialSetIdx;
+	uint16 materialSetIdx;
 	DirectX::XMFLOAT3 pos;
 	DirectX::XMFLOAT3 orient;
 	DirectX::XMFLOAT3 scale;
@@ -52,7 +52,8 @@ struct PlayerInfo {
 
 struct SEnterPacket : public PacketHeader {
 	uint16 playerId;
-	int32 playerCnt;
+	uint16 playersOffset;	// playerInfos 배열의 시작 위치
+	uint16 playerCnt;
 };
 
 #pragma pack(pop)
