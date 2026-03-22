@@ -402,6 +402,9 @@ SkeletonEnumeration convertStrToSkeletonEnum(const std::string& skeletonEnumerat
     if (skeletonEnumerationStr == "Humanoid") {
         return SkeletonEnumeration::Humanoid;
     }
+    else if (skeletonEnumerationStr == "Unique") {
+        return SkeletonEnumeration::Unique;
+    }
 
     DISPLAY_ERROR_STR( false, "[GFX Error] convertStrToSkeletonEnum: 알 수 없는 SkeletonEnumeration 값 \""s
         + skeletonEnumerationStr + "\"을 읽었습니다.\n",
