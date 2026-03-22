@@ -52,7 +52,7 @@ bool isTailTag(const std::string& str, const std::string& expectedSource) {
 
 // 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
 std::string readString(std::ifstream& ifs) {
-    char tmpBuffer[64]{'\0'};
+    char tmpBuffer[128]{'\0'};
     unsigned char sz{};
 
     ifs.read(reinterpret_cast<char*>(&sz), sizeof(unsigned char));

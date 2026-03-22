@@ -1,8 +1,10 @@
-#ifndef macro_hpp
-#define macro_hpp
+#ifndef MACRO_HPP
+#define MACRO_HPP
+
+#include "types.hpp"
 
 #define CRASH(cause) {\
-	int* crash = nullptr;\
+	int32* crash = nullptr;\
 	__analysis_assume(crash != nullptr);\
 	*crash = 0xDEADBEEF;\
 }
@@ -13,4 +15,4 @@
 	}\
 }
 
-#endif // macro_hpp
+#endif // MACRO_HPP
