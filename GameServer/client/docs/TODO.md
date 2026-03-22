@@ -1,0 +1,10 @@
+- [ ] 모델 메시별로 셰이더 별도 적용
+- [ ] 공격을 위한 충돌처리 구현
+- [ ] 몬스터 단순 ai 구현
+- [ ] Height map 기반 Terrain 구현 (Unity에서 맵 추출)
+- [ ] Terrain Splat 구현 (Unity에서 splat 추출)
+- [ ] 시분할 애니메이션 제대로 적용
+- [ ] Cascaded Shadow Mapping 구현
+- [ ] Deferred Shading을 위한 GBuffer 설계
+- [ ] Deferred Shading 구현
+- [ ] Active Ragdoll 구현, 몬스터들의 움직임에 적용
