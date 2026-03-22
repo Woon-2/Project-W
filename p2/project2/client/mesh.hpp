@@ -123,6 +123,7 @@ Bone::SocketType convertStrToBoneSocketType(const std::string& boneSocketTypeStr
 // 올바른 스키닝이 가능하다.
 enum class SkeletonEnumeration {
 	Humanoid,
+	Unique,
 	SIZE
 };
 
