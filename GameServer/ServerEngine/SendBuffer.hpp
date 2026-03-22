@@ -31,7 +31,8 @@ public:
     void close(uint32 writeSize);
 
     byte* data() { return buffer_; }
-	int32 size() const { return writeSize_; }
+	uint32 allocSize() const { return allocSize_; }
+	uint32 writeSize() const { return writeSize_; }
 
 private:
     SendBufferChunk* owner_;

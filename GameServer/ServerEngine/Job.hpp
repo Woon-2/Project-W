@@ -13,7 +13,8 @@ public:
 	template<class T, class Ret, class... Args>
 	Job(T* obj, Ret(T::* memFn)(Args...), Args&&... args) {
 		callback_ = [obj, memFn, args...]() {
-			obj->*memFn(args...);
+			//(obj->*memFn)(args...);
+			std::invoke(memFn, obj, args...);
 		};
 	}
 

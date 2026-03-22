@@ -19,13 +19,13 @@ public:
 	}
 
 	template<class T>
-	T* reserve() {
-		if (freeSize() < sizeof(T)) {
+	T* reserve(uint16 cnt = 1u) {
+		if (freeSize() < sizeof(T) * cnt) {
 			return nullptr;
 		}
 
 		T* ptr = reinterpret_cast<T*>(&buffer_[writePos_]);
-		writePos_ += sizeof(T);
+		writePos_ += (sizeof(T) * cnt);
 		return ptr;
 	}
 
