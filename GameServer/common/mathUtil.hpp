@@ -399,13 +399,14 @@ public:
     }
 
     Vec<2> MU_CALLCONV xx() const __MathUtil_NOEXCEPT requires (D >= 2) {
-        return Vec<2>(dx::XMVectorSwizzle<0, 0>(vec_));
+        return Vec<2>(dx::XMVectorSwizzle<0, 0, 0, 0>(vec_));
     }
 
     Vec<2> MU_CALLCONV xy() const __MathUtil_NOEXCEPT requires (D >= 2) {
-        return Vec<2>(dx::XMVectorSwizzle<0, 1>(vec_));
+        return Vec<2>(dx::XMVectorSwizzle<0, 1, 0, 0>(vec_));
     }
 
+    // TODO: 여기서부터 쭉 수정해야 함...
     Vec<2> MU_CALLCONV yx() const __MathUtil_NOEXCEPT requires (D >= 2) {
         return Vec<2>(dx::XMVectorSwizzle<1, 0>(vec_));
     }
@@ -435,7 +436,7 @@ public:
     }
 
     Vec<3> MU_CALLCONV xyz() const __MathUtil_NOEXCEPT requires (D >= 3) {
-        return Vec<3>(dx::XMVectorSwizzle<0, 1, 2>(vec_));
+        return Vec<3>(dx::XMVectorSwizzle<0, 1, 2, 0>(vec_));
     }
 
     Vec<3> MU_CALLCONV xzx() const __MathUtil_NOEXCEPT requires (D >= 3) {
@@ -2733,6 +2734,10 @@ public:
         normalize();
     }
 
+    // constructor omitting normalization
+    NQuat(dx::FXMVECTOR quat, NoNormalize_t) __MathUtil_NOEXCEPT
+        : quat_(quat) {}
+
     NQuat(Quat quat) __MathUtil_NOEXCEPT
         : quat_(quat.get()) {
         normalize();
@@ -2827,10 +2832,6 @@ public:
     }
 
 private:
-    // constructor omitting normalization
-    NQuat(dx::FXMVECTOR quat, NoNormalize_t) __MathUtil_NOEXCEPT
-        : quat_(quat) {}
-
     void normalize() __MathUtil_NOEXCEPT {
         quat_ = dx::XMQuaternionNormalize(quat_);
     }
@@ -2904,6 +2905,10 @@ inline const Quat MU_CALLCONV squad(
     Quat q0, Quat q1, Quat a, Quat b, float t
 ) __MathUtil_NOEXCEPT {
     return dx::XMQuaternionSquad(q0.get(), q1.get(), a.get(), b.get(), t);
+}
+
+inline float MU_CALLCONV dot(Quat lhs, Quat rhs) __MathUtil_NOEXCEPT {
+    return dx::XMVectorGetX(dx::XMVector4Dot(lhs.get(), rhs.get()));
 }
 
 template <std::size_t R, std::size_t C>

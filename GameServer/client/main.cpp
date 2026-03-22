@@ -3,6 +3,7 @@
 #include "online/onlineGame.hpp"
 #include "standalone/game.hpp"
 #include "timer.hpp"
+#include "ServerSession.hpp"
 
 inline constexpr const char* wndClsName = "wndCls";
 inline constexpr const char* wndName = "Project1";
@@ -27,7 +28,7 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 		.style = CS_OWNDC,
 		.lpfnWndProc = wndProc,
 		.cbClsExtra = 0,
-		.cbWndExtra = 0,
+		.cbWndExtra = sizeof( IGame* ),
 		.hInstance = hInstance,
 		.hIcon = nullptr,
 		.hCursor = nullptr,
@@ -66,27 +67,27 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 
 	std::unique_ptr<IGame> pGame = nullptr;
 
-	auto serverSocket = SocketUtils::createSocket();
-	auto serverAddr = NetAddress(serverIp, serverPort);
+	ServerSession serverSession;
 
 	std::cout << "[Main] 서버 연결 중...\n";
-	if (SOCKET_ERROR == connect(serverSocket, reinterpret_cast<const SOCKADDR*>(&serverAddr.sockAddr()), sizeof(serverAddr))) {
-		std::cout << "[Main] 서버 연결 실패\n";
+	if (!serverSession.connect()) {
+		std::cout << "[Main] 서버 연결 실패\n" << "StandAlone 모드로 실행합니다.\n";
 		pGame = std::make_unique<StandAlone::Game>();
+
+		SetWindowLongPtrA(ghWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pGame.get()));
 
 		auto standAloneGame = static_cast<StandAlone::Game*>(pGame.get());
 		standAloneGame->setupStage();
 		standAloneGame->setTimer(&timer);
-		exit(-1);
 	}
 	else {
-		std::cout << "[Main] 서버 연결 성공\n" << "서버 IP: " << serverAddr.ip() << ", 서버 Port: " << serverAddr.port() << '\n';
-		pGame = std::make_unique<Online::Game>(serverSocket);
-
-		auto onlineGame = static_cast<Online::Game*>(pGame.get());
-		onlineGame->setupStage();
-		onlineGame->setTimer(&timer);
-		exit(-1);
+		std::cout << "[Main] 서버 연결 성공\n" << "서버 IP: " << serverSession.ip() << ", 서버 Port: " << serverSession.port() << '\n';
+		//pGame = std::make_unique<Online::Game>(serverSocket);
+		
+		//auto onlineGame = static_cast<Online::Game*>(pGame.get());
+		//onlineGame->setupStage();
+		//onlineGame->setTimer(&timer);
+		while (true);
 	}
 	
 	// 윈도우 메시지 루프
@@ -112,6 +113,8 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 }
 
 LRESULT wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+	auto pGame = reinterpret_cast<IGame*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
+
 	switch (msg) {
 	case WM_CLOSE:
 		PostMessageA(ghWnd, WM_DESTROY, 0, 0);
@@ -123,11 +126,11 @@ LRESULT wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		return 0;
 
 	default:
-			return DefWindowProcA(hWnd, msg, wParam, lParam);
-		/*if (pGame) {
+		if (pGame) {
 			return pGame->receiveWndMsg(hWnd, msg, wParam, lParam);
 		}
 		else {
-		}*/
+			return DefWindowProcA(hWnd, msg, wParam, lParam);
+		}
 	}
 }

@@ -85,6 +85,15 @@
     <Filter Include="독립 구현체\헤더 파일">
       <UniqueIdentifier>{02bfad2b-5867-44a5-ac41-9c72470f5442}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Network">
+      <UniqueIdentifier>{bc52b4a6-2619-44e1-8242-f905bada84b9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Network\Session">
+      <UniqueIdentifier>{df45a867-2949-40a2-8d29-66a8bc25a121}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Network\PacketManager">
+      <UniqueIdentifier>{6bf7f2e3-6624-4240-b10c-e5bdc9318d4c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -197,6 +206,9 @@
     </ClCompile>
     <ClCompile Include="threadPool.cpp">
       <Filter>독립 구현체\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="ServerSession.cpp">
+      <Filter>Network\Session</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -385,6 +397,9 @@
     </ClInclude>
     <ClInclude Include="timsort.hpp">
       <Filter>외부 헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="ServerSession.hpp">
+      <Filter>Network\Session</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
