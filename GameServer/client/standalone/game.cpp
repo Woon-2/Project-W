@@ -125,7 +125,7 @@ void Game::importNode(std::ifstream& ifs) {
 	}
 	else if (type == "AnubisSpawner") {
 		anubis_ = std::make_shared<Anubis>(std::move(object));
-		//importAnubisSpawner(ifs, *anubis_);
+		importAnubisSpawner(ifs, *anubis_);
 	}
 	else if (type == "BatSpawner") {
 		bat_ = std::make_shared<Bat>(std::move(object));
@@ -149,7 +149,7 @@ void Game::importNode(std::ifstream& ifs) {
 	}
 	else if (type == "FishmanSpawner") {
 		fishman_ = std::make_shared<Fishman>(std::move(object));
-		//importFishmanSpawner(ifs, *fishman_);
+		importFishmanSpawner(ifs, *fishman_);
 	}
 	else if (type == "GargoyleSpawner") {
 		gargoyle_ = std::make_shared<Gargoyle>(std::move(object));
@@ -266,6 +266,8 @@ void Game::update(Milliseconds deltaTime) {
 	player_->physicState().evOmega = mu::Vec3();
 	goblin_->physicState().evVelocity = mu::Vec3();
 	goblin_->physicState().evOmega = mu::Vec3();
+	anubis_->physicState().evVelocity = mu::Vec3();
+	anubis_->physicState().evOmega = mu::Vec3();
 	bat_->physicState().evVelocity = mu::Vec3();
 	bat_->physicState().evOmega = mu::Vec3();
 	bomber_->physicState().evVelocity = mu::Vec3();
@@ -276,6 +278,8 @@ void Game::update(Milliseconds deltaTime) {
 	dragon_->physicState().evOmega = mu::Vec3();
 	eyeball_->physicState().evVelocity = mu::Vec3();
 	eyeball_->physicState().evOmega = mu::Vec3();
+	fishman_->physicState().evVelocity = mu::Vec3();
+	fishman_->physicState().evOmega = mu::Vec3();
 	gargoyle_->physicState().evVelocity = mu::Vec3();
 	gargoyle_->physicState().evOmega = mu::Vec3();
 
@@ -295,6 +299,12 @@ void Game::update(Milliseconds deltaTime) {
 				goblin_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, goblin_.get());
 				if (goblin_->hp() == 0) {
 					holdEvent( eventList_, EvDeath(goblin_->getId()) );
+				}
+			}
+			else if (static_cast<EvHit*>(pEv)->targetId == anubis_->getId()) {
+				anubis_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, anubis_.get());
+				if (anubis_->hp() == 0) {
+					holdEvent( eventList_, EvDeath(anubis_->getId()) );
 				}
 			}
 			else if (static_cast<EvHit*>(pEv)->targetId == bat_->getId()) {
@@ -327,6 +337,12 @@ void Game::update(Milliseconds deltaTime) {
 					holdEvent(eventList_, EvDeath(eyeball_->getId()));
 				}
 			}
+			else if (static_cast<EvHit*>(pEv)->targetId == fishman_->getId()) {
+				fishman_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, fishman_.get());
+				if (fishman_->hp() == 0) {
+					holdEvent( eventList_, EvDeath(fishman_->getId()) );
+				}
+			}
 			else if (static_cast<EvHit*>(pEv)->targetId == gargoyle_->getId()) {
 				gargoyle_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, gargoyle_.get());
 				if (gargoyle_->hp() == 0) {
@@ -339,6 +355,9 @@ void Game::update(Milliseconds deltaTime) {
 			auto* attack = static_cast<EvAttack*>(pEv);
 			if (attack->attackerId == goblin_->getId()) {
 				goblin_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, goblin_.get());
+			}
+			else if (attack->attackerId == anubis_->getId()) {
+				anubis_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, anubis_.get());
 			}
 			else if (attack->attackerId == bat_->getId()) {
 				bat_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, bat_.get());
@@ -354,6 +373,9 @@ void Game::update(Milliseconds deltaTime) {
 			}
 			else if (attack->attackerId == eyeball_->getId()) {
 				eyeball_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, eyeball_.get());
+			}
+			else if (attack->attackerId == fishman_->getId()) {
+				fishman_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, fishman_.get());
 			}
 			else if (attack->attackerId == gargoyle_->getId()) {
 				gargoyle_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, gargoyle_.get());
@@ -375,6 +397,9 @@ void Game::update(Milliseconds deltaTime) {
 			if (death->victimId == goblin_->getId()) {
 				goblin_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, goblin_.get());
 			}
+			else if (death->victimId == anubis_->getId()) {
+				anubis_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, anubis_.get());
+			}
 			else if (death->victimId == bat_->getId()) {
 				bat_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, bat_.get());
 			}
@@ -389,6 +414,9 @@ void Game::update(Milliseconds deltaTime) {
 			}
 			else if (death->victimId == eyeball_->getId()) {
 				eyeball_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, eyeball_.get());
+			}
+			else if (death->victimId == fishman_->getId()) {
+				fishman_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, fishman_.get());
 			}
 			else if (death->victimId == gargoyle_->getId()) {
 				gargoyle_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, gargoyle_.get());
@@ -418,16 +446,18 @@ void Game::update(Milliseconds deltaTime) {
 		// 물리 시뮬레이션의 대상이 되는 객체들을
 		// 한 곳에 모아 PhysicSystem 객체에 전달한다.
 		static std::vector<Object*> targetObjects{};
-		targetObjects.resize(9u);
+		targetObjects.resize(11u);
 		targetObjects[0] = ground_.get();
 		targetObjects[1] = player_.get();
 		targetObjects[2] = goblin_.get();
-		targetObjects[3] = bat_.get();
-		targetObjects[4] = bomber_.get();
-		targetObjects[5] = demon_.get();
-		targetObjects[6] = dragon_.get();
-		targetObjects[7] = eyeball_.get();
-		targetObjects[8] = gargoyle_.get();
+		targetObjects[3] = anubis_.get();
+		targetObjects[4] = bat_.get();
+		targetObjects[5] = bomber_.get();
+		targetObjects[6] = demon_.get();
+		targetObjects[7] = dragon_.get();
+		targetObjects[8] = eyeball_.get();
+		targetObjects[9] = fishman_.get();
+		targetObjects[10] = gargoyle_.get();
 
 		while (physicUpdateAcc_ >= physicUpdateInterval) {
 			physicSystem_.step(targetObjects, physicUpdateInterval);
@@ -448,11 +478,13 @@ void Game::update(Milliseconds deltaTime) {
 	ground_->update(deltaTime, tPhysicInterpolation);
 	player_->update(deltaTime, tPhysicInterpolation);
 	goblin_->update(deltaTime, tPhysicInterpolation);
+	anubis_->update(deltaTime, tPhysicInterpolation);
 	bat_->update(deltaTime, tPhysicInterpolation);
 	bomber_->update(deltaTime, tPhysicInterpolation);
 	demon_->update(deltaTime, tPhysicInterpolation);
 	dragon_->update(deltaTime, tPhysicInterpolation);
 	eyeball_->update(deltaTime, tPhysicInterpolation);
+	fishman_->update(deltaTime, tPhysicInterpolation);
 	gargoyle_->update(deltaTime, tPhysicInterpolation);
 	camera_.update();
 	dirLight_.update(deltaTime);
@@ -483,11 +515,13 @@ void Game::render() {
 	ground_->render(gfx_);
 	player_->render(gfx_);
 	goblin_->render(gfx_);
+	anubis_->render(gfx_);
 	bat_->render(gfx_);
 	bomber_->render(gfx_);
 	demon_->render(gfx_);
 	dragon_->render(gfx_);
 	eyeball_->render(gfx_);
+	fishman_->render(gfx_);
 	gargoyle_->render(gfx_);
 	skybox_.render(gfx_);
 	camera_.updateGFX(gfx_);
@@ -677,6 +711,9 @@ void Game::processInput(Milliseconds deltaTime) {
 		if (goblin_->hp() > 0) {
 			holdEvent(eventList_, EvHit(goblin_->getId(), goblin_->hp() - 10));
 		}
+		if (anubis_->hp() > 0) {
+			holdEvent(eventList_, EvHit(anubis_->getId(), anubis_->hp() - 10));
+		}
 		if (bat_->hp() > 0) {
 			holdEvent(eventList_, EvHit(bat_->getId(), bat_->hp() - 10));
 		}
@@ -692,6 +729,9 @@ void Game::processInput(Milliseconds deltaTime) {
 		if (eyeball_->hp() > 0) {
 			holdEvent(eventList_, EvHit(eyeball_->getId(), eyeball_->hp() - 10));
 		}
+		if (fishman_->hp() > 0) {
+			holdEvent(eventList_, EvHit(fishman_->getId(), fishman_->hp() - 10));
+		}
 		if (gargoyle_->hp() > 0) {
 			holdEvent(eventList_, EvHit(gargoyle_->getId(), gargoyle_->hp() - 10));
 		}
@@ -703,6 +743,9 @@ void Game::processInput(Milliseconds deltaTime) {
 	) {
 		if (goblin_->hp() > 0) {
 			holdEvent(eventList_, EvAttack(goblin_->getId()));
+		}
+		if (anubis_->hp() > 0) {
+			holdEvent(eventList_, EvAttack(anubis_->getId()));
 		}
 		if (bat_->hp() > 0) {
 			holdEvent(eventList_, EvAttack(bat_->getId()));
@@ -718,6 +761,9 @@ void Game::processInput(Milliseconds deltaTime) {
 		}
 		if (eyeball_->hp() > 0) {
 			holdEvent(eventList_, EvAttack(eyeball_->getId()));
+		}
+		if (fishman_->hp() > 0) {
+			holdEvent(eventList_, EvAttack(fishman_->getId()));
 		}
 		if (gargoyle_->hp() > 0) {
 			holdEvent(eventList_, EvAttack(gargoyle_->getId()));
