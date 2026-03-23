@@ -1,4 +1,4 @@
-#include "pch.hpp"
+ï»¿#include "pch.hpp"
 #include "spriteAnimation.hpp"
 #include "gfx.hpp"
 #include "errorHandling.hpp"
@@ -17,10 +17,10 @@ void SpriteAnimation::update( Milliseconds deltaTime ) {
 		return;
 	}
 
-	// ·»´õ¸µ¿¡ »ç¿ëÇÒ ¿ùµå º¯È¯ °»½Å
+	// ë Œë”ë§ì— ì‚¬ìš©í•  ì›”ë“œ ë³€í™˜ ê°±ì‹ 
 	world_ = mu::translate(pos_);
 
-	// ½ºÇÁ¶óÀÌÆ® °»½Å
+	// ìŠ¤í”„ë¼ì´íŠ¸ ê°±ì‹ 
 	timeAcc_ += deltaTime * speed_;
 
 	if (pAnimData_->type == SpriteAnimType::RandomAdvance) {

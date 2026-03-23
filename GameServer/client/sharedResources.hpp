@@ -1,13 +1,13 @@
-#ifndef __sharedResources_HPP
+ï»¿#ifndef __sharedResources_HPP
 #define __sharedResources_HPP
 
 #include "gfxUtil.hpp"
 
-// ±×¸²ÀÚ¸Ê ÅØ½ºÃ³¿Í ±×¿Í °ü·ÃµÈ ÀÚÁÖ ¾²ÀÌ´Â µ¥ÀÌÅÍµéÀ» ´ã´Â ±¸Á¶Ã¼
-// formatÀº ±×¸²ÀÚ¸ÊÀÇ SRV¿Í DSV¸¦ ¸¸µé ¶§ È°¿ëÇÏ°í,
-// width¿Í height´Â ±×¸²ÀÚ¸ÊÀ» ·»´õ¸µÇÒ ¶§ »ç¿ëÇÒ viewport¿Í scissor rectangleÀ»
-// ¸¸µé ¶§ È°¿ëÇÑ´Ù.
-// dsv´Â ±×¸²ÀÚ¸ÊÀ» Å¬¸®¾îÇÒ ¶§ »ç¿ëÇÑ´Ù.
+// ê·¸ë¦¼ìë§µ í…ìŠ¤ì²˜ì™€ ê·¸ì™€ ê´€ë ¨ëœ ìì£¼ ì“°ì´ëŠ” ë°ì´í„°ë“¤ì„ ë‹´ëŠ” êµ¬ì¡°ì²´
+// formatì€ ê·¸ë¦¼ìë§µì˜ SRVì™€ DSVë¥¼ ë§Œë“¤ ë•Œ í™œìš©í•˜ê³ ,
+// widthì™€ heightëŠ” ê·¸ë¦¼ìë§µì„ ë Œë”ë§í•  ë•Œ ì‚¬ìš©í•  viewportì™€ scissor rectangleì„
+// ë§Œë“¤ ë•Œ í™œìš©í•œë‹¤.
+// dsvëŠ” ê·¸ë¦¼ìë§µì„ í´ë¦¬ì–´í•  ë•Œ ì‚¬ìš©í•œë‹¤.
 struct ShadowMapData {
 	Texture tex;
 	DXGI_FORMAT format;
@@ -17,37 +17,37 @@ struct ShadowMapData {
 	D3D12_RESOURCE_STATES curState;
 };
 
-// µÑ ÀÌ»óÀÇ ÆÄÀÌÇÁ¶óÀÎÀÌ °øÀ¯ÇÏ´Â ¸®¼Ò½ºµé°ú ±× ÃÊ±âÈ­ ÇÔ¼öµéÀ» µÎ´Â ³×ÀÓ½ºÆäÀÌ½º
+// ë‘˜ ì´ìƒì˜ íŒŒì´í”„ë¼ì¸ì´ ê³µìœ í•˜ëŠ” ë¦¬ì†ŒìŠ¤ë“¤ê³¼ ê·¸ ì´ˆê¸°í™” í•¨ìˆ˜ë“¤ì„ ë‘ëŠ” ë„¤ì„ìŠ¤í˜ì´ìŠ¤
 namespace SharedResources {
 
 namespace ShadowMap {
 
-// SharedResources::ShadowMap::shadowMapData¿¡ Æ¯Á¤ key·Î
-// ÁÖ¾îÁø ÀÎÀÚ·Î »ı¼ºµÈ ±×¸²ÀÚ¸ÊÀ» µî·ÏÇÑ´Ù.
-// ÀÌ¹Ì ÇØ´ç key°¡ µî·ÏµÇ¾î ÀÖ´Ù¸é ¿À·ù¸¦ Ãâ·ÂÇÏ°í ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
-// (±×¸²ÀÚ¸Ê »ı¼ºÀÌ ÀÏ¾î³ªÁö ¾Ê´Â´Ù.)
-// format ÀÎÀÚ´Â depth formatÀÌ¾î¾ß ÇÑ´Ù. ex) DXGI_FORMAT_D32_FLOAT
+// SharedResources::ShadowMap::shadowMapDataì— íŠ¹ì • keyë¡œ
+// ì£¼ì–´ì§„ ì¸ìë¡œ ìƒì„±ëœ ê·¸ë¦¼ìë§µì„ ë“±ë¡í•œë‹¤.
+// ì´ë¯¸ í•´ë‹¹ keyê°€ ë“±ë¡ë˜ì–´ ìˆë‹¤ë©´ ì˜¤ë¥˜ë¥¼ ì¶œë ¥í•˜ê³  ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
+// (ê·¸ë¦¼ìë§µ ìƒì„±ì´ ì¼ì–´ë‚˜ì§€ ì•ŠëŠ”ë‹¤.)
+// format ì¸ìëŠ” depth formatì´ì–´ì•¼ í•œë‹¤. ex) DXGI_FORMAT_D32_FLOAT
 void addShadowMap( const std::string& key, ID3D12Device* device,
 	DXGI_FORMAT format, u32t width, u32t height,
 	std::size_t roomCnt, DescriptorPool& srvTexPool, DescriptorPool& dsvPool	
 );
 
-// SharedResources::ShadowMap::shadowMapDataÀÇ Æ¯Á¤ key¿¡ ¸ÅÇÎµÈ
-// ±×¸²ÀÚ¸ÊÀ» clearÇÏ´Â ¸í·ÉÀ» ±â·ÏÇÑ´Ù.
-// ¸ÕÀú addShadowMap ÇÔ¼ö¸¦ ÅëÇØ ÇØ´ç keyÀÇ ±×¸²ÀÚ¸ÊÀÌ Ãß°¡µÇ¾î ÀÖ¾î¾ß ÇÑ´Ù.
+// SharedResources::ShadowMap::shadowMapDataì˜ íŠ¹ì • keyì— ë§¤í•‘ëœ
+// ê·¸ë¦¼ìë§µì„ clearí•˜ëŠ” ëª…ë ¹ì„ ê¸°ë¡í•œë‹¤.
+// ë¨¼ì € addShadowMap í•¨ìˆ˜ë¥¼ í†µí•´ í•´ë‹¹ keyì˜ ê·¸ë¦¼ìë§µì´ ì¶”ê°€ë˜ì–´ ìˆì–´ì•¼ í•œë‹¤.
 void clearShadowMap(const std::string& key, ID3D12GraphicsCommandList* cmdList);
 
-// ±×¸²ÀÚ¸ÊÀÇ »óÅÂ°¡ ÇöÀç Depth Write°¡ ¾Æ´Ï¶ó¸é Depth Write·Î º¯°æÇÑ´Ù.
+// ê·¸ë¦¼ìë§µì˜ ìƒíƒœê°€ í˜„ì¬ Depth Writeê°€ ì•„ë‹ˆë¼ë©´ Depth Writeë¡œ ë³€ê²½í•œë‹¤.
 void getReadyAsDepthWrite(const std::string& key, ID3D12GraphicsCommandList* cmdList);
-// ±×¸²ÀÚ¸ÊÀÇ »óÅÂ°¡ ÇöÀç Depth Write°¡ ¾Æ´Ï¶ó¸é Depth Write·Î º¯°æÇÑ´Ù.
-// cmdListPool¿¡¼­ ÀÚÃ¼ÀûÀ¸·Î Rendering Slave Å¸ÀÔ ¸í·É ÄÁÅØ½ºÆ® ÇÏ³ª¸¦ ÇÒ´çÇØ ¸í·ÉÀ» ±â·ÏÇÏ°í
-// cmdQ¸¦ ½ÇÇàÇÑ µÚ, ¸í·É ÄÁÅØ½ºÆ®¸¦ fence¿¡ ¿¬°ü½ÃÄÑ³õ´Â´Ù.
+// ê·¸ë¦¼ìë§µì˜ ìƒíƒœê°€ í˜„ì¬ Depth Writeê°€ ì•„ë‹ˆë¼ë©´ Depth Writeë¡œ ë³€ê²½í•œë‹¤.
+// cmdListPoolì—ì„œ ìì²´ì ìœ¼ë¡œ Rendering Slave íƒ€ì… ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ í•˜ë‚˜ë¥¼ í• ë‹¹í•´ ëª…ë ¹ì„ ê¸°ë¡í•˜ê³ 
+// cmdQë¥¼ ì‹¤í–‰í•œ ë’¤, ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë¥¼ fenceì— ì—°ê´€ì‹œì¼œë†“ëŠ”ë‹¤.
 void getReadyAsDepthWrite(const std::string& key, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence);
-// ±×¸²ÀÚ¸ÊÀÇ »óÅÂ°¡ ÇöÀç Shader Resource°¡ ¾Æ´Ï¶ó¸é Shader Resource·Î º¯°æÇÑ´Ù.
+// ê·¸ë¦¼ìë§µì˜ ìƒíƒœê°€ í˜„ì¬ Shader Resourceê°€ ì•„ë‹ˆë¼ë©´ Shader Resourceë¡œ ë³€ê²½í•œë‹¤.
 void getReadyAsShaderResource(const std::string& key, ID3D12GraphicsCommandList* cmdList);
-// ±×¸²ÀÚ¸ÊÀÇ »óÅÂ°¡ ÇöÀç Shader Resource°¡ ¾Æ´Ï¶ó¸é Shader Resource·Î º¯°æÇÑ´Ù.
-// cmdListPool¿¡¼­ ÀÚÃ¼ÀûÀ¸·Î Rendering Slave Å¸ÀÔ ¸í·É ÄÁÅØ½ºÆ® ÇÏ³ª¸¦ ÇÒ´çÇØ ¸í·ÉÀ» ±â·ÏÇÏ°í
-// cmdQ¸¦ ½ÇÇàÇÑ µÚ, ¸í·É ÄÁÅØ½ºÆ®¸¦ fence¿¡ ¿¬°ü½ÃÄÑ³õ´Â´Ù.
+// ê·¸ë¦¼ìë§µì˜ ìƒíƒœê°€ í˜„ì¬ Shader Resourceê°€ ì•„ë‹ˆë¼ë©´ Shader Resourceë¡œ ë³€ê²½í•œë‹¤.
+// cmdListPoolì—ì„œ ìì²´ì ìœ¼ë¡œ Rendering Slave íƒ€ì… ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ í•˜ë‚˜ë¥¼ í• ë‹¹í•´ ëª…ë ¹ì„ ê¸°ë¡í•˜ê³ 
+// cmdQë¥¼ ì‹¤í–‰í•œ ë’¤, ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë¥¼ fenceì— ì—°ê´€ì‹œì¼œë†“ëŠ”ë‹¤.
 void getReadyAsShaderResource(const std::string& key, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence);
 
 extern std::unordered_map<std::string, ShadowMapData> shadowMapData;

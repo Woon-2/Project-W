@@ -1,4 +1,4 @@
-#include "pch.hpp"
+ï»¿#include "pch.hpp"
 #include "onlineGame.hpp"
 #include "../errorHandling.hpp"
 #include "../timer.hpp"
@@ -9,12 +9,12 @@ extern RECT gClientRect;
 namespace Online {
 
 Game::Game() {
-	// ½º·¹µå Ç® ÃÊ±âÈ­
-	std::cout << "----------[°ÔÀÓ ÃÊ±âÈ­ ¼³Á¤]----------\n";
-	std::cout << "½º·¹µå Ç®¿¡ »ç¿ëÇÒ ½º·¹µå ¼ö¸¦ ÀÔ·ÂÇØ ÁÖ¼¼¿ä.\n";
-	std::cout << "ÄÄÇ»ÅÍÀÇ ¹°¸® ÄÚ¾î ¼ö: " << numberOfPhysicalCores() << '\n';
-	std::cout << "»ç¿ë °¡´ÉÇÑ ¹°¸® ÄÚ¾î ¼ö: " << numberOfPhysicalCores() - 1 << " (1°³ - ¸ŞÀÎ ½º·¹µå)\n";
-	std::cout << "½º·¹µå ¼ö: ";
+	// ìŠ¤ë ˆë“œ í’€ ì´ˆê¸°í™”
+	std::cout << "----------[ê²Œì„ ì´ˆê¸°í™” ì„¤ì •]----------\n";
+	std::cout << "ìŠ¤ë ˆë“œ í’€ì— ì‚¬ìš©í•  ìŠ¤ë ˆë“œ ìˆ˜ë¥¼ ì…ë ¥í•´ ì£¼ì„¸ìš”.\n";
+	std::cout << "ì»´í“¨í„°ì˜ ë¬¼ë¦¬ ì½”ì–´ ìˆ˜: " << numberOfPhysicalCores() << '\n';
+	std::cout << "ì‚¬ìš© ê°€ëŠ¥í•œ ë¬¼ë¦¬ ì½”ì–´ ìˆ˜: " << numberOfPhysicalCores() - 1 << " (1ê°œ - ë©”ì¸ ìŠ¤ë ˆë“œ)\n";
+	std::cout << "ìŠ¤ë ˆë“œ ìˆ˜: ";
 
 	std::size_t threadCnt{ 4u };
 	std::cout << threadCnt << '\n';
@@ -22,7 +22,7 @@ Game::Game() {
 
 	threadPool_.run(threadCnt);
 
-	// GFX °´Ã¼ ÃÊ±âÈ­
+	// GFX ê°ì²´ ì´ˆê¸°í™”
 	gfx_.setupDXGI(D3D_FEATURE_LEVEL_12_1);
 	gfx_.init();
 	gfx_.createSwapChain();
@@ -55,56 +55,56 @@ void Game::setupStage() {
 	);
 }
 
-// °ÔÀÓÀÇ ¾÷µ¥ÀÌÆ®´Â ´ÙÀ½ ¼ø¼­´ë·Î ÀÌ·ç¾îÁø´Ù.
-// ÀÔ·Â Ã³¸®
-// ³×Æ®¿öÅ© ÆĞÅ¶ Ã³¸®
-// ÀÌº¥Æ® Ã³¸®
-// ¹°¸® ¾÷µ¥ÀÌÆ® ·çÆ¾
-// °´Ã¼º° ¾÷µ¥ÀÌÆ® ·çÆ¾
-// ¾Ö´Ï¸ŞÀÌ¼Ç ¾÷µ¥ÀÌÆ®
+// ê²Œì„ì˜ ì—…ë°ì´íŠ¸ëŠ” ë‹¤ìŒ ìˆœì„œëŒ€ë¡œ ì´ë£¨ì–´ì§„ë‹¤.
+// ì…ë ¥ ì²˜ë¦¬
+// ë„¤íŠ¸ì›Œí¬ íŒ¨í‚· ì²˜ë¦¬
+// ì´ë²¤íŠ¸ ì²˜ë¦¬
+// ë¬¼ë¦¬ ì—…ë°ì´íŠ¸ ë£¨í‹´
+// ê°ì²´ë³„ ì—…ë°ì´íŠ¸ ë£¨í‹´
+// ì• ë‹ˆë©”ì´ì…˜ ì—…ë°ì´íŠ¸
 void Game::update(Milliseconds deltaTime) {
 	auto lock = std::lock_guard(objectsMtx_);
-	// Æò°¡ ¹°¸®·® ÃÊ±âÈ­
+	// í‰ê°€ ë¬¼ë¦¬ëŸ‰ ì´ˆê¸°í™”
 	player_->physicState().evVelocity = mu::Vec3();
 	player_->physicState().evOmega = mu::Vec3();
 
-	// ÀÔ·Â Ã³¸®
+	// ì…ë ¥ ì²˜ë¦¬
 	processInput(deltaTime);
 
-	// Æò°¡ ¹°¸®·® °»½Å
+	// í‰ê°€ ë¬¼ë¦¬ëŸ‰ ê°±ì‹ 
 	player_->physicState().evVelocity += player_->physicState().velocity;
 	player_->physicState().evOmega += player_->physicState().omega;
 
-	// ³×Æ®¿öÅ© ÆĞÅ¶ Ã³¸®
-	// ¼­¹ö·ÎºÎÅÍ ¹ŞÀº ¸Ş½ÃÁö Ã³¸®
+	// ë„¤íŠ¸ì›Œí¬ íŒ¨í‚· ì²˜ë¦¬
+	// ì„œë²„ë¡œë¶€í„° ë°›ì€ ë©”ì‹œì§€ ì²˜ë¦¬
 	const auto bulkSize = 100u;
 	auto messages = std::vector<Message>(bulkSize);
 
 	auto size = 10; // messageQueue.try_dequeue_bulk(messages.data(), bulkSize);
 
-	// ³²Àº ¸Ş½ÃÁö°¡ ÀÖÀ¸¸é ¸ğµÎ ²¨³»±â
+	// ë‚¨ì€ ë©”ì‹œì§€ê°€ ìˆìœ¼ë©´ ëª¨ë‘ êº¼ë‚´ê¸°
 	Message msg;
 	/*while (messageQueue.try_dequeue(msg)) {
 		messages.push_back(msg);
 		++size;
 	}*/
 
-	// ¹°¸® ¾÷µ¥ÀÌÆ® ·çÆ¾
+	// ë¬¼ë¦¬ ì—…ë°ì´íŠ¸ ë£¨í‹´
 	//
-	// ¹°¸®·® °»½ÅÀº °ÔÀÓ °»½Å°ú ´Ù¸£°Ô °íÁ¤ ÁÖ±â·Î ¼öÇàÇÑ´Ù.
-	// ÀÌ¸¦ ÅëÇØ ³Ê¹« À¯µ¿ÀûÀÎ delta timeÀ¸·Î ÀÎÇÑ ½Ã¹Ä·¹ÀÌ¼ÇÀÇ ºÒ¾ÈÁ¤¼º°ú
-	// ¹°¸® ¾÷µ¥ÀÌÆ®ÀÇ ¼º´ÉÀû ºñ¿ë ¹®Á¦¸¦ ÇØ°áÇÑ´Ù.
-	// ¹°¸® ¾÷µ¥ÀÌÆ® ÁÖ±â´Â physicUpdateInterval_ º¯¼ö¿¡ ÀúÀåµÈ´Ù.
+	// ë¬¼ë¦¬ëŸ‰ ê°±ì‹ ì€ ê²Œì„ ê°±ì‹ ê³¼ ë‹¤ë¥´ê²Œ ê³ ì • ì£¼ê¸°ë¡œ ìˆ˜í–‰í•œë‹¤.
+	// ì´ë¥¼ í†µí•´ ë„ˆë¬´ ìœ ë™ì ì¸ delta timeìœ¼ë¡œ ì¸í•œ ì‹œë®¬ë ˆì´ì…˜ì˜ ë¶ˆì•ˆì •ì„±ê³¼
+	// ë¬¼ë¦¬ ì—…ë°ì´íŠ¸ì˜ ì„±ëŠ¥ì  ë¹„ìš© ë¬¸ì œë¥¼ í•´ê²°í•œë‹¤.
+	// ë¬¼ë¦¬ ì—…ë°ì´íŠ¸ ì£¼ê¸°ëŠ” physicUpdateInterval_ ë³€ìˆ˜ì— ì €ì¥ëœë‹¤.
 	//
-	// update ÇÔ¼ö¿¡¼­ physicUpdateAcc_ º¯¼ö¸¦ ÅëÇØ
-	// ¹°¸®·® °»½ÅÀÇ ÁÖ±â°¡ µ¹¾Æ¿Ô´ÂÁö ÆÇ´ÜÇÏ°í
-	// ÁÖ±â°¡ µÇ¾ú´Ù¸é ¹°¸®·® °»½ÅÀ» ¼öÇàÇÑ´Ù.
+	// update í•¨ìˆ˜ì—ì„œ physicUpdateAcc_ ë³€ìˆ˜ë¥¼ í†µí•´
+	// ë¬¼ë¦¬ëŸ‰ ê°±ì‹ ì˜ ì£¼ê¸°ê°€ ëŒì•„ì™”ëŠ”ì§€ íŒë‹¨í•˜ê³ 
+	// ì£¼ê¸°ê°€ ë˜ì—ˆë‹¤ë©´ ë¬¼ë¦¬ëŸ‰ ê°±ì‹ ì„ ìˆ˜í–‰í•œë‹¤.
 	physicUpdateAcc_ += deltaTime;
 
 	if ( physicUpdateAcc_ >= physicUpdateInterval ) {
-		// ¹°¸® ½Ã¹Ä·¹ÀÌ¼ÇÀ» À§ÇØ
-		// ¹°¸® ½Ã¹Ä·¹ÀÌ¼ÇÀÇ ´ë»óÀÌ µÇ´Â °´Ã¼µéÀ»
-		// ÇÑ °÷¿¡ ¸ğ¾Æ PhysicSystem °´Ã¼¿¡ Àü´ŞÇÑ´Ù.
+		// ë¬¼ë¦¬ ì‹œë®¬ë ˆì´ì…˜ì„ ìœ„í•´
+		// ë¬¼ë¦¬ ì‹œë®¬ë ˆì´ì…˜ì˜ ëŒ€ìƒì´ ë˜ëŠ” ê°ì²´ë“¤ì„
+		// í•œ ê³³ì— ëª¨ì•„ PhysicSystem ê°ì²´ì— ì „ë‹¬í•œë‹¤.
 		static std::vector<Object*> allObjects{};
 		allObjects.push_back(player_.get());
 
@@ -121,19 +121,19 @@ void Game::update(Milliseconds deltaTime) {
 		sendMoveStatePacket();
 	}
 
-	// °´Ã¼º° ¾÷µ¥ÀÌÆ® ·çÆ¾
+	// ê°ì²´ë³„ ì—…ë°ì´íŠ¸ ë£¨í‹´
 	// 
-	// ¹°¸®·® °»½Å ÁÖ±â¿¡ ´ëÇØ,
-	// ¸¶Áö¸· ¹°¸®·® °»½ÅÀ¸·ÎºÎÅÍ ¾ó¸¶³ª Áö³µ´ÂÁöÀÇ ºñÀ²·Î
-	// RenderState °»½ÅÀ» À§ÇÑ PhysicState º¸°£ °è¼ö¸¦ ¼³Á¤ÇÑ´Ù.
-	// °ÔÀÓ °´Ã¼ÀÇ update ÇÔ¼ö¿¡ Àü´ŞµÈ´Ù.
+	// ë¬¼ë¦¬ëŸ‰ ê°±ì‹  ì£¼ê¸°ì— ëŒ€í•´,
+	// ë§ˆì§€ë§‰ ë¬¼ë¦¬ëŸ‰ ê°±ì‹ ìœ¼ë¡œë¶€í„° ì–¼ë§ˆë‚˜ ì§€ë‚¬ëŠ”ì§€ì˜ ë¹„ìœ¨ë¡œ
+	// RenderState ê°±ì‹ ì„ ìœ„í•œ PhysicState ë³´ê°„ ê³„ìˆ˜ë¥¼ ì„¤ì •í•œë‹¤.
+	// ê²Œì„ ê°ì²´ì˜ update í•¨ìˆ˜ì— ì „ë‹¬ëœë‹¤.
 	const auto tPhysicInterpolation = physicUpdateAcc_ / physicUpdateInterval;
 
 	for (auto& cube : cubes_) {
 		cube.update(deltaTime, tPhysicInterpolation);
 	}
 
-	// °ÔÀÓ °´Ã¼µé °»½Å
+	// ê²Œì„ ê°ì²´ë“¤ ê°±ì‹ 
 	player_->update(deltaTime, tPhysicInterpolation );
 	for ( auto& obj : otherPlayers_ ) {
 		if( obj != player_ ) {
@@ -165,13 +165,13 @@ void Game::update(Milliseconds deltaTime) {
 
 	crosshair_.update(deltaTime);
 
-	// ¾Ö´Ï¸ŞÀÌ¼Ç ¾÷µ¥ÀÌÆ®
+	// ì• ë‹ˆë©”ì´ì…˜ ì—…ë°ì´íŠ¸
 	slimeSprite_.update( deltaTime );
 
 	for (auto& muzzleFlash : muzzleFlashes_) {
 		auto pOwner = muzzleFlash.pOwner;
-		// ÃÑ±¸ È­¿° ½ºÇÁ¶óÀÌÆ® ¾Ö´Ï¸ŞÀÌ¼Ç
-		// ÇÃ·¹ÀÌ¾î¿¡ ´ëÇØ¼­ ¿ÀÇÁ¼Â ÁöÁ¤
+		// ì´êµ¬ í™”ì—¼ ìŠ¤í”„ë¼ì´íŠ¸ ì• ë‹ˆë©”ì´ì…˜
+		// í”Œë ˆì´ì–´ì— ëŒ€í•´ì„œ ì˜¤í”„ì…‹ ì§€ì •
 		muzzleFlash.anim.setPos( pOwner->pos()
 			+ pOwner->up() * 1.4f
 			+ pOwner->forward() * 0.85f
@@ -194,7 +194,7 @@ void Game::update(Milliseconds deltaTime) {
 
 	animSystem_.update(0.016s);
 
-	// UI µ¿±âÈ­
+	// UI ë™ê¸°í™”
 	playerHpUI_.setHp(player_->hp());
 
 	for (auto& [id, ui] : otherPlayerHpUIs_) {
@@ -268,7 +268,7 @@ void Game::removePlayer( i32t playerId ) {
 	);
 
 	DISPLAY_ERROR_STR( itPlayer != otherPlayers_.end(),
-		"[Game Error] Game::removePlayer: Á¦°ÅÇÏ·Á´Â ÇÃ·¹ÀÌ¾î°¡ Á¸ÀçÇÏÁö ¾Ê½À´Ï´Ù.\n",
+		"[Game Error] Game::removePlayer: ì œê±°í•˜ë ¤ëŠ” í”Œë ˆì´ì–´ê°€ ì¡´ì¬í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.\n",
 		false
 	);
 
@@ -283,21 +283,21 @@ void Game::removePlayer( i32t playerId ) {
 	otherPlayerHpUIs_.erase( playerId );
 }
 
-// À©µµ¿ì ÇÁ·Î½ÃÀú¿¡¼­ Æ¯Á¤ÇÑ ¸Ş½ÃÁö Ã³¸®¸¦ À§ÀÓ¹Ş´Â´Ù.
+// ìœˆë„ìš° í”„ë¡œì‹œì €ì—ì„œ íŠ¹ì •í•œ ë©”ì‹œì§€ ì²˜ë¦¬ë¥¼ ìœ„ì„ë°›ëŠ”ë‹¤.
 LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	switch (msg) {
-		// WM_INPUT ¸Ş½ÃÁö
-		// ¸¶¿ì½º ¿òÁ÷ÀÓÀÇ °æ¿ì WM_MOUSEMOVE ¸Ş½ÃÁö ´ë½Å ÀÌ ¸Ş½ÃÁö·Î Ã³¸®ÇÏ´Â °ÍÀÌ
-		// Á¤È®ÇÏ°í ¾ÈÁ¤ÀûÀÎ Ã³¸®°¡ °¡´ÉÇÏ´Ù.
-		// À©µµ¿ì °æ°è·ÎºÎÅÍ ¿µÇâÀ» ¹ŞÁö ¾Ê°í, °¡»ó Ä¿¼­ ¼Óµµ/°¡¼Óµµ ¼³Á¤À» ¹«½ÃÇÏ¸ç,
-		// Alt-Tab / Ã¢ ÀÌµ¿ ÈÄ¿¡µµ »óÅÂ º¹±¸°¡ ¸íÈ®ÇÏ´Ù.
-		// (DPI ½ºÄÉÀÏ¸µ È¯°æ¿¡¼­µµ ÀÔ·ÂÀÌ ¿Ö°îµÇÁö ¾Ê´Â´Ù°í ÇÑ´Ù.)
+		// WM_INPUT ë©”ì‹œì§€
+		// ë§ˆìš°ìŠ¤ ì›€ì§ì„ì˜ ê²½ìš° WM_MOUSEMOVE ë©”ì‹œì§€ ëŒ€ì‹  ì´ ë©”ì‹œì§€ë¡œ ì²˜ë¦¬í•˜ëŠ” ê²ƒì´
+		// ì •í™•í•˜ê³  ì•ˆì •ì ì¸ ì²˜ë¦¬ê°€ ê°€ëŠ¥í•˜ë‹¤.
+		// ìœˆë„ìš° ê²½ê³„ë¡œë¶€í„° ì˜í–¥ì„ ë°›ì§€ ì•Šê³ , ê°€ìƒ ì»¤ì„œ ì†ë„/ê°€ì†ë„ ì„¤ì •ì„ ë¬´ì‹œí•˜ë©°,
+		// Alt-Tab / ì°½ ì´ë™ í›„ì—ë„ ìƒíƒœ ë³µêµ¬ê°€ ëª…í™•í•˜ë‹¤.
+		// (DPI ìŠ¤ì¼€ì¼ë§ í™˜ê²½ì—ì„œë„ ì…ë ¥ì´ ì™œê³¡ë˜ì§€ ì•ŠëŠ”ë‹¤ê³  í•œë‹¤.)
 	case WM_INPUT: {
 		static auto sRawInputBuffer = std::vector<std::uint8_t>(256);
 		UINT rawInputSize{};
 		UINT rawInputResult{};
 
-		// ÀÔ·Â ±¸Á¶Ã¼ Å©±â ¼ö½Å
+		// ì…ë ¥ êµ¬ì¡°ì²´ í¬ê¸° ìˆ˜ì‹ 
 		rawInputResult = GetRawInputData(reinterpret_cast<HRAWINPUT>(lParam),
 			RID_INPUT, nullptr, &rawInputSize, sizeof(RAWINPUTHEADER)
 		);
@@ -307,7 +307,7 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 			sRawInputBuffer.resize(rawInputSize);
 		}
 
-		// ÀÔ·Â ±¸Á¶Ã¼ ³»¿ë ¼ö½Å
+		// ì…ë ¥ êµ¬ì¡°ì²´ ë‚´ìš© ìˆ˜ì‹ 
 		rawInputResult = GetRawInputData(reinterpret_cast<HRAWINPUT>(lParam),
 			RID_INPUT, sRawInputBuffer.data(), &rawInputSize, sizeof(RAWINPUTHEADER)
 		);
@@ -315,22 +315,22 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 		auto ri = reinterpret_cast<const RAWINPUT*>(sRawInputBuffer.data());
 		if (ri->header.dwType == RIM_TYPEMOUSE) {
-			// ¸¶¿ì½º¿¡ ´ëÇÑ ÀÔ·Â ³»¿ëÀÌ »ó´ë ÁÂÇ¥¿©¾ß ÇÑ´Ù.
+			// ë§ˆìš°ìŠ¤ì— ëŒ€í•œ ì…ë ¥ ë‚´ìš©ì´ ìƒëŒ€ ì¢Œí‘œì—¬ì•¼ í•œë‹¤.
 			DISPLAY_ERROR_STR(!(ri->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE),
-				"[Input Error] Game::receiveWndMsg: ¸¶¿ì½º ÀÔ·Â ÀåÄ¡°¡ °ÔÀÓ°ú È£È¯µÇÁö ¾Ê½À´Ï´Ù.\n"
-				"RAWMOUSEÀÇ ÇÃ·¡±× Áß MOUSE_MOVE_ABSOLUTE°¡ È°¼ºÈ­µÇ¾îÀÖ½À´Ï´Ù.",
+				"[Input Error] Game::receiveWndMsg: ë§ˆìš°ìŠ¤ ì…ë ¥ ì¥ì¹˜ê°€ ê²Œì„ê³¼ í˜¸í™˜ë˜ì§€ ì•ŠìŠµë‹ˆë‹¤.\n"
+				"RAWMOUSEì˜ í”Œë˜ê·¸ ì¤‘ MOUSE_MOVE_ABSOLUTEê°€ í™œì„±í™”ë˜ì–´ìˆìŠµë‹ˆë‹¤.",
 				true
 			);
 
-			// ¸¶¿ì½º ÀÌµ¿·® ±â·Ï
+			// ë§ˆìš°ìŠ¤ ì´ë™ëŸ‰ ê¸°ë¡
 			mouseDeltaX_ += ri->data.mouse.lLastX;
 			mouseDeltaY_ += ri->data.mouse.lLastY;
 		}
 		return 0;
 	}
 
-	// Alt+Tab µîÀ¸·Î À©µµ¿ì°¡ Æ÷Ä¿½º¸¦ ÀÒ¾ú´Ù°¡ µÇÃ£Àº °æ¿ì,
-	// Ä¿¼­¿Í °ü·ÃµÈ ÇÃ·¡±×µéÀ» ÀĞ¾î Ä¿¼­ Ä¸Ã³, Ä¿¼­ ¼û±â±â µîÀ» ´Ù½Ã ¼öÇàÇÑ´Ù.
+	// Alt+Tab ë“±ìœ¼ë¡œ ìœˆë„ìš°ê°€ í¬ì»¤ìŠ¤ë¥¼ ìƒì—ˆë‹¤ê°€ ë˜ì°¾ì€ ê²½ìš°,
+	// ì»¤ì„œì™€ ê´€ë ¨ëœ í”Œë˜ê·¸ë“¤ì„ ì½ì–´ ì»¤ì„œ ìº¡ì²˜, ì»¤ì„œ ìˆ¨ê¸°ê¸° ë“±ì„ ë‹¤ì‹œ ìˆ˜í–‰í•œë‹¤.
 	case WM_SETFOCUS:
 		if (cursorCaptureEnabled_) {
 			captureCursor();
@@ -340,9 +340,9 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		}
 		break;
 
-	// Alt+Tab µîÀ¸·Î À©µµ¿ì°¡ Æ÷Ä¿½º¸¦ ÀÒÀº °æ¿ì
-	// Ä¿¼­¿Í °ü·ÃµÈ ÇÃ·¡±×µéÀ» ÀĞ¾î Ä¿¼­ Ä¸Ã³ ÇØÁ¦, Ä¿¼­ º¸ÀÌ±â µîÀ» ¼öÇàÇÑ´Ù.
-	// ´Ù¸¥ À©µµ¿ì·Î ÀüÈ¯µÇ¾ú´Âµ¥ Ä¿¼­°¡ º¸ÀÌÁö ¾Ê°Å³ª ¾È ¿òÁ÷¿©Áö¸é °ï¶õÇÒ °ÍÀÌ´Ù.
+	// Alt+Tab ë“±ìœ¼ë¡œ ìœˆë„ìš°ê°€ í¬ì»¤ìŠ¤ë¥¼ ìƒì€ ê²½ìš°
+	// ì»¤ì„œì™€ ê´€ë ¨ëœ í”Œë˜ê·¸ë“¤ì„ ì½ì–´ ì»¤ì„œ ìº¡ì²˜ í•´ì œ, ì»¤ì„œ ë³´ì´ê¸° ë“±ì„ ìˆ˜í–‰í•œë‹¤.
+	// ë‹¤ë¥¸ ìœˆë„ìš°ë¡œ ì „í™˜ë˜ì—ˆëŠ”ë° ì»¤ì„œê°€ ë³´ì´ì§€ ì•Šê±°ë‚˜ ì•ˆ ì›€ì§ì—¬ì§€ë©´ ê³¤ë€í•  ê²ƒì´ë‹¤.
 	case WM_KILLFOCUS:
 		if (cursorCaptureEnabled_) {
 			releaseCursor();
@@ -430,7 +430,7 @@ void Game::processInput(Milliseconds deltaTime) {
 	keyboardStatePrev_ = keyboardStateCurr_;
 	DISPLAY_ERROR_GLE( GetKeyboardState(keyboardStateCurr_.data()), false );
 
-	// ÇöÀç ÇÃ·¹ÀÌ¾î°¡ ·Îºñ¿¡ ÀÖ³Ä °ÔÀÓÁßÀÌ³Ä¿¡ µû¶ó È°¼ºÈ­µÇ´Â ÀÔ·ÂÀÌ ´Ù¸£´Ù.
+	// í˜„ì¬ í”Œë ˆì´ì–´ê°€ ë¡œë¹„ì— ìˆëƒ ê²Œì„ì¤‘ì´ëƒì— ë”°ë¼ í™œì„±í™”ë˜ëŠ” ì…ë ¥ì´ ë‹¤ë¥´ë‹¤.
 	if (inRoom_) {
 		processInputGame(deltaTime);
 	}
@@ -438,8 +438,8 @@ void Game::processInput(Milliseconds deltaTime) {
 		processInputLobby(deltaTime);
 	}
 
-	// ·Îºñ/°ÔÀÓ °øÅë ÀÔ·Â Ã³¸®
-	// Enter Å°¸¦ ´©¸£¸é Ä¿¼­ Ä¸Ã³ ÇÃ·¡±×¸¦ È°¼ºÈ­/ºñÈ°¼ºÈ­ÇÑ´Ù.
+	// ë¡œë¹„/ê²Œì„ ê³µí†µ ì…ë ¥ ì²˜ë¦¬
+	// Enter í‚¤ë¥¼ ëˆ„ë¥´ë©´ ì»¤ì„œ ìº¡ì²˜ í”Œë˜ê·¸ë¥¼ í™œì„±í™”/ë¹„í™œì„±í™”í•œë‹¤.
 	if ( (keyboardStateCurr_[VK_RETURN] & 0x80) && !(keyboardStatePrev_[VK_RETURN] & 0x80) ) {
 		cursorCaptureEnabled_ = !cursorCaptureEnabled_;
 		if (cursorCaptureEnabled_) {
@@ -450,7 +450,7 @@ void Game::processInput(Milliseconds deltaTime) {
 		}
 	}
 
-	// Space Å°¸¦ ´©¸£¸é Ä¿¼­ º¸ÀÌ±â ÇÃ·¡±×¸¦ È°¼ºÈ­/ºñÈ°¼ºÈ­ÇÑ´Ù.
+	// Space í‚¤ë¥¼ ëˆ„ë¥´ë©´ ì»¤ì„œ ë³´ì´ê¸° í”Œë˜ê·¸ë¥¼ í™œì„±í™”/ë¹„í™œì„±í™”í•œë‹¤.
 	if ( (keyboardStateCurr_[VK_SPACE] & 0x80) && !(keyboardStatePrev_[VK_SPACE] & 0x80) ) {
 		cursorShowEnabled_ = !cursorShowEnabled_;
 		if (cursorShowEnabled_) {
@@ -462,8 +462,8 @@ void Game::processInput(Milliseconds deltaTime) {
 	}
 }
 
-// ¹æ¿¡ µé¾î°¡Áö ¾ÊÀº »óÅÂÀÏ ¶§
-// ¹æ ÀÔÀå Å° Ã³¸®
+// ë°©ì— ë“¤ì–´ê°€ì§€ ì•Šì€ ìƒíƒœì¼ ë•Œ
+// ë°© ì…ì¥ í‚¤ ì²˜ë¦¬
 void Game::processInputLobby(Milliseconds deltaTime) {
 	if (keyboardStateCurr_['1'] & 0x80) {
 		sendEnterRoomPacket(1);
@@ -484,9 +484,9 @@ void Game::processInputGame(Milliseconds deltaTime) {
 	const Seconds zeroToMax = 0.5s;
 	const Seconds maxToZero = 0.2s;
 
-	// ¼­·Î »ó¼âµÇ´Â ÀÔ·ÂµéÀ» °¨¾ÈÇØ¼­,
-	// ÇöÀç ÀÌµ¿ ÀÔ·ÂÀÌ ÀÖÀ¸¸é ÇÃ·¹ÀÌ¾î °´Ã¼ÀÇ ¼Óµµ¸¦ º¯È­½ÃÅ²´Ù.
-	// + ÇÃ·¹ÀÌ¾î°¡ Á×À¸¸é ¿òÁ÷ÀÌÁö ¾Ê´Â´Ù.
+	// ì„œë¡œ ìƒì‡„ë˜ëŠ” ì…ë ¥ë“¤ì„ ê°ì•ˆí•´ì„œ,
+	// í˜„ì¬ ì´ë™ ì…ë ¥ì´ ìˆìœ¼ë©´ í”Œë ˆì´ì–´ ê°ì²´ì˜ ì†ë„ë¥¼ ë³€í™”ì‹œí‚¨ë‹¤.
+	// + í”Œë ˆì´ì–´ê°€ ì£½ìœ¼ë©´ ì›€ì§ì´ì§€ ì•ŠëŠ”ë‹¤.
 
 	const auto moveXSign = !playerDead_ * ( (keyboardStateCurr_['D'] & 0x80) - (keyboardStateCurr_['A'] & 0x80) );
 	const auto moveZSign = !playerDead_ * ( (keyboardStateCurr_['W'] & 0x80) - (keyboardStateCurr_['S'] & 0x80) );
@@ -495,46 +495,46 @@ void Game::processInputGame(Milliseconds deltaTime) {
 	prevVelocity_ = currVelocity_;
 
 	if (moveXSign || moveZSign) {
-		// 'W'/'S' ÀÔ·ÂÀ¸·Î ÆÇÁ¤µÈ Z ºÎÈ£´Â ÇÃ·¹ÀÌ¾îÀÇ forward º¤ÅÍ,
-		// 'D'/'A' ÀÔ·ÂÀ¸·Î ÆÇÁ¤µÈ X ºÎÈ£´Â ÇÃ·¹ÀÌ¾îÀÇ right º¤ÅÍ¿Í °öÇØ ¼ÓµµÀÇ ¹æÇâÀ» Á¤ÇÑ´Ù.
+		// 'W'/'S' ì…ë ¥ìœ¼ë¡œ íŒì •ëœ Z ë¶€í˜¸ëŠ” í”Œë ˆì´ì–´ì˜ forward ë²¡í„°,
+		// 'D'/'A' ì…ë ¥ìœ¼ë¡œ íŒì •ëœ X ë¶€í˜¸ëŠ” í”Œë ˆì´ì–´ì˜ right ë²¡í„°ì™€ ê³±í•´ ì†ë„ì˜ ë°©í–¥ì„ ì •í•œë‹¤.
 		const auto moveDirection = mu::NVec3(
 			static_cast<float>(moveXSign) * player_->right() + static_cast<float>(moveZSign) * player_->forward()
 		);
 
-		// ÇÃ·¹ÀÌ¾î °´Ã¼ÀÇ ¼Ó·ÂÀ» Áõ°¡½ÃÅ²´Ù.
+		// í”Œë ˆì´ì–´ ê°ì²´ì˜ ì†ë ¥ì„ ì¦ê°€ì‹œí‚¨ë‹¤.
 		const auto moveAmount = Seconds(deltaTime).count() * maxSpeed / zeroToMax.count();
 		player_->physicState().velocity += mu::Vec3(moveDirection) * moveAmount;
 
-		// ÇÃ·¹ÀÌ¾î °´Ã¼ÀÇ ¼Ó·ÂÀÌ ÃÖ´ë ¼Ó·ÂÀ» ³ÑÁö ¸øÇÏ°Ô ÇÑ´Ù.
+		// í”Œë ˆì´ì–´ ê°ì²´ì˜ ì†ë ¥ì´ ìµœëŒ€ ì†ë ¥ì„ ë„˜ì§€ ëª»í•˜ê²Œ í•œë‹¤.
 		if (player_->physicState().velocity.len2() > maxSpeed * maxSpeed) {
 			player_->physicState().velocity *= maxSpeed / player_->physicState().velocity.len();
 		}
 	}
-	// ÀÌµ¿ ÀÔ·ÂÀÌ ¾øÀ¸¸é ÇÃ·¹ÀÌ¾î °´Ã¼ÀÇ ¼Ó·ÂÀ» °¨¼Ò½ÃÅ²´Ù. (¸¶Âû)
-	// ¼Ó·ÂÀÌ moveThresholdº¸´Ù ÀÛ´Ù¸é, ÇÃ·¹ÀÌ¾î °´Ã¼¸¦ ¸ØÃá´Ù.
+	// ì´ë™ ì…ë ¥ì´ ì—†ìœ¼ë©´ í”Œë ˆì´ì–´ ê°ì²´ì˜ ì†ë ¥ì„ ê°ì†Œì‹œí‚¨ë‹¤. (ë§ˆì°°)
+	// ì†ë ¥ì´ moveThresholdë³´ë‹¤ ì‘ë‹¤ë©´, í”Œë ˆì´ì–´ ê°ì²´ë¥¼ ë©ˆì¶˜ë‹¤.
 	else if (player_->physicState().velocity.len2() > moveThreshold * moveThreshold) {
 		const auto moveAmount = Seconds(deltaTime).count() * maxSpeed / maxToZero.count();
 
-		// ¼Ó·Â °¨¼Ò·®ÀÌ ÇöÀç ÇÃ·¹ÀÌ¾îÀÇ ¼Ó·Âº¸´Ù Å©°Ô °è»êµÆ´Ù¸é,
-		// ÇÃ·¹ÀÌ¾îÀÇ ¼Ó·ÂÀ» 0À¸·Î ¸¸µç´Ù.
+		// ì†ë ¥ ê°ì†ŒëŸ‰ì´ í˜„ì¬ í”Œë ˆì´ì–´ì˜ ì†ë ¥ë³´ë‹¤ í¬ê²Œ ê³„ì‚°ëë‹¤ë©´,
+		// í”Œë ˆì´ì–´ì˜ ì†ë ¥ì„ 0ìœ¼ë¡œ ë§Œë“ ë‹¤.
 		if (moveAmount * moveAmount > player_->physicState().velocity.len2()) {
 			player_->physicState().velocity = mu::Vec3();
 		}
-		// ±×·¸Áö ¾Ê´Ù¸é ÇÃ·¹ÀÌ¾î°¡ ¿òÁ÷ÀÌ°í ÀÖ´Â ¹İ´ë ¹æÇâÀÇ ¼Óµµ¸¦ ´õÇØ
-		// ÇÃ·¹ÀÌ¾îÀÇ ¼Ó·ÂÀ» °¨¼Ò½ÃÅ²´Ù.
+		// ê·¸ë ‡ì§€ ì•Šë‹¤ë©´ í”Œë ˆì´ì–´ê°€ ì›€ì§ì´ê³  ìˆëŠ” ë°˜ëŒ€ ë°©í–¥ì˜ ì†ë„ë¥¼ ë”í•´
+		// í”Œë ˆì´ì–´ì˜ ì†ë ¥ì„ ê°ì†Œì‹œí‚¨ë‹¤.
 		else {
 			const auto moveDirection = mu::NVec3(-player_->physicState().velocity);
 			player_->physicState().velocity += mu::Vec3(moveDirection) * moveAmount;
 		}
 	}
-	// ÇÃ·¹ÀÌ¾î °´Ã¼¸¦ ¸ØÃá´Ù.
+	// í”Œë ˆì´ì–´ ê°ì²´ë¥¼ ë©ˆì¶˜ë‹¤.
 	else {
 		player_->physicState().velocity = mu::Vec3();
 	}
 
 	currVelocity_ = player_->physicState().velocity;
 
-	// Ä«¸Ş¶ó 1ÀÎÄª ¸ğµå ¼³Á¤
+	// ì¹´ë©”ë¼ 1ì¸ì¹­ ëª¨ë“œ ì„¤ì •
 	if ( !(keyboardStatePrev_['1'] & 0x80)
 		&& keyboardStateCurr_['1'] & 0x80
 	) {
@@ -543,7 +543,7 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		camera_.setOffsetTargetPivot( mu::Vec3(0.f, 1.6f, 8.f));
 		cameraMode_ = CameraMode::FirstPerson;
 	} 
-	// Ä«¸Ş¶ó 3ÀÎÄª ¸ğµå ¼³Á¤
+	// ì¹´ë©”ë¼ 3ì¸ì¹­ ëª¨ë“œ ì„¤ì •
 	if ( !(keyboardStatePrev_['3'] & 0x80)
 		&& keyboardStateCurr_['3'] & 0x80
 	) {
@@ -553,7 +553,7 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		cameraMode_ = CameraMode::ThirdPerson;
 	}
 
-	// ÃÑ ÀåÀü
+	// ì´ ì¥ì „
 	if ( !playerDead_ && keyboardStateCurr_['R'] & 0x80 ) {
 		/*auto csReloadPacket = Packet{
 			.header = {
@@ -569,7 +569,7 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		serverSession_->send(sendBuffer);*/
 	}
 
-	// ÃÑ ¹ß»ç: ÃÑ±¸ È­¿° ¾Ö´Ï¸ŞÀÌ¼Ç Àç»ı
+	// ì´ ë°œì‚¬: ì´êµ¬ í™”ì—¼ ì• ë‹ˆë©”ì´ì…˜ ì¬ìƒ
 	if ( !playerDead_ && (keyboardStateCurr_[VK_LBUTTON] & 0x80)
 		&& !(keyboardStatePrev_[VK_LBUTTON] & 0x80)
 	) {
@@ -598,9 +598,9 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		serverSession_->send(sendBuffer);*/
 	}
 
-	// ¸¶¿ì½º ¹Î°¨µµ¸¦ ±â¹İÀ¸·Î 1ÀÎÄª Ä«¸Ş¶ó ¸ğµå¿Í 3ÀÎÄª Ä«¸Ş¶ó ¸ğµåÀÏ ¶§
-	// °¢°¢ÀÇ ÇÃ·¹ÀÌ¾î yaw, Ä«¸Ş¶ó pitch¸¦ °è»êÇÑ´Ù.
-	// (pitch¸¦ ÇÃ·¹ÀÌ¾î¿¡ Àû¿ëÇÏ°Ô µÇ¸é, ÇÃ·¹ÀÌ¾î°¡ °í°³¸¦ µé°í ³»¸®´Â °Ô ¾Æ´Ï¶ó ±¼·¯¹ö¸°´Ù.)
+	// ë§ˆìš°ìŠ¤ ë¯¼ê°ë„ë¥¼ ê¸°ë°˜ìœ¼ë¡œ 1ì¸ì¹­ ì¹´ë©”ë¼ ëª¨ë“œì™€ 3ì¸ì¹­ ì¹´ë©”ë¼ ëª¨ë“œì¼ ë•Œ
+	// ê°ê°ì˜ í”Œë ˆì´ì–´ yaw, ì¹´ë©”ë¼ pitchë¥¼ ê³„ì‚°í•œë‹¤.
+	// (pitchë¥¼ í”Œë ˆì´ì–´ì— ì ìš©í•˜ê²Œ ë˜ë©´, í”Œë ˆì´ì–´ê°€ ê³ ê°œë¥¼ ë“¤ê³  ë‚´ë¦¬ëŠ” ê²Œ ì•„ë‹ˆë¼ êµ´ëŸ¬ë²„ë¦°ë‹¤.)
 	const auto mouseSensitivity = mu::pi * 2.f;
 
 	switch (cameraMode_) {
@@ -661,13 +661,13 @@ void Game::processInputGame(Milliseconds deltaTime) {
 	}
 }
 
-// Ä¿¼­°¡ Å¬¶óÀÌ¾ğÆ® ¿µ¿ª ¹Ù±ùÀ¸·Î ³ª°¡Áö ¸øÇÏµµ·Ï ÇÑ´Ù.
-// ÇÑ¹ø ¼³Á¤ÇØ³õÀ¸¸é, releaseCursor¸¦ È£ÃâÇÏ±â Àü±îÁö Ä¿¼­´Â °è¼Ó Å¬¶óÀÌ¾ğÆ® ¿µ¿ª¿¡ °¤ÇôÀÖ´Â´Ù.
+// ì»¤ì„œê°€ í´ë¼ì´ì–¸íŠ¸ ì˜ì—­ ë°”ê¹¥ìœ¼ë¡œ ë‚˜ê°€ì§€ ëª»í•˜ë„ë¡ í•œë‹¤.
+// í•œë²ˆ ì„¤ì •í•´ë†“ìœ¼ë©´, releaseCursorë¥¼ í˜¸ì¶œí•˜ê¸° ì „ê¹Œì§€ ì»¤ì„œëŠ” ê³„ì† í´ë¼ì´ì–¸íŠ¸ ì˜ì—­ì— ê°‡í˜€ìˆëŠ”ë‹¤.
 void Game::captureCursor() {
     auto ul = POINT{ gClientRect.left, gClientRect.top };
     auto lr = POINT{ gClientRect.right, gClientRect.bottom };
 
-    // Å¬¶óÀÌ¾ğÆ®ÀÇ ¿Ü°û ÁÂÇ¥¸¦ À©µµ¿ì ÁÂÇ¥·Î º¯È¯
+    // í´ë¼ì´ì–¸íŠ¸ì˜ ì™¸ê³½ ì¢Œí‘œë¥¼ ìœˆë„ìš° ì¢Œí‘œë¡œ ë³€í™˜
     MapWindowPoints(ghWnd, nullptr, &ul, 1);
     MapWindowPoints(ghWnd, nullptr, &lr, 1);
 
@@ -676,21 +676,21 @@ void Game::captureCursor() {
     ClipCursor(&clipRect);
 }
 
-// Ä¿¼­ Ä¸Ã³°¡ ¼³Á¤µÇ¾îÀÖ´Ù¸é ÇØÁ¦ÇÑ´Ù.
-// captureCursor·Î È°¼ºÈ­µÈ Ä¿¼­ Ä¸Ã³¸¦ ÇØÁ¦ÇÏ´Â ¿ªÇÒÀ» ÇÑ´Ù.
+// ì»¤ì„œ ìº¡ì²˜ê°€ ì„¤ì •ë˜ì–´ìˆë‹¤ë©´ í•´ì œí•œë‹¤.
+// captureCursorë¡œ í™œì„±í™”ëœ ì»¤ì„œ ìº¡ì²˜ë¥¼ í•´ì œí•˜ëŠ” ì—­í• ì„ í•œë‹¤.
 void Game::releaseCursor() {
 	ClipCursor(nullptr);
 }
 
 void Game::hideCursor() {
-	// ShowCursor()´Â ³»ºÎÀûÀ¸·Î display counter¸¦ Áõ°¡/°¨¼Ò½ÃÅ°´Â ±¸Á¶¶ó¼­
-	// ¹İº¹ È£ÃâÇØ Á¤È®È÷ ¼û±â°Å³ª Ç¥½ÃÇØ¾ß ÇÑ´Ù.
+	// ShowCursor()ëŠ” ë‚´ë¶€ì ìœ¼ë¡œ display counterë¥¼ ì¦ê°€/ê°ì†Œì‹œí‚¤ëŠ” êµ¬ì¡°ë¼ì„œ
+	// ë°˜ë³µ í˜¸ì¶œí•´ ì •í™•íˆ ìˆ¨ê¸°ê±°ë‚˜ í‘œì‹œí•´ì•¼ í•œë‹¤.
 	while (ShowCursor(false) >= 0) {}
 }
 
 void Game::showCursor() {
-	// ShowCursor()´Â ³»ºÎÀûÀ¸·Î display counter¸¦ Áõ°¡/°¨¼Ò½ÃÅ°´Â ±¸Á¶¶ó¼­
-	// ¹İº¹ È£ÃâÇØ Á¤È®È÷ ¼û±â°Å³ª Ç¥½ÃÇØ¾ß ÇÑ´Ù.
+	// ShowCursor()ëŠ” ë‚´ë¶€ì ìœ¼ë¡œ display counterë¥¼ ì¦ê°€/ê°ì†Œì‹œí‚¤ëŠ” êµ¬ì¡°ë¼ì„œ
+	// ë°˜ë³µ í˜¸ì¶œí•´ ì •í™•íˆ ìˆ¨ê¸°ê±°ë‚˜ í‘œì‹œí•´ì•¼ í•œë‹¤.
 	while (ShowCursor(true) < 0) {}
 }
 

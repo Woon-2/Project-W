@@ -1,4 +1,4 @@
-#ifndef RECV_BUFFER_HPP
+ï»¿#ifndef RECV_BUFFER_HPP
 #define RECV_BUFFER_HPP
 
 #include "pch.hpp"
@@ -15,12 +15,12 @@ public:
 
 	void clean( ) {
 		if ( dataSize( ) == 0 ) {
-			// ÀÐ±â, ¾²±â Ä¿¼­°¡ µ¿ÀÏÇÑ À§Ä¡¶ó¸é, µÑ ´Ù ÃÊ±âÈ­
+			// ì½ê¸°, ì“°ê¸° ì»¤ì„œê°€ ë™ì¼í•œ ìœ„ì¹˜ë¼ë©´, ë‘˜ ë‹¤ ì´ˆê¸°í™”
 			readPos_ = 0;
 			writePos_ = 0;
 		}
 		else {
-			// ¿©À¯ °ø°£ÀÌ ¹öÆÛ 1°³ Å©±â ¹Ì¸¸ÀÏ °æ¿ì, µ¥ÀÌÅÍ¸¦ ¾ÕÀ¸·Î ´ç±è
+			// ì—¬ìœ  ê³µê°„ì´ ë²„í¼ 1ê°œ í¬ê¸° ë¯¸ë§Œì¼ ê²½ìš°, ë°ì´í„°ë¥¼ ì•žìœ¼ë¡œ ë‹¹ê¹€
 			if ( freeSize( ) < bufferSize_ ) {
 				::memcpy( &buffer_[ 0 ], &buffer_[ readPos_ ], dataSize( ) );
 				readPos_ = 0;
@@ -64,9 +64,9 @@ public:
 	}
 
 private:
-	int32 capacity_;	// clean ÇÔ¼öÀÇ Ã¹ ¹øÂ° if ¹®¿¡ °É¸± È®·üÀ» ´Ã¸®±â À§ÇØ ¹öÆÛ Å©±â¸¦ bufferSize_ º¸´Ù Å©°Ô ÀâÀ½
-						// ½ÇÁ¦ ¹öÆÛ Å©±â
-	int32 bufferSize_;	// ´ÜÀÏ ¹öÆÛ¿¡ ¾µ ¼ö ÀÖ´Â ÃÖ´ë Å©±â
+	int32 capacity_;	// clean í•¨ìˆ˜ì˜ ì²« ë²ˆì§¸ if ë¬¸ì— ê±¸ë¦´ í™•ë¥ ì„ ëŠ˜ë¦¬ê¸° ìœ„í•´ ë²„í¼ í¬ê¸°ë¥¼ bufferSize_ ë³´ë‹¤ í¬ê²Œ ìž¡ìŒ
+						// ì‹¤ì œ ë²„í¼ í¬ê¸°
+	int32 bufferSize_;	// ë‹¨ì¼ ë²„í¼ì— ì“¸ ìˆ˜ ìžˆëŠ” ìµœëŒ€ í¬ê¸°
 	int32 readPos_;
 	int32 writePos_;
 	std::vector<uint8> buffer_;

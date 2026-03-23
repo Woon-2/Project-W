@@ -1,4 +1,4 @@
-#ifndef __pbrPipeline_HPP
+ï»¿#ifndef __pbrPipeline_HPP
 #define __pbrPipeline_HPP
 
 #include "gfxUtil.hpp"
@@ -57,11 +57,11 @@ struct DrawEvent {
 	const SubMesh* subMesh;
 	const Material* material;
 
-	// ÀÌ ÇÔ¼ö·Î ÀÎÇØ DrawEvent Á¤·Ä ½Ã
-	// °°Àº ¸Ş½Ã¸¦ °øÀ¯ÇÏ´Â DrawEventµé³¢¸® 1Â÷Àû,
-	// °°Àº ¼­ºê¸Ş½Ã¸¦ °øÀ¯ÇÏ´Â DrawEventµé³¢¸® 2Â÷Àû,
-	// °°Àº ÀçÁúÀ» °øÀ¯ÇÏ´Â DrawEventµé³¢¸® 3Â÷ÀûÀ¸·Î ¸ğÀÌ°Ô µÈ´Ù.
-	// ÀÌ´Â ÀÎ½ºÅÏ½Ì¿¡ ¿ëÀÌÇÏ´Ù.
+	// ì´ í•¨ìˆ˜ë¡œ ì¸í•´ DrawEvent ì •ë ¬ ì‹œ
+	// ê°™ì€ ë©”ì‹œë¥¼ ê³µìœ í•˜ëŠ” DrawEventë“¤ë¼ë¦¬ 1ì°¨ì ,
+	// ê°™ì€ ì„œë¸Œë©”ì‹œë¥¼ ê³µìœ í•˜ëŠ” DrawEventë“¤ë¼ë¦¬ 2ì°¨ì ,
+	// ê°™ì€ ì¬ì§ˆì„ ê³µìœ í•˜ëŠ” DrawEventë“¤ë¼ë¦¬ 3ì°¨ì ìœ¼ë¡œ ëª¨ì´ê²Œ ëœë‹¤.
+	// ì´ëŠ” ì¸ìŠ¤í„´ì‹±ì— ìš©ì´í•˜ë‹¤.
 	auto operator<=>(const DrawEvent& rhs) const noexcept {
 		auto e = mesh <=> rhs.mesh;
 		if ( e == std::strong_ordering::equal ) {
@@ -90,29 +90,29 @@ struct Resources {
 	} mainPass;
 };
 
-// PBR PipelineÀÇ input layoutÀ» À§ÇÑ Vertex Buffer View ¹è¿­ÀÌ
-// mesh¿¡ Á¸ÀçÇÏÁö ¾Ê´Â´Ù¸é, Ãß°¡ÇÑ´Ù.
+// PBR Pipelineì˜ input layoutì„ ìœ„í•œ Vertex Buffer View ë°°ì—´ì´
+// meshì— ì¡´ì¬í•˜ì§€ ì•ŠëŠ”ë‹¤ë©´, ì¶”ê°€í•œë‹¤.
 // 0: position, 1: normal, 2: tangent, 3: bitangent, 4: uv
 void layoutMeshIfNeeded(const Mesh& mesh);
 
-// PBR PipelineÀÇ Dispatcher
-// Dispatcher Å¬·¡½º´Â GFX¿¡¼­ ÇÊ¿äÇÑ ÀÎÀÚµéÀ» ¹Ş¾Æ
-// ÆÄÀÌÇÁ¶óÀÎÀÇ Æ¯Á¤ ´Ü°è¸¦ ½Ì±Û½º·¹µå È¤Àº ¸ÖÆ¼½º·¹µå·Î ¼öÇàÇÑ´Ù.
-// ¸î °³ÀÇ ÇÔ¼ö¿¡¼­ °øÀ¯ÇÏ´Â µ¥ÀÌÅÍµéÀ» µû·Î ¸ğ¾Æ º¸°üÇÏ´Â µ¿½Ã¿¡
-// ¸ÖÆ¼½º·¹µå ÀÛ¾÷ ºĞ¹è °úÁ¤À» Á» ´õ ½±°Ô ÀÛ¼ºÇÏ±â À§ÇØ ¸¸µé¾îÁ³´Ù.
+// PBR Pipelineì˜ Dispatcher
+// Dispatcher í´ë˜ìŠ¤ëŠ” GFXì—ì„œ í•„ìš”í•œ ì¸ìë“¤ì„ ë°›ì•„
+// íŒŒì´í”„ë¼ì¸ì˜ íŠ¹ì • ë‹¨ê³„ë¥¼ ì‹±ê¸€ìŠ¤ë ˆë“œ í˜¹ì€ ë©€í‹°ìŠ¤ë ˆë“œë¡œ ìˆ˜í–‰í•œë‹¤.
+// ëª‡ ê°œì˜ í•¨ìˆ˜ì—ì„œ ê³µìœ í•˜ëŠ” ë°ì´í„°ë“¤ì„ ë”°ë¡œ ëª¨ì•„ ë³´ê´€í•˜ëŠ” ë™ì‹œì—
+// ë©€í‹°ìŠ¤ë ˆë“œ ì‘ì—… ë¶„ë°° ê³¼ì •ì„ ì¢€ ë” ì‰½ê²Œ ì‘ì„±í•˜ê¸° ìœ„í•´ ë§Œë“¤ì–´ì¡Œë‹¤.
 // 
-// PBR PipelineÀº H/W ÀÎ½ºÅÏ½ÌÀ» »óÁ¤ÇÏ¹Ç·Î,
-// ¹Ì¸® draw eventµéÀ» ±×·ìÈ­(Á¤·Ä)ÇÒ ÇÊ¿ä°¡ ÀÖ´Ù.
-// Dispatcher::sortDrawEvents ÇÔ¼ö¸¦ Á¦ÀÏ ¸ÕÀú È£ÃâÇÏµµ·Ï ÇÏÀÚ.
+// PBR Pipelineì€ H/W ì¸ìŠ¤í„´ì‹±ì„ ìƒì •í•˜ë¯€ë¡œ,
+// ë¯¸ë¦¬ draw eventë“¤ì„ ê·¸ë£¹í™”(ì •ë ¬)í•  í•„ìš”ê°€ ìˆë‹¤.
+// Dispatcher::sortDrawEvents í•¨ìˆ˜ë¥¼ ì œì¼ ë¨¼ì € í˜¸ì¶œí•˜ë„ë¡ í•˜ì.
 //
-// PBR PipelineÀº 2-pass ·»´õ¸µÀÌ´Ù.
+// PBR Pipelineì€ 2-pass ë Œë”ë§ì´ë‹¤.
 // - shadow pass
 // - main pass
-// shadow pass¸¦ ¸ÕÀú ¼öÇàÇÑ µÚ main pass¸¦ ¼öÇàÇÏµµ·Ï ÇÑ´Ù.
+// shadow passë¥¼ ë¨¼ì € ìˆ˜í–‰í•œ ë’¤ main passë¥¼ ìˆ˜í–‰í•˜ë„ë¡ í•œë‹¤.
 class Dispatcher {
 public:
 	Dispatcher() = default;
-	// GFX °´Ã¼·ÎºÎÅÍ ÇÊ¿äÇÑ ÀÎÀÚµéÀ» Àü´Ş¹ŞÀÚ.
+	// GFX ê°ì²´ë¡œë¶€í„° í•„ìš”í•œ ì¸ìë“¤ì„ ì „ë‹¬ë°›ì.
 	Dispatcher(
 		const std::vector<ComPtr<ID3D12DescriptorHeap>>& descriptorHeaps,
 		DescriptorPool* pTexPool, DescriptorPool* pTexArrayPool,
@@ -134,82 +134,82 @@ public:
 		std::size_t roomIdx
 	);
 
-	// draw eventµéÀ» H/W ÀÎ½ºÅÏ½ÌÀ» À§ÇØ ±×·ìÈ­(Á¤·Ä)ÇÑ´Ù.
-	// °¡Àå ¸ÕÀú È£ÃâµÇ¾î¾ß ÇÑ´Ù.
+	// draw eventë“¤ì„ H/W ì¸ìŠ¤í„´ì‹±ì„ ìœ„í•´ ê·¸ë£¹í™”(ì •ë ¬)í•œë‹¤.
+	// ê°€ì¥ ë¨¼ì € í˜¸ì¶œë˜ì–´ì•¼ í•œë‹¤.
 	void sortDrawEvents();
-	// shadow pass¸¦ ½Ì±Û ½º·¹µå·Î ¼öÇàÇÑ´Ù.
-	// 1¹øÂ° ·»´õÆĞ½º¿¡ ÇØ´çÇÑ´Ù.
+	// shadow passë¥¼ ì‹±ê¸€ ìŠ¤ë ˆë“œë¡œ ìˆ˜í–‰í•œë‹¤.
+	// 1ë²ˆì§¸ ë Œë”íŒ¨ìŠ¤ì— í•´ë‹¹í•œë‹¤.
 	void shadowPass();
-	// shadow pass¸¦ ¸ÖÆ¼ ½º·¹µå·Î ¼öÇàÇÑ´Ù.
-	// 1¹øÂ° ·»´õÆĞ½º¿¡ ÇØ´çÇÑ´Ù.
+	// shadow passë¥¼ ë©€í‹° ìŠ¤ë ˆë“œë¡œ ìˆ˜í–‰í•œë‹¤.
+	// 1ë²ˆì§¸ ë Œë”íŒ¨ìŠ¤ì— í•´ë‹¹í•œë‹¤.
 	void shadowPassMT();
-	// main pass¸¦ ½Ì±Û ½º·¹µå·Î ¼öÇàÇÑ´Ù.
-	// 2¹øÂ° ·»´õÆĞ½º¿¡ ÇØ´çÇÑ´Ù.
+	// main passë¥¼ ì‹±ê¸€ ìŠ¤ë ˆë“œë¡œ ìˆ˜í–‰í•œë‹¤.
+	// 2ë²ˆì§¸ ë Œë”íŒ¨ìŠ¤ì— í•´ë‹¹í•œë‹¤.
 	void mainPass();
-	// main pass¸¦ ¸ÖÆ¼ ½º·¹µå·Î ¼öÇàÇÑ´Ù.
-	// 2¹øÂ° ·»´õÆĞ½º¿¡ ÇØ´çÇÑ´Ù.
+	// main passë¥¼ ë©€í‹° ìŠ¤ë ˆë“œë¡œ ìˆ˜í–‰í•œë‹¤.
+	// 2ë²ˆì§¸ ë Œë”íŒ¨ìŠ¤ì— í•´ë‹¹í•œë‹¤.
 	void mainPassMT();
 
 private:
-	// shadow pass¿¡¼­ »ç¿ëÇÏ´Â GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
-	// DrawEvents, CameraData, LightData¿¡ ´ã°ÜÀÖ´Â Á¤º¸¸¦ °¡°øÇÏ¿©
-	// Resources °´Ã¼¿¡ ´ã±ä, ShaderInputBuffer ÀÎÅÍÆäÀÌ½º¸¦ °¡Áö´Â °´Ã¼µé¿¡ ¿Å°Ü´ã´Â´Ù.
-	// ½Ì±Û½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
-	// DrawEvents°¡ ºñ¾îÀÖ´Ù¸é ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
+	// shadow passì—ì„œ ì‚¬ìš©í•˜ëŠ” GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
+	// DrawEvents, CameraData, LightDataì— ë‹´ê²¨ìˆëŠ” ì •ë³´ë¥¼ ê°€ê³µí•˜ì—¬
+	// Resources ê°ì²´ì— ë‹´ê¸´, ShaderInputBuffer ì¸í„°í˜ì´ìŠ¤ë¥¼ ê°€ì§€ëŠ” ê°ì²´ë“¤ì— ì˜®ê²¨ë‹´ëŠ”ë‹¤.
+	// ì‹±ê¸€ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
+	// DrawEventsê°€ ë¹„ì–´ìˆë‹¤ë©´ ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 	void shadowUpdate();
-	// shadow pass¿¡¼­ »ç¿ëÇÏ´Â GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
-	// DrawEvents, CameraData, LightData¿¡ ´ã°ÜÀÖ´Â Á¤º¸¸¦ °¡°øÇÏ¿©
-	// Resources °´Ã¼¿¡ ´ã±ä, ShaderInputBuffer ÀÎÅÍÆäÀÌ½º¸¦ °¡Áö´Â °´Ã¼µé¿¡ ¿Å°Ü´ã´Â´Ù.
-	// ¸ÖÆ¼½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
-	// DrawEvents°¡ ºñ¾îÀÖ´Ù¸é ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
+	// shadow passì—ì„œ ì‚¬ìš©í•˜ëŠ” GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
+	// DrawEvents, CameraData, LightDataì— ë‹´ê²¨ìˆëŠ” ì •ë³´ë¥¼ ê°€ê³µí•˜ì—¬
+	// Resources ê°ì²´ì— ë‹´ê¸´, ShaderInputBuffer ì¸í„°í˜ì´ìŠ¤ë¥¼ ê°€ì§€ëŠ” ê°ì²´ë“¤ì— ì˜®ê²¨ë‹´ëŠ”ë‹¤.
+	// ë©€í‹°ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
+	// DrawEventsê°€ ë¹„ì–´ìˆë‹¤ë©´ ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 	void shadowUpdateMT();
 	void shadowDraw();
 	void shadowDrawMT();
 
-	// main pass¿¡¼­ »ç¿ëÇÏ´Â GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
-	// DrawEvents, CameraData, LightData, FrameData¿¡ ´ã°ÜÀÖ´Â Á¤º¸¸¦ °¡°øÇÏ¿©
-	// Resources °´Ã¼¿¡ ´ã±ä, ShaderInputBuffer ÀÎÅÍÆäÀÌ½º¸¦ °¡Áö´Â °´Ã¼µé¿¡ ¿Å°Ü´ã´Â´Ù.
-	// ½Ì±Û½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
-	// DrawEvents°¡ ºñ¾îÀÖ´Ù¸é ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
+	// main passì—ì„œ ì‚¬ìš©í•˜ëŠ” GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
+	// DrawEvents, CameraData, LightData, FrameDataì— ë‹´ê²¨ìˆëŠ” ì •ë³´ë¥¼ ê°€ê³µí•˜ì—¬
+	// Resources ê°ì²´ì— ë‹´ê¸´, ShaderInputBuffer ì¸í„°í˜ì´ìŠ¤ë¥¼ ê°€ì§€ëŠ” ê°ì²´ë“¤ì— ì˜®ê²¨ë‹´ëŠ”ë‹¤.
+	// ì‹±ê¸€ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
+	// DrawEventsê°€ ë¹„ì–´ìˆë‹¤ë©´ ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 	void mainUpdate();
-	// main pass¿¡¼­ »ç¿ëÇÏ´Â GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
-	// DrawEvents, CameraData, LightData, FrameData¿¡ ´ã°ÜÀÖ´Â Á¤º¸¸¦ °¡°øÇÏ¿©
-	// Resources °´Ã¼¿¡ ´ã±ä, ShaderInputBuffer ÀÎÅÍÆäÀÌ½º¸¦ °¡Áö´Â °´Ã¼µé¿¡ ¿Å°Ü´ã´Â´Ù.
-	// ¸ÖÆ¼½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
-	// DrawEvents°¡ ºñ¾îÀÖ´Ù¸é ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
+	// main passì—ì„œ ì‚¬ìš©í•˜ëŠ” GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
+	// DrawEvents, CameraData, LightData, FrameDataì— ë‹´ê²¨ìˆëŠ” ì •ë³´ë¥¼ ê°€ê³µí•˜ì—¬
+	// Resources ê°ì²´ì— ë‹´ê¸´, ShaderInputBuffer ì¸í„°í˜ì´ìŠ¤ë¥¼ ê°€ì§€ëŠ” ê°ì²´ë“¤ì— ì˜®ê²¨ë‹´ëŠ”ë‹¤.
+	// ë©€í‹°ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
+	// DrawEventsê°€ ë¹„ì–´ìˆë‹¤ë©´ ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 	void mainUpdateMT();
-	// DrawEventsÀÇ Á¤º¸µéÀ» Âü°íÇÏ¿©
-	// µå·Î¿ìÄİµéÀ» ¼öÇàÇÑ´Ù.
-	// ½Ì±Û½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
-	// DrawEvents°¡ ºñ¾îÀÖ´Ù¸é ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
+	// DrawEventsì˜ ì •ë³´ë“¤ì„ ì°¸ê³ í•˜ì—¬
+	// ë“œë¡œìš°ì½œë“¤ì„ ìˆ˜í–‰í•œë‹¤.
+	// ì‹±ê¸€ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
+	// DrawEventsê°€ ë¹„ì–´ìˆë‹¤ë©´ ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 	void mainDraw();
-	// DrawEventsÀÇ Á¤º¸µéÀ» Âü°íÇÏ¿©
-	// µå·Î¿ìÄİµéÀ» ¼öÇàÇÑ´Ù.
-	// ¸ÖÆ¼½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
-	// DrawEvents°¡ ºñ¾îÀÖ´Ù¸é ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
+	// DrawEventsì˜ ì •ë³´ë“¤ì„ ì°¸ê³ í•˜ì—¬
+	// ë“œë¡œìš°ì½œë“¤ì„ ìˆ˜í–‰í•œë‹¤.
+	// ë©€í‹°ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
+	// DrawEventsê°€ ë¹„ì–´ìˆë‹¤ë©´ ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 	void mainDrawMT();
 
-	// ¸ÖÆ¼½º·¹µå ÀÛ¾÷ ½Ã, GPU µ¥ÀÌÅÍ °»½Å ÀÛ¾÷¿¡ ´ëÇØ
-	// ´ÜÀ§ ÀÛ¾÷À» »ı¼ºÇÏ¿© ½º·¹µå¿¡ ÇÒ´çÇÏ´Âµ¥ »ç¿ëµÈ´Ù.
+	// ë©€í‹°ìŠ¤ë ˆë“œ ì‘ì—… ì‹œ, GPU ë°ì´í„° ê°±ì‹  ì‘ì—…ì— ëŒ€í•´
+	// ë‹¨ìœ„ ì‘ì—…ì„ ìƒì„±í•˜ì—¬ ìŠ¤ë ˆë“œì— í• ë‹¹í•˜ëŠ”ë° ì‚¬ìš©ëœë‹¤.
 	void MU_CALLCONV addJobMainUpdate( mu::Mat4x4 view, const mu::Mat4x4& viewProj,
 		const DrawEvent* pFirst, const DrawEvent* pLast, PBRShader::PerInstanceData* pOut,
 		std::latch& latch
 	);
-	// ¸ÖÆ¼½º·¹µå ÀÛ¾÷ ½Ã, µå·Î¿ìÄİµé¿¡ ´ëÇØ
-	// ´ÜÀ§ ÀÛ¾÷À» »ı¼ºÇÏ¿© ½º·¹µå¿¡ ÇÒ´çÇÏ´Âµ¥ »ç¿ëµÈ´Ù.
+	// ë©€í‹°ìŠ¤ë ˆë“œ ì‘ì—… ì‹œ, ë“œë¡œìš°ì½œë“¤ì— ëŒ€í•´
+	// ë‹¨ìœ„ ì‘ì—…ì„ ìƒì„±í•˜ì—¬ ìŠ¤ë ˆë“œì— í• ë‹¹í•˜ëŠ”ë° ì‚¬ìš©ëœë‹¤.
 	void addJobMainDraw( ID3D12GraphicsCommandList* threadCmdList,
 		const std::vector<DrawEvent>::const_iterator* pItFirst,
 		const std::vector<DrawEvent>::const_iterator* pItLast,
 		std::size_t firstDrawcallIdx, std::latch& latch
 	);
-	// ¸ÖÆ¼½º·¹µå ÀÛ¾÷ ½Ã, GPU µ¥ÀÌÅÍ °»½Å ÀÛ¾÷¿¡ ´ëÇØ
-	// ´ÜÀ§ ÀÛ¾÷À» »ı¼ºÇÏ¿© ½º·¹µå¿¡ ÇÒ´çÇÏ´Âµ¥ »ç¿ëµÈ´Ù.
+	// ë©€í‹°ìŠ¤ë ˆë“œ ì‘ì—… ì‹œ, GPU ë°ì´í„° ê°±ì‹  ì‘ì—…ì— ëŒ€í•´
+	// ë‹¨ìœ„ ì‘ì—…ì„ ìƒì„±í•˜ì—¬ ìŠ¤ë ˆë“œì— í• ë‹¹í•˜ëŠ”ë° ì‚¬ìš©ëœë‹¤.
 	void addJobShadowUpdate( const DrawEvent* pFirst,
 		const DrawEvent* pLast, ShadowMapShader::PerInstanceData* pOut,
 		std::latch& latch
 	);
-	// ¸ÖÆ¼½º·¹µå ÀÛ¾÷ ½Ã, µå·Î¿ìÄİµé¿¡ ´ëÇØ
-	// ´ÜÀ§ ÀÛ¾÷À» »ı¼ºÇÏ¿© ½º·¹µå¿¡ ÇÒ´çÇÏ´Âµ¥ »ç¿ëµÈ´Ù.
+	// ë©€í‹°ìŠ¤ë ˆë“œ ì‘ì—… ì‹œ, ë“œë¡œìš°ì½œë“¤ì— ëŒ€í•´
+	// ë‹¨ìœ„ ì‘ì—…ì„ ìƒì„±í•˜ì—¬ ìŠ¤ë ˆë“œì— í• ë‹¹í•˜ëŠ”ë° ì‚¬ìš©ëœë‹¤.
 	void addJobShadowDraw( ID3D12GraphicsCommandList* threadCmdList,
 		const std::vector<DrawEvent>::const_iterator* pItFirst,
 		const std::vector<DrawEvent>::const_iterator* pItLast,
@@ -217,7 +217,7 @@ private:
 		std::latch& latch
 	);
 
-	// GFX·ÎºÎÅÍ Àü´ŞµÇ¾î ±×´ë·Î »ç¿ëÇÏ´Â º¯¼öµé
+	// GFXë¡œë¶€í„° ì „ë‹¬ë˜ì–´ ê·¸ëŒ€ë¡œ ì‚¬ìš©í•˜ëŠ” ë³€ìˆ˜ë“¤
 	std::vector<ComPtr<ID3D12DescriptorHeap>> descriptorHeaps_{};
 	DescriptorPool* pTexPool_ = nullptr;
 	DescriptorPool* pTexArrayPool_ = nullptr;
@@ -244,7 +244,7 @@ private:
 	FrameData frameData_{};
 	std::size_t roomIdx_{};
 	
-	// GFX·ÎºÎÅÍ Àü´ŞµÈ °ÍµéÀº ÅëÇØ ¾ò¾îÁö´Â º¯¼öµé
+	// GFXë¡œë¶€í„° ì „ë‹¬ëœ ê²ƒë“¤ì€ í†µí•´ ì–»ì–´ì§€ëŠ” ë³€ìˆ˜ë“¤
 	UINT rootParamIdxPID_{};
 	UINT rootParamIdxPDD_{};
 	UINT rootParamIdxPFD_{};
@@ -255,7 +255,7 @@ private:
 	UINT rootParamIdxSamPool_{};
 	UINT rootParamIdxCmpSamPool_{};
 
-	// ¸ÖÆ¼½º·¹µå µ¿ÀÛ ½Ã ÀÛ¾÷ Ä«Å×°í¸®º° ºĞ¹è ´ÜÀ§
+	// ë©€í‹°ìŠ¤ë ˆë“œ ë™ì‘ ì‹œ ì‘ì—… ì¹´í…Œê³ ë¦¬ë³„ ë¶„ë°° ë‹¨ìœ„
 	std::size_t jobSizeUpdate_ = 120u;
 	std::size_t jobSizeDraw_ = 200u;
 };

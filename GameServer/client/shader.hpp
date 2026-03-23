@@ -1,4 +1,4 @@
-#ifndef __shader_HPP
+ï»¿#ifndef __shader_HPP
 #define __shader_HPP
 
 #include "gfxUtil.hpp"
@@ -8,8 +8,8 @@ struct CompiledShaderOutput {
 	D3D12_SHADER_BYTECODE byteCode;
 };
 
-// ¼ÎÀÌ´õ¸¦ ÄÄÆÄÀÏÇÏ¿© D3D Blob °´Ã¼, ±×¸®°í ±× °´Ã¼¿Í ¿¬°áµÈ
-// D3D12_SHADER_BYTECODE °´Ã¼¸¦ ¸®ÅÏÇÑ´Ù.
+// ì…°ì´ë”ë¥¼ ì»´íŒŒì¼í•˜ì—¬ D3D Blob ê°ì²´, ê·¸ë¦¬ê³  ê·¸ ê°ì²´ì™€ ì—°ê²°ëœ
+// D3D12_SHADER_BYTECODE ê°ì²´ë¥¼ ë¦¬í„´í•œë‹¤.
 CompiledShaderOutput compileShader(const std::filesystem::path& path,
 	const D3D_SHADER_MACRO* macros,
 	std::string_view entryPoint, std::string_view target,
@@ -26,8 +26,8 @@ ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootS
 ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSignature* rootSig );
 
-// ·çÆ® ÆÄ¶ó¹ÌÅÍ Á¢±ÙÀ» ÀÌÇØÇÏ±â ½±µµ·Ï ÇÏ±â À§ÇØ ¸¸µç Å¬·¡½º
-// ·çÆ® ÆÄ¶ó¹ÌÅÍ¿¡ ÀÌ¸§À» Áö¾î ±× ÀÎµ¦½º ¹× D3D12_ROOT_PARAMETER ±¸Á¶Ã¼¿Í ¸ÅÇÎÇÑ´Ù.
+// ë£¨íŠ¸ íŒŒë¼ë¯¸í„° ì ‘ê·¼ì„ ì´í•´í•˜ê¸° ì‰½ë„ë¡ í•˜ê¸° ìœ„í•´ ë§Œë“  í´ë˜ìŠ¤
+// ë£¨íŠ¸ íŒŒë¼ë¯¸í„°ì— ì´ë¦„ì„ ì§€ì–´ ê·¸ ì¸ë±ìŠ¤ ë° D3D12_ROOT_PARAMETER êµ¬ì¡°ì²´ì™€ ë§¤í•‘í•œë‹¤.
 class RootSig {
 public:
 	virtual ~RootSig() = default;
@@ -44,7 +44,7 @@ protected:
 	void addParam(const std::string& paramName, UINT paramIdx, const D3D12_ROOT_PARAMETER& paramDesc);
 
 	ComPtr<ID3D12RootSignature> rootSig_ = nullptr;
-	// key: ·çÆ® ÆÄ¶ó¹ÌÅÍ ÀÌ¸§, value: ·çÆ® ÆÄ¶ó¹ÌÅÍ ÀÎµ¦½º¿Í ·çÆ® ÆÄ¶ó¹ÌÅÍ ±¸Á¶Ã¼ÀÇ pair
+	// key: ë£¨íŠ¸ íŒŒë¼ë¯¸í„° ì´ë¦„, value: ë£¨íŠ¸ íŒŒë¼ë¯¸í„° ì¸ë±ìŠ¤ì™€ ë£¨íŠ¸ íŒŒë¼ë¯¸í„° êµ¬ì¡°ì²´ì˜ pair
 	std::map<std::string, std::pair<UINT, D3D12_ROOT_PARAMETER>> paramMap_{};
 	std::string name_{"unbuilt root signature"};
 };
@@ -57,7 +57,7 @@ public:
 private:
 };
 
-// ¼ÎÀÌ´õº° ±¸Á¶Ã¼ ------------------------------------
+// ì…°ì´ë”ë³„ êµ¬ì¡°ì²´ ------------------------------------
 // SampleShader
 namespace SampleShader {
 
@@ -105,8 +105,8 @@ struct Light {
 
 struct Material {
 	BindlessIndex idxAlbedo;
-	BindlessIndex idxMetallicSmoothness;	// À¯´ÏÆ¼ ÀÍ½ºÆ÷ÅÍ¸¦ »ç¿ëÇÏ±â ¶§¹®¿¡ À¯´ÏÆ¼¿Í ÅØ½ºÃ³ Æ÷¸Ë ¸ÂÃçÁØ´Ù.
-											// R Ã¤³Î¿¡ metallic, A Ã¤³Î¿¡ Smoothness (1 - roughness) °ªÀÌ µé¾îÀÖ°Ô µÈ´Ù.
+	BindlessIndex idxMetallicSmoothness;	// ìœ ë‹ˆí‹° ìµìŠ¤í¬í„°ë¥¼ ì‚¬ìš©í•˜ê¸° ë•Œë¬¸ì— ìœ ë‹ˆí‹°ì™€ í…ìŠ¤ì²˜ í¬ë§· ë§ì¶°ì¤€ë‹¤.
+											// R ì±„ë„ì— metallic, A ì±„ë„ì— Smoothness (1 - roughness) ê°’ì´ ë“¤ì–´ìˆê²Œ ëœë‹¤.
 	BindlessIndex idxNormal;
 	BindlessIndex idxEmmisive;
 	BindlessIndex idxAmbientOcllusion;
@@ -165,8 +165,8 @@ struct Light {
 
 struct Material {
 	BindlessIndex idxAlbedo;
-	BindlessIndex idxMetallicSmoothness;	// À¯´ÏÆ¼ ÀÍ½ºÆ÷ÅÍ¸¦ »ç¿ëÇÏ±â ¶§¹®¿¡ À¯´ÏÆ¼¿Í ÅØ½ºÃ³ Æ÷¸Ë ¸ÂÃçÁØ´Ù.
-											// R Ã¤³Î¿¡ metallic, A Ã¤³Î¿¡ Smoothness (1 - roughness) °ªÀÌ µé¾îÀÖ°Ô µÈ´Ù.
+	BindlessIndex idxMetallicSmoothness;	// ìœ ë‹ˆí‹° ìµìŠ¤í¬í„°ë¥¼ ì‚¬ìš©í•˜ê¸° ë•Œë¬¸ì— ìœ ë‹ˆí‹°ì™€ í…ìŠ¤ì²˜ í¬ë§· ë§ì¶°ì¤€ë‹¤.
+											// R ì±„ë„ì— metallic, A ì±„ë„ì— Smoothness (1 - roughness) ê°’ì´ ë“¤ì–´ìˆê²Œ ëœë‹¤.
 	BindlessIndex idxNormal;
 	BindlessIndex idxEmmisive;
 	BindlessIndex idxAmbientOcllusion;

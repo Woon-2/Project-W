@@ -1,10 +1,10 @@
-#include "pch.hpp"
+ï»¿#include "pch.hpp"
 #include "basicPlayerHpUI.hpp"
 #include "errorHandling.hpp"
 #include "gfxUtil.hpp"
 #include "timer.hpp"
 
-// ÇöÀç ½ºÅ©¸° »çÀÌÁî : 1024 x 768
+// í˜„ìž¬ ìŠ¤í¬ë¦° ì‚¬ì´ì¦ˆ : 1024 x 768
 
 BasicPlayerHpUI::BasicPlayerHpUI() {
 	mu::Vec3 scale{ 1024.0f / 2.0f, 64.0f / 2.0f, 1.0f };
@@ -26,7 +26,7 @@ void BasicPlayerHpUI::update( Milliseconds deltaTime, GFX& gfx, FontHandle* pFon
 		int iTextWidth = 0;
 		int iTextHeight = 0;
 		WCHAR	wchTxt[64] = {};
-		DWORD	dwTxtLen = swprintf_s( wchTxt, L"HP : %d\nÃÑ¾Ë : %d", hp_, bullet_);
+		DWORD	dwTxtLen = swprintf_s( wchTxt, L"HP : %d\nì´ì•Œ : %d", hp_, bullet_);
 		std::ranges::fill( pTextHp_->pData, 0 );
 		gfx.WriteTextToBitmap( pTextHp_, pTextHp_->width, pTextHp_->height, pTextHp_->width * 4, &iTextWidth, &iTextHeight, nullptr, wchTxt, dwTxtLen );
 		gfx.UpdateTextureWithTextImage( pTextHp_, pTextHp_->width, pTextHp_->height );

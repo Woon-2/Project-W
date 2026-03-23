@@ -1,4 +1,4 @@
-#include "pch.hpp"
+ï»¿#include "pch.hpp"
 #include "billboardPipeline.hpp"
 #include "shader.hpp"
 #include "mesh.hpp"
@@ -27,7 +27,7 @@ void initStaticPointMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdLi
 		0u
 	};
 
-	// Á¤Á¡ ¹öÆÛµé ±¸Ãà
+	// ì •ì  ë²„í¼ë“¤ êµ¬ì¶•
 	auto vbPosition = createBufferResource( device, nullptr, positions.size() * sizeof( XMFLOAT3 ), BufferCreationType::VertexBuffer );
 	setD3DName( vbPosition.Get(), "PointMesh_VB_Position" );
 	auto vbPositionu = createBufferResource( device, positions.data(), positions.size() * sizeof( XMFLOAT3 ), BufferCreationType::UploadBuffer );
@@ -46,7 +46,7 @@ void initStaticPointMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdLi
 		D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
 	);
 
-	// ÀÎµ¦½º ¹öÆÛ ±¸Ãà
+	// ì¸ë±ìŠ¤ ë²„í¼ êµ¬ì¶•
 	auto ib = createBufferResource( device, nullptr, indices.size() * sizeof( u16t ), BufferCreationType::IndexBuffer );
 	setD3DName( ib.Get(), "PointMesh_IB" );
 	auto ibu = createBufferResource( device, indices.data(), indices.size() * sizeof( u16t ), BufferCreationType::UploadBuffer );
@@ -56,8 +56,8 @@ void initStaticPointMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdLi
 		D3D12_RESOURCE_STATE_INDEX_BUFFER
 	);
 
-	// ¸¸µç ¹öÆÛµéÀ» Á¶ÇÕÇÏ¿© ¸Ş½Ã ±¸Ãà
-	// Vertex Buffer View ±¸¼º
+	// ë§Œë“  ë²„í¼ë“¤ì„ ì¡°í•©í•˜ì—¬ ë©”ì‹œ êµ¬ì¶•
+	// Vertex Buffer View êµ¬ì„±
 	Detail::staticVBViewPoints.emplace_back(
 		/* .BufferLocation = */ vbPosition->GetGPUVirtualAddress(),
 		/* .SizeInBytes = */ static_cast<UINT>(positions.size() * sizeof( XMFLOAT3 )),
@@ -70,28 +70,28 @@ void initStaticPointMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdLi
 		/* .StrideInBytes = */ static_cast<UINT>(sizeof( float ))
 	);
 
-	// SubMesh ±¸¼º
+	// SubMesh êµ¬ì„±
 	Detail::staticIBViewPoint = D3D12_INDEX_BUFFER_VIEW{
 		.BufferLocation = ib->GetGPUVirtualAddress(),
 		.SizeInBytes = static_cast<UINT>(indices.size() * sizeof( u16t )),
 		.Format = DXGI_FORMAT_R16_UINT
 	};
 
-	// ÀÚ·á±¸Á¶ µî·Ï (Vertex Buffer View¿Í SubMesh´Â À§¿¡¼­ µî·ÏÇÏ¿´À½)
+	// ìë£Œêµ¬ì¡° ë“±ë¡ (Vertex Buffer Viewì™€ SubMeshëŠ” ìœ„ì—ì„œ ë“±ë¡í•˜ì˜€ìŒ)
 	Detail::staticVBPoints.push_back( std::move( vbPosition ) );
 	Detail::staticVBIdxMapPoints.try_emplace( "PointMesh_VB_Position", 0u );
 	Detail::staticVBPoints.push_back( std::move( vbSize ) );
 	Detail::staticVBIdxMapPoints.try_emplace( "PointMesh_VB_Size", 1u );
 	Detail::staticIBPoint = std::move( ib );
 
-	gSharedLog << "[Resource Load] BillboardPipeline Static Point Mesh ±¸Ãà ¿Ï·á\n";
+	gSharedLog << "[Resource Load] BillboardPipeline Static Point Mesh êµ¬ì¶• ì™„ë£Œ\n";
 
 	fenceToAssociate.associatedResources_.push_back( std::move( vbPositionu ) );
 	fenceToAssociate.associatedResources_.push_back( std::move( vbSizeu ) );
 	fenceToAssociate.associatedResources_.push_back( std::move( ibu ) );
 }
 
-// GFX °´Ã¼·ÎºÎÅÍ ÇÊ¿äÇÑ ÀÎÀÚµéÀ» Àü´Ş¹ŞÀÚ.
+// GFX ê°ì²´ë¡œë¶€í„° í•„ìš”í•œ ì¸ìë“¤ì„ ì „ë‹¬ë°›ì.
 Dispatcher::Dispatcher(
 	const std::vector<ComPtr<ID3D12DescriptorHeap>>& descriptorHeaps,
 	DescriptorPool* pTexPool, DescriptorPool* pTexArrayPool,
@@ -117,30 +117,30 @@ Dispatcher::Dispatcher(
 	rootParamIdxSamPool_(rootSig->paramIdx("SamplerPool")),
 	rootParamIdxCmpSamPool_( rootSig->paramIdx( "ComparisonSamplerPool" ) ) {}
 
-// ¼ÎÀÌ´õ¿¡¼­ »ç¿ëÇÏ´Â GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
-// DrawEvents, CameraData¿¡ ´ã°ÜÀÖ´Â Á¤º¸¸¦ °¡°øÇÏ¿©
-// Resources °´Ã¼¿¡ ´ã±ä,
-// ShaderInputBuffer ÀÎÅÍÆäÀÌ½º¸¦ °¡Áö´Â °´Ã¼µé¿¡ ¿Å°Ü´ã´Â´Ù.
-// ½Ì±Û½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
-// DrawEvents°¡ ºñ¾îÀÖ´Ù¸é ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
+// ì…°ì´ë”ì—ì„œ ì‚¬ìš©í•˜ëŠ” GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
+// DrawEvents, CameraDataì— ë‹´ê²¨ìˆëŠ” ì •ë³´ë¥¼ ê°€ê³µí•˜ì—¬
+// Resources ê°ì²´ì— ë‹´ê¸´,
+// ShaderInputBuffer ì¸í„°í˜ì´ìŠ¤ë¥¼ ê°€ì§€ëŠ” ê°ì²´ë“¤ì— ì˜®ê²¨ë‹´ëŠ”ë‹¤.
+// ì‹±ê¸€ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
+// DrawEventsê°€ ë¹„ì–´ìˆë‹¤ë©´ ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 void Dispatcher::updateGPUDataSingleThreaded() {
 	if ( drawEvents_.empty() ) {
 		return;
 	}
 
-	// ¸Ş½Ã µ¥ÀÌÅÍ ¾÷·Îµå
-	// Á¤·ÄÀ» ÅëÇØ ÀÎ½ºÅÏ½ÌÀÌ °¡´ÉÇÏµµ·Ï ÇÑ´Ù.
+	// ë©”ì‹œ ë°ì´í„° ì—…ë¡œë“œ
+	// ì •ë ¬ì„ í†µí•´ ì¸ìŠ¤í„´ì‹±ì´ ê°€ëŠ¥í•˜ë„ë¡ í•œë‹¤.
 	std::sort( drawEvents_.begin(), drawEvents_.end() );
 
-	// perInstanceData¸¦ staticÀ¸·Î ¼±¾ğÇÏ¿©
-	// ¸Å¹ø Ã³À½ºÎÅÍ ¸Ş¸ğ¸®¸¦ ±¸ÃàÇÏÁö ¾Ê°í Àç»ç¿ëÇÒ ¼ö ÀÖµµ·Ï ÇÑ´Ù.
+	// perInstanceDataë¥¼ staticìœ¼ë¡œ ì„ ì–¸í•˜ì—¬
+	// ë§¤ë²ˆ ì²˜ìŒë¶€í„° ë©”ëª¨ë¦¬ë¥¼ êµ¬ì¶•í•˜ì§€ ì•Šê³  ì¬ì‚¬ìš©í•  ìˆ˜ ìˆë„ë¡ í•œë‹¤.
 	static auto perInstanceData = std::vector<BillboardShader::PerInstanceData>();
 	perInstanceData.resize( drawEvents_.size() );
 
 	const auto viewProj = cameraData_.view * cameraData_.proj;
 	const auto cameraPosV = cameraData_.pos;
 
-	// DrawEvents¿¡ ´ã°ÜÀÖ´Â Á¤º¸¸¦ °¡°øÇØ perInstanceData¿¡ ÀúÀåÇÑ´Ù.
+	// DrawEventsì— ë‹´ê²¨ìˆëŠ” ì •ë³´ë¥¼ ê°€ê³µí•´ perInstanceDataì— ì €ì¥í•œë‹¤.
 	std::ranges::transform( drawEvents_, perInstanceData.begin(),
 		[]( const BillboardPipeline::DrawEvent& drawEvent ) {
 			return BillboardShader::PerInstanceData{
@@ -149,42 +149,42 @@ void Dispatcher::updateGPUDataSingleThreaded() {
 		}
 	);
 
-	// perInstanceDataÀÇ ³»¿ëÀ» ¹ÙÅÁÀ¸·Î GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
+	// perInstanceDataì˜ ë‚´ìš©ì„ ë°”íƒ•ìœ¼ë¡œ GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
 	pResources_->perInstanceData.stage( roomIdx_, perInstanceData );
 	perInstanceData.clear();
 
-	// FrameData¿¡ ´ã°ÜÀÖ´Â Á¤º¸¸¦ °¡°øÇØ pfd¿¡ ÀúÀåÇÑ´Ù.
+	// FrameDataì— ë‹´ê²¨ìˆëŠ” ì •ë³´ë¥¼ ê°€ê³µí•´ pfdì— ì €ì¥í•œë‹¤.
 	auto pfd = BillboardShader::PerFrameData{
 		.vp = mu::transpose( viewProj ).getXmf(),
 		.cameraPosV = cameraPosV.getXmf()
 	};
-	// pfdÀÇ ³»¿ëÀ» ¹ÙÅÁÀ¸·Î GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
+	// pfdì˜ ë‚´ìš©ì„ ë°”íƒ•ìœ¼ë¡œ GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
 	pResources_->perFrameData.stage( roomIdx_, &pfd, 1u );
 }
 
-// ¼ÎÀÌ´õ¿¡¼­ »ç¿ëÇÏ´Â GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
-// DrawEvents, CameraData¿¡ ´ã°ÜÀÖ´Â Á¤º¸¸¦ °¡°øÇÏ¿©
-// Resources °´Ã¼¿¡ ´ã±ä,
-// ShaderInputBuffer ÀÎÅÍÆäÀÌ½º¸¦ °¡Áö´Â °´Ã¼µé¿¡ ¿Å°Ü´ã´Â´Ù.
-// ½Ì±Û½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
-// DrawEvents°¡ ºñ¾îÀÖ´Ù¸é ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
+// ì…°ì´ë”ì—ì„œ ì‚¬ìš©í•˜ëŠ” GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
+// DrawEvents, CameraDataì— ë‹´ê²¨ìˆëŠ” ì •ë³´ë¥¼ ê°€ê³µí•˜ì—¬
+// Resources ê°ì²´ì— ë‹´ê¸´,
+// ShaderInputBuffer ì¸í„°í˜ì´ìŠ¤ë¥¼ ê°€ì§€ëŠ” ê°ì²´ë“¤ì— ì˜®ê²¨ë‹´ëŠ”ë‹¤.
+// ì‹±ê¸€ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
+// DrawEventsê°€ ë¹„ì–´ìˆë‹¤ë©´ ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 void Dispatcher::updateGPUDataMultiThreaded() {
 	if ( drawEvents_.empty() ) {
 		return;
 	}
 
-	// ¸Ş½Ã µ¥ÀÌÅÍ ¾÷·Îµå
-	// Á¤·ÄÀ» ÅëÇØ ÀÎ½ºÅÏ½ÌÀÌ °¡´ÉÇÏµµ·Ï ÇÑ´Ù.
+	// ë©”ì‹œ ë°ì´í„° ì—…ë¡œë“œ
+	// ì •ë ¬ì„ í†µí•´ ì¸ìŠ¤í„´ì‹±ì´ ê°€ëŠ¥í•˜ë„ë¡ í•œë‹¤.
 	std::sort( drawEvents_.begin(), drawEvents_.end() );
 
-	// perInstanceData¸¦ staticÀ¸·Î ¼±¾ğÇÏ¿©
-	// ¸Å¹ø Ã³À½ºÎÅÍ ¸Ş¸ğ¸®¸¦ ±¸ÃàÇÏÁö ¾Ê°í Àç»ç¿ëÇÒ ¼ö ÀÖµµ·Ï ÇÑ´Ù.
+	// perInstanceDataë¥¼ staticìœ¼ë¡œ ì„ ì–¸í•˜ì—¬
+	// ë§¤ë²ˆ ì²˜ìŒë¶€í„° ë©”ëª¨ë¦¬ë¥¼ êµ¬ì¶•í•˜ì§€ ì•Šê³  ì¬ì‚¬ìš©í•  ìˆ˜ ìˆë„ë¡ í•œë‹¤.
 	static auto perInstanceData = std::vector<BillboardShader::PerInstanceData>();
 	perInstanceData.resize( drawEvents_.size() );
 
-	// DrawEvent´Â jobSize ´ÜÀ§·Î ½º·¹µåµé¿¡ ºĞ¹èµÉ °ÍÀÌ¹Ç·Î,
-	// µ¿±âÈ­¸¦ À§ÇÑ latch¸¦ ÁØºñÇÑ´Ù.
-	// ÀÌ¶§, DrawEventÀÇ °³¼ö°¡ jobSize·Î ³ª´©¾î ¶³¾îÁöÁö ¾ÊÀ» °æ¿ì¸¦ ´ëºñÇÑ´Ù.
+	// DrawEventëŠ” jobSize ë‹¨ìœ„ë¡œ ìŠ¤ë ˆë“œë“¤ì— ë¶„ë°°ë  ê²ƒì´ë¯€ë¡œ,
+	// ë™ê¸°í™”ë¥¼ ìœ„í•œ latchë¥¼ ì¤€ë¹„í•œë‹¤.
+	// ì´ë•Œ, DrawEventì˜ ê°œìˆ˜ê°€ jobSizeë¡œ ë‚˜ëˆ„ì–´ ë–¨ì–´ì§€ì§€ ì•Šì„ ê²½ìš°ë¥¼ ëŒ€ë¹„í•œë‹¤.
 	auto latch = std::latch( drawEvents_.size() / jobSizeUpdate_
 		+ ((drawEvents_.size() % jobSizeUpdate_) != 0)
 	);
@@ -192,8 +192,8 @@ void Dispatcher::updateGPUDataMultiThreaded() {
 	const auto viewProj = cameraData_.view * cameraData_.proj;
 	const auto cameraPosV = cameraData_.pos;
 
-	// drawEventsÀÇ [accEventCnt, accEventCnt + jobSizeUpdate_) ¹üÀ§ÀÇ
-	// µ¥ÀÌÅÍ¸¦ °¡°øÇØ perInstanceDataÀÇ ´ëÀÀµÇ´Â ¿µ¿ª¿¡ ÀúÀåÇÑ´Ù.
+	// drawEventsì˜ [accEventCnt, accEventCnt + jobSizeUpdate_) ë²”ìœ„ì˜
+	// ë°ì´í„°ë¥¼ ê°€ê³µí•´ perInstanceDataì˜ ëŒ€ì‘ë˜ëŠ” ì˜ì—­ì— ì €ì¥í•œë‹¤.
 	std::size_t accEventCnt = 0u;
 	while ( accEventCnt + (jobSizeUpdate_ - 1) < drawEvents_.size() ) {
 		addJobUpdate( viewProj, drawEvents_.data() + accEventCnt,
@@ -204,7 +204,7 @@ void Dispatcher::updateGPUDataMultiThreaded() {
 		accEventCnt += jobSizeUpdate_;
 	}
 
-	// Âî²¨±â Ã³¸®
+	// ì°Œêº¼ê¸° ì²˜ë¦¬
 	if ( accEventCnt != drawEvents_.size() ) {
 		const auto lastJobSize = drawEvents_.size() - accEventCnt;
 
@@ -214,40 +214,40 @@ void Dispatcher::updateGPUDataMultiThreaded() {
 		);
 	}
 
-	// FrameData¿¡ ´ã°ÜÀÖ´Â Á¤º¸¸¦ °¡°øÇØ pfd¿¡ ÀúÀåÇÑ´Ù.
+	// FrameDataì— ë‹´ê²¨ìˆëŠ” ì •ë³´ë¥¼ ê°€ê³µí•´ pfdì— ì €ì¥í•œë‹¤.
 	auto pfd = BillboardShader::PerFrameData{
 		.vp = mu::transpose( viewProj ).getXmf(),
 		.cameraPosV = cameraPosV.getXmf()
 	};
-	// pfdÀÇ ³»¿ëÀ» ¹ÙÅÁÀ¸·Î GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
+	// pfdì˜ ë‚´ìš©ì„ ë°”íƒ•ìœ¼ë¡œ GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
 	pResources_->perFrameData.stage( roomIdx_, &pfd, 1u );
 
-	// µ¿±âÈ­
+	// ë™ê¸°í™”
 	latch.wait();
-	// ¸ğµç µ¥ÀÌÅÍ°¡ °¡°øµÈ ÀÌÈÄ, GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
+	// ëª¨ë“  ë°ì´í„°ê°€ ê°€ê³µëœ ì´í›„, GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
 	pResources_->perInstanceData.stage( roomIdx_, perInstanceData );
 	perInstanceData.clear();
 }
 
-// DrawEventsÀÇ Á¤º¸µéÀ» Âü°íÇÏ¿©
-// µå·Î¿ìÄİµéÀ» ¼öÇàÇÑ´Ù.
-// ½Ì±Û½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
-// DrawEvents°¡ ºñ¾îÀÖ´Ù¸é ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
+// DrawEventsì˜ ì •ë³´ë“¤ì„ ì°¸ê³ í•˜ì—¬
+// ë“œë¡œìš°ì½œë“¤ì„ ìˆ˜í–‰í•œë‹¤.
+// ì‹±ê¸€ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
+// DrawEventsê°€ ë¹„ì–´ìˆë‹¤ë©´ ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 void Dispatcher::drawSingleThreaded() {
 	if ( drawEvents_.empty() ) {
 		return;
 	}
 
-	// ¸í·É ÄÁÅØ½ºÆ® ÇÒ´ç
+	// ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ í• ë‹¹
 	CommandContext cmdCtx{};
 	DISPLAY_ERROR_STR( cmdListPool_->allocOne( CommandListUsage::RenderingSlave, cmdCtx ),
-		"[GFX Error] GFX::drawSingleThreaded: ¿äÃ»ÇÑ ¸í·É ¸®½ºÆ®¸¦ ÇÒ´ç¹ŞÁö ¸øÇß½À´Ï´Ù.", false
+		"[GFX Error] GFX::drawSingleThreaded: ìš”ì²­í•œ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ë¥¼ í• ë‹¹ë°›ì§€ ëª»í–ˆìŠµë‹ˆë‹¤.", false
 	);
 	if ( !cmdCtx.cmdList ) {
 		return;
 	}
 
-	// ¸í·É ÄÁÅØ½ºÆ® ÃÊ±âÈ­
+	// ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ ì´ˆê¸°í™”
 	auto cmdList = cmdCtx.cmdList.Get();
 	auto cmdAlloc = cmdCtx.cmdAlloc.Get();
 	auto hrCmdAllocReset = cmdAlloc->Reset();
@@ -263,15 +263,15 @@ void Dispatcher::drawSingleThreaded() {
 		return;
 	}
 
-	// ¸í·É ±â·Ï ½ÃÀÛ
+	// ëª…ë ¹ ê¸°ë¡ ì‹œì‘
 	DISPLAY_ERROR_DX_VOID( cmdList->SetGraphicsRootSignature( rootSig_->get() ), false );
 	DISPLAY_ERROR_DX_VOID( cmdList->SetPipelineState( shader_.Get() ), false );
 	DISPLAY_ERROR_DX_VOID( cmdList->OMSetRenderTargets( 1u, &rtv_, false, &dsv_ ), false );
 	DISPLAY_ERROR_DX_VOID( cmdList->RSSetViewports( 1u, &viewport_ ), false );
 	DISPLAY_ERROR_DX_VOID( cmdList->RSSetScissorRects( 1u, &scissorRect_ ), false );
 
-	// bindless È¯°æ ¼¼ÆÃ
-	// d3d12´Ü Descriptor Heap, Descriptor Table ¼³Á¤
+	// bindless í™˜ê²½ ì„¸íŒ…
+	// d3d12ë‹¨ Descriptor Heap, Descriptor Table ì„¤ì •
 	auto descriptorHeapsRaw = std::vector<ID3D12DescriptorHeap*>( descriptorHeaps_.size() );
 	std::ranges::transform( descriptorHeaps_, descriptorHeapsRaw.begin(),
 		[]( ComPtr<ID3D12DescriptorHeap>& comPtrHeap ) { return comPtrHeap.Get(); }
@@ -288,28 +288,28 @@ void Dispatcher::drawSingleThreaded() {
 
 	DISPLAY_ERROR_DX_VOID( cmdList->IASetPrimitiveTopology( D3D_PRIMITIVE_TOPOLOGY_POINTLIST ), false );
 
-	// ¹ÙÀÎµåÇØ¾ß ÇÏ´Â GPU µ¥ÀÌÅÍ´Â ´ÙÀ½ ¼¼ Á¾·ù´Ù. (¼ÎÀÌ´õ Âü°í)
+	// ë°”ì¸ë“œí•´ì•¼ í•˜ëŠ” GPU ë°ì´í„°ëŠ” ë‹¤ìŒ ì„¸ ì¢…ë¥˜ë‹¤. (ì…°ì´ë” ì°¸ê³ )
 	// - PerInstanceData
 	// - PerDrawcallData
 	// - PerFrameData
 
-	// PerInstanceData ¹ÙÀÎµå
+	// PerInstanceData ë°”ì¸ë“œ
 	pResources_->perInstanceData.bind( cmdList, rootParamIdxPID_, roomIdx_ );
-	// PerFrameData ¹ÙÀÎµå
+	// PerFrameData ë°”ì¸ë“œ
 	pResources_->perFrameData.bind( cmdList, rootParamIdxPFD_, roomIdx_ );
 
 	u32t idxDrawcall = 0u;
 
-	// DrawEventµéÀ» ÇÏ³ª¾¿ Ã³¸®ÇÑ´Ù.
+	// DrawEventë“¤ì„ í•˜ë‚˜ì”© ì²˜ë¦¬í•œë‹¤.
 	for ( const auto& drawEvent : drawEvents_ ) {
-		// PerDrawcallData ¹ÙÀÎµå
+		// PerDrawcallData ë°”ì¸ë“œ
 		pResources_->perDrawcallData.cbuffers[idxDrawcall].bind(
 			cmdList, rootParamIdxPDD_, roomIdx_
 		);
 
-		// PerDrawcallData GPU µ¥ÀÌÅÍ °»½Å
-		// (¹ÙÀÎµå¿Í GPU µ¥ÀÌÅÍ °»½Å ¼ø¼­´Â »ó°ü¾ø´Ù.
-		//  ¾îÂ÷ÇÇ ¹ÙÀÎµå´Â GPU ¸í·ÉÀÌ¶ó ¹Ù·Î ½ÇÇàµÇÁö ¾Ê±â ¶§¹®¿¡)
+		// PerDrawcallData GPU ë°ì´í„° ê°±ì‹ 
+		// (ë°”ì¸ë“œì™€ GPU ë°ì´í„° ê°±ì‹  ìˆœì„œëŠ” ìƒê´€ì—†ë‹¤.
+		//  ì–´ì°¨í”¼ ë°”ì¸ë“œëŠ” GPU ëª…ë ¹ì´ë¼ ë°”ë¡œ ì‹¤í–‰ë˜ì§€ ì•Šê¸° ë•Œë¬¸ì—)
 		auto perDrawcallData = BillboardShader::PerDrawcallData{
 			.material = BillboardShader::Material{
 				.idxTex = drawEvent.pTex->idxSrv,
@@ -343,32 +343,32 @@ void Dispatcher::drawSingleThreaded() {
 		return;
 	}
 
-	// ¸í·É ±â·Ï ³¡, ½ÇÇà
+	// ëª…ë ¹ ê¸°ë¡ ë, ì‹¤í–‰
 	ID3D12CommandList* stagedCmdLists[] = { cmdList };
 
 	DISPLAY_ERROR_DX_VOID( cmdQ_->ExecuteCommandLists( 1u, stagedCmdLists ), false );
 
-	// Fence °´Ã¼¿¡ »ç¿ëÇÑ ¸í·É ÄÁÅØ½ºÆ®¸¦ ¿¬°ü½ÃÄÑ ³õ´Â´Ù.
+	// Fence ê°ì²´ì— ì‚¬ìš©í•œ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë¥¼ ì—°ê´€ì‹œì¼œ ë†“ëŠ”ë‹¤.
 	pFence_->associatedCmdCtxs_[etoi( CommandListUsage::RenderingSlave )]
 		.push_back( std::move( cmdCtx ) );
 }
 
-// DrawEventsÀÇ Á¤º¸µéÀ» Âü°íÇÏ¿©
-// µå·Î¿ìÄİµéÀ» ¼öÇàÇÑ´Ù.
-// ¸ÖÆ¼½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
-// DrawEvents°¡ ºñ¾îÀÖ´Ù¸é ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
+// DrawEventsì˜ ì •ë³´ë“¤ì„ ì°¸ê³ í•˜ì—¬
+// ë“œë¡œìš°ì½œë“¤ì„ ìˆ˜í–‰í•œë‹¤.
+// ë©€í‹°ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
+// DrawEventsê°€ ë¹„ì–´ìˆë‹¤ë©´ ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 void Dispatcher::drawMultiThreaded() {
 	if ( drawEvents_.empty() ) {
 		return;
 	}
 
-	// DrawEvent´Â jobSize ´ÜÀ§·Î ½º·¹µåµé¿¡ ºĞ¹èµÉ °ÍÀÌ¹Ç·Î,
-	// µ¿±âÈ­¸¦ À§ÇÑ latch¸¦ ÁØºñÇÑ´Ù.
-	// ÀÌ¶§, DrawEventÀÇ °³¼ö°¡ jobSize·Î ³ª´©¾î ¶³¾îÁöÁö ¾ÊÀ» °æ¿ì¸¦ ´ëºñÇÑ´Ù.
+	// DrawEventëŠ” jobSize ë‹¨ìœ„ë¡œ ìŠ¤ë ˆë“œë“¤ì— ë¶„ë°°ë  ê²ƒì´ë¯€ë¡œ,
+	// ë™ê¸°í™”ë¥¼ ìœ„í•œ latchë¥¼ ì¤€ë¹„í•œë‹¤.
+	// ì´ë•Œ, DrawEventì˜ ê°œìˆ˜ê°€ jobSizeë¡œ ë‚˜ëˆ„ì–´ ë–¨ì–´ì§€ì§€ ì•Šì„ ê²½ìš°ë¥¼ ëŒ€ë¹„í•œë‹¤.
 	const std::size_t jobCnt = (drawEvents_.size() + (jobSizeDraw_ - 1)) / jobSizeDraw_;
 	auto latch = std::latch( jobCnt );
 
-	// ÆÄ¾ÇµÈ ÀÛ¾÷ÀÇ °³¼ö¿¡ ¸Â°Ô ¸í·É ÄÁÅØ½ºÆ®µéÀ» ÇÒ´çÇÑ´Ù.
+	// íŒŒì•…ëœ ì‘ì—…ì˜ ê°œìˆ˜ì— ë§ê²Œ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë“¤ì„ í• ë‹¹í•œë‹¤.
 	std::list<CommandContext> cmdCtxs{};
 	const auto requiredCmdListCnt = jobCnt;
 
@@ -377,26 +377,26 @@ void Dispatcher::drawMultiThreaded() {
 	);
 
 	DISPLAY_ERROR_STR( allocatedCmdListCnt == requiredCmdListCnt,
-		"[GFX Error] GFX::renderSampleShaderDispatch: ¿äÃ»ÇÑ ¼ö ¸¸Å­ÀÇ ¸í·É ¸®½ºÆ®¸¦ ÇÒ´ç¹ŞÁö ¸øÇß½À´Ï´Ù.",
+		"[GFX Error] GFX::renderSampleShaderDispatch: ìš”ì²­í•œ ìˆ˜ ë§Œí¼ì˜ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ë¥¼ í• ë‹¹ë°›ì§€ ëª»í–ˆìŠµë‹ˆë‹¤.",
 		false
 	);
 	if ( allocatedCmdListCnt != requiredCmdListCnt ) {
-		// ÇÊ¿äÇÑ ¸¸Å­ ¸í·É ÄÁÅØ½ºÆ®°¡ ÇÒ´çµÇÁö ¾Ê¾ÒÀ» °æ¿ì,
-		// ¸í·É ÄÁÅØ½ºÆ®µéÀ» »ç¿ëÇÏÁö ¾Ê°í ±×´ë·Î ¹İ³³ÇÏ¸ç,
-		// ÇÔ¼öµµ ±×´ë·Î ¹İÈ¯ÇÑ´Ù.
-		// ÃßÈÄ ÀÌ °æ¿ì¿¡µµ µ¿ÀÛÇÒ ¼ö ÀÖµµ·Ï ´ëÀÀÇÏµµ·Ï ÇÑ´Ù..
+		// í•„ìš”í•œ ë§Œí¼ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ê°€ í• ë‹¹ë˜ì§€ ì•Šì•˜ì„ ê²½ìš°,
+		// ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë“¤ì„ ì‚¬ìš©í•˜ì§€ ì•Šê³  ê·¸ëŒ€ë¡œ ë°˜ë‚©í•˜ë©°,
+		// í•¨ìˆ˜ë„ ê·¸ëŒ€ë¡œ ë°˜í™˜í•œë‹¤.
+		// ì¶”í›„ ì´ ê²½ìš°ì—ë„ ë™ì‘í•  ìˆ˜ ìˆë„ë¡ ëŒ€ì‘í•˜ë„ë¡ í•œë‹¤..
 		cmdListPool_->free( CommandListUsage::RenderingSlave, std::move( cmdCtxs ) );
 		return;
 	}
 
-	// drawEventsÀÇ [accEventCnt, accEventCnt + jobSizeUpdate_) ¹üÀ§ÀÇ
-	// µ¥ÀÌÅÍ¸¦ °¡°øÇØ perDrawcallData¸¦ ±¸ÃàÇÏ°í, µå·Î¿ìÄİÀ» ¼öÇàÇÑ´Ù.
+	// drawEventsì˜ [accEventCnt, accEventCnt + jobSizeUpdate_) ë²”ìœ„ì˜
+	// ë°ì´í„°ë¥¼ ê°€ê³µí•´ perDrawcallDataë¥¼ êµ¬ì¶•í•˜ê³ , ë“œë¡œìš°ì½œì„ ìˆ˜í–‰í•œë‹¤.
 	std::size_t accEventCnt = 0u;
-	// °¢ ÀÛ¾÷¸¶´Ù ¸í·É ÄÁÅØ½ºÆ®¸¦ ºĞ¹èÇÑ´Ù.
+	// ê° ì‘ì—…ë§ˆë‹¤ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë¥¼ ë¶„ë°°í•œë‹¤.
 	auto currCmdCtx = cmdCtxs.begin();
 
 	while ( accEventCnt + (jobSizeDraw_ - 1) < drawEvents_.size() ) {
-		// ¸í·É ÄÁÅØ½ºÆ® ÃÊ±âÈ­
+		// ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ ì´ˆê¸°í™”
 		auto hrCmdAllocReset = currCmdCtx->cmdAlloc->Reset();
 		DISPLAY_ERROR_DX_HR( hrCmdAllocReset, false );
 		if ( hrCmdAllocReset < 0 ) {
@@ -410,7 +410,7 @@ void Dispatcher::drawMultiThreaded() {
 			return;
 		}
 
-		// ¸í·É ±â·Ï
+		// ëª…ë ¹ ê¸°ë¡
 		addJobDraw( currCmdCtx->cmdList.Get(), drawEvents_.data() + accEventCnt,
 			drawEvents_.data() + accEventCnt + jobSizeDraw_, accEventCnt, latch
 		);
@@ -419,10 +419,10 @@ void Dispatcher::drawMultiThreaded() {
 		++currCmdCtx;
 	}
 
-	// Âî²¨±â Ã³¸®
+	// ì°Œêº¼ê¸° ì²˜ë¦¬
 	if ( accEventCnt != drawEvents_.size() ) {
 		const auto lastJobSize = drawEvents_.size() - accEventCnt;
-		// ¸í·É ÄÁÅØ½ºÆ® ÃÊ±âÈ­
+		// ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ ì´ˆê¸°í™”
 		auto hrCmdAllocReset = currCmdCtx->cmdAlloc->Reset();
 		DISPLAY_ERROR_DX_HR( hrCmdAllocReset, false );
 		if ( hrCmdAllocReset < 0 ) {
@@ -436,16 +436,16 @@ void Dispatcher::drawMultiThreaded() {
 			return;
 		}
 
-		// ¸í·É ±â·Ï
+		// ëª…ë ¹ ê¸°ë¡
 		addJobDraw( currCmdCtx->cmdList.Get(), drawEvents_.data() + accEventCnt,
 			drawEvents_.data() + accEventCnt + lastJobSize, accEventCnt, latch
 		);
 	}
 
-	// µ¿±âÈ­
+	// ë™ê¸°í™”
 	latch.wait();
 
-	// ¸í·É ±â·Ï ³¡, ½ÇÇà
+	// ëª…ë ¹ ê¸°ë¡ ë, ì‹¤í–‰
 	auto stagedCmdLists = std::vector<ID3D12CommandList*>( cmdCtxs.size(), nullptr );
 	std::ranges::transform( cmdCtxs, stagedCmdLists.begin(),
 		[]( const CommandContext& cmdCtx ) { return cmdCtx.cmdList.Get(); }
@@ -455,13 +455,13 @@ void Dispatcher::drawMultiThreaded() {
 		static_cast<UINT>(stagedCmdLists.size()), stagedCmdLists.data()
 	), false );
 
-	// Fence °´Ã¼¿¡ »ç¿ëÇÑ ¸í·É ÄÁÅØ½ºÆ®µéÀ» ¿¬°ü½ÃÄÑ ³õ´Â´Ù.
+	// Fence ê°ì²´ì— ì‚¬ìš©í•œ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë“¤ì„ ì—°ê´€ì‹œì¼œ ë†“ëŠ”ë‹¤.
 	pFence_->associatedCmdCtxs_[etoi( CommandListUsage::RenderingSlave )]
 		.splice( pFence_->associatedCmdCtxs_[etoi( CommandListUsage::RenderingSlave )].end(), std::move( cmdCtxs ) );
 }
 
-// ¸ÖÆ¼½º·¹µå ÀÛ¾÷ ½Ã, GPU µ¥ÀÌÅÍ °»½Å ÀÛ¾÷¿¡ ´ëÇØ
-// ´ÜÀ§ ÀÛ¾÷À» »ı¼ºÇÏ¿© ½º·¹µå¿¡ ÇÒ´çÇÏ´Âµ¥ »ç¿ëµÈ´Ù.
+// ë©€í‹°ìŠ¤ë ˆë“œ ì‘ì—… ì‹œ, GPU ë°ì´í„° ê°±ì‹  ì‘ì—…ì— ëŒ€í•´
+// ë‹¨ìœ„ ì‘ì—…ì„ ìƒì„±í•˜ì—¬ ìŠ¤ë ˆë“œì— í• ë‹¹í•˜ëŠ”ë° ì‚¬ìš©ëœë‹¤.
 void MU_CALLCONV Dispatcher::addJobUpdate( mu::Mat4x4 viewProj, const DrawEvent* pFirst,
 	const DrawEvent* pLast, BillboardShader::PerInstanceData* pOut, std::latch& latch
 ) {
@@ -478,8 +478,8 @@ void MU_CALLCONV Dispatcher::addJobUpdate( mu::Mat4x4 viewProj, const DrawEvent*
 	});
 }
 
-// ¸ÖÆ¼½º·¹µå ÀÛ¾÷ ½Ã, µå·Î¿ìÄİµé¿¡ ´ëÇØ
-// ´ÜÀ§ ÀÛ¾÷À» »ı¼ºÇÏ¿© ½º·¹µå¿¡ ÇÒ´çÇÏ´Âµ¥ »ç¿ëµÈ´Ù.
+// ë©€í‹°ìŠ¤ë ˆë“œ ì‘ì—… ì‹œ, ë“œë¡œìš°ì½œë“¤ì— ëŒ€í•´
+// ë‹¨ìœ„ ì‘ì—…ì„ ìƒì„±í•˜ì—¬ ìŠ¤ë ˆë“œì— í• ë‹¹í•˜ëŠ”ë° ì‚¬ìš©ëœë‹¤.
 void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 	const DrawEvent* pFirst, const DrawEvent* pLast,
 	std::size_t firstInstanceOffset, std::latch& latch
@@ -487,16 +487,16 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 	const auto jobSize = pLast - pFirst;
 
 	threadPool_->addJob( [=, &latch]() {
-		// ¸í·É ÄÁÅØ½ºÆ®¸¶´Ù °³º°ÀûÀ¸·Î ÆÄÀÌÇÁ¶óÀÎ ¼³Á¤À» ÇØÁÖ¾î¾ß ÇÑ´Ù.
-		// (ÆÄÀÌÇÁ¶óÀÎ ¼³Á¤Àº °øÀ¯µÇÁö ¾Ê´Â´Ù. ±×·¸´õ¶ó.)
+		// ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë§ˆë‹¤ ê°œë³„ì ìœ¼ë¡œ íŒŒì´í”„ë¼ì¸ ì„¤ì •ì„ í•´ì£¼ì–´ì•¼ í•œë‹¤.
+		// (íŒŒì´í”„ë¼ì¸ ì„¤ì •ì€ ê³µìœ ë˜ì§€ ì•ŠëŠ”ë‹¤. ê·¸ë ‡ë”ë¼.)
 		DISPLAY_ERROR_DX_VOID( threadCmdList->SetGraphicsRootSignature( rootSig_->get() ), false );
 		DISPLAY_ERROR_DX_VOID( threadCmdList->SetPipelineState( shader_.Get() ), false );
 		DISPLAY_ERROR_DX_VOID( threadCmdList->OMSetRenderTargets( 1u, &rtv_, false, &dsv_ ), false );
 		DISPLAY_ERROR_DX_VOID( threadCmdList->RSSetViewports( 1u, &viewport_ ), false );
 		DISPLAY_ERROR_DX_VOID( threadCmdList->RSSetScissorRects( 1u, &scissorRect_ ), false );
 
-		// bindless È¯°æ ¼¼ÆÃ
-		// d3d12´Ü Descriptor Heap, Descriptor Table ¼³Á¤
+		// bindless í™˜ê²½ ì„¸íŒ…
+		// d3d12ë‹¨ Descriptor Heap, Descriptor Table ì„¤ì •
 		auto descriptorHeapsRaw = std::vector<ID3D12DescriptorHeap*>( descriptorHeaps_.size() );
 		std::ranges::transform( descriptorHeaps_, descriptorHeapsRaw.begin(),
 			[]( ComPtr<ID3D12DescriptorHeap>& comPtrHeap ) { return comPtrHeap.Get(); }
@@ -513,25 +513,25 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 
 		DISPLAY_ERROR_DX_VOID( threadCmdList->IASetPrimitiveTopology( D3D_PRIMITIVE_TOPOLOGY_POINTLIST ), false );
 
-		// ¹ÙÀÎµåÇØ¾ß ÇÏ´Â GPU µ¥ÀÌÅÍ´Â ´ÙÀ½ µÎ Á¾·ù´Ù. (¼ÎÀÌ´õ Âü°í)
+		// ë°”ì¸ë“œí•´ì•¼ í•˜ëŠ” GPU ë°ì´í„°ëŠ” ë‹¤ìŒ ë‘ ì¢…ë¥˜ë‹¤. (ì…°ì´ë” ì°¸ê³ )
 		// - PerInstanceData
 		// - PerDrawcallData
 		// - PerFrameData
 
-		// PerInstanceData ¹ÙÀÎµå
+		// PerInstanceData ë°”ì¸ë“œ
 		pResources_->perInstanceData.bind( threadCmdList, rootParamIdxPID_, roomIdx_ );
-		// PerFrameData ¹ÙÀÎµå
+		// PerFrameData ë°”ì¸ë“œ
 		pResources_->perFrameData.bind( threadCmdList, rootParamIdxPFD_, roomIdx_ );
 
 		for ( auto idxDrawcall = firstInstanceOffset;
 			idxDrawcall < firstInstanceOffset + jobSize;
 			++idxDrawcall
 			) {
-			// DrawEventÀÇ Á¤º¸¸¦ ±â¹İÀ¸·Î GPU µ¥ÀÌÅÍ ¾÷µ¥ÀÌÆ® ¹×
-			// ÀÔ·Â Á¶¸³±â ¼³Á¤À» ÇÏ°í µå·Î¿ìÄİÀ» ¼öÇàÇÑ´Ù.
+			// DrawEventì˜ ì •ë³´ë¥¼ ê¸°ë°˜ìœ¼ë¡œ GPU ë°ì´í„° ì—…ë°ì´íŠ¸ ë°
+			// ì…ë ¥ ì¡°ë¦½ê¸° ì„¤ì •ì„ í•˜ê³  ë“œë¡œìš°ì½œì„ ìˆ˜í–‰í•œë‹¤.
 			const auto& drawEvent = drawEvents_[idxDrawcall];
 
-			// PerDrawcallData ¹ÙÀÎµå
+			// PerDrawcallData ë°”ì¸ë“œ
 			pResources_->perDrawcallData.cbuffers[idxDrawcall].bind(
 				threadCmdList, rootParamIdxPDD_, roomIdx_
 			);
@@ -543,9 +543,9 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 				},
 				.firstInstanceOffset = static_cast<u32t>(idxDrawcall)
 			};
-			// PerDrawcallData GPU µ¥ÀÌÅÍ °»½Å
-			// (¹ÙÀÎµå¿Í GPU µ¥ÀÌÅÍ °»½Å ¼ø¼­´Â »ó°ü¾ø´Ù.
-			//  ¾îÂ÷ÇÇ ¹ÙÀÎµå´Â GPU ¸í·ÉÀÌ¶ó ¹Ù·Î ½ÇÇàµÇÁö ¾Ê±â ¶§¹®¿¡)
+			// PerDrawcallData GPU ë°ì´í„° ê°±ì‹ 
+			// (ë°”ì¸ë“œì™€ GPU ë°ì´í„° ê°±ì‹  ìˆœì„œëŠ” ìƒê´€ì—†ë‹¤.
+			//  ì–´ì°¨í”¼ ë°”ì¸ë“œëŠ” GPU ëª…ë ¹ì´ë¼ ë°”ë¡œ ì‹¤í–‰ë˜ì§€ ì•Šê¸° ë•Œë¬¸ì—)
 			pResources_->perDrawcallData.cbuffers[idxDrawcall].stage(
 				roomIdx_, &perDrawcallData, 1u
 			);
@@ -563,7 +563,7 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 			), false );
 		}
 
-		// ¸í·É ±â·Ï Á¾·á
+		// ëª…ë ¹ ê¸°ë¡ ì¢…ë£Œ
 		DISPLAY_ERROR_DX_HR( threadCmdList->Close(), false );
 		latch.count_down();
 	});

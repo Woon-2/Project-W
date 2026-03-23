@@ -1,4 +1,4 @@
-#include "threadPool.hpp"
+ï»¿#include "threadPool.hpp"
 
 void ThreadPool::run(std::size_t threadCnt) {
 	workerThreads_.reserve(threadCnt);
@@ -21,7 +21,7 @@ void ThreadPool::stop() {
 
 void ThreadPool::worker(std::size_t threadIdx) {
 	while (!done_) {
-		// moodycamel::ConcurrentQueueÀÇ ´ÙÀ½ Á¶¾ğ¿¡ µû¶ó JobÀ» ²¨³½´Ù.
+		// moodycamel::ConcurrentQueueì˜ ë‹¤ìŒ ì¡°ì–¸ì— ë”°ë¼ Jobì„ êº¼ë‚¸ë‹¤.
 		// When producing or consuming many elements, the most efficient way is to:
 		// 1. Use the bulk methods of the queue with tokens
 		// 2. Failing that, use the bulk methods without tokens

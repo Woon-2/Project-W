@@ -1,4 +1,4 @@
-#ifndef __Online_game_HPP
+ï»¿#ifndef __Online_game_HPP
 #define __Online_game_HPP
 
 #include "../IGame.hpp"
@@ -49,25 +49,25 @@ struct Message {
 
 class Game : public IGame {
 public:
-	// »ç¿ëÀÚ ÀÔ·ÂÀ» ¹Ş¾Æ ½º·¹µå Ç®°ú GFX °´Ã¼¸¦ ÃÊ±âÈ­ÇÑ´Ù.
+	// ì‚¬ìš©ì ì…ë ¥ì„ ë°›ì•„ ìŠ¤ë ˆë“œ í’€ê³¼ GFX ê°ì²´ë¥¼ ì´ˆê¸°í™”í•œë‹¤.
 	Game();
 
 	GameType type() const override { return GameType::Online; }
 
 	void setTimer(Timer* pTimer) { pTimer_ = pTimer; }
-	// °´Ã¼µéÀ» »ı¼ºÇÑ´Ù.
+	// ê°ì²´ë“¤ì„ ìƒì„±í•œë‹¤.
 	void setupStage();
 
-	// °ÔÀÓÀÇ ¾÷µ¥ÀÌÆ®´Â ´ÙÀ½ ¼ø¼­´ë·Î ÀÌ·ç¾îÁø´Ù.
-	// ÀÔ·Â Ã³¸®
-	// ³×Æ®¿öÅ© ÆĞÅ¶ Ã³¸®
-	// ÀÌº¥Æ® Ã³¸®
-	// ¹°¸® ¾÷µ¥ÀÌÆ® ·çÆ¾
-	// °´Ã¼º° ¾÷µ¥ÀÌÆ® ·çÆ¾
-	// ¾Ö´Ï¸ŞÀÌ¼Ç ¾÷µ¥ÀÌÆ®
+	// ê²Œì„ì˜ ì—…ë°ì´íŠ¸ëŠ” ë‹¤ìŒ ìˆœì„œëŒ€ë¡œ ì´ë£¨ì–´ì§„ë‹¤.
+	// ì…ë ¥ ì²˜ë¦¬
+	// ë„¤íŠ¸ì›Œí¬ íŒ¨í‚· ì²˜ë¦¬
+	// ì´ë²¤íŠ¸ ì²˜ë¦¬
+	// ë¬¼ë¦¬ ì—…ë°ì´íŠ¸ ë£¨í‹´
+	// ê°ì²´ë³„ ì—…ë°ì´íŠ¸ ë£¨í‹´
+	// ì• ë‹ˆë©”ì´ì…˜ ì—…ë°ì´íŠ¸
 	void update(Milliseconds deltaTime) override;
 	void render() override;
-	// À©µµ¿ì ÇÁ·Î½ÃÀú¿¡¼­ Æ¯Á¤ÇÑ ¸Ş½ÃÁö Ã³¸®¸¦ À§ÀÓ¹Ş´Â´Ù.
+	// ìœˆë„ìš° í”„ë¡œì‹œì €ì—ì„œ íŠ¹ì •í•œ ë©”ì‹œì§€ ì²˜ë¦¬ë¥¼ ìœ„ì„ë°›ëŠ”ë‹¤.
 	LRESULT receiveWndMsg( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam ) override;
 
 	void addClientPlayer( i32t playerId, float x, float y, float z ) {
@@ -104,7 +104,7 @@ public:
 		newPlayer->setModel( assetManager_.modelPlayer( ) );
 		newPlayer->setScale( 1.f );
 		newPlayer->enableBVRendering();
-		// ÀÓ½Ã
+		// ì„ì‹œ
 		newPlayer->setHp(100);
 		// newPlayer->setAmmo(30);
 
@@ -146,11 +146,11 @@ private:
 	void processInputLobby(Milliseconds deltaTime);
 	void processInputGame(Milliseconds deltaTime);
 
-	// Ä¿¼­°¡ Å¬¶óÀÌ¾ğÆ® ¿µ¿ª ¹Ù±ùÀ¸·Î ³ª°¡Áö ¸øÇÏµµ·Ï ÇÑ´Ù.
-	// ÇÑ¹ø ¼³Á¤ÇØ³õÀ¸¸é, releaseCursor¸¦ È£ÃâÇÏ±â Àü±îÁö Ä¿¼­´Â °è¼Ó Å¬¶óÀÌ¾ğÆ® ¿µ¿ª¿¡ °¤ÇôÀÖ´Â´Ù.
+	// ì»¤ì„œê°€ í´ë¼ì´ì–¸íŠ¸ ì˜ì—­ ë°”ê¹¥ìœ¼ë¡œ ë‚˜ê°€ì§€ ëª»í•˜ë„ë¡ í•œë‹¤.
+	// í•œë²ˆ ì„¤ì •í•´ë†“ìœ¼ë©´, releaseCursorë¥¼ í˜¸ì¶œí•˜ê¸° ì „ê¹Œì§€ ì»¤ì„œëŠ” ê³„ì† í´ë¼ì´ì–¸íŠ¸ ì˜ì—­ì— ê°‡í˜€ìˆëŠ”ë‹¤.
 	void captureCursor();
-	// Ä¿¼­ Ä¸Ã³°¡ ¼³Á¤µÇ¾îÀÖ´Ù¸é ÇØÁ¦ÇÑ´Ù.
-	// captureCursor·Î È°¼ºÈ­µÈ Ä¿¼­ Ä¸Ã³¸¦ ÇØÁ¦ÇÏ´Â ¿ªÇÒÀ» ÇÑ´Ù.
+	// ì»¤ì„œ ìº¡ì²˜ê°€ ì„¤ì •ë˜ì–´ìˆë‹¤ë©´ í•´ì œí•œë‹¤.
+	// captureCursorë¡œ í™œì„±í™”ëœ ì»¤ì„œ ìº¡ì²˜ë¥¼ í•´ì œí•˜ëŠ” ì—­í• ì„ í•œë‹¤.
 	void releaseCursor();
 	void hideCursor();
 	void showCursor();
@@ -158,11 +158,11 @@ private:
 	AssetManager assetManager_{};
 
 	PhysicSystem physicSystem_{};
-	Seconds physicUpdateAcc_{ 0s };	// ¹°¸® ¾÷µ¥ÀÌÆ®¸¦ À§ÇÑ ½Ã°£ ´©»ê±â
-	Seconds physicUpdateInterval{ 1s / 60.f };	// 60fps·Î ¹°¸® ¾÷µ¥ÀÌÆ®
+	Seconds physicUpdateAcc_{ 0s };	// ë¬¼ë¦¬ ì—…ë°ì´íŠ¸ë¥¼ ìœ„í•œ ì‹œê°„ ëˆ„ì‚°ê¸°
+	Seconds physicUpdateInterval{ 1s / 60.f };	// 60fpsë¡œ ë¬¼ë¦¬ ì—…ë°ì´íŠ¸
 
 	Seconds moveStateSendAcc_{0s};
-	Seconds moveStateSendInterval_{1s / 20.f};	// 20fps·Î ÀÌµ¿ »óÅÂ ÆĞÅ¶ Àü¼Û
+	Seconds moveStateSendInterval_{1s / 20.f};	// 20fpsë¡œ ì´ë™ ìƒíƒœ íŒ¨í‚· ì „ì†¡
 	
 	AnimSystem animSystem_{};
 
@@ -186,8 +186,8 @@ private:
 
 	Camera camera_{};
 	mu::Radian cameraPitch_ = 0.f;
-	// Ä«¸Ş¶ó yaw´Â ±âº»ÀûÀ¸·Î ÇÃ·¹ÀÌ¾î¿¡ ´ëÇÑ ¿ÀÇÁ¼ÂÀ¸·Î¸¸ ÀÛµ¿ÇÏÁö¸¸,
-	// ÇÃ·¹ÀÌ¾î »ç¸Á ÀÌÈÄ¿¡´Â ÀÌ º¯¼ö·Î ÀÛµ¿ÇÑ´Ù.
+	// ì¹´ë©”ë¼ yawëŠ” ê¸°ë³¸ì ìœ¼ë¡œ í”Œë ˆì´ì–´ì— ëŒ€í•œ ì˜¤í”„ì…‹ìœ¼ë¡œë§Œ ì‘ë™í•˜ì§€ë§Œ,
+	// í”Œë ˆì´ì–´ ì‚¬ë§ ì´í›„ì—ëŠ” ì´ ë³€ìˆ˜ë¡œ ì‘ë™í•œë‹¤.
 	mu::Radian cameraYaw_ = 0.f;
 	CameraMode cameraMode_ = CameraMode::ThirdPerson;
 

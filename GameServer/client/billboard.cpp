@@ -1,9 +1,9 @@
-#include "pch.hpp"
+ï»¿#include "pch.hpp"
 #include "billboard.hpp"
 #include "errorHandling.hpp"
 
 void Billboard::update( Milliseconds deltaTime ) {
-	// µüÈ÷ ¾÷µ¥ÀÌÆ® ÇÒ ³»¿ëÀÌ ¾ø´Â °Í °°À½ ¾Æ¸¶µµ?
+	// ë”±íˆ ì—…ë°ì´íŠ¸ í•  ë‚´ìš©ì´ ì—†ëŠ” ê²ƒ ê°™ìŒ ì•„ë§ˆë„?
 }
 
 void Billboard::render( GFX& gfx ) {

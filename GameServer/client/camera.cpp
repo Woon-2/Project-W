@@ -1,4 +1,4 @@
-#include "pch.hpp"
+ï»¿#include "pch.hpp"
 #include "camera.hpp"
 
 void Camera::update() {
@@ -7,11 +7,11 @@ void Camera::update() {
 		return;
 	}
 
-	// Ä«¸Þ¶ó ÀÚÃ¼ÀÇ È¸Àü Àû¿ë
+	// ì¹´ë©”ë¼ ìžì²´ì˜ íšŒì „ ì ìš©
 	auto rotatedOffsetFromTarget = offsetFromTargetPreRotation_.rotate(offsetFromTarget_);
-	// Å¸°Ù ¿ÀºêÁ§Æ®ÀÇ È¸Àü Àû¿ë
+	// íƒ€ê²Ÿ ì˜¤ë¸Œì íŠ¸ì˜ íšŒì „ ì ìš©
 	rotatedOffsetFromTarget = pTarget->orient().rotate(rotatedOffsetFromTarget);
-	// Å¸°Ù ¿ÀºêÁ§Æ®¿¡ ´ëÇÑ Ä«¸Þ¶óÀÇ ÃÊÁ¡ ¿ÀÇÁ¼Â Àû¿ë
+	// íƒ€ê²Ÿ ì˜¤ë¸Œì íŠ¸ì— ëŒ€í•œ ì¹´ë©”ë¼ì˜ ì´ˆì  ì˜¤í”„ì…‹ ì ìš©
 	auto rotatedOffsetTargetPivot = xxPreRotation_.rotate(offsetTargetPivot_);
 	rotatedOffsetTargetPivot = pTarget->orient().rotate(rotatedOffsetTargetPivot);
 

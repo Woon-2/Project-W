@@ -1,4 +1,4 @@
-#ifndef __MathUtil_HPP
+ï»¿#ifndef __MathUtil_HPP
 #define __MathUtil_HPP
 
 #define __MathUtil_NOEXCEPT noexcept
@@ -406,7 +406,7 @@ public:
         return Vec<2>(dx::XMVectorSwizzle<0, 1, 0, 0>(vec_));
     }
 
-    // TODO: ¿©±â¼­ºÎÅÍ Âß ¼öÁ¤ÇØ¾ß ÇÔ...
+    // TODO: ì—¬ê¸°ì„œë¶€í„° ì­‰ ìˆ˜ì •í•´ì•¼ í•¨...
     Vec<2> MU_CALLCONV yx() const __MathUtil_NOEXCEPT requires (D >= 2) {
         return Vec<2>(dx::XMVectorSwizzle<1, 0>(vec_));
     }

@@ -1,4 +1,4 @@
-#include "pch.hpp"
+ï»¿#include "pch.hpp"
 #include "font.hpp"
 #include "errorHandling.hpp"
 
@@ -14,7 +14,7 @@ void Font::init( ID3D12Device* device, ID3D12CommandQueue* cmdQ, UINT width, UIN
 void Font::createD2D( ID3D12Device* device, ID3D12CommandQueue* cmdQ )
 {
 	// Create D3D11 on D3D12
-	// 12¿Í È£È¯µÇ´Â 11 µğ¹ÙÀÌ½º¸¦ ¸¸µç´Ù.
+	// 12ì™€ í˜¸í™˜ë˜ëŠ” 11 ë””ë°”ì´ìŠ¤ë¥¼ ë§Œë“ ë‹¤.
 
 	UINT flag = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 	D2D1_FACTORY_OPTIONS factoryOptions = {};
@@ -116,13 +116,13 @@ void Font::CreateBitmapFromText( int* piOutWidth, int* piOutHeight, IDWriteTextF
 	{
 		pTextLayout->GetMetrics( &metrics );
 
-		// Å¸°Ù¼³Á¤
+		// íƒ€ê²Ÿì„¤ì •
 		pD2DDeviceContext->SetTarget( pD2DTargetBitmap_.Get() );
 
-		// ¾ÈÆ¼¾Ù¸®¾î½Ì¸ğµå ¼³Á¤
+		// ì•ˆí‹°ì•¨ë¦¬ì–´ì‹±ëª¨ë“œ ì„¤ì •
 		pD2DDeviceContext->SetTextAntialiasMode( D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE );
 
-		// ÅØ½ºÆ® ·»´õ¸µ
+		// í…ìŠ¤íŠ¸ ë Œë”ë§
 		pD2DDeviceContext->BeginDraw();
 
 		pD2DDeviceContext->Clear( D2D1::ColorF( 0.0f, 0.0f, 0.0f, 0.0f ) );
@@ -134,11 +134,11 @@ void Font::CreateBitmapFromText( int* piOutWidth, int* piOutHeight, IDWriteTextF
 		// is lost. It will be handled during the next call to Present.
 		DISPLAY_ERROR_DX_HR( pD2DDeviceContext->EndDraw(), true);
 
-		// ¾ÈÆ¼¾Ù¸®¾î½Ì ¸ğµå º¹±¸    
+		// ì•ˆí‹°ì•¨ë¦¬ì–´ì‹± ëª¨ë“œ ë³µêµ¬    
 		pD2DDeviceContext->SetTextAntialiasMode( D2D1_TEXT_ANTIALIAS_MODE_DEFAULT );
 		pD2DDeviceContext->SetTarget( nullptr );
 
-		// ·¹ÀÌ¾Æ¿ô ¿ÀºêÁ§Æ® ÇÊ¿ä¾øÀ¸´Ï Release
+		// ë ˆì´ì•„ì›ƒ ì˜¤ë¸Œì íŠ¸ í•„ìš”ì—†ìœ¼ë‹ˆ Release
 		pTextLayout->Release();
 		pTextLayout = nullptr;
 	}
@@ -247,7 +247,7 @@ TextImage::TextImage( ID3D12Device* device, UINT textWidth, UINT textHeight, Des
 		texture.uploadInfo->rowSizes.data(), &texture.uploadInfo->totalSize
 	);
 
-	// default heap¿¡ ´ëÇÑ ¸®¼Ò½º¸¸ srv »ı¼º
+	// default heapì— ëŒ€í•œ ë¦¬ì†ŒìŠ¤ë§Œ srv ìƒì„±
 	D3D12_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
 	SRVDesc.Format = TexFormat;
 	SRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;

@@ -1,19 +1,19 @@
-#include "pch.hpp"
+ï»¿#include "pch.hpp"
 #include "animation.hpp"
 #include "errorHandling.hpp"
 #include "binaryImport.hpp"
 
-// Àü´ŞµÈ ¾Ö´Ï¸ŞÀÌ¼Ç ÇÁ·¹ÀÓÀ» Çà·Ä·Î º¯È¯ÇÑ´Ù.
-// lerpAnimFrames ÇÔ¼ö·Î ¿©·¯ ÇÁ·¹ÀÓÀ» º¸°£ÇÑ ÃÖÁ¾ ÇÁ·¹ÀÓÀ»
-// ÀÌ ÇÔ¼ö¸¦ ÅëÇØ Çà·Ä·Î º¯È¯ÇØ¼­ »ç¿ëÇØ¾ß ÇÑ´Ù.
+// ì „ë‹¬ëœ ì• ë‹ˆë©”ì´ì…˜ í”„ë ˆì„ì„ í–‰ë ¬ë¡œ ë³€í™˜í•œë‹¤.
+// lerpAnimFrames í•¨ìˆ˜ë¡œ ì—¬ëŸ¬ í”„ë ˆì„ì„ ë³´ê°„í•œ ìµœì¢… í”„ë ˆì„ì„
+// ì´ í•¨ìˆ˜ë¥¼ í†µí•´ í–‰ë ¬ë¡œ ë³€í™˜í•´ì„œ ì‚¬ìš©í•´ì•¼ í•œë‹¤.
 mu::Mat4x4 MU_CALLCONV convertAnimFrameToMatrix(AnimFrame frame) {
 	return mu::Mat4x4(mu::scale(frame.scale)) * mu::Mat4x4(frame.rotation)
 		* mu::translate(frame.translation);
 }
 
-// µÎ ¾Ö´Ï¸ŞÀÌ¼Ç ÇÁ·¹ÀÓÀ» ÀÎÀÚ t·Î ¼±Çüº¸°£ÇÑ´Ù.
-// translation°ú scale¿¡ ´ëÇØ¼± mu::lerp°¡,
-// rotation¿¡ ´ëÇØ¼± mu::slerp°¡ »ç¿ëµÈ´Ù.
+// ë‘ ì• ë‹ˆë©”ì´ì…˜ í”„ë ˆì„ì„ ì¸ì të¡œ ì„ í˜•ë³´ê°„í•œë‹¤.
+// translationê³¼ scaleì— ëŒ€í•´ì„  mu::lerpê°€,
+// rotationì— ëŒ€í•´ì„  mu::slerpê°€ ì‚¬ìš©ëœë‹¤.
 AnimFrame MU_CALLCONV lerpAnimFrames(AnimFrame lhs, AnimFrame rhs, float t) {
 	AnimFrame ret{};
 	ret.translation = mu::lerp(lhs.translation, rhs.translation, t);
@@ -22,8 +22,8 @@ AnimFrame MU_CALLCONV lerpAnimFrames(AnimFrame lhs, AnimFrame rhs, float t) {
 	return ret;
 }
 
-// Àü´ŞµÈ ¾Ö´Ï¸ŞÀÌ¼Ç ÇÁ·¹ÀÓµéÀÇ °¡ÁßÇÕÀ» °è»êÇÑ´Ù.
-// rotationÀº normalized linear interpolationÀ¸·Î °è»êµÈ´Ù.
+// ì „ë‹¬ëœ ì• ë‹ˆë©”ì´ì…˜ í”„ë ˆì„ë“¤ì˜ ê°€ì¤‘í•©ì„ ê³„ì‚°í•œë‹¤.
+// rotationì€ normalized linear interpolationìœ¼ë¡œ ê³„ì‚°ëœë‹¤.
 AnimFrame MU_CALLCONV sumWeightedAnimFrames(std::span<WeightedAnimFrame> frames) {
 	AnimFrame ret{};
 	auto tmpQuat = mu::Quat(0.f, 0.f, 0.f, 0.f);
@@ -54,8 +54,8 @@ void importAnimClip(std::ifstream& ifs, AnimClip& clip) {
 		// no-op
 	}
 	else {
-		DISPLAY_ERROR_STR( false, "[File I/O Error] importAnimClip: ¾Ë ¼ö ¾ø´Â wrapMode °ª \""s
-			+ wrapModeStr + "\"À» ÀĞ¾ú½À´Ï´Ù.",
+		DISPLAY_ERROR_STR( false, "[File I/O Error] importAnimClip: ì•Œ ìˆ˜ ì—†ëŠ” wrapMode ê°’ \""s
+			+ wrapModeStr + "\"ì„ ì½ì—ˆìŠµë‹ˆë‹¤.",
 			false
 		);
 	}
@@ -64,7 +64,7 @@ void importAnimClip(std::ifstream& ifs, AnimClip& clip) {
 		const auto boneIdx = readInteger(ifs, "Bone");
 		const auto keyFrameCnt = readInteger(ifs, "KeyFrameCnt");
 
-		keyFrames.resize(keyFrameCnt + 1u);	// sentinel °ªÀ» À§ÇÔ
+		keyFrames.resize(keyFrameCnt + 1u);	// sentinel ê°’ì„ ìœ„í•¨
 		for (int i = 0; i < keyFrameCnt; ++i) {
 			auto& keyFrame = keyFrames[i];
 
@@ -84,7 +84,7 @@ void importAnimClip(std::ifstream& ifs, AnimClip& clip) {
 			readTailTag(ifs, "KeyFrame");
 		}
 
-		// sentinel °ª Ãß°¡: ¾Ö´Ï¸ŞÀÌ¼Ç ½Ã°£Àº +inf, º¯È¯Àº ¸¶Áö¸· ÇÁ·¹ÀÓ°ú °°À½
+		// sentinel ê°’ ì¶”ê°€: ì• ë‹ˆë©”ì´ì…˜ ì‹œê°„ì€ +inf, ë³€í™˜ì€ ë§ˆì§€ë§‰ í”„ë ˆì„ê³¼ ê°™ìŒ
 		keyFrames[keyFrameCnt].time = Seconds(std::numeric_limits<float>::max());
 		keyFrames[keyFrameCnt].translation = keyFrames[keyFrameCnt - 1].translation;
 		keyFrames[keyFrameCnt].rotation = keyFrames[keyFrameCnt - 1].rotation;
@@ -93,14 +93,14 @@ void importAnimClip(std::ifstream& ifs, AnimClip& clip) {
 
 	readTailTag(ifs, "Clip");
 
-	gSharedLog << "[Resource Load] ¾Ö´Ï¸ŞÀÌ¼Ç Å¬¸³ " << clip.name << " ·Îµå ¿Ï·á\n";
+	gSharedLog << "[Resource Load] ì• ë‹ˆë©”ì´ì…˜ í´ë¦½ " << clip.name << " ë¡œë“œ ì™„ë£Œ\n";
 }
 
 std::vector<AnimClip> loadAnimClipsFromFile(const std::filesystem::path& path) {
 	std::vector<AnimClip> ret{};
 
     auto ifs = std::ifstream(path, std::ios::binary);
-    DISPLAY_ERROR_STR(ifs.good(), "[File I/O Error]: loadAnimClipsFromFile: "s + path.string() + " ÆÄÀÏÀ» ¿­ ¼ö ¾ø½À´Ï´Ù."s, false);
+    DISPLAY_ERROR_STR(ifs.good(), "[File I/O Error]: loadAnimClipsFromFile: "s + path.string() + " íŒŒì¼ì„ ì—´ ìˆ˜ ì—†ìŠµë‹ˆë‹¤."s, false);
     if (!ifs) {
         return ret;
     }
@@ -115,30 +115,30 @@ std::vector<AnimClip> loadAnimClipsFromFile(const std::filesystem::path& path) {
 		importAnimClip(ifs, clip);
 	}
 
-    gSharedLog << "[Resource Load] File I/O: ¾Ö´Ï¸ŞÀÌ¼Ç ¼¼Æ® " << animationSetName << '(' << path << ") ·Îµå ¿Ï·á\n";
+    gSharedLog << "[Resource Load] File I/O: ì• ë‹ˆë©”ì´ì…˜ ì„¸íŠ¸ " << animationSetName << '(' << path << ") ë¡œë“œ ì™„ë£Œ\n";
 
     return ret;
 }
 
-// ´ë»ó ¾Ö´Ï¸ŞÀÌ¼Ç Å¬¸³À» Ãß°¡ÇÑ´Ù.
-// À¢¸¸ÇÏ¸é »ó¼ÓÇÑ Å¬·¡½º¿¡¼­ ÃÊ±âÈ­½ÃÁ¡¿¡ »ç¿ëÇÒ Å¬¸³µéÀ» ÀüºÎ pushÇØ³õ°í
-// °ÔÀÓ °´Ã¼ÀÇ »óÅÂ¿¡ ¸Â°Ô Å¬¸³µéÀ» ¼±ÅÃÇØ ÇÁ·¹ÀÓ ¾÷µ¥ÀÌÆ® ¹× ºí·»µùÀ» ¼öÇàÇÏµµ·Ï ÇÑ´Ù.
+// ëŒ€ìƒ ì• ë‹ˆë©”ì´ì…˜ í´ë¦½ì„ ì¶”ê°€í•œë‹¤.
+// ì›¬ë§Œí•˜ë©´ ìƒì†í•œ í´ë˜ìŠ¤ì—ì„œ ì´ˆê¸°í™”ì‹œì ì— ì‚¬ìš©í•  í´ë¦½ë“¤ì„ ì „ë¶€ pushí•´ë†“ê³ 
+// ê²Œì„ ê°ì²´ì˜ ìƒíƒœì— ë§ê²Œ í´ë¦½ë“¤ì„ ì„ íƒí•´ í”„ë ˆì„ ì—…ë°ì´íŠ¸ ë° ë¸”ë Œë”©ì„ ìˆ˜í–‰í•˜ë„ë¡ í•œë‹¤.
 void AnimBlender::pushTargetClip(
 	const std::string& key, const std::shared_ptr<const AnimClip>& pTargetClip
 ) {
 	DISPLAY_ERROR_STR( skeleton_.pRoot, "[Animation Error] AnimBlender::pushTargetClip: "s
-		+ "AnimBlender °´Ã¼¿¡ ½ºÄÌ·¹ÅæÀÌ ÇÒ´çµÇ¾î ÀÖÁö ¾Ê½À´Ï´Ù.",
+		+ "AnimBlender ê°ì²´ì— ìŠ¤ì¼ˆë ˆí†¤ì´ í• ë‹¹ë˜ì–´ ìˆì§€ ì•ŠìŠµë‹ˆë‹¤.",
 		false
 	);
 
 	DISPLAY_ERROR_STR( skeleton_.skeletonEnumeration == pTargetClip->skeletonEnumeration,
-		"[Animation Error] AnimBlender::pushTargetClip: ½ºÄÌ·¹Åæ°ú ¾Ö´Ï¸ŞÀÌ¼Ç Å¬¸³ÀÌ È£È¯µÇÁö ¾Ê½À´Ï´Ù.",
+		"[Animation Error] AnimBlender::pushTargetClip: ìŠ¤ì¼ˆë ˆí†¤ê³¼ ì• ë‹ˆë©”ì´ì…˜ í´ë¦½ì´ í˜¸í™˜ë˜ì§€ ì•ŠìŠµë‹ˆë‹¤.",
 		false
 	);
 
 	DISPLAY_ERROR_STR( !frameInfoMap_.contains(key),
 		"[Animation Error] AnimBlender::pushTargetClip: key \""s + key
-		+ "\"ÀÌ(°¡) ÀÌ¹Ì AnimBlender¿¡ µî·ÏµÇ¾î ÀÖ¾ú½À´Ï´Ù.",
+		+ "\"ì´(ê°€) ì´ë¯¸ AnimBlenderì— ë“±ë¡ë˜ì–´ ìˆì—ˆìŠµë‹ˆë‹¤.",
 		false
 	);
 
@@ -161,20 +161,20 @@ void AnimBlender::pushTargetClip(
 	}
 }
 
-// ´ë»ó ¾Ö´Ï¸ŞÀÌ¼Ç Å¬¸³À» Á¦°ÅÇÑ´Ù.
+// ëŒ€ìƒ ì• ë‹ˆë©”ì´ì…˜ í´ë¦½ì„ ì œê±°í•œë‹¤.
 void AnimBlender::popTargetClip(const std::string& key) {
 	frameInfoMap_.erase(key);
 }
 
-// ½ºÄÌ·¹ÅæÀ» ¼³Á¤ÇÑ´Ù.
-// ¾Ö´Ï¸ŞÀÌ¼Ç Å¬¸³µéÀ» Ãß°¡ÇÏ±â Àü¿¡ ½ºÄÌ·¹ÅæÀÌ ¸ÕÀú ¼³Á¤µÇ¾î¾ß ÇÑ´Ù.
+// ìŠ¤ì¼ˆë ˆí†¤ì„ ì„¤ì •í•œë‹¤.
+// ì• ë‹ˆë©”ì´ì…˜ í´ë¦½ë“¤ì„ ì¶”ê°€í•˜ê¸° ì „ì— ìŠ¤ì¼ˆë ˆí†¤ì´ ë¨¼ì € ì„¤ì •ë˜ì–´ì•¼ í•œë‹¤.
 void AnimBlender::setSkeleton(const Skeleton& skeleton) {
 	skeleton_ = skeleton;
 	boneXformCache_.resize(skeleton_.bones->size());
 }
 
-// º»µéÀÇ ·ÎÄÃ º¯È¯À» ½ºÄÌ·¹ÅæÀÇ º» Æ®¸®¸¦ ¼øÈ¸ÇÏ¸ç
-// µå·¹½º °ø°£ º¯È¯À¸·Î È¯¿øÇÑ´Ù.
+// ë³¸ë“¤ì˜ ë¡œì»¬ ë³€í™˜ì„ ìŠ¤ì¼ˆë ˆí†¤ì˜ ë³¸ íŠ¸ë¦¬ë¥¼ ìˆœíšŒí•˜ë©°
+// ë“œë ˆìŠ¤ ê³µê°„ ë³€í™˜ìœ¼ë¡œ í™˜ì›í•œë‹¤.
 void AnimBlender::onCalcDress(PassKey<AnimSystem>) {
 	traverseBone(*skeleton_.pRoot);
 }
@@ -188,15 +188,15 @@ void MU_CALLCONV AnimBlender::traverseBone(const Bone& bone, mu::Mat4x4 parentXf
 	}
 }
 
-// º»µéÀÇ ÃÖÁ¾ º¯È¯ Çà·ÄµéÀ» °è»êÇÑ´Ù.
-// ½ºÄÌ·¹ÅæÀÇ º»µéÀº ±âº»ÀûÀ¸·Î µå·¹½º °ø°£¿¡ ÀÖ±â ¶§¹®¿¡,
-// 1. µå·¹½º °ø°£ -> º» °ø°£ ÀÌÀü
-// 2. º» °ø°£¿¡¼­ ¾Ö´Ï¸ŞÀÌ¼Ç ÇÁ·¹ÀÓ¿¡ µû¸¥ º¯È¯ ¼öÇà
-// 3. º» °ø°£ -> µå·¹½º °ø°£ ÀÌÀü
-// ÀÇ ´Ü°è°¡ ÇÊ¿äÇÑµ¥,
-// onCalcLocalÀÌ 2., onCalcDress°¡ 3.ÀÇ ´Ü°è¸¦ ¼öÇàÇß´Ù.
-// ±× °á°ú Çà·ÄÀÇ ¾ÕÂÊ¿¡ º»µéÀÇ toLocal Çà·ÄÀ» °öÇØÁÖ¾î
-// 1.ÀÇ ´Ü°è¸¦ ¼öÇàÇÑ´Ù.
+// ë³¸ë“¤ì˜ ìµœì¢… ë³€í™˜ í–‰ë ¬ë“¤ì„ ê³„ì‚°í•œë‹¤.
+// ìŠ¤ì¼ˆë ˆí†¤ì˜ ë³¸ë“¤ì€ ê¸°ë³¸ì ìœ¼ë¡œ ë“œë ˆìŠ¤ ê³µê°„ì— ìˆê¸° ë•Œë¬¸ì—,
+// 1. ë“œë ˆìŠ¤ ê³µê°„ -> ë³¸ ê³µê°„ ì´ì „
+// 2. ë³¸ ê³µê°„ì—ì„œ ì• ë‹ˆë©”ì´ì…˜ í”„ë ˆì„ì— ë”°ë¥¸ ë³€í™˜ ìˆ˜í–‰
+// 3. ë³¸ ê³µê°„ -> ë“œë ˆìŠ¤ ê³µê°„ ì´ì „
+// ì˜ ë‹¨ê³„ê°€ í•„ìš”í•œë°,
+// onCalcLocalì´ 2., onCalcDressê°€ 3.ì˜ ë‹¨ê³„ë¥¼ ìˆ˜í–‰í–ˆë‹¤.
+// ê·¸ ê²°ê³¼ í–‰ë ¬ì˜ ì•ìª½ì— ë³¸ë“¤ì˜ toLocal í–‰ë ¬ì„ ê³±í•´ì£¼ì–´
+// 1.ì˜ ë‹¨ê³„ë¥¼ ìˆ˜í–‰í•œë‹¤.
 void AnimBlender::onCalcFinal(PassKey<AnimSystem>) {
 	auto& bones = *skeleton_.bones;
 	for (std::size_t i = 0; i < bones.size(); ++i) {
@@ -204,46 +204,46 @@ void AnimBlender::onCalcFinal(PassKey<AnimSystem>) {
 	}
 }
 
-// º»µéÀÇ ·ÎÄÃ º¯È¯ Çà·Äµé¿¡ Á¢±ÙÇÑ´Ù.
-// onCalcLocal¿¡¼­ »ç¿ëÇÏµµ·Ï ÇÑ´Ù.
+// ë³¸ë“¤ì˜ ë¡œì»¬ ë³€í™˜ í–‰ë ¬ë“¤ì— ì ‘ê·¼í•œë‹¤.
+// onCalcLocalì—ì„œ ì‚¬ìš©í•˜ë„ë¡ í•œë‹¤.
 std::vector<mu::Mat4x4>& AnimBlender::localXformData() {
 	//DISPLAY_ERROR_STR( stage_ == Stage::committedLocal,
 	//	"[Animation Error] AnimBlender::localXformData: "s
-	//	+ "localXformData¿¡ Á¢±ÙÇÏ±â À§ÇØ¼± AnimBlenderÀÇ »óÅÂ°¡ committedLocalÀÌ¾î¾ß ÇÕ´Ï´Ù.\n"
-	//	+ "¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ´Ù¸¥ ´Ü°è·Î ÀÌ¹Ì ÀüÀÌÇß°Å³ª, ·ÎÄÃ º¯È¯ °è»êÀÌ ³¡³ªÁö ¾Ê¾Æ Ä³½ÃÀÇ ³»¿ëÀÌ À¯È¿ÇÏÁö ¾Ê½À´Ï´Ù.",
+	//	+ "localXformDataì— ì ‘ê·¼í•˜ê¸° ìœ„í•´ì„  AnimBlenderì˜ ìƒíƒœê°€ committedLocalì´ì–´ì•¼ í•©ë‹ˆë‹¤.\n"
+	//	+ "ì• ë‹ˆë©”ì´ì…˜ì´ ë‹¤ë¥¸ ë‹¨ê³„ë¡œ ì´ë¯¸ ì „ì´í–ˆê±°ë‚˜, ë¡œì»¬ ë³€í™˜ ê³„ì‚°ì´ ëë‚˜ì§€ ì•Šì•„ ìºì‹œì˜ ë‚´ìš©ì´ ìœ íš¨í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.",
 	//	false
 	//);
 	return boneXformCache_;
 }
 
-// º»µéÀÇ µå·¹½º °ø°£ º¯È¯ Çà·Äµé¿¡ Á¢±ÙÇÑ´Ù.
+// ë³¸ë“¤ì˜ ë“œë ˆìŠ¤ ê³µê°„ ë³€í™˜ í–‰ë ¬ë“¤ì— ì ‘ê·¼í•œë‹¤.
 std::vector<mu::Mat4x4>& AnimBlender::dressXformData() {
 	//DISPLAY_ERROR_STR( stage_ == Stage::committedDress,
 	//	"[Animation Error] AnimBlender::dressXformData: "s
-	//	+ "dressXformData¿¡ Á¢±ÙÇÏ±â À§ÇØ¼± AnimBlenderÀÇ »óÅÂ°¡ committedDressÀÌ¾î¾ß ÇÕ´Ï´Ù.\n"
-	//	+ "¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ´Ù¸¥ ´Ü°è·Î ÀÌ¹Ì ÀüÀÌÇß°Å³ª, ·ÎÄÃ º¯È¯ °è»êÀÌ ³¡³ªÁö ¾Ê¾Æ Ä³½ÃÀÇ ³»¿ëÀÌ À¯È¿ÇÏÁö ¾Ê½À´Ï´Ù.",
+	//	+ "dressXformDataì— ì ‘ê·¼í•˜ê¸° ìœ„í•´ì„  AnimBlenderì˜ ìƒíƒœê°€ committedDressì´ì–´ì•¼ í•©ë‹ˆë‹¤.\n"
+	//	+ "ì• ë‹ˆë©”ì´ì…˜ì´ ë‹¤ë¥¸ ë‹¨ê³„ë¡œ ì´ë¯¸ ì „ì´í–ˆê±°ë‚˜, ë¡œì»¬ ë³€í™˜ ê³„ì‚°ì´ ëë‚˜ì§€ ì•Šì•„ ìºì‹œì˜ ë‚´ìš©ì´ ìœ íš¨í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.",
 	//	false
 	//);
 	return boneXformCache_;
 }
 
-// º»µéÀÇ ÃÖÁ¾ º¯È¯ Çà·ÄµéÀ» ¹İÈ¯ÇÑ´Ù.
-// ·»´õ¸µ ½Ã¿¡´Â ÀÌ Çà·ÄµéÀ» ÂüÁ¶ÇÑ´Ù.
+// ë³¸ë“¤ì˜ ìµœì¢… ë³€í™˜ í–‰ë ¬ë“¤ì„ ë°˜í™˜í•œë‹¤.
+// ë Œë”ë§ ì‹œì—ëŠ” ì´ í–‰ë ¬ë“¤ì„ ì°¸ì¡°í•œë‹¤.
 std::vector<mu::Mat4x4>& AnimBlender::finalXformData() {
 	//DISPLAY_ERROR_STR( stage_ == Stage::committedFinal,
 	//	"[Animation Error] AnimBlender::finalXformData: "s
-	//	+ "finalXformData¿¡ Á¢±ÙÇÏ±â À§ÇØ¼± AnimBlenderÀÇ »óÅÂ°¡ committedFinalÀÌ¾î¾ß ÇÕ´Ï´Ù.\n"
-	//	+ "¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ´Ù¸¥ ´Ü°è·Î ÀÌ¹Ì ÀüÀÌÇß°Å³ª, ·ÎÄÃ º¯È¯ °è»êÀÌ ³¡³ªÁö ¾Ê¾Æ Ä³½ÃÀÇ ³»¿ëÀÌ À¯È¿ÇÏÁö ¾Ê½À´Ï´Ù.",
+	//	+ "finalXformDataì— ì ‘ê·¼í•˜ê¸° ìœ„í•´ì„  AnimBlenderì˜ ìƒíƒœê°€ committedFinalì´ì–´ì•¼ í•©ë‹ˆë‹¤.\n"
+	//	+ "ì• ë‹ˆë©”ì´ì…˜ì´ ë‹¤ë¥¸ ë‹¨ê³„ë¡œ ì´ë¯¸ ì „ì´í–ˆê±°ë‚˜, ë¡œì»¬ ë³€í™˜ ê³„ì‚°ì´ ëë‚˜ì§€ ì•Šì•„ ìºì‹œì˜ ë‚´ìš©ì´ ìœ íš¨í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.",
 	//	false
 	//);
 	return boneXformCache_;
 }
 
-// key¿¡ ÇØ´çÇÏ´Â Å¬¸³À» elapsed ¸¸Å­ÀÇ ½Ã°£ÀÌ Áö³µÀ» ¶§ÀÇ ÇÁ·¹ÀÓÀ¸·Î °»½ÅÇÑ´Ù.
+// keyì— í•´ë‹¹í•˜ëŠ” í´ë¦½ì„ elapsed ë§Œí¼ì˜ ì‹œê°„ì´ ì§€ë‚¬ì„ ë•Œì˜ í”„ë ˆì„ìœ¼ë¡œ ê°±ì‹ í•œë‹¤.
 void AnimBlender::updateFrames(const std::string& key, Seconds elapsed) {
 	DISPLAY_ERROR_STR( frameInfoMap_.contains(key),
 		"[Animation Error] AnimBlender::updateFrames: key \""s + key
-		+ "\"ÀÌ(°¡) AnimBlender¿¡ µî·ÏµÇ¾î ÀÖÁö ¾Ê½À´Ï´Ù.",
+		+ "\"ì´(ê°€) AnimBlenderì— ë“±ë¡ë˜ì–´ ìˆì§€ ì•ŠìŠµë‹ˆë‹¤.",
 		false
 	);
 
@@ -275,23 +275,23 @@ void AnimBlender::updateFrames(const std::string& key, Seconds elapsed) {
 	}
 }
 
-// µî·ÏµÈ AnimBlender °´Ã¼µéÀ» priority·Î max-heapifyÇÏ°í
-// ¸ğµç AnimBlender °´Ã¼µéÀ» ¾÷µ¥ÀÌÆ®ÇÏ°Å³ª ÁÖ¾îÁø timeSlice°¡ ¼ÒÁøµÉ ¶§±îÁö
-// AnimBlender °´Ã¼µéÀ» ¾÷µ¥ÀÌÆ®ÇÑ´Ù.
-// AnimBlender::onCalcLocal, AnimBlender::onCalcDress, AnimBlender::onCalcFinalÀÌ
-// ¼ø¼­´ë·Î ºÒ¸®¸ç ¾÷µ¥ÀÌÆ®µÈ´Ù.
+// ë“±ë¡ëœ AnimBlender ê°ì²´ë“¤ì„ priorityë¡œ max-heapifyí•˜ê³ 
+// ëª¨ë“  AnimBlender ê°ì²´ë“¤ì„ ì—…ë°ì´íŠ¸í•˜ê±°ë‚˜ ì£¼ì–´ì§„ timeSliceê°€ ì†Œì§„ë  ë•Œê¹Œì§€
+// AnimBlender ê°ì²´ë“¤ì„ ì—…ë°ì´íŠ¸í•œë‹¤.
+// AnimBlender::onCalcLocal, AnimBlender::onCalcDress, AnimBlender::onCalcFinalì´
+// ìˆœì„œëŒ€ë¡œ ë¶ˆë¦¬ë©° ì—…ë°ì´íŠ¸ëœë‹¤.
 void AnimSystem::update(Seconds timeSlice) {
 	auto tp = HighResolutionClock::now();
 	Seconds elapsed = 0s;
 
-	// priority ±âÁØ max-heapify
+	// priority ê¸°ì¤€ max-heapify
 	std::ranges::make_heap(blenders_, std::less<>{}, &AnimBlender::priority);
 
-	std::size_t cntProcessed = 0u;	// Ã³¸®ÇÑ ºí·»´õ ¼ö
-	std::size_t jobCnt = 0u;	// Ã³¸®ÇÑ job ¼ö
+	std::size_t cntProcessed = 0u;	// ì²˜ë¦¬í•œ ë¸”ë Œë” ìˆ˜
+	std::size_t jobCnt = 0u;	// ì²˜ë¦¬í•œ job ìˆ˜
 	while (elapsed < timeSlice && cntProcessed < blenders_.size()) {
-		// ³²Àº ºí·»´õÀÇ ¼ö°¡ jobSize_º¸´Ù ÀÛÀ» ¼ö ÀÖ´Ù.
-		// ±×·² °æ¿ì¿£ ³²Àº ºí·»´õÀÇ ¼ö¸¸Å­ ºí·»´õµéÀ» Ã³¸®ÇÏµµ·Ï ÇÑ´Ù.
+		// ë‚¨ì€ ë¸”ë Œë”ì˜ ìˆ˜ê°€ jobSize_ë³´ë‹¤ ì‘ì„ ìˆ˜ ìˆë‹¤.
+		// ê·¸ëŸ´ ê²½ìš°ì—” ë‚¨ì€ ë¸”ë Œë”ì˜ ìˆ˜ë§Œí¼ ë¸”ë Œë”ë“¤ì„ ì²˜ë¦¬í•˜ë„ë¡ í•œë‹¤.
 		const auto iteration = std::min(jobSize_, blenders_.size() - cntProcessed);
 
 		for (std::size_t i = 0; i < iteration; ++i) {
@@ -313,8 +313,8 @@ void AnimSystem::update(Seconds timeSlice) {
 		elapsed = HighResolutionClock::now() - tp;
 	}
 
-	// jobSize_ ºñ·Ê Á¦¾î
-	const float ratio = static_cast<float>(jobCnt) / 8.f;	// ¸ñÀû: jobÀÇ °³¼ö°¡ 8°³¿¡ ±ÙÁ¢ÇÏ±â
+	// jobSize_ ë¹„ë¡€ ì œì–´
+	const float ratio = static_cast<float>(jobCnt) / 8.f;	// ëª©ì : jobì˜ ê°œìˆ˜ê°€ 8ê°œì— ê·¼ì ‘í•˜ê¸°
 	const float error = ratio - 1.f;
 
 	static constexpr float Kp = 0.1f;

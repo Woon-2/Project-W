@@ -1,4 +1,4 @@
-#ifndef __GFX_HPP
+ï»¿#ifndef __GFX_HPP
 #define __GFX_HPP
 
 #include "gfxUtil.hpp"
@@ -49,10 +49,10 @@ struct RequestTextImageLoad {
 	TextImage* pDest;
 };
 
-// ·»´õ¸µÀ» ÃÑ°ı Ã¥ÀÓÁö´Â Å¬·¡½º
-// - ÀåÄ¡ ÃÊ±âÈ­: setupDXGI, init, createSwapChain
-// - °´Ã¼ ±×¸®±â: addDrawEvent·Î °´Ã¼¸¶´Ù ±×·ÁÁö±æ ¿øÇÏ´Â ÆÄÀÌÇÁ¶óÀÎ¿¡ µî·Ï,
-//					ÀÌÈÄ render ÇÔ¼ö¸¦ È£ÃâÇØ ÇÑ¹ø¿¡ ÀüºÎ ±×¸®±â
+// ë Œë”ë§ì„ ì´ê´„ ì±…ì„ì§€ëŠ” í´ë˜ìŠ¤
+// - ì¥ì¹˜ ì´ˆê¸°í™”: setupDXGI, init, createSwapChain
+// - ê°ì²´ ê·¸ë¦¬ê¸°: addDrawEventë¡œ ê°ì²´ë§ˆë‹¤ ê·¸ë ¤ì§€ê¸¸ ì›í•˜ëŠ” íŒŒì´í”„ë¼ì¸ì— ë“±ë¡,
+//					ì´í›„ render í•¨ìˆ˜ë¥¼ í˜¸ì¶œí•´ í•œë²ˆì— ì „ë¶€ ê·¸ë¦¬ê¸°
 class GFX {
 public:
 	GFX() = default;
@@ -60,69 +60,69 @@ public:
 	GFX& operator=(const GFX&) = delete;
 	GFX(GFX&&) noexcept = delete;
 	GFX& operator=(GFX&&) noexcept = delete;
-	// GFX°¡ ¼Ò¸êÇÒ ¶§, Á¦ÃâµÈ ¸ğµç GPUÀÛ¾÷ÀÌ ¿Ï·áµÇ°í ³ª¼­ ¼Ò¸êÇÏµµ·Ï ÇÑ´Ù.
+	// GFXê°€ ì†Œë©¸í•  ë•Œ, ì œì¶œëœ ëª¨ë“  GPUì‘ì—…ì´ ì™„ë£Œë˜ê³  ë‚˜ì„œ ì†Œë©¸í•˜ë„ë¡ í•œë‹¤.
 	~GFX();
 
-	// ÀåÄ¡ ÃÊ±âÈ­: setupDXGI, init, createSwapChain ¼øÀ¸·Î È£ÃâÇÑ´Ù.
+	// ì¥ì¹˜ ì´ˆê¸°í™”: setupDXGI, init, createSwapChain ìˆœìœ¼ë¡œ í˜¸ì¶œí•œë‹¤.
 
-	// DXGI Factory¸¦ ÃÊ±âÈ­ÇÏ°í, DXGI AdapterµéÀ» ¿­°ÅÇÑ´Ù.
-	// ±×¸®°í ±× Áß ÇÏ³ª¸¦ ¼±ÅÃÇÏ¿© curAdapter_¿¡ ÀúÀåÇÑ´Ù.
+	// DXGI Factoryë¥¼ ì´ˆê¸°í™”í•˜ê³ , DXGI Adapterë“¤ì„ ì—´ê±°í•œë‹¤.
+	// ê·¸ë¦¬ê³  ê·¸ ì¤‘ í•˜ë‚˜ë¥¼ ì„ íƒí•˜ì—¬ curAdapter_ì— ì €ì¥í•œë‹¤.
 	void setupDXGI(D3D_FEATURE_LEVEL d3dFeatureLevel);
-	// D3D12 Device¿Í Command Queue, Descriptor Heap, Descriptor PoolµéÀ» ¸¸µç´Ù.
-	// °ø¿ë »ùÇÃ·¯µéÀ» »ı¼ºÇÑ´Ù.
-	// RenderingSlave, ResourceLoading Ä«Å×°í¸®ÀÇ Command List PoolÀ» ÃÊ±âÈ­ÇÑ´Ù.
-	// Root Signature¿Í Shader(PSO)µéÀ» ¸¸µç´Ù.
-	// Load Fence¸¦ ¸¸µç´Ù.
-	// ±×¸®°í DrawEventµéÀ» ÀúÀåÇÏ±â À§ÇÑ ¸Ş¸ğ¸®¸¦ ¿¹¾àÇÑ´Ù.
+	// D3D12 Deviceì™€ Command Queue, Descriptor Heap, Descriptor Poolë“¤ì„ ë§Œë“ ë‹¤.
+	// ê³µìš© ìƒ˜í”ŒëŸ¬ë“¤ì„ ìƒì„±í•œë‹¤.
+	// RenderingSlave, ResourceLoading ì¹´í…Œê³ ë¦¬ì˜ Command List Poolì„ ì´ˆê¸°í™”í•œë‹¤.
+	// Root Signatureì™€ Shader(PSO)ë“¤ì„ ë§Œë“ ë‹¤.
+	// Load Fenceë¥¼ ë§Œë“ ë‹¤.
+	// ê·¸ë¦¬ê³  DrawEventë“¤ì„ ì €ì¥í•˜ê¸° ìœ„í•œ ë©”ëª¨ë¦¬ë¥¼ ì˜ˆì•½í•œë‹¤.
 	void init();
-	// À©µµ¿ì¿Í ¿¬°áµÈ SwapChainÀ» ¸¸µç´Ù.
-	// Back Buffer °³¼ö ¸¸Å­ÀÇ roomÀ» °¡Áö´Â ÆÄÀÌÇÁ¶óÀÎº° ShaderInputBufferµéÀ» ¸¸µç´Ù.
-	// RenderingMaster Ä«Å×°í¸®ÀÇ Command List PoolÀ»
-	// Back Buffer °³¼ö * 2ÀÇ Å©±â¸¦ °®µµ·Ï ÃÊ±âÈ­ÇÑ´Ù.
-	// ±×¸®°í Back Buffer °³¼ö ¸¸Å­ÀÇ Frame FenceµéÀ» ¸¸µç´Ù.
+	// ìœˆë„ìš°ì™€ ì—°ê²°ëœ SwapChainì„ ë§Œë“ ë‹¤.
+	// Back Buffer ê°œìˆ˜ ë§Œí¼ì˜ roomì„ ê°€ì§€ëŠ” íŒŒì´í”„ë¼ì¸ë³„ ShaderInputBufferë“¤ì„ ë§Œë“ ë‹¤.
+	// RenderingMaster ì¹´í…Œê³ ë¦¬ì˜ Command List Poolì„
+	// Back Buffer ê°œìˆ˜ * 2ì˜ í¬ê¸°ë¥¼ ê°–ë„ë¡ ì´ˆê¸°í™”í•œë‹¤.
+	// ê·¸ë¦¬ê³  Back Buffer ê°œìˆ˜ ë§Œí¼ì˜ Frame Fenceë“¤ì„ ë§Œë“ ë‹¤.
 	void createSwapChain();
 
-	// ½º·¹µå Ç®À» ¼³Á¤ÇÑ´Ù.
-	// GFX´Â ½º·¹µå Ç®ÀÌ ¼³Á¤µÇ¾îÀÖÀ» °æ¿ì ¸ÖÆ¼½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
+	// ìŠ¤ë ˆë“œ í’€ì„ ì„¤ì •í•œë‹¤.
+	// GFXëŠ” ìŠ¤ë ˆë“œ í’€ì´ ì„¤ì •ë˜ì–´ìˆì„ ê²½ìš° ë©€í‹°ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
 	void setThreadPool(ThreadPool* threadPool) { threadPool_ = threadPool; }
 
-	// µå·Î¿ìÄİ ¿äÃ»À» Á¦ÃâÇÑ´Ù. render() È£Ãâ ½Ã ±×·ÁÁø´Ù.
+	// ë“œë¡œìš°ì½œ ìš”ì²­ì„ ì œì¶œí•œë‹¤. render() í˜¸ì¶œ ì‹œ ê·¸ë ¤ì§„ë‹¤.
 	void addDrawEvent(const SamplePipeline::DrawEvent& drawEvent);
-	// Ä«¸Ş¶ó µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+	// ì¹´ë©”ë¼ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 	void addCameraData(const SamplePipeline::CameraData& cameraData);
-	// µå·Î¿ìÄİ ¿äÃ»À» Á¦ÃâÇÑ´Ù. render() È£Ãâ ½Ã ±×·ÁÁø´Ù.
+	// ë“œë¡œìš°ì½œ ìš”ì²­ì„ ì œì¶œí•œë‹¤. render() í˜¸ì¶œ ì‹œ ê·¸ë ¤ì§„ë‹¤.
 	void addDrawEvent(const PBRPipeline::DrawEvent& drawEvent);
-	// Ä«¸Ş¶ó µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+	// ì¹´ë©”ë¼ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 	void addCameraData(const PBRPipeline::CameraData& cameraData);
-	// Á¶¸í µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+	// ì¡°ëª… ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 	void addLightData(const PBRPipeline::LightData& lightData);
-	// ÇÁ·¹ÀÓ µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+	// í”„ë ˆì„ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 	void addFrameData(const PBRPipeline::FrameData& frameData);
-	// µå·Î¿ìÄİ ¿äÃ»À» Á¦ÃâÇÑ´Ù. render() È£Ãâ ½Ã ±×·ÁÁø´Ù.
+	// ë“œë¡œìš°ì½œ ìš”ì²­ì„ ì œì¶œí•œë‹¤. render() í˜¸ì¶œ ì‹œ ê·¸ë ¤ì§„ë‹¤.
 	void addDrawEvent(const PBRSkinnedPipeline::DrawEvent& drawEvent);
-	// Ä«¸Ş¶ó µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+	// ì¹´ë©”ë¼ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 	void addCameraData(const PBRSkinnedPipeline::CameraData& cameraData);
-	// Á¶¸í µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+	// ì¡°ëª… ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 	void addLightData(const PBRSkinnedPipeline::LightData& lightData);
-	// ÇÁ·¹ÀÓ µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+	// í”„ë ˆì„ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 	void addFrameData(const PBRSkinnedPipeline::FrameData& frameData);
-	// µå·Î¿ìÄİ ¿äÃ»À» Á¦ÃâÇÑ´Ù. render() È£Ãâ ½Ã ±×·ÁÁø´Ù.
+	// ë“œë¡œìš°ì½œ ìš”ì²­ì„ ì œì¶œí•œë‹¤. render() í˜¸ì¶œ ì‹œ ê·¸ë ¤ì§„ë‹¤.
 	void addDrawEvent( const BillboardPipeline::DrawEvent& drawEvent );
-	// Ä«¸Ş¶ó µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+	// ì¹´ë©”ë¼ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 	void addCameraData( const BillboardPipeline::CameraData& cameraData );
-	// ÇÁ·¹ÀÓ µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+	// í”„ë ˆì„ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 	void addFrameData( const BillboardPipeline::FrameData& frameData );
-	// µå·Î¿ìÄİ ¿äÃ»À» Á¦ÃâÇÑ´Ù. render() È£Ãâ ½Ã ±×·ÁÁø´Ù.
+	// ë“œë¡œìš°ì½œ ìš”ì²­ì„ ì œì¶œí•œë‹¤. render() í˜¸ì¶œ ì‹œ ê·¸ë ¤ì§„ë‹¤.
 	void addDrawEvent(const SkyboxPipeline::DrawEvent& drawEvent);
-	// Ä«¸Ş¶ó µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+	// ì¹´ë©”ë¼ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 	void addCameraData(const SkyboxPipeline::CameraData& cameraData);
-	// µå·Î¿ìÄİ ¿äÃ»À» Á¦ÃâÇÑ´Ù. render() È£Ãâ ½Ã ±×·ÁÁø´Ù.
+	// ë“œë¡œìš°ì½œ ìš”ì²­ì„ ì œì¶œí•œë‹¤. render() í˜¸ì¶œ ì‹œ ê·¸ë ¤ì§„ë‹¤.
 	void addDrawEvent(const BVPipeline::DrawEvent& drawEvent);
-	// Ä«¸Ş¶ó µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+	// ì¹´ë©”ë¼ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 	void addCameraData(const BVPipeline::CameraData& cameraData);
-	// µå·Î¿ìÄİ ¿äÃ»À» Á¦ÃâÇÑ´Ù. render() È£Ãâ ½Ã ±×·ÁÁø´Ù.
+	// ë“œë¡œìš°ì½œ ìš”ì²­ì„ ì œì¶œí•œë‹¤. render() í˜¸ì¶œ ì‹œ ê·¸ë ¤ì§„ë‹¤.
 	void addDrawEvent( const UIPipeline::DrawEvent& drawEvent );
-	// ÇÁ·¹ÀÓ µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+	// í”„ë ˆì„ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 	void addFrameData( const UIPipeline::FrameData& frameData );
 
 	void addRequestModelLoad(const RequestModelLoad& request);
@@ -131,25 +131,25 @@ public:
 	void addRequestSpritesLoad( const RequestSpriteAnimLoad& request );
 	void addRequestTextImageLoad( const RequestTextImageLoad& request );
 
-	// ÆÄÀÌÇÁ¶óÀÎµéÀÌ ÀÚÃ¼ÀûÀ¸·Î »ç¿ëÇÏ´Â ¸®¼Ò½ºµé°ú
-	// addRequestXXLoad ²ÃÀÇ ÇÔ¼ö·Î ¿äÃ»µÈ ¸®¼Ò½ºµéÀ» ·ÎµåÇÑ´Ù.
+	// íŒŒì´í”„ë¼ì¸ë“¤ì´ ìì²´ì ìœ¼ë¡œ ì‚¬ìš©í•˜ëŠ” ë¦¬ì†ŒìŠ¤ë“¤ê³¼
+	// addRequestXXLoad ê¼´ì˜ í•¨ìˆ˜ë¡œ ìš”ì²­ëœ ë¦¬ì†ŒìŠ¤ë“¤ì„ ë¡œë“œí•œë‹¤.
 	void loadAssets();
 
-	// ¿äÃ»µÈ µå·Î¿ìÄİµéÀ» ¸ğ¾Æ °´Ã¼µéÀ» ±×¸®°í È­¸é¿¡ ¶ç¿î´Ù.
+	// ìš”ì²­ëœ ë“œë¡œìš°ì½œë“¤ì„ ëª¨ì•„ ê°ì²´ë“¤ì„ ê·¸ë¦¬ê³  í™”ë©´ì— ë„ìš´ë‹¤.
 	void render();
 
 	void WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, void* pFontObjHandle, const WCHAR* wchString, DWORD dwLen );
 	void UpdateTextureWithTextImage( TextImage* srcImage, UINT srcWidth, UINT srcHeight );
 
 private:
-	// °ø¿ë »ùÇÃ·¯µé »ı¼º
-	// gfxUtil.hppÀÇ Samplers enum°ú ÀÎµ¦½º¸¦ ¸ÂÃçÁÖ¾î¾ß ÇÑ´Ù.
+	// ê³µìš© ìƒ˜í”ŒëŸ¬ë“¤ ìƒì„±
+	// gfxUtil.hppì˜ Samplers enumê³¼ ì¸ë±ìŠ¤ë¥¼ ë§ì¶°ì£¼ì–´ì•¼ í•œë‹¤.
 	void createSamplers();
-	// fenceNameÀ» °®´Â FenceÀÇ desiredValue °ªÀ» 1 Áõ°¡½ÃÅ°°í
-	// GPU Å¥¿¡ ±× °»½Å ¸í·ÉÀ» »ğÀÔÇÑ´Ù.
+	// fenceNameì„ ê°–ëŠ” Fenceì˜ desiredValue ê°’ì„ 1 ì¦ê°€ì‹œí‚¤ê³ 
+	// GPU íì— ê·¸ ê°±ì‹  ëª…ë ¹ì„ ì‚½ì…í•œë‹¤.
 	void signalFence(const std::string& fenceName);
-	// fenceNameÀ» °®´Â Fence¿¡ ´ëÇØ¼­ waitÇÏ°í,
-	// »ç¿ëÀÌ ³¡³­ ¸í·É ÄÁÅØ½ºÆ®, ¾÷·Îµå ¹öÆÛ µîÀ» ¹İÈ¯ÇÑ´Ù.
+	// fenceNameì„ ê°–ëŠ” Fenceì— ëŒ€í•´ì„œ waití•˜ê³ ,
+	// ì‚¬ìš©ì´ ëë‚œ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸, ì—…ë¡œë“œ ë²„í¼ ë“±ì„ ë°˜í™˜í•œë‹¤.
 	void waitOnFence(const std::string& fenceName);
 
 	ComPtr<IDXGIFactory4> dxgiFactory_ = nullptr;
@@ -163,7 +163,7 @@ private:
 
 	CommandListPool cmdListPool_{};
 
-	// ½º¿Ò Ã¼ÀÎ °ü·Ã º¯¼öµé
+	// ìŠ¤ì™‘ ì²´ì¸ ê´€ë ¨ ë³€ìˆ˜ë“¤
 	DXGI_SWAP_CHAIN_DESC1 scd_{};
 	DXGI_SWAP_CHAIN_FULLSCREEN_DESC scfd_{};
 	ComPtr<IDXGISwapChain3> swapChain_ = nullptr;
@@ -174,24 +174,24 @@ private:
 	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> depthBufferDsvs_{};
 	std::vector<int> allocatedDsvIndices_{};
 
-	// µğ½ºÅ©¸³ÅÍ Èü°ú µğ½ºÅ©¸³ÅÍ Ç®
+	// ë””ìŠ¤í¬ë¦½í„° í™ê³¼ ë””ìŠ¤í¬ë¦½í„° í’€
 	DescriptorHeap rtvHeap_{};
 	DescriptorPool rtvPool_{};
 	DescriptorHeap dsvHeap_{};
 	DescriptorPool dsvPool_{};
-	DescriptorHeap srvCbvUavHeap_{};	// gpuVisible, SetDescriptorHeaps ÇÔ¼ö È£Ãâ ÇÊ¿ä
-	DescriptorPool srvTexPool_{};	// ÆÄÀÌÇÁ¶óÀÎ¿¡¼­ »ç¿ëÇÏ·Á¸é bind È£Ãâ ÇÊ¿ä
-	DescriptorPool srvTexArrayPool_{};	// ÆÄÀÌÇÁ¶óÀÎ¿¡¼­ »ç¿ëÇÏ·Á¸é bind È£Ãâ ÇÊ¿ä
-	DescriptorPool srvTexCubePool_{};	// ÆÄÀÌÇÁ¶óÀÎ¿¡¼­ »ç¿ëÇÏ·Á¸é bind È£Ãâ ÇÊ¿ä
-	DescriptorHeap samHeap_{};	// gpuVisible, SetDescriptorHeaps ÇÔ¼ö È£Ãâ ÇÊ¿ä
-	DescriptorPool samPool_{};	// ÆÄÀÌÇÁ¶óÀÎ¿¡¼­ »ç¿ëÇÏ·Á¸é bind È£Ãâ ÇÊ¿ä
-	DescriptorPool cmpSamPool_{};	// ÆÄÀÌÇÁ¶óÀÎ¿¡¼­ »ç¿ëÇÏ·Á¸é bind È£Ãâ ÇÊ¿ä
+	DescriptorHeap srvCbvUavHeap_{};	// gpuVisible, SetDescriptorHeaps í•¨ìˆ˜ í˜¸ì¶œ í•„ìš”
+	DescriptorPool srvTexPool_{};	// íŒŒì´í”„ë¼ì¸ì—ì„œ ì‚¬ìš©í•˜ë ¤ë©´ bind í˜¸ì¶œ í•„ìš”
+	DescriptorPool srvTexArrayPool_{};	// íŒŒì´í”„ë¼ì¸ì—ì„œ ì‚¬ìš©í•˜ë ¤ë©´ bind í˜¸ì¶œ í•„ìš”
+	DescriptorPool srvTexCubePool_{};	// íŒŒì´í”„ë¼ì¸ì—ì„œ ì‚¬ìš©í•˜ë ¤ë©´ bind í˜¸ì¶œ í•„ìš”
+	DescriptorHeap samHeap_{};	// gpuVisible, SetDescriptorHeaps í•¨ìˆ˜ í˜¸ì¶œ í•„ìš”
+	DescriptorPool samPool_{};	// íŒŒì´í”„ë¼ì¸ì—ì„œ ì‚¬ìš©í•˜ë ¤ë©´ bind í˜¸ì¶œ í•„ìš”
+	DescriptorPool cmpSamPool_{};	// íŒŒì´í”„ë¼ì¸ì—ì„œ ì‚¬ìš©í•˜ë ¤ë©´ bind í˜¸ì¶œ í•„ìš”
 
-	// ·çÆ® ½Ã±×³ÊÃ³¿Í ¼ÎÀÌ´õµé
+	// ë£¨íŠ¸ ì‹œê·¸ë„ˆì²˜ì™€ ì…°ì´ë”ë“¤
 	std::map<std::string, std::shared_ptr<RootSig>> rootSigs_{};
 	std::map<std::string, ComPtr<ID3D12PipelineState>> shaders_{};
 
-	// ÆÄÀÌÇÁ¶óÀÎ °ü·Ã º¯¼öµé
+	// íŒŒì´í”„ë¼ì¸ ê´€ë ¨ ë³€ìˆ˜ë“¤
 	// Sample Pipeline
 	std::vector<SamplePipeline::DrawEvent> drawEventsSamplePipeline_{};
 	SamplePipeline::Resources resourcesSamplePipeline_{};
@@ -242,7 +242,7 @@ private:
 	std::vector<RequestSpriteAnimLoad> requestsSpritesLoad_{};
 	std::vector<RequestTextImageLoad> requestsTextImageLoad_{};
 
-	ThreadPool* threadPool_ = nullptr;	// ¼³Á¤µÇ¾îÀÖÀ» °æ¿ì ¸ÖÆ¼½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
+	ThreadPool* threadPool_ = nullptr;	// ì„¤ì •ë˜ì–´ìˆì„ ê²½ìš° ë©€í‹°ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
 };
 
 #endif	// __GFX_HPP

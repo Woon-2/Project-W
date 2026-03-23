@@ -1,21 +1,21 @@
-#include "pch.hpp"
+ï»¿#include "pch.hpp"
 #include "gfxUtil.hpp"
 #include "errorHandling.hpp"
 #include "binaryImport.hpp"
 
-// ¹öÆÛ ¸®¼Ò½º¸¦ »ı¼ºÇÏ´Â ÇÔ¼ö
-// creationTypeÀÌ UploadBufferÀÌ°í pSrc != nullptrÀÎ °æ¿ì¿¡¸¸
-// pSrcÀÇ ³»¿ëÀÌ ¸®¼Ò½º¿¡ º¹»çµÈ´Ù.
-// creationType¿¡ °ü°è¾øÀÌ srcByteWidth´Â ¹öÆÛÀÇ Å©±â¸¦ ³ªÅ¸³»¹Ç·Î,
-// ¹İµå½Ã srcByteWidth¿¡ À¯È¿ÇÑ °ªÀ» Àü´ŞÇÏ¿©¾ß ÇÑ´Ù.
-// creationType¿¡ µû¶ó Èü Å¸ÀÔ°ú ¸®¼Ò½º ÃÊ±â »óÅÂ¸¦ ´Ù¸£°Ô ¼³Á¤ÇÑ´Ù.
+// ë²„í¼ ë¦¬ì†ŒìŠ¤ë¥¼ ìƒì„±í•˜ëŠ” í•¨ìˆ˜
+// creationTypeì´ UploadBufferì´ê³  pSrc != nullptrì¸ ê²½ìš°ì—ë§Œ
+// pSrcì˜ ë‚´ìš©ì´ ë¦¬ì†ŒìŠ¤ì— ë³µì‚¬ëœë‹¤.
+// creationTypeì— ê´€ê³„ì—†ì´ srcByteWidthëŠ” ë²„í¼ì˜ í¬ê¸°ë¥¼ ë‚˜íƒ€ë‚´ë¯€ë¡œ,
+// ë°˜ë“œì‹œ srcByteWidthì— ìœ íš¨í•œ ê°’ì„ ì „ë‹¬í•˜ì—¬ì•¼ í•œë‹¤.
+// creationTypeì— ë”°ë¼ í™ íƒ€ì…ê³¼ ë¦¬ì†ŒìŠ¤ ì´ˆê¸° ìƒíƒœë¥¼ ë‹¤ë¥´ê²Œ ì„¤ì •í•œë‹¤.
 ComPtr<ID3D12Resource> createBufferResource(
 	ID3D12Device* device, const void* pSrc, UINT64 srcByteWidth,
 	BufferCreationType creationType
 ) {
 	auto ret = ComPtr<ID3D12Resource>{};
 
-	// creationType¿¡ µû¶ó heapType, initialState, formatÀÌ ´Ş¶óÁø´Ù.
+	// creationTypeì— ë”°ë¼ heapType, initialState, formatì´ ë‹¬ë¼ì§„ë‹¤.
 	auto heapType = D3D12_HEAP_TYPE_DEFAULT;
 	auto initialState = D3D12_RESOURCE_STATE_COMMON;
 
@@ -36,13 +36,13 @@ ComPtr<ID3D12Resource> createBufferResource(
 		break;
 
 	default:
-		DISPLAY_ERROR_STR(false, "[GFX Error] createBufferResource: creationTypeÀÌ ¾Ë ¼ö ¾ø´Â °ªÀÔ´Ï´Ù: "s +
+		DISPLAY_ERROR_STR(false, "[GFX Error] createBufferResource: creationTypeì´ ì•Œ ìˆ˜ ì—†ëŠ” ê°’ì…ë‹ˆë‹¤: "s +
 			std::to_string(etoi(creationType)) + "\n"s, false
 		);
 		return ret;
 	}
 
-	// °áÁ¤µÈ ÀÎÀÚµéÀ» ¹ÙÅÁÀ¸·Î ¸®¼Ò½º »ı¼º
+	// ê²°ì •ëœ ì¸ìë“¤ì„ ë°”íƒ•ìœ¼ë¡œ ë¦¬ì†ŒìŠ¤ ìƒì„±
 	auto heapProperties = D3D12_HEAP_PROPERTIES{
 		.Type = heapType,
 		.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
@@ -58,8 +58,8 @@ ComPtr<ID3D12Resource> createBufferResource(
 		.Height = 1u,
 		.DepthOrArraySize = 1u,
 		.MipLevels = 1u,
-		.Format = DXGI_FORMAT_UNKNOWN,	// D3D12_RESOURCE_DIMENSION_BUFFER¸¦ °®´Â ¹öÆÛ¿¡ ´ëÇØ¼­´Â
-										// ¹«Á¶°Ç FormatÀÌ DXGI_FORMAT_UNKNOWNÀÌ¾î¾ß ÇÑ´Ù.
+		.Format = DXGI_FORMAT_UNKNOWN,	// D3D12_RESOURCE_DIMENSION_BUFFERë¥¼ ê°–ëŠ” ë²„í¼ì— ëŒ€í•´ì„œëŠ”
+										// ë¬´ì¡°ê±´ Formatì´ DXGI_FORMAT_UNKNOWNì´ì–´ì•¼ í•œë‹¤.
 		.SampleDesc = DXGI_SAMPLE_DESC{.Count = 1u, .Quality = 0u },
 		.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
 		.Flags = D3D12_RESOURCE_FLAG_NONE
@@ -72,7 +72,7 @@ ComPtr<ID3D12Resource> createBufferResource(
 		), false
 	);
 
-	// ¹öÆÛ Å¸ÀÔÀÌ ¾÷·Îµå UploadBufferÀÎ °æ¿ì pSrcÀÇ µ¥ÀÌÅÍ¸¦ ¸®¼Ò½º¿¡ ¸ÅÇÎÇÑ´Ù.
+	// ë²„í¼ íƒ€ì…ì´ ì—…ë¡œë“œ UploadBufferì¸ ê²½ìš° pSrcì˜ ë°ì´í„°ë¥¼ ë¦¬ì†ŒìŠ¤ì— ë§¤í•‘í•œë‹¤.
 	if (creationType == BufferCreationType::UploadBuffer && pSrc) {
 		void* mem = nullptr;
 		DISPLAY_ERROR_DX_HR( ret->Map(0, nullptr, reinterpret_cast<void**>(&mem)), false );
@@ -83,10 +83,10 @@ ComPtr<ID3D12Resource> createBufferResource(
 	return ret;
 }
 
-// Æ¯Á¤ ¿ëµµ usageÀÇ ¸í·É ÄÁÅØ½ºÆ® cnt°³¸¦ Ç® ³»ºÎ¿¡ È®ÃæÇØ³õ´Â´Ù.
+// íŠ¹ì • ìš©ë„ usageì˜ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ cntê°œë¥¼ í’€ ë‚´ë¶€ì— í™•ì¶©í•´ë†“ëŠ”ë‹¤.
 void CommandListPool::init(ID3D12Device* device, CommandListUsage usage, std::size_t cnt) {
-	// µğ¹ö±ëÀ» À§ÇØ usage enumÀ» ¹®ÀÚ¿­·Î ¸ÅÇÎÇÑ´Ù.
-	// ÃßÈÄ D3D12 °´Ã¼ ÀÌ¸§ ÁöÁ¤ ¹× ¿À·ù ¸Ş½ÃÁö Ãâ·Â¿¡ ¾²ÀÎ´Ù.
+	// ë””ë²„ê¹…ì„ ìœ„í•´ usage enumì„ ë¬¸ìì—´ë¡œ ë§¤í•‘í•œë‹¤.
+	// ì¶”í›„ D3D12 ê°ì²´ ì´ë¦„ ì§€ì • ë° ì˜¤ë¥˜ ë©”ì‹œì§€ ì¶œë ¥ì— ì“°ì¸ë‹¤.
 	std::string usageName{};
 
 	switch (usage) {
@@ -103,8 +103,8 @@ void CommandListPool::init(ID3D12Device* device, CommandListUsage usage, std::si
 		break;
 
 	default:
-		DISPLAY_ERROR_STR( false, "[GFX Error]: CommandListPool::init: Á¸ÀçÇÏÁö ¾Ê´Â CommandListUsage °ª"s
-			+ std::to_string(etoi(usage)) + "ÀÌ(°¡) Àü´ŞµÇ¾ú½À´Ï´Ù.", true
+		DISPLAY_ERROR_STR( false, "[GFX Error]: CommandListPool::init: ì¡´ì¬í•˜ì§€ ì•ŠëŠ” CommandListUsage ê°’"s
+			+ std::to_string(etoi(usage)) + "ì´(ê°€) ì „ë‹¬ë˜ì—ˆìŠµë‹ˆë‹¤.", true
 		);
 		break;
 	}
@@ -124,19 +124,19 @@ void CommandListPool::init(ID3D12Device* device, CommandListUsage usage, std::si
 			), true
 		);
 		setD3DName(ctx.cmdList.Get(), std::string("CommandList_") + usageName + std::to_string(i));
-		// »ı¼ºµÆÀ» ¶© open »óÅÂÀÌ¹Ç·Î,
-		// render È£Ãâ ½Ã ÀÌ¹Ì open »óÅÂÀÎ Command List¸¦ openÇÒ ¼ö ÀÖ´Ù.
-		// µû¶ó¼­ ¿©±â¼­ close ÇØÁØ´Ù.
+		// ìƒì„±ëì„ ë• open ìƒíƒœì´ë¯€ë¡œ,
+		// render í˜¸ì¶œ ì‹œ ì´ë¯¸ open ìƒíƒœì¸ Command Listë¥¼ opení•  ìˆ˜ ìˆë‹¤.
+		// ë”°ë¼ì„œ ì—¬ê¸°ì„œ close í•´ì¤€ë‹¤.
 		ctx.cmdList->Close();
 	}
 }
 
-// Æ¯Á¤ ¿ëµµ usageÀÇ ¸í·É ÄÁÅØ½ºÆ®¸¦ cnt°³ ÇÒ´çÇØ output¿¡ Ã¤¿ö³Ö´Â´Ù.
-// @return ½ÇÁ¦·Î ÇÒ´çÇÑ ¸í·É ÄÁÅØ½ºÆ® ¼ö, ¿äÃ» ¹ŞÀº °³¼ö cnt¿Í ´Ù¸¦ ¼ö ÀÖ´Ù.
+// íŠ¹ì • ìš©ë„ usageì˜ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë¥¼ cntê°œ í• ë‹¹í•´ outputì— ì±„ì›Œë„£ëŠ”ë‹¤.
+// @return ì‹¤ì œë¡œ í• ë‹¹í•œ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ ìˆ˜, ìš”ì²­ ë°›ì€ ê°œìˆ˜ cntì™€ ë‹¤ë¥¼ ìˆ˜ ìˆë‹¤.
 std::size_t CommandListPool::alloc( std::size_t cnt,
 	CommandListUsage usage, std::list<CommandContext>& output
 ) {
-	// ÇÒ´ç °¡´ÉÇÑ ¸¸Å­¸¸ ÇÒ´çÇÑ´Ù.
+	// í• ë‹¹ ê°€ëŠ¥í•œ ë§Œí¼ë§Œ í• ë‹¹í•œë‹¤.
 	std::size_t allocCnt = 0u;
 
 	auto& pool = cmdCtxs_[etoi(usage)];
@@ -155,8 +155,8 @@ std::size_t CommandListPool::alloc( std::size_t cnt,
 	return allocCnt;
 }
 
-// Æ¯Á¤ ¿ëµµ usageÀÇ ¸í·É ÄÁÅØ½ºÆ® 1°³¸¦ output¿¡ Ã¤¿ö³Ö´Â´Ù.
-// @return ¸í·É ÄÁÅØ½ºÆ®ÀÇ ÇÒ´ç ¼º°ø ¿©ºÎ, ½ÇÆĞÇÒ ¼öµµ ÀÖ´Ù.
+// íŠ¹ì • ìš©ë„ usageì˜ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ 1ê°œë¥¼ outputì— ì±„ì›Œë„£ëŠ”ë‹¤.
+// @return ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ì˜ í• ë‹¹ ì„±ê³µ ì—¬ë¶€, ì‹¤íŒ¨í•  ìˆ˜ë„ ìˆë‹¤.
 bool CommandListPool::allocOne(CommandListUsage usage, CommandContext& output) {
 	auto& pool = cmdCtxs_[etoi(usage)];
 	if (pool.empty()) {
@@ -168,23 +168,23 @@ bool CommandListPool::allocOne(CommandListUsage usage, CommandContext& output) {
 	return true;
 }
 
-// Æ¯Á¤ ¿ëµµ usageÀÇ ¸í·É ÄÁÅØ½ºÆ®µé expired¸¦ Ç®¿¡ ¹İ³³ÇÑ´Ù.
-// ¹İµå½Ã GPU¿¡¼­µµ »ç¿ëÀÌ ³¡³­ ¸í·É ÄÁÅØ½ºÆ®µéÀÓÀ» È®ÀÎÇÏÀÚ.
+// íŠ¹ì • ìš©ë„ usageì˜ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë“¤ expiredë¥¼ í’€ì— ë°˜ë‚©í•œë‹¤.
+// ë°˜ë“œì‹œ GPUì—ì„œë„ ì‚¬ìš©ì´ ëë‚œ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë“¤ì„ì„ í™•ì¸í•˜ì.
 void CommandListPool::free(CommandListUsage usage, std::list<CommandContext>&& expired) {
 	free(etoi(usage), std::move(expired));
 }
 
-// Æ¯Á¤ ¿ëµµ usageÀÇ ¸í·É ÄÁÅØ½ºÆ®µé expired¸¦ Ç®¿¡ ¹İ³³ÇÑ´Ù.
-// ¹İµå½Ã GPU¿¡¼­µµ »ç¿ëÀÌ ³¡³­ ¸í·É ÄÁÅØ½ºÆ®µéÀÓÀ» È®ÀÎÇÏÀÚ.
-// * ¹İº¹¹®¿¡¼­ÀÇ ¾²ÀÓÀ» »óÁ¤ÇØ enum ´ë½Å int¸¦ ¹Ş´Â ¹öÀüÀ» ¸¶·ÃÇÏ¿´´Ù.
-//   ¹üÀ§ Á¡°ËÀ» µû·Î ÇÏÁö ¾ÊÀ¸¹Ç·Î ÁÖÀÇÇØ¼­ ¾²ÀÚ.
+// íŠ¹ì • ìš©ë„ usageì˜ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë“¤ expiredë¥¼ í’€ì— ë°˜ë‚©í•œë‹¤.
+// ë°˜ë“œì‹œ GPUì—ì„œë„ ì‚¬ìš©ì´ ëë‚œ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë“¤ì„ì„ í™•ì¸í•˜ì.
+// * ë°˜ë³µë¬¸ì—ì„œì˜ ì“°ì„ì„ ìƒì •í•´ enum ëŒ€ì‹  intë¥¼ ë°›ëŠ” ë²„ì „ì„ ë§ˆë ¨í•˜ì˜€ë‹¤.
+//   ë²”ìœ„ ì ê²€ì„ ë”°ë¡œ í•˜ì§€ ì•Šìœ¼ë¯€ë¡œ ì£¼ì˜í•´ì„œ ì“°ì.
 void CommandListPool::free(int usage, std::list<CommandContext>&& expired) {
 	auto& pool = cmdCtxs_[usage];
 	pool.splice(pool.end(), std::move(expired));
 }
 
-// Æ¯Á¤ ¿ëµµ usageÀÇ ¸í·É ÄÁÅØ½ºÆ® expired¸¦ Ç®¿¡ ¹İ³³ÇÑ´Ù.
-// ¹İµå½Ã GPU¿¡¼­µµ »ç¿ëÀÌ ³¡³­ ¸í·É ÄÁÅØ½ºÆ®ÀÓÀ» È®ÀÎÇÏÀÚ.
+// íŠ¹ì • ìš©ë„ usageì˜ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ expiredë¥¼ í’€ì— ë°˜ë‚©í•œë‹¤.
+// ë°˜ë“œì‹œ GPUì—ì„œë„ ì‚¬ìš©ì´ ëë‚œ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ì„ì„ í™•ì¸í•˜ì.
 void CommandListPool::freeOne(CommandListUsage usage, CommandContext&& expired) {
 	auto& pool = cmdCtxs_[etoi(usage)];
 	pool.push_back(std::move(expired));
@@ -200,8 +200,8 @@ DescriptorHeap::DescriptorHeap(ID3D12Device* device, const D3D12_DESCRIPTOR_HEAP
 	cpuStart = heap->GetCPUDescriptorHandleForHeapStart();
 	gpuVisible = desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	if (gpuVisible) {
-		// gpuVisible ÇÃ·¡±×°¡ È°¼ºÈ­µÇ¾îÀÖÀ» ¶§¿¡¸¸
-		// gpuStart °ªÀ» À¯È¿ÇÑ °ªÀ¸·Î Ã¤¿î´Ù.
+		// gpuVisible í”Œë˜ê·¸ê°€ í™œì„±í™”ë˜ì–´ìˆì„ ë•Œì—ë§Œ
+		// gpuStart ê°’ì„ ìœ íš¨í•œ ê°’ìœ¼ë¡œ ì±„ìš´ë‹¤.
 		gpuStart = heap->GetGPUDescriptorHandleForHeapStart();
 	}
 }
@@ -232,23 +232,23 @@ D3D12_CPU_DESCRIPTOR_HANDLE DescriptorPool::cpuHandle(int idx) const {
 }
 
 D3D12_GPU_DESCRIPTOR_HANDLE DescriptorPool::gpuHandle(int idx) const {
-	DISPLAY_ERROR_STR(gpuVisible_, "[DescriptorPool] gpuVisible ÇÃ·¡±×°¡ È°¼ºÈ­µÇÁö ¾ÊÀº"
-		"µğ½ºÅ©¸³ÅÍ Èü¿¡¼­ gpuHandle ÇÒ´çÀ» ½ÃµµÇß½À´Ï´Ù.", false
+	DISPLAY_ERROR_STR(gpuVisible_, "[DescriptorPool] gpuVisible í”Œë˜ê·¸ê°€ í™œì„±í™”ë˜ì§€ ì•Šì€"
+		"ë””ìŠ¤í¬ë¦½í„° í™ì—ì„œ gpuHandle í• ë‹¹ì„ ì‹œë„í–ˆìŠµë‹ˆë‹¤.", false
 	);
 	auto ret = gpuStart_;
 	ret.ptr += idx * incrementSize_;
 	return ret;
 }
 
-// ·çÆ® ½Ã±×³ÊÃ³ÀÇ idxRootParam ¹øÂ° ·çÆ® ÆÄ¶ó¹ÌÅÍ¿¡
-// SetGraphicsRootDescriptorTable ÇÔ¼ö¸¦ ÅëÇØ Ç®À» ¹ÙÀÎµåÇÑ´Ù.
+// ë£¨íŠ¸ ì‹œê·¸ë„ˆì²˜ì˜ idxRootParam ë²ˆì§¸ ë£¨íŠ¸ íŒŒë¼ë¯¸í„°ì—
+// SetGraphicsRootDescriptorTable í•¨ìˆ˜ë¥¼ í†µí•´ í’€ì„ ë°”ì¸ë“œí•œë‹¤.
 void DescriptorPool::bind(ID3D12GraphicsCommandList* cmdList, UINT idxRootParam) const {
 	DISPLAY_ERROR_DX_VOID(
 		cmdList->SetGraphicsRootDescriptorTable(idxRootParam, gpuStart_), false
 	);
 }
 
-// ±íÀÌ ¹öÆÛ¸¦ ½±°Ô »ı¼ºÇÏ´Â À¯Æ¿¸®Æ¼ ÇÔ¼ö
+// ê¹Šì´ ë²„í¼ë¥¼ ì‰½ê²Œ ìƒì„±í•˜ëŠ” ìœ í‹¸ë¦¬í‹° í•¨ìˆ˜
 ComPtr<ID3D12Resource> createDepthBuffer(
 	ID3D12Device* device,
 	DXGI_FORMAT format, const DXGI_SAMPLE_DESC& sampleDesc
@@ -289,9 +289,9 @@ ComPtr<ID3D12Resource> createDepthBuffer(
 	return ret;
 }
 
-// ID3D12GraphicsCommandList::ResourceBarrier ÀÎÅÍÆäÀÌ½º¸¦ ÅëÇØ
-// ¸®¼Ò½ºÀÇ »óÅÂ¸¦ beforeState¿¡¼­ afterState·Î ÀüÈ¯ÇÑ´Ù.
-// »ç¿ëµÇ´Â ±âº»°ªµéÀº º»¹®À» ÂüÁ¶ÇÏÀÚ.
+// ID3D12GraphicsCommandList::ResourceBarrier ì¸í„°í˜ì´ìŠ¤ë¥¼ í†µí•´
+// ë¦¬ì†ŒìŠ¤ì˜ ìƒíƒœë¥¼ beforeStateì—ì„œ afterStateë¡œ ì „í™˜í•œë‹¤.
+// ì‚¬ìš©ë˜ëŠ” ê¸°ë³¸ê°’ë“¤ì€ ë³¸ë¬¸ì„ ì°¸ì¡°í•˜ì.
 void transitionResourceState(ID3D12GraphicsCommandList* cmdList,
 	ID3D12Resource* resource, D3D12_RESOURCE_STATES beforeState,
 	D3D12_RESOURCE_STATES afterState
@@ -309,7 +309,7 @@ void transitionResourceState(ID3D12GraphicsCommandList* cmdList,
 	DISPLAY_ERROR_DX_VOID(cmdList->ResourceBarrier(1u, &barrier), false);
 }
 
-// ¸®¼Ò½º »óÅÂ ÀüÈ¯°ú °ü·ÃµÈ »çÇ×À» °£·«È­ÇÏ´Â ¸®¼Ò½º º¹»ç ÇÔ¼ö
+// ë¦¬ì†ŒìŠ¤ ìƒíƒœ ì „í™˜ê³¼ ê´€ë ¨ëœ ì‚¬í•­ì„ ê°„ëµí™”í•˜ëŠ” ë¦¬ì†ŒìŠ¤ ë³µì‚¬ í•¨ìˆ˜
 void copyResource(ID3D12GraphicsCommandList* cmdList,
 	ID3D12Resource* srcRes, ID3D12Resource* destRes,
 	D3D12_RESOURCE_STATES srcResState, D3D12_RESOURCE_STATES destResState
@@ -321,10 +321,10 @@ void copyResource(ID3D12GraphicsCommandList* cmdList,
 	transitionResourceState(cmdList, srcRes, D3D12_RESOURCE_STATE_COPY_SOURCE, srcResState);
 }
 
-// ÀÌ¹Ì ¸¸µé¾îÁø ¸®¼Ò½º¸¦ °¡Á®¿Í¼­, ¸Ş¸ğ¸® ¿µ¿ªÀ» ºĞ¹è¹Ş¾Æ »ç¿ëÇÏ´Â °æ¿ì
-// ÀÌ »ı¼ºÀÚ¸¦ È£ÃâÇÑ´Ù.
-// ¸®¼Ò½ºÀÇ [addressOffset, addressOffset + allowedByteWidth) ¿µ¿ªÀ» ºĞ¹è¹Ş´Â´Ù.
-// CreateCommittedResource È£ÃâÀ» ÁÙÀÌ°í gpu ¸Ş¸ğ¸® »ç¿ë·®À» ÁÙÀÌ´Â ÀÌÁ¡ÀÌ ÀÖ´Ù.
+// ì´ë¯¸ ë§Œë“¤ì–´ì§„ ë¦¬ì†ŒìŠ¤ë¥¼ ê°€ì ¸ì™€ì„œ, ë©”ëª¨ë¦¬ ì˜ì—­ì„ ë¶„ë°°ë°›ì•„ ì‚¬ìš©í•˜ëŠ” ê²½ìš°
+// ì´ ìƒì„±ìë¥¼ í˜¸ì¶œí•œë‹¤.
+// ë¦¬ì†ŒìŠ¤ì˜ [addressOffset, addressOffset + allowedByteWidth) ì˜ì—­ì„ ë¶„ë°°ë°›ëŠ”ë‹¤.
+// CreateCommittedResource í˜¸ì¶œì„ ì¤„ì´ê³  gpu ë©”ëª¨ë¦¬ ì‚¬ìš©ëŸ‰ì„ ì¤„ì´ëŠ” ì´ì ì´ ìˆë‹¤.
 ShaderInputBuffer::ShaderInputBuffer( const std::vector<ComPtr<ID3D12Resource>>& premadeResources,
 	std::size_t addressOffset, std::size_t allowedByteWidth, const std::string& name
 ) : ShaderInputBuffer() {
@@ -343,14 +343,14 @@ ShaderInputBuffer::ShaderInputBuffer( const std::vector<ComPtr<ID3D12Resource>>&
 	name_ = name;
 }
 
-// ±âº» »ı¼ºÀÚ¸¦ È£ÃâÇÏ°í initÀ» È£ÃâÇÏ´Â °Í°ú °°´Ù.
+// ê¸°ë³¸ ìƒì„±ìë¥¼ í˜¸ì¶œí•˜ê³  initì„ í˜¸ì¶œí•˜ëŠ” ê²ƒê³¼ ê°™ë‹¤.
 ShaderInputBuffer::ShaderInputBuffer( ID3D12Device* device, UINT64 byteWidth,
 	std::size_t roomCnt, const std::string& name
 ) : ShaderInputBuffer() {
 	init(device, byteWidth, roomCnt, name);
 }
 
-// byteWidth Å©±âÀÇ ¸®¼Ò½º¸¦ roomCnt °³ ¸¸Å­ ¸¸µç´Ù.
+// byteWidth í¬ê¸°ì˜ ë¦¬ì†ŒìŠ¤ë¥¼ roomCnt ê°œ ë§Œí¼ ë§Œë“ ë‹¤.
 void ShaderInputBuffer::init( ID3D12Device* device, UINT64 byteWidth,
 	std::size_t roomCnt, const std::string& name
 ) {
@@ -369,19 +369,19 @@ void ShaderInputBuffer::init( ID3D12Device* device, UINT64 byteWidth,
 	name_ = name;
 }
 
-// roomIdx ¸®¼Ò½ºÀÇ gpu µ¥ÀÌÅÍ¸¦ data¿Í µ¿±âÈ­ÇÑ´Ù.
+// roomIdx ë¦¬ì†ŒìŠ¤ì˜ gpu ë°ì´í„°ë¥¼ dataì™€ ë™ê¸°í™”í•œë‹¤.
 void ShaderInputBuffer::stage(std::size_t roomIdx, const void* data, std::size_t byteWidth) {
 	if (byteWidth > byteWidth_) {
 		DISPLAY_ERROR_STR(byteWidth > byteWidth_, "[GFX Error] ShaderInputBuffer::stage: "s +
-			"¹öÆÛ¿¡ ÇÒ´çµÈ "s + std::to_string(byteWidth_) + " ¹ÙÀÌÆ®¸¦ ³Ñ¾î "s
-			+ std::to_string(byteWidth) + " ¹ÙÀÌÆ®¸¦ º¹»çÇÏ·Á°í ½ÃµµÇß½À´Ï´Ù.\n", false
+			"ë²„í¼ì— í• ë‹¹ëœ "s + std::to_string(byteWidth_) + " ë°”ì´íŠ¸ë¥¼ ë„˜ì–´ "s
+			+ std::to_string(byteWidth) + " ë°”ì´íŠ¸ë¥¼ ë³µì‚¬í•˜ë ¤ê³  ì‹œë„í–ˆìŠµë‹ˆë‹¤.\n", false
 		);
 		return;
 	}
 	std::memcpy(mappedRegions_.at(roomIdx), data, byteWidth);
 }
 
-// roomIdxÀÇ ¸®¼Ò½º¸¦ ·çÆ® ½Ã±×³ÊÃ³¿¡ cbv·Î ¿¬°áÇÑ´Ù.
+// roomIdxì˜ ë¦¬ì†ŒìŠ¤ë¥¼ ë£¨íŠ¸ ì‹œê·¸ë„ˆì²˜ì— cbvë¡œ ì—°ê²°í•œë‹¤.
 void ConstantBuffer::bind(ID3D12GraphicsCommandList* cmdList, UINT rootParamIdx, std::size_t roomIdx) {
 	DISPLAY_ERROR_DX_VOID(
 		cmdList->SetGraphicsRootConstantBufferView(rootParamIdx, addresses_.at(roomIdx)),
@@ -389,7 +389,7 @@ void ConstantBuffer::bind(ID3D12GraphicsCommandList* cmdList, UINT rootParamIdx,
 	);
 }
 
-// roomIdxÀÇ ¸®¼Ò½º¸¦ ·çÆ® ½Ã±×³ÊÃ³¿¡ srv·Î ¿¬°áÇÑ´Ù.
+// roomIdxì˜ ë¦¬ì†ŒìŠ¤ë¥¼ ë£¨íŠ¸ ì‹œê·¸ë„ˆì²˜ì— srvë¡œ ì—°ê²°í•œë‹¤.
 void StructuredBuffer::bind(ID3D12GraphicsCommandList* cmdList, UINT rootParamIdx, std::size_t roomIdx) {
 	DISPLAY_ERROR_DX_VOID(
 		cmdList->SetGraphicsRootShaderResourceView(rootParamIdx, addresses_.at(roomIdx)),
@@ -397,13 +397,13 @@ void StructuredBuffer::bind(ID3D12GraphicsCommandList* cmdList, UINT rootParamId
 	);
 }
 
-// ConstantBufferArray °´Ã¼¸¦ »ı¼ºÇÑ´Ù.
-// room °³¼ö¸¸Å­ÀÇ Å« ¸®¼Ò½ºµéÀ» »ı¼ºÇÏ°í
-// ±× ¸®¼Ò½ºµéÀ» ±â¹İÀ¸·Î ConstantBufferµéÀ» »ı¼ºÇØ ´ã´Â´Ù.
+// ConstantBufferArray ê°ì²´ë¥¼ ìƒì„±í•œë‹¤.
+// room ê°œìˆ˜ë§Œí¼ì˜ í° ë¦¬ì†ŒìŠ¤ë“¤ì„ ìƒì„±í•˜ê³ 
+// ê·¸ ë¦¬ì†ŒìŠ¤ë“¤ì„ ê¸°ë°˜ìœ¼ë¡œ ConstantBufferë“¤ì„ ìƒì„±í•´ ë‹´ëŠ”ë‹¤.
 ConstantBufferArray createConstantBufferArray( ID3D12Device* device, UINT64 elemByteWidth,
 	std::size_t elemCnt, std::size_t roomCnt, const std::string& name
 ) {
-	// ConstantBufferÀÇ ÁÖ¼Ò´Â 256¹ÙÀÌÆ® ´ÜÀ§·Î Á¤·ÄµÇ¾î ÀÖ¾î¾ß ÇÑ´Ù.
+	// ConstantBufferì˜ ì£¼ì†ŒëŠ” 256ë°”ì´íŠ¸ ë‹¨ìœ„ë¡œ ì •ë ¬ë˜ì–´ ìˆì–´ì•¼ í•œë‹¤.
 	elemByteWidth = (elemByteWidth + 255ull) & ~255ull;
 
 	ConstantBufferArray ret{};
@@ -426,9 +426,9 @@ ConstantBufferArray createConstantBufferArray( ID3D12Device* device, UINT64 elem
 	return ret;
 }
 
-// dds Æ÷¸ËÀÇ ÀÌ¹ÌÁö ÆÄÀÏÀ» ·ÎµåÇÑ´Ù.
-// UpdateSubresources ÇÔ¼ö¿¡¼­ ¾²ÀÎ ÀÓ½Ã ¾÷·Îµå ¹öÆÛ°¡ Ææ½º¿¡ ¿¬°üµÇ¹Ç·Î,
-// Ææ½º¿¡¼­ gpu ÀÛ¾÷ ¿Ï·á¸¦ È®ÀÎÇÏ°í ³­ µÚ¿¡ ÀÓ½Ã ¾÷·Îµå ¹öÆÛµéÀ» ÇØÁ¦ÇÒ ÇÊ¿ä°¡ ÀÖ´Ù.
+// dds í¬ë§·ì˜ ì´ë¯¸ì§€ íŒŒì¼ì„ ë¡œë“œí•œë‹¤.
+// UpdateSubresources í•¨ìˆ˜ì—ì„œ ì“°ì¸ ì„ì‹œ ì—…ë¡œë“œ ë²„í¼ê°€ íœìŠ¤ì— ì—°ê´€ë˜ë¯€ë¡œ,
+// íœìŠ¤ì—ì„œ gpu ì‘ì—… ì™„ë£Œë¥¼ í™•ì¸í•˜ê³  ë‚œ ë’¤ì— ì„ì‹œ ì—…ë¡œë“œ ë²„í¼ë“¤ì„ í•´ì œí•  í•„ìš”ê°€ ìˆë‹¤.
 LoadDDSReturnType loadDDS(
     ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
     const std::filesystem::path& path, Fence& fenceToAssociate
@@ -472,9 +472,9 @@ LoadDDSReturnType loadDDS(
     return ret;
 }
 
-// ÀÎÀÚ·Î Àü´Ş¹ŞÀº »ùÇÃ·¯ ¼Ó¼º¿¡ ¸Â´Â »ùÇÃ·¯ÀÇ bindless ÀÎµ¦½º¸¦ °è»êÇÑ´Ù.
-// À§ÀÇ Samplers enum Áß ÇÏ³ªÀÇ °ªÀÌ ¸®ÅÏµÈ´Ù.
-// ¸¸¾à, ÇØ´çÇÏ´Â »ùÇÃ·¯°¡ ¾ø´Ù¸é 0ÀÌ ¸®ÅÏµÇ°í ¿À·ù ¸Ş½ÃÁö¸¦ Ãâ·ÂÇÑ´Ù.
+// ì¸ìë¡œ ì „ë‹¬ë°›ì€ ìƒ˜í”ŒëŸ¬ ì†ì„±ì— ë§ëŠ” ìƒ˜í”ŒëŸ¬ì˜ bindless ì¸ë±ìŠ¤ë¥¼ ê³„ì‚°í•œë‹¤.
+// ìœ„ì˜ Samplers enum ì¤‘ í•˜ë‚˜ì˜ ê°’ì´ ë¦¬í„´ëœë‹¤.
+// ë§Œì•½, í•´ë‹¹í•˜ëŠ” ìƒ˜í”ŒëŸ¬ê°€ ì—†ë‹¤ë©´ 0ì´ ë¦¬í„´ë˜ê³  ì˜¤ë¥˜ ë©”ì‹œì§€ë¥¼ ì¶œë ¥í•œë‹¤.
 UINT calcIdxBindlessSampler( D3D12_FILTER filterMode,
 	D3D12_TEXTURE_ADDRESS_MODE addrModeU, D3D12_TEXTURE_ADDRESS_MODE addrModeV,
 	D3D12_TEXTURE_ADDRESS_MODE addrModeW, UINT anisoLevel
@@ -568,16 +568,16 @@ UINT calcIdxBindlessSampler( D3D12_FILTER filterMode,
 		return 1;
 	}
 	else {
-		DISPLAY_ERROR_STR(false, "[GFX Error] calcIdxBindlessSampler: ¿ä±¸µÈ »ùÇÃ¸µ ¹æ½Ä¿¡ ´ëÀÀµÇ´Â »ùÇÃ·¯°¡ ¾ø½À´Ï´Ù.\n"
-			"Samplers enum°ú calcIdxBindlessSampler ÇÔ¼ö, ±×¸®°í createSampler ÇÔ¼ö¸¦ ¾÷µ¥ÀÌÆ®ÇÏ¼¼¿ä.", false
+		DISPLAY_ERROR_STR(false, "[GFX Error] calcIdxBindlessSampler: ìš”êµ¬ëœ ìƒ˜í”Œë§ ë°©ì‹ì— ëŒ€ì‘ë˜ëŠ” ìƒ˜í”ŒëŸ¬ê°€ ì—†ìŠµë‹ˆë‹¤.\n"
+			"Samplers enumê³¼ calcIdxBindlessSampler í•¨ìˆ˜, ê·¸ë¦¬ê³  createSampler í•¨ìˆ˜ë¥¼ ì—…ë°ì´íŠ¸í•˜ì„¸ìš”.", false
 		);
 		return 0;
 	}
 }
 
-// dds Æ÷¸ËÀÇ ÆÄÀÏ·ÎºÎÅÍ ÅØ½ºÃ³¸¦ ·ÎµåÇÑ´Ù.
-// UpdateSubresources ÇÔ¼ö¿¡¼­ ¾²ÀÎ ÀÓ½Ã ¾÷·Îµå ¹öÆÛ°¡ Ææ½º¿¡ ¿¬°üµÇ¹Ç·Î,
-// Ææ½º¿¡¼­ gpu ÀÛ¾÷ ¿Ï·á¸¦ È®ÀÎÇÏ°í ³­ µÚ¿¡ ÀÓ½Ã ¾÷·Îµå ¹öÆÛµéÀ» ÇØÁ¦ÇÒ ÇÊ¿ä°¡ ÀÖ´Ù.
+// dds í¬ë§·ì˜ íŒŒì¼ë¡œë¶€í„° í…ìŠ¤ì²˜ë¥¼ ë¡œë“œí•œë‹¤.
+// UpdateSubresources í•¨ìˆ˜ì—ì„œ ì“°ì¸ ì„ì‹œ ì—…ë¡œë“œ ë²„í¼ê°€ íœìŠ¤ì— ì—°ê´€ë˜ë¯€ë¡œ,
+// íœìŠ¤ì—ì„œ gpu ì‘ì—… ì™„ë£Œë¥¼ í™•ì¸í•˜ê³  ë‚œ ë’¤ì— ì„ì‹œ ì—…ë¡œë“œ ë²„í¼ë“¤ì„ í•´ì œí•  í•„ìš”ê°€ ìˆë‹¤.
 Texture loadTexture( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
 	const std::filesystem::path& path, Fence& fenceToAssociate, Texture::Type& texType
 ) {
@@ -596,22 +596,22 @@ Texture loadTexture( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
 		texType = Texture::Type::Tex2DArray;
 	}
 
-	gSharedLog << "[Resource Load] File I/O: ÅØ½ºÃ³ " << path << " ·Îµå ¿Ï·á\n";
+	gSharedLog << "[Resource Load] File I/O: í…ìŠ¤ì²˜ " << path << " ë¡œë“œ ì™„ë£Œ\n";
 
 	return ret;
 }
 
-// Ä¿½ºÅÒ ÅØ½ºÃ³(Texture2D)¸¦ »ı¼ºÇÑ´Ù.
-// bindless index °ü·Ã ¼³Á¤Àº ÇÏÁö ¾ÊÀ¸¹Ç·Î
-// createSRV, calcIdxBindlessSampler¿Í °°Àº ÇÔ¼ö¸¦ ÀûÀıÈ÷ È°¿ëÇÏ¿©
-// bindless indexµéÀ» ¼³Á¤ÇÏÀÚ.
+// ì»¤ìŠ¤í…€ í…ìŠ¤ì²˜(Texture2D)ë¥¼ ìƒì„±í•œë‹¤.
+// bindless index ê´€ë ¨ ì„¤ì •ì€ í•˜ì§€ ì•Šìœ¼ë¯€ë¡œ
+// createSRV, calcIdxBindlessSamplerì™€ ê°™ì€ í•¨ìˆ˜ë¥¼ ì ì ˆíˆ í™œìš©í•˜ì—¬
+// bindless indexë“¤ì„ ì„¤ì •í•˜ì.
 Texture createTexture( ID3D12Device* device, std::uint32_t width, std::uint32_t height,
 	DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES initialState,
 	const D3D12_CLEAR_VALUE& optimizedClearValue
 ) {
 	Texture ret{};
 
-	// °áÁ¤µÈ ÀÎÀÚµéÀ» ¹ÙÅÁÀ¸·Î ¸®¼Ò½º »ı¼º
+	// ê²°ì •ëœ ì¸ìë“¤ì„ ë°”íƒ•ìœ¼ë¡œ ë¦¬ì†ŒìŠ¤ ìƒì„±
 	auto heapProperties = D3D12_HEAP_PROPERTIES{
 		.Type = D3D12_HEAP_TYPE_DEFAULT,
 		.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
@@ -643,10 +643,10 @@ Texture createTexture( ID3D12Device* device, std::uint32_t width, std::uint32_t 
 	return ret;
 }
 
-// ÅØ½ºÃ³ÀÇ gpu ¸®¼Ò½º¸¦ ´ã´Â ComPtr ºÎºĞÀº Á¦¿ÜÇÏ°í,
-// Bindless ¼ÎÀÌ´õ¿¡¼­ ÀÎµ¦½ÌÇÏ±â À§ÇÑ ÀÎµ¦½ºµé¸¸ º¹»çÇÑ ÅØ½ºÃ³¸¦ ¹İÈ¯ÇÑ´Ù.
-// ¸®¼Ò½º ÀÚÃ¼¿¡ Á¢±ÙÇÒ ÀÏÀº °ÅÀÇ ¾ø±â ¶§¹®¿¡, ÀÎµ¦½ºµé¸¸ º¹»çÇÏ´Â °ÍÀÌ
-// ´ëºÎºĞÀÇ »óÈ²¿¡¼­ ¿ëÀÌÇÏ´Ù.
+// í…ìŠ¤ì²˜ì˜ gpu ë¦¬ì†ŒìŠ¤ë¥¼ ë‹´ëŠ” ComPtr ë¶€ë¶„ì€ ì œì™¸í•˜ê³ ,
+// Bindless ì…°ì´ë”ì—ì„œ ì¸ë±ì‹±í•˜ê¸° ìœ„í•œ ì¸ë±ìŠ¤ë“¤ë§Œ ë³µì‚¬í•œ í…ìŠ¤ì²˜ë¥¼ ë°˜í™˜í•œë‹¤.
+// ë¦¬ì†ŒìŠ¤ ìì²´ì— ì ‘ê·¼í•  ì¼ì€ ê±°ì˜ ì—†ê¸° ë•Œë¬¸ì—, ì¸ë±ìŠ¤ë“¤ë§Œ ë³µì‚¬í•˜ëŠ” ê²ƒì´
+// ëŒ€ë¶€ë¶„ì˜ ìƒí™©ì—ì„œ ìš©ì´í•˜ë‹¤.
 Texture cloneTextureIdxOnly(const Texture& tex) {
 	Texture ret{};
 
@@ -696,14 +696,14 @@ void createResourcePair( ID3D12Resource** outDefaultTex, ID3D12Resource** outUpl
 
 	desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
 	desc.Alignment = 0;                          
-	desc.Width = uploadBufferSize;           // ¹öÆÛ ¹ÙÀÌÆ® Å©±â
+	desc.Width = uploadBufferSize;           // ë²„í¼ ë°”ì´íŠ¸ í¬ê¸°
 	desc.Height = 1;
 	desc.DepthOrArraySize = 1;
 	desc.MipLevels = 1;
-	desc.Format = DXGI_FORMAT_UNKNOWN;        // ¹öÆÛ´Â UNKNOWN
+	desc.Format = DXGI_FORMAT_UNKNOWN;        // ë²„í¼ëŠ” UNKNOWN
 	desc.SampleDesc.Count = 1;
 	desc.SampleDesc.Quality = 0;
-	desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR; // ¹öÆÛ´Â ROW_MAJOR
+	desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR; // ë²„í¼ëŠ” ROW_MAJOR
 	desc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
 	DISPLAY_ERROR_DX_HR(
@@ -717,7 +717,7 @@ void createResourcePair( ID3D12Resource** outDefaultTex, ID3D12Resource** outUpl
 	*outUploadTex = pUploadBuffer;
 }
 
-// ¾÷·Îµå Èü¿¡ »ı¼ºµÈ ÅØ½ºÃ³¸¦ µğÆúÆ® Èü ÅØ½ºÃ³·Î º¹»çÇÏ´Â ÇÔ¼ö
+// ì—…ë¡œë“œ í™ì— ìƒì„±ëœ í…ìŠ¤ì²˜ë¥¼ ë””í´íŠ¸ í™ í…ìŠ¤ì²˜ë¡œ ë³µì‚¬í•˜ëŠ” í•¨ìˆ˜
 void UpdateTexture( ID3D12GraphicsCommandList* cmdList, const Texture& srcTex, const Texture& destTex ) {
 	transitionResourceState( cmdList, destTex.res.Get(), D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST );
 	for ( DWORD i = 0; i < destTex.uploadInfo->resDesc.MipLevels; i++ )
@@ -748,14 +748,14 @@ void __createRTV( ID3D12Device* device, Texture& tex,
 	);
 }
 
-// DescriptorPool °´Ã¼¿¡¼­ µğ½ºÅ©¸³ÅÍ¸¦ ÇÒ´ç¹Ş¾Æ ±× ÀÚ¸®¿¡ ÅØ½ºÃ³ÀÇ RTV¸¦ ¸¸µç´Ù.
-// ÅØ½ºÃ³ÀÇ idxRtv¿¡ Ç®¿¡¼­ÀÇ ÀÎµ¦½º°¡ ÀúÀåµÈ´Ù.
+// DescriptorPool ê°ì²´ì—ì„œ ë””ìŠ¤í¬ë¦½í„°ë¥¼ í• ë‹¹ë°›ì•„ ê·¸ ìë¦¬ì— í…ìŠ¤ì²˜ì˜ RTVë¥¼ ë§Œë“ ë‹¤.
+// í…ìŠ¤ì²˜ì˜ idxRtvì— í’€ì—ì„œì˜ ì¸ë±ìŠ¤ê°€ ì €ì¥ëœë‹¤.
 void createRTV(ID3D12Device* device, Texture& tex, DescriptorPool& pool) {
 	__createRTV(device, tex, nullptr, pool);
 }
 
-// DescriptorPool °´Ã¼¿¡¼­ µğ½ºÅ©¸³ÅÍ¸¦ ÇÒ´ç¹Ş¾Æ ±× ÀÚ¸®¿¡ ÅØ½ºÃ³ÀÇ RTV¸¦ ¸¸µç´Ù.
-// ÅØ½ºÃ³ÀÇ idxRtv¿¡ Ç®¿¡¼­ÀÇ ÀÎµ¦½º°¡ ÀúÀåµÈ´Ù.
+// DescriptorPool ê°ì²´ì—ì„œ ë””ìŠ¤í¬ë¦½í„°ë¥¼ í• ë‹¹ë°›ì•„ ê·¸ ìë¦¬ì— í…ìŠ¤ì²˜ì˜ RTVë¥¼ ë§Œë“ ë‹¤.
+// í…ìŠ¤ì²˜ì˜ idxRtvì— í’€ì—ì„œì˜ ì¸ë±ìŠ¤ê°€ ì €ì¥ëœë‹¤.
 void createRTV( ID3D12Device* device, Texture& tex,
 	const D3D12_RENDER_TARGET_VIEW_DESC& rtvDesc, DescriptorPool& pool
 ) {
@@ -777,16 +777,16 @@ void createDSV(ID3D12Device* device, Texture& tex, DescriptorPool& pool) {
 	__createDSV(device, tex, nullptr, pool);
 }
 
-// DescriptorPool °´Ã¼¿¡¼­ µğ½ºÅ©¸³ÅÍ¸¦ ÇÒ´ç¹Ş¾Æ ±× ÀÚ¸®¿¡ ÅØ½ºÃ³ÀÇ DSV¸¦ ¸¸µç´Ù.
-// ÅØ½ºÃ³ÀÇ idxDsv¿¡ Ç®¿¡¼­ÀÇ ÀÎµ¦½º°¡ ÀúÀåµÈ´Ù.
+// DescriptorPool ê°ì²´ì—ì„œ ë””ìŠ¤í¬ë¦½í„°ë¥¼ í• ë‹¹ë°›ì•„ ê·¸ ìë¦¬ì— í…ìŠ¤ì²˜ì˜ DSVë¥¼ ë§Œë“ ë‹¤.
+// í…ìŠ¤ì²˜ì˜ idxDsvì— í’€ì—ì„œì˜ ì¸ë±ìŠ¤ê°€ ì €ì¥ëœë‹¤.
 void createDSV( ID3D12Device* device, Texture& tex,
 	const D3D12_DEPTH_STENCIL_VIEW_DESC& dsvDesc, DescriptorPool& pool
 ) {
 	__createDSV(device, tex, &dsvDesc, pool);
 }
 
-// DescriptorPool °´Ã¼¿¡¼­ µğ½ºÅ©¸³ÅÍ¸¦ ÇÒ´ç¹Ş¾Æ ±× ÀÚ¸®¿¡ ÅØ½ºÃ³ÀÇ DSV¸¦ ¸¸µç´Ù.
-// ÅØ½ºÃ³ÀÇ idxDsv¿¡ Ç®¿¡¼­ÀÇ ÀÎµ¦½º°¡ ÀúÀåµÈ´Ù.
+// DescriptorPool ê°ì²´ì—ì„œ ë””ìŠ¤í¬ë¦½í„°ë¥¼ í• ë‹¹ë°›ì•„ ê·¸ ìë¦¬ì— í…ìŠ¤ì²˜ì˜ DSVë¥¼ ë§Œë“ ë‹¤.
+// í…ìŠ¤ì²˜ì˜ idxDsvì— í’€ì—ì„œì˜ ì¸ë±ìŠ¤ê°€ ì €ì¥ëœë‹¤.
 void __createSRV( ID3D12Device* device, Texture& tex,
 	const D3D12_SHADER_RESOURCE_VIEW_DESC* srvDesc, DescriptorPool& pool
 ) {
@@ -798,14 +798,14 @@ void __createSRV( ID3D12Device* device, Texture& tex,
 	);
 }
 
-// DescriptorPool °´Ã¼¿¡¼­ µğ½ºÅ©¸³ÅÍ¸¦ ÇÒ´ç¹Ş¾Æ ±× ÀÚ¸®¿¡ ÅØ½ºÃ³ÀÇ SRV¸¦ ¸¸µç´Ù.
-// ÅØ½ºÃ³ÀÇ idxSrv.idxResource¿¡ Ç®¿¡¼­ÀÇ ÀÎµ¦½º°¡ ÀúÀåµÈ´Ù.
+// DescriptorPool ê°ì²´ì—ì„œ ë””ìŠ¤í¬ë¦½í„°ë¥¼ í• ë‹¹ë°›ì•„ ê·¸ ìë¦¬ì— í…ìŠ¤ì²˜ì˜ SRVë¥¼ ë§Œë“ ë‹¤.
+// í…ìŠ¤ì²˜ì˜ idxSrv.idxResourceì— í’€ì—ì„œì˜ ì¸ë±ìŠ¤ê°€ ì €ì¥ëœë‹¤.
 void createSRV(ID3D12Device* device, Texture& tex, DescriptorPool& pool) {
 	__createSRV(device, tex, nullptr, pool);
 }
 
-// DescriptorPool °´Ã¼¿¡¼­ µğ½ºÅ©¸³ÅÍ¸¦ ÇÒ´ç¹Ş¾Æ ±× ÀÚ¸®¿¡ ÅØ½ºÃ³ÀÇ SRV¸¦ ¸¸µç´Ù.
-// ÅØ½ºÃ³ÀÇ idxSrv.idxResource¿¡ Ç®¿¡¼­ÀÇ ÀÎµ¦½º°¡ ÀúÀåµÈ´Ù.
+// DescriptorPool ê°ì²´ì—ì„œ ë””ìŠ¤í¬ë¦½í„°ë¥¼ í• ë‹¹ë°›ì•„ ê·¸ ìë¦¬ì— í…ìŠ¤ì²˜ì˜ SRVë¥¼ ë§Œë“ ë‹¤.
+// í…ìŠ¤ì²˜ì˜ idxSrv.idxResourceì— í’€ì—ì„œì˜ ì¸ë±ìŠ¤ê°€ ì €ì¥ëœë‹¤.
 void createSRV( ID3D12Device* device, Texture& tex,
 	const D3D12_SHADER_RESOURCE_VIEW_DESC& srvDesc, DescriptorPool& pool
 ) {
@@ -823,44 +823,44 @@ void __createUAV( ID3D12Device* device, Texture& tex,
 	);
 }
 
-// DescriptorPool °´Ã¼¿¡¼­ µğ½ºÅ©¸³ÅÍ¸¦ ÇÒ´ç¹Ş¾Æ ±× ÀÚ¸®¿¡ ÅØ½ºÃ³ÀÇ UAV¸¦ ¸¸µç´Ù.
-// ÅØ½ºÃ³ÀÇ idxUav.idxResource¿¡ Ç®¿¡¼­ÀÇ ÀÎµ¦½º°¡ ÀúÀåµÈ´Ù.
+// DescriptorPool ê°ì²´ì—ì„œ ë””ìŠ¤í¬ë¦½í„°ë¥¼ í• ë‹¹ë°›ì•„ ê·¸ ìë¦¬ì— í…ìŠ¤ì²˜ì˜ UAVë¥¼ ë§Œë“ ë‹¤.
+// í…ìŠ¤ì²˜ì˜ idxUav.idxResourceì— í’€ì—ì„œì˜ ì¸ë±ìŠ¤ê°€ ì €ì¥ëœë‹¤.
 void createUAV(ID3D12Device* device, Texture& tex, DescriptorPool& pool){ 
 	__createUAV(device, tex, nullptr, pool);
 }
 
-// DescriptorPool °´Ã¼¿¡¼­ µğ½ºÅ©¸³ÅÍ¸¦ ÇÒ´ç¹Ş¾Æ ±× ÀÚ¸®¿¡ ÅØ½ºÃ³ÀÇ UAV¸¦ ¸¸µç´Ù.
-// ÅØ½ºÃ³ÀÇ idxUav.idxResource¿¡ Ç®¿¡¼­ÀÇ ÀÎµ¦½º°¡ ÀúÀåµÈ´Ù.
+// DescriptorPool ê°ì²´ì—ì„œ ë””ìŠ¤í¬ë¦½í„°ë¥¼ í• ë‹¹ë°›ì•„ ê·¸ ìë¦¬ì— í…ìŠ¤ì²˜ì˜ UAVë¥¼ ë§Œë“ ë‹¤.
+// í…ìŠ¤ì²˜ì˜ idxUav.idxResourceì— í’€ì—ì„œì˜ ì¸ë±ìŠ¤ê°€ ì €ì¥ëœë‹¤.
 void createUAV( ID3D12Device* device, Texture& tex,
 	const D3D12_UNORDERED_ACCESS_VIEW_DESC& uavDesc, DescriptorPool& pool
 ) {
 	__createUAV(device, tex, &uavDesc, pool);
 }
 
-// ÅØ½ºÃ³ÀÇ RTV ¿ëµµ·Î DescriptorPool °´Ã¼¿¡¼­ ÇÒ´ç¹Ş¾Ò´ø µğ½ºÅ©¸³ÅÍ¸¦ ¹İ³³ÇÑ´Ù.
-// ÅØ½ºÃ³ ³»¿¡ ÀúÀåµÇ¾ú´ø ÀÎµ¦½º¿¡ º¯È­°¡ ¾ø¾î¾ß ÇÏ°í, ÇÒ´çÇÑ Ç®°ú ¹İ³³ÇÑ Ç®ÀÌ °°¾Æ¾ß ÇÑ´Ù.
-// ÀÌ ÇÔ¼ö´Â ±×°ÍÀ» °Ë»çÇÏÁö ¾Ê´Â´Ù.
+// í…ìŠ¤ì²˜ì˜ RTV ìš©ë„ë¡œ DescriptorPool ê°ì²´ì—ì„œ í• ë‹¹ë°›ì•˜ë˜ ë””ìŠ¤í¬ë¦½í„°ë¥¼ ë°˜ë‚©í•œë‹¤.
+// í…ìŠ¤ì²˜ ë‚´ì— ì €ì¥ë˜ì—ˆë˜ ì¸ë±ìŠ¤ì— ë³€í™”ê°€ ì—†ì–´ì•¼ í•˜ê³ , í• ë‹¹í•œ í’€ê³¼ ë°˜ë‚©í•œ í’€ì´ ê°™ì•„ì•¼ í•œë‹¤.
+// ì´ í•¨ìˆ˜ëŠ” ê·¸ê²ƒì„ ê²€ì‚¬í•˜ì§€ ì•ŠëŠ”ë‹¤.
 void freeRTV(const Texture& tex, DescriptorPool& pool) {
 	pool.free(tex.idxRtv);
 }
 
-// ÅØ½ºÃ³ÀÇ DSV ¿ëµµ·Î DescriptorPool °´Ã¼¿¡¼­ ÇÒ´ç¹Ş¾Ò´ø µğ½ºÅ©¸³ÅÍ¸¦ ¹İ³³ÇÑ´Ù.
-// ÅØ½ºÃ³ ³»¿¡ ÀúÀåµÇ¾ú´ø ÀÎµ¦½º¿¡ º¯È­°¡ ¾ø¾î¾ß ÇÏ°í, ÇÒ´çÇÑ Ç®°ú ¹İ³³ÇÑ Ç®ÀÌ °°¾Æ¾ß ÇÑ´Ù.
-// ÀÌ ÇÔ¼ö´Â ±×°ÍÀ» °Ë»çÇÏÁö ¾Ê´Â´Ù.
+// í…ìŠ¤ì²˜ì˜ DSV ìš©ë„ë¡œ DescriptorPool ê°ì²´ì—ì„œ í• ë‹¹ë°›ì•˜ë˜ ë””ìŠ¤í¬ë¦½í„°ë¥¼ ë°˜ë‚©í•œë‹¤.
+// í…ìŠ¤ì²˜ ë‚´ì— ì €ì¥ë˜ì—ˆë˜ ì¸ë±ìŠ¤ì— ë³€í™”ê°€ ì—†ì–´ì•¼ í•˜ê³ , í• ë‹¹í•œ í’€ê³¼ ë°˜ë‚©í•œ í’€ì´ ê°™ì•„ì•¼ í•œë‹¤.
+// ì´ í•¨ìˆ˜ëŠ” ê·¸ê²ƒì„ ê²€ì‚¬í•˜ì§€ ì•ŠëŠ”ë‹¤.
 void freeDSV(const Texture& tex, DescriptorPool& pool) {
 	pool.free(tex.idxDsv);
 }
 
-// ÅØ½ºÃ³ÀÇ SRV ¿ëµµ·Î DescriptorPool °´Ã¼¿¡¼­ ÇÒ´ç¹Ş¾Ò´ø µğ½ºÅ©¸³ÅÍ¸¦ ¹İ³³ÇÑ´Ù.
-// ÅØ½ºÃ³ ³»¿¡ ÀúÀåµÇ¾ú´ø ÀÎµ¦½º¿¡ º¯È­°¡ ¾ø¾î¾ß ÇÏ°í, ÇÒ´çÇÑ Ç®°ú ¹İ³³ÇÑ Ç®ÀÌ °°¾Æ¾ß ÇÑ´Ù.
-// ÀÌ ÇÔ¼ö´Â ±×°ÍÀ» °Ë»çÇÏÁö ¾Ê´Â´Ù.
+// í…ìŠ¤ì²˜ì˜ SRV ìš©ë„ë¡œ DescriptorPool ê°ì²´ì—ì„œ í• ë‹¹ë°›ì•˜ë˜ ë””ìŠ¤í¬ë¦½í„°ë¥¼ ë°˜ë‚©í•œë‹¤.
+// í…ìŠ¤ì²˜ ë‚´ì— ì €ì¥ë˜ì—ˆë˜ ì¸ë±ìŠ¤ì— ë³€í™”ê°€ ì—†ì–´ì•¼ í•˜ê³ , í• ë‹¹í•œ í’€ê³¼ ë°˜ë‚©í•œ í’€ì´ ê°™ì•„ì•¼ í•œë‹¤.
+// ì´ í•¨ìˆ˜ëŠ” ê·¸ê²ƒì„ ê²€ì‚¬í•˜ì§€ ì•ŠëŠ”ë‹¤.
 void freeSRV(const Texture& tex, DescriptorPool& pool) {
 	pool.free(tex.idxSrv.idxResource);
 }
 
-// ÅØ½ºÃ³ÀÇ UAV ¿ëµµ·Î DescriptorPool °´Ã¼¿¡¼­ ÇÒ´ç¹Ş¾Ò´ø µğ½ºÅ©¸³ÅÍ¸¦ ¹İ³³ÇÑ´Ù.
-// ÅØ½ºÃ³ ³»¿¡ ÀúÀåµÇ¾ú´ø ÀÎµ¦½º¿¡ º¯È­°¡ ¾ø¾î¾ß ÇÏ°í, ÇÒ´çÇÑ Ç®°ú ¹İ³³ÇÑ Ç®ÀÌ °°¾Æ¾ß ÇÑ´Ù.
-// ÀÌ ÇÔ¼ö´Â ±×°ÍÀ» °Ë»çÇÏÁö ¾Ê´Â´Ù.
+// í…ìŠ¤ì²˜ì˜ UAV ìš©ë„ë¡œ DescriptorPool ê°ì²´ì—ì„œ í• ë‹¹ë°›ì•˜ë˜ ë””ìŠ¤í¬ë¦½í„°ë¥¼ ë°˜ë‚©í•œë‹¤.
+// í…ìŠ¤ì²˜ ë‚´ì— ì €ì¥ë˜ì—ˆë˜ ì¸ë±ìŠ¤ì— ë³€í™”ê°€ ì—†ì–´ì•¼ í•˜ê³ , í• ë‹¹í•œ í’€ê³¼ ë°˜ë‚©í•œ í’€ì´ ê°™ì•„ì•¼ í•œë‹¤.
+// ì´ í•¨ìˆ˜ëŠ” ê·¸ê²ƒì„ ê²€ì‚¬í•˜ì§€ ì•ŠëŠ”ë‹¤.
 void freeUAV(const Texture& tex, DescriptorPool& pool) {
 	pool.free(tex.idxUav.idxResource);
 }
@@ -870,7 +870,7 @@ SpriteAnimationClip loadSpriteAnimationFromFile( const std::filesystem::path& pa
 	SpriteAnimationClip ret{};
 
 	auto ifs = std::ifstream( path, std::ios::binary );
-	DISPLAY_ERROR_STR( ifs.good(), "[File I/O Error]: loadSpriteAnimationFromFile: "s + path.string() + " ÆÄÀÏÀ» ¿­ ¼ö ¾ø½À´Ï´Ù."s, false );
+	DISPLAY_ERROR_STR( ifs.good(), "[File I/O Error]: loadSpriteAnimationFromFile: "s + path.string() + " íŒŒì¼ì„ ì—´ ìˆ˜ ì—†ìŠµë‹ˆë‹¤."s, false );
 	if ( !ifs ) {
 		return ret;
 	}
@@ -914,7 +914,7 @@ SpriteAnimationClip loadSpriteAnimationFromFile( const std::filesystem::path& pa
 			auto texture = loadTexture(device, cmdList, texturePath, fenceToAssociate, type);
 
 			createSRV(device, texture, texPool);
-			// TODO: »ùÇÃ¸µ ¹æ¹ıµµ ¹ÙÀÌ³Ê¸®¿¡ ±â·Ï
+			// TODO: ìƒ˜í”Œë§ ë°©ë²•ë„ ë°”ì´ë„ˆë¦¬ì— ê¸°ë¡
 			texture.idxSrv.idxSampler = etoi(Samplers::TrilinearWrap);
 
 			sprites.push_back(std::move(texture));
@@ -935,7 +935,7 @@ SpriteAnimationClip loadSpriteAnimationFromFile( const std::filesystem::path& pa
 
 	readTailTag( ifs, "Frames" );
 
-	gSharedLog << "[Resource Load] File I/O: Sprites " << '(' << path << ") ·Îµå ¿Ï·á\n";
+	gSharedLog << "[Resource Load] File I/O: Sprites " << '(' << path << ") ë¡œë“œ ì™„ë£Œ\n";
 
 	return ret;
 }

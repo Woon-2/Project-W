@@ -1,4 +1,4 @@
-#ifndef __skyboxPipeline_HPP
+ï»¿#ifndef __skyboxPipeline_HPP
 #define __skyboxPipeline_HPP
 
 #include "gfxUtil.hpp"
@@ -26,20 +26,20 @@ struct Resources {
 	ConstantBuffer perFrameData;	// b1
 };
 
-// Skybox PipelineÀÇ input layoutÀ» À§ÇÑ Vertex Buffer View ¹è¿­ÀÌ
-// mesh¿¡ Á¸ÀçÇÏÁö ¾Ê´Â´Ù¸é, Ãß°¡ÇÑ´Ù.
+// Skybox Pipelineì˜ input layoutì„ ìœ„í•œ Vertex Buffer View ë°°ì—´ì´
+// meshì— ì¡´ì¬í•˜ì§€ ì•ŠëŠ”ë‹¤ë©´, ì¶”ê°€í•œë‹¤.
 // 0: position
 void layoutMeshIfNeeded(const Mesh& mesh);
 
-// PBR PipelineÀÇ Dispatcher
-// Dispatcher Å¬·¡½º´Â GFX¿¡¼­ ÇÊ¿äÇÑ ÀÎÀÚµéÀ» ¹Ş¾Æ
-// ÆÄÀÌÇÁ¶óÀÎÀÇ Æ¯Á¤ ´Ü°è¸¦ ½Ì±Û½º·¹µå È¤Àº ¸ÖÆ¼½º·¹µå·Î ¼öÇàÇÑ´Ù.
-// ¸î °³ÀÇ ÇÔ¼ö¿¡¼­ °øÀ¯ÇÏ´Â µ¥ÀÌÅÍµéÀ» µû·Î ¸ğ¾Æ º¸°üÇÏ´Â µ¿½Ã¿¡
-// ¸ÖÆ¼½º·¹µå ÀÛ¾÷ ºĞ¹è °úÁ¤À» Á» ´õ ½±°Ô ÀÛ¼ºÇÏ±â À§ÇØ ¸¸µé¾îÁ³´Ù.
+// PBR Pipelineì˜ Dispatcher
+// Dispatcher í´ë˜ìŠ¤ëŠ” GFXì—ì„œ í•„ìš”í•œ ì¸ìë“¤ì„ ë°›ì•„
+// íŒŒì´í”„ë¼ì¸ì˜ íŠ¹ì • ë‹¨ê³„ë¥¼ ì‹±ê¸€ìŠ¤ë ˆë“œ í˜¹ì€ ë©€í‹°ìŠ¤ë ˆë“œë¡œ ìˆ˜í–‰í•œë‹¤.
+// ëª‡ ê°œì˜ í•¨ìˆ˜ì—ì„œ ê³µìœ í•˜ëŠ” ë°ì´í„°ë“¤ì„ ë”°ë¡œ ëª¨ì•„ ë³´ê´€í•˜ëŠ” ë™ì‹œì—
+// ë©€í‹°ìŠ¤ë ˆë“œ ì‘ì—… ë¶„ë°° ê³¼ì •ì„ ì¢€ ë” ì‰½ê²Œ ì‘ì„±í•˜ê¸° ìœ„í•´ ë§Œë“¤ì–´ì¡Œë‹¤.
 class Dispatcher {
 public:
 	Dispatcher() = default;
-	// GFX °´Ã¼·ÎºÎÅÍ ÇÊ¿äÇÑ ÀÎÀÚµéÀ» Àü´Ş¹ŞÀÚ.
+	// GFX ê°ì²´ë¡œë¶€í„° í•„ìš”í•œ ì¸ìë“¤ì„ ì „ë‹¬ë°›ì.
 	Dispatcher(
 		const std::vector<ComPtr<ID3D12DescriptorHeap>>& descriptorHeaps,
 		DescriptorPool* pTexPool, DescriptorPool* pTexArrayPool,
@@ -58,21 +58,21 @@ public:
 		std::size_t roomIdx
 	);
 
-	// ¼ÎÀÌ´õ¿¡¼­ »ç¿ëÇÏ´Â GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
-	// DrawEvents, CameraData, LightData, FrameData¿¡ ´ã°ÜÀÖ´Â Á¤º¸¸¦ °¡°øÇÏ¿©
-	// Resources °´Ã¼¿¡ ´ã±ä, ShaderInputBuffer ÀÎÅÍÆäÀÌ½º¸¦ °¡Áö´Â °´Ã¼µé¿¡ ¿Å°Ü´ã´Â´Ù.
-	// ½Ì±Û½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
-	// DrawEvents°¡ ºñ¾îÀÖ´Ù¸é ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
+	// ì…°ì´ë”ì—ì„œ ì‚¬ìš©í•˜ëŠ” GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
+	// DrawEvents, CameraData, LightData, FrameDataì— ë‹´ê²¨ìˆëŠ” ì •ë³´ë¥¼ ê°€ê³µí•˜ì—¬
+	// Resources ê°ì²´ì— ë‹´ê¸´, ShaderInputBuffer ì¸í„°í˜ì´ìŠ¤ë¥¼ ê°€ì§€ëŠ” ê°ì²´ë“¤ì— ì˜®ê²¨ë‹´ëŠ”ë‹¤.
+	// ì‹±ê¸€ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
+	// DrawEventsê°€ ë¹„ì–´ìˆë‹¤ë©´ ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 	void updateGPUDataSingleThreaded();
-	// DrawEventsÀÇ Á¤º¸µéÀ» Âü°íÇÏ¿©
-	// µå·Î¿ìÄİµéÀ» ¼öÇàÇÑ´Ù.
-	// ½Ì±Û½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
-	// DrawEvents°¡ ºñ¾îÀÖ´Ù¸é ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
+	// DrawEventsì˜ ì •ë³´ë“¤ì„ ì°¸ê³ í•˜ì—¬
+	// ë“œë¡œìš°ì½œë“¤ì„ ìˆ˜í–‰í•œë‹¤.
+	// ì‹±ê¸€ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
+	// DrawEventsê°€ ë¹„ì–´ìˆë‹¤ë©´ ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 	void drawSingleThreaded();
 
 private:
 
-	// GFX·ÎºÎÅÍ Àü´ŞµÇ¾î ±×´ë·Î »ç¿ëÇÏ´Â º¯¼öµé
+	// GFXë¡œë¶€í„° ì „ë‹¬ë˜ì–´ ê·¸ëŒ€ë¡œ ì‚¬ìš©í•˜ëŠ” ë³€ìˆ˜ë“¤
 	std::vector<ComPtr<ID3D12DescriptorHeap>> descriptorHeaps_{};
 	DescriptorPool* pTexPool_ = nullptr;
 	DescriptorPool* pTexArrayPool_ = nullptr;
@@ -93,7 +93,7 @@ private:
 	CameraData cameraData_{};
 	std::size_t roomIdx_{};
 	
-	// GFX·ÎºÎÅÍ Àü´ŞµÈ °ÍµéÀº ÅëÇØ ¾ò¾îÁö´Â º¯¼öµé
+	// GFXë¡œë¶€í„° ì „ë‹¬ëœ ê²ƒë“¤ì€ í†µí•´ ì–»ì–´ì§€ëŠ” ë³€ìˆ˜ë“¤
 	UINT rootParamIdxPDD_{};
 	UINT rootParamIdxPFD_{};
 	UINT rootParamIdxLightData_{};

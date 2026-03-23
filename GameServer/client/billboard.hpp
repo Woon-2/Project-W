@@ -1,4 +1,4 @@
-#ifndef __billboard_HPP
+ï»¿#ifndef __billboard_HPP
 #define __billboard_HPP
 
 #include "gfx.hpp"
@@ -10,7 +10,7 @@ public:
 	void render( GFX& gfx );
 
 private:
-	mu::Mat4x4 world_{};	// GFX¿¡ Çà·ÄÀ» Àü´ŞÇÒ ¶§¸¸ »ç¿ëµÈ´Ù.
+	mu::Mat4x4 world_{};	// GFXì— í–‰ë ¬ì„ ì „ë‹¬í•  ë•Œë§Œ ì‚¬ìš©ëœë‹¤.
 	const Texture* pTex_ = nullptr;
 };
 

@@ -1,4 +1,4 @@
-#ifndef __camera_HPP
+ï»¿#ifndef __camera_HPP
 #define __camera_HPP
 
 #include "gfx.hpp"
@@ -8,18 +8,18 @@ class Camera {
 public:
 	void setTargetObject(const std::shared_ptr<Object>& pObject) { pTargetObject_ = pObject; }
 	std::shared_ptr<Object> pTargetObject() const { return pTargetObject_.lock(); }
-	// Å¸°Ù ¿ÀºêÁ§Æ®¿¡ ´ëÇÑ Ä«¸Ş¶óÀÇ À§Ä¡ ¿ÀÇÁ¼ÂÀ» ¼³Á¤ÇÑ´Ù.
+	// íƒ€ê²Ÿ ì˜¤ë¸Œì íŠ¸ì— ëŒ€í•œ ì¹´ë©”ë¼ì˜ ìœ„ì¹˜ ì˜¤í”„ì…‹ì„ ì„¤ì •í•œë‹¤.
 	void MU_CALLCONV setOffsetFromTarget(mu::Vec3 offset) { offsetFromTarget_ = offset; }
 	mu::Vec3 MU_CALLCONV offsetFromTarget() const { return offsetFromTarget_; }
-	// Ä«¸Ş¶ó ÀÚÃ¼ÀÇ È¸ÀüÀ» ¼³Á¤ÇÑ´Ù.
-	// (ÀÌ È¸Àü°ú Å¸°Ù ¿ÀºêÁ§Æ®ÀÇ È¸ÀüÀÌ ¼ø¼­´ë·Î offsetFromTarget¿¡ ´ëÇØ Àû¿ëµÇ¾î ºä Çà·ÄÀÌ ¸¸µé¾îÁø´Ù.)
+	// ì¹´ë©”ë¼ ìì²´ì˜ íšŒì „ì„ ì„¤ì •í•œë‹¤.
+	// (ì´ íšŒì „ê³¼ íƒ€ê²Ÿ ì˜¤ë¸Œì íŠ¸ì˜ íšŒì „ì´ ìˆœì„œëŒ€ë¡œ offsetFromTargetì— ëŒ€í•´ ì ìš©ë˜ì–´ ë·° í–‰ë ¬ì´ ë§Œë“¤ì–´ì§„ë‹¤.)
 	void MU_CALLCONV setOffsetFromTargetPreRotation(mu::NQuat rotation) { offsetFromTargetPreRotation_ = rotation; }
 	mu::NQuat MU_CALLCONV offsetFromTargetPreRotation() const { return offsetFromTargetPreRotation_; }
 	void MU_CALLCONV setXXPreRotation(mu::NQuat rotation) { xxPreRotation_ = rotation; }
 	mu::NQuat MU_CALLCONV XXPreRotation() const { return xxPreRotation_; }
-	// Å¸°Ù ¿ÀºêÁ§Æ®¿¡ ´ëÇÑ Ä«¸Ş¶óÀÇ ÃÊÁ¡ ¿ÀÇÁ¼ÂÀ» ¼³Á¤ÇÑ´Ù.
-	// (¿¹¸¦ µé¾î ÀÎ°£Çü ¸ğµ¨ÀÇ °æ¿ì Å¸°Ù ¿ÀºêÁ§Æ®ÀÇ Áß½ÉÀº °ñ¹İÂÊÀÌ¹Ç·Î,
-	// Ä«¸Ş¶ó°¡ ¾ó±¼À» ÃÄ´Ùº¼ ¼ö ÀÖµµ·Ï ÃÊÁ¡ ¿ÀÇÁ¼ÂÀ» À§·Î ÁÖ¸é ÁÁÀ» °ÍÀÌ´Ù.)
+	// íƒ€ê²Ÿ ì˜¤ë¸Œì íŠ¸ì— ëŒ€í•œ ì¹´ë©”ë¼ì˜ ì´ˆì  ì˜¤í”„ì…‹ì„ ì„¤ì •í•œë‹¤.
+	// (ì˜ˆë¥¼ ë“¤ì–´ ì¸ê°„í˜• ëª¨ë¸ì˜ ê²½ìš° íƒ€ê²Ÿ ì˜¤ë¸Œì íŠ¸ì˜ ì¤‘ì‹¬ì€ ê³¨ë°˜ìª½ì´ë¯€ë¡œ,
+	// ì¹´ë©”ë¼ê°€ ì–¼êµ´ì„ ì³ë‹¤ë³¼ ìˆ˜ ìˆë„ë¡ ì´ˆì  ì˜¤í”„ì…‹ì„ ìœ„ë¡œ ì£¼ë©´ ì¢‹ì„ ê²ƒì´ë‹¤.)
 	void MU_CALLCONV setOffsetTargetPivot(mu::Vec3 offset) { offsetTargetPivot_ = offset; }
 	mu::Vec3 MU_CALLCONV offsetTargetPivot() const { return offsetTargetPivot_; }
 
@@ -37,21 +37,21 @@ public:
 
 private:
 	std::weak_ptr<Object> pTargetObject_{};
-	// Å¸°Ù ¿ÀºêÁ§Æ®¿¡ ´ëÇÑ Ä«¸Ş¶óÀÇ À§Ä¡ ¿ÀÇÁ¼Â
+	// íƒ€ê²Ÿ ì˜¤ë¸Œì íŠ¸ì— ëŒ€í•œ ì¹´ë©”ë¼ì˜ ìœ„ì¹˜ ì˜¤í”„ì…‹
 	mu::Vec3 offsetFromTarget_{};
-	// Ä«¸Ş¶ó ÀÚÃ¼ÀÇ È¸Àü (offsetFromTarget_ º¤ÅÍ¸¦ È¸Àü½ÃÅ²´Ù.)
+	// ì¹´ë©”ë¼ ìì²´ì˜ íšŒì „ (offsetFromTarget_ ë²¡í„°ë¥¼ íšŒì „ì‹œí‚¨ë‹¤.)
 	mu::NQuat offsetFromTargetPreRotation_{};
-	// Å¸°Ù ¿ÀºêÁ§Æ®¿¡ ´ëÇÑ Ä«¸Ş¶óÀÇ ÃÊÁ¡ ¿ÀÇÁ¼Â
+	// íƒ€ê²Ÿ ì˜¤ë¸Œì íŠ¸ì— ëŒ€í•œ ì¹´ë©”ë¼ì˜ ì´ˆì  ì˜¤í”„ì…‹
 	mu::Vec3 offsetTargetPivot_{};
 	mu::NQuat xxPreRotation_{};
 
-	// perspective¿ë
+	// perspectiveìš©
 	mu::Degree fovy_ = 90.f;
 	float aspect_ = 1.f;
 	float nearz_ = 0.01f;
 	float farz_ = 500.f;
 
-	// ortho¿ë
+	// orthoìš©
 	float minX_ = -100.f;
 	float maxX_ = 100.f;
 	float minY_ = -100.f;
@@ -59,8 +59,8 @@ private:
 	float minZ_ = -100.f;
 	float maxZ_ = 100.f;
 
-	// ¼ÎÀÌ´õ Àü´Ş¿ëÀ¸·Î¸¸ ¾²ÀÌ´Â º¯¼öµé,
-	// Ä«¸Ş¶óÀÇ À§Ä¡ °»½ÅÀº Å¸°Ù ¿ÀºêÁ§Æ®¿Í ¿ÀÇÁ¼Âµé ¹× È¸ÀüÀ¸·Î °áÁ¤µÈ´Ù.
+	// ì…°ì´ë” ì „ë‹¬ìš©ìœ¼ë¡œë§Œ ì“°ì´ëŠ” ë³€ìˆ˜ë“¤,
+	// ì¹´ë©”ë¼ì˜ ìœ„ì¹˜ ê°±ì‹ ì€ íƒ€ê²Ÿ ì˜¤ë¸Œì íŠ¸ì™€ ì˜¤í”„ì…‹ë“¤ ë° íšŒì „ìœ¼ë¡œ ê²°ì •ëœë‹¤.
 	mu::Vec3 eye_{};
 	mu::Vec3 at_{};
 	mu::Mat4x4 view_{};

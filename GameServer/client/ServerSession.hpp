@@ -1,4 +1,4 @@
-#ifndef server_session_hpp
+ï»¿#ifndef server_session_hpp
 #define server_session_hpp
 
 #include "RecvBuffer.hpp"
@@ -15,7 +15,7 @@ class ServerSession {
 		WSAOVERLAPPED over;
 		IoType type;
 		ServerSession* owner;
-		SendBuffer* sendBuffer;	// SendÀÏ ¶§¸¸ À¯È¿
+		SendBuffer* sendBuffer;	// Sendì¼ ë•Œë§Œ ìœ íš¨
 
 		void clear() {
 			ZeroMemory(&over, sizeof(WSAOVERLAPPED));

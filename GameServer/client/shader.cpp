@@ -1,10 +1,10 @@
-#include "pch.hpp"
+ï»¿#include "pch.hpp"
 #include "shader.hpp"
 
 #include "errorHandling.hpp"
 
-// ¼ÎÀÌ´õ¸¦ ÄÄÆÄÀÏÇÏ¿© D3D Blob °´Ã¼, ±×¸®°í ±× °´Ã¼¿Í ¿¬°áµÈ
-// D3D12_SHADER_BYTECODE °´Ã¼¸¦ ¸®ÅÏÇÑ´Ù.
+// ì…°ì´ë”ë¥¼ ì»´íŒŒì¼í•˜ì—¬ D3D Blob ê°ì²´, ê·¸ë¦¬ê³  ê·¸ ê°ì²´ì™€ ì—°ê²°ëœ
+// D3D12_SHADER_BYTECODE ê°ì²´ë¥¼ ë¦¬í„´í•œë‹¤.
 CompiledShaderOutput compileShader(const std::filesystem::path& path,
 	const D3D_SHADER_MACRO* macros,
 	std::string_view entryPoint, std::string_view target,
@@ -20,12 +20,12 @@ CompiledShaderOutput compileShader(const std::filesystem::path& path,
 
 	if (errorBlob) {
 		if (hr >= 0) {
-			DISPLAY_ERROR_STR( false, "[GFX Warning] compileShader: ¼ÎÀÌ´õ ÄÄÆÄÀÏ Áß °æ°í°¡ ¹ß»ıÇß½À´Ï´Ù.\n"s
+			DISPLAY_ERROR_STR( false, "[GFX Warning] compileShader: ì…°ì´ë” ì»´íŒŒì¼ ì¤‘ ê²½ê³ ê°€ ë°œìƒí–ˆìŠµë‹ˆë‹¤.\n"s
 				+ static_cast<const char*>(errorBlob->GetBufferPointer()), false
 			);
 		}
 		else {
-			DISPLAY_ERROR_STR( false, "[GFX Error] compileShader: ¼ÎÀÌ´õ ÄÄÆÄÀÏ Áß ¿À·ù°¡ ¹ß»ıÇß½À´Ï´Ù.\n"s
+			DISPLAY_ERROR_STR( false, "[GFX Error] compileShader: ì…°ì´ë” ì»´íŒŒì¼ ì¤‘ ì˜¤ë¥˜ê°€ ë°œìƒí–ˆìŠµë‹ˆë‹¤.\n"s
 				+ static_cast<const char*>(errorBlob->GetBufferPointer()), false
 			);
 			return ret;
@@ -43,11 +43,11 @@ CompiledShaderOutput compileShader(const std::filesystem::path& path,
 ComPtr<ID3D12PipelineState> createSampleShader(ID3D12Device* device, ID3D12RootSignature* rootSig) {
 	ComPtr<ID3D12PipelineState> ret{};
 
-	// ¼ÎÀÌ´õ ÄÄÆÄÀÏ
+	// ì…°ì´ë” ì»´íŒŒì¼
 	auto vsCode = compileShader("sample.hlsl", nullptr, "VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
 	auto psCode = compileShader("sample.hlsl", nullptr, "PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
 
-	// ÀÔ·Â Á¶¸³±â ¼³Á¤
+	// ì…ë ¥ ì¡°ë¦½ê¸° ì„¤ì •
 	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
 		D3D12_INPUT_ELEMENT_DESC{
 			.SemanticName = "POSITION",
@@ -78,13 +78,13 @@ ComPtr<ID3D12PipelineState> createSampleShader(ID3D12Device* device, ID3D12RootS
 		.pRootSignature = rootSig,
 		.VS = vsCode.byteCode,
 		.PS = psCode.byteCode,
-		// ºí·»µå »óÅÂ ¼³Á¤
+		// ë¸”ë Œë“œ ìƒíƒœ ì„¤ì •
 		.BlendState = D3D12_BLEND_DESC{
 			.AlphaToCoverageEnable = false,
 			.IndependentBlendEnable = false
 		},
 		.SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
-		// ·¡½ºÅÍ¶óÀÌÀú ¼³Á¤
+		// ë˜ìŠ¤í„°ë¼ì´ì € ì„¤ì •
 		.RasterizerState = D3D12_RASTERIZER_DESC{
 			.FillMode = D3D12_FILL_MODE_SOLID,
 			.CullMode = D3D12_CULL_MODE_BACK,
@@ -97,7 +97,7 @@ ComPtr<ID3D12PipelineState> createSampleShader(ID3D12Device* device, ID3D12RootS
 			.AntialiasedLineEnable = false,
 			.ForcedSampleCount = 0u
 		},
-		// ±íÀÌ ½ºÅÙ½Ç ¼³Á¤
+		// ê¹Šì´ ìŠ¤í…ì‹¤ ì„¤ì •
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
@@ -109,7 +109,7 @@ ComPtr<ID3D12PipelineState> createSampleShader(ID3D12Device* device, ID3D12RootS
 			.BackFace = D3D12_DEPTH_STENCILOP_DESC{}
 		},
 		.InputLayout = inputLayoutDesc,
-		// ÇÁ¸®¹ÌÆ¼ºê ÅäÆú·ÎÁö ¼³Á¤
+		// í”„ë¦¬ë¯¸í‹°ë¸Œ í† í´ë¡œì§€ ì„¤ì •
 		.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
 		.SampleDesc = DXGI_SAMPLE_DESC{
 			.Count = 1u, .Quality = 0u
@@ -118,7 +118,7 @@ ComPtr<ID3D12PipelineState> createSampleShader(ID3D12Device* device, ID3D12RootS
 		.Flags = D3D12_PIPELINE_STATE_FLAG_NONE
 	};
 
-	// ·»´õ Å¸°Ù °ü·Ã ¼³Á¤
+	// ë Œë” íƒ€ê²Ÿ ê´€ë ¨ ì„¤ì •
 	psoDesc.NumRenderTargets = 1u;
 	psoDesc.BlendState.RenderTarget[0].BlendEnable = false;
 	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
@@ -144,10 +144,10 @@ ComPtr<ID3D12PipelineState> createSampleShader(ID3D12Device* device, ID3D12RootS
 ComPtr<ID3D12PipelineState> createShadowMapShader(ID3D12Device* device, ID3D12RootSignature* rootSig) {
 	ComPtr<ID3D12PipelineState> ret{};
 
-	// ¼ÎÀÌ´õ ÄÄÆÄÀÏ
+	// ì…°ì´ë” ì»´íŒŒì¼
 	auto vsCode = compileShader("shadowMap.hlsl", nullptr, "VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
 
-	// ÀÔ·Â Á¶¸³±â ¼³Á¤
+	// ì…ë ¥ ì¡°ë¦½ê¸° ì„¤ì •
 	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
 		D3D12_INPUT_ELEMENT_DESC{
 			.SemanticName = "POSITION",
@@ -168,13 +168,13 @@ ComPtr<ID3D12PipelineState> createShadowMapShader(ID3D12Device* device, ID3D12Ro
 	auto psoDesc = D3D12_GRAPHICS_PIPELINE_STATE_DESC{
 		.pRootSignature = rootSig,
 		.VS = vsCode.byteCode,
-		// ºí·»µå »óÅÂ ¼³Á¤
+		// ë¸”ë Œë“œ ìƒíƒœ ì„¤ì •
 		.BlendState = D3D12_BLEND_DESC{
 			.AlphaToCoverageEnable = false,
 			.IndependentBlendEnable = false
 		},
 		.SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
-		// ·¡½ºÅÍ¶óÀÌÀú ¼³Á¤
+		// ë˜ìŠ¤í„°ë¼ì´ì € ì„¤ì •
 		.RasterizerState = D3D12_RASTERIZER_DESC{
 			.FillMode = D3D12_FILL_MODE_SOLID,
 			.CullMode = D3D12_CULL_MODE_BACK,
@@ -187,7 +187,7 @@ ComPtr<ID3D12PipelineState> createShadowMapShader(ID3D12Device* device, ID3D12Ro
 			.AntialiasedLineEnable = false,
 			.ForcedSampleCount = 0u
 		},
-		// ±íÀÌ ½ºÅÙ½Ç ¼³Á¤
+		// ê¹Šì´ ìŠ¤í…ì‹¤ ì„¤ì •
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
@@ -199,7 +199,7 @@ ComPtr<ID3D12PipelineState> createShadowMapShader(ID3D12Device* device, ID3D12Ro
 			.BackFace = D3D12_DEPTH_STENCILOP_DESC{}
 		},
 		.InputLayout = inputLayoutDesc,
-		// ÇÁ¸®¹ÌÆ¼ºê ÅäÆú·ÎÁö ¼³Á¤
+		// í”„ë¦¬ë¯¸í‹°ë¸Œ í† í´ë¡œì§€ ì„¤ì •
 		.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
 		.SampleDesc = DXGI_SAMPLE_DESC{
 			.Count = 1u, .Quality = 0u
@@ -208,7 +208,7 @@ ComPtr<ID3D12PipelineState> createShadowMapShader(ID3D12Device* device, ID3D12Ro
 		.Flags = D3D12_PIPELINE_STATE_FLAG_NONE
 	};
 
-	// ·»´õ Å¸°Ù °ü·Ã ¼³Á¤
+	// ë Œë” íƒ€ê²Ÿ ê´€ë ¨ ì„¤ì •
 	psoDesc.NumRenderTargets = 1u;
 	psoDesc.BlendState.RenderTarget[0].BlendEnable = false;
 	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
@@ -234,10 +234,10 @@ ComPtr<ID3D12PipelineState> createShadowMapShader(ID3D12Device* device, ID3D12Ro
 ComPtr<ID3D12PipelineState> createShadowMapSkinnedShader(ID3D12Device* device, ID3D12RootSignature* rootSig) {
 	ComPtr<ID3D12PipelineState> ret{};
 
-	// ¼ÎÀÌ´õ ÄÄÆÄÀÏ
+	// ì…°ì´ë” ì»´íŒŒì¼
 	auto vsCode = compileShader("shadowMapSkinned.hlsl", nullptr, "VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
 
-	// ÀÔ·Â Á¶¸³±â ¼³Á¤
+	// ì…ë ¥ ì¡°ë¦½ê¸° ì„¤ì •
 	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
 		D3D12_INPUT_ELEMENT_DESC{
 			.SemanticName = "POSITION",
@@ -276,13 +276,13 @@ ComPtr<ID3D12PipelineState> createShadowMapSkinnedShader(ID3D12Device* device, I
 	auto psoDesc = D3D12_GRAPHICS_PIPELINE_STATE_DESC{
 		.pRootSignature = rootSig,
 		.VS = vsCode.byteCode,
-		// ºí·»µå »óÅÂ ¼³Á¤
+		// ë¸”ë Œë“œ ìƒíƒœ ì„¤ì •
 		.BlendState = D3D12_BLEND_DESC{
 			.AlphaToCoverageEnable = false,
 			.IndependentBlendEnable = false
 		},
 		.SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
-		// ·¡½ºÅÍ¶óÀÌÀú ¼³Á¤
+		// ë˜ìŠ¤í„°ë¼ì´ì € ì„¤ì •
 		.RasterizerState = D3D12_RASTERIZER_DESC{
 			.FillMode = D3D12_FILL_MODE_SOLID,
 			.CullMode = D3D12_CULL_MODE_BACK,
@@ -295,7 +295,7 @@ ComPtr<ID3D12PipelineState> createShadowMapSkinnedShader(ID3D12Device* device, I
 			.AntialiasedLineEnable = false,
 			.ForcedSampleCount = 0u
 		},
-		// ±íÀÌ ½ºÅÙ½Ç ¼³Á¤
+		// ê¹Šì´ ìŠ¤í…ì‹¤ ì„¤ì •
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
@@ -307,7 +307,7 @@ ComPtr<ID3D12PipelineState> createShadowMapSkinnedShader(ID3D12Device* device, I
 			.BackFace = D3D12_DEPTH_STENCILOP_DESC{}
 		},
 		.InputLayout = inputLayoutDesc,
-		// ÇÁ¸®¹ÌÆ¼ºê ÅäÆú·ÎÁö ¼³Á¤
+		// í”„ë¦¬ë¯¸í‹°ë¸Œ í† í´ë¡œì§€ ì„¤ì •
 		.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
 		.SampleDesc = DXGI_SAMPLE_DESC{
 			.Count = 1u, .Quality = 0u
@@ -316,7 +316,7 @@ ComPtr<ID3D12PipelineState> createShadowMapSkinnedShader(ID3D12Device* device, I
 		.Flags = D3D12_PIPELINE_STATE_FLAG_NONE
 	};
 
-	// ·»´õ Å¸°Ù °ü·Ã ¼³Á¤
+	// ë Œë” íƒ€ê²Ÿ ê´€ë ¨ ì„¤ì •
 	psoDesc.NumRenderTargets = 1u;
 	psoDesc.BlendState.RenderTarget[0].BlendEnable = false;
 	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
@@ -342,11 +342,11 @@ ComPtr<ID3D12PipelineState> createShadowMapSkinnedShader(ID3D12Device* device, I
 ComPtr<ID3D12PipelineState> createPBRShader(ID3D12Device* device, ID3D12RootSignature* rootSig) {
 	ComPtr<ID3D12PipelineState> ret{};
 
-	// ¼ÎÀÌ´õ ÄÄÆÄÀÏ
+	// ì…°ì´ë” ì»´íŒŒì¼
 	auto vsCode = compileShader("pbr.hlsl", nullptr, "VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
 	auto psCode = compileShader("pbr.hlsl", nullptr, "PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
 
-	// ÀÔ·Â Á¶¸³±â ¼³Á¤
+	// ì…ë ¥ ì¡°ë¦½ê¸° ì„¤ì •
 	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
 		D3D12_INPUT_ELEMENT_DESC{
 			.SemanticName = "POSITION",
@@ -404,13 +404,13 @@ ComPtr<ID3D12PipelineState> createPBRShader(ID3D12Device* device, ID3D12RootSign
 		.pRootSignature = rootSig,
 		.VS = vsCode.byteCode,
 		.PS = psCode.byteCode,
-		// ºí·»µå »óÅÂ ¼³Á¤
+		// ë¸”ë Œë“œ ìƒíƒœ ì„¤ì •
 		.BlendState = D3D12_BLEND_DESC{
 			.AlphaToCoverageEnable = false,
 			.IndependentBlendEnable = false
 		},
 		.SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
-		// ·¡½ºÅÍ¶óÀÌÀú ¼³Á¤
+		// ë˜ìŠ¤í„°ë¼ì´ì € ì„¤ì •
 		.RasterizerState = D3D12_RASTERIZER_DESC{
 			.FillMode = D3D12_FILL_MODE_SOLID,
 			.CullMode = D3D12_CULL_MODE_BACK,
@@ -423,7 +423,7 @@ ComPtr<ID3D12PipelineState> createPBRShader(ID3D12Device* device, ID3D12RootSign
 			.AntialiasedLineEnable = false,
 			.ForcedSampleCount = 0u
 		},
-		// ±íÀÌ ½ºÅÙ½Ç ¼³Á¤
+		// ê¹Šì´ ìŠ¤í…ì‹¤ ì„¤ì •
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
@@ -435,7 +435,7 @@ ComPtr<ID3D12PipelineState> createPBRShader(ID3D12Device* device, ID3D12RootSign
 			.BackFace = D3D12_DEPTH_STENCILOP_DESC{}
 		},
 		.InputLayout = inputLayoutDesc,
-		// ÇÁ¸®¹ÌÆ¼ºê ÅäÆú·ÎÁö ¼³Á¤
+		// í”„ë¦¬ë¯¸í‹°ë¸Œ í† í´ë¡œì§€ ì„¤ì •
 		.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
 		.SampleDesc = DXGI_SAMPLE_DESC{
 			.Count = 1u, .Quality = 0u
@@ -444,7 +444,7 @@ ComPtr<ID3D12PipelineState> createPBRShader(ID3D12Device* device, ID3D12RootSign
 		.Flags = D3D12_PIPELINE_STATE_FLAG_NONE
 	};
 
-	// ·»´õ Å¸°Ù °ü·Ã ¼³Á¤
+	// ë Œë” íƒ€ê²Ÿ ê´€ë ¨ ì„¤ì •
 	psoDesc.NumRenderTargets = 1u;
 	psoDesc.BlendState.RenderTarget[0].BlendEnable = false;
 	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
@@ -470,11 +470,11 @@ ComPtr<ID3D12PipelineState> createPBRShader(ID3D12Device* device, ID3D12RootSign
 ComPtr<ID3D12PipelineState> createPBRSkinnedShader(ID3D12Device* device, ID3D12RootSignature* rootSig) {
 	ComPtr<ID3D12PipelineState> ret{};
 
-	// ¼ÎÀÌ´õ ÄÄÆÄÀÏ
+	// ì…°ì´ë” ì»´íŒŒì¼
 	auto vsCode = compileShader("pbrSkinned.hlsl", nullptr, "VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
 	auto psCode = compileShader("pbrSkinned.hlsl", nullptr, "PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
 
-	// ÀÔ·Â Á¶¸³±â ¼³Á¤
+	// ì…ë ¥ ì¡°ë¦½ê¸° ì„¤ì •
 	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
 		D3D12_INPUT_ELEMENT_DESC{
 			.SemanticName = "POSITION",
@@ -550,13 +550,13 @@ ComPtr<ID3D12PipelineState> createPBRSkinnedShader(ID3D12Device* device, ID3D12R
 		.pRootSignature = rootSig,
 		.VS = vsCode.byteCode,
 		.PS = psCode.byteCode,
-		// ºí·»µå »óÅÂ ¼³Á¤
+		// ë¸”ë Œë“œ ìƒíƒœ ì„¤ì •
 		.BlendState = D3D12_BLEND_DESC{
 			.AlphaToCoverageEnable = false,
 			.IndependentBlendEnable = false
 		},
 		.SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
-		// ·¡½ºÅÍ¶óÀÌÀú ¼³Á¤
+		// ë˜ìŠ¤í„°ë¼ì´ì € ì„¤ì •
 		.RasterizerState = D3D12_RASTERIZER_DESC{
 			.FillMode = D3D12_FILL_MODE_SOLID,
 			.CullMode = D3D12_CULL_MODE_BACK,
@@ -569,7 +569,7 @@ ComPtr<ID3D12PipelineState> createPBRSkinnedShader(ID3D12Device* device, ID3D12R
 			.AntialiasedLineEnable = false,
 			.ForcedSampleCount = 0u
 		},
-		// ±íÀÌ ½ºÅÙ½Ç ¼³Á¤
+		// ê¹Šì´ ìŠ¤í…ì‹¤ ì„¤ì •
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
@@ -581,7 +581,7 @@ ComPtr<ID3D12PipelineState> createPBRSkinnedShader(ID3D12Device* device, ID3D12R
 			.BackFace = D3D12_DEPTH_STENCILOP_DESC{}
 		},
 		.InputLayout = inputLayoutDesc,
-		// ÇÁ¸®¹ÌÆ¼ºê ÅäÆú·ÎÁö ¼³Á¤
+		// í”„ë¦¬ë¯¸í‹°ë¸Œ í† í´ë¡œì§€ ì„¤ì •
 		.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
 		.SampleDesc = DXGI_SAMPLE_DESC{
 			.Count = 1u, .Quality = 0u
@@ -590,7 +590,7 @@ ComPtr<ID3D12PipelineState> createPBRSkinnedShader(ID3D12Device* device, ID3D12R
 		.Flags = D3D12_PIPELINE_STATE_FLAG_NONE
 	};
 
-	// ·»´õ Å¸°Ù °ü·Ã ¼³Á¤
+	// ë Œë” íƒ€ê²Ÿ ê´€ë ¨ ì„¤ì •
 	psoDesc.NumRenderTargets = 1u;
 	psoDesc.BlendState.RenderTarget[0].BlendEnable = false;
 	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
@@ -616,11 +616,11 @@ ComPtr<ID3D12PipelineState> createPBRSkinnedShader(ID3D12Device* device, ID3D12R
 ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootSignature* rootSig) {
 	ComPtr<ID3D12PipelineState> ret{};
 
-	// ¼ÎÀÌ´õ ÄÄÆÄÀÏ
+	// ì…°ì´ë” ì»´íŒŒì¼
 	auto vsCode = compileShader("skybox.hlsl", nullptr, "VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
 	auto psCode = compileShader("skybox.hlsl", nullptr, "PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
 
-	// ÀÔ·Â Á¶¸³±â ¼³Á¤
+	// ì…ë ¥ ì¡°ë¦½ê¸° ì„¤ì •
 	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
 		D3D12_INPUT_ELEMENT_DESC{
 			.SemanticName = "POSITION",
@@ -642,13 +642,13 @@ ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootS
 		.pRootSignature = rootSig,
 		.VS = vsCode.byteCode,
 		.PS = psCode.byteCode,
-		// ºí·»µå »óÅÂ ¼³Á¤
+		// ë¸”ë Œë“œ ìƒíƒœ ì„¤ì •
 		.BlendState = D3D12_BLEND_DESC{
 			.AlphaToCoverageEnable = false,
 			.IndependentBlendEnable = false
 		},
 		.SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
-		// ·¡½ºÅÍ¶óÀÌÀú ¼³Á¤
+		// ë˜ìŠ¤í„°ë¼ì´ì € ì„¤ì •
 		.RasterizerState = D3D12_RASTERIZER_DESC{
 			.FillMode = D3D12_FILL_MODE_SOLID,
 			.CullMode = D3D12_CULL_MODE_BACK,
@@ -661,7 +661,7 @@ ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootS
 			.AntialiasedLineEnable = false,
 			.ForcedSampleCount = 0u
 		},
-		// ±íÀÌ ½ºÅÙ½Ç ¼³Á¤
+		// ê¹Šì´ ìŠ¤í…ì‹¤ ì„¤ì •
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
@@ -673,7 +673,7 @@ ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootS
 			.BackFace = D3D12_DEPTH_STENCILOP_DESC{}
 		},
 		.InputLayout = inputLayoutDesc,
-		// ÇÁ¸®¹ÌÆ¼ºê ÅäÆú·ÎÁö ¼³Á¤
+		// í”„ë¦¬ë¯¸í‹°ë¸Œ í† í´ë¡œì§€ ì„¤ì •
 		.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
 		.SampleDesc = DXGI_SAMPLE_DESC{
 			.Count = 1u, .Quality = 0u
@@ -682,7 +682,7 @@ ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootS
 		.Flags = D3D12_PIPELINE_STATE_FLAG_NONE
 	};
 
-	// ·»´õ Å¸°Ù °ü·Ã ¼³Á¤
+	// ë Œë” íƒ€ê²Ÿ ê´€ë ¨ ì„¤ì •
 	psoDesc.NumRenderTargets = 1u;
 	psoDesc.BlendState.RenderTarget[0].BlendEnable = false;
 	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
@@ -708,11 +708,11 @@ ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootS
 ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSignature* rootSig) {
 	ComPtr<ID3D12PipelineState> ret{};
 
-	// ¼ÎÀÌ´õ ÄÄÆÄÀÏ
+	// ì…°ì´ë” ì»´íŒŒì¼
 	auto vsCode = compileShader("boundingVolume.hlsl", nullptr, "VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
 	auto psCode = compileShader("boundingVolume.hlsl", nullptr, "PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
 
-	// ÀÔ·Â Á¶¸³±â ¼³Á¤
+	// ì…ë ¥ ì¡°ë¦½ê¸° ì„¤ì •
 	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
 		D3D12_INPUT_ELEMENT_DESC{
 			.SemanticName = "POSITION",
@@ -734,13 +734,13 @@ ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSigna
 		.pRootSignature = rootSig,
 		.VS = vsCode.byteCode,
 		.PS = psCode.byteCode,
-		// ºí·»µå »óÅÂ ¼³Á¤
+		// ë¸”ë Œë“œ ìƒíƒœ ì„¤ì •
 		.BlendState = D3D12_BLEND_DESC{
 			.AlphaToCoverageEnable = false,
 			.IndependentBlendEnable = false
 		},
 		.SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
-		// ·¡½ºÅÍ¶óÀÌÀú ¼³Á¤
+		// ë˜ìŠ¤í„°ë¼ì´ì € ì„¤ì •
 		.RasterizerState = D3D12_RASTERIZER_DESC{
 			.FillMode = D3D12_FILL_MODE_WIREFRAME,
 			.CullMode = D3D12_CULL_MODE_NONE,
@@ -753,7 +753,7 @@ ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSigna
 			.AntialiasedLineEnable = false,
 			.ForcedSampleCount = 0u
 		},
-		// ±íÀÌ ½ºÅÙ½Ç ¼³Á¤
+		// ê¹Šì´ ìŠ¤í…ì‹¤ ì„¤ì •
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
@@ -765,7 +765,7 @@ ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSigna
 			.BackFace = D3D12_DEPTH_STENCILOP_DESC{}
 		},
 		.InputLayout = inputLayoutDesc,
-		// ÇÁ¸®¹ÌÆ¼ºê ÅäÆú·ÎÁö ¼³Á¤
+		// í”„ë¦¬ë¯¸í‹°ë¸Œ í† í´ë¡œì§€ ì„¤ì •
 		.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
 		.SampleDesc = DXGI_SAMPLE_DESC{
 			.Count = 1u, .Quality = 0u
@@ -774,7 +774,7 @@ ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSigna
 		.Flags = D3D12_PIPELINE_STATE_FLAG_NONE
 	};
 
-	// ·»´õ Å¸°Ù °ü·Ã ¼³Á¤
+	// ë Œë” íƒ€ê²Ÿ ê´€ë ¨ ì„¤ì •
 	psoDesc.NumRenderTargets = 1u;
 	psoDesc.BlendState.RenderTarget[0].BlendEnable = false;
 	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
@@ -801,11 +801,11 @@ ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSign
 {
 	ComPtr<ID3D12PipelineState> ret{};
 
-	// ¼ÎÀÌ´õ ÄÄÆÄÀÏ
+	// ì…°ì´ë” ì»´íŒŒì¼
 	auto vsCode = compileShader( "ui.hlsl", nullptr, "VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
 	auto psCode = compileShader( "ui.hlsl", nullptr, "PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
 
-	// ÀÔ·Â Á¶¸³±â ¼³Á¤
+	// ì…ë ¥ ì¡°ë¦½ê¸° ì„¤ì •
 	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
 		D3D12_INPUT_ELEMENT_DESC{
 			.SemanticName = "POSITION",
@@ -836,13 +836,13 @@ ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSign
 		.pRootSignature = rootSig,
 		.VS = vsCode.byteCode,
 		.PS = psCode.byteCode,
-		// ºí·»µå »óÅÂ ¼³Á¤
+		// ë¸”ë Œë“œ ìƒíƒœ ì„¤ì •
 		.BlendState = D3D12_BLEND_DESC{
 			.AlphaToCoverageEnable = false,
 			.IndependentBlendEnable = false
 		},
 		.SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
-		// ·¡½ºÅÍ¶óÀÌÀú ¼³Á¤
+		// ë˜ìŠ¤í„°ë¼ì´ì € ì„¤ì •
 		.RasterizerState = D3D12_RASTERIZER_DESC{
 			.FillMode = D3D12_FILL_MODE_SOLID,
 			.CullMode = D3D12_CULL_MODE_NONE,
@@ -855,7 +855,7 @@ ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSign
 			.AntialiasedLineEnable = false,
 			.ForcedSampleCount = 0u
 		},
-		// ±íÀÌ ½ºÅÙ½Ç ¼³Á¤
+		// ê¹Šì´ ìŠ¤í…ì‹¤ ì„¤ì •
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = false,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
@@ -867,7 +867,7 @@ ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSign
 			.BackFace = D3D12_DEPTH_STENCILOP_DESC{}
 		},
 		.InputLayout = inputLayoutDesc,
-		// ÇÁ¸®¹ÌÆ¼ºê ÅäÆú·ÎÁö ¼³Á¤
+		// í”„ë¦¬ë¯¸í‹°ë¸Œ í† í´ë¡œì§€ ì„¤ì •
 		.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
 		.SampleDesc = DXGI_SAMPLE_DESC{
 			.Count = 1u, .Quality = 0u
@@ -876,7 +876,7 @@ ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSign
 		.Flags = D3D12_PIPELINE_STATE_FLAG_NONE
 	};
 
-	// ·»´õ Å¸°Ù °ü·Ã ¼³Á¤
+	// ë Œë” íƒ€ê²Ÿ ê´€ë ¨ ì„¤ì •
 	psoDesc.NumRenderTargets = 1u;
 	psoDesc.BlendState.RenderTarget[0].BlendEnable = true;
 	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
@@ -902,12 +902,12 @@ ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSign
 ComPtr<ID3D12PipelineState> createBillboardShader( ID3D12Device* device, ID3D12RootSignature* rootSig ) {
 	ComPtr<ID3D12PipelineState> ret{};
 
-	// ¼ÎÀÌ´õ ÄÄÆÄÀÏ
+	// ì…°ì´ë” ì»´íŒŒì¼
 	auto vsCode = compileShader( "billboard.hlsl", nullptr, "VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
 	auto psCode = compileShader( "billboard.hlsl", nullptr, "PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
 	auto gsCode = compileShader( "billboard.hlsl", nullptr, "GSMain", "gs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
 
-	// ÀÔ·Â Á¶¸³±â ¼³Á¤
+	// ì…ë ¥ ì¡°ë¦½ê¸° ì„¤ì •
 	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
 		D3D12_INPUT_ELEMENT_DESC{
 			.SemanticName = "POSITION",
@@ -939,13 +939,13 @@ ComPtr<ID3D12PipelineState> createBillboardShader( ID3D12Device* device, ID3D12R
 		.VS = vsCode.byteCode,
 		.PS = psCode.byteCode,
 		.GS = gsCode.byteCode,
-		// ºí·»µå »óÅÂ ¼³Á¤
+		// ë¸”ë Œë“œ ìƒíƒœ ì„¤ì •
 		.BlendState = D3D12_BLEND_DESC{
 			.AlphaToCoverageEnable = true,
 			.IndependentBlendEnable = false
 		},
 		.SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
-		// ·¡½ºÅÍ¶óÀÌÀú ¼³Á¤
+		// ë˜ìŠ¤í„°ë¼ì´ì € ì„¤ì •
 		.RasterizerState = D3D12_RASTERIZER_DESC{
 			.FillMode = D3D12_FILL_MODE_SOLID,
 			.CullMode = D3D12_CULL_MODE_BACK,
@@ -958,7 +958,7 @@ ComPtr<ID3D12PipelineState> createBillboardShader( ID3D12Device* device, ID3D12R
 			.AntialiasedLineEnable = false,
 			.ForcedSampleCount = 0u
 		},
-		// ±íÀÌ ½ºÅÙ½Ç ¼³Á¤
+		// ê¹Šì´ ìŠ¤í…ì‹¤ ì„¤ì •
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
@@ -970,7 +970,7 @@ ComPtr<ID3D12PipelineState> createBillboardShader( ID3D12Device* device, ID3D12R
 			.BackFace = D3D12_DEPTH_STENCILOP_DESC{}
 		},
 		.InputLayout = inputLayoutDesc,
-		// ÇÁ¸®¹ÌÆ¼ºê ÅäÆú·ÎÁö ¼³Á¤
+		// í”„ë¦¬ë¯¸í‹°ë¸Œ í† í´ë¡œì§€ ì„¤ì •
 		.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT,
 		.SampleDesc = DXGI_SAMPLE_DESC{
 			.Count = 1u, .Quality = 0u
@@ -979,7 +979,7 @@ ComPtr<ID3D12PipelineState> createBillboardShader( ID3D12Device* device, ID3D12R
 		.Flags = D3D12_PIPELINE_STATE_FLAG_NONE
 	};
 
-	// ·»´õ Å¸°Ù °ü·Ã ¼³Á¤
+	// ë Œë” íƒ€ê²Ÿ ê´€ë ¨ ì„¤ì •
 	psoDesc.NumRenderTargets = 1u;
 	psoDesc.BlendState.RenderTarget[0].BlendEnable = false;
 	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
@@ -1006,9 +1006,9 @@ void RootSig::addParam(const std::string& paramName,
 	UINT paramIdx, const D3D12_ROOT_PARAMETER& paramDesc
 ) {
 	auto [_, added] = paramMap_.try_emplace(paramName, paramIdx, paramDesc);
-	DISPLAY_ERROR_STR(added, "[GFX Error] RootSig::addParam: ¸Å°³º¯¼ö "s + paramName
-		+ "Àº(´Â) ÀÌ¹Ì ·çÆ® ½Ã±×³ÊÃ³¿¡ "s + std::to_string(paramMap_.at(paramName).first)
-		+ "¹ø ÀÎµ¦½º·Î µî·ÏµÇ¾î ÀÖ½À´Ï´Ù.\n"s, false
+	DISPLAY_ERROR_STR(added, "[GFX Error] RootSig::addParam: ë§¤ê°œë³€ìˆ˜ "s + paramName
+		+ "ì€(ëŠ”) ì´ë¯¸ ë£¨íŠ¸ ì‹œê·¸ë„ˆì²˜ì— "s + std::to_string(paramMap_.at(paramName).first)
+		+ "ë²ˆ ì¸ë±ìŠ¤ë¡œ ë“±ë¡ë˜ì–´ ìˆìŠµë‹ˆë‹¤.\n"s, false
 	);
 }
 
@@ -1081,7 +1081,7 @@ void DefaultRootSig::build(ID3D12Device* device) {
 		.OffsetInDescriptorsFromTableStart = 0u
 	};
 
-	// ==== bindless È¯°æÀ» °í·ÁÇÑ ·çÆ® ÆÄ¶ó¹ÌÅÍµé =========
+	// ==== bindless í™˜ê²½ì„ ê³ ë ¤í•œ ë£¨íŠ¸ íŒŒë¼ë¯¸í„°ë“¤ =========
 
 	// t10, space1: TexturePool
 	addParam( "TexturePool", idxRootParam++, D3D12_ROOT_PARAMETER{
@@ -1167,10 +1167,10 @@ void DefaultRootSig::build(ID3D12Device* device) {
 
 	// ==============================================
 
-	// ·çÆ® ÆÄ¶ó¹ÌÅÍµéÀ» d3d12 api¿¡ ¹è¿­·Î ³Ñ°ÜÁÖ±â À§ÇØ
-	// º¤ÅÍ¸¦ ¸¸µé°í, ÀúÀåµÈ ÆÄ¶ó¹ÌÅÍ °³¼ö ¸¸Å­ÀÇ °ø°£À» È®º¸ÇÑ´Ù.
-	// ¸Ê¿¡ ÀúÀåµÈ ÆÄ¶ó¹ÌÅÍÀÇ ÀÎµ¦½º¸¦ º¸°í ÀÓÀÇ Á¢±ÙÇÏ¿©
-	// ÆÄ¶ó¹ÌÅÍ Á¤º¸¸¦ Ã¤¿ö³Ö´Â´Ù.
+	// ë£¨íŠ¸ íŒŒë¼ë¯¸í„°ë“¤ì„ d3d12 apiì— ë°°ì—´ë¡œ ë„˜ê²¨ì£¼ê¸° ìœ„í•´
+	// ë²¡í„°ë¥¼ ë§Œë“¤ê³ , ì €ì¥ëœ íŒŒë¼ë¯¸í„° ê°œìˆ˜ ë§Œí¼ì˜ ê³µê°„ì„ í™•ë³´í•œë‹¤.
+	// ë§µì— ì €ì¥ëœ íŒŒë¼ë¯¸í„°ì˜ ì¸ë±ìŠ¤ë¥¼ ë³´ê³  ì„ì˜ ì ‘ê·¼í•˜ì—¬
+	// íŒŒë¼ë¯¸í„° ì •ë³´ë¥¼ ì±„ì›Œë„£ëŠ”ë‹¤.
 	auto params = std::vector<D3D12_ROOT_PARAMETER>(paramMap_.size());
 
 	for (const auto& [paramName, paramPair] : paramMap_) {
@@ -1180,7 +1180,7 @@ void DefaultRootSig::build(ID3D12Device* device) {
 		params[paramIdx] = paramDesc;
 	}
 
-	// ·çÆ® ½Ã±×³ÊÃ³¸¦ Á÷·ÄÈ­ÇÏ°í °´Ã¼·Î »ı¼ºÇÑ´Ù.
+	// ë£¨íŠ¸ ì‹œê·¸ë„ˆì²˜ë¥¼ ì§ë ¬í™”í•˜ê³  ê°ì²´ë¡œ ìƒì„±í•œë‹¤.
 	auto rootSigDesc = D3D12_ROOT_SIGNATURE_DESC{
 		.NumParameters = static_cast<UINT>(params.size()),
 		.pParameters = params.data(),
@@ -1198,7 +1198,7 @@ void DefaultRootSig::build(ID3D12Device* device) {
 	);
 
 	if (errorBlob) {
-		DISPLAY_ERROR_STR(false, "[GFX Error] DefaultRootSig::build: ·çÆ® ½Ã±×³ÊÃ³ Á÷·ÄÈ­ Áß ¿À·ù°¡ ¹ß»ıÇß½À´Ï´Ù.\n"s
+		DISPLAY_ERROR_STR(false, "[GFX Error] DefaultRootSig::build: ë£¨íŠ¸ ì‹œê·¸ë„ˆì²˜ ì§ë ¬í™” ì¤‘ ì˜¤ë¥˜ê°€ ë°œìƒí–ˆìŠµë‹ˆë‹¤.\n"s
 			+ static_cast<const char*>(errorBlob->GetBufferPointer()), false
 		);
 		return;
@@ -1209,7 +1209,7 @@ void DefaultRootSig::build(ID3D12Device* device) {
 		__uuidof(ID3D12RootSignature), &rootSig_
 	), false );
 
-	// ÀÌ¸§ ¼³Á¤
+	// ì´ë¦„ ì„¤ì •
 	name_ = "DefaultRootSignature";
 	setD3DName(rootSig_.Get(), name_);
 }

@@ -1,4 +1,4 @@
-#include "pch.hpp"
+ï»¿#include "pch.hpp"
 #include "ServerSession.hpp"
 #include "SendBuffer.hpp"
 #include "MemoryManager.hpp"
@@ -49,7 +49,7 @@ void ServerSession::registerSend(SendBuffer* sendBuffer) {
 	}
 
 	sendOver_.clear();
-	sendOver_.sendBuffer = sendBuffer;	// Send ¿Ï·á ÈÄ ÇØÁ¦ÇÒ SendBuffer ¼³Á¤
+	sendOver_.sendBuffer = sendBuffer;	// Send ì™„ë£Œ í›„ í•´ì œí•  SendBuffer ì„¤ì •
 
 	auto wsaBuf = WSABUF{
 		.len = static_cast<ULONG>(sendBuffer->writeSize()),
