@@ -1557,16 +1557,10 @@ void Object::setModel(const Model* pModel){
 	}
 
 	renderState_.pModel = pModel;
-	currPhysicState_.aabbs.resize(pModel->aabbs.size());
-	for (std::size_t i = 0u; i < currPhysicState_.aabbs.size(); ++i) {
-		currPhysicState_.aabbs[i].center
-			= pModel->aabbs[i].center * currPhysicState_.scale
-			+ currPhysicState_.pos;
-		currPhysicState_.aabbs[i].size
-			= pModel->aabbs[i].size * currPhysicState_.scale;
-	}
-	prevPhysicState_.aabbs = currPhysicState_.aabbs;
-	renderState_.worldBVs.resize(currPhysicState_.aabbs.size());
+	currPhysicState_.volumes.resize(pModel->volumes.size());
+	rebuildVolumes(currPhysicState_);
+	prevPhysicState_.volumes = currPhysicState_.volumes;
+	renderState_.worldBVs.resize(currPhysicState_.volumes.size());
 }
 
 // @brief 게임 객체의 RenderState와 방향 벡터들을 갱신한다.
@@ -1596,10 +1590,22 @@ void Object::update(Milliseconds deltaTime, float tPhysicInterpolation) {
 	const auto pModel = renderState_.pModel;
 
 	renderState_.world = mu::Mat4x4(mu::scale(scale)) * mu::Mat4x4(orient) * mu::translate(pos);
-	for (std::size_t i = 0; i < currPhysicState_.aabbs.size(); ++i) {
-		const auto center = pModel->aabbs[i].center * scale + pos;
-		const auto size = pModel->aabbs[i].size * scale;
-		renderState_.worldBVs[i] = mu::Mat4x4(mu::scale(size)) * mu::translate(center);
+	for (std::size_t i = 0; i < currPhysicState_.volumes.size(); ++i) {
+		std::visit([&](auto&& localVol) {
+			using T = std::decay_t<decltype(localVol)>;
+			if constexpr (std::is_same_v<T, AABB>) {
+				const auto bvCenter = localVol.center * scale + pos;
+				const auto bvSize   = localVol.size * scale;
+				renderState_.worldBVs[i] = mu::Mat4x4(mu::scale(bvSize)) * mu::translate(bvCenter);
+			} else {
+				mu::NQuat worldOrient = orient;
+				worldOrient *= localVol.orient;
+				const auto bvCenter = orient.rotate(localVol.center * scale) + pos;
+				renderState_.worldBVs[i] = mu::Mat4x4(mu::scale(localVol.halfExtents * scale * 2.f))
+				                         * mu::Mat4x4(worldOrient)
+				                         * mu::translate(bvCenter);
+			}
+		}, pModel->volumes[i]);
 	}
 
 	if (renderState_.animBlender) {
@@ -1642,7 +1648,7 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 	}
 
 	if (willRenderBV_) {
-		for (std::size_t i = 0u; i < currPhysicState_.aabbs.size(); ++i) {
+		for (std::size_t i = 0u; i < currPhysicState_.volumes.size(); ++i) {
 			gfx.addDrawEvent( BVPipeline::DrawEvent{
 				.world = offsetXform * renderState_.worldBVs[i],
 				.bvModel = BVPipeline::BVModel::Box
@@ -1682,7 +1688,7 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 
 // 게임 객체의 위치를 갱신한다.
 // 이전 PhysicState와 현재 PhysicState의 위치가 모두 갱신된다.
-// 각 PhysicState의 AABB 역시 갱신된다.
+// 각 PhysicState의 충돌체(volumes) 역시 갱신된다.
 void MU_CALLCONV Object::setPos(mu::Vec3 newPos) {
 	prevPhysicState_.pos = newPos;
 	currPhysicState_.pos = newPos;
@@ -1690,15 +1696,9 @@ void MU_CALLCONV Object::setPos(mu::Vec3 newPos) {
 	const auto pModel = renderState_.pModel;
 
 	if (pModel) {
-		currPhysicState_.aabbs.resize(pModel->aabbs.size());
-		for (std::size_t i = 0u; i < currPhysicState_.aabbs.size(); ++i) {
-			currPhysicState_.aabbs[i].center
-				= pModel->aabbs[i].center * currPhysicState_.scale
-				+ currPhysicState_.pos;
-			currPhysicState_.aabbs[i].size
-				= pModel->aabbs[i].size * currPhysicState_.scale;
-		}
-		prevPhysicState_.aabbs = currPhysicState_.aabbs;
+		currPhysicState_.volumes.resize(pModel->volumes.size());
+		rebuildVolumes(currPhysicState_);
+		prevPhysicState_.volumes = currPhysicState_.volumes;
 	}
 }
 
@@ -1710,15 +1710,8 @@ void MU_CALLCONV Object::setCurrPos(mu::Vec3 newPos) {
 	const auto pModel = renderState_.pModel;
 
 	if (pModel) {
-		currPhysicState_.aabbs.resize(pModel->aabbs.size());
-		for (std::size_t i = 0u; i < currPhysicState_.aabbs.size(); ++i) {
-			currPhysicState_.aabbs[i].center
-				= pModel->aabbs[i].center * currPhysicState_.scale
-				+ currPhysicState_.pos;
-			currPhysicState_.aabbs[i].size
-				= pModel->aabbs[i].size * currPhysicState_.scale;
-		}
-		prevPhysicState_.aabbs = currPhysicState_.aabbs;
+		currPhysicState_.volumes.resize(pModel->volumes.size());
+		rebuildVolumes(currPhysicState_);
 	}
 }
 
@@ -1742,9 +1735,22 @@ void MU_CALLCONV Object::setOmega(mu::Vec3 newOmega) {
 void MU_CALLCONV Object::setOrient(mu::NQuat newOrient) {
 	prevPhysicState_.orient = newOrient;
 	currPhysicState_.orient = newOrient;
-	right_ = currPhysicState_.orient.rotate(mu::Vec3(1.f, 0.f, 0.f));
-	up_ = currPhysicState_.orient.rotate(mu::Vec3(0.f, 1.f, 0.f));
+	right_   = currPhysicState_.orient.rotate(mu::Vec3(1.f, 0.f, 0.f));
+	up_      = currPhysicState_.orient.rotate(mu::Vec3(0.f, 1.f, 0.f));
 	forward_ = currPhysicState_.orient.rotate(mu::Vec3(0.f, 0.f, 1.f));
+
+	// OBB volumes track orientation and must be rebuilt when orient changes.
+	const auto pModel = renderState_.pModel;
+	if (pModel) {
+		bool hasOBB = false;
+		for (const auto& v : pModel->volumes) {
+			if (std::holds_alternative<OBB>(v)) { hasOBB = true; break; }
+		}
+		if (hasOBB) {
+			rebuildVolumes(currPhysicState_);
+			prevPhysicState_.volumes = currPhysicState_.volumes;
+		}
+	}
 }
 
 // 게임 객체의 크기를 갱신한다.
@@ -1757,15 +1763,9 @@ void MU_CALLCONV Object::setScale(mu::Vec3 newScale) {
 	const auto pModel = renderState_.pModel;
 
 	if (pModel) {
-		currPhysicState_.aabbs.resize(pModel->aabbs.size());
-		for (std::size_t i = 0u; i < currPhysicState_.aabbs.size(); ++i) {
-			currPhysicState_.aabbs[i].center
-				= pModel->aabbs[i].center * currPhysicState_.scale
-				+ currPhysicState_.pos;
-			currPhysicState_.aabbs[i].size
-				= pModel->aabbs[i].size * currPhysicState_.scale;
-		}
-		prevPhysicState_.aabbs = currPhysicState_.aabbs;
+		currPhysicState_.volumes.resize(pModel->volumes.size());
+		rebuildVolumes(currPhysicState_);
+		prevPhysicState_.volumes = currPhysicState_.volumes;
 	}
 }
 
@@ -1814,6 +1814,36 @@ const Equipment* Object::getEquipment(Bone::SocketType socketType) const {
 	}
 
 	return &*it;
+}
+
+// Rebuilds world-space collision volumes in `state` from model local volumes.
+// AABB: applies pos + scale only.
+// OBB:  applies pos + scale + object orient, composing object orient with local OBB orient.
+void Object::rebuildVolumes(PhysicState& state) const {
+	const auto pModel = renderState_.pModel;
+	if (!pModel || pModel->volumes.empty()) return;
+
+	state.volumes.resize(pModel->volumes.size());
+
+	for (std::size_t i = 0; i < pModel->volumes.size(); ++i) {
+		std::visit([&](auto&& localVol) {
+			using T = std::decay_t<decltype(localVol)>;
+			if constexpr (std::is_same_v<T, AABB>) {
+				state.volumes[i] = AABB{
+					localVol.center * state.scale + state.pos,
+					localVol.size * state.scale,
+				};
+			} else {
+				mu::NQuat worldOrient = state.orient;
+				worldOrient *= localVol.orient;
+				state.volumes[i] = OBB{
+					state.orient.rotate(localVol.center * state.scale) + state.pos,
+					localVol.halfExtents * state.scale,
+					worldOrient,
+				};
+			}
+		}, pModel->volumes[i]);
+	}
 }
 
 void Player::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {

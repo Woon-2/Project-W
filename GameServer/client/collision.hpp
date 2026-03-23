@@ -1,14 +1,16 @@
-﻿#ifndef __collision_HPP
+#ifndef __collision_HPP
 #define __collision_HPP
 
-
-// 모델에 AABB 벡터
-// 충돌 처리할 때 월드 변환 적용
-// 기본 박스 모델에 center, size의 로컬 변환 먼저 적용 -> 모델 변환 적용 -> 월드 변환 적용 (TRS 분리된 거에서 TS만 가져와야겠다)
 
 struct AABB {
 	mu::Vec3 center;
 	mu::Vec3 size;
+};
+
+struct OBB {
+	mu::Vec3  center;
+	mu::Vec3  halfExtents;
+	mu::NQuat orient;
 };
 
 struct Ray {
@@ -16,28 +18,34 @@ struct Ray {
 	mu::Vec3 dir;
 };
 
-struct AABBCollisionResult {
-    bool hit;
-    mu::NVec3 normal;
-    mu::Vec3 mtv;
-    float depth;
-    mu::Vec3 contactPoint;
+struct CollisionResult {
+	bool      hit;
+	mu::NVec3 normal;
+	mu::Vec3  mtv;
+	float     depth;
+	mu::Vec3  contactPoint;
 };
 
-AABBCollisionResult collides(const AABB& a, const AABB& b);
+using AABBCollisionResult = CollisionResult;
+
+using CollisionVolume = std::variant<AABB, OBB>;
+
+CollisionResult collides(const AABB& a, const AABB& b);
+CollisionResult collides(const OBB& a,  const OBB& b);
+CollisionResult collides(const CollisionVolume& a, const CollisionVolume& b);
+
+OBB toOBB(const AABB& aabb);
 
 struct RayHit {
-    bool hit;
-    float t;    // ray hit distance
-    mu::Vec3 point;     // hit point
-    mu::NVec3 normal;    // hit face normal
+	bool      hit;
+	float     t;
+	mu::Vec3  point;
+	mu::NVec3 normal;
 };
 
 RayHit RaycastAABB(const AABB& box, const Ray& ray);
 
-// 공격자의 위치와 전방 벡터를 기반으로 공격 hitbox AABB를 생성한다.
-// pos: 공격자 월드 위치, forward: 정규화된 전방 벡터
-// halfExtent: AABB 반크기, offsetFwd: 전방 방향 중심 offset
 AABB buildAttackAABB(mu::Vec3 pos, mu::Vec3 forward, mu::Vec3 halfExtent, float offsetFwd);
+
 
 #endif	// __collision_HPP

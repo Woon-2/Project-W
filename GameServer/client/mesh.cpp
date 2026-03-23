@@ -1105,31 +1105,43 @@ void importGeometry( std::ifstream& ifs, ID3D12Device* device,
     readTailTag(ifs, "Geometry");
 }
 
-// 모델의 바운딩 볼륨 하나의 정보를 읽어온다.
+// Reads one bounding volume entry and appends it to model.volumes.
+// Binary format includes a Type tag ("AABB" or "OBB") that selects the shape.
+// For OBB: Size stores halfExtents, Rotation stores local-space orientation.
 void importBoundingVolume(std::ifstream& ifs, Model& model) {
     readHeadTag(ifs, "BoundingVolume");
 
-    auto& aabb = model.aabbs.emplace_back();
-
-    const auto bvName = readText(ifs, "Name");
-    model.aabbIdxMap.try_emplace(bvName, static_cast<int>(model.aabbs.size() - 1u));
+    const auto typeName = readText(ifs, "Type");
+    const auto bvName   = readText(ifs, "Name");
 
     const auto localMatrix = readMatrix(ifs, "LocalMatrix");
 
     readHeadTag(ifs, "LocalTRS");
-	const auto localT = readVec3(ifs, "Position");
-	const auto localR = readVec4(ifs, "Rotation");
-	const auto localS = readVec3(ifs, "Scale");
-	readTailTag(ifs, "LocalTRS");
+    const auto localT = readVec3(ifs, "Position");
+    const auto localR = readVec4(ifs, "Rotation");
+    const auto localS = readVec3(ifs, "Scale");
+    readTailTag(ifs, "LocalTRS");
 
-	const auto center = readVec3(ifs, "Center");
-    aabb.center = DirectX::XMLoadFloat3(&center);
-    const auto size = readVec3(ifs, "Size");
-    aabb.size = DirectX::XMLoadFloat3(&size);
+    const auto center = readVec3(ifs, "Center");
+    const auto size   = readVec3(ifs, "Size");
+
+    if (typeName == "OBB") {
+        OBB obb;
+        obb.center      = DirectX::XMLoadFloat3(&center);
+        obb.halfExtents = DirectX::XMLoadFloat3(&size);
+        obb.orient      = mu::NQuat(DirectX::XMLoadFloat4(&localR));
+        model.volumes.push_back(obb);
+    } else {
+        AABB aabb;
+        aabb.center = DirectX::XMLoadFloat3(&center);
+        aabb.size   = DirectX::XMLoadFloat3(&size);
+        model.volumes.push_back(aabb);
+    }
+    model.volumeIdxMap.try_emplace(bvName, static_cast<int>(model.volumes.size() - 1u));
 
     readTailTag(ifs, "BoundingVolume");
 
-    gSharedLog << "[Resource Load] 바운딩 볼륨 " << bvName << " 구축 완료\n";
+    gSharedLog << "[Resource Load] 바운딩 볼륨 " << bvName << " (" << typeName << ") 구축 완료\n";
 }
 
 // 모델의 바운딩 볼륨 정보를 읽어온다.

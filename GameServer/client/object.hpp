@@ -442,7 +442,7 @@ struct PhysicState {
 	mu::NQuat orient{};
 	mu::Vec3 scale{};
 
-	std::vector<AABB> aabbs{};
+	std::vector<CollisionVolume> volumes{};
 };
 
 // 물체의 렌더링과 관련된 상태
@@ -498,11 +498,16 @@ public:
 	// (모델의 바운딩 볼륨을 기반으로 게임 객체의 월드 변환을 적용한
 	//  월드 공간 바운딩 볼륨을 따로 두어야 월드 공간 충돌 처리가 가능하다.)
 	void setModel(const Model* pModel);
+
+	// 지정한 PhysicState의 pos/scale/orient를 기반으로 충돌체(volumes)를 재빌드한다.
+	// AABB는 pos+scale만, OBB는 orient까지 적용한다.
+	// PhysicSystem 등 외부 시스템에서 직접 pos를 수정한 뒤 호출한다.
+	void rebuildVolumes(PhysicState& state) const;
 	const Model* model() const { return renderState_.pModel; }
 
 	// 게임 객체의 위치를 갱신한다.
 	// 이전 PhysicState와 현재 PhysicState의 위치가 모두 갱신된다.
-	// 각 PhysicState의 AABB 역시 갱신된다.
+	// 각 PhysicState의 충돌체(volumes) 역시 갱신된다.
 	void MU_CALLCONV setPos(mu::Vec3 newPos);
 	// 게임 객체의 위치를 갱신한다.
 	// 현재 PhysicState의 위치만 갱신된다.
@@ -523,7 +528,7 @@ public:
 	mu::NQuat MU_CALLCONV orient() const { return currPhysicState_.orient; }
 	// 게임 객체의 크기를 갱신한다.
 	// 이전 PhysicState와 현재 PhysicState의 크기가 모두 갱신된다.
-	// 각 PhysicState의 AABB 역시 갱신된다.
+	// 각 PhysicState의 충돌체(volumes) 역시 갱신된다.
 	void MU_CALLCONV setScale(mu::Vec3 newScale);
 	mu::Vec3 MU_CALLCONV scale() const { return currPhysicState_.scale; }
 

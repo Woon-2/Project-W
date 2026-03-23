@@ -96,6 +96,7 @@
 #include <thread>
 #include <latch>
 #include <array>
+#include <variant>
 #include <mutex>
 #include <span>
 

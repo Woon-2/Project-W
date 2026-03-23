@@ -157,8 +157,8 @@ struct MeshWithDressXform {
 struct Model {
 	std::string name;
 	std::vector<MeshWithDressXform> meshWithDressXforms;
-	std::vector<AABB> aabbs;
-	std::map<std::string, int> aabbIdxMap;
+	std::vector<CollisionVolume> volumes;
+	std::map<std::string, int> volumeIdxMap;
 	std::map<Bone::SocketType, mu::Mat4x4> socketOffsets;
 	Skeleton skeleton;
 };

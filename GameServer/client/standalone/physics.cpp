@@ -1,4 +1,4 @@
-﻿#include "pch.hpp"
+#include "pch.hpp"
 #include "physics.hpp"
 #include "../object.hpp"
 
@@ -8,19 +8,15 @@ void PhysicSystem::step(const std::vector<Object*>& objects, Seconds dt)
         obj->proceedPhysicState();
     }
 
-    // integrate (예측)
     integrate(objects, dt);
 
-    // broad-phase (충돌 후보군 추리기)
     broadPairs_.clear();
     broadPhase(objects);
 
-    // narrow-phase (실제 충돌 검사)
     contacts_.clear();
     narrowPhase();
 
-    // 충돌 피드백 (반복적 MTV solver)
-    solveCollisions(1); // 필수적으로 여러 번 돌려야 함
+    solveCollisions(1);
 }
 
 void PhysicSystem::integrate(const std::vector<Object*>& objects, Seconds dt)
@@ -28,29 +24,23 @@ void PhysicSystem::integrate(const std::vector<Object*>& objects, Seconds dt)
     for (auto* obj : objects) {
         auto& phys = obj->physicState();
 
-        auto& pos = phys.pos;
-	    auto& omega = phys.omega;
-	    auto& orient = phys.orient;
-	    auto& scale = phys.scale;
+        auto& pos    = phys.pos;
+        auto& omega  = phys.omega;
+        auto& orient = phys.orient;
 
         pos += phys.velocity * dt.count();
 
-	    // 쿼터니언 갱신: q' = 0.5 * ω_q * q
-	    auto wq = mu::Quat(omega, 0.f);
-	    auto dq = orient * wq * 0.5f;
-	    orient = orient + dq * dt.count();
+        auto wq = mu::Quat(omega, 0.f);
+        auto dq = orient * wq * 0.5f;
+        orient = orient + dq * dt.count();
 
-        // 바운딩 볼륨 갱신
-	    for (std::size_t i = 0; i < phys.aabbs.size(); ++i) {
-		    phys.aabbs[i].center = obj->model()->aabbs[i].center * scale + pos;
-		    phys.aabbs[i].size = obj->model()->aabbs[i].size * scale;
-	    }
+        obj->rebuildVolumes(phys);
     }
 }
 
 void PhysicSystem::broadPhase(const std::vector<Object*>& objects) {
-    for (int i = 0; i < objects.size(); i++) {
-        for (int j = i + 1; j < objects.size(); j++) {
+    for (int i = 0; i < (int)objects.size(); i++) {
+        for (int j = i + 1; j < (int)objects.size(); j++) {
             broadPairs_.emplace_back(objects[i], objects[j]);
         }
     }
@@ -77,27 +67,18 @@ void PhysicSystem::solveCollisions(std::size_t iterations)
             a->physicState().pos += c.mtv * 0.5f;
             b->physicState().pos -= c.mtv * 0.5f;
 
-            // 바운딩 볼륨 갱신
-	        for (std::size_t i = 0; i < a->physicState().aabbs.size(); ++i) {
-		        a->physicState().aabbs[i].center = a->model()->aabbs[i].center
-                    * a->physicState().scale + a->physicState().pos;
-		        a->physicState().aabbs[i].size = a->model()->aabbs[i].size
-                    * a->physicState().scale;
-	        }
-	        for (std::size_t i = 0; i < b->physicState().aabbs.size(); ++i) {
-		        b->physicState().aabbs[i].center = b->model()->aabbs[i].center
-                    * b->physicState().scale + b->physicState().pos;
-		        b->physicState().aabbs[i].size = b->model()->aabbs[i].size
-                    * b->physicState().scale;
-	        }
+            a->rebuildVolumes(a->physicState());
+            b->rebuildVolumes(b->physicState());
         }
     }
 }
 
 void PhysicSystem::checkCollision(Object* a, Object* b) {
-    for (int i = 0; i < a->physicState().aabbs.size(); ++i) {
-        for (int j = 0; j < b->physicState().aabbs.size(); ++j) {
-            auto c = collides( a->physicState().aabbs[i], b->physicState().aabbs[j] );
+    const auto& volsA = a->physicState().volumes;
+    const auto& volsB = b->physicState().volumes;
+    for (int i = 0; i < (int)volsA.size(); ++i) {
+        for (int j = 0; j < (int)volsB.size(); ++j) {
+            auto c = collides(volsA[i], volsB[j]);
             if (c.hit) {
                 contacts_.emplace_back(
                     /* .a = */ a,
