@@ -136,6 +136,7 @@ public:
 	// 본들의 최종 변환 행렬들을 반환한다.
 	// 렌더링 시에는 이 행렬들을 참조한다.
 	std::vector<mu::Mat4x4>& finalXformData();
+	const std::vector<mu::Mat4x4>& finalXformData() const;
 
 	// AnimSystem에서, 이 AnimBlender 객체의 계산 단계를 설정하기 위해 만들어진 함수
 	void setStage(PassKey<AnimSystem>, Stage stage) { stage_ = stage; }

@@ -239,6 +239,10 @@ std::vector<mu::Mat4x4>& AnimBlender::finalXformData() {
 	return boneXformCache_;
 }
 
+const std::vector<mu::Mat4x4>& AnimBlender::finalXformData() const {
+	return boneXformCache_;
+}
+
 // key에 해당하는 클립을 elapsed 만큼의 시간이 지났을 때의 프레임으로 갱신한다.
 void AnimBlender::updateFrames(const std::string& key, Seconds elapsed) {
 	DISPLAY_ERROR_STR( frameInfoMap_.contains(key),

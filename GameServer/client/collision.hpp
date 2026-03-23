@@ -35,7 +35,9 @@ struct BVHNode {
 	AABB                    bounds;    // AABB encompassing this subtree (fast reject)
 	std::variant<AABB, OBB> shape;     // actual shape for precise collision
 	std::vector<int>        children;  // child indices into BVH::nodes (empty = leaf)
-	std::string             name;
+	std::string             name;      // box name (debug)
+	std::string             boneName;  // bone name used at load time to resolve boneIdx
+	int                     boneIdx = -1; // resolved bone index; -1 = root transform only
 
 	bool isLeaf() const { return children.empty(); }
 };

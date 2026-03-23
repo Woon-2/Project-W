@@ -1591,23 +1591,49 @@ void Object::update(Milliseconds deltaTime, float tPhysicInterpolation) {
 	renderState_.world = mu::Mat4x4(mu::scale(scale)) * mu::Mat4x4(orient) * mu::translate(pos);
 	if (pModel && !pModel->bvh.empty()) {
 		const auto& localBVH = pModel->bvh;
+		const auto& skeleton = pModel->skeleton;
+		const bool  hasBones = renderState_.animBlender
+		                    && skeleton.bones && !skeleton.bones->empty();
 		renderState_.worldBVs.resize(localBVH.nodes.size());
 		for (std::size_t i = 0; i < localBVH.nodes.size(); ++i) {
-			std::visit([&](auto&& localShape) {
-				using T = std::decay_t<decltype(localShape)>;
-				if constexpr (std::is_same_v<T, AABB>) {
-					const auto bvCenter = localShape.center * scale + pos;
-					const auto bvSize   = localShape.size * scale;
-					renderState_.worldBVs[i] = mu::Mat4x4(mu::scale(bvSize)) * mu::translate(bvCenter);
-				} else {
-					mu::NQuat worldOrient = orient;
-					worldOrient *= localShape.orient;
-					const auto bvCenter = orient.rotate(localShape.center * scale) + pos;
-					renderState_.worldBVs[i] = mu::Mat4x4(mu::scale(localShape.halfExtents * scale * 2.f))
-					                         * mu::Mat4x4(worldOrient)
-					                         * mu::translate(bvCenter);
-				}
-			}, localBVH.nodes[i].shape);
+			const auto& node    = localBVH.nodes[i];
+			const bool  useBone = hasBones && node.boneIdx >= 0
+			                   && node.boneIdx < (int)skeleton.bones->size();
+			if (useBone) {
+				const auto&      bone        = skeleton.bones->at(node.boneIdx);
+				const mu::Mat4x4 boneToWorld = bone.toDress
+											 * renderState_.animBlender->finalXformData()[node.boneIdx]
+				                             * renderState_.world;
+				std::visit([&](auto&& s) {
+					using T = std::decay_t<decltype(s)>;
+					mu::Vec3  lc, lh;
+					mu::NQuat lo{};
+					if constexpr (std::is_same_v<T, AABB>) { lc = s.center; lh = s.size * 0.5f; }
+					else { lc = s.center; lh = s.halfExtents; lo = s.orient; }
+					const mu::Vec3  wc = mu::Vec3(mu::Vec4(lc, 1.f) * boneToWorld);
+					const mu::Vec3  wh = lh * scale;
+					const mu::NQuat wo = lo * mu::NQuat{ mu::Quat{ mu::quatRotMat(boneToWorld.get()) } };
+					renderState_.worldBVs[i] = mu::Mat4x4(mu::scale(wh * 2.f))
+					                         * mu::Mat4x4(wo)
+					                         * mu::translate(wc);
+				}, node.shape);
+			} else {
+				std::visit([&](auto&& localShape) {
+					using T = std::decay_t<decltype(localShape)>;
+					if constexpr (std::is_same_v<T, AABB>) {
+						const auto bvCenter = localShape.center * scale + pos;
+						const auto bvSize   = localShape.size * scale;
+						renderState_.worldBVs[i] = mu::Mat4x4(mu::scale(bvSize)) * mu::translate(bvCenter);
+					} else {
+						mu::NQuat worldOrient = orient;
+						worldOrient *= localShape.orient;
+						const auto bvCenter = orient.rotate(localShape.center * scale) + pos;
+						renderState_.worldBVs[i] = mu::Mat4x4(mu::scale(localShape.halfExtents * scale * 2.f))
+						                         * mu::Mat4x4(worldOrient)
+						                         * mu::translate(bvCenter);
+					}
+				}, node.shape);
+			}
 		}
 	}
 
@@ -1812,40 +1838,87 @@ const Equipment* Object::getEquipment(Bone::SocketType socketType) const {
 
 // Rebuilds the world-space BVH in `state` from the model's local-space BVH template.
 // Tree structure (children indices) is preserved; only shape/bounds values are transformed.
-// AABB shapes: apply pos + scale.
-// OBB shapes:  apply pos + scale + orient (composed with local OBB orient).
-// Bounds are recomputed from the transformed shapes.
+//
+// For bone-attached nodes (boneIdx >= 0) with an active animBlender:
+//   boneToWorld = bone.toDress * finalXformData()[boneIdx] * objWorldMat
+//   (bone local -> dress -> animated dress -> world; same chain as equipment socket rendering)
+//   center is transformed as a homogeneous point; result is always OBB.
+//
+// For root-only nodes (boneIdx == -1) or when no animBlender is present:
+//   AABB: apply pos + scale.
+//   OBB:  apply pos + scale + orient (composed with local OBB orient).
 void Object::rebuildBVH(PhysicState& state) const {
 	const auto pModel = renderState_.pModel;
 	if (!pModel || pModel->bvh.empty()) return;
 
 	const auto& localBVH = pModel->bvh;
-	state.bvh.nodes.resize(localBVH.nodes.size());
+	const auto& skeleton = pModel->skeleton;
+	const bool  hasBones = renderState_.animBlender
+	                    && skeleton.bones && !skeleton.bones->empty();
 
+	// Object world matrix (same formula as renderState_.world, physics-state based)
+	const mu::Mat4x4 objWorld = mu::Mat4x4(mu::scale(state.scale))
+	                          * mu::Mat4x4(state.orient)
+	                          * mu::translate(state.pos);
+
+	state.bvh.nodes.resize(localBVH.nodes.size());
 	for (std::size_t i = 0; i < localBVH.nodes.size(); ++i) {
 		const auto& src = localBVH.nodes[i];
 		auto&       dst = state.bvh.nodes[i];
 
 		dst.children = src.children;
 		dst.name     = src.name;
+		dst.boneIdx  = src.boneIdx;
 
-		dst.shape = std::visit([&](auto&& localShape) -> std::variant<AABB, OBB> {
-			using T = std::decay_t<decltype(localShape)>;
-			if constexpr (std::is_same_v<T, AABB>) {
-				return AABB{
-					localShape.center * state.scale + state.pos,
-					localShape.size   * state.scale,
-				};
-			} else {
-				mu::NQuat worldOrient = state.orient;
-				worldOrient *= localShape.orient;
-				return OBB{
-					state.orient.rotate(localShape.center * state.scale) + state.pos,
-					localShape.halfExtents * state.scale,
-					worldOrient,
-				};
-			}
-		}, src.shape);
+		const bool useBone = hasBones && src.boneIdx >= 0
+		                  && src.boneIdx < (int)skeleton.bones->size();
+
+		if (useBone) {
+			const auto&      bone       = skeleton.bones->at(src.boneIdx);
+			const auto&      boneXforms = renderState_.animBlender->finalXformData();
+			// bone local -> animated dress -> object world
+			const mu::Mat4x4 boneToWorld = bone.toDress * boneXforms[src.boneIdx] * objWorld;
+
+			dst.shape = std::visit([&](auto&& s) -> std::variant<AABB, OBB> {
+				using T = std::decay_t<decltype(s)>;
+				mu::Vec3  localCenter, localHalfExtents;
+				mu::NQuat localOrient{};
+				if constexpr (std::is_same_v<T, AABB>) {
+					localCenter      = s.center;
+					localHalfExtents = s.size * 0.5f;
+				} else {
+					localCenter      = s.center;
+					localHalfExtents = s.halfExtents;
+					localOrient      = s.orient;
+				}
+				// Transform center as a homogeneous point through boneToWorld
+				const mu::Vec3  worldCenter      = mu::Vec3(mu::Vec4(localCenter, 1.f) * boneToWorld);
+				// Scale halfExtents by root object scale only (bone transforms are rigid)
+				const mu::Vec3  worldHalfExtents = localHalfExtents * state.scale;
+				// Extract rotation from boneToWorld and compose with local orient
+				const mu::NQuat boneWorldOrient{ mu::Quat{ mu::quatRotMat(boneToWorld.get()) } };
+				const mu::NQuat worldOrient      = localOrient * boneWorldOrient;
+				return OBB{ worldCenter, worldHalfExtents, worldOrient };
+			}, src.shape);
+		} else {
+			dst.shape = std::visit([&](auto&& s) -> std::variant<AABB, OBB> {
+				using T = std::decay_t<decltype(s)>;
+				if constexpr (std::is_same_v<T, AABB>) {
+					return AABB{
+						s.center * state.scale + state.pos,
+						s.size   * state.scale,
+					};
+				} else {
+					mu::NQuat worldOrient = state.orient;
+					worldOrient *= s.orient;
+					return OBB{
+						state.orient.rotate(s.center * state.scale) + state.pos,
+						s.halfExtents * state.scale,
+						worldOrient,
+					};
+				}
+			}, src.shape);
+		}
 
 		dst.bounds = std::visit([](auto&& s) -> AABB {
 			using T = std::decay_t<decltype(s)>;

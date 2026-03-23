@@ -1121,8 +1121,7 @@ static bool isZeroEuler(const DirectX::XMFLOAT3& e) {
 
 static mu::NQuat eulerDegsToQuat(const DirectX::XMFLOAT3& e) {
     constexpr float toRad = DirectX::XM_PI / 180.f;
-    return mu::NQuat(DirectX::XMQuaternionRotationRollPitchYaw(
-        e.x * toRad, e.y * toRad, e.z * toRad));
+    return mu::NQuat(mu::Degree(e.z), mu::Degree(e.x), mu::Degree(e.y));
 }
 
 static AABB computeNodeBounds(const std::variant<AABB, OBB>& shape) {
@@ -1145,10 +1144,13 @@ static AABB unionAABB(const AABB& a, const AABB& b) {
 
 static BVHNode makeBVHNode(const ImportedBVBox& box) {
     BVHNode node;
-    node.name = box.name;
+    node.name     = box.name;
+    node.boneName = box.boneName;
 
     const mu::Vec3 center = DirectX::XMLoadFloat3(&box.center);
     const mu::Vec3 size   = DirectX::XMLoadFloat3(&box.size);
+
+    node.shape  = OBB{ center, size * 0.5f, eulerDegsToQuat(box.rotEuler) };
 
     if (isZeroEuler(box.rotEuler)) {
         node.shape  = AABB{ center, size };
@@ -1212,6 +1214,22 @@ static BVH buildBVHFromLODs(const std::vector<std::vector<ImportedBVBox>>& allLO
     }
 
     return bvh;
+}
+
+// Resolves BVHNode::boneName -> BVHNode::boneIdx for all nodes in bvh.
+// Must be called after the skeleton is loaded (importSkeleton).
+static void resolveBVHBoneIndices(BVH& bvh, const Skeleton& skeleton) {
+    if (!skeleton.bones) return;
+    const auto& bones = *skeleton.bones;
+    for (auto& node : bvh.nodes) {
+        if (node.boneName.empty()) continue;
+        for (const auto& bone : bones) {
+            if (bone.name == node.boneName) {
+                node.boneIdx = bone.boneIdx;
+                break;
+            }
+        }
+    }
 }
 
 // Reads bounding volume data in the Unity ModelExtractor LOD format and
@@ -1390,6 +1408,7 @@ Model loadModelFromFile( const std::filesystem::path& path,
     const auto hasSkeleton = static_cast<bool>(readInteger(ifs, "HasSkeleton"));
     if (hasSkeleton) {
         importSkeleton(ifs, ret);
+        resolveBVHBoneIndices(ret.bvh, ret.skeleton);
     }
 
     // 해당 모델이 아이템으로 쓰일 수 있는 모델이라면,
