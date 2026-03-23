@@ -65,4 +65,11 @@ void CombatSystem::update(Milliseconds dt, i32t playerId, EventList& evList) {
 	}
 }
 
+std::optional<AttackSpec> CombatSystem::queryAttackSpec(i32t id) const {
+	auto it = combatants_.find(id);
+	if (it == combatants_.end()) return std::nullopt;
+	const auto& e = it->second;
+	return AttackSpec{ e.obj, e.config.attackHalfExtent, e.config.attackOffsetFwd };
+}
+
 }   // namespace StandAlone

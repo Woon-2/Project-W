@@ -304,6 +304,9 @@ void Game::update(Milliseconds deltaTime) {
 	player_->physicState().evVelocity += player_->physicState().velocity;
 	player_->physicState().evOmega += player_->physicState().omega;
 
+	// debug BV 갱신 (TTL 감소 + 소멸 조건 평가)
+	debugBVView_.update(deltaTime);
+
 	// 몬스터 AI 공격 처리
 	// 쿨타임 감소 후 플레이어와 AABB 교차 시 EvAttack + EvHit 발생
 	if (!playerDead_) {
@@ -406,6 +409,11 @@ void Game::update(Milliseconds deltaTime) {
 			}
 			else if (attack->attackerId == gargoyle_->getId()) {
 				gargoyle_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, gargoyle_.get());
+			}
+
+			// 공격 발동 시 attack hitbox를 1500ms 동안 live 추적으로 렌더링
+			if (auto spec = combatSystem_.queryAttackSpec(attack->attackerId)) {
+				debugBVView_.pushLive(spec->obj, spec->halfExtent, spec->offsetFwd, 1500ms);
 			}
 		}
 		break;
@@ -524,6 +532,7 @@ void Game::update(Milliseconds deltaTime) {
 }
 
 void Game::render() {
+	debugBVView_.render(gfx_);
 	ground_->render(gfx_);
 	player_->render(gfx_);
 	goblin_->render(gfx_);
@@ -718,6 +727,10 @@ void Game::processInput(Milliseconds deltaTime) {
 		&& !(keyboardStatePrev_[VK_LBUTTON] & 0x80)
 	) {
 		combatSystem_.onPlayerAttack(player_->getId(), eventList_);
+		// 공격 발동 시 플레이어 attack hitbox를 1500ms 동안 live 추적으로 렌더링
+		if (auto spec = combatSystem_.queryAttackSpec(player_->getId())) {
+			debugBVView_.pushLive(spec->obj, spec->halfExtent, spec->offsetFwd, 1500ms);
+		}
 	}
 
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때

@@ -28,6 +28,14 @@ struct CombatConfig {
 //   - OBB support : virtualise or template overlapsAny()
 //   - BVH broadphase : spatial partition for large monster counts
 //   - Multi-hitbox  : per-weapon / per-limb hitbox lists
+// Read-only view of a combatant's attack parameters.
+// Intended for external systems such as debug visualization.
+struct AttackSpec {
+	const Object* obj;
+	mu::Vec3      halfExtent;
+	float         offsetFwd;
+};
+
 class CombatSystem {
 public:
 	// Register a combatant using obj->getId() as the key.
@@ -45,6 +53,11 @@ public:
 	// Decrements each monster's cooldown and, when expired + overlapping
 	// the player, emits EvAttack(monsterId) + EvHit(playerId).
 	void update(Milliseconds dt, i32t playerId, EventList& evList);
+
+	// Returns the attack specification for the given combatant id.
+	// Returns nullopt if the id is not registered.
+	// Pure query - no side effects.
+	std::optional<AttackSpec> queryAttackSpec(i32t id) const;
 
 private:
 	struct CombatEntry {

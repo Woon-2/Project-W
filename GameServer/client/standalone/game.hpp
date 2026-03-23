@@ -19,6 +19,7 @@
 #include "../basicPlayerHpUI.hpp"
 #include "../event.hpp"
 #include "../crosshair.hpp"
+#include "../debugBVView.hpp"
 
 class Timer;
 
@@ -83,6 +84,7 @@ private:
 
 	PhysicSystem physicSystem_{};
 	CombatSystem combatSystem_{};
+	DebugBVView  debugBVView_{};
 	Seconds physicUpdateAcc_{0s};	// 물리 업데이트를 위한 시간 누산기
 	Seconds physicUpdateInterval{1s/60.f};	// 60fps로 물리 업데이트
 
