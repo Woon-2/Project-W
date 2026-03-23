@@ -22,6 +22,15 @@
     <Filter Include="network\PacketManager">
       <UniqueIdentifier>{de48db76-0d3f-4df5-b5ca-eec5b2106eba}</UniqueIdentifier>
     </Filter>
+    <Filter Include="utils">
+      <UniqueIdentifier>{6b80f040-f2da-4665-85cf-dcd8a84a2e5e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="contents\Player">
+      <UniqueIdentifier>{8b615a2d-9999-4438-a197-a8621c175e75}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="contents\Room">
+      <UniqueIdentifier>{3ce4afb8-3fa7-4855-95d5-040b02ac9826}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Listener.cpp">
@@ -39,15 +48,6 @@
     <ClCompile Include="GameSession.cpp">
       <Filter>network\GameSession</Filter>
     </ClCompile>
-    <ClCompile Include="Room.cpp">
-      <Filter>contents</Filter>
-    </ClCompile>
-    <ClCompile Include="Player.cpp">
-      <Filter>contents</Filter>
-    </ClCompile>
-    <ClCompile Include="RoomManager.cpp">
-      <Filter>contents</Filter>
-    </ClCompile>
     <ClCompile Include="PacketManager.cpp">
       <Filter>network\PacketManager</Filter>
     </ClCompile>
@@ -63,6 +63,27 @@
     <ClCompile Include="collision.cpp">
       <Filter>contents</Filter>
     </ClCompile>
+    <ClCompile Include="binaryImport.cpp">
+      <Filter>utils</Filter>
+    </ClCompile>
+    <ClCompile Include="errorHandling.cpp">
+      <Filter>utils</Filter>
+    </ClCompile>
+    <ClCompile Include="object.cpp">
+      <Filter>contents</Filter>
+    </ClCompile>
+    <ClCompile Include="physics.cpp">
+      <Filter>contents</Filter>
+    </ClCompile>
+    <ClCompile Include="Player.cpp">
+      <Filter>contents\Player</Filter>
+    </ClCompile>
+    <ClCompile Include="Room.cpp">
+      <Filter>contents\Room</Filter>
+    </ClCompile>
+    <ClCompile Include="RoomManager.cpp">
+      <Filter>contents\Room</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Listener.hpp">
@@ -76,15 +97,6 @@
     </ClInclude>
     <ClInclude Include="GameSession.hpp">
       <Filter>network\GameSession</Filter>
-    </ClInclude>
-    <ClInclude Include="Room.hpp">
-      <Filter>contents</Filter>
-    </ClInclude>
-    <ClInclude Include="Player.hpp">
-      <Filter>contents</Filter>
-    </ClInclude>
-    <ClInclude Include="RoomManager.hpp">
-      <Filter>contents</Filter>
     </ClInclude>
     <ClInclude Include="PacketManager.hpp">
       <Filter>network\PacketManager</Filter>
@@ -100,6 +112,27 @@
     </ClInclude>
     <ClInclude Include="collision.hpp">
       <Filter>contents</Filter>
+    </ClInclude>
+    <ClInclude Include="binaryImport.hpp">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="errorHandling.hpp">
+      <Filter>utils</Filter>
+    </ClInclude>
+    <ClInclude Include="object.hpp">
+      <Filter>contents</Filter>
+    </ClInclude>
+    <ClInclude Include="physics.hpp">
+      <Filter>contents</Filter>
+    </ClInclude>
+    <ClInclude Include="Player.hpp">
+      <Filter>contents\Player</Filter>
+    </ClInclude>
+    <ClInclude Include="Room.hpp">
+      <Filter>contents\Room</Filter>
+    </ClInclude>
+    <ClInclude Include="RoomManager.hpp">
+      <Filter>contents\Room</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
