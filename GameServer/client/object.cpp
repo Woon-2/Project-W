@@ -1557,10 +1557,9 @@ void Object::setModel(const Model* pModel){
 	}
 
 	renderState_.pModel = pModel;
-	currPhysicState_.volumes.resize(pModel->volumes.size());
-	rebuildVolumes(currPhysicState_);
-	prevPhysicState_.volumes = currPhysicState_.volumes;
-	renderState_.worldBVs.resize(currPhysicState_.volumes.size());
+	rebuildBVH(currPhysicState_);
+	prevPhysicState_.bvh = currPhysicState_.bvh;
+	renderState_.worldBVs.resize(currPhysicState_.bvh.nodes.size());
 }
 
 // @brief 게임 객체의 RenderState와 방향 벡터들을 갱신한다.
@@ -1590,22 +1589,26 @@ void Object::update(Milliseconds deltaTime, float tPhysicInterpolation) {
 	const auto pModel = renderState_.pModel;
 
 	renderState_.world = mu::Mat4x4(mu::scale(scale)) * mu::Mat4x4(orient) * mu::translate(pos);
-	for (std::size_t i = 0; i < currPhysicState_.volumes.size(); ++i) {
-		std::visit([&](auto&& localVol) {
-			using T = std::decay_t<decltype(localVol)>;
-			if constexpr (std::is_same_v<T, AABB>) {
-				const auto bvCenter = localVol.center * scale + pos;
-				const auto bvSize   = localVol.size * scale;
-				renderState_.worldBVs[i] = mu::Mat4x4(mu::scale(bvSize)) * mu::translate(bvCenter);
-			} else {
-				mu::NQuat worldOrient = orient;
-				worldOrient *= localVol.orient;
-				const auto bvCenter = orient.rotate(localVol.center * scale) + pos;
-				renderState_.worldBVs[i] = mu::Mat4x4(mu::scale(localVol.halfExtents * scale * 2.f))
-				                         * mu::Mat4x4(worldOrient)
-				                         * mu::translate(bvCenter);
-			}
-		}, pModel->volumes[i]);
+	if (pModel && !pModel->bvh.empty()) {
+		const auto& localBVH = pModel->bvh;
+		renderState_.worldBVs.resize(localBVH.nodes.size());
+		for (std::size_t i = 0; i < localBVH.nodes.size(); ++i) {
+			std::visit([&](auto&& localShape) {
+				using T = std::decay_t<decltype(localShape)>;
+				if constexpr (std::is_same_v<T, AABB>) {
+					const auto bvCenter = localShape.center * scale + pos;
+					const auto bvSize   = localShape.size * scale;
+					renderState_.worldBVs[i] = mu::Mat4x4(mu::scale(bvSize)) * mu::translate(bvCenter);
+				} else {
+					mu::NQuat worldOrient = orient;
+					worldOrient *= localShape.orient;
+					const auto bvCenter = orient.rotate(localShape.center * scale) + pos;
+					renderState_.worldBVs[i] = mu::Mat4x4(mu::scale(localShape.halfExtents * scale * 2.f))
+					                         * mu::Mat4x4(worldOrient)
+					                         * mu::translate(bvCenter);
+				}
+			}, localBVH.nodes[i].shape);
+		}
 	}
 
 	if (renderState_.animBlender) {
@@ -1647,10 +1650,10 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 		}
 	}
 
-	if (willRenderBV_) {
-		for (std::size_t i = 0u; i < currPhysicState_.volumes.size(); ++i) {
+	if (willRenderBV_ && pModel && !pModel->bvh.empty()) {
+		for (std::size_t i = 0u; i < pModel->bvh.nodes.size(); ++i) {
 			gfx.addDrawEvent( BVPipeline::DrawEvent{
-				.world = offsetXform * renderState_.worldBVs[i],
+				.world   = offsetXform * renderState_.worldBVs[i],
 				.bvModel = BVPipeline::BVModel::Box
 			} );
 		}
@@ -1695,10 +1698,9 @@ void MU_CALLCONV Object::setPos(mu::Vec3 newPos) {
 
 	const auto pModel = renderState_.pModel;
 
-	if (pModel) {
-		currPhysicState_.volumes.resize(pModel->volumes.size());
-		rebuildVolumes(currPhysicState_);
-		prevPhysicState_.volumes = currPhysicState_.volumes;
+	if (pModel && !pModel->bvh.empty()) {
+		rebuildBVH(currPhysicState_);
+		prevPhysicState_.bvh = currPhysicState_.bvh;
 	}
 }
 
@@ -1709,9 +1711,8 @@ void MU_CALLCONV Object::setCurrPos(mu::Vec3 newPos) {
 
 	const auto pModel = renderState_.pModel;
 
-	if (pModel) {
-		currPhysicState_.volumes.resize(pModel->volumes.size());
-		rebuildVolumes(currPhysicState_);
+	if (pModel && !pModel->bvh.empty()) {
+		rebuildBVH(currPhysicState_);
 	}
 }
 
@@ -1739,17 +1740,11 @@ void MU_CALLCONV Object::setOrient(mu::NQuat newOrient) {
 	up_      = currPhysicState_.orient.rotate(mu::Vec3(0.f, 1.f, 0.f));
 	forward_ = currPhysicState_.orient.rotate(mu::Vec3(0.f, 0.f, 1.f));
 
-	// OBB volumes track orientation and must be rebuilt when orient changes.
+	// BVH nodes with OBB shapes track orientation and must be rebuilt.
 	const auto pModel = renderState_.pModel;
-	if (pModel) {
-		bool hasOBB = false;
-		for (const auto& v : pModel->volumes) {
-			if (std::holds_alternative<OBB>(v)) { hasOBB = true; break; }
-		}
-		if (hasOBB) {
-			rebuildVolumes(currPhysicState_);
-			prevPhysicState_.volumes = currPhysicState_.volumes;
-		}
+	if (pModel && !pModel->bvh.empty()) {
+		rebuildBVH(currPhysicState_);
+		prevPhysicState_.bvh = currPhysicState_.bvh;
 	}
 }
 
@@ -1762,10 +1757,9 @@ void MU_CALLCONV Object::setScale(mu::Vec3 newScale) {
 
 	const auto pModel = renderState_.pModel;
 
-	if (pModel) {
-		currPhysicState_.volumes.resize(pModel->volumes.size());
-		rebuildVolumes(currPhysicState_);
-		prevPhysicState_.volumes = currPhysicState_.volumes;
+	if (pModel && !pModel->bvh.empty()) {
+		rebuildBVH(currPhysicState_);
+		prevPhysicState_.bvh = currPhysicState_.bvh;
 	}
 }
 
@@ -1816,33 +1810,48 @@ const Equipment* Object::getEquipment(Bone::SocketType socketType) const {
 	return &*it;
 }
 
-// Rebuilds world-space collision volumes in `state` from model local volumes.
-// AABB: applies pos + scale only.
-// OBB:  applies pos + scale + object orient, composing object orient with local OBB orient.
-void Object::rebuildVolumes(PhysicState& state) const {
+// Rebuilds the world-space BVH in `state` from the model's local-space BVH template.
+// Tree structure (children indices) is preserved; only shape/bounds values are transformed.
+// AABB shapes: apply pos + scale.
+// OBB shapes:  apply pos + scale + orient (composed with local OBB orient).
+// Bounds are recomputed from the transformed shapes.
+void Object::rebuildBVH(PhysicState& state) const {
 	const auto pModel = renderState_.pModel;
-	if (!pModel || pModel->volumes.empty()) return;
+	if (!pModel || pModel->bvh.empty()) return;
 
-	state.volumes.resize(pModel->volumes.size());
+	const auto& localBVH = pModel->bvh;
+	state.bvh.nodes.resize(localBVH.nodes.size());
 
-	for (std::size_t i = 0; i < pModel->volumes.size(); ++i) {
-		std::visit([&](auto&& localVol) {
-			using T = std::decay_t<decltype(localVol)>;
+	for (std::size_t i = 0; i < localBVH.nodes.size(); ++i) {
+		const auto& src = localBVH.nodes[i];
+		auto&       dst = state.bvh.nodes[i];
+
+		dst.children = src.children;
+		dst.name     = src.name;
+
+		dst.shape = std::visit([&](auto&& localShape) -> std::variant<AABB, OBB> {
+			using T = std::decay_t<decltype(localShape)>;
 			if constexpr (std::is_same_v<T, AABB>) {
-				state.volumes[i] = AABB{
-					localVol.center * state.scale + state.pos,
-					localVol.size * state.scale,
+				return AABB{
+					localShape.center * state.scale + state.pos,
+					localShape.size   * state.scale,
 				};
 			} else {
 				mu::NQuat worldOrient = state.orient;
-				worldOrient *= localVol.orient;
-				state.volumes[i] = OBB{
-					state.orient.rotate(localVol.center * state.scale) + state.pos,
-					localVol.halfExtents * state.scale,
+				worldOrient *= localShape.orient;
+				return OBB{
+					state.orient.rotate(localShape.center * state.scale) + state.pos,
+					localShape.halfExtents * state.scale,
 					worldOrient,
 				};
 			}
-		}, pModel->volumes[i]);
+		}, src.shape);
+
+		dst.bounds = std::visit([](auto&& s) -> AABB {
+			using T = std::decay_t<decltype(s)>;
+			if constexpr (std::is_same_v<T, OBB>) return obbToAABB(s);
+			else                                   return s;
+		}, dst.shape);
 	}
 }
 

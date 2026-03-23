@@ -4,6 +4,7 @@
 - [X] 공격에 해당하는 바운딩 볼륨 렌더링 가능하도록 구현
 - [X] OBB 충돌처리 지원, 캐릭터 오브젝트들에 대해 기존 AABB 전부 OBB로 교체 (AABB는 특정 단순 사물에만 사용할 예정)
 - [ ] 유니티에서 추출한 바이너리 리소스를 로드해 Bounding Volume Hierarchy 구축 및 그를 통한 충돌처리로 업그레이드
+  - 유니티에서 어떻게 추출했는지는 `unityScripts/ExtractUtil.cs`, `unityScripts/ModelExtractor.cs`, `unityScripts/MultiBoundingVolume.cs` 참조
 - [ ] Anubis가 스태프를 equip하도록 구현
 - [ ] Height map 기반 Terrain 구현 (Unity에서 맵 추출)
 - [ ] Terrain Splat 구현 (Unity에서 splat 추출)

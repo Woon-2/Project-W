@@ -34,7 +34,7 @@ void PhysicSystem::integrate(const std::vector<Object*>& objects, Seconds dt)
         auto dq = orient * wq * 0.5f;
         orient = orient + dq * dt.count();
 
-        obj->rebuildVolumes(phys);
+        obj->rebuildBVH(phys);
     }
 }
 
@@ -55,7 +55,7 @@ void PhysicSystem::narrowPhase()
 
 void PhysicSystem::solveCollisions(std::size_t iterations)
 {
-    for (std::size_t i = 0; i < iterations; ++i)
+    /*for (std::size_t i = 0; i < iterations; ++i)
     {
         for (auto& c : contacts_)
         {
@@ -67,30 +67,27 @@ void PhysicSystem::solveCollisions(std::size_t iterations)
             a->physicState().pos += c.mtv * 0.5f;
             b->physicState().pos -= c.mtv * 0.5f;
 
-            a->rebuildVolumes(a->physicState());
-            b->rebuildVolumes(b->physicState());
+            a->rebuildBVH(a->physicState());
+            b->rebuildBVH(b->physicState());
         }
-    }
+    }*/
 }
 
 void PhysicSystem::checkCollision(Object* a, Object* b) {
-    const auto& volsA = a->physicState().volumes;
-    const auto& volsB = b->physicState().volumes;
-    for (int i = 0; i < (int)volsA.size(); ++i) {
-        for (int j = 0; j < (int)volsB.size(); ++j) {
-            auto c = collides(volsA[i], volsB[j]);
-            if (c.hit) {
-                contacts_.emplace_back(
-                    /* .a = */ a,
-                    /* .b = */ b,
-                    /* .colliding = */ true,
-                    /* .penetrationDepth = */ c.depth,
-                    /* .mtv = */ c.mtv,
-                    /* .normal = */ c.normal,
-                    /* .contactPoint = */ c.contactPoint
-                );
-                break;
-            }
-        }
+    const auto& bvhA = a->physicState().bvh;
+    const auto& bvhB = b->physicState().bvh;
+    if (bvhA.empty() || bvhB.empty()) return;
+
+    auto c = collides(bvhA, bvhB);
+    if (c.hit) {
+        contacts_.emplace_back(
+            /* .a = */ a,
+            /* .b = */ b,
+            /* .colliding = */ true,
+            /* .penetrationDepth = */ c.depth,
+            /* .mtv = */ c.mtv,
+            /* .normal = */ c.normal,
+            /* .contactPoint = */ c.contactPoint
+        );
     }
 }

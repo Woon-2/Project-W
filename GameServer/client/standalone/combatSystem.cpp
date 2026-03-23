@@ -12,10 +12,9 @@ void CombatSystem::unregister(i32t id) {
 }
 
 bool CombatSystem::overlapsAny(const AABB& hitbox, const Object& target) {
-	for (const auto& vol : target.physicState().volumes) {
-		if (collides(CollisionVolume{ hitbox }, vol).hit) return true;
-	}
-	return false;
+	const auto& bvh = target.physicState().bvh;
+	if (bvh.empty()) return false;
+	return collides(bvh, hitbox).hit;
 }
 
 void CombatSystem::onPlayerAttack(i32t playerId, EventList& evList) {

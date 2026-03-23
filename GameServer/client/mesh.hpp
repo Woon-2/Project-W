@@ -157,8 +157,7 @@ struct MeshWithDressXform {
 struct Model {
 	std::string name;
 	std::vector<MeshWithDressXform> meshWithDressXforms;
-	std::vector<CollisionVolume> volumes;
-	std::map<std::string, int> volumeIdxMap;
+	BVH bvh;   // model-space BVH template; world-space copy lives in PhysicState
 	std::map<Bone::SocketType, mu::Mat4x4> socketOffsets;
 	Skeleton skeleton;
 };

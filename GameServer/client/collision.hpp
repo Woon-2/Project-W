@@ -28,13 +28,34 @@ struct CollisionResult {
 
 using AABBCollisionResult = CollisionResult;
 
-using CollisionVolume = std::variant<AABB, OBB>;
+// N-ary BVH node. Maximum 3 levels (LOD 0 -> LOD 1 -> LOD 2).
+// Every node carries a shape (AABB or OBB) for precise collision testing.
+// Leaf nodes have no children (children.empty() == true).
+struct BVHNode {
+	AABB                    bounds;    // AABB encompassing this subtree (fast reject)
+	std::variant<AABB, OBB> shape;     // actual shape for precise collision
+	std::vector<int>        children;  // child indices into BVH::nodes (empty = leaf)
+	std::string             name;
+
+	bool isLeaf() const { return children.empty(); }
+};
+
+// Linearized BVH. nodes[0] is the root. Empty nodes means no collision.
+struct BVH {
+	std::vector<BVHNode> nodes;
+
+	bool empty() const { return nodes.empty(); }
+};
+
+using CollisionVolume = BVH;
 
 CollisionResult collides(const AABB& a, const AABB& b);
 CollisionResult collides(const OBB& a,  const OBB& b);
-CollisionResult collides(const CollisionVolume& a, const CollisionVolume& b);
+CollisionResult collides(const BVH& a,  const BVH& b);
+CollisionResult collides(const BVH& bvh, const AABB& hitbox);
 
-OBB toOBB(const AABB& aabb);
+OBB  toOBB(const AABB& aabb);
+AABB obbToAABB(const OBB& obb);
 
 struct RayHit {
 	bool      hit;

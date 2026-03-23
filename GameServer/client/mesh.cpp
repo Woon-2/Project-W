@@ -1105,55 +1105,155 @@ void importGeometry( std::ifstream& ifs, ID3D12Device* device,
     readTailTag(ifs, "Geometry");
 }
 
-// Reads one bounding volume entry and appends it to model.volumes.
-// Binary format includes a Type tag ("AABB" or "OBB") that selects the shape.
-// For OBB: Size stores halfExtents, Rotation stores local-space orientation.
-void importBoundingVolume(std::ifstream& ifs, Model& model) {
-    readHeadTag(ifs, "BoundingVolume");
+// --- BVH build helpers ---
 
-    const auto typeName = readText(ifs, "Type");
-    const auto bvName   = readText(ifs, "Name");
+struct ImportedBVBox {
+    std::string name;
+    std::string boneName;
+    DirectX::XMFLOAT3 center;
+    DirectX::XMFLOAT3 size;      // full extents (width, height, depth)
+    DirectX::XMFLOAT3 rotEuler;  // degrees
+};
 
-    const auto localMatrix = readMatrix(ifs, "LocalMatrix");
-
-    readHeadTag(ifs, "LocalTRS");
-    const auto localT = readVec3(ifs, "Position");
-    const auto localR = readVec4(ifs, "Rotation");
-    const auto localS = readVec3(ifs, "Scale");
-    readTailTag(ifs, "LocalTRS");
-
-    const auto center = readVec3(ifs, "Center");
-    const auto size   = readVec3(ifs, "Size");
-
-    if (typeName == "OBB") {
-        OBB obb;
-        obb.center      = DirectX::XMLoadFloat3(&center);
-        obb.halfExtents = DirectX::XMLoadFloat3(&size);
-        obb.orient      = mu::NQuat(DirectX::XMLoadFloat4(&localR));
-        model.volumes.push_back(obb);
-    } else {
-        AABB aabb;
-        aabb.center = DirectX::XMLoadFloat3(&center);
-        aabb.size   = DirectX::XMLoadFloat3(&size);
-        model.volumes.push_back(aabb);
-    }
-    model.volumeIdxMap.try_emplace(bvName, static_cast<int>(model.volumes.size() - 1u));
-
-    readTailTag(ifs, "BoundingVolume");
-
-    gSharedLog << "[Resource Load] 바운딩 볼륨 " << bvName << " (" << typeName << ") 구축 완료\n";
+static bool isZeroEuler(const DirectX::XMFLOAT3& e) {
+    return std::abs(e.x) < 1e-4f && std::abs(e.y) < 1e-4f && std::abs(e.z) < 1e-4f;
 }
 
-// 모델의 바운딩 볼륨 정보를 읽어온다.
-// 모델에는 여러 개의 바운딩 볼륨이 존재할 수 있다.
+static mu::NQuat eulerDegsToQuat(const DirectX::XMFLOAT3& e) {
+    constexpr float toRad = DirectX::XM_PI / 180.f;
+    return mu::NQuat(DirectX::XMQuaternionRotationRollPitchYaw(
+        e.x * toRad, e.y * toRad, e.z * toRad));
+}
+
+static AABB computeNodeBounds(const std::variant<AABB, OBB>& shape) {
+    return std::visit([](auto&& s) -> AABB {
+        using T = std::decay_t<decltype(s)>;
+        if constexpr (std::is_same_v<T, OBB>) return obbToAABB(s);
+        else                                   return s;
+    }, shape);
+}
+
+static AABB unionAABB(const AABB& a, const AABB& b) {
+    const mu::Vec3 minA = a.center - a.size * 0.5f;
+    const mu::Vec3 maxA = a.center + a.size * 0.5f;
+    const mu::Vec3 minB = b.center - b.size * 0.5f;
+    const mu::Vec3 maxB = b.center + b.size * 0.5f;
+    const mu::Vec3 mn = mu::min(minA, minB);
+    const mu::Vec3 mx = mu::max(maxA, maxB);
+    return AABB{ (mn + mx) * 0.5f, mx - mn };
+}
+
+static BVHNode makeBVHNode(const ImportedBVBox& box) {
+    BVHNode node;
+    node.name = box.name;
+
+    const mu::Vec3 center = DirectX::XMLoadFloat3(&box.center);
+    const mu::Vec3 size   = DirectX::XMLoadFloat3(&box.size);
+
+    if (isZeroEuler(box.rotEuler)) {
+        node.shape  = AABB{ center, size };
+    } else {
+        node.shape  = OBB{ center, size * 0.5f, eulerDegsToQuat(box.rotEuler) };
+    }
+    node.bounds = computeNodeBounds(node.shape);
+    return node;
+}
+
+// Builds a BVH from LOD-based box arrays.
+// LOD 0 = root level (1 coarse box expected), LOD 1 = sub-BVs, LOD 2 = finer sub-BVs.
+// Each LOD N+1 box is assigned to the nearest center LOD N parent.
+static BVH buildBVHFromLODs(const std::vector<std::vector<ImportedBVBox>>& allLODs) {
+    BVH bvh;
+    if (allLODs.empty() || allLODs[0].empty()) return bvh;
+
+    if (allLODs.size() == 1) {
+        for (const auto& box : allLODs[0])
+            bvh.nodes.push_back(makeBVHNode(box));
+        return bvh;
+    }
+
+    // Build LOD 0 root nodes first (indices 0 .. n0-1)
+    for (const auto& box : allLODs[0])
+        bvh.nodes.push_back(makeBVHNode(box));
+
+    int parentStart = 0;
+    int parentEnd   = (int)bvh.nodes.size();
+
+    for (int lod = 1; lod < (int)allLODs.size(); ++lod) {
+        const int childStart = (int)bvh.nodes.size();
+
+        for (const auto& box : allLODs[lod]) {
+            BVHNode child = makeBVHNode(box);
+
+            const mu::Vec3 childCenter = std::visit(
+                [](auto&& s) { return s.center; }, child.shape);
+
+            int bestParent = parentStart;
+            float bestDist = std::numeric_limits<float>::max();
+            for (int p = parentStart; p < parentEnd; ++p) {
+                const mu::Vec3 pCenter = std::visit(
+                    [](auto&& s) { return s.center; }, bvh.nodes[p].shape);
+                const float d = (childCenter - pCenter).len2();
+                if (d < bestDist) { bestDist = d; bestParent = p; }
+            }
+
+            bvh.nodes[bestParent].children.push_back((int)bvh.nodes.size());
+            bvh.nodes.push_back(std::move(child));
+        }
+
+        // Expand parent bounds to encompass new children
+        for (int p = parentStart; p < parentEnd; ++p) {
+            for (int c : bvh.nodes[p].children)
+                bvh.nodes[p].bounds = unionAABB(bvh.nodes[p].bounds, bvh.nodes[c].bounds);
+        }
+
+        parentStart = childStart;
+        parentEnd   = (int)bvh.nodes.size();
+    }
+
+    return bvh;
+}
+
+// Reads bounding volume data in the Unity ModelExtractor LOD format and
+// builds the model's BVH. Format: BoundingVolumes > LODCount, LOD > Box.
 void importBoundingVolumes(std::ifstream& ifs, Model& model) {
     readHeadTag(ifs, "BoundingVolumes");
 
-    const auto bvCnt = readInteger(ifs, "Count");
-
-    for (int i = 0; i < bvCnt; ++i) {
-        importBoundingVolume(ifs, model);
+    const int lodCount = readInteger(ifs, "LODCount");
+    if (lodCount == 0) {
+        readTailTag(ifs, "BoundingVolumes");
+        return;
     }
+
+    std::vector<std::vector<ImportedBVBox>> allLODs(lodCount);
+
+    for (int lod = 0; lod < lodCount; ++lod) {
+        readHeadTag(ifs, "LOD");
+        const int lodIdx   = readInteger(ifs, "Index");
+        const int boxCount = readInteger(ifs, "BoxCount");
+
+        const int target = (lodIdx >= 0 && lodIdx < lodCount) ? lodIdx : lod;
+        allLODs[target].reserve(boxCount);
+
+        for (int b = 0; b < boxCount; ++b) {
+            readHeadTag(ifs, "Box");
+            ImportedBVBox box;
+            box.name     = readText(ifs, "Name");
+            box.boneName = readText(ifs, "Bone");
+            box.center   = readVec3(ifs, "Center");
+            box.size     = readVec3(ifs, "Size");
+            box.rotEuler = readVec3(ifs, "Rotation");
+            allLODs[target].push_back(box);
+            readTailTag(ifs, "Box");
+
+            gSharedLog << "[Resource Load] BV box " << box.name << " (LOD " << target << ")\n";
+        }
+
+        readTailTag(ifs, "LOD");
+    }
+
+    model.bvh = buildBVHFromLODs(allLODs);
+    gSharedLog << "[Resource Load] BVH 구축 완료 - " << model.bvh.nodes.size() << " nodes\n";
 
     readTailTag(ifs, "BoundingVolumes");
 }

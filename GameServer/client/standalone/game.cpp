@@ -74,6 +74,15 @@ void Game::setupStage() {
 	//}
 
 	player_->enableBVRendering();
+	goblin_->enableBVRendering();
+	anubis_->enableBVRendering();
+	bat_->enableBVRendering();
+	bomber_->enableBVRendering();
+	demon_->enableBVRendering();
+	dragon_->enableBVRendering();
+	eyeball_->enableBVRendering();
+	fishman_->enableBVRendering();
+	gargoyle_->enableBVRendering();
 
 	//playerHpUI_.setTexture( assetManager_.playerHpLine() );
 	//playerHpUI_.setTextImage( assetManager_.textPlayerHp() );

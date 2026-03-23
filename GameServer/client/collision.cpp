@@ -119,20 +119,116 @@ OBB toOBB(const AABB& aabb) {
     };
 }
 
-CollisionResult collides(const CollisionVolume& a, const CollisionVolume& b) {
-    return std::visit([](auto&& va, auto&& vb) -> CollisionResult {
-        using A = std::decay_t<decltype(va)>;
-        using B = std::decay_t<decltype(vb)>;
-        if constexpr (std::is_same_v<A, AABB> && std::is_same_v<B, AABB>) {
-            return collides(va, vb);
-        } else if constexpr (std::is_same_v<A, OBB> && std::is_same_v<B, OBB>) {
-            return collides(va, vb);
-        } else if constexpr (std::is_same_v<A, AABB>) {
-            return collides(toOBB(va), vb);
-        } else {
-            return collides(va, toOBB(vb));
-        }
+// Returns the tightest AABB wrapping an OBB.
+AABB obbToAABB(const OBB& obb) {
+    const auto axes = obbLocalAxes(obb);
+    const float ex = std::abs(mu::dot(axes[0], mu::Vec3(1.f,0.f,0.f))) * obb.halfExtents.x()
+                   + std::abs(mu::dot(axes[1], mu::Vec3(1.f,0.f,0.f))) * obb.halfExtents.y()
+                   + std::abs(mu::dot(axes[2], mu::Vec3(1.f,0.f,0.f))) * obb.halfExtents.z();
+    const float ey = std::abs(mu::dot(axes[0], mu::Vec3(0.f,1.f,0.f))) * obb.halfExtents.x()
+                   + std::abs(mu::dot(axes[1], mu::Vec3(0.f,1.f,0.f))) * obb.halfExtents.y()
+                   + std::abs(mu::dot(axes[2], mu::Vec3(0.f,1.f,0.f))) * obb.halfExtents.z();
+    const float ez = std::abs(mu::dot(axes[0], mu::Vec3(0.f,0.f,1.f))) * obb.halfExtents.x()
+                   + std::abs(mu::dot(axes[1], mu::Vec3(0.f,0.f,1.f))) * obb.halfExtents.y()
+                   + std::abs(mu::dot(axes[2], mu::Vec3(0.f,0.f,1.f))) * obb.halfExtents.z();
+    return AABB{ obb.center, mu::Vec3(ex, ey, ez) * 2.f };
+}
+
+// --- BVH helpers ---
+
+// Precise collision test between two variant shapes.
+static CollisionResult collidesShapes(
+    const std::variant<AABB, OBB>& a,
+    const std::variant<AABB, OBB>& b)
+{
+    return std::visit([](auto&& sa, auto&& sb) -> CollisionResult {
+        using A = std::decay_t<decltype(sa)>;
+        using B = std::decay_t<decltype(sb)>;
+        if constexpr (std::is_same_v<A, AABB> && std::is_same_v<B, AABB>)
+            return collides(sa, sb);
+        else if constexpr (std::is_same_v<A, OBB> && std::is_same_v<B, OBB>)
+            return collides(sa, sb);
+        else if constexpr (std::is_same_v<A, AABB>)
+            return collides(toOBB(sa), sb);
+        else
+            return collides(sa, toOBB(sb));
     }, a, b);
+}
+
+// BVH vs AABB (used for combat attack hitboxes).
+// Traverses the BVH with DFS. For each node whose bounds overlap the hitbox,
+// runs a precise shape test. Returns on the first precise hit.
+// If shape misses, still descends into children (parent shape may not tightly
+// contain children — children can still overlap the hitbox).
+CollisionResult collides(const BVH& bvh, const AABB& hitbox) {
+    if (bvh.empty()) return CollisionResult{ .hit = false };
+
+    std::vector<int> stack;
+    stack.reserve(8);
+    stack.push_back(0);
+
+    while (!stack.empty()) {
+        const int idx = stack.back(); stack.pop_back();
+        const auto& node = bvh.nodes[idx];
+
+        if (!collides(node.bounds, hitbox).hit) continue;
+
+        const CollisionVolume dummy{};  // not used below
+        const auto result = std::visit([&](auto&& s) -> CollisionResult {
+            using T = std::decay_t<decltype(s)>;
+            if constexpr (std::is_same_v<T, AABB>)
+                return collides(s, hitbox);
+            else
+                return collides(s, toOBB(hitbox));
+        }, node.shape);
+
+        if (result.hit) return result;
+
+        for (int c : node.children) stack.push_back(c);
+    }
+
+    return CollisionResult{ .hit = false };
+}
+
+// BVH vs BVH (used for physics body-body collision).
+// Dual-tree DFS. Returns on the first precise shape hit.
+CollisionResult collides(const BVH& a, const BVH& b) {
+    if (a.empty() || b.empty()) return CollisionResult{ .hit = false };
+
+    struct Pair { int ai, bi; };
+    std::vector<Pair> stack;
+    stack.reserve(16);
+    stack.push_back({ 0, 0 });
+
+    while (!stack.empty()) {
+        const auto [ai, bi] = stack.back(); stack.pop_back();
+        const auto& na = a.nodes[ai];
+        const auto& nb = b.nodes[bi];
+
+        if (!collides(na.bounds, nb.bounds).hit) continue;
+
+        const auto result = collidesShapes(na.shape, nb.shape);
+        if (result.hit) return result;
+
+        const bool aLeaf = na.isLeaf();
+        const bool bLeaf = nb.isLeaf();
+
+        if (!aLeaf && !bLeaf) {
+            const float volA = na.bounds.size.x() * na.bounds.size.y() * na.bounds.size.z();
+            const float volB = nb.bounds.size.x() * nb.bounds.size.y() * nb.bounds.size.z();
+            if (volA >= volB) {
+                for (int ca : na.children) stack.push_back({ ca, bi });
+            } else {
+                for (int cb : nb.children) stack.push_back({ ai, cb });
+            }
+        } else if (!aLeaf) {
+            for (int ca : na.children) stack.push_back({ ca, bi });
+        } else if (!bLeaf) {
+            for (int cb : nb.children) stack.push_back({ ai, cb });
+        }
+    }
+
+    return CollisionResult{ .hit = false };
 }
 
 AABB buildAttackAABB(mu::Vec3 pos, mu::Vec3 forward, mu::Vec3 halfExtent, float offsetFwd) {
