@@ -51,6 +51,18 @@
     <ClCompile Include="PacketManager.cpp">
       <Filter>network\PacketManager</Filter>
     </ClCompile>
+    <ClCompile Include="AssetManager.cpp">
+      <Filter>contents</Filter>
+    </ClCompile>
+    <ClCompile Include="Model.cpp">
+      <Filter>contents</Filter>
+    </ClCompile>
+    <ClCompile Include="Level.cpp">
+      <Filter>contents</Filter>
+    </ClCompile>
+    <ClCompile Include="collision.cpp">
+      <Filter>contents</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Listener.hpp">
@@ -76,6 +88,18 @@
     </ClInclude>
     <ClInclude Include="PacketManager.hpp">
       <Filter>network\PacketManager</Filter>
+    </ClInclude>
+    <ClInclude Include="AssetManager.hpp">
+      <Filter>contents</Filter>
+    </ClInclude>
+    <ClInclude Include="Level.hpp">
+      <Filter>contents</Filter>
+    </ClInclude>
+    <ClInclude Include="Model.hpp">
+      <Filter>contents</Filter>
+    </ClInclude>
+    <ClInclude Include="collision.hpp">
+      <Filter>contents</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

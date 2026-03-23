@@ -151,8 +151,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="AssetManager.cpp" />
+    <ClCompile Include="collision.cpp" />
     <ClCompile Include="GameSession.cpp" />
+    <ClCompile Include="Level.cpp" />
     <ClCompile Include="Listener.cpp" />
+    <ClCompile Include="Model.cpp" />
     <ClCompile Include="PacketManager.cpp" />
     <ClCompile Include="Player.cpp" />
     <ClCompile Include="Room.cpp" />
@@ -167,8 +171,12 @@
     <ClCompile Include="roomServerMain.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AssetManager.hpp" />
+    <ClInclude Include="collision.hpp" />
     <ClInclude Include="GameSession.hpp" />
+    <ClInclude Include="Level.hpp" />
     <ClInclude Include="Listener.hpp" />
+    <ClInclude Include="Model.hpp" />
     <ClInclude Include="PacketManager.hpp" />
     <ClInclude Include="Player.hpp" />
     <ClInclude Include="Room.hpp" />
