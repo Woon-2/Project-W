@@ -35,4 +35,9 @@ struct RayHit {
 
 RayHit RaycastAABB(const AABB& box, const Ray& ray);
 
+// 공격자의 위치와 전방 벡터를 기반으로 공격 hitbox AABB를 생성한다.
+// pos: 공격자 월드 위치, forward: 정규화된 전방 벡터
+// halfExtent: AABB 반크기, offsetFwd: 전방 방향 중심 offset
+AABB buildAttackAABB(mu::Vec3 pos, mu::Vec3 forward, mu::Vec3 halfExtent, float offsetFwd);
+
 #endif	// __collision_HPP

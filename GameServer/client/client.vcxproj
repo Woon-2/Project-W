@@ -206,6 +206,7 @@
     <ClCompile Include="skybox.cpp" />
     <ClCompile Include="skyboxPipeline.cpp" />
     <ClCompile Include="spriteAnimation.cpp" />
+    <ClCompile Include="standalone\combatSystem.cpp" />
     <ClCompile Include="standalone\game.cpp" />
     <ClCompile Include="standalone\physics.cpp" />
     <ClCompile Include="texloader\DDSTextureLoader12.cpp">
@@ -276,6 +277,7 @@
     <ClInclude Include="skybox.hpp" />
     <ClInclude Include="skyboxPipeline.hpp" />
     <ClInclude Include="spriteAnimation.hpp" />
+    <ClInclude Include="standalone\combatSystem.hpp" />
     <ClInclude Include="standalone\game.hpp" />
     <ClInclude Include="standalone\physics.hpp" />
     <ClInclude Include="texloader\DDSTextureLoader12.h" />

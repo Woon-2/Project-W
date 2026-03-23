@@ -194,8 +194,6 @@ private:
 	Light dirLight_{};
 
 	SpriteAnimation slimeSprite_{};
-	std::deque<SpriteAnimationOwned> muzzleFlashes_{};
-	std::deque<SpriteAnimationOwned> bloodSplashes_{};
 
 	bool playerDead_{};
 

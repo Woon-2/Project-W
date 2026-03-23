@@ -48,6 +48,13 @@ AABBCollisionResult collides(const AABB& a, const AABB& b) {
     return res;
 }
 
+AABB buildAttackAABB(mu::Vec3 pos, mu::Vec3 forward, mu::Vec3 halfExtent, float offsetFwd) {
+    return AABB{
+        .center = pos + forward * offsetFwd,
+        .size   = halfExtent * 2.f,
+    };
+}
+
 RayHit RaycastAABB(const AABB& box, const Ray& ray) {
     RayHit hit { .hit = false };
 

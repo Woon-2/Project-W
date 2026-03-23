@@ -5,10 +5,31 @@ DirectX 12 game client. Supports two modes selected at compile/runtime:
 - `online/onlineGame.hpp` — Networked mode
 - `standalone/game.hpp` — Single-player mode
 
+### 핵심 지침
+시니어 게임 엔진 프로그래머의 관점에서 구현한다.
+
+목표:
+- 현재 구조를 유지하는 것이 아니라, 더 나은 구조로 한 단계씩 개선한다.
+- 가능한 임시 코드가 아니라 production-quality 코드를 작성한다.
+
+허용:
+- 클래스 구조 변경 가능
+- 새로운 abstraction 도입 가능
+- 기존 코드 삭제/리팩토링 가능
+
+현재 구조가 잘못되어 있다면 과감하게 재설계해도 된다.
+기존 구조 유지보다 코드 품질을 우선한다.
+
 ### 아키텍처
 그래픽스 아키텍처 참조 - `docs/graphicsArchitecture.md`
 물리 아키텍처 참조 - `docs/physicsArchitecture.md`
 게임 아키텍처 참조 - `docs/gameArchitecture.md`
+
+### 파일 인코딩 주의
+프로젝트의 기존 파일은 **UTF-8 with BOM** (utf-8-sig)으로 저장되어 있다.
+새 파일을 생성할 때 자동 도구가 BOM 없이 저장하는 경우, 한국어 Windows에서 MSVC가
+해당 파일을 cp949로 해석해 한국어 주석이 빌드 오류를 일으킨다.
+**새 파일에는 한국어 주석 사용 금지.** 기존 파일 편집은 무방.
 
 ### 외부 참조
 `d3dx12`, `texloader` 디렉터리는 외부 참조입니다.

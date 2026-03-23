@@ -81,6 +81,20 @@ void Game::setupStage() {
 	//playerHpUI_.setAmmo( player_->ammo() );
 	playerHpUI_.setPivot( mu::Vec2(512.f, 768.f - 40.f) );
 	playerHpUI_.setScale( mu::Vec2(1024.f, 64.f) );
+
+	// 전투 시스템에 참가자 등록
+	// 플레이어: 공격 hitbox 및 데미지 설정 (AI 쿨타임은 사용하지 않음)
+	combatSystem_.registerCombatant(player_.get(),   { {1.5f, 1.5f, 1.5f}, 1.0f, 30, 500ms  });
+	// 몬스터: 종류별로 공격 범위·데미지·쿨타임 차등 적용
+	combatSystem_.registerCombatant(goblin_.get(),   { {1.2f, 1.5f, 1.2f}, 0.8f, 15, 2000ms });
+	combatSystem_.registerCombatant(anubis_.get(),   { {1.5f, 2.0f, 1.5f}, 1.0f, 25, 3000ms });
+	combatSystem_.registerCombatant(bat_.get(),      { {0.8f, 0.8f, 0.8f}, 0.6f, 10, 1500ms });
+	combatSystem_.registerCombatant(bomber_.get(),   { {1.5f, 1.5f, 1.5f}, 1.2f, 30, 4000ms });
+	combatSystem_.registerCombatant(demon_.get(),    { {1.5f, 2.0f, 1.5f}, 1.0f, 20, 2500ms });
+	combatSystem_.registerCombatant(dragon_.get(),   { {2.5f, 2.0f, 2.5f}, 1.5f, 40, 5000ms });
+	combatSystem_.registerCombatant(eyeball_.get(),  { {1.2f, 1.2f, 1.2f}, 1.0f, 15, 2000ms });
+	combatSystem_.registerCombatant(fishman_.get(),  { {1.2f, 1.8f, 1.2f}, 0.9f, 20, 2500ms });
+	combatSystem_.registerCombatant(gargoyle_.get(), { {1.5f, 2.0f, 1.5f}, 1.0f, 25, 3000ms });
 }
 
 void Game::importNode(std::ifstream& ifs) {
@@ -290,6 +304,12 @@ void Game::update(Milliseconds deltaTime) {
 	player_->physicState().evVelocity += player_->physicState().velocity;
 	player_->physicState().evOmega += player_->physicState().omega;
 
+	// 몬스터 AI 공격 처리
+	// 쿨타임 감소 후 플레이어와 AABB 교차 시 EvAttack + EvHit 발생
+	if (!playerDead_) {
+		combatSystem_.update(deltaTime, player_->getId(), eventList_);
+	}
+
 	// 이벤트 처리
 	for (auto pEvRaw : eventList_) {
 		auto pEv = reinterpret_cast<BasicEvent*>(pEvRaw);
@@ -349,6 +369,13 @@ void Game::update(Milliseconds deltaTime) {
 					holdEvent(eventList_, EvDeath(gargoyle_->getId()));
 				}
 			}
+			else if (static_cast<EvHit*>(pEv)->targetId == player_->getId()) {
+				player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
+				if (player_->hp() <= 0 && !playerDead_) {
+					playerDead_ = true;
+					holdEvent(eventList_, EvDeath(player_->getId()));
+				}
+			}
 			break;
 
 		case EventType::Attack: {
@@ -383,14 +410,6 @@ void Game::update(Milliseconds deltaTime) {
 		}
 		break;
 
-		case EventType::Blood: {
-			auto& bloodSplash = bloodSplashes_.emplace_back();
-			// bloodSplash.init(assetManager_.muzzleFlashAnimation());
-			bloodSplash.setSpeed(0.75f);
-			bloodSplash.setTint(mu::Vec3(0.92f, 0.04f, 0.01f));
-			break;
-		}
-
 		case EventType::Death: {
 			auto* death = static_cast<EvDeath*>(pEv);
 
@@ -420,6 +439,9 @@ void Game::update(Milliseconds deltaTime) {
 			}
 			else if (death->victimId == gargoyle_->getId()) {
 				gargoyle_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, gargoyle_.get());
+			}
+			else if (death->victimId == player_->getId()) {
+				player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
 			}
 			break;
 		}
@@ -493,16 +515,6 @@ void Game::update(Milliseconds deltaTime) {
 	// playerHpUI_.update( deltaTime, gfx_, nullptr );
 
 	// 애니메이션 업데이트
-	for (auto& bloodSplash : bloodSplashes_) {
-		bloodSplash.setPos( player_->pos()
-			+ player_->up() * 1.25f
-			- player_->forward() * 0.1f
-		);
-		bloodSplash.update(deltaTime);
-	}
-
-	std::erase_if(bloodSplashes_, [](const SpriteAnimation& anim) { return anim.done(); });
-
 	animSystem_.update(0.016s);
 
 	// UI 동기화
@@ -526,10 +538,6 @@ void Game::render() {
 	skybox_.render(gfx_);
 	camera_.updateGFX(gfx_);
 	dirLight_.render(gfx_);
-
-	for (const auto& bloodSplash : bloodSplashes_) {
-		bloodSplash.render(gfx_);
-	}
 
 	playerHpUI_.render( gfx_ );
 
@@ -704,70 +712,12 @@ void Game::processInput(Milliseconds deltaTime) {
 		cameraMode_ = CameraMode::ThirdPerson;
 	}
 
-	// 임시: 피격, 피격 애니메이션 및 이펙트 재생
-	if ( !playerDead_ && (keyboardStateCurr_[VK_LBUTTON] & 0x80)
+	// 플레이어 공격: LButton 클릭 시 forward 방향 hitbox와 몬스터 AABB 교차 검사
+	if ( !playerDead_
+		&& (keyboardStateCurr_[VK_LBUTTON] & 0x80)
 		&& !(keyboardStatePrev_[VK_LBUTTON] & 0x80)
 	) {
-		if (goblin_->hp() > 0) {
-			holdEvent(eventList_, EvHit(goblin_->getId(), goblin_->hp() - 10));
-		}
-		if (anubis_->hp() > 0) {
-			holdEvent(eventList_, EvHit(anubis_->getId(), anubis_->hp() - 10));
-		}
-		if (bat_->hp() > 0) {
-			holdEvent(eventList_, EvHit(bat_->getId(), bat_->hp() - 10));
-		}
-		if (bomber_->hp() > 0) {
-			holdEvent(eventList_, EvHit(bomber_->getId(), bomber_->hp() - 10));
-		}
-		if (demon_->hp() > 0) {
-			holdEvent(eventList_, EvHit(demon_->getId(), demon_->hp() - 10));
-		}
-		if (dragon_->hp() > 0) {
-			holdEvent(eventList_, EvHit(dragon_->getId(), dragon_->hp() - 10));
-		}
-		if (eyeball_->hp() > 0) {
-			holdEvent(eventList_, EvHit(eyeball_->getId(), eyeball_->hp() - 10));
-		}
-		if (fishman_->hp() > 0) {
-			holdEvent(eventList_, EvHit(fishman_->getId(), fishman_->hp() - 10));
-		}
-		if (gargoyle_->hp() > 0) {
-			holdEvent(eventList_, EvHit(gargoyle_->getId(), gargoyle_->hp() - 10));
-		}
-	}
-
-	// 임시: 공격, 공격 애니메이션 및 이펙트 재생
-	if ( !playerDead_ && (keyboardStateCurr_[VK_RBUTTON] & 0x80)
-		&& !(keyboardStatePrev_[VK_RBUTTON] & 0x80)
-	) {
-		if (goblin_->hp() > 0) {
-			holdEvent(eventList_, EvAttack(goblin_->getId()));
-		}
-		if (anubis_->hp() > 0) {
-			holdEvent(eventList_, EvAttack(anubis_->getId()));
-		}
-		if (bat_->hp() > 0) {
-			holdEvent(eventList_, EvAttack(bat_->getId()));
-		}
-		if (bomber_->hp() > 0) {
-			holdEvent(eventList_, EvAttack(bomber_->getId()));
-		}
-		if (demon_->hp() > 0) {
-			holdEvent(eventList_, EvAttack(demon_->getId()));
-		}
-		if (dragon_->hp() > 0) {
-			holdEvent(eventList_, EvAttack(dragon_->getId()));
-		}
-		if (eyeball_->hp() > 0) {
-			holdEvent(eventList_, EvAttack(eyeball_->getId()));
-		}
-		if (fishman_->hp() > 0) {
-			holdEvent(eventList_, EvAttack(fishman_->getId()));
-		}
-		if (gargoyle_->hp() > 0) {
-			holdEvent(eventList_, EvAttack(gargoyle_->getId()));
-		}
+		combatSystem_.onPlayerAttack(player_->getId(), eventList_);
 	}
 
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때

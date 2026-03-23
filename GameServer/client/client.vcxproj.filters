@@ -210,6 +210,9 @@
     <ClCompile Include="ServerSession.cpp">
       <Filter>Network\Session</Filter>
     </ClCompile>
+    <ClCompile Include="standalone\combatSystem.cpp">
+      <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="binaryImport.hpp">
@@ -400,6 +403,9 @@
     </ClInclude>
     <ClInclude Include="ServerSession.hpp">
       <Filter>Network\Session</Filter>
+    </ClInclude>
+    <ClInclude Include="standalone\combatSystem.hpp">
+      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

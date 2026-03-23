@@ -1,6 +1,6 @@
 - [X] 모델 메시별로 셰이더 별도 적용
-- [ ] 공격을 위한 충돌처리 구현
-- [ ] 몬스터 단순 ai 구현
+- [X] 공격을 위한 충돌처리 구현 (AABB 기반, CombatSystem 서브시스템)
+- [X] 몬스터 단순 AI 구현 (쿨타임 기반 AABB 교차 공격)
 - [ ] Height map 기반 Terrain 구현 (Unity에서 맵 추출)
 - [ ] Terrain Splat 구현 (Unity에서 splat 추출)
 - [ ] 시분할 애니메이션 제대로 적용

@@ -167,31 +167,6 @@ void Game::update(Milliseconds deltaTime) {
 
 	// 애니메이션 업데이트
 	slimeSprite_.update( deltaTime );
-
-	for (auto& muzzleFlash : muzzleFlashes_) {
-		auto pOwner = muzzleFlash.pOwner;
-		// 총구 화염 스프라이트 애니메이션
-		// 플레이어에 대해서 오프셋 지정
-		muzzleFlash.anim.setPos( pOwner->pos()
-			+ pOwner->up() * 1.4f
-			+ pOwner->forward() * 0.85f
-			+ pOwner->right() * 0.15f
-		);
-		muzzleFlash.anim.update(deltaTime);
-	}
-
-	std::erase_if(muzzleFlashes_, [](const SpriteAnimationOwned& animOwned) { return animOwned.anim.done(); });
-
-	for (auto& bloodSplash : bloodSplashes_) {
-		auto pOwner = bloodSplash.pOwner;
-		bloodSplash.anim.setPos( pOwner->pos()
-			+ pOwner->up() * 1.25f
-		);
-		bloodSplash.anim.update(deltaTime);
-	}
-
-	std::erase_if(bloodSplashes_, [](const SpriteAnimationOwned& animOwned) { return animOwned.anim.done(); });
-
 	animSystem_.update(0.016s);
 
 	// UI 동기화
@@ -231,13 +206,6 @@ void Game::render() {
 	gfx_.addFrameData(frameDataPBRSkinned);
 
 	if (inRoom_) {
-		for (const auto& muzzleFlash : muzzleFlashes_) {
-			muzzleFlash.anim.render(gfx_);
-		}
-		for (const auto& bloodSplash : bloodSplashes_) {
-			bloodSplash.anim.render(gfx_);
-		}
-
 		playerHpUI_.render(gfx_);
 		for (auto& [id, ui] : otherPlayerHpUIs_) {
 			ui.render(gfx_);

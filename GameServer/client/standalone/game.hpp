@@ -12,6 +12,7 @@
 #include "../animation.hpp"
 
 #include "physics.hpp"
+#include "combatSystem.hpp"
 
 #include "../billboard.hpp"
 #include "../spriteAnimation.hpp"
@@ -81,6 +82,7 @@ private:
 	AnimSystem animSystem_{};
 
 	PhysicSystem physicSystem_{};
+	CombatSystem combatSystem_{};
 	Seconds physicUpdateAcc_{0s};	// 물리 업데이트를 위한 시간 누산기
 	Seconds physicUpdateInterval{1s/60.f};	// 60fps로 물리 업데이트
 
@@ -113,9 +115,6 @@ private:
 
 	Light dirLight_{};
 	bool playerSpawned_ = false;
-
-	std::deque<SpriteAnimation> bloodSplashes_{};
-
 
 	bool playerDead_{};
 
