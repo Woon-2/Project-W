@@ -310,7 +310,7 @@ constexpr int MAX_TERRAIN_LAYERS = 4;
 struct PerDrawcallData {
     XMFLOAT4X4 wvp;
     XMFLOAT4X4 world;
-    XMFLOAT4X4 worldNormal;
+    XMFLOAT4X4 wv;           // world-view (replaces worldNormal; uniform scale assumed)
 
     BindlessIndex idxSplatMap;
     BindlessIndex idxDiffuse[MAX_TERRAIN_LAYERS];
@@ -321,15 +321,14 @@ struct PerDrawcallData {
 };
 
 // Matches cbuffer PerFrameData : register(b1) in terrain.hlsl
+// Same layout as PBRShader::PerFrameData
 struct PerFrameData {
-    XMFLOAT3 lightDirW;
-    float    _p0;
-    XMFLOAT3 lightColor;
-    float    lightIntensity;
-    XMFLOAT3 globalAmbient;
-    float    _p1;
+    XMFLOAT3  globalAmbient;
+    float     padding0;
+    u32t      lightCnt;
+    XMUINT3   padding1;
     BindlessIndex idxShadowMap;
-    XMFLOAT4X4   lightVP;
+    XMFLOAT4X4    lightVP;
 };
 
 }	// namespace TerrainShader

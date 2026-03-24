@@ -1,45 +1,50 @@
-#include "bindless.hlsli"
-
-// ---------------------------------------------------------------------------
-// Constant buffers
-// ---------------------------------------------------------------------------
-
 #define MAX_TERRAIN_LAYERS 4
 
 cbuffer PerDrawcallData : register(b0) {
     float4x4 wvp;
-    float4x4 world;         // terrain world matrix (identity for ground-origin terrain)
-    float4x4 worldNormal;   // inverse-transpose of world (also identity here)
+    float4x4 world;
+    float4x4 wv;            // world-view (uniform scale assumed)
 
-    int4  idxSplatMap;               // bindless index for the RGBA splat map
+    int4  idxSplatMap;
     int4  idxDiffuse[MAX_TERRAIN_LAYERS];
     int4  idxNormal [MAX_TERRAIN_LAYERS];
-    // tiling.xy = tileSize, tiling.zw = tileOffset
-    float4 tiling   [MAX_TERRAIN_LAYERS];
+    float4 tiling   [MAX_TERRAIN_LAYERS]; // xy = tileSize, zw = tileOffset
     int    layerCount;
     float3 _pdd0;
 };
 
+// Same layout as PBRShader::PerFrameData
 cbuffer PerFrameData : register(b1) {
-    float3 lightDirW;
-    float  _p0;
-    float3 lightColor;
-    float  lightIntensity;
-    float3 globalAmbient;
-    float  _p1;
-    int4   idxShadowMap;
+    float3   globalAmbient;
+    float    padding0;
+    uint     lightCnt;
+    uint3    padding1;
+    int4     idxShadowMap;
     float4x4 lightVP;
 };
+
+static float4x4 gmtxTexturize = {
+    0.5f,  0.0f, 0.0f, 0.0f,
+    0.0f, -0.5f, 0.0f, 0.0f,
+    0.0f,  0.0f, 1.0f, 0.0f,
+    0.5f,  0.5f, 0.0f, 1.0f
+};
+
+// Skip illuminate() from pbrLighting.hlsli (it requires a Material cbuffer
+// that terrain does not have — terrain blends albedo from splat layers instead).
+#define TERRAIN_SHADER
+#include "pbrLighting.hlsli"
 
 // ---------------------------------------------------------------------------
 // Vertex shader
 // ---------------------------------------------------------------------------
 
 struct VSOutput {
-    float4 posH   : SV_Position;
-    float3 posW   : POSITION_W;   // world-space position (for shadow lookup)
-    float3 normalW: NORMAL_W;     // world-space normal
-    float2 uv     : UV;           // normalized terrain UV [0,1]
+    float4 posH    : SV_Position;
+    float3 posV    : POSITION_V;   // view-space position
+    float4 posL    : POSITION_L;   // light-projection space (for shadow)
+    float3 normalV : NORMAL_V;     // view-space normal
+    float2 uv      : UV;
 };
 
 VSOutput VSMain(
@@ -48,108 +53,113 @@ VSOutput VSMain(
     float2 uv       : UV
 ) {
     VSOutput ret;
-    float4 posW4  = mul(float4(position, 1.f), world);
-    ret.posH      = mul(float4(position, 1.f), wvp);
-    ret.posW      = posW4.xyz;
-    ret.normalW   = normalize(mul(normal, (float3x3)worldNormal));
-    ret.uv        = uv;
+    ret.posH    = mul(float4(position, 1.f), wvp);
+    ret.posV    = mul(float4(position, 1.f), wv).xyz;
+    ret.normalV = normalize(mul(normal, (float3x3)wv)); // uniform scale: no inv-transpose needed
+    ret.posL    = mul(mul(mul(float4(position, 1.f), world), lightVP), gmtxTexturize);
+    ret.uv      = uv;
     return ret;
+}
+
+// ---------------------------------------------------------------------------
+// Pixel shader helpers
+// ---------------------------------------------------------------------------
+
+// Builds a TBN matrix from a view-space normal (used for tangent-space normal maps).
+float3x3 buildTBN(float3 N) {
+    float3 ref = abs(N.y) < 0.999f ? float3(0.f, 1.f, 0.f) : float3(1.f, 0.f, 0.f);
+    float3 T   = normalize(cross(ref, N));
+    float3 B   = cross(N, T);
+    return float3x3(T, B, N);
 }
 
 // ---------------------------------------------------------------------------
 // Pixel shader
 // ---------------------------------------------------------------------------
 
-// Builds a simple TBN matrix from a world-space normal.
-// Since terrain normals mostly point up, we bias the reference vector.
-float3x3 buildTBN(float3 N) {
-    float3 ref = abs(N.y) < 0.999f ? float3(0.f, 1.f, 0.f) : float3(1.f, 0.f, 0.f);
-    float3 T   = normalize(cross(ref, N));
-    float3 B   = cross(N, T);
-    return float3x3(T, B, N); // rows: T, B, N -> tangent-to-world
-}
-
 float4 PSMain(VSOutput input) : SV_TARGET {
-    // 1. Sample splat weights from the RGBA splat map.
+    // 1. Sample splat weights.
     float4 splatWeights = sampleBindless(idxSplatMap, input.uv);
-
-    // Normalize weights to sum to 1.
     float totalWeight = splatWeights.r + splatWeights.g + splatWeights.b + splatWeights.a;
-    if (totalWeight > 0.0001f) {
+    if (totalWeight > 0.0001f)
         splatWeights /= totalWeight;
-    } else {
+    else
         splatWeights = float4(1.f, 0.f, 0.f, 0.f);
-    }
 
-    // Pack weights into an array for indexed access.
     float weights[4];
     weights[0] = splatWeights.r;
     weights[1] = splatWeights.g;
     weights[2] = splatWeights.b;
     weights[3] = splatWeights.a;
 
-    // 2. Blend diffuse albedo across layers.
-    float3 albedo = float3(0.f, 0.f, 0.f);
-    float3 blendedNormalTS = float3(0.f, 0.f, 0.f); // tangent-space
+    // 2. Blend albedo and tangent-space normals across layers.
+    float3 albedo        = float3(0.f, 0.f, 0.f);
+    float3 blendedNormalTS = float3(0.f, 0.f, 0.f);
 
     [unroll]
     for (int i = 0; i < MAX_TERRAIN_LAYERS; ++i) {
         if (i >= layerCount) break;
-
         float w = weights[i];
         if (w < 0.0001f) continue;
 
-        // Per-layer UV with tiling and offset.
         float2 layerUV = input.uv * tiling[i].xy + tiling[i].zw;
 
-        // Diffuse contribution.
+        // Diffuse: sample and convert sRGB -> linear before blending.
         float4 diffuseSample = sampleBindless(idxDiffuse[i], layerUV);
-        albedo += diffuseSample.rgb * w;
+        albedo += pow(abs(diffuseSample.rgb), 2.2f) * w;
 
-        // Normal map contribution (tangent-space, RG channels store XY deviation).
+        // Normal map.
         if (idxNormal[i].x >= 0) {
             float4 nmSample = sampleBindless(idxNormal[i], layerUV);
-            // Reconstruct tangent-space normal from BC5/RGBA normal map.
             float3 nTS;
             nTS.xy = nmSample.rg * 2.f - 1.f;
             nTS.z  = sqrt(max(0.f, 1.f - dot(nTS.xy, nTS.xy)));
             blendedNormalTS += nTS * w;
         } else {
-            blendedNormalTS += float3(0.f, 0.f, 1.f) * w; // flat normal
+            blendedNormalTS += float3(0.f, 0.f, 1.f) * w;
         }
     }
 
-    // 3. Compute world-space shading normal from blended tangent-space normal.
-    float3 vertNormalW  = normalize(input.normalW);
-    float3x3 tbn        = buildTBN(vertNormalW);
-    // tbn rows are T, B, N. We want to transform from tangent to world:
-    float3 shadingNormalW = normalize(
+    // 3. Reconstruct view-space shading normal from blended tangent-space normal.
+    float3   vertNormalV  = normalize(input.normalV);
+    float3x3 tbn          = buildTBN(vertNormalV);
+    float3   shadingNormalV = normalize(
         blendedNormalTS.x * tbn[0] +
         blendedNormalTS.y * tbn[1] +
         blendedNormalTS.z * tbn[2]
     );
 
-    // 4. Shadow lookup.
-    static float4x4 gmtxTexturize = {
-        0.5f, 0.0f, 0.0f, 0.0f,
-        0.0f,-0.5f, 0.0f, 0.0f,
-        0.0f, 0.0f, 1.0f, 0.0f,
-        0.5f, 0.5f, 0.0f, 1.0f
-    };
-    float4 posL = mul(mul(float4(input.posW, 1.f), lightVP), gmtxTexturize);
-    float shadow = 1.f;
-    if (idxShadowMap.x >= 0) {
-        float2 shadowUV = posL.xy / posL.w;
-        float  shadowZ  = posL.z  / posL.w;
-        shadow = sampleCmpBindless(idxShadowMap, shadowUV, shadowZ);
+    // 4. PBR lighting — terrain is non-metallic and rough.
+    const float roughness = 0.85f;
+    const float metallic  = 0.0f;
+    const float ao        = 0.0f;
+
+    float3 posVNorm = normalize(input.posV);
+    float3 color    = float3(0.f, 0.f, 0.f);
+
+    for (uint li = 0; li < lightCnt; li++) {
+        if (gLightData[li].type == LIGHT_TYPE_POINT) {
+            color += pointLight(li, input.posV, posVNorm, shadingNormalV,
+                                input.uv, albedo, roughness, metallic, ao);
+        } else if (gLightData[li].type == LIGHT_TYPE_SPOT) {
+            color += spotLight(li, input.posV, posVNorm, shadingNormalV,
+                               input.uv, albedo, roughness, metallic, ao);
+        } else if (gLightData[li].type == LIGHT_TYPE_DIRECTIONAL) {
+            color += dirLight(li, input.posV, posVNorm, shadingNormalV,
+                              input.uv, albedo, roughness, metallic, ao);
+        }
     }
 
-    // 5. Lambertian directional lighting.
-    float3 L       = normalize(-lightDirW);
-    float  NdotL   = saturate(dot(shadingNormalW, L));
-    float3 diffuse = albedo * lightColor * lightIntensity * NdotL; // * shadow;
-    float3 ambient = albedo * globalAmbient;
+    // 5. Shadow.
+    float shadow = calcSingleShadow(input.posV, input.posL);
+    color *= shadow;
 
-    float3 color = diffuse + ambient;
+    // 6. Ambient.
+    color += globalAmbient * albedo * (1.f - ao);
+
+    // 7. Tonemap (Reinhard) + gamma correction.
+    color = color / (color + float3(1.f, 1.f, 1.f));
+    color = pow(abs(color), 1.f / 2.2f);
+
     return float4(color, 1.f);
 }

@@ -450,6 +450,9 @@ void GFX::createSwapChain() {
 	resourcesTerrainPipeline_.mainPass.perFrameData.init(
 		device_.Get(), sizeof(TerrainShader::PerFrameData), backBuffers_.size(), "Terrain_Main_PerFrameData"
 	);
+	resourcesTerrainPipeline_.mainPass.lightData.init(
+		device_.Get(), sizeof(PBRShader::Light) * 32u, backBuffers_.size(), "Terrain_Main_LightData"
+	);
 
 
 
@@ -856,6 +859,31 @@ void GFX::render() {
 		cameraDataSamplePipeline_,
 		frameIdx_ % backBuffers_.size()	// room index
 	);
+
+	// Stage light data for terrain pipeline before PBR moves the light list.
+	// Terrain uses the same lights as PBR, converted to view-space GPU format.
+	{
+		const auto& view = cameraDataTerrainPipeline_.view;
+		auto gpuLights = std::vector<PBRShader::Light>{};
+		gpuLights.reserve(lightDataPBRPipeline_.size());
+		for (const auto& ld : lightDataPBRPipeline_) {
+			gpuLights.push_back(PBRShader::Light{
+				.color     = ld.color.getXmf(),
+				.falloff   = ld.falloff,
+				.posV      = mu::Vec3(mu::Vec4(ld.pos, 1.f) * view).getXmf(),
+				.cosTheta  = ld.cosTheta,
+				.dirV      = mu::NVec3(mu::Vec4(ld.dir, 0.f) * view).getXmf(),
+				.cosPhi    = ld.cosPhi,
+				.atten     = ld.atten.getXmf(),
+				.intensity = ld.intensity,
+				.type      = static_cast<int>(ld.type),
+				.padding   = {}
+			});
+		}
+		const auto roomIdx = frameIdx_ % backBuffers_.size();
+		resourcesTerrainPipeline_.mainPass.lightData.stage(roomIdx, gpuLights);
+		frameDataTerrainPipeline_.lightCount = static_cast<u32t>(gpuLights.size());
+	}
 
 	auto pbrPipelineDispatcher = PBRPipeline::Dispatcher(
 		tmpDescriptorHeaps,

@@ -24,7 +24,8 @@ struct LightData {
 };
 
 struct FrameData {
-    mu::Vec3     globalAmbient;
+    mu::Vec3      globalAmbient;
+    u32t          lightCount = 0u;
     BindlessIndex idxShadowMap;
 };
 
@@ -35,8 +36,9 @@ struct DrawEvent {
 
 struct Resources {
     struct MainPass {
-        ConstantBuffer perDrawcallData;  // b0
-        ConstantBuffer perFrameData;     // b1
+        ConstantBuffer   perDrawcallData;  // b0
+        ConstantBuffer   perFrameData;     // b1
+        StructuredBuffer lightData;        // t1
     } mainPass;
 };
 
@@ -99,6 +101,7 @@ private:
 
     UINT rootParamIdxPDD_{};
     UINT rootParamIdxPFD_{};
+    UINT rootParamIdxLightData_{};
     UINT rootParamIdxTexPool_{};
     UINT rootParamIdxTexArrayPool_{};
     UINT rootParamIdxTexCubePool_{};

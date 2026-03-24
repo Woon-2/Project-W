@@ -240,7 +240,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | SkyboxPipeline | `skyboxPipeline.hpp` | 스카이박스 |
 | UIPipeline | `uiPipeline.hpp` | UI 요소 |
 | SamplePipeline | `samplePipeline.hpp` | 샘플 렌더 |
-| TerrainPipeline | `terrainPipeline.hpp` / `terrainPipeline.cpp` | Height map 지형 렌더 (Splat 블렌딩) |
+| TerrainPipeline | `terrainPipeline.hpp` / `terrainPipeline.cpp` | Height map 지형 렌더 (Splat 블렌딩 + PBR BRDF) |
 
 **Terrain 관련 파일:**
 
@@ -248,9 +248,10 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 |------|------|
 | `terrain.hpp` | `TerrainLayer`, `TerrainData` 구조체, `loadTerrainFromFiles()` 선언 |
 | `terrain.cpp` | manifest/meta 파싱, height.raw → GPU 메시 생성, 텍스처 로드 |
-| `terrain.hlsl` | Terrain VS/PS (Splat map 레이어 블렌딩 + Lambertian + Shadow) |
+| `terrain.hlsl` | Terrain VS/PS (Splat map 레이어 블렌딩 + PBR Cook-Torrance BRDF + PCF Shadow) |
 | `terrainPipeline.hpp` | `TerrainPipeline` 네임스페이스 (DrawEvent, Resources, Dispatcher) |
 | `terrainPipeline.cpp` | `Dispatcher::mainPass()` 구현 |
+| `pbrLighting.hlsli` | PBR BRDF 함수 라이브러리 — terrain에서 `#define TERRAIN_SHADER` 후 include 시 `illuminate()` 제외됨 |
 
 **TerrainData 구조 (`terrain.hpp #18-30`):**
 - `heightmapResolution` (N): 그리드 N×N 정점
@@ -258,10 +259,34 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 - `splatMap`: RGBA splat 텍스처
 - `mesh`: VB 3슬롯 (Position/Normal/UV), IB 32-bit
 
-**TerrainPipeline::DrawEvent (`terrainPipeline.hpp #31-34`):**
+**TerrainPipeline 주요 구조체 (`terrainPipeline.hpp`):**
+
+| 구조체 | 위치 | 설명 |
+|--------|------|------|
+| `LightData` | `#18` | 방향광 (dir, color, intensity, view, proj) |
+| `FrameData` | `#26` | globalAmbient + **lightCount** + idxShadowMap |
+| `DrawEvent` | `#32` | terrain 포인터 + world 행렬 |
+| `Resources::MainPass` | `#37` | perDrawcallData(b0), perFrameData(b1), **lightData(t1)** |
+
+**TerrainShader cbuffer 레이아웃 (`shader.hpp #310`):**
+- `PerDrawcallData`: wvp / world / **wv(world-view)** / idxSplatMap / idxDiffuse[4] / idxNormal[4] / tiling[4] / layerCount
+- `PerFrameData` (`#325`): PBRShader::PerFrameData와 동일 레이아웃 — globalAmbient / lightCnt / idxShadowMap / lightVP
+
+**terrain.hlsl 셰이딩 흐름:**
+1. splat 가중치 샘플링 → 4레이어 albedo(sRGB→linear) + tangent-space normal 블렌딩
+2. buildTBN(vertNormalV) → 블렌딩 법선을 view-space로 변환
+3. lightCnt 루프 → pbrLighting.hlsli의 dirLight/pointLight/spotLight 호출 (roughness=0.85, metallic=0)
+4. calcSingleShadow(posV, posL) → PCF 9-tap 그림자 적용
+5. globalAmbient 더하기 → Reinhard tonemapping → gamma correction
+
+**gfx.cpp 라이트 스테이징 (`gfx.cpp`):**
+- PBR Dispatcher 생성 직전에 `lightDataPBRPipeline_` → `PBRShader::Light` 변환 후 `resourcesTerrainPipeline_.mainPass.lightData` 스테이징
+- `frameDataTerrainPipeline_.lightCount` 동시 갱신
+
+**TerrainPipeline::DrawEvent (`terrainPipeline.hpp #32-35`):**
 - `terrain`: `const TerrainData*`
 - `world`: `mu::Mat4x4` — 월드 변환 행렬 (기본값 identity)
-- mainPass()에서 `ev.world`로 WVP 계산 (identity 하드코딩 제거)
+- mainPass()에서 `ev.world`로 WVP/WV 계산
 
 **GFX 내부 파이프라인별 DrawEvent 벡터 위치 (`gfx.hpp`):**
 

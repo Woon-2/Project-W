@@ -63,6 +63,7 @@ Dispatcher::Dispatcher(
     roomIdx_(roomIdx),
     rootParamIdxPDD_(rootSig->paramIdx("PerDrawcallData")),
     rootParamIdxPFD_(rootSig->paramIdx("PerFrameData")),
+    rootParamIdxLightData_(rootSig->paramIdx("LightData")),
     rootParamIdxTexPool_(rootSig->paramIdx("TexturePool")),
     rootParamIdxTexArrayPool_(rootSig->paramIdx("TextureArrayPool")),
     rootParamIdxTexCubePool_(rootSig->paramIdx("TextureCubePool")),
@@ -122,19 +123,17 @@ void Dispatcher::mainPass() {
     pTexCubePool_->bind(cmdList, rootParamIdxTexCubePool_);
     pSamPool_->bind(cmdList, rootParamIdxSamPool_);
     pCmpSamPool_->bind(cmdList, rootParamIdxCmpSamPool_);
+    pResources_->mainPass.lightData.bind(cmdList, rootParamIdxLightData_, roomIdx_);
 
     DISPLAY_ERROR_DX_VOID(cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST), false);
 
-    // Build PerFrameData (light + shadow)
+    // Build PerFrameData
     {
         auto pfd = TerrainShader::PerFrameData{};
-        pfd.lightDirW      = lightData_.dir.getXmf();
-        pfd.lightColor     = lightData_.color.getXmf();
-        pfd.lightIntensity = lightData_.intensity;
-        pfd.globalAmbient  = frameData_.globalAmbient.getXmf();
-        pfd.idxShadowMap   = frameData_.idxShadowMap;
+        pfd.globalAmbient = frameData_.globalAmbient.getXmf();
+        pfd.lightCnt      = frameData_.lightCount;
+        pfd.idxShadowMap  = frameData_.idxShadowMap;
 
-        // Light VP (view * proj, then transpose for HLSL row-major)
         auto lightVP = lightData_.view * lightData_.proj;
         pfd.lightVP  = mu::transpose(lightVP).getXmf();
 
@@ -158,9 +157,10 @@ void Dispatcher::mainPass() {
         auto proj = cameraData_.proj;
         auto wvp  = worldMat * view * proj;
 
-        pdd.wvp         = mu::transpose(wvp).getXmf();
-        pdd.world       = mu::transpose(worldMat).getXmf();
-        pdd.worldNormal = mu::transpose(worldMat).getXmf(); // uniform scale assumed
+        auto wv = worldMat * view;
+        pdd.wvp   = mu::transpose(wvp).getXmf();
+        pdd.world = mu::transpose(worldMat).getXmf();
+        pdd.wv    = mu::transpose(wv).getXmf();
 
         // Splat map
         pdd.idxSplatMap = terrain.splatMap.idxSrv;
