@@ -173,8 +173,10 @@ void Dispatcher::mainPass() {
             pdd.idxDiffuse[i]  = layer.diffuse.idxSrv;
             pdd.idxNormal[i]   = layer.normalMap.idxSrv;
             pdd.tiling[i]      = XMFLOAT4(
-                layer.tileSizeX, layer.tileSizeY,
-                layer.tileOffsetX, layer.tileOffsetY
+                terrain.sizeX / layer.tileSizeX,
+                terrain.sizeZ / layer.tileSizeY,
+                layer.tileOffsetX,
+                layer.tileOffsetY
             );
         }
         // Fill remaining slots with invalid indices

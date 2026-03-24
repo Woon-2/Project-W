@@ -53,9 +53,8 @@ struct TerrainManifest {
     std::string heightMapPath;
     std::string metaPath;
     std::vector<std::string> splatPaths;
-    // Both diffuse and normal layer textures are stored under "DiffusePath" tag
-    // due to the exporter's design. Order: diffuse[0], normal[0], diffuse[1], normal[1], ...
-    std::vector<std::string> allLayerPaths;
+    std::vector<std::string> diffusePaths;
+    std::vector<std::string> normalPaths;
 };
 
 static TerrainManifest parseManifest(const std::filesystem::path& manifestPath) {
@@ -73,7 +72,7 @@ static TerrainManifest parseManifest(const std::filesystem::path& manifestPath) 
     readTailTag(ifs, "TerrainName");
 
     // The exporter writes mappings in insertion order:
-    //   HeightMap -> SplatPath(s) -> DiffusePath(s, alternating diffuse/normal) -> MetaData
+    //   HeightMap -> SplatPath(s) -> DiffusePath / NormalPath (alternating per layer) -> MetaData
     // So we must not assume a fixed order after TerrainName; read tag-by-tag instead.
     while (ifs) {
         auto rawTag = readString(ifs);
@@ -90,10 +89,10 @@ static TerrainManifest parseManifest(const std::filesystem::path& manifestPath) 
             result.metaPath = value;
         } else if (tagName == "SplatPath") {
             result.splatPaths.push_back(value);
-        } else if (tagName == "DiffusePath" || tagName == "NormalPath") {
-            // Exporter stores both diffuse and normal textures under "DiffusePath" tag.
-            // NormalPath is kept for compatibility but unused in practice.
-            result.allLayerPaths.push_back(value);
+        } else if (tagName == "DiffusePath") {
+            result.diffusePaths.push_back(value);
+        } else if (tagName == "NormalPath") {
+            result.normalPaths.push_back(value);
         }
     }
 
@@ -368,8 +367,6 @@ TerrainData loadTerrainFromFiles(
     }
 
     // 5. Load per-layer textures
-    // The exporter tags both diffuse and normal maps as "DiffusePath",
-    // so allLayerPaths alternates: diffuse[0], normal[0], diffuse[1], normal[1], ...
     terrain.layers.resize(meta.layerCount);
     for (int i = 0; i < meta.layerCount; ++i) {
         auto& layer         = terrain.layers[i];
@@ -378,11 +375,8 @@ TerrainData loadTerrainFromFiles(
         layer.tileOffsetX   = meta.layers[i].tileOffsetX;
         layer.tileOffsetY   = meta.layers[i].tileOffsetY;
 
-        const int diffusePathIdx = i * 2;
-        const int normalPathIdx  = i * 2 + 1;
-
-        if (diffusePathIdx < static_cast<int>(manifest.allLayerPaths.size())) {
-            const auto& diffusePath = manifest.allLayerPaths[diffusePathIdx];
+        if (i < static_cast<int>(manifest.diffusePaths.size())) {
+            const auto& diffusePath = manifest.diffusePaths[i];
             layer.diffuse = loadAndRegisterTexture(
                 resolvePath(diffusePath),
                 "Terrain_Layer" + std::to_string(i) + "_Diffuse",
@@ -393,8 +387,8 @@ TerrainData loadTerrainFromFiles(
             markTextureInvalid(layer.diffuse);
         }
 
-        if (normalPathIdx < static_cast<int>(manifest.allLayerPaths.size())) {
-            const auto& normalPath = manifest.allLayerPaths[normalPathIdx];
+        if (i < static_cast<int>(manifest.normalPaths.size())) {
+            const auto& normalPath = manifest.normalPaths[i];
             layer.normalMap = loadAndRegisterTexture(
                 resolvePath(normalPath),
                 "Terrain_Layer" + std::to_string(i) + "_Normal",

@@ -214,7 +214,7 @@ public class TerrainExtractor : EditorWindow
                     mappedPath = engineBasePath + $"layer_{i}_diffuse.dds"
                 });
 
-                SaveTexture(layer.diffuseTexture, fileName);
+                SaveTexture(layer.diffuseTexture, fileName, false);
             }
 
             if (layer.normalMapTexture != null)
@@ -223,20 +223,19 @@ public class TerrainExtractor : EditorWindow
 
                 mappings.Add(new TextureMapping
                 {
-                    tag = "Diffuse",
+                    tag = "Normal",
                     sourcePath = Path.Combine(exportPath, fileName),
                     mappedPath = engineBasePath + $"layer_{i}_normal.dds"
                 });
 
-                SaveTexture(layer.normalMapTexture, fileName);
+                SaveTexture(layer.normalMapTexture, fileName, true);
             }
         }
     }
 
-    Texture2D GetReadableTexture(Texture2D source)
+    Texture2D GetReadableTexture(Texture2D source, bool isNormal)
     {
-        RenderTextureReadWrite rw =
-            QualitySettings.activeColorSpace == ColorSpace.Linear
+        RenderTextureReadWrite rw = isNormal
             ? RenderTextureReadWrite.Linear
             : RenderTextureReadWrite.sRGB;
 
@@ -253,7 +252,14 @@ public class TerrainExtractor : EditorWindow
         RenderTexture prev = RenderTexture.active;
         RenderTexture.active = rt;
 
-        Texture2D tex = new Texture2D(source.width, source.height, TextureFormat.RGBA32, false);
+        Texture2D tex = new Texture2D(
+            source.width,
+            source.height,
+            TextureFormat.RGBA32,
+            false,
+            isNormal // linear ¿©ºÎ
+        );
+
         tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
         tex.Apply();
 
@@ -263,9 +269,9 @@ public class TerrainExtractor : EditorWindow
         return tex;
     }
 
-    void SaveTexture(Texture2D source, string filename)
+    void SaveTexture(Texture2D source, string filename, bool isNormal = false)
     {
-        Texture2D readableTex = GetReadableTexture(source);
+        Texture2D readableTex = GetReadableTexture(source, isNormal);
 
         byte[] png = readableTex.EncodeToPNG();
 
