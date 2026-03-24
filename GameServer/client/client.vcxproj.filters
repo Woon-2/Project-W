@@ -218,6 +218,8 @@
     </ClCompile>
     <ClCompile Include="terrain.cpp">
       <Filter>그래픽스\코어\헤더 파일</Filter>
+    <ClCompile Include="particleSystem.cpp">
+      <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -418,6 +420,8 @@
     </ClInclude>
     <ClInclude Include="terrain.hpp">
       <Filter>그래픽스\코어\소스 파일</Filter>
+    <ClInclude Include="particleSystem.hpp">
+      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

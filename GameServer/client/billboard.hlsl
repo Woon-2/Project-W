@@ -43,8 +43,7 @@ VSOutput VSMain( float3 position : POSITION, float2 size : SIZE,
     
     PerInstanceData instance = gInstances[idxInst + idxDrawcall];
     ret.pos = mul(float4(position, 1.0f), instance.world);
-    //ret.size = float2(2.0f, 2.0f); // Fixed size for billboard
-    ret.size = size;
+    ret.size = size.x * instance.world._m00;
     
     return ret;
 }
