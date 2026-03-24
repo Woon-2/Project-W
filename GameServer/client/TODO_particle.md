@@ -105,22 +105,22 @@ done_         = false;
 
 **목표:** 파티클 생성부터 소멸까지 색과 크기를 부드럽게 보간한다.
 
-- [ ] `EmitterConfig`에 추가
+- [x] `EmitterConfig`에 추가
   ```cpp
   mu::Vec3 tintBegin = {1,1,1}, tintEnd = {1,1,1};
   float    sizeBegin = 1.f,    sizeEnd  = 0.f;
   float    drag      = 0.f;
   mu::Vec3 gravity   = {0, -9.8f, 0};
   ```
-- [ ] `Particle`에 `tintBegin, tintEnd, sizeBegin, sizeEnd, drag` 저장
-- [ ] `update()` 에서 `t = 1 - lifetime/maxLifetime`으로 보간
+- [x] `Particle`에 `tintBegin, tintEnd, sizeBegin, sizeEnd, drag` 저장
+- [x] `update()` 에서 `t = 1 - lifetime/maxLifetime`으로 보간
   - `size = lerp(sizeBegin, sizeEnd, t)`
   - `tint = lerp(tintBegin, tintEnd, t)`
   - `vel *= max(0, 1 - drag * dt)`
   - `anim.setScale`, `anim.setTint` 적용
-- [ ] 빌드 & 실행 → 파티클이 점점 작아지고 색이 변하는지 확인
+- [x] 빌드 & 실행 → 파티클이 점점 작아지고 색이 변하는지 확인
 
-**확인 기준:** 불꽃이 타오르다가 점점 투명해지며 사라지는 느낌이 난다.
+**확인 기준:** 불꽃이 타오르다가 점점 투명해지며 사라지는 느낌이 난다. ✓
 
 ---
 
