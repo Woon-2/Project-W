@@ -57,6 +57,10 @@ public:
 	void setTimer(Timer* pTimer) { pTimer_ = pTimer; }
 	// 객체들을 생성한다.
 	void setupStage();
+	void setupPlayer(const PlayerInfo& playerInfo);
+	void createOtherPlayer(const ObjectInfo& otherPlayerInfo);
+	void createOtherPlayer(const PlayerInfo& otherPlayerInfo);
+	void setupGround(const ObjectInfo& groundInfo);
 
 	// 게임의 업데이트는 다음 순서대로 이루어진다.
 	// 입력 처리
@@ -70,40 +74,31 @@ public:
 	// 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
 	LRESULT receiveWndMsg( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam ) override;
 
-	void addClientPlayer(i32t playerId, float x, float y, float z);
-	void addOtherPlayer(const std::shared_ptr<Object>& player);
-		/*player->setAnimBlender(animSystem_, assetManager_);
-		otherPlayers_.push_back( player );
-		idPlayerMap_[ player->getId( ) ] = player;
-		auto [pPair, _] = otherPlayerHpUIs_.try_emplace(player->getId());
-		auto& ui = pPair->second;
-		ui.setTexture(assetManager_.playerHpLine());*/
-
 	void removePlayer( i32t playerId );
-	bool findPlayer(i32t playerId);
+	//bool findPlayer(i32t playerId);
 
-	void createOtherPlayer( i32t playerId, float x, float y, float z ) {
-		auto newPlayer = std::make_shared<Object>( );
+	//void createOtherPlayer( i32t playerId, float x, float y, float z ) {
+	//	auto newPlayer = std::make_shared<Object>( );
 
-		newPlayer->setId( playerId );
-		newPlayer->setPos( mu::Vec3( x, y, z ) );
-		newPlayer->setModel( assetManager_.modelPlayer( ) );
-		newPlayer->setScale( 1.f );
-		newPlayer->enableBVRendering();
-		// 임시
-		newPlayer->setHp(100);
-		// newPlayer->setAmmo(30);
+	//	newPlayer->setId( playerId );
+	//	newPlayer->setPos( mu::Vec3( x, y, z ) );
+	//	newPlayer->setModel( assetManager_.modelPlayer( ) );
+	//	newPlayer->setScale( 1.f );
+	//	newPlayer->enableBVRendering();
+	//	// 임시
+	//	newPlayer->setHp(100);
+	//	// newPlayer->setAmmo(30);
 
-		//Equipment rifle{};
-		//rifle.socketType = Bone::SocketType::RightHand;
-		//rifle.object = std::make_unique<Object>();
-		//// rifle.object->setModel(assetManager_.modelRifle());
-		//rifle.object->setScale(mu::Vec3(1.f, 1.f, 1.f));
+	//	//Equipment rifle{};
+	//	//rifle.socketType = Bone::SocketType::RightHand;
+	//	//rifle.object = std::make_unique<Object>();
+	//	//// rifle.object->setModel(assetManager_.modelRifle());
+	//	//rifle.object->setScale(mu::Vec3(1.f, 1.f, 1.f));
 
-		//newPlayer->equip(std::move(rifle));
+	//	//newPlayer->equip(std::move(rifle));
 
-		addOtherPlayer( newPlayer );
-	}
+	//	addOtherPlayer( newPlayer );
+	//}
 
 private:
 	enum class CameraMode {

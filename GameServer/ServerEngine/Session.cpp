@@ -1,6 +1,7 @@
 #include "sepch.hpp"
 #include "Session.hpp"
 #include "SendBuffer.hpp"
+#include "BufferReader.hpp"
 
 /*---------------
 	 Session
@@ -101,10 +102,10 @@ void Session::registerSend() {
 
 	auto wsaBufs = std::vector<WSABUF>();
 	wsaBufs.reserve(size);
-	for (auto sb : sendEv_.sendBuffers_) {
+	for (int32 i = 0; i < size; ++i) {
 		wsaBufs.emplace_back(WSABUF{
-			.len = static_cast<ULONG>(sb->writeSize()),
-			.buf = reinterpret_cast<char*>(sb->data())
+			.len = static_cast<ULONG>(sendEv_.sendBuffers_[i]->writeSize()),
+			.buf = reinterpret_cast<char*>(sendEv_.sendBuffers_[i]->data())
 		});
 	}
 
@@ -117,8 +118,8 @@ void Session::registerSend() {
 			handleError( "register send"sv, errCode);
 			sendEv_.setOwner(nullptr);	// release reference
 
-			for (auto sb : sendEv_.sendBuffers_) {
-				odelete(sb);
+			for (int32 i = 0; i < size; ++i) {
+				odelete(sendEv_.sendBuffers_[i]);
 			}
 
 			sendEv_.sendBuffers_.clear();
@@ -166,6 +167,15 @@ void Session::processSend(int32 numBytes) {
 	sendEv_.setOwner(nullptr);	// release reference
 
 	for (auto sb : sendEv_.sendBuffers_) {
+		/*if (sb != nullptr) {
+			auto header = reinterpret_cast<PacketHeader*>(sb->data());
+			std::cout << "To Client - ID: " << id() << '\n';
+			std::cout << "Sent packet - Type: " << static_cast<uint16>(header->type) << ", Size: " << header->size << '\n';
+		}*/
+		if (sb == nullptr) {
+			break;
+		}
+
 		odelete(sb);
 	}
 	sendEv_.sendBuffers_.clear();

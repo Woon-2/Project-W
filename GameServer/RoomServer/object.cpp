@@ -46,7 +46,6 @@ void Object::update(Milliseconds deltaTime) {
 void MU_CALLCONV Object::setPos(mu::Vec3 newPos) {
 	physicState_.pos = newPos;
 
-
 	if (!pModel_) {
 		return;
 	}

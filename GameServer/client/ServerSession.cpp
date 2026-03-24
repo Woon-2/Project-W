@@ -86,6 +86,7 @@ void ServerSession::processRecv(int32 numBytes) {
 
 	while (true) {
 		int32 currDataSize = dataSize - recvLen;
+		std::cout << "curr data size: " << currDataSize << '\n';
 
 		if (currDataSize < sizeof(PacketHeader)) {
 			break;
@@ -99,10 +100,20 @@ void ServerSession::processRecv(int32 numBytes) {
 		processPacket(buffer + recvLen, header->size);
 		recvLen += header->size;
 	}
+
+	if(recvLen < 0 || recvLen > dataSize || !recvBuf_.moveReadPos(recvLen)) {
+		std::cout << "Failed to move read position in receive buffer.\n";
+		connected_.store(false);
+		return;
+	}
+
+	recvBuf_.clean();
+	registerRecv();
 }
 
 void ServerSession::processPacket(byte* buffer, int32 len) {
-	PacketManager::handlePacket(buffer, len);
+	//std::cout << "Received packet - Size: " << len << '\n';
+	PacketManager::handlePacket(game_, buffer, len);
 }
 
 void ServerSession::processSend(int32 numBytes) {

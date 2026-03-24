@@ -18,6 +18,7 @@ GameSession::~GameSession() {
 	std::cout << "GameSession destroyed. ID: " << id() << '\n';
 	IdPool::push(id());
 	ObjectPool<Object>::push(myPlayer_);
+	myPlayer_ = nullptr;
 }
 
 void GameSession::onConnected() {

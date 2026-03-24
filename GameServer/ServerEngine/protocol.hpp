@@ -12,11 +12,13 @@ enum class PacketType : uint16 {
 	C_Enter,
 	S_Enter,
 	S_Enter_Other,
+
+	S_Leave,
 };
 
 enum class ObjectType : uint16 {
 	Player,
-	Cube,
+	Ground,
 
 };
 
@@ -72,10 +74,21 @@ struct SEnterPacket : public PacketHeader {
 
 	uint16 objsOffset;	// objectInfo 배열의 시작 위치
 	uint16 objCnt;
+
+	using ObjectList = DataList<ObjectInfo>;
+
+	ObjectList getObjectList() {
+		byte* dataStart = reinterpret_cast<byte*>(this) + objsOffset;
+		return ObjectList(reinterpret_cast<ObjectInfo*>(dataStart), objCnt);
+	}
 };
 
 struct SEnterOtherPacket : public PacketHeader {
 	PlayerInfo otherInfo;
+};
+
+struct SLeavePacket : public PacketHeader {
+	uint16 playerId;
 };
 
 #pragma pack(pop)

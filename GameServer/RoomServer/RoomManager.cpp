@@ -25,9 +25,14 @@ Room* RoomManager::getRoom(int32 roomId) {
 }
 
 void RoomManager::removeRoom(int32 roomId) {
-	std::lock_guard<std::mutex> lock(rmMtx_);
+	Room* room = roomIdMap_[roomId];
+
+	rmMtx_.lock();
 	std::erase_if(rooms_, [roomId](Room* room) { return room->id() == roomId; });
 	roomIdMap_.erase(roomId);
+	rmMtx_.unlock();
+
+	ObjectPool<Room>::push(room);
 }
 
 std::mutex RoomManager::rmMtx_;

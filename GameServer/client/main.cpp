@@ -83,13 +83,14 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 	else {
 		std::cout << "[Main] 서버 연결 성공\n" << "서버 IP: " << serverSession.ip() << ", 서버 Port: " << serverSession.port() << '\n';
 		pGame = std::make_unique<Online::Game>();
+
+		SetWindowLongPtrA(ghWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pGame.get()));
 		
 		auto onlineGame = static_cast<Online::Game*>(pGame.get());
 		onlineGame->setupStage();
 		onlineGame->setTimer(&timer);
 
 		serverSession.setGame(onlineGame);
-		while (true);
 	}
 	
 	// 윈도우 메시지 루프
@@ -111,6 +112,7 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 
 		pGame->update(timer.deltaTime<Milliseconds>());
 		pGame->render();
+
 		SleepEx(1, true);
 	}
 }

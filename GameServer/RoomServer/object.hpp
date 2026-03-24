@@ -86,8 +86,6 @@ public:
 
 	void setHp(int32 hp) { hp_ = hp; }
 	int32 hp() const { return hp_; }
-	void setBullet(int32 bullet) { bullet_ = bullet; }
-	int32 bullet() const { return bullet_; }
 
 	void setLastMoveTimestamp(uint32 timestamp) { lastMoveTimestamp_ = timestamp; }
 	uint32 lastMoveTimestamp() const { return lastMoveTimestamp_; }
@@ -105,7 +103,6 @@ public:
 		Milliseconds currTime = SteadyClock::now().time_since_epoch();
 		if (currTime - reloadStartTime_ >= reloadCooldown_) {
 			reloading_ = false;
-			bullet_ = 30;
 			return true;
 		}
 		return false;
@@ -130,7 +127,6 @@ private:
 	int32 id_{ -1 };
 
 	int32 hp_{100};
-	int32 bullet_{30};
 
 	uint32 lastMoveTimestamp_{0u};
 

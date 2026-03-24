@@ -36,21 +36,75 @@ void Game::setupStage() {
 	skybox_.setModel( assetManager_.modelCube( ) );
 	skybox_.setSkyboxMaterial( assetManager_.skyboxMaterial( ) );
 
-	player_ = std::make_shared<Player>();
-
 	dirLight_.setOrient( mu::NQuat( mu::Degree( 0.f ), mu::Degree( 160.f ), mu::Degree( 0.f ) ) );
 	dirLight_.color = mu::Vec3( 0.8f, 0.8f, 0.8f );
 	dirLight_.intensity = 2.f;
 	dirLight_.type = PBRPipeline::LightData::Type::DirectionalLight;
 	dirLight_.isMainDirectionalLight = true;
+}
 
-	camera_.setTargetObject( player_ );
-	camera_.setOffsetFromTarget( mu::Vec3( 0.f, 1.8f, -2.5f ) );
-	camera_.setOffsetTargetPivot( mu::Vec3( 0.f, 1.f, 0.f ) );
-	camera_.setPerspective( mu::Degree( 90.f ),
-		static_cast<float>( gClientRect.right - gClientRect.left ) / ( gClientRect.bottom - gClientRect.top ),
+void Game::setupPlayer(const PlayerInfo& playerInfo) {
+	player_ = std::make_shared<Player>();
+
+	player_->setId(playerInfo.playerId);
+	player_->setPos(DirectX::XMLoadFloat3(&playerInfo.pos));
+	player_->setOrient(DirectX::XMLoadFloat4(&playerInfo.orient));
+	player_->setScale(DirectX::XMLoadFloat3(&playerInfo.scale));
+	player_->setModel(assetManager_.modelPlayer());
+	player_->setAnimBlender(animSystem_, assetManager_);
+	player_->enableBVRendering();
+
+	camera_.setTargetObject(player_);
+	camera_.setOffsetFromTarget(mu::Vec3(0.f, 1.8f, -2.5f));
+	camera_.setOffsetTargetPivot(mu::Vec3(0.f, 1.f, 0.f));
+	camera_.setPerspective(mu::Degree(90.f),
+		static_cast<float>(gClientRect.right - gClientRect.left) / (gClientRect.bottom - gClientRect.top),
 		0.1f, 500.f
 	);
+
+	idPlayerMap_[playerInfo.playerId] = player_;
+}
+
+void Game::createOtherPlayer(const ObjectInfo& otherPlayerInfo) {
+	auto otherPlayer = std::make_shared<Player>();
+
+	otherPlayer->setId(otherPlayerInfo.objectId);
+	otherPlayer->setPos(DirectX::XMLoadFloat3(&otherPlayerInfo.pos));
+	otherPlayer->setOrient(DirectX::XMLoadFloat4(&otherPlayerInfo.orient));
+	otherPlayer->setScale(DirectX::XMLoadFloat3(&otherPlayerInfo.scale));
+	otherPlayer->setModel(assetManager_.modelPlayer());
+	otherPlayer->setAnimBlender(animSystem_, assetManager_);
+	otherPlayer->enableBVRendering();
+
+	otherPlayers_.push_back(otherPlayer);
+	idPlayerMap_[otherPlayerInfo.objectId] = otherPlayer;
+}
+
+void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
+	auto otherPlayer = std::make_shared<Player>();
+
+	otherPlayer->setId(otherPlayerInfo.playerId);
+	otherPlayer->setPos(DirectX::XMLoadFloat3(&otherPlayerInfo.pos));
+	otherPlayer->setOrient(DirectX::XMLoadFloat4(&otherPlayerInfo.orient));
+	otherPlayer->setScale(DirectX::XMLoadFloat3(&otherPlayerInfo.scale));
+	otherPlayer->setModel(assetManager_.modelPlayer());
+	otherPlayer->setAnimBlender(animSystem_, assetManager_);
+	otherPlayer->enableBVRendering();
+
+	otherPlayers_.push_back(otherPlayer);
+	idPlayerMap_[otherPlayerInfo.playerId] = otherPlayer;
+}
+
+void Game::setupGround(const ObjectInfo& groundInfo) {
+	ground_ = std::make_shared<Cube>();
+
+	ground_->setId(groundInfo.objectId);
+	ground_->setMaterialSetIdx(groundInfo.materialSetIdx);
+	ground_->setPos(DirectX::XMLoadFloat3(&groundInfo.pos));
+	ground_->setOrient(DirectX::XMLoadFloat4(&groundInfo.orient));
+	ground_->setScale(DirectX::XMLoadFloat3(&groundInfo.scale));
+	ground_->setModel(assetManager_.modelCube());
+	ground_->enableBVRendering();
 }
 
 // 게임의 업데이트는 다음 순서대로 이루어진다.
@@ -61,6 +115,10 @@ void Game::setupStage() {
 // 객체별 업데이트 루틴
 // 애니메이션 업데이트
 void Game::update(Milliseconds deltaTime) {
+	if (player_ == nullptr) {
+		return;
+	}
+
 	// 평가 물리량 초기화
 	player_->physicState().evVelocity = mu::Vec3();
 	player_->physicState().evOmega = mu::Vec3();
@@ -92,21 +150,23 @@ void Game::update(Milliseconds deltaTime) {
 		// 물리 시뮬레이션을 위해
 		// 물리 시뮬레이션의 대상이 되는 객체들을
 		// 한 곳에 모아 PhysicSystem 객체에 전달한다.
-		static std::vector<Object*> allObjects{};
-		allObjects.push_back(player_.get());
+		static std::vector<Object*> targetObjects{};
+		targetObjects.resize(2u);
+		targetObjects[0] = ground_.get();
+		targetObjects[1] = player_.get();
 
 		while ( physicUpdateAcc_ >= physicUpdateInterval ) {
-			physicSystem_.step( allObjects, physicUpdateInterval );
+			physicSystem_.step(targetObjects, physicUpdateInterval );
 			physicUpdateAcc_ -= physicUpdateInterval;
 		}
 
-		allObjects.clear( );
+		targetObjects.clear( );
 	}
 
 	//std::cout << "player pos : " << player_->pos().x() << ", " << player_->pos().y() << ", " << player_->pos().z() << '\n';
-	if (prevVelocity_ != currVelocity_) {
+	/*if (prevVelocity_ != currVelocity_) {
 		sendMoveStatePacket();
-	}
+	}*/
 
 	// 객체별 업데이트 루틴
 	// 
@@ -117,18 +177,18 @@ void Game::update(Milliseconds deltaTime) {
 	const auto tPhysicInterpolation = physicUpdateAcc_ / physicUpdateInterval;
 
 	// 게임 객체들 갱신
+	ground_->update(deltaTime, tPhysicInterpolation);
 	player_->update(deltaTime, tPhysicInterpolation );
+
 	for ( auto& obj : otherPlayers_ ) {
-		if( obj != player_ ) {
-			obj->update( deltaTime, tPhysicInterpolation );
-		}
+		obj->update( deltaTime, tPhysicInterpolation );
 	}
 
 	camera_.update();
 	dirLight_.update(deltaTime);
 	dirLight_.updateShadowAuxDirectional(camera_.eye(), 100.f, -10.f, 10.f, -10.f, 10.f, 50.f, 200.f);
 
-	playerHpUI_.update(deltaTime, gfx_, nullptr);
+	/*playerHpUI_.update(deltaTime, gfx_, nullptr);
 	for (auto& [id, ui] : otherPlayerHpUIs_) {
 		auto pPlayer = idPlayerMap_.at(id);
 		auto projPos = mu::Vec4(pPlayer->pos(), 1.0f) * camera_.view() * camera_.proj();
@@ -144,28 +204,32 @@ void Game::update(Milliseconds deltaTime) {
 		ui.setScale( mu::Vec2(100.f, 20.f) * std::min(1.f, 5.f / d));
 
 		ui.update(deltaTime, gfx_, nullptr);
-	}
+	}*/
 
 	// 애니메이션 업데이트
 	animSystem_.update(0.016s);
 
 	// UI 동기화
-	playerHpUI_.setHp(player_->hp());
+	/*playerHpUI_.setHp(player_->hp());
 
 	for (auto& [id, ui] : otherPlayerHpUIs_) {
 		ui.setHp(idPlayerMap_.at(id)->hp());
-	}
+	}*/
 
 	clearEvents(eventList_);
 }
 
 void Game::render() {
-	player_->render(gfx_);
+	if(player_ == nullptr) {
+		return;
+	}
+
 	skybox_.render( gfx_ );
+	ground_->render(gfx_);
+	player_->render(gfx_);
+
 	for ( auto& obj : otherPlayers_ ) {
-		if( obj != player_ ) {
-			obj->render( gfx_ );
-		}
+		obj->render( gfx_ );
 	}
 
 	camera_.updateGFX(gfx_);
@@ -180,25 +244,23 @@ void Game::render() {
 	};
 	gfx_.addFrameData(frameDataPBRSkinned);
 
-	if (inRoom_) {
-		playerHpUI_.render(gfx_);
-		for (auto& [id, ui] : otherPlayerHpUIs_) {
-			ui.render(gfx_);
-		}
+	/*playerHpUI_.render(gfx_);
+	for (auto& [id, ui] : otherPlayerHpUIs_) {
+		ui.render(gfx_);
+	}*/
 
-		auto frameDataUI = UIPipeline::FrameData{
-			.screenWidth = static_cast<float>( gClientRect.right - gClientRect.left ),
-			.screenHeight = static_cast<float>( gClientRect.bottom - gClientRect.top )
-		};
-		gfx_.addFrameData(frameDataUI);
-	}
+	auto frameDataUI = UIPipeline::FrameData{
+		.screenWidth = static_cast<float>( gClientRect.right - gClientRect.left ),
+		.screenHeight = static_cast<float>( gClientRect.bottom - gClientRect.top )
+	};
+	gfx_.addFrameData(frameDataUI);
 
 	gfx_.render();
 }
 
 void Game::removePlayer( i32t playerId ) {
 	auto itPlayer = std::ranges::find_if(
-		otherPlayers_, [ playerId ]( const std::shared_ptr<Object>& obj ) {
+		otherPlayers_, [ playerId ]( const std::shared_ptr<Player>& obj ) {
 			return obj->getId( ) == playerId;
 		}
 	);
@@ -362,17 +424,14 @@ void Game::processInput(Milliseconds deltaTime) {
 	if (GetForegroundWindow() != ghWnd) {
 		return;
 	}
+	if (player_ == nullptr) {
+		return;
+	}
 
 	keyboardStatePrev_ = keyboardStateCurr_;
 	DISPLAY_ERROR_GLE( GetKeyboardState(keyboardStateCurr_.data()), false );
 
-	// 현재 플레이어가 로비에 있냐 게임중이냐에 따라 활성화되는 입력이 다르다.
-	if (inRoom_) {
-		processInputGame(deltaTime);
-	}
-	else {
-		processInputLobby(deltaTime);
-	}
+	processInputGame(deltaTime);
 
 	// 로비/게임 공통 입력 처리
 	// Enter 키를 누르면 커서 캡처 플래그를 활성화/비활성화한다.

@@ -55,3 +55,17 @@ SendBuffer* PacketManager::makeSEnterOtherPacket(const PlayerInfo& playerInfo) {
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;
 }
+
+SendBuffer* PacketManager::makeSLeavePacket(uint16 playerId) {
+	auto sendBuffer = SendBufferManager::open(sizeof(SLeavePacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto leavePacket = bw.reserve<SLeavePacket>();
+	leavePacket->playerId = playerId;
+
+	leavePacket->size = bw.writeSize();
+	leavePacket->type = PacketType::S_Leave;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
