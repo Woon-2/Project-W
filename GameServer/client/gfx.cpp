@@ -844,6 +844,18 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	auto skyboxPipelineDispatcher = SkyboxPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at("DefaultRootSignature"), shaders_.at("SkyboxShader"),
+		cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesSkyboxPipeline_, &cmdListPool_,
+		std::move(drawEventsSkyboxPipeline_), cameraDataSkyboxPipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
 	auto billboardPipelineDispatcher = BillboardPipeline::Dispatcher(
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
@@ -852,7 +864,7 @@ void GFX::render() {
 		shaders_.at( "BillboardShaderAdditive" ),
 		cmdQ_, viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
-		&fenceToSignal, &resourcesBillboardPipeline_, threadPool_, 
+		&fenceToSignal, &resourcesBillboardPipeline_, threadPool_,
 		&cmdListPool_, std::move( drawEventsBillboardPipeline_ ),
 		cameraDataBillboardPipeline_, frameDataBillboardPipeline_,
 		frameIdx_ % backBuffers_.size()	// room index
@@ -919,6 +931,9 @@ void GFX::render() {
 		bvPipelineDispatcher.drawSingleThreaded();
 		dumpLog();
 
+		skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
+		skyboxPipelineDispatcher.drawSingleThreaded();
+
 		billboardPipelineDispatcher.updateGPUDataSingleThreaded();
 		billboardPipelineDispatcher.drawSingleThreaded();
 		dumpLog();
@@ -955,27 +970,13 @@ void GFX::render() {
 		bvPipelineDispatcher.drawMultiThreaded();
 		dumpLog();
 
+		skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
+		skyboxPipelineDispatcher.drawSingleThreaded();
+
 		billboardPipelineDispatcher.updateGPUDataMultiThreaded();
 		billboardPipelineDispatcher.drawMultiThreaded();
 		dumpLog();
 	}
-
-	auto skyboxPipelineDispatcher = SkyboxPipeline::Dispatcher(
-		tmpDescriptorHeaps,
-		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
-		&samPool_, &cmpSamPool_,
-		rootSigs_.at("DefaultRootSignature"), shaders_.at("SkyboxShader"),
-		cmdQ_, viewport, clRect,
-		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
-		&fenceToSignal, &resourcesSkyboxPipeline_, &cmdListPool_,
-		std::move(drawEventsSkyboxPipeline_), cameraDataSkyboxPipeline_,
-		frameIdx_ % backBuffers_.size()	// room index
-	);
-
-	// Skybox Pipeline의 Dispatch
-	// 스카이박스 하나 그리는 파이프라인이라, 멀티스레드일 필요가 없다.
-	skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
-	skyboxPipelineDispatcher.drawSingleThreaded();
 
 	// Ui Pipeline의 rendering
 	if ( !threadPool_ ) {

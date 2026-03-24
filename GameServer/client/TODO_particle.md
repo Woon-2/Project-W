@@ -186,12 +186,12 @@ Unity에서 불꽃 파티클은 Rendering Mode → Additive로 설정되어 겹�
 - [x] `emit()` 에서 `[startRotationMin, startRotationMax]` 범위 랜덤 샘플링
 - [x] `SpriteAnimation::setRotation(float rad)` 추가, billboard GS에서 quad 생성 시 회전 반영
 - [x] **billboard.hlsl / billboardPipeline.cpp 회전 미적용 버그 수정** (아래 상세 참조)
-- [ ] 빌드 & 실행 → 파티클마다 방향이 다른지 확인
+- [x] 빌드 & 실행 → 파티클마다 방향이 다른지 확인
 
 **발견된 문제점:**
 
 - [x] **[BUG] rotation 미적용** *(수정 완료)* — 원인 분석 및 수정 완료. 아래 "Stage 8-1" 참조.
-- [ ] **[BUG] Skybox에 파티클이 가려짐** — additive 파티클임에도 skybox depth가 파티클보다 앞에 써지는 문제. Stage 7에서 `DepthWriteMask = ZERO`로 설정했으나 skybox depth pass 순서 또는 far-plane 설정 확인 필요.
+- [x] **[BUG] Skybox에 파티클이 가려짐** *(수정 완료)* — 렌더 순서 문제. Skybox가 billboard 이후에 그려져 `LESS_EQUAL` depth=1.0으로 파티클 픽셀을 덮어씼음. `gfx.cpp`에서 Skybox를 billboard 앞으로 이동하여 수정.
 
 **확인 기준:** 파티클이 각각 다른 각도로 출력되어 자연스러운 불꽃 모양이 된다.
 
