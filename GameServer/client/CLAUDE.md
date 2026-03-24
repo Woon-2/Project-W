@@ -35,5 +35,13 @@ DirectX 12 game client. Supports two modes selected at compile/runtime:
 `d3dx12`, `texloader` 디렉터리는 외부 참조입니다.
 해당 디렉터리의 내용은 가급적 수정 및 참조하지 마세요.
 
+### 코드 인덱스 (필수 참조)
+- `docs/CODE_INDEX.md` — 기능별 소스 파일 + 라인 번호 인덱스
+
+**탐색 규칙:**
+1. 특정 기능/클래스의 위치를 찾을 때는 `CODE_INDEX.md`를 먼저 조회한다.
+2. 코드를 수정한 후에는 해당 항목의 라인 번호를 `CODE_INDEX.md`에 반드시 갱신한다.
+3. 새 클래스/함수/구조체를 추가하면 `CODE_INDEX.md`에 항목을 추가한다.
+
 ### TODO 참조
 - `docs/TODO.md`
