@@ -20,12 +20,13 @@ struct EmitterConfig {
     float                      sizeEnd     = 0.f;
     float                      drag        = 0.f;
     mu::Vec3                   gravity     = {0.f, -9.8f, 0.f};
+    float                      startRotationMin = 0.f;   // radians
+    float                      startRotationMax = 0.f;
     const SpriteAnimationClip* pClip       = nullptr;
+    bool                       additiveBlend = true;
 };
 
 class GFX;
-
-static constexpr int kMaxParticles = 64;
 
 struct Particle {
     mu::Vec3        pos, vel;
@@ -34,11 +35,15 @@ struct Particle {
     float           sizeBegin, sizeEnd, drag;
     mu::Vec3        gravity;
     SpriteAnimation anim;
+    float           rotation;
+    bool            additive;
     bool            active;
 };
 
 class ParticleSystem {
 public:
+    static constexpr int kMaxParticles = 4096;
+
     void emit(const EmitterConfig& config, int count);
     void update(Seconds dt);
     void render(GFX& gfx);

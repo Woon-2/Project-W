@@ -24,6 +24,12 @@ public:
 	mu::Vec3 MU_CALLCONV tint() const { return tint_; }
 	void MU_CALLCONV setTint(mu::Vec3 tint) { tint_ = tint; }
 
+	bool additive() const { return additive_; }
+	void setAdditive(bool additive) { additive_ = additive; }
+
+	float rotation() const { return rotation_; }
+	void setRotation(float rad) { rotation_ = rad; }
+
 private:
 	mu::Mat4x4 world_{};	// GFX에 행렬을 전달할 때만 사용된다.
 	std::normal_distribution<float> distRandomAdvance_{};
@@ -31,6 +37,8 @@ private:
 	mu::Vec3 pos_{};
 	mu::Vec3 tint_ = mu::Vec3(1.f, 1.f, 1.f);
 	mu::Vec2 scale_ = mu::Vec2(1.f, 1.f);	// 향후 셰이더에서 반영할 수 있도록
+	bool additive_ = false;
+	float rotation_ = 0.f;
 
 	const SpriteAnimationClip* pAnimData_ = nullptr;
 

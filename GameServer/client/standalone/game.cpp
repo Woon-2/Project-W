@@ -31,18 +31,6 @@ Game::Game() {
 
 	assetManager_.loadGFXAssets(gfx_);
 	assetManager_.loadAnimations();
-
-	emitterConfig_.pClip       = assetManager_.flameAnimation();
-	emitterConfig_.position    = { 0.f, 1.f, -3.f };
-	emitterConfig_.direction   = { 0.f, 1.f, 0.f };
-	emitterConfig_.spread      = 0.0f;
-	emitterConfig_.speedMin    = 2.f;
-	emitterConfig_.speedMax    = 5.f;
-	emitterConfig_.lifetimeMin = 0.5f;
-	emitterConfig_.lifetimeMax = 1.5f;
-	emitterConfig_.sizeEnd = 0.f;
-	emitterConfig_.tintBegin = { 1.f, 0.4f, 0.0f };
-	emitterConfig_.tintEnd = { 0.3f, 0.1f, 0.0f };
 }
 
 void Game::setupStage() {
@@ -102,6 +90,21 @@ void Game::setupStage() {
 	//playerHpUI_.setAmmo( player_->ammo() );
 	playerHpUI_.setPivot( mu::Vec2(512.f, 768.f - 40.f) );
 	playerHpUI_.setScale( mu::Vec2(1024.f, 64.f) );
+
+	// 파티클 설정
+	emitterConfig_.pClip = assetManager_.flameAnimation();
+	emitterConfig_.position = { 0.f, 1.f, -3.f };
+	emitterConfig_.direction = { 0.f, 1.f, 0.f };
+	emitterConfig_.spread = 0.0f;
+	emitterConfig_.speedMin = 2.f;
+	emitterConfig_.speedMax = 5.f;
+	emitterConfig_.lifetimeMin = 0.5f;
+	emitterConfig_.lifetimeMax = 1.5f;
+	emitterConfig_.sizeEnd = 0.f;
+	emitterConfig_.tintBegin = { 1.f, 0.4f, 0.0f };
+	emitterConfig_.tintEnd = { 1.f, 0.4f, 0.0f };
+	emitterConfig_.startRotationMin = 0.f;
+	emitterConfig_.startRotationMax = mu::pi * 2;
 
 	// 전투 시스템에 참가자 등록
 	// 플레이어: 공격 hitbox 및 데미지 설정 (AI 쿨타임은 사용하지 않음)
@@ -830,7 +833,7 @@ void Game::processInput(Milliseconds deltaTime) {
 
 	// F key: emit particles for testing
 	if ( (keyboardStateCurr_['F'] & 0x80) && !(keyboardStatePrev_['F'] & 0x80) ) {
-		particleSystem_.emit(emitterConfig_, 5);
+		particleSystem_.emit(emitterConfig_, 1);
 	}
 
 	// Space 키를 누르면 커서 보이기 플래그를 활성화/비활성화한다.

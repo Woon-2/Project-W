@@ -128,11 +128,129 @@ done_         = false;
 
 **목표:** pool 크기를 늘리고 코드를 정리한다.
 
-- [ ] `kMaxParticles` 4096으로 증가 (단계적으로 128 → 1024 → 4096 테스트)
-- [ ] `game.cpp` 테스트 코드 정리, 실제 게임 이벤트(타격, 폭발 등)와 연결
-- [ ] `emit()` 이 null clip이나 count<=0일 때 no-op 보장
-- [ ] `particleSystem.hpp/cpp` 코드 최종 리뷰
-- [ ] `docs/TODO.md`에 파티클 시스템 완료 체크
+- [x] `kMaxParticles` 4096으로 증가
+- [x] `emit()` 이 null clip이나 count<=0일 때 no-op 보장 (이미 구현됨)
+- [x] `kMaxParticles` 를 헤더 전역이 아닌 클래스 내 `static constexpr`로 이동 (ODR 위반 방지)
+- [x] `particleSystem.hpp/cpp` 코드 최종 리뷰
+- [x] `docs/TODO.md`에 파티클 시스템 완료 체크
+
+> `game.cpp` 테스트 코드(F키 emit)는 게임 이벤트 연결 전 유지.
+> 실제 이벤트(타격·폭발 등) 연결은 게임플레이 시스템이 갖춰진 이후 별도 작업.
+
+---
+
+## 불꽃 파티클 고도화 (Flame Particle Polish)
+
+불꽃 이미지에 걸맞는 시각적 완성도를 높이는 단계.
+Unity Particle System의 Shape, Start Rotation, Additive Blending을 참고하여 구현한다.
+불필요한 범용 기능은 구현하지 않고 불꽃 연출에 필요한 것만 추린다.
+
+---
+
+### Stage 7 — Additive Blending (가산 혼합)
+
+**목표:** 겹친 파티클이 더 밝게 보이도록 블렌드 스테이트를 가산 혼합으로 변경한다.
+
+Unity에서 불꽃 파티클은 Rendering Mode → Additive로 설정되어 겹칠수록 밝아지는 효과를 낸다.
+
+- [x] billboard 렌더 패스에 additive blend PSO 옵션 추가
+  - `SrcBlend = ONE, DestBlend = ONE` (가산 혼합)
+  - 기존: `AlphaToCoverageEnable = true`, `BlendEnable = false`
+  - additive PSO: `DepthWriteMask = ZERO` (depth read 유지, write 비활성)
+- [x] `EmitterConfig`에 `bool additiveBlend = true` 추가
+- [x] 렌더 시 해당 플래그에 따라 PSO 선택 (alpha / additive 분기)
+  - `DrawEvent`에 `bool additive` 추가, 정렬 시 non-additive → additive 순
+  - `BillboardPipeline::Dispatcher`가 두 PSO 보유, 경계에서 `SetPipelineState` 전환
+- [x] 빌드 & 실행 → 불꽃이 겹치는 곳이 밝게 타오르는지 확인
+
+**확인 기준:** 파티클이 많이 겹치는 중심부가 더 밝고 강렬하게 보인다. ✓
+
+**구현 요약:**
+- `shader.cpp`: `createBillboardShaderAdditive()` 추가 — `SrcBlend = ONE, DestBlend = ONE`, `AlphaToCoverageEnable = false`, `DepthWriteMask = ZERO` (depth test 유지, write 비활성으로 파티클끼리 서로 가리지 않음)
+- `billboardPipeline.hpp/cpp`: `DrawEvent`에 `bool additive` 추가. `operator<=>` 수정으로 non-additive → additive 순 정렬 보장. `Dispatcher`가 두 PSO를 보유하고 경계에서 `SetPipelineState()` 전환 (싱글/멀티스레드 모두 대응)
+- `spriteAnimation.hpp/cpp`: `additive_` 필드 및 `setAdditive()` 추가, `DrawEvent` 생성 시 전달
+- `particleSystem.hpp/cpp`: `EmitterConfig`에 `bool additiveBlend = true` 추가, `Particle`에 `bool additive` 저장, `emit()`/`render()`에서 반영
+
+---
+
+### Stage 8 — Start Rotation (초기 회전)
+
+**목표:** 파티클 생성 시 랜덤한 초기 회전값을 부여해 시각적 다양성을 높인다.
+
+- [x] `EmitterConfig`에 추가
+  ```cpp
+  float startRotationMin = 0.f;   // radians
+  float startRotationMax = 0.f;
+  ```
+- [x] `Particle`에 `float rotation` 저장
+- [x] `emit()` 에서 `[startRotationMin, startRotationMax]` 범위 랜덤 샘플링
+- [x] `SpriteAnimation::setRotation(float rad)` 추가, billboard GS에서 quad 생성 시 회전 반영
+- [ ] 빌드 & 실행 → 파티클마다 방향이 다른지 확인
+
+**발견된 문제점:**
+
+- [ ] **[BUG] rotation 미적용** *(급함)* — `setRotation()`이 호출되지만 billboard GS의 quad 생성 로직에 회전이 반영되지 않음. GS에서 회전 행렬 적용 누락 여부 확인 필요.
+- [ ] **[BUG] Skybox에 파티클이 가려짐** — additive 파티클임에도 skybox depth가 파티클보다 앞에 써지는 문제. Stage 7에서 `DepthWriteMask = ZERO`로 설정했으나 skybox depth pass 순서 또는 far-plane 설정 확인 필요.
+
+**확인 기준:** 파티클이 각각 다른 각도로 출력되어 자연스러운 불꽃 모양이 된다.
+
+---
+
+### Stage 9 — Shape: 발사 영역 제어
+
+**목표:** Emitter가 파티클을 방출하는 영역 형태를 설정할 수 있게 한다.
+Unity Shape 컴포넌트 중 불꽃에 필요한 타입만 구현한다.
+
+```cpp
+enum class EmitterShape { Point, Edge };
+```
+
+- **Point** (기본값): 현재 구현과 동일, 한 점에서 emit
+- **Edge**: 선분 위의 랜덤 위치에서 emit — 불꽃 바닥이 넓게 퍼지는 효과
+
+- [ ] `EmitterShape` enum 추가
+- [ ] `EmitterConfig`에 추가
+  ```cpp
+  EmitterShape shape      = EmitterShape::Point;
+  float        edgeLength = 1.f;        // Edge 타입일 때 선분 길이
+  mu::Vec3     edgeDir    = {1, 0, 0};  // Edge 방향
+  ```
+- [ ] `emit()` 에서 shape에 따라 spawn 위치 계산
+  - `Point`: `config.position`
+  - `Edge`: `config.position + edgeDir * rand(-edgeLength/2, edgeLength/2)`
+- [ ] 빌드 & 실행 → Edge 타입에서 선분 위에 고르게 파티클이 생성되는지 확인
+
+**확인 기준:** Edge 타입으로 설정하면 불꽃 바닥이 선형으로 퍼지며 타오르는 모양이 된다.
+
+---
+
+### Stage 10 — Continuous Emit + 불꽃 프리셋 튜닝
+
+**목표:** 자동으로 계속 방출하는 연속 emit을 구현하고, 불꽃다운 파라미터 기본값을 잡는다.
+
+**Continuous Emit:**
+
+- [ ] `EmitterConfig`에 `float emitRate = 0.f` 추가 (particles/sec, 0이면 수동 emit)
+- [ ] `ParticleSystem::update(dt)` 에서 `emitRate > 0`이면 누적 시간으로 자동 emit
+  ```cpp
+  emitAccum_ += emitRate * dt;
+  int count = (int)emitAccum_;
+  emitAccum_ -= count;
+  if (count > 0) emit(config_, count);
+  ```
+- [ ] F키는 수동 burst emit으로 유지, 별도 emitter로 continuous emit 테스트
+
+**불꽃 프리셋 (EmitterConfig 튜닝 목표값):**
+
+- [ ] `gravity = {0, -1.f, 0}` — 중력 거의 없음, 불꽃은 위로 타오름
+- [ ] `drag = 0.8f` — 공기 저항으로 자연스럽게 감속
+- [ ] `direction = {0, 1, 0}`, `spread = 0.2f` — 좁은 cone으로 위쪽 집중
+- [ ] `speedMin = 0.5f, speedMax = 2.f` — 천천히 위로 올라가는 속도
+- [ ] `sizeBegin = 1.f, sizeEnd = 0.3f` — 타오르다 작아지는 느낌
+- [ ] `tintBegin = {1, 1, 1}, tintEnd = {1, 0.3f, 0}` — 흰→주황 계열 fade
+- [ ] 빌드 & 실행 → 불꽃이 자연스럽게 타오르는지 확인
+
+**확인 기준:** 횃불처럼 위로 타오르며 자연스럽게 소멸하는 불꽃이 연출된다.
 
 ---
 

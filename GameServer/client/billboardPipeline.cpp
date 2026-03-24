@@ -98,13 +98,14 @@ Dispatcher::Dispatcher(
 	DescriptorPool* pTexCubePool, DescriptorPool* pSamPool,
 	DescriptorPool* pCmpSamPool,
 	const std::shared_ptr<RootSig>& rootSig, const ComPtr<ID3D12PipelineState>& shader,
+	const ComPtr<ID3D12PipelineState>& shaderAdditive,
 	const ComPtr<ID3D12CommandQueue>& cmdQ, const D3D12_VIEWPORT& viewport, const D3D12_RECT& scissorRect,
 	D3D12_CPU_DESCRIPTOR_HANDLE rtv, D3D12_CPU_DESCRIPTOR_HANDLE dsv, Fence* pFence, Resources* pResources,
 	ThreadPool* threadPool, CommandListPool* commandListPool, std::vector<DrawEvent>&& drawEvents,
 	const CameraData& cameraData, const FrameData& frameData, std::size_t roomIdx
 ) : descriptorHeaps_(descriptorHeaps), pTexPool_(pTexPool), pTexArrayPool_(pTexArrayPool),
 	pTexCubePool_(pTexCubePool), pSamPool_(pSamPool), pCmpSamPool_(pCmpSamPool),
-	rootSig_(rootSig), shader_(shader), cmdQ_(cmdQ),
+	rootSig_(rootSig), shader_(shader), shaderAdditive_(shaderAdditive), cmdQ_(cmdQ),
 	viewport_(viewport), scissorRect_(scissorRect), rtv_(rtv), dsv_(dsv), pFence_(pFence),
 	pResources_(pResources), threadPool_(threadPool), cmdListPool_(commandListPool), drawEvents_(std::move(drawEvents)),
 	cameraData_(cameraData), frameData_( frameData ), roomIdx_(roomIdx),
@@ -144,7 +145,8 @@ void Dispatcher::updateGPUDataSingleThreaded() {
 	std::ranges::transform( drawEvents_, perInstanceData.begin(),
 		[]( const BillboardPipeline::DrawEvent& drawEvent ) {
 			return BillboardShader::PerInstanceData{
-				.world = mu::transpose( drawEvent.world ).getXmf(),
+				.world    = mu::transpose( drawEvent.world ).getXmf(),
+				.rotation = drawEvent.rotation,
 			};
 		}
 	);
@@ -263,7 +265,7 @@ void Dispatcher::drawSingleThreaded() {
 		return;
 	}
 
-	// 명령 기록 시작
+	// 명령 기록 시작 — 첫 PSO는 비가산(non-additive)
 	DISPLAY_ERROR_DX_VOID( cmdList->SetGraphicsRootSignature( rootSig_->get() ), false );
 	DISPLAY_ERROR_DX_VOID( cmdList->SetPipelineState( shader_.Get() ), false );
 	DISPLAY_ERROR_DX_VOID( cmdList->OMSetRenderTargets( 1u, &rtv_, false, &dsv_ ), false );
@@ -299,9 +301,17 @@ void Dispatcher::drawSingleThreaded() {
 	pResources_->perFrameData.bind( cmdList, rootParamIdxPFD_, roomIdx_ );
 
 	u32t idxDrawcall = 0u;
+	bool currentAdditive = false;
 
-	// DrawEvent들을 하나씩 처리한다.
+	// DrawEvent들을 하나씩 처리한다. (정렬 후: non-additive → additive 순)
 	for ( const auto& drawEvent : drawEvents_ ) {
+		// additive 경계에서 PSO 전환
+		if ( drawEvent.additive != currentAdditive ) {
+			currentAdditive = drawEvent.additive;
+			auto* pso = currentAdditive ? shaderAdditive_.Get() : shader_.Get();
+			DISPLAY_ERROR_DX_VOID( cmdList->SetPipelineState( pso ), false );
+		}
+
 		// PerDrawcallData 바인드
 		pResources_->perDrawcallData.cbuffers[idxDrawcall].bind(
 			cmdList, rootParamIdxPDD_, roomIdx_
@@ -389,11 +399,19 @@ void Dispatcher::drawMultiThreaded() {
 		return;
 	}
 
-	// drawEvents의 [accEventCnt, accEventCnt + jobSizeUpdate_) 범위의
+	// drawEvents의 [accEventCnt, accEventCnt + jobSizeDraw_) 범위의
 	// 데이터를 가공해 perDrawcallData를 구축하고, 드로우콜을 수행한다.
 	std::size_t accEventCnt = 0u;
 	// 각 작업마다 명령 컨텍스트를 분배한다.
 	auto currCmdCtx = cmdCtxs.begin();
+
+	// 정렬된 이벤트에서 첫 additive 이벤트 인덱스를 파악한다.
+	// (각 job이 PSO 전환 여부를 판단하는 데 사용)
+	const std::size_t additiveStart = static_cast<std::size_t>(
+		std::ranges::lower_bound( drawEvents_, false, {},
+			[]( const DrawEvent& e ) { return !e.additive; }
+		) - drawEvents_.begin()
+	);
 
 	while ( accEventCnt + (jobSizeDraw_ - 1) < drawEvents_.size() ) {
 		// 명령 컨텍스트 초기화
@@ -410,9 +428,13 @@ void Dispatcher::drawMultiThreaded() {
 			return;
 		}
 
+		// 이 job의 첫 이벤트가 additive 구간에 속하는지 여부로 초기 PSO 결정
+		auto* initialPso = (accEventCnt >= additiveStart) ? shaderAdditive_.Get() : shader_.Get();
+
 		// 명령 기록
 		addJobDraw( currCmdCtx->cmdList.Get(), drawEvents_.data() + accEventCnt,
-			drawEvents_.data() + accEventCnt + jobSizeDraw_, accEventCnt, latch
+			drawEvents_.data() + accEventCnt + jobSizeDraw_, accEventCnt, latch,
+			initialPso
 		);
 
 		accEventCnt += jobSizeDraw_;
@@ -436,9 +458,12 @@ void Dispatcher::drawMultiThreaded() {
 			return;
 		}
 
+		auto* initialPso = (accEventCnt >= additiveStart) ? shaderAdditive_.Get() : shader_.Get();
+
 		// 명령 기록
 		addJobDraw( currCmdCtx->cmdList.Get(), drawEvents_.data() + accEventCnt,
-			drawEvents_.data() + accEventCnt + lastJobSize, accEventCnt, latch
+			drawEvents_.data() + accEventCnt + lastJobSize, accEventCnt, latch,
+			initialPso
 		);
 	}
 
@@ -482,7 +507,8 @@ void MU_CALLCONV Dispatcher::addJobUpdate( mu::Mat4x4 viewProj, const DrawEvent*
 // 단위 작업을 생성하여 스레드에 할당하는데 사용된다.
 void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 	const DrawEvent* pFirst, const DrawEvent* pLast,
-	std::size_t firstInstanceOffset, std::latch& latch
+	std::size_t firstInstanceOffset, std::latch& latch,
+	ID3D12PipelineState* pso
 ) {
 	const auto jobSize = pLast - pFirst;
 
@@ -490,7 +516,7 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 		// 명령 컨텍스트마다 개별적으로 파이프라인 설정을 해주어야 한다.
 		// (파이프라인 설정은 공유되지 않는다. 그렇더라.)
 		DISPLAY_ERROR_DX_VOID( threadCmdList->SetGraphicsRootSignature( rootSig_->get() ), false );
-		DISPLAY_ERROR_DX_VOID( threadCmdList->SetPipelineState( shader_.Get() ), false );
+		DISPLAY_ERROR_DX_VOID( threadCmdList->SetPipelineState( pso ), false );
 		DISPLAY_ERROR_DX_VOID( threadCmdList->OMSetRenderTargets( 1u, &rtv_, false, &dsv_ ), false );
 		DISPLAY_ERROR_DX_VOID( threadCmdList->RSSetViewports( 1u, &viewport_ ), false );
 		DISPLAY_ERROR_DX_VOID( threadCmdList->RSSetScissorRects( 1u, &scissorRect_ ), false );
@@ -523,6 +549,8 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 		// PerFrameData 바인드
 		pResources_->perFrameData.bind( threadCmdList, rootParamIdxPFD_, roomIdx_ );
 
+		bool jobCurrentAdditive = pFirst->additive;
+
 		for ( auto idxDrawcall = firstInstanceOffset;
 			idxDrawcall < firstInstanceOffset + jobSize;
 			++idxDrawcall
@@ -530,6 +558,13 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 			// DrawEvent의 정보를 기반으로 GPU 데이터 업데이트 및
 			// 입력 조립기 설정을 하고 드로우콜을 수행한다.
 			const auto& drawEvent = drawEvents_[idxDrawcall];
+
+			// job이 additive 경계를 걸칠 경우 PSO 전환
+			if ( drawEvent.additive != jobCurrentAdditive ) {
+				jobCurrentAdditive = drawEvent.additive;
+				auto* nextPso = jobCurrentAdditive ? shaderAdditive_.Get() : shader_.Get();
+				DISPLAY_ERROR_DX_VOID( threadCmdList->SetPipelineState( nextPso ), false );
+			}
 
 			// PerDrawcallData 바인드
 			pResources_->perDrawcallData.cbuffers[idxDrawcall].bind(

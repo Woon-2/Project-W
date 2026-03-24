@@ -33,8 +33,13 @@ struct DrawEvent {
 	mu::Mat4x4 world;
 	const Texture* pTex;
 	mu::Vec3 tint;
+	bool additive = false;
+	float rotation = 0.f;
 
+	// Non-additive events sort before additive so we can switch PSO once.
 	auto operator<=>( const DrawEvent& rhs ) const noexcept {
+		if ( additive != rhs.additive )
+			return additive ? std::strong_ordering::greater : std::strong_ordering::less;
 		return std::strong_ordering::equal;
 	}
 };
@@ -61,6 +66,7 @@ public:
 		DescriptorPool* pCmpSamPool,
 		const std::shared_ptr<RootSig>& rootSig,
 		const ComPtr<ID3D12PipelineState>& shader,
+		const ComPtr<ID3D12PipelineState>& shaderAdditive,
 		const ComPtr<ID3D12CommandQueue>& cmdQ,
 		const D3D12_VIEWPORT& viewport,
 		const D3D12_RECT& scissorRect, D3D12_CPU_DESCRIPTOR_HANDLE rtv,
@@ -68,7 +74,7 @@ public:
 		Resources* pResources, ThreadPool* threadPool,
 		CommandListPool* commandListPool,
 		std::vector<DrawEvent>&& drawEvents,
-		const CameraData& cameraData, const FrameData& frameData, 
+		const CameraData& cameraData, const FrameData& frameData,
 		std::size_t roomIdx
 	);
 
@@ -107,7 +113,8 @@ private:
 	// 단위 작업을 생성하여 스레드에 할당하는데 사용된다.
 	void addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 		const DrawEvent* pFirst, const DrawEvent* pLast,
-		std::size_t firstInstanceOffset, std::latch& latch
+		std::size_t firstInstanceOffset, std::latch& latch,
+		ID3D12PipelineState* pso
 	);
 
 	std::vector<ComPtr<ID3D12DescriptorHeap>> descriptorHeaps_{};
@@ -118,6 +125,7 @@ private:
 	DescriptorPool* pCmpSamPool_ = nullptr;
 	std::shared_ptr<RootSig> rootSig_ = nullptr;
 	ComPtr<ID3D12PipelineState> shader_ = nullptr;
+	ComPtr<ID3D12PipelineState> shaderAdditive_ = nullptr;
 	ComPtr<ID3D12CommandQueue> cmdQ_ = nullptr;
 	D3D12_VIEWPORT viewport_{};
 	D3D12_RECT scissorRect_{};

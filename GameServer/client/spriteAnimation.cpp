@@ -60,8 +60,10 @@ void SpriteAnimation::update( Milliseconds deltaTime ) {
 
 void SpriteAnimation::render( GFX& gfx ) const {
 	gfx.addDrawEvent( BillboardPipeline::DrawEvent{
-		.world = world_,
-		.pTex = &pAnimData_->frames[currFrameIdx_].sprite,
-		.tint = tint_
+		.world    = world_,
+		.pTex     = &pAnimData_->frames[currFrameIdx_].sprite,
+		.tint     = tint_,
+		.additive = additive_,
+		.rotation = rotation_,
 	} );
 }

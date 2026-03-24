@@ -32,6 +32,7 @@ void ParticleSystem::emit(const EmitterConfig& config, int count) {
 
     std::uniform_real_distribution<float> speedDist(config.speedMin, config.speedMax);
     std::uniform_real_distribution<float> lifeDist(config.lifetimeMin, config.lifetimeMax);
+    std::uniform_real_distribution<float> rotDist(config.startRotationMin, config.startRotationMax);
 
     const mu::NVec3 axis(config.direction);
 
@@ -50,8 +51,12 @@ void ParticleSystem::emit(const EmitterConfig& config, int count) {
         p.sizeEnd     = config.sizeEnd;
         p.drag        = config.drag;
         p.gravity     = config.gravity;
+        p.rotation    = rotDist(rng_);
+        p.additive    = config.additiveBlend;
         p.anim.init(config.pClip);
+        p.anim.setAdditive(config.additiveBlend);
         p.anim.setPos(config.position);
+        p.anim.setRotation(p.rotation);
         p.active      = true;
     }
 }
@@ -79,8 +84,9 @@ void ParticleSystem::update(Seconds dt) {
 }
 
 void ParticleSystem::render(GFX& gfx) {
-    for (const auto& p : pool_) {
+    for (auto& p : pool_) {
         if (!p.active) continue;
+        p.anim.setAdditive(p.additive);
         p.anim.render(gfx);
     }
 }
