@@ -20,6 +20,7 @@
 #include "../event.hpp"
 #include "../crosshair.hpp"
 #include "../debugBVView.hpp"
+#include "../particleSystem.hpp"
 
 class Timer;
 
@@ -123,6 +124,9 @@ private:
 
 	BasicPlayerHpUI playerHpUI_{};
 	TextImage textFPS_{};
+
+	ParticleSystem particleSystem_{};
+	EmitterConfig emitterConfig_{};
 
 	LONG mouseDeltaX_{};
 	LONG mouseDeltaY_{};

@@ -100,6 +100,11 @@ void AssetManager::loadGFXAssets(GFX& gfx) {
 		.pTexHashMap = &texHashMap_,
 		.pDest       = &terrain_
 	} );
+	gfx.addRequestSpritesLoad( RequestSpriteAnimLoad{
+		.spritesPath = "../resources/Sprites/flame5_anim.bin",
+		.pDest = &flameAnimation_,
+		.pSpritesHashMap = &spritesHashMap_
+		} );
 
 	gfx.loadAssets();
 }
