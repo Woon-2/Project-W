@@ -95,6 +95,12 @@ void AssetManager::loadGFXAssets(GFX& gfx) {
 		.pDest = &textPlayerHp_
 	} );
 
+	gfx.addRequestSpritesLoad( RequestSpriteAnimLoad{
+		.spritesPath = "../resources/Sprites/flame5_anim.bin",
+		.pDest = &flameAnimation_,
+		.pSpritesHashMap = &spritesHashMap_
+		} );
+
 	gfx.loadAssets();
 }
 

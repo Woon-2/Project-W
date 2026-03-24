@@ -5,7 +5,10 @@
 #include "binaryImport.hpp"
 
 void SpriteAnimation::init(const SpriteAnimationClip* pAnimData) {
-	pAnimData_ = pAnimData;
+	pAnimData_    = pAnimData;
+	currFrameIdx_ = 0u;
+	timeAcc_      = 0ms;
+	done_         = false;
 	const auto m = static_cast<float>( pAnimData->frames.size() * pAnimData->frameTime / pAnimData->duration );
 	if (pAnimData->type == SpriteAnimType::RandomAdvance) {
 		distRandomAdvance_ = std::normal_distribution<float>(m, m);
@@ -18,7 +21,7 @@ void SpriteAnimation::update( Milliseconds deltaTime ) {
 	}
 
 	// 렌더링에 사용할 월드 변환 갱신
-	world_ = mu::translate(pos_);
+	world_ = mu::scaleH(mu::Vec3(scale_.x(), scale_.y(), scale_.x())) * mu::translate(pos_);
 
 	// 스프라이트 갱신
 	timeAcc_ += deltaTime * speed_;

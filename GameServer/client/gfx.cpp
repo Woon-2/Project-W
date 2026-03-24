@@ -423,10 +423,10 @@ void GFX::createSwapChain() {
 	);
 	// Billboard Pipeline ----
 	resourcesBillboardPipeline_.perInstanceData.init(
-		device_.Get(), sizeof( BillboardShader::PerInstanceData ) * 1000u, backBuffers_.size(), "Billboard_PerInstanceData"
+		device_.Get(), sizeof( BillboardShader::PerInstanceData ) * 4096u, backBuffers_.size(), "Billboard_PerInstanceData"
 	);
 	resourcesBillboardPipeline_.perDrawcallData = createConstantBufferArray(
-		device_.Get(), sizeof( BillboardShader::PerDrawcallData ), 1000u, backBuffers_.size(), "Billboard_PerDrawcallData"
+		device_.Get(), sizeof( BillboardShader::PerDrawcallData ), 4096u, backBuffers_.size(), "Billboard_PerDrawcallData"
 	);
 	resourcesBillboardPipeline_.perFrameData.init(
 		device_.Get(), sizeof( BillboardShader::PerFrameData ), backBuffers_.size(), "Billboard_PerFrameData"

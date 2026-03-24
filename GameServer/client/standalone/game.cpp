@@ -31,6 +31,18 @@ Game::Game() {
 
 	assetManager_.loadGFXAssets(gfx_);
 	assetManager_.loadAnimations();
+
+	emitterConfig_.pClip       = assetManager_.flameAnimation();
+	emitterConfig_.position    = { 0.f, 1.f, -3.f };
+	emitterConfig_.direction   = { 0.f, 1.f, 0.f };
+	emitterConfig_.spread      = 0.0f;
+	emitterConfig_.speedMin    = 2.f;
+	emitterConfig_.speedMax    = 5.f;
+	emitterConfig_.lifetimeMin = 0.5f;
+	emitterConfig_.lifetimeMax = 1.5f;
+	emitterConfig_.sizeEnd = 0.f;
+	emitterConfig_.tintBegin = { 1.f, 0.4f, 0.0f };
+	emitterConfig_.tintEnd = { 0.3f, 0.1f, 0.0f };
 }
 
 void Game::setupStage() {
@@ -534,6 +546,9 @@ void Game::update(Milliseconds deltaTime) {
 	// 애니메이션 업데이트
 	animSystem_.update(0.016s);
 
+	// 파티클
+	particleSystem_.update( deltaTime );
+
 	// UI 동기화
 	// playerHpUI_.setHp(player_->hp());
 
@@ -556,6 +571,8 @@ void Game::render() {
 	skybox_.render(gfx_);
 	camera_.updateGFX(gfx_);
 	dirLight_.render(gfx_);
+
+	particleSystem_.render( gfx_ );
 
 	playerHpUI_.render( gfx_ );
 
@@ -809,6 +826,11 @@ void Game::processInput(Milliseconds deltaTime) {
 		else {
 			releaseCursor();
 		}
+	}
+
+	// F key: emit particles for testing
+	if ( (keyboardStateCurr_['F'] & 0x80) && !(keyboardStatePrev_['F'] & 0x80) ) {
+		particleSystem_.emit(emitterConfig_, 5);
 	}
 
 	// Space 키를 누르면 커서 보이기 플래그를 활성화/비활성화한다.
