@@ -185,14 +185,95 @@ Unity에서 불꽃 파티클은 Rendering Mode → Additive로 설정되어 겹�
 - [x] `Particle`에 `float rotation` 저장
 - [x] `emit()` 에서 `[startRotationMin, startRotationMax]` 범위 랜덤 샘플링
 - [x] `SpriteAnimation::setRotation(float rad)` 추가, billboard GS에서 quad 생성 시 회전 반영
+- [x] **billboard.hlsl / billboardPipeline.cpp 회전 미적용 버그 수정** (아래 상세 참조)
 - [ ] 빌드 & 실행 → 파티클마다 방향이 다른지 확인
 
 **발견된 문제점:**
 
-- [ ] **[BUG] rotation 미적용** *(급함)* — `setRotation()`이 호출되지만 billboard GS의 quad 생성 로직에 회전이 반영되지 않음. GS에서 회전 행렬 적용 누락 여부 확인 필요.
+- [x] **[BUG] rotation 미적용** *(수정 완료)* — 원인 분석 및 수정 완료. 아래 "Stage 8-1" 참조.
 - [ ] **[BUG] Skybox에 파티클이 가려짐** — additive 파티클임에도 skybox depth가 파티클보다 앞에 써지는 문제. Stage 7에서 `DepthWriteMask = ZERO`로 설정했으나 skybox depth pass 순서 또는 far-plane 설정 확인 필요.
 
 **확인 기준:** 파티클이 각각 다른 각도로 출력되어 자연스러운 불꽃 모양이 된다.
+
+---
+
+### Stage 8-1 — billboard 회전 미적용 버그 분석 및 수정 ✓
+
+**핵심 원인:** 회전 수식이 잘못된 것이 아니라, 대부분의 파티클이 **GS에 도달하기 전에 하드웨어에 의해 컬링**되고 있었음. 회전이 안 보인 게 아니라 파티클 자체가 렌더링되지 않았던 것.
+
+#### [CRITICAL] `SV_Position`에 world-space 좌표 저장 (`billboard.hlsl` L17, L48)
+```hlsl
+// 수정 전 (버그)
+struct VSOutput { float4 pos : SV_Position; ... };
+ret.pos = mul(float4(position, 1.0f), instance.world);  // VP 변환 없음
+```
+
+`SV_Position`은 GPU 하드웨어가 frustum clipping에 사용하는 특수 semantic이다.
+VS에서 `SV_Position`에 쓰는 순간 하드웨어는 그것이 clip-space 좌표라고 가정한다.
+DX12 clip-space 유효 범위: `-w ≤ x,y ≤ w`, `0 ≤ z ≤ w` (w=1일 때 z는 [0,1]).
+world-space 위치 `(10, 0, 5, 1)`은 z=5 > w=1이므로 near/far clipping에 걸려 제거된다.
+결과적으로 원점 근처(world xyz가 [-1,1] 이내)의 파티클만 GS에 도달하고 나머지는 모두 컬링.
+
+```hlsl
+// 수정 후
+struct VSOutput { float3 worldPos : TEXCOORD0; ... };
+ret.worldPos = mul(float4(position, 1.0f), instance.world).xyz;
+```
+
+GS가 있는 파이프라인에서 VS의 역할은 world-space 변환까지만이고,
+clip-space 변환(`matViewProj`)은 반드시 GS 출력에서 수행해야 한다.
+
+#### [MEDIUM] `_m00`만으로 scale 추출 (`billboard.hlsl` L49)
+
+```hlsl
+// 수정 전 (버그)
+ret.size = size.x * instance.world._m00;
+// world matrix에 rotation이 있으면 _m00 = scaleX * cos(θ) ≠ scaleX
+```
+
+```hlsl
+// 수정 후
+float scaleX = length(float3(instance.world._m00, instance.world._m10, instance.world._m20));
+ret.size = size * scaleX;
+```
+
+#### [LOW] `cross(vUP, vLook)` NaN 위험 (`billboard.hlsl` L61)
+
+카메라가 파티클 바로 위/아래에 있을 때 `cross((0,1,0), (0,±1,0)) = (0,0,0)` → `normalize` → NaN.
+
+```hlsl
+// 수정 후
+float3 worldUp = (abs(vLook.y) < 0.999f) ? float3(0,1,0) : float3(1,0,0);
+```
+
+#### [BUG] 멀티스레드 업데이트 경로에서 rotation 누락 (`billboardPipeline.cpp` L494)
+
+`addJobUpdate()`의 람다에서 `PerInstanceData` 초기화 시 `.rotation` 필드가 빠져있었음.
+싱글스레드 경로는 정상이었고 멀티스레드 경로에서만 rotation이 항상 0.
+
+```cpp
+// 수정 전 (버그)
+return BillboardShader::PerInstanceData{
+    .world = mu::transpose( drawEvent.world ).getXmf(),
+    // .rotation 누락
+};
+
+// 수정 후
+return BillboardShader::PerInstanceData{
+    .world    = mu::transpose( drawEvent.world ).getXmf(),
+    .rotation = drawEvent.rotation,
+};
+```
+
+#### [NAMING] `cameraPosV` → `cameraPosW` (`shader.hpp`, `billboardPipeline.cpp`)
+
+"V" suffix는 view-space 관행적 표기이지만 실제로는 world-space 카메라 위치를 담고 있었음.
+혼동 방지를 위해 `cameraPosW`로 rename.
+
+**수정된 파일:**
+- `billboard.hlsl` — VSOutput semantic, VS 로직, GS 로직 수정
+- `shader.hpp` — `BillboardShader::PerFrameData::cameraPosV` → `cameraPosW`
+- `billboardPipeline.cpp` — 필드명 rename, `addJobUpdate` rotation 누락 수정
 
 ---
 

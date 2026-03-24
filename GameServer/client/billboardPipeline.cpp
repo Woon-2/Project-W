@@ -158,7 +158,7 @@ void Dispatcher::updateGPUDataSingleThreaded() {
 	// FrameData에 담겨있는 정보를 가공해 pfd에 저장한다.
 	auto pfd = BillboardShader::PerFrameData{
 		.vp = mu::transpose( viewProj ).getXmf(),
-		.cameraPosV = cameraPosV.getXmf()
+		.cameraPosW = cameraPosV.getXmf()
 	};
 	// pfd의 내용을 바탕으로 GPU 데이터를 갱신한다.
 	pResources_->perFrameData.stage( roomIdx_, &pfd, 1u );
@@ -219,7 +219,7 @@ void Dispatcher::updateGPUDataMultiThreaded() {
 	// FrameData에 담겨있는 정보를 가공해 pfd에 저장한다.
 	auto pfd = BillboardShader::PerFrameData{
 		.vp = mu::transpose( viewProj ).getXmf(),
-		.cameraPosV = cameraPosV.getXmf()
+		.cameraPosW = cameraPosV.getXmf()
 	};
 	// pfd의 내용을 바탕으로 GPU 데이터를 갱신한다.
 	pResources_->perFrameData.stage( roomIdx_, &pfd, 1u );
@@ -492,9 +492,10 @@ void MU_CALLCONV Dispatcher::addJobUpdate( mu::Mat4x4 viewProj, const DrawEvent*
 ) {
 	threadPool_->addJob( [=, &latch]() {
 		std::transform( pFirst, pLast, pOut,
-			[viewProj]( const BillboardPipeline::DrawEvent& drawEvent ) {
+			[]( const BillboardPipeline::DrawEvent& drawEvent ) {
 				return BillboardShader::PerInstanceData{
-					.world = mu::transpose( drawEvent.world ).getXmf(),
+					.world    = mu::transpose( drawEvent.world ).getXmf(),
+					.rotation = drawEvent.rotation,
 				};
 			}
 		);

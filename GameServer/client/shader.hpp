@@ -231,7 +231,7 @@ struct PerDrawcallData {
 
 struct PerFrameData {
 	XMFLOAT4X4 vp;
-	XMFLOAT3 cameraPosV;
+	XMFLOAT3 cameraPosW;  // world-space camera position
 	float padding0;
 };
 
