@@ -26,3 +26,5 @@
 - [ ] Deferred Shading 구현
 - [ ] 청크 구현 및 리소스 멀티스레드 동적 로딩 구현 (Seamless Openworld가 가능하도록)
 - [ ] Image Based Lighting 구현
+
+// UI(hp, inventory, login, loading), Effect, goal-based AI, clustered AI: 5월 초 게임 시작->집단 전투 컨텐츠 완성
