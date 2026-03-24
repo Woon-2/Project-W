@@ -210,6 +210,9 @@
     <ClCompile Include="ServerSession.cpp">
       <Filter>Network\Session</Filter>
     </ClCompile>
+    <ClCompile Include="PacketManager.cpp">
+      <Filter>Network\PacketManager</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="binaryImport.hpp">
@@ -400,6 +403,9 @@
     </ClInclude>
     <ClInclude Include="ServerSession.hpp">
       <Filter>Network\Session</Filter>
+    </ClInclude>
+    <ClInclude Include="PacketManager.hpp">
+      <Filter>Network\PacketManager</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

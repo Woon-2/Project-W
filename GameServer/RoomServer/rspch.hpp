@@ -12,7 +12,7 @@
 #include <fstream>
 #include <filesystem>
 
-#include "../common/log.hpp"
+#include "log.hpp"
 #include "errorHandling.hpp"
 
 using Nanoseconds = std::chrono::duration<float, std::nano>;

@@ -1,5 +1,5 @@
-#ifndef __errorHandling_HPP
-#define __errorHandling_HPP
+#ifndef room_server_error_handling_hpp
+#define room_server_error_handling_hpp
 
 #include <system_error>
 
@@ -202,4 +202,4 @@ inline void setDXName(T* obj, const std::string& name)
 #endif
 }
 
-#endif	//__errorHandling_HPP
+#endif // room_server_error_handling_hpp

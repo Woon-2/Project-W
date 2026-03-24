@@ -11,6 +11,13 @@ constexpr uint16 serverPort = 9000;
 enum class PacketType : uint16 {
 	C_Enter,
 	S_Enter,
+	S_Enter_Other,
+};
+
+enum class ObjectType : uint16 {
+	Player,
+	Cube,
+
 };
 
 struct PacketHeader {
@@ -46,14 +53,29 @@ struct PlayerInfo {
 	uint16 playerId;
 	uint16 materialSetIdx;
 	DirectX::XMFLOAT3 pos;
-	DirectX::XMFLOAT3 orient;
+	DirectX::XMFLOAT4 orient;
+	DirectX::XMFLOAT3 scale;
+	// 추후에 player 고유 정보 추가 필요
+};
+
+struct ObjectInfo {
+	ObjectType type;
+	uint16 objectId;
+	uint16 materialSetIdx;
+	DirectX::XMFLOAT3 pos;
+	DirectX::XMFLOAT4 orient;
 	DirectX::XMFLOAT3 scale;
 };
 
 struct SEnterPacket : public PacketHeader {
-	uint16 playerId;
-	uint16 playersOffset;	// playerInfos 배열의 시작 위치
-	uint16 playerCnt;
+	PlayerInfo myInfo;
+
+	uint16 objsOffset;	// objectInfo 배열의 시작 위치
+	uint16 objCnt;
+};
+
+struct SEnterOtherPacket : public PacketHeader {
+	PlayerInfo otherInfo;
 };
 
 #pragma pack(pop)

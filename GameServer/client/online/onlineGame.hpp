@@ -60,41 +60,27 @@ public:
 
 	// 게임의 업데이트는 다음 순서대로 이루어진다.
 	// 입력 처리
-	// 네트워크 패킷 처리
 	// 이벤트 처리
 	// 물리 업데이트 루틴
 	// 객체별 업데이트 루틴
 	// 애니메이션 업데이트
+	// 네트워크 패킷 처리 (main에서 SleepEx 호출로 처리)
 	void update(Milliseconds deltaTime) override;
 	void render() override;
 	// 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
 	LRESULT receiveWndMsg( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam ) override;
 
-	void addClientPlayer( i32t playerId, float x, float y, float z ) {
-		std::lock_guard<std::mutex> lock( objectsMtx_ );
-
-		player_ = std::make_shared<Object>( );
-
-		player_->setId( playerId );
-		idPlayerMap_[ player_->getId( ) ] = player_;
-	}
-
-	void addOtherPlayer( const std::shared_ptr<Object>& player ) {
-		std::lock_guard<std::mutex> lock( objectsMtx_ );
-		player->setAnimBlender(animSystem_, assetManager_);
+	void addClientPlayer(i32t playerId, float x, float y, float z);
+	void addOtherPlayer(const std::shared_ptr<Object>& player);
+		/*player->setAnimBlender(animSystem_, assetManager_);
 		otherPlayers_.push_back( player );
 		idPlayerMap_[ player->getId( ) ] = player;
 		auto [pPair, _] = otherPlayerHpUIs_.try_emplace(player->getId());
 		auto& ui = pPair->second;
-		ui.setTexture(assetManager_.playerHpLine());
-	}
+		ui.setTexture(assetManager_.playerHpLine());*/
 
 	void removePlayer( i32t playerId );
-
-	bool findPlayer( i32t playerId ) {
-		std::lock_guard<std::mutex> lock( objectsMtx_ );
-		return idPlayerMap_.find( playerId ) != idPlayerMap_.end( );
-	}
+	bool findPlayer(i32t playerId);
 
 	void createOtherPlayer( i32t playerId, float x, float y, float z ) {
 		auto newPlayer = std::make_shared<Object>( );
@@ -108,25 +94,16 @@ public:
 		newPlayer->setHp(100);
 		// newPlayer->setAmmo(30);
 
-		Equipment rifle{};
-		rifle.socketType = Bone::SocketType::RightHand;
-		rifle.object = std::make_unique<Object>();
-		// rifle.object->setModel(assetManager_.modelRifle());
-		rifle.object->setScale(mu::Vec3(1.f, 1.f, 1.f));
+		//Equipment rifle{};
+		//rifle.socketType = Bone::SocketType::RightHand;
+		//rifle.object = std::make_unique<Object>();
+		//// rifle.object->setModel(assetManager_.modelRifle());
+		//rifle.object->setScale(mu::Vec3(1.f, 1.f, 1.f));
 
-		newPlayer->equip(std::move(rifle));
+		//newPlayer->equip(std::move(rifle));
 
 		addOtherPlayer( newPlayer );
 	}
-
-	//void setServerSession( const SPServerSession& serverSession ) {	serverSession_ = serverSession;	}
-
-	const std::shared_ptr<Object>& getPlayer( ) const { return player_; }
-	std::shared_ptr<Object>& getPlayerById( i32t playerId ) {
-		std::lock_guard<std::mutex> lock( objectsMtx_ );
-		return idPlayerMap_[ playerId ];
-	}
-
 
 private:
 	enum class CameraMode {
@@ -172,17 +149,22 @@ private:
 	EventList eventList_{};
 	Timer* pTimer_ = nullptr;
 
-	//SPServerSession serverSession_{ };
+	std::shared_ptr<Cube> ground_{};
+	std::shared_ptr<Goblin> goblin_{};
+	std::shared_ptr<Anubis> anubis_{};
+	std::shared_ptr<Bat> bat_{};
+	std::shared_ptr<Bomber> bomber_{};
+	std::shared_ptr<Demon> demon_{};
+	std::shared_ptr<Dragon> dragon_{};
+	std::shared_ptr<Eyeball> eyeball_{};
+	std::shared_ptr<Fishman> fishman_{};
+	std::shared_ptr<Gargoyle> gargoyle_{};
 
-	std::vector<Object> cubes_{};
-
-	std::shared_ptr<Object> player_{};
-	std::vector<std::shared_ptr<Object>> otherPlayers_{ };
+	std::shared_ptr<Player> player_{};
+	std::vector<std::shared_ptr<Player>> otherPlayers_{ };
+	std::unordered_map<i32t, std::shared_ptr<Player>> idPlayerMap_{ };
 
 	SkyboxObject skybox_{};
-
-	std::mutex objectsMtx_{ };
-	std::unordered_map<i32t, std::shared_ptr<Object>> idPlayerMap_{ };
 
 	Camera camera_{};
 	mu::Radian cameraPitch_ = 0.f;
@@ -193,15 +175,10 @@ private:
 
 	Light dirLight_{};
 
-	SpriteAnimation slimeSprite_{};
-	std::deque<SpriteAnimationOwned> muzzleFlashes_{};
-	std::deque<SpriteAnimationOwned> bloodSplashes_{};
-
 	bool playerDead_{};
 
 	BasicPlayerHpUI playerHpUI_{};
 	std::unordered_map<i32t, BasicPlayerHpUI> otherPlayerHpUIs_{};
-	Crosshair crosshair_{};
 
 	LONG mouseDeltaX_{};
 	LONG mouseDeltaY_{};

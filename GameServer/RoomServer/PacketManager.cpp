@@ -15,27 +15,42 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 	}
 }
 
-SendBuffer* PacketManager::makeSEnterPacket(int32 playerId, const std::vector<PlayerInfo>& Infos) {
-	int32 playerCnt = static_cast<int32>(Infos.size());
-	auto sendBuffer = SendBufferManager::open(sizeof(SEnterPacket) + sizeof(PlayerInfo) * playerCnt);
+SendBuffer* PacketManager::makeSEnterPacket(const PlayerInfo& playerInfo, const std::vector<ObjectInfo>& objInfos) {
+	int32 objCnt = static_cast<int32>(objInfos.size());
+	auto sendBuffer = SendBufferManager::open(sizeof(SEnterPacket) + sizeof(ObjectInfo) * objCnt);
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
 	auto enterPacket = bw.reserve<SEnterPacket>();
-	enterPacket->playerId = playerId;
-	enterPacket->playerCnt = playerCnt;
+	enterPacket->myInfo = playerInfo;
+	enterPacket->objCnt = objCnt;
 
-	auto playerInfos = bw.reserve<PlayerInfo>(playerCnt);
-	for (int32 i = 0; i < playerCnt; ++i) {
-		playerInfos[i].playerId = Infos[i].playerId;
-		playerInfos[i].materialSetIdx = Infos[i].materialSetIdx;
-		playerInfos[i].pos = Infos[i].pos;
-		playerInfos[i].orient = Infos[i].orient;
-		playerInfos[i].scale = Infos[i].scale;
+	auto infos = bw.reserve<ObjectInfo>(objCnt);
+	for (int32 i = 0; i < objCnt; ++i) {
+		infos[i].type = objInfos[i].type;
+		infos[i].objectId = objInfos[i].objectId;
+		infos[i].materialSetIdx = objInfos[i].materialSetIdx;
+		infos[i].pos = objInfos[i].pos;
+		infos[i].orient = objInfos[i].orient;
+		infos[i].scale = objInfos[i].scale;
 	}
 
-	enterPacket->playersOffset = static_cast<uint16>(reinterpret_cast<uint64>(playerInfos) - reinterpret_cast<uint64>(enterPacket));
+	enterPacket->objsOffset = static_cast<uint16>(reinterpret_cast<uint64>(infos) - reinterpret_cast<uint64>(enterPacket));
 	enterPacket->size = bw.writeSize();
 	enterPacket->type = PacketType::S_Enter;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+SendBuffer* PacketManager::makeSEnterOtherPacket(const PlayerInfo& playerInfo) {
+	auto sendBuffer = SendBufferManager::open(sizeof(SEnterOtherPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto enterOtherPacket = bw.reserve<SEnterOtherPacket>();
+	enterOtherPacket->otherInfo = playerInfo;
+
+	enterOtherPacket->size = bw.writeSize();
+	enterOtherPacket->type = PacketType::S_Enter_Other;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;

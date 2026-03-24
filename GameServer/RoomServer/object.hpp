@@ -1,5 +1,5 @@
-#ifndef __object_HPP
-#define __object_HPP
+#ifndef room_server_object_hpp
+#define room_server_object_hpp
 
 #include "physics.hpp"
 
@@ -143,4 +143,4 @@ private:
 	Milliseconds reloadCooldown_{2000ms};
 };
 
-#endif	// __object_HPP
+#endif // room_server_object_hpp

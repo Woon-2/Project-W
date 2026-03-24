@@ -2,6 +2,7 @@
 #include "ServerSession.hpp"
 #include "SendBuffer.hpp"
 #include "MemoryManager.hpp"
+#include "PacketManager.hpp"
 
 bool ServerSession::connect() {
 	if (::connect(sock_, reinterpret_cast<const SOCKADDR*>(&netAddr_.sockAddr()), sizeof(SOCKADDR_IN)) == SOCKET_ERROR) {
@@ -101,7 +102,7 @@ void ServerSession::processRecv(int32 numBytes) {
 }
 
 void ServerSession::processPacket(byte* buffer, int32 len) {
-
+	PacketManager::handlePacket(buffer, len);
 }
 
 void ServerSession::processSend(int32 numBytes) {

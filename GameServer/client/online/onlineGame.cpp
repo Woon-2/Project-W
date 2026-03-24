@@ -33,12 +33,10 @@ Game::Game() {
 }
 
 void Game::setupStage() {
-	auto lock = std::lock_guard(objectsMtx_);
-
 	skybox_.setModel( assetManager_.modelCube( ) );
 	skybox_.setSkyboxMaterial( assetManager_.skyboxMaterial( ) );
 
-	player_ = std::make_shared<Object>();
+	player_ = std::make_shared<Player>();
 
 	dirLight_.setOrient( mu::NQuat( mu::Degree( 0.f ), mu::Degree( 160.f ), mu::Degree( 0.f ) ) );
 	dirLight_.color = mu::Vec3( 0.8f, 0.8f, 0.8f );
@@ -63,7 +61,6 @@ void Game::setupStage() {
 // 객체별 업데이트 루틴
 // 애니메이션 업데이트
 void Game::update(Milliseconds deltaTime) {
-	auto lock = std::lock_guard(objectsMtx_);
 	// 평가 물리량 초기화
 	player_->physicState().evVelocity = mu::Vec3();
 	player_->physicState().evOmega = mu::Vec3();
@@ -77,17 +74,7 @@ void Game::update(Milliseconds deltaTime) {
 
 	// 네트워크 패킷 처리
 	// 서버로부터 받은 메시지 처리
-	const auto bulkSize = 100u;
-	auto messages = std::vector<Message>(bulkSize);
 
-	auto size = 10; // messageQueue.try_dequeue_bulk(messages.data(), bulkSize);
-
-	// 남은 메시지가 있으면 모두 꺼내기
-	Message msg;
-	/*while (messageQueue.try_dequeue(msg)) {
-		messages.push_back(msg);
-		++size;
-	}*/
 
 	// 물리 업데이트 루틴
 	//
@@ -129,10 +116,6 @@ void Game::update(Milliseconds deltaTime) {
 	// 게임 객체의 update 함수에 전달된다.
 	const auto tPhysicInterpolation = physicUpdateAcc_ / physicUpdateInterval;
 
-	for (auto& cube : cubes_) {
-		cube.update(deltaTime, tPhysicInterpolation);
-	}
-
 	// 게임 객체들 갱신
 	player_->update(deltaTime, tPhysicInterpolation );
 	for ( auto& obj : otherPlayers_ ) {
@@ -163,35 +146,7 @@ void Game::update(Milliseconds deltaTime) {
 		ui.update(deltaTime, gfx_, nullptr);
 	}
 
-	crosshair_.update(deltaTime);
-
 	// 애니메이션 업데이트
-	slimeSprite_.update( deltaTime );
-
-	for (auto& muzzleFlash : muzzleFlashes_) {
-		auto pOwner = muzzleFlash.pOwner;
-		// 총구 화염 스프라이트 애니메이션
-		// 플레이어에 대해서 오프셋 지정
-		muzzleFlash.anim.setPos( pOwner->pos()
-			+ pOwner->up() * 1.4f
-			+ pOwner->forward() * 0.85f
-			+ pOwner->right() * 0.15f
-		);
-		muzzleFlash.anim.update(deltaTime);
-	}
-
-	std::erase_if(muzzleFlashes_, [](const SpriteAnimationOwned& animOwned) { return animOwned.anim.done(); });
-
-	for (auto& bloodSplash : bloodSplashes_) {
-		auto pOwner = bloodSplash.pOwner;
-		bloodSplash.anim.setPos( pOwner->pos()
-			+ pOwner->up() * 1.25f
-		);
-		bloodSplash.anim.update(deltaTime);
-	}
-
-	std::erase_if(bloodSplashes_, [](const SpriteAnimationOwned& animOwned) { return animOwned.anim.done(); });
-
 	animSystem_.update(0.016s);
 
 	// UI 동기화
@@ -205,11 +160,6 @@ void Game::update(Milliseconds deltaTime) {
 }
 
 void Game::render() {
-	auto lock = std::lock_guard(objectsMtx_);
-	for (auto& cube : cubes_) {
-		cube.render(gfx_);
-	}
-
 	player_->render(gfx_);
 	skybox_.render( gfx_ );
 	for ( auto& obj : otherPlayers_ ) {
@@ -231,20 +181,9 @@ void Game::render() {
 	gfx_.addFrameData(frameDataPBRSkinned);
 
 	if (inRoom_) {
-		for (const auto& muzzleFlash : muzzleFlashes_) {
-			muzzleFlash.anim.render(gfx_);
-		}
-		for (const auto& bloodSplash : bloodSplashes_) {
-			bloodSplash.anim.render(gfx_);
-		}
-
 		playerHpUI_.render(gfx_);
 		for (auto& [id, ui] : otherPlayerHpUIs_) {
 			ui.render(gfx_);
-		}
-
-		if (cameraMode_ == CameraMode::FirstPerson) {
-			crosshair_.render(gfx_);
 		}
 
 		auto frameDataUI = UIPipeline::FrameData{
@@ -252,15 +191,12 @@ void Game::render() {
 			.screenHeight = static_cast<float>( gClientRect.bottom - gClientRect.top )
 		};
 		gfx_.addFrameData(frameDataUI);
-
-		slimeSprite_.render(gfx_);
 	}
 
 	gfx_.render();
 }
 
 void Game::removePlayer( i32t playerId ) {
-	std::lock_guard<std::mutex> lock( objectsMtx_ );
 	auto itPlayer = std::ranges::find_if(
 		otherPlayers_, [ playerId ]( const std::shared_ptr<Object>& obj ) {
 			return obj->getId( ) == playerId;
@@ -551,51 +487,6 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		camera_.setOffsetFromTarget( mu::Vec3( 0.f, 1.8f, -2.5f ) );
 		camera_.setOffsetTargetPivot( mu::Vec3(0.f, 1.f, 0.f));
 		cameraMode_ = CameraMode::ThirdPerson;
-	}
-
-	// 총 장전
-	if ( !playerDead_ && keyboardStateCurr_['R'] & 0x80 ) {
-		/*auto csReloadPacket = Packet{
-			.header = {
-				.size = sizeof(PacketHeader) + sizeof(CSReloadPacket),
-				.id = static_cast<std::uint16_t>(PacketType::csReload)
-			},
-			.csReload = {}
-		};
-
-		i32t packetSize = sizeof(Packet);
-		auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
-		sendBuffer->copyData(&csReloadPacket, packetSize);
-		serverSession_->send(sendBuffer);*/
-	}
-
-	// 총 발사: 총구 화염 애니메이션 재생
-	if ( !playerDead_ && (keyboardStateCurr_[VK_LBUTTON] & 0x80)
-		&& !(keyboardStatePrev_[VK_LBUTTON] & 0x80)
-	) {
-		sendMoveStatePacket();
-
-		auto firePos = player_->pos()
-			+ player_->up() * 1.3f
-			+ player_->forward() * 0.85f
-			+ player_->right() * 0.15f;
-
-		/*auto csFirePacket = Packet{
-			.header = {
-				.size = sizeof(PacketHeader) + sizeof(CSFirePacket),
-				.id = static_cast<std::uint16_t>(PacketType::csFire)
-			},
-			.csFire = {
-				.firePos = firePos.getXmf(),
-				.forward = player_->forward().getXmf(),
-				.cameraPitchRadian = cameraPitch_,
-			}
-		};
-
-		i32t packetSize = sizeof(Packet);
-		auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
-		sendBuffer->copyData(&csFirePacket, packetSize);
-		serverSession_->send(sendBuffer);*/
 	}
 
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때

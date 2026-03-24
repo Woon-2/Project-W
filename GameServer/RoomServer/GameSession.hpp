@@ -2,19 +2,16 @@
 #define game_session_hpp
 
 #include "Session.hpp"
-#include "IdPool.hpp"
-//#include "Player.hpp"
 
 class Room;
+class Object;
 
 class GameSession : public PacketSession {
 public:
-	GameSession() : myRoom_(nullptr) {}
-	
-	virtual ~GameSession() {
-		std::cout << "GameSession destroyed. ID: " << id() << '\n';
-		IdPool::push(id());
-	}
+	GameSession() : myRoom_(nullptr), myPlayer_(nullptr) {}
+	virtual ~GameSession();
+
+	Object* player() { return myPlayer_; }
 
 protected:
 	virtual void onConnected() override;
@@ -24,7 +21,7 @@ protected:
 
 private:
 	Room* myRoom_;
-	//Player myPlayer_;
+	Object* myPlayer_;
 };
 
 #endif // game_session_hpp

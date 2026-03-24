@@ -189,6 +189,7 @@
     <ClCompile Include="mesh.cpp" />
     <ClCompile Include="object.cpp" />
     <ClCompile Include="online\onlineGame.cpp" />
+    <ClCompile Include="PacketManager.cpp" />
     <ClCompile Include="pbrPipeline.cpp" />
     <ClCompile Include="pbrSkinnedPipeline.cpp" />
     <ClCompile Include="pch.cpp">
@@ -264,6 +265,7 @@
     <ClInclude Include="mesh.hpp" />
     <ClInclude Include="object.hpp" />
     <ClInclude Include="online\onlineGame.hpp" />
+    <ClInclude Include="PacketManager.hpp" />
     <ClInclude Include="pbrPipeline.hpp" />
     <ClInclude Include="pbrSkinnedPipeline.hpp" />
     <ClInclude Include="pch.hpp" />

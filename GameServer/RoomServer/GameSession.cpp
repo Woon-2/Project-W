@@ -2,6 +2,9 @@
 #include "GameSession.hpp"
 #include "PacketManager.hpp"
 #include "SendBuffer.hpp"
+#include "IdPool.hpp"
+#include "ObjectPool.hpp"
+#include "object.hpp"
 
 // temporary --------------------------------
 #include "IdPool.hpp"
@@ -11,6 +14,12 @@ static std::atomic_int32_t totalSessions{0};
 static const int32 maxRoomSessions = 4;
 // ------------------------------------------
 
+GameSession::~GameSession() {
+	std::cout << "GameSession destroyed. ID: " << id() << '\n';
+	IdPool::push(id());
+	ObjectPool<Object>::push(myPlayer_);
+}
+
 void GameSession::onConnected() {
 	if (totalSessions.load() % maxRoomSessions == 0) {
 		myRoom_ = RoomManager::makeRoom();
@@ -18,11 +27,16 @@ void GameSession::onConnected() {
 	else {
 		myRoom_ = RoomManager::getRoom(RoomIdPool::currId());
 	}
+	++totalSessions;
+
+	myPlayer_ = ObjectPool<Object>::pop();
+	myPlayer_->setId(id());
 
 	myRoom_->doAsync(&Room::enter, this);
 }
 
 void GameSession::onDisconnected() {
+	--totalSessions;
 	myRoom_->doAsync(&Room::leave, this);
 }
 

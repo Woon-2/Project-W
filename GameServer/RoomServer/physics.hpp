@@ -1,5 +1,5 @@
-#ifndef __physics_HPP
-#define __physics_HPP
+#ifndef room_server_physics_hpp
+#define room_server_physics_hpp
 
 #include "collision.hpp"
 
@@ -38,4 +38,4 @@ private:
 };
 
 
-#endif	// __physics_HPP
+#endif // room_server_physics_hpp

@@ -158,6 +158,7 @@
     <ClCompile Include="GameSession.cpp" />
     <ClCompile Include="Level.cpp" />
     <ClCompile Include="Listener.cpp" />
+    <ClCompile Include="log.cpp" />
     <ClCompile Include="Model.cpp" />
     <ClCompile Include="object.cpp" />
     <ClCompile Include="PacketManager.cpp" />
@@ -182,6 +183,7 @@
     <ClInclude Include="GameSession.hpp" />
     <ClInclude Include="Level.hpp" />
     <ClInclude Include="Listener.hpp" />
+    <ClInclude Include="log.hpp" />
     <ClInclude Include="Model.hpp" />
     <ClInclude Include="object.hpp" />
     <ClInclude Include="PacketManager.hpp" />

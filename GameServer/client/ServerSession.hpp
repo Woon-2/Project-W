@@ -5,6 +5,8 @@
 
 class SendBuffer;
 
+namespace Online { class Game; }
+
 class ServerSession {
 	enum class IoType {
 		Recv,
@@ -24,7 +26,7 @@ class ServerSession {
 
 public:
 	ServerSession() : sock_(SocketUtils::createSocket()), netAddr_(serverIp, serverPort),
-		connected_(false), recvBuf_(0x10000)/*64KB*/
+		connected_(false), recvBuf_(0x10000)/*64KB*/, game_(nullptr)
 	{
 		ZeroMemory(&recvOver_.over, sizeof(WSAOVERLAPPED));
 		recvOver_.type = IoType::Recv;
@@ -43,6 +45,8 @@ public:
 
 	bool connect();
 	void send(SendBuffer* sendBuffer);
+
+	void setGame(Online::Game* game) { game_ = game; }
 
 	const std::string& ip() const { return netAddr_.ip(); }
 	uint16 port() const { return netAddr_.port(); }
@@ -68,6 +72,7 @@ private:
 
 	RecvBuffer recvBuf_;
 
+	Online::Game* game_;
 };
 
 #endif // server_session_hpp
