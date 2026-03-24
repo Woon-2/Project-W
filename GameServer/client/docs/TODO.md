@@ -6,7 +6,11 @@
 - [X] 유니티에서 추출한 바이너리 리소스를 로드해 Bounding Volume Hierarchy 구축 및 그를 통한 충돌처리로 업그레이드
   - 유니티에서 어떻게 추출했는지는 `unityScripts/ExtractUtil.cs`, `unityScripts/ModelExtractor.cs`, `unityScripts/MultiBoundingVolume.cs` 참조
   - BVH 노드가 bone에 종속된 경우 `bone.toDress * finalXformData()[i] * world` 체인으로 월드 변환
-- [ ] Height map 기반 Terrain 구현/Terrain Splat까지 (Unity에서 맵 추출)
+- [X] Height map 기반 Terrain 구현/Terrain Splat까지 (Unity에서 맵 추출)
+  - TerrainExtractor.cs로 추출된 height.raw + terrain_meta.bin + terrain_manifest.bin + DDS 텍스처 로드
+  - N×N 그리드 메시 생성 (중앙차분 법선, 32-bit IB), RGBA splat map 기반 레이어 블렌딩
+  - terrain.hlsl: Lambertian + globalAmbient + PCF shadow, terrainPipeline.hpp/cpp: Dispatcher
+- [ ] Terrain Shadow 구현
 - [ ] 몬스터 AI 시스템 초안 구현(주변 배회, 피격 시 어그로)
 - [ ] 장비 장착: 공격 모션에 무기도 같이 움직이도록 (필요하면 IK 구현)
 - [ ] Rigid Body Physics 구현: 중력, 공기 저항, 마찰력 등 반영

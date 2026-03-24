@@ -95,6 +95,12 @@ void AssetManager::loadGFXAssets(GFX& gfx) {
 		.pDest = &textPlayerHp_
 	} );
 
+	gfx.addRequestTerrainLoad( RequestTerrainLoad{
+		.terrainDir  = "../resources/terrains/",
+		.pTexHashMap = &texHashMap_,
+		.pDest       = &terrain_
+	} );
+
 	gfx.loadAssets();
 }
 

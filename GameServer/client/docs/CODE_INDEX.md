@@ -167,6 +167,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 **파이프라인별 필수 VB 슬롯:**
 - PBRPipeline: Position(0), Normal(1), Tangent(2), Bitangent(3), UV(4)
 - PBRSkinnedPipeline: 위 5개 + BoneIndices(5), BoneWeights(6)
+- TerrainPipeline: Position(0), Normal(1), UV(2)
 
 **스킨드 메시 판별 조건:** `mesh.vbIdxMap.contains(mesh.name + "_VB_BoneIndices") && animBlender`
 
@@ -213,13 +214,13 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
-| `GFX` class | `gfx.hpp #56-246` | DX12 렌더링 총괄 |
-| `GFX::setupDXGI()` | `gfx.hpp #70` | DXGI Factory + Adapter 열거 |
-| `GFX::init()` | `gfx.hpp #77` | Device, CmdQ, DescriptorHeap, PSO 생성 |
-| `GFX::createSwapChain()` | `gfx.hpp #83` | SwapChain + BackBuffer + FrameFence |
-| `GFX::addDrawEvent()` | `gfx.hpp #90-124` | 파이프라인별 오버로드 |
-| `GFX::loadAssets()` | `gfx.hpp #136` | 요청된 리소스 로드 |
-| `GFX::render()` | `gfx.hpp #139` | 전체 파이프라인 실행 |
+| `GFX` class | `gfx.hpp #63` | DX12 렌더링 총괄 |
+| `GFX::setupDXGI()` | `gfx.hpp #77` | DXGI Factory + Adapter 열거 |
+| `GFX::init()` | `gfx.hpp #84` | Device, CmdQ, DescriptorHeap, PSO 생성 |
+| `GFX::createSwapChain()` | `gfx.hpp #90` | SwapChain + BackBuffer + FrameFence |
+| `GFX::addDrawEvent()` | `gfx.hpp #97-135` | 파이프라인별 오버로드 |
+| `GFX::loadAssets()` | `gfx.hpp #152` | 요청된 리소스 로드 |
+| `GFX::render()` | `gfx.hpp #155` | 전체 파이프라인 실행 |
 
 **파이프라인 파일 목록:**
 
@@ -232,18 +233,36 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | SkyboxPipeline | `skyboxPipeline.hpp` | 스카이박스 |
 | UIPipeline | `uiPipeline.hpp` | UI 요소 |
 | SamplePipeline | `samplePipeline.hpp` | 샘플 렌더 |
+| TerrainPipeline | `terrainPipeline.hpp` / `terrainPipeline.cpp` | Height map 지형 렌더 (Splat 블렌딩) |
+
+**Terrain 관련 파일:**
+
+| 파일 | 설명 |
+|------|------|
+| `terrain.hpp` | `TerrainLayer`, `TerrainData` 구조체, `loadTerrainFromFiles()` 선언 |
+| `terrain.cpp` | manifest/meta 파싱, height.raw → GPU 메시 생성, 텍스처 로드 |
+| `terrain.hlsl` | Terrain VS/PS (Splat map 레이어 블렌딩 + Lambertian + Shadow) |
+| `terrainPipeline.hpp` | `TerrainPipeline` 네임스페이스 (DrawEvent, Resources, Dispatcher) |
+| `terrainPipeline.cpp` | `Dispatcher::mainPass()` 구현 |
+
+**TerrainData 구조 (`terrain.hpp #18-30`):**
+- `heightmapResolution` (N): 그리드 N×N 정점
+- `layers`: `TerrainLayer` 배열 (diffuse + normalMap + tiling)
+- `splatMap`: RGBA splat 텍스처
+- `mesh`: VB 3슬롯 (Position/Normal/UV), IB 32-bit
 
 **GFX 내부 파이프라인별 DrawEvent 벡터 위치 (`gfx.hpp`):**
 
 | 파이프라인 | DrawEvent 벡터 위치 |
 |-----------|-------------------|
-| SamplePipeline | `gfx.hpp #196` |
-| PBRPipeline | `gfx.hpp #200` |
-| PBRSkinnedPipeline | `gfx.hpp #207` |
-| SkyboxPipeline | `gfx.hpp #214` |
-| BVPipeline | `gfx.hpp #218` |
-| BillboardPipeline | `gfx.hpp #222` |
-| UIPipeline | `gfx.hpp #227` |
+| SamplePipeline | `gfx.hpp #212` |
+| PBRPipeline | `gfx.hpp #216` |
+| PBRSkinnedPipeline | `gfx.hpp #223` |
+| SkyboxPipeline | `gfx.hpp #230` |
+| BVPipeline | `gfx.hpp #234` |
+| BillboardPipeline | `gfx.hpp #238` |
+| UIPipeline | `gfx.hpp #243` |
+| TerrainPipeline | `gfx.hpp #247` |
 
 ---
 
@@ -260,7 +279,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `Game::processInput()` | `standalone/game.hpp #57` | 키보드/마우스 입력 처리 |
 | `importNode()` 계열 | `standalone/game.hpp #68-79` | 씬 바이너리 파일 파싱 |
 
-**Game 멤버 변수 (game.hpp #81-133):**
+**Game 멤버 변수 (game.hpp #81-135):**
 
 | 멤버 | 타입 | 역할 |
 |------|------|------|
@@ -272,6 +291,22 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `physicUpdateInterval` | `Seconds` | `1s/60f` 고정 타임스텝 |
 | `eventList_` | `EventList` | 프레임별 이벤트 큐 |
 | 몬스터 shared_ptr들 | `#97-107` | goblin_, anubis_, bat_ 등 |
+| `terrain_` | `const TerrainData*` | `game.hpp #111` — 지형 데이터 포인터 |
+
+**AssetManager 주요 멤버 (`AssetManager.hpp`):**
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| `terrain()` accessor | `AssetManager.hpp #24` | `const TerrainData*` 반환 |
+| `terrain_` 멤버 | `AssetManager.hpp #64` | `TerrainData` 인스턴스 |
+
+**Light 클래스 accessor 추가 (`light.hpp`):**
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| `Light::shadowView()` | `light.hpp #29` | 그림자 뷰 행렬 |
+| `Light::shadowProj()` | `light.hpp #30` | 그림자 투영 행렬 |
+| `Light::dir()` | `light.hpp #31` | 조명 방향 (NVec3) |
 
 **업데이트 순서 (game.cpp Game::update):**
 1. `processInput()` → 입력/LButton → `combatSystem_.onPlayerAttack()`

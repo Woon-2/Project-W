@@ -25,6 +25,7 @@ ComPtr<ID3D12PipelineState> createBillboardShader(ID3D12Device* device, ID3D12Ro
 ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSignature* rootSig );
+ComPtr<ID3D12PipelineState> createTerrainShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 
 // 루트 파라미터 접근을 이해하기 쉽도록 하기 위해 만든 클래스
 // 루트 파라미터에 이름을 지어 그 인덱스 및 D3D12_ROOT_PARAMETER 구조체와 매핑한다.
@@ -299,6 +300,39 @@ struct PerDrawcallData {
 	XMUINT3 padding;
 };
 }	// namespace BoundingVolumeShader
+
+// TerrainShader
+namespace TerrainShader {
+
+constexpr int MAX_TERRAIN_LAYERS = 4;
+
+// Matches cbuffer PerDrawcallData : register(b0) in terrain.hlsl
+struct PerDrawcallData {
+    XMFLOAT4X4 wvp;
+    XMFLOAT4X4 world;
+    XMFLOAT4X4 worldNormal;
+
+    BindlessIndex idxSplatMap;
+    BindlessIndex idxDiffuse[MAX_TERRAIN_LAYERS];
+    BindlessIndex idxNormal [MAX_TERRAIN_LAYERS];
+    XMFLOAT4     tiling    [MAX_TERRAIN_LAYERS];  // (tileSizeX, tileSizeY, tileOffsetX, tileOffsetY)
+    int          layerCount;
+    float        _pdd0[3];
+};
+
+// Matches cbuffer PerFrameData : register(b1) in terrain.hlsl
+struct PerFrameData {
+    XMFLOAT3 lightDirW;
+    float    _p0;
+    XMFLOAT3 lightColor;
+    float    lightIntensity;
+    XMFLOAT3 globalAmbient;
+    float    _p1;
+    BindlessIndex idxShadowMap;
+    XMFLOAT4X4   lightVP;
+};
+
+}	// namespace TerrainShader
 
 namespace UIShader {
 	struct Material {

@@ -21,6 +21,7 @@ public:
 	const Model* modelFishman() const { return &modelFishman_; }
 	const Model* modelGargoyle() const { return &modelGargoyle_; }
 	const Skybox* skyboxMaterial() const { return &skyboxMaterial_; }
+	const TerrainData* terrain() const { return &terrain_; }
 	const Texture* playerHpLine() const { return &playerHpLine_; }
 	const Texture* playerHpFrame() const { return &playerHpFrame_; }
 	TextImage* textPlayerHp() { return &textPlayerHp_; }
@@ -60,6 +61,7 @@ private:
 	Model modelFishman_{};
 	Model modelGargoyle_{};
 	Skybox skyboxMaterial_{};
+	TerrainData terrain_{};
 	Texture playerHpLine_{};
 	Texture playerHpFrame_{};
 	TextImage textPlayerHp_;

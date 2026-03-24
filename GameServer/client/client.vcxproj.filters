@@ -213,6 +213,12 @@
     <ClCompile Include="standalone\combatSystem.cpp">
       <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="terrainPipeline.cpp">
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="terrain.cpp">
+      <Filter>그래픽스\코어\헤더 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="binaryImport.hpp">
@@ -407,6 +413,12 @@
     <ClInclude Include="standalone\combatSystem.hpp">
       <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="terrainPipeline.hpp">
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="terrain.hpp">
+      <Filter>그래픽스\코어\소스 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="billboard.hlsl">
@@ -434,6 +446,9 @@
       <Filter>셰이더 파일</Filter>
     </FxCompile>
     <FxCompile Include="pbr.hlsl">
+      <Filter>셰이더 파일</Filter>
+    </FxCompile>
+    <FxCompile Include="terrain.hlsl">
       <Filter>셰이더 파일</Filter>
     </FxCompile>
   </ItemGroup>

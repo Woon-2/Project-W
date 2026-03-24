@@ -26,6 +26,11 @@ public:
 	mu::Vec3 MU_CALLCONV pos() const { return pos_; }
 	void MU_CALLCONV setOrient(mu::NQuat newOrient);
 	mu::NQuat MU_CALLCONV orient() const { return orient_; }
+	mu::Mat4x4 MU_CALLCONV shadowView() const { return view_; }
+	mu::Mat4x4 MU_CALLCONV shadowProj() const { return proj_; }
+	mu::NVec3  MU_CALLCONV dir() const {
+		return mu::NVec3(orient_.rotate(mu::Vec3(0.f, 0.f, 1.f)));
+	}
 
 private:
 	mu::Vec3 pos_{};

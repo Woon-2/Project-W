@@ -241,6 +241,7 @@ void GFX::init() {
 	shaders_.try_emplace("SkyboxShader", createSkyboxShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("BVShader", createBVShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace( "UIShader", createUIShader( device_.Get(), defaultRootSig.get() ) );
+	shaders_.try_emplace("TerrainShader", createTerrainShader(device_.Get(), defaultRootSig.get()));
 
 	rootSigs_.try_emplace("DefaultRootSignature", std::make_shared<DefaultRootSig>(std::move(defaultRootSig)));
 
@@ -260,6 +261,7 @@ void GFX::init() {
 	drawEventsBVPipeline_.reserve(1000u);
 	drawEventsBillboardPipeline_.reserve(1000u);
 	drawEventsSkyboxPipeline_.reserve(10u);
+	drawEventsTerrainPipeline_.reserve(4u);
 }
 
 // 윈도우와 연결된 SwapChain을 만든다.
@@ -441,6 +443,13 @@ void GFX::createSwapChain() {
 	resourcesUIPipeline_.perFrameData.init(
 		device_.Get(), sizeof( UIShader::PerFrameData ), backBuffers_.size(), "UI_PerFrameData"
 	);
+	// Terrain Pipeline ----
+	resourcesTerrainPipeline_.mainPass.perDrawcallData.init(
+		device_.Get(), sizeof(TerrainShader::PerDrawcallData), backBuffers_.size(), "Terrain_Main_PerDrawcallData"
+	);
+	resourcesTerrainPipeline_.mainPass.perFrameData.init(
+		device_.Get(), sizeof(TerrainShader::PerFrameData), backBuffers_.size(), "Terrain_Main_PerFrameData"
+	);
 
 
 
@@ -561,6 +570,27 @@ void GFX::addRequestTextImageLoad( const RequestTextImageLoad& request )
 	requestsTextImageLoad_.push_back( request );
 }
 
+void GFX::addRequestTerrainLoad(const RequestTerrainLoad& request) {
+	requestsTerrainLoad_.push_back(request);
+}
+
+// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+void GFX::addDrawEvent(const TerrainPipeline::DrawEvent& drawEvent) {
+	drawEventsTerrainPipeline_.push_back(drawEvent);
+}
+// 카메라 데이터를 입력한다.
+void GFX::addCameraData(const TerrainPipeline::CameraData& cameraData) {
+	cameraDataTerrainPipeline_ = cameraData;
+}
+// 조명 데이터를 입력한다.
+void GFX::addLightData(const TerrainPipeline::LightData& lightData) {
+	lightDataTerrainPipeline_ = lightData;
+}
+// 프레임 데이터를 입력한다.
+void GFX::addFrameData(const TerrainPipeline::FrameData& frameData) {
+	frameDataTerrainPipeline_ = frameData;
+}
+
 // 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 void GFX::addDrawEvent(const SkyboxPipeline::DrawEvent& drawEvent) {
 	drawEventsSkyboxPipeline_.push_back(drawEvent);
@@ -670,6 +700,16 @@ void GFX::loadAssets() {
 	// load text texture
 	for( auto& request : requestsTextImageLoad_ ) {
 		*request.pDest = TextImage( device_.Get(), request.width, request.height, srvTexPool_ );
+	}
+
+	dumpLog();
+
+	// load terrain
+	for (auto& request : requestsTerrainLoad_) {
+		*request.pDest = loadTerrainFromFiles(
+			request.terrainDir, device_.Get(), cmdList.Get(),
+			*request.pTexHashMap, srvTexPool_, fence
+		);
 	}
 
 	dumpLog();
@@ -865,6 +905,19 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	auto terrainPipelineDispatcher = TerrainPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at("DefaultRootSignature"), shaders_.at("TerrainShader"),
+		cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesTerrainPipeline_,
+		&cmdListPool_, std::move(drawEventsTerrainPipeline_),
+		lightDataTerrainPipeline_, cameraDataTerrainPipeline_, frameDataTerrainPipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
 	// UI Pipeline의 Dispatch
 	auto uiPipelineDispatcher = UIPipeline::Dispatcher(
 		tmpDescriptorHeaps,
@@ -913,6 +966,9 @@ void GFX::render() {
 		pbrSkinnedPipelineDispatcher.mainPass();
 		dumpLog();
 
+		terrainPipelineDispatcher.mainPass();
+		dumpLog();
+
 		bvPipelineDispatcher.updateGPUDataSingleThreaded();
 		bvPipelineDispatcher.drawSingleThreaded();
 		dumpLog();
@@ -947,6 +1003,9 @@ void GFX::render() {
 		pbrPipelineDispatcher.mainPassMT();
 		dumpLog();
 		pbrSkinnedPipelineDispatcher.mainPassMT();
+		dumpLog();
+
+		terrainPipelineDispatcher.mainPass();
 		dumpLog();
 
 		bvPipelineDispatcher.updateGPUDataMultiThreaded();

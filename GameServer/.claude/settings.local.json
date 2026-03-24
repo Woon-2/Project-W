@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(grep -E \"\\\\.\\(hpp|cpp\\)$\")"
+      "Bash(grep -E \"\\\\.\\(hpp|cpp\\)$\")",
+      "Bash(find /c/Users/PC/Desktop/zolzak/Project-W/GameServer -type d -name resources -o -type d -name terrain*)"
     ]
   }
 }

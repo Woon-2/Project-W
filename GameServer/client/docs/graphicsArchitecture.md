@@ -2,7 +2,7 @@
 `GFX` - 렌더링을 총괄 책임지는 클래스
 
 - 코어: `gfx.hpp`, `gfxUtil.hpp`, `mesh.hpp`, `shader.hpp`, `font.hpp`, `collision.hpp`
-- 파이프라인: `pbrPipeline.hpp`, `pbrSkinnedPipeline.hpp`, `billboardPipeline.hpp`, `bvPipeline.hpp`, `samplePipeline.hpp`, `skyboxPipeline.hpp`, `uiPipeline.hpp`, `sharedResource.hpp`
+- 파이프라인: `pbrPipeline.hpp`, `pbrSkinnedPipeline.hpp`, `billboardPipeline.hpp`, `bvPipeline.hpp`, `samplePipeline.hpp`, `skyboxPipeline.hpp`, `uiPipeline.hpp`, `terrainPipeline.hpp`, `sharedResource.hpp`
 
 #### 장치 초기화
 - `GFX::setupDXGI`
@@ -31,3 +31,22 @@
 - `shader.hpp`, `shader.cpp`에 `create...Shader`와 같이 셰이더 생성 함수 추가
 - `shader.hpp`에 cpu-gpu 메모리 레이아웃이 같도록 각 셰이더의 네임스페이스에 리소스 구조체들 추가
 - 해당 셰이더와 연관된 파이프라인 수정: 파이프라인 리소스 구조체들과 셰이더의 구조체들간 수정사항 동기화 필요, 렌더링 패스들 업데이트 필요
+
+#### 렌더 패스 실행 순서 (gfx.cpp render())
+
+1. shadowPass(PBR) → shadowPass(PBRSkinned)
+2. mainPass(PBR) → mainPass(PBRSkinned)
+3. **mainPass(Terrain)** — shadow map SRV 상태에서 실행, 그림자 수신 O, 단일 스레드
+4. mainPass(Skybox) → mainPass(BV) → mainPass(Billboard)
+5. mainPass(UI)
+
+#### TerrainPipeline 특성
+
+- 파일: `terrain.hpp/cpp`, `terrain.hlsl`, `terrainPipeline.hpp/cpp`
+- shadow pass 없음 (지형 자체는 그림자를 드리우지 않음)
+- 단일 스레드(`mainPass()` 하나만 제공, 멀티스레드 variant 없음)
+- 리소스 로드: `loadTerrainFromFiles()` — manifest 파싱 → height.raw 메시 빌드 → 텍스처 로드
+- **manifest 태그 순서**: `HeightMap → SplatPath(s) → DiffusePath(s) → MetaData` (MetaData가 마지막)
+- VB 3슬롯: Position(0) / Normal(1) / UV(2), IB 32-bit (513×513 정점 초과 가능)
+- Splat map: RGBA 채널 = 레이어 0~3 블렌딩 가중치, 각 레이어마다 diffuse + normal map
+- `terrain.hlsl`에서 `pbrLighting.hlsli` include 금지 — PBR 전용 cbuffer 변수 참조로 컴파일 오류 발생

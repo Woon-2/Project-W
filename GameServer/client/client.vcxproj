@@ -209,6 +209,8 @@
     <ClCompile Include="standalone\combatSystem.cpp" />
     <ClCompile Include="standalone\game.cpp" />
     <ClCompile Include="standalone\physics.cpp" />
+    <ClCompile Include="terrain.cpp" />
+    <ClCompile Include="terrainPipeline.cpp" />
     <ClCompile Include="texloader\DDSTextureLoader12.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
@@ -280,6 +282,8 @@
     <ClInclude Include="standalone\combatSystem.hpp" />
     <ClInclude Include="standalone\game.hpp" />
     <ClInclude Include="standalone\physics.hpp" />
+    <ClInclude Include="terrain.hpp" />
+    <ClInclude Include="terrainPipeline.hpp" />
     <ClInclude Include="texloader\DDSTextureLoader12.h" />
     <ClInclude Include="threadPool.hpp" />
     <ClInclude Include="timer.hpp" />
@@ -316,6 +320,10 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
     <FxCompile Include="skybox.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="terrain.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>

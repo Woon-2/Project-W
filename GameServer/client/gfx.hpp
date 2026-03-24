@@ -14,6 +14,7 @@
 #include "skyboxPipeline.hpp"
 #include "BVPipeline.hpp"
 #include "uiPipeline.hpp"
+#include "terrainPipeline.hpp"
 #include "spriteAnimation.hpp"
 
 extern HWND ghWnd;
@@ -47,6 +48,12 @@ struct RequestTextImageLoad {
 	UINT width;
 	UINT height;
 	TextImage* pDest;
+};
+
+struct RequestTerrainLoad {
+	std::filesystem::path terrainDir;
+	std::unordered_map<std::string, Texture>* pTexHashMap;
+	TerrainData* pDest;
 };
 
 // 렌더링을 총괄 책임지는 클래스
@@ -124,12 +131,21 @@ public:
 	void addDrawEvent( const UIPipeline::DrawEvent& drawEvent );
 	// 프레임 데이터를 입력한다.
 	void addFrameData( const UIPipeline::FrameData& frameData );
+	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+	void addDrawEvent(const TerrainPipeline::DrawEvent& drawEvent);
+	// 카메라 데이터를 입력한다.
+	void addCameraData(const TerrainPipeline::CameraData& cameraData);
+	// 조명 데이터를 입력한다.
+	void addLightData(const TerrainPipeline::LightData& lightData);
+	// 프레임 데이터를 입력한다.
+	void addFrameData(const TerrainPipeline::FrameData& frameData);
 
 	void addRequestModelLoad(const RequestModelLoad& request);
 	void addRequestSkyboxLoad(const RequestSkyboxLoad& request);
 	void addRequestTextureLoad( const RequestTextureLoad& request );
 	void addRequestSpritesLoad( const RequestSpriteAnimLoad& request );
 	void addRequestTextImageLoad( const RequestTextImageLoad& request );
+	void addRequestTerrainLoad(const RequestTerrainLoad& request);
 
 	// 파이프라인들이 자체적으로 사용하는 리소스들과
 	// addRequestXXLoad 꼴의 함수로 요청된 리소스들을 로드한다.
@@ -227,6 +243,12 @@ private:
 	std::vector<UIPipeline::DrawEvent> drawEventsUIPipeline_{};
 	UIPipeline::Resources resourcesUIPipeline_{};
 	UIPipeline::FrameData frameDataUIPipeline_{};
+	// Terrain Pipeline
+	std::vector<TerrainPipeline::DrawEvent> drawEventsTerrainPipeline_{};
+	TerrainPipeline::Resources resourcesTerrainPipeline_{};
+	TerrainPipeline::CameraData cameraDataTerrainPipeline_{};
+	TerrainPipeline::LightData  lightDataTerrainPipeline_{};
+	TerrainPipeline::FrameData  frameDataTerrainPipeline_{};
 
 	// Font
 	Font font_{};
@@ -241,6 +263,7 @@ private:
 	std::vector<RequestTextureLoad> requestsTextureLoad_{};
 	std::vector<RequestSpriteAnimLoad> requestsSpritesLoad_{};
 	std::vector<RequestTextImageLoad> requestsTextImageLoad_{};
+	std::vector<RequestTerrainLoad> requestsTerrainLoad_{};
 
 	ThreadPool* threadPool_ = nullptr;	// 설정되어있을 경우 멀티스레드로 동작한다.
 };

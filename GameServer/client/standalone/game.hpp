@@ -107,6 +107,7 @@ private:
 	std::shared_ptr<Gargoyle> gargoyle_{};
 
 	SkyboxObject skybox_{};
+	const TerrainData* terrain_ = nullptr;
 
 	Camera camera_{};
 	mu::Radian cameraPitch_ = 0.f;

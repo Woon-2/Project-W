@@ -55,6 +55,8 @@ void Game::setupStage() {
 	skybox_.setModel(assetManager_.modelCube());
 	skybox_.setSkyboxMaterial(assetManager_.skyboxMaterial());
 
+	terrain_ = assetManager_.terrain();
+
 	dirLight_.setOrient(mu::NQuat(mu::Degree(0.f), mu::Degree(160.f), mu::Degree(0.f)));
 	dirLight_.color = mu::Vec3(0.8f, 0.8f, 0.8f);
 	dirLight_.intensity = 2.f;
@@ -567,6 +569,30 @@ void Game::render() {
 		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
 	};
 	gfx_.addFrameData( frameDataPBRSkinned );
+
+	if (terrain_ && terrain_->mesh.subMeshes.size() > 0) {
+		gfx_.addDrawEvent(TerrainPipeline::DrawEvent{ terrain_ });
+		gfx_.addCameraData(TerrainPipeline::CameraData{
+			.view = camera_.view(),
+			.proj = camera_.proj(),
+			.pos  = camera_.eye()
+		});
+		gfx_.addLightData(TerrainPipeline::LightData{
+			.dir       = mu::Vec3(dirLight_.dir()),
+			.color     = dirLight_.color,
+			.intensity = dirLight_.intensity,
+			.view      = dirLight_.shadowView(),
+			.proj      = dirLight_.shadowProj()
+		});
+		auto terrainIdxShadowMap = BindlessIndex{};
+		if (SharedResources::ShadowMap::shadowMapData.contains("ShadowMap")) {
+			terrainIdxShadowMap = SharedResources::ShadowMap::shadowMapData.at("ShadowMap").tex.idxSrv;
+		}
+		gfx_.addFrameData(TerrainPipeline::FrameData{
+			.globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f),
+			.idxShadowMap  = terrainIdxShadowMap
+		});
+	}
 
 	auto frameData1 = UIPipeline::FrameData{
 		.screenWidth = static_cast<float>( gClientRect.right - gClientRect.left ),
