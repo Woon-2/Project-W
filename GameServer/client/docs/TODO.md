@@ -7,9 +7,14 @@
   - 유니티에서 어떻게 추출했는지는 `unityScripts/ExtractUtil.cs`, `unityScripts/ModelExtractor.cs`, `unityScripts/MultiBoundingVolume.cs` 참조
   - BVH 노드가 bone에 종속된 경우 `bone.toDress * finalXformData()[i] * world` 체인으로 월드 변환
 - [ ] Height map 기반 Terrain 구현/Terrain Splat까지 (Unity에서 맵 추출)
-- [ ] Anubis가 스태프를 equip하도록 구현
+- [ ] 몬스터 AI 시스템 초안 구현(주변 배회, 피격 시 어그로)
+- [ ] 장비 장착: 공격 모션에 무기도 같이 움직이도록 (필요하면 IK 구현)
+- [ ] Rigid Body Physics 구현: 중력, 공기 저항, 마찰력 등 반영
+- [ ] Software Occlusion(Culling)을 통한 최적화
+- [ ] Active Ragdoll 시뮬레이션, 몬스터들의 움직임에 적용
 - [ ] 시분할 애니메이션 제대로 적용
 - [ ] Cascaded Shadow Mapping 구현
 - [ ] Deferred Shading을 위한 GBuffer 설계
 - [ ] Deferred Shading 구현
-- [ ] Active Ragdoll 구현, 몬스터들의 움직임에 적용
+- [ ] 청크 구현 및 리소스 멀티스레드 동적 로딩 구현 (Seamless Openworld가 가능하도록)
+- [ ] Image Based Lighting 구현
