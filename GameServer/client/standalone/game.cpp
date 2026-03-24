@@ -861,6 +861,9 @@ void Game::processInput(Milliseconds deltaTime) {
 
 	// F key: emit particles for testing
 	if ( (keyboardStateCurr_['F'] & 0x80) && !(keyboardStatePrev_['F'] & 0x80) ) {
+		emitterConfig_.position = player_->pos()
+		                        + player_->right()   * 1.0f
+		                        + player_->forward() * 1.5f;
 		particleSystem_.emit(emitterConfig_, 5);
 	}
 
