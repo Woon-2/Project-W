@@ -55,8 +55,6 @@ void Game::setupStage() {
 	skybox_.setModel(assetManager_.modelCube());
 	skybox_.setSkyboxMaterial(assetManager_.skyboxMaterial());
 
-	terrain_ = assetManager_.terrain();
-
 	dirLight_.setOrient(mu::NQuat(mu::Degree(0.f), mu::Degree(160.f), mu::Degree(0.f)));
 	dirLight_.color = mu::Vec3(0.8f, 0.8f, 0.8f);
 	dirLight_.intensity = 2.f;
@@ -133,9 +131,9 @@ void Game::importNode(std::ifstream& ifs) {
 	object.setScale(DirectX::XMLoadFloat3(&worldS));
 
 	if (type == "Cube") {
-		ground_ = std::make_shared<Cube>(std::move(object));
-		ground_->setModel(assetManager_.modelCube());
-		importCube(ifs, *ground_);
+		auto tmp = std::make_shared<Cube>(std::move(object));
+		tmp->setModel(assetManager_.modelCube());
+		importCube(ifs, *tmp);
 	}
 	else if (type == "PlayerStart") {
 		if (!playerSpawned_) {
@@ -179,6 +177,11 @@ void Game::importNode(std::ifstream& ifs) {
 	else if (type == "GargoyleSpawner") {
 		gargoyle_ = std::make_shared<Gargoyle>(std::move(object));
 		importGargoyleSpawner(ifs, *gargoyle_);
+	}
+	else if (type == "Terrain") {
+		terrain_ = std::make_shared<TerrainObject>(std::move(object));
+		importTerrain(ifs, *terrain_);
+		terrain_->update(0ms, 1.f);
 	}
 	else {
 		// no-op
@@ -277,6 +280,11 @@ void Game::importGargoyleSpawner(std::ifstream& ifs, Gargoyle& gargoyle) {
 	gargoyle.setAnimBlender(animSystem_, assetManager_);
 	gargoyle.setHp(160);
 	gargoyle.setId(9);
+}
+
+void Game::importTerrain(std::ifstream& ifs, TerrainObject& terrain) {
+	const auto manifestPath = readText(ifs, "ManifestPath");
+	terrain.setTerrainData(assetManager_.terrain());
 }
 
 // 게임의 업데이트는 다음 순서대로 이루어진다.
@@ -487,18 +495,17 @@ void Game::update(Milliseconds deltaTime) {
 		// 물리 시뮬레이션의 대상이 되는 객체들을
 		// 한 곳에 모아 PhysicSystem 객체에 전달한다.
 		static std::vector<Object*> targetObjects{};
-		targetObjects.resize(11u);
-		targetObjects[0] = ground_.get();
-		targetObjects[1] = player_.get();
-		targetObjects[2] = goblin_.get();
-		targetObjects[3] = anubis_.get();
-		targetObjects[4] = bat_.get();
-		targetObjects[5] = bomber_.get();
-		targetObjects[6] = demon_.get();
-		targetObjects[7] = dragon_.get();
-		targetObjects[8] = eyeball_.get();
-		targetObjects[9] = fishman_.get();
-		targetObjects[10] = gargoyle_.get();
+		targetObjects.resize(10u);
+		targetObjects[0] = player_.get();
+		targetObjects[1] = goblin_.get();
+		targetObjects[2] = anubis_.get();
+		targetObjects[3] = bat_.get();
+		targetObjects[4] = bomber_.get();
+		targetObjects[5] = demon_.get();
+		targetObjects[6] = dragon_.get();
+		targetObjects[7] = eyeball_.get();
+		targetObjects[8] = fishman_.get();
+		targetObjects[9] = gargoyle_.get();
 
 		while (physicUpdateAcc_ >= physicUpdateInterval) {
 			physicSystem_.step(targetObjects, physicUpdateInterval);
@@ -516,7 +523,6 @@ void Game::update(Milliseconds deltaTime) {
 	// 게임 객체의 update 함수에 전달된다.
 	const auto tPhysicInterpolation = physicUpdateAcc_ / physicUpdateInterval;
 
-	ground_->update(deltaTime, tPhysicInterpolation);
 	player_->update(deltaTime, tPhysicInterpolation);
 	goblin_->update(deltaTime, tPhysicInterpolation);
 	anubis_->update(deltaTime, tPhysicInterpolation);
@@ -529,7 +535,7 @@ void Game::update(Milliseconds deltaTime) {
 	gargoyle_->update(deltaTime, tPhysicInterpolation);
 	camera_.update();
 	dirLight_.update(deltaTime);
-	dirLight_.updateShadowAuxDirectional(camera_.eye(), 100.f, -10.f, 10.f, -10.f, 10.f, 50.f, 200.f);
+	dirLight_.updateShadowAuxDirectional(camera_.eye(), 400.f, -300.f, 300.f, -300.f, 300.f, 50.f, 800.f);
 
 	// playerHpUI_.update( deltaTime, gfx_, nullptr );
 
@@ -544,7 +550,6 @@ void Game::update(Milliseconds deltaTime) {
 
 void Game::render() {
 	debugBVView_.render(gfx_);
-	ground_->render(gfx_);
 	player_->render(gfx_);
 	goblin_->render(gfx_);
 	anubis_->render(gfx_);
@@ -570,8 +575,8 @@ void Game::render() {
 	};
 	gfx_.addFrameData( frameDataPBRSkinned );
 
-	if (terrain_ && terrain_->mesh.subMeshes.size() > 0) {
-		gfx_.addDrawEvent(TerrainPipeline::DrawEvent{ terrain_ });
+	if (terrain_) {
+		terrain_->render(gfx_);
 		gfx_.addCameraData(TerrainPipeline::CameraData{
 			.view = camera_.view(),
 			.proj = camera_.proj(),

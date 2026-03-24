@@ -30,6 +30,7 @@ struct FrameData {
 
 struct DrawEvent {
     const TerrainData* terrain = nullptr;
+    mu::Mat4x4         world   = {};    // world transform; default is identity
 };
 
 struct Resources {

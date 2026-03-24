@@ -152,18 +152,15 @@ void Dispatcher::mainPass() {
         // Build PerDrawcallData
         auto pdd = TerrainShader::PerDrawcallData{};
 
-        // World matrices (terrain sits at world origin: identity)
+        // World matrices from the draw event's world transform.
+        const auto& worldMat = ev.world;
         auto view = cameraData_.view;
         auto proj = cameraData_.proj;
-        auto vp   = view * proj;
+        auto wvp  = worldMat * view * proj;
 
-        // WVP = world(identity) * V * P
-        pdd.wvp         = mu::transpose(vp).getXmf();
-
-        // World matrix (identity for ground-origin terrain)
-        auto identMat = mu::Mat4x4(); // default-constructed = identity
-        pdd.world       = identMat.getXmf();
-        pdd.worldNormal = identMat.getXmf(); // inverse-transpose of identity = identity
+        pdd.wvp         = mu::transpose(wvp).getXmf();
+        pdd.world       = mu::transpose(worldMat).getXmf();
+        pdd.worldNormal = mu::transpose(worldMat).getXmf(); // uniform scale assumed
 
         // Splat map
         pdd.idxSplatMap = terrain.splatMap.idxSrv;

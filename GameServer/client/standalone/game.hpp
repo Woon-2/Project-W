@@ -77,6 +77,7 @@ private:
 	void importEyeballSpawner(std::ifstream& ifs, Eyeball& eyeball);
 	void importFishmanSpawner(std::ifstream& ifs, Fishman& fishman);
 	void importGargoyleSpawner(std::ifstream& ifs, Gargoyle& gargoyle);
+	void importTerrain(std::ifstream& ifs, TerrainObject& terrain);
 
 	AssetManager assetManager_{};
 
@@ -94,7 +95,6 @@ private:
 	EventList eventList_{};
 	Timer* pTimer_ = nullptr;
 
-	std::shared_ptr<Cube> ground_{};
 	std::shared_ptr<Player> player_{};
 	std::shared_ptr<Goblin> goblin_{};
 	std::shared_ptr<Anubis> anubis_{};
@@ -107,7 +107,7 @@ private:
 	std::shared_ptr<Gargoyle> gargoyle_{};
 
 	SkyboxObject skybox_{};
-	const TerrainData* terrain_ = nullptr;
+	std::shared_ptr<TerrainObject> terrain_{};
 
 	Camera camera_{};
 	mu::Radian cameraPitch_ = 0.f;

@@ -837,4 +837,23 @@ private:
 	EventBus eventBus_{};
 };
 
+struct TerrainData;
+
+// Game entity wrapping TerrainData with a world transform.
+// Mirrors the Object/Model relationship: TerrainObject owns placement,
+// TerrainData owns the heavy mesh and texture resources.
+class TerrainObject : public Object {
+public:
+	TerrainObject() = default;
+	TerrainObject(Object&& base) : Object(std::move(base)) {}
+
+	void setTerrainData(const TerrainData* data) { terrainData_ = data; }
+	const TerrainData* terrainData() const { return terrainData_; }
+
+	void MU_CALLCONV render(GFX& gfx, mu::Mat4x4 offsetXform = mu::Mat4x4()) override;
+
+private:
+	const TerrainData* terrainData_ = nullptr;
+};
+
 #endif	// __object_HPP

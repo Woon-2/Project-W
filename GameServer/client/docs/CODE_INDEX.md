@@ -205,6 +205,13 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `Eyeball` | `object.hpp #768` |
 | `Fishman` | `object.hpp #792` |
 | `Gargoyle` | `object.hpp #816` |
+| `TerrainObject` | `object.hpp #845` |
+
+**TerrainObject (`object.hpp #845`):**
+- Object 상속. `const TerrainData*` 보유 (TerrainData/Model 분리 패턴과 동일)
+- `setTerrainData(const TerrainData*)` — 지형 데이터 연결
+- `render()` override — `TerrainPipeline::DrawEvent{ terrain, renderState_.world }` 제출
+- 구현: `object.cpp` 말미
 
 ---
 
@@ -251,6 +258,11 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 - `splatMap`: RGBA splat 텍스처
 - `mesh`: VB 3슬롯 (Position/Normal/UV), IB 32-bit
 
+**TerrainPipeline::DrawEvent (`terrainPipeline.hpp #31-34`):**
+- `terrain`: `const TerrainData*`
+- `world`: `mu::Mat4x4` — 월드 변환 행렬 (기본값 identity)
+- mainPass()에서 `ev.world`로 WVP 계산 (identity 하드코딩 제거)
+
 **GFX 내부 파이프라인별 DrawEvent 벡터 위치 (`gfx.hpp`):**
 
 | 파이프라인 | DrawEvent 벡터 위치 |
@@ -277,7 +289,8 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `Game::update()` | `standalone/game.hpp #45` | 메인 루프 (입력→이벤트→물리→오브젝트→애니메이션) |
 | `Game::render()` | `standalone/game.hpp #46` | GFX 렌더 호출 |
 | `Game::processInput()` | `standalone/game.hpp #57` | 키보드/마우스 입력 처리 |
-| `importNode()` 계열 | `standalone/game.hpp #68-79` | 씬 바이너리 파일 파싱 |
+| `importNode()` 계열 | `standalone/game.hpp #68-80` | 씬 바이너리 파일 파싱 |
+| `importTerrain()` | `standalone/game.hpp #80` | Terrain 노드 처리 — `TerrainObject`에 TerrainData 연결 |
 
 **Game 멤버 변수 (game.hpp #81-135):**
 
@@ -291,7 +304,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `physicUpdateInterval` | `Seconds` | `1s/60f` 고정 타임스텝 |
 | `eventList_` | `EventList` | 프레임별 이벤트 큐 |
 | 몬스터 shared_ptr들 | `#97-107` | goblin_, anubis_, bat_ 등 |
-| `terrain_` | `const TerrainData*` | `game.hpp #111` — 지형 데이터 포인터 |
+| `terrain_` | `std::shared_ptr<TerrainObject>` | `game.hpp #110` — 지형 게임 엔티티 |
 
 **AssetManager 주요 멤버 (`AssetManager.hpp`):**
 

@@ -147,7 +147,7 @@ float4 PSMain(VSOutput input) : SV_TARGET {
     // 5. Lambertian directional lighting.
     float3 L       = normalize(-lightDirW);
     float  NdotL   = saturate(dot(shadingNormalW, L));
-    float3 diffuse = albedo * lightColor * lightIntensity * NdotL * shadow;
+    float3 diffuse = albedo * lightColor * lightIntensity * NdotL; // * shadow;
     float3 ambient = albedo * globalAmbient;
 
     float3 color = diffuse + ambient;

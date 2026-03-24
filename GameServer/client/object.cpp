@@ -1,5 +1,6 @@
 #include "pch.hpp"
 #include "object.hpp"
+#include "terrainPipeline.hpp"
 #include "errorHandling.hpp"
 #include "AssetManager.hpp"
 #include "Timer.hpp"
@@ -2382,4 +2383,12 @@ void Gargoyle::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Eve
 	default:
 		break;
 	}
+}
+
+void TerrainObject::render(GFX& gfx, mu::Mat4x4 /*offsetXform*/) {
+	if (!terrainData_ || terrainData_->mesh.subMeshes.empty()) return;
+	gfx.addDrawEvent(TerrainPipeline::DrawEvent{
+		.terrain = terrainData_,
+		.world   = renderState_.world
+	});
 }

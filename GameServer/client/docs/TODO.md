@@ -10,7 +10,11 @@
   - TerrainExtractor.cs로 추출된 height.raw + terrain_meta.bin + terrain_manifest.bin + DDS 텍스처 로드
   - N×N 그리드 메시 생성 (중앙차분 법선, 32-bit IB), RGBA splat map 기반 레이어 블렌딩
   - terrain.hlsl: Lambertian + globalAmbient + PCF shadow, terrainPipeline.hpp/cpp: Dispatcher
-- [ ] Terrain Shadow 구현
+- [X] level 바이너리에서 Terrain WorldTRS 읽어 월드 변환 적용
+  - TerrainObject(Object 상속)와 TerrainData 분리: Object/Model 패턴과 동일
+  - importNode() "Terrain" 분기 → TerrainObject 생성 → importTerrain() → update(0ms, 1.f)
+  - TerrainPipeline::DrawEvent에 world 필드 추가, mainPass()에서 ev.world로 WVP 계산
+- [ ] Terrain PBR Shading, Terrain Shadow 구현
 - [ ] 몬스터 AI 시스템 초안 구현(주변 배회, 피격 시 어그로)
 - [ ] 장비 장착: 공격 모션에 무기도 같이 움직이도록 (필요하면 IK 구현)
 - [ ] Rigid Body Physics 구현: 중력, 공기 저항, 마찰력 등 반영
