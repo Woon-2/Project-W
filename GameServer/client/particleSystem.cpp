@@ -41,7 +41,19 @@ void ParticleSystem::emit(const EmitterConfig& config, int count) {
         cursor_            = (cursor_ + 1) % kMaxParticles;
         const float  speed = speedDist(rng_);
         const mu::Vec3 dir = sampleConeDirection(axis, config.spread, rng_);
-        p.pos         = config.position;
+		// Spawn position starts at emitter position.
+        mu::Vec3 spawnPos = config.position;
+		// If the emitter shape is an edge, offset the spawn position along the edge direction.
+        if (config.shape == EmitterShape::Edge) {
+            const float lenSq = mu::dot(config.edgeDir, config.edgeDir);
+            if (lenSq > 1e-6f) {
+                const mu::Vec3 edgeDirNorm = mu::Vec3(mu::normalize(config.edgeDir));
+                std::uniform_real_distribution<float> edgeDist(
+                    -config.edgeLength * 0.5f, config.edgeLength * 0.5f);
+                spawnPos += edgeDirNorm * edgeDist(rng_);
+            }
+        }
+        p.pos         = spawnPos;
         p.vel         = dir * speed;
         p.lifetime    = lifeDist(rng_);
         p.maxLifetime = p.lifetime;
@@ -55,14 +67,32 @@ void ParticleSystem::emit(const EmitterConfig& config, int count) {
         p.additive    = config.additiveBlend;
         p.anim.init(config.pClip);
         p.anim.setAdditive(config.additiveBlend);
-        p.anim.setPos(config.position);
+        p.anim.setPos(spawnPos);
         p.anim.setRotation(p.rotation);
         p.active      = true;
     }
 }
 
+void ParticleSystem::startContinuous(const EmitterConfig& config) {
+    continuousConfig_ = config;
+    continuous_       = true;
+    emitAccum_        = 0.f;
+}
+
+void ParticleSystem::stopContinuous() {
+    continuous_ = false;
+}
+
 void ParticleSystem::update(Seconds dt) {
     const float dtf = dt.count();
+
+    if (continuous_ && continuousConfig_.emitRate > 0.f) {
+        emitAccum_ += continuousConfig_.emitRate * dtf;
+        const int count = static_cast<int>(emitAccum_);
+        emitAccum_ -= static_cast<float>(count);
+        if (count > 0) emit(continuousConfig_, count);
+    }
+
     const Milliseconds dtMs = std::chrono::duration_cast<Milliseconds>(dt);
     for (auto& p : pool_) {
         if (!p.active) continue;

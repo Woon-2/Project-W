@@ -6,6 +6,8 @@
 #include <array>
 #include <random>
 
+enum class EmitterShape { Point, Edge };
+
 struct EmitterConfig {
     mu::Vec3                   position;
     mu::Vec3                   direction   = {0, 1, 0};  // world-space emit axis
@@ -23,7 +25,11 @@ struct EmitterConfig {
     float                      startRotationMin = 0.f;   // radians
     float                      startRotationMax = 0.f;
     const SpriteAnimationClip* pClip       = nullptr;
+    EmitterShape               shape        = EmitterShape::Point;
+    float                      edgeLength   = 1.f;
+    mu::Vec3                   edgeDir      = {1.f, 0.f, 0.f};
     bool                       additiveBlend = true;
+    float                      emitRate     = 0.f;       // particles/sec (0이면 수동 emit)
 };
 
 class GFX;
@@ -48,10 +54,17 @@ public:
     void update(Seconds dt);
     void render(GFX& gfx);
 
+    void startContinuous(const EmitterConfig& config);
+    void stopContinuous();
+
 private:
     std::array<Particle, kMaxParticles> pool_{};
-    int          cursor_ = 0;
-    std::mt19937 rng_{ std::random_device{}() };
+    int           cursor_ = 0;
+    std::mt19937  rng_{ std::random_device{}() };
+
+    EmitterConfig continuousConfig_{};
+    float         emitAccum_  = 0.f;
+    bool          continuous_ = false;
 };
 
 #endif  // __particleSystem_HPP

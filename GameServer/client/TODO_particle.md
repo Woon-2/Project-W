@@ -289,17 +289,17 @@ enum class EmitterShape { Point, Edge };
 - **Point** (기본값): 현재 구현과 동일, 한 점에서 emit
 - **Edge**: 선분 위의 랜덤 위치에서 emit — 불꽃 바닥이 넓게 퍼지는 효과
 
-- [ ] `EmitterShape` enum 추가
-- [ ] `EmitterConfig`에 추가
+- [x] `EmitterShape` enum 추가
+- [x] `EmitterConfig`에 추가
   ```cpp
   EmitterShape shape      = EmitterShape::Point;
   float        edgeLength = 1.f;        // Edge 타입일 때 선분 길이
   mu::Vec3     edgeDir    = {1, 0, 0};  // Edge 방향
   ```
-- [ ] `emit()` 에서 shape에 따라 spawn 위치 계산
+- [x] `emit()` 에서 shape에 따라 spawn 위치 계산
   - `Point`: `config.position`
   - `Edge`: `config.position + edgeDir * rand(-edgeLength/2, edgeLength/2)`
-- [ ] 빌드 & 실행 → Edge 타입에서 선분 위에 고르게 파티클이 생성되는지 확인
+- [x] 빌드 & 실행 → Edge 타입에서 선분 위에 고르게 파티클이 생성되는지 확인
 
 **확인 기준:** Edge 타입으로 설정하면 불꽃 바닥이 선형으로 퍼지며 타오르는 모양이 된다.
 
@@ -311,27 +311,27 @@ enum class EmitterShape { Point, Edge };
 
 **Continuous Emit:**
 
-- [ ] `EmitterConfig`에 `float emitRate = 0.f` 추가 (particles/sec, 0이면 수동 emit)
-- [ ] `ParticleSystem::update(dt)` 에서 `emitRate > 0`이면 누적 시간으로 자동 emit
+- [x] `EmitterConfig`에 `float emitRate = 0.f` 추가 (particles/sec, 0이면 수동 emit)
+- [x] `ParticleSystem::update(dt)` 에서 `emitRate > 0`이면 누적 시간으로 자동 emit
   ```cpp
   emitAccum_ += emitRate * dt;
   int count = (int)emitAccum_;
   emitAccum_ -= count;
   if (count > 0) emit(config_, count);
   ```
-- [ ] F키는 수동 burst emit으로 유지, 별도 emitter로 continuous emit 테스트
+- [x] F키는 수동 burst emit으로 유지, 별도 emitter로 continuous emit 테스트
 
 **불꽃 프리셋 (EmitterConfig 튜닝 목표값):**
 
-- [ ] `gravity = {0, -1.f, 0}` — 중력 거의 없음, 불꽃은 위로 타오름
-- [ ] `drag = 0.8f` — 공기 저항으로 자연스럽게 감속
-- [ ] `direction = {0, 1, 0}`, `spread = 0.2f` — 좁은 cone으로 위쪽 집중
-- [ ] `speedMin = 0.5f, speedMax = 2.f` — 천천히 위로 올라가는 속도
-- [ ] `sizeBegin = 1.f, sizeEnd = 0.3f` — 타오르다 작아지는 느낌
-- [ ] `tintBegin = {1, 1, 1}, tintEnd = {1, 0.3f, 0}` — 흰→주황 계열 fade
-- [ ] 빌드 & 실행 → 불꽃이 자연스럽게 타오르는지 확인
+- [x] `gravity = {0, -1.f, 0}` — 중력 거의 없음, 불꽃은 위로 타오름
+- [x] `drag = 0.8f` — 공기 저항으로 자연스럽게 감속
+- [x] `direction = {0, 1, 0}`, `spread = 0.2f` — 좁은 cone으로 위쪽 집중
+- [x] `speedMin = 0.5f, speedMax = 2.f` — 천천히 위로 올라가는 속도
+- [x] `sizeBegin = 1.f, sizeEnd = 0.3f` — 타오르다 작아지는 느낌
+- [x] `tintBegin = {1, 1, 1}, tintEnd = {1, 0.3f, 0}` — 흰→주황 계열 fade
+- [x] 빌드 & 실행 → 불꽃이 자연스럽게 타오르는지 확인
 
-**확인 기준:** 횃불처럼 위로 타오르며 자연스럽게 소멸하는 불꽃이 연출된다.
+**확인 기준:** 횃불처럼 위로 타오르며 자연스럽게 소멸하는 불꽃이 연출된다. ✓
 
 ---
 

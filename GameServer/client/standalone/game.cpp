@@ -92,19 +92,26 @@ void Game::setupStage() {
 	playerHpUI_.setScale( mu::Vec2(1024.f, 64.f) );
 
 	// 파티클 설정
-	emitterConfig_.pClip = assetManager_.flameAnimation();
-	emitterConfig_.position = { 0.f, 1.f, -3.f };
-	emitterConfig_.direction = { 0.f, 1.f, 0.f };
-	emitterConfig_.spread = 0.0f;
-	emitterConfig_.speedMin = 2.f;
-	emitterConfig_.speedMax = 5.f;
-	emitterConfig_.lifetimeMin = 0.5f;
-	emitterConfig_.lifetimeMax = 1.5f;
-	emitterConfig_.sizeEnd = 0.f;
-	emitterConfig_.tintBegin = { 1.f, 0.4f, 0.0f };
-	emitterConfig_.tintEnd = { 1.f, 0.4f, 0.0f };
-	emitterConfig_.startRotationMin = 0.f;
-	emitterConfig_.startRotationMax = mu::pi * 2;
+	emitterConfig_.pClip             = assetManager_.flameAnimation();
+	emitterConfig_.position          = { 0.f, 0.0f, -5.f };
+	emitterConfig_.direction         = { 0.f, 1.f, 0.f };
+	emitterConfig_.spread            = 0.0f;
+	emitterConfig_.speedMin          = 0.5f;
+	emitterConfig_.speedMax          = 2.f;
+	emitterConfig_.lifetimeMin       = 0.5f;
+	emitterConfig_.lifetimeMax       = 1.5f;
+	emitterConfig_.sizeBegin         = 1.f;
+	emitterConfig_.sizeEnd           = 0.3f;
+	emitterConfig_.drag              = 0.8f;
+	emitterConfig_.gravity           = { 0.f, -1.f, 0.f };
+	emitterConfig_.tintBegin         = { 1.f, 0.4f, 0.f };
+	emitterConfig_.tintEnd           = { 1.f, 0.4f, 0.f };
+	emitterConfig_.startRotationMin  = 0.f;
+	emitterConfig_.startRotationMax  = mu::pi * 2;
+	emitterConfig_.shape             = EmitterShape::Edge;
+	emitterConfig_.edgeLength		 = 1.5f;
+	emitterConfig_.emitRate          = 15.0f;
+	particleSystem_.startContinuous(emitterConfig_);
 
 	// 전투 시스템에 참가자 등록
 	// 플레이어: 공격 hitbox 및 데미지 설정 (AI 쿨타임은 사용하지 않음)
