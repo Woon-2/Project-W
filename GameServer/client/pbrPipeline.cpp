@@ -180,11 +180,13 @@ void Dispatcher::shadowUpdate() {
 	perInstanceData.clear();
 
 	// main directional light의 내용을 가공해 pfd에 저장한다.
-	auto pfd = ShadowMapShader::PerFrameData{
-		.lightVP = mu::transpose(
-			mainDirectionalLightData_.view * mainDirectionalLightData_.proj
-		).getXmf()
-	};
+	ShadowMapShader::PerFrameData pfd{};
+	pfd.cascadeCount = mainDirectionalLightData_.cascadeCount;
+	for (u32t i = 0u; i < mainDirectionalLightData_.cascadeCount; ++i) {
+		pfd.lightVP[i] = mu::transpose(
+			mainDirectionalLightData_.cascadeViews[i] * mainDirectionalLightData_.cascadeProjs[i]
+		).getXmf();
+	}
 	// pfd의 내용을 바탕으로 GPU 데이터를 갱신한다.
 	pResources_->shadowPass.perFrameData.stage(roomIdx_, &pfd, 1u);
 }
@@ -234,11 +236,13 @@ void Dispatcher::shadowUpdateMT() {
 	}
 
 	// main directional light의 내용을 가공해 pfd에 저장한다.
-	auto pfd = ShadowMapShader::PerFrameData{
-		.lightVP = mu::transpose(
-			mainDirectionalLightData_.view * mainDirectionalLightData_.proj
-		).getXmf()
-	};
+	ShadowMapShader::PerFrameData pfd{};
+	pfd.cascadeCount = mainDirectionalLightData_.cascadeCount;
+	for (u32t i = 0u; i < mainDirectionalLightData_.cascadeCount; ++i) {
+		pfd.lightVP[i] = mu::transpose(
+			mainDirectionalLightData_.cascadeViews[i] * mainDirectionalLightData_.cascadeProjs[i]
+		).getXmf();
+	}
 	// pfd의 내용을 바탕으로 GPU 데이터를 갱신한다.
 	pResources_->shadowPass.perFrameData.stage(roomIdx_, &pfd, 1u);
 
@@ -285,14 +289,14 @@ void Dispatcher::shadowDraw() {
 
 	// shadow map data를 미리 쿼리해놓는다.
 	// (동일한 검색 연산의 반복을 피한다.)
-	auto& shadowMapData = SharedResources::ShadowMap::shadowMapData.at("ShadowMap");
+	auto& shadowMapData = SharedResources::ShadowMap::shadowMapData.at("ShadowMap")[roomIdx_];
 
 	// 명령 기록 시작
 	DISPLAY_ERROR_DX_VOID(cmdList->SetGraphicsRootSignature(rootSig_->get()), false);
 	DISPLAY_ERROR_DX_VOID(cmdList->SetPipelineState(shadowShader_.Get()), false);
 
 	// shadow pass에서는 자체적인 shadow map 텍스처의 dsv를 사용한다.
-	auto shadowMapDsv = pDsvPool_->cpuHandle(shadowMapData.tex.idxDsv);
+	auto& shadowMapDsv = shadowMapData.dsv;
 	DISPLAY_ERROR_DX_VOID( cmdList->OMSetRenderTargets(
 		0u, nullptr, false, &shadowMapDsv
 	), false );
@@ -480,7 +484,7 @@ void Dispatcher::shadowDrawMT() {
 
 	// shadow map data를 미리 쿼리해놓는다.
 	// (동일한 검색 연산의 반복을 피한다.)
-	auto& shadowMapData = SharedResources::ShadowMap::shadowMapData.at("ShadowMap");
+	auto& shadowMapData = SharedResources::ShadowMap::shadowMapData.at("ShadowMap")[roomIdx_];
 
 	while (accDrawcallCnt + (jobSizeDraw_ - 1) < instancingGroups.size() - 1u) {
 		// 명령 컨텍스트 초기화
@@ -608,18 +612,20 @@ void Dispatcher::mainUpdate() {
 
 	// shadow map data를 미리 쿼리해놓는다.
 	// (동일한 검색 연산의 반복을 피한다.)
-	auto& shadowMapData = SharedResources::ShadowMap::shadowMapData.at("ShadowMap");
+	auto& shadowMapData = SharedResources::ShadowMap::shadowMapData.at("ShadowMap")[roomIdx_];
 
 	// FrameData와 main directional light의 내용을 가공해 pfd에 저장한다.
-	auto pfd = PBRShader::PerFrameData{
-		.globalAmbient = frameData_.globalAmbient.getXmf(),
-		.lightCnt = static_cast<u32t>(lightData.size()),	// 여기서 lightData.size()를 호출하므로 
-														// 이전에 lightData.clear()를 호출하면 안된다.
-		.idxShadowMap = shadowMapData.tex.idxSrv,
-		.lightVP = mu::transpose(
-			mainDirectionalLightData_.view * mainDirectionalLightData_.proj
-		).getXmf()
-	};
+	PBRShader::PerFrameData pfd{};
+	pfd.globalAmbient     = frameData_.globalAmbient.getXmf();
+	pfd.lightCnt          = static_cast<u32t>(lightData.size());
+	pfd.cascadeCount      = mainDirectionalLightData_.cascadeCount;
+	pfd.idxShadowMap      = shadowMapData.tex.idxSrv;
+	pfd.cascadeSplitsFarV = mainDirectionalLightData_.cascadeSplitsFarV;
+	for (u32t i = 0u; i < mainDirectionalLightData_.cascadeCount; ++i) {
+		pfd.lightVP[i] = mu::transpose(
+			mainDirectionalLightData_.cascadeViews[i] * mainDirectionalLightData_.cascadeProjs[i]
+		).getXmf();
+	}
 	// pfd의 내용을 바탕으로 GPU 데이터를 갱신한다.
 	pResources_->mainPass.perFrameData.stage(roomIdx_, &pfd, 1u);
 
@@ -702,18 +708,20 @@ void Dispatcher::mainUpdateMT() {
 
 	// shadow map data를 미리 쿼리해놓는다.
 	// (동일한 검색 연산의 반복을 피한다.)
-	auto& shadowMapData = SharedResources::ShadowMap::shadowMapData.at("ShadowMap");
+	auto& shadowMapData = SharedResources::ShadowMap::shadowMapData.at("ShadowMap")[roomIdx_];
 
 	// FrameData와 main directional light의 내용을 가공해 pfd에 저장한다.
-	auto pfd = PBRShader::PerFrameData{
-		.globalAmbient = frameData_.globalAmbient.getXmf(),
-		.lightCnt = static_cast<u32t>(lightData.size()),	// 여기서 lightData.size()를 호출하므로 
-														// 이전에 lightData.clear()를 호출하면 안된다.
-		.idxShadowMap = shadowMapData.tex.idxSrv,
-		.lightVP = mu::transpose(
-			mainDirectionalLightData_.view * mainDirectionalLightData_.proj
-		).getXmf()
-	};
+	PBRShader::PerFrameData pfd{};
+	pfd.globalAmbient     = frameData_.globalAmbient.getXmf();
+	pfd.lightCnt          = static_cast<u32t>(lightData.size());
+	pfd.cascadeCount      = mainDirectionalLightData_.cascadeCount;
+	pfd.idxShadowMap      = shadowMapData.tex.idxSrv;
+	pfd.cascadeSplitsFarV = mainDirectionalLightData_.cascadeSplitsFarV;
+	for (u32t i = 0u; i < mainDirectionalLightData_.cascadeCount; ++i) {
+		pfd.lightVP[i] = mu::transpose(
+			mainDirectionalLightData_.cascadeViews[i] * mainDirectionalLightData_.cascadeProjs[i]
+		).getXmf();
+	}
 	// pfd의 내용을 바탕으로 GPU 데이터를 갱신한다.
 	pResources_->mainPass.perFrameData.stage(roomIdx_, &pfd, 1u);
 

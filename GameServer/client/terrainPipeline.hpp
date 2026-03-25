@@ -19,8 +19,14 @@ struct LightData {
     mu::Vec3   dir;
     mu::Vec3   color;
     float      intensity = 1.f;
-    mu::Mat4x4 view;
-    mu::Mat4x4 proj;
+    // Single-shadow VP (legacy / non-CSM path)
+    mu::Mat4x4 view = {};
+    mu::Mat4x4 proj = {};
+    // CSM cascade data
+    std::array<mu::Mat4x4, MAX_CSM_CASCADES> cascadeViews = {};
+    std::array<mu::Mat4x4, MAX_CSM_CASCADES> cascadeProjs = {};
+    XMFLOAT4   cascadeSplitsFarV = {};  // view-space far depth per cascade
+    u32t       cascadeCount = MAX_CSM_CASCADES;
 };
 
 struct FrameData {
@@ -76,7 +82,7 @@ public:
         ThreadPool* threadPool,
         CommandListPool* commandListPool,
         std::vector<DrawEvent>&& drawEvents,
-        const LightData& lightData,
+        std::vector<LightData>&& lightData,
         const CameraData& cameraData,
         const FrameData& frameData,
         std::size_t roomIdx
@@ -131,7 +137,7 @@ private:
     CommandListPool*                  cmdListPool_ = nullptr;
     Resources*                        pResources_  = nullptr;
     std::vector<DrawEvent>            drawEvents_{};
-    LightData                         lightData_{};
+    std::vector<LightData>            lightData_{};
     CameraData                        cameraData_{};
     FrameData                         frameData_{};
     std::size_t                       roomIdx_{};

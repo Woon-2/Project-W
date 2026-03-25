@@ -37,8 +37,11 @@ struct LightData {
 	mu::Vec3 atten;
 	Type type;
 	bool isMainDirectionalLight;
-	mu::Mat4x4 view;
-	mu::Mat4x4 proj;
+	// CSM cascade VP data (only meaningful when isMainDirectionalLight == true)
+	std::array<mu::Mat4x4, MAX_CSM_CASCADES> cascadeViews  = {};
+	std::array<mu::Mat4x4, MAX_CSM_CASCADES> cascadeProjs  = {};
+	XMFLOAT4 cascadeSplitsFarV = {};  // view-space far depth per cascade
+	u32t cascadeCount = MAX_CSM_CASCADES;
 };
 
 struct CameraData {

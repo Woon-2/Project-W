@@ -1,4 +1,4 @@
-﻿#include "pch.hpp"
+#include "pch.hpp"
 #include "gfx.hpp"
 #include "errorHandling.hpp"
 
@@ -594,7 +594,7 @@ void GFX::addCameraData(const TerrainPipeline::CameraData& cameraData) {
 }
 // 조명 데이터를 입력한다.
 void GFX::addLightData(const TerrainPipeline::LightData& lightData) {
-	lightDataTerrainPipeline_ = lightData;
+	lightDataTerrainPipeline_.push_back(lightData);
 }
 // 프레임 데이터를 입력한다.
 void GFX::addFrameData(const TerrainPipeline::FrameData& frameData) {
@@ -624,7 +624,7 @@ void GFX::addCameraData(const BVPipeline::CameraData& cameraData) {
 // 파이프라인들이 자체적으로 사용하는 리소스들과
 // addRequestXXLoad 꼴의 함수로 요청된 리소스들을 로드/생성한다.
 // 반드시 모든 장치 초기화가 끝나고 호출되어야 한다.
-void GFX::loadAssets() {
+void GFX::loadAssets(const AssetConfigs& configs) {
 	auto& fence = fences_.at("LoadFence");
 
 	// 명령 리스트와 명령 할당자 할당
@@ -644,9 +644,12 @@ void GFX::loadAssets() {
 	DISPLAY_ERROR_DX_VOID(cmdList->Reset(cmdAlloc.Get(), nullptr), false);
 	
 	// 파이프라인 공용 리소스 로드
-	SharedResources::ShadowMap::addShadowMap("ShadowMap", device_.Get(),
-		DXGI_FORMAT_D32_FLOAT, 2000u, 2000u, backBuffers_.size(),
-		srvTexPool_, dsvPool_
+	SharedResources::ShadowMap::addCSMShadowMap(
+		configs.shadowMap.key, device_.Get(),
+		configs.shadowMap.format,
+		configs.shadowMap.resolution, configs.shadowMap.resolution,
+		configs.shadowMap.cascadeCount,
+		backBuffers_.size(), srvTexArrayPool_, dsvPool_
 	);
 	// 파이프라인 자체 리소스 로드
 	// BVPipeline
@@ -816,10 +819,9 @@ void GFX::render() {
 	);
 
 	// 그림자맵 클리어
-	SharedResources::ShadowMap::getReadyAsDepthWrite(
-		"ShadowMap", cmdListPool_, cmdQ_.Get(), fenceToSignal
+	SharedResources::ShadowMap::getReadyAsDepthWrite("ShadowMap", frameIdx_ % backBuffers_.size(), cmdListPool_, cmdQ_.Get(), fenceToSignal
 	);
-	SharedResources::ShadowMap::clearShadowMap("ShadowMap", cmdListClear);
+	SharedResources::ShadowMap::clearShadowMap("ShadowMap", frameIdx_ % backBuffers_.size(), cmdListClear);
 
 	const auto clRect = gClientRect;
 
@@ -952,7 +954,7 @@ void GFX::render() {
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesTerrainPipeline_,
 		threadPool_, &cmdListPool_, std::move(drawEventsTerrainPipeline_),
-		lightDataTerrainPipeline_, cameraDataTerrainPipeline_, frameDataTerrainPipeline_,
+		std::move(lightDataTerrainPipeline_), cameraDataTerrainPipeline_, frameDataTerrainPipeline_,
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
@@ -982,8 +984,7 @@ void GFX::render() {
 		dumpLog();
 
 		// == 그림자 패스들 ==
-		SharedResources::ShadowMap::getReadyAsDepthWrite(
-			"ShadowMap", cmdListPool_, cmdQ_.Get(), fenceToSignal
+		SharedResources::ShadowMap::getReadyAsDepthWrite("ShadowMap", frameIdx_ % backBuffers_.size(), cmdListPool_, cmdQ_.Get(), fenceToSignal
 		);
 
 		pbrPipelineDispatcher.sortDrawEvents();
@@ -998,8 +999,7 @@ void GFX::render() {
 		dumpLog();
 
 		// == 메인 패스들 ==
-		SharedResources::ShadowMap::getReadyAsShaderResource(
-			"ShadowMap", cmdListPool_, cmdQ_.Get(), fenceToSignal
+		SharedResources::ShadowMap::getReadyAsShaderResource("ShadowMap", frameIdx_ % backBuffers_.size(), cmdListPool_, cmdQ_.Get(), fenceToSignal
 		);
 
 		pbrPipelineDispatcher.mainPass();
@@ -1024,8 +1024,7 @@ void GFX::render() {
 		dumpLog();
 
 		// == 그림자 패스들 ==
-		SharedResources::ShadowMap::getReadyAsDepthWrite(
-			"ShadowMap", cmdListPool_, cmdQ_.Get(), fenceToSignal
+		SharedResources::ShadowMap::getReadyAsDepthWrite("ShadowMap", frameIdx_ % backBuffers_.size(), cmdListPool_, cmdQ_.Get(), fenceToSignal
 		);
 
 		pbrPipelineDispatcher.sortDrawEvents();
@@ -1040,8 +1039,7 @@ void GFX::render() {
 		dumpLog();
 
 		// == 메인 패스들 ==
-		SharedResources::ShadowMap::getReadyAsShaderResource(
-			"ShadowMap", cmdListPool_, cmdQ_.Get(), fenceToSignal
+		SharedResources::ShadowMap::getReadyAsShaderResource("ShadowMap", frameIdx_ % backBuffers_.size(), cmdListPool_, cmdQ_.Get(), fenceToSignal
 		);
 
 		pbrPipelineDispatcher.mainPassMT();

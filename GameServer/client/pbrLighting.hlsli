@@ -230,6 +230,56 @@ float calcSingleShadow(float3 posV, float4 posL) {
     return PCF(idxShadowMap, posL);
 }
 
+// ---------------------------------------------------------------------------
+// CSM shadow functions (Texture2DArray, 9-tap PCF per cascade slice)
+// ---------------------------------------------------------------------------
+#ifndef MAX_CSM_CASCADES
+#define MAX_CSM_CASCADES 4
+#endif
+
+// PCF_CSM: 9-tap PCF sampling a Texture2DArray slice (idx.z = cascade index).
+// Kept separate from PCF() so existing callers are unaffected.
+float PCF_CSM(int4 idx, float4 posL) {
+    posL.xyz /= posL.w;
+    posL.z = min(posL.z, 1.0f);
+    float p00 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(-1, -1)).r;
+    float p01 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(-1,  0)).r;
+    float p02 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(-1,  1)).r;
+    float p10 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 0, -1)).r;
+    float p11 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 0,  0)).r;
+    float p12 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 0,  1)).r;
+    float p20 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 1, -1)).r;
+    float p21 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 1,  0)).r;
+    float p22 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 1,  1)).r;
+    return (p00 + p01 + p02 + p10 + p11 + p12 + p20 + p21 + p22) / 9.f;
+}
+
+// calcCSMShadow: selects cascade by view-space depth, then calls PCF_CSM.
+// posV: view-space position, posW: world-space position.
+// Uses cbuffer vars: cascadeCount, cascadeSplitsFarV, lightVP[], idxShadowMap.
+// Uses gmtxTexturize (declared in the including .hlsl before this include).
+float calcCSMShadow(float3 posV, float3 posW) {
+    // Select cascade: find first cascade whose far depth exceeds posV.z
+    uint cascadeIdx = cascadeCount - 1u;
+    float splits[4] = {
+        cascadeSplitsFarV.x, cascadeSplitsFarV.y,
+        cascadeSplitsFarV.z, cascadeSplitsFarV.w
+    };
+    [unroll]
+    for (uint ci = 0u; ci < cascadeCount; ++ci) {
+        if (posV.z < splits[ci]) { cascadeIdx = ci; break; }
+    }
+
+    // Project world-space position into the selected cascade's light space
+    float4 posL = mul(mul(float4(posW, 1.f), lightVP[cascadeIdx]), gmtxTexturize);
+
+    // Set the Texture2DArray slice index in the bindless shadow map descriptor
+    int4 idx = idxShadowMap;
+    idx.z    = (int)cascadeIdx;
+
+    return PCF_CSM(idx, posL);
+}
+
 #ifndef TERRAIN_SHADER
 
 // ��鿡 �����ϴ� ��� ������(gLightData)�� ���� ���� �ݻ縦 ����Ͽ�
@@ -291,10 +341,62 @@ float4 illuminate(float3 posV, float4 posL, float3 normalV, float2 tex) {
 	color = color / (color + float3(1.f, 1.f, 1.f));
     // linear => sRGB
     color = pow( abs(color), 1.f/2.2f );
-    
+
     posL.xyz /= posL.w;
     posL.z = min(posL.z, 1.0f);
-    
+
+    return float4(color, albedo.w);
+}
+
+// illuminateCSM: CSM(Cascaded Shadow Map) 버전. illuminate()와 별도로 유지.
+// posW: world-space position (cascade 선택 후 light-space 변환에 사용)
+float4 illuminateCSM(float3 posV, float3 posW, float3 normalV, float2 tex) {
+    float4 albedo = material.cAlbedo;
+    if (material.idxAlbedo.x >= 0) {
+        albedo = sampleBindless(material.idxAlbedo, tex);
+    }
+    albedo.rgb = pow( abs(albedo.rgb), 2.2f );
+
+    float roughness = material.cRoughness;
+    float metallic = material.cMetallic;
+    if (material.idxMetallicSmoothness.x >= 0) {
+        float4 metallicSmoothness = sampleBindless(material.idxMetallicSmoothness, tex);
+        metallic = metallicSmoothness.r;
+        roughness = 1.f - metallicSmoothness.a;
+    }
+
+    float ao = 0.f;
+    if (material.idxAmbientOcclusion.x >= 0) {
+        ao = material.cAOStrength * sampleBindless(material.idxAmbientOcclusion, tex).r;
+    }
+
+    float3 emmisive = material.cEmmisive;
+    if (material.idxEmmisive.x >= 0) {
+        emmisive = sampleBindless(material.idxEmmisive, tex).rgb;
+    }
+
+    float3 posVNormalized = normalize(posV);
+
+    float3 color = float3(0.f, 0.f, 0.f);
+    for (uint i = 0; i < lightCnt; i++) {
+        if (gLightData[i].type == LIGHT_TYPE_POINT) {
+            color += pointLight(i, posV, posVNormalized, normalV, tex, albedo.rgb, roughness, metallic, ao);
+        } else if (gLightData[i].type == LIGHT_TYPE_SPOT) {
+            color += spotLight(i, posV, posVNormalized, normalV, tex, albedo.rgb, roughness, metallic, ao);
+        } else if (gLightData[i].type == LIGHT_TYPE_DIRECTIONAL) {
+            color += dirLight(i, posV, posVNormalized, normalV, tex, albedo.rgb, roughness, metallic, ao);
+        }
+    }
+
+    float directFactor = calcCSMShadow(posV, posW);
+    color *= directFactor;
+
+    float3 ambient = globalAmbient * albedo.rgb * (1.f - ao);
+    color += ambient + emmisive;
+
+    color = color / (color + float3(1.f, 1.f, 1.f));
+    color = pow( abs(color), 1.f/2.2f );
+
     return float4(color, albedo.w);
 }
 #endif // TERRAIN_SHADER

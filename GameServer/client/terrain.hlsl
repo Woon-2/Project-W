@@ -1,4 +1,5 @@
 #define MAX_TERRAIN_LAYERS 4
+#define MAX_CSM_CASCADES 4
 
 cbuffer PerDrawcallData : register(b0) {
     float4x4 wvp;
@@ -20,9 +21,11 @@ cbuffer PerFrameData : register(b1) {
     float3   globalAmbient;
     float    padding0;
     uint     lightCnt;
-    uint3    padding1;
+    uint     cascadeCount;
+    uint2    padding1;
     int4     idxShadowMap;
-    float4x4 lightVP;
+    float4   cascadeSplitsFarV;
+    float4x4 lightVP[MAX_CSM_CASCADES];
 };
 
 static float4x4 gmtxTexturize = {
@@ -44,7 +47,7 @@ static float4x4 gmtxTexturize = {
 struct VSOutput {
     float4 posH       : SV_Position;
     float3 posV       : POSITION_V;   // view-space position
-    float4 posL       : POSITION_L;   // light-projection space (for shadow)
+    float3 posW       : POSITION_W;   // world-space position (for CSM shadow)
     float3 normalV    : NORMAL_V;     // view-space normal
     float3 tangentV   : TANGENT_V;
     float3 bitangentV : BITANGENT_V;
@@ -61,8 +64,8 @@ VSOutput VSMain(
     VSOutput ret;
     ret.posH    = mul(float4(position, 1.f), wvp);
     ret.posV    = mul(float4(position, 1.f), wv).xyz;
+    ret.posW    = mul(float4(position, 1.f), world).xyz;
     ret.normalV = normalize(mul(normal, (float3x3)wv)); // uniform scale: no inv-transpose needed
-    ret.posL    = mul(mul(mul(float4(position, 1.f), world), lightVP), gmtxTexturize);
     if (hasAnyNormal) {
         ret.tangentV   = normalize(mul(tangent,   (float3x3)wv));
         ret.bitangentV = normalize(mul(bitangent, (float3x3)wv));
@@ -160,7 +163,7 @@ float4 PSMain(VSOutput input) : SV_TARGET {
     }
 
     // 5. Shadow.
-    float shadow = calcSingleShadow(input.posV, input.posL);
+    float shadow = calcCSMShadow(input.posV, input.posW);
     color *= shadow;
 
     // 6. Ambient.

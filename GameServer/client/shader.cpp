@@ -146,6 +146,7 @@ ComPtr<ID3D12PipelineState> createShadowMapShader(ID3D12Device* device, ID3D12Ro
 
 	// 셰이더 컴파일
 	auto vsCode = compileShader("shadowMap.hlsl", nullptr, "VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
+	auto gsCode = compileShader("shadowMap.hlsl", nullptr, "GSMain", "gs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
 
 	// 입력 조립기 설정
 	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
@@ -168,6 +169,7 @@ ComPtr<ID3D12PipelineState> createShadowMapShader(ID3D12Device* device, ID3D12Ro
 	auto psoDesc = D3D12_GRAPHICS_PIPELINE_STATE_DESC{
 		.pRootSignature = rootSig,
 		.VS = vsCode.byteCode,
+		.GS = gsCode.byteCode,
 		// 블렌드 상태 설정
 		.BlendState = D3D12_BLEND_DESC{
 			.AlphaToCoverageEnable = false,
@@ -208,17 +210,8 @@ ComPtr<ID3D12PipelineState> createShadowMapShader(ID3D12Device* device, ID3D12Ro
 		.Flags = D3D12_PIPELINE_STATE_FLAG_NONE
 	};
 
-	// 렌더 타겟 관련 설정
-	psoDesc.NumRenderTargets = 1u;
-	psoDesc.BlendState.RenderTarget[0].BlendEnable = false;
-	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
-	psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
-	psoDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-	psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-	psoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
-	psoDesc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
-	psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+	// Depth-only: 렌더 타겟 없음
+	psoDesc.NumRenderTargets = 0u;
 	psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
 
 	DISPLAY_ERROR_DX_HR(
@@ -236,6 +229,7 @@ ComPtr<ID3D12PipelineState> createShadowMapSkinnedShader(ID3D12Device* device, I
 
 	// 셰이더 컴파일
 	auto vsCode = compileShader("shadowMapSkinned.hlsl", nullptr, "VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
+	auto gsCode = compileShader("shadowMapSkinned.hlsl", nullptr, "GSMain", "gs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
 
 	// 입력 조립기 설정
 	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
@@ -276,6 +270,7 @@ ComPtr<ID3D12PipelineState> createShadowMapSkinnedShader(ID3D12Device* device, I
 	auto psoDesc = D3D12_GRAPHICS_PIPELINE_STATE_DESC{
 		.pRootSignature = rootSig,
 		.VS = vsCode.byteCode,
+		.GS = gsCode.byteCode,
 		// 블렌드 상태 설정
 		.BlendState = D3D12_BLEND_DESC{
 			.AlphaToCoverageEnable = false,
@@ -316,17 +311,8 @@ ComPtr<ID3D12PipelineState> createShadowMapSkinnedShader(ID3D12Device* device, I
 		.Flags = D3D12_PIPELINE_STATE_FLAG_NONE
 	};
 
-	// 렌더 타겟 관련 설정
-	psoDesc.NumRenderTargets = 1u;
-	psoDesc.BlendState.RenderTarget[0].BlendEnable = false;
-	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
-	psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
-	psoDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-	psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-	psoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
-	psoDesc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
-	psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+	// Depth-only: 렌더 타겟 없음
+	psoDesc.NumRenderTargets = 0u;
 	psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
 
 	DISPLAY_ERROR_DX_HR(
@@ -1024,6 +1010,8 @@ ComPtr<ID3D12PipelineState> createTerrainShadowMapShader(ID3D12Device* device, I
 
 	auto vsCode = compileShader("terrainShadowMap.hlsl", nullptr, "VSMain", "vs_5_1",
 		D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
+	auto gsCode = compileShader("terrainShadowMap.hlsl", nullptr, "GSMain", "gs_5_1",
+		D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
 
 	// Position only (slot 0) - matches TerrainPipeline VBV cache index 0
 	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
@@ -1046,6 +1034,7 @@ ComPtr<ID3D12PipelineState> createTerrainShadowMapShader(ID3D12Device* device, I
 	auto psoDesc = D3D12_GRAPHICS_PIPELINE_STATE_DESC{
 		.pRootSignature = rootSig,
 		.VS             = vsCode.byteCode,
+		.GS             = gsCode.byteCode,
 		// No PS: depth-only pass
 		.BlendState = D3D12_BLEND_DESC{
 			.AlphaToCoverageEnable  = false,

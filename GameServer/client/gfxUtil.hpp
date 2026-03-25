@@ -279,6 +279,9 @@ LoadDDSReturnType loadDDS(
     const std::filesystem::path& path, Fence& fenceToAssociate
 );
 
+// Number of CSM cascade slices. Must match MAX_CSM_CASCADES in HLSL.
+constexpr int MAX_CSM_CASCADES = 4;
+
 // Bindless 환경에서 특정한 텍스처를 샘플링하기 위한 종합적 인덱스
 struct BindlessIndex {
 	i32t idxRange;	// 텍스처의 srv가 존재하는 풀 인덱스(Texture, TextureArray, TextureCube)

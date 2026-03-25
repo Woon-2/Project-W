@@ -1,4 +1,4 @@
-#include "pch.hpp"
+﻿#include "pch.hpp"
 #include "terrainPipeline.hpp"
 #include "shader.hpp"
 #include "mesh.hpp"
@@ -57,7 +57,7 @@ Dispatcher::Dispatcher(
     Fence* pFence, Resources* pResources,
     ThreadPool* threadPool, CommandListPool* commandListPool,
     std::vector<DrawEvent>&& drawEvents,
-    const LightData& lightData, const CameraData& cameraData, const FrameData& frameData,
+    std::vector<LightData>&& lightData, const CameraData& cameraData, const FrameData& frameData,
     std::size_t roomIdx
 ) : descriptorHeaps_(descriptorHeaps),
     pTexPool_(pTexPool), pTexArrayPool_(pTexArrayPool),
@@ -67,7 +67,7 @@ Dispatcher::Dispatcher(
     viewport_(viewport), scissorRect_(scissorRect), rtv_(rtv), dsv_(dsv),
     pFence_(pFence), pResources_(pResources), threadPool_(threadPool), cmdListPool_(commandListPool),
     drawEvents_(std::move(drawEvents)),
-    lightData_(lightData), cameraData_(cameraData), frameData_(frameData),
+    lightData_(std::move(lightData)), cameraData_(cameraData), frameData_(frameData),
     roomIdx_(roomIdx),
     rootParamIdxPDD_(rootSig->paramIdx("PerDrawcallData")),
     rootParamIdxPFD_(rootSig->paramIdx("PerFrameData")),
@@ -98,22 +98,27 @@ void Dispatcher::shadowPassMT() {
 // ---------------------------------------------------------------------------
 
 void Dispatcher::shadowUpdate() {
-    if (drawEvents_.empty()) {
+    if (drawEvents_.empty() || lightData_.empty()) {
         return;
     }
 
+    const auto& light = lightData_[0];
     auto pfd = TerrainShadowMapShader::PerFrameData{};
-    auto lightVP = lightData_.view * lightData_.proj;
-    pfd.lightVP  = mu::transpose(lightVP).getXmf();
+    pfd.cascadeCount = light.cascadeCount;
+    for (u32t i = 0u; i < light.cascadeCount; ++i) {
+        pfd.lightVP[i] = mu::transpose(
+            light.cascadeViews[i] * light.cascadeProjs[i]
+        ).getXmf();
+    }
     pResources_->shadowPass.perFrameData.stage(roomIdx_, &pfd, 1u);
 }
 
 void Dispatcher::shadowDraw() {
-    if (drawEvents_.empty()) {
+    if (drawEvents_.empty() || lightData_.empty()) {
         return;
     }
 
-    auto& shadowMapData = SharedResources::ShadowMap::shadowMapData.at("ShadowMap");
+    auto& shadowMapData = SharedResources::ShadowMap::shadowMapData.at("ShadowMap")[roomIdx_];
 
     CommandContext cmdCtx{};
     DISPLAY_ERROR_STR(cmdListPool_->allocOne(CommandListUsage::RenderingSlave, cmdCtx),
@@ -143,7 +148,7 @@ void Dispatcher::shadowDraw() {
     DISPLAY_ERROR_DX_VOID(cmdList->SetPipelineState(shadowShader_.Get()), false);
 
     // Shadow map DSV only; no color render targets
-    auto shadowDsv = pDsvPool_->cpuHandle(shadowMapData.tex.idxDsv);
+    auto shadowDsv = shadowMapData.dsv;
     DISPLAY_ERROR_DX_VOID(cmdList->OMSetRenderTargets(0u, nullptr, false, &shadowDsv), false);
 
     // Viewport and scissor sized to shadow map texture
@@ -192,6 +197,7 @@ void Dispatcher::shadowDraw() {
         const auto& subMesh = mesh.subMeshes[0];
         DISPLAY_ERROR_DX_VOID(cmdList->IASetIndexBuffer(&subMesh.ibView), false);
 
+        // GS가 각 삼각형을 cascade 수만큼 증폭하여 SV_RenderTargetArrayIndex로 라우팅한다.
         const UINT indexCount = subMesh.ibView.SizeInBytes / sizeof(u32t);
         DISPLAY_ERROR_DX_VOID(cmdList->DrawIndexedInstanced(indexCount, 1u, 0u, 0, 0u), false);
     }
@@ -233,13 +239,21 @@ void Dispatcher::mainUpdate() {
         return;
     }
 
+    const auto& light = lightData_.empty() ? LightData{} : lightData_[0];
+
     auto pfd = TerrainShader::PerFrameData{};
     pfd.globalAmbient = frameData_.globalAmbient.getXmf();
     pfd.lightCnt      = frameData_.lightCount;
-    pfd.idxShadowMap  = frameData_.idxShadowMap;
+    // shadow map SRV index는 per-room 리소스에서 직접 조회한다.
+    pfd.idxShadowMap  = SharedResources::ShadowMap::shadowMapData.at("ShadowMap")[roomIdx_].tex.idxSrv;
 
-    auto lightVP = lightData_.view * lightData_.proj;
-    pfd.lightVP  = mu::transpose(lightVP).getXmf();
+    pfd.cascadeCount      = light.cascadeCount;
+    pfd.cascadeSplitsFarV = light.cascadeSplitsFarV;
+    for (u32t i = 0u; i < light.cascadeCount; ++i) {
+        pfd.lightVP[i] = mu::transpose(
+            light.cascadeViews[i] * light.cascadeProjs[i]
+        ).getXmf();
+    }
 
     pResources_->mainPass.perFrameData.stage(roomIdx_, &pfd, 1u);
 }

@@ -56,6 +56,22 @@ struct RequestTerrainLoad {
 	TerrainData* pDest;
 };
 
+// Configuration passed to GFX::loadAssets()
+struct AssetConfigs {
+	struct ShadowMapConfig {
+		std::string key        = "ShadowMap";
+		u32t        resolution = 2048u;
+		u32t        cascadeCount = static_cast<u32t>(MAX_CSM_CASCADES);
+		DXGI_FORMAT format     = DXGI_FORMAT_D32_FLOAT;
+	} shadowMap;
+
+	struct CascadeConfig {
+		float nearZ  = 0.1f;
+		float farZ   = 500.f;
+		float lambda = 0.75f;
+	} cascade;
+};
+
 // 렌더링을 총괄 책임지는 클래스
 // - 장치 초기화: setupDXGI, init, createSwapChain
 // - 객체 그리기: addDrawEvent로 객체마다 그려지길 원하는 파이프라인에 등록,
@@ -149,7 +165,7 @@ public:
 
 	// 파이프라인들이 자체적으로 사용하는 리소스들과
 	// addRequestXXLoad 꼴의 함수로 요청된 리소스들을 로드한다.
-	void loadAssets();
+	void loadAssets(const AssetConfigs& configs = AssetConfigs{});
 
 	// 요청된 드로우콜들을 모아 객체들을 그리고 화면에 띄운다.
 	void render();
@@ -247,7 +263,7 @@ private:
 	std::vector<TerrainPipeline::DrawEvent> drawEventsTerrainPipeline_{};
 	TerrainPipeline::Resources resourcesTerrainPipeline_{};
 	TerrainPipeline::CameraData cameraDataTerrainPipeline_{};
-	TerrainPipeline::LightData  lightDataTerrainPipeline_{};
+	std::vector<TerrainPipeline::LightData> lightDataTerrainPipeline_{};
 	TerrainPipeline::FrameData  frameDataTerrainPipeline_{};
 
 	// Font

@@ -143,7 +143,8 @@ void Game::update(Milliseconds deltaTime) {
 
 	camera_.update();
 	dirLight_.update(deltaTime);
-	dirLight_.updateShadowAuxDirectional(camera_.eye(), 100.f, -10.f, 10.f, -10.f, 10.f, 50.f, 200.f);
+	static constexpr float kCascadeFar[MAX_CSM_CASCADES] = { 32.f, 68.f, 138.f, 500.f };
+	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), kCascadeFar, MAX_CSM_CASCADES, 2048u);
 
 	playerHpUI_.update(deltaTime, gfx_, nullptr);
 	for (auto& [id, ui] : otherPlayerHpUIs_) {

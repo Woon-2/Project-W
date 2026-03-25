@@ -135,12 +135,14 @@ struct PerDrawcallData {
 };
 
 struct PerFrameData {
-	XMFLOAT3 globalAmbient;
-	float padding0;
-	u32t lightCnt;
-	XMUINT3 padding1;
+	XMFLOAT3   globalAmbient;
+	float      padding0;
+	u32t       lightCnt;
+	u32t       cascadeCount;
+	XMUINT2    padding1;
 	BindlessIndex idxShadowMap;
-	XMFLOAT4X4 lightVP;
+	XMFLOAT4   cascadeSplitsFarV;
+	XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
 };
 }	// namespace PBRShader
 
@@ -201,12 +203,14 @@ struct PerDrawcallData {
 };
 
 struct PerFrameData {
-	XMFLOAT3 globalAmbient;
-	float padding0;
-	u32t lightCnt;
-	XMUINT3 padding1;
+	XMFLOAT3   globalAmbient;
+	float      padding0;
+	u32t       lightCnt;
+	u32t       cascadeCount;
+	XMUINT2    padding1;
 	BindlessIndex idxShadowMap;
-	XMFLOAT4X4 lightVP;
+	XMFLOAT4   cascadeSplitsFarV;
+	XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
 };
 
 }	// namespace PBRSkinnedShader
@@ -248,7 +252,9 @@ struct PerDrawcallData {
 };
 
 struct PerFrameData {
-	XMFLOAT4X4 lightVP;
+	XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
+	u32t       cascadeCount;
+	XMUINT3    _pfd0;
 };
 }	// namespace ShadowMapShader
 
@@ -270,9 +276,11 @@ struct PerDrawcallData {
 };
 
 struct PerFrameData {
-	XMFLOAT4X4 lightVP;
+	XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
+	u32t       cascadeCount;
+	XMUINT3    _pfd0;
 };
-}	// namespace ShadowMapShader
+}	// namespace ShadowMapSkinnedShader
 
 // SkyboxShader
 namespace SkyboxShader {
@@ -326,12 +334,14 @@ struct PerDrawcallData {
 // Matches cbuffer PerFrameData : register(b1) in terrain.hlsl
 // Same layout as PBRShader::PerFrameData
 struct PerFrameData {
-    XMFLOAT3  globalAmbient;
-    float     padding0;
-    u32t      lightCnt;
-    XMUINT3   padding1;
+    XMFLOAT3   globalAmbient;
+    float      padding0;
+    u32t       lightCnt;
+    u32t       cascadeCount;
+    XMUINT2    padding1;
     BindlessIndex idxShadowMap;
-    XMFLOAT4X4    lightVP;
+    XMFLOAT4   cascadeSplitsFarV;
+    XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
 };
 
 }	// namespace TerrainShader
@@ -344,7 +354,9 @@ struct PerDrawcallData {
 };
 // Matches cbuffer PerFrameData : register(b1) in terrainShadowMap.hlsl
 struct PerFrameData {
-    XMFLOAT4X4 lightVP;
+    XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
+    u32t       cascadeCount;
+    XMUINT3    _pfd0;
 };
 }  // namespace TerrainShadowMapShader
 

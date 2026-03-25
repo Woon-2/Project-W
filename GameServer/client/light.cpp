@@ -2,13 +2,15 @@
 #include "light.hpp"
 #include "errorHandling.hpp"
 #include "camera.hpp"
+#include <algorithm>
+#include <cmath>
 
 void Light::update(Milliseconds deltaTime) {
 
 }
 
 void MU_CALLCONV Light::updateShadowAuxDirectional( mu::Vec3 pointOfView, float distance,
-	float left, float right, float bottom, float top, float nearZ, float farZ	
+	float left, float right, float bottom, float top, float nearZ, float farZ
 ) {
 	const auto dir = mu::NVec3(orient().rotate(mu::Vec3(0.f, 0.f, 1.f)));
 	pos_ = pointOfView - mu::Vec3(dir) * distance;
@@ -16,8 +18,92 @@ void MU_CALLCONV Light::updateShadowAuxDirectional( mu::Vec3 pointOfView, float 
 	proj_ = mu::ortho(left, right, bottom, top, nearZ, farZ);
 }
 
+void MU_CALLCONV Light::updateCSMCascades(
+	mu::Mat4x4 camView, mu::Mat4x4 camProj,
+	const float* cascadeFarDistances, u32t cascadeCount, u32t shadowResolution
+) {
+	cascadeCount_ = cascadeCount;
+
+	const auto lightDir = mu::NVec3(orient_.rotate(mu::Vec3(0.f, 0.f, 1.f)));
+
+	// Choose world-up axis orthogonal to light direction to avoid gimbal lock
+	mu::Vec3 worldUp(0.f, 1.f, 0.f);
+	if (std::abs(lightDir[1]) > 0.99f) {
+		worldUp = mu::Vec3(0.f, 0.f, 1.f);
+	}
+	const auto worldUpN = mu::NVec3(worldUp, mu::NVec3::NoNormalize_t{});
+
+	// Light view matrix: fixed world-space orientation (stable for texel snapping)
+	const auto lightView = mu::lookAt(mu::Vec3(0.f, 0.f, 0.f), mu::Vec3(lightDir), worldUpN);
+
+	// Extract A, B from projection matrix to convert view-space depth to NDC z:
+	// NDC_z = A + B/viewZ  (LH: nearZ -> NDC_z=0, farZ -> NDC_z=1)
+	const float A = camProj.row(2)[2];
+	const float B = camProj.row(3)[2];
+
+	// Camera near plane in view space: when NDC_z=0, viewZ = -B/A
+	float prevFarV = -B / A;
+
+	// Precompute inverse(camView * camProj) for NDC -> world unproject
+	const auto invVP = mu::inverse(camView * camProj);
+
+	for (u32t i = 0u; i < cascadeCount; ++i) {
+		const float nearV = prevFarV;
+		const float farV  = cascadeFarDistances[i];
+
+		// NDC z for this cascade's near and far planes
+		const float ndcZNear = A + B / nearV;
+		const float ndcZFar  = A + B / farV;
+
+		// Unproject 8 NDC corners to world space, then transform to light-view space
+		float minX =  FLT_MAX, maxX = -FLT_MAX;
+		float minY =  FLT_MAX, maxY = -FLT_MAX;
+		float minZ =  FLT_MAX, maxZ = -FLT_MAX;
+
+		for (float zNDC : {ndcZNear, ndcZFar}) {
+			for (float x : {-1.f, 1.f}) {
+				for (float y : {-1.f, 1.f}) {
+					// NDC corner -> world space (row-vector convention: v * M)
+					mu::Vec4 hClip = mu::Vec4(x, y, zNDC, 1.f) * invVP;
+					const float invW = 1.f / hClip[3];
+					mu::Vec3 world(hClip[0] * invW, hClip[1] * invW, hClip[2] * invW);
+
+					// World -> light-view space
+					mu::Vec4 lv = mu::Vec4(world, 1.f) * lightView;
+					minX = std::min(minX, lv[0]); maxX = std::max(maxX, lv[0]);
+					minY = std::min(minY, lv[1]); maxY = std::max(maxY, lv[1]);
+					minZ = std::min(minZ, lv[2]); maxZ = std::max(maxZ, lv[2]);
+				}
+			}
+		}
+
+		// Texel snapping: round AABB to texel boundaries to prevent shadow swimming
+		const float texelW = (maxX - minX) / static_cast<float>(shadowResolution);
+		const float texelH = (maxY - minY) / static_cast<float>(shadowResolution);
+		minX = std::floor(minX / texelW) * texelW;
+		maxX = std::ceil(maxX  / texelW) * texelW;
+		minY = std::floor(minY / texelH) * texelH;
+		maxY = std::ceil(maxY  / texelH) * texelH;
+
+		// Extend nearZ backward to catch shadow casters behind the frustum slice
+		const float nearZPadding = 100.f;
+
+		cascadeViews_[i] = lightView;
+		cascadeProjs_[i] = mu::ortho(minX, maxX, minY, maxY, minZ - nearZPadding, maxZ);
+
+		prevFarV = farV;
+	}
+
+	// Pack cascade far depths into float4 (view-space)
+	float splits[4] = {};
+	for (u32t i = 0u; i < cascadeCount && i < 4u; ++i) {
+		splits[i] = cascadeFarDistances[i];
+	}
+	cascadeSplitsFarV_ = XMFLOAT4(splits[0], splits[1], splits[2], splits[3]);
+}
+
 void Light::render(GFX& gfx) {
-	gfx.addLightData(PBRPipeline::LightData{
+	auto pbrLD = PBRPipeline::LightData{
 		.pos = pos_,
 		.dir = mu::NVec3(orient().rotate(mu::Vec3(0.f, 0.f, 1.f))),
 		.color = color,
@@ -28,10 +114,14 @@ void Light::render(GFX& gfx) {
 		.atten = atten,
 		.type = type,
 		.isMainDirectionalLight = isMainDirectionalLight,
-		.view = view_,
-		.proj = proj_
-	});
-	gfx.addLightData(PBRSkinnedPipeline::LightData{
+		.cascadeViews  = cascadeViews_,
+		.cascadeProjs  = cascadeProjs_,
+		.cascadeSplitsFarV = cascadeSplitsFarV_,
+		.cascadeCount  = cascadeCount_
+	};
+	gfx.addLightData(pbrLD);
+
+	auto pbrSkinnedLD = PBRSkinnedPipeline::LightData{
 		.pos = pos_,
 		.dir = mu::NVec3(orient().rotate(mu::Vec3(0.f, 0.f, 1.f))),
 		.color = color,
@@ -42,9 +132,12 @@ void Light::render(GFX& gfx) {
 		.atten = atten,
 		.type = static_cast<PBRSkinnedPipeline::LightData::Type>(type),
 		.isMainDirectionalLight = isMainDirectionalLight,
-		.view = view_,
-		.proj = proj_
-	});
+		.cascadeViews  = cascadeViews_,
+		.cascadeProjs  = cascadeProjs_,
+		.cascadeSplitsFarV = cascadeSplitsFarV_,
+		.cascadeCount  = cascadeCount_
+	};
+	gfx.addLightData(pbrSkinnedLD);
 }
 
 void MU_CALLCONV Light::setPos(mu::Vec3 newPos) {

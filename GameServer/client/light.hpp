@@ -2,6 +2,7 @@
 #define __light_HPP
 
 #include "gfx.hpp"
+#include <array>
 
 class Camera;
 
@@ -17,27 +18,54 @@ public:
 	bool isMainDirectionalLight = false;
 
 	void update(Milliseconds deltaTime);
+
+	// Single-light orthographic shadow (legacy / non-CSM path)
 	void MU_CALLCONV updateShadowAuxDirectional( mu::Vec3 pointOfView, float distance,
-		float left, float right, float bottom, float top, float nearZ, float farZ	
+		float left, float right, float bottom, float top, float nearZ, float farZ
 	);
+
+	// Computes 4 CSM cascade view/proj matrices from camera frustum slices.
+	// cascadeFarDistances: array of cascadeCount view-space far depths for each cascade
+	// shadowResolution: shadow map texel count per side (used for texel snapping)
+	void MU_CALLCONV updateCSMCascades(
+		mu::Mat4x4 camView, mu::Mat4x4 camProj,
+		const float* cascadeFarDistances, u32t cascadeCount, u32t shadowResolution
+	);
+
 	void render(GFX& gfx);
 
 	void MU_CALLCONV setPos(mu::Vec3 newPos);
-	mu::Vec3 MU_CALLCONV pos() const { return pos_; }
+	mu::Vec3  MU_CALLCONV pos() const { return pos_; }
 	void MU_CALLCONV setOrient(mu::NQuat newOrient);
 	mu::NQuat MU_CALLCONV orient() const { return orient_; }
+
+	// Single-shadow accessors (set by updateShadowAuxDirectional)
 	mu::Mat4x4 MU_CALLCONV shadowView() const { return view_; }
 	mu::Mat4x4 MU_CALLCONV shadowProj() const { return proj_; }
-	mu::NVec3  MU_CALLCONV dir() const {
+
+	// CSM cascade accessors (set by updateCSMCascades)
+	const std::array<mu::Mat4x4, MAX_CSM_CASCADES>& cascadeViews() const { return cascadeViews_; }
+	const std::array<mu::Mat4x4, MAX_CSM_CASCADES>& cascadeProjs() const { return cascadeProjs_; }
+	XMFLOAT4 cascadeSplitsFarV() const { return cascadeSplitsFarV_; }
+	u32t cascadeCount() const { return cascadeCount_; }
+
+	mu::NVec3 MU_CALLCONV dir() const {
 		return mu::NVec3(orient_.rotate(mu::Vec3(0.f, 0.f, 1.f)));
 	}
 
 private:
-	mu::Vec3 pos_{};
+	mu::Vec3  pos_{};
 	mu::NQuat orient_{};
 
+	// Single-shadow VP (legacy)
 	mu::Mat4x4 view_{};
 	mu::Mat4x4 proj_{};
+
+	// CSM cascade data
+	std::array<mu::Mat4x4, MAX_CSM_CASCADES> cascadeViews_{};
+	std::array<mu::Mat4x4, MAX_CSM_CASCADES> cascadeProjs_{};
+	XMFLOAT4 cascadeSplitsFarV_{};
+	u32t cascadeCount_ = 0u;
 };
 
 #endif	// __light_HPP
