@@ -48,7 +48,7 @@ Dispatcher::Dispatcher(
     const D3D12_VIEWPORT& viewport, const D3D12_RECT& scissorRect,
     D3D12_CPU_DESCRIPTOR_HANDLE rtv, D3D12_CPU_DESCRIPTOR_HANDLE dsv,
     Fence* pFence, Resources* pResources,
-    CommandListPool* commandListPool,
+    ThreadPool* threadPool, CommandListPool* commandListPool,
     std::vector<DrawEvent>&& drawEvents,
     const LightData& lightData, const CameraData& cameraData, const FrameData& frameData,
     std::size_t roomIdx
@@ -57,7 +57,7 @@ Dispatcher::Dispatcher(
     pTexCubePool_(pTexCubePool), pSamPool_(pSamPool), pCmpSamPool_(pCmpSamPool),
     rootSig_(rootSig), shader_(shader), cmdQ_(cmdQ),
     viewport_(viewport), scissorRect_(scissorRect), rtv_(rtv), dsv_(dsv),
-    pFence_(pFence), pResources_(pResources), cmdListPool_(commandListPool),
+    pFence_(pFence), pResources_(pResources), threadPool_(threadPool), cmdListPool_(commandListPool),
     drawEvents_(std::move(drawEvents)),
     lightData_(lightData), cameraData_(cameraData), frameData_(frameData),
     roomIdx_(roomIdx),
@@ -72,10 +72,54 @@ Dispatcher::Dispatcher(
 {}
 
 // ---------------------------------------------------------------------------
-// mainPass
+// mainPass / mainPassMT
 // ---------------------------------------------------------------------------
 
 void Dispatcher::mainPass() {
+    mainUpdate();
+    mainDraw();
+}
+
+void Dispatcher::mainPassMT() {
+    mainUpdateMT();
+    mainDrawMT();
+}
+
+// ---------------------------------------------------------------------------
+// mainUpdate / mainUpdateMT
+// ---------------------------------------------------------------------------
+
+void Dispatcher::mainUpdate() {
+    if (drawEvents_.empty()) {
+        return;
+    }
+
+    auto pfd = TerrainShader::PerFrameData{};
+    pfd.globalAmbient = frameData_.globalAmbient.getXmf();
+    pfd.lightCnt      = frameData_.lightCount;
+    pfd.idxShadowMap  = frameData_.idxShadowMap;
+
+    auto lightVP = lightData_.view * lightData_.proj;
+    pfd.lightVP  = mu::transpose(lightVP).getXmf();
+
+    pResources_->mainPass.perFrameData.stage(roomIdx_, &pfd, 1u);
+}
+
+// Terrain pipeline typically has only 1~4 draw events.
+// Parallelizing PerFrameData staging over such a small count yields no
+// measurable benefit and introduces unnecessary thread-pool overhead
+// (job enqueue + latch sync).
+// This function is provided for API symmetry with PBRPipeline::mainPassMT()
+// only; it delegates directly to the single-threaded implementation.
+void Dispatcher::mainUpdateMT() {
+    mainUpdate();
+}
+
+// ---------------------------------------------------------------------------
+// mainDraw / mainDrawMT
+// ---------------------------------------------------------------------------
+
+void Dispatcher::mainDraw() {
     if (drawEvents_.empty()) {
         return;
     }
@@ -83,7 +127,7 @@ void Dispatcher::mainPass() {
     // Allocate a command context.
     CommandContext cmdCtx{};
     DISPLAY_ERROR_STR(cmdListPool_->allocOne(CommandListUsage::RenderingSlave, cmdCtx),
-        "[GFX Error] TerrainPipeline::mainPass: no command context available.", false);
+        "[GFX Error] TerrainPipeline::mainDraw: no command context available.", false);
     if (!cmdCtx.cmdList) {
         return;
     }
@@ -127,18 +171,7 @@ void Dispatcher::mainPass() {
 
     DISPLAY_ERROR_DX_VOID(cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST), false);
 
-    // Build PerFrameData
-    {
-        auto pfd = TerrainShader::PerFrameData{};
-        pfd.globalAmbient = frameData_.globalAmbient.getXmf();
-        pfd.lightCnt      = frameData_.lightCount;
-        pfd.idxShadowMap  = frameData_.idxShadowMap;
-
-        auto lightVP = lightData_.view * lightData_.proj;
-        pfd.lightVP  = mu::transpose(lightVP).getXmf();
-
-        pResources_->mainPass.perFrameData.stage(roomIdx_, &pfd, 1u);
-    }
+    // Bind PerFrameData (staged in mainUpdate).
     pResources_->mainPass.perFrameData.bind(cmdList, rootParamIdxPFD_, roomIdx_);
 
     // Iterate draw events (usually just one terrain)
@@ -148,16 +181,16 @@ void Dispatcher::mainPass() {
         const auto& mesh    = terrain.mesh;
         if (mesh.subMeshes.empty()) continue;
 
-        // Build PerDrawcallData
+        // Build PerDrawcallData.
+        // perDrawcallData uses a single ConstantBuffer slot, so it must be
+        // staged and bound immediately before each draw call.
         auto pdd = TerrainShader::PerDrawcallData{};
 
-        // World matrices from the draw event's world transform.
         const auto& worldMat = ev.world;
         auto view = cameraData_.view;
         auto proj = cameraData_.proj;
         auto wvp  = worldMat * view * proj;
-
-        auto wv = worldMat * view;
+        auto wv   = worldMat * view;
         pdd.wvp   = mu::transpose(wvp).getXmf();
         pdd.world = mu::transpose(worldMat).getXmf();
         pdd.wv    = mu::transpose(wv).getXmf();
@@ -215,6 +248,16 @@ void Dispatcher::mainPass() {
 
     pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)]
         .push_back(std::move(cmdCtx));
+}
+
+// Terrain pipeline typically has only 1~4 draw events.
+// Recording draw calls for such a small count on a worker thread yields no
+// measurable benefit and introduces unnecessary thread-pool overhead
+// (job enqueue + latch sync + multi-list submission).
+// This function is provided for API symmetry with PBRPipeline::mainPassMT()
+// only; it delegates directly to the single-threaded implementation.
+void Dispatcher::mainDrawMT() {
+    mainDraw();
 }
 
 }   // namespace TerrainPipeline

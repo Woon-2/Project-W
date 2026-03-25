@@ -13,14 +13,6 @@ This is a **Visual Studio 2022** solution (C++20, Windows only). Open `GameServe
 - `DummyClient` — Server test client executable
 - `client` — DirectX 12 game client executable
 
-**Build targets:** Debug|x64 and Release|x64 (Win32 variants also exist)
-
-**From command line (MSBuild):**
-```
-msbuild GameServer.sln /p:Configuration=Debug /p:Platform=x64
-msbuild client.vcxproj /p:Configuration=Debug /p:Platform=x64
-```
-
 There are no automated tests — `DummyClient` is used for manual server validation.
 
 ## Architecture Overview
@@ -62,3 +54,6 @@ All packets start with `PacketHeader { uint16 size; PacketType type; }`. Packet 
 - C++20 (`/std:c++latest`), MSVC toolset v143
 - Windows-only: Winsock2, IOCP, DirectX 12, DirectXMath
 - Comments and identifiers are often in **Korean**
+
+## Note
+**Major changes or design changes must be recorded in markdown documents and remembered separately.**

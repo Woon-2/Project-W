@@ -941,7 +941,7 @@ void GFX::render() {
 		cmdQ_, viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesTerrainPipeline_,
-		&cmdListPool_, std::move(drawEventsTerrainPipeline_),
+		threadPool_, &cmdListPool_, std::move(drawEventsTerrainPipeline_),
 		lightDataTerrainPipeline_, cameraDataTerrainPipeline_, frameDataTerrainPipeline_,
 		frameIdx_ % backBuffers_.size()	// room index
 	);
@@ -1033,7 +1033,7 @@ void GFX::render() {
 		pbrSkinnedPipelineDispatcher.mainPassMT();
 		dumpLog();
 
-		terrainPipelineDispatcher.mainPass();
+		terrainPipelineDispatcher.mainPassMT();
 		dumpLog();
 
 		bvPipelineDispatcher.updateGPUDataMultiThreaded();

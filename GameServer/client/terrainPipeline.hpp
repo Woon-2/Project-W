@@ -46,7 +46,9 @@ struct Resources {
 // Slots: 0 = Position, 1 = Normal, 2 = UV
 void layoutMeshIfNeeded(const Mesh& mesh);
 
-// Terrain pipeline dispatcher - single-threaded, no shadow pass.
+// Terrain pipeline dispatcher. No shadow pass.
+// Supports single-threaded (mainPass) and multi-threaded (mainPassMT) paths
+// for API symmetry with PBRPipeline::Dispatcher.
 class Dispatcher {
 public:
     Dispatcher() = default;
@@ -64,6 +66,7 @@ public:
         D3D12_CPU_DESCRIPTOR_HANDLE dsv,
         Fence* pFence,
         Resources* pResources,
+        ThreadPool* threadPool,
         CommandListPool* commandListPool,
         std::vector<DrawEvent>&& drawEvents,
         const LightData& lightData,
@@ -72,11 +75,26 @@ public:
         std::size_t roomIdx
     );
 
-    // Updates GPU constant buffers and issues draw calls.
+    // Stages GPU constant buffers then issues draw calls (single-threaded).
     // Does nothing if drawEvents is empty.
     void mainPass();
+    // Stages GPU constant buffers then issues draw calls (multi-threaded path).
+    // Does nothing if drawEvents is empty.
+    void mainPassMT();
 
 private:
+    // Stages per-frame GPU constant buffer (PerFrameData).
+    // Single-threaded. Does nothing if drawEvents is empty.
+    void mainUpdate();
+    // Stages per-frame GPU constant buffer (PerFrameData).
+    // Multi-threaded path. See implementation for why MT is not applied here.
+    void mainUpdateMT();
+    // Allocates a command context and records all draw calls.
+    // Single-threaded. Does nothing if drawEvents is empty.
+    void mainDraw();
+    // Allocates a command context and records all draw calls.
+    // Multi-threaded path. See implementation for why MT is not applied here.
+    void mainDrawMT();
     std::vector<ComPtr<ID3D12DescriptorHeap>> descriptorHeaps_{};
     DescriptorPool* pTexPool_      = nullptr;
     DescriptorPool* pTexArrayPool_ = nullptr;
@@ -90,7 +108,8 @@ private:
     D3D12_RECT                        scissorRect_{};
     D3D12_CPU_DESCRIPTOR_HANDLE       rtv_{};
     D3D12_CPU_DESCRIPTOR_HANDLE       dsv_{};
-    Fence*                            pFence_     = nullptr;
+    Fence*                            pFence_      = nullptr;
+    ThreadPool*                       threadPool_  = nullptr;
     CommandListPool*                  cmdListPool_ = nullptr;
     Resources*                        pResources_  = nullptr;
     std::vector<DrawEvent>            drawEvents_{};
