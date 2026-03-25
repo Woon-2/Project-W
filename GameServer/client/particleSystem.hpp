@@ -11,17 +11,21 @@ enum class EmitterShape { Point, Edge };
 struct EmitterConfig {
     mu::Vec3                   position;
     mu::Vec3                   direction   = {0, 1, 0};  // world-space emit axis
-    float                      spread      = 0.3f;       // cone half-angle (radians)
+    float                      spread      = 0.3f;       // cone half-angle (radians), 흩뿌리는 방식을 원한다면 이 옵션을.
     float                      speedMin    = 1.f;
     float                      speedMax    = 3.f;
     float                      lifetimeMin = 0.5f;
     float                      lifetimeMax = 1.5f;
     mu::Vec3                   tintBegin   = {1.f, 1.f, 1.f};
     mu::Vec3                   tintEnd     = {1.f, 1.f, 1.f};
-    float                      sizeBegin   = 1.f;
-    float                      sizeEnd     = 0.f;
+    float                      sizeBegin        = 1.f;
+    float                      sizeEnd          = 1.f;
+    float                      sizeMultiplierMin = 1.f;  // 파티클 크기 배율 min (Unity Start Size)
+    float                      sizeMultiplierMax = 1.f;  // 파티클 크기 배율 max
     float                      drag        = 0.f;
     mu::Vec3                   gravity     = {0.f, -9.8f, 0.f};
+    float                      gravityModifierMin = 1.f;  
+    float                      gravityModifierMax = 1.f; 
     float                      startRotationMin = 0.f;   // radians
     float                      startRotationMax = 0.f;
     const SpriteAnimationClip* pClip       = nullptr;

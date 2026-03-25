@@ -25,6 +25,7 @@ public:
 	const Texture* playerHpFrame() const { return &playerHpFrame_; }
 	TextImage* textPlayerHp() { return &textPlayerHp_; }
 	const SpriteAnimationClip* flameAnimation() const { return &flameAnimation_; }
+	const SpriteAnimationClip* smokeAnimation() const { return &smokeAnimation_; }
 	const std::vector<std::shared_ptr<AnimClip>>& playerAnimations() const { return playerAnimations_; }
 	const std::vector<std::shared_ptr<AnimClip>>& goblinAnimations() const { return goblinAnimations_; }
 	const std::vector<std::shared_ptr<AnimClip>>& anubisAnimations() const { return anubisAnimations_; }
@@ -64,6 +65,7 @@ private:
 	Texture playerHpFrame_{};
 	TextImage textPlayerHp_;
 	SpriteAnimationClip flameAnimation_{};
+	SpriteAnimationClip smokeAnimation_{};
 };
 
 #endif	// __AssetManager_HPP

@@ -96,13 +96,23 @@ void AssetManager::loadGFXAssets(GFX& gfx) {
 	} );
 
 	gfx.addRequestSpritesLoad( RequestSpriteAnimLoad{
-		.sheetPath  = "../resources/Sprites/a_VFX_flame.dds",
+		.sheetPath  = "../resources/Sprites/Flame.dds",
 		.rows       = 3,
 		.cols       = 3,
 		.frameCount = 9,
 		.type       = SpriteAnimType::Loop,
 		.frameTime  = 80ms,
 		.pDest      = &flameAnimation_
+	} );
+
+	gfx.addRequestSpritesLoad( RequestSpriteAnimLoad{
+		.sheetPath  = "../resources/Sprites/A_Smoke_2.dds",
+		.rows       = 3,
+		.cols       = 3,
+		.frameCount = 9,
+		.type       = SpriteAnimType::Loop,
+		.frameTime  = 80ms,
+		.pDest      = &smokeAnimation_
 	} );
 
 	gfx.loadAssets();

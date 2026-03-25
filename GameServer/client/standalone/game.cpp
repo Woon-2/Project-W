@@ -92,26 +92,52 @@ void Game::setupStage() {
 	playerHpUI_.setScale( mu::Vec2(1024.f, 64.f) );
 
 	// 파티클 설정
-	emitterConfig_.pClip             = assetManager_.flameAnimation();
-	emitterConfig_.position          = { 0.f, 0.0f, -5.f };
-	emitterConfig_.direction         = { 0.f, 1.f, 0.f };
-	emitterConfig_.spread            = 0.0f;
-	emitterConfig_.speedMin          = 0.5f;
-	emitterConfig_.speedMax          = 2.f;
-	emitterConfig_.lifetimeMin       = 0.5f;
-	emitterConfig_.lifetimeMax       = 1.5f;
-	emitterConfig_.sizeBegin         = 1.f;
-	emitterConfig_.sizeEnd           = 0.3f;
-	emitterConfig_.drag              = 0.8f;
-	emitterConfig_.gravity           = { 0.f, -1.f, 0.f };
-	emitterConfig_.tintBegin         = { 1.f, 0.4f, 0.f };
-	emitterConfig_.tintEnd           = { 1.f, 0.4f, 0.f };
-	emitterConfig_.startRotationMin  = 0.f;
-	emitterConfig_.startRotationMax  = mu::pi * 2;
-	emitterConfig_.shape             = EmitterShape::Edge;
-	emitterConfig_.edgeLength		 = 1.5f;
-	emitterConfig_.emitRate          = 15.0f;
-	particleSystem_.startContinuous(emitterConfig_);
+	flameEmitterConfig_.pClip             = assetManager_.flameAnimation();
+	flameEmitterConfig_.position          = { 0.f, 0.0f, -5.f };
+	flameEmitterConfig_.direction          = { 0.f, 1.f, 0.f };
+	flameEmitterConfig_.spread             = 0.0f;          // 약간의 퍼짐으로 자연스러운 불꽃
+	flameEmitterConfig_.speedMin           = 0.f;           // 초기 속도 제거: 상승은 gravityModifier로 제어
+	flameEmitterConfig_.speedMax           = 0.3f;          // 아주 작은 랜덤 변화만 허용
+	flameEmitterConfig_.lifetimeMin        = 0.5f;
+	flameEmitterConfig_.lifetimeMax        = 1.0f;
+	flameEmitterConfig_.sizeBegin          = 1.0f;
+	flameEmitterConfig_.sizeEnd            = 1.0f;
+	flameEmitterConfig_.sizeMultiplierMin  = 0.8f;
+	flameEmitterConfig_.sizeMultiplierMax  = 1.0f;
+	flameEmitterConfig_.drag               = 0.8f;
+	flameEmitterConfig_.gravityModifierMin = -0.3f;         // 음수 = 위쪽 부력 (Unity 방식)
+	flameEmitterConfig_.gravityModifierMax = 0.0f;         // 파티클마다 다른 상승력
+	flameEmitterConfig_.tintBegin         = { 1.f, 0.4f, 0.f };
+	flameEmitterConfig_.tintEnd           = { 1.f, 0.4f, 0.f };
+	flameEmitterConfig_.startRotationMin  = 0.f;
+	flameEmitterConfig_.startRotationMax  = mu::pi * 2;
+	flameEmitterConfig_.shape             = EmitterShape::Edge;
+	flameEmitterConfig_.edgeLength		 = 1.5f;
+	flameEmitterConfig_.emitRate          = 15.0f;
+	flameParticleSystem_.startContinuous(flameEmitterConfig_);
+
+	smokeEmitterConfig_.pClip            = assetManager_.smokeAnimation();
+	smokeEmitterConfig_.position         = { 0.f, 0.0f, -5.f };
+	smokeEmitterConfig_.direction        = { 0.f, 1.f, 0.f };
+	smokeEmitterConfig_.spread           = 0.0f;
+	smokeEmitterConfig_.speedMin         = 0.5f;
+	smokeEmitterConfig_.speedMax         = 2.f;
+	smokeEmitterConfig_.lifetimeMin      = 0.5f;
+	smokeEmitterConfig_.lifetimeMax      = 1.5f;
+	smokeEmitterConfig_.sizeBegin        = 1.f;
+	smokeEmitterConfig_.sizeEnd          = 1.0f;
+	smokeEmitterConfig_.sizeMultiplierMin = 0.8f;
+	smokeEmitterConfig_.sizeMultiplierMax = 1.2f;
+	smokeEmitterConfig_.drag             = 0.8f;
+	smokeEmitterConfig_.gravity          = { 0.f, -1.f, 0.f };
+	smokeEmitterConfig_.tintBegin        = { 0.537f, 0.537f, 0.537f };
+	smokeEmitterConfig_.tintEnd          = { 0.537f, 0.537f, 0.537f };
+	smokeEmitterConfig_.startRotationMin = 0.f;
+	smokeEmitterConfig_.startRotationMax = mu::pi * 2;
+	smokeEmitterConfig_.shape            = EmitterShape::Edge;
+	smokeEmitterConfig_.edgeLength       = 1.5f;
+	smokeEmitterConfig_.emitRate         = 10.0f;
+	smokeParticleSystem_.startContinuous(smokeEmitterConfig_);
 
 	// 전투 시스템에 참가자 등록
 	// 플레이어: 공격 hitbox 및 데미지 설정 (AI 쿨타임은 사용하지 않음)
@@ -557,7 +583,8 @@ void Game::update(Milliseconds deltaTime) {
 	animSystem_.update(0.016s);
 
 	// 파티클
-	particleSystem_.update( deltaTime );
+	flameParticleSystem_.update( deltaTime );
+	smokeParticleSystem_.update( deltaTime );
 
 	// UI 동기화
 	// playerHpUI_.setHp(player_->hp());
@@ -582,7 +609,8 @@ void Game::render() {
 	camera_.updateGFX(gfx_);
 	dirLight_.render(gfx_);
 
-	particleSystem_.render( gfx_ );
+	flameParticleSystem_.render( gfx_ );
+	//smokeParticleSystem_.render( gfx_ );
 
 	playerHpUI_.render( gfx_ );
 
@@ -840,7 +868,8 @@ void Game::processInput(Milliseconds deltaTime) {
 
 	// F key: emit particles for testing
 	if ( (keyboardStateCurr_['F'] & 0x80) && !(keyboardStatePrev_['F'] & 0x80) ) {
-		particleSystem_.emit(emitterConfig_, 1);
+		flameParticleSystem_.emit(flameEmitterConfig_, 1);
+		smokeParticleSystem_.emit(smokeEmitterConfig_, 1);
 	}
 
 	// Space 키를 누르면 커서 보이기 플래그를 활성화/비활성화한다.

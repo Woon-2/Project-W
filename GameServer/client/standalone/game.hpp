@@ -124,8 +124,10 @@ private:
 	BasicPlayerHpUI playerHpUI_{};
 	TextImage textFPS_{};
 
-	ParticleSystem particleSystem_{};
-	EmitterConfig emitterConfig_{};
+	ParticleSystem flameParticleSystem_{};
+	ParticleSystem smokeParticleSystem_{};
+	EmitterConfig flameEmitterConfig_{};
+	EmitterConfig smokeEmitterConfig_{};
 
 	LONG mouseDeltaX_{};
 	LONG mouseDeltaY_{};
