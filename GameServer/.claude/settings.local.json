@@ -3,7 +3,10 @@
     "allow": [
       "Bash(grep -E \"\\\\.\\(hpp|cpp\\)$\")",
       "WebFetch(domain:skills.sh)",
-      "Bash(grep -rn \"Pool<\\\\|new\\\\|delete\\\\|std::make_unique\\\\|std::allocate\" /d/DirectX12/Project-W/GameServer/client/*.hpp)"
+      "Bash(grep -rn \"Pool<\\\\|new\\\\|delete\\\\|std::make_unique\\\\|std::allocate\" /d/DirectX12/Project-W/GameServer/client/*.hpp)",
+      "Bash(ls -la /d/DirectX12/Project-W/GameServer/client/*.hpp)",
+      "Bash(ls -la /d/DirectX12/Project-W/GameServer/client/*.cpp)",
+      "Bash(find D:DirectX12Project-WGameServerclientdocs -type f -name *.md)"
     ]
   }
 }
