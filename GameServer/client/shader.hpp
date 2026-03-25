@@ -318,7 +318,8 @@ struct PerDrawcallData {
     BindlessIndex idxNormal [MAX_TERRAIN_LAYERS];
     XMFLOAT4     tiling    [MAX_TERRAIN_LAYERS];  // (tileSizeX, tileSizeY, tileOffsetX, tileOffsetY)
     int          layerCount;
-    float        _pdd0[3];
+    int          hasAnyNormal;
+    float        _pdd0[2];
 };
 
 // Matches cbuffer PerFrameData : register(b1) in terrain.hlsl

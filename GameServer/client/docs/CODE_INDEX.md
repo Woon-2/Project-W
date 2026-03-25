@@ -167,7 +167,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 **파이프라인별 필수 VB 슬롯:**
 - PBRPipeline: Position(0), Normal(1), Tangent(2), Bitangent(3), UV(4)
 - PBRSkinnedPipeline: 위 5개 + BoneIndices(5), BoneWeights(6)
-- TerrainPipeline: Position(0), Normal(1), UV(2)
+- TerrainPipeline: Position(0), Normal(1), Tangent(2), Bitangent(3), UV(4)
 
 **스킨드 메시 판별 조건:** `mesh.vbIdxMap.contains(mesh.name + "_VB_BoneIndices") && animBlender`
 
@@ -257,7 +257,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 - `heightmapResolution` (N): 그리드 N×N 정점
 - `layers`: `TerrainLayer` 배열 (diffuse + normalMap + tiling)
 - `splatMap`: RGBA splat 텍스처
-- `mesh`: VB 3슬롯 (Position/Normal/UV), IB 32-bit
+- `mesh`: VB 5슬롯 (Position/Normal/Tangent/Bitangent/UV), IB 32-bit
 
 **TerrainPipeline 주요 구조체 (`terrainPipeline.hpp`):**
 

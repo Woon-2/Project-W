@@ -48,6 +48,9 @@
 - shadow shader: `terrainShadowMap.hlsl` — position-only VS, PS 없음, NumRenderTargets=0
 - 리소스 로드: `loadTerrainFromFiles()` — manifest 파싱 → height.raw 메시 빌드 → 텍스처 로드
 - **manifest 태그 순서**: `HeightMap → SplatPath(s) → DiffusePath(s) → MetaData` (MetaData가 마지막)
-- VB 3슬롯: Position(0) / Normal(1) / UV(2), IB 32-bit (513×513 정점 초과 가능)
+- VB 5슬롯: Position(0) / Normal(1) / Tangent(2) / Bitangent(3) / UV(4), IB 32-bit (513×513 정점 초과 가능)
+- Tangent/Bitangent: `terrain.cpp buildTerrainMesh()`에서 중앙 차분 + Gram-Schmidt로 CPU 사전 계산
 - Splat map: RGBA 채널 = 레이어 0~3 블렌딩 가중치, 각 레이어마다 diffuse + normal map
+- Normal map 포맷: **Unity DXT5nm** — X는 Alpha 채널, Y는 Green 채널, R은 더미(1.0) → `nmSample.ag * 2 - 1`로 읽어야 함
+- Normal mapping: `hasAnyNormal` 플래그(cbuffer b0)로 조건부 처리, `float3x3(tangentV, bitangentV, normalV)` 패턴 (pbr.hlsl과 동일)
 - `terrain.hlsl`에서 `pbrLighting.hlsli` include 시 `#define TERRAIN_SHADER` 필수 — `illuminate()` 스킵 가드

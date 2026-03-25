@@ -10,7 +10,8 @@ cbuffer PerDrawcallData : register(b0) {
     int4  idxNormal [MAX_TERRAIN_LAYERS];
     float4 tiling   [MAX_TERRAIN_LAYERS]; // xy = tileSize, zw = tileOffset
     int    layerCount;
-    float3 _pdd0;
+    int    hasAnyNormal;
+    float2 _pdd0;
 };
 
 // Same layout as PBRShader::PerFrameData
@@ -40,37 +41,33 @@ static float4x4 gmtxTexturize = {
 // ---------------------------------------------------------------------------
 
 struct VSOutput {
-    float4 posH    : SV_Position;
-    float3 posV    : POSITION_V;   // view-space position
-    float4 posL    : POSITION_L;   // light-projection space (for shadow)
-    float3 normalV : NORMAL_V;     // view-space normal
-    float2 uv      : UV;
+    float4 posH       : SV_Position;
+    float3 posV       : POSITION_V;   // view-space position
+    float4 posL       : POSITION_L;   // light-projection space (for shadow)
+    float3 normalV    : NORMAL_V;     // view-space normal
+    float3 tangentV   : TANGENT_V;
+    float3 bitangentV : BITANGENT_V;
+    float2 uv         : UV;
 };
 
 VSOutput VSMain(
-    float3 position : POSITION,
-    float3 normal   : NORMAL,
-    float2 uv       : UV
+    float3 position  : POSITION,
+    float3 normal    : NORMAL,
+    float3 tangent   : TANGENT,
+    float3 bitangent : BITANGENT,
+    float2 uv        : UV
 ) {
     VSOutput ret;
     ret.posH    = mul(float4(position, 1.f), wvp);
     ret.posV    = mul(float4(position, 1.f), wv).xyz;
     ret.normalV = normalize(mul(normal, (float3x3)wv)); // uniform scale: no inv-transpose needed
     ret.posL    = mul(mul(mul(float4(position, 1.f), world), lightVP), gmtxTexturize);
+    if (hasAnyNormal) {
+        ret.tangentV   = normalize(mul(tangent,   (float3x3)wv));
+        ret.bitangentV = normalize(mul(bitangent, (float3x3)wv));
+    }
     ret.uv      = uv;
     return ret;
-}
-
-// ---------------------------------------------------------------------------
-// Pixel shader helpers
-// ---------------------------------------------------------------------------
-
-// Builds a TBN matrix from a view-space normal (used for tangent-space normal maps).
-float3x3 buildTBN(float3 N) {
-    float3 ref = abs(N.y) < 0.999f ? float3(0.f, 1.f, 0.f) : float3(1.f, 0.f, 0.f);
-    float3 T   = normalize(cross(ref, N));
-    float3 B   = cross(N, T);
-    return float3x3(T, B, N);
 }
 
 // ---------------------------------------------------------------------------
@@ -109,10 +106,12 @@ float4 PSMain(VSOutput input) : SV_TARGET {
         albedo += pow(abs(diffuseSample.rgb), 2.2f) * w;
 
         // Normal map.
+        // Unity DXT5nm format: X stored in Alpha channel, Y in Green channel.
+        // Red channel is a dummy constant (≈1.0) — do NOT read nmSample.rg.
         if (idxNormal[i].x >= 0) {
             float4 nmSample = sampleBindless(idxNormal[i], layerUV);
             float3 nTS;
-            nTS.xy = nmSample.rg * 2.f - 1.f;
+            nTS.xy = nmSample.ag * 2.f - 1.f;
             nTS.z  = sqrt(max(0.f, 1.f - dot(nTS.xy, nTS.xy)));
             blendedNormalTS += nTS * w;
         } else {
@@ -121,13 +120,16 @@ float4 PSMain(VSOutput input) : SV_TARGET {
     }
 
     // 3. Reconstruct view-space shading normal from blended tangent-space normal.
-    float3   vertNormalV  = normalize(input.normalV);
-    float3x3 tbn          = buildTBN(vertNormalV);
-    float3   shadingNormalV = normalize(
-        blendedNormalTS.x * tbn[0] +
-        blendedNormalTS.y * tbn[1] +
-        blendedNormalTS.z * tbn[2]
-    );
+    float3 vertNormalV = normalize(input.normalV);
+    float3 shadingNormalV;
+    if (hasAnyNormal) {
+        float3   tangentV   = normalize(input.tangentV);
+        float3   bitangentV = normalize(input.bitangentV);
+        float3x3 tbn        = float3x3(tangentV, bitangentV, vertNormalV);
+        shadingNormalV = normalize(mul(blendedNormalTS, tbn));
+    } else {
+        shadingNormalV = vertNormalV;
+    }
 
     // 4. PBR lighting — terrain is non-metallic and rough.
     const float roughness = 0.85f;
@@ -139,13 +141,13 @@ float4 PSMain(VSOutput input) : SV_TARGET {
 
     for (uint li = 0; li < lightCnt; li++) {
         if (gLightData[li].type == LIGHT_TYPE_POINT) {
-            color += pointLight(li, input.posV, posVNorm, vertNormalV,
+            color += pointLight(li, input.posV, posVNorm, shadingNormalV,
                                 input.uv, albedo, roughness, metallic, ao);
         } else if (gLightData[li].type == LIGHT_TYPE_SPOT) {
-            color += spotLight(li, input.posV, posVNorm, vertNormalV,
+            color += spotLight(li, input.posV, posVNorm, shadingNormalV,
                                input.uv, albedo, roughness, metallic, ao);
         } else if (gLightData[li].type == LIGHT_TYPE_DIRECTIONAL) {
-            color += dirLight(li, input.posV, posVNorm, vertNormalV,
+            color += dirLight(li, input.posV, posVNorm, shadingNormalV,
                               input.uv, albedo, roughness, metallic, ao);
         }
     }

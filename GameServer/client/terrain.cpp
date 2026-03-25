@@ -177,9 +177,11 @@ static Mesh buildTerrainMesh(
     const float dx = (N > 1) ? meta.sizeX / (N - 1) : 0.f;
     const float dz = (N > 1) ? meta.sizeZ / (N - 1) : 0.f;
 
-    auto positions = std::vector<XMFLOAT3>(static_cast<size_t>(N) * N);
-    auto normals   = std::vector<XMFLOAT3>(static_cast<size_t>(N) * N);
-    auto uvs       = std::vector<XMFLOAT2>(static_cast<size_t>(N) * N);
+    auto positions  = std::vector<XMFLOAT3>(static_cast<size_t>(N) * N);
+    auto normals    = std::vector<XMFLOAT3>(static_cast<size_t>(N) * N);
+    auto tangents   = std::vector<XMFLOAT3>(static_cast<size_t>(N) * N);
+    auto bitangents = std::vector<XMFLOAT3>(static_cast<size_t>(N) * N);
+    auto uvs        = std::vector<XMFLOAT2>(static_cast<size_t>(N) * N);
 
     for (int y = 0; y < N; ++y) {
         for (int x = 0; x < N; ++x) {
@@ -199,6 +201,26 @@ static Mesh buildTerrainMesh(
 
             auto n = DirectX::XMVector3Normalize(DirectX::XMVectorSet(gx, 1.f, gz, 0.f));
             DirectX::XMStoreFloat3(&normals[idx], n);
+
+            // Tangent: world-space dP/dU direction (U increases with x).
+            // dP/dU = (sizeX, (h(x+1,y)-h(x-1,y))*sizeY/(2*dx), 0)
+            //       = (1, -gx_unsigned, 0) after direction reduction
+            const float rawTy = (dx > 0.f) ? (height(x + 1, y) - height(x - 1, y)) * meta.sizeY / (2.f * dx) : 0.f;
+            auto rawT = DirectX::XMVector3Normalize(DirectX::XMVectorSet(1.f, rawTy, 0.f, 0.f));
+
+            // Bitangent: world-space dP/dV direction (V increases with y/z).
+            const float rawBy = (dz > 0.f) ? (height(x, y + 1) - height(x, y - 1)) * meta.sizeY / (2.f * dz) : 0.f;
+            auto rawB = DirectX::XMVector3Normalize(DirectX::XMVectorSet(0.f, rawBy, 1.f, 0.f));
+
+            // Gram-Schmidt: orthogonalize tangent against normal, then derive bitangent.
+            auto t = DirectX::XMVector3Normalize(
+                DirectX::XMVectorSubtract(rawT,
+                    DirectX::XMVectorScale(n, DirectX::XMVectorGetX(DirectX::XMVector3Dot(rawT, n))))
+            );
+            auto b = DirectX::XMVector3Cross(n, t);
+
+            DirectX::XMStoreFloat3(&tangents[idx],   t);
+            DirectX::XMStoreFloat3(&bitangents[idx], b);
         }
     }
 
@@ -225,10 +247,12 @@ static Mesh buildTerrainMesh(
     }
 
     // --- Upload to GPU ---
-    const size_t posByteSize  = positions.size() * sizeof(XMFLOAT3);
-    const size_t normByteSize = normals.size()   * sizeof(XMFLOAT3);
-    const size_t uvByteSize   = uvs.size()       * sizeof(XMFLOAT2);
-    const size_t idxByteSize  = indices.size()   * sizeof(u32t);
+    const size_t posByteSize  = positions.size()  * sizeof(XMFLOAT3);
+    const size_t normByteSize = normals.size()    * sizeof(XMFLOAT3);
+    const size_t tanByteSize  = tangents.size()   * sizeof(XMFLOAT3);
+    const size_t bitByteSize  = bitangents.size() * sizeof(XMFLOAT3);
+    const size_t uvByteSize   = uvs.size()        * sizeof(XMFLOAT2);
+    const size_t idxByteSize  = indices.size()    * sizeof(u32t);
 
     auto vbPos  = createBufferResource(device, nullptr, posByteSize,  BufferCreationType::VertexBuffer);
     auto vbPosU = createBufferResource(device, positions.data(), posByteSize,  BufferCreationType::UploadBuffer);
@@ -242,6 +266,20 @@ static Mesh buildTerrainMesh(
     setD3DName(vbNrm.Get(),  "TerrainMesh_VB_Normal");
     setD3DName(vbNrmU.Get(), "TerrainMesh_VB_Normal_Upload");
     copyResource(cmdList, vbNrmU.Get(), vbNrm.Get(),
+        D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+
+    auto vbTan  = createBufferResource(device, nullptr, tanByteSize, BufferCreationType::VertexBuffer);
+    auto vbTanU = createBufferResource(device, tangents.data(), tanByteSize, BufferCreationType::UploadBuffer);
+    setD3DName(vbTan.Get(),  "TerrainMesh_VB_Tangent");
+    setD3DName(vbTanU.Get(), "TerrainMesh_VB_Tangent_Upload");
+    copyResource(cmdList, vbTanU.Get(), vbTan.Get(),
+        D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+
+    auto vbBit  = createBufferResource(device, nullptr, bitByteSize, BufferCreationType::VertexBuffer);
+    auto vbBitU = createBufferResource(device, bitangents.data(), bitByteSize, BufferCreationType::UploadBuffer);
+    setD3DName(vbBit.Get(),  "TerrainMesh_VB_Bitangent");
+    setD3DName(vbBitU.Get(), "TerrainMesh_VB_Bitangent_Upload");
+    copyResource(cmdList, vbBitU.Get(), vbBit.Get(),
         D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
 
     auto vbUV   = createBufferResource(device, nullptr, uvByteSize,   BufferCreationType::VertexBuffer);
@@ -273,17 +311,31 @@ static Mesh buildTerrainMesh(
         static_cast<UINT>(sizeof(XMFLOAT3))
     );
     mesh.vbViews.emplace_back(
+        vbTan->GetGPUVirtualAddress(),
+        static_cast<UINT>(tanByteSize),
+        static_cast<UINT>(sizeof(XMFLOAT3))
+    );
+    mesh.vbViews.emplace_back(
+        vbBit->GetGPUVirtualAddress(),
+        static_cast<UINT>(bitByteSize),
+        static_cast<UINT>(sizeof(XMFLOAT3))
+    );
+    mesh.vbViews.emplace_back(
         vbUV->GetGPUVirtualAddress(),
         static_cast<UINT>(uvByteSize),
         static_cast<UINT>(sizeof(XMFLOAT2))
     );
 
     mesh.vbs.push_back(std::move(vbPos));
-    mesh.vbIdxMap.try_emplace("TerrainMesh_VB_Position", 0u);
+    mesh.vbIdxMap.try_emplace("TerrainMesh_VB_Position",  0u);
     mesh.vbs.push_back(std::move(vbNrm));
-    mesh.vbIdxMap.try_emplace("TerrainMesh_VB_Normal", 1u);
+    mesh.vbIdxMap.try_emplace("TerrainMesh_VB_Normal",    1u);
+    mesh.vbs.push_back(std::move(vbTan));
+    mesh.vbIdxMap.try_emplace("TerrainMesh_VB_Tangent",   2u);
+    mesh.vbs.push_back(std::move(vbBit));
+    mesh.vbIdxMap.try_emplace("TerrainMesh_VB_Bitangent", 3u);
     mesh.vbs.push_back(std::move(vbUV));
-    mesh.vbIdxMap.try_emplace("TerrainMesh_VB_UV", 2u);
+    mesh.vbIdxMap.try_emplace("TerrainMesh_VB_UV",        4u);
 
     mesh.subMeshes.emplace_back(
         "TerrainMesh_SubMesh",
@@ -299,6 +351,8 @@ static Mesh buildTerrainMesh(
     // Keep upload buffers alive until the fence signals GPU completion.
     fence.associatedResources_.push_back(std::move(vbPosU));
     fence.associatedResources_.push_back(std::move(vbNrmU));
+    fence.associatedResources_.push_back(std::move(vbTanU));
+    fence.associatedResources_.push_back(std::move(vbBitU));
     fence.associatedResources_.push_back(std::move(vbUVU));
     fence.associatedResources_.push_back(std::move(ibU));
 

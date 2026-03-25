@@ -18,7 +18,7 @@ void layoutMeshIfNeeded(const Mesh& mesh) {
 
     auto [pvbViews, _] = mesh.vbViewsByPipeline.try_emplace("TerrainPipeline");
     auto& vbViews = pvbViews->second;
-    vbViews.reserve(3u);    // Position, Normal, UV
+    vbViews.reserve(5u);    // Position, Normal, Tangent, Bitangent, UV
 
     const auto checkVB = [&](const std::string& key) {
         DISPLAY_ERROR_STR(mesh.vbIdxMap.contains(key),
@@ -27,10 +27,14 @@ void layoutMeshIfNeeded(const Mesh& mesh) {
 
     checkVB(mesh.name + "_VB_Position");
     checkVB(mesh.name + "_VB_Normal");
+    checkVB(mesh.name + "_VB_Tangent");
+    checkVB(mesh.name + "_VB_Bitangent");
     checkVB(mesh.name + "_VB_UV");
 
     vbViews.push_back(mesh.vbViews[mesh.vbIdxMap.at(mesh.name + "_VB_Position")]);
     vbViews.push_back(mesh.vbViews[mesh.vbIdxMap.at(mesh.name + "_VB_Normal")]);
+    vbViews.push_back(mesh.vbViews[mesh.vbIdxMap.at(mesh.name + "_VB_Tangent")]);
+    vbViews.push_back(mesh.vbViews[mesh.vbIdxMap.at(mesh.name + "_VB_Bitangent")]);
     vbViews.push_back(mesh.vbViews[mesh.vbIdxMap.at(mesh.name + "_VB_UV")]);
 }
 
@@ -347,6 +351,14 @@ void Dispatcher::mainDraw() {
                 layer.tileOffsetY
             );
         }
+        pdd.hasAnyNormal = 0;
+        for (int i = 0; i < maxLayers; ++i) {
+            if (terrain.layers[i].normalMap.idxSrv.idxRange >= 0) {
+                pdd.hasAnyNormal = 1;
+                break;
+            }
+        }
+
         // Fill remaining slots with invalid indices
         for (int i = maxLayers; i < TerrainShader::MAX_TERRAIN_LAYERS; ++i) {
             pdd.idxDiffuse[i].idxRange = -1;

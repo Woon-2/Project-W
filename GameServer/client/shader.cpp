@@ -905,7 +905,7 @@ ComPtr<ID3D12PipelineState> createTerrainShader(ID3D12Device* device, ID3D12Root
 	auto vsCode = compileShader("terrain.hlsl", nullptr, "VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
 	auto psCode = compileShader("terrain.hlsl", nullptr, "PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
 
-	// 3-slot input layout: Position (slot 0), Normal (slot 1), UV (slot 2)
+	// 5-slot input layout: Position (slot 0), Normal (slot 1), Tangent (slot 2), Bitangent (slot 3), UV (slot 4)
 	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
 		D3D12_INPUT_ELEMENT_DESC{
 			.SemanticName = "POSITION",
@@ -926,10 +926,28 @@ ComPtr<ID3D12PipelineState> createTerrainShader(ID3D12Device* device, ID3D12Root
 			.InstanceDataStepRate = 0u
 		},
 		D3D12_INPUT_ELEMENT_DESC{
+			.SemanticName = "TANGENT",
+			.SemanticIndex = 0u,
+			.Format = DXGI_FORMAT_R32G32B32_FLOAT,
+			.InputSlot = 2u,
+			.AlignedByteOffset = 0u,
+			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			.InstanceDataStepRate = 0u
+		},
+		D3D12_INPUT_ELEMENT_DESC{
+			.SemanticName = "BITANGENT",
+			.SemanticIndex = 0u,
+			.Format = DXGI_FORMAT_R32G32B32_FLOAT,
+			.InputSlot = 3u,
+			.AlignedByteOffset = 0u,
+			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			.InstanceDataStepRate = 0u
+		},
+		D3D12_INPUT_ELEMENT_DESC{
 			.SemanticName = "UV",
 			.SemanticIndex = 0u,
 			.Format = DXGI_FORMAT_R32G32_FLOAT,
-			.InputSlot = 2u,
+			.InputSlot = 4u,
 			.AlignedByteOffset = 0u,
 			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
 			.InstanceDataStepRate = 0u
