@@ -111,6 +111,8 @@ struct TerrainMeta {
     struct LayerInfo {
         float tileSizeX, tileSizeY;
         float tileOffsetX, tileOffsetY;
+        float metallic;
+        float roughness;
     };
     std::vector<LayerInfo> layers;
 };
@@ -134,6 +136,8 @@ static TerrainMeta parseMeta(const std::filesystem::path& metaPath) {
         layer.tileSizeY   = readFloat(ifs);
         layer.tileOffsetX = readFloat(ifs);
         layer.tileOffsetY = readFloat(ifs);
+        layer.metallic    = readFloat(ifs);
+        layer.roughness   = readFloat(ifs);
     }
     return m;
 }
@@ -428,6 +432,8 @@ TerrainData loadTerrainFromFiles(
         layer.tileSizeY     = meta.layers[i].tileSizeY;
         layer.tileOffsetX   = meta.layers[i].tileOffsetX;
         layer.tileOffsetY   = meta.layers[i].tileOffsetY;
+        layer.metallic      = meta.layers[i].metallic;
+        layer.roughness     = meta.layers[i].roughness;
 
         if (i < static_cast<int>(manifest.diffusePaths.size())) {
             const auto& diffusePath = manifest.diffusePaths[i];

@@ -18,14 +18,15 @@
   - terrainShadowMap.hlsl + TerrainShadowMapShader PSO 추가 (position-only, depth-only, NumRenderTargets=0)
   - TerrainPipeline::Dispatcher에 shadowPass/shadowPassMT/shadowUpdate/shadowDraw 추가
   - 공유 shadow map("ShadowMap") DSV에 지형 기하를 기록 → PBR mainPass에서 샘플링
-- [ ] Terrain PBR Shading 구현
+- [X] Terrain roughness metallic도 unity에서 추출 및 렌더링 시 반영하도록 수정
+  - 현재는 셰이더에 하드코딩되어 있음.
+- [ ] Cascaded Shadow Mapping 구현
 - [ ] 몬스터 AI 시스템 초안 구현(주변 배회, 피격 시 어그로)
 - [ ] 장비 장착: 공격 모션에 무기도 같이 움직이도록 (필요하면 IK 구현)
 - [ ] Rigid Body Physics 구현: 중력, 공기 저항, 마찰력 등 반영
 - [ ] Software Occlusion(Culling)을 통한 최적화
 - [ ] Active Ragdoll 시뮬레이션, 몬스터들의 움직임에 적용
 - [ ] 시분할 애니메이션 제대로 적용
-- [ ] Cascaded Shadow Mapping 구현
 - [ ] Deferred Shading을 위한 GBuffer 설계
 - [ ] Deferred Shading 구현
 - [ ] 청크 구현 및 리소스 멀티스레드 동적 로딩 구현 (Seamless Openworld가 가능하도록)

@@ -8,7 +8,8 @@ cbuffer PerDrawcallData : register(b0) {
     int4  idxSplatMap;
     int4  idxDiffuse[MAX_TERRAIN_LAYERS];
     int4  idxNormal [MAX_TERRAIN_LAYERS];
-    float4 tiling   [MAX_TERRAIN_LAYERS]; // xy = tileSize, zw = tileOffset
+    float4 tiling            [MAX_TERRAIN_LAYERS]; // xy = tileSize, zw = tileOffset
+    float4 metallicRoughness [MAX_TERRAIN_LAYERS]; // x = metallic, y = roughness
     int    layerCount;
     int    hasAnyNormal;
     float2 _pdd0;
@@ -131,10 +132,16 @@ float4 PSMain(VSOutput input) : SV_TARGET {
         shadingNormalV = vertNormalV;
     }
 
-    // 4. PBR lighting — terrain is non-metallic and rough.
-    const float roughness = 0.85f;
-    const float metallic  = 0.0f;
-    const float ao        = 0.0f;
+    // 4. Blend per-layer metallic/roughness by splat weights.
+    float roughness = 0.f;
+    float metallic  = 0.f;
+    [unroll]
+    for (int mi = 0; mi < MAX_TERRAIN_LAYERS; ++mi) {
+        if (mi >= layerCount) break;
+        roughness += metallicRoughness[mi].y * weights[mi];
+        metallic  += metallicRoughness[mi].x * weights[mi];
+    }
+    const float ao = 0.0f;
 
     float3 posVNorm = normalize(input.posV);
     float3 color    = float3(0.f, 0.f, 0.f);

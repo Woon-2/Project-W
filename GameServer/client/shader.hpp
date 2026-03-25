@@ -316,7 +316,8 @@ struct PerDrawcallData {
     BindlessIndex idxSplatMap;
     BindlessIndex idxDiffuse[MAX_TERRAIN_LAYERS];
     BindlessIndex idxNormal [MAX_TERRAIN_LAYERS];
-    XMFLOAT4     tiling    [MAX_TERRAIN_LAYERS];  // (tileSizeX, tileSizeY, tileOffsetX, tileOffsetY)
+    XMFLOAT4     tiling            [MAX_TERRAIN_LAYERS];  // (tileSizeX, tileSizeY, tileOffsetX, tileOffsetY)
+    XMFLOAT4     metallicRoughness[MAX_TERRAIN_LAYERS];  // x=metallic, y=roughness, zw=unused
     int          layerCount;
     int          hasAnyNormal;
     float        _pdd0[2];

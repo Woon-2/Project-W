@@ -253,9 +253,9 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `terrainPipeline.cpp` | `Dispatcher::mainPass()` 구현 |
 | `pbrLighting.hlsli` | PBR BRDF 함수 라이브러리 — terrain에서 `#define TERRAIN_SHADER` 후 include 시 `illuminate()` 제외됨 |
 
-**TerrainData 구조 (`terrain.hpp #18-30`):**
+**TerrainData 구조 (`terrain.hpp #18-31`):**
 - `heightmapResolution` (N): 그리드 N×N 정점
-- `layers`: `TerrainLayer` 배열 (diffuse + normalMap + tiling)
+- `layers`: `TerrainLayer` 배열 (diffuse + normalMap + tiling + metallic + roughness)
 - `splatMap`: RGBA splat 텍스처
 - `mesh`: VB 5슬롯 (Position/Normal/Tangent/Bitangent/UV), IB 32-bit
 
@@ -269,13 +269,13 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `Resources::MainPass` | `#37` | perDrawcallData(b0), perFrameData(b1), **lightData(t1)** |
 
 **TerrainShader cbuffer 레이아웃 (`shader.hpp #310`):**
-- `PerDrawcallData`: wvp / world / **wv(world-view)** / idxSplatMap / idxDiffuse[4] / idxNormal[4] / tiling[4] / layerCount
-- `PerFrameData` (`#325`): PBRShader::PerFrameData와 동일 레이아웃 — globalAmbient / lightCnt / idxShadowMap / lightVP
+- `PerDrawcallData`: wvp / world / **wv(world-view)** / idxSplatMap / idxDiffuse[4] / idxNormal[4] / tiling[4] / **metallicRoughness[4]** / layerCount
+- `PerFrameData` (`#327`): PBRShader::PerFrameData와 동일 레이아웃 — globalAmbient / lightCnt / idxShadowMap / lightVP
 
 **terrain.hlsl 셰이딩 흐름:**
 1. splat 가중치 샘플링 → 4레이어 albedo(sRGB→linear) + tangent-space normal 블렌딩
 2. buildTBN(vertNormalV) → 블렌딩 법선을 view-space로 변환
-3. lightCnt 루프 → pbrLighting.hlsli의 dirLight/pointLight/spotLight 호출 (roughness=0.85, metallic=0)
+3. metallicRoughness[4]를 splat weight로 블렌딩 → lightCnt 루프 → pbrLighting.hlsli의 dirLight/pointLight/spotLight 호출
 4. calcSingleShadow(posV, posL) → PCF 9-tap 그림자 적용
 5. globalAmbient 더하기 → Reinhard tonemapping → gamma correction
 

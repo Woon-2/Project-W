@@ -342,14 +342,15 @@ void Dispatcher::mainDraw() {
         const int maxLayers = std::min(static_cast<int>(terrain.layers.size()), TerrainShader::MAX_TERRAIN_LAYERS);
         for (int i = 0; i < maxLayers; ++i) {
             const auto& layer  = terrain.layers[i];
-            pdd.idxDiffuse[i]  = layer.diffuse.idxSrv;
-            pdd.idxNormal[i]   = layer.normalMap.idxSrv;
-            pdd.tiling[i]      = XMFLOAT4(
+            pdd.idxDiffuse[i]          = layer.diffuse.idxSrv;
+            pdd.idxNormal[i]           = layer.normalMap.idxSrv;
+            pdd.tiling[i]              = XMFLOAT4(
                 terrain.sizeX / layer.tileSizeX,
                 terrain.sizeZ / layer.tileSizeY,
                 layer.tileOffsetX,
                 layer.tileOffsetY
             );
+            pdd.metallicRoughness[i]   = XMFLOAT4(layer.metallic, layer.roughness, 0.f, 0.f);
         }
         pdd.hasAnyNormal = 0;
         for (int i = 0; i < maxLayers; ++i) {
@@ -361,9 +362,10 @@ void Dispatcher::mainDraw() {
 
         // Fill remaining slots with invalid indices
         for (int i = maxLayers; i < TerrainShader::MAX_TERRAIN_LAYERS; ++i) {
-            pdd.idxDiffuse[i].idxRange = -1;
-            pdd.idxNormal[i].idxRange  = -1;
-            pdd.tiling[i]              = XMFLOAT4(1.f, 1.f, 0.f, 0.f);
+            pdd.idxDiffuse[i].idxRange    = -1;
+            pdd.idxNormal[i].idxRange     = -1;
+            pdd.tiling[i]                 = XMFLOAT4(1.f, 1.f, 0.f, 0.f);
+            pdd.metallicRoughness[i]      = XMFLOAT4(0.f, 0.85f, 0.f, 0.f);
         }
 
         pResources_->mainPass.perDrawcallData.stage(roomIdx_, &pdd, 1u);
