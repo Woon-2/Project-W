@@ -74,7 +74,9 @@ class ParticleSystem {
 public:
     static constexpr int kMaxParticles = 4096;
 
-    // 즉시 count개 파티클 emit
+    // 즉시 count개 파티클 emit.
+    // emit 시 SpriteAnimType::Once / Loop 클립의 애니메이션 속도(speed)를
+    // 파티클 lifetime에 맞게 자동 조정한다.
     void emit(const EmitterConfig& config, int count);
 
     // 연속 emit 시작/중지 (config.emitRate particles/sec)
@@ -103,6 +105,9 @@ update(dt)
        size  = lerp(sizeBegin, sizeEnd, t)
        tint  = lerp(tintBegin, tintEnd, t)
        anim.update / setPos / setScale / setTint
+       ※ emit 시 speed 자동 설정:
+           Once  → speed = duration / lifetime
+           Loop  → speed = N * duration / lifetime  (N = round(lifetime/duration), min 1)
        lifetime 소진 or anim.done()
          → swap-remove: pool_[i] ← move(pool_[activeCount_-1])
          → --activeCount_, i 재처리
@@ -177,3 +182,7 @@ particleSystem_.stopContinuous();
 - `additive` 플래그는 `emit()` 시 한 번 설정되며 수명 동안 불변이다.
 - billboard VS는 world-space까지만 변환; clip-space 변환은 GS에서 수행.
 - 카메라가 파티클 바로 위/아래에 있을 때 NaN 방지: `worldUp`을 `(1,0,0)`으로 fallback.
+- `emit()` 시 `SpriteAnimType::Once` / `Loop` 클립의 `speed`는 lifetime에 맞게 자동 설정된다.
+  `Loop` 타입은 lifetime 동안 정수 N번의 완전한 사이클이 재생되도록 계산하여,
+  파티클 소멸 시 애니메이션이 루프 경계 근처에서 끝나도록 한다.
+  `RandomAdvance` 타입은 랜덤 특성상 자동 설정 없음 (speed = 1.f 유지).

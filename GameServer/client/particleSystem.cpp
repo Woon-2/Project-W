@@ -67,13 +67,31 @@ void ParticleSystem::emit(const EmitterConfig& config, int count) {
         p.maxLifetime = p.lifetime;
         p.tintBegin   = config.tintBegin;
         p.tintEnd     = config.tintEnd;
-        p.sizeBegin   = config.sizeBegin;
-        p.sizeEnd     = config.sizeEnd;
+        const float sizeMult = randomFloat(config.sizeMultiplierMin, config.sizeMultiplierMax);
+        p.sizeBegin   = config.sizeBegin * sizeMult;
+        p.sizeEnd     = config.sizeEnd   * sizeMult;
         p.drag        = config.drag;
-        p.gravity     = config.gravity;
+        p.gravity     = config.gravity * randomFloat(config.gravityModifierMin, config.gravityModifierMax);
         p.rotation    = randomFloat(config.startRotationMin, config.startRotationMax);
         p.additive    = config.additiveBlend;
         p.anim.init(config.pClip);
+
+        // 애니메이션 속도를 파티클 lifetime에 동기화:
+        // Loop 타입 → lifetime 동안 정수 N번의 완전한 루프 사이클 재생
+        // Once 타입 → lifetime 과 동시에 애니메이션 완료
+        if (config.pClip->duration.count() > 0 && p.lifetime > 0.f) {
+            const float lifetimeMs = p.lifetime * 1000.f;
+            const float durationMs = static_cast<float>(config.pClip->duration.count());
+            float speed = 1.f;
+            if (config.pClip->type == SpriteAnimType::Once) {
+                speed = durationMs / lifetimeMs;
+            } else if (config.pClip->type == SpriteAnimType::Loop) {
+                const float cycles = std::max(1.f, std::round(lifetimeMs / durationMs));
+                speed = cycles * durationMs / lifetimeMs;
+            }
+            p.anim.setSpeed(speed);
+        }
+
         p.anim.setAdditive(config.additiveBlend);
         p.anim.setPos(spawnPos);
         p.anim.setRotation(p.rotation);

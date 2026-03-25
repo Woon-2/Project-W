@@ -12,6 +12,11 @@ Stage 1~10 모두 완료. 불꽃 파티클 렌더링 완성.
   - 유니티 익스포트 방식 변경: PNG N장 + 바이너리 → 스프라이트 시트 PNG 1장
   - flame 설정: `a_VFX_flame.dds`, 3×3 그리드, 9프레임, 80ms/frame
 
+- **파티클 lifetime ↔ 애니메이션 속도 동기화**
+  - `emit()` 시 `SpriteAnimType::Loop` → lifetime 내 정수 N번 완전 루프 재생되도록 speed 자동 계산
+  - `SpriteAnimType::Once` → lifetime과 동시에 애니메이션 완료되도록 speed 자동 계산
+  - 파티클이 임의의 프레임에서 갑자기 사라지는 현상 수정
+
 ## 남은 작업
 - 게임 이벤트(타격·폭발 등)와 ParticleSystem 연결
   → 게임플레이 시스템 완성 후 별도 진행
