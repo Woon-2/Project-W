@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(grep -E \"\\\\.\\(hpp|cpp\\)$\")"
+      "Bash(grep -E \"\\\\.\\(hpp|cpp\\)$\")",
+      "WebFetch(domain:skills.sh)",
+      "Bash(grep -rn \"Pool<\\\\|new\\\\|delete\\\\|std::make_unique\\\\|std::allocate\" /d/DirectX12/Project-W/GameServer/client/*.hpp)"
     ]
   }
 }
