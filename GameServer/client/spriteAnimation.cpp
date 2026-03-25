@@ -60,12 +60,13 @@ void SpriteAnimation::update( Milliseconds deltaTime ) {
 void SpriteAnimation::render( GFX& gfx ) const {
 	const auto& frame = pAnimData_->frames[currFrameIdx_];
 	gfx.addDrawEvent( BillboardPipeline::DrawEvent{
-		.world    = world_,
-		.pTex     = &pAnimData_->spriteSheet,
-		.uvOffset = frame.uvOffset,
-		.uvScale  = frame.uvScale,
-		.tint     = tint_,
-		.additive = additive_,
-		.rotation = rotation_,
+		.world       = world_,
+		.pTex        = &pAnimData_->spriteSheet,
+		.uvOffset    = frame.uvOffset,
+		.uvScale     = frame.uvScale,
+		.tint        = tint_,
+		.additive    = additive_,
+		.rotation    = rotation_,
+		.renderOrder = renderOrder_,
 	} );
 }

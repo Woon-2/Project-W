@@ -93,6 +93,7 @@ void ParticleSystem::emit(const EmitterConfig& config, int count) {
         }
 
         p.anim.setAdditive(config.additiveBlend);
+        p.anim.setRenderOrder(config.renderOrder);
         p.anim.setPos(spawnPos);
         p.anim.setRotation(p.rotation);
     }

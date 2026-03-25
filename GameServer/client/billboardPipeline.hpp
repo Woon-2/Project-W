@@ -37,12 +37,14 @@ struct DrawEvent {
 	mu::Vec3 tint;
 	bool additive = false;
 	float rotation = 0.f;
+	int renderOrder = 0;	// 낮을수록 먼저 렌더 (Unity Order in Layer 동일 개념)
 
 	// Non-additive events sort before additive so we can switch PSO once.
+	// Within the same blend mode, sort by renderOrder (ascending).
 	auto operator<=>( const DrawEvent& rhs ) const noexcept {
 		if ( additive != rhs.additive )
 			return additive ? std::strong_ordering::greater : std::strong_ordering::less;
-		return std::strong_ordering::equal;
+		return renderOrder <=> rhs.renderOrder;
 	}
 };
 

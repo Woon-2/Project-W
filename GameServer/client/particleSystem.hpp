@@ -33,6 +33,7 @@ struct EmitterConfig {
     float                      edgeLength   = 1.f;
     mu::Vec3                   edgeDir      = {1.f, 0.f, 0.f};
     bool                       additiveBlend = true;
+    int                        renderOrder  = 0;         // 낮을수록 먼저 렌더 (같은 blend 모드 내 정렬 기준)
     float                      emitRate     = 0.f;       // particles/sec (0이면 수동 emit)
 };
 

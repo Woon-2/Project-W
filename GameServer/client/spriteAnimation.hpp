@@ -30,6 +30,9 @@ public:
 	float rotation() const { return rotation_; }
 	void setRotation(float rad) { rotation_ = rad; }
 
+	int  renderOrder() const { return renderOrder_; }
+	void setRenderOrder(int order) { renderOrder_ = order; }
+
 private:
 	mu::Mat4x4 world_{};	// GFX에 행렬을 전달할 때만 사용된다.
 	std::normal_distribution<float> distRandomAdvance_{};
@@ -39,6 +42,7 @@ private:
 	mu::Vec2 scale_ = mu::Vec2(1.f, 1.f);	// 향후 셰이더에서 반영할 수 있도록
 	bool additive_ = false;
 	float rotation_ = 0.f;
+	int renderOrder_ = 0;
 
 	const SpriteAnimationClip* pAnimData_ = nullptr;
 

@@ -114,6 +114,8 @@ void Game::setupStage() {
 	flameEmitterConfig_.shape             = EmitterShape::Edge;
 	flameEmitterConfig_.edgeLength		 = 1.5f;
 	flameEmitterConfig_.emitRate          = 15.0f;
+	flameEmitterConfig_.additiveBlend     = false;
+	flameEmitterConfig_.renderOrder       = 0;
 	flameParticleSystem_.startContinuous(flameEmitterConfig_);
 
 	smokeEmitterConfig_.pClip            = assetManager_.smokeAnimation();
@@ -123,13 +125,15 @@ void Game::setupStage() {
 	smokeEmitterConfig_.speedMin         = 0.5f;
 	smokeEmitterConfig_.speedMax         = 2.f;
 	smokeEmitterConfig_.lifetimeMin      = 0.5f;
-	smokeEmitterConfig_.lifetimeMax      = 1.5f;
+	smokeEmitterConfig_.lifetimeMax      = 1.0f;
 	smokeEmitterConfig_.sizeBegin        = 1.f;
 	smokeEmitterConfig_.sizeEnd          = 1.0f;
-	smokeEmitterConfig_.sizeMultiplierMin = 0.8f;
-	smokeEmitterConfig_.sizeMultiplierMax = 1.2f;
+	smokeEmitterConfig_.sizeMultiplierMin = 1.f;
+	smokeEmitterConfig_.sizeMultiplierMax = 1.f;
 	smokeEmitterConfig_.drag             = 0.8f;
 	smokeEmitterConfig_.gravity          = { 0.f, -1.f, 0.f };
+	smokeEmitterConfig_.gravityModifierMin = -0.5f;        // 약간의 부력으로 천천히 상승
+	smokeEmitterConfig_.gravityModifierMax = -0.2f;
 	smokeEmitterConfig_.tintBegin        = { 0.537f, 0.537f, 0.537f };
 	smokeEmitterConfig_.tintEnd          = { 0.537f, 0.537f, 0.537f };
 	smokeEmitterConfig_.startRotationMin = 0.f;
@@ -137,6 +141,8 @@ void Game::setupStage() {
 	smokeEmitterConfig_.shape            = EmitterShape::Edge;
 	smokeEmitterConfig_.edgeLength       = 1.5f;
 	smokeEmitterConfig_.emitRate         = 10.0f;
+	smokeEmitterConfig_.additiveBlend    = false;
+	smokeEmitterConfig_.renderOrder      = 1;
 	smokeParticleSystem_.startContinuous(smokeEmitterConfig_);
 
 	// 전투 시스템에 참가자 등록
@@ -610,7 +616,7 @@ void Game::render() {
 	dirLight_.render(gfx_);
 
 	flameParticleSystem_.render( gfx_ );
-	//smokeParticleSystem_.render( gfx_ );
+	smokeParticleSystem_.render( gfx_ );
 
 	playerHpUI_.render( gfx_ );
 
