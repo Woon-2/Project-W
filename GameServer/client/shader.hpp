@@ -26,6 +26,7 @@ ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootS
 ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSignature* rootSig );
 ComPtr<ID3D12PipelineState> createTerrainShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createTerrainShadowMapShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 
 // 루트 파라미터 접근을 이해하기 쉽도록 하기 위해 만든 클래스
 // 루트 파라미터에 이름을 지어 그 인덱스 및 D3D12_ROOT_PARAMETER 구조체와 매핑한다.
@@ -332,6 +333,18 @@ struct PerFrameData {
 };
 
 }	// namespace TerrainShader
+
+// TerrainShadowMapShader
+namespace TerrainShadowMapShader {
+// Matches cbuffer PerDrawcallData : register(b0) in terrainShadowMap.hlsl
+struct PerDrawcallData {
+    XMFLOAT4X4 world;
+};
+// Matches cbuffer PerFrameData : register(b1) in terrainShadowMap.hlsl
+struct PerFrameData {
+    XMFLOAT4X4 lightVP;
+};
+}  // namespace TerrainShadowMapShader
 
 namespace UIShader {
 	struct Material {

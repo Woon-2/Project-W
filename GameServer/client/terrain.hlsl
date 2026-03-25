@@ -139,13 +139,13 @@ float4 PSMain(VSOutput input) : SV_TARGET {
 
     for (uint li = 0; li < lightCnt; li++) {
         if (gLightData[li].type == LIGHT_TYPE_POINT) {
-            color += pointLight(li, input.posV, posVNorm, shadingNormalV,
+            color += pointLight(li, input.posV, posVNorm, vertNormalV,
                                 input.uv, albedo, roughness, metallic, ao);
         } else if (gLightData[li].type == LIGHT_TYPE_SPOT) {
-            color += spotLight(li, input.posV, posVNorm, shadingNormalV,
+            color += spotLight(li, input.posV, posVNorm, vertNormalV,
                                input.uv, albedo, roughness, metallic, ao);
         } else if (gLightData[li].type == LIGHT_TYPE_DIRECTIONAL) {
-            color += dirLight(li, input.posV, posVNorm, shadingNormalV,
+            color += dirLight(li, input.posV, posVNorm, vertNormalV,
                               input.uv, albedo, roughness, metallic, ao);
         }
     }

@@ -3,6 +3,7 @@
 #include "shader.hpp"
 #include "mesh.hpp"
 #include "errorHandling.hpp"
+#include "sharedResources.hpp"
 
 namespace TerrainPipeline {
 
@@ -44,6 +45,8 @@ Dispatcher::Dispatcher(
     DescriptorPool* pCmpSamPool,
     const std::shared_ptr<RootSig>& rootSig,
     const ComPtr<ID3D12PipelineState>& shader,
+    const ComPtr<ID3D12PipelineState>& shadowShader,
+    DescriptorPool* pDsvPool,
     const ComPtr<ID3D12CommandQueue>& cmdQ,
     const D3D12_VIEWPORT& viewport, const D3D12_RECT& scissorRect,
     D3D12_CPU_DESCRIPTOR_HANDLE rtv, D3D12_CPU_DESCRIPTOR_HANDLE dsv,
@@ -55,7 +58,8 @@ Dispatcher::Dispatcher(
 ) : descriptorHeaps_(descriptorHeaps),
     pTexPool_(pTexPool), pTexArrayPool_(pTexArrayPool),
     pTexCubePool_(pTexCubePool), pSamPool_(pSamPool), pCmpSamPool_(pCmpSamPool),
-    rootSig_(rootSig), shader_(shader), cmdQ_(cmdQ),
+    rootSig_(rootSig), shader_(shader), shadowShader_(shadowShader), pDsvPool_(pDsvPool),
+    cmdQ_(cmdQ),
     viewport_(viewport), scissorRect_(scissorRect), rtv_(rtv), dsv_(dsv),
     pFence_(pFence), pResources_(pResources), threadPool_(threadPool), cmdListPool_(commandListPool),
     drawEvents_(std::move(drawEvents)),
@@ -70,6 +74,137 @@ Dispatcher::Dispatcher(
     rootParamIdxSamPool_(rootSig->paramIdx("SamplerPool")),
     rootParamIdxCmpSamPool_(rootSig->paramIdx("ComparisonSamplerPool"))
 {}
+
+// ---------------------------------------------------------------------------
+// shadowPass / shadowPassMT
+// ---------------------------------------------------------------------------
+
+void Dispatcher::shadowPass() {
+    shadowUpdate();
+    shadowDraw();
+}
+
+// Terrain has 1-4 draw events; no MT benefit. Delegates to single-threaded path.
+void Dispatcher::shadowPassMT() {
+    shadowPass();
+}
+
+// ---------------------------------------------------------------------------
+// shadowUpdate / shadowDraw
+// ---------------------------------------------------------------------------
+
+void Dispatcher::shadowUpdate() {
+    if (drawEvents_.empty()) {
+        return;
+    }
+
+    auto pfd = TerrainShadowMapShader::PerFrameData{};
+    auto lightVP = lightData_.view * lightData_.proj;
+    pfd.lightVP  = mu::transpose(lightVP).getXmf();
+    pResources_->shadowPass.perFrameData.stage(roomIdx_, &pfd, 1u);
+}
+
+void Dispatcher::shadowDraw() {
+    if (drawEvents_.empty()) {
+        return;
+    }
+
+    auto& shadowMapData = SharedResources::ShadowMap::shadowMapData.at("ShadowMap");
+
+    CommandContext cmdCtx{};
+    DISPLAY_ERROR_STR(cmdListPool_->allocOne(CommandListUsage::RenderingSlave, cmdCtx),
+        "[GFX Error] TerrainPipeline::shadowDraw: no command context available.", false);
+    if (!cmdCtx.cmdList) {
+        return;
+    }
+
+    auto* cmdList  = cmdCtx.cmdList.Get();
+    auto* cmdAlloc = cmdCtx.cmdAlloc.Get();
+
+    auto hrReset = cmdAlloc->Reset();
+    DISPLAY_ERROR_DX_HR(hrReset, false);
+    if (hrReset < 0) {
+        cmdListPool_->freeOne(CommandListUsage::RenderingSlave, std::move(cmdCtx));
+        return;
+    }
+    auto hrListReset = cmdList->Reset(cmdAlloc, nullptr);
+    DISPLAY_ERROR_DX_HR(hrListReset, false);
+    if (hrListReset < 0) {
+        cmdListPool_->freeOne(CommandListUsage::RenderingSlave, std::move(cmdCtx));
+        return;
+    }
+
+    // Shadow pass pipeline state
+    DISPLAY_ERROR_DX_VOID(cmdList->SetGraphicsRootSignature(rootSig_->get()), false);
+    DISPLAY_ERROR_DX_VOID(cmdList->SetPipelineState(shadowShader_.Get()), false);
+
+    // Shadow map DSV only; no color render targets
+    auto shadowDsv = pDsvPool_->cpuHandle(shadowMapData.tex.idxDsv);
+    DISPLAY_ERROR_DX_VOID(cmdList->OMSetRenderTargets(0u, nullptr, false, &shadowDsv), false);
+
+    // Viewport and scissor sized to shadow map texture
+    auto shadowVP = D3D12_VIEWPORT{
+        .TopLeftX = 0.f, .TopLeftY = 0.f,
+        .Width    = static_cast<float>(shadowMapData.width),
+        .Height   = static_cast<float>(shadowMapData.height),
+        .MinDepth = 0.f, .MaxDepth = 1.f
+    };
+    auto shadowSR = D3D12_RECT{
+        .left = 0, .top = 0,
+        .right  = static_cast<LONG>(shadowMapData.width),
+        .bottom = static_cast<LONG>(shadowMapData.height)
+    };
+    DISPLAY_ERROR_DX_VOID(cmdList->RSSetViewports(1u, &shadowVP), false);
+    DISPLAY_ERROR_DX_VOID(cmdList->RSSetScissorRects(1u, &shadowSR), false);
+
+    // Descriptor heaps required by root signature even with no texture sampling
+    auto heapsRaw = std::vector<ID3D12DescriptorHeap*>(descriptorHeaps_.size());
+    std::ranges::transform(descriptorHeaps_, heapsRaw.begin(),
+        [](const ComPtr<ID3D12DescriptorHeap>& h) { return h.Get(); });
+    DISPLAY_ERROR_DX_VOID(cmdList->SetDescriptorHeaps(
+        static_cast<UINT>(heapsRaw.size()), heapsRaw.data()), false);
+
+    DISPLAY_ERROR_DX_VOID(cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST), false);
+
+    // Bind PerFrameData (staged in shadowUpdate)
+    pResources_->shadowPass.perFrameData.bind(cmdList, rootParamIdxPFD_, roomIdx_);
+
+    for (const auto& ev : drawEvents_) {
+        if (!ev.terrain) continue;
+        const auto& mesh = ev.terrain->mesh;
+        if (mesh.subMeshes.empty()) continue;
+
+        auto pdd = TerrainShadowMapShader::PerDrawcallData{
+            .world = mu::transpose(ev.world).getXmf()
+        };
+        pResources_->shadowPass.perDrawcallData.stage(roomIdx_, &pdd, 1u);
+        pResources_->shadowPass.perDrawcallData.bind(cmdList, rootParamIdxPDD_, roomIdx_);
+
+        // Position VBV only (slot 0 of the TerrainPipeline VBV cache)
+        layoutMeshIfNeeded(mesh);
+        const auto& allVbViews = mesh.vbViewsByPipeline.at("TerrainPipeline");
+        DISPLAY_ERROR_DX_VOID(cmdList->IASetVertexBuffers(0u, 1u, &allVbViews[0]), false);
+
+        const auto& subMesh = mesh.subMeshes[0];
+        DISPLAY_ERROR_DX_VOID(cmdList->IASetIndexBuffer(&subMesh.ibView), false);
+
+        const UINT indexCount = subMesh.ibView.SizeInBytes / sizeof(u32t);
+        DISPLAY_ERROR_DX_VOID(cmdList->DrawIndexedInstanced(indexCount, 1u, 0u, 0, 0u), false);
+    }
+
+    auto hrClose = cmdList->Close();
+    DISPLAY_ERROR_DX_HR(hrClose, false);
+    if (hrClose < 0) {
+        cmdListPool_->freeOne(CommandListUsage::RenderingSlave, std::move(cmdCtx));
+        return;
+    }
+
+    ID3D12CommandList* lists[] = { cmdList };
+    DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, lists), false);
+
+    pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)]
+        .push_back(std::move(cmdCtx));
+}
 
 // ---------------------------------------------------------------------------
 // mainPass / mainPassMT

@@ -242,6 +242,7 @@ void GFX::init() {
 	shaders_.try_emplace("BVShader", createBVShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace( "UIShader", createUIShader( device_.Get(), defaultRootSig.get() ) );
 	shaders_.try_emplace("TerrainShader", createTerrainShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("TerrainShadowMapShader", createTerrainShadowMapShader(device_.Get(), defaultRootSig.get()));
 
 	rootSigs_.try_emplace("DefaultRootSignature", std::make_shared<DefaultRootSig>(std::move(defaultRootSig)));
 
@@ -444,6 +445,12 @@ void GFX::createSwapChain() {
 		device_.Get(), sizeof( UIShader::PerFrameData ), backBuffers_.size(), "UI_PerFrameData"
 	);
 	// Terrain Pipeline ----
+	resourcesTerrainPipeline_.shadowPass.perDrawcallData.init(
+		device_.Get(), sizeof(TerrainShadowMapShader::PerDrawcallData), backBuffers_.size(), "Terrain_Shadow_PerDrawcallData"
+	);
+	resourcesTerrainPipeline_.shadowPass.perFrameData.init(
+		device_.Get(), sizeof(TerrainShadowMapShader::PerFrameData), backBuffers_.size(), "Terrain_Shadow_PerFrameData"
+	);
 	resourcesTerrainPipeline_.mainPass.perDrawcallData.init(
 		device_.Get(), sizeof(TerrainShader::PerDrawcallData), backBuffers_.size(), "Terrain_Main_PerDrawcallData"
 	);
@@ -937,7 +944,10 @@ void GFX::render() {
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_,
-		rootSigs_.at("DefaultRootSignature"), shaders_.at("TerrainShader"),
+		rootSigs_.at("DefaultRootSignature"),
+		shaders_.at("TerrainShader"),
+		shaders_.at("TerrainShadowMapShader"),
+		&dsvPool_,
 		cmdQ_, viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesTerrainPipeline_,
@@ -984,6 +994,9 @@ void GFX::render() {
 		pbrSkinnedPipelineDispatcher.shadowPass();
 		dumpLog();
 
+		terrainPipelineDispatcher.shadowPass();
+		dumpLog();
+
 		// == 메인 패스들 ==
 		SharedResources::ShadowMap::getReadyAsShaderResource(
 			"ShadowMap", cmdListPool_, cmdQ_.Get(), fenceToSignal
@@ -1021,6 +1034,9 @@ void GFX::render() {
 
 		pbrSkinnedPipelineDispatcher.sortDrawEvents();
 		pbrSkinnedPipelineDispatcher.shadowPassMT();
+		dumpLog();
+
+		terrainPipelineDispatcher.shadowPassMT();
 		dumpLog();
 
 		// == 메인 패스들 ==

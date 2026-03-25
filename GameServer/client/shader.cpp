@@ -1001,6 +1001,82 @@ ComPtr<ID3D12PipelineState> createTerrainShader(ID3D12Device* device, ID3D12Root
 	return ret;
 }
 
+ComPtr<ID3D12PipelineState> createTerrainShadowMapShader(ID3D12Device* device, ID3D12RootSignature* rootSig) {
+	ComPtr<ID3D12PipelineState> ret{};
+
+	auto vsCode = compileShader("terrainShadowMap.hlsl", nullptr, "VSMain", "vs_5_1",
+		D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
+
+	// Position only (slot 0) - matches TerrainPipeline VBV cache index 0
+	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
+		D3D12_INPUT_ELEMENT_DESC{
+			.SemanticName         = "POSITION",
+			.SemanticIndex        = 0u,
+			.Format               = DXGI_FORMAT_R32G32B32_FLOAT,
+			.InputSlot            = 0u,
+			.AlignedByteOffset    = 0u,
+			.InputSlotClass       = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			.InstanceDataStepRate = 0u
+		}
+	};
+
+	auto inputLayoutDesc = D3D12_INPUT_LAYOUT_DESC{
+		.pInputElementDescs = elemDescs.data(),
+		.NumElements        = static_cast<UINT>(elemDescs.size())
+	};
+
+	auto psoDesc = D3D12_GRAPHICS_PIPELINE_STATE_DESC{
+		.pRootSignature = rootSig,
+		.VS             = vsCode.byteCode,
+		// No PS: depth-only pass
+		.BlendState = D3D12_BLEND_DESC{
+			.AlphaToCoverageEnable  = false,
+			.IndependentBlendEnable = false
+		},
+		.SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
+		.RasterizerState = D3D12_RASTERIZER_DESC{
+			.FillMode              = D3D12_FILL_MODE_SOLID,
+			.CullMode              = D3D12_CULL_MODE_BACK,
+			.FrontCounterClockwise = false,
+			.DepthBias             = 1000,
+			.DepthBiasClamp        = 0.f,
+			.SlopeScaledDepthBias  = 1.f,
+			.DepthClipEnable       = true,
+			.MultisampleEnable     = false,
+			.AntialiasedLineEnable = false,
+			.ForcedSampleCount     = 0u
+		},
+		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
+			.DepthEnable      = true,
+			.DepthWriteMask   = D3D12_DEPTH_WRITE_MASK_ALL,
+			.DepthFunc        = D3D12_COMPARISON_FUNC_LESS,
+			.StencilEnable    = false,
+			.StencilReadMask  = 0u,
+			.StencilWriteMask = 0u,
+			.FrontFace        = D3D12_DEPTH_STENCILOP_DESC{},
+			.BackFace         = D3D12_DEPTH_STENCILOP_DESC{}
+		},
+		.InputLayout           = inputLayoutDesc,
+		.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+		.SampleDesc            = DXGI_SAMPLE_DESC{.Count = 1u, .Quality = 0u},
+		.NodeMask              = 0u,
+		.Flags                 = D3D12_PIPELINE_STATE_FLAG_NONE
+	};
+
+	// Depth-only: zero render targets
+	psoDesc.NumRenderTargets = 0u;
+	psoDesc.DSVFormat        = DXGI_FORMAT_D32_FLOAT;
+
+	DISPLAY_ERROR_DX_HR(
+		device->CreateGraphicsPipelineState(&psoDesc, __uuidof(ID3D12PipelineState), &ret),
+		false
+	);
+
+	setD3DName(ret.Get(), "TerrainShadowMapShader");
+
+	return ret;
+}
+
 ComPtr<ID3D12PipelineState> createBillboardShader( ID3D12Device* device, ID3D12RootSignature* rootSig ) {
 	ComPtr<ID3D12PipelineState> ret{};
 

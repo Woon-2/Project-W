@@ -14,7 +14,11 @@
   - TerrainObject(Object 상속)와 TerrainData 분리: Object/Model 패턴과 동일
   - importNode() "Terrain" 분기 → TerrainObject 생성 → importTerrain() → update(0ms, 1.f)
   - TerrainPipeline::DrawEvent에 world 필드 추가, mainPass()에서 ev.world로 WVP 계산
-- [ ] Terrain PBR Shading, Terrain Shadow 구현
+- [X] Terrain Shadow 구현 (지형이 PBR 객체 위에 그림자를 드리움, PBR 객체의 그림자가 지형 위에 드리움)
+  - terrainShadowMap.hlsl + TerrainShadowMapShader PSO 추가 (position-only, depth-only, NumRenderTargets=0)
+  - TerrainPipeline::Dispatcher에 shadowPass/shadowPassMT/shadowUpdate/shadowDraw 추가
+  - 공유 shadow map("ShadowMap") DSV에 지형 기하를 기록 → PBR mainPass에서 샘플링
+- [ ] Terrain PBR Shading 구현
 - [ ] 몬스터 AI 시스템 초안 구현(주변 배회, 피격 시 어그로)
 - [ ] 장비 장착: 공격 모션에 무기도 같이 움직이도록 (필요하면 IK 구현)
 - [ ] Rigid Body Physics 구현: 중력, 공기 저항, 마찰력 등 반영
