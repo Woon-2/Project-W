@@ -423,10 +423,8 @@ void freeUAV(const Texture& tex, DescriptorPool& pool);
 
 struct SpriteAnimFrame
 {
-	Texture sprite;
-	std::string name;
-	std::uint32_t width;
-	std::uint32_t height;
+	mu::Vec2 uvOffset;	// 스프라이트 시트 내 이 프레임의 좌상단 UV
+	mu::Vec2 uvScale;	// 이 프레임의 UV 크기 (= 1/cols, 1/rows)
 	Milliseconds time;
 };
 
@@ -441,17 +439,22 @@ enum class SpriteAnimType : std::uint32_t
 struct SpriteAnimationClip
 {
 	std::string name;
+	Texture spriteSheet;				// 모든 프레임이 담긴 단일 스프라이트 시트 텍스처
 	std::vector<SpriteAnimFrame> frames;
 	SpriteAnimType type;
 	Milliseconds frameTime;
 	Milliseconds duration;
 };
 
-// 바이너리 파일로부터 스프라이트 애니메이션의 정보들을 로드하고 그것을 바탕으로 texAnimHashMap을 채운다.
-SpriteAnimationClip loadSpriteAnimationFromFile(
-	const std::filesystem::path& path,
+// 스프라이트 시트 텍스처와 그리드 파라미터로부터 SpriteAnimationClip을 생성한다.
+// sheetPath: DDS 포맷의 스프라이트 시트 경로
+// rows, cols: 스프라이트 시트의 행/열 수
+// frameCount: 실제 유효 프레임 수 (rows * cols 이하)
+SpriteAnimationClip loadSpriteSheetAnimation(
+	const std::filesystem::path& sheetPath,
+	int rows, int cols, int frameCount,
+	SpriteAnimType type, Milliseconds frameTime,
 	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
-	std::unordered_map<std::string, std::vector<Texture>>& texAnimHashMap,
 	DescriptorPool& texPool, Fence& fenceToAssociate
 );
 

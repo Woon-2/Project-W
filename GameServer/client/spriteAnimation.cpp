@@ -2,7 +2,6 @@
 #include "spriteAnimation.hpp"
 #include "gfx.hpp"
 #include "errorHandling.hpp"
-#include "binaryImport.hpp"
 
 void SpriteAnimation::init(const SpriteAnimationClip* pAnimData) {
 	pAnimData_    = pAnimData;
@@ -59,9 +58,12 @@ void SpriteAnimation::update( Milliseconds deltaTime ) {
 }
 
 void SpriteAnimation::render( GFX& gfx ) const {
+	const auto& frame = pAnimData_->frames[currFrameIdx_];
 	gfx.addDrawEvent( BillboardPipeline::DrawEvent{
 		.world    = world_,
-		.pTex     = &pAnimData_->frames[currFrameIdx_].sprite,
+		.pTex     = &pAnimData_->spriteSheet,
+		.uvOffset = frame.uvOffset,
+		.uvScale  = frame.uvScale,
 		.tint     = tint_,
 		.additive = additive_,
 		.rotation = rotation_,

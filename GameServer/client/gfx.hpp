@@ -38,9 +38,13 @@ struct RequestTextureLoad {
 };
 
 struct RequestSpriteAnimLoad {
-	std::filesystem::path spritesPath;
+	std::filesystem::path sheetPath;	// DDS 포맷의 스프라이트 시트 경로
+	int rows;							// 스프라이트 시트의 행 수
+	int cols;							// 스프라이트 시트의 열 수
+	int frameCount;						// 실제 유효 프레임 수 (rows * cols 이하)
+	SpriteAnimType type;
+	Milliseconds frameTime;
 	SpriteAnimationClip* pDest;
-	std::unordered_map<std::string, std::vector<Texture>>* pSpritesHashMap;
 };
 
 struct RequestTextImageLoad {

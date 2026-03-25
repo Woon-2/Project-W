@@ -38,7 +38,6 @@ public:
 
 private:
 	std::unordered_map<std::string, Texture> texHashMap_{};
-	std::unordered_map<std::string, std::vector<Texture>> spritesHashMap_{};
 	std::vector<std::shared_ptr<AnimClip>> playerAnimations_{};
 	std::vector<std::shared_ptr<AnimClip>> goblinAnimations_{};
 	std::vector<std::shared_ptr<AnimClip>> anubisAnimations_{};

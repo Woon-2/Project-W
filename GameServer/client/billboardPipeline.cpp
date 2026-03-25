@@ -325,7 +325,9 @@ void Dispatcher::drawSingleThreaded() {
 				.idxTex = drawEvent.pTex->idxSrv,
 				.tint = drawEvent.tint.getXmf()
 			},
-			.firstInstanceOffset = idxDrawcall
+			.firstInstanceOffset = idxDrawcall,
+			.uvOffset = drawEvent.uvOffset.getXmf(),
+			.uvScale  = drawEvent.uvScale.getXmf(),
 		};
 		pResources_->perDrawcallData.cbuffers[idxDrawcall].stage(
 			roomIdx_, &perDrawcallData, 1u
@@ -577,7 +579,9 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 					.idxTex = drawEvent.pTex->idxSrv,
 					.tint = drawEvent.tint.getXmf()
 				},
-				.firstInstanceOffset = static_cast<u32t>(idxDrawcall)
+				.firstInstanceOffset = static_cast<u32t>(idxDrawcall),
+				.uvOffset = drawEvent.uvOffset.getXmf(),
+				.uvScale  = drawEvent.uvScale.getXmf(),
 			};
 			// PerDrawcallData GPU 데이터 갱신
 			// (바인드와 GPU 데이터 갱신 순서는 상관없다.

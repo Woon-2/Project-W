@@ -32,6 +32,8 @@ struct PSInput
 cbuffer PerDrawcallData : register(b0) {
     Material material;
     uint idxDrawcall;
+    float2 uvOffset;    // 스프라이트 시트 내 현재 프레임의 좌상단 UV
+    float2 uvScale;     // 현재 프레임의 UV 크기 (= 1/cols, 1/rows)
 };
 
 cbuffer PerFrameData : register(b1) {
@@ -85,7 +87,12 @@ void GSMain(point VSOutput input[1],
     p[1] = pos + half * vRightR - half * vUPR;
     p[2] = pos - half * vRightR + half * vUPR;
     p[3] = pos + half * vRightR + half * vUPR;
-    float2 uv[4] = { float2(0.f, 1.f), float2(1.f, 1.f), float2(0.f, 0.f), float2(1.f, 0.f) };
+    // 로컬 UV (0~1 범위) → 스프라이트 시트 UV로 변환
+    float2 baseUV[4] = { float2(0.f, 1.f), float2(1.f, 1.f), float2(0.f, 0.f), float2(1.f, 0.f) };
+    float2 uv[4];
+    [unroll]
+    for (int j = 0; j < 4; ++j)
+        uv[j] = baseUV[j] * uvScale + uvOffset;
 
     PSInput output;
     [unroll]

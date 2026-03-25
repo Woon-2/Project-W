@@ -96,10 +96,14 @@ void AssetManager::loadGFXAssets(GFX& gfx) {
 	} );
 
 	gfx.addRequestSpritesLoad( RequestSpriteAnimLoad{
-		.spritesPath = "../resources/Sprites/flame5_anim.bin",
-		.pDest = &flameAnimation_,
-		.pSpritesHashMap = &spritesHashMap_
-		} );
+		.sheetPath  = "../resources/Sprites/a_VFX_flame.dds",
+		.rows       = 3,
+		.cols       = 3,
+		.frameCount = 9,
+		.type       = SpriteAnimType::Loop,
+		.frameTime  = 80ms,
+		.pDest      = &flameAnimation_
+	} );
 
 	gfx.loadAssets();
 }

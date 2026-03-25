@@ -663,7 +663,11 @@ void GFX::loadAssets() {
 
 	// load sprites
 	for ( auto& request : requestsSpritesLoad_ ) {
-		*request.pDest = loadSpriteAnimationFromFile( request.spritesPath, device_.Get(), cmdList.Get(), *request.pSpritesHashMap, srvTexPool_, fence );
+		*request.pDest = loadSpriteSheetAnimation(
+			request.sheetPath, request.rows, request.cols, request.frameCount,
+			request.type, request.frameTime,
+			device_.Get(), cmdList.Get(), srvTexPool_, fence
+		);
 	}
 
 	dumpLog();

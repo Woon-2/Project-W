@@ -227,6 +227,8 @@ struct PerInstanceData {
 struct PerDrawcallData {
 	Material material;
 	u32t firstInstanceOffset;
+	XMFLOAT2 uvOffset;		// 스프라이트 시트 내 현재 프레임의 좌상단 UV
+	XMFLOAT2 uvScale;		// 현재 프레임의 UV 크기 (= 1/cols, 1/rows)
 };
 
 struct PerFrameData {

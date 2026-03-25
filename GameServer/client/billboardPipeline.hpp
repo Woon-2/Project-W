@@ -32,6 +32,8 @@ struct FrameData {
 struct DrawEvent {
 	mu::Mat4x4 world;
 	const Texture* pTex;
+	mu::Vec2 uvOffset = mu::Vec2(0.f, 0.f);	// 스프라이트 시트 내 현재 프레임의 좌상단 UV
+	mu::Vec2 uvScale  = mu::Vec2(1.f, 1.f);	// 현재 프레임의 UV 크기 (= 1/cols, 1/rows)
 	mu::Vec3 tint;
 	bool additive = false;
 	float rotation = 0.f;
