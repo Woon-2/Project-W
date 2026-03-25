@@ -234,7 +234,7 @@ void Dispatcher::shadowUpdate() {
 	boneData.clear();
 
 	// main directional light의 내용을 가공해 pfd에 저장한다.
-	ShadowMapSkinnedShader::PerFrameData pfd{};
+	ShadowMapSkinnedCSMShader::PerFrameData pfd{};
 	pfd.cascadeCount = mainDirectionalLightData_.cascadeCount;
 	for (u32t i = 0u; i < mainDirectionalLightData_.cascadeCount; ++i) {
 		pfd.lightVP[i] = mu::transpose(
@@ -290,7 +290,7 @@ void Dispatcher::shadowUpdateMT() {
 	}
 
 	// main directional light의 내용을 가공해 pfd에 저장한다.
-	ShadowMapSkinnedShader::PerFrameData pfd{};
+	ShadowMapSkinnedCSMShader::PerFrameData pfd{};
 	pfd.cascadeCount = mainDirectionalLightData_.cascadeCount;
 	for (u32t i = 0u; i < mainDirectionalLightData_.cascadeCount; ++i) {
 		pfd.lightVP[i] = mu::transpose(

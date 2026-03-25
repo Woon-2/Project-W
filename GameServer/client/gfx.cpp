@@ -235,6 +235,8 @@ void GFX::init() {
 	shaders_.try_emplace("SampleShader", createSampleShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("ShadowMapShader", createShadowMapShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("ShadowMapSkinnedShader", createShadowMapSkinnedShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("ShadowMapCSMShader", createShadowMapCSMShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("ShadowMapSkinnedCSMShader", createShadowMapSkinnedCSMShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRShader", createPBRShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRSkinnedShader", createPBRSkinnedShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("BillboardShader", createBillboardShader( device_.Get(), defaultRootSig.get() ));
@@ -243,6 +245,10 @@ void GFX::init() {
 	shaders_.try_emplace( "UIShader", createUIShader( device_.Get(), defaultRootSig.get() ) );
 	shaders_.try_emplace("TerrainShader", createTerrainShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("TerrainShadowMapShader", createTerrainShadowMapShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("TerrainShadowMapCSMShader", createTerrainShadowMapCSMShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("PBRShaderCSMDebug", createPBRShaderCSMDebug(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("PBRSkinnedShaderCSMDebug", createPBRSkinnedShaderCSMDebug(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("TerrainShaderCSMDebug", createTerrainShaderCSMDebug(device_.Get(), defaultRootSig.get()));
 
 	rootSigs_.try_emplace("DefaultRootSignature", std::make_shared<DefaultRootSig>(std::move(defaultRootSig)));
 
@@ -368,7 +374,7 @@ void GFX::createSwapChain() {
 		device_.Get(), sizeof(ShadowMapShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBR_Shadow_PerDrawcallData"
 	);
 	resourcesPBRPipeline_.shadowPass.perFrameData.init(
-		device_.Get(), sizeof(ShadowMapShader::PerFrameData), backBuffers_.size(), "PBR_Shadow_PerFrameData"
+		device_.Get(), sizeof(ShadowMapCSMShader::PerFrameData), backBuffers_.size(), "PBR_Shadow_PerFrameData"
 	);
 	resourcesPBRPipeline_.mainPass.perInstanceData.init(
 		device_.Get(), sizeof(PBRShader::PerInstanceData) * 1000u, backBuffers_.size(), "PBR_Main_PerInstanceData"
@@ -393,7 +399,7 @@ void GFX::createSwapChain() {
 		device_.Get(), sizeof(ShadowMapSkinnedShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBRSkinned_Shadow_PerDrawcallData"
 	);
 	resourcesPBRSkinnedPipeline_.shadowPass.perFrameData.init(
-		device_.Get(), sizeof(ShadowMapSkinnedShader::PerFrameData), backBuffers_.size(), "PBRSkinned_Shadow_PerFrameData"
+		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::PerFrameData), backBuffers_.size(), "PBRSkinned_Shadow_PerFrameData"
 	);
 	resourcesPBRSkinnedPipeline_.mainPass.perInstanceData.init(
 		device_.Get(), sizeof(PBRSkinnedShader::PerInstanceData) * 1000u, backBuffers_.size(), "PBRSkinned_Main_PerInstanceData"
@@ -449,7 +455,7 @@ void GFX::createSwapChain() {
 		device_.Get(), sizeof(TerrainShadowMapShader::PerDrawcallData), backBuffers_.size(), "Terrain_Shadow_PerDrawcallData"
 	);
 	resourcesTerrainPipeline_.shadowPass.perFrameData.init(
-		device_.Get(), sizeof(TerrainShadowMapShader::PerFrameData), backBuffers_.size(), "Terrain_Shadow_PerFrameData"
+		device_.Get(), sizeof(TerrainShadowMapCSMShader::PerFrameData), backBuffers_.size(), "Terrain_Shadow_PerFrameData"
 	);
 	resourcesTerrainPipeline_.mainPass.perDrawcallData.init(
 		device_.Get(), sizeof(TerrainShader::PerDrawcallData), backBuffers_.size(), "Terrain_Main_PerDrawcallData"
@@ -898,8 +904,8 @@ void GFX::render() {
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_, &dsvPool_,
-		rootSigs_.at("DefaultRootSignature"), shaders_.at("PBRShader"),
-		shaders_.at("ShadowMapShader"), cmdQ_, viewport, clRect,
+		rootSigs_.at("DefaultRootSignature"), csmDebugVisualization_ ? shaders_.at("PBRShaderCSMDebug") : shaders_.at("PBRShader"),
+		shaders_.at("ShadowMapCSMShader"), cmdQ_, viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesPBRPipeline_, threadPool_, &cmdListPool_,
 		std::move(drawEventsPBRPipeline_), std::move(lightDataPBRPipeline_),
@@ -911,8 +917,8 @@ void GFX::render() {
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_, &dsvPool_,
-		rootSigs_.at("DefaultRootSignature"), shaders_.at("PBRSkinnedShader"),
-		shaders_.at("ShadowMapSkinnedShader"), cmdQ_, viewport, clRect,
+		rootSigs_.at("DefaultRootSignature"), csmDebugVisualization_ ? shaders_.at("PBRSkinnedShaderCSMDebug") : shaders_.at("PBRSkinnedShader"),
+		shaders_.at("ShadowMapSkinnedCSMShader"), cmdQ_, viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesPBRSkinnedPipeline_, threadPool_, &cmdListPool_,
 		std::move(drawEventsPBRSkinnedPipeline_), std::move(lightDataPBRSkinnedPipeline_),
@@ -947,8 +953,8 @@ void GFX::render() {
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_,
 		rootSigs_.at("DefaultRootSignature"),
-		shaders_.at("TerrainShader"),
-		shaders_.at("TerrainShadowMapShader"),
+		csmDebugVisualization_ ? shaders_.at("TerrainShaderCSMDebug") : shaders_.at("TerrainShader"),
+		shaders_.at("TerrainShadowMapCSMShader"),
 		&dsvPool_,
 		cmdQ_, viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],

@@ -18,15 +18,21 @@ CompiledShaderOutput compileShader(const std::filesystem::path& path,
 
 ComPtr<ID3D12PipelineState> createSampleShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createShadowMapShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createShadowMapCSMShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createShadowMapSkinnedShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createShadowMapSkinnedCSMShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createPBRShaderCSMDebug(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRSkinnedShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createPBRSkinnedShaderCSMDebug(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBillboardShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSignature* rootSig );
 ComPtr<ID3D12PipelineState> createTerrainShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createTerrainShaderCSMDebug(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createTerrainShadowMapShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createTerrainShadowMapCSMShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 
 // 루트 파라미터 접근을 이해하기 쉽도록 하기 위해 만든 클래스
 // 루트 파라미터에 이름을 지어 그 인덱스 및 D3D12_ROOT_PARAMETER 구조체와 매핑한다.
@@ -252,14 +258,52 @@ struct PerDrawcallData {
 };
 
 struct PerFrameData {
+	XMFLOAT4X4 lightVP;
+};
+}	// namespace ShadowMapShader
+
+// ShadowMapCSMShader — Matches shadowMapCSM.hlsl (GS + Texture2DArray, CSM path)
+namespace ShadowMapCSMShader {
+struct PerInstanceData {
+	XMFLOAT4X4 world;
+};
+
+struct PerDrawcallData {
+	u32t firstInstanceOffset;
+	XMUINT3 padding;
+};
+
+struct PerFrameData {
 	XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
 	u32t       cascadeCount;
 	XMUINT3    _pfd0;
 };
-}	// namespace ShadowMapShader
+}	// namespace ShadowMapCSMShader
 
 // ShadowMapSkinnedShader
 namespace ShadowMapSkinnedShader {
+struct BoneData {
+	XMFLOAT4X4 xform;
+};
+
+struct PerInstanceData {
+	XMFLOAT4X4 world;
+	u32t rootBoneOffset;
+	XMUINT3 padding;
+};
+
+struct PerDrawcallData {
+	u32t firstInstanceOffset;
+	XMUINT3 padding;
+};
+
+struct PerFrameData {
+	XMFLOAT4X4 lightVP;
+};
+}	// namespace ShadowMapSkinnedShader
+
+// ShadowMapSkinnedCSMShader — Matches shadowMapSkinnedCSM.hlsl
+namespace ShadowMapSkinnedCSMShader {
 struct BoneData {
 	XMFLOAT4X4 xform;
 };
@@ -280,7 +324,7 @@ struct PerFrameData {
 	u32t       cascadeCount;
 	XMUINT3    _pfd0;
 };
-}	// namespace ShadowMapSkinnedShader
+}	// namespace ShadowMapSkinnedCSMShader
 
 // SkyboxShader
 namespace SkyboxShader {
@@ -348,17 +392,27 @@ struct PerFrameData {
 
 // TerrainShadowMapShader
 namespace TerrainShadowMapShader {
-// Matches cbuffer PerDrawcallData : register(b0) in terrainShadowMap.hlsl
+// Matches cbuffer PerDrawcallData : register(b0) in terrainShadowMap.hlsl (non-CSM)
 struct PerDrawcallData {
     XMFLOAT4X4 world;
 };
-// Matches cbuffer PerFrameData : register(b1) in terrainShadowMap.hlsl
+// Matches cbuffer PerFrameData : register(b1) in terrainShadowMap.hlsl (non-CSM)
+struct PerFrameData {
+    XMFLOAT4X4 lightVP;
+};
+}  // namespace TerrainShadowMapShader
+
+// TerrainShadowMapCSMShader — Matches terrainShadowMapCSM.hlsl (GS + Texture2DArray, CSM path)
+namespace TerrainShadowMapCSMShader {
+struct PerDrawcallData {
+    XMFLOAT4X4 world;
+};
 struct PerFrameData {
     XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
     u32t       cascadeCount;
     XMUINT3    _pfd0;
 };
-}  // namespace TerrainShadowMapShader
+}  // namespace TerrainShadowMapCSMShader
 
 namespace UIShader {
 	struct Material {

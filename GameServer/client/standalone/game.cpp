@@ -858,6 +858,11 @@ void Game::processInput(Milliseconds deltaTime) {
 		}
 	}
 
+	// C key: toggle CSM cascade debug visualization
+	if ( (keyboardStateCurr_['C'] & 0x80) && !(keyboardStatePrev_['C'] & 0x80) ) {
+		gfx_.toggleCsmDebugVisualization();
+	}
+
 	// F key: emit particles for testing
 	if ( (keyboardStateCurr_['F'] & 0x80) && !(keyboardStatePrev_['F'] & 0x80) ) {
 		emitterConfig_.position = player_->pos()

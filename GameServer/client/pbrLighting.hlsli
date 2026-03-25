@@ -391,6 +391,24 @@ float4 illuminateCSM(float3 posV, float3 posW, float3 normalV, float2 tex) {
     float directFactor = calcCSMShadow(posV, posW);
     color *= directFactor;
 
+#ifdef CSM_DEBUG_VIS
+    {
+        static const float3 kCascadeColors[4] = {
+            float3(1,0,0), float3(0,1,0), float3(0,0,1), float3(1,1,0)
+        };
+        uint dbgCascade = cascadeCount - 1u;
+        float dbgSplits[4] = {
+            cascadeSplitsFarV.x, cascadeSplitsFarV.y,
+            cascadeSplitsFarV.z, cascadeSplitsFarV.w
+        };
+        [unroll]
+        for (uint dci = 0u; dci < cascadeCount; ++dci) {
+            if (posV.z < dbgSplits[dci]) { dbgCascade = dci; break; }
+        }
+        color.rgb = lerp(color.rgb, kCascadeColors[dbgCascade], 0.4f);
+    }
+#endif
+
     float3 ambient = globalAmbient * albedo.rgb * (1.f - ao);
     color += ambient + emmisive;
 

@@ -103,7 +103,7 @@ void Dispatcher::shadowUpdate() {
     }
 
     const auto& light = lightData_[0];
-    auto pfd = TerrainShadowMapShader::PerFrameData{};
+    auto pfd = TerrainShadowMapCSMShader::PerFrameData{};
     pfd.cascadeCount = light.cascadeCount;
     for (u32t i = 0u; i < light.cascadeCount; ++i) {
         pfd.lightVP[i] = mu::transpose(

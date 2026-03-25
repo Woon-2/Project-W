@@ -170,6 +170,9 @@ public:
 	// 요청된 드로우콜들을 모아 객체들을 그리고 화면에 띄운다.
 	void render();
 
+	// CSM cascade 디버그 시각화를 토글한다 ('C' 키에 연결됨).
+	void toggleCsmDebugVisualization() { csmDebugVisualization_ = !csmDebugVisualization_; }
+
 	void WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, void* pFontObjHandle, const WCHAR* wchString, DWORD dwLen );
 	void UpdateTextureWithTextImage( TextImage* srcImage, UINT srcWidth, UINT srcHeight );
 
@@ -282,6 +285,7 @@ private:
 	std::vector<RequestTerrainLoad> requestsTerrainLoad_{};
 
 	ThreadPool* threadPool_ = nullptr;	// 설정되어있을 경우 멀티스레드로 동작한다.
+	bool csmDebugVisualization_ = false;
 };
 
 #endif	// __GFX_HPP

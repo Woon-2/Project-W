@@ -166,6 +166,24 @@ float4 PSMain(VSOutput input) : SV_TARGET {
     float shadow = calcCSMShadow(input.posV, input.posW);
     color *= shadow;
 
+#ifdef CSM_DEBUG_VIS
+    {
+        static const float3 kCascadeColors[4] = {
+            float3(1,0,0), float3(0,1,0), float3(0,0,1), float3(1,1,0)
+        };
+        uint dbgCascade = cascadeCount - 1u;
+        float dbgSplits[4] = {
+            cascadeSplitsFarV.x, cascadeSplitsFarV.y,
+            cascadeSplitsFarV.z, cascadeSplitsFarV.w
+        };
+        [unroll]
+        for (uint dci = 0u; dci < cascadeCount; ++dci) {
+            if (input.posV.z < dbgSplits[dci]) { dbgCascade = dci; break; }
+        }
+        color = lerp(color, kCascadeColors[dbgCascade], 0.4f);
+    }
+#endif
+
     // 6. Ambient.
     color += globalAmbient * albedo * (1.f - ao);
 
