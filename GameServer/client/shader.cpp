@@ -941,7 +941,7 @@ ComPtr<ID3D12PipelineState> createBillboardShader( ID3D12Device* device, ID3D12R
 		.GS = gsCode.byteCode,
 		// 블렌드 상태 설정
 		.BlendState = D3D12_BLEND_DESC{
-			.AlphaToCoverageEnable = true,
+			.AlphaToCoverageEnable = false,
 			.IndependentBlendEnable = false
 		},
 		.SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
@@ -959,9 +959,11 @@ ComPtr<ID3D12PipelineState> createBillboardShader( ID3D12Device* device, ID3D12R
 			.ForcedSampleCount = 0u
 		},
 		// 깊이 스텐실 설정
+		// 반투명 파티클은 depth test만 하고 쓰기는 하지 않는다.
+		// depth write를 하면 뒤에 오는 반투명 오브젝트가 클리핑된다.
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
-			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
+			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
 			.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
 			.StencilEnable = false,
 			.StencilReadMask = 0u,
@@ -980,10 +982,11 @@ ComPtr<ID3D12PipelineState> createBillboardShader( ID3D12Device* device, ID3D12R
 	};
 
 	// 렌더 타겟 관련 설정
+	// 표준 알파 블렌딩: result = src.rgb * src.a + dst.rgb * (1 - src.a)
 	psoDesc.NumRenderTargets = 1u;
-	psoDesc.BlendState.RenderTarget[0].BlendEnable = false;
-	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
-	psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
+	psoDesc.BlendState.RenderTarget[0].BlendEnable = true;
+	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+	psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
 	psoDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
 	psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
 	psoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;

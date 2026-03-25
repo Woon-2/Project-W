@@ -409,8 +409,9 @@ void Dispatcher::drawMultiThreaded() {
 
 	// 정렬된 이벤트에서 첫 additive 이벤트 인덱스를 파악한다.
 	// (각 job이 PSO 전환 여부를 판단하는 데 사용)
+	// partition_point: !e.additive가 true인 구간(non-additive)의 끝 = additive 시작 위치
 	const std::size_t additiveStart = static_cast<std::size_t>(
-		std::ranges::lower_bound( drawEvents_, false, {},
+		std::ranges::partition_point( drawEvents_,
 			[]( const DrawEvent& e ) { return !e.additive; }
 		) - drawEvents_.begin()
 	);

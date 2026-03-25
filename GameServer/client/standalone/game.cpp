@@ -114,7 +114,7 @@ void Game::setupStage() {
 	flameEmitterConfig_.shape             = EmitterShape::Edge;
 	flameEmitterConfig_.edgeLength		 = 1.5f;
 	flameEmitterConfig_.emitRate          = 15.0f;
-	flameEmitterConfig_.additiveBlend     = false;
+	flameEmitterConfig_.additiveBlend     = true;
 	flameEmitterConfig_.renderOrder       = 0;
 	flameParticleSystem_.startContinuous(flameEmitterConfig_);
 
