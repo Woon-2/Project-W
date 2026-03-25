@@ -43,7 +43,7 @@ struct Particle {
     SpriteAnimation anim;
     float           rotation;
     bool            additive;
-    bool            active;
+    // 'active' 필드 없음: pool_[0..activeCount_-1] 이 항상 활성 상태
 };
 
 class ParticleSystem {
@@ -52,14 +52,20 @@ public:
 
     void emit(const EmitterConfig& config, int count);
     void update(Seconds dt);
-    void render(GFX& gfx);
+    void render(GFX& gfx) const;
 
     void startContinuous(const EmitterConfig& config);
     void stopContinuous();
 
+    int activeCount() const { return activeCount_; }
+
 private:
+    float randomFloat(float lo, float hi);
+
+    // pool_[0..activeCount_-1] 이 항상 활성 파티클 (compact array)
     std::array<Particle, kMaxParticles> pool_{};
-    int           cursor_ = 0;
+    int           activeCount_     = 0;
+    int           overwriteCursor_ = 0;   // full-pool 덮어쓰기용 round-robin 커서
     std::mt19937  rng_{ std::random_device{}() };
 
     EmitterConfig continuousConfig_{};

@@ -27,35 +27,43 @@ static mu::Vec3 sampleConeDirection(mu::NVec3 axis, float spread, std::mt19937& 
          + cosTheta * axisV;
 }
 
+float ParticleSystem::randomFloat(float lo, float hi) {
+    return std::uniform_real_distribution<float>{lo, hi}(rng_);
+}
+
 void ParticleSystem::emit(const EmitterConfig& config, int count) {
     if (!config.pClip || count <= 0) return;
-
-    std::uniform_real_distribution<float> speedDist(config.speedMin, config.speedMax);
-    std::uniform_real_distribution<float> lifeDist(config.lifetimeMin, config.lifetimeMax);
-    std::uniform_real_distribution<float> rotDist(config.startRotationMin, config.startRotationMax);
 
     const mu::NVec3 axis(config.direction);
 
     for (int i = 0; i < count; ++i) {
-        Particle& p        = pool_[cursor_];
-        cursor_            = (cursor_ + 1) % kMaxParticles;
-        const float  speed = speedDist(rng_);
-        const mu::Vec3 dir = sampleConeDirection(axis, config.spread, rng_);
-		// Spawn position starts at emitter position.
+        Particle* pSlot;
+        if (activeCount_ < kMaxParticles) {
+            pSlot = &pool_[activeCount_];
+            ++activeCount_;
+        } else {
+            // pool full: round-robin 덮어쓰기 (기존 ring-buffer 동작과 동등)
+            pSlot = &pool_[overwriteCursor_];
+            overwriteCursor_ = (overwriteCursor_ + 1) % kMaxParticles;
+        }
+        Particle& p = *pSlot;
+
+        const float    speed = randomFloat(config.speedMin, config.speedMax);
+        const mu::Vec3 dir   = sampleConeDirection(axis, config.spread, rng_);
+
         mu::Vec3 spawnPos = config.position;
-		// If the emitter shape is an edge, offset the spawn position along the edge direction.
         if (config.shape == EmitterShape::Edge) {
             const float lenSq = mu::dot(config.edgeDir, config.edgeDir);
             if (lenSq > 1e-6f) {
                 const mu::Vec3 edgeDirNorm = mu::Vec3(mu::normalize(config.edgeDir));
-                std::uniform_real_distribution<float> edgeDist(
+                spawnPos += edgeDirNorm * randomFloat(
                     -config.edgeLength * 0.5f, config.edgeLength * 0.5f);
-                spawnPos += edgeDirNorm * edgeDist(rng_);
             }
         }
+
         p.pos         = spawnPos;
         p.vel         = dir * speed;
-        p.lifetime    = lifeDist(rng_);
+        p.lifetime    = randomFloat(config.lifetimeMin, config.lifetimeMax);
         p.maxLifetime = p.lifetime;
         p.tintBegin   = config.tintBegin;
         p.tintEnd     = config.tintEnd;
@@ -63,13 +71,12 @@ void ParticleSystem::emit(const EmitterConfig& config, int count) {
         p.sizeEnd     = config.sizeEnd;
         p.drag        = config.drag;
         p.gravity     = config.gravity;
-        p.rotation    = rotDist(rng_);
+        p.rotation    = randomFloat(config.startRotationMin, config.startRotationMax);
         p.additive    = config.additiveBlend;
         p.anim.init(config.pClip);
         p.anim.setAdditive(config.additiveBlend);
         p.anim.setPos(spawnPos);
         p.anim.setRotation(p.rotation);
-        p.active      = true;
     }
 }
 
@@ -94,8 +101,11 @@ void ParticleSystem::update(Seconds dt) {
     }
 
     const Milliseconds dtMs = std::chrono::duration_cast<Milliseconds>(dt);
-    for (auto& p : pool_) {
-        if (!p.active) continue;
+
+    int i = 0;
+    while (i < activeCount_) {
+        Particle& p = pool_[i];
+
         p.vel      *= std::max(0.f, 1.f - p.drag * dtf);
         p.vel      += p.gravity * dtf;
         p.pos      += p.vel * dtf;
@@ -109,14 +119,20 @@ void ParticleSystem::update(Seconds dt) {
         p.anim.setTint(tint);
         p.anim.update(dtMs);
         p.anim.setPos(p.pos);
-        if (p.lifetime <= 0.f || p.anim.done()) p.active = false;
+
+        if (p.lifetime <= 0.f || p.anim.done()) {
+            // swap-remove: 마지막 활성 파티클을 현재 슬롯으로 이동
+            if (i != activeCount_ - 1)
+                pool_[i] = std::move(pool_[activeCount_ - 1]);
+            --activeCount_;
+            // i 증가 안 함: 이동된 파티클을 다음 반복에서 처리
+        } else {
+            ++i;
+        }
     }
 }
 
-void ParticleSystem::render(GFX& gfx) {
-    for (auto& p : pool_) {
-        if (!p.active) continue;
-        p.anim.setAdditive(p.additive);
-        p.anim.render(gfx);
-    }
+void ParticleSystem::render(GFX& gfx) const {
+    for (int i = 0; i < activeCount_; ++i)
+        pool_[i].anim.render(gfx);
 }

@@ -58,11 +58,12 @@ struct Particle {
     SpriteAnimation anim;
     float           rotation;
     bool            additive;
-    bool            active;
+    // active 필드 없음: pool_[0..activeCount_-1] 이 항상 활성 상태
 };
 ```
 
-풀(`pool_`)에서 ring-buffer 방식으로 재사용된다. `active=false`인 슬롯에 덮어쓴다.
+compact array 방식으로 관리된다. `pool_[0..activeCount_-1]`이 항상 활성 파티클이며,
+만료 시 swap-remove로 마지막 요소와 교체 후 `activeCount_`를 감소한다.
 
 ---
 
@@ -82,7 +83,10 @@ public:
 
     // 매 프레임 호출
     void update(Seconds dt);
-    void render(GFX& gfx);
+    void render(GFX& gfx) const;
+
+    // 현재 활성 파티클 수 (디버깅/프로파일링용)
+    int activeCount() const;
 };
 ```
 
@@ -91,7 +95,7 @@ public:
 ```
 update(dt)
   └─ continuous_ && emitRate > 0  →  누적 후 emit()
-  └─ 각 active Particle:
+  └─ pool_[0..activeCount_-1] 순회 (compact array):
        vel  *= max(0, 1 - drag * dt)      // drag
        vel  += gravity * dt               // 중력
        pos  += vel * dt                   // 이동
@@ -99,10 +103,13 @@ update(dt)
        size  = lerp(sizeBegin, sizeEnd, t)
        tint  = lerp(tintBegin, tintEnd, t)
        anim.update / setPos / setScale / setTint
-       lifetime 소진 or anim.done()  →  active = false
+       lifetime 소진 or anim.done()
+         → swap-remove: pool_[i] ← move(pool_[activeCount_-1])
+         → --activeCount_, i 재처리
 
-render(gfx)
-  └─ 각 active Particle: anim.render(gfx)
+render(gfx) const
+  └─ pool_[0..activeCount_-1] 순회
+  └─ 각 Particle: anim.render(gfx)
        non-additive 먼저, additive 나중에 정렬 (BillboardPipeline 내부)
 ```
 
@@ -165,7 +172,8 @@ particleSystem_.stopContinuous();
 ## 주의사항
 
 - `pClip`이 `nullptr`이거나 `count <= 0`이면 `emit()`은 no-op.
-- 풀 크기(4096)를 초과하면 가장 오래된 파티클부터 ring-buffer 덮어쓰기.
+- 풀 크기(4096)를 초과하면 `overwriteCursor_`가 round-robin으로 기존 활성 파티클 슬롯을 덮어씀.
 - `SpriteAnimation::init()`은 호출 시 `currFrameIdx_`, `timeAcc_`, `done_`을 초기화한다 (재사용 시 잔상 방지).
+- `additive` 플래그는 `emit()` 시 한 번 설정되며 수명 동안 불변이다.
 - billboard VS는 world-space까지만 변환; clip-space 변환은 GS에서 수행.
 - 카메라가 파티클 바로 위/아래에 있을 때 NaN 방지: `worldUp`을 `(1,0,0)`으로 fallback.
