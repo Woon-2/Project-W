@@ -3,6 +3,31 @@
 #include "errorHandling.hpp"
 #include "binaryImport.hpp"
 
+mu::Vec4 MU_CALLCONV ColorGradient::evaluate(float t) const {
+	if (keys.empty()) return mu::Vec4(1.f, 1.f, 1.f, 1.f);
+
+	if (t <= keys.front().t) return keys.front().color;
+	if (t >= keys.back().t)  return keys.back().color;
+
+	// t를 포함하는 두 키 구간을 찾아 선형 보간한다.
+	for (std::size_t i = 1; i < keys.size(); ++i) {
+		if (t <= keys[i].t) {
+			const float span = keys[i].t - keys[i - 1].t;
+			const float f    = (span > 0.f) ? (t - keys[i - 1].t) / span : 0.f;
+			return mu::lerp(keys[i - 1].color, keys[i].color, f);
+		}
+	}
+	return keys.back().color;
+}
+
+ColorGradient ColorGradient::constant(mu::Vec4 c) {
+	return ColorGradient{ .keys = { {0.f, c}, {1.f, c} } };
+}
+
+ColorGradient ColorGradient::linear(mu::Vec4 begin, mu::Vec4 end) {
+	return ColorGradient{ .keys = { {0.f, begin}, {1.f, end} } };
+}
+
 // 버퍼 리소스를 생성하는 함수
 // creationType이 UploadBuffer이고 pSrc != nullptr인 경우에만
 // pSrc의 내용이 리소스에 복사된다.

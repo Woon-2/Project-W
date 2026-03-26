@@ -215,19 +215,24 @@ namespace BillboardShader {
 
 struct Material {
 	BindlessIndex idxTex;
-	XMFLOAT3 tint;
+	XMFLOAT4 tint;	// RGBA — rgb: 색 multiplier, a: 알파 multiplier. finalColor = startColor * tint (component-wise)
 };
 
 struct PerInstanceData {
 	XMFLOAT4X4 world;
-	float       rotation;   // radians, billboard in-plane rotation
+	float       rotation;   // 빌보드 평면 내 회전 (라디안)
 	float       pad[3];
 };
 
+// cbuffer b0 레이아웃 (총 56B):
+//   Material(32B) | firstInstanceOffset(4B) | uvOffset(8B) | pad_(4B) | uvScale(8B)
+// pad_는 HLSL cbuffer packing rule에 의해 float2 uvScale이 16-byte register 경계(48B)로
+// 자동 정렬되는 것에 맞추기 위한 명시적 패딩이다.
 struct PerDrawcallData {
 	Material material;
 	u32t firstInstanceOffset;
 	XMFLOAT2 uvOffset;		// 스프라이트 시트 내 현재 프레임의 좌상단 UV
+	u32t pad_;				// 명시적 4B 패딩 — HLSL register boundary 정렬 (offset 44→48)
 	XMFLOAT2 uvScale;		// 현재 프레임의 UV 크기 (= 1/cols, 1/rows)
 };
 

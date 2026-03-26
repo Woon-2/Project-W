@@ -17,6 +17,67 @@ Stage 1~10 모두 완료. 불꽃 파티클 렌더링 완성.
   - `SpriteAnimType::Once` → lifetime과 동시에 애니메이션 완료되도록 speed 자동 계산
   - 파티클이 임의의 프레임에서 갑자기 사라지는 현상 수정
 
+## 완료된 추가 작업
+
+- **Color over Lifetime 구현 (Unity 모델 기반)**
+
+  **설계 원칙**
+  ```
+  finalColor(t) = startColor * colorOverLifetime.evaluate(t)  // RGBA component-wise
+  최종 픽셀    = finalColor × texture.rgba
+  ```
+  - `startColor` : 파티클 생성 시 고정 RGBA (베이스 색)
+  - `colorOverLifetime` : startColor에 곱해지는 RGBA multiplier 커브 (절대 색이 아님)
+  - 기본값 `ColorGradient::constant({1,1,1,1})` → 곱해도 변화 없음
+
+  **구현 내용**
+  - `gfxUtil.hpp/cpp`: `ColorKey` + `ColorGradient` 신설
+    - `evaluate(float t)` — piecewise linear RGBA 보간, keys 비어있으면 `{1,1,1,1}` 반환
+    - `static constant(Vec4)` / `static linear(Vec4 begin, Vec4 end)`
+  - `particleSystem.hpp`: `EmitterConfig` / `Particle` 재설계
+    - `tintBegin` / `tintEnd` (Vec3) 제거
+    - `startColor: mu::Vec4` + `colorOverLifetime: ColorGradient` 추가
+  - `particleSystem.cpp`: `emit()` / `update()` 수정
+    - `emit()`: `p.startColor` / `p.colorOverLifetime` 복사
+    - `update()`: `finalColor = p.startColor * p.colorOverLifetime.evaluate(t)` → `anim.setTint(finalColor)`
+  - `spriteAnimation.hpp`: `tint_` / `setTint()` / `tint()` Vec3 → Vec4
+  - `billboardPipeline.hpp`: `DrawEvent::tint` Vec3 → Vec4, 기본값 `{1,1,1,1}`
+  - `shader.hpp`: `BillboardShader::Material::tint` XMFLOAT3 → XMFLOAT4
+    - cbuffer 레이아웃: `int4 idxTex`(16B) + `float4 tint`(16B) = 32B
+  - `billboard.hlsl`: `Material.tint` float3 → float4
+    - PSMain: `return float4(src.xyz * material.tint.rgb, src.a * material.tint.a);`
+  - `standalone/game.cpp`: 마이그레이션
+    - 불꽃: `tintBegin/tintEnd` → `startColor = {1, 0.4, 0, 1}` (기본 gradient 사용)
+    - 연기: `startColor = {0.8, 0.8, 0.8, 1}` + 3-key gradient (밝은 회색→어두운 회색, alpha 0→1→0)
+
+  **smoke colorOverLifetime 파라미터**
+  ```cpp
+  smokeEmitterConfig_.startColor = {0.8f, 0.8f, 0.8f, 1.f};
+  smokeEmitterConfig_.colorOverLifetime = ColorGradient{
+      .keys = {
+          {0.0f, {1.f,  1.f,  1.f,  0.f}},   // RGB*1 (밝음),  A*0 (투명)
+          {0.5f, {0.5f, 0.5f, 0.5f, 1.f}},   // RGB*0.5 (중간), A*1 (불투명)
+          {1.0f, {0.f,  0.f,  0.f,  0.f}},   // RGB*0 (검정),  A*0 (투명)
+      }
+  };
+  ```
+  기대 결과: 안 보임 → 밝은 회색(반투명) → 중간 회색(불투명) → 어두운 회색(반투명) → 안 보임
+
+  **검증 완료**
+  - [x] 불꽃 파티클 regression 확인 — 시각 변화 없음
+  - [x] smoke 파티클 시각 결과 확인 — 밝은 회색→어두운 회색 페이드 동작 확인
+
+- **cbuffer 레이아웃 버그 수정**
+  - `shader.hpp` `BillboardShader::PerDrawcallData`: `pad_` 필드 추가
+  - `billboard.hlsl` cbuffer: `float pad0` 명시적 패딩 추가
+  - 원인: `Material::tint`를 XMFLOAT3(12B)→XMFLOAT4(16B)로 확장하면서 `uvScale` offset이
+    C++(44) vs HLSL auto-pad(48)로 4바이트 불일치 → 파티클이 회색 직사각형으로 깨지는 현상
+  - 결과 레이아웃: `Material`(32B) + `firstInstanceOffset`(4B) + `uvOffset`(8B) + `pad_`(4B) + `uvScale`(8B) = 56B
+
+---
+
+## 완료된 추가 작업
+
 - **additiveBlend PSO 버그 수정**
   - `shader.cpp` `createBillboardShader()`: non-additive PSO 블렌드 설정 수정
     - `AlphaToCoverageEnable=true, BlendEnable=false` → `BlendEnable=true, SrcAlpha/InvSrcAlpha, DepthWriteMask=ZERO`

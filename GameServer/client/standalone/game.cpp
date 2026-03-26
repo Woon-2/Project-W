@@ -107,8 +107,7 @@ void Game::setupStage() {
 	flameEmitterConfig_.drag               = 0.8f;
 	flameEmitterConfig_.gravityModifierMin = -0.3f;         // 음수 = 위쪽 부력 (Unity 방식)
 	flameEmitterConfig_.gravityModifierMax = 0.0f;         // 파티클마다 다른 상승력
-	flameEmitterConfig_.tintBegin         = { 1.f, 0.4f, 0.f };
-	flameEmitterConfig_.tintEnd           = { 1.f, 0.4f, 0.f };
+	flameEmitterConfig_.startColor        = { 1.f, 0.4f, 0.f, 1.f };
 	flameEmitterConfig_.startRotationMin  = 0.f;
 	flameEmitterConfig_.startRotationMax  = mu::pi * 2;
 	flameEmitterConfig_.shape             = EmitterShape::Edge;
@@ -134,8 +133,14 @@ void Game::setupStage() {
 	smokeEmitterConfig_.gravity          = { 0.f, -1.f, 0.f };
 	smokeEmitterConfig_.gravityModifierMin = -0.5f;        // 약간의 부력으로 천천히 상승
 	smokeEmitterConfig_.gravityModifierMax = -0.2f;
-	smokeEmitterConfig_.tintBegin        = { 0.537f, 0.537f, 0.537f };
-	smokeEmitterConfig_.tintEnd          = { 0.537f, 0.537f, 0.537f };
+	smokeEmitterConfig_.startColor        = { 0.5f, 0.5f, 0.5f, 1.f };
+	smokeEmitterConfig_.colorOverLifetime = ColorGradient{
+		.keys = {
+			{0.0f, {1.f,  1.f,  1.f,  0.f}},   // RGB*1 (bright),  A*0 (transparent)
+			{0.5f, {0.5f, 0.5f, 0.5f, 1.f}},   // RGB*0.5 (mid),   A*1 (opaque)
+			{1.0f, {0.f,  0.f,  0.f,  0.f}},   // RGB*0 (black),   A*0 (transparent)
+		}
+	};
 	smokeEmitterConfig_.startRotationMin = 0.f;
 	smokeEmitterConfig_.startRotationMax = mu::pi * 2;
 	smokeEmitterConfig_.shape            = EmitterShape::Edge;

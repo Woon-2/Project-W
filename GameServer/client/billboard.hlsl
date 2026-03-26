@@ -9,7 +9,7 @@ struct PerInstanceData {
 struct Material
 {
     int4 idxTex;
-    float3 tint;
+    float4 tint;    // RGBA — rgb: 색 multiplier, a: 알파 multiplier
 };
 
 // VS -> GS: world-space data only. Clip-space transform is done in GS.
@@ -33,6 +33,7 @@ cbuffer PerDrawcallData : register(b0) {
     Material material;
     uint idxDrawcall;
     float2 uvOffset;    // 스프라이트 시트 내 현재 프레임의 좌상단 UV
+    float pad0;         // 명시적 패딩 — C++ pad_와 대응, float2 uvScale을 register 경계(48B)에 정렬
     float2 uvScale;     // 현재 프레임의 UV 크기 (= 1/cols, 1/rows)
 };
 
@@ -106,5 +107,6 @@ void GSMain(point VSOutput input[1],
 
 float4 PSMain(PSInput input) : SV_TARGET {
     float4 src = sampleBindless(material.idxTex, input.uv);
-    return float4(src.xyz * material.tint, src.a);
+    // finalColor = texture * tint.rgb (색 multiplier), alpha = texture.a * tint.a (알파 multiplier)
+    return float4(src.xyz * material.tint.rgb, src.a * material.tint.a);
 }

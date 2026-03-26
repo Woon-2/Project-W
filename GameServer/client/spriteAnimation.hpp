@@ -21,8 +21,8 @@ public:
 	mu::Vec2 MU_CALLCONV scale() const { return scale_; }
 	void MU_CALLCONV setScale(mu::Vec2 scale) { scale_ = scale; }
 
-	mu::Vec3 MU_CALLCONV tint() const { return tint_; }
-	void MU_CALLCONV setTint(mu::Vec3 tint) { tint_ = tint; }
+	mu::Vec4 MU_CALLCONV tint() const { return tint_; }
+	void MU_CALLCONV setTint(mu::Vec4 tint) { tint_ = tint; }
 
 	bool additive() const { return additive_; }
 	void setAdditive(bool additive) { additive_ = additive; }
@@ -38,7 +38,7 @@ private:
 	std::normal_distribution<float> distRandomAdvance_{};
 
 	mu::Vec3 pos_{};
-	mu::Vec3 tint_ = mu::Vec3(1.f, 1.f, 1.f);
+	mu::Vec4 tint_ = mu::Vec4(1.f, 1.f, 1.f, 1.f);
 	mu::Vec2 scale_ = mu::Vec2(1.f, 1.f);	// 향후 셰이더에서 반영할 수 있도록
 	bool additive_ = false;
 	float rotation_ = 0.f;

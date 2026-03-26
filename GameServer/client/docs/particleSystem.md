@@ -23,7 +23,8 @@ ParticleSystem       — 풀 관리 + update + render
 | `spread` | `float` | `0.3f` | cone 반각 (rad). 0=직선, π/2=반구 |
 | `speedMin/Max` | `float` | `1 / 3` | 초기 속도 범위 |
 | `lifetimeMin/Max` | `float` | `0.5 / 1.5` | 수명 범위 (초) |
-| `tintBegin/End` | `Vec3` | `(1,1,1)` | 생성→소멸 색 보간 |
+| `startColor` | `Vec4` | `(1,1,1,1)` | 파티클 생성 시 고정 RGBA 베이스 색 |
+| `colorOverLifetime` | `ColorGradient` | `constant({1,1,1,1})` | 수명에 따라 startColor에 **곱해지는** RGBA multiplier 커브 |
 | `sizeBegin/End` | `float` | `1 / 0` | 생성→소멸 크기 보간 |
 | `drag` | `float` | `0` | 공기 저항 (속도에 매 프레임 곱함) |
 | `gravity` | `Vec3` | `(0,-9.8,0)` | 가속도 (m/s²) |
@@ -52,7 +53,8 @@ enum class EmitterShape { Point, Edge };
 struct Particle {
     Vec3            pos, vel;
     float           lifetime, maxLifetime;
-    Vec3            tintBegin, tintEnd;
+    Vec4            startColor;          // 생성 시 고정 RGBA 베이스 색
+    ColorGradient   colorOverLifetime;   // startColor에 곱해지는 RGBA multiplier 커브
     float           sizeBegin, sizeEnd, drag;
     Vec3            gravity;
     SpriteAnimation anim;
@@ -101,10 +103,10 @@ update(dt)
        vel  *= max(0, 1 - drag * dt)      // drag
        vel  += gravity * dt               // 중력
        pos  += vel * dt                   // 이동
-       t     = 1 - lifetime/maxLifetime   // 0→1 진행도
-       size  = lerp(sizeBegin, sizeEnd, t)
-       tint  = lerp(tintBegin, tintEnd, t)
-       anim.update / setPos / setScale / setTint
+       t          = 1 - lifetime/maxLifetime   // 0→1 진행도
+       size       = lerp(sizeBegin, sizeEnd, t)
+       finalColor = startColor * colorOverLifetime.evaluate(t)  // RGBA component-wise
+       anim.update / setPos / setScale / setTint(finalColor)
        ※ emit 시 speed 자동 설정:
            Once  → speed = duration / lifetime
            Loop  → speed = N * duration / lifetime  (N = round(lifetime/duration), min 1)
@@ -137,20 +139,20 @@ particleSystem_.emit(cfg, 20);
 
 ```cpp
 EmitterConfig flame;
-flame.position       = torchPos;
-flame.pClip          = AssetManager::flameAnimation();
-flame.direction      = {0, 1, 0};
-flame.spread         = 0.2f;
-flame.speedMin       = 0.5f;   flame.speedMax    = 2.f;
-flame.gravity        = {0, -1.f, 0};
-flame.drag           = 0.8f;
-flame.sizeBegin      = 1.f;    flame.sizeEnd     = 0.3f;
-flame.tintBegin      = {1,1,1};flame.tintEnd     = {1,0.3f,0};
-flame.startRotationMin = 0.f;  flame.startRotationMax = 6.28f;
-flame.shape          = EmitterShape::Edge;
-flame.edgeLength     = 0.5f;
-flame.additiveBlend  = true;
-flame.emitRate       = 30.f;   // 30 particles/sec
+flame.position         = torchPos;
+flame.pClip            = AssetManager::flameAnimation();
+flame.direction        = {0, 1, 0};
+flame.spread           = 0.2f;
+flame.speedMin         = 0.5f;   flame.speedMax = 2.f;
+flame.gravity          = {0, -1.f, 0};
+flame.drag             = 0.8f;
+flame.sizeBegin        = 1.f;    flame.sizeEnd  = 0.3f;
+flame.startColor       = {1.f, 0.4f, 0.f, 1.f};  // 주황색, 완전 불투명
+flame.startRotationMin = 0.f;    flame.startRotationMax = 6.28f;
+flame.shape            = EmitterShape::Edge;
+flame.edgeLength       = 0.5f;
+flame.additiveBlend    = true;
+flame.emitRate         = 30.f;   // 30 particles/sec
 particleSystem_.startContinuous(flame);
 
 // 매 프레임
@@ -161,16 +163,59 @@ particleSystem_.render(gfx);
 particleSystem_.stopContinuous();
 ```
 
+### 연기 (Color over Lifetime 활용)
+
+```cpp
+// startColor * colorOverLifetime.evaluate(t) = 최종 파티클 색
+// colorOverLifetime는 startColor에 곱해지는 RGBA multiplier 커브다.
+EmitterConfig smoke;
+smoke.pClip            = AssetManager::smokeAnimation();
+smoke.startColor       = {0.8f, 0.8f, 0.8f, 1.f};  // 밝은 회색 베이스
+smoke.colorOverLifetime = ColorGradient{
+    .keys = {
+        {0.0f, {1.f,  1.f,  1.f,  0.f}},   // 생성 직후: RGB 유지, 투명
+        {0.5f, {0.5f, 0.5f, 0.5f, 1.f}},   // 중간: RGB 절반(어두워짐), 불투명
+        {1.0f, {0.f,  0.f,  0.f,  0.f}},   // 소멸: 검정, 투명
+    }
+};
+smoke.additiveBlend = false;  // alpha blend
+smoke.emitRate      = 10.f;
+particleSystem_.startContinuous(smoke);
+// 결과: 밝은 회색으로 등장 → 중간 회색(불투명) → 어두운 회색으로 페이드아웃
+```
+
+---
+
+## Color over Lifetime
+
+Unity 파티클 시스템의 색상 모델과 동일한 방식으로 동작한다.
+
+```
+finalColor(t) = startColor × colorOverLifetime.evaluate(t)   // RGBA component-wise
+최종 픽셀    = finalColor × texture.rgba
+```
+
+| 항목 | 역할 |
+|---|---|
+| `startColor` | 파티클 생성 시 확정되는 고정 RGBA 베이스 색 |
+| `colorOverLifetime` | 수명 진행도 t ∈ [0,1]에서 평가되는 RGBA multiplier 커브 (절대 색이 아님) |
+
+`ColorGradient`는 임의의 키 수를 지원하는 piecewise-linear 보간으로, `ColorGradient::constant`나 `ColorGradient::linear` 팩토리 메서드 또는 `keys` 직접 구성으로 생성한다.
+
+기본값 `ColorGradient::constant({1,1,1,1})`은 multiplier가 항등값이므로 기존 동작에서 시각 변화가 없다.
+
 ---
 
 ## 관련 파일
 
 | 파일 | 역할 |
 |---|---|
-| `spriteAnimation.hpp/cpp` | 개별 파티클의 스프라이트 재생, tint/scale/rotation 제어 |
+| `gfxUtil.hpp/cpp` | `ColorKey`, `ColorGradient` 정의 및 구현 |
+| `spriteAnimation.hpp/cpp` | 개별 파티클의 스프라이트 재생, tint(Vec4)/scale/rotation 제어 |
 | `billboardPipeline.hpp/cpp` | DrawEvent 정렬 (non-additive→additive), PSO 전환 |
-| `billboard.hlsl` | VS(world변환) → GS(camera-facing quad 생성, rotation 적용) → PS |
-| `shader.cpp` | `createBillboardShaderAdditive()` — additive blend PSO 생성 |
+| `billboard.hlsl` | VS(world변환) → GS(camera-facing quad 생성, rotation 적용) → PS(tint 적용) |
+| `shader.hpp` | `BillboardShader::Material` (tint XMFLOAT4), `PerDrawcallData` cbuffer 레이아웃 |
+| `shader.cpp` | `createBillboardShader()` / `createBillboardShaderAdditive()` — PSO 생성 |
 
 ---
 
@@ -186,3 +231,7 @@ particleSystem_.stopContinuous();
   `Loop` 타입은 lifetime 동안 정수 N번의 완전한 사이클이 재생되도록 계산하여,
   파티클 소멸 시 애니메이션이 루프 경계 근처에서 끝나도록 한다.
   `RandomAdvance` 타입은 랜덤 특성상 자동 설정 없음 (speed = 1.f 유지).
+- `colorOverLifetime` 기본값은 `ColorGradient::constant({1,1,1,1})`이므로
+  설정하지 않으면 `startColor`가 수명 전체에 걸쳐 그대로 유지된다.
+- `colorOverLifetime.keys`는 t 기준 오름차순으로 정렬되어 있어야 한다.
+  `constant` / `linear` 팩토리 메서드는 이를 자동으로 보장한다.

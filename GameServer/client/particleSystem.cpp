@@ -65,8 +65,8 @@ void ParticleSystem::emit(const EmitterConfig& config, int count) {
         p.vel         = dir * speed;
         p.lifetime    = randomFloat(config.lifetimeMin, config.lifetimeMax);
         p.maxLifetime = p.lifetime;
-        p.tintBegin   = config.tintBegin;
-        p.tintEnd     = config.tintEnd;
+        p.startColor        = config.startColor;
+        p.colorOverLifetime = config.colorOverLifetime;
         const float sizeMult = randomFloat(config.sizeMultiplierMin, config.sizeMultiplierMax);
         p.sizeBegin   = config.sizeBegin * sizeMult;
         p.sizeEnd     = config.sizeEnd   * sizeMult;
@@ -131,11 +131,11 @@ void ParticleSystem::update(Seconds dt) {
         p.lifetime -= dtf;
 
         const float    t    = 1.f - p.lifetime / p.maxLifetime;
-        const float    size = std::lerp(p.sizeBegin, p.sizeEnd, t);
-        const mu::Vec3 tint = mu::lerp(p.tintBegin, p.tintEnd, t);
+        const float    size       = std::lerp(p.sizeBegin, p.sizeEnd, t);
+        const mu::Vec4 finalColor = p.startColor * p.colorOverLifetime.evaluate(t);
 
         p.anim.setScale(mu::Vec2(size, size));
-        p.anim.setTint(tint);
+        p.anim.setTint(finalColor);
         p.anim.update(dtMs);
         p.anim.setPos(p.pos);
 

@@ -421,6 +421,26 @@ void freeSRV(const Texture& tex, DescriptorPool& pool);
 // 이 함수는 그것을 검사하지 않는다.
 void freeUAV(const Texture& tex, DescriptorPool& pool);
 
+struct ColorKey {
+	float    t;      // 정규화된 파티클 수명 위치 [0, 1] — 0 = 생성, 1 = 소멸
+	mu::Vec4 color;  // RGBA [0, 1] — startColor에 채널별로 곱해지는 multiplier
+};
+
+// 파티클 수명 [0, 1] 구간에서 평가되는 piecewise-linear RGBA 그래디언트.
+// EmitterConfig::startColor에 곱해지는 multiplier 커브로 동작한다:
+//   finalColor(t) = startColor * colorOverLifetime.evaluate(t)  // RGBA component-wise
+// keys가 비어있으면 {1,1,1,1}을 반환하여 startColor를 그대로 유지한다.
+struct ColorGradient {
+	std::vector<ColorKey> keys;  // t 기준 오름차순 정렬 필수
+
+	mu::Vec4 MU_CALLCONV evaluate(float t) const;
+
+	// 수명 전체에 걸쳐 동일한 색을 유지하는 그래디언트를 생성한다.
+	static ColorGradient constant(mu::Vec4 c);
+	// begin에서 end까지 선형으로 변화하는 2-key 그래디언트를 생성한다.
+	static ColorGradient linear(mu::Vec4 begin, mu::Vec4 end);
+};
+
 struct SpriteAnimFrame
 {
 	mu::Vec2 uvOffset;	// 스프라이트 시트 내 이 프레임의 좌상단 UV

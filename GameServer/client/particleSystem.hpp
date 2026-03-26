@@ -16,8 +16,8 @@ struct EmitterConfig {
     float                      speedMax    = 3.f;
     float                      lifetimeMin = 0.5f;
     float                      lifetimeMax = 1.5f;
-    mu::Vec3                   tintBegin   = {1.f, 1.f, 1.f};
-    mu::Vec3                   tintEnd     = {1.f, 1.f, 1.f};
+    mu::Vec4                   startColor          = {1.f, 1.f, 1.f, 1.f};
+    ColorGradient              colorOverLifetime   = ColorGradient::constant({1.f, 1.f, 1.f, 1.f});
     float                      sizeBegin        = 1.f;
     float                      sizeEnd          = 1.f;
     float                      sizeMultiplierMin = 1.f;  // 파티클 크기 배율 min (Unity Start Size)
@@ -42,7 +42,8 @@ class GFX;
 struct Particle {
     mu::Vec3        pos, vel;
     float           lifetime, maxLifetime;
-    mu::Vec3        tintBegin, tintEnd;
+    mu::Vec4        startColor;
+    ColorGradient   colorOverLifetime;
     float           sizeBegin, sizeEnd, drag;
     mu::Vec3        gravity;
     SpriteAnimation anim;
