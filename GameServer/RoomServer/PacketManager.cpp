@@ -2,17 +2,31 @@
 #include "PacketManager.hpp"
 #include "SendBuffer.hpp"
 #include "BufferWriter.hpp"
+#include "GameSession.hpp"
+#include "ObjectPool.hpp"
 
-void PacketManager::handlePacket(byte* buffer, int32 len) {
+void PacketManager::handlePacket(GameSession* session, byte* buffer, int32 len) {
 	auto header = reinterpret_cast<PacketHeader*>(buffer);
 	
 	switch (header->type) {
-
+	case PacketType::C_Move:
+		handleCMovePacket(session, buffer, len);
+		break;
 
 	default:
 		std::cout << "Unknown packet type received. Type: " << static_cast<uint16>(header->type) << '\n';
 		break;
 	}
+}
+
+void PacketManager::handleCMovePacket(GameSession* session, byte* buffer, int32 len) {
+	auto movePacket = reinterpret_cast<CMovePacket*>(buffer);
+	auto mvPktClone = ObjectPool<CMovePacket>::pop();
+
+	mvPktClone->pos = movePacket->pos;
+	mvPktClone->orient = movePacket->orient;
+
+	
 }
 
 SendBuffer* PacketManager::makeSEnterPacket(const PlayerInfo& playerInfo, const std::vector<ObjectInfo>& objInfos) {

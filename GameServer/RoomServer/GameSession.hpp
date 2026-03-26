@@ -11,6 +11,7 @@ public:
 	GameSession() : myRoom_(nullptr), myPlayer_(nullptr) {}
 	virtual ~GameSession();
 
+	Room* room() { return myRoom_; }
 	Object* player() { return myPlayer_; }
 
 protected:
