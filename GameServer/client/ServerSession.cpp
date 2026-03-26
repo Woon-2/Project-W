@@ -86,7 +86,7 @@ void ServerSession::processRecv(int32 numBytes) {
 
 	while (true) {
 		int32 currDataSize = dataSize - recvLen;
-		std::cout << "curr data size: " << currDataSize << '\n';
+		//std::cout << "curr data size: " << currDataSize << '\n';
 
 		if (currDataSize < sizeof(PacketHeader)) {
 			break;
