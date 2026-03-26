@@ -43,26 +43,26 @@ public:
 	// 게임 객체의 위치를 갱신한다.
 	// PhysicState의 AABB와 Bounding Rect 역시 갱신된다.
 	void MU_CALLCONV setPos(mu::Vec3 newPos);
-	mu::Vec3 MU_CALLCONV pos() const { return physicState_.pos; }
+	mu::Vec3 pos() const { return physicState_.pos; }
 	// 게임 객체의 속도를 갱신한다.
 	// 이전 PhysicState와 현재 PhysicState의 속도가 모두 갱신된다.
 	void MU_CALLCONV setVelocity(mu::Vec3 newVelocity);
-	mu::Vec3 MU_CALLCONV velocity() const { return physicState_.velocity; }
+	mu::Vec3 velocity() const { return physicState_.velocity; }
 	// 게임 객체의 각속도를 갱신한다.
 	void MU_CALLCONV setOmega(mu::Vec3 newOmega);
-	mu::Vec3 MU_CALLCONV omega() const { return physicState_.omega; }
+	mu::Vec3 omega() const { return physicState_.omega; }
 	// 게임 객체의 방향을 갱신한다.
 	// 게임 객체의 방향 벡터들도 전부 갱신된다.
 	void MU_CALLCONV setOrient(mu::NQuat newOrient);
-	mu::NQuat MU_CALLCONV orient() const { return physicState_.orient; }
+	mu::NQuat orient() const { return physicState_.orient; }
 	// 게임 객체의 크기를 갱신한다.
 	// PhysicState의 AABB와 Bounding Rect 역시 갱신된다.
 	void MU_CALLCONV setScale(mu::Vec3 newScale);
-	mu::Vec3 MU_CALLCONV scale() const { return physicState_.scale; }
+	mu::Vec3 scale() const { return physicState_.scale; }
 
-	mu::Vec3 MU_CALLCONV forward() const { return forward_; }
-	mu::Vec3 MU_CALLCONV right() const { return right_; }
-	mu::Vec3 MU_CALLCONV up() const { return up_; }
+	mu::Vec3 forward() const { return forward_; }
+	mu::Vec3 right() const { return right_; }
+	mu::Vec3 up() const { return up_; }
 
 	PhysicState& physicState() { return physicState_; }
 

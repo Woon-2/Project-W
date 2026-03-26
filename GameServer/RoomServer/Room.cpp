@@ -23,9 +23,9 @@ void Room::enter(GameSession* session) {
 	auto newPlayerInfo = PlayerInfo{
 		.playerId = static_cast<uint16>(session->id()),
 		.materialSetIdx = 0,
-		.pos = player->physicState().pos.getXmf(),
-		.orient = player->physicState().orient.getXmf(),
-		.scale = player->physicState().scale.getXmf(),
+		.pos = player->pos().getXmf(),
+		.orient = player->orient().getXmf(),
+		.scale = player->scale().getXmf(),
 	};
 
 	// 기존 플레이어들 및 기타 object들에 대한 snapshot 만들기
@@ -37,9 +37,9 @@ void Room::enter(GameSession* session) {
 			.type = ObjectType::Player,
 			.objectId = static_cast<uint16>(session->id()),
 			.materialSetIdx = 0,
-			.pos = session->player()->physicState().pos.getXmf(),
-			.orient = session->player()->physicState().orient.getXmf(),
-			.scale = session->player()->physicState().scale.getXmf(),
+			.pos = session->player()->pos().getXmf(),
+			.orient = session->player()->orient().getXmf(),
+			.scale = session->player()->scale().getXmf(),
 		};
 		objInfos.emplace_back(playerInfo);
 	}
@@ -48,9 +48,9 @@ void Room::enter(GameSession* session) {
 		.type = ObjectType::Ground,
 		.objectId = static_cast<uint16>(IdPool::pop()),	// cube는 objectId가 필요하긴 하지만, 클라이언트에서 cube에 대한 패킷은 따로 없으므로 일단 IdPool에서 pop해서 사용한다. 나중에 개선 필요.
 		.materialSetIdx = 0,
-		.pos = cubes_[0].physicState().pos.getXmf(),
-		.orient = cubes_[0].physicState().orient.getXmf(),
-		.scale = cubes_[0].physicState().scale.getXmf(),
+		.pos = cubes_[0].pos().getXmf(),
+		.orient = cubes_[0].orient().getXmf(),
+		.scale = cubes_[0].scale().getXmf(),
 	};
 	objInfos.emplace_back(cubeInfo);
 
