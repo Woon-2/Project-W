@@ -33,16 +33,21 @@ void GameSession::onConnected() {
 	myPlayer_ = ObjectPool<Object>::pop();
 	myPlayer_->setId(id());
 
-	myRoom_->doAsync(&Room::enter, this);
+	myRoom_->doAsync([this]() {
+		myRoom_->enter(this);
+	});
 }
 
 void GameSession::onDisconnected() {
 	--totalSessions;
-	myRoom_->doAsync(&Room::leave, this);
+	
+	myRoom_->doAsync([this]() {
+		myRoom_->leave(this);
+	});
 }
 
 void GameSession::processPacket(byte* buffer, int32 len) {
-	PacketManager::handlePacket(buffer, len);
+	PacketManager::handlePacket(this, buffer, len);
 }
 
 void GameSession::onSend(int32 len) {
