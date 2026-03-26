@@ -1,7 +1,7 @@
 #include "pch.hpp"
 #include "AssetManager.hpp"
 
-void AssetManager::loadGFXAssets(GFX& gfx) {
+void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 	gfx.addRequestModelLoad( RequestModelLoad{
 		.modelPath = "../resources/models/cube/cube.bin",
 		.pTexHashMap = &texHashMap_,
@@ -106,7 +106,7 @@ void AssetManager::loadGFXAssets(GFX& gfx) {
 		.pSpritesHashMap = &spritesHashMap_
 		} );
 
-	gfx.loadAssets();
+	gfx.loadAssets(configs);
 }
 
 void AssetManager::loadAnimations() {

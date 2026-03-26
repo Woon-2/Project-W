@@ -2,14 +2,13 @@
 #define __pbrSkinnedPipeline_HPP
 
 #include "gfxUtil.hpp"
+#include "sharedResources.hpp"
 
 class RootSig;
 
 struct Mesh;
 struct SubMesh;
 struct Material;
-
-struct ShadowMapData;
 
 namespace ShadowMapSkinnedShader {
 	struct PerInstanceData;
@@ -81,10 +80,10 @@ struct DrawEvent {
 
 struct Resources {
 	struct ShadowPass {
-		StructuredBuffer perInstanceData;	// t0
-		StructuredBuffer boneData;	// t2
-		ConstantBufferArray perDrawcallData;	// b0
-		ConstantBuffer perFrameData;	// b1
+		StructuredBuffer    perInstanceData;   // t0
+		StructuredBuffer    boneData;          // t2
+		ConstantBufferArray perDrawcallData;   // b0
+		ConstantBufferArray perFrameData;      // b1: cascade별 별도 슬롯 (MAX_CSM_CASCADES)
 	} shadowPass;
 
 	struct MainPass {
@@ -219,8 +218,8 @@ private:
 	void addJobShadowDraw( ID3D12GraphicsCommandList* threadCmdList,
 		const std::vector<DrawEvent>::const_iterator* pItFirst,
 		const std::vector<DrawEvent>::const_iterator* pItLast,
-		std::size_t firstDrawcallIdx, const ShadowMapData& shadowMapData,
-		std::latch& latch
+		std::size_t firstDrawcallIdx, const CSMShadowMapData::CascadeSlice& cascadeSlice,
+		u32t cascadeIdx, std::latch& latch
 	);
 
 	// GFX로부터 전달되어 그대로 사용하는 변수들

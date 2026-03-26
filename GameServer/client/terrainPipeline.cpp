@@ -57,7 +57,9 @@ Dispatcher::Dispatcher(
     Fence* pFence, Resources* pResources,
     ThreadPool* threadPool, CommandListPool* commandListPool,
     std::vector<DrawEvent>&& drawEvents,
-    std::vector<LightData>&& lightData, const CameraData& cameraData, const FrameData& frameData,
+    std::vector<LightData>&& lightData,
+    const LightData& mainDirectionalLightData,
+    const CameraData& cameraData, const FrameData& frameData,
     std::size_t roomIdx
 ) : descriptorHeaps_(descriptorHeaps),
     pTexPool_(pTexPool), pTexArrayPool_(pTexArrayPool),
@@ -67,7 +69,8 @@ Dispatcher::Dispatcher(
     viewport_(viewport), scissorRect_(scissorRect), rtv_(rtv), dsv_(dsv),
     pFence_(pFence), pResources_(pResources), threadPool_(threadPool), cmdListPool_(commandListPool),
     drawEvents_(std::move(drawEvents)),
-    lightData_(std::move(lightData)), cameraData_(cameraData), frameData_(frameData),
+    lightData_(std::move(lightData)), mainDirectionalLightData_(mainDirectionalLightData),
+    cameraData_(cameraData), frameData_(frameData),
     roomIdx_(roomIdx),
     rootParamIdxPDD_(rootSig->paramIdx("PerDrawcallData")),
     rootParamIdxPFD_(rootSig->paramIdx("PerFrameData")),
@@ -77,7 +80,9 @@ Dispatcher::Dispatcher(
     rootParamIdxTexCubePool_(rootSig->paramIdx("TextureCubePool")),
     rootParamIdxSamPool_(rootSig->paramIdx("SamplerPool")),
     rootParamIdxCmpSamPool_(rootSig->paramIdx("ComparisonSamplerPool"))
-{}
+{
+    SharedResources::ShadowMap::validateRequiredKeys({SharedResources::ShadowMap::kDefaultKey});
+}
 
 // ---------------------------------------------------------------------------
 // shadowPass / shadowPassMT
@@ -98,27 +103,30 @@ void Dispatcher::shadowPassMT() {
 // ---------------------------------------------------------------------------
 
 void Dispatcher::shadowUpdate() {
-    if (drawEvents_.empty() || lightData_.empty()) {
+    if (drawEvents_.empty()) {
         return;
     }
 
-    const auto& light = lightData_[0];
-    auto pfd = TerrainShadowMapCSMShader::PerFrameData{};
-    pfd.cascadeCount = light.cascadeCount;
-    for (u32t i = 0u; i < light.cascadeCount; ++i) {
-        pfd.lightVP[i] = mu::transpose(
-            light.cascadeViews[i] * light.cascadeProjs[i]
+    // cascade별 PerFrameData를 각 ConstantBufferArray 슬롯에 스테이징한다.
+    const auto& light = mainDirectionalLightData_;
+    for (u32t ci = 0u; ci < light.cascadeCount; ++ci) {
+        TerrainShadowMapCSMShader::PerFrameData pfd{};
+        pfd.lightVP = mu::transpose(
+            light.cascadeViews[ci] * light.cascadeProjs[ci]
         ).getXmf();
+        pfd.cascadeIdx = ci;
+        pResources_->shadowPass.perFrameData.cbuffers[ci].stage(roomIdx_, &pfd, 1u);
     }
-    pResources_->shadowPass.perFrameData.stage(roomIdx_, &pfd, 1u);
 }
 
 void Dispatcher::shadowDraw() {
-    if (drawEvents_.empty() || lightData_.empty()) {
+    if (drawEvents_.empty()) {
         return;
     }
 
-    auto& shadowMapData = SharedResources::ShadowMap::shadowMapData.at("ShadowMap")[roomIdx_];
+    const auto& csmData = SharedResources::ShadowMap::csmShadowMapData.at(
+        std::string(SharedResources::ShadowMap::kDefaultKey))[roomIdx_];
+    const u32t cascadeCount = csmData.cascadeCount;
 
     CommandContext cmdCtx{};
     DISPLAY_ERROR_STR(cmdListPool_->allocOne(CommandListUsage::RenderingSlave, cmdCtx),
@@ -143,30 +151,9 @@ void Dispatcher::shadowDraw() {
         return;
     }
 
-    // Shadow pass pipeline state
     DISPLAY_ERROR_DX_VOID(cmdList->SetGraphicsRootSignature(rootSig_->get()), false);
     DISPLAY_ERROR_DX_VOID(cmdList->SetPipelineState(shadowShader_.Get()), false);
 
-    // Shadow map DSV only; no color render targets
-    auto shadowDsv = shadowMapData.dsv;
-    DISPLAY_ERROR_DX_VOID(cmdList->OMSetRenderTargets(0u, nullptr, false, &shadowDsv), false);
-
-    // Viewport and scissor sized to shadow map texture
-    auto shadowVP = D3D12_VIEWPORT{
-        .TopLeftX = 0.f, .TopLeftY = 0.f,
-        .Width    = static_cast<float>(shadowMapData.width),
-        .Height   = static_cast<float>(shadowMapData.height),
-        .MinDepth = 0.f, .MaxDepth = 1.f
-    };
-    auto shadowSR = D3D12_RECT{
-        .left = 0, .top = 0,
-        .right  = static_cast<LONG>(shadowMapData.width),
-        .bottom = static_cast<LONG>(shadowMapData.height)
-    };
-    DISPLAY_ERROR_DX_VOID(cmdList->RSSetViewports(1u, &shadowVP), false);
-    DISPLAY_ERROR_DX_VOID(cmdList->RSSetScissorRects(1u, &shadowSR), false);
-
-    // Descriptor heaps required by root signature even with no texture sampling
     auto heapsRaw = std::vector<ID3D12DescriptorHeap*>(descriptorHeaps_.size());
     std::ranges::transform(descriptorHeaps_, heapsRaw.begin(),
         [](const ComPtr<ID3D12DescriptorHeap>& h) { return h.Get(); });
@@ -175,31 +162,51 @@ void Dispatcher::shadowDraw() {
 
     DISPLAY_ERROR_DX_VOID(cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST), false);
 
-    // Bind PerFrameData (staged in shadowUpdate)
-    pResources_->shadowPass.perFrameData.bind(cmdList, rootParamIdxPFD_, roomIdx_);
+    // cascade별로 별도 pass 수행
+    for (u32t ci = 0u; ci < cascadeCount; ++ci) {
+        const auto& cascadeSlice = csmData.cascades[ci];
 
-    for (const auto& ev : drawEvents_) {
-        if (!ev.terrain) continue;
-        const auto& mesh = ev.terrain->mesh;
-        if (mesh.subMeshes.empty()) continue;
+        DISPLAY_ERROR_DX_VOID(cmdList->OMSetRenderTargets(
+            0u, nullptr, false, &cascadeSlice.dsv), false);
 
-        auto pdd = TerrainShadowMapShader::PerDrawcallData{
-            .world = mu::transpose(ev.world).getXmf()
+        auto shadowVP = D3D12_VIEWPORT{
+            .TopLeftX = 0.f, .TopLeftY = 0.f,
+            .Width    = static_cast<float>(cascadeSlice.width),
+            .Height   = static_cast<float>(cascadeSlice.height),
+            .MinDepth = 0.f, .MaxDepth = 1.f
         };
-        pResources_->shadowPass.perDrawcallData.stage(roomIdx_, &pdd, 1u);
-        pResources_->shadowPass.perDrawcallData.bind(cmdList, rootParamIdxPDD_, roomIdx_);
+        auto shadowSR = D3D12_RECT{
+            .left = 0, .top = 0,
+            .right  = static_cast<LONG>(cascadeSlice.width),
+            .bottom = static_cast<LONG>(cascadeSlice.height)
+        };
+        DISPLAY_ERROR_DX_VOID(cmdList->RSSetViewports(1u, &shadowVP), false);
+        DISPLAY_ERROR_DX_VOID(cmdList->RSSetScissorRects(1u, &shadowSR), false);
 
-        // Position VBV only (slot 0 of the TerrainPipeline VBV cache)
-        layoutMeshIfNeeded(mesh);
-        const auto& allVbViews = mesh.vbViewsByPipeline.at("TerrainPipeline");
-        DISPLAY_ERROR_DX_VOID(cmdList->IASetVertexBuffers(0u, 1u, &allVbViews[0]), false);
+        // cascade ci의 PerFrameData 바인드
+        pResources_->shadowPass.perFrameData.cbuffers[ci].bind(cmdList, rootParamIdxPFD_, roomIdx_);
 
-        const auto& subMesh = mesh.subMeshes[0];
-        DISPLAY_ERROR_DX_VOID(cmdList->IASetIndexBuffer(&subMesh.ibView), false);
+        for (const auto& ev : drawEvents_) {
+            if (!ev.terrain) continue;
+            const auto& mesh = ev.terrain->mesh;
+            if (mesh.subMeshes.empty()) continue;
 
-        // GS가 각 삼각형을 cascade 수만큼 증폭하여 SV_RenderTargetArrayIndex로 라우팅한다.
-        const UINT indexCount = subMesh.ibView.SizeInBytes / sizeof(u32t);
-        DISPLAY_ERROR_DX_VOID(cmdList->DrawIndexedInstanced(indexCount, 1u, 0u, 0, 0u), false);
+            auto pdd = TerrainShadowMapShader::PerDrawcallData{
+                .world = mu::transpose(ev.world).getXmf()
+            };
+            pResources_->shadowPass.perDrawcallData.stage(roomIdx_, &pdd, 1u);
+            pResources_->shadowPass.perDrawcallData.bind(cmdList, rootParamIdxPDD_, roomIdx_);
+
+            layoutMeshIfNeeded(mesh);
+            const auto& allVbViews = mesh.vbViewsByPipeline.at("TerrainPipeline");
+            DISPLAY_ERROR_DX_VOID(cmdList->IASetVertexBuffers(0u, 1u, &allVbViews[0]), false);
+
+            const auto& subMesh = mesh.subMeshes[0];
+            DISPLAY_ERROR_DX_VOID(cmdList->IASetIndexBuffer(&subMesh.ibView), false);
+
+            const UINT indexCount = subMesh.ibView.SizeInBytes / sizeof(u32t);
+            DISPLAY_ERROR_DX_VOID(cmdList->DrawIndexedInstanced(indexCount, 1u, 0u, 0, 0u), false);
+        }
     }
 
     auto hrClose = cmdList->Close();
@@ -239,13 +246,18 @@ void Dispatcher::mainUpdate() {
         return;
     }
 
-    const auto& light = lightData_.empty() ? LightData{} : lightData_[0];
+    const auto& light = mainDirectionalLightData_;
+
+    // cascade별 CSM shadow map SRV 인덱스를 쿼리한다.
+    const auto& csmData = SharedResources::ShadowMap::csmShadowMapData.at(
+        std::string(SharedResources::ShadowMap::kDefaultKey))[roomIdx_];
 
     auto pfd = TerrainShader::PerFrameData{};
     pfd.globalAmbient = frameData_.globalAmbient.getXmf();
     pfd.lightCnt      = frameData_.lightCount;
-    // shadow map SRV index는 per-room 리소스에서 직접 조회한다.
-    pfd.idxShadowMap  = SharedResources::ShadowMap::shadowMapData.at("ShadowMap")[roomIdx_].tex.idxSrv;
+    for (u32t ci = 0u; ci < light.cascadeCount; ++ci) {
+        pfd.idxShadowMap[ci] = csmData.cascades[ci].tex.idxSrv;
+    }
 
     pfd.cascadeCount      = light.cascadeCount;
     pfd.cascadeSplitsFarV = light.cascadeSplitsFarV;

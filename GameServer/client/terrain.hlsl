@@ -23,7 +23,7 @@ cbuffer PerFrameData : register(b1) {
     uint     lightCnt;
     uint     cascadeCount;
     uint2    padding1;
-    int4     idxShadowMap;
+    int4     idxShadowMap[MAX_CSM_CASCADES];
     float4   cascadeSplitsFarV;
     float4x4 lightVP[MAX_CSM_CASCADES];
 };

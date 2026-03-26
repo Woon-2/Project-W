@@ -16,13 +16,17 @@ struct CameraData {
 };
 
 struct LightData {
+    enum class Type {
+        PointLight,
+        Spotlight,
+        DirectionalLight
+    };
     mu::Vec3   dir;
     mu::Vec3   color;
     float      intensity = 1.f;
-    // Single-shadow VP (legacy / non-CSM path)
-    mu::Mat4x4 view = {};
-    mu::Mat4x4 proj = {};
-    // CSM cascade data
+    Type       type = Type::DirectionalLight;
+    bool       isMainDirectionalLight = false;
+    // CSM cascade data (isMainDirectionalLight == true 일 때만 유효)
     std::array<mu::Mat4x4, MAX_CSM_CASCADES> cascadeViews = {};
     std::array<mu::Mat4x4, MAX_CSM_CASCADES> cascadeProjs = {};
     XMFLOAT4   cascadeSplitsFarV = {};  // view-space far depth per cascade
@@ -30,9 +34,8 @@ struct LightData {
 };
 
 struct FrameData {
-    mu::Vec3      globalAmbient;
-    u32t          lightCount = 0u;
-    BindlessIndex idxShadowMap;
+    mu::Vec3 globalAmbient;
+    u32t     lightCount = 0u;
 };
 
 struct DrawEvent {
@@ -42,8 +45,8 @@ struct DrawEvent {
 
 struct Resources {
     struct ShadowPass {
-        ConstantBuffer perDrawcallData;  // b0: TerrainShadowMapShader::PerDrawcallData
-        ConstantBuffer perFrameData;     // b1: TerrainShadowMapShader::PerFrameData
+        ConstantBuffer      perDrawcallData;  // b0: TerrainShadowMapShader::PerDrawcallData
+        ConstantBufferArray perFrameData;     // b1: cascade별 별도 슬롯 (MAX_CSM_CASCADES)
     } shadowPass;
 
     struct MainPass {
@@ -83,6 +86,7 @@ public:
         CommandListPool* commandListPool,
         std::vector<DrawEvent>&& drawEvents,
         std::vector<LightData>&& lightData,
+        const LightData& mainDirectionalLightData,
         const CameraData& cameraData,
         const FrameData& frameData,
         std::size_t roomIdx
@@ -138,6 +142,7 @@ private:
     Resources*                        pResources_  = nullptr;
     std::vector<DrawEvent>            drawEvents_{};
     std::vector<LightData>            lightData_{};
+    LightData                         mainDirectionalLightData_{};
     CameraData                        cameraData_{};
     FrameData                         frameData_{};
     std::size_t                       roomIdx_{};

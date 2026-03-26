@@ -19,7 +19,8 @@ DXGI_FORMAT convertDepthToColorFormat(DXGI_FORMAT depthFormat) {
 	}
 }
 
-std::unordered_map<std::string, std::vector<ShadowMapData>> shadowMapData;
+std::unordered_map<std::string, std::vector<ShadowMapData>>    shadowMapData;
+std::unordered_map<std::string, std::vector<CSMShadowMapData>> csmShadowMapData;
 
 void addShadowMap( const std::string& key, ID3D12Device* device,
 	DXGI_FORMAT format, u32t width, u32t height,
@@ -116,102 +117,101 @@ void addShadowMap( const std::string& key, ID3D12Device* device,
 }
 
 void addCSMShadowMap( const std::string& key, ID3D12Device* device,
-	DXGI_FORMAT format, u32t width, u32t height, u32t sliceCount,
-	std::size_t roomCnt, DescriptorPool& srvTexArrayPool, DescriptorPool& dsvPool
+	DXGI_FORMAT format,
+	const std::array<u32t, MAX_CSM_CASCADES>& cascadeResolutions,
+	u32t cascadeCount,
+	std::size_t roomCnt, DescriptorPool& srvTexPool, DescriptorPool& dsvPool
 ) {
-	DISPLAY_ERROR_STR(!shadowMapData.contains(key), "[GFX Error] SharedResources::ShadowMap::addCSMShadowMap: \""s
-		+ key + "\" 키로 이미 그림자맵이 등록되어 있습니다.", false
+	DISPLAY_ERROR_STR(!csmShadowMapData.contains(key), "[GFX Error] SharedResources::ShadowMap::addCSMShadowMap: \""s
+		+ key + "\" 키로 이미 CSM 그림자맵이 등록되어 있습니다.", false
 	);
 
-	if (shadowMapData.contains(key)) {
+	if (csmShadowMapData.contains(key)) {
 		return;
 	}
 
-	auto& vec = shadowMapData[key];
-	vec.reserve(roomCnt);
+	auto& vec = csmShadowMapData[key];
+	vec.resize(roomCnt);
 
 	for (std::size_t r = 0u; r < roomCnt; ++r) {
-		Texture tex{};
+		vec[r].cascadeCount = cascadeCount;
 
-		// Texture2DArray 리소스 생성 (cascade 개수 = sliceCount)
-		{
-			auto heapProperties = D3D12_HEAP_PROPERTIES{
-				.Type = D3D12_HEAP_TYPE_DEFAULT,
-				.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
-				.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
-				.CreationNodeMask = 0u,
-				.VisibleNodeMask = 0u
-			};
-			auto clearVal = D3D12_CLEAR_VALUE{
-				.Format = format,
-				.DepthStencil = D3D12_DEPTH_STENCIL_VALUE{ .Depth = 1.f, .Stencil = 0u }
-			};
-			auto desc = D3D12_RESOURCE_DESC{
-				.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
-				.Alignment = 0u,
-				.Width = width,
-				.Height = height,
-				.DepthOrArraySize = static_cast<UINT16>(sliceCount),
-				.MipLevels = 1u,
-				.Format = format,
-				.SampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
-				.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
-				.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
-			};
-			DISPLAY_ERROR_DX_VOID( device->CreateCommittedResource(
-				&heapProperties, D3D12_HEAP_FLAG_NONE, &desc,
-				D3D12_RESOURCE_STATE_DEPTH_WRITE, &clearVal,
-				__uuidof(ID3D12Resource), &tex.res
-			), false );
-			auto resName = key + "[" + std::to_string(r) + "]";
-			setD3DName(tex.res.Get(), resName.c_str());
-		}
+		for (u32t ci = 0u; ci < cascadeCount; ++ci) {
+			const u32t res = cascadeResolutions[ci];
+			auto& slice = vec[r].cascades[ci];
 
-		// Full-array DSV (모든 cascade slice를 한 번에 커버)
-		{
-			auto dsvDesc = D3D12_DEPTH_STENCIL_VIEW_DESC{
-				.Format = format,
-				.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY,
-				.Flags = D3D12_DSV_FLAG_NONE,
-				.Texture2DArray = D3D12_TEX2D_ARRAY_DSV{
-					.MipSlice = 0u,
-					.FirstArraySlice = 0u,
-					.ArraySize = sliceCount
-				}
-			};
-			createDSV(device, tex, dsvDesc, dsvPool);
-		}
-
-		// Texture2DArray SRV (bindless IDX_RANGE_TEXTUREARRAY)
-		{
-			tex.idxSrv.idxRange = etoi(Texture::Type::Tex2DArray);
-			createSRV( device, tex, D3D12_SHADER_RESOURCE_VIEW_DESC{
-				.Format = convertDepthToColorFormat(format),
-				.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY,
-				.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-				.Texture2DArray = D3D12_TEX2D_ARRAY_SRV{
-					.MostDetailedMip = 0u,
+			// Texture2D 리소스 생성 (cascade별 독립 텍스처)
+			{
+				auto heapProperties = D3D12_HEAP_PROPERTIES{
+					.Type = D3D12_HEAP_TYPE_DEFAULT,
+					.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+					.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+					.CreationNodeMask = 0u,
+					.VisibleNodeMask = 0u
+				};
+				auto clearVal = D3D12_CLEAR_VALUE{
+					.Format = format,
+					.DepthStencil = D3D12_DEPTH_STENCIL_VALUE{ .Depth = 1.f, .Stencil = 0u }
+				};
+				auto desc = D3D12_RESOURCE_DESC{
+					.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+					.Alignment = 0u,
+					.Width = res,
+					.Height = res,
+					.DepthOrArraySize = 1u,
 					.MipLevels = 1u,
-					.FirstArraySlice = 0u,
-					.ArraySize = sliceCount
-				}
-			}, srvTexArrayPool );
+					.Format = format,
+					.SampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
+					.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+					.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
+				};
+				DISPLAY_ERROR_DX_VOID( device->CreateCommittedResource(
+					&heapProperties, D3D12_HEAP_FLAG_NONE, &desc,
+					D3D12_RESOURCE_STATE_DEPTH_WRITE, &clearVal,
+					__uuidof(ID3D12Resource), &slice.tex.res
+				), false );
+				auto resName = key + "_csm[" + std::to_string(r) + "][" + std::to_string(ci) + "]";
+				setD3DName(slice.tex.res.Get(), resName.c_str());
+			}
 
-			tex.idxSrv.idxInArray = 0;  // PS uses idx.z = cascadeIdx at sampling time
-			tex.idxSrv.idxSampler = calcIdxBindlessSampler(D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT,
-				D3D12_TEXTURE_ADDRESS_MODE_BORDER, D3D12_TEXTURE_ADDRESS_MODE_BORDER,
-				D3D12_TEXTURE_ADDRESS_MODE_BORDER, 1u
-			);
+			// Texture2D DSV
+			{
+				auto dsvDesc = D3D12_DEPTH_STENCIL_VIEW_DESC{
+					.Format = format,
+					.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D,
+					.Flags = D3D12_DSV_FLAG_NONE,
+					.Texture2D = D3D12_TEX2D_DSV{ .MipSlice = 0u }
+				};
+				createDSV(device, slice.tex, dsvDesc, dsvPool);
+			}
+
+			// Texture2D SRV (bindless IDX_RANGE_TEXTURE)
+			{
+				slice.tex.idxSrv.idxRange = etoi(Texture::Type::Tex2D);
+				createSRV( device, slice.tex, D3D12_SHADER_RESOURCE_VIEW_DESC{
+					.Format = convertDepthToColorFormat(format),
+					.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
+					.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+					.Texture2D = D3D12_TEX2D_SRV{
+						.MostDetailedMip = 0u,
+						.MipLevels = 1u
+					}
+				}, srvTexPool );
+
+				slice.tex.idxSrv.idxInArray = 0;
+				slice.tex.idxSrv.idxSampler = calcIdxBindlessSampler(
+					D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT,
+					D3D12_TEXTURE_ADDRESS_MODE_BORDER, D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+					D3D12_TEXTURE_ADDRESS_MODE_BORDER, 1u
+				);
+			}
+
+			slice.dsv      = dsvPool.cpuHandle(slice.tex.idxDsv);
+			slice.format   = format;
+			slice.width    = res;
+			slice.height   = res;
+			slice.curState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 		}
-
-		ShadowMapData data{};
-		data.dsv      = dsvPool.cpuHandle(tex.idxDsv);
-		data.format   = format;
-		data.width    = width;
-		data.height   = height;
-		data.curState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-		data.tex      = std::move(tex);
-		vec.push_back(std::move(data));
 	}
 }
 
@@ -225,6 +225,22 @@ void clearShadowMap(const std::string& key, std::size_t roomIdx, ID3D12GraphicsC
 	}
 
 	auto& data = shadowMapData.at(key)[roomIdx];
+
+	DISPLAY_ERROR_DX_VOID( cmdList->ClearDepthStencilView(
+		data.dsv, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0u, 0u, nullptr
+	), false );
+}
+
+void clearCSMShadowMap(const std::string& key, std::size_t roomIdx, u32t cascadeIdx, ID3D12GraphicsCommandList* cmdList) {
+	DISPLAY_ERROR_STR(csmShadowMapData.contains(key), "[GFX Error] SharedResources::ShadowMap::clearCSMShadowMap: \""s
+		+ key + "\" 키의 CSM 그림자 맵이 존재하지 않습니다.", false
+	);
+
+	if (!csmShadowMapData.contains(key)) {
+		return;
+	}
+
+	auto& data = csmShadowMapData.at(key)[roomIdx].cascades[cascadeIdx];
 
 	DISPLAY_ERROR_DX_VOID( cmdList->ClearDepthStencilView(
 		data.dsv, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0u, 0u, nullptr
@@ -363,6 +379,173 @@ void getReadyAsShaderResource(const std::string& key, std::size_t roomIdx, Comma
 	DISPLAY_ERROR_DX_VOID( cmdQ->ExecuteCommandLists(1u, clearCmdLists), false );
 
 	fence.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtxTransition));
+}
+
+void getCSMReadyAsDepthWrite(const std::string& key, std::size_t roomIdx, u32t cascadeIdx, ID3D12GraphicsCommandList* cmdList) {
+	DISPLAY_ERROR_STR(csmShadowMapData.contains(key), "[GFX Error] SharedResources::ShadowMap::getCSMReadyAsDepthWrite: \""s
+		+ key + "\" 키의 CSM 그림자 맵이 존재하지 않습니다.", false
+	);
+
+	if (!csmShadowMapData.contains(key)) {
+		return;
+	}
+
+	auto& slice = csmShadowMapData.at(key)[roomIdx].cascades[cascadeIdx];
+
+	if (slice.curState != D3D12_RESOURCE_STATE_DEPTH_WRITE) {
+		transitionResourceState( cmdList, slice.tex.res.Get(),
+			D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE,
+			D3D12_RESOURCE_STATE_DEPTH_WRITE
+		);
+		slice.curState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+	}
+}
+
+void getCSMReadyAsShaderResource(const std::string& key, std::size_t roomIdx, u32t cascadeIdx, ID3D12GraphicsCommandList* cmdList) {
+	DISPLAY_ERROR_STR(csmShadowMapData.contains(key), "[GFX Error] SharedResources::ShadowMap::getCSMReadyAsShaderResource: \""s
+		+ key + "\" 키의 CSM 그림자 맵이 존재하지 않습니다.", false
+	);
+
+	if (!csmShadowMapData.contains(key)) {
+		return;
+	}
+
+	auto& slice = csmShadowMapData.at(key)[roomIdx].cascades[cascadeIdx];
+
+	if (slice.curState != D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE) {
+		transitionResourceState( cmdList, slice.tex.res.Get(),
+			D3D12_RESOURCE_STATE_DEPTH_WRITE,
+			D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+		);
+		slice.curState = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
+	}
+}
+
+void getCSMAllReadyAsDepthWrite(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence) {
+	DISPLAY_ERROR_STR(csmShadowMapData.contains(key), "[GFX Error] SharedResources::ShadowMap::getCSMAllReadyAsDepthWrite: \""s
+		+ key + "\" 키의 CSM 그림자 맵이 존재하지 않습니다.", false
+	);
+	if (!csmShadowMapData.contains(key)) {
+		return;
+	}
+
+	// 이미 모든 cascade가 DEPTH_WRITE 상태이면 배리어 제출 불필요
+
+	auto& csmData = csmShadowMapData.at(key)[roomIdx];
+	bool anyNeedsTransition = false;
+	for (u32t ci = 0u; ci < csmData.cascadeCount; ++ci) {
+		if (csmData.cascades[ci].curState != D3D12_RESOURCE_STATE_DEPTH_WRITE) {
+			anyNeedsTransition = true;
+			break;
+		}
+	}
+	if (!anyNeedsTransition) {
+		return;
+	}
+
+	CommandContext cmdCtx{};
+	DISPLAY_ERROR_STR( cmdListPool.allocOne(CommandListUsage::RenderingSlave, cmdCtx),
+		"[GFX Error] SharedResources::ShadowMap::getCSMAllReadyAsDepthWrite: 사용 가능한 명령 리스트가 없습니다.", false
+	);
+	if (!cmdCtx.cmdList) {
+		return;
+	}
+
+	DISPLAY_ERROR_DX_VOID( cmdCtx.cmdAlloc->Reset(), false );
+	DISPLAY_ERROR_DX_VOID( cmdCtx.cmdList->Reset(cmdCtx.cmdAlloc.Get(), nullptr), false );
+
+	for (u32t ci = 0u; ci < csmData.cascadeCount; ++ci) {
+		getCSMReadyAsDepthWrite(key, roomIdx, ci, cmdCtx.cmdList.Get());
+	}
+
+	DISPLAY_ERROR_DX_VOID( cmdCtx.cmdList->Close(), false );
+	ID3D12CommandList* lists[] = { cmdCtx.cmdList.Get() };
+	DISPLAY_ERROR_DX_VOID( cmdQ->ExecuteCommandLists(1u, lists), false );
+	fence.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtx));
+}
+
+void getCSMAllReadyAsShaderResource(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence) {
+	DISPLAY_ERROR_STR(csmShadowMapData.contains(key), "[GFX Error] SharedResources::ShadowMap::getCSMAllReadyAsShaderResource: \""s
+		+ key + "\" 키의 CSM 그림자 맵이 존재하지 않습니다.", false
+	);
+	if (!csmShadowMapData.contains(key)) {
+		return;
+	}
+
+	auto& csmData = csmShadowMapData.at(key)[roomIdx];
+	bool anyNeedsTransition = false;
+	for (u32t ci = 0u; ci < csmData.cascadeCount; ++ci) {
+		if (csmData.cascades[ci].curState != D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE) {
+			anyNeedsTransition = true;
+			break;
+		}
+	}
+	if (!anyNeedsTransition) {
+		return;
+	}
+
+	CommandContext cmdCtx{};
+	DISPLAY_ERROR_STR( cmdListPool.allocOne(CommandListUsage::RenderingSlave, cmdCtx),
+		"[GFX Error] SharedResources::ShadowMap::getCSMAllReadyAsShaderResource: 사용 가능한 명령 리스트가 없습니다.", false
+	);
+	if (!cmdCtx.cmdList) {
+		return;
+	}
+
+	DISPLAY_ERROR_DX_VOID( cmdCtx.cmdAlloc->Reset(), false );
+	DISPLAY_ERROR_DX_VOID( cmdCtx.cmdList->Reset(cmdCtx.cmdAlloc.Get(), nullptr), false );
+
+	for (u32t ci = 0u; ci < csmData.cascadeCount; ++ci) {
+		getCSMReadyAsShaderResource(key, roomIdx, ci, cmdCtx.cmdList.Get());
+	}
+
+	DISPLAY_ERROR_DX_VOID( cmdCtx.cmdList->Close(), false );
+	ID3D12CommandList* lists[] = { cmdCtx.cmdList.Get() };
+	DISPLAY_ERROR_DX_VOID( cmdQ->ExecuteCommandLists(1u, lists), false );
+	fence.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtx));
+}
+
+void clearCSMAllShadowMaps(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence) {
+	DISPLAY_ERROR_STR(csmShadowMapData.contains(key), "[GFX Error] SharedResources::ShadowMap::clearCSMAllShadowMaps: \""s
+		+ key + "\" 키의 CSM 그림자 맵이 존재하지 않습니다.", false
+	);
+	if (!csmShadowMapData.contains(key)) {
+		return;
+	}
+
+	const auto& csmData = csmShadowMapData.at(key)[roomIdx];
+
+	CommandContext cmdCtx{};
+	DISPLAY_ERROR_STR( cmdListPool.allocOne(CommandListUsage::RenderingSlave, cmdCtx),
+		"[GFX Error] SharedResources::ShadowMap::clearCSMAllShadowMaps: 사용 가능한 명령 리스트가 없습니다.", false
+	);
+	if (!cmdCtx.cmdList) {
+		return;
+	}
+
+	DISPLAY_ERROR_DX_VOID( cmdCtx.cmdAlloc->Reset(), false );
+	DISPLAY_ERROR_DX_VOID( cmdCtx.cmdList->Reset(cmdCtx.cmdAlloc.Get(), nullptr), false );
+
+	for (u32t ci = 0u; ci < csmData.cascadeCount; ++ci) {
+		DISPLAY_ERROR_DX_VOID( cmdCtx.cmdList->ClearDepthStencilView(
+			csmData.cascades[ci].dsv, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0u, 0u, nullptr
+		), false );
+	}
+
+	DISPLAY_ERROR_DX_VOID( cmdCtx.cmdList->Close(), false );
+	ID3D12CommandList* lists[] = { cmdCtx.cmdList.Get() };
+	DISPLAY_ERROR_DX_VOID( cmdQ->ExecuteCommandLists(1u, lists), false );
+	fence.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtx));
+}
+
+void validateRequiredKeys(std::initializer_list<std::string_view> keys) {
+	for (auto k : keys) {
+		const bool found = csmShadowMapData.contains(std::string(k)) || shadowMapData.contains(std::string(k));
+		DISPLAY_ERROR_STR(found, "[GFX Error] SharedResources::ShadowMap::validateRequiredKeys: \""s
+			+ std::string(k) + "\" 키의 그림자 맵이 등록되어 있지 않습니다. "
+			"loadAssets()보다 Dispatcher를 먼저 생성했거나, 해당 키의 그림자 맵이 등록되지 않았습니다.", true
+		);
+	}
 }
 
 }	// namespace SharedResources::ShadowMap

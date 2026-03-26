@@ -146,7 +146,7 @@ struct PerFrameData {
 	u32t       lightCnt;
 	u32t       cascadeCount;
 	XMUINT2    padding1;
-	BindlessIndex idxShadowMap;
+	BindlessIndex idxShadowMap[MAX_CSM_CASCADES];  // cascade별 독립 Texture2D SRV
 	XMFLOAT4   cascadeSplitsFarV;
 	XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
 };
@@ -214,7 +214,7 @@ struct PerFrameData {
 	u32t       lightCnt;
 	u32t       cascadeCount;
 	XMUINT2    padding1;
-	BindlessIndex idxShadowMap;
+	BindlessIndex idxShadowMap[MAX_CSM_CASCADES];  // cascade별 독립 Texture2D SRV
 	XMFLOAT4   cascadeSplitsFarV;
 	XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
 };
@@ -262,7 +262,7 @@ struct PerFrameData {
 };
 }	// namespace ShadowMapShader
 
-// ShadowMapCSMShader — Matches shadowMapCSM.hlsl (GS + Texture2DArray, CSM path)
+// ShadowMapCSMShader — Matches shadowMapCSM.hlsl (separate Texture2D per cascade, no GS)
 namespace ShadowMapCSMShader {
 struct PerInstanceData {
 	XMFLOAT4X4 world;
@@ -274,8 +274,8 @@ struct PerDrawcallData {
 };
 
 struct PerFrameData {
-	XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
-	u32t       cascadeCount;
+	XMFLOAT4X4 lightVP;    // 현재 cascade의 VP 행렬 (cascade pass마다 갱신)
+	u32t       cascadeIdx;
 	XMUINT3    _pfd0;
 };
 }	// namespace ShadowMapCSMShader
@@ -302,7 +302,7 @@ struct PerFrameData {
 };
 }	// namespace ShadowMapSkinnedShader
 
-// ShadowMapSkinnedCSMShader — Matches shadowMapSkinnedCSM.hlsl
+// ShadowMapSkinnedCSMShader — Matches shadowMapSkinnedCSM.hlsl (separate Texture2D per cascade, no GS)
 namespace ShadowMapSkinnedCSMShader {
 struct BoneData {
 	XMFLOAT4X4 xform;
@@ -320,8 +320,8 @@ struct PerDrawcallData {
 };
 
 struct PerFrameData {
-	XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
-	u32t       cascadeCount;
+	XMFLOAT4X4 lightVP;    // 현재 cascade의 VP 행렬 (cascade pass마다 갱신)
+	u32t       cascadeIdx;
 	XMUINT3    _pfd0;
 };
 }	// namespace ShadowMapSkinnedCSMShader
@@ -383,7 +383,7 @@ struct PerFrameData {
     u32t       lightCnt;
     u32t       cascadeCount;
     XMUINT2    padding1;
-    BindlessIndex idxShadowMap;
+    BindlessIndex idxShadowMap[MAX_CSM_CASCADES];  // cascade별 독립 Texture2D SRV
     XMFLOAT4   cascadeSplitsFarV;
     XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
 };
@@ -402,14 +402,14 @@ struct PerFrameData {
 };
 }  // namespace TerrainShadowMapShader
 
-// TerrainShadowMapCSMShader — Matches terrainShadowMapCSM.hlsl (GS + Texture2DArray, CSM path)
+// TerrainShadowMapCSMShader — Matches terrainShadowMapCSM.hlsl (separate Texture2D per cascade, no GS)
 namespace TerrainShadowMapCSMShader {
 struct PerDrawcallData {
     XMFLOAT4X4 world;
 };
 struct PerFrameData {
-    XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
-    u32t       cascadeCount;
+    XMFLOAT4X4 lightVP;    // 현재 cascade의 VP 행렬 (cascade pass마다 갱신)
+    u32t       cascadeIdx;
     XMUINT3    _pfd0;
 };
 }  // namespace TerrainShadowMapCSMShader

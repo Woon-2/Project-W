@@ -59,10 +59,11 @@ struct RequestTerrainLoad {
 // Configuration passed to GFX::loadAssets()
 struct AssetConfigs {
 	struct ShadowMapConfig {
-		std::string key        = "ShadowMap";
-		u32t        resolution = 2048u;
+		std::string key          = "ShadowMap";
+		// cascade별 shadow map 해상도 (index 0 = 가장 가까운 cascade)
+		std::array<u32t, MAX_CSM_CASCADES> cascadeResolutions = { 2048u, 1024u, 1024u, 512u };
 		u32t        cascadeCount = static_cast<u32t>(MAX_CSM_CASCADES);
-		DXGI_FORMAT format     = DXGI_FORMAT_D32_FLOAT;
+		DXGI_FORMAT format       = DXGI_FORMAT_D32_FLOAT;
 	} shadowMap;
 
 	struct CascadeConfig {
@@ -267,7 +268,8 @@ private:
 	TerrainPipeline::Resources resourcesTerrainPipeline_{};
 	TerrainPipeline::CameraData cameraDataTerrainPipeline_{};
 	std::vector<TerrainPipeline::LightData> lightDataTerrainPipeline_{};
-	TerrainPipeline::FrameData  frameDataTerrainPipeline_{};
+	TerrainPipeline::LightData              mainDirectionalLightTerrainPipeline_{};
+	TerrainPipeline::FrameData              frameDataTerrainPipeline_{};
 
 	// Font
 	Font font_{};

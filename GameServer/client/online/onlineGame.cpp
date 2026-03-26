@@ -28,7 +28,7 @@ Game::Game() {
 	gfx_.createSwapChain();
 	gfx_.setThreadPool(&threadPool_);
 
-	assetManager_.loadGFXAssets( gfx_ );
+	assetManager_.loadGFXAssets( gfx_, assetConfigs_ );
 	assetManager_.loadAnimations();
 }
 
@@ -143,8 +143,7 @@ void Game::update(Milliseconds deltaTime) {
 
 	camera_.update();
 	dirLight_.update(deltaTime);
-	static constexpr float kCascadeFar[MAX_CSM_CASCADES] = { 32.f, 68.f, 138.f, 500.f };
-	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), kCascadeFar, MAX_CSM_CASCADES, 2048u);
+	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), assetConfigs_.cascade, assetConfigs_.shadowMap);
 
 	playerHpUI_.update(deltaTime, gfx_, nullptr);
 	for (auto& [id, ui] : otherPlayerHpUIs_) {

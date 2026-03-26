@@ -226,40 +226,25 @@ float PCF(int4 idx, float4 posL) {
     return (p00 + p01 + p02 + p10 + p11 + p12 + p20 + p21 + p22) / 9.f;
 }
 
+#ifdef SINGLE_SHADOW
 float calcSingleShadow(float3 posV, float4 posL) {
     return PCF(idxShadowMap, posL);
 }
+#endif
 
 // ---------------------------------------------------------------------------
-// CSM shadow functions (Texture2DArray, 9-tap PCF per cascade slice)
+// CSM shadow functions (separate Texture2D per cascade, 9-tap PCF)
 // ---------------------------------------------------------------------------
 #ifndef MAX_CSM_CASCADES
 #define MAX_CSM_CASCADES 4
 #endif
 
-// PCF_CSM: 9-tap PCF sampling a Texture2DArray slice (idx.z = cascade index).
-// Kept separate from PCF() so existing callers are unaffected.
-float PCF_CSM(int4 idx, float4 posL) {
-    posL.xyz /= posL.w;
-    posL.z = min(posL.z, 1.0f);
-    float p00 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(-1, -1)).r;
-    float p01 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(-1,  0)).r;
-    float p02 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(-1,  1)).r;
-    float p10 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 0, -1)).r;
-    float p11 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 0,  0)).r;
-    float p12 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 0,  1)).r;
-    float p20 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 1, -1)).r;
-    float p21 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 1,  0)).r;
-    float p22 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 1,  1)).r;
-    return (p00 + p01 + p02 + p10 + p11 + p12 + p20 + p21 + p22) / 9.f;
-}
-
-// calcCSMShadow: selects cascade by view-space depth, then calls PCF_CSM.
+// calcCSMShadow: selects cascade by view-space depth, then performs 9-tap PCF.
 // posV: view-space position, posW: world-space position.
-// Uses cbuffer vars: cascadeCount, cascadeSplitsFarV, lightVP[], idxShadowMap.
+// Uses cbuffer vars: cascadeCount, cascadeSplitsFarV, lightVP[], idxShadowMap[].
 // Uses gmtxTexturize (declared in the including .hlsl before this include).
 float calcCSMShadow(float3 posV, float3 posW) {
-    // Select cascade: find first cascade whose far depth exceeds posV.z
+    // Select cascade: find first cascade whose far depth exceeds |posV.z|
     uint cascadeIdx = cascadeCount - 1u;
     float splits[4] = {
         cascadeSplitsFarV.x, cascadeSplitsFarV.y,
@@ -272,16 +257,26 @@ float calcCSMShadow(float3 posV, float3 posW) {
 
     // Project world-space position into the selected cascade's light space
     float4 posL = mul(mul(float4(posW, 1.f), lightVP[cascadeIdx]), gmtxTexturize);
+    posL.xyz /= posL.w;
+    posL.z = min(posL.z, 1.0f);
 
-    // Set the Texture2DArray slice index in the bindless shadow map descriptor
-    int4 idx = idxShadowMap;
-    idx.z    = (int)cascadeIdx;
-
-    return PCF_CSM(idx, posL);
+    // 9-tap PCF on the cascade's dedicated Texture2D (idxShadowMap[cascadeIdx])
+    int4 idx = idxShadowMap[cascadeIdx];
+    float p00 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(-1, -1)).r;
+    float p01 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(-1,  0)).r;
+    float p02 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(-1,  1)).r;
+    float p10 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 0, -1)).r;
+    float p11 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 0,  0)).r;
+    float p12 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 0,  1)).r;
+    float p20 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 1, -1)).r;
+    float p21 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 1,  0)).r;
+    float p22 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 1,  1)).r;
+    return (p00 + p01 + p02 + p10 + p11 + p12 + p20 + p21 + p22) / 9.f;
 }
 
 #ifndef TERRAIN_SHADER
 
+#ifdef SINGLE_SHADOW
 // ��鿡 �����ϴ� ��� ������(gLightData)�� ���� ���� �ݻ縦 ����Ͽ�
 // ��ü�� �Ѻ��� ������ �����Ѵ�.
 float4 illuminate(float3 posV, float4 posL, float3 normalV, float2 tex) {
@@ -347,6 +342,7 @@ float4 illuminate(float3 posV, float4 posL, float3 normalV, float2 tex) {
 
     return float4(color, albedo.w);
 }
+#endif
 
 // illuminateCSM: CSM(Cascaded Shadow Map) 버전. illuminate()와 별도로 유지.
 // posW: world-space position (cascade 선택 후 light-space 변환에 사용)

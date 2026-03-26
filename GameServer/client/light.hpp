@@ -24,12 +24,13 @@ public:
 		float left, float right, float bottom, float top, float nearZ, float farZ
 	);
 
-	// Computes 4 CSM cascade view/proj matrices from camera frustum slices.
-	// cascadeFarDistances: array of cascadeCount view-space far depths for each cascade
-	// shadowResolution: shadow map texel count per side (used for texel snapping)
+	// Computes CSM cascade view/proj matrices from camera frustum slices.
+	// Cascade far depths are derived internally via the Practical Split Scheme
+	// (lambda blend of uniform and logarithmic splits).
 	void MU_CALLCONV updateCSMCascades(
 		mu::Mat4x4 camView, mu::Mat4x4 camProj,
-		const float* cascadeFarDistances, u32t cascadeCount, u32t shadowResolution
+		const AssetConfigs::CascadeConfig& cascadeCfg,
+		const AssetConfigs::ShadowMapConfig& shadowCfg
 	);
 
 	void render(GFX& gfx);

@@ -226,7 +226,6 @@ ComPtr<ID3D12PipelineState> createShadowMapCSMShader(ID3D12Device* device, ID3D1
 	ComPtr<ID3D12PipelineState> ret{};
 
 	auto vsCode = compileShader("shadowMapCSM.hlsl", nullptr, "VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
-	auto gsCode = compileShader("shadowMapCSM.hlsl", nullptr, "GSMain", "gs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
 
 	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
 		D3D12_INPUT_ELEMENT_DESC{
@@ -248,7 +247,6 @@ ComPtr<ID3D12PipelineState> createShadowMapCSMShader(ID3D12Device* device, ID3D1
 	auto psoDesc = D3D12_GRAPHICS_PIPELINE_STATE_DESC{
 		.pRootSignature = rootSig,
 		.VS = vsCode.byteCode,
-		.GS = gsCode.byteCode,
 		.BlendState = D3D12_BLEND_DESC{
 			.AlphaToCoverageEnable = false,
 			.IndependentBlendEnable = false
@@ -396,7 +394,6 @@ ComPtr<ID3D12PipelineState> createShadowMapSkinnedCSMShader(ID3D12Device* device
 	ComPtr<ID3D12PipelineState> ret{};
 
 	auto vsCode = compileShader("shadowMapSkinnedCSM.hlsl", nullptr, "VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
-	auto gsCode = compileShader("shadowMapSkinnedCSM.hlsl", nullptr, "GSMain", "gs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
 
 	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
 		D3D12_INPUT_ELEMENT_DESC{
@@ -436,7 +433,6 @@ ComPtr<ID3D12PipelineState> createShadowMapSkinnedCSMShader(ID3D12Device* device
 	auto psoDesc = D3D12_GRAPHICS_PIPELINE_STATE_DESC{
 		.pRootSignature = rootSig,
 		.VS = vsCode.byteCode,
-		.GS = gsCode.byteCode,
 		.BlendState = D3D12_BLEND_DESC{
 			.AlphaToCoverageEnable = false,
 			.IndependentBlendEnable = false
@@ -1628,8 +1624,6 @@ ComPtr<ID3D12PipelineState> createTerrainShadowMapCSMShader(ID3D12Device* device
 
 	auto vsCode = compileShader("terrainShadowMapCSM.hlsl", nullptr, "VSMain", "vs_5_1",
 		D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
-	auto gsCode = compileShader("terrainShadowMapCSM.hlsl", nullptr, "GSMain", "gs_5_1",
-		D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u);
 
 	// Position only (slot 0) - matches TerrainPipeline VBV cache index 0
 	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
@@ -1652,7 +1646,6 @@ ComPtr<ID3D12PipelineState> createTerrainShadowMapCSMShader(ID3D12Device* device
 	auto psoDesc = D3D12_GRAPHICS_PIPELINE_STATE_DESC{
 		.pRootSignature = rootSig,
 		.VS             = vsCode.byteCode,
-		.GS             = gsCode.byteCode,
 		// No PS: depth-only pass
 		.BlendState = D3D12_BLEND_DESC{
 			.AlphaToCoverageEnable  = false,

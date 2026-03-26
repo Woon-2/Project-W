@@ -20,9 +20,26 @@ void MU_CALLCONV Light::updateShadowAuxDirectional( mu::Vec3 pointOfView, float 
 
 void MU_CALLCONV Light::updateCSMCascades(
 	mu::Mat4x4 camView, mu::Mat4x4 camProj,
-	const float* cascadeFarDistances, u32t cascadeCount, u32t shadowResolution
+	const AssetConfigs::CascadeConfig& cascadeCfg,
+	const AssetConfigs::ShadowMapConfig& shadowCfg
 ) {
+	const u32t cascadeCount = shadowCfg.cascadeCount;
 	cascadeCount_ = cascadeCount;
+
+	// Practical Split Scheme: blend of uniform and logarithmic splits
+	// C_i = lambda * nearZ*(farZ/nearZ)^((i+1)/N) + (1-lambda)*(nearZ + (farZ-nearZ)*(i+1)/N)
+	float cascadeFarDistances[MAX_CSM_CASCADES] = {};
+	const float nearZ  = cascadeCfg.nearZ;
+	const float farZ   = cascadeCfg.farZ;
+	const float lambda = cascadeCfg.lambda;
+	const float ratio  = farZ / nearZ;
+	const float N      = static_cast<float>(cascadeCount);
+	for (u32t i = 0u; i < cascadeCount; ++i) {
+		const float t  = static_cast<float>(i + 1u) / N;
+		const float cLog  = nearZ * std::pow(ratio, t);
+		const float cUnif = nearZ + (farZ - nearZ) * t;
+		cascadeFarDistances[i] = lambda * cLog + (1.f - lambda) * cUnif;
+	}
 
 	const auto lightDir = mu::NVec3(orient_.rotate(mu::Vec3(0.f, 0.f, 1.f)));
 
@@ -78,8 +95,9 @@ void MU_CALLCONV Light::updateCSMCascades(
 		}
 
 		// Texel snapping: round AABB to texel boundaries to prevent shadow swimming
-		const float texelW = (maxX - minX) / static_cast<float>(shadowResolution);
-		const float texelH = (maxY - minY) / static_cast<float>(shadowResolution);
+		const float res    = static_cast<float>(shadowCfg.cascadeResolutions[i]);
+		const float texelW = (maxX - minX) / res;
+		const float texelH = (maxY - minY) / res;
 		minX = std::floor(minX / texelW) * texelW;
 		maxX = std::ceil(maxX  / texelW) * texelW;
 		minY = std::floor(minY / texelH) * texelH;
@@ -138,6 +156,19 @@ void Light::render(GFX& gfx) {
 		.cascadeCount  = cascadeCount_
 	};
 	gfx.addLightData(pbrSkinnedLD);
+
+	auto terrainLD = TerrainPipeline::LightData{
+		.dir                    = mu::NVec3(orient().rotate(mu::Vec3(0.f, 0.f, 1.f))),
+		.color                  = color,
+		.intensity              = intensity,
+		.type                   = static_cast<TerrainPipeline::LightData::Type>(type),
+		.isMainDirectionalLight = isMainDirectionalLight,
+		.cascadeViews           = cascadeViews_,
+		.cascadeProjs           = cascadeProjs_,
+		.cascadeSplitsFarV      = cascadeSplitsFarV_,
+		.cascadeCount           = cascadeCount_
+	};
+	gfx.addLightData(terrainLD);
 }
 
 void MU_CALLCONV Light::setPos(mu::Vec3 newPos) {

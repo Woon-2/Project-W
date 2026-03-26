@@ -29,7 +29,7 @@ Game::Game() {
 	gfx_.createSwapChain();
 	gfx_.setThreadPool(&threadPool_);
 
-	assetManager_.loadGFXAssets(gfx_);
+	assetManager_.loadGFXAssets(gfx_, assetConfigs_);
 	assetManager_.loadAnimations();
 
 	emitterConfig_.pClip       = assetManager_.flameAnimation();
@@ -547,8 +547,7 @@ void Game::update(Milliseconds deltaTime) {
 	gargoyle_->update(deltaTime, tPhysicInterpolation);
 	camera_.update();
 	dirLight_.update(deltaTime);
-	static constexpr float kCascadeFar[MAX_CSM_CASCADES] = { 32.f, 68.f, 138.f, 500.f };
-	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), kCascadeFar, MAX_CSM_CASCADES, 2048u);
+	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), assetConfigs_.cascade, assetConfigs_.shadowMap);
 
 	// playerHpUI_.update( deltaTime, gfx_, nullptr );
 
@@ -595,23 +594,8 @@ void Game::render() {
 
 	if (terrain_) {
 		terrain_->render(gfx_);
-		gfx_.addCameraData(TerrainPipeline::CameraData{
-			.view = camera_.view(),
-			.proj = camera_.proj(),
-			.pos  = camera_.eye()
-		});
-		gfx_.addLightData(TerrainPipeline::LightData{
-			.dir            = mu::Vec3(dirLight_.dir()),
-			.color          = dirLight_.color,
-			.intensity      = dirLight_.intensity,
-			.cascadeViews   = dirLight_.cascadeViews(),
-			.cascadeProjs   = dirLight_.cascadeProjs(),
-			.cascadeSplitsFarV = dirLight_.cascadeSplitsFarV(),
-			.cascadeCount   = dirLight_.cascadeCount()
-		});
 		gfx_.addFrameData(TerrainPipeline::FrameData{
 			.globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f)
-			// idxShadowMap: TerrainPipeline이 per-room ShadowMap에서 직접 조회
 		});
 	}
 
