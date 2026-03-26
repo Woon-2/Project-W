@@ -14,6 +14,9 @@ enum class PacketType : uint16 {
 	S_Enter_Other,
 
 	S_Leave,
+
+	C_Move,
+	S_Move,
 };
 
 enum class ObjectType : uint16 {
@@ -89,6 +92,17 @@ struct SEnterOtherPacket : public PacketHeader {
 
 struct SLeavePacket : public PacketHeader {
 	uint16 playerId;
+};
+
+struct CMovePacket : public PacketHeader {
+	DirectX::XMFLOAT3 pos;
+	DirectX::XMFLOAT4 orient;
+};
+
+struct SMovePacket : public PacketHeader {
+	uint16 playerId;
+	DirectX::XMFLOAT3 pos;
+	DirectX::XMFLOAT4 orient;
 };
 
 #pragma pack(pop)
