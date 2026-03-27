@@ -6,7 +6,21 @@
       "Bash(grep -rn \"Pool<\\\\|new\\\\|delete\\\\|std::make_unique\\\\|std::allocate\" /d/DirectX12/Project-W/GameServer/client/*.hpp)",
       "Bash(ls -la /d/DirectX12/Project-W/GameServer/client/*.hpp)",
       "Bash(ls -la /d/DirectX12/Project-W/GameServer/client/*.cpp)",
-      "Bash(find D:DirectX12Project-WGameServerclientdocs -type f -name *.md)"
+      "Bash(find D:DirectX12Project-WGameServerclientdocs -type f -name *.md)",
+      "Bash(find D:/DirectX12/Project-W/GameServer/client -type f -name *.dds)",
+      "Bash(grep:*)",
+      "Bash(xxd -l 200 D:/DirectX12/Project-W/GameServer/client/CubeMesh_Albedo.dds)",
+      "Bash(xxd:*)",
+      "Bash(powershell -Command \"Format-Hex 'D:\\\\DirectX12\\\\Project-W\\\\GameServer\\\\resources\\\\Sprites\\\\a_VFX_flame.dds' | Select-Object -First 12\")",
+      "Bash(find D:DirectX12Project-WGameServer -name *particle* -o -name *Particle*)",
+      "Bash(find D:DirectX12Project-WGameServerclient -type f \\\\\\(-name *.h -o -name *.cpp -o -name *.hlsl \\\\\\))",
+      "Bash(find D:DirectX12Project-WGameServerclient -name *.hlsl)",
+      "Bash(find D:DirectX12Project-WGameServerclient -name *.hpp -o -name *.h)",
+      "Bash(find D:DirectX12Project-WGameServerclient -name *animation*)",
+      "Bash(msbuild client.vcxproj /p:Configuration=Debug /p:Platform=x64 /t:Build /m /nologo)",
+      "Bash(find /d/DirectX12/Project-W/GameServer/client -type f -name *particle* -o -name *Particle*)",
+      "Bash(find D:DirectX12Project-WGameServerclient -type f -name *particle* -o -name *Particle*)",
+      "Bash(find D:DirectX12Project-WGameServerclient -type f \\\\\\(-name *.hlsl -o -name *billboard* -o -name *shader* \\\\\\))"
     ]
   }
 }

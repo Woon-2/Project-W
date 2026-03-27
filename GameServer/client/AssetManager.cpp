@@ -115,6 +115,13 @@ void AssetManager::loadGFXAssets(GFX& gfx) {
 		.pDest      = &smokeAnimation_
 	} );
 
+	gfx.addRequestMeshBinLoad( RequestMeshBinLoad{
+		.meshPath    = "../resources/effects/SwordSlash.meshbin",
+		.pTexHashMap = &texHashMap_,
+		.pDestMesh   = &swordSlashMesh_,
+		.pDestTex    = &swordSlashTex_
+	} );
+
 	gfx.loadAssets();
 }
 

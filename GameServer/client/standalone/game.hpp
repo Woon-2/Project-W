@@ -21,6 +21,7 @@
 #include "../crosshair.hpp"
 #include "../debugBVView.hpp"
 #include "../particleSystem.hpp"
+#include "../meshParticleSystem.hpp"
 
 class Timer;
 
@@ -128,6 +129,9 @@ private:
 	ParticleSystem smokeParticleSystem_{};
 	EmitterConfig flameEmitterConfig_{};
 	EmitterConfig smokeEmitterConfig_{};
+
+	MeshParticleSystem  swordSlashSystem_{};
+	MeshEmitterConfig   swordSlashConfig_{};
 
 	LONG mouseDeltaX_{};
 	LONG mouseDeltaY_{};

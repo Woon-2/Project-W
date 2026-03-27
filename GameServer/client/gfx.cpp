@@ -239,6 +239,7 @@ void GFX::init() {
 	shaders_.try_emplace("PBRSkinnedShader", createPBRSkinnedShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("BillboardShader", createBillboardShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("BillboardShaderAdditive", createBillboardShaderAdditive( device_.Get(), defaultRootSig.get() ));
+	shaders_.try_emplace("MeshParticleShader", createMeshParticleShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("SkyboxShader", createSkyboxShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("BVShader", createBVShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace( "UIShader", createUIShader( device_.Get(), defaultRootSig.get() ) );
@@ -260,6 +261,7 @@ void GFX::init() {
 	drawEventsPBRSkinnedPipeline_.reserve(1000u);
 	drawEventsBVPipeline_.reserve(1000u);
 	drawEventsBillboardPipeline_.reserve(1000u);
+	drawEventsMeshParticlePipeline_.reserve(256u);
 	drawEventsSkyboxPipeline_.reserve(10u);
 }
 
@@ -432,6 +434,16 @@ void GFX::createSwapChain() {
 	resourcesBillboardPipeline_.perFrameData.init(
 		device_.Get(), sizeof( BillboardShader::PerFrameData ), backBuffers_.size(), "Billboard_PerFrameData"
 	);
+	// Mesh Particle Pipeline ----
+	resourcesMeshParticlePipeline_.perInstanceData.init(
+		device_.Get(), sizeof( MeshParticleShader::PerInstanceData ) * 256u, backBuffers_.size(), "MeshParticle_PerInstanceData"
+	);
+	resourcesMeshParticlePipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof( MeshParticleShader::PerDrawcallData ), 256u, backBuffers_.size(), "MeshParticle_PerDrawcallData"
+	);
+	resourcesMeshParticlePipeline_.perFrameData.init(
+		device_.Get(), sizeof( MeshParticleShader::PerFrameData ), backBuffers_.size(), "MeshParticle_PerFrameData"
+	);
 	// UI Pipeline ----
 	resourcesUIPipeline_.perInstanceData.init(
 		device_.Get(), sizeof( UIShader::PerInstanceData ) * 1000u, backBuffers_.size(), "UI_PerInstanceData"
@@ -529,6 +541,18 @@ void GFX::addFrameData( const BillboardPipeline::FrameData& frameData ) {
 	frameDataBillboardPipeline_ = frameData;
 }
 
+void GFX::addDrawEvent( const MeshParticlePipeline::DrawEvent& drawEvent ) {
+	drawEventsMeshParticlePipeline_.push_back( drawEvent );
+}
+
+void GFX::addCameraData( const MeshParticlePipeline::CameraData& cameraData ) {
+	cameraDataMeshParticlePipeline_ = cameraData;
+}
+
+void GFX::addFrameData( const MeshParticlePipeline::FrameData& frameData ) {
+	frameDataMeshParticlePipeline_ = frameData;
+}
+
 // 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 void GFX::addDrawEvent(const UIPipeline::DrawEvent& drawEvent) {
 	drawEventsUIPipeline_.push_back(drawEvent);
@@ -560,6 +584,11 @@ void GFX::addRequestSpritesLoad( const RequestSpriteAnimLoad& request )
 void GFX::addRequestTextImageLoad( const RequestTextImageLoad& request )
 {
 	requestsTextImageLoad_.push_back( request );
+}
+
+void GFX::addRequestMeshBinLoad(const RequestMeshBinLoad& request)
+{
+	requestsMeshBinLoad_.push_back(request);
 }
 
 // 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
@@ -675,6 +704,28 @@ void GFX::loadAssets() {
 	// load text texture
 	for( auto& request : requestsTextImageLoad_ ) {
 		*request.pDest = TextImage( device_.Get(), request.width, request.height, srvTexPool_ );
+	}
+
+	dumpLog();
+
+	// load .meshbin files
+	for (auto& request : requestsMeshBinLoad_) {
+		auto [mesh, texRelPath] = loadMeshBin(request.meshPath, device_.Get(), cmdList.Get(), fence);
+		*request.pDestMesh = std::move(mesh);
+
+		if (!texRelPath.empty() && request.pDestTex) {
+			const auto texPath = std::filesystem::path("../resources/Textures") / texRelPath;
+			if (!request.pTexHashMap->contains(texRelPath)) {
+				Texture::Type type{};
+				auto [pPair, _] = request.pTexHashMap->try_emplace(
+					texRelPath, loadTexture(device_.Get(), cmdList.Get(), texPath, fence, type)
+				);
+				auto& tex = pPair->second;
+				createSRV(device_.Get(), tex, srvTexPool_);
+				tex.idxSrv.idxSampler = etoi(Samplers::TrilinearWrap);
+			}
+			*request.pDestTex = request.pTexHashMap->at(texRelPath);
+		}
 	}
 
 	dumpLog();
@@ -874,6 +925,19 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	auto meshParticleDispatcher = MeshParticlePipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "MeshParticleShader" ),
+		cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesMeshParticlePipeline_, threadPool_,
+		&cmdListPool_, std::move( drawEventsMeshParticlePipeline_ ),
+		cameraDataMeshParticlePipeline_, frameDataMeshParticlePipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
 	auto bvPipelineDispatcher = BVPipeline::Dispatcher(
 		tmpDescriptorHeaps, rootSigs_.at("DefaultRootSignature"),
 		shaders_.at("BVShader"), cmdQ_, viewport, clRect,
@@ -940,6 +1004,9 @@ void GFX::render() {
 
 		billboardPipelineDispatcher.updateGPUDataSingleThreaded();
 		billboardPipelineDispatcher.drawSingleThreaded();
+
+		meshParticleDispatcher.updateGPUDataSingleThreaded();
+		meshParticleDispatcher.drawSingleThreaded();
 		dumpLog();
 	}
 	else {
@@ -979,6 +1046,9 @@ void GFX::render() {
 
 		billboardPipelineDispatcher.updateGPUDataMultiThreaded();
 		billboardPipelineDispatcher.drawMultiThreaded();
+
+		meshParticleDispatcher.updateGPUDataMultiThreaded();
+		meshParticleDispatcher.drawMultiThreaded();
 		dumpLog();
 	}
 

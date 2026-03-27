@@ -23,6 +23,7 @@ ComPtr<ID3D12PipelineState> createPBRShader(ID3D12Device* device, ID3D12RootSign
 ComPtr<ID3D12PipelineState> createPBRSkinnedShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBillboardShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBillboardShaderAdditive(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createMeshParticleShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSignature* rootSig );
@@ -243,6 +244,31 @@ struct PerFrameData {
 };
 
 }	// namespace BillboardShader
+
+// MeshParticleShader
+namespace MeshParticleShader {
+
+// 80B, 16B-aligned
+// world: row-major — CPU에서 mu::transpose().getXmf() 후 전달
+struct PerInstanceData {
+	XMFLOAT4X4 world;  // 64B
+	XMFLOAT4   tint;   // 16B
+};
+
+// 32B
+// int4 idxTex(16B) | firstInstanceOffset(4B) | pad(12B)
+struct PerDrawcallData {
+	BindlessIndex idxTex;              // int4, 16B
+	u32t          firstInstanceOffset; // 4B
+	XMUINT3       pad;                 // 12B
+};
+
+// 64B
+struct PerFrameData {
+	XMFLOAT4X4 vp;  // row-major — CPU에서 mu::transpose().getXmf() 후 전달
+};
+
+}	// namespace MeshParticleShader
 
 // ShadowMapShader
 namespace ShadowMapShader {

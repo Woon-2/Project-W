@@ -150,6 +150,27 @@ void Game::setupStage() {
 	smokeEmitterConfig_.renderOrder      = 1;
 	smokeParticleSystem_.startContinuous(smokeEmitterConfig_);
 
+	// 검기 이펙트 설정 (에셋이 없으면 emit 시 아무것도 렌더되지 않음)
+	swordSlashConfig_.pMesh        = assetManager_.swordSlashMesh();
+	swordSlashConfig_.pSubMesh     = assetManager_.swordSlashMesh()->subMeshes.empty()
+	                                  ? nullptr
+	                                  : &assetManager_.swordSlashMesh()->subMeshes[0];
+	swordSlashConfig_.pTex         = assetManager_.swordSlashTex();
+	swordSlashConfig_.position     = { 0.f, 0.f, 0.f };
+	swordSlashConfig_.rotation     = mu::Mat4x4{};
+	swordSlashConfig_.sizeBegin    = 5.f;   // 메시 원본 스케일에 따라 조정
+	swordSlashConfig_.sizeEnd      = 5.f;
+	swordSlashConfig_.lifetimeMin  = 0.2f;
+	swordSlashConfig_.lifetimeMax  = 0.4f;
+	swordSlashConfig_.startColor   = { 0.384167f, 0.8396226f, 0.8256719f, 1.f };
+	swordSlashConfig_.colorOverLifetime = ColorGradient{
+		.keys = {
+			{ 0.0f, { 1.f, 1.f, 1.f, 1.f } },
+			{ 1.0f, { 1.f, 1.f, 1.f, 0.f } },
+		}
+	};
+	swordSlashConfig_.renderOrder  = 2;
+
 	// 전투 시스템에 참가자 등록
 	// 플레이어: 공격 hitbox 및 데미지 설정 (AI 쿨타임은 사용하지 않음)
 	combatSystem_.registerCombatant(player_.get(),   { {1.5f, 1.5f, 1.5f}, 1.0f, 30, 500ms  });
@@ -596,6 +617,7 @@ void Game::update(Milliseconds deltaTime) {
 	// 파티클
 	flameParticleSystem_.update( deltaTime );
 	smokeParticleSystem_.update( deltaTime );
+	swordSlashSystem_.update( deltaTime );
 
 	// UI 동기화
 	// playerHpUI_.setHp(player_->hp());
@@ -622,6 +644,7 @@ void Game::render() {
 
 	flameParticleSystem_.render( gfx_ );
 	smokeParticleSystem_.render( gfx_ );
+	swordSlashSystem_.render( gfx_ );
 
 	playerHpUI_.render( gfx_ );
 
@@ -806,6 +829,14 @@ void Game::processInput(Milliseconds deltaTime) {
 		if (auto spec = combatSystem_.queryAttackSpec(player_->getId())) {
 			debugBVView_.pushLive(spec->obj, spec->halfExtent, spec->offsetFwd, 1500ms);
 		}
+
+		// 검기 이펙트 emit: 플레이어 전방 1m, 허리 높이(+1m)에서 플레이어 방향으로 방출
+		const auto slashPos = player_->renderState().pos
+		                    + player_->forward() * 1.f
+		                    + mu::Vec3(0.f, 1.0f, 0.f);
+		swordSlashConfig_.position = slashPos;
+		swordSlashConfig_.rotation = mu::Mat4x4(player_->orient());
+		swordSlashSystem_.emit(swordSlashConfig_, 1);
 	}
 
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때

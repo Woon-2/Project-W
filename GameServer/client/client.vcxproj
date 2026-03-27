@@ -168,6 +168,8 @@
     <ClCompile Include="basicPlayerHPUI.cpp" />
     <ClCompile Include="billboard.cpp" />
     <ClCompile Include="billboardPipeline.cpp" />
+    <ClCompile Include="meshParticlePipeline.cpp" />
+    <ClCompile Include="meshParticleSystem.cpp" />
     <ClCompile Include="binaryImport.cpp" />
     <ClCompile Include="bvPipeline.cpp" />
     <ClCompile Include="camera.cpp" />
@@ -289,6 +291,10 @@
     <ClInclude Include="uiPipeline.hpp" />
   </ItemGroup>
   <ItemGroup>
+    <FxCompile Include="meshParticle.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
     <FxCompile Include="billboard.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
