@@ -29,6 +29,8 @@ void MeshParticleSystem::emit(const MeshEmitterConfig& config, int count) {
         p.sizeBegin         = config.sizeBegin;
         p.sizeEnd           = config.sizeEnd;
         p.rotation          = config.rotation;
+        p.angularVelocity   = randomFloat(config.angularVelocityMin, config.angularVelocityMax);
+        p.angle             = 0.f;
         p.pMesh             = config.pMesh;
         p.pSubMesh          = config.pSubMesh;
         p.pTex              = config.pTex;
@@ -60,6 +62,7 @@ void MeshParticleSystem::update(Seconds dt) {
     while (i < activeCount_) {
         MeshParticle& p = pool_[i];
         p.lifetime -= dtf;
+        p.angle    += p.angularVelocity * dtf;
 
         if (p.lifetime <= 0.f) {
             if (i != activeCount_ - 1)
@@ -79,10 +82,16 @@ void MeshParticleSystem::render(GFX& gfx) const {
         const float size = std::lerp(p.sizeBegin, p.sizeEnd, t);
         const mu::Vec4 tint = p.startColor * p.colorOverLifetime.evaluate(t);
 
-        // world = Scale * Rotation * Translation
+        // Rotation over Lifetime: spin around mesh local Z axis (face normal).
+        // Applied BEFORE p.rotation so the axis is in local space.
+        // After the art corrections in p.rotation, local Z ≈ world Y,
+        // so this produces a Y-axis-like sweeping rotation in world space.
+        const auto rotDelta = mu::rotateZH(mu::Radian{ p.angle });
+
+        // world = Scale * RotDelta(local) * BaseRot * Translation
         const auto scaleM = mu::scaleH(mu::Vec3{ size, size, size });
         const auto transM = mu::translate(p.pos);
-        const auto world  = scaleM * p.rotation * transM;
+        const auto world  = scaleM * rotDelta * p.rotation * transM;
 
         gfx.addDrawEvent(MeshParticlePipeline::DrawEvent{
             .world      = world,

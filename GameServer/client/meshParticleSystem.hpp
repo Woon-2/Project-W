@@ -19,6 +19,8 @@ struct MeshEmitterConfig {
     float          lifetimeMax      = 0.5f;
     mu::Vec4       startColor       = { 1.f, 1.f, 1.f, 1.f };
     ColorGradient  colorOverLifetime = ColorGradient::constant({ 1.f, 1.f, 1.f, 1.f });
+    float          angularVelocityMin = 0.f;  // radians/sec
+    float          angularVelocityMax = 0.f;  // radians/sec
     const Mesh*    pMesh            = nullptr;
     const SubMesh* pSubMesh         = nullptr;
     const Texture* pTex             = nullptr;
@@ -33,6 +35,8 @@ struct MeshParticle {
     ColorGradient colorOverLifetime;
     float       sizeBegin, sizeEnd;
     mu::Mat4x4  rotation;
+    float       angularVelocity = 0.f;  // radians/sec, set at spawn
+    float       angle           = 0.f;  // accumulated rotation (radians)
     const Mesh*    pMesh    = nullptr;
     const SubMesh* pSubMesh = nullptr;
     const Texture* pTex     = nullptr;

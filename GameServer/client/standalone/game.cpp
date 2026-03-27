@@ -165,11 +165,14 @@ void Game::setupStage() {
 	swordSlashConfig_.startColor   = { 0.384167f, 0.8396226f, 0.8256719f, 1.f };
 	swordSlashConfig_.colorOverLifetime = ColorGradient{
 		.keys = {
-			{ 0.0f, { 1.f, 1.f, 1.f, 1.f } },
-			{ 1.0f, { 1.f, 1.f, 1.f, 0.f } },
+			{ 0.000f, { 1.000f, 1.000f, 1.000f, 1.000f } },
+			{ 0.565f, { 0.973f, 0.899f, 0.953f, 0.533f } },
+			{ 1.000f, { 0.953f, 0.822f, 0.917f, 0.000f } },
 		}
 	};
-	swordSlashConfig_.renderOrder  = 2;
+	swordSlashConfig_.renderOrder        = 2;
+	swordSlashConfig_.angularVelocityMin =  mu::pi * 2.0f;  // -90deg/sec
+	swordSlashConfig_.angularVelocityMax =  mu::pi * 2.0f;  //  90deg/sec
 
 	// 전투 시스템에 참가자 등록
 	// 플레이어: 공격 hitbox 및 데미지 설정 (AI 쿨타임은 사용하지 않음)
@@ -835,7 +838,10 @@ void Game::processInput(Milliseconds deltaTime) {
 		                    + player_->forward() * 1.f
 		                    + mu::Vec3(0.f, 1.0f, 0.f);
 		swordSlashConfig_.position = slashPos;
-		swordSlashConfig_.rotation = mu::Mat4x4(player_->orient());
+		swordSlashConfig_.rotation = mu::Mat4x4(player_->orient())
+		                           * mu::rotateXH(mu::Degree{ 80.f })
+		                           * mu::rotateYH(mu::Degree{ 180.f })
+		                           * mu::rotateZH(mu::Degree{ 180.f });
 		swordSlashSystem_.emit(swordSlashConfig_, 1);
 	}
 
