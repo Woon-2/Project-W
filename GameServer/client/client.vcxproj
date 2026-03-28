@@ -180,6 +180,7 @@
     <ClCompile Include="font.cpp" />
     <ClCompile Include="gfx.cpp" />
     <ClCompile Include="gfxUtil.cpp" />
+    <ClCompile Include="ClientApp.cpp" />
     <ClCompile Include="light.cpp" />
     <ClCompile Include="log.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
@@ -260,6 +261,7 @@
     <ClInclude Include="gfx.hpp" />
     <ClInclude Include="gfxUtil.hpp" />
     <ClInclude Include="IGame.hpp" />
+    <ClInclude Include="ClientApp.hpp" />
     <ClInclude Include="light.hpp" />
     <ClInclude Include="log.hpp" />
     <ClInclude Include="mesh.hpp" />
