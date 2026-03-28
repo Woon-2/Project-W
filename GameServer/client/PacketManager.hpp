@@ -12,7 +12,7 @@ public:
 	static void handleSLeavePacket(byte* buffer, int32 len);
 	static void handleSMovePacket(byte* buffer, int32 len);
 
-	static SendBuffer* makeCMovePacket(DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient);
+	static SendBuffer* makeCMovePacket(DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
 };
 
 #endif // client_packet_manager_hpp

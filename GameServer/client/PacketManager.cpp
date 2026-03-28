@@ -23,6 +23,7 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 
 	case PacketType::S_Move:
 		handleSMovePacket(buffer, len);
+		break;
 
 	default:
 		std::cout << "Unknown packet type received. Type: " << static_cast<uint16>(header->type) << '\n';
@@ -75,18 +76,19 @@ void PacketManager::handleSLeavePacket(byte* buffer, int32 len) {
 
 void PacketManager::handleSMovePacket(byte* buffer, int32 len) {
 	auto sMvPkt = reinterpret_cast<SMovePacket*>(buffer);
-	
+
 	auto game = INet::ClientApp::onlineGame();
-	game->movePlayer(sMvPkt->playerId, sMvPkt->pos, sMvPkt->orient);
+	game->movePlayer(sMvPkt->playerId, sMvPkt->pos, sMvPkt->orient, sMvPkt->velocity);
 }
 
-SendBuffer* PacketManager::makeCMovePacket(DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient) {
+SendBuffer* PacketManager::makeCMovePacket(DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
 	auto sendBuffer = SendBufferManager::open(sizeof(CMovePacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
 	auto cMvPkt = bw.reserve<CMovePacket>();
 	cMvPkt->pos = pos;
 	cMvPkt->orient = orient;
+	cMvPkt->velocity = velocity;
 
 	cMvPkt->size = bw.writeSize();
 	cMvPkt->type = PacketType::C_Move;

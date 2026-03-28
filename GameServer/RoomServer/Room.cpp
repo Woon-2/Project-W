@@ -1,4 +1,4 @@
-#include "rspch.hpp"
+ï»¿#include "rspch.hpp"
 #include "Room.hpp"
 #include "RoomManager.hpp"
 #include "GameSession.hpp"
@@ -12,14 +12,14 @@ void Room::init(const Level* levelData) {
 }
 
 void Room::enter(GameSession* session) {
-	// ¼­¹ö¿¡¼­ »ç¿ëÇÒ player °´Ã¼ ¼¼ÆÃ
+	// ì„œë²„ì—ì„œ ì‚¬ìš©í•  player ê°ì²´ ì„¸íŒ…
 	auto player = session->player();
 	player->setModel(RoomManager::playerModelData());
-	player->setPos(playerStarts_[sessions_.size() % playerStarts_.size()].pos());	// »õ·Î µé¾î¿À´Â ÇÃ·¹ÀÌ¾î´Â playerStarts_¿¡¼­ ¼ø¼­´ë·Î À§Ä¡¸¦ ¹Ş´Â´Ù.
+	player->setPos(playerStarts_[sessions_.size() % playerStarts_.size()].pos());	// ìƒˆë¡œ ë“¤ì–´ì˜¤ëŠ” í”Œë ˆì´ì–´ëŠ” playerStarts_ì—ì„œ ìˆœì„œëŒ€ë¡œ ìœ„ì¹˜ë¥¼ ë°›ëŠ”ë‹¤.
 	player->setOrient(playerStarts_[sessions_.size() % playerStarts_.size()].orient());
 	player->setScale(playerStarts_[sessions_.size() % playerStarts_.size()].scale());
 
-	// »õ·Î µé¾î¿À´Â ÇÃ·¹ÀÌ¾î¿¡ ´ëÇÑ snapshot ¸¸µé±â
+	// ìƒˆë¡œ ë“¤ì–´ì˜¤ëŠ” í”Œë ˆì´ì–´ì— ëŒ€í•œ snapshot ë§Œë“¤ê¸°
 	auto newPlayerInfo = PlayerInfo{
 		.playerId = static_cast<uint16>(session->id()),
 		.materialSetIdx = 0,
@@ -28,7 +28,7 @@ void Room::enter(GameSession* session) {
 		.scale = player->scale().getXmf(),
 	};
 
-	// ±âÁ¸ ÇÃ·¹ÀÌ¾îµé ¹× ±âÅ¸ objectµé¿¡ ´ëÇÑ snapshot ¸¸µé±â
+	// ê¸°ì¡´ í”Œë ˆì´ì–´ë“¤ ë° ê¸°íƒ€ objectë“¤ì— ëŒ€í•œ snapshot ë§Œë“¤ê¸°
 	auto objInfos = std::vector<ObjectInfo>();
 	objInfos.reserve(sessions_.size() + cubes_.size());
 
@@ -46,7 +46,7 @@ void Room::enter(GameSession* session) {
 
 	auto cubeInfo = ObjectInfo{
 		.type = ObjectType::Ground,
-		.objectId = static_cast<uint16>(IdPool::pop()),	// cube´Â objectId°¡ ÇÊ¿äÇÏ±ä ÇÏÁö¸¸, Å¬¶óÀÌ¾ğÆ®¿¡¼­ cube¿¡ ´ëÇÑ ÆĞÅ¶Àº µû·Î ¾øÀ¸¹Ç·Î ÀÏ´Ü IdPool¿¡¼­ popÇØ¼­ »ç¿ëÇÑ´Ù. ³ªÁß¿¡ °³¼± ÇÊ¿ä.
+		.objectId = static_cast<uint16>(IdPool::pop()),	// cubeëŠ” objectIdê°€ í•„ìš”í•˜ê¸´ í•˜ì§€ë§Œ, í´ë¼ì´ì–¸íŠ¸ì—ì„œ cubeì— ëŒ€í•œ íŒ¨í‚·ì€ ë”°ë¡œ ì—†ìœ¼ë¯€ë¡œ ì¼ë‹¨ IdPoolì—ì„œ popí•´ì„œ ì‚¬ìš©í•œë‹¤. ë‚˜ì¤‘ì— ê°œì„  í•„ìš”.
 		.materialSetIdx = 0,
 		.pos = cubes_[0].pos().getXmf(),
 		.orient = cubes_[0].orient().getXmf(),
@@ -54,17 +54,17 @@ void Room::enter(GameSession* session) {
 	};
 	objInfos.emplace_back(cubeInfo);
 
-	// ÆĞÅ¶ »ı¼º ÈÄ »õ·Î µé¾î¿Â ÇÃ·¹ÀÌ¾î¿¡°Ô Àü¼Û
+	// íŒ¨í‚· ìƒì„± í›„ ìƒˆë¡œ ë“¤ì–´ì˜¨ í”Œë ˆì´ì–´ì—ê²Œ ì „ì†¡
 	auto enterPkt = PacketManager::makeSEnterPacket(newPlayerInfo, objInfos);
 	session->send(enterPkt);
 
-	// »õ·Î µé¾î¿Â ÇÃ·¹ÀÌ¾îÀÇ Á¤º¸¸¦ ±âÁ¸ ÇÃ·¹ÀÌ¾îµé¿¡°Ô ºê·ÎµåÄ³½ºÆ®
-	if (sessions_.size() > 0) {	// ±âÁ¸ ÇÃ·¹ÀÌ¾î°¡ ÀÖÀ» ¶§¸¸ ºê·ÎµåÄ³½ºÆ®
+	// ìƒˆë¡œ ë“¤ì–´ì˜¨ í”Œë ˆì´ì–´ì˜ ì •ë³´ë¥¼ ê¸°ì¡´ í”Œë ˆì´ì–´ë“¤ì—ê²Œ ë¸Œë¡œë“œìºìŠ¤íŠ¸
+	if (sessions_.size() > 0) {	// ê¸°ì¡´ í”Œë ˆì´ì–´ê°€ ìˆì„ ë•Œë§Œ ë¸Œë¡œë“œìºìŠ¤íŠ¸
 		auto enterOtherPkt = PacketManager::makeSEnterOtherPacket(newPlayerInfo);
 		broadcast(enterOtherPkt);
 	}
 
-	// room »óÅÂ º¯°æ
+	// room ìƒíƒœ ë³€ê²½
 	sessions_.push_back(session);
 	idSessionMap_[session->id()] = session;
 }
@@ -84,19 +84,22 @@ void Room::leave(GameSession* session) {
 }
 
 void Room::move(int32 sessionId, CMovePacket* cMvPkt) {
-	// È¤½Ã³ª ÇÏ´Â °¡´É¼º Áß, sessionId·Î idSessionMap_¿¡¼­ sessionÀ» Ã£´Â °ÍÀÌ À¯È¿ÇÏÁö ¾ÊÀ» ¼öµµ ÀÖÀ½.
-	// leaveÇÑ sessionId°¡ move ÆĞÅ¶À» º¸³»´Â °æ¿ì µî. ÀÏ´ÜÀº ¹æ¿¡ ÀÖ´Â sessionÀÌ º¸³½ ÆĞÅ¶ÀÌ¹Ç·Î À¯È¿ÇÏ´Ù°í °¡Á¤ÇÏ°í ÀÛ¼ºÇÑ´Ù.
+	// í˜¹ì‹œë‚˜ í•˜ëŠ” ê°€ëŠ¥ì„± ì¤‘, sessionIdë¡œ idSessionMap_ì—ì„œ sessionì„ ì°¾ëŠ” ê²ƒì´ ìœ íš¨í•˜ì§€ ì•Šì„ ìˆ˜ë„ ìˆìŒ.
+	// leaveí•œ sessionIdê°€ move íŒ¨í‚·ì„ ë³´ë‚´ëŠ” ê²½ìš° ë“±. ì¼ë‹¨ì€ ë°©ì— ìˆëŠ” sessionì´ ë³´ë‚¸ íŒ¨í‚·ì´ë¯€ë¡œ ìœ íš¨í•˜ë‹¤ê³  ê°€ì •í•˜ê³  ì‘ì„±í•œë‹¤.
 	auto session = idSessionMap_[sessionId];
 
 	auto player = session->player();
 
 	player->setPos(DirectX::XMLoadFloat3(&cMvPkt->pos));
 	player->setOrient(DirectX::XMLoadFloat4(&cMvPkt->orient));
+	player->physicState().evVelocity = DirectX::XMLoadFloat3(&cMvPkt->velocity);
+	//player->setVelocity(DirectX::XMLoadFloat3(&cMvPkt->velocity));
 
 	auto sMvPkt = PacketManager::makeSMovePacket(
 		static_cast<uint16>(sessionId),
 		player->pos().getXmf(),
-		player->orient().getXmf()
+		player->orient().getXmf(),
+		player->physicState().evVelocity.getXmf()
 	);
 
 	broadcastExcept(session, sMvPkt);

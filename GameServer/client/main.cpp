@@ -100,8 +100,6 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 
 		INet::ClientApp::update(timer.deltaTime<Milliseconds>());
 		INet::ClientApp::render();
-
-		SleepEx(1, true);
 	}
 }
 

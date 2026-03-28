@@ -26,6 +26,7 @@ void PacketManager::handleCMovePacket(GameSession* session, byte* buffer, int32 
 
 	cMvPktClone->pos = clientMovePacket->pos;
 	cMvPktClone->orient = clientMovePacket->orient;
+	cMvPktClone->velocity = clientMovePacket->velocity;
 	
 	session->room()->doAsync([session, cMvPktClone]() {
 		session->room()->move(session->id(), cMvPktClone);
@@ -87,7 +88,7 @@ SendBuffer* PacketManager::makeSLeavePacket(uint16 playerId) {
 	return sendBuffer;
 }
 
-SendBuffer* PacketManager::makeSMovePacket(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient) {
+SendBuffer* PacketManager::makeSMovePacket(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SMovePacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
@@ -95,6 +96,7 @@ SendBuffer* PacketManager::makeSMovePacket(uint16 playerId, DirectX::XMFLOAT3 po
 	sMvPkt->playerId = playerId;
 	sMvPkt->pos = pos;
 	sMvPkt->orient = orient;
+	sMvPkt->velocity = velocity;
 
 	sMvPkt->size = bw.writeSize();
 	sMvPkt->type = PacketType::S_Move;

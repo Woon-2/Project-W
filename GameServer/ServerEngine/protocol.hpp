@@ -1,4 +1,4 @@
-#ifndef protocol_hpp
+ï»¿#ifndef protocol_hpp
 #define protocol_hpp
 
 #include "macro.hpp"
@@ -60,7 +60,7 @@ struct PlayerInfo {
 	DirectX::XMFLOAT3 pos;
 	DirectX::XMFLOAT4 orient;
 	DirectX::XMFLOAT3 scale;
-	// ÃßÈÄ¿¡ player °íÀ¯ Á¤º¸ Ãß°¡ ÇÊ¿ä
+	// ì¶”í›„ì— player ê³ ìœ  ì •ë³´ ì¶”ê°€ í•„ìš”
 };
 
 struct ObjectInfo {
@@ -75,7 +75,7 @@ struct ObjectInfo {
 struct SEnterPacket : public PacketHeader {
 	PlayerInfo myInfo;
 
-	uint16 objsOffset;	// objectInfo ¹è¿­ÀÇ ½ÃÀÛ À§Ä¡
+	uint16 objsOffset;	// objectInfo ë°°ì—´ì˜ ì‹œì‘ ìœ„ì¹˜
 	uint16 objCnt;
 
 	using ObjectList = DataList<ObjectInfo>;
@@ -97,12 +97,14 @@ struct SLeavePacket : public PacketHeader {
 struct CMovePacket : public PacketHeader {
 	DirectX::XMFLOAT3 pos;
 	DirectX::XMFLOAT4 orient;
+	DirectX::XMFLOAT3 velocity;
 };
 
 struct SMovePacket : public PacketHeader {
 	uint16 playerId;
 	DirectX::XMFLOAT3 pos;
 	DirectX::XMFLOAT4 orient;
+	DirectX::XMFLOAT3 velocity;
 };
 
 #pragma pack(pop)
