@@ -1,4 +1,4 @@
-#ifndef iocp_object_hpp
+ï»¿#ifndef iocp_object_hpp
 #define iocp_object_hpp
 
 #include "simpleWindows.hpp"
@@ -13,7 +13,7 @@ public:
 	virtual ~IocpObject() = default;
 
 	virtual void dispatch(IoEvent* ioEvent, int32 numBytes) = 0;
-	// SOCKET Å¸ÀÔÀ» HANDLE Å¸ÀÔÀ¸·Î º¯È¯ÇÏ¿© ¹İÈ¯ÇÏ´Â ¸â¹ö ÇÔ¼ö
+	// SOCKET íƒ€ì…ì„ HANDLE íƒ€ì…ìœ¼ë¡œ ë³€í™˜í•˜ì—¬ ë°˜í™˜í•˜ëŠ” ë©¤ë²„ í•¨ìˆ˜
 	virtual HANDLE getHandle() const = 0;
 	virtual SOCKET getSocket() const = 0;
 };

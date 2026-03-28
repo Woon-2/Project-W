@@ -1,22 +1,22 @@
-#include "rspch.hpp"
+ï»¿#include "rspch.hpp"
 #include "physics.hpp"
 #include "object.hpp"
 
 void PhysicSystem::step(const std::vector<Object*>& objects, Seconds dt)
 {
-    // integrate (¿¹Ãø)
+    // integrate (ì˜ˆì¸¡)
     integrate(objects, dt);
 
-    // broad-phase (Ãæµ¹ ÈÄº¸±º Ãß¸®±â)
+    // broad-phase (ì¶©ëŒ í›„ë³´êµ° ì¶”ë¦¬ê¸°)
     broadPairs_.clear();
     broadPhase(objects);
 
-    // narrow-phase (½ÇÁ¦ Ãæµ¹ °Ë»ç)
+    // narrow-phase (ì‹¤ì œ ì¶©ëŒ ê²€ì‚¬)
     contacts_.clear();
     narrowPhase();
 
-    // Ãæµ¹ ÇÇµå¹é (¹İº¹Àû MTV solver)
-    solveCollisions(1); // ÇÊ¼öÀûÀ¸·Î ¿©·¯ ¹ø µ¹·Á¾ß ÇÔ
+    // ì¶©ëŒ í”¼ë“œë°± (ë°˜ë³µì  MTV solver)
+    solveCollisions(1); // í•„ìˆ˜ì ìœ¼ë¡œ ì—¬ëŸ¬ ë²ˆ ëŒë ¤ì•¼ í•¨
 }
 
 void PhysicSystem::integrate(const std::vector<Object*>& objects, Seconds dt)
@@ -31,12 +31,12 @@ void PhysicSystem::integrate(const std::vector<Object*>& objects, Seconds dt)
 
         pos += phys.velocity * dt.count();
 
-	    // ÄõÅÍ´Ï¾ğ °»½Å: q' = 0.5 * ¥ø_q * q
+	    // ì¿¼í„°ë‹ˆì–¸ ê°±ì‹ : q' = 0.5 * Ï‰_q * q
 	    auto wq = mu::Quat(omega, 0.f);
 	    auto dq = orient * wq * 0.5f;
 	    orient = orient + dq * dt.count();
 
-        // ¹Ù¿îµù º¼·ı °»½Å
+        // ë°”ìš´ë”© ë³¼ë¥¨ ê°±ì‹ 
 	    // for (std::size_t i = 0; i < phys.aabbs.size(); ++i) {
 		    // phys.aabbs[i].center = obj->model()->aabbs[i].center * phys.scale + phys.pos;
 		    // phys.aabbs[i].size = obj->model()->aabbs[i].size * phys.scale;
@@ -73,7 +73,7 @@ void PhysicSystem::solveCollisions(std::size_t iterations)
             a->physicState().pos += c.mtv * 0.5f;
             b->physicState().pos -= c.mtv * 0.5f;
 
-            // ¹Ù¿îµù º¼·ı °»½Å
+            // ë°”ìš´ë”© ë³¼ë¥¨ ê°±ì‹ 
 	        /*for (std::size_t i = 0; i < a->physicState().aabbs.size(); ++i) {
 		        a->physicState().aabbs[i].center = a->model()->aabbs[i].center
                     * a->physicState().scale + a->physicState().pos;

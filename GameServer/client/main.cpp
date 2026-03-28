@@ -1,4 +1,4 @@
-#include "pch.hpp"
+ï»¿#include "pch.hpp"
 #include "errorHandling.hpp"
 #include "online/onlineGame.hpp"
 #include "standalone/game.hpp"
@@ -26,7 +26,7 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 	pushLoggerA("standard", &std::cout);
 	pushLoggerW("standard", &std::wcout);
 
-	// À©µµ¿ì Å¬·¡½º ¼³Á¤ ¹× À©µµ¿ì »ı¼º
+	// ìœˆë„ìš° í´ë˜ìŠ¤ ì„¤ì • ë° ìœˆë„ìš° ìƒì„±
 	auto cls = WNDCLASSEXA{
 		.cbSize = sizeof( WNDCLASSEXA ),
 		.style = CS_OWNDC,
@@ -47,7 +47,7 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 	AdjustWindowRect( &gWndRect, WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, false );
 
 	ghWnd = CreateWindowExA( 0, wndClsName, wndName, WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-		0, 0, gWndRect.right - gWndRect.left, gWndRect.bottom - gWndRect.top,	// À©µµ¿ìÀÇ ½ÃÀÛ À§Ä¡, Å©±â ¼³Á¤
+		0, 0, gWndRect.right - gWndRect.left, gWndRect.bottom - gWndRect.top,	// ìœˆë„ìš°ì˜ ì‹œì‘ ìœ„ì¹˜, í¬ê¸° ì„¤ì •
 		nullptr, nullptr, hInstance, nullptr
 	);
 
@@ -55,7 +55,7 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 	DISPLAY_ERROR_GLE( !ShowWindow( ghWnd, SW_SHOW ), true );
 
 
-	// À©µµ¿ì ÇÁ·Î½ÃÀú¿¡¼­ WM_INPUT ¸Ş½ÃÁö ¼ö½ÅÀ» À§ÇÑ Raw Input Device µî·Ï(¸¶¿ì½º)
+	// ìœˆë„ìš° í”„ë¡œì‹œì €ì—ì„œ WM_INPUT ë©”ì‹œì§€ ìˆ˜ì‹ ì„ ìœ„í•œ Raw Input Device ë“±ë¡(ë§ˆìš°ìŠ¤)
 	auto rid = RAWINPUTDEVICE{
         .usUsagePage = 0x01,    // Generic Desktop Controls
         .usUsage = 0x02,    // Mouse
@@ -66,20 +66,20 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 	DISPLAY_ERROR_GLE(RegisterRawInputDevices(&rid, 1, sizeof(rid)), true);
 
 
-	// ¼­¹ö ¿¬°á ¹× °ÔÀÓ ÃÊ±âÈ­
+	// ì„œë²„ ì—°ê²° ë° ê²Œì„ ì´ˆê¸°í™”
 	Timer timer{};
 
-	std::cout << "[Main] ¼­¹ö ¿¬°á Áß...\n";
+	std::cout << "[Main] ì„œë²„ ì—°ê²° ì¤‘...\n";
 	if (!INet::ClientApp::connectToServer()) {
-		std::cout << "[Main] ¼­¹ö ¿¬°á ½ÇÆĞ\n" << "StandAlone ¸ğµå·Î ½ÇÇàÇÕ´Ï´Ù.\n";
+		std::cout << "[Main] ì„œë²„ ì—°ê²° ì‹¤íŒ¨\n" << "StandAlone ëª¨ë“œë¡œ ì‹¤í–‰í•©ë‹ˆë‹¤.\n";
 		INet::ClientApp::setup(INet::GameType::StandAlone, &timer);
 	}
 	else {
-		std::cout << "[Main] ¼­¹ö ¿¬°á ¼º°ø\n" << "¼­¹ö IP: " << INet::ClientApp::serverIp() << ", ¼­¹ö Port: " << INet::ClientApp::serverPort() << '\n';
+		std::cout << "[Main] ì„œë²„ ì—°ê²° ì„±ê³µ\n" << "ì„œë²„ IP: " << INet::ClientApp::serverIp() << ", ì„œë²„ Port: " << INet::ClientApp::serverPort() << '\n';
 		INet::ClientApp::setup(INet::GameType::Online, &timer);
 	}
 	
-	// À©µµ¿ì ¸Ş½ÃÁö ·çÇÁ
+	// ìœˆë„ìš° ë©”ì‹œì§€ ë£¨í”„
 	MSG msg;
 	while ( true ) {
 		while ( PeekMessageA( &msg, nullptr, 0, 0, PM_REMOVE ) ) {

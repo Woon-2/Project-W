@@ -1,4 +1,4 @@
-#include "pch.hpp"
+ï»¿#include "pch.hpp"
 #include "object.hpp"
 #include "errorHandling.hpp"
 #include "AssetManager.hpp"
@@ -12,38 +12,38 @@ void AnimBlenderPlayer::init(const AssetManager& assetManager) {
 	}
 }
 
-// pOwnerÀÇ ¹°¸® Á¤º¸¿¡ µû¶ó
-// ¾Ö´Ï¸ŞÀÌ¼Ç ºí·»µù »óÅÂ¸¦ °»½ÅÇÑ´Ù.
+// pOwnerì˜ ë¬¼ë¦¬ ì •ë³´ì— ë”°ë¼
+// ì• ë‹ˆë©”ì´ì…˜ ë¸”ë Œë”© ìƒíƒœë¥¼ ê°±ì‹ í•œë‹¤.
 void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
 	
-	// °´Ã¼ÀÇ ¼Ó·ÂÀÌ runThreshold¸¦ ³Ñ´ÂÁö¸¦ ±âÁØÀ¸·Î
-	// run ¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ÇÊ¿äÇÑÁö idle ¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ÇÊ¿äÇÑÁö ÆÇ´ÜÇÑ´Ù.
-	// runThreshold¸¦ ºÎµå·´°Ô °¨½Î´Â blendRange¸¦ ¼³Á¤ÇÏ¿©
-	// °´Ã¼ÀÇ ¼Ó·ÂÀÌ blendRange ³»ºÎ¿¡ ÀÖ´Ù¸é 0°ú 1 »çÀÌÀÇ tRun °ªÀÌ ±¸ÇØÁø´Ù.
-	// run ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ °¡ÁßÄ¡´Â tRun, idle ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ °¡ÁßÄ¡´Â 1 - tRunÀÌ µÈ´Ù.
+	// ê°ì²´ì˜ ì†ë ¥ì´ runThresholdë¥¼ ë„˜ëŠ”ì§€ë¥¼ ê¸°ì¤€ìœ¼ë¡œ
+	// run ì• ë‹ˆë©”ì´ì…˜ì´ í•„ìš”í•œì§€ idle ì• ë‹ˆë©”ì´ì…˜ì´ í•„ìš”í•œì§€ íŒë‹¨í•œë‹¤.
+	// runThresholdë¥¼ ë¶€ë“œëŸ½ê²Œ ê°ì‹¸ëŠ” blendRangeë¥¼ ì„¤ì •í•˜ì—¬
+	// ê°ì²´ì˜ ì†ë ¥ì´ blendRange ë‚´ë¶€ì— ìˆë‹¤ë©´ 0ê³¼ 1 ì‚¬ì´ì˜ tRun ê°’ì´ êµ¬í•´ì§„ë‹¤.
+	// run ì• ë‹ˆë©”ì´ì…˜ì˜ ê°€ì¤‘ì¹˜ëŠ” tRun, idle ì• ë‹ˆë©”ì´ì…˜ì˜ ê°€ì¤‘ì¹˜ëŠ” 1 - tRunì´ ëœë‹¤.
 	const auto runThreshold = 0.1f;
 
-	// °´Ã¼ÀÇ ¼Ó·Â ±¸ÇÏ±â
+	// ê°ì²´ì˜ ì†ë ¥ êµ¬í•˜ê¸°
 	const auto speed = pOwner->physicState().evVelocity.len();
 
-	// blendRange ¼³Á¤
+	// blendRange ì„¤ì •
 	const auto runBlendRangeStart = runThreshold - 0.05f;
 	const auto runBlendRangeEnd = runThreshold + 5.f;
-	// tRun ±¸ÇÏ±â
+	// tRun êµ¬í•˜ê¸°
 	const auto tRun = std::clamp( (speed - runBlendRangeStart) / (runBlendRangeEnd - runBlendRangeStart), 0.f, 1.f );
 
-	// tIdle ±¸ÇÏ±â (tIdle0_ ¹× tIdle1_)
-	// ¿òÁ÷ÀÌÁö ¾ÊÀº Ã¤ motionlessThreshold ½Ã°£ÀÌ Áö³µ´Ù¸é idle1 ¾Ö´Ï¸ŞÀÌ¼ÇÀ»,
-	// ±×·¸Áö ¾ÊÀ¸¸é Á¶ÁØ idle0 ¾Ö´Ï¸ŞÀÌ¼ÇÀ» Àç»ıÇÏµµ·Ï ÇÑ´Ù.
+	// tIdle êµ¬í•˜ê¸° (tIdle0_ ë° tIdle1_)
+	// ì›€ì§ì´ì§€ ì•Šì€ ì±„ motionlessThreshold ì‹œê°„ì´ ì§€ë‚¬ë‹¤ë©´ idle1 ì• ë‹ˆë©”ì´ì…˜ì„,
+	// ê·¸ë ‡ì§€ ì•Šìœ¼ë©´ ì¡°ì¤€ idle0 ì• ë‹ˆë©”ì´ì…˜ì„ ì¬ìƒí•˜ë„ë¡ í•œë‹¤.
 	const auto aimlessThreshold = 2s;
 	const auto aimBlendRangeStart = aimlessThreshold - 100ms;
 	const auto aimBlendRangeEnd = aimlessThreshold + 400ms;
 
 	const auto tIdleBase = 1.f - tRun;
 
-	// Idle ¾Ö´Ï¸ŞÀÌ¼ÇµéÀº ±×³É °è¼Ó µ¹¸°´Ù.
-	// µüÈ÷ ¸ØÃßÁö ¾Ê¾Æµµ ºÎÀÚ¿¬½º·´Áø ¾Ê´Ù.
+	// Idle ì• ë‹ˆë©”ì´ì…˜ë“¤ì€ ê·¸ëƒ¥ ê³„ì† ëŒë¦°ë‹¤.
+	// ë”±íˆ ë©ˆì¶”ì§€ ì•Šì•„ë„ ë¶€ìì—°ìŠ¤ëŸ½ì§„ ì•Šë‹¤.
 	animTimeIdle0_ += deltaTime;
 	const auto durationIdle = targetClip("Player_Idle0")->duration;
 	while (animTimeIdle0_ > durationIdle) {
@@ -56,21 +56,21 @@ void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 	}
 	tIdle0_ = tIdleBase;
 
-	// run ¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ÇÊ¿äÇÏ´Ù°í ÆÇ´ÜµÇ¾úÀ¸¸é,
-	// °´Ã¼°¡ ¿òÁ÷ÀÌ°í ÀÖ´Â ¹æÇâ°ú ¹Ù¶óº¸°í ÀÖ´Â ¹æÇâÀ» ÅëÇØ
-	// ÁÂ¿ì»óÇÏ ¿òÁ÷ÀÓ ¾Ö´Ï¸ŞÀÌ¼ÇÀ» ºí·»µùÇÑ´Ù.
+	// run ì• ë‹ˆë©”ì´ì…˜ì´ í•„ìš”í•˜ë‹¤ê³  íŒë‹¨ë˜ì—ˆìœ¼ë©´,
+	// ê°ì²´ê°€ ì›€ì§ì´ê³  ìˆëŠ” ë°©í–¥ê³¼ ë°”ë¼ë³´ê³  ìˆëŠ” ë°©í–¥ì„ í†µí•´
+	// ì¢Œìš°ìƒí•˜ ì›€ì§ì„ ì• ë‹ˆë©”ì´ì…˜ì„ ë¸”ë Œë”©í•œë‹¤.
 	if (tRun > 0.f) {
-		// ¼Óµµ¿Í right º¤ÅÍÀÇ ³»ÀûÀ» ÅëÇØ blend space¿¡¼­ÀÇ ÁÂÇ¥¸¦ ±¸ÇÒ ¼ö ÀÖ´Ù.
+		// ì†ë„ì™€ right ë²¡í„°ì˜ ë‚´ì ì„ í†µí•´ blend spaceì—ì„œì˜ ì¢Œí‘œë¥¼ êµ¬í•  ìˆ˜ ìˆë‹¤.
 		const auto blendSpaceX = mu::dot(pOwner->physicState().evVelocity, pOwner->right());
 		const auto blendSpaceY = mu::dot(pOwner->physicState().evVelocity, pOwner->forward());
 	
-		// blend space ÁÂÇ¥¸¦ ¹ÙÅÁÀ¸·Î °¢ ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ °¡ÁßÄ¡¸¦ Á¤ÇÑ´Ù.
+		// blend space ì¢Œí‘œë¥¼ ë°”íƒ•ìœ¼ë¡œ ê° ì• ë‹ˆë©”ì´ì…˜ì˜ ê°€ì¤‘ì¹˜ë¥¼ ì •í•œë‹¤.
 		const auto wForward = std::max(0.f, blendSpaceY);
 		const auto wBackward = std::max(0.f, -blendSpaceY);
 		const auto wLeft = std::max(0.f, -blendSpaceX);
 		const auto wRight = std::max(0.f, blendSpaceX);
 
-		// °¡ÁßÄ¡ÀÇ ÃÑÇÕÀÌ 1ÀÌ µÇ°Ô²û ÇÑ´Ù.
+		// ê°€ì¤‘ì¹˜ì˜ ì´í•©ì´ 1ì´ ë˜ê²Œë” í•œë‹¤.
 		float total = wForward + wBackward + wLeft + wRight;
 
 		tRunForward_ = tRun * wForward / total;
@@ -85,8 +85,8 @@ void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 		}
 	}
 	else {
-		// ¿ÏÀüÇÑ idle ¾Ö´Ï¸ŞÀÌ¼ÇÀÌ Àç»ıµÇ°í ÀÖ´Ù¸é
-		// run ¾Ö´Ï¸ŞÀÌ¼Ç°ú ¿¬°üµÈ º¯¼öµéÀº ÃÊ±âÈ­ÇÑ´Ù.
+		// ì™„ì „í•œ idle ì• ë‹ˆë©”ì´ì…˜ì´ ì¬ìƒë˜ê³  ìˆë‹¤ë©´
+		// run ì• ë‹ˆë©”ì´ì…˜ê³¼ ì—°ê´€ëœ ë³€ìˆ˜ë“¤ì€ ì´ˆê¸°í™”í•œë‹¤.
 		tRunForward_ = 0.f;
 		tRunBackward_ = 0.f;
 		tRunLeft_ = 0.f;
@@ -97,9 +97,9 @@ void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 		accMotionless_ += deltaTime;
 	}
 
-	// death ¾Ö´Ï¸ŞÀÌ¼ÇÀº °¡Àå ¿ì¼±¼øÀ§°¡ ³ô°Ô °è»êµÈ´Ù.
-	// cooldownDeath_ÀÇ °ªÀÌ 0º¸´Ù Å« µ¿¾ÈÀº ´Ù¸¥ ¾Ö´Ï¸ŞÀÌ¼Ç°ú ÃÖÁ¾ÀûÀ¸·Î ºí·»µùµÇ¸ç
-	// ÆäÀÌµåÀÎÀÌ ÀÌ·ç¾îÁö°í, cooldownDeath_ÀÇ °ªÀÌ 0ÀÌ µÇ¸é ¿ÏÀüÈ÷ 1ÀÇ ºñÀ²À» Â÷ÁöÇÑ´Ù.
+	// death ì• ë‹ˆë©”ì´ì…˜ì€ ê°€ì¥ ìš°ì„ ìˆœìœ„ê°€ ë†’ê²Œ ê³„ì‚°ëœë‹¤.
+	// cooldownDeath_ì˜ ê°’ì´ 0ë³´ë‹¤ í° ë™ì•ˆì€ ë‹¤ë¥¸ ì• ë‹ˆë©”ì´ì…˜ê³¼ ìµœì¢…ì ìœ¼ë¡œ ë¸”ë Œë”©ë˜ë©°
+	// í˜ì´ë“œì¸ì´ ì´ë£¨ì–´ì§€ê³ , cooldownDeath_ì˜ ê°’ì´ 0ì´ ë˜ë©´ ì™„ì „íˆ 1ì˜ ë¹„ìœ¨ì„ ì°¨ì§€í•œë‹¤.
 	if (dead_) {
 		animTimeDeath_ += deltaTime;
 
@@ -112,12 +112,12 @@ void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 
 		cooldownDeath_ -= deltaTime;
 	}
-	// hit ¾Ö´Ï¸ŞÀÌ¼Ç ºí·»µù ºñÀ²Àº death ´ÙÀ½À¸·Î °¡Àå ¿ì¼±¼øÀ§°¡ ³ô°Ô °è»êµÈ´Ù.
-	// ´Ù¸¥ ¸ğµç ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ºí·»µù ºñÀ²À» ³·Ãß°í ÃÖ´ë 0.75¸¸Å­ÀÇ ºñÀ²À» Â÷ÁöÇÑ´Ù.
-	// ¸ğµç ºí·»µùÀÌ ÀÏ¾î³­ ÈÄ¿¡ °á°ú ÇÁ·¹ÀÓ°ú hit ¾Ö´Ï¸ŞÀÌ¼Ç ÇÁ·¹ÀÓÀ»
-	// tHit_À¸·Î º¸°£ÇÏ°Ô µÈ´Ù.
+	// hit ì• ë‹ˆë©”ì´ì…˜ ë¸”ë Œë”© ë¹„ìœ¨ì€ death ë‹¤ìŒìœ¼ë¡œ ê°€ì¥ ìš°ì„ ìˆœìœ„ê°€ ë†’ê²Œ ê³„ì‚°ëœë‹¤.
+	// ë‹¤ë¥¸ ëª¨ë“  ì• ë‹ˆë©”ì´ì…˜ì˜ ë¸”ë Œë”© ë¹„ìœ¨ì„ ë‚®ì¶”ê³  ìµœëŒ€ 0.75ë§Œí¼ì˜ ë¹„ìœ¨ì„ ì°¨ì§€í•œë‹¤.
+	// ëª¨ë“  ë¸”ë Œë”©ì´ ì¼ì–´ë‚œ í›„ì— ê²°ê³¼ í”„ë ˆì„ê³¼ hit ì• ë‹ˆë©”ì´ì…˜ í”„ë ˆì„ì„
+	// tHit_ìœ¼ë¡œ ë³´ê°„í•˜ê²Œ ëœë‹¤.
 	else if (cooldownHit_ > 0ms) {
-		// 2¹è¼Ó Àç»ı
+		// 2ë°°ì† ì¬ìƒ
 		animTimeHit_ += deltaTime * 2.f;
 		
 		tHit_ = 0.75f * std::clamp( cooldownHit_ / 600ms, 0.f, 1.f );
@@ -129,8 +129,8 @@ void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 		tHit_ = 0.f;
 	}
 
-	// 4¹æÇâ run ¾Ö´Ï¸ŞÀÌ¼ÇµéÀº Àç»ı ½Ã°£ÀÌ ºñ½ÁÇÏ´Ù.
-	// Run_Forward ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ durationÀ» ´ëÇ¥·Î »ç¿ëÇØµµ ºÎÀÚ¿¬½º·´Áö ¾Ê´Ù.
+	// 4ë°©í–¥ run ì• ë‹ˆë©”ì´ì…˜ë“¤ì€ ì¬ìƒ ì‹œê°„ì´ ë¹„ìŠ·í•˜ë‹¤.
+	// Run_Forward ì• ë‹ˆë©”ì´ì…˜ì˜ durationì„ ëŒ€í‘œë¡œ ì‚¬ìš©í•´ë„ ë¶€ìì—°ìŠ¤ëŸ½ì§€ ì•Šë‹¤.
 	const auto durationRun = targetClip("Player_Run_Forward")->duration;
 	while (animTimeRun_ > durationRun) {
 		animTimeRun_ -= durationRun;
@@ -140,9 +140,9 @@ void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 }
 
 void AnimBlenderPlayer::onCalcLocal(PassKey<AnimSystem>) {
-	// update¿¡¼­ ±¸ÇÑ ¾Ö´Ï¸ŞÀÌ¼Ç °¡ÁßÄ¡µé·Î ºí·»µùÀ» ¼öÇàÇÑ´Ù.
+	// updateì—ì„œ êµ¬í•œ ì• ë‹ˆë©”ì´ì…˜ ê°€ì¤‘ì¹˜ë“¤ë¡œ ë¸”ë Œë”©ì„ ìˆ˜í–‰í•œë‹¤.
 
-	// °³º° ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ÇÁ·¹ÀÓÀ» ¾÷µ¥ÀÌÆ®ÇÑ´Ù.
+	// ê°œë³„ ì• ë‹ˆë©”ì´ì…˜ì˜ í”„ë ˆì„ì„ ì—…ë°ì´íŠ¸í•œë‹¤.
 	updateFrames("Player_Idle0", animTimeIdle0_);
 	updateFrames("Player_Idle1", animTimeIdle1_);
 	updateFrames("Player_Hit", animTimeHit_);
@@ -162,7 +162,7 @@ void AnimBlenderPlayer::onCalcLocal(PassKey<AnimSystem>) {
 	auto& framesRunLeft = curFrames("Player_Run_Left");
 	auto& framesRunRight = curFrames("Player_Run_Right");
 
-	// ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ÇÁ·¹ÀÓµéÀ» ºí·»µùÇÑ´Ù.
+	// ì• ë‹ˆë©”ì´ì…˜ì˜ í”„ë ˆì„ë“¤ì„ ë¸”ë Œë”©í•œë‹¤.
 	for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
 		WeightedAnimFrame frames[] = {
 			WeightedAnimFrame{ .frame = framesIdle0[i], .w = tIdle0_ },
@@ -173,9 +173,9 @@ void AnimBlenderPlayer::onCalcLocal(PassKey<AnimSystem>) {
 			WeightedAnimFrame{ .frame = framesRunRight[i], .w = tRunRight_ },
 		};
 		framesBlended_[i] = sumWeightedAnimFrames(frames);
-		// hit animation º¸°£ (nlerp ¾²¸é ÆÈ²ŞÄ¡ ²¿ÀÓ)
+		// hit animation ë³´ê°„ (nlerp ì“°ë©´ íŒ”ê¿ˆì¹˜ ê¼¬ì„)
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i], tHit_);
-		// death animation º¸°£
+		// death animation ë³´ê°„
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i], tDeath_);
 	}
 	std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
@@ -186,11 +186,11 @@ void AnimBlenderPlayer::EventBus::receive(const BasicEvent* event, Seconds delta
 
 	switch (event->type) {
 	//case EventType::Fire:
-	//	// Á¶ÁØ ¿©ºÎ¿Í °ü°è¾øÀÌ ¹ß»ç ½Ã
-	//	// ¿òÁ÷ÀÓÀÌ ¾ø¾ú´ø ½Ã°£À» ´©»êÇÏ´Â accMotionless_¸¦ 0À¸·Î ¸¸µç´Ù.
+	//	// ì¡°ì¤€ ì—¬ë¶€ì™€ ê´€ê³„ì—†ì´ ë°œì‚¬ ì‹œ
+	//	// ì›€ì§ì„ì´ ì—†ì—ˆë˜ ì‹œê°„ì„ ëˆ„ì‚°í•˜ëŠ” accMotionless_ë¥¼ 0ìœ¼ë¡œ ë§Œë“ ë‹¤.
 	//	pOwner->accMotionless_ = 0s;
-	//	// ºñÁ¶ÁØ »óÅÂ¿´´Ù¸é, Á¶ÁØÇÑ ÈÄ »ç°İÇØ¾ß ÇÏ¹Ç·Î
-	//	// ¹ß»ç±îÁö µô·¹ÀÌ°¡ ÀÖ´Ù.
+	//	// ë¹„ì¡°ì¤€ ìƒíƒœì˜€ë‹¤ë©´, ì¡°ì¤€í•œ í›„ ì‚¬ê²©í•´ì•¼ í•˜ë¯€ë¡œ
+	//	// ë°œì‚¬ê¹Œì§€ ë”œë ˆì´ê°€ ìˆë‹¤.
 	//	if (pOwner->tIdle_ > 0.1f) {
 	//		pOwner->cooldownFire_ = 120ms;
 	//		timer.enqueueJob( DelayedJob{
@@ -200,7 +200,7 @@ void AnimBlenderPlayer::EventBus::receive(const BasicEvent* event, Seconds delta
 	//			.executeAt = timer.lastTp() + 120ms
 	//		} );
 	//	}
-	//	// Á¶ÁØ »óÅÂ¿´´Ù¸é, µô·¹ÀÌ ¾øÀÌ ¹Ù·Î »ç°İÇÑ´Ù.
+	//	// ì¡°ì¤€ ìƒíƒœì˜€ë‹¤ë©´, ë”œë ˆì´ ì—†ì´ ë°”ë¡œ ì‚¬ê²©í•œë‹¤.
 	//	else {
 	//		holdEvent(evList, EvMuzzleFlash(static_cast<const EvFire*>(event)->shooterId));
 	//	}
@@ -230,32 +230,32 @@ void AnimBlenderGoblin::init(const AssetManager& assetManager) {
 	}
 }
 
-// pOwnerÀÇ ¹°¸® Á¤º¸¿¡ µû¶ó
-// ¾Ö´Ï¸ŞÀÌ¼Ç ºí·»µù »óÅÂ¸¦ °»½ÅÇÑ´Ù.
+// pOwnerì˜ ë¬¼ë¦¬ ì •ë³´ì— ë”°ë¼
+// ì• ë‹ˆë©”ì´ì…˜ ë¸”ë Œë”© ìƒíƒœë¥¼ ê°±ì‹ í•œë‹¤.
 void AnimBlenderGoblin::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
 
-	// °´Ã¼ÀÇ ¼Ó·ÂÀÌ walkThreshold¸¦ ³Ñ´ÂÁö¸¦ ±âÁØÀ¸·Î
-	// walk ¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ÇÊ¿äÇÑÁö idle ¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ÇÊ¿äÇÑÁö ÆÇ´ÜÇÑ´Ù.
-	// walkThreshold¸¦ ºÎµå·´°Ô °¨½Î´Â blendRange¸¦ ¼³Á¤ÇÏ¿©
-	// °´Ã¼ÀÇ ¼Ó·ÂÀÌ blendRange ³»ºÎ¿¡ ÀÖ´Ù¸é 0°ú 1 »çÀÌÀÇ tWalk °ªÀÌ ±¸ÇØÁø´Ù.
-	// walk ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ °¡ÁßÄ¡´Â tWalk, idle ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ °¡ÁßÄ¡´Â 1 - tWalkÀÌ µÈ´Ù.
+	// ê°ì²´ì˜ ì†ë ¥ì´ walkThresholdë¥¼ ë„˜ëŠ”ì§€ë¥¼ ê¸°ì¤€ìœ¼ë¡œ
+	// walk ì• ë‹ˆë©”ì´ì…˜ì´ í•„ìš”í•œì§€ idle ì• ë‹ˆë©”ì´ì…˜ì´ í•„ìš”í•œì§€ íŒë‹¨í•œë‹¤.
+	// walkThresholdë¥¼ ë¶€ë“œëŸ½ê²Œ ê°ì‹¸ëŠ” blendRangeë¥¼ ì„¤ì •í•˜ì—¬
+	// ê°ì²´ì˜ ì†ë ¥ì´ blendRange ë‚´ë¶€ì— ìˆë‹¤ë©´ 0ê³¼ 1 ì‚¬ì´ì˜ tWalk ê°’ì´ êµ¬í•´ì§„ë‹¤.
+	// walk ì• ë‹ˆë©”ì´ì…˜ì˜ ê°€ì¤‘ì¹˜ëŠ” tWalk, idle ì• ë‹ˆë©”ì´ì…˜ì˜ ê°€ì¤‘ì¹˜ëŠ” 1 - tWalkì´ ëœë‹¤.
 	const auto walkThreshold = 0.06f;
 
-	// °´Ã¼ÀÇ ¼Ó·Â ±¸ÇÏ±â
+	// ê°ì²´ì˜ ì†ë ¥ êµ¬í•˜ê¸°
 	const auto speed = pOwner->physicState().evVelocity.len();
 
-	// blendRange ¼³Á¤
+	// blendRange ì„¤ì •
 	const auto walkBlendRangeStart = walkThreshold - 0.03f;
 	const auto walkBlendRangeEnd = walkThreshold + 3.f;
-	// tWalk ±¸ÇÏ±â
+	// tWalk êµ¬í•˜ê¸°
 	tWalk_ = std::clamp( (speed - walkBlendRangeStart) / (walkBlendRangeEnd - walkBlendRangeStart), 0.f, 1.f );
 
-	// tIdle ±¸ÇÏ±â
+	// tIdle êµ¬í•˜ê¸°
 	tIdle_ = 1.f - tWalk_;
 
-	// Idle ¾Ö´Ï¸ŞÀÌ¼ÇµéÀº ±×³É °è¼Ó µ¹¸°´Ù.
-	// µüÈ÷ ¸ØÃßÁö ¾Ê¾Æµµ ºÎÀÚ¿¬½º·´Áø ¾Ê´Ù.
+	// Idle ì• ë‹ˆë©”ì´ì…˜ë“¤ì€ ê·¸ëƒ¥ ê³„ì† ëŒë¦°ë‹¤.
+	// ë”±íˆ ë©ˆì¶”ì§€ ì•Šì•„ë„ ë¶€ìì—°ìŠ¤ëŸ½ì§„ ì•Šë‹¤.
 	animTimeIdle_ += deltaTime;
 	const auto durationIdle = targetClip("Goblin_Idle")->duration;
 	while (animTimeIdle_ > durationIdle) {
@@ -275,9 +275,9 @@ void AnimBlenderGoblin::update(Seconds deltaTime, void* pVoidOwner) {
 		tAttack_ = 0.f;
 	}
 
-	// death ¾Ö´Ï¸ŞÀÌ¼ÇÀº °¡Àå ¿ì¼±¼øÀ§°¡ ³ô°Ô °è»êµÈ´Ù.
-	// cooldownDeath_ÀÇ °ªÀÌ 0º¸´Ù Å« µ¿¾ÈÀº ´Ù¸¥ ¾Ö´Ï¸ŞÀÌ¼Ç°ú ÃÖÁ¾ÀûÀ¸·Î ºí·»µùµÇ¸ç
-	// ÆäÀÌµåÀÎÀÌ ÀÌ·ç¾îÁö°í, cooldownDeath_ÀÇ °ªÀÌ 0ÀÌ µÇ¸é ¿ÏÀüÈ÷ 1ÀÇ ºñÀ²À» Â÷ÁöÇÑ´Ù.
+	// death ì• ë‹ˆë©”ì´ì…˜ì€ ê°€ì¥ ìš°ì„ ìˆœìœ„ê°€ ë†’ê²Œ ê³„ì‚°ëœë‹¤.
+	// cooldownDeath_ì˜ ê°’ì´ 0ë³´ë‹¤ í° ë™ì•ˆì€ ë‹¤ë¥¸ ì• ë‹ˆë©”ì´ì…˜ê³¼ ìµœì¢…ì ìœ¼ë¡œ ë¸”ë Œë”©ë˜ë©°
+	// í˜ì´ë“œì¸ì´ ì´ë£¨ì–´ì§€ê³ , cooldownDeath_ì˜ ê°’ì´ 0ì´ ë˜ë©´ ì™„ì „íˆ 1ì˜ ë¹„ìœ¨ì„ ì°¨ì§€í•œë‹¤.
 	if (dead_) {
 		animTimeDeath_ += deltaTime;
 
@@ -290,12 +290,12 @@ void AnimBlenderGoblin::update(Seconds deltaTime, void* pVoidOwner) {
 
 		cooldownDeath_ -= deltaTime;
 	}
-	// hit ¾Ö´Ï¸ŞÀÌ¼Ç ºí·»µù ºñÀ²Àº death ´ÙÀ½À¸·Î °¡Àå ¿ì¼±¼øÀ§°¡ ³ô°Ô °è»êµÈ´Ù.
-	// ´Ù¸¥ ¸ğµç ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ºí·»µù ºñÀ²À» ³·Ãß°í ÃÖ´ë 0.75¸¸Å­ÀÇ ºñÀ²À» Â÷ÁöÇÑ´Ù.
-	// ¸ğµç ºí·»µùÀÌ ÀÏ¾î³­ ÈÄ¿¡ °á°ú ÇÁ·¹ÀÓ°ú hit ¾Ö´Ï¸ŞÀÌ¼Ç ÇÁ·¹ÀÓÀ»
-	// tHit_À¸·Î º¸°£ÇÏ°Ô µÈ´Ù.
+	// hit ì• ë‹ˆë©”ì´ì…˜ ë¸”ë Œë”© ë¹„ìœ¨ì€ death ë‹¤ìŒìœ¼ë¡œ ê°€ì¥ ìš°ì„ ìˆœìœ„ê°€ ë†’ê²Œ ê³„ì‚°ëœë‹¤.
+	// ë‹¤ë¥¸ ëª¨ë“  ì• ë‹ˆë©”ì´ì…˜ì˜ ë¸”ë Œë”© ë¹„ìœ¨ì„ ë‚®ì¶”ê³  ìµœëŒ€ 0.75ë§Œí¼ì˜ ë¹„ìœ¨ì„ ì°¨ì§€í•œë‹¤.
+	// ëª¨ë“  ë¸”ë Œë”©ì´ ì¼ì–´ë‚œ í›„ì— ê²°ê³¼ í”„ë ˆì„ê³¼ hit ì• ë‹ˆë©”ì´ì…˜ í”„ë ˆì„ì„
+	// tHit_ìœ¼ë¡œ ë³´ê°„í•˜ê²Œ ëœë‹¤.
 	else if (cooldownHit_ > 0ms) {
-		// 2¹è¼Ó Àç»ı
+		// 2ë°°ì† ì¬ìƒ
 		animTimeHit_ += deltaTime * 2.f;
 		
 		tHit_ = 0.75f * std::clamp( cooldownHit_ / 600ms, 0.f, 1.f );
@@ -311,9 +311,9 @@ void AnimBlenderGoblin::update(Seconds deltaTime, void* pVoidOwner) {
 }
 
 void AnimBlenderGoblin::onCalcLocal(PassKey<AnimSystem>) {
-	// update¿¡¼­ ±¸ÇÑ ¾Ö´Ï¸ŞÀÌ¼Ç °¡ÁßÄ¡µé·Î ºí·»µùÀ» ¼öÇàÇÑ´Ù.
+	// updateì—ì„œ êµ¬í•œ ì• ë‹ˆë©”ì´ì…˜ ê°€ì¤‘ì¹˜ë“¤ë¡œ ë¸”ë Œë”©ì„ ìˆ˜í–‰í•œë‹¤.
 
-	// °³º° ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ÇÁ·¹ÀÓÀ» ¾÷µ¥ÀÌÆ®ÇÑ´Ù.
+	// ê°œë³„ ì• ë‹ˆë©”ì´ì…˜ì˜ í”„ë ˆì„ì„ ì—…ë°ì´íŠ¸í•œë‹¤.
 	updateFrames("Goblin_Idle", animTimeIdle_);
 	updateFrames("Goblin_Walk", animTimeWalk_);
 	updateFrames("Goblin_Attack", animTimeAttack_);
@@ -327,18 +327,18 @@ void AnimBlenderGoblin::onCalcLocal(PassKey<AnimSystem>) {
 	auto& framesHit = curFrames("Goblin_Hit");
 	auto& framesDeath = curFrames("Goblin_Death");
 
-	// ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ÇÁ·¹ÀÓµéÀ» ºí·»µùÇÑ´Ù.
+	// ì• ë‹ˆë©”ì´ì…˜ì˜ í”„ë ˆì„ë“¤ì„ ë¸”ë Œë”©í•œë‹¤.
 	for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
 		WeightedAnimFrame frames[] = {
 			WeightedAnimFrame{ .frame = framesIdle[i], .w = tIdle_ },
 			WeightedAnimFrame{ .frame = framesWalk[i], .w = tWalk_ }
 		};
 		framesBlended_[i] = sumWeightedAnimFrames(frames);
-		// attack animation º¸°£
+		// attack animation ë³´ê°„
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesAttack[i], tAttack_);
-		// hit animation º¸°£ (nlerp ¾²¸é ÆÈ²ŞÄ¡ ²¿ÀÓ)
+		// hit animation ë³´ê°„ (nlerp ì“°ë©´ íŒ”ê¿ˆì¹˜ ê¼¬ì„)
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i], tHit_);
-		// death animation º¸°£
+		// death animation ë³´ê°„
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i], tDeath_);
 	}
 	std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
@@ -377,32 +377,32 @@ void AnimBlenderAnubis::init(const AssetManager& assetManager) {
 	}
 }
 
-// pOwnerÀÇ ¹°¸® Á¤º¸¿¡ µû¶ó
-// ¾Ö´Ï¸ŞÀÌ¼Ç ºí·»µù »óÅÂ¸¦ °»½ÅÇÑ´Ù.
+// pOwnerì˜ ë¬¼ë¦¬ ì •ë³´ì— ë”°ë¼
+// ì• ë‹ˆë©”ì´ì…˜ ë¸”ë Œë”© ìƒíƒœë¥¼ ê°±ì‹ í•œë‹¤.
 void AnimBlenderAnubis::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
 
-	// °´Ã¼ÀÇ ¼Ó·ÂÀÌ walkThreshold¸¦ ³Ñ´ÂÁö¸¦ ±âÁØÀ¸·Î
-	// walk ¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ÇÊ¿äÇÑÁö idle ¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ÇÊ¿äÇÑÁö ÆÇ´ÜÇÑ´Ù.
-	// walkThreshold¸¦ ºÎµå·´°Ô °¨½Î´Â blendRange¸¦ ¼³Á¤ÇÏ¿©
-	// °´Ã¼ÀÇ ¼Ó·ÂÀÌ blendRange ³»ºÎ¿¡ ÀÖ´Ù¸é 0°ú 1 »çÀÌÀÇ tWalk °ªÀÌ ±¸ÇØÁø´Ù.
-	// walk ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ °¡ÁßÄ¡´Â tWalk, idle ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ °¡ÁßÄ¡´Â 1 - tWalkÀÌ µÈ´Ù.
+	// ê°ì²´ì˜ ì†ë ¥ì´ walkThresholdë¥¼ ë„˜ëŠ”ì§€ë¥¼ ê¸°ì¤€ìœ¼ë¡œ
+	// walk ì• ë‹ˆë©”ì´ì…˜ì´ í•„ìš”í•œì§€ idle ì• ë‹ˆë©”ì´ì…˜ì´ í•„ìš”í•œì§€ íŒë‹¨í•œë‹¤.
+	// walkThresholdë¥¼ ë¶€ë“œëŸ½ê²Œ ê°ì‹¸ëŠ” blendRangeë¥¼ ì„¤ì •í•˜ì—¬
+	// ê°ì²´ì˜ ì†ë ¥ì´ blendRange ë‚´ë¶€ì— ìˆë‹¤ë©´ 0ê³¼ 1 ì‚¬ì´ì˜ tWalk ê°’ì´ êµ¬í•´ì§„ë‹¤.
+	// walk ì• ë‹ˆë©”ì´ì…˜ì˜ ê°€ì¤‘ì¹˜ëŠ” tWalk, idle ì• ë‹ˆë©”ì´ì…˜ì˜ ê°€ì¤‘ì¹˜ëŠ” 1 - tWalkì´ ëœë‹¤.
 	const auto walkThreshold = 0.06f;
 
-	// °´Ã¼ÀÇ ¼Ó·Â ±¸ÇÏ±â
+	// ê°ì²´ì˜ ì†ë ¥ êµ¬í•˜ê¸°
 	const auto speed = pOwner->physicState().evVelocity.len();
 
-	// blendRange ¼³Á¤
+	// blendRange ì„¤ì •
 	const auto walkBlendRangeStart = walkThreshold - 0.03f;
 	const auto walkBlendRangeEnd = walkThreshold + 3.f;
-	// tWalk ±¸ÇÏ±â
+	// tWalk êµ¬í•˜ê¸°
 	tWalk_ = std::clamp( (speed - walkBlendRangeStart) / (walkBlendRangeEnd - walkBlendRangeStart), 0.f, 1.f );
 
-	// tIdle ±¸ÇÏ±â
+	// tIdle êµ¬í•˜ê¸°
 	tIdle_ = 1.f - tWalk_;
 
-	// Idle ¾Ö´Ï¸ŞÀÌ¼ÇµéÀº ±×³É °è¼Ó µ¹¸°´Ù.
-	// µüÈ÷ ¸ØÃßÁö ¾Ê¾Æµµ ºÎÀÚ¿¬½º·´Áø ¾Ê´Ù.
+	// Idle ì• ë‹ˆë©”ì´ì…˜ë“¤ì€ ê·¸ëƒ¥ ê³„ì† ëŒë¦°ë‹¤.
+	// ë”±íˆ ë©ˆì¶”ì§€ ì•Šì•„ë„ ë¶€ìì—°ìŠ¤ëŸ½ì§„ ì•Šë‹¤.
 	animTimeIdle_ += deltaTime;
 	const auto durationIdle = targetClip("Anubis_Idle")->duration;
 	while (animTimeIdle_ > durationIdle) {
@@ -422,9 +422,9 @@ void AnimBlenderAnubis::update(Seconds deltaTime, void* pVoidOwner) {
 		tAttack_ = 0.f;
 	}
 
-	// death ¾Ö´Ï¸ŞÀÌ¼ÇÀº °¡Àå ¿ì¼±¼øÀ§°¡ ³ô°Ô °è»êµÈ´Ù.
-	// cooldownDeath_ÀÇ °ªÀÌ 0º¸´Ù Å« µ¿¾ÈÀº ´Ù¸¥ ¾Ö´Ï¸ŞÀÌ¼Ç°ú ÃÖÁ¾ÀûÀ¸·Î ºí·»µùµÇ¸ç
-	// ÆäÀÌµåÀÎÀÌ ÀÌ·ç¾îÁö°í, cooldownDeath_ÀÇ °ªÀÌ 0ÀÌ µÇ¸é ¿ÏÀüÈ÷ 1ÀÇ ºñÀ²À» Â÷ÁöÇÑ´Ù.
+	// death ì• ë‹ˆë©”ì´ì…˜ì€ ê°€ì¥ ìš°ì„ ìˆœìœ„ê°€ ë†’ê²Œ ê³„ì‚°ëœë‹¤.
+	// cooldownDeath_ì˜ ê°’ì´ 0ë³´ë‹¤ í° ë™ì•ˆì€ ë‹¤ë¥¸ ì• ë‹ˆë©”ì´ì…˜ê³¼ ìµœì¢…ì ìœ¼ë¡œ ë¸”ë Œë”©ë˜ë©°
+	// í˜ì´ë“œì¸ì´ ì´ë£¨ì–´ì§€ê³ , cooldownDeath_ì˜ ê°’ì´ 0ì´ ë˜ë©´ ì™„ì „íˆ 1ì˜ ë¹„ìœ¨ì„ ì°¨ì§€í•œë‹¤.
 	if (dead_) {
 		animTimeDeath_ += deltaTime;
 
@@ -437,12 +437,12 @@ void AnimBlenderAnubis::update(Seconds deltaTime, void* pVoidOwner) {
 
 		cooldownDeath_ -= deltaTime;
 	}
-	// hit ¾Ö´Ï¸ŞÀÌ¼Ç ºí·»µù ºñÀ²Àº death ´ÙÀ½À¸·Î °¡Àå ¿ì¼±¼øÀ§°¡ ³ô°Ô °è»êµÈ´Ù.
-	// ´Ù¸¥ ¸ğµç ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ºí·»µù ºñÀ²À» ³·Ãß°í ÃÖ´ë 0.75¸¸Å­ÀÇ ºñÀ²À» Â÷ÁöÇÑ´Ù.
-	// ¸ğµç ºí·»µùÀÌ ÀÏ¾î³­ ÈÄ¿¡ °á°ú ÇÁ·¹ÀÓ°ú hit ¾Ö´Ï¸ŞÀÌ¼Ç ÇÁ·¹ÀÓÀ»
-	// tHit_À¸·Î º¸°£ÇÏ°Ô µÈ´Ù.
+	// hit ì• ë‹ˆë©”ì´ì…˜ ë¸”ë Œë”© ë¹„ìœ¨ì€ death ë‹¤ìŒìœ¼ë¡œ ê°€ì¥ ìš°ì„ ìˆœìœ„ê°€ ë†’ê²Œ ê³„ì‚°ëœë‹¤.
+	// ë‹¤ë¥¸ ëª¨ë“  ì• ë‹ˆë©”ì´ì…˜ì˜ ë¸”ë Œë”© ë¹„ìœ¨ì„ ë‚®ì¶”ê³  ìµœëŒ€ 0.75ë§Œí¼ì˜ ë¹„ìœ¨ì„ ì°¨ì§€í•œë‹¤.
+	// ëª¨ë“  ë¸”ë Œë”©ì´ ì¼ì–´ë‚œ í›„ì— ê²°ê³¼ í”„ë ˆì„ê³¼ hit ì• ë‹ˆë©”ì´ì…˜ í”„ë ˆì„ì„
+	// tHit_ìœ¼ë¡œ ë³´ê°„í•˜ê²Œ ëœë‹¤.
 	else if (cooldownHit_ > 0ms) {
-		// 2¹è¼Ó Àç»ı
+		// 2ë°°ì† ì¬ìƒ
 		animTimeHit_ += deltaTime * 2.f;
 		
 		tHit_ = 0.75f * std::clamp( cooldownHit_ / 600ms, 0.f, 1.f );
@@ -458,9 +458,9 @@ void AnimBlenderAnubis::update(Seconds deltaTime, void* pVoidOwner) {
 }
 
 void AnimBlenderAnubis::onCalcLocal(PassKey<AnimSystem>) {
-	// update¿¡¼­ ±¸ÇÑ ¾Ö´Ï¸ŞÀÌ¼Ç °¡ÁßÄ¡µé·Î ºí·»µùÀ» ¼öÇàÇÑ´Ù.
+	// updateì—ì„œ êµ¬í•œ ì• ë‹ˆë©”ì´ì…˜ ê°€ì¤‘ì¹˜ë“¤ë¡œ ë¸”ë Œë”©ì„ ìˆ˜í–‰í•œë‹¤.
 
-	// °³º° ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ÇÁ·¹ÀÓÀ» ¾÷µ¥ÀÌÆ®ÇÑ´Ù.
+	// ê°œë³„ ì• ë‹ˆë©”ì´ì…˜ì˜ í”„ë ˆì„ì„ ì—…ë°ì´íŠ¸í•œë‹¤.
 	updateFrames("Anubis_Idle", animTimeIdle_);
 	updateFrames("Anubis_Walk", animTimeWalk_);
 	updateFrames("Anubis_Attack", animTimeAttack_);
@@ -474,18 +474,18 @@ void AnimBlenderAnubis::onCalcLocal(PassKey<AnimSystem>) {
 	auto& framesHit = curFrames("Anubis_Hit");
 	auto& framesDeath = curFrames("Anubis_Death");
 
-	// ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ÇÁ·¹ÀÓµéÀ» ºí·»µùÇÑ´Ù.
+	// ì• ë‹ˆë©”ì´ì…˜ì˜ í”„ë ˆì„ë“¤ì„ ë¸”ë Œë”©í•œë‹¤.
 	for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
 		WeightedAnimFrame frames[] = {
 			WeightedAnimFrame{ .frame = framesIdle[i], .w = tIdle_ },
 			WeightedAnimFrame{ .frame = framesWalk[i], .w = tWalk_ }
 		};
 		framesBlended_[i] = sumWeightedAnimFrames(frames);
-		// attack animation º¸°£
+		// attack animation ë³´ê°„
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesAttack[i], tAttack_);
-		// hit animation º¸°£ (nlerp ¾²¸é ÆÈ²ŞÄ¡ ²¿ÀÓ)
+		// hit animation ë³´ê°„ (nlerp ì“°ë©´ íŒ”ê¿ˆì¹˜ ê¼¬ì„)
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i], tHit_);
-		// death animation º¸°£
+		// death animation ë³´ê°„
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i], tDeath_);
 	}
 	std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
@@ -524,32 +524,32 @@ void AnimBlenderBat::init(const AssetManager& assetManager) {
 	}
 }
 
-// pOwnerÀÇ ¹°¸® Á¤º¸¿¡ µû¶ó
-// ¾Ö´Ï¸ŞÀÌ¼Ç ºí·»µù »óÅÂ¸¦ °»½ÅÇÑ´Ù.
+// pOwnerì˜ ë¬¼ë¦¬ ì •ë³´ì— ë”°ë¼
+// ì• ë‹ˆë©”ì´ì…˜ ë¸”ë Œë”© ìƒíƒœë¥¼ ê°±ì‹ í•œë‹¤.
 void AnimBlenderBat::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
 
-	// °´Ã¼ÀÇ ¼Ó·ÂÀÌ walkThreshold¸¦ ³Ñ´ÂÁö¸¦ ±âÁØÀ¸·Î
-	// walk ¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ÇÊ¿äÇÑÁö idle ¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ÇÊ¿äÇÑÁö ÆÇ´ÜÇÑ´Ù.
-	// walkThreshold¸¦ ºÎµå·´°Ô °¨½Î´Â blendRange¸¦ ¼³Á¤ÇÏ¿©
-	// °´Ã¼ÀÇ ¼Ó·ÂÀÌ blendRange ³»ºÎ¿¡ ÀÖ´Ù¸é 0°ú 1 »çÀÌÀÇ tWalk °ªÀÌ ±¸ÇØÁø´Ù.
-	// walk ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ °¡ÁßÄ¡´Â tWalk, idle ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ °¡ÁßÄ¡´Â 1 - tWalkÀÌ µÈ´Ù.
+	// ê°ì²´ì˜ ì†ë ¥ì´ walkThresholdë¥¼ ë„˜ëŠ”ì§€ë¥¼ ê¸°ì¤€ìœ¼ë¡œ
+	// walk ì• ë‹ˆë©”ì´ì…˜ì´ í•„ìš”í•œì§€ idle ì• ë‹ˆë©”ì´ì…˜ì´ í•„ìš”í•œì§€ íŒë‹¨í•œë‹¤.
+	// walkThresholdë¥¼ ë¶€ë“œëŸ½ê²Œ ê°ì‹¸ëŠ” blendRangeë¥¼ ì„¤ì •í•˜ì—¬
+	// ê°ì²´ì˜ ì†ë ¥ì´ blendRange ë‚´ë¶€ì— ìˆë‹¤ë©´ 0ê³¼ 1 ì‚¬ì´ì˜ tWalk ê°’ì´ êµ¬í•´ì§„ë‹¤.
+	// walk ì• ë‹ˆë©”ì´ì…˜ì˜ ê°€ì¤‘ì¹˜ëŠ” tWalk, idle ì• ë‹ˆë©”ì´ì…˜ì˜ ê°€ì¤‘ì¹˜ëŠ” 1 - tWalkì´ ëœë‹¤.
 	const auto walkThreshold = 0.06f;
 
-	// °´Ã¼ÀÇ ¼Ó·Â ±¸ÇÏ±â
+	// ê°ì²´ì˜ ì†ë ¥ êµ¬í•˜ê¸°
 	const auto speed = pOwner->physicState().evVelocity.len();
 
-	// blendRange ¼³Á¤
+	// blendRange ì„¤ì •
 	const auto walkBlendRangeStart = walkThreshold - 0.03f;
 	const auto walkBlendRangeEnd = walkThreshold + 3.f;
-	// tWalk ±¸ÇÏ±â
+	// tWalk êµ¬í•˜ê¸°
 	tWalk_ = std::clamp( (speed - walkBlendRangeStart) / (walkBlendRangeEnd - walkBlendRangeStart), 0.f, 1.f );
 
-	// tIdle ±¸ÇÏ±â
+	// tIdle êµ¬í•˜ê¸°
 	tIdle_ = 1.f - tWalk_;
 
-	// Idle ¾Ö´Ï¸ŞÀÌ¼ÇµéÀº ±×³É °è¼Ó µ¹¸°´Ù.
-	// µüÈ÷ ¸ØÃßÁö ¾Ê¾Æµµ ºÎÀÚ¿¬½º·´Áø ¾Ê´Ù.
+	// Idle ì• ë‹ˆë©”ì´ì…˜ë“¤ì€ ê·¸ëƒ¥ ê³„ì† ëŒë¦°ë‹¤.
+	// ë”±íˆ ë©ˆì¶”ì§€ ì•Šì•„ë„ ë¶€ìì—°ìŠ¤ëŸ½ì§„ ì•Šë‹¤.
 	animTimeIdle_ += deltaTime;
 	const auto durationIdle = targetClip("Bat_Idle")->duration;
 	while (animTimeIdle_ > durationIdle) {
@@ -569,9 +569,9 @@ void AnimBlenderBat::update(Seconds deltaTime, void* pVoidOwner) {
 		tAttack_ = 0.f;
 	}
 
-	// death ¾Ö´Ï¸ŞÀÌ¼ÇÀº °¡Àå ¿ì¼±¼øÀ§°¡ ³ô°Ô °è»êµÈ´Ù.
-	// cooldownDeath_ÀÇ °ªÀÌ 0º¸´Ù Å« µ¿¾ÈÀº ´Ù¸¥ ¾Ö´Ï¸ŞÀÌ¼Ç°ú ÃÖÁ¾ÀûÀ¸·Î ºí·»µùµÇ¸ç
-	// ÆäÀÌµåÀÎÀÌ ÀÌ·ç¾îÁö°í, cooldownDeath_ÀÇ °ªÀÌ 0ÀÌ µÇ¸é ¿ÏÀüÈ÷ 1ÀÇ ºñÀ²À» Â÷ÁöÇÑ´Ù.
+	// death ì• ë‹ˆë©”ì´ì…˜ì€ ê°€ì¥ ìš°ì„ ìˆœìœ„ê°€ ë†’ê²Œ ê³„ì‚°ëœë‹¤.
+	// cooldownDeath_ì˜ ê°’ì´ 0ë³´ë‹¤ í° ë™ì•ˆì€ ë‹¤ë¥¸ ì• ë‹ˆë©”ì´ì…˜ê³¼ ìµœì¢…ì ìœ¼ë¡œ ë¸”ë Œë”©ë˜ë©°
+	// í˜ì´ë“œì¸ì´ ì´ë£¨ì–´ì§€ê³ , cooldownDeath_ì˜ ê°’ì´ 0ì´ ë˜ë©´ ì™„ì „íˆ 1ì˜ ë¹„ìœ¨ì„ ì°¨ì§€í•œë‹¤.
 	if (dead_) {
 		animTimeDeath_ += deltaTime;
 
@@ -584,12 +584,12 @@ void AnimBlenderBat::update(Seconds deltaTime, void* pVoidOwner) {
 
 		cooldownDeath_ -= deltaTime;
 	}
-	// hit ¾Ö´Ï¸ŞÀÌ¼Ç ºí·»µù ºñÀ²Àº death ´ÙÀ½À¸·Î °¡Àå ¿ì¼±¼øÀ§°¡ ³ô°Ô °è»êµÈ´Ù.
-	// ´Ù¸¥ ¸ğµç ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ºí·»µù ºñÀ²À» ³·Ãß°í ÃÖ´ë 0.75¸¸Å­ÀÇ ºñÀ²À» Â÷ÁöÇÑ´Ù.
-	// ¸ğµç ºí·»µùÀÌ ÀÏ¾î³­ ÈÄ¿¡ °á°ú ÇÁ·¹ÀÓ°ú hit ¾Ö´Ï¸ŞÀÌ¼Ç ÇÁ·¹ÀÓÀ»
-	// tHit_À¸·Î º¸°£ÇÏ°Ô µÈ´Ù.
+	// hit ì• ë‹ˆë©”ì´ì…˜ ë¸”ë Œë”© ë¹„ìœ¨ì€ death ë‹¤ìŒìœ¼ë¡œ ê°€ì¥ ìš°ì„ ìˆœìœ„ê°€ ë†’ê²Œ ê³„ì‚°ëœë‹¤.
+	// ë‹¤ë¥¸ ëª¨ë“  ì• ë‹ˆë©”ì´ì…˜ì˜ ë¸”ë Œë”© ë¹„ìœ¨ì„ ë‚®ì¶”ê³  ìµœëŒ€ 0.75ë§Œí¼ì˜ ë¹„ìœ¨ì„ ì°¨ì§€í•œë‹¤.
+	// ëª¨ë“  ë¸”ë Œë”©ì´ ì¼ì–´ë‚œ í›„ì— ê²°ê³¼ í”„ë ˆì„ê³¼ hit ì• ë‹ˆë©”ì´ì…˜ í”„ë ˆì„ì„
+	// tHit_ìœ¼ë¡œ ë³´ê°„í•˜ê²Œ ëœë‹¤.
 	else if (cooldownHit_ > 0ms) {
-		// 2¹è¼Ó Àç»ı
+		// 2ë°°ì† ì¬ìƒ
 		animTimeHit_ += deltaTime * 2.f;
 		
 		tHit_ = 0.75f * std::clamp( cooldownHit_ / 600ms, 0.f, 1.f );
@@ -605,9 +605,9 @@ void AnimBlenderBat::update(Seconds deltaTime, void* pVoidOwner) {
 }
 
 void AnimBlenderBat::onCalcLocal(PassKey<AnimSystem>) {
-	// update¿¡¼­ ±¸ÇÑ ¾Ö´Ï¸ŞÀÌ¼Ç °¡ÁßÄ¡µé·Î ºí·»µùÀ» ¼öÇàÇÑ´Ù.
+	// updateì—ì„œ êµ¬í•œ ì• ë‹ˆë©”ì´ì…˜ ê°€ì¤‘ì¹˜ë“¤ë¡œ ë¸”ë Œë”©ì„ ìˆ˜í–‰í•œë‹¤.
 
-	// °³º° ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ÇÁ·¹ÀÓÀ» ¾÷µ¥ÀÌÆ®ÇÑ´Ù.
+	// ê°œë³„ ì• ë‹ˆë©”ì´ì…˜ì˜ í”„ë ˆì„ì„ ì—…ë°ì´íŠ¸í•œë‹¤.
 	updateFrames("Bat_Idle", animTimeIdle_);
 	updateFrames("Bat_Fly", animTimeWalk_);
 	updateFrames("Bat_Attack", animTimeAttack_);
@@ -621,18 +621,18 @@ void AnimBlenderBat::onCalcLocal(PassKey<AnimSystem>) {
 	auto& framesHit = curFrames("Bat_Hit");
 	auto& framesDeath = curFrames("Bat_Death");
 
-	// ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ÇÁ·¹ÀÓµéÀ» ºí·»µùÇÑ´Ù.
+	// ì• ë‹ˆë©”ì´ì…˜ì˜ í”„ë ˆì„ë“¤ì„ ë¸”ë Œë”©í•œë‹¤.
 	for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
 		WeightedAnimFrame frames[] = {
 			WeightedAnimFrame{ .frame = framesIdle[i], .w = tIdle_ },
 			WeightedAnimFrame{ .frame = framesWalk[i], .w = tWalk_ }
 		};
 		framesBlended_[i] = sumWeightedAnimFrames(frames);
-		// attack animation º¸°£
+		// attack animation ë³´ê°„
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesAttack[i], tAttack_);
-		// hit animation º¸°£ (nlerp ¾²¸é ÆÈ²ŞÄ¡ ²¿ÀÓ)
+		// hit animation ë³´ê°„ (nlerp ì“°ë©´ íŒ”ê¿ˆì¹˜ ê¼¬ì„)
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i], tHit_);
-		// death animation º¸°£
+		// death animation ë³´ê°„
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i], tDeath_);
 	}
 	std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
@@ -671,32 +671,32 @@ void AnimBlenderBomber::init(const AssetManager& assetManager) {
 	}
 }
 
-// pOwnerÀÇ ¹°¸® Á¤º¸¿¡ µû¶ó
-// ¾Ö´Ï¸ŞÀÌ¼Ç ºí·»µù »óÅÂ¸¦ °»½ÅÇÑ´Ù.
+// pOwnerì˜ ë¬¼ë¦¬ ì •ë³´ì— ë”°ë¼
+// ì• ë‹ˆë©”ì´ì…˜ ë¸”ë Œë”© ìƒíƒœë¥¼ ê°±ì‹ í•œë‹¤.
 void AnimBlenderBomber::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
 
-	// °´Ã¼ÀÇ ¼Ó·ÂÀÌ walkThreshold¸¦ ³Ñ´ÂÁö¸¦ ±âÁØÀ¸·Î
-	// walk ¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ÇÊ¿äÇÑÁö idle ¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ÇÊ¿äÇÑÁö ÆÇ´ÜÇÑ´Ù.
-	// walkThreshold¸¦ ºÎµå·´°Ô °¨½Î´Â blendRange¸¦ ¼³Á¤ÇÏ¿©
-	// °´Ã¼ÀÇ ¼Ó·ÂÀÌ blendRange ³»ºÎ¿¡ ÀÖ´Ù¸é 0°ú 1 »çÀÌÀÇ tWalk °ªÀÌ ±¸ÇØÁø´Ù.
-	// walk ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ °¡ÁßÄ¡´Â tWalk, idle ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ °¡ÁßÄ¡´Â 1 - tWalkÀÌ µÈ´Ù.
+	// ê°ì²´ì˜ ì†ë ¥ì´ walkThresholdë¥¼ ë„˜ëŠ”ì§€ë¥¼ ê¸°ì¤€ìœ¼ë¡œ
+	// walk ì• ë‹ˆë©”ì´ì…˜ì´ í•„ìš”í•œì§€ idle ì• ë‹ˆë©”ì´ì…˜ì´ í•„ìš”í•œì§€ íŒë‹¨í•œë‹¤.
+	// walkThresholdë¥¼ ë¶€ë“œëŸ½ê²Œ ê°ì‹¸ëŠ” blendRangeë¥¼ ì„¤ì •í•˜ì—¬
+	// ê°ì²´ì˜ ì†ë ¥ì´ blendRange ë‚´ë¶€ì— ìˆë‹¤ë©´ 0ê³¼ 1 ì‚¬ì´ì˜ tWalk ê°’ì´ êµ¬í•´ì§„ë‹¤.
+	// walk ì• ë‹ˆë©”ì´ì…˜ì˜ ê°€ì¤‘ì¹˜ëŠ” tWalk, idle ì• ë‹ˆë©”ì´ì…˜ì˜ ê°€ì¤‘ì¹˜ëŠ” 1 - tWalkì´ ëœë‹¤.
 	const auto walkThreshold = 0.06f;
 
-	// °´Ã¼ÀÇ ¼Ó·Â ±¸ÇÏ±â
+	// ê°ì²´ì˜ ì†ë ¥ êµ¬í•˜ê¸°
 	const auto speed = pOwner->physicState().evVelocity.len();
 
-	// blendRange ¼³Á¤
+	// blendRange ì„¤ì •
 	const auto walkBlendRangeStart = walkThreshold - 0.03f;
 	const auto walkBlendRangeEnd = walkThreshold + 3.f;
-	// tWalk ±¸ÇÏ±â
+	// tWalk êµ¬í•˜ê¸°
 	tWalk_ = std::clamp( (speed - walkBlendRangeStart) / (walkBlendRangeEnd - walkBlendRangeStart), 0.f, 1.f );
 
-	// tIdle ±¸ÇÏ±â
+	// tIdle êµ¬í•˜ê¸°
 	tIdle_ = 1.f - tWalk_;
 
-	// Idle ¾Ö´Ï¸ŞÀÌ¼ÇµéÀº ±×³É °è¼Ó µ¹¸°´Ù.
-	// µüÈ÷ ¸ØÃßÁö ¾Ê¾Æµµ ºÎÀÚ¿¬½º·´Áø ¾Ê´Ù.
+	// Idle ì• ë‹ˆë©”ì´ì…˜ë“¤ì€ ê·¸ëƒ¥ ê³„ì† ëŒë¦°ë‹¤.
+	// ë”±íˆ ë©ˆì¶”ì§€ ì•Šì•„ë„ ë¶€ìì—°ìŠ¤ëŸ½ì§„ ì•Šë‹¤.
 	animTimeIdle_ += deltaTime;
 	const auto durationIdle = targetClip("Bomber_Idle")->duration;
 	while (animTimeIdle_ > durationIdle) {
@@ -716,9 +716,9 @@ void AnimBlenderBomber::update(Seconds deltaTime, void* pVoidOwner) {
 		tAttack_ = 0.f;
 	}
 
-	// death ¾Ö´Ï¸ŞÀÌ¼ÇÀº °¡Àå ¿ì¼±¼øÀ§°¡ ³ô°Ô °è»êµÈ´Ù.
-	// cooldownDeath_ÀÇ °ªÀÌ 0º¸´Ù Å« µ¿¾ÈÀº ´Ù¸¥ ¾Ö´Ï¸ŞÀÌ¼Ç°ú ÃÖÁ¾ÀûÀ¸·Î ºí·»µùµÇ¸ç
-	// ÆäÀÌµåÀÎÀÌ ÀÌ·ç¾îÁö°í, cooldownDeath_ÀÇ °ªÀÌ 0ÀÌ µÇ¸é ¿ÏÀüÈ÷ 1ÀÇ ºñÀ²À» Â÷ÁöÇÑ´Ù.
+	// death ì• ë‹ˆë©”ì´ì…˜ì€ ê°€ì¥ ìš°ì„ ìˆœìœ„ê°€ ë†’ê²Œ ê³„ì‚°ëœë‹¤.
+	// cooldownDeath_ì˜ ê°’ì´ 0ë³´ë‹¤ í° ë™ì•ˆì€ ë‹¤ë¥¸ ì• ë‹ˆë©”ì´ì…˜ê³¼ ìµœì¢…ì ìœ¼ë¡œ ë¸”ë Œë”©ë˜ë©°
+	// í˜ì´ë“œì¸ì´ ì´ë£¨ì–´ì§€ê³ , cooldownDeath_ì˜ ê°’ì´ 0ì´ ë˜ë©´ ì™„ì „íˆ 1ì˜ ë¹„ìœ¨ì„ ì°¨ì§€í•œë‹¤.
 	if (dead_) {
 		animTimeDeath_ += deltaTime;
 
@@ -731,12 +731,12 @@ void AnimBlenderBomber::update(Seconds deltaTime, void* pVoidOwner) {
 
 		cooldownDeath_ -= deltaTime;
 	}
-	// hit ¾Ö´Ï¸ŞÀÌ¼Ç ºí·»µù ºñÀ²Àº death ´ÙÀ½À¸·Î °¡Àå ¿ì¼±¼øÀ§°¡ ³ô°Ô °è»êµÈ´Ù.
-	// ´Ù¸¥ ¸ğµç ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ºí·»µù ºñÀ²À» ³·Ãß°í ÃÖ´ë 0.75¸¸Å­ÀÇ ºñÀ²À» Â÷ÁöÇÑ´Ù.
-	// ¸ğµç ºí·»µùÀÌ ÀÏ¾î³­ ÈÄ¿¡ °á°ú ÇÁ·¹ÀÓ°ú hit ¾Ö´Ï¸ŞÀÌ¼Ç ÇÁ·¹ÀÓÀ»
-	// tHit_À¸·Î º¸°£ÇÏ°Ô µÈ´Ù.
+	// hit ì• ë‹ˆë©”ì´ì…˜ ë¸”ë Œë”© ë¹„ìœ¨ì€ death ë‹¤ìŒìœ¼ë¡œ ê°€ì¥ ìš°ì„ ìˆœìœ„ê°€ ë†’ê²Œ ê³„ì‚°ëœë‹¤.
+	// ë‹¤ë¥¸ ëª¨ë“  ì• ë‹ˆë©”ì´ì…˜ì˜ ë¸”ë Œë”© ë¹„ìœ¨ì„ ë‚®ì¶”ê³  ìµœëŒ€ 0.75ë§Œí¼ì˜ ë¹„ìœ¨ì„ ì°¨ì§€í•œë‹¤.
+	// ëª¨ë“  ë¸”ë Œë”©ì´ ì¼ì–´ë‚œ í›„ì— ê²°ê³¼ í”„ë ˆì„ê³¼ hit ì• ë‹ˆë©”ì´ì…˜ í”„ë ˆì„ì„
+	// tHit_ìœ¼ë¡œ ë³´ê°„í•˜ê²Œ ëœë‹¤.
 	else if (cooldownHit_ > 0ms) {
-		// 2¹è¼Ó Àç»ı
+		// 2ë°°ì† ì¬ìƒ
 		animTimeHit_ += deltaTime * 2.f;
 		
 		tHit_ = 0.75f * std::clamp( cooldownHit_ / 600ms, 0.f, 1.f );
@@ -752,9 +752,9 @@ void AnimBlenderBomber::update(Seconds deltaTime, void* pVoidOwner) {
 }
 
 void AnimBlenderBomber::onCalcLocal(PassKey<AnimSystem>) {
-	// update¿¡¼­ ±¸ÇÑ ¾Ö´Ï¸ŞÀÌ¼Ç °¡ÁßÄ¡µé·Î ºí·»µùÀ» ¼öÇàÇÑ´Ù.
+	// updateì—ì„œ êµ¬í•œ ì• ë‹ˆë©”ì´ì…˜ ê°€ì¤‘ì¹˜ë“¤ë¡œ ë¸”ë Œë”©ì„ ìˆ˜í–‰í•œë‹¤.
 
-	// °³º° ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ÇÁ·¹ÀÓÀ» ¾÷µ¥ÀÌÆ®ÇÑ´Ù.
+	// ê°œë³„ ì• ë‹ˆë©”ì´ì…˜ì˜ í”„ë ˆì„ì„ ì—…ë°ì´íŠ¸í•œë‹¤.
 	updateFrames("Bomber_Idle", animTimeIdle_);
 	updateFrames("Bomber_Fly", animTimeWalk_);
 	updateFrames("Bomber_Attack", animTimeAttack_);
@@ -768,18 +768,18 @@ void AnimBlenderBomber::onCalcLocal(PassKey<AnimSystem>) {
 	auto& framesHit = curFrames("Bomber_Hit");
 	auto& framesDeath = curFrames("Bomber_Death");
 
-	// ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ÇÁ·¹ÀÓµéÀ» ºí·»µùÇÑ´Ù.
+	// ì• ë‹ˆë©”ì´ì…˜ì˜ í”„ë ˆì„ë“¤ì„ ë¸”ë Œë”©í•œë‹¤.
 	for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
 		WeightedAnimFrame frames[] = {
 			WeightedAnimFrame{ .frame = framesIdle[i], .w = tIdle_ },
 			WeightedAnimFrame{ .frame = framesWalk[i], .w = tWalk_ }
 		};
 		framesBlended_[i] = sumWeightedAnimFrames(frames);
-		// attack animation º¸°£
+		// attack animation ë³´ê°„
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesAttack[i], tAttack_);
-		// hit animation º¸°£ (nlerp ¾²¸é ÆÈ²ŞÄ¡ ²¿ÀÓ)
+		// hit animation ë³´ê°„ (nlerp ì“°ë©´ íŒ”ê¿ˆì¹˜ ê¼¬ì„)
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i], tHit_);
-		// death animation º¸°£
+		// death animation ë³´ê°„
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i], tDeath_);
 	}
 	std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
@@ -818,32 +818,32 @@ void AnimBlenderDemon::init(const AssetManager& assetManager) {
 	}
 }
 
-// pOwnerÀÇ ¹°¸® Á¤º¸¿¡ µû¶ó
-// ¾Ö´Ï¸ŞÀÌ¼Ç ºí·»µù »óÅÂ¸¦ °»½ÅÇÑ´Ù.
+// pOwnerì˜ ë¬¼ë¦¬ ì •ë³´ì— ë”°ë¼
+// ì• ë‹ˆë©”ì´ì…˜ ë¸”ë Œë”© ìƒíƒœë¥¼ ê°±ì‹ í•œë‹¤.
 void AnimBlenderDemon::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
 
-	// °´Ã¼ÀÇ ¼Ó·ÂÀÌ walkThreshold¸¦ ³Ñ´ÂÁö¸¦ ±âÁØÀ¸·Î
-	// walk ¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ÇÊ¿äÇÑÁö idle ¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ÇÊ¿äÇÑÁö ÆÇ´ÜÇÑ´Ù.
-	// walkThreshold¸¦ ºÎµå·´°Ô °¨½Î´Â blendRange¸¦ ¼³Á¤ÇÏ¿©
-	// °´Ã¼ÀÇ ¼Ó·ÂÀÌ blendRange ³»ºÎ¿¡ ÀÖ´Ù¸é 0°ú 1 »çÀÌÀÇ tWalk °ªÀÌ ±¸ÇØÁø´Ù.
-	// walk ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ °¡ÁßÄ¡´Â tWalk, idle ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ °¡ÁßÄ¡´Â 1 - tWalkÀÌ µÈ´Ù.
+	// ê°ì²´ì˜ ì†ë ¥ì´ walkThresholdë¥¼ ë„˜ëŠ”ì§€ë¥¼ ê¸°ì¤€ìœ¼ë¡œ
+	// walk ì• ë‹ˆë©”ì´ì…˜ì´ í•„ìš”í•œì§€ idle ì• ë‹ˆë©”ì´ì…˜ì´ í•„ìš”í•œì§€ íŒë‹¨í•œë‹¤.
+	// walkThresholdë¥¼ ë¶€ë“œëŸ½ê²Œ ê°ì‹¸ëŠ” blendRangeë¥¼ ì„¤ì •í•˜ì—¬
+	// ê°ì²´ì˜ ì†ë ¥ì´ blendRange ë‚´ë¶€ì— ìˆë‹¤ë©´ 0ê³¼ 1 ì‚¬ì´ì˜ tWalk ê°’ì´ êµ¬í•´ì§„ë‹¤.
+	// walk ì• ë‹ˆë©”ì´ì…˜ì˜ ê°€ì¤‘ì¹˜ëŠ” tWalk, idle ì• ë‹ˆë©”ì´ì…˜ì˜ ê°€ì¤‘ì¹˜ëŠ” 1 - tWalkì´ ëœë‹¤.
 	const auto walkThreshold = 0.06f;
 
-	// °´Ã¼ÀÇ ¼Ó·Â ±¸ÇÏ±â
+	// ê°ì²´ì˜ ì†ë ¥ êµ¬í•˜ê¸°
 	const auto speed = pOwner->physicState().evVelocity.len();
 
-	// blendRange ¼³Á¤
+	// blendRange ì„¤ì •
 	const auto walkBlendRangeStart = walkThreshold - 0.03f;
 	const auto walkBlendRangeEnd = walkThreshold + 3.f;
-	// tWalk ±¸ÇÏ±â
+	// tWalk êµ¬í•˜ê¸°
 	tWalk_ = std::clamp( (speed - walkBlendRangeStart) / (walkBlendRangeEnd - walkBlendRangeStart), 0.f, 1.f );
 
-	// tIdle ±¸ÇÏ±â
+	// tIdle êµ¬í•˜ê¸°
 	tIdle_ = 1.f - tWalk_;
 
-	// Idle ¾Ö´Ï¸ŞÀÌ¼ÇµéÀº ±×³É °è¼Ó µ¹¸°´Ù.
-	// µüÈ÷ ¸ØÃßÁö ¾Ê¾Æµµ ºÎÀÚ¿¬½º·´Áø ¾Ê´Ù.
+	// Idle ì• ë‹ˆë©”ì´ì…˜ë“¤ì€ ê·¸ëƒ¥ ê³„ì† ëŒë¦°ë‹¤.
+	// ë”±íˆ ë©ˆì¶”ì§€ ì•Šì•„ë„ ë¶€ìì—°ìŠ¤ëŸ½ì§„ ì•Šë‹¤.
 	animTimeIdle_ += deltaTime;
 	const auto durationIdle = targetClip("Demon_Idle")->duration;
 	while (animTimeIdle_ > durationIdle) {
@@ -863,9 +863,9 @@ void AnimBlenderDemon::update(Seconds deltaTime, void* pVoidOwner) {
 		tAttack_ = 0.f;
 	}
 
-	// death ¾Ö´Ï¸ŞÀÌ¼ÇÀº °¡Àå ¿ì¼±¼øÀ§°¡ ³ô°Ô °è»êµÈ´Ù.
-	// cooldownDeath_ÀÇ °ªÀÌ 0º¸´Ù Å« µ¿¾ÈÀº ´Ù¸¥ ¾Ö´Ï¸ŞÀÌ¼Ç°ú ÃÖÁ¾ÀûÀ¸·Î ºí·»µùµÇ¸ç
-	// ÆäÀÌµåÀÎÀÌ ÀÌ·ç¾îÁö°í, cooldownDeath_ÀÇ °ªÀÌ 0ÀÌ µÇ¸é ¿ÏÀüÈ÷ 1ÀÇ ºñÀ²À» Â÷ÁöÇÑ´Ù.
+	// death ì• ë‹ˆë©”ì´ì…˜ì€ ê°€ì¥ ìš°ì„ ìˆœìœ„ê°€ ë†’ê²Œ ê³„ì‚°ëœë‹¤.
+	// cooldownDeath_ì˜ ê°’ì´ 0ë³´ë‹¤ í° ë™ì•ˆì€ ë‹¤ë¥¸ ì• ë‹ˆë©”ì´ì…˜ê³¼ ìµœì¢…ì ìœ¼ë¡œ ë¸”ë Œë”©ë˜ë©°
+	// í˜ì´ë“œì¸ì´ ì´ë£¨ì–´ì§€ê³ , cooldownDeath_ì˜ ê°’ì´ 0ì´ ë˜ë©´ ì™„ì „íˆ 1ì˜ ë¹„ìœ¨ì„ ì°¨ì§€í•œë‹¤.
 	if (dead_) {
 		animTimeDeath_ += deltaTime;
 
@@ -878,12 +878,12 @@ void AnimBlenderDemon::update(Seconds deltaTime, void* pVoidOwner) {
 
 		cooldownDeath_ -= deltaTime;
 	}
-	// hit ¾Ö´Ï¸ŞÀÌ¼Ç ºí·»µù ºñÀ²Àº death ´ÙÀ½À¸·Î °¡Àå ¿ì¼±¼øÀ§°¡ ³ô°Ô °è»êµÈ´Ù.
-	// ´Ù¸¥ ¸ğµç ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ºí·»µù ºñÀ²À» ³·Ãß°í ÃÖ´ë 0.75¸¸Å­ÀÇ ºñÀ²À» Â÷ÁöÇÑ´Ù.
-	// ¸ğµç ºí·»µùÀÌ ÀÏ¾î³­ ÈÄ¿¡ °á°ú ÇÁ·¹ÀÓ°ú hit ¾Ö´Ï¸ŞÀÌ¼Ç ÇÁ·¹ÀÓÀ»
-	// tHit_À¸·Î º¸°£ÇÏ°Ô µÈ´Ù.
+	// hit ì• ë‹ˆë©”ì´ì…˜ ë¸”ë Œë”© ë¹„ìœ¨ì€ death ë‹¤ìŒìœ¼ë¡œ ê°€ì¥ ìš°ì„ ìˆœìœ„ê°€ ë†’ê²Œ ê³„ì‚°ëœë‹¤.
+	// ë‹¤ë¥¸ ëª¨ë“  ì• ë‹ˆë©”ì´ì…˜ì˜ ë¸”ë Œë”© ë¹„ìœ¨ì„ ë‚®ì¶”ê³  ìµœëŒ€ 0.75ë§Œí¼ì˜ ë¹„ìœ¨ì„ ì°¨ì§€í•œë‹¤.
+	// ëª¨ë“  ë¸”ë Œë”©ì´ ì¼ì–´ë‚œ í›„ì— ê²°ê³¼ í”„ë ˆì„ê³¼ hit ì• ë‹ˆë©”ì´ì…˜ í”„ë ˆì„ì„
+	// tHit_ìœ¼ë¡œ ë³´ê°„í•˜ê²Œ ëœë‹¤.
 	else if (cooldownHit_ > 0ms) {
-		// 2¹è¼Ó Àç»ı
+		// 2ë°°ì† ì¬ìƒ
 		animTimeHit_ += deltaTime * 2.f;
 		
 		tHit_ = 0.75f * std::clamp( cooldownHit_ / 600ms, 0.f, 1.f );
@@ -899,9 +899,9 @@ void AnimBlenderDemon::update(Seconds deltaTime, void* pVoidOwner) {
 }
 
 void AnimBlenderDemon::onCalcLocal(PassKey<AnimSystem>) {
-	// update¿¡¼­ ±¸ÇÑ ¾Ö´Ï¸ŞÀÌ¼Ç °¡ÁßÄ¡µé·Î ºí·»µùÀ» ¼öÇàÇÑ´Ù.
+	// updateì—ì„œ êµ¬í•œ ì• ë‹ˆë©”ì´ì…˜ ê°€ì¤‘ì¹˜ë“¤ë¡œ ë¸”ë Œë”©ì„ ìˆ˜í–‰í•œë‹¤.
 
-	// °³º° ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ÇÁ·¹ÀÓÀ» ¾÷µ¥ÀÌÆ®ÇÑ´Ù.
+	// ê°œë³„ ì• ë‹ˆë©”ì´ì…˜ì˜ í”„ë ˆì„ì„ ì—…ë°ì´íŠ¸í•œë‹¤.
 	updateFrames("Demon_Idle", animTimeIdle_);
 	updateFrames("Demon_Walk", animTimeWalk_);
 	updateFrames("Demon_Attack", animTimeAttack_);
@@ -915,18 +915,18 @@ void AnimBlenderDemon::onCalcLocal(PassKey<AnimSystem>) {
 	auto& framesHit = curFrames("Demon_Hit");
 	auto& framesDeath = curFrames("Demon_Death");
 
-	// ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ÇÁ·¹ÀÓµéÀ» ºí·»µùÇÑ´Ù.
+	// ì• ë‹ˆë©”ì´ì…˜ì˜ í”„ë ˆì„ë“¤ì„ ë¸”ë Œë”©í•œë‹¤.
 	for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
 		WeightedAnimFrame frames[] = {
 			WeightedAnimFrame{ .frame = framesIdle[i], .w = tIdle_ },
 			WeightedAnimFrame{ .frame = framesWalk[i], .w = tWalk_ }
 		};
 		framesBlended_[i] = sumWeightedAnimFrames(frames);
-		// attack animation º¸°£
+		// attack animation ë³´ê°„
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesAttack[i], tAttack_);
-		// hit animation º¸°£ (nlerp ¾²¸é ÆÈ²ŞÄ¡ ²¿ÀÓ)
+		// hit animation ë³´ê°„ (nlerp ì“°ë©´ íŒ”ê¿ˆì¹˜ ê¼¬ì„)
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i], tHit_);
-		// death animation º¸°£
+		// death animation ë³´ê°„
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i], tDeath_);
 	}
 	std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
@@ -965,32 +965,32 @@ void AnimBlenderDragon::init(const AssetManager& assetManager) {
 	}
 }
 
-// pOwnerÀÇ ¹°¸® Á¤º¸¿¡ µû¶ó
-// ¾Ö´Ï¸ŞÀÌ¼Ç ºí·»µù »óÅÂ¸¦ °»½ÅÇÑ´Ù.
+// pOwnerì˜ ë¬¼ë¦¬ ì •ë³´ì— ë”°ë¼
+// ì• ë‹ˆë©”ì´ì…˜ ë¸”ë Œë”© ìƒíƒœë¥¼ ê°±ì‹ í•œë‹¤.
 void AnimBlenderDragon::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
 
-	// °´Ã¼ÀÇ ¼Ó·ÂÀÌ walkThreshold¸¦ ³Ñ´ÂÁö¸¦ ±âÁØÀ¸·Î
-	// walk ¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ÇÊ¿äÇÑÁö idle ¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ÇÊ¿äÇÑÁö ÆÇ´ÜÇÑ´Ù.
-	// walkThreshold¸¦ ºÎµå·´°Ô °¨½Î´Â blendRange¸¦ ¼³Á¤ÇÏ¿©
-	// °´Ã¼ÀÇ ¼Ó·ÂÀÌ blendRange ³»ºÎ¿¡ ÀÖ´Ù¸é 0°ú 1 »çÀÌÀÇ tWalk °ªÀÌ ±¸ÇØÁø´Ù.
-	// walk ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ °¡ÁßÄ¡´Â tWalk, idle ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ °¡ÁßÄ¡´Â 1 - tWalkÀÌ µÈ´Ù.
+	// ê°ì²´ì˜ ì†ë ¥ì´ walkThresholdë¥¼ ë„˜ëŠ”ì§€ë¥¼ ê¸°ì¤€ìœ¼ë¡œ
+	// walk ì• ë‹ˆë©”ì´ì…˜ì´ í•„ìš”í•œì§€ idle ì• ë‹ˆë©”ì´ì…˜ì´ í•„ìš”í•œì§€ íŒë‹¨í•œë‹¤.
+	// walkThresholdë¥¼ ë¶€ë“œëŸ½ê²Œ ê°ì‹¸ëŠ” blendRangeë¥¼ ì„¤ì •í•˜ì—¬
+	// ê°ì²´ì˜ ì†ë ¥ì´ blendRange ë‚´ë¶€ì— ìˆë‹¤ë©´ 0ê³¼ 1 ì‚¬ì´ì˜ tWalk ê°’ì´ êµ¬í•´ì§„ë‹¤.
+	// walk ì• ë‹ˆë©”ì´ì…˜ì˜ ê°€ì¤‘ì¹˜ëŠ” tWalk, idle ì• ë‹ˆë©”ì´ì…˜ì˜ ê°€ì¤‘ì¹˜ëŠ” 1 - tWalkì´ ëœë‹¤.
 	const auto walkThreshold = 0.06f;
 
-	// °´Ã¼ÀÇ ¼Ó·Â ±¸ÇÏ±â
+	// ê°ì²´ì˜ ì†ë ¥ êµ¬í•˜ê¸°
 	const auto speed = pOwner->physicState().evVelocity.len();
 
-	// blendRange ¼³Á¤
+	// blendRange ì„¤ì •
 	const auto walkBlendRangeStart = walkThreshold - 0.03f;
 	const auto walkBlendRangeEnd = walkThreshold + 3.f;
-	// tWalk ±¸ÇÏ±â
+	// tWalk êµ¬í•˜ê¸°
 	tWalk_ = std::clamp( (speed - walkBlendRangeStart) / (walkBlendRangeEnd - walkBlendRangeStart), 0.f, 1.f );
 
-	// tIdle ±¸ÇÏ±â
+	// tIdle êµ¬í•˜ê¸°
 	tIdle_ = 1.f - tWalk_;
 
-	// Idle ¾Ö´Ï¸ŞÀÌ¼ÇµéÀº ±×³É °è¼Ó µ¹¸°´Ù.
-	// µüÈ÷ ¸ØÃßÁö ¾Ê¾Æµµ ºÎÀÚ¿¬½º·´Áø ¾Ê´Ù.
+	// Idle ì• ë‹ˆë©”ì´ì…˜ë“¤ì€ ê·¸ëƒ¥ ê³„ì† ëŒë¦°ë‹¤.
+	// ë”±íˆ ë©ˆì¶”ì§€ ì•Šì•„ë„ ë¶€ìì—°ìŠ¤ëŸ½ì§„ ì•Šë‹¤.
 	animTimeIdle_ += deltaTime;
 	const auto durationIdle = targetClip("Dragon_Idle")->duration;
 	while (animTimeIdle_ > durationIdle) {
@@ -1010,9 +1010,9 @@ void AnimBlenderDragon::update(Seconds deltaTime, void* pVoidOwner) {
 		tAttack_ = 0.f;
 	}
 
-	// death ¾Ö´Ï¸ŞÀÌ¼ÇÀº °¡Àå ¿ì¼±¼øÀ§°¡ ³ô°Ô °è»êµÈ´Ù.
-	// cooldownDeath_ÀÇ °ªÀÌ 0º¸´Ù Å« µ¿¾ÈÀº ´Ù¸¥ ¾Ö´Ï¸ŞÀÌ¼Ç°ú ÃÖÁ¾ÀûÀ¸·Î ºí·»µùµÇ¸ç
-	// ÆäÀÌµåÀÎÀÌ ÀÌ·ç¾îÁö°í, cooldownDeath_ÀÇ °ªÀÌ 0ÀÌ µÇ¸é ¿ÏÀüÈ÷ 1ÀÇ ºñÀ²À» Â÷ÁöÇÑ´Ù.
+	// death ì• ë‹ˆë©”ì´ì…˜ì€ ê°€ì¥ ìš°ì„ ìˆœìœ„ê°€ ë†’ê²Œ ê³„ì‚°ëœë‹¤.
+	// cooldownDeath_ì˜ ê°’ì´ 0ë³´ë‹¤ í° ë™ì•ˆì€ ë‹¤ë¥¸ ì• ë‹ˆë©”ì´ì…˜ê³¼ ìµœì¢…ì ìœ¼ë¡œ ë¸”ë Œë”©ë˜ë©°
+	// í˜ì´ë“œì¸ì´ ì´ë£¨ì–´ì§€ê³ , cooldownDeath_ì˜ ê°’ì´ 0ì´ ë˜ë©´ ì™„ì „íˆ 1ì˜ ë¹„ìœ¨ì„ ì°¨ì§€í•œë‹¤.
 	if (dead_) {
 		animTimeDeath_ += deltaTime;
 
@@ -1025,12 +1025,12 @@ void AnimBlenderDragon::update(Seconds deltaTime, void* pVoidOwner) {
 
 		cooldownDeath_ -= deltaTime;
 	}
-	// hit ¾Ö´Ï¸ŞÀÌ¼Ç ºí·»µù ºñÀ²Àº death ´ÙÀ½À¸·Î °¡Àå ¿ì¼±¼øÀ§°¡ ³ô°Ô °è»êµÈ´Ù.
-	// ´Ù¸¥ ¸ğµç ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ºí·»µù ºñÀ²À» ³·Ãß°í ÃÖ´ë 0.75¸¸Å­ÀÇ ºñÀ²À» Â÷ÁöÇÑ´Ù.
-	// ¸ğµç ºí·»µùÀÌ ÀÏ¾î³­ ÈÄ¿¡ °á°ú ÇÁ·¹ÀÓ°ú hit ¾Ö´Ï¸ŞÀÌ¼Ç ÇÁ·¹ÀÓÀ»
-	// tHit_À¸·Î º¸°£ÇÏ°Ô µÈ´Ù.
+	// hit ì• ë‹ˆë©”ì´ì…˜ ë¸”ë Œë”© ë¹„ìœ¨ì€ death ë‹¤ìŒìœ¼ë¡œ ê°€ì¥ ìš°ì„ ìˆœìœ„ê°€ ë†’ê²Œ ê³„ì‚°ëœë‹¤.
+	// ë‹¤ë¥¸ ëª¨ë“  ì• ë‹ˆë©”ì´ì…˜ì˜ ë¸”ë Œë”© ë¹„ìœ¨ì„ ë‚®ì¶”ê³  ìµœëŒ€ 0.75ë§Œí¼ì˜ ë¹„ìœ¨ì„ ì°¨ì§€í•œë‹¤.
+	// ëª¨ë“  ë¸”ë Œë”©ì´ ì¼ì–´ë‚œ í›„ì— ê²°ê³¼ í”„ë ˆì„ê³¼ hit ì• ë‹ˆë©”ì´ì…˜ í”„ë ˆì„ì„
+	// tHit_ìœ¼ë¡œ ë³´ê°„í•˜ê²Œ ëœë‹¤.
 	else if (cooldownHit_ > 0ms) {
-		// 2¹è¼Ó Àç»ı
+		// 2ë°°ì† ì¬ìƒ
 		animTimeHit_ += deltaTime * 2.f;
 		
 		tHit_ = 0.75f * std::clamp( cooldownHit_ / 600ms, 0.f, 1.f );
@@ -1046,9 +1046,9 @@ void AnimBlenderDragon::update(Seconds deltaTime, void* pVoidOwner) {
 }
 
 void AnimBlenderDragon::onCalcLocal(PassKey<AnimSystem>) {
-	// update¿¡¼­ ±¸ÇÑ ¾Ö´Ï¸ŞÀÌ¼Ç °¡ÁßÄ¡µé·Î ºí·»µùÀ» ¼öÇàÇÑ´Ù.
+	// updateì—ì„œ êµ¬í•œ ì• ë‹ˆë©”ì´ì…˜ ê°€ì¤‘ì¹˜ë“¤ë¡œ ë¸”ë Œë”©ì„ ìˆ˜í–‰í•œë‹¤.
 
-	// °³º° ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ÇÁ·¹ÀÓÀ» ¾÷µ¥ÀÌÆ®ÇÑ´Ù.
+	// ê°œë³„ ì• ë‹ˆë©”ì´ì…˜ì˜ í”„ë ˆì„ì„ ì—…ë°ì´íŠ¸í•œë‹¤.
 	updateFrames("Dragon_Idle", animTimeIdle_);
 	updateFrames("Dragon_Walk", animTimeWalk_);
 	updateFrames("Dragon_Attack", animTimeAttack_);
@@ -1062,18 +1062,18 @@ void AnimBlenderDragon::onCalcLocal(PassKey<AnimSystem>) {
 	auto& framesHit = curFrames("Dragon_Hit");
 	auto& framesDeath = curFrames("Dragon_Death");
 
-	// ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ÇÁ·¹ÀÓµéÀ» ºí·»µùÇÑ´Ù.
+	// ì• ë‹ˆë©”ì´ì…˜ì˜ í”„ë ˆì„ë“¤ì„ ë¸”ë Œë”©í•œë‹¤.
 	for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
 		WeightedAnimFrame frames[] = {
 			WeightedAnimFrame{ .frame = framesIdle[i], .w = tIdle_ },
 			WeightedAnimFrame{ .frame = framesWalk[i], .w = tWalk_ }
 		};
 		framesBlended_[i] = sumWeightedAnimFrames(frames);
-		// attack animation º¸°£
+		// attack animation ë³´ê°„
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesAttack[i], tAttack_);
-		// hit animation º¸°£ (nlerp ¾²¸é ÆÈ²ŞÄ¡ ²¿ÀÓ)
+		// hit animation ë³´ê°„ (nlerp ì“°ë©´ íŒ”ê¿ˆì¹˜ ê¼¬ì„)
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i], tHit_);
-		// death animation º¸°£
+		// death animation ë³´ê°„
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i], tDeath_);
 	}
 	std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
@@ -1112,32 +1112,32 @@ void AnimBlenderEyeball::init(const AssetManager& assetManager) {
 	}
 }
 
-// pOwnerÀÇ ¹°¸® Á¤º¸¿¡ µû¶ó
-// ¾Ö´Ï¸ŞÀÌ¼Ç ºí·»µù »óÅÂ¸¦ °»½ÅÇÑ´Ù.
+// pOwnerì˜ ë¬¼ë¦¬ ì •ë³´ì— ë”°ë¼
+// ì• ë‹ˆë©”ì´ì…˜ ë¸”ë Œë”© ìƒíƒœë¥¼ ê°±ì‹ í•œë‹¤.
 void AnimBlenderEyeball::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
 
-	// °´Ã¼ÀÇ ¼Ó·ÂÀÌ walkThreshold¸¦ ³Ñ´ÂÁö¸¦ ±âÁØÀ¸·Î
-	// walk ¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ÇÊ¿äÇÑÁö idle ¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ÇÊ¿äÇÑÁö ÆÇ´ÜÇÑ´Ù.
-	// walkThreshold¸¦ ºÎµå·´°Ô °¨½Î´Â blendRange¸¦ ¼³Á¤ÇÏ¿©
-	// °´Ã¼ÀÇ ¼Ó·ÂÀÌ blendRange ³»ºÎ¿¡ ÀÖ´Ù¸é 0°ú 1 »çÀÌÀÇ tWalk °ªÀÌ ±¸ÇØÁø´Ù.
-	// walk ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ °¡ÁßÄ¡´Â tWalk, idle ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ °¡ÁßÄ¡´Â 1 - tWalkÀÌ µÈ´Ù.
+	// ê°ì²´ì˜ ì†ë ¥ì´ walkThresholdë¥¼ ë„˜ëŠ”ì§€ë¥¼ ê¸°ì¤€ìœ¼ë¡œ
+	// walk ì• ë‹ˆë©”ì´ì…˜ì´ í•„ìš”í•œì§€ idle ì• ë‹ˆë©”ì´ì…˜ì´ í•„ìš”í•œì§€ íŒë‹¨í•œë‹¤.
+	// walkThresholdë¥¼ ë¶€ë“œëŸ½ê²Œ ê°ì‹¸ëŠ” blendRangeë¥¼ ì„¤ì •í•˜ì—¬
+	// ê°ì²´ì˜ ì†ë ¥ì´ blendRange ë‚´ë¶€ì— ìˆë‹¤ë©´ 0ê³¼ 1 ì‚¬ì´ì˜ tWalk ê°’ì´ êµ¬í•´ì§„ë‹¤.
+	// walk ì• ë‹ˆë©”ì´ì…˜ì˜ ê°€ì¤‘ì¹˜ëŠ” tWalk, idle ì• ë‹ˆë©”ì´ì…˜ì˜ ê°€ì¤‘ì¹˜ëŠ” 1 - tWalkì´ ëœë‹¤.
 	const auto walkThreshold = 0.06f;
 
-	// °´Ã¼ÀÇ ¼Ó·Â ±¸ÇÏ±â
+	// ê°ì²´ì˜ ì†ë ¥ êµ¬í•˜ê¸°
 	const auto speed = pOwner->physicState().evVelocity.len();
 
-	// blendRange ¼³Á¤
+	// blendRange ì„¤ì •
 	const auto walkBlendRangeStart = walkThreshold - 0.03f;
 	const auto walkBlendRangeEnd = walkThreshold + 3.f;
-	// tWalk ±¸ÇÏ±â
+	// tWalk êµ¬í•˜ê¸°
 	tWalk_ = std::clamp( (speed - walkBlendRangeStart) / (walkBlendRangeEnd - walkBlendRangeStart), 0.f, 1.f );
 
-	// tIdle ±¸ÇÏ±â
+	// tIdle êµ¬í•˜ê¸°
 	tIdle_ = 1.f - tWalk_;
 
-	// Idle ¾Ö´Ï¸ŞÀÌ¼ÇµéÀº ±×³É °è¼Ó µ¹¸°´Ù.
-	// µüÈ÷ ¸ØÃßÁö ¾Ê¾Æµµ ºÎÀÚ¿¬½º·´Áø ¾Ê´Ù.
+	// Idle ì• ë‹ˆë©”ì´ì…˜ë“¤ì€ ê·¸ëƒ¥ ê³„ì† ëŒë¦°ë‹¤.
+	// ë”±íˆ ë©ˆì¶”ì§€ ì•Šì•„ë„ ë¶€ìì—°ìŠ¤ëŸ½ì§„ ì•Šë‹¤.
 	animTimeIdle_ += deltaTime;
 	const auto durationIdle = targetClip("Eyeball_Idle")->duration;
 	while (animTimeIdle_ > durationIdle) {
@@ -1157,9 +1157,9 @@ void AnimBlenderEyeball::update(Seconds deltaTime, void* pVoidOwner) {
 		tAttack_ = 0.f;
 	}
 
-	// death ¾Ö´Ï¸ŞÀÌ¼ÇÀº °¡Àå ¿ì¼±¼øÀ§°¡ ³ô°Ô °è»êµÈ´Ù.
-	// cooldownDeath_ÀÇ °ªÀÌ 0º¸´Ù Å« µ¿¾ÈÀº ´Ù¸¥ ¾Ö´Ï¸ŞÀÌ¼Ç°ú ÃÖÁ¾ÀûÀ¸·Î ºí·»µùµÇ¸ç
-	// ÆäÀÌµåÀÎÀÌ ÀÌ·ç¾îÁö°í, cooldownDeath_ÀÇ °ªÀÌ 0ÀÌ µÇ¸é ¿ÏÀüÈ÷ 1ÀÇ ºñÀ²À» Â÷ÁöÇÑ´Ù.
+	// death ì• ë‹ˆë©”ì´ì…˜ì€ ê°€ì¥ ìš°ì„ ìˆœìœ„ê°€ ë†’ê²Œ ê³„ì‚°ëœë‹¤.
+	// cooldownDeath_ì˜ ê°’ì´ 0ë³´ë‹¤ í° ë™ì•ˆì€ ë‹¤ë¥¸ ì• ë‹ˆë©”ì´ì…˜ê³¼ ìµœì¢…ì ìœ¼ë¡œ ë¸”ë Œë”©ë˜ë©°
+	// í˜ì´ë“œì¸ì´ ì´ë£¨ì–´ì§€ê³ , cooldownDeath_ì˜ ê°’ì´ 0ì´ ë˜ë©´ ì™„ì „íˆ 1ì˜ ë¹„ìœ¨ì„ ì°¨ì§€í•œë‹¤.
 	if (dead_) {
 		animTimeDeath_ += deltaTime;
 
@@ -1172,12 +1172,12 @@ void AnimBlenderEyeball::update(Seconds deltaTime, void* pVoidOwner) {
 
 		cooldownDeath_ -= deltaTime;
 	}
-	// hit ¾Ö´Ï¸ŞÀÌ¼Ç ºí·»µù ºñÀ²Àº death ´ÙÀ½À¸·Î °¡Àå ¿ì¼±¼øÀ§°¡ ³ô°Ô °è»êµÈ´Ù.
-	// ´Ù¸¥ ¸ğµç ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ºí·»µù ºñÀ²À» ³·Ãß°í ÃÖ´ë 0.75¸¸Å­ÀÇ ºñÀ²À» Â÷ÁöÇÑ´Ù.
-	// ¸ğµç ºí·»µùÀÌ ÀÏ¾î³­ ÈÄ¿¡ °á°ú ÇÁ·¹ÀÓ°ú hit ¾Ö´Ï¸ŞÀÌ¼Ç ÇÁ·¹ÀÓÀ»
-	// tHit_À¸·Î º¸°£ÇÏ°Ô µÈ´Ù.
+	// hit ì• ë‹ˆë©”ì´ì…˜ ë¸”ë Œë”© ë¹„ìœ¨ì€ death ë‹¤ìŒìœ¼ë¡œ ê°€ì¥ ìš°ì„ ìˆœìœ„ê°€ ë†’ê²Œ ê³„ì‚°ëœë‹¤.
+	// ë‹¤ë¥¸ ëª¨ë“  ì• ë‹ˆë©”ì´ì…˜ì˜ ë¸”ë Œë”© ë¹„ìœ¨ì„ ë‚®ì¶”ê³  ìµœëŒ€ 0.75ë§Œí¼ì˜ ë¹„ìœ¨ì„ ì°¨ì§€í•œë‹¤.
+	// ëª¨ë“  ë¸”ë Œë”©ì´ ì¼ì–´ë‚œ í›„ì— ê²°ê³¼ í”„ë ˆì„ê³¼ hit ì• ë‹ˆë©”ì´ì…˜ í”„ë ˆì„ì„
+	// tHit_ìœ¼ë¡œ ë³´ê°„í•˜ê²Œ ëœë‹¤.
 	else if (cooldownHit_ > 0ms) {
-		// 2¹è¼Ó Àç»ı
+		// 2ë°°ì† ì¬ìƒ
 		animTimeHit_ += deltaTime * 2.f;
 		
 		tHit_ = 0.75f * std::clamp( cooldownHit_ / 600ms, 0.f, 1.f );
@@ -1193,9 +1193,9 @@ void AnimBlenderEyeball::update(Seconds deltaTime, void* pVoidOwner) {
 }
 
 void AnimBlenderEyeball::onCalcLocal(PassKey<AnimSystem>) {
-	// update¿¡¼­ ±¸ÇÑ ¾Ö´Ï¸ŞÀÌ¼Ç °¡ÁßÄ¡µé·Î ºí·»µùÀ» ¼öÇàÇÑ´Ù.
+	// updateì—ì„œ êµ¬í•œ ì• ë‹ˆë©”ì´ì…˜ ê°€ì¤‘ì¹˜ë“¤ë¡œ ë¸”ë Œë”©ì„ ìˆ˜í–‰í•œë‹¤.
 
-	// °³º° ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ÇÁ·¹ÀÓÀ» ¾÷µ¥ÀÌÆ®ÇÑ´Ù.
+	// ê°œë³„ ì• ë‹ˆë©”ì´ì…˜ì˜ í”„ë ˆì„ì„ ì—…ë°ì´íŠ¸í•œë‹¤.
 	updateFrames("Eyeball_Idle", animTimeIdle_);
 	updateFrames("Eyeball_Walk", animTimeWalk_);
 	updateFrames("Eyeball_Attack", animTimeAttack_);
@@ -1209,18 +1209,18 @@ void AnimBlenderEyeball::onCalcLocal(PassKey<AnimSystem>) {
 	auto& framesHit = curFrames("Eyeball_Hit");
 	auto& framesDeath = curFrames("Eyeball_Death");
 
-	// ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ÇÁ·¹ÀÓµéÀ» ºí·»µùÇÑ´Ù.
+	// ì• ë‹ˆë©”ì´ì…˜ì˜ í”„ë ˆì„ë“¤ì„ ë¸”ë Œë”©í•œë‹¤.
 	for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
 		WeightedAnimFrame frames[] = {
 			WeightedAnimFrame{ .frame = framesIdle[i], .w = tIdle_ },
 			WeightedAnimFrame{ .frame = framesWalk[i], .w = tWalk_ }
 		};
 		framesBlended_[i] = sumWeightedAnimFrames(frames);
-		// attack animation º¸°£
+		// attack animation ë³´ê°„
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesAttack[i], tAttack_);
-		// hit animation º¸°£ (nlerp ¾²¸é ÆÈ²ŞÄ¡ ²¿ÀÓ)
+		// hit animation ë³´ê°„ (nlerp ì“°ë©´ íŒ”ê¿ˆì¹˜ ê¼¬ì„)
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i], tHit_);
-		// death animation º¸°£
+		// death animation ë³´ê°„
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i], tDeath_);
 	}
 	std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
@@ -1259,32 +1259,32 @@ void AnimBlenderFishman::init(const AssetManager& assetManager) {
 	}
 }
 
-// pOwnerÀÇ ¹°¸® Á¤º¸¿¡ µû¶ó
-// ¾Ö´Ï¸ŞÀÌ¼Ç ºí·»µù »óÅÂ¸¦ °»½ÅÇÑ´Ù.
+// pOwnerì˜ ë¬¼ë¦¬ ì •ë³´ì— ë”°ë¼
+// ì• ë‹ˆë©”ì´ì…˜ ë¸”ë Œë”© ìƒíƒœë¥¼ ê°±ì‹ í•œë‹¤.
 void AnimBlenderFishman::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
 
-	// °´Ã¼ÀÇ ¼Ó·ÂÀÌ walkThreshold¸¦ ³Ñ´ÂÁö¸¦ ±âÁØÀ¸·Î
-	// walk ¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ÇÊ¿äÇÑÁö idle ¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ÇÊ¿äÇÑÁö ÆÇ´ÜÇÑ´Ù.
-	// walkThreshold¸¦ ºÎµå·´°Ô °¨½Î´Â blendRange¸¦ ¼³Á¤ÇÏ¿©
-	// °´Ã¼ÀÇ ¼Ó·ÂÀÌ blendRange ³»ºÎ¿¡ ÀÖ´Ù¸é 0°ú 1 »çÀÌÀÇ tWalk °ªÀÌ ±¸ÇØÁø´Ù.
-	// walk ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ °¡ÁßÄ¡´Â tWalk, idle ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ °¡ÁßÄ¡´Â 1 - tWalkÀÌ µÈ´Ù.
+	// ê°ì²´ì˜ ì†ë ¥ì´ walkThresholdë¥¼ ë„˜ëŠ”ì§€ë¥¼ ê¸°ì¤€ìœ¼ë¡œ
+	// walk ì• ë‹ˆë©”ì´ì…˜ì´ í•„ìš”í•œì§€ idle ì• ë‹ˆë©”ì´ì…˜ì´ í•„ìš”í•œì§€ íŒë‹¨í•œë‹¤.
+	// walkThresholdë¥¼ ë¶€ë“œëŸ½ê²Œ ê°ì‹¸ëŠ” blendRangeë¥¼ ì„¤ì •í•˜ì—¬
+	// ê°ì²´ì˜ ì†ë ¥ì´ blendRange ë‚´ë¶€ì— ìˆë‹¤ë©´ 0ê³¼ 1 ì‚¬ì´ì˜ tWalk ê°’ì´ êµ¬í•´ì§„ë‹¤.
+	// walk ì• ë‹ˆë©”ì´ì…˜ì˜ ê°€ì¤‘ì¹˜ëŠ” tWalk, idle ì• ë‹ˆë©”ì´ì…˜ì˜ ê°€ì¤‘ì¹˜ëŠ” 1 - tWalkì´ ëœë‹¤.
 	const auto walkThreshold = 0.06f;
 
-	// °´Ã¼ÀÇ ¼Ó·Â ±¸ÇÏ±â
+	// ê°ì²´ì˜ ì†ë ¥ êµ¬í•˜ê¸°
 	const auto speed = pOwner->physicState().evVelocity.len();
 
-	// blendRange ¼³Á¤
+	// blendRange ì„¤ì •
 	const auto walkBlendRangeStart = walkThreshold - 0.03f;
 	const auto walkBlendRangeEnd = walkThreshold + 3.f;
-	// tWalk ±¸ÇÏ±â
+	// tWalk êµ¬í•˜ê¸°
 	tWalk_ = std::clamp( (speed - walkBlendRangeStart) / (walkBlendRangeEnd - walkBlendRangeStart), 0.f, 1.f );
 
-	// tIdle ±¸ÇÏ±â
+	// tIdle êµ¬í•˜ê¸°
 	tIdle_ = 1.f - tWalk_;
 
-	// Idle ¾Ö´Ï¸ŞÀÌ¼ÇµéÀº ±×³É °è¼Ó µ¹¸°´Ù.
-	// µüÈ÷ ¸ØÃßÁö ¾Ê¾Æµµ ºÎÀÚ¿¬½º·´Áø ¾Ê´Ù.
+	// Idle ì• ë‹ˆë©”ì´ì…˜ë“¤ì€ ê·¸ëƒ¥ ê³„ì† ëŒë¦°ë‹¤.
+	// ë”±íˆ ë©ˆì¶”ì§€ ì•Šì•„ë„ ë¶€ìì—°ìŠ¤ëŸ½ì§„ ì•Šë‹¤.
 	animTimeIdle_ += deltaTime;
 	const auto durationIdle = targetClip("Fishman_Idle")->duration;
 	while (animTimeIdle_ > durationIdle) {
@@ -1304,9 +1304,9 @@ void AnimBlenderFishman::update(Seconds deltaTime, void* pVoidOwner) {
 		tAttack_ = 0.f;
 	}
 
-	// death ¾Ö´Ï¸ŞÀÌ¼ÇÀº °¡Àå ¿ì¼±¼øÀ§°¡ ³ô°Ô °è»êµÈ´Ù.
-	// cooldownDeath_ÀÇ °ªÀÌ 0º¸´Ù Å« µ¿¾ÈÀº ´Ù¸¥ ¾Ö´Ï¸ŞÀÌ¼Ç°ú ÃÖÁ¾ÀûÀ¸·Î ºí·»µùµÇ¸ç
-	// ÆäÀÌµåÀÎÀÌ ÀÌ·ç¾îÁö°í, cooldownDeath_ÀÇ °ªÀÌ 0ÀÌ µÇ¸é ¿ÏÀüÈ÷ 1ÀÇ ºñÀ²À» Â÷ÁöÇÑ´Ù.
+	// death ì• ë‹ˆë©”ì´ì…˜ì€ ê°€ì¥ ìš°ì„ ìˆœìœ„ê°€ ë†’ê²Œ ê³„ì‚°ëœë‹¤.
+	// cooldownDeath_ì˜ ê°’ì´ 0ë³´ë‹¤ í° ë™ì•ˆì€ ë‹¤ë¥¸ ì• ë‹ˆë©”ì´ì…˜ê³¼ ìµœì¢…ì ìœ¼ë¡œ ë¸”ë Œë”©ë˜ë©°
+	// í˜ì´ë“œì¸ì´ ì´ë£¨ì–´ì§€ê³ , cooldownDeath_ì˜ ê°’ì´ 0ì´ ë˜ë©´ ì™„ì „íˆ 1ì˜ ë¹„ìœ¨ì„ ì°¨ì§€í•œë‹¤.
 	if (dead_) {
 		animTimeDeath_ += deltaTime;
 
@@ -1319,12 +1319,12 @@ void AnimBlenderFishman::update(Seconds deltaTime, void* pVoidOwner) {
 
 		cooldownDeath_ -= deltaTime;
 	}
-	// hit ¾Ö´Ï¸ŞÀÌ¼Ç ºí·»µù ºñÀ²Àº death ´ÙÀ½À¸·Î °¡Àå ¿ì¼±¼øÀ§°¡ ³ô°Ô °è»êµÈ´Ù.
-	// ´Ù¸¥ ¸ğµç ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ºí·»µù ºñÀ²À» ³·Ãß°í ÃÖ´ë 0.75¸¸Å­ÀÇ ºñÀ²À» Â÷ÁöÇÑ´Ù.
-	// ¸ğµç ºí·»µùÀÌ ÀÏ¾î³­ ÈÄ¿¡ °á°ú ÇÁ·¹ÀÓ°ú hit ¾Ö´Ï¸ŞÀÌ¼Ç ÇÁ·¹ÀÓÀ»
-	// tHit_À¸·Î º¸°£ÇÏ°Ô µÈ´Ù.
+	// hit ì• ë‹ˆë©”ì´ì…˜ ë¸”ë Œë”© ë¹„ìœ¨ì€ death ë‹¤ìŒìœ¼ë¡œ ê°€ì¥ ìš°ì„ ìˆœìœ„ê°€ ë†’ê²Œ ê³„ì‚°ëœë‹¤.
+	// ë‹¤ë¥¸ ëª¨ë“  ì• ë‹ˆë©”ì´ì…˜ì˜ ë¸”ë Œë”© ë¹„ìœ¨ì„ ë‚®ì¶”ê³  ìµœëŒ€ 0.75ë§Œí¼ì˜ ë¹„ìœ¨ì„ ì°¨ì§€í•œë‹¤.
+	// ëª¨ë“  ë¸”ë Œë”©ì´ ì¼ì–´ë‚œ í›„ì— ê²°ê³¼ í”„ë ˆì„ê³¼ hit ì• ë‹ˆë©”ì´ì…˜ í”„ë ˆì„ì„
+	// tHit_ìœ¼ë¡œ ë³´ê°„í•˜ê²Œ ëœë‹¤.
 	else if (cooldownHit_ > 0ms) {
-		// 2¹è¼Ó Àç»ı
+		// 2ë°°ì† ì¬ìƒ
 		animTimeHit_ += deltaTime * 2.f;
 		
 		tHit_ = 0.75f * std::clamp( cooldownHit_ / 600ms, 0.f, 1.f );
@@ -1340,9 +1340,9 @@ void AnimBlenderFishman::update(Seconds deltaTime, void* pVoidOwner) {
 }
 
 void AnimBlenderFishman::onCalcLocal(PassKey<AnimSystem>) {
-	// update¿¡¼­ ±¸ÇÑ ¾Ö´Ï¸ŞÀÌ¼Ç °¡ÁßÄ¡µé·Î ºí·»µùÀ» ¼öÇàÇÑ´Ù.
+	// updateì—ì„œ êµ¬í•œ ì• ë‹ˆë©”ì´ì…˜ ê°€ì¤‘ì¹˜ë“¤ë¡œ ë¸”ë Œë”©ì„ ìˆ˜í–‰í•œë‹¤.
 
-	// °³º° ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ÇÁ·¹ÀÓÀ» ¾÷µ¥ÀÌÆ®ÇÑ´Ù.
+	// ê°œë³„ ì• ë‹ˆë©”ì´ì…˜ì˜ í”„ë ˆì„ì„ ì—…ë°ì´íŠ¸í•œë‹¤.
 	updateFrames("Fishman_Idle", animTimeIdle_);
 	updateFrames("Fishman_Walk", animTimeWalk_);
 	updateFrames("Fishman_Attack", animTimeAttack_);
@@ -1356,18 +1356,18 @@ void AnimBlenderFishman::onCalcLocal(PassKey<AnimSystem>) {
 	auto& framesHit = curFrames("Fishman_Hit");
 	auto& framesDeath = curFrames("Fishman_Death");
 
-	// ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ÇÁ·¹ÀÓµéÀ» ºí·»µùÇÑ´Ù.
+	// ì• ë‹ˆë©”ì´ì…˜ì˜ í”„ë ˆì„ë“¤ì„ ë¸”ë Œë”©í•œë‹¤.
 	for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
 		WeightedAnimFrame frames[] = {
 			WeightedAnimFrame{ .frame = framesIdle[i], .w = tIdle_ },
 			WeightedAnimFrame{ .frame = framesWalk[i], .w = tWalk_ }
 		};
 		framesBlended_[i] = sumWeightedAnimFrames(frames);
-		// attack animation º¸°£
+		// attack animation ë³´ê°„
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesAttack[i], tAttack_);
-		// hit animation º¸°£ (nlerp ¾²¸é ÆÈ²ŞÄ¡ ²¿ÀÓ)
+		// hit animation ë³´ê°„ (nlerp ì“°ë©´ íŒ”ê¿ˆì¹˜ ê¼¬ì„)
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i], tHit_);
-		// death animation º¸°£
+		// death animation ë³´ê°„
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i], tDeath_);
 	}
 	std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
@@ -1406,32 +1406,32 @@ void AnimBlenderGargoyle::init(const AssetManager& assetManager) {
 	}
 }
 
-// pOwnerÀÇ ¹°¸® Á¤º¸¿¡ µû¶ó
-// ¾Ö´Ï¸ŞÀÌ¼Ç ºí·»µù »óÅÂ¸¦ °»½ÅÇÑ´Ù.
+// pOwnerì˜ ë¬¼ë¦¬ ì •ë³´ì— ë”°ë¼
+// ì• ë‹ˆë©”ì´ì…˜ ë¸”ë Œë”© ìƒíƒœë¥¼ ê°±ì‹ í•œë‹¤.
 void AnimBlenderGargoyle::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
 
-	// °´Ã¼ÀÇ ¼Ó·ÂÀÌ walkThreshold¸¦ ³Ñ´ÂÁö¸¦ ±âÁØÀ¸·Î
-	// walk ¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ÇÊ¿äÇÑÁö idle ¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ÇÊ¿äÇÑÁö ÆÇ´ÜÇÑ´Ù.
-	// walkThreshold¸¦ ºÎµå·´°Ô °¨½Î´Â blendRange¸¦ ¼³Á¤ÇÏ¿©
-	// °´Ã¼ÀÇ ¼Ó·ÂÀÌ blendRange ³»ºÎ¿¡ ÀÖ´Ù¸é 0°ú 1 »çÀÌÀÇ tWalk °ªÀÌ ±¸ÇØÁø´Ù.
-	// walk ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ °¡ÁßÄ¡´Â tWalk, idle ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ °¡ÁßÄ¡´Â 1 - tWalkÀÌ µÈ´Ù.
+	// ê°ì²´ì˜ ì†ë ¥ì´ walkThresholdë¥¼ ë„˜ëŠ”ì§€ë¥¼ ê¸°ì¤€ìœ¼ë¡œ
+	// walk ì• ë‹ˆë©”ì´ì…˜ì´ í•„ìš”í•œì§€ idle ì• ë‹ˆë©”ì´ì…˜ì´ í•„ìš”í•œì§€ íŒë‹¨í•œë‹¤.
+	// walkThresholdë¥¼ ë¶€ë“œëŸ½ê²Œ ê°ì‹¸ëŠ” blendRangeë¥¼ ì„¤ì •í•˜ì—¬
+	// ê°ì²´ì˜ ì†ë ¥ì´ blendRange ë‚´ë¶€ì— ìˆë‹¤ë©´ 0ê³¼ 1 ì‚¬ì´ì˜ tWalk ê°’ì´ êµ¬í•´ì§„ë‹¤.
+	// walk ì• ë‹ˆë©”ì´ì…˜ì˜ ê°€ì¤‘ì¹˜ëŠ” tWalk, idle ì• ë‹ˆë©”ì´ì…˜ì˜ ê°€ì¤‘ì¹˜ëŠ” 1 - tWalkì´ ëœë‹¤.
 	const auto walkThreshold = 0.06f;
 
-	// °´Ã¼ÀÇ ¼Ó·Â ±¸ÇÏ±â
+	// ê°ì²´ì˜ ì†ë ¥ êµ¬í•˜ê¸°
 	const auto speed = pOwner->physicState().evVelocity.len();
 
-	// blendRange ¼³Á¤
+	// blendRange ì„¤ì •
 	const auto walkBlendRangeStart = walkThreshold - 0.03f;
 	const auto walkBlendRangeEnd = walkThreshold + 3.f;
-	// tWalk ±¸ÇÏ±â
+	// tWalk êµ¬í•˜ê¸°
 	tWalk_ = std::clamp( (speed - walkBlendRangeStart) / (walkBlendRangeEnd - walkBlendRangeStart), 0.f, 1.f );
 
-	// tIdle ±¸ÇÏ±â
+	// tIdle êµ¬í•˜ê¸°
 	tIdle_ = 1.f - tWalk_;
 
-	// Idle ¾Ö´Ï¸ŞÀÌ¼ÇµéÀº ±×³É °è¼Ó µ¹¸°´Ù.
-	// µüÈ÷ ¸ØÃßÁö ¾Ê¾Æµµ ºÎÀÚ¿¬½º·´Áø ¾Ê´Ù.
+	// Idle ì• ë‹ˆë©”ì´ì…˜ë“¤ì€ ê·¸ëƒ¥ ê³„ì† ëŒë¦°ë‹¤.
+	// ë”±íˆ ë©ˆì¶”ì§€ ì•Šì•„ë„ ë¶€ìì—°ìŠ¤ëŸ½ì§„ ì•Šë‹¤.
 	animTimeIdle_ += deltaTime;
 	const auto durationIdle = targetClip("Gargoyle_Idle")->duration;
 	while (animTimeIdle_ > durationIdle) {
@@ -1451,9 +1451,9 @@ void AnimBlenderGargoyle::update(Seconds deltaTime, void* pVoidOwner) {
 		tAttack_ = 0.f;
 	}
 
-	// death ¾Ö´Ï¸ŞÀÌ¼ÇÀº °¡Àå ¿ì¼±¼øÀ§°¡ ³ô°Ô °è»êµÈ´Ù.
-	// cooldownDeath_ÀÇ °ªÀÌ 0º¸´Ù Å« µ¿¾ÈÀº ´Ù¸¥ ¾Ö´Ï¸ŞÀÌ¼Ç°ú ÃÖÁ¾ÀûÀ¸·Î ºí·»µùµÇ¸ç
-	// ÆäÀÌµåÀÎÀÌ ÀÌ·ç¾îÁö°í, cooldownDeath_ÀÇ °ªÀÌ 0ÀÌ µÇ¸é ¿ÏÀüÈ÷ 1ÀÇ ºñÀ²À» Â÷ÁöÇÑ´Ù.
+	// death ì• ë‹ˆë©”ì´ì…˜ì€ ê°€ì¥ ìš°ì„ ìˆœìœ„ê°€ ë†’ê²Œ ê³„ì‚°ëœë‹¤.
+	// cooldownDeath_ì˜ ê°’ì´ 0ë³´ë‹¤ í° ë™ì•ˆì€ ë‹¤ë¥¸ ì• ë‹ˆë©”ì´ì…˜ê³¼ ìµœì¢…ì ìœ¼ë¡œ ë¸”ë Œë”©ë˜ë©°
+	// í˜ì´ë“œì¸ì´ ì´ë£¨ì–´ì§€ê³ , cooldownDeath_ì˜ ê°’ì´ 0ì´ ë˜ë©´ ì™„ì „íˆ 1ì˜ ë¹„ìœ¨ì„ ì°¨ì§€í•œë‹¤.
 	if (dead_) {
 		animTimeDeath_ += deltaTime;
 
@@ -1466,12 +1466,12 @@ void AnimBlenderGargoyle::update(Seconds deltaTime, void* pVoidOwner) {
 
 		cooldownDeath_ -= deltaTime;
 	}
-	// hit ¾Ö´Ï¸ŞÀÌ¼Ç ºí·»µù ºñÀ²Àº death ´ÙÀ½À¸·Î °¡Àå ¿ì¼±¼øÀ§°¡ ³ô°Ô °è»êµÈ´Ù.
-	// ´Ù¸¥ ¸ğµç ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ºí·»µù ºñÀ²À» ³·Ãß°í ÃÖ´ë 0.75¸¸Å­ÀÇ ºñÀ²À» Â÷ÁöÇÑ´Ù.
-	// ¸ğµç ºí·»µùÀÌ ÀÏ¾î³­ ÈÄ¿¡ °á°ú ÇÁ·¹ÀÓ°ú hit ¾Ö´Ï¸ŞÀÌ¼Ç ÇÁ·¹ÀÓÀ»
-	// tHit_À¸·Î º¸°£ÇÏ°Ô µÈ´Ù.
+	// hit ì• ë‹ˆë©”ì´ì…˜ ë¸”ë Œë”© ë¹„ìœ¨ì€ death ë‹¤ìŒìœ¼ë¡œ ê°€ì¥ ìš°ì„ ìˆœìœ„ê°€ ë†’ê²Œ ê³„ì‚°ëœë‹¤.
+	// ë‹¤ë¥¸ ëª¨ë“  ì• ë‹ˆë©”ì´ì…˜ì˜ ë¸”ë Œë”© ë¹„ìœ¨ì„ ë‚®ì¶”ê³  ìµœëŒ€ 0.75ë§Œí¼ì˜ ë¹„ìœ¨ì„ ì°¨ì§€í•œë‹¤.
+	// ëª¨ë“  ë¸”ë Œë”©ì´ ì¼ì–´ë‚œ í›„ì— ê²°ê³¼ í”„ë ˆì„ê³¼ hit ì• ë‹ˆë©”ì´ì…˜ í”„ë ˆì„ì„
+	// tHit_ìœ¼ë¡œ ë³´ê°„í•˜ê²Œ ëœë‹¤.
 	else if (cooldownHit_ > 0ms) {
-		// 2¹è¼Ó Àç»ı
+		// 2ë°°ì† ì¬ìƒ
 		animTimeHit_ += deltaTime * 2.f;
 		
 		tHit_ = 0.75f * std::clamp( cooldownHit_ / 600ms, 0.f, 1.f );
@@ -1487,9 +1487,9 @@ void AnimBlenderGargoyle::update(Seconds deltaTime, void* pVoidOwner) {
 }
 
 void AnimBlenderGargoyle::onCalcLocal(PassKey<AnimSystem>) {
-	// update¿¡¼­ ±¸ÇÑ ¾Ö´Ï¸ŞÀÌ¼Ç °¡ÁßÄ¡µé·Î ºí·»µùÀ» ¼öÇàÇÑ´Ù.
+	// updateì—ì„œ êµ¬í•œ ì• ë‹ˆë©”ì´ì…˜ ê°€ì¤‘ì¹˜ë“¤ë¡œ ë¸”ë Œë”©ì„ ìˆ˜í–‰í•œë‹¤.
 
-	// °³º° ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ÇÁ·¹ÀÓÀ» ¾÷µ¥ÀÌÆ®ÇÑ´Ù.
+	// ê°œë³„ ì• ë‹ˆë©”ì´ì…˜ì˜ í”„ë ˆì„ì„ ì—…ë°ì´íŠ¸í•œë‹¤.
 	updateFrames("Gargoyle_Idle", animTimeIdle_);
 	updateFrames("Gargoyle_Walk", animTimeWalk_);
 	updateFrames("Gargoyle_Attack", animTimeAttack_);
@@ -1503,18 +1503,18 @@ void AnimBlenderGargoyle::onCalcLocal(PassKey<AnimSystem>) {
 	auto& framesHit = curFrames("Gargoyle_Hit");
 	auto& framesDeath = curFrames("Gargoyle_Death");
 
-	// ¾Ö´Ï¸ŞÀÌ¼ÇÀÇ ÇÁ·¹ÀÓµéÀ» ºí·»µùÇÑ´Ù.
+	// ì• ë‹ˆë©”ì´ì…˜ì˜ í”„ë ˆì„ë“¤ì„ ë¸”ë Œë”©í•œë‹¤.
 	for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
 		WeightedAnimFrame frames[] = {
 			WeightedAnimFrame{ .frame = framesIdle[i], .w = tIdle_ },
 			WeightedAnimFrame{ .frame = framesWalk[i], .w = tWalk_ }
 		};
 		framesBlended_[i] = sumWeightedAnimFrames(frames);
-		// attack animation º¸°£
+		// attack animation ë³´ê°„
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesAttack[i], tAttack_);
-		// hit animation º¸°£ (nlerp ¾²¸é ÆÈ²ŞÄ¡ ²¿ÀÓ)
+		// hit animation ë³´ê°„ (nlerp ì“°ë©´ íŒ”ê¿ˆì¹˜ ê¼¬ì„)
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i], tHit_);
-		// death animation º¸°£
+		// death animation ë³´ê°„
 		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i], tDeath_);
 	}
 	std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
@@ -1545,13 +1545,13 @@ void AnimBlenderGargoyle::EventBus::receive(const BasicEvent* event, Seconds del
 	}
 }
 
-// ¸ğµ¨À» ¼³Á¤ÇÑ´Ù.
-// ¸ğµ¨ÀÌ ÀÖ´Â °ÔÀÓ °´Ã¼´Â render ½Ã GFX¿¡ DrawEvent¸¦ Á¦ÃâÇÑ´Ù.
-// ¸ğµ¨¿¡ ¹Ù¿îµù º¼·ıÀÌ Á¸ÀçÇÒ °æ¿ì, ¿ùµå °ø°£ ¹Ù¿îµù º¼·ıÀ» ±¸ÃàÇÑ´Ù.
-// (¸ğµ¨ÀÇ ¹Ù¿îµù º¼·ıÀ» ±â¹İÀ¸·Î °ÔÀÓ °´Ã¼ÀÇ ¿ùµå º¯È¯À» Àû¿ëÇÑ
-//  ¿ùµå °ø°£ ¹Ù¿îµù º¼·ıÀ» µû·Î µÎ¾î¾ß ¿ùµå °ø°£ Ãæµ¹ Ã³¸®°¡ °¡´ÉÇÏ´Ù.)
+// ëª¨ë¸ì„ ì„¤ì •í•œë‹¤.
+// ëª¨ë¸ì´ ìˆëŠ” ê²Œì„ ê°ì²´ëŠ” render ì‹œ GFXì— DrawEventë¥¼ ì œì¶œí•œë‹¤.
+// ëª¨ë¸ì— ë°”ìš´ë”© ë³¼ë¥¨ì´ ì¡´ì¬í•  ê²½ìš°, ì›”ë“œ ê³µê°„ ë°”ìš´ë”© ë³¼ë¥¨ì„ êµ¬ì¶•í•œë‹¤.
+// (ëª¨ë¸ì˜ ë°”ìš´ë”© ë³¼ë¥¨ì„ ê¸°ë°˜ìœ¼ë¡œ ê²Œì„ ê°ì²´ì˜ ì›”ë“œ ë³€í™˜ì„ ì ìš©í•œ
+//  ì›”ë“œ ê³µê°„ ë°”ìš´ë”© ë³¼ë¥¨ì„ ë”°ë¡œ ë‘ì–´ì•¼ ì›”ë“œ ê³µê°„ ì¶©ëŒ ì²˜ë¦¬ê°€ ê°€ëŠ¥í•˜ë‹¤.)
 void Object::setModel(const Model* pModel){
-	DISPLAY_ERROR_STR(pModel != nullptr, "[Game Error] Object::setModel: ³Î ¸ğµ¨ÀÌ Àü´ŞµÇ¾ú½À´Ï´Ù.", false);
+	DISPLAY_ERROR_STR(pModel != nullptr, "[Game Error] Object::setModel: ë„ ëª¨ë¸ì´ ì „ë‹¬ë˜ì—ˆìŠµë‹ˆë‹¤.", false);
 	if (pModel == nullptr) {
 		return;
 	}
@@ -1569,27 +1569,27 @@ void Object::setModel(const Model* pModel){
 	renderState_.worldBVs.resize(currPhysicState_.aabbs.size());
 }
 
-// @brief °ÔÀÓ °´Ã¼ÀÇ RenderState¿Í ¹æÇâ º¤ÅÍµéÀ» °»½ÅÇÑ´Ù.
-//		RenderState´Â ÀÌÀü PhysicState¿Í ÇöÀç PhysicState¸¦ º¸°£ÇÏ¿© ¾ò¾îÁö°í,
-//      ¹æÇâ º¤ÅÍµéÀº ÇöÀç PhysicStateÀÇ ³»¿ëÀ¸·Î °è»êÇÑ´Ù.
-// @param deltaTime ¸¶Áö¸· ÇÁ·¹ÀÓÀ¸·ÎºÎÅÍ °æ°úÇÑ ½Ã°£
-// @param tPhysicInterpolation ÀÌÀü PhysicState¿Í ÇöÀç PhysicStateÀÇ º¸°£ ºñÀ²
-//		(°ÔÀÓ °´Ã¼°¡ °è»êÇØ¼­ ÀÏ°ıÀûÀ¸·Î Àü´ŞÇØ¾ß ÇÑ´Ù.)
+// @brief ê²Œì„ ê°ì²´ì˜ RenderStateì™€ ë°©í–¥ ë²¡í„°ë“¤ì„ ê°±ì‹ í•œë‹¤.
+//		RenderStateëŠ” ì´ì „ PhysicStateì™€ í˜„ì¬ PhysicStateë¥¼ ë³´ê°„í•˜ì—¬ ì–»ì–´ì§€ê³ ,
+//      ë°©í–¥ ë²¡í„°ë“¤ì€ í˜„ì¬ PhysicStateì˜ ë‚´ìš©ìœ¼ë¡œ ê³„ì‚°í•œë‹¤.
+// @param deltaTime ë§ˆì§€ë§‰ í”„ë ˆì„ìœ¼ë¡œë¶€í„° ê²½ê³¼í•œ ì‹œê°„
+// @param tPhysicInterpolation ì´ì „ PhysicStateì™€ í˜„ì¬ PhysicStateì˜ ë³´ê°„ ë¹„ìœ¨
+//		(ê²Œì„ ê°ì²´ê°€ ê³„ì‚°í•´ì„œ ì¼ê´„ì ìœ¼ë¡œ ì „ë‹¬í•´ì•¼ í•œë‹¤.)
 void Object::update(Milliseconds deltaTime, float tPhysicInterpolation) {
 	const auto& prev = prevPhysicState_;
 	const auto& curr = currPhysicState_;
 	const auto t = tPhysicInterpolation;
 
-	// ¹æÇâ º¤ÅÍ °»½Å
+	// ë°©í–¥ ë²¡í„° ê°±ì‹ 
 	right_ = curr.orient.rotate(mu::Vec3(1.f, 0.f, 0.f));
 	up_ = curr.orient.rotate(mu::Vec3(0.f, 1.f, 0.f));
 	forward_ = curr.orient.rotate(mu::Vec3(0.f, 0.f, 1.f));
 	
-	// ·»´õ »óÅÂ °»½Å
+	// ë Œë” ìƒíƒœ ê°±ì‹ 
 	auto& pos = renderState_.pos;
 	pos = mu::lerp(prev.pos, curr.pos, t);
 	auto& orient = renderState_.orient;
-	orient = mu::slerp(prev.orient, curr.orient, t);	// ÄõÅÍ´Ï¾ğ
+	orient = mu::slerp(prev.orient, curr.orient, t);	// ì¿¼í„°ë‹ˆì–¸
 	auto& scale = renderState_.scale;
 	scale = mu::lerp(prev.scale, curr.scale, t);
 
@@ -1606,7 +1606,7 @@ void Object::update(Milliseconds deltaTime, float tPhysicInterpolation) {
 		renderState_.animBlender->update(deltaTime, this);
 	}
 
-	// ºÎ¼Ó °´Ã¼ °»½Å
+	// ë¶€ì† ê°ì²´ ê°±ì‹ 
 	for (auto& equipment : equipments_) {
 		equipment.object->update(deltaTime, tPhysicInterpolation);
 	}
@@ -1651,26 +1651,26 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 		}
 	}
 
-	// ºÎ¼Ó °´Ã¼ ·»´õ¸µ
+	// ë¶€ì† ê°ì²´ ë Œë”ë§
 	if (renderState_.animBlender) {
 		auto& skeleton = renderState_.pModel->skeleton;
 
 		for (auto& equipment : equipments_) {
-			// ¼ÒÄÏÀÌ ´Ş¸° º»ÀÇ º¯È¯À» ¹İ¿µÇØÁÖ¾î¾ß ÇÑ´Ù.
-			// animBlenderÀÇ finalXformData´Â Dress->Local->Animation->DressÀÇ º¯È¯ ³»¿ëÀ» ´ã°í ÀÖÀ¸¹Ç·Î
-			// Local->Dress º¯È¯À» ¾Õ¿¡ ³Ö¾îÁÖ¾î¾ß ÇÑ´Ù.
-			// (ºÎ¼Ó °´Ã¼¸¦ ºÎ¸ğ °´Ã¼ÀÇ ÁÂÇ¥°è·Î ¿¬°áÇÏ´Â °úÁ¤ÀÌ¶ó »ı°¢ÇÏ¸é ÁÁ´Ù.)
+			// ì†Œì¼“ì´ ë‹¬ë¦° ë³¸ì˜ ë³€í™˜ì„ ë°˜ì˜í•´ì£¼ì–´ì•¼ í•œë‹¤.
+			// animBlenderì˜ finalXformDataëŠ” Dress->Local->Animation->Dressì˜ ë³€í™˜ ë‚´ìš©ì„ ë‹´ê³  ìˆìœ¼ë¯€ë¡œ
+			// Local->Dress ë³€í™˜ì„ ì•ì— ë„£ì–´ì£¼ì–´ì•¼ í•œë‹¤.
+			// (ë¶€ì† ê°ì²´ë¥¼ ë¶€ëª¨ ê°ì²´ì˜ ì¢Œí‘œê³„ë¡œ ì—°ê²°í•˜ëŠ” ê³¼ì •ì´ë¼ ìƒê°í•˜ë©´ ì¢‹ë‹¤.)
 			//
-			// ¶ÇÇÑ, ¾ÆÀÌÅÛ¸¶´Ù °¢ ¼ÒÄÏ¿¡ ºÎÂøµÇ¾úÀ» ¶§ ¿ÀÇÁ¼ÂÀÌ Á¸ÀçÇÏ¹Ç·Î,
-			// ÇØ´ç ¿ÀÇÁ¼ÂÀ» ¸Ç ¾Õ¿¡ °öÇØÁØ´Ù.
+			// ë˜í•œ, ì•„ì´í…œë§ˆë‹¤ ê° ì†Œì¼“ì— ë¶€ì°©ë˜ì—ˆì„ ë•Œ ì˜¤í”„ì…‹ì´ ì¡´ì¬í•˜ë¯€ë¡œ,
+			// í•´ë‹¹ ì˜¤í”„ì…‹ì„ ë§¨ ì•ì— ê³±í•´ì¤€ë‹¤.
 			//
-			// µû¶ó¼­ Çà·Ä°ö Àû¿ë ¼ø¼­´Â
-			// 1. ¾ÆÀÌÅÛÀÇ ¼ÒÄÏÀ¸·ÎºÎÅÍÀÇ offset Çà·Ä
-			// 2. ¼ÒÄÏ º»À» dress °ø°£À¸·Î ¿Å±â´Â Çà·Ä
-			// 3. ¼ÒÄÏ º»ÀÇ ¾Ö´Ï¸ŞÀÌ¼ÇµÈ ÃÖÁ¾ Çà·Ä
-			// 4. °´Ã¼ÀÇ ¿ùµåº¯È¯ Çà·Ä(renderState_.world) ¶Ç´Â ºÎ¸ğ ºÎ¼Ó °´Ã¼ÀÇ ÃÖÁ¾ ¿ÀÇÁ¼Â Çà·Ä(offsetXform)
-			// (µÑ Áß ÇÏ³ª´Â ¹«Á¶°Ç ´ÜÀ§ Çà·ÄÀÌ´Ù. µÑÀ» °ö¼ÀÀ¸·Î ÀÌÀº °Í¿¡ Çò°¥¸®Áö ¸»ÀÚ.)
-			// ÀÌ´Ù.
+			// ë”°ë¼ì„œ í–‰ë ¬ê³± ì ìš© ìˆœì„œëŠ”
+			// 1. ì•„ì´í…œì˜ ì†Œì¼“ìœ¼ë¡œë¶€í„°ì˜ offset í–‰ë ¬
+			// 2. ì†Œì¼“ ë³¸ì„ dress ê³µê°„ìœ¼ë¡œ ì˜®ê¸°ëŠ” í–‰ë ¬
+			// 3. ì†Œì¼“ ë³¸ì˜ ì• ë‹ˆë©”ì´ì…˜ëœ ìµœì¢… í–‰ë ¬
+			// 4. ê°ì²´ì˜ ì›”ë“œë³€í™˜ í–‰ë ¬(renderState_.world) ë˜ëŠ” ë¶€ëª¨ ë¶€ì† ê°ì²´ì˜ ìµœì¢… ì˜¤í”„ì…‹ í–‰ë ¬(offsetXform)
+			// (ë‘˜ ì¤‘ í•˜ë‚˜ëŠ” ë¬´ì¡°ê±´ ë‹¨ìœ„ í–‰ë ¬ì´ë‹¤. ë‘˜ì„ ê³±ì…ˆìœ¼ë¡œ ì´ì€ ê²ƒì— í—·ê°ˆë¦¬ì§€ ë§ì.)
+			// ì´ë‹¤.
 			equipment.object->render( gfx,
 				equipment.object->renderState_.pModel->socketOffsets.at(equipment.socketType)
 				* skeleton.bones->at( skeleton.socketToBoneIdx.at(equipment.socketType) ).toDress
@@ -1681,9 +1681,9 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 	}
 }
 
-// °ÔÀÓ °´Ã¼ÀÇ À§Ä¡¸¦ °»½ÅÇÑ´Ù.
-// ÀÌÀü PhysicState¿Í ÇöÀç PhysicStateÀÇ À§Ä¡°¡ ¸ğµÎ °»½ÅµÈ´Ù.
-// °¢ PhysicStateÀÇ AABB ¿ª½Ã °»½ÅµÈ´Ù.
+// ê²Œì„ ê°ì²´ì˜ ìœ„ì¹˜ë¥¼ ê°±ì‹ í•œë‹¤.
+// ì´ì „ PhysicStateì™€ í˜„ì¬ PhysicStateì˜ ìœ„ì¹˜ê°€ ëª¨ë‘ ê°±ì‹ ëœë‹¤.
+// ê° PhysicStateì˜ AABB ì—­ì‹œ ê°±ì‹ ëœë‹¤.
 void MU_CALLCONV Object::setPos(mu::Vec3 newPos) {
 	prevPhysicState_.pos = newPos;
 	currPhysicState_.pos = newPos;
@@ -1703,8 +1703,8 @@ void MU_CALLCONV Object::setPos(mu::Vec3 newPos) {
 	}
 }
 
-// °ÔÀÓ °´Ã¼ÀÇ À§Ä¡¸¦ °»½ÅÇÑ´Ù.
-// ÇöÀç PhysicStateÀÇ À§Ä¡¸¸ °»½ÅµÈ´Ù.
+// ê²Œì„ ê°ì²´ì˜ ìœ„ì¹˜ë¥¼ ê°±ì‹ í•œë‹¤.
+// í˜„ì¬ PhysicStateì˜ ìœ„ì¹˜ë§Œ ê°±ì‹ ëœë‹¤.
 void MU_CALLCONV Object::setCurrPos(mu::Vec3 newPos) {
 	currPhysicState_.pos = newPos;
 
@@ -1723,23 +1723,23 @@ void MU_CALLCONV Object::setCurrPos(mu::Vec3 newPos) {
 	}
 }
 
-// °ÔÀÓ °´Ã¼ÀÇ ¼Óµµ¸¦ °»½ÅÇÑ´Ù.
-// ÀÌÀü PhysicState¿Í ÇöÀç PhysicStateÀÇ ¼Óµµ°¡ ¸ğµÎ °»½ÅµÈ´Ù.
+// ê²Œì„ ê°ì²´ì˜ ì†ë„ë¥¼ ê°±ì‹ í•œë‹¤.
+// ì´ì „ PhysicStateì™€ í˜„ì¬ PhysicStateì˜ ì†ë„ê°€ ëª¨ë‘ ê°±ì‹ ëœë‹¤.
 void MU_CALLCONV Object::setVelocity(mu::Vec3 newVelocity) {
 	prevPhysicState_.velocity = newVelocity;
 	currPhysicState_.velocity = newVelocity;
 }
 
-// °ÔÀÓ °´Ã¼ÀÇ °¢¼Óµµ¸¦ °»½ÅÇÑ´Ù.
-// ÀÌÀü PhysicState¿Í ÇöÀç PhysicStateÀÇ °¢¼Óµµ°¡ ¸ğµÎ °»½ÅµÈ´Ù.
+// ê²Œì„ ê°ì²´ì˜ ê°ì†ë„ë¥¼ ê°±ì‹ í•œë‹¤.
+// ì´ì „ PhysicStateì™€ í˜„ì¬ PhysicStateì˜ ê°ì†ë„ê°€ ëª¨ë‘ ê°±ì‹ ëœë‹¤.
 void MU_CALLCONV Object::setOmega(mu::Vec3 newOmega) {
 	prevPhysicState_.omega = newOmega;
 	currPhysicState_.omega = newOmega;
 }
 
-// °ÔÀÓ °´Ã¼ÀÇ ¹æÇâÀ» °»½ÅÇÑ´Ù.
-// ÀÌÀü PhysicState¿Í ÇöÀç PhysicStateÀÇ ¹æÇâÀÌ ¸ğµÎ °»½ÅµÈ´Ù.
-// °ÔÀÓ °´Ã¼ÀÇ ¹æÇâ º¤ÅÍµéµµ ÀüºÎ °»½ÅµÈ´Ù.
+// ê²Œì„ ê°ì²´ì˜ ë°©í–¥ì„ ê°±ì‹ í•œë‹¤.
+// ì´ì „ PhysicStateì™€ í˜„ì¬ PhysicStateì˜ ë°©í–¥ì´ ëª¨ë‘ ê°±ì‹ ëœë‹¤.
+// ê²Œì„ ê°ì²´ì˜ ë°©í–¥ ë²¡í„°ë“¤ë„ ì „ë¶€ ê°±ì‹ ëœë‹¤.
 void MU_CALLCONV Object::setOrient(mu::NQuat newOrient) {
 	prevPhysicState_.orient = newOrient;
 	currPhysicState_.orient = newOrient;
@@ -1748,9 +1748,9 @@ void MU_CALLCONV Object::setOrient(mu::NQuat newOrient) {
 	forward_ = currPhysicState_.orient.rotate(mu::Vec3(0.f, 0.f, 1.f));
 }
 
-// °ÔÀÓ °´Ã¼ÀÇ Å©±â¸¦ °»½ÅÇÑ´Ù.
-// ÀÌÀü PhysicState¿Í ÇöÀç PhysicStateÀÇ Å©±â°¡ ¸ğµÎ °»½ÅµÈ´Ù.
-// °¢ PhysicStateÀÇ AABB ¿ª½Ã °»½ÅµÈ´Ù.
+// ê²Œì„ ê°ì²´ì˜ í¬ê¸°ë¥¼ ê°±ì‹ í•œë‹¤.
+// ì´ì „ PhysicStateì™€ í˜„ì¬ PhysicStateì˜ í¬ê¸°ê°€ ëª¨ë‘ ê°±ì‹ ëœë‹¤.
+// ê° PhysicStateì˜ AABB ì—­ì‹œ ê°±ì‹ ëœë‹¤.
 void MU_CALLCONV Object::setScale(mu::Vec3 newScale) {
 	prevPhysicState_.scale = newScale;
 	currPhysicState_.scale = newScale;
@@ -1790,7 +1790,7 @@ void Object::disequip(Bone::SocketType socketType) {
 
 	equipments_.erase(toRemoves.begin(), toRemoves.end());
 	
-	// ÇÊ¿äÇÏ´Ù¸é º»ÀÇ ÃÖÁ¾ º¯È¯À¸·ÎºÎÅÍ T, RÀ» ÃßÃâÇØ ºĞ¸®µÈ ¿ÀºêÁ§Æ®¿¡ º¹¿øÇØ³»µµ·Ï ÇÑ´Ù.
+	// í•„ìš”í•˜ë‹¤ë©´ ë³¸ì˜ ìµœì¢… ë³€í™˜ìœ¼ë¡œë¶€í„° T, Rì„ ì¶”ì¶œí•´ ë¶„ë¦¬ëœ ì˜¤ë¸Œì íŠ¸ì— ë³µì›í•´ë‚´ë„ë¡ í•œë‹¤.
 }
 
 Equipment* Object::getEquipment(Bone::SocketType socketType) {
@@ -1831,8 +1831,8 @@ void Player::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Event
 	//		holdEvent(evList, EvBlood(pOwner->getId()));
 	//		pOwner->hp_ = std::max( static_cast<const EvHit*>(event)->hp, 0 );
 
-	//		// ¿Â¶óÀÎ °ÔÀÓÀÇ °æ¿ì ¼­¹ö¿¡¼­ Á×À½ ÆÇÁ¤À» ¼öÇàÇÏ¹Ç·Î
-	//		// °ø¿ë ÄÚµåÀÎ ÀÌ°÷¿¡¼­ death event¸¦ ´Ù·çÁö ¾Ê´Â´Ù.
+	//		// ì˜¨ë¼ì¸ ê²Œì„ì˜ ê²½ìš° ì„œë²„ì—ì„œ ì£½ìŒ íŒì •ì„ ìˆ˜í–‰í•˜ë¯€ë¡œ
+	//		// ê³µìš© ì½”ë“œì¸ ì´ê³³ì—ì„œ death eventë¥¼ ë‹¤ë£¨ì§€ ì•ŠëŠ”ë‹¤.
 	//	}
 	//	break;
 
@@ -1867,8 +1867,8 @@ void Goblin::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Event
 			// holdEvent(evList, EvBlood(pOwner->getId()));
 			pOwner->hp_ = std::max( static_cast<const EvHit*>(event)->hp, 0 );
 
-			// ¿Â¶óÀÎ °ÔÀÓÀÇ °æ¿ì ¼­¹ö¿¡¼­ Á×À½ ÆÇÁ¤À» ¼öÇàÇÏ¹Ç·Î
-			// °ø¿ë ÄÚµåÀÎ ÀÌ°÷¿¡¼­ death event¸¦ ´Ù·çÁö ¾Ê´Â´Ù.
+			// ì˜¨ë¼ì¸ ê²Œì„ì˜ ê²½ìš° ì„œë²„ì—ì„œ ì£½ìŒ íŒì •ì„ ìˆ˜í–‰í•˜ë¯€ë¡œ
+			// ê³µìš© ì½”ë“œì¸ ì´ê³³ì—ì„œ death eventë¥¼ ë‹¤ë£¨ì§€ ì•ŠëŠ”ë‹¤.
 		}
 		break;
 
@@ -1914,8 +1914,8 @@ void Anubis::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Event
 			// holdEvent(evList, EvBlood(pOwner->getId()));
 			pOwner->hp_ = std::max( static_cast<const EvHit*>(event)->hp, 0 );
 
-			// ¿Â¶óÀÎ °ÔÀÓÀÇ °æ¿ì ¼­¹ö¿¡¼­ Á×À½ ÆÇÁ¤À» ¼öÇàÇÏ¹Ç·Î
-			// °ø¿ë ÄÚµåÀÎ ÀÌ°÷¿¡¼­ death event¸¦ ´Ù·çÁö ¾Ê´Â´Ù.
+			// ì˜¨ë¼ì¸ ê²Œì„ì˜ ê²½ìš° ì„œë²„ì—ì„œ ì£½ìŒ íŒì •ì„ ìˆ˜í–‰í•˜ë¯€ë¡œ
+			// ê³µìš© ì½”ë“œì¸ ì´ê³³ì—ì„œ death eventë¥¼ ë‹¤ë£¨ì§€ ì•ŠëŠ”ë‹¤.
 		}
 		break;
 
@@ -1961,8 +1961,8 @@ void Bat::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventLis
 			// holdEvent(evList, EvBlood(pOwner->getId()));
 			pOwner->hp_ = std::max( static_cast<const EvHit*>(event)->hp, 0 );
 
-			// ¿Â¶óÀÎ °ÔÀÓÀÇ °æ¿ì ¼­¹ö¿¡¼­ Á×À½ ÆÇÁ¤À» ¼öÇàÇÏ¹Ç·Î
-			// °ø¿ë ÄÚµåÀÎ ÀÌ°÷¿¡¼­ death event¸¦ ´Ù·çÁö ¾Ê´Â´Ù.
+			// ì˜¨ë¼ì¸ ê²Œì„ì˜ ê²½ìš° ì„œë²„ì—ì„œ ì£½ìŒ íŒì •ì„ ìˆ˜í–‰í•˜ë¯€ë¡œ
+			// ê³µìš© ì½”ë“œì¸ ì´ê³³ì—ì„œ death eventë¥¼ ë‹¤ë£¨ì§€ ì•ŠëŠ”ë‹¤.
 		}
 		break;
 
@@ -2008,8 +2008,8 @@ void Bomber::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Event
 			// holdEvent(evList, EvBlood(pOwner->getId()));
 			pOwner->hp_ = std::max( static_cast<const EvHit*>(event)->hp, 0 );
 
-			// ¿Â¶óÀÎ °ÔÀÓÀÇ °æ¿ì ¼­¹ö¿¡¼­ Á×À½ ÆÇÁ¤À» ¼öÇàÇÏ¹Ç·Î
-			// °ø¿ë ÄÚµåÀÎ ÀÌ°÷¿¡¼­ death event¸¦ ´Ù·çÁö ¾Ê´Â´Ù.
+			// ì˜¨ë¼ì¸ ê²Œì„ì˜ ê²½ìš° ì„œë²„ì—ì„œ ì£½ìŒ íŒì •ì„ ìˆ˜í–‰í•˜ë¯€ë¡œ
+			// ê³µìš© ì½”ë“œì¸ ì´ê³³ì—ì„œ death eventë¥¼ ë‹¤ë£¨ì§€ ì•ŠëŠ”ë‹¤.
 		}
 		break;
 
@@ -2055,8 +2055,8 @@ void Demon::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventL
 			// holdEvent(evList, EvBlood(pOwner->getId()));
 			pOwner->hp_ = std::max( static_cast<const EvHit*>(event)->hp, 0 );
 
-			// ¿Â¶óÀÎ °ÔÀÓÀÇ °æ¿ì ¼­¹ö¿¡¼­ Á×À½ ÆÇÁ¤À» ¼öÇàÇÏ¹Ç·Î
-			// °ø¿ë ÄÚµåÀÎ ÀÌ°÷¿¡¼­ death event¸¦ ´Ù·çÁö ¾Ê´Â´Ù.
+			// ì˜¨ë¼ì¸ ê²Œì„ì˜ ê²½ìš° ì„œë²„ì—ì„œ ì£½ìŒ íŒì •ì„ ìˆ˜í–‰í•˜ë¯€ë¡œ
+			// ê³µìš© ì½”ë“œì¸ ì´ê³³ì—ì„œ death eventë¥¼ ë‹¤ë£¨ì§€ ì•ŠëŠ”ë‹¤.
 		}
 		break;
 
@@ -2102,8 +2102,8 @@ void Dragon::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Event
 			// holdEvent(evList, EvBlood(pOwner->getId()));
 			pOwner->hp_ = std::max( static_cast<const EvHit*>(event)->hp, 0 );
 
-			// ¿Â¶óÀÎ °ÔÀÓÀÇ °æ¿ì ¼­¹ö¿¡¼­ Á×À½ ÆÇÁ¤À» ¼öÇàÇÏ¹Ç·Î
-			// °ø¿ë ÄÚµåÀÎ ÀÌ°÷¿¡¼­ death event¸¦ ´Ù·çÁö ¾Ê´Â´Ù.
+			// ì˜¨ë¼ì¸ ê²Œì„ì˜ ê²½ìš° ì„œë²„ì—ì„œ ì£½ìŒ íŒì •ì„ ìˆ˜í–‰í•˜ë¯€ë¡œ
+			// ê³µìš© ì½”ë“œì¸ ì´ê³³ì—ì„œ death eventë¥¼ ë‹¤ë£¨ì§€ ì•ŠëŠ”ë‹¤.
 		}
 		break;
 
@@ -2149,8 +2149,8 @@ void Eyeball::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Even
 			// holdEvent(evList, EvBlood(pOwner->getId()));
 			pOwner->hp_ = std::max( static_cast<const EvHit*>(event)->hp, 0 );
 
-			// ¿Â¶óÀÎ °ÔÀÓÀÇ °æ¿ì ¼­¹ö¿¡¼­ Á×À½ ÆÇÁ¤À» ¼öÇàÇÏ¹Ç·Î
-			// °ø¿ë ÄÚµåÀÎ ÀÌ°÷¿¡¼­ death event¸¦ ´Ù·çÁö ¾Ê´Â´Ù.
+			// ì˜¨ë¼ì¸ ê²Œì„ì˜ ê²½ìš° ì„œë²„ì—ì„œ ì£½ìŒ íŒì •ì„ ìˆ˜í–‰í•˜ë¯€ë¡œ
+			// ê³µìš© ì½”ë“œì¸ ì´ê³³ì—ì„œ death eventë¥¼ ë‹¤ë£¨ì§€ ì•ŠëŠ”ë‹¤.
 		}
 		break;
 
@@ -2196,8 +2196,8 @@ void Fishman::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Even
 			// holdEvent(evList, EvBlood(pOwner->getId()));
 			pOwner->hp_ = std::max( static_cast<const EvHit*>(event)->hp, 0 );
 
-			// ¿Â¶óÀÎ °ÔÀÓÀÇ °æ¿ì ¼­¹ö¿¡¼­ Á×À½ ÆÇÁ¤À» ¼öÇàÇÏ¹Ç·Î
-			// °ø¿ë ÄÚµåÀÎ ÀÌ°÷¿¡¼­ death event¸¦ ´Ù·çÁö ¾Ê´Â´Ù.
+			// ì˜¨ë¼ì¸ ê²Œì„ì˜ ê²½ìš° ì„œë²„ì—ì„œ ì£½ìŒ íŒì •ì„ ìˆ˜í–‰í•˜ë¯€ë¡œ
+			// ê³µìš© ì½”ë“œì¸ ì´ê³³ì—ì„œ death eventë¥¼ ë‹¤ë£¨ì§€ ì•ŠëŠ”ë‹¤.
 		}
 		break;
 
@@ -2243,8 +2243,8 @@ void Gargoyle::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Eve
 			// holdEvent(evList, EvBlood(pOwner->getId()));
 			pOwner->hp_ = std::max( static_cast<const EvHit*>(event)->hp, 0 );
 
-			// ¿Â¶óÀÎ °ÔÀÓÀÇ °æ¿ì ¼­¹ö¿¡¼­ Á×À½ ÆÇÁ¤À» ¼öÇàÇÏ¹Ç·Î
-			// °ø¿ë ÄÚµåÀÎ ÀÌ°÷¿¡¼­ death event¸¦ ´Ù·çÁö ¾Ê´Â´Ù.
+			// ì˜¨ë¼ì¸ ê²Œì„ì˜ ê²½ìš° ì„œë²„ì—ì„œ ì£½ìŒ íŒì •ì„ ìˆ˜í–‰í•˜ë¯€ë¡œ
+			// ê³µìš© ì½”ë“œì¸ ì´ê³³ì—ì„œ death eventë¥¼ ë‹¤ë£¨ì§€ ì•ŠëŠ”ë‹¤.
 		}
 		break;
 

@@ -1,8 +1,8 @@
-#include "pch.hpp"
+ï»¿#include "pch.hpp"
 #include "gfx.hpp"
 #include "errorHandling.hpp"
 
-// GFX°¡ ¼Ò¸êÇÒ ¶§, Á¦ÃâµÈ ¸ğµç GPUÀÛ¾÷ÀÌ ¿Ï·áµÇ°í ³ª¼­ ¼Ò¸êÇÏµµ·Ï ÇÑ´Ù.
+// GFXê°€ ì†Œë©¸í•  ë•Œ, ì œì¶œëœ ëª¨ë“  GPUì‘ì—…ì´ ì™„ë£Œë˜ê³  ë‚˜ì„œ ì†Œë©¸í•˜ë„ë¡ í•œë‹¤.
 GFX::~GFX() {
 	for (std::size_t i = 0u; i < backBuffers_.size(); ++i) {
 		waitOnFence("FrameFence"s + std::to_string(i));
@@ -10,8 +10,8 @@ GFX::~GFX() {
 	waitOnFence("LoadFence");
 }
 
-// DXGI Factory¸¦ ÃÊ±âÈ­ÇÏ°í, DXGI AdapterµéÀ» ¿­°ÅÇÑ´Ù.
-// ±×¸®°í ±× Áß ÇÏ³ª¸¦ ¼±ÅÃÇÏ¿© curAdapter_¿¡ ÀúÀåÇÑ´Ù.
+// DXGI Factoryë¥¼ ì´ˆê¸°í™”í•˜ê³ , DXGI Adapterë“¤ì„ ì—´ê±°í•œë‹¤.
+// ê·¸ë¦¬ê³  ê·¸ ì¤‘ í•˜ë‚˜ë¥¼ ì„ íƒí•˜ì—¬ curAdapter_ì— ì €ì¥í•œë‹¤.
 void GFX::setupDXGI(D3D_FEATURE_LEVEL d3dFeatureLevel) {
 #ifdef DXGI_DEBUG_INFO
 	DXGIDebugInfo::init();
@@ -34,9 +34,9 @@ void GFX::setupDXGI(D3D_FEATURE_LEVEL d3dFeatureLevel) {
 
 	setDXName(dxgiFactory_.Get(), "DXGIFactory");
 
-	// Ãâ·Â ÀÎÀÚ°¡ nullptrÀÎ D3D12CreateDeviceÀÇ È£ÃâÀº ÇØ´ç ±×·¡ÇÈ ¾î´ğÅÍ°¡
-	// d3d12¸¦ Áö¿øÇÏ´ÂÁö °Ë»çÇÒ ¼ö ÀÖ´Ù.
-	// ÀÌ¸¦ ÅëÇØ d3d12¸¦ Áö¿øÇÏ´Â ±×·¡ÇÈ ¾î´ğÅÍµéÀ» adapters_¿¡ ¿­°ÅÇÏÀÚ.
+	// ì¶œë ¥ ì¸ìê°€ nullptrì¸ D3D12CreateDeviceì˜ í˜¸ì¶œì€ í•´ë‹¹ ê·¸ë˜í”½ ì–´ëŒ‘í„°ê°€
+	// d3d12ë¥¼ ì§€ì›í•˜ëŠ”ì§€ ê²€ì‚¬í•  ìˆ˜ ìˆë‹¤.
+	// ì´ë¥¼ í†µí•´ d3d12ë¥¼ ì§€ì›í•˜ëŠ” ê·¸ë˜í”½ ì–´ëŒ‘í„°ë“¤ì„ adapters_ì— ì—´ê±°í•˜ì.
 	auto pAdapter = ComPtr<IDXGIAdapter1>{};
 	DXGI_ADAPTER_DESC1 desc{};
 
@@ -56,7 +56,7 @@ void GFX::setupDXGI(D3D_FEATURE_LEVEL d3dFeatureLevel) {
 		}
 	}
 
-	// WARP ¾î´ğÅÍ°¡ Áßº¹ °¨ÁöµÇ¹Ç·Î ÇöÀç ¾Æ·¡ ÄÚµå´Â »ç¿ëÇÏÁö ¾ÊÀ½.
+	// WARP ì–´ëŒ‘í„°ê°€ ì¤‘ë³µ ê°ì§€ë˜ë¯€ë¡œ í˜„ì¬ ì•„ë˜ ì½”ë“œëŠ” ì‚¬ìš©í•˜ì§€ ì•ŠìŒ.
 
 	//auto hr = dxgiFactory_->EnumWarpAdapter(__uuidof(IDXGIAdapter1), &pAdapter);
 	//if (hr == S_OK) {
@@ -70,40 +70,40 @@ void GFX::setupDXGI(D3D_FEATURE_LEVEL d3dFeatureLevel) {
 	//	}
 	//}
 
-	std::cout << "----------[±×·¡ÇÈ ¾î´ğÅÍ ¼³Á¤]----------\n";
-	std::cout << "»ç¿ëÇÒ ±×·¡ÇÈ ¾î´ğÅÍ¸¦ °ñ¶óÁÖ¼¼¿ä.\n";
+	std::cout << "----------[ê·¸ë˜í”½ ì–´ëŒ‘í„° ì„¤ì •]----------\n";
+	std::cout << "ì‚¬ìš©í•  ê·¸ë˜í”½ ì–´ëŒ‘í„°ë¥¼ ê³¨ë¼ì£¼ì„¸ìš”.\n";
 
 	for (std::size_t i = 0u; i < adapters_.size(); ++i) {
 		std::wcout << i << " - " << adapterDescs_[i].Description << '\n';
 	}
-	std::cout << "¼±ÅÃ: ";
+	std::cout << "ì„ íƒ: ";
 	int idx{};
 	std::cout << idx << '\n';
 	// std::cin >> idx;
 	std::wcout << idx << " - " << adapterDescs_[idx].Description;
-	std::cout << "ÀÌ ¼±ÅÃµÇ¾ú½À´Ï´Ù.\n";
+	std::cout << "ì´ ì„ íƒë˜ì—ˆìŠµë‹ˆë‹¤.\n";
 	std::cout << "----------------------------------------\n";
 
 	curAdapter_ = adapters_[idx];
 }
 
-// D3D12 Device¿Í Command Queue, Descriptor Heap, Descriptor PoolµéÀ» ¸¸µç´Ù.
-// °ø¿ë »ùÇÃ·¯µéÀ» »ı¼ºÇÑ´Ù.
-// RenderingSlave, ResourceLoading Ä«Å×°í¸®ÀÇ Command List PoolÀ» ÃÊ±âÈ­ÇÑ´Ù.
-// Root Signature¿Í Shader(PSO)µéÀ» ¸¸µç´Ù.
-// Load Fence¸¦ ¸¸µç´Ù.
-// ±×¸®°í DrawEventµéÀ» ÀúÀåÇÏ±â À§ÇÑ ¸Ş¸ğ¸®¸¦ ¿¹¾àÇÑ´Ù.
+// D3D12 Deviceì™€ Command Queue, Descriptor Heap, Descriptor Poolë“¤ì„ ë§Œë“ ë‹¤.
+// ê³µìš© ìƒ˜í”ŒëŸ¬ë“¤ì„ ìƒì„±í•œë‹¤.
+// RenderingSlave, ResourceLoading ì¹´í…Œê³ ë¦¬ì˜ Command List Poolì„ ì´ˆê¸°í™”í•œë‹¤.
+// Root Signatureì™€ Shader(PSO)ë“¤ì„ ë§Œë“ ë‹¤.
+// Load Fenceë¥¼ ë§Œë“ ë‹¤.
+// ê·¸ë¦¬ê³  DrawEventë“¤ì„ ì €ì¥í•˜ê¸° ìœ„í•œ ë©”ëª¨ë¦¬ë¥¼ ì˜ˆì•½í•œë‹¤.
 void GFX::init() {
 #ifdef DXGI_DEBUG_INFO
-	// D3D12 µğ¹ö±× °èÃş È°¼ºÈ­
+	// D3D12 ë””ë²„ê·¸ ê³„ì¸µ í™œì„±í™”
 	ComPtr<ID3D12Debug> pDebug = nullptr;
 	D3D12GetDebugInterface(__uuidof(ID3D12Debug), &pDebug);
 	pDebug->EnableDebugLayer();
 #endif
 
-	// D3D12 Device »ı¼º
-	DISPLAY_ERROR_STR(curAdapter_, "[GFX Error] È°¼ºÈ­µÈ ±×·¡ÇÈ ¾î´ğÅÍ°¡ ¾ø½À´Ï´Ù. "
-		"GFX::setupDXGIÀÇ È£ÃâÀÌ GFX::init È£Ãâ Àü¿¡ ÀÌ·ç¾îÁ³´ÂÁö È®ÀÎÇÏ¼¼¿ä.", true);
+	// D3D12 Device ìƒì„±
+	DISPLAY_ERROR_STR(curAdapter_, "[GFX Error] í™œì„±í™”ëœ ê·¸ë˜í”½ ì–´ëŒ‘í„°ê°€ ì—†ìŠµë‹ˆë‹¤. "
+		"GFX::setupDXGIì˜ í˜¸ì¶œì´ GFX::init í˜¸ì¶œ ì „ì— ì´ë£¨ì–´ì¡ŒëŠ”ì§€ í™•ì¸í•˜ì„¸ìš”.", true);
 
 	DISPLAY_ERROR_DX_HR(
 		D3D12CreateDevice(curAdapter_.Get(), d3dFeatureLevel_, __uuidof(ID3D12Device), &device_),
@@ -118,18 +118,18 @@ void GFX::init() {
 		.NodeMask = 0
 	};
 
-	// Command Queue »ı¼º
+	// Command Queue ìƒì„±
 	DISPLAY_ERROR_DX_HR(
 		device_->CreateCommandQueue(&qDesc, __uuidof(ID3D12CommandQueue), &cmdQ_),
 		true
 	);
 	setD3DName(cmdQ_.Get(), "CommandQueue");
 
-	// RenderingSlave, ResourceLoading Ä«Å×°í¸®ÀÇ Command List Pool ÃÊ±âÈ­
+	// RenderingSlave, ResourceLoading ì¹´í…Œê³ ë¦¬ì˜ Command List Pool ì´ˆê¸°í™”
 	cmdListPool_.init(device_.Get(), CommandListUsage::RenderingSlave, 64u);
 	cmdListPool_.init(device_.Get(), CommandListUsage::ResourceLoading, 16u);
 
-	// Descriptor Heap ¹× Poolµé »ı¼º
+	// Descriptor Heap ë° Poolë“¤ ìƒì„±
 	rtvHeap_ = DescriptorHeap( device_.Get(), D3D12_DESCRIPTOR_HEAP_DESC{
 		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
 		.NumDescriptors = 4u,
@@ -137,7 +137,7 @@ void GFX::init() {
 		.NodeMask = 0
 	} );
 
-	// RTV Pool: RTVHeapÀÇ [0, 4) ¹üÀ§
+	// RTV Pool: RTVHeapì˜ [0, 4) ë²”ìœ„
 	rtvPool_ = DescriptorPool( 4u, rtvHeap_.cpuStart, rtvHeap_.gpuStart, rtvHeap_.desc.Type,
 		rtvHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 		device_->GetDescriptorHandleIncrementSize(rtvHeap_.desc.Type)
@@ -150,13 +150,13 @@ void GFX::init() {
 		.NodeMask = 0
 	} );
 
-	// DSV Pool: DSVHeapÀÇ [0, 10) ¹üÀ§
+	// DSV Pool: DSVHeapì˜ [0, 10) ë²”ìœ„
 	dsvPool_ = DescriptorPool( 10u, dsvHeap_.cpuStart, dsvHeap_.gpuStart, dsvHeap_.desc.Type,
 		dsvHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 		device_->GetDescriptorHandleIncrementSize(dsvHeap_.desc.Type)
 	);
 
-	// SRV & CBV & UAV HeapÀº GPU Visible, bind ÇÊ¿ä
+	// SRV & CBV & UAV Heapì€ GPU Visible, bind í•„ìš”
 	srvCbvUavHeap_ = DescriptorHeap( device_.Get(), D3D12_DESCRIPTOR_HEAP_DESC{
 		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
 		.NumDescriptors = 2000u,
@@ -168,8 +168,8 @@ void GFX::init() {
 	auto cpuStart = srvCbvUavHeap_.cpuStart;
 	auto gpuStart = srvCbvUavHeap_.gpuStart;
 
-	// SRV Texture Pool: SRVHeapÀÇ [0, 1800) ¹üÀ§
-	// ÅØ½ºÃ³ ¸®¼Ò½º Áß ±âº» Texture2D°¡ ´ëºÎºĞÀÌ´Ù.
+	// SRV Texture Pool: SRVHeapì˜ [0, 1800) ë²”ìœ„
+	// í…ìŠ¤ì²˜ ë¦¬ì†ŒìŠ¤ ì¤‘ ê¸°ë³¸ Texture2Dê°€ ëŒ€ë¶€ë¶„ì´ë‹¤.
 	srvTexPool_ = DescriptorPool(1800u, cpuStart, gpuStart,
 		srvCbvUavHeap_.desc.Type, srvCbvUavHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 		cbvSrvUavIncSize
@@ -178,7 +178,7 @@ void GFX::init() {
 	cpuStart.ptr += 1800u * cbvSrvUavIncSize;
 	gpuStart.ptr += 1800u * cbvSrvUavIncSize;
 
-	// SRV Texture Array Pool: SRVHeapÀÇ [1800, 1900) ¹üÀ§
+	// SRV Texture Array Pool: SRVHeapì˜ [1800, 1900) ë²”ìœ„
 	srvTexArrayPool_ = DescriptorPool(100u, cpuStart, gpuStart,
 		srvCbvUavHeap_.desc.Type, srvCbvUavHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 		cbvSrvUavIncSize
@@ -187,13 +187,13 @@ void GFX::init() {
 	cpuStart.ptr += 100u * cbvSrvUavIncSize;
 	gpuStart.ptr += 100u * cbvSrvUavIncSize;
 
-	// SRV Texture Cube Pool: SRVHeapÀÇ [1900, 2000) ¹üÀ§
+	// SRV Texture Cube Pool: SRVHeapì˜ [1900, 2000) ë²”ìœ„
 	srvTexCubePool_ = DescriptorPool(100u, cpuStart, gpuStart,
 		srvCbvUavHeap_.desc.Type, srvCbvUavHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 		cbvSrvUavIncSize
 	);
 
-	// Sampler HeapÀº GPU Visible, bind ÇÊ¿ä
+	// Sampler Heapì€ GPU Visible, bind í•„ìš”
 	samHeap_ = DescriptorHeap( device_.Get(), D3D12_DESCRIPTOR_HEAP_DESC{
 		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
 		.NumDescriptors = 16u,
@@ -205,7 +205,7 @@ void GFX::init() {
 	cpuStart = samHeap_.cpuStart;
 	gpuStart = samHeap_.gpuStart;
 
-	// Sampler Pool: SAMHeapÀÇ [0, 14) ¹üÀ§
+	// Sampler Pool: SAMHeapì˜ [0, 14) ë²”ìœ„
 	samPool_ = DescriptorPool(14u, cpuStart, gpuStart, samHeap_.desc.Type,
 		samHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 		device_->GetDescriptorHandleIncrementSize(samHeap_.desc.Type)
@@ -214,21 +214,21 @@ void GFX::init() {
 	cpuStart.ptr += 14u * samIncSize;
 	gpuStart.ptr += 14u * samIncSize;
 
-	// Comparison Sampler Pool: SAMHeapÀÇ [14, 16) ¹üÀ§
-	// ±×¸²ÀÚ ±¸ÇöÀ» À§ÇØ ¿¹¾àµÈ »ùÇÃ·¯
+	// Comparison Sampler Pool: SAMHeapì˜ [14, 16) ë²”ìœ„
+	// ê·¸ë¦¼ì êµ¬í˜„ì„ ìœ„í•´ ì˜ˆì•½ëœ ìƒ˜í”ŒëŸ¬
 	cmpSamPool_ = DescriptorPool(2u, cpuStart, gpuStart, samHeap_.desc.Type,
 		samHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 		device_->GetDescriptorHandleIncrementSize(samHeap_.desc.Type)
 	);
 
-	// °ø¿ë »ùÇÃ·¯µé »ı¼º
+	// ê³µìš© ìƒ˜í”ŒëŸ¬ë“¤ ìƒì„±
 	createSamplers();
 
-	// Font ÃÊ±âÈ­
+	// Font ì´ˆê¸°í™”
 	font_.init( device_.Get(), cmdQ_.Get(), 1024u, 256u, ghWnd );
 	tahomaFont_ = font_.CreateFontObject( L"Tahoma", 16.0f);
 
-	// Root Signatures & Shaders »ı¼º
+	// Root Signatures & Shaders ìƒì„±
 	auto defaultRootSig = DefaultRootSig{};
 	defaultRootSig.build(device_.Get());
 
@@ -244,7 +244,7 @@ void GFX::init() {
 
 	rootSigs_.try_emplace("DefaultRootSignature", std::make_shared<DefaultRootSig>(std::move(defaultRootSig)));
 
-	// Load Fence Ãß°¡
+	// Load Fence ì¶”ê°€
 	const auto fenceName = "LoadFence"s;
 	fences_.try_emplace(fenceName, Fence{});
 	DISPLAY_ERROR_DX_HR(
@@ -253,7 +253,7 @@ void GFX::init() {
 	);
 	setD3DName(fences_.at(fenceName).fence.Get(), fenceName);
 
-	// Draw EventµéÀ» ÀúÀåÇÒ ¸Ş¸ğ¸® ¿¹¾à
+	// Draw Eventë“¤ì„ ì €ì¥í•  ë©”ëª¨ë¦¬ ì˜ˆì•½
 	drawEventsSamplePipeline_.reserve(1000u);
 	drawEventsPBRPipeline_.reserve(1000u);
 	drawEventsPBRSkinnedPipeline_.reserve(1000u);
@@ -262,14 +262,14 @@ void GFX::init() {
 	drawEventsSkyboxPipeline_.reserve(10u);
 }
 
-// À©µµ¿ì¿Í ¿¬°áµÈ SwapChainÀ» ¸¸µç´Ù.
-// Back Buffer °³¼ö ¸¸Å­ÀÇ roomÀ» °¡Áö´Â Constant BufferµéÀ» ¸¸µç´Ù.
-// RenderingMaster Ä«Å×°í¸®ÀÇ Command List PoolÀ»
-// Back Buffer °³¼ö * 2ÀÇ Å©±â¸¦ °®µµ·Ï ÃÊ±âÈ­ÇÑ´Ù.
-// ±×¸®°í Back Buffer °³¼ö ¸¸Å­ÀÇ Frame FenceµéÀ» ¸¸µç´Ù.
-// Scaling, BufferCount´Â ÈÄ¿¡ ¸Å°³º¯¼ö·Î Àü´Ş¹Şµµ·Ï ÇÏÀÚ.
+// ìœˆë„ìš°ì™€ ì—°ê²°ëœ SwapChainì„ ë§Œë“ ë‹¤.
+// Back Buffer ê°œìˆ˜ ë§Œí¼ì˜ roomì„ ê°€ì§€ëŠ” Constant Bufferë“¤ì„ ë§Œë“ ë‹¤.
+// RenderingMaster ì¹´í…Œê³ ë¦¬ì˜ Command List Poolì„
+// Back Buffer ê°œìˆ˜ * 2ì˜ í¬ê¸°ë¥¼ ê°–ë„ë¡ ì´ˆê¸°í™”í•œë‹¤.
+// ê·¸ë¦¬ê³  Back Buffer ê°œìˆ˜ ë§Œí¼ì˜ Frame Fenceë“¤ì„ ë§Œë“ ë‹¤.
+// Scaling, BufferCountëŠ” í›„ì— ë§¤ê°œë³€ìˆ˜ë¡œ ì „ë‹¬ë°›ë„ë¡ í•˜ì.
 void GFX::createSwapChain() {
-	// ½º¿ÒÃ¼ÀÎ »ı¼º
+	// ìŠ¤ì™‘ì²´ì¸ ìƒì„±
 	scd_ = DXGI_SWAP_CHAIN_DESC1{
 		.Width = static_cast<UINT>(gClientRect.right - gClientRect.left),
 		.Height = static_cast<UINT>(gClientRect.bottom - gClientRect.top),
@@ -302,11 +302,11 @@ void GFX::createSwapChain() {
 
 	setDXName(swapChain_.Get(), "SwapChain");
 
-	// ¹é¹öÆÛ ¹× ±íÀÌ¹öÆÛ ¸®¼Ò½º¿Í ºä »ı¼º
+	// ë°±ë²„í¼ ë° ê¹Šì´ë²„í¼ ë¦¬ì†ŒìŠ¤ì™€ ë·° ìƒì„±
 	backBuffers_.resize(3u);
 
-	// ¹é¹öÆÛ´Â ½º¿ÒÃ¼ÀÎ¿¡¼­ ÀÌ¹Ì ¸¸µé¾úÀ¸¹Ç·Î,
-	// swapChain_->GetBuffer¸¦ ÅëÇØ °¡Á®¿Í µğ½ºÅ©¸³ÅÍ¸¸ ¸¸µç´Ù.
+	// ë°±ë²„í¼ëŠ” ìŠ¤ì™‘ì²´ì¸ì—ì„œ ì´ë¯¸ ë§Œë“¤ì—ˆìœ¼ë¯€ë¡œ,
+	// swapChain_->GetBufferë¥¼ í†µí•´ ê°€ì ¸ì™€ ë””ìŠ¤í¬ë¦½í„°ë§Œ ë§Œë“ ë‹¤.
 	for (int i = 0; i < 3; ++i) {
 		DISPLAY_ERROR_DX_HR(
 			swapChain_->GetBuffer(i, __uuidof(ID3D12Resource), &backBuffers_[i]),
@@ -324,7 +324,7 @@ void GFX::createSwapChain() {
 		);
 	}
 
-	// ±íÀÌ ¹öÆÛ´Â ¿ì¸®°¡ µû·Î ¸¸µé¾îÁÖ¾î¾ß ÇÑ´Ù.
+	// ê¹Šì´ ë²„í¼ëŠ” ìš°ë¦¬ê°€ ë”°ë¡œ ë§Œë“¤ì–´ì£¼ì–´ì•¼ í•œë‹¤.
 	for (int i = 0; i < 3; ++i) {
 		auto depthBuffer = createDepthBuffer( device_.Get(), DXGI_FORMAT_D32_FLOAT,
 			DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u }
@@ -342,14 +342,14 @@ void GFX::createSwapChain() {
 		);
 	}
 
-	// RenderingMaster Ä«Å×°í¸®ÀÇ Command List PoolÀ»
-	// Back Buffer °³¼ö * 2ÀÇ Å©±â¸¦ °®µµ·Ï ÃÊ±âÈ­ÇÑ´Ù.
-	// RenderingMaster Ä«Å×°í¸®ÀÇ ¸í·É ÄÁÅØ½ºÆ®´Â ÇÑ ÇÁ·¹ÀÓÀÇ ·»´õ¸µ¿¡
-	// Å¬¸®¾î¿ë, Ãâ·Â¿ëÀ¸·Î µÎ °³°¡ ¾²ÀÎ´Ù.
+	// RenderingMaster ì¹´í…Œê³ ë¦¬ì˜ Command List Poolì„
+	// Back Buffer ê°œìˆ˜ * 2ì˜ í¬ê¸°ë¥¼ ê°–ë„ë¡ ì´ˆê¸°í™”í•œë‹¤.
+	// RenderingMaster ì¹´í…Œê³ ë¦¬ì˜ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ëŠ” í•œ í”„ë ˆì„ì˜ ë Œë”ë§ì—
+	// í´ë¦¬ì–´ìš©, ì¶œë ¥ìš©ìœ¼ë¡œ ë‘ ê°œê°€ ì“°ì¸ë‹¤.
 	cmdListPool_.init(device_.Get(), CommandListUsage::RenderingMaster, (backBuffers_.size()) * 2);
 
-	// ¹é¹öÆÛ °³¼ö¸¸Å­ÀÇ roomÀ» °¡Áö´Â ÆÄÀÌÇÁ¶óÀÎº° ¸®¼Ò½ºµé »ı¼º
-	// 1000u, 32u¸¦ º¯¼ö·Î ´ëÃ¼ÇÏ±â
+	// ë°±ë²„í¼ ê°œìˆ˜ë§Œí¼ì˜ roomì„ ê°€ì§€ëŠ” íŒŒì´í”„ë¼ì¸ë³„ ë¦¬ì†ŒìŠ¤ë“¤ ìƒì„±
+	// 1000u, 32uë¥¼ ë³€ìˆ˜ë¡œ ëŒ€ì²´í•˜ê¸°
 	// Sample Pipeline ----
 	resourcesSamplePipeline_.perInstanceData.init(
 		device_.Get(), sizeof(SampleShader::PerInstanceData) * 1000u, backBuffers_.size(), "Sample_PerInstanceData"
@@ -444,8 +444,8 @@ void GFX::createSwapChain() {
 
 
 
-	// ÇÁ·¹ÀÓ Ææ½º »ı¼º
-	// i¹øÂ° ÇÁ·¹ÀÓÀ» ·»´õ¸µÇÑ ÈÄ i-(¹é¹öÆÛ ¼ö - 1)¹øÂ° ÇÁ·¹ÀÓÀÇ Ææ½º¸¦ ±â´Ù¸®µµ·Ï ÇÑ´Ù.
+	// í”„ë ˆì„ íœìŠ¤ ìƒì„±
+	// ië²ˆì§¸ í”„ë ˆì„ì„ ë Œë”ë§í•œ í›„ i-(ë°±ë²„í¼ ìˆ˜ - 1)ë²ˆì§¸ í”„ë ˆì„ì˜ íœìŠ¤ë¥¼ ê¸°ë‹¤ë¦¬ë„ë¡ í•œë‹¤.
 	for (std::size_t i = 0u; i < backBuffers_.size(); ++i) {
 		const auto fenceName = "FrameFence"s + std::to_string(i);
 		fences_.try_emplace(fenceName, Fence{});
@@ -457,27 +457,27 @@ void GFX::createSwapChain() {
 	}
 }
 
-// µå·Î¿ìÄİ ¿äÃ»À» Á¦ÃâÇÑ´Ù. render() È£Ãâ ½Ã ±×·ÁÁø´Ù.
+// ë“œë¡œìš°ì½œ ìš”ì²­ì„ ì œì¶œí•œë‹¤. render() í˜¸ì¶œ ì‹œ ê·¸ë ¤ì§„ë‹¤.
 void GFX::addDrawEvent(const SamplePipeline::DrawEvent& drawEvent) {
 	drawEventsSamplePipeline_.push_back(drawEvent);
 }
 
-// Ä«¸Ş¶ó µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+// ì¹´ë©”ë¼ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 void GFX::addCameraData(const SamplePipeline::CameraData& cameraData) {
 	cameraDataSamplePipeline_ = cameraData;
 }
 
-// µå·Î¿ìÄİ ¿äÃ»À» Á¦ÃâÇÑ´Ù. render() È£Ãâ ½Ã ±×·ÁÁø´Ù.
+// ë“œë¡œìš°ì½œ ìš”ì²­ì„ ì œì¶œí•œë‹¤. render() í˜¸ì¶œ ì‹œ ê·¸ë ¤ì§„ë‹¤.
 void GFX::addDrawEvent(const PBRPipeline::DrawEvent& drawEvent) {
 	drawEventsPBRPipeline_.push_back(drawEvent);
 }
 
-// Ä«¸Ş¶ó µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+// ì¹´ë©”ë¼ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 void GFX::addCameraData(const PBRPipeline::CameraData& cameraData) {
 	cameraDataPBRPipeline_ = cameraData;
 }
 
-// Á¶¸í µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+// ì¡°ëª… ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 void GFX::addLightData(const PBRPipeline::LightData& lightData) {
 	lightDataPBRPipeline_.push_back(lightData);
 	if (lightData.isMainDirectionalLight) {
@@ -485,22 +485,22 @@ void GFX::addLightData(const PBRPipeline::LightData& lightData) {
 	}
 }
 
-// ÇÁ·¹ÀÓ µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+// í”„ë ˆì„ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 void GFX::addFrameData(const PBRPipeline::FrameData& frameData) {
 	frameDataPBRPipeline_ = frameData;
 }
 
-// µå·Î¿ìÄİ ¿äÃ»À» Á¦ÃâÇÑ´Ù. render() È£Ãâ ½Ã ±×·ÁÁø´Ù.
+// ë“œë¡œìš°ì½œ ìš”ì²­ì„ ì œì¶œí•œë‹¤. render() í˜¸ì¶œ ì‹œ ê·¸ë ¤ì§„ë‹¤.
 void GFX::addDrawEvent(const PBRSkinnedPipeline::DrawEvent& drawEvent) {
 	drawEventsPBRSkinnedPipeline_.push_back(drawEvent);
 }
 
-// Ä«¸Ş¶ó µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+// ì¹´ë©”ë¼ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 void GFX::addCameraData(const PBRSkinnedPipeline::CameraData& cameraData) {
 	cameraDataPBRSkinnedPipeline_ = cameraData;
 }
 
-// Á¶¸í µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+// ì¡°ëª… ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 void GFX::addLightData(const PBRSkinnedPipeline::LightData& lightData) {
 	lightDataPBRSkinnedPipeline_.push_back(lightData);
 	if (lightData.isMainDirectionalLight) {
@@ -508,32 +508,32 @@ void GFX::addLightData(const PBRSkinnedPipeline::LightData& lightData) {
 	}
 }
 
-// ÇÁ·¹ÀÓ µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+// í”„ë ˆì„ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 void GFX::addFrameData(const PBRSkinnedPipeline::FrameData& frameData) {
 	frameDataPBRSkinnedPipeline_ = frameData;
 }
 
-// µå·Î¿ìÄİ ¿äÃ»À» Á¦ÃâÇÑ´Ù. render() È£Ãâ ½Ã ±×·ÁÁø´Ù.
+// ë“œë¡œìš°ì½œ ìš”ì²­ì„ ì œì¶œí•œë‹¤. render() í˜¸ì¶œ ì‹œ ê·¸ë ¤ì§„ë‹¤.
 void GFX::addDrawEvent( const BillboardPipeline::DrawEvent& drawEvent ) {
 	drawEventsBillboardPipeline_.push_back( drawEvent );
 }
 
-// Ä«¸Ş¶ó µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+// ì¹´ë©”ë¼ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 void GFX::addCameraData( const BillboardPipeline::CameraData& cameraData ) {
 	cameraDataBillboardPipeline_ = cameraData;
 }
 
-// ÇÁ·¹ÀÓ µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+// í”„ë ˆì„ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 void GFX::addFrameData( const BillboardPipeline::FrameData& frameData ) {
 	frameDataBillboardPipeline_ = frameData;
 }
 
-// µå·Î¿ìÄİ ¿äÃ»À» Á¦ÃâÇÑ´Ù. render() È£Ãâ ½Ã ±×·ÁÁø´Ù.
+// ë“œë¡œìš°ì½œ ìš”ì²­ì„ ì œì¶œí•œë‹¤. render() í˜¸ì¶œ ì‹œ ê·¸ë ¤ì§„ë‹¤.
 void GFX::addDrawEvent(const UIPipeline::DrawEvent& drawEvent) {
 	drawEventsUIPipeline_.push_back(drawEvent);
 }
 
-// ÇÁ·¹ÀÓ µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+// í”„ë ˆì„ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 void GFX::addFrameData(const UIPipeline::FrameData& frameData) {
 	frameDataUIPipeline_ = frameData;
 }
@@ -561,54 +561,54 @@ void GFX::addRequestTextImageLoad( const RequestTextImageLoad& request )
 	requestsTextImageLoad_.push_back( request );
 }
 
-// µå·Î¿ìÄİ ¿äÃ»À» Á¦ÃâÇÑ´Ù. render() È£Ãâ ½Ã ±×·ÁÁø´Ù.
+// ë“œë¡œìš°ì½œ ìš”ì²­ì„ ì œì¶œí•œë‹¤. render() í˜¸ì¶œ ì‹œ ê·¸ë ¤ì§„ë‹¤.
 void GFX::addDrawEvent(const SkyboxPipeline::DrawEvent& drawEvent) {
 	drawEventsSkyboxPipeline_.push_back(drawEvent);
 }
 
-// Ä«¸Ş¶ó µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+// ì¹´ë©”ë¼ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 void GFX::addCameraData(const SkyboxPipeline::CameraData& cameraData) {
 	cameraDataSkyboxPipeline_ = cameraData;
 }
 
-// µå·Î¿ìÄİ ¿äÃ»À» Á¦ÃâÇÑ´Ù. render() È£Ãâ ½Ã ±×·ÁÁø´Ù.
+// ë“œë¡œìš°ì½œ ìš”ì²­ì„ ì œì¶œí•œë‹¤. render() í˜¸ì¶œ ì‹œ ê·¸ë ¤ì§„ë‹¤.
 void GFX::addDrawEvent(const BVPipeline::DrawEvent& drawEvent) {
 	drawEventsBVPipeline_.push_back(drawEvent);
 }
 
-// Ä«¸Ş¶ó µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+// ì¹´ë©”ë¼ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 void GFX::addCameraData(const BVPipeline::CameraData& cameraData) {
 	cameraDataBVPipeline_ = cameraData;
 }
 
-// ÆÄÀÌÇÁ¶óÀÎµéÀÌ ÀÚÃ¼ÀûÀ¸·Î »ç¿ëÇÏ´Â ¸®¼Ò½ºµé°ú
-// addRequestXXLoad ²ÃÀÇ ÇÔ¼ö·Î ¿äÃ»µÈ ¸®¼Ò½ºµéÀ» ·Îµå/»ı¼ºÇÑ´Ù.
-// ¹İµå½Ã ¸ğµç ÀåÄ¡ ÃÊ±âÈ­°¡ ³¡³ª°í È£ÃâµÇ¾î¾ß ÇÑ´Ù.
+// íŒŒì´í”„ë¼ì¸ë“¤ì´ ìì²´ì ìœ¼ë¡œ ì‚¬ìš©í•˜ëŠ” ë¦¬ì†ŒìŠ¤ë“¤ê³¼
+// addRequestXXLoad ê¼´ì˜ í•¨ìˆ˜ë¡œ ìš”ì²­ëœ ë¦¬ì†ŒìŠ¤ë“¤ì„ ë¡œë“œ/ìƒì„±í•œë‹¤.
+// ë°˜ë“œì‹œ ëª¨ë“  ì¥ì¹˜ ì´ˆê¸°í™”ê°€ ëë‚˜ê³  í˜¸ì¶œë˜ì–´ì•¼ í•œë‹¤.
 void GFX::loadAssets() {
 	auto& fence = fences_.at("LoadFence");
 
-	// ¸í·É ¸®½ºÆ®¿Í ¸í·É ÇÒ´çÀÚ ÇÒ´ç
+	// ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ì™€ ëª…ë ¹ í• ë‹¹ì í• ë‹¹
 	CommandContext cmdCtx{};
 	DISPLAY_ERROR_STR(
 		cmdListPool_.allocOne(CommandListUsage::ResourceLoading, cmdCtx),
-		"[GFX Error] GFX::loadMeshes: »ç¿ë °¡´ÉÇÑ ¸í·É ¸®½ºÆ®°¡ ¾ø½À´Ï´Ù. "
-		"CommandListPool::init È£ÃâÀÌ ÀÌ·ç¾îÁöÁö ¾Ê¾Ò°Å³ª, ÇÒ´ç¹ŞÀº ¸í·É ¸®½ºÆ®°¡ ¹İ³³µÇÁö ¾Ê¾Ò°Å³ª,"
-		"³Ê¹« ¸¹Àº ¸í·É ¸®½ºÆ®ÀÇ ÇÒ´çÀÌ ¿äÃ»µÇ¾ú½À´Ï´Ù.",
+		"[GFX Error] GFX::loadMeshes: ì‚¬ìš© ê°€ëŠ¥í•œ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ê°€ ì—†ìŠµë‹ˆë‹¤. "
+		"CommandListPool::init í˜¸ì¶œì´ ì´ë£¨ì–´ì§€ì§€ ì•Šì•˜ê±°ë‚˜, í• ë‹¹ë°›ì€ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ê°€ ë°˜ë‚©ë˜ì§€ ì•Šì•˜ê±°ë‚˜,"
+		"ë„ˆë¬´ ë§ì€ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ì˜ í• ë‹¹ì´ ìš”ì²­ë˜ì—ˆìŠµë‹ˆë‹¤.",
 		false
 	);
 	auto& cmdList = cmdCtx.cmdList;
 	auto& cmdAlloc = cmdCtx.cmdAlloc;
 
-	// ¸í·É ¸®½ºÆ® ÃÊ±âÈ­
+	// ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ ì´ˆê¸°í™”
 	DISPLAY_ERROR_DX_VOID(cmdAlloc->Reset(), false);
 	DISPLAY_ERROR_DX_VOID(cmdList->Reset(cmdAlloc.Get(), nullptr), false);
 	
-	// ÆÄÀÌÇÁ¶óÀÎ °ø¿ë ¸®¼Ò½º ·Îµå
+	// íŒŒì´í”„ë¼ì¸ ê³µìš© ë¦¬ì†ŒìŠ¤ ë¡œë“œ
 	SharedResources::ShadowMap::addShadowMap("ShadowMap", device_.Get(),
 		DXGI_FORMAT_D32_FLOAT, 2000u, 2000u, backBuffers_.size(),
 		srvTexPool_, dsvPool_
 	);
-	// ÆÄÀÌÇÁ¶óÀÎ ÀÚÃ¼ ¸®¼Ò½º ·Îµå
+	// íŒŒì´í”„ë¼ì¸ ìì²´ ë¦¬ì†ŒìŠ¤ ë¡œë“œ
 	// BVPipeline
 	BVPipeline::initStaticModels(device_.Get(), cmdList.Get(), fence);
 	// BillboardPipeline
@@ -618,7 +618,7 @@ void GFX::loadAssets() {
 
 	dumpLog();
 
-	// ¸í·É ±â·Ï ½ÃÀÛ
+	// ëª…ë ¹ ê¸°ë¡ ì‹œì‘
 	for (auto& request : requestsModelLoad_) {
 		*request.pDest = loadModelFromFile( request.modelPath,
 			device_.Get(), cmdList.Get(), *request.pTexHashMap, srvTexPool_, fence
@@ -674,58 +674,58 @@ void GFX::loadAssets() {
 
 	dumpLog();
 
-	// ¸í·É ±â·Ï ³¡, ¸í·É ½ÇÇà
+	// ëª…ë ¹ ê¸°ë¡ ë, ëª…ë ¹ ì‹¤í–‰
 	DISPLAY_ERROR_DX_VOID(cmdList->Close(), false);
 
 	ID3D12CommandList* tmpCmdLists[] = { cmdList.Get() };
 
 	DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, tmpCmdLists), false);
 
-	// Ææ½º µ¿±âÈ­
+	// íœìŠ¤ ë™ê¸°í™”
 	fence.associatedCmdCtxs_[etoi(CommandListUsage::ResourceLoading)].push_back(std::move(cmdCtx));
 	signalFence("LoadFence");
 	waitOnFence("LoadFence");
 }
 
 void GFX::render() {
-	// ¿¹¿Ü °Ë»ç
-	DISPLAY_ERROR_STR(curAdapter_, "[GFX Error] GFX::render: È°¼ºÈ­µÈ ±×·¡ÇÈ ¾î´ğÅÍ°¡ ¾ø½À´Ï´Ù. "
-		"GFX::setupDXGIÀÇ È£ÃâÀÌ ÀÌ·ç¾îÁ³´ÂÁö È®ÀÎÇÏ¼¼¿ä.", false);
+	// ì˜ˆì™¸ ê²€ì‚¬
+	DISPLAY_ERROR_STR(curAdapter_, "[GFX Error] GFX::render: í™œì„±í™”ëœ ê·¸ë˜í”½ ì–´ëŒ‘í„°ê°€ ì—†ìŠµë‹ˆë‹¤. "
+		"GFX::setupDXGIì˜ í˜¸ì¶œì´ ì´ë£¨ì–´ì¡ŒëŠ”ì§€ í™•ì¸í•˜ì„¸ìš”.", false);
 
-	DISPLAY_ERROR_STR(device_, "[GFX Error] GFX::render: ÀåÄ¡ ÃÊ±âÈ­°¡ ÀÌ·ç¾îÁöÁö ¾Ê¾Ò½À´Ï´Ù. "
-		"GFX::init È£ÃâÀÌ ÀÌ·ç¾îÁ³´ÂÁö È®ÀÎÇÏ¼¼¿ä.", false);
+	DISPLAY_ERROR_STR(device_, "[GFX Error] GFX::render: ì¥ì¹˜ ì´ˆê¸°í™”ê°€ ì´ë£¨ì–´ì§€ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤. "
+		"GFX::init í˜¸ì¶œì´ ì´ë£¨ì–´ì¡ŒëŠ”ì§€ í™•ì¸í•˜ì„¸ìš”.", false);
 
-	DISPLAY_ERROR_STR(cmdQ_, "[GFX Error] GFX::render: ¸í·É Å¥°¡ È°¼ºÈ­µÇÁö ¾Ê¾Ò½À´Ï´Ù. "
-		"GFX::init È£ÃâÀÌ ÀÌ·ç¾îÁ³´ÂÁö È®ÀÎÇÏ¼¼¿ä.", false);
+	DISPLAY_ERROR_STR(cmdQ_, "[GFX Error] GFX::render: ëª…ë ¹ íê°€ í™œì„±í™”ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤. "
+		"GFX::init í˜¸ì¶œì´ ì´ë£¨ì–´ì¡ŒëŠ”ì§€ í™•ì¸í•˜ì„¸ìš”.", false);
 
-	DISPLAY_ERROR_STR(swapChain_, "[GFX Error] GFX::render: ½º¿Ò Ã¼ÀÎÀÌ È°¼ºÈ­µÇÁö ¾Ê¾Ò½À´Ï´Ù. "
-		"GFX::createSwapChain È£ÃâÀÌ ÀÌ·ç¾îÁ³´ÂÁö È®ÀÎÇÏ¼¼¿ä.", false);
+	DISPLAY_ERROR_STR(swapChain_, "[GFX Error] GFX::render: ìŠ¤ì™‘ ì²´ì¸ì´ í™œì„±í™”ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤. "
+		"GFX::createSwapChain í˜¸ì¶œì´ ì´ë£¨ì–´ì¡ŒëŠ”ì§€ í™•ì¸í•˜ì„¸ìš”.", false);
 
 	if (!curAdapter_ || !device_ || !cmdQ_ || !swapChain_) {
 		return;
 	}
 
-	// Ææ½º µ¿±âÈ­
-	// ·»´õ¸µÇÒ ¼ö ÀÖ´Â ¹é¹öÆÛ°¡ ÀÖ´Ù¸é,
-	// waitÇÏÁö ¾Ê°í ÀÌ¾î¼­ ·»´õ¸µÀ» ÇÏµµ·Ï ÇÑ´Ù.
-	// ¹é¹öÆÛ´Â ¼øÂ÷ÀûÀ¸·Î »ç¿ëµÇ¹Ç·Î, (¹é¹öÆÛ °³¼ö - 1) ÇÁ·¹ÀÓ ÀüÀÇ ·»´õ¸µ¿¡ ´ëÇÑ
-	// Fence¸¦ waitÇÏ¸é ÀÌ¸¦ ±¸ÇöÇÒ ¼ö ÀÖ´Ù.
+	// íœìŠ¤ ë™ê¸°í™”
+	// ë Œë”ë§í•  ìˆ˜ ìˆëŠ” ë°±ë²„í¼ê°€ ìˆë‹¤ë©´,
+	// waití•˜ì§€ ì•Šê³  ì´ì–´ì„œ ë Œë”ë§ì„ í•˜ë„ë¡ í•œë‹¤.
+	// ë°±ë²„í¼ëŠ” ìˆœì°¨ì ìœ¼ë¡œ ì‚¬ìš©ë˜ë¯€ë¡œ, (ë°±ë²„í¼ ê°œìˆ˜ - 1) í”„ë ˆì„ ì „ì˜ ë Œë”ë§ì— ëŒ€í•œ
+	// Fenceë¥¼ waití•˜ë©´ ì´ë¥¼ êµ¬í˜„í•  ìˆ˜ ìˆë‹¤.
 	auto idxFenceToWait = (frameIdx_ - (backBuffers_.size() - 1)) % backBuffers_.size();
 	waitOnFence("FrameFence" + std::to_string(idxFenceToWait));
 
-	// DispatcherµéÀº ¸í·É ¸®½ºÆ® Ç®¿¡¼­ ½º½º·Î ¸í·É ÄÁÅØ½ºÆ®¸¦ ÇÒ´çÇÏ°í ±â·Ï, ½ÇÇàÇÑ´Ù.
-	// »ç¿ëÀÌ ³¡³­ ¸í·É ÄÁÅØ½ºÆ®´Â Ææ½º¿Í ¿¬°üµÇ¾î gpu »ç¿ëÀÌ ³¡³²À» °¨ÁöÇÑ ÈÄ
-	// ¹İÈ¯µÇ´Â °Ô ±ÔÄ¢ÀÌ¹Ç·Î, Dispatcher¿¡ ¸í·É ÄÁÅØ½ºÆ®¿Í ¿¬°ü½ÃÅ³ Ææ½º¸¦ Àü´ŞÇØ¾ß ÇÑ´Ù.
+	// Dispatcherë“¤ì€ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ í’€ì—ì„œ ìŠ¤ìŠ¤ë¡œ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë¥¼ í• ë‹¹í•˜ê³  ê¸°ë¡, ì‹¤í–‰í•œë‹¤.
+	// ì‚¬ìš©ì´ ëë‚œ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ëŠ” íœìŠ¤ì™€ ì—°ê´€ë˜ì–´ gpu ì‚¬ìš©ì´ ëë‚¨ì„ ê°ì§€í•œ í›„
+	// ë°˜í™˜ë˜ëŠ” ê²Œ ê·œì¹™ì´ë¯€ë¡œ, Dispatcherì— ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ì™€ ì—°ê´€ì‹œí‚¬ íœìŠ¤ë¥¼ ì „ë‹¬í•´ì•¼ í•œë‹¤.
 	auto idxFenceToSignal = frameIdx_ % backBuffers_.size();
 	auto fenceNameToSignal = "FrameFence" + std::to_string(idxFenceToSignal);
 	auto& fenceToSignal = fences_.at(fenceNameToSignal);
 
-	// ·»´õ Å¸°Ù Å¬¸®¾î¸¦ À§ÇÑ ¸í·É ÄÁÅØ½ºÆ® ÇÒ´ç
+	// ë Œë” íƒ€ê²Ÿ í´ë¦¬ì–´ë¥¼ ìœ„í•œ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ í• ë‹¹
 	CommandContext cmdCtxClear{};
 	DISPLAY_ERROR_STR(
 		cmdListPool_.allocOne(CommandListUsage::RenderingMaster, cmdCtxClear),
-		"[GFX Error] GFX::render: »ç¿ë °¡´ÉÇÑ ¸í·É ¸®½ºÆ®°¡ ¾ø½À´Ï´Ù. "
-		"CommandListPool::init È£ÃâÀÌ ÀÌ·ç¾îÁöÁö ¾Ê¾Ò°Å³ª, ÇÒ´ç¹ŞÀº ¸í·É ¸®½ºÆ®°¡ ¹İ³³µÇÁö ¾Ê¾Ò½À´Ï´Ù.",
+		"[GFX Error] GFX::render: ì‚¬ìš© ê°€ëŠ¥í•œ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ê°€ ì—†ìŠµë‹ˆë‹¤. "
+		"CommandListPool::init í˜¸ì¶œì´ ì´ë£¨ì–´ì§€ì§€ ì•Šì•˜ê±°ë‚˜, í• ë‹¹ë°›ì€ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ê°€ ë°˜ë‚©ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤.",
 		false
 	);
 	auto cmdListClear = cmdCtxClear.cmdList.Get();
@@ -735,14 +735,14 @@ void GFX::render() {
 		return;
 	}
 
-	// Å¬¸®¾î ¸í·É ¸®½ºÆ® ÃÊ±âÈ­
+	// í´ë¦¬ì–´ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ ì´ˆê¸°í™”
 	DISPLAY_ERROR_DX_VOID( cmdAllocClear->Reset(), false );
 	DISPLAY_ERROR_DX_VOID( cmdListClear->Reset(cmdAllocClear, nullptr), false );
 
-	// Å¬¸®¾î ¸í·É ±â·Ï ½ÃÀÛ
+	// í´ë¦¬ì–´ ëª…ë ¹ ê¸°ë¡ ì‹œì‘
 	const auto backbufIdx = swapChain_->GetCurrentBackBufferIndex();
 
-	// ¸ŞÀÎ ·»´õ Å¸°Ù¿¡ ´ëÇÑ Å¬¸®¾î
+	// ë©”ì¸ ë Œë” íƒ€ê²Ÿì— ëŒ€í•œ í´ë¦¬ì–´
 	transitionResourceState(cmdListClear, backBuffers_[backbufIdx].Get(),
 		D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET
 	);
@@ -765,7 +765,7 @@ void GFX::render() {
 		), false
 	);
 
-	// ±×¸²ÀÚ¸Ê Å¬¸®¾î
+	// ê·¸ë¦¼ìë§µ í´ë¦¬ì–´
 	SharedResources::ShadowMap::getReadyAsDepthWrite(
 		"ShadowMap", cmdListPool_, cmdQ_.Get(), fenceToSignal
 	);
@@ -785,21 +785,21 @@ void GFX::render() {
 	DISPLAY_ERROR_DX_VOID( cmdListClear->RSSetViewports(1u, &viewport), false );
 	DISPLAY_ERROR_DX_VOID( cmdListClear->RSSetScissorRects(1u, &clRect), false );
 
-	// Å¬¸®¾î ¸í·É ±â·Ï ³¡
-	// Å¬¸®¾î ¸í·É ¸®½ºÆ®´Â °ğ¹Ù·Î ½ÇÇàÇÑ´Ù.
-	// Dispatcherµé¿¡¼­ µå·Î¿ìÄİµéÀ» ¼öÇàÇÒ ¶§
-	// ¸í·É Å¥¸¦ »ç¿ëÇØ ½ÇÇà±îÁö ÇÏ±â ¶§¹®¿¡,
-	// Å¬¸®¾î ¸í·É ¸®½ºÆ®¸¦ DispatcherµéÀÇ µå·Î¿ìÄİµé ¼öÇà ÀÌÈÄ
-	// ½ÇÇàÇÏ°Ô µÇ¸é ±×·ÁÁø °ÍµéÀÌ ÀüºÎ Áö¿öÁö°Ô µÈ´Ù.
+	// í´ë¦¬ì–´ ëª…ë ¹ ê¸°ë¡ ë
+	// í´ë¦¬ì–´ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ëŠ” ê³§ë°”ë¡œ ì‹¤í–‰í•œë‹¤.
+	// Dispatcherë“¤ì—ì„œ ë“œë¡œìš°ì½œë“¤ì„ ìˆ˜í–‰í•  ë•Œ
+	// ëª…ë ¹ íë¥¼ ì‚¬ìš©í•´ ì‹¤í–‰ê¹Œì§€ í•˜ê¸° ë•Œë¬¸ì—,
+	// í´ë¦¬ì–´ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ë¥¼ Dispatcherë“¤ì˜ ë“œë¡œìš°ì½œë“¤ ìˆ˜í–‰ ì´í›„
+	// ì‹¤í–‰í•˜ê²Œ ë˜ë©´ ê·¸ë ¤ì§„ ê²ƒë“¤ì´ ì „ë¶€ ì§€ì›Œì§€ê²Œ ëœë‹¤.
 	DISPLAY_ERROR_DX_VOID( cmdListClear->Close(), false );
 
 	ID3D12CommandList* clearCmdLists[] = { cmdListClear };
 
-	// Å¬¸®¾î ¸í·É ¸®½ºÆ® ½ÇÇà
+	// í´ë¦¬ì–´ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ ì‹¤í–‰
 	DISPLAY_ERROR_DX_VOID( cmdQ_->ExecuteCommandLists(1u, clearCmdLists), false );
 
-	// µğ½ºÅ©¸³ÅÍ Èü ¹ÙÀÎµù ¸í·ÉÀ» À§ÇÑ gpu-visible µğ½ºÅ©¸³ÅÍ Èü ¸ğÀ½,
-	// Dispatcherµé¿¡ Àü´ŞÇÑ´Ù.
+	// ë””ìŠ¤í¬ë¦½í„° í™ ë°”ì¸ë”© ëª…ë ¹ì„ ìœ„í•œ gpu-visible ë””ìŠ¤í¬ë¦½í„° í™ ëª¨ìŒ,
+	// Dispatcherë“¤ì— ì „ë‹¬í•œë‹¤.
 	auto tmpDescriptorHeaps = std::vector<ComPtr<ID3D12DescriptorHeap>>{};
 	tmpDescriptorHeaps.push_back(srvCbvUavHeap_.heap);
 	tmpDescriptorHeaps.push_back(samHeap_.heap);
@@ -865,7 +865,7 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
-	// UI PipelineÀÇ Dispatch
+	// UI Pipelineì˜ Dispatch
 	auto uiPipelineDispatcher = UIPipeline::Dispatcher(
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
@@ -879,18 +879,18 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
-	// ÀÇÁ¸ °ü°è°¡ ÀÖ´Â ÆÄÀÌÇÁ¶óÀÎº° ÇÔ¼öµé »çÀÌÀÇ È£Ãâ ¼ø¼­´Â Áß¿äÇÏ´Ù.
-	// ¿¹¸¦ µé¾î ±×¸²ÀÚ¸¦ Áö¿øÇÏ´Â ÆÄÀÌÇÁ¶óÀÎµéÀº
-	// °¢ ÆÄÀÌÇÁ¶óÀÎÀÇ ¸ğµç ±×¸²ÀÚ ÆĞ½º¸¦ ¼öÇàÇÑ ÈÄ¿¡ µ¿±âÈ­µÇ¾î
-	// °¢ ÆÄÀÌÇÁ¶óÀÎÀÇ ¸ğµç ¸ŞÀÎ ÆĞ½º¸¦ ¼öÇàÇØ¾ß ÇÑ´Ù.
+	// ì˜ì¡´ ê´€ê³„ê°€ ìˆëŠ” íŒŒì´í”„ë¼ì¸ë³„ í•¨ìˆ˜ë“¤ ì‚¬ì´ì˜ í˜¸ì¶œ ìˆœì„œëŠ” ì¤‘ìš”í•˜ë‹¤.
+	// ì˜ˆë¥¼ ë“¤ì–´ ê·¸ë¦¼ìë¥¼ ì§€ì›í•˜ëŠ” íŒŒì´í”„ë¼ì¸ë“¤ì€
+	// ê° íŒŒì´í”„ë¼ì¸ì˜ ëª¨ë“  ê·¸ë¦¼ì íŒ¨ìŠ¤ë¥¼ ìˆ˜í–‰í•œ í›„ì— ë™ê¸°í™”ë˜ì–´
+	// ê° íŒŒì´í”„ë¼ì¸ì˜ ëª¨ë“  ë©”ì¸ íŒ¨ìŠ¤ë¥¼ ìˆ˜í–‰í•´ì•¼ í•œë‹¤.
 
-	// threadPool_ÀÌ È°¼ºÈ­µÈ °æ¿ì¿£ ¸ÖÆ¼½º·¹µå·Î Ã³¸®ÇÑ´Ù.
+	// threadPool_ì´ í™œì„±í™”ëœ ê²½ìš°ì—” ë©€í‹°ìŠ¤ë ˆë“œë¡œ ì²˜ë¦¬í•œë‹¤.
 	if (!threadPool_) {
 		samplePipelineDispatcher.updateGPUDataSingleThreaded();
 		samplePipelineDispatcher.drawSingleThreaded();
 		dumpLog();
 
-		// == ±×¸²ÀÚ ÆĞ½ºµé ==
+		// == ê·¸ë¦¼ì íŒ¨ìŠ¤ë“¤ ==
 		SharedResources::ShadowMap::getReadyAsDepthWrite(
 			"ShadowMap", cmdListPool_, cmdQ_.Get(), fenceToSignal
 		);
@@ -903,7 +903,7 @@ void GFX::render() {
 		pbrSkinnedPipelineDispatcher.shadowPass();
 		dumpLog();
 
-		// == ¸ŞÀÎ ÆĞ½ºµé ==
+		// == ë©”ì¸ íŒ¨ìŠ¤ë“¤ ==
 		SharedResources::ShadowMap::getReadyAsShaderResource(
 			"ShadowMap", cmdListPool_, cmdQ_.Get(), fenceToSignal
 		);
@@ -926,7 +926,7 @@ void GFX::render() {
 		samplePipelineDispatcher.drawMultiThreaded();
 		dumpLog();
 
-		// == ±×¸²ÀÚ ÆĞ½ºµé ==
+		// == ê·¸ë¦¼ì íŒ¨ìŠ¤ë“¤ ==
 		SharedResources::ShadowMap::getReadyAsDepthWrite(
 			"ShadowMap", cmdListPool_, cmdQ_.Get(), fenceToSignal
 		);
@@ -939,7 +939,7 @@ void GFX::render() {
 		pbrSkinnedPipelineDispatcher.shadowPassMT();
 		dumpLog();
 
-		// == ¸ŞÀÎ ÆĞ½ºµé ==
+		// == ë©”ì¸ íŒ¨ìŠ¤ë“¤ ==
 		SharedResources::ShadowMap::getReadyAsShaderResource(
 			"ShadowMap", cmdListPool_, cmdQ_.Get(), fenceToSignal
 		);
@@ -970,12 +970,12 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
-	// Skybox PipelineÀÇ Dispatch
-	// ½ºÄ«ÀÌ¹Ú½º ÇÏ³ª ±×¸®´Â ÆÄÀÌÇÁ¶óÀÎÀÌ¶ó, ¸ÖÆ¼½º·¹µåÀÏ ÇÊ¿ä°¡ ¾ø´Ù.
+	// Skybox Pipelineì˜ Dispatch
+	// ìŠ¤ì¹´ì´ë°•ìŠ¤ í•˜ë‚˜ ê·¸ë¦¬ëŠ” íŒŒì´í”„ë¼ì¸ì´ë¼, ë©€í‹°ìŠ¤ë ˆë“œì¼ í•„ìš”ê°€ ì—†ë‹¤.
 	skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
 	skyboxPipelineDispatcher.drawSingleThreaded();
 
-	// Ui PipelineÀÇ rendering
+	// Ui Pipelineì˜ rendering
 	if ( !threadPool_ ) {
 		uiPipelineDispatcher.updateGPUDataSingleThreaded();
 		uiPipelineDispatcher.drawSingleThreaded();
@@ -987,12 +987,12 @@ void GFX::render() {
 		dumpLog();
 	}
 
-	// Ãâ·Â ¸í·É ÄÁÅØ½ºÆ® ÇÒ´ç
+	// ì¶œë ¥ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ í• ë‹¹
 	CommandContext cmdCtxPresent{};
 	DISPLAY_ERROR_STR(
 		cmdListPool_.allocOne(CommandListUsage::RenderingMaster, cmdCtxPresent),
-		"[GFX Error] GFX::render: »ç¿ë °¡´ÉÇÑ ¸í·É ¸®½ºÆ®°¡ ¾ø½À´Ï´Ù. "
-		"CommandListPool::init È£ÃâÀÌ ÀÌ·ç¾îÁöÁö ¾Ê¾Ò°Å³ª, ÇÒ´ç¹ŞÀº ¸í·É ¸®½ºÆ®°¡ ¹İ³³µÇÁö ¾Ê¾Ò½À´Ï´Ù.",
+		"[GFX Error] GFX::render: ì‚¬ìš© ê°€ëŠ¥í•œ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ê°€ ì—†ìŠµë‹ˆë‹¤. "
+		"CommandListPool::init í˜¸ì¶œì´ ì´ë£¨ì–´ì§€ì§€ ì•Šì•˜ê±°ë‚˜, í• ë‹¹ë°›ì€ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ê°€ ë°˜ë‚©ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤.",
 		false
 	);
 	auto cmdListPresent = cmdCtxPresent.cmdList.Get();
@@ -1005,15 +1005,15 @@ void GFX::render() {
 	DISPLAY_ERROR_DX_HR( cmdAllocPresent->Reset(), false );
 	DISPLAY_ERROR_DX_HR( cmdListPresent->Reset(cmdAllocPresent, nullptr), false );
 
-	// Ãâ·Â ¸í·É ±â·Ï ½ÃÀÛ
+	// ì¶œë ¥ ëª…ë ¹ ê¸°ë¡ ì‹œì‘
 	transitionResourceState(cmdListPresent, backBuffers_[backbufIdx].Get(),
 		D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT
 	);
 
-	// Ãâ·Â ¸í·É ±â·Ï ³¡
+	// ì¶œë ¥ ëª…ë ¹ ê¸°ë¡ ë
 	DISPLAY_ERROR_DX_VOID( cmdListPresent->Close(), false );
 
-	// Ãâ·Â ¸í·É ¸®½ºÆ® ½ÇÇà
+	// ì¶œë ¥ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ ì‹¤í–‰
 	ID3D12CommandList* presentCmdLists[] = { cmdListPresent };
 	DISPLAY_ERROR_DX_VOID( cmdQ_->ExecuteCommandLists(1u, presentCmdLists), false );
 
@@ -1027,7 +1027,7 @@ void GFX::render() {
 		.push_back(std::move(cmdCtxPresent));
 	signalFence("FrameFence" + std::to_string(idxFenceToSignal));
 
-	// ÇÁ·¹ÀÓ ÀÎµ¦½º °»½Å
+	// í”„ë ˆì„ ì¸ë±ìŠ¤ ê°±ì‹ 
 	++frameIdx_;
 }
 
@@ -1044,11 +1044,11 @@ void GFX::UpdateTextureWithTextImage( TextImage* srcImage, UINT srcWidth, UINT s
 	D3D12_RESOURCE_DESC Desc = pDestTexResource->GetDesc();
 	if ( srcWidth > Desc.Width )
 	{
-		DISPLAY_ERROR_STR( false, "[GFX Error] GFX::UpdateTextureWithTextImage: ¼Ò½º ÀÌ¹ÌÁöÀÇ ³Êºñ°¡ ´ë»ó ÅØ½ºÃ³ÀÇ ³Êºñº¸´Ù Å®´Ï´Ù.", true );
+		DISPLAY_ERROR_STR( false, "[GFX Error] GFX::UpdateTextureWithTextImage: ì†ŒìŠ¤ ì´ë¯¸ì§€ì˜ ë„ˆë¹„ê°€ ëŒ€ìƒ í…ìŠ¤ì²˜ì˜ ë„ˆë¹„ë³´ë‹¤ í½ë‹ˆë‹¤.", true );
 	}
 	if ( srcHeight > Desc.Height )
 	{
-		DISPLAY_ERROR_STR( false, "[GFX Error] GFX::UpdateTextureWithTextImage: ¼Ò½º ÀÌ¹ÌÁöÀÇ ³ôÀÌ°¡ ´ë»ó ÅØ½ºÃ³ÀÇ ³ôÀÌº¸´Ù Å®´Ï´Ù.", true );
+		DISPLAY_ERROR_STR( false, "[GFX Error] GFX::UpdateTextureWithTextImage: ì†ŒìŠ¤ ì´ë¯¸ì§€ì˜ ë†’ì´ê°€ ëŒ€ìƒ í…ìŠ¤ì²˜ì˜ ë†’ì´ë³´ë‹¤ í½ë‹ˆë‹¤.", true );
 	}
 	D3D12_PLACED_SUBRESOURCE_FOOTPRINT Footprint;
 	UINT	Rows = 0;
@@ -1075,8 +1075,8 @@ void GFX::UpdateTextureWithTextImage( TextImage* srcImage, UINT srcWidth, UINT s
 	pUploadBuffer->Unmap( 0, nullptr );
 }
 
-// °ø¿ë »ùÇÃ·¯µé »ı¼º
-// gfxUtil.hppÀÇ Samplers enum°ú ÀÎµ¦½º¸¦ ¸ÂÃçÁÖ¾î¾ß ÇÑ´Ù.
+// ê³µìš© ìƒ˜í”ŒëŸ¬ë“¤ ìƒì„±
+// gfxUtil.hppì˜ Samplers enumê³¼ ì¸ë±ìŠ¤ë¥¼ ë§ì¶°ì£¼ì–´ì•¼ í•œë‹¤.
 void GFX::createSamplers() {
 	// 0 - Nearest Wrap
 	auto samDesc = D3D12_SAMPLER_DESC{
@@ -1170,11 +1170,11 @@ void GFX::createSamplers() {
 	device_->CreateSampler(&samDesc, handle);
 }
 
-// fenceNameÀ» °®´Â FenceÀÇ desiredValue °ªÀ» 1 Áõ°¡½ÃÅ°°í
-// GPU Å¥¿¡ ±× °»½Å ¸í·ÉÀ» »ğÀÔÇÑ´Ù.
+// fenceNameì„ ê°–ëŠ” Fenceì˜ desiredValue ê°’ì„ 1 ì¦ê°€ì‹œí‚¤ê³ 
+// GPU íì— ê·¸ ê°±ì‹  ëª…ë ¹ì„ ì‚½ì…í•œë‹¤.
 void GFX::signalFence(const std::string& fenceName) {
 	auto validFenceName = fences_.contains(fenceName);
-	DISPLAY_ERROR_STR(validFenceName, "[GFX Error] GFX::signalFence: Ææ½º "s + fenceName + "¸¦ Ã£À» ¼ö ¾ø½À´Ï´Ù.\n", false);
+	DISPLAY_ERROR_STR(validFenceName, "[GFX Error] GFX::signalFence: íœìŠ¤ "s + fenceName + "ë¥¼ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.\n", false);
 	if (!validFenceName) {
 		return;
 	}
@@ -1187,18 +1187,18 @@ void GFX::signalFence(const std::string& fenceName) {
 	);
 }
 
-// fenceNameÀ» °®´Â Fence¿¡ ´ëÇØ¼­ waitÇÏ°í,
-// »ç¿ëÀÌ ³¡³­ ¸í·É ÄÁÅØ½ºÆ®, ¾÷·Îµå ¹öÆÛ µîÀ» ¹İÈ¯ÇÑ´Ù.
+// fenceNameì„ ê°–ëŠ” Fenceì— ëŒ€í•´ì„œ waití•˜ê³ ,
+// ì‚¬ìš©ì´ ëë‚œ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸, ì—…ë¡œë“œ ë²„í¼ ë“±ì„ ë°˜í™˜í•œë‹¤.
 void GFX::waitOnFence(const std::string& fenceName) {
 	auto validFenceName = fences_.contains(fenceName);
-	DISPLAY_ERROR_STR(validFenceName, "[GFX Error] GFX::waitOnFence: Ææ½º "s + fenceName + "¸¦ Ã£À» ¼ö ¾ø½À´Ï´Ù.\n", false);
+	DISPLAY_ERROR_STR(validFenceName, "[GFX Error] GFX::waitOnFence: íœìŠ¤ "s + fenceName + "ë¥¼ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.\n", false);
 	if (!validFenceName) {
 		return;
 	}
 
 	auto& fence = fences_.at(fenceName);
 	if (fence.fence->GetCompletedValue() == fence.desiredValue) {
-		// GPU¿¡¼­ »ç¿ëÀÌ ³¡³­ ¸í·É ÄÁÅØ½ºÆ®¿Í ¸®¼Ò½º¸¦ ¹İÈ¯ÇÑ´Ù.
+		// GPUì—ì„œ ì‚¬ìš©ì´ ëë‚œ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ì™€ ë¦¬ì†ŒìŠ¤ë¥¼ ë°˜í™˜í•œë‹¤.
 		for (int idxUsage = 0; idxUsage < etoi(CommandListUsage::SIZE); ++idxUsage) {
 			cmdListPool_.free(idxUsage, std::move(fence.associatedCmdCtxs_[idxUsage]));
 		}
@@ -1208,7 +1208,7 @@ void GFX::waitOnFence(const std::string& fenceName) {
 
 	fence.fence->SetEventOnCompletion(fence.desiredValue, nullptr);
 
-	// GPU¿¡¼­ »ç¿ëÀÌ ³¡³­ ¸í·É ÄÁÅØ½ºÆ®¿Í ¸®¼Ò½º¸¦ ¹İÈ¯ÇÑ´Ù.
+	// GPUì—ì„œ ì‚¬ìš©ì´ ëë‚œ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ì™€ ë¦¬ì†ŒìŠ¤ë¥¼ ë°˜í™˜í•œë‹¤.
 	for (int idxUsage = 0; idxUsage < etoi(CommandListUsage::SIZE); ++idxUsage) {
 		cmdListPool_.free(idxUsage, std::move(fence.associatedCmdCtxs_[idxUsage]));
 	}

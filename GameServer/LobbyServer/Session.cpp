@@ -1,4 +1,4 @@
-#include "pch.hpp"
+ï»¿#include "pch.hpp"
 #include "Session.hpp"
 #include "Memory.hpp"
 
@@ -11,7 +11,7 @@ void Session::disconnect(std::string_view cause) {
 		return;
 	}
 
-	std::cout << "Disconnected: " << cause << '\n';	// log·Î ³²±æ °Í
+	std::cout << "Disconnected: " << cause << '\n';	// logë¡œ ë‚¨ê¸¸ ê²ƒ
 	registerDisconnect();
 }
 
@@ -207,13 +207,13 @@ int32 PacketSession::onRecv(uint8* buffer, int32 len) {
 	while (true) {
 		int32 dataSize = len - recvLen;
 
-		// ÃÖ¼ÒÇÑ Çì´õ´Â ÆÄ½ÌÇÒ ¼ö ÀÖ¾î¾ß ÇÑ´Ù.
+		// ìµœì†Œí•œ í—¤ë”ëŠ” íŒŒì‹±í•  ìˆ˜ ìˆì–´ì•¼ í•œë‹¤.
 		if (dataSize < static_cast<int32>(sizeof(PacketHeader))) {
 			break;
 		}
 
 		auto header = reinterpret_cast<PacketHeader*>(buffer + recvLen);
-		// Çì´õ¿¡ ±â·ÏµÈ ÆĞÅ¶ Å©±â¸¸Å­ ÆÄ½ÌÇÒ ¼ö ÀÖ¾î¾ß ÇÑ´Ù.
+		// í—¤ë”ì— ê¸°ë¡ëœ íŒ¨í‚· í¬ê¸°ë§Œí¼ íŒŒì‹±í•  ìˆ˜ ìˆì–´ì•¼ í•œë‹¤.
 		if (dataSize < header->size) {
 			break;
 		}

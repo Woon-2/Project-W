@@ -1,4 +1,4 @@
-#include "rspch.hpp"
+ï»¿#include "rspch.hpp"
 #include "collision.hpp"
 
 AABBCollisionResult collides(const AABB& a, const AABB& b) {
@@ -10,29 +10,29 @@ AABBCollisionResult collides(const AABB& a, const AABB& b) {
     mu::Vec3 delta = b.center - a.center;
     mu::Vec3 overlap = (halfA + halfB) - mu::abs(delta);
 
-    // Ãæµ¹ ¾øÀ½
+    // ì¶©ëŒ ì—†ìŒ
     if (overlap.x() < 0 || overlap.y() < 0 || overlap.z() < 0) {
         return res;
     }
 
-    // Ãæµ¹ ¹ß»ı
+    // ì¶©ëŒ ë°œìƒ
     res.hit = true;
 
-    // ÃÖ¼Ò ¿À¹ö·¦ Ãà ¼±ÅÃ
+    // ìµœì†Œ ì˜¤ë²„ë© ì¶• ì„ íƒ
     if (overlap.x() < overlap.y() && overlap.x() < overlap.z()) {
-        // XÃà Ãæµ¹
+        // Xì¶• ì¶©ëŒ
         res.depth = overlap.x();
         res.normal = mu::NVec3((delta.x() > 0) ? -1.0f : 1.0f, 0, 0);
         res.mtv = mu::Vec3(res.normal) * res.depth;
     }
     else if (overlap.y() < overlap.z()) {
-        // YÃà Ãæµ¹
+        // Yì¶• ì¶©ëŒ
         res.depth = overlap.y();
         res.normal = mu::NVec3(0, (delta.y() > 0) ? -1.0f : 1.0f, 0);
         res.mtv = mu::Vec3(res.normal) * res.depth;
     }
     else {
-        // ZÃà Ãæµ¹
+        // Zì¶• ì¶©ëŒ
         res.depth = overlap.z();
         res.normal = mu::Vec3(0, 0, (delta.z() > 0) ? -1.0f : 1.0f);
         res.mtv = mu::Vec3(res.normal) * res.depth;
@@ -87,7 +87,7 @@ RayHit RaycastAABB(const AABB& box, const Ray& ray) {
         }
     }
 
-    // tminÀº ray°¡ box¿¡ Ã³À½ Ãæµ¹ÇÑ ÁöÁ¡
+    // tminì€ rayê°€ boxì— ì²˜ìŒ ì¶©ëŒí•œ ì§€ì 
     if (tmin < 0)
         return hit; // no hit
 
@@ -99,7 +99,7 @@ RayHit RaycastAABB(const AABB& box, const Ray& ray) {
     return hit;
 }
 
-// BoundingRect´Â XZ Æò¸é¿¡ ÆòÇà
+// BoundingRectëŠ” XZ í‰ë©´ì— í‰í–‰
 RayHit RaycastBoundingRect(const BoundingRect& rect, const Ray& ray) {
     RayHit hit{.hit = false};
 

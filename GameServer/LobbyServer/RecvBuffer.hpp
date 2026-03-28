@@ -1,4 +1,4 @@
-#ifndef receive_buffer_hpp
+ï»¿#ifndef receive_buffer_hpp
 #define receive_buffer_hpp
 
 #include <cstdint>
@@ -14,12 +14,12 @@ public:
 
 	void clean() {
 		if (dataSize() == 0) {
-			// read, write Ä¿¼­°¡ µ¿ÀÏÇÑ À§Ä¡¶ó¸é, µÑ ´Ù ÃÊ±âÈ­
+			// read, write ì»¤ì„œê°€ ë™ì¼í•œ ìœ„ì¹˜ë¼ë©´, ë‘˜ ë‹¤ ì´ˆê¸°í™”
 			readPos_ = 0;
 			writePos_ = 0;
 		}
 		else {
-			// ¿©À¯ °ø°£ÀÌ ¹öÆÛ 1°³ Å©±â ¹Ì¸¸ÀÏ °æ¿ì, µ¥ÀÌÅÍ¸¦ ¾ÕÀ¸·Î ´ç±è
+			// ì—¬ìœ  ê³µê°„ì´ ë²„í¼ 1ê°œ í¬ê¸° ë¯¸ë§Œì¼ ê²½ìš°, ë°ì´í„°ë¥¼ ì•ìœ¼ë¡œ ë‹¹ê¹€
 			if (freeSize() < bufferSize_) {
 				::memcpy(&buffer_[0], &buffer_[readPos_], dataSize());
 				readPos_ = 0;
@@ -53,8 +53,8 @@ public:
 
 private:
 	static const int32 bufferCount_{10};
-	int32 capacity_;				// ½ÇÁ¦ ¹öÆÛ Å©±â
-	int32 bufferSize_;			// ¹öÆÛ 1°³ Å©±â
+	int32 capacity_;				// ì‹¤ì œ ë²„í¼ í¬ê¸°
+	int32 bufferSize_;			// ë²„í¼ 1ê°œ í¬ê¸°
 	int32 readPos_;
 	int32 writePos_;
 
@@ -62,12 +62,12 @@ private:
 };
 
 /*
-* »ç¿ëÀÚ´Â bufferSize Å©±âÀÇ ¹öÆÛ¸¦ °®´Â´Ù°í »ı°¢ÇÏÁö¸¸,
-* ½ÇÁ¦·Î´Â bufferSize * bufferCount Å©±âÀÇ ¹öÆÛ¸¦ °®´Â´Ù.
-* [     ] °¡ bufferSize Å©±âÀÇ ¹öÆÛ¶ó¸é
-* [     ][     ][     ][     ][     ][     ][     ][     ][     ][     ] <- ½ÇÁ¦ ¹öÆÛ
-* [                                                                    ] <- Á¤È®È÷´Â ÀÌ·± ¸ğ¾çÀÇ ¹öÆÛÀÌ´Ù.
-* clean ¸â¹ö ÇÔ¼öÀÇ Ã¹ ¹øÂ° if¹®¿¡¼­ Ã³¸®µÉ È®·üÀ» ³ôÀÌ±â À§ÇØ ¹öÆÛ Å©±â¸¦ Å©°Ô ÀâÀ½
+* ì‚¬ìš©ìëŠ” bufferSize í¬ê¸°ì˜ ë²„í¼ë¥¼ ê°–ëŠ”ë‹¤ê³  ìƒê°í•˜ì§€ë§Œ,
+* ì‹¤ì œë¡œëŠ” bufferSize * bufferCount í¬ê¸°ì˜ ë²„í¼ë¥¼ ê°–ëŠ”ë‹¤.
+* [     ] ê°€ bufferSize í¬ê¸°ì˜ ë²„í¼ë¼ë©´
+* [     ][     ][     ][     ][     ][     ][     ][     ][     ][     ] <- ì‹¤ì œ ë²„í¼
+* [                                                                    ] <- ì •í™•íˆëŠ” ì´ëŸ° ëª¨ì–‘ì˜ ë²„í¼ì´ë‹¤.
+* clean ë©¤ë²„ í•¨ìˆ˜ì˜ ì²« ë²ˆì§¸ ifë¬¸ì—ì„œ ì²˜ë¦¬ë  í™•ë¥ ì„ ë†’ì´ê¸° ìœ„í•´ ë²„í¼ í¬ê¸°ë¥¼ í¬ê²Œ ì¡ìŒ
 */
 
 #endif	// receive_buffer_hpp

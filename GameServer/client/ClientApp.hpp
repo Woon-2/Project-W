@@ -1,4 +1,4 @@
-#ifndef client_app_hpp
+ï»¿#ifndef client_app_hpp
 #define client_app_hpp
 
 #include "ServerSession.hpp"
@@ -23,17 +23,17 @@ class ClientApp {
 public:
 	static void init(){ serverSession_ = std::make_unique<ServerSession>();	}
 	static bool connectToServer() { return serverSession_->connect(); }
-	// Online ¸ðµå°¡ ¾Æ´Ò ¶© »ç¿ëÇÏÁö ¾Êµµ·Ï ÇÑ´Ù.
+	// Online ëª¨ë“œê°€ ì•„ë‹ ë• ì‚¬ìš©í•˜ì§€ ì•Šë„ë¡ í•œë‹¤.
 	static void send(SendBuffer* sendBuffer) { serverSession_->send(sendBuffer); }
 
 	static void setup(GameType type, Timer* pTimer);
-	// setupÀÌ È£ÃâµÇ±â Àü±îÁö´Â È£ÃâÇÏÁö ¾Êµµ·Ï ÇÑ´Ù.
+	// setupì´ í˜¸ì¶œë˜ê¸° ì „ê¹Œì§€ëŠ” í˜¸ì¶œí•˜ì§€ ì•Šë„ë¡ í•œë‹¤.
 	static void update(Milliseconds deltaTime);
-	// setupÀÌ È£ÃâµÇ±â Àü±îÁö´Â È£ÃâÇÏÁö ¾Êµµ·Ï ÇÑ´Ù.
+	// setupì´ í˜¸ì¶œë˜ê¸° ì „ê¹Œì§€ëŠ” í˜¸ì¶œí•˜ì§€ ì•Šë„ë¡ í•œë‹¤.
 	static void render();
 
-	// setupÀÌ È£ÃâµÇ±â Àü±îÁö´Â È£ÃâÇÏÁö ¾Êµµ·Ï ÇÑ´Ù.
-	// Online ¸ðµå°¡ ¾Æ´Ò ¶© »ç¿ëÇÏÁö ¾Êµµ·Ï ÇÑ´Ù.
+	// setupì´ í˜¸ì¶œë˜ê¸° ì „ê¹Œì§€ëŠ” í˜¸ì¶œí•˜ì§€ ì•Šë„ë¡ í•œë‹¤.
+	// Online ëª¨ë“œê°€ ì•„ë‹ ë• ì‚¬ìš©í•˜ì§€ ì•Šë„ë¡ í•œë‹¤.
 	static Online::Game* onlineGame();
 
 	static const std::string& serverIp() { return serverSession_->ip(); }

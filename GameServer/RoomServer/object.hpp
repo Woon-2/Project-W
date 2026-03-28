@@ -1,14 +1,14 @@
-#ifndef room_server_object_hpp
+ï»¿#ifndef room_server_object_hpp
 #define room_server_object_hpp
 
 #include "physics.hpp"
 
 struct PhysicState {
 	mu::Vec3 pos{};
-	mu::Vec3 velocity{};	// Physic SystemÀÇ step ´Ü°è¿¡¼­ ÀûºĞµÉ ¼Óµµ
-	mu::Vec3 omega{};	// Physic SystemÀÇ step ´Ü°è¿¡¼­ ÀûºĞµÉ °¢¼Óµµ
-	mu::Vec3 evVelocity{};	// Physic System ¹× ±× ¿Ü °»½Å °úÁ¤À» °ÅÃÄ ÃÖÁ¾ Æò°¡µÈ ¼Óµµ
-	mu::Vec3 evOmega{};	// Physic System ¹× ±× ¿Ü °»½Å °úÁ¤À» °ÅÃÄ ÃÖÁ¾ Æò°¡µÈ ¼Óµµ
+	mu::Vec3 velocity{};	// Physic Systemì˜ step ë‹¨ê³„ì—ì„œ ì ë¶„ë  ì†ë„
+	mu::Vec3 omega{};	// Physic Systemì˜ step ë‹¨ê³„ì—ì„œ ì ë¶„ë  ê°ì†ë„
+	mu::Vec3 evVelocity{};	// Physic System ë° ê·¸ ì™¸ ê°±ì‹  ê³¼ì •ì„ ê±°ì³ ìµœì¢… í‰ê°€ëœ ì†ë„
+	mu::Vec3 evOmega{};	// Physic System ë° ê·¸ ì™¸ ê°±ì‹  ê³¼ì •ì„ ê±°ì³ ìµœì¢… í‰ê°€ëœ ì†ë„
 	mu::NQuat orient{};
 	mu::Vec3 scale{};
 
@@ -18,45 +18,45 @@ struct PhysicState {
 
 struct Model;
 
-// ¹°Ã¼ÀÇ »óÅÂ´Â PhysicState, RenderState µÎ ÃşÀ§·Î °ü¸®µÈ´Ù.
-// À§Ä¡, ¹æÇâ, Å©±â¿Í °°ÀÌ ¹°¸®·®¿¡ °ü·ÃµÈ Á¤º¸´Â PhysicState¿¡ º¸°üµÇ°í
-// ¿ùµå º¯È¯ Çà·Ä, ¸ğµ¨ Á¤º¸¿Í °°ÀÌ ·»´õ¸µ¿¡ °ü·ÃµÈ Á¤º¸´Â RenderState¿¡ º¸°üµÈ´Ù.
+// ë¬¼ì²´ì˜ ìƒíƒœëŠ” PhysicState, RenderState ë‘ ì¸µìœ„ë¡œ ê´€ë¦¬ëœë‹¤.
+// ìœ„ì¹˜, ë°©í–¥, í¬ê¸°ì™€ ê°™ì´ ë¬¼ë¦¬ëŸ‰ì— ê´€ë ¨ëœ ì •ë³´ëŠ” PhysicStateì— ë³´ê´€ë˜ê³ 
+// ì›”ë“œ ë³€í™˜ í–‰ë ¬, ëª¨ë¸ ì •ë³´ì™€ ê°™ì´ ë Œë”ë§ì— ê´€ë ¨ëœ ì •ë³´ëŠ” RenderStateì— ë³´ê´€ëœë‹¤.
 //
-// PhysicStateÀÇ °»½Å ÁÖ±â¿Í RenderStateÀÇ °»½Å ÁÖ±â´Â ´Ù¸£´Ù.
-// (°ÔÀÓ °´Ã¼°¡ ¼­·Î ´Ù¸¥ ÁÖ±â·Î °»½ÅÇÑ´Ù.)
-// °´Ã¼ÀÇ ¹°¸®·® °»½ÅÀº PhysicSystemÀÌ µµ¸Ã¾Æ ÇÏ¹Ç·Î,
-// Object::update´Â ±× ³»¿ëÀ» ¹ÙÅÁÀ¸·Î RenderStateÀÇ °»½ÅÀ» ÁÖ¿ä °úÁ¦·Î »ï´Â´Ù.
-// °ÔÀÓ °´Ã¼´Â ÀÌÀü PhysicState¿Í ÇöÀç PhysicStateÀÇ ³»¿ëÀ» º¸°üÇÏ¿©,
-// Object::update¸¦ È£ÃâÇÑ ½ÃÁ¡¿¡ ¸Â°Ô µÎ PhysicState¸¦ º¸°£ÇØ ¿ùµåº¯È¯µéÀ» °»½ÅÇÑ´Ù.
+// PhysicStateì˜ ê°±ì‹  ì£¼ê¸°ì™€ RenderStateì˜ ê°±ì‹  ì£¼ê¸°ëŠ” ë‹¤ë¥´ë‹¤.
+// (ê²Œì„ ê°ì²´ê°€ ì„œë¡œ ë‹¤ë¥¸ ì£¼ê¸°ë¡œ ê°±ì‹ í•œë‹¤.)
+// ê°ì²´ì˜ ë¬¼ë¦¬ëŸ‰ ê°±ì‹ ì€ PhysicSystemì´ ë„ë§¡ì•„ í•˜ë¯€ë¡œ,
+// Object::updateëŠ” ê·¸ ë‚´ìš©ì„ ë°”íƒ•ìœ¼ë¡œ RenderStateì˜ ê°±ì‹ ì„ ì£¼ìš” ê³¼ì œë¡œ ì‚¼ëŠ”ë‹¤.
+// ê²Œì„ ê°ì²´ëŠ” ì´ì „ PhysicStateì™€ í˜„ì¬ PhysicStateì˜ ë‚´ìš©ì„ ë³´ê´€í•˜ì—¬,
+// Object::updateë¥¼ í˜¸ì¶œí•œ ì‹œì ì— ë§ê²Œ ë‘ PhysicStateë¥¼ ë³´ê°„í•´ ì›”ë“œë³€í™˜ë“¤ì„ ê°±ì‹ í•œë‹¤.
 class Object {
 public:
-	// ¹°¸® ½Ã¹Ä·¹ÀÌ¼Ç°ú º°°³·Î °ÔÀÓ °´Ã¼ÀÇ
-	// ÀÚÃ¼ÀûÀÎ °»½Å ·çÆ¾À» ÇÊ¿ä·Î ÇÒ ¶§ ÀÌ ÇÔ¼ö¿¡ ÀÛ¼ºÇÑ´Ù.
+	// ë¬¼ë¦¬ ì‹œë®¬ë ˆì´ì…˜ê³¼ ë³„ê°œë¡œ ê²Œì„ ê°ì²´ì˜
+	// ìì²´ì ì¸ ê°±ì‹  ë£¨í‹´ì„ í•„ìš”ë¡œ í•  ë•Œ ì´ í•¨ìˆ˜ì— ì‘ì„±í•œë‹¤.
 	void update(Milliseconds deltaTime);
 
-	// ¸ğµ¨À» ¼³Á¤ÇÑ´Ù.
-	// ¸ğµ¨¿¡ ¹Ù¿îµù º¼·ıÀÌ Á¸ÀçÇÒ °æ¿ì, ¿ùµå °ø°£ ¹Ù¿îµù º¼·ıÀ» ±¸ÃàÇÑ´Ù.
-	// (¸ğµ¨ÀÇ ¹Ù¿îµù º¼·ıÀ» ±â¹İÀ¸·Î °ÔÀÓ °´Ã¼ÀÇ ¿ùµå º¯È¯À» Àû¿ëÇÑ
-	//  ¿ùµå °ø°£ ¹Ù¿îµù º¼·ıÀ» µû·Î µÎ¾î¾ß ¿ùµå °ø°£ Ãæµ¹ Ã³¸®°¡ °¡´ÉÇÏ´Ù.)
+	// ëª¨ë¸ì„ ì„¤ì •í•œë‹¤.
+	// ëª¨ë¸ì— ë°”ìš´ë”© ë³¼ë¥¨ì´ ì¡´ì¬í•  ê²½ìš°, ì›”ë“œ ê³µê°„ ë°”ìš´ë”© ë³¼ë¥¨ì„ êµ¬ì¶•í•œë‹¤.
+	// (ëª¨ë¸ì˜ ë°”ìš´ë”© ë³¼ë¥¨ì„ ê¸°ë°˜ìœ¼ë¡œ ê²Œì„ ê°ì²´ì˜ ì›”ë“œ ë³€í™˜ì„ ì ìš©í•œ
+	//  ì›”ë“œ ê³µê°„ ë°”ìš´ë”© ë³¼ë¥¨ì„ ë”°ë¡œ ë‘ì–´ì•¼ ì›”ë“œ ê³µê°„ ì¶©ëŒ ì²˜ë¦¬ê°€ ê°€ëŠ¥í•˜ë‹¤.)
 	void setModel(const Model* pModel);
 
-	// °ÔÀÓ °´Ã¼ÀÇ À§Ä¡¸¦ °»½ÅÇÑ´Ù.
-	// PhysicStateÀÇ AABB¿Í Bounding Rect ¿ª½Ã °»½ÅµÈ´Ù.
+	// ê²Œì„ ê°ì²´ì˜ ìœ„ì¹˜ë¥¼ ê°±ì‹ í•œë‹¤.
+	// PhysicStateì˜ AABBì™€ Bounding Rect ì—­ì‹œ ê°±ì‹ ëœë‹¤.
 	void MU_CALLCONV setPos(mu::Vec3 newPos);
 	mu::Vec3 pos() const { return physicState_.pos; }
-	// °ÔÀÓ °´Ã¼ÀÇ ¼Óµµ¸¦ °»½ÅÇÑ´Ù.
-	// ÀÌÀü PhysicState¿Í ÇöÀç PhysicStateÀÇ ¼Óµµ°¡ ¸ğµÎ °»½ÅµÈ´Ù.
+	// ê²Œì„ ê°ì²´ì˜ ì†ë„ë¥¼ ê°±ì‹ í•œë‹¤.
+	// ì´ì „ PhysicStateì™€ í˜„ì¬ PhysicStateì˜ ì†ë„ê°€ ëª¨ë‘ ê°±ì‹ ëœë‹¤.
 	void MU_CALLCONV setVelocity(mu::Vec3 newVelocity);
 	mu::Vec3 velocity() const { return physicState_.velocity; }
-	// °ÔÀÓ °´Ã¼ÀÇ °¢¼Óµµ¸¦ °»½ÅÇÑ´Ù.
+	// ê²Œì„ ê°ì²´ì˜ ê°ì†ë„ë¥¼ ê°±ì‹ í•œë‹¤.
 	void MU_CALLCONV setOmega(mu::Vec3 newOmega);
 	mu::Vec3 omega() const { return physicState_.omega; }
-	// °ÔÀÓ °´Ã¼ÀÇ ¹æÇâÀ» °»½ÅÇÑ´Ù.
-	// °ÔÀÓ °´Ã¼ÀÇ ¹æÇâ º¤ÅÍµéµµ ÀüºÎ °»½ÅµÈ´Ù.
+	// ê²Œì„ ê°ì²´ì˜ ë°©í–¥ì„ ê°±ì‹ í•œë‹¤.
+	// ê²Œì„ ê°ì²´ì˜ ë°©í–¥ ë²¡í„°ë“¤ë„ ì „ë¶€ ê°±ì‹ ëœë‹¤.
 	void MU_CALLCONV setOrient(mu::NQuat newOrient);
 	mu::NQuat orient() const { return physicState_.orient; }
-	// °ÔÀÓ °´Ã¼ÀÇ Å©±â¸¦ °»½ÅÇÑ´Ù.
-	// PhysicStateÀÇ AABB¿Í Bounding Rect ¿ª½Ã °»½ÅµÈ´Ù.
+	// ê²Œì„ ê°ì²´ì˜ í¬ê¸°ë¥¼ ê°±ì‹ í•œë‹¤.
+	// PhysicStateì˜ AABBì™€ Bounding Rect ì—­ì‹œ ê°±ì‹ ëœë‹¤.
 	void MU_CALLCONV setScale(mu::Vec3 newScale);
 	mu::Vec3 scale() const { return physicState_.scale; }
 
@@ -66,7 +66,7 @@ public:
 
 	PhysicState& physicState() { return physicState_; }
 
-	// ÀçÁú ÁıÇÕ ÀÎµ¦½º¸¦ ¼³Á¤ÇÑ´Ù.
+	// ì¬ì§ˆ ì§‘í•© ì¸ë±ìŠ¤ë¥¼ ì„¤ì •í•œë‹¤.
 	void setMaterialSetIdx(uint32 idx) { materialSetIdx_ = idx; }
 	uint32 materialSetIdx() const { return materialSetIdx_; }
 
@@ -109,7 +109,7 @@ public:
 	}
 
 private:
-	// object(player) ÁÂÇ¥ÀÇ ½º³À¼¦À» ÀúÀåÇÏ±â À§ÇÑ oldX_, oldZ_
+	// object(player) ì¢Œí‘œì˜ ìŠ¤ëƒ…ìƒ·ì„ ì €ì¥í•˜ê¸° ìœ„í•œ oldX_, oldZ_
 	float oldX_{};
 	float oldZ_{};
 	PhysicState physicState_{};
@@ -130,7 +130,7 @@ private:
 
 	uint32 lastMoveTimestamp_{0u};
 
-	// ¼­¹ö ½Ã°£À» »ç¿ëÇÑ´Ù.
+	// ì„œë²„ ì‹œê°„ì„ ì‚¬ìš©í•œë‹¤.
 	Milliseconds lastFireTime_{0ms};
 	Milliseconds fireCooldown_{200ms};
 

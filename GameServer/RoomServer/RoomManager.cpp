@@ -1,4 +1,4 @@
-#include "rspch.hpp"
+Ôªø#include "rspch.hpp"
 #include "RoomManager.hpp"
 #include "Room.hpp"
 #include "ObjectPool.hpp"
@@ -6,7 +6,7 @@
 
 Room* RoomManager::makeRoom() {
 	auto roomId = RoomIdPool::pop();
-	auto newRoom = ObjectPool<Room>::pop(roomId);	// room ªË¡¶ Ω√ object poolø° π›»Ø«ÿæﬂ «‘. æ∆¡˜ √≥∏Æ æ» µ≈¿÷¿Ω.
+	auto newRoom = ObjectPool<Room>::pop(roomId);	// room ÏÇ≠Ï†ú Ïãú object poolÏóê Î∞òÌôòÌï¥Ïïº Ìï®. ÏïÑÏßÅ Ï≤òÎ¶¨ Ïïà ÎèºÏûàÏùå.
 
 	ASSERT_CRASH(pLevel_ != nullptr);
 	newRoom->init(pLevel_);

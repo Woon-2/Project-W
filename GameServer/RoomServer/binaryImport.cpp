@@ -1,7 +1,7 @@
-#include "rspch.hpp"
+ï»¿#include "rspch.hpp"
 #include "binaryImport.hpp"
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ¿¡¼­ µ¥ÀÌÅÍ¸¦ ÀĞ´Âµ¥ ¾²ÀÌ´Â À¯Æ¿¸®Æ¼ ÇÔ¼ö
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ì—ì„œ ë°ì´í„°ë¥¼ ì½ëŠ”ë° ì“°ì´ëŠ” ìœ í‹¸ë¦¬í‹° í•¨ìˆ˜
 void readHeadTag(std::ifstream& ifs, const std::string& expectedSource) {
     char tmpBuffer[32]{'\0'};
     unsigned char sz{};
@@ -17,12 +17,12 @@ void readHeadTag(std::ifstream& ifs, const std::string& expectedSource) {
     wReceived.assign(tmpBuffer, tmpBuffer + sz);
 
     DISPLAY_ERROR_STR(expected == tmpBuffer,
-        "[File I/O Error] readHeadTag: "s + wExpected + " ÅäÅ«À» ±â´ëÇßÁö¸¸ "s
-        + wReceived + " ÅäÅ«À» ¹Ş¾Ò½À´Ï´Ù.", true
+        "[File I/O Error] readHeadTag: "s + wExpected + " í† í°ì„ ê¸°ëŒ€í–ˆì§€ë§Œ "s
+        + wReceived + " í† í°ì„ ë°›ì•˜ìŠµë‹ˆë‹¤.", true
     );
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ¿¡¼­ µ¥ÀÌÅÍ¸¦ ÀĞ´Âµ¥ ¾²ÀÌ´Â À¯Æ¿¸®Æ¼ ÇÔ¼ö
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ì—ì„œ ë°ì´í„°ë¥¼ ì½ëŠ”ë° ì“°ì´ëŠ” ìœ í‹¸ë¦¬í‹° í•¨ìˆ˜
 void readTailTag(std::ifstream& ifs, const std::string& expectedSource) {
     char tmpBuffer[32]{'\0'};
     unsigned char sz{};
@@ -38,18 +38,18 @@ void readTailTag(std::ifstream& ifs, const std::string& expectedSource) {
     wReceived.assign(tmpBuffer, tmpBuffer + sz);
 
     DISPLAY_ERROR_STR(expected == tmpBuffer,
-        "[File I/O Error] readTailTag: "s + wExpected + " ÅäÅ«À» ±â´ëÇßÁö¸¸ "s
-        + wReceived + " ÅäÅ«À» ¹Ş¾Ò½À´Ï´Ù.", true
+        "[File I/O Error] readTailTag: "s + wExpected + " í† í°ì„ ê¸°ëŒ€í–ˆì§€ë§Œ "s
+        + wReceived + " í† í°ì„ ë°›ì•˜ìŠµë‹ˆë‹¤.", true
     );
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ¿¡¼­ µ¥ÀÌÅÍ¸¦ ÀĞ´Âµ¥ ¾²ÀÌ´Â À¯Æ¿¸®Æ¼ ÇÔ¼ö
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ì—ì„œ ë°ì´í„°ë¥¼ ì½ëŠ”ë° ì“°ì´ëŠ” ìœ í‹¸ë¦¬í‹° í•¨ìˆ˜
 bool isTailTag(const std::string& str, const std::string& expectedSource) {
     const auto expected = "</"s + expectedSource + ">"s;
     return str == expected;
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ¿¡¼­ µ¥ÀÌÅÍ¸¦ ÀĞ´Âµ¥ ¾²ÀÌ´Â À¯Æ¿¸®Æ¼ ÇÔ¼ö
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ì—ì„œ ë°ì´í„°ë¥¼ ì½ëŠ”ë° ì“°ì´ëŠ” ìœ í‹¸ë¦¬í‹° í•¨ìˆ˜
 std::string readString(std::ifstream& ifs) {
     char tmpBuffer[64]{'\0'};
     unsigned char sz{};
@@ -60,7 +60,7 @@ std::string readString(std::ifstream& ifs) {
     return std::string(tmpBuffer, tmpBuffer + sz);
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ¿¡¼­ µ¥ÀÌÅÍ¸¦ ÀĞ´Âµ¥ ¾²ÀÌ´Â À¯Æ¿¸®Æ¼ ÇÔ¼ö
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ì—ì„œ ë°ì´í„°ë¥¼ ì½ëŠ”ë° ì“°ì´ëŠ” ìœ í‹¸ë¦¬í‹° í•¨ìˆ˜
 std::string readText(std::ifstream& ifs, const char* tagSource) {
     readHeadTag(ifs, tagSource);
     auto ret = readString(ifs);
@@ -68,19 +68,19 @@ std::string readText(std::ifstream& ifs, const char* tagSource) {
     return ret;
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ¿¡¼­ µ¥ÀÌÅÍ¸¦ ÀĞ´Âµ¥ ¾²ÀÌ´Â À¯Æ¿¸®Æ¼ ÇÔ¼ö
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ì—ì„œ ë°ì´í„°ë¥¼ ì½ëŠ”ë° ì“°ì´ëŠ” ìœ í‹¸ë¦¬í‹° í•¨ìˆ˜
 std::string untagHead(const std::string& tag) {
     return tag.substr(1u, tag.size() - 1u - 2u);
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ¿¡¼­ µ¥ÀÌÅÍ¸¦ ÀĞ´Âµ¥ ¾²ÀÌ´Â À¯Æ¿¸®Æ¼ ÇÔ¼ö
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ì—ì„œ ë°ì´í„°ë¥¼ ì½ëŠ”ë° ì“°ì´ëŠ” ìœ í‹¸ë¦¬í‹° í•¨ìˆ˜
 int readInteger(std::ifstream& ifs) {
     int ret{};
     ifs.read(reinterpret_cast<char*>(&ret), sizeof(int));
     return ret;
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ¿¡¼­ µ¥ÀÌÅÍ¸¦ ÀĞ´Âµ¥ ¾²ÀÌ´Â À¯Æ¿¸®Æ¼ ÇÔ¼ö
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ì—ì„œ ë°ì´í„°ë¥¼ ì½ëŠ”ë° ì“°ì´ëŠ” ìœ í‹¸ë¦¬í‹° í•¨ìˆ˜
 int readInteger(std::ifstream& ifs, const char* tagSource) {
     readHeadTag(ifs, tagSource);
     int ret{};
@@ -89,7 +89,7 @@ int readInteger(std::ifstream& ifs, const char* tagSource) {
     return ret;
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ¿¡¼­ µ¥ÀÌÅÍ¸¦ ÀĞ´Âµ¥ ¾²ÀÌ´Â À¯Æ¿¸®Æ¼ ÇÔ¼ö
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ì—ì„œ ë°ì´í„°ë¥¼ ì½ëŠ”ë° ì“°ì´ëŠ” ìœ í‹¸ë¦¬í‹° í•¨ìˆ˜
 std::vector<int> readIntegers(std::ifstream& ifs, const char* tagSource) {
     readHeadTag(ifs, tagSource);
     auto cnt = readInteger(ifs, "Cnt");
@@ -101,7 +101,7 @@ std::vector<int> readIntegers(std::ifstream& ifs, const char* tagSource) {
     return ret;
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ¿¡¼­ µ¥ÀÌÅÍ¸¦ ÀĞ´Âµ¥ ¾²ÀÌ´Â À¯Æ¿¸®Æ¼ ÇÔ¼ö
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ì—ì„œ ë°ì´í„°ë¥¼ ì½ëŠ”ë° ì“°ì´ëŠ” ìœ í‹¸ë¦¬í‹° í•¨ìˆ˜
 std::vector<uint16> readU16s(std::ifstream& ifs, const char* tagSource) {
     readHeadTag(ifs, tagSource);
     auto cnt = readInteger(ifs, "Cnt");
@@ -113,14 +113,14 @@ std::vector<uint16> readU16s(std::ifstream& ifs, const char* tagSource) {
     return ret;
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ¿¡¼­ µ¥ÀÌÅÍ¸¦ ÀĞ´Âµ¥ ¾²ÀÌ´Â À¯Æ¿¸®Æ¼ ÇÔ¼ö
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ì—ì„œ ë°ì´í„°ë¥¼ ì½ëŠ”ë° ì“°ì´ëŠ” ìœ í‹¸ë¦¬í‹° í•¨ìˆ˜
 float readFloat(std::ifstream& ifs) {
     float ret{};
     ifs.read(reinterpret_cast<char*>(&ret), sizeof(float));
     return ret;
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ¿¡¼­ µ¥ÀÌÅÍ¸¦ ÀĞ´Âµ¥ ¾²ÀÌ´Â À¯Æ¿¸®Æ¼ ÇÔ¼ö
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ì—ì„œ ë°ì´í„°ë¥¼ ì½ëŠ”ë° ì“°ì´ëŠ” ìœ í‹¸ë¦¬í‹° í•¨ìˆ˜
 float readFloat(std::ifstream& ifs, const char* tagSource) {
     readHeadTag(ifs, tagSource);
     float ret{};
@@ -129,14 +129,14 @@ float readFloat(std::ifstream& ifs, const char* tagSource) {
     return ret;
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ¿¡¼­ µ¥ÀÌÅÍ¸¦ ÀĞ´Âµ¥ ¾²ÀÌ´Â À¯Æ¿¸®Æ¼ ÇÔ¼ö
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ì—ì„œ ë°ì´í„°ë¥¼ ì½ëŠ”ë° ì“°ì´ëŠ” ìœ í‹¸ë¦¬í‹° í•¨ìˆ˜
 XMFLOAT4 readColor(std::ifstream& ifs) {
     XMFLOAT4 ret{};
     ifs.read(reinterpret_cast<char*>(&ret), sizeof(XMFLOAT4));
     return ret;
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ¿¡¼­ µ¥ÀÌÅÍ¸¦ ÀĞ´Âµ¥ ¾²ÀÌ´Â À¯Æ¿¸®Æ¼ ÇÔ¼ö
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ì—ì„œ ë°ì´í„°ë¥¼ ì½ëŠ”ë° ì“°ì´ëŠ” ìœ í‹¸ë¦¬í‹° í•¨ìˆ˜
 XMFLOAT4X4 readMatrix(std::ifstream& ifs, const char* tagSource) {
     readHeadTag(ifs, tagSource);
     XMFLOAT4X4 ret{};
@@ -145,14 +145,14 @@ XMFLOAT4X4 readMatrix(std::ifstream& ifs, const char* tagSource) {
     return ret;
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ¿¡¼­ µ¥ÀÌÅÍ¸¦ ÀĞ´Âµ¥ ¾²ÀÌ´Â À¯Æ¿¸®Æ¼ ÇÔ¼ö
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ì—ì„œ ë°ì´í„°ë¥¼ ì½ëŠ”ë° ì“°ì´ëŠ” ìœ í‹¸ë¦¬í‹° í•¨ìˆ˜
 XMFLOAT2 readVec2(std::ifstream& ifs) {
     XMFLOAT2 ret{};
     ifs.read(reinterpret_cast<char*>(&ret), sizeof(XMFLOAT2));
     return ret;
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ¿¡¼­ µ¥ÀÌÅÍ¸¦ ÀĞ´Âµ¥ ¾²ÀÌ´Â À¯Æ¿¸®Æ¼ ÇÔ¼ö
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ì—ì„œ ë°ì´í„°ë¥¼ ì½ëŠ”ë° ì“°ì´ëŠ” ìœ í‹¸ë¦¬í‹° í•¨ìˆ˜
 XMFLOAT2 readVec2(std::ifstream& ifs, const char* tagSource) {
     readHeadTag(ifs, tagSource);
     auto ret = readVec2(ifs);
@@ -160,14 +160,14 @@ XMFLOAT2 readVec2(std::ifstream& ifs, const char* tagSource) {
     return ret;
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ¿¡¼­ µ¥ÀÌÅÍ¸¦ ÀĞ´Âµ¥ ¾²ÀÌ´Â À¯Æ¿¸®Æ¼ ÇÔ¼ö
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ì—ì„œ ë°ì´í„°ë¥¼ ì½ëŠ”ë° ì“°ì´ëŠ” ìœ í‹¸ë¦¬í‹° í•¨ìˆ˜
 XMFLOAT3 readVec3(std::ifstream& ifs) {
     XMFLOAT3 ret{};
     ifs.read(reinterpret_cast<char*>(&ret), sizeof(XMFLOAT3));
     return ret;
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ¿¡¼­ µ¥ÀÌÅÍ¸¦ ÀĞ´Âµ¥ ¾²ÀÌ´Â À¯Æ¿¸®Æ¼ ÇÔ¼ö
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ì—ì„œ ë°ì´í„°ë¥¼ ì½ëŠ”ë° ì“°ì´ëŠ” ìœ í‹¸ë¦¬í‹° í•¨ìˆ˜
 XMFLOAT3 readVec3(std::ifstream& ifs, const char* tagSource) {
     readHeadTag(ifs, tagSource);
     auto ret = readVec3(ifs);
@@ -175,14 +175,14 @@ XMFLOAT3 readVec3(std::ifstream& ifs, const char* tagSource) {
     return ret;
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ¿¡¼­ µ¥ÀÌÅÍ¸¦ ÀĞ´Âµ¥ ¾²ÀÌ´Â À¯Æ¿¸®Æ¼ ÇÔ¼ö
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ì—ì„œ ë°ì´í„°ë¥¼ ì½ëŠ”ë° ì“°ì´ëŠ” ìœ í‹¸ë¦¬í‹° í•¨ìˆ˜
 XMFLOAT4 readVec4(std::ifstream& ifs) {
     XMFLOAT4 ret{};
     ifs.read(reinterpret_cast<char*>(&ret), sizeof(XMFLOAT4));
     return ret;
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ¿¡¼­ µ¥ÀÌÅÍ¸¦ ÀĞ´Âµ¥ ¾²ÀÌ´Â À¯Æ¿¸®Æ¼ ÇÔ¼ö
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ì—ì„œ ë°ì´í„°ë¥¼ ì½ëŠ”ë° ì“°ì´ëŠ” ìœ í‹¸ë¦¬í‹° í•¨ìˆ˜
 XMFLOAT4 readVec4(std::ifstream& ifs, const char* tagSource) {
     readHeadTag(ifs, tagSource);
     auto ret = readVec4(ifs);
@@ -190,7 +190,7 @@ XMFLOAT4 readVec4(std::ifstream& ifs, const char* tagSource) {
     return ret;
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ¿¡¼­ µ¥ÀÌÅÍ¸¦ ÀĞ´Âµ¥ ¾²ÀÌ´Â À¯Æ¿¸®Æ¼ ÇÔ¼ö
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ì—ì„œ ë°ì´í„°ë¥¼ ì½ëŠ”ë° ì“°ì´ëŠ” ìœ í‹¸ë¦¬í‹° í•¨ìˆ˜
 std::vector<XMFLOAT2> readVec2s(std::ifstream& ifs) {
     auto cnt = readInteger(ifs, "Cnt");
     auto ret = std::vector<XMFLOAT2>(cnt);
@@ -200,7 +200,7 @@ std::vector<XMFLOAT2> readVec2s(std::ifstream& ifs) {
     return ret;
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ¿¡¼­ µ¥ÀÌÅÍ¸¦ ÀĞ´Âµ¥ ¾²ÀÌ´Â À¯Æ¿¸®Æ¼ ÇÔ¼ö
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ì—ì„œ ë°ì´í„°ë¥¼ ì½ëŠ”ë° ì“°ì´ëŠ” ìœ í‹¸ë¦¬í‹° í•¨ìˆ˜
 std::vector<XMFLOAT3> readVec3s(std::ifstream& ifs) {
     auto cnt = readInteger(ifs, "Cnt");
     auto ret = std::vector<XMFLOAT3>(cnt);
@@ -210,7 +210,7 @@ std::vector<XMFLOAT3> readVec3s(std::ifstream& ifs) {
     return ret;
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ¿¡¼­ µ¥ÀÌÅÍ¸¦ ÀĞ´Âµ¥ ¾²ÀÌ´Â À¯Æ¿¸®Æ¼ ÇÔ¼ö
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ì—ì„œ ë°ì´í„°ë¥¼ ì½ëŠ”ë° ì“°ì´ëŠ” ìœ í‹¸ë¦¬í‹° í•¨ìˆ˜
 std::vector<XMFLOAT4> readVec4s(std::ifstream& ifs) {
     auto cnt = readInteger(ifs, "Cnt");
     auto ret = std::vector<XMFLOAT4>(cnt);

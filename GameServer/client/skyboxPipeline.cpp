@@ -1,4 +1,4 @@
-#include "pch.hpp"
+ï»¿#include "pch.hpp"
 #include "skyboxPipeline.hpp"
 #include "shader.hpp"
 #include "mesh.hpp"
@@ -6,8 +6,8 @@
 
 namespace SkyboxPipeline {
 
-// Skybox PipelineÀÇ input layoutÀ» À§ÇÑ Vertex Buffer View ¹è¿­ÀÌ
-// mesh¿¡ Á¸ÀçÇÏÁö ¾Ê´Â´Ù¸é, Ãß°¡ÇÑ´Ù.
+// Skybox Pipelineì˜ input layoutì„ ìœ„í•œ Vertex Buffer View ë°°ì—´ì´
+// meshì— ì¡´ì¬í•˜ì§€ ì•ŠëŠ”ë‹¤ë©´, ì¶”ê°€í•œë‹¤.
 // 0: position
 void layoutMeshIfNeeded(const Mesh& mesh) {
 	if (mesh.vbViewsByPipeline.contains("SkyboxPipeline")) {
@@ -20,7 +20,7 @@ void layoutMeshIfNeeded(const Mesh& mesh) {
 
 	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_Position"),
 		"[GFX Error] SkyboxPipeline::layoutMeshIfNeeded: " + mesh.name + "_VB_Position"
-		"ÀÇ ÀÌ¸§À» °¡Áø Á¤Á¡ ¹öÆÛ°¡ ¿ä±¸µÇ¾úÀ¸³ª, Á¸ÀçÇÏÁö ¾Ê½À´Ï´Ù.",
+		"ì˜ ì´ë¦„ì„ ê°€ì§„ ì •ì  ë²„í¼ê°€ ìš”êµ¬ë˜ì—ˆìœ¼ë‚˜, ì¡´ì¬í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.",
 		false
 	);
 
@@ -29,7 +29,7 @@ void layoutMeshIfNeeded(const Mesh& mesh) {
 	vbViews.push_back(vbViewPos);
 }
 
-// GFX °´Ã¼·ÎºÎÅÍ ÇÊ¿äÇÑ ÀÎÀÚµéÀ» Àü´Ş¹ŞÀÚ.
+// GFX ê°ì²´ë¡œë¶€í„° í•„ìš”í•œ ì¸ìë“¤ì„ ì „ë‹¬ë°›ì.
 Dispatcher::Dispatcher(
 	const std::vector<ComPtr<ID3D12DescriptorHeap>>& descriptorHeaps,
 	DescriptorPool* pTexPool, DescriptorPool* pTexArrayPool,
@@ -54,42 +54,42 @@ Dispatcher::Dispatcher(
 	rootParamIdxSamPool_(rootSig->paramIdx("SamplerPool")),
 	rootParamIdxCmpSamPool_(rootSig->paramIdx("ComparisonSamplerPool")) {}
 
-// ¼ÎÀÌ´õ¿¡¼­ »ç¿ëÇÏ´Â GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
-// DrawEvents, CameraData, LightData, FrameData¿¡ ´ã°ÜÀÖ´Â Á¤º¸¸¦ °¡°øÇÏ¿©
-// Resources °´Ã¼¿¡ ´ã±ä, ShaderInputBuffer ÀÎÅÍÆäÀÌ½º¸¦ °¡Áö´Â °´Ã¼µé¿¡ ¿Å°Ü´ã´Â´Ù.
-// ½Ì±Û½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
-// DrawEvents°¡ ºñ¾îÀÖ´Ù¸é ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
+// ì…°ì´ë”ì—ì„œ ì‚¬ìš©í•˜ëŠ” GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
+// DrawEvents, CameraData, LightData, FrameDataì— ë‹´ê²¨ìˆëŠ” ì •ë³´ë¥¼ ê°€ê³µí•˜ì—¬
+// Resources ê°ì²´ì— ë‹´ê¸´, ShaderInputBuffer ì¸í„°í˜ì´ìŠ¤ë¥¼ ê°€ì§€ëŠ” ê°ì²´ë“¤ì— ì˜®ê²¨ë‹´ëŠ”ë‹¤.
+// ì‹±ê¸€ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
+// DrawEventsê°€ ë¹„ì–´ìˆë‹¤ë©´ ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 void Dispatcher::updateGPUDataSingleThreaded() {
 	if (drawEvents_.empty()) {
 		return;
 	}
 
-	// CameraData¿¡ ´ã°ÜÀÖ´Â Á¤º¸¸¦ °¡°øÇØ pfd¿¡ ÀúÀåÇÑ´Ù.
+	// CameraDataì— ë‹´ê²¨ìˆëŠ” ì •ë³´ë¥¼ ê°€ê³µí•´ pfdì— ì €ì¥í•œë‹¤.
 	auto pfd = SkyboxShader::PerFrameData{
 		.viewProj = mu::transpose(cameraData_.view * cameraData_.proj).getXmf()
 	};
-	// pfdÀÇ ³»¿ëÀ» ¹ÙÅÁÀ¸·Î GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
+	// pfdì˜ ë‚´ìš©ì„ ë°”íƒ•ìœ¼ë¡œ GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
 	pResources_->perFrameData.stage(roomIdx_, &pfd, 1u);
 }
 
-// DrawEventsÀÇ Á¤º¸µéÀ» Âü°íÇÏ¿©
-// µå·Î¿ìÄİµéÀ» ¼öÇàÇÑ´Ù.
-// ½Ì±Û½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
+// DrawEventsì˜ ì •ë³´ë“¤ì„ ì°¸ê³ í•˜ì—¬
+// ë“œë¡œìš°ì½œë“¤ì„ ìˆ˜í–‰í•œë‹¤.
+// ì‹±ê¸€ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
 void Dispatcher::drawSingleThreaded() {
 	if (drawEvents_.empty()) {
 		return;
 	}
 
-	// ¸í·É ÄÁÅØ½ºÆ® ÇÒ´ç
+	// ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ í• ë‹¹
 	CommandContext cmdCtx{};
 	DISPLAY_ERROR_STR( cmdListPool_->allocOne(CommandListUsage::RenderingSlave, cmdCtx),
-		"[GFX Error] GFX::drawSingleThreaded: ¿äÃ»ÇÑ ¸í·É ¸®½ºÆ®¸¦ ÇÒ´ç¹ŞÁö ¸øÇß½À´Ï´Ù.", false
+		"[GFX Error] GFX::drawSingleThreaded: ìš”ì²­í•œ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ë¥¼ í• ë‹¹ë°›ì§€ ëª»í–ˆìŠµë‹ˆë‹¤.", false
 	);
 	if (!cmdCtx.cmdList) {
 		return;
 	}
 
-	// ¸í·É ÄÁÅØ½ºÆ® ÃÊ±âÈ­
+	// ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ ì´ˆê¸°í™”
 	auto cmdList = cmdCtx.cmdList.Get();
 	auto cmdAlloc = cmdCtx.cmdAlloc.Get();
 	auto hrCmdAllocReset = cmdAlloc->Reset();
@@ -105,15 +105,15 @@ void Dispatcher::drawSingleThreaded() {
 		return;
 	}
 
-	// ¸í·É ±â·Ï ½ÃÀÛ
+	// ëª…ë ¹ ê¸°ë¡ ì‹œì‘
 	DISPLAY_ERROR_DX_VOID(cmdList->SetGraphicsRootSignature(rootSig_->get()), false);
 	DISPLAY_ERROR_DX_VOID(cmdList->SetPipelineState(shader_.Get()), false);
 	DISPLAY_ERROR_DX_VOID(cmdList->OMSetRenderTargets(1u, &rtv_, false, &dsv_), false);
 	DISPLAY_ERROR_DX_VOID(cmdList->RSSetViewports(1u, &viewport_), false);
 	DISPLAY_ERROR_DX_VOID(cmdList->RSSetScissorRects(1u, &scissorRect_), false);
 
-	// bindless È¯°æ ¼¼ÆÃ
-	// d3d12´Ü Descriptor Heap, Descriptor Table ¼³Á¤
+	// bindless í™˜ê²½ ì„¸íŒ…
+	// d3d12ë‹¨ Descriptor Heap, Descriptor Table ì„¤ì •
 	auto descriptorHeapsRaw = std::vector<ID3D12DescriptorHeap*>(descriptorHeaps_.size());
 	std::ranges::transform(descriptorHeaps_, descriptorHeapsRaw.begin(),
 		[](ComPtr<ID3D12DescriptorHeap>& comPtrHeap) { return comPtrHeap.Get(); }	
@@ -130,24 +130,24 @@ void Dispatcher::drawSingleThreaded() {
 
 	DISPLAY_ERROR_DX_VOID( cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST), false );
 
-	// ¹ÙÀÎµåÇØ¾ß ÇÏ´Â GPU µ¥ÀÌÅÍ´Â ´ÙÀ½ µÎ Á¾·ù´Ù. (¼ÎÀÌ´õ Âü°í)
+	// ë°”ì¸ë“œí•´ì•¼ í•˜ëŠ” GPU ë°ì´í„°ëŠ” ë‹¤ìŒ ë‘ ì¢…ë¥˜ë‹¤. (ì…°ì´ë” ì°¸ê³ )
 	// - PerDrawcallData
 	// - PerFrameData
 
-	// PerFrameData ¹ÙÀÎµå
+	// PerFrameData ë°”ì¸ë“œ
 	pResources_->perFrameData.bind(cmdList, rootParamIdxPFD_, roomIdx_);
 
 	u32t idxDrawcall = 0u;
 
 	for (auto& drawEvent : drawEvents_) {
-		// PerDrawcallData ¹ÙÀÎµå
+		// PerDrawcallData ë°”ì¸ë“œ
 		pResources_->perDrawcallData.cbuffers[idxDrawcall].bind(
 			cmdList, rootParamIdxPDD_, roomIdx_
 		);
 
-		// PerDrawcallData GPU µ¥ÀÌÅÍ °»½Å
-		// (¹ÙÀÎµå¿Í GPU µ¥ÀÌÅÍ °»½Å ¼ø¼­´Â »ó°ü¾ø´Ù.
-		//  ¾îÂ÷ÇÇ ¹ÙÀÎµå´Â GPU ¸í·ÉÀÌ¶ó ¹Ù·Î ½ÇÇàµÇÁö ¾Ê±â ¶§¹®¿¡)
+		// PerDrawcallData GPU ë°ì´í„° ê°±ì‹ 
+		// (ë°”ì¸ë“œì™€ GPU ë°ì´í„° ê°±ì‹  ìˆœì„œëŠ” ìƒê´€ì—†ë‹¤.
+		//  ì–´ì°¨í”¼ ë°”ì¸ë“œëŠ” GPU ëª…ë ¹ì´ë¼ ë°”ë¡œ ì‹¤í–‰ë˜ì§€ ì•Šê¸° ë•Œë¬¸ì—)
 		auto perDrawcallData = SkyboxShader::PerDrawcallData{
 			.material = SkyboxShader::Material{
 				.idxAlbedo = drawEvent.texSkybox->idxSrv
@@ -179,12 +179,12 @@ void Dispatcher::drawSingleThreaded() {
 		return;
 	}
 
-	// ¸í·É ±â·Ï ³¡, ½ÇÇà
+	// ëª…ë ¹ ê¸°ë¡ ë, ì‹¤í–‰
 	ID3D12CommandList* stagedCmdLists[] = {cmdList};
 
 	DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, stagedCmdLists), false);
 	
-	// Fence °´Ã¼¿¡ »ç¿ëÇÑ ¸í·É ÄÁÅØ½ºÆ®¸¦ ¿¬°ü½ÃÄÑ ³õ´Â´Ù.
+	// Fence ê°ì²´ì— ì‚¬ìš©í•œ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë¥¼ ì—°ê´€ì‹œì¼œ ë†“ëŠ”ë‹¤.
 	pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)]
 		.push_back(std::move(cmdCtx));
 }

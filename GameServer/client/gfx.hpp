@@ -1,4 +1,4 @@
-#ifndef __GFX_HPP
+ï»¿#ifndef __GFX_HPP
 #define __GFX_HPP
 
 #include "gfxUtil.hpp"
@@ -16,86 +16,86 @@
 #include "uiPipeline.hpp"
 #include "spriteAnimation.hpp"
 
-// ÇÊ¿ä¾ø´Â ÀÌº¥Æ® Á¦°Å
-// À¯´ÏÆ¼ ½ºÅ©¸³Æ®µé µé¿©¿À°í ¿¡¼Â Á¦ÀÛ ¹× ÃßÃâ
-// À¯´ÏÆ¼ ·¹º§ Á¦ÀÛ ¹× ÃßÃâ
-// ¸Ç ¹Ù´Ú À§¿¡ ÇÃ·¹ÀÌ¾î Ä³¸¯ÅÍ ¶ç¿ì±â
-// ÇÃ·¹ÀÌ¾î ¿òÁ÷ÀÓ ¾Ö´Ï¸ŞÀÌ¼Ç ÃßÃâ ¹× Àç»ı
+// í•„ìš”ì—†ëŠ” ì´ë²¤íŠ¸ ì œê±°
+// ìœ ë‹ˆí‹° ìŠ¤í¬ë¦½íŠ¸ë“¤ ë“¤ì—¬ì˜¤ê³  ì—ì…‹ ì œì‘ ë° ì¶”ì¶œ
+// ìœ ë‹ˆí‹° ë ˆë²¨ ì œì‘ ë° ì¶”ì¶œ
+// ë§¨ ë°”ë‹¥ ìœ„ì— í”Œë ˆì´ì–´ ìºë¦­í„° ë„ìš°ê¸°
+// í”Œë ˆì´ì–´ ì›€ì§ì„ ì• ë‹ˆë©”ì´ì…˜ ì¶”ì¶œ ë° ì¬ìƒ
 // 
 
 
-// ½ºÇÁ¶óÀÌÆ® ½ÃÆ® ¾Ö´Ï¸ŞÀÌ¼Ç ±â´É
-// - append °¡´ÉÇÏµµ·Ï
-// - C++ ÄÚµå ¼öÁ¤
-// Å©·Î½ºÇì¾î
-// È­¸é¿¡ ÇÇ°İ È¿°ú
-// ·¹º§µğÀÚÀÎ
-// Static Dynamic object ºĞ¸® ÃßÃâ
+// ìŠ¤í”„ë¼ì´íŠ¸ ì‹œíŠ¸ ì• ë‹ˆë©”ì´ì…˜ ê¸°ëŠ¥
+// - append ê°€ëŠ¥í•˜ë„ë¡
+// - C++ ì½”ë“œ ìˆ˜ì •
+// í¬ë¡œìŠ¤í—¤ì–´
+// í™”ë©´ì— í”¼ê²© íš¨ê³¼
+// ë ˆë²¨ë””ìì¸
+// Static Dynamic object ë¶„ë¦¬ ì¶”ì¶œ
 // CSM
-// timer gameÀÌ ¿ÏÀü ¼ÒÀ¯ÇÏµµ·Ï ¼öÁ¤
-// metallic, roughness map º°µµ ÁöÁ¤ °¡´ÉÇÏµµ·Ï Texture Mapping ÀÚÀ¯µµ ³ôÀÌ±â - 12.24.
-// functionµµ »çÀÌÁîº°·Î pool ¾²°Ô
-// ExecuteCommands º°µµ ½º·¹µå È£Ãâ
-// Clickable UI ±¸Çö
-// ¸¶¿ì½º ÇÇÅ·
-// ¿ÀºêÁ§Æ® ¹èÄ¡ - 12.25.
-// CSM ¼¨µµ¿ì¸Ê ºä
-// G¹öÆÛ ¸¸µé¾î¼­ Æ¯Á¤ ÅØ½ºÃ³ º¼ ¼ö ÀÖµµ·Ï - 12.24.
+// timer gameì´ ì™„ì „ ì†Œìœ í•˜ë„ë¡ ìˆ˜ì •
+// metallic, roughness map ë³„ë„ ì§€ì • ê°€ëŠ¥í•˜ë„ë¡ Texture Mapping ììœ ë„ ë†’ì´ê¸° - 12.24.
+// functionë„ ì‚¬ì´ì¦ˆë³„ë¡œ pool ì“°ê²Œ
+// ExecuteCommands ë³„ë„ ìŠ¤ë ˆë“œ í˜¸ì¶œ
+// Clickable UI êµ¬í˜„
+// ë§ˆìš°ìŠ¤ í”¼í‚¹
+// ì˜¤ë¸Œì íŠ¸ ë°°ì¹˜ - 12.25.
+// CSM ì„€ë„ìš°ë§µ ë·°
+// Gë²„í¼ ë§Œë“¤ì–´ì„œ íŠ¹ì • í…ìŠ¤ì²˜ ë³¼ ìˆ˜ ìˆë„ë¡ - 12.24.
 // Deferred Shading
-// G¹öÆÛ ºä - 12.26.
-// Á¡Á¶¸í ±×¸²ÀÚ¸ÅÇÎ
-// ´ÙÁß ±×¸²ÀÚ¸ÅÇÎ - 12.27.
-// Object Å¬·¡½º ÀÏ¹İÈ­
-// ÇÇ°İ ÆĞÅ¶¿¡ µé¾îÀÖ´Â À§Ä¡¿¡ ÀÌÆåÆ® Àç»ı
-// ´Ù¸¥ ÇÃ·¹ÀÌ¾î Ã¼·Â¹Ù Ç¥½Ã
-// ¸ó½ºÅÍ ¿¡¼Â ¿øÇÏ´Â ¾Æ¹ÙÅ¸·Î »Ì¾Æ³¾ ¼ö ÀÖ°Ô ¿¬±¸ - 12.28.
-// PhysicState¿¡ Ãæµ¹ °¨Áö ¿©ºÎ, È¸º¹ ¹æ½Ä ¼³Á¤ °¡´ÉÇÏµµ·Ï ±¸Çö
-// ¸ó½ºÅÍµé ¶ç¿ì±â
-// ¸ó½ºÅÍµéÀÇ ·£´ı ÀÌµ¿ - 12.29.
-// Ã»Å© ´ÜÀ§ ÁöÇü ±¸Çö
-// Ã»Å© ÇÏ³ª ·Îµå & Å×¼¿·¹ÀÌ¼Ç
-// Ã»Å© ÆÄÀÏ °ü¸®¹ı ¼³°è, ¿©·¯ Ã»Å© ·Îµå
-// ÆÄÆ¼Å¬ ÀÌÆåÆ®(Á¾Áø)
-// ¾Ö´Ï¸ŞÀÌ¼ÇµÈ À§Ä¡¿Í ¹æÇâ ¾ò±â, »ó´ë ¹°¸®·® ¾ò±â
-// ÆÄÀÏ->¸®¼Ò½º ÇÔ¼ö ¸ÖÆ¼½º·¹µå ±¸Çö
-// ¾Ö´Ï¸ŞÀÌ¼Ç priority °è»ê
+// Gë²„í¼ ë·° - 12.26.
+// ì ì¡°ëª… ê·¸ë¦¼ìë§¤í•‘
+// ë‹¤ì¤‘ ê·¸ë¦¼ìë§¤í•‘ - 12.27.
+// Object í´ë˜ìŠ¤ ì¼ë°˜í™”
+// í”¼ê²© íŒ¨í‚·ì— ë“¤ì–´ìˆëŠ” ìœ„ì¹˜ì— ì´í™íŠ¸ ì¬ìƒ
+// ë‹¤ë¥¸ í”Œë ˆì´ì–´ ì²´ë ¥ë°” í‘œì‹œ
+// ëª¬ìŠ¤í„° ì—ì…‹ ì›í•˜ëŠ” ì•„ë°”íƒ€ë¡œ ë½‘ì•„ë‚¼ ìˆ˜ ìˆê²Œ ì—°êµ¬ - 12.28.
+// PhysicStateì— ì¶©ëŒ ê°ì§€ ì—¬ë¶€, íšŒë³µ ë°©ì‹ ì„¤ì • ê°€ëŠ¥í•˜ë„ë¡ êµ¬í˜„
+// ëª¬ìŠ¤í„°ë“¤ ë„ìš°ê¸°
+// ëª¬ìŠ¤í„°ë“¤ì˜ ëœë¤ ì´ë™ - 12.29.
+// ì²­í¬ ë‹¨ìœ„ ì§€í˜• êµ¬í˜„
+// ì²­í¬ í•˜ë‚˜ ë¡œë“œ & í…Œì…€ë ˆì´ì…˜
+// ì²­í¬ íŒŒì¼ ê´€ë¦¬ë²• ì„¤ê³„, ì—¬ëŸ¬ ì²­í¬ ë¡œë“œ
+// íŒŒí‹°í´ ì´í™íŠ¸(ì¢…ì§„)
+// ì• ë‹ˆë©”ì´ì…˜ëœ ìœ„ì¹˜ì™€ ë°©í–¥ ì–»ê¸°, ìƒëŒ€ ë¬¼ë¦¬ëŸ‰ ì–»ê¸°
+// íŒŒì¼->ë¦¬ì†ŒìŠ¤ í•¨ìˆ˜ ë©€í‹°ìŠ¤ë ˆë“œ êµ¬í˜„
+// ì• ë‹ˆë©”ì´ì…˜ priority ê³„ì‚°
 // Rigidbody Physics
 // Active Ragdoll
-// frustum Ãæµ¹Ã³¸® ±¸Çö
+// frustum ì¶©ëŒì²˜ë¦¬ êµ¬í˜„
 // view frustum culling
 // software culling
-// ¸ÖÆ¼½º·¹µå ¹°¸®
-// ¸ÖÆ¼½º·¹µå ¾Ö´Ï¸ŞÀÌ¼Ç
+// ë©€í‹°ìŠ¤ë ˆë“œ ë¬¼ë¦¬
+// ë©€í‹°ìŠ¤ë ˆë“œ ì• ë‹ˆë©”ì´ì…˜
 // BoundingVolumeHierarchy-Unity
 // BoundingVolumeHierarchy-C++
-// ±×¸®µå °ø°£ºĞÇÒ
-// °ø°£ºĞÇÒ Ãæµ¹Ã³¸® ÃÖÀûÈ­
+// ê·¸ë¦¬ë“œ ê³µê°„ë¶„í• 
+// ê³µê°„ë¶„í•  ì¶©ëŒì²˜ë¦¬ ìµœì í™”
 // 
-// ¹°¸® LOD ¼³Á¤
-// ±×·¡ÇÈ LOD ¼³Á¤ ¹× ÃßÃâ
-// ±×·¡ÇÈ LOD ±¸Çö
-// Vegetation (biome Ç¥Çö)
-// ´Ü¼ø ±Ù°Å¸® ¿ø°Å¸® °ø°İ ±¸Çö
-// ÀÚ¿¬½º·¯¿î °ø°İ Ãæµ¹¿µ¿ª Ç¥Çö
-// °ø°İ ÇÇµå¹é ±¸Çö(³Ë¹é, ÀÌÆåÆ®, µ¥¹ÌÁö)
-// È¸ÇÇ, ¹æ¾î ±âÈ¹ ¹× ±¸Çö
-// ½ºÇÁ¸µ ÆÈ·ÎÀ× Ä«¸Ş¶ó ±¸Çö
-// ÀüÅõ UI ±¸Çö
-// ÀÎº¥Åä¸® ±¸Çö
-// ´Ù¾çÇÑ ¹«±â, ½ºÅ³ ±¸Çö
-// ¸ó½ºÅÍ Áı´Ü ÀÌµ¿ÇüÅÂ ±¸Çö
-// ¸ó½ºÅÍ Áı´Ü AI ±¸Çö
-// Àü¼ú ½Ã½ºÅÛ º¸³Ê½º ±¸Çö
-// ³×ÀÓµå ÀüÅõ ÇÏ³ª ±¸Çö
-// ¸Ê ÀÌµ¿ ±¸Çö
-// º¸½º ÀüÅõ ÇÏ³ª ±¸Çö
-// È¯°æ¸ÅÇÎ
-// Irradiance map µî ºôµå ÈÄ Ç¥½Ã
-// Light Probe À¯´ÏÆ¼¿¡¼­ Á¤ÀÇ ¹× ÃßÃâ
-// ¿Ïº®ÇÑ IBL
-// PCF ÀÏ¹İÈ­
-// VSM, EVSM µîÀÇ ±×¸²ÀÚ ¾Ë°í¸®Áò
-// pn-triangle Å×¼¿·¹ÀÌ¼Ç
+// ë¬¼ë¦¬ LOD ì„¤ì •
+// ê·¸ë˜í”½ LOD ì„¤ì • ë° ì¶”ì¶œ
+// ê·¸ë˜í”½ LOD êµ¬í˜„
+// Vegetation (biome í‘œí˜„)
+// ë‹¨ìˆœ ê·¼ê±°ë¦¬ ì›ê±°ë¦¬ ê³µê²© êµ¬í˜„
+// ìì—°ìŠ¤ëŸ¬ìš´ ê³µê²© ì¶©ëŒì˜ì—­ í‘œí˜„
+// ê³µê²© í”¼ë“œë°± êµ¬í˜„(ë„‰ë°±, ì´í™íŠ¸, ë°ë¯¸ì§€)
+// íšŒí”¼, ë°©ì–´ ê¸°íš ë° êµ¬í˜„
+// ìŠ¤í”„ë§ íŒ”ë¡œì‰ ì¹´ë©”ë¼ êµ¬í˜„
+// ì „íˆ¬ UI êµ¬í˜„
+// ì¸ë²¤í† ë¦¬ êµ¬í˜„
+// ë‹¤ì–‘í•œ ë¬´ê¸°, ìŠ¤í‚¬ êµ¬í˜„
+// ëª¬ìŠ¤í„° ì§‘ë‹¨ ì´ë™í˜•íƒœ êµ¬í˜„
+// ëª¬ìŠ¤í„° ì§‘ë‹¨ AI êµ¬í˜„
+// ì „ìˆ  ì‹œìŠ¤í…œ ë³´ë„ˆìŠ¤ êµ¬í˜„
+// ë„¤ì„ë“œ ì „íˆ¬ í•˜ë‚˜ êµ¬í˜„
+// ë§µ ì´ë™ êµ¬í˜„
+// ë³´ìŠ¤ ì „íˆ¬ í•˜ë‚˜ êµ¬í˜„
+// í™˜ê²½ë§¤í•‘
+// Irradiance map ë“± ë¹Œë“œ í›„ í‘œì‹œ
+// Light Probe ìœ ë‹ˆí‹°ì—ì„œ ì •ì˜ ë° ì¶”ì¶œ
+// ì™„ë²½í•œ IBL
+// PCF ì¼ë°˜í™”
+// VSM, EVSM ë“±ì˜ ê·¸ë¦¼ì ì•Œê³ ë¦¬ì¦˜
+// pn-triangle í…Œì…€ë ˆì´ì…˜
 // Bloom
 // HDR
 // Subsuface Scattering
@@ -104,7 +104,7 @@
 // Volumetric Rendering
 // Atmosphere Rendering
 // TAA
-// fmod »ç¿îµå ÇÁ·Î±×·¡¹Ö
+// fmod ì‚¬ìš´ë“œ í”„ë¡œê·¸ë˜ë°
 
 extern HWND ghWnd;
 
@@ -139,10 +139,10 @@ struct RequestTextImageLoad {
 	TextImage* pDest;
 };
 
-// ·»´õ¸µÀ» ÃÑ°ı Ã¥ÀÓÁö´Â Å¬·¡½º
-// - ÀåÄ¡ ÃÊ±âÈ­: setupDXGI, init, createSwapChain
-// - °´Ã¼ ±×¸®±â: addDrawEvent·Î °´Ã¼¸¶´Ù ±×·ÁÁö±æ ¿øÇÏ´Â ÆÄÀÌÇÁ¶óÀÎ¿¡ µî·Ï,
-//					ÀÌÈÄ render ÇÔ¼ö¸¦ È£ÃâÇØ ÇÑ¹ø¿¡ ÀüºÎ ±×¸®±â
+// ë Œë”ë§ì„ ì´ê´„ ì±…ì„ì§€ëŠ” í´ë˜ìŠ¤
+// - ì¥ì¹˜ ì´ˆê¸°í™”: setupDXGI, init, createSwapChain
+// - ê°ì²´ ê·¸ë¦¬ê¸°: addDrawEventë¡œ ê°ì²´ë§ˆë‹¤ ê·¸ë ¤ì§€ê¸¸ ì›í•˜ëŠ” íŒŒì´í”„ë¼ì¸ì— ë“±ë¡,
+//					ì´í›„ render í•¨ìˆ˜ë¥¼ í˜¸ì¶œí•´ í•œë²ˆì— ì „ë¶€ ê·¸ë¦¬ê¸°
 class GFX {
 public:
 	GFX() = default;
@@ -150,69 +150,69 @@ public:
 	GFX& operator=(const GFX&) = delete;
 	GFX(GFX&&) noexcept = delete;
 	GFX& operator=(GFX&&) noexcept = delete;
-	// GFX°¡ ¼Ò¸êÇÒ ¶§, Á¦ÃâµÈ ¸ğµç GPUÀÛ¾÷ÀÌ ¿Ï·áµÇ°í ³ª¼­ ¼Ò¸êÇÏµµ·Ï ÇÑ´Ù.
+	// GFXê°€ ì†Œë©¸í•  ë•Œ, ì œì¶œëœ ëª¨ë“  GPUì‘ì—…ì´ ì™„ë£Œë˜ê³  ë‚˜ì„œ ì†Œë©¸í•˜ë„ë¡ í•œë‹¤.
 	~GFX();
 
-	// ÀåÄ¡ ÃÊ±âÈ­: setupDXGI, init, createSwapChain ¼øÀ¸·Î È£ÃâÇÑ´Ù.
+	// ì¥ì¹˜ ì´ˆê¸°í™”: setupDXGI, init, createSwapChain ìˆœìœ¼ë¡œ í˜¸ì¶œí•œë‹¤.
 
-	// DXGI Factory¸¦ ÃÊ±âÈ­ÇÏ°í, DXGI AdapterµéÀ» ¿­°ÅÇÑ´Ù.
-	// ±×¸®°í ±× Áß ÇÏ³ª¸¦ ¼±ÅÃÇÏ¿© curAdapter_¿¡ ÀúÀåÇÑ´Ù.
+	// DXGI Factoryë¥¼ ì´ˆê¸°í™”í•˜ê³ , DXGI Adapterë“¤ì„ ì—´ê±°í•œë‹¤.
+	// ê·¸ë¦¬ê³  ê·¸ ì¤‘ í•˜ë‚˜ë¥¼ ì„ íƒí•˜ì—¬ curAdapter_ì— ì €ì¥í•œë‹¤.
 	void setupDXGI(D3D_FEATURE_LEVEL d3dFeatureLevel);
-	// D3D12 Device¿Í Command Queue, Descriptor Heap, Descriptor PoolµéÀ» ¸¸µç´Ù.
-	// °ø¿ë »ùÇÃ·¯µéÀ» »ı¼ºÇÑ´Ù.
-	// RenderingSlave, ResourceLoading Ä«Å×°í¸®ÀÇ Command List PoolÀ» ÃÊ±âÈ­ÇÑ´Ù.
-	// Root Signature¿Í Shader(PSO)µéÀ» ¸¸µç´Ù.
-	// Load Fence¸¦ ¸¸µç´Ù.
-	// ±×¸®°í DrawEventµéÀ» ÀúÀåÇÏ±â À§ÇÑ ¸Ş¸ğ¸®¸¦ ¿¹¾àÇÑ´Ù.
+	// D3D12 Deviceì™€ Command Queue, Descriptor Heap, Descriptor Poolë“¤ì„ ë§Œë“ ë‹¤.
+	// ê³µìš© ìƒ˜í”ŒëŸ¬ë“¤ì„ ìƒì„±í•œë‹¤.
+	// RenderingSlave, ResourceLoading ì¹´í…Œê³ ë¦¬ì˜ Command List Poolì„ ì´ˆê¸°í™”í•œë‹¤.
+	// Root Signatureì™€ Shader(PSO)ë“¤ì„ ë§Œë“ ë‹¤.
+	// Load Fenceë¥¼ ë§Œë“ ë‹¤.
+	// ê·¸ë¦¬ê³  DrawEventë“¤ì„ ì €ì¥í•˜ê¸° ìœ„í•œ ë©”ëª¨ë¦¬ë¥¼ ì˜ˆì•½í•œë‹¤.
 	void init();
-	// À©µµ¿ì¿Í ¿¬°áµÈ SwapChainÀ» ¸¸µç´Ù.
-	// Back Buffer °³¼ö ¸¸Å­ÀÇ roomÀ» °¡Áö´Â ÆÄÀÌÇÁ¶óÀÎº° ShaderInputBufferµéÀ» ¸¸µç´Ù.
-	// RenderingMaster Ä«Å×°í¸®ÀÇ Command List PoolÀ»
-	// Back Buffer °³¼ö * 2ÀÇ Å©±â¸¦ °®µµ·Ï ÃÊ±âÈ­ÇÑ´Ù.
-	// ±×¸®°í Back Buffer °³¼ö ¸¸Å­ÀÇ Frame FenceµéÀ» ¸¸µç´Ù.
+	// ìœˆë„ìš°ì™€ ì—°ê²°ëœ SwapChainì„ ë§Œë“ ë‹¤.
+	// Back Buffer ê°œìˆ˜ ë§Œí¼ì˜ roomì„ ê°€ì§€ëŠ” íŒŒì´í”„ë¼ì¸ë³„ ShaderInputBufferë“¤ì„ ë§Œë“ ë‹¤.
+	// RenderingMaster ì¹´í…Œê³ ë¦¬ì˜ Command List Poolì„
+	// Back Buffer ê°œìˆ˜ * 2ì˜ í¬ê¸°ë¥¼ ê°–ë„ë¡ ì´ˆê¸°í™”í•œë‹¤.
+	// ê·¸ë¦¬ê³  Back Buffer ê°œìˆ˜ ë§Œí¼ì˜ Frame Fenceë“¤ì„ ë§Œë“ ë‹¤.
 	void createSwapChain();
 
-	// ½º·¹µå Ç®À» ¼³Á¤ÇÑ´Ù.
-	// GFX´Â ½º·¹µå Ç®ÀÌ ¼³Á¤µÇ¾îÀÖÀ» °æ¿ì ¸ÖÆ¼½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
+	// ìŠ¤ë ˆë“œ í’€ì„ ì„¤ì •í•œë‹¤.
+	// GFXëŠ” ìŠ¤ë ˆë“œ í’€ì´ ì„¤ì •ë˜ì–´ìˆì„ ê²½ìš° ë©€í‹°ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
 	void setThreadPool(ThreadPool* threadPool) { threadPool_ = threadPool; }
 
-	// µå·Î¿ìÄİ ¿äÃ»À» Á¦ÃâÇÑ´Ù. render() È£Ãâ ½Ã ±×·ÁÁø´Ù.
+	// ë“œë¡œìš°ì½œ ìš”ì²­ì„ ì œì¶œí•œë‹¤. render() í˜¸ì¶œ ì‹œ ê·¸ë ¤ì§„ë‹¤.
 	void addDrawEvent(const SamplePipeline::DrawEvent& drawEvent);
-	// Ä«¸Ş¶ó µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+	// ì¹´ë©”ë¼ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 	void addCameraData(const SamplePipeline::CameraData& cameraData);
-	// µå·Î¿ìÄİ ¿äÃ»À» Á¦ÃâÇÑ´Ù. render() È£Ãâ ½Ã ±×·ÁÁø´Ù.
+	// ë“œë¡œìš°ì½œ ìš”ì²­ì„ ì œì¶œí•œë‹¤. render() í˜¸ì¶œ ì‹œ ê·¸ë ¤ì§„ë‹¤.
 	void addDrawEvent(const PBRPipeline::DrawEvent& drawEvent);
-	// Ä«¸Ş¶ó µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+	// ì¹´ë©”ë¼ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 	void addCameraData(const PBRPipeline::CameraData& cameraData);
-	// Á¶¸í µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+	// ì¡°ëª… ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 	void addLightData(const PBRPipeline::LightData& lightData);
-	// ÇÁ·¹ÀÓ µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+	// í”„ë ˆì„ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 	void addFrameData(const PBRPipeline::FrameData& frameData);
-	// µå·Î¿ìÄİ ¿äÃ»À» Á¦ÃâÇÑ´Ù. render() È£Ãâ ½Ã ±×·ÁÁø´Ù.
+	// ë“œë¡œìš°ì½œ ìš”ì²­ì„ ì œì¶œí•œë‹¤. render() í˜¸ì¶œ ì‹œ ê·¸ë ¤ì§„ë‹¤.
 	void addDrawEvent(const PBRSkinnedPipeline::DrawEvent& drawEvent);
-	// Ä«¸Ş¶ó µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+	// ì¹´ë©”ë¼ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 	void addCameraData(const PBRSkinnedPipeline::CameraData& cameraData);
-	// Á¶¸í µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+	// ì¡°ëª… ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 	void addLightData(const PBRSkinnedPipeline::LightData& lightData);
-	// ÇÁ·¹ÀÓ µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+	// í”„ë ˆì„ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 	void addFrameData(const PBRSkinnedPipeline::FrameData& frameData);
-	// µå·Î¿ìÄİ ¿äÃ»À» Á¦ÃâÇÑ´Ù. render() È£Ãâ ½Ã ±×·ÁÁø´Ù.
+	// ë“œë¡œìš°ì½œ ìš”ì²­ì„ ì œì¶œí•œë‹¤. render() í˜¸ì¶œ ì‹œ ê·¸ë ¤ì§„ë‹¤.
 	void addDrawEvent( const BillboardPipeline::DrawEvent& drawEvent );
-	// Ä«¸Ş¶ó µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+	// ì¹´ë©”ë¼ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 	void addCameraData( const BillboardPipeline::CameraData& cameraData );
-	// ÇÁ·¹ÀÓ µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+	// í”„ë ˆì„ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 	void addFrameData( const BillboardPipeline::FrameData& frameData );
-	// µå·Î¿ìÄİ ¿äÃ»À» Á¦ÃâÇÑ´Ù. render() È£Ãâ ½Ã ±×·ÁÁø´Ù.
+	// ë“œë¡œìš°ì½œ ìš”ì²­ì„ ì œì¶œí•œë‹¤. render() í˜¸ì¶œ ì‹œ ê·¸ë ¤ì§„ë‹¤.
 	void addDrawEvent(const SkyboxPipeline::DrawEvent& drawEvent);
-	// Ä«¸Ş¶ó µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+	// ì¹´ë©”ë¼ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 	void addCameraData(const SkyboxPipeline::CameraData& cameraData);
-	// µå·Î¿ìÄİ ¿äÃ»À» Á¦ÃâÇÑ´Ù. render() È£Ãâ ½Ã ±×·ÁÁø´Ù.
+	// ë“œë¡œìš°ì½œ ìš”ì²­ì„ ì œì¶œí•œë‹¤. render() í˜¸ì¶œ ì‹œ ê·¸ë ¤ì§„ë‹¤.
 	void addDrawEvent(const BVPipeline::DrawEvent& drawEvent);
-	// Ä«¸Ş¶ó µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+	// ì¹´ë©”ë¼ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 	void addCameraData(const BVPipeline::CameraData& cameraData);
-	// µå·Î¿ìÄİ ¿äÃ»À» Á¦ÃâÇÑ´Ù. render() È£Ãâ ½Ã ±×·ÁÁø´Ù.
+	// ë“œë¡œìš°ì½œ ìš”ì²­ì„ ì œì¶œí•œë‹¤. render() í˜¸ì¶œ ì‹œ ê·¸ë ¤ì§„ë‹¤.
 	void addDrawEvent( const UIPipeline::DrawEvent& drawEvent );
-	// ÇÁ·¹ÀÓ µ¥ÀÌÅÍ¸¦ ÀÔ·ÂÇÑ´Ù.
+	// í”„ë ˆì„ ë°ì´í„°ë¥¼ ì…ë ¥í•œë‹¤.
 	void addFrameData( const UIPipeline::FrameData& frameData );
 
 	void addRequestModelLoad(const RequestModelLoad& request);
@@ -221,25 +221,25 @@ public:
 	void addRequestSpritesLoad( const RequestSpriteAnimLoad& request );
 	void addRequestTextImageLoad( const RequestTextImageLoad& request );
 
-	// ÆÄÀÌÇÁ¶óÀÎµéÀÌ ÀÚÃ¼ÀûÀ¸·Î »ç¿ëÇÏ´Â ¸®¼Ò½ºµé°ú
-	// addRequestXXLoad ²ÃÀÇ ÇÔ¼ö·Î ¿äÃ»µÈ ¸®¼Ò½ºµéÀ» ·ÎµåÇÑ´Ù.
+	// íŒŒì´í”„ë¼ì¸ë“¤ì´ ìì²´ì ìœ¼ë¡œ ì‚¬ìš©í•˜ëŠ” ë¦¬ì†ŒìŠ¤ë“¤ê³¼
+	// addRequestXXLoad ê¼´ì˜ í•¨ìˆ˜ë¡œ ìš”ì²­ëœ ë¦¬ì†ŒìŠ¤ë“¤ì„ ë¡œë“œí•œë‹¤.
 	void loadAssets();
 
-	// ¿äÃ»µÈ µå·Î¿ìÄİµéÀ» ¸ğ¾Æ °´Ã¼µéÀ» ±×¸®°í È­¸é¿¡ ¶ç¿î´Ù.
+	// ìš”ì²­ëœ ë“œë¡œìš°ì½œë“¤ì„ ëª¨ì•„ ê°ì²´ë“¤ì„ ê·¸ë¦¬ê³  í™”ë©´ì— ë„ìš´ë‹¤.
 	void render();
 
 	void WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, void* pFontObjHandle, const WCHAR* wchString, DWORD dwLen );
 	void UpdateTextureWithTextImage( TextImage* srcImage, UINT srcWidth, UINT srcHeight );
 
 private:
-	// °ø¿ë »ùÇÃ·¯µé »ı¼º
-	// gfxUtil.hppÀÇ Samplers enum°ú ÀÎµ¦½º¸¦ ¸ÂÃçÁÖ¾î¾ß ÇÑ´Ù.
+	// ê³µìš© ìƒ˜í”ŒëŸ¬ë“¤ ìƒì„±
+	// gfxUtil.hppì˜ Samplers enumê³¼ ì¸ë±ìŠ¤ë¥¼ ë§ì¶°ì£¼ì–´ì•¼ í•œë‹¤.
 	void createSamplers();
-	// fenceNameÀ» °®´Â FenceÀÇ desiredValue °ªÀ» 1 Áõ°¡½ÃÅ°°í
-	// GPU Å¥¿¡ ±× °»½Å ¸í·ÉÀ» »ğÀÔÇÑ´Ù.
+	// fenceNameì„ ê°–ëŠ” Fenceì˜ desiredValue ê°’ì„ 1 ì¦ê°€ì‹œí‚¤ê³ 
+	// GPU íì— ê·¸ ê°±ì‹  ëª…ë ¹ì„ ì‚½ì…í•œë‹¤.
 	void signalFence(const std::string& fenceName);
-	// fenceNameÀ» °®´Â Fence¿¡ ´ëÇØ¼­ waitÇÏ°í,
-	// »ç¿ëÀÌ ³¡³­ ¸í·É ÄÁÅØ½ºÆ®, ¾÷·Îµå ¹öÆÛ µîÀ» ¹İÈ¯ÇÑ´Ù.
+	// fenceNameì„ ê°–ëŠ” Fenceì— ëŒ€í•´ì„œ waití•˜ê³ ,
+	// ì‚¬ìš©ì´ ëë‚œ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸, ì—…ë¡œë“œ ë²„í¼ ë“±ì„ ë°˜í™˜í•œë‹¤.
 	void waitOnFence(const std::string& fenceName);
 
 	ComPtr<IDXGIFactory4> dxgiFactory_ = nullptr;
@@ -253,7 +253,7 @@ private:
 
 	CommandListPool cmdListPool_{};
 
-	// ½º¿Ò Ã¼ÀÎ °ü·Ã º¯¼öµé
+	// ìŠ¤ì™‘ ì²´ì¸ ê´€ë ¨ ë³€ìˆ˜ë“¤
 	DXGI_SWAP_CHAIN_DESC1 scd_{};
 	DXGI_SWAP_CHAIN_FULLSCREEN_DESC scfd_{};
 	ComPtr<IDXGISwapChain3> swapChain_ = nullptr;
@@ -264,24 +264,24 @@ private:
 	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> depthBufferDsvs_{};
 	std::vector<int> allocatedDsvIndices_{};
 
-	// µğ½ºÅ©¸³ÅÍ Èü°ú µğ½ºÅ©¸³ÅÍ Ç®
+	// ë””ìŠ¤í¬ë¦½í„° í™ê³¼ ë””ìŠ¤í¬ë¦½í„° í’€
 	DescriptorHeap rtvHeap_{};
 	DescriptorPool rtvPool_{};
 	DescriptorHeap dsvHeap_{};
 	DescriptorPool dsvPool_{};
-	DescriptorHeap srvCbvUavHeap_{};	// gpuVisible, SetDescriptorHeaps ÇÔ¼ö È£Ãâ ÇÊ¿ä
-	DescriptorPool srvTexPool_{};	// ÆÄÀÌÇÁ¶óÀÎ¿¡¼­ »ç¿ëÇÏ·Á¸é bind È£Ãâ ÇÊ¿ä
-	DescriptorPool srvTexArrayPool_{};	// ÆÄÀÌÇÁ¶óÀÎ¿¡¼­ »ç¿ëÇÏ·Á¸é bind È£Ãâ ÇÊ¿ä
-	DescriptorPool srvTexCubePool_{};	// ÆÄÀÌÇÁ¶óÀÎ¿¡¼­ »ç¿ëÇÏ·Á¸é bind È£Ãâ ÇÊ¿ä
-	DescriptorHeap samHeap_{};	// gpuVisible, SetDescriptorHeaps ÇÔ¼ö È£Ãâ ÇÊ¿ä
-	DescriptorPool samPool_{};	// ÆÄÀÌÇÁ¶óÀÎ¿¡¼­ »ç¿ëÇÏ·Á¸é bind È£Ãâ ÇÊ¿ä
-	DescriptorPool cmpSamPool_{};	// ÆÄÀÌÇÁ¶óÀÎ¿¡¼­ »ç¿ëÇÏ·Á¸é bind È£Ãâ ÇÊ¿ä
+	DescriptorHeap srvCbvUavHeap_{};	// gpuVisible, SetDescriptorHeaps í•¨ìˆ˜ í˜¸ì¶œ í•„ìš”
+	DescriptorPool srvTexPool_{};	// íŒŒì´í”„ë¼ì¸ì—ì„œ ì‚¬ìš©í•˜ë ¤ë©´ bind í˜¸ì¶œ í•„ìš”
+	DescriptorPool srvTexArrayPool_{};	// íŒŒì´í”„ë¼ì¸ì—ì„œ ì‚¬ìš©í•˜ë ¤ë©´ bind í˜¸ì¶œ í•„ìš”
+	DescriptorPool srvTexCubePool_{};	// íŒŒì´í”„ë¼ì¸ì—ì„œ ì‚¬ìš©í•˜ë ¤ë©´ bind í˜¸ì¶œ í•„ìš”
+	DescriptorHeap samHeap_{};	// gpuVisible, SetDescriptorHeaps í•¨ìˆ˜ í˜¸ì¶œ í•„ìš”
+	DescriptorPool samPool_{};	// íŒŒì´í”„ë¼ì¸ì—ì„œ ì‚¬ìš©í•˜ë ¤ë©´ bind í˜¸ì¶œ í•„ìš”
+	DescriptorPool cmpSamPool_{};	// íŒŒì´í”„ë¼ì¸ì—ì„œ ì‚¬ìš©í•˜ë ¤ë©´ bind í˜¸ì¶œ í•„ìš”
 
-	// ·çÆ® ½Ã±×³ÊÃ³¿Í ¼ÎÀÌ´õµé
+	// ë£¨íŠ¸ ì‹œê·¸ë„ˆì²˜ì™€ ì…°ì´ë”ë“¤
 	std::map<std::string, std::shared_ptr<RootSig>> rootSigs_{};
 	std::map<std::string, ComPtr<ID3D12PipelineState>> shaders_{};
 
-	// ÆÄÀÌÇÁ¶óÀÎ °ü·Ã º¯¼öµé
+	// íŒŒì´í”„ë¼ì¸ ê´€ë ¨ ë³€ìˆ˜ë“¤
 	// Sample Pipeline
 	std::vector<SamplePipeline::DrawEvent> drawEventsSamplePipeline_{};
 	SamplePipeline::Resources resourcesSamplePipeline_{};
@@ -332,7 +332,7 @@ private:
 	std::vector<RequestSpriteAnimLoad> requestsSpritesLoad_{};
 	std::vector<RequestTextImageLoad> requestsTextImageLoad_{};
 
-	ThreadPool* threadPool_ = nullptr;	// ¼³Á¤µÇ¾îÀÖÀ» °æ¿ì ¸ÖÆ¼½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
+	ThreadPool* threadPool_ = nullptr;	// ì„¤ì •ë˜ì–´ìˆì„ ê²½ìš° ë©€í‹°ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
 };
 
 #endif	// __GFX_HPP

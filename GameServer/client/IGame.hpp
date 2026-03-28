@@ -1,4 +1,4 @@
-#ifndef __IGame_HPP
+ï»¿#ifndef __IGame_HPP
 #define __IGame_HPP
 
 enum class GameType {
@@ -13,7 +13,7 @@ public:
 	virtual GameType type() const = 0;
 	virtual void update(Milliseconds deltaTime) = 0;
 	virtual void render() = 0;
-	// À©µµ¿ì ÇÁ·Î½ÃÀú¿¡¼­ Æ¯Á¤ÇÑ ¸Ş½ÃÁö Ã³¸®¸¦ À§ÀÓ¹Ş´Â´Ù.
+	// ìœˆë„ìš° í”„ë¡œì‹œì €ì—ì„œ íŠ¹ì •í•œ ë©”ì‹œì§€ ì²˜ë¦¬ë¥¼ ìœ„ì„ë°›ëŠ”ë‹¤.
 	virtual LRESULT receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) = 0;
 };
 

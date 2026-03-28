@@ -1,13 +1,13 @@
-#include "rspch.hpp"
+ï»¿#include "rspch.hpp"
 #include "object.hpp"
 #include "Model.hpp"
 
-// ¸ðµ¨À» ¼³Á¤ÇÑ´Ù.
-// ¸ðµ¨¿¡ ¹Ù¿îµù º¼·ýÀÌ Á¸ÀçÇÒ °æ¿ì, ¿ùµå °ø°£ ¹Ù¿îµù º¼·ýÀ» ±¸ÃàÇÑ´Ù.
-// (¸ðµ¨ÀÇ ¹Ù¿îµù º¼·ýÀ» ±â¹ÝÀ¸·Î °ÔÀÓ °´Ã¼ÀÇ ¿ùµå º¯È¯À» Àû¿ëÇÑ
-//  ¿ùµå °ø°£ ¹Ù¿îµù º¼·ýÀ» µû·Î µÎ¾î¾ß ¿ùµå °ø°£ Ãæµ¹ Ã³¸®°¡ °¡´ÉÇÏ´Ù.)
+// ëª¨ë¸ì„ ì„¤ì •í•œë‹¤.
+// ëª¨ë¸ì— ë°”ìš´ë”© ë³¼ë¥¨ì´ ì¡´ìž¬í•  ê²½ìš°, ì›”ë“œ ê³µê°„ ë°”ìš´ë”© ë³¼ë¥¨ì„ êµ¬ì¶•í•œë‹¤.
+// (ëª¨ë¸ì˜ ë°”ìš´ë”© ë³¼ë¥¨ì„ ê¸°ë°˜ìœ¼ë¡œ ê²Œìž„ ê°ì²´ì˜ ì›”ë“œ ë³€í™˜ì„ ì ìš©í•œ
+//  ì›”ë“œ ê³µê°„ ë°”ìš´ë”© ë³¼ë¥¨ì„ ë”°ë¡œ ë‘ì–´ì•¼ ì›”ë“œ ê³µê°„ ì¶©ëŒ ì²˜ë¦¬ê°€ ê°€ëŠ¥í•˜ë‹¤.)
 void Object::setModel(const Model* pModel){
-	DISPLAY_ERROR_STR(pModel != nullptr, "[Game Error] Object::setModel: ³Î ¸ðµ¨ÀÌ Àü´ÞµÇ¾ú½À´Ï´Ù.", false);
+	DISPLAY_ERROR_STR(pModel != nullptr, "[Game Error] Object::setModel: ë„ ëª¨ë¸ì´ ì „ë‹¬ë˜ì—ˆìŠµë‹ˆë‹¤.", false);
 	if (pModel == nullptr) {
 		return;
 	}
@@ -35,14 +35,14 @@ void Object::setModel(const Model* pModel){
 	}
 }
 
-// ¹°¸® ½Ã¹Ä·¹ÀÌ¼Ç°ú º°°³·Î °ÔÀÓ °´Ã¼ÀÇ
-	// ÀÚÃ¼ÀûÀÎ °»½Å ·çÆ¾À» ÇÊ¿ä·Î ÇÒ ¶§ ÀÌ ÇÔ¼ö¿¡ ÀÛ¼ºÇÑ´Ù.
+// ë¬¼ë¦¬ ì‹œë®¬ë ˆì´ì…˜ê³¼ ë³„ê°œë¡œ ê²Œìž„ ê°ì²´ì˜
+	// ìžì²´ì ì¸ ê°±ì‹  ë£¨í‹´ì„ í•„ìš”ë¡œ í•  ë•Œ ì´ í•¨ìˆ˜ì— ìž‘ì„±í•œë‹¤.
 void Object::update(Milliseconds deltaTime) {
 
 }
 
-// °ÔÀÓ °´Ã¼ÀÇ À§Ä¡¸¦ °»½ÅÇÑ´Ù.
-// PhysicStateÀÇ AABB¿Í Bounding Rect ¿ª½Ã °»½ÅµÈ´Ù.
+// ê²Œìž„ ê°ì²´ì˜ ìœ„ì¹˜ë¥¼ ê°±ì‹ í•œë‹¤.
+// PhysicStateì˜ AABBì™€ Bounding Rect ì—­ì‹œ ê°±ì‹ ëœë‹¤.
 void MU_CALLCONV Object::setPos(mu::Vec3 newPos) {
 	physicState_.pos = newPos;
 
@@ -71,19 +71,19 @@ void MU_CALLCONV Object::setPos(mu::Vec3 newPos) {
 	}
 }
 
-// °ÔÀÓ °´Ã¼ÀÇ ¼Óµµ¸¦ °»½ÅÇÑ´Ù.
-// ÀÌÀü PhysicState¿Í ÇöÀç PhysicStateÀÇ ¼Óµµ°¡ ¸ðµÎ °»½ÅµÈ´Ù.
+// ê²Œìž„ ê°ì²´ì˜ ì†ë„ë¥¼ ê°±ì‹ í•œë‹¤.
+// ì´ì „ PhysicStateì™€ í˜„ìž¬ PhysicStateì˜ ì†ë„ê°€ ëª¨ë‘ ê°±ì‹ ëœë‹¤.
 void MU_CALLCONV Object::setVelocity(mu::Vec3 newVelocity) {
 	physicState_.velocity = newVelocity;
 }
 
-// °ÔÀÓ °´Ã¼ÀÇ °¢¼Óµµ¸¦ °»½ÅÇÑ´Ù.
+// ê²Œìž„ ê°ì²´ì˜ ê°ì†ë„ë¥¼ ê°±ì‹ í•œë‹¤.
 void MU_CALLCONV Object::setOmega(mu::Vec3 newOmega) {
 	physicState_.omega = newOmega;
 }
 
-// °ÔÀÓ °´Ã¼ÀÇ ¹æÇâÀ» °»½ÅÇÑ´Ù.
-// °ÔÀÓ °´Ã¼ÀÇ ¹æÇâ º¤ÅÍµéµµ ÀüºÎ °»½ÅµÈ´Ù.
+// ê²Œìž„ ê°ì²´ì˜ ë°©í–¥ì„ ê°±ì‹ í•œë‹¤.
+// ê²Œìž„ ê°ì²´ì˜ ë°©í–¥ ë²¡í„°ë“¤ë„ ì „ë¶€ ê°±ì‹ ëœë‹¤.
 void MU_CALLCONV Object::setOrient(mu::NQuat newOrient) {
 	physicState_.orient = newOrient;
 	right_ = physicState_.orient.rotate(mu::Vec3(1.f, 0.f, 0.f));
@@ -91,8 +91,8 @@ void MU_CALLCONV Object::setOrient(mu::NQuat newOrient) {
 	forward_ = physicState_.orient.rotate(mu::Vec3(0.f, 0.f, 1.f));
 }
 
-// °ÔÀÓ °´Ã¼ÀÇ Å©±â¸¦ °»½ÅÇÑ´Ù.
-// PhysicStateÀÇ AABB¿Í Bounding Rect ¿ª½Ã °»½ÅµÈ´Ù.
+// ê²Œìž„ ê°ì²´ì˜ í¬ê¸°ë¥¼ ê°±ì‹ í•œë‹¤.
+// PhysicStateì˜ AABBì™€ Bounding Rect ì—­ì‹œ ê°±ì‹ ëœë‹¤.
 void MU_CALLCONV Object::setScale(mu::Vec3 newScale) {
 	physicState_.scale = newScale;
 

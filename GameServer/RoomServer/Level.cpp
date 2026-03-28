@@ -1,4 +1,4 @@
-#include "rspch.hpp"
+ï»¿#include "rspch.hpp"
 #include "Level.hpp"
 #include "binaryImport.hpp"
 #include "assetManager.hpp"
@@ -18,7 +18,7 @@ void importNode(std::ifstream& ifs, const AssetManager& assetManager, Level& lev
 	const auto type = readText(ifs, "Type");
 	const auto name = readText(ifs, "Name");
 
-	gSharedLog << "[Level Load] ·¹º§ ³ëµå " << name << " ·Îµå ¿Ï·á\n";
+	gSharedLog << "[Level Load] ë ˆë²¨ ë…¸ë“œ " << name << " ë¡œë“œ ì™„ë£Œ\n";
 	dumpLog();
 
 	readHeadTag(ifs, "LocalTRS");
@@ -63,7 +63,7 @@ Level loadLevelFromFile(const std::filesystem::path& path, const AssetManager& a
 	Level ret{};
 
 	auto ifs = std::ifstream(path, std::ios::binary);
-	DISPLAY_ERROR_STR(ifs.good(), "[File I/O Error]: loadModelFromFile: "s + path.string() + " ÆÄÀÏÀ» ¿­ ¼ö ¾ø½À´Ï´Ù."s, true);
+	DISPLAY_ERROR_STR(ifs.good(), "[File I/O Error]: loadModelFromFile: "s + path.string() + " íŒŒì¼ì„ ì—´ ìˆ˜ ì—†ìŠµë‹ˆë‹¤."s, true);
 
 	readHeadTag(ifs, "Level");
 	const auto nodeCnt = readInteger(ifs, "NodeCnt");
@@ -72,6 +72,6 @@ Level loadLevelFromFile(const std::filesystem::path& path, const AssetManager& a
 
 	readTailTag(ifs, "Level");
 
-	gSharedLog << "[Level Load] File I/O: ·¹º§ " << path << "·Îµå ¿Ï·á\n";
+	gSharedLog << "[Level Load] File I/O: ë ˆë²¨ " << path << "ë¡œë“œ ì™„ë£Œ\n";
 	return ret;
 }

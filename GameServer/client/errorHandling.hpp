@@ -1,12 +1,12 @@
-#ifndef __errorHandling_HPP
+ï»¿#ifndef __errorHandling_HPP
 #define __errorHandling_HPP
 
 #include <system_error>
 
-// @param result ½ÇÇàµÈ ÇÔ¼öÀÇ ¹İÈ¯°ª
-// @param willExit ¿¹¿Ü ¹ß»ı ½Ã Á¾·á ¿©ºÎ
-// @brief result °ªÀÌ false·Î Æò°¡µÇ¸é std::wcoutÀ» ÅëÇØ,
-// GetLastError ÇÔ¼ö·Î ¹İÈ¯µÇ´Â ¿¹¿Ü ÄÚµå¸¦ ÇØ´ç ¿¹¿Ü ÄÚµåÀÇ ÀÚ¿¬¾î ÇØ¼®°ú ÇÔ²² Ãâ·ÂÇÑ´Ù.
+// @param result ì‹¤í–‰ëœ í•¨ìˆ˜ì˜ ë°˜í™˜ê°’
+// @param willExit ì˜ˆì™¸ ë°œìƒ ì‹œ ì¢…ë£Œ ì—¬ë¶€
+// @brief result ê°’ì´ falseë¡œ í‰ê°€ë˜ë©´ std::wcoutì„ í†µí•´,
+// GetLastError í•¨ìˆ˜ë¡œ ë°˜í™˜ë˜ëŠ” ì˜ˆì™¸ ì½”ë“œë¥¼ í•´ë‹¹ ì˜ˆì™¸ ì½”ë“œì˜ ìì—°ì–´ í•´ì„ê³¼ í•¨ê»˜ ì¶œë ¥í•œë‹¤.
 #define DISPLAY_ERROR_GLE(result, willExit)	\
 	{	\
 		auto __dp_e_gle_result = (result);	\
@@ -20,10 +20,10 @@
 		}	\
 	}	
 
-// @param hr ½ÇÇàµÈ ÇÔ¼öÀÇ ¹İÈ¯°ª(HRESULT Å¸ÀÔ)
-// @param willExit ¿¹¿Ü ¹ß»ı ½Ã Á¾·á ¿©ºÎ
-// @brief hr °ªÀÌ 0º¸´Ù ÀÛÀ¸¸é std::wcoutÀ» ÅëÇØ,
-// hr°ú ÇÔ²² hrÀÌ ³ªÅ¸³»´Â ¿¹¿Ü ³»¿ëÀ» ÇØ¼®ÇÑ ÀÚ¿¬¾î ¹®ÀåÀ» Ãâ·ÂÇÑ´Ù.
+// @param hr ì‹¤í–‰ëœ í•¨ìˆ˜ì˜ ë°˜í™˜ê°’(HRESULT íƒ€ì…)
+// @param willExit ì˜ˆì™¸ ë°œìƒ ì‹œ ì¢…ë£Œ ì—¬ë¶€
+// @brief hr ê°’ì´ 0ë³´ë‹¤ ì‘ìœ¼ë©´ std::wcoutì„ í†µí•´,
+// hrê³¼ í•¨ê»˜ hrì´ ë‚˜íƒ€ë‚´ëŠ” ì˜ˆì™¸ ë‚´ìš©ì„ í•´ì„í•œ ìì—°ì–´ ë¬¸ì¥ì„ ì¶œë ¥í•œë‹¤.
 #define DISPLAY_ERROR_HR(hr, willExit)	\
 	{	\
 		auto __dp_e_hr_result = (hr);	\
@@ -37,11 +37,11 @@
 		}	\
 	}	
 
-// @param condition bool·Î Æò°¡ °¡´ÉÇÑ, falseÀÏ ½Ã ¿¹¿Ü·Î ÆÇ´ÜÇÒ °ª
-// @param msg ¿¹¿Ü ¹ß»ı ½Ã Ãâ·ÂÇÒ ¹®ÀÚ¿­
-// @param willExit ¿¹¿Ü ¹ß»ı ½Ã Á¾·á ¿©ºÎ
-// @brief condition °ªÀÌ false·Î Æò°¡µÇ¸é std::wcoutÀ» ÅëÇØ,
-// msg·Î Àü´Ş¹ŞÀº ¹®ÀÚ¿­À» Ãâ·ÂÇÑ´Ù.
+// @param condition boolë¡œ í‰ê°€ ê°€ëŠ¥í•œ, falseì¼ ì‹œ ì˜ˆì™¸ë¡œ íŒë‹¨í•  ê°’
+// @param msg ì˜ˆì™¸ ë°œìƒ ì‹œ ì¶œë ¥í•  ë¬¸ìì—´
+// @param willExit ì˜ˆì™¸ ë°œìƒ ì‹œ ì¢…ë£Œ ì—¬ë¶€
+// @brief condition ê°’ì´ falseë¡œ í‰ê°€ë˜ë©´ std::wcoutì„ í†µí•´,
+// msgë¡œ ì „ë‹¬ë°›ì€ ë¬¸ìì—´ì„ ì¶œë ¥í•œë‹¤.
 #define DISPLAY_ERROR_STR(condition, msg, willExit)	\
 	{	\
 		auto __dp_e_str_condition = (condition);	\
@@ -56,12 +56,12 @@
 
 #ifdef DXGI_DEBUG_INFO
 
-// @param hr ½ÇÇàµÈ ÇÔ¼öÀÇ ¹İÈ¯°ª(HRESULT Å¸ÀÔ)
-// @param willExit ¿¹¿Ü ¹ß»ı ½Ã Á¾·á ¿©ºÎ
-// @brief hr °ªÀÌ 0º¸´Ù ÀÛÀ¸¸é std::wcout°ú std::coutÀ» ÅëÇØ,
-// hr°ú ÇÔ²² hrÀÌ ³ªÅ¸³»´Â ¿¹¿Ü ³»¿ëÀ» ÇØ¼®ÇÑ ÀÚ¿¬¾î ¹®ÀåÀ» Ãâ·ÂÇÑ´Ù.
-// ¶ÇÇÑ DXGI Info Queue¿¡ ÀúÀåµÈ ¿¹¿Ü ³»¿ëÀ» Ãâ·ÂÇÑ´Ù.
-// (½ÇÇà Àü¿¡ DXGIDebugInfo::initÀÌ Á¤»ó È£Ãâ ¿Ï·áµÇ¾î¾ß ÇÑ´Ù.)
+// @param hr ì‹¤í–‰ëœ í•¨ìˆ˜ì˜ ë°˜í™˜ê°’(HRESULT íƒ€ì…)
+// @param willExit ì˜ˆì™¸ ë°œìƒ ì‹œ ì¢…ë£Œ ì—¬ë¶€
+// @brief hr ê°’ì´ 0ë³´ë‹¤ ì‘ìœ¼ë©´ std::wcoutê³¼ std::coutì„ í†µí•´,
+// hrê³¼ í•¨ê»˜ hrì´ ë‚˜íƒ€ë‚´ëŠ” ì˜ˆì™¸ ë‚´ìš©ì„ í•´ì„í•œ ìì—°ì–´ ë¬¸ì¥ì„ ì¶œë ¥í•œë‹¤.
+// ë˜í•œ DXGI Info Queueì— ì €ì¥ëœ ì˜ˆì™¸ ë‚´ìš©ì„ ì¶œë ¥í•œë‹¤.
+// (ì‹¤í–‰ ì „ì— DXGIDebugInfo::initì´ ì •ìƒ í˜¸ì¶œ ì™„ë£Œë˜ì–´ì•¼ í•œë‹¤.)
 #define DISPLAY_ERROR_DX_HR(hr, willExit)	\
 	{	\
 		auto __dp_e_hr_result = (hr);	\
@@ -69,8 +69,8 @@
 			gSharedLog << "[Error Code: " << __dp_e_hr_result << "] - " << errorMsgHR(__dp_e_hr_result)	\
 				<< ", from file " << __FILE__ << ", line " << __LINE__ << '\n';	\
 			if (!DXGIDebugInfo::infoQ) {	\
-				gSharedLog << "[DXGIDebugInfo] DXGIDebugInfo::infoQ°¡ È°¼ºÈ­µÇÁö ¾Ê¾Ò½À´Ï´Ù. "	\
-					"DXGI¿¡¼­ ¹ß»ıÇÑ ÀÚ¼¼ÇÑ ¿¹¿ÜÀÇ Á¤º¸¸¦ È®ÀÎÇÒ ¼ö ¾ø½À´Ï´Ù.\n";	\
+				gSharedLog << "[DXGIDebugInfo] DXGIDebugInfo::infoQê°€ í™œì„±í™”ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤. "	\
+					"DXGIì—ì„œ ë°œìƒí•œ ìì„¸í•œ ì˜ˆì™¸ì˜ ì •ë³´ë¥¼ í™•ì¸í•  ìˆ˜ ì—†ìŠµë‹ˆë‹¤.\n";	\
 			}	\
 			else {	\
 				DXGIDebugInfo::dump(gSharedLog, true);	\
@@ -84,16 +84,16 @@
 		}	\
 	}
 
-// @param voidCall °Ë»çÇÒ ÇÔ¼ö È£Ãâ
-// @param willExit ¿¹¿Ü ¹ß»ı ½Ã Á¾·á ¿©ºÎ
-// @brief voidCallÀ» ¼öÇà ÈÄ DXGI Info Queue¿¡ ¿¹¿Ü ¸Ş½ÃÁö°¡
-// Ãß°¡µÇ¾ú´Ù¸é std::wcout°ú std::coutÀ» ÅëÇØ ±× ³»¿ëÀ» Ãâ·ÂÇÑ´Ù.
-// (½ÇÇà Àü¿¡ DXGIDebugInfo::initÀÌ Á¤»ó È£Ãâ ¿Ï·áµÇ¾î¾ß ÇÑ´Ù.)
+// @param voidCall ê²€ì‚¬í•  í•¨ìˆ˜ í˜¸ì¶œ
+// @param willExit ì˜ˆì™¸ ë°œìƒ ì‹œ ì¢…ë£Œ ì—¬ë¶€
+// @brief voidCallì„ ìˆ˜í–‰ í›„ DXGI Info Queueì— ì˜ˆì™¸ ë©”ì‹œì§€ê°€
+// ì¶”ê°€ë˜ì—ˆë‹¤ë©´ std::wcoutê³¼ std::coutì„ í†µí•´ ê·¸ ë‚´ìš©ì„ ì¶œë ¥í•œë‹¤.
+// (ì‹¤í–‰ ì „ì— DXGIDebugInfo::initì´ ì •ìƒ í˜¸ì¶œ ì™„ë£Œë˜ì–´ì•¼ í•œë‹¤.)
 #define DISPLAY_ERROR_DX_VOID(voidCall, willExit)	\
 	{	\
 		if (!DXGIDebugInfo::infoQ) {	\
-			gSharedLog << "[DXGIDebugInfo] DXGIDebugInfo::infoQ°¡ È°¼ºÈ­µÇÁö ¾Ê¾Ò½À´Ï´Ù. "	\
-				"DISPLAY_ERROR_DX_VOID·Î ¿¹¿Ü¸¦ °¨ÁöÇÒ ¼ö ¾ø½À´Ï´Ù."	\
+			gSharedLog << "[DXGIDebugInfo] DXGIDebugInfo::infoQê°€ í™œì„±í™”ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤. "	\
+				"DISPLAY_ERROR_DX_VOIDë¡œ ì˜ˆì™¸ë¥¼ ê°ì§€í•  ìˆ˜ ì—†ìŠµë‹ˆë‹¤."	\
 				", from file " << __FILE__ << ", line " << __LINE__ << '\n';	\
 			dumpLog();	\
 			(voidCall);	\
@@ -105,7 +105,7 @@
 			auto __dp_e_vc_numMsg_After = DXGIDebugInfo::infoQ	\
 				->GetNumStoredMessagesAllowedByRetrievalFilters(DXGI_DEBUG_ALL);	\
 			if (__dp_e_vc_numMsg_After > __dp_e_vc_numMsg) {	\
-				gSharedLog << "[DXVoid]: " << #voidCall << "] - ¿¹¿Ü¹ß»ı"	\
+				gSharedLog << "[DXVoid]: " << #voidCall << "] - ì˜ˆì™¸ë°œìƒ"	\
 					<< ", from file " << __FILE__ << ", line " << __LINE__ << '\n';	\
 				DXGIDebugInfo::dump(std::cout, true);	\
 					\
@@ -120,11 +120,11 @@
 
 #else	// if not defined(DXGI_DEBUG_INFO)
 
-// @param hr ½ÇÇàµÈ ÇÔ¼öÀÇ ¹İÈ¯°ª(HRESULT Å¸ÀÔ)
-// @param willExit ¿¹¿Ü ¹ß»ı ½Ã Á¾·á ¿©ºÎ
-// @brief hr °ªÀÌ false·Î Æò°¡µÇÁö ¾ÊÀ¸¸é std::wcoutÀ» ÅëÇØ,
-// hr°ú ÇÔ²² hrÀÌ ³ªÅ¸³»´Â ¿¹¿Ü ³»¿ëÀ» ÇØ¼®ÇÑ ÀÚ¿¬¾î ¹®ÀåÀ» Ãâ·ÂÇÑ´Ù.
-// DXGIÀÇ ÀÚ¼¼ÇÑ ¿¹¿Ü ³»¿ëÀ» ¾Ë°í ½ÍÀ¸¸é DXGI_DEBUG_INFO ¸ÅÅ©·Î¸¦ È°¼ºÈ­ÇÑ´Ù.
+// @param hr ì‹¤í–‰ëœ í•¨ìˆ˜ì˜ ë°˜í™˜ê°’(HRESULT íƒ€ì…)
+// @param willExit ì˜ˆì™¸ ë°œìƒ ì‹œ ì¢…ë£Œ ì—¬ë¶€
+// @brief hr ê°’ì´ falseë¡œ í‰ê°€ë˜ì§€ ì•Šìœ¼ë©´ std::wcoutì„ í†µí•´,
+// hrê³¼ í•¨ê»˜ hrì´ ë‚˜íƒ€ë‚´ëŠ” ì˜ˆì™¸ ë‚´ìš©ì„ í•´ì„í•œ ìì—°ì–´ ë¬¸ì¥ì„ ì¶œë ¥í•œë‹¤.
+// DXGIì˜ ìì„¸í•œ ì˜ˆì™¸ ë‚´ìš©ì„ ì•Œê³  ì‹¶ìœ¼ë©´ DXGI_DEBUG_INFO ë§¤í¬ë¡œë¥¼ í™œì„±í™”í•œë‹¤.
 #define DISPLAY_ERROR_DX_HR(hr, willExit)	\
 	{	\
 		auto __dp_e_hr_result = (hr);	\
@@ -137,22 +137,22 @@
 		}	\
 	}
 
-// @param voidCall °Ë»çÇÒ ÇÔ¼ö È£Ãâ
-// @param willExit ¿¹¿Ü ¹ß»ı ½Ã Á¾·á ¿©ºÎ
-// @brief voidCallÀ» ¼öÇàÇÑ´Ù. willExit ¸Å°³º¯¼ö´Â »ç¿ëµÇÁö ¾Ê´Â´Ù.
-// DXGIÀÇ ÀÚ¼¼ÇÑ ¿¹¿Ü ³»¿ëÀ» ¾Ë°í ½ÍÀ¸¸é DXGI_DEBUG_INFO ¸ÅÅ©·Î¸¦ È°¼ºÈ­ÇÑ´Ù.
+// @param voidCall ê²€ì‚¬í•  í•¨ìˆ˜ í˜¸ì¶œ
+// @param willExit ì˜ˆì™¸ ë°œìƒ ì‹œ ì¢…ë£Œ ì—¬ë¶€
+// @brief voidCallì„ ìˆ˜í–‰í•œë‹¤. willExit ë§¤ê°œë³€ìˆ˜ëŠ” ì‚¬ìš©ë˜ì§€ ì•ŠëŠ”ë‹¤.
+// DXGIì˜ ìì„¸í•œ ì˜ˆì™¸ ë‚´ìš©ì„ ì•Œê³  ì‹¶ìœ¼ë©´ DXGI_DEBUG_INFO ë§¤í¬ë¡œë¥¼ í™œì„±í™”í•œë‹¤.
 #define DISPLAY_ERROR_DX_VOID(voidCall, willExit) (voidCall)
 
 #endif	// DXGI_DEBUG_INFO
 
-// GetLastError ÇÔ¼ö¸¦ ÅëÇØ ¹ß°ßµÇ´Â ¿¹¿Ü ÄÚµå¸¦ ÀÚ¿¬¾î ¹®ÀåÀ¸·Î ÇØ¼®ÇØ
-// std::stringÀ¸·Î µ¹·ÁÁØ´Ù.
+// GetLastError í•¨ìˆ˜ë¥¼ í†µí•´ ë°œê²¬ë˜ëŠ” ì˜ˆì™¸ ì½”ë“œë¥¼ ìì—°ì–´ ë¬¸ì¥ìœ¼ë¡œ í•´ì„í•´
+// std::stringìœ¼ë¡œ ëŒë ¤ì¤€ë‹¤.
 inline std::string errorMsgGLE() {
 	return std::system_category().message(GetLastError());
 }
 
-// ¿¹¿Ü ÄÚµå °ªÀ» °¡Áø HRESULT º¯¼ö¸¦ Àü´Ş¹Ş¾ÒÀ» ¶§,
-// ÇØ´ç ¿¹¿Ü ÄÚµå¸¦ ÀÚ¿¬¾î ¹®ÀåÀ¸·Î ÇØ¼®ÇØ std::stringÀ¸·Î µ¹·ÁÁØ´Ù.
+// ì˜ˆì™¸ ì½”ë“œ ê°’ì„ ê°€ì§„ HRESULT ë³€ìˆ˜ë¥¼ ì „ë‹¬ë°›ì•˜ì„ ë•Œ,
+// í•´ë‹¹ ì˜ˆì™¸ ì½”ë“œë¥¼ ìì—°ì–´ ë¬¸ì¥ìœ¼ë¡œ í•´ì„í•´ std::stringìœ¼ë¡œ ëŒë ¤ì¤€ë‹¤.
 inline std::string errorMsgHR(HRESULT hResult) {
 	return std::system_category().message(hResult);;
 }
@@ -160,22 +160,22 @@ inline std::string errorMsgHR(HRESULT hResult) {
 #ifdef DXGI_DEBUG_INFO
 namespace DXGIDebugInfo
 {
-extern ComPtr<IDXGIDebug1> debug;	// reportLiveObjects¸¦ ¼öÇàÇÏ±â À§ÇÑ µğ¹ö±× °´Ã¼
-extern ComPtr<IDXGIInfoQueue> infoQ;	// std::cout, È¤Àº ÆÄÀÏ·Î DXGI ¿¹¿Ü¸¦ Ãâ·ÂÇÏ±â À§ÇØ
-										// DXGI ¸Ş½ÃÁöµéÀÌ ´ã±ä Info Queue¸¦ ´Ù·ê ¼ö ÀÖ´Â ÀÎÅÍÆäÀÌ½º »ç¿ë
+extern ComPtr<IDXGIDebug1> debug;	// reportLiveObjectsë¥¼ ìˆ˜í–‰í•˜ê¸° ìœ„í•œ ë””ë²„ê·¸ ê°ì²´
+extern ComPtr<IDXGIInfoQueue> infoQ;	// std::cout, í˜¹ì€ íŒŒì¼ë¡œ DXGI ì˜ˆì™¸ë¥¼ ì¶œë ¥í•˜ê¸° ìœ„í•´
+										// DXGI ë©”ì‹œì§€ë“¤ì´ ë‹´ê¸´ Info Queueë¥¼ ë‹¤ë£° ìˆ˜ ìˆëŠ” ì¸í„°í˜ì´ìŠ¤ ì‚¬ìš©
 
-// DXGI Debug °èÃşÀ» È°¼ºÈ­ÇÑ´Ù.
-// debug °´Ã¼¿Í infoQ °´Ã¼¸¦ ÃÊ±âÈ­ÇÑ´Ù.
+// DXGI Debug ê³„ì¸µì„ í™œì„±í™”í•œë‹¤.
+// debug ê°ì²´ì™€ infoQ ê°ì²´ë¥¼ ì´ˆê¸°í™”í•œë‹¤.
 void init();
-// »ì¾ÆÀÖ´Â DXGI °´Ã¼µéÀ» °¨ÁöÇØ º¸°íÇÑ´Ù.
-// ÇÁ·Î±×·¥ÀÇ ¸¶Áö¸·¿¡ ºÒ¸®Áö ¾ÊÀ¸¸é, ¼Ò¸êµÉ ¿¹Á¤ÀÎ °´Ã¼µéÀÌ ÀÖÀ½¿¡µµ ºÒ±¸ÇÏ°í
-// ¾û¶×ÇÏ°Ô ´©¼ö º¸°í¸¦ ÇÒ ¼ö ÀÖ´Ù.
-// Ãß°¡ÀûÀ¸·Î, ID3D12Object::SetNameÀ» ÅëÇØ °´Ã¼ÀÇ ÀÌ¸§À» ¼³Á¤ÇÏ¿©
-// ¾î¶² °´Ã¼µéÀÌ »ì¾ÆÀÖ´ÂÁö È®ÀÎÇÒ ¼ö ÀÖµµ·Ï ÇÏÀÚ.
+// ì‚´ì•„ìˆëŠ” DXGI ê°ì²´ë“¤ì„ ê°ì§€í•´ ë³´ê³ í•œë‹¤.
+// í”„ë¡œê·¸ë¨ì˜ ë§ˆì§€ë§‰ì— ë¶ˆë¦¬ì§€ ì•Šìœ¼ë©´, ì†Œë©¸ë  ì˜ˆì •ì¸ ê°ì²´ë“¤ì´ ìˆìŒì—ë„ ë¶ˆêµ¬í•˜ê³ 
+// ì—‰ëš±í•˜ê²Œ ëˆ„ìˆ˜ ë³´ê³ ë¥¼ í•  ìˆ˜ ìˆë‹¤.
+// ì¶”ê°€ì ìœ¼ë¡œ, ID3D12Object::SetNameì„ í†µí•´ ê°ì²´ì˜ ì´ë¦„ì„ ì„¤ì •í•˜ì—¬
+// ì–´ë–¤ ê°ì²´ë“¤ì´ ì‚´ì•„ìˆëŠ”ì§€ í™•ì¸í•  ìˆ˜ ìˆë„ë¡ í•˜ì.
 void reportLiveObjects(DXGI_DEBUG_RLO_FLAGS flags, std::ostream& os);
-// @brief Àü´Ş¹ŞÀº Ãâ·Â ½ºÆ®¸²À¸·Î ÀúÀåµÈ ¸Ş½ÃÁöµéÀ» Ãâ·ÂÇÑ´Ù.
-// @param os Ãâ·Â ½ºÆ®¸²
-// @param willClear Ãâ·Â ÈÄ infoQ¸¦ ºñ¿ïÁö ¿©ºÎ
+// @brief ì „ë‹¬ë°›ì€ ì¶œë ¥ ìŠ¤íŠ¸ë¦¼ìœ¼ë¡œ ì €ì¥ëœ ë©”ì‹œì§€ë“¤ì„ ì¶œë ¥í•œë‹¤.
+// @param os ì¶œë ¥ ìŠ¤íŠ¸ë¦¼
+// @param willClear ì¶œë ¥ í›„ infoQë¥¼ ë¹„ìš¸ì§€ ì—¬ë¶€
 void dump(std::ostream& os, bool willClear);
 }	// namespace DXGIDebugInfo
 #endif	// DXGI_DEBUG_INFO

@@ -1,29 +1,29 @@
-#include "pch.hpp"
+ï»¿#include "pch.hpp"
 #include "timer.hpp"
 
-// ¸¶Áö¸· tick°ú ÇöÀç tick°úÀÇ °£°ÝÀ¸·Î
-// Delta Time°ú fps, °¢Á¾ º¸Á¶ Á¤º¸µéÀ» °è»êÇÑ´Ù.
-// * Å¸ÀÌ¸Ó°¡ Á¤ÁöµÈ µ¿¾ÈÀÇ ½Ã°£Àº tickÀÇ Á¤º¸ °»½Å¿¡ ¿µÇâÀ» ÁÖÁö ¾Ê´Â´Ù.
+// ë§ˆì§€ë§‰ tickê³¼ í˜„ìž¬ tickê³¼ì˜ ê°„ê²©ìœ¼ë¡œ
+// Delta Timeê³¼ fps, ê°ì¢… ë³´ì¡° ì •ë³´ë“¤ì„ ê³„ì‚°í•œë‹¤.
+// * íƒ€ì´ë¨¸ê°€ ì •ì§€ëœ ë™ì•ˆì˜ ì‹œê°„ì€ tickì˜ ì •ë³´ ê°±ì‹ ì— ì˜í–¥ì„ ì£¼ì§€ ì•ŠëŠ”ë‹¤.
 void Timer::tick() {
-	// Å¸ÀÌ¸Ó°¡ ¸ØÃèÀ» ½Ã ¾Æ¹«°Íµµ °»½ÅµÇÁö ¾ÊÀ½
+	// íƒ€ì´ë¨¸ê°€ ë©ˆì·„ì„ ì‹œ ì•„ë¬´ê²ƒë„ ê°±ì‹ ë˜ì§€ ì•ŠìŒ
 	if (stopped_) {
 		return;
 	}
 
 	const auto tp = HighResolutionClock::now();
 
-	// Ã³¸®ÇÒ ½Ã°£ÀÌ µÈ ÀÛ¾÷µéÀ» Ã³¸®ÇÑ´Ù.
+	// ì²˜ë¦¬í•  ì‹œê°„ì´ ëœ ìž‘ì—…ë“¤ì„ ì²˜ë¦¬í•œë‹¤.
 	while ( !jobQueue_.empty() && jobQueue_.top().executeAt < tp ) {
 		jobQueue_.top().job();
 		jobQueue_.pop();
 	}
 
-	// delta time °è»ê
+	// delta time ê³„ì‚°
 	lastDeltaTime_ = stopAccDeltaTime_ + (tp - lastTp_);
 	stopAccDeltaTime_ = 0ms;
 
-	// delta time stamp Ãß°¡
-	// maxStamps_´Â »ó¼öÀÌ¹Ç·Î, dtStamps_.size()°¡ maxStamps_º¸´Ù Å¬ ÀÏÀº ¾ø´Ù.
+	// delta time stamp ì¶”ê°€
+	// maxStamps_ëŠ” ìƒìˆ˜ì´ë¯€ë¡œ, dtStamps_.size()ê°€ maxStamps_ë³´ë‹¤ í´ ì¼ì€ ì—†ë‹¤.
 	if (dtStamps_.size() == maxStamps_) {
 		sumDeltaTime_ -= dtStamps_[tickIdx_ % maxStamps_];
 		dtStamps_[tickIdx_ % maxStamps_] = lastDeltaTime_;
@@ -34,25 +34,25 @@ void Timer::tick() {
 		sumDeltaTime_ += lastDeltaTime_;
 	}
 
-	// FPS °è»ê
+	// FPS ê³„ì‚°
 	const auto avgFrameTime = sumDeltaTime_ / dtStamps_.size();
 	fps_ = static_cast<float>(1.0 / std::chrono::duration_cast<Seconds>(avgFrameTime).count());
 
-	// Æ½ ÀÎµ¦½º ¹× Å¸ÀÓ ½ºÅÆÇÁ °»½Å
+	// í‹± ì¸ë±ìŠ¤ ë° íƒ€ìž„ ìŠ¤íƒ¬í”„ ê°±ì‹ 
 	++tickIdx_;
 	lastTp_ = tp;
 }
 
-// Å¸ÀÌ¸ÓÀÇ TickÀ» ºñÈ°¼ºÈ­ ÇÑ´Ù.
-// Å¸ÀÌ¸Ó°¡ Á¤ÁöµÇ¾î ÀÖ´Â µ¿¾ÈÀÇ ½Ã°£Àº deltaTime¿¡ °¡»êµÇÁö ¾Ê´Â´Ù.
+// íƒ€ì´ë¨¸ì˜ Tickì„ ë¹„í™œì„±í™” í•œë‹¤.
+// íƒ€ì´ë¨¸ê°€ ì •ì§€ë˜ì–´ ìžˆëŠ” ë™ì•ˆì˜ ì‹œê°„ì€ deltaTimeì— ê°€ì‚°ë˜ì§€ ì•ŠëŠ”ë‹¤.
 void Timer::stop() {
 	stopped_ = true;
 	const auto tp = HighResolutionClock::now();
 	stopAccDeltaTime_ = tp - lastTp_;
 }
 
-// Å¸ÀÌ¸ÓÀÇ TickÀ» È°¼ºÈ­ ÇÑ´Ù.
-// Å¸ÀÌ¸Ó°¡ Á¤ÁöµÇ¾î ÀÖ´Â µ¿¾ÈÀÇ ½Ã°£Àº deltaTime¿¡ °¡»êµÇÁö ¾Ê´Â´Ù.
+// íƒ€ì´ë¨¸ì˜ Tickì„ í™œì„±í™” í•œë‹¤.
+// íƒ€ì´ë¨¸ê°€ ì •ì§€ë˜ì–´ ìžˆëŠ” ë™ì•ˆì˜ ì‹œê°„ì€ deltaTimeì— ê°€ì‚°ë˜ì§€ ì•ŠëŠ”ë‹¤.
 void Timer::resume() {
 	if (stopped_) {
 		lastTp_ = HighResolutionClock::now();

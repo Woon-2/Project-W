@@ -1,8 +1,8 @@
-#ifndef __log_HPP
+ï»¿#ifndef __log_HPP
 #define __log_HPP
 
-// ¾Æ·¡ ¸ÅÅ©·ÎÀÇ È°¼ºÈ­ ¿©ºÎ¿¡ µû¶ó ·Î±ëÀÌ È°¼ºÈ­/ºñÈ°¼ºÈ­µÈ´Ù.
-// ·Î±ë ±â´ÉÀÌ ÇÊ¿ä ¾ø´Ù¸é ¾Æ·¡ #define Áö½Ã¹®À» ÁÖ¼® Ã³¸®ÇÏÀÚ.
+// ì•„ë˜ ë§¤í¬ë¡œì˜ í™œì„±í™” ì—¬ë¶€ì— ë”°ë¼ ë¡œê¹…ì´ í™œì„±í™”/ë¹„í™œì„±í™”ëœë‹¤.
+// ë¡œê¹… ê¸°ëŠ¥ì´ í•„ìš” ì—†ë‹¤ë©´ ì•„ë˜ #define ì§€ì‹œë¬¸ì„ ì£¼ì„ ì²˜ë¦¬í•˜ì.
 #define ENABLE_LOG
 
 #include <map>
@@ -13,12 +13,12 @@
 template <class CharT>
 struct NullBuffer : public std::basic_streambuf<CharT> {
 	using int_type = std::basic_streambuf<CharT>::int_type;
-    int_type overflow(int_type c) override { return c; } // ¾Æ¹«°Íµµ ¾È ÇÔ
+    int_type overflow(int_type c) override { return c; } // ì•„ë¬´ê²ƒë„ ì•ˆ í•¨
 };
 
-// std::basic_ostream°ú È£È¯µÇ¸é¼­
-// operator<<, write µîÀÇ ÇÔ¼ö¿¡¼­ ¾Æ¹« ÀÏµµ ÇÏÁö ¾Ê´Â Å¬·¡½º
-// ·Î±ë ±â´ÉÀÇ ºñÈ°¼ºÈ­ ½Ã¿¡ »ç¿ëµÈ´Ù.
+// std::basic_ostreamê³¼ í˜¸í™˜ë˜ë©´ì„œ
+// operator<<, write ë“±ì˜ í•¨ìˆ˜ì—ì„œ ì•„ë¬´ ì¼ë„ í•˜ì§€ ì•ŠëŠ” í´ë˜ìŠ¤
+// ë¡œê¹… ê¸°ëŠ¥ì˜ ë¹„í™œì„±í™” ì‹œì— ì‚¬ìš©ëœë‹¤.
 template <class CharT>
 class NullStream : public std::basic_ostream<CharT> {
 public:
@@ -27,26 +27,26 @@ private:
     NullBuffer<CharT> nullBuffer_;
 };
 
-// pushLoggerA, popLoggerA µîÀÇ ÇÔ¼ö¿¡¼­ ÀÌ°÷¿¡ ½ºÆ®¸²µéÀ» µî·Ï/Á¦°ÅÇÑ´Ù.
-// dumpLog() È£Ãâ ½Ã gSharedLogÀÇ ³»¿ëÀÌ ½ºÆ®¸²µé¿¡ º¹»çµÇ¾î Ãâ·ÂµÈ´Ù.
+// pushLoggerA, popLoggerA ë“±ì˜ í•¨ìˆ˜ì—ì„œ ì´ê³³ì— ìŠ¤íŠ¸ë¦¼ë“¤ì„ ë“±ë¡/ì œê±°í•œë‹¤.
+// dumpLog() í˜¸ì¶œ ì‹œ gSharedLogì˜ ë‚´ìš©ì´ ìŠ¤íŠ¸ë¦¼ë“¤ì— ë³µì‚¬ë˜ì–´ ì¶œë ¥ëœë‹¤.
 extern std::map<std::string, std::ostream*> gLoggers;
-// pushLoggerW, popLoggerW µîÀÇ ÇÔ¼ö¿¡¼­ ÀÌ°÷¿¡ ½ºÆ®¸²µéÀ» µî·Ï/Á¦°ÅÇÑ´Ù.
-// dumpLog() È£Ãâ ½Ã gwSharedLogÀÇ ³»¿ëÀÌ ½ºÆ®¸²µé¿¡ º¹»çµÇ¾î Ãâ·ÂµÈ´Ù.
+// pushLoggerW, popLoggerW ë“±ì˜ í•¨ìˆ˜ì—ì„œ ì´ê³³ì— ìŠ¤íŠ¸ë¦¼ë“¤ì„ ë“±ë¡/ì œê±°í•œë‹¤.
+// dumpLog() í˜¸ì¶œ ì‹œ gwSharedLogì˜ ë‚´ìš©ì´ ìŠ¤íŠ¸ë¦¼ë“¤ì— ë³µì‚¬ë˜ì–´ ì¶œë ¥ëœë‹¤.
 extern std::map<std::string, std::wostream*> gwLoggers;
 
 #ifdef ENABLE_LOG
-// std::coutÃ³·³ »ç¿ëÇÑ´Ù.
-// ÀÌ°÷¿¡ ¾²ÀÎ ·Î±×µéÀº dumpLog ÇÔ¼ö È£Ãâ ½Ã Ãâ·ÂµÈ´Ù.
+// std::coutì²˜ëŸ¼ ì‚¬ìš©í•œë‹¤.
+// ì´ê³³ì— ì“°ì¸ ë¡œê·¸ë“¤ì€ dumpLog í•¨ìˆ˜ í˜¸ì¶œ ì‹œ ì¶œë ¥ëœë‹¤.
 extern std::ostringstream gSharedLog;
-// std::wcoutÃ³·³ »ç¿ëÇÑ´Ù.
-// ÀÌ°÷¿¡ ¾²ÀÎ ·Î±×µéÀº dumpLog ÇÔ¼ö È£Ãâ ½Ã Ãâ·ÂµÈ´Ù.
+// std::wcoutì²˜ëŸ¼ ì‚¬ìš©í•œë‹¤.
+// ì´ê³³ì— ì“°ì¸ ë¡œê·¸ë“¤ì€ dumpLog í•¨ìˆ˜ í˜¸ì¶œ ì‹œ ì¶œë ¥ëœë‹¤.
 extern std::wostringstream gwSharedLog;
 #else
-// std::coutÃ³·³ »ç¿ëÇÑ´Ù.
-// ÀÌ°÷¿¡ ¾²ÀÎ ·Î±×µéÀº dumpLog ÇÔ¼ö È£Ãâ ½Ã Ãâ·ÂµÈ´Ù.
+// std::coutì²˜ëŸ¼ ì‚¬ìš©í•œë‹¤.
+// ì´ê³³ì— ì“°ì¸ ë¡œê·¸ë“¤ì€ dumpLog í•¨ìˆ˜ í˜¸ì¶œ ì‹œ ì¶œë ¥ëœë‹¤.
 extern NullStream<char> gSharedLog;
-// std::wcoutÃ³·³ »ç¿ëÇÑ´Ù.
-// ÀÌ°÷¿¡ ¾²ÀÎ ·Î±×µéÀº dumpLog ÇÔ¼ö È£Ãâ ½Ã Ãâ·ÂµÈ´Ù.
+// std::wcoutì²˜ëŸ¼ ì‚¬ìš©í•œë‹¤.
+// ì´ê³³ì— ì“°ì¸ ë¡œê·¸ë“¤ì€ dumpLog í•¨ìˆ˜ í˜¸ì¶œ ì‹œ ì¶œë ¥ëœë‹¤.
 extern NullStream<wchar_t> gwSharedLog;
 #endif
 
@@ -73,9 +73,9 @@ inline void popLoggerA(const std::string& key) {}
 inline void popLoggerW(const std::string& key) {}
 #endif
 
-// gSharedLog¿Í gwSharedLog¿¡ ±â·ÏµÈ ·Î±×µéÀ»
-// pushLoggerA, pushLoggerW µîÀÇ ÇÔ¼ö·Î µî·ÏµÈ ¸ğµç ½ºÆ®¸²µé¿¡ Ãâ·ÂÇÑ´Ù.
-// ENABLE_LOG ¸ÅÅ©·Î°¡ È°¼ºÈ­µÇ¾îÀÖÁö ¾Ê´Ù¸é, ¾Æ¹« ÀÏµµ ÇÏÁö ¾Ê´Â´Ù.
+// gSharedLogì™€ gwSharedLogì— ê¸°ë¡ëœ ë¡œê·¸ë“¤ì„
+// pushLoggerA, pushLoggerW ë“±ì˜ í•¨ìˆ˜ë¡œ ë“±ë¡ëœ ëª¨ë“  ìŠ¤íŠ¸ë¦¼ë“¤ì— ì¶œë ¥í•œë‹¤.
+// ENABLE_LOG ë§¤í¬ë¡œê°€ í™œì„±í™”ë˜ì–´ìˆì§€ ì•Šë‹¤ë©´, ì•„ë¬´ ì¼ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 void dumpLog();
 
 

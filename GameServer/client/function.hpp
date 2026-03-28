@@ -1,4 +1,4 @@
-#ifndef __function_HPP
+Ôªø#ifndef __function_HPP
 #define __function_HPP
 
 #include <iostream>
@@ -13,7 +13,7 @@ class Function128;
 
 template < class R, class ... Args>
 class Function128<R(Args...)> {
-    static constexpr size_t BUFFER_SIZE = 128;  // ø©±‚º≠ πˆ∆€ ≈©±‚ ¡∂¡§
+    static constexpr size_t BUFFER_SIZE = 128;  // Ïó¨Í∏∞ÏÑú Î≤ÑÌçº ÌÅ¨Í∏∞ Ï°∞Ï†ï
     static constexpr size_t BUFFER_ALIGN = alignof(std::max_align_t);
 
     struct ICallable {

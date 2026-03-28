@@ -1,4 +1,4 @@
-#ifndef __PCF_HPP
+ï»¿#ifndef __PCF_HPP
 #define __PCF_HPP
 
 #define _CRT_SECURE_NO_WARNINGS
@@ -41,7 +41,7 @@
 #define NOMINMAX
 #define STRICT
 
-#define DXGI_DEBUG_INFO		// DXGI¿¡¼­ ¹ß»ıÇÑ ¿¹¿Ü Á¤º¸µéÀ» Ãâ·ÂÇÒ °æ¿ì È°¼ºÈ­
+#define DXGI_DEBUG_INFO		// DXGIì—ì„œ ë°œìƒí•œ ì˜ˆì™¸ ì •ë³´ë“¤ì„ ì¶œë ¥í•  ê²½ìš° í™œì„±í™”
 
 #ifdef _DEBUG
 #pragma comment(lib, "Debug/ServerEngine.lib")

@@ -1,4 +1,4 @@
-#include "pch.hpp"
+ï»¿#include "pch.hpp"
 #include "sharedResources.hpp"
 #include "errorHandling.hpp"
 
@@ -13,7 +13,7 @@ DXGI_FORMAT convertDepthToColorFormat(DXGI_FORMAT depthFormat) {
 
 	default:
 		DISPLAY_ERROR_STR(false, "[GFX Error] SharedResources::ShadowMap::convertDepthToColorFormat: "s
-			+ "¾Ë ¼ö ¾ø´Â depth format "s + std::to_string(depthFormat) + "À» ¹Ş¾Ò½À´Ï´Ù."s, false
+			+ "ì•Œ ìˆ˜ ì—†ëŠ” depth format "s + std::to_string(depthFormat) + "ì„ ë°›ì•˜ìŠµë‹ˆë‹¤."s, false
 		);
 		return DXGI_FORMAT_UNKNOWN;
 	}
@@ -21,17 +21,17 @@ DXGI_FORMAT convertDepthToColorFormat(DXGI_FORMAT depthFormat) {
 
 std::unordered_map<std::string, ShadowMapData> shadowMapData;
 
-// SharedResources::ShadowMap::shadowMapData¿¡ Æ¯Á¤ key·Î
-// ÁÖ¾îÁø ÀÎÀÚ·Î »ı¼ºµÈ ±×¸²ÀÚ¸ÊÀ» µî·ÏÇÑ´Ù.
-// ÀÌ¹Ì ÇØ´ç key°¡ µî·ÏµÇ¾î ÀÖ´Ù¸é ¿À·ù¸¦ Ãâ·ÂÇÏ°í ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
-// (±×¸²ÀÚ¸Ê »ı¼ºÀÌ ÀÏ¾î³ªÁö ¾Ê´Â´Ù.)
-// format ÀÎÀÚ´Â depth formatÀÌ¾î¾ß ÇÑ´Ù. ex) DXGI_FORMAT_D32_FLOAT
+// SharedResources::ShadowMap::shadowMapDataì— íŠ¹ì • keyë¡œ
+// ì£¼ì–´ì§„ ì¸ìë¡œ ìƒì„±ëœ ê·¸ë¦¼ìë§µì„ ë“±ë¡í•œë‹¤.
+// ì´ë¯¸ í•´ë‹¹ keyê°€ ë“±ë¡ë˜ì–´ ìˆë‹¤ë©´ ì˜¤ë¥˜ë¥¼ ì¶œë ¥í•˜ê³  ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
+// (ê·¸ë¦¼ìë§µ ìƒì„±ì´ ì¼ì–´ë‚˜ì§€ ì•ŠëŠ”ë‹¤.)
+// format ì¸ìëŠ” depth formatì´ì–´ì•¼ í•œë‹¤. ex) DXGI_FORMAT_D32_FLOAT
 void addShadowMap( const std::string& key, ID3D12Device* device,
 	DXGI_FORMAT format, u32t width, u32t height,
 	std::size_t roomCnt, DescriptorPool& srvTexPool, DescriptorPool& dsvPool	
 ) {
 	DISPLAY_ERROR_STR(!shadowMapData.contains(key), "[GFX Error] SharedResources::ShadowMap::addShadowMap: \""s
-		+ key + "\" Å°·Î ÀÌ¹Ì ±×¸²ÀÚ¸ÊÀÌ µî·ÏµÇ¾î ÀÖ½À´Ï´Ù.", false
+		+ key + "\" í‚¤ë¡œ ì´ë¯¸ ê·¸ë¦¼ìë§µì´ ë“±ë¡ë˜ì–´ ìˆìŠµë‹ˆë‹¤.", false
 	);
 
 	if (shadowMapData.contains(key)) {
@@ -77,12 +77,12 @@ void addShadowMap( const std::string& key, ID3D12Device* device,
 	}
 }
 
-// SharedResources::ShadowMap::shadowMapDataÀÇ Æ¯Á¤ key¿¡ ¸ÅÇÎµÈ
-// ±×¸²ÀÚ¸ÊÀ» clearÇÏ´Â ¸í·ÉÀ» ±â·ÏÇÑ´Ù.
-// ¸ÕÀú addShadowMap ÇÔ¼ö¸¦ ÅëÇØ ÇØ´ç keyÀÇ ±×¸²ÀÚ¸ÊÀÌ Ãß°¡µÇ¾î ÀÖ¾î¾ß ÇÑ´Ù.
+// SharedResources::ShadowMap::shadowMapDataì˜ íŠ¹ì • keyì— ë§¤í•‘ëœ
+// ê·¸ë¦¼ìë§µì„ clearí•˜ëŠ” ëª…ë ¹ì„ ê¸°ë¡í•œë‹¤.
+// ë¨¼ì € addShadowMap í•¨ìˆ˜ë¥¼ í†µí•´ í•´ë‹¹ keyì˜ ê·¸ë¦¼ìë§µì´ ì¶”ê°€ë˜ì–´ ìˆì–´ì•¼ í•œë‹¤.
 void clearShadowMap(const std::string& key, ID3D12GraphicsCommandList* cmdList) {
 	DISPLAY_ERROR_STR(shadowMapData.contains(key), "[GFX Error] SharedResources::ShadowMap::clearShadowMap: \""s
-		+ key + "\" Å°ÀÇ ±×¸²ÀÚ ¸ÊÀÌ Á¸ÀçÇÏÁö ¾Ê½À´Ï´Ù.", false
+		+ key + "\" í‚¤ì˜ ê·¸ë¦¼ì ë§µì´ ì¡´ì¬í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.", false
 	);
 
 	if (!shadowMapData.contains(key)) {
@@ -91,16 +91,16 @@ void clearShadowMap(const std::string& key, ID3D12GraphicsCommandList* cmdList) 
 
 	auto& data = shadowMapData.at(key);
 
-	// shadow map ÅØ½ºÃ³¸¦ depth=1.f·Î clearÇÑ´Ù.
+	// shadow map í…ìŠ¤ì²˜ë¥¼ depth=1.fë¡œ clearí•œë‹¤.
 	DISPLAY_ERROR_DX_VOID( cmdList->ClearDepthStencilView(
 		data.dsv, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0u, 0u, nullptr
 	), false );
 }
 
-// ±×¸²ÀÚ¸ÊÀÇ »óÅÂ°¡ ÇöÀç Depth Write°¡ ¾Æ´Ï¶ó¸é Depth Write·Î º¯°æÇÑ´Ù.
+// ê·¸ë¦¼ìë§µì˜ ìƒíƒœê°€ í˜„ì¬ Depth Writeê°€ ì•„ë‹ˆë¼ë©´ Depth Writeë¡œ ë³€ê²½í•œë‹¤.
 void getReadyAsDepthWrite(const std::string& key, ID3D12GraphicsCommandList* cmdList) {
 	DISPLAY_ERROR_STR(shadowMapData.contains(key), "[GFX Error] SharedResources::ShadowMap::getReadyAsDepthWrite: \""s
-		+ key + "\" Å°ÀÇ ±×¸²ÀÚ ¸ÊÀÌ Á¸ÀçÇÏÁö ¾Ê½À´Ï´Ù.", false
+		+ key + "\" í‚¤ì˜ ê·¸ë¦¼ì ë§µì´ ì¡´ì¬í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.", false
 	);
 
 	if (!shadowMapData.contains(key)) {
@@ -118,12 +118,12 @@ void getReadyAsDepthWrite(const std::string& key, ID3D12GraphicsCommandList* cmd
 	}
 }
 
-// ±×¸²ÀÚ¸ÊÀÇ »óÅÂ°¡ ÇöÀç Depth Write°¡ ¾Æ´Ï¶ó¸é Depth Write·Î º¯°æÇÑ´Ù.
-// cmdListPool¿¡¼­ ÀÚÃ¼ÀûÀ¸·Î Rendering Slave Å¸ÀÔ ¸í·É ÄÁÅØ½ºÆ® ÇÏ³ª¸¦ ÇÒ´çÇØ ¸í·ÉÀ» ±â·ÏÇÏ°í
-// cmdQ¸¦ ½ÇÇàÇÑ µÚ, ¸í·É ÄÁÅØ½ºÆ®¸¦ fence¿¡ ¿¬°ü½ÃÄÑ³õ´Â´Ù.
+// ê·¸ë¦¼ìë§µì˜ ìƒíƒœê°€ í˜„ì¬ Depth Writeê°€ ì•„ë‹ˆë¼ë©´ Depth Writeë¡œ ë³€ê²½í•œë‹¤.
+// cmdListPoolì—ì„œ ìì²´ì ìœ¼ë¡œ Rendering Slave íƒ€ì… ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ í•˜ë‚˜ë¥¼ í• ë‹¹í•´ ëª…ë ¹ì„ ê¸°ë¡í•˜ê³ 
+// cmdQë¥¼ ì‹¤í–‰í•œ ë’¤, ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë¥¼ fenceì— ì—°ê´€ì‹œì¼œë†“ëŠ”ë‹¤.
 void getReadyAsDepthWrite(const std::string& key, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence) {
 	DISPLAY_ERROR_STR(shadowMapData.contains(key), "[GFX Error] SharedResources::ShadowMap::getReadyAsDepthWrite: \""s
-		+ key + "\" Å°ÀÇ ±×¸²ÀÚ ¸ÊÀÌ Á¸ÀçÇÏÁö ¾Ê½À´Ï´Ù.", false
+		+ key + "\" í‚¤ì˜ ê·¸ë¦¼ì ë§µì´ ì¡´ì¬í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.", false
 	);
 
 	if (!shadowMapData.contains(key)) {
@@ -138,12 +138,12 @@ void getReadyAsDepthWrite(const std::string& key, CommandListPool& cmdListPool, 
 
 	data.curState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
 
-	// ±×¸²ÀÚ¸Ê »óÅÂ ÀüÈ¯À» À§ÇÑ ¸í·É ÄÁÅØ½ºÆ® ÇÒ´ç
+	// ê·¸ë¦¼ìë§µ ìƒíƒœ ì „í™˜ì„ ìœ„í•œ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ í• ë‹¹
 	CommandContext cmdCtxTransition{};
 	DISPLAY_ERROR_STR(
 		cmdListPool.allocOne(CommandListUsage::RenderingSlave, cmdCtxTransition),
-		"[GFX Error] SharedResources::ShadowMap::getReadyAsDepthWrite: »ç¿ë °¡´ÉÇÑ ¸í·É ¸®½ºÆ®°¡ ¾ø½À´Ï´Ù. "
-		"CommandListPool::init È£ÃâÀÌ ÀÌ·ç¾îÁöÁö ¾Ê¾Ò°Å³ª, ÇÒ´ç¹ŞÀº ¸í·É ¸®½ºÆ®°¡ ¹İ³³µÇÁö ¾Ê¾Ò½À´Ï´Ù.",
+		"[GFX Error] SharedResources::ShadowMap::getReadyAsDepthWrite: ì‚¬ìš© ê°€ëŠ¥í•œ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ê°€ ì—†ìŠµë‹ˆë‹¤. "
+		"CommandListPool::init í˜¸ì¶œì´ ì´ë£¨ì–´ì§€ì§€ ì•Šì•˜ê±°ë‚˜, í• ë‹¹ë°›ì€ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ê°€ ë°˜ë‚©ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤.",
 		false
 	);
 	auto cmdListTransition = cmdCtxTransition.cmdList.Get();
@@ -153,7 +153,7 @@ void getReadyAsDepthWrite(const std::string& key, CommandListPool& cmdListPool, 
 		return;
 	}
 
-	// Å¬¸®¾î ¸í·É ¸®½ºÆ® ÃÊ±âÈ­
+	// í´ë¦¬ì–´ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ ì´ˆê¸°í™”
 	DISPLAY_ERROR_DX_VOID( cmdAllocTransition->Reset(), false );
 	DISPLAY_ERROR_DX_VOID( cmdListTransition->Reset(cmdAllocTransition, nullptr), false );
 
@@ -162,21 +162,21 @@ void getReadyAsDepthWrite(const std::string& key, CommandListPool& cmdListPool, 
 		D3D12_RESOURCE_STATE_DEPTH_WRITE	
 	);
 
-	// »óÅÂ ÀüÈ¯ ¸í·É ±â·Ï ³¡
+	// ìƒíƒœ ì „í™˜ ëª…ë ¹ ê¸°ë¡ ë
 	DISPLAY_ERROR_DX_VOID( cmdListTransition->Close(), false );
 
 	ID3D12CommandList* clearCmdLists[] = { cmdListTransition };
 
-	// »óÅÂ ÀüÈ¯ ¸í·É ¸®½ºÆ® ½ÇÇà
+	// ìƒíƒœ ì „í™˜ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ ì‹¤í–‰
 	DISPLAY_ERROR_DX_VOID( cmdQ->ExecuteCommandLists(1u, clearCmdLists), false );
 
 	fence.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtxTransition));
 }
 
-// ±×¸²ÀÚ¸ÊÀÇ »óÅÂ°¡ ÇöÀç Shader Resource°¡ ¾Æ´Ï¶ó¸é Shader Resource·Î º¯°æÇÑ´Ù.
+// ê·¸ë¦¼ìë§µì˜ ìƒíƒœê°€ í˜„ì¬ Shader Resourceê°€ ì•„ë‹ˆë¼ë©´ Shader Resourceë¡œ ë³€ê²½í•œë‹¤.
 void getReadyAsShaderResource(const std::string& key, ID3D12GraphicsCommandList* cmdList) {
 	DISPLAY_ERROR_STR(shadowMapData.contains(key), "[GFX Error] SharedResources::ShadowMap::getReadyAsShaderResource: \""s
-		+ key + "\" Å°ÀÇ ±×¸²ÀÚ ¸ÊÀÌ Á¸ÀçÇÏÁö ¾Ê½À´Ï´Ù.", false
+		+ key + "\" í‚¤ì˜ ê·¸ë¦¼ì ë§µì´ ì¡´ì¬í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.", false
 	);
 
 	if (!shadowMapData.contains(key)) {
@@ -194,12 +194,12 @@ void getReadyAsShaderResource(const std::string& key, ID3D12GraphicsCommandList*
 	}
 }
 
-// ±×¸²ÀÚ¸ÊÀÇ »óÅÂ°¡ ÇöÀç Shader Resource°¡ ¾Æ´Ï¶ó¸é Shader Resource·Î º¯°æÇÑ´Ù.
-// cmdListPool¿¡¼­ ÀÚÃ¼ÀûÀ¸·Î Rendering Slave Å¸ÀÔ ¸í·É ÄÁÅØ½ºÆ® ÇÏ³ª¸¦ ÇÒ´çÇØ ¸í·ÉÀ» ±â·ÏÇÏ°í
-// cmdQ¸¦ ½ÇÇàÇÑ µÚ, ¸í·É ÄÁÅØ½ºÆ®¸¦ fence¿¡ ¿¬°ü½ÃÄÑ³õ´Â´Ù.
+// ê·¸ë¦¼ìë§µì˜ ìƒíƒœê°€ í˜„ì¬ Shader Resourceê°€ ì•„ë‹ˆë¼ë©´ Shader Resourceë¡œ ë³€ê²½í•œë‹¤.
+// cmdListPoolì—ì„œ ìì²´ì ìœ¼ë¡œ Rendering Slave íƒ€ì… ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ í•˜ë‚˜ë¥¼ í• ë‹¹í•´ ëª…ë ¹ì„ ê¸°ë¡í•˜ê³ 
+// cmdQë¥¼ ì‹¤í–‰í•œ ë’¤, ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë¥¼ fenceì— ì—°ê´€ì‹œì¼œë†“ëŠ”ë‹¤.
 void getReadyAsShaderResource(const std::string& key, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence) {
 	DISPLAY_ERROR_STR(shadowMapData.contains(key), "[GFX Error] SharedResources::ShadowMap::getReadyAsShaderResource: \""s
-		+ key + "\" Å°ÀÇ ±×¸²ÀÚ ¸ÊÀÌ Á¸ÀçÇÏÁö ¾Ê½À´Ï´Ù.", false
+		+ key + "\" í‚¤ì˜ ê·¸ë¦¼ì ë§µì´ ì¡´ì¬í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.", false
 	);
 
 	if (!shadowMapData.contains(key)) {
@@ -214,12 +214,12 @@ void getReadyAsShaderResource(const std::string& key, CommandListPool& cmdListPo
 
 	data.curState = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
 
-	// ±×¸²ÀÚ¸Ê »óÅÂ ÀüÈ¯À» À§ÇÑ ¸í·É ÄÁÅØ½ºÆ® ÇÒ´ç
+	// ê·¸ë¦¼ìë§µ ìƒíƒœ ì „í™˜ì„ ìœ„í•œ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ í• ë‹¹
 	CommandContext cmdCtxTransition{};
 	DISPLAY_ERROR_STR(
 		cmdListPool.allocOne(CommandListUsage::RenderingSlave, cmdCtxTransition),
-		"[GFX Error] SharedResources::ShadowMap::getReadyAsShaderResource: »ç¿ë °¡´ÉÇÑ ¸í·É ¸®½ºÆ®°¡ ¾ø½À´Ï´Ù. "
-		"CommandListPool::init È£ÃâÀÌ ÀÌ·ç¾îÁöÁö ¾Ê¾Ò°Å³ª, ÇÒ´ç¹ŞÀº ¸í·É ¸®½ºÆ®°¡ ¹İ³³µÇÁö ¾Ê¾Ò½À´Ï´Ù.",
+		"[GFX Error] SharedResources::ShadowMap::getReadyAsShaderResource: ì‚¬ìš© ê°€ëŠ¥í•œ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ê°€ ì—†ìŠµë‹ˆë‹¤. "
+		"CommandListPool::init í˜¸ì¶œì´ ì´ë£¨ì–´ì§€ì§€ ì•Šì•˜ê±°ë‚˜, í• ë‹¹ë°›ì€ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ê°€ ë°˜ë‚©ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤.",
 		false
 	);
 	auto cmdListTransition = cmdCtxTransition.cmdList.Get();
@@ -229,7 +229,7 @@ void getReadyAsShaderResource(const std::string& key, CommandListPool& cmdListPo
 		return;
 	}
 
-	// Å¬¸®¾î ¸í·É ¸®½ºÆ® ÃÊ±âÈ­
+	// í´ë¦¬ì–´ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ ì´ˆê¸°í™”
 	DISPLAY_ERROR_DX_VOID( cmdAllocTransition->Reset(), false );
 	DISPLAY_ERROR_DX_VOID( cmdListTransition->Reset(cmdAllocTransition, nullptr), false );
 
@@ -238,12 +238,12 @@ void getReadyAsShaderResource(const std::string& key, CommandListPool& cmdListPo
 		D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE	
 	);
 
-	// »óÅÂ ÀüÈ¯ ¸í·É ±â·Ï ³¡
+	// ìƒíƒœ ì „í™˜ ëª…ë ¹ ê¸°ë¡ ë
 	DISPLAY_ERROR_DX_VOID( cmdListTransition->Close(), false );
 
 	ID3D12CommandList* clearCmdLists[] = { cmdListTransition };
 
-	// »óÅÂ ÀüÈ¯ ¸í·É ¸®½ºÆ® ½ÇÇà
+	// ìƒíƒœ ì „í™˜ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ ì‹¤í–‰
 	DISPLAY_ERROR_DX_VOID( cmdQ->ExecuteCommandLists(1u, clearCmdLists), false );
 
 	fence.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtxTransition));

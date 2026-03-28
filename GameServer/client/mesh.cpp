@@ -1,14 +1,14 @@
-#include "pch.hpp"
+ï»¿#include "pch.hpp"
 #include "mesh.hpp"
 #include "gfxUtil.hpp"
 #include "errorHandling.hpp"
 #include "binaryImport.hpp"
 
-// 1x1x1 Å¥ºê ¸Ş½Ã¸¦ »ı¼ºÇÑ´Ù.
+// 1x1x1 íë¸Œ ë©”ì‹œë¥¼ ìƒì„±í•œë‹¤.
 // @return Mesh
-// ¸Ş½Ã ·Îµå¿¡ ÀÓ½Ã ¾÷·Îµå ¹öÆÛµéÀÌ »ç¿ëµÈ´Ù.
-// »ç¿ëµÈ ¾÷·Îµå ¹öÆÛµéÀº Àü´ŞµÈ Ææ½º¿¡ ¿¬°üµÇ¹Ç·Î,
-// Ææ½º¿¡¼­ GPU ÀÛ¾÷ ¿Ï·á¸¦ °Ë»çÇÑ ÈÄ ÀÌ ¾÷·Îµå ¹öÆÛµéÀ» ÇØÁ¦ÇÏµµ·Ï ÇÏÀÚ.
+// ë©”ì‹œ ë¡œë“œì— ì„ì‹œ ì—…ë¡œë“œ ë²„í¼ë“¤ì´ ì‚¬ìš©ëœë‹¤.
+// ì‚¬ìš©ëœ ì—…ë¡œë“œ ë²„í¼ë“¤ì€ ì „ë‹¬ëœ íœìŠ¤ì— ì—°ê´€ë˜ë¯€ë¡œ,
+// íœìŠ¤ì—ì„œ GPU ì‘ì—… ì™„ë£Œë¥¼ ê²€ì‚¬í•œ í›„ ì´ ì—…ë¡œë“œ ë²„í¼ë“¤ì„ í•´ì œí•˜ë„ë¡ í•˜ì.
 Mesh buildCubeMesh(
 	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
     std::unordered_map<std::string, Texture>& texHashMap,
@@ -136,8 +136,8 @@ Mesh buildCubeMesh(
         18u, 19u, 20u, 21u, 22u, 23u, 24u, 25u, 26u, 27u, 28u, 29u, 30u, 31u, 32u, 33u, 34u, 35u
     };
 
-    // Á¤Á¡ ¹öÆÛµé ±¸Ãà
-    // ¼Ó¼º¸¶´Ù º°µµÀÇ ¹öÆÛ¸¦ ¸¸µç´Ù.
+    // ì •ì  ë²„í¼ë“¤ êµ¬ì¶•
+    // ì†ì„±ë§ˆë‹¤ ë³„ë„ì˜ ë²„í¼ë¥¼ ë§Œë“ ë‹¤.
 	auto vbPosition = createBufferResource(device, nullptr, positions.size() * sizeof(XMFLOAT3), BufferCreationType::VertexBuffer);
     setD3DName(vbPosition.Get(), "CubeMesh_VB_Position");
 	auto vbPositionu = createBufferResource(device, positions.data(), positions.size() * sizeof(XMFLOAT3), BufferCreationType::UploadBuffer);
@@ -165,7 +165,7 @@ Mesh buildCubeMesh(
         D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
     );
 
-    // ÀÎµ¦½º ¹öÆÛ ±¸Ãà
+    // ì¸ë±ìŠ¤ ë²„í¼ êµ¬ì¶•
 	auto ib = createBufferResource(device, nullptr, indices.size() * sizeof(u16t), BufferCreationType::IndexBuffer);
     setD3DName(ib.Get(), "CubeMesh_IB");
 	auto ibu = createBufferResource(device, indices.data(), indices.size() * sizeof(u16t), BufferCreationType::UploadBuffer);
@@ -175,13 +175,13 @@ Mesh buildCubeMesh(
 		D3D12_RESOURCE_STATE_INDEX_BUFFER
 	);
 
-    // ¸¸µç ¹öÆÛµéÀ» Á¶ÇÕÇÏ¿© ¸Ş½Ã ±¸Ãà
-    // »ç¿ëÇÑ ¾÷·Îµå ¹öÆÛµéÀ» º°µµ·Î ¸®ÅÏ°ª¿¡ Æ÷ÇÔ½ÃÄÑ
-    // ¾÷·Îµå ¹öÆÛµéÀÌ ¼Ò¸êÇÏÁö ¾Ê°Ô ÇÑ´Ù.
-    // (¾÷·Îµå ¹öÆÛµéÀº gpu°¡ ½ÇÁ¦·Î copy¸¦ ¼öÇàÇÒ ¶§±îÁö »ì¾ÆÀÖ¾î¾ß ÇÑ´Ù.)
+    // ë§Œë“  ë²„í¼ë“¤ì„ ì¡°í•©í•˜ì—¬ ë©”ì‹œ êµ¬ì¶•
+    // ì‚¬ìš©í•œ ì—…ë¡œë“œ ë²„í¼ë“¤ì„ ë³„ë„ë¡œ ë¦¬í„´ê°’ì— í¬í•¨ì‹œì¼œ
+    // ì—…ë¡œë“œ ë²„í¼ë“¤ì´ ì†Œë©¸í•˜ì§€ ì•Šê²Œ í•œë‹¤.
+    // (ì—…ë¡œë“œ ë²„í¼ë“¤ì€ gpuê°€ ì‹¤ì œë¡œ copyë¥¼ ìˆ˜í–‰í•  ë•Œê¹Œì§€ ì‚´ì•„ìˆì–´ì•¼ í•œë‹¤.)
 	auto mesh = Mesh{ .name = "CubeMesh" };
 
-    // Vertex Buffer View ±¸¼º
+    // Vertex Buffer View êµ¬ì„±
     mesh.vbViews.emplace_back(
         /* .BufferLocation = */ vbPosition->GetGPUVirtualAddress(),
         /* .SizeInBytes = */ static_cast<UINT>(positions.size() * sizeof(XMFLOAT3)),
@@ -201,12 +201,12 @@ Mesh buildCubeMesh(
     if (!texHashMap.contains("CubeMesh_Albedo")) {
         Texture::Type type{};
         auto [pPair, _] = texHashMap.try_emplace("CubeMesh_Albedo", loadTexture(device, cmdList, "CubeMesh_Albedo.dds", fenceToAssociate, type));
-        gSharedLog << "[Resource Load] File I/O: ÅØ½ºÃ³ CubeMesh_Albedo ·Îµå ¿Ï·á - CubeMesh_Albedo.dds\n";
+        gSharedLog << "[Resource Load] File I/O: í…ìŠ¤ì²˜ CubeMesh_Albedo ë¡œë“œ ì™„ë£Œ - CubeMesh_Albedo.dds\n";
         createSRV(device, pPair->second, texPool);
         pPair->second.idxSrv.idxSampler = etoi(Samplers::TrilinearWrap);
     }
 
-    // SubMesh ±¸¼º
+    // SubMesh êµ¬ì„±
     mesh.subMeshes.emplace_back(
         /* .name = */ "CubeMesh_SubMesh",
         /* .ibView = */ D3D12_INDEX_BUFFER_VIEW {
@@ -239,7 +239,7 @@ Mesh buildCubeMesh(
     defMaterialSet.materials[0].mapAmbientOcclusion.idxSrv.idxRange = -1;
     defMaterialSet.materials[0].mapAmbientOcclusion.idxUav.idxRange = -1;
 
-    // ÀÚ·á±¸Á¶ µî·Ï (Vertex Buffer View¿Í SubMesh´Â À§¿¡¼­ µî·ÏÇÏ¿´À½)
+    // ìë£Œêµ¬ì¡° ë“±ë¡ (Vertex Buffer Viewì™€ SubMeshëŠ” ìœ„ì—ì„œ ë“±ë¡í•˜ì˜€ìŒ)
 	mesh.vbs.push_back(std::move(vbPosition));
     mesh.vbIdxMap.try_emplace("CubeMesh_VB_Position", 0u);
     mesh.vbs.push_back(std::move(vbNormal));
@@ -248,7 +248,7 @@ Mesh buildCubeMesh(
     mesh.vbIdxMap.try_emplace("CubeMesh_VB_UV", 2u);
     mesh.ibs.push_back(std::move(ib));
 
-    gSharedLog << "[Resource Load] CubeMesh ±¸Ãà ¿Ï·á\n";
+    gSharedLog << "[Resource Load] CubeMesh êµ¬ì¶• ì™„ë£Œ\n";
 
     fenceToAssociate.associatedResources_.push_back(std::move(vbPositionu));
     fenceToAssociate.associatedResources_.push_back(std::move(vbNormalu));
@@ -272,7 +272,7 @@ Mesh buildPointMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, s
 		0u
 	};
 
-	// Á¤Á¡ ¹öÆÛµé ±¸Ãà
+	// ì •ì  ë²„í¼ë“¤ êµ¬ì¶•
 	auto vbPosition = createBufferResource( device, nullptr, positions.size() * sizeof( XMFLOAT3 ), BufferCreationType::VertexBuffer );
 	setD3DName( vbPosition.Get(), "PointMesh_VB_Position" );
 	auto vbPositionu = createBufferResource( device, positions.data(), positions.size() * sizeof( XMFLOAT3 ), BufferCreationType::UploadBuffer );
@@ -291,7 +291,7 @@ Mesh buildPointMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, s
         D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
     );
 
-	// ÀÎµ¦½º ¹öÆÛ ±¸Ãà
+	// ì¸ë±ìŠ¤ ë²„í¼ êµ¬ì¶•
 	auto ib = createBufferResource( device, nullptr, indices.size() * sizeof( u16t ), BufferCreationType::IndexBuffer );
 	setD3DName( ib.Get(), "PointMesh_IB" );
 	auto ibu = createBufferResource( device, indices.data(), indices.size() * sizeof( u16t ), BufferCreationType::UploadBuffer );
@@ -301,10 +301,10 @@ Mesh buildPointMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, s
         D3D12_RESOURCE_STATE_INDEX_BUFFER 
     );
 
-	// ¸¸µç ¹öÆÛµéÀ» Á¶ÇÕÇÏ¿© ¸Ş½Ã ±¸Ãà
+	// ë§Œë“  ë²„í¼ë“¤ì„ ì¡°í•©í•˜ì—¬ ë©”ì‹œ êµ¬ì¶•
 	auto mesh = Mesh{};
 
-	// Vertex Buffer View ±¸¼º
+	// Vertex Buffer View êµ¬ì„±
 	mesh.vbViews.emplace_back(
 		/* .BufferLocation = */ vbPosition->GetGPUVirtualAddress(),
 		/* .SizeInBytes = */ static_cast<UINT>(positions.size() * sizeof( XMFLOAT3 )),
@@ -324,8 +324,8 @@ Mesh buildPointMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, s
         pPair->second.idxSrv.idxSampler = etoi( Samplers::TrilinearWrap );
     }
 
-	// SubMesh ±¸¼º
-    // SubMesh ±¸¼º
+	// SubMesh êµ¬ì„±
+    // SubMesh êµ¬ì„±
     mesh.subMeshes.emplace_back(
         /* .name = */ "PointMesh_SubMesh",
         /* .ibView = */ D3D12_INDEX_BUFFER_VIEW {
@@ -360,14 +360,14 @@ Mesh buildPointMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, s
 
     defMaterialSet.materials[0].mapAlbedo = cloneTextureIdxOnly( texHashMap.at( "PointMesh_Albedo" ) );
 
-	// ÀÚ·á±¸Á¶ µî·Ï (Vertex Buffer View¿Í SubMesh´Â À§¿¡¼­ µî·ÏÇÏ¿´À½)
+	// ìë£Œêµ¬ì¡° ë“±ë¡ (Vertex Buffer Viewì™€ SubMeshëŠ” ìœ„ì—ì„œ ë“±ë¡í•˜ì˜€ìŒ)
 	mesh.vbs.push_back( std::move( vbPosition ) );
 	mesh.vbIdxMap.try_emplace( "PointMesh_VB_Position", 0u );
 	mesh.vbs.push_back( std::move( vbSize ) );
 	mesh.vbIdxMap.try_emplace( "PointMesh_VB_Size", 1u );
     mesh.ibs.push_back(std::move(ib));
 
-    gSharedLog << "[Resource Load] PointMesh ±¸Ãà ¿Ï·á\n";
+    gSharedLog << "[Resource Load] PointMesh êµ¬ì¶• ì™„ë£Œ\n";
 
 	fenceToAssociate.associatedResources_.push_back( std::move( vbPositionu ) );
 	fenceToAssociate.associatedResources_.push_back( std::move( vbSizeu ) );
@@ -376,8 +376,8 @@ Mesh buildPointMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, s
 	return mesh;
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏÀÇ Bone Socket TypeÀ» ³ªÅ¸³»´Â ¹®ÀÚ¿­·ÎºÎÅÍ
-// ½ÇÁ¦ ¿­°ÅÇü °ªÀ» ¾ò¾î³½´Ù.
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ì˜ Bone Socket Typeì„ ë‚˜íƒ€ë‚´ëŠ” ë¬¸ìì—´ë¡œë¶€í„°
+// ì‹¤ì œ ì—´ê±°í˜• ê°’ì„ ì–»ì–´ë‚¸ë‹¤.
 Bone::SocketType convertStrToBoneSocketType(const std::string& boneSocketTypeStr) {
     if (boneSocketTypeStr == "None") {
         return Bone::SocketType::None;
@@ -389,40 +389,40 @@ Bone::SocketType convertStrToBoneSocketType(const std::string& boneSocketTypeStr
         return Bone::SocketType::LeftHand;
     }
 
-    DISPLAY_ERROR_STR( false, "[GFX Error] convertStrToBoneSocketType: ¾Ë ¼ö ¾ø´Â BoneSocketType °ª \""s
-        + boneSocketTypeStr + "\"À» ÀĞ¾ú½À´Ï´Ù.\n",
+    DISPLAY_ERROR_STR( false, "[GFX Error] convertStrToBoneSocketType: ì•Œ ìˆ˜ ì—†ëŠ” BoneSocketType ê°’ \""s
+        + boneSocketTypeStr + "\"ì„ ì½ì—ˆìŠµë‹ˆë‹¤.\n",
         false
     );
     return Bone::SocketType::None;
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏÀÇ Skeleton EnumerationÀ» ³ªÅ¸³»´Â ¹®ÀÚ¿­·ÎºÎÅÍ
-// ½ÇÁ¦ ¿­°ÅÇü °ªÀ» ¾ò¾î³½´Ù.
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ì˜ Skeleton Enumerationì„ ë‚˜íƒ€ë‚´ëŠ” ë¬¸ìì—´ë¡œë¶€í„°
+// ì‹¤ì œ ì—´ê±°í˜• ê°’ì„ ì–»ì–´ë‚¸ë‹¤.
 SkeletonEnumeration convertStrToSkeletonEnum(const std::string& skeletonEnumerationStr) {
     if (skeletonEnumerationStr == "Humanoid") {
         return SkeletonEnumeration::Humanoid;
     }
 
-    DISPLAY_ERROR_STR( false, "[GFX Error] convertStrToSkeletonEnum: ¾Ë ¼ö ¾ø´Â SkeletonEnumeration °ª \""s
-        + skeletonEnumerationStr + "\"À» ÀĞ¾ú½À´Ï´Ù.\n",
+    DISPLAY_ERROR_STR( false, "[GFX Error] convertStrToSkeletonEnum: ì•Œ ìˆ˜ ì—†ëŠ” SkeletonEnumeration ê°’ \""s
+        + skeletonEnumerationStr + "\"ì„ ì½ì—ˆìŠµë‹ˆë‹¤.\n",
         false
     );
     return SkeletonEnumeration::Humanoid;
 }
 
-// ÅØ½ºÃ³ ¸ÅÇÎ Á¤º¸¸¦ ÀĞ¾îµéÀÎ´Ù.
-// ÅØ½ºÃ³ ÀÌ¸§À» key·Î »ï¾Æ texHashMap¿¡ Äõ¸®¸¦ ÇØº¸°í,
-// ÅØ½ºÃ³°¡ Á¸ÀçÇÏÁö ¾Ê´Â´Ù¸é ¾Ë¾Æ³½ °æ·Î¸¦ ÅëÇØ ÅØ½ºÃ³¸¦ ·ÎµåÇØ key¿Í ÇÔ²² µî·ÏÇÑ´Ù.
-// ·ÎµåµÈ ÅØ½ºÃ³·Î texPool¿¡¼­ srv¸¦ ÇÒ´ç¹Ş¾Æ »ı¼ºÇÏ°í, »ùÇÃ¸µ Á¤º¸¸¦ ÃßÃâÇÑ´Ù.
-// ±×¸®°í ÅØ½ºÃ³ÀÇ srv¿Í uav¿¡ ÇØ´çÇÏ´Â bindless index¿¡
-// Ç®¿¡¼­ÀÇ ÀÎµ¦½º¿Í »ùÇÃ·¯ ÀÎµ¦½º¸¦ Ã¤¿ö³Ö´Â´Ù.
+// í…ìŠ¤ì²˜ ë§¤í•‘ ì •ë³´ë¥¼ ì½ì–´ë“¤ì¸ë‹¤.
+// í…ìŠ¤ì²˜ ì´ë¦„ì„ keyë¡œ ì‚¼ì•„ texHashMapì— ì¿¼ë¦¬ë¥¼ í•´ë³´ê³ ,
+// í…ìŠ¤ì²˜ê°€ ì¡´ì¬í•˜ì§€ ì•ŠëŠ”ë‹¤ë©´ ì•Œì•„ë‚¸ ê²½ë¡œë¥¼ í†µí•´ í…ìŠ¤ì²˜ë¥¼ ë¡œë“œí•´ keyì™€ í•¨ê»˜ ë“±ë¡í•œë‹¤.
+// ë¡œë“œëœ í…ìŠ¤ì²˜ë¡œ texPoolì—ì„œ srvë¥¼ í• ë‹¹ë°›ì•„ ìƒì„±í•˜ê³ , ìƒ˜í”Œë§ ì •ë³´ë¥¼ ì¶”ì¶œí•œë‹¤.
+// ê·¸ë¦¬ê³  í…ìŠ¤ì²˜ì˜ srvì™€ uavì— í•´ë‹¹í•˜ëŠ” bindless indexì—
+// í’€ì—ì„œì˜ ì¸ë±ìŠ¤ì™€ ìƒ˜í”ŒëŸ¬ ì¸ë±ìŠ¤ë¥¼ ì±„ì›Œë„£ëŠ”ë‹¤.
 void importTexture( std::ifstream& ifs, ID3D12Device* device,
     ID3D12GraphicsCommandList* cmdList, std::unordered_map<std::string, Texture>& texHashMap,
     DescriptorPool& texPool, Fence& fenceToAssociate
 ) {
     std::string key{};
     std::string path{};
-    // ±âº»°ªµé·Î ÃÊ±âÈ­
+    // ê¸°ë³¸ê°’ë“¤ë¡œ ì´ˆê¸°í™”
     D3D12_FILTER filterMode = D3D12_FILTER_MIN_MAG_MIP_POINT;
     D3D12_TEXTURE_ADDRESS_MODE addrModeU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     D3D12_TEXTURE_ADDRESS_MODE addrModeV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -437,12 +437,12 @@ void importTexture( std::ifstream& ifs, ID3D12Device* device,
 
         const auto tag = untagHead(str);
 
-        // ÅØ½ºÃ³ ÀÌ¸§ ÃßÃâ
+        // í…ìŠ¤ì²˜ ì´ë¦„ ì¶”ì¶œ
         if (tag == "TextureName") {
             key = readString(ifs);
             readTailTag(ifs, "TextureName");
         }
-        // Address Mode(Wrap Mode) ÃßÃâ
+        // Address Mode(Wrap Mode) ì¶”ì¶œ
         else if (tag == "WrapModeU") {
             const auto wrapModeUStr = readString(ifs);
             if (wrapModeUStr == "Repeat") {
@@ -455,8 +455,8 @@ void importTexture( std::ifstream& ifs, ID3D12Device* device,
                 addrModeU = D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
             }
             else {
-                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: ¾Ë¼ö ¾ø´Â ÅØ½ºÃ³ wrap mode "s
-                    + wrapModeUStr + "À» ÀĞ¾ú½À´Ï´Ù.", false
+                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: ì•Œìˆ˜ ì—†ëŠ” í…ìŠ¤ì²˜ wrap mode "s
+                    + wrapModeUStr + "ì„ ì½ì—ˆìŠµë‹ˆë‹¤.", false
                 );
             }
 
@@ -474,8 +474,8 @@ void importTexture( std::ifstream& ifs, ID3D12Device* device,
                 addrModeV = D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
             }
             else {
-                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: ¾Ë¼ö ¾ø´Â ÅØ½ºÃ³ wrap mode "s
-                    + wrapModeVStr + "À» ÀĞ¾ú½À´Ï´Ù.", false
+                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: ì•Œìˆ˜ ì—†ëŠ” í…ìŠ¤ì²˜ wrap mode "s
+                    + wrapModeVStr + "ì„ ì½ì—ˆìŠµë‹ˆë‹¤.", false
                 );
             }
 
@@ -493,14 +493,14 @@ void importTexture( std::ifstream& ifs, ID3D12Device* device,
                 addrModeW = D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
             }
             else {
-                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: ¾Ë¼ö ¾ø´Â ÅØ½ºÃ³ wrap mode "s
-                    + wrapModeWStr + "À» ÀĞ¾ú½À´Ï´Ù.", false
+                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: ì•Œìˆ˜ ì—†ëŠ” í…ìŠ¤ì²˜ wrap mode "s
+                    + wrapModeWStr + "ì„ ì½ì—ˆìŠµë‹ˆë‹¤.", false
                 );
             }
 
             readTailTag(ifs, "WrapModeW");
         }
-        // Filter Mode ÃßÃâ
+        // Filter Mode ì¶”ì¶œ
         else if (tag == "FilterMode") {
             const auto filterModeStr = readString(ifs);
             if (filterModeStr == "Point") {
@@ -516,51 +516,51 @@ void importTexture( std::ifstream& ifs, ID3D12Device* device,
                 filterMode = D3D12_FILTER_ANISOTROPIC;
             }
             else {
-                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: ¾Ë¼ö ¾ø´Â ÅØ½ºÃ³ filter mode "s
-                    + filterModeStr + "À» ÀĞ¾ú½À´Ï´Ù.", false
+                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: ì•Œìˆ˜ ì—†ëŠ” í…ìŠ¤ì²˜ filter mode "s
+                    + filterModeStr + "ì„ ì½ì—ˆìŠµë‹ˆë‹¤.", false
                 );
             }
 
             readTailTag(ifs, "FilterMode");
         }
-        // ºñµî¹æ¼º ÇÊÅÍ¸µ ·¹º§(ÃÖ´ë ·¹º§) ÃßÃâ
+        // ë¹„ë“±ë°©ì„± í•„í„°ë§ ë ˆë²¨(ìµœëŒ€ ë ˆë²¨) ì¶”ì¶œ
         else if (tag == "AnisoLevel") {
             anisoLevel = static_cast<UINT>(readInteger(ifs));
             readTailTag(ifs, "AnisoLevel");
         }
-        // °æ·Î ÃßÃâ
+        // ê²½ë¡œ ì¶”ì¶œ
         else if (tag == "Path") {
             path = readString(ifs);
             readTailTag(ifs, "Path");
         }
         else {
-            DISPLAY_ERROR_STR(false, "[File I/O Error] importTextureMapping: ¾Ë ¼ö ¾ø´Â ÅÂ±× "s
-                + tag + "¸¦ ÀĞ¾ú½À´Ï´Ù.", true
+            DISPLAY_ERROR_STR(false, "[File I/O Error] importTextureMapping: ì•Œ ìˆ˜ ì—†ëŠ” íƒœê·¸ "s
+                + tag + "ë¥¼ ì½ì—ˆìŠµë‹ˆë‹¤.", true
             );
         }
     }
 
-    // texHashMap¿¡ ¾ø´Ù¸é ¾Ë¾Æ³½ °æ·Î¸¦ ÅëÇØ ÅØ½ºÃ³¸¦ loadÇØ key¿Í ÇÔ²² µî·Ï
+    // texHashMapì— ì—†ë‹¤ë©´ ì•Œì•„ë‚¸ ê²½ë¡œë¥¼ í†µí•´ í…ìŠ¤ì²˜ë¥¼ loadí•´ keyì™€ í•¨ê»˜ ë“±ë¡
     if (!texHashMap.contains(key)) {
         Texture::Type type{};
         auto [pPair, _] = texHashMap.try_emplace( key, loadTexture(device, cmdList, path, fenceToAssociate, type) );
 
-        // Ç®¿¡¼­ srv¸¦ ÇÒ´ç¹Ş¾Æ »ı¼º
+        // í’€ì—ì„œ srvë¥¼ í• ë‹¹ë°›ì•„ ìƒì„±
         createSRV(device, pPair->second, texPool);
         
-        // »ùÇÃ·¯ ÀÎµ¦½º¸¦ °è»êÇØ¼­ Ã¤¿ö³Ö±â
+        // ìƒ˜í”ŒëŸ¬ ì¸ë±ìŠ¤ë¥¼ ê³„ì‚°í•´ì„œ ì±„ì›Œë„£ê¸°
         const auto samplerIdx = calcIdxBindlessSampler(filterMode, addrModeU, addrModeV, addrModeW, anisoLevel);
         pPair->second.idxSrv.idxSampler = samplerIdx;
         pPair->second.idxUav.idxSampler = samplerIdx;
     }
 }
 
-// ÅØ½ºÃ³ ¸ÅÇÎ Á¤º¸¸¦ ÀĞ¾îµéÀÎ´Ù.
-// ÅØ½ºÃ³ ÀÌ¸§À» key·Î »ï¾Æ texHashMap¿¡ Äõ¸®¸¦ ÇØº¸°í,
-// ÅØ½ºÃ³°¡ Á¸ÀçÇÏÁö ¾Ê´Â´Ù¸é ¾Ë¾Æ³½ °æ·Î¸¦ ÅëÇØ ÅØ½ºÃ³¸¦ ·ÎµåÇØ key¿Í ÇÔ²² µî·ÏÇÑ´Ù.
-// ·ÎµåµÈ ÅØ½ºÃ³·Î texPool¿¡¼­ srv¸¦ ÇÒ´ç¹Ş¾Æ »ı¼ºÇÏ°í, »ùÇÃ¸µ Á¤º¸¸¦ ÃßÃâÇÑ´Ù.
-// ±×¸®°í ÅØ½ºÃ³ÀÇ srv¿Í uav¿¡ ÇØ´çÇÏ´Â bindless index¿¡
-// Ç®¿¡¼­ÀÇ ÀÎµ¦½º¿Í »ùÇÃ·¯ ÀÎµ¦½º¸¦ Ã¤¿ö³Ö´Â´Ù.
+// í…ìŠ¤ì²˜ ë§¤í•‘ ì •ë³´ë¥¼ ì½ì–´ë“¤ì¸ë‹¤.
+// í…ìŠ¤ì²˜ ì´ë¦„ì„ keyë¡œ ì‚¼ì•„ texHashMapì— ì¿¼ë¦¬ë¥¼ í•´ë³´ê³ ,
+// í…ìŠ¤ì²˜ê°€ ì¡´ì¬í•˜ì§€ ì•ŠëŠ”ë‹¤ë©´ ì•Œì•„ë‚¸ ê²½ë¡œë¥¼ í†µí•´ í…ìŠ¤ì²˜ë¥¼ ë¡œë“œí•´ keyì™€ í•¨ê»˜ ë“±ë¡í•œë‹¤.
+// ë¡œë“œëœ í…ìŠ¤ì²˜ë¡œ texPoolì—ì„œ srvë¥¼ í• ë‹¹ë°›ì•„ ìƒì„±í•˜ê³ , ìƒ˜í”Œë§ ì •ë³´ë¥¼ ì¶”ì¶œí•œë‹¤.
+// ê·¸ë¦¬ê³  í…ìŠ¤ì²˜ì˜ srvì™€ uavì— í•´ë‹¹í•˜ëŠ” bindless indexì—
+// í’€ì—ì„œì˜ ì¸ë±ìŠ¤ì™€ ìƒ˜í”ŒëŸ¬ ì¸ë±ìŠ¤ë¥¼ ì±„ì›Œë„£ëŠ”ë‹¤.
 void importTextureMapping( std::ifstream& ifs, ID3D12Device* device,
     ID3D12GraphicsCommandList* cmdList, std::unordered_map<std::string, Texture>& texHashMap,
     DescriptorPool& texPool, Fence& fenceToAssociate
@@ -574,26 +574,26 @@ void importTextureMapping( std::ifstream& ifs, ID3D12Device* device,
 
         const auto tag = untagHead(str);
 
-        // ÅØ½ºÃ³ ÀÌ¸§, ÅØ½ºÃ³ »ùÇÃ¸µ Á¤º¸, ÅØ½ºÃ³ °æ·Î ÀĞ±â
+        // í…ìŠ¤ì²˜ ì´ë¦„, í…ìŠ¤ì²˜ ìƒ˜í”Œë§ ì •ë³´, í…ìŠ¤ì²˜ ê²½ë¡œ ì½ê¸°
         if (tag == "Item") {
             importTexture(ifs, device, cmdList, texHashMap, texPool, fenceToAssociate);
         }
         else {
-            DISPLAY_ERROR_STR(false, "[File I/O Error] importTextureMapping: ¾Ë ¼ö ¾ø´Â ÅÂ±× "s
-                + tag + "¸¦ ÀĞ¾ú½À´Ï´Ù.", true
+            DISPLAY_ERROR_STR(false, "[File I/O Error] importTextureMapping: ì•Œ ìˆ˜ ì—†ëŠ” íƒœê·¸ "s
+                + tag + "ë¥¼ ì½ì—ˆìŠµë‹ˆë‹¤.", true
             );
         }
     }
 }
 
-// ¸Ş½Ã ÇÏ³ª¸¦ ÀĞ¾îµéÀÎ´Ù.
-// ¸Ş½ÃÀÇ Á¤Á¡ ¹öÆÛµéÀ» ±¸ÃàÇÏ¸ç,
-// ¼­ºê¸Ş½Ã Á¤º¸¸¦ ÀĞ¾îµé¿© ¼­ºê¸Ş½Ã °¢°¢ÀÇ ÀÎµ¦½º ¹öÆÛ¸¦ ±¸ÃàÇÑ´Ù.
+// ë©”ì‹œ í•˜ë‚˜ë¥¼ ì½ì–´ë“¤ì¸ë‹¤.
+// ë©”ì‹œì˜ ì •ì  ë²„í¼ë“¤ì„ êµ¬ì¶•í•˜ë©°,
+// ì„œë¸Œë©”ì‹œ ì •ë³´ë¥¼ ì½ì–´ë“¤ì—¬ ì„œë¸Œë©”ì‹œ ê°ê°ì˜ ì¸ë±ìŠ¤ ë²„í¼ë¥¼ êµ¬ì¶•í•œë‹¤.
 void importMesh( std::ifstream& ifs, ID3D12Device* device,
     ID3D12GraphicsCommandList* cmdList, const std::string& name,
     Fence& fenceToAssociate, Mesh& mesh
 ) {
-    // Á¤Á¡ ¹öÆÛµé ±¸Ãà
+    // ì •ì  ë²„í¼ë“¤ êµ¬ì¶•
     readHeadTag(ifs, "VertexBuffers");
     
     for (;;) {
@@ -790,19 +790,19 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
             readTailTag(ifs, "BoneWeights");
         }
         else {
-            DISPLAY_ERROR_STR(false, "[File I/O Error] importMesh: ¾Ë ¼ö ¾ø´Â ÅÂ±× "s
-                + tag + "¸¦ ÀĞ¾ú½À´Ï´Ù.", true
+            DISPLAY_ERROR_STR(false, "[File I/O Error] importMesh: ì•Œ ìˆ˜ ì—†ëŠ” íƒœê·¸ "s
+                + tag + "ë¥¼ ì½ì—ˆìŠµë‹ˆë‹¤.", true
             );
         }
     }
 
-    // ¼­ºê¸Ş½Ãµé ±¸Ãà
+    // ì„œë¸Œë©”ì‹œë“¤ êµ¬ì¶•
     readHeadTag(ifs, "Submeshes");
     const auto submeshCnt = readInteger(ifs, "SubmeshCnt");
     const auto maxIdx = readInteger(ifs, "MaxIndex");
 
-    // ÃÖ°í ÀÎµ¦½º°¡ 65536 ¹Ì¸¸ÀÌ¶ó¸é uint16_t·Î ÀÎµ¦½º¸¦ Ç¥ÇöÇÒ ¼ö ÀÖ´Ù.
-    // ±×·¸°Ô Ç¥ÇöÇÏ¸é ÀÎµ¦½º ¹öÆÛ¿¡ ¾²ÀÌ´Â gpu ¸Ş¸ğ¸® Å©±â¸¦ Àı¹İÀ¸·Î Àı¾àÇÒ ¼ö ÀÖ´Ù.
+    // ìµœê³  ì¸ë±ìŠ¤ê°€ 65536 ë¯¸ë§Œì´ë¼ë©´ uint16_të¡œ ì¸ë±ìŠ¤ë¥¼ í‘œí˜„í•  ìˆ˜ ìˆë‹¤.
+    // ê·¸ë ‡ê²Œ í‘œí˜„í•˜ë©´ ì¸ë±ìŠ¤ ë²„í¼ì— ì“°ì´ëŠ” gpu ë©”ëª¨ë¦¬ í¬ê¸°ë¥¼ ì ˆë°˜ìœ¼ë¡œ ì ˆì•½í•  ìˆ˜ ìˆë‹¤.
     if (maxIdx < 65536) {
         for (int i = 0; i < submeshCnt; ++i) {
             auto indices = readU16s(ifs, "Submesh");
@@ -831,7 +831,7 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
             fenceToAssociate.associatedResources_.push_back(std::move(ibu));
         }
     }
-    // ÃÖ°í ÀÎµ¦½º°¡ 65536 ÀÌ»óÀÎ °æ¿ì
+    // ìµœê³  ì¸ë±ìŠ¤ê°€ 65536 ì´ìƒì¸ ê²½ìš°
     else {
         for (int i = 0; i < submeshCnt; ++i) {
             auto indices = readIntegers(ifs, "Submesh");
@@ -865,13 +865,13 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
     readTailTag(ifs, "Mesh");
 }
 
-// ÀçÁú ÁıÇÕÀÇ ³»¿ëÀ» ÀĞ¾îµéÀÎ´Ù.
-// ÅØ½ºÃ³ ¸ÅÇÎ Á¤º¸¸¦ ÅëÇØ ¹Ì¸® ·ÎµåÇß´ø ÅØ½ºÃ³µéÀÌ
-// °¢ ÀçÁú¿¡ ¿¬°áµÈ´Ù.
+// ì¬ì§ˆ ì§‘í•©ì˜ ë‚´ìš©ì„ ì½ì–´ë“¤ì¸ë‹¤.
+// í…ìŠ¤ì²˜ ë§¤í•‘ ì •ë³´ë¥¼ í†µí•´ ë¯¸ë¦¬ ë¡œë“œí–ˆë˜ í…ìŠ¤ì²˜ë“¤ì´
+// ê° ì¬ì§ˆì— ì—°ê²°ëœë‹¤.
 // 
-// ÇÑ ÀçÁú ÁıÇÕÀÇ ÀçÁúÀÇ °³¼ö´Â ¸Ş½ÃÀÇ ¼­ºê¸Ş½Ã °³¼ö¿Í °°°í,
-// °¢ ÀçÁúÀº µ¿ÀÏÇÑ ÀÎµ¦½ºÀÇ ¼­ºê¸Ş½Ã¿¡ ´ëÀÀµÈ´Ù.
-// * Ä¿½ºÅÍ¸¶ÀÌÂ¡ ÇÁ¸®¼Â °³³äÀÌ¶ó ÀÌÇØÇÏ¸é ÆíÇÏ´Ù.
+// í•œ ì¬ì§ˆ ì§‘í•©ì˜ ì¬ì§ˆì˜ ê°œìˆ˜ëŠ” ë©”ì‹œì˜ ì„œë¸Œë©”ì‹œ ê°œìˆ˜ì™€ ê°™ê³ ,
+// ê° ì¬ì§ˆì€ ë™ì¼í•œ ì¸ë±ìŠ¤ì˜ ì„œë¸Œë©”ì‹œì— ëŒ€ì‘ëœë‹¤.
+// * ì»¤ìŠ¤í„°ë§ˆì´ì§• í”„ë¦¬ì…‹ ê°œë…ì´ë¼ ì´í•´í•˜ë©´ í¸í•˜ë‹¤.
 void importMaterials( std::ifstream& ifs, ID3D12Device* device,
     ID3D12GraphicsCommandList* cmdList, 
     std::unordered_map<std::string, Texture>& texHashMap,
@@ -879,8 +879,8 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
 ) {
     auto materialCnt = readInteger(ifs, "MaterialCnt");
     materialSet.materials.resize(materialCnt);
-    // Bindless Index ÃÊ±âÈ­
-    // idxRange¸¦ -1·Î ½áÁÖ´Â °ÍÀ¸·Î ±× ÅØ½ºÃ³°¡ Á¸ÀçÇÏÁö ¾ÊÀ½À» Ç¥ÇöÇÑ´Ù.
+    // Bindless Index ì´ˆê¸°í™”
+    // idxRangeë¥¼ -1ë¡œ ì¨ì£¼ëŠ” ê²ƒìœ¼ë¡œ ê·¸ í…ìŠ¤ì²˜ê°€ ì¡´ì¬í•˜ì§€ ì•ŠìŒì„ í‘œí˜„í•œë‹¤.
     for (auto& material : materialSet.materials) {
         material.mapAlbedo.idxSrv.idxRange = -1;
         material.mapAlbedo.idxUav.idxRange = -1;
@@ -905,68 +905,68 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
             }
 
             const auto tag = untagHead(str);
-            // »ó¼ö ÀĞ¾îµéÀÌ±â ======================
-            // ¾Ëº£µµ »ö»ó »ó¼ö
+            // ìƒìˆ˜ ì½ì–´ë“¤ì´ê¸° ======================
+            // ì•Œë² ë„ ìƒ‰ìƒ ìƒìˆ˜
             if (tag == "cAlbedo") {
                 const auto albedo = readColor(ifs);
                 material.constantAlbedo = albedo;
                 readTailTag(ifs, "cAlbedo");
             }
-            // ÀÚÃ¼¹ß±¤ »ö»ó »ó¼ö
+            // ìì²´ë°œê´‘ ìƒ‰ìƒ ìƒìˆ˜
             else if (tag == "cEmmisive") {
                 const auto emmisive = readColor(ifs);
                 material.constantEmmisive = XMFLOAT3(emmisive.x, emmisive.y, emmisive.z);
                 readTailTag(ifs, "cEmmisive");
             }
-            // ¸Å²ô·¯¿ò »ó¼ö (°ÅÄ¥±â »ó¼öÀÇ ¿ª)
+            // ë§¤ë„ëŸ¬ì›€ ìƒìˆ˜ (ê±°ì¹ ê¸° ìƒìˆ˜ì˜ ì—­)
             else if (tag == "cSmoothness") {
                 const auto smoothness = readFloat(ifs);
                 material.constantRoughness = 1.f - smoothness;
                 readTailTag(ifs, "cSmoothness");
             }
-            // ±İ¼Ó¼º »ó¼ö
+            // ê¸ˆì†ì„± ìƒìˆ˜
             else if (tag == "cMetallic") {
                 const auto metallic = readFloat(ifs);
                 material.constantRoughness = 1.f - metallic;
                 readTailTag(ifs, "cMetallic");
             }
-            // ÁÖº¯±¤ Â÷Æó Àû¿ë °­µµ »ó¼ö
+            // ì£¼ë³€ê´‘ ì°¨í ì ìš© ê°•ë„ ìƒìˆ˜
             else if (tag == "cAOStrength") {
                 const auto aoStrength = readFloat(ifs);
                 material.constantAOStrength = aoStrength;
                 readTailTag(ifs, "cAOStrength");
             }
             // ======================================
-            // ÅØ½ºÃ³ ÀĞ¾îµéÀÌ±â ====================
-            // ÅØ½ºÃ³ ¸ÅÇÎ Á¤º¸¸¦ ÅëÇØ ¹Ì¸® ·ÎµåÇß´ø ÅØ½ºÃ³µéÀ»
-            // texHashMap¿¡¼­ Ã£¾Æ ÀçÁú¿¡ ¿¬°áÇÑ´Ù.
+            // í…ìŠ¤ì²˜ ì½ì–´ë“¤ì´ê¸° ====================
+            // í…ìŠ¤ì²˜ ë§¤í•‘ ì •ë³´ë¥¼ í†µí•´ ë¯¸ë¦¬ ë¡œë“œí–ˆë˜ í…ìŠ¤ì²˜ë“¤ì„
+            // texHashMapì—ì„œ ì°¾ì•„ ì¬ì§ˆì— ì—°ê²°í•œë‹¤.
             
-            // ¾Ëº£µµ ÅØ½ºÃ³
+            // ì•Œë² ë„ í…ìŠ¤ì²˜
             else if (tag == "AlbedoMap") {
                 const auto albedoMapKey = readString(ifs);
                 material.mapAlbedo = cloneTextureIdxOnly(texHashMap.at(albedoMapKey));
                 readTailTag(ifs, "AlbedoMap");
             }
-            // ³ë¸Ö ÅØ½ºÃ³
+            // ë…¸ë©€ í…ìŠ¤ì²˜
             else if (tag == "NormalMap") {
                 const auto normalMapKey = readString(ifs);
                 material.mapNormal = cloneTextureIdxOnly(texHashMap.at(normalMapKey));
                 readTailTag(ifs, "NormalMap");
             }
-            // ±İ¼Ó¼º°ú ¸Å²ô·¯¿ò ÅØ½ºÃ³
+            // ê¸ˆì†ì„±ê³¼ ë§¤ë„ëŸ¬ì›€ í…ìŠ¤ì²˜
             else if (tag == "MetallicSmoothnessMap") {
                 const auto metallicSmoothnessMapKey = readString(ifs);
                 material.mapMetallicSmoothness
                     = cloneTextureIdxOnly(texHashMap.at(metallicSmoothnessMapKey));
                 readTailTag(ifs, "MetallicSmoothnessMap");
             }
-            // ÀÚÃ¼¹ß±¤ ÅØ½ºÃ³
+            // ìì²´ë°œê´‘ í…ìŠ¤ì²˜
             else if (tag == "EmmisiveMap") {
                 const auto emmisiveMapKey = readString(ifs);
                 material.mapEmmisive = cloneTextureIdxOnly(texHashMap.at(emmisiveMapKey));
                 readTailTag(ifs, "EmmisiveMap");
             }
-            // Â÷Æóµµ ÅØ½ºÃ³
+            // ì°¨íë„ í…ìŠ¤ì²˜
             else if (tag == "AOMap") {
                 const auto aoMapKey = readString(ifs);
                 material.mapAmbientOcclusion
@@ -975,8 +975,8 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
             }
             // ======================================
             else {
-                DISPLAY_ERROR_STR(false, "[File I/O Error] importMaterials: ¾Ë ¼ö ¾ø´Â ÅÂ±× "s
-                    + tag + "¸¦ ÀĞ¾ú½À´Ï´Ù.", true
+                DISPLAY_ERROR_STR(false, "[File I/O Error] importMaterials: ì•Œ ìˆ˜ ì—†ëŠ” íƒœê·¸ "s
+                    + tag + "ë¥¼ ì½ì—ˆìŠµë‹ˆë‹¤.", true
                 );
             }
         }
@@ -986,13 +986,13 @@ void importMaterials( std::ifstream& ifs, ID3D12Device* device,
     readTailTag(ifs, "Materials");
 }
 
-// ÀçÁú ÁıÇÕ Á¤º¸¸¦ ÀĞ¾î¼­ ¸Ş½Ã¿¡ ¹İ¿µÇÑ´Ù.
-// ¿©·¯ °³ÀÇ ÀçÁú ÁıÇÕÀ» »ç¿ëÇÏ´Â ¸Ş½Ã´Â
-// ¸Ş½Ã¸¦ ±×¸± ¶§¿¡ ¾î¶² ÀçÁú ÁıÇÕÀ» »ç¿ëÇÒÁö ¼±ÅÃÇØ¼­ ±×¸®µµ·Ï ÇÑ´Ù.
+// ì¬ì§ˆ ì§‘í•© ì •ë³´ë¥¼ ì½ì–´ì„œ ë©”ì‹œì— ë°˜ì˜í•œë‹¤.
+// ì—¬ëŸ¬ ê°œì˜ ì¬ì§ˆ ì§‘í•©ì„ ì‚¬ìš©í•˜ëŠ” ë©”ì‹œëŠ”
+// ë©”ì‹œë¥¼ ê·¸ë¦´ ë•Œì— ì–´ë–¤ ì¬ì§ˆ ì§‘í•©ì„ ì‚¬ìš©í• ì§€ ì„ íƒí•´ì„œ ê·¸ë¦¬ë„ë¡ í•œë‹¤.
 // 
-// ÇÑ ÀçÁú ÁıÇÕÀÇ ÀçÁúÀÇ °³¼ö´Â ¸Ş½ÃÀÇ ¼­ºê¸Ş½Ã °³¼ö¿Í °°°í,
-// °¢ ÀçÁúÀº µ¿ÀÏÇÑ ÀÎµ¦½ºÀÇ ¼­ºê¸Ş½Ã¿¡ ´ëÀÀµÈ´Ù.
-// * Ä¿½ºÅÍ¸¶ÀÌÂ¡ ÇÁ¸®¼Â °³³äÀÌ¶ó ÀÌÇØÇÏ¸é ÆíÇÏ´Ù.
+// í•œ ì¬ì§ˆ ì§‘í•©ì˜ ì¬ì§ˆì˜ ê°œìˆ˜ëŠ” ë©”ì‹œì˜ ì„œë¸Œë©”ì‹œ ê°œìˆ˜ì™€ ê°™ê³ ,
+// ê° ì¬ì§ˆì€ ë™ì¼í•œ ì¸ë±ìŠ¤ì˜ ì„œë¸Œë©”ì‹œì— ëŒ€ì‘ëœë‹¤.
+// * ì»¤ìŠ¤í„°ë§ˆì´ì§• í”„ë¦¬ì…‹ ê°œë…ì´ë¼ ì´í•´í•˜ë©´ í¸í•˜ë‹¤.
 void importMaterialSets( std::ifstream& ifs, ID3D12Device* device,
     ID3D12GraphicsCommandList* cmdList, 
     std::unordered_map<std::string, Texture>& texHashMap,
@@ -1018,28 +1018,28 @@ void importMaterialSets( std::ifstream& ifs, ID3D12Device* device,
     readTailTag(ifs, "MaterialSets");
 }
 
-// ±âÇÏ °èÃş±¸Á¶ÀÇ Æ¯Á¤ ³ëµå¸¦ ÀĞ¾îµéÀÌ°í
-// ±× ÀÚ½Ä ³ëµåµéÀ» Àç±ÍÀûÀ¸·Î ÀĞ¾îµéÀÎ´Ù.
-// ³ëµå¿¡´Â º¯È¯ Çà·Ä, ¸Ş½Ã¿Í ÀçÁú Á¤º¸°¡ ´ã°Ü ÀÖ´Ù.
-// ³ëµå¿Í ¸Ş½Ã, º¯È¯ Çà·ÄÀº °¢°¢ ÀÏ´ëÀÏ ´ëÀÀÀÌ´Ù.
-// ¸Ş½Ã´Â ¿©·¯ °³ÀÇ ÀçÁú ÁıÇÕÀ» °¡Áú ¼ö ÀÖ´Âµ¥,
-// ÇÏ³ªÀÇ ÀçÁú ÁıÇÕ ³»ÀÇ ÀçÁúµéÀº ¸ğµÎ ¸Ş½ÃÀÇ °¢ ¼­ºê¸Ş½Ã¿Í ÀÏ´ëÀÏ ´ëÀÀµÈ´Ù.
-// ÀçÁú ÁıÇÕÀ» ±³Ã¼ÇÏ´Â °ÍÀ¸·Î ÀüÃ¼ ¸Ş½ÃÀÇ Áú°¨À» ¹Ù²Ü ¼ö ÀÖ´Ù.
+// ê¸°í•˜ ê³„ì¸µêµ¬ì¡°ì˜ íŠ¹ì • ë…¸ë“œë¥¼ ì½ì–´ë“¤ì´ê³ 
+// ê·¸ ìì‹ ë…¸ë“œë“¤ì„ ì¬ê·€ì ìœ¼ë¡œ ì½ì–´ë“¤ì¸ë‹¤.
+// ë…¸ë“œì—ëŠ” ë³€í™˜ í–‰ë ¬, ë©”ì‹œì™€ ì¬ì§ˆ ì •ë³´ê°€ ë‹´ê²¨ ìˆë‹¤.
+// ë…¸ë“œì™€ ë©”ì‹œ, ë³€í™˜ í–‰ë ¬ì€ ê°ê° ì¼ëŒ€ì¼ ëŒ€ì‘ì´ë‹¤.
+// ë©”ì‹œëŠ” ì—¬ëŸ¬ ê°œì˜ ì¬ì§ˆ ì§‘í•©ì„ ê°€ì§ˆ ìˆ˜ ìˆëŠ”ë°,
+// í•˜ë‚˜ì˜ ì¬ì§ˆ ì§‘í•© ë‚´ì˜ ì¬ì§ˆë“¤ì€ ëª¨ë‘ ë©”ì‹œì˜ ê° ì„œë¸Œë©”ì‹œì™€ ì¼ëŒ€ì¼ ëŒ€ì‘ëœë‹¤.
+// ì¬ì§ˆ ì§‘í•©ì„ êµì²´í•˜ëŠ” ê²ƒìœ¼ë¡œ ì „ì²´ ë©”ì‹œì˜ ì§ˆê°ì„ ë°”ê¿€ ìˆ˜ ìˆë‹¤.
 void importTransform( std::ifstream& ifs, ID3D12Device* device,
     ID3D12GraphicsCommandList* cmdList, 
     std::unordered_map<std::string, Texture>& texHashMap,
     Fence& fenceToAssociate, Model& model
 ) {
     readHeadTag(ifs, "Node");
-    // ³ëµåÀÇ ÀÌ¸§
+    // ë…¸ë“œì˜ ì´ë¦„
     const auto name = readString(ifs);
 
-    // ³ëµåÀÇ º¯È¯ Çà·Äµé
+    // ë…¸ë“œì˜ ë³€í™˜ í–‰ë ¬ë“¤
     const auto localMat = readMatrix(ifs, "LocalMatrix");
     const auto dressMat = readMatrix(ifs, "DressMatrix");
 
     auto& pair = model.meshWithDressXforms.emplace_back(
-        /* .mesh = */ Mesh{ .name = name }, // ¸ğµ¨ ³ëµå¿Í ¸Ş½Ã´Â ÀÌ¸§À» °øÀ¯ÇÑ´Ù.
+        /* .mesh = */ Mesh{ .name = name }, // ëª¨ë¸ ë…¸ë“œì™€ ë©”ì‹œëŠ” ì´ë¦„ì„ ê³µìœ í•œë‹¤.
         /* .dressXform = */ mu::Mat4x4(XMLoadFloat4x4(&dressMat))
     );
 
@@ -1051,16 +1051,16 @@ void importTransform( std::ifstream& ifs, ID3D12Device* device,
 
         const auto tag = untagHead(str);
 
-        // ¸Ş½Ã ÀĞ¾îµéÀÌ±â
+        // ë©”ì‹œ ì½ì–´ë“¤ì´ê¸°
         if (tag == "Mesh") {
             importMesh(ifs, device, cmdList, name, fenceToAssociate, pair.mesh);
         }
-        // ¿©·¯ °³ÀÇ ÀçÁú ÁıÇÕÀ» Áö¿øÇÏ´Â °æ¿ì
+        // ì—¬ëŸ¬ ê°œì˜ ì¬ì§ˆ ì§‘í•©ì„ ì§€ì›í•˜ëŠ” ê²½ìš°
         else if (tag == "MaterialSets") {
             importMaterialSets(ifs, device, cmdList, texHashMap, fenceToAssociate, pair.mesh);
         }
-        // ¿©·¯ °³ÀÇ ÀçÁú ÁıÇÕÀ» Áö¿øÇÏÁö ¾Ê´Â °æ¿ì
-        // ±âº» ÀçÁú ÁıÇÕÀ» ±¸ÃàÇØ »ç¿ë (0¹ø ÀÎµ¦½º)
+        // ì—¬ëŸ¬ ê°œì˜ ì¬ì§ˆ ì§‘í•©ì„ ì§€ì›í•˜ì§€ ì•ŠëŠ” ê²½ìš°
+        // ê¸°ë³¸ ì¬ì§ˆ ì§‘í•©ì„ êµ¬ì¶•í•´ ì‚¬ìš© (0ë²ˆ ì¸ë±ìŠ¤)
         else if (tag == "Materials") {
             auto& defMaterialSet = pair.mesh.materialSets.emplace_back(
                 /* .name = */ pair.mesh.name + "_MaterialSet_Default",
@@ -1069,7 +1069,7 @@ void importTransform( std::ifstream& ifs, ID3D12Device* device,
             defMaterialSet.materials.reserve(pair.mesh.subMeshes.size());
             importMaterials(ifs, device, cmdList, texHashMap, fenceToAssociate, defMaterialSet);
         }
-        // ÀÚ½Ä ³ëµå ÀĞ¾îµéÀÌ±â
+        // ìì‹ ë…¸ë“œ ì½ì–´ë“¤ì´ê¸°
         else if (tag == "ChildCnt") {
             const auto childCnt = readInteger(ifs);
             readTailTag(ifs, "ChildCnt");
@@ -1080,17 +1080,17 @@ void importTransform( std::ifstream& ifs, ID3D12Device* device,
             readTailTag(ifs, "Children");
         }
         else {
-            DISPLAY_ERROR_STR(false, "[File I/O Error] importTransform: ¾Ë ¼ö ¾ø´Â ÅÂ±× "s
-                + tag + "¸¦ ÀĞ¾ú½À´Ï´Ù.", true
+            DISPLAY_ERROR_STR(false, "[File I/O Error] importTransform: ì•Œ ìˆ˜ ì—†ëŠ” íƒœê·¸ "s
+                + tag + "ë¥¼ ì½ì—ˆìŠµë‹ˆë‹¤.", true
             );
         }
     }
 
-    gSharedLog << "[Resource Load] ¸ğµ¨ ³ëµå " << name << " ±¸Ãà ¿Ï·á\n";
+    gSharedLog << "[Resource Load] ëª¨ë¸ ë…¸ë“œ " << name << " êµ¬ì¶• ì™„ë£Œ\n";
 }
 
-// ±âÇÏ±¸Á¶¸¦ ÀĞ¾îµéÀÎ´Ù.
-// ±âÇÏ±¸Á¶ÀÇ ·çÆ®³ëµå¿¡ ´ëÇÑ importTransform È£ÃâÀ» ¼öÇàÇÑ´Ù.
+// ê¸°í•˜êµ¬ì¡°ë¥¼ ì½ì–´ë“¤ì¸ë‹¤.
+// ê¸°í•˜êµ¬ì¡°ì˜ ë£¨íŠ¸ë…¸ë“œì— ëŒ€í•œ importTransform í˜¸ì¶œì„ ìˆ˜í–‰í•œë‹¤.
 void importGeometry( std::ifstream& ifs, ID3D12Device* device,
     ID3D12GraphicsCommandList* cmdList,
     std::unordered_map<std::string, Texture>& texHashMap,
@@ -1102,7 +1102,7 @@ void importGeometry( std::ifstream& ifs, ID3D12Device* device,
     readTailTag(ifs, "Geometry");
 }
 
-// ¸ğµ¨ÀÇ ¹Ù¿îµù º¼·ı ÇÏ³ªÀÇ Á¤º¸¸¦ ÀĞ¾î¿Â´Ù.
+// ëª¨ë¸ì˜ ë°”ìš´ë”© ë³¼ë¥¨ í•˜ë‚˜ì˜ ì •ë³´ë¥¼ ì½ì–´ì˜¨ë‹¤.
 void importBoundingVolume(std::ifstream& ifs, Model& model) {
     readHeadTag(ifs, "BoundingVolume");
 
@@ -1126,11 +1126,11 @@ void importBoundingVolume(std::ifstream& ifs, Model& model) {
 
     readTailTag(ifs, "BoundingVolume");
 
-    gSharedLog << "[Resource Load] ¹Ù¿îµù º¼·ı " << bvName << " ±¸Ãà ¿Ï·á\n";
+    gSharedLog << "[Resource Load] ë°”ìš´ë”© ë³¼ë¥¨ " << bvName << " êµ¬ì¶• ì™„ë£Œ\n";
 }
 
-// ¸ğµ¨ÀÇ ¹Ù¿îµù º¼·ı Á¤º¸¸¦ ÀĞ¾î¿Â´Ù.
-// ¸ğµ¨¿¡´Â ¿©·¯ °³ÀÇ ¹Ù¿îµù º¼·ıÀÌ Á¸ÀçÇÒ ¼ö ÀÖ´Ù.
+// ëª¨ë¸ì˜ ë°”ìš´ë”© ë³¼ë¥¨ ì •ë³´ë¥¼ ì½ì–´ì˜¨ë‹¤.
+// ëª¨ë¸ì—ëŠ” ì—¬ëŸ¬ ê°œì˜ ë°”ìš´ë”© ë³¼ë¥¨ì´ ì¡´ì¬í•  ìˆ˜ ìˆë‹¤.
 void importBoundingVolumes(std::ifstream& ifs, Model& model) {
     readHeadTag(ifs, "BoundingVolumes");
 
@@ -1143,8 +1143,8 @@ void importBoundingVolumes(std::ifstream& ifs, Model& model) {
     readTailTag(ifs, "BoundingVolumes");
 }
 
-// ¸ğµ¨ÀÇ º»À» ÀĞ¾îµéÀÎ´Ù.
-// ´ë»ó º»ÀÇ ÀÓÆ÷Æ® ÀÌÈÄ, ÀÚ½Ä º»µéÀ» Àç±ÍÀûÀ¸·Î ÀÓÆ÷Æ®ÇÑ´Ù.
+// ëª¨ë¸ì˜ ë³¸ì„ ì½ì–´ë“¤ì¸ë‹¤.
+// ëŒ€ìƒ ë³¸ì˜ ì„í¬íŠ¸ ì´í›„, ìì‹ ë³¸ë“¤ì„ ì¬ê·€ì ìœ¼ë¡œ ì„í¬íŠ¸í•œë‹¤.
 [[maybe_unused]] std::size_t importBone(
     std::ifstream& ifs, Model& model, i32t& boneIdx
 ) {
@@ -1179,14 +1179,14 @@ void importBoundingVolumes(std::ifstream& ifs, Model& model) {
 
     readTailTag(ifs, "Bone");
 
-    gSharedLog << "[Resource Load] º» " << bone.name << " ±¸Ãà ¿Ï·á\n";
+    gSharedLog << "[Resource Load] ë³¸ " << bone.name << " êµ¬ì¶• ì™„ë£Œ\n";
 
     return bone.boneIdx;
 }
 
-// ¸ğµ¨ÀÇ ½ºÄÌ·¹ÅæÀ» ÀĞ¾îµéÀÎ´Ù.
-// ÃßÃâÇÏ´Â °úÁ¤¿¡¼­ ¹«Á¶°Ç 0¹ø º»ÀÌ ·çÆ® º»ÀÌ¹Ç·Î,
-// 0¹ø º»ºÎÅÍ º» Æ®¸®¸¦ ¼øÈ¸ÇÏ¸ç ¸ğµç º»À» ÀĞ¾îµéÀÎ´Ù.
+// ëª¨ë¸ì˜ ìŠ¤ì¼ˆë ˆí†¤ì„ ì½ì–´ë“¤ì¸ë‹¤.
+// ì¶”ì¶œí•˜ëŠ” ê³¼ì •ì—ì„œ ë¬´ì¡°ê±´ 0ë²ˆ ë³¸ì´ ë£¨íŠ¸ ë³¸ì´ë¯€ë¡œ,
+// 0ë²ˆ ë³¸ë¶€í„° ë³¸ íŠ¸ë¦¬ë¥¼ ìˆœíšŒí•˜ë©° ëª¨ë“  ë³¸ì„ ì½ì–´ë“¤ì¸ë‹¤.
 void importSkeleton(std::ifstream& ifs, Model& model) {
     readHeadTag(ifs, "Skeleton");
 
@@ -1207,10 +1207,10 @@ void importSkeleton(std::ifstream& ifs, Model& model) {
 
     skeleton.pRoot = &(*skeleton.bones)[0];
 
-    gSharedLog << "[Resource Load] ½ºÄÌ·¹Åæ " << skeleton.name << "±¸Ãà ¿Ï·á\n";
+    gSharedLog << "[Resource Load] ìŠ¤ì¼ˆë ˆí†¤ " << skeleton.name << "êµ¬ì¶• ì™„ë£Œ\n";
 }
 
-// ÇØ´ç ¸ğµ¨ÀÇ socketÀ¸·ÎºÎÅÍÀÇ offsetµéÀ» ÀĞ´Â´Ù.
+// í•´ë‹¹ ëª¨ë¸ì˜ socketìœ¼ë¡œë¶€í„°ì˜ offsetë“¤ì„ ì½ëŠ”ë‹¤.
 void importSocketOffsets(std::ifstream& ifs, Model& model) {
     readHeadTag(ifs, "SocketOffsets");
 
@@ -1236,21 +1236,21 @@ void importSocketOffsets(std::ifstream& ifs, Model& model) {
     readTailTag(ifs, "SocketOffsets");
 }
 
-// ¸ğµ¨ÀÇ ¾ÆÀÌÅÛ Á¤º¸¸¦ ÀĞ¾îµéÀÎ´Ù.
-// ÇöÀç´Â socketÀ¸·ÎºÎÅÍÀÇ offsetµéÀ» ÀĞ´Â´Ù.
+// ëª¨ë¸ì˜ ì•„ì´í…œ ì •ë³´ë¥¼ ì½ì–´ë“¤ì¸ë‹¤.
+// í˜„ì¬ëŠ” socketìœ¼ë¡œë¶€í„°ì˜ offsetë“¤ì„ ì½ëŠ”ë‹¤.
 void importItemData(std::ifstream& ifs, Model& model) {
     readHeadTag(ifs, "ItemData");
     importSocketOffsets(ifs, model);
     readTailTag(ifs, "ItemData");
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ·ÎºÎÅÍ ¸ğµ¨À» ÀĞ¾î¿Â´Ù.
-// ¸Ş½ÃµéÀ» »ı¼ºÇÏ¸ç °¢ ¸Ş½ÃµéÀÇ ¹öÅØ½º ¹öÆÛ¿Í ¼­ºê¸Ş½Ã, ±×¸®°í ÀçÁú ÁıÇÕÀ» »ı¼ºÇÑ´Ù.
-// ±× °úÁ¤¿¡¼­ ÇÊ¿äÇÑ ÅØ½ºÃ³µéÀÌ texHashMap¿¡ Á¸ÀçÇÏÁö ¾Ê´Â´Ù¸é, ·ÎµåÇÑ´Ù.
-// (·ÎµåµÇ´Â ÅØ½ºÃ³ÀÇ °æ·ÎµéÀº ¹ÙÀÌ³Ê¸® ÆÄÀÏ ³»¿¡ ÀûÇôÀÖ´Ù.)
-// ¸ğµ¨¿¡ ½ºÄÌ·¹ÅæÀÌ ÀÖ´Â °æ¿ì, ½ºÄÌ·¹Åæ Á¤º¸µµ ·ÎµåÇÑ´Ù.
-// ¸ğµ¨¿¡ ¾ÆÀÌÅÛ Á¤º¸°¡ ÀÖ´Â °æ¿ì, ¾ÆÀÌÅÛ Á¤º¸µµ ·ÎµåÇÑ´Ù.
-// * ¼öÁ¤ ½Ã ÁÖÀÇ»çÇ×: À¯´ÏÆ¼ÀÇ ÃßÃâ ½ºÅ©¸³Æ®¿Í ±¸Á¶°¡ ´ëÄªÀÌ¾î¾ß ÇÑ´Ù.
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ë¡œë¶€í„° ëª¨ë¸ì„ ì½ì–´ì˜¨ë‹¤.
+// ë©”ì‹œë“¤ì„ ìƒì„±í•˜ë©° ê° ë©”ì‹œë“¤ì˜ ë²„í…ìŠ¤ ë²„í¼ì™€ ì„œë¸Œë©”ì‹œ, ê·¸ë¦¬ê³  ì¬ì§ˆ ì§‘í•©ì„ ìƒì„±í•œë‹¤.
+// ê·¸ ê³¼ì •ì—ì„œ í•„ìš”í•œ í…ìŠ¤ì²˜ë“¤ì´ texHashMapì— ì¡´ì¬í•˜ì§€ ì•ŠëŠ”ë‹¤ë©´, ë¡œë“œí•œë‹¤.
+// (ë¡œë“œë˜ëŠ” í…ìŠ¤ì²˜ì˜ ê²½ë¡œë“¤ì€ ë°”ì´ë„ˆë¦¬ íŒŒì¼ ë‚´ì— ì í˜€ìˆë‹¤.)
+// ëª¨ë¸ì— ìŠ¤ì¼ˆë ˆí†¤ì´ ìˆëŠ” ê²½ìš°, ìŠ¤ì¼ˆë ˆí†¤ ì •ë³´ë„ ë¡œë“œí•œë‹¤.
+// ëª¨ë¸ì— ì•„ì´í…œ ì •ë³´ê°€ ìˆëŠ” ê²½ìš°, ì•„ì´í…œ ì •ë³´ë„ ë¡œë“œí•œë‹¤.
+// * ìˆ˜ì • ì‹œ ì£¼ì˜ì‚¬í•­: ìœ ë‹ˆí‹°ì˜ ì¶”ì¶œ ìŠ¤í¬ë¦½íŠ¸ì™€ êµ¬ì¡°ê°€ ëŒ€ì¹­ì´ì–´ì•¼ í•œë‹¤.
 Model loadModelFromFile( const std::filesystem::path& path,
 	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
 	std::unordered_map<std::string, Texture>& texHashMap,
@@ -1259,14 +1259,14 @@ Model loadModelFromFile( const std::filesystem::path& path,
     Model ret{};
 
     auto ifs = std::ifstream(path, std::ios::binary);
-    DISPLAY_ERROR_STR(ifs.good(), "[File I/O Error]: loadModelFromFile: "s + path.string() + " ÆÄÀÏÀ» ¿­ ¼ö ¾ø½À´Ï´Ù."s, false);
+    DISPLAY_ERROR_STR(ifs.good(), "[File I/O Error]: loadModelFromFile: "s + path.string() + " íŒŒì¼ì„ ì—´ ìˆ˜ ì—†ìŠµë‹ˆë‹¤."s, false);
     if (!ifs) {
         return ret;
     }
 
     ret.name = readText(ifs, "ModelName");
 
-    // ÅØ½ºÃ³ÀÇ ¹°¸®Àû ·Îµå´Â ¿©±â¼­ ÀÌ·ç¾îÁø´Ù.
+    // í…ìŠ¤ì²˜ì˜ ë¬¼ë¦¬ì  ë¡œë“œëŠ” ì—¬ê¸°ì„œ ì´ë£¨ì–´ì§„ë‹¤.
     importTextureMapping(ifs, device, cmdList, texHashMap, texPool, fenceToAssociate);
 
     importGeometry(ifs, device, cmdList, texHashMap, fenceToAssociate, ret);
@@ -1277,21 +1277,21 @@ Model loadModelFromFile( const std::filesystem::path& path,
         importSkeleton(ifs, ret);
     }
 
-    // ÇØ´ç ¸ğµ¨ÀÌ ¾ÆÀÌÅÛÀ¸·Î ¾²ÀÏ ¼ö ÀÖ´Â ¸ğµ¨ÀÌ¶ó¸é,
-    // ¾ÆÀÌÅÛ Á¤º¸¸¦ ÃßÃâÇÑ´Ù.
-    // (¼ÒÄÏ¿¡ ÀåÂø °¡´ÉÇÒ °æ¿ì ¼ÒÄÏÀ¸·ÎºÎÅÍÀÇ ¿ÀÇÁ¼Â µî)
+    // í•´ë‹¹ ëª¨ë¸ì´ ì•„ì´í…œìœ¼ë¡œ ì“°ì¼ ìˆ˜ ìˆëŠ” ëª¨ë¸ì´ë¼ë©´,
+    // ì•„ì´í…œ ì •ë³´ë¥¼ ì¶”ì¶œí•œë‹¤.
+    // (ì†Œì¼“ì— ì¥ì°© ê°€ëŠ¥í•  ê²½ìš° ì†Œì¼“ìœ¼ë¡œë¶€í„°ì˜ ì˜¤í”„ì…‹ ë“±)
     const auto hasWeaponInfo = static_cast<bool>(readInteger(ifs, "HasWeaponInfo"));
     if (hasWeaponInfo) {
         importItemData(ifs, ret);
     }
 
-    gSharedLog << "[Resource Load] File I/O: ¸ğµ¨ " << ret.name << '(' << path << ") ·Îµå ¿Ï·á\n";
+    gSharedLog << "[Resource Load] File I/O: ëª¨ë¸ " << ret.name << '(' << path << ") ë¡œë“œ ì™„ë£Œ\n";
 
     return ret;
 }
 
-// »ùÇÃ¸µ Á¤º¸, °æ·Î Á¤º¸¸¦ ÀĞ¾î ÅØ½ºÃ³ °´Ã¼¸¦ ±¸ÃàÇÑ´Ù.
-// ½ºÄ«ÀÌ¹Ú½ºÀÇ ÀÌ¸§µµ ÁöÁ¤ÇÑ´Ù.
+// ìƒ˜í”Œë§ ì •ë³´, ê²½ë¡œ ì •ë³´ë¥¼ ì½ì–´ í…ìŠ¤ì²˜ ê°ì²´ë¥¼ êµ¬ì¶•í•œë‹¤.
+// ìŠ¤ì¹´ì´ë°•ìŠ¤ì˜ ì´ë¦„ë„ ì§€ì •í•œë‹¤.
 void importSkyboxCubemap( std::ifstream& ifs,
 	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
 	DescriptorPool& texCubePool, Fence& fenceToAssociate,
@@ -1299,7 +1299,7 @@ void importSkyboxCubemap( std::ifstream& ifs,
 ) {
     std::string name{};
     std::string path{};
-    // ±âº»°ªµé·Î ÃÊ±âÈ­
+    // ê¸°ë³¸ê°’ë“¤ë¡œ ì´ˆê¸°í™”
     D3D12_FILTER filterMode = D3D12_FILTER_MIN_MAG_MIP_POINT;
     D3D12_TEXTURE_ADDRESS_MODE addrModeU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     D3D12_TEXTURE_ADDRESS_MODE addrModeV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -1314,12 +1314,12 @@ void importSkyboxCubemap( std::ifstream& ifs,
 
         const auto tag = untagHead(str);
 
-        // ÅØ½ºÃ³ ÀÌ¸§ ÃßÃâ
+        // í…ìŠ¤ì²˜ ì´ë¦„ ì¶”ì¶œ
         if (tag == "Name") {
             name = readString(ifs);
             readTailTag(ifs, "Name");
         }
-        // Address Mode(Wrap Mode) ÃßÃâ
+        // Address Mode(Wrap Mode) ì¶”ì¶œ
         else if (tag == "WrapModeU") {
             const auto wrapModeUStr = readString(ifs);
             if (wrapModeUStr == "Repeat") {
@@ -1332,8 +1332,8 @@ void importSkyboxCubemap( std::ifstream& ifs,
                 addrModeU = D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
             }
             else {
-                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: ¾Ë¼ö ¾ø´Â ÅØ½ºÃ³ wrap mode "s
-                    + wrapModeUStr + "À» ÀĞ¾ú½À´Ï´Ù.", false
+                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: ì•Œìˆ˜ ì—†ëŠ” í…ìŠ¤ì²˜ wrap mode "s
+                    + wrapModeUStr + "ì„ ì½ì—ˆìŠµë‹ˆë‹¤.", false
                 );
             }
 
@@ -1351,8 +1351,8 @@ void importSkyboxCubemap( std::ifstream& ifs,
                 addrModeV = D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
             }
             else {
-                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: ¾Ë¼ö ¾ø´Â ÅØ½ºÃ³ wrap mode "s
-                    + wrapModeVStr + "À» ÀĞ¾ú½À´Ï´Ù.", false
+                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: ì•Œìˆ˜ ì—†ëŠ” í…ìŠ¤ì²˜ wrap mode "s
+                    + wrapModeVStr + "ì„ ì½ì—ˆìŠµë‹ˆë‹¤.", false
                 );
             }
 
@@ -1370,14 +1370,14 @@ void importSkyboxCubemap( std::ifstream& ifs,
                 addrModeW = D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
             }
             else {
-                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: ¾Ë¼ö ¾ø´Â ÅØ½ºÃ³ wrap mode "s
-                    + wrapModeWStr + "À» ÀĞ¾ú½À´Ï´Ù.", false
+                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: ì•Œìˆ˜ ì—†ëŠ” í…ìŠ¤ì²˜ wrap mode "s
+                    + wrapModeWStr + "ì„ ì½ì—ˆìŠµë‹ˆë‹¤.", false
                 );
             }
 
             readTailTag(ifs, "WrapModeW");
         }
-        // Filter Mode ÃßÃâ
+        // Filter Mode ì¶”ì¶œ
         else if (tag == "FilterMode") {
             const auto filterModeStr = readString(ifs);
             if (filterModeStr == "Point") {
@@ -1393,37 +1393,37 @@ void importSkyboxCubemap( std::ifstream& ifs,
                 filterMode = D3D12_FILTER_ANISOTROPIC;
             }
             else {
-                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: ¾Ë¼ö ¾ø´Â ÅØ½ºÃ³ filter mode "s
-                    + filterModeStr + "À» ÀĞ¾ú½À´Ï´Ù.", false
+                DISPLAY_ERROR_STR(false, "[GFX Error] importTextureMapping: ì•Œìˆ˜ ì—†ëŠ” í…ìŠ¤ì²˜ filter mode "s
+                    + filterModeStr + "ì„ ì½ì—ˆìŠµë‹ˆë‹¤.", false
                 );
             }
 
             readTailTag(ifs, "FilterMode");
         }
-        // ºñµî¹æ¼º ÇÊÅÍ¸µ ·¹º§(ÃÖ´ë ·¹º§) ÃßÃâ
+        // ë¹„ë“±ë°©ì„± í•„í„°ë§ ë ˆë²¨(ìµœëŒ€ ë ˆë²¨) ì¶”ì¶œ
         else if (tag == "AnisoLevel") {
             anisoLevel = static_cast<UINT>(readInteger(ifs));
             readTailTag(ifs, "AnisoLevel");
         }
-        // °æ·Î ÃßÃâ
+        // ê²½ë¡œ ì¶”ì¶œ
         else if (tag == "DDSPath") {
             path = readString(ifs);
             readTailTag(ifs, "DDSPath");
         }
         else {
-            DISPLAY_ERROR_STR(false, "[File I/O Error] importTextureMapping: ¾Ë ¼ö ¾ø´Â ÅÂ±× "s
-                + tag + "¸¦ ÀĞ¾ú½À´Ï´Ù.", true
+            DISPLAY_ERROR_STR(false, "[File I/O Error] importTextureMapping: ì•Œ ìˆ˜ ì—†ëŠ” íƒœê·¸ "s
+                + tag + "ë¥¼ ì½ì—ˆìŠµë‹ˆë‹¤.", true
             );
         }
     }
 
-    // ÅØ½ºÃ³ ±¸Ãà
+    // í…ìŠ¤ì²˜ êµ¬ì¶•
     Texture::Type type{};
     skybox.texSkybox = loadTexture(device, cmdList, path, fenceToAssociate, type);
     skybox.name = name;
 
-    // Å¥ºê¸Ê ÅØ½ºÃ³´Â D3D12_SHADER_RESOURCE_VIEW_DESC¸¦ ±âº»°ª(null)À¸·Î »ç¿ëÇÏ¸é ¾È ±×·ÁÁø´Ù.
-    // Á÷Á¢ ÀÛ¼ºÇØ¼­ ³Ñ°ÜÁÖ¾î¾ß ÇÑ´Ù.
+    // íë¸Œë§µ í…ìŠ¤ì²˜ëŠ” D3D12_SHADER_RESOURCE_VIEW_DESCë¥¼ ê¸°ë³¸ê°’(null)ìœ¼ë¡œ ì‚¬ìš©í•˜ë©´ ì•ˆ ê·¸ë ¤ì§„ë‹¤.
+    // ì§ì ‘ ì‘ì„±í•´ì„œ ë„˜ê²¨ì£¼ì–´ì•¼ í•œë‹¤.
     createSRV( device, skybox.texSkybox, D3D12_SHADER_RESOURCE_VIEW_DESC{
 		.Format = DXGI_FORMAT_R8G8B8A8_UNORM,
 		.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE,
@@ -1437,15 +1437,15 @@ void importSkyboxCubemap( std::ifstream& ifs,
     skybox.texSkybox.idxSrv.idxRange = etoi(Texture::Type::TexCube);
     skybox.texSkybox.idxUav.idxRange = etoi(Texture::Type::TexCube);
 
-    // »ùÇÃ·¯ ÀÎµ¦½º¸¦ °è»êÇØ¼­ Ã¤¿ö³Ö±â
+    // ìƒ˜í”ŒëŸ¬ ì¸ë±ìŠ¤ë¥¼ ê³„ì‚°í•´ì„œ ì±„ì›Œë„£ê¸°
     const auto samplerIdx = calcIdxBindlessSampler(filterMode, addrModeU, addrModeV, addrModeW, anisoLevel);
     skybox.texSkybox.idxSrv.idxSampler = samplerIdx;
     skybox.texSkybox.idxUav.idxSampler = samplerIdx;
 }
 
-// ½ºÄ«ÀÌ¹Ú½º¿¡¼­ »ç¿ëµÇ´Â ÅØ½ºÃ³µé¿¡ ´ëÇÑ ÅØ½ºÃ³ ¸ÅÇÎ Á¤º¸¸¦ ÀĞ¾îµéÀÎ´Ù.
-// °¢ ¸ÅÇÎ Á¤º¸¿¡¼­ ¾ò¾î³½ »ùÇÃ¸µ Á¤º¸, °æ·Î Á¤º¸¸¦ ¹ÙÅÁÀ¸·Î
-// ÅØ½ºÃ³ °´Ã¼¸¦ ±¸ÃàÇÑ´Ù.
+// ìŠ¤ì¹´ì´ë°•ìŠ¤ì—ì„œ ì‚¬ìš©ë˜ëŠ” í…ìŠ¤ì²˜ë“¤ì— ëŒ€í•œ í…ìŠ¤ì²˜ ë§¤í•‘ ì •ë³´ë¥¼ ì½ì–´ë“¤ì¸ë‹¤.
+// ê° ë§¤í•‘ ì •ë³´ì—ì„œ ì–»ì–´ë‚¸ ìƒ˜í”Œë§ ì •ë³´, ê²½ë¡œ ì •ë³´ë¥¼ ë°”íƒ•ìœ¼ë¡œ
+// í…ìŠ¤ì²˜ ê°ì²´ë¥¼ êµ¬ì¶•í•œë‹¤.
 void importSkyboxTextureMapping( std::ifstream& ifs,
 	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
 	DescriptorPool& texCubePool, Fence& fenceToAssociate,
@@ -1464,14 +1464,14 @@ void importSkyboxTextureMapping( std::ifstream& ifs,
             importSkyboxCubemap(ifs, device, cmdList, texCubePool, fenceToAssociate, skybox);
         }
         else {
-            DISPLAY_ERROR_STR(false, "[File I/O Error] importSkyboxTextureMapping: ¾Ë ¼ö ¾ø´Â ÅÂ±× "s
-                + tag + "¸¦ ÀĞ¾ú½À´Ï´Ù.", true
+            DISPLAY_ERROR_STR(false, "[File I/O Error] importSkyboxTextureMapping: ì•Œ ìˆ˜ ì—†ëŠ” íƒœê·¸ "s
+                + tag + "ë¥¼ ì½ì—ˆìŠµë‹ˆë‹¤.", true
             );
         }
     }
 }
 
-// ½ºÄ«ÀÌ¹Ú½º¿¡ ´ã°Ü ÀÖ´Â ÀçÁú Á¤º¸µéÀ» ÀĞ¾îµéÀÎ´Ù.
+// ìŠ¤ì¹´ì´ë°•ìŠ¤ì— ë‹´ê²¨ ìˆëŠ” ì¬ì§ˆ ì •ë³´ë“¤ì„ ì½ì–´ë“¤ì¸ë‹¤.
 void importSkyboxMaterials(std::ifstream& ifs) {
     const auto materialCnt = readInteger(ifs, "MaterialCnt");
 
@@ -1482,10 +1482,10 @@ void importSkyboxMaterials(std::ifstream& ifs) {
     }
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ·ÎºÎÅÍ ½ºÄ«ÀÌ¹Ú½º¸¦ ÀĞ¾î¿Â´Ù.
-// ÆÄÀÏ¿¡ ÀûÇôÀÖ´Â Å¥ºê¸Ê ÅØ½ºÃ³ Á¤º¸¸¦ ÅëÇØ ½ºÄ«ÀÌ¹Ú½º ÀçÁúÀ» ¿Ï¼ºÇÑ´Ù.
-// ÀÌ ÇÔ¼ö´Â ¹«Á¶°Ç ¿¬°üµÈ ÅØ½ºÃ³¸¦ ·ÎµåÇÏ¹Ç·Î, Áßº¹È£ÃâµÇÁö ¾Êµµ·Ï ÁÖÀÇÇÑ´Ù.
-// * ¼öÁ¤ ½Ã ÁÖÀÇ»çÇ×: À¯´ÏÆ¼ÀÇ ÃßÃâ ½ºÅ©¸³Æ®¿Í ±¸Á¶°¡ ´ëÄªÀÌ¾î¾ß ÇÑ´Ù.
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ë¡œë¶€í„° ìŠ¤ì¹´ì´ë°•ìŠ¤ë¥¼ ì½ì–´ì˜¨ë‹¤.
+// íŒŒì¼ì— ì í˜€ìˆëŠ” íë¸Œë§µ í…ìŠ¤ì²˜ ì •ë³´ë¥¼ í†µí•´ ìŠ¤ì¹´ì´ë°•ìŠ¤ ì¬ì§ˆì„ ì™„ì„±í•œë‹¤.
+// ì´ í•¨ìˆ˜ëŠ” ë¬´ì¡°ê±´ ì—°ê´€ëœ í…ìŠ¤ì²˜ë¥¼ ë¡œë“œí•˜ë¯€ë¡œ, ì¤‘ë³µí˜¸ì¶œë˜ì§€ ì•Šë„ë¡ ì£¼ì˜í•œë‹¤.
+// * ìˆ˜ì • ì‹œ ì£¼ì˜ì‚¬í•­: ìœ ë‹ˆí‹°ì˜ ì¶”ì¶œ ìŠ¤í¬ë¦½íŠ¸ì™€ êµ¬ì¡°ê°€ ëŒ€ì¹­ì´ì–´ì•¼ í•œë‹¤.
 Skybox loadSkyboxFromFile( const std::filesystem::path& path,
 	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
 	DescriptorPool& texCubePool, Fence& fenceToAssociate
@@ -1493,7 +1493,7 @@ Skybox loadSkyboxFromFile( const std::filesystem::path& path,
     Skybox ret{};
 
     auto ifs = std::ifstream(path, std::ios::binary);
-    DISPLAY_ERROR_STR(ifs.good(), "[File I/O Error]: loadSkyboxFromFile: "s + path.string() + " ÆÄÀÏÀ» ¿­ ¼ö ¾ø½À´Ï´Ù."s, false);
+    DISPLAY_ERROR_STR(ifs.good(), "[File I/O Error]: loadSkyboxFromFile: "s + path.string() + " íŒŒì¼ì„ ì—´ ìˆ˜ ì—†ìŠµë‹ˆë‹¤."s, false);
     if (!ifs) {
         return ret;
     }
@@ -1501,7 +1501,7 @@ Skybox loadSkyboxFromFile( const std::filesystem::path& path,
     importSkyboxTextureMapping(ifs, device, cmdList, texCubePool, fenceToAssociate, ret);
     importSkyboxMaterials(ifs);
 
-    gSharedLog << "[Resource Load] File I/O: ½ºÄ«ÀÌ¹Ú½º " << ret.name << '(' << path << ") ·Îµå ¿Ï·á\n";
+    gSharedLog << "[Resource Load] File I/O: ìŠ¤ì¹´ì´ë°•ìŠ¤ " << ret.name << '(' << path << ") ë¡œë“œ ì™„ë£Œ\n";
 
     return ret;
 }

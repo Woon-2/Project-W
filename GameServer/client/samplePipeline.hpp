@@ -1,4 +1,4 @@
-#ifndef __samplePipeline_HPP
+ï»¿#ifndef __samplePipeline_HPP
 #define __samplePipeline_HPP
 
 #include "gfxUtil.hpp"
@@ -13,7 +13,7 @@ namespace SampleShader {
 	struct PerInstanceData;
 }
 
-// ·»´õ¸µ ÆÄÀÌÇÁ¶óÀÎº° ±¸Á¶Ã¼ -------------------------
+// ë Œë”ë§ íŒŒì´í”„ë¼ì¸ë³„ êµ¬ì¡°ì²´ -------------------------
 namespace SamplePipeline {
 
 struct CameraData {
@@ -27,11 +27,11 @@ struct DrawEvent {
 	const SubMesh* subMesh;
 	const Material* material;
 
-	// ÀÌ ÇÔ¼ö·Î ÀÎÇØ DrawEvent Á¤·Ä ½Ã
-	// °°Àº ¸Ş½Ã¸¦ °øÀ¯ÇÏ´Â DrawEventµé³¢¸® 1Â÷Àû,
-	// °°Àº ¼­ºê¸Ş½Ã¸¦ °øÀ¯ÇÏ´Â DrawEventµé³¢¸® 2Â÷Àû,
-	// °°Àº ÀçÁúÀ» °øÀ¯ÇÏ´Â DrawEventµé³¢¸® 3Â÷ÀûÀ¸·Î ¸ğÀÌ°Ô µÈ´Ù.
-	// ÀÌ´Â ÀÎ½ºÅÏ½Ì¿¡ ¿ëÀÌÇÏ´Ù.
+	// ì´ í•¨ìˆ˜ë¡œ ì¸í•´ DrawEvent ì •ë ¬ ì‹œ
+	// ê°™ì€ ë©”ì‹œë¥¼ ê³µìœ í•˜ëŠ” DrawEventë“¤ë¼ë¦¬ 1ì°¨ì ,
+	// ê°™ì€ ì„œë¸Œë©”ì‹œë¥¼ ê³µìœ í•˜ëŠ” DrawEventë“¤ë¼ë¦¬ 2ì°¨ì ,
+	// ê°™ì€ ì¬ì§ˆì„ ê³µìœ í•˜ëŠ” DrawEventë“¤ë¼ë¦¬ 3ì°¨ì ìœ¼ë¡œ ëª¨ì´ê²Œ ëœë‹¤.
+	// ì´ëŠ” ì¸ìŠ¤í„´ì‹±ì— ìš©ì´í•˜ë‹¤.
 	auto operator<=>(const DrawEvent& rhs) const noexcept {
 		auto e = mesh <=> rhs.mesh;
 		if ( e == std::strong_ordering::equal ) {
@@ -50,20 +50,20 @@ struct Resources {
 	ConstantBufferArray perDrawcallData;
 };
 
-// Sample PipelineÀÇ input layoutÀ» À§ÇÑ Vertex Buffer View ¹è¿­ÀÌ
-// mesh¿¡ Á¸ÀçÇÏÁö ¾Ê´Â´Ù¸é, Ãß°¡ÇÑ´Ù.
+// Sample Pipelineì˜ input layoutì„ ìœ„í•œ Vertex Buffer View ë°°ì—´ì´
+// meshì— ì¡´ì¬í•˜ì§€ ì•ŠëŠ”ë‹¤ë©´, ì¶”ê°€í•œë‹¤.
 // 0: position, 1: uv
 void layoutMeshIfNeeded(const Mesh& mesh);
 
-// Sample PipelineÀÇ Dispatcher
-// Dispatcher Å¬·¡½º´Â GFX¿¡¼­ ÇÊ¿äÇÑ ÀÎÀÚµéÀ» ¹Ş¾Æ
-// ÆÄÀÌÇÁ¶óÀÎÀÇ Æ¯Á¤ ´Ü°è¸¦ ½Ì±Û½º·¹µå È¤Àº ¸ÖÆ¼½º·¹µå·Î ¼öÇàÇÑ´Ù.
-// ¸î °³ÀÇ ÇÔ¼ö¿¡¼­ °øÀ¯ÇÏ´Â µ¥ÀÌÅÍµéÀ» µû·Î ¸ğ¾Æ º¸°üÇÏ´Â µ¿½Ã¿¡
-// ¸ÖÆ¼½º·¹µå ÀÛ¾÷ ºĞ¹è °úÁ¤À» Á» ´õ ½±°Ô ÀÛ¼ºÇÏ±â À§ÇØ ¸¸µé¾îÁ³´Ù.
+// Sample Pipelineì˜ Dispatcher
+// Dispatcher í´ë˜ìŠ¤ëŠ” GFXì—ì„œ í•„ìš”í•œ ì¸ìë“¤ì„ ë°›ì•„
+// íŒŒì´í”„ë¼ì¸ì˜ íŠ¹ì • ë‹¨ê³„ë¥¼ ì‹±ê¸€ìŠ¤ë ˆë“œ í˜¹ì€ ë©€í‹°ìŠ¤ë ˆë“œë¡œ ìˆ˜í–‰í•œë‹¤.
+// ëª‡ ê°œì˜ í•¨ìˆ˜ì—ì„œ ê³µìœ í•˜ëŠ” ë°ì´í„°ë“¤ì„ ë”°ë¡œ ëª¨ì•„ ë³´ê´€í•˜ëŠ” ë™ì‹œì—
+// ë©€í‹°ìŠ¤ë ˆë“œ ì‘ì—… ë¶„ë°° ê³¼ì •ì„ ì¢€ ë” ì‰½ê²Œ ì‘ì„±í•˜ê¸° ìœ„í•´ ë§Œë“¤ì–´ì¡Œë‹¤.
 class Dispatcher {
 public:
 	Dispatcher() = default;
-	// GFX °´Ã¼·ÎºÎÅÍ ÇÊ¿äÇÑ ÀÎÀÚµéÀ» Àü´Ş¹ŞÀÚ.
+	// GFX ê°ì²´ë¡œë¶€í„° í•„ìš”í•œ ì¸ìë“¤ì„ ì „ë‹¬ë°›ì.
 	Dispatcher(
 		const std::vector<ComPtr<ID3D12DescriptorHeap>>& descriptorHeaps,
 		DescriptorPool* pTexPool, DescriptorPool* pTexArrayPool,
@@ -81,45 +81,45 @@ public:
 		const CameraData& cameraData, std::size_t roomIdx
 	);
 
-	// ¼ÎÀÌ´õ¿¡¼­ »ç¿ëÇÏ´Â GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
-	// DrawEvents, CameraData¿¡ ´ã°ÜÀÖ´Â Á¤º¸¸¦ °¡°øÇÏ¿©
-	// Resources °´Ã¼¿¡ ´ã±ä,
-	// ShaderInputBuffer ÀÎÅÍÆäÀÌ½º¸¦ °¡Áö´Â °´Ã¼µé¿¡ ¿Å°Ü´ã´Â´Ù.
-	// ½Ì±Û½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
-	// DrawEvents°¡ ºñ¾îÀÖ´Ù¸é ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
+	// ì…°ì´ë”ì—ì„œ ì‚¬ìš©í•˜ëŠ” GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
+	// DrawEvents, CameraDataì— ë‹´ê²¨ìˆëŠ” ì •ë³´ë¥¼ ê°€ê³µí•˜ì—¬
+	// Resources ê°ì²´ì— ë‹´ê¸´,
+	// ShaderInputBuffer ì¸í„°í˜ì´ìŠ¤ë¥¼ ê°€ì§€ëŠ” ê°ì²´ë“¤ì— ì˜®ê²¨ë‹´ëŠ”ë‹¤.
+	// ì‹±ê¸€ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
+	// DrawEventsê°€ ë¹„ì–´ìˆë‹¤ë©´ ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 	void updateGPUDataSingleThreaded();
-	// ¼ÎÀÌ´õ¿¡¼­ »ç¿ëÇÏ´Â GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
-	// DrawEvents, CameraData¿¡ ´ã°ÜÀÖ´Â Á¤º¸¸¦ °¡°øÇÏ¿©
-	// Resources °´Ã¼¿¡ ´ã±ä,
-	// ShaderInputBuffer ÀÎÅÍÆäÀÌ½º¸¦ °¡Áö´Â °´Ã¼µé¿¡ ¿Å°Ü´ã´Â´Ù.
-	// ¸ÖÆ¼½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
-	// DrawEvents°¡ ºñ¾îÀÖ´Ù¸é ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
+	// ì…°ì´ë”ì—ì„œ ì‚¬ìš©í•˜ëŠ” GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
+	// DrawEvents, CameraDataì— ë‹´ê²¨ìˆëŠ” ì •ë³´ë¥¼ ê°€ê³µí•˜ì—¬
+	// Resources ê°ì²´ì— ë‹´ê¸´,
+	// ShaderInputBuffer ì¸í„°í˜ì´ìŠ¤ë¥¼ ê°€ì§€ëŠ” ê°ì²´ë“¤ì— ì˜®ê²¨ë‹´ëŠ”ë‹¤.
+	// ë©€í‹°ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
+	// DrawEventsê°€ ë¹„ì–´ìˆë‹¤ë©´ ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 	void updateGPUDataMultiThreaded();
-	// DrawEventsÀÇ Á¤º¸µéÀ» Âü°íÇÏ¿©
-	// µå·Î¿ìÄİµéÀ» ¼öÇàÇÑ´Ù.
-	// ½Ì±Û½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
-	// DrawEvents°¡ ºñ¾îÀÖ´Ù¸é ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
+	// DrawEventsì˜ ì •ë³´ë“¤ì„ ì°¸ê³ í•˜ì—¬
+	// ë“œë¡œìš°ì½œë“¤ì„ ìˆ˜í–‰í•œë‹¤.
+	// ì‹±ê¸€ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
+	// DrawEventsê°€ ë¹„ì–´ìˆë‹¤ë©´ ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 	void drawSingleThreaded();
-	// DrawEventsÀÇ Á¤º¸µéÀ» Âü°íÇÏ¿©
-	// µå·Î¿ìÄİµéÀ» ¼öÇàÇÑ´Ù.
-	// ¸ÖÆ¼½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
-	// DrawEvents°¡ ºñ¾îÀÖ´Ù¸é ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
+	// DrawEventsì˜ ì •ë³´ë“¤ì„ ì°¸ê³ í•˜ì—¬
+	// ë“œë¡œìš°ì½œë“¤ì„ ìˆ˜í–‰í•œë‹¤.
+	// ë©€í‹°ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
+	// DrawEventsê°€ ë¹„ì–´ìˆë‹¤ë©´ ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 	void drawMultiThreaded();
 
 private:
-	// ¸ÖÆ¼½º·¹µå ÀÛ¾÷ ½Ã, GPU µ¥ÀÌÅÍ °»½Å ÀÛ¾÷¿¡ ´ëÇØ
-	// ´ÜÀ§ ÀÛ¾÷À» »ı¼ºÇÏ¿© ½º·¹µå¿¡ ÇÒ´çÇÏ´Âµ¥ »ç¿ëµÈ´Ù.
+	// ë©€í‹°ìŠ¤ë ˆë“œ ì‘ì—… ì‹œ, GPU ë°ì´í„° ê°±ì‹  ì‘ì—…ì— ëŒ€í•´
+	// ë‹¨ìœ„ ì‘ì—…ì„ ìƒì„±í•˜ì—¬ ìŠ¤ë ˆë“œì— í• ë‹¹í•˜ëŠ”ë° ì‚¬ìš©ëœë‹¤.
 	void MU_CALLCONV addJobUpdate( mu::Mat4x4 viewProj, const DrawEvent* pFirst,
 		const DrawEvent* pLast, SampleShader::PerInstanceData* pOut, std::latch& latch
 	);
-	// ¸ÖÆ¼½º·¹µå ÀÛ¾÷ ½Ã, µå·Î¿ìÄİµé¿¡ ´ëÇØ
-	// ´ÜÀ§ ÀÛ¾÷À» »ı¼ºÇÏ¿© ½º·¹µå¿¡ ÇÒ´çÇÏ´Âµ¥ »ç¿ëµÈ´Ù.
+	// ë©€í‹°ìŠ¤ë ˆë“œ ì‘ì—… ì‹œ, ë“œë¡œìš°ì½œë“¤ì— ëŒ€í•´
+	// ë‹¨ìœ„ ì‘ì—…ì„ ìƒì„±í•˜ì—¬ ìŠ¤ë ˆë“œì— í• ë‹¹í•˜ëŠ”ë° ì‚¬ìš©ëœë‹¤.
 	void addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 		const DrawEvent* pFirst, const DrawEvent* pLast,
 		std::size_t firstInstanceOffset, std::latch& latch
 	);
 
-	// GFX·ÎºÎÅÍ Àü´ŞµÇ¾î ±×´ë·Î »ç¿ëÇÏ´Â º¯¼öµé
+	// GFXë¡œë¶€í„° ì „ë‹¬ë˜ì–´ ê·¸ëŒ€ë¡œ ì‚¬ìš©í•˜ëŠ” ë³€ìˆ˜ë“¤
 	std::vector<ComPtr<ID3D12DescriptorHeap>> descriptorHeaps_{};
 	DescriptorPool* pTexPool_ = nullptr;
 	DescriptorPool* pTexArrayPool_ = nullptr;
@@ -141,7 +141,7 @@ private:
 	CameraData cameraData_{};
 	std::size_t roomIdx_{};
 	
-	// GFX·ÎºÎÅÍ Àü´ŞµÈ °ÍµéÀº ÅëÇØ ¾ò¾îÁö´Â º¯¼öµé
+	// GFXë¡œë¶€í„° ì „ë‹¬ëœ ê²ƒë“¤ì€ í†µí•´ ì–»ì–´ì§€ëŠ” ë³€ìˆ˜ë“¤
 	UINT rootParamIdxPID_{};
 	UINT rootParamIdxPDD_{};
 	UINT rootParamIdxTexPool_{};
@@ -150,7 +150,7 @@ private:
 	UINT rootParamIdxSamPool_{};
 	UINT rootParamIdxCmpSamPool_{};
 
-	// ¸ÖÆ¼½º·¹µå µ¿ÀÛ ½Ã ÀÛ¾÷ Ä«Å×°í¸®º° ºĞ¹è ´ÜÀ§
+	// ë©€í‹°ìŠ¤ë ˆë“œ ë™ì‘ ì‹œ ì‘ì—… ì¹´í…Œê³ ë¦¬ë³„ ë¶„ë°° ë‹¨ìœ„
 	std::size_t jobSizeUpdate_ = 4000u;
 	std::size_t jobSizeDraw_ = 200u;
 };

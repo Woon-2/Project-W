@@ -1,4 +1,4 @@
-#include "rspch.hpp"
+ï»¿#include "rspch.hpp"
 #include "Model.hpp"
 #include "binaryImport.hpp"
 
@@ -37,7 +37,7 @@ void importBoundingRect(std::ifstream& ifs, Model& model) {
     const auto halfSize = XMFLOAT2(size.x * 0.5f, size.y * 0.5f);
 }
 
-// ¸ğµ¨ÀÇ ¹Ù¿îµù º¼·ı ÇÏ³ªÀÇ Á¤º¸¸¦ ÀĞ¾î¿Â´Ù.
+// ëª¨ë¸ì˜ ë°”ìš´ë”© ë³¼ë¥¨ í•˜ë‚˜ì˜ ì •ë³´ë¥¼ ì½ì–´ì˜¨ë‹¤.
 void importBoundingVolume(std::ifstream& ifs, Model& model) {
     readHeadTag(ifs, "BoundingVolume");
     const auto type = readText(ifs, "Type");
@@ -50,8 +50,8 @@ void importBoundingVolume(std::ifstream& ifs, Model& model) {
     readTailTag(ifs, "BoundingVolume");
 }
 
-// ¸ğµ¨ÀÇ ¹Ù¿îµù º¼·ı Á¤º¸¸¦ ÀĞ¾î¿Â´Ù.
-// ¸ğµ¨¿¡´Â ¿©·¯ °³ÀÇ ¹Ù¿îµù º¼·ıÀÌ Á¸ÀçÇÒ ¼ö ÀÖ´Ù.
+// ëª¨ë¸ì˜ ë°”ìš´ë”© ë³¼ë¥¨ ì •ë³´ë¥¼ ì½ì–´ì˜¨ë‹¤.
+// ëª¨ë¸ì—ëŠ” ì—¬ëŸ¬ ê°œì˜ ë°”ìš´ë”© ë³¼ë¥¨ì´ ì¡´ì¬í•  ìˆ˜ ìˆë‹¤.
 void importBoundingVolumes(std::ifstream& ifs, Model& model) {
     readHeadTag(ifs, "BoundingVolumes");
 
@@ -64,23 +64,23 @@ void importBoundingVolumes(std::ifstream& ifs, Model& model) {
     readTailTag(ifs, "BoundingVolumes");
 }
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ·ÎºÎÅÍ ¸ğµ¨À» ÀĞ¾î¿Â´Ù.
-// ¸Ş½ÃµéÀ» »ı¼ºÇÏ¸ç °¢ ¸Ş½ÃµéÀÇ ¹öÅØ½º ¹öÆÛ¿Í ¼­ºê¸Ş½Ã, ±×¸®°í ÀçÁú ÁıÇÕÀ» »ı¼ºÇÑ´Ù.
-// ±× °úÁ¤¿¡¼­ ÇÊ¿äÇÑ ÅØ½ºÃ³µéÀÌ texHashMap¿¡ Á¸ÀçÇÏÁö ¾Ê´Â´Ù¸é, ·ÎµåÇÑ´Ù.
-// (·ÎµåµÇ´Â ÅØ½ºÃ³ÀÇ °æ·ÎµéÀº ¹ÙÀÌ³Ê¸® ÆÄÀÏ ³»¿¡ ÀûÇôÀÖ´Ù.)
-// * ¼öÁ¤ ½Ã ÁÖÀÇ»çÇ×: À¯´ÏÆ¼ÀÇ ÃßÃâ ½ºÅ©¸³Æ®¿Í ±¸Á¶°¡ ´ëÄªÀÌ¾î¾ß ÇÑ´Ù.
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ë¡œë¶€í„° ëª¨ë¸ì„ ì½ì–´ì˜¨ë‹¤.
+// ë©”ì‹œë“¤ì„ ìƒì„±í•˜ë©° ê° ë©”ì‹œë“¤ì˜ ë²„í…ìŠ¤ ë²„í¼ì™€ ì„œë¸Œë©”ì‹œ, ê·¸ë¦¬ê³  ì¬ì§ˆ ì§‘í•©ì„ ìƒì„±í•œë‹¤.
+// ê·¸ ê³¼ì •ì—ì„œ í•„ìš”í•œ í…ìŠ¤ì²˜ë“¤ì´ texHashMapì— ì¡´ì¬í•˜ì§€ ì•ŠëŠ”ë‹¤ë©´, ë¡œë“œí•œë‹¤.
+// (ë¡œë“œë˜ëŠ” í…ìŠ¤ì²˜ì˜ ê²½ë¡œë“¤ì€ ë°”ì´ë„ˆë¦¬ íŒŒì¼ ë‚´ì— ì í˜€ìˆë‹¤.)
+// * ìˆ˜ì • ì‹œ ì£¼ì˜ì‚¬í•­: ìœ ë‹ˆí‹°ì˜ ì¶”ì¶œ ìŠ¤í¬ë¦½íŠ¸ì™€ êµ¬ì¡°ê°€ ëŒ€ì¹­ì´ì–´ì•¼ í•œë‹¤.
 Model loadModelFromFile(const std::filesystem::path& path) {
     Model ret{};
 
     auto ifs = std::ifstream(path, std::ios::binary);
-    DISPLAY_ERROR_STR(ifs.good(), "[File I/O Error]: loadModelFromFile: "s + path.string() + " ÆÄÀÏÀ» ¿­ ¼ö ¾ø½À´Ï´Ù."s, false);
+    DISPLAY_ERROR_STR(ifs.good(), "[File I/O Error]: loadModelFromFile: "s + path.string() + " íŒŒì¼ì„ ì—´ ìˆ˜ ì—†ìŠµë‹ˆë‹¤."s, false);
     if (!ifs) {
         return ret;
     }
 
     ret.name = readText(ifs, "ModelName");
     importBoundingVolumes(ifs, ret);
-    gSharedLog << "[Resource Load] File I/O: ¸ğµ¨ " << ret.name << '(' << path << ") ·Îµå ¿Ï·á\n";
+    gSharedLog << "[Resource Load] File I/O: ëª¨ë¸ " << ret.name << '(' << path << ") ë¡œë“œ ì™„ë£Œ\n";
 
     return ret;
 }

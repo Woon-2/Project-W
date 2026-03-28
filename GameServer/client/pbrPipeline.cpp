@@ -1,4 +1,4 @@
-#include "pch.hpp"
+ï»¿#include "pch.hpp"
 #include "pbrPipeline.hpp"
 #include "sharedResources.hpp"
 #include "shader.hpp"
@@ -7,8 +7,8 @@
 
 namespace PBRPipeline {
 
-// PBR Pipeline ±×¸²ÀÚ ÆĞ½ºÀÇ input layoutÀ» À§ÇÑ Vertex Buffer View ¹è¿­ÀÌ
-// mesh¿¡ Á¸ÀçÇÏÁö ¾Ê´Â´Ù¸é, Ãß°¡ÇÑ´Ù.
+// PBR Pipeline ê·¸ë¦¼ì íŒ¨ìŠ¤ì˜ input layoutì„ ìœ„í•œ Vertex Buffer View ë°°ì—´ì´
+// meshì— ì¡´ì¬í•˜ì§€ ì•ŠëŠ”ë‹¤ë©´, ì¶”ê°€í•œë‹¤.
 // 0: position
 void __layoutMeshIfNeededShadowPass(const Mesh& mesh) {
 	if (mesh.vbViewsByPipeline.contains("PBRPipeline_Shadow")) {
@@ -21,7 +21,7 @@ void __layoutMeshIfNeededShadowPass(const Mesh& mesh) {
 
 	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_Position"),
 		"[GFX Error] PBRPipeline::__layoutMeshIfNeededShadowPass: " + mesh.name + "_VB_Position"
-		"ÀÇ ÀÌ¸§À» °¡Áø Á¤Á¡ ¹öÆÛ°¡ ¿ä±¸µÇ¾úÀ¸³ª, Á¸ÀçÇÏÁö ¾Ê½À´Ï´Ù.",
+		"ì˜ ì´ë¦„ì„ ê°€ì§„ ì •ì  ë²„í¼ê°€ ìš”êµ¬ë˜ì—ˆìœ¼ë‚˜, ì¡´ì¬í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.",
 		false
 	);
 
@@ -30,8 +30,8 @@ void __layoutMeshIfNeededShadowPass(const Mesh& mesh) {
 	vbViews.push_back(vbViewPos);
 }
 
-// PBR Pipeline ¸ŞÀÎ ·»´õ ÆĞ½ºÀÇ input layoutÀ» À§ÇÑ Vertex Buffer View ¹è¿­ÀÌ
-// mesh¿¡ Á¸ÀçÇÏÁö ¾Ê´Â´Ù¸é, Ãß°¡ÇÑ´Ù.
+// PBR Pipeline ë©”ì¸ ë Œë” íŒ¨ìŠ¤ì˜ input layoutì„ ìœ„í•œ Vertex Buffer View ë°°ì—´ì´
+// meshì— ì¡´ì¬í•˜ì§€ ì•ŠëŠ”ë‹¤ë©´, ì¶”ê°€í•œë‹¤.
 // 0: position, 1: normal, 2: tangent, 3: bitangent, 4: uv
 void __layoutMeshIfNeededMainPass(const Mesh& mesh) {
 	if (mesh.vbViewsByPipeline.contains("PBRPipeline_Main")) {
@@ -44,27 +44,27 @@ void __layoutMeshIfNeededMainPass(const Mesh& mesh) {
 
 	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_Position"),
 		"[GFX Error] PBRPipeline::__layoutMeshIfNeededMainPass: " + mesh.name + "_VB_Position"
-		"ÀÇ ÀÌ¸§À» °¡Áø Á¤Á¡ ¹öÆÛ°¡ ¿ä±¸µÇ¾úÀ¸³ª, Á¸ÀçÇÏÁö ¾Ê½À´Ï´Ù.",
+		"ì˜ ì´ë¦„ì„ ê°€ì§„ ì •ì  ë²„í¼ê°€ ìš”êµ¬ë˜ì—ˆìœ¼ë‚˜, ì¡´ì¬í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.",
 		false
 	);
 	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_Normal"),
 		"[GFX Error] PBRPipeline::__layoutMeshIfNeededMainPass: " + mesh.name + "_VB_Normal"
-		"ÀÇ ÀÌ¸§À» °¡Áø Á¤Á¡ ¹öÆÛ°¡ ¿ä±¸µÇ¾úÀ¸³ª, Á¸ÀçÇÏÁö ¾Ê½À´Ï´Ù.",
+		"ì˜ ì´ë¦„ì„ ê°€ì§„ ì •ì  ë²„í¼ê°€ ìš”êµ¬ë˜ì—ˆìœ¼ë‚˜, ì¡´ì¬í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.",
 		false
 	);
 	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_Tangent"),
 		"[GFX Error] PBRPipeline::__layoutMeshIfNeededMainPass: " + mesh.name + "_VB_Tangent"
-		"ÀÇ ÀÌ¸§À» °¡Áø Á¤Á¡ ¹öÆÛ°¡ ¿ä±¸µÇ¾úÀ¸³ª, Á¸ÀçÇÏÁö ¾Ê½À´Ï´Ù.",
+		"ì˜ ì´ë¦„ì„ ê°€ì§„ ì •ì  ë²„í¼ê°€ ìš”êµ¬ë˜ì—ˆìœ¼ë‚˜, ì¡´ì¬í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.",
 		false
 	);
 	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_Bitangent"),
 		"[GFX Error] PBRPipeline::__layoutMeshIfNeededMainPass: " + mesh.name + "_VB_Bitangent"
-		"ÀÇ ÀÌ¸§À» °¡Áø Á¤Á¡ ¹öÆÛ°¡ ¿ä±¸µÇ¾úÀ¸³ª, Á¸ÀçÇÏÁö ¾Ê½À´Ï´Ù.",
+		"ì˜ ì´ë¦„ì„ ê°€ì§„ ì •ì  ë²„í¼ê°€ ìš”êµ¬ë˜ì—ˆìœ¼ë‚˜, ì¡´ì¬í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.",
 		false
 	);
 	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_UV"),
 		"[GFX Error] PBRPipeline::__layoutMeshIfNeededMainPass: " + mesh.name + "_VB_UV"
-		"ÀÇ ÀÌ¸§À» °¡Áø Á¤Á¡ ¹öÆÛ°¡ ¿ä±¸µÇ¾úÀ¸³ª, Á¸ÀçÇÏÁö ¾Ê½À´Ï´Ù.",
+		"ì˜ ì´ë¦„ì„ ê°€ì§„ ì •ì  ë²„í¼ê°€ ìš”êµ¬ë˜ì—ˆìœ¼ë‚˜, ì¡´ì¬í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.",
 		false
 	);
 
@@ -86,7 +86,7 @@ void layoutMeshIfNeeded(const Mesh& mesh) {
 	__layoutMeshIfNeededMainPass(mesh);
 }
 
-// GFX °´Ã¼·ÎºÎÅÍ ÇÊ¿äÇÑ ÀÎÀÚµéÀ» Àü´Ş¹ŞÀÚ.
+// GFX ê°ì²´ë¡œë¶€í„° í•„ìš”í•œ ì¸ìë“¤ì„ ì „ë‹¬ë°›ì.
 Dispatcher::Dispatcher(
 	const std::vector<ComPtr<ID3D12DescriptorHeap>>& descriptorHeaps,
 	DescriptorPool* pTexPool, DescriptorPool* pTexArrayPool,
@@ -117,56 +117,56 @@ Dispatcher::Dispatcher(
 	rootParamIdxSamPool_(rootSig->paramIdx("SamplerPool")),
 	rootParamIdxCmpSamPool_(rootSig->paramIdx("ComparisonSamplerPool")) {}
 
-// draw eventµéÀ» H/W ÀÎ½ºÅÏ½ÌÀ» À§ÇØ ±×·ìÈ­(Á¤·Ä)ÇÑ´Ù.
-// °¡Àå ¸ÕÀú È£ÃâµÇ¾î¾ß ÇÑ´Ù.
+// draw eventë“¤ì„ H/W ì¸ìŠ¤í„´ì‹±ì„ ìœ„í•´ ê·¸ë£¹í™”(ì •ë ¬)í•œë‹¤.
+// ê°€ì¥ ë¨¼ì € í˜¸ì¶œë˜ì–´ì•¼ í•œë‹¤.
 void Dispatcher::sortDrawEvents() {
 	std::sort(drawEvents_.begin(), drawEvents_.end());
 }
 
-// shadow pass¸¦ ½Ì±Û ½º·¹µå·Î ¼öÇàÇÑ´Ù.
-// 1¹øÂ° ·»´õÆĞ½º¿¡ ÇØ´çÇÑ´Ù.
+// shadow passë¥¼ ì‹±ê¸€ ìŠ¤ë ˆë“œë¡œ ìˆ˜í–‰í•œë‹¤.
+// 1ë²ˆì§¸ ë Œë”íŒ¨ìŠ¤ì— í•´ë‹¹í•œë‹¤.
 void Dispatcher::shadowPass() {
 	shadowUpdate();
 	shadowDraw();
 }
 
-// shadow pass¸¦ ¸ÖÆ¼ ½º·¹µå·Î ¼öÇàÇÑ´Ù.
-// 1¹øÂ° ·»´õÆĞ½º¿¡ ÇØ´çÇÑ´Ù.
+// shadow passë¥¼ ë©€í‹° ìŠ¤ë ˆë“œë¡œ ìˆ˜í–‰í•œë‹¤.
+// 1ë²ˆì§¸ ë Œë”íŒ¨ìŠ¤ì— í•´ë‹¹í•œë‹¤.
 void Dispatcher::shadowPassMT() {
 	shadowUpdateMT();
 	shadowDrawMT();
 }
 
-// main pass¸¦ ½Ì±Û ½º·¹µå·Î ¼öÇàÇÑ´Ù.
-// 2¹øÂ° ·»´õÆĞ½º¿¡ ÇØ´çÇÑ´Ù.
+// main passë¥¼ ì‹±ê¸€ ìŠ¤ë ˆë“œë¡œ ìˆ˜í–‰í•œë‹¤.
+// 2ë²ˆì§¸ ë Œë”íŒ¨ìŠ¤ì— í•´ë‹¹í•œë‹¤.
 void Dispatcher::mainPass() {
 	mainUpdate();
 	mainDraw();
 }
 
-// main pass¸¦ ¸ÖÆ¼ ½º·¹µå·Î ¼öÇàÇÑ´Ù.
-// 2¹øÂ° ·»´õÆĞ½º¿¡ ÇØ´çÇÑ´Ù.
+// main passë¥¼ ë©€í‹° ìŠ¤ë ˆë“œë¡œ ìˆ˜í–‰í•œë‹¤.
+// 2ë²ˆì§¸ ë Œë”íŒ¨ìŠ¤ì— í•´ë‹¹í•œë‹¤.
 void Dispatcher::mainPassMT() {
 	mainUpdateMT();
 	mainDrawMT();
 }
 
-// shadow pass¿¡¼­ »ç¿ëÇÏ´Â GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
-// DrawEvents, CameraData, LightData¿¡ ´ã°ÜÀÖ´Â Á¤º¸¸¦ °¡°øÇÏ¿©
-// Resources °´Ã¼¿¡ ´ã±ä, ShaderInputBuffer ÀÎÅÍÆäÀÌ½º¸¦ °¡Áö´Â °´Ã¼µé¿¡ ¿Å°Ü´ã´Â´Ù.
-// ½Ì±Û½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
-// DrawEvents°¡ ºñ¾îÀÖ´Ù¸é ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
+// shadow passì—ì„œ ì‚¬ìš©í•˜ëŠ” GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
+// DrawEvents, CameraData, LightDataì— ë‹´ê²¨ìˆëŠ” ì •ë³´ë¥¼ ê°€ê³µí•˜ì—¬
+// Resources ê°ì²´ì— ë‹´ê¸´, ShaderInputBuffer ì¸í„°í˜ì´ìŠ¤ë¥¼ ê°€ì§€ëŠ” ê°ì²´ë“¤ì— ì˜®ê²¨ë‹´ëŠ”ë‹¤.
+// ì‹±ê¸€ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
+// DrawEventsê°€ ë¹„ì–´ìˆë‹¤ë©´ ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 void Dispatcher::shadowUpdate() {
 	if (drawEvents_.empty()) {
 		return;
 	}
 
-	// perInstanceData¸¦ staticÀ¸·Î ¼±¾ğÇÏ¿©
-	// ¸Å¹ø Ã³À½ºÎÅÍ ¸Ş¸ğ¸®¸¦ ±¸ÃàÇÏÁö ¾Ê°í Àç»ç¿ëÇÒ ¼ö ÀÖµµ·Ï ÇÑ´Ù.
+	// perInstanceDataë¥¼ staticìœ¼ë¡œ ì„ ì–¸í•˜ì—¬
+	// ë§¤ë²ˆ ì²˜ìŒë¶€í„° ë©”ëª¨ë¦¬ë¥¼ êµ¬ì¶•í•˜ì§€ ì•Šê³  ì¬ì‚¬ìš©í•  ìˆ˜ ìˆë„ë¡ í•œë‹¤.
 	static auto perInstanceData = std::vector<ShadowMapShader::PerInstanceData>();
 	perInstanceData.resize(drawEvents_.size());
 
-	// DrawEvents¿¡ ´ã°ÜÀÖ´Â Á¤º¸¸¦ °¡°øÇØ perInstanceData¿¡ ÀúÀåÇÑ´Ù.
+	// DrawEventsì— ë‹´ê²¨ìˆëŠ” ì •ë³´ë¥¼ ê°€ê³µí•´ perInstanceDataì— ì €ì¥í•œë‹¤.
 	std::ranges::transform(drawEvents_, perInstanceData.begin(),
 		[](const PBRPipeline::DrawEvent& drawEvent) {
 			return ShadowMapShader::PerInstanceData{
@@ -175,44 +175,44 @@ void Dispatcher::shadowUpdate() {
 		}	
 	);
 
-	// perInstanceDataÀÇ ³»¿ëÀ» ¹ÙÅÁÀ¸·Î GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
+	// perInstanceDataì˜ ë‚´ìš©ì„ ë°”íƒ•ìœ¼ë¡œ GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
 	pResources_->shadowPass.perInstanceData.stage(roomIdx_, perInstanceData);
 	perInstanceData.clear();
 
-	// main directional lightÀÇ ³»¿ëÀ» °¡°øÇØ pfd¿¡ ÀúÀåÇÑ´Ù.
+	// main directional lightì˜ ë‚´ìš©ì„ ê°€ê³µí•´ pfdì— ì €ì¥í•œë‹¤.
 	auto pfd = ShadowMapShader::PerFrameData{
 		.lightVP = mu::transpose(
 			mainDirectionalLightData_.view * mainDirectionalLightData_.proj
 		).getXmf()
 	};
-	// pfdÀÇ ³»¿ëÀ» ¹ÙÅÁÀ¸·Î GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
+	// pfdì˜ ë‚´ìš©ì„ ë°”íƒ•ìœ¼ë¡œ GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
 	pResources_->shadowPass.perFrameData.stage(roomIdx_, &pfd, 1u);
 }
 
-// shadow pass¿¡¼­ »ç¿ëÇÏ´Â GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
-// DrawEvents, CameraData, LightData¿¡ ´ã°ÜÀÖ´Â Á¤º¸¸¦ °¡°øÇÏ¿©
-// Resources °´Ã¼¿¡ ´ã±ä, ShaderInputBuffer ÀÎÅÍÆäÀÌ½º¸¦ °¡Áö´Â °´Ã¼µé¿¡ ¿Å°Ü´ã´Â´Ù.
-// ¸ÖÆ¼½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
-// DrawEvents°¡ ºñ¾îÀÖ´Ù¸é ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
+// shadow passì—ì„œ ì‚¬ìš©í•˜ëŠ” GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
+// DrawEvents, CameraData, LightDataì— ë‹´ê²¨ìˆëŠ” ì •ë³´ë¥¼ ê°€ê³µí•˜ì—¬
+// Resources ê°ì²´ì— ë‹´ê¸´, ShaderInputBuffer ì¸í„°í˜ì´ìŠ¤ë¥¼ ê°€ì§€ëŠ” ê°ì²´ë“¤ì— ì˜®ê²¨ë‹´ëŠ”ë‹¤.
+// ë©€í‹°ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
+// DrawEventsê°€ ë¹„ì–´ìˆë‹¤ë©´ ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 void Dispatcher::shadowUpdateMT() {
 	if (drawEvents_.empty()) {
 		return;
 	}
 
-	// perInstanceData¸¦ staticÀ¸·Î ¼±¾ğÇÏ¿©
-	// ¸Å¹ø Ã³À½ºÎÅÍ ¸Ş¸ğ¸®¸¦ ±¸ÃàÇÏÁö ¾Ê°í Àç»ç¿ëÇÒ ¼ö ÀÖµµ·Ï ÇÑ´Ù.
+	// perInstanceDataë¥¼ staticìœ¼ë¡œ ì„ ì–¸í•˜ì—¬
+	// ë§¤ë²ˆ ì²˜ìŒë¶€í„° ë©”ëª¨ë¦¬ë¥¼ êµ¬ì¶•í•˜ì§€ ì•Šê³  ì¬ì‚¬ìš©í•  ìˆ˜ ìˆë„ë¡ í•œë‹¤.
 	static auto perInstanceData = std::vector<ShadowMapShader::PerInstanceData>();
 	perInstanceData.resize(drawEvents_.size());
 
-	// DrawEvent´Â jobSize ´ÜÀ§·Î ½º·¹µåµé¿¡ ºĞ¹èµÉ °ÍÀÌ¹Ç·Î,
-	// µ¿±âÈ­¸¦ À§ÇÑ latch¸¦ ÁØºñÇÑ´Ù.
-	// ÀÌ¶§, DrawEventÀÇ °³¼ö°¡ jobSize·Î ³ª´©¾î ¶³¾îÁöÁö ¾ÊÀ» °æ¿ì¸¦ ´ëºñÇÑ´Ù.
+	// DrawEventëŠ” jobSize ë‹¨ìœ„ë¡œ ìŠ¤ë ˆë“œë“¤ì— ë¶„ë°°ë  ê²ƒì´ë¯€ë¡œ,
+	// ë™ê¸°í™”ë¥¼ ìœ„í•œ latchë¥¼ ì¤€ë¹„í•œë‹¤.
+	// ì´ë•Œ, DrawEventì˜ ê°œìˆ˜ê°€ jobSizeë¡œ ë‚˜ëˆ„ì–´ ë–¨ì–´ì§€ì§€ ì•Šì„ ê²½ìš°ë¥¼ ëŒ€ë¹„í•œë‹¤.
 	auto latch = std::latch( drawEvents_.size() / jobSizeUpdate_
 		+ ((drawEvents_.size() % jobSizeUpdate_) != 0)
 	);
 
-	// drawEventsÀÇ [accEventCnt, accEventCnt + jobSizeUpdate_) ¹üÀ§ÀÇ
-	// µ¥ÀÌÅÍ¸¦ °¡°øÇØ perInstanceDataÀÇ ´ëÀÀµÇ´Â ¿µ¿ª¿¡ ÀúÀåÇÑ´Ù.
+	// drawEventsì˜ [accEventCnt, accEventCnt + jobSizeUpdate_) ë²”ìœ„ì˜
+	// ë°ì´í„°ë¥¼ ê°€ê³µí•´ perInstanceDataì˜ ëŒ€ì‘ë˜ëŠ” ì˜ì—­ì— ì €ì¥í•œë‹¤.
 	std::size_t accEventCnt = 0u;
 	while (accEventCnt + (jobSizeUpdate_ - 1) < drawEvents_.size()) {
 		addJobShadowUpdate( drawEvents_.data() + accEventCnt,
@@ -223,7 +223,7 @@ void Dispatcher::shadowUpdateMT() {
 		accEventCnt += jobSizeUpdate_;
 	}
 	
-	// Âî²¨±â Ã³¸®
+	// ì°Œêº¼ê¸° ì²˜ë¦¬
 	if (accEventCnt != drawEvents_.size()) {
 		const auto lastJobSize = drawEvents_.size() - accEventCnt;
 
@@ -233,41 +233,41 @@ void Dispatcher::shadowUpdateMT() {
 		);
 	}
 
-	// main directional lightÀÇ ³»¿ëÀ» °¡°øÇØ pfd¿¡ ÀúÀåÇÑ´Ù.
+	// main directional lightì˜ ë‚´ìš©ì„ ê°€ê³µí•´ pfdì— ì €ì¥í•œë‹¤.
 	auto pfd = ShadowMapShader::PerFrameData{
 		.lightVP = mu::transpose(
 			mainDirectionalLightData_.view * mainDirectionalLightData_.proj
 		).getXmf()
 	};
-	// pfdÀÇ ³»¿ëÀ» ¹ÙÅÁÀ¸·Î GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
+	// pfdì˜ ë‚´ìš©ì„ ë°”íƒ•ìœ¼ë¡œ GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
 	pResources_->shadowPass.perFrameData.stage(roomIdx_, &pfd, 1u);
 
-	// µ¿±âÈ­
+	// ë™ê¸°í™”
 	latch.wait();
-	// ¸ğµç µ¥ÀÌÅÍ°¡ °¡°øµÈ ÀÌÈÄ, GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
+	// ëª¨ë“  ë°ì´í„°ê°€ ê°€ê³µëœ ì´í›„, GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
 	pResources_->shadowPass.perInstanceData.stage(roomIdx_, perInstanceData);
 	perInstanceData.clear();
 }
 
-// DrawEventsÀÇ Á¤º¸µéÀ» Âü°íÇÏ¿©
-// shadow passÀÇ µå·Î¿ìÄİµéÀ» ¼öÇàÇÑ´Ù.
-// ½Ì±Û½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
-// DrawEvents°¡ ºñ¾îÀÖ´Ù¸é ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
+// DrawEventsì˜ ì •ë³´ë“¤ì„ ì°¸ê³ í•˜ì—¬
+// shadow passì˜ ë“œë¡œìš°ì½œë“¤ì„ ìˆ˜í–‰í•œë‹¤.
+// ì‹±ê¸€ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
+// DrawEventsê°€ ë¹„ì–´ìˆë‹¤ë©´ ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 void Dispatcher::shadowDraw() {
 	if (drawEvents_.empty()) {
 		return;
 	}
 
-	// ¸í·É ÄÁÅØ½ºÆ® ÇÒ´ç
+	// ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ í• ë‹¹
 	CommandContext cmdCtx{};
 	DISPLAY_ERROR_STR( cmdListPool_->allocOne(CommandListUsage::RenderingSlave, cmdCtx),
-		"[GFX Error] GFX::drawSingleThreaded: ¿äÃ»ÇÑ ¸í·É ¸®½ºÆ®¸¦ ÇÒ´ç¹ŞÁö ¸øÇß½À´Ï´Ù.", false
+		"[GFX Error] GFX::drawSingleThreaded: ìš”ì²­í•œ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ë¥¼ í• ë‹¹ë°›ì§€ ëª»í–ˆìŠµë‹ˆë‹¤.", false
 	);
 	if (!cmdCtx.cmdList) {
 		return;
 	}
 
-	// ¸í·É ÄÁÅØ½ºÆ® ÃÊ±âÈ­
+	// ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ ì´ˆê¸°í™”
 	auto cmdList = cmdCtx.cmdList.Get();
 	auto cmdAlloc = cmdCtx.cmdAlloc.Get();
 	auto hrCmdAllocReset = cmdAlloc->Reset();
@@ -283,22 +283,22 @@ void Dispatcher::shadowDraw() {
 		return;
 	}
 
-	// shadow map data¸¦ ¹Ì¸® Äõ¸®ÇØ³õ´Â´Ù.
-	// (µ¿ÀÏÇÑ °Ë»ö ¿¬»êÀÇ ¹İº¹À» ÇÇÇÑ´Ù.)
+	// shadow map dataë¥¼ ë¯¸ë¦¬ ì¿¼ë¦¬í•´ë†“ëŠ”ë‹¤.
+	// (ë™ì¼í•œ ê²€ìƒ‰ ì—°ì‚°ì˜ ë°˜ë³µì„ í”¼í•œë‹¤.)
 	auto& shadowMapData = SharedResources::ShadowMap::shadowMapData.at("ShadowMap");
 
-	// ¸í·É ±â·Ï ½ÃÀÛ
+	// ëª…ë ¹ ê¸°ë¡ ì‹œì‘
 	DISPLAY_ERROR_DX_VOID(cmdList->SetGraphicsRootSignature(rootSig_->get()), false);
 	DISPLAY_ERROR_DX_VOID(cmdList->SetPipelineState(shadowShader_.Get()), false);
 
-	// shadow pass¿¡¼­´Â ÀÚÃ¼ÀûÀÎ shadow map ÅØ½ºÃ³ÀÇ dsv¸¦ »ç¿ëÇÑ´Ù.
+	// shadow passì—ì„œëŠ” ìì²´ì ì¸ shadow map í…ìŠ¤ì²˜ì˜ dsvë¥¼ ì‚¬ìš©í•œë‹¤.
 	auto shadowMapDsv = pDsvPool_->cpuHandle(shadowMapData.tex.idxDsv);
 	DISPLAY_ERROR_DX_VOID( cmdList->OMSetRenderTargets(
 		0u, nullptr, false, &shadowMapDsv
 	), false );
 
-	// shadow mapÀ» ·»´õ¸µÇÒ ¶§ ¾²´Â viewport¿Í scissor rectangleÀÇ Å©±â´Â
-	// shadow map ÅØ½ºÃ³ÀÇ Å©±â¿Í °°¾Æ¾ß ÇÑ´Ù.
+	// shadow mapì„ ë Œë”ë§í•  ë•Œ ì“°ëŠ” viewportì™€ scissor rectangleì˜ í¬ê¸°ëŠ”
+	// shadow map í…ìŠ¤ì²˜ì˜ í¬ê¸°ì™€ ê°™ì•„ì•¼ í•œë‹¤.
 	auto shadowViewport = D3D12_VIEWPORT{
 		.TopLeftX = 0.f,
 		.TopLeftY = 0.f,
@@ -316,8 +316,8 @@ void Dispatcher::shadowDraw() {
 	DISPLAY_ERROR_DX_VOID(cmdList->RSSetViewports(1u, &shadowViewport), false);
 	DISPLAY_ERROR_DX_VOID(cmdList->RSSetScissorRects(1u, &shadowScissorRect), false);
 
-	// bindless È¯°æ ¼¼ÆÃ
-	// d3d12´Ü Descriptor Heap ¼³Á¤
+	// bindless í™˜ê²½ ì„¸íŒ…
+	// d3d12ë‹¨ Descriptor Heap ì„¤ì •
 	auto descriptorHeapsRaw = std::vector<ID3D12DescriptorHeap*>(descriptorHeaps_.size());
 	std::ranges::transform(descriptorHeaps_, descriptorHeapsRaw.begin(),
 		[](ComPtr<ID3D12DescriptorHeap>& comPtrHeap) { return comPtrHeap.Get(); }	
@@ -326,43 +326,43 @@ void Dispatcher::shadowDraw() {
 		static_cast<UINT>(descriptorHeapsRaw.size()), descriptorHeapsRaw.data()
 	), false );
 
-	// º°µµÀÇ ÅØ½ºÃ³ »ùÇÃ¸µÀ» ÇÏÁö ¾ÊÀ¸¹Ç·Î DescriptorPool ¹ÙÀÎµùÀº »ı·«ÇÑ´Ù.
+	// ë³„ë„ì˜ í…ìŠ¤ì²˜ ìƒ˜í”Œë§ì„ í•˜ì§€ ì•Šìœ¼ë¯€ë¡œ DescriptorPool ë°”ì¸ë”©ì€ ìƒëµí•œë‹¤.
 
 	DISPLAY_ERROR_DX_VOID( cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST), false );
 
-	// ¹ÙÀÎµåÇØ¾ß ÇÏ´Â GPU µ¥ÀÌÅÍ´Â ´ÙÀ½ ¼¼ Á¾·ù´Ù. (¼ÎÀÌ´õ Âü°í)
+	// ë°”ì¸ë“œí•´ì•¼ í•˜ëŠ” GPU ë°ì´í„°ëŠ” ë‹¤ìŒ ì„¸ ì¢…ë¥˜ë‹¤. (ì…°ì´ë” ì°¸ê³ )
 	// - PerInstanceData
 	// - PerDrawcallData
 	// - PerFrameData
 
-	// PerInstanceData ¹ÙÀÎµå
+	// PerInstanceData ë°”ì¸ë“œ
 	pResources_->shadowPass.perInstanceData.bind(cmdList, rootParamIdxPID_, roomIdx_);
-	// PerFrameData ¹ÙÀÎµå
+	// PerFrameData ë°”ì¸ë“œ
 	pResources_->shadowPass.perFrameData.bind(cmdList, rootParamIdxPFD_, roomIdx_);
 
 	u32t idxDrawcall = 0u;
 
-	// ÀÎ½ºÅÏ½ÌÀ» Àû¿ëÇÑ´Ù.
-	// equivalentÇÏ°Ô Æò°¡µÇ´Â DrawEventµéÀ» (°°Àº ¸Ş½Ã¿Í ¼­ºê¸Ş½Ã »ç¿ë)
-	// ¹­¾î¼­ instancing groupÀ¸·Î »ï¾Æ ÇÏ³ªÀÇ µå·Î¿ìÄİ·Î Ã³¸®ÇÑ´Ù.
+	// ì¸ìŠ¤í„´ì‹±ì„ ì ìš©í•œë‹¤.
+	// equivalentí•˜ê²Œ í‰ê°€ë˜ëŠ” DrawEventë“¤ì„ (ê°™ì€ ë©”ì‹œì™€ ì„œë¸Œë©”ì‹œ ì‚¬ìš©)
+	// ë¬¶ì–´ì„œ instancing groupìœ¼ë¡œ ì‚¼ì•„ í•˜ë‚˜ì˜ ë“œë¡œìš°ì½œë¡œ ì²˜ë¦¬í•œë‹¤.
 	// 
-	// [groupFirst, groupLast)´Â ÇÏ³ªÀÇ instancing groupÀ» Ç¥ÇöÇÑ´Ù.
+	// [groupFirst, groupLast)ëŠ” í•˜ë‚˜ì˜ instancing groupì„ í‘œí˜„í•œë‹¤.
 	auto groupFirst = drawEvents_.begin();
 	while (groupFirst != drawEvents_.end()) {
 		auto& drawEvent = *groupFirst;
 
 		auto groupLast = std::upper_bound(groupFirst, drawEvents_.end(), drawEvent);
 
-		// PerDrawcallData ¹ÙÀÎµå
+		// PerDrawcallData ë°”ì¸ë“œ
 		pResources_->shadowPass.perDrawcallData.cbuffers[idxDrawcall].bind(
 			cmdList, rootParamIdxPDD_, roomIdx_
 		);
 
-		// PerDrawcallData GPU µ¥ÀÌÅÍ °»½Å
-		// (¹ÙÀÎµå¿Í GPU µ¥ÀÌÅÍ °»½Å ¼ø¼­´Â »ó°ü¾ø´Ù.
-		//  ¾îÂ÷ÇÇ ¹ÙÀÎµå´Â GPU ¸í·ÉÀÌ¶ó ¹Ù·Î ½ÇÇàµÇÁö ¾Ê±â ¶§¹®¿¡)
+		// PerDrawcallData GPU ë°ì´í„° ê°±ì‹ 
+		// (ë°”ì¸ë“œì™€ GPU ë°ì´í„° ê°±ì‹  ìˆœì„œëŠ” ìƒê´€ì—†ë‹¤.
+		//  ì–´ì°¨í”¼ ë°”ì¸ë“œëŠ” GPU ëª…ë ¹ì´ë¼ ë°”ë¡œ ì‹¤í–‰ë˜ì§€ ì•Šê¸° ë•Œë¬¸ì—)
 		auto perDrawcallData = ShadowMapShader::PerDrawcallData{
-			// perInstanceData¿¡¼­ ÇöÀç instancing groupÀÇ Ã¹ ¹øÂ° ÀÎ½ºÅÏ½ºÀÇ ÀÎµ¦½º
+			// perInstanceDataì—ì„œ í˜„ì¬ instancing groupì˜ ì²« ë²ˆì§¸ ì¸ìŠ¤í„´ìŠ¤ì˜ ì¸ë±ìŠ¤
 			.firstInstanceOffset = static_cast<u32t>(groupFirst - drawEvents_.begin())
 		};
 		pResources_->shadowPass.perDrawcallData.cbuffers[idxDrawcall].stage(
@@ -397,36 +397,36 @@ void Dispatcher::shadowDraw() {
 		return;
 	}
 
-	// ¸í·É ±â·Ï ³¡, ½ÇÇà
+	// ëª…ë ¹ ê¸°ë¡ ë, ì‹¤í–‰
 	ID3D12CommandList* stagedCmdLists[] = {cmdList};
 
 	DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, stagedCmdLists), false);
 	
-	// Fence °´Ã¼¿¡ »ç¿ëÇÑ ¸í·É ÄÁÅØ½ºÆ®¸¦ ¿¬°ü½ÃÄÑ ³õ´Â´Ù.
+	// Fence ê°ì²´ì— ì‚¬ìš©í•œ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë¥¼ ì—°ê´€ì‹œì¼œ ë†“ëŠ”ë‹¤.
 	pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)]
 		.push_back(std::move(cmdCtx));
 }
 
-// DrawEventsÀÇ Á¤º¸µéÀ» Âü°íÇÏ¿©
-// shadow passÀÇ µå·Î¿ìÄİµéÀ» ¼öÇàÇÑ´Ù.
-// ¸ÖÆ¼½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
-// DrawEvents°¡ ºñ¾îÀÖ´Ù¸é ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
+// DrawEventsì˜ ì •ë³´ë“¤ì„ ì°¸ê³ í•˜ì—¬
+// shadow passì˜ ë“œë¡œìš°ì½œë“¤ì„ ìˆ˜í–‰í•œë‹¤.
+// ë©€í‹°ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
+// DrawEventsê°€ ë¹„ì–´ìˆë‹¤ë©´ ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 void Dispatcher::shadowDrawMT() {
 	if (drawEvents_.empty()) {
 		return;
 	}
 
-	// ÀÎ½ºÅÏ½ÌÀ» Àû¿ëÇÑ´Ù.
-	// equivalentÇÏ°Ô Æò°¡µÇ´Â DrawEventµéÀ» (°°Àº ¸Ş½Ã¿Í ¼­ºê¸Ş½Ã »ç¿ë)
-	// ¹­¾î¼­ instancing groupÀ¸·Î »ï¾Æ ÇÏ³ªÀÇ µå·Î¿ìÄİ·Î Ã³¸®ÇÑ´Ù.
+	// ì¸ìŠ¤í„´ì‹±ì„ ì ìš©í•œë‹¤.
+	// equivalentí•˜ê²Œ í‰ê°€ë˜ëŠ” DrawEventë“¤ì„ (ê°™ì€ ë©”ì‹œì™€ ì„œë¸Œë©”ì‹œ ì‚¬ìš©)
+	// ë¬¶ì–´ì„œ instancing groupìœ¼ë¡œ ì‚¼ì•„ í•˜ë‚˜ì˜ ë“œë¡œìš°ì½œë¡œ ì²˜ë¦¬í•œë‹¤.
 	// 
-	// instancingGroups´Â drawEvents_¿¡¼­ °¢ instancing groupÀÇ Ã¹ ¿ø¼Ò¸¦ °¡¸®Å°´Â iteratorµéÀ» ÀúÀåÇÑ´Ù.
-	// ±×¸®°í sentinel °ªÀ¸·Î drawEvents_.end()¸¦ ÀúÀåÇÑ´Ù.
-	// * ¶§¹®¿¡ instancing groupÀÇ ÃÑ °³¼ö´Â instancingGroups.size()°¡ ¾Æ´Ñ instancingGroups.size() - 1ÀÌ´Ù.
+	// instancingGroupsëŠ” drawEvents_ì—ì„œ ê° instancing groupì˜ ì²« ì›ì†Œë¥¼ ê°€ë¦¬í‚¤ëŠ” iteratorë“¤ì„ ì €ì¥í•œë‹¤.
+	// ê·¸ë¦¬ê³  sentinel ê°’ìœ¼ë¡œ drawEvents_.end()ë¥¼ ì €ì¥í•œë‹¤.
+	// * ë•Œë¬¸ì— instancing groupì˜ ì´ ê°œìˆ˜ëŠ” instancingGroups.size()ê°€ ì•„ë‹Œ instancingGroups.size() - 1ì´ë‹¤.
 	// 
-	// instancingGroups[k]¿Í instancingGroups[k+1]Àº
-	// k¹øÂ° instancingGroupÀÇ begin, end°¡ µÈ´Ù.
-	// ÀÌ¸¦ À§ÇØ sentinel °ªÀ» Ãß°¡ÇÏ¿´´Ù.
+	// instancingGroups[k]ì™€ instancingGroups[k+1]ì€
+	// kë²ˆì§¸ instancingGroupì˜ begin, endê°€ ëœë‹¤.
+	// ì´ë¥¼ ìœ„í•´ sentinel ê°’ì„ ì¶”ê°€í•˜ì˜€ë‹¤.
 	static auto instancingGroups = std::vector<decltype(drawEvents_)::const_iterator>();
 	
 	auto itFirst = drawEvents_.cbegin();
@@ -437,13 +437,13 @@ void Dispatcher::shadowDrawMT() {
 	}
 	instancingGroups.push_back(drawEvents_.cend());
 
-	// instancing groupµéÀº jobSize ´ÜÀ§·Î ½º·¹µåµé¿¡ ºĞ¹èµÉ °ÍÀÌ¹Ç·Î,
-	// µ¿±âÈ­¸¦ À§ÇÑ latch¸¦ ÁØºñÇÑ´Ù.
-	// ÀÌ¶§, DrawEventÀÇ °³¼ö°¡ jobSize·Î ³ª´©¾î ¶³¾îÁöÁö ¾ÊÀ» °æ¿ì¸¦ ´ëºñÇÑ´Ù.
+	// instancing groupë“¤ì€ jobSize ë‹¨ìœ„ë¡œ ìŠ¤ë ˆë“œë“¤ì— ë¶„ë°°ë  ê²ƒì´ë¯€ë¡œ,
+	// ë™ê¸°í™”ë¥¼ ìœ„í•œ latchë¥¼ ì¤€ë¹„í•œë‹¤.
+	// ì´ë•Œ, DrawEventì˜ ê°œìˆ˜ê°€ jobSizeë¡œ ë‚˜ëˆ„ì–´ ë–¨ì–´ì§€ì§€ ì•Šì„ ê²½ìš°ë¥¼ ëŒ€ë¹„í•œë‹¤.
 	const std::size_t jobCnt = ( (instancingGroups.size() - 1u) + (jobSizeDraw_ - 1u)) / jobSizeDraw_;
 	auto latch = std::latch(jobCnt);
 
-	// ÆÄ¾ÇµÈ ÀÛ¾÷ÀÇ °³¼ö¿¡ ¸Â°Ô ¸í·É ÄÁÅØ½ºÆ®µéÀ» ÇÒ´çÇÑ´Ù.
+	// íŒŒì•…ëœ ì‘ì—…ì˜ ê°œìˆ˜ì— ë§ê²Œ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë“¤ì„ í• ë‹¹í•œë‹¤.
 	std::list<CommandContext> cmdCtxs{};
 	const auto requiredCmdListCnt = jobCnt;
 
@@ -452,38 +452,38 @@ void Dispatcher::shadowDrawMT() {
 	);
 
 	DISPLAY_ERROR_STR( allocatedCmdListCnt == requiredCmdListCnt,
-		"[GFX Error] PBRPipeline::Dispatcher::shadowDrawMT: ¿äÃ»ÇÑ ¼ö ¸¸Å­ÀÇ ¸í·É ¸®½ºÆ®¸¦ ÇÒ´ç¹ŞÁö ¸øÇß½À´Ï´Ù.",
+		"[GFX Error] PBRPipeline::Dispatcher::shadowDrawMT: ìš”ì²­í•œ ìˆ˜ ë§Œí¼ì˜ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ë¥¼ í• ë‹¹ë°›ì§€ ëª»í–ˆìŠµë‹ˆë‹¤.",
 		false
 	);
 	if (allocatedCmdListCnt != requiredCmdListCnt) {
-		// ÇÊ¿äÇÑ ¸¸Å­ ¸í·É ÄÁÅØ½ºÆ®°¡ ÇÒ´çµÇÁö ¾Ê¾ÒÀ» °æ¿ì,
-		// ¸í·É ÄÁÅØ½ºÆ®µéÀ» »ç¿ëÇÏÁö ¾Ê°í ±×´ë·Î ¹İ³³ÇÏ¸ç,
-		// ÇÔ¼öµµ ±×´ë·Î ¹İÈ¯ÇÑ´Ù.
-		// ÃßÈÄ ÀÌ °æ¿ì¿¡µµ µ¿ÀÛÇÒ ¼ö ÀÖµµ·Ï ´ëÀÀÇÏµµ·Ï ÇÑ´Ù..
+		// í•„ìš”í•œ ë§Œí¼ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ê°€ í• ë‹¹ë˜ì§€ ì•Šì•˜ì„ ê²½ìš°,
+		// ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë“¤ì„ ì‚¬ìš©í•˜ì§€ ì•Šê³  ê·¸ëŒ€ë¡œ ë°˜ë‚©í•˜ë©°,
+		// í•¨ìˆ˜ë„ ê·¸ëŒ€ë¡œ ë°˜í™˜í•œë‹¤.
+		// ì¶”í›„ ì´ ê²½ìš°ì—ë„ ë™ì‘í•  ìˆ˜ ìˆë„ë¡ ëŒ€ì‘í•˜ë„ë¡ í•œë‹¤..
 		cmdListPool_->free(CommandListUsage::RenderingSlave, std::move(cmdCtxs));
 		return;
 	}
 
 	
-	// °¢ ½º·¹µå´Â instancingGroups ³» jobSizeDraw_ °³ÀÇ instancing groupÀ» ¸Ã¾Æ
-	// µå·Î¿ìÄİ ¸í·ÉÀ» ±â·ÏÇÑ´Ù.
+	// ê° ìŠ¤ë ˆë“œëŠ” instancingGroups ë‚´ jobSizeDraw_ ê°œì˜ instancing groupì„ ë§¡ì•„
+	// ë“œë¡œìš°ì½œ ëª…ë ¹ì„ ê¸°ë¡í•œë‹¤.
 	// 
-	// accDrawcallCnt º¯¼ö¸¦ ÀÌ¿ëÇÏ¿© ÀÌ º¯¼öÀÇ °ªÀ» jobSizeDraw_¸¸Å­ Áõ°¡½ÃÄÑ°¡¸ç
-	// instancingGroupsÀÇ [accDrawcallCnt, accDrawcallCnt + jobSizeDraw_) ¹üÀ§ÀÇ
-	// µ¥ÀÌÅÍ¸¦ °¡°øÇØ °¢ instancing groupÀÇ µå·Î¿ìÄİ ¸í·ÉÀ» ±â·ÏÇÏ´Â °ÍÀ¸·Î ±¸ÇöÇÑ´Ù.
+	// accDrawcallCnt ë³€ìˆ˜ë¥¼ ì´ìš©í•˜ì—¬ ì´ ë³€ìˆ˜ì˜ ê°’ì„ jobSizeDraw_ë§Œí¼ ì¦ê°€ì‹œì¼œê°€ë©°
+	// instancingGroupsì˜ [accDrawcallCnt, accDrawcallCnt + jobSizeDraw_) ë²”ìœ„ì˜
+	// ë°ì´í„°ë¥¼ ê°€ê³µí•´ ê° instancing groupì˜ ë“œë¡œìš°ì½œ ëª…ë ¹ì„ ê¸°ë¡í•˜ëŠ” ê²ƒìœ¼ë¡œ êµ¬í˜„í•œë‹¤.
 	//
-	// jobSizeDraw_ °³·Î ³ª´©¾î ¶³¾îÁöÁö ¾ÊÀ» »óÈ²¿¡ ´ëÀÀÇÏ±â À§ÇØ
-	// º°µµÀÇ Âî²¨±â Ã³¸® ÄÚµå¸¦ µĞ´Ù.
+	// jobSizeDraw_ ê°œë¡œ ë‚˜ëˆ„ì–´ ë–¨ì–´ì§€ì§€ ì•Šì„ ìƒí™©ì— ëŒ€ì‘í•˜ê¸° ìœ„í•´
+	// ë³„ë„ì˜ ì°Œêº¼ê¸° ì²˜ë¦¬ ì½”ë“œë¥¼ ë‘”ë‹¤.
 	std::size_t accDrawcallCnt = 0u;
-	// °¢ ÀÛ¾÷¸¶´Ù ¸í·É ÄÁÅØ½ºÆ®¸¦ ºĞ¹èÇÑ´Ù.
+	// ê° ì‘ì—…ë§ˆë‹¤ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë¥¼ ë¶„ë°°í•œë‹¤.
 	auto currCmdCtx = cmdCtxs.begin();
 
-	// shadow map data¸¦ ¹Ì¸® Äõ¸®ÇØ³õ´Â´Ù.
-	// (µ¿ÀÏÇÑ °Ë»ö ¿¬»êÀÇ ¹İº¹À» ÇÇÇÑ´Ù.)
+	// shadow map dataë¥¼ ë¯¸ë¦¬ ì¿¼ë¦¬í•´ë†“ëŠ”ë‹¤.
+	// (ë™ì¼í•œ ê²€ìƒ‰ ì—°ì‚°ì˜ ë°˜ë³µì„ í”¼í•œë‹¤.)
 	auto& shadowMapData = SharedResources::ShadowMap::shadowMapData.at("ShadowMap");
 
 	while (accDrawcallCnt + (jobSizeDraw_ - 1) < instancingGroups.size() - 1u) {
-		// ¸í·É ÄÁÅØ½ºÆ® ÃÊ±âÈ­
+		// ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ ì´ˆê¸°í™”
 		auto hrCmdAllocReset = currCmdCtx->cmdAlloc->Reset();
 		DISPLAY_ERROR_DX_HR( hrCmdAllocReset, false );
 		if (hrCmdAllocReset < 0) {
@@ -497,7 +497,7 @@ void Dispatcher::shadowDrawMT() {
 			return;
 		}
 
-		// ¸í·É ±â·Ï
+		// ëª…ë ¹ ê¸°ë¡
 		addJobShadowDraw( currCmdCtx->cmdList.Get(), instancingGroups.data() + accDrawcallCnt,
 			instancingGroups.data() + accDrawcallCnt + jobSizeDraw_, accDrawcallCnt, shadowMapData, latch
 		);
@@ -506,10 +506,10 @@ void Dispatcher::shadowDrawMT() {
 		++currCmdCtx;
 	}
 
-	// Âî²¨±â Ã³¸®
+	// ì°Œêº¼ê¸° ì²˜ë¦¬
 	if (accDrawcallCnt != instancingGroups.size() - 1u) {
 		const auto lastJobSize = instancingGroups.size() - 1u - accDrawcallCnt;
-		// ¸í·É ÄÁÅØ½ºÆ® ÃÊ±âÈ­
+		// ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ ì´ˆê¸°í™”
 		auto hrCmdAllocReset = currCmdCtx->cmdAlloc->Reset();
 		DISPLAY_ERROR_DX_HR( hrCmdAllocReset, false );
 		if (hrCmdAllocReset < 0) {
@@ -523,18 +523,18 @@ void Dispatcher::shadowDrawMT() {
 			return;
 		}
 
-		// ¸í·É ±â·Ï
+		// ëª…ë ¹ ê¸°ë¡
 		addJobShadowDraw( currCmdCtx->cmdList.Get(), instancingGroups.data() + accDrawcallCnt,
 			instancingGroups.data() + accDrawcallCnt + lastJobSize, accDrawcallCnt, shadowMapData, latch
 		);
 	}
 
-	// µ¿±âÈ­
+	// ë™ê¸°í™”
 	latch.wait();
 
 	instancingGroups.clear();
 
-	// ¸í·É ±â·Ï ³¡, ½ÇÇà
+	// ëª…ë ¹ ê¸°ë¡ ë, ì‹¤í–‰
 	auto stagedCmdLists = std::vector<ID3D12CommandList*>(cmdCtxs.size(), nullptr);
 	std::ranges::transform(cmdCtxs.begin(), cmdCtxs.end(),
 		stagedCmdLists.begin(),
@@ -545,30 +545,30 @@ void Dispatcher::shadowDrawMT() {
 		static_cast<UINT>(stagedCmdLists.size()), stagedCmdLists.data()
 	), false );
 
-	// Fence °´Ã¼¿¡ »ç¿ëÇÑ ¸í·É ÄÁÅØ½ºÆ®µéÀ» ¿¬°ü½ÃÄÑ ³õ´Â´Ù.
+	// Fence ê°ì²´ì— ì‚¬ìš©í•œ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë“¤ì„ ì—°ê´€ì‹œì¼œ ë†“ëŠ”ë‹¤.
 	pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)]
 		.splice( pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].end(), std::move(cmdCtxs) );
 }
 
-// main pass¿¡¼­ »ç¿ëÇÏ´Â GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
-// DrawEvents, CameraData, LightData, FrameData¿¡ ´ã°ÜÀÖ´Â Á¤º¸¸¦ °¡°øÇÏ¿©
-// Resources °´Ã¼¿¡ ´ã±ä, ShaderInputBuffer ÀÎÅÍÆäÀÌ½º¸¦ °¡Áö´Â °´Ã¼µé¿¡ ¿Å°Ü´ã´Â´Ù.
-// ½Ì±Û½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
-// DrawEvents°¡ ºñ¾îÀÖ´Ù¸é ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
+// main passì—ì„œ ì‚¬ìš©í•˜ëŠ” GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
+// DrawEvents, CameraData, LightData, FrameDataì— ë‹´ê²¨ìˆëŠ” ì •ë³´ë¥¼ ê°€ê³µí•˜ì—¬
+// Resources ê°ì²´ì— ë‹´ê¸´, ShaderInputBuffer ì¸í„°í˜ì´ìŠ¤ë¥¼ ê°€ì§€ëŠ” ê°ì²´ë“¤ì— ì˜®ê²¨ë‹´ëŠ”ë‹¤.
+// ì‹±ê¸€ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
+// DrawEventsê°€ ë¹„ì–´ìˆë‹¤ë©´ ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 void Dispatcher::mainUpdate() {
 	if (drawEvents_.empty()) {
 		return;
 	}
 
-	// perInstanceData¸¦ staticÀ¸·Î ¼±¾ğÇÏ¿©
-	// ¸Å¹ø Ã³À½ºÎÅÍ ¸Ş¸ğ¸®¸¦ ±¸ÃàÇÏÁö ¾Ê°í Àç»ç¿ëÇÒ ¼ö ÀÖµµ·Ï ÇÑ´Ù.
+	// perInstanceDataë¥¼ staticìœ¼ë¡œ ì„ ì–¸í•˜ì—¬
+	// ë§¤ë²ˆ ì²˜ìŒë¶€í„° ë©”ëª¨ë¦¬ë¥¼ êµ¬ì¶•í•˜ì§€ ì•Šê³  ì¬ì‚¬ìš©í•  ìˆ˜ ìˆë„ë¡ í•œë‹¤.
 	static auto perInstanceData = std::vector<PBRShader::PerInstanceData>();
 	perInstanceData.resize(drawEvents_.size());
 
 	const auto view = cameraData_.view;
 	const auto viewProj = cameraData_.view * cameraData_.proj;
 
-	// DrawEvents¿¡ ´ã°ÜÀÖ´Â Á¤º¸¸¦ °¡°øÇØ perInstanceData¿¡ ÀúÀåÇÑ´Ù.
+	// DrawEventsì— ë‹´ê²¨ìˆëŠ” ì •ë³´ë¥¼ ê°€ê³µí•´ perInstanceDataì— ì €ì¥í•œë‹¤.
 	std::ranges::transform(drawEvents_, perInstanceData.begin(),
 		[view, viewProj](const PBRPipeline::DrawEvent& drawEvent) {
 			return PBRShader::PerInstanceData{
@@ -580,16 +580,16 @@ void Dispatcher::mainUpdate() {
 		}	
 	);
 
-	// perInstanceDataÀÇ ³»¿ëÀ» ¹ÙÅÁÀ¸·Î GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
+	// perInstanceDataì˜ ë‚´ìš©ì„ ë°”íƒ•ìœ¼ë¡œ GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
 	pResources_->mainPass.perInstanceData.stage(roomIdx_, perInstanceData);
 	perInstanceData.clear();
 
-	// lightData¸¦ staticÀ¸·Î ¼±¾ğÇÏ¿©
-	// ¸Å¹ø Ã³À½ºÎÅÍ ¸Ş¸ğ¸®¸¦ ±¸ÃàÇÏÁö ¾Ê°í Àç»ç¿ëÇÒ ¼ö ÀÖµµ·Ï ÇÑ´Ù.
+	// lightDataë¥¼ staticìœ¼ë¡œ ì„ ì–¸í•˜ì—¬
+	// ë§¤ë²ˆ ì²˜ìŒë¶€í„° ë©”ëª¨ë¦¬ë¥¼ êµ¬ì¶•í•˜ì§€ ì•Šê³  ì¬ì‚¬ìš©í•  ìˆ˜ ìˆë„ë¡ í•œë‹¤.
 	static auto lightData = std::vector<PBRShader::Light>();
 	lightData.resize(lightData_.size());
 
-	// LightData¿¡ ´ã°ÜÀÖ´Â Á¤º¸¸¦ °¡°øÇØ lightData¿¡ ÀúÀåÇÑ´Ù.
+	// LightDataì— ë‹´ê²¨ìˆëŠ” ì •ë³´ë¥¼ ê°€ê³µí•´ lightDataì— ì €ì¥í•œë‹¤.
 	std::ranges::transform(lightData_, lightData.begin(),
 		[view](const PBRPipeline::LightData& lightData) {
 			return PBRShader::Light{
@@ -606,58 +606,58 @@ void Dispatcher::mainUpdate() {
 		}	
 	);
 
-	// shadow map data¸¦ ¹Ì¸® Äõ¸®ÇØ³õ´Â´Ù.
-	// (µ¿ÀÏÇÑ °Ë»ö ¿¬»êÀÇ ¹İº¹À» ÇÇÇÑ´Ù.)
+	// shadow map dataë¥¼ ë¯¸ë¦¬ ì¿¼ë¦¬í•´ë†“ëŠ”ë‹¤.
+	// (ë™ì¼í•œ ê²€ìƒ‰ ì—°ì‚°ì˜ ë°˜ë³µì„ í”¼í•œë‹¤.)
 	auto& shadowMapData = SharedResources::ShadowMap::shadowMapData.at("ShadowMap");
 
-	// FrameData¿Í main directional lightÀÇ ³»¿ëÀ» °¡°øÇØ pfd¿¡ ÀúÀåÇÑ´Ù.
+	// FrameDataì™€ main directional lightì˜ ë‚´ìš©ì„ ê°€ê³µí•´ pfdì— ì €ì¥í•œë‹¤.
 	auto pfd = PBRShader::PerFrameData{
 		.globalAmbient = frameData_.globalAmbient.getXmf(),
-		.lightCnt = static_cast<u32t>(lightData.size()),	// ¿©±â¼­ lightData.size()¸¦ È£ÃâÇÏ¹Ç·Î 
-														// ÀÌÀü¿¡ lightData.clear()¸¦ È£ÃâÇÏ¸é ¾ÈµÈ´Ù.
+		.lightCnt = static_cast<u32t>(lightData.size()),	// ì—¬ê¸°ì„œ lightData.size()ë¥¼ í˜¸ì¶œí•˜ë¯€ë¡œ 
+														// ì´ì „ì— lightData.clear()ë¥¼ í˜¸ì¶œí•˜ë©´ ì•ˆëœë‹¤.
 		.idxShadowMap = shadowMapData.tex.idxSrv,
 		.lightVP = mu::transpose(
 			mainDirectionalLightData_.view * mainDirectionalLightData_.proj
 		).getXmf()
 	};
-	// pfdÀÇ ³»¿ëÀ» ¹ÙÅÁÀ¸·Î GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
+	// pfdì˜ ë‚´ìš©ì„ ë°”íƒ•ìœ¼ë¡œ GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
 	pResources_->mainPass.perFrameData.stage(roomIdx_, &pfd, 1u);
 
-	// lightDataÀÇ ³»¿ëÀ» ¹ÙÅÁÀ¸·Î GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
+	// lightDataì˜ ë‚´ìš©ì„ ë°”íƒ•ìœ¼ë¡œ GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
 	pResources_->mainPass.lightData.stage(roomIdx_, lightData);
 	lightData.clear();
 }
 
-// main pass¿¡¼­ »ç¿ëÇÏ´Â GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
-// DrawEvents, CameraData, LightData, FrameData¿¡ ´ã°ÜÀÖ´Â Á¤º¸¸¦ °¡°øÇÏ¿©
-// Resources °´Ã¼¿¡ ´ã±ä, ShaderInputBuffer ÀÎÅÍÆäÀÌ½º¸¦ °¡Áö´Â °´Ã¼µé¿¡ ¿Å°Ü´ã´Â´Ù.
-// ¸ÖÆ¼½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
-// DrawEvents°¡ ºñ¾îÀÖ´Ù¸é ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
+// main passì—ì„œ ì‚¬ìš©í•˜ëŠ” GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
+// DrawEvents, CameraData, LightData, FrameDataì— ë‹´ê²¨ìˆëŠ” ì •ë³´ë¥¼ ê°€ê³µí•˜ì—¬
+// Resources ê°ì²´ì— ë‹´ê¸´, ShaderInputBuffer ì¸í„°í˜ì´ìŠ¤ë¥¼ ê°€ì§€ëŠ” ê°ì²´ë“¤ì— ì˜®ê²¨ë‹´ëŠ”ë‹¤.
+// ë©€í‹°ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
+// DrawEventsê°€ ë¹„ì–´ìˆë‹¤ë©´ ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 void Dispatcher::mainUpdateMT() {
 	if (drawEvents_.empty()) {
 		return;
 	}
 
-	// ¸Ş½Ã µ¥ÀÌÅÍ ¾÷·Îµå
+	// ë©”ì‹œ ë°ì´í„° ì—…ë¡œë“œ
 	
-	// perInstanceData¸¦ staticÀ¸·Î ¼±¾ğÇÏ¿©
-	// ¸Å¹ø Ã³À½ºÎÅÍ ¸Ş¸ğ¸®¸¦ ±¸ÃàÇÏÁö ¾Ê°í Àç»ç¿ëÇÒ ¼ö ÀÖµµ·Ï ÇÑ´Ù.
+	// perInstanceDataë¥¼ staticìœ¼ë¡œ ì„ ì–¸í•˜ì—¬
+	// ë§¤ë²ˆ ì²˜ìŒë¶€í„° ë©”ëª¨ë¦¬ë¥¼ êµ¬ì¶•í•˜ì§€ ì•Šê³  ì¬ì‚¬ìš©í•  ìˆ˜ ìˆë„ë¡ í•œë‹¤.
 	static auto perInstanceData = std::vector<PBRShader::PerInstanceData>();
 	perInstanceData.resize(drawEvents_.size());
 
-	// DrawEvent´Â jobSize ´ÜÀ§·Î ½º·¹µåµé¿¡ ºĞ¹èµÉ °ÍÀÌ¹Ç·Î,
-	// µ¿±âÈ­¸¦ À§ÇÑ latch¸¦ ÁØºñÇÑ´Ù.
-	// ÀÌ¶§, DrawEventÀÇ °³¼ö°¡ jobSize·Î ³ª´©¾î ¶³¾îÁöÁö ¾ÊÀ» °æ¿ì¸¦ ´ëºñÇÑ´Ù.
-	// perInstanceDataÀÇ ¾ç¿¡ ºñÇØ lightData³ª pfdÀÇ ¾çÀº ¹Ì¹ÌÇÏ´Ù.
-	// lightData¿Í pfdÀÇ Ã³¸®´Â ±¸ÅÂ¿© ¸ÖÆ¼½º·¹µå·Î ÇÏÁö ¾Ê´Â´Ù.
+	// DrawEventëŠ” jobSize ë‹¨ìœ„ë¡œ ìŠ¤ë ˆë“œë“¤ì— ë¶„ë°°ë  ê²ƒì´ë¯€ë¡œ,
+	// ë™ê¸°í™”ë¥¼ ìœ„í•œ latchë¥¼ ì¤€ë¹„í•œë‹¤.
+	// ì´ë•Œ, DrawEventì˜ ê°œìˆ˜ê°€ jobSizeë¡œ ë‚˜ëˆ„ì–´ ë–¨ì–´ì§€ì§€ ì•Šì„ ê²½ìš°ë¥¼ ëŒ€ë¹„í•œë‹¤.
+	// perInstanceDataì˜ ì–‘ì— ë¹„í•´ lightDataë‚˜ pfdì˜ ì–‘ì€ ë¯¸ë¯¸í•˜ë‹¤.
+	// lightDataì™€ pfdì˜ ì²˜ë¦¬ëŠ” êµ¬íƒœì—¬ ë©€í‹°ìŠ¤ë ˆë“œë¡œ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 	auto latch = std::latch( drawEvents_.size() / jobSizeUpdate_
 		+ ((drawEvents_.size() % jobSizeUpdate_) != 0)
 	);
 
 	const auto viewProj = cameraData_.view * cameraData_.proj;
 
-	// drawEventsÀÇ [accEventCnt, accEventCnt + jobSizeUpdate_) ¹üÀ§ÀÇ
-	// µ¥ÀÌÅÍ¸¦ °¡°øÇØ perInstanceDataÀÇ ´ëÀÀµÇ´Â ¿µ¿ª¿¡ ÀúÀåÇÑ´Ù.
+	// drawEventsì˜ [accEventCnt, accEventCnt + jobSizeUpdate_) ë²”ìœ„ì˜
+	// ë°ì´í„°ë¥¼ ê°€ê³µí•´ perInstanceDataì˜ ëŒ€ì‘ë˜ëŠ” ì˜ì—­ì— ì €ì¥í•œë‹¤.
 	std::size_t accEventCnt = 0u;
 	while (accEventCnt + (jobSizeUpdate_ - 1) < drawEvents_.size()) {
 		addJobMainUpdate( cameraData_.view, viewProj, drawEvents_.data() + accEventCnt,
@@ -668,7 +668,7 @@ void Dispatcher::mainUpdateMT() {
 		accEventCnt += jobSizeUpdate_;
 	}
 	
-	// Âî²¨±â Ã³¸®
+	// ì°Œêº¼ê¸° ì²˜ë¦¬
 	if (accEventCnt != drawEvents_.size()) {
 		const auto lastJobSize = drawEvents_.size() - accEventCnt;
 
@@ -678,12 +678,12 @@ void Dispatcher::mainUpdateMT() {
 		);
 	}
 
-	// lightData¸¦ staticÀ¸·Î ¼±¾ğÇÏ¿©
-	// ¸Å¹ø Ã³À½ºÎÅÍ ¸Ş¸ğ¸®¸¦ ±¸ÃàÇÏÁö ¾Ê°í Àç»ç¿ëÇÒ ¼ö ÀÖµµ·Ï ÇÑ´Ù.
+	// lightDataë¥¼ staticìœ¼ë¡œ ì„ ì–¸í•˜ì—¬
+	// ë§¤ë²ˆ ì²˜ìŒë¶€í„° ë©”ëª¨ë¦¬ë¥¼ êµ¬ì¶•í•˜ì§€ ì•Šê³  ì¬ì‚¬ìš©í•  ìˆ˜ ìˆë„ë¡ í•œë‹¤.
 	static auto lightData = std::vector<PBRShader::Light>();
 	lightData.resize(lightData_.size());
 
-	// LightData¿¡ ´ã°ÜÀÖ´Â Á¤º¸¸¦ °¡°øÇØ lightData¿¡ ÀúÀåÇÑ´Ù.
+	// LightDataì— ë‹´ê²¨ìˆëŠ” ì •ë³´ë¥¼ ê°€ê³µí•´ lightDataì— ì €ì¥í•œë‹¤.
 	std::ranges::transform(lightData_, lightData.begin(),
 		[view = cameraData_.view](const PBRPipeline::LightData& lightData) {
 			return PBRShader::Light{
@@ -700,53 +700,53 @@ void Dispatcher::mainUpdateMT() {
 		}	
 	);
 
-	// shadow map data¸¦ ¹Ì¸® Äõ¸®ÇØ³õ´Â´Ù.
-	// (µ¿ÀÏÇÑ °Ë»ö ¿¬»êÀÇ ¹İº¹À» ÇÇÇÑ´Ù.)
+	// shadow map dataë¥¼ ë¯¸ë¦¬ ì¿¼ë¦¬í•´ë†“ëŠ”ë‹¤.
+	// (ë™ì¼í•œ ê²€ìƒ‰ ì—°ì‚°ì˜ ë°˜ë³µì„ í”¼í•œë‹¤.)
 	auto& shadowMapData = SharedResources::ShadowMap::shadowMapData.at("ShadowMap");
 
-	// FrameData¿Í main directional lightÀÇ ³»¿ëÀ» °¡°øÇØ pfd¿¡ ÀúÀåÇÑ´Ù.
+	// FrameDataì™€ main directional lightì˜ ë‚´ìš©ì„ ê°€ê³µí•´ pfdì— ì €ì¥í•œë‹¤.
 	auto pfd = PBRShader::PerFrameData{
 		.globalAmbient = frameData_.globalAmbient.getXmf(),
-		.lightCnt = static_cast<u32t>(lightData.size()),	// ¿©±â¼­ lightData.size()¸¦ È£ÃâÇÏ¹Ç·Î 
-														// ÀÌÀü¿¡ lightData.clear()¸¦ È£ÃâÇÏ¸é ¾ÈµÈ´Ù.
+		.lightCnt = static_cast<u32t>(lightData.size()),	// ì—¬ê¸°ì„œ lightData.size()ë¥¼ í˜¸ì¶œí•˜ë¯€ë¡œ 
+														// ì´ì „ì— lightData.clear()ë¥¼ í˜¸ì¶œí•˜ë©´ ì•ˆëœë‹¤.
 		.idxShadowMap = shadowMapData.tex.idxSrv,
 		.lightVP = mu::transpose(
 			mainDirectionalLightData_.view * mainDirectionalLightData_.proj
 		).getXmf()
 	};
-	// pfdÀÇ ³»¿ëÀ» ¹ÙÅÁÀ¸·Î GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
+	// pfdì˜ ë‚´ìš©ì„ ë°”íƒ•ìœ¼ë¡œ GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
 	pResources_->mainPass.perFrameData.stage(roomIdx_, &pfd, 1u);
 
-	// lightDataÀÇ ³»¿ëÀ» ¹ÙÅÁÀ¸·Î GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
+	// lightDataì˜ ë‚´ìš©ì„ ë°”íƒ•ìœ¼ë¡œ GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
 	pResources_->mainPass.lightData.stage(roomIdx_, lightData);
 	lightData.clear();
 
-	// µ¿±âÈ­
+	// ë™ê¸°í™”
 	latch.wait();
-	// ¸ğµç µ¥ÀÌÅÍ°¡ °¡°øµÈ ÀÌÈÄ, GPU µ¥ÀÌÅÍ¸¦ °»½ÅÇÑ´Ù.
+	// ëª¨ë“  ë°ì´í„°ê°€ ê°€ê³µëœ ì´í›„, GPU ë°ì´í„°ë¥¼ ê°±ì‹ í•œë‹¤.
 	pResources_->mainPass.perInstanceData.stage(roomIdx_, perInstanceData);
 	perInstanceData.clear();
 }
 
-// DrawEventsÀÇ Á¤º¸µéÀ» Âü°íÇÏ¿©
-// main passÀÇ µå·Î¿ìÄİµéÀ» ¼öÇàÇÑ´Ù.
-// ½Ì±Û½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
-// DrawEvents°¡ ºñ¾îÀÖ´Ù¸é ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
+// DrawEventsì˜ ì •ë³´ë“¤ì„ ì°¸ê³ í•˜ì—¬
+// main passì˜ ë“œë¡œìš°ì½œë“¤ì„ ìˆ˜í–‰í•œë‹¤.
+// ì‹±ê¸€ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
+// DrawEventsê°€ ë¹„ì–´ìˆë‹¤ë©´ ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 void Dispatcher::mainDraw() {
 	if (drawEvents_.empty()) {
 		return;
 	}
 
-	// ¸í·É ÄÁÅØ½ºÆ® ÇÒ´ç
+	// ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ í• ë‹¹
 	CommandContext cmdCtx{};
 	DISPLAY_ERROR_STR( cmdListPool_->allocOne(CommandListUsage::RenderingSlave, cmdCtx),
-		"[GFX Error] GFX::drawSingleThreaded: ¿äÃ»ÇÑ ¸í·É ¸®½ºÆ®¸¦ ÇÒ´ç¹ŞÁö ¸øÇß½À´Ï´Ù.", false
+		"[GFX Error] GFX::drawSingleThreaded: ìš”ì²­í•œ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ë¥¼ í• ë‹¹ë°›ì§€ ëª»í–ˆìŠµë‹ˆë‹¤.", false
 	);
 	if (!cmdCtx.cmdList) {
 		return;
 	}
 
-	// ¸í·É ÄÁÅØ½ºÆ® ÃÊ±âÈ­
+	// ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ ì´ˆê¸°í™”
 	auto cmdList = cmdCtx.cmdList.Get();
 	auto cmdAlloc = cmdCtx.cmdAlloc.Get();
 	auto hrCmdAllocReset = cmdAlloc->Reset();
@@ -762,15 +762,15 @@ void Dispatcher::mainDraw() {
 		return;
 	}
 
-	// ¸í·É ±â·Ï ½ÃÀÛ
+	// ëª…ë ¹ ê¸°ë¡ ì‹œì‘
 	DISPLAY_ERROR_DX_VOID(cmdList->SetGraphicsRootSignature(rootSig_->get()), false);
 	DISPLAY_ERROR_DX_VOID(cmdList->SetPipelineState(mainShader_.Get()), false);
 	DISPLAY_ERROR_DX_VOID(cmdList->OMSetRenderTargets(1u, &rtv_, false, &dsv_), false);
 	DISPLAY_ERROR_DX_VOID(cmdList->RSSetViewports(1u, &viewport_), false);
 	DISPLAY_ERROR_DX_VOID(cmdList->RSSetScissorRects(1u, &scissorRect_), false);
 
-	// bindless È¯°æ ¼¼ÆÃ
-	// d3d12´Ü Descriptor Heap, Descriptor Table ¼³Á¤
+	// bindless í™˜ê²½ ì„¸íŒ…
+	// d3d12ë‹¨ Descriptor Heap, Descriptor Table ì„¤ì •
 	auto descriptorHeapsRaw = std::vector<ID3D12DescriptorHeap*>(descriptorHeaps_.size());
 	std::ranges::transform(descriptorHeaps_, descriptorHeapsRaw.begin(),
 		[](ComPtr<ID3D12DescriptorHeap>& comPtrHeap) { return comPtrHeap.Get(); }	
@@ -787,40 +787,40 @@ void Dispatcher::mainDraw() {
 
 	DISPLAY_ERROR_DX_VOID( cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST), false );
 
-	// ¹ÙÀÎµåÇØ¾ß ÇÏ´Â GPU µ¥ÀÌÅÍ´Â ´ÙÀ½ ³× Á¾·ù´Ù. (¼ÎÀÌ´õ Âü°í)
+	// ë°”ì¸ë“œí•´ì•¼ í•˜ëŠ” GPU ë°ì´í„°ëŠ” ë‹¤ìŒ ë„¤ ì¢…ë¥˜ë‹¤. (ì…°ì´ë” ì°¸ê³ )
 	// - PerInstanceData
 	// - PerDrawcallData
 	// - PerFrameData
 	// - LightData
 
-	// PerInstanceData ¹ÙÀÎµå
+	// PerInstanceData ë°”ì¸ë“œ
 	pResources_->mainPass.perInstanceData.bind(cmdList, rootParamIdxPID_, roomIdx_);
-	// LightData ¹ÙÀÎµå
+	// LightData ë°”ì¸ë“œ
 	pResources_->mainPass.lightData.bind(cmdList, rootParamIdxLightData_, roomIdx_);
-	// PerFrameData ¹ÙÀÎµå
+	// PerFrameData ë°”ì¸ë“œ
 	pResources_->mainPass.perFrameData.bind(cmdList, rootParamIdxPFD_, roomIdx_);
 
 	u32t idxDrawcall = 0u;
 
-	// ÀÎ½ºÅÏ½ÌÀ» Àû¿ëÇÑ´Ù.
-	// equivalentÇÏ°Ô Æò°¡µÇ´Â DrawEventµéÀ» (°°Àº ¸Ş½Ã¿Í ¼­ºê¸Ş½Ã »ç¿ë)
-	// ¹­¾î¼­ instancing groupÀ¸·Î »ï¾Æ ÇÏ³ªÀÇ µå·Î¿ìÄİ·Î Ã³¸®ÇÑ´Ù.
+	// ì¸ìŠ¤í„´ì‹±ì„ ì ìš©í•œë‹¤.
+	// equivalentí•˜ê²Œ í‰ê°€ë˜ëŠ” DrawEventë“¤ì„ (ê°™ì€ ë©”ì‹œì™€ ì„œë¸Œë©”ì‹œ ì‚¬ìš©)
+	// ë¬¶ì–´ì„œ instancing groupìœ¼ë¡œ ì‚¼ì•„ í•˜ë‚˜ì˜ ë“œë¡œìš°ì½œë¡œ ì²˜ë¦¬í•œë‹¤.
 	// 
-	// [groupFirst, groupLast)´Â ÇÏ³ªÀÇ instancing groupÀ» Ç¥ÇöÇÑ´Ù.
+	// [groupFirst, groupLast)ëŠ” í•˜ë‚˜ì˜ instancing groupì„ í‘œí˜„í•œë‹¤.
 	auto groupFirst = drawEvents_.begin();
 	while (groupFirst != drawEvents_.end()) {
 		auto& drawEvent = *groupFirst;
 
 		auto groupLast = std::upper_bound(groupFirst, drawEvents_.end(), drawEvent);
 
-		// PerDrawcallData ¹ÙÀÎµå
+		// PerDrawcallData ë°”ì¸ë“œ
 		pResources_->mainPass.perDrawcallData.cbuffers[idxDrawcall].bind(
 			cmdList, rootParamIdxPDD_, roomIdx_
 		);
 
-		// PerDrawcallData GPU µ¥ÀÌÅÍ °»½Å
-		// (¹ÙÀÎµå¿Í GPU µ¥ÀÌÅÍ °»½Å ¼ø¼­´Â »ó°ü¾ø´Ù.
-		//  ¾îÂ÷ÇÇ ¹ÙÀÎµå´Â GPU ¸í·ÉÀÌ¶ó ¹Ù·Î ½ÇÇàµÇÁö ¾Ê±â ¶§¹®¿¡)
+		// PerDrawcallData GPU ë°ì´í„° ê°±ì‹ 
+		// (ë°”ì¸ë“œì™€ GPU ë°ì´í„° ê°±ì‹  ìˆœì„œëŠ” ìƒê´€ì—†ë‹¤.
+		//  ì–´ì°¨í”¼ ë°”ì¸ë“œëŠ” GPU ëª…ë ¹ì´ë¼ ë°”ë¡œ ì‹¤í–‰ë˜ì§€ ì•Šê¸° ë•Œë¬¸ì—)
 		auto perDrawcallData = PBRShader::PerDrawcallData{
 			.material = PBRShader::Material{
 				.idxAlbedo = drawEvent.material->mapAlbedo.idxSrv,
@@ -834,7 +834,7 @@ void Dispatcher::mainDraw() {
 				.cAOStrength = drawEvent.material->constantAOStrength,
 				.cEmmisive = drawEvent.material->constantEmmisive
 			},
-			// perInstanceData¿¡¼­ ÇöÀç instancing groupÀÇ Ã¹ ¹øÂ° ÀÎ½ºÅÏ½ºÀÇ ÀÎµ¦½º
+			// perInstanceDataì—ì„œ í˜„ì¬ instancing groupì˜ ì²« ë²ˆì§¸ ì¸ìŠ¤í„´ìŠ¤ì˜ ì¸ë±ìŠ¤
 			.firstInstanceOffset = static_cast<u32t>(groupFirst - drawEvents_.begin())
 		};
 		pResources_->mainPass.perDrawcallData.cbuffers[idxDrawcall].stage(
@@ -869,36 +869,36 @@ void Dispatcher::mainDraw() {
 		return;
 	}
 
-	// ¸í·É ±â·Ï ³¡, ½ÇÇà
+	// ëª…ë ¹ ê¸°ë¡ ë, ì‹¤í–‰
 	ID3D12CommandList* stagedCmdLists[] = {cmdList};
 
 	DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, stagedCmdLists), false);
 	
-	// Fence °´Ã¼¿¡ »ç¿ëÇÑ ¸í·É ÄÁÅØ½ºÆ®¸¦ ¿¬°ü½ÃÄÑ ³õ´Â´Ù.
+	// Fence ê°ì²´ì— ì‚¬ìš©í•œ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë¥¼ ì—°ê´€ì‹œì¼œ ë†“ëŠ”ë‹¤.
 	pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)]
 		.push_back(std::move(cmdCtx));
 }
 
-// DrawEventsÀÇ Á¤º¸µéÀ» Âü°íÇÏ¿©
-// main passÀÇ µå·Î¿ìÄİµéÀ» ¼öÇàÇÑ´Ù.
-// ¸ÖÆ¼½º·¹µå·Î µ¿ÀÛÇÑ´Ù.
-// DrawEvents°¡ ºñ¾îÀÖ´Ù¸é ¾Æ¹« µ¿ÀÛµµ ÇÏÁö ¾Ê´Â´Ù.
+// DrawEventsì˜ ì •ë³´ë“¤ì„ ì°¸ê³ í•˜ì—¬
+// main passì˜ ë“œë¡œìš°ì½œë“¤ì„ ìˆ˜í–‰í•œë‹¤.
+// ë©€í‹°ìŠ¤ë ˆë“œë¡œ ë™ì‘í•œë‹¤.
+// DrawEventsê°€ ë¹„ì–´ìˆë‹¤ë©´ ì•„ë¬´ ë™ì‘ë„ í•˜ì§€ ì•ŠëŠ”ë‹¤.
 void Dispatcher::mainDrawMT() {
 	if (drawEvents_.empty()) {
 		return;
 	}
 
-	// ÀÎ½ºÅÏ½ÌÀ» Àû¿ëÇÑ´Ù.
-	// equivalentÇÏ°Ô Æò°¡µÇ´Â DrawEventµéÀ» (°°Àº ¸Ş½Ã¿Í ¼­ºê¸Ş½Ã »ç¿ë)
-	// ¹­¾î¼­ instancing groupÀ¸·Î »ï¾Æ ÇÏ³ªÀÇ µå·Î¿ìÄİ·Î Ã³¸®ÇÑ´Ù.
+	// ì¸ìŠ¤í„´ì‹±ì„ ì ìš©í•œë‹¤.
+	// equivalentí•˜ê²Œ í‰ê°€ë˜ëŠ” DrawEventë“¤ì„ (ê°™ì€ ë©”ì‹œì™€ ì„œë¸Œë©”ì‹œ ì‚¬ìš©)
+	// ë¬¶ì–´ì„œ instancing groupìœ¼ë¡œ ì‚¼ì•„ í•˜ë‚˜ì˜ ë“œë¡œìš°ì½œë¡œ ì²˜ë¦¬í•œë‹¤.
 	// 
-	// instancingGroups´Â drawEvents_¿¡¼­ °¢ instancing groupÀÇ Ã¹ ¿ø¼Ò¸¦ °¡¸®Å°´Â iteratorµéÀ» ÀúÀåÇÑ´Ù.
-	// ±×¸®°í sentinel °ªÀ¸·Î drawEvents_.end()¸¦ ÀúÀåÇÑ´Ù.
-	// * ¶§¹®¿¡ instancing groupÀÇ ÃÑ °³¼ö´Â instancingGroups.size()°¡ ¾Æ´Ñ instancingGroups.size() - 1ÀÌ´Ù.
+	// instancingGroupsëŠ” drawEvents_ì—ì„œ ê° instancing groupì˜ ì²« ì›ì†Œë¥¼ ê°€ë¦¬í‚¤ëŠ” iteratorë“¤ì„ ì €ì¥í•œë‹¤.
+	// ê·¸ë¦¬ê³  sentinel ê°’ìœ¼ë¡œ drawEvents_.end()ë¥¼ ì €ì¥í•œë‹¤.
+	// * ë•Œë¬¸ì— instancing groupì˜ ì´ ê°œìˆ˜ëŠ” instancingGroups.size()ê°€ ì•„ë‹Œ instancingGroups.size() - 1ì´ë‹¤.
 	// 
-	// instancingGroups[k]¿Í instancingGroups[k+1]Àº
-	// k¹øÂ° instancingGroupÀÇ begin, end°¡ µÈ´Ù.
-	// ÀÌ¸¦ À§ÇØ sentinel °ªÀ» Ãß°¡ÇÏ¿´´Ù.
+	// instancingGroups[k]ì™€ instancingGroups[k+1]ì€
+	// kë²ˆì§¸ instancingGroupì˜ begin, endê°€ ëœë‹¤.
+	// ì´ë¥¼ ìœ„í•´ sentinel ê°’ì„ ì¶”ê°€í•˜ì˜€ë‹¤.
 	static auto instancingGroups = std::vector<decltype(drawEvents_)::const_iterator>();
 	
 	auto itFirst = drawEvents_.cbegin();
@@ -909,13 +909,13 @@ void Dispatcher::mainDrawMT() {
 	}
 	instancingGroups.push_back(drawEvents_.cend());
 
-	// instancing groupµéÀº jobSize ´ÜÀ§·Î ½º·¹µåµé¿¡ ºĞ¹èµÉ °ÍÀÌ¹Ç·Î,
-	// µ¿±âÈ­¸¦ À§ÇÑ latch¸¦ ÁØºñÇÑ´Ù.
-	// ÀÌ¶§, DrawEventÀÇ °³¼ö°¡ jobSize·Î ³ª´©¾î ¶³¾îÁöÁö ¾ÊÀ» °æ¿ì¸¦ ´ëºñÇÑ´Ù.
+	// instancing groupë“¤ì€ jobSize ë‹¨ìœ„ë¡œ ìŠ¤ë ˆë“œë“¤ì— ë¶„ë°°ë  ê²ƒì´ë¯€ë¡œ,
+	// ë™ê¸°í™”ë¥¼ ìœ„í•œ latchë¥¼ ì¤€ë¹„í•œë‹¤.
+	// ì´ë•Œ, DrawEventì˜ ê°œìˆ˜ê°€ jobSizeë¡œ ë‚˜ëˆ„ì–´ ë–¨ì–´ì§€ì§€ ì•Šì„ ê²½ìš°ë¥¼ ëŒ€ë¹„í•œë‹¤.
 	const std::size_t jobCnt = ( (instancingGroups.size() - 1u) + (jobSizeDraw_ - 1u)) / jobSizeDraw_;
 	auto latch = std::latch(jobCnt);
 
-	// ÆÄ¾ÇµÈ ÀÛ¾÷ÀÇ °³¼ö¿¡ ¸Â°Ô ¸í·É ÄÁÅØ½ºÆ®µéÀ» ÇÒ´çÇÑ´Ù.
+	// íŒŒì•…ëœ ì‘ì—…ì˜ ê°œìˆ˜ì— ë§ê²Œ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë“¤ì„ í• ë‹¹í•œë‹¤.
 	std::list<CommandContext> cmdCtxs{};
 	const auto requiredCmdListCnt = jobCnt;
 
@@ -924,34 +924,34 @@ void Dispatcher::mainDrawMT() {
 	);
 
 	DISPLAY_ERROR_STR( allocatedCmdListCnt == requiredCmdListCnt,
-		"[GFX Error] PBRPipeline::Dispatcher::mainDrawMT: ¿äÃ»ÇÑ ¼ö ¸¸Å­ÀÇ ¸í·É ¸®½ºÆ®¸¦ ÇÒ´ç¹ŞÁö ¸øÇß½À´Ï´Ù.",
+		"[GFX Error] PBRPipeline::Dispatcher::mainDrawMT: ìš”ì²­í•œ ìˆ˜ ë§Œí¼ì˜ ëª…ë ¹ ë¦¬ìŠ¤íŠ¸ë¥¼ í• ë‹¹ë°›ì§€ ëª»í–ˆìŠµë‹ˆë‹¤.",
 		false
 	);
 	if (allocatedCmdListCnt != requiredCmdListCnt) {
-		// ÇÊ¿äÇÑ ¸¸Å­ ¸í·É ÄÁÅØ½ºÆ®°¡ ÇÒ´çµÇÁö ¾Ê¾ÒÀ» °æ¿ì,
-		// ¸í·É ÄÁÅØ½ºÆ®µéÀ» »ç¿ëÇÏÁö ¾Ê°í ±×´ë·Î ¹İ³³ÇÏ¸ç,
-		// ÇÔ¼öµµ ±×´ë·Î ¹İÈ¯ÇÑ´Ù.
-		// ÃßÈÄ ÀÌ °æ¿ì¿¡µµ µ¿ÀÛÇÒ ¼ö ÀÖµµ·Ï ´ëÀÀÇÏµµ·Ï ÇÑ´Ù..
+		// í•„ìš”í•œ ë§Œí¼ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ê°€ í• ë‹¹ë˜ì§€ ì•Šì•˜ì„ ê²½ìš°,
+		// ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë“¤ì„ ì‚¬ìš©í•˜ì§€ ì•Šê³  ê·¸ëŒ€ë¡œ ë°˜ë‚©í•˜ë©°,
+		// í•¨ìˆ˜ë„ ê·¸ëŒ€ë¡œ ë°˜í™˜í•œë‹¤.
+		// ì¶”í›„ ì´ ê²½ìš°ì—ë„ ë™ì‘í•  ìˆ˜ ìˆë„ë¡ ëŒ€ì‘í•˜ë„ë¡ í•œë‹¤..
 		cmdListPool_->free(CommandListUsage::RenderingSlave, std::move(cmdCtxs));
 		return;
 	}
 
 	
-	// °¢ ½º·¹µå´Â instancingGroups ³» jobSizeDraw_ °³ÀÇ instancing groupÀ» ¸Ã¾Æ
-	// µå·Î¿ìÄİ ¸í·ÉÀ» ±â·ÏÇÑ´Ù.
+	// ê° ìŠ¤ë ˆë“œëŠ” instancingGroups ë‚´ jobSizeDraw_ ê°œì˜ instancing groupì„ ë§¡ì•„
+	// ë“œë¡œìš°ì½œ ëª…ë ¹ì„ ê¸°ë¡í•œë‹¤.
 	// 
-	// accDrawcallCnt º¯¼ö¸¦ ÀÌ¿ëÇÏ¿© ÀÌ º¯¼öÀÇ °ªÀ» jobSizeDraw_¸¸Å­ Áõ°¡½ÃÄÑ°¡¸ç
-	// instancingGroupsÀÇ [accDrawcallCnt, accDrawcallCnt + jobSizeDraw_) ¹üÀ§ÀÇ
-	// µ¥ÀÌÅÍ¸¦ °¡°øÇØ °¢ instancing groupÀÇ µå·Î¿ìÄİ ¸í·ÉÀ» ±â·ÏÇÏ´Â °ÍÀ¸·Î ±¸ÇöÇÑ´Ù.
+	// accDrawcallCnt ë³€ìˆ˜ë¥¼ ì´ìš©í•˜ì—¬ ì´ ë³€ìˆ˜ì˜ ê°’ì„ jobSizeDraw_ë§Œí¼ ì¦ê°€ì‹œì¼œê°€ë©°
+	// instancingGroupsì˜ [accDrawcallCnt, accDrawcallCnt + jobSizeDraw_) ë²”ìœ„ì˜
+	// ë°ì´í„°ë¥¼ ê°€ê³µí•´ ê° instancing groupì˜ ë“œë¡œìš°ì½œ ëª…ë ¹ì„ ê¸°ë¡í•˜ëŠ” ê²ƒìœ¼ë¡œ êµ¬í˜„í•œë‹¤.
 	//
-	// jobSizeDraw_ °³·Î ³ª´©¾î ¶³¾îÁöÁö ¾ÊÀ» »óÈ²¿¡ ´ëÀÀÇÏ±â À§ÇØ
-	// º°µµÀÇ Âî²¨±â Ã³¸® ÄÚµå¸¦ µĞ´Ù.
+	// jobSizeDraw_ ê°œë¡œ ë‚˜ëˆ„ì–´ ë–¨ì–´ì§€ì§€ ì•Šì„ ìƒí™©ì— ëŒ€ì‘í•˜ê¸° ìœ„í•´
+	// ë³„ë„ì˜ ì°Œêº¼ê¸° ì²˜ë¦¬ ì½”ë“œë¥¼ ë‘”ë‹¤.
 	std::size_t accDrawcallCnt = 0u;
-	// °¢ ÀÛ¾÷¸¶´Ù ¸í·É ÄÁÅØ½ºÆ®¸¦ ºĞ¹èÇÑ´Ù.
+	// ê° ì‘ì—…ë§ˆë‹¤ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë¥¼ ë¶„ë°°í•œë‹¤.
 	auto currCmdCtx = cmdCtxs.begin();
 
 	while (accDrawcallCnt + (jobSizeDraw_ - 1) < instancingGroups.size() - 1u) {
-		// ¸í·É ÄÁÅØ½ºÆ® ÃÊ±âÈ­
+		// ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ ì´ˆê¸°í™”
 		auto hrCmdAllocReset = currCmdCtx->cmdAlloc->Reset();
 		DISPLAY_ERROR_DX_HR( hrCmdAllocReset, false );
 		if (hrCmdAllocReset < 0) {
@@ -965,7 +965,7 @@ void Dispatcher::mainDrawMT() {
 			return;
 		}
 
-		// ¸í·É ±â·Ï
+		// ëª…ë ¹ ê¸°ë¡
 		addJobMainDraw( currCmdCtx->cmdList.Get(), instancingGroups.data() + accDrawcallCnt,
 			instancingGroups.data() + accDrawcallCnt + jobSizeDraw_, accDrawcallCnt, latch
 		);
@@ -974,10 +974,10 @@ void Dispatcher::mainDrawMT() {
 		++currCmdCtx;
 	}
 
-	// Âî²¨±â Ã³¸®
+	// ì°Œêº¼ê¸° ì²˜ë¦¬
 	if (accDrawcallCnt != instancingGroups.size() - 1u) {
 		const auto lastJobSize = instancingGroups.size() - 1u - accDrawcallCnt;
-		// ¸í·É ÄÁÅØ½ºÆ® ÃÊ±âÈ­
+		// ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ ì´ˆê¸°í™”
 		auto hrCmdAllocReset = currCmdCtx->cmdAlloc->Reset();
 		DISPLAY_ERROR_DX_HR( hrCmdAllocReset, false );
 		if (hrCmdAllocReset < 0) {
@@ -991,18 +991,18 @@ void Dispatcher::mainDrawMT() {
 			return;
 		}
 
-		// ¸í·É ±â·Ï
+		// ëª…ë ¹ ê¸°ë¡
 		addJobMainDraw( currCmdCtx->cmdList.Get(), instancingGroups.data() + accDrawcallCnt,
 			instancingGroups.data() + accDrawcallCnt + lastJobSize, accDrawcallCnt, latch
 		);
 	}
 
-	// µ¿±âÈ­
+	// ë™ê¸°í™”
 	latch.wait();
 
 	instancingGroups.clear();
 
-	// ¸í·É ±â·Ï ³¡, ½ÇÇà
+	// ëª…ë ¹ ê¸°ë¡ ë, ì‹¤í–‰
 	auto stagedCmdLists = std::vector<ID3D12CommandList*>(cmdCtxs.size(), nullptr);
 	std::ranges::transform(cmdCtxs.begin(), cmdCtxs.end(),
 		stagedCmdLists.begin(),
@@ -1013,13 +1013,13 @@ void Dispatcher::mainDrawMT() {
 		static_cast<UINT>(stagedCmdLists.size()), stagedCmdLists.data()
 	), false );
 
-	// Fence °´Ã¼¿¡ »ç¿ëÇÑ ¸í·É ÄÁÅØ½ºÆ®µéÀ» ¿¬°ü½ÃÄÑ ³õ´Â´Ù.
+	// Fence ê°ì²´ì— ì‚¬ìš©í•œ ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë“¤ì„ ì—°ê´€ì‹œì¼œ ë†“ëŠ”ë‹¤.
 	pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)]
 		.splice( pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].end(), std::move(cmdCtxs) );
 }
 
-// ¸ÖÆ¼½º·¹µå ÀÛ¾÷ ½Ã, GPU µ¥ÀÌÅÍ °»½Å ÀÛ¾÷¿¡ ´ëÇØ
-// ´ÜÀ§ ÀÛ¾÷À» »ı¼ºÇÏ¿© ½º·¹µå¿¡ ÇÒ´çÇÏ´Âµ¥ »ç¿ëµÈ´Ù.
+// ë©€í‹°ìŠ¤ë ˆë“œ ì‘ì—… ì‹œ, GPU ë°ì´í„° ê°±ì‹  ì‘ì—…ì— ëŒ€í•´
+// ë‹¨ìœ„ ì‘ì—…ì„ ìƒì„±í•˜ì—¬ ìŠ¤ë ˆë“œì— í• ë‹¹í•˜ëŠ”ë° ì‚¬ìš©ëœë‹¤.
 void MU_CALLCONV Dispatcher::addJobMainUpdate( mu::Mat4x4 view, const mu::Mat4x4& viewProj,
 	const DrawEvent* pFirst, const DrawEvent* pLast, PBRShader::PerInstanceData* pOut,
 	std::latch& latch
@@ -1040,24 +1040,24 @@ void MU_CALLCONV Dispatcher::addJobMainUpdate( mu::Mat4x4 view, const mu::Mat4x4
 	});
 }
 
-// ¸ÖÆ¼½º·¹µå ÀÛ¾÷ ½Ã, µå·Î¿ìÄİµé¿¡ ´ëÇØ
-// ´ÜÀ§ ÀÛ¾÷À» »ı¼ºÇÏ¿© ½º·¹µå¿¡ ÇÒ´çÇÏ´Âµ¥ »ç¿ëµÈ´Ù.
+// ë©€í‹°ìŠ¤ë ˆë“œ ì‘ì—… ì‹œ, ë“œë¡œìš°ì½œë“¤ì— ëŒ€í•´
+// ë‹¨ìœ„ ì‘ì—…ì„ ìƒì„±í•˜ì—¬ ìŠ¤ë ˆë“œì— í• ë‹¹í•˜ëŠ”ë° ì‚¬ìš©ëœë‹¤.
 void Dispatcher::addJobMainDraw( ID3D12GraphicsCommandList* threadCmdList,
 	const std::vector<DrawEvent>::const_iterator* pItFirst,
 	const std::vector<DrawEvent>::const_iterator* pItLast,
 	std::size_t firstDrawcallIdx, std::latch& latch
 ) {
 	threadPool_->addJob([=, &latch]() {
-		// ¸í·É ÄÁÅØ½ºÆ®¸¶´Ù °³º°ÀûÀ¸·Î ÆÄÀÌÇÁ¶óÀÎ ¼³Á¤À» ÇØÁÖ¾î¾ß ÇÑ´Ù.
-		// (ÆÄÀÌÇÁ¶óÀÎ ¼³Á¤Àº °øÀ¯µÇÁö ¾Ê´Â´Ù. ±×·¸´õ¶ó.)
+		// ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë§ˆë‹¤ ê°œë³„ì ìœ¼ë¡œ íŒŒì´í”„ë¼ì¸ ì„¤ì •ì„ í•´ì£¼ì–´ì•¼ í•œë‹¤.
+		// (íŒŒì´í”„ë¼ì¸ ì„¤ì •ì€ ê³µìœ ë˜ì§€ ì•ŠëŠ”ë‹¤. ê·¸ë ‡ë”ë¼.)
 		DISPLAY_ERROR_DX_VOID(threadCmdList->SetGraphicsRootSignature(rootSig_->get()), false);
 		DISPLAY_ERROR_DX_VOID(threadCmdList->SetPipelineState(mainShader_.Get()), false);
 		DISPLAY_ERROR_DX_VOID(threadCmdList->OMSetRenderTargets(1u, &rtv_, false, &dsv_), false);
 		DISPLAY_ERROR_DX_VOID(threadCmdList->RSSetViewports(1u, &viewport_), false);
 		DISPLAY_ERROR_DX_VOID(threadCmdList->RSSetScissorRects(1u, &scissorRect_), false);
 
-		// bindless È¯°æ ¼¼ÆÃ
-		// d3d12´Ü Descriptor Heap, Descriptor Table ¼³Á¤
+		// bindless í™˜ê²½ ì„¸íŒ…
+		// d3d12ë‹¨ Descriptor Heap, Descriptor Table ì„¤ì •
 		auto descriptorHeapsRaw = std::vector<ID3D12DescriptorHeap*>(descriptorHeaps_.size());
 		std::ranges::transform(descriptorHeaps_, descriptorHeapsRaw.begin(),
 			[](ComPtr<ID3D12DescriptorHeap>& comPtrHeap) { return comPtrHeap.Get(); }	
@@ -1074,33 +1074,33 @@ void Dispatcher::addJobMainDraw( ID3D12GraphicsCommandList* threadCmdList,
 				
 		DISPLAY_ERROR_DX_VOID( threadCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST), false );
 
-		// ¹ÙÀÎµåÇØ¾ß ÇÏ´Â GPU µ¥ÀÌÅÍ´Â ´ÙÀ½ ³× Á¾·ù´Ù. (¼ÎÀÌ´õ Âü°í)
+		// ë°”ì¸ë“œí•´ì•¼ í•˜ëŠ” GPU ë°ì´í„°ëŠ” ë‹¤ìŒ ë„¤ ì¢…ë¥˜ë‹¤. (ì…°ì´ë” ì°¸ê³ )
 		// - PerInstanceData
 		// - PerDrawcallData
 		// - PerFrameData
 		// - LightData
 
-		// PerInstanceData ¹ÙÀÎµå
+		// PerInstanceData ë°”ì¸ë“œ
 		pResources_->mainPass.perInstanceData.bind(threadCmdList, rootParamIdxPID_, roomIdx_);
-		// PerFrameData ¹ÙÀÎµå
+		// PerFrameData ë°”ì¸ë“œ
 		pResources_->mainPass.perFrameData.bind(threadCmdList, rootParamIdxPFD_, roomIdx_);
-		// LightData ¹ÙÀÎµå
+		// LightData ë°”ì¸ë“œ
 		pResources_->mainPass.lightData.bind(threadCmdList, rootParamIdxLightData_, roomIdx_);
 
 		std::size_t idxDrawcall = firstDrawcallIdx;
 
-		// [pItFirst, pItLast]´Â °¢ instancing groupÀÇ ½ÃÀÛÁ¡(È¤Àº sentinel)ÀÌ µÇ´Â
-		// iteratorµéÀ» Ç¥ÇöÇÑ´Ù.
+		// [pItFirst, pItLast]ëŠ” ê° instancing groupì˜ ì‹œì‘ì (í˜¹ì€ sentinel)ì´ ë˜ëŠ”
+		// iteratorë“¤ì„ í‘œí˜„í•œë‹¤.
 		auto pGroup = pItFirst;
 
 		while (pGroup != pItLast) {
-			// [groupFirst, groupLast)´Â ÇÏ³ªÀÇ instancing groupÀ» Ç¥ÇöÇÑ´Ù.
+			// [groupFirst, groupLast)ëŠ” í•˜ë‚˜ì˜ instancing groupì„ í‘œí˜„í•œë‹¤.
 			auto groupFirst = *pGroup;
 			auto groupLast = *(pGroup + 1);
 
 			const auto& drawEvent = *groupFirst;
 
-			// PerDrawcallData ¹ÙÀÎµå
+			// PerDrawcallData ë°”ì¸ë“œ
 			pResources_->mainPass.perDrawcallData.cbuffers[idxDrawcall].bind(
 				threadCmdList, rootParamIdxPDD_, roomIdx_
 			);
@@ -1118,12 +1118,12 @@ void Dispatcher::addJobMainDraw( ID3D12GraphicsCommandList* threadCmdList,
 					.cAOStrength = drawEvent.material->constantAOStrength,
 					.cEmmisive = drawEvent.material->constantEmmisive
 				},
-				// perInstanceData¿¡¼­ ÇöÀç instancing groupÀÇ Ã¹ ¹øÂ° ÀÎ½ºÅÏ½ºÀÇ ÀÎµ¦½º
+				// perInstanceDataì—ì„œ í˜„ì¬ instancing groupì˜ ì²« ë²ˆì§¸ ì¸ìŠ¤í„´ìŠ¤ì˜ ì¸ë±ìŠ¤
 				.firstInstanceOffset = static_cast<u32t>(groupFirst - drawEvents_.begin())
 			};
-			// PerDrawcallData GPU µ¥ÀÌÅÍ °»½Å
-			// (¹ÙÀÎµå¿Í GPU µ¥ÀÌÅÍ °»½Å ¼ø¼­´Â »ó°ü¾ø´Ù.
-			//  ¾îÂ÷ÇÇ ¹ÙÀÎµå´Â GPU ¸í·ÉÀÌ¶ó ¹Ù·Î ½ÇÇàµÇÁö ¾Ê±â ¶§¹®¿¡)
+			// PerDrawcallData GPU ë°ì´í„° ê°±ì‹ 
+			// (ë°”ì¸ë“œì™€ GPU ë°ì´í„° ê°±ì‹  ìˆœì„œëŠ” ìƒê´€ì—†ë‹¤.
+			//  ì–´ì°¨í”¼ ë°”ì¸ë“œëŠ” GPU ëª…ë ¹ì´ë¼ ë°”ë¡œ ì‹¤í–‰ë˜ì§€ ì•Šê¸° ë•Œë¬¸ì—)
 			pResources_->mainPass.perDrawcallData.cbuffers[idxDrawcall].stage(
 				roomIdx_, &perDrawcallData, 1u
 			);
@@ -1148,14 +1148,14 @@ void Dispatcher::addJobMainDraw( ID3D12GraphicsCommandList* threadCmdList,
 			++pGroup;
 		}
 
-		// ¸í·É ±â·Ï Á¾·á
+		// ëª…ë ¹ ê¸°ë¡ ì¢…ë£Œ
 		DISPLAY_ERROR_DX_HR( threadCmdList->Close(), false );
 		latch.count_down();
 	} );
 }
 
-// ¸ÖÆ¼½º·¹µå ÀÛ¾÷ ½Ã, GPU µ¥ÀÌÅÍ °»½Å ÀÛ¾÷¿¡ ´ëÇØ
-// ´ÜÀ§ ÀÛ¾÷À» »ı¼ºÇÏ¿© ½º·¹µå¿¡ ÇÒ´çÇÏ´Âµ¥ »ç¿ëµÈ´Ù.
+// ë©€í‹°ìŠ¤ë ˆë“œ ì‘ì—… ì‹œ, GPU ë°ì´í„° ê°±ì‹  ì‘ì—…ì— ëŒ€í•´
+// ë‹¨ìœ„ ì‘ì—…ì„ ìƒì„±í•˜ì—¬ ìŠ¤ë ˆë“œì— í• ë‹¹í•˜ëŠ”ë° ì‚¬ìš©ëœë‹¤.
 void Dispatcher::addJobShadowUpdate( const DrawEvent* pFirst,
 	const DrawEvent* pLast, ShadowMapShader::PerInstanceData* pOut,
 	std::latch& latch
@@ -1173,8 +1173,8 @@ void Dispatcher::addJobShadowUpdate( const DrawEvent* pFirst,
 	});
 }
 
-// ¸ÖÆ¼½º·¹µå ÀÛ¾÷ ½Ã, µå·Î¿ìÄİµé¿¡ ´ëÇØ
-// ´ÜÀ§ ÀÛ¾÷À» »ı¼ºÇÏ¿© ½º·¹µå¿¡ ÇÒ´çÇÏ´Âµ¥ »ç¿ëµÈ´Ù.
+// ë©€í‹°ìŠ¤ë ˆë“œ ì‘ì—… ì‹œ, ë“œë¡œìš°ì½œë“¤ì— ëŒ€í•´
+// ë‹¨ìœ„ ì‘ì—…ì„ ìƒì„±í•˜ì—¬ ìŠ¤ë ˆë“œì— í• ë‹¹í•˜ëŠ”ë° ì‚¬ìš©ëœë‹¤.
 void Dispatcher::addJobShadowDraw( ID3D12GraphicsCommandList* threadCmdList,
 	const std::vector<DrawEvent>::const_iterator* pItFirst,
 	const std::vector<DrawEvent>::const_iterator* pItLast,
@@ -1182,8 +1182,8 @@ void Dispatcher::addJobShadowDraw( ID3D12GraphicsCommandList* threadCmdList,
 	std::latch& latch
 ) {
 	threadPool_->addJob([=, &latch, &shadowMapData]() {
-		// shadow mapÀ» ·»´õ¸µÇÒ ¶§ ¾²´Â viewport¿Í scissor rectangleÀÇ Å©±â´Â
-		// shadow map ÅØ½ºÃ³ÀÇ Å©±â¿Í °°¾Æ¾ß ÇÑ´Ù.
+		// shadow mapì„ ë Œë”ë§í•  ë•Œ ì“°ëŠ” viewportì™€ scissor rectangleì˜ í¬ê¸°ëŠ”
+		// shadow map í…ìŠ¤ì²˜ì˜ í¬ê¸°ì™€ ê°™ì•„ì•¼ í•œë‹¤.
 		auto shadowViewport = D3D12_VIEWPORT{
 			.TopLeftX = 0.f,
 			.TopLeftY = 0.f,
@@ -1198,8 +1198,8 @@ void Dispatcher::addJobShadowDraw( ID3D12GraphicsCommandList* threadCmdList,
 			.bottom = static_cast<LONG>(shadowMapData.height)
 		};
 
-		// ¸í·É ÄÁÅØ½ºÆ®¸¶´Ù °³º°ÀûÀ¸·Î ÆÄÀÌÇÁ¶óÀÎ ¼³Á¤À» ÇØÁÖ¾î¾ß ÇÑ´Ù.
-		// (ÆÄÀÌÇÁ¶óÀÎ ¼³Á¤Àº °øÀ¯µÇÁö ¾Ê´Â´Ù. ±×·¸´õ¶ó.)
+		// ëª…ë ¹ ì»¨í…ìŠ¤íŠ¸ë§ˆë‹¤ ê°œë³„ì ìœ¼ë¡œ íŒŒì´í”„ë¼ì¸ ì„¤ì •ì„ í•´ì£¼ì–´ì•¼ í•œë‹¤.
+		// (íŒŒì´í”„ë¼ì¸ ì„¤ì •ì€ ê³µìœ ë˜ì§€ ì•ŠëŠ”ë‹¤. ê·¸ë ‡ë”ë¼.)
 		DISPLAY_ERROR_DX_VOID(threadCmdList->SetGraphicsRootSignature(rootSig_->get()), false);
 		DISPLAY_ERROR_DX_VOID(threadCmdList->SetPipelineState(shadowShader_.Get()), false);
 
@@ -1213,8 +1213,8 @@ void Dispatcher::addJobShadowDraw( ID3D12GraphicsCommandList* threadCmdList,
 		DISPLAY_ERROR_DX_VOID(threadCmdList->RSSetViewports(1u, &shadowViewport), false);
 		DISPLAY_ERROR_DX_VOID(threadCmdList->RSSetScissorRects(1u, &shadowScissorRect), false);
 
-		// bindless È¯°æ ¼¼ÆÃ
-		// d3d12´Ü Descriptor Heap ¼³Á¤
+		// bindless í™˜ê²½ ì„¸íŒ…
+		// d3d12ë‹¨ Descriptor Heap ì„¤ì •
 		auto descriptorHeapsRaw = std::vector<ID3D12DescriptorHeap*>(descriptorHeaps_.size());
 		std::ranges::transform(descriptorHeaps_, descriptorHeapsRaw.begin(),
 			[](ComPtr<ID3D12DescriptorHeap>& comPtrHeap) { return comPtrHeap.Get(); }	
@@ -1223,45 +1223,45 @@ void Dispatcher::addJobShadowDraw( ID3D12GraphicsCommandList* threadCmdList,
 			static_cast<UINT>(descriptorHeapsRaw.size()), descriptorHeapsRaw.data()
 		), false );
 
-		// º°µµÀÇ ÅØ½ºÃ³ »ùÇÃ¸µÀ» ÇÏÁö ¾ÊÀ¸¹Ç·Î DescriptorPool ¹ÙÀÎµùÀº »ı·«ÇÑ´Ù.
+		// ë³„ë„ì˜ í…ìŠ¤ì²˜ ìƒ˜í”Œë§ì„ í•˜ì§€ ì•Šìœ¼ë¯€ë¡œ DescriptorPool ë°”ì¸ë”©ì€ ìƒëµí•œë‹¤.
 				
 		DISPLAY_ERROR_DX_VOID( threadCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST), false );
 
-		// ¹ÙÀÎµåÇØ¾ß ÇÏ´Â GPU µ¥ÀÌÅÍ´Â ´ÙÀ½ ¼¼ Á¾·ù´Ù. (¼ÎÀÌ´õ Âü°í)
+		// ë°”ì¸ë“œí•´ì•¼ í•˜ëŠ” GPU ë°ì´í„°ëŠ” ë‹¤ìŒ ì„¸ ì¢…ë¥˜ë‹¤. (ì…°ì´ë” ì°¸ê³ )
 		// - PerInstanceData
 		// - PerDrawcallData
 		// - PerFrameData
 
-		// PerInstanceData ¹ÙÀÎµå
+		// PerInstanceData ë°”ì¸ë“œ
 		pResources_->shadowPass.perInstanceData.bind(threadCmdList, rootParamIdxPID_, roomIdx_);
-		// PerFrameData ¹ÙÀÎµå
+		// PerFrameData ë°”ì¸ë“œ
 		pResources_->shadowPass.perFrameData.bind(threadCmdList, rootParamIdxPFD_, roomIdx_);
 
 		std::size_t idxDrawcall = firstDrawcallIdx;
 
-		// [pItFirst, pItLast]´Â °¢ instancing groupÀÇ ½ÃÀÛÁ¡(È¤Àº sentinel)ÀÌ µÇ´Â
-		// iteratorµéÀ» Ç¥ÇöÇÑ´Ù.
+		// [pItFirst, pItLast]ëŠ” ê° instancing groupì˜ ì‹œì‘ì (í˜¹ì€ sentinel)ì´ ë˜ëŠ”
+		// iteratorë“¤ì„ í‘œí˜„í•œë‹¤.
 		auto pGroup = pItFirst;
 
 		while (pGroup != pItLast) {
-			// [groupFirst, groupLast)´Â ÇÏ³ªÀÇ instancing groupÀ» Ç¥ÇöÇÑ´Ù.
+			// [groupFirst, groupLast)ëŠ” í•˜ë‚˜ì˜ instancing groupì„ í‘œí˜„í•œë‹¤.
 			auto groupFirst = *pGroup;
 			auto groupLast = *(pGroup + 1);
 
 			const auto& drawEvent = *groupFirst;
 
-			// PerDrawcallData ¹ÙÀÎµå
+			// PerDrawcallData ë°”ì¸ë“œ
 			pResources_->shadowPass.perDrawcallData.cbuffers[idxDrawcall].bind(
 				threadCmdList, rootParamIdxPDD_, roomIdx_
 			);
 
 			auto perDrawcallData = ShadowMapShader::PerDrawcallData{
-				// perInstanceData¿¡¼­ ÇöÀç instancing groupÀÇ Ã¹ ¹øÂ° ÀÎ½ºÅÏ½ºÀÇ ÀÎµ¦½º
+				// perInstanceDataì—ì„œ í˜„ì¬ instancing groupì˜ ì²« ë²ˆì§¸ ì¸ìŠ¤í„´ìŠ¤ì˜ ì¸ë±ìŠ¤
 				.firstInstanceOffset = static_cast<u32t>(groupFirst - drawEvents_.begin())
 			};
-			// PerDrawcallData GPU µ¥ÀÌÅÍ °»½Å
-			// (¹ÙÀÎµå¿Í GPU µ¥ÀÌÅÍ °»½Å ¼ø¼­´Â »ó°ü¾ø´Ù.
-			//  ¾îÂ÷ÇÇ ¹ÙÀÎµå´Â GPU ¸í·ÉÀÌ¶ó ¹Ù·Î ½ÇÇàµÇÁö ¾Ê±â ¶§¹®¿¡)
+			// PerDrawcallData GPU ë°ì´í„° ê°±ì‹ 
+			// (ë°”ì¸ë“œì™€ GPU ë°ì´í„° ê°±ì‹  ìˆœì„œëŠ” ìƒê´€ì—†ë‹¤.
+			//  ì–´ì°¨í”¼ ë°”ì¸ë“œëŠ” GPU ëª…ë ¹ì´ë¼ ë°”ë¡œ ì‹¤í–‰ë˜ì§€ ì•Šê¸° ë•Œë¬¸ì—)
 			pResources_->shadowPass.perDrawcallData.cbuffers[idxDrawcall].stage(
 				roomIdx_, &perDrawcallData, 1u
 			);
@@ -1286,7 +1286,7 @@ void Dispatcher::addJobShadowDraw( ID3D12GraphicsCommandList* threadCmdList,
 			++pGroup;
 		}
 
-		// ¸í·É ±â·Ï Á¾·á
+		// ëª…ë ¹ ê¸°ë¡ ì¢…ë£Œ
 		DISPLAY_ERROR_DX_HR( threadCmdList->Close(), false );
 		latch.count_down();
 	} );

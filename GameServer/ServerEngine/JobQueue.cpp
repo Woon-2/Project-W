@@ -1,4 +1,4 @@
-#include "sepch.hpp"
+ï»¿#include "sepch.hpp"
 #include "JobQueue.hpp"
 #include "JobQueuePool.hpp"
 
@@ -6,13 +6,13 @@ void JobQueue::push(Job* job, bool pushOnly) {
 	const int32 prevCnt = jobCount_.fetch_add(1);
 	queue_.enqueue(job);
 
-	// Ã¹ ¹øÂ° jobÀ» ³ÖÀº ½º·¹µå°¡ ½ÇÇà±îÁö ´ã´çÇÑ´Ù.
+	// ì²« ë²ˆì§¸ jobì„ ë„£ì€ ìŠ¤ë ˆë“œê°€ ì‹¤í–‰ê¹Œì§€ ë‹´ë‹¹í•œë‹¤.
 	if (prevCnt == 0) {
 		if (LJobQueue == nullptr && pushOnly == false) {
 			execute();
 		}
 		else {
-			// ¿©À¯ÀÖ´Â ½º·¹µå¿¡°Ô ½ÇÇàÀ» ³Ñ±ä´Ù.
+			// ì—¬ìœ ìˆëŠ” ìŠ¤ë ˆë“œì—ê²Œ ì‹¤í–‰ì„ ë„˜ê¸´ë‹¤.
 			JobQueuePool::push(this);
 		}
 	}

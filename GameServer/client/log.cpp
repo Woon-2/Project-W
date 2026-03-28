@@ -1,32 +1,32 @@
-#include "log.hpp"
+﻿#include "log.hpp"
 
-// pushLoggerA, popLoggerA ���� �Լ����� �̰��� ��Ʈ������ ���/�����Ѵ�.
-// dumpLog() ȣ�� �� gSharedLog�� ������ ��Ʈ���鿡 ����Ǿ� ��µȴ�.
+// pushLoggerA, popLoggerA 등의 함수에서 이곳에 스트림들을 등록/제거한다.
+// dumpLog() 호출 시 gSharedLog의 내용이 스트림들에 복사되어 출력된다.
 std::map<std::string, std::ostream*> gLoggers;
-// pushLoggerW, popLoggerW ���� �Լ����� �̰��� ��Ʈ������ ���/�����Ѵ�.
-// dumpLog() ȣ�� �� gwSharedLog�� ������ ��Ʈ���鿡 ����Ǿ� ��µȴ�.
+// pushLoggerW, popLoggerW 등의 함수에서 이곳에 스트림들을 등록/제거한다.
+// dumpLog() 호출 시 gwSharedLog의 내용이 스트림들에 복사되어 출력된다.
 std::map<std::string, std::wostream*> gwLoggers;
 
 #ifdef ENABLE_LOG
-// std::coutó�� ����Ѵ�.
-// �̰��� ���� �α׵��� dumpLog �Լ� ȣ�� �� ��µȴ�.
+// std::cout처럼 사용한다.
+// 이곳에 쓰인 로그들은 dumpLog 함수 호출 시 출력된다.
 std::ostringstream gSharedLog;
-// std::wcoutó�� ����Ѵ�.
-// �̰��� ���� �α׵��� dumpLog �Լ� ȣ�� �� ��µȴ�.
+// std::wcout처럼 사용한다.
+// 이곳에 쓰인 로그들은 dumpLog 함수 호출 시 출력된다.
 std::wostringstream gwSharedLog;
 #else
-// std::coutó�� ����Ѵ�.
-// �̰��� ���� �α׵��� dumpLog �Լ� ȣ�� �� ��µȴ�.
+// std::cout처럼 사용한다.
+// 이곳에 쓰인 로그들은 dumpLog 함수 호출 시 출력된다.
 NullStream<char> gSharedLog;
-// std::wcoutó�� ����Ѵ�.
-// �̰��� ���� �α׵��� dumpLog �Լ� ȣ�� �� ��µȴ�.
+// std::wcout처럼 사용한다.
+// 이곳에 쓰인 로그들은 dumpLog 함수 호출 시 출력된다.
 NullStream<wchar_t> gwSharedLog;
 #endif
 
 #ifdef ENABLE_LOG
-// gSharedLog�� gwSharedLog�� ��ϵ� �α׵���
-// pushLoggerA, pushLoggerW ���� �Լ��� ��ϵ� ��� ��Ʈ���鿡 ����Ѵ�.
-// ENABLE_LOG ��ũ�ΰ� Ȱ��ȭ�Ǿ����� �ʴٸ�, �ƹ� �ϵ� ���� �ʴ´�.
+// gSharedLog와 gwSharedLog에 기록된 로그들을
+// pushLoggerA, pushLoggerW 등의 함수로 등록된 모든 스트림들에 출력한다.
+// ENABLE_LOG 매크로가 활성화되어있지 않다면, 아무 일도 하지 않는다.
 void dumpLog() {
 	auto log = gSharedLog.rdbuf()->str();
 	for (auto& [key, logger] : gLoggers) {
@@ -43,8 +43,8 @@ void dumpLog() {
 	gwSharedLog.clear();
 }
 #else
-// gSharedLog�� gwSharedLog�� ��ϵ� �α׵���
-// pushLoggerA, pushLoggerW ���� �Լ��� ��ϵ� ��� ��Ʈ���鿡 ����Ѵ�.
-// ENABLE_LOG ��ũ�ΰ� Ȱ��ȭ�Ǿ����� �ʴٸ�, �ƹ� �ϵ� ���� �ʴ´�.
+// gSharedLog와 gwSharedLog에 기록된 로그들을
+// pushLoggerA, pushLoggerW 등의 함수로 등록된 모든 스트림들에 출력한다.
+// ENABLE_LOG 매크로가 활성화되어있지 않다면, 아무 일도 하지 않는다.
 void dumpLog() {}
 #endif

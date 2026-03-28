@@ -1,10 +1,10 @@
-#ifndef room_server_model_hpp
+ï»¿#ifndef room_server_model_hpp
 #define room_server_model_hpp
 
 #include "collision.hpp"
 
-// ¼­¹ö¿¡¼­ °ÔÀÓ °´Ã¼ÀÇ ¸ğµ¨°ú °ü·ÃÇÏ¿© ¾Ë¾Æ¾ß ÇÒ Á¤º¸´Â ÇöÀç
-// ÀÌ¸§°ú Ãæµ¹Ã¼ Á¤º¸ »ÓÀÌ´Ù.
+// ì„œë²„ì—ì„œ ê²Œì„ ê°ì²´ì˜ ëª¨ë¸ê³¼ ê´€ë ¨í•˜ì—¬ ì•Œì•„ì•¼ í•  ì •ë³´ëŠ” í˜„ì¬
+// ì´ë¦„ê³¼ ì¶©ëŒì²´ ì •ë³´ ë¿ì´ë‹¤.
 struct Model {
 	std::string name;
 	std::vector<BoundingRect> boundingRects;
@@ -13,8 +13,8 @@ struct Model {
 	std::map<std::string, int> aabbIdxMap;
 };
 
-// ¹ÙÀÌ³Ê¸® ÆÄÀÏ·ÎºÎÅÍ ¸ğµ¨À» ÀĞ¾î¿Â´Ù.
-// * ¼öÁ¤ ½Ã ÁÖÀÇ»çÇ×: À¯´ÏÆ¼ÀÇ ÃßÃâ ½ºÅ©¸³Æ®¿Í ±¸Á¶°¡ ´ëÄªÀÌ¾î¾ß ÇÑ´Ù.
+// ë°”ì´ë„ˆë¦¬ íŒŒì¼ë¡œë¶€í„° ëª¨ë¸ì„ ì½ì–´ì˜¨ë‹¤.
+// * ìˆ˜ì • ì‹œ ì£¼ì˜ì‚¬í•­: ìœ ë‹ˆí‹°ì˜ ì¶”ì¶œ ìŠ¤í¬ë¦½íŠ¸ì™€ êµ¬ì¡°ê°€ ëŒ€ì¹­ì´ì–´ì•¼ í•œë‹¤.
 Model loadModelFromFile(const std::filesystem::path& path);
 
 #endif // room_server_model_hpp

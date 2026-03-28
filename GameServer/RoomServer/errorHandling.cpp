@@ -1,22 +1,22 @@
-#include "rspch.hpp"
+ï»¿#include "rspch.hpp"
 #include "errorHandling.hpp"
 
 #ifdef DXGI_DEBUG_INFO
 namespace DXGIDebugInfo
 {
 
-ComPtr<IDXGIDebug1> debug;	// reportLiveObjects¸¦ ¼öÇàÇÏ±â À§ÇÑ µğ¹ö±× °´Ã¼
-ComPtr<IDXGIInfoQueue> infoQ;	// std::cout, È¤Àº ÆÄÀÏ·Î DXGI ¿¹¿Ü¸¦ Ãâ·ÂÇÏ±â À§ÇØ
-								// DXGI ¸Ş½ÃÁöµéÀÌ ´ã±ä Info Queue¸¦ ´Ù·ê ¼ö ÀÖ´Â ÀÎÅÍÆäÀÌ½º »ç¿ë
-// DXGI Debug °èÃşÀ» È°¼ºÈ­ÇÑ´Ù.
-// debug °´Ã¼¿Í infoQ °´Ã¼¸¦ ÃÊ±âÈ­ÇÑ´Ù.
+ComPtr<IDXGIDebug1> debug;	// reportLiveObjectsë¥¼ ìˆ˜í–‰í•˜ê¸° ìœ„í•œ ë””ë²„ê·¸ ê°ì²´
+ComPtr<IDXGIInfoQueue> infoQ;	// std::cout, í˜¹ì€ íŒŒì¼ë¡œ DXGI ì˜ˆì™¸ë¥¼ ì¶œë ¥í•˜ê¸° ìœ„í•´
+								// DXGI ë©”ì‹œì§€ë“¤ì´ ë‹´ê¸´ Info Queueë¥¼ ë‹¤ë£° ìˆ˜ ìˆëŠ” ì¸í„°í˜ì´ìŠ¤ ì‚¬ìš©
+// DXGI Debug ê³„ì¸µì„ í™œì„±í™”í•œë‹¤.
+// debug ê°ì²´ì™€ infoQ ê°ì²´ë¥¼ ì´ˆê¸°í™”í•œë‹¤.
 void init() {
 	DISPLAY_ERROR_HR( DXGIGetDebugInterface1(0, __uuidof(IDXGIDebug1), &debug), true );
 	DISPLAY_ERROR_HR( DXGIGetDebugInterface1(0, __uuidof(IDXGIInfoQueue), &infoQ), true );
 
-	// Info Queue¸¦ ÅëÇØ¼­ Corruption, Error ¹üÁÖÀÇ ¸Ş½ÃÁö¸¸ ¾ò¾î¿Àµµ·Ï ÇÑ´Ù.
-	// Info Queue´Â std::coutÀÌ³ª ÆÄÀÏÀ» ÅëÇØ DXGIÀÇ ¿¹¿Ü ¸Ş½ÃÁö¸¦ Ãâ·ÂÇÏ±â À§ÇÑ ¿ëµµÀÌ¹Ç·Î.
-	// Warning, Message, Info ¹üÁÖÀÇ ¸Ş½ÃÁö´Â ¾ò¾î¿Ã ÇÊ¿ä°¡ ¾ø´Ù.
+	// Info Queueë¥¼ í†µí•´ì„œ Corruption, Error ë²”ì£¼ì˜ ë©”ì‹œì§€ë§Œ ì–»ì–´ì˜¤ë„ë¡ í•œë‹¤.
+	// Info QueueëŠ” std::coutì´ë‚˜ íŒŒì¼ì„ í†µí•´ DXGIì˜ ì˜ˆì™¸ ë©”ì‹œì§€ë¥¼ ì¶œë ¥í•˜ê¸° ìœ„í•œ ìš©ë„ì´ë¯€ë¡œ.
+	// Warning, Message, Info ë²”ì£¼ì˜ ë©”ì‹œì§€ëŠ” ì–»ì–´ì˜¬ í•„ìš”ê°€ ì—†ë‹¤.
 	DXGI_INFO_QUEUE_MESSAGE_SEVERITY severties[] = {
 		DXGI_INFO_QUEUE_MESSAGE_SEVERITY_CORRUPTION,
 		DXGI_INFO_QUEUE_MESSAGE_SEVERITY_ERROR,
@@ -32,24 +32,24 @@ void init() {
 	infoQ->AddRetrievalFilterEntries(DXGI_DEBUG_ALL, &filter);
 }
 
-// »ì¾ÆÀÖ´Â DXGI °´Ã¼µéÀ» °¨ÁöÇØ º¸°íÇÑ´Ù.
-// ÇÁ·Î±×·¥ÀÇ ¸¶Áö¸·¿¡ ºÒ¸®Áö ¾ÊÀ¸¸é, ¼Ò¸êµÉ ¿¹Á¤ÀÎ °´Ã¼µéÀÌ ÀÖÀ½¿¡µµ ºÒ±¸ÇÏ°í
-// ¾û¶×ÇÏ°Ô ´©¼ö º¸°í¸¦ ÇÒ ¼ö ÀÖ´Ù.
-// Ãß°¡ÀûÀ¸·Î, ID3D12Object::SetNameÀ» ÅëÇØ °´Ã¼ÀÇ ÀÌ¸§À» ¼³Á¤ÇÏ¿©
-// ¾î¶² °´Ã¼µéÀÌ »ì¾ÆÀÖ´ÂÁö È®ÀÎÇÒ ¼ö ÀÖµµ·Ï ÇÏÀÚ.
+// ì‚´ì•„ìˆëŠ” DXGI ê°ì²´ë“¤ì„ ê°ì§€í•´ ë³´ê³ í•œë‹¤.
+// í”„ë¡œê·¸ë¨ì˜ ë§ˆì§€ë§‰ì— ë¶ˆë¦¬ì§€ ì•Šìœ¼ë©´, ì†Œë©¸ë  ì˜ˆì •ì¸ ê°ì²´ë“¤ì´ ìˆìŒì—ë„ ë¶ˆêµ¬í•˜ê³ 
+// ì—‰ëš±í•˜ê²Œ ëˆ„ìˆ˜ ë³´ê³ ë¥¼ í•  ìˆ˜ ìˆë‹¤.
+// ì¶”ê°€ì ìœ¼ë¡œ, ID3D12Object::SetNameì„ í†µí•´ ê°ì²´ì˜ ì´ë¦„ì„ ì„¤ì •í•˜ì—¬
+// ì–´ë–¤ ê°ì²´ë“¤ì´ ì‚´ì•„ìˆëŠ”ì§€ í™•ì¸í•  ìˆ˜ ìˆë„ë¡ í•˜ì.
 void reportLiveObjects(DXGI_DEBUG_RLO_FLAGS flags, std::ostream& os) {
-	DISPLAY_ERROR_STR(debug, "[DXGIDebugInfo] DXGIDebugInfo::debug °´Ã¼°¡ È°¼ºÈ­µÇÁö ¾Ê¾Ò½À´Ï´Ù. "
-		"DXGIDebugInfo::initÀ» ¸ÕÀú È£ÃâÇÏ¼¼¿ä.", false
+	DISPLAY_ERROR_STR(debug, "[DXGIDebugInfo] DXGIDebugInfo::debug ê°ì²´ê°€ í™œì„±í™”ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤. "
+		"DXGIDebugInfo::initì„ ë¨¼ì € í˜¸ì¶œí•˜ì„¸ìš”.", false
 	);
-	DISPLAY_ERROR_STR(infoQ, "[DXGIDebugInfo] DXGIDebugInfo::infoQ °´Ã¼°¡ È°¼ºÈ­µÇÁö ¾Ê¾Ò½À´Ï´Ù. "
-		"DXGIDebugInfo::initÀ» ¸ÕÀú È£ÃâÇÏ¼¼¿ä.", false
+	DISPLAY_ERROR_STR(infoQ, "[DXGIDebugInfo] DXGIDebugInfo::infoQ ê°ì²´ê°€ í™œì„±í™”ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤. "
+		"DXGIDebugInfo::initì„ ë¨¼ì € í˜¸ì¶œí•˜ì„¸ìš”.", false
 	);
 
 	if (debug) {
 		if (infoQ) {
-			// ReportLiveObjects·Î º¸°íµÇ´Â °ÍÀº ERROR³ª CORRUPTIONÀÌ ¾Æ´Ï´Ù.
-			// ReportLiveObjects·Î º¸°íµÇ´Â ³»¿ëµµ std::coutÀÌ³ª ÆÄÀÏ·Î È®ÀÎÇÏ±â À§ÇØ¼­´Â,
-			// ¿©±â¼­ ÇÊÅÍ¸¦ Á¦°ÅÇØÁÙ ÇÊ¿ä°¡ ÀÖ´Ù.
+			// ReportLiveObjectsë¡œ ë³´ê³ ë˜ëŠ” ê²ƒì€ ERRORë‚˜ CORRUPTIONì´ ì•„ë‹ˆë‹¤.
+			// ReportLiveObjectsë¡œ ë³´ê³ ë˜ëŠ” ë‚´ìš©ë„ std::coutì´ë‚˜ íŒŒì¼ë¡œ í™•ì¸í•˜ê¸° ìœ„í•´ì„œëŠ”,
+			// ì—¬ê¸°ì„œ í•„í„°ë¥¼ ì œê±°í•´ì¤„ í•„ìš”ê°€ ìˆë‹¤.
 			infoQ->PopRetrievalFilter(DXGI_DEBUG_ALL);
 		}
 
@@ -61,9 +61,9 @@ void reportLiveObjects(DXGI_DEBUG_RLO_FLAGS flags, std::ostream& os) {
 	}
 }
 
-// @brief Àü´Ş¹ŞÀº Ãâ·Â ½ºÆ®¸²À¸·Î ÀúÀåµÈ ¸Ş½ÃÁöµéÀ» Ãâ·ÂÇÑ´Ù.
-// @param os Ãâ·Â ½ºÆ®¸²
-// @param willClear Ãâ·Â ÈÄ infoQ¸¦ ºñ¿ïÁö ¿©ºÎ
+// @brief ì „ë‹¬ë°›ì€ ì¶œë ¥ ìŠ¤íŠ¸ë¦¼ìœ¼ë¡œ ì €ì¥ëœ ë©”ì‹œì§€ë“¤ì„ ì¶œë ¥í•œë‹¤.
+// @param os ì¶œë ¥ ìŠ¤íŠ¸ë¦¼
+// @param willClear ì¶œë ¥ í›„ infoQë¥¼ ë¹„ìš¸ì§€ ì—¬ë¶€
 void dump(std::ostream& os, bool willClear) {
 	UINT64 msgCnt = infoQ->GetNumStoredMessagesAllowedByRetrievalFilters(DXGI_DEBUG_ALL);
 

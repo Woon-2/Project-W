@@ -1,4 +1,4 @@
-#ifndef __spriteAnimation_HPP
+ï»¿#ifndef __spriteAnimation_HPP
 #define __spriteAnimation_HPP
 
 #include "gfxUtil.hpp"
@@ -25,12 +25,12 @@ public:
 	void MU_CALLCONV setTint(mu::Vec3 tint) { tint_ = tint; }
 
 private:
-	mu::Mat4x4 world_{};	// GFX¿¡ Çà·ÄÀ» Àü´ŞÇÒ ¶§¸¸ »ç¿ëµÈ´Ù.
+	mu::Mat4x4 world_{};	// GFXì— í–‰ë ¬ì„ ì „ë‹¬í•  ë•Œë§Œ ì‚¬ìš©ëœë‹¤.
 	std::normal_distribution<float> distRandomAdvance_{};
 
 	mu::Vec3 pos_{};
 	mu::Vec3 tint_ = mu::Vec3(1.f, 1.f, 1.f);
-	mu::Vec2 scale_ = mu::Vec2(1.f, 1.f);	// ÇâÈÄ ¼ÎÀÌ´õ¿¡¼­ ¹İ¿µÇÒ ¼ö ÀÖµµ·Ï
+	mu::Vec2 scale_ = mu::Vec2(1.f, 1.f);	// í–¥í›„ ì…°ì´ë”ì—ì„œ ë°˜ì˜í•  ìˆ˜ ìˆë„ë¡
 
 	const SpriteAnimationClip* pAnimData_ = nullptr;
 
