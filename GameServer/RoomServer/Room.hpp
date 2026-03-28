@@ -24,9 +24,13 @@ public:
 	}
 
 	void init(const Level* levelData);
+
 	void enter(GameSession* session);
 	void leave(GameSession* session);
+	void move(int32 sessionId, CMovePacket* cMvPkt);
+
 	void broadcast(SendBuffer* sendBuffer);
+	void broadcastExcept(GameSession* exceptSession, SendBuffer* sendBuffer);
 
 	void doAsync(CallbackType&& callback) {
 		jobQueue_.doAsync(std::move(callback));

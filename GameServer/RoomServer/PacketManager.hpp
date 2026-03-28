@@ -15,6 +15,7 @@ public:
 	static SendBuffer* makeSEnterPacket(const PlayerInfo& playerInfo, const std::vector<ObjectInfo>& objInfos);
 	static SendBuffer* makeSEnterOtherPacket(const PlayerInfo& playerInfo);
 	static SendBuffer* makeSLeavePacket(uint16 playerId);
+	static SendBuffer* makeSMovePacket(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient);
 };
 
 #endif // packet_manager_hpp

@@ -4,6 +4,7 @@
 #include "BufferWriter.hpp"
 #include "GameSession.hpp"
 #include "ObjectPool.hpp"
+#include "Room.hpp"
 
 void PacketManager::handlePacket(GameSession* session, byte* buffer, int32 len) {
 	auto header = reinterpret_cast<PacketHeader*>(buffer);
@@ -20,13 +21,15 @@ void PacketManager::handlePacket(GameSession* session, byte* buffer, int32 len) 
 }
 
 void PacketManager::handleCMovePacket(GameSession* session, byte* buffer, int32 len) {
-	auto movePacket = reinterpret_cast<CMovePacket*>(buffer);
-	auto mvPktClone = ObjectPool<CMovePacket>::pop();
+	auto clientMovePacket = reinterpret_cast<CMovePacket*>(buffer);
+	auto cMvPktClone = ObjectPool<CMovePacket>::pop();
 
-	mvPktClone->pos = movePacket->pos;
-	mvPktClone->orient = movePacket->orient;
-
+	cMvPktClone->pos = clientMovePacket->pos;
+	cMvPktClone->orient = clientMovePacket->orient;
 	
+	session->room()->doAsync([session, cMvPktClone]() {
+		session->room()->move(session->id(), cMvPktClone);
+	});
 }
 
 SendBuffer* PacketManager::makeSEnterPacket(const PlayerInfo& playerInfo, const std::vector<ObjectInfo>& objInfos) {
@@ -79,6 +82,22 @@ SendBuffer* PacketManager::makeSLeavePacket(uint16 playerId) {
 
 	leavePacket->size = bw.writeSize();
 	leavePacket->type = PacketType::S_Leave;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+SendBuffer* PacketManager::makeSMovePacket(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient) {
+	auto sendBuffer = SendBufferManager::open(sizeof(SMovePacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto sMvPkt = bw.reserve<SMovePacket>();
+	sMvPkt->playerId = playerId;
+	sMvPkt->pos = pos;
+	sMvPkt->orient = orient;
+
+	sMvPkt->size = bw.writeSize();
+	sMvPkt->type = PacketType::S_Move;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;

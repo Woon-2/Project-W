@@ -83,8 +83,38 @@ void Room::leave(GameSession* session) {
 	}
 }
 
+void Room::move(int32 sessionId, CMovePacket* cMvPkt) {
+	// 혹시나 하는 가능성 중, sessionId로 idSessionMap_에서 session을 찾는 것이 유효하지 않을 수도 있음.
+	// leave한 sessionId가 move 패킷을 보내는 경우 등. 일단은 방에 있는 session이 보낸 패킷이므로 유효하다고 가정하고 작성한다.
+	auto session = idSessionMap_[sessionId];
+
+	auto player = session->player();
+
+	player->setPos(DirectX::XMLoadFloat3(&cMvPkt->pos));
+	player->setOrient(DirectX::XMLoadFloat4(&cMvPkt->orient));
+
+	auto sMvPkt = PacketManager::makeSMovePacket(
+		static_cast<uint16>(sessionId),
+		player->pos().getXmf(),
+		player->orient().getXmf()
+	);
+
+	broadcastExcept(session, sMvPkt);
+
+	ObjectPool<CMovePacket>::push(cMvPkt);
+}
+
 void Room::broadcast(SendBuffer* sendBuffer) {
 	for(auto session : sessions_) {
+		session->send(sendBuffer);
+	}
+}
+
+void Room::broadcastExcept(GameSession* exceptSession, SendBuffer* sendBuffer) {
+	for (auto session : sessions_) {
+		if (session == exceptSession) {
+			continue;
+		}
 		session->send(sendBuffer);
 	}
 }
