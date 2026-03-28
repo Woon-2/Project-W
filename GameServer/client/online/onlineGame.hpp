@@ -17,6 +17,7 @@
 #include "../crosshair.hpp"
 
 class Timer;
+class SendBuffer;
 
 namespace Online {
 
@@ -55,12 +56,19 @@ public:
 	GameType type() const override { return GameType::Online; }
 
 	void setTimer(Timer* pTimer) { pTimer_ = pTimer; }
+
 	// 객체들을 생성한다.
 	void setupStage();
+
 	void setupPlayer(const PlayerInfo& playerInfo);
 	void createOtherPlayer(const ObjectInfo& otherPlayerInfo);
 	void createOtherPlayer(const PlayerInfo& otherPlayerInfo);
+
 	void setupGround(const ObjectInfo& groundInfo);
+
+	void removePlayer( i32t playerId );
+
+	void movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient);
 
 	// 게임의 업데이트는 다음 순서대로 이루어진다.
 	// 입력 처리
@@ -74,7 +82,6 @@ public:
 	// 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
 	LRESULT receiveWndMsg( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam ) override;
 
-	void removePlayer( i32t playerId );
 	//bool findPlayer(i32t playerId);
 
 	//void createOtherPlayer( i32t playerId, float x, float y, float z ) {
@@ -110,6 +117,8 @@ private:
 		SpriteAnimation anim;
 		std::shared_ptr<Object> pOwner;
 	};
+
+	void sendMovePacket(SendBuffer* sendBuffer);
 
 	void sendMouseMovePacket();
 	void sendMoveStatePacket();

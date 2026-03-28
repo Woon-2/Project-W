@@ -113,7 +113,7 @@ void ServerSession::processRecv(int32 numBytes) {
 
 void ServerSession::processPacket(byte* buffer, int32 len) {
 	//std::cout << "Received packet - Size: " << len << '\n';
-	PacketManager::handlePacket(game_, buffer, len);
+	PacketManager::handlePacket(buffer, len);
 }
 
 void ServerSession::processSend(int32 numBytes) {

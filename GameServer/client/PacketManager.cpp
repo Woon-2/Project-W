@@ -1,22 +1,28 @@
 #include "pch.hpp"
 #include "PacketManager.hpp"
 #include "online/onlineGame.hpp"
+#include "SendBuffer.hpp"
+#include "BufferWriter.hpp"
+#include "ClientApp.hpp"
 
-void PacketManager::handlePacket(Online::Game* game, byte* buffer, int32 len) {
+void PacketManager::handlePacket(byte* buffer, int32 len) {
 	auto header = reinterpret_cast<PacketHeader*>(buffer);
 
 	switch (header->type) {
 	case PacketType::S_Enter:
-		handleSEnterPacket(game, buffer, len);
+		handleSEnterPacket(buffer, len);
 		break;
 
 	case PacketType::S_Enter_Other:
-		handleSEnterOtherPacket(game, buffer, len);
+		handleSEnterOtherPacket(buffer, len);
 		break;
 
 	case PacketType::S_Leave:
-		handleSLeavePacket(game, buffer, len);
+		handleSLeavePacket(buffer, len);
 		break;
+
+	case PacketType::S_Move:
+		handleSMovePacket(buffer, len);
 
 	default:
 		std::cout << "Unknown packet type received. Type: " << static_cast<uint16>(header->type) << '\n';
@@ -24,10 +30,11 @@ void PacketManager::handlePacket(Online::Game* game, byte* buffer, int32 len) {
 	}
 }
 
-void PacketManager::handleSEnterPacket(Online::Game* game, byte* buffer, int32 len) {
+void PacketManager::handleSEnterPacket(byte* buffer, int32 len) {
 	auto enterPacket = reinterpret_cast<SEnterPacket*>(buffer);
 	auto playerInfo = enterPacket->myInfo;
 
+	auto game = INet::ClientApp::onlineGame();
 	game->setupPlayer(playerInfo);
 
 	auto objList = enterPacket->getObjectList();
@@ -51,15 +58,39 @@ void PacketManager::handleSEnterPacket(Online::Game* game, byte* buffer, int32 l
 	}
 }
 
-void PacketManager::handleSEnterOtherPacket(Online::Game* game, byte* buffer, int32 len) {
+void PacketManager::handleSEnterOtherPacket(byte* buffer, int32 len) {
 	auto enterOtherPacket = reinterpret_cast<SEnterOtherPacket*>(buffer);
 	auto otherPlayerInfo = enterOtherPacket->otherInfo;
 
+	auto game = INet::ClientApp::onlineGame();
 	game->createOtherPlayer(otherPlayerInfo);
 }
 
-void PacketManager::handleSLeavePacket(Online::Game* game, byte* buffer, int32 len) {
+void PacketManager::handleSLeavePacket(byte* buffer, int32 len) {
 	auto leavePacket = reinterpret_cast<SLeavePacket*>(buffer);
 
+	auto game = INet::ClientApp::onlineGame();
 	game->removePlayer(leavePacket->playerId);
+}
+
+void PacketManager::handleSMovePacket(byte* buffer, int32 len) {
+	auto sMvPkt = reinterpret_cast<SMovePacket*>(buffer);
+	
+	auto game = INet::ClientApp::onlineGame();
+	game->movePlayer(sMvPkt->playerId, sMvPkt->pos, sMvPkt->orient);
+}
+
+SendBuffer* PacketManager::makeCMovePacket(DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient) {
+	auto sendBuffer = SendBufferManager::open(sizeof(CMovePacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto cMvPkt = bw.reserve<CMovePacket>();
+	cMvPkt->pos = pos;
+	cMvPkt->orient = orient;
+
+	cMvPkt->size = bw.writeSize();
+	cMvPkt->type = PacketType::C_Move;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
 }

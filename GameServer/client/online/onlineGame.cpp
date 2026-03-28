@@ -2,6 +2,9 @@
 #include "onlineGame.hpp"
 #include "../errorHandling.hpp"
 #include "../timer.hpp"
+#include "SendBuffer.hpp"
+#include "../PacketManager.hpp"
+#include "../ClientApp.hpp"
 
 extern HWND ghWnd;
 extern RECT gClientRect;
@@ -164,9 +167,10 @@ void Game::update(Milliseconds deltaTime) {
 	}
 
 	//std::cout << "player pos : " << player_->pos().x() << ", " << player_->pos().y() << ", " << player_->pos().z() << '\n';
-	/*if (prevVelocity_ != currVelocity_) {
-		sendMoveStatePacket();
-	}*/
+	if (prevVelocity_ != currVelocity_) {
+		auto sendBuffer = PacketManager::makeCMovePacket(player_->pos().getXmf(), player_->orient().getXmf());
+		INet::ClientApp::send(sendBuffer);
+	}
 
 	// 객체별 업데이트 루틴
 	// 
@@ -281,6 +285,22 @@ void Game::removePlayer( i32t playerId ) {
 	otherPlayerHpUIs_.erase( playerId );
 }
 
+void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient) {
+	auto player = idPlayerMap_[playerId];
+
+	DISPLAY_ERROR_STR(player != nullptr,
+		"[Game Error] Game::movePlayer: 이동하려는 플레이어가 존재하지 않습니다.\n",
+		false
+	);
+
+	if (player == nullptr) {
+		return;
+	}
+
+	player->setPos(DirectX::XMLoadFloat3(&pos));
+	player->setOrient(DirectX::XMLoadFloat4(&orient));
+}
+
 // 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
 LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	switch (msg) {
@@ -358,6 +378,9 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	}
 
 	return DefWindowProcA(hWnd, msg, wParam, lParam);
+}
+
+void Game::sendMovePacket(SendBuffer* sendBuffer) {
 }
 
 void Game::sendMouseMovePacket() {

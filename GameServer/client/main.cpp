@@ -3,7 +3,8 @@
 #include "online/onlineGame.hpp"
 #include "standalone/game.hpp"
 #include "timer.hpp"
-#include "ServerSession.hpp"
+#include "SendBuffer.hpp"
+#include "ClientApp.hpp"
 
 inline constexpr const char* wndClsName = "wndCls";
 inline constexpr const char* wndName = "Project1";
@@ -17,6 +18,9 @@ LRESULT wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow )
 {
 	SocketUtils::init( );
+	MemoryManager::init();
+	INet::ClientApp::init();
+
 	std::locale::global( std::locale( "ko-KR" ) );
 
 	pushLoggerA("standard", &std::cout);
@@ -65,32 +69,14 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 	// 서버 연결 및 게임 초기화
 	Timer timer{};
 
-	std::unique_ptr<IGame> pGame = nullptr;
-
-	ServerSession serverSession;
-
 	std::cout << "[Main] 서버 연결 중...\n";
-	if (!serverSession.connect()) {
+	if (!INet::ClientApp::connectToServer()) {
 		std::cout << "[Main] 서버 연결 실패\n" << "StandAlone 모드로 실행합니다.\n";
-		pGame = std::make_unique<StandAlone::Game>();
-
-		SetWindowLongPtrA(ghWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pGame.get()));
-
-		auto standAloneGame = static_cast<StandAlone::Game*>(pGame.get());
-		standAloneGame->setupStage();
-		standAloneGame->setTimer(&timer);
+		INet::ClientApp::setup(INet::GameType::StandAlone, &timer);
 	}
 	else {
-		std::cout << "[Main] 서버 연결 성공\n" << "서버 IP: " << serverSession.ip() << ", 서버 Port: " << serverSession.port() << '\n';
-		pGame = std::make_unique<Online::Game>();
-
-		SetWindowLongPtrA(ghWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pGame.get()));
-		
-		auto onlineGame = static_cast<Online::Game*>(pGame.get());
-		onlineGame->setupStage();
-		onlineGame->setTimer(&timer);
-
-		serverSession.setGame(onlineGame);
+		std::cout << "[Main] 서버 연결 성공\n" << "서버 IP: " << INet::ClientApp::serverIp() << ", 서버 Port: " << INet::ClientApp::serverPort() << '\n';
+		INet::ClientApp::setup(INet::GameType::Online, &timer);
 	}
 	
 	// 윈도우 메시지 루프
@@ -98,7 +84,9 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 	while ( true ) {
 		while ( PeekMessageA( &msg, nullptr, 0, 0, PM_REMOVE ) ) {
 			if ( msg.message == WM_QUIT ) {
-				SocketUtils::release( );
+				SendBufferManager::clear();
+				MemoryManager::release();
+				SocketUtils::release();
 				return static_cast<int>( msg.wParam );
 			}
 
@@ -110,8 +98,8 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 		auto title = wndName + "(FPS: "s + std::to_string( timer.fps( ) ) + ")"s;
 		SetWindowTextA( ghWnd, title.c_str( ) );
 
-		pGame->update(timer.deltaTime<Milliseconds>());
-		pGame->render();
+		INet::ClientApp::update(timer.deltaTime<Milliseconds>());
+		INet::ClientApp::render();
 
 		SleepEx(1, true);
 	}
