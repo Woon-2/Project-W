@@ -424,12 +424,30 @@ void freeSRV(const Texture& tex, DescriptorPool& pool);
 // 이 함수는 그것을 검사하지 않는다.
 void freeUAV(const Texture& tex, DescriptorPool& pool);
 
+struct ColorKey {
+	float    t;      // 정규화된 파티클 수명 위치 [0, 1] — 0 = 생성, 1 = 소멸
+	mu::Vec4 color;  // RGBA [0, 1] — startColor에 채널별로 곱해지는 multiplier
+};
+
+// 파티클 수명 [0, 1] 구간에서 평가되는 piecewise-linear RGBA 그래디언트.
+// EmitterConfig::startColor에 곱해지는 multiplier 커브로 동작한다:
+//   finalColor(t) = startColor * colorOverLifetime.evaluate(t)  // RGBA component-wise
+// keys가 비어있으면 {1,1,1,1}을 반환하여 startColor를 그대로 유지한다.
+struct ColorGradient {
+	std::vector<ColorKey> keys;  // t 기준 오름차순 정렬 필수
+
+	mu::Vec4 MU_CALLCONV evaluate(float t) const;
+
+	// 수명 전체에 걸쳐 동일한 색을 유지하는 그래디언트를 생성한다.
+	static ColorGradient constant(mu::Vec4 c);
+	// begin에서 end까지 선형으로 변화하는 2-key 그래디언트를 생성한다.
+	static ColorGradient linear(mu::Vec4 begin, mu::Vec4 end);
+};
+
 struct SpriteAnimFrame
 {
-	Texture sprite;
-	std::string name;
-	std::uint32_t width;
-	std::uint32_t height;
+	mu::Vec2 uvOffset;	// 스프라이트 시트 내 이 프레임의 좌상단 UV
+	mu::Vec2 uvScale;	// 이 프레임의 UV 크기 (= 1/cols, 1/rows)
 	Milliseconds time;
 };
 
@@ -444,17 +462,22 @@ enum class SpriteAnimType : std::uint32_t
 struct SpriteAnimationClip
 {
 	std::string name;
+	Texture spriteSheet;				// 모든 프레임이 담긴 단일 스프라이트 시트 텍스처
 	std::vector<SpriteAnimFrame> frames;
 	SpriteAnimType type;
 	Milliseconds frameTime;
 	Milliseconds duration;
 };
 
-// 바이너리 파일로부터 스프라이트 애니메이션의 정보들을 로드하고 그것을 바탕으로 texAnimHashMap을 채운다.
-SpriteAnimationClip loadSpriteAnimationFromFile(
-	const std::filesystem::path& path,
+// 스프라이트 시트 텍스처와 그리드 파라미터로부터 SpriteAnimationClip을 생성한다.
+// sheetPath: DDS 포맷의 스프라이트 시트 경로
+// rows, cols: 스프라이트 시트의 행/열 수
+// frameCount: 실제 유효 프레임 수 (rows * cols 이하)
+SpriteAnimationClip loadSpriteSheetAnimation(
+	const std::filesystem::path& sheetPath,
+	int rows, int cols, int frameCount,
+	SpriteAnimType type, Milliseconds frameTime,
 	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
-	std::unordered_map<std::string, std::vector<Texture>>& texAnimHashMap,
 	DescriptorPool& texPool, Fence& fenceToAssociate
 );
 

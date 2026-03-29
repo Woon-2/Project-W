@@ -175,6 +175,18 @@ Model loadModelFromFile( const std::filesystem::path& path,
 	DescriptorPool& texPool, Fence& fenceToAssociate	
 );
 
+// .meshbin v1 포맷에서 메시를 로드한다.
+// 반환값: (Mesh, 텍스처 경로 문자열)
+// 텍스처 경로는 ../resources/Textures/ 기준 상대 경로이며
+// 호출자가 해당 텍스처를 별도로 로드해야 한다.
+// 메시의 VB 키: "{meshName}_VB_Position" (float3, Slot0), "{meshName}_VB_UV" (float2, Slot1)
+std::pair<Mesh, std::string> loadMeshBin(
+	const std::filesystem::path& path,
+	ID3D12Device* device,
+	ID3D12GraphicsCommandList* cmdList,
+	Fence& fenceToAssociate
+);
+
 struct Skybox {
 	std::string name;
 	Texture texSkybox;

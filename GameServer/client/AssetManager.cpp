@@ -101,10 +101,31 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 		.pDest       = &terrain_
 	} );
 	gfx.addRequestSpritesLoad( RequestSpriteAnimLoad{
-		.spritesPath = "../resources/Sprites/flame5_anim.bin",
-		.pDest = &flameAnimation_,
-		.pSpritesHashMap = &spritesHashMap_
-		} );
+		.sheetPath  = "../resources/Sprites/Flame.dds",
+		.rows       = 3,
+		.cols       = 3,
+		.frameCount = 9,
+		.type       = SpriteAnimType::Loop,
+		.frameTime  = 80ms,
+		.pDest      = &flameAnimation_
+	} );
+
+	gfx.addRequestSpritesLoad( RequestSpriteAnimLoad{
+		.sheetPath  = "../resources/Sprites/A_Smoke_2.dds",
+		.rows       = 3,
+		.cols       = 3,
+		.frameCount = 9,
+		.type       = SpriteAnimType::Loop,
+		.frameTime  = 80ms,
+		.pDest      = &smokeAnimation_
+	} );
+
+	gfx.addRequestMeshBinLoad( RequestMeshBinLoad{
+		.meshPath    = "../resources/effects/SwordSlash.meshbin",
+		.pTexHashMap = &texHashMap_,
+		.pDestMesh   = &swordSlashMesh_,
+		.pDestTex    = &swordSlashTex_
+	} );
 
 	gfx.loadAssets(configs);
 }

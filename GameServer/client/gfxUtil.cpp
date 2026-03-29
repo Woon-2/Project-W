@@ -3,6 +3,31 @@
 #include "errorHandling.hpp"
 #include "binaryImport.hpp"
 
+mu::Vec4 MU_CALLCONV ColorGradient::evaluate(float t) const {
+	if (keys.empty()) return mu::Vec4(1.f, 1.f, 1.f, 1.f);
+
+	if (t <= keys.front().t) return keys.front().color;
+	if (t >= keys.back().t)  return keys.back().color;
+
+	// t를 포함하는 두 키 구간을 찾아 선형 보간한다.
+	for (std::size_t i = 1; i < keys.size(); ++i) {
+		if (t <= keys[i].t) {
+			const float span = keys[i].t - keys[i - 1].t;
+			const float f    = (span > 0.f) ? (t - keys[i - 1].t) / span : 0.f;
+			return mu::lerp(keys[i - 1].color, keys[i].color, f);
+		}
+	}
+	return keys.back().color;
+}
+
+ColorGradient ColorGradient::constant(mu::Vec4 c) {
+	return ColorGradient{ .keys = { {0.f, c}, {1.f, c} } };
+}
+
+ColorGradient ColorGradient::linear(mu::Vec4 begin, mu::Vec4 end) {
+	return ColorGradient{ .keys = { {0.f, begin}, {1.f, end} } };
+}
+
 // 버퍼 리소스를 생성하는 함수
 // creationType이 UploadBuffer이고 pSrc != nullptr인 경우에만
 // pSrc의 내용이 리소스에 복사된다.
@@ -865,77 +890,50 @@ void freeUAV(const Texture& tex, DescriptorPool& pool) {
 	pool.free(tex.idxUav.idxResource);
 }
 
-SpriteAnimationClip loadSpriteAnimationFromFile( const std::filesystem::path& path, ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, 
-	std::unordered_map<std::string, std::vector<Texture>>& texAnimHashMap, DescriptorPool& texPool, Fence& fenceToAssociate ) {
+SpriteAnimationClip loadSpriteSheetAnimation(
+	const std::filesystem::path& sheetPath,
+	int rows, int cols, int frameCount,
+	SpriteAnimType type, Milliseconds frameTime,
+	ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
+	DescriptorPool& texPool, Fence& fenceToAssociate
+) {
 	SpriteAnimationClip ret{};
+	ret.name     = sheetPath.stem().string();
+	ret.type     = type;
+	ret.frameTime = frameTime;
+	ret.duration  = frameTime * frameCount;
 
-	auto ifs = std::ifstream( path, std::ios::binary );
-	DISPLAY_ERROR_STR( ifs.good(), "[File I/O Error]: loadSpriteAnimationFromFile: "s + path.string() + " 파일을 열 수 없습니다."s, false );
-	if ( !ifs ) {
-		return ret;
+	// 스프라이트 시트 텍스처 로드 (프레임 전체가 담긴 단일 텍스처)
+	Texture::Type texType{};
+	ret.spriteSheet = loadTexture(device, cmdList, sheetPath, fenceToAssociate, texType);
+	createSRV(device, ret.spriteSheet, texPool);
+	ret.spriteSheet.idxSrv.idxSampler = etoi(Samplers::TrilinearWrap);
+
+	// 그리드 파라미터로부터 프레임별 UV 계산
+	const float uvW = 1.f / cols;
+	const float uvH = 1.f / rows;
+
+	ret.frames.resize(static_cast<std::size_t>(frameCount) + 1u);  // +1: sentinel
+
+	for (int i = 0; i < frameCount; ++i) {
+		const int row = i / cols;
+		const int col = i % cols;
+		ret.frames[i].uvOffset = mu::Vec2(col * uvW, row * uvH);
+		ret.frames[i].uvScale  = mu::Vec2(uvW, uvH);
+
+		if (type == SpriteAnimType::RandomAdvance) {
+			ret.frames[i].time = frameTime;
+		} else {
+			ret.frames[i].time = i * frameTime;
+		}
 	}
 
-	ret.name = readText(ifs, "Name");
-	ret.type = static_cast<SpriteAnimType>(readInteger(ifs, "Type"));
+	// sentinel: 인덱스 오버런 방지용 (Loop/Once의 while 조건에서 사용)
+	ret.frames.back() = ret.frames[frameCount - 1];
+	ret.frames.back().time = Milliseconds(std::numeric_limits<float>::max());
 
-	const auto frameCount = readInteger(ifs, "FrameCount");
-	ret.frames.resize(frameCount + 1u);
-
-	ret.frameTime = Milliseconds( readInteger(ifs, "FrameTime") );
-
-	auto [pPair, emplaced] = texAnimHashMap.try_emplace(ret.name);
-	if (emplaced) {
-		auto& sprites = pPair->second;
-		sprites.reserve(ret.frames.size());
-	}
-
-	ret.duration = Milliseconds( readInteger(ifs, "Duration") );
-
-	readHeadTag( ifs, "Frames" );
-	for ( std::size_t i = 0u; i < ret.frames.size() - 1u; ++i ) {
-		readHeadTag( ifs, "Frame" );
-		
-		ret.frames[i].name = readText(ifs, "Name");
-		ret.frames[i].width = static_cast<u32t>(readInteger(ifs, "Width"));
-		ret.frames[i].height = static_cast<u32t>(readInteger(ifs, "Height"));
-		if (ret.type == SpriteAnimType::RandomAdvance) {
-			ret.frames[i].time = ret.frameTime;
-		}
-		else {
-			ret.frames[i].time = i * ret.frameTime;
-		}
-
-		auto& sprites = pPair->second;
-
-		if (emplaced) {
-			const auto texturePath = std::filesystem::path("../resources/Sprites/"s + ret.name + '/' + ret.frames[i].name);
-
-			Texture::Type type{};
-			auto texture = loadTexture(device, cmdList, texturePath, fenceToAssociate, type);
-
-			createSRV(device, texture, texPool);
-			// TODO: 샘플링 방법도 바이너리에 기록
-			texture.idxSrv.idxSampler = etoi(Samplers::TrilinearWrap);
-
-			sprites.push_back(std::move(texture));
-		}
-
-		ret.frames[i].sprite = cloneTextureIdxOnly(sprites[i]);
-
-		readTailTag( ifs, "Frame" );
-	}
-
-	// sentinel frame
-	auto& sentinelFrame = ret.frames.back();
-	sentinelFrame.name = "Sentinel";
-	sentinelFrame.width = ret.frames[ret.frames.size() - 2u].width;
-	sentinelFrame.height = ret.frames[ret.frames.size() - 2u].height;
-	sentinelFrame.sprite = ret.frames[ret.frames.size() - 2u].sprite;
-	sentinelFrame.time = Milliseconds(std::numeric_limits<float>::max());
-
-	readTailTag( ifs, "Frames" );
-
-	gSharedLog << "[Resource Load] File I/O: Sprites " << '(' << path << ") 로드 완료\n";
+	gSharedLog << "[Resource Load] File I/O: SpriteSheet (" << sheetPath << ") "
+		<< rows << "x" << cols << " grid, " << frameCount << " frames 로드 완료\n";
 
 	return ret;
 }

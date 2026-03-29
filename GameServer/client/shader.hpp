@@ -26,6 +26,8 @@ ComPtr<ID3D12PipelineState> createPBRShaderCSMDebug(ID3D12Device* device, ID3D12
 ComPtr<ID3D12PipelineState> createPBRSkinnedShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRSkinnedShaderCSMDebug(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBillboardShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createBillboardShaderAdditive(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createMeshParticleShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSignature* rootSig );
@@ -230,25 +232,59 @@ namespace BillboardShader {
 
 struct Material {
 	BindlessIndex idxTex;
-	XMFLOAT3 tint;
+	XMFLOAT4 tint;	// RGBA — rgb: 색 multiplier, a: 알파 multiplier. finalColor = startColor * tint (component-wise)
 };
 
 struct PerInstanceData {
 	XMFLOAT4X4 world;
+	float       rotation;   // 빌보드 평면 내 회전 (라디안)
+	float       pad[3];
 };
 
+// cbuffer b0 레이아웃 (총 56B):
+//   Material(32B) | firstInstanceOffset(4B) | uvOffset(8B) | pad_(4B) | uvScale(8B)
+// pad_는 HLSL cbuffer packing rule에 의해 float2 uvScale이 16-byte register 경계(48B)로
+// 자동 정렬되는 것에 맞추기 위한 명시적 패딩이다.
 struct PerDrawcallData {
 	Material material;
 	u32t firstInstanceOffset;
+	XMFLOAT2 uvOffset;		// 스프라이트 시트 내 현재 프레임의 좌상단 UV
+	u32t pad_;				// 명시적 4B 패딩 — HLSL register boundary 정렬 (offset 44→48)
+	XMFLOAT2 uvScale;		// 현재 프레임의 UV 크기 (= 1/cols, 1/rows)
 };
 
 struct PerFrameData {
 	XMFLOAT4X4 vp;
-	XMFLOAT3 cameraPosV;
+	XMFLOAT3 cameraPosW;  // world-space camera position
 	float padding0;
 };
 
 }	// namespace BillboardShader
+
+// MeshParticleShader
+namespace MeshParticleShader {
+
+// 80B, 16B-aligned
+// world: row-major — CPU에서 mu::transpose().getXmf() 후 전달
+struct PerInstanceData {
+	XMFLOAT4X4 world;  // 64B
+	XMFLOAT4   tint;   // 16B
+};
+
+// 32B
+// int4 idxTex(16B) | firstInstanceOffset(4B) | pad(12B)
+struct PerDrawcallData {
+	BindlessIndex idxTex;              // int4, 16B
+	u32t          firstInstanceOffset; // 4B
+	XMUINT3       pad;                 // 12B
+};
+
+// 64B
+struct PerFrameData {
+	XMFLOAT4X4 vp;  // row-major — CPU에서 mu::transpose().getXmf() 후 전달
+};
+
+}	// namespace MeshParticleShader
 
 // ShadowMapShader
 namespace ShadowMapShader {

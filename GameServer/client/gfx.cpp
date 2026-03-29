@@ -240,6 +240,8 @@ void GFX::init() {
 	shaders_.try_emplace("PBRShader", createPBRShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRSkinnedShader", createPBRSkinnedShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("BillboardShader", createBillboardShader( device_.Get(), defaultRootSig.get() ));
+	shaders_.try_emplace("BillboardShaderAdditive", createBillboardShaderAdditive( device_.Get(), defaultRootSig.get() ));
+	shaders_.try_emplace("MeshParticleShader", createMeshParticleShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("SkyboxShader", createSkyboxShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("BVShader", createBVShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace( "UIShader", createUIShader( device_.Get(), defaultRootSig.get() ) );
@@ -267,6 +269,7 @@ void GFX::init() {
 	drawEventsPBRSkinnedPipeline_.reserve(1000u);
 	drawEventsBVPipeline_.reserve(1000u);
 	drawEventsBillboardPipeline_.reserve(1000u);
+	drawEventsMeshParticlePipeline_.reserve(256u);
 	drawEventsSkyboxPipeline_.reserve(10u);
 	drawEventsTerrainPipeline_.reserve(4u);
 }
@@ -440,6 +443,16 @@ void GFX::createSwapChain() {
 	resourcesBillboardPipeline_.perFrameData.init(
 		device_.Get(), sizeof( BillboardShader::PerFrameData ), backBuffers_.size(), "Billboard_PerFrameData"
 	);
+	// Mesh Particle Pipeline ----
+	resourcesMeshParticlePipeline_.perInstanceData.init(
+		device_.Get(), sizeof( MeshParticleShader::PerInstanceData ) * 256u, backBuffers_.size(), "MeshParticle_PerInstanceData"
+	);
+	resourcesMeshParticlePipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof( MeshParticleShader::PerDrawcallData ), 256u, backBuffers_.size(), "MeshParticle_PerDrawcallData"
+	);
+	resourcesMeshParticlePipeline_.perFrameData.init(
+		device_.Get(), sizeof( MeshParticleShader::PerFrameData ), backBuffers_.size(), "MeshParticle_PerFrameData"
+	);
 	// UI Pipeline ----
 	resourcesUIPipeline_.perInstanceData.init(
 		device_.Get(), sizeof( UIShader::PerInstanceData ) * 1000u, backBuffers_.size(), "UI_PerInstanceData"
@@ -553,6 +566,18 @@ void GFX::addFrameData( const BillboardPipeline::FrameData& frameData ) {
 	frameDataBillboardPipeline_ = frameData;
 }
 
+void GFX::addDrawEvent( const MeshParticlePipeline::DrawEvent& drawEvent ) {
+	drawEventsMeshParticlePipeline_.push_back( drawEvent );
+}
+
+void GFX::addCameraData( const MeshParticlePipeline::CameraData& cameraData ) {
+	cameraDataMeshParticlePipeline_ = cameraData;
+}
+
+void GFX::addFrameData( const MeshParticlePipeline::FrameData& frameData ) {
+	frameDataMeshParticlePipeline_ = frameData;
+}
+
 // 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 void GFX::addDrawEvent(const UIPipeline::DrawEvent& drawEvent) {
 	drawEventsUIPipeline_.push_back(drawEvent);
@@ -608,6 +633,9 @@ void GFX::addLightData(const TerrainPipeline::LightData& lightData) {
 // 프레임 데이터를 입력한다.
 void GFX::addFrameData(const TerrainPipeline::FrameData& frameData) {
 	frameDataTerrainPipeline_ = frameData;
+void GFX::addRequestMeshBinLoad(const RequestMeshBinLoad& request)
+{
+	requestsMeshBinLoad_.push_back(request);
 }
 
 // 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
@@ -714,7 +742,11 @@ void GFX::loadAssets(const AssetConfigs& configs) {
 
 	// load sprites
 	for ( auto& request : requestsSpritesLoad_ ) {
-		*request.pDest = loadSpriteAnimationFromFile( request.spritesPath, device_.Get(), cmdList.Get(), *request.pSpritesHashMap, srvTexPool_, fence );
+		*request.pDest = loadSpriteSheetAnimation(
+			request.sheetPath, request.rows, request.cols, request.frameCount,
+			request.type, request.frameTime,
+			device_.Get(), cmdList.Get(), srvTexPool_, fence
+		);
 	}
 
 	dumpLog();
@@ -732,6 +764,24 @@ void GFX::loadAssets(const AssetConfigs& configs) {
 			request.terrainDir, device_.Get(), cmdList.Get(),
 			*request.pTexHashMap, srvTexPool_, fence
 		);
+	// load .meshbin files
+	for (auto& request : requestsMeshBinLoad_) {
+		auto [mesh, texRelPath] = loadMeshBin(request.meshPath, device_.Get(), cmdList.Get(), fence);
+		*request.pDestMesh = std::move(mesh);
+
+		if (!texRelPath.empty() && request.pDestTex) {
+			const auto texPath = std::filesystem::path("../resources/Textures") / texRelPath;
+			if (!request.pTexHashMap->contains(texRelPath)) {
+				Texture::Type type{};
+				auto [pPair, _] = request.pTexHashMap->try_emplace(
+					texRelPath, loadTexture(device_.Get(), cmdList.Get(), texPath, fence, type)
+				);
+				auto& tex = pPair->second;
+				createSRV(device_.Get(), tex, srvTexPool_);
+				tex.idxSrv.idxSampler = etoi(Samplers::TrilinearWrap);
+			}
+			*request.pDestTex = request.pTexHashMap->at(texRelPath);
+		}
 	}
 
 	dumpLog();
@@ -936,16 +986,42 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	auto skyboxPipelineDispatcher = SkyboxPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at("DefaultRootSignature"), shaders_.at("SkyboxShader"),
+		cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesSkyboxPipeline_, &cmdListPool_,
+		std::move(drawEventsSkyboxPipeline_), cameraDataSkyboxPipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
 	auto billboardPipelineDispatcher = BillboardPipeline::Dispatcher(
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_,
 		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "BillboardShader" ),
+		shaders_.at( "BillboardShaderAdditive" ),
 		cmdQ_, viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
-		&fenceToSignal, &resourcesBillboardPipeline_, threadPool_, 
+		&fenceToSignal, &resourcesBillboardPipeline_, threadPool_,
 		&cmdListPool_, std::move( drawEventsBillboardPipeline_ ),
 		cameraDataBillboardPipeline_, frameDataBillboardPipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
+	auto meshParticleDispatcher = MeshParticlePipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "MeshParticleShader" ),
+		cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesMeshParticlePipeline_, threadPool_,
+		&cmdListPool_, std::move( drawEventsMeshParticlePipeline_ ),
+		cameraDataMeshParticlePipeline_, frameDataMeshParticlePipeline_,
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
@@ -1036,8 +1112,14 @@ void GFX::render() {
 		bvPipelineDispatcher.drawSingleThreaded();
 		dumpLog();
 
+		skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
+		skyboxPipelineDispatcher.drawSingleThreaded();
+
 		billboardPipelineDispatcher.updateGPUDataSingleThreaded();
 		billboardPipelineDispatcher.drawSingleThreaded();
+
+		meshParticleDispatcher.updateGPUDataSingleThreaded();
+		meshParticleDispatcher.drawSingleThreaded();
 		dumpLog();
 	}
 	else {
@@ -1081,27 +1163,16 @@ void GFX::render() {
 		bvPipelineDispatcher.drawMultiThreaded();
 		dumpLog();
 
+		skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
+		skyboxPipelineDispatcher.drawSingleThreaded();
+
 		billboardPipelineDispatcher.updateGPUDataMultiThreaded();
 		billboardPipelineDispatcher.drawMultiThreaded();
+
+		meshParticleDispatcher.updateGPUDataMultiThreaded();
+		meshParticleDispatcher.drawMultiThreaded();
 		dumpLog();
 	}
-
-	auto skyboxPipelineDispatcher = SkyboxPipeline::Dispatcher(
-		tmpDescriptorHeaps,
-		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
-		&samPool_, &cmpSamPool_,
-		rootSigs_.at("DefaultRootSignature"), shaders_.at("SkyboxShader"),
-		cmdQ_, viewport, clRect,
-		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
-		&fenceToSignal, &resourcesSkyboxPipeline_, &cmdListPool_,
-		std::move(drawEventsSkyboxPipeline_), cameraDataSkyboxPipeline_,
-		frameIdx_ % backBuffers_.size()	// room index
-	);
-
-	// Skybox Pipeline의 Dispatch
-	// 스카이박스 하나 그리는 파이프라인이라, 멀티스레드일 필요가 없다.
-	skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
-	skyboxPipelineDispatcher.drawSingleThreaded();
 
 	// Ui Pipeline의 rendering
 	if ( !threadPool_ ) {

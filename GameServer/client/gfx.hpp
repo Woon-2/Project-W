@@ -11,6 +11,7 @@
 #include "pbrPipeline.hpp"
 #include "pbrSkinnedPipeline.hpp"
 #include "billboardPipeline.hpp"
+#include "meshParticlePipeline.hpp"
 #include "skyboxPipeline.hpp"
 #include "BVPipeline.hpp"
 #include "uiPipeline.hpp"
@@ -39,9 +40,22 @@ struct RequestTextureLoad {
 };
 
 struct RequestSpriteAnimLoad {
-	std::filesystem::path spritesPath;
+	std::filesystem::path sheetPath;	// DDS 포맷의 스프라이트 시트 경로
+	int rows;							// 스프라이트 시트의 행 수
+	int cols;							// 스프라이트 시트의 열 수
+	int frameCount;						// 실제 유효 프레임 수 (rows * cols 이하)
+	SpriteAnimType type;
+	Milliseconds frameTime;
 	SpriteAnimationClip* pDest;
-	std::unordered_map<std::string, std::vector<Texture>>* pSpritesHashMap;
+};
+
+// .meshbin v1 파일 로드 요청.
+// texturePath는 파일 내 경로 문자열로부터 "../resources/Textures/" 기준으로 해석한다.
+struct RequestMeshBinLoad {
+	std::filesystem::path meshPath;
+	std::unordered_map<std::string, Texture>* pTexHashMap;
+	Mesh*    pDestMesh;
+	Texture* pDestTex;
 };
 
 struct RequestTextImageLoad {
@@ -137,6 +151,12 @@ public:
 	// 프레임 데이터를 입력한다.
 	void addFrameData( const BillboardPipeline::FrameData& frameData );
 	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+	void addDrawEvent( const MeshParticlePipeline::DrawEvent& drawEvent );
+	// 카메라 데이터를 입력한다.
+	void addCameraData( const MeshParticlePipeline::CameraData& cameraData );
+	// 프레임 데이터를 입력한다.
+	void addFrameData( const MeshParticlePipeline::FrameData& frameData );
+	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 	void addDrawEvent(const SkyboxPipeline::DrawEvent& drawEvent);
 	// 카메라 데이터를 입력한다.
 	void addCameraData(const SkyboxPipeline::CameraData& cameraData);
@@ -163,6 +183,7 @@ public:
 	void addRequestSpritesLoad( const RequestSpriteAnimLoad& request );
 	void addRequestTextImageLoad( const RequestTextImageLoad& request );
 	void addRequestTerrainLoad(const RequestTerrainLoad& request);
+	void addRequestMeshBinLoad(const RequestMeshBinLoad& request);
 
 	// 파이프라인들이 자체적으로 사용하는 리소스들과
 	// addRequestXXLoad 꼴의 함수로 요청된 리소스들을 로드한다.
@@ -259,6 +280,11 @@ private:
 	BillboardPipeline::Resources resourcesBillboardPipeline_{};
 	BillboardPipeline::CameraData cameraDataBillboardPipeline_{};
 	BillboardPipeline::FrameData frameDataBillboardPipeline_{};
+	// Mesh Particle Pipeline
+	std::vector<MeshParticlePipeline::DrawEvent> drawEventsMeshParticlePipeline_{};
+	MeshParticlePipeline::Resources              resourcesMeshParticlePipeline_{};
+	MeshParticlePipeline::CameraData             cameraDataMeshParticlePipeline_{};
+	MeshParticlePipeline::FrameData              frameDataMeshParticlePipeline_{};
 	// UI Pipeline
 	std::vector<UIPipeline::DrawEvent> drawEventsUIPipeline_{};
 	UIPipeline::Resources resourcesUIPipeline_{};
@@ -285,6 +311,7 @@ private:
 	std::vector<RequestSpriteAnimLoad> requestsSpritesLoad_{};
 	std::vector<RequestTextImageLoad> requestsTextImageLoad_{};
 	std::vector<RequestTerrainLoad> requestsTerrainLoad_{};
+	std::vector<RequestMeshBinLoad> requestsMeshBinLoad_{};
 
 	ThreadPool* threadPool_ = nullptr;	// 설정되어있을 경우 멀티스레드로 동작한다.
 	bool csmDebugVisualization_ = false;

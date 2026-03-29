@@ -1639,3 +1639,124 @@ Skybox loadSkyboxFromFile( const std::filesystem::path& path,
 
     return ret;
 }
+
+// .meshbin v1 포맷에서 메시를 로드한다.
+// 포맷:
+//   [u8*8]  magic = "MESHBIN\0"
+//   [u8]    version = 1
+//   [u32]   vertexCount
+//   [u32]   indexCount
+//   [struct { float3 pos, float2 uv }] * vertexCount
+//   [u16] * indexCount
+//   [u8]    texturePathLen
+//   [char * texturePathLen]
+std::pair<Mesh, std::string> loadMeshBin(
+	const std::filesystem::path& path,
+	ID3D12Device* device,
+	ID3D12GraphicsCommandList* cmdList,
+	Fence& fenceToAssociate
+) {
+	auto ret = std::pair<Mesh, std::string>{};
+	auto& mesh = ret.first;
+
+	auto ifs = std::ifstream(path, std::ios::binary);
+	DISPLAY_ERROR_STR(ifs.good(), "[File I/O Error]: loadMeshBin: "s + path.string() + " 파일을 열 수 없습니다."s, false);
+	if (!ifs) return ret;
+
+	// magic
+	char magic[8]{};
+	ifs.read(magic, 8);
+	DISPLAY_ERROR_STR(std::string_view(magic, 7) == "MESHBIN",
+		"[File I/O Error]: loadMeshBin: invalid magic in "s + path.string(), false);
+	if (std::string_view(magic, 7) != "MESHBIN") return ret;
+
+	// version
+	uint8_t version{};
+	ifs.read(reinterpret_cast<char*>(&version), 1);
+	DISPLAY_ERROR_STR(version == 1u,
+		"[File I/O Error]: loadMeshBin: unsupported version "s + std::to_string(version), false);
+	if (version != 1u) return ret;
+
+	// counts
+	uint32_t vertexCount{}, indexCount{};
+	ifs.read(reinterpret_cast<char*>(&vertexCount), 4);
+	ifs.read(reinterpret_cast<char*>(&indexCount), 4);
+
+	// vertex data: interleaved position(float3) + uv(float2)
+	struct RawVertex { XMFLOAT3 pos; XMFLOAT2 uv; };
+	auto rawVertices = std::vector<RawVertex>(vertexCount);
+	ifs.read(reinterpret_cast<char*>(rawVertices.data()), vertexCount * sizeof(RawVertex));
+
+	// split into separate position and uv arrays
+	auto positions = std::vector<XMFLOAT3>(vertexCount);
+	auto uvs       = std::vector<XMFLOAT2>(vertexCount);
+	for (uint32_t i = 0; i < vertexCount; ++i) {
+		positions[i] = rawVertices[i].pos;
+		uvs[i]       = rawVertices[i].uv;
+	}
+
+	// indices
+	auto indices = std::vector<u16t>(indexCount);
+	ifs.read(reinterpret_cast<char*>(indices.data()), indexCount * sizeof(u16t));
+
+	// texture path
+	uint8_t texPathLen{};
+	ifs.read(reinterpret_cast<char*>(&texPathLen), 1);
+	auto texPath = std::string(texPathLen, '\0');
+	ifs.read(texPath.data(), texPathLen);
+	ret.second = texPath;
+
+	const auto meshName = path.stem().string();
+	mesh.name = meshName;
+
+	// build GPU buffers: position VB (Slot 0)
+	auto vbPos  = createBufferResource(device, nullptr, positions.size() * sizeof(XMFLOAT3), BufferCreationType::VertexBuffer);
+	setD3DName(vbPos.Get(), (meshName + "_VB_Position").c_str());
+	auto vbPosu = createBufferResource(device, positions.data(), positions.size() * sizeof(XMFLOAT3), BufferCreationType::UploadBuffer);
+	setD3DName(vbPosu.Get(), (meshName + "_VB_Position_Upload").c_str());
+	copyResource(cmdList, vbPosu.Get(), vbPos.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+
+	// uv VB (Slot 1)
+	auto vbUV  = createBufferResource(device, nullptr, uvs.size() * sizeof(XMFLOAT2), BufferCreationType::VertexBuffer);
+	setD3DName(vbUV.Get(), (meshName + "_VB_UV").c_str());
+	auto vbUVu = createBufferResource(device, uvs.data(), uvs.size() * sizeof(XMFLOAT2), BufferCreationType::UploadBuffer);
+	setD3DName(vbUVu.Get(), (meshName + "_VB_UV_Upload").c_str());
+	copyResource(cmdList, vbUVu.Get(), vbUV.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+
+	// IB
+	auto ib  = createBufferResource(device, nullptr, indices.size() * sizeof(u16t), BufferCreationType::IndexBuffer);
+	setD3DName(ib.Get(), (meshName + "_IB").c_str());
+	auto ibu = createBufferResource(device, indices.data(), indices.size() * sizeof(u16t), BufferCreationType::UploadBuffer);
+	setD3DName(ibu.Get(), (meshName + "_IB_Upload").c_str());
+	copyResource(cmdList, ibu.Get(), ib.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_INDEX_BUFFER);
+
+	// VB views
+	mesh.vbViews.emplace_back(vbPos->GetGPUVirtualAddress(), static_cast<UINT>(positions.size() * sizeof(XMFLOAT3)), static_cast<UINT>(sizeof(XMFLOAT3)));
+	mesh.vbViews.emplace_back(vbUV->GetGPUVirtualAddress(), static_cast<UINT>(uvs.size() * sizeof(XMFLOAT2)), static_cast<UINT>(sizeof(XMFLOAT2)));
+	mesh.vbIdxMap.try_emplace(meshName + "_VB_Position", 0u);
+	mesh.vbIdxMap.try_emplace(meshName + "_VB_UV", 1u);
+
+	// IB + submesh
+	mesh.subMeshes.emplace_back(
+		meshName + "_SubMesh",
+		D3D12_INDEX_BUFFER_VIEW{
+			.BufferLocation = ib->GetGPUVirtualAddress(),
+			.SizeInBytes    = static_cast<UINT>(indices.size() * sizeof(u16t)),
+			.Format         = DXGI_FORMAT_R16_UINT
+		}
+	);
+
+	// ownership
+	mesh.vbs.push_back(std::move(vbPos));
+	mesh.vbs.push_back(std::move(vbUV));
+	mesh.ibs.push_back(std::move(ib));
+
+	fenceToAssociate.associatedResources_.push_back(std::move(vbPosu));
+	fenceToAssociate.associatedResources_.push_back(std::move(vbUVu));
+	fenceToAssociate.associatedResources_.push_back(std::move(ibu));
+
+	gSharedLog << "[Resource Load] loadMeshBin: " << meshName << " (" << path << ") loaded, "
+		<< vertexCount << " verts, " << indexCount << " indices, tex=" << texPath << '\n';
+
+	return ret;
+}

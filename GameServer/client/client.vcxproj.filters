@@ -231,6 +231,12 @@
     <ClCompile Include="ClientApp.cpp">
       <Filter>Network\ClientApp</Filter>
     </ClCompile>
+    <ClCompile Include="meshParticlePipeline.cpp">
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="meshParticleSystem.cpp">
+      <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="binaryImport.hpp">
@@ -440,6 +446,12 @@
     <ClInclude Include="ClientApp.hpp">
       <Filter>Network\ClientApp</Filter>
     </ClInclude>
+    <ClInclude Include="meshParticlePipeline.hpp">
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="meshParticleSystem.hpp">
+      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="billboard.hlsl">
@@ -473,6 +485,9 @@
       <Filter>셰이더 파일</Filter>
     </FxCompile>
     <FxCompile Include="terrainShadowMap.hlsl">
+      <Filter>셰이더 파일</Filter>
+    </FxCompile>
+    <FxCompile Include="meshParticle.hlsl">
       <Filter>셰이더 파일</Filter>
     </FxCompile>
   </ItemGroup>

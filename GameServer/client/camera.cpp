@@ -49,6 +49,9 @@ void Camera::updateGFX(GFX& gfx) {
 		.view = view_,
 		.proj = proj_,
 		.pos  = eye_
+	gfx.addCameraData(MeshParticlePipeline::CameraData{
+		.view = view_,
+		.proj = proj_
 	});
 }
 

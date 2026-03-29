@@ -8,7 +8,26 @@
       "Bash(powershell -Command \"\n\\\\$file = 'C:/Users/PC/Desktop/zolzak/Project-W/GameServer/client/pbrSkinnedPipeline.cpp'\n\\\\$lines = [System.IO.File]::ReadAllLines\\(\\\\$file, [System.Text.Encoding]::UTF8\\)\n\\\\$hits = @\\(\\)\nfor \\(\\\\$i = 0; \\\\$i -lt \\\\$lines.Count; \\\\$i++\\) {\n    if \\(\\\\$lines[\\\\$i] -match 'cascadeCount|cascadeViews|cascadeProjs|cascadeSplitsFarV'\\) { \\\\$hits += \\\\$i }\n}\nWrite-Host \\('CSM fields found at lines: ' + \\(\\\\$hits -join ', '\\)\\)\n\\\\$lines[236..244]\n\")",
       "Bash(powershell -Command \"\n\\\\$file = 'C:/Users/PC/Desktop/zolzak/Project-W/GameServer/client/terrainPipeline.cpp'\n\\\\$lines = [System.IO.File]::ReadAllLines\\(\\\\$file, [System.Text.Encoding]::UTF8\\)\nWrite-Host \\('Total lines: ' + \\\\$lines.Count\\)\nWrite-Host \\('Line 105: ' + \\\\$lines[105]\\)\nWrite-Host \\('Line 106: ' + \\\\$lines[106]\\)\nWrite-Host \\('Line 107: ' + \\\\$lines[107]\\)\nWrite-Host \\('Line 108: ' + \\\\$lines[108]\\)\nWrite-Host \\('Line 146: ' + \\\\$lines[146]\\)\nWrite-Host \\('Line 196: ' + \\\\$lines[196]\\)\nWrite-Host \\('Line 241: ' + \\\\$lines[241]\\)\nWrite-Host \\('Line 242: ' + \\\\$lines[242]\\)\n\")",
       "Bash(powershell -Command \"\n\\\\$file = 'C:/Users/PC/Desktop/zolzak/Project-W/GameServer/client/standalone/game.cpp'\n\\\\$lines = [System.IO.File]::ReadAllLines\\(\\\\$file, [System.Text.Encoding]::UTF8\\)\nfor \\(\\\\$i = 0; \\\\$i -lt \\\\$lines.Count; \\\\$i++\\) {\n    if \\(\\\\$lines[\\\\$i] -match 'updateShadowAux|addLightData.*Terrain'\\) {\n        Write-Host \\(\\\\$i.ToString\\(\\) + ': ' + \\\\$lines[\\\\$i]\\)\n    }\n}\n\")",
-      "Bash(grep -rn shadowMapData.at.*ShadowMap.*\\\\\\). C:/Users/PC/Desktop/zolzak/Project-W/GameServer/client/)"
+      "Bash(grep -rn shadowMapData.at.*ShadowMap.*\\\\\\). C:/Users/PC/Desktop/zolzak/Project-W/GameServer/client/)",
+      "WebFetch(domain:skills.sh)",
+      "Bash(grep -rn \"Pool<\\\\|new\\\\|delete\\\\|std::make_unique\\\\|std::allocate\" /d/DirectX12/Project-W/GameServer/client/*.hpp)",
+      "Bash(ls -la /d/DirectX12/Project-W/GameServer/client/*.hpp)",
+      "Bash(ls -la /d/DirectX12/Project-W/GameServer/client/*.cpp)",
+      "Bash(find D:DirectX12Project-WGameServerclientdocs -type f -name *.md)",
+      "Bash(find D:/DirectX12/Project-W/GameServer/client -type f -name *.dds)",
+      "Bash(grep:*)",
+      "Bash(xxd -l 200 D:/DirectX12/Project-W/GameServer/client/CubeMesh_Albedo.dds)",
+      "Bash(xxd:*)",
+      "Bash(powershell -Command \"Format-Hex 'D:\\\\DirectX12\\\\Project-W\\\\GameServer\\\\resources\\\\Sprites\\\\a_VFX_flame.dds' | Select-Object -First 12\")",
+      "Bash(find D:DirectX12Project-WGameServer -name *particle* -o -name *Particle*)",
+      "Bash(find D:DirectX12Project-WGameServerclient -type f \\\\\\(-name *.h -o -name *.cpp -o -name *.hlsl \\\\\\))",
+      "Bash(find D:DirectX12Project-WGameServerclient -name *.hlsl)",
+      "Bash(find D:DirectX12Project-WGameServerclient -name *.hpp -o -name *.h)",
+      "Bash(find D:DirectX12Project-WGameServerclient -name *animation*)",
+      "Bash(msbuild client.vcxproj /p:Configuration=Debug /p:Platform=x64 /t:Build /m /nologo)",
+      "Bash(find /d/DirectX12/Project-W/GameServer/client -type f -name *particle* -o -name *Particle*)",
+      "Bash(find D:DirectX12Project-WGameServerclient -type f -name *particle* -o -name *Particle*)",
+      "Bash(find D:DirectX12Project-WGameServerclient -type f \\\\\\(-name *.hlsl -o -name *billboard* -o -name *shader* \\\\\\))"
     ]
   }
 }
