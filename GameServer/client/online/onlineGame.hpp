@@ -115,7 +115,7 @@ private:
 		std::shared_ptr<Object> pOwner;
 	};
 
-	void sendMovePacket(SendBuffer* sendBuffer);
+	void sendMovePacket();
 
 	void sendMouseMovePacket();
 	void sendMoveStatePacket();
@@ -139,8 +139,9 @@ private:
 	Seconds physicUpdateAcc_{ 0s };				// 물리 업데이트를 위한 시간 누산기
 	Seconds physicUpdateInterval{ 1s / 60.f };	// 60fps로 물리 업데이트
 
+	bool moveChange_{};
 	Seconds moveStateSendAcc_{0s};
-	Seconds moveStateSendInterval_{1s / 20.f};	// 20fps로 이동 상태 패킷 전송
+	Seconds moveStateSendInterval_{1s / 20.f};	// 50ms(20Hz)마다 move 패킷 전송
 	
 	AnimSystem animSystem_{};
 

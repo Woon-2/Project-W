@@ -164,6 +164,9 @@ void Game::update(Milliseconds deltaTime) {
 		return;
 	}
 
+	// 이전 평가 물리량 갱신
+	prevVelocity_ = currVelocity_;
+
 	// 평가 물리량 초기화
 	player_->physicState().evVelocity = mu::Vec3();
 	player_->physicState().evOmega = mu::Vec3();
@@ -174,6 +177,14 @@ void Game::update(Milliseconds deltaTime) {
 	// 평가 물리량 갱신
 	player_->physicState().evVelocity += player_->physicState().velocity;
 	player_->physicState().evOmega += player_->physicState().omega;
+
+	// 현재 평가 물리량 저장
+	currVelocity_ = player_->physicState().evVelocity;
+	
+	// 이전 평가 물리량과 현재 평가 물리량의 차이가 move 패킷 전송 임계값 이상이라면, move 패킷 전송 플래그를 켠다.
+	if( prevVelocity_ != currVelocity_ ) {
+		moveChange_ = true;
+	}
 
 	// 물리 업데이트 루틴
 	//
@@ -186,6 +197,9 @@ void Game::update(Milliseconds deltaTime) {
 	// 물리량 갱신의 주기가 돌아왔는지 판단하고
 	// 주기가 되었다면 물리량 갱신을 수행한다.
 	physicUpdateAcc_ += deltaTime;
+
+	// move 패킷 전송 주기 판단
+	moveStateSendAcc_ += deltaTime;
 
 	if ( physicUpdateAcc_ >= physicUpdateInterval ) {
 		// 물리 시뮬레이션을 위해
@@ -205,10 +219,14 @@ void Game::update(Milliseconds deltaTime) {
 	}
 
 	//std::cout << "player pos : " << player_->pos().x() << ", " << player_->pos().y() << ", " << player_->pos().z() << '\n';
-	if (prevVelocity_ != currVelocity_) {
-		auto sendBuffer = PacketManager::makeCMovePacket(player_->pos().getXmf(), player_->orient().getXmf(), player_->physicState().evVelocity.getXmf());
-		INet::ClientApp::send(sendBuffer);
+	if (moveStateSendAcc_ >= moveStateSendInterval_) {
+		moveStateSendAcc_ = 0s;
+
+		if (moveChange_) {
+			sendMovePacket();
+		}
 	}
+	moveChange_ = false;
 
 	// 객체별 업데이트 루틴
 	// 
@@ -379,7 +397,9 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	return DefWindowProcA(hWnd, msg, wParam, lParam);
 }
 
-void Game::sendMovePacket(SendBuffer* sendBuffer) {
+void Game::sendMovePacket() {
+	auto sendBuffer = PacketManager::makeCMovePacket(player_->pos().getXmf(), player_->orient().getXmf(), player_->physicState().evVelocity.getXmf());
+	INet::ClientApp::send(sendBuffer);
 }
 
 void Game::sendMouseMovePacket() {
@@ -508,8 +528,6 @@ void Game::processInputGame(Milliseconds deltaTime) {
 	const auto moveXSign = !playerDead_ * ( (keyboardStateCurr_['D'] & 0x80) - (keyboardStateCurr_['A'] & 0x80) );
 	const auto moveZSign = !playerDead_ * ( (keyboardStateCurr_['W'] & 0x80) - (keyboardStateCurr_['S'] & 0x80) );
 	const auto moveThreshold = 0.1f;
-
-	prevVelocity_ = currVelocity_;
 
 	if (moveXSign || moveZSign) {
 		// 'W'/'S' 입력으로 판정된 Z 부호는 플레이어의 forward 벡터,
