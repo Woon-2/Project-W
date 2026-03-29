@@ -239,28 +239,16 @@ float calcSingleShadow(float3 posV, float4 posL) {
 #define MAX_CSM_CASCADES 4
 #endif
 
-// calcCSMShadow: selects cascade by view-space depth, then performs 9-tap PCF.
-// posV: view-space position, posW: world-space position.
-// Uses cbuffer vars: cascadeCount, cascadeSplitsFarV, lightVP[], idxShadowMap[].
-// Uses gmtxTexturize (declared in the including .hlsl before this include).
-float calcCSMShadow(float3 posV, float3 posW) {
-    // Select cascade: find first cascade whose far depth exceeds |posV.z|
-    uint cascadeIdx = cascadeCount - 1u;
-    float splits[4] = {
-        cascadeSplitsFarV.x, cascadeSplitsFarV.y,
-        cascadeSplitsFarV.z, cascadeSplitsFarV.w
-    };
-    [unroll]
-    for (uint ci = 0u; ci < cascadeCount; ++ci) {
-        if (posV.z < splits[ci]) { cascadeIdx = ci; break; }
-    }
+float sampleCascadePCF(uint cascadeIdx, float3 posW, float3 normalW, float sinTheta, float offsets[4]) {
+    // adjust the offset of selected cascade
+    float3 biasedPosW = posW + normalize(normalW) * offsets[cascadeIdx] * sinTheta;
 
-    // Project world-space position into the selected cascade's light space
-    float4 posL = mul(mul(float4(posW, 1.f), lightVP[cascadeIdx]), gmtxTexturize);
+    // project to light space of the selected cascade
+    float4 posL = mul(mul(float4(biasedPosW, 1.f), lightVP[cascadeIdx]), gmtxTexturize);
     posL.xyz /= posL.w;
     posL.z = min(posL.z, 1.0f);
 
-    // 9-tap PCF on the cascade's dedicated Texture2D (idxShadowMap[cascadeIdx])
+    // 9-tap PCF
     int4 idx = idxShadowMap[cascadeIdx];
     float p00 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(-1, -1)).r;
     float p01 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2(-1,  0)).r;
@@ -271,7 +259,67 @@ float calcCSMShadow(float3 posV, float3 posW) {
     float p20 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 1, -1)).r;
     float p21 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 1,  0)).r;
     float p22 = sampleCmpBindless2DOffset(idx, posL.xy, posL.z, int2( 1,  1)).r;
+    
     return (p00 + p01 + p02 + p10 + p11 + p12 + p20 + p21 + p22) / 9.f;
+}
+
+// calcCSMShadow: selects related cascades by view-space depth, performs 9-tap PCF,
+//                then blends the results.
+float calcCSMShadow(float3 posV, float3 posW, float3 normalW, float rawNdotl) {
+    float splits[4] = {
+        cascadeSplitsFarV.x, cascadeSplitsFarV.y,
+        cascadeSplitsFarV.z, cascadeSplitsFarV.w
+    };
+
+    // Select cascade: find first cascade whose far depth exceeds |posV.z|
+    uint cascadeIdx = cascadeCount - 1u;
+    [unroll]
+    for (uint ci = 0u; ci < cascadeCount; ++ci) {
+        if (posV.z < splits[ci]) { 
+            cascadeIdx = ci; 
+            break; 
+        }
+    }
+
+    // NdotL-adaptive normal offset: maximum when surface is perpendicular to light,
+    // zero when surface faces light directly.
+    // Back-lit faces (rawNdotl < 0) get zero offset — offsetting away from the sun
+    // would push biasedPosL.z shallower than the shadow map depth, incorrectly
+    // marking the surface as lit and causing view-direction-dependent shadow flicker.
+    float offsets[4] = {
+        cascadeNormalOffsets.x, cascadeNormalOffsets.y,
+        cascadeNormalOffsets.z, cascadeNormalOffsets.w
+    };
+    float sinTheta = (rawNdotl > 0.f) ? sqrt(max(0.f, 1.f - rawNdotl * rawNdotl)) : 0.f;
+
+    // main cascade sampling
+    float shadow = sampleCascadePCF(cascadeIdx, posW, normalW, sinTheta, offsets);
+
+    // --- Cascade Blending logic ---
+    // regard blending with next cascade only if the cascade is not the last cascade.
+    if (cascadeIdx < cascadeCount - 1u) {
+        // the bandwidth of blending range (view space unit)
+        // for now, 15% of split distance
+        float blendBand = splits[cascadeIdx] * 0.15f; 
+        
+        float splitDist = splits[cascadeIdx];
+        float blendStart = splitDist - blendBand;
+        
+        // check if the depth is in the blending range
+        if (posV.z > blendStart) {
+            // calculate the blending factor, between 0.0 (blendStart) ~ 1.0 (splitDist).
+            float blendFactor = smoothstep(blendStart, splitDist, posV.z);
+            
+            // sample the next cascade
+            uint nextCascadeIdx = cascadeIdx + 1u;
+            float nextShadow = sampleCascadePCF(nextCascadeIdx, posW, normalW, sinTheta, offsets);
+            
+            // softly blend the two different cascades.
+            shadow = lerp(shadow, nextShadow, blendFactor);
+        }
+    }
+
+    return shadow;
 }
 
 #ifndef TERRAIN_SHADER
@@ -346,7 +394,8 @@ float4 illuminate(float3 posV, float4 posL, float3 normalV, float2 tex) {
 
 // illuminateCSM: CSM(Cascaded Shadow Map) 버전. illuminate()와 별도로 유지.
 // posW: world-space position (cascade 선택 후 light-space 변환에 사용)
-float4 illuminateCSM(float3 posV, float3 posW, float3 normalV, float2 tex) {
+// normalW: world-space geometric normal (normal offset shadow bias용)
+float4 illuminateCSM(float3 posV, float3 posW, float3 normalV, float2 tex, float3 normalW) {
     float4 albedo = material.cAlbedo;
     if (material.idxAlbedo.x >= 0) {
         albedo = sampleBindless(material.idxAlbedo, tex);
@@ -384,7 +433,18 @@ float4 illuminateCSM(float3 posV, float3 posW, float3 normalV, float2 tex) {
         }
     }
 
-    float directFactor = calcCSMShadow(posV, posW);
+    // Compute raw (unsaturated) NdotL for the main directional light.
+    // Must NOT be saturated: back-lit faces need rawNdotl < 0 so calcCSMShadow
+    // applies zero normal offset (saturating to 0 would give sinTheta=1 → max offset
+    // → biasedPosL.z shallower than shadow map → surface incorrectly marked as lit).
+    float rawNdotl_shadow = 0.5f;
+    for (uint si = 0u; si < lightCnt; ++si) {
+        if (gLightData[si].type == LIGHT_TYPE_DIRECTIONAL) {
+            rawNdotl_shadow = dot(normalV, -gLightData[si].dirV);
+            break;
+        }
+    }
+    float directFactor = calcCSMShadow(posV, posW, normalW, rawNdotl_shadow);
     color *= directFactor;
 
 #ifdef CSM_DEBUG_VIS

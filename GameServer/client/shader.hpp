@@ -133,6 +133,7 @@ struct PerInstanceData {
 	XMFLOAT4X4 wvp;
 	XMFLOAT4X4 wv;
 	XMFLOAT3X3 wvNormal;
+	XMFLOAT3X3 worldNormal;  // inverse(Mat3x3(world)) — non-uniform scale safe normal transform
 };
 
 struct PerDrawcallData {
@@ -149,6 +150,7 @@ struct PerFrameData {
 	BindlessIndex idxShadowMap[MAX_CSM_CASCADES];  // cascade별 독립 Texture2D SRV
 	XMFLOAT4   cascadeSplitsFarV;
 	XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
+	XMFLOAT4   cascadeNormalOffsets;  // world units of normal offset per cascade (for shadow acne elimination)
 };
 }	// namespace PBRShader
 
@@ -199,6 +201,7 @@ struct PerInstanceData {
 	XMFLOAT4X4 wvp;
 	XMFLOAT4X4 wv;
 	XMFLOAT3X3 wvNormal;
+	XMFLOAT3X3 worldNormal;  // inverse(Mat3x3(world)) — non-uniform scale safe normal transform
 	u32t rootBoneOffset;
 	XMUINT3 padding;
 };
@@ -217,6 +220,7 @@ struct PerFrameData {
 	BindlessIndex idxShadowMap[MAX_CSM_CASCADES];  // cascade별 독립 Texture2D SRV
 	XMFLOAT4   cascadeSplitsFarV;
 	XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
+	XMFLOAT4   cascadeNormalOffsets;
 };
 
 }	// namespace PBRSkinnedShader
@@ -386,6 +390,7 @@ struct PerFrameData {
     BindlessIndex idxShadowMap[MAX_CSM_CASCADES];  // cascade별 독립 Texture2D SRV
     XMFLOAT4   cascadeSplitsFarV;
     XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
+    XMFLOAT4   cascadeNormalOffsets;
 };
 
 }	// namespace TerrainShader

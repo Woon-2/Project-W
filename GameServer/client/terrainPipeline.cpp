@@ -266,6 +266,10 @@ void Dispatcher::mainUpdate() {
             light.cascadeViews[i] * light.cascadeProjs[i]
         ).getXmf();
     }
+    {
+        const auto& o = light.cascadeNormalOffsets;
+        pfd.cascadeNormalOffsets = XMFLOAT4(o[0], o[1], o[2], o[3]);
+    }
 
     pResources_->mainPass.perFrameData.stage(roomIdx_, &pfd, 1u);
 }

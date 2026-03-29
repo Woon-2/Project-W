@@ -12,10 +12,28 @@ void Light::update(Milliseconds deltaTime) {
 void MU_CALLCONV Light::updateShadowAuxDirectional( mu::Vec3 pointOfView, float distance,
 	float left, float right, float bottom, float top, float nearZ, float farZ
 ) {
-	const auto dir = mu::NVec3(orient().rotate(mu::Vec3(0.f, 0.f, 1.f)));
-	pos_ = pointOfView - mu::Vec3(dir) * distance;
-	view_ = mu::lookAt(pos_, pointOfView, mu::NVec3(0.f, 1.f, 0.f, mu::NVec3::NoNormalize_t{}));
-	proj_ = mu::ortho(left, right, bottom, top, nearZ, farZ);
+	const auto lightDir = mu::NVec3(orient().rotate(mu::Vec3(0.f, 0.f, 1.f)));
+	pos_ = pointOfView - mu::Vec3(lightDir) * distance;
+
+	mu::Vec3 worldUp(0.f, 1.f, 0.f);
+	if (std::abs(lightDir[1]) > 0.99f) {
+		worldUp = mu::Vec3(0.f, 0.f, 1.f);
+	}
+	const auto worldUpN = mu::NVec3(worldUp, mu::NVec3::NoNormalize_t{});
+
+	// Pure rotation lightView (eye = 0), same approach as updateCSMCascades
+	const auto lightView = mu::lookAt(mu::Vec3(0.f, 0.f, 0.f), mu::Vec3(lightDir), worldUpN);
+
+	// Transform pos_ to light-view space to offset the ortho bounds.
+	// Caller passes left/right/bottom/top relative to pos_; we preserve that semantics.
+	const mu::Vec4 posLV = mu::Vec4(pos_, 1.f) * lightView;
+
+	view_ = lightView;
+	proj_ = mu::ortho(
+		left   + posLV[0], right + posLV[0],
+		bottom + posLV[1], top   + posLV[1],
+		nearZ  + posLV[2], farZ  + posLV[2]
+	);
 }
 
 void MU_CALLCONV Light::updateCSMCascades(
@@ -72,10 +90,11 @@ void MU_CALLCONV Light::updateCSMCascades(
 		const float ndcZNear = A + B / nearV;
 		const float ndcZFar  = A + B / farV;
 
-		// Unproject 8 NDC corners to world space, then transform to light-view space
-		float minX =  FLT_MAX, maxX = -FLT_MAX;
-		float minY =  FLT_MAX, maxY = -FLT_MAX;
-		float minZ =  FLT_MAX, maxZ = -FLT_MAX;
+		// Unproject 8 NDC frustum corners to world space, then to light-view space.
+		// Collect all corners to compute a bounding sphere.
+		float lv_x[8], lv_y[8], lv_z[8];
+		int   ci    = 0;
+		float minZ  = FLT_MAX, maxZ = -FLT_MAX;
 
 		for (float zNDC : {ndcZNear, ndcZFar}) {
 			for (float x : {-1.f, 1.f}) {
@@ -86,28 +105,44 @@ void MU_CALLCONV Light::updateCSMCascades(
 					mu::Vec3 world(hClip[0] * invW, hClip[1] * invW, hClip[2] * invW);
 
 					// World -> light-view space
-					mu::Vec4 lv = mu::Vec4(world, 1.f) * lightView;
-					minX = std::min(minX, lv[0]); maxX = std::max(maxX, lv[0]);
-					minY = std::min(minY, lv[1]); maxY = std::max(maxY, lv[1]);
+					mu::Vec4 lv    = mu::Vec4(world, 1.f) * lightView;
+					lv_x[ci] = lv[0]; lv_y[ci] = lv[1]; lv_z[ci] = lv[2];
 					minZ = std::min(minZ, lv[2]); maxZ = std::max(maxZ, lv[2]);
+					++ci;
 				}
 			}
 		}
 
-		// Texel snapping: round AABB to texel boundaries to prevent shadow swimming
-		const float res    = static_cast<float>(shadowCfg.cascadeResolutions[i]);
-		const float texelW = (maxX - minX) / res;
-		const float texelH = (maxY - minY) / res;
-		minX = std::floor(minX / texelW) * texelW;
-		maxX = std::ceil(maxX  / texelW) * texelW;
-		minY = std::floor(minY / texelH) * texelH;
-		maxY = std::ceil(maxY  / texelH) * texelH;
+		// Bounding sphere: centroid of the 8 corners in light-view space.
+		// The sphere radius is invariant to camera rotation (depends only on FOV and
+		// cascade near/far depths), which gives a stable, constant worldUnitsPerTexel.
+		float cx = 0.f, cy = 0.f, cz = 0.f;
+		for (int k = 0; k < 8; ++k) { cx += lv_x[k]; cy += lv_y[k]; cz += lv_z[k]; }
+		cx /= 8.f; cy /= 8.f; cz /= 8.f;
 
-		// Extend nearZ backward to catch shadow casters behind the frustum slice
-		const float nearZPadding = 100.f;
+		float radius = 0.f;
+		for (int k = 0; k < 8; ++k) {
+			const float dx = lv_x[k] - cx, dy = lv_y[k] - cy, dz = lv_z[k] - cz;
+			radius = std::max(radius, std::sqrt(dx*dx + dy*dy + dz*dz));
+		}
 
+		// Texel snapping: snap sphere center XY to texel grid.
+		// worldUnitsPerTexel is now constant across frames → shadow swimming eliminated.
+		const float res              = static_cast<float>(shadowCfg.cascadeResolutions[i]);
+		const float worldUnitsPerTexel = (2.f * radius) / res;
+		cx = std::round(cx / worldUnitsPerTexel) * worldUnitsPerTexel;
+		cy = std::round(cy / worldUnitsPerTexel) * worldUnitsPerTexel;
+
+		// Fixed-size ortho bounds from the bounding sphere
+		const float minX = cx - radius, maxX = cx + radius;
+		const float minY = cy - radius, maxY = cy + radius;
+
+		// nearZPadding = radius: scales with cascade size, preserves depth precision.
+		// Catches shadow casters behind the frustum slice without over-extending the Z range.
+		constexpr float kNormalOffsetTexels = 2.0f;
+		cascadeNormalOffsets_[i] = worldUnitsPerTexel * kNormalOffsetTexels;
 		cascadeViews_[i] = lightView;
-		cascadeProjs_[i] = mu::ortho(minX, maxX, minY, maxY, minZ - nearZPadding, maxZ);
+		cascadeProjs_[i] = mu::ortho(minX, maxX, minY, maxY, minZ - 3.f * radius, maxZ);
 
 		prevFarV = farV;
 	}
@@ -132,10 +167,11 @@ void Light::render(GFX& gfx) {
 		.atten = atten,
 		.type = type,
 		.isMainDirectionalLight = isMainDirectionalLight,
-		.cascadeViews  = cascadeViews_,
-		.cascadeProjs  = cascadeProjs_,
-		.cascadeSplitsFarV = cascadeSplitsFarV_,
-		.cascadeCount  = cascadeCount_
+		.cascadeViews        = cascadeViews_,
+		.cascadeProjs        = cascadeProjs_,
+		.cascadeSplitsFarV   = cascadeSplitsFarV_,
+		.cascadeCount        = cascadeCount_,
+		.cascadeNormalOffsets = cascadeNormalOffsets_
 	};
 	gfx.addLightData(pbrLD);
 
@@ -150,10 +186,11 @@ void Light::render(GFX& gfx) {
 		.atten = atten,
 		.type = static_cast<PBRSkinnedPipeline::LightData::Type>(type),
 		.isMainDirectionalLight = isMainDirectionalLight,
-		.cascadeViews  = cascadeViews_,
-		.cascadeProjs  = cascadeProjs_,
-		.cascadeSplitsFarV = cascadeSplitsFarV_,
-		.cascadeCount  = cascadeCount_
+		.cascadeViews        = cascadeViews_,
+		.cascadeProjs        = cascadeProjs_,
+		.cascadeSplitsFarV   = cascadeSplitsFarV_,
+		.cascadeCount        = cascadeCount_,
+		.cascadeNormalOffsets = cascadeNormalOffsets_
 	};
 	gfx.addLightData(pbrSkinnedLD);
 
@@ -166,7 +203,8 @@ void Light::render(GFX& gfx) {
 		.cascadeViews           = cascadeViews_,
 		.cascadeProjs           = cascadeProjs_,
 		.cascadeSplitsFarV      = cascadeSplitsFarV_,
-		.cascadeCount           = cascadeCount_
+		.cascadeCount           = cascadeCount_,
+		.cascadeNormalOffsets   = cascadeNormalOffsets_
 	};
 	gfx.addLightData(terrainLD);
 }

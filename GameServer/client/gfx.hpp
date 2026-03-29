@@ -69,7 +69,7 @@ struct AssetConfigs {
 	struct CascadeConfig {
 		float nearZ  = 0.1f;
 		float farZ   = 500.f;
-		float lambda = 0.75f;
+		float lambda = 0.8f;
 	} cascade;
 };
 

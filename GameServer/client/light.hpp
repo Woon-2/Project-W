@@ -49,6 +49,7 @@ public:
 	const std::array<mu::Mat4x4, MAX_CSM_CASCADES>& cascadeProjs() const { return cascadeProjs_; }
 	XMFLOAT4 cascadeSplitsFarV() const { return cascadeSplitsFarV_; }
 	u32t cascadeCount() const { return cascadeCount_; }
+	const std::array<float, MAX_CSM_CASCADES>& cascadeNormalOffsets() const { return cascadeNormalOffsets_; }
 
 	mu::NVec3 MU_CALLCONV dir() const {
 		return mu::NVec3(orient_.rotate(mu::Vec3(0.f, 0.f, 1.f)));
@@ -67,6 +68,7 @@ private:
 	std::array<mu::Mat4x4, MAX_CSM_CASCADES> cascadeProjs_{};
 	XMFLOAT4 cascadeSplitsFarV_{};
 	u32t cascadeCount_ = 0u;
+	std::array<float, MAX_CSM_CASCADES> cascadeNormalOffsets_{};
 };
 
 #endif	// __light_HPP

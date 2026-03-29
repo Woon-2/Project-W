@@ -26,6 +26,7 @@ cbuffer PerFrameData : register(b1) {
     int4     idxShadowMap[MAX_CSM_CASCADES];
     float4   cascadeSplitsFarV;
     float4x4 lightVP[MAX_CSM_CASCADES];
+    float4   cascadeNormalOffsets;
 };
 
 static float4x4 gmtxTexturize = {
@@ -49,6 +50,7 @@ struct VSOutput {
     float3 posV       : POSITION_V;   // view-space position
     float3 posW       : POSITION_W;   // world-space position (for CSM shadow)
     float3 normalV    : NORMAL_V;     // view-space normal
+    float3 normalW    : NORMAL_W;     // world-space geometric normal (for shadow normal offset)
     float3 tangentV   : TANGENT_V;
     float3 bitangentV : BITANGENT_V;
     float2 uv         : UV;
@@ -66,6 +68,7 @@ VSOutput VSMain(
     ret.posV    = mul(float4(position, 1.f), wv).xyz;
     ret.posW    = mul(float4(position, 1.f), world).xyz;
     ret.normalV = normalize(mul(normal, (float3x3)wv)); // uniform scale: no inv-transpose needed
+    ret.normalW = mul(normal, (float3x3)world);         // uniform scale: direct upper-left 3x3 is correct
     if (hasAnyNormal) {
         ret.tangentV   = normalize(mul(tangent,   (float3x3)wv));
         ret.bitangentV = normalize(mul(bitangent, (float3x3)wv));
@@ -163,7 +166,16 @@ float4 PSMain(VSOutput input) : SV_TARGET {
     }
 
     // 5. Shadow.
-    float shadow = calcCSMShadow(input.posV, input.posW);
+    // Raw (unsaturated) NdotL: back-lit faces (< 0) must stay negative so
+    // calcCSMShadow applies zero normal offset and avoids shadow flicker.
+    float ndotl = 0.5f;
+    for (uint li2 = 0u; li2 < lightCnt; ++li2) {
+        if (gLightData[li2].type == LIGHT_TYPE_DIRECTIONAL) {
+            ndotl = dot(shadingNormalV, -gLightData[li2].dirV);
+            break;
+        }
+    }
+    float shadow = calcCSMShadow(input.posV, input.posW, normalize(input.normalW), ndotl);
     color *= shadow;
 
 #ifdef CSM_DEBUG_VIS

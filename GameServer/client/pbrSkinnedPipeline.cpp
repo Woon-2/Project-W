@@ -634,6 +634,7 @@ void Dispatcher::mainUpdate() {
 				.wvp = mu::transpose(drawEvent.world * viewProj).getXmf(),
 				.wv = mu::transpose(drawEvent.world * view).getXmf(),
 				.wvNormal = mu::inverse(mu::Mat3x3(drawEvent.world * view)).getXmf(),
+				.worldNormal = mu::inverse(mu::Mat3x3(drawEvent.world)).getXmf(),
 				.rootBoneOffset = boneUploadCnt
 			};
 			boneUploadCnt += static_cast<u32t>( drawEvent.boneXforms.size() );
@@ -701,6 +702,10 @@ void Dispatcher::mainUpdate() {
 		pfd.lightVP[i] = mu::transpose(
 			mainDirectionalLightData_.cascadeViews[i] * mainDirectionalLightData_.cascadeProjs[i]
 		).getXmf();
+	}
+	{
+		const auto& o = mainDirectionalLightData_.cascadeNormalOffsets;
+		pfd.cascadeNormalOffsets = XMFLOAT4(o[0], o[1], o[2], o[3]);
 	}
 	// pfd의 내용을 바탕으로 GPU 데이터를 갱신한다.
 	pResources_->mainPass.perFrameData.stage(roomIdx_, &pfd, 1u);
@@ -799,6 +804,10 @@ void Dispatcher::mainUpdateMT() {
 		pfd.lightVP[i] = mu::transpose(
 			mainDirectionalLightData_.cascadeViews[i] * mainDirectionalLightData_.cascadeProjs[i]
 		).getXmf();
+	}
+	{
+		const auto& o = mainDirectionalLightData_.cascadeNormalOffsets;
+		pfd.cascadeNormalOffsets = XMFLOAT4(o[0], o[1], o[2], o[3]);
 	}
 	// pfd의 내용을 바탕으로 GPU 데이터를 갱신한다.
 	pResources_->mainPass.perFrameData.stage(roomIdx_, &pfd, 1u);
@@ -1146,7 +1155,8 @@ void MU_CALLCONV Dispatcher::addJobMainUpdate( mu::Mat4x4 view, const mu::Mat4x4
 					.world = mu::transpose(drawEvent.world).getXmf(),
 					.wvp = mu::transpose(drawEvent.world * viewProj).getXmf(),
 					.wv = mu::transpose(drawEvent.world * view).getXmf(),
-					.wvNormal = mu::inverse(mu::Mat3x3(drawEvent.world * view)).getXmf()
+					.wvNormal = mu::inverse(mu::Mat3x3(drawEvent.world * view)).getXmf(),
+					.worldNormal = mu::inverse(mu::Mat3x3(drawEvent.world)).getXmf()
 					// rootBoneOffset 계산은 앞에서부터 순서대로 이루어져야 하므로 병렬로 수행할 수 없다.
 					// 따라서 동기화 후 rootBoneOffset 멤버를 갱신하도록 한다.
 				};
