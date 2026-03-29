@@ -631,8 +631,10 @@ void GFX::addLightData(const TerrainPipeline::LightData& lightData) {
 	}
 }
 // 프레임 데이터를 입력한다.
-void GFX::addFrameData(const TerrainPipeline::FrameData& frameData) {
+void GFX::addFrameData( const TerrainPipeline::FrameData& frameData ) {
 	frameDataTerrainPipeline_ = frameData;
+}
+
 void GFX::addRequestMeshBinLoad(const RequestMeshBinLoad& request)
 {
 	requestsMeshBinLoad_.push_back(request);
@@ -759,11 +761,12 @@ void GFX::loadAssets(const AssetConfigs& configs) {
 	dumpLog();
 
 	// load terrain
-	for (auto& request : requestsTerrainLoad_) {
+	for ( auto& request : requestsTerrainLoad_ ) {
 		*request.pDest = loadTerrainFromFiles(
 			request.terrainDir, device_.Get(), cmdList.Get(),
 			*request.pTexHashMap, srvTexPool_, fence
 		);
+	}
 	// load .meshbin files
 	for (auto& request : requestsMeshBinLoad_) {
 		auto [mesh, texRelPath] = loadMeshBin(request.meshPath, device_.Get(), cmdList.Get(), fence);

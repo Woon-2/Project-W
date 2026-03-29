@@ -93,7 +93,7 @@ void Game::setupStage() {
 
 	// 파티클 설정
 	flameEmitterConfig_.pClip             = assetManager_.flameAnimation();
-	flameEmitterConfig_.position          = { 0.f, 0.0f, -5.f };
+	flameEmitterConfig_.position          = { -6.f, 58.5f, -5.f };
 	flameEmitterConfig_.direction          = { 0.f, 1.f, 0.f };
 	flameEmitterConfig_.spread             = 0.0f;          // 약간의 퍼짐으로 자연스러운 불꽃
 	flameEmitterConfig_.speedMin           = 0.f;           // 초기 속도 제거: 상승은 gravityModifier로 제어
@@ -105,7 +105,7 @@ void Game::setupStage() {
 	flameEmitterConfig_.sizeMultiplierMin  = 0.8f;
 	flameEmitterConfig_.sizeMultiplierMax  = 1.0f;
 	flameEmitterConfig_.drag               = 0.8f;
-	flameEmitterConfig_.gravityModifierMin = -0.3f;         // 음수 = 위쪽 부력 (Unity 방식)
+	flameEmitterConfig_.gravityModifierMin = -0.3f;         // 음수 = 위쪽 부력 
 	flameEmitterConfig_.gravityModifierMax = 0.0f;         // 파티클마다 다른 상승력
 	flameEmitterConfig_.startColor        = { 1.f, 0.4f, 0.f, 1.f };
 	flameEmitterConfig_.startRotationMin  = 0.f;
@@ -118,7 +118,7 @@ void Game::setupStage() {
 	flameParticleSystem_.startContinuous(flameEmitterConfig_);
 
 	smokeEmitterConfig_.pClip            = assetManager_.smokeAnimation();
-	smokeEmitterConfig_.position         = { 0.f, 0.0f, -5.f };
+	smokeEmitterConfig_.position         = { -6.f, 58.5f, -5.f };
 	smokeEmitterConfig_.direction        = { 0.f, 1.f, 0.f };
 	smokeEmitterConfig_.spread           = 0.0f;
 	smokeEmitterConfig_.speedMin         = 0.5f;
@@ -935,12 +935,15 @@ void Game::processInput(Milliseconds deltaTime) {
 
 	// F key: emit particles for testing
 	if ( (keyboardStateCurr_['F'] & 0x80) && !(keyboardStatePrev_['F'] & 0x80) ) {
-		emitterConfig_.position = player_->pos()
-		                        + player_->right()   * 1.0f
-		                        + player_->forward() * 1.5f;
-		particleSystem_.emit(emitterConfig_, 5);
-		flameParticleSystem_.emit(flameEmitterConfig_, 1);
-		smokeParticleSystem_.emit(smokeEmitterConfig_, 1);
+		const auto slashPos = player_->renderState().pos
+			+ player_->forward() * 1.f
+			+ mu::Vec3( 0.f, 1.0f, 0.f );
+		swordSlashConfig_.position = slashPos;
+		swordSlashConfig_.rotation = mu::Mat4x4( player_->orient() )
+			* mu::rotateXH( mu::Degree{ 80.f } )
+			* mu::rotateYH( mu::Degree{ 180.f } )
+			* mu::rotateZH( mu::Degree{ 180.f } );
+		swordSlashSystem_.emit( swordSlashConfig_, 1 );
 	}
 
 	// Space 키를 누르면 커서 보이기 플래그를 활성화/비활성화한다.
