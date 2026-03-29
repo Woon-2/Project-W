@@ -1,10 +1,13 @@
-### ServerEngine
+### ServerEngine (Networking Layer)
 Core async networking library used by all servers. Built on **Windows IOCP (I/O Completion Ports)**.
 
-Key abstractions:
-- `IocpReactor` — IOCP event loop; servers call `iocpCore().dispatch()` in worker threads
-- `Session` — Base class for a network connection; handles async send/recv, connect/disconnect lifecycle
-- `SendBuffer` / `RecvBuffer` — Buffer management; `SendBuffer` uses 4KB chunks with thread-local pooling to avoid lock contention
-- `Listener` — Server-side accept socket
-- `JobQueue` — Async job dispatch; used by `Room` to serialize mutations without a global lock
-- `protocol.hpp` — Binary packet definitions (`PacketHeader` = size + type, `PacketType` enum, `PlayerInfo`, etc.)
+IOCP-based async I/O engine used by both servers:
+- `IocpReactor` — completion port wrapper; drives the worker thread dispatch loop
+- `Session` / `PacketSession` — connection lifecycle and packet framing/parsing
+- `Listener` — TCP accept loop
+- `SendBuffer` / `RecvBuffer` — pooled send/recv buffers
+- `JobQueue` — async job queue for thread-safe operations within a room/session
+- `MemoryManager` — object pooling to reduce allocation overhead
+- `protocol.hpp` — all packet type definitions (shared between client and servers)
+
+**Threading model:** N-1 worker threads run the IOCP dispatch loop. Each `Room` has its own `JobQueue`; operations on room state are posted as jobs rather than accessed directly.

@@ -2,6 +2,9 @@
 #include "onlineGame.hpp"
 #include "../errorHandling.hpp"
 #include "../timer.hpp"
+#include "SendBuffer.hpp"
+#include "../PacketManager.hpp"
+#include "../ClientApp.hpp"
 
 extern HWND ghWnd;
 extern RECT gClientRect;
@@ -33,204 +36,83 @@ Game::Game() {
 }
 
 void Game::setupStage() {
-	auto lock = std::lock_guard(objectsMtx_);
-
 	skybox_.setModel( assetManager_.modelCube( ) );
 	skybox_.setSkyboxMaterial( assetManager_.skyboxMaterial( ) );
-
-	player_ = std::make_shared<Object>();
 
 	dirLight_.setOrient( mu::NQuat( mu::Degree( 0.f ), mu::Degree( 160.f ), mu::Degree( 0.f ) ) );
 	dirLight_.color = mu::Vec3( 0.8f, 0.8f, 0.8f );
 	dirLight_.intensity = 2.f;
 	dirLight_.type = PBRPipeline::LightData::Type::DirectionalLight;
 	dirLight_.isMainDirectionalLight = true;
+}
 
-	camera_.setTargetObject( player_ );
-	camera_.setOffsetFromTarget( mu::Vec3( 0.f, 1.8f, -2.5f ) );
-	camera_.setOffsetTargetPivot( mu::Vec3( 0.f, 1.f, 0.f ) );
-	camera_.setPerspective( mu::Degree( 90.f ),
-		static_cast<float>( gClientRect.right - gClientRect.left ) / ( gClientRect.bottom - gClientRect.top ),
+void Game::setupPlayer(const PlayerInfo& playerInfo) {
+	player_ = std::make_shared<Player>();
+
+	player_->setId(playerInfo.playerId);
+	player_->setPos(DirectX::XMLoadFloat3(&playerInfo.pos));
+	player_->setOrient(DirectX::XMLoadFloat4(&playerInfo.orient));
+	player_->setScale(DirectX::XMLoadFloat3(&playerInfo.scale));
+	player_->setModel(assetManager_.modelPlayer());
+	player_->setAnimBlender(animSystem_, assetManager_);
+	player_->enableBVRendering();
+
+	camera_.setTargetObject(player_);
+	camera_.setOffsetFromTarget(mu::Vec3(0.f, 1.8f, -2.5f));
+	camera_.setOffsetTargetPivot(mu::Vec3(0.f, 1.f, 0.f));
+	camera_.setPerspective(mu::Degree(90.f),
+		static_cast<float>(gClientRect.right - gClientRect.left) / (gClientRect.bottom - gClientRect.top),
 		0.1f, 500.f
 	);
+
+	idPlayerMap_[playerInfo.playerId] = player_;
 }
 
-// 게임의 업데이트는 다음 순서대로 이루어진다.
-// 입력 처리
-// 네트워크 패킷 처리
-// 이벤트 처리
-// 물리 업데이트 루틴
-// 객체별 업데이트 루틴
-// 애니메이션 업데이트
-void Game::update(Milliseconds deltaTime) {
-	auto lock = std::lock_guard(objectsMtx_);
-	// 평가 물리량 초기화
-	player_->physicState().evVelocity = mu::Vec3();
-	player_->physicState().evOmega = mu::Vec3();
+void Game::setupGround(const ObjectInfo& groundInfo) {
+	ground_ = std::make_shared<Cube>();
 
-	// 입력 처리
-	processInput(deltaTime);
-
-	// 평가 물리량 갱신
-	player_->physicState().evVelocity += player_->physicState().velocity;
-	player_->physicState().evOmega += player_->physicState().omega;
-
-	// 네트워크 패킷 처리
-	// 서버로부터 받은 메시지 처리
-	const auto bulkSize = 100u;
-	auto messages = std::vector<Message>(bulkSize);
-
-	auto size = 10; // messageQueue.try_dequeue_bulk(messages.data(), bulkSize);
-
-	// 남은 메시지가 있으면 모두 꺼내기
-	Message msg;
-	/*while (messageQueue.try_dequeue(msg)) {
-		messages.push_back(msg);
-		++size;
-	}*/
-
-	// 물리 업데이트 루틴
-	//
-	// 물리량 갱신은 게임 갱신과 다르게 고정 주기로 수행한다.
-	// 이를 통해 너무 유동적인 delta time으로 인한 시뮬레이션의 불안정성과
-	// 물리 업데이트의 성능적 비용 문제를 해결한다.
-	// 물리 업데이트 주기는 physicUpdateInterval_ 변수에 저장된다.
-	//
-	// update 함수에서 physicUpdateAcc_ 변수를 통해
-	// 물리량 갱신의 주기가 돌아왔는지 판단하고
-	// 주기가 되었다면 물리량 갱신을 수행한다.
-	physicUpdateAcc_ += deltaTime;
-
-	if ( physicUpdateAcc_ >= physicUpdateInterval ) {
-		// 물리 시뮬레이션을 위해
-		// 물리 시뮬레이션의 대상이 되는 객체들을
-		// 한 곳에 모아 PhysicSystem 객체에 전달한다.
-		static std::vector<Object*> allObjects{};
-		allObjects.push_back(player_.get());
-
-		while ( physicUpdateAcc_ >= physicUpdateInterval ) {
-			physicSystem_.step( allObjects, physicUpdateInterval );
-			physicUpdateAcc_ -= physicUpdateInterval;
-		}
-
-		allObjects.clear( );
-	}
-
-	//std::cout << "player pos : " << player_->pos().x() << ", " << player_->pos().y() << ", " << player_->pos().z() << '\n';
-	if (prevVelocity_ != currVelocity_) {
-		sendMoveStatePacket();
-	}
-
-	// 객체별 업데이트 루틴
-	// 
-	// 물리량 갱신 주기에 대해,
-	// 마지막 물리량 갱신으로부터 얼마나 지났는지의 비율로
-	// RenderState 갱신을 위한 PhysicState 보간 계수를 설정한다.
-	// 게임 객체의 update 함수에 전달된다.
-	const auto tPhysicInterpolation = physicUpdateAcc_ / physicUpdateInterval;
-
-	for (auto& cube : cubes_) {
-		cube.update(deltaTime, tPhysicInterpolation);
-	}
-
-	// 게임 객체들 갱신
-	player_->update(deltaTime, tPhysicInterpolation );
-	for ( auto& obj : otherPlayers_ ) {
-		if( obj != player_ ) {
-			obj->update( deltaTime, tPhysicInterpolation );
-		}
-	}
-
-	camera_.update();
-	dirLight_.update(deltaTime);
-	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), assetConfigs_.cascade, assetConfigs_.shadowMap);
-
-	playerHpUI_.update(deltaTime, gfx_, nullptr);
-	for (auto& [id, ui] : otherPlayerHpUIs_) {
-		auto pPlayer = idPlayerMap_.at(id);
-		auto projPos = mu::Vec4(pPlayer->pos(), 1.0f) * camera_.view() * camera_.proj();
-		if (projPos.z() < 0.f) {
-			ui.setCulled(true);
-			continue;
-		}
-		ui.setCulled(false);
-		ui.setPivot( ( projPos.xy() / projPos.w() + mu::Vec2(1.f, 1.f) ) * 0.5f
-			* mu::Vec2(1024.f, 768.f)
-		);
-		auto d = std::max( (pPlayer->pos() - camera_.eye()).len(), 0.001f );
-		ui.setScale( mu::Vec2(100.f, 20.f) * std::min(1.f, 5.f / d));
-
-		ui.update(deltaTime, gfx_, nullptr);
-	}
-
-	crosshair_.update(deltaTime);
-
-	// 애니메이션 업데이트
-	slimeSprite_.update( deltaTime );
-	animSystem_.update(0.016s);
-
-	// UI 동기화
-	playerHpUI_.setHp(player_->hp());
-
-	for (auto& [id, ui] : otherPlayerHpUIs_) {
-		ui.setHp(idPlayerMap_.at(id)->hp());
-	}
-
-	clearEvents(eventList_);
+	ground_->setId(groundInfo.objectId);
+	ground_->setMaterialSetIdx(groundInfo.materialSetIdx);
+	ground_->setPos(DirectX::XMLoadFloat3(&groundInfo.pos));
+	ground_->setOrient(DirectX::XMLoadFloat4(&groundInfo.orient));
+	ground_->setScale(DirectX::XMLoadFloat3(&groundInfo.scale));
+	ground_->setModel(assetManager_.modelCube());
+	ground_->enableBVRendering();
 }
 
-void Game::render() {
-	auto lock = std::lock_guard(objectsMtx_);
-	for (auto& cube : cubes_) {
-		cube.render(gfx_);
-	}
+void Game::createOtherPlayer(const ObjectInfo& otherPlayerInfo) {
+	auto otherPlayer = std::make_shared<Player>();
 
-	player_->render(gfx_);
-	skybox_.render( gfx_ );
-	for ( auto& obj : otherPlayers_ ) {
-		if( obj != player_ ) {
-			obj->render( gfx_ );
-		}
-	}
+	otherPlayer->setId(otherPlayerInfo.objectId);
+	otherPlayer->setPos(DirectX::XMLoadFloat3(&otherPlayerInfo.pos));
+	otherPlayer->setOrient(DirectX::XMLoadFloat4(&otherPlayerInfo.orient));
+	otherPlayer->setScale(DirectX::XMLoadFloat3(&otherPlayerInfo.scale));
+	otherPlayer->setModel(assetManager_.modelPlayer());
+	otherPlayer->setAnimBlender(animSystem_, assetManager_);
+	otherPlayer->enableBVRendering();
 
-	camera_.updateGFX(gfx_);
-	dirLight_.render(gfx_);
+	otherPlayers_.push_back(otherPlayer);
+	idPlayerMap_[otherPlayerInfo.objectId] = otherPlayer;
+}
 
-	auto frameDataPBR = PBRPipeline::FrameData{
-		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
-	};
-	gfx_.addFrameData(frameDataPBR);
-	auto frameDataPBRSkinned = PBRSkinnedPipeline::FrameData{
-		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
-	};
-	gfx_.addFrameData(frameDataPBRSkinned);
+void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
+	auto otherPlayer = std::make_shared<Player>();
 
-	if (inRoom_) {
-		playerHpUI_.render(gfx_);
-		for (auto& [id, ui] : otherPlayerHpUIs_) {
-			ui.render(gfx_);
-		}
+	otherPlayer->setId(otherPlayerInfo.playerId);
+	otherPlayer->setPos(DirectX::XMLoadFloat3(&otherPlayerInfo.pos));
+	otherPlayer->setOrient(DirectX::XMLoadFloat4(&otherPlayerInfo.orient));
+	otherPlayer->setScale(DirectX::XMLoadFloat3(&otherPlayerInfo.scale));
+	otherPlayer->setModel(assetManager_.modelPlayer());
+	otherPlayer->setAnimBlender(animSystem_, assetManager_);
+	otherPlayer->enableBVRendering();
 
-		if (cameraMode_ == CameraMode::FirstPerson) {
-			crosshair_.render(gfx_);
-		}
-
-		auto frameDataUI = UIPipeline::FrameData{
-			.screenWidth = static_cast<float>( gClientRect.right - gClientRect.left ),
-			.screenHeight = static_cast<float>( gClientRect.bottom - gClientRect.top )
-		};
-		gfx_.addFrameData(frameDataUI);
-
-		slimeSprite_.render(gfx_);
-	}
-
-	gfx_.render();
+	otherPlayers_.push_back(otherPlayer);
+	idPlayerMap_[otherPlayerInfo.playerId] = otherPlayer;
 }
 
 void Game::removePlayer( i32t playerId ) {
-	std::lock_guard<std::mutex> lock( objectsMtx_ );
 	auto itPlayer = std::ranges::find_if(
-		otherPlayers_, [ playerId ]( const std::shared_ptr<Object>& obj ) {
+		otherPlayers_, [ playerId ]( const std::shared_ptr<Player>& obj ) {
 			return obj->getId( ) == playerId;
 		}
 	);
@@ -249,6 +131,191 @@ void Game::removePlayer( i32t playerId ) {
 	otherPlayers_.erase(itPlayer);
 	idPlayerMap_.erase( playerId );
 	otherPlayerHpUIs_.erase( playerId );
+}
+
+void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
+	auto player = idPlayerMap_[playerId];
+
+	DISPLAY_ERROR_STR(player != nullptr,
+		"[Game Error] Game::movePlayer: 이동하려는 플레이어가 존재하지 않습니다.\n",
+		false
+	);
+
+	if (player == nullptr) {
+		return;
+	}
+
+	player->setPos(DirectX::XMLoadFloat3(&pos));
+	player->setOrient(DirectX::XMLoadFloat4(&orient));
+	player->physicState().evVelocity = DirectX::XMLoadFloat3(&velocity);
+}
+
+// 게임의 업데이트는 다음 순서대로 이루어진다.
+// 네트워크 패킷 처리
+// 입력 처리
+// 이벤트 처리
+// 물리 업데이트 루틴
+// 객체별 업데이트 루틴
+// 애니메이션 업데이트
+void Game::update(Milliseconds deltaTime) {
+	SleepEx(1, true);
+
+	if (player_ == nullptr) {
+		return;
+	}
+
+	// 이전 평가 물리량 갱신
+	prevVelocity_ = currVelocity_;
+
+	// 평가 물리량 초기화
+	player_->physicState().evVelocity = mu::Vec3();
+	player_->physicState().evOmega = mu::Vec3();
+
+	// 입력 처리
+	processInput(deltaTime);
+
+	// 평가 물리량 갱신
+	player_->physicState().evVelocity += player_->physicState().velocity;
+	player_->physicState().evOmega += player_->physicState().omega;
+
+	// 현재 평가 물리량 저장
+	currVelocity_ = player_->physicState().evVelocity;
+	
+	// 이전 평가 물리량과 현재 평가 물리량의 차이가 move 패킷 전송 임계값 이상이라면, move 패킷 전송 플래그를 켠다.
+	if( prevVelocity_ != currVelocity_ ) {
+		moveChange_ = true;
+	}
+
+	// 물리 업데이트 루틴
+	//
+	// 물리량 갱신은 게임 갱신과 다르게 고정 주기로 수행한다.
+	// 이를 통해 너무 유동적인 delta time으로 인한 시뮬레이션의 불안정성과
+	// 물리 업데이트의 성능적 비용 문제를 해결한다.
+	// 물리 업데이트 주기는 physicUpdateInterval_ 변수에 저장된다.
+	//
+	// update 함수에서 physicUpdateAcc_ 변수를 통해
+	// 물리량 갱신의 주기가 돌아왔는지 판단하고
+	// 주기가 되었다면 물리량 갱신을 수행한다.
+	physicUpdateAcc_ += deltaTime;
+
+	// move 패킷 전송 주기 판단
+	moveStateSendAcc_ += deltaTime;
+
+	if ( physicUpdateAcc_ >= physicUpdateInterval ) {
+		// 물리 시뮬레이션을 위해
+		// 물리 시뮬레이션의 대상이 되는 객체들을
+		// 한 곳에 모아 PhysicSystem 객체에 전달한다.
+		static std::vector<Object*> targetObjects{};
+		targetObjects.resize(2u);
+		targetObjects[0] = ground_.get();
+		targetObjects[1] = player_.get();
+
+		while ( physicUpdateAcc_ >= physicUpdateInterval ) {
+			physicSystem_.step(targetObjects, physicUpdateInterval );
+			physicUpdateAcc_ -= physicUpdateInterval;
+		}
+
+		targetObjects.clear( );
+	}
+
+	//std::cout << "player pos : " << player_->pos().x() << ", " << player_->pos().y() << ", " << player_->pos().z() << '\n';
+	if (moveStateSendAcc_ >= moveStateSendInterval_) {
+		moveStateSendAcc_ = 0s;
+
+		if (moveChange_) {
+			sendMovePacket();
+		}
+	}
+	moveChange_ = false;
+
+	// 객체별 업데이트 루틴
+	// 
+	// 물리량 갱신 주기에 대해,
+	// 마지막 물리량 갱신으로부터 얼마나 지났는지의 비율로
+	// RenderState 갱신을 위한 PhysicState 보간 계수를 설정한다.
+	// 게임 객체의 update 함수에 전달된다.
+	const auto tPhysicInterpolation = physicUpdateAcc_ / physicUpdateInterval;
+
+	// 게임 객체들 갱신
+	ground_->update(deltaTime, tPhysicInterpolation);
+	player_->update(deltaTime, tPhysicInterpolation );
+
+	for ( auto& obj : otherPlayers_ ) {
+		obj->update( deltaTime, tPhysicInterpolation );
+	}
+
+	camera_.update();
+	dirLight_.update(deltaTime);
+	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), assetConfigs_.cascade, assetConfigs_.shadowMap);
+
+	/*playerHpUI_.update(deltaTime, gfx_, nullptr);
+	for (auto& [id, ui] : otherPlayerHpUIs_) {
+		auto pPlayer = idPlayerMap_.at(id);
+		auto projPos = mu::Vec4(pPlayer->pos(), 1.0f) * camera_.view() * camera_.proj();
+		if (projPos.z() < 0.f) {
+			ui.setCulled(true);
+			continue;
+		}
+		ui.setCulled(false);
+		ui.setPivot( ( projPos.xy() / projPos.w() + mu::Vec2(1.f, 1.f) ) * 0.5f
+			* mu::Vec2(1024.f, 768.f)
+		);
+		auto d = std::max( (pPlayer->pos() - camera_.eye()).len(), 0.001f );
+		ui.setScale( mu::Vec2(100.f, 20.f) * std::min(1.f, 5.f / d));
+
+		ui.update(deltaTime, gfx_, nullptr);
+	}*/
+
+	// 애니메이션 업데이트
+	animSystem_.update(0.016s);
+
+	// UI 동기화
+	/*playerHpUI_.setHp(player_->hp());
+
+	for (auto& [id, ui] : otherPlayerHpUIs_) {
+		ui.setHp(idPlayerMap_.at(id)->hp());
+	}*/
+
+	clearEvents(eventList_);
+}
+
+void Game::render() {
+	if(player_ == nullptr) {
+		return;
+	}
+
+	skybox_.render( gfx_ );
+	ground_->render(gfx_);
+	player_->render(gfx_);
+
+	for ( auto& obj : otherPlayers_ ) {
+		obj->render( gfx_ );
+	}
+
+	camera_.updateGFX(gfx_);
+	dirLight_.render(gfx_);
+
+	auto frameDataPBR = PBRPipeline::FrameData{
+		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
+	};
+	gfx_.addFrameData(frameDataPBR);
+	auto frameDataPBRSkinned = PBRSkinnedPipeline::FrameData{
+		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
+	};
+	gfx_.addFrameData(frameDataPBRSkinned);
+
+	/*playerHpUI_.render(gfx_);
+	for (auto& [id, ui] : otherPlayerHpUIs_) {
+		ui.render(gfx_);
+	}*/
+
+	auto frameDataUI = UIPipeline::FrameData{
+		.screenWidth = static_cast<float>( gClientRect.right - gClientRect.left ),
+		.screenHeight = static_cast<float>( gClientRect.bottom - gClientRect.top )
+	};
+	gfx_.addFrameData(frameDataUI);
+
+	gfx_.render();
 }
 
 // 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
@@ -330,6 +397,11 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	return DefWindowProcA(hWnd, msg, wParam, lParam);
 }
 
+void Game::sendMovePacket() {
+	auto sendBuffer = PacketManager::makeCMovePacket(player_->pos().getXmf(), player_->orient().getXmf(), player_->physicState().evVelocity.getXmf());
+	INet::ClientApp::send(sendBuffer);
+}
+
 void Game::sendMouseMovePacket() {
 	/*const auto forward = player_->forward();
 	const auto yaw = std::atan2(forward.x(), forward.z());
@@ -394,17 +466,14 @@ void Game::processInput(Milliseconds deltaTime) {
 	if (GetForegroundWindow() != ghWnd) {
 		return;
 	}
+	if (player_ == nullptr) {
+		return;
+	}
 
 	keyboardStatePrev_ = keyboardStateCurr_;
 	DISPLAY_ERROR_GLE( GetKeyboardState(keyboardStateCurr_.data()), false );
 
-	// 현재 플레이어가 로비에 있냐 게임중이냐에 따라 활성화되는 입력이 다르다.
-	if (inRoom_) {
-		processInputGame(deltaTime);
-	}
-	else {
-		processInputLobby(deltaTime);
-	}
+	processInputGame(deltaTime);
 
 	// 로비/게임 공통 입력 처리
 	// Enter 키를 누르면 커서 캡처 플래그를 활성화/비활성화한다.
@@ -459,8 +528,6 @@ void Game::processInputGame(Milliseconds deltaTime) {
 	const auto moveXSign = !playerDead_ * ( (keyboardStateCurr_['D'] & 0x80) - (keyboardStateCurr_['A'] & 0x80) );
 	const auto moveZSign = !playerDead_ * ( (keyboardStateCurr_['W'] & 0x80) - (keyboardStateCurr_['S'] & 0x80) );
 	const auto moveThreshold = 0.1f;
-
-	prevVelocity_ = currVelocity_;
 
 	if (moveXSign || moveZSign) {
 		// 'W'/'S' 입력으로 판정된 Z 부호는 플레이어의 forward 벡터,
@@ -519,51 +586,6 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		camera_.setOffsetFromTarget( mu::Vec3( 0.f, 1.8f, -2.5f ) );
 		camera_.setOffsetTargetPivot( mu::Vec3(0.f, 1.f, 0.f));
 		cameraMode_ = CameraMode::ThirdPerson;
-	}
-
-	// 총 장전
-	if ( !playerDead_ && keyboardStateCurr_['R'] & 0x80 ) {
-		/*auto csReloadPacket = Packet{
-			.header = {
-				.size = sizeof(PacketHeader) + sizeof(CSReloadPacket),
-				.id = static_cast<std::uint16_t>(PacketType::csReload)
-			},
-			.csReload = {}
-		};
-
-		i32t packetSize = sizeof(Packet);
-		auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
-		sendBuffer->copyData(&csReloadPacket, packetSize);
-		serverSession_->send(sendBuffer);*/
-	}
-
-	// 총 발사: 총구 화염 애니메이션 재생
-	if ( !playerDead_ && (keyboardStateCurr_[VK_LBUTTON] & 0x80)
-		&& !(keyboardStatePrev_[VK_LBUTTON] & 0x80)
-	) {
-		sendMoveStatePacket();
-
-		auto firePos = player_->pos()
-			+ player_->up() * 1.3f
-			+ player_->forward() * 0.85f
-			+ player_->right() * 0.15f;
-
-		/*auto csFirePacket = Packet{
-			.header = {
-				.size = sizeof(PacketHeader) + sizeof(CSFirePacket),
-				.id = static_cast<std::uint16_t>(PacketType::csFire)
-			},
-			.csFire = {
-				.firePos = firePos.getXmf(),
-				.forward = player_->forward().getXmf(),
-				.cameraPitchRadian = cameraPitch_,
-			}
-		};
-
-		i32t packetSize = sizeof(Packet);
-		auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
-		sendBuffer->copyData(&csFirePacket, packetSize);
-		serverSession_->send(sendBuffer);*/
 	}
 
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때
@@ -635,7 +657,7 @@ void Game::captureCursor() {
     auto ul = POINT{ gClientRect.left, gClientRect.top };
     auto lr = POINT{ gClientRect.right, gClientRect.bottom };
 
-    // 클라이언트의 외곽 좌표를 윈도우 좌표로 변환
+	// 클라이언트의 외곽 좌표를 윈도우 좌표로 변환
     MapWindowPoints(ghWnd, nullptr, &ul, 1);
     MapWindowPoints(ghWnd, nullptr, &lr, 1);
 

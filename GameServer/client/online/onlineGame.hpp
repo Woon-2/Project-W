@@ -17,6 +17,7 @@
 #include "../crosshair.hpp"
 
 class Timer;
+class SendBuffer;
 
 namespace Online {
 
@@ -55,12 +56,20 @@ public:
 	GameType type() const override { return GameType::Online; }
 
 	void setTimer(Timer* pTimer) { pTimer_ = pTimer; }
+
 	// 객체들을 생성한다.
 	void setupStage();
 
+	void setupPlayer(const PlayerInfo& playerInfo);
+	void setupGround(const ObjectInfo& groundInfo);
+	void createOtherPlayer(const ObjectInfo& otherPlayerInfo);
+	void createOtherPlayer(const PlayerInfo& otherPlayerInfo);
+	void removePlayer( i32t playerId );
+	void movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
+
 	// 게임의 업데이트는 다음 순서대로 이루어진다.
+	// 네트워크 패킷 처리(SleepEx)
 	// 입력 처리
-	// 네트워크 패킷 처리
 	// 이벤트 처리
 	// 물리 업데이트 루틴
 	// 객체별 업데이트 루틴
@@ -70,63 +79,30 @@ public:
 	// 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
 	LRESULT receiveWndMsg( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam ) override;
 
-	void addClientPlayer( i32t playerId, float x, float y, float z ) {
-		std::lock_guard<std::mutex> lock( objectsMtx_ );
+	//bool findPlayer(i32t playerId);
 
-		player_ = std::make_shared<Object>( );
+	//void createOtherPlayer( i32t playerId, float x, float y, float z ) {
+	//	auto newPlayer = std::make_shared<Object>( );
 
-		player_->setId( playerId );
-		idPlayerMap_[ player_->getId( ) ] = player_;
-	}
+	//	newPlayer->setId( playerId );
+	//	newPlayer->setPos( mu::Vec3( x, y, z ) );
+	//	newPlayer->setModel( assetManager_.modelPlayer( ) );
+	//	newPlayer->setScale( 1.f );
+	//	newPlayer->enableBVRendering();
+	//	// 임시
+	//	newPlayer->setHp(100);
+	//	// newPlayer->setAmmo(30);
 
-	void addOtherPlayer( const std::shared_ptr<Object>& player ) {
-		std::lock_guard<std::mutex> lock( objectsMtx_ );
-		player->setAnimBlender(animSystem_, assetManager_);
-		otherPlayers_.push_back( player );
-		idPlayerMap_[ player->getId( ) ] = player;
-		auto [pPair, _] = otherPlayerHpUIs_.try_emplace(player->getId());
-		auto& ui = pPair->second;
-		ui.setTexture(assetManager_.playerHpLine());
-	}
+	//	//Equipment rifle{};
+	//	//rifle.socketType = Bone::SocketType::RightHand;
+	//	//rifle.object = std::make_unique<Object>();
+	//	//// rifle.object->setModel(assetManager_.modelRifle());
+	//	//rifle.object->setScale(mu::Vec3(1.f, 1.f, 1.f));
 
-	void removePlayer( i32t playerId );
+	//	//newPlayer->equip(std::move(rifle));
 
-	bool findPlayer( i32t playerId ) {
-		std::lock_guard<std::mutex> lock( objectsMtx_ );
-		return idPlayerMap_.find( playerId ) != idPlayerMap_.end( );
-	}
-
-	void createOtherPlayer( i32t playerId, float x, float y, float z ) {
-		auto newPlayer = std::make_shared<Object>( );
-
-		newPlayer->setId( playerId );
-		newPlayer->setPos( mu::Vec3( x, y, z ) );
-		newPlayer->setModel( assetManager_.modelPlayer( ) );
-		newPlayer->setScale( 1.f );
-		newPlayer->enableBVRendering();
-		// 임시
-		newPlayer->setHp(100);
-		// newPlayer->setAmmo(30);
-
-		Equipment rifle{};
-		rifle.socketType = Bone::SocketType::RightHand;
-		rifle.object = std::make_unique<Object>();
-		// rifle.object->setModel(assetManager_.modelRifle());
-		rifle.object->setScale(mu::Vec3(1.f, 1.f, 1.f));
-
-		newPlayer->equip(std::move(rifle));
-
-		addOtherPlayer( newPlayer );
-	}
-
-	//void setServerSession( const SPServerSession& serverSession ) {	serverSession_ = serverSession;	}
-
-	const std::shared_ptr<Object>& getPlayer( ) const { return player_; }
-	std::shared_ptr<Object>& getPlayerById( i32t playerId ) {
-		std::lock_guard<std::mutex> lock( objectsMtx_ );
-		return idPlayerMap_[ playerId ];
-	}
-
+	//	addOtherPlayer( newPlayer );
+	//}
 
 private:
 	enum class CameraMode {
@@ -138,6 +114,8 @@ private:
 		SpriteAnimation anim;
 		std::shared_ptr<Object> pOwner;
 	};
+
+	void sendMovePacket();
 
 	void sendMouseMovePacket();
 	void sendMoveStatePacket();
@@ -158,11 +136,12 @@ private:
 	AssetManager assetManager_{};
 
 	PhysicSystem physicSystem_{};
-	Seconds physicUpdateAcc_{ 0s };	// 물리 업데이트를 위한 시간 누산기
+	Seconds physicUpdateAcc_{ 0s };				// 물리 업데이트를 위한 시간 누산기
 	Seconds physicUpdateInterval{ 1s / 60.f };	// 60fps로 물리 업데이트
 
+	bool moveChange_{};
 	Seconds moveStateSendAcc_{0s};
-	Seconds moveStateSendInterval_{1s / 20.f};	// 20fps로 이동 상태 패킷 전송
+	Seconds moveStateSendInterval_{1s / 20.f};	// 50ms(20Hz)마다 move 패킷 전송
 	
 	AnimSystem animSystem_{};
 
@@ -172,17 +151,22 @@ private:
 	EventList eventList_{};
 	Timer* pTimer_ = nullptr;
 
-	//SPServerSession serverSession_{ };
+	std::shared_ptr<Cube> ground_{};
+	std::shared_ptr<Goblin> goblin_{};
+	std::shared_ptr<Anubis> anubis_{};
+	std::shared_ptr<Bat> bat_{};
+	std::shared_ptr<Bomber> bomber_{};
+	std::shared_ptr<Demon> demon_{};
+	std::shared_ptr<Dragon> dragon_{};
+	std::shared_ptr<Eyeball> eyeball_{};
+	std::shared_ptr<Fishman> fishman_{};
+	std::shared_ptr<Gargoyle> gargoyle_{};
 
-	std::vector<Object> cubes_{};
-
-	std::shared_ptr<Object> player_{};
-	std::vector<std::shared_ptr<Object>> otherPlayers_{ };
+	std::shared_ptr<Player> player_{};
+	std::vector<std::shared_ptr<Player>> otherPlayers_{ };
+	std::unordered_map<i32t, std::shared_ptr<Player>> idPlayerMap_{ };
 
 	SkyboxObject skybox_{};
-
-	std::mutex objectsMtx_{ };
-	std::unordered_map<i32t, std::shared_ptr<Object>> idPlayerMap_{ };
 
 	Camera camera_{};
 	mu::Radian cameraPitch_ = 0.f;
@@ -192,15 +176,11 @@ private:
 	CameraMode cameraMode_ = CameraMode::ThirdPerson;
 
 	Light dirLight_{};
-	AssetConfigs assetConfigs_{};
-
-	SpriteAnimation slimeSprite_{};
 
 	bool playerDead_{};
 
 	BasicPlayerHpUI playerHpUI_{};
 	std::unordered_map<i32t, BasicPlayerHpUI> otherPlayerHpUIs_{};
-	Crosshair crosshair_{};
 
 	LONG mouseDeltaX_{};
 	LONG mouseDeltaY_{};

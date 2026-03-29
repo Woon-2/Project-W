@@ -2,8 +2,9 @@
 Entry: `client/main.cpp` (WinMain)
 
 DirectX 12 game client. Supports two modes selected at compile/runtime:
-- `online/onlineGame.hpp` — Networked mode
-- `standalone/game.hpp` — Single-player mode
+- `ClientApp` — top-level app; switches between `StandAlone` and `Online` modes
+- `standalone/game` — singleplayer mode; simulates all at the client-side
+- `online/onlineGame` — multiplayer mode; owns the network session and interpolates server state for rendering
 
 ### 핵심 지침
 시니어 게임 엔진 프로그래머의 관점에서 구현한다.

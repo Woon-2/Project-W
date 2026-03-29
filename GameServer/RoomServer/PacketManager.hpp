@@ -2,15 +2,20 @@
 #define packet_manager_hpp
 
 class SendBuffer;
+class GameSession;
 
 /**
 * @brief SingletonBase
 */
 class PacketManager {
 public:
-	static void handlePacket(byte* buffer, int32 len);
+	static void handlePacket(GameSession* session, byte* buffer, int32 len);
+	static void handleCMovePacket(GameSession* session, byte* buffer, int32 len);
 
-	static SendBuffer* makeSEnterPacket(int32 playerId, int32 playerCnt);
+	static SendBuffer* makeSEnterPacket(const PlayerInfo& playerInfo, const std::vector<ObjectInfo>& objInfos);
+	static SendBuffer* makeSEnterOtherPacket(const PlayerInfo& playerInfo);
+	static SendBuffer* makeSLeavePacket(uint16 playerId);
+	static SendBuffer* makeSMovePacket(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
 };
 
 #endif // packet_manager_hpp

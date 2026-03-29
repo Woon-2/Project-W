@@ -1,6 +1,7 @@
-#include "sepch.hpp"
+ï»¿#include "sepch.hpp"
 #include "Session.hpp"
 #include "SendBuffer.hpp"
+#include "BufferReader.hpp"
 
 /*---------------
 	 Session
@@ -96,15 +97,15 @@ void Session::registerSend() {
 	sendEv_.setOwner(this);	// add reference
 
 	const int32 bulkSize = 100;
-	sendEv_.sendBuffers_.resize(bulkSize);	// °³¼± ÇÊ¿ä : bulkSize¸¦ °íÁ¤ÇÏ¸é resize¸¦ sendÇÒ ¶§¸¶´Ù ÇØÁÙ ÇÊ¿ä°¡ ¾ø¾îÁöÁö ¾ÊÀ»±î
+	sendEv_.sendBuffers_.resize(bulkSize);	// ê°œì„  í•„ìš” : bulkSizeë¥¼ ê³ ì •í•˜ë©´ resizeë¥¼ sendí•  ë•Œë§ˆë‹¤ í•´ì¤„ í•„ìš”ê°€ ì—†ì–´ì§€ì§€ ì•Šì„ê¹Œ
 	auto size = sendQueue_.try_dequeue_bulk(sendEv_.sendBuffers_.begin(), bulkSize);
 
 	auto wsaBufs = std::vector<WSABUF>();
 	wsaBufs.reserve(size);
-	for (auto sb : sendEv_.sendBuffers_) {
+	for (int32 i = 0; i < size; ++i) {
 		wsaBufs.emplace_back(WSABUF{
-			.len = static_cast<ULONG>(sb->writeSize()),
-			.buf = reinterpret_cast<char*>(sb->data())
+			.len = static_cast<ULONG>(sendEv_.sendBuffers_[i]->writeSize()),
+			.buf = reinterpret_cast<char*>(sendEv_.sendBuffers_[i]->data())
 		});
 	}
 
@@ -117,8 +118,8 @@ void Session::registerSend() {
 			handleError( "register send"sv, errCode);
 			sendEv_.setOwner(nullptr);	// release reference
 
-			for (auto sb : sendEv_.sendBuffers_) {
-				odelete(sb);
+			for (int32 i = 0; i < size; ++i) {
+				odelete(sendEv_.sendBuffers_[i]);
 			}
 
 			sendEv_.sendBuffers_.clear();
@@ -166,6 +167,15 @@ void Session::processSend(int32 numBytes) {
 	sendEv_.setOwner(nullptr);	// release reference
 
 	for (auto sb : sendEv_.sendBuffers_) {
+		/*if (sb != nullptr) {
+			auto header = reinterpret_cast<PacketHeader*>(sb->data());
+			std::cout << "To Client - ID: " << id() << '\n';
+			std::cout << "Sent packet - Type: " << static_cast<uint16>(header->type) << ", Size: " << header->size << '\n';
+		}*/
+		if (sb == nullptr) {
+			break;
+		}
+
 		odelete(sb);
 	}
 	sendEv_.sendBuffers_.clear();
@@ -204,14 +214,14 @@ int32 PacketSession::onRecv(byte* buffer, int32 len) {
 	while (true) {
 		int32 dataSize = len - recvLen;
 
-		// ÃÖ¼ÒÇÑ ÆĞÅ¶ Çì´õ Å©±â¸¸Å­ÀÇ µ¥ÀÌÅÍ°¡ ¼ö½ÅµÇ¾î¾ß ÇÑ´Ù.
+		// ìµœì†Œí•œ íŒ¨í‚· í—¤ë” í¬ê¸°ë§Œí¼ì˜ ë°ì´í„°ê°€ ìˆ˜ì‹ ë˜ì–´ì•¼ í•œë‹¤.
 		if (dataSize < sizeof(PacketHeader)) {
 			break;
 		}
 
 		auto header = reinterpret_cast<PacketHeader*>(buffer + recvLen);
-		// ÆĞÅ¶ Çì´õ¿¡ ¸í½ÃµÈ Å©±â¸¸Å­ÀÇ µ¥ÀÌÅÍ°¡ ¼ö½ÅµÇ¾î¾ß ÇÑ´Ù.
-		// size´Â ÆĞÅ¶ Çì´õ Å©±â + ÆĞÅ¶ Å©±â
+		// íŒ¨í‚· í—¤ë”ì— ëª…ì‹œëœ í¬ê¸°ë§Œí¼ì˜ ë°ì´í„°ê°€ ìˆ˜ì‹ ë˜ì–´ì•¼ í•œë‹¤.
+		// sizeëŠ” íŒ¨í‚· í—¤ë” í¬ê¸° + íŒ¨í‚· í¬ê¸°
 		if (dataSize < header->size) {
 			break;
 		}

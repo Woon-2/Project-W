@@ -1,4 +1,4 @@
-#ifndef protocol_hpp
+﻿#ifndef protocol_hpp
 #define protocol_hpp
 
 #include "macro.hpp"
@@ -11,6 +11,18 @@ constexpr uint16 serverPort = 9000;
 enum class PacketType : uint16 {
 	C_Enter,
 	S_Enter,
+	S_Enter_Other,
+
+	S_Leave,
+
+	C_Move,
+	S_Move,
+};
+
+enum class ObjectType : uint16 {
+	Player,
+	Ground,
+
 };
 
 struct PacketHeader {
@@ -44,15 +56,55 @@ struct CEnterPacket : public PacketHeader {
 
 struct PlayerInfo {
 	uint16 playerId;
-	uint32 materialSetIdx;
+	uint16 materialSetIdx;
 	DirectX::XMFLOAT3 pos;
-	DirectX::XMFLOAT3 orient;
+	DirectX::XMFLOAT4 orient;
+	DirectX::XMFLOAT3 scale;
+	// 추후에 player 고유 정보 추가 필요
+};
+
+struct ObjectInfo {
+	ObjectType type;
+	uint16 objectId;
+	uint16 materialSetIdx;
+	DirectX::XMFLOAT3 pos;
+	DirectX::XMFLOAT4 orient;
 	DirectX::XMFLOAT3 scale;
 };
 
 struct SEnterPacket : public PacketHeader {
+	PlayerInfo myInfo;
+
+	uint16 objsOffset;	// objectInfo 배열의 시작 위치
+	uint16 objCnt;
+
+	using ObjectList = DataList<ObjectInfo>;
+
+	ObjectList getObjectList() {
+		byte* dataStart = reinterpret_cast<byte*>(this) + objsOffset;
+		return ObjectList(reinterpret_cast<ObjectInfo*>(dataStart), objCnt);
+	}
+};
+
+struct SEnterOtherPacket : public PacketHeader {
+	PlayerInfo otherInfo;
+};
+
+struct SLeavePacket : public PacketHeader {
 	uint16 playerId;
-	int32 playerCnt;
+};
+
+struct CMovePacket : public PacketHeader {
+	DirectX::XMFLOAT3 pos;
+	DirectX::XMFLOAT4 orient;
+	DirectX::XMFLOAT3 velocity;
+};
+
+struct SMovePacket : public PacketHeader {
+	uint16 playerId;
+	DirectX::XMFLOAT3 pos;
+	DirectX::XMFLOAT4 orient;
+	DirectX::XMFLOAT3 velocity;
 };
 
 #pragma pack(pop)

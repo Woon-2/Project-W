@@ -2,6 +2,9 @@
 #include "GameSession.hpp"
 #include "PacketManager.hpp"
 #include "SendBuffer.hpp"
+#include "IdPool.hpp"
+#include "ObjectPool.hpp"
+#include "object.hpp"
 
 // temporary --------------------------------
 #include "IdPool.hpp"
@@ -11,6 +14,13 @@ static std::atomic_int32_t totalSessions{0};
 static const int32 maxRoomSessions = 4;
 // ------------------------------------------
 
+GameSession::~GameSession() {
+	std::cout << "GameSession destroyed. ID: " << id() << '\n';
+	IdPool::push(id());
+	ObjectPool<Object>::push(myPlayer_);
+	myPlayer_ = nullptr;
+}
+
 void GameSession::onConnected() {
 	if (totalSessions.load() % maxRoomSessions == 0) {
 		myRoom_ = RoomManager::makeRoom();
@@ -18,16 +28,26 @@ void GameSession::onConnected() {
 	else {
 		myRoom_ = RoomManager::getRoom(RoomIdPool::currId());
 	}
+	++totalSessions;
 
-	myRoom_->doAsync(&Room::enter, this);
+	myPlayer_ = ObjectPool<Object>::pop();
+	myPlayer_->setId(id());
+
+	myRoom_->doAsync([this]() {
+		myRoom_->enter(this);
+	});
 }
 
 void GameSession::onDisconnected() {
-	myRoom_->doAsync(&Room::leave, this);
+	--totalSessions;
+	
+	myRoom_->doAsync([this]() {
+		myRoom_->leave(this);
+	});
 }
 
 void GameSession::processPacket(byte* buffer, int32 len) {
-	PacketManager::handlePacket(buffer, len);
+	PacketManager::handlePacket(this, buffer, len);
 }
 
 void GameSession::onSend(int32 len) {

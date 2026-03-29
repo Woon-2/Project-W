@@ -1,4 +1,4 @@
-#include "sepch.hpp"
+﻿#include "sepch.hpp"
 #include "MemoryManager.hpp"
 #include "MemoryPool.hpp"
 
@@ -51,7 +51,7 @@ void* MemoryManager::allocate(int32 size) {
 	const int32 allocSize = size + sizeof(MemoryHeader);
 
 	if (allocSize > maxAllocSize_) {
-		// �޸� Ǯ�� �ִ� ũ�⸦ ����� �Ϲ� �Ҵ�
+		// 메모리 풀링 최대 크기를 벗어나면 일반 할당
 		header = reinterpret_cast<MemoryHeader*>(malloc(allocSize));
 	}
 	else {
@@ -68,7 +68,7 @@ void MemoryManager::deallocate(void* ptr) {
 	ASSERT_CRASH(allocSize > 0);
 
 	if (allocSize > maxAllocSize_) {
-		// �޸� Ǯ�� �ִ� ũ�⸦ ����� �ϴ� ����
+		// 메모리 풀링 최대 크기를 벗어나면 일단 해제
 		free(header);
 	}
 	else {

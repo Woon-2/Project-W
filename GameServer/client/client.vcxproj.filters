@@ -94,6 +94,9 @@
     <Filter Include="Network\PacketManager">
       <UniqueIdentifier>{6bf7f2e3-6624-4240-b10c-e5bdc9318d4c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Network\ClientApp">
+      <UniqueIdentifier>{0e6c08b2-6e43-40b5-8455-e37f1e5d0324}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -221,6 +224,12 @@
     </ClCompile>
     <ClCompile Include="particleSystem.cpp">
       <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="PacketManager.cpp">
+      <Filter>Network\PacketManager</Filter>
+    </ClCompile>
+    <ClCompile Include="ClientApp.cpp">
+      <Filter>Network\ClientApp</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -424,6 +433,12 @@
     </ClInclude>
     <ClInclude Include="log.hpp">
       <Filter>독립 구현체\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="PacketManager.hpp">
+      <Filter>Network\PacketManager</Filter>
+    </ClInclude>
+    <ClInclude Include="ClientApp.hpp">
+      <Filter>Network\ClientApp</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

@@ -1,4 +1,4 @@
-#ifndef session_hpp
+ï»¿#ifndef session_hpp
 #define session_hpp
 
 #include "IocpDispatchable.hpp"
@@ -45,13 +45,13 @@ private:
 	void handleError(std::string_view where, int32 errCode);
 
 protected:
-	// ÄÁÅÙÃ÷ ÂÊ¿¡¼­ ¿À¹ö¶óÀÌµåÇØ¼­ »ç¿ë
+	// ì»¨í…ì¸  ìª½ì—ì„œ ì˜¤ë²„ë¼ì´ë“œí•´ì„œ ì‚¬ìš©
 	virtual void onConnected() {}
-	// ÄÁÅÙÃ÷ ÂÊ¿¡¼­ ¿À¹ö¶óÀÌµåÇØ¼­ »ç¿ë
+	// ì»¨í…ì¸  ìª½ì—ì„œ ì˜¤ë²„ë¼ì´ë“œí•´ì„œ ì‚¬ìš©
 	virtual void onDisconnected() {}
-	// ÄÁÅÙÃ÷ ÂÊ¿¡¼­ ¿À¹ö¶óÀÌµåÇØ¼­ »ç¿ë
+	// ì»¨í…ì¸  ìª½ì—ì„œ ì˜¤ë²„ë¼ì´ë“œí•´ì„œ ì‚¬ìš©
 	virtual int32 onRecv(byte* buffer, int32 len) { return len; }
-	// ÄÁÅÙÃ÷ ÂÊ¿¡¼­ ¿À¹ö¶óÀÌµåÇØ¼­ »ç¿ë
+	// ì»¨í…ì¸  ìª½ì—ì„œ ì˜¤ë²„ë¼ì´ë“œí•´ì„œ ì‚¬ìš©
 	virtual void onSend(int32 len) {}
 
 private:

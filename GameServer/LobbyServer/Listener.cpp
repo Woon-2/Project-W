@@ -1,4 +1,4 @@
-#include "pch.hpp"
+ï»¿#include "pch.hpp"
 #include "Listener.hpp"
 #include "IoEvent.hpp"
 #include "GameSession.hpp"
@@ -13,7 +13,7 @@ void Listener::startAccept() {
 	SocketUtils::bind(listenSock_, netAddr);
 	SocketUtils::listen(listenSock_);
 
-	// ¹°¸® ÄÚ¾î ¼ö ¸¸Å­ acceptEvent µî·Ï
+	// ë¬¼ë¦¬ ì½”ì–´ ìˆ˜ ë§Œí¼ acceptEvent ë“±ë¡
 	const int32 acceptEvCnt = static_cast<int32>(numberOfPhysicalCores());
 	acceptEvs_.reserve(acceptEvCnt);
 

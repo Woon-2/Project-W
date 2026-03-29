@@ -1,4 +1,4 @@
-#ifndef iocp_dispatchable_hpp
+ï»¿#ifndef iocp_dispatchable_hpp
 #define iocp_dispatchable_hpp
 
 #include "simpleWindows.hpp"
@@ -12,19 +12,19 @@ public:
 	virtual ~IocpDispatchable() = default;
 
 	/**
-	* @brief IOCP ¿Ï·á ÅëÁö¸¦ Ã³¸®ÇÏ±â À§ÇÑ ÁøÀÔ ÇÔ¼ö.
+	* @brief IOCP ì™„ë£Œ í†µì§€ë¥¼ ì²˜ë¦¬í•˜ê¸° ìœ„í•œ ì§„ì… í•¨ìˆ˜.
 	*
-	* GetQueuedCompletionStatus·ÎºÎÅÍ Àü´ŞµÈ I/O ¿Ï·á ÀÌº¥Æ®¸¦ ¹Ş¾Æ
-	* ÇØ´ç °´Ã¼ÀÇ ÄÁÅØ½ºÆ®¿¡¼­ ÀûÀıÇÑ ÈÄ¼Ó Ã³¸®¸¦ ¼öÇàÇÑ´Ù.
+	* GetQueuedCompletionStatusë¡œë¶€í„° ì „ë‹¬ëœ I/O ì™„ë£Œ ì´ë²¤íŠ¸ë¥¼ ë°›ì•„
+	* í•´ë‹¹ ê°ì²´ì˜ ì»¨í…ìŠ¤íŠ¸ì—ì„œ ì ì ˆí•œ í›„ì† ì²˜ë¦¬ë¥¼ ìˆ˜í–‰í•œë‹¤.
 	*
-	* @param ioEvent   ¿Ï·áµÈ Overlapped ±â¹İ I/O ÀÌº¥Æ® Á¤º¸
-	* @param numBytes  ½ÇÁ¦ Àü¼Û(¶Ç´Â ¼ö½Å) ¿Ï·áµÈ ¹ÙÀÌÆ® ¼ö
+	* @param ioEvent   ì™„ë£Œëœ Overlapped ê¸°ë°˜ I/O ì´ë²¤íŠ¸ ì •ë³´
+	* @param numBytes  ì‹¤ì œ ì „ì†¡(ë˜ëŠ” ìˆ˜ì‹ ) ì™„ë£Œëœ ë°”ì´íŠ¸ ìˆ˜
 	*/
 	virtual void dispatch(IoEvent* ioEvent, int32 numBytes) = 0;
 
-	// SOCKET Å¸ÀÔÀ» HANDLE Å¸ÀÔÀ¸·Î º¯È¯ÇÏ¿© ¹İÈ¯ÇÏ´Â ¸â¹ö ÇÔ¼ö
+	// SOCKET íƒ€ì…ì„ HANDLE íƒ€ì…ìœ¼ë¡œ ë³€í™˜í•˜ì—¬ ë°˜í™˜í•˜ëŠ” ë©¤ë²„ í•¨ìˆ˜
 	virtual HANDLE getHandle() const = 0;
-	// SOCKETÀ» ¹İÈ¯ÇÏ´Â ¸â¹ö ÇÔ¼ö
+	// SOCKETì„ ë°˜í™˜í•˜ëŠ” ë©¤ë²„ í•¨ìˆ˜
 	virtual SOCKET getSocket() const = 0;
 };
 

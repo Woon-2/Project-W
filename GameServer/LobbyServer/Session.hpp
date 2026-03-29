@@ -1,4 +1,4 @@
-#ifndef session_hpp
+ï»¿#ifndef session_hpp
 #define session_hpp
 
 #include "IocpObject.hpp"
@@ -24,7 +24,7 @@ public:
 	void disconnect(std::string_view cause);
 	void send(SendBuffer* sendBuffer);
 
-	// SOCKET Å¸ÀÔÀ» HANDLE Å¸ÀÔÀ¸·Î º¯È¯ÇÏ¿© ¹İÈ¯ÇÏ´Â ¸â¹ö ÇÔ¼ö
+	// SOCKET íƒ€ì…ì„ HANDLE íƒ€ì…ìœ¼ë¡œ ë³€í™˜í•˜ì—¬ ë°˜í™˜í•˜ëŠ” ë©¤ë²„ í•¨ìˆ˜
 	virtual HANDLE getHandle() const { return reinterpret_cast<HANDLE>(sock_); }
 	virtual SOCKET getSocket() const { return sock_; }
 
@@ -50,7 +50,7 @@ private:
 	void handleError(std::string_view where, int32 errCode);
 
 protected:
-	// ÄÁÅÙÃ÷ ÂÊ¿¡¼­ ¿À¹ö¶óÀÌµåÇØ¼­ »ç¿ë
+	// ì»¨í…ì¸  ìª½ì—ì„œ ì˜¤ë²„ë¼ì´ë“œí•´ì„œ ì‚¬ìš©
 	virtual void onConnected() {}
 	virtual void onDisconnected() {}
 	virtual int32 onRecv(uint8* buffer, int32 len) { return len; }

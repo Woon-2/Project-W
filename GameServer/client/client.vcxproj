@@ -182,6 +182,7 @@
     <ClCompile Include="font.cpp" />
     <ClCompile Include="gfx.cpp" />
     <ClCompile Include="gfxUtil.cpp" />
+    <ClCompile Include="ClientApp.cpp" />
     <ClCompile Include="light.cpp" />
     <ClCompile Include="log.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
@@ -192,6 +193,7 @@
     <ClCompile Include="object.cpp" />
     <ClCompile Include="online\onlineGame.cpp" />
     <ClCompile Include="particleSystem.cpp" />
+    <ClCompile Include="PacketManager.cpp" />
     <ClCompile Include="pbrPipeline.cpp" />
     <ClCompile Include="pbrSkinnedPipeline.cpp" />
     <ClCompile Include="pch.cpp">
@@ -265,12 +267,14 @@
     <ClInclude Include="gfx.hpp" />
     <ClInclude Include="gfxUtil.hpp" />
     <ClInclude Include="IGame.hpp" />
+    <ClInclude Include="ClientApp.hpp" />
     <ClInclude Include="light.hpp" />
     <ClInclude Include="log.hpp" />
     <ClInclude Include="mesh.hpp" />
     <ClInclude Include="object.hpp" />
     <ClInclude Include="online\onlineGame.hpp" />
     <ClInclude Include="particleSystem.hpp" />
+    <ClInclude Include="PacketManager.hpp" />
     <ClInclude Include="pbrPipeline.hpp" />
     <ClInclude Include="pbrSkinnedPipeline.hpp" />
     <ClInclude Include="pch.hpp" />

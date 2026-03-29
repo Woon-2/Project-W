@@ -1,4 +1,4 @@
-#include "pch.hpp"
+ï»¿#include "pch.hpp"
 #include "Memory.hpp"
 #include "Server.hpp"
 #include "IdPool.hpp"
@@ -12,7 +12,7 @@ int main()
 
 	Server::start();
 
-	// ¹°¸® ÄÚ¾î ¼ö - 1(main ¾²·¡µå) °³ ¸¸Å­ ¾²·¡µå »ı¼º
+	// ë¬¼ë¦¬ ì½”ì–´ ìˆ˜ - 1(main ì“°ë˜ë“œ) ê°œ ë§Œí¼ ì“°ë˜ë“œ ìƒì„±
 	auto coreCnt = numberOfPhysicalCores() - 1;
 	auto threads = std::vector<std::thread>(coreCnt);
 	for (size_t i = 0; i < coreCnt; ++i) {

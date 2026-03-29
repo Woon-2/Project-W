@@ -40,7 +40,7 @@ public:
 	}
 
 	static void push(uint32 id) {
-		ASSERT_CRASH(pool_.try_enqueue(id));
+		ASSERT_CRASH(pool_.enqueue(id));
 	}
 
 	static uint32 pop() {
