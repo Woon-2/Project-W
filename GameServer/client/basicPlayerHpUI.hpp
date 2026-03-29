@@ -1,4 +1,4 @@
-#ifndef __basicPlayerHpUI_HPP
+﻿#ifndef __basicPlayerHpUI_HPP
 #define __basicPlayerHpUI_HPP
 
 #include "gfx.hpp"

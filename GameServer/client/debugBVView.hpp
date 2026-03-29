@@ -1,4 +1,4 @@
-#ifndef __debugBVView_HPP
+﻿#ifndef __debugBVView_HPP
 #define __debugBVView_HPP
 
 #include "object.hpp"

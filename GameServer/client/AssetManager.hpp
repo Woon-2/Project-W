@@ -1,4 +1,4 @@
-#ifndef __AssetManager_HPP
+﻿#ifndef __AssetManager_HPP
 #define __AssetManager_HPP
 
 #include "gfx.hpp"

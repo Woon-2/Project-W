@@ -1,4 +1,4 @@
-#include "pch.hpp"
+﻿#include "pch.hpp"
 #include "AssetManager.hpp"
 
 void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {

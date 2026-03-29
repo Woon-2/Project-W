@@ -1,55 +1,55 @@
 #include "bindless.hlsli"
 
-// �� hlsl �ڵ忡�� ������ BRDF ����
-// Cook-Torrance BRDF ���� ������.
+// 이 hlsl 코드에서 조명의 BRDF 모델은
+// Cook-Torrance BRDF 모델을 따른다.
 
-// �� hlsl �ڵ忡 ���� include�� ���� ������ ��ü���� ���ǵǾ� ���������� ������ �������� �����ȴ�.
+// 이 hlsl 코드에 대한 include문 전에 다음의 객체들이 정의되어 전역적으로 접근이 가능함이 가정된다.
 // {material}
-// - idxAlbedo: int4 (Albedo Map�� ���� Bindless Index)
-// - idxMetallicSmoothness: int4 (MetallicSmoothnessMap�� ���� Bindless Index - ����Ƽ ����)
-// - idxNormal: int4 (Normal Map�� ���� Bindless Index)
-// - idxEmmisive: int4 (Emmisive Map�� ���� Bindless Index)
-// - idxAmbientOcclusion: int4 (Ambient Occlusion Map�� ���� Bindless Index)
-// - cAlbedo: float4 (��ü�� ������ ��Ÿ���� ���)
-// - cRoughness: float (��ü�� ��ĥ�⸦ ��Ÿ���� ���)
-// - cMetallic: float (��ü�� �ݼӼ��� ��Ÿ���� ���)
-// - cAOStrength: float (��ü�� ���� �ֺ��� ������ ���� ������ ��Ÿ���� ���)
-// - cEmmisive: float3 (��ü�� ��ü�߱��� ���� ������ ��Ÿ���� ���)
+// - idxAlbedo: int4 (Albedo Map에 대한 Bindless Index)
+// - idxMetallicSmoothness: int4 (MetallicSmoothnessMap에 대한 Bindless Index - 유니티 대응)
+// - idxNormal: int4 (Normal Map에 대한 Bindless Index)
+// - idxEmmisive: int4 (Emmisive Map에 대한 Bindless Index)
+// - idxAmbientOcclusion: int4 (Ambient Occlusion Map에 대한 Bindless Index)
+// - cAlbedo: float4 (물체의 색상을 나타내는 상수)
+// - cRoughness: float (물체의 거칠기를 나타내는 상수)
+// - cMetallic: float (물체의 금속성을 나타내는 상수)
+// - cAOStrength: float (물체에 대해 주변광 차폐의 적용 강도를 나타내는 상수)
+// - cEmmisive: float3 (물체의 자체발광에 대해 색상을 나타내는 상수)
 // {lightCnt}: uint
 // {idxShadowMap}: int4 (bindless index)
 
 #define PI 3.14159f
-// ���� ���� ���, Light ��ü�� type ����� �� ������ ����.
+// 빛의 종류 목록, Light 객체의 type 멤버에 이 값들을 쓴다.
 #define LIGHT_TYPE_POINT 0
 #define LIGHT_TYPE_SPOT 1
 #define LIGHT_TYPE_DIRECTIONAL 2
 
 struct Light {
-    float3 color;   // ���� ����
-    float falloff;  // spotlight���� �߽����κ����� ������ ���� ����
-    float3 posV;    // ������ �� ���� ��ġ
-    float cosTheta; // spotlight���� ������ ���ߴ� �ִ� ���� (�ܺ� �� ����)
-    float3 dirV;    // directional light, spotlight���� ���� �� ���� ����
-    float cosPhi;   // spotlight���� ������ �ִ�� ���ߴ� ���� (���� �� ����)
-    float3 atten;   // ���� ���� ���
-    float intensity;    // ���� ����
-    int type;   // ���� ����
+    float3 color;   // 빛의 색상
+    float falloff;  // spotlight에서 중심으로부터의 각도에 따른 감쇠
+    float3 posV;    // 조명의 뷰 공간 위치
+    float cosTheta; // spotlight에서 조명이 비추는 최대 각도 (외부 콘 각도)
+    float3 dirV;    // directional light, spotlight에서 빛의 뷰 공간 방향
+    float cosPhi;   // spotlight에서 조명이 최대로 비추는 각도 (내부 콘 각도)
+    float3 atten;   // 빛의 감쇠 계수
+    float intensity;    // 빛의 강도
+    int type;   // 빛의 종류
     int3 padding;
 };
 
 StructuredBuffer<Light> gLightData : register(t1);
 
-// ������ ���� ����Ѵ�.
-// @param F0: ��ü�� �������� �ٶ� �ݻ��� ��
-// @param HV: Halfway ���Ϳ� View ������ ����
+// 프레넬 항을 계산한다.
+// @param F0: 물체를 수직에서 바라본 반사율 값
+// @param HV: Halfway 벡터와 View 벡터의 내적
 float3 fresnel(float3 F0, float HV) {
     // return F0 + (1.f - F0) * pow(2, (-5.55473f * HV - 6.98316f) * HV);
 	return F0 + (1.f - F0)*pow(1.f - HV, 5.f);
 }
 
-// �̼����� ���⿡ ���� �л�(Distribution)�� ����Ѵ�.
-// @param NH: Normal ���Ϳ� Halfway ������ ����
-// @param roughness: �̼����� ��ĥ��
+// 미세면의 기울기에 대한 분산(Distribution)을 계산한다.
+// @param NH: Normal 벡터와 Halfway 벡터의 내적
+// @param roughness: 미세면의 거칠기
 float distribute(float NH, float roughness) {
 	float a = roughness * roughness;
 	float a2 = a*a;
@@ -61,10 +61,10 @@ float distribute(float NH, float roughness) {
 	return nom / denom;
 }
 
-// �̼����� ��ü �׸��� ����� ����� �� ���̴�,
-// Schlick-GGX �ٻ��
-// @param NV: Normal ���Ϳ� View ������ ����
-// @param roughness: �̼����� ����
+// 미세면의 자체 그림자 계수를 계산할 때 쓰이는,
+// Schlick-GGX 근사식
+// @param NV: Normal 벡터와 View 벡터의 내적
+// @param roughness: 미세면의 기울기
 float GeometrySchlickGGX(float NV, float roughness) {
 	float r = roughness + 1.f;
 	float k = (r*r) / 8.f;
@@ -75,21 +75,21 @@ float GeometrySchlickGGX(float NV, float roughness) {
 	return nom / denom;
 }
 
-// �̼����� ��ü �׸��� ����� ����Ѵ�.
-// @param NV: Normal ���Ϳ� View ������ ����
-// @param NL: Normal ���Ϳ� Light ������ ����
-// @param roughness: �̼����� ����
+// 미세면의 자체 그림자 계수를 계산한다.
+// @param NV: Normal 벡터와 View 벡터의 내적
+// @param NL: Normal 벡터와 Light 벡터의 내적
+// @param roughness: 미세면의 기울기
 float GeometrySmith(float NV, float NL, float roughness) {
 	float ggx2 = max(GeometrySchlickGGX(NV, roughness), 0.00002f);
 	float ggx1 = GeometrySchlickGGX(NL, roughness);
 	return ggx1 * ggx2;
 }
 
-// �� ������ ���� ���� �ݻ� ���
+// 점 조명에 대한 조명 반사 계산
 float3 pointLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 normalV,
     float2 tex, float3 albedo, float roughness, float metallic, float ao
 ) {
-    // Cook-Torrance BRDF ����� ���� ���Ϳ� ���������� �����س��´�.
+    // Cook-Torrance BRDF 계산을 위한 벡터와 내적값들을 마련해놓는다.
     float3 N = normalV;
     float3 V = -posVNormalized;
 
@@ -108,7 +108,7 @@ float3 pointLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 nor
     float3 F0 = float3(0.04f, 0.04f, 0.04f);
     F0 = lerp(F0, albedo, float3(metallic, metallic, metallic));
     
-    // BRDF ���
+    // BRDF 계산
     float3 F = fresnel(F0, HV);
     float D = distribute(NH, roughness);
     float G = GeometrySmith(NV, NL, roughness);
@@ -118,18 +118,18 @@ float3 pointLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 nor
     kD *= albedo / PI;
     float3 specular = F * D * G / max(4 * NV * NL, 0.001f);
 
-    // ���� ����
+    // 감쇠 적용
     float atten = 1.f / dot(gLightData[lightIdx].atten, float3(1.f, dist, dist * dist));
 
-    // ���� �ݻ� ���
+    // 조명 반사 계산
     return gLightData[lightIdx].color * gLightData[lightIdx].intensity * (kD + specular) * NL * atten;
 }
 
-// ���Ɽ�� ���� ���� �ݻ� ���
+// 방향광에 대한 조명 반사 계산
 float3 dirLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 normalV,
     float2 tex, float3 albedo, float roughness, float metallic, float ao
 ) {
-    // Cook-Torrance BRDF ����� ���� ���Ϳ� ���������� �����س��´�.
+    // Cook-Torrance BRDF 계산을 위한 벡터와 내적값들을 마련해놓는다.
     float3 N = normalV;
     float3 V = -posVNormalized;
     float3 L = -gLightData[lightIdx].dirV;
@@ -145,7 +145,7 @@ float3 dirLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 norma
     float3 F0 = float3(0.04f, 0.04f, 0.04f);
     F0 = lerp(F0, albedo, float3(metallic, metallic, metallic)); // use metalic value to get F
     
-    // BRDF ���
+    // BRDF 계산
     float3 F = fresnel(F0, HV);
     float D = distribute(NH, roughness);
     float G = GeometrySmith(NV, NL, roughness);
@@ -155,15 +155,15 @@ float3 dirLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 norma
     kD *= albedo / PI;
     float3 specular = F * D * G / max(4 * NV * NL, 0.0001f);
 
-    // ���� �ݻ� ��� (���Ɽ�� ���谡 ����.)
+    // 조명 반사 계산 (방향광은 감쇠가 없다.)
     return gLightData[lightIdx].color * gLightData[lightIdx].intensity * (kD + specular) * NL;
 }
 
-// ���������� ���� ���� �ݻ� ���
+// 집중조명에 대한 조명 반사 계산
 float3 spotLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 normalV,
     float2 tex, float3 albedo, float roughness, float metallic, float ao
 ) {
-    // Cook-Torrance BRDF ����� ���� ���Ϳ� ���������� �����س��´�.
+    // Cook-Torrance BRDF 계산을 위한 벡터와 내적값들을 마련해놓는다.
     float3 N = normalV;
     float3 V = -posVNormalized;
 
@@ -185,13 +185,13 @@ float3 spotLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 norm
     float D = distribute(NH, roughness);
     float G = GeometrySmith(NV, NL, roughness);
 
-    // BRDF ���
+    // BRDF 계산
     float3 kD = float3(1.f, 1.f, 1.f) - F;
     kD *= 1.f - metallic;
     kD *= albedo / PI;
     float3 specular = F * D * G / max(4 * NV * NL, 0.001f);
 
-    // ���� ����
+    // 감쇠 적용
     float atten = 1.f / dot(gLightData[lightIdx].atten, float3(1.f, dist, dist * dist));
 
     float cosChi = max(dot(-L, gLightData[lightIdx].dirV), 0.f);
@@ -204,7 +204,7 @@ float3 spotLight( uint lightIdx, float3 posV, float3 posVNormalized, float3 norm
         gLightData[lightIdx].falloff
     );
 
-    // ���� �ݻ� ���
+    // 조명 반사 계산
     return gLightData[lightIdx].color * gLightData[lightIdx].intensity * (kD + specular) * NL * atten * coneAtten;
 }
 
@@ -325,13 +325,13 @@ float calcCSMShadow(float3 posV, float3 posW, float3 normalW, float rawNdotl) {
 #ifndef TERRAIN_SHADER
 
 #ifdef SINGLE_SHADOW
-// ��鿡 �����ϴ� ��� ������(gLightData)�� ���� ���� �ݻ縦 ����Ͽ�
-// ��ü�� �Ѻ��� ������ �����Ѵ�.
+// 장면에 존재하는 모든 조명들(gLightData)에 대해 조명 반사를 계산하여
+// 물체의 겉보기 색상을 결정한다.
 float4 illuminate(float3 posV, float4 posL, float3 normalV, float2 tex) {
-    // ���� �ݻ� ����� ���� �������� ����Ѵ�.
+    // 조명 반사 계산을 위한 변수들을 계산한다.
     float4 albedo = material.cAlbedo;
-    // bindless index�� ������ ���� �ؽ�ó�� ������ �ǹ��Ѵ�.
-    // ���� bindless index�� ����� ���� �ؽ�ó�� ���ø��Ѵ�.
+    // bindless index가 음수인 것은 텍스처가 없음을 의미한다.
+    // 따라서 bindless index가 양수일 때만 텍스처를 샘플링한다.
     if (material.idxAlbedo.x >= 0) {
         albedo = sampleBindless(material.idxAlbedo, tex);
     }
@@ -341,9 +341,9 @@ float4 illuminate(float3 posV, float4 posL, float3 normalV, float2 tex) {
     float roughness = material.cRoughness;
     float metallic = material.cMetallic;
     if (material.idxMetallicSmoothness.x >= 0) {
-        // ����Ƽ �ͽ����͸� ����ϹǷ� ����Ƽ �ؽ�ó ������ �����Ѵ�.
-        // ����Ƽ���� metallicSmoothness �ؽ�ó��
-        // rä�ο� metallic ��, aä�ο� smoothness ���� �����Ѵ�.
+        // 유니티 익스포터를 사용하므로 유니티 텍스처 포맷을 상정한다.
+        // 유니티에서 metallicSmoothness 텍스처는
+        // r채널에 metallic 값, a채널에 smoothness 값을 저장한다.
         float4 metallicSmoothness = sampleBindless(material.idxMetallicSmoothness, tex);
         metallic = metallicSmoothness.r;
         roughness = 1.f - metallicSmoothness.a; // roughness = 1.f - smoothness
@@ -361,7 +361,7 @@ float4 illuminate(float3 posV, float4 posL, float3 normalV, float2 tex) {
 
     float3 posVNormalized = normalize(posV);
 
-    // ���� �ݻ簪�� �����Ѵ�.
+    // 조명 반사값을 누적한다.
     float3 color = float3(0.f, 0.f, 0.f);
 
     for (uint i = 0; i < lightCnt; i++) {
@@ -380,14 +380,14 @@ float4 illuminate(float3 posV, float4 posL, float3 normalV, float2 tex) {
     float3 ambient = globalAmbient * albedo.rgb * (1.f - ao);
     color += ambient + emmisive;
 
-    // ������� �����Ѵ�.
+    // 톤매핑을 수행한다.
 	color = color / (color + float3(1.f, 1.f, 1.f));
     // linear => sRGB
     color = pow( abs(color), 1.f/2.2f );
-
+    
     posL.xyz /= posL.w;
     posL.z = min(posL.z, 1.0f);
-
+    
     return float4(color, albedo.w);
 }
 #endif

@@ -1,4 +1,4 @@
-#ifndef __sharedResources_HPP
+﻿#ifndef __sharedResources_HPP
 #define __sharedResources_HPP
 
 #include "gfxUtil.hpp"

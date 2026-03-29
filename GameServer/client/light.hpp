@@ -1,4 +1,4 @@
-#ifndef __light_HPP
+﻿#ifndef __light_HPP
 #define __light_HPP
 
 #include "gfx.hpp"

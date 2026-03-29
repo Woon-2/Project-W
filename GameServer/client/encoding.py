@@ -19,27 +19,38 @@ def contains_korean(text):
     return False
 
 
+def has_bom(raw):
+    return raw.startswith(b'\xef\xbb\xbf')
+
+
 def should_convert(filepath):
     try:
         with open(filepath, "rb") as f:
             raw = f.read()
 
-        # UTF-8 시도
+        # BOM 여부
+        bom = has_bom(raw)
+
+        # UTF-8 체크
         try:
             text_utf8 = raw.decode("utf-8")
             utf8_ok = True
         except:
             utf8_ok = False
 
-        # EUC-KR 시도
+        # cp949 체크
         try:
-            text_euc = raw.decode("euc-kr")
+            text_euc = raw.decode("cp949")
             euc_ok = True
         except:
             euc_ok = False
 
-        # 핵심 조건
+        # cp949 → 변환
         if euc_ok and not utf8_ok and contains_korean(text_euc):
+            return True
+
+        # UTF-8인데 BOM 없음 → 변환
+        if utf8_ok and not bom:
             return True
 
         return False
@@ -50,19 +61,27 @@ def should_convert(filepath):
 
 def convert_file(filepath):
     try:
-        # 백업
-        backup_path = filepath + ".bak"
-        shutil.copy2(filepath, backup_path)
+        with open(filepath, "rb") as f:
+            raw = f.read()
 
-        # EUC-KR로 읽기
-        with open(filepath, "r", encoding="euc-kr") as f:
-            content = f.read()
+        # UTF-8 시도
+        try:
+            text = raw.decode("utf-8")
+            source = "utf-8"
+        except:
+            # CP949 시도
+            try:
+                text = raw.decode("cp949")
+                source = "cp949"
+            except:
+                print(f"[SKIP - UNKNOWN ENCODING] {filepath}")
+                return
 
-        # UTF-8로 저장
-        with open(filepath, "w", encoding="utf-8-sig") as f:
-            f.write(content)
+        # BOM 포함 UTF-8로 저장
+        with open(filepath, "w", encoding="utf-8-sig", newline="") as f:
+            f.write(text)
 
-        print(f"[CONVERTED] {filepath}")
+        print(f"[CONVERTED {source}] {filepath}")
 
     except Exception as e:
         print(f"[FAIL] {filepath} -> {e}")

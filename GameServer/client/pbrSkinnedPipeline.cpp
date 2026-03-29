@@ -1,4 +1,4 @@
-#include "pch.hpp"
+﻿#include "pch.hpp"
 #include "pbrSkinnedPipeline.hpp"
 #include "sharedResources.hpp"
 #include "shader.hpp"

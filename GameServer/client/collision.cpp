@@ -1,4 +1,4 @@
-#include "pch.hpp"
+﻿#include "pch.hpp"
 #include "collision.hpp"
 
 CollisionResult collides(const AABB& a, const AABB& b) {

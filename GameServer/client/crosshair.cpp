@@ -1,4 +1,4 @@
-#include "pch.hpp"
+﻿#include "pch.hpp"
 #include "crosshair.hpp"
 
 void Crosshair::update( Milliseconds deltaTime ) {

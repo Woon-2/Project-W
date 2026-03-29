@@ -1,4 +1,4 @@
-#ifndef __collision_HPP
+﻿#ifndef __collision_HPP
 #define __collision_HPP
 
 

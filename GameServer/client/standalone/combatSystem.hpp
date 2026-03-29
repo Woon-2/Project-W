@@ -1,4 +1,4 @@
-#ifndef __StandAlone_combatSystem_HPP
+﻿#ifndef __StandAlone_combatSystem_HPP
 #define __StandAlone_combatSystem_HPP
 
 #include "../object.hpp"

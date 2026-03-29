@@ -1,4 +1,4 @@
-#ifndef simple_windows_hpp
+﻿#ifndef simple_windows_hpp
 #define simple_windows_hpp
 
 #ifndef WIN32_LEAN_AND_MEAN

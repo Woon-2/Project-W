@@ -1,4 +1,4 @@
-/*
+﻿/*
  * C++ implementation of timsort
  *
  * ported from Python's and OpenJDK's:

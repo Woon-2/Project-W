@@ -1,4 +1,4 @@
-#ifndef __terrain_HPP
+﻿#ifndef __terrain_HPP
 #define __terrain_HPP
 
 #include "gfxUtil.hpp"
