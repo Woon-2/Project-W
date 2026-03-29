@@ -3,7 +3,12 @@
     "allow": [
       "Bash(grep -E \"\\\\.\\(hpp|cpp\\)$\")",
       "Bash(find /c/Users/PC/Desktop/zolzak/Project-W/GameServer -type d -name resources -o -type d -name terrain*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(powershell -Command \"\n\\\\$file = 'C:/Users/PC/Desktop/zolzak/Project-W/GameServer/client/pbrSkinnedPipeline.cpp'\n\\\\$lines = [System.IO.File]::ReadAllLines\\(\\\\$file, [System.Text.Encoding]::UTF8\\)\n\\\\$hits = @\\(\\)\nfor \\(\\\\$i = 0; \\\\$i -lt \\\\$lines.Count; \\\\$i++\\) {\n    if \\(\\\\$lines[\\\\$i] -match 'auto pfd = \\(ShadowMapSkinnedShader|PBRSkinnedShader\\)::PerFrameData'\\) {\n        \\\\$hits += \\\\$i\n    }\n}\nWrite-Host \\(\\\\$hits -join ', '\\)\n\\\\$lines[236..241]\n\")",
+      "Bash(powershell -Command \"\n\\\\$file = 'C:/Users/PC/Desktop/zolzak/Project-W/GameServer/client/pbrSkinnedPipeline.cpp'\n\\\\$lines = [System.IO.File]::ReadAllLines\\(\\\\$file, [System.Text.Encoding]::UTF8\\)\n\\\\$hits = @\\(\\)\nfor \\(\\\\$i = 0; \\\\$i -lt \\\\$lines.Count; \\\\$i++\\) {\n    if \\(\\\\$lines[\\\\$i] -match 'cascadeCount|cascadeViews|cascadeProjs|cascadeSplitsFarV'\\) { \\\\$hits += \\\\$i }\n}\nWrite-Host \\('CSM fields found at lines: ' + \\(\\\\$hits -join ', '\\)\\)\n\\\\$lines[236..244]\n\")",
+      "Bash(powershell -Command \"\n\\\\$file = 'C:/Users/PC/Desktop/zolzak/Project-W/GameServer/client/terrainPipeline.cpp'\n\\\\$lines = [System.IO.File]::ReadAllLines\\(\\\\$file, [System.Text.Encoding]::UTF8\\)\nWrite-Host \\('Total lines: ' + \\\\$lines.Count\\)\nWrite-Host \\('Line 105: ' + \\\\$lines[105]\\)\nWrite-Host \\('Line 106: ' + \\\\$lines[106]\\)\nWrite-Host \\('Line 107: ' + \\\\$lines[107]\\)\nWrite-Host \\('Line 108: ' + \\\\$lines[108]\\)\nWrite-Host \\('Line 146: ' + \\\\$lines[146]\\)\nWrite-Host \\('Line 196: ' + \\\\$lines[196]\\)\nWrite-Host \\('Line 241: ' + \\\\$lines[241]\\)\nWrite-Host \\('Line 242: ' + \\\\$lines[242]\\)\n\")",
+      "Bash(powershell -Command \"\n\\\\$file = 'C:/Users/PC/Desktop/zolzak/Project-W/GameServer/client/standalone/game.cpp'\n\\\\$lines = [System.IO.File]::ReadAllLines\\(\\\\$file, [System.Text.Encoding]::UTF8\\)\nfor \\(\\\\$i = 0; \\\\$i -lt \\\\$lines.Count; \\\\$i++\\) {\n    if \\(\\\\$lines[\\\\$i] -match 'updateShadowAux|addLightData.*Terrain'\\) {\n        Write-Host \\(\\\\$i.ToString\\(\\) + ': ' + \\\\$lines[\\\\$i]\\)\n    }\n}\n\")",
+      "Bash(grep -rn shadowMapData.at.*ShadowMap.*\\\\\\). C:/Users/PC/Desktop/zolzak/Project-W/GameServer/client/)"
     ]
   }
 }

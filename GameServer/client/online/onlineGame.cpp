@@ -28,7 +28,7 @@ Game::Game() {
 	gfx_.createSwapChain();
 	gfx_.setThreadPool(&threadPool_);
 
-	assetManager_.loadGFXAssets( gfx_ );
+	assetManager_.loadGFXAssets( gfx_, assetConfigs_ );
 	assetManager_.loadAnimations();
 }
 
@@ -143,7 +143,7 @@ void Game::update(Milliseconds deltaTime) {
 
 	camera_.update();
 	dirLight_.update(deltaTime);
-	dirLight_.updateShadowAuxDirectional(camera_.eye(), 100.f, -10.f, 10.f, -10.f, 10.f, 50.f, 200.f);
+	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), assetConfigs_.cascade, assetConfigs_.shadowMap);
 
 	playerHpUI_.update(deltaTime, gfx_, nullptr);
 	for (auto& [id, ui] : otherPlayerHpUIs_) {

@@ -1,4 +1,4 @@
-#ifndef __terrainPipeline_HPP
+﻿#ifndef __terrainPipeline_HPP
 #define __terrainPipeline_HPP
 
 #include "gfxUtil.hpp"
@@ -16,17 +16,27 @@ struct CameraData {
 };
 
 struct LightData {
+    enum class Type {
+        PointLight,
+        Spotlight,
+        DirectionalLight
+    };
     mu::Vec3   dir;
     mu::Vec3   color;
     float      intensity = 1.f;
-    mu::Mat4x4 view;
-    mu::Mat4x4 proj;
+    Type       type = Type::DirectionalLight;
+    bool       isMainDirectionalLight = false;
+    // CSM cascade data (isMainDirectionalLight == true 일 때만 유효)
+    std::array<mu::Mat4x4, MAX_CSM_CASCADES> cascadeViews = {};
+    std::array<mu::Mat4x4, MAX_CSM_CASCADES> cascadeProjs = {};
+    XMFLOAT4   cascadeSplitsFarV = {};  // view-space far depth per cascade
+    u32t       cascadeCount = MAX_CSM_CASCADES;
+    std::array<float, MAX_CSM_CASCADES> cascadeNormalOffsets = {};
 };
 
 struct FrameData {
-    mu::Vec3      globalAmbient;
-    u32t          lightCount = 0u;
-    BindlessIndex idxShadowMap;
+    mu::Vec3 globalAmbient;
+    u32t     lightCount = 0u;
 };
 
 struct DrawEvent {
@@ -35,6 +45,11 @@ struct DrawEvent {
 };
 
 struct Resources {
+    struct ShadowPass {
+        ConstantBuffer      perDrawcallData;  // b0: TerrainShadowMapShader::PerDrawcallData
+        ConstantBufferArray perFrameData;     // b1: cascade별 별도 슬롯 (MAX_CSM_CASCADES)
+    } shadowPass;
+
     struct MainPass {
         ConstantBuffer   perDrawcallData;  // b0
         ConstantBuffer   perFrameData;     // b1
@@ -46,8 +61,8 @@ struct Resources {
 // Slots: 0 = Position, 1 = Normal, 2 = UV
 void layoutMeshIfNeeded(const Mesh& mesh);
 
-// Terrain pipeline dispatcher. No shadow pass.
-// Supports single-threaded (mainPass) and multi-threaded (mainPassMT) paths
+// Terrain pipeline dispatcher. Supports shadow pass and main pass.
+// Supports single-threaded (shadowPass/mainPass) and multi-threaded (shadowPassMT/mainPassMT) paths
 // for API symmetry with PBRPipeline::Dispatcher.
 class Dispatcher {
 public:
@@ -59,6 +74,8 @@ public:
         DescriptorPool* pCmpSamPool,
         const std::shared_ptr<RootSig>& rootSig,
         const ComPtr<ID3D12PipelineState>& shader,
+        const ComPtr<ID3D12PipelineState>& shadowShader,
+        DescriptorPool* pDsvPool,
         const ComPtr<ID3D12CommandQueue>& cmdQ,
         const D3D12_VIEWPORT& viewport,
         const D3D12_RECT& scissorRect,
@@ -69,12 +86,19 @@ public:
         ThreadPool* threadPool,
         CommandListPool* commandListPool,
         std::vector<DrawEvent>&& drawEvents,
-        const LightData& lightData,
+        std::vector<LightData>&& lightData,
+        const LightData& mainDirectionalLightData,
         const CameraData& cameraData,
         const FrameData& frameData,
         std::size_t roomIdx
     );
 
+    // Records terrain geometry to the shared shadow map (single-threaded).
+    // Does nothing if drawEvents is empty.
+    void shadowPass();
+    // Records terrain geometry to the shared shadow map (multi-threaded path).
+    // Delegates to shadowPass(): terrain has 1-4 draw events, no MT benefit.
+    void shadowPassMT();
     // Stages GPU constant buffers then issues draw calls (single-threaded).
     // Does nothing if drawEvents is empty.
     void mainPass();
@@ -83,6 +107,9 @@ public:
     void mainPassMT();
 
 private:
+    // Stages shadow pass GPU constant buffer (PerFrameData) and records draw calls.
+    void shadowUpdate();
+    void shadowDraw();
     // Stages per-frame GPU constant buffer (PerFrameData).
     // Single-threaded. Does nothing if drawEvents is empty.
     void mainUpdate();
@@ -101,9 +128,11 @@ private:
     DescriptorPool* pTexCubePool_  = nullptr;
     DescriptorPool* pSamPool_      = nullptr;
     DescriptorPool* pCmpSamPool_   = nullptr;
-    std::shared_ptr<RootSig>          rootSig_ = nullptr;
-    ComPtr<ID3D12PipelineState>       shader_  = nullptr;
-    ComPtr<ID3D12CommandQueue>        cmdQ_    = nullptr;
+    std::shared_ptr<RootSig>          rootSig_      = nullptr;
+    ComPtr<ID3D12PipelineState>       shader_       = nullptr;
+    ComPtr<ID3D12PipelineState>       shadowShader_ = nullptr;
+    DescriptorPool*                   pDsvPool_     = nullptr;
+    ComPtr<ID3D12CommandQueue>        cmdQ_         = nullptr;
     D3D12_VIEWPORT                    viewport_{};
     D3D12_RECT                        scissorRect_{};
     D3D12_CPU_DESCRIPTOR_HANDLE       rtv_{};
@@ -113,7 +142,8 @@ private:
     CommandListPool*                  cmdListPool_ = nullptr;
     Resources*                        pResources_  = nullptr;
     std::vector<DrawEvent>            drawEvents_{};
-    LightData                         lightData_{};
+    std::vector<LightData>            lightData_{};
+    LightData                         mainDirectionalLightData_{};
     CameraData                        cameraData_{};
     FrameData                         frameData_{};
     std::size_t                       roomIdx_{};

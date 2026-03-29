@@ -10,8 +10,8 @@ public class TerrainExtractor : EditorWindow
     class TextureMapping
     {
         public string tag;          // Height, Splat, Diffuse...
-        public string sourcePath;   // Unity¿¡¼­ ÃßÃâµÈ °æ·Î
-        public string mappedPath;   // À¯Àú°¡ ÀÔ·ÂÇÏ´Â ¿£Áø °æ·Î
+        public string sourcePath;   // Unityì—ì„œ ì¶”ì¶œëœ ê²½ë¡œ
+        public string mappedPath;   // ìœ ì €ê°€ ì…ë ¥í•˜ëŠ” ì—”ì§„ ê²½ë¡œ
     }
 
     private Terrain terrain;
@@ -257,7 +257,7 @@ public class TerrainExtractor : EditorWindow
             source.height,
             TextureFormat.RGBA32,
             false,
-            isNormal // linear ¿©ºÎ
+            isNormal // linear ì—¬ë¶€
         );
 
         tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
@@ -317,6 +317,8 @@ public class TerrainExtractor : EditorWindow
                 writer.Write(tileSize.y);
                 writer.Write(tileOffset.x);
                 writer.Write(tileOffset.y);
+                writer.Write(layer.metallic);
+                writer.Write(1.0f - layer.smoothness);  // roughness = 1 - smoothness
             }
         }
     }

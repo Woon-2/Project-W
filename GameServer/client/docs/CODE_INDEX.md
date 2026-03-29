@@ -167,7 +167,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 **파이프라인별 필수 VB 슬롯:**
 - PBRPipeline: Position(0), Normal(1), Tangent(2), Bitangent(3), UV(4)
 - PBRSkinnedPipeline: 위 5개 + BoneIndices(5), BoneWeights(6)
-- TerrainPipeline: Position(0), Normal(1), UV(2)
+- TerrainPipeline: Position(0), Normal(1), Tangent(2), Bitangent(3), UV(4)
 
 **스킨드 메시 판별 조건:** `mesh.vbIdxMap.contains(mesh.name + "_VB_BoneIndices") && animBlender`
 
@@ -253,29 +253,30 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `terrainPipeline.cpp` | `Dispatcher::mainPass()` 구현 |
 | `pbrLighting.hlsli` | PBR BRDF 함수 라이브러리 — terrain에서 `#define TERRAIN_SHADER` 후 include 시 `illuminate()` 제외됨 |
 
-**TerrainData 구조 (`terrain.hpp #18-30`):**
+**TerrainData 구조 (`terrain.hpp #18-31`):**
 - `heightmapResolution` (N): 그리드 N×N 정점
-- `layers`: `TerrainLayer` 배열 (diffuse + normalMap + tiling)
+- `layers`: `TerrainLayer` 배열 (diffuse + normalMap + tiling + metallic + roughness)
 - `splatMap`: RGBA splat 텍스처
-- `mesh`: VB 3슬롯 (Position/Normal/UV), IB 32-bit
+- `mesh`: VB 5슬롯 (Position/Normal/Tangent/Bitangent/UV), IB 32-bit
 
 **TerrainPipeline 주요 구조체 (`terrainPipeline.hpp`):**
 
 | 구조체 | 위치 | 설명 |
 |--------|------|------|
-| `LightData` | `#18` | 방향광 (dir, color, intensity, view, proj) |
-| `FrameData` | `#26` | globalAmbient + **lightCount** + idxShadowMap |
-| `DrawEvent` | `#32` | terrain 포인터 + world 행렬 |
-| `Resources::MainPass` | `#37` | perDrawcallData(b0), perFrameData(b1), **lightData(t1)** |
+| `LightData` | `#18` | 방향광 — 독자적 Type enum, isMainDirectionalLight, cascade view/proj/splits |
+| `FrameData` | `#36` | globalAmbient + lightCount |
+| `DrawEvent` | `#41` | terrain 포인터 + world 행렬 |
+| `Resources::ShadowPass` | `#47` | perDrawcallData(b0), perFrameData(ConstantBufferArray, cascade별 슬롯) |
+| `Resources::MainPass` | `#52` | perDrawcallData(b0), perFrameData(b1), **lightData(t1)** |
 
 **TerrainShader cbuffer 레이아웃 (`shader.hpp #310`):**
-- `PerDrawcallData`: wvp / world / **wv(world-view)** / idxSplatMap / idxDiffuse[4] / idxNormal[4] / tiling[4] / layerCount
-- `PerFrameData` (`#325`): PBRShader::PerFrameData와 동일 레이아웃 — globalAmbient / lightCnt / idxShadowMap / lightVP
+- `PerDrawcallData`: wvp / world / **wv(world-view)** / idxSplatMap / idxDiffuse[4] / idxNormal[4] / tiling[4] / **metallicRoughness[4]** / layerCount
+- `PerFrameData` (`#327`): PBRShader::PerFrameData와 동일 레이아웃 — globalAmbient / lightCnt / idxShadowMap / lightVP
 
 **terrain.hlsl 셰이딩 흐름:**
 1. splat 가중치 샘플링 → 4레이어 albedo(sRGB→linear) + tangent-space normal 블렌딩
 2. buildTBN(vertNormalV) → 블렌딩 법선을 view-space로 변환
-3. lightCnt 루프 → pbrLighting.hlsli의 dirLight/pointLight/spotLight 호출 (roughness=0.85, metallic=0)
+3. metallicRoughness[4]를 splat weight로 블렌딩 → lightCnt 루프 → pbrLighting.hlsli의 dirLight/pointLight/spotLight 호출
 4. calcSingleShadow(posV, posL) → PCF 9-tap 그림자 적용
 5. globalAmbient 더하기 → Reinhard tonemapping → gamma correction
 
@@ -338,13 +339,38 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `terrain()` accessor | `AssetManager.hpp #24` | `const TerrainData*` 반환 |
 | `terrain_` 멤버 | `AssetManager.hpp #64` | `TerrainData` 인스턴스 |
 
-**Light 클래스 accessor 추가 (`light.hpp`):**
+**Light 클래스 주요 항목 (`light.hpp`):**
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
-| `Light::shadowView()` | `light.hpp #29` | 그림자 뷰 행렬 |
-| `Light::shadowProj()` | `light.hpp #30` | 그림자 투영 행렬 |
-| `Light::dir()` | `light.hpp #31` | 조명 방향 (NVec3) |
+| `Light::updateCSMCascades()` | `light.hpp #30` | CascadeConfig + ShadowMapConfig → Practical Split Scheme으로 cascade 계산 |
+| `Light::render()` | `light.hpp #35` | PBR, PBRSkinned, Terrain 세 파이프라인에 LightData 자기등록 |
+| `Light::dir()` | `light.hpp #52` | 조명 방향 (NVec3) |
+
+**Camera::updateGFX() 등록 파이프라인 (`camera.cpp`):**
+- PBRPipeline, PBRSkinnedPipeline, SkyboxPipeline, BVPipeline, BillboardPipeline, **TerrainPipeline** CameraData 자기등록
+
+**AssetManager::loadGFXAssets (`AssetManager.hpp #9`):**
+- `loadGFXAssets(GFX& gfx, const GFX::AssetConfigs& configs = {})` — configs를 `gfx.loadAssets(configs)`로 전달
+
+**GFX::AssetConfigs (`gfx.hpp #61`):**
+
+| 구조체 | 필드 | 설명 |
+|--------|------|------|
+| `ShadowMapConfig` | `cascadeResolutions[MAX_CSM_CASCADES]` | cascade별 독립 해상도 (기본값 {2048,1024,1024,512}) |
+| `ShadowMapConfig` | `cascadeCount`, `format`, `key` | CSM 설정 |
+| `CascadeConfig` | `nearZ`, `farZ`, `lambda` | Practical Split Scheme 파라미터 |
+
+**SharedResources::ShadowMap (`sharedResources.hpp`):**
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| `kDefaultKey` | `sharedResources.hpp #41` | `"ShadowMap"` — 문자열 리터럴 대신 이 상수 사용 |
+| `validateRequiredKeys()` | `sharedResources.hpp #95` | Dispatcher 생성자에서 필수 키 등록 여부 검증 |
+| `getCSMAllReadyAsDepthWrite()` | `sharedResources.hpp #89` | 모든 cascade를 DepthWrite로 전환 (CL 할당 + 제출 포함) |
+| `getCSMAllReadyAsShaderResource()` | `sharedResources.hpp #91` | 모든 cascade를 ShaderResource로 전환 (CL 할당 + 제출 포함) |
+| `clearCSMAllShadowMaps()` | `sharedResources.hpp #93` | 모든 cascade DSV 일괄 클리어 — gfx.cpp에서 한 번만. 각 파이프라인 shadowDraw 내부 호출 금지 |
+| `csmShadowMapData` | `sharedResources.hpp #102` | key → per-room CSMShadowMapData 벡터 (cascade별 독립 Texture2D) |
 
 **업데이트 순서 (game.cpp Game::update):**
 1. `processInput()` → 입력/LButton → `combatSystem_.onPlayerAttack()`

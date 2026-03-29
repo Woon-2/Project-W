@@ -1,4 +1,4 @@
-#include "pch.hpp"
+﻿#include "pch.hpp"
 #include "skybox.hpp"
 
 void SkyboxObject::render(GFX& gfx) {

@@ -1,8 +1,11 @@
+#define MAX_CSM_CASCADES 4
+
 struct PerInstanceData {
     float4x4 world;
     float4x4 wvp;
     float4x4 wv;
     float3x3 wvNormal;
+    float3x3 worldNormal;
     uint rootBoneOffset;
     uint3 padding;
 };
@@ -26,8 +29,9 @@ struct Material {
 struct VSOutput {
     float4 pos : SV_Position;
     float3 posV : POSITION_V;
-    float4 posL : POSITION_L;
+    float3 posW : POSITION_W;
     float3 normalV : NORMAL_V;
+    float3 normalW : NORMAL_W;
     float3 tangentV : TANGENT_V;
     float3 bitangentV : BITANGENT_V;
     float2 uv : UV;
@@ -39,12 +43,15 @@ cbuffer PerDrawcallData : register(b0) {
 };
 
 cbuffer PerFrameData : register(b1) {
-    float3 globalAmbient;
-    float padding0;
-    uint lightCnt;
-    uint3 padding1;
-    int4 idxShadowMap;
-    float4x4 lightVP;
+    float3   globalAmbient;
+    float    padding0;
+    uint     lightCnt;
+    uint     cascadeCount;
+    uint2    padding1;
+    int4     idxShadowMap[MAX_CSM_CASCADES];
+    float4   cascadeSplitsFarV;
+    float4x4 lightVP[MAX_CSM_CASCADES];
+    float4   cascadeNormalOffsets;
 }
 
 StructuredBuffer<PerInstanceData> gInstances : register(t0);
@@ -87,16 +94,11 @@ VSOutput VSMain(
     float4 animatedPos = mul(float4(position, 1.0f), anim);
     float4 animatedNormal = mul(float4(normal, 0.0f), anim);
     
-    ret.pos = mul(animatedPos, gInstances[idxInst + firstInstanceOffset].wvp);
-    ret.posV = mul(animatedPos, gInstances[idxInst + firstInstanceOffset].wv).xyz;
-    ret.posL = mul(
-        mul(
-            mul(animatedPos, gInstances[idxInst + firstInstanceOffset].world),
-            lightVP
-        ),
-        gmtxTexturize
-    );
+    ret.pos     = mul(animatedPos, gInstances[idxInst + firstInstanceOffset].wvp);
+    ret.posV    = mul(animatedPos, gInstances[idxInst + firstInstanceOffset].wv).xyz;
+    ret.posW    = mul(animatedPos, gInstances[idxInst + firstInstanceOffset].world).xyz;
     ret.normalV = mul(animatedNormal.xyz, gInstances[idxInst + firstInstanceOffset].wvNormal);
+    ret.normalW = mul(animatedNormal.xyz, gInstances[idxInst + firstInstanceOffset].worldNormal);
     if (material.idxNormal.x >= 0) {
         float4 animatedTangent = mul(float4(tangent, 0.0f), anim);
         float4 animatedBitangent = mul(float4(bitangent, 0.0f), anim);
@@ -122,5 +124,5 @@ float4 PSMain(VSOutput input) : SV_TARGET {
 		input.normalV = mul(normal, TBN);
 	}
     
-    return illuminate(input.posV, input.posL, input.normalV, input.uv);
+    return illuminateCSM(input.posV, input.posW, input.normalV, input.uv, input.normalW);
 }

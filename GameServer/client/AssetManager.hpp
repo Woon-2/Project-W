@@ -1,4 +1,4 @@
-#ifndef __AssetManager_HPP
+﻿#ifndef __AssetManager_HPP
 #define __AssetManager_HPP
 
 #include "gfx.hpp"
@@ -6,7 +6,7 @@
 
 class AssetManager {
 public:
-	void loadGFXAssets(GFX& gfx);
+	void loadGFXAssets(GFX& gfx, const AssetConfigs& configs = AssetConfigs{});
 	void loadAnimations();
 
 	const Model* modelCube() const { return &modelCube_; }

@@ -1,4 +1,4 @@
-#ifndef __physics_HPP
+﻿#ifndef __physics_HPP
 #define __physics_HPP
 
 #include "../collision.hpp"

@@ -1,17 +1,19 @@
-#ifndef __terrain_HPP
+﻿#ifndef __terrain_HPP
 #define __terrain_HPP
 
 #include "gfxUtil.hpp"
 #include "mesh.hpp"
 
-// One terrain layer: diffuse + normal map textures and tiling parameters.
+// One terrain layer: diffuse + normal map textures, tiling parameters, and PBR scalars.
 struct TerrainLayer {
     Texture diffuse;
     Texture normalMap;
-    float tileSizeX  = 1.f;
-    float tileSizeY  = 1.f;
+    float tileSizeX   = 1.f;
+    float tileSizeY   = 1.f;
     float tileOffsetX = 0.f;
     float tileOffsetY = 0.f;
+    float metallic    = 0.f;
+    float roughness   = 0.85f;  // default matches former hard-coded value
 };
 
 // All data required to render a Unity-exported terrain.

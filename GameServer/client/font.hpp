@@ -1,4 +1,4 @@
-#ifndef __FONT_HPP
+﻿#ifndef __FONT_HPP
 #define __FONT_HPP
 
 #include "gfxUtil.hpp"

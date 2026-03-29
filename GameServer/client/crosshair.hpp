@@ -1,4 +1,4 @@
-#ifndef __crosshair_HPP
+﻿#ifndef __crosshair_HPP
 #define __crosshair_HPP
 
 #include "gfx.hpp"

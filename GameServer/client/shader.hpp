@@ -18,14 +18,21 @@ CompiledShaderOutput compileShader(const std::filesystem::path& path,
 
 ComPtr<ID3D12PipelineState> createSampleShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createShadowMapShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createShadowMapCSMShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createShadowMapSkinnedShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createShadowMapSkinnedCSMShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createPBRShaderCSMDebug(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRSkinnedShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createPBRSkinnedShaderCSMDebug(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBillboardShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSignature* rootSig );
 ComPtr<ID3D12PipelineState> createTerrainShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createTerrainShaderCSMDebug(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createTerrainShadowMapShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createTerrainShadowMapCSMShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 
 // 루트 파라미터 접근을 이해하기 쉽도록 하기 위해 만든 클래스
 // 루트 파라미터에 이름을 지어 그 인덱스 및 D3D12_ROOT_PARAMETER 구조체와 매핑한다.
@@ -126,6 +133,7 @@ struct PerInstanceData {
 	XMFLOAT4X4 wvp;
 	XMFLOAT4X4 wv;
 	XMFLOAT3X3 wvNormal;
+	XMFLOAT3X3 worldNormal;  // inverse(Mat3x3(world)) — non-uniform scale safe normal transform
 };
 
 struct PerDrawcallData {
@@ -134,12 +142,15 @@ struct PerDrawcallData {
 };
 
 struct PerFrameData {
-	XMFLOAT3 globalAmbient;
-	float padding0;
-	u32t lightCnt;
-	XMUINT3 padding1;
-	BindlessIndex idxShadowMap;
-	XMFLOAT4X4 lightVP;
+	XMFLOAT3   globalAmbient;
+	float      padding0;
+	u32t       lightCnt;
+	u32t       cascadeCount;
+	XMUINT2    padding1;
+	BindlessIndex idxShadowMap[MAX_CSM_CASCADES];  // cascade별 독립 Texture2D SRV
+	XMFLOAT4   cascadeSplitsFarV;
+	XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
+	XMFLOAT4   cascadeNormalOffsets;  // world units of normal offset per cascade (for shadow acne elimination)
 };
 }	// namespace PBRShader
 
@@ -190,6 +201,7 @@ struct PerInstanceData {
 	XMFLOAT4X4 wvp;
 	XMFLOAT4X4 wv;
 	XMFLOAT3X3 wvNormal;
+	XMFLOAT3X3 worldNormal;  // inverse(Mat3x3(world)) — non-uniform scale safe normal transform
 	u32t rootBoneOffset;
 	XMUINT3 padding;
 };
@@ -200,12 +212,15 @@ struct PerDrawcallData {
 };
 
 struct PerFrameData {
-	XMFLOAT3 globalAmbient;
-	float padding0;
-	u32t lightCnt;
-	XMUINT3 padding1;
-	BindlessIndex idxShadowMap;
-	XMFLOAT4X4 lightVP;
+	XMFLOAT3   globalAmbient;
+	float      padding0;
+	u32t       lightCnt;
+	u32t       cascadeCount;
+	XMUINT2    padding1;
+	BindlessIndex idxShadowMap[MAX_CSM_CASCADES];  // cascade별 독립 Texture2D SRV
+	XMFLOAT4   cascadeSplitsFarV;
+	XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
+	XMFLOAT4   cascadeNormalOffsets;
 };
 
 }	// namespace PBRSkinnedShader
@@ -251,6 +266,24 @@ struct PerFrameData {
 };
 }	// namespace ShadowMapShader
 
+// ShadowMapCSMShader — Matches shadowMapCSM.hlsl (separate Texture2D per cascade, no GS)
+namespace ShadowMapCSMShader {
+struct PerInstanceData {
+	XMFLOAT4X4 world;
+};
+
+struct PerDrawcallData {
+	u32t firstInstanceOffset;
+	XMUINT3 padding;
+};
+
+struct PerFrameData {
+	XMFLOAT4X4 lightVP;    // 현재 cascade의 VP 행렬 (cascade pass마다 갱신)
+	u32t       cascadeIdx;
+	XMUINT3    _pfd0;
+};
+}	// namespace ShadowMapCSMShader
+
 // ShadowMapSkinnedShader
 namespace ShadowMapSkinnedShader {
 struct BoneData {
@@ -271,7 +304,31 @@ struct PerDrawcallData {
 struct PerFrameData {
 	XMFLOAT4X4 lightVP;
 };
-}	// namespace ShadowMapShader
+}	// namespace ShadowMapSkinnedShader
+
+// ShadowMapSkinnedCSMShader — Matches shadowMapSkinnedCSM.hlsl (separate Texture2D per cascade, no GS)
+namespace ShadowMapSkinnedCSMShader {
+struct BoneData {
+	XMFLOAT4X4 xform;
+};
+
+struct PerInstanceData {
+	XMFLOAT4X4 world;
+	u32t rootBoneOffset;
+	XMUINT3 padding;
+};
+
+struct PerDrawcallData {
+	u32t firstInstanceOffset;
+	XMUINT3 padding;
+};
+
+struct PerFrameData {
+	XMFLOAT4X4 lightVP;    // 현재 cascade의 VP 행렬 (cascade pass마다 갱신)
+	u32t       cascadeIdx;
+	XMUINT3    _pfd0;
+};
+}	// namespace ShadowMapSkinnedCSMShader
 
 // SkyboxShader
 namespace SkyboxShader {
@@ -315,23 +372,52 @@ struct PerDrawcallData {
     BindlessIndex idxSplatMap;
     BindlessIndex idxDiffuse[MAX_TERRAIN_LAYERS];
     BindlessIndex idxNormal [MAX_TERRAIN_LAYERS];
-    XMFLOAT4     tiling    [MAX_TERRAIN_LAYERS];  // (tileSizeX, tileSizeY, tileOffsetX, tileOffsetY)
+    XMFLOAT4     tiling            [MAX_TERRAIN_LAYERS];  // (tileSizeX, tileSizeY, tileOffsetX, tileOffsetY)
+    XMFLOAT4     metallicRoughness[MAX_TERRAIN_LAYERS];  // x=metallic, y=roughness, zw=unused
     int          layerCount;
-    float        _pdd0[3];
+    int          hasAnyNormal;
+    float        _pdd0[2];
 };
 
 // Matches cbuffer PerFrameData : register(b1) in terrain.hlsl
 // Same layout as PBRShader::PerFrameData
 struct PerFrameData {
-    XMFLOAT3  globalAmbient;
-    float     padding0;
-    u32t      lightCnt;
-    XMUINT3   padding1;
-    BindlessIndex idxShadowMap;
-    XMFLOAT4X4    lightVP;
+    XMFLOAT3   globalAmbient;
+    float      padding0;
+    u32t       lightCnt;
+    u32t       cascadeCount;
+    XMUINT2    padding1;
+    BindlessIndex idxShadowMap[MAX_CSM_CASCADES];  // cascade별 독립 Texture2D SRV
+    XMFLOAT4   cascadeSplitsFarV;
+    XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
+    XMFLOAT4   cascadeNormalOffsets;
 };
 
 }	// namespace TerrainShader
+
+// TerrainShadowMapShader
+namespace TerrainShadowMapShader {
+// Matches cbuffer PerDrawcallData : register(b0) in terrainShadowMap.hlsl (non-CSM)
+struct PerDrawcallData {
+    XMFLOAT4X4 world;
+};
+// Matches cbuffer PerFrameData : register(b1) in terrainShadowMap.hlsl (non-CSM)
+struct PerFrameData {
+    XMFLOAT4X4 lightVP;
+};
+}  // namespace TerrainShadowMapShader
+
+// TerrainShadowMapCSMShader — Matches terrainShadowMapCSM.hlsl (separate Texture2D per cascade, no GS)
+namespace TerrainShadowMapCSMShader {
+struct PerDrawcallData {
+    XMFLOAT4X4 world;
+};
+struct PerFrameData {
+    XMFLOAT4X4 lightVP;    // 현재 cascade의 VP 행렬 (cascade pass마다 갱신)
+    u32t       cascadeIdx;
+    XMUINT3    _pfd0;
+};
+}  // namespace TerrainShadowMapCSMShader
 
 namespace UIShader {
 	struct Material {

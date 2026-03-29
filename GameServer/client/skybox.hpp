@@ -1,4 +1,4 @@
-#ifndef __skybox_HPP
+﻿#ifndef __skybox_HPP
 #define __skybox_HPP
 
 #include "gfx.hpp"

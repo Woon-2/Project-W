@@ -29,7 +29,7 @@ Game::Game() {
 	gfx_.createSwapChain();
 	gfx_.setThreadPool(&threadPool_);
 
-	assetManager_.loadGFXAssets(gfx_);
+	assetManager_.loadGFXAssets(gfx_, assetConfigs_);
 	assetManager_.loadAnimations();
 
 	emitterConfig_.pClip       = assetManager_.flameAnimation();
@@ -547,7 +547,7 @@ void Game::update(Milliseconds deltaTime) {
 	gargoyle_->update(deltaTime, tPhysicInterpolation);
 	camera_.update();
 	dirLight_.update(deltaTime);
-	dirLight_.updateShadowAuxDirectional(camera_.eye(), 400.f, -300.f, 300.f, -300.f, 300.f, 50.f, 800.f);
+	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), assetConfigs_.cascade, assetConfigs_.shadowMap);
 
 	// playerHpUI_.update( deltaTime, gfx_, nullptr );
 
@@ -594,25 +594,8 @@ void Game::render() {
 
 	if (terrain_) {
 		terrain_->render(gfx_);
-		gfx_.addCameraData(TerrainPipeline::CameraData{
-			.view = camera_.view(),
-			.proj = camera_.proj(),
-			.pos  = camera_.eye()
-		});
-		gfx_.addLightData(TerrainPipeline::LightData{
-			.dir       = mu::Vec3(dirLight_.dir()),
-			.color     = dirLight_.color,
-			.intensity = dirLight_.intensity,
-			.view      = dirLight_.shadowView(),
-			.proj      = dirLight_.shadowProj()
-		});
-		auto terrainIdxShadowMap = BindlessIndex{};
-		if (SharedResources::ShadowMap::shadowMapData.contains("ShadowMap")) {
-			terrainIdxShadowMap = SharedResources::ShadowMap::shadowMapData.at("ShadowMap").tex.idxSrv;
-		}
 		gfx_.addFrameData(TerrainPipeline::FrameData{
-			.globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f),
-			.idxShadowMap  = terrainIdxShadowMap
+			.globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f)
 		});
 	}
 
@@ -857,6 +840,11 @@ void Game::processInput(Milliseconds deltaTime) {
 		else {
 			releaseCursor();
 		}
+	}
+
+	// C key: toggle CSM cascade debug visualization
+	if ( (keyboardStateCurr_['C'] & 0x80) && !(keyboardStatePrev_['C'] & 0x80) ) {
+		gfx_.toggleCsmDebugVisualization();
 	}
 
 	// F key: emit particles for testing

@@ -145,13 +145,13 @@ void GFX::init() {
 
 	dsvHeap_ = DescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_DESC{
 		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
-		.NumDescriptors = 10u,
+		.NumDescriptors = 24u,
 		.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
 		.NodeMask = 0
 	} );
 
-	// DSV Pool: DSVHeap의 [0, 10) 범위
-	dsvPool_ = DescriptorPool( 10u, dsvHeap_.cpuStart, dsvHeap_.gpuStart, dsvHeap_.desc.Type,
+	// DSV Pool: DSVHeap의 [0, 24) 범위
+	dsvPool_ = DescriptorPool( 24u, dsvHeap_.cpuStart, dsvHeap_.gpuStart, dsvHeap_.desc.Type,
 		dsvHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 		device_->GetDescriptorHandleIncrementSize(dsvHeap_.desc.Type)
 	);
@@ -235,6 +235,8 @@ void GFX::init() {
 	shaders_.try_emplace("SampleShader", createSampleShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("ShadowMapShader", createShadowMapShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("ShadowMapSkinnedShader", createShadowMapSkinnedShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("ShadowMapCSMShader", createShadowMapCSMShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("ShadowMapSkinnedCSMShader", createShadowMapSkinnedCSMShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRShader", createPBRShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRSkinnedShader", createPBRSkinnedShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("BillboardShader", createBillboardShader( device_.Get(), defaultRootSig.get() ));
@@ -242,6 +244,11 @@ void GFX::init() {
 	shaders_.try_emplace("BVShader", createBVShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace( "UIShader", createUIShader( device_.Get(), defaultRootSig.get() ) );
 	shaders_.try_emplace("TerrainShader", createTerrainShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("TerrainShadowMapShader", createTerrainShadowMapShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("TerrainShadowMapCSMShader", createTerrainShadowMapCSMShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("PBRShaderCSMDebug", createPBRShaderCSMDebug(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("PBRSkinnedShaderCSMDebug", createPBRSkinnedShaderCSMDebug(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("TerrainShaderCSMDebug", createTerrainShaderCSMDebug(device_.Get(), defaultRootSig.get()));
 
 	rootSigs_.try_emplace("DefaultRootSignature", std::make_shared<DefaultRootSig>(std::move(defaultRootSig)));
 
@@ -366,8 +373,8 @@ void GFX::createSwapChain() {
 	resourcesPBRPipeline_.shadowPass.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(ShadowMapShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBR_Shadow_PerDrawcallData"
 	);
-	resourcesPBRPipeline_.shadowPass.perFrameData.init(
-		device_.Get(), sizeof(ShadowMapShader::PerFrameData), backBuffers_.size(), "PBR_Shadow_PerFrameData"
+	resourcesPBRPipeline_.shadowPass.perFrameData = createConstantBufferArray(
+		device_.Get(), sizeof(ShadowMapCSMShader::PerFrameData), MAX_CSM_CASCADES, backBuffers_.size(), "PBR_Shadow_PerFrameData"
 	);
 	resourcesPBRPipeline_.mainPass.perInstanceData.init(
 		device_.Get(), sizeof(PBRShader::PerInstanceData) * 1000u, backBuffers_.size(), "PBR_Main_PerInstanceData"
@@ -391,8 +398,8 @@ void GFX::createSwapChain() {
 	resourcesPBRSkinnedPipeline_.shadowPass.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(ShadowMapSkinnedShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBRSkinned_Shadow_PerDrawcallData"
 	);
-	resourcesPBRSkinnedPipeline_.shadowPass.perFrameData.init(
-		device_.Get(), sizeof(ShadowMapSkinnedShader::PerFrameData), backBuffers_.size(), "PBRSkinned_Shadow_PerFrameData"
+	resourcesPBRSkinnedPipeline_.shadowPass.perFrameData = createConstantBufferArray(
+		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::PerFrameData), MAX_CSM_CASCADES, backBuffers_.size(), "PBRSkinned_Shadow_PerFrameData"
 	);
 	resourcesPBRSkinnedPipeline_.mainPass.perInstanceData.init(
 		device_.Get(), sizeof(PBRSkinnedShader::PerInstanceData) * 1000u, backBuffers_.size(), "PBRSkinned_Main_PerInstanceData"
@@ -444,6 +451,12 @@ void GFX::createSwapChain() {
 		device_.Get(), sizeof( UIShader::PerFrameData ), backBuffers_.size(), "UI_PerFrameData"
 	);
 	// Terrain Pipeline ----
+	resourcesTerrainPipeline_.shadowPass.perDrawcallData.init(
+		device_.Get(), sizeof(TerrainShadowMapShader::PerDrawcallData), backBuffers_.size(), "Terrain_Shadow_PerDrawcallData"
+	);
+	resourcesTerrainPipeline_.shadowPass.perFrameData = createConstantBufferArray(
+		device_.Get(), sizeof(TerrainShadowMapCSMShader::PerFrameData), MAX_CSM_CASCADES, backBuffers_.size(), "Terrain_Shadow_PerFrameData"
+	);
 	resourcesTerrainPipeline_.mainPass.perDrawcallData.init(
 		device_.Get(), sizeof(TerrainShader::PerDrawcallData), backBuffers_.size(), "Terrain_Main_PerDrawcallData"
 	);
@@ -587,7 +600,10 @@ void GFX::addCameraData(const TerrainPipeline::CameraData& cameraData) {
 }
 // 조명 데이터를 입력한다.
 void GFX::addLightData(const TerrainPipeline::LightData& lightData) {
-	lightDataTerrainPipeline_ = lightData;
+	lightDataTerrainPipeline_.push_back(lightData);
+	if (lightData.isMainDirectionalLight) {
+		mainDirectionalLightTerrainPipeline_ = lightData;
+	}
 }
 // 프레임 데이터를 입력한다.
 void GFX::addFrameData(const TerrainPipeline::FrameData& frameData) {
@@ -617,7 +633,7 @@ void GFX::addCameraData(const BVPipeline::CameraData& cameraData) {
 // 파이프라인들이 자체적으로 사용하는 리소스들과
 // addRequestXXLoad 꼴의 함수로 요청된 리소스들을 로드/생성한다.
 // 반드시 모든 장치 초기화가 끝나고 호출되어야 한다.
-void GFX::loadAssets() {
+void GFX::loadAssets(const AssetConfigs& configs) {
 	auto& fence = fences_.at("LoadFence");
 
 	// 명령 리스트와 명령 할당자 할당
@@ -637,9 +653,12 @@ void GFX::loadAssets() {
 	DISPLAY_ERROR_DX_VOID(cmdList->Reset(cmdAlloc.Get(), nullptr), false);
 	
 	// 파이프라인 공용 리소스 로드
-	SharedResources::ShadowMap::addShadowMap("ShadowMap", device_.Get(),
-		DXGI_FORMAT_D32_FLOAT, 2000u, 2000u, backBuffers_.size(),
-		srvTexPool_, dsvPool_
+	SharedResources::ShadowMap::addCSMShadowMap(
+		configs.shadowMap.key, device_.Get(),
+		configs.shadowMap.format,
+		configs.shadowMap.cascadeResolutions,
+		configs.shadowMap.cascadeCount,
+		backBuffers_.size(), srvTexPool_, dsvPool_
 	);
 	// 파이프라인 자체 리소스 로드
 	// BVPipeline
@@ -808,11 +827,17 @@ void GFX::render() {
 		), false
 	);
 
-	// 그림자맵 클리어
-	SharedResources::ShadowMap::getReadyAsDepthWrite(
-		"ShadowMap", cmdListPool_, cmdQ_.Get(), fenceToSignal
-	);
-	SharedResources::ShadowMap::clearShadowMap("ShadowMap", cmdListClear);
+	// CSM 그림자맵: 모든 cascade를 Depth Write 상태로 전환한다 (clear CL에 기록)
+	{
+		const auto csmKey = std::string(SharedResources::ShadowMap::kDefaultKey);
+		const auto csmRoomIdx = frameIdx_ % backBuffers_.size();
+		if (SharedResources::ShadowMap::csmShadowMapData.contains(csmKey)) {
+			const auto& csmData = SharedResources::ShadowMap::csmShadowMapData.at(csmKey)[csmRoomIdx];
+			for (u32t ci = 0u; ci < csmData.cascadeCount; ++ci) {
+				SharedResources::ShadowMap::getCSMReadyAsDepthWrite(csmKey, csmRoomIdx, ci, cmdListClear);
+			}
+		}
+	}
 
 	const auto clRect = gClientRect;
 
@@ -889,8 +914,8 @@ void GFX::render() {
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_, &dsvPool_,
-		rootSigs_.at("DefaultRootSignature"), shaders_.at("PBRShader"),
-		shaders_.at("ShadowMapShader"), cmdQ_, viewport, clRect,
+		rootSigs_.at("DefaultRootSignature"), csmDebugVisualization_ ? shaders_.at("PBRShaderCSMDebug") : shaders_.at("PBRShader"),
+		shaders_.at("ShadowMapCSMShader"), cmdQ_, viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesPBRPipeline_, threadPool_, &cmdListPool_,
 		std::move(drawEventsPBRPipeline_), std::move(lightDataPBRPipeline_),
@@ -902,8 +927,8 @@ void GFX::render() {
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_, &dsvPool_,
-		rootSigs_.at("DefaultRootSignature"), shaders_.at("PBRSkinnedShader"),
-		shaders_.at("ShadowMapSkinnedShader"), cmdQ_, viewport, clRect,
+		rootSigs_.at("DefaultRootSignature"), csmDebugVisualization_ ? shaders_.at("PBRSkinnedShaderCSMDebug") : shaders_.at("PBRSkinnedShader"),
+		shaders_.at("ShadowMapSkinnedCSMShader"), cmdQ_, viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesPBRSkinnedPipeline_, threadPool_, &cmdListPool_,
 		std::move(drawEventsPBRSkinnedPipeline_), std::move(lightDataPBRSkinnedPipeline_),
@@ -937,12 +962,16 @@ void GFX::render() {
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_,
-		rootSigs_.at("DefaultRootSignature"), shaders_.at("TerrainShader"),
+		rootSigs_.at("DefaultRootSignature"),
+		csmDebugVisualization_ ? shaders_.at("TerrainShaderCSMDebug") : shaders_.at("TerrainShader"),
+		shaders_.at("TerrainShadowMapCSMShader"),
+		&dsvPool_,
 		cmdQ_, viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesTerrainPipeline_,
 		threadPool_, &cmdListPool_, std::move(drawEventsTerrainPipeline_),
-		lightDataTerrainPipeline_, cameraDataTerrainPipeline_, frameDataTerrainPipeline_,
+		std::move(lightDataTerrainPipeline_), mainDirectionalLightTerrainPipeline_,
+		cameraDataTerrainPipeline_, frameDataTerrainPipeline_,
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
@@ -972,8 +1001,11 @@ void GFX::render() {
 		dumpLog();
 
 		// == 그림자 패스들 ==
-		SharedResources::ShadowMap::getReadyAsDepthWrite(
-			"ShadowMap", cmdListPool_, cmdQ_.Get(), fenceToSignal
+		SharedResources::ShadowMap::getCSMAllReadyAsDepthWrite(
+			std::string(SharedResources::ShadowMap::kDefaultKey), frameIdx_ % backBuffers_.size(), cmdListPool_, cmdQ_.Get(), fenceToSignal
+		);
+		SharedResources::ShadowMap::clearCSMAllShadowMaps(
+			std::string(SharedResources::ShadowMap::kDefaultKey), frameIdx_ % backBuffers_.size(), cmdListPool_, cmdQ_.Get(), fenceToSignal
 		);
 
 		pbrPipelineDispatcher.sortDrawEvents();
@@ -984,9 +1016,12 @@ void GFX::render() {
 		pbrSkinnedPipelineDispatcher.shadowPass();
 		dumpLog();
 
+		terrainPipelineDispatcher.shadowPass();
+		dumpLog();
+
 		// == 메인 패스들 ==
-		SharedResources::ShadowMap::getReadyAsShaderResource(
-			"ShadowMap", cmdListPool_, cmdQ_.Get(), fenceToSignal
+		SharedResources::ShadowMap::getCSMAllReadyAsShaderResource(
+			std::string(SharedResources::ShadowMap::kDefaultKey), frameIdx_ % backBuffers_.size(), cmdListPool_, cmdQ_.Get(), fenceToSignal
 		);
 
 		pbrPipelineDispatcher.mainPass();
@@ -1011,8 +1046,11 @@ void GFX::render() {
 		dumpLog();
 
 		// == 그림자 패스들 ==
-		SharedResources::ShadowMap::getReadyAsDepthWrite(
-			"ShadowMap", cmdListPool_, cmdQ_.Get(), fenceToSignal
+		SharedResources::ShadowMap::getCSMAllReadyAsDepthWrite(
+			std::string(SharedResources::ShadowMap::kDefaultKey), frameIdx_ % backBuffers_.size(), cmdListPool_, cmdQ_.Get(), fenceToSignal
+		);
+		SharedResources::ShadowMap::clearCSMAllShadowMaps(
+			std::string(SharedResources::ShadowMap::kDefaultKey), frameIdx_ % backBuffers_.size(), cmdListPool_, cmdQ_.Get(), fenceToSignal
 		);
 
 		pbrPipelineDispatcher.sortDrawEvents();
@@ -1023,9 +1061,12 @@ void GFX::render() {
 		pbrSkinnedPipelineDispatcher.shadowPassMT();
 		dumpLog();
 
+		terrainPipelineDispatcher.shadowPassMT();
+		dumpLog();
+
 		// == 메인 패스들 ==
-		SharedResources::ShadowMap::getReadyAsShaderResource(
-			"ShadowMap", cmdListPool_, cmdQ_.Get(), fenceToSignal
+		SharedResources::ShadowMap::getCSMAllReadyAsShaderResource(
+			std::string(SharedResources::ShadowMap::kDefaultKey), frameIdx_ % backBuffers_.size(), cmdListPool_, cmdQ_.Get(), fenceToSignal
 		);
 
 		pbrPipelineDispatcher.mainPassMT();
