@@ -69,15 +69,15 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 }
 
 void Game::setupGround(const ObjectInfo& groundInfo) {
-	ground_ = std::make_shared<Cube>();
+	// ground_ = std::make_shared<Cube>();
 
-	ground_->setId(groundInfo.objectId);
-	ground_->setMaterialSetIdx(groundInfo.materialSetIdx);
-	ground_->setPos(DirectX::XMLoadFloat3(&groundInfo.pos));
-	ground_->setOrient(DirectX::XMLoadFloat4(&groundInfo.orient));
-	ground_->setScale(DirectX::XMLoadFloat3(&groundInfo.scale));
-	ground_->setModel(assetManager_.modelCube());
-	ground_->enableBVRendering();
+	// ground_->setId(groundInfo.objectId);
+	// ground_->setMaterialSetIdx(groundInfo.materialSetIdx);
+	// ground_->setPos(DirectX::XMLoadFloat3(&groundInfo.pos));
+	// ground_->setOrient(DirectX::XMLoadFloat4(&groundInfo.orient));
+	// ground_->setScale(DirectX::XMLoadFloat3(&groundInfo.scale));
+	// ground_->setModel(assetManager_.modelCube());
+	// ground_->enableBVRendering();
 }
 
 void Game::createOtherPlayer(const ObjectInfo& otherPlayerInfo) {
@@ -206,9 +206,9 @@ void Game::update(Milliseconds deltaTime) {
 		// 물리 시뮬레이션의 대상이 되는 객체들을
 		// 한 곳에 모아 PhysicSystem 객체에 전달한다.
 		static std::vector<Object*> targetObjects{};
-		targetObjects.resize(2u);
-		targetObjects[0] = ground_.get();
-		targetObjects[1] = player_.get();
+		targetObjects.resize(1u);
+		// targetObjects[0] = ground_.get();
+		targetObjects[0] = player_.get();
 
 		while ( physicUpdateAcc_ >= physicUpdateInterval ) {
 			physicSystem_.step(targetObjects, physicUpdateInterval );
@@ -237,7 +237,7 @@ void Game::update(Milliseconds deltaTime) {
 	const auto tPhysicInterpolation = physicUpdateAcc_ / physicUpdateInterval;
 
 	// 게임 객체들 갱신
-	ground_->update(deltaTime, tPhysicInterpolation);
+	// ground_->update(deltaTime, tPhysicInterpolation);
 	player_->update(deltaTime, tPhysicInterpolation );
 
 	for ( auto& obj : otherPlayers_ ) {
@@ -285,7 +285,7 @@ void Game::render() {
 	}
 
 	skybox_.render( gfx_ );
-	ground_->render(gfx_);
+	// ground_->render(gfx_);
 	player_->render(gfx_);
 
 	for ( auto& obj : otherPlayers_ ) {

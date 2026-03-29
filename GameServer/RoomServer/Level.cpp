@@ -13,6 +13,11 @@ void importCube(std::ifstream& ifs, const AssetManager& assetManager, Object& cu
 	cube.setMaterialSetIdx(materialSetIdx);
 }
 
+void importTerrain(std::ifstream& ifs, const AssetManager& assetManager, Object& terrain) {
+	const auto manifestPath = readText(ifs, "ManifestPath");
+	// terrain.setTerrainData(assetManager_.terrain());
+}
+
 void importNode(std::ifstream& ifs, const AssetManager& assetManager, Level& level) {
 	readHeadTag(ifs, "Node");
 	const auto type = readText(ifs, "Type");
@@ -44,6 +49,9 @@ void importNode(std::ifstream& ifs, const AssetManager& assetManager, Level& lev
 	}
 	else if (type == "PlayerStart") {
 		level.playerStarts.push_back(std::move(object));
+	}
+	else if (type == "Terrain") {
+		importTerrain(ifs, assetManager, object);
 	}
 	else {
 		// no-op

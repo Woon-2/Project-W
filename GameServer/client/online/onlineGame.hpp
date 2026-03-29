@@ -176,6 +176,7 @@ private:
 	CameraMode cameraMode_ = CameraMode::ThirdPerson;
 
 	Light dirLight_{};
+	AssetConfigs assetConfigs_{};
 
 	bool playerDead_{};
 
