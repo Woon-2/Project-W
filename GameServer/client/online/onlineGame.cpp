@@ -145,9 +145,11 @@ void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 
 		return;
 	}
 
-	player->setPos(DirectX::XMLoadFloat3(&pos));
+	player->setPrevPos(player->renderState().pos);
+	player->setCurrPos(DirectX::XMLoadFloat3(&pos));
 	player->setOrient(DirectX::XMLoadFloat4(&orient));
 	player->physicState().evVelocity = DirectX::XMLoadFloat3(&velocity);
+	player->netInterpAcc_ = 0s;
 }
 
 // 게임의 업데이트는 다음 순서대로 이루어진다.
@@ -241,7 +243,9 @@ void Game::update(Milliseconds deltaTime) {
 	player_->update(deltaTime, tPhysicInterpolation );
 
 	for ( auto& obj : otherPlayers_ ) {
-		obj->update( deltaTime, tPhysicInterpolation );
+		obj->netInterpAcc_ += deltaTime;
+		const float tNet = std::min(obj->netInterpAcc_ / obj->netInterpDuration_, 1.f);
+		obj->update( deltaTime, tNet );
 	}
 
 	camera_.update();
@@ -465,16 +469,16 @@ void Game::processInput(Milliseconds deltaTime) {
 // 방 입장 키 처리
 void Game::processInputLobby(Milliseconds deltaTime) {
 	if (keyboardStateCurr_['1'] & 0x80) {
-		sendEnterRoomPacket(1);
+		//sendEnterRoomPacket(1);
 	}
 	if (keyboardStateCurr_['2'] & 0x80) {
-		sendEnterRoomPacket(2);
+		//sendEnterRoomPacket(2);
 	}
 	if (keyboardStateCurr_['3'] & 0x80) {
-		sendEnterRoomPacket(3);
+		//sendEnterRoomPacket(3);
 	}
 	if (keyboardStateCurr_['4'] & 0x80) {
-		sendEnterRoomPacket(4);
+		//sendEnterRoomPacket(4);
 	}
 }
 

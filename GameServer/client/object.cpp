@@ -1743,6 +1743,16 @@ void MU_CALLCONV Object::setCurrPos(mu::Vec3 newPos) {
 	}
 }
 
+void MU_CALLCONV Object::setPrevPos(mu::Vec3 pos) {
+	prevPhysicState_.pos = pos;
+
+	const auto pModel = renderState_.pModel;
+
+	if (pModel && !pModel->bvh.empty()) {
+		rebuildBVH(prevPhysicState_);
+	}
+}
+
 // 게임 객체의 속도를 갱신한다.
 // 이전 PhysicState와 현재 PhysicState의 속도가 모두 갱신된다.
 void MU_CALLCONV Object::setVelocity(mu::Vec3 newVelocity) {

@@ -511,6 +511,7 @@ public:
 	// 게임 객체의 위치를 갱신한다.
 	// 현재 PhysicState의 위치만 갱신된다.
 	void MU_CALLCONV setCurrPos(mu::Vec3 pos);
+	void MU_CALLCONV setPrevPos(mu::Vec3 pos);
 	mu::Vec3 MU_CALLCONV pos() const { return currPhysicState_.pos; }
 	// 게임 객체의 속도를 갱신한다.
 	// 이전 PhysicState와 현재 PhysicState의 속도가 모두 갱신된다.
@@ -616,6 +617,11 @@ public:
 
 		animSystem.trackAnimBlender(renderState_.animBlender.get());
 	}
+
+	// 원격 플레이어 네트워크 보간 상태. 로컬 플레이어에서는 사용되지 않음.
+	// onlineGame.cpp의 Game 루프에서 관리됨.
+	Seconds netInterpDuration_{ 1s / 20.f };
+	Seconds netInterpAcc_{ 0s };
 
 private:
 	EventBus eventBus_{};

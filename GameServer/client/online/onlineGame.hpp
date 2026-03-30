@@ -138,7 +138,7 @@ private:
 	Seconds physicUpdateInterval{ 1s / 60.f };	// 60fps로 물리 업데이트
 
 	bool moveChange_{};
-	Seconds moveStateSendAcc_{0s};
+	Seconds moveStateSendAcc_{0s};				// move 패킷 전송을 위한 시간 누산기
 	Seconds moveStateSendInterval_{1s / 20.f};	// 50ms(20Hz)마다 move 패킷 전송
 	
 	AnimSystem animSystem_{};
