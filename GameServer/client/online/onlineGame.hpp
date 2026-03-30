@@ -116,10 +116,8 @@ private:
 	};
 
 	void sendMovePacket();
-
 	void sendMouseMovePacket();
-	void sendMoveStatePacket();
-	void sendEnterRoomPacket(i32t roomId);
+
 	void processInput(Milliseconds deltaTime);
 	void processInputLobby(Milliseconds deltaTime);
 	void processInputGame(Milliseconds deltaTime);

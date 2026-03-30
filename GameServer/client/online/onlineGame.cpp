@@ -424,44 +424,6 @@ void Game::sendMouseMovePacket() {
 	serverSession_->send(sendBuffer);*/
 }
 
-void Game::sendMoveStatePacket() {
-	/*auto moveStatePacket = Packet{
-		.header = {
-			.size = sizeof(PacketHeader) + sizeof(CSMoveStatePacket),
-			.id = static_cast<std::uint16_t>(PacketType::csMoveState)
-		},
-		.csMoveState = {
-			.position = player_->physicState().pos.getXmf(),
-			.velocity = player_->physicState().evVelocity.getXmf(),
-			.forward = player_->forward().getXmf(),
-			.timeStamp = static_cast<u32t>(Milliseconds(HighResolutionClock::now().time_since_epoch()).count())
-		}
-	};
-
-	i32t packetSize = sizeof(Packet);
-	auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
-	sendBuffer->copyData(&moveStatePacket, packetSize);
-	serverSession_->send(sendBuffer);*/
-}
-
-void Game::sendEnterRoomPacket(i32t roomId) {
-	/*auto packet = Packet{
-		.header = {
-			.size = sizeof(PacketHeader) + sizeof(CSFindRoomPacket),
-			.id = static_cast<std::uint16_t>(PacketType::csFindRoom)
-		},
-		.csFindRoom = {
-			.roomId = roomId
-		}
-	};
-
-	i32t packetSize = sizeof(Packet);
-	auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
-	sendBuffer->copyData(&packet, packetSize);
-	serverSession_->send(sendBuffer);
-	inRoom_ = true;*/
-}
-
 void Game::processInput(Milliseconds deltaTime) {
 	if (GetForegroundWindow() != ghWnd) {
 		return;
