@@ -220,3 +220,6 @@
     해결 방법
       SocketUtils::release 함수를 ServerSession의 소멸자에 넣으면서 생명 주기에 의존성을 부여함.
       그러는 김에 일관성 있게 SendBufferManager::clear(), MemoryManager::release()도 같이 넣어줌.
+
+
+**아직 서버도 버그 있음. 피곤해서 기억이 잘 안나는 데 대충 위의 문제와 같은 문제 하나 그리고 플레이어가 3명 들어오면 터지는 문제 하나
