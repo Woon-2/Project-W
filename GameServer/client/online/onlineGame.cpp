@@ -133,7 +133,7 @@ void Game::removePlayer( i32t playerId ) {
 	otherPlayerHpUIs_.erase( playerId );
 }
 
-void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
+void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient) {
 	auto player = idPlayerMap_[playerId];
 
 	DISPLAY_ERROR_STR(player != nullptr,
@@ -145,10 +145,25 @@ void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 
 		return;
 	}
 
+	// 애니메이션용 velocity: 패킷 도착 시점에 1번만 계산.
+	// 서버가 보내는 velocity 필드 대신, 연속 패킷 간 위치 변화량을 netInterpAcc_(패킷 전송 주기를 판단하는 누적 시간)으로 나눈다.
+	// netInterpAcc_는 직전 패킷 이후 경과 시간이므로 실제 패킷 간격과 동일하다.
+	// 간격이 너무 길면(첫 패킷, 재접속 등) 0으로 초기화해 오류를 방지한다.
+	const float timeSinceLastPacket = Seconds(player->netInterpAcc_).count();
+	const float maxValidInterval = Seconds(player->netInterpDuration_ * 2.f).count();
+
+	if ( timeSinceLastPacket > 0.001f && timeSinceLastPacket <= maxValidInterval ) {
+		const mu::Vec3 newPos = DirectX::XMLoadFloat3(&pos);
+		const mu::Vec3 movement = newPos - player->physicState().pos;
+		player->physicState().evVelocity = movement / timeSinceLastPacket;
+	}
+	else {
+		player->physicState().evVelocity = mu::Vec3();
+	}
+
 	player->setPrevPos(player->renderState().pos);
 	player->setCurrPos(DirectX::XMLoadFloat3(&pos));
 	player->setOrient(DirectX::XMLoadFloat4(&orient));
-	player->physicState().evVelocity = DirectX::XMLoadFloat3(&velocity);
 	player->netInterpAcc_ = 0s;
 }
 
@@ -245,6 +260,13 @@ void Game::update(Milliseconds deltaTime) {
 	for ( auto& obj : otherPlayers_ ) {
 		obj->netInterpAcc_ += deltaTime;
 		const float tNet = std::min(obj->netInterpAcc_ / obj->netInterpDuration_, 1.f);
+
+		// 패킷 2개 간격(100ms) 이상 새 패킷이 없으면 멈춘 것으로 확정.
+		// 1개 간격(50ms)이면 정상 패킷 도착 타이밍과 겹쳐 oscillation이 발생하므로 2배로 여유를 준다.
+		if ( obj->netInterpAcc_ >= obj->netInterpDuration_ * 2.f ) {
+			obj->physicState().evVelocity = mu::Vec3();
+		}
+
 		obj->update( deltaTime, tNet );
 	}
 

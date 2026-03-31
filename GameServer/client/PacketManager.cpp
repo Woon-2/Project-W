@@ -78,7 +78,7 @@ void PacketManager::handleSMovePacket(byte* buffer, int32 len) {
 	auto sMvPkt = reinterpret_cast<SMovePacket*>(buffer);
 
 	auto game = INet::ClientApp::onlineGame();
-	game->movePlayer(sMvPkt->playerId, sMvPkt->pos, sMvPkt->orient, sMvPkt->velocity);
+	game->movePlayer(sMvPkt->playerId, sMvPkt->pos, sMvPkt->orient);
 }
 
 SendBuffer* PacketManager::makeCMovePacket(DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
@@ -88,7 +88,6 @@ SendBuffer* PacketManager::makeCMovePacket(DirectX::XMFLOAT3 pos, DirectX::XMFLO
 	auto cMvPkt = bw.reserve<CMovePacket>();
 	cMvPkt->pos = pos;
 	cMvPkt->orient = orient;
-	cMvPkt->velocity = velocity;
 
 	cMvPkt->size = bw.writeSize();
 	cMvPkt->type = PacketType::C_Move;

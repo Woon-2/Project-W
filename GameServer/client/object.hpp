@@ -538,6 +538,7 @@ public:
 
 	PhysicState& physicState() { return currPhysicState_; }
 	const PhysicState& physicState() const { return currPhysicState_; }
+	const PhysicState& prevPhysicState() const { return prevPhysicState_; }
 	const RenderState& renderState() const { return renderState_; }
 	// PhysicState를 새로운 상태로 전환한다.
 	// 이 함수의 호출 시점의 PhysicState가 prevPhysicState로서 저장된다.

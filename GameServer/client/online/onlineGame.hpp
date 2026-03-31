@@ -65,7 +65,7 @@ public:
 	void createOtherPlayer(const ObjectInfo& otherPlayerInfo);
 	void createOtherPlayer(const PlayerInfo& otherPlayerInfo);
 	void removePlayer( i32t playerId );
-	void movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
+	void movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient);
 
 	// 게임의 업데이트는 다음 순서대로 이루어진다.
 	// 네트워크 패킷 처리(SleepEx)
