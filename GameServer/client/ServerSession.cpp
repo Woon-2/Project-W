@@ -4,6 +4,13 @@
 #include "MemoryManager.hpp"
 #include "PacketManager.hpp"
 
+ServerSession::~ServerSession() {
+	SocketUtils::closeSocket(sock_);
+	SendBufferManager::clear();
+	MemoryManager::release();
+	SocketUtils::release();
+}
+
 bool ServerSession::connect() {
 	if (::connect(sock_, reinterpret_cast<const SOCKADDR*>(&netAddr_.sockAddr()), sizeof(SOCKADDR_IN)) == SOCKET_ERROR) {
 		return false;
@@ -11,14 +18,17 @@ bool ServerSession::connect() {
 	else {
 		SocketUtils::setTcpNoDelay(sock_, true);
 
-		connected_.store(true);
+		connected_ = true;
 		registerRecv();
 		return true;
 	}
 }
 
 void ServerSession::send() {
-	if (sendOver_.sendBuffers.empty()) {
+	if (pendingSendBuffers_.empty()) {
+		return;
+	}
+	if (sending_) {
 		return;
 	}
 
@@ -26,7 +36,7 @@ void ServerSession::send() {
 }
 
 void ServerSession::registerRecv() {
-	if (!isConnected()) {
+	if (!connected_) {
 		return;
 	}
 
@@ -43,19 +53,22 @@ void ServerSession::registerRecv() {
 		auto error = WSAGetLastError();
 		if (error != WSA_IO_PENDING) {
 			std::cout << "WSARecv failed with error: " << error << '\n';
-			connected_.store(false);
+			connected_ = false;
 		}
 	}
 }
 
 void ServerSession::registerSend() {
-	if (!isConnected()) {
+	if (!connected_) {
 		return;
 	}
-
+	
+	sending_ = true;
 	sendOver_.clear();
 
 	// Send 완료 후 해제할 SendBuffer 설정
+	sendOver_.sendBuffers = std::move(pendingSendBuffers_);
+
 	auto wsaBufs = std::vector<WSABUF>();
 	wsaBufs.reserve(sendOver_.sendBuffers.size());
 
@@ -76,8 +89,9 @@ void ServerSession::registerSend() {
 				odelete(sendBuf);
 			}
 			sendOver_.sendBuffers.clear();
+			sending_ = false;
 
-			connected_.store(false);
+			connected_ = false;
 		}
 	}
 }
@@ -85,12 +99,12 @@ void ServerSession::registerSend() {
 void ServerSession::processRecv(int32 numBytes) {
 	if (numBytes == 0) {
 		std::cout << "Recv 0\n";
-		connected_.store(false);
+		connected_ = false;
 		return;
 	}
 	if(!recvBuf_.moveWritePos(numBytes)) {
 		std::cout << "Failed to move write position in receive buffer.\n";
-		connected_.store(false);
+		connected_ = false;
 		return;
 	}
 
@@ -117,7 +131,7 @@ void ServerSession::processRecv(int32 numBytes) {
 
 	if(recvLen < 0 || recvLen > dataSize || !recvBuf_.moveReadPos(recvLen)) {
 		std::cout << "Failed to move read position in receive buffer.\n";
-		connected_.store(false);
+		connected_ = false;
 		return;
 	}
 
@@ -131,16 +145,28 @@ void ServerSession::processPacket(byte* buffer, int32 len) {
 }
 
 void ServerSession::processSend(int32 numBytes) {
-	if (numBytes > 0) {
+	for (auto sendBuf : sendOver_.sendBuffers) {
+		odelete(sendBuf);
+	}
+	sendOver_.sendBuffers.clear();
+	sending_ = false;
+
+	if(numBytes == 0) {
+		std::cout << "Connection closed by the server during send.\n";
+		connected_ = false;
+	}
+
+	/*if (numBytes > 0) {
 		for (auto sendBuf : sendOver_.sendBuffers) {
 			odelete(sendBuf);
 		}
 		sendOver_.sendBuffers.clear();
+		sending_ = false;
 	}
 	else {
 		std::cout << "Connection closed by the server during send.\n";
-		connected_.store(false);
-	}
+		connected_ = false;
+	}*/
 }
 
 void CALLBACK ServerSession::completionCallback(DWORD error, DWORD numBytes, LPWSAOVERLAPPED overlapped, DWORD flags) {
@@ -149,7 +175,16 @@ void CALLBACK ServerSession::completionCallback(DWORD error, DWORD numBytes, LPW
 
 	if (error != 0) {
 		std::cout << "I/O operation failed with error: " << error << '\n';
-		session->connected_.store(false);
+
+		if(overEx->type == IoType::Send) {
+			for (auto sendBuf : overEx->sendBuffers) {
+				odelete(sendBuf);
+			}
+			overEx->sendBuffers.clear();
+			session->sending_ = false;
+		}
+
+		session->connected_ = false;
 		return;
 	}
 

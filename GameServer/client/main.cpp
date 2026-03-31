@@ -84,9 +84,6 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 	while ( true ) {
 		while ( PeekMessageA( &msg, nullptr, 0, 0, PM_REMOVE ) ) {
 			if ( msg.message == WM_QUIT ) {
-				SendBufferManager::clear();
-				MemoryManager::release();
-				SocketUtils::release();
 				return static_cast<int>( msg.wParam );
 			}
 
@@ -101,6 +98,8 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 		INet::ClientApp::update(timer.deltaTime<Milliseconds>());
 		INet::ClientApp::render();
 	}
+
+	
 }
 
 LRESULT wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {

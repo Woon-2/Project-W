@@ -26,7 +26,7 @@ class ServerSession {
 
 public:
 	ServerSession() : sock_(SocketUtils::createSocket()), netAddr_(serverIp, serverPort),
-		connected_(false), recvBuf_(0x10000)/*64KB*/, game_(nullptr)
+		connected_(false),recvBuf_(0x10000)/*64KB*/, sending_(false), pendingSendBuffers_(), game_(nullptr)
 	{
 		ZeroMemory(&recvOver_.over, sizeof(WSAOVERLAPPED));
 		recvOver_.type = IoType::Recv;
@@ -37,19 +37,16 @@ public:
 		sendOver_.owner = this;
 	}
 
-	~ServerSession() {
-		SocketUtils::closeSocket(sock_);
-	}
+	~ServerSession();
 
 	bool connect();
-	void addSendBuffer(SendBuffer* sendBuffer) { sendOver_.sendBuffers.push_back(sendBuffer); }
+	void addSendBuffer(SendBuffer* sendBuffer) { pendingSendBuffers_.push_back(sendBuffer); }
 	void send();
 
 	void setGame(Online::Game* game) { game_ = game; }
 
 	const std::string& ip() const { return netAddr_.ip(); }
 	uint16 port() const { return netAddr_.port(); }
-	bool isConnected() const { return connected_.load(); }
 
 private:
 	void registerRecv();
@@ -64,12 +61,15 @@ private:
 private:
 	SOCKET sock_;
 	NetAddress netAddr_;
-	std::atomic_bool connected_;
+	bool connected_;
 
 	OverlappedEx recvOver_;
 	OverlappedEx sendOver_;
 
 	RecvBuffer recvBuf_;
+
+	bool sending_;
+	std::vector<SendBuffer*> pendingSendBuffers_;
 
 	Online::Game* game_;
 };

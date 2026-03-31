@@ -186,3 +186,37 @@
           - `client/online/onlineGame.cpp` — `Game::movePlayer()`, `Game::update()` 원격 플레이어 루프
 
 [x] 각각의 패킷마다 유효성 검사를 할 수 있는 기능 추가
+
+
+
+
+[문제 상황과 해결 사례]
+------------------------ 2026.03.31 / 화요일 ------------------------
+클라이언트 버그
+  1. 마우스 회전에 따른 플레이어 회전 패킷과 플레이어 이동 패킷을 분리하면서 send를 2번하게 되면서 문제가 발생함.
+      send를 2번하게 될 때의 문제는
+        - wsasend에 사용되는 wsaoverlapped(이하 over) 구조체는 send가 완료되기 전까지는 초기화돼서는 안됨.
+          하지만 send를 연달아 하게 되면서 send와 send 사이에 over 구조체가 zeromemory 함수에 의해 초기화됨.
+    
+    해결 방법
+      send를 한 번에 몰아서 하자.
+      send buffer에 대한 vector를 만들고 send 하고자 할 때 vector에 넣기만 함. 그리고 send를 할 때 한꺼번에 보냄.
+      하지만 여기서도 문제가 있음. send buffer vector 하나로만 한다면 네트워크로 보내지고 있는 send buffers의 데이터와 send 하고자 하는 send buffer가 하나의 vector에 공존하기 때문에 충돌이 생김.
+      따라서 pending용 vector를 하나 더 만들어서 send 하고자 할 때는 pending용 vector에 담다가 send 시에는 한꺼번에 옮겨야 함.
+      하지만 유의할 점은 pending용 vector가 empty임에도 불구하고 제한없이 매 프레임 빈 깡통 데이터를 send하게 되면 마치 서버가 클라로부터 패킷을 받지 못하는 것 처럼 보이는 현상을 보게 될 것임.
+
+      추가적으로, SleepEx -> 여러 패킷 WSASend -> SleepEx -> 여러 패킷 WSASend -> ... 가 현재 클라이언트의 네트워크 통신 시퀀스인데
+      완료 처리 후 send가 항상 맞물려서 동작한다면 문제가 없겠지만, 타이밍이 절묘하게 완료 처리가 없을 때 또 다시 send를 하게 되면 이전에 send 했던 상태(over 구조체)가 망가짐.
+      따라서 sending이라는 bool 변수를 둬서 아직 send 중인지를 판단함.
+  
+  2. WSASend에 대한 완료 처리를 할 때, 네트워크로 보내진 send buffer의 메모리 해제 시 프로그램 다운.
+      클라이언트 프로그래밍을 강제 종료하면서부터가 사건의 발단이었음. 
+      내가 만든 MemoryManager, MemoryPool, odelete에 문제가 있는 것일까, concurrent queue를 잘못 사용한 것일까, 싱글스레드 프로그램에서 멀티스레드 환경에 사용하는 자료구조를 사용한 것이 문제일까를 고민함.
+      사실 실제로 문제가 있는 것일지도 모름. 하지만 그래도 나름 제대로 만들었다고 생각하면서 프로그램이 뻗은 곳인 메모리 오염된 send buffer를 유심히 들여다 봄.
+      절망적인 상황에 의해 멘탈이 완전히 나가버리고 있는 와중에
+      문득 over 구조체가 망가진 게 아닐까? 하는 생각에 프로그램의 호출 스택을 들여다 봄.
+      그렇게 발견하게 된 것은 SocketUtils::release 함수가 가장 먼저 호출됐다는 사실임. over 구조체가 포함된 완료 처리가 정상적으로 동작하기 전에 WSACleanup이 호출됨.
+
+    해결 방법
+      SocketUtils::release 함수를 ServerSession의 소멸자에 넣으면서 생명 주기에 의존성을 부여함.
+      그러는 김에 일관성 있게 SendBufferManager::clear(), MemoryManager::release()도 같이 넣어줌.

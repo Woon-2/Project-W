@@ -586,6 +586,8 @@ void Game::processInputGame(Milliseconds deltaTime) {
 
 	switch (cameraMode_) {
 	case CameraMode::ThirdPerson: {
+		const auto prevForward = player_->forward();
+
 		const auto yaw = mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left));
 		auto yawRotation = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), yaw);
 
@@ -604,7 +606,11 @@ void Game::processInputGame(Milliseconds deltaTime) {
 			camera_.setOffsetFromTargetPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, cameraYaw_) );
 		}
 
-		sendMouseMovePacket();
+		const auto currForward = player_->forward();
+
+		if (prevForward != currForward) {
+			sendMouseMovePacket();
+		}
 
 		mouseDeltaX_ = 0;
 		mouseDeltaY_ = 0;
