@@ -133,7 +133,7 @@ void Game::removePlayer( i32t playerId ) {
 	otherPlayerHpUIs_.erase( playerId );
 }
 
-void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient) {
+void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos) {
 	auto player = idPlayerMap_[playerId];
 
 	DISPLAY_ERROR_STR(player != nullptr,
@@ -163,8 +163,23 @@ void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 
 
 	player->setPrevPos(player->renderState().pos);
 	player->setCurrPos(DirectX::XMLoadFloat3(&pos));
-	player->setOrient(DirectX::XMLoadFloat4(&orient));
 	player->netInterpAcc_ = 0s;
+}
+
+void Game::rotatePlayer(uint16 playerId, float yawRad) {
+	auto player = idPlayerMap_[playerId];
+
+	DISPLAY_ERROR_STR(player != nullptr,
+		"[Game Error] Game::rotatePlayer: 회전하려는 플레이어가 존재하지 않습니다.\n",
+		false
+	);
+
+	if (player == nullptr) {
+		return;
+	}
+
+	const mu::NQuat yaw = mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yawRad));
+	player->setOrient(yaw);
 }
 
 // 게임의 업데이트는 다음 순서대로 이루어진다.
@@ -303,6 +318,8 @@ void Game::update(Milliseconds deltaTime) {
 	}*/
 
 	clearEvents(eventList_);
+
+	INet::ClientApp::send();
 }
 
 void Game::render() {
@@ -424,30 +441,16 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 }
 
 void Game::sendMovePacket() {
-	auto sendBuffer = PacketManager::makeCMovePacket(player_->pos().getXmf(), player_->orient().getXmf(), player_->physicState().evVelocity.getXmf());
-	INet::ClientApp::send(sendBuffer);
+	auto sendBuffer = PacketManager::makeCMovePacket(player_->pos().getXmf());
+	INet::ClientApp::addSendBuffer(sendBuffer);
 }
 
 void Game::sendMouseMovePacket() {
-	/*const auto forward = player_->forward();
-	const auto yaw = std::atan2(forward.x(), forward.z());
+	const auto forward = player_->forward();
+	const auto yawRad = std::atan2(forward.x(), forward.z());
 
-	auto mouseMovePacket = Packet{
-		.header = {
-			.size = sizeof(PacketHeader) + sizeof(CSMouseMovePacket),
-			.id = static_cast<std::uint16_t>(PacketType::csMouseMove)
-		},
-		.csMouseMove = {
-			.playerYawRadian = yaw,
-			.cameraPitchRadian = cameraPitch_,
-			.timeStamp = static_cast<u32t>(Milliseconds(HighResolutionClock::now().time_since_epoch()).count())
-		}
-	};
-
-	i32t packetSize = sizeof(Packet);
-	auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
-	sendBuffer->copyData(&mouseMovePacket, packetSize);
-	serverSession_->send(sendBuffer);*/
+	auto sendBuffer = PacketManager::makeCMouseMovePacket(yawRad);
+	INet::ClientApp::addSendBuffer(sendBuffer);
 }
 
 void Game::processInput(Milliseconds deltaTime) {

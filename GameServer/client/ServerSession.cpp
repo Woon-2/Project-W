@@ -17,8 +17,12 @@ bool ServerSession::connect() {
 	}
 }
 
-void ServerSession::send(SendBuffer* sendBuffer) {
-	registerSend(sendBuffer);
+void ServerSession::send() {
+	if (sendOver_.sendBuffers.empty()) {
+		return;
+	}
+
+	registerSend();
 }
 
 void ServerSession::registerRecv() {
@@ -44,25 +48,35 @@ void ServerSession::registerRecv() {
 	}
 }
 
-void ServerSession::registerSend(SendBuffer* sendBuffer) {
+void ServerSession::registerSend() {
 	if (!isConnected()) {
 		return;
 	}
 
 	sendOver_.clear();
-	sendOver_.sendBuffer = sendBuffer;	// Send 완료 후 해제할 SendBuffer 설정
 
-	auto wsaBuf = WSABUF{
-		.len = static_cast<ULONG>(sendBuffer->writeSize()),
-		.buf = reinterpret_cast<char*>(sendBuffer->data())
-	};
+	// Send 완료 후 해제할 SendBuffer 설정
+	auto wsaBufs = std::vector<WSABUF>();
+	wsaBufs.reserve(sendOver_.sendBuffers.size());
+
+	for(auto sendBuf : sendOver_.sendBuffers) {
+		 wsaBufs.emplace_back(WSABUF{
+			.len = static_cast<ULONG>(sendBuf->writeSize()),
+			.buf = reinterpret_cast<char*>(sendBuf->data())
+		});
+	}
 
 	DWORD numBytes{};
-	if (WSASend(sock_, &wsaBuf, 1, &numBytes, 0, &sendOver_.over, &completionCallback) == SOCKET_ERROR) {
+	if (WSASend(sock_, wsaBufs.data(), static_cast<DWORD>(wsaBufs.size()) , &numBytes, 0, &sendOver_.over, &completionCallback) == SOCKET_ERROR) {
 		auto error = WSAGetLastError();
 		if (error != WSA_IO_PENDING) {
 			std::cout << "WSASend failed with error: " << error << '\n';
-			odelete(sendBuffer);
+
+			for(auto sendBuf : sendOver_.sendBuffers) {
+				odelete(sendBuf);
+			}
+			sendOver_.sendBuffers.clear();
+
 			connected_.store(false);
 		}
 	}
@@ -118,7 +132,10 @@ void ServerSession::processPacket(byte* buffer, int32 len) {
 
 void ServerSession::processSend(int32 numBytes) {
 	if (numBytes > 0) {
-		odelete(sendOver_.sendBuffer);
+		for (auto sendBuf : sendOver_.sendBuffers) {
+			odelete(sendBuf);
+		}
+		sendOver_.sendBuffers.clear();
 	}
 	else {
 		std::cout << "Connection closed by the server during send.\n";

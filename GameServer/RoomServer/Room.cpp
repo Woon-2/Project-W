@@ -89,22 +89,27 @@ void Room::move(int32 sessionId, CMovePacket* cMvPkt) {
 	auto session = idSessionMap_[sessionId];
 
 	auto player = session->player();
-
 	player->setPos(DirectX::XMLoadFloat3(&cMvPkt->pos));
-	player->setOrient(DirectX::XMLoadFloat4(&cMvPkt->orient));
-	player->physicState().evVelocity = DirectX::XMLoadFloat3(&cMvPkt->velocity);
-	//player->setVelocity(DirectX::XMLoadFloat3(&cMvPkt->velocity));
+	//player->setOrient(DirectX::XMLoadFloat4(&cMvPkt->orient));
+	//player->physicState().evVelocity = DirectX::XMLoadFloat3(&cMvPkt->velocity);
 
-	auto sMvPkt = PacketManager::makeSMovePacket(
-		static_cast<uint16>(sessionId),
-		player->pos().getXmf(),
-		player->orient().getXmf(),
-		player->physicState().evVelocity.getXmf()
-	);
-
+	auto sMvPkt = PacketManager::makeSMovePacket(static_cast<uint16>(sessionId), player->pos().getXmf());
 	broadcastExcept(session, sMvPkt);
 
 	ObjectPool<CMovePacket>::push(cMvPkt);
+}
+
+void Room::rotate(int32 sessionId, CMouseMovePacket* cMouseMvPkt) {
+	auto session = idSessionMap_[sessionId];
+
+	auto player = session->player();
+	auto yaw = mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(cMouseMvPkt->yawRadian));
+	player->setOrient(yaw);
+
+	auto sMouseMvPkt = PacketManager::makeSMouseMovePacket(static_cast<uint16>(sessionId), cMouseMvPkt->yawRadian);
+	broadcastExcept(session, sMouseMvPkt);
+
+	ObjectPool<CMouseMovePacket>::push(cMouseMvPkt);
 }
 
 void Room::broadcast(SendBuffer* sendBuffer) {

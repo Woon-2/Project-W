@@ -28,6 +28,7 @@ public:
 	void enter(GameSession* session);
 	void leave(GameSession* session);
 	void move(int32 sessionId, CMovePacket* cMvPkt);
+	void rotate(int32 sessionId, CMouseMovePacket* cMouseMvPkt);
 
 	void broadcast(SendBuffer* sendBuffer);
 	void broadcastExcept(GameSession* exceptSession, SendBuffer* sendBuffer);

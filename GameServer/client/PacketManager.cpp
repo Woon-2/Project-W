@@ -25,6 +25,10 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 		handleSMovePacket(buffer, len);
 		break;
 
+	case PacketType::S_MouseMove:
+		handleSMouseMovePacket(buffer, len);
+		break;
+
 	default:
 		std::cout << "Unknown packet type received. Type: " << static_cast<uint16>(header->type) << '\n';
 		break;
@@ -78,19 +82,39 @@ void PacketManager::handleSMovePacket(byte* buffer, int32 len) {
 	auto sMvPkt = reinterpret_cast<SMovePacket*>(buffer);
 
 	auto game = INet::ClientApp::onlineGame();
-	game->movePlayer(sMvPkt->playerId, sMvPkt->pos, sMvPkt->orient);
+	game->movePlayer(sMvPkt->playerId, sMvPkt->pos);
 }
 
-SendBuffer* PacketManager::makeCMovePacket(DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
+void PacketManager::handleSMouseMovePacket(byte* buffer, int32 len) {
+	auto sMouseMvPkt = reinterpret_cast<SMouseMovePacket*>(buffer);
+
+	auto game = INet::ClientApp::onlineGame();
+	game->rotatePlayer(sMouseMvPkt->playerId, sMouseMvPkt->yawRadian);
+}
+
+SendBuffer* PacketManager::makeCMovePacket(DirectX::XMFLOAT3 pos) {
 	auto sendBuffer = SendBufferManager::open(sizeof(CMovePacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
 	auto cMvPkt = bw.reserve<CMovePacket>();
 	cMvPkt->pos = pos;
-	cMvPkt->orient = orient;
 
 	cMvPkt->size = bw.writeSize();
 	cMvPkt->type = PacketType::C_Move;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+SendBuffer* PacketManager::makeCMouseMovePacket(float yawRad) {
+	auto sendBuffer = SendBufferManager::open(sizeof(CMouseMovePacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto cMouseMvPkt = bw.reserve<CMouseMovePacket>();
+	cMouseMvPkt->yawRadian = yawRad;
+
+	cMouseMvPkt->size = bw.writeSize();
+	cMouseMvPkt->type = PacketType::C_MouseMove;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;

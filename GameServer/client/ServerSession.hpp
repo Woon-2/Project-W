@@ -14,10 +14,10 @@ class ServerSession {
 	};
 
 	struct OverlappedEx {
-		WSAOVERLAPPED over;
-		IoType type;
-		ServerSession* owner;
-		SendBuffer* sendBuffer;	// Send일 때만 유효
+		WSAOVERLAPPED over{};
+		IoType type{};
+		ServerSession* owner{nullptr};
+		std::vector<SendBuffer*> sendBuffers{};	// Send일 때만 유효
 
 		void clear() {
 			ZeroMemory(&over, sizeof(WSAOVERLAPPED));
@@ -31,12 +31,10 @@ public:
 		ZeroMemory(&recvOver_.over, sizeof(WSAOVERLAPPED));
 		recvOver_.type = IoType::Recv;
 		recvOver_.owner = this;
-		recvOver_.sendBuffer = nullptr;
 
 		ZeroMemory(&sendOver_.over, sizeof(WSAOVERLAPPED));
 		sendOver_.type = IoType::Send;
 		sendOver_.owner = this;
-		sendOver_.sendBuffer = nullptr;
 	}
 
 	~ServerSession() {
@@ -44,7 +42,8 @@ public:
 	}
 
 	bool connect();
-	void send(SendBuffer* sendBuffer);
+	void addSendBuffer(SendBuffer* sendBuffer) { sendOver_.sendBuffers.push_back(sendBuffer); }
+	void send();
 
 	void setGame(Online::Game* game) { game_ = game; }
 
@@ -54,7 +53,7 @@ public:
 
 private:
 	void registerRecv();
-	void registerSend(SendBuffer* sendBuffer);
+	void registerSend();
 
 	void processRecv(int32 numBytes);
 	void processPacket(byte* buffer, int32 len);

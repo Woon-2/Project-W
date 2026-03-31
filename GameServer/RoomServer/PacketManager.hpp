@@ -11,11 +11,13 @@ class PacketManager {
 public:
 	static void handlePacket(GameSession* session, byte* buffer, int32 len);
 	static void handleCMovePacket(GameSession* session, byte* buffer, int32 len);
+	static void handleCMouseMovePacket(GameSession* session, byte* buffer, int32 len);
 
 	static SendBuffer* makeSEnterPacket(const PlayerInfo& playerInfo, const std::vector<ObjectInfo>& objInfos);
 	static SendBuffer* makeSEnterOtherPacket(const PlayerInfo& playerInfo);
 	static SendBuffer* makeSLeavePacket(uint16 playerId);
-	static SendBuffer* makeSMovePacket(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
+	static SendBuffer* makeSMovePacket(uint16 playerId, DirectX::XMFLOAT3 pos);
+	static SendBuffer* makeSMouseMovePacket(uint16 playerId, float yawRad);
 };
 
 #endif // packet_manager_hpp

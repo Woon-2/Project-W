@@ -14,6 +14,10 @@ void PacketManager::handlePacket(GameSession* session, byte* buffer, int32 len) 
 		handleCMovePacket(session, buffer, len);
 		break;
 
+	case PacketType::C_MouseMove:
+		handleCMouseMovePacket(session, buffer, len);
+		break;
+
 	default:
 		std::cout << "Unknown packet type received. Type: " << static_cast<uint16>(header->type) << '\n';
 		break;
@@ -25,11 +29,20 @@ void PacketManager::handleCMovePacket(GameSession* session, byte* buffer, int32 
 	auto cMvPktClone = ObjectPool<CMovePacket>::pop();
 
 	cMvPktClone->pos = clientMovePacket->pos;
-	cMvPktClone->orient = clientMovePacket->orient;
-	cMvPktClone->velocity = clientMovePacket->velocity;
 	
 	session->room()->doAsync([session, cMvPktClone]() {
 		session->room()->move(session->id(), cMvPktClone);
+	});
+}
+
+void PacketManager::handleCMouseMovePacket(GameSession* session, byte* buffer, int32 len) {
+	auto clientMouseMovePacket = reinterpret_cast<CMouseMovePacket*>(buffer);
+	auto cMouseMvPktClone = ObjectPool<CMouseMovePacket>::pop();
+
+	cMouseMvPktClone->yawRadian = clientMouseMovePacket->yawRadian;
+
+	session->room()->doAsync([session, cMouseMvPktClone]() {
+		session->room()->rotate(session->id(), cMouseMvPktClone);
 	});
 }
 
@@ -88,18 +101,31 @@ SendBuffer* PacketManager::makeSLeavePacket(uint16 playerId) {
 	return sendBuffer;
 }
 
-SendBuffer* PacketManager::makeSMovePacket(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
+SendBuffer* PacketManager::makeSMovePacket(uint16 playerId, DirectX::XMFLOAT3 pos) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SMovePacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
 	auto sMvPkt = bw.reserve<SMovePacket>();
 	sMvPkt->playerId = playerId;
 	sMvPkt->pos = pos;
-	sMvPkt->orient = orient;
-	sMvPkt->velocity = velocity;
 
 	sMvPkt->size = bw.writeSize();
 	sMvPkt->type = PacketType::S_Move;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+SendBuffer* PacketManager::makeSMouseMovePacket(uint16 playerId, float yawRad) {
+	auto sendBuffer = SendBufferManager::open(sizeof(SMouseMovePacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto sMouseMvPkt = bw.reserve<SMouseMovePacket>();
+	sMouseMvPkt->playerId = playerId;
+	sMouseMvPkt->yawRadian = yawRad;
+
+	sMouseMvPkt->size = bw.writeSize();
+	sMouseMvPkt->type = PacketType::S_MouseMove;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;
