@@ -1,6 +1,8 @@
 ﻿#ifndef send_buffer_hpp
 #define send_buffer_hpp
 
+#include "ObjectPool.hpp"
+
 /*
 * 사용자의 입장에서 볼 때, 괜찮은 인터페이스가 되지 못할 수도 있다.
 * SendBufferManager는 open할 때, thread local인 SendBufferChunk에게 메모리를 할당해준다.
@@ -15,6 +17,11 @@
 * 만약 서버의 shutdown을 정상적으로 처리하고 싶다면, manager의 open으로 얻은 SendBuffer를 손수 한땀한땀 해제해주어야 한다.
 * 
 * shared_ptr을 사용한다면 위의 문제들을 어느 정도 해결할 수 있을 것 같지만, shared_ptr의 성능이 걱정된다.
+* 
+* [ 2026.04.02 ]
+* SendBufferManager와 그에 따른 SendBufferChunk의 open 함수에서 shared_ptr을 반환하도록 수정하였다.
+* 왜냐하면 여러 session에서 같은 SendBuffer의 포인터를 참조할 수 있기 때문이다.
+* 정확히는 send 완료 후에 SendBuffer(raw pointer)를 해제할 때 double free가 발생할 수 있기 때문이다.
 */
 
 /*------------------
@@ -49,12 +56,12 @@ class SendBufferChunk {
 public:
     SendBufferChunk() : buffer_(), open_(false), usedSize_(0u) {}
 
-    SendBuffer* open(uint32 size) {
+    std::shared_ptr<SendBuffer> open(uint32 size) {
         ASSERT_CRASH(size <= chunkSize_);
         ASSERT_CRASH(!open_);
 
         open_ = true;
-        return onew<SendBuffer>(this, buffer(), size);
+		return ObjectPool<SendBuffer>::makeShared(this, buffer(), size);
     }
 
     void close(uint32 writeSize) {
@@ -88,19 +95,22 @@ private:
 */
 class SendBufferManager {
 public:
-    static SendBuffer* open(uint32 size) {
+    static std::shared_ptr<SendBuffer> open(uint32 size) {
         if (LSendBufferChunk == nullptr) {
             LSendBufferChunk = onew<SendBufferChunk>();
         }
         else if (LSendBufferChunk->freeSize() < size) {
 			LSendBufferChunk->reset();
         }
+        else {
+            // no-op
+        }
 
 		//std::cout << "Free Size: " << LSendBufferChunk->freeSize() << '\n';
         return LSendBufferChunk->open(size);
     }
 
-    static void clear() {
+    static void release() {
         if (LSendBufferChunk != nullptr) {
 			odelete(LSendBufferChunk);
 			LSendBufferChunk = nullptr;
