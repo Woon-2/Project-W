@@ -76,7 +76,7 @@ void Room::leave(GameSession* session) {
 	auto leavePkt = PacketManager::makeSLeavePacket(static_cast<uint16>(session->id()));
 	broadcast(leavePkt);
 
-	odelete(session);
+	ObjectPool<GameSession>::push(session);
 
 	if (sessions_.size() == 0) {
 		RoomManager::removeRoom(id_);
