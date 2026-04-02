@@ -112,13 +112,13 @@ void Room::rotate(int32 sessionId, CMouseMovePacket* cMouseMvPkt) {
 	ObjectPool<CMouseMovePacket>::push(cMouseMvPkt);
 }
 
-void Room::broadcast(SendBuffer* sendBuffer) {
+void Room::broadcast(const std::shared_ptr<SendBuffer>& sendBuffer) {
 	for(auto session : sessions_) {
 		session->send(sendBuffer);
 	}
 }
 
-void Room::broadcastExcept(GameSession* exceptSession, SendBuffer* sendBuffer) {
+void Room::broadcastExcept(GameSession* exceptSession, const std::shared_ptr<SendBuffer>& sendBuffer) {
 	for (auto session : sessions_) {
 		if (session == exceptSession) {
 			continue;

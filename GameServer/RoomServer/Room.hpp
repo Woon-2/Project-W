@@ -30,8 +30,8 @@ public:
 	void move(int32 sessionId, CMovePacket* cMvPkt);
 	void rotate(int32 sessionId, CMouseMovePacket* cMouseMvPkt);
 
-	void broadcast(SendBuffer* sendBuffer);
-	void broadcastExcept(GameSession* exceptSession, SendBuffer* sendBuffer);
+	void broadcast(const std::shared_ptr<SendBuffer>& sendBuffer);
+	void broadcastExcept(GameSession* exceptSession, const std::shared_ptr<SendBuffer>& sendBuffer);
 
 	void doAsync(CallbackType&& callback) {
 		jobQueue_.doAsync(std::move(callback));

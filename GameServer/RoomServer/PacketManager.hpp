@@ -13,11 +13,11 @@ public:
 	static void handleCMovePacket(GameSession* session, byte* buffer, int32 len);
 	static void handleCMouseMovePacket(GameSession* session, byte* buffer, int32 len);
 
-	static SendBuffer* makeSEnterPacket(const PlayerInfo& playerInfo, const std::vector<ObjectInfo>& objInfos);
-	static SendBuffer* makeSEnterOtherPacket(const PlayerInfo& playerInfo);
-	static SendBuffer* makeSLeavePacket(uint16 playerId);
-	static SendBuffer* makeSMovePacket(uint16 playerId, DirectX::XMFLOAT3 pos);
-	static SendBuffer* makeSMouseMovePacket(uint16 playerId, float yawRad);
+	static std::shared_ptr<SendBuffer> makeSEnterPacket(const PlayerInfo& playerInfo, const std::vector<ObjectInfo>& objInfos);
+	static std::shared_ptr<SendBuffer> makeSEnterOtherPacket(const PlayerInfo& playerInfo);
+	static std::shared_ptr<SendBuffer> makeSLeavePacket(uint16 playerId);
+	static std::shared_ptr<SendBuffer> makeSMovePacket(uint16 playerId, DirectX::XMFLOAT3 pos);
+	static std::shared_ptr<SendBuffer> makeSMouseMovePacket(uint16 playerId, float yawRad);
 };
 
 #endif // packet_manager_hpp

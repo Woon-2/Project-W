@@ -46,7 +46,7 @@ void PacketManager::handleCMouseMovePacket(GameSession* session, byte* buffer, i
 	});
 }
 
-SendBuffer* PacketManager::makeSEnterPacket(const PlayerInfo& playerInfo, const std::vector<ObjectInfo>& objInfos) {
+std::shared_ptr<SendBuffer> PacketManager::makeSEnterPacket(const PlayerInfo& playerInfo, const std::vector<ObjectInfo>& objInfos) {
 	int32 objCnt = static_cast<int32>(objInfos.size());
 	auto sendBuffer = SendBufferManager::open(sizeof(SEnterPacket) + sizeof(ObjectInfo) * objCnt);
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
@@ -73,7 +73,7 @@ SendBuffer* PacketManager::makeSEnterPacket(const PlayerInfo& playerInfo, const 
 	return sendBuffer;
 }
 
-SendBuffer* PacketManager::makeSEnterOtherPacket(const PlayerInfo& playerInfo) {
+std::shared_ptr<SendBuffer> PacketManager::makeSEnterOtherPacket(const PlayerInfo& playerInfo) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SEnterOtherPacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
@@ -87,7 +87,7 @@ SendBuffer* PacketManager::makeSEnterOtherPacket(const PlayerInfo& playerInfo) {
 	return sendBuffer;
 }
 
-SendBuffer* PacketManager::makeSLeavePacket(uint16 playerId) {
+std::shared_ptr<SendBuffer> PacketManager::makeSLeavePacket(uint16 playerId) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SLeavePacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
@@ -101,7 +101,7 @@ SendBuffer* PacketManager::makeSLeavePacket(uint16 playerId) {
 	return sendBuffer;
 }
 
-SendBuffer* PacketManager::makeSMovePacket(uint16 playerId, DirectX::XMFLOAT3 pos) {
+std::shared_ptr<SendBuffer> PacketManager::makeSMovePacket(uint16 playerId, DirectX::XMFLOAT3 pos) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SMovePacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
@@ -116,7 +116,7 @@ SendBuffer* PacketManager::makeSMovePacket(uint16 playerId, DirectX::XMFLOAT3 po
 	return sendBuffer;
 }
 
-SendBuffer* PacketManager::makeSMouseMovePacket(uint16 playerId, float yawRad) {
+std::shared_ptr<SendBuffer> PacketManager::makeSMouseMovePacket(uint16 playerId, float yawRad) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SMouseMovePacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 

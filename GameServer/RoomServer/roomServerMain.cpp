@@ -25,7 +25,7 @@ int main()
 	RoomServer server;
 	server.start();
 
-	SendBufferManager::clear();
+	SendBufferManager::release();
 	MemoryManager::release();
 	SocketUtils::release();
 }
