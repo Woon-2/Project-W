@@ -8,7 +8,6 @@ class JobQueue {
 public:
 	JobQueue() = default;
 
-	void push(Job* job, bool pushOnly = false);
 	void execute();
 
 	void doAsync(CallbackType&& callback) {
@@ -19,6 +18,9 @@ public:
 	void doAsync(T* obj, Ret(T::* memFn)(Args...), Args&&... args) {
 		push(ObjectPool<Job>::pop(obj, memFn, std::forward<Args>(args)...));
 	}
+
+private:
+	void push(Job* job, bool pushOnly = false);
 
 private:
 	ccqueue<Job*> queue_;

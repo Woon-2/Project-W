@@ -31,8 +31,18 @@ void JobQueue::execute() {
 			ObjectPool<Job>::push(jobs[i]);
 		}
 
+		// 남은 job이 0개라면 종료
 		if (jobCount_.fetch_sub(jobCount) == jobCount) {
 			LJobQueue = nullptr;
+			break;
+		}
+
+		const uint64 now = GetTickCount64();
+		if( now >= LEndTick) {
+			LJobQueue = nullptr;
+
+			// 작업을 수행해야 하는 시간이 지났다면 여유있는 스레드에게 실행을 넘긴다.
+			JobQueuePool::push(this);
 			break;
 		}
 	}
