@@ -8,5 +8,5 @@ int32 Player::id() const {
 }
 
 void Player::send(SendBuffer* sendBuffer) {
-	ownerSession_->send(sendBuffer);
+	//ownerSession_->send(sendBuffer);
 }
