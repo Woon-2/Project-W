@@ -174,6 +174,57 @@ void Game::setupStage() {
 	swordSlashConfig_.angularVelocityMin =  mu::pi * 2.0f;  // -90deg/sec
 	swordSlashConfig_.angularVelocityMax =  mu::pi * 2.0f;  //  90deg/sec
 
+	// 발 본 인덱스 탐색 (흙먼지 VFX용)
+	const auto& playerSkeleton = player_->model()->skeleton;
+	if (playerSkeleton.bones) {
+		for (const auto& bone : *playerSkeleton.bones) {
+			if (bone.name == "foot_l") {
+				footBoneIdxLeft_ = bone.boneIdx;
+			}
+			else if (bone.name == "foot_r") {
+				footBoneIdxRight_ = bone.boneIdx;
+			}
+		}
+	}
+	if (footBoneIdxLeft_ < 0 || footBoneIdxRight_ < 0) {
+		gSharedLog << "[Dust VFX] Warning: foot bones not found. Dumping all bone names:\n";
+		if (playerSkeleton.bones) {
+			for (const auto& bone : *playerSkeleton.bones) {
+				gSharedLog << "  bone[" << bone.boneIdx << "] = \"" << bone.name << "\"\n";
+			}
+		}
+	}
+
+	// 흙먼지 VFX config (smokeAnimation 재활용, 갈색 tint)
+	dustEmitterConfig_.pClip             = assetManager_.smokeAnimation();
+	dustEmitterConfig_.direction         = { 0.f, 1.f, 0.f };
+	dustEmitterConfig_.spread            = 1.2f;
+	dustEmitterConfig_.speedMin          = 0.3f;
+	dustEmitterConfig_.speedMax          = 0.8f;
+	dustEmitterConfig_.lifetimeMin       = 0.3f;
+	dustEmitterConfig_.lifetimeMax       = 0.6f;
+	dustEmitterConfig_.sizeBegin         = 0.3f;
+	dustEmitterConfig_.sizeEnd           = 0.8f;
+	dustEmitterConfig_.sizeMultiplierMin = 0.8f;
+	dustEmitterConfig_.sizeMultiplierMax = 1.2f;
+	dustEmitterConfig_.drag              = 2.0f;
+	dustEmitterConfig_.gravity           = { 0.f, -9.8f, 0.f };
+	dustEmitterConfig_.gravityModifierMin = 0.0f;
+	dustEmitterConfig_.gravityModifierMax = 0.05f;
+	dustEmitterConfig_.startColor        = { 0.55f, 0.4f, 0.25f, 0.8f };
+	dustEmitterConfig_.colorOverLifetime  = ColorGradient{
+		.keys = {
+			{ 0.0f, { 1.f, 1.f, 1.f, 0.f } },
+			{ 0.2f, { 1.f, 1.f, 1.f, 1.f } },
+			{ 1.0f, { 0.7f, 0.7f, 0.7f, 0.f } },
+		}
+	};
+	dustEmitterConfig_.startRotationMin  = 0.f;
+	dustEmitterConfig_.startRotationMax  = mu::pi * 2;
+	dustEmitterConfig_.shape             = EmitterShape::Point;
+	dustEmitterConfig_.additiveBlend     = false;
+	dustEmitterConfig_.renderOrder       = 1;
+
 	// 전투 시스템에 참가자 등록
 	// 플레이어: 공격 hitbox 및 데미지 설정 (AI 쿨타임은 사용하지 않음)
 	combatSystem_.registerCombatant(player_.get(),   { {1.5f, 1.5f, 1.5f}, 1.0f, 30, 500ms  });
@@ -625,10 +676,60 @@ void Game::update(Milliseconds deltaTime) {
 	// 애니메이션 업데이트
 	animSystem_.update(0.016s);
 
+	// 발 흙먼지 방출
+	if (footBoneIdxLeft_ >= 0 && footBoneIdxRight_ >= 0
+		&& player_->renderState().animBlender) {
+		auto* animBlender = static_cast<AnimBlenderPlayer*>(
+			player_->renderState().animBlender.get());
+
+		if (animBlender->isRunning()) {
+			const auto duration = animBlender->runDuration();
+			const auto currTime = animBlender->runAnimTime();
+			const float currPhase = currTime / duration;
+			const float prevPhase = prevAnimTimeRun_ / duration;
+
+			constexpr float kLeftFootContact  = 0.0f;
+			constexpr float kRightFootContact = 0.5f;
+
+			auto crossedPhase = [&](float phase) -> bool {
+				if (currPhase >= prevPhase) {
+					return prevPhase < phase && currPhase >= phase;
+				} else {
+					return prevPhase < phase || currPhase >= phase;
+				}
+			};
+
+			const auto& skeleton = player_->model()->skeleton;
+			const auto& boneXforms = animBlender->finalXformData();
+			const auto& world = player_->renderState().world;
+
+			auto getBoneWorldPos = [&](int boneIdx) -> mu::Vec3 {
+				const auto& bone = skeleton.bones->at(boneIdx);
+				const mu::Mat4x4 boneToWorld = bone.toDress
+					* boneXforms[boneIdx] * world;
+				return mu::Vec3(mu::Vec4(0.f, 0.f, 0.f, 1.f) * boneToWorld);
+			};
+
+			if (crossedPhase(kLeftFootContact)) {
+				dustEmitterConfig_.position = getBoneWorldPos(footBoneIdxLeft_);
+				dustParticleSystem_.emit(dustEmitterConfig_, 4);
+			}
+			if (crossedPhase(kRightFootContact)) {
+				dustEmitterConfig_.position = getBoneWorldPos(footBoneIdxRight_);
+				dustParticleSystem_.emit(dustEmitterConfig_, 4);
+			}
+
+			prevAnimTimeRun_ = currTime;
+		} else {
+			prevAnimTimeRun_ = 0s;
+		}
+	}
+
 	// 파티클
 	flameParticleSystem_.update( deltaTime );
 	smokeParticleSystem_.update( deltaTime );
 	swordSlashSystem_.update( deltaTime );
+	dustParticleSystem_.update( deltaTime );
 
 	// UI 동기화
 	// playerHpUI_.setHp(player_->hp());
@@ -655,6 +756,7 @@ void Game::render() {
 	flameParticleSystem_.render( gfx_ );
 	smokeParticleSystem_.render( gfx_ );
 	swordSlashSystem_.render( gfx_ );
+	dustParticleSystem_.render( gfx_ );
 
 	playerHpUI_.render( gfx_ );
 

@@ -135,6 +135,12 @@ private:
 	MeshParticleSystem  swordSlashSystem_{};
 	MeshEmitterConfig   swordSlashConfig_{};
 
+	ParticleSystem dustParticleSystem_{};
+	EmitterConfig  dustEmitterConfig_{};
+	int            footBoneIdxLeft_  = -1;
+	int            footBoneIdxRight_ = -1;
+	Seconds        prevAnimTimeRun_  = 0s;
+
 	LONG mouseDeltaX_{};
 	LONG mouseDeltaY_{};
 	bool cursorCaptureEnabled_ = false;

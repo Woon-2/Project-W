@@ -25,6 +25,10 @@ public:
 
 	IEventBus* eventBus() override { return &eventBus_; }
 
+	Seconds runAnimTime() const { return animTimeRun_; }
+	Seconds runDuration() const { return targetClip("Player_Run_Forward")->duration; }
+	bool isRunning() const { return (tRunForward_ + tRunBackward_ + tRunLeft_ + tRunRight_) > 0.f; }
+
 private:
 	std::vector<AnimFrame> framesBlended_{};
 	EventBus eventBus_{};
