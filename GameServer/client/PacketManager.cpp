@@ -92,7 +92,7 @@ void PacketManager::handleSMouseMovePacket(byte* buffer, int32 len) {
 	game->rotatePlayer(sMouseMvPkt->playerId, sMouseMvPkt->yawRadian);
 }
 
-SendBuffer* PacketManager::makeCMovePacket(DirectX::XMFLOAT3 pos) {
+std::shared_ptr<SendBuffer> PacketManager::makeCMovePacket(DirectX::XMFLOAT3 pos) {
 	auto sendBuffer = SendBufferManager::open(sizeof(CMovePacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
@@ -106,7 +106,7 @@ SendBuffer* PacketManager::makeCMovePacket(DirectX::XMFLOAT3 pos) {
 	return sendBuffer;
 }
 
-SendBuffer* PacketManager::makeCMouseMovePacket(float yawRad) {
+std::shared_ptr<SendBuffer> PacketManager::makeCMouseMovePacket(float yawRad) {
 	auto sendBuffer = SendBufferManager::open(sizeof(CMouseMovePacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 

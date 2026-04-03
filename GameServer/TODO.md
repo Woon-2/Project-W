@@ -191,7 +191,7 @@
 
 
 [문제 상황과 해결 사례]
------------------------- 2026.03.31 / 화요일 ------------------------
+2026.03.31 / 화요일
 클라이언트 버그
   1. 마우스 회전에 따른 플레이어 회전 패킷과 플레이어 이동 패킷을 분리하면서 send를 2번하게 되면서 문제가 발생함.
       send를 2번하게 될 때의 문제는
@@ -221,48 +221,21 @@
       SocketUtils::release 함수를 ServerSession의 소멸자에 넣으면서 생명 주기에 의존성을 부여함.
       그러는 김에 일관성 있게 SendBufferManager::clear(), MemoryManager::release()도 같이 넣어줌.
 
+      2026.04.02 / 목요일
+      그럼에도 문제가 발생하여 gClose라는 전역 bool 변수를 두었음. SocketUtils::release()가 호출되기 이전에 gClose를 true로 바꾸도록 함.
+      그리고 Overlapped I/O Callback 함수에서는 gClose가 true인지 항상 체크하도록 수정함.
+      WSACleanup이 호출되고 나서는 Callback 함수로 전달되는 overlapped 구조체를 신뢰할 수 없기 때문에 전역 변수를 사용함.
 
-**아직 서버도 버그 있음. 피곤해서 기억이 잘 안나는 데 대충 위의 문제와 같은 문제 하나 그리고 플레이어가 3명 들어오면 터지는 문제 하나
+2026.04.02 / 목요일
+서버 엔진 버그
+  1. Session 클래스의 processSend에서 SendBuffer에 대해 할당받은 메모리 해제 시 프로그램 다운
+      SendBuffer*는 SendBufferManager::open()이 반환한 단일 포인터인데, room 서버의 broadcast/broadcastExcept에서 여러 세션의 큐에 그대로 넣음.
+      각 세션이 IOCP completion 후 processSend에서 odelete(sendbuffer)를 호출하므로, 두 번째 호출 시점에는 MemoryHeader의 allocSize가 이미 0으로 초기화된 상태임.
+    
+    해결 방법
+      SendBufferManager::open()이 SendBuffer에 대한 raw pointer가 아닌 std::shared_ptr를 반환하도록 수정함으로써 모든 세션이 전송을 완료한 후 한 번만 해제되도록 함.
 
-핵심적인 버그를 찾았습니다.                                                                                                                                                          
-                                                                                                                                                                                       
-  allocSize == 0 발생 경로                                                                                                                                                             
-                                                                                                                                                                                         원인: broadcast에서의 이중 해제 (Double Free)                                                                                                                                                                                                                                                                                                                               
-  흐름:                                                                                                                                                                                
 
-  1단계 — MemoryPool::push()에서 allocSize를 0으로 초기화 (MemoryPool.cpp:9)
-  void MemoryPool::push(MemoryHeader* header) {
-      header->allocSize = 0;  // 풀에 반환 시 0으로 설정
-      ...
-  }
 
-  2단계 — Room::broadcast / broadcastExcept에서 동일한 SendBuffer* 포인터를 여러 세션에 전달 (Room.cpp:115-128)
-  void Room::broadcast(SendBuffer* sendBuffer) {
-      for(auto session : sessions_) {
-          session->send(sendBuffer);  // 같은 포인터를 N개 세션의 sendQueue_에 enqueue
-      }
-  }
 
-  3단계 — 각 세션의 processSend에서 독립적으로 odelete(sb) 호출 (Session.cpp:179)
-  for (auto sb : sendEv_.sendBuffers_) {
-      if (sb == nullptr) break;
-      odelete(sb);  // 세션마다 같은 포인터를 delete!
-  }
-
-  4단계 — 결과
-
-  ┌──────────────┬────────────────────────────────────┬──────────────────────────────────────┐
-  │     순서     │                세션                │     deallocate 시점의 allocSize      │
-  ├──────────────┼────────────────────────────────────┼──────────────────────────────────────┤
-  │ 첫 번째 세션 │ 정상 해제 → push() → allocSize = 0 │ 유효한 값                            │
-  ├──────────────┼────────────────────────────────────┼──────────────────────────────────────┤
-  │ 두 번째 세션 │ 이미 풀에 반환된 헤더를 읽음       │ 0 → ASSERT_CRASH(allocSize > 0) 발동 │
-  └──────────────┴────────────────────────────────────┴──────────────────────────────────────┘
-
-  ---
-  요약
-
-  SendBuffer*는 SendBufferManager::open()이 반환한 단일 포인터인데, broadcast/broadcastExcept에서 여러 세션의 큐에 그대로 넣습니다. 각 세션이 IOCP completion 후 processSend에서       
-  odelete(sb)를 호출하므로, 두 번째 호출 시점에는 헤더의 allocSize가 이미 0으로 초기화된 상태입니다.
-
-  해결 방향은 broadcast 시 SendBuffer에 레퍼런스 카운팅 (예: std::shared_ptr 또는 커스텀 ref count)을 도입해서 모든 세션이 전송을 완료한 후 한 번만 해제되도록 해야 합니다.
+**서버 엔진쪽 코드에서 모든 register... 함수에서 send event의 setOwner를 그때마다 해줘야할까? 그냥 한 번 등록하면 되는 거 아닌가?

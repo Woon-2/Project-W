@@ -13,8 +13,8 @@ public:
 	static void handleSMovePacket(byte* buffer, int32 len);
 	static void handleSMouseMovePacket(byte* buffer, int32 len);
 
-	static SendBuffer* makeCMovePacket(DirectX::XMFLOAT3 pos);
-	static SendBuffer* makeCMouseMovePacket(float yawRad);
+	static std::shared_ptr<SendBuffer> makeCMovePacket(DirectX::XMFLOAT3 pos);
+	static std::shared_ptr<SendBuffer> makeCMouseMovePacket(float yawRad);
 };
 
 #endif // client_packet_manager_hpp

@@ -4,12 +4,7 @@
 #include "MemoryManager.hpp"
 #include "PacketManager.hpp"
 
-ServerSession::~ServerSession() {
-	SocketUtils::closeSocket(sock_);
-	SendBufferManager::clear();
-	MemoryManager::release();
-	SocketUtils::release();
-}
+extern bool gClose;
 
 bool ServerSession::connect() {
 	if (::connect(sock_, reinterpret_cast<const SOCKADDR*>(&netAddr_.sockAddr()), sizeof(SOCKADDR_IN)) == SOCKET_ERROR) {
@@ -85,12 +80,8 @@ void ServerSession::registerSend() {
 		if (error != WSA_IO_PENDING) {
 			std::cout << "WSASend failed with error: " << error << '\n';
 
-			for(auto sendBuf : sendOver_.sendBuffers) {
-				odelete(sendBuf);
-			}
 			sendOver_.sendBuffers.clear();
 			sending_ = false;
-
 			connected_ = false;
 		}
 	}
@@ -145,9 +136,6 @@ void ServerSession::processPacket(byte* buffer, int32 len) {
 }
 
 void ServerSession::processSend(int32 numBytes) {
-	for (auto sendBuf : sendOver_.sendBuffers) {
-		odelete(sendBuf);
-	}
 	sendOver_.sendBuffers.clear();
 	sending_ = false;
 
@@ -155,21 +143,13 @@ void ServerSession::processSend(int32 numBytes) {
 		std::cout << "Connection closed by the server during send.\n";
 		connected_ = false;
 	}
-
-	/*if (numBytes > 0) {
-		for (auto sendBuf : sendOver_.sendBuffers) {
-			odelete(sendBuf);
-		}
-		sendOver_.sendBuffers.clear();
-		sending_ = false;
-	}
-	else {
-		std::cout << "Connection closed by the server during send.\n";
-		connected_ = false;
-	}*/
 }
 
 void CALLBACK ServerSession::completionCallback(DWORD error, DWORD numBytes, LPWSAOVERLAPPED overlapped, DWORD flags) {
+	if (gClose) {
+		return;
+	}
+
 	auto overEx = reinterpret_cast<OverlappedEx*>(overlapped);
 	auto session = overEx->owner;
 
@@ -177,9 +157,6 @@ void CALLBACK ServerSession::completionCallback(DWORD error, DWORD numBytes, LPW
 		std::cout << "I/O operation failed with error: " << error << '\n';
 
 		if(overEx->type == IoType::Send) {
-			for (auto sendBuf : overEx->sendBuffers) {
-				odelete(sendBuf);
-			}
 			overEx->sendBuffers.clear();
 			session->sending_ = false;
 		}

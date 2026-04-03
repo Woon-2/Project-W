@@ -17,7 +17,7 @@ class ServerSession {
 		WSAOVERLAPPED over{};
 		IoType type{};
 		ServerSession* owner{nullptr};
-		std::vector<SendBuffer*> sendBuffers{};	// Send일 때만 유효
+		std::vector<std::shared_ptr<SendBuffer>> sendBuffers{};	// Send일 때만 유효
 
 		void clear() {
 			ZeroMemory(&over, sizeof(WSAOVERLAPPED));
@@ -37,10 +37,12 @@ public:
 		sendOver_.owner = this;
 	}
 
-	~ServerSession();
+	~ServerSession() {
+		SocketUtils::closeSocket(sock_);
+	}
 
 	bool connect();
-	void addSendBuffer(SendBuffer* sendBuffer) { pendingSendBuffers_.push_back(sendBuffer); }
+	void addSendBuffer(const std::shared_ptr<SendBuffer>& sendBuffer) { pendingSendBuffers_.push_back(sendBuffer); }
 	void send();
 
 	void setGame(Online::Game* game) { game_ = game; }
@@ -69,7 +71,7 @@ private:
 	RecvBuffer recvBuf_;
 
 	bool sending_;
-	std::vector<SendBuffer*> pendingSendBuffers_;
+	std::vector<std::shared_ptr<SendBuffer>> pendingSendBuffers_;
 
 	Online::Game* game_;
 };
