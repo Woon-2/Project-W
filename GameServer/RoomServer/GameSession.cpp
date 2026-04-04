@@ -26,7 +26,7 @@ void GameSession::onConnected() {
 		myRoom_ = RoomManager::makeRoom();
 	}
 	else {
-		myRoom_ = RoomManager::getRoom(RoomIdPool::currId());
+		myRoom_ = RoomManager::findRoom(RoomIdPool::currId());
 	}
 	++totalSessions;
 

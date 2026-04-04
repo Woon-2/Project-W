@@ -6,7 +6,7 @@
 
 Room* RoomManager::makeRoom() {
 	auto roomId = RoomIdPool::pop();
-	auto newRoom = ObjectPool<Room>::pop(roomId);	// room 삭제 시 object pool에 반환해야 함. 아직 처리 안 돼있음.
+	auto newRoom = ObjectPool<Room>::pop(roomId);
 
 	ASSERT_CRASH(pLevel_ != nullptr);
 	newRoom->init(pLevel_);
@@ -19,9 +19,15 @@ Room* RoomManager::makeRoom() {
 	return newRoom;
 }
 
-Room* RoomManager::getRoom(int32 roomId) {
+Room* RoomManager::findRoom(int32 roomId) {
 	std::lock_guard<std::mutex> lock(rmMtx_);
-	return roomIdMap_[roomId];
+
+	auto iter = roomIdMap_.find(roomId);
+	if (iter == roomIdMap_.end()) {
+		return nullptr;
+	}
+
+	return iter->second;
 }
 
 void RoomManager::removeRoom(int32 roomId) {

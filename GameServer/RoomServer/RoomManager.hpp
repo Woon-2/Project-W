@@ -11,7 +11,7 @@ struct Model;
 class RoomManager {
 public:
 	static Room* makeRoom();
-	static Room* getRoom(int32 roomId);
+	static Room* findRoom(int32 roomId);
 	static void removeRoom(int32 roomId);
 
 	static void setLevelData(const Level* pLevel) { pLevel_ = pLevel; }
