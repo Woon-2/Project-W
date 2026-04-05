@@ -12,8 +12,7 @@ struct PhysicState {
 	mu::NQuat orient{};
 	mu::Vec3 scale{};
 
-	std::vector<AABB> aabbs{};
-	std::vector<BoundingRect> boundingRects{};
+	BVH bvh{};
 };
 
 struct Model;
@@ -65,6 +64,10 @@ public:
 	mu::Vec3 up() const { return up_; }
 
 	PhysicState& physicState() { return physicState_; }
+
+	// 지정한 PhysicState의 pos/scale/orient를 기반으로 BVH를 world-space로 재빌드한다.
+	// PhysicSystem 등 외부 시스템에서 직접 pos를 수정한 뒤 호출한다.
+	void rebuildBVH(PhysicState& state) const;
 
 	// 재질 집합 인덱스를 설정한다.
 	void setMaterialSetIdx(uint32 idx) { materialSetIdx_ = idx; }

@@ -11,6 +11,7 @@
 
 #include <fstream>
 #include <filesystem>
+#include <variant>
 
 #include "log.hpp"
 #include "errorHandling.hpp"

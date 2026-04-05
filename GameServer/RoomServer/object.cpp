@@ -13,26 +13,7 @@ void Object::setModel(const Model* pModel){
 	}
 
 	pModel_ = pModel;
-
-	physicState_.aabbs.resize(pModel->aabbs.size());
-	for (std::size_t i = 0u; i < physicState_.aabbs.size(); ++i) {
-		physicState_.aabbs[i].center
-			= pModel->aabbs[i].center * physicState_.scale
-			+ physicState_.pos;
-		physicState_.aabbs[i].size
-			= pModel->aabbs[i].size * physicState_.scale;
-	}
-
-	const auto pos2D = mu::Vec2(physicState_.pos.x(), physicState_.pos.z());
-	const auto scale2D = mu::Vec2(physicState_.scale.x(), physicState_.scale.z());
-
-	physicState_.boundingRects.resize(pModel->boundingRects.size());
-	for (std::size_t i = 0u; i < physicState_.boundingRects.size(); ++i) {
-		physicState_.boundingRects[i].center
-			= pModel->boundingRects[i].center * scale2D + pos2D;
-		physicState_.boundingRects[i].size
-			= pModel->boundingRects[i].size * scale2D;
-	}
+	rebuildBVH(physicState_);
 }
 
 // 물리 시뮬레이션과 별개로 게임 객체의
@@ -42,32 +23,13 @@ void Object::update(Milliseconds deltaTime) {
 }
 
 // 게임 객체의 위치를 갱신한다.
-// PhysicState의 AABB와 Bounding Rect 역시 갱신된다.
+// 이전 PhysicState와 현재 PhysicState의 위치가 모두 갱신된다.
+// 각 PhysicState의 충돌체(volumes) 역시 갱신된다.
 void MU_CALLCONV Object::setPos(mu::Vec3 newPos) {
 	physicState_.pos = newPos;
 
-	if (!pModel_) {
-		return;
-	}
-
-	physicState_.aabbs.resize(pModel_->aabbs.size());
-	for (std::size_t i = 0u; i < physicState_.aabbs.size(); ++i) {
-		physicState_.aabbs[i].center
-			= pModel_->aabbs[i].center * physicState_.scale
-			+ physicState_.pos;
-		physicState_.aabbs[i].size
-			= pModel_->aabbs[i].size * physicState_.scale;
-	}
-
-	const auto pos2D = mu::Vec2(physicState_.pos.x(), physicState_.pos.z());
-	const auto scale2D = mu::Vec2(physicState_.scale.x(), physicState_.scale.z());
-
-	physicState_.boundingRects.resize(pModel_->boundingRects.size());
-	for (std::size_t i = 0u; i < physicState_.boundingRects.size(); ++i) {
-		physicState_.boundingRects[i].center
-			= pModel_->boundingRects[i].center * scale2D + pos2D;
-		physicState_.boundingRects[i].size
-			= pModel_->boundingRects[i].size * scale2D;
+	if (pModel_ && !pModel_->bvh.empty()) {
+		rebuildBVH(physicState_);
 	}
 }
 
@@ -78,46 +40,94 @@ void MU_CALLCONV Object::setVelocity(mu::Vec3 newVelocity) {
 }
 
 // 게임 객체의 각속도를 갱신한다.
+// 이전 PhysicState와 현재 PhysicState의 각속도가 모두 갱신된다.
 void MU_CALLCONV Object::setOmega(mu::Vec3 newOmega) {
 	physicState_.omega = newOmega;
 }
 
 // 게임 객체의 방향을 갱신한다.
+// 이전 PhysicState와 현재 PhysicState의 방향이 모두 갱신된다.
 // 게임 객체의 방향 벡터들도 전부 갱신된다.
 void MU_CALLCONV Object::setOrient(mu::NQuat newOrient) {
 	physicState_.orient = newOrient;
 	right_ = physicState_.orient.rotate(mu::Vec3(1.f, 0.f, 0.f));
 	up_ = physicState_.orient.rotate(mu::Vec3(0.f, 1.f, 0.f));
 	forward_ = physicState_.orient.rotate(mu::Vec3(0.f, 0.f, 1.f));
+
+	// BVH nodes with OBB shapes track orientation and must be rebuilt.
+	if (pModel_ && !pModel_->bvh.empty()) {
+		rebuildBVH(physicState_);
+	}
 }
 
 // 게임 객체의 크기를 갱신한다.
-// PhysicState의 AABB와 Bounding Rect 역시 갱신된다.
+// 이전 PhysicState와 현재 PhysicState의 크기가 모두 갱신된다.
+// 각 PhysicState의 AABB 역시 갱신된다.
 void MU_CALLCONV Object::setScale(mu::Vec3 newScale) {
 	physicState_.scale = newScale;
 
-
-	if (!pModel_) {
-		return;
+	if (pModel_ && !pModel_->bvh.empty()) {
+		rebuildBVH(physicState_);
 	}
+}
 
-	physicState_.aabbs.resize(pModel_->aabbs.size());
-	for (std::size_t i = 0u; i < physicState_.aabbs.size(); ++i) {
-		physicState_.aabbs[i].center
-			= pModel_->aabbs[i].center * physicState_.scale
-			+ physicState_.pos;
-		physicState_.aabbs[i].size
-			= pModel_->aabbs[i].size * physicState_.scale;
-	}
+// Rebuilds the world-space BVH in `state` from the model's local-space BVH template.
+// Tree structure (children indices) is preserved; only shape/bounds values are transformed.
+//
+// For bone-attached nodes (boneIdx >= 0) with an active animBlender:
+//   boneToWorld = bone.toDress * finalXformData()[boneIdx] * objWorldMat
+//   (bone local -> dress -> animated dress -> world; same chain as equipment socket rendering)
+//   center is transformed as a homogeneous point; result is always OBB.
+//
+// For root-only nodes (boneIdx == -1) or when no animBlender is present:
+//   AABB: apply pos + scale.
+//   OBB:  apply pos + scale + orient (composed with local OBB orient).
+void Object::rebuildBVH(PhysicState& state) const {
+	if (!pModel_ || pModel_->bvh.empty()) return;
 
-	const auto pos2D = mu::Vec2(physicState_.pos.x(), physicState_.pos.z());
-	const auto scale2D = mu::Vec2(physicState_.scale.x(), physicState_.scale.z());
+	const auto& localBVH = pModel_->bvh;
 
-	physicState_.boundingRects.resize(pModel_->boundingRects.size());
-	for (std::size_t i = 0u; i < physicState_.boundingRects.size(); ++i) {
-		physicState_.boundingRects[i].center
-			= pModel_->boundingRects[i].center * scale2D + pos2D;
-		physicState_.boundingRects[i].size
-			= pModel_->boundingRects[i].size * scale2D;
+	// Object world matrix (same formula as renderState_.world, physics-state based)
+	const mu::Mat4x4 objWorld = mu::Mat4x4(mu::scale(state.scale))
+		* mu::Mat4x4(state.orient)
+		* mu::translate(state.pos);
+
+	state.bvh.nodes.resize(localBVH.nodes.size());
+	for (std::size_t i = 0; i < localBVH.nodes.size(); ++i) {
+		const auto& src = localBVH.nodes[i];
+		auto& dst = state.bvh.nodes[i];
+
+		dst.children = src.children;
+		dst.name = src.name;
+		dst.boneIdx = src.boneIdx;
+
+		const bool useBone = false;
+
+
+		dst.shape = std::visit([&](auto&& s) -> std::variant<AABB, OBB> {
+			using T = std::decay_t<decltype(s)>;
+			if constexpr (std::is_same_v<T, AABB>) {
+				return AABB{
+					s.center * state.scale + state.pos,
+					s.size * state.scale,
+				};
+			}
+			else {
+				mu::NQuat worldOrient = state.orient;
+				worldOrient *= s.orient;
+				return OBB{
+					state.orient.rotate(s.center * state.scale) + state.pos,
+					s.halfExtents * state.scale,
+					worldOrient,
+				};
+			}
+			}, src.shape);
+
+
+		dst.bounds = std::visit([](auto&& s) -> AABB {
+			using T = std::decay_t<decltype(s)>;
+			if constexpr (std::is_same_v<T, OBB>) return obbToAABB(s);
+			else                                   return s;
+			}, dst.shape);
 	}
 }
