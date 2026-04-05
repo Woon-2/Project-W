@@ -1,4 +1,4 @@
-#ifndef room_hpp
+ï»¿#ifndef room_hpp
 #define room_hpp
 
 #include "IdPool.hpp"
@@ -60,9 +60,11 @@ private:
 	std::unordered_map<int32, GameSession*> idSessionMap_;
 	JobQueue jobQueue_;
 
-	std::vector<Cube> cubes_;			// µ¥ÀÌÅÍ
-	std::vector<Player> playerStarts_;	// µ¥ÀÌÅÍ
-	std::vector<Goblin> goblins_;		// °ÔÀÓ ³»ÀÇ ¸ó½ºÅÍ
+	void updateGoblinAI(float dt);
+
+	std::vector<Cube> cubes_;			// ë°ì´í„°
+	std::vector<Player> playerStarts_;	// ë°ì´í„°
+	std::vector<Goblin> goblins_;		// ê°œì„ ë‚´ì˜ ëª¬ìŠ¤í„°
 };
 
 #endif // room_hpp

@@ -12,6 +12,7 @@
 #include <fstream>
 #include <filesystem>
 #include <variant>
+#include <random>
 
 #include "log.hpp"
 #include "errorHandling.hpp"

@@ -20,6 +20,8 @@ enum class PacketType : uint16 {
 
 	C_MouseMove,
 	S_MouseMove,
+
+	S_NpcMove,
 };
 
 enum class ObjectType : uint16 {
@@ -117,6 +119,13 @@ struct CMouseMovePacket : public PacketHeader {
 struct SMouseMovePacket : public PacketHeader {
 	uint16 playerId;
 	float yawRadian;
+};
+
+struct SNpcMovePacket : public PacketHeader {
+	uint16 npcId;
+	DirectX::XMFLOAT3 pos;
+	DirectX::XMFLOAT4 orient;
+	DirectX::XMFLOAT3 velocity;
 };
 
 #pragma pack(pop)

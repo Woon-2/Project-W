@@ -263,6 +263,14 @@ void AnimBlenderGoblin::update(Seconds deltaTime, void* pVoidOwner) {
 		animTimeIdle_ -= durationIdle;
 	}
 
+	if (tWalk_ > 0.f) {
+		animTimeWalk_ += deltaTime;
+		const auto durationWalk = targetClip("Goblin_Walk")->duration;
+		while (animTimeWalk_ > durationWalk) {
+			animTimeWalk_ -= durationWalk;
+		}
+	}
+
 	if (cooldownAttack_ > 0ms) {
 		const auto durationAttack = targetClip("Goblin_Attack")->duration;
 		animTimeAttack_ = std::min(durationAttack, animTimeAttack_ + deltaTime);

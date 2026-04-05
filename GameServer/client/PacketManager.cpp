@@ -29,6 +29,10 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 		handleSMouseMovePacket(buffer, len);
 		break;
 
+	case PacketType::S_NpcMove:
+		handleSNpcMovePacket(buffer, len);
+		break;
+
 	default:
 		std::cout << "Unknown packet type received. Type: " << static_cast<uint16>(header->type) << '\n';
 		break;
@@ -87,6 +91,11 @@ void PacketManager::handleSMovePacket(byte* buffer, int32 len) {
 
 	auto game = INet::ClientApp::onlineGame();
 	game->movePlayer(sMvPkt->playerId, sMvPkt->pos);
+}
+
+void PacketManager::handleSNpcMovePacket(byte* buffer, int32 len) {
+	auto pkt = reinterpret_cast<SNpcMovePacket*>(buffer);
+	INet::ClientApp::onlineGame()->moveGoblin(pkt->npcId, pkt->pos, pkt->orient, pkt->velocity);
 }
 
 void PacketManager::handleSMouseMovePacket(byte* buffer, int32 len) {

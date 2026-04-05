@@ -142,6 +142,8 @@ private:
 	Milliseconds reloadCooldown_{2000ms};
 };
 
+enum class GoblinAIState { Patrol, Chase, Attack, Return };
+
 class Player : public Object {
 public:
 	Player() = default;
@@ -152,6 +154,29 @@ class Goblin : public Object {
 public:
 	Goblin() = default;
 	Goblin(Object&& base) : Object(std::move(base)) {}
+
+	void setAIState(GoblinAIState s)  { aiState_ = s; }
+	GoblinAIState aiState() const      { return aiState_; }
+
+	void setSpawnPos(mu::Vec3 p)       { spawnPos_ = p; patrolTarget_ = p; }
+	mu::Vec3 spawnPos() const          { return spawnPos_; }
+
+	void setPatrolTarget(mu::Vec3 p)   { patrolTarget_ = p; }
+	mu::Vec3 patrolTarget() const      { return patrolTarget_; }
+
+	float aggroRange()   const { return aggroRange_; }
+	float deaggroRange() const { return deaggroRange_; }
+	float attackRange()  const { return attackRange_; }
+	float moveSpeed()    const { return moveSpeed_; }
+
+private:
+	GoblinAIState aiState_     = GoblinAIState::Patrol;
+	mu::Vec3      spawnPos_    {};
+	mu::Vec3      patrolTarget_{};
+	float         aggroRange_   = 15.f;
+	float         deaggroRange_ = 20.f;
+	float         attackRange_  = 1.5f;
+	float         moveSpeed_    = 3.f;
 };
 
 class Cube : public Object {

@@ -41,6 +41,7 @@ public:
 	void removePlayer( i32t playerId );
 	void movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos);
 	void rotatePlayer(uint16 playerId, float yawRad);
+	void moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
 
 	// 게임의 업데이트는 다음 순서대로 이루어진다.
 	// 네트워크 패킷 처리(SleepEx)
@@ -100,7 +101,8 @@ private:
 	Timer* pTimer_ = nullptr;
 
 	std::shared_ptr<Cube> ground_{};
-	std::shared_ptr<Goblin> goblin_{};
+	std::vector<std::shared_ptr<Goblin>> goblins_{};
+	std::unordered_map<uint16, std::shared_ptr<Goblin>> idGoblinMap_{};
 	std::shared_ptr<Anubis> anubis_{};
 	std::shared_ptr<Bat> bat_{};
 	std::shared_ptr<Bomber> bomber_{};

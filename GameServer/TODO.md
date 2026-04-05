@@ -244,3 +244,79 @@
 ** 서버 엔진쪽 코드에서 모든 register... 함수에서 send event의 setOwner를 그때마다 해줘야할까? 그냥 한 번 등록하면 되는 거 아닌가?
 ** 추후 room을 id + generation 정보로 관리해야 하지 않을까 라는 생각이 들었다. id를 재사용한다는 점에서 그런 생각이 들었다. 이러면 room, room manager의 전체적인 구조에 변경이 필요하다.
 ** BVH -> collision 책임자
+** 고블린 걷기 애니메이션 안되어있는 거 처리함. 다른 몬스터도 안되어 있어서 처리해야 함.
+** 몬스터 ai를 크게 전체, 그룹, 개인으로 세분화해서 구현이 목표
+  일단 수정해 할 것 -> 고블린 이동할 때 진동하는 현상이 일어남.
+  애니메이션 블렌딩이 좀 이상함.
+
+  
+[Room JobQueue 동작 구조]
+
+핵심 구성요소 3가지
+
+┌──────────────────────────┬─────────────────────────────────────────────────────────────┐
+│         구성요소          │                           역할                               │
+├──────────────────────────┼─────────────────────────────────────────────────────────────┤
+│ Room::jobQueue_          │ Room별로 1개씩 있는 작업 큐                                    │
+├──────────────────────────┼─────────────────────────────────────────────────────────────┤
+│ JobQueuePool             │ 전역 lock-free 큐. 실행 대기 중인 JobQueue* 포인터들을 담음      │
+├──────────────────────────┼─────────────────────────────────────────────────────────────┤
+│ LJobQueue (thread-local) │ 현재 스레드가 실행 중인 JobQueue를 가리킴                       │
+└──────────────────────────┴─────────────────────────────────────────────────────────────┘
+
+---
+doAsync 호출부터 실행까지
+
+room->doAsync(&Room::move, ...)
+    └─ jobQueue_.push(job)
+            ├─ jobCount_.fetch_add(1)  ← atomic 카운터 증가
+            ├─ queue_.enqueue(job)
+            └─ prevCnt == 0 이었다면? (첫 번째 job → 실행 담당자 결정)
+                  ├─ LJobQueue == nullptr (현 스레드 여유있음)
+                  │       └─ execute() 직접 실행
+                  └─ LJobQueue != nullptr (현 스레드 이미 다른 큐 실행 중)
+                          └─ JobQueuePool::push(this)  ← 다른 스레드에게 위임
+
+핵심 보장: prevCnt == 0인 순간 하나의 스레드만 실행 권한을 획득 → 동시에 두 스레드가 같은 Room 큐를 실행하는 일이 없음
+
+---
+Worker 스레드 루프 (DoWork)
+
+매 64ms 슬롯마다:
+  1. reactor.dispatch(10)     ← IOCP 이벤트 처리 (패킷 수신 → room->doAsync 호출)
+  2. DoReservedJob()          ← 타이머 예약 job 분배
+  3. DoJob()                  ← JobQueuePool에서 큐 꺼내 execute()
+
+DoJob() 내부:
+while (now < LEndTick) {
+    JobQueue* jq = JobQueuePool::pop();  // 대기 중인 Room 큐 하나 꺼냄
+    jq->execute();                        // 해당 Room의 job들 실행
+}
+
+---
+execute() 내부의 "바통 넘기기"
+
+execute() {
+    LJobQueue = this;  ← "나 지금 이 큐 실행 중"
+    loop {
+        최대 100개 bulk dequeue & 실행
+        jobCount 0 되면 → LJobQueue = nullptr, 종료
+        LEndTick 초과 → LJobQueue = nullptr
+                          JobQueuePool::push(this)  ← 남은 작업 다른 스레드에 넘김
+    }
+}
+
+---
+여러 Room 큐가 서로 맞물리는 시나리오
+
+Thread A: IOCP 이벤트 처리 중 (LJobQueue = nullptr)
+  → Room1.doAsync() 호출 → prevCnt==0 → 직접 execute()
+  → 실행 중 Room2.doAsync() 호출 (LJobQueue = Room1의 큐)
+      → prevCnt==0 → LJobQueue != nullptr → JobQueuePool에 Room2 큐 push
+
+Thread B: DoJob() 루프
+  → JobQueuePool::pop() → Room2 큐 획득 → execute()
+
+- Room 간 격리: 각 Room 큐는 독립적으로 실행됨, Room 내부는 단일 스레드처럼 동작
+- 시간 공정성: 64ms 예산 초과 시 남은 작업을 Pool에 돌려놓아 다른 Room이 굶지 않도록 함
+- Lock-free: jobCount_ atomic + moodycamel concurrentqueue로 뮤텍스 없이 동작

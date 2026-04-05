@@ -111,15 +111,26 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 }
 
 void Game::createGoblin(const ObjectInfo& goblinInfo) {
-	goblin_ = std::make_shared<Goblin>();
+	auto goblin = std::make_shared<Goblin>();
 
-	goblin_->setId(goblinInfo.objectId);
-	goblin_->setPos(DirectX::XMLoadFloat3(&goblinInfo.pos));
-	goblin_->setOrient(DirectX::XMLoadFloat4(&goblinInfo.orient));
-	goblin_->setScale(DirectX::XMLoadFloat3(&goblinInfo.scale));
-	goblin_->setModel(assetManager_.modelGoblin());
-	goblin_->setAnimBlender(animSystem_, assetManager_);
-	goblin_->enableBVRendering();
+	goblin->setId(goblinInfo.objectId);
+	goblin->setPos(DirectX::XMLoadFloat3(&goblinInfo.pos));
+	goblin->setOrient(DirectX::XMLoadFloat4(&goblinInfo.orient));
+	goblin->setScale(DirectX::XMLoadFloat3(&goblinInfo.scale));
+	goblin->setModel(assetManager_.modelGoblin());
+	goblin->setAnimBlender(animSystem_, assetManager_);
+	goblin->enableBVRendering();
+
+	goblins_.push_back(goblin);
+	idGoblinMap_[goblinInfo.objectId] = goblin;
+}
+
+void Game::moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
+	auto it = idGoblinMap_.find(npcId);
+	if (it == idGoblinMap_.end()) return;
+	it->second->setPos(DirectX::XMLoadFloat3(&pos));
+	it->second->setOrient(DirectX::XMLoadFloat4(&orient));
+	it->second->physicState().evVelocity = DirectX::XMLoadFloat3(&velocity);
 }
 
 void Game::removePlayer( i32t playerId ) {
@@ -297,7 +308,9 @@ void Game::update(Milliseconds deltaTime) {
 		obj->update( deltaTime, tNet );
 	}
 
-	goblin_->update(deltaTime, tPhysicInterpolation);
+	for (auto& goblin : goblins_) {
+		goblin->update(deltaTime, tPhysicInterpolation);
+	}
 
 	camera_.update();
 	dirLight_.update(deltaTime);
@@ -349,7 +362,9 @@ void Game::render() {
 		obj->render( gfx_ );
 	}
 
-	goblin_->render(gfx_);
+	for (auto& goblin : goblins_) {
+		goblin->render(gfx_);
+	}
 
 	camera_.updateGFX(gfx_);
 	dirLight_.render(gfx_);

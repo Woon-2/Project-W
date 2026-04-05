@@ -12,6 +12,7 @@ public:
 	static void handleSLeavePacket(byte* buffer, int32 len);
 	static void handleSMovePacket(byte* buffer, int32 len);
 	static void handleSMouseMovePacket(byte* buffer, int32 len);
+	static void handleSNpcMovePacket(byte* buffer, int32 len);
 
 	static std::shared_ptr<SendBuffer> makeCMovePacket(DirectX::XMFLOAT3 pos);
 	static std::shared_ptr<SendBuffer> makeCMouseMovePacket(float yawRad);
