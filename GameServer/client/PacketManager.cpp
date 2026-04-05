@@ -52,6 +52,10 @@ void PacketManager::handleSEnterPacket(byte* buffer, int32 len) {
 			game->createOtherPlayer(objInfo);
 			break;
 
+		case ObjectType::Goblin:
+			game->createGoblin(objInfo);
+			break;
+
 		case ObjectType::Ground:
 			game->setupGround(objInfo);
 			break;

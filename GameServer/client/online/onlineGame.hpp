@@ -21,33 +21,6 @@ class SendBuffer;
 
 namespace Online {
 
-enum class MsgType : u8t {
-	None,
-	SetupPlayer,
-	SetupCube,
-	PlayerMouseMove,
-	PlayerRollback,
-	PlayerMove,
-	Fire,
-	Reload,
-	HitResult,
-	Death
-};
-
-struct Message {
-	MsgType type{MsgType::None};
-	i32t objectId;
-	i32t targetId;
-	u32t materialSetIdx;
-	mu::Vec3 pos;
-	mu::Vec3 evVelocity;
-	mu::NQuat orient;
-	mu::Vec3 scale;
-	float cameraPitch{0.f};
-	i32t currHp{0};
-	i32t bulletCnt{0};
-};
-
 class Game : public IGame {
 public:
 	// 사용자 입력을 받아 스레드 풀과 GFX 객체를 초기화한다.
@@ -64,6 +37,7 @@ public:
 	void setupGround(const ObjectInfo& groundInfo);
 	void createOtherPlayer(const ObjectInfo& otherPlayerInfo);
 	void createOtherPlayer(const PlayerInfo& otherPlayerInfo);
+	void createGoblin(const ObjectInfo& goblinInfo);
 	void removePlayer( i32t playerId );
 	void movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos);
 	void rotatePlayer(uint16 playerId, float yawRad);
@@ -79,31 +53,6 @@ public:
 	void render() override;
 	// 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
 	LRESULT receiveWndMsg( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam ) override;
-
-	//bool findPlayer(i32t playerId);
-
-	//void createOtherPlayer( i32t playerId, float x, float y, float z ) {
-	//	auto newPlayer = std::make_shared<Object>( );
-
-	//	newPlayer->setId( playerId );
-	//	newPlayer->setPos( mu::Vec3( x, y, z ) );
-	//	newPlayer->setModel( assetManager_.modelPlayer( ) );
-	//	newPlayer->setScale( 1.f );
-	//	newPlayer->enableBVRendering();
-	//	// 임시
-	//	newPlayer->setHp(100);
-	//	// newPlayer->setAmmo(30);
-
-	//	//Equipment rifle{};
-	//	//rifle.socketType = Bone::SocketType::RightHand;
-	//	//rifle.object = std::make_unique<Object>();
-	//	//// rifle.object->setModel(assetManager_.modelRifle());
-	//	//rifle.object->setScale(mu::Vec3(1.f, 1.f, 1.f));
-
-	//	//newPlayer->equip(std::move(rifle));
-
-	//	addOtherPlayer( newPlayer );
-	//}
 
 private:
 	enum class CameraMode {

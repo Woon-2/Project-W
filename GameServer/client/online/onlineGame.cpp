@@ -110,6 +110,18 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 	idPlayerMap_[otherPlayerInfo.playerId] = otherPlayer;
 }
 
+void Game::createGoblin(const ObjectInfo& goblinInfo) {
+	goblin_ = std::make_shared<Goblin>();
+
+	goblin_->setId(goblinInfo.objectId);
+	goblin_->setPos(DirectX::XMLoadFloat3(&goblinInfo.pos));
+	goblin_->setOrient(DirectX::XMLoadFloat4(&goblinInfo.orient));
+	goblin_->setScale(DirectX::XMLoadFloat3(&goblinInfo.scale));
+	goblin_->setModel(assetManager_.modelGoblin());
+	goblin_->setAnimBlender(animSystem_, assetManager_);
+	goblin_->enableBVRendering();
+}
+
 void Game::removePlayer( i32t playerId ) {
 	auto itPlayer = std::ranges::find_if(
 		otherPlayers_, [ playerId ]( const std::shared_ptr<Player>& obj ) {
@@ -285,6 +297,8 @@ void Game::update(Milliseconds deltaTime) {
 		obj->update( deltaTime, tNet );
 	}
 
+	goblin_->update(deltaTime, tPhysicInterpolation);
+
 	camera_.update();
 	dirLight_.update(deltaTime);
 	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), assetConfigs_.cascade, assetConfigs_.shadowMap);
@@ -334,6 +348,8 @@ void Game::render() {
 	for ( auto& obj : otherPlayers_ ) {
 		obj->render( gfx_ );
 	}
+
+	goblin_->render(gfx_);
 
 	camera_.updateGFX(gfx_);
 	dirLight_.render(gfx_);
