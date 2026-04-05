@@ -53,6 +53,10 @@ void importNode(std::ifstream& ifs, const AssetManager& assetManager, Level& lev
 	else if (type == "Terrain") {
 		importTerrain(ifs, assetManager, object);
 	}
+	else if (type == "GoblinSpawner") {
+		auto& g = level.goblins.emplace_back(std::move(object));
+		g.setHp(90);
+	}
 	else {
 		// no-op
 	}
