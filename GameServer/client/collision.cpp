@@ -191,7 +191,8 @@ CollisionResult collides(const BVH& bvh, const AABB& hitbox) {
 }
 
 // BVH vs BVH (used for physics body-body collision).
-// Dual-tree DFS. Returns on the first precise shape hit.
+// Dual-tree DFS. A hit is only reported when BOTH nodes are leaves, so
+// coarse parent volumes cannot produce false positives.
 CollisionResult collides(const BVH& a, const BVH& b) {
     if (a.empty() || b.empty()) return CollisionResult{ .hit = false };
 
@@ -205,15 +206,18 @@ CollisionResult collides(const BVH& a, const BVH& b) {
         const auto& na = a.nodes[ai];
         const auto& nb = b.nodes[bi];
 
+        // Fast AABB reject on subtree bounds.
         if (!collides(na.bounds, nb.bounds).hit) continue;
-
-        const auto result = collidesShapes(na.shape, nb.shape);
-        if (result.hit) return result;
 
         const bool aLeaf = na.isLeaf();
         const bool bLeaf = nb.isLeaf();
 
-        if (!aLeaf && !bLeaf) {
+        if (aLeaf && bLeaf) {
+            // Both leaf: precise shape test is definitive.
+            const auto result = collidesShapes(na.shape, nb.shape);
+            if (result.hit) return result;
+        } else if (!aLeaf && !bLeaf) {
+            // Descend into the subtree with the larger volume.
             const float volA = na.bounds.size.x() * na.bounds.size.y() * na.bounds.size.z();
             const float volB = nb.bounds.size.x() * nb.bounds.size.y() * nb.bounds.size.z();
             if (volA >= volB) {
@@ -223,7 +227,7 @@ CollisionResult collides(const BVH& a, const BVH& b) {
             }
         } else if (!aLeaf) {
             for (int ca : na.children) stack.push_back({ ca, bi });
-        } else if (!bLeaf) {
+        } else {
             for (int cb : nb.children) stack.push_back({ ai, cb });
         }
     }

@@ -11,7 +11,7 @@
 #include "../light.hpp"
 #include "../animation.hpp"
 
-#include "physics.hpp"
+#include "../physicsWorld.hpp"
 #include "combatSystem.hpp"
 
 #include "../billboard.hpp"
@@ -85,7 +85,7 @@ private:
 
 	AnimSystem animSystem_{};
 
-	PhysicSystem physicSystem_{};
+	PhysicsWorld physicsWorld_{};
 	CombatSystem combatSystem_{};
 	DebugBVView  debugBVView_{};
 	Seconds physicUpdateAcc_{0s};	// 물리 업데이트를 위한 시간 누산기
