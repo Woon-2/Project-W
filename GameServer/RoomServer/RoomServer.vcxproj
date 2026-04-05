@@ -164,7 +164,6 @@
     <ClCompile Include="object.cpp" />
     <ClCompile Include="PacketManager.cpp" />
     <ClCompile Include="physics.cpp" />
-    <ClCompile Include="Player.cpp" />
     <ClCompile Include="Room.cpp" />
     <ClCompile Include="RoomManager.cpp" />
     <ClCompile Include="RoomServer.cpp" />
@@ -190,7 +189,6 @@
     <ClInclude Include="object.hpp" />
     <ClInclude Include="PacketManager.hpp" />
     <ClInclude Include="physics.hpp" />
-    <ClInclude Include="Player.hpp" />
     <ClInclude Include="Room.hpp" />
     <ClInclude Include="RoomManager.hpp" />
     <ClInclude Include="RoomServer.hpp" />
