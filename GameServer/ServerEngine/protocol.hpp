@@ -24,8 +24,8 @@ enum class PacketType : uint16 {
 
 enum class ObjectType : uint16 {
 	Player,
+	Goblin,
 	Ground,
-
 };
 
 struct PacketHeader {

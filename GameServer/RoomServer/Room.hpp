@@ -21,9 +21,13 @@ public:
 		for (const auto& cube : cubes_) {
 			IdPool::push(cube.getId());
 		}
+		for (const auto& g : goblins_) {
+			IdPool::push(g.getId());
+		}
 	}
 
 	void init(const Level* levelData);
+	void update();
 
 	void enter(GameSession* session);
 	void leave(GameSession* session);
@@ -56,8 +60,9 @@ private:
 	std::unordered_map<int32, GameSession*> idSessionMap_;
 	JobQueue jobQueue_;
 
-	std::vector<Object> cubes_;
-	std::vector<Object> playerStarts_;
+	std::vector<Cube> cubes_;			// 데이터
+	std::vector<Player> playerStarts_;	// 데이터
+	std::vector<Goblin> goblins_;		// 게임 내의 몬스터
 };
 
 #endif // room_hpp

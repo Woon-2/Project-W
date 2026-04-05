@@ -10,6 +10,19 @@
 void Room::init(const Level* levelData) {
 	cubes_ = levelData->cubes;
 	playerStarts_ = levelData->playerStarts;
+	goblins_ = levelData->goblins;
+
+	for (auto& g : goblins_) {
+		g.setId(IdPool::pop());
+	}
+}
+
+void Room::update() {
+
+
+	doTimer(17, [this]() {	// 60fps
+		update();
+	});
 }
 
 void Room::enter(GameSession* session) {
@@ -45,15 +58,16 @@ void Room::enter(GameSession* session) {
 		objInfos.emplace_back(playerInfo);
 	}
 
-	//auto cubeInfo = ObjectInfo{
-	//	.type = ObjectType::Ground,
-	//	.objectId = static_cast<uint16>(IdPool::pop()),	// cube는 objectId가 필요하긴 하지만, 클라이언트에서 cube에 대한 패킷은 따로 없으므로 일단 IdPool에서 pop해서 사용한다. 나중에 개선 필요.
-	//	.materialSetIdx = 0,
-	//	.pos = cubes_[0].pos().getXmf(),
-	//	.orient = cubes_[0].orient().getXmf(),
-	//	.scale = cubes_[0].scale().getXmf(),
-	//};
-	//objInfos.emplace_back(cubeInfo);
+	for (const auto& g : goblins_) {
+		objInfos.push_back(ObjectInfo{
+			.type = ObjectType::Goblin,
+			.objectId = static_cast<uint16>(g.getId()),
+			.materialSetIdx = 0,
+			.pos = g.pos().getXmf(),
+			.orient = g.orient().getXmf(),
+			.scale = g.scale().getXmf(),
+		});
+	}
 
 	// 패킷 생성 후 새로 들어온 플레이어에게 전송
 	auto enterPkt = PacketManager::makeSEnterPacket(newPlayerInfo, objInfos);
