@@ -17,7 +17,7 @@ static const int32 maxRoomSessions = 4;
 GameSession::~GameSession() {
 	std::cout << "GameSession destroyed. ID: " << id() << '\n';
 	IdPool::push(id());
-	ObjectPool<Object>::push(myPlayer_);
+	ObjectPool<Player>::push(myPlayer_);
 	myPlayer_ = nullptr;
 }
 
@@ -30,7 +30,7 @@ void GameSession::onConnected() {
 	}
 	++totalSessions;
 
-	myPlayer_ = ObjectPool<Object>::pop();
+	myPlayer_ = ObjectPool<Player>::pop();
 	myPlayer_->setId(id());
 
 	myRoom_->doAsync([this]() {

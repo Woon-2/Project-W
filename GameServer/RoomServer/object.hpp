@@ -142,4 +142,22 @@ private:
 	Milliseconds reloadCooldown_{2000ms};
 };
 
+class Player : public Object {
+public:
+	Player() = default;
+	Player(Object&& base) : Object(std::move(base)) {}
+};
+
+class Goblin : public Object {
+public:
+	Goblin() = default;
+	Goblin(Object&& base) : Object(std::move(base)) {}
+};
+
+class Cube : public Object {
+public:
+	Cube() = default;
+	Cube(Object&& base) : Object(std::move(base)) {}
+};
+
 #endif // room_server_object_hpp
