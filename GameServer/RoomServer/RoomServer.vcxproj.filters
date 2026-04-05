@@ -31,6 +31,9 @@
     <Filter Include="contents\Object">
       <UniqueIdentifier>{8b615a2d-9999-4438-a197-a8621c175e75}</UniqueIdentifier>
     </Filter>
+    <Filter Include="utils\JobTimer">
+      <UniqueIdentifier>{443eabbb-1f42-406a-8d53-b05580083898}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Listener.cpp">
@@ -87,6 +90,9 @@
     <ClCompile Include="object.cpp">
       <Filter>contents\Object</Filter>
     </ClCompile>
+    <ClCompile Include="JobTimer.cpp">
+      <Filter>utils\JobTimer</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Listener.hpp">
@@ -139,6 +145,9 @@
     </ClInclude>
     <ClInclude Include="object.hpp">
       <Filter>contents\Object</Filter>
+    </ClInclude>
+    <ClInclude Include="JobTimer.hpp">
+      <Filter>utils\JobTimer</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

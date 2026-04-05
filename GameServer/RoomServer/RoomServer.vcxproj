@@ -156,6 +156,7 @@
     <ClCompile Include="collision.cpp" />
     <ClCompile Include="errorHandling.cpp" />
     <ClCompile Include="GameSession.cpp" />
+    <ClCompile Include="JobTimer.cpp" />
     <ClCompile Include="Level.cpp" />
     <ClCompile Include="Listener.cpp" />
     <ClCompile Include="log.cpp" />
@@ -181,6 +182,7 @@
     <ClInclude Include="collision.hpp" />
     <ClInclude Include="errorHandling.hpp" />
     <ClInclude Include="GameSession.hpp" />
+    <ClInclude Include="JobTimer.hpp" />
     <ClInclude Include="Level.hpp" />
     <ClInclude Include="Listener.hpp" />
     <ClInclude Include="log.hpp" />

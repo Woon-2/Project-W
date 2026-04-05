@@ -1,5 +1,5 @@
 [x] 패킷의 유효성 검사
-[x] 클라이언트 - 서버 간 이동 동기화
+[o] 클라이언트 - 서버 간 이동 동기화
     1. 클라이언트의 move 패킷 전송 주기 -> 우선 간단한 이동 동기화만 구현
         - [o] 걷기 : 50ms 주기(20Hz)
         - [x] 뛰기 : 미정
@@ -10,7 +10,7 @@
           - orientation
           - velocity
        2. mouse move 패킷 -> 아직 미구현. 하지만 플레이어가 움직이지 않고 마우스만 움직였을 때 다른 플레이어가 그 현상을 관측할 수 있어야 함.
-          - 미정
+          - 플레이어의 yaw
     
     3. 서버 검증 - 일단 패스
     4. 서버에서 클라이언트의 플레이어 상태 변경 후 다른 플레이어들에게 정보 브로트캐스트
@@ -186,7 +186,10 @@
           - `client/online/onlineGame.cpp` — `Game::movePlayer()`, `Game::update()` 원격 플레이어 루프
 
 [x] 각각의 패킷마다 유효성 검사를 할 수 있는 기능 추가
-
+[o] JobTimer 구현
+    TimerItem에 들어갈 JobData에 Room의 JobQueue를 어떻게 저장할까 고민을 했음.
+    Room의 JobQueue를 담자니 해당 큐를 소유한 Room이 소멸하고나서 예약된 작업을 수행하는 것이 위험함.
+    그래서 그냥 Room의 id를 저장하고 RoomManager에게 유효성을 확인받도록 구현함.
 
 
 
@@ -238,4 +241,5 @@
 
 
 
-**서버 엔진쪽 코드에서 모든 register... 함수에서 send event의 setOwner를 그때마다 해줘야할까? 그냥 한 번 등록하면 되는 거 아닌가?
+** 서버 엔진쪽 코드에서 모든 register... 함수에서 send event의 setOwner를 그때마다 해줘야할까? 그냥 한 번 등록하면 되는 거 아닌가?
+** 추후 room을 id + generation 정보로 관리해야 하지 않을까 라는 생각이 들었다. id를 재사용한다는 점에서 그런 생각이 들었다. 이러면 room, room manager의 전체적인 구조에 변경이 필요하다.

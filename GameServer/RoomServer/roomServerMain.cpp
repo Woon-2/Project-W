@@ -3,6 +3,7 @@
 #include "SendBuffer.hpp"
 #include "AssetManager.hpp"
 #include "RoomManager.hpp"
+#include "JobTimer.hpp"
 
 int main()
 {
@@ -25,6 +26,7 @@ int main()
 	RoomServer server;
 	server.start();
 
+	JobTimer::clear();
 	SendBufferManager::release();
 	MemoryManager::release();
 	SocketUtils::release();

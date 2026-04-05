@@ -33,6 +33,10 @@ public:
 	void broadcast(const std::shared_ptr<SendBuffer>& sendBuffer);
 	void broadcastExcept(GameSession* exceptSession, const std::shared_ptr<SendBuffer>& sendBuffer);
 
+	void pushJob(Job* job, bool pushOnly = false) {
+		jobQueue_.push(job, pushOnly);
+	}
+
 	void doAsync(CallbackType&& callback) {
 		jobQueue_.doAsync(std::move(callback));
 	}
@@ -41,6 +45,8 @@ public:
 	void doAsync(Ret(T::* memFn)(Args...), Args&&... args) {
 		jobQueue_.doAsync(this, memFn, std::forward<Args>(args)...);
 	}
+
+	void doTimer(uint64 delay, CallbackType&& callback);
 
 	int32 id() const { return id_; }
 

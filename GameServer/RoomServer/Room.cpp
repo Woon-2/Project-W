@@ -5,6 +5,7 @@
 #include "MemoryManager.hpp"
 #include "PacketManager.hpp"
 #include "Level.hpp"
+#include "JobTimer.hpp"
 
 void Room::init(const Level* levelData) {
 	cubes_ = levelData->cubes;
@@ -125,4 +126,9 @@ void Room::broadcastExcept(GameSession* exceptSession, const std::shared_ptr<Sen
 		}
 		session->send(sendBuffer);
 	}
+}
+
+void Room::doTimer(uint64 delay, CallbackType&& callback) {
+	auto job = ObjectPool<Job>::pop(std::move(callback));
+	JobTimer::addJob(delay, id_, job);
 }
