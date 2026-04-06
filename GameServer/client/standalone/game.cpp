@@ -86,13 +86,6 @@ void Game::setupStage() {
 	fishman_->enableBVRendering();
 	gargoyle_->enableBVRendering();
 
-	//playerHpUI_.setTexture( assetManager_.playerHpLine() );
-	//playerHpUI_.setTextImage( assetManager_.textPlayerHp() );
-	//playerHpUI_.setHp( player_->hp() );
-	// playerHpUI_.setAmmo( player_->ammo() );
-	playerHpUI_.setPivot( mu::Vec2(512.f, 768.f - 40.f) );
-	playerHpUI_.setScale( mu::Vec2(1024.f, 64.f) );
-	
 	setParticle();
 
 	// 전투 시스템에 참가자 등록
@@ -713,8 +706,6 @@ void Game::update(Milliseconds deltaTime) {
 	dirLight_.update(deltaTime);
 	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), assetConfigs_.cascade, assetConfigs_.shadowMap);
 
-	// playerHpUI_.update( deltaTime, gfx_, nullptr );
-
 	uiManager_.layout();
 	uiManager_.update( std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont() );
 
@@ -777,7 +768,6 @@ void Game::update(Milliseconds deltaTime) {
 	dustParticleSystem_.update( deltaTime );
 
 	// UI 동기화
-	// playerHpUI_.setHp(player_->hp());
 	if (playerHpBar_)
 		playerHpBar_->setProgress(player_->hp() / 100.f);
 
@@ -806,7 +796,6 @@ void Game::render() {
 	dustParticleSystem_.render( gfx_ );
 
 	uiManager_.render( gfx_ );
-	playerHpUI_.render( gfx_ );
 
 	auto frameDataPBR = PBRPipeline::FrameData{
 		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )

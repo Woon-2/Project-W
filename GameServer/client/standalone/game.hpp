@@ -16,7 +16,6 @@
 
 #include "../billboard.hpp"
 #include "../spriteAnimation.hpp"
-#include "../basicPlayerHpUI.hpp"
 #include "../event.hpp"
 #include "../crosshair.hpp"
 #include "../debugBVView.hpp"
@@ -127,7 +126,6 @@ private:
 
 	bool playerDead_{};
 
-	BasicPlayerHpUI playerHpUI_{};
 	TextImage textFPS_{};
 
 	UI::UIManager   uiManager_{};
