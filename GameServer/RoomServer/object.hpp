@@ -3,6 +3,8 @@
 
 #include "physics.hpp"
 
+class GameSession;
+
 struct PhysicState {
 	mu::Vec3 pos{};
 	mu::Vec3 velocity{};	// Physic System의 step 단계에서 적분될 속도
@@ -168,6 +170,9 @@ public:
 	float deaggroRange() const { return deaggroRange_; }
 	float attackRange()  const { return attackRange_; }
 	float moveSpeed()    const { return moveSpeed_; }
+
+	// AI 상태머신을 한 틱 실행한다. 리턴값은 이 틱에서의 이동 속도.
+	mu::Vec3 update(float dt, const std::vector<GameSession*>& sessions);
 
 private:
 	GoblinAIState aiState_     = GoblinAIState::Patrol;

@@ -1,6 +1,7 @@
 ﻿#include "rspch.hpp"
 #include "object.hpp"
 #include "Model.hpp"
+#include "GameSession.hpp"
 
 // 모델을 설정한다.
 // 모델에 바운딩 볼륨이 존재할 경우, 월드 공간 바운딩 볼륨을 구축한다.
@@ -20,6 +21,85 @@ void Object::setModel(const Model* pModel){
 	// 자체적인 갱신 루틴을 필요로 할 때 이 함수에 작성한다.
 void Object::update(Milliseconds deltaTime) {
 
+}
+
+mu::Vec3 Goblin::update(float dt, const std::vector<GameSession*>& sessions) {
+	// 가장 가까운 플레이어 탐색
+	GameSession* nearestSession = nullptr;
+	float nearestDist = std::numeric_limits<float>::max();
+	for (auto s : sessions) {
+		float d = (s->player()->pos() - pos()).len();
+		if (d < nearestDist) { nearestDist = d; nearestSession = s; }
+	}
+
+	mu::Vec3 velocity{};
+
+	switch (aiState_) {
+	case GoblinAIState::Patrol: {
+		if (nearestDist < aggroRange_) {
+			aiState_ = GoblinAIState::Chase;
+			break;
+		}
+		auto toTarget = patrolTarget_ - pos();
+		if (toTarget.len2() < 0.25f) {
+			static std::mt19937 rng{ std::random_device{}() };
+			std::uniform_real_distribution<float> angleDist(0.f, mu::pi * 2.f);
+			float angle = angleDist(rng);
+			patrolTarget_ = spawnPos_ + mu::Vec3(std::cos(angle) * 5.f, 0.f, std::sin(angle) * 5.f);
+		} else {
+			auto dir = mu::NVec3(toTarget);
+			velocity = mu::Vec3(dir) * moveSpeed_;
+			setPos(pos() + velocity * dt);
+			float yaw = std::atan2(dir.x(), dir.z());
+			setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yaw)));
+		}
+		break;
+	}
+	case GoblinAIState::Chase: {
+		if (nearestDist < attackRange_) {
+			aiState_ = GoblinAIState::Attack; break;
+		}
+		if (nearestDist > deaggroRange_) {
+			aiState_ = GoblinAIState::Return; break;
+		}
+		auto toPlayer = nearestSession->player()->pos() - pos();
+		auto dir = mu::NVec3(toPlayer);
+		velocity = mu::Vec3(dir) * moveSpeed_;
+		setPos(pos() + velocity * dt);
+		float yaw = std::atan2(dir.x(), dir.z());
+		setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yaw)));
+		break;
+	}
+	case GoblinAIState::Attack: {
+		if (nearestDist > attackRange_) {
+			aiState_ = GoblinAIState::Chase; break;
+		}
+		auto toPlayer = nearestSession->player()->pos() - pos();
+		float yaw = std::atan2(toPlayer.x(), toPlayer.z());
+		setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yaw)));
+		// hp 차감은 데미지 패킷 구현 후 추가 예정
+		break;
+	}
+	case GoblinAIState::Return: {
+		if (nearestDist < aggroRange_) {
+			aiState_ = GoblinAIState::Chase; break;
+		}
+		auto toSpawn = spawnPos_ - pos();
+		if (toSpawn.len2() < 0.25f) {
+			setPos(spawnPos_);
+			patrolTarget_ = spawnPos_;
+			aiState_ = GoblinAIState::Patrol; break;
+		}
+		auto dir = mu::NVec3(toSpawn);
+		velocity = mu::Vec3(dir) * moveSpeed_;
+		setPos(pos() + velocity * dt);
+		float yaw = std::atan2(dir.x(), dir.z());
+		setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yaw)));
+		break;
+	}
+	}
+
+	return velocity;
 }
 
 // 게임 객체의 위치를 갱신한다.
