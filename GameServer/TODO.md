@@ -260,13 +260,42 @@
 
 
 
+2026.04.06 / 일요일
+클라이언트 버그 (고블린 애니메이션)
+  4. 고블린 walk 애니메이션이 재생되지 않는 문제
+
+    **원인**
+    `moveGoblin()`에서 서버가 보내는 `velocity` 파라미터를 수신하지만 `physicState().evVelocity`에
+    반영하지 않음. `AnimBlenderGoblin::update()`는 `evVelocity`의 크기로 idle/walk를 판정하므로,
+    `evVelocity`가 항상 0 → walk 애니메이션이 절대 재생되지 않음.
+
+    **해결 방법** (`client/online/onlineGame.cpp` — `Game::moveGoblin()`)
+    ```
+    goblin->physicState().evVelocity = DirectX::XMLoadFloat3(&velocity);
+    ```
+
+  5. 고블린 idle↔walk 애니메이션 전환이 부자연스러운 문제
+
+    **원인**
+    `tWalk_`를 매 프레임 현재 speed에서 직접 계산해 즉시 덮어씀.
+    고블린의 `evVelocity`는 17ms 패킷 단위로 0↔3.0이 순간 점프하므로,
+    `tWalk_`도 0↔~0.98을 순간 전환 → 애니메이션이 즉시 튀는 현상 발생.
+
+    **해결 방법** (`client/object.cpp` — `AnimBlenderGoblin::update()`)
+    목표값을 구한 뒤 지수 감쇠로 부드럽게 보간:
+    ```
+    targetTWalk = clamp((speed - rangeStart) / (rangeEnd - rangeStart), 0, 1)
+    tWalk_ += (targetTWalk - tWalk_) * (1 - exp(-dt / 0.12))
+    ```
+    시상수 0.12s → idle↔walk 전환이 ~250ms에 걸쳐 자연스럽게 이루어짐.
+
 ** 서버 엔진쪽 코드에서 모든 register... 함수에서 send event의 setOwner를 그때마다 해줘야할까? 그냥 한 번 등록하면 되는 거 아닌가?
 ** 추후 room을 id + generation 정보로 관리해야 하지 않을까 라는 생각이 들었다. id를 재사용한다는 점에서 그런 생각이 들었다. 이러면 room, room manager의 전체적인 구조에 변경이 필요하다.
 ** BVH -> collision 책임자
 ** 고블린 걷기 애니메이션 안되어있는 거 처리함. 다른 몬스터도 안되어 있어서 처리해야 함.
 ** 몬스터 ai를 크게 전체, 그룹, 개인으로 세분화해서 구현이 목표
-  일단 수정해 할 것 -> 고블린 이동할 때 진동하는 현상이 일어남.
-  애니메이션 블렌딩이 좀 이상함.
+  - 고블린 이동할 때 진동하는 현상은 아직 미해결.
+  - 애니메이션 블렌딩 부자연스러운 문제 해결됨 (항목 5 참고).
 ** TU : C++에서 단일 .cpp 파일과 그것이 #include하는 헤더들을 합친 컴파일 단위를 말해.
 
   
