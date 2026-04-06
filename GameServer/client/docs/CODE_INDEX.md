@@ -37,7 +37,7 @@
 | `CollisionVolume` alias | `collision.hpp #52` | `using CollisionVolume = BVH` |
 | `collides(AABB, AABB)` | `collision.hpp #54` | AABB-AABB 교차 |
 | `collides(OBB, OBB)` | `collision.hpp #55` | 15축 SAT |
-| `collides(BVH, BVH)` | `collision.hpp #56` | BVH-BVH 재귀 교차 |
+| `collides(BVH, BVH)` | `collision.hpp #56` | BVH-BVH 재귀 교차 (leaf-leaf 쌍에서만 정밀 판정; 내부 노드는 bounds AABB fast-reject만 사용) |
 | `collides(BVH, AABB)` | `collision.hpp #57` | BVH vs 공격 hitbox |
 | `RayHit` / `RaycastAABB` | `collision.hpp #62-69` | 레이-AABB 교차 |
 | `buildAttackAABB` | `collision.hpp #71` | pos + forward + halfExtent + offsetFwd → AABB |
@@ -52,24 +52,54 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 ## 2. 물리 시뮬레이션
 
-**파일:** `client/standalone/physics.hpp` / `client/standalone/physics.cpp`
+**파일:** `client/rigidBody.hpp` / `client/rigidBody.cpp`
+**파일:** `client/physicsWorld.hpp` / `client/physicsWorld.cpp`
+**파일:** `client/constraint.hpp`
+**파일:** `client/contactConstraint.hpp` / `client/contactConstraint.cpp`
+**파일:** `client/broadPhase.hpp` / `client/broadPhase.cpp`
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
-| `CollisionManifold` struct | `physics.hpp #8-18` | 충돌 결과 (a, b, mtv, normal, contactPoint) |
-| `PhysicSystem` class | `physics.hpp #20-38` | 60Hz 고정 타임스텝 물리 |
-| `PhysicSystem::step()` | `physics.hpp #22` | 외부 호출 진입점; objects + dt 전달 |
-| `integrate()` | `physics.hpp #25` | velocity/omega 적분 |
-| `broadPhase()` | `physics.hpp #26` | AABB 기반 잠재 충돌쌍 수집 |
-| `narrowPhase()` | `physics.hpp #27` | 정밀 충돌 검사 |
-| `solveCollisions()` | `physics.hpp #28` | impulse-based 충돌 해소 |
+| `MotionType` enum | `rigidBody.hpp #9` | Kinematic / Dynamic / Static |
+| `BodyState` struct | `rigidBody.hpp #16-22` | pos, linearVel, omega, orient, scale (더블 버퍼 1개) |
+| `RigidBody` class | `rigidBody.hpp #35` | prev/curr 더블 버퍼 + worldBVH_ + Dynamic 물리 멤버 |
+| `RigidBody::advanceState()` | `rigidBody.hpp #59` | prev ← curr (step 첫 줄) |
+| `RigidBody::snapToCurrent()` | `rigidBody.hpp #63` | prev = curr (텔레포트/초기화) |
+| `RigidBody::worldBVH()` | `rigidBody.hpp #69` | 월드 공간 BVH |
+| `RigidBody::worldAABB()` | `rigidBody.hpp` | BroadPhase용 AABB (root BVH bounds 또는 단위 박스) |
+| `RigidBody::setMass()` | `rigidBody.cpp` | invMass + 기본 box 관성 초기화 |
+| `RigidBody::setInertia()` | `rigidBody.cpp` | 로컬 관성 텐서 역행렬 저장 |
+| `RigidBody::applyForce()` | `rigidBody.cpp` | force accumulator에 추가 |
+| `RigidBody::applyImpulse()` | `rigidBody.cpp` | 즉시 vel/omega 변경 |
+| `computeBoxInertia()` | `rigidBody.hpp #26` | 박스 관성 텐서 헬퍼 |
+| `computeCapsuleInertia()` | `rigidBody.hpp #27` | 캡슐 관성 텐서 헬퍼 |
+| `Constraint` (abstract) | `constraint.hpp #12` | prepare/solveVelocity/solvePosition 인터페이스 |
+| `ContactPoint` struct | `collision.hpp` | worldPos, normal(B→A), depth, acc 누적값 |
+| `ContactConstraint` class | `contactConstraint.hpp` | PGS Normal + Coulomb 마찰 impulse solver |
+| `BodyPair` struct | `broadPhase.hpp` | broad phase 결과 쌍 |
+| `BroadPhase` (abstract) | `broadPhase.hpp` | add/remove/update/queryPairs 인터페이스 |
+| `BruteForceBroadPhase` | `broadPhase.hpp` | O(n²) 참조 구현 (후보 비교용으로 보존) |
+| `SAPBroadPhase` | `broadPhase.hpp` | X축 Sort-and-Sweep, O(n log n) (기본 사용) |
+| `TerrainHeightField` struct | `terrain.hpp` | CPU-side 높이 데이터 (getHeightAt, getNormalAt) |
+| `TerrainCollider` class | `collision.hpp` | Dynamic body ↔ 지형 높이맵 contact 생성 |
+| `PhysicsWorld` class | `physicsWorld.hpp` | 시뮬레이션 진입점 |
+| `PhysicsWorld::registerBody()` | `physicsWorld.hpp` | body + onRebuildBVH 콜백 + broad phase 등록 |
+| `PhysicsWorld::unregisterBody()` | `physicsWorld.hpp` | 등록 해제 |
+| `PhysicsWorld::registerTerrain()` | `physicsWorld.hpp` | Static 지형 body + heightField 등록 |
+| `PhysicsWorld::unregisterTerrain()` | `physicsWorld.hpp` | 지형 collider 해제 |
+| `PhysicsWorld::step()` | `physicsWorld.hpp` | integrate → generateContacts → solveConstraints |
+| `PhysicsWorld::setGravity()` | `physicsWorld.hpp` | Dynamic body 중력 설정 |
+| `PhysicsWorld::interpolatePos()` | `physicsWorld.hpp` | 렌더 보간 헬퍼 (prev→curr, t) |
+| `PhysicsWorld::interpolateOrient()` | `physicsWorld.hpp` | 렌더 보간 헬퍼 (slerp) |
 
-**PhysicState** (물리 상태 데이터):
+**Object 내 물리 상태 접근:**
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
-| `PhysicState` struct | `object.hpp #436-446` | pos, velocity, omega, orient, scale, bvh |
-| `PhysicState::bvh` | `object.hpp #445` | 월드 공간 BVH (rebuildBVH로 갱신) |
+| `Object::body_` (protected) | `object.hpp` | 인라인 `RigidBody` (항상 유효) |
+| `Object::body()` | `object.hpp` | RigidBody 참조 (PhysicsWorld 등록 시 &body() 전달) |
+| `Object::worldBVH()` | `object.hpp` | `body_.worldBVH()` 위임 (CombatSystem 호환) |
+| `Object::rebuildBodyBVH()` | `object.cpp` | BVH 월드 공간 재빌드 (PhysicsWorld 콜백으로도 사용) |
 
 ---
 
@@ -180,16 +210,16 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
-| `PhysicState` struct | `object.hpp #436-446` | pos, velocity, omega, orient, scale, bvh |
-| `RenderState` struct | `object.hpp #452-460` | world, pos, orient, scale, worldBVs, animBlender, pModel |
-| `Equipment` struct | `object.hpp #462-465` | socketType + Object (장비 소켓) |
-| `Object` class | `object.hpp #477-???` | 모든 게임 오브젝트의 base |
-| `Object::update()` | `object.hpp #490` | RenderState 갱신 (물리 보간) |
-| `Object::render()` | `object.hpp #491` | GFX DrawEvent 제출 (파이프라인 선택) |
-| `Object::rebuildBVH()` | `object.hpp #504` | PhysicState BVH 월드 공간 재빌드 |
-| `Object::setPos/setCurrPos` | `object.hpp #510-513` | 위치 갱신 + BVH 재빌드 |
-| `Object::physicState()` | `object.hpp #538` | currPhysicState_ 참조 |
-| `Object::hp()` / `setHp()` | `object.hpp #566-567` | HP 접근자 |
+| `RenderState` struct | `object.hpp` | world, pos, orient, scale, worldBVs, animBlender, pModel |
+| `Equipment` struct | `object.hpp` | socketType + Object (장비 소켓) |
+| `Object` class | `object.hpp` | 모든 게임 오브젝트의 base |
+| `Object::update()` | `object.hpp` | RenderState 갱신 (물리 보간: PhysicsWorld::interpolatePos/Orient) |
+| `Object::render()` | `object.hpp` | GFX DrawEvent 제출 (파이프라인 선택) |
+| `Object::body()` | `object.hpp` | 인라인 RigidBody 참조 (PhysicsWorld 등록 시 사용) |
+| `Object::worldBVH()` | `object.hpp` | `body_.worldBVH()` 위임 (CombatSystem 호환) |
+| `Object::rebuildBodyBVH()` | `object.cpp` | BVH 월드 공간 재빌드 (setPos/setOrient 시 호출) |
+| `Object::setPos/setOrient` | `object.hpp` | body_ 위임 + rebuildBodyBVH() |
+| `Object::hp()` / `setHp()` | `object.hpp` | HP 접근자 |
 
 **구체 오브젝트 클래스:**
 
@@ -325,7 +355,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 |------|------|------|
 | `assetManager_` | `AssetManager` | 모델/애니메이션/텍스처 캐시 |
 | `animSystem_` | `AnimSystem` | 애니메이션 스케줄러 |
-| `physicSystem_` | `PhysicSystem` | 물리 적분 + 충돌 해소 |
+| `physicsWorld_` | `PhysicsWorld` | 물리 시뮬레이션 (integrate + contact + PGS solver) |
 | `combatSystem_` | `CombatSystem` | 공격 판정 / 몬스터 AI |
 | `debugBVView_` | `DebugBVView` | BV 디버그 렌더링 |
 | `physicUpdateInterval` | `Seconds` | `1s/60f` 고정 타임스텝 |
@@ -377,7 +407,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 1. `processInput()` → 입력/LButton → `combatSystem_.onPlayerAttack()`
 2. `combatSystem_.update()` → EvAttack, EvHit 생성
 3. 이벤트 처리 루프 (Hit/Death/Blood/Attack → 각 오브젝트 eventBus)
-4. `physicSystem_.step()` (고정 타임스텝 누산기 패턴)
+4. `physicsWorld_.step()` (고정 타임스텝 누산기 패턴)
 5. 각 `Object::update()` (물리 보간, RenderState 갱신)
 6. `animSystem_.update()` (timeSlice 기반 스케줄링)
 7. `Game::render()` → `gfx_.render()`

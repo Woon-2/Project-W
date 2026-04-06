@@ -153,12 +153,14 @@ static int clampIdx(int x, int N) {
 
 // Reads height.raw and builds a fully indexed grid mesh on the GPU.
 // Uses 32-bit indices to support large heightmaps (N > 256).
+// outNormalizedHeights receives normalized [0,1] height values for CPU physics use.
 static Mesh buildTerrainMesh(
     const std::filesystem::path& heightRawPath,
     const TerrainMeta& meta,
     ID3D12Device* device,
     ID3D12GraphicsCommandList* cmdList,
-    Fence& fence
+    Fence& fence,
+    std::vector<float>& outNormalizedHeights
 ) {
     const int N = meta.heightmapResolution;
 
@@ -176,6 +178,12 @@ static Mesh buildTerrainMesh(
     auto height = [&](int x, int y) -> float {
         return rawHeights[clampIdx(y, N) * N + clampIdx(x, N)] / 65535.f;
     };
+
+    // Populate CPU-side normalized heights for physics collision.
+    outNormalizedHeights.resize(static_cast<size_t>(N) * N);
+    for (int y = 0; y < N; ++y)
+        for (int x = 0; x < N; ++x)
+            outNormalizedHeights[y * N + x] = height(x, y);
 
     // --- Build vertices ---
     const float dx = (N > 1) ? meta.sizeX / (N - 1) : 0.f;
@@ -407,10 +415,18 @@ TerrainData loadTerrainFromFiles(
     terrain.sizeZ = meta.sizeZ;
     terrain.layerCount = meta.layerCount;
 
+    std::vector<float> cpuHeights;
     terrain.mesh = buildTerrainMesh(
         resolvePath(manifest.heightMapPath),
-        meta, device, cmdList, fenceToAssociate
+        meta, device, cmdList, fenceToAssociate,
+        cpuHeights
     );
+
+    terrain.heightField.resolution = meta.heightmapResolution;
+    terrain.heightField.sizeX      = meta.sizeX;
+    terrain.heightField.sizeY      = meta.sizeY;
+    terrain.heightField.sizeZ      = meta.sizeZ;
+    terrain.heightField.heights    = std::move(cpuHeights);
 
     // 4. Load splat map (take first splat; each RGBA covers 4 layers)
     if (!manifest.splatPaths.empty()) {
@@ -464,4 +480,52 @@ TerrainData loadTerrainFromFiles(
                << "world size (" << meta.sizeX << ", " << meta.sizeY << ", " << meta.sizeZ << ")\n";
 
     return terrain;
+}
+
+// ---------------------------------------------------------------------------
+// TerrainHeightField methods
+// ---------------------------------------------------------------------------
+
+float TerrainHeightField::getHeightAt(float localX, float localZ) const
+{
+    if (empty()) return 0.f;
+
+    const int N   = resolution;
+    const float fx = localX / sizeX * static_cast<float>(N - 1);
+    const float fz = localZ / sizeZ * static_cast<float>(N - 1);
+
+    const int ix = std::clamp(static_cast<int>(fx), 0, N - 2);
+    const int iz = std::clamp(static_cast<int>(fz), 0, N - 2);
+    const float tx = fx - static_cast<float>(ix);
+    const float tz = fz - static_cast<float>(iz);
+
+    const float h00 = heights[ iz      * N + ix    ];
+    const float h10 = heights[ iz      * N + ix + 1];
+    const float h01 = heights[(iz + 1) * N + ix    ];
+    const float h11 = heights[(iz + 1) * N + ix + 1];
+
+    const float h0 = h00 + (h10 - h00) * tx;
+    const float h1 = h01 + (h11 - h01) * tx;
+    return (h0 + (h1 - h0) * tz) * sizeY;
+}
+
+mu::Vec3 TerrainHeightField::getNormalAt(float localX, float localZ) const
+{
+    if (empty()) return mu::Vec3(0.f, 1.f, 0.f);
+
+    const int N  = resolution;
+    const float dx = sizeX / static_cast<float>(N - 1);
+    const float dz = sizeZ / static_cast<float>(N - 1);
+
+    const int ix = std::clamp(static_cast<int>(std::round(localX / dx)), 0, N - 1);
+    const int iz = std::clamp(static_cast<int>(std::round(localZ / dz)), 0, N - 1);
+
+    auto h = [&](int x, int y) -> float {
+        return heights[std::clamp(y, 0, N - 1) * N + std::clamp(x, 0, N - 1)];
+    };
+
+    const float gx = (dx > 0.f) ? (h(ix - 1, iz) - h(ix + 1, iz)) * sizeY / (2.f * dx) : 0.f;
+    const float gz = (dz > 0.f) ? (h(ix, iz - 1) - h(ix, iz + 1)) * sizeY / (2.f * dz) : 0.f;
+
+    return mu::normalize(mu::Vec3(gx, 1.f, gz));
 }

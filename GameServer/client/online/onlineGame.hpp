@@ -9,7 +9,7 @@
 #include "../skybox.hpp"
 #include "../light.hpp"
 #include "../AssetManager.hpp"
-#include "../standalone/physics.hpp"
+#include "../physicsWorld.hpp"
 #include "../animation.hpp"
 #include "../basicPlayerHpUI.hpp"
 #include "../event.hpp"
@@ -40,7 +40,7 @@ struct Message {
 	i32t targetId;
 	u32t materialSetIdx;
 	mu::Vec3 pos;
-	mu::Vec3 evVelocity;
+	mu::Vec3 velocity;
 	mu::NQuat orient;
 	mu::Vec3 scale;
 	float cameraPitch{0.f};
@@ -135,7 +135,7 @@ private:
 
 	AssetManager assetManager_{};
 
-	PhysicSystem physicSystem_{};
+	PhysicsWorld physicsWorld_{};
 	Seconds physicUpdateAcc_{ 0s };				// 물리 업데이트를 위한 시간 누산기
 	Seconds physicUpdateInterval{ 1s / 60.f };	// 60fps로 물리 업데이트
 

@@ -1,0 +1,28 @@
+#ifndef __Constraint_HPP
+#define __Constraint_HPP
+
+// Abstract base for all velocity-level + position-level constraints.
+// Concrete types: ContactConstraint, BallSocketJoint, HingeJoint, ConeTwistJoint.
+//
+// The PhysicsWorld::step() pipeline calls these in order:
+//   1. prepare(dt)     - cache effective masses, compute biases
+//   2. solveVelocity() - PGS velocity-level impulse (called N times)
+//   3. solvePosition() - position-level correction (called once, split impulse)
+class Constraint {
+public:
+    virtual ~Constraint() = default;
+
+    // Pre-compute cached data (effective mass, bias) for this step.
+    // Called once per step before any PGS iteration.
+    virtual void prepare(Seconds dt) = 0;
+
+    // Apply one iteration of velocity-level impulses.
+    // Called solverIterations times per step.
+    virtual void solveVelocity() = 0;
+
+    // Apply position-level correction (split impulse / pseudo-velocity).
+    // Called once per step after all velocity iterations.
+    virtual void solvePosition() = 0;
+};
+
+#endif // __Constraint_HPP

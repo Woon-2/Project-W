@@ -126,6 +126,17 @@ void MU_CALLCONV Light::updateCSMCascades(
 			radius = std::max(radius, std::sqrt(dx*dx + dy*dy + dz*dz));
 		}
 
+		// Guard against degenerate cascades (e.g. camera not yet initialised,
+		// nearV == farV, or NaN propagation from an ill-conditioned projection).
+		// A zero or NaN radius makes minX == maxX which asserts inside mu::ortho().
+		if (!std::isfinite(radius) || radius < 0.01f) {
+			cascadeViews_[i] = lightView;
+			cascadeProjs_[i] = mu::ortho(-0.5f, 0.5f, -0.5f, 0.5f, -1.f, 1.f);
+			cascadeNormalOffsets_[i] = 0.f;
+			prevFarV = farV;
+			continue;
+		}
+
 		// Texel snapping: snap sphere center XY to texel grid.
 		// worldUnitsPerTexel is now constant across frames → shadow swimming eliminated.
 		const float res              = static_cast<float>(shadowCfg.cascadeResolutions[i]);

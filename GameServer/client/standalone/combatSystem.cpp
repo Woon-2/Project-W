@@ -12,7 +12,7 @@ void CombatSystem::unregister(i32t id) {
 }
 
 bool CombatSystem::overlapsAny(const AABB& hitbox, const Object& target) {
-	const auto& bvh = target.physicState().bvh;
+	const auto& bvh = target.worldBVH();
 	if (bvh.empty()) return false;
 	return collides(bvh, hitbox).hit;
 }

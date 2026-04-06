@@ -159,9 +159,6 @@
     <ClCompile Include="standalone\game.cpp">
       <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="standalone\physics.cpp">
-      <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
-    </ClCompile>
     <ClCompile Include="online\onlineGame.cpp">
       <Filter>게임%28온라인%29\소스 파일</Filter>
     </ClCompile>
@@ -263,6 +260,17 @@
     </ClCompile>
     <ClCompile Include="ui\UIManager.cpp">
       <Filter>UI</Filter>
+    <ClCompile Include="broadPhase.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="contactConstraint.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="physicsWorld.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="rigidBody.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -392,9 +400,6 @@
     <ClInclude Include="standalone\game.hpp">
       <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="standalone\physics.hpp">
-      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
-    </ClInclude>
     <ClInclude Include="online\onlineGame.hpp">
       <Filter>게임%28온라인%29\헤더 파일</Filter>
     </ClInclude>
@@ -505,6 +510,20 @@
     </ClInclude>
     <ClInclude Include="ui\UITypes.hpp">
       <Filter>UI</Filter>
+    <ClInclude Include="broadPhase.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="constraint.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="contactConstraint.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="physicsWorld.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="rigidBody.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

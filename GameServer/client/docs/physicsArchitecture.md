@@ -1,139 +1,214 @@
-### 물리 아키텍처
-- `standalone/physics.hpp`, `collision.hpp`, `object.hpp`가 연관되었음
+### 물리 아키텍처 (Phase 1–5 완료)
 
-`PhysicSystem` - 물리 시뮬레이션을 총괄 책임지는 클래스
-`PhysicSystem::step` 함수에 의해서 물리 시뮬레이션이 실행됨
+연관 파일: `rigidBody.hpp/cpp`, `physicsWorld.hpp/cpp`, `constraint.hpp`,
+`contactConstraint.hpp/cpp`, `broadPhase.hpp/cpp`, `collision.hpp/cpp`, `object.hpp/cpp`
 
-`PhysicSystem::step`의 내부적 4단계
-- `integrate`: 속도, 각속도 등 적분 + 각 오브젝트 BVH 재빌드
-- `broadPhase`: 충돌 후보군 계산 (성능을 위함)
-- `narrowPhase`: 충돌 후보군 중 실제 충돌 대상 식별
-- `solveCollisions`: 충돌 해소 후 BVH 재빌드
+---
 
-물리 시뮬레이션은 `Object`를 상속하는 클래스 객체들을 대상으로 수행
-각 객체들의 `PhysicState`를 갱신
+## 클래스 구조
 
-성능 및 안정성을 위해 물리 시뮬레이션은 고정 간격으로 실행
+```
+PhysicsWorld
+ ├─ std::vector<Entry>             // { RigidBody*, onRebuildBVH 콜백 }
+ ├─ SAPBroadPhase                  // X축 Sort-and-Sweep, O(n log n)
+ ├─ std::optional<TerrainCollider> // 지형 충돌 (BroadPhase 우회)
+ └─ std::vector<ContactConstraint> // 매 step 재생성
 
-### 충돌체 타입 (CollisionVolume = BVH)
-파일: `collision.hpp`
+RigidBody
+ ├─ BodyState curr, prev           // 더블 버퍼 (렌더 보간용)
+ ├─ MotionType: Dynamic/Kinematic/Static
+ ├─ BVH worldBVH_
+ └─ Dynamic 전용: invMass, invInertiaLocal/World, forceAccum, torqueAccum,
+                  linearDamping, angularDamping, restitution, friction
+
+ContactConstraint : Constraint
+ └─ PGS velocity solve (Normal impulse + Coulomb friction)
+    Baumgarte bias로 위치 수정 (split impulse는 solvePosition()에서 no-op)
+```
+
+`Object`는 `RigidBody body_`를 인라인으로 소유한다. `PhysicsWorld`는 포인터만 참조 (등록/해제 패턴).
+
+---
+
+## PhysicsWorld::step() 흐름
+
+```
+integrate(dt)
+    ├─ Kinematic: damping → vel/omega snap → pos/orient 적분
+    ├─ Dynamic:   damping → force/torque 적분 → pos/orient 적분 → clearAccumulators()
+    └─ 각 body: onRebuildBVH 콜백 → worldBVH 재빌드
+
+generateContacts()
+    ├─ broadPhase_->update() + queryPairs()
+    ├─ collides(bvhA, bvhB) → leaf-leaf 쌍에서만 정밀 판정
+    ├─ ContactConstraint 생성 (법선 = center-to-center 벡터, 신뢰성 우선)
+    └─ TerrainCollider::generateContacts() → Dynamic body별 지형 contact 생성
+
+solveConstraints(dt)
+    ├─ prepare(dt)  : rA/rB, tangent frame, effMass, Baumgarte bias 계산
+    ├─ PGS × 10 iter: solveVelocity() — Normal impulse + Coulomb friction
+    └─ solvePosition(): no-op (Baumgarte only)
+```
+
+> Phase 4(TerrainCollider) 완료로 중력이 활성화됨. (`physicsWorld.cpp` integrate)
+
+---
+
+## Sequential Impulse Solver 부호 규약
+
+```
+normal     : B → A 방향 (A가 +normal로 분리됨)
+Jv         : dot(relVel_A_contact, normal)   → 양수 = 분리, 음수 = 접근
+bias       : +kBaumgarteBeta * invDt * max(0, depth - kSlop)  (양수)
+jn         : -(Jv - bias) * effMassNormal                     ← 부호 주의
+             (Jv=0, depth>0 → jn > 0 → 분리 impulse)
+accNormal  : clamp(prev + jn, 0, ∞)   (비음수, 당기는 impulse 금지)
+```
+
+**과거 버그 (수정 완료):** `jn = -(Jv + bias)` 로 되어 있어 정지한 두 물체의 jn이
+항상 음수 → clamp → 0 → 충돌 응답 없음. `+` → `-` 1자 수정으로 해결.
+
+---
+
+## RigidBody 관성 텐서 초기화 주의사항
+
+`diagMat3()` 내부에서 `mu::Mat3x3 m{}` (기본 생성자 = identity)을 사용해야 한다.
+`m(0.f)` (스칼라 곱 = 전체 0 행렬)로 초기화하면 4×4 내부 표현의 row 3이
+`(0,0,0,0)` → det=0 → `XMMatrixInverse` → NaN → `invInertiaLocal_ = NaN`
+→ `angAcc = 0 × NaN = NaN` (IEEE 754) → angular velocity 폭발.
+
+DirectXMath 기반 `mu::Mat3x3`은 항상 4×4 XMMATRIX를 내부에 사용한다.
+row 3은 `(0, 0, 0, 1)`이어야 역행렬 계산이 정상 동작한다.
+
+---
+
+## 캐릭터 Dynamic Body 설정 원칙
+
+- `MotionType::Dynamic` 사용 (Kinematic에서 전환)
+- `angularDamping = 100.f`: 매 step에서 `max(0, 1 - 100/60) = 0`으로 즉시 소거
+  → 충돌 impulse에 의한 캐릭터 회전/기울어짐 방지
+- `linearDamping`과 최대 속도의 관계:
+  ```
+  terminal_vel = accelRate / linearDamping
+  → accelRate = maxSpeed × linearDamping
+  ```
+  `kPlayerLinearDamping = 12`, `kPlayerAccelRate = kPlayerMaxSpeed × 12`
+
+---
+
+## 축별 velocity damping 분리 (`physicsWorld.cpp`)
+
+Dynamic body integrate 시 linear damping을 축별로 분리 적용한다.
+
+```
+x/z (수평): linearDamping  → 지면 마찰 (캐릭터: 12)
+y   (수직): kAirDamping    → 공기 저항 (physicsWorld.cpp 상단 상수, 현재 0.5f)
+```
+
+- **이유**: `linearDamping`은 수평 이동의 지면 마찰로 설계된 값(12)이다.
+  이를 y축에도 적용하면 종단 속도 = 9.8 / 12 ≈ 0.82 m/s로 낙하가 거의 정지 수준이 된다.
+- `kAirDamping = 0.5f` → 종단 속도 ≈ 19.6 m/s (게임 스케일에서 적절)
+- 값 조정: `terminal_fall_vel = gravity / kAirDamping`
+
+---
+
+## processInput 속도 처리 원칙 (`standalone/game.cpp`)
+
+입력으로 인한 가속과 속도 클램프는 **x/z 수평 성분에만** 적용한다.
 
 ```cpp
-using CollisionVolume = BVH;
+// 가속: x/z에만 더함, y(중력)는 보존
+float newX = fullVel.x() + accel.x();
+float newZ = fullVel.z() + accel.z();
+// 클램프: x/z 평면 속도만 kPlayerMaxSpeed 기준
+const float hSpd2 = newX*newX + newZ*newZ;
+if (hSpd2 > kPlayerMaxSpeed²) { newX *= scale; newZ *= scale; }
+player_->setVelocity(mu::Vec3(newX, fullVel.y(), newZ));
 ```
 
-`CollisionVolume`은 더 이상 `std::variant<AABB, OBB>`의 flat list가 아니라 **BVH(Bounding Volume Hierarchy)** 트리다.
+- **이유**: 낙하 중 y 속도가 크면 3D 속도 크기 기준 클램프 시 x/z가 의도치 않게 줄어듦.
 
-#### BVH 구조
+---
 
-```cpp
-struct BVHNode {
-    AABB                    bounds;      // 이 서브트리를 감싸는 AABB (fast reject)
-    std::variant<AABB, OBB> shape;       // 실제 충돌 도형 (모든 레벨)
-    std::vector<int>        children;    // 자식 인덱스 목록 (비어 있으면 리프)
-    std::string             name;        // 디버그/식별용 박스 이름
-    std::string             boneName;    // 로드 시 본 인덱스 해소에만 사용; 런타임 불필요
-    int                     boneIdx = -1; // 해소된 본 인덱스; -1 = 루트 변환만 적용
-    bool isLeaf() const { return children.empty(); }
-};
+## BVH 충돌 판정: leaf-only
 
-struct BVH {
-    std::vector<BVHNode> nodes;  // nodes[0] = root; 비어 있으면 충돌 없음
-    bool empty() const { return nodes.empty(); }
-};
-```
+`collides(BVH, BVH)`는 **leaf-leaf 쌍에서만** 정밀 shape 판정을 수행한다.
+내부 노드(LOD 0, LOD 1)의 coarse bounds는 AABB fast-reject에만 사용된다.
 
-- 최대 3레벨 N-ary 트리 (LOD 0 → LOD 1 → LOD 2)
-- 모든 노드(내부 노드 포함)가 `AABB` 또는 `OBB` shape을 가진다
-- `bounds`는 자식 전체를 감싸는 AABB로, fast reject에 사용된다
-- Unity의 `MultiBoundingVolume` 컴포넌트의 LOD 계층 구조를 그대로 반영
+이전에는 비-leaf 노드도 정밀 판정에 참여해, LOD 0끼리 겹치면 실제 bone shape은
+충돌 안 해도 collision이 발생 → angular impulse 오적용 → 무한 회전 버그가 있었다.
 
-#### LOD → BVH 변환 (`buildBVHFromLODs`, `mesh.cpp`)
+---
 
-1. LOD 0의 박스 → root 노드 (nodes[0])
-2. LOD 1 박스들 → root의 children (기하적 포함 or 최근접 LOD 0 박스에 연결)
-3. LOD 2 박스들 → 가장 가까운 LOD 1 노드의 children에 연결
-4. 내부 노드 bounds = children bounds들의 union AABB (bottom-up)
-5. LODCount == 0 → 빈 BVH
+## BVH 재빌드 시점
 
-shape 결정: `rotationEuler == (0,0,0)` → `AABB`, 그 외 → `OBB`
+- `PhysicsWorld::integrate()` 끝에서 `onRebuildBVH` 콜백 호출
+- 게임 로직의 `setPos()`, `setOrient()` 호출 시 Object가 직접 `rebuildBodyBVH()` 호출
 
-#### 본(Bone) 연결 및 임포트 시 인덱스 해소
+---
 
-각 BVHNode는 Unity에서 특정 본에 종속되어 있으며 `boneName` 필드로 저장된다.
-바이너리 로드 순서상 BVH 임포트가 스켈레톤 임포트보다 먼저 일어나므로,
-스켈레톤 임포트 직후 `resolveBVHBoneIndices()`로 이름→인덱스 해소를 별도 패스로 수행한다.
+## 충돌체 추상화 (현재)
 
-```
-importBoundingVolumes()   // BVH 로드 (boneName 저장)
-importSkeleton()          // 스켈레톤 로드
-resolveBVHBoneIndices()   // boneName → boneIdx 해소
-```
+별도 Collider 인터페이스 없이 두 경로로 충돌을 처리한다.
 
-런타임에는 `boneIdx`만 참조하며 `boneName`은 불필요하다.
+- **Body-Body**: `RigidBody::worldBVH_` dual-tree DFS (기존)
+- **Body-Terrain**: `TerrainCollider`가 `TerrainHeightField`를 직접 조회 (Phase 4 추가)
+  - Terrain body는 BroadPhase에 등록하지 않음; `PhysicsWorld::generateContacts()`에서 별도 패스로 처리
 
-### BVH 재빌드 시점
-파일: `object.cpp` — `Object::rebuildBVH(PhysicState&)`
+---
 
-- `setModel()`, `setPos()`, `setCurrPos()`, `setScale()` 호출 시
-- `setOrient()` 호출 시
-- `PhysicSystem::integrate()` 단계 후
-- `PhysicSystem::solveCollisions()` 단계 후
+## TerrainCollider
 
-#### 본 연결 노드의 월드 변환 체인
+`collision.hpp/cpp`에 정의. `collision.hpp`는 `TerrainHeightField`를 forward-declare하고,
+`collision.cpp`가 `terrain.hpp`를 include해서 완전 타입을 사용한다.
 
-mathUtil은 DirectXMath 규약을 따른다: 변환 적용 순서 A→B→C = 행렬 곱셈 순서 A*B*C.
+**알고리즘:**
+1. Dynamic body의 BVH leaf 노드에서 하단 꼭짓점들 추출
+   - AABB leaf: 4 bottom corners (y = center.y - halfSize.y)
+   - OBB leaf: 8 corners 전부 (관통 여부로 필터링)
+2. 각 꼭짓점에 대해 지형 로컬 공간으로 변환 → `getHeightAt(x, z)` 조회
+3. `depth = terrainWorldY - vertexY > 0` → ContactPoint 생성
+4. depth 내림차순 최대 4개 유지 → `ContactConstraint(dynamic, terrainBody)` 생성
 
-`bone.toDress`: bone 로컬 공간 → dress(모델 루트 로컬) 공간
-`finalXformData()[i]`: dress 공간 기준 애니메이션 변환 (내부적으로 toLocal * 누적 로컬 애니메이션)
-`objWorld`: dress 공간 → 월드 공간
+**Normal 부호 규약:** `normal = B → A` (B=terrain, A=dynamic). `getNormalAt()` 결과는
+항상 Y > 0 (위방향)이므로 terrain → dynamic 방향 = 올바른 부호.
 
-**결합 체인**: `boneToWorld = bone.toDress * finalXformData()[i] * objWorld`
-- `Vec4(localCenter, 1.f) * boneToWorld` → 월드 공간 중심점
-- halfExtents는 오브젝트 루트 scale만 적용 (bone 변환은 rigid 가정)
-- `quatRotMat(boneToWorld.get())` → 월드 회전 쿼터니언
+---
 
-이 체인은 장비 소켓 렌더링과 동일하다 (`object.cpp` — `Object::update()` 내 equipment render 참조).
+## SAPBroadPhase
 
-`boneIdx == -1` 또는 `animBlender`가 없으면 기존 루트 변환(pos + scale + orient)으로 fallback.
+`broadPhase.hpp/cpp`에 정의. Phase 5에서 `BruteForceBroadPhase`를 대체.
 
-### 공격 충돌체 (Attack Hitbox)
-파일: `collision.hpp`, `collision.cpp`
+**알고리즘 (X축 Sort-and-Sweep):**
+1. `update()`: 각 body AABB의 minX/maxX 엔드포인트 2N개 생성 → insertion sort
+   - insertion sort: 프레임 간 위치 변화가 작아 거의 정렬 → 평균 O(n)
+2. `queryPairs()`: active set sweep
+   - min endpoint 도달: active set 내 모든 body와 Y/Z overlap 검사 → 쌍 생성
+   - max endpoint 도달: active set에서 제거
+   - Static-Static 쌍 제외
 
-`buildAttackAABB(pos, forward, halfExtent, offsetFwd)` 함수로 공격 hitbox를 생성한다.
-공격 hitbox는 AABB로 유지된다.
+**Static body 처리:** `ContactConstraint::prepare()`에서 `invMass == 0`인 body의
+angular 기여를 0으로 처리 (static body의 default `invInertiaWorld_`가 identity여서
+effective mass 오산 방지). `applyImpulse()`는 이미 `invMass == 0` guard 보유.
 
-공격 충돌 판정은 PhysicSystem과 완전히 분리된 CombatSystem에서 수행된다.
-- `PhysicSystem`: 지형/오브젝트 간 물리 충돌 (MTV 기반 관통 해소)
-- `CombatSystem`: 공격 hitbox(AABB) ↔ 대상 BVH 트리 교차 판정 (데미지 이벤트 발생)
+---
 
-### 충돌 검사 함수
-파일: `collision.hpp`, `collision.cpp`
+## ContactPoint 위치
 
-- `collides(AABB, AABB)` → 3축 SAT
-- `collides(OBB, OBB)` → 15축 SAT (face normals A×3 + face normals B×3 + edge cross products×9)
-- `collides(BVH, BVH)` → dual-tree traversal (스택 기반 DFS, bounds AABB fast reject → shape 정확 판정)
-- `collides(BVH, AABB)` → 스택 기반 DFS, 히트 즉시 return (combat용)
-- `obbToAABB(OBB)` → OBB 8개 꼭짓점에서 min/max AABB 계산
+`ContactPoint` struct는 `collision.hpp`에 정의한다 (Phase 4에서 이동).
+`contactConstraint.hpp`는 `rigidBody.hpp → collision.hpp` 체인으로 이를 획득한다.
 
-#### BVH 트리 순회 알고리즘
+---
 
-**`collides(BVH, AABB)` (combat용)**:
-```
-stack에 root 인덱스 push
-반복: nodeIdx pop
-  bounds vs hitbox AABB miss → skip (early out)
-  shape vs toOBB(hitbox) 정확 판정 → hit이면 즉시 return hit
-  children들을 stack에 push
-```
+## Phase 로드맵
 
-**`collides(BVH, BVH)` (physics용, dual-tree traversal)**:
-```
-stack에 (idxA=0, idxB=0) 페어 push
-반복: 페어 pop
-  두 bounds AABB 교차 안하면 skip
-  두 shape 모두 정확 판정: hit이면 즉시 return hit
-  양쪽 모두 리프면 판정 완료
-  자식 있는 쪽을 펼쳐서 (자식 × 상대방) 페어를 stack에 push
-  양쪽 다 자식 있으면 더 큰 bounds 쪽을 펼침
-```
+| Phase | 목표 | 상태 |
+|-------|------|------|
+| 1 | PhysicsWorld + RigidBody 골격, Kinematic 이동 | 완료 |
+| 2 | Dynamic body + 힘/관성 적분 | 완료 |
+| 3 | ContactConstraint + PGS solver | 완료 |
+| 4 | TerrainCollider + 지형 충돌 (중력 활성화) | 완료 |
+| 5 | SAPBroadPhase (O(n²) → O(n log n)) | 완료 |
+| 6 | Joint Constraints (BallSocket, Hinge, ConeTwist) | 미구현 |
+| 7 | Ragdoll 구조 | 미구현 |
+| 8 | ActiveRagdollController | 미구현 |

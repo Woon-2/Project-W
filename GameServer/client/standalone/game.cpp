@@ -11,6 +11,25 @@ extern RECT gClientRect;
 
 namespace StandAlone {
 
+// ---------------------------------------------------------------------------
+// Player movement parameters — tweak these to adjust game feel.
+//
+// kPlayerLinearDamping acts as ground friction: each physics step (60 Hz)
+// velocity is multiplied by (1 - damping/60).
+//
+// For the player to sustain kPlayerMaxSpeed under constant input,
+// kPlayerAccelRate must equal kPlayerMaxSpeed * kPlayerLinearDamping.
+// (At equilibrium: added_vel_per_step == removed_vel_per_step.)
+//
+// Stop time from max speed (no input):
+//   kPlayerLinearDamping = 10  → ~0.42 s
+//   kPlayerLinearDamping = 12  → ~0.33 s  ← default
+//   kPlayerLinearDamping = 20  → ~0.20 s  (very snappy)
+// ---------------------------------------------------------------------------
+static constexpr float kPlayerMaxSpeed      = 10.f;   // m/s
+static constexpr float kPlayerLinearDamping = 12.f;   // adjust stop time
+static constexpr float kPlayerAccelRate     = kPlayerMaxSpeed * kPlayerLinearDamping;
+
 Game::Game() {
 	// 스레드 풀 초기화
 	std::cout << "----------[게임 초기화 설정]----------\n";
@@ -337,43 +356,63 @@ void Game::importNode(std::ifstream& ifs) {
 			player_ = std::make_shared<Player>(std::move(object));
 			playerSpawned_ = true;
 			importPlayerStart(ifs, *player_);
+			physicsWorld_.registerBody(&player_->body(),
+				[p = player_.get()]() { p->rebuildBodyBVH(); });
 		}
 	}
 	else if (type == "GoblinSpawner") {
 		goblin_ = std::make_shared<Goblin>(std::move(object));
 		importGoblinSpawner(ifs, *goblin_);
+		physicsWorld_.registerBody(&goblin_->body(),
+			[p = goblin_.get()]() { p->rebuildBodyBVH(); });
 	}
 	else if (type == "AnubisSpawner") {
 		anubis_ = std::make_shared<Anubis>(std::move(object));
 		importAnubisSpawner(ifs, *anubis_);
+		physicsWorld_.registerBody(&anubis_->body(),
+			[p = anubis_.get()]() { p->rebuildBodyBVH(); });
 	}
 	else if (type == "BatSpawner") {
 		bat_ = std::make_shared<Bat>(std::move(object));
 		importBatSpawner(ifs, *bat_);
+		physicsWorld_.registerBody(&bat_->body(),
+			[p = bat_.get()]() { p->rebuildBodyBVH(); });
 	}
 	else if (type == "BomberSpawner") {
 		bomber_ = std::make_shared<Bomber>(std::move(object));
 		importBomberSpawner(ifs, *bomber_);
+		physicsWorld_.registerBody(&bomber_->body(),
+			[p = bomber_.get()]() { p->rebuildBodyBVH(); });
 	}
 	else if (type == "DemonSpawner") {
 		demon_ = std::make_shared<Demon>(std::move(object));
 		importDemonSpawner(ifs, *demon_);
+		physicsWorld_.registerBody(&demon_->body(),
+			[p = demon_.get()]() { p->rebuildBodyBVH(); });
 	}
 	else if (type == "DragonSpawner") {
 		dragon_ = std::make_shared<Dragon>(std::move(object));
 		importDragonSpawner(ifs, *dragon_);
+		physicsWorld_.registerBody(&dragon_->body(),
+			[p = dragon_.get()]() { p->rebuildBodyBVH(); });
 	}
 	else if (type == "EyeballSpawner") {
 		eyeball_ = std::make_shared<Eyeball>(std::move(object));
 		importEyeballSpawner(ifs, *eyeball_);
+		physicsWorld_.registerBody(&eyeball_->body(),
+			[p = eyeball_.get()]() { p->rebuildBodyBVH(); });
 	}
 	else if (type == "FishmanSpawner") {
 		fishman_ = std::make_shared<Fishman>(std::move(object));
 		importFishmanSpawner(ifs, *fishman_);
+		physicsWorld_.registerBody(&fishman_->body(),
+			[p = fishman_.get()]() { p->rebuildBodyBVH(); });
 	}
 	else if (type == "GargoyleSpawner") {
 		gargoyle_ = std::make_shared<Gargoyle>(std::move(object));
 		importGargoyleSpawner(ifs, *gargoyle_);
+		physicsWorld_.registerBody(&gargoyle_->body(),
+			[p = gargoyle_.get()]() { p->rebuildBodyBVH(); });
 	}
 	else if (type == "Terrain") {
 		terrain_ = std::make_shared<TerrainObject>(std::move(object));
@@ -408,6 +447,12 @@ void Game::importPlayerStart(std::ifstream& ifs, Player& player) {
 	player.setHp(100);
 	player.setMaxHp(100);
 
+	player.body().setMotionType(MotionType::Dynamic);
+	player.body().setMass(80.f);
+	player.body().setLinearDamping(kPlayerLinearDamping);
+	// Prevent collision impulses from tipping/spinning the character.
+	player.body().setAngularDamping(100.f);
+
 	//Equipment rifle{};
 	//rifle.socketType = Bone::SocketType::RightHand;
 	//rifle.object = std::make_unique<Object>();
@@ -417,12 +462,21 @@ void Game::importPlayerStart(std::ifstream& ifs, Player& player) {
 	//player.equip(std::move(rifle));
 }
 
+// Helper: configure a monster body as Dynamic with shared character properties.
+static void setupMonsterBody(RigidBody& body, float mass) {
+	body.setMotionType(MotionType::Dynamic);
+	body.setMass(mass);
+	body.setLinearDamping(20.f);
+	body.setAngularDamping(100.f);  // prevent impulse-driven tipping/spinning
+}
+
 void Game::importGoblinSpawner(std::ifstream& ifs, Goblin& goblin) {
 	goblin.setModel(assetManager_.modelGoblin());
 	goblin.setAnimBlender(animSystem_, assetManager_);
 	goblin.setHp(90);
 	goblin.setMaxHp(90);
 	goblin.setId(1);
+	setupMonsterBody(goblin.body(), 40.f);
 }
 
 void Game::importAnubisSpawner(std::ifstream& ifs, Anubis& anubis) {
@@ -431,6 +485,7 @@ void Game::importAnubisSpawner(std::ifstream& ifs, Anubis& anubis) {
 	anubis.setHp(110);
 	anubis.setMaxHp(110);
 	anubis.setId(2);
+	setupMonsterBody(anubis.body(), 90.f);
 }
 
 void Game::importBatSpawner(std::ifstream& ifs, Bat& bat) {
@@ -439,6 +494,7 @@ void Game::importBatSpawner(std::ifstream& ifs, Bat& bat) {
 	bat.setHp(40);
 	bat.setMaxHp(40);
 	bat.setId(3);
+	setupMonsterBody(bat.body(), 20.f);
 }
 
 void Game::importBomberSpawner(std::ifstream& ifs, Bomber& bomber) {
@@ -447,6 +503,7 @@ void Game::importBomberSpawner(std::ifstream& ifs, Bomber& bomber) {
 	bomber.setHp(60);
 	bomber.setMaxHp(60);
 	bomber.setId(4);
+	setupMonsterBody(bomber.body(), 60.f);
 }
 
 void Game::importDemonSpawner(std::ifstream& ifs, Demon& demon) {
@@ -455,6 +512,7 @@ void Game::importDemonSpawner(std::ifstream& ifs, Demon& demon) {
 	demon.setHp(140);
 	demon.setMaxHp(140);
 	demon.setId(5);
+	setupMonsterBody(demon.body(), 100.f);
 }
 
 void Game::importDragonSpawner(std::ifstream& ifs, Dragon& dragon) {
@@ -463,6 +521,7 @@ void Game::importDragonSpawner(std::ifstream& ifs, Dragon& dragon) {
 	dragon.setHp(250);
 	dragon.setMaxHp(250);
 	dragon.setId(6);
+	setupMonsterBody(dragon.body(), 200.f);
 }
 
 void Game::importEyeballSpawner(std::ifstream& ifs, Eyeball& eyeball) {
@@ -471,6 +530,7 @@ void Game::importEyeballSpawner(std::ifstream& ifs, Eyeball& eyeball) {
 	eyeball.setHp(120);
 	eyeball.setMaxHp(120);
 	eyeball.setId(7);
+	setupMonsterBody(eyeball.body(), 30.f);
 }
 
 void Game::importFishmanSpawner(std::ifstream& ifs, Fishman& fishman) {
@@ -479,6 +539,7 @@ void Game::importFishmanSpawner(std::ifstream& ifs, Fishman& fishman) {
 	fishman.setHp(80);
 	fishman.setMaxHp(80);
 	fishman.setId(8);
+	setupMonsterBody(fishman.body(), 70.f);
 }
 
 void Game::importGargoyleSpawner(std::ifstream& ifs, Gargoyle& gargoyle) {
@@ -487,11 +548,20 @@ void Game::importGargoyleSpawner(std::ifstream& ifs, Gargoyle& gargoyle) {
 	gargoyle.setHp(160);
 	gargoyle.setMaxHp(160);
 	gargoyle.setId(9);
+	setupMonsterBody(gargoyle.body(), 120.f);
 }
 
 void Game::importTerrain(std::ifstream& ifs, TerrainObject& terrain) {
 	const auto manifestPath = readText(ifs, "ManifestPath");
 	terrain.setTerrainData(assetManager_.terrain());
+
+	// 지형 물리 바디 설정: Static body (위치는 importNode WorldTRS에서 설정됨)
+	terrain.body().setMotionType(MotionType::Static);
+
+	// TerrainCollider 등록 (BVH 불필요 — heightField 직접 조회)
+	const TerrainData* td = assetManager_.terrain();
+	if (td && !td->heightField.empty())
+		physicsWorld_.registerTerrain(&terrain.body(), &td->heightField);
 }
 
 // 게임의 업데이트는 다음 순서대로 이루어진다.
@@ -501,34 +571,8 @@ void Game::importTerrain(std::ifstream& ifs, TerrainObject& terrain) {
 // 객체별 업데이트 루틴
 // 애니메이션 업데이트
 void Game::update(Milliseconds deltaTime) {
-	// 평가 물리량 초기화
-	player_->physicState().evVelocity = mu::Vec3();
-	player_->physicState().evOmega = mu::Vec3();
-	goblin_->physicState().evVelocity = mu::Vec3();
-	goblin_->physicState().evOmega = mu::Vec3();
-	anubis_->physicState().evVelocity = mu::Vec3();
-	anubis_->physicState().evOmega = mu::Vec3();
-	bat_->physicState().evVelocity = mu::Vec3();
-	bat_->physicState().evOmega = mu::Vec3();
-	bomber_->physicState().evVelocity = mu::Vec3();
-	bomber_->physicState().evOmega = mu::Vec3();
-	demon_->physicState().evVelocity = mu::Vec3();
-	demon_->physicState().evOmega = mu::Vec3();
-	dragon_->physicState().evVelocity = mu::Vec3();
-	dragon_->physicState().evOmega = mu::Vec3();
-	eyeball_->physicState().evVelocity = mu::Vec3();
-	eyeball_->physicState().evOmega = mu::Vec3();
-	fishman_->physicState().evVelocity = mu::Vec3();
-	fishman_->physicState().evOmega = mu::Vec3();
-	gargoyle_->physicState().evVelocity = mu::Vec3();
-	gargoyle_->physicState().evOmega = mu::Vec3();
-
 	// 입력 처리
 	processInput(deltaTime);
-
-	// 평가 물리량 갱신
-	player_->physicState().evVelocity += player_->physicState().velocity;
-	player_->physicState().evOmega += player_->physicState().omega;
 
 	// debug BV 갱신 (TTL 감소 + 소멸 조건 평가)
 	debugBVView_.update(deltaTime);
@@ -698,28 +742,10 @@ void Game::update(Milliseconds deltaTime) {
 	physicUpdateAcc_ += deltaTime;
 
 	if (physicUpdateAcc_ >= physicUpdateInterval) {
-		// 물리 시뮬레이션을 위해
-		// 물리 시뮬레이션의 대상이 되는 객체들을
-		// 한 곳에 모아 PhysicSystem 객체에 전달한다.
-		static std::vector<Object*> targetObjects{};
-		targetObjects.resize(10u);
-		targetObjects[0] = player_.get();
-		targetObjects[1] = goblin_.get();
-		targetObjects[2] = anubis_.get();
-		targetObjects[3] = bat_.get();
-		targetObjects[4] = bomber_.get();
-		targetObjects[5] = demon_.get();
-		targetObjects[6] = dragon_.get();
-		targetObjects[7] = eyeball_.get();
-		targetObjects[8] = fishman_.get();
-		targetObjects[9] = gargoyle_.get();
-
 		while (physicUpdateAcc_ >= physicUpdateInterval) {
-			physicSystem_.step(targetObjects, physicUpdateInterval);
+			physicsWorld_.step(physicUpdateInterval);
 			physicUpdateAcc_ -= physicUpdateInterval;
 		}
-
-		targetObjects.clear();
 	}
 
 	// 객체별 업데이트 루틴
@@ -971,17 +997,10 @@ void Game::processInput(Milliseconds deltaTime) {
 	keyboardStatePrev_ = keyboardStateCurr_;
 	DISPLAY_ERROR_GLE( GetKeyboardState(keyboardStateCurr_.data()), false );
 
-	const auto maxSpeed = 10.f;	// 10m/s
-	const Seconds zeroToMax = 0.5s;
-	const Seconds maxToZero = 0.2s;
-
-	// 서로 상쇄되는 입력들을 감안해서,
-	// 현재 이동 입력이 있으면 플레이어 객체의 속도를 변화시킨다.
-	// + 플레이어가 죽으면 움직이지 않는다.
-
+	// 이동 가속도만 담당. 감속은 PhysicsWorld의 linearDamping(마찰)이 처리한다.
+	// 속도 상한은 kPlayerMaxSpeed, 가속률은 kPlayerAccelRate (파일 상단 상수 참조).
 	const auto moveXSign = !playerDead_ * ( (keyboardStateCurr_['D'] & 0x80) - (keyboardStateCurr_['A'] & 0x80) );
 	const auto moveZSign = !playerDead_ * ( (keyboardStateCurr_['W'] & 0x80) - (keyboardStateCurr_['S'] & 0x80) );
-	const auto moveThreshold = 0.1f;
 
 	if (moveXSign || moveZSign) {
 		// 'W'/'S' 입력으로 판정된 Z 부호는 플레이어의 forward 벡터,
@@ -990,35 +1009,20 @@ void Game::processInput(Milliseconds deltaTime) {
 			static_cast<float>(moveXSign) * player_->right() + static_cast<float>(moveZSign) * player_->forward()
 		);
 
-		// 플레이어 객체의 속력을 증가시킨다.
-		const auto moveAmount = Seconds(deltaTime).count() * maxSpeed / zeroToMax.count();
-		player_->physicState().velocity += mu::Vec3(moveDirection) * moveAmount;
+		// x/z 방향으로만 가속. y(중력)는 물리 엔진이 담당.
+		const auto fullVel = player_->velocity();
+		const auto accel   = mu::Vec3(moveDirection) * (kPlayerAccelRate * Seconds(deltaTime).count());
+		float newX = fullVel.x() + accel.x();
+		float newZ = fullVel.z() + accel.z();
 
-		// 플레이어 객체의 속력이 최대 속력을 넘지 못하게 한다.
-		if (player_->physicState().velocity.len2() > maxSpeed * maxSpeed) {
-			player_->physicState().velocity *= maxSpeed / player_->physicState().velocity.len();
+		// x/z 속도만 클램프 (y는 건드리지 않음).
+		const float hSpd2 = newX * newX + newZ * newZ;
+		if (hSpd2 > kPlayerMaxSpeed * kPlayerMaxSpeed) {
+			const float scale = kPlayerMaxSpeed / std::sqrt(hSpd2);
+			newX *= scale;
+			newZ *= scale;
 		}
-	}
-	// 이동 입력이 없으면 플레이어 객체의 속력을 감소시킨다. (마찰)
-	// 속력이 moveThreshold보다 작다면, 플레이어 객체를 멈춘다.
-	else if (player_->physicState().velocity.len2() > moveThreshold * moveThreshold) {
-		const auto moveAmount = Seconds(deltaTime).count() * maxSpeed / maxToZero.count();
-
-		// 속력 감소량이 현재 플레이어의 속력보다 크게 계산됐다면,
-		// 플레이어의 속력을 0으로 만든다.
-		if (moveAmount * moveAmount > player_->physicState().velocity.len2()) {
-			player_->physicState().velocity = mu::Vec3();
-		}
-		// 그렇지 않다면 플레이어가 움직이고 있는 반대 방향의 속도를 더해
-		// 플레이어의 속력을 감소시킨다.
-		else {
-			const auto moveDirection = mu::NVec3(-player_->physicState().velocity);
-			player_->physicState().velocity += mu::Vec3(moveDirection) * moveAmount;
-		}
-	}
-	// 플레이어 객체를 멈춘다.
-	else {
-		player_->physicState().velocity = mu::Vec3();
+		player_->setVelocity(mu::Vec3(newX, fullVel.y(), newZ));
 	}
 
 	// 카메라 1인칭 모드 설정

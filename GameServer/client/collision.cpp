@@ -1,5 +1,7 @@
 ﻿#include "pch.hpp"
 #include "collision.hpp"
+#include "rigidBody.hpp"
+#include "terrain.hpp"
 
 CollisionResult collides(const AABB& a, const AABB& b) {
     CollisionResult res{ .hit = false };
@@ -191,7 +193,8 @@ CollisionResult collides(const BVH& bvh, const AABB& hitbox) {
 }
 
 // BVH vs BVH (used for physics body-body collision).
-// Dual-tree DFS. Returns on the first precise shape hit.
+// Dual-tree DFS. A hit is only reported when BOTH nodes are leaves, so
+// coarse parent volumes cannot produce false positives.
 CollisionResult collides(const BVH& a, const BVH& b) {
     if (a.empty() || b.empty()) return CollisionResult{ .hit = false };
 
@@ -205,15 +208,18 @@ CollisionResult collides(const BVH& a, const BVH& b) {
         const auto& na = a.nodes[ai];
         const auto& nb = b.nodes[bi];
 
+        // Fast AABB reject on subtree bounds.
         if (!collides(na.bounds, nb.bounds).hit) continue;
-
-        const auto result = collidesShapes(na.shape, nb.shape);
-        if (result.hit) return result;
 
         const bool aLeaf = na.isLeaf();
         const bool bLeaf = nb.isLeaf();
 
-        if (!aLeaf && !bLeaf) {
+        if (aLeaf && bLeaf) {
+            // Both leaf: precise shape test is definitive.
+            const auto result = collidesShapes(na.shape, nb.shape);
+            if (result.hit) return result;
+        } else if (!aLeaf && !bLeaf) {
+            // Descend into the subtree with the larger volume.
             const float volA = na.bounds.size.x() * na.bounds.size.y() * na.bounds.size.z();
             const float volB = nb.bounds.size.x() * nb.bounds.size.y() * nb.bounds.size.z();
             if (volA >= volB) {
@@ -223,7 +229,7 @@ CollisionResult collides(const BVH& a, const BVH& b) {
             }
         } else if (!aLeaf) {
             for (int ca : na.children) stack.push_back({ ca, bi });
-        } else if (!bLeaf) {
+        } else {
             for (int cb : nb.children) stack.push_back({ ai, cb });
         }
     }
@@ -284,4 +290,106 @@ RayHit RaycastAABB(const AABB& box, const Ray& ray) {
     hit.normal = normal;
 
     return hit;
+}
+
+// ---------------------------------------------------------------------------
+// TerrainCollider
+// ---------------------------------------------------------------------------
+
+TerrainCollider::TerrainCollider(RigidBody* terrainBody, const TerrainHeightField* hf)
+    : terrainBody_(terrainBody), heightField_(hf)
+{}
+
+void TerrainCollider::extractBottomVertices(const BVHNode& leaf,
+                                            std::vector<mu::Vec3>& out)
+{
+    if (std::holds_alternative<AABB>(leaf.shape)) {
+        const auto& aabb = std::get<AABB>(leaf.shape);
+        const mu::Vec3 c = aabb.center;
+        const mu::Vec3 h = aabb.size * 0.5f;
+        const float    by = c.y() - h.y();
+        out.push_back(mu::Vec3(c.x() - h.x(), by, c.z() - h.z()));
+        out.push_back(mu::Vec3(c.x() + h.x(), by, c.z() - h.z()));
+        out.push_back(mu::Vec3(c.x() - h.x(), by, c.z() + h.z()));
+        out.push_back(mu::Vec3(c.x() + h.x(), by, c.z() + h.z()));
+    } else {
+        const auto& obb = std::get<OBB>(leaf.shape);
+        // Compute OBB axes from orientation
+        const mu::Vec3 ax = obb.orient.rotate(mu::Vec3(1.f, 0.f, 0.f));
+        const mu::Vec3 ay = obb.orient.rotate(mu::Vec3(0.f, 1.f, 0.f));
+        const mu::Vec3 az = obb.orient.rotate(mu::Vec3(0.f, 0.f, 1.f));
+        const float    hx = obb.halfExtents.x();
+        const float    hy = obb.halfExtents.y();
+        const float    hz = obb.halfExtents.z();
+        // All 8 corners; testVertex will filter by penetration depth
+        for (int sx : {-1, 1})
+        for (int sy : {-1, 1})
+        for (int sz : {-1, 1}) {
+            out.push_back(obb.center
+                + ax * (hx * sx)
+                + ay * (hy * sy)
+                + az * (hz * sz));
+        }
+    }
+}
+
+bool TerrainCollider::testVertex(mu::Vec3 worldVert, ContactPoint& outCp) const
+{
+    const mu::Vec3 origin = terrainBody_->pos();
+
+    const float localX = worldVert.x() - origin.x();
+    const float localZ = worldVert.z() - origin.z();
+
+    if (localX < 0.f || localX > heightField_->sizeX) return false;
+    if (localZ < 0.f || localZ > heightField_->sizeZ) return false;
+
+    const float terrainWorldY = origin.y() + heightField_->getHeightAt(localX, localZ);
+    const float depth         = terrainWorldY - worldVert.y();
+    if (depth <= 0.f) return false;
+
+    outCp.worldPos = mu::Vec3(worldVert.x(), terrainWorldY, worldVert.z());
+    outCp.normal   = mu::NVec3(heightField_->getNormalAt(localX, localZ));
+    outCp.depth    = depth;
+    // localA/localB filled by PhysicsWorld::generateContacts
+    return true;
+}
+
+int TerrainCollider::generateContacts(const RigidBody& dynamic,
+                                      std::vector<ContactPoint>& outContacts) const
+{
+    if (!heightField_ || heightField_->empty()) return 0;
+    if (dynamic.worldBVH().empty())             return 0;
+
+    // Collect bottom vertices from all BVH leaf nodes
+    std::vector<mu::Vec3> verts;
+    verts.reserve(32);
+    for (const BVHNode& node : dynamic.worldBVH().nodes) {
+        if (node.isLeaf())
+            extractBottomVertices(node, verts);
+    }
+
+    // Test each vertex and collect penetrating contacts
+    std::vector<ContactPoint> candidates;
+    candidates.reserve(verts.size());
+    for (const mu::Vec3& v : verts) {
+        ContactPoint cp;
+        if (testVertex(v, cp))
+            candidates.push_back(cp);
+    }
+
+    if (candidates.empty()) return 0;
+
+    // Keep the 4 deepest contacts
+    if (candidates.size() > 4) {
+        std::partial_sort(candidates.begin(), candidates.begin() + 4, candidates.end(),
+            [](const ContactPoint& a, const ContactPoint& b) {
+                return a.depth > b.depth;
+            });
+        candidates.resize(4);
+    }
+
+    const int added = static_cast<int>(candidates.size());
+    for (auto& cp : candidates)
+        outContacts.push_back(cp);
+    return added;
 }

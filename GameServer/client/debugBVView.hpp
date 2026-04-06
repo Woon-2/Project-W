@@ -42,7 +42,7 @@ public:
 
     // Push all BVH nodes (or only leaf nodes) of obj as static snapshots.
     void pushBVHNodes(const Object& obj, Milliseconds ttl, bool leavesOnly = true) {
-        for (const auto& node : obj.physicState().bvh.nodes) {
+        for (const auto& node : obj.worldBVH().nodes) {
             if (leavesOnly && !node.isLeaf()) continue;
             std::visit([&](auto&& s) { push(s, ttl); }, node.shape);
         }

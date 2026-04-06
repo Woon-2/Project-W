@@ -70,5 +70,57 @@ RayHit RaycastAABB(const AABB& box, const Ray& ray);
 
 AABB buildAttackAABB(mu::Vec3 pos, mu::Vec3 forward, mu::Vec3 halfExtent, float offsetFwd);
 
+// ---------------------------------------------------------------------------
+// ContactPoint (used by ContactConstraint and TerrainCollider)
+// ---------------------------------------------------------------------------
+
+// One contact point between two rigid bodies.
+// Stores warm-start accumulators that persist within a single step.
+struct ContactPoint {
+	mu::Vec3  worldPos;              // world-space contact location
+	mu::Vec3  localA;                // worldPos - bodyA->pos()
+	mu::Vec3  localB;                // worldPos - bodyB->pos()
+	mu::NVec3 normal;                // contact normal: points from B toward A
+	float     depth         = 0.f;  // penetration depth (> 0 when penetrating)
+	float     accNormal     = 0.f;  // accumulated normal impulse (warm start)
+	float     accTangent[2] = {};   // accumulated tangent impulses (warm start)
+};
+
+// ---------------------------------------------------------------------------
+// TerrainCollider
+// ---------------------------------------------------------------------------
+
+struct TerrainHeightField; // defined in terrain.hpp
+class  RigidBody;          // defined in rigidBody.hpp
+
+// Generates contact points between dynamic RigidBody instances and a
+// height-field terrain. The terrain body is Static (invMass == 0) and
+// carries no BVH; collision is computed directly against TerrainHeightField.
+class TerrainCollider {
+public:
+	TerrainCollider(RigidBody* terrainBody, const TerrainHeightField* hf);
+
+	// Collects up to 4 deepest ContactPoints into outContacts (appends).
+	// Returns the number of contacts added.
+	int generateContacts(const RigidBody& dynamic,
+	                     std::vector<ContactPoint>& outContacts) const;
+
+	RigidBody* terrainBody() const { return terrainBody_; }
+
+private:
+	// Appends the bottom vertices of a BVH leaf shape into out.
+	// AABB: 4 bottom corners. OBB: all 8 corners (testVertex filters them).
+	static void extractBottomVertices(const BVHNode& leaf,
+	                                  std::vector<mu::Vec3>& out);
+
+	// Tests one world-space vertex against the terrain surface.
+	// Returns true if penetrating; fills outCp (worldPos, normal, depth).
+	// localA/localB must be set by the caller.
+	bool testVertex(mu::Vec3 worldVert, ContactPoint& outCp) const;
+
+	RigidBody*                terrainBody_ = nullptr;
+	const TerrainHeightField* heightField_ = nullptr;
+};
+
 
 #endif	// __collision_HPP

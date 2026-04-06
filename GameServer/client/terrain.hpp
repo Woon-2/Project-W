@@ -3,6 +3,27 @@
 
 #include "gfxUtil.hpp"
 #include "mesh.hpp"
+#include "mathUtil.hpp"
+
+// CPU-side height field data used for physics collision queries.
+// Built alongside the GPU mesh during loadTerrainFromFiles().
+struct TerrainHeightField {
+	int   resolution = 0;                // N: grid is N x N vertices
+	float sizeX      = 0.f;
+	float sizeY      = 0.f;
+	float sizeZ      = 0.f;
+	std::vector<float> heights;          // normalized [0,1], row-major: heights[y*N + x]
+
+	bool empty() const { return heights.empty(); }
+
+	// Bilinear interpolation. localX in [0,sizeX], localZ in [0,sizeZ].
+	// Returns world-space Y (i.e., already scaled by sizeY).
+	float getHeightAt(float localX, float localZ) const;
+
+	// Central-difference surface normal at (localX, localZ).
+	// Always returns a vector with positive Y (upward-facing).
+	mu::Vec3 getNormalAt(float localX, float localZ) const;
+};
 
 // One terrain layer: diffuse + normal map textures, tiling parameters, and PBR scalars.
 struct TerrainLayer {
@@ -29,6 +50,8 @@ struct TerrainData {
     Texture splatMap;   // RGBA splat map: channel per layer blend weight
 
     Mesh mesh;          // GPU grid mesh built from height.raw
+
+	TerrainHeightField heightField; // CPU-side height data for physics collision
 };
 
 // Loads terrain from resources/terrains directory.
