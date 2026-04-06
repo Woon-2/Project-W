@@ -97,6 +97,9 @@
     <Filter Include="Network\ClientApp">
       <UniqueIdentifier>{0e6c08b2-6e43-40b5-8455-e37f1e5d0324}</UniqueIdentifier>
     </Filter>
+    <Filter Include="UI">
+      <UniqueIdentifier>{9c49d4b2-413a-418a-8eb4-a338ba8dd257}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -257,6 +260,30 @@
     </ClCompile>
     <ClCompile Include="ragdollDef.cpp">
       <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\widgets\Button.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\widgets\Image.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\widgets\Label.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\widgets\Panel.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\widgets\ProgressBar.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\widgets\Slider.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\UIElement.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\UIManager.cpp">
+      <Filter>UI</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -496,6 +523,33 @@
     </ClInclude>
     <ClInclude Include="activeRagdoll.hpp">
       <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\widgets\Button.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\widgets\Image.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\widgets\Label.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\widgets\Panel.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\widgets\ProgressBar.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\widgets\Slider.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\UIElement.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\UIManager.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\UITypes.hpp">
+      <Filter>UI</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

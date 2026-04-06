@@ -18,6 +18,7 @@
 8. [렌더링 (GFX / Pipeline)](#8-렌더링-gfx--pipeline)
 9. [게임 루프](#9-게임-루프)
 10. [디버그 시각화](#10-디버그-시각화)
+11. [UI 시스템](#11-ui-시스템)
 
 ---
 
@@ -464,6 +465,97 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `render(gfx)` | `debugBVView.hpp #68` | BVPipeline::DrawEvent 제출 |
 | `StaticEntry` (private) | `debugBVView.hpp #87-91` | 사전 계산된 worldXform + ttl |
 | `LiveEntry` (private) | `debugBVView.hpp #93-99` | Object* + halfExtent + offsetFwd + ttl |
+
+---
+
+## 11. UI 시스템
+
+**파일:** `client/ui/` 디렉터리
+
+설계 문서: `client/docs/UI.md`
+
+### 공유 타입 (`ui/UITypes.hpp`)
+
+| 항목 | 설명 |
+|------|------|
+| `UI::Anchor` | 부모 사각형 기준점 (0~1 정규화) |
+| `UI::Pivot` | 자기 자신 기준점 (0~1 정규화) |
+| `UI::DimValue` | 픽셀 또는 퍼센트 크기값 (`px()` / `pct()` 팩토리) |
+| `UI::Rect` | 레이아웃 후 절대 픽셀 사각형 |
+| `UI::Color` | RGBA 색상 (float, 0~1) |
+| `UI::MouseButton` | Left / Right / Middle |
+| `UI::Anchors::*` | 앵커 프리셋 (TopLeft, Center, BottomCenter 등) |
+| `UI::Pivots::*` | 피벗 프리셋 |
+
+### 베이스 클래스 (`ui/UIElement.hpp` / `ui/UIElement.cpp`)
+
+| 항목 | 설명 |
+|------|------|
+| `UI::UpdateContext` | update 트리 순회 시 전달되는 컨텍스트 (deltaTime, GFX*, FontHandle*, 화면 크기) |
+| `UI::RenderContext` | render 트리 순회 시 전달되는 컨텍스트 (GFX*, screenHeight) |
+| `UI::UIElement` | 모든 위젯의 base 클래스 |
+| `UIElement::addChild()` | `unique_ptr` 자식 추가; 부모 소유권 |
+| `UIElement::layout(parentRect)` | anchor/pivot/offset → `resolvedRect_` 계산 후 자식 재귀 |
+| `UIElement::updateTree(ctx)` | `onUpdate` 호출 후 자식 재귀 (invisible 스킵) |
+| `UIElement::renderTree(rc)` | zOrder 정렬 후 `onRender` + 자식 렌더 (invisible 스킵) |
+| `UIElement::buildWorldMatrix(screenHeight)` | `resolvedRect_` → UIPipeline용 scale+translate 행렬; Y축 뒤집기 포함 |
+
+### 매니저 (`ui/UIManager.hpp` / `ui/UIManager.cpp`)
+
+| 항목 | 설명 |
+|------|------|
+| `UI::UIManager` | 엘리먼트 트리 소유, 레이아웃/업데이트/렌더/입력 총괄 |
+| `UIManager::setScreenSize(w, h)` | 화면 크기 갱신 (WM_SIZE 수신 시 호출) |
+| `UIManager::layout()` | 전체 트리 레이아웃 재계산 |
+| `UIManager::update(dt, gfx, font)` | `UpdateContext` 생성 후 `root_.updateTree()` |
+| `UIManager::render(gfx)` | `UIPipeline::FrameData` 제출 후 `root_.renderTree()` |
+| `UIManager::onWndMsg(msg, wp, lp)` | WM_MOUSEMOVE/LBUTTON*/RBUTTON*/KEY* 처리; true면 게임 입력 차단 |
+| `UIManager::needsCursor()` | interactive + visible 엘리먼트 존재 시 true (커서 캡처 해제 신호) |
+| `UIManager::hitTest(x, y)` | zOrder 역순 히트테스트; interactive 엘리먼트만 대상 |
+
+### 위젯 (`ui/widgets/`)
+
+| 클래스 | 파일 | 설명 |
+|--------|------|------|
+| `UI::Panel` | `Panel.hpp/cpp` | 컨테이너; `backgroundTex` 있으면 배경 렌더 |
+| `UI::Image` | `Image.hpp/cpp` | 단일 텍스처 표시 |
+| `UI::Label` | `Label.hpp/cpp` | `TextImage` + `FontHandle` 기반 텍스트 렌더; dirty-check로 매 프레임 래스터화 방지 |
+| `UI::Button` | `Button.hpp/cpp` | Normal/Hovered/Pressed 상태 텍스처; `onClick` 콜백 (`std::function<void()>`) |
+| `UI::ProgressBar` | `ProgressBar.hpp/cpp` | 배경 + fill 이중 쿼드; `setProgress(0~1)` |
+| `UI::Slider` | `Slider.hpp/cpp` | 트랙 + 핸들 드래그; `onValueChanged` 콜백 (`std::function<void(float)>`) |
+
+### 사용 패턴 (game.cpp 통합 예시)
+
+```cpp
+// 멤버 추가
+UI::UIManager uiManager_;
+
+// 씬 셋업에서 트리 구성
+auto hpBar = std::make_unique<UI::ProgressBar>();
+hpBar->anchor = UI::Anchors::BottomCenter;
+hpBar->pivot  = UI::Pivots::BottomCenter;
+hpBar->width  = UI::DimValue::px(1024.f);
+hpBar->height = UI::DimValue::px(64.f);
+hpBar->offsetY = UI::DimValue::px(-40.f);
+hpBar->fillTex = assetManager_.getTexture("hpFill");
+uiManager_.root()->addChild(std::move(hpBar));
+
+// update()에서
+uiManager_.layout();
+uiManager_.update(dt, gfx_, &fontHandle_);
+
+// render()에서
+uiManager_.render(gfx_);
+
+// receiveWndMsg()에서 (입력 차단)
+if (uiManager_.onWndMsg(msg, wParam, lParam)) return 0;
+```
+
+### 레이아웃 좌표계 주의사항
+
+- `UIElement::layout()` 내부는 **top-down** 좌표 (Y=0 = 상단)
+- `buildWorldMatrix()` 에서 `translateY = screenHeight - topDownCenterY` 로 뒤집음
+- `ui.hlsl`은 픽셀 Y=0 → NDC -1 (하단) 매핑이므로 이 변환이 필수
 
 ---
 

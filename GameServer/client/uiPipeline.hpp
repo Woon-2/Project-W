@@ -28,6 +28,7 @@ namespace UIPipeline {
 		mu::Mat4x4 world;
 		const Texture* pTex;
 		const Texture* pCopySrc;	// nullptr가 아닐 경우 이 텍스처를 원본으로 복사를 수행
+		XMFLOAT4 colorMul = { 1.f, 1.f, 1.f, 1.f };  // per-draw color multiplier
 
 		auto operator<=>( const DrawEvent& rhs ) const noexcept {
 			return std::strong_ordering::equal;

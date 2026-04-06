@@ -28,6 +28,10 @@ public:
 
 	IEventBus* eventBus() override { return &eventBus_; }
 
+	Seconds runAnimTime() const { return animTimeRun_; }
+	Seconds runDuration() const { return targetClip("Player_Run_Forward")->duration; }
+	bool isRunning() const { return (tRunForward_ + tRunBackward_ + tRunLeft_ + tRunRight_) > 0.f; }
+
 private:
 	std::vector<AnimFrame> framesBlended_{};
 	EventBus eventBus_{};
@@ -556,6 +560,9 @@ public:
 	void setHp(i32t hp) { hp_ = hp; }
 	i32t hp() const { return hp_; }
 
+	void setMaxHp(i32t v) { maxHp_ = v; }
+	i32t maxHp() const    { return maxHp_; }
+
 protected:
 	RigidBody body_{};
 
@@ -573,6 +580,7 @@ protected:
 	i32t id_{ -1 };
 
 	i32t hp_{};
+	i32t maxHp_{};
 
 	std::unique_ptr<Ragdoll> ragdoll_;
 

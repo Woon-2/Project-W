@@ -16,12 +16,13 @@
 
 #include "../billboard.hpp"
 #include "../spriteAnimation.hpp"
-#include "../basicPlayerHpUI.hpp"
 #include "../event.hpp"
 #include "../crosshair.hpp"
 #include "../debugBVView.hpp"
 #include "../particleSystem.hpp"
 #include "../meshParticleSystem.hpp"
+#include "../ui/UIManager.hpp"
+#include "../ui/widgets/ProgressBar.hpp"
 
 class Timer;
 
@@ -37,6 +38,7 @@ public:
 	void setTimer(Timer* pTimer) { pTimer_ = pTimer; }
 	// 객체들을 생성한다.
 	void setupStage();
+	void setParticle();
 
 	// 게임의 업데이트는 다음 순서대로 이루어진다.
 	// 입력 처리
@@ -57,6 +59,7 @@ private:
 	};
 
 	void processInput(Milliseconds deltaTime);
+	void setupMonsterHpBars();
 
 	// 커서가 클라이언트 영역 바깥으로 나가지 못하도록 한다.
 	// 한번 설정해놓으면, releaseCursor를 호출하기 전까지 커서는 계속 클라이언트 영역에 갇혀있는다.
@@ -124,8 +127,10 @@ private:
 
 	bool playerDead_{};
 
-	BasicPlayerHpUI playerHpUI_{};
 	TextImage textFPS_{};
+
+	UI::UIManager   uiManager_{};
+	UI::ProgressBar* playerHpBar_ = nullptr;  // owned by uiManager_
 
 	ParticleSystem flameParticleSystem_{};
 	ParticleSystem smokeParticleSystem_{};
@@ -134,6 +139,19 @@ private:
 
 	MeshParticleSystem  swordSlashSystem_{};
 	MeshEmitterConfig   swordSlashConfig_{};
+
+	ParticleSystem dustParticleSystem_{};
+	EmitterConfig  dustEmitterConfig_{};
+	int            footBoneIdxLeft_  = -1;
+	int            footBoneIdxRight_ = -1;
+	Seconds        prevAnimTimeRun_  = 0s;
+
+	struct MonsterHpEntry {
+		Object*          monster;      // non-owning; lifetime owned by shared_ptr in Game
+		UI::ProgressBar* hpBar;        // owned by uiManager_
+		float            worldYOffset; // monster pos()로부터 HP바를 붙일 월드Y 오프셋
+	};
+	std::vector<MonsterHpEntry> monsterHpBars_{};
 
 	LONG mouseDeltaX_{};
 	LONG mouseDeltaY_{};

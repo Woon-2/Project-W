@@ -698,6 +698,12 @@ void GFX::loadAssets(const AssetConfigs& configs) {
 	// UIPipeline
 	UIPipeline::initStaticQuadMesh( device_.Get(), cmdList.Get(), fence );
 
+	// 1x1 white pixel texture — solid-color UI fallback
+	createTextImageImmediate( 1, 1, &solidColorImage_ );
+	solidColorImage_.pData = { 0xFF, 0xFF, 0xFF, 0xFF };
+	UpdateTextureWithTextImage( &solidColorImage_, 1, 1 );
+	::UpdateTexture( cmdList.Get(), solidColorImage_.textureUpload, solidColorImage_.texture );
+
 	dumpLog();
 
 	// 명령 기록 시작
@@ -1233,9 +1239,20 @@ void GFX::render() {
 	++frameIdx_;
 }
 
-void GFX::WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, void* pFontObjHandle, const WCHAR* wchString, DWORD dwLen )
+void GFX::WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, void* pFontObjHandle, const WCHAR* wchString, DWORD dwLen, D2D1_COLOR_F color )
 {
-	font_.WriteTextToBitmap( pDestImage, DestWidth, DestHeight, DestPitch, piOutWidth, piOutHeight, &tahomaFont_, wchString, dwLen );
+	FontHandle* pFont = pFontObjHandle ? static_cast<FontHandle*>( pFontObjHandle ) : &tahomaFont_;
+	font_.WriteTextToBitmap( pDestImage, DestWidth, DestHeight, DestPitch, piOutWidth, piOutHeight, pFont, wchString, dwLen, color );
+}
+
+FontHandle GFX::createFont( float fontSize )
+{
+	return font_.CreateFontObject( L"Tahoma", fontSize );
+}
+
+void GFX::measureText( FontHandle* pFont, const WCHAR* str, DWORD len, float maxW, float maxH, int* outW, int* outH )
+{
+	font_.measureText( pFont, str, len, maxW, maxH, outW, outH );
 }
 
 void GFX::UpdateTextureWithTextImage( TextImage* srcImage, UINT srcWidth, UINT srcHeight )
@@ -1275,6 +1292,10 @@ void GFX::UpdateTextureWithTextImage( TextImage* srcImage, UINT srcWidth, UINT s
 	}
 	// Unmap
 	pUploadBuffer->Unmap( 0, nullptr );
+}
+
+void GFX::createTextImageImmediate(UINT width, UINT height, TextImage* pDest) {
+	*pDest = TextImage(device_.Get(), width, height, srvTexPool_);
 }
 
 // 공용 샘플러들 생성

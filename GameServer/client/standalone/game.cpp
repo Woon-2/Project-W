@@ -4,6 +4,8 @@
 #include "../errorHandling.hpp"
 #include "../binaryImport.hpp"
 #include "../timer.hpp"
+#include "../ui/widgets/Label.hpp"
+#include "../ui/widgets/ProgressBar.hpp"
 
 extern RECT gClientRect;
 
@@ -103,95 +105,7 @@ void Game::setupStage() {
 	fishman_->enableBVRendering();
 	gargoyle_->enableBVRendering();
 
-	//playerHpUI_.setTexture( assetManager_.playerHpLine() );
-	//playerHpUI_.setTextImage( assetManager_.textPlayerHp() );
-	//playerHpUI_.setHp( player_->hp() );
-	//playerHpUI_.setAmmo( player_->ammo() );
-	playerHpUI_.setPivot( mu::Vec2(512.f, 768.f - 40.f) );
-	playerHpUI_.setScale( mu::Vec2(1024.f, 64.f) );
-
-	// 파티클 설정
-	flameEmitterConfig_.pClip             = assetManager_.flameAnimation();
-	flameEmitterConfig_.position          = { -6.f, 58.5f, -5.f };
-	flameEmitterConfig_.direction          = { 0.f, 1.f, 0.f };
-	flameEmitterConfig_.spread             = 0.0f;          // 약간의 퍼짐으로 자연스러운 불꽃
-	flameEmitterConfig_.speedMin           = 0.f;           // 초기 속도 제거: 상승은 gravityModifier로 제어
-	flameEmitterConfig_.speedMax           = 0.3f;          // 아주 작은 랜덤 변화만 허용
-	flameEmitterConfig_.lifetimeMin        = 0.5f;
-	flameEmitterConfig_.lifetimeMax        = 1.0f;
-	flameEmitterConfig_.sizeBegin          = 1.0f;
-	flameEmitterConfig_.sizeEnd            = 1.0f;
-	flameEmitterConfig_.sizeMultiplierMin  = 0.8f;
-	flameEmitterConfig_.sizeMultiplierMax  = 1.0f;
-	flameEmitterConfig_.drag               = 0.8f;
-	flameEmitterConfig_.gravityModifierMin = -0.3f;         // 음수 = 위쪽 부력 
-	flameEmitterConfig_.gravityModifierMax = 0.0f;         // 파티클마다 다른 상승력
-	flameEmitterConfig_.startColor        = { 1.f, 0.4f, 0.f, 1.f };
-	flameEmitterConfig_.startRotationMin  = 0.f;
-	flameEmitterConfig_.startRotationMax  = mu::pi * 2;
-	flameEmitterConfig_.shape             = EmitterShape::Edge;
-	flameEmitterConfig_.edgeLength		 = 1.5f;
-	flameEmitterConfig_.emitRate          = 15.0f;
-	flameEmitterConfig_.additiveBlend     = true;
-	flameEmitterConfig_.renderOrder       = 0;
-	flameParticleSystem_.startContinuous(flameEmitterConfig_);
-
-	smokeEmitterConfig_.pClip            = assetManager_.smokeAnimation();
-	smokeEmitterConfig_.position         = { -6.f, 58.5f, -5.f };
-	smokeEmitterConfig_.direction        = { 0.f, 1.f, 0.f };
-	smokeEmitterConfig_.spread           = 0.0f;
-	smokeEmitterConfig_.speedMin         = 0.5f;
-	smokeEmitterConfig_.speedMax         = 2.f;
-	smokeEmitterConfig_.lifetimeMin      = 0.5f;
-	smokeEmitterConfig_.lifetimeMax      = 1.0f;
-	smokeEmitterConfig_.sizeBegin        = 1.f;
-	smokeEmitterConfig_.sizeEnd          = 1.0f;
-	smokeEmitterConfig_.sizeMultiplierMin = 1.f;
-	smokeEmitterConfig_.sizeMultiplierMax = 1.f;
-	smokeEmitterConfig_.drag             = 0.8f;
-	smokeEmitterConfig_.gravity          = { 0.f, -1.f, 0.f };
-	smokeEmitterConfig_.gravityModifierMin = -0.5f;        // 약간의 부력으로 천천히 상승
-	smokeEmitterConfig_.gravityModifierMax = -0.2f;
-	smokeEmitterConfig_.startColor        = { 0.5f, 0.5f, 0.5f, 1.f };
-	smokeEmitterConfig_.colorOverLifetime = ColorGradient{
-		.keys = {
-			{0.0f, {1.f,  1.f,  1.f,  0.f}},   // RGB*1 (bright),  A*0 (transparent)
-			{0.5f, {0.5f, 0.5f, 0.5f, 1.f}},   // RGB*0.5 (mid),   A*1 (opaque)
-			{1.0f, {0.f,  0.f,  0.f,  0.f}},   // RGB*0 (black),   A*0 (transparent)
-		}
-	};
-	smokeEmitterConfig_.startRotationMin = 0.f;
-	smokeEmitterConfig_.startRotationMax = mu::pi * 2;
-	smokeEmitterConfig_.shape            = EmitterShape::Edge;
-	smokeEmitterConfig_.edgeLength       = 1.5f;
-	smokeEmitterConfig_.emitRate         = 10.0f;
-	smokeEmitterConfig_.additiveBlend    = false;
-	smokeEmitterConfig_.renderOrder      = 1;
-	smokeParticleSystem_.startContinuous(smokeEmitterConfig_);
-
-	// 검기 이펙트 설정 (에셋이 없으면 emit 시 아무것도 렌더되지 않음)
-	swordSlashConfig_.pMesh        = assetManager_.swordSlashMesh();
-	swordSlashConfig_.pSubMesh     = assetManager_.swordSlashMesh()->subMeshes.empty()
-	                                  ? nullptr
-	                                  : &assetManager_.swordSlashMesh()->subMeshes[0];
-	swordSlashConfig_.pTex         = assetManager_.swordSlashTex();
-	swordSlashConfig_.position     = { 0.f, 0.f, 0.f };
-	swordSlashConfig_.rotation     = mu::Mat4x4{};
-	swordSlashConfig_.sizeBegin    = 5.f;   // 메시 원본 스케일에 따라 조정
-	swordSlashConfig_.sizeEnd      = 5.f;
-	swordSlashConfig_.lifetimeMin  = 0.2f;
-	swordSlashConfig_.lifetimeMax  = 0.4f;
-	swordSlashConfig_.startColor   = { 0.384167f, 0.8396226f, 0.8256719f, 1.f };
-	swordSlashConfig_.colorOverLifetime = ColorGradient{
-		.keys = {
-			{ 0.000f, { 1.000f, 1.000f, 1.000f, 1.000f } },
-			{ 0.565f, { 0.973f, 0.899f, 0.953f, 0.533f } },
-			{ 1.000f, { 0.953f, 0.822f, 0.917f, 0.000f } },
-		}
-	};
-	swordSlashConfig_.renderOrder        = 2;
-	swordSlashConfig_.angularVelocityMin =  mu::pi * 2.0f;  // -90deg/sec
-	swordSlashConfig_.angularVelocityMax =  mu::pi * 2.0f;  //  90deg/sec
+	setParticle();
 
 	// 전투 시스템에 참가자 등록
 	// 플레이어: 공격 hitbox 및 데미지 설정 (AI 쿨타임은 사용하지 않음)
@@ -206,6 +120,206 @@ void Game::setupStage() {
 	combatSystem_.registerCombatant(eyeball_.get(),  { {1.2f, 1.2f, 1.2f}, 1.0f, 15, 2000ms });
 	combatSystem_.registerCombatant(fishman_.get(),  { {1.2f, 1.8f, 1.2f}, 0.9f, 20, 2500ms });
 	combatSystem_.registerCombatant(gargoyle_.get(), { {1.5f, 2.0f, 1.5f}, 1.0f, 25, 3000ms });
+
+	uiManager_.setScreenSize(
+		static_cast<float>(gClientRect.right - gClientRect.left),
+		static_cast<float>(gClientRect.bottom - gClientRect.top)
+	);
+	uiManager_.requestDebugResources(gfx_);
+	auto* pLabel = static_cast<UI::Label*>(
+		uiManager_.root()->addChild(std::make_unique<UI::Label>())
+	);
+	pLabel->name    = "hpLabel";
+	pLabel->anchor  = UI::Anchors::BottomCenter; // 부모의 어느 점에 붙을 지
+	pLabel->pivot   = UI::Pivots::BottomCenter;	 // 내 박스의 어느 점에 못을 걸지	
+	pLabel->width   = UI::DimValue::px(512.f);
+	pLabel->height  = UI::DimValue::px(256.f);
+	pLabel->offsetY = UI::DimValue::px(-10.f);
+	pLabel->setTextImage(assetManager_.textPlayerHp());
+	pLabel->setTextHAlign(UI::TextHAlign::Center);
+	pLabel->setTextVAlign(UI::TextVAlign::Center);
+	pLabel->setText(L"UI System OK");
+	pLabel->setAutoSize(true);
+	pLabel->setTextColor( 0.0f, 0.0f, 1.0f, 1.0f );
+
+	playerHpBar_ = static_cast<UI::ProgressBar*>(
+		uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
+	);
+	playerHpBar_->name    = "playerHpBar";
+	playerHpBar_->anchor  = UI::Anchors::TopLeft;
+	playerHpBar_->pivot   = UI::Pivots::TopLeft;
+	playerHpBar_->width   = UI::DimValue::px(300.f);
+	playerHpBar_->height  = UI::DimValue::px(18.f);
+	playerHpBar_->offsetX = UI::DimValue::px(20.f);
+	playerHpBar_->offsetY = UI::DimValue::px(20.f);
+	playerHpBar_->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
+	playerHpBar_->fillColor = { 1.0f, 0.0f, 0.0f, 1.00f };
+	playerHpBar_->setProgress(1.f);
+
+	setupMonsterHpBars();
+}
+
+void Game::setupMonsterHpBars() {
+	auto registerBar = [&](Object* monster, float yOffset) {
+		auto* bar = static_cast<UI::ProgressBar*>(
+			uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
+		);
+		bar->anchor    = UI::Anchors::TopLeft;
+		bar->pivot     = UI::Pivots::TopLeft;
+		bar->width     = UI::DimValue::px(80.f);
+		bar->height    = UI::DimValue::px(8.f);
+		bar->fillColor = { 0.9f, 0.15f, 0.1f, 1.f };
+		bar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
+		bar->visible   = false;
+		monsterHpBars_.push_back({ monster, bar, yOffset });
+	};
+
+	registerBar(goblin_.get(),   2.5f);
+	registerBar(anubis_.get(),   3.5f);
+	registerBar(bat_.get(),      1.5f);
+	registerBar(bomber_.get(),   3.0f);
+	registerBar(demon_.get(),    4.0f);
+	registerBar(dragon_.get(),   6.0f);
+	registerBar(eyeball_.get(),  1.5f);
+	registerBar(fishman_.get(),  3.0f);
+	registerBar(gargoyle_.get(), 3.5f);
+}
+
+void Game::setParticle()
+{
+	// 파티클 설정
+	flameEmitterConfig_.pClip = assetManager_.flameAnimation();
+	flameEmitterConfig_.position = { -6.f, 58.5f, -5.f };
+	flameEmitterConfig_.direction = { 0.f, 1.f, 0.f };
+	flameEmitterConfig_.spread = 0.0f;          // 약간의 퍼짐으로 자연스러운 불꽃
+	flameEmitterConfig_.speedMin = 0.f;           // 초기 속도 제거: 상승은 gravityModifier로 제어
+	flameEmitterConfig_.speedMax = 0.3f;          // 아주 작은 랜덤 변화만 허용
+	flameEmitterConfig_.lifetimeMin = 0.5f;
+	flameEmitterConfig_.lifetimeMax = 1.0f;
+	flameEmitterConfig_.sizeBegin = 1.0f;
+	flameEmitterConfig_.sizeEnd = 1.0f;
+	flameEmitterConfig_.sizeMultiplierMin = 0.8f;
+	flameEmitterConfig_.sizeMultiplierMax = 1.0f;
+	flameEmitterConfig_.drag = 0.8f;
+	flameEmitterConfig_.gravityModifierMin = -0.3f;         // 음수 = 위쪽 부력 
+	flameEmitterConfig_.gravityModifierMax = 0.0f;         // 파티클마다 다른 상승력
+	flameEmitterConfig_.startColor = { 1.f, 0.4f, 0.f, 1.f };
+	flameEmitterConfig_.startRotationMin = 0.f;
+	flameEmitterConfig_.startRotationMax = mu::pi * 2;
+	flameEmitterConfig_.shape = EmitterShape::Edge;
+	flameEmitterConfig_.edgeLength = 1.5f;
+	flameEmitterConfig_.emitRate = 15.0f;
+	flameEmitterConfig_.additiveBlend = true;
+	flameEmitterConfig_.renderOrder = 0;
+	flameParticleSystem_.startContinuous( flameEmitterConfig_ );
+
+	smokeEmitterConfig_.pClip = assetManager_.smokeAnimation();
+	smokeEmitterConfig_.position = { -6.f, 58.5f, -5.f };
+	smokeEmitterConfig_.direction = { 0.f, 1.f, 0.f };
+	smokeEmitterConfig_.spread = 0.0f;
+	smokeEmitterConfig_.speedMin = 0.5f;
+	smokeEmitterConfig_.speedMax = 2.f;
+	smokeEmitterConfig_.lifetimeMin = 0.5f;
+	smokeEmitterConfig_.lifetimeMax = 1.0f;
+	smokeEmitterConfig_.sizeBegin = 1.f;
+	smokeEmitterConfig_.sizeEnd = 1.0f;
+	smokeEmitterConfig_.sizeMultiplierMin = 1.f;
+	smokeEmitterConfig_.sizeMultiplierMax = 1.f;
+	smokeEmitterConfig_.drag = 0.8f;
+	smokeEmitterConfig_.gravity = { 0.f, -1.f, 0.f };
+	smokeEmitterConfig_.gravityModifierMin = -0.5f;        // 약간의 부력으로 천천히 상승
+	smokeEmitterConfig_.gravityModifierMax = -0.2f;
+	smokeEmitterConfig_.startColor = { 0.5f, 0.5f, 0.5f, 1.f };
+	smokeEmitterConfig_.colorOverLifetime = ColorGradient{
+		.keys = {
+			{0.0f, {1.f,  1.f,  1.f,  0.f}},   // RGB*1 (bright),  A*0 (transparent)
+			{0.5f, {0.5f, 0.5f, 0.5f, 1.f}},   // RGB*0.5 (mid),   A*1 (opaque)
+			{1.0f, {0.f,  0.f,  0.f,  0.f}},   // RGB*0 (black),   A*0 (transparent)
+		}
+	};
+	smokeEmitterConfig_.startRotationMin = 0.f;
+	smokeEmitterConfig_.startRotationMax = mu::pi * 2;
+	smokeEmitterConfig_.shape = EmitterShape::Edge;
+	smokeEmitterConfig_.edgeLength = 1.5f;
+	smokeEmitterConfig_.emitRate = 10.0f;
+	smokeEmitterConfig_.additiveBlend = false;
+	smokeEmitterConfig_.renderOrder = 1;
+	smokeParticleSystem_.startContinuous( smokeEmitterConfig_ );
+
+	// 검기 이펙트 설정 (에셋이 없으면 emit 시 아무것도 렌더되지 않음)
+	swordSlashConfig_.pMesh = assetManager_.swordSlashMesh();
+	swordSlashConfig_.pSubMesh = assetManager_.swordSlashMesh()->subMeshes.empty()
+		? nullptr
+		: &assetManager_.swordSlashMesh()->subMeshes[0];
+	swordSlashConfig_.pTex = assetManager_.swordSlashTex();
+	swordSlashConfig_.position = { 0.f, 0.f, 0.f };
+	swordSlashConfig_.rotation = mu::Mat4x4{};
+	swordSlashConfig_.sizeBegin = 5.f;   // 메시 원본 스케일에 따라 조정
+	swordSlashConfig_.sizeEnd = 5.f;
+	swordSlashConfig_.lifetimeMin = 0.2f;
+	swordSlashConfig_.lifetimeMax = 0.4f;
+	swordSlashConfig_.startColor = { 0.384167f, 0.8396226f, 0.8256719f, 1.f };
+	swordSlashConfig_.colorOverLifetime = ColorGradient{
+		.keys = {
+			{ 0.000f, { 1.000f, 1.000f, 1.000f, 1.000f } },
+			{ 0.565f, { 0.973f, 0.899f, 0.953f, 0.533f } },
+			{ 1.000f, { 0.953f, 0.822f, 0.917f, 0.000f } },
+		}
+	};
+	swordSlashConfig_.renderOrder = 2;
+	swordSlashConfig_.angularVelocityMin = mu::pi * 2.0f;  // -90deg/sec
+	swordSlashConfig_.angularVelocityMax = mu::pi * 2.0f;  //  90deg/sec
+
+	// 발 본 인덱스 탐색 (흙먼지 VFX용)
+	const auto& playerSkeleton = player_->model()->skeleton;
+	if ( playerSkeleton.bones ) {
+		for ( const auto& bone : *playerSkeleton.bones ) {
+			if ( bone.name == "foot_l" ) {
+				footBoneIdxLeft_ = bone.boneIdx;
+			}
+			else if ( bone.name == "foot_r" ) {
+				footBoneIdxRight_ = bone.boneIdx;
+			}
+		}
+	}
+	if ( footBoneIdxLeft_ < 0 || footBoneIdxRight_ < 0 ) {
+		gSharedLog << "[Dust VFX] Warning: foot bones not found. Dumping all bone names:\n";
+		if ( playerSkeleton.bones ) {
+			for ( const auto& bone : *playerSkeleton.bones ) {
+				gSharedLog << "  bone[" << bone.boneIdx << "] = \"" << bone.name << "\"\n";
+			}
+		}
+	}
+
+	// 흙먼지 VFX config (smokeAnimation 재활용, 갈색 tint)
+	dustEmitterConfig_.pClip = assetManager_.smokeAnimation();
+	dustEmitterConfig_.direction = { 0.f, 1.f, 0.f };
+	dustEmitterConfig_.spread = 1.2f;
+	dustEmitterConfig_.speedMin = 0.3f;
+	dustEmitterConfig_.speedMax = 0.8f;
+	dustEmitterConfig_.lifetimeMin = 0.3f;
+	dustEmitterConfig_.lifetimeMax = 0.6f;
+	dustEmitterConfig_.sizeBegin = 0.3f;
+	dustEmitterConfig_.sizeEnd = 0.8f;
+	dustEmitterConfig_.sizeMultiplierMin = 0.8f;
+	dustEmitterConfig_.sizeMultiplierMax = 1.2f;
+	dustEmitterConfig_.drag = 2.0f;
+	dustEmitterConfig_.gravity = { 0.f, -9.8f, 0.f };
+	dustEmitterConfig_.gravityModifierMin = 0.0f;
+	dustEmitterConfig_.gravityModifierMax = 0.05f;
+	dustEmitterConfig_.startColor = { 0.55f, 0.4f, 0.25f, 0.8f };
+	dustEmitterConfig_.colorOverLifetime = ColorGradient{
+		.keys = {
+			{ 0.0f, { 1.f, 1.f, 1.f, 0.f } },
+			{ 0.2f, { 1.f, 1.f, 1.f, 1.f } },
+			{ 1.0f, { 0.7f, 0.7f, 0.7f, 0.f } },
+		}
+	};
+	dustEmitterConfig_.startRotationMin = 0.f;
+	dustEmitterConfig_.startRotationMax = mu::pi * 2;
+	dustEmitterConfig_.shape = EmitterShape::Point;
+	dustEmitterConfig_.additiveBlend = false;
+	dustEmitterConfig_.renderOrder = 1;
 }
 
 void Game::importNode(std::ifstream& ifs) {
@@ -331,6 +445,7 @@ void Game::importPlayerStart(std::ifstream& ifs, Player& player) {
 	player.setModel(assetManager_.modelPlayer());
 	player.setAnimBlender(animSystem_, assetManager_);
 	player.setHp(100);
+	player.setMaxHp(100);
 
 	player.body().setMotionType(MotionType::Dynamic);
 	player.body().setMass(80.f);
@@ -359,6 +474,7 @@ void Game::importGoblinSpawner(std::ifstream& ifs, Goblin& goblin) {
 	goblin.setModel(assetManager_.modelGoblin());
 	goblin.setAnimBlender(animSystem_, assetManager_);
 	goblin.setHp(90);
+	goblin.setMaxHp(90);
 	goblin.setId(1);
 	setupMonsterBody(goblin.body(), 40.f);
 }
@@ -367,6 +483,7 @@ void Game::importAnubisSpawner(std::ifstream& ifs, Anubis& anubis) {
 	anubis.setModel(assetManager_.modelAnubis());
 	anubis.setAnimBlender(animSystem_, assetManager_);
 	anubis.setHp(110);
+	anubis.setMaxHp(110);
 	anubis.setId(2);
 	setupMonsterBody(anubis.body(), 90.f);
 }
@@ -375,6 +492,7 @@ void Game::importBatSpawner(std::ifstream& ifs, Bat& bat) {
 	bat.setModel(assetManager_.modelBat());
 	bat.setAnimBlender(animSystem_, assetManager_);
 	bat.setHp(40);
+	bat.setMaxHp(40);
 	bat.setId(3);
 	setupMonsterBody(bat.body(), 20.f);
 }
@@ -383,6 +501,7 @@ void Game::importBomberSpawner(std::ifstream& ifs, Bomber& bomber) {
 	bomber.setModel(assetManager_.modelBomber());
 	bomber.setAnimBlender(animSystem_, assetManager_);
 	bomber.setHp(60);
+	bomber.setMaxHp(60);
 	bomber.setId(4);
 	setupMonsterBody(bomber.body(), 60.f);
 }
@@ -391,6 +510,7 @@ void Game::importDemonSpawner(std::ifstream& ifs, Demon& demon) {
 	demon.setModel(assetManager_.modelDemon());
 	demon.setAnimBlender(animSystem_, assetManager_);
 	demon.setHp(140);
+	demon.setMaxHp(140);
 	demon.setId(5);
 	setupMonsterBody(demon.body(), 100.f);
 }
@@ -399,6 +519,7 @@ void Game::importDragonSpawner(std::ifstream& ifs, Dragon& dragon) {
 	dragon.setModel(assetManager_.modelDragon());
 	dragon.setAnimBlender(animSystem_, assetManager_);
 	dragon.setHp(250);
+	dragon.setMaxHp(250);
 	dragon.setId(6);
 	setupMonsterBody(dragon.body(), 200.f);
 }
@@ -407,6 +528,7 @@ void Game::importEyeballSpawner(std::ifstream& ifs, Eyeball& eyeball) {
 	eyeball.setModel(assetManager_.modelEyeball());
 	eyeball.setAnimBlender(animSystem_, assetManager_);
 	eyeball.setHp(120);
+	eyeball.setMaxHp(120);
 	eyeball.setId(7);
 	setupMonsterBody(eyeball.body(), 30.f);
 }
@@ -415,6 +537,7 @@ void Game::importFishmanSpawner(std::ifstream& ifs, Fishman& fishman) {
 	fishman.setModel(assetManager_.modelFishman());
 	fishman.setAnimBlender(animSystem_, assetManager_);
 	fishman.setHp(80);
+	fishman.setMaxHp(80);
 	fishman.setId(8);
 	setupMonsterBody(fishman.body(), 70.f);
 }
@@ -423,6 +546,7 @@ void Game::importGargoyleSpawner(std::ifstream& ifs, Gargoyle& gargoyle) {
 	gargoyle.setModel(assetManager_.modelGargoyle());
 	gargoyle.setAnimBlender(animSystem_, assetManager_);
 	gargoyle.setHp(160);
+	gargoyle.setMaxHp(160);
 	gargoyle.setId(9);
 	setupMonsterBody(gargoyle.body(), 120.f);
 }
@@ -646,18 +770,99 @@ void Game::update(Milliseconds deltaTime) {
 	dirLight_.update(deltaTime);
 	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), assetConfigs_.cascade, assetConfigs_.shadowMap);
 
-	// playerHpUI_.update( deltaTime, gfx_, nullptr );
+	// 몬스터 HP바 위치 갱신 (layout() 이전에 offset 갱신해야 반영됨)
+	{
+		constexpr float kBarHalfWidth = 40.f;
+		for (auto& entry : monsterHpBars_) {
+			if (entry.monster->hp() <= 0) {
+				entry.hpBar->visible = false;
+				continue;
+			}
+			const mu::Vec3 barWorldPos = entry.monster->pos()
+				+ mu::Vec3{ 0.f, entry.worldYOffset, 0.f };
+			float sx{}, sy{};
+			const bool onScreen = worldToScreen(
+				barWorldPos,
+				camera_.view(), camera_.proj(),
+				uiManager_.screenWidth(), uiManager_.screenHeight(),
+				sx, sy
+			);
+			entry.hpBar->visible = onScreen;
+			if (onScreen) {
+				entry.hpBar->offsetX = UI::DimValue::px(sx - kBarHalfWidth);
+				entry.hpBar->offsetY = UI::DimValue::px(sy);
+				entry.hpBar->setProgress(
+					static_cast<float>(entry.monster->hp()) /
+					static_cast<float>(entry.monster->maxHp())
+				);
+			}
+		}
+	}
+
+	uiManager_.layout();
+	uiManager_.update( std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont() );
 
 	// 애니메이션 업데이트
 	animSystem_.update(0.016s);
+
+	// 발 흙먼지 방출
+	if (footBoneIdxLeft_ >= 0 && footBoneIdxRight_ >= 0
+		&& player_->renderState().animBlender) {
+		auto* animBlender = static_cast<AnimBlenderPlayer*>(
+			player_->renderState().animBlender.get());
+
+		if (animBlender->isRunning()) {
+			const auto duration = animBlender->runDuration();
+			const auto currTime = animBlender->runAnimTime();
+			const float currPhase = currTime / duration;
+			const float prevPhase = prevAnimTimeRun_ / duration;
+
+			constexpr float kLeftFootContact  = 0.0f;
+			constexpr float kRightFootContact = 0.5f;
+
+			auto crossedPhase = [&](float phase) -> bool {
+				if (currPhase >= prevPhase) {
+					return prevPhase < phase && currPhase >= phase;
+				} else {
+					return prevPhase < phase || currPhase >= phase;
+				}
+			};
+
+			const auto& skeleton = player_->model()->skeleton;
+			const auto& boneXforms = animBlender->finalXformData();
+			const auto& world = player_->renderState().world;
+
+			auto getBoneWorldPos = [&](int boneIdx) -> mu::Vec3 {
+				const auto& bone = skeleton.bones->at(boneIdx);
+				const mu::Mat4x4 boneToWorld = bone.toDress
+					* boneXforms[boneIdx] * world;
+				return mu::Vec3(mu::Vec4(0.f, 0.f, 0.f, 1.f) * boneToWorld);
+			};
+
+			if (crossedPhase(kLeftFootContact)) {
+				dustEmitterConfig_.position = getBoneWorldPos(footBoneIdxLeft_);
+				dustParticleSystem_.emit(dustEmitterConfig_, 4);
+			}
+			if (crossedPhase(kRightFootContact)) {
+				dustEmitterConfig_.position = getBoneWorldPos(footBoneIdxRight_);
+				dustParticleSystem_.emit(dustEmitterConfig_, 4);
+			}
+
+			prevAnimTimeRun_ = currTime;
+		} else {
+			prevAnimTimeRun_ = 0s;
+		}
+	}
 
 	// 파티클
 	flameParticleSystem_.update( deltaTime );
 	smokeParticleSystem_.update( deltaTime );
 	swordSlashSystem_.update( deltaTime );
+	dustParticleSystem_.update( deltaTime );
 
 	// UI 동기화
-	// playerHpUI_.setHp(player_->hp());
+	if (playerHpBar_)
+		playerHpBar_->setProgress(player_->hp() / 100.f);
 
 	clearEvents(eventList_);
 }
@@ -681,8 +886,9 @@ void Game::render() {
 	flameParticleSystem_.render( gfx_ );
 	smokeParticleSystem_.render( gfx_ );
 	swordSlashSystem_.render( gfx_ );
+	dustParticleSystem_.render( gfx_ );
 
-	playerHpUI_.render( gfx_ );
+	uiManager_.render( gfx_ );
 
 	auto frameDataPBR = PBRPipeline::FrameData{
 		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
@@ -699,12 +905,6 @@ void Game::render() {
 			.globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f)
 		});
 	}
-
-	auto frameData1 = UIPipeline::FrameData{
-		.screenWidth = static_cast<float>( gClientRect.right - gClientRect.left ),
-		.screenHeight = static_cast<float>( gClientRect.bottom - gClientRect.top )
-	};
-	gfx_.addFrameData( frameData1 );
 
 	gfx_.render();
 }
@@ -935,6 +1135,11 @@ void Game::processInput(Milliseconds deltaTime) {
 	// C key: toggle CSM cascade debug visualization
 	if ( (keyboardStateCurr_['C'] & 0x80) && !(keyboardStatePrev_['C'] & 0x80) ) {
 		gfx_.toggleCsmDebugVisualization();
+	}
+
+	// U key: toggle UI debug overlay (colored bounding boxes)
+	if ( (keyboardStateCurr_['U'] & 0x80) && !(keyboardStatePrev_['U'] & 0x80) ) {
+		uiManager_.toggleDebugMode();
 	}
 
 	// F key: emit particles for testing

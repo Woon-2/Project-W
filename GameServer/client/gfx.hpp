@@ -195,8 +195,18 @@ public:
 	// CSM cascade 디버그 시각화를 토글한다 ('C' 키에 연결됨).
 	void toggleCsmDebugVisualization() { csmDebugVisualization_ = !csmDebugVisualization_; }
 
-	void WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, void* pFontObjHandle, const WCHAR* wchString, DWORD dwLen );
+	void WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, void* pFontObjHandle, const WCHAR* wchString, DWORD dwLen, D2D1_COLOR_F color = D2D1::ColorF( D2D1::ColorF::White ) );
 	void UpdateTextureWithTextImage( TextImage* srcImage, UINT srcWidth, UINT srcHeight );
+	// Creates a TextImage immediately (loadAssets must have been called first).
+	void createTextImageImmediate(UINT width, UINT height, TextImage* pDest);
+	// Returns the built-in default font handle (Tahoma 16pt).
+	FontHandle* defaultFont() { return &tahomaFont_; }
+	// Returns a 1x1 white pixel texture for solid-color UI rendering.
+	const Texture* solidColorTex() const { return &solidColorImage_.texture; }
+	// Creates a new Tahoma FontHandle with the specified point size.
+	FontHandle createFont(float fontSize);
+	// Measures text extents without rendering to a bitmap.
+	void measureText(FontHandle* pFont, const WCHAR* str, DWORD len, float maxW, float maxH, int* outW, int* outH);
 
 private:
 	// 공용 샘플러들 생성
@@ -300,6 +310,7 @@ private:
 	// Font
 	Font font_{};
 	FontHandle tahomaFont_{};
+	TextImage  solidColorImage_{};  // 1x1 white pixel — solid-color UI fallback
 
 	std::map<std::string, Fence> fences_{};
 
