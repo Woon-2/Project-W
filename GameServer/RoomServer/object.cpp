@@ -31,7 +31,8 @@ mu::Vec3 Goblin::update(float dt, const std::vector<GameSession*>& sessions) {
 	for (auto s : sessions) {
 		float d = (s->player()->pos() - pos()).len();
 		if (d < nearestDist) { 
-			nearestDist = d; nearestSession = s;
+			nearestDist = d;
+			nearestSession = s;
 		}
 	}
 
