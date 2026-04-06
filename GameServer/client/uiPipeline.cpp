@@ -322,6 +322,7 @@ namespace UIPipeline {
 			auto perDrawcallData = UIShader::PerDrawcallData{
 				.material = UIShader::Material{
 					.idxAlbedo = drawEvent.pTex->idxSrv,
+					.cAlbedo = drawEvent.colorMul,
 				},
 				.firstInstanceIdx = idxDrawcall
 			};
@@ -550,7 +551,8 @@ namespace UIPipeline {
 
 				auto perDrawcallData = UIShader::PerDrawcallData{
 					.material = UIShader::Material{
-						.idxAlbedo = drawEvent.pTex->idxSrv
+						.idxAlbedo = drawEvent.pTex->idxSrv,
+						.cAlbedo = drawEvent.colorMul,
 					},
 					.firstInstanceIdx = static_cast<u32t>(idxDrawcall)
 				};

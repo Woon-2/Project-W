@@ -4,6 +4,7 @@
 #include "../errorHandling.hpp"
 #include "../binaryImport.hpp"
 #include "../timer.hpp"
+#include "../ui/widgets/Label.hpp"
 
 extern RECT gClientRect;
 
@@ -87,143 +88,11 @@ void Game::setupStage() {
 	//playerHpUI_.setTexture( assetManager_.playerHpLine() );
 	//playerHpUI_.setTextImage( assetManager_.textPlayerHp() );
 	//playerHpUI_.setHp( player_->hp() );
-	//playerHpUI_.setAmmo( player_->ammo() );
+	// playerHpUI_.setAmmo( player_->ammo() );
 	playerHpUI_.setPivot( mu::Vec2(512.f, 768.f - 40.f) );
 	playerHpUI_.setScale( mu::Vec2(1024.f, 64.f) );
-
-	// 파티클 설정
-	flameEmitterConfig_.pClip             = assetManager_.flameAnimation();
-	flameEmitterConfig_.position          = { -6.f, 58.5f, -5.f };
-	flameEmitterConfig_.direction          = { 0.f, 1.f, 0.f };
-	flameEmitterConfig_.spread             = 0.0f;          // 약간의 퍼짐으로 자연스러운 불꽃
-	flameEmitterConfig_.speedMin           = 0.f;           // 초기 속도 제거: 상승은 gravityModifier로 제어
-	flameEmitterConfig_.speedMax           = 0.3f;          // 아주 작은 랜덤 변화만 허용
-	flameEmitterConfig_.lifetimeMin        = 0.5f;
-	flameEmitterConfig_.lifetimeMax        = 1.0f;
-	flameEmitterConfig_.sizeBegin          = 1.0f;
-	flameEmitterConfig_.sizeEnd            = 1.0f;
-	flameEmitterConfig_.sizeMultiplierMin  = 0.8f;
-	flameEmitterConfig_.sizeMultiplierMax  = 1.0f;
-	flameEmitterConfig_.drag               = 0.8f;
-	flameEmitterConfig_.gravityModifierMin = -0.3f;         // 음수 = 위쪽 부력 
-	flameEmitterConfig_.gravityModifierMax = 0.0f;         // 파티클마다 다른 상승력
-	flameEmitterConfig_.startColor        = { 1.f, 0.4f, 0.f, 1.f };
-	flameEmitterConfig_.startRotationMin  = 0.f;
-	flameEmitterConfig_.startRotationMax  = mu::pi * 2;
-	flameEmitterConfig_.shape             = EmitterShape::Edge;
-	flameEmitterConfig_.edgeLength		 = 1.5f;
-	flameEmitterConfig_.emitRate          = 15.0f;
-	flameEmitterConfig_.additiveBlend     = true;
-	flameEmitterConfig_.renderOrder       = 0;
-	flameParticleSystem_.startContinuous(flameEmitterConfig_);
-
-	smokeEmitterConfig_.pClip            = assetManager_.smokeAnimation();
-	smokeEmitterConfig_.position         = { -6.f, 58.5f, -5.f };
-	smokeEmitterConfig_.direction        = { 0.f, 1.f, 0.f };
-	smokeEmitterConfig_.spread           = 0.0f;
-	smokeEmitterConfig_.speedMin         = 0.5f;
-	smokeEmitterConfig_.speedMax         = 2.f;
-	smokeEmitterConfig_.lifetimeMin      = 0.5f;
-	smokeEmitterConfig_.lifetimeMax      = 1.0f;
-	smokeEmitterConfig_.sizeBegin        = 1.f;
-	smokeEmitterConfig_.sizeEnd          = 1.0f;
-	smokeEmitterConfig_.sizeMultiplierMin = 1.f;
-	smokeEmitterConfig_.sizeMultiplierMax = 1.f;
-	smokeEmitterConfig_.drag             = 0.8f;
-	smokeEmitterConfig_.gravity          = { 0.f, -1.f, 0.f };
-	smokeEmitterConfig_.gravityModifierMin = -0.5f;        // 약간의 부력으로 천천히 상승
-	smokeEmitterConfig_.gravityModifierMax = -0.2f;
-	smokeEmitterConfig_.startColor        = { 0.5f, 0.5f, 0.5f, 1.f };
-	smokeEmitterConfig_.colorOverLifetime = ColorGradient{
-		.keys = {
-			{0.0f, {1.f,  1.f,  1.f,  0.f}},   // RGB*1 (bright),  A*0 (transparent)
-			{0.5f, {0.5f, 0.5f, 0.5f, 1.f}},   // RGB*0.5 (mid),   A*1 (opaque)
-			{1.0f, {0.f,  0.f,  0.f,  0.f}},   // RGB*0 (black),   A*0 (transparent)
-		}
-	};
-	smokeEmitterConfig_.startRotationMin = 0.f;
-	smokeEmitterConfig_.startRotationMax = mu::pi * 2;
-	smokeEmitterConfig_.shape            = EmitterShape::Edge;
-	smokeEmitterConfig_.edgeLength       = 1.5f;
-	smokeEmitterConfig_.emitRate         = 10.0f;
-	smokeEmitterConfig_.additiveBlend    = false;
-	smokeEmitterConfig_.renderOrder      = 1;
-	smokeParticleSystem_.startContinuous(smokeEmitterConfig_);
-
-	// 검기 이펙트 설정 (에셋이 없으면 emit 시 아무것도 렌더되지 않음)
-	swordSlashConfig_.pMesh        = assetManager_.swordSlashMesh();
-	swordSlashConfig_.pSubMesh     = assetManager_.swordSlashMesh()->subMeshes.empty()
-	                                  ? nullptr
-	                                  : &assetManager_.swordSlashMesh()->subMeshes[0];
-	swordSlashConfig_.pTex         = assetManager_.swordSlashTex();
-	swordSlashConfig_.position     = { 0.f, 0.f, 0.f };
-	swordSlashConfig_.rotation     = mu::Mat4x4{};
-	swordSlashConfig_.sizeBegin    = 5.f;   // 메시 원본 스케일에 따라 조정
-	swordSlashConfig_.sizeEnd      = 5.f;
-	swordSlashConfig_.lifetimeMin  = 0.2f;
-	swordSlashConfig_.lifetimeMax  = 0.4f;
-	swordSlashConfig_.startColor   = { 0.384167f, 0.8396226f, 0.8256719f, 1.f };
-	swordSlashConfig_.colorOverLifetime = ColorGradient{
-		.keys = {
-			{ 0.000f, { 1.000f, 1.000f, 1.000f, 1.000f } },
-			{ 0.565f, { 0.973f, 0.899f, 0.953f, 0.533f } },
-			{ 1.000f, { 0.953f, 0.822f, 0.917f, 0.000f } },
-		}
-	};
-	swordSlashConfig_.renderOrder        = 2;
-	swordSlashConfig_.angularVelocityMin =  mu::pi * 2.0f;  // -90deg/sec
-	swordSlashConfig_.angularVelocityMax =  mu::pi * 2.0f;  //  90deg/sec
-
-	// 발 본 인덱스 탐색 (흙먼지 VFX용)
-	const auto& playerSkeleton = player_->model()->skeleton;
-	if (playerSkeleton.bones) {
-		for (const auto& bone : *playerSkeleton.bones) {
-			if (bone.name == "foot_l") {
-				footBoneIdxLeft_ = bone.boneIdx;
-			}
-			else if (bone.name == "foot_r") {
-				footBoneIdxRight_ = bone.boneIdx;
-			}
-		}
-	}
-	if (footBoneIdxLeft_ < 0 || footBoneIdxRight_ < 0) {
-		gSharedLog << "[Dust VFX] Warning: foot bones not found. Dumping all bone names:\n";
-		if (playerSkeleton.bones) {
-			for (const auto& bone : *playerSkeleton.bones) {
-				gSharedLog << "  bone[" << bone.boneIdx << "] = \"" << bone.name << "\"\n";
-			}
-		}
-	}
-
-	// 흙먼지 VFX config (smokeAnimation 재활용, 갈색 tint)
-	dustEmitterConfig_.pClip             = assetManager_.smokeAnimation();
-	dustEmitterConfig_.direction         = { 0.f, 1.f, 0.f };
-	dustEmitterConfig_.spread            = 1.2f;
-	dustEmitterConfig_.speedMin          = 0.3f;
-	dustEmitterConfig_.speedMax          = 0.8f;
-	dustEmitterConfig_.lifetimeMin       = 0.3f;
-	dustEmitterConfig_.lifetimeMax       = 0.6f;
-	dustEmitterConfig_.sizeBegin         = 0.3f;
-	dustEmitterConfig_.sizeEnd           = 0.8f;
-	dustEmitterConfig_.sizeMultiplierMin = 0.8f;
-	dustEmitterConfig_.sizeMultiplierMax = 1.2f;
-	dustEmitterConfig_.drag              = 2.0f;
-	dustEmitterConfig_.gravity           = { 0.f, -9.8f, 0.f };
-	dustEmitterConfig_.gravityModifierMin = 0.0f;
-	dustEmitterConfig_.gravityModifierMax = 0.05f;
-	dustEmitterConfig_.startColor        = { 0.55f, 0.4f, 0.25f, 0.8f };
-	dustEmitterConfig_.colorOverLifetime  = ColorGradient{
-		.keys = {
-			{ 0.0f, { 1.f, 1.f, 1.f, 0.f } },
-			{ 0.2f, { 1.f, 1.f, 1.f, 1.f } },
-			{ 1.0f, { 0.7f, 0.7f, 0.7f, 0.f } },
-		}
-	};
-	dustEmitterConfig_.startRotationMin  = 0.f;
-	dustEmitterConfig_.startRotationMax  = mu::pi * 2;
-	dustEmitterConfig_.shape             = EmitterShape::Point;
-	dustEmitterConfig_.additiveBlend     = false;
-	dustEmitterConfig_.renderOrder       = 1;
+	
+	setParticle();
 
 	// 전투 시스템에 참가자 등록
 	// 플레이어: 공격 hitbox 및 데미지 설정 (AI 쿨타임은 사용하지 않음)
@@ -238,6 +107,160 @@ void Game::setupStage() {
 	combatSystem_.registerCombatant(eyeball_.get(),  { {1.2f, 1.2f, 1.2f}, 1.0f, 15, 2000ms });
 	combatSystem_.registerCombatant(fishman_.get(),  { {1.2f, 1.8f, 1.2f}, 0.9f, 20, 2500ms });
 	combatSystem_.registerCombatant(gargoyle_.get(), { {1.5f, 2.0f, 1.5f}, 1.0f, 25, 3000ms });
+
+	uiManager_.setScreenSize(
+		static_cast<float>(gClientRect.right - gClientRect.left),
+		static_cast<float>(gClientRect.bottom - gClientRect.top)
+	);
+	uiManager_.requestDebugResources(gfx_);
+	auto* pLabel = static_cast<UI::Label*>(
+		uiManager_.root()->addChild(std::make_unique<UI::Label>())
+	);
+	pLabel->name    = "hpLabel";
+	pLabel->anchor  = UI::Anchors::BottomCenter;
+	pLabel->pivot   = UI::Pivots::BottomCenter;
+	pLabel->width   = UI::DimValue::px(512.f);
+	pLabel->height  = UI::DimValue::px(256.f);
+	pLabel->offsetY = UI::DimValue::px(-10.f);
+	pLabel->setTextImage(assetManager_.textPlayerHp());
+	pLabel->setText(L"UI System OK");
+}
+
+void Game::setParticle()
+{
+	// 파티클 설정
+	flameEmitterConfig_.pClip = assetManager_.flameAnimation();
+	flameEmitterConfig_.position = { -6.f, 58.5f, -5.f };
+	flameEmitterConfig_.direction = { 0.f, 1.f, 0.f };
+	flameEmitterConfig_.spread = 0.0f;          // 약간의 퍼짐으로 자연스러운 불꽃
+	flameEmitterConfig_.speedMin = 0.f;           // 초기 속도 제거: 상승은 gravityModifier로 제어
+	flameEmitterConfig_.speedMax = 0.3f;          // 아주 작은 랜덤 변화만 허용
+	flameEmitterConfig_.lifetimeMin = 0.5f;
+	flameEmitterConfig_.lifetimeMax = 1.0f;
+	flameEmitterConfig_.sizeBegin = 1.0f;
+	flameEmitterConfig_.sizeEnd = 1.0f;
+	flameEmitterConfig_.sizeMultiplierMin = 0.8f;
+	flameEmitterConfig_.sizeMultiplierMax = 1.0f;
+	flameEmitterConfig_.drag = 0.8f;
+	flameEmitterConfig_.gravityModifierMin = -0.3f;         // 음수 = 위쪽 부력 
+	flameEmitterConfig_.gravityModifierMax = 0.0f;         // 파티클마다 다른 상승력
+	flameEmitterConfig_.startColor = { 1.f, 0.4f, 0.f, 1.f };
+	flameEmitterConfig_.startRotationMin = 0.f;
+	flameEmitterConfig_.startRotationMax = mu::pi * 2;
+	flameEmitterConfig_.shape = EmitterShape::Edge;
+	flameEmitterConfig_.edgeLength = 1.5f;
+	flameEmitterConfig_.emitRate = 15.0f;
+	flameEmitterConfig_.additiveBlend = true;
+	flameEmitterConfig_.renderOrder = 0;
+	flameParticleSystem_.startContinuous( flameEmitterConfig_ );
+
+	smokeEmitterConfig_.pClip = assetManager_.smokeAnimation();
+	smokeEmitterConfig_.position = { -6.f, 58.5f, -5.f };
+	smokeEmitterConfig_.direction = { 0.f, 1.f, 0.f };
+	smokeEmitterConfig_.spread = 0.0f;
+	smokeEmitterConfig_.speedMin = 0.5f;
+	smokeEmitterConfig_.speedMax = 2.f;
+	smokeEmitterConfig_.lifetimeMin = 0.5f;
+	smokeEmitterConfig_.lifetimeMax = 1.0f;
+	smokeEmitterConfig_.sizeBegin = 1.f;
+	smokeEmitterConfig_.sizeEnd = 1.0f;
+	smokeEmitterConfig_.sizeMultiplierMin = 1.f;
+	smokeEmitterConfig_.sizeMultiplierMax = 1.f;
+	smokeEmitterConfig_.drag = 0.8f;
+	smokeEmitterConfig_.gravity = { 0.f, -1.f, 0.f };
+	smokeEmitterConfig_.gravityModifierMin = -0.5f;        // 약간의 부력으로 천천히 상승
+	smokeEmitterConfig_.gravityModifierMax = -0.2f;
+	smokeEmitterConfig_.startColor = { 0.5f, 0.5f, 0.5f, 1.f };
+	smokeEmitterConfig_.colorOverLifetime = ColorGradient{
+		.keys = {
+			{0.0f, {1.f,  1.f,  1.f,  0.f}},   // RGB*1 (bright),  A*0 (transparent)
+			{0.5f, {0.5f, 0.5f, 0.5f, 1.f}},   // RGB*0.5 (mid),   A*1 (opaque)
+			{1.0f, {0.f,  0.f,  0.f,  0.f}},   // RGB*0 (black),   A*0 (transparent)
+		}
+	};
+	smokeEmitterConfig_.startRotationMin = 0.f;
+	smokeEmitterConfig_.startRotationMax = mu::pi * 2;
+	smokeEmitterConfig_.shape = EmitterShape::Edge;
+	smokeEmitterConfig_.edgeLength = 1.5f;
+	smokeEmitterConfig_.emitRate = 10.0f;
+	smokeEmitterConfig_.additiveBlend = false;
+	smokeEmitterConfig_.renderOrder = 1;
+	smokeParticleSystem_.startContinuous( smokeEmitterConfig_ );
+
+	// 검기 이펙트 설정 (에셋이 없으면 emit 시 아무것도 렌더되지 않음)
+	swordSlashConfig_.pMesh = assetManager_.swordSlashMesh();
+	swordSlashConfig_.pSubMesh = assetManager_.swordSlashMesh()->subMeshes.empty()
+		? nullptr
+		: &assetManager_.swordSlashMesh()->subMeshes[0];
+	swordSlashConfig_.pTex = assetManager_.swordSlashTex();
+	swordSlashConfig_.position = { 0.f, 0.f, 0.f };
+	swordSlashConfig_.rotation = mu::Mat4x4{};
+	swordSlashConfig_.sizeBegin = 5.f;   // 메시 원본 스케일에 따라 조정
+	swordSlashConfig_.sizeEnd = 5.f;
+	swordSlashConfig_.lifetimeMin = 0.2f;
+	swordSlashConfig_.lifetimeMax = 0.4f;
+	swordSlashConfig_.startColor = { 0.384167f, 0.8396226f, 0.8256719f, 1.f };
+	swordSlashConfig_.colorOverLifetime = ColorGradient{
+		.keys = {
+			{ 0.000f, { 1.000f, 1.000f, 1.000f, 1.000f } },
+			{ 0.565f, { 0.973f, 0.899f, 0.953f, 0.533f } },
+			{ 1.000f, { 0.953f, 0.822f, 0.917f, 0.000f } },
+		}
+	};
+	swordSlashConfig_.renderOrder = 2;
+	swordSlashConfig_.angularVelocityMin = mu::pi * 2.0f;  // -90deg/sec
+	swordSlashConfig_.angularVelocityMax = mu::pi * 2.0f;  //  90deg/sec
+
+	// 발 본 인덱스 탐색 (흙먼지 VFX용)
+	const auto& playerSkeleton = player_->model()->skeleton;
+	if ( playerSkeleton.bones ) {
+		for ( const auto& bone : *playerSkeleton.bones ) {
+			if ( bone.name == "foot_l" ) {
+				footBoneIdxLeft_ = bone.boneIdx;
+			}
+			else if ( bone.name == "foot_r" ) {
+				footBoneIdxRight_ = bone.boneIdx;
+			}
+		}
+	}
+	if ( footBoneIdxLeft_ < 0 || footBoneIdxRight_ < 0 ) {
+		gSharedLog << "[Dust VFX] Warning: foot bones not found. Dumping all bone names:\n";
+		if ( playerSkeleton.bones ) {
+			for ( const auto& bone : *playerSkeleton.bones ) {
+				gSharedLog << "  bone[" << bone.boneIdx << "] = \"" << bone.name << "\"\n";
+			}
+		}
+	}
+
+	// 흙먼지 VFX config (smokeAnimation 재활용, 갈색 tint)
+	dustEmitterConfig_.pClip = assetManager_.smokeAnimation();
+	dustEmitterConfig_.direction = { 0.f, 1.f, 0.f };
+	dustEmitterConfig_.spread = 1.2f;
+	dustEmitterConfig_.speedMin = 0.3f;
+	dustEmitterConfig_.speedMax = 0.8f;
+	dustEmitterConfig_.lifetimeMin = 0.3f;
+	dustEmitterConfig_.lifetimeMax = 0.6f;
+	dustEmitterConfig_.sizeBegin = 0.3f;
+	dustEmitterConfig_.sizeEnd = 0.8f;
+	dustEmitterConfig_.sizeMultiplierMin = 0.8f;
+	dustEmitterConfig_.sizeMultiplierMax = 1.2f;
+	dustEmitterConfig_.drag = 2.0f;
+	dustEmitterConfig_.gravity = { 0.f, -9.8f, 0.f };
+	dustEmitterConfig_.gravityModifierMin = 0.0f;
+	dustEmitterConfig_.gravityModifierMax = 0.05f;
+	dustEmitterConfig_.startColor = { 0.55f, 0.4f, 0.25f, 0.8f };
+	dustEmitterConfig_.colorOverLifetime = ColorGradient{
+		.keys = {
+			{ 0.0f, { 1.f, 1.f, 1.f, 0.f } },
+			{ 0.2f, { 1.f, 1.f, 1.f, 1.f } },
+			{ 1.0f, { 0.7f, 0.7f, 0.7f, 0.f } },
+		}
+	};
+	dustEmitterConfig_.startRotationMin = 0.f;
+	dustEmitterConfig_.startRotationMax = mu::pi * 2;
+	dustEmitterConfig_.shape = EmitterShape::Point;
+	dustEmitterConfig_.additiveBlend = false;
+	dustEmitterConfig_.renderOrder = 1;
 }
 
 void Game::importNode(std::ifstream& ifs) {
@@ -673,6 +696,9 @@ void Game::update(Milliseconds deltaTime) {
 
 	// playerHpUI_.update( deltaTime, gfx_, nullptr );
 
+	uiManager_.layout();
+	uiManager_.update( std::chrono::duration<float>(deltaTime).count(), gfx_, nullptr );
+
 	// 애니메이션 업데이트
 	animSystem_.update(0.016s);
 
@@ -758,6 +784,7 @@ void Game::render() {
 	swordSlashSystem_.render( gfx_ );
 	dustParticleSystem_.render( gfx_ );
 
+	uiManager_.render( gfx_ );
 	playerHpUI_.render( gfx_ );
 
 	auto frameDataPBR = PBRPipeline::FrameData{
@@ -775,12 +802,6 @@ void Game::render() {
 			.globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f)
 		});
 	}
-
-	auto frameData1 = UIPipeline::FrameData{
-		.screenWidth = static_cast<float>( gClientRect.right - gClientRect.left ),
-		.screenHeight = static_cast<float>( gClientRect.bottom - gClientRect.top )
-	};
-	gfx_.addFrameData( frameData1 );
 
 	gfx_.render();
 }
@@ -1033,6 +1054,11 @@ void Game::processInput(Milliseconds deltaTime) {
 	// C key: toggle CSM cascade debug visualization
 	if ( (keyboardStateCurr_['C'] & 0x80) && !(keyboardStatePrev_['C'] & 0x80) ) {
 		gfx_.toggleCsmDebugVisualization();
+	}
+
+	// U key: toggle UI debug overlay (colored bounding boxes)
+	if ( (keyboardStateCurr_['U'] & 0x80) && !(keyboardStatePrev_['U'] & 0x80) ) {
+		uiManager_.toggleDebugMode();
 	}
 
 	// F key: emit particles for testing

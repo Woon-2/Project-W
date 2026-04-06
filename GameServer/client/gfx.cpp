@@ -1277,6 +1277,10 @@ void GFX::UpdateTextureWithTextImage( TextImage* srcImage, UINT srcWidth, UINT s
 	pUploadBuffer->Unmap( 0, nullptr );
 }
 
+void GFX::createTextImageImmediate(UINT width, UINT height, TextImage* pDest) {
+	*pDest = TextImage(device_.Get(), width, height, srvTexPool_);
+}
+
 // 공용 샘플러들 생성
 // gfxUtil.hpp의 Samplers enum과 인덱스를 맞춰주어야 한다.
 void GFX::createSamplers() {

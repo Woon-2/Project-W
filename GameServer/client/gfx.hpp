@@ -197,6 +197,8 @@ public:
 
 	void WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, void* pFontObjHandle, const WCHAR* wchString, DWORD dwLen );
 	void UpdateTextureWithTextImage( TextImage* srcImage, UINT srcWidth, UINT srcHeight );
+	// Creates a TextImage immediately (loadAssets must have been called first).
+	void createTextImageImmediate(UINT width, UINT height, TextImage* pDest);
 
 private:
 	// 공용 샘플러들 생성

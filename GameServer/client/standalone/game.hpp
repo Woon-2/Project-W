@@ -22,6 +22,7 @@
 #include "../debugBVView.hpp"
 #include "../particleSystem.hpp"
 #include "../meshParticleSystem.hpp"
+#include "../ui/UIManager.hpp"
 
 class Timer;
 
@@ -37,6 +38,7 @@ public:
 	void setTimer(Timer* pTimer) { pTimer_ = pTimer; }
 	// 객체들을 생성한다.
 	void setupStage();
+	void setParticle();
 
 	// 게임의 업데이트는 다음 순서대로 이루어진다.
 	// 입력 처리
@@ -126,6 +128,8 @@ private:
 
 	BasicPlayerHpUI playerHpUI_{};
 	TextImage textFPS_{};
+
+	UI::UIManager uiManager_{};
 
 	ParticleSystem flameParticleSystem_{};
 	ParticleSystem smokeParticleSystem_{};

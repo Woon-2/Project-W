@@ -226,6 +226,14 @@
     </ClCompile>
     <ClCompile Include="timer.cpp" />
     <ClCompile Include="uiPipeline.cpp" />
+    <ClCompile Include="ui\UIElement.cpp" />
+    <ClCompile Include="ui\UIManager.cpp" />
+    <ClCompile Include="ui\widgets\Panel.cpp" />
+    <ClCompile Include="ui\widgets\Image.cpp" />
+    <ClCompile Include="ui\widgets\Label.cpp" />
+    <ClCompile Include="ui\widgets\ProgressBar.cpp" />
+    <ClCompile Include="ui\widgets\Button.cpp" />
+    <ClCompile Include="ui\widgets\Slider.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common\pool.hpp" />
@@ -299,6 +307,15 @@
     <ClInclude Include="timer.hpp" />
     <ClInclude Include="timsort.hpp" />
     <ClInclude Include="uiPipeline.hpp" />
+    <ClInclude Include="ui\UITypes.hpp" />
+    <ClInclude Include="ui\UIElement.hpp" />
+    <ClInclude Include="ui\UIManager.hpp" />
+    <ClInclude Include="ui\widgets\Panel.hpp" />
+    <ClInclude Include="ui\widgets\Image.hpp" />
+    <ClInclude Include="ui\widgets\Label.hpp" />
+    <ClInclude Include="ui\widgets\ProgressBar.hpp" />
+    <ClInclude Include="ui\widgets\Button.hpp" />
+    <ClInclude Include="ui\widgets\Slider.hpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="meshParticle.hlsl">

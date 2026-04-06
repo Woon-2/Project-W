@@ -128,7 +128,7 @@ void Font::CreateBitmapFromText( int* piOutWidth, int* piOutHeight, IDWriteTextF
 		pD2DDeviceContext->Clear( D2D1::ColorF( 0.0f, 0.0f, 0.0f, 0.0f ) );
 		pD2DDeviceContext->SetTransform( D2D1::Matrix3x2F::Identity() );
 
-		DISPLAY_ERROR_DX_VOID( pD2DDeviceContext->DrawTextLayout( D2D1::Point2F( 0.0f, 0.0f ), pTextLayout, pBlackBrush_.Get() ), true);
+		DISPLAY_ERROR_DX_VOID( pD2DDeviceContext->DrawTextLayout( D2D1::Point2F( 0.0f, 0.0f ), pTextLayout, pWhiteBrush_.Get() ), true);
 
 		// We ignore D2DERR_RECREATE_TARGET here. This error indicates that the device
 		// is lost. It will be handled during the next call to Present.
