@@ -249,8 +249,11 @@ void AnimBlenderGoblin::update(Seconds deltaTime, void* pVoidOwner) {
 	// blendRange 설정
 	const auto walkBlendRangeStart = walkThreshold - 0.03f;
 	const auto walkBlendRangeEnd = walkThreshold + 3.f;
-	// tWalk 구하기
-	tWalk_ = std::clamp( (speed - walkBlendRangeStart) / (walkBlendRangeEnd - walkBlendRangeStart), 0.f, 1.f );
+	// tWalk 목표값 구하기
+	const auto targetTWalk = std::clamp( (speed - walkBlendRangeStart) / (walkBlendRangeEnd - walkBlendRangeStart), 0.f, 1.f );
+
+	// 지수 감쇠로 tWalk를 부드럽게 보간한다 (시상수 0.12s → 전환의 63%가 ~120ms 내 완료)
+	tWalk_ += (targetTWalk - tWalk_) * (1.f - std::exp(-deltaTime.count() / 0.12f));
 
 	// tIdle 구하기
 	tIdle_ = 1.f - tWalk_;

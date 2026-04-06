@@ -212,6 +212,7 @@ void Game::moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 ori
 	goblin->setPrevPos(goblin->renderState().pos);
 	goblin->setCurrPos(DirectX::XMLoadFloat3(&pos));
 	goblin->setOrient(DirectX::XMLoadFloat4(&orient));
+	goblin->physicState().evVelocity = DirectX::XMLoadFloat3(&velocity);
 }
 
 // 게임의 업데이트는 다음 순서대로 이루어진다.
