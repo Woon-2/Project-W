@@ -570,6 +570,9 @@ public:
 	void setHp(i32t hp) { hp_ = hp; }
 	i32t hp() const { return hp_; }
 
+	void setMaxHp(i32t v) { maxHp_ = v; }
+	i32t maxHp() const    { return maxHp_; }
+
 protected:
 	PhysicState prevPhysicState_{};
 	PhysicState currPhysicState_{};
@@ -588,6 +591,7 @@ protected:
 	i32t id_{ -1 };
 
 	i32t hp_{};
+	i32t maxHp_{};
 
 private:
 };

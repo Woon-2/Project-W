@@ -121,21 +121,49 @@ void Game::setupStage() {
 	pLabel->setTextVAlign(UI::TextVAlign::Center);
 	pLabel->setText(L"UI System OK");
 	pLabel->setAutoSize(true);
-	pLabel->setTextColor( 1.f, 1.f, 0.f, 0.5f );
+	pLabel->setTextColor( 0.0f, 0.0f, 1.0f, 1.0f );
 
 	playerHpBar_ = static_cast<UI::ProgressBar*>(
 		uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
 	);
 	playerHpBar_->name    = "playerHpBar";
-	playerHpBar_->anchor  = UI::Anchors::BottomLeft;
-	playerHpBar_->pivot   = UI::Pivots::BottomLeft;
+	playerHpBar_->anchor  = UI::Anchors::TopLeft;
+	playerHpBar_->pivot   = UI::Pivots::TopLeft;
 	playerHpBar_->width   = UI::DimValue::px(300.f);
 	playerHpBar_->height  = UI::DimValue::px(18.f);
 	playerHpBar_->offsetX = UI::DimValue::px(20.f);
-	playerHpBar_->offsetY = UI::DimValue::px(-20.f);
+	playerHpBar_->offsetY = UI::DimValue::px(20.f);
 	playerHpBar_->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
 	playerHpBar_->fillColor = { 1.0f, 0.0f, 0.0f, 1.00f };
 	playerHpBar_->setProgress(1.f);
+
+	setupMonsterHpBars();
+}
+
+void Game::setupMonsterHpBars() {
+	auto registerBar = [&](Object* monster, float yOffset) {
+		auto* bar = static_cast<UI::ProgressBar*>(
+			uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
+		);
+		bar->anchor    = UI::Anchors::TopLeft;
+		bar->pivot     = UI::Pivots::TopLeft;
+		bar->width     = UI::DimValue::px(80.f);
+		bar->height    = UI::DimValue::px(8.f);
+		bar->fillColor = { 0.9f, 0.15f, 0.1f, 1.f };
+		bar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
+		bar->visible   = false;
+		monsterHpBars_.push_back({ monster, bar, yOffset });
+	};
+
+	registerBar(goblin_.get(),   2.5f);
+	registerBar(anubis_.get(),   3.5f);
+	registerBar(bat_.get(),      1.5f);
+	registerBar(bomber_.get(),   3.0f);
+	registerBar(demon_.get(),    4.0f);
+	registerBar(dragon_.get(),   6.0f);
+	registerBar(eyeball_.get(),  1.5f);
+	registerBar(fishman_.get(),  3.0f);
+	registerBar(gargoyle_.get(), 3.5f);
 }
 
 void Game::setParticle()
@@ -378,6 +406,7 @@ void Game::importPlayerStart(std::ifstream& ifs, Player& player) {
 	player.setModel(assetManager_.modelPlayer());
 	player.setAnimBlender(animSystem_, assetManager_);
 	player.setHp(100);
+	player.setMaxHp(100);
 
 	//Equipment rifle{};
 	//rifle.socketType = Bone::SocketType::RightHand;
@@ -392,6 +421,7 @@ void Game::importGoblinSpawner(std::ifstream& ifs, Goblin& goblin) {
 	goblin.setModel(assetManager_.modelGoblin());
 	goblin.setAnimBlender(animSystem_, assetManager_);
 	goblin.setHp(90);
+	goblin.setMaxHp(90);
 	goblin.setId(1);
 }
 
@@ -399,6 +429,7 @@ void Game::importAnubisSpawner(std::ifstream& ifs, Anubis& anubis) {
 	anubis.setModel(assetManager_.modelAnubis());
 	anubis.setAnimBlender(animSystem_, assetManager_);
 	anubis.setHp(110);
+	anubis.setMaxHp(110);
 	anubis.setId(2);
 }
 
@@ -406,6 +437,7 @@ void Game::importBatSpawner(std::ifstream& ifs, Bat& bat) {
 	bat.setModel(assetManager_.modelBat());
 	bat.setAnimBlender(animSystem_, assetManager_);
 	bat.setHp(40);
+	bat.setMaxHp(40);
 	bat.setId(3);
 }
 
@@ -413,6 +445,7 @@ void Game::importBomberSpawner(std::ifstream& ifs, Bomber& bomber) {
 	bomber.setModel(assetManager_.modelBomber());
 	bomber.setAnimBlender(animSystem_, assetManager_);
 	bomber.setHp(60);
+	bomber.setMaxHp(60);
 	bomber.setId(4);
 }
 
@@ -420,6 +453,7 @@ void Game::importDemonSpawner(std::ifstream& ifs, Demon& demon) {
 	demon.setModel(assetManager_.modelDemon());
 	demon.setAnimBlender(animSystem_, assetManager_);
 	demon.setHp(140);
+	demon.setMaxHp(140);
 	demon.setId(5);
 }
 
@@ -427,6 +461,7 @@ void Game::importDragonSpawner(std::ifstream& ifs, Dragon& dragon) {
 	dragon.setModel(assetManager_.modelDragon());
 	dragon.setAnimBlender(animSystem_, assetManager_);
 	dragon.setHp(250);
+	dragon.setMaxHp(250);
 	dragon.setId(6);
 }
 
@@ -434,6 +469,7 @@ void Game::importEyeballSpawner(std::ifstream& ifs, Eyeball& eyeball) {
 	eyeball.setModel(assetManager_.modelEyeball());
 	eyeball.setAnimBlender(animSystem_, assetManager_);
 	eyeball.setHp(120);
+	eyeball.setMaxHp(120);
 	eyeball.setId(7);
 }
 
@@ -441,6 +477,7 @@ void Game::importFishmanSpawner(std::ifstream& ifs, Fishman& fishman) {
 	fishman.setModel(assetManager_.modelFishman());
 	fishman.setAnimBlender(animSystem_, assetManager_);
 	fishman.setHp(80);
+	fishman.setMaxHp(80);
 	fishman.setId(8);
 }
 
@@ -448,6 +485,7 @@ void Game::importGargoyleSpawner(std::ifstream& ifs, Gargoyle& gargoyle) {
 	gargoyle.setModel(assetManager_.modelGargoyle());
 	gargoyle.setAnimBlender(animSystem_, assetManager_);
 	gargoyle.setHp(160);
+	gargoyle.setMaxHp(160);
 	gargoyle.setId(9);
 }
 
@@ -705,6 +743,35 @@ void Game::update(Milliseconds deltaTime) {
 	camera_.update();
 	dirLight_.update(deltaTime);
 	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), assetConfigs_.cascade, assetConfigs_.shadowMap);
+
+	// 몬스터 HP바 위치 갱신 (layout() 이전에 offset 갱신해야 반영됨)
+	{
+		constexpr float kBarHalfWidth = 40.f;
+		for (auto& entry : monsterHpBars_) {
+			if (entry.monster->hp() <= 0) {
+				entry.hpBar->visible = false;
+				continue;
+			}
+			const mu::Vec3 barWorldPos = entry.monster->pos()
+				+ mu::Vec3{ 0.f, entry.worldYOffset, 0.f };
+			float sx{}, sy{};
+			const bool onScreen = worldToScreen(
+				barWorldPos,
+				camera_.view(), camera_.proj(),
+				uiManager_.screenWidth(), uiManager_.screenHeight(),
+				sx, sy
+			);
+			entry.hpBar->visible = onScreen;
+			if (onScreen) {
+				entry.hpBar->offsetX = UI::DimValue::px(sx - kBarHalfWidth);
+				entry.hpBar->offsetY = UI::DimValue::px(sy);
+				entry.hpBar->setProgress(
+					static_cast<float>(entry.monster->hp()) /
+					static_cast<float>(entry.monster->maxHp())
+				);
+			}
+		}
+	}
 
 	uiManager_.layout();
 	uiManager_.update( std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont() );
