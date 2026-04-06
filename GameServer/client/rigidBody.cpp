@@ -86,6 +86,12 @@ void RigidBody::applyImpulse(mu::Vec3 j, mu::Vec3 worldPoint)
     curr_.omega = curr_.omega + angularImpulse * invInertiaWorld_;
 }
 
+void RigidBody::applyTorqueImpulse(mu::Vec3 tau)
+{
+    if (invMass_ == 0.f) return;
+    curr_.omega = curr_.omega + tau * invInertiaWorld_;
+}
+
 void RigidBody::clearAccumulators()
 {
     forceAccum_  = mu::Vec3{};

@@ -163,11 +163,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="activeRagdoll.cpp" />
     <ClCompile Include="animation.cpp" />
     <ClCompile Include="AssetManager.cpp" />
     <ClCompile Include="basicPlayerHPUI.cpp" />
     <ClCompile Include="billboard.cpp" />
     <ClCompile Include="billboardPipeline.cpp" />
+    <ClCompile Include="jointConstraint.cpp" />
     <ClCompile Include="meshParticlePipeline.cpp" />
     <ClCompile Include="meshParticleSystem.cpp" />
     <ClCompile Include="binaryImport.cpp" />
@@ -198,6 +200,8 @@
     <ClCompile Include="online\onlineGame.cpp" />
     <ClCompile Include="particleSystem.cpp" />
     <ClCompile Include="physicsWorld.cpp" />
+    <ClCompile Include="ragdoll.cpp" />
+    <ClCompile Include="ragdollDef.cpp" />
     <ClCompile Include="rigidBody.cpp" />
     <ClCompile Include="PacketManager.cpp" />
     <ClCompile Include="pbrPipeline.cpp" />
@@ -232,6 +236,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common\pool.hpp" />
+    <ClInclude Include="activeRagdoll.hpp" />
     <ClInclude Include="animation.hpp" />
     <ClInclude Include="AssetManager.hpp" />
     <ClInclude Include="basicPlayerHpUI.hpp" />
@@ -276,6 +281,7 @@
     <ClInclude Include="gfxUtil.hpp" />
     <ClInclude Include="IGame.hpp" />
     <ClInclude Include="ClientApp.hpp" />
+    <ClInclude Include="jointConstraint.hpp" />
     <ClInclude Include="light.hpp" />
     <ClInclude Include="log.hpp" />
     <ClInclude Include="mesh.hpp" />
@@ -285,6 +291,8 @@
     <ClInclude Include="online\onlineGame.hpp" />
     <ClInclude Include="particleSystem.hpp" />
     <ClInclude Include="physicsWorld.hpp" />
+    <ClInclude Include="ragdoll.hpp" />
+    <ClInclude Include="ragdollDef.hpp" />
     <ClInclude Include="rigidBody.hpp" />
     <ClInclude Include="PacketManager.hpp" />
     <ClInclude Include="pbrPipeline.hpp" />

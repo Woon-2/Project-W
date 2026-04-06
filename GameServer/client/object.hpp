@@ -6,6 +6,8 @@
 #include "animation.hpp"
 #include "event.hpp"
 #include "rigidBody.hpp"
+#include "ragdoll.hpp"
+#include "ragdollDef.hpp"
 
 class AssetManager;
 class Object;
@@ -536,6 +538,16 @@ public:
 	// 바운딩 볼륨 렌더링을 비활성화한다.
 	void disableBVRendering() { willRenderBV_ = false; }
 
+	// Build a ragdoll from def, seed positions from the current animation pose,
+	// and activate it.  Call while the object is animated (animBlender must be set).
+	// Increases solver iterations to 20 for the joint chain.
+	void enableRagdoll(const RagdollDef& def, PhysicsWorld& world);
+
+	// Deactivate the ragdoll, destroy all bodies/joints, restore solver iterations.
+	void disableRagdoll(PhysicsWorld& world);
+
+	bool hasActiveRagdoll() const { return ragdoll_ && ragdoll_->isActive(); }
+
 	void setId( i32t id ) {	id_ = id; }
 	i32t getId( ) const { return id_; }
 
@@ -561,6 +573,8 @@ protected:
 	i32t id_{ -1 };
 
 	i32t hp_{};
+
+	std::unique_ptr<Ragdoll> ragdoll_;
 
 private:
 };

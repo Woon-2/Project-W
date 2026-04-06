@@ -56,6 +56,10 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 **파일:** `client/constraint.hpp`
 **파일:** `client/contactConstraint.hpp` / `client/contactConstraint.cpp`
 **파일:** `client/broadPhase.hpp` / `client/broadPhase.cpp`
+**파일:** `client/jointConstraint.hpp` / `client/jointConstraint.cpp`
+**파일:** `client/ragdollDef.hpp` / `client/ragdollDef.cpp`
+**파일:** `client/ragdoll.hpp` / `client/ragdoll.cpp`
+**파일:** `client/activeRagdoll.hpp` / `client/activeRagdoll.cpp`
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
@@ -70,6 +74,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `RigidBody::setInertia()` | `rigidBody.cpp` | 로컬 관성 텐서 역행렬 저장 |
 | `RigidBody::applyForce()` | `rigidBody.cpp` | force accumulator에 추가 |
 | `RigidBody::applyImpulse()` | `rigidBody.cpp` | 즉시 vel/omega 변경 |
+| `RigidBody::applyTorqueImpulse()` | `rigidBody.cpp` | 즉시 omega 변경 (joint/PD 토크용) |
 | `computeBoxInertia()` | `rigidBody.hpp #26` | 박스 관성 텐서 헬퍼 |
 | `computeCapsuleInertia()` | `rigidBody.hpp #27` | 캡슐 관성 텐서 헬퍼 |
 | `Constraint` (abstract) | `constraint.hpp #12` | prepare/solveVelocity/solvePosition 인터페이스 |
@@ -82,23 +87,54 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `TerrainHeightField` struct | `terrain.hpp` | CPU-side 높이 데이터 (getHeightAt, getNormalAt) |
 | `TerrainCollider` class | `collision.hpp` | Dynamic body ↔ 지형 높이맵 contact 생성 |
 | `PhysicsWorld` class | `physicsWorld.hpp` | 시뮬레이션 진입점 |
-| `PhysicsWorld::registerBody()` | `physicsWorld.hpp` | body + onRebuildBVH 콜백 + broad phase 등록 |
-| `PhysicsWorld::unregisterBody()` | `physicsWorld.hpp` | 등록 해제 |
-| `PhysicsWorld::registerTerrain()` | `physicsWorld.hpp` | Static 지형 body + heightField 등록 |
-| `PhysicsWorld::unregisterTerrain()` | `physicsWorld.hpp` | 지형 collider 해제 |
-| `PhysicsWorld::step()` | `physicsWorld.hpp` | integrate → generateContacts → solveConstraints |
-| `PhysicsWorld::setGravity()` | `physicsWorld.hpp` | Dynamic body 중력 설정 |
-| `PhysicsWorld::interpolatePos()` | `physicsWorld.hpp` | 렌더 보간 헬퍼 (prev→curr, t) |
-| `PhysicsWorld::interpolateOrient()` | `physicsWorld.hpp` | 렌더 보간 헬퍼 (slerp) |
+| `PhysicsWorld::registerBody()` | `physicsWorld.hpp #37` | body + onRebuildBVH 콜백 + collisionGroup/Mask + broad phase 등록 |
+| `PhysicsWorld::unregisterBody()` | `physicsWorld.hpp #43` | 등록 해제 |
+| `PhysicsWorld::addJointConstraint()` | `physicsWorld.hpp #47` | 소유권 이전 joint 등록 |
+| `PhysicsWorld::removeJointConstraint()` | `physicsWorld.hpp #48` | 소유 joint 제거 |
+| `PhysicsWorld::addJointRef()` | `physicsWorld.hpp #52` | 비소유 joint ref 등록 (Ragdoll용) |
+| `PhysicsWorld::removeJointRef()` | `physicsWorld.hpp #53` | 비소유 joint ref 제거 |
+| `PhysicsWorld::registerTerrain()` | `physicsWorld.hpp #57` | Static 지형 body + heightField 등록 |
+| `PhysicsWorld::unregisterTerrain()` | `physicsWorld.hpp #60` | 지형 collider 해제 |
+| `PhysicsWorld::step()` | `physicsWorld.hpp #63` | integrate → generateContacts → solveConstraints |
+| `PhysicsWorld::setGravity()` | `physicsWorld.hpp #67` | Dynamic body 중력 설정 |
+| `PhysicsWorld::setSolverIterations()` | `physicsWorld.hpp #70` | PGS 반복 횟수 (기본 10, ragdoll 활성 시 20) |
+| `PhysicsWorld::interpolatePos()` | `physicsWorld.hpp #73` | 렌더 보간 헬퍼 (prev→curr, t) |
+| `PhysicsWorld::interpolateOrient()` | `physicsWorld.hpp #74` | 렌더 보간 헬퍼 (slerp) |
+| `BallSocketJoint` class | `jointConstraint.hpp #16` | 3 translational DOF 제거, bilateral warmstart |
+| `HingeJoint` class | `jointConstraint.hpp #50` | 1 rotational DOF, angle limits, refOrient |
+| `ConeTwistJoint` class | `jointConstraint.hpp #103` | swing cone + twist limit, T-pose refOrient |
+| `JointType` enum | `ragdollDef.hpp #8` | BallSocket / Hinge / ConeTwist |
+| `BoneCapsuleDef` struct | `ragdollDef.hpp #11` | boneName, radius, halfHeight, mass, capsuleOffset |
+| `JointDef` struct | `ragdollDef.hpp #20` | parentBoneName, childBoneName, type, limits |
+| `RagdollDef` struct | `ragdollDef.hpp #34` | span<BoneCapsuleDef> + span<JointDef> |
+| `getHumanoidRagdollDef()` | `ragdollDef.hpp #41` | Unity Humanoid 뼈대 정의 (static 싱글턴) |
+| `RagdollBone` struct | `ragdoll.hpp #15` | boneIdx, body*(non-owning), parentJoint*(non-owning), capsuleOffset |
+| `Ragdoll` class | `ragdoll.hpp #33` | bone별 RigidBody + Constraint 소유, PhysicsWorld 비소유 등록 |
+| `Ragdoll::build()` | `ragdoll.cpp` | 스켈레톤 + def → body/joint 생성 + world 등록 |
+| `Ragdoll::destroy()` | `ragdoll.cpp` | joint 먼저, body 나중 제거 (dangling ptr 방지) |
+| `Ragdoll::syncFromPose()` | `ragdoll.cpp` | AnimFrame pose → body pos/orient (DFS) |
+| `Ragdoll::seedFromFinalXforms()` | `ragdoll.cpp` | AnimBlender finalXformData → body pos/orient |
+| `Ragdoll::syncToPose()` | `ragdoll.cpp` | body pos/orient → AnimFrame pose (DFS) |
+| `Ragdoll::activate()` | `ragdoll.cpp` | Kinematic → Dynamic |
+| `Ragdoll::deactivate()` | `ragdoll.cpp` | Dynamic → Kinematic |
+| `ActiveRagdollController` class | `activeRagdoll.hpp #25` | PD 토크 컨트롤러, 피격 반응 포함 |
+| `ActiveRagdollController::update()` | `activeRagdoll.cpp` | DFS로 bone별 PD 토크 적용 |
+| `ActiveRagdollController::onImpact()` | `activeRagdoll.cpp` | kp 일시 감소 (limp 반응) |
+| `ActiveRagdollController::computeOrientError()` | `activeRagdoll.cpp` | q.w<0 처리 포함 최단경로 오차 |
 
 **Object 내 물리 상태 접근:**
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
 | `Object::body_` (protected) | `object.hpp` | 인라인 `RigidBody` (항상 유효) |
+| `Object::ragdoll_` (protected) | `object.hpp` | `unique_ptr<Ragdoll>` (비활성 시 null) |
 | `Object::body()` | `object.hpp` | RigidBody 참조 (PhysicsWorld 등록 시 &body() 전달) |
 | `Object::worldBVH()` | `object.hpp` | `body_.worldBVH()` 위임 (CombatSystem 호환) |
 | `Object::rebuildBodyBVH()` | `object.cpp` | BVH 월드 공간 재빌드 (PhysicsWorld 콜백으로도 사용) |
+| `Object::enableRagdoll()` | `object.cpp` | build + seedFromFinalXforms + activate (solverIter=20) |
+| `Object::disableRagdoll()` | `object.cpp` | destroy + reset (solverIter=10 복원) |
+| `Object::hasActiveRagdoll()` | `object.hpp` | ragdoll 활성 여부 |
+| ragdoll finalXform override | `object.cpp Object::update()` | 활성 시 finalXformData를 body 위치로 직접 덮어씀 |
 
 ---
 

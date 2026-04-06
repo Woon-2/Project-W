@@ -246,6 +246,18 @@
     <ClCompile Include="rigidBody.cpp">
       <Filter>게임%28공용%29\소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="activeRagdoll.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="jointConstraint.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="ragdoll.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="ragdollDef.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="binaryImport.hpp">
@@ -471,6 +483,18 @@
       <Filter>게임%28공용%29\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="rigidBody.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="ragdoll.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="ragdollDef.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="jointConstraint.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="activeRagdoll.hpp">
       <Filter>게임%28공용%29\헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
