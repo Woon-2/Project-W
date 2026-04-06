@@ -51,6 +51,9 @@ struct Color {
 
 enum class MouseButton { Left, Right, Middle };
 
+enum class TextHAlign { Leading, Center, Trailing };
+enum class TextVAlign { Top, Center, Bottom };
+
 namespace Anchors {
     inline constexpr Anchor TopLeft      = { 0.f, 0.f };
     inline constexpr Anchor TopCenter    = { 0.5f, 0.f };

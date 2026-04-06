@@ -199,6 +199,8 @@ public:
 	void UpdateTextureWithTextImage( TextImage* srcImage, UINT srcWidth, UINT srcHeight );
 	// Creates a TextImage immediately (loadAssets must have been called first).
 	void createTextImageImmediate(UINT width, UINT height, TextImage* pDest);
+	// Returns the built-in default font handle (Tahoma). Used for text alignment.
+	FontHandle* defaultFont() { return &tahomaFont_; }
 
 private:
 	// 공용 샘플러들 생성

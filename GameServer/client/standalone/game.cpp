@@ -117,12 +117,14 @@ void Game::setupStage() {
 		uiManager_.root()->addChild(std::make_unique<UI::Label>())
 	);
 	pLabel->name    = "hpLabel";
-	pLabel->anchor  = UI::Anchors::BottomCenter;
-	pLabel->pivot   = UI::Pivots::BottomCenter;
+	pLabel->anchor  = UI::Anchors::BottomCenter; // 부모의 어느 점에 붙을 지
+	pLabel->pivot   = UI::Pivots::BottomCenter;	 // 내 박스의 어느 점에 못을 걸지	
 	pLabel->width   = UI::DimValue::px(512.f);
 	pLabel->height  = UI::DimValue::px(256.f);
 	pLabel->offsetY = UI::DimValue::px(-10.f);
 	pLabel->setTextImage(assetManager_.textPlayerHp());
+	pLabel->setTextHAlign(UI::TextHAlign::Center);
+	pLabel->setTextVAlign(UI::TextVAlign::Center);
 	pLabel->setText(L"UI System OK");
 }
 
@@ -697,7 +699,7 @@ void Game::update(Milliseconds deltaTime) {
 	// playerHpUI_.update( deltaTime, gfx_, nullptr );
 
 	uiManager_.layout();
-	uiManager_.update( std::chrono::duration<float>(deltaTime).count(), gfx_, nullptr );
+	uiManager_.update( std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont() );
 
 	// 애니메이션 업데이트
 	animSystem_.update(0.016s);

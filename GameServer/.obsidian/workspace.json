@@ -4,11 +4,11 @@
     "type": "split",
     "children": [
       {
-        "id": "dae00ee5d3005cc0",
+        "id": "49ff40dbe714a0cc",
         "type": "tabs",
         "children": [
           {
-            "id": "bd9ecedfa75a8e47",
+            "id": "d0ff826cdfac2f48",
             "type": "leaf",
             "state": {
               "type": "markdown",
@@ -183,18 +183,18 @@
       "bases:새 베이스 생성하기": false
     }
   },
-  "active": "bd9ecedfa75a8e47",
+  "active": "d0ff826cdfac2f48",
   "lastOpenFiles": [
+    "client/docs/UI.md",
+    "client/standalone/4m0dxljk.eg0~",
+    "client/standalone/mxw5kflj.0tr~",
     "client/x64/Debug/client.tlog/link.read.2.tlog",
-    "client/x64/Debug/client.tlog/CL.41748.write.1.tlog",
-    "client/x64/Debug/client.tlog/CL.41748.read.1.tlog",
-    "client/x64/Debug/client.tlog/CL.42044.write.1.tlog",
-    "client/x64/Debug/client.tlog/CL.42044.read.1.tlog",
-    "client/x64/Debug/client.tlog/CL.41172.write.1.tlog",
-    "client/x64/Debug/client.tlog/CL.41172.read.1.tlog",
-    "client/x64/Debug/client.tlog/CL.31576.write.1.tlog",
-    "client/x64/Debug/client.tlog/CL.31576.read.1.tlog",
-    "client/x64/Debug/client.tlog/CL.10380.write.1.tlog",
-    "client/x64/Debug/client.tlog/CL.10380.read.1.tlog"
+    "client/x64/Debug/game.obj",
+    "client/x64/Debug/client.tlog/unsuccessfulbuild",
+    "client/standalone/dtixaiit.yw1~",
+    "client/standalone/sxdt3jbp.3wq~",
+    "client/x64/Debug/client.tlog/CL.39848.write.1.tlog",
+    "client/x64/Debug/client.tlog/CL.39848.read.1.tlog",
+    "client/x64/Debug/client.tlog/CL.16364.write.1.tlog"
   ]
 }
