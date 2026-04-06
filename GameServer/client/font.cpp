@@ -223,6 +223,21 @@ void Font::WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHe
 	*piOutHeight = iTextHeight;
 }
 
+void Font::measureText( FontHandle* pFont, const WCHAR* str, DWORD len, float maxW, float maxH, int* outW, int* outH )
+{
+	*outW = 0; *outH = 0;
+	if ( !pFont || !pFont->pTextFormat || !pDWFactory_ || !str || len == 0 ) return;
+
+	ComPtr<IDWriteTextLayout> layout;
+	HRESULT hr = pDWFactory_->CreateTextLayout( str, len, pFont->pTextFormat.Get(), maxW, maxH, &layout );
+	if ( FAILED( hr ) || !layout ) return;
+
+	DWRITE_TEXT_METRICS metrics{};
+	layout->GetMetrics( &metrics );
+	*outW = static_cast<int>( std::ceil( metrics.width ) );
+	*outH = static_cast<int>( std::ceil( metrics.height ) );
+}
+
 TextImage::TextImage( ID3D12Device* device, UINT textWidth, UINT textHeight, DescriptorPool& srvTexPool )
 {
 	DXGI_FORMAT TexFormat = DXGI_FORMAT_R8G8B8A8_UNORM;

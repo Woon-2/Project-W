@@ -32,6 +32,7 @@ public:
 	void init( ID3D12Device* device, ID3D12CommandQueue* cmdQ, UINT width, UINT height, HWND hwnd );
 	FontHandle CreateFontObject( const WCHAR* fontFamilyName, float fontSize );
 	void WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, FontHandle* pFontHandle, const WCHAR* wchString, DWORD dwLen );
+	void measureText( FontHandle* pFont, const WCHAR* str, DWORD len, float maxW, float maxH, int* outW, int* outH );
 
 private:
 	void createD2D( ID3D12Device* device, ID3D12CommandQueue* cmdQ );

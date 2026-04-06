@@ -12,10 +12,52 @@ void Label::setText(const std::wstring& text) {
     }
 }
 
+void Label::setFontSize(float size) {
+    if (fontSize_ != size) { fontSize_ = size; dirty_ = true; }
+}
+
+void Label::setAutoSize(bool enabled, float minSize, float maxSize) {
+    autoSize_    = enabled;
+    autoSizeMin_ = minSize;
+    autoSizeMax_ = maxSize;
+    dirty_ = true;
+}
+
 void Label::onUpdate(const UpdateContext& ctx) {
     if (!dirty_ || !textImage_ || !ctx.gfx || text_.empty()) return;
 
-    FontHandle* font = fontHandle_ ? fontHandle_ : ctx.defaultFont;
+    FontHandle* font = nullptr;
+
+    if (autoSize_) {
+        float lo = autoSizeMin_, hi = autoSizeMax_;
+        for (int i = 0; i < 8; ++i) {
+            float mid = (lo + hi) * 0.5f;
+            FontHandle tryFont = ctx.gfx->createFont(mid);
+            int tw = 0, th = 0;
+            ctx.gfx->measureText(&tryFont, text_.c_str(), static_cast<DWORD>(text_.size()),
+                                 static_cast<float>(textImage_->width),
+                                 static_cast<float>(textImage_->height),
+                                 &tw, &th);
+            if (tw <= static_cast<int>(textImage_->width) && th <= static_cast<int>(textImage_->height))
+                lo = mid;
+            else
+                hi = mid;
+        }
+        if (lo != prevFontSize_) {
+            ownedFont_    = ctx.gfx->createFont(lo);
+            prevFontSize_ = lo;
+        }
+        font = &ownedFont_;
+    } else if (fontSize_ > 0.f) {
+        if (fontSize_ != prevFontSize_) {
+            ownedFont_    = ctx.gfx->createFont(fontSize_);
+            prevFontSize_ = fontSize_;
+        }
+        font = &ownedFont_;
+    } else {
+        font = fontHandle_ ? fontHandle_ : ctx.defaultFont;
+    }
+
     if (!font) return;
 
     // WriteTextToBitmap always renders text at (0,0) in the bitmap (LEADING/NEAR).

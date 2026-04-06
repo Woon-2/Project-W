@@ -126,6 +126,7 @@ void Game::setupStage() {
 	pLabel->setTextHAlign(UI::TextHAlign::Center);
 	pLabel->setTextVAlign(UI::TextVAlign::Center);
 	pLabel->setText(L"UI System OK");
+	pLabel->setAutoSize(true);
 }
 
 void Game::setParticle()

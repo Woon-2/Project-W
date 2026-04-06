@@ -199,8 +199,12 @@ public:
 	void UpdateTextureWithTextImage( TextImage* srcImage, UINT srcWidth, UINT srcHeight );
 	// Creates a TextImage immediately (loadAssets must have been called first).
 	void createTextImageImmediate(UINT width, UINT height, TextImage* pDest);
-	// Returns the built-in default font handle (Tahoma). Used for text alignment.
+	// Returns the built-in default font handle (Tahoma 16pt).
 	FontHandle* defaultFont() { return &tahomaFont_; }
+	// Creates a new Tahoma FontHandle with the specified point size.
+	FontHandle createFont(float fontSize);
+	// Measures text extents without rendering to a bitmap.
+	void measureText(FontHandle* pFont, const WCHAR* str, DWORD len, float maxW, float maxH, int* outW, int* outH);
 
 private:
 	// 공용 샘플러들 생성

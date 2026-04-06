@@ -1235,7 +1235,18 @@ void GFX::render() {
 
 void GFX::WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, void* pFontObjHandle, const WCHAR* wchString, DWORD dwLen )
 {
-	font_.WriteTextToBitmap( pDestImage, DestWidth, DestHeight, DestPitch, piOutWidth, piOutHeight, &tahomaFont_, wchString, dwLen );
+	FontHandle* pFont = pFontObjHandle ? static_cast<FontHandle*>( pFontObjHandle ) : &tahomaFont_;
+	font_.WriteTextToBitmap( pDestImage, DestWidth, DestHeight, DestPitch, piOutWidth, piOutHeight, pFont, wchString, dwLen );
+}
+
+FontHandle GFX::createFont( float fontSize )
+{
+	return font_.CreateFontObject( L"Tahoma", fontSize );
+}
+
+void GFX::measureText( FontHandle* pFont, const WCHAR* str, DWORD len, float maxW, float maxH, int* outW, int* outH )
+{
+	font_.measureText( pFont, str, len, maxW, maxH, outW, outH );
 }
 
 void GFX::UpdateTextureWithTextImage( TextImage* srcImage, UINT srcWidth, UINT srcHeight )
