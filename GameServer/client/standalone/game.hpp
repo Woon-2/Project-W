@@ -23,6 +23,7 @@
 #include "../particleSystem.hpp"
 #include "../meshParticleSystem.hpp"
 #include "../ui/UIManager.hpp"
+#include "../ui/widgets/ProgressBar.hpp"
 
 class Timer;
 
@@ -129,7 +130,8 @@ private:
 	BasicPlayerHpUI playerHpUI_{};
 	TextImage textFPS_{};
 
-	UI::UIManager uiManager_{};
+	UI::UIManager   uiManager_{};
+	UI::ProgressBar* playerHpBar_ = nullptr;  // owned by uiManager_
 
 	ParticleSystem flameParticleSystem_{};
 	ParticleSystem smokeParticleSystem_{};

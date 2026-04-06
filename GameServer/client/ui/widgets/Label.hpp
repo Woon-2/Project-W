@@ -21,6 +21,9 @@ public:
     // enabled=true이면 텍스트가 TextImage 크기에 꽉 차도록 폰트 크기를 자동 결정.
     void setAutoSize(bool enabled, float minSize = 8.f, float maxSize = 72.f);
 
+    void setTextColor(float r, float g, float b, float a = 1.f) { textColor_ = { r, g, b, a }; dirty_ = true; }
+    D2D1_COLOR_F textColor() const { return textColor_; }
+
     void setTextHAlign(TextHAlign a) { textHAlign_ = a; dirty_ = true; }
     void setTextVAlign(TextVAlign a) { textVAlign_ = a; dirty_ = true; }
     TextHAlign textHAlign() const { return textHAlign_; }
@@ -36,6 +39,7 @@ private:
     TextImage* textImage_ = nullptr;
     TextHAlign textHAlign_ = TextHAlign::Leading;
     TextVAlign textVAlign_ = TextVAlign::Top;
+    D2D1_COLOR_F textColor_ = D2D1::ColorF( D2D1::ColorF::White );
     bool dirty_ = true;
     bool needsCopy_ = false;
 

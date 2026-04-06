@@ -8,18 +8,22 @@ void ProgressBar::onRender(const RenderContext& rc) {
     const auto& rect = resolvedRect_;
 
     // Background (full width)
-    if (backgroundTex) {
+    {
+        const Texture* tex = backgroundTex ? backgroundTex : rc.gfx->solidColorTex();
+        XMFLOAT4 col = backgroundTex ? XMFLOAT4{ 1.f, 1.f, 1.f, 1.f } : bgColor;
         rc.gfx->addDrawEvent(UIPipeline::DrawEvent{
-            .world = buildWorldMatrix(rc.screenHeight),
-            .pTex = backgroundTex
+            .world    = buildWorldMatrix(rc.screenHeight),
+            .pTex     = tex,
+            .pCopySrc = nullptr,
+            .colorMul = col
         });
     }
 
     // Fill bar (scaled by progress, anchored to left edge)
-    // Matches BasicPlayerHpUI pattern:
-    //   scaleX = halfWidth * progress
-    //   translateX = center shifted left by unfilled portion
-    if (fillTex && progress_ > 0.f) {
+    if (progress_ > 0.f) {
+        const Texture* tex = fillTex ? fillTex : rc.gfx->solidColorTex();
+        XMFLOAT4 col = fillTex ? XMFLOAT4{ 1.f, 1.f, 1.f, 1.f } : fillColor;
+
         mu::Vec3 scl{
             rect.width * 0.5f * progress_,
             rect.height * 0.5f,
@@ -33,8 +37,10 @@ void ProgressBar::onRender(const RenderContext& rc) {
         mu::Mat4x4 fillWorld = mu::Mat4x4(mu::scale(scl)) * mu::translate(pos);
 
         rc.gfx->addDrawEvent(UIPipeline::DrawEvent{
-            .world = fillWorld,
-            .pTex = fillTex
+            .world    = fillWorld,
+            .pTex     = tex,
+            .pCopySrc = nullptr,
+            .colorMul = col
         });
     }
 }

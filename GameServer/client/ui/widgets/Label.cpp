@@ -73,7 +73,8 @@ void Label::onUpdate(const UpdateContext& ctx) {
         &outW, &outH,
         font,
         text_.c_str(),
-        static_cast<DWORD>(text_.size())
+        static_cast<DWORD>(text_.size()),
+        textColor_
     );
 
     // Shift pixels within pData to implement alignment.

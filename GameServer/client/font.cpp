@@ -95,7 +95,7 @@ void Font::createDWrite( ID3D12Device* device, UINT TexWidth, UINT TexHeight, fl
 	DISPLAY_ERROR_DX_HR( DWriteCreateFactory( DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory5), (IUnknown**)&pDWFactory_ ), true );
 }
 
-void Font::CreateBitmapFromText( int* piOutWidth, int* piOutHeight, IDWriteTextFormat* pTextFormat, const WCHAR* wchString, DWORD dwLen )
+void Font::CreateBitmapFromText( int* piOutWidth, int* piOutHeight, IDWriteTextFormat* pTextFormat, const WCHAR* wchString, DWORD dwLen, D2D1_COLOR_F color )
 {
 	BOOL	bResult = FALSE;
 
@@ -128,7 +128,9 @@ void Font::CreateBitmapFromText( int* piOutWidth, int* piOutHeight, IDWriteTextF
 		pD2DDeviceContext->Clear( D2D1::ColorF( 0.0f, 0.0f, 0.0f, 0.0f ) );
 		pD2DDeviceContext->SetTransform( D2D1::Matrix3x2F::Identity() );
 
-		DISPLAY_ERROR_DX_VOID( pD2DDeviceContext->DrawTextLayout( D2D1::Point2F( 0.0f, 0.0f ), pTextLayout, pWhiteBrush_.Get() ), true);
+		ComPtr<ID2D1SolidColorBrush> pColorBrush;
+		DISPLAY_ERROR_DX_HR( pD2DDeviceContext->CreateSolidColorBrush( color, &pColorBrush ), true );
+		DISPLAY_ERROR_DX_VOID( pD2DDeviceContext->DrawTextLayout( D2D1::Point2F( 0.0f, 0.0f ), pTextLayout, pColorBrush.Get() ), true);
 
 		// We ignore D2DERR_RECREATE_TARGET here. This error indicates that the device
 		// is lost. It will be handled during the next call to Present.
@@ -192,12 +194,12 @@ FontHandle Font::CreateFontObject( const WCHAR* fontFamilyName, float fontSize )
 	return ret;
 }
 
-void Font::WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, FontHandle* pFontHandle, const WCHAR* wchString, DWORD dwLen )
+void Font::WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, FontHandle* pFontHandle, const WCHAR* wchString, DWORD dwLen, D2D1_COLOR_F color )
 {
 	int iTextWidth = 0;
 	int iTextHeight = 0;
 
-	CreateBitmapFromText( &iTextWidth, &iTextHeight, pFontHandle->pTextFormat.Get(), wchString, dwLen);
+	CreateBitmapFromText( &iTextWidth, &iTextHeight, pFontHandle->pTextFormat.Get(), wchString, dwLen, color );
 
 	if ( iTextWidth > (int)DestWidth )
 		iTextWidth = (int)DestWidth;

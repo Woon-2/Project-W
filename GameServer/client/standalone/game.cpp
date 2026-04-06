@@ -5,6 +5,7 @@
 #include "../binaryImport.hpp"
 #include "../timer.hpp"
 #include "../ui/widgets/Label.hpp"
+#include "../ui/widgets/ProgressBar.hpp"
 
 extern RECT gClientRect;
 
@@ -127,6 +128,21 @@ void Game::setupStage() {
 	pLabel->setTextVAlign(UI::TextVAlign::Center);
 	pLabel->setText(L"UI System OK");
 	pLabel->setAutoSize(true);
+	pLabel->setTextColor( 1.f, 1.f, 0.f, 0.5f );
+
+	playerHpBar_ = static_cast<UI::ProgressBar*>(
+		uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
+	);
+	playerHpBar_->name    = "playerHpBar";
+	playerHpBar_->anchor  = UI::Anchors::BottomLeft;
+	playerHpBar_->pivot   = UI::Pivots::BottomLeft;
+	playerHpBar_->width   = UI::DimValue::px(300.f);
+	playerHpBar_->height  = UI::DimValue::px(18.f);
+	playerHpBar_->offsetX = UI::DimValue::px(20.f);
+	playerHpBar_->offsetY = UI::DimValue::px(-20.f);
+	playerHpBar_->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
+	playerHpBar_->fillColor = { 1.0f, 0.0f, 0.0f, 1.00f };
+	playerHpBar_->setProgress(1.f);
 }
 
 void Game::setParticle()
@@ -762,6 +778,8 @@ void Game::update(Milliseconds deltaTime) {
 
 	// UI 동기화
 	// playerHpUI_.setHp(player_->hp());
+	if (playerHpBar_)
+		playerHpBar_->setProgress(player_->hp() / 100.f);
 
 	clearEvents(eventList_);
 }
