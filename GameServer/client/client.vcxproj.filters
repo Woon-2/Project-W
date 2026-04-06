@@ -260,6 +260,7 @@
     </ClCompile>
     <ClCompile Include="ui\UIManager.cpp">
       <Filter>UI</Filter>
+    </ClCompile>
     <ClCompile Include="broadPhase.cpp">
       <Filter>게임%28공용%29\소스 파일</Filter>
     </ClCompile>
@@ -510,6 +511,7 @@
     </ClInclude>
     <ClInclude Include="ui\UITypes.hpp">
       <Filter>UI</Filter>
+    </ClInclude>
     <ClInclude Include="broadPhase.hpp">
       <Filter>게임%28공용%29\헤더 파일</Filter>
     </ClInclude>
