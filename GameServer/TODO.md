@@ -229,6 +229,26 @@
       그리고 Overlapped I/O Callback 함수에서는 gClose가 true인지 항상 체크하도록 수정함.
       WSACleanup이 호출되고 나서는 Callback 함수로 전달되는 overlapped 구조체를 신뢰할 수 없기 때문에 전역 변수를 사용함.
 
+  2026.04.06 / 일요일
+  3. 클라이언트 종료 시 ObjectPool<SendBuffer>::push에서 프로그램 다운 (static destruction order fiasco)
+
+    **원인**
+    gClose = true 상태에서 completionCallback이 조기 리턴하면, sendOver_.sendBuffers의
+    shared_ptr<SendBuffer>가 해제되지 않은 채로 남음.
+    WinMain 리턴 후 static 소멸자가 실행될 때 ClientApp::serverSession_과
+    ObjectPool<SendBuffer>::pool_ (내부의 ccqueue)의 소멸 순서가 서로 다른 TU(Translation Unit)에 걸쳐
+    있어 undefined임. pool_이 먼저 소멸된 뒤 serverSession_ 소멸 중 sendBuffers.clear()가
+    호출되어 이미 소멸된 pool_.enqueue()를 호출 → 크래시.
+
+    **해결 방법**
+    1. ClientApp::release() 추가: game_, serverSession_을 MemoryManager::release() 전에
+       명시적으로 파괴해 소멸 순서를 확정. (client/ClientApp.hpp)
+    2. main.cpp WM_QUIT 핸들러에서 INet::ClientApp::release()를 SendBufferManager::release()
+       보다 먼저 호출. (client/main.cpp)
+    3. ServerSession::~ServerSession()에서 소켓을 닫기 전에 pendingSendBuffers_,
+       sendOver_.sendBuffers를 명시적으로 clear해 APC 콜백이 늦게 발생하더라도
+       버퍼가 이미 비어있게 함. (client/ServerSession.hpp)
+
 2026.04.02 / 목요일
 서버 엔진 버그
   1. Session 클래스의 processSend에서 SendBuffer에 대해 할당받은 메모리 해제 시 프로그램 다운
@@ -240,7 +260,6 @@
 
 
 
-
 ** 서버 엔진쪽 코드에서 모든 register... 함수에서 send event의 setOwner를 그때마다 해줘야할까? 그냥 한 번 등록하면 되는 거 아닌가?
 ** 추후 room을 id + generation 정보로 관리해야 하지 않을까 라는 생각이 들었다. id를 재사용한다는 점에서 그런 생각이 들었다. 이러면 room, room manager의 전체적인 구조에 변경이 필요하다.
 ** BVH -> collision 책임자
@@ -248,6 +267,7 @@
 ** 몬스터 ai를 크게 전체, 그룹, 개인으로 세분화해서 구현이 목표
   일단 수정해 할 것 -> 고블린 이동할 때 진동하는 현상이 일어남.
   애니메이션 블렌딩이 좀 이상함.
+** TU : C++에서 단일 .cpp 파일과 그것이 #include하는 헤더들을 합친 컴파일 단위를 말해.
 
   
 [Room JobQueue 동작 구조]

@@ -86,6 +86,7 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 		while ( PeekMessageA( &msg, nullptr, 0, 0, PM_REMOVE ) ) {
 			if ( msg.message == WM_QUIT ) {
 				gClose = true;
+				INet::ClientApp::release();
 				SendBufferManager::release();
 				MemoryManager::release();
 				SocketUtils::release();

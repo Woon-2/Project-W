@@ -38,6 +38,8 @@ public:
 	}
 
 	~ServerSession() {
+		pendingSendBuffers_.clear();
+		sendOver_.sendBuffers.clear();
 		SocketUtils::closeSocket(sock_);
 	}
 
