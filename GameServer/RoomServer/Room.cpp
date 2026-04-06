@@ -19,15 +19,18 @@ void Room::init(const Level* levelData) {
 }
 
 void Room::update() {
-	updateGoblinAI(17.f / 1000.f);
+	static constexpr Milliseconds dt = 1s / 60.f;	// 60fps
+	updateGoblinAI(dt);
 
-	doTimer(17, [this]() {	// 60fps
+	doTimer(dt, [this]() {
 		update();
 	});
 }
 
-void Room::updateGoblinAI(float dt) {
-	if (sessions_.empty()) return;
+void Room::updateGoblinAI(Milliseconds dt) {
+	if (sessions_.empty()) {
+		return;
+	}
 
 	for (auto& goblin : goblins_) {
 		auto velocity = goblin.update(dt, sessions_);
@@ -159,7 +162,7 @@ void Room::broadcastExcept(GameSession* exceptSession, const std::shared_ptr<Sen
 	}
 }
 
-void Room::doTimer(uint64 delay, CallbackType&& callback) {
+void Room::doTimer(Milliseconds delay, CallbackType&& callback) {
 	auto job = ObjectPool<Job>::pop(std::move(callback));
 	JobTimer::addJob(delay, id_, job);
 }

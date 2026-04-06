@@ -5,5 +5,5 @@
 
 thread_local SendBufferChunk* LSendBufferChunk = nullptr;
 
-thread_local uint64 LEndTick = 0ull;
+thread_local HighResolutionClock::time_point LWorkStartTime;
 thread_local JobQueue* LJobQueue = nullptr;

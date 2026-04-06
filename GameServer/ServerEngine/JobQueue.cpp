@@ -1,6 +1,7 @@
 ﻿#include "sepch.hpp"
 #include "JobQueue.hpp"
 #include "JobQueuePool.hpp"
+#include "globalTLS.hpp"
 
 void JobQueue::push(Job* job, bool pushOnly) {
 	const int32 prevCnt = jobCount_.fetch_add(1);
@@ -21,6 +22,8 @@ void JobQueue::push(Job* job, bool pushOnly) {
 void JobQueue::execute() {
 	LJobQueue = this;
 
+	static constexpr Milliseconds timeOut = 64ms;
+
 	while (true) {
 		const int32 bulkSize = 100;
 		auto jobs = std::vector<Job*>(bulkSize);
@@ -37,8 +40,8 @@ void JobQueue::execute() {
 			break;
 		}
 
-		const uint64 now = GetTickCount64();
-		if( now >= LEndTick) {
+		const auto now = HighResolutionClock::now();
+		if (now - LWorkStartTime >= timeOut) {
 			LJobQueue = nullptr;
 
 			// 작업을 수행해야 하는 시간이 지났다면 여유있는 스레드에게 실행을 넘긴다.

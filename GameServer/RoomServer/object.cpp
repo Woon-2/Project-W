@@ -23,7 +23,7 @@ void Object::update(Milliseconds deltaTime) {
 
 }
 
-mu::Vec3 Goblin::update(float dt, const std::vector<GameSession*>& sessions) {
+mu::Vec3 Goblin::update(Seconds dt, const std::vector<GameSession*>& sessions) {
 	// 가장 가까운 플레이어 탐색
 	GameSession* nearestSession = nullptr;
 	float nearestDist = std::numeric_limits<float>::max();
@@ -58,7 +58,7 @@ mu::Vec3 Goblin::update(float dt, const std::vector<GameSession*>& sessions) {
 			auto dir = mu::NVec3(toTarget);
 
 			velocity = mu::Vec3(dir) * moveSpeed_;
-			setPos(pos() + velocity * dt);
+			setPos(pos() + velocity * dt.count());
 
 			float yaw = std::atan2(dir.x(), dir.z());
 			setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yaw)));
@@ -79,7 +79,7 @@ mu::Vec3 Goblin::update(float dt, const std::vector<GameSession*>& sessions) {
 		auto dir = mu::NVec3(toPlayer);
 
 		velocity = mu::Vec3(dir) * moveSpeed_;
-		setPos(pos() + velocity * dt);
+		setPos(pos() + velocity * dt.count());
 
 		float yaw = std::atan2(dir.x(), dir.z());
 		setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yaw)));
@@ -116,7 +116,7 @@ mu::Vec3 Goblin::update(float dt, const std::vector<GameSession*>& sessions) {
 		auto dir = mu::NVec3(toSpawn);
 
 		velocity = mu::Vec3(dir) * moveSpeed_;
-		setPos(pos() + velocity * dt);
+		setPos(pos() + velocity * dt.count());
 
 		float yaw = std::atan2(dir.x(), dir.z());
 		setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yaw)));

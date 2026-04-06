@@ -2,6 +2,7 @@
 #define send_buffer_hpp
 
 #include "ObjectPool.hpp"
+#include "globalTLS.hpp"
 
 /*
 * 사용자의 입장에서 볼 때, 괜찮은 인터페이스가 되지 못할 수도 있다.

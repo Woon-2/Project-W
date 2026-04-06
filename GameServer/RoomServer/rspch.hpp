@@ -17,15 +17,6 @@
 #include "log.hpp"
 #include "errorHandling.hpp"
 
-using Nanoseconds = std::chrono::duration<float, std::nano>;
-using Microseconds = std::chrono::duration<float, std::micro>;
-using Milliseconds = std::chrono::duration<float, std::milli>;
-using Seconds = std::chrono::duration<float>;
-
-using SystemClock = std::chrono::system_clock;
-using HighResolutionClock = std::chrono::high_resolution_clock;
-using SteadyClock = std::chrono::steady_clock;
-
 using XMFLOAT2 = DirectX::XMFLOAT2;
 using XMFLOAT3 = DirectX::XMFLOAT3;
 using XMFLOAT4 = DirectX::XMFLOAT4;

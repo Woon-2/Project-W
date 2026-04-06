@@ -17,7 +17,7 @@ struct JobData {
 -----------------*/
 
 struct TimerItem {
-	uint64 executionTime;
+	HighResolutionClock::time_point executionTime;
 	JobData* jobData;
 
 	bool operator<(const TimerItem& other) const {
@@ -34,8 +34,8 @@ struct TimerItem {
 */
 class JobTimer {
 public:
-	static void addJob(uint64 delay, uint32 roomId, Job* job);
-	static void distribute(uint64 now);
+	static void addJob(Milliseconds delay, uint32 roomId, Job* job);
+	static void distribute();
 	static void clear();
 
 private:

@@ -50,7 +50,7 @@ public:
 		jobQueue_.doAsync(this, memFn, std::forward<Args>(args)...);
 	}
 
-	void doTimer(uint64 delay, CallbackType&& callback);
+	void doTimer(Milliseconds delay, CallbackType&& callback);
 
 	int32 id() const { return id_; }
 
@@ -60,7 +60,7 @@ private:
 	std::unordered_map<int32, GameSession*> idSessionMap_;
 	JobQueue jobQueue_;
 
-	void updateGoblinAI(float dt);
+	void updateGoblinAI(Milliseconds dt);
 
 	std::vector<Cube> cubes_;			// 데이터
 	std::vector<Player> playerStarts_;	// 데이터

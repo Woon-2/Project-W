@@ -99,19 +99,19 @@ public:
 	Milliseconds lastFireTime() const { return lastFireTime_; }
 	Milliseconds fireCooldown() const { return fireCooldown_; }
 
-	bool reloading() const { return reloading_; }
-	void startReloading() { 
-		reloading_ = true;
-		reloadStartTime_ = SteadyClock::now().time_since_epoch();
-	}
-	bool finishReloading() { 
-		Milliseconds currTime = SteadyClock::now().time_since_epoch();
-		if (currTime - reloadStartTime_ >= reloadCooldown_) {
-			reloading_ = false;
-			return true;
-		}
-		return false;
-	}
+	//bool reloading() const { return reloading_; }
+	//void startReloading() { 
+	//	reloading_ = true;
+	//	reloadStartTime_ = SteadyClock::now().time_since_epoch();
+	//}
+	//bool finishReloading() { 
+	//	Milliseconds currTime = SteadyClock::now().time_since_epoch();
+	//	if (currTime - reloadStartTime_ >= reloadCooldown_) {
+	//		reloading_ = false;
+	//		return true;
+	//	}
+	//	return false;
+	//}
 
 private:
 	// object(player) 좌표의 스냅샷을 저장하기 위한 oldX_, oldZ_
@@ -172,7 +172,7 @@ public:
 	float moveSpeed() const { return moveSpeed_; }
 
 	// AI 상태머신을 한 틱 실행한다. 리턴값은 이 틱에서의 이동 속도.
-	mu::Vec3 update(float dt, const std::vector<GameSession*>& sessions);
+	mu::Vec3 update(Seconds dt, const std::vector<GameSession*>& sessions);
 
 private:
 	GoblinAIState aiState_ = GoblinAIState::Patrol;

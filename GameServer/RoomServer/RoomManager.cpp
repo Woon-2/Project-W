@@ -11,7 +11,7 @@ Room* RoomManager::makeRoom() {
 	ASSERT_CRASH(pLevel_ != nullptr);
 	newRoom->init(pLevel_);
 
-	newRoom->doTimer(17, [newRoom] {	// 60fps
+	newRoom->doTimer(17ms, [newRoom] {	// 60fps
 		newRoom->update();
 	});
 

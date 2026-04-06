@@ -297,7 +297,23 @@
   - 고블린 이동할 때 진동하는 현상은 아직 미해결.
   - 애니메이션 블렌딩 부자연스러운 문제 해결됨 (항목 5 참고).
 ** TU : C++에서 단일 .cpp 파일과 그것이 #include하는 헤더들을 합친 컴파일 단위를 말해.
+** <chrono>에 대해서 system clock, steady clock, high resolution clock의 모든 time point는 현재 시간을 알려줌.
+    time point의 차는 duration임. 기본적으로 duration은 정수값임.
+    하지만
+    using Nanoseconds = std::chrono::duration<float, std::nano>;
+    using Microseconds = std::chrono::duration<float, std::micro>;
+    using Milliseconds = std::chrono::duration<float, std::milli>;
+    using Seconds = std::chrono::duration<float>;
+    float값으로 바꿀 수 있음. 이렇게 했을 때 duration은 정수값 2개를 분모, 분자로 저장을 해서 분자/분모로 값을 계산함.
+    time_point = 시점, duration = 시간 / 시점과 시간은 비교 불가능, 시점과 시간 덧셈-뺄셈 가능 ex) 시점 + 시간 = 시점
 
+    2026.04.07 / 화요일
+    시간 정밀도 개선에서 생긴 문제와 해결
+    [문제]
+    JobTimer의 addJob에서 생긴 문제임.
+    JobTimer에서 TimeItem 중 executionTime의 타입을 Milliseconds( std::chrono::duration<float, std::milli> )와 더하기 위해
+    HighResolutionClockTimePoint( std::chrono::time_point<HighResolutionClock, Nanoseconds> )
+    해당 타입으로 했음. using Milliseconds = std::chrono::duration<float, std::milli>; 해당 타입과 더하기 위해서 
   
 [Room JobQueue 동작 구조]
 

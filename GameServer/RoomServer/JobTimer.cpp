@@ -8,22 +8,25 @@
 	 JobTimer
 ----------------*/
 
-void JobTimer::addJob(uint64 delay, uint32 roomId, Job* job) {
-	const uint64 executionTime = GetTickCount64() + delay;
+void JobTimer::addJob(Milliseconds delay, uint32 roomId, Job* job) {
+	const auto now = HighResolutionClock::now();
+	const auto executionTime = now + std::chrono::duration_cast<std::chrono::milliseconds>(delay);
 	auto jobData = ObjectPool<JobData>::pop(roomId, job);
 
 	std::lock_guard<std::mutex> lock(jobTimerMtx_);
 	timerQueue_.push({executionTime, jobData});
 }
 
-void JobTimer::distribute(uint64 now) {
+void JobTimer::distribute() {
 	if(distributing_.exchange(true) == true) {
 		return; // 이미 분배 중인 경우, 중복 실행 방지
 	}
 
 	std::vector<TimerItem> readyItems;
+	const auto now = HighResolutionClock::now();
 	{
 		std::lock_guard<std::mutex> lock(jobTimerMtx_);
+
 		while (!timerQueue_.empty()) {
 			const TimerItem& item = timerQueue_.top();
 			if (item.executionTime > now) {
