@@ -430,6 +430,14 @@ void Game::importGargoyleSpawner(std::ifstream& ifs, Gargoyle& gargoyle) {
 void Game::importTerrain(std::ifstream& ifs, TerrainObject& terrain) {
 	const auto manifestPath = readText(ifs, "ManifestPath");
 	terrain.setTerrainData(assetManager_.terrain());
+
+	// 지형 물리 바디 설정: Static body (위치는 importNode WorldTRS에서 설정됨)
+	terrain.body().setMotionType(MotionType::Static);
+
+	// TerrainCollider 등록 (BVH 불필요 — heightField 직접 조회)
+	const TerrainData* td = assetManager_.terrain();
+	if (td && !td->heightField.empty())
+		physicsWorld_.registerTerrain(&terrain.body(), &td->heightField);
 }
 
 // 게임의 업데이트는 다음 순서대로 이루어진다.
@@ -801,12 +809,20 @@ void Game::processInput(Milliseconds deltaTime) {
 			static_cast<float>(moveXSign) * player_->right() + static_cast<float>(moveZSign) * player_->forward()
 		);
 
-		// 입력 방향으로 가속. 최대 속력 초과분은 클램프한다.
-		auto vel = player_->velocity() + mu::Vec3(moveDirection) * (kPlayerAccelRate * Seconds(deltaTime).count());
-		if (vel.len2() > kPlayerMaxSpeed * kPlayerMaxSpeed) {
-			vel *= kPlayerMaxSpeed / vel.len();
+		// x/z 방향으로만 가속. y(중력)는 물리 엔진이 담당.
+		const auto fullVel = player_->velocity();
+		const auto accel   = mu::Vec3(moveDirection) * (kPlayerAccelRate * Seconds(deltaTime).count());
+		float newX = fullVel.x() + accel.x();
+		float newZ = fullVel.z() + accel.z();
+
+		// x/z 속도만 클램프 (y는 건드리지 않음).
+		const float hSpd2 = newX * newX + newZ * newZ;
+		if (hSpd2 > kPlayerMaxSpeed * kPlayerMaxSpeed) {
+			const float scale = kPlayerMaxSpeed / std::sqrt(hSpd2);
+			newX *= scale;
+			newZ *= scale;
 		}
-		player_->setVelocity(vel);
+		player_->setVelocity(mu::Vec3(newX, fullVel.y(), newZ));
 	}
 
 	// 카메라 1인칭 모드 설정

@@ -37,7 +37,6 @@ public:
 
 // O(n^2) reference implementation.
 // Suitable for small scenes (< ~50 dynamic bodies).
-// Phase 5 replaces this with SAPBroadPhase.
 class BruteForceBroadPhase : public BroadPhase {
 public:
     void add(RigidBody* body) override;
@@ -47,6 +46,35 @@ public:
 
 private:
     std::vector<RigidBody*> bodies_;
+};
+
+// Sort-and-Sweep broad phase along the X axis.
+// Complexity: O(n log n) sort + O(n + k) sweep per frame, where k = output pairs.
+// Uses insertion sort to exploit temporal coherence (body positions change little
+// between frames, keeping the endpoint list nearly sorted).
+class SAPBroadPhase : public BroadPhase {
+public:
+    void add(RigidBody* body) override;
+    void remove(RigidBody* body) override;
+
+    // Rebuilds endpoint list from current body AABBs and insertion-sorts it.
+    void update() override;
+
+    // Sweeps the sorted endpoint list with an active set, then checks Y/Z overlap.
+    // Static-Static pairs are never returned.
+    std::vector<BodyPair> queryPairs() override;
+
+private:
+    struct Endpoint {
+        float      value;  // AABB min or max on X axis
+        RigidBody* body;
+        bool       isMax;  // false = min endpoint, true = max endpoint
+    };
+
+    std::vector<RigidBody*> bodies_;
+    std::vector<Endpoint>   endpoints_; // sorted by value after update()
+
+    static bool overlapYZ(const AABB& a, const AABB& b);
 };
 
 #endif // __BroadPhase_HPP

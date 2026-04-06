@@ -3,19 +3,7 @@
 
 #include "constraint.hpp"
 #include "rigidBody.hpp"
-
-// One contact point between two bodies.
-// Stores warm-start accumulators (accNormal, accTangent) that persist
-// within a single step across PGS iterations.
-struct ContactPoint {
-    mu::Vec3  worldPos;              // world-space contact location
-    mu::Vec3  localA;                // worldPos - bodyA->pos() at prepare time
-    mu::Vec3  localB;                // worldPos - bodyB->pos() at prepare time
-    mu::NVec3 normal;                // contact normal: points from B toward A
-    float     depth    = 0.f;       // penetration depth (> 0 when penetrating)
-    float     accNormal      = 0.f; // accumulated normal impulse (warm start)
-    float     accTangent[2]  = {};  // accumulated tangent impulses (warm start)
-};
+// ContactPoint is defined in collision.hpp (included transitively via rigidBody.hpp)
 
 // Velocity-level Sequential Impulse constraint for one contact manifold.
 // Up to 4 contact points per pair.

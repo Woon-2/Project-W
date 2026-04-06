@@ -52,15 +52,21 @@ void ContactConstraint::prepare(Seconds dt)
         const mu::Vec3 n = cp.normal;
 
         // Normal effective mass: 1 / (sum of inverse mass contributions).
-        const float angA_n = angularEffectiveMass(c.rA, n, bodyA->invInertiaWorld());
-        const float angB_n = angularEffectiveMass(c.rB, n, bodyB->invInertiaWorld());
+        // Static bodies (invMass == 0) have infinite inertia, so their
+        // angular contribution is excluded to avoid distorting effMass.
+        const float angA_n = (bodyA->invMass() > 0.f)
+            ? angularEffectiveMass(c.rA, n, bodyA->invInertiaWorld()) : 0.f;
+        const float angB_n = (bodyB->invMass() > 0.f)
+            ? angularEffectiveMass(c.rB, n, bodyB->invInertiaWorld()) : 0.f;
         c.effMassNormal = 1.f / (bodyA->invMass() + bodyB->invMass() + angA_n + angB_n);
 
         // Tangent effective masses.
         for (int t = 0; t < 2; ++t) {
             const mu::Vec3 tv = c.tangent[t];
-            const float angA_t = angularEffectiveMass(c.rA, tv, bodyA->invInertiaWorld());
-            const float angB_t = angularEffectiveMass(c.rB, tv, bodyB->invInertiaWorld());
+            const float angA_t = (bodyA->invMass() > 0.f)
+                ? angularEffectiveMass(c.rA, tv, bodyA->invInertiaWorld()) : 0.f;
+            const float angB_t = (bodyB->invMass() > 0.f)
+                ? angularEffectiveMass(c.rB, tv, bodyB->invInertiaWorld()) : 0.f;
             c.effMassTangent[t] = 1.f / (bodyA->invMass() + bodyB->invMass() + angA_t + angB_t);
         }
 
@@ -78,12 +84,18 @@ static void applyImpulsePair(RigidBody* a, RigidBody* b,
 {
     const mu::Vec3 jDir = dir * j;
 
-    a->setLinearVel(a->linearVel() + jDir * a->invMass());
-    b->setLinearVel(b->linearVel() - jDir * b->invMass());
-
-    // In row-vector form: delta_omega = (r x J) * invInertiaWorld
-    a->setOmega(a->omega() + mu::cross(rA, jDir) * a->invInertiaWorld());
-    b->setOmega(b->omega() - mu::cross(rB, jDir) * b->invInertiaWorld());
+    // Guard on invMass: Static bodies (invMass==0) must not be moved.
+    // Without this guard, a Static body's omega gets set via the identity
+    // invInertiaWorld, corrupting subsequent relVel calculations in PGS.
+    if (a->invMass() > 0.f) {
+        a->setLinearVel(a->linearVel() + jDir * a->invMass());
+        // In row-vector form: delta_omega = (r x J) * invInertiaWorld
+        a->setOmega(a->omega() + mu::cross(rA, jDir) * a->invInertiaWorld());
+    }
+    if (b->invMass() > 0.f) {
+        b->setLinearVel(b->linearVel() - jDir * b->invMass());
+        b->setOmega(b->omega() - mu::cross(rB, jDir) * b->invInertiaWorld());
+    }
 }
 
 void ContactConstraint::solveVelocity()

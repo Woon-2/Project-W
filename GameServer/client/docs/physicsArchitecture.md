@@ -1,4 +1,4 @@
-### 물리 아키텍처 (Phase 1–3 완료)
+### 물리 아키텍처 (Phase 1–5 완료)
 
 연관 파일: `rigidBody.hpp/cpp`, `physicsWorld.hpp/cpp`, `constraint.hpp`,
 `contactConstraint.hpp/cpp`, `broadPhase.hpp/cpp`, `collision.hpp/cpp`, `object.hpp/cpp`
@@ -10,7 +10,8 @@
 ```
 PhysicsWorld
  ├─ std::vector<Entry>             // { RigidBody*, onRebuildBVH 콜백 }
- ├─ BruteForceBroadPhase           // O(n²), Phase 5에서 SAP로 교체 예정
+ ├─ SAPBroadPhase                  // X축 Sort-and-Sweep, O(n log n)
+ ├─ std::optional<TerrainCollider> // 지형 충돌 (BroadPhase 우회)
  └─ std::vector<ContactConstraint> // 매 step 재생성
 
 RigidBody
@@ -40,7 +41,8 @@ integrate(dt)
 generateContacts()
     ├─ broadPhase_->update() + queryPairs()
     ├─ collides(bvhA, bvhB) → leaf-leaf 쌍에서만 정밀 판정
-    └─ ContactConstraint 생성 (법선 = center-to-center 벡터, 신뢰성 우선)
+    ├─ ContactConstraint 생성 (법선 = center-to-center 벡터, 신뢰성 우선)
+    └─ TerrainCollider::generateContacts() → Dynamic body별 지형 contact 생성
 
 solveConstraints(dt)
     ├─ prepare(dt)  : rA/rB, tangent frame, effMass, Baumgarte bias 계산
@@ -48,8 +50,7 @@ solveConstraints(dt)
     └─ solvePosition(): no-op (Baumgarte only)
 ```
 
-> **주의**: 지형 충돌 미구현 상태에서 중력은 주석 처리. Phase 4(TerrainCollider) 완료 후 활성화.
-> (`physicsWorld.cpp` integrate의 `/* gravity_ + */` 부분)
+> Phase 4(TerrainCollider) 완료로 중력이 활성화됨. (`physicsWorld.cpp` integrate)
 
 ---
 
@@ -95,6 +96,40 @@ row 3은 `(0, 0, 0, 1)`이어야 역행렬 계산이 정상 동작한다.
 
 ---
 
+## 축별 velocity damping 분리 (`physicsWorld.cpp`)
+
+Dynamic body integrate 시 linear damping을 축별로 분리 적용한다.
+
+```
+x/z (수평): linearDamping  → 지면 마찰 (캐릭터: 12)
+y   (수직): kAirDamping    → 공기 저항 (physicsWorld.cpp 상단 상수, 현재 0.5f)
+```
+
+- **이유**: `linearDamping`은 수평 이동의 지면 마찰로 설계된 값(12)이다.
+  이를 y축에도 적용하면 종단 속도 = 9.8 / 12 ≈ 0.82 m/s로 낙하가 거의 정지 수준이 된다.
+- `kAirDamping = 0.5f` → 종단 속도 ≈ 19.6 m/s (게임 스케일에서 적절)
+- 값 조정: `terminal_fall_vel = gravity / kAirDamping`
+
+---
+
+## processInput 속도 처리 원칙 (`standalone/game.cpp`)
+
+입력으로 인한 가속과 속도 클램프는 **x/z 수평 성분에만** 적용한다.
+
+```cpp
+// 가속: x/z에만 더함, y(중력)는 보존
+float newX = fullVel.x() + accel.x();
+float newZ = fullVel.z() + accel.z();
+// 클램프: x/z 평면 속도만 kPlayerMaxSpeed 기준
+const float hSpd2 = newX*newX + newZ*newZ;
+if (hSpd2 > kPlayerMaxSpeed²) { newX *= scale; newZ *= scale; }
+player_->setVelocity(mu::Vec3(newX, fullVel.y(), newZ));
+```
+
+- **이유**: 낙하 중 y 속도가 크면 3D 속도 크기 기준 클램프 시 x/z가 의도치 않게 줄어듦.
+
+---
+
 ## BVH 충돌 판정: leaf-only
 
 `collides(BVH, BVH)`는 **leaf-leaf 쌍에서만** 정밀 shape 판정을 수행한다.
@@ -114,8 +149,54 @@ row 3은 `(0, 0, 0, 1)`이어야 역행렬 계산이 정상 동작한다.
 
 ## 충돌체 추상화 (현재)
 
-현재는 별도 Collider 인터페이스 없이 `RigidBody::worldBVH_`를 직접 사용한다.
-Phase 4(TerrainCollider)에서 `Collider` 인터페이스를 도입할 예정이다.
+별도 Collider 인터페이스 없이 두 경로로 충돌을 처리한다.
+
+- **Body-Body**: `RigidBody::worldBVH_` dual-tree DFS (기존)
+- **Body-Terrain**: `TerrainCollider`가 `TerrainHeightField`를 직접 조회 (Phase 4 추가)
+  - Terrain body는 BroadPhase에 등록하지 않음; `PhysicsWorld::generateContacts()`에서 별도 패스로 처리
+
+---
+
+## TerrainCollider
+
+`collision.hpp/cpp`에 정의. `collision.hpp`는 `TerrainHeightField`를 forward-declare하고,
+`collision.cpp`가 `terrain.hpp`를 include해서 완전 타입을 사용한다.
+
+**알고리즘:**
+1. Dynamic body의 BVH leaf 노드에서 하단 꼭짓점들 추출
+   - AABB leaf: 4 bottom corners (y = center.y - halfSize.y)
+   - OBB leaf: 8 corners 전부 (관통 여부로 필터링)
+2. 각 꼭짓점에 대해 지형 로컬 공간으로 변환 → `getHeightAt(x, z)` 조회
+3. `depth = terrainWorldY - vertexY > 0` → ContactPoint 생성
+4. depth 내림차순 최대 4개 유지 → `ContactConstraint(dynamic, terrainBody)` 생성
+
+**Normal 부호 규약:** `normal = B → A` (B=terrain, A=dynamic). `getNormalAt()` 결과는
+항상 Y > 0 (위방향)이므로 terrain → dynamic 방향 = 올바른 부호.
+
+---
+
+## SAPBroadPhase
+
+`broadPhase.hpp/cpp`에 정의. Phase 5에서 `BruteForceBroadPhase`를 대체.
+
+**알고리즘 (X축 Sort-and-Sweep):**
+1. `update()`: 각 body AABB의 minX/maxX 엔드포인트 2N개 생성 → insertion sort
+   - insertion sort: 프레임 간 위치 변화가 작아 거의 정렬 → 평균 O(n)
+2. `queryPairs()`: active set sweep
+   - min endpoint 도달: active set 내 모든 body와 Y/Z overlap 검사 → 쌍 생성
+   - max endpoint 도달: active set에서 제거
+   - Static-Static 쌍 제외
+
+**Static body 처리:** `ContactConstraint::prepare()`에서 `invMass == 0`인 body의
+angular 기여를 0으로 처리 (static body의 default `invInertiaWorld_`가 identity여서
+effective mass 오산 방지). `applyImpulse()`는 이미 `invMass == 0` guard 보유.
+
+---
+
+## ContactPoint 위치
+
+`ContactPoint` struct는 `collision.hpp`에 정의한다 (Phase 4에서 이동).
+`contactConstraint.hpp`는 `rigidBody.hpp → collision.hpp` 체인으로 이를 획득한다.
 
 ---
 
@@ -126,8 +207,8 @@ Phase 4(TerrainCollider)에서 `Collider` 인터페이스를 도입할 예정이
 | 1 | PhysicsWorld + RigidBody 골격, Kinematic 이동 | 완료 |
 | 2 | Dynamic body + 힘/관성 적분 | 완료 |
 | 3 | ContactConstraint + PGS solver | 완료 |
-| 4 | TerrainCollider + 지형 충돌 (중력 활성화) | 미구현 |
-| 5 | SAPBroadPhase (O(n²) → O(n log n)) | 미구현 |
+| 4 | TerrainCollider + 지형 충돌 (중력 활성화) | 완료 |
+| 5 | SAPBroadPhase (O(n²) → O(n log n)) | 완료 |
 | 6 | Joint Constraints (BallSocket, Hinge, ConeTwist) | 미구현 |
 | 7 | Ragdoll 구조 | 미구현 |
 | 8 | ActiveRagdollController | 미구현 |

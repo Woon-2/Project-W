@@ -21,7 +21,7 @@
 - [X] Terrain roughness metallic도 unity에서 추출 및 렌더링 시 반영하도록 수정
   - 현재는 셰이더에 하드코딩되어 있음.
 - [X] Cascaded Shadow Mapping 구현
-- [ ] Rigid Body Physics 구현: 중력, 공기 저항, 마찰력 등 반영 (Phase 1-3 완료 / Phase 4 TerrainCollider + 중력 활성화 미구현)
+- [X] Rigid Body Physics 구현: 중력, 공기 저항, 마찰력 등 반영 (Phase 1-5 완료)
 - [ ] 몬스터 AI 시스템 초안 구현(주변 배회, 피격 시 어그로)
 - [ ] 장비 장착: 공격 모션에 무기도 같이 움직이도록 (필요하면 IK 구현)
 - [ ] Software Occlusion(Culling)을 통한 최적화

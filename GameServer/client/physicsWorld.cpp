@@ -1,8 +1,14 @@
 #include "pch.hpp"
 #include "physicsWorld.hpp"
+#include "terrain.hpp"
+
+// 수직(y축) 공기 저항 계수. linearDamping은 수평 지면 마찰에 사용되므로
+// y축에는 별도의 작은 값을 적용한다.
+// 종단 속도 = gravity / kAirDamping (예: 9.8 / 0.5 ≈ 19.6 m/s)
+static constexpr float kAirDamping = 0.5f;
 
 PhysicsWorld::PhysicsWorld()
-    : broadPhase_(std::make_unique<BruteForceBroadPhase>())
+    : broadPhase_(std::make_unique<SAPBroadPhase>())
 {}
 
 void PhysicsWorld::registerBody(RigidBody* body,
@@ -18,6 +24,17 @@ void PhysicsWorld::unregisterBody(RigidBody* body)
     if (it != entries_.end())
         entries_.erase(it);
     broadPhase_->remove(body);
+}
+
+void PhysicsWorld::registerTerrain(RigidBody* terrainBody,
+                                    const TerrainHeightField* heightField)
+{
+    terrainCollider_ = std::make_unique<TerrainCollider>(terrainBody, heightField);
+}
+
+void PhysicsWorld::unregisterTerrain()
+{
+    terrainCollider_.reset();
 }
 
 void PhysicsWorld::step(Seconds dt)
@@ -65,11 +82,16 @@ void PhysicsWorld::integrate(Seconds dt)
             const float dtf = dt.count();
 
             // Velocity damping (applied first so it does not damp the new impulse).
-            b.setLinearVel(b.linearVel() * std::max(0.f, 1.f - b.linearDamping()  * dtf));
-            b.setOmega    (b.omega()     * std::max(0.f, 1.f - b.angularDamping() * dtf));
+            // x/z: ground friction (linearDamping). y: air resistance (kAirDamping).
+            {
+                const auto vel = b.linearVel();
+                const float horzDamp = std::max(0.f, 1.f - b.linearDamping() * dtf);
+                const float vertDamp = std::max(0.f, 1.f - kAirDamping * dtf);
+                b.setLinearVel(mu::Vec3(vel.x() * horzDamp, vel.y() * vertDamp, vel.z() * horzDamp));
+            }
+            b.setOmega(b.omega() * std::max(0.f, 1.f - b.angularDamping() * dtf));
 
-            // Gravity disabled until terrain collision is implemented.
-            const auto linAcc = /* gravity_ + */ b.forceAccum() * b.invMass();
+            const auto linAcc = gravity_ + b.forceAccum() * b.invMass();
             b.setLinearVel(b.linearVel() + linAcc * dtf);
 
             // Integrate angular velocity: I_world^-1 * torque.
@@ -136,6 +158,28 @@ void PhysicsWorld::generateContacts()
         cc->addContact(cp);
 
         contactConstraints_.push_back(std::move(cc));
+    }
+
+    // --- Body-Terrain contacts ---
+    if (terrainCollider_) {
+        for (auto& e : entries_) {
+            RigidBody* body = e.body;
+            if (body->motionType() != MotionType::Dynamic) continue;
+            if (body->worldBVH().empty()) continue;
+
+            std::vector<ContactPoint> contacts;
+            contacts.reserve(4);
+            const int cnt = terrainCollider_->generateContacts(*body, contacts);
+            if (cnt == 0) continue;
+
+            auto cc = std::make_unique<ContactConstraint>(body, terrainCollider_->terrainBody());
+            for (auto& cp : contacts) {
+                cp.localA = cp.worldPos - body->pos();
+                cp.localB = cp.worldPos - terrainCollider_->terrainBody()->pos();
+                cc->addContact(cp);
+            }
+            contactConstraints_.push_back(std::move(cc));
+        }
     }
 }
 

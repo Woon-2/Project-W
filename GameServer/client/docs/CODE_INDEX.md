@@ -73,18 +73,23 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `computeBoxInertia()` | `rigidBody.hpp #26` | 박스 관성 텐서 헬퍼 |
 | `computeCapsuleInertia()` | `rigidBody.hpp #27` | 캡슐 관성 텐서 헬퍼 |
 | `Constraint` (abstract) | `constraint.hpp #12` | prepare/solveVelocity/solvePosition 인터페이스 |
-| `ContactPoint` struct | `contactConstraint.hpp #16` | worldPos, normal(B→A), depth, acc 누적값 |
-| `ContactConstraint` class | `contactConstraint.hpp #38` | PGS Normal + Coulomb 마찰 impulse solver |
-| `BodyPair` struct | `broadPhase.hpp #12` | broad phase 결과 쌍 |
-| `BroadPhase` (abstract) | `broadPhase.hpp #18` | add/remove/update/queryPairs 인터페이스 |
-| `BruteForceBroadPhase` | `broadPhase.hpp #36` | O(n²) 초기 구현 (Phase 5에서 SAP로 교체) |
-| `PhysicsWorld` class | `physicsWorld.hpp #22` | 시뮬레이션 진입점 |
-| `PhysicsWorld::registerBody()` | `physicsWorld.hpp #34` | body + onRebuildBVH 콜백 + broad phase 등록 |
-| `PhysicsWorld::unregisterBody()` | `physicsWorld.hpp #39` | 등록 해제 |
-| `PhysicsWorld::step()` | `physicsWorld.hpp #42` | integrate → generateContacts → solveConstraints |
-| `PhysicsWorld::setGravity()` | `physicsWorld.hpp #46` | Dynamic body 중력 설정 |
-| `PhysicsWorld::interpolatePos()` | `physicsWorld.hpp #52` | 렌더 보간 헬퍼 (prev→curr, t) |
-| `PhysicsWorld::interpolateOrient()` | `physicsWorld.hpp #53` | 렌더 보간 헬퍼 (slerp) |
+| `ContactPoint` struct | `collision.hpp` | worldPos, normal(B→A), depth, acc 누적값 |
+| `ContactConstraint` class | `contactConstraint.hpp` | PGS Normal + Coulomb 마찰 impulse solver |
+| `BodyPair` struct | `broadPhase.hpp` | broad phase 결과 쌍 |
+| `BroadPhase` (abstract) | `broadPhase.hpp` | add/remove/update/queryPairs 인터페이스 |
+| `BruteForceBroadPhase` | `broadPhase.hpp` | O(n²) 참조 구현 (후보 비교용으로 보존) |
+| `SAPBroadPhase` | `broadPhase.hpp` | X축 Sort-and-Sweep, O(n log n) (기본 사용) |
+| `TerrainHeightField` struct | `terrain.hpp` | CPU-side 높이 데이터 (getHeightAt, getNormalAt) |
+| `TerrainCollider` class | `collision.hpp` | Dynamic body ↔ 지형 높이맵 contact 생성 |
+| `PhysicsWorld` class | `physicsWorld.hpp` | 시뮬레이션 진입점 |
+| `PhysicsWorld::registerBody()` | `physicsWorld.hpp` | body + onRebuildBVH 콜백 + broad phase 등록 |
+| `PhysicsWorld::unregisterBody()` | `physicsWorld.hpp` | 등록 해제 |
+| `PhysicsWorld::registerTerrain()` | `physicsWorld.hpp` | Static 지형 body + heightField 등록 |
+| `PhysicsWorld::unregisterTerrain()` | `physicsWorld.hpp` | 지형 collider 해제 |
+| `PhysicsWorld::step()` | `physicsWorld.hpp` | integrate → generateContacts → solveConstraints |
+| `PhysicsWorld::setGravity()` | `physicsWorld.hpp` | Dynamic body 중력 설정 |
+| `PhysicsWorld::interpolatePos()` | `physicsWorld.hpp` | 렌더 보간 헬퍼 (prev→curr, t) |
+| `PhysicsWorld::interpolateOrient()` | `physicsWorld.hpp` | 렌더 보간 헬퍼 (slerp) |
 
 **Object 내 물리 상태 접근:**
 

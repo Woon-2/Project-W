@@ -5,7 +5,10 @@
 #include "constraint.hpp"
 #include "contactConstraint.hpp"
 #include "broadPhase.hpp"
+#include "collision.hpp"
 #include <functional>
+
+struct TerrainHeightField;
 
 // PhysicsWorld manages the physics simulation tick.
 // It holds non-owning pointers to RigidBody instances (which are owned
@@ -33,6 +36,13 @@ public:
 
     // Remove a body from simulation. Safe to call with an unregistered body.
     void unregisterBody(RigidBody* body);
+
+    // Register a static height-field terrain for body-terrain collision.
+    // terrainBody must be MotionType::Static; it is NOT added to the broad phase.
+    void registerTerrain(RigidBody* terrainBody, const TerrainHeightField* heightField);
+
+    // Remove the terrain collider. Safe to call when no terrain is registered.
+    void unregisterTerrain();
 
     // Main simulation tick (integrate + detect + solve).
     void step(Seconds dt);
@@ -69,6 +79,11 @@ private:
 
     // Persistent constraints: joints, springs, etc. (added by the game).
     std::vector<std::unique_ptr<Constraint>>    jointConstraints_;
+
+    // Optional terrain collider (null when no terrain is registered).
+    // Terrain body is NOT in entries_ or broadPhase_; TerrainCollider
+    // iterates Dynamic bodies directly.
+    std::unique_ptr<TerrainCollider>            terrainCollider_;
 
     int solverIterations_ = 10;
 };
