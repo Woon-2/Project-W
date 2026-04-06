@@ -125,14 +125,6 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 	idGoblinMap_[goblinInfo.objectId] = goblin;
 }
 
-void Game::moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
-	auto it = idGoblinMap_.find(npcId);
-	if (it == idGoblinMap_.end()) return;
-	it->second->setPos(DirectX::XMLoadFloat3(&pos));
-	it->second->setOrient(DirectX::XMLoadFloat4(&orient));
-	it->second->physicState().evVelocity = DirectX::XMLoadFloat3(&velocity);
-}
-
 void Game::removePlayer( i32t playerId ) {
 	auto itPlayer = std::ranges::find_if(
 		otherPlayers_, [ playerId ]( const std::shared_ptr<Player>& obj ) {
@@ -203,6 +195,23 @@ void Game::rotatePlayer(uint16 playerId, float yawRad) {
 
 	const mu::NQuat yaw = mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yawRad));
 	player->setOrient(yaw);
+}
+
+void Game::moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
+	auto goblin = idGoblinMap_[npcId];
+
+	DISPLAY_ERROR_STR(goblin != nullptr,
+		"[Game Error] Game::moveGoblin: 이동하려는 고블린이 존재하지 않습니다.\n",
+		false
+	);
+
+	if (goblin == nullptr) {
+		return;
+	}
+
+	goblin->setPrevPos(goblin->renderState().pos);
+	goblin->setCurrPos(DirectX::XMLoadFloat3(&pos));
+	goblin->setOrient(DirectX::XMLoadFloat4(&orient));
 }
 
 // 게임의 업데이트는 다음 순서대로 이루어진다.

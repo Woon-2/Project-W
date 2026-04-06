@@ -116,23 +116,6 @@ std::shared_ptr<SendBuffer> PacketManager::makeSMovePacket(uint16 playerId, Dire
 	return sendBuffer;
 }
 
-std::shared_ptr<SendBuffer> PacketManager::makeSNpcMovePacket(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
-	auto sendBuffer = SendBufferManager::open(sizeof(SNpcMovePacket));
-	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
-
-	auto pkt = bw.reserve<SNpcMovePacket>();
-	pkt->npcId    = npcId;
-	pkt->pos      = pos;
-	pkt->orient   = orient;
-	pkt->velocity = velocity;
-
-	pkt->size = bw.writeSize();
-	pkt->type = PacketType::S_NpcMove;
-
-	sendBuffer->close(bw.writeSize());
-	return sendBuffer;
-}
-
 std::shared_ptr<SendBuffer> PacketManager::makeSMouseMovePacket(uint16 playerId, float yawRad) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SMouseMovePacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
@@ -143,6 +126,23 @@ std::shared_ptr<SendBuffer> PacketManager::makeSMouseMovePacket(uint16 playerId,
 
 	sMouseMvPkt->size = bw.writeSize();
 	sMouseMvPkt->type = PacketType::S_MouseMove;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSNpcMovePacket(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
+	auto sendBuffer = SendBufferManager::open(sizeof(SNpcMovePacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto sNpcMvPkt = bw.reserve<SNpcMovePacket>();
+	sNpcMvPkt->npcId = npcId;
+	sNpcMvPkt->pos = pos;
+	sNpcMvPkt->orient = orient;
+	sNpcMvPkt->velocity = velocity;
+
+	sNpcMvPkt->size = bw.writeSize();
+	sNpcMvPkt->type = PacketType::S_NpcMove;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;

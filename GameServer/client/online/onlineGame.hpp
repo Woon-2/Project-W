@@ -38,6 +38,7 @@ public:
 	void createOtherPlayer(const ObjectInfo& otherPlayerInfo);
 	void createOtherPlayer(const PlayerInfo& otherPlayerInfo);
 	void createGoblin(const ObjectInfo& goblinInfo);
+
 	void removePlayer( i32t playerId );
 	void movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos);
 	void rotatePlayer(uint16 playerId, float yawRad);

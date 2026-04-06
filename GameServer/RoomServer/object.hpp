@@ -157,31 +157,31 @@ public:
 	Goblin() = default;
 	Goblin(Object&& base) : Object(std::move(base)) {}
 
-	void setAIState(GoblinAIState s)  { aiState_ = s; }
-	GoblinAIState aiState() const      { return aiState_; }
+	void setAIState(GoblinAIState s) { aiState_ = s; }
+	GoblinAIState aiState() const { return aiState_; }
 
-	void setSpawnPos(mu::Vec3 p)       { spawnPos_ = p; patrolTarget_ = p; }
-	mu::Vec3 spawnPos() const          { return spawnPos_; }
+	void setSpawnPos(mu::Vec3 p) { spawnPos_ = p; patrolTarget_ = p; }
+	mu::Vec3 spawnPos() const { return spawnPos_; }
 
-	void setPatrolTarget(mu::Vec3 p)   { patrolTarget_ = p; }
-	mu::Vec3 patrolTarget() const      { return patrolTarget_; }
+	void setPatrolTarget(mu::Vec3 p) { patrolTarget_ = p; }
+	mu::Vec3 patrolTarget() const { return patrolTarget_; }
 
-	float aggroRange()   const { return aggroRange_; }
+	float aggroRange() const { return aggroRange_; }
 	float deaggroRange() const { return deaggroRange_; }
-	float attackRange()  const { return attackRange_; }
-	float moveSpeed()    const { return moveSpeed_; }
+	float attackRange() const { return attackRange_; }
+	float moveSpeed() const { return moveSpeed_; }
 
 	// AI 상태머신을 한 틱 실행한다. 리턴값은 이 틱에서의 이동 속도.
 	mu::Vec3 update(float dt, const std::vector<GameSession*>& sessions);
 
 private:
-	GoblinAIState aiState_     = GoblinAIState::Patrol;
-	mu::Vec3      spawnPos_    {};
-	mu::Vec3      patrolTarget_{};
-	float         aggroRange_   = 15.f;
-	float         deaggroRange_ = 20.f;
-	float         attackRange_  = 1.5f;
-	float         moveSpeed_    = 3.f;
+	GoblinAIState aiState_ = GoblinAIState::Patrol;
+	mu::Vec3 spawnPos_{};
+	mu::Vec3 patrolTarget_{};
+	float aggroRange_ = 15.f;
+	float deaggroRange_ = 20.f;
+	float attackRange_ = 1.5f;
+	float moveSpeed_ = 3.f;
 };
 
 class Cube : public Object {

@@ -93,16 +93,16 @@ void PacketManager::handleSMovePacket(byte* buffer, int32 len) {
 	game->movePlayer(sMvPkt->playerId, sMvPkt->pos);
 }
 
-void PacketManager::handleSNpcMovePacket(byte* buffer, int32 len) {
-	auto pkt = reinterpret_cast<SNpcMovePacket*>(buffer);
-	INet::ClientApp::onlineGame()->moveGoblin(pkt->npcId, pkt->pos, pkt->orient, pkt->velocity);
-}
-
 void PacketManager::handleSMouseMovePacket(byte* buffer, int32 len) {
 	auto sMouseMvPkt = reinterpret_cast<SMouseMovePacket*>(buffer);
 
 	auto game = INet::ClientApp::onlineGame();
 	game->rotatePlayer(sMouseMvPkt->playerId, sMouseMvPkt->yawRadian);
+}
+
+void PacketManager::handleSNpcMovePacket(byte* buffer, int32 len) {
+	auto sNpcMvPkt = reinterpret_cast<SNpcMovePacket*>(buffer);
+	INet::ClientApp::onlineGame()->moveGoblin(sNpcMvPkt->npcId, sNpcMvPkt->pos, sNpcMvPkt->orient, sNpcMvPkt->velocity);
 }
 
 std::shared_ptr<SendBuffer> PacketManager::makeCMovePacket(DirectX::XMFLOAT3 pos) {

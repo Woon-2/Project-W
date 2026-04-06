@@ -27,9 +27,12 @@ mu::Vec3 Goblin::update(float dt, const std::vector<GameSession*>& sessions) {
 	// 가장 가까운 플레이어 탐색
 	GameSession* nearestSession = nullptr;
 	float nearestDist = std::numeric_limits<float>::max();
+
 	for (auto s : sessions) {
 		float d = (s->player()->pos() - pos()).len();
-		if (d < nearestDist) { nearestDist = d; nearestSession = s; }
+		if (d < nearestDist) { 
+			nearestDist = d; nearestSession = s;
+		}
 	}
 
 	mu::Vec3 velocity{};
@@ -40,16 +43,22 @@ mu::Vec3 Goblin::update(float dt, const std::vector<GameSession*>& sessions) {
 			aiState_ = GoblinAIState::Chase;
 			break;
 		}
+
 		auto toTarget = patrolTarget_ - pos();
+
 		if (toTarget.len2() < 0.25f) {
 			static std::mt19937 rng{ std::random_device{}() };
 			std::uniform_real_distribution<float> angleDist(0.f, mu::pi * 2.f);
+
 			float angle = angleDist(rng);
 			patrolTarget_ = spawnPos_ + mu::Vec3(std::cos(angle) * 5.f, 0.f, std::sin(angle) * 5.f);
-		} else {
+		} 
+		else {
 			auto dir = mu::NVec3(toTarget);
+
 			velocity = mu::Vec3(dir) * moveSpeed_;
 			setPos(pos() + velocity * dt);
+
 			float yaw = std::atan2(dir.x(), dir.z());
 			setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yaw)));
 		}
@@ -57,24 +66,32 @@ mu::Vec3 Goblin::update(float dt, const std::vector<GameSession*>& sessions) {
 	}
 	case GoblinAIState::Chase: {
 		if (nearestDist < attackRange_) {
-			aiState_ = GoblinAIState::Attack; break;
+			aiState_ = GoblinAIState::Attack;
+			break;
 		}
 		if (nearestDist > deaggroRange_) {
-			aiState_ = GoblinAIState::Return; break;
+			aiState_ = GoblinAIState::Return;
+			break;
 		}
+
 		auto toPlayer = nearestSession->player()->pos() - pos();
 		auto dir = mu::NVec3(toPlayer);
+
 		velocity = mu::Vec3(dir) * moveSpeed_;
 		setPos(pos() + velocity * dt);
+
 		float yaw = std::atan2(dir.x(), dir.z());
 		setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yaw)));
 		break;
 	}
 	case GoblinAIState::Attack: {
 		if (nearestDist > attackRange_) {
-			aiState_ = GoblinAIState::Chase; break;
+			aiState_ = GoblinAIState::Chase;
+			break;
 		}
+
 		auto toPlayer = nearestSession->player()->pos() - pos();
+
 		float yaw = std::atan2(toPlayer.x(), toPlayer.z());
 		setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yaw)));
 		// hp 차감은 데미지 패킷 구현 후 추가 예정
@@ -82,17 +99,24 @@ mu::Vec3 Goblin::update(float dt, const std::vector<GameSession*>& sessions) {
 	}
 	case GoblinAIState::Return: {
 		if (nearestDist < aggroRange_) {
-			aiState_ = GoblinAIState::Chase; break;
+			aiState_ = GoblinAIState::Chase;
+			break;
 		}
+
 		auto toSpawn = spawnPos_ - pos();
+
 		if (toSpawn.len2() < 0.25f) {
 			setPos(spawnPos_);
 			patrolTarget_ = spawnPos_;
-			aiState_ = GoblinAIState::Patrol; break;
+			aiState_ = GoblinAIState::Patrol;
+			break;
 		}
+
 		auto dir = mu::NVec3(toSpawn);
+
 		velocity = mu::Vec3(dir) * moveSpeed_;
 		setPos(pos() + velocity * dt);
+
 		float yaw = std::atan2(dir.x(), dir.z());
 		setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yaw)));
 		break;
