@@ -215,6 +215,43 @@ void Game::moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 ori
 	goblin->physicState().evVelocity = DirectX::XMLoadFloat3(&velocity);
 }
 
+void Game::onNpcAttack( uint16 npcId ) {
+	auto npc = idGoblinMap_[ npcId ];
+
+	DISPLAY_ERROR_STR( npc != nullptr,
+		"[Game Error] Game::onNpcAttack: 공격하는 NPC가 존재하지 않습니다.\n",
+		false
+	);
+
+	if ( npc == nullptr ) {
+		return;
+	}
+
+	holdEvent( eventList_, EvAttack( static_cast<i32t>(npcId) ) );
+}
+
+void Game::applyHit( uint16 targetId, int32 newHp ) {
+	if ( player_ && static_cast<uint16>(player_->getId()) == targetId ) {
+		player_->setHp( newHp );
+
+		if ( newHp <= 0 ) {
+			playerDead_ = true;
+		}
+		return;
+	}
+	if ( auto it = idPlayerMap_.find( targetId ); it != idPlayerMap_.end() ) {
+		it->second->setHp( newHp );
+		return;
+	}
+	if ( auto it = idGoblinMap_.find( targetId ); it != idGoblinMap_.end() ) {
+		it->second->setHp( newHp );
+	}
+}
+
+void Game::applyTimeSync( uint64 serverMs ) {
+	serverClockOffset_ = static_cast<int64>(serverMs) - static_cast<int64>(GetTickCount64());
+}
+
 // 게임의 업데이트는 다음 순서대로 이루어진다.
 // 네트워크 패킷 처리
 // 입력 처리
@@ -494,6 +531,12 @@ void Game::sendMouseMovePacket() {
 	INet::ClientApp::addSendBuffer(sendBuffer);
 }
 
+void Game::sendAttackPacket() {
+	uint64 clientMs = static_cast<uint64>(
+		static_cast<int64>(GetTickCount64()) + serverClockOffset_);
+	INet::ClientApp::addSendBuffer(PacketManager::makeCAttackPacket(clientMs));
+}
+
 void Game::processInput(Milliseconds deltaTime) {
 	if (GetForegroundWindow() != ghWnd) {
 		return;
@@ -686,6 +729,14 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		mouseDeltaY_ = 0;
 		break;
 	}
+	}
+
+	// 플레이어 공격: LButton 클릭 시 서버에 C_Attack 전송
+	if (!playerDead_
+		&& (keyboardStateCurr_[VK_LBUTTON] & 0x80)
+		&& !(keyboardStatePrev_[VK_LBUTTON] & 0x80))
+	{
+		sendAttackPacket();
 	}
 }
 

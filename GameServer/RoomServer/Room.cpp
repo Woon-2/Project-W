@@ -6,6 +6,7 @@
 #include "PacketManager.hpp"
 #include "Level.hpp"
 #include "JobTimer.hpp"
+#include "collision.hpp"
 
 void Room::init(const Level* levelData) {
 	cubes_ = levelData->cubes;
@@ -32,16 +33,26 @@ void Room::updateGoblinAI(Milliseconds dt) {
 		return;
 	}
 
-	for (auto& goblin : goblins_) {
-		auto velocity = goblin.update(dt, sessions_);
+	uint64 serverNow = static_cast<uint64>(GetTickCount64());
 
-		auto pkt = PacketManager::makeSNpcMovePacket(
+	for (auto& goblin : goblins_) {
+		goblin.recordSnapshot(serverNow);
+
+		auto result = goblin.update(dt, sessions_);
+
+		broadcast(PacketManager::makeSNpcMovePacket(
 			static_cast<uint16>(goblin.getId()),
 			goblin.pos().getXmf(),
 			goblin.orient().getXmf(),
-			velocity.getXmf()
-		);
-		broadcast(pkt);
+			result.velocity.getXmf()
+		));
+
+		if (result.hit) {
+			broadcast(PacketManager::makeSNpcAttackPacket(
+				static_cast<uint16>(goblin.getId())));
+			broadcast(PacketManager::makeSHitPacket(
+				result.hit->targetId, result.hit->newHp));
+		}
 	}
 }
 
@@ -93,6 +104,11 @@ void Room::enter(GameSession* session) {
 	auto enterPkt = PacketManager::makeSEnterPacket(newPlayerInfo, objInfos);
 	session->send(enterPkt);
 
+	// 시계 동기화 패킷 전송 (지연 보상용)
+	auto timeSyncPkt = PacketManager::makeSTimeSyncPacket(
+		static_cast<uint64>(GetTickCount64()));
+	session->send(timeSyncPkt);
+
 	// 새로 들어온 플레이어의 정보를 기존 플레이어들에게 브로드캐스트
 	if (sessions_.size() > 0) {	// 기존 플레이어가 있을 때만 브로드캐스트
 		auto enterOtherPkt = PacketManager::makeSEnterOtherPacket(newPlayerInfo);
@@ -123,6 +139,11 @@ void Room::move(int32 sessionId, CMovePacket* cMvPkt) {
 	// leave한 sessionId가 move 패킷을 보내는 경우 등. 일단은 방에 있는 session이 보낸 패킷이므로 유효하다고 가정하고 작성한다.
 	auto session = idSessionMap_[sessionId];
 
+	if (session == nullptr) {
+		std::cout << "[ move() ] 존재하지 않는 session을 찾고 있습니다. sessionId: " << sessionId << '\n';
+		return;
+	}
+
 	auto player = session->player();
 	player->setPos(DirectX::XMLoadFloat3(&cMvPkt->pos));
 	//player->setOrient(DirectX::XMLoadFloat4(&cMvPkt->orient));
@@ -137,6 +158,11 @@ void Room::move(int32 sessionId, CMovePacket* cMvPkt) {
 void Room::rotate(int32 sessionId, CMouseMovePacket* cMouseMvPkt) {
 	auto session = idSessionMap_[sessionId];
 
+	if(session == nullptr) {
+		std::cout << "[ rotate() ] 존재하지 않는 session을 찾고 있습니다. sessionId: " << sessionId << '\n';
+		return;
+	}
+
 	auto player = session->player();
 	auto yaw = mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(cMouseMvPkt->yawRadian));
 	player->setOrient(yaw);
@@ -147,8 +173,49 @@ void Room::rotate(int32 sessionId, CMouseMovePacket* cMouseMvPkt) {
 	ObjectPool<CMouseMovePacket>::push(cMouseMvPkt);
 }
 
+void Room::attack(int32 sessionId, uint64 clientMs) {
+	auto sessionIt = idSessionMap_.find(sessionId);
+
+	if (sessionIt == idSessionMap_.end()) {
+		std::cout << "[ attack() ] 존재하지 않는 session을 찾고 있습니다. sessionId: " << sessionId << '\n';
+		return;
+	}
+
+	auto player = sessionIt->second->player();
+	if (player->hp() <= 0) {
+		return;
+	}
+
+	static const mu::Vec3 kHalfExtent{ 1.5f, 1.5f, 1.5f };
+	static constexpr float kOffsetFwd = 1.0f;
+	static constexpr int32 kDamage = 30;
+
+	auto hitbox = buildAttackAABB(
+		player->pos(), player->forward(), kHalfExtent, kOffsetFwd
+	);
+
+	// clientMs ≈ serverTime - D (단방향 지연), 되감기 타겟으로 사용
+	uint64 targetMs = clientMs;
+
+	for (auto& goblin : goblins_) {
+		if (goblin.hp() <= 0) {
+			continue;
+		}
+
+		AABB goblinAABB{ goblin.rewindPos(targetMs), {1.0f, 2.0f, 1.0f} };
+
+		if (collides(hitbox, goblinAABB).hit) {
+			int32 newHp = std::max(goblin.hp() - kDamage, 0);
+			goblin.setHp(newHp);
+
+			broadcast(PacketManager::makeSHitPacket(
+				static_cast<uint16>(goblin.getId()), newHp));
+		}
+	}
+}
+
 void Room::broadcast(const std::shared_ptr<SendBuffer>& sendBuffer) {
-	for(auto session : sessions_) {
+	for (auto session : sessions_) {
 		session->send(sendBuffer);
 	}
 }

@@ -22,6 +22,11 @@ enum class PacketType : uint16 {
 	S_MouseMove,
 
 	S_NpcMove,
+
+	C_Attack,
+	S_NpcAttack,
+	S_Hit,
+	S_TimeSync,
 };
 
 enum class ObjectType : uint16 {
@@ -126,6 +131,23 @@ struct SNpcMovePacket : public PacketHeader {
 	DirectX::XMFLOAT3 pos;
 	DirectX::XMFLOAT4 orient;
 	DirectX::XMFLOAT3 velocity;
+};
+
+struct CAttackPacket : public PacketHeader {
+	uint64 clientMs;   // GetTickCount64() + serverClockOffset (서버 시계 추정값)
+};
+
+struct SNpcAttackPacket : public PacketHeader {
+	uint16 npcId;
+};
+
+struct SHitPacket : public PacketHeader {
+	uint16 targetId;
+	int32  newHp;
+};
+
+struct STimeSyncPacket : public PacketHeader {
+	uint64 serverMs;   // GetTickCount64() 기반
 };
 
 #pragma pack(pop)

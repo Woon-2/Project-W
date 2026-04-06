@@ -144,7 +144,18 @@ private:
 	Milliseconds reloadCooldown_{2000ms};
 };
 
-enum class GoblinAIState { Patrol, Chase, Attack, Return };
+enum class GoblinAIState { 
+	Patrol,
+	Chase,
+	Attack,
+	Return
+};
+
+struct GoblinUpdateResult {
+	mu::Vec3 velocity;
+	struct HitInfo { uint16 targetId; int32 newHp; };
+	std::optional<HitInfo> hit;   // 이 틱에 공격이 발동되었을 때만 set
+};
 
 class Player : public Object {
 public:
@@ -171,8 +182,13 @@ public:
 	float attackRange() const { return attackRange_; }
 	float moveSpeed() const { return moveSpeed_; }
 
-	// AI 상태머신을 한 틱 실행한다. 리턴값은 이 틱에서의 이동 속도.
-	mu::Vec3 update(Seconds dt, const std::vector<GameSession*>& sessions);
+	// AI 상태머신을 한 틱 실행한다.
+	GoblinUpdateResult update(Seconds dt, const std::vector<GameSession*>& sessions);
+
+	// 지연 보상용 위치 스냅샷을 기록한다. Room::updateGoblinAI()에서 매 틱 호출.
+	void recordSnapshot(uint64 serverMs);
+	// targetMs 시각에 가장 가까운 위치 스냅샷을 반환한다.
+	mu::Vec3 rewindPos(uint64 targetMs) const;
 
 private:
 	GoblinAIState aiState_ = GoblinAIState::Patrol;
@@ -182,6 +198,19 @@ private:
 	float deaggroRange_ = 20.f;
 	float attackRange_ = 1.5f;
 	float moveSpeed_ = 3.f;
+
+	Seconds attackCooldown_{ 0s };
+	static constexpr Seconds kAttackCooldownMax_{ 2.0f };
+	static constexpr int32 kAttackDamage_{ 15 };
+
+	struct PosSnapshot { 
+		uint64 serverMs;
+		mu::Vec3 pos;
+	};
+
+	static constexpr int kHistorySize_ = 16;   // 17ms × 16 ≈ 272ms
+	std::array<PosSnapshot, kHistorySize_> posHistory_{};
+	int32 historyHead_ = 0;
 };
 
 class Cube : public Object {

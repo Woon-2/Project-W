@@ -43,6 +43,9 @@ public:
 	void movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos);
 	void rotatePlayer(uint16 playerId, float yawRad);
 	void moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
+	void onNpcAttack(uint16 npcId);
+	void applyHit(uint16 targetId, int32 newHp);
+	void applyTimeSync(uint64 serverMs);
 
 	// 게임의 업데이트는 다음 순서대로 이루어진다.
 	// 네트워크 패킷 처리(SleepEx)
@@ -69,6 +72,7 @@ private:
 
 	void sendMovePacket();
 	void sendMouseMovePacket();
+	void sendAttackPacket();
 
 	void processInput(Milliseconds deltaTime);
 	void processInputLobby(Milliseconds deltaTime);
@@ -130,6 +134,8 @@ private:
 	AssetConfigs assetConfigs_{};
 
 	bool playerDead_{};
+
+	int64 serverClockOffset_{ 0 };   // clockOffset = serverMs - localNow (S_TimeSync 수신 시 갱신)
 
 	BasicPlayerHpUI playerHpUI_{};
 	std::unordered_map<i32t, BasicPlayerHpUI> otherPlayerHpUIs_{};

@@ -23,110 +23,6 @@ void Object::update(Milliseconds deltaTime) {
 
 }
 
-mu::Vec3 Goblin::update(Seconds dt, const std::vector<GameSession*>& sessions) {
-	// 가장 가까운 플레이어 탐색
-	GameSession* nearestSession = nullptr;
-	float nearestDist = std::numeric_limits<float>::max();
-
-	for (auto s : sessions) {
-		float d = (s->player()->pos() - pos()).len();
-		if (d < nearestDist) { 
-			nearestDist = d;
-			nearestSession = s;
-		}
-	}
-
-	mu::Vec3 velocity{};
-
-	switch (aiState_) {
-	case GoblinAIState::Patrol: {
-		if (nearestDist < aggroRange_) {
-			aiState_ = GoblinAIState::Chase;
-			break;
-		}
-
-		auto toTarget = patrolTarget_ - pos();
-
-		if (toTarget.len2() < 0.25f) {
-			static std::mt19937 rng{ std::random_device{}() };
-			std::uniform_real_distribution<float> angleDist(0.f, mu::pi * 2.f);
-
-			float angle = angleDist(rng);
-			patrolTarget_ = spawnPos_ + mu::Vec3(std::cos(angle) * 5.f, 0.f, std::sin(angle) * 5.f);
-		} 
-		else {
-			auto dir = mu::NVec3(toTarget);
-
-			velocity = mu::Vec3(dir) * moveSpeed_;
-			setPos(pos() + velocity * dt.count());
-
-			float yaw = std::atan2(dir.x(), dir.z());
-			setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yaw)));
-		}
-		break;
-	}
-	case GoblinAIState::Chase: {
-		if (nearestDist < attackRange_) {
-			aiState_ = GoblinAIState::Attack;
-			break;
-		}
-		if (nearestDist > deaggroRange_) {
-			aiState_ = GoblinAIState::Return;
-			break;
-		}
-
-		auto toPlayer = nearestSession->player()->pos() - pos();
-		auto dir = mu::NVec3(toPlayer);
-
-		velocity = mu::Vec3(dir) * moveSpeed_;
-		setPos(pos() + velocity * dt.count());
-
-		float yaw = std::atan2(dir.x(), dir.z());
-		setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yaw)));
-		break;
-	}
-	case GoblinAIState::Attack: {
-		if (nearestDist > attackRange_) {
-			aiState_ = GoblinAIState::Chase;
-			break;
-		}
-
-		auto toPlayer = nearestSession->player()->pos() - pos();
-
-		float yaw = std::atan2(toPlayer.x(), toPlayer.z());
-		setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yaw)));
-		// hp 차감은 데미지 패킷 구현 후 추가 예정
-		break;
-	}
-	case GoblinAIState::Return: {
-		if (nearestDist < aggroRange_) {
-			aiState_ = GoblinAIState::Chase;
-			break;
-		}
-
-		auto toSpawn = spawnPos_ - pos();
-
-		if (toSpawn.len2() < 0.25f) {
-			setPos(spawnPos_);
-			patrolTarget_ = spawnPos_;
-			aiState_ = GoblinAIState::Patrol;
-			break;
-		}
-
-		auto dir = mu::NVec3(toSpawn);
-
-		velocity = mu::Vec3(dir) * moveSpeed_;
-		setPos(pos() + velocity * dt.count());
-
-		float yaw = std::atan2(dir.x(), dir.z());
-		setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yaw)));
-		break;
-	}
-	}
-
-	return velocity;
-}
-
 // 게임 객체의 위치를 갱신한다.
 // 이전 PhysicState와 현재 PhysicState의 위치가 모두 갱신된다.
 // 각 PhysicState의 충돌체(volumes) 역시 갱신된다.
@@ -235,4 +131,147 @@ void Object::rebuildBVH(PhysicState& state) const {
 			else                                   return s;
 			}, dst.shape);
 	}
+}
+
+/*--------------
+     Goblin
+--------------*/
+
+GoblinUpdateResult Goblin::update(Seconds dt, const std::vector<GameSession*>& sessions) {
+	if ( hp() <= 0 ) {
+		return;
+	}
+
+	// 가장 가까운 플레이어 탐색
+	GameSession* nearestSession = nullptr;
+	float nearestDist = std::numeric_limits<float>::max();
+
+	for (auto s : sessions) {
+		float d = (s->player()->pos() - pos()).len();
+		if (d < nearestDist) {
+			nearestDist = d;
+			nearestSession = s;
+		}
+	}
+
+	GoblinUpdateResult result{};
+	auto& velocity = result.velocity;
+
+	switch (aiState_) {
+	case GoblinAIState::Patrol: {
+		if (nearestDist < aggroRange_) {
+			aiState_ = GoblinAIState::Chase;
+			break;
+		}
+
+		auto toTarget = patrolTarget_ - pos();
+
+		if (toTarget.len2() < 0.25f) {
+			static std::mt19937 rng{std::random_device{}()};
+			std::uniform_real_distribution<float> angleDist(0.f, mu::pi * 2.f);
+
+			float angle = angleDist(rng);
+			patrolTarget_ = spawnPos_ + mu::Vec3(std::cos(angle) * 5.f, 0.f, std::sin(angle) * 5.f);
+		}
+		else {
+			auto dir = mu::NVec3(toTarget);
+
+			velocity = mu::Vec3(dir) * moveSpeed_;
+			setPos(pos() + velocity * dt.count());
+
+			float yaw = std::atan2(dir.x(), dir.z());
+			setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yaw)));
+		}
+		break;
+	}
+	case GoblinAIState::Chase: {
+		if (nearestDist < attackRange_) {
+			aiState_ = GoblinAIState::Attack;
+			break;
+		}
+		if (nearestDist > deaggroRange_) {
+			aiState_ = GoblinAIState::Return;
+			break;
+		}
+
+		auto toPlayer = nearestSession->player()->pos() - pos();
+		auto dir = mu::NVec3(toPlayer);
+
+		velocity = mu::Vec3(dir) * moveSpeed_;
+		setPos(pos() + velocity * dt.count());
+
+		float yaw = std::atan2(dir.x(), dir.z());
+		setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yaw)));
+		break;
+	}
+	case GoblinAIState::Attack: {
+		if (nearestDist > attackRange_) {
+			aiState_ = GoblinAIState::Chase;
+			break;
+		}
+
+		auto toPlayer = nearestSession->player()->pos() - pos();
+		setOrient(mu::NQuat(mu::Radian(), mu::Radian(),
+			mu::Radian(std::atan2(toPlayer.x(), toPlayer.z())))
+		);
+
+		if (attackCooldown_ > 0s) {
+			attackCooldown_ -= dt;
+		}
+		else {
+			auto player = nearestSession->player();
+
+			int32 newHp = std::max(player->hp() - kAttackDamage_, 0);
+			player->setHp(newHp);
+
+			result.hit = {static_cast<uint16>(nearestSession->id()), newHp};
+
+			attackCooldown_ = kAttackCooldownMax_;
+		}
+		break;
+	}
+	case GoblinAIState::Return: {
+		if (nearestDist < aggroRange_) {
+			aiState_ = GoblinAIState::Chase;
+			break;
+		}
+
+		auto toSpawn = spawnPos_ - pos();
+
+		if (toSpawn.len2() < 0.25f) {
+			setPos(spawnPos_);
+			patrolTarget_ = spawnPos_;
+			aiState_ = GoblinAIState::Patrol;
+			break;
+		}
+
+		auto dir = mu::NVec3(toSpawn);
+
+		velocity = mu::Vec3(dir) * moveSpeed_;
+		setPos(pos() + velocity * dt.count());
+
+		float yaw = std::atan2(dir.x(), dir.z());
+		setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yaw)));
+		break;
+	}
+	}
+
+	return result;
+}
+
+void Goblin::recordSnapshot(uint64 serverMs) {
+	posHistory_[historyHead_] = {serverMs, pos()};
+	historyHead_ = (historyHead_ + 1) % kHistorySize_;
+}
+
+mu::Vec3 Goblin::rewindPos(uint64 targetMs) const {
+	for (int32 i = 1; i <= kHistorySize_; ++i) {
+		int32 idx = (historyHead_ - i + kHistorySize_) % kHistorySize_;
+		if ( posHistory_[ idx ].serverMs <= targetMs ) {
+			return posHistory_[ idx ].pos;
+		}
+	}
+
+	// 히스토리 전체가 targetMs보다 최신이면 가장 오래된 항목으로 클램프
+	return posHistory_[historyHead_ % kHistorySize_].pos;
 }

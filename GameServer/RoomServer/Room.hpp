@@ -33,6 +33,7 @@ public:
 	void leave(GameSession* session);
 	void move(int32 sessionId, CMovePacket* cMvPkt);
 	void rotate(int32 sessionId, CMouseMovePacket* cMouseMvPkt);
+	void attack(int32 sessionId, uint64 clientMs);
 
 	void broadcast(const std::shared_ptr<SendBuffer>& sendBuffer);
 	void broadcastExcept(GameSession* exceptSession, const std::shared_ptr<SendBuffer>& sendBuffer);

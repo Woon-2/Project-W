@@ -385,3 +385,93 @@ Thread B: DoJob() 루프
 - Room 간 격리: 각 Room 큐는 독립적으로 실행됨, Room 내부는 단일 스레드처럼 동작
 - 시간 공정성: 64ms 예산 초과 시 남은 작업을 Pool에 돌려놓아 다른 Room이 굶지 않도록 함
 - Lock-free: jobCount_ atomic + moodycamel concurrentqueue로 뮤텍스 없이 동작
+
+
+---
+
+[x] 서버 공격 시스템 구현 (2026.04.07)
+
+## 개요
+
+StandAlone 모드에만 존재하던 `CombatSystem`의 핵심 로직을 서버 권한으로 이식함.
+플레이어 공격 / 고블린 공격 / 피격 결과 브로드캐스트 / 시계 동기화(지연 보상)를 포함.
+
+---
+
+## 추가 패킷 (ServerEngine/protocol.hpp)
+
+| 패킷 | 방향 | 필드 | 설명 |
+|------|------|------|------|
+| `C_Attack` | Client→Server | `uint64 clientMs` | 플레이어 공격 발동 |
+| `S_Hit` | Server→Client | `uint16 targetId`, `int32 newHp` | 피격 대상 HP 변경 알림 |
+| `S_NpcAttack` | Server→Client | `uint16 npcId` | 고블린 공격 발동 (클라이언트 애니메이션 트리거용) |
+| `S_TimeSync` | Server→Client | `uint64 serverMs` | 입장 직후 1회 전송, 시계 동기화 |
+
+---
+
+## 고블린 공격 (RoomServer/object)
+
+- `Goblin`에 `attackCooldown_`(Seconds), `kAttackCooldownMax_(2s)`, `kAttackDamage_(15)` 추가
+- `update()` 반환 타입을 `GoblinUpdateResult`로 변경
+  - `velocity` + `std::optional<HitInfo>{ targetId, newHp }`
+- Attack 상태에서 쿨다운 차감 → 만료 시 가장 가까운 플레이어 HP 차감 + `result.hit` 설정
+- `hp() <= 0`이면 early return (사망한 고블린은 AI 비활성)
+
+---
+
+## 플레이어 공격 (RoomServer/Room)
+
+- `Room::attack(sessionId, clientMs)` 추가
+- `buildAttackAABB(player.pos, player.forward, {1.5, 1.5, 1.5}, 1.0f)` 로 hitbox 생성
+- 고블린마다 근사 AABB `{ rewindPos(targetMs), {1.0, 2.0, 1.0} }` 와 `collides(AABB, AABB)` 로 판정
+  - 고블린 서버 모델에 BVH 미적재 → 근사 AABB 사용
+  - `rewindPos(targetMs)` : 지연 보상된 위치 사용 (아래 참고)
+- 히트 시 HP 차감 + `S_Hit` 브로드캐스트
+- 공격 파라미터 (standalone CombatConfig와 일치): halfExtent=1.5, offsetFwd=1.0, damage=30
+
+---
+
+## 지연 보상 (Lag Compensation)
+
+**문제**: 클라이언트가 LButton을 누른 시점(T)과 C_Attack이 서버에 도달하는 시점(T + D) 사이에
+고블린이 이동. 서버의 현재 고블린 위치로 판정하면 클라이언트 화면과 불일치.
+
+**방법**: 클라이언트가 공격 시점의 서버 시계 추정값을 `clientMs`로 전송 → 서버가 그 시점으로 되감기.
+
+### 시계 동기화 원리
+
+```
+서버: S_TimeSync(Ts) ─── D(단방향 지연) ───→ 클라이언트(L_recv)
+
+클라이언트 저장: clockOffset = Ts - L_recv
+공격 시 전송:   clientMs = GetTickCount64() + clockOffset
+              = Ts + (L_atk - L_recv)
+              ≈ 서버 시계 기준 공격 시점 - D
+
+서버 수신 시각 = Ts + (L_atk - L_recv) + D
+rewindTarget  = clientMs = 서버 수신 시각 - D  ← D만큼 이전 스냅샷 사용
+```
+
+RTT 측정 없이 단방향 지연이 자동으로 보상됨.
+S_TimeSync를 받기 전(초기값 clockOffset=0)에는 보상 없이 동작 (LAN 환경에서는 무시 가능한 오차).
+
+### 위치 히스토리 링 버퍼 (RoomServer/object)
+
+```cpp
+struct PosSnapshot { uint64 serverMs; mu::Vec3 pos; };
+static constexpr int kHistorySize_ = 16;   // 17ms × 16 ≈ 272ms
+```
+
+- `updateGoblinAI()`에서 매 틱 `recordSnapshot(GetTickCount64())` 호출
+- `rewindPos(targetMs)`: 역순 탐색으로 targetMs 이하인 가장 최신 스냅샷 반환,
+  전체가 최신이면 가장 오래된 항목으로 클램프
+
+---
+
+## 클라이언트 (online 모드)
+
+- `processInputGame()` — LButton 클릭(edge detection) 시 `sendAttackPacket()` 호출
+- `sendAttackPacket()` — `GetTickCount64() + serverClockOffset_`을 `clientMs`로 C_Attack 전송
+- `applyTimeSync(serverMs)` — `serverClockOffset_ = serverMs - GetTickCount64()` 갱신
+- `applyHit(targetId, newHp)` — 내 플레이어/타 플레이어/고블린 HP 업데이트, 내 HP=0이면 `playerDead_=true`
+- `onNpcAttack(npcId)` — `EvAttack` 이벤트 발생 → 고블린 공격 애니메이션 트리거

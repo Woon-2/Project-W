@@ -18,6 +18,10 @@ void PacketManager::handlePacket(GameSession* session, byte* buffer, int32 len) 
 		handleCMouseMovePacket(session, buffer, len);
 		break;
 
+	case PacketType::C_Attack:
+		handleCAttackPacket(session, buffer, len);
+		break;
+
 	default:
 		std::cout << "Unknown packet type received. Type: " << static_cast<uint16>(header->type) << '\n';
 		break;
@@ -44,6 +48,13 @@ void PacketManager::handleCMouseMovePacket(GameSession* session, byte* buffer, i
 	session->room()->doAsync([session, cMouseMvPktClone]() {
 		session->room()->rotate(session->id(), cMouseMvPktClone);
 	});
+}
+
+void PacketManager::handleCAttackPacket( GameSession* session, byte* buffer, int32 len ) {
+	uint64 clientMs = reinterpret_cast<CAttackPacket*>(buffer)->clientMs;
+	session->room()->doAsync( [ session, clientMs ]() {
+		session->room()->attack( session->id(), clientMs );
+		} );
 }
 
 std::shared_ptr<SendBuffer> PacketManager::makeSEnterPacket(const PlayerInfo& playerInfo, const std::vector<ObjectInfo>& objInfos) {
@@ -143,6 +154,46 @@ std::shared_ptr<SendBuffer> PacketManager::makeSNpcMovePacket(uint16 npcId, Dire
 
 	sNpcMvPkt->size = bw.writeSize();
 	sNpcMvPkt->type = PacketType::S_NpcMove;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSNpcAttackPacket( uint16 npcId ) {
+	auto sendBuffer = SendBufferManager::open( sizeof( SNpcAttackPacket ) );
+	auto bw = BufferWriter( sendBuffer->data(), sendBuffer->allocSize() );
+
+	auto pkt = bw.reserve<SNpcAttackPacket>();
+	pkt->npcId = npcId;
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_NpcAttack;
+
+	sendBuffer->close( bw.writeSize() );
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSHitPacket(uint16 targetId, int32 newHp) {
+	auto sendBuffer = SendBufferManager::open(sizeof(SHitPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<SHitPacket>();
+	pkt->targetId = targetId;
+	pkt->newHp    = newHp;
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_Hit;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSTimeSyncPacket(uint64 serverMs) {
+	auto sendBuffer = SendBufferManager::open(sizeof(STimeSyncPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<STimeSyncPacket>();
+	pkt->serverMs = serverMs;
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_TimeSync;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;
