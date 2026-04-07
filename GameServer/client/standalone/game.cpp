@@ -134,11 +134,11 @@ void Game::setupStage() {
 	pLabel->pivot   = UI::Pivots::Center;	 // 내 박스의 어느 점에 못을 걸지	
 	pLabel->width   = UI::DimValue::px(1000.0f);
 	pLabel->height  = UI::DimValue::px(500.0f);
-	pLabel->offsetX = UI::DimValue::px( -230.f );
-	pLabel->offsetY = UI::DimValue::px( -270.f );
+	pLabel->offsetX = UI::DimValue::px( -340.f );
+	pLabel->offsetY = UI::DimValue::px( -220.f );
 	pLabel->setTextHAlign(UI::TextHAlign::Center);
 	pLabel->setTextVAlign(UI::TextVAlign::Center);
-	pLabel->setText(L"이것은 TEXT입니다.\n \"U\"키를 눌러서 UI의 영역을 표시할 수 있습니다. ");
+	pLabel->setText(L"U: UI영역 표시\nEnter: 마우스 포인터 캡처\nSpace: 마우스 포인터 감추기\nWASD: 이동\n좌클릭: 공격 ");
 	pLabel->setFontSize(24.0f);
 	//pLabel->setAutoSize( true );
 	pLabel->setTextColor( 1.0f, 1.0f, 1.0f, 1.0f );
