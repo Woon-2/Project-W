@@ -130,6 +130,10 @@ namespace UIPipeline {
 		rootParamIdxTexCubePool_( rootSig->paramIdx( "TextureCubePool" ) ),
 		rootParamIdxSamPool_( rootSig->paramIdx( "SamplerPool" ) ),
 		rootParamIdxCmpSamPool_( rootSig->paramIdx( "ComparisonSamplerPool" ) ) {
+		descriptorHeapsRaw_.resize( descriptorHeaps_.size() );
+		std::ranges::transform( descriptorHeaps_, descriptorHeapsRaw_.begin(),
+			[]( const ComPtr<ID3D12DescriptorHeap>& h ) { return h.Get(); }
+		);
 	}
 
 	// 셰이더에서 사용하는 GPU 데이터를 갱신한다.
@@ -142,10 +146,6 @@ namespace UIPipeline {
 		if ( drawEvents_.empty() ) {
 			return;
 		}
-
-		// 메시 데이터 업로드
-		// 정렬을 통해 인스턴싱이 가능하도록 한다.
-		std::sort( drawEvents_.begin(), drawEvents_.end() );
 
 		// perInstanceData를 static으로 선언하여
 		// 매번 처음부터 메모리를 구축하지 않고 재사용할 수 있도록 한다.
@@ -184,10 +184,6 @@ namespace UIPipeline {
 		if ( drawEvents_.empty() ) {
 			return;
 		}
-
-		// 메시 데이터 업로드
-		// 정렬을 통해 인스턴싱이 가능하도록 한다.
-		std::sort( drawEvents_.begin(), drawEvents_.end() );
 
 		// perInstanceData를 static으로 선언하여
 		// 매번 처음부터 메모리를 구축하지 않고 재사용할 수 있도록 한다.
@@ -281,12 +277,8 @@ namespace UIPipeline {
 
 		// bindless 환경 세팅
 		// d3d12단 Descriptor Heap, Descriptor Table 설정
-		auto descriptorHeapsRaw = std::vector<ID3D12DescriptorHeap*>( descriptorHeaps_.size() );
-		std::ranges::transform( descriptorHeaps_, descriptorHeapsRaw.begin(),
-			[]( ComPtr<ID3D12DescriptorHeap>& comPtrHeap ) { return comPtrHeap.Get(); }
-		);
 		DISPLAY_ERROR_DX_VOID( cmdList->SetDescriptorHeaps(
-			static_cast<UINT>(descriptorHeapsRaw.size()), descriptorHeapsRaw.data()
+			static_cast<UINT>(descriptorHeapsRaw_.size()), descriptorHeapsRaw_.data()
 		), false );
 
 		pTexPool_->bind( cmdList, rootParamIdxTexPool_ );
@@ -296,6 +288,14 @@ namespace UIPipeline {
 		pCmpSamPool_->bind( cmdList, rootParamIdxCmpSamPool_ );
 
 		DISPLAY_ERROR_DX_VOID( cmdList->IASetPrimitiveTopology( D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST ), false );
+
+		// 정적 쿼드 메시는 모든 드로우콜에서 동일하므로 루프 밖에서 한 번만 설정한다.
+		DISPLAY_ERROR_DX_VOID(
+			cmdList->IASetVertexBuffers( 0u, static_cast<UINT>(Detail::staticVBViewQuads.size()),
+				Detail::staticVBViewQuads.data()
+			), false
+		);
+		DISPLAY_ERROR_DX_VOID( cmdList->IASetIndexBuffer( &Detail::staticIBViewQuad ), false );
 
 		// 바인드해야 하는 GPU 데이터는 다음 세 종류다. (셰이더 참고)
 		// - PerInstanceData
@@ -333,13 +333,6 @@ namespace UIPipeline {
 			if (drawEvent.pCopySrc) {
 				::UpdateTexture(cmdList, *drawEvent.pCopySrc, *drawEvent.pTex);
 			}
-
-			DISPLAY_ERROR_DX_VOID(
-				cmdList->IASetVertexBuffers( 0u, static_cast<UINT>(Detail::staticVBViewQuads.size()),
-					Detail::staticVBViewQuads.data()
-				), false
-			);
-			DISPLAY_ERROR_DX_VOID( cmdList->IASetIndexBuffer( &Detail::staticIBViewQuad ), false );
 
 			DISPLAY_ERROR_DX_VOID( cmdList->DrawIndexedInstanced(
 				static_cast<UINT>(Detail::staticIBViewQuad.SizeInBytes / sizeof( u16t )),
@@ -510,12 +503,8 @@ namespace UIPipeline {
 
 			// bindless 환경 세팅
 			// d3d12단 Descriptor Heap, Descriptor Table 설정
-			auto descriptorHeapsRaw = std::vector<ID3D12DescriptorHeap*>( descriptorHeaps_.size() );
-			std::ranges::transform( descriptorHeaps_, descriptorHeapsRaw.begin(),
-				[]( ComPtr<ID3D12DescriptorHeap>& comPtrHeap ) { return comPtrHeap.Get(); }
-			);
 			DISPLAY_ERROR_DX_VOID( threadCmdList->SetDescriptorHeaps(
-				static_cast<UINT>(descriptorHeapsRaw.size()), descriptorHeapsRaw.data()
+				static_cast<UINT>(descriptorHeapsRaw_.size()), descriptorHeapsRaw_.data()
 			), false );
 
 			pTexPool_->bind( threadCmdList, rootParamIdxTexPool_ );
@@ -525,6 +514,14 @@ namespace UIPipeline {
 			pCmpSamPool_->bind( threadCmdList, rootParamIdxCmpSamPool_ );
 
 			DISPLAY_ERROR_DX_VOID( threadCmdList->IASetPrimitiveTopology( D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST ), false );
+
+			// 정적 쿼드 메시는 모든 드로우콜에서 동일하므로 루프 밖에서 한 번만 설정한다.
+			DISPLAY_ERROR_DX_VOID(
+				threadCmdList->IASetVertexBuffers( 0u, static_cast<UINT>(Detail::staticVBViewQuads.size()),
+					Detail::staticVBViewQuads.data()
+				), false
+			);
+			DISPLAY_ERROR_DX_VOID( threadCmdList->IASetIndexBuffer( &Detail::staticIBViewQuad ), false );
 
 			// 바인드해야 하는 GPU 데이터는 다음 두 종류다. (셰이더 참고)
 			// - PerInstanceData
@@ -566,13 +563,6 @@ namespace UIPipeline {
 				if (drawEvent.pCopySrc) {
 					::UpdateTexture(threadCmdList, *drawEvent.pCopySrc, *drawEvent.pTex);
 				}
-
-				DISPLAY_ERROR_DX_VOID(
-					threadCmdList->IASetVertexBuffers( 0u, static_cast<UINT>(Detail::staticVBViewQuads.size()),
-						Detail::staticVBViewQuads.data()
-					), false
-				);
-				DISPLAY_ERROR_DX_VOID( threadCmdList->IASetIndexBuffer( &Detail::staticIBViewQuad ), false );
 
 				DISPLAY_ERROR_DX_VOID( threadCmdList->DrawIndexedInstanced(
 					static_cast<UINT>(Detail::staticIBViewQuad.SizeInBytes / sizeof( u16t )),
