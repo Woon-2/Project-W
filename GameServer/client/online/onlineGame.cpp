@@ -108,6 +108,11 @@ void Game::createOtherPlayer(const ObjectInfo& otherPlayerInfo) {
 	otherPlayer->setAnimBlender(animSystem_, assetManager_);
 	otherPlayer->enableBVRendering();
 
+	otherPlayer->body().setMotionType(MotionType::Kinematic);
+	otherPlayer->body().setMass(80.f);
+	otherPlayer->body().setLinearDamping(kPlayerLinearDamping);
+	otherPlayer->body().setAngularDamping(100.f);
+
 	// 서버 주도 객체: 패킷으로 pos/vel이 설정되면 PhysicsWorld가 Kinematic 적분으로
 	// 패킷 간격 사이를 dead-reckoning 보간한다.
 	physicsWorld_.registerBody(&otherPlayer->body(),
@@ -128,6 +133,11 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 	otherPlayer->setAnimBlender(animSystem_, assetManager_);
 	otherPlayer->enableBVRendering();
 
+	otherPlayer->body().setMotionType(MotionType::Kinematic);
+	otherPlayer->body().setMass(80.f);
+	otherPlayer->body().setLinearDamping(kPlayerLinearDamping);
+	otherPlayer->body().setAngularDamping(100.f);
+
 	// 서버 주도 객체: 패킷으로 pos/vel이 설정되면 PhysicsWorld가 Kinematic 적분으로
 	// 패킷 간격 사이를 dead-reckoning 보간한다.
 	physicsWorld_.registerBody(&otherPlayer->body(),
@@ -147,6 +157,14 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 	goblin->setModel(assetManager_.modelGoblin());
 	goblin->setAnimBlender(animSystem_, assetManager_);
 	goblin->enableBVRendering();
+
+	goblin->body().setMotionType(MotionType::Kinematic);
+	goblin->body().setMass(40.f);
+	goblin->body().setLinearDamping(20.f);
+	goblin->body().setAngularDamping(100.f);
+
+	physicsWorld_.registerBody(&goblin->body(),
+		[p = goblin.get()]() { p->rebuildBodyBVH(); });
 
 	goblins_.push_back(goblin);
 	idGoblinMap_[goblinInfo.objectId] = goblin;
@@ -380,7 +398,7 @@ void Game::update(Milliseconds deltaTime) {
 		// 패킷 2개 간격(100ms) 이상 새 패킷이 없으면 멈춘 것으로 확정.
 		// 1개 간격(50ms)이면 정상 패킷 도착 타이밍과 겹쳐 oscillation이 발생하므로 2배로 여유를 준다.
 		if ( obj->netInterpAcc_ >= obj->netInterpDuration_ * 2.f ) {
-			obj->physicState().evVelocity = mu::Vec3();
+			obj->setVelocity(mu::Vec3{});
 		}
 
 		obj->update( deltaTime, tNet );
@@ -550,8 +568,8 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 }
 
 void Game::sendMovePacket() {
-	auto sendBuffer = PacketManager::makeCMovePacket(player_->pos().getXmf(), player_->orient().getXmf(), player_->velocity().getXmf());
-	INet::ClientApp::send(sendBuffer);
+	auto sendBuffer = PacketManager::makeCMovePacket(player_->pos().getXmf());
+	INet::ClientApp::send();
 }
 
 void Game::sendMouseMovePacket() {

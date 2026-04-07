@@ -21,34 +21,6 @@ class SendBuffer;
 
 namespace Online {
 
-enum class MsgType : u8t {
-	None,
-	SetupPlayer,
-	SetupCube,
-	PlayerMouseMove,
-	PlayerRollback,
-	PlayerMove,
-	Fire,
-	Reload,
-	HitResult,
-	Death
-};
-
-struct Message {
-	MsgType type{MsgType::None};
-	i32t objectId;
-	i32t targetId;
-	u32t materialSetIdx;
-	mu::Vec3 pos;
-	mu::Vec3 velocity;
-	mu::NQuat orient;
-	mu::Vec3 scale;
-	float cameraPitch{0.f};
-	i32t currHp{0};
-	i32t bulletCnt{0};
-};
-
-
 class Game : public IGame {
 public:
 	// 사용자 입력을 받아 스레드 풀과 GFX 객체를 초기화한다.
