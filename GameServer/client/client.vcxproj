@@ -168,10 +168,14 @@
     <ClCompile Include="basicPlayerHPUI.cpp" />
     <ClCompile Include="billboard.cpp" />
     <ClCompile Include="billboardPipeline.cpp" />
+    <ClCompile Include="meshParticlePipeline.cpp" />
+    <ClCompile Include="meshParticleSystem.cpp" />
     <ClCompile Include="binaryImport.cpp" />
     <ClCompile Include="bvPipeline.cpp" />
     <ClCompile Include="camera.cpp" />
+    <ClCompile Include="broadPhase.cpp" />
     <ClCompile Include="collision.cpp" />
+    <ClCompile Include="contactConstraint.cpp" />
     <ClCompile Include="crosshair.cpp" />
     <ClCompile Include="d3dx12\src\d3dx12_property_format_table.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
@@ -193,6 +197,8 @@
     <ClCompile Include="object.cpp" />
     <ClCompile Include="online\onlineGame.cpp" />
     <ClCompile Include="particleSystem.cpp" />
+    <ClCompile Include="physicsWorld.cpp" />
+    <ClCompile Include="rigidBody.cpp" />
     <ClCompile Include="PacketManager.cpp" />
     <ClCompile Include="pbrPipeline.cpp" />
     <ClCompile Include="pbrSkinnedPipeline.cpp" />
@@ -211,7 +217,6 @@
     <ClCompile Include="spriteAnimation.cpp" />
     <ClCompile Include="standalone\combatSystem.cpp" />
     <ClCompile Include="standalone\game.cpp" />
-    <ClCompile Include="standalone\physics.cpp" />
     <ClCompile Include="terrain.cpp" />
     <ClCompile Include="terrainPipeline.cpp" />
     <ClCompile Include="texloader\DDSTextureLoader12.cpp">
@@ -224,6 +229,14 @@
     </ClCompile>
     <ClCompile Include="timer.cpp" />
     <ClCompile Include="uiPipeline.cpp" />
+    <ClCompile Include="ui\UIElement.cpp" />
+    <ClCompile Include="ui\UIManager.cpp" />
+    <ClCompile Include="ui\widgets\Panel.cpp" />
+    <ClCompile Include="ui\widgets\Image.cpp" />
+    <ClCompile Include="ui\widgets\Label.cpp" />
+    <ClCompile Include="ui\widgets\ProgressBar.cpp" />
+    <ClCompile Include="ui\widgets\Button.cpp" />
+    <ClCompile Include="ui\widgets\Slider.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common\pool.hpp" />
@@ -235,7 +248,10 @@
     <ClInclude Include="binaryImport.hpp" />
     <ClInclude Include="BVPipeline.hpp" />
     <ClInclude Include="camera.hpp" />
+    <ClInclude Include="broadPhase.hpp" />
     <ClInclude Include="collision.hpp" />
+    <ClInclude Include="constraint.hpp" />
+    <ClInclude Include="contactConstraint.hpp" />
     <ClInclude Include="concurrentqueue.h" />
     <ClInclude Include="crosshair.hpp" />
     <ClInclude Include="d3dx12\include\directx\d3d12.h" />
@@ -271,9 +287,13 @@
     <ClInclude Include="light.hpp" />
     <ClInclude Include="log.hpp" />
     <ClInclude Include="mesh.hpp" />
+    <ClInclude Include="meshParticlePipeline.hpp" />
+    <ClInclude Include="meshParticleSystem.hpp" />
     <ClInclude Include="object.hpp" />
     <ClInclude Include="online\onlineGame.hpp" />
     <ClInclude Include="particleSystem.hpp" />
+    <ClInclude Include="physicsWorld.hpp" />
+    <ClInclude Include="rigidBody.hpp" />
     <ClInclude Include="PacketManager.hpp" />
     <ClInclude Include="pbrPipeline.hpp" />
     <ClInclude Include="pbrSkinnedPipeline.hpp" />
@@ -287,7 +307,6 @@
     <ClInclude Include="spriteAnimation.hpp" />
     <ClInclude Include="standalone\combatSystem.hpp" />
     <ClInclude Include="standalone\game.hpp" />
-    <ClInclude Include="standalone\physics.hpp" />
     <ClInclude Include="terrain.hpp" />
     <ClInclude Include="terrainPipeline.hpp" />
     <ClInclude Include="texloader\DDSTextureLoader12.h" />
@@ -295,8 +314,21 @@
     <ClInclude Include="timer.hpp" />
     <ClInclude Include="timsort.hpp" />
     <ClInclude Include="uiPipeline.hpp" />
+    <ClInclude Include="ui\UITypes.hpp" />
+    <ClInclude Include="ui\UIElement.hpp" />
+    <ClInclude Include="ui\UIManager.hpp" />
+    <ClInclude Include="ui\widgets\Panel.hpp" />
+    <ClInclude Include="ui\widgets\Image.hpp" />
+    <ClInclude Include="ui\widgets\Label.hpp" />
+    <ClInclude Include="ui\widgets\ProgressBar.hpp" />
+    <ClInclude Include="ui\widgets\Button.hpp" />
+    <ClInclude Include="ui\widgets\Slider.hpp" />
   </ItemGroup>
   <ItemGroup>
+    <FxCompile Include="meshParticle.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
     <FxCompile Include="billboard.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>

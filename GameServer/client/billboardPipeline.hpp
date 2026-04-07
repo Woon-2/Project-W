@@ -32,10 +32,19 @@ struct FrameData {
 struct DrawEvent {
 	mu::Mat4x4 world;
 	const Texture* pTex;
-	mu::Vec3 tint;
+	mu::Vec2 uvOffset = mu::Vec2(0.f, 0.f);	// 스프라이트 시트 내 현재 프레임의 좌상단 UV
+	mu::Vec2 uvScale  = mu::Vec2(1.f, 1.f);	// 현재 프레임의 UV 크기 (= 1/cols, 1/rows)
+	mu::Vec4 tint = {1.f, 1.f, 1.f, 1.f};
+	bool additive = false;
+	float rotation = 0.f;
+	int renderOrder = 0;	// 낮을수록 먼저 렌더 (Unity Order in Layer 동일 개념)
 
+	// Non-additive events sort before additive so we can switch PSO once.
+	// Within the same blend mode, sort by renderOrder (ascending).
 	auto operator<=>( const DrawEvent& rhs ) const noexcept {
-		return std::strong_ordering::equal;
+		if ( additive != rhs.additive )
+			return additive ? std::strong_ordering::greater : std::strong_ordering::less;
+		return renderOrder <=> rhs.renderOrder;
 	}
 };
 
@@ -61,6 +70,7 @@ public:
 		DescriptorPool* pCmpSamPool,
 		const std::shared_ptr<RootSig>& rootSig,
 		const ComPtr<ID3D12PipelineState>& shader,
+		const ComPtr<ID3D12PipelineState>& shaderAdditive,
 		const ComPtr<ID3D12CommandQueue>& cmdQ,
 		const D3D12_VIEWPORT& viewport,
 		const D3D12_RECT& scissorRect, D3D12_CPU_DESCRIPTOR_HANDLE rtv,
@@ -68,7 +78,7 @@ public:
 		Resources* pResources, ThreadPool* threadPool,
 		CommandListPool* commandListPool,
 		std::vector<DrawEvent>&& drawEvents,
-		const CameraData& cameraData, const FrameData& frameData, 
+		const CameraData& cameraData, const FrameData& frameData,
 		std::size_t roomIdx
 	);
 
@@ -107,7 +117,8 @@ private:
 	// 단위 작업을 생성하여 스레드에 할당하는데 사용된다.
 	void addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 		const DrawEvent* pFirst, const DrawEvent* pLast,
-		std::size_t firstInstanceOffset, std::latch& latch
+		std::size_t firstInstanceOffset, std::latch& latch,
+		ID3D12PipelineState* pso
 	);
 
 	std::vector<ComPtr<ID3D12DescriptorHeap>> descriptorHeaps_{};
@@ -118,6 +129,7 @@ private:
 	DescriptorPool* pCmpSamPool_ = nullptr;
 	std::shared_ptr<RootSig> rootSig_ = nullptr;
 	ComPtr<ID3D12PipelineState> shader_ = nullptr;
+	ComPtr<ID3D12PipelineState> shaderAdditive_ = nullptr;
 	ComPtr<ID3D12CommandQueue> cmdQ_ = nullptr;
 	D3D12_VIEWPORT viewport_{};
 	D3D12_RECT scissorRect_{};

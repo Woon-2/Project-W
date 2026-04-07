@@ -1,5 +1,6 @@
 ﻿#include "pch.hpp"
 #include "object.hpp"
+#include "physicsWorld.hpp"
 #include "terrainPipeline.hpp"
 #include "errorHandling.hpp"
 #include "AssetManager.hpp"
@@ -26,7 +27,7 @@ void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 	const auto runThreshold = 0.1f;
 
 	// 객체의 속력 구하기
-	const auto speed = pOwner->physicState().evVelocity.len();
+	const auto speed = pOwner->velocity().len();
 
 	// blendRange 설정
 	const auto runBlendRangeStart = runThreshold - 0.05f;
@@ -62,8 +63,8 @@ void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 	// 좌우상하 움직임 애니메이션을 블렌딩한다.
 	if (tRun > 0.f) {
 		// 속도와 right 벡터의 내적을 통해 blend space에서의 좌표를 구할 수 있다.
-		const auto blendSpaceX = mu::dot(pOwner->physicState().evVelocity, pOwner->right());
-		const auto blendSpaceY = mu::dot(pOwner->physicState().evVelocity, pOwner->forward());
+		const auto blendSpaceX = mu::dot(pOwner->velocity(), pOwner->right());
+		const auto blendSpaceY = mu::dot(pOwner->velocity(), pOwner->forward());
 	
 		// blend space 좌표를 바탕으로 각 애니메이션의 가중치를 정한다.
 		const auto wForward = std::max(0.f, blendSpaceY);
@@ -244,7 +245,7 @@ void AnimBlenderGoblin::update(Seconds deltaTime, void* pVoidOwner) {
 	const auto walkThreshold = 0.06f;
 
 	// 객체의 속력 구하기
-	const auto speed = pOwner->physicState().evVelocity.len();
+	const auto speed = pOwner->velocity().len();
 
 	// blendRange 설정
 	const auto walkBlendRangeStart = walkThreshold - 0.03f;
@@ -402,7 +403,7 @@ void AnimBlenderAnubis::update(Seconds deltaTime, void* pVoidOwner) {
 	const auto walkThreshold = 0.06f;
 
 	// 객체의 속력 구하기
-	const auto speed = pOwner->physicState().evVelocity.len();
+	const auto speed = pOwner->velocity().len();
 
 	// blendRange 설정
 	const auto walkBlendRangeStart = walkThreshold - 0.03f;
@@ -549,7 +550,7 @@ void AnimBlenderBat::update(Seconds deltaTime, void* pVoidOwner) {
 	const auto walkThreshold = 0.06f;
 
 	// 객체의 속력 구하기
-	const auto speed = pOwner->physicState().evVelocity.len();
+	const auto speed = pOwner->velocity().len();
 
 	// blendRange 설정
 	const auto walkBlendRangeStart = walkThreshold - 0.03f;
@@ -696,7 +697,7 @@ void AnimBlenderBomber::update(Seconds deltaTime, void* pVoidOwner) {
 	const auto walkThreshold = 0.06f;
 
 	// 객체의 속력 구하기
-	const auto speed = pOwner->physicState().evVelocity.len();
+	const auto speed = pOwner->velocity().len();
 
 	// blendRange 설정
 	const auto walkBlendRangeStart = walkThreshold - 0.03f;
@@ -843,7 +844,7 @@ void AnimBlenderDemon::update(Seconds deltaTime, void* pVoidOwner) {
 	const auto walkThreshold = 0.06f;
 
 	// 객체의 속력 구하기
-	const auto speed = pOwner->physicState().evVelocity.len();
+	const auto speed = pOwner->velocity().len();
 
 	// blendRange 설정
 	const auto walkBlendRangeStart = walkThreshold - 0.03f;
@@ -990,7 +991,7 @@ void AnimBlenderDragon::update(Seconds deltaTime, void* pVoidOwner) {
 	const auto walkThreshold = 0.06f;
 
 	// 객체의 속력 구하기
-	const auto speed = pOwner->physicState().evVelocity.len();
+	const auto speed = pOwner->velocity().len();
 
 	// blendRange 설정
 	const auto walkBlendRangeStart = walkThreshold - 0.03f;
@@ -1137,7 +1138,7 @@ void AnimBlenderEyeball::update(Seconds deltaTime, void* pVoidOwner) {
 	const auto walkThreshold = 0.06f;
 
 	// 객체의 속력 구하기
-	const auto speed = pOwner->physicState().evVelocity.len();
+	const auto speed = pOwner->velocity().len();
 
 	// blendRange 설정
 	const auto walkBlendRangeStart = walkThreshold - 0.03f;
@@ -1284,7 +1285,7 @@ void AnimBlenderFishman::update(Seconds deltaTime, void* pVoidOwner) {
 	const auto walkThreshold = 0.06f;
 
 	// 객체의 속력 구하기
-	const auto speed = pOwner->physicState().evVelocity.len();
+	const auto speed = pOwner->velocity().len();
 
 	// blendRange 설정
 	const auto walkBlendRangeStart = walkThreshold - 0.03f;
@@ -1431,7 +1432,7 @@ void AnimBlenderGargoyle::update(Seconds deltaTime, void* pVoidOwner) {
 	const auto walkThreshold = 0.06f;
 
 	// 객체의 속력 구하기
-	const auto speed = pOwner->physicState().evVelocity.len();
+	const auto speed = pOwner->velocity().len();
 
 	// blendRange 설정
 	const auto walkBlendRangeStart = walkThreshold - 0.03f;
@@ -1569,9 +1570,8 @@ void Object::setModel(const Model* pModel){
 	}
 
 	renderState_.pModel = pModel;
-	rebuildBVH(currPhysicState_);
-	prevPhysicState_.bvh = currPhysicState_.bvh;
-	renderState_.worldBVs.resize(currPhysicState_.bvh.nodes.size());
+	rebuildBodyBVH();
+	renderState_.worldBVs.resize(body_.worldBVH().nodes.size());
 }
 
 // @brief 게임 객체의 RenderState와 방향 벡터들을 갱신한다.
@@ -1581,20 +1581,20 @@ void Object::setModel(const Model* pModel){
 // @param tPhysicInterpolation 이전 PhysicState와 현재 PhysicState의 보간 비율
 //		(게임 객체가 계산해서 일괄적으로 전달해야 한다.)
 void Object::update(Milliseconds deltaTime, float tPhysicInterpolation) {
-	const auto& prev = prevPhysicState_;
-	const auto& curr = currPhysicState_;
+	const auto& prev = body_.prev();
+	const auto& curr = body_.curr();
 	const auto t = tPhysicInterpolation;
 
 	// 방향 벡터 갱신
 	right_ = curr.orient.rotate(mu::Vec3(1.f, 0.f, 0.f));
 	up_ = curr.orient.rotate(mu::Vec3(0.f, 1.f, 0.f));
 	forward_ = curr.orient.rotate(mu::Vec3(0.f, 0.f, 1.f));
-	
+
 	// 렌더 상태 갱신
 	auto& pos = renderState_.pos;
-	pos = mu::lerp(prev.pos, curr.pos, t);
+	pos = PhysicsWorld::interpolatePos(body_, t);
 	auto& orient = renderState_.orient;
-	orient = mu::slerp(prev.orient, curr.orient, t);	// 쿼터니언
+	orient = PhysicsWorld::interpolateOrient(body_, t);
 	auto& scale = renderState_.scale;
 	scale = mu::lerp(prev.scale, curr.scale, t);
 
@@ -1727,88 +1727,42 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 	}
 }
 
-// 게임 객체의 위치를 갱신한다.
-// 이전 PhysicState와 현재 PhysicState의 위치가 모두 갱신된다.
-// 각 PhysicState의 충돌체(volumes) 역시 갱신된다.
 void MU_CALLCONV Object::setPos(mu::Vec3 newPos) {
-	prevPhysicState_.pos = newPos;
-	currPhysicState_.pos = newPos;
-
-	const auto pModel = renderState_.pModel;
-
-	if (pModel && !pModel->bvh.empty()) {
-		rebuildBVH(currPhysicState_);
-		prevPhysicState_.bvh = currPhysicState_.bvh;
-	}
+	body_.setPos(newPos);
+	body_.snapToCurrent();
+	if (renderState_.pModel && !renderState_.pModel->bvh.empty())
+		rebuildBodyBVH();
 }
 
-// 게임 객체의 위치를 갱신한다.
-// 현재 PhysicState의 위치만 갱신된다.
 void MU_CALLCONV Object::setCurrPos(mu::Vec3 newPos) {
-	currPhysicState_.pos = newPos;
-
-	const auto pModel = renderState_.pModel;
-
-	if (pModel && !pModel->bvh.empty()) {
-		rebuildBVH(currPhysicState_);
-	}
+	body_.setPos(newPos);
+	if (renderState_.pModel && !renderState_.pModel->bvh.empty())
+		rebuildBodyBVH();
 }
 
-void MU_CALLCONV Object::setPrevPos(mu::Vec3 pos) {
-	prevPhysicState_.pos = pos;
-
-	const auto pModel = renderState_.pModel;
-
-	if (pModel && !pModel->bvh.empty()) {
-		rebuildBVH(prevPhysicState_);
-	}
-}
-
-// 게임 객체의 속도를 갱신한다.
-// 이전 PhysicState와 현재 PhysicState의 속도가 모두 갱신된다.
 void MU_CALLCONV Object::setVelocity(mu::Vec3 newVelocity) {
-	prevPhysicState_.velocity = newVelocity;
-	currPhysicState_.velocity = newVelocity;
+	body_.setLinearVel(newVelocity);
 }
 
-// 게임 객체의 각속도를 갱신한다.
-// 이전 PhysicState와 현재 PhysicState의 각속도가 모두 갱신된다.
 void MU_CALLCONV Object::setOmega(mu::Vec3 newOmega) {
-	prevPhysicState_.omega = newOmega;
-	currPhysicState_.omega = newOmega;
+	body_.setOmega(newOmega);
 }
 
-// 게임 객체의 방향을 갱신한다.
-// 이전 PhysicState와 현재 PhysicState의 방향이 모두 갱신된다.
-// 게임 객체의 방향 벡터들도 전부 갱신된다.
 void MU_CALLCONV Object::setOrient(mu::NQuat newOrient) {
-	prevPhysicState_.orient = newOrient;
-	currPhysicState_.orient = newOrient;
-	right_   = currPhysicState_.orient.rotate(mu::Vec3(1.f, 0.f, 0.f));
-	up_      = currPhysicState_.orient.rotate(mu::Vec3(0.f, 1.f, 0.f));
-	forward_ = currPhysicState_.orient.rotate(mu::Vec3(0.f, 0.f, 1.f));
-
-	// BVH nodes with OBB shapes track orientation and must be rebuilt.
-	const auto pModel = renderState_.pModel;
-	if (pModel && !pModel->bvh.empty()) {
-		rebuildBVH(currPhysicState_);
-		prevPhysicState_.bvh = currPhysicState_.bvh;
-	}
+	body_.setOrient(newOrient);
+	body_.snapToCurrent();
+	right_   = body_.orient().rotate(mu::Vec3(1.f, 0.f, 0.f));
+	up_      = body_.orient().rotate(mu::Vec3(0.f, 1.f, 0.f));
+	forward_ = body_.orient().rotate(mu::Vec3(0.f, 0.f, 1.f));
+	if (renderState_.pModel && !renderState_.pModel->bvh.empty())
+		rebuildBodyBVH();
 }
 
-// 게임 객체의 크기를 갱신한다.
-// 이전 PhysicState와 현재 PhysicState의 크기가 모두 갱신된다.
-// 각 PhysicState의 AABB 역시 갱신된다.
 void MU_CALLCONV Object::setScale(mu::Vec3 newScale) {
-	prevPhysicState_.scale = newScale;
-	currPhysicState_.scale = newScale;
-
-	const auto pModel = renderState_.pModel;
-
-	if (pModel && !pModel->bvh.empty()) {
-		rebuildBVH(currPhysicState_);
-		prevPhysicState_.bvh = currPhysicState_.bvh;
-	}
+	body_.setScale(newScale);
+	body_.snapToCurrent();
+	if (renderState_.pModel && !renderState_.pModel->bvh.empty())
+		rebuildBodyBVH();
 }
 
 void Object::equip(Equipment&& equipment) { 
@@ -1825,8 +1779,10 @@ void Object::disequip(Bone::SocketType socketType) {
 	} );
 
 	for (auto& toRemove : toRemoves) {
-		toRemove.object->prevPhysicState_ = prevPhysicState_;
-		toRemove.object->currPhysicState_ = currPhysicState_;
+		toRemove.object->body_.setPos(body_.pos());
+		toRemove.object->body_.setOrient(body_.orient());
+		toRemove.object->body_.setScale(body_.scale());
+		toRemove.object->body_.snapToCurrent();
 	}
 
 	equipments_.erase(toRemoves.begin(), toRemoves.end());
@@ -1858,18 +1814,18 @@ const Equipment* Object::getEquipment(Bone::SocketType socketType) const {
 	return &*it;
 }
 
-// Rebuilds the world-space BVH in `state` from the model's local-space BVH template.
-// Tree structure (children indices) is preserved; only shape/bounds values are transformed.
+// Rebuilds the world-space BVH stored in body_.worldBVH() from the model's
+// local-space BVH template.  Tree structure (children indices) is preserved;
+// only shape/bounds values are transformed.
 //
 // For bone-attached nodes (boneIdx >= 0) with an active animBlender:
 //   boneToWorld = bone.toDress * finalXformData()[boneIdx] * objWorldMat
-//   (bone local -> dress -> animated dress -> world; same chain as equipment socket rendering)
 //   center is transformed as a homogeneous point; result is always OBB.
 //
 // For root-only nodes (boneIdx == -1) or when no animBlender is present:
 //   AABB: apply pos + scale.
 //   OBB:  apply pos + scale + orient (composed with local OBB orient).
-void Object::rebuildBVH(PhysicState& state) const {
+void Object::rebuildBodyBVH() {
 	const auto pModel = renderState_.pModel;
 	if (!pModel || pModel->bvh.empty()) return;
 
@@ -1878,15 +1834,20 @@ void Object::rebuildBVH(PhysicState& state) const {
 	const bool  hasBones = renderState_.animBlender
 	                    && skeleton.bones && !skeleton.bones->empty();
 
-	// Object world matrix (same formula as renderState_.world, physics-state based)
-	const mu::Mat4x4 objWorld = mu::Mat4x4(mu::scale(state.scale))
-	                          * mu::Mat4x4(state.orient)
-	                          * mu::translate(state.pos);
+	const mu::Vec3  bPos    = body_.pos();
+	const mu::NQuat bOrient = body_.orient();
+	const mu::Vec3  bScale  = body_.scale();
 
-	state.bvh.nodes.resize(localBVH.nodes.size());
+	// Object world matrix (physics-state based, same formula as renderState_.world)
+	const mu::Mat4x4 objWorld = mu::Mat4x4(mu::scale(bScale))
+	                          * mu::Mat4x4(bOrient)
+	                          * mu::translate(bPos);
+
+	auto& worldBVH = body_.worldBVH();
+	worldBVH.nodes.resize(localBVH.nodes.size());
 	for (std::size_t i = 0; i < localBVH.nodes.size(); ++i) {
 		const auto& src = localBVH.nodes[i];
-		auto&       dst = state.bvh.nodes[i];
+		auto&       dst = worldBVH.nodes[i];
 
 		dst.children = src.children;
 		dst.name     = src.name;
@@ -1916,7 +1877,7 @@ void Object::rebuildBVH(PhysicState& state) const {
 				// Transform center as a homogeneous point through boneToWorld
 				const mu::Vec3  worldCenter      = mu::Vec3(mu::Vec4(localCenter, 1.f) * boneToWorld);
 				// Scale halfExtents by root object scale only (bone transforms are rigid)
-				const mu::Vec3  worldHalfExtents = localHalfExtents * state.scale;
+				const mu::Vec3  worldHalfExtents = localHalfExtents * bScale;
 				// Extract rotation from boneToWorld and compose with local orient
 				const mu::NQuat boneWorldOrient{ mu::Quat{ mu::quatRotMat(boneToWorld.get()) } };
 				const mu::NQuat worldOrient      = localOrient * boneWorldOrient;
@@ -1927,15 +1888,15 @@ void Object::rebuildBVH(PhysicState& state) const {
 				using T = std::decay_t<decltype(s)>;
 				if constexpr (std::is_same_v<T, AABB>) {
 					return AABB{
-						s.center * state.scale + state.pos,
-						s.size   * state.scale,
+						s.center * bScale + bPos,
+						s.size   * bScale,
 					};
 				} else {
-					mu::NQuat worldOrient = state.orient;
+					mu::NQuat worldOrient = bOrient;
 					worldOrient *= s.orient;
 					return OBB{
-						state.orient.rotate(s.center * state.scale) + state.pos,
-						s.halfExtents * state.scale,
+						bOrient.rotate(s.center * bScale) + bPos,
+						s.halfExtents * bScale,
 						worldOrient,
 					};
 				}

@@ -11,6 +11,14 @@ extern RECT gClientRect;
 
 namespace Online {
 
+// ---------------------------------------------------------------------------
+// Player movement parameters — tweak these to adjust game feel.
+// See standalone/game.cpp for the derivation of kPlayerAccelRate.
+// ---------------------------------------------------------------------------
+static constexpr float kPlayerMaxSpeed      = 10.f;
+static constexpr float kPlayerLinearDamping = 12.f;
+static constexpr float kPlayerAccelRate     = kPlayerMaxSpeed * kPlayerLinearDamping;
+
 Game::Game() {
 	// 스레드 풀 초기화
 	std::cout << "----------[게임 초기화 설정]----------\n";
@@ -57,6 +65,15 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 	player_->setAnimBlender(animSystem_, assetManager_);
 	player_->enableBVRendering();
 
+	player_->body().setMotionType(MotionType::Dynamic);
+	player_->body().setMass(80.f);
+	player_->body().setLinearDamping(kPlayerLinearDamping);
+	// Prevent collision impulses from tipping/spinning the character.
+	player_->body().setAngularDamping(100.f);
+
+	physicsWorld_.registerBody(&player_->body(),
+		[p = player_.get()]() { p->rebuildBodyBVH(); });
+
 	camera_.setTargetObject(player_);
 	camera_.setOffsetFromTarget(mu::Vec3(0.f, 1.8f, -2.5f));
 	camera_.setOffsetTargetPivot(mu::Vec3(0.f, 1.f, 0.f));
@@ -91,6 +108,11 @@ void Game::createOtherPlayer(const ObjectInfo& otherPlayerInfo) {
 	otherPlayer->setAnimBlender(animSystem_, assetManager_);
 	otherPlayer->enableBVRendering();
 
+	// 서버 주도 객체: 패킷으로 pos/vel이 설정되면 PhysicsWorld가 Kinematic 적분으로
+	// 패킷 간격 사이를 dead-reckoning 보간한다.
+	physicsWorld_.registerBody(&otherPlayer->body(),
+		[p = otherPlayer.get()]() { p->rebuildBodyBVH(); });
+
 	otherPlayers_.push_back(otherPlayer);
 	idPlayerMap_[otherPlayerInfo.objectId] = otherPlayer;
 }
@@ -105,6 +127,11 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 	otherPlayer->setModel(assetManager_.modelPlayer());
 	otherPlayer->setAnimBlender(animSystem_, assetManager_);
 	otherPlayer->enableBVRendering();
+
+	// 서버 주도 객체: 패킷으로 pos/vel이 설정되면 PhysicsWorld가 Kinematic 적분으로
+	// 패킷 간격 사이를 dead-reckoning 보간한다.
+	physicsWorld_.registerBody(&otherPlayer->body(),
+		[p = otherPlayer.get()]() { p->rebuildBodyBVH(); });
 
 	otherPlayers_.push_back(otherPlayer);
 	idPlayerMap_[otherPlayerInfo.playerId] = otherPlayer;
@@ -142,6 +169,7 @@ void Game::removePlayer( i32t playerId ) {
 	}
 
 	animSystem_.untrackAnimBlender(itPlayer->get()->renderState().animBlender.get());
+	physicsWorld_.unregisterBody(&(*itPlayer)->body());
 
 	otherPlayers_.erase(itPlayer);
 	idPlayerMap_.erase( playerId );
@@ -173,14 +201,14 @@ void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos) {
 
 	if ( timeSinceLastPacket > 0.001f && timeSinceLastPacket <= maxValidInterval ) {
 		const mu::Vec3 newPos = DirectX::XMLoadFloat3(&pos);
-		const mu::Vec3 movement = newPos - player->physicState().pos;
-		player->physicState().evVelocity = movement / timeSinceLastPacket;
+		const mu::Vec3 movement = newPos - player->pos();
+		player->setVelocity(movement / timeSinceLastPacket);
 	}
 	else {
-		player->physicState().evVelocity = mu::Vec3();
+		player->setVelocity(mu::Vec3{});
 	}
 
-	player->setPrevPos(player->renderState().pos);
+	player->body().advanceState();
 	player->setCurrPos(DirectX::XMLoadFloat3(&pos));
 	player->netInterpAcc_ = 0s;
 }
@@ -221,10 +249,10 @@ void Game::moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 ori
 		return;
 	}
 
-	goblin->setPrevPos(goblin->renderState().pos);
+	goblin->body().advanceState();
 	goblin->setCurrPos(DirectX::XMLoadFloat3(&pos));
 	goblin->setOrient(DirectX::XMLoadFloat4(&orient));
-	goblin->physicState().evVelocity = DirectX::XMLoadFloat3(&velocity);
+	goblin->setVelocity(DirectX::XMLoadFloat3(&velocity));
 }
 
 void Game::onNpcAttack( uint16 npcId ) {
@@ -287,22 +315,14 @@ void Game::update(Milliseconds deltaTime) {
 		return;
 	}
 
-	// 이전 평가 물리량 갱신
+	// 이전 프레임 속도 저장
 	prevVelocity_ = currVelocity_;
 
-	// 평가 물리량 초기화
-	player_->physicState().evVelocity = mu::Vec3();
-	player_->physicState().evOmega = mu::Vec3();
-
-	// 입력 처리
+	// 입력 처리 (속도는 프레임 간 유지 - processInputGame이 감속/가속 관리)
 	processInput(deltaTime);
 
-	// 평가 물리량 갱신
-	player_->physicState().evVelocity += player_->physicState().velocity;
-	player_->physicState().evOmega += player_->physicState().omega;
-
-	// 현재 평가 물리량 저장
-	currVelocity_ = player_->physicState().evVelocity;
+	// 현재 속도 저장
+	currVelocity_ = player_->velocity();
 	
 	// 이전 평가 물리량과 현재 평가 물리량의 차이가 move 패킷 전송 임계값 이상이라면, move 패킷 전송 플래그를 켠다.
 	if( prevVelocity_ != currVelocity_ ) {
@@ -325,20 +345,10 @@ void Game::update(Milliseconds deltaTime) {
 	moveStateSendAcc_ += deltaTime;
 
 	if ( physicUpdateAcc_ >= physicUpdateInterval ) {
-		// 물리 시뮬레이션을 위해
-		// 물리 시뮬레이션의 대상이 되는 객체들을
-		// 한 곳에 모아 PhysicSystem 객체에 전달한다.
-		static std::vector<Object*> targetObjects{};
-		targetObjects.resize(1u);
-		// targetObjects[0] = ground_.get();
-		targetObjects[0] = player_.get();
-
 		while ( physicUpdateAcc_ >= physicUpdateInterval ) {
-			physicSystem_.step(targetObjects, physicUpdateInterval );
+			physicsWorld_.step(physicUpdateInterval);
 			physicUpdateAcc_ -= physicUpdateInterval;
 		}
-
-		targetObjects.clear( );
 	}
 
 	//std::cout << "player pos : " << player_->pos().x() << ", " << player_->pos().y() << ", " << player_->pos().z() << '\n';
@@ -540,8 +550,8 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 }
 
 void Game::sendMovePacket() {
-	auto sendBuffer = PacketManager::makeCMovePacket(player_->pos().getXmf());
-	INet::ClientApp::addSendBuffer(sendBuffer);
+	auto sendBuffer = PacketManager::makeCMovePacket(player_->pos().getXmf(), player_->orient().getXmf(), player_->velocity().getXmf());
+	INet::ClientApp::send(sendBuffer);
 }
 
 void Game::sendMouseMovePacket() {
@@ -615,17 +625,10 @@ void Game::processInputLobby(Milliseconds deltaTime) {
 }
 
 void Game::processInputGame(Milliseconds deltaTime) {
-	const auto maxSpeed = 10.f;	// 10m/s
-	const Seconds zeroToMax = 0.5s;
-	const Seconds maxToZero = 0.2s;
-
-	// 서로 상쇄되는 입력들을 감안해서,
-	// 현재 이동 입력이 있으면 플레이어 객체의 속도를 변화시킨다.
-	// + 플레이어가 죽으면 움직이지 않는다.
-
+	// 이동 가속도만 담당. 감속은 PhysicsWorld의 linearDamping(마찰)이 처리한다.
+	// 속도 상한은 kPlayerMaxSpeed, 가속률은 kPlayerAccelRate (파일 상단 상수 참조).
 	const auto moveXSign = !playerDead_ * ( (keyboardStateCurr_['D'] & 0x80) - (keyboardStateCurr_['A'] & 0x80) );
 	const auto moveZSign = !playerDead_ * ( (keyboardStateCurr_['W'] & 0x80) - (keyboardStateCurr_['S'] & 0x80) );
-	const auto moveThreshold = 0.1f;
 
 	if (moveXSign || moveZSign) {
 		// 'W'/'S' 입력으로 판정된 Z 부호는 플레이어의 forward 벡터,
@@ -634,38 +637,15 @@ void Game::processInputGame(Milliseconds deltaTime) {
 			static_cast<float>(moveXSign) * player_->right() + static_cast<float>(moveZSign) * player_->forward()
 		);
 
-		// 플레이어 객체의 속력을 증가시킨다.
-		const auto moveAmount = Seconds(deltaTime).count() * maxSpeed / zeroToMax.count();
-		player_->physicState().velocity += mu::Vec3(moveDirection) * moveAmount;
-
-		// 플레이어 객체의 속력이 최대 속력을 넘지 못하게 한다.
-		if (player_->physicState().velocity.len2() > maxSpeed * maxSpeed) {
-			player_->physicState().velocity *= maxSpeed / player_->physicState().velocity.len();
+		// 입력 방향으로 가속. 최대 속력 초과분은 클램프한다.
+		auto vel = player_->velocity() + mu::Vec3(moveDirection) * (kPlayerAccelRate * Seconds(deltaTime).count());
+		if (vel.len2() > kPlayerMaxSpeed * kPlayerMaxSpeed) {
+			vel = vel * (kPlayerMaxSpeed / vel.len());
 		}
-	}
-	// 이동 입력이 없으면 플레이어 객체의 속력을 감소시킨다. (마찰)
-	// 속력이 moveThreshold보다 작다면, 플레이어 객체를 멈춘다.
-	else if (player_->physicState().velocity.len2() > moveThreshold * moveThreshold) {
-		const auto moveAmount = Seconds(deltaTime).count() * maxSpeed / maxToZero.count();
-
-		// 속력 감소량이 현재 플레이어의 속력보다 크게 계산됐다면,
-		// 플레이어의 속력을 0으로 만든다.
-		if (moveAmount * moveAmount > player_->physicState().velocity.len2()) {
-			player_->physicState().velocity = mu::Vec3();
-		}
-		// 그렇지 않다면 플레이어가 움직이고 있는 반대 방향의 속도를 더해
-		// 플레이어의 속력을 감소시킨다.
-		else {
-			const auto moveDirection = mu::NVec3(-player_->physicState().velocity);
-			player_->physicState().velocity += mu::Vec3(moveDirection) * moveAmount;
-		}
-	}
-	// 플레이어 객체를 멈춘다.
-	else {
-		player_->physicState().velocity = mu::Vec3();
+		player_->setVelocity(vel);
 	}
 
-	currVelocity_ = player_->physicState().velocity;
+	currVelocity_ = player_->velocity();
 
 	// 카메라 1인칭 모드 설정
 	if ( !(keyboardStatePrev_['1'] & 0x80)

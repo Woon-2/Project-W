@@ -18,6 +18,7 @@
 8. [렌더링 (GFX / Pipeline)](#8-렌더링-gfx--pipeline)
 9. [게임 루프](#9-게임-루프)
 10. [디버그 시각화](#10-디버그-시각화)
+11. [UI 시스템](#11-ui-시스템)
 
 ---
 
@@ -36,7 +37,7 @@
 | `CollisionVolume` alias | `collision.hpp #52` | `using CollisionVolume = BVH` |
 | `collides(AABB, AABB)` | `collision.hpp #54` | AABB-AABB 교차 |
 | `collides(OBB, OBB)` | `collision.hpp #55` | 15축 SAT |
-| `collides(BVH, BVH)` | `collision.hpp #56` | BVH-BVH 재귀 교차 |
+| `collides(BVH, BVH)` | `collision.hpp #56` | BVH-BVH 재귀 교차 (leaf-leaf 쌍에서만 정밀 판정; 내부 노드는 bounds AABB fast-reject만 사용) |
 | `collides(BVH, AABB)` | `collision.hpp #57` | BVH vs 공격 hitbox |
 | `RayHit` / `RaycastAABB` | `collision.hpp #62-69` | 레이-AABB 교차 |
 | `buildAttackAABB` | `collision.hpp #71` | pos + forward + halfExtent + offsetFwd → AABB |
@@ -51,24 +52,54 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 ## 2. 물리 시뮬레이션
 
-**파일:** `client/standalone/physics.hpp` / `client/standalone/physics.cpp`
+**파일:** `client/rigidBody.hpp` / `client/rigidBody.cpp`
+**파일:** `client/physicsWorld.hpp` / `client/physicsWorld.cpp`
+**파일:** `client/constraint.hpp`
+**파일:** `client/contactConstraint.hpp` / `client/contactConstraint.cpp`
+**파일:** `client/broadPhase.hpp` / `client/broadPhase.cpp`
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
-| `CollisionManifold` struct | `physics.hpp #8-18` | 충돌 결과 (a, b, mtv, normal, contactPoint) |
-| `PhysicSystem` class | `physics.hpp #20-38` | 60Hz 고정 타임스텝 물리 |
-| `PhysicSystem::step()` | `physics.hpp #22` | 외부 호출 진입점; objects + dt 전달 |
-| `integrate()` | `physics.hpp #25` | velocity/omega 적분 |
-| `broadPhase()` | `physics.hpp #26` | AABB 기반 잠재 충돌쌍 수집 |
-| `narrowPhase()` | `physics.hpp #27` | 정밀 충돌 검사 |
-| `solveCollisions()` | `physics.hpp #28` | impulse-based 충돌 해소 |
+| `MotionType` enum | `rigidBody.hpp #9` | Kinematic / Dynamic / Static |
+| `BodyState` struct | `rigidBody.hpp #16-22` | pos, linearVel, omega, orient, scale (더블 버퍼 1개) |
+| `RigidBody` class | `rigidBody.hpp #35` | prev/curr 더블 버퍼 + worldBVH_ + Dynamic 물리 멤버 |
+| `RigidBody::advanceState()` | `rigidBody.hpp #59` | prev ← curr (step 첫 줄) |
+| `RigidBody::snapToCurrent()` | `rigidBody.hpp #63` | prev = curr (텔레포트/초기화) |
+| `RigidBody::worldBVH()` | `rigidBody.hpp #69` | 월드 공간 BVH |
+| `RigidBody::worldAABB()` | `rigidBody.hpp` | BroadPhase용 AABB (root BVH bounds 또는 단위 박스) |
+| `RigidBody::setMass()` | `rigidBody.cpp` | invMass + 기본 box 관성 초기화 |
+| `RigidBody::setInertia()` | `rigidBody.cpp` | 로컬 관성 텐서 역행렬 저장 |
+| `RigidBody::applyForce()` | `rigidBody.cpp` | force accumulator에 추가 |
+| `RigidBody::applyImpulse()` | `rigidBody.cpp` | 즉시 vel/omega 변경 |
+| `computeBoxInertia()` | `rigidBody.hpp #26` | 박스 관성 텐서 헬퍼 |
+| `computeCapsuleInertia()` | `rigidBody.hpp #27` | 캡슐 관성 텐서 헬퍼 |
+| `Constraint` (abstract) | `constraint.hpp #12` | prepare/solveVelocity/solvePosition 인터페이스 |
+| `ContactPoint` struct | `collision.hpp` | worldPos, normal(B→A), depth, acc 누적값 |
+| `ContactConstraint` class | `contactConstraint.hpp` | PGS Normal + Coulomb 마찰 impulse solver |
+| `BodyPair` struct | `broadPhase.hpp` | broad phase 결과 쌍 |
+| `BroadPhase` (abstract) | `broadPhase.hpp` | add/remove/update/queryPairs 인터페이스 |
+| `BruteForceBroadPhase` | `broadPhase.hpp` | O(n²) 참조 구현 (후보 비교용으로 보존) |
+| `SAPBroadPhase` | `broadPhase.hpp` | X축 Sort-and-Sweep, O(n log n) (기본 사용) |
+| `TerrainHeightField` struct | `terrain.hpp` | CPU-side 높이 데이터 (getHeightAt, getNormalAt) |
+| `TerrainCollider` class | `collision.hpp` | Dynamic body ↔ 지형 높이맵 contact 생성 |
+| `PhysicsWorld` class | `physicsWorld.hpp` | 시뮬레이션 진입점 |
+| `PhysicsWorld::registerBody()` | `physicsWorld.hpp` | body + onRebuildBVH 콜백 + broad phase 등록 |
+| `PhysicsWorld::unregisterBody()` | `physicsWorld.hpp` | 등록 해제 |
+| `PhysicsWorld::registerTerrain()` | `physicsWorld.hpp` | Static 지형 body + heightField 등록 |
+| `PhysicsWorld::unregisterTerrain()` | `physicsWorld.hpp` | 지형 collider 해제 |
+| `PhysicsWorld::step()` | `physicsWorld.hpp` | integrate → generateContacts → solveConstraints |
+| `PhysicsWorld::setGravity()` | `physicsWorld.hpp` | Dynamic body 중력 설정 |
+| `PhysicsWorld::interpolatePos()` | `physicsWorld.hpp` | 렌더 보간 헬퍼 (prev→curr, t) |
+| `PhysicsWorld::interpolateOrient()` | `physicsWorld.hpp` | 렌더 보간 헬퍼 (slerp) |
 
-**PhysicState** (물리 상태 데이터):
+**Object 내 물리 상태 접근:**
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
-| `PhysicState` struct | `object.hpp #436-446` | pos, velocity, omega, orient, scale, bvh |
-| `PhysicState::bvh` | `object.hpp #445` | 월드 공간 BVH (rebuildBVH로 갱신) |
+| `Object::body_` (protected) | `object.hpp` | 인라인 `RigidBody` (항상 유효) |
+| `Object::body()` | `object.hpp` | RigidBody 참조 (PhysicsWorld 등록 시 &body() 전달) |
+| `Object::worldBVH()` | `object.hpp` | `body_.worldBVH()` 위임 (CombatSystem 호환) |
+| `Object::rebuildBodyBVH()` | `object.cpp` | BVH 월드 공간 재빌드 (PhysicsWorld 콜백으로도 사용) |
 
 ---
 
@@ -179,16 +210,16 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
-| `PhysicState` struct | `object.hpp #436-446` | pos, velocity, omega, orient, scale, bvh |
-| `RenderState` struct | `object.hpp #452-460` | world, pos, orient, scale, worldBVs, animBlender, pModel |
-| `Equipment` struct | `object.hpp #462-465` | socketType + Object (장비 소켓) |
-| `Object` class | `object.hpp #477-???` | 모든 게임 오브젝트의 base |
-| `Object::update()` | `object.hpp #490` | RenderState 갱신 (물리 보간) |
-| `Object::render()` | `object.hpp #491` | GFX DrawEvent 제출 (파이프라인 선택) |
-| `Object::rebuildBVH()` | `object.hpp #504` | PhysicState BVH 월드 공간 재빌드 |
-| `Object::setPos/setCurrPos` | `object.hpp #510-513` | 위치 갱신 + BVH 재빌드 |
-| `Object::physicState()` | `object.hpp #538` | currPhysicState_ 참조 |
-| `Object::hp()` / `setHp()` | `object.hpp #566-567` | HP 접근자 |
+| `RenderState` struct | `object.hpp` | world, pos, orient, scale, worldBVs, animBlender, pModel |
+| `Equipment` struct | `object.hpp` | socketType + Object (장비 소켓) |
+| `Object` class | `object.hpp` | 모든 게임 오브젝트의 base |
+| `Object::update()` | `object.hpp` | RenderState 갱신 (물리 보간: PhysicsWorld::interpolatePos/Orient) |
+| `Object::render()` | `object.hpp` | GFX DrawEvent 제출 (파이프라인 선택) |
+| `Object::body()` | `object.hpp` | 인라인 RigidBody 참조 (PhysicsWorld 등록 시 사용) |
+| `Object::worldBVH()` | `object.hpp` | `body_.worldBVH()` 위임 (CombatSystem 호환) |
+| `Object::rebuildBodyBVH()` | `object.cpp` | BVH 월드 공간 재빌드 (setPos/setOrient 시 호출) |
+| `Object::setPos/setOrient` | `object.hpp` | body_ 위임 + rebuildBodyBVH() |
+| `Object::hp()` / `setHp()` | `object.hpp` | HP 접근자 |
 
 **구체 오브젝트 클래스:**
 
@@ -324,7 +355,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 |------|------|------|
 | `assetManager_` | `AssetManager` | 모델/애니메이션/텍스처 캐시 |
 | `animSystem_` | `AnimSystem` | 애니메이션 스케줄러 |
-| `physicSystem_` | `PhysicSystem` | 물리 적분 + 충돌 해소 |
+| `physicsWorld_` | `PhysicsWorld` | 물리 시뮬레이션 (integrate + contact + PGS solver) |
 | `combatSystem_` | `CombatSystem` | 공격 판정 / 몬스터 AI |
 | `debugBVView_` | `DebugBVView` | BV 디버그 렌더링 |
 | `physicUpdateInterval` | `Seconds` | `1s/60f` 고정 타임스텝 |
@@ -376,7 +407,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 1. `processInput()` → 입력/LButton → `combatSystem_.onPlayerAttack()`
 2. `combatSystem_.update()` → EvAttack, EvHit 생성
 3. 이벤트 처리 루프 (Hit/Death/Blood/Attack → 각 오브젝트 eventBus)
-4. `physicSystem_.step()` (고정 타임스텝 누산기 패턴)
+4. `physicsWorld_.step()` (고정 타임스텝 누산기 패턴)
 5. 각 `Object::update()` (물리 보간, RenderState 갱신)
 6. `animSystem_.update()` (timeSlice 기반 스케줄링)
 7. `Game::render()` → `gfx_.render()`
@@ -398,6 +429,97 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `render(gfx)` | `debugBVView.hpp #68` | BVPipeline::DrawEvent 제출 |
 | `StaticEntry` (private) | `debugBVView.hpp #87-91` | 사전 계산된 worldXform + ttl |
 | `LiveEntry` (private) | `debugBVView.hpp #93-99` | Object* + halfExtent + offsetFwd + ttl |
+
+---
+
+## 11. UI 시스템
+
+**파일:** `client/ui/` 디렉터리
+
+설계 문서: `client/docs/UI.md`
+
+### 공유 타입 (`ui/UITypes.hpp`)
+
+| 항목 | 설명 |
+|------|------|
+| `UI::Anchor` | 부모 사각형 기준점 (0~1 정규화) |
+| `UI::Pivot` | 자기 자신 기준점 (0~1 정규화) |
+| `UI::DimValue` | 픽셀 또는 퍼센트 크기값 (`px()` / `pct()` 팩토리) |
+| `UI::Rect` | 레이아웃 후 절대 픽셀 사각형 |
+| `UI::Color` | RGBA 색상 (float, 0~1) |
+| `UI::MouseButton` | Left / Right / Middle |
+| `UI::Anchors::*` | 앵커 프리셋 (TopLeft, Center, BottomCenter 등) |
+| `UI::Pivots::*` | 피벗 프리셋 |
+
+### 베이스 클래스 (`ui/UIElement.hpp` / `ui/UIElement.cpp`)
+
+| 항목 | 설명 |
+|------|------|
+| `UI::UpdateContext` | update 트리 순회 시 전달되는 컨텍스트 (deltaTime, GFX*, FontHandle*, 화면 크기) |
+| `UI::RenderContext` | render 트리 순회 시 전달되는 컨텍스트 (GFX*, screenHeight) |
+| `UI::UIElement` | 모든 위젯의 base 클래스 |
+| `UIElement::addChild()` | `unique_ptr` 자식 추가; 부모 소유권 |
+| `UIElement::layout(parentRect)` | anchor/pivot/offset → `resolvedRect_` 계산 후 자식 재귀 |
+| `UIElement::updateTree(ctx)` | `onUpdate` 호출 후 자식 재귀 (invisible 스킵) |
+| `UIElement::renderTree(rc)` | zOrder 정렬 후 `onRender` + 자식 렌더 (invisible 스킵) |
+| `UIElement::buildWorldMatrix(screenHeight)` | `resolvedRect_` → UIPipeline용 scale+translate 행렬; Y축 뒤집기 포함 |
+
+### 매니저 (`ui/UIManager.hpp` / `ui/UIManager.cpp`)
+
+| 항목 | 설명 |
+|------|------|
+| `UI::UIManager` | 엘리먼트 트리 소유, 레이아웃/업데이트/렌더/입력 총괄 |
+| `UIManager::setScreenSize(w, h)` | 화면 크기 갱신 (WM_SIZE 수신 시 호출) |
+| `UIManager::layout()` | 전체 트리 레이아웃 재계산 |
+| `UIManager::update(dt, gfx, font)` | `UpdateContext` 생성 후 `root_.updateTree()` |
+| `UIManager::render(gfx)` | `UIPipeline::FrameData` 제출 후 `root_.renderTree()` |
+| `UIManager::onWndMsg(msg, wp, lp)` | WM_MOUSEMOVE/LBUTTON*/RBUTTON*/KEY* 처리; true면 게임 입력 차단 |
+| `UIManager::needsCursor()` | interactive + visible 엘리먼트 존재 시 true (커서 캡처 해제 신호) |
+| `UIManager::hitTest(x, y)` | zOrder 역순 히트테스트; interactive 엘리먼트만 대상 |
+
+### 위젯 (`ui/widgets/`)
+
+| 클래스 | 파일 | 설명 |
+|--------|------|------|
+| `UI::Panel` | `Panel.hpp/cpp` | 컨테이너; `backgroundTex` 있으면 배경 렌더 |
+| `UI::Image` | `Image.hpp/cpp` | 단일 텍스처 표시 |
+| `UI::Label` | `Label.hpp/cpp` | `TextImage` + `FontHandle` 기반 텍스트 렌더; dirty-check로 매 프레임 래스터화 방지 |
+| `UI::Button` | `Button.hpp/cpp` | Normal/Hovered/Pressed 상태 텍스처; `onClick` 콜백 (`std::function<void()>`) |
+| `UI::ProgressBar` | `ProgressBar.hpp/cpp` | 배경 + fill 이중 쿼드; `setProgress(0~1)` |
+| `UI::Slider` | `Slider.hpp/cpp` | 트랙 + 핸들 드래그; `onValueChanged` 콜백 (`std::function<void(float)>`) |
+
+### 사용 패턴 (game.cpp 통합 예시)
+
+```cpp
+// 멤버 추가
+UI::UIManager uiManager_;
+
+// 씬 셋업에서 트리 구성
+auto hpBar = std::make_unique<UI::ProgressBar>();
+hpBar->anchor = UI::Anchors::BottomCenter;
+hpBar->pivot  = UI::Pivots::BottomCenter;
+hpBar->width  = UI::DimValue::px(1024.f);
+hpBar->height = UI::DimValue::px(64.f);
+hpBar->offsetY = UI::DimValue::px(-40.f);
+hpBar->fillTex = assetManager_.getTexture("hpFill");
+uiManager_.root()->addChild(std::move(hpBar));
+
+// update()에서
+uiManager_.layout();
+uiManager_.update(dt, gfx_, &fontHandle_);
+
+// render()에서
+uiManager_.render(gfx_);
+
+// receiveWndMsg()에서 (입력 차단)
+if (uiManager_.onWndMsg(msg, wParam, lParam)) return 0;
+```
+
+### 레이아웃 좌표계 주의사항
+
+- `UIElement::layout()` 내부는 **top-down** 좌표 (Y=0 = 상단)
+- `buildWorldMatrix()` 에서 `translateY = screenHeight - topDownCenterY` 로 뒤집음
+- `ui.hlsl`은 픽셀 Y=0 → NDC -1 (하단) 매핑이므로 이 변환이 필수
 
 ---
 

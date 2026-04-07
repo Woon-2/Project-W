@@ -67,4 +67,22 @@ private:
 	mu::Mat4x4 proj_{};
 };
 
+// Returns the screen-space pixel position of a world-space point.
+// Returns false if the point is behind the near plane or outside the NDC frustum.
+inline bool worldToScreen(
+	mu::Vec3 worldPos,
+	const mu::Mat4x4& view, const mu::Mat4x4& proj,
+	float screenW, float screenH,
+	float& outX, float& outY)
+{
+	mu::Vec4 clip = mu::Vec4(worldPos, 1.f) * (view * proj);
+	if (clip.w() <= 0.f) return false;
+	const float ndcX = clip.x() / clip.w();
+	const float ndcY = clip.y() / clip.w();
+	if (ndcX < -1.f || ndcX > 1.f || ndcY < -1.f || ndcY > 1.f) return false;
+	outX = (ndcX + 1.f) * 0.5f * screenW;
+	outY = (1.f - ndcY) * 0.5f * screenH;
+	return true;
+}
+
 #endif	// __camera_HPP

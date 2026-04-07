@@ -97,6 +97,9 @@
     <Filter Include="Network\ClientApp">
       <UniqueIdentifier>{0e6c08b2-6e43-40b5-8455-e37f1e5d0324}</UniqueIdentifier>
     </Filter>
+    <Filter Include="UI">
+      <UniqueIdentifier>{9c49d4b2-413a-418a-8eb4-a338ba8dd257}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -154,9 +157,6 @@
       <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="standalone\game.cpp">
-      <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="standalone\physics.cpp">
       <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="online\onlineGame.cpp">
@@ -230,6 +230,48 @@
     </ClCompile>
     <ClCompile Include="ClientApp.cpp">
       <Filter>Network\ClientApp</Filter>
+    </ClCompile>
+    <ClCompile Include="meshParticlePipeline.cpp">
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="meshParticleSystem.cpp">
+      <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\widgets\Button.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\widgets\Image.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\widgets\Label.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\widgets\Panel.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\widgets\ProgressBar.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\widgets\Slider.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\UIElement.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\UIManager.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="broadPhase.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="contactConstraint.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="physicsWorld.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="rigidBody.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -359,9 +401,6 @@
     <ClInclude Include="standalone\game.hpp">
       <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="standalone\physics.hpp">
-      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
-    </ClInclude>
     <ClInclude Include="online\onlineGame.hpp">
       <Filter>게임%28온라인%29\헤더 파일</Filter>
     </ClInclude>
@@ -440,6 +479,54 @@
     <ClInclude Include="ClientApp.hpp">
       <Filter>Network\ClientApp</Filter>
     </ClInclude>
+    <ClInclude Include="meshParticlePipeline.hpp">
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="meshParticleSystem.hpp">
+      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\widgets\Button.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\widgets\Image.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\widgets\Label.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\widgets\Panel.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\widgets\ProgressBar.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\widgets\Slider.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\UIElement.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\UIManager.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\UITypes.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="broadPhase.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="constraint.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="contactConstraint.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="physicsWorld.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="rigidBody.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="billboard.hlsl">
@@ -473,6 +560,9 @@
       <Filter>셰이더 파일</Filter>
     </FxCompile>
     <FxCompile Include="terrainShadowMap.hlsl">
+      <Filter>셰이더 파일</Filter>
+    </FxCompile>
+    <FxCompile Include="meshParticle.hlsl">
       <Filter>셰이더 파일</Filter>
     </FxCompile>
   </ItemGroup>

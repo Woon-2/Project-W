@@ -26,6 +26,9 @@ public:
 	const Texture* playerHpFrame() const { return &playerHpFrame_; }
 	TextImage* textPlayerHp() { return &textPlayerHp_; }
 	const SpriteAnimationClip* flameAnimation() const { return &flameAnimation_; }
+	const SpriteAnimationClip* smokeAnimation() const { return &smokeAnimation_; }
+	const Mesh*    swordSlashMesh() const { return &swordSlashMesh_; }
+	const Texture* swordSlashTex()  const { return &swordSlashTex_; }
 	const std::vector<std::shared_ptr<AnimClip>>& playerAnimations() const { return playerAnimations_; }
 	const std::vector<std::shared_ptr<AnimClip>>& goblinAnimations() const { return goblinAnimations_; }
 	const std::vector<std::shared_ptr<AnimClip>>& anubisAnimations() const { return anubisAnimations_; }
@@ -39,7 +42,6 @@ public:
 
 private:
 	std::unordered_map<std::string, Texture> texHashMap_{};
-	std::unordered_map<std::string, std::vector<Texture>> spritesHashMap_{};
 	std::vector<std::shared_ptr<AnimClip>> playerAnimations_{};
 	std::vector<std::shared_ptr<AnimClip>> goblinAnimations_{};
 	std::vector<std::shared_ptr<AnimClip>> anubisAnimations_{};
@@ -67,6 +69,9 @@ private:
 	Texture playerHpFrame_{};
 	TextImage textPlayerHp_;
 	SpriteAnimationClip flameAnimation_{};
+	SpriteAnimationClip smokeAnimation_{};
+	Mesh    swordSlashMesh_{};
+	Texture swordSlashTex_{};
 };
 
 #endif	// __AssetManager_HPP

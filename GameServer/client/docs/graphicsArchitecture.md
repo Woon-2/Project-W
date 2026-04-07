@@ -40,6 +40,43 @@
 4. mainPass(Skybox) → mainPass(BV) → mainPass(Billboard)
 5. mainPass(UI)
 
+#### CSM (Cascaded Shadow Mapping)
+
+4-cascade CSM이 PBR / PBRSkinned / Terrain 파이프라인에 모두 적용되어 있다.
+
+**설계 방식:** GS + Texture2DArray 대신 **cascade별 개별 Texture2D + 4-pass draw** 방식.
+
+**cascade split:** `light.cpp::updateCSMCascades()` — Practical Split Scheme
+```
+C_i = lambda * nearZ*(farZ/nearZ)^((i+1)/N) + (1-lambda)*(nearZ + (farZ-nearZ)*(i+1)/N)
+```
+- 기본 파라미터: nearZ=0.1, farZ=500, lambda=0.75
+- texel snapping으로 shadow swimming 제거 (cascade별 독립 해상도 사용)
+
+**Normal Offset Shadow Bias:** (`pbrLighting.hlsli::sampleCascadePCF`)
+- world-space normal 방향으로 `offset * sinTheta` 만큼 샘플 위치를 오프셋
+- `sinTheta = sqrt(1 - NdotL²)` — 법선이 광원에 수직일수록 오프셋 최대
+- back-lit 면(`rawNdotl < 0`)은 sinTheta=0 → 오프셋 없음 (잘못 lit 마킹 방지)
+- offset 크기: `worldUnitsPerTexel * 2.0f` (cascade별 독립, `cascadeNormalOffsets[4]`)
+
+**Cascade Blending:** (`pbrLighting.hlsli::calcCSMShadow`)
+- cascade 경계 15% 구간에서 현재·다음 cascade를 `smoothstep` lerp
+- 경계 팝핑(popping) 없이 부드러운 전환
+
+**cbuffer 데이터 흐름 (PBR/PBRSkinned/Terrain 공통):**
+```
+Light::updateCSMCascades()
+  → cascadeViews_[], cascadeProjs_[], cascadeSplitsFarV_, cascadeNormalOffsets_[]
+  → render() → Pipeline::mainUpdate() → PerFrameData { lightVP[4], cascadeSplitsFarV, cascadeNormalOffsets }
+```
+
+**CSM 디버그:** `#define CSM_DEBUG_VIS` — cascade별 색상 오버레이 (R/G/B/Y)
+
+**주의사항:**
+- cascade DSV clear는 `gfx.cpp::clearCSMAllShadowMaps()`에서만 수행 (각 파이프라인 shadowDraw에서 개별 클리어 금지)
+- MT shadow draw latch count = `cascadeCount * jobCnt` (cascadeCount만이면 버그)
+- `cascadeNormalOffsets`의 rawNdotl은 **saturate 금지** — back-lit 감지에 음수 값이 필요
+
 #### TerrainPipeline 특성
 
 - 파일: `terrain.hpp/cpp`, `terrain.hlsl`, `terrainPipeline.hpp/cpp`, `terrainShadowMap.hlsl`
