@@ -161,6 +161,7 @@ void Game::setupStage() {
 
 void Game::setupMonsterHpBars() {
 	auto registerBar = [&](Object* monster, float yOffset) {
+		if (!monster) return;
 		auto* bar = static_cast<UI::ProgressBar*>(
 			uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
 		);
@@ -774,12 +775,24 @@ void Game::update(Milliseconds deltaTime) {
 	{
 		constexpr float kBarHalfWidth = 40.f;
 		for (auto& entry : monsterHpBars_) {
-			if (entry.monster->hp() <= 0) {
+			if (!entry.monster || entry.monster->hp() <= 0) {
 				entry.hpBar->visible = false;
 				continue;
 			}
-			const mu::Vec3 barWorldPos = entry.monster->pos()
-				+ mu::Vec3{ 0.f, entry.worldYOffset, 0.f };
+			
+			const auto& world = entry.monster->renderState().world; // 예시
+
+			mu::Vec3 worldPos{
+				world( 3, 0 ),
+				world( 3, 1 ),
+				world( 3, 2 )
+			};
+
+			//const mu::Vec3 barWorldPos = entry.monster->renderState().pos
+			//	+ mu::Vec3{ 0.f, entry.worldYOffset, 0.f };
+
+			const mu::Vec3 barWorldPos = entry.monster->renderState().pos;
+
 			float sx{}, sy{};
 			const bool onScreen = worldToScreen(
 				barWorldPos,
