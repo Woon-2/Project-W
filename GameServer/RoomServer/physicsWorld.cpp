@@ -16,6 +16,16 @@ void PhysicsWorld::registerBody(RigidBody* body,
     broadPhase_->add(body);
 }
 
+void PhysicsWorld::registerTerrain(RigidBody* terrainBody, const TerrainHeightField* hf)
+{
+    terrainCollider_ = std::make_unique<TerrainCollider>(terrainBody, hf);
+}
+
+void PhysicsWorld::unregisterTerrain()
+{
+    terrainCollider_.reset();
+}
+
 void PhysicsWorld::unregisterBody(RigidBody* body)
 {
     auto it = std::ranges::find(entries_, body, &Entry::body);
@@ -127,6 +137,28 @@ void PhysicsWorld::generateContacts()
         cc->addContact(cp);
 
         contactConstraints_.push_back(std::move(cc));
+    }
+
+    // --- Body-Terrain contacts ---
+    if (terrainCollider_) {
+        for (auto& e : entries_) {
+            RigidBody* body = e.body;
+            if (body->motionType() != MotionType::Dynamic) continue;
+            if (body->worldBVH().empty()) continue;
+
+            std::vector<ContactPoint> contacts;
+            contacts.reserve(4);
+            const int cnt = terrainCollider_->generateContacts(*body, contacts);
+            if (cnt == 0) continue;
+
+            auto cc = std::make_unique<ContactConstraint>(body, terrainCollider_->terrainBody());
+            for (auto& cp : contacts) {
+                cp.localA = cp.worldPos - body->pos();
+                cp.localB = cp.worldPos - terrainCollider_->terrainBody()->pos();
+                cc->addContact(cp);
+            }
+            contactConstraints_.push_back(std::move(cc));
+        }
     }
 }
 

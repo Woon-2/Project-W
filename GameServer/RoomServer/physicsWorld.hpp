@@ -6,6 +6,7 @@
 #include "contactConstraint.hpp"
 #include "broadPhase.hpp"
 #include "collision.hpp"
+#include "terrain.hpp"
 #include <functional>
 
 // PhysicsWorld manages the physics simulation tick.
@@ -34,6 +35,13 @@ public:
     // Main simulation tick (integrate + detect + solve).
     void step(Seconds dt);
 
+    // Register a static height-field terrain for body-terrain collision.
+    // terrainBody must be MotionType::Static; it is NOT added to the broad phase.
+    void registerTerrain(RigidBody* terrainBody, const TerrainHeightField* heightField);
+
+    // Remove the terrain collider. Safe to call when no terrain is registered.
+    void unregisterTerrain();
+
     // Set the gravitational acceleration applied to Dynamic bodies each step.
     void MU_CALLCONV setGravity(mu::Vec3 g) { gravity_ = g; }
 
@@ -59,6 +67,12 @@ private:
     std::unique_ptr<BroadPhase>                     broadPhase_;
     std::vector<std::unique_ptr<ContactConstraint>> contactConstraints_;
     std::vector<std::unique_ptr<Constraint>>        jointConstraints_;
+
+    // Optional terrain collider (null when no terrain is registered).
+    // Terrain body is NOT in entries_ or broadPhase_; TerrainCollider
+    // iterates Dynamic bodies directly.
+    std::unique_ptr<TerrainCollider>                terrainCollider_;
+
     int solverIterations_ = 10;
 };
 

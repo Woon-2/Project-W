@@ -4,6 +4,7 @@
 class Room;
 struct Level;
 struct Model;
+struct TerrainHeightField;
 
 /**
 * @brief SingletonBase
@@ -16,6 +17,7 @@ public:
 
 	static void setLevelData(const Level* pLevel) { pLevel_ = pLevel; }
 	static void setPlayerModelData(const Model* pModel) { pPlayerModel_ = pModel; }
+	static void setTerrainData(const TerrainHeightField* pTerrain) { pTerrain_ = pTerrain; }
 	static const Model* playerModelData() { return pPlayerModel_; }
 
 private:
@@ -23,8 +25,9 @@ private:
 	static std::vector<Room*> rooms_;
 	static std::unordered_map<int32, Room*> roomIdMap_;
 
-	static const Level* pLevel_;
-	static const Model* pPlayerModel_;
+	static const Level*              pLevel_;
+	static const Model*              pPlayerModel_;
+	static const TerrainHeightField* pTerrain_;
 };
 
 #endif // room_manager_hpp

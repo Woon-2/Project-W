@@ -81,4 +81,35 @@ RayHit RaycastAABB(const AABB& box, const Ray& ray);
 
 AABB buildAttackAABB(mu::Vec3 pos, mu::Vec3 forward, mu::Vec3 halfExtent, float offsetFwd);
 
+// ---------------------------------------------------------------------------
+// TerrainCollider
+// ---------------------------------------------------------------------------
+
+struct TerrainHeightField; // defined in terrain.hpp
+class  RigidBody;          // defined in rigidBody.hpp
+
+// Generates contact points between dynamic RigidBody instances and a
+// height-field terrain. The terrain body is Static (invMass == 0) and
+// carries no BVH; collision is computed directly against TerrainHeightField.
+class TerrainCollider {
+public:
+    TerrainCollider(RigidBody* terrainBody, const TerrainHeightField* hf);
+
+    // Collects up to 4 deepest ContactPoints into outContacts (appends).
+    // Returns the number of contacts added.
+    int generateContacts(const RigidBody& dynamic,
+                         std::vector<ContactPoint>& outContacts) const;
+
+    RigidBody* terrainBody() const { return terrainBody_; }
+
+private:
+    static void extractBottomVertices(const BVHNode& leaf,
+                                      std::vector<mu::Vec3>& out);
+
+    bool testVertex(mu::Vec3 worldVert, ContactPoint& outCp) const;
+
+    RigidBody*                terrainBody_ = nullptr;
+    const TerrainHeightField* heightField_ = nullptr;
+};
+
 #endif // room_server_collision_hpp

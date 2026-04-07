@@ -106,6 +106,7 @@ private:
 	Timer* pTimer_ = nullptr;
 
 	std::shared_ptr<Cube> ground_{};
+	std::shared_ptr<TerrainObject> terrain_{};
 	std::vector<std::shared_ptr<Goblin>> goblins_{};
 	std::unordered_map<uint16, std::shared_ptr<Goblin>> idGoblinMap_{};
 	std::shared_ptr<Anubis> anubis_{};

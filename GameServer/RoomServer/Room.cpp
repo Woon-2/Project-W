@@ -7,8 +7,9 @@
 #include "Level.hpp"
 #include "JobTimer.hpp"
 #include "collision.hpp"
+#include "terrain.hpp"
 
-void Room::init(const Level* levelData) {
+void Room::init(const Level* levelData, const TerrainHeightField* heightField) {
 	cubes_ = levelData->cubes;
 	playerStarts_ = levelData->playerStarts;
 	goblins_ = levelData->goblins;
@@ -22,12 +23,20 @@ void Room::init(const Level* levelData) {
 	for (auto& g : goblins_) {
 		g.setId(IdPool::pop());
 		g.setSpawnPos(g.pos());
-		g.body().setMotionType(MotionType::Kinematic);
+		g.body().setMotionType(MotionType::Dynamic);
+		g.body().setMass(70.f);
+		g.body().setLinearDamping(0.1f);
+		g.body().setAngularDamping(0.99f);
+		g.body().setRestitution(0.0f);
 		g.body().snapToCurrent();
 		physicsWorld_.registerBody(&g.body(), [&g]() { g.rebuildBodyBVH(); });
 	}
 
-	physicsWorld_.setGravity(mu::Vec3(0.f, 0.f, 0.f));
+	if (heightField && !heightField->empty()) {
+		terrainBody_.setMotionType(MotionType::Static);
+		terrainBody_.snapToCurrent();
+		physicsWorld_.registerTerrain(&terrainBody_, heightField);
+	}
 }
 
 void Room::update() {

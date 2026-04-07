@@ -1,5 +1,7 @@
 ﻿#include "rspch.hpp"
 #include "collision.hpp"
+#include "terrain.hpp"
+#include "rigidBody.hpp"
 
 CollisionResult collides(const AABB& a, const AABB& b) {
     CollisionResult res{.hit = false};
@@ -240,6 +242,104 @@ AABB buildAttackAABB(mu::Vec3 pos, mu::Vec3 forward, mu::Vec3 halfExtent, float 
         .size = halfExtent * 2.f,
     };
 }
+
+// ---------------------------------------------------------------------------
+// TerrainCollider
+// ---------------------------------------------------------------------------
+
+TerrainCollider::TerrainCollider(RigidBody* terrainBody, const TerrainHeightField* hf)
+    : terrainBody_(terrainBody), heightField_(hf)
+{}
+
+void TerrainCollider::extractBottomVertices(const BVHNode& leaf,
+                                            std::vector<mu::Vec3>& out)
+{
+    if (std::holds_alternative<AABB>(leaf.shape)) {
+        const auto& aabb = std::get<AABB>(leaf.shape);
+        const mu::Vec3 c = aabb.center;
+        const mu::Vec3 h = aabb.size * 0.5f;
+        const float    by = c.y() - h.y();
+        out.push_back(mu::Vec3(c.x() - h.x(), by, c.z() - h.z()));
+        out.push_back(mu::Vec3(c.x() + h.x(), by, c.z() - h.z()));
+        out.push_back(mu::Vec3(c.x() - h.x(), by, c.z() + h.z()));
+        out.push_back(mu::Vec3(c.x() + h.x(), by, c.z() + h.z()));
+    } else {
+        const auto& obb = std::get<OBB>(leaf.shape);
+        const mu::Vec3 ax = obb.orient.rotate(mu::Vec3(1.f, 0.f, 0.f));
+        const mu::Vec3 ay = obb.orient.rotate(mu::Vec3(0.f, 1.f, 0.f));
+        const mu::Vec3 az = obb.orient.rotate(mu::Vec3(0.f, 0.f, 1.f));
+        const float    hx = obb.halfExtents.x();
+        const float    hy = obb.halfExtents.y();
+        const float    hz = obb.halfExtents.z();
+        for (int sx : {-1, 1})
+        for (int sy : {-1, 1})
+        for (int sz : {-1, 1}) {
+            out.push_back(obb.center
+                + ax * (hx * sx)
+                + ay * (hy * sy)
+                + az * (hz * sz));
+        }
+    }
+}
+
+bool TerrainCollider::testVertex(mu::Vec3 worldVert, ContactPoint& outCp) const
+{
+    const mu::Vec3 origin = terrainBody_->pos();
+
+    const float localX = worldVert.x() - origin.x();
+    const float localZ = worldVert.z() - origin.z();
+
+    if (localX < 0.f || localX > heightField_->sizeX) return false;
+    if (localZ < 0.f || localZ > heightField_->sizeZ) return false;
+
+    const float terrainWorldY = origin.y() + heightField_->getHeightAt(localX, localZ);
+    const float depth         = terrainWorldY - worldVert.y();
+    if (depth <= 0.f) return false;
+
+    outCp.worldPos = mu::Vec3(worldVert.x(), terrainWorldY, worldVert.z());
+    outCp.normal   = mu::NVec3(heightField_->getNormalAt(localX, localZ));
+    outCp.depth    = depth;
+    return true;
+}
+
+int TerrainCollider::generateContacts(const RigidBody& dynamic,
+                                      std::vector<ContactPoint>& outContacts) const
+{
+    if (!heightField_ || heightField_->empty()) return 0;
+    if (dynamic.worldBVH().empty())             return 0;
+
+    std::vector<mu::Vec3> verts;
+    verts.reserve(32);
+    for (const BVHNode& node : dynamic.worldBVH().nodes) {
+        if (node.isLeaf())
+            extractBottomVertices(node, verts);
+    }
+
+    std::vector<ContactPoint> candidates;
+    candidates.reserve(verts.size());
+    for (const mu::Vec3& v : verts) {
+        ContactPoint cp;
+        if (testVertex(v, cp))
+            candidates.push_back(cp);
+    }
+
+    if (candidates.empty()) return 0;
+
+    if (candidates.size() > 4) {
+        std::partial_sort(candidates.begin(), candidates.begin() + 4, candidates.end(),
+            [](const ContactPoint& a, const ContactPoint& b) {
+                return a.depth > b.depth;
+            });
+        candidates.resize(4);
+    }
+
+    const int added = static_cast<int>(candidates.size());
+    for (auto& cp : candidates)
+        outContacts.push_back(cp);
+    return added;
+}
+
+// ---------------------------------------------------------------------------
 
 RayHit RaycastAABB(const AABB& box, const Ray& ray) {
     RayHit hit{.hit = false};

@@ -52,6 +52,16 @@ void Game::setupStage() {
 	dirLight_.intensity = 2.f;
 	dirLight_.type = PBRPipeline::LightData::Type::DirectionalLight;
 	dirLight_.isMainDirectionalLight = true;
+
+	const TerrainData* td = assetManager_.terrain();
+	if (td && !td->heightField.empty()) {
+		terrain_ = std::make_shared<TerrainObject>();
+		terrain_->setTerrainData(td);
+		terrain_->body().setMotionType(MotionType::Static);
+		terrain_->body().snapToCurrent();
+		physicsWorld_.registerTerrain(&terrain_->body(), &td->heightField);
+		terrain_->update(0ms, 1.f);
+	}
 }
 
 void Game::setupPlayer(const PlayerInfo& playerInfo) {
@@ -473,6 +483,13 @@ void Game::render() {
 		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
 	};
 	gfx_.addFrameData(frameDataPBRSkinned);
+
+	if (terrain_) {
+		terrain_->render(gfx_);
+		gfx_.addFrameData(TerrainPipeline::FrameData{
+			.globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f)
+		});
+	}
 
 	/*playerHpUI_.render(gfx_);
 	for (auto& [id, ui] : otherPlayerHpUIs_) {

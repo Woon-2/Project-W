@@ -94,6 +94,7 @@
     <ClCompile Include="contactConstraint.cpp" />
     <ClCompile Include="physicsWorld.cpp" />
     <ClCompile Include="rigidBody.cpp" />
+    <ClCompile Include="terrain.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Listener.hpp">
@@ -152,5 +153,6 @@
     <ClInclude Include="contactConstraint.hpp" />
     <ClInclude Include="physicsWorld.hpp" />
     <ClInclude Include="rigidBody.hpp" />
+    <ClInclude Include="terrain.hpp" />
   </ItemGroup>
 </Project>

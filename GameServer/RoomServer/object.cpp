@@ -105,6 +105,9 @@ GoblinUpdateResult Goblin::update(Seconds dt, const std::vector<GameSession*>& s
 		return {};
 	}
 
+	// Freeze rotation: physics solver may accumulate angular velocity on a Dynamic body.
+	body().setOmega(mu::Vec3{});
+
 	GameSession* nearestSession = nullptr;
 	float nearestDist = std::numeric_limits<float>::max();
 
@@ -138,8 +141,8 @@ GoblinUpdateResult Goblin::update(Seconds dt, const std::vector<GameSession*>& s
 		else {
 			auto dir = mu::NVec3(toTarget);
 
-			velocity = mu::Vec3(dir) * moveSpeed_;
-			setLinearVel(velocity);
+			velocity = mu::Vec3(dir.x(), 0.f, dir.z()) * moveSpeed_;
+			setLinearVel(mu::Vec3(velocity.x(), body().linearVel().y(), velocity.z()));
 
 			float yaw = std::atan2(dir.x(), dir.z());
 			setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yaw)));
@@ -159,8 +162,8 @@ GoblinUpdateResult Goblin::update(Seconds dt, const std::vector<GameSession*>& s
 		auto toPlayer = nearestSession->player()->pos() - pos();
 		auto dir = mu::NVec3(toPlayer);
 
-		velocity = mu::Vec3(dir) * moveSpeed_;
-		setLinearVel(velocity);
+		velocity = mu::Vec3(dir.x(), 0.f, dir.z()) * moveSpeed_;
+		setLinearVel(mu::Vec3(velocity.x(), body().linearVel().y(), velocity.z()));
 
 		float yaw = std::atan2(dir.x(), dir.z());
 		setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yaw)));
@@ -172,7 +175,7 @@ GoblinUpdateResult Goblin::update(Seconds dt, const std::vector<GameSession*>& s
 			break;
 		}
 
-		setLinearVel(mu::Vec3{});
+		setLinearVel(mu::Vec3(0.f, body().linearVel().y(), 0.f));
 
 		auto toPlayer = nearestSession->player()->pos() - pos();
 		setOrient(mu::NQuat(mu::Radian(), mu::Radian(),
@@ -213,8 +216,8 @@ GoblinUpdateResult Goblin::update(Seconds dt, const std::vector<GameSession*>& s
 
 		auto dir = mu::NVec3(toSpawn);
 
-		velocity = mu::Vec3(dir) * moveSpeed_;
-		setLinearVel(velocity);
+		velocity = mu::Vec3(dir.x(), 0.f, dir.z()) * moveSpeed_;
+		setLinearVel(mu::Vec3(velocity.x(), body().linearVel().y(), velocity.z()));
 
 		float yaw = std::atan2(dir.x(), dir.z());
 		setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yaw)));

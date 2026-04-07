@@ -7,4 +7,5 @@ void AssetManager::loadAssets() {
 	modelGoblin_ = loadModelFromFile("../resources/models/goblin/goblinServer.bin");
 
 	level_ = loadLevelFromFile("../resources/levels/level.bin", *this);
+	terrainHeightField_ = loadTerrainHeightFieldFromFiles("../resources/terrains/");
 }
