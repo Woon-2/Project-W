@@ -483,7 +483,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 |--------|------|------|
 | `UI::Panel` | `Panel.hpp/cpp` | 컨테이너; `backgroundTex` 있으면 배경 렌더 |
 | `UI::Image` | `Image.hpp/cpp` | 단일 텍스처 표시 |
-| `UI::Label` | `Label.hpp/cpp` | `TextImage` + `FontHandle` 기반 텍스트 렌더; dirty-check로 매 프레임 래스터화 방지 |
+| `UI::Label` | `Label.hpp/cpp` | `TextImage` 내부 소유; `resolvedRect_` 크기에 맞게 자동 재생성; dirty-check로 매 프레임 래스터화 방지 |
 | `UI::Button` | `Button.hpp/cpp` | Normal/Hovered/Pressed 상태 텍스처; `onClick` 콜백 (`std::function<void()>`) |
 | `UI::ProgressBar` | `ProgressBar.hpp/cpp` | 배경 + fill 이중 쿼드; `setProgress(0~1)` |
 | `UI::Slider` | `Slider.hpp/cpp` | 트랙 + 핸들 드래그; `onValueChanged` 콜백 (`std::function<void(float)>`) |

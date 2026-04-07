@@ -271,6 +271,6 @@ TextImage::TextImage( ID3D12Device* device, UINT textWidth, UINT textHeight, Des
 	SRVDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 	SRVDesc.Texture2D.MipLevels = 1;
 	createSRV( device, texture, SRVDesc, srvTexPool );
-	texture.idxSrv.idxSampler = etoi(Samplers::BilinearClamp);
+	texture.idxSrv.idxSampler = etoi(Samplers::NearestClamp);
 	texture.idxSrv.idxRange = etoi( Texture::Type::Tex2D );
 }

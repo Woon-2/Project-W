@@ -326,7 +326,6 @@ class Label : public UIElement {
 public:
     void setText(const std::wstring& text);
     void setFont(FontHandle* font);
-    void setTextImage(TextImage* img);
 
     // 텍스트 정렬 (변경 시 자동으로 dirty → 다음 프레임 재렌더링)
     void setTextHAlign(TextHAlign a);
@@ -338,24 +337,18 @@ public:
 ```
 
 **텍스트 렌더링 흐름:**
-1. `dirty_`일 때 `gfx.WriteTextToBitmap(...)` → D2D 래스터화 → `textImage_->pData`에 기록
-2. 정렬 오프셋 계산 후 `pData` 내 픽셀을 이동 (CPU 쪽에서 shift)
-3. `gfx.UpdateTextureWithTextImage(...)` → GPU 업로드 버퍼에 복사
-4. `onRender`에서 `DrawEvent{ pCopySrc = &textureUpload }` → GPU 업로드 실행
+1. `onUpdate` 진입 시 `resolvedRect_` 크기가 바뀌었으면 `gfx.createTextImageImmediate(w, h)` 로 `ownedTextImage_` 재생성
+2. `dirty_`일 때 `gfx.WriteTextToBitmap(...)` → D2D 래스터화 → `ownedTextImage_.pData`에 기록
+3. 정렬 오프셋 계산 후 `pData` 내 픽셀을 이동 (CPU 쪽에서 shift)
+4. `gfx.UpdateTextureWithTextImage(...)` → GPU 업로드 버퍼에 복사
+5. `onRender`에서 `DrawEvent{ pCopySrc = &textureUpload }` → GPU 업로드 실행
 
 **텍스트 정렬 구현 원리:**
 DirectWrite는 항상 LEADING(좌상단)으로 렌더링한다. 정렬은 `pData` 내 픽셀을 원하는 위치로
 shift해서 구현한다. 셰이더나 쿼드 크기는 변경되지 않으며, 텍스처 데이터 안에 정렬 위치가 반영된다.
 
-```cpp
-// 사용 예
-label->setTextHAlign(UI::TextHAlign::Center);
-label->setTextVAlign(UI::TextVAlign::Center);
-```
-
 **주의:**
-- `setTextImage`에 전달하는 `TextImage*`는 외부(AssetManager 등)에서 소유하고
-  프레임 간 유지되어야 한다. Label은 포인터만 참조한다.
+- `TextImage`는 Label이 내부 소유(`ownedTextImage_`). 외부 주입 불필요.
 - `update()` 호출 시 `ctx.defaultFont`가 null이면 텍스트 렌더링이 스킵된다.
   `gfx_.defaultFont()`(내장 Tahoma 폰트)를 전달해야 한다.
 
@@ -480,7 +473,6 @@ uiManager_.requestDebugResources(gfx_);  // loadAssets 이후에 호출
 auto* label = static_cast<UI::Label*>(
     uiManager_.root()->addChild(std::make_unique<UI::Label>())
 );
-label->setTextImage(assetManager_.textPlayerHp());
 label->setTextHAlign(UI::TextHAlign::Center);
 label->setTextVAlign(UI::TextVAlign::Center);
 label->setText(L"...");

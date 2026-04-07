@@ -130,17 +130,18 @@ void Game::setupStage() {
 		uiManager_.root()->addChild(std::make_unique<UI::Label>())
 	);
 	pLabel->name    = "hpLabel";
-	pLabel->anchor  = UI::Anchors::BottomCenter; // 부모의 어느 점에 붙을 지
-	pLabel->pivot   = UI::Pivots::BottomCenter;	 // 내 박스의 어느 점에 못을 걸지	
-	pLabel->width   = UI::DimValue::px(512.f);
-	pLabel->height  = UI::DimValue::px(256.f);
-	pLabel->offsetY = UI::DimValue::px(-10.f);
-	pLabel->setTextImage(assetManager_.textPlayerHp());
+	pLabel->anchor  = UI::Anchors::Center; // 부모의 어느 점에 붙을 지
+	pLabel->pivot   = UI::Pivots::Center;	 // 내 박스의 어느 점에 못을 걸지	
+	pLabel->width   = UI::DimValue::px(1000.0f);
+	pLabel->height  = UI::DimValue::px(500.0f);
+	pLabel->offsetX = UI::DimValue::px( -230.f );
+	pLabel->offsetY = UI::DimValue::px( -270.f );
 	pLabel->setTextHAlign(UI::TextHAlign::Center);
 	pLabel->setTextVAlign(UI::TextVAlign::Center);
-	pLabel->setText(L"UI System OK");
-	pLabel->setAutoSize(true);
-	pLabel->setTextColor( 0.0f, 0.0f, 1.0f, 1.0f );
+	pLabel->setText(L"이것은 TEXT입니다.\n \"U\"키를 눌러서 UI의 영역을 표시할 수 있습니다. ");
+	pLabel->setFontSize(24.0f);
+	//pLabel->setAutoSize( true );
+	pLabel->setTextColor( 1.0f, 1.0f, 1.0f, 1.0f );
 
 	playerHpBar_ = static_cast<UI::ProgressBar*>(
 		uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
@@ -780,18 +781,8 @@ void Game::update(Milliseconds deltaTime) {
 				continue;
 			}
 			
-			const auto& world = entry.monster->renderState().world; // 예시
-
-			mu::Vec3 worldPos{
-				world( 3, 0 ),
-				world( 3, 1 ),
-				world( 3, 2 )
-			};
-
-			//const mu::Vec3 barWorldPos = entry.monster->renderState().pos
-			//	+ mu::Vec3{ 0.f, entry.worldYOffset, 0.f };
-
-			const mu::Vec3 barWorldPos = entry.monster->renderState().pos;
+			const mu::Vec3 barWorldPos = entry.monster->renderState().pos
+				+ mu::Vec3{ 0.f, entry.worldYOffset, 0.f };
 
 			float sx{}, sy{};
 			const bool onScreen = worldToScreen(

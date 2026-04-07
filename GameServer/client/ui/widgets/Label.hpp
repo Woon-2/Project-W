@@ -14,7 +14,6 @@ public:
     const std::wstring& text() const { return text_; }
 
     void setFont(FontHandle* font) { fontHandle_ = font; dirty_ = true; }
-    void setTextImage(TextImage* img) { textImage_ = img; }
 
     // 0 = 기본 폰트(16pt Tahoma) 사용. autoSize가 활성화되면 무시됨.
     void setFontSize(float size);
@@ -36,7 +35,9 @@ private:
     std::wstring text_;
     std::wstring prevText_;
     FontHandle* fontHandle_ = nullptr;
-    TextImage* textImage_ = nullptr;
+    TextImage ownedTextImage_{};
+    UINT prevTexW_ = 0;
+    UINT prevTexH_ = 0;
     TextHAlign textHAlign_ = TextHAlign::Leading;
     TextVAlign textVAlign_ = TextVAlign::Top;
     D2D1_COLOR_F textColor_ = D2D1::ColorF( D2D1::ColorF::White );
