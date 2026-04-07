@@ -134,7 +134,7 @@ struct SNpcMovePacket : public PacketHeader {
 };
 
 struct CAttackPacket : public PacketHeader {
-	uint64 clientMs;   // GetTickCount64() + serverClockOffset (서버 시계 추정값)
+	uint64 clientMs;
 };
 
 struct SNpcAttackPacket : public PacketHeader {
@@ -147,7 +147,7 @@ struct SHitPacket : public PacketHeader {
 };
 
 struct STimeSyncPacket : public PacketHeader {
-	uint64 serverMs;   // GetTickCount64() 기반
+	uint64 serverMs;
 };
 
 #pragma pack(pop)

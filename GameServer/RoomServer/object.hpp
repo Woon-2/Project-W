@@ -200,16 +200,16 @@ private:
 	float moveSpeed_ = 3.f;
 
 	Seconds attackCooldown_{ 0s };
-	static constexpr Seconds kAttackCooldownMax_{ 2.0f };
-	static constexpr int32 kAttackDamage_{ 15 };
+	static constexpr Seconds attackCooldownMax_{ 2.0f };
+	static constexpr int32 attackDamage_{ 15 };
 
 	struct PosSnapshot { 
 		uint64 serverMs;
 		mu::Vec3 pos;
 	};
 
-	static constexpr int kHistorySize_ = 16;   // 17ms × 16 ≈ 272ms
-	std::array<PosSnapshot, kHistorySize_> posHistory_{};
+	static constexpr int32 historySize_ = 16;   // 17ms × 16 ≈ 272ms
+	std::array<PosSnapshot, historySize_> posHistory_{};
 	int32 historyHead_ = 0;
 };
 

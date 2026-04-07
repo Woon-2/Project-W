@@ -139,7 +139,7 @@ void Object::rebuildBVH(PhysicState& state) const {
 
 GoblinUpdateResult Goblin::update(Seconds dt, const std::vector<GameSession*>& sessions) {
 	if ( hp() <= 0 ) {
-		return;
+		return {};
 	}
 
 	// 가장 가까운 플레이어 탐색
@@ -221,12 +221,12 @@ GoblinUpdateResult Goblin::update(Seconds dt, const std::vector<GameSession*>& s
 		else {
 			auto player = nearestSession->player();
 
-			int32 newHp = std::max(player->hp() - kAttackDamage_, 0);
+			int32 newHp = std::max(player->hp() - attackDamage_, 0);
 			player->setHp(newHp);
 
 			result.hit = {static_cast<uint16>(nearestSession->id()), newHp};
 
-			attackCooldown_ = kAttackCooldownMax_;
+			attackCooldown_ = attackCooldownMax_;
 		}
 		break;
 	}
@@ -261,17 +261,17 @@ GoblinUpdateResult Goblin::update(Seconds dt, const std::vector<GameSession*>& s
 
 void Goblin::recordSnapshot(uint64 serverMs) {
 	posHistory_[historyHead_] = {serverMs, pos()};
-	historyHead_ = (historyHead_ + 1) % kHistorySize_;
+	historyHead_ = (historyHead_ + 1) % historySize_;
 }
 
 mu::Vec3 Goblin::rewindPos(uint64 targetMs) const {
-	for (int32 i = 1; i <= kHistorySize_; ++i) {
-		int32 idx = (historyHead_ - i + kHistorySize_) % kHistorySize_;
+	for (int32 i = 1; i <= historySize_; ++i) {
+		int32 idx = (historyHead_ - i + historySize_) % historySize_;
 		if ( posHistory_[ idx ].serverMs <= targetMs ) {
 			return posHistory_[ idx ].pos;
 		}
 	}
 
 	// 히스토리 전체가 targetMs보다 최신이면 가장 오래된 항목으로 클램프
-	return posHistory_[historyHead_ % kHistorySize_].pos;
+	return posHistory_[historyHead_ % historySize_].pos;
 }

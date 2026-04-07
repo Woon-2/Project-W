@@ -249,7 +249,10 @@ void Game::applyHit( uint16 targetId, int32 newHp ) {
 }
 
 void Game::applyTimeSync( uint64 serverMs ) {
-	serverClockOffset_ = static_cast<int64>(serverMs) - static_cast<int64>(GetTickCount64());
+	serverClockOffset_ = static_cast<int64>(serverMs) -
+		static_cast<int64>(std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::high_resolution_clock::now().time_since_epoch()
+		).count());
 }
 
 // 게임의 업데이트는 다음 순서대로 이루어진다.
@@ -533,7 +536,9 @@ void Game::sendMouseMovePacket() {
 
 void Game::sendAttackPacket() {
 	uint64 clientMs = static_cast<uint64>(
-		static_cast<int64>(GetTickCount64()) + serverClockOffset_);
+		static_cast<int64>(std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::high_resolution_clock::now().time_since_epoch()
+		).count()) + serverClockOffset_);
 	INet::ClientApp::addSendBuffer(PacketManager::makeCAttackPacket(clientMs));
 }
 

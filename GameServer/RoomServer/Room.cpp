@@ -33,7 +33,11 @@ void Room::updateGoblinAI(Milliseconds dt) {
 		return;
 	}
 
-	uint64 serverNow = static_cast<uint64>(GetTickCount64());
+	uint64 serverNow = static_cast<uint64>(
+		std::chrono::duration_cast<std::chrono::milliseconds>(
+			HighResolutionClock::now().time_since_epoch()
+		).count()
+	);
 
 	for (auto& goblin : goblins_) {
 		goblin.recordSnapshot(serverNow);
@@ -48,10 +52,8 @@ void Room::updateGoblinAI(Milliseconds dt) {
 		));
 
 		if (result.hit) {
-			broadcast(PacketManager::makeSNpcAttackPacket(
-				static_cast<uint16>(goblin.getId())));
-			broadcast(PacketManager::makeSHitPacket(
-				result.hit->targetId, result.hit->newHp));
+			broadcast(PacketManager::makeSNpcAttackPacket(static_cast<uint16>(goblin.getId())));
+			broadcast(PacketManager::makeSHitPacket(result.hit->targetId, result.hit->newHp));
 		}
 	}
 }
@@ -106,7 +108,11 @@ void Room::enter(GameSession* session) {
 
 	// 시계 동기화 패킷 전송 (지연 보상용)
 	auto timeSyncPkt = PacketManager::makeSTimeSyncPacket(
-		static_cast<uint64>(GetTickCount64()));
+		static_cast<uint64>(
+			std::chrono::duration_cast<std::chrono::milliseconds>(
+				HighResolutionClock::now().time_since_epoch()
+			).count()
+		));
 	session->send(timeSyncPkt);
 
 	// 새로 들어온 플레이어의 정보를 기존 플레이어들에게 브로드캐스트
@@ -208,8 +214,7 @@ void Room::attack(int32 sessionId, uint64 clientMs) {
 			int32 newHp = std::max(goblin.hp() - kDamage, 0);
 			goblin.setHp(newHp);
 
-			broadcast(PacketManager::makeSHitPacket(
-				static_cast<uint16>(goblin.getId()), newHp));
+			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(goblin.getId()), newHp));
 		}
 	}
 }
