@@ -93,6 +93,8 @@ public:
 
 	virtual ~AnimBlender() = default;
 
+	virtual void triggerDeath() {}
+
 	// 대상 애니메이션 클립을 추가한다.
 	// 웬만하면 상속한 클래스에서 초기화시점에 사용할 클립들을 전부 push해놓고
 	// 게임 객체의 상태에 맞게 클립들을 선택해 프레임 업데이트 및 블렌딩을 수행하도록 한다.

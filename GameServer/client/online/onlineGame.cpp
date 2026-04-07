@@ -160,6 +160,10 @@ void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos) {
 		return;
 	}
 
+	if (player->isDead()) {
+		return;
+	}
+
 	// 애니메이션용 velocity: 패킷 도착 시점에 1번만 계산.
 	// 서버가 보내는 velocity 필드 대신, 연속 패킷 간 위치 변화량을 netInterpAcc_(패킷 전송 주기를 판단하는 누적 시간)으로 나눈다.
 	// netInterpAcc_는 직전 패킷 이후 경과 시간이므로 실제 패킷 간격과 동일하다.
@@ -193,6 +197,10 @@ void Game::rotatePlayer(uint16 playerId, float yawRad) {
 		return;
 	}
 
+	if (player->isDead()) {
+		return;
+	}
+
 	const mu::NQuat yaw = mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yawRad));
 	player->setOrient(yaw);
 }
@@ -206,6 +214,10 @@ void Game::moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 ori
 	);
 
 	if (goblin == nullptr) {
+		return;
+	}
+
+	if (goblin->isDead()) {
 		return;
 	}
 
@@ -241,10 +253,16 @@ void Game::applyHit( uint16 targetId, int32 newHp ) {
 	}
 	if ( auto it = idPlayerMap_.find( targetId ); it != idPlayerMap_.end() ) {
 		it->second->setHp( newHp );
+		if ( newHp <= 0 ) {
+			it->second->setDead( true );
+		}
 		return;
 	}
 	if ( auto it = idGoblinMap_.find( targetId ); it != idGoblinMap_.end() ) {
 		it->second->setHp( newHp );
+		if ( newHp <= 0 ) {
+			it->second->setDead( true );
+		}
 	}
 }
 

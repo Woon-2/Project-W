@@ -443,13 +443,16 @@ StandAlone 모드에만 존재하던 `CombatSystem`의 핵심 로직을 서버 �
 ```
 서버: S_TimeSync(Ts) ─── D(단방향 지연) ───→ 클라이언트(L_recv)
 
-클라이언트 저장: clockOffset = Ts - L_recv
-공격 시 전송:   clientMs = GetTickCount64() + clockOffset
+클라이언트 저장: clockOffset = Ts - nowMs()
+공격 시 전송:   clientMs = nowMs() + clockOffset
               = Ts + (L_atk - L_recv)
               ≈ 서버 시계 기준 공격 시점 - D
 
 서버 수신 시각 = Ts + (L_atk - L_recv) + D
 rewindTarget  = clientMs = 서버 수신 시각 - D  ← D만큼 이전 스냅샷 사용
+
+(nowMs = high_resolution_clock::now().time_since_epoch() 를 ms uint64로 변환한 값.
+ GetTickCount64() 대신 chrono 기반으로 교체됨 - 2026.04.07)
 ```
 
 RTT 측정 없이 단방향 지연이 자동으로 보상됨.
@@ -462,7 +465,7 @@ struct PosSnapshot { uint64 serverMs; mu::Vec3 pos; };
 static constexpr int kHistorySize_ = 16;   // 17ms × 16 ≈ 272ms
 ```
 
-- `updateGoblinAI()`에서 매 틱 `recordSnapshot(GetTickCount64())` 호출
+- `updateGoblinAI()`에서 매 틱 `recordSnapshot(nowMs())` 호출 (chrono 기반, GetTickCount64() 교체됨)
 - `rewindPos(targetMs)`: 역순 탐색으로 targetMs 이하인 가장 최신 스냅샷 반환,
   전체가 최신이면 가장 오래된 항목으로 클램프
 
@@ -471,7 +474,109 @@ static constexpr int kHistorySize_ = 16;   // 17ms × 16 ≈ 272ms
 ## 클라이언트 (online 모드)
 
 - `processInputGame()` — LButton 클릭(edge detection) 시 `sendAttackPacket()` 호출
-- `sendAttackPacket()` — `GetTickCount64() + serverClockOffset_`을 `clientMs`로 C_Attack 전송
-- `applyTimeSync(serverMs)` — `serverClockOffset_ = serverMs - GetTickCount64()` 갱신
+- `sendAttackPacket()` — `nowMs() + serverClockOffset_`을 `clientMs`로 C_Attack 전송
+- `applyTimeSync(serverMs)` — `serverClockOffset_ = serverMs - nowMs()` 갱신
+  (nowMs = `high_resolution_clock::now().time_since_epoch()` ms uint64. GetTickCount64() 교체됨 - 2026.04.07)
 - `applyHit(targetId, newHp)` — 내 플레이어/타 플레이어/고블린 HP 업데이트, 내 HP=0이면 `playerDead_=true`
 - `onNpcAttack(npcId)` — `EvAttack` 이벤트 발생 → 고블린 공격 애니메이션 트리거
+
+---
+
+[x] 플레이어 / 고블린 죽음 처리 구현 (2026.04.07)
+
+## 개요
+
+`S_Hit(newHp=0)` 수신 시 내 플레이어 사망만 처리되던 구조에서,
+원격 플레이어·고블린의 사망 애니메이션 재생 및 이후 이동 패킷 무시 기능을 추가함.
+서버 측에서는 죽은 고블린에 대해 `S_NpcMove`를 계속 브로드캐스트하던 문제도 수정함.
+
+---
+
+## 설계 결정 — 왜 EvDeath를 쓰지 않았나
+
+standalone 모드에서는 `holdEvent(eventList_, EvDeath(id))` → 이벤트 루프에서 처리 → `AnimBlender::dead_ = true` 패턴을 사용함.
+그러나 online 모드의 `Game::update()`에는 이벤트를 처리하는 루프가 없고, `clearEvents(eventList_)`로 그냥 비워버림.
+→ EvDeath를 쓸 수 없으므로, `AnimBlender` 기반 클래스에 `virtual void triggerDeath()` 가상 함수를 추가하는 방식으로 해결.
+
+---
+
+## 변경 내용
+
+### `client/animation.hpp` — AnimBlender 기반 클래스
+
+```cpp
+virtual void triggerDeath() {}  // 기본 구현은 아무것도 안 함
+```
+
+### `client/object.hpp` — AnimBlenderPlayer, AnimBlenderGoblin
+
+두 클래스에 `triggerDeath()` override 추가:
+```cpp
+void triggerDeath() override {
+    animTimeDeath_ = 0s;
+    cooldownDeath_ = 200ms;
+    dead_ = true;
+}
+```
+- `animTimeDeath_ = 0s` : 사망 애니메이션 타이머 초기화
+- `cooldownDeath_ = 200ms` : 300ms 페이드인 구간 시작 (기존 EventBus::receive와 동일 값)
+- `dead_ = true` : 사망 상태 플래그 → 이후 `update()`에서 사망 애니메이션 블렌딩 시작
+
+나머지 AnimBlender 서브클래스(Anubis, Bat 등) — 온라인 모드에서 사용되지 않으므로 변경 불필요.
+
+### `client/object.hpp` — Object 기반 클래스
+
+`isDead_` 필드 및 접근자 추가:
+```cpp
+void setDead(bool dead) {
+    isDead_ = dead;
+    if (dead && renderState_.animBlender) {
+        renderState_.animBlender->triggerDeath();
+    }
+}
+bool isDead() const { return isDead_; }
+
+// protected:
+bool isDead_ = false;
+```
+- `setDead(true)` 하나로 논리 상태(`isDead_`)와 애니메이션 트리거(`triggerDeath()`)가 동시에 처리됨
+
+### `client/online/onlineGame.cpp` — applyHit
+
+`newHp <= 0` 시 원격 플레이어·고블린에 대해 `setDead(true)` 호출:
+```cpp
+if ( auto it = idPlayerMap_.find( targetId ); it != idPlayerMap_.end() ) {
+    it->second->setHp( newHp );
+    if ( newHp <= 0 ) { it->second->setDead( true ); }
+    return;
+}
+if ( auto it = idGoblinMap_.find( targetId ); it != idGoblinMap_.end() ) {
+    it->second->setHp( newHp );
+    if ( newHp <= 0 ) { it->second->setDead( true ); }
+}
+```
+
+### `client/online/onlineGame.cpp` — movePlayer / rotatePlayer / moveGoblin
+
+죽은 오브젝트로 들어오는 in-flight 이동 패킷 무시:
+```cpp
+if (obj->isDead()) return;
+```
+각 함수의 `nullptr` 체크 직후에 추가.
+
+### `RoomServer/Room.cpp` — updateGoblinAI
+
+죽은 고블린(`hp() <= 0`)에 대한 `S_NpcMove` 브로드캐스트 생략:
+```cpp
+if (goblin.hp() > 0) {
+    broadcast(PacketManager::makeSNpcMovePacket(...));
+}
+```
+
+---
+
+## 미구현 (TODO)
+
+- 내 플레이어가 죽었을 때 사망 애니메이션 재생 (현재는 `playerDead_ = true`만 세팅, triggerDeath 미호출)
+  → `applyHit`에서 내 플레이어 분기에도 `player_->setDead(true)` 추가 필요
+- 사망 후 일정 시간이 지나면 오브젝트 페이드아웃 또는 제거

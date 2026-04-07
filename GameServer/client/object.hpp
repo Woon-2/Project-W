@@ -25,6 +25,12 @@ public:
 
 	IEventBus* eventBus() override { return &eventBus_; }
 
+	void triggerDeath() override {
+		animTimeDeath_ = 0s;
+		cooldownDeath_ = 200ms;
+		dead_ = true;
+	}
+
 private:
 	std::vector<AnimFrame> framesBlended_{};
 	EventBus eventBus_{};
@@ -69,6 +75,12 @@ public:
 	void onCalcLocal(PassKey<AnimSystem>) override;
 
 	IEventBus* eventBus() override { return &eventBus_; }
+
+	void triggerDeath() override {
+		animTimeDeath_ = 0s;
+		cooldownDeath_ = 200ms;
+		dead_ = true;
+	}
 
 private:
 	std::vector<AnimFrame> framesBlended_{};
@@ -568,6 +580,14 @@ public:
 	void setHp(i32t hp) { hp_ = hp; }
 	i32t hp() const { return hp_; }
 
+	void setDead(bool dead) {
+		isDead_ = dead;
+		if (dead && renderState_.animBlender) {
+			renderState_.animBlender->triggerDeath();
+		}
+	}
+	bool isDead() const { return isDead_; }
+
 protected:
 	PhysicState prevPhysicState_{};
 	PhysicState currPhysicState_{};
@@ -586,6 +606,7 @@ protected:
 	i32t id_{ -1 };
 
 	i32t hp_{};
+	bool isDead_ = false;
 
 private:
 };

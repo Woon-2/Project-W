@@ -44,12 +44,14 @@ void Room::updateGoblinAI(Milliseconds dt) {
 
 		auto result = goblin.update(dt, sessions_);
 
-		broadcast(PacketManager::makeSNpcMovePacket(
-			static_cast<uint16>(goblin.getId()),
-			goblin.pos().getXmf(),
-			goblin.orient().getXmf(),
-			result.velocity.getXmf()
-		));
+		if (goblin.hp() > 0) {
+			broadcast(PacketManager::makeSNpcMovePacket(
+				static_cast<uint16>(goblin.getId()),
+				goblin.pos().getXmf(),
+				goblin.orient().getXmf(),
+				result.velocity.getXmf()
+			));
+		}
 
 		if (result.hit) {
 			broadcast(PacketManager::makeSNpcAttackPacket(static_cast<uint16>(goblin.getId())));
