@@ -138,7 +138,7 @@ void Game::setupStage() {
 	pLabel->offsetY = UI::DimValue::px( -220.f );
 	pLabel->setTextHAlign(UI::TextHAlign::Center);
 	pLabel->setTextVAlign(UI::TextVAlign::Center);
-	pLabel->setText(L"U: UI영역 표시\nEnter: 마우스 포인터 캡처\nSpace: 마우스 포인터 감추기\nWASD: 이동\n좌클릭: 공격 ");
+	pLabel->setText(L"U: UI영역 표시\nEnter: 마우스 포인터 캡처\nSpace: 마우스 포인터 감추기\nWASD: 이동\nC: Cascade Debug View\n좌클릭: 공격 ");
 	pLabel->setFontSize(24.0f);
 	//pLabel->setAutoSize( true );
 	pLabel->setTextColor( 1.0f, 1.0f, 1.0f, 1.0f );
