@@ -13,14 +13,28 @@ void Room::init(const Level* levelData) {
 	playerStarts_ = levelData->playerStarts;
 	goblins_ = levelData->goblins;
 
+	for (auto& c : cubes_) {
+		c.body().setMotionType(MotionType::Static);
+		c.body().snapToCurrent();
+		physicsWorld_.registerBody(&c.body(), [&c]() { c.rebuildBodyBVH(); });
+	}
+
 	for (auto& g : goblins_) {
 		g.setId(IdPool::pop());
 		g.setSpawnPos(g.pos());
+		g.body().setMotionType(MotionType::Kinematic);
+		g.body().snapToCurrent();
+		physicsWorld_.registerBody(&g.body(), [&g]() { g.rebuildBodyBVH(); });
 	}
+
+	physicsWorld_.setGravity(mu::Vec3(0.f, 0.f, 0.f));
 }
 
 void Room::update() {
 	static constexpr Milliseconds dt = 1s / 60.f;	// 60fps
+	static constexpr Seconds dtSec   = 1s / 60.f;
+
+	physicsWorld_.step(dtSec);
 	updateGoblinAI(dt);
 
 	doTimer(dt, [this]() {
@@ -67,6 +81,9 @@ void Room::enter(GameSession* session) {
 	player->setPos(playerStarts_[sessions_.size() % playerStarts_.size()].pos());	// 새로 들어오는 플레이어는 playerStarts_에서 순서대로 위치를 받는다.
 	player->setOrient(playerStarts_[sessions_.size() % playerStarts_.size()].orient());
 	player->setScale(playerStarts_[sessions_.size() % playerStarts_.size()].scale());
+	player->body().setMotionType(MotionType::Kinematic);
+	player->body().snapToCurrent();
+	physicsWorld_.registerBody(&player->body(), [player]() { player->rebuildBodyBVH(); });
 
 	// 새로 들어오는 플레이어에 대한 snapshot 만들기
 	auto newPlayerInfo = PlayerInfo{
@@ -129,6 +146,8 @@ void Room::enter(GameSession* session) {
 }
 
 void Room::leave(GameSession* session) {
+	physicsWorld_.unregisterBody(&session->player()->body());
+
 	std::erase_if(sessions_, [session](GameSession* s) { return s == session; });
 	idSessionMap_.erase(session->id());
 

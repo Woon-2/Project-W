@@ -90,6 +90,10 @@
     <ClCompile Include="JobTimer.cpp">
       <Filter>utils\JobTimer</Filter>
     </ClCompile>
+    <ClCompile Include="broadPhase.cpp" />
+    <ClCompile Include="contactConstraint.cpp" />
+    <ClCompile Include="physicsWorld.cpp" />
+    <ClCompile Include="rigidBody.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Listener.hpp">
@@ -143,5 +147,10 @@
     <ClInclude Include="JobTimer.hpp">
       <Filter>utils\JobTimer</Filter>
     </ClInclude>
+    <ClInclude Include="broadPhase.hpp" />
+    <ClInclude Include="constraint.hpp" />
+    <ClInclude Include="contactConstraint.hpp" />
+    <ClInclude Include="physicsWorld.hpp" />
+    <ClInclude Include="rigidBody.hpp" />
   </ItemGroup>
 </Project>

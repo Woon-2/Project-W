@@ -121,12 +121,14 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
-      <SDLCheck>true</SDLCheck>
+      <SDLCheck>false</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>rspch.hpp</PrecompiledHeaderFile>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <FloatingPointModel>Fast</FloatingPointModel>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -138,12 +140,14 @@
       <WarningLevel>Level3</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>true</SDLCheck>
+      <SDLCheck>false</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>rspch.hpp</PrecompiledHeaderFile>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <FloatingPointModel>Fast</FloatingPointModel>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -163,7 +167,11 @@
     <ClCompile Include="Model.cpp" />
     <ClCompile Include="object.cpp" />
     <ClCompile Include="PacketManager.cpp" />
+    <ClCompile Include="broadPhase.cpp" />
+    <ClCompile Include="contactConstraint.cpp" />
     <ClCompile Include="physics.cpp" />
+    <ClCompile Include="physicsWorld.cpp" />
+    <ClCompile Include="rigidBody.cpp" />
     <ClCompile Include="Room.cpp" />
     <ClCompile Include="RoomManager.cpp" />
     <ClCompile Include="RoomServer.cpp" />
@@ -188,7 +196,12 @@
     <ClInclude Include="Model.hpp" />
     <ClInclude Include="object.hpp" />
     <ClInclude Include="PacketManager.hpp" />
+    <ClInclude Include="broadPhase.hpp" />
+    <ClInclude Include="constraint.hpp" />
+    <ClInclude Include="contactConstraint.hpp" />
     <ClInclude Include="physics.hpp" />
+    <ClInclude Include="physicsWorld.hpp" />
+    <ClInclude Include="rigidBody.hpp" />
     <ClInclude Include="Room.hpp" />
     <ClInclude Include="RoomManager.hpp" />
     <ClInclude Include="RoomServer.hpp" />

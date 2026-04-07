@@ -5,6 +5,7 @@
 #include "JobQueue.hpp"
 #include "GameSession.hpp"
 #include "object.hpp"
+#include "physicsWorld.hpp"
 
 class SendBuffer;
 struct Level;
@@ -66,6 +67,8 @@ private:
 	std::vector<Cube> cubes_;			// 데이터
 	std::vector<Player> playerStarts_;	// 데이터
 	std::vector<Goblin> goblins_;		// 개임 내의 몬스터
+
+	PhysicsWorld physicsWorld_;
 };
 
 #endif // room_hpp

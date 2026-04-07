@@ -58,6 +58,18 @@ CollisionResult collides(const BVH& bvh, const AABB& hitbox);
 OBB  toOBB(const AABB& aabb);
 AABB obbToAABB(const OBB& obb);
 
+// One contact point between two rigid bodies.
+// Stores warm-start accumulators that persist within a single step.
+struct ContactPoint {
+	mu::Vec3  worldPos;
+	mu::Vec3  localA;
+	mu::Vec3  localB;
+	mu::NVec3 normal;                // points from B toward A
+	float     depth         = 0.f;
+	float     accNormal     = 0.f;
+	float     accTangent[2] = {};
+};
+
 struct RayHit {
 	bool      hit;
 	float     t;
