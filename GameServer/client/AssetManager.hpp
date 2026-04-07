@@ -24,7 +24,6 @@ public:
 	const TerrainData* terrain() const { return &terrain_; }
 	const Texture* playerHpLine() const { return &playerHpLine_; }
 	const Texture* playerHpFrame() const { return &playerHpFrame_; }
-	TextImage* textPlayerHp() { return &textPlayerHp_; }
 	const SpriteAnimationClip* flameAnimation() const { return &flameAnimation_; }
 	const SpriteAnimationClip* smokeAnimation() const { return &smokeAnimation_; }
 	const Mesh*    swordSlashMesh() const { return &swordSlashMesh_; }
@@ -67,7 +66,6 @@ private:
 	TerrainData terrain_{};
 	Texture playerHpLine_{};
 	Texture playerHpFrame_{};
-	TextImage textPlayerHp_;
 	SpriteAnimationClip flameAnimation_{};
 	SpriteAnimationClip smokeAnimation_{};
 	Mesh    swordSlashMesh_{};
