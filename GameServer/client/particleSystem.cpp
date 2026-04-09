@@ -38,13 +38,13 @@ void ParticleSystem::emit(const EmitterConfig& config, int count) {
 
     for (int i = 0; i < count; ++i) {
         Particle* pSlot;
-        if (activeCount_ < kMaxParticles) {
+        if (activeCount_ < maxParticles_) {
             pSlot = &pool_[activeCount_];
             ++activeCount_;
         } else {
             // pool full: round-robin 덮어쓰기 (기존 ring-buffer 동작과 동등)
             pSlot = &pool_[overwriteCursor_];
-            overwriteCursor_ = (overwriteCursor_ + 1) % kMaxParticles;
+            overwriteCursor_ = (overwriteCursor_ + 1) % maxParticles_;
         }
         Particle& p = *pSlot;
 
@@ -75,6 +75,7 @@ void ParticleSystem::emit(const EmitterConfig& config, int count) {
         p.rotation    = randomFloat(config.startRotationMin, config.startRotationMax);
         p.additive    = config.additiveBlend;
         p.anim.init(config.pClip);
+        p.hasAnim = true;
 
         // 애니메이션 속도를 파티클 lifetime에 동기화:
         // Loop 타입 → lifetime 동안 정수 N번의 완전한 루프 사이클 재생
@@ -106,7 +107,8 @@ void ParticleSystem::startContinuous(const EmitterConfig& config) {
 }
 
 void ParticleSystem::stopContinuous() {
-    continuous_ = false;
+    continuous_    = false;
+    continuousNew_ = false;
 }
 
 void ParticleSystem::update(Seconds dt) {
@@ -117,6 +119,14 @@ void ParticleSystem::update(Seconds dt) {
         const int count = static_cast<int>(emitAccum_);
         emitAccum_ -= static_cast<float>(count);
         if (count > 0) emit(continuousConfig_, count);
+    }
+
+    // 새 path: config_ 기반 연속 방출
+    if (continuousNew_ && config_.emission.emitRate > 0.f) {
+        emitAccumNew_ += config_.emission.emitRate * dtf;
+        const int n = static_cast<int>(emitAccumNew_);
+        emitAccumNew_ -= static_cast<float>(n);
+        if (n > 0) emit(n);
     }
 
     const Milliseconds dtMs = std::chrono::duration_cast<Milliseconds>(dt);
@@ -130,16 +140,26 @@ void ParticleSystem::update(Seconds dt) {
         p.pos      += p.vel * dtf;
         p.lifetime -= dtf;
 
-        const float    t    = 1.f - p.lifetime / p.maxLifetime;
-        const float    size       = std::lerp(p.sizeBegin, p.sizeEnd, t);
+        const float    t         = 1.f - p.lifetime / p.maxLifetime;
+        const float    size      = std::lerp(p.sizeBegin, p.sizeEnd, t);
         const mu::Vec4 finalColor = p.startColor * p.colorOverLifetime.evaluate(t);
 
-        p.anim.setScale(mu::Vec2(size, size));
-        p.anim.setTint(finalColor);
-        p.anim.update(dtMs);
-        p.anim.setPos(p.pos);
+        // 기존 billboard 렌더 경로 (Phase 2에서 제거 예정)
+        if (p.hasAnim) {
+            p.anim.setScale(mu::Vec2(size, size));
+            p.anim.setTint(finalColor);
+            p.anim.update(dtMs);
+            p.anim.setPos(p.pos);
+        }
 
-        if (p.lifetime <= 0.f || p.anim.done()) {
+        // mesh 회전 누적 (hasAnim이 false인 mesh particle에만 적용)
+        if (!p.hasAnim && p.angularVelocity != 0.f)
+            p.angularAngle += p.angularVelocity * dtf;
+
+        // semantic payload 갱신 (renderer backend가 Phase 2 이후 소비)
+        updatePayload(p, t);
+
+        if (p.lifetime <= 0.f || (p.hasAnim && p.anim.done())) {
             // swap-remove: 마지막 활성 파티클을 현재 슬롯으로 이동
             if (i != activeCount_ - 1)
                 pool_[i] = std::move(pool_[activeCount_ - 1]);
@@ -152,6 +172,205 @@ void ParticleSystem::update(Seconds dt) {
 }
 
 void ParticleSystem::render(GFX& gfx) const {
-    for (int i = 0; i < activeCount_; ++i)
-        pool_[i].anim.render(gfx);
+    for (int i = 0; i < activeCount_; ++i) {
+        if (pool_[i].hasAnim)
+            pool_[i].anim.render(gfx);
+        // Mesh mode render path added in Phase 2 (IParticleRenderer::flush)
+    }
+}
+
+// ── New module-based API implementation ─────────────────────────────────────
+
+void ParticleSystem::init(const ParticleSystemConfig& config, int maxParticles) {
+    config_       = config;
+    maxParticles_ = maxParticles;
+    pool_.resize(maxParticles_);
+    activeCount_     = 0;
+    overwriteCursor_ = 0;
+    emitAccumNew_    = 0.f;
+    continuousNew_   = false;
+}
+
+void ParticleSystem::emit(int count) {
+    for (int i = 0; i < count; ++i)
+        spawnParticle();
+}
+
+void ParticleSystem::startContinuous() {
+    continuousNew_ = true;
+    emitAccumNew_  = 0.f;
+}
+
+void ParticleSystem::startContinuous(const ParticleSystemConfig& config) {
+    init(config);
+    startContinuous();
+}
+
+// ── Shape sampling ───────────────────────────────────────────────────────────
+
+mu::Vec3 ParticleSystem::sampleShapeOrigin() {
+    const ShapeModule& s = config_.shape;
+    switch (s.type) {
+    case ShapeModule::Type::Point:
+        return s.position;
+
+    case ShapeModule::Type::Edge: {
+        const float lenSq = mu::dot(s.edgeDir, s.edgeDir);
+        if (lenSq < 1e-6f) return s.position;
+        const mu::Vec3 dir = mu::Vec3(mu::normalize(s.edgeDir));
+        return s.position + dir * randomFloat(-s.edgeLength * 0.5f, s.edgeLength * 0.5f);
+    }
+
+    case ShapeModule::Type::Cone:
+        if (s.coneRadius > 0.f) {
+            // random point on base disc; disc is perpendicular to the up axis by default
+            const float angle = randomFloat(0.f, 2.f * 3.14159265f);
+            const float r     = s.coneRadius * std::sqrt(randomFloat(0.f, 1.f));
+            return s.position + mu::Vec3{ r * std::cos(angle), 0.f, r * std::sin(angle) };
+        }
+        return s.position;  // apex emit
+
+    case ShapeModule::Type::Sphere: {
+        const float theta = 2.f * 3.14159265f * randomFloat(0.f, 1.f);
+        const float phi   = std::acos(1.f - 2.f * randomFloat(0.f, 1.f));
+        const float sp    = std::sin(phi);
+        return s.position + mu::Vec3{
+            s.sphereRadius * sp * std::cos(theta),
+            s.sphereRadius * std::cos(phi),
+            s.sphereRadius * sp * std::sin(theta) };
+    }
+
+    case ShapeModule::Type::Box:
+        return s.position + mu::Vec3{
+            randomFloat(-s.boxSize.x() * 0.5f,  s.boxSize.x() * 0.5f),
+            randomFloat(-s.boxSize.y() * 0.5f,  s.boxSize.y() * 0.5f),
+            randomFloat(-s.boxSize.z() * 0.5f,  s.boxSize.z() * 0.5f) };
+    }
+    return s.position;
+}
+
+mu::Vec3 ParticleSystem::sampleShapeDirection(const mu::Vec3& origin) {
+    const ShapeModule& s = config_.shape;
+    switch (s.type) {
+    case ShapeModule::Type::Point:
+        // Point: emit along the configured direction axis with no spread
+        return s.direction;
+
+    case ShapeModule::Type::Edge:
+        // Emit upward (perpendicular to edge) along the configured direction
+        return s.direction;
+
+    case ShapeModule::Type::Cone:
+        return sampleConeDirection(mu::NVec3(s.direction), s.coneAngle, rng_);
+
+    case ShapeModule::Type::Sphere:
+    case ShapeModule::Type::Box: {
+        // Outward from shape centre
+        const mu::Vec3 outward = origin - s.position;
+        const float    len     = std::sqrt(mu::dot(outward, outward));
+        return (len > 1e-6f) ? outward * (1.f / len) : s.direction;
+    }
+    }
+    return s.direction;
+}
+
+// ── Particle spawn ───────────────────────────────────────────────────────────
+
+void ParticleSystem::spawnParticle() {
+    Particle* pSlot;
+    if (activeCount_ < maxParticles_) {
+        pSlot = &pool_[activeCount_++];
+    } else {
+        pSlot = &pool_[overwriteCursor_];
+        overwriteCursor_ = (overwriteCursor_ + 1) % maxParticles_;
+    }
+    Particle& p = *pSlot;
+
+    const mu::Vec3 origin = sampleShapeOrigin();
+    const mu::Vec3 dir    = sampleShapeDirection(origin);
+    const float    speed  = randomFloat(config_.main.speedMin, config_.main.speedMax);
+
+    p.pos         = origin;
+    p.vel         = dir * speed;
+    p.lifetime    = randomFloat(config_.main.lifetimeMin, config_.main.lifetimeMax);
+    p.maxLifetime = p.lifetime;
+    p.startColor  = config_.main.startColor;
+    p.drag        = config_.main.drag;
+    p.gravity     = config_.main.gravity *
+                    randomFloat(config_.main.gravityModifierMin, config_.main.gravityModifierMax);
+    p.rotation    = randomFloat(config_.main.startRotationMin, config_.main.startRotationMax);
+
+    if (config_.colorOverLifetime.enabled)
+        p.colorOverLifetime = config_.colorOverLifetime.gradient;
+    else
+        p.colorOverLifetime = ColorGradient::constant({ 1.f, 1.f, 1.f, 1.f });
+
+    const float sizeMult = randomFloat(config_.main.startSizeMin, config_.main.startSizeMax);
+    if (config_.sizeOverLifetime.enabled) {
+        p.sizeBegin = config_.sizeOverLifetime.sizeBegin * sizeMult;
+        p.sizeEnd   = config_.sizeOverLifetime.sizeEnd   * sizeMult;
+    } else {
+        p.sizeBegin = p.sizeEnd = sizeMult;
+    }
+
+    const bool additive = (config_.renderer.material.blendMode ==
+                           MaterialDescriptor::BlendMode::Additive);
+    p.additive = additive;
+
+    if (config_.renderer.mode == RendererModule::Mode::Billboard &&
+        config_.renderer.pClip != nullptr)
+    {
+        p.anim.init(config_.renderer.pClip);
+        p.hasAnim = true;
+        p.angularVelocity = 0.f;
+        p.angularAngle    = 0.f;
+
+        // 애니메이션 속도를 파티클 lifetime에 동기화 (기존 로직과 동일)
+        if (config_.renderer.pClip->duration.count() > 0 && p.lifetime > 0.f) {
+            const float lifetimeMs = p.lifetime * 1000.f;
+            const float durationMs = static_cast<float>(config_.renderer.pClip->duration.count());
+            float animSpeed = 1.f;
+            if (config_.renderer.pClip->type == SpriteAnimType::Once) {
+                animSpeed = durationMs / lifetimeMs;
+            } else if (config_.renderer.pClip->type == SpriteAnimType::Loop) {
+                const float cycles = std::max(1.f, std::round(lifetimeMs / durationMs));
+                animSpeed = cycles * durationMs / lifetimeMs;
+            }
+            p.anim.setSpeed(animSpeed);
+        }
+        p.anim.setAdditive(additive);
+        p.anim.setRenderOrder(config_.renderer.renderOrder);
+        p.anim.setPos(origin);
+        p.anim.setRotation(p.rotation);
+    } else {
+        // Mesh particle or billboard without clip
+        p.hasAnim         = false;
+        p.angularVelocity = randomFloat(config_.renderer.angularVelocityMin,
+                                        config_.renderer.angularVelocityMax);
+        p.angularAngle    = 0.f;
+        // baseRotation: left as default-constructed; Phase 2 will wire up
+    }
+
+    updatePayload(p, 0.f);
+}
+
+// ── Payload update ───────────────────────────────────────────────────────────
+
+void ParticleSystem::updatePayload(Particle& p, float t) const {
+    p.payload.color = p.startColor * p.colorOverLifetime.evaluate(t);
+
+    // uvFrame: Phase 3 will read the current sprite animation frame here.
+    // Until then, full UV (no sprite sheet offset applied via payload).
+    p.payload.uvFrame = { 0.f, 0.f, 1.f, 1.f };
+
+    // uv1: no source in Phase 1; zeroed
+    p.payload.uv1 = mu::Vec2(0.f, 0.f);
+
+    if (config_.customData.enabled) {
+        p.payload.custom0 = config_.customData.custom0Constant;
+        p.payload.custom1 = config_.customData.custom1Constant;
+    } else {
+        p.payload.custom0 = mu::Vec2(0.f, 0.f);
+        p.payload.custom1 = mu::Vec2(0.f, 0.f);
+    }
 }

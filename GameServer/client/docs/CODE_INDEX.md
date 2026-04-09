@@ -333,6 +333,59 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | UIPipeline | `gfx.hpp #243` |
 | TerrainPipeline | `gfx.hpp #247` |
 
+**MeshParticlePipeline:**
+
+| 파일 | 설명 |
+|------|------|
+| `meshParticlePipeline.hpp` | DrawEvent (world, pMesh, pSubMesh, pTex, tint, renderOrder), Dispatcher |
+| `meshParticlePipeline.cpp` | updateGPUDataSingleThreaded / drawSingleThreaded 구현 |
+| `meshParticle.hlsl` | PerInstanceData(world+tint), bindless texture PS |
+
+---
+
+## 8-B. 파티클 시스템 (Phase 0~1 완료)
+
+**설계 원칙:** 공통 simulation core + renderer backend 분리 (Unity Particle System 모듈 구조)
+
+| 파일 | 상태 | 설명 |
+|------|------|------|
+| `particlePayload.hpp` | **신규** | `ParticleSemanticPayload`, `ParticleGPUPayload`, `packPayload()`, `ParticleDrawData` |
+| `particleModules.hpp` | **신규** | `MainModule`, `EmissionModule`, `ShapeModule`, `ColorOverLifetimeModule`, `SizeOverLifetimeModule`, `CustomDataModule`, `MaterialDescriptor`, `RendererModule`, `ParticleSystemConfig` |
+| `particleCompat.hpp` | **신규** | `fromEmitterConfig()`, `fromMeshEmitterConfig()` — 레거시 compat 변환 |
+| `particleSystem.hpp` | 수정 | 통합 `ParticleSystem`, `EmitterConfig`(유지), `Particle`(payload/hasAnim 추가) |
+| `particleSystem.cpp` | 수정 | `init()`, `emit(int)`, `spawnParticle()`, `sampleShapeOrigin/Direction()`, `updatePayload()` 추가 |
+| `meshParticleSystem.hpp` | 유지(deprecated) | Phase 3 검증 완료 후 삭제 예정 |
+| `meshParticleSystem.cpp` | 유지(deprecated) | Phase 3 검증 완료 후 삭제 예정 |
+
+**ParticleSystem API (`particleSystem.hpp`):**
+
+| 메서드 | 설명 |
+|--------|------|
+| `init(config, maxParticles=4096)` | 모듈 config 설정 + pool 크기 결정 |
+| `emit(int count)` | init() 후 사용하는 새 emit API |
+| `emit(EmitterConfig, int)` | 레거시 API (유지) |
+| `startContinuous()` | init() 기반 연속 방출 |
+| `startContinuous(ParticleSystemConfig)` | config 설정 + 연속 방출 편의 오버로드 |
+| `startContinuous(EmitterConfig)` | 레거시 API (유지) |
+| `stopContinuous()` | 모든 연속 방출 정지 |
+
+**ShapeModule::Type 지원:**
+- `Point` — 단일 점, `direction` 방향으로 emit
+- `Edge` — 선분 위 랜덤 위치, `direction` 방향으로 emit
+- `Cone` — apex 또는 base disc에서 원뿔 내 랜덤 방향
+- `Sphere` — 구면에서 outward 방향
+- `Box` — 박스 내 랜덤 위치, 중심 outward 방향
+
+**Payload 2단계 구조:**
+- `ParticleSemanticPayload` — simulation core가 유지 (color, uvFrame, uv1, custom0, custom1)
+- `ParticleGPUPayload` — renderer backend가 `packPayload()`로 생성 (Phase 2에서 사용)
+
+**남은 TODO (Phase 1.5~4):**
+- Phase 1.5: `CustomDataModule` Curve 모드 (FloatCurve per channel)
+- Phase 2: `IParticleRenderer` / `BillboardParticleRenderer` / `MeshParticleRenderer` 구현, `MeshParticleSystem` 마이그레이션
+- Phase 3: billboard/meshParticle shader에 per-instance uv0/uv1 추가, `payload.uvFrame` → GPU 연결
+- Phase 4: `particleMaterial.hlsl` (MainTex, Emission, Flow, Dissolve, soft particles)
+
 ---
 
 ## 9. 게임 루프
