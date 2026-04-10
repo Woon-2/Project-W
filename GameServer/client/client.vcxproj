@@ -169,7 +169,6 @@
     <ClCompile Include="billboard.cpp" />
     <ClCompile Include="billboardPipeline.cpp" />
     <ClCompile Include="meshParticlePipeline.cpp" />
-    <ClCompile Include="meshParticleSystem.cpp" />
     <ClCompile Include="binaryImport.cpp" />
     <ClCompile Include="bvPipeline.cpp" />
     <ClCompile Include="camera.cpp" />
@@ -288,7 +287,6 @@
     <ClInclude Include="log.hpp" />
     <ClInclude Include="mesh.hpp" />
     <ClInclude Include="meshParticlePipeline.hpp" />
-    <ClInclude Include="meshParticleSystem.hpp" />
     <ClInclude Include="object.hpp" />
     <ClInclude Include="online\onlineGame.hpp" />
     <ClInclude Include="particleSystem.hpp" />

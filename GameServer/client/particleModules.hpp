@@ -16,12 +16,17 @@ struct MainModule {
     mu::Vec4 startColor         = { 1.f, 1.f, 1.f, 1.f };
     float    startSizeMin       = 1.f;   // per-particle size multiplier min
     float    startSizeMax       = 1.f;   // per-particle size multiplier max
-    float    startRotationMin   = 0.f;   // radians
+    float    startRotationMin   = 0.f;   // radians (billboard Z-axis)
     float    startRotationMax   = 0.f;
+    mu::Mat4x4 startRotation3D = mu::Mat4x4{};  // mesh: full 3D orientation at spawn (identity = unused)
     float    gravityModifierMin = 0.f;
     float    gravityModifierMax = 0.f;
     mu::Vec3 gravity            = { 0.f, -9.8f, 0.f };
-    float    drag               = 0.f;
+    // Lifecycle controls
+    float    duration        = 5.f;   // one cycle length in seconds; 0 = no time limit
+    bool     looping         = true;  // restart after duration elapses (ignored when duration == 0)
+    float    startDelay      = 0.f;   // seconds before first emission after startContinuous()
+    float    simulationSpeed = 1.f;   // global playback speed multiplier applied to dt
 
     enum class SimulationSpace { World, Local };
     // World: current behaviour — particles live in world space.
@@ -62,6 +67,14 @@ struct ShapeModule {
 };
 
 // ---------------------------------------------------------------------------
+// VelocityOverLifetime Module — velocity decay (drag) applied each frame.
+// ---------------------------------------------------------------------------
+struct VelocityOverLifetimeModule {
+    bool  enabled = false;
+    float drag    = 0.f;   // exponential velocity decay coefficient (1/sec)
+};
+
+// ---------------------------------------------------------------------------
 // ColorOverLifetime Module — RGBA multiplier curve over normalised lifetime.
 // ---------------------------------------------------------------------------
 struct ColorOverLifetimeModule {
@@ -76,6 +89,15 @@ struct SizeOverLifetimeModule {
     bool  enabled   = false;
     float sizeBegin = 1.f;
     float sizeEnd   = 0.f;
+};
+
+// ---------------------------------------------------------------------------
+// RotationOverLifetime Module — angular velocity (local Z axis) applied each frame.
+// ---------------------------------------------------------------------------
+struct RotationOverLifetimeModule {
+    bool  enabled            = false;
+    float angularVelocityMin = 0.f;   // rad/sec, local Z axis
+    float angularVelocityMax = 0.f;
 };
 
 // ---------------------------------------------------------------------------
@@ -137,27 +159,22 @@ struct RendererModule {
     // Mesh-specific
     const Mesh*    pMesh    = nullptr;
     const SubMesh* pSubMesh = nullptr;
-    // Angular velocity for mesh rotation-over-lifetime (backward compat with MeshEmitterConfig)
-    float angularVelocityMin = 0.f;  // rad/sec local Z
-    float angularVelocityMax = 0.f;
 
     // Material / shader binding
     MaterialDescriptor material;
-
-    // UV packing options — controls how packPayload() maps semantic fields to GPU uv0/uv1.
-    bool packCustom0InUV0zw = false;  // uv0.zw <- custom0 (instead of uvFrame.zw)
-    bool packCustom1InUV1zw = false;  // uv1.zw <- custom1
 };
 
 // ---------------------------------------------------------------------------
 // ParticleSystemConfig — top-level config composed of modules.
 // ---------------------------------------------------------------------------
 struct ParticleSystemConfig {
-    MainModule              main;
-    EmissionModule          emission;
-    ShapeModule             shape;
-    ColorOverLifetimeModule colorOverLifetime;
-    SizeOverLifetimeModule  sizeOverLifetime;
-    CustomDataModule        customData;
-    RendererModule          renderer;
+    MainModule                  main;
+    EmissionModule              emission;
+    ShapeModule                 shape;
+    VelocityOverLifetimeModule  velocityOverLifetime;
+    ColorOverLifetimeModule     colorOverLifetime;
+    SizeOverLifetimeModule      sizeOverLifetime;
+    RotationOverLifetimeModule  rotationOverLifetime;
+    CustomDataModule            customData;
+    RendererModule              renderer;
 };

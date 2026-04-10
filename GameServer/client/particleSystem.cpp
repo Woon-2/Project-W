@@ -31,140 +31,71 @@ float ParticleSystem::randomFloat(float lo, float hi) {
     return std::uniform_real_distribution<float>{lo, hi}(rng_);
 }
 
-void ParticleSystem::emit(const EmitterConfig& config, int count) {
-    if (!config.pClip || count <= 0) return;
-
-    const mu::NVec3 axis(config.direction);
-
-    for (int i = 0; i < count; ++i) {
-        Particle* pSlot;
-        if (activeCount_ < maxParticles_) {
-            pSlot = &pool_[activeCount_];
-            ++activeCount_;
-        } else {
-            // pool full: round-robin 덮어쓰기 (기존 ring-buffer 동작과 동등)
-            pSlot = &pool_[overwriteCursor_];
-            overwriteCursor_ = (overwriteCursor_ + 1) % maxParticles_;
-        }
-        Particle& p = *pSlot;
-
-        const float    speed = randomFloat(config.speedMin, config.speedMax);
-        const mu::Vec3 dir   = sampleConeDirection(axis, config.spread, rng_);
-
-        mu::Vec3 spawnPos = config.position;
-        if (config.shape == EmitterShape::Edge) {
-            const float lenSq = mu::dot(config.edgeDir, config.edgeDir);
-            if (lenSq > 1e-6f) {
-                const mu::Vec3 edgeDirNorm = mu::Vec3(mu::normalize(config.edgeDir));
-                spawnPos += edgeDirNorm * randomFloat(
-                    -config.edgeLength * 0.5f, config.edgeLength * 0.5f);
-            }
-        }
-
-        p.pos         = spawnPos;
-        p.vel         = dir * speed;
-        p.lifetime    = randomFloat(config.lifetimeMin, config.lifetimeMax);
-        p.maxLifetime = p.lifetime;
-        p.startColor        = config.startColor;
-        p.colorOverLifetime = config.colorOverLifetime;
-        const float sizeMult = randomFloat(config.sizeMultiplierMin, config.sizeMultiplierMax);
-        p.sizeBegin   = config.sizeBegin * sizeMult;
-        p.sizeEnd     = config.sizeEnd   * sizeMult;
-        p.drag        = config.drag;
-        p.gravity     = config.gravity * randomFloat(config.gravityModifierMin, config.gravityModifierMax);
-        p.rotation    = randomFloat(config.startRotationMin, config.startRotationMax);
-        p.additive    = config.additiveBlend;
-        p.anim.init(config.pClip);
-        p.hasAnim = true;
-
-        // 애니메이션 속도를 파티클 lifetime에 동기화:
-        // Loop 타입 → lifetime 동안 정수 N번의 완전한 루프 사이클 재생
-        // Once 타입 → lifetime 과 동시에 애니메이션 완료
-        if (config.pClip->duration.count() > 0 && p.lifetime > 0.f) {
-            const float lifetimeMs = p.lifetime * 1000.f;
-            const float durationMs = static_cast<float>(config.pClip->duration.count());
-            float speed = 1.f;
-            if (config.pClip->type == SpriteAnimType::Once) {
-                speed = durationMs / lifetimeMs;
-            } else if (config.pClip->type == SpriteAnimType::Loop) {
-                const float cycles = std::max(1.f, std::round(lifetimeMs / durationMs));
-                speed = cycles * durationMs / lifetimeMs;
-            }
-            p.anim.setSpeed(speed);
-        }
-
-        p.anim.setAdditive(config.additiveBlend);
-        p.anim.setRenderOrder(config.renderOrder);
-        p.anim.setPos(spawnPos);
-        p.anim.setRotation(p.rotation);
-    }
-}
-
-void ParticleSystem::startContinuous(const EmitterConfig& config) {
-    continuousConfig_ = config;
-    continuous_       = true;
-    emitAccum_        = 0.f;
-}
-
 void ParticleSystem::stopContinuous() {
-    continuous_    = false;
     continuousNew_ = false;
 }
 
 void ParticleSystem::update(Seconds dt) {
-    const float dtf = dt.count();
+    const float scaledDtf = dt.count() * config_.main.simulationSpeed;
 
-    if (continuous_ && continuousConfig_.emitRate > 0.f) {
-        emitAccum_ += continuousConfig_.emitRate * dtf;
-        const int count = static_cast<int>(emitAccum_);
-        emitAccum_ -= static_cast<float>(count);
-        if (count > 0) emit(continuousConfig_, count);
+    // Start Delay -> Emission -> Duration / Looping
+    if (continuousNew_) {
+        if (delayRemaining_ > 0.f) {
+            delayRemaining_ -= scaledDtf;
+        } else {
+            if (config_.emission.emitRate > 0.f) {
+                emitAccumNew_ += config_.emission.emitRate * scaledDtf;
+                const int n = static_cast<int>(emitAccumNew_);
+                emitAccumNew_ -= static_cast<float>(n);
+                if (n > 0) emit(n);
+            }
+
+            if (config_.main.duration > 0.f) {
+                systemTime_ += scaledDtf;
+                if (systemTime_ >= config_.main.duration) {
+                    if (config_.main.looping) {
+                        systemTime_ -= config_.main.duration;
+                    } else {
+                        continuousNew_ = false;
+                        systemTime_    = 0.f;
+                    }
+                }
+            }
+        }
     }
 
-    // 새 path: config_ 기반 연속 방출
-    if (continuousNew_ && config_.emission.emitRate > 0.f) {
-        emitAccumNew_ += config_.emission.emitRate * dtf;
-        const int n = static_cast<int>(emitAccumNew_);
-        emitAccumNew_ -= static_cast<float>(n);
-        if (n > 0) emit(n);
-    }
-
-    const Milliseconds dtMs = std::chrono::duration_cast<Milliseconds>(dt);
+    // Particle simulation — simulationSpeed 적용
+    // (legacy 파티클은 config_.main.simulationSpeed 기본값 1.0이므로 영향 없음)
+    const Milliseconds scaledDtMs = std::chrono::duration_cast<Milliseconds>(
+        std::chrono::duration<float>(scaledDtf));
 
     int i = 0;
     while (i < activeCount_) {
         Particle& p = pool_[i];
 
-        p.vel      *= std::max(0.f, 1.f - p.drag * dtf);
-        p.vel      += p.gravity * dtf;
-        p.pos      += p.vel * dtf;
-        p.lifetime -= dtf;
+        p.vel      *= std::max(0.f, 1.f - p.drag * scaledDtf);
+        p.vel      += p.gravity * scaledDtf;
+        p.pos      += p.vel * scaledDtf;
+        p.lifetime -= scaledDtf;
 
-        const float    t         = 1.f - p.lifetime / p.maxLifetime;
-        const float    size      = std::lerp(p.sizeBegin, p.sizeEnd, t);
+        const float    t          = 1.f - p.lifetime / p.maxLifetime;
+        const float    size       = std::lerp(p.sizeBegin, p.sizeEnd, t);
         const mu::Vec4 finalColor = p.startColor * p.colorOverLifetime.evaluate(t);
 
-        // 기존 billboard 렌더 경로 (Phase 2에서 제거 예정)
         if (p.hasAnim) {
             p.anim.setScale(mu::Vec2(size, size));
             p.anim.setTint(finalColor);
-            p.anim.update(dtMs);
+            p.anim.update(scaledDtMs);
             p.anim.setPos(p.pos);
         }
 
-        // mesh 회전 누적 (hasAnim이 false인 mesh particle에만 적용)
         if (!p.hasAnim && p.angularVelocity != 0.f)
-            p.angularAngle += p.angularVelocity * dtf;
-
-        // semantic payload 갱신 (renderer backend가 Phase 2 이후 소비)
-        updatePayload(p, t);
+            p.angularAngle += p.angularVelocity * scaledDtf;
 
         if (p.lifetime <= 0.f || (p.hasAnim && p.anim.done())) {
-            // swap-remove: 마지막 활성 파티클을 현재 슬롯으로 이동
             if (i != activeCount_ - 1)
                 pool_[i] = std::move(pool_[activeCount_ - 1]);
             --activeCount_;
-            // i 증가 안 함: 이동된 파티클을 다음 반복에서 처리
         } else {
             ++i;
         }
@@ -173,9 +104,31 @@ void ParticleSystem::update(Seconds dt) {
 
 void ParticleSystem::render(GFX& gfx) const {
     for (int i = 0; i < activeCount_; ++i) {
-        if (pool_[i].hasAnim)
-            pool_[i].anim.render(gfx);
-        // Mesh mode render path added in Phase 2 (IParticleRenderer::flush)
+        const Particle& p = pool_[i];
+        if (p.hasAnim) {
+            p.anim.render(gfx);
+            continue;
+        }
+        if (config_.renderer.mode  == RendererModule::Mode::Mesh &&
+            config_.renderer.pMesh && config_.renderer.pSubMesh &&
+            config_.renderer.material.mainTex)
+        {
+            const float    t    = 1.f - p.lifetime / p.maxLifetime;
+            const float    size = std::lerp(p.sizeBegin, p.sizeEnd, t);
+            const mu::Vec4 tint = p.startColor * p.colorOverLifetime.evaluate(t);
+            const auto world    = mu::scaleH(mu::Vec3{ size, size, size })
+                                * mu::rotateZH(mu::Radian{ p.angularAngle })
+                                * p.baseRotation
+                                * mu::translate(p.pos);
+            gfx.addDrawEvent(MeshParticlePipeline::DrawEvent{
+                .world       = world,
+                .pMesh       = config_.renderer.pMesh,
+                .pSubMesh    = config_.renderer.pSubMesh,
+                .pTex        = config_.renderer.material.mainTex,
+                .tint        = tint,
+                .renderOrder = config_.renderer.renderOrder,
+            });
+        }
     }
 }
 
@@ -189,6 +142,8 @@ void ParticleSystem::init(const ParticleSystemConfig& config, int maxParticles) 
     overwriteCursor_ = 0;
     emitAccumNew_    = 0.f;
     continuousNew_   = false;
+    systemTime_      = 0.f;
+    delayRemaining_  = 0.f;
 }
 
 void ParticleSystem::emit(int count) {
@@ -197,8 +152,10 @@ void ParticleSystem::emit(int count) {
 }
 
 void ParticleSystem::startContinuous() {
-    continuousNew_ = true;
-    emitAccumNew_  = 0.f;
+    continuousNew_  = true;
+    emitAccumNew_   = 0.f;
+    systemTime_     = 0.f;
+    delayRemaining_ = config_.main.startDelay;
 }
 
 void ParticleSystem::startContinuous(const ParticleSystemConfig& config) {
@@ -295,7 +252,7 @@ void ParticleSystem::spawnParticle() {
     p.lifetime    = randomFloat(config_.main.lifetimeMin, config_.main.lifetimeMax);
     p.maxLifetime = p.lifetime;
     p.startColor  = config_.main.startColor;
-    p.drag        = config_.main.drag;
+    p.drag        = config_.velocityOverLifetime.enabled ? config_.velocityOverLifetime.drag : 0.f;
     p.gravity     = config_.main.gravity *
                     randomFloat(config_.main.gravityModifierMin, config_.main.gravityModifierMax);
     p.rotation    = randomFloat(config_.main.startRotationMin, config_.main.startRotationMax);
@@ -345,32 +302,11 @@ void ParticleSystem::spawnParticle() {
     } else {
         // Mesh particle or billboard without clip
         p.hasAnim         = false;
-        p.angularVelocity = randomFloat(config_.renderer.angularVelocityMin,
-                                        config_.renderer.angularVelocityMax);
+        p.angularVelocity = config_.rotationOverLifetime.enabled
+                            ? randomFloat(config_.rotationOverLifetime.angularVelocityMin,
+                                          config_.rotationOverLifetime.angularVelocityMax)
+                            : 0.f;
         p.angularAngle    = 0.f;
-        // baseRotation: left as default-constructed; Phase 2 will wire up
-    }
-
-    updatePayload(p, 0.f);
-}
-
-// ── Payload update ───────────────────────────────────────────────────────────
-
-void ParticleSystem::updatePayload(Particle& p, float t) const {
-    p.payload.color = p.startColor * p.colorOverLifetime.evaluate(t);
-
-    // uvFrame: Phase 3 will read the current sprite animation frame here.
-    // Until then, full UV (no sprite sheet offset applied via payload).
-    p.payload.uvFrame = { 0.f, 0.f, 1.f, 1.f };
-
-    // uv1: no source in Phase 1; zeroed
-    p.payload.uv1 = mu::Vec2(0.f, 0.f);
-
-    if (config_.customData.enabled) {
-        p.payload.custom0 = config_.customData.custom0Constant;
-        p.payload.custom1 = config_.customData.custom1Constant;
-    } else {
-        p.payload.custom0 = mu::Vec2(0.f, 0.f);
-        p.payload.custom1 = mu::Vec2(0.f, 0.f);
+        p.baseRotation    = config_.main.startRotation3D;
     }
 }

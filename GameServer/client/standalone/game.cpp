@@ -189,139 +189,188 @@ void Game::setupMonsterHpBars() {
 
 void Game::setParticle()
 {
-	// 파티클 설정
-	flameEmitterConfig_.pClip = assetManager_.flameAnimation();
-	flameEmitterConfig_.position = { -6.f, 58.5f, -5.f };
-	flameEmitterConfig_.direction = { 0.f, 1.f, 0.f };
-	flameEmitterConfig_.spread = 0.0f;          // 약간의 퍼짐으로 자연스러운 불꽃
-	flameEmitterConfig_.speedMin = 0.f;           // 초기 속도 제거: 상승은 gravityModifier로 제어
-	flameEmitterConfig_.speedMax = 0.3f;          // 아주 작은 랜덤 변화만 허용
-	flameEmitterConfig_.lifetimeMin = 0.5f;
-	flameEmitterConfig_.lifetimeMax = 1.0f;
-	flameEmitterConfig_.sizeBegin = 1.0f;
-	flameEmitterConfig_.sizeEnd = 1.0f;
-	flameEmitterConfig_.sizeMultiplierMin = 0.8f;
-	flameEmitterConfig_.sizeMultiplierMax = 1.0f;
-	flameEmitterConfig_.drag = 0.8f;
-	flameEmitterConfig_.gravityModifierMin = -0.3f;         // 음수 = 위쪽 부력 
-	flameEmitterConfig_.gravityModifierMax = 0.0f;         // 파티클마다 다른 상승력
-	flameEmitterConfig_.startColor = { 1.f, 0.4f, 0.f, 1.f };
-	flameEmitterConfig_.startRotationMin = 0.f;
-	flameEmitterConfig_.startRotationMax = mu::pi * 2;
-	flameEmitterConfig_.shape = EmitterShape::Edge;
-	flameEmitterConfig_.edgeLength = 1.5f;
-	flameEmitterConfig_.emitRate = 15.0f;
-	flameEmitterConfig_.additiveBlend = true;
-	flameEmitterConfig_.renderOrder = 0;
-	flameParticleSystem_.startContinuous( flameEmitterConfig_ );
+	// ── Flame ────────────────────────────────────────────────────────────────
+	{
+		ParticleSystemConfig cfg;
+		cfg.main.lifetimeMin        = 0.5f;
+		cfg.main.lifetimeMax        = 1.0f;
+		cfg.main.speedMin           = 0.f;
+		cfg.main.speedMax           = 0.3f;
+		cfg.main.startColor         = { 1.f, 0.4f, 0.f, 1.f };
+		cfg.main.startSizeMin       = 0.8f;
+		cfg.main.startSizeMax       = 1.0f;
+		cfg.main.startRotationMin   = 0.f;
+		cfg.main.startRotationMax   = mu::pi * 2.f;
+		cfg.main.gravityModifierMin = -0.3f;
+		cfg.main.gravityModifierMax = 0.f;
+		cfg.main.gravity            = { 0.f, -9.8f, 0.f };
+		cfg.main.duration           = 0.f;   // no time limit
 
-	smokeEmitterConfig_.pClip = assetManager_.smokeAnimation();
-	smokeEmitterConfig_.position = { -6.f, 58.5f, -5.f };
-	smokeEmitterConfig_.direction = { 0.f, 1.f, 0.f };
-	smokeEmitterConfig_.spread = 0.0f;
-	smokeEmitterConfig_.speedMin = 0.5f;
-	smokeEmitterConfig_.speedMax = 2.f;
-	smokeEmitterConfig_.lifetimeMin = 0.5f;
-	smokeEmitterConfig_.lifetimeMax = 1.0f;
-	smokeEmitterConfig_.sizeBegin = 1.f;
-	smokeEmitterConfig_.sizeEnd = 1.0f;
-	smokeEmitterConfig_.sizeMultiplierMin = 1.f;
-	smokeEmitterConfig_.sizeMultiplierMax = 1.f;
-	smokeEmitterConfig_.drag = 0.8f;
-	smokeEmitterConfig_.gravity = { 0.f, -1.f, 0.f };
-	smokeEmitterConfig_.gravityModifierMin = -0.5f;        // 약간의 부력으로 천천히 상승
-	smokeEmitterConfig_.gravityModifierMax = -0.2f;
-	smokeEmitterConfig_.startColor = { 0.5f, 0.5f, 0.5f, 1.f };
-	smokeEmitterConfig_.colorOverLifetime = ColorGradient{
-		.keys = {
-			{0.0f, {1.f,  1.f,  1.f,  0.f}},   // RGB*1 (bright),  A*0 (transparent)
-			{0.5f, {0.5f, 0.5f, 0.5f, 1.f}},   // RGB*0.5 (mid),   A*1 (opaque)
-			{1.0f, {0.f,  0.f,  0.f,  0.f}},   // RGB*0 (black),   A*0 (transparent)
-		}
-	};
-	smokeEmitterConfig_.startRotationMin = 0.f;
-	smokeEmitterConfig_.startRotationMax = mu::pi * 2;
-	smokeEmitterConfig_.shape = EmitterShape::Edge;
-	smokeEmitterConfig_.edgeLength = 1.5f;
-	smokeEmitterConfig_.emitRate = 10.0f;
-	smokeEmitterConfig_.additiveBlend = false;
-	smokeEmitterConfig_.renderOrder = 1;
-	smokeParticleSystem_.startContinuous( smokeEmitterConfig_ );
+		cfg.emission.emitRate = 15.f;
 
-	// 검기 이펙트 설정 (에셋이 없으면 emit 시 아무것도 렌더되지 않음)
-	swordSlashConfig_.pMesh = assetManager_.swordSlashMesh();
-	swordSlashConfig_.pSubMesh = assetManager_.swordSlashMesh()->subMeshes.empty()
-		? nullptr
-		: &assetManager_.swordSlashMesh()->subMeshes[0];
-	swordSlashConfig_.pTex = assetManager_.swordSlashTex();
-	swordSlashConfig_.position = { 0.f, 0.f, 0.f };
-	swordSlashConfig_.rotation = mu::Mat4x4{};
-	swordSlashConfig_.sizeBegin = 5.f;   // 메시 원본 스케일에 따라 조정
-	swordSlashConfig_.sizeEnd = 5.f;
-	swordSlashConfig_.lifetimeMin = 0.2f;
-	swordSlashConfig_.lifetimeMax = 0.4f;
-	swordSlashConfig_.startColor = { 0.384167f, 0.8396226f, 0.8256719f, 1.f };
-	swordSlashConfig_.colorOverLifetime = ColorGradient{
-		.keys = {
-			{ 0.000f, { 1.000f, 1.000f, 1.000f, 1.000f } },
-			{ 0.565f, { 0.973f, 0.899f, 0.953f, 0.533f } },
-			{ 1.000f, { 0.953f, 0.822f, 0.917f, 0.000f } },
-		}
-	};
-	swordSlashConfig_.renderOrder = 2;
-	swordSlashConfig_.angularVelocityMin = mu::pi * 2.0f;  // -90deg/sec
-	swordSlashConfig_.angularVelocityMax = mu::pi * 2.0f;  //  90deg/sec
+		cfg.shape.type       = ShapeModule::Type::Edge;
+		cfg.shape.position   = { -6.f, 58.5f, -5.f };
+		cfg.shape.direction  = { 0.f, 1.f, 0.f };
+		cfg.shape.edgeLength = 1.5f;
+		cfg.shape.edgeDir    = { 1.f, 0.f, 0.f };
 
-	// 발 본 인덱스 탐색 (흙먼지 VFX용)
+		cfg.colorOverLifetime.enabled  = true;
+		cfg.colorOverLifetime.gradient = ColorGradient::constant({ 1.f, 1.f, 1.f, 1.f });
+
+		cfg.sizeOverLifetime.enabled   = true;
+		cfg.sizeOverLifetime.sizeBegin = 1.0f;
+		cfg.sizeOverLifetime.sizeEnd   = 1.0f;
+
+		cfg.renderer.mode               = RendererModule::Mode::Billboard;
+		cfg.renderer.pClip              = assetManager_.flameAnimation();
+		cfg.renderer.renderOrder        = 0;
+		cfg.renderer.material.blendMode = MaterialDescriptor::BlendMode::Additive;
+
+		flameParticleSystem_.startContinuous(cfg);
+	}
+
+	// ── Smoke ────────────────────────────────────────────────────────────────
+	{
+		ParticleSystemConfig cfg;
+		cfg.main.lifetimeMin        = 0.5f;
+		cfg.main.lifetimeMax        = 1.0f;
+		cfg.main.speedMin           = 0.5f;
+		cfg.main.speedMax           = 2.f;
+		cfg.main.startColor         = { 0.5f, 0.5f, 0.5f, 1.f };
+		cfg.main.startSizeMin       = 1.f;
+		cfg.main.startSizeMax       = 1.f;
+		cfg.main.startRotationMin   = 0.f;
+		cfg.main.startRotationMax   = mu::pi * 2.f;
+		cfg.main.gravityModifierMin = -0.5f;
+		cfg.main.gravityModifierMax = -0.2f;
+		cfg.main.gravity            = { 0.f, -1.f, 0.f };
+		cfg.main.duration           = 0.f;
+
+		cfg.emission.emitRate = 10.f;
+
+		cfg.shape.type       = ShapeModule::Type::Edge;
+		cfg.shape.position   = { -6.f, 58.5f, -5.f };
+		cfg.shape.direction  = { 0.f, 1.f, 0.f };
+		cfg.shape.edgeLength = 1.5f;
+		cfg.shape.edgeDir    = { 1.f, 0.f, 0.f };
+
+		cfg.colorOverLifetime.enabled  = true;
+		cfg.colorOverLifetime.gradient = ColorGradient{
+			.keys = {
+				{ 0.0f, { 1.f,  1.f,  1.f,  0.f } },
+				{ 0.5f, { 0.5f, 0.5f, 0.5f, 1.f } },
+				{ 1.0f, { 0.f,  0.f,  0.f,  0.f } },
+			}
+		};
+
+		cfg.sizeOverLifetime.enabled   = true;
+		cfg.sizeOverLifetime.sizeBegin = 1.f;
+		cfg.sizeOverLifetime.sizeEnd   = 1.f;
+
+		cfg.renderer.mode               = RendererModule::Mode::Billboard;
+		cfg.renderer.pClip              = assetManager_.smokeAnimation();
+		cfg.renderer.renderOrder        = 1;
+		cfg.renderer.material.blendMode = MaterialDescriptor::BlendMode::Alpha;
+
+		smokeParticleSystem_.startContinuous(cfg);
+	}
+
+	// ── Sword Slash (mesh particle, manual emit) ──────────────────────────────
+	{
+		ParticleSystemConfig cfg;
+		cfg.main.lifetimeMin  = 0.2f;
+		cfg.main.lifetimeMax  = 0.4f;
+		cfg.main.speedMin     = 0.f;
+		cfg.main.speedMax     = 0.f;
+		cfg.main.startColor   = { 0.384167f, 0.8396226f, 0.8256719f, 1.f };
+		cfg.main.startSizeMin = 5.f;
+		cfg.main.startSizeMax = 5.f;
+
+		cfg.shape.type = ShapeModule::Type::Point;
+
+		cfg.colorOverLifetime.enabled  = true;
+		cfg.colorOverLifetime.gradient = ColorGradient{
+			.keys = {
+				{ 0.000f, { 1.000f, 1.000f, 1.000f, 1.000f } },
+				{ 0.565f, { 0.973f, 0.899f, 0.953f, 0.533f } },
+				{ 1.000f, { 0.953f, 0.822f, 0.917f, 0.000f } },
+			}
+		};
+
+		cfg.sizeOverLifetime.enabled   = true;
+		cfg.sizeOverLifetime.sizeBegin = 1.f;
+		cfg.sizeOverLifetime.sizeEnd   = 1.f;
+
+		cfg.renderer.mode               = RendererModule::Mode::Mesh;
+		cfg.renderer.pMesh              = assetManager_.swordSlashMesh();
+		cfg.renderer.pSubMesh           = assetManager_.swordSlashMesh()->subMeshes.empty()
+		                                  ? nullptr
+		                                  : &assetManager_.swordSlashMesh()->subMeshes[0];
+		cfg.renderer.material.mainTex   = assetManager_.swordSlashTex();
+		cfg.renderer.renderOrder        = 2;
+		cfg.rotationOverLifetime.enabled            = true;
+		cfg.rotationOverLifetime.angularVelocityMin = mu::pi * 2.f;
+		cfg.rotationOverLifetime.angularVelocityMax = mu::pi * 2.f;
+
+		swordSlashSystem_.init(cfg);
+	}
+
+	// ── 발 본 인덱스 탐색 (흙먼지 VFX용) ────────────────────────────────────
 	const auto& playerSkeleton = player_->model()->skeleton;
 	if ( playerSkeleton.bones ) {
 		for ( const auto& bone : *playerSkeleton.bones ) {
-			if ( bone.name == "foot_l" ) {
-				footBoneIdxLeft_ = bone.boneIdx;
-			}
-			else if ( bone.name == "foot_r" ) {
-				footBoneIdxRight_ = bone.boneIdx;
-			}
+			if ( bone.name == "foot_l" )       footBoneIdxLeft_  = bone.boneIdx;
+			else if ( bone.name == "foot_r" )  footBoneIdxRight_ = bone.boneIdx;
 		}
 	}
 	if ( footBoneIdxLeft_ < 0 || footBoneIdxRight_ < 0 ) {
 		gSharedLog << "[Dust VFX] Warning: foot bones not found. Dumping all bone names:\n";
 		if ( playerSkeleton.bones ) {
-			for ( const auto& bone : *playerSkeleton.bones ) {
+			for ( const auto& bone : *playerSkeleton.bones )
 				gSharedLog << "  bone[" << bone.boneIdx << "] = \"" << bone.name << "\"\n";
-			}
 		}
 	}
 
-	// 흙먼지 VFX config (smokeAnimation 재활용, 갈색 tint)
-	dustEmitterConfig_.pClip = assetManager_.smokeAnimation();
-	dustEmitterConfig_.direction = { 0.f, 1.f, 0.f };
-	dustEmitterConfig_.spread = 1.2f;
-	dustEmitterConfig_.speedMin = 0.3f;
-	dustEmitterConfig_.speedMax = 0.8f;
-	dustEmitterConfig_.lifetimeMin = 0.3f;
-	dustEmitterConfig_.lifetimeMax = 0.6f;
-	dustEmitterConfig_.sizeBegin = 0.3f;
-	dustEmitterConfig_.sizeEnd = 0.8f;
-	dustEmitterConfig_.sizeMultiplierMin = 0.8f;
-	dustEmitterConfig_.sizeMultiplierMax = 1.2f;
-	dustEmitterConfig_.drag = 2.0f;
-	dustEmitterConfig_.gravity = { 0.f, -9.8f, 0.f };
-	dustEmitterConfig_.gravityModifierMin = 0.0f;
-	dustEmitterConfig_.gravityModifierMax = 0.05f;
-	dustEmitterConfig_.startColor = { 0.55f, 0.4f, 0.25f, 0.8f };
-	dustEmitterConfig_.colorOverLifetime = ColorGradient{
-		.keys = {
-			{ 0.0f, { 1.f, 1.f, 1.f, 0.f } },
-			{ 0.2f, { 1.f, 1.f, 1.f, 1.f } },
-			{ 1.0f, { 0.7f, 0.7f, 0.7f, 0.f } },
-		}
-	};
-	dustEmitterConfig_.startRotationMin = 0.f;
-	dustEmitterConfig_.startRotationMax = mu::pi * 2;
-	dustEmitterConfig_.shape = EmitterShape::Point;
-	dustEmitterConfig_.additiveBlend = false;
-	dustEmitterConfig_.renderOrder = 1;
+	// ── Dust (foot impact VFX) ────────────────────────────────────────────────
+	{
+		ParticleSystemConfig cfg;
+		cfg.main.lifetimeMin        = 0.3f;
+		cfg.main.lifetimeMax        = 0.6f;
+		cfg.main.speedMin           = 0.3f;
+		cfg.main.speedMax           = 0.8f;
+		cfg.main.startColor         = { 0.55f, 0.4f, 0.25f, 0.8f };
+		cfg.main.startSizeMin       = 0.8f;
+		cfg.main.startSizeMax       = 1.2f;
+		cfg.main.startRotationMin   = 0.f;
+		cfg.main.startRotationMax   = mu::pi * 2.f;
+		cfg.main.gravityModifierMin = 0.f;
+		cfg.main.gravityModifierMax = 0.05f;
+		cfg.main.gravity            = { 0.f, -9.8f, 0.f };
+
+		cfg.shape.type      = ShapeModule::Type::Cone;
+		cfg.shape.coneAngle = 1.2f;
+		cfg.shape.direction = { 0.f, 1.f, 0.f };
+
+		cfg.colorOverLifetime.enabled  = true;
+		cfg.colorOverLifetime.gradient = ColorGradient{
+			.keys = {
+				{ 0.0f, { 1.f, 1.f, 1.f, 0.f } },
+				{ 0.2f, { 1.f, 1.f, 1.f, 1.f } },
+				{ 1.0f, { 0.7f, 0.7f, 0.7f, 0.f } },
+			}
+		};
+
+		cfg.sizeOverLifetime.enabled   = true;
+		cfg.sizeOverLifetime.sizeBegin = 0.3f;
+		cfg.sizeOverLifetime.sizeEnd   = 0.8f;
+
+		cfg.renderer.mode               = RendererModule::Mode::Billboard;
+		cfg.renderer.pClip              = assetManager_.smokeAnimation();
+		cfg.renderer.renderOrder        = 1;
+		cfg.renderer.material.blendMode = MaterialDescriptor::BlendMode::Alpha;
+
+		dustParticleSystem_.init(cfg);
+	}
 }
 
 void Game::importNode(std::ifstream& ifs) {
@@ -844,12 +893,12 @@ void Game::update(Milliseconds deltaTime) {
 			};
 
 			if (crossedPhase(kLeftFootContact)) {
-				dustEmitterConfig_.position = getBoneWorldPos(footBoneIdxLeft_);
-				dustParticleSystem_.emit(dustEmitterConfig_, 4);
+				dustParticleSystem_.config().shape.position = getBoneWorldPos(footBoneIdxLeft_);
+				dustParticleSystem_.emit(4);
 			}
 			if (crossedPhase(kRightFootContact)) {
-				dustEmitterConfig_.position = getBoneWorldPos(footBoneIdxRight_);
-				dustParticleSystem_.emit(dustEmitterConfig_, 4);
+				dustParticleSystem_.config().shape.position = getBoneWorldPos(footBoneIdxRight_);
+				dustParticleSystem_.emit(4);
 			}
 
 			prevAnimTimeRun_ = currTime;
@@ -1059,12 +1108,12 @@ void Game::processInput(Milliseconds deltaTime) {
 		const auto slashPos = player_->renderState().pos
 		                    + player_->forward() * 1.f
 		                    + mu::Vec3(0.f, 1.0f, 0.f);
-		swordSlashConfig_.position = slashPos;
-		swordSlashConfig_.rotation = mu::Mat4x4(player_->orient())
-		                           * mu::rotateXH(mu::Degree{ 80.f })
-		                           * mu::rotateYH(mu::Degree{ 180.f })
-		                           * mu::rotateZH(mu::Degree{ 180.f });
-		swordSlashSystem_.emit(swordSlashConfig_, 1);
+		swordSlashSystem_.config().shape.position       = slashPos;
+		swordSlashSystem_.config().main.startRotation3D = mu::Mat4x4(player_->orient())
+		                                                * mu::rotateXH(mu::Degree{ 80.f })
+		                                                * mu::rotateYH(mu::Degree{ 180.f })
+		                                                * mu::rotateZH(mu::Degree{ 180.f });
+		swordSlashSystem_.emit(1);
 	}
 
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때
@@ -1151,12 +1200,12 @@ void Game::processInput(Milliseconds deltaTime) {
 		const auto slashPos = player_->renderState().pos
 			+ player_->forward() * 1.f
 			+ mu::Vec3( 0.f, 1.0f, 0.f );
-		swordSlashConfig_.position = slashPos;
-		swordSlashConfig_.rotation = mu::Mat4x4( player_->orient() )
+		swordSlashSystem_.config().shape.position       = slashPos;
+		swordSlashSystem_.config().main.startRotation3D = mu::Mat4x4( player_->orient() )
 			* mu::rotateXH( mu::Degree{ 80.f } )
 			* mu::rotateYH( mu::Degree{ 180.f } )
 			* mu::rotateZH( mu::Degree{ 180.f } );
-		swordSlashSystem_.emit( swordSlashConfig_, 1 );
+		swordSlashSystem_.emit(1);
 	}
 
 	// Space 키를 누르면 커서 보이기 플래그를 활성화/비활성화한다.

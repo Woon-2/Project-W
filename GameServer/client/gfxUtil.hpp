@@ -430,7 +430,7 @@ struct ColorKey {
 };
 
 // 파티클 수명 [0, 1] 구간에서 평가되는 piecewise-linear RGBA 그래디언트.
-// EmitterConfig::startColor에 곱해지는 multiplier 커브로 동작한다:
+// MainModule::startColor에 곱해지는 multiplier 커브로 동작한다:
 //   finalColor(t) = startColor * colorOverLifetime.evaluate(t)  // RGBA component-wise
 // keys가 비어있으면 {1,1,1,1}을 반환하여 startColor를 그대로 유지한다.
 struct ColorGradient {

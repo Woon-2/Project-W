@@ -20,7 +20,6 @@
 #include "../crosshair.hpp"
 #include "../debugBVView.hpp"
 #include "../particleSystem.hpp"
-#include "../meshParticleSystem.hpp"
 #include "../ui/UIManager.hpp"
 #include "../ui/widgets/ProgressBar.hpp"
 
@@ -134,14 +133,8 @@ private:
 
 	ParticleSystem flameParticleSystem_{};
 	ParticleSystem smokeParticleSystem_{};
-	EmitterConfig flameEmitterConfig_{};
-	EmitterConfig smokeEmitterConfig_{};
-
-	MeshParticleSystem  swordSlashSystem_{};
-	MeshEmitterConfig   swordSlashConfig_{};
-
+	ParticleSystem swordSlashSystem_{};
 	ParticleSystem dustParticleSystem_{};
-	EmitterConfig  dustEmitterConfig_{};
 	int            footBoneIdxLeft_  = -1;
 	int            footBoneIdxRight_ = -1;
 	Seconds        prevAnimTimeRun_  = 0s;

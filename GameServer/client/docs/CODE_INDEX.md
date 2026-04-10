@@ -343,31 +343,33 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 ---
 
-## 8-B. 파티클 시스템 (Phase 0~1 완료)
+## 8-B. 파티클 시스템
 
-**설계 원칙:** 공통 simulation core + renderer backend 분리 (Unity Particle System 모듈 구조)
+**설계 원칙:** Unity Particle System 모듈 구조 — 공통 simulation core, `RendererModule.mode`로 렌더 백엔드 선택
 
-| 파일 | 상태 | 설명 |
-|------|------|------|
-| `particlePayload.hpp` | **신규** | `ParticleSemanticPayload`, `ParticleGPUPayload`, `packPayload()`, `ParticleDrawData` |
-| `particleModules.hpp` | **신규** | `MainModule`, `EmissionModule`, `ShapeModule`, `ColorOverLifetimeModule`, `SizeOverLifetimeModule`, `CustomDataModule`, `MaterialDescriptor`, `RendererModule`, `ParticleSystemConfig` |
-| `particleCompat.hpp` | **신규** | `fromEmitterConfig()`, `fromMeshEmitterConfig()` — 레거시 compat 변환 |
-| `particleSystem.hpp` | 수정 | 통합 `ParticleSystem`, `EmitterConfig`(유지), `Particle`(payload/hasAnim 추가) |
-| `particleSystem.cpp` | 수정 | `init()`, `emit(int)`, `spawnParticle()`, `sampleShapeOrigin/Direction()`, `updatePayload()` 추가 |
-| `meshParticleSystem.hpp` | 유지(deprecated) | Phase 3 검증 완료 후 삭제 예정 |
-| `meshParticleSystem.cpp` | 유지(deprecated) | Phase 3 검증 완료 후 삭제 예정 |
+| 파일 | 설명 |
+|------|------|
+| `particleModules.hpp` | `MainModule`, `EmissionModule`, `ShapeModule`, `VelocityOverLifetimeModule`, `ColorOverLifetimeModule`, `SizeOverLifetimeModule`, `RotationOverLifetimeModule`, `CustomDataModule`, `MaterialDescriptor`, `RendererModule`, `ParticleSystemConfig` |
+| `particleSystem.hpp` | `ParticleSystem`, `Particle` |
+| `particleSystem.cpp` | `init()`, `emit()`, `startContinuous()`, `spawnParticle()`, `sampleShapeOrigin/Direction()`, `update()`, `render()` |
 
 **ParticleSystem API (`particleSystem.hpp`):**
 
 | 메서드 | 설명 |
 |--------|------|
 | `init(config, maxParticles=4096)` | 모듈 config 설정 + pool 크기 결정 |
-| `emit(int count)` | init() 후 사용하는 새 emit API |
-| `emit(EmitterConfig, int)` | 레거시 API (유지) |
-| `startContinuous()` | init() 기반 연속 방출 |
+| `emit(int count)` | init() 후 수동 방출 |
+| `config()` | 설정 참조 반환 — emit 전 shape.position, main.startRotation3D 등 변경에 사용 |
+| `startContinuous()` | init() 기반 연속 방출 시작 |
 | `startContinuous(ParticleSystemConfig)` | config 설정 + 연속 방출 편의 오버로드 |
-| `startContinuous(EmitterConfig)` | 레거시 API (유지) |
-| `stopContinuous()` | 모든 연속 방출 정지 |
+| `stopContinuous()` | 연속 방출 정지 |
+
+**MainModule 주요 필드:**
+- `duration` — 한 사이클 길이(초); 0 = 시간 제한 없음
+- `looping` — duration 후 재시작 여부
+- `startDelay` — 첫 방출 전 대기 시간
+- `simulationSpeed` — 전역 재생 속도 배율
+- `startRotation3D` — mesh 파티클 초기 3D 방향(`mu::Mat4x4`); emit 전 `config().main.startRotation3D`로 설정
 
 **ShapeModule::Type 지원:**
 - `Point` — 단일 점, `direction` 방향으로 emit
@@ -376,15 +378,9 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 - `Sphere` — 구면에서 outward 방향
 - `Box` — 박스 내 랜덤 위치, 중심 outward 방향
 
-**Payload 2단계 구조:**
-- `ParticleSemanticPayload` — simulation core가 유지 (color, uvFrame, uv1, custom0, custom1)
-- `ParticleGPUPayload` — renderer backend가 `packPayload()`로 생성 (Phase 2에서 사용)
-
-**남은 TODO (Phase 1.5~4):**
-- Phase 1.5: `CustomDataModule` Curve 모드 (FloatCurve per channel)
-- Phase 2: `IParticleRenderer` / `BillboardParticleRenderer` / `MeshParticleRenderer` 구현, `MeshParticleSystem` 마이그레이션
-- Phase 3: billboard/meshParticle shader에 per-instance uv0/uv1 추가, `payload.uvFrame` → GPU 연결
-- Phase 4: `particleMaterial.hlsl` (MainTex, Emission, Flow, Dissolve, soft particles)
+**RendererModule::Mode:**
+- `Billboard` — `SpriteAnimationClip` 기반 스프라이트 애니메이션 (`p.anim.render()`)
+- `Mesh` — `MeshParticlePipeline::DrawEvent` 직접 제출 (angularAngle + startRotation3D + translate)
 
 ---
 
