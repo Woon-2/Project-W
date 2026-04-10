@@ -349,7 +349,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 | 파일 | 설명 |
 |------|------|
-| `particleModules.hpp` | `MainModule`, `EmissionModule`, `ShapeModule`, `VelocityOverLifetimeModule`, `ColorOverLifetimeModule`, `SizeOverLifetimeModule`, `RotationOverLifetimeModule`, `CustomDataModule`, `MaterialDescriptor`, `RendererModule`, `ParticleSystemConfig` |
+| `particleModules.hpp` | `MainModule`, `EmissionModule`, `ShapeModule`, `VelocityOverLifetimeModule`, `ColorOverLifetimeModule`, `SizeOverLifetimeModule`, `RotationOverLifetimeModule`, `CustomDataModule`, `Material`, `RendererModule`, `TextureSheetAnimationModule`, `ParticleSystemConfig` |
 | `particleSystem.hpp` | `ParticleSystem`, `Particle` |
 | `particleSystem.cpp` | `init()`, `emit()`, `startContinuous()`, `spawnParticle()`, `sampleShapeOrigin/Direction()`, `update()`, `render()` |
 
@@ -379,8 +379,26 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 - `Box` — 박스 내 랜덤 위치, 중심 outward 방향
 
 **RendererModule::Mode:**
-- `Billboard` — `SpriteAnimationClip` 기반 스프라이트 애니메이션 (`p.anim.render()`)
+- `Billboard` — `material.mainTex`가 있으면 항상 `BillboardPipeline::DrawEvent` 제출
+  - `TextureSheetAnimationModule.enabled = true` → 그리드 기반 UV 프레임 계산
+  - `TextureSheetAnimationModule.enabled = false` → 전체 텍스처 (uvOffset=0, uvScale=1)
 - `Mesh` — `MeshParticlePipeline::DrawEvent` 직접 제출 (angularAngle + startRotation3D + translate)
+
+**Material** (`particleModules.hpp`):
+- `shader` — 렌더링 알고리즘 / PSO 변형 힌트
+  - `Unlit` — 알파 블렌드 (기본)
+  - `UnlitAdditive` — 가산 혼합
+- `mainTex` — 메인 텍스처 (Billboard 렌더링 활성화 조건이기도 함)
+- `emissionTex / flowTex / dissolveTex` — Phase 4 예약
+- `softParticles` — 깊이 페이드 (Phase 4)
+
+**TextureSheetAnimationModule** (`particleModules.hpp`):
+- `enabled` — 활성화 시 Billboard UV를 그리드 기반 프레임으로 교체 (비활성 시 전체 텍스처)
+- `tilesX / tilesY` — 스프라이트 시트 분할 수
+- `animation` — `WholeSheet`(전체 시트 순회) / `SingleRow`(한 행만, RowMode 미구현)
+- `timeMode` — `Lifetime`만 구현 (Speed/FPS 미구현)
+- `cycles` — 수명 동안 반복 횟수 (기본 1)
+- `startFrame` — 시작 프레임 오프셋 (기본 0)
 
 ---
 

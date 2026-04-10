@@ -94,24 +94,20 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 		.pTexHashMap = &texHashMap_,
 		.pDest       = &terrain_
 	} );
-	gfx.addRequestSpritesLoad( RequestSpriteAnimLoad{
-		.sheetPath  = "../resources/Sprites/Flame.dds",
-		.rows       = 3,
-		.cols       = 3,
-		.frameCount = 9,
-		.type       = SpriteAnimType::Loop,
-		.frameTime  = 80ms,
-		.pDest      = &flameAnimation_
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name           = "FlameTex",
+		.texturePath    = "../resources/Sprites/Flame.dds",
+		.pDest          = &flameTex_,
+		.pTexHashMap    = &texHashMap_,
+		.needsUploadInfo = false
 	} );
 
-	gfx.addRequestSpritesLoad( RequestSpriteAnimLoad{
-		.sheetPath  = "../resources/Sprites/A_Smoke_2.dds",
-		.rows       = 3,
-		.cols       = 3,
-		.frameCount = 9,
-		.type       = SpriteAnimType::Loop,
-		.frameTime  = 80ms,
-		.pDest      = &smokeAnimation_
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name           = "SmokeTex",
+		.texturePath    = "../resources/Sprites/A_Smoke_2.dds",
+		.pDest          = &smokeTex_,
+		.pTexHashMap    = &texHashMap_,
+		.needsUploadInfo = false
 	} );
 
 	gfx.addRequestMeshBinLoad( RequestMeshBinLoad{

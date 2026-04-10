@@ -24,8 +24,8 @@ public:
 	const TerrainData* terrain() const { return &terrain_; }
 	const Texture* playerHpLine() const { return &playerHpLine_; }
 	const Texture* playerHpFrame() const { return &playerHpFrame_; }
-	const SpriteAnimationClip* flameAnimation() const { return &flameAnimation_; }
-	const SpriteAnimationClip* smokeAnimation() const { return &smokeAnimation_; }
+	const Texture* flameTex() const { return &flameTex_; }
+	const Texture* smokeTex() const { return &smokeTex_; }
 	const Mesh*    swordSlashMesh() const { return &swordSlashMesh_; }
 	const Texture* swordSlashTex()  const { return &swordSlashTex_; }
 	const std::vector<std::shared_ptr<AnimClip>>& playerAnimations() const { return playerAnimations_; }
@@ -66,8 +66,8 @@ private:
 	TerrainData terrain_{};
 	Texture playerHpLine_{};
 	Texture playerHpFrame_{};
-	SpriteAnimationClip flameAnimation_{};
-	SpriteAnimationClip smokeAnimation_{};
+	Texture flameTex_{};
+	Texture smokeTex_{};
 	Mesh    swordSlashMesh_{};
 	Texture swordSlashTex_{};
 };

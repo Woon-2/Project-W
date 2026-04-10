@@ -191,7 +191,7 @@ void Game::setParticle()
 {
 	// ── Flame ────────────────────────────────────────────────────────────────
 	{
-		ParticleSystemConfig cfg;
+		ps::ParticleSystemConfig cfg;
 		cfg.main.lifetimeMin        = 0.5f;
 		cfg.main.lifetimeMax        = 1.0f;
 		cfg.main.speedMin           = 0.f;
@@ -208,7 +208,7 @@ void Game::setParticle()
 
 		cfg.emission.emitRate = 15.f;
 
-		cfg.shape.type       = ShapeModule::Type::Edge;
+		cfg.shape.type       = ps::ShapeModule::Type::Edge;
 		cfg.shape.position   = { -6.f, 58.5f, -5.f };
 		cfg.shape.direction  = { 0.f, 1.f, 0.f };
 		cfg.shape.edgeLength = 1.5f;
@@ -221,17 +221,22 @@ void Game::setParticle()
 		cfg.sizeOverLifetime.sizeBegin = 1.0f;
 		cfg.sizeOverLifetime.sizeEnd   = 1.0f;
 
-		cfg.renderer.mode               = RendererModule::Mode::Billboard;
-		cfg.renderer.pClip              = assetManager_.flameAnimation();
+		cfg.renderer.mode               = ps::RendererModule::Mode::Billboard;
 		cfg.renderer.renderOrder        = 0;
-		cfg.renderer.material.blendMode = MaterialDescriptor::BlendMode::Additive;
+		cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.flameTex(), .additive = true };
+
+		cfg.textureSheetAnimation.enabled   = true;
+		cfg.textureSheetAnimation.tilesX    = 3;
+		cfg.textureSheetAnimation.tilesY    = 3;
+		cfg.textureSheetAnimation.animation = ps::TextureSheetAnimationModule::Animation::WholeSheet;
+		cfg.textureSheetAnimation.cycles    = 1.f;
 
 		flameParticleSystem_.startContinuous(cfg);
 	}
 
 	// ── Smoke ────────────────────────────────────────────────────────────────
 	{
-		ParticleSystemConfig cfg;
+		ps::ParticleSystemConfig cfg;
 		cfg.main.lifetimeMin        = 0.5f;
 		cfg.main.lifetimeMax        = 1.0f;
 		cfg.main.speedMin           = 0.5f;
@@ -248,7 +253,7 @@ void Game::setParticle()
 
 		cfg.emission.emitRate = 10.f;
 
-		cfg.shape.type       = ShapeModule::Type::Edge;
+		cfg.shape.type       = ps::ShapeModule::Type::Edge;
 		cfg.shape.position   = { -6.f, 58.5f, -5.f };
 		cfg.shape.direction  = { 0.f, 1.f, 0.f };
 		cfg.shape.edgeLength = 1.5f;
@@ -267,17 +272,22 @@ void Game::setParticle()
 		cfg.sizeOverLifetime.sizeBegin = 1.f;
 		cfg.sizeOverLifetime.sizeEnd   = 1.f;
 
-		cfg.renderer.mode               = RendererModule::Mode::Billboard;
-		cfg.renderer.pClip              = assetManager_.smokeAnimation();
+		cfg.renderer.mode               = ps::RendererModule::Mode::Billboard;
 		cfg.renderer.renderOrder        = 1;
-		cfg.renderer.material.blendMode = MaterialDescriptor::BlendMode::Alpha;
+		cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.smokeTex() };
+
+		cfg.textureSheetAnimation.enabled   = true;
+		cfg.textureSheetAnimation.tilesX    = 3;
+		cfg.textureSheetAnimation.tilesY    = 3;
+		cfg.textureSheetAnimation.animation = ps::TextureSheetAnimationModule::Animation::WholeSheet;
+		cfg.textureSheetAnimation.cycles    = 1.f;
 
 		smokeParticleSystem_.startContinuous(cfg);
 	}
 
 	// ── Sword Slash (mesh particle, manual emit) ──────────────────────────────
 	{
-		ParticleSystemConfig cfg;
+		ps::ParticleSystemConfig cfg;
 		cfg.main.lifetimeMin  = 0.2f;
 		cfg.main.lifetimeMax  = 0.4f;
 		cfg.main.speedMin     = 0.f;
@@ -286,7 +296,7 @@ void Game::setParticle()
 		cfg.main.startSizeMin = 5.f;
 		cfg.main.startSizeMax = 5.f;
 
-		cfg.shape.type = ShapeModule::Type::Point;
+		cfg.shape.type = ps::ShapeModule::Type::Point;
 
 		cfg.colorOverLifetime.enabled  = true;
 		cfg.colorOverLifetime.gradient = ColorGradient{
@@ -301,12 +311,12 @@ void Game::setParticle()
 		cfg.sizeOverLifetime.sizeBegin = 1.f;
 		cfg.sizeOverLifetime.sizeEnd   = 1.f;
 
-		cfg.renderer.mode               = RendererModule::Mode::Mesh;
+		cfg.renderer.mode               = ps::RendererModule::Mode::Mesh;
 		cfg.renderer.pMesh              = assetManager_.swordSlashMesh();
 		cfg.renderer.pSubMesh           = assetManager_.swordSlashMesh()->subMeshes.empty()
 		                                  ? nullptr
 		                                  : &assetManager_.swordSlashMesh()->subMeshes[0];
-		cfg.renderer.material.mainTex   = assetManager_.swordSlashTex();
+		cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.swordSlashTex() };
 		cfg.renderer.renderOrder        = 2;
 		cfg.rotationOverLifetime.enabled            = true;
 		cfg.rotationOverLifetime.angularVelocityMin = mu::pi * 2.f;
@@ -333,7 +343,7 @@ void Game::setParticle()
 
 	// ── Dust (foot impact VFX) ────────────────────────────────────────────────
 	{
-		ParticleSystemConfig cfg;
+		ps::ParticleSystemConfig cfg;
 		cfg.main.lifetimeMin        = 0.3f;
 		cfg.main.lifetimeMax        = 0.6f;
 		cfg.main.speedMin           = 0.3f;
@@ -347,7 +357,7 @@ void Game::setParticle()
 		cfg.main.gravityModifierMax = 0.05f;
 		cfg.main.gravity            = { 0.f, -9.8f, 0.f };
 
-		cfg.shape.type      = ShapeModule::Type::Cone;
+		cfg.shape.type      = ps::ShapeModule::Type::Cone;
 		cfg.shape.coneAngle = 1.2f;
 		cfg.shape.direction = { 0.f, 1.f, 0.f };
 
@@ -364,10 +374,15 @@ void Game::setParticle()
 		cfg.sizeOverLifetime.sizeBegin = 0.3f;
 		cfg.sizeOverLifetime.sizeEnd   = 0.8f;
 
-		cfg.renderer.mode               = RendererModule::Mode::Billboard;
-		cfg.renderer.pClip              = assetManager_.smokeAnimation();
+		cfg.renderer.mode               = ps::RendererModule::Mode::Billboard;
 		cfg.renderer.renderOrder        = 1;
-		cfg.renderer.material.blendMode = MaterialDescriptor::BlendMode::Alpha;
+		cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.smokeTex() };
+
+		cfg.textureSheetAnimation.enabled   = true;
+		cfg.textureSheetAnimation.tilesX    = 3;
+		cfg.textureSheetAnimation.tilesY    = 3;
+		cfg.textureSheetAnimation.animation = ps::TextureSheetAnimationModule::Animation::WholeSheet;
+		cfg.textureSheetAnimation.cycles    = 1.f;
 
 		dustParticleSystem_.init(cfg);
 	}

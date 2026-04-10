@@ -1,7 +1,6 @@
-﻿#ifndef __particleSystem_HPP
+#ifndef __particleSystem_HPP
 #define __particleSystem_HPP
 
-#include "spriteAnimation.hpp"
 #include "particleModules.hpp"
 
 #include <vector>
@@ -16,10 +15,7 @@ struct Particle {
     ColorGradient   colorOverLifetime;
     float           sizeBegin, sizeEnd, drag;
     mu::Vec3        gravity;
-    SpriteAnimation anim;
     float           rotation;
-    bool            additive;
-    bool            hasAnim = false;   // true if anim was initialised with a clip
 
     // Mesh renderer fields
     float           angularVelocity = 0.f;   // rad/sec, local Z axis
@@ -35,7 +31,7 @@ public:
     static constexpr int kMaxParticles = kDefaultMaxParticles;  // backward-compat alias
 
     // Configures the system and sizes the pool. Must be called before emit(int).
-    void init(const ParticleSystemConfig& config, int maxParticles = kDefaultMaxParticles);
+    void init(const ps::ParticleSystemConfig& config, int maxParticles = kDefaultMaxParticles);
 
     // Emit particles using the config set by init().
     void emit(int count);
@@ -44,7 +40,7 @@ public:
     void startContinuous();
 
     // Convenience overload: sets config then starts continuous emission.
-    void startContinuous(const ParticleSystemConfig& config);
+    void startContinuous(const ps::ParticleSystemConfig& config);
 
     void update(Seconds dt);
     void render(GFX& gfx) const;
@@ -52,8 +48,8 @@ public:
 
     int activeCount() const { return activeCount_; }
 
-    ParticleSystemConfig&       config()       { return config_; }
-    const ParticleSystemConfig& config() const { return config_; }
+    ps::ParticleSystemConfig&       config()       { return config_; }
+    const ps::ParticleSystemConfig& config() const { return config_; }
 
 private:
     float    randomFloat(float lo, float hi);
@@ -69,11 +65,11 @@ private:
     int          maxParticles_    = kDefaultMaxParticles;
     std::mt19937 rng_{ std::random_device{}() };
 
-    ParticleSystemConfig config_;
-    float                emitAccumNew_   = 0.f;
-    bool                 continuousNew_  = false;
-    float                systemTime_     = 0.f;
-    float                delayRemaining_ = 0.f;
+    ps::ParticleSystemConfig config_;
+    float                    emitAccumNew_   = 0.f;
+    bool                     continuousNew_  = false;
+    float                    systemTime_     = 0.f;
+    float                    delayRemaining_ = 0.f;
 };
 
 #endif  // __particleSystem_HPP

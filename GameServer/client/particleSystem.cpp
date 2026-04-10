@@ -1,4 +1,4 @@
-﻿#include "pch.hpp"
+#include "pch.hpp"
 #include "particleSystem.hpp"
 #include "gfx.hpp"
 
@@ -64,11 +64,6 @@ void ParticleSystem::update(Seconds dt) {
         }
     }
 
-    // Particle simulation — simulationSpeed 적용
-    // (legacy 파티클은 config_.main.simulationSpeed 기본값 1.0이므로 영향 없음)
-    const Milliseconds scaledDtMs = std::chrono::duration_cast<Milliseconds>(
-        std::chrono::duration<float>(scaledDtf));
-
     int i = 0;
     while (i < activeCount_) {
         Particle& p = pool_[i];
@@ -78,21 +73,10 @@ void ParticleSystem::update(Seconds dt) {
         p.pos      += p.vel * scaledDtf;
         p.lifetime -= scaledDtf;
 
-        const float    t          = 1.f - p.lifetime / p.maxLifetime;
-        const float    size       = std::lerp(p.sizeBegin, p.sizeEnd, t);
-        const mu::Vec4 finalColor = p.startColor * p.colorOverLifetime.evaluate(t);
-
-        if (p.hasAnim) {
-            p.anim.setScale(mu::Vec2(size, size));
-            p.anim.setTint(finalColor);
-            p.anim.update(scaledDtMs);
-            p.anim.setPos(p.pos);
-        }
-
-        if (!p.hasAnim && p.angularVelocity != 0.f)
+        if (p.angularVelocity != 0.f)
             p.angularAngle += p.angularVelocity * scaledDtf;
 
-        if (p.lifetime <= 0.f || (p.hasAnim && p.anim.done())) {
+        if (p.lifetime <= 0.f) {
             if (i != activeCount_ - 1)
                 pool_[i] = std::move(pool_[activeCount_ - 1]);
             --activeCount_;
@@ -103,38 +87,80 @@ void ParticleSystem::update(Seconds dt) {
 }
 
 void ParticleSystem::render(GFX& gfx) const {
+    const auto& rend = config_.renderer;
+    const auto& tsa  = config_.textureSheetAnimation;
+
     for (int i = 0; i < activeCount_; ++i) {
-        const Particle& p = pool_[i];
-        if (p.hasAnim) {
-            p.anim.render(gfx);
-            continue;
-        }
-        if (config_.renderer.mode  == RendererModule::Mode::Mesh &&
-            config_.renderer.pMesh && config_.renderer.pSubMesh &&
-            config_.renderer.material.mainTex)
-        {
-            const float    t    = 1.f - p.lifetime / p.maxLifetime;
-            const float    size = std::lerp(p.sizeBegin, p.sizeEnd, t);
-            const mu::Vec4 tint = p.startColor * p.colorOverLifetime.evaluate(t);
-            const auto world    = mu::scaleH(mu::Vec3{ size, size, size })
-                                * mu::rotateZH(mu::Radian{ p.angularAngle })
-                                * p.baseRotation
-                                * mu::translate(p.pos);
-            gfx.addDrawEvent(MeshParticlePipeline::DrawEvent{
-                .world       = world,
-                .pMesh       = config_.renderer.pMesh,
-                .pSubMesh    = config_.renderer.pSubMesh,
-                .pTex        = config_.renderer.material.mainTex,
-                .tint        = tint,
-                .renderOrder = config_.renderer.renderOrder,
-            });
-        }
+        const Particle& p    = pool_[i];
+        const float    t     = 1.f - p.lifetime / p.maxLifetime;
+        const float    size  = std::lerp(p.sizeBegin, p.sizeEnd, t);
+        const mu::Vec4 tint  = p.startColor * p.colorOverLifetime.evaluate(t);
+
+        std::visit([&](const auto& mat) {
+            using T = std::decay_t<decltype(mat)>;
+
+            if constexpr (std::is_same_v<T, ps::MatUnlit>) {
+                if (!mat.mainTex) return;
+
+                // ── Billboard path ────────────────────────────────────────
+                if (rend.mode == ps::RendererModule::Mode::Billboard) {
+                    mu::Vec2 uvOffset = { 0.f, 0.f };
+                    mu::Vec2 uvScale  = { 1.f, 1.f };
+                    if (tsa.enabled) {
+                        const int totalFrames = (tsa.animation == ps::TextureSheetAnimationModule::Animation::WholeSheet)
+                                                ? tsa.tilesX * tsa.tilesY
+                                                : tsa.tilesX;
+                        const int frameIndex  = static_cast<int>(t * totalFrames * tsa.cycles)
+                                                % totalFrames + tsa.startFrame;
+                        const int col = frameIndex % tsa.tilesX;
+                        const int row = (tsa.animation == ps::TextureSheetAnimationModule::Animation::WholeSheet)
+                                        ? frameIndex / tsa.tilesX
+                                        : 0;
+                        uvOffset = { col / static_cast<float>(tsa.tilesX),
+                                     row / static_cast<float>(tsa.tilesY) };
+                        uvScale  = { 1.f / tsa.tilesX, 1.f / tsa.tilesY };
+                    }
+                    gfx.addDrawEvent(BillboardPipeline::DrawEvent{
+                        .world       = mu::scaleH(mu::Vec3{ size, size, size })
+                                     * mu::translate(p.pos),
+                        .pTex        = mat.mainTex,
+                        .uvOffset    = uvOffset,
+                        .uvScale     = uvScale,
+                        .tint        = tint,
+                        .additive    = mat.additive,
+                        .rotation    = p.rotation,
+                        .renderOrder = rend.renderOrder,
+                    });
+                }
+                // ── Mesh path ─────────────────────────────────────────────
+                else if (rend.mode == ps::RendererModule::Mode::Mesh &&
+                         rend.pMesh && rend.pSubMesh)
+                {
+                    const auto world = mu::scaleH(mu::Vec3{ size, size, size })
+                                     * mu::rotateZH(mu::Radian{ p.angularAngle })
+                                     * p.baseRotation
+                                     * mu::translate(p.pos);
+                    gfx.addDrawEvent(MeshParticlePipeline::DrawEvent{
+                        .world       = world,
+                        .pMesh       = rend.pMesh,
+                        .pSubMesh    = rend.pSubMesh,
+                        .pTex        = mat.mainTex,
+                        .tint        = tint,
+                        .renderOrder = rend.renderOrder,
+                    });
+                }
+            }
+            else if constexpr (std::is_same_v<T, ps::MatSwordSlash>) {
+                // SwordSlashPipeline -- Step 4 (not yet implemented)
+                (void)mat;
+            }
+        }, rend.mat);
     }
 }
 
 // ── New module-based API implementation ─────────────────────────────────────
 
-void ParticleSystem::init(const ParticleSystemConfig& config, int maxParticles) {
+void ParticleSystem::init(const ps::ParticleSystemConfig& config, int maxParticles) {
     config_       = config;
     maxParticles_ = maxParticles;
     pool_.resize(maxParticles_);
@@ -158,7 +184,7 @@ void ParticleSystem::startContinuous() {
     delayRemaining_ = config_.main.startDelay;
 }
 
-void ParticleSystem::startContinuous(const ParticleSystemConfig& config) {
+void ParticleSystem::startContinuous(const ps::ParticleSystemConfig& config) {
     init(config);
     startContinuous();
 }
@@ -166,19 +192,19 @@ void ParticleSystem::startContinuous(const ParticleSystemConfig& config) {
 // ── Shape sampling ───────────────────────────────────────────────────────────
 
 mu::Vec3 ParticleSystem::sampleShapeOrigin() {
-    const ShapeModule& s = config_.shape;
+    const ps::ShapeModule& s = config_.shape;
     switch (s.type) {
-    case ShapeModule::Type::Point:
+    case ps::ShapeModule::Type::Point:
         return s.position;
 
-    case ShapeModule::Type::Edge: {
+    case ps::ShapeModule::Type::Edge: {
         const float lenSq = mu::dot(s.edgeDir, s.edgeDir);
         if (lenSq < 1e-6f) return s.position;
         const mu::Vec3 dir = mu::Vec3(mu::normalize(s.edgeDir));
         return s.position + dir * randomFloat(-s.edgeLength * 0.5f, s.edgeLength * 0.5f);
     }
 
-    case ShapeModule::Type::Cone:
+    case ps::ShapeModule::Type::Cone:
         if (s.coneRadius > 0.f) {
             // random point on base disc; disc is perpendicular to the up axis by default
             const float angle = randomFloat(0.f, 2.f * 3.14159265f);
@@ -187,7 +213,7 @@ mu::Vec3 ParticleSystem::sampleShapeOrigin() {
         }
         return s.position;  // apex emit
 
-    case ShapeModule::Type::Sphere: {
+    case ps::ShapeModule::Type::Sphere: {
         const float theta = 2.f * 3.14159265f * randomFloat(0.f, 1.f);
         const float phi   = std::acos(1.f - 2.f * randomFloat(0.f, 1.f));
         const float sp    = std::sin(phi);
@@ -197,7 +223,7 @@ mu::Vec3 ParticleSystem::sampleShapeOrigin() {
             s.sphereRadius * sp * std::sin(theta) };
     }
 
-    case ShapeModule::Type::Box:
+    case ps::ShapeModule::Type::Box:
         return s.position + mu::Vec3{
             randomFloat(-s.boxSize.x() * 0.5f,  s.boxSize.x() * 0.5f),
             randomFloat(-s.boxSize.y() * 0.5f,  s.boxSize.y() * 0.5f),
@@ -207,21 +233,21 @@ mu::Vec3 ParticleSystem::sampleShapeOrigin() {
 }
 
 mu::Vec3 ParticleSystem::sampleShapeDirection(const mu::Vec3& origin) {
-    const ShapeModule& s = config_.shape;
+    const ps::ShapeModule& s = config_.shape;
     switch (s.type) {
-    case ShapeModule::Type::Point:
+    case ps::ShapeModule::Type::Point:
         // Point: emit along the configured direction axis with no spread
         return s.direction;
 
-    case ShapeModule::Type::Edge:
+    case ps::ShapeModule::Type::Edge:
         // Emit upward (perpendicular to edge) along the configured direction
         return s.direction;
 
-    case ShapeModule::Type::Cone:
+    case ps::ShapeModule::Type::Cone:
         return sampleConeDirection(mu::NVec3(s.direction), s.coneAngle, rng_);
 
-    case ShapeModule::Type::Sphere:
-    case ShapeModule::Type::Box: {
+    case ps::ShapeModule::Type::Sphere:
+    case ps::ShapeModule::Type::Box: {
         // Outward from shape centre
         const mu::Vec3 outward = origin - s.position;
         const float    len     = std::sqrt(mu::dot(outward, outward));
@@ -270,43 +296,10 @@ void ParticleSystem::spawnParticle() {
         p.sizeBegin = p.sizeEnd = sizeMult;
     }
 
-    const bool additive = (config_.renderer.material.blendMode ==
-                           MaterialDescriptor::BlendMode::Additive);
-    p.additive = additive;
-
-    if (config_.renderer.mode == RendererModule::Mode::Billboard &&
-        config_.renderer.pClip != nullptr)
-    {
-        p.anim.init(config_.renderer.pClip);
-        p.hasAnim = true;
-        p.angularVelocity = 0.f;
-        p.angularAngle    = 0.f;
-
-        // 애니메이션 속도를 파티클 lifetime에 동기화 (기존 로직과 동일)
-        if (config_.renderer.pClip->duration.count() > 0 && p.lifetime > 0.f) {
-            const float lifetimeMs = p.lifetime * 1000.f;
-            const float durationMs = static_cast<float>(config_.renderer.pClip->duration.count());
-            float animSpeed = 1.f;
-            if (config_.renderer.pClip->type == SpriteAnimType::Once) {
-                animSpeed = durationMs / lifetimeMs;
-            } else if (config_.renderer.pClip->type == SpriteAnimType::Loop) {
-                const float cycles = std::max(1.f, std::round(lifetimeMs / durationMs));
-                animSpeed = cycles * durationMs / lifetimeMs;
-            }
-            p.anim.setSpeed(animSpeed);
-        }
-        p.anim.setAdditive(additive);
-        p.anim.setRenderOrder(config_.renderer.renderOrder);
-        p.anim.setPos(origin);
-        p.anim.setRotation(p.rotation);
-    } else {
-        // Mesh particle or billboard without clip
-        p.hasAnim         = false;
-        p.angularVelocity = config_.rotationOverLifetime.enabled
-                            ? randomFloat(config_.rotationOverLifetime.angularVelocityMin,
-                                          config_.rotationOverLifetime.angularVelocityMax)
-                            : 0.f;
-        p.angularAngle    = 0.f;
-        p.baseRotation    = config_.main.startRotation3D;
-    }
+    p.angularVelocity = config_.rotationOverLifetime.enabled
+                        ? randomFloat(config_.rotationOverLifetime.angularVelocityMin,
+                                      config_.rotationOverLifetime.angularVelocityMax)
+                        : 0.f;
+    p.angularAngle    = 0.f;
+    p.baseRotation    = config_.main.startRotation3D;
 }
