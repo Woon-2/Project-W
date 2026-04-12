@@ -13,6 +13,11 @@ void importCube(std::ifstream& ifs, const AssetManager& assetManager, Object& cu
 	cube.setMaterialSetIdx(materialSetIdx);
 }
 
+void importGoblinSpawner(std::ifstream& ifs, const AssetManager& assetManager, Goblin& goblin) {
+	goblin.setHp(90);
+	goblin.setModel(assetManager.modelGoblin());
+}
+
 void importTerrain(std::ifstream& ifs, TerrainObject& terrain) {
 	const auto manifestPath = readText(ifs, "ManifestPath");
 	const auto terrainDir   = std::filesystem::path(manifestPath).parent_path();
@@ -57,7 +62,7 @@ void importNode(std::ifstream& ifs, const AssetManager& assetManager, Level& lev
 	}
 	else if (type == "GoblinSpawner") {
 		auto& g = level.goblins.emplace_back(std::move(object));
-		g.setHp(90);
+		importGoblinSpawner(ifs, assetManager, g);
 	}
 	else {
 		// no-op

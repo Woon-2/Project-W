@@ -208,8 +208,8 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 
 	// 서버 주도 객체: 패킷으로 pos/vel이 설정되면 PhysicsWorld가 Kinematic 적분으로
 	// 패킷 간격 사이를 dead-reckoning 보간한다.
-	physicsWorld_.registerBody(&otherPlayer->body(),
-		[p = otherPlayer.get()]() { p->rebuildBodyBVH(); });
+	//physicsWorld_.registerBody(&otherPlayer->body(),
+	//	[p = otherPlayer.get()]() { p->rebuildBodyBVH(); });
 
 	otherPlayers_.push_back(otherPlayer);
 	idPlayerMap_[otherPlayerInfo.playerId] = otherPlayer;
@@ -287,8 +287,10 @@ void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos) {
 
 	if ( timeSinceLastPacket > 0.001f && timeSinceLastPacket <= maxValidInterval ) {
 		const mu::Vec3 newPos = DirectX::XMLoadFloat3(&pos);
-		const mu::Vec3 movement = newPos - player->pos();
-		player->setVelocity(movement / timeSinceLastPacket);
+		const auto movement = newPos - player->pos();
+		const auto velocity = movement / timeSinceLastPacket;
+		player->setVelocity(velocity);
+		std::cout << "other player velocity: " << velocity.x() << ", " << velocity.y() << ", " << velocity.z() << '\n';
 	}
 	else {
 		player->setVelocity(mu::Vec3{});
@@ -644,7 +646,7 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 void Game::sendMovePacket() {
 	auto sendBuffer = PacketManager::makeCMovePacket(player_->pos().getXmf());
-	INet::ClientApp::send();
+	INet::ClientApp::addSendBuffer(sendBuffer);
 }
 
 void Game::sendMouseMovePacket() {
