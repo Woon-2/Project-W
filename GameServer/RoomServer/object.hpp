@@ -2,6 +2,7 @@
 #define room_server_object_hpp
 
 #include "physicsWorld.hpp"
+#include "terrain.hpp"
 
 class GameSession;
 
@@ -167,6 +168,18 @@ class Cube : public Object {
 public:
 	Cube() = default;
 	Cube(Object&& base) : Object(std::move(base)) {}
+};
+
+class TerrainObject : public Object {
+public:
+	TerrainObject() = default;
+	TerrainObject(Object&& base) : Object(std::move(base)) {}
+
+	TerrainHeightField&       heightField()       { return heightField_; }
+	const TerrainHeightField& heightField() const { return heightField_; }
+
+private:
+	TerrainHeightField heightField_;
 };
 
 #endif // room_server_object_hpp

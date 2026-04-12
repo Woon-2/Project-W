@@ -3,14 +3,13 @@
 #include "Room.hpp"
 #include "IdPool.hpp"
 #include "JobTimer.hpp"
-#include "terrain.hpp"
 
 Room* RoomManager::makeRoom() {
 	auto roomId = RoomIdPool::pop();
 	auto newRoom = ObjectPool<Room>::pop(roomId);
 
 	ASSERT_CRASH(pLevel_ != nullptr);
-	newRoom->init(pLevel_, pTerrain_);
+	newRoom->init(pLevel_);
 
 	newRoom->doTimer(17ms, [newRoom] {	// 60fps
 		newRoom->update();
@@ -50,6 +49,5 @@ std::mutex RoomManager::rmMtx_;
 std::vector<Room*> RoomManager::rooms_;
 std::unordered_map<int32, Room*> RoomManager::roomIdMap_;
 
-const Level*              RoomManager::pLevel_         = nullptr;
-const Model*              RoomManager::pPlayerModel_   = nullptr;
-const TerrainHeightField* RoomManager::pTerrain_       = nullptr;
+const Level*  RoomManager::pLevel_       = nullptr;
+const Model*  RoomManager::pPlayerModel_ = nullptr;

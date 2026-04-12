@@ -9,7 +9,6 @@
 
 class SendBuffer;
 struct Level;
-struct TerrainHeightField;
 
 class Room {
 public:
@@ -28,7 +27,7 @@ public:
 		}
 	}
 
-	void init(const Level* levelData, const TerrainHeightField* heightField = nullptr);
+	void init(const Level* levelData);
 	void update();
 
 	void enter(GameSession* session);
@@ -69,8 +68,8 @@ private:
 	std::vector<Player> playerStarts_;	// 데이터
 	std::vector<Goblin> goblins_;		// 개임 내의 몬스터
 
-	PhysicsWorld physicsWorld_;
-	RigidBody    terrainBody_;
+	PhysicsWorld  physicsWorld_;
+	TerrainObject terrain_;
 };
 
 #endif // room_hpp

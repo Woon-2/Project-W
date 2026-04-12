@@ -87,6 +87,9 @@ private:
 	void hideCursor();
 	void showCursor();
 
+	void importNode(std::ifstream& ifs);
+	void importTerrain(std::ifstream& ifs, TerrainObject& terrain);
+
 	AssetManager assetManager_{};
 
 	PhysicsWorld physicsWorld_{};
