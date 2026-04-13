@@ -462,6 +462,7 @@ struct RenderState {
 	std::vector<mu::Mat4x4> worldBVs;
 	std::unique_ptr<AnimBlender> animBlender;
 	const Model* pModel;
+	bool shouldCull;
 };
 
 struct Equipment {
@@ -569,6 +570,8 @@ public:
 	bool isDead() const { return isDead_; }
 	void setMaxHp(i32t v) { maxHp_ = v; }
 	i32t maxHp() const    { return maxHp_; }
+
+	void setCulled(bool culled) { renderState_.shouldCull = culled; }
 
 protected:
 	RigidBody body_{};

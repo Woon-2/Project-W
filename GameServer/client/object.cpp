@@ -1660,6 +1660,10 @@ void Object::update(Milliseconds deltaTime, float tPhysicInterpolation) {
 }
 
 void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
+	if (renderState_.shouldCull) {
+		return;
+	}
+
 	const auto pModel = renderState_.pModel;
 	if (pModel) {
 		for (auto& [mesh, meshXform] : pModel->meshWithDressXforms) {

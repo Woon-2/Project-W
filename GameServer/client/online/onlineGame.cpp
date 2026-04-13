@@ -515,9 +515,11 @@ void Game::update(Milliseconds deltaTime) {
 }
 
 void Game::render() {
-	if(player_ == nullptr) {
+	if (player_ == nullptr) {
 		return;
 	}
+
+	cullObjects();
 
 	skybox_.render( gfx_ );
 	// ground_->render(gfx_);
@@ -834,6 +836,73 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		&& !(keyboardStatePrev_[VK_LBUTTON] & 0x80))
 	{
 		sendAttackPacket();
+	}
+}
+
+void Game::cullObjects() {
+	auto entities = std::vector< std::shared_ptr<Object> >();
+	entities.reserve(otherPlayers_.size() + goblins_.size());
+	std::ranges::copy(otherPlayers_, std::back_inserter(entities));
+	std::ranges::copy(goblins_, std::back_inserter(entities));
+
+	// perform view frusutum culling
+	for (auto& entt : entities) {
+		auto& rootShape = entt->body().worldBVH().nodes[0].shape;
+
+		auto vertices = std::vector<mu::Vec3>();
+		vertices.reserve(8u);
+		auto out = std::back_inserter(vertices);
+
+		if (std::holds_alternative<AABB>(rootShape)) {
+			const auto& aabb = std::get<AABB>(rootShape);
+
+			const mu::Vec3 c = aabb.center;
+			const mu::Vec3 h = aabb.size * 0.5f;
+
+			out = mu::Vec3(c.x() - h.x(), c.y() - h.y(), c.z() - h.z());
+			out = mu::Vec3(c.x() + h.x(), c.y() - h.y(), c.z() - h.z());
+			out = mu::Vec3(c.x() - h.x(), c.y() - h.y(), c.z() + h.z());
+			out = mu::Vec3(c.x() + h.x(), c.y() - h.y(), c.z() + h.z());
+			out = mu::Vec3(c.x() - h.x(), c.y() + h.y(), c.z() - h.z());
+			out = mu::Vec3(c.x() + h.x(), c.y() + h.y(), c.z() - h.z());
+			out = mu::Vec3(c.x() - h.x(), c.y() + h.y(), c.z() + h.z());
+			out = mu::Vec3(c.x() + h.x(), c.y() + h.y(), c.z() + h.z());
+
+		} else {
+			const auto& obb = std::get<OBB>(rootShape);
+			// Compute OBB axes from orientation
+			const mu::Vec3 ax = obb.orient.rotate(mu::Vec3(1.f, 0.f, 0.f));
+			const mu::Vec3 ay = obb.orient.rotate(mu::Vec3(0.f, 1.f, 0.f));
+			const mu::Vec3 az = obb.orient.rotate(mu::Vec3(0.f, 0.f, 1.f));
+			const float    hx = obb.halfExtents.x();
+			const float    hy = obb.halfExtents.y();
+			const float    hz = obb.halfExtents.z();
+			// All 8 corners; testVertex will filter by penetration depth
+			for (int sx : {-1, 1})
+				for (int sy : {-1, 1})
+					for (int sz : {-1, 1}) {
+						out = obb.center
+							+ ax * (hx * sx)
+							+ ay * (hy * sy)
+							+ az * (hz * sz);
+					}
+		}
+
+		entt->setCulled(true);
+
+		for (auto& v : vertices) {
+			auto ndc = mu::Vec4(v, 1.f) * camera_.view() * camera_.proj();
+			ndc /= ndc.w();
+
+			if (ndc.x() >= -1.f && ndc.x() <= 1.f
+				&& ndc.y() >= -1.f && ndc.y() <= 1.f
+				&& ndc.z() >= 0.f && ndc.z() <= 1.f
+			) {
+				// a vertex is in the view frustum, it should not be culled.
+				entt->setCulled(false);
+				break;
+			}
+		}
 	}
 }
 

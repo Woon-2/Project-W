@@ -59,6 +59,9 @@ private:
 	};
 
 	void processInput(Milliseconds deltaTime);
+	
+	void cullObjects();
+	
 	void setupMonsterHpBars();
 
 	// 커서가 클라이언트 영역 바깥으로 나가지 못하도록 한다.
