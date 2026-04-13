@@ -282,18 +282,3 @@ effective mass 오산 방지). `applyImpulse()`는 이미 `invMass == 0` guard �
 
 `ContactPoint` struct는 `collision.hpp`에 정의한다 (Phase 4에서 이동).
 `contactConstraint.hpp`는 `rigidBody.hpp → collision.hpp` 체인으로 이를 획득한다.
-
----
-
-## Phase 로드맵
-
-| Phase | 목표 | 상태 |
-|-------|------|------|
-| 1 | PhysicsWorld + RigidBody 골격, Kinematic 이동 | 완료 |
-| 2 | Dynamic body + 힘/관성 적분 | 완료 |
-| 3 | ContactConstraint + PGS solver | 완료 |
-| 4 | TerrainCollider + 지형 충돌 (중력 활성화) | 완료 |
-| 5 | SAPBroadPhase (O(n²) → O(n log n)) | 완료 |
-| 6 | Joint Constraints (BallSocket, Hinge, ConeTwist) | 미구현 |
-| 7 | Ragdoll 구조 | 미구현 |
-| 8 | ActiveRagdollController | 미구현 |
