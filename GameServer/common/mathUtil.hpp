@@ -207,7 +207,7 @@ public:
     Vec(Vec<D2> vec, Fs... floats) __MathUtil_NOEXCEPT
         : vec_(vec.vec_) {
         if constexpr (D2 == 1) {
-            const auto ctrl = dx::XMVectorSet(0.f, 1.f, 1.f, 1.f);
+            const auto ctrl = dx::XMVectorSelectControl( 0, 1, 1, 1 );
             if constexpr (D == 2) {
                 static_assert(sizeof...(floats) == 1, "Invalid number of arguments detected.");
                 vec_ = dx::XMVectorSelect(vec_, dx::XMVectorSet(0.f, floats..., 0.f, 1.f), ctrl);
@@ -222,7 +222,7 @@ public:
             }
         }
         else if constexpr (D2 == 2) {
-            const auto ctrl = dx::XMVectorSet(0.f, 0.f, 1.f, 1.f);
+            const auto ctrl = dx::XMVectorSelectControl( 0, 0, 1, 1 );
             if constexpr (D == 3) {
                 static_assert(sizeof...(floats) == 1, "Invalid number of arguments detected.");
                 vec_ = dx::XMVectorSelect(vec_, dx::XMVectorSet(0.f, 0.f, floats..., 1.f), ctrl);
@@ -233,7 +233,7 @@ public:
             }
         }
         else {
-            const auto ctrl = dx::XMVectorSet(0.f, 0.f, 0.f, 1.f);
+			const auto ctrl = dx::XMVectorSelectControl( 0, 0, 0, 1 );
             vec_ = dx::XMVectorSelect(vec_, dx::XMVectorSet(0.f, 0.f, 0.f, floats...), ctrl);
         }
     }

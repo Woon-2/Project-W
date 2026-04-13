@@ -30,8 +30,11 @@ namespace UIPipeline {
 		const Texture* pCopySrc;	// nullptr가 아닐 경우 이 텍스처를 원본으로 복사를 수행
 		XMFLOAT4 colorMul = { 1.f, 1.f, 1.f, 1.f };  // per-draw color multiplier
 
+		// 텍스처 포인터 기준으로 정렬 — 동일 텍스처 이벤트를 인접하게 배치해 향후 인스턴싱을 가능하게 한다.
+		// 주의: z-order는 DrawEvent에 저장되지 않으므로, updateGPUData에서 sort를 호출하면
+		//       renderTree가 보장한 zOrder 순서가 깨진다. 따라서 현재는 sort를 호출하지 않는다.
 		auto operator<=>( const DrawEvent& rhs ) const noexcept {
-			return std::strong_ordering::equal;
+			return std::compare_three_way{}( pTex, rhs.pTex );
 		}
 	};
 
@@ -107,6 +110,7 @@ namespace UIPipeline {
 		);
 
 		std::vector<ComPtr<ID3D12DescriptorHeap>> descriptorHeaps_{};
+		std::vector<ID3D12DescriptorHeap*> descriptorHeapsRaw_{};  // descriptorHeaps_의 raw pointer 캐시
 		DescriptorPool* pTexPool_ = nullptr;
 		DescriptorPool* pTexArrayPool_ = nullptr;
 		DescriptorPool* pTexCubePool_ = nullptr;

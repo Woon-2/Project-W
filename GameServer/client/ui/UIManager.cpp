@@ -139,10 +139,16 @@ bool UIManager::onWndMsg(UINT msg, WPARAM wParam, LPARAM lParam) {
 }
 
 bool UIManager::needsCursor() const {
-    std::vector<UIElement*> interactives;
-    const_cast<UIManager*>(this)->collectInteractive(
-        const_cast<UIElement*>(&root_), interactives);
-    return !interactives.empty();
+    struct Finder {
+        static bool any(const UIElement& e) {
+            if (!e.visible) return false;
+            if (e.interactive) return true;
+            for (const auto& c : e.children())
+                if (any(*c)) return true;
+            return false;
+        }
+    };
+    return Finder::any(root_);
 }
 
 UIElement* UIManager::hitTest(float x, float y) {

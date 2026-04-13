@@ -78,14 +78,16 @@ mu::Mat4x4 UIElement::buildWorldMatrix(float screenHeight) const {
     // The quad mesh spans [-1,1], so half-extents become the scale.
     // This matches the pattern in BasicPlayerHpUI and Crosshair:
     //   world = scale(...) * translate(...)
+    const float rw = std::round(resolvedRect_.width);
+    const float rh = std::round(resolvedRect_.height);
     mu::Vec3 scl{
-        resolvedRect_.width * 0.5f,
-        resolvedRect_.height * 0.5f,
+        rw * 0.5f,
+        rh * 0.5f,
         1.f
     };
     mu::Vec3 pos{
-        resolvedRect_.x + resolvedRect_.width * 0.5f,
-        screenHeight - (resolvedRect_.y + resolvedRect_.height * 0.5f),
+        std::round(resolvedRect_.x + resolvedRect_.width  * 0.5f),
+        std::round(screenHeight - (resolvedRect_.y + resolvedRect_.height * 0.5f)),
         0.f
     };
     return mu::Mat4x4(mu::scale(scl)) * mu::translate(pos);

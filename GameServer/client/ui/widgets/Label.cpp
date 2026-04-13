@@ -24,7 +24,19 @@ void Label::setAutoSize(bool enabled, float minSize, float maxSize) {
 }
 
 void Label::onUpdate(const UpdateContext& ctx) {
-    if (!dirty_ || !textImage_ || !ctx.gfx || text_.empty()) return;
+    if (!ctx.gfx || text_.empty()) return;
+
+    // resolvedRect_ 크기에 맞게 TextImage를 자동 생성/재생성
+    const UINT texW = static_cast<UINT>(std::max(1.f, std::round(resolvedRect_.width)));
+    const UINT texH = static_cast<UINT>(std::max(1.f, std::round(resolvedRect_.height)));
+    if (texW != prevTexW_ || texH != prevTexH_) {
+        ctx.gfx->createTextImageImmediate(texW, texH, &ownedTextImage_);
+        prevTexW_ = texW;
+        prevTexH_ = texH;
+        dirty_ = true;
+    }
+
+    if (!dirty_ || ownedTextImage_.pData.empty()) return;
 
     FontHandle* font = nullptr;
 
@@ -35,10 +47,10 @@ void Label::onUpdate(const UpdateContext& ctx) {
             FontHandle tryFont = ctx.gfx->createFont(mid);
             int tw = 0, th = 0;
             ctx.gfx->measureText(&tryFont, text_.c_str(), static_cast<DWORD>(text_.size()),
-                                 static_cast<float>(textImage_->width),
-                                 static_cast<float>(textImage_->height),
+                                 static_cast<float>(ownedTextImage_.width),
+                                 static_cast<float>(ownedTextImage_.height),
                                  &tw, &th);
-            if (tw <= static_cast<int>(textImage_->width) && th <= static_cast<int>(textImage_->height))
+            if (tw <= static_cast<int>(ownedTextImage_.width) && th <= static_cast<int>(ownedTextImage_.height))
                 lo = mid;
             else
                 hi = mid;
@@ -65,11 +77,11 @@ void Label::onUpdate(const UpdateContext& ctx) {
     // so the full-size quad shows text in the correct location.
 
     int outW = 0, outH = 0;
-    std::ranges::fill(textImage_->pData, static_cast<BYTE>(0));
+    std::ranges::fill(ownedTextImage_.pData, static_cast<BYTE>(0));
     ctx.gfx->WriteTextToBitmap(
-        textImage_,
-        textImage_->width, textImage_->height,
-        textImage_->width * 4,
+        &ownedTextImage_,
+        ownedTextImage_.width, ownedTextImage_.height,
+        ownedTextImage_.width * 4,
         &outW, &outH,
         font,
         text_.c_str(),
@@ -80,8 +92,8 @@ void Label::onUpdate(const UpdateContext& ctx) {
     // Shift pixels within pData to implement alignment.
     if (outW > 0 && outH > 0) {
         int destX = 0, destY = 0;
-        const int imgW = static_cast<int>(textImage_->width);
-        const int imgH = static_cast<int>(textImage_->height);
+        const int imgW = static_cast<int>(ownedTextImage_.width);
+        const int imgH = static_cast<int>(ownedTextImage_.height);
         if (textHAlign_ == TextHAlign::Center)   destX = (imgW - outW) / 2;
         if (textHAlign_ == TextHAlign::Trailing) destX =  imgW - outW;
         if (textVAlign_ == TextVAlign::Center)   destY = (imgH - outH) / 2;
@@ -89,7 +101,7 @@ void Label::onUpdate(const UpdateContext& ctx) {
 
         if (destX != 0 || destY != 0) {
             const int stride = imgW * 4;
-            std::vector<BYTE> shifted(textImage_->pData.size(), 0);
+            std::vector<BYTE> shifted(ownedTextImage_.pData.size(), 0);
             for (int row = 0; row < outH; ++row) {
                 const int dstRow = destY + row;
                 if (dstRow < 0 || dstRow >= imgH) continue;
@@ -97,24 +109,24 @@ void Label::onUpdate(const UpdateContext& ctx) {
                 const int dstOff = dstRow * stride + destX * 4;
                 const int copyBytes = std::min(outW * 4, stride - destX * 4);
                 if (copyBytes > 0)
-                    memcpy(shifted.data() + dstOff, textImage_->pData.data() + srcOff, copyBytes);
+                    memcpy(shifted.data() + dstOff, ownedTextImage_.pData.data() + srcOff, copyBytes);
             }
-            textImage_->pData = std::move(shifted);
+            ownedTextImage_.pData = std::move(shifted);
         }
     }
 
-    ctx.gfx->UpdateTextureWithTextImage(textImage_, textImage_->width, textImage_->height);
+    ctx.gfx->UpdateTextureWithTextImage(&ownedTextImage_, ownedTextImage_.width, ownedTextImage_.height);
     dirty_ = false;
     needsCopy_ = true;
 }
 
 void Label::onRender(const RenderContext& rc) {
-    if (!textImage_ || text_.empty()) return;
+    if (ownedTextImage_.pData.empty() || text_.empty()) return;
 
     rc.gfx->addDrawEvent(UIPipeline::DrawEvent{
         .world    = buildWorldMatrix(rc.screenHeight),
-        .pTex     = &textImage_->texture,
-        .pCopySrc = needsCopy_ ? &textImage_->textureUpload : nullptr
+        .pTex     = &ownedTextImage_.texture,
+        .pCopySrc = needsCopy_ ? &ownedTextImage_.textureUpload : nullptr
     });
     needsCopy_ = false;
 }

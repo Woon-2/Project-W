@@ -89,12 +89,6 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 	//	.needsUploadInfo = false
 	//} );
 
-	gfx.addRequestTextImageLoad( RequestTextImageLoad{
-		.width = 512,
-		.height = 256,
-		.pDest = &textPlayerHp_
-	} );
-
 	gfx.addRequestTerrainLoad( RequestTerrainLoad{
 		.terrainDir  = "../resources/terrains/",
 		.pTexHashMap = &texHashMap_,
