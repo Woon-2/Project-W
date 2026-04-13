@@ -7,6 +7,7 @@
     2. 클라이언트 -> 서버
        1. move 패킷 -> 패킷에 담길 정보의 변동이 필요함. 속도 정보가 포함되어야 다른 플레이어의 애니메이션 업데이트 및 렌더가 가능함. 그리고 무작전 orientation을 패킷에 담는 것이 맞는지도 의문임.
           - position
+          - velocity
        2. mouse move 패킷 -> 아직 미구현. 하지만 플레이어가 움직이지 않고 마우스만 움직였을 때 다른 플레이어가 그 현상을 관측할 수 있어야 함.
           - 플레이어의 yaw
     
@@ -182,6 +183,181 @@
 
           **수정 파일**
           - `client/online/onlineGame.cpp` — `Game::movePlayer()`, `Game::update()` 원격 플레이어 루프
+
+
+
+          - 원격 플레이어 애니메이션이 idle ↔ run 사이를 진동하는 현상 수정 (2026-04-13)                                **현상**                                                                                                                                                         - 다른 플레이어가 이동 중임에도 불구하고 관측자 화면에서 해당 플레이어의                                                                             
+              애니메이션이 idle과 run 사이를 빠르게 오가며 진동함                                                                                                
+
+            ---
+
+            **원인 1 (주요): moveChange_ 조건 — 정속 이동 중 패킷 미전송**
+
+            ```
+            // client/online/onlineGame.cpp
+            if (prevVelocity_ != currVelocity_) {  // 속도가 바뀐 프레임에만 ON
+                moveChange_ = true;
+            }
+            ...
+            if (moveStateSendAcc_ >= moveStateSendInterval_) {  // 50ms마다
+                if (moveChange_) { sendMovePacket(); }          // 플래그가 켜진 경우에만 전송
+            }
+            ```
+
+            `moveChange_`는 velocity가 변한 프레임에만 true가 된다.
+            플레이어가 일직선 정속 이동 중이면 velocity가 일정 → `moveChange_` 계속 false → **패킷 미전송**.
+
+            원격 클라이언트 측에서는 100ms 이상 패킷이 없으면 velocity를 강제로 0으로 초기화한다:
+
+            ```
+            if (obj->netInterpAcc_ >= obj->netInterpDuration_ * 2.f) {  // 100ms
+                obj->setVelocity(0);  // → idle 전환
+            }
+            ```
+
+            결과: 출발·방향 전환 시에만 패킷이 전송되므로 그 사이 100ms마다 idle로 전환,
+            다음 패킷 도착 시 run으로 복귀 → 진동 반복.
+
+            ---
+
+            **원인 2 (보조): 연속 패킷 간 위치 차이로 velocity를 역산할 때의 불안정성**
+
+            NPC(`SNpcMovePacket`)와 달리 플레이어(`SMovePacket`)는 velocity 필드가 없어서
+            클라이언트가 직접 velocity를 역산하고 있었다:
+
+            ```
+            // client/online/onlineGame.cpp  movePlayer()
+            velocity = (newPos - prevNetworkPos_) / timeSinceLastPacket
+            ```
+
+            `timeSinceLastPacket`은 네트워크 지터의 영향을 받고,
+            위치 변화량도 부동소수점 오차가 있기 때문에 역산된 velocity가 불안정하다.
+            계산된 speed가 run 임계값(0.05~0.1) 근방에서 매 패킷마다 오르내리면
+            idle/run 전환이 반복된다.
+
+            ---
+
+            **원인 3 (핵심): 원격 플레이어의 Kinematic 물리 바디에 linearDamping 적용**
+
+            ```
+            // client/online/onlineGame.cpp  createOtherPlayer()
+            otherPlayer->body().setLinearDamping(kPlayerLinearDamping);  // = 12.f
+            ```
+
+            ```
+            // client/physicsWorld.cpp  PhysicsWorld::step()  Kinematic 분기
+            b.setLinearVel(b.linearVel() * max(0.f, 1.f - b.linearDamping() * dt));
+            ```
+
+            `kPlayerLinearDamping = 12`, 물리 스텝 60Hz(dt ≈ 0.0167s):
+            스텝당 감속 계수 = 1 - 12 × 0.0167 = **0.8**
+
+            20Hz 패킷(50ms) 사이에 3번의 물리 스텝이 실행되므로:
+
+            | 시점 | velocity | tRun (애니메이션 블렌딩 비율) |
+            |------|----------|------------------------------|
+            | 패킷 도착 | 8.0 | ≈ 1.00 |
+            | +17ms (1스텝) | 6.4 | ≈ 0.83 |
+            | +33ms (2스텝) | 5.12 | ≈ 0.61 |
+            | +50ms (3스텝) | 4.1  | ≈ 0.79 |
+            | 다음 패킷 도착 | 8.0 | ≈ 1.00 |
+
+            `tRun`이 0.61~1.0 사이를 20Hz로 반복 → **run 애니메이션 블렌딩 비율 자체가 진동**.
+            임계값 근방의 저속 이동 시에는 speed가 run 임계값 아래로 떨어져 idle ↔ run 전환도 발생.
+
+            로컬 플레이어에게 이 문제가 없는 이유:
+            로컬 플레이어는 `kPlayerAccelRate = kPlayerMaxSpeed × kPlayerLinearDamping = 120`으로
+            매 프레임 가속을 가해 damping과 균형을 맞추지만,
+            **원격 플레이어는 네트워크 패킷 외에는 가속 없이 damping만 적용**된다.
+
+            ---
+
+            **수정 내용**
+
+            1. **`SMovePacket`에 velocity 필드 추가 (원인 2 해결)**
+
+               NPC와 동일하게 서버가 velocity를 직접 전송:
+
+               ```cpp
+               // ServerEngine/protocol.hpp
+               struct CMovePacket : PacketHeader {
+                   XMFLOAT3 pos;
+                   XMFLOAT3 velocity;  // 추가
+               };
+               struct SMovePacket : PacketHeader {
+                   uint16   playerId;
+                   XMFLOAT3 pos;
+                   XMFLOAT3 velocity;  // 추가
+               };
+               ```
+
+               클라이언트는 역산 없이 수신한 velocity를 그대로 적용:
+
+               ```cpp
+               // client/online/onlineGame.cpp  movePlayer()
+               // 이전: velocity = (newPos - prevNetworkPos_) / timeSinceLastPacket  ← 역산
+               // 이후: player->setVelocity(receivedVelocity)                        ← 직접 적용
+               ```
+
+            2. **이동 중 패킷 지속 전송 (원인 1 해결)**
+
+               ```cpp
+               // client/online/onlineGame.cpp
+               // 이전
+               if (prevVelocity_ != currVelocity_) { moveChange_ = true; }
+               // 이후
+               constexpr float kMoveThreshold = 0.05f;
+               if (prevVelocity_ != currVelocity_ || currVelocity_.len() > kMoveThreshold) {
+                   moveChange_ = true;
+               }
+               ```
+
+               현재 이동 중(speed > 0.05)이면 velocity가 변하지 않아도 50ms 주기로 패킷을 전송.
+               → 100ms timeout이 발동할 일 없음.
+
+            3. **원격 플레이어의 linearDamping을 0으로 설정 (원인 3 해결)**
+
+               ```cpp
+               // client/online/onlineGame.cpp  createOtherPlayer()
+               // 이전: otherPlayer->body().setLinearDamping(kPlayerLinearDamping);
+               // 이후: otherPlayer->body().setLinearDamping(0.f);
+               ```
+
+               원격 플레이어의 velocity는 네트워크 패킷으로만 결정되며,
+               물리 감속이 적용되면 패킷 간격 사이에 velocity가 소멸해 애니메이션이 진동한다.
+               Kinematic 네트워크 객체는 damping 없이 일정 속도로 dead-reckoning 보간하는 것이 올바름.
+
+            ---
+
+            **동작 타임라인 (수정 후, 60fps / 패킷 50ms 기준)**
+
+            [정상 이동 중]
+            t=0ms    패킷 도착. setVelocity(8.0). netInterpAcc_ = 0.
+            t=17ms   물리 스텝. damping 0 → velocity 8.0 유지. tRun ≈ 1.0 → run ✓
+            t=33ms   velocity 8.0 유지. tRun ≈ 1.0 → run ✓
+            t=50ms   패킷 도착. setVelocity(8.0). netInterpAcc_ = 0.
+                     → velocity 항상 일정, tRun 항상 1.0, 애니메이션 안정 ✓
+
+            [플레이어 정지]
+            t=0ms    마지막 이동 패킷. velocity = 8.0.
+            t=50ms   정지 패킷 도착. setVelocity(0). → 즉시 idle 전환 ✓
+
+            [정지 패킷 유실 또는 패킷 단절]
+            t=0ms    마지막 이동 패킷. velocity = 8.0.
+            t=50ms   패킷 없음. netInterpAcc_ = 50ms.
+            t=100ms  netInterpAcc_ = 100ms >= 50ms × 2 → setVelocity(0) → idle 전환 (최대 100ms 지연) ✓
+
+            ---
+
+            **수정 파일**
+            - `ServerEngine/protocol.hpp` — `CMovePacket`, `SMovePacket`에 `velocity` 필드 추가
+            - `RoomServer/PacketManager.hpp/.cpp` — `makeSMovePacket()` velocity 인자 추가
+            - `RoomServer/PacketManager.cpp` — `handleCMovePacket()` clone 시 velocity 복사
+            - `RoomServer/Room.cpp` — `move()`에서 `cMvPkt->velocity`를 `makeSMovePacket`에 전달
+            - `client/PacketManager.hpp/.cpp` — `makeCMovePacket()` velocity 인자 추가, `handleSMovePacket()` velocity 파싱
+            - `client/online/onlineGame.hpp` — `movePlayer()` 시그니처 변경
+            - `client/online/onlineGame.cpp` — `movePlayer()` 역산 제거 / `moveChange_` 조건 완화 / `sendMovePacket()` velocity 포함 / 원격 플레이어
+`linearDamping(0.f)`
 
 [x] 각각의 패킷마다 유효성 검사를 할 수 있는 기능 추가
 [o] JobTimer 구현

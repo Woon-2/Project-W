@@ -102,7 +102,7 @@ void PacketManager::handleSMovePacket(byte* buffer, int32 len) {
 	auto sMvPkt = reinterpret_cast<SMovePacket*>(buffer);
 
 	auto game = INet::ClientApp::onlineGame();
-	game->movePlayer(sMvPkt->playerId, sMvPkt->pos);
+	game->movePlayer(sMvPkt->playerId, sMvPkt->pos, sMvPkt->velocity);
 }
 
 void PacketManager::handleSMouseMovePacket(byte* buffer, int32 len) {
@@ -146,12 +146,13 @@ std::shared_ptr<SendBuffer> PacketManager::makeCAttackPacket(uint64 clientMs) {
 	return sendBuffer;
 }
 
-std::shared_ptr<SendBuffer> PacketManager::makeCMovePacket(DirectX::XMFLOAT3 pos) {
+std::shared_ptr<SendBuffer> PacketManager::makeCMovePacket(DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity) {
 	auto sendBuffer = SendBufferManager::open(sizeof(CMovePacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
 	auto cMvPkt = bw.reserve<CMovePacket>();
 	cMvPkt->pos = pos;
+	cMvPkt->velocity = velocity;
 
 	cMvPkt->size = bw.writeSize();
 	cMvPkt->type = PacketType::C_Move;

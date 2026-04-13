@@ -40,7 +40,7 @@ public:
 	void createGoblin(const ObjectInfo& goblinInfo);
 
 	void removePlayer( i32t playerId );
-	void movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos);
+	void movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity);
 	void rotatePlayer(uint16 playerId, float yawRad);
 	void moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
 	void onNpcAttack(uint16 npcId);
