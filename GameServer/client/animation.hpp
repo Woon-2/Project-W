@@ -141,8 +141,17 @@ public:
 	const std::vector<mu::Mat4x4>& finalXformData() const;
 
 	// AnimSystem에서, 이 AnimBlender 객체의 계산 단계를 설정하기 위해 만들어진 함수
-	void setStage(PassKey<AnimSystem>, Stage stage) { stage_ = stage; }
+	void setStage(PassKey<AnimSystem>, Stage stage) {
+		stage_ = stage;
+		if (stage == Stage::committedLocal) {
+			priority_ = 0.f;
+		}
+	}
 	Stage stage() const { return stage_; }
+
+	// 이 AnimBlender의 priority를 누적 갱신한다.
+	// AnimSystem::updatePriorities에서 호출된다.
+	void accumulatePriority(PassKey<AnimSystem>, Seconds dt, mu::Vec3 refPos);
 
 protected:
 	// 본들의 로컬 변환 행렬들에 접근한다.
@@ -170,6 +179,10 @@ protected:
 	const Skeleton& skeleton() const { return skeleton_; }
 
 	float priority_{};
+	// Object::update() 시점의 소유자 위치를 캐싱한다.
+	// AnimSystem::updatePriorities에서 priority 계산에 사용된다.
+	mu::Vec3 cachedPos_{};
+	void setOwnerPos(mu::Vec3 pos) { cachedPos_ = pos; }
 
 private:
 	// 특정한 클립의 현재 프레임 상태 및
@@ -210,6 +223,13 @@ public:
 	void untrackAnimBlender(AnimBlender* blender) {
 		std::erase(blenders_, blender);
 	}
+	// 모든 AnimBlender의 priority를 누적 갱신한다.
+	// Object::update() 루프 이후, AnimSystem::update() 이전에 호출해야 한다.
+	// 각 AnimBlender의 cachedPos(Object::update에서 캐싱된 위치)와
+	// refPos(기준 위치, 보통 로컬 플레이어 위치) 사이의 거리를 사용해
+	// priority를 누적한다.
+	void updatePriorities(Seconds dt, mu::Vec3 refPos);
+
 	// 등록된 AnimBlender 객체들을 priority로 max-heapify하고
 	// 모든 AnimBlender 객체들을 업데이트하거나 주어진 timeSlice가 소진될 때까지
 	// AnimBlender 객체들을 업데이트한다.

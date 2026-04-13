@@ -279,6 +279,19 @@ void AnimBlender::updateFrames(const std::string& key, Seconds elapsed) {
 	}
 }
 
+void AnimBlender::accumulatePriority(PassKey<AnimSystem>, Seconds dt, mu::Vec3 refPos) {
+	const float dist = (cachedPos_ - refPos).len();
+	constexpr float kDistScale = 20.f;
+	const float d = dist / kDistScale;
+	priority_ += static_cast<float>(dt.count()) * (1.f / (1.f + d * d));
+}
+
+void AnimSystem::updatePriorities(Seconds dt, mu::Vec3 refPos) {
+	for (auto* b : blenders_) {
+		b->accumulatePriority({}, dt, refPos);
+	}
+}
+
 // 등록된 AnimBlender 객체들을 priority로 max-heapify하고
 // 모든 AnimBlender 객체들을 업데이트하거나 주어진 timeSlice가 소진될 때까지
 // AnimBlender 객체들을 업데이트한다.

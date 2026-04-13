@@ -478,6 +478,11 @@ void Game::update(Milliseconds deltaTime) {
 		goblin->update(deltaTime, tPhysicInterpolation);
 	}
 
+	animSystem_.updatePriorities(
+		std::chrono::duration_cast<Seconds>(deltaTime),
+		player_->pos()
+	);
+
 	camera_.update();
 	dirLight_.update(deltaTime);
 	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), assetConfigs_.cascade, assetConfigs_.shadowMap);

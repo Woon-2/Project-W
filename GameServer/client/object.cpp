@@ -18,6 +18,7 @@ void AnimBlenderPlayer::init(const AssetManager& assetManager) {
 // 애니메이션 블렌딩 상태를 갱신한다.
 void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
 	
 	// 객체의 속력이 runThreshold를 넘는지를 기준으로
 	// run 애니메이션이 필요한지 idle 애니메이션이 필요한지 판단한다.
@@ -138,7 +139,6 @@ void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 		animTimeRun_ -= durationRun;
 	}
 
-	priority_ = 0.f;
 }
 
 void AnimBlenderPlayer::onCalcLocal(PassKey<AnimSystem>) {
@@ -236,6 +236,7 @@ void AnimBlenderGoblin::init(const AssetManager& assetManager) {
 // 애니메이션 블렌딩 상태를 갱신한다.
 void AnimBlenderGoblin::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
 
 	// 객체의 속력이 walkThreshold를 넘는지를 기준으로
 	// walk 애니메이션이 필요한지 idle 애니메이션이 필요한지 판단한다.
@@ -320,7 +321,6 @@ void AnimBlenderGoblin::update(Seconds deltaTime, void* pVoidOwner) {
 		tHit_ = 0.f;
 	}
 
-	priority_ = 0.f;
 }
 
 void AnimBlenderGoblin::onCalcLocal(PassKey<AnimSystem>) {
@@ -394,6 +394,7 @@ void AnimBlenderAnubis::init(const AssetManager& assetManager) {
 // 애니메이션 블렌딩 상태를 갱신한다.
 void AnimBlenderAnubis::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
 
 	// 객체의 속력이 walkThreshold를 넘는지를 기준으로
 	// walk 애니메이션이 필요한지 idle 애니메이션이 필요한지 판단한다.
@@ -467,7 +468,6 @@ void AnimBlenderAnubis::update(Seconds deltaTime, void* pVoidOwner) {
 		tHit_ = 0.f;
 	}
 
-	priority_ = 0.f;
 }
 
 void AnimBlenderAnubis::onCalcLocal(PassKey<AnimSystem>) {
@@ -541,6 +541,7 @@ void AnimBlenderBat::init(const AssetManager& assetManager) {
 // 애니메이션 블렌딩 상태를 갱신한다.
 void AnimBlenderBat::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
 
 	// 객체의 속력이 walkThreshold를 넘는지를 기준으로
 	// walk 애니메이션이 필요한지 idle 애니메이션이 필요한지 판단한다.
@@ -614,7 +615,6 @@ void AnimBlenderBat::update(Seconds deltaTime, void* pVoidOwner) {
 		tHit_ = 0.f;
 	}
 
-	priority_ = 0.f;
 }
 
 void AnimBlenderBat::onCalcLocal(PassKey<AnimSystem>) {
@@ -688,6 +688,7 @@ void AnimBlenderBomber::init(const AssetManager& assetManager) {
 // 애니메이션 블렌딩 상태를 갱신한다.
 void AnimBlenderBomber::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
 
 	// 객체의 속력이 walkThreshold를 넘는지를 기준으로
 	// walk 애니메이션이 필요한지 idle 애니메이션이 필요한지 판단한다.
@@ -761,7 +762,6 @@ void AnimBlenderBomber::update(Seconds deltaTime, void* pVoidOwner) {
 		tHit_ = 0.f;
 	}
 
-	priority_ = 0.f;
 }
 
 void AnimBlenderBomber::onCalcLocal(PassKey<AnimSystem>) {
@@ -835,6 +835,7 @@ void AnimBlenderDemon::init(const AssetManager& assetManager) {
 // 애니메이션 블렌딩 상태를 갱신한다.
 void AnimBlenderDemon::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
 
 	// 객체의 속력이 walkThreshold를 넘는지를 기준으로
 	// walk 애니메이션이 필요한지 idle 애니메이션이 필요한지 판단한다.
@@ -908,7 +909,6 @@ void AnimBlenderDemon::update(Seconds deltaTime, void* pVoidOwner) {
 		tHit_ = 0.f;
 	}
 
-	priority_ = 0.f;
 }
 
 void AnimBlenderDemon::onCalcLocal(PassKey<AnimSystem>) {
@@ -982,6 +982,7 @@ void AnimBlenderDragon::init(const AssetManager& assetManager) {
 // 애니메이션 블렌딩 상태를 갱신한다.
 void AnimBlenderDragon::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
 
 	// 객체의 속력이 walkThreshold를 넘는지를 기준으로
 	// walk 애니메이션이 필요한지 idle 애니메이션이 필요한지 판단한다.
@@ -1055,7 +1056,6 @@ void AnimBlenderDragon::update(Seconds deltaTime, void* pVoidOwner) {
 		tHit_ = 0.f;
 	}
 
-	priority_ = 0.f;
 }
 
 void AnimBlenderDragon::onCalcLocal(PassKey<AnimSystem>) {
@@ -1129,6 +1129,7 @@ void AnimBlenderEyeball::init(const AssetManager& assetManager) {
 // 애니메이션 블렌딩 상태를 갱신한다.
 void AnimBlenderEyeball::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
 
 	// 객체의 속력이 walkThreshold를 넘는지를 기준으로
 	// walk 애니메이션이 필요한지 idle 애니메이션이 필요한지 판단한다.
@@ -1202,7 +1203,6 @@ void AnimBlenderEyeball::update(Seconds deltaTime, void* pVoidOwner) {
 		tHit_ = 0.f;
 	}
 
-	priority_ = 0.f;
 }
 
 void AnimBlenderEyeball::onCalcLocal(PassKey<AnimSystem>) {
@@ -1276,6 +1276,7 @@ void AnimBlenderFishman::init(const AssetManager& assetManager) {
 // 애니메이션 블렌딩 상태를 갱신한다.
 void AnimBlenderFishman::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
 
 	// 객체의 속력이 walkThreshold를 넘는지를 기준으로
 	// walk 애니메이션이 필요한지 idle 애니메이션이 필요한지 판단한다.
@@ -1349,7 +1350,6 @@ void AnimBlenderFishman::update(Seconds deltaTime, void* pVoidOwner) {
 		tHit_ = 0.f;
 	}
 
-	priority_ = 0.f;
 }
 
 void AnimBlenderFishman::onCalcLocal(PassKey<AnimSystem>) {
@@ -1423,6 +1423,7 @@ void AnimBlenderGargoyle::init(const AssetManager& assetManager) {
 // 애니메이션 블렌딩 상태를 갱신한다.
 void AnimBlenderGargoyle::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
 
 	// 객체의 속력이 walkThreshold를 넘는지를 기준으로
 	// walk 애니메이션이 필요한지 idle 애니메이션이 필요한지 판단한다.
@@ -1496,7 +1497,6 @@ void AnimBlenderGargoyle::update(Seconds deltaTime, void* pVoidOwner) {
 		tHit_ = 0.f;
 	}
 
-	priority_ = 0.f;
 }
 
 void AnimBlenderGargoyle::onCalcLocal(PassKey<AnimSystem>) {
