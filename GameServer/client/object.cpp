@@ -250,8 +250,11 @@ void AnimBlenderGoblin::update(Seconds deltaTime, void* pVoidOwner) {
 	// blendRange 설정
 	const auto walkBlendRangeStart = walkThreshold - 0.03f;
 	const auto walkBlendRangeEnd = walkThreshold + 3.f;
-	// tWalk 구하기
-	tWalk_ = std::clamp( (speed - walkBlendRangeStart) / (walkBlendRangeEnd - walkBlendRangeStart), 0.f, 1.f );
+	// tWalk 목표값 구하기
+	const auto targetTWalk = std::clamp( (speed - walkBlendRangeStart) / (walkBlendRangeEnd - walkBlendRangeStart), 0.f, 1.f );
+
+	// 지수 감쇠로 tWalk를 부드럽게 보간한다 (시상수 0.12s → 전환의 63%가 ~120ms 내 완료)
+	tWalk_ += (targetTWalk - tWalk_) * (1.f - std::exp(-deltaTime.count() / 0.12f));
 
 	// tIdle 구하기
 	tIdle_ = 1.f - tWalk_;
@@ -262,6 +265,14 @@ void AnimBlenderGoblin::update(Seconds deltaTime, void* pVoidOwner) {
 	const auto durationIdle = targetClip("Goblin_Idle")->duration;
 	while (animTimeIdle_ > durationIdle) {
 		animTimeIdle_ -= durationIdle;
+	}
+
+	if (tWalk_ > 0.f) {
+		animTimeWalk_ += deltaTime;
+		const auto durationWalk = targetClip("Goblin_Walk")->duration;
+		while (animTimeWalk_ > durationWalk) {
+			animTimeWalk_ -= durationWalk;
+		}
 	}
 
 	if (cooldownAttack_ > 0ms) {
@@ -1569,36 +1580,6 @@ void Object::setModel(const Model* pModel){
 // @param deltaTime 마지막 프레임으로부터 경과한 시간
 // @param tPhysicInterpolation 이전 PhysicState와 현재 PhysicState의 보간 비율
 //		(게임 객체가 계산해서 일괄적으로 전달해야 한다.)
-void Object::enableRagdoll(const RagdollDef& def, PhysicsWorld& world)
-{
-	if (ragdoll_ && ragdoll_->isBuilt()) return;  // already active
-
-	const Model* pModel = renderState_.pModel;
-	if (!pModel || !pModel->skeleton.bones || !pModel->skeleton.pRoot) return;
-
-	ragdoll_ = std::make_unique<Ragdoll>();
-	ragdoll_->build(pModel->skeleton, def, world);
-
-	// Seed body positions from the most recent animation output.
-	if (renderState_.animBlender && !renderState_.animBlender->finalXformData().empty()) {
-		ragdoll_->seedFromFinalXforms(
-		    renderState_.animBlender->finalXformData(),
-		    pModel->skeleton,
-		    renderState_.world);
-	}
-
-	ragdoll_->activate();
-	world.setSolverIterations(20);
-}
-
-void Object::disableRagdoll(PhysicsWorld& world)
-{
-	if (!ragdoll_) return;
-	ragdoll_->destroy(world);
-	ragdoll_.reset();
-	world.setSolverIterations(10);
-}
-
 void Object::update(Milliseconds deltaTime, float tPhysicInterpolation) {
 	const auto& prev = body_.prev();
 	const auto& curr = body_.curr();
@@ -1670,36 +1651,6 @@ void Object::update(Milliseconds deltaTime, float tPhysicInterpolation) {
 
 	if (renderState_.animBlender) {
 		renderState_.animBlender->update(deltaTime, this);
-	}
-
-	// When the ragdoll is active, override finalXformData with body-derived transforms.
-	// Each entry must be: bone.toLocal * boneXformDress
-	// where boneXformDress = boneWorldMat * inv(renderState_.world).
-	// boneWorldMat has rotation = body->orient(), translation = bone origin (not capsule centre).
-	if (ragdoll_ && ragdoll_->isActive()
-	    && renderState_.animBlender
-	    && renderState_.pModel
-	    && renderState_.pModel->skeleton.bones) {
-
-		const Skeleton&   skel       = renderState_.pModel->skeleton;
-		auto&             finalXforms = renderState_.animBlender->finalXformData();
-		const mu::Mat4x4  invWorld   = mu::Mat4x4{} / renderState_.world;
-
-		for (const RagdollBone& rb : ragdoll_->bones()) {
-			if (rb.boneIdx < 0 || rb.boneIdx >= static_cast<int>(skel.bones->size())) continue;
-			const Bone& bone = (*skel.bones)[rb.boneIdx];
-
-			// Bone origin = capsule centre - orient.rotate(capsuleOffset)
-			const mu::Vec3 boneOrigin =
-			    rb.body->pos() - rb.body->orient().rotate(rb.capsuleOffset);
-
-			// Build bone world matrix: rotation + bone-origin translation.
-			mu::Mat4x4 boneWorldMat(rb.body->orient());
-			boneWorldMat.setRow(3, mu::Vec4(boneOrigin.x(), boneOrigin.y(), boneOrigin.z(), 1.f));
-
-			// boneXformDress = boneWorldMat * inv(world)
-			finalXforms[rb.boneIdx] = bone.toLocal * (boneWorldMat / renderState_.world);
-		}
 	}
 
 	// 부속 객체 갱신

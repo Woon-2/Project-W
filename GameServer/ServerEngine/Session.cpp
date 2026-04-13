@@ -36,7 +36,7 @@ void Session::disconnect(std::string_view cause) {
 	registerDisconnect();
 }
 
-void Session::send(SendBuffer* sendBuffer) {
+void Session::send(const std::shared_ptr<SendBuffer>& sendBuffer) {
 	if (!isConnected()) {
 		return;
 	}
@@ -115,13 +115,8 @@ void Session::registerSend() {
 	) {
 		int32 errCode = ::WSAGetLastError();
 		if (errCode != ERROR_IO_PENDING) {
-			handleError( "register send"sv, errCode);
+			handleError("register send"sv, errCode);
 			sendEv_.setOwner(nullptr);	// release reference
-
-			for (int32 i = 0; i < size; ++i) {
-				odelete(sendEv_.sendBuffers_[i]);
-			}
-
 			sendEv_.sendBuffers_.clear();
 			sending_.store(false);
 		}
@@ -165,19 +160,6 @@ void Session::processRecv(int32 numBytes) {
 
 void Session::processSend(int32 numBytes) {
 	sendEv_.setOwner(nullptr);	// release reference
-
-	for (auto sb : sendEv_.sendBuffers_) {
-		/*if (sb != nullptr) {
-			auto header = reinterpret_cast<PacketHeader*>(sb->data());
-			std::cout << "To Client - ID: " << id() << '\n';
-			std::cout << "Sent packet - Type: " << static_cast<uint16>(header->type) << ", Size: " << header->size << '\n';
-		}*/
-		if (sb == nullptr) {
-			break;
-		}
-
-		odelete(sb);
-	}
 	sendEv_.sendBuffers_.clear();
 
 	if (numBytes == 0) {

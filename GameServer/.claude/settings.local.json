@@ -27,7 +27,10 @@
       "Bash(msbuild client.vcxproj /p:Configuration=Debug /p:Platform=x64 /t:Build /m /nologo)",
       "Bash(find /d/DirectX12/Project-W/GameServer/client -type f -name *particle* -o -name *Particle*)",
       "Bash(find D:DirectX12Project-WGameServerclient -type f -name *particle* -o -name *Particle*)",
-      "Bash(find D:DirectX12Project-WGameServerclient -type f \\\\\\(-name *.hlsl -o -name *billboard* -o -name *shader* \\\\\\))"
+      "Bash(find D:DirectX12Project-WGameServerclient -type f \\\\\\(-name *.hlsl -o -name *billboard* -o -name *shader* \\\\\\))",
+      "Bash(wc -l /c/Users/PC/Desktop/zolzak/Project-W/GameServer/RoomServer/*.cpp /c/Users/PC/Desktop/zolzak/Project-W/GameServer/RoomServer/*.hpp)",
+      "Bash(ls -la /c/Users/PC/Desktop/zolzak/Project-W/GameServer/client/*.hpp)",
+      "Bash(wc -l \"C:\\\\Users\\\\PC\\\\Desktop\\\\zolzak\\\\Project-W\\\\GameServer\\\\RoomServer\"/*.cpp)"
     ]
   }
 }

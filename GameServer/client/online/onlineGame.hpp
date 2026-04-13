@@ -21,33 +21,6 @@ class SendBuffer;
 
 namespace Online {
 
-enum class MsgType : u8t {
-	None,
-	SetupPlayer,
-	SetupCube,
-	PlayerMouseMove,
-	PlayerRollback,
-	PlayerMove,
-	Fire,
-	Reload,
-	HitResult,
-	Death
-};
-
-struct Message {
-	MsgType type{MsgType::None};
-	i32t objectId;
-	i32t targetId;
-	u32t materialSetIdx;
-	mu::Vec3 pos;
-	mu::Vec3 velocity;
-	mu::NQuat orient;
-	mu::Vec3 scale;
-	float cameraPitch{0.f};
-	i32t currHp{0};
-	i32t bulletCnt{0};
-};
-
 class Game : public IGame {
 public:
 	// 사용자 입력을 받아 스레드 풀과 GFX 객체를 초기화한다.
@@ -64,8 +37,15 @@ public:
 	void setupGround(const ObjectInfo& groundInfo);
 	void createOtherPlayer(const ObjectInfo& otherPlayerInfo);
 	void createOtherPlayer(const PlayerInfo& otherPlayerInfo);
+	void createGoblin(const ObjectInfo& goblinInfo);
+
 	void removePlayer( i32t playerId );
-	void movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
+	void movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos);
+	void rotatePlayer(uint16 playerId, float yawRad);
+	void moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
+	void onNpcAttack(uint16 npcId);
+	void applyHit(uint16 targetId, int32 newHp);
+	void applyTimeSync(uint64 serverMs);
 
 	// 게임의 업데이트는 다음 순서대로 이루어진다.
 	// 네트워크 패킷 처리(SleepEx)
@@ -79,31 +59,6 @@ public:
 	// 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
 	LRESULT receiveWndMsg( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam ) override;
 
-	//bool findPlayer(i32t playerId);
-
-	//void createOtherPlayer( i32t playerId, float x, float y, float z ) {
-	//	auto newPlayer = std::make_shared<Object>( );
-
-	//	newPlayer->setId( playerId );
-	//	newPlayer->setPos( mu::Vec3( x, y, z ) );
-	//	newPlayer->setModel( assetManager_.modelPlayer( ) );
-	//	newPlayer->setScale( 1.f );
-	//	newPlayer->enableBVRendering();
-	//	// 임시
-	//	newPlayer->setHp(100);
-	//	// newPlayer->setAmmo(30);
-
-	//	//Equipment rifle{};
-	//	//rifle.socketType = Bone::SocketType::RightHand;
-	//	//rifle.object = std::make_unique<Object>();
-	//	//// rifle.object->setModel(assetManager_.modelRifle());
-	//	//rifle.object->setScale(mu::Vec3(1.f, 1.f, 1.f));
-
-	//	//newPlayer->equip(std::move(rifle));
-
-	//	addOtherPlayer( newPlayer );
-	//}
-
 private:
 	enum class CameraMode {
 		FirstPerson,
@@ -116,10 +71,9 @@ private:
 	};
 
 	void sendMovePacket();
-
 	void sendMouseMovePacket();
-	void sendMoveStatePacket();
-	void sendEnterRoomPacket(i32t roomId);
+	void sendAttackPacket();
+
 	void processInput(Milliseconds deltaTime);
 	void processInputLobby(Milliseconds deltaTime);
 	void processInputGame(Milliseconds deltaTime);
@@ -133,6 +87,9 @@ private:
 	void hideCursor();
 	void showCursor();
 
+	void importNode(std::ifstream& ifs);
+	void importTerrain(std::ifstream& ifs, TerrainObject& terrain);
+
 	AssetManager assetManager_{};
 
 	PhysicsWorld physicsWorld_{};
@@ -140,7 +97,7 @@ private:
 	Seconds physicUpdateInterval{ 1s / 60.f };	// 60fps로 물리 업데이트
 
 	bool moveChange_{};
-	Seconds moveStateSendAcc_{0s};
+	Seconds moveStateSendAcc_{0s};				// move 패킷 전송을 위한 시간 누산기
 	Seconds moveStateSendInterval_{1s / 20.f};	// 50ms(20Hz)마다 move 패킷 전송
 	
 	AnimSystem animSystem_{};
@@ -152,7 +109,9 @@ private:
 	Timer* pTimer_ = nullptr;
 
 	std::shared_ptr<Cube> ground_{};
-	std::shared_ptr<Goblin> goblin_{};
+	std::shared_ptr<TerrainObject> terrain_{};
+	std::vector<std::shared_ptr<Goblin>> goblins_{};
+	std::unordered_map<uint16, std::shared_ptr<Goblin>> idGoblinMap_{};
 	std::shared_ptr<Anubis> anubis_{};
 	std::shared_ptr<Bat> bat_{};
 	std::shared_ptr<Bomber> bomber_{};
@@ -179,6 +138,8 @@ private:
 	AssetConfigs assetConfigs_{};
 
 	bool playerDead_{};
+
+	int64 serverClockOffset_{ 0 };   // clockOffset = serverMs - localNow (S_TimeSync 수신 시 갱신)
 
 	BasicPlayerHpUI playerHpUI_{};
 	std::unordered_map<i32t, BasicPlayerHpUI> otherPlayerHpUIs_{};

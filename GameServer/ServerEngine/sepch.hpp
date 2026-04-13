@@ -31,6 +31,7 @@
 #include <vector>
 #include <map>
 #include <unordered_map>
+#include <queue>
 
 #include "protocol.hpp"
 #include "concurrentqueue.h"
@@ -39,12 +40,22 @@
 
 #include "NetAddress.hpp"
 #include "SocketUtils.hpp"
-#include "globalTLS.hpp"
 #include "MemoryManager.hpp"
 #include "ObjectPool.hpp"
 #include "IdPool.hpp"
 
 using namespace std::literals;
+
+using Nanoseconds = std::chrono::duration<float, std::nano>;
+using Microseconds = std::chrono::duration<float, std::micro>;
+using Milliseconds = std::chrono::duration<float, std::milli>;
+using Seconds = std::chrono::duration<float>;
+
+using SystemClock = std::chrono::system_clock;
+using HighResolutionClock = std::chrono::high_resolution_clock;
+
+using SystemClockTimePoint = std::chrono::time_point<HighResolutionClock, Nanoseconds>;
+using HighResolutionClockTimePoint = std::chrono::time_point<HighResolutionClock, Nanoseconds>;
 
 size_t numberOfPhysicalCores() noexcept;
 

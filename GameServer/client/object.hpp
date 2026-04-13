@@ -6,8 +6,6 @@
 #include "animation.hpp"
 #include "event.hpp"
 #include "rigidBody.hpp"
-#include "ragdoll.hpp"
-#include "ragdollDef.hpp"
 
 class AssetManager;
 class Object;
@@ -27,6 +25,12 @@ public:
 	void onCalcLocal(PassKey<AnimSystem>) override;
 
 	IEventBus* eventBus() override { return &eventBus_; }
+
+	void triggerDeath() override {
+		animTimeDeath_ = 0s;
+		cooldownDeath_ = 200ms;
+		dead_ = true;
+	}
 
 	Seconds runAnimTime() const { return animTimeRun_; }
 	Seconds runDuration() const { return targetClip("Player_Run_Forward")->duration; }
@@ -76,6 +80,12 @@ public:
 	void onCalcLocal(PassKey<AnimSystem>) override;
 
 	IEventBus* eventBus() override { return &eventBus_; }
+
+	void triggerDeath() override {
+		animTimeDeath_ = 0s;
+		cooldownDeath_ = 200ms;
+		dead_ = true;
+	}
 
 private:
 	std::vector<AnimFrame> framesBlended_{};
@@ -542,16 +552,6 @@ public:
 	// 바운딩 볼륨 렌더링을 비활성화한다.
 	void disableBVRendering() { willRenderBV_ = false; }
 
-	// Build a ragdoll from def, seed positions from the current animation pose,
-	// and activate it.  Call while the object is animated (animBlender must be set).
-	// Increases solver iterations to 20 for the joint chain.
-	void enableRagdoll(const RagdollDef& def, PhysicsWorld& world);
-
-	// Deactivate the ragdoll, destroy all bodies/joints, restore solver iterations.
-	void disableRagdoll(PhysicsWorld& world);
-
-	bool hasActiveRagdoll() const { return ragdoll_ && ragdoll_->isActive(); }
-
 	void setId( i32t id ) {	id_ = id; }
 	i32t getId( ) const { return id_; }
 
@@ -560,6 +560,13 @@ public:
 	void setHp(i32t hp) { hp_ = hp; }
 	i32t hp() const { return hp_; }
 
+	void setDead(bool dead) {
+		isDead_ = dead;
+		if (dead && renderState_.animBlender) {
+			renderState_.animBlender->triggerDeath();
+		}
+	}
+	bool isDead() const { return isDead_; }
 	void setMaxHp(i32t v) { maxHp_ = v; }
 	i32t maxHp() const    { return maxHp_; }
 
@@ -580,9 +587,8 @@ protected:
 	i32t id_{ -1 };
 
 	i32t hp_{};
+	bool isDead_ = false;
 	i32t maxHp_{};
-
-	std::unique_ptr<Ragdoll> ragdoll_;
 
 private:
 };
@@ -615,6 +621,11 @@ public:
 
 		animSystem.trackAnimBlender(renderState_.animBlender.get());
 	}
+
+	// 원격 플레이어 네트워크 보간 상태. 로컬 플레이어에서는 사용되지 않음.
+	// onlineGame.cpp의 Game 루프에서 관리됨.
+	Seconds netInterpDuration_{ 1s / 20.f };
+	Seconds netInterpAcc_{ 0s };
 
 private:
 	EventBus eventBus_{};

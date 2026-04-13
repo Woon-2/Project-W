@@ -14,7 +14,7 @@ void Listener::startAccept() {
 	acceptEvs_.reserve(count);
 
 	for (int32 i = 0; i < count; ++i) {
-		auto acceptEv = onew<AcceptEvent>();
+		auto acceptEv = ObjectPool<AcceptEvent>::pop();
 		acceptEv->setOwner(this);
 		registerAccept(acceptEv);
 		acceptEvs_.emplace_back(acceptEv);
@@ -28,7 +28,7 @@ void Listener::dispatch(IoEvent* event, int32 numBytes) {
 }
 
 void Listener::registerAccept(AcceptEvent* event) {
-	auto session = onew<GameSession>();
+	auto session = ObjectPool<GameSession>::pop();
 	CreateIoCompletionPort(session->getHandle(), iocpHandle_, 0, 0);
 
 	event->clear();
@@ -42,8 +42,9 @@ void Listener::registerAccept(AcceptEvent* event) {
 			std::cout << "AcceptEx failed. Error Code - " << errCode << '\n'
 				<< "Error Message - " << std::system_category().message(errCode) << '\n';
 
-			odelete(session);
-			registerAccept(event);
+			//ObjectPool<GameSession>::push(session);
+			//registerAccept(event);
+			exit(-1);
 		}
 	};
 }

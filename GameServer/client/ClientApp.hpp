@@ -23,8 +23,11 @@ class ClientApp {
 public:
 	static void init(){ serverSession_ = std::make_unique<ServerSession>();	}
 	static bool connectToServer() { return serverSession_->connect(); }
+	static void release() { game_.reset(); serverSession_.reset(); }
 	// Online 모드가 아닐 땐 사용하지 않도록 한다.
-	static void send(SendBuffer* sendBuffer) { serverSession_->send(sendBuffer); }
+	static void addSendBuffer(const std::shared_ptr<SendBuffer>& sendBuffer) { serverSession_->addSendBuffer(sendBuffer); }
+	// Online 모드가 아닐 땐 사용하지 않도록 한다.
+	static void send() { serverSession_->send(); }
 
 	static void setup(GameType type, Timer* pTimer);
 	// setup이 호출되기 전까지는 호출하지 않도록 한다.

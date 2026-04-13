@@ -4,7 +4,7 @@
 #include "Session.hpp"
 
 class Room;
-class Object;
+class Player;
 
 class GameSession : public PacketSession {
 public:
@@ -12,7 +12,7 @@ public:
 	virtual ~GameSession();
 
 	Room* room() { return myRoom_; }
-	Object* player() { return myPlayer_; }
+	Player* player() { return myPlayer_; }
 
 protected:
 	virtual void onConnected() override;
@@ -22,7 +22,7 @@ protected:
 
 private:
 	Room* myRoom_;
-	Object* myPlayer_;
+	Player* myPlayer_;
 };
 
 #endif // game_session_hpp

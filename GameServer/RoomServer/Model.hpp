@@ -7,10 +7,7 @@
 // 이름과 충돌체 정보 뿐이다.
 struct Model {
 	std::string name;
-	std::vector<BoundingRect> boundingRects;
-	std::map<std::string, int> boundingRectIdxMap;
-	std::vector<AABB> aabbs;
-	std::map<std::string, int> aabbIdxMap;
+	BVH bvh;
 };
 
 // 바이너리 파일로부터 모델을 읽어온다.

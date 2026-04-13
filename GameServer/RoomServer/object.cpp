@@ -1,123 +1,245 @@
-﻿#include "rspch.hpp"
+#include "rspch.hpp"
 #include "object.hpp"
 #include "Model.hpp"
+#include "GameSession.hpp"
 
-// 모델을 설정한다.
-// 모델에 바운딩 볼륨이 존재할 경우, 월드 공간 바운딩 볼륨을 구축한다.
-// (모델의 바운딩 볼륨을 기반으로 게임 객체의 월드 변환을 적용한
-//  월드 공간 바운딩 볼륨을 따로 두어야 월드 공간 충돌 처리가 가능하다.)
 void Object::setModel(const Model* pModel){
-	DISPLAY_ERROR_STR(pModel != nullptr, "[Game Error] Object::setModel: 널 모델이 전달되었습니다.", false);
+	DISPLAY_ERROR_STR(pModel != nullptr, "[Game Error] Object::setModel: null model.", false);
 	if (pModel == nullptr) {
 		return;
 	}
 
 	pModel_ = pModel;
-
-	physicState_.aabbs.resize(pModel->aabbs.size());
-	for (std::size_t i = 0u; i < physicState_.aabbs.size(); ++i) {
-		physicState_.aabbs[i].center
-			= pModel->aabbs[i].center * physicState_.scale
-			+ physicState_.pos;
-		physicState_.aabbs[i].size
-			= pModel->aabbs[i].size * physicState_.scale;
-	}
-
-	const auto pos2D = mu::Vec2(physicState_.pos.x(), physicState_.pos.z());
-	const auto scale2D = mu::Vec2(physicState_.scale.x(), physicState_.scale.z());
-
-	physicState_.boundingRects.resize(pModel->boundingRects.size());
-	for (std::size_t i = 0u; i < physicState_.boundingRects.size(); ++i) {
-		physicState_.boundingRects[i].center
-			= pModel->boundingRects[i].center * scale2D + pos2D;
-		physicState_.boundingRects[i].size
-			= pModel->boundingRects[i].size * scale2D;
-	}
+	rebuildBodyBVH();
 }
 
-// 물리 시뮬레이션과 별개로 게임 객체의
-	// 자체적인 갱신 루틴을 필요로 할 때 이 함수에 작성한다.
 void Object::update(Milliseconds deltaTime) {
 
 }
 
-// 게임 객체의 위치를 갱신한다.
-// PhysicState의 AABB와 Bounding Rect 역시 갱신된다.
 void MU_CALLCONV Object::setPos(mu::Vec3 newPos) {
-	physicState_.pos = newPos;
+	body_.setPos(newPos);
 
-	if (!pModel_) {
-		return;
-	}
-
-	physicState_.aabbs.resize(pModel_->aabbs.size());
-	for (std::size_t i = 0u; i < physicState_.aabbs.size(); ++i) {
-		physicState_.aabbs[i].center
-			= pModel_->aabbs[i].center * physicState_.scale
-			+ physicState_.pos;
-		physicState_.aabbs[i].size
-			= pModel_->aabbs[i].size * physicState_.scale;
-	}
-
-	const auto pos2D = mu::Vec2(physicState_.pos.x(), physicState_.pos.z());
-	const auto scale2D = mu::Vec2(physicState_.scale.x(), physicState_.scale.z());
-
-	physicState_.boundingRects.resize(pModel_->boundingRects.size());
-	for (std::size_t i = 0u; i < physicState_.boundingRects.size(); ++i) {
-		physicState_.boundingRects[i].center
-			= pModel_->boundingRects[i].center * scale2D + pos2D;
-		physicState_.boundingRects[i].size
-			= pModel_->boundingRects[i].size * scale2D;
+	if (pModel_ && !pModel_->bvh.empty()) {
+		rebuildBodyBVH();
 	}
 }
 
-// 게임 객체의 속도를 갱신한다.
-// 이전 PhysicState와 현재 PhysicState의 속도가 모두 갱신된다.
-void MU_CALLCONV Object::setVelocity(mu::Vec3 newVelocity) {
-	physicState_.velocity = newVelocity;
-}
-
-// 게임 객체의 각속도를 갱신한다.
-void MU_CALLCONV Object::setOmega(mu::Vec3 newOmega) {
-	physicState_.omega = newOmega;
-}
-
-// 게임 객체의 방향을 갱신한다.
-// 게임 객체의 방향 벡터들도 전부 갱신된다.
 void MU_CALLCONV Object::setOrient(mu::NQuat newOrient) {
-	physicState_.orient = newOrient;
-	right_ = physicState_.orient.rotate(mu::Vec3(1.f, 0.f, 0.f));
-	up_ = physicState_.orient.rotate(mu::Vec3(0.f, 1.f, 0.f));
-	forward_ = physicState_.orient.rotate(mu::Vec3(0.f, 0.f, 1.f));
+	body_.setOrient(newOrient);
+	right_   = body_.orient().rotate(mu::Vec3(1.f, 0.f, 0.f));
+	up_      = body_.orient().rotate(mu::Vec3(0.f, 1.f, 0.f));
+	forward_ = body_.orient().rotate(mu::Vec3(0.f, 0.f, 1.f));
+
+	if (pModel_ && !pModel_->bvh.empty()) {
+		rebuildBodyBVH();
+	}
 }
 
-// 게임 객체의 크기를 갱신한다.
-// PhysicState의 AABB와 Bounding Rect 역시 갱신된다.
 void MU_CALLCONV Object::setScale(mu::Vec3 newScale) {
-	physicState_.scale = newScale;
+	body_.setScale(newScale);
 
+	if (pModel_ && !pModel_->bvh.empty()) {
+		rebuildBodyBVH();
+	}
+}
 
-	if (!pModel_) {
-		return;
+// Rebuilds the world-space BVH in body_ from the model's local-space BVH template.
+// Tree structure (children indices) is preserved; only shape/bounds values are transformed.
+void Object::rebuildBodyBVH() {
+	if (!pModel_ || pModel_->bvh.empty()) return;
+
+	const auto& localBVH = pModel_->bvh;
+	BVH& worldBVH = body_.worldBVH();
+
+	const mu::Vec3  pos    = body_.pos();
+	const mu::NQuat orient = body_.orient();
+	const mu::Vec3  scale  = body_.scale();
+
+	const mu::Mat4x4 objWorld = mu::Mat4x4(mu::scale(scale))
+		* mu::Mat4x4(orient)
+		* mu::translate(pos);
+
+	worldBVH.nodes.resize(localBVH.nodes.size());
+	for (std::size_t i = 0; i < localBVH.nodes.size(); ++i) {
+		const auto& src = localBVH.nodes[i];
+		auto& dst = worldBVH.nodes[i];
+
+		dst.children = src.children;
+		dst.name = src.name;
+		dst.boneIdx = src.boneIdx;
+
+		dst.shape = std::visit([&](auto&& s) -> std::variant<AABB, OBB> {
+			using T = std::decay_t<decltype(s)>;
+			if constexpr (std::is_same_v<T, AABB>) {
+				return AABB{
+					s.center * scale + pos,
+					s.size * scale,
+				};
+			}
+			else {
+				mu::NQuat worldOrient = orient;
+				worldOrient *= s.orient;
+				return OBB{
+					orient.rotate(s.center * scale) + pos,
+					s.halfExtents * scale,
+					worldOrient,
+				};
+			}
+			}, src.shape);
+
+		dst.bounds = std::visit([](auto&& s) -> AABB {
+			using T = std::decay_t<decltype(s)>;
+			if constexpr (std::is_same_v<T, OBB>) return obbToAABB(s);
+			else                                   return s;
+			}, dst.shape);
+	}
+}
+
+/*--------------
+     Goblin
+--------------*/
+
+GoblinUpdateResult Goblin::update(Seconds dt, const std::vector<GameSession*>& sessions) {
+	if ( hp() <= 0 ) {
+		return {};
 	}
 
-	physicState_.aabbs.resize(pModel_->aabbs.size());
-	for (std::size_t i = 0u; i < physicState_.aabbs.size(); ++i) {
-		physicState_.aabbs[i].center
-			= pModel_->aabbs[i].center * physicState_.scale
-			+ physicState_.pos;
-		physicState_.aabbs[i].size
-			= pModel_->aabbs[i].size * physicState_.scale;
+	// Freeze rotation: physics solver may accumulate angular velocity on a Dynamic body.
+	body().setOmega(mu::Vec3{});
+
+	GameSession* nearestSession = nullptr;
+	float nearestDist = std::numeric_limits<float>::max();
+
+	for (auto s : sessions) {
+		float d = (s->player()->pos() - pos()).len();
+		if (d < nearestDist) {
+			nearestDist = d;
+			nearestSession = s;
+		}
 	}
 
-	const auto pos2D = mu::Vec2(physicState_.pos.x(), physicState_.pos.z());
-	const auto scale2D = mu::Vec2(physicState_.scale.x(), physicState_.scale.z());
+	GoblinUpdateResult result{};
+	auto& velocity = result.velocity;
 
-	physicState_.boundingRects.resize(pModel_->boundingRects.size());
-	for (std::size_t i = 0u; i < physicState_.boundingRects.size(); ++i) {
-		physicState_.boundingRects[i].center
-			= pModel_->boundingRects[i].center * scale2D + pos2D;
-		physicState_.boundingRects[i].size
-			= pModel_->boundingRects[i].size * scale2D;
+	switch (aiState_) {
+	case GoblinAIState::Patrol: {
+		if (nearestDist < aggroRange_) {
+			aiState_ = GoblinAIState::Chase;
+			break;
+		}
+
+		auto toTarget = patrolTarget_ - pos();
+
+		if (toTarget.len2() < 0.25f) {
+			static std::mt19937 rng{std::random_device{}()};
+			std::uniform_real_distribution<float> angleDist(0.f, mu::pi * 2.f);
+
+			float angle = angleDist(rng);
+			patrolTarget_ = spawnPos_ + mu::Vec3(std::cos(angle) * 5.f, 0.f, std::sin(angle) * 5.f);
+		}
+		else {
+			auto dir = mu::NVec3(toTarget);
+
+			velocity = mu::Vec3(dir.x(), 0.f, dir.z()) * moveSpeed_;
+			setLinearVel(mu::Vec3(velocity.x(), body().linearVel().y(), velocity.z()));
+
+			float yaw = std::atan2(dir.x(), dir.z());
+			setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yaw)));
+		}
+		break;
 	}
+	case GoblinAIState::Chase: {
+		if (nearestDist < attackRange_) {
+			aiState_ = GoblinAIState::Attack;
+			break;
+		}
+		if (nearestDist > deaggroRange_) {
+			aiState_ = GoblinAIState::Return;
+			break;
+		}
+
+		auto toPlayer = nearestSession->player()->pos() - pos();
+		auto dir = mu::NVec3(toPlayer);
+
+		velocity = mu::Vec3(dir.x(), 0.f, dir.z()) * moveSpeed_;
+		setLinearVel(mu::Vec3(velocity.x(), body().linearVel().y(), velocity.z()));
+
+		float yaw = std::atan2(dir.x(), dir.z());
+		setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yaw)));
+		break;
+	}
+	case GoblinAIState::Attack: {
+		if (nearestDist > attackRange_) {
+			aiState_ = GoblinAIState::Chase;
+			break;
+		}
+
+		setLinearVel(mu::Vec3(0.f, body().linearVel().y(), 0.f));
+
+		auto toPlayer = nearestSession->player()->pos() - pos();
+		setOrient(mu::NQuat(mu::Radian(), mu::Radian(),
+			mu::Radian(std::atan2(toPlayer.x(), toPlayer.z())))
+		);
+
+		if (attackCooldown_ > 0s) {
+			attackCooldown_ -= dt;
+		}
+		else {
+			auto player = nearestSession->player();
+
+			int32 newHp = std::max(player->hp() - attackDamage_, 0);
+			player->setHp(newHp);
+
+			result.hit = {static_cast<uint16>(nearestSession->id()), newHp};
+
+			attackCooldown_ = attackCooldownMax_;
+		}
+		break;
+	}
+	case GoblinAIState::Return: {
+		if (nearestDist < aggroRange_) {
+			aiState_ = GoblinAIState::Chase;
+			break;
+		}
+
+		auto toSpawn = spawnPos_ - pos();
+
+		if (toSpawn.len2() < 0.25f) {
+			setLinearVel(mu::Vec3{});
+			setPos(spawnPos_);
+			body().snapToCurrent();
+			patrolTarget_ = spawnPos_;
+			aiState_ = GoblinAIState::Patrol;
+			break;
+		}
+
+		auto dir = mu::NVec3(toSpawn);
+
+		velocity = mu::Vec3(dir.x(), 0.f, dir.z()) * moveSpeed_;
+		setLinearVel(mu::Vec3(velocity.x(), body().linearVel().y(), velocity.z()));
+
+		float yaw = std::atan2(dir.x(), dir.z());
+		setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yaw)));
+		break;
+	}
+	}
+
+	return result;
+}
+
+void Goblin::recordSnapshot(uint64 serverMs) {
+	posHistory_[historyHead_] = {serverMs, pos()};
+	historyHead_ = (historyHead_ + 1) % historySize_;
+}
+
+mu::Vec3 Goblin::rewindPos(uint64 targetMs) const {
+	for (int32 i = 1; i <= historySize_; ++i) {
+		int32 idx = (historyHead_ - i + historySize_) % historySize_;
+		if ( posHistory_[ idx ].serverMs <= targetMs ) {
+			return posHistory_[ idx ].pos;
+		}
+	}
+
+	return posHistory_[historyHead_ % historySize_].pos;
 }

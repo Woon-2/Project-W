@@ -1,6 +1,7 @@
 ﻿#include "pch.hpp"
 #include "onlineGame.hpp"
 #include "../errorHandling.hpp"
+#include "../binaryImport.hpp"
 #include "../timer.hpp"
 #include "SendBuffer.hpp"
 #include "../PacketManager.hpp"
@@ -44,6 +45,17 @@ Game::Game() {
 }
 
 void Game::setupStage() {
+	const auto path = std::filesystem::path("../resources/levels/level.bin");
+	auto ifs = std::ifstream(path, std::ios::binary);
+	DISPLAY_ERROR_STR(ifs.good(), "[File I/O Error]: loadModelFromFile: "s + path.string() + " 파일을 열 수 없습니다."s, true);
+
+	readHeadTag(ifs, "Level");
+	const auto nodeCnt = readInteger(ifs, "NodeCnt");
+
+	importNode(ifs);
+
+	readTailTag(ifs, "Level");
+
 	skybox_.setModel( assetManager_.modelCube( ) );
 	skybox_.setSkyboxMaterial( assetManager_.skyboxMaterial( ) );
 
@@ -52,6 +64,62 @@ void Game::setupStage() {
 	dirLight_.intensity = 2.f;
 	dirLight_.type = PBRPipeline::LightData::Type::DirectionalLight;
 	dirLight_.isMainDirectionalLight = true;
+}
+
+void Game::importNode(std::ifstream& ifs) {
+	readHeadTag(ifs, "Node");
+	const auto type = readText(ifs, "Type");
+	const auto name = readText(ifs, "Name");
+
+	gSharedLog << "[Level Load] 레벨 노드 " << name << " 로드 완료\n";
+
+	readHeadTag(ifs, "LocalTRS");
+	const auto localT = readVec3(ifs, "Position");
+	const auto localR = readVec4(ifs, "Rotation");
+	const auto localS = readVec3(ifs, "Scale");
+	readTailTag(ifs, "LocalTRS");
+
+	readHeadTag(ifs, "WorldTRS");
+	const auto worldT = readVec3(ifs, "Position");
+	const auto worldR = readVec4(ifs, "Rotation");
+	const auto worldS = readVec3(ifs, "Scale");
+	readTailTag(ifs, "WorldTRS");
+
+	Object object{};
+	object.setPos(DirectX::XMLoadFloat3(&worldT));
+	object.setOrient(DirectX::XMLoadFloat4(&worldR));
+	object.setScale(DirectX::XMLoadFloat3(&worldS));
+
+	if (type == "Terrain") {
+		terrain_ = std::make_shared<TerrainObject>(std::move(object));
+		importTerrain(ifs, *terrain_);
+		terrain_->update(0ms, 1.f);
+	}
+	else {
+		// no-op
+	}
+
+	const auto childCnt = readInteger(ifs, "ChildCnt");
+	readHeadTag(ifs, "Children");
+	for (int i = 0; i < childCnt; ++i) {
+		importNode(ifs);
+	}
+	readTailTag(ifs, "Children");
+
+	readTailTag(ifs, "Node");
+}
+
+void Game::importTerrain(std::ifstream& ifs, TerrainObject& terrain) {
+	const auto manifestPath = readText(ifs, "ManifestPath");
+	terrain.setTerrainData(assetManager_.terrain());
+
+	// 지형 물리 바디 설정: Static body (위치는 importNode WorldTRS에서 설정됨)
+	terrain.body().setMotionType(MotionType::Static);
+
+	// TerrainCollider 등록 (BVH 불필요 — heightField 직접 조회)
+	const TerrainData* td = assetManager_.terrain();
+	if (td && !td->heightField.empty())
+		physicsWorld_.registerTerrain(&terrain.body(), &td->heightField);
 }
 
 void Game::setupPlayer(const PlayerInfo& playerInfo) {
@@ -108,6 +176,11 @@ void Game::createOtherPlayer(const ObjectInfo& otherPlayerInfo) {
 	otherPlayer->setAnimBlender(animSystem_, assetManager_);
 	otherPlayer->enableBVRendering();
 
+	otherPlayer->body().setMotionType(MotionType::Kinematic);
+	otherPlayer->body().setMass(80.f);
+	otherPlayer->body().setLinearDamping(kPlayerLinearDamping);
+	otherPlayer->body().setAngularDamping(100.f);
+
 	// 서버 주도 객체: 패킷으로 pos/vel이 설정되면 PhysicsWorld가 Kinematic 적분으로
 	// 패킷 간격 사이를 dead-reckoning 보간한다.
 	physicsWorld_.registerBody(&otherPlayer->body(),
@@ -128,13 +201,41 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 	otherPlayer->setAnimBlender(animSystem_, assetManager_);
 	otherPlayer->enableBVRendering();
 
+	otherPlayer->body().setMotionType(MotionType::Kinematic);
+	otherPlayer->body().setMass(80.f);
+	otherPlayer->body().setLinearDamping(kPlayerLinearDamping);
+	otherPlayer->body().setAngularDamping(100.f);
+
 	// 서버 주도 객체: 패킷으로 pos/vel이 설정되면 PhysicsWorld가 Kinematic 적분으로
 	// 패킷 간격 사이를 dead-reckoning 보간한다.
-	physicsWorld_.registerBody(&otherPlayer->body(),
-		[p = otherPlayer.get()]() { p->rebuildBodyBVH(); });
+	//physicsWorld_.registerBody(&otherPlayer->body(),
+	//	[p = otherPlayer.get()]() { p->rebuildBodyBVH(); });
 
 	otherPlayers_.push_back(otherPlayer);
 	idPlayerMap_[otherPlayerInfo.playerId] = otherPlayer;
+}
+
+void Game::createGoblin(const ObjectInfo& goblinInfo) {
+	auto goblin = std::make_shared<Goblin>();
+
+	goblin->setId(goblinInfo.objectId);
+	goblin->setPos(DirectX::XMLoadFloat3(&goblinInfo.pos));
+	goblin->setOrient(DirectX::XMLoadFloat4(&goblinInfo.orient));
+	goblin->setScale(DirectX::XMLoadFloat3(&goblinInfo.scale));
+	goblin->setModel(assetManager_.modelGoblin());
+	goblin->setAnimBlender(animSystem_, assetManager_);
+	goblin->enableBVRendering();
+
+	goblin->body().setMotionType(MotionType::Kinematic);
+	goblin->body().setMass(40.f);
+	goblin->body().setLinearDamping(20.f);
+	goblin->body().setAngularDamping(100.f);
+
+	physicsWorld_.registerBody(&goblin->body(),
+		[p = goblin.get()]() { p->rebuildBodyBVH(); });
+
+	goblins_.push_back(goblin);
+	idGoblinMap_[goblinInfo.objectId] = goblin;
 }
 
 void Game::removePlayer( i32t playerId ) {
@@ -161,7 +262,7 @@ void Game::removePlayer( i32t playerId ) {
 	otherPlayerHpUIs_.erase( playerId );
 }
 
-void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
+void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos) {
 	auto player = idPlayerMap_[playerId];
 
 	DISPLAY_ERROR_STR(player != nullptr,
@@ -173,9 +274,119 @@ void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 
 		return;
 	}
 
-	player->setPos(DirectX::XMLoadFloat3(&pos));
-	player->setOrient(DirectX::XMLoadFloat4(&orient));
-	player->setVelocity(DirectX::XMLoadFloat3(&velocity));
+	if (player->isDead()) {
+		return;
+	}
+
+	// 애니메이션용 velocity: 패킷 도착 시점에 1번만 계산.
+	// 서버가 보내는 velocity 필드 대신, 연속 패킷 간 위치 변화량을 netInterpAcc_(패킷 전송 주기를 판단하는 누적 시간)으로 나눈다.
+	// netInterpAcc_는 직전 패킷 이후 경과 시간이므로 실제 패킷 간격과 동일하다.
+	// 간격이 너무 길면(첫 패킷, 재접속 등) 0으로 초기화해 오류를 방지한다.
+	const float timeSinceLastPacket = Seconds(player->netInterpAcc_).count();
+	const float maxValidInterval = Seconds(player->netInterpDuration_ * 2.f).count();
+
+	if ( timeSinceLastPacket > 0.001f && timeSinceLastPacket <= maxValidInterval ) {
+		const mu::Vec3 newPos = DirectX::XMLoadFloat3(&pos);
+		const auto movement = newPos - player->pos();
+		const auto velocity = movement / timeSinceLastPacket;
+		player->setVelocity(velocity);
+		std::cout << "other player velocity: " << velocity.x() << ", " << velocity.y() << ", " << velocity.z() << '\n';
+	}
+	else {
+		player->setVelocity(mu::Vec3{});
+	}
+
+	player->body().advanceState();
+	player->setCurrPos(DirectX::XMLoadFloat3(&pos));
+	player->netInterpAcc_ = 0s;
+}
+
+void Game::rotatePlayer(uint16 playerId, float yawRad) {
+	auto player = idPlayerMap_[playerId];
+
+	DISPLAY_ERROR_STR(player != nullptr,
+		"[Game Error] Game::rotatePlayer: 회전하려는 플레이어가 존재하지 않습니다.\n",
+		false
+	);
+
+	if (player == nullptr) {
+		return;
+	}
+
+	if (player->isDead()) {
+		return;
+	}
+
+	const mu::NQuat yaw = mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yawRad));
+	player->setOrient(yaw);
+}
+
+void Game::moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
+	auto goblin = idGoblinMap_[npcId];
+
+	DISPLAY_ERROR_STR(goblin != nullptr,
+		"[Game Error] Game::moveGoblin: 이동하려는 고블린이 존재하지 않습니다.\n",
+		false
+	);
+
+	if (goblin == nullptr) {
+		return;
+	}
+
+	if (goblin->isDead()) {
+		return;
+	}
+
+	goblin->body().advanceState();
+	goblin->setCurrPos(DirectX::XMLoadFloat3(&pos));
+	goblin->setOrient(DirectX::XMLoadFloat4(&orient));
+	goblin->setVelocity(DirectX::XMLoadFloat3(&velocity));
+}
+
+void Game::onNpcAttack( uint16 npcId ) {
+	auto npc = idGoblinMap_[ npcId ];
+
+	DISPLAY_ERROR_STR( npc != nullptr,
+		"[Game Error] Game::onNpcAttack: 공격하는 NPC가 존재하지 않습니다.\n",
+		false
+	);
+
+	if ( npc == nullptr ) {
+		return;
+	}
+
+	holdEvent( eventList_, EvAttack( static_cast<i32t>(npcId) ) );
+}
+
+void Game::applyHit( uint16 targetId, int32 newHp ) {
+	if ( player_ && static_cast<uint16>(player_->getId()) == targetId ) {
+		player_->setHp( newHp );
+
+		if ( newHp <= 0 ) {
+			playerDead_ = true;
+		}
+		return;
+	}
+	if ( auto it = idPlayerMap_.find( targetId ); it != idPlayerMap_.end() ) {
+		it->second->setHp( newHp );
+		if ( newHp <= 0 ) {
+			it->second->setDead( true );
+		}
+		return;
+	}
+	if ( auto it = idGoblinMap_.find( targetId ); it != idGoblinMap_.end() ) {
+		it->second->setHp( newHp );
+		if ( newHp <= 0 ) {
+			it->second->setDead( true );
+		}
+	}
+}
+
+void Game::applyTimeSync( uint64 serverMs ) {
+	serverClockOffset_ = static_cast<int64>(serverMs) -
+		static_cast<int64>(std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::high_resolution_clock::now().time_since_epoch()
+		).count());
 }
 
 // 게임의 업데이트는 다음 순서대로 이루어진다.
@@ -251,7 +462,20 @@ void Game::update(Milliseconds deltaTime) {
 	player_->update(deltaTime, tPhysicInterpolation );
 
 	for ( auto& obj : otherPlayers_ ) {
-		obj->update( deltaTime, tPhysicInterpolation );
+		obj->netInterpAcc_ += deltaTime;
+		const float tNet = std::min(obj->netInterpAcc_ / obj->netInterpDuration_, 1.f);
+
+		// 패킷 2개 간격(100ms) 이상 새 패킷이 없으면 멈춘 것으로 확정.
+		// 1개 간격(50ms)이면 정상 패킷 도착 타이밍과 겹쳐 oscillation이 발생하므로 2배로 여유를 준다.
+		if ( obj->netInterpAcc_ >= obj->netInterpDuration_ * 2.f ) {
+			obj->setVelocity(mu::Vec3{});
+		}
+
+		obj->update( deltaTime, tNet );
+	}
+
+	for (auto& goblin : goblins_) {
+		goblin->update(deltaTime, tPhysicInterpolation);
 	}
 
 	camera_.update();
@@ -287,6 +511,8 @@ void Game::update(Milliseconds deltaTime) {
 	}*/
 
 	clearEvents(eventList_);
+
+	INet::ClientApp::send();
 }
 
 void Game::render() {
@@ -302,6 +528,10 @@ void Game::render() {
 		obj->render( gfx_ );
 	}
 
+	for (auto& goblin : goblins_) {
+		goblin->render(gfx_);
+	}
+
 	camera_.updateGFX(gfx_);
 	dirLight_.render(gfx_);
 
@@ -313,6 +543,13 @@ void Game::render() {
 		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
 	};
 	gfx_.addFrameData(frameDataPBRSkinned);
+
+	if (terrain_) {
+		terrain_->render(gfx_);
+		gfx_.addFrameData(TerrainPipeline::FrameData{
+			.globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f)
+		});
+	}
 
 	/*playerHpUI_.render(gfx_);
 	for (auto& [id, ui] : otherPlayerHpUIs_) {
@@ -408,68 +645,24 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 }
 
 void Game::sendMovePacket() {
-	auto sendBuffer = PacketManager::makeCMovePacket(player_->pos().getXmf(), player_->orient().getXmf(), player_->velocity().getXmf());
-	INet::ClientApp::send(sendBuffer);
+	auto sendBuffer = PacketManager::makeCMovePacket(player_->pos().getXmf());
+	INet::ClientApp::addSendBuffer(sendBuffer);
 }
 
 void Game::sendMouseMovePacket() {
-	/*const auto forward = player_->forward();
-	const auto yaw = std::atan2(forward.x(), forward.z());
+	const auto forward = player_->forward();
+	const auto yawRad = std::atan2(forward.x(), forward.z());
 
-	auto mouseMovePacket = Packet{
-		.header = {
-			.size = sizeof(PacketHeader) + sizeof(CSMouseMovePacket),
-			.id = static_cast<std::uint16_t>(PacketType::csMouseMove)
-		},
-		.csMouseMove = {
-			.playerYawRadian = yaw,
-			.cameraPitchRadian = cameraPitch_,
-			.timeStamp = static_cast<u32t>(Milliseconds(HighResolutionClock::now().time_since_epoch()).count())
-		}
-	};
-
-	i32t packetSize = sizeof(Packet);
-	auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
-	sendBuffer->copyData(&mouseMovePacket, packetSize);
-	serverSession_->send(sendBuffer);*/
+	auto sendBuffer = PacketManager::makeCMouseMovePacket(yawRad);
+	INet::ClientApp::addSendBuffer(sendBuffer);
 }
 
-void Game::sendMoveStatePacket() {
-	/*auto moveStatePacket = Packet{
-		.header = {
-			.size = sizeof(PacketHeader) + sizeof(CSMoveStatePacket),
-			.id = static_cast<std::uint16_t>(PacketType::csMoveState)
-		},
-		.csMoveState = {
-			.position = player_->physicState().pos.getXmf(),
-			.velocity = player_->physicState().evVelocity.getXmf(),
-			.forward = player_->forward().getXmf(),
-			.timeStamp = static_cast<u32t>(Milliseconds(HighResolutionClock::now().time_since_epoch()).count())
-		}
-	};
-
-	i32t packetSize = sizeof(Packet);
-	auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
-	sendBuffer->copyData(&moveStatePacket, packetSize);
-	serverSession_->send(sendBuffer);*/
-}
-
-void Game::sendEnterRoomPacket(i32t roomId) {
-	/*auto packet = Packet{
-		.header = {
-			.size = sizeof(PacketHeader) + sizeof(CSFindRoomPacket),
-			.id = static_cast<std::uint16_t>(PacketType::csFindRoom)
-		},
-		.csFindRoom = {
-			.roomId = roomId
-		}
-	};
-
-	i32t packetSize = sizeof(Packet);
-	auto sendBuffer = std::make_shared<SendBuffer>(packetSize);
-	sendBuffer->copyData(&packet, packetSize);
-	serverSession_->send(sendBuffer);
-	inRoom_ = true;*/
+void Game::sendAttackPacket() {
+	uint64 clientMs = static_cast<uint64>(
+		static_cast<int64>(std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::high_resolution_clock::now().time_since_epoch()
+		).count()) + serverClockOffset_);
+	INet::ClientApp::addSendBuffer(PacketManager::makeCAttackPacket(clientMs));
 }
 
 void Game::processInput(Milliseconds deltaTime) {
@@ -513,16 +706,16 @@ void Game::processInput(Milliseconds deltaTime) {
 // 방 입장 키 처리
 void Game::processInputLobby(Milliseconds deltaTime) {
 	if (keyboardStateCurr_['1'] & 0x80) {
-		sendEnterRoomPacket(1);
+		//sendEnterRoomPacket(1);
 	}
 	if (keyboardStateCurr_['2'] & 0x80) {
-		sendEnterRoomPacket(2);
+		//sendEnterRoomPacket(2);
 	}
 	if (keyboardStateCurr_['3'] & 0x80) {
-		sendEnterRoomPacket(3);
+		//sendEnterRoomPacket(3);
 	}
 	if (keyboardStateCurr_['4'] & 0x80) {
-		sendEnterRoomPacket(4);
+		//sendEnterRoomPacket(4);
 	}
 }
 
@@ -575,6 +768,8 @@ void Game::processInputGame(Milliseconds deltaTime) {
 
 	switch (cameraMode_) {
 	case CameraMode::ThirdPerson: {
+		const auto prevForward = player_->forward();
+
 		const auto yaw = mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left));
 		auto yawRotation = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), yaw);
 
@@ -593,7 +788,11 @@ void Game::processInputGame(Milliseconds deltaTime) {
 			camera_.setOffsetFromTargetPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, cameraYaw_) );
 		}
 
-		sendMouseMovePacket();
+		const auto currForward = player_->forward();
+
+		if (prevForward != currForward) {
+			sendMouseMovePacket();
+		}
 
 		mouseDeltaX_ = 0;
 		mouseDeltaY_ = 0;
@@ -628,6 +827,14 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		mouseDeltaY_ = 0;
 		break;
 	}
+	}
+
+	// 플레이어 공격: LButton 클릭 시 서버에 C_Attack 전송
+	if (!playerDead_
+		&& (keyboardStateCurr_[VK_LBUTTON] & 0x80)
+		&& !(keyboardStatePrev_[VK_LBUTTON] & 0x80))
+	{
+		sendAttackPacket();
 	}
 }
 

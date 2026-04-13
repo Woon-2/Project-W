@@ -84,7 +84,7 @@ class SendEvent : public IoEvent {
 public:
 	SendEvent() : IoEvent(IoType::send), sendBuffers_() {}
 
-	std::vector<SendBuffer*> sendBuffers_;
+	std::vector<std::shared_ptr<SendBuffer>> sendBuffers_;
 };
 
 #endif // io_event_hpp

@@ -25,6 +25,26 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 		handleSMovePacket(buffer, len);
 		break;
 
+	case PacketType::S_MouseMove:
+		handleSMouseMovePacket(buffer, len);
+		break;
+
+	case PacketType::S_NpcMove:
+		handleSNpcMovePacket(buffer, len);
+		break;
+
+	case PacketType::S_NpcAttack:
+		handleSNpcAttackPacket( buffer, len );
+		break;
+
+	case PacketType::S_Hit:
+		handleSHitPacket(buffer, len);
+		break;
+
+	case PacketType::S_TimeSync:
+		handleSTimeSyncPacket(buffer, len);
+		break;
+
 	default:
 		std::cout << "Unknown packet type received. Type: " << static_cast<uint16>(header->type) << '\n';
 		break;
@@ -46,6 +66,10 @@ void PacketManager::handleSEnterPacket(byte* buffer, int32 len) {
 		switch (objInfo.type) {
 		case ObjectType::Player:
 			game->createOtherPlayer(objInfo);
+			break;
+
+		case ObjectType::Goblin:
+			game->createGoblin(objInfo);
 			break;
 
 		case ObjectType::Ground:
@@ -78,20 +102,73 @@ void PacketManager::handleSMovePacket(byte* buffer, int32 len) {
 	auto sMvPkt = reinterpret_cast<SMovePacket*>(buffer);
 
 	auto game = INet::ClientApp::onlineGame();
-	game->movePlayer(sMvPkt->playerId, sMvPkt->pos, sMvPkt->orient, sMvPkt->velocity);
+	game->movePlayer(sMvPkt->playerId, sMvPkt->pos);
 }
 
-SendBuffer* PacketManager::makeCMovePacket(DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
+void PacketManager::handleSMouseMovePacket(byte* buffer, int32 len) {
+	auto sMouseMvPkt = reinterpret_cast<SMouseMovePacket*>(buffer);
+
+	auto game = INet::ClientApp::onlineGame();
+	game->rotatePlayer(sMouseMvPkt->playerId, sMouseMvPkt->yawRadian);
+}
+
+void PacketManager::handleSNpcMovePacket(byte* buffer, int32 len) {
+	auto sNpcMvPkt = reinterpret_cast<SNpcMovePacket*>(buffer);
+	INet::ClientApp::onlineGame()->moveGoblin(sNpcMvPkt->npcId, sNpcMvPkt->pos, sNpcMvPkt->orient, sNpcMvPkt->velocity);
+}
+
+void PacketManager::handleSNpcAttackPacket( byte* buffer, int32 len ) {
+	auto sNpcAtkPkt = reinterpret_cast<SNpcAttackPacket*>(buffer);
+	INet::ClientApp::onlineGame()->onNpcAttack( sNpcAtkPkt->npcId );
+}
+
+void PacketManager::handleSHitPacket(byte* buffer, int32 len) {
+	auto sHitPkt = reinterpret_cast<SHitPacket*>(buffer);
+	INet::ClientApp::onlineGame()->applyHit( sHitPkt->targetId, sHitPkt->newHp);
+}
+
+void PacketManager::handleSTimeSyncPacket(byte* buffer, int32 len) {
+	auto sTimeSyncPkt = reinterpret_cast<STimeSyncPacket*>(buffer);
+	INet::ClientApp::onlineGame()->applyTimeSync( sTimeSyncPkt->serverMs );
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeCAttackPacket(uint64 clientMs) {
+	auto sendBuffer = SendBufferManager::open(sizeof(CAttackPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto cAtkPkt = bw.reserve<CAttackPacket>();
+	cAtkPkt->clientMs = clientMs;
+
+	cAtkPkt->size = bw.writeSize();
+	cAtkPkt->type = PacketType::C_Attack;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeCMovePacket(DirectX::XMFLOAT3 pos) {
 	auto sendBuffer = SendBufferManager::open(sizeof(CMovePacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
 	auto cMvPkt = bw.reserve<CMovePacket>();
 	cMvPkt->pos = pos;
-	cMvPkt->orient = orient;
-	cMvPkt->velocity = velocity;
 
 	cMvPkt->size = bw.writeSize();
 	cMvPkt->type = PacketType::C_Move;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeCMouseMovePacket(float yawRad) {
+	auto sendBuffer = SendBufferManager::open(sizeof(CMouseMovePacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto cMouseMvPkt = bw.reserve<CMouseMovePacket>();
+	cMouseMvPkt->yawRadian = yawRad;
+
+	cMouseMvPkt->size = bw.writeSize();
+	cMouseMvPkt->type = PacketType::C_MouseMove;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;
