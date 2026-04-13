@@ -17,7 +17,7 @@ public:
 	static std::shared_ptr<SendBuffer> makeSEnterPacket(const PlayerInfo& playerInfo, const std::vector<ObjectInfo>& objInfos);
 	static std::shared_ptr<SendBuffer> makeSEnterOtherPacket(const PlayerInfo& playerInfo);
 	static std::shared_ptr<SendBuffer> makeSLeavePacket(uint16 playerId);
-	static std::shared_ptr<SendBuffer> makeSMovePacket(uint16 playerId, DirectX::XMFLOAT3 pos);
+	static std::shared_ptr<SendBuffer> makeSMovePacket(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity);
 	static std::shared_ptr<SendBuffer> makeSMouseMovePacket(uint16 playerId, float yawRad);
 	static std::shared_ptr<SendBuffer> makeSNpcMovePacket(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
 	static std::shared_ptr<SendBuffer> makeSNpcAttackPacket(uint16 npcId);

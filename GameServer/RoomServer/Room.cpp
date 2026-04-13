@@ -182,10 +182,12 @@ void Room::move(int32 sessionId, CMovePacket* cMvPkt) {
 
 	auto player = session->player();
 	player->setPos(DirectX::XMLoadFloat3(&cMvPkt->pos));
-	//player->setOrient(DirectX::XMLoadFloat4(&cMvPkt->orient));
-	//player->physicState().evVelocity = DirectX::XMLoadFloat3(&cMvPkt->velocity);
 
-	auto sMvPkt = PacketManager::makeSMovePacket(static_cast<uint16>(sessionId), player->pos().getXmf());
+	auto sMvPkt = PacketManager::makeSMovePacket(
+		static_cast<uint16>(sessionId),
+		player->pos().getXmf(),
+		cMvPkt->velocity
+	);
 	broadcastExcept(session, sMvPkt);
 
 	ObjectPool<CMovePacket>::push(cMvPkt);

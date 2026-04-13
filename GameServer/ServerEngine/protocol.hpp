@@ -106,15 +106,13 @@ struct SLeavePacket : public PacketHeader {
 
 struct CMovePacket : public PacketHeader {
 	DirectX::XMFLOAT3 pos;
-	//DirectX::XMFLOAT4 orient;
-	//DirectX::XMFLOAT3 velocity;
+	DirectX::XMFLOAT3 velocity;
 };
 
 struct SMovePacket : public PacketHeader {
 	uint16 playerId;
 	DirectX::XMFLOAT3 pos;
-	//DirectX::XMFLOAT4 orient;
-	//DirectX::XMFLOAT3 velocity;
+	DirectX::XMFLOAT3 velocity;
 };
 
 struct CMouseMovePacket : public PacketHeader {

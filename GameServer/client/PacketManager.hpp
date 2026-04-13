@@ -17,7 +17,7 @@ public:
 	static void handleSHitPacket(byte* buffer, int32 len);
 	static void handleSTimeSyncPacket(byte* buffer, int32 len);
 
-	static std::shared_ptr<SendBuffer> makeCMovePacket(DirectX::XMFLOAT3 pos);
+	static std::shared_ptr<SendBuffer> makeCMovePacket(DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity);
 	static std::shared_ptr<SendBuffer> makeCMouseMovePacket(float yawRad);
 	static std::shared_ptr<SendBuffer> makeCAttackPacket(uint64 clientMs);
 };

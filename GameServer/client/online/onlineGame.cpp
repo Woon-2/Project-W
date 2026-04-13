@@ -178,7 +178,10 @@ void Game::createOtherPlayer(const ObjectInfo& otherPlayerInfo) {
 
 	otherPlayer->body().setMotionType(MotionType::Kinematic);
 	otherPlayer->body().setMass(80.f);
-	otherPlayer->body().setLinearDamping(kPlayerLinearDamping);
+	// 원격 플레이어는 velocity가 네트워크 패킷으로만 결정된다.
+	// 물리 감속(linearDamping)을 적용하면 패킷 간격 사이에 velocity가 소멸해
+	// 애니메이션 블렌딩 비율이 진동하므로, 감속을 0으로 설정한다.
+	otherPlayer->body().setLinearDamping(0.f);
 	otherPlayer->body().setAngularDamping(100.f);
 
 	// 서버 주도 객체: 패킷으로 pos/vel이 설정되면 PhysicsWorld가 Kinematic 적분으로
@@ -203,13 +206,16 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 
 	otherPlayer->body().setMotionType(MotionType::Kinematic);
 	otherPlayer->body().setMass(80.f);
-	otherPlayer->body().setLinearDamping(kPlayerLinearDamping);
+	// 원격 플레이어는 velocity가 네트워크 패킷으로만 결정된다.
+	// 물리 감속(linearDamping)을 적용하면 패킷 간격 사이에 velocity가 소멸해
+	// 애니메이션 블렌딩 비율이 진동하므로, 감속을 0으로 설정한다.
+	otherPlayer->body().setLinearDamping(0.f);
 	otherPlayer->body().setAngularDamping(100.f);
 
 	// 서버 주도 객체: 패킷으로 pos/vel이 설정되면 PhysicsWorld가 Kinematic 적분으로
 	// 패킷 간격 사이를 dead-reckoning 보간한다.
-	//physicsWorld_.registerBody(&otherPlayer->body(),
-	//	[p = otherPlayer.get()]() { p->rebuildBodyBVH(); });
+	physicsWorld_.registerBody(&otherPlayer->body(),
+		[p = otherPlayer.get()]() { p->rebuildBodyBVH(); });
 
 	otherPlayers_.push_back(otherPlayer);
 	idPlayerMap_[otherPlayerInfo.playerId] = otherPlayer;
@@ -228,7 +234,8 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 
 	goblin->body().setMotionType(MotionType::Kinematic);
 	goblin->body().setMass(40.f);
-	goblin->body().setLinearDamping(20.f);
+	//goblin->body().setLinearDamping(20.f);
+	goblin->body().setLinearDamping(0.f);
 	goblin->body().setAngularDamping(100.f);
 
 	physicsWorld_.registerBody(&goblin->body(),
@@ -262,7 +269,7 @@ void Game::removePlayer( i32t playerId ) {
 	otherPlayerHpUIs_.erase( playerId );
 }
 
-void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos) {
+void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity) {
 	auto player = idPlayerMap_[playerId];
 
 	DISPLAY_ERROR_STR(player != nullptr,
@@ -278,26 +285,11 @@ void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos) {
 		return;
 	}
 
-	// 애니메이션용 velocity: 패킷 도착 시점에 1번만 계산.
-	// 서버가 보내는 velocity 필드 대신, 연속 패킷 간 위치 변화량을 netInterpAcc_(패킷 전송 주기를 판단하는 누적 시간)으로 나눈다.
-	// netInterpAcc_는 직전 패킷 이후 경과 시간이므로 실제 패킷 간격과 동일하다.
-	// 간격이 너무 길면(첫 패킷, 재접속 등) 0으로 초기화해 오류를 방지한다.
-	const float timeSinceLastPacket = Seconds(player->netInterpAcc_).count();
-	const float maxValidInterval = Seconds(player->netInterpDuration_ * 2.f).count();
-
-	if ( timeSinceLastPacket > 0.001f && timeSinceLastPacket <= maxValidInterval ) {
-		const mu::Vec3 newPos = DirectX::XMLoadFloat3(&pos);
-		const auto movement = newPos - player->pos();
-		const auto velocity = movement / timeSinceLastPacket;
-		player->setVelocity(velocity);
-		std::cout << "other player velocity: " << velocity.x() << ", " << velocity.y() << ", " << velocity.z() << '\n';
-	}
-	else {
-		player->setVelocity(mu::Vec3{});
-	}
-
+	// 서버가 보낸 velocity를 그대로 사용한다.
+	// 위치 차이로 역산하던 이전 방식은 패킷 지터에 민감해 애니메이션 진동을 유발했다.
 	player->body().advanceState();
-	player->setCurrPos(DirectX::XMLoadFloat3(&pos));
+	player->setCurrPos( DirectX::XMLoadFloat3( &pos ) );
+	player->setVelocity( DirectX::XMLoadFloat3( &velocity ) );
 	player->netInterpAcc_ = 0s;
 }
 
@@ -412,8 +404,10 @@ void Game::update(Milliseconds deltaTime) {
 	// 현재 속도 저장
 	currVelocity_ = player_->velocity();
 	
-	// 이전 평가 물리량과 현재 평가 물리량의 차이가 move 패킷 전송 임계값 이상이라면, move 패킷 전송 플래그를 켠다.
-	if( prevVelocity_ != currVelocity_ ) {
+	// 속도가 바뀌거나 현재 이동 중이면 move 패킷 전송 플래그를 켠다.
+	// 정속 이동 중에도 패킷을 전송해야 원격 클라이언트의 100ms 타임아웃이 발동하지 않는다.
+	constexpr float kMoveThreshold = 0.05f;
+	if (prevVelocity_ != currVelocity_ || currVelocity_.len() > kMoveThreshold) {
 		moveChange_ = true;
 	}
 
@@ -650,7 +644,7 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 }
 
 void Game::sendMovePacket() {
-	auto sendBuffer = PacketManager::makeCMovePacket(player_->pos().getXmf());
+	auto sendBuffer = PacketManager::makeCMovePacket(player_->pos().getXmf(), player_->velocity().getXmf());
 	INet::ClientApp::addSendBuffer(sendBuffer);
 }
 
