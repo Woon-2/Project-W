@@ -1,0 +1,1455 @@
+{
+    "materialName": "SwordSlash2",
+    "materialAssetPath": "Assets/Hovl Studio/HSFiles/Materials/SwordSlash2.mat",
+    "shaderName": "Shader Graphs/HS_SwordSlash",
+    "shaderAssetPath": "Assets/Hovl Studio/HSFiles/Shaders/Shader Graph/HS_SwordSlash.shadergraph",
+    "renderQueue": 3000,
+    "rawRenderQueue": -1,
+    "enableInstancing": false,
+    "doubleSidedGI": true,
+    "globalIlluminationFlags": "EmissiveIsBlack",
+    "shaderKeywords": [
+        "_DOUBLESIDED_ON",
+        "_ENABLE_FOG_ON_TRANSPARENT",
+        "_SURFACE_TYPE_TRANSPARENT"
+    ],
+    "tags": [
+        {
+            "name": "Queue",
+            "value": "Transparent"
+        },
+        {
+            "name": "RenderType",
+            "value": "Transparent"
+        },
+        {
+            "name": "RenderPipeline",
+            "value": "UniversalPipeline"
+        },
+        {
+            "name": "UniversalMaterialType",
+            "value": "Unlit"
+        },
+        {
+            "name": "ShaderGraphShader",
+            "value": "true"
+        },
+        {
+            "name": "ShaderGraphTargetId",
+            "value": "UniversalUnlitSubTarget"
+        },
+        {
+            "name": "DisableBatching",
+            "value": "False"
+        }
+    ],
+    "shaderProperties": [
+        {
+            "index": 0,
+            "name": "_MainTexture",
+            "displayName": "MainTexture",
+            "type": "TexEnv",
+            "flags": "",
+            "attributes": [],
+            "value": "Smoke12",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "Smoke12",
+                "assetPath": "Assets/Hovl Studio/HSFiles/Textures/Smoke12.png",
+                "scale": {
+                    "x": 1.2999999523162842,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "Clamp",
+                "wrapModeV": "Clamp",
+                "wrapModeW": "Clamp",
+                "filterMode": "Bilinear",
+                "anisoLevel": 1,
+                "width": 1024,
+                "height": 1024
+            }
+        },
+        {
+            "index": 1,
+            "name": "_EmissionTex",
+            "displayName": "EmissionTex",
+            "type": "TexEnv",
+            "flags": "",
+            "attributes": [],
+            "value": "Fire13",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "Fire13",
+                "assetPath": "Assets/Hovl Studio/HSFiles/Textures/Fire13.png",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.10000000149011612,
+                    "y": 0.0
+                },
+                "wrapModeU": "Clamp",
+                "wrapModeV": "Clamp",
+                "wrapModeW": "Clamp",
+                "filterMode": "Bilinear",
+                "anisoLevel": 1,
+                "width": 512,
+                "height": 512
+            }
+        },
+        {
+            "index": 2,
+            "name": "_Opacity",
+            "displayName": "Opacity",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "20",
+            "floatValue": 20.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 3,
+            "name": "_Dissolve",
+            "displayName": "Dissolve",
+            "type": "TexEnv",
+            "flags": "",
+            "attributes": [],
+            "value": "Noise43b",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "Noise43b",
+                "assetPath": "Assets/Hovl Studio/HSFiles/Textures/Noise43b.png",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "Repeat",
+                "wrapModeV": "Repeat",
+                "wrapModeW": "Repeat",
+                "filterMode": "Bilinear",
+                "anisoLevel": 1,
+                "width": 1024,
+                "height": 1024
+            }
+        },
+        {
+            "index": 4,
+            "name": "_SpeedMainTexUVNoiseZW",
+            "displayName": "Speed MainTex U/V + Noise Z/W",
+            "type": "Vector",
+            "flags": "",
+            "attributes": [],
+            "value": "(0, 0, 0.8, 0)",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.800000011920929,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 5,
+            "name": "_Emission",
+            "displayName": "Emission",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "7",
+            "floatValue": 7.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 6,
+            "name": "_Remap",
+            "displayName": "Remap",
+            "type": "Vector",
+            "flags": "",
+            "attributes": [],
+            "value": "(-0.3, 1, 0, 0)",
+            "floatValue": 0.0,
+            "vector": {
+                "x": -0.30000001192092898,
+                "y": 1.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 7,
+            "name": "_AddColor",
+            "displayName": "Add Color",
+            "type": "Color",
+            "flags": "",
+            "attributes": [],
+            "value": "(0.103773586, 0.07531176, 0.0602082461, 0)",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.1037735864520073,
+                "g": 0.07531175762414932,
+                "b": 0.06020824611186981,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 8,
+            "name": "_Desaturation",
+            "displayName": "Desaturation",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "0.8",
+            "floatValue": 0.800000011920929,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 9,
+            "name": "_Usedepth",
+            "displayName": "Use depth?",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "0",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 10,
+            "name": "_InvFade",
+            "displayName": "Soft Particles Factor",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "1",
+            "floatValue": 1.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 11,
+            "name": "_Flow",
+            "displayName": "Flow",
+            "type": "TexEnv",
+            "flags": "",
+            "attributes": [],
+            "value": "<null>",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 12,
+            "name": "_Usesmoothdissolve",
+            "displayName": "Use smooth dissolve",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "0",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 13,
+            "name": "_Flowpower",
+            "displayName": "Flow power",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "0",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 14,
+            "name": "_SpeedFlow",
+            "displayName": "Speed Flow",
+            "type": "Vector",
+            "flags": "",
+            "attributes": [],
+            "value": "(0, 0, 0, 0)",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 15,
+            "name": "_QueueOffset",
+            "displayName": "_QueueOffset",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "0",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 16,
+            "name": "_QueueControl",
+            "displayName": "_QueueControl",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "0",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 17,
+            "name": "unity_Lightmaps",
+            "displayName": "unity_Lightmaps",
+            "type": "TexEnv",
+            "flags": "",
+            "attributes": [],
+            "value": "<null>",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 18,
+            "name": "unity_LightmapsInd",
+            "displayName": "unity_LightmapsInd",
+            "type": "TexEnv",
+            "flags": "",
+            "attributes": [],
+            "value": "<null>",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 19,
+            "name": "unity_ShadowMasks",
+            "displayName": "unity_ShadowMasks",
+            "type": "TexEnv",
+            "flags": "",
+            "attributes": [],
+            "value": "<null>",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 20,
+            "name": "_BUILTIN_QueueOffset",
+            "displayName": "Float",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "0",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 21,
+            "name": "_BUILTIN_QueueControl",
+            "displayName": "Float",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "0",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        }
+    ],
+    "savedProperties": {
+        "texEnvs": [
+            {
+                "name": "_Dissolve",
+                "textureName": "Noise43b",
+                "assetPath": "Assets/Hovl Studio/HSFiles/Textures/Noise43b.png",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_EmissionTex",
+                "textureName": "Fire13",
+                "assetPath": "Assets/Hovl Studio/HSFiles/Textures/Fire13.png",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.10000000149011612,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_Flow",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_MainTex",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_MainTexture",
+                "textureName": "Smoke12",
+                "assetPath": "Assets/Hovl Studio/HSFiles/Textures/Smoke12.png",
+                "scale": {
+                    "x": 1.2999999523162842,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_texcoord",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "unity_Lightmaps",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "unity_LightmapsInd",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "unity_ShadowMasks",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            }
+        ],
+        "floats": [
+            {
+                "name": "_AddPrecomputedVelocity",
+                "value": 0.0
+            },
+            {
+                "name": "_AlphaCutoffEnable",
+                "value": 0.0
+            },
+            {
+                "name": "_AlphaDstBlend",
+                "value": 10.0
+            },
+            {
+                "name": "_AlphaSrcBlend",
+                "value": 1.0
+            },
+            {
+                "name": "_BUILTIN_QueueControl",
+                "value": 0.0
+            },
+            {
+                "name": "_BUILTIN_QueueOffset",
+                "value": 0.0
+            },
+            {
+                "name": "_BlendMode",
+                "value": 0.0
+            },
+            {
+                "name": "_ConservativeDepthOffsetEnable",
+                "value": 0.0
+            },
+            {
+                "name": "_CullMode",
+                "value": 0.0
+            },
+            {
+                "name": "_CullModeForward",
+                "value": 0.0
+            },
+            {
+                "name": "_DepthOffsetEnable",
+                "value": 0.0
+            },
+            {
+                "name": "_Desaturation",
+                "value": 0.800000011920929
+            },
+            {
+                "name": "_DoubleSidedEnable",
+                "value": 1.0
+            },
+            {
+                "name": "_DoubleSidedGIMode",
+                "value": 0.0
+            },
+            {
+                "name": "_DoubleSidedNormalMode",
+                "value": 2.0
+            },
+            {
+                "name": "_DstBlend",
+                "value": 10.0
+            },
+            {
+                "name": "_Emission",
+                "value": 7.0
+            },
+            {
+                "name": "_EnableBlendModePreserveSpecularLighting",
+                "value": 0.0
+            },
+            {
+                "name": "_EnableFogOnTransparent",
+                "value": 1.0
+            },
+            {
+                "name": "_ExcludeFromTUAndAA",
+                "value": 0.0
+            },
+            {
+                "name": "_Flowpower",
+                "value": 0.0
+            },
+            {
+                "name": "_HUE",
+                "value": 0.0
+            },
+            {
+                "name": "_InvFade",
+                "value": 1.0
+            },
+            {
+                "name": "_Opacity",
+                "value": 20.0
+            },
+            {
+                "name": "_OpaqueCullMode",
+                "value": 2.0
+            },
+            {
+                "name": "_PathSet0ifyouuseinPS",
+                "value": 0.0
+            },
+            {
+                "name": "_QueueControl",
+                "value": 0.0
+            },
+            {
+                "name": "_QueueOffset",
+                "value": 0.0
+            },
+            {
+                "name": "_RenderQueueType",
+                "value": 3.0
+            },
+            {
+                "name": "_SrcBlend",
+                "value": 1.0
+            },
+            {
+                "name": "_StencilRef",
+                "value": 0.0
+            },
+            {
+                "name": "_StencilRefDepth",
+                "value": 1.0
+            },
+            {
+                "name": "_StencilRefDistortionVec",
+                "value": 4.0
+            },
+            {
+                "name": "_StencilRefMV",
+                "value": 33.0
+            },
+            {
+                "name": "_StencilWriteMask",
+                "value": 6.0
+            },
+            {
+                "name": "_StencilWriteMaskDepth",
+                "value": 9.0
+            },
+            {
+                "name": "_StencilWriteMaskDistortionVec",
+                "value": 4.0
+            },
+            {
+                "name": "_StencilWriteMaskMV",
+                "value": 43.0
+            },
+            {
+                "name": "_SurfaceType",
+                "value": 1.0
+            },
+            {
+                "name": "_TransparentBackfaceEnable",
+                "value": 0.0
+            },
+            {
+                "name": "_TransparentCullMode",
+                "value": 2.0
+            },
+            {
+                "name": "_TransparentDepthPostpassEnable",
+                "value": 0.0
+            },
+            {
+                "name": "_TransparentDepthPrepassEnable",
+                "value": 0.0
+            },
+            {
+                "name": "_TransparentSortPriority",
+                "value": 0.0
+            },
+            {
+                "name": "_TransparentWritingMotionVec",
+                "value": 0.0
+            },
+            {
+                "name": "_TransparentZWrite",
+                "value": 0.0
+            },
+            {
+                "name": "_UseShadowThreshold",
+                "value": 0.0
+            },
+            {
+                "name": "_Usedepth",
+                "value": 0.0
+            },
+            {
+                "name": "_Usesmoothdissolve",
+                "value": 0.0
+            },
+            {
+                "name": "_ZTestDepthEqualForOpaque",
+                "value": 4.0
+            },
+            {
+                "name": "_ZTestTransparent",
+                "value": 4.0
+            },
+            {
+                "name": "_ZWrite",
+                "value": 0.0
+            }
+        ],
+        "colors": [
+            {
+                "name": "_AddColor",
+                "value": {
+                    "r": 0.10377359390258789,
+                    "g": 0.07531177997589112,
+                    "b": 0.060208264738321307,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_DoubleSidedConstants",
+                "value": {
+                    "r": 1.0,
+                    "g": 1.0,
+                    "b": -1.0,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_EmissionColor",
+                "value": {
+                    "r": 1.0,
+                    "g": 1.0,
+                    "b": 1.0,
+                    "a": 1.0
+                }
+            },
+            {
+                "name": "_Remap",
+                "value": {
+                    "r": -0.30000001192092898,
+                    "g": 1.0,
+                    "b": 0.0,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_SpeedFlow",
+                "value": {
+                    "r": 0.0,
+                    "g": 0.0,
+                    "b": 0.0,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_SpeedMainTexUVNoiseZW",
+                "value": {
+                    "r": 0.0,
+                    "g": 0.0,
+                    "b": 0.800000011920929,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_TintColor",
+                "value": {
+                    "r": 0.5,
+                    "g": 0.5,
+                    "b": 0.5,
+                    "a": 0.5
+                }
+            }
+        ],
+        "ints": []
+    },
+    "swordSlashMappedValues": {
+        "opacity": 20.0,
+        "emission": 7.0,
+        "desaturation": 0.800000011920929,
+        "useSmoothDissolve": 0.0,
+        "useDepth": 0.0,
+        "flowPower": 0.0,
+        "remap": {
+            "x": -0.30000001192092898,
+            "y": 1.0,
+            "z": 0.0,
+            "w": 0.0
+        },
+        "addColor": {
+            "r": 0.1037735864520073,
+            "g": 0.07531175762414932,
+            "b": 0.06020824611186981,
+            "a": 0.0
+        },
+        "speedMainTexUVNoise": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.800000011920929,
+            "w": 0.0
+        },
+        "speedFlow": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "w": 0.0
+        },
+        "mainTexture": {
+            "textureName": "Smoke12",
+            "assetPath": "Assets/Hovl Studio/HSFiles/Textures/Smoke12.png",
+            "scale": {
+                "x": 1.2999999523162842,
+                "y": 1.0
+            },
+            "offset": {
+                "x": 0.0,
+                "y": 0.0
+            },
+            "wrapModeU": "Clamp",
+            "wrapModeV": "Clamp",
+            "wrapModeW": "Clamp",
+            "filterMode": "Bilinear",
+            "anisoLevel": 1,
+            "width": 1024,
+            "height": 1024
+        },
+        "emissionTex": {
+            "textureName": "Fire13",
+            "assetPath": "Assets/Hovl Studio/HSFiles/Textures/Fire13.png",
+            "scale": {
+                "x": 1.0,
+                "y": 1.0
+            },
+            "offset": {
+                "x": 0.10000000149011612,
+                "y": 0.0
+            },
+            "wrapModeU": "Clamp",
+            "wrapModeV": "Clamp",
+            "wrapModeW": "Clamp",
+            "filterMode": "Bilinear",
+            "anisoLevel": 1,
+            "width": 512,
+            "height": 512
+        },
+        "dissolveTex": {
+            "textureName": "Noise43b",
+            "assetPath": "Assets/Hovl Studio/HSFiles/Textures/Noise43b.png",
+            "scale": {
+                "x": 1.0,
+                "y": 1.0
+            },
+            "offset": {
+                "x": 0.0,
+                "y": 0.0
+            },
+            "wrapModeU": "Repeat",
+            "wrapModeV": "Repeat",
+            "wrapModeW": "Repeat",
+            "filterMode": "Bilinear",
+            "anisoLevel": 1,
+            "width": 1024,
+            "height": 1024
+        },
+        "flowTex": {
+            "textureName": "",
+            "assetPath": "",
+            "scale": {
+                "x": 1.0,
+                "y": 1.0
+            },
+            "offset": {
+                "x": 0.0,
+                "y": 0.0
+            },
+            "wrapModeU": "",
+            "wrapModeV": "",
+            "wrapModeW": "",
+            "filterMode": "",
+            "anisoLevel": 0,
+            "width": 0,
+            "height": 0
+        }
+    }
+}

@@ -135,6 +135,8 @@ private:
 	ParticleSystem flameParticleSystem_{};
 	ParticleSystem smokeParticleSystem_{};
 	ParticleEffect swordSlash1Effect_{};
+	ParticleEffect swordSlash7Effect_{};
+	ParticleEffect swordSlashComboEffect_{};
 	ParticleSystem dustParticleSystem_{};
 	int            footBoneIdxLeft_  = -1;
 	int            footBoneIdxRight_ = -1;

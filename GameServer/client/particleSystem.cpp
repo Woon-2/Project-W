@@ -419,10 +419,12 @@ mu::Vec3 ParticleSystem::sampleShapeOrigin() {
         const float theta = 2.f * 3.14159265f * randomFloat(0.f, 1.f);
         const float phi   = std::acos(1.f - 2.f * randomFloat(0.f, 1.f));
         const float sp    = std::sin(phi);
+        const float inner = std::clamp(1.f - s.radiusThickness, 0.f, 1.f);
+        const float r     = s.sphereRadius * std::cbrt(randomFloat(inner * inner * inner, 1.f));
         return withRandomOffset(s.position + mu::Vec3{
-            s.sphereRadius * sp * std::cos(theta),
-            s.sphereRadius * std::cos(phi),
-            s.sphereRadius * sp * std::sin(theta) });
+            r * sp * std::cos(theta),
+            r * std::cos(phi),
+            r * sp * std::sin(theta) });
     }
 
     case ps::ShapeModule::Type::Box:
@@ -527,6 +529,7 @@ void ParticleSystem::spawnParticle() {
     p.angularAngle3D  = { 0.f, 0.f, 0.f };
     p.rotationRandom3D = { randomFloat(0.f, 1.f), randomFloat(0.f, 1.f), randomFloat(0.f, 1.f) };
     p.baseRotation    = config_.main.startRotation3D;
+    p.transformScale  = config_.main.transformScale;
     if (config_.main.startRotation3DEnabled) {
         const mu::Vec3 startRotation = {
             randomFloat(config_.main.startRotation3DMin.x(), config_.main.startRotation3DMax.x()),

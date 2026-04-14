@@ -7,6 +7,7 @@ ParticleSystem& ParticleEffect::addSystem(const ps::ParticleSystemConfig& cfg,
 {
     auto& entry = systems_.emplace_back();
     entry.mode = mode;
+    entry.shapeBasePosition = cfg.shape.position;
     entry.ps.init(cfg, maxParticles);
     return entry.ps;
 }
@@ -14,7 +15,7 @@ ParticleSystem& ParticleEffect::addSystem(const ps::ParticleSystemConfig& cfg,
 void ParticleEffect::play(const mu::Vec3& pos)
 {
     for (auto& e : systems_) {
-        e.ps.config().shape.position = pos;
+        e.ps.config().shape.position = pos + e.shapeBasePosition;
         if (e.mode == PlayMode::Emit)
             e.ps.emit(1);
         else

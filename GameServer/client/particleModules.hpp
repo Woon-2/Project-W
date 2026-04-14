@@ -57,6 +57,7 @@ struct MainModule {
     mu::Vec3 startRotation3DMin = { 0.f, 0.f, 0.f };  // radians, Unity Start Rotation XYZ
     mu::Vec3 startRotation3DMax = { 0.f, 0.f, 0.f };
     mu::Mat4x4 startRotation3D = mu::Mat4x4{};  // mesh: externally supplied base orientation
+    mu::Vec3 transformScale    = { 1.f, 1.f, 1.f };  // Unity ParticleSystem Transform.localScale
     float    flipRotation      = 0.f;
     float    gravityModifierMin = 0.f;
     float    gravityModifierMax = 0.f;

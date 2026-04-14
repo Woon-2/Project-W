@@ -134,9 +134,9 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 	} );
 
 	gfx.addRequestMeshBinLoad( RequestMeshBinLoad{
-		.meshPath    = "../resources/effects/SwordSlash_new.meshbin",
+		.meshPath    = "../resources/effects/Slash3.meshbin",
 		.pTexHashMap = &texHashMap_,
-		.pDestMesh   = &swordSlashMesh_,
+		.pDestMesh   = &meshSlash3_,
 		.pDestTex    = nullptr
 	} );
 
@@ -175,11 +175,27 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 		.needsUploadInfo = false
 	} );
 
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "Fire13",
+		.texturePath     = "../resources/Textures/Fire13.dds",
+		.pDest           = &fire13Tex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
 	swordSlashMaterial_ = makeDefaultSwordSlashMaterial();
 	if (loadSwordSlashMaterialMetadata("../resources/effects/SwordSlashMat.json", swordSlashMaterial_)) {
 		gSharedLog << "[SwordSlash Material] File I/O: ../resources/effects/SwordSlashMat.json 로드 완료\n";
 	} else {
 		gSharedLog << "[SwordSlash Material] Warning: ../resources/effects/SwordSlashMat.json 로드 실패. 기본값을 사용합니다.\n";
+	}
+
+	swordSlash2Material_ = makeDefaultSwordSlashMaterial();
+	if (loadSwordSlashMaterialMetadata("../resources/effects/SwordSlash2.json", swordSlash2Material_)) {
+		gSharedLog << "[SwordSlash2 Material] File I/O: ../resources/effects/SwordSlash2.json 로드 완료\n";
+	} else {
+		gSharedLog << "[SwordSlash2 Material] Warning: ../resources/effects/SwordSlash2.json 로드 실패. 기본값을 사용합니다.\n";
 	}
 
 	gfx.loadAssets(configs);
@@ -188,6 +204,11 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 	swordSlashMaterial_.emissionTex = &crater62Tex_;
 	swordSlashMaterial_.dissolveTex = &noise43bTex_;
 	swordSlashMaterial_.flowTex = nullptr;
+
+	swordSlash2Material_.mainTex = &smoke12Tex_;
+	swordSlash2Material_.emissionTex = &fire13Tex_;
+	swordSlash2Material_.dissolveTex = &noise43bTex_;
+	swordSlash2Material_.flowTex = nullptr;
 
 	smokeBlendCGMaterial_ = ps::MatSmokeBlendCG{};
 	smokeBlendCGMaterial_.mainTex = &smoke24Tex_;

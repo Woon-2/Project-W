@@ -58,7 +58,7 @@ std::optional<ParticleMeshGeometry> buildParticleMeshGeometry(
     }
 
     return ParticleMeshGeometry{
-        .world = mu::scaleH(mu::Vec3{ ctx.size, ctx.size, ctx.size })
+        .world = mu::scaleH(ctx.particle.transformScale * ctx.size)
                * buildParticleAngularRotation(ctx.particle)
                * ctx.particle.baseRotation
                * mu::translate(ctx.particle.pos),

@@ -40,6 +40,7 @@ private:
     struct Entry {
         ParticleSystem ps;
         PlayMode       mode;
+        mu::Vec3       shapeBasePosition = { 0.f, 0.f, 0.f };
     };
     std::vector<Entry> systems_;
 };

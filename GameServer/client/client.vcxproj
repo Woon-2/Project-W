@@ -199,6 +199,7 @@
     <ClCompile Include="particleRenderMode.cpp" />
     <ClCompile Include="particleRenderSubmit.cpp" />
     <ClCompile Include="particleEffect.cpp" />
+    <ClCompile Include="particleImporter.cpp" />
     <ClCompile Include="particleSystem.cpp" />
     <ClCompile Include="physicsWorld.cpp" />
     <ClCompile Include="rigidBody.cpp" />
@@ -215,6 +216,7 @@
     <ClCompile Include="ServerSession.cpp" />
     <ClCompile Include="shader.cpp" />
     <ClCompile Include="sharedResources.cpp" />
+    <ClCompile Include="simpleJson.cpp" />
     <ClCompile Include="skybox.cpp" />
     <ClCompile Include="skyboxPipeline.cpp" />
     <ClCompile Include="spriteAnimation.cpp" />
@@ -299,6 +301,7 @@
     <ClInclude Include="particleRenderMode.hpp" />
     <ClInclude Include="particleRenderSubmit.hpp" />
     <ClInclude Include="particleEffect.hpp" />
+    <ClInclude Include="particleImporter.hpp" />
     <ClInclude Include="particleSystem.hpp" />
     <ClInclude Include="physicsWorld.hpp" />
     <ClInclude Include="rigidBody.hpp" />
@@ -310,6 +313,7 @@
     <ClInclude Include="ServerSession.hpp" />
     <ClInclude Include="shader.hpp" />
     <ClInclude Include="sharedResources.hpp" />
+    <ClInclude Include="simpleJson.hpp" />
     <ClInclude Include="skybox.hpp" />
     <ClInclude Include="skyboxPipeline.hpp" />
     <ClInclude Include="spriteAnimation.hpp" />

@@ -27,12 +27,14 @@ public:
 	const Texture* playerHpFrame() const { return &playerHpFrame_; }
 	const Texture* flameTex() const { return &flameTex_; }
 	const Texture* smokeTex() const { return &smokeTex_; }
-	const Mesh*    swordSlashMesh()        const { return &swordSlashMesh_; }
+	const Mesh*    meshSlash3()            const { return &meshSlash3_; }
 	const Texture* smoke24Tex()            const { return &smoke24Tex_; }
 	const Texture* smoke12Tex()            const { return &smoke12Tex_; }
 	const Texture* crater62Tex()           const { return &crater62Tex_; }
 	const Texture* noise43bTex()           const { return &noise43bTex_; }
-	const ps::MatSwordSlash& swordSlashMaterial() const { return swordSlashMaterial_; }
+	const Texture* fire13Tex()             const { return &fire13Tex_; }
+	const ps::MatSwordSlash& swordSlashMaterial()  const { return swordSlashMaterial_; }
+	const ps::MatSwordSlash& swordSlash2Material() const { return swordSlash2Material_; }
 	const ps::MatSmokeBlendCG& smokeBlendCGMaterial() const { return smokeBlendCGMaterial_; }
 	const std::vector<std::shared_ptr<AnimClip>>& playerAnimations() const { return playerAnimations_; }
 	const std::vector<std::shared_ptr<AnimClip>>& goblinAnimations() const { return goblinAnimations_; }
@@ -74,12 +76,14 @@ private:
 	Texture playerHpFrame_{};
 	Texture flameTex_{};
 	Texture smokeTex_{};
-	Mesh    swordSlashMesh_{};
+	Mesh    meshSlash3_{};
 	Texture smoke24Tex_{};
 	Texture smoke12Tex_{};
 	Texture crater62Tex_{};
 	Texture noise43bTex_{};
+	Texture fire13Tex_{};
 	ps::MatSwordSlash swordSlashMaterial_{};
+	ps::MatSwordSlash swordSlash2Material_{};
 	ps::MatSmokeBlendCG smokeBlendCGMaterial_{};
 };
 

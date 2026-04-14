@@ -27,6 +27,7 @@ struct Particle {
     mu::Vec3        angularAngle3D    = { 0.f, 0.f, 0.f };
     mu::Vec3        rotationRandom3D  = { 0.f, 0.f, 0.f };
     mu::Mat4x4      baseRotation;            // fixed 3D orientation set at spawn
+    mu::Vec3        transformScale = { 1.f, 1.f, 1.f };
     mu::Vec2        custom1Random   = { 0.f, 0.f };
     mu::Vec2        custom2Random   = { 0.f, 0.f };
 

@@ -100,6 +100,7 @@ public static class ParticleSystemPropertyExporter
         ParticleSystem.RotationOverLifetimeModule rotationOverLifetime = ps.rotationOverLifetime;
         ParticleSystem.ColorOverLifetimeModule colorOverLifetime = ps.colorOverLifetime;
         ParticleSystem.SizeOverLifetimeModule sizeOverLifetime = ps.sizeOverLifetime;
+        ParticleSystem.CustomDataModule customDataModule = ps.customData;
 
         var summary = new ParticleSystemSummary
         {
@@ -182,7 +183,9 @@ public static class ParticleSystemPropertyExporter
             {
                 enabled = sizeOverLifetime.enabled,
                 size = Curve(sizeOverLifetime.size)
-            }
+            },
+
+            customData = CaptureCustomData(customDataModule)
         };
 
         if (renderer != null)
@@ -209,6 +212,41 @@ public static class ParticleSystemPropertyExporter
         }
 
         return summary;
+    }
+
+    private static CustomDataModuleExport CaptureCustomData(ParticleSystem.CustomDataModule customData)
+    {
+        return new CustomDataModuleExport
+        {
+            enabled = customData.enabled,
+            custom1 = CaptureCustomDataStream(customData, ParticleSystemCustomData.Custom1),
+            custom2 = CaptureCustomDataStream(customData, ParticleSystemCustomData.Custom2)
+        };
+    }
+
+    private static CustomDataStreamExport CaptureCustomDataStream(
+        ParticleSystem.CustomDataModule customData, ParticleSystemCustomData stream)
+    {
+        ParticleSystemCustomDataMode mode = customData.GetMode(stream);
+        var result = new CustomDataStreamExport
+        {
+            stream = stream.ToString(),
+            mode = mode.ToString(),
+            vectorComponentCount = customData.GetVectorComponentCount(stream),
+            vectorComponents = new List<MinMaxCurveExport>()
+        };
+
+        if (mode == ParticleSystemCustomDataMode.Vector)
+        {
+            for (int i = 0; i < result.vectorComponentCount; ++i)
+                result.vectorComponents.Add(Curve(customData.GetVector(stream, i)));
+        }
+        else if (mode == ParticleSystemCustomDataMode.Color)
+        {
+            result.color = Gradient(customData.GetColor(stream));
+        }
+
+        return result;
     }
 
     private static List<BurstExport> CaptureBursts(ParticleSystem.EmissionModule emission)
@@ -539,6 +577,25 @@ public class ParticleSystemSummary
     public ColorOverLifetimeModuleExport colorOverLifetime;
     public SizeOverLifetimeModuleExport sizeOverLifetime;
     public RendererModuleExport renderer;
+    public CustomDataModuleExport customData;
+}
+
+[Serializable]
+public class CustomDataModuleExport
+{
+    public bool enabled;
+    public CustomDataStreamExport custom1;
+    public CustomDataStreamExport custom2;
+}
+
+[Serializable]
+public class CustomDataStreamExport
+{
+    public string stream;
+    public string mode;
+    public int vectorComponentCount;
+    public List<MinMaxCurveExport> vectorComponents;
+    public MinMaxGradientExport color;
 }
 
 [Serializable]

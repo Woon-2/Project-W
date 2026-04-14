@@ -4,6 +4,7 @@
 #include "../errorHandling.hpp"
 #include "../binaryImport.hpp"
 #include "../timer.hpp"
+#include "../particleImporter.hpp"
 #include "../ui/widgets/Label.hpp"
 #include "../ui/widgets/ProgressBar.hpp"
 
@@ -285,190 +286,180 @@ void Game::setParticle()
 		smokeParticleSystem_.startContinuous(cfg);
 	}
 
-	// ── Sword Slash (mesh particle, manual emit) ──────────────────────────────
-	{
+	auto loadUnityParticleConfig = [](const std::filesystem::path& jsonPath,
+	                                  std::string_view relativePath) {
 		ps::ParticleSystemConfig cfg;
-		cfg.main.lifetimeMin  = 0.3f;
-		cfg.main.lifetimeMax  = 0.3f;
-		cfg.main.speedMin     = 0.f;
-		cfg.main.speedMax     = 0.f;
-		cfg.main.startColor   = { 1.0f, 1.0f, 1.0f, 1.f };
-		cfg.main.startSizeMin = 1.f;
-		cfg.main.startSizeMax = 1.f;
-		cfg.main.startRotation3DEnabled = true;
-		cfg.main.startRotation3DMin = { 0.f, -2.44346094f, 0.f };
-		cfg.main.startRotation3DMax = { 0.f, -2.44346094f, 0.f };
-		cfg.main.duration     = 2.f;
-		cfg.main.looping      = true;
-		cfg.main.prewarm      = false;
-		cfg.main.playOnAwake  = true;
-		cfg.main.maxParticles = 1000;
+		loadParticleSystemConfigFromUnityJson(jsonPath, relativePath, cfg);
+		return cfg;
+	};
 
-		cfg.emission.enabled = true;
-		cfg.emission.bursts = {
-			ps::EmissionModule::Burst{
-				.time           = 0.f,
-				.countMin       = 1,
-				.countMax       = 1,
-				.cycleCount     = 1,
-				.repeatInterval = 0.01f,
-				.probability    = 1.f,
-			}
-		};
-
-		cfg.shape.enabled = false;
-		cfg.shape.type = ps::ShapeModule::Type::Point;
-
-		cfg.colorOverLifetime.enabled  = false;
-		cfg.colorOverLifetime.gradient = ColorGradient{
-			.keys = {
-				{ 0.000f, { 1.000f, 1.000f, 1.000f, 1.000f } },
-				{ 0.565f, { 0.973f, 0.899f, 0.953f, 0.533f } },
-				{ 1.000f, { 0.953f, 0.822f, 0.917f, 0.000f } },
-			}
-		};
-
-		cfg.sizeOverLifetime.enabled   = true;
-		cfg.sizeOverLifetime.sizeBegin = 1.f;
-		cfg.sizeOverLifetime.sizeEnd   = 1.f;
-
-		cfg.customData.enabled = true;
-		cfg.customData.custom1.x.mode = ps::CustomDataChannel::Mode::Curve;
-		cfg.customData.custom1.x.curve.keys = {
-			{ 0.0f,        -0.00456619f,  1.83689094f,  1.83689094f },
-			{ 0.15771103f,  1.0f,        -1.91100359f, -1.91100359f },
-			{ 1.0f,         0.0f,        -1.18724096f, -1.18724096f },
-		};
-		cfg.customData.custom1.y.mode = ps::CustomDataChannel::Mode::Constant;
-		cfg.customData.custom1.y.constant = 1.f;
-		cfg.customData.custom2.x.mode = ps::CustomDataChannel::Mode::Constant;
-		cfg.customData.custom2.x.constant = 0.f;
-		cfg.customData.custom2.y.mode = ps::CustomDataChannel::Mode::TwoConstants;
-		cfg.customData.custom2.y.constantMin = 0.f;
-		cfg.customData.custom2.y.constantMax = 1.f;
-		cfg.customData.custom2.y.constant = 1.f;
-
-		cfg.renderer.mode               = ps::RendererModule::Mode::Mesh;
-		cfg.renderer.alignment          = ps::RendererModule::Alignment::Local;
-		cfg.renderer.sortMode           = ps::RendererModule::SortMode::None;
-		cfg.renderer.minParticleSize    = 0.f;
-		cfg.renderer.maxParticleSize    = 0.5f;
-		cfg.renderer.normalDirection    = 1.f;
-		cfg.renderer.allowRoll          = true;
-		cfg.renderer.pivot              = { 0.f, 0.f, 0.f };
-		cfg.renderer.flip               = { 0.f, 0.f, 0.f };
-		cfg.renderer.pMesh              = assetManager_.swordSlashMesh();
-		cfg.renderer.pSubMesh           = assetManager_.swordSlashMesh()->subMeshes.empty()
-		                                  ? nullptr
-		                                  : &assetManager_.swordSlashMesh()->subMeshes[0];
+	// ── Sword Slash 1 effect ─────────────────────────────────────────────────
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/Sword Slash 1_ParticleSystems.json",
+			"Sword Slash 1"
+		);
+		cfg.renderer.pMesh = assetManager_.meshSlash3();
+		cfg.renderer.pSubMesh = assetManager_.meshSlash3()->subMeshes.empty()
+		                       ? nullptr
+		                       : &assetManager_.meshSlash3()->subMeshes[0];
 		cfg.renderer.mat = assetManager_.swordSlashMaterial();
-		cfg.renderer.renderOrder        = 2;
-		cfg.rotationOverLifetime.enabled = true;
-		cfg.rotationOverLifetime.separateAxes = true;
-		cfg.rotationOverLifetime.useCurves = true;
-		cfg.rotationOverLifetime.x.mode = ps::MinMaxCurveChannel::Mode::Curve;
-		cfg.rotationOverLifetime.x.curveMultiplier = 0.f;
-		cfg.rotationOverLifetime.x.curve.keys = {
-			{ 0.f, 0.f, 0.f, 0.f },
-			{ 1.f, 0.f, 0.f, 0.f },
-		};
-		cfg.rotationOverLifetime.y.mode = ps::MinMaxCurveChannel::Mode::Curve;
-		cfg.rotationOverLifetime.y.curveMultiplier = 26.17993927f;
-		cfg.rotationOverLifetime.y.curve.keys = {
-			{ 0.f, 1.f, -2.f, -2.f },
-			{ 1.f, 0.f,  0.f,  0.f },
-		};
-		cfg.rotationOverLifetime.z.mode = ps::MinMaxCurveChannel::Mode::Curve;
-		cfg.rotationOverLifetime.z.curveMultiplier = 0.f;
-		cfg.rotationOverLifetime.z.curve.keys = {
-			{ 0.f, 1.f, 0.f, 0.f },
-			{ 1.f, 1.f, 0.f, 0.f },
-		};
-
+		cfg.renderer.renderOrder = 2;
 		swordSlash1Effect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);
 	}
 
-	// ── Sword Slash Smoke (HS_Blend_CG / Smoke24bcg) ─────────────────────────
 	{
-		ps::ParticleSystemConfig cfg;
-		// Source: resources/effects/Sword Slash 1_ParticleSystems.json
-		// System: Sword Slash 1/Smoke
-		cfg.main.lifetimeMin  = 0.60000002f;
-		cfg.main.lifetimeMax  = 1.0f;
-		cfg.main.speedMin     = 0.f;
-		cfg.main.speedMax     = 0.f;
-		cfg.main.startColor   = { 0.f, 0.0484111f, 0.122642f, 1.f };
-		cfg.main.startSizeMin = 1.5f;
-		cfg.main.startSizeMax = 2.0f;
-		cfg.main.startRotationMin = 0.f;
-		cfg.main.startRotationMax = 0.f;
-		cfg.main.gravityModifierMin = 0.f;
-		cfg.main.gravityModifierMax = 0.f;
-		cfg.main.duration     = 4.f;
-		cfg.main.looping      = false; // Re-triggered manually per slash; avoids repeated smoke at the last position.
-		cfg.main.prewarm      = false;
-		cfg.main.playOnAwake  = true;
-		cfg.main.simulationSpeed = 2.f;
-		cfg.main.maxParticles = 1000;
-
-		cfg.emission.enabled = true;
-		cfg.emission.emitRate = 0.f;
-		cfg.emission.bursts = {
-			ps::EmissionModule::Burst{
-				.time = 0.f,
-				.countMin = 1,
-				.countMax = 1,
-				.cycleCount = 15,
-				.repeatInterval = 0.01f,
-				.probability = 1.f,
-			}
-		};
-
-		cfg.shape.enabled = true;
-		cfg.shape.type = ps::ShapeModule::Type::Circle;
-		cfg.shape.coneRadius = 3.f; // Circle radius in the current ShapeModule representation.
-		cfg.shape.radiusThickness = 0.f;
-		cfg.shape.arc = mu::pi * 2.f;
-		cfg.shape.direction = { 0.f, 0.f, 1.f };
-		cfg.shape.orientation =
-			mu::rotateXH(mu::Degree{ 270.f }) *
-			mu::rotateYH(mu::Degree{ 79.999992f });
-
-		cfg.velocityOverLifetime.enabled = true;
-		cfg.velocityOverLifetime.linear = { 0.f, 0.f, 0.f };
-		cfg.velocityOverLifetime.orbital = { 0.f, 0.f, 0.3f };
-		cfg.velocityOverLifetime.radial = 1.f;
-		cfg.velocityOverLifetime.speedModifier = 1.f;
-		cfg.velocityOverLifetime.inWorldSpace = false;
-
-		cfg.colorOverLifetime.enabled = true;
-		cfg.colorOverLifetime.gradient = ColorGradient{
-			.keys = {
-				{ 0.00000f, { 1.f, 1.f, 1.f, 0.00000f } },
-				{ 0.34412f, { 1.f, 1.f, 1.f, 1.00000f } },
-				{ 0.56471f, { 1.f, 1.f, 1.f, 1.00000f } },
-				{ 1.00000f, { 1.f, 1.f, 1.f, 0.00000f } },
-			}
-		};
-
-		cfg.sizeOverLifetime.enabled = false;
-		cfg.sizeOverLifetime.sizeBegin = 1.f;
-		cfg.sizeOverLifetime.sizeEnd = 1.f;
-
-		cfg.renderer.mode = ps::RendererModule::Mode::StretchedBillboard;
-		cfg.renderer.alignment = ps::RendererModule::Alignment::View;
-		cfg.renderer.sortMode = ps::RendererModule::SortMode::None;
-		cfg.renderer.minParticleSize = 0.f;
-		cfg.renderer.maxParticleSize = 0.5f;
-		cfg.renderer.cameraVelocityScale = 0.f;
-		cfg.renderer.velocityScale = 0.f;
-		cfg.renderer.lengthScale = 2.f;
-		cfg.renderer.normalDirection = 1.f;
-		cfg.renderer.allowRoll = true;
-		cfg.renderer.renderOrder = 0;
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/Sword Slash 1_ParticleSystems.json",
+			"Sword Slash 1/Smoke"
+		);
+		cfg.main.looping = false;  // Re-triggered manually per slash.
 		cfg.renderer.mat = assetManager_.smokeBlendCGMaterial();
-
 		swordSlash1Effect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
+	}
+
+	// ── Sword Slash Combo: five Sword Slash 1 layers, tuned only by rotation/burst
+	{
+		auto baseCfg = loadUnityParticleConfig(
+			"../resources/effects/Sword Slash 1_ParticleSystems.json",
+			"Sword Slash 1"
+		);
+		baseCfg.renderer.pMesh = assetManager_.meshSlash3();
+		baseCfg.renderer.pSubMesh = assetManager_.meshSlash3()->subMeshes.empty()
+		                           ? nullptr
+		                           : &assetManager_.meshSlash3()->subMeshes[0];
+		baseCfg.renderer.mat = assetManager_.swordSlashMaterial();
+		baseCfg.renderer.renderOrder = 2;
+		baseCfg.main.looping = false;
+		baseCfg.main.startRotation3DEnabled = true;
+		baseCfg.emission.enabled = true;
+		baseCfg.emission.emitRate = 0.f;
+		baseCfg.emission.rateOverDistance = 0.f;
+
+		{
+			auto cfg = baseCfg;
+			cfg.main.startRotation3DMin = { 0.f, -2.44346094f, -0.62831855f };
+			cfg.main.startRotation3DMax = cfg.main.startRotation3DMin;
+
+			cfg.emission.bursts = {
+				ps::EmissionModule::Burst{
+					.time = 0.10f,
+					.countMin = 1,
+					.countMax = 1,
+					.cycleCount = 1,
+					.repeatInterval = 0.01f,
+					.probability = 1.f,
+				}
+			};
+
+			swordSlashComboEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
+		}
+
+		{
+			auto cfg = baseCfg;
+			cfg.main.startRotation3DMin = { 0.f, -2.44346094f, 0.31415927f };
+			cfg.main.startRotation3DMax = cfg.main.startRotation3DMin;
+
+			cfg.emission.bursts = {
+				ps::EmissionModule::Burst{
+					.time = 0.45f,
+					.countMin = 1,
+					.countMax = 1,
+					.cycleCount = 1,
+					.repeatInterval = 0.01f,
+					.probability = 1.f,
+				}
+			};
+
+			swordSlashComboEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
+		}
+
+		{
+			auto cfg = baseCfg;
+			cfg.main.startRotation3DMin = { 0.f, -2.44346094f, -0.20943952f };
+			cfg.main.startRotation3DMax = cfg.main.startRotation3DMin;
+
+			cfg.emission.bursts = {
+				ps::EmissionModule::Burst{
+					.time = 0.6f,
+					.countMin = 1,
+					.countMax = 1,
+					.cycleCount = 1,
+					.repeatInterval = 0.01f,
+					.probability = 1.f,
+				}
+			};
+
+			swordSlashComboEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
+		}
+
+		{
+			auto cfg = baseCfg;
+			cfg.main.startRotation3DMin = { 0.f, 2.44346094f, 0.59341192f };
+			cfg.main.startRotation3DMax = cfg.main.startRotation3DMin;
+
+			cfg.emission.bursts = {
+				ps::EmissionModule::Burst{
+					.time = 1.15f,
+					.countMin = 1,
+					.countMax = 1,
+					.cycleCount = 1,
+					.repeatInterval = 0.01f,
+					.probability = 1.f,
+				}
+			};
+
+			swordSlashComboEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
+		}
+
+		{
+			auto cfg = baseCfg;
+			cfg.main.startRotation3DMin = { 0.f, 0.0f, 0.f };
+			cfg.main.startRotation3DMax = cfg.main.startRotation3DMin;
+
+			cfg.emission.bursts = {
+				ps::EmissionModule::Burst{
+					.time = 1.15f,
+					.countMin = 1,
+					.countMax = 1,
+					.cycleCount = 1,
+					.repeatInterval = 0.01f,
+					.probability = 1.f,
+				}
+			};
+
+			swordSlashComboEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
+		}
+	}
+
+	// ── Sword Slash 7 / Slash (mesh particle, manual emit) ───────────────────
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/Slash_ParticleSystems.json",
+			"Slash"
+		);
+		cfg.renderer.pMesh = assetManager_.meshSlash3();
+		cfg.renderer.pSubMesh = assetManager_.meshSlash3()->subMeshes.empty()
+		                       ? nullptr
+		                       : &assetManager_.meshSlash3()->subMeshes[0];
+		cfg.renderer.mat = assetManager_.swordSlash2Material();
+		cfg.renderer.renderOrder = 2;
+		swordSlash7Effect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);
+	}
+
+	// ── Sword Slash 7 / Slashes (mesh particle, manual emit) ─────────────────
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/Slashes_ParticleSystems.json",
+			"Slashes"
+		);
+		cfg.renderer.pMesh = assetManager_.meshSlash3();
+		cfg.renderer.pSubMesh = assetManager_.meshSlash3()->subMeshes.empty()
+		                       ? nullptr
+		                       : &assetManager_.meshSlash3()->subMeshes[0];
+		cfg.renderer.mat = assetManager_.swordSlash2Material();
+		cfg.renderer.renderOrder = 2;
+		swordSlash7Effect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);
 	}
 
 	// ── 발 본 인덱스 탐색 (흙먼지 VFX용) ────────────────────────────────────
@@ -1072,6 +1063,8 @@ void Game::update(Milliseconds deltaTime) {
 	flameParticleSystem_.update( deltaTime );
 	smokeParticleSystem_.update( deltaTime );
 	swordSlash1Effect_.update( deltaTime );
+	swordSlash7Effect_.update( deltaTime );
+	swordSlashComboEffect_.update( deltaTime );
 	dustParticleSystem_.update( deltaTime );
 
 	// UI 동기화
@@ -1100,6 +1093,8 @@ void Game::render() {
 	flameParticleSystem_.render( gfx_ );
 	smokeParticleSystem_.render( gfx_ );
 	swordSlash1Effect_.render( gfx_ );
+	swordSlash7Effect_.render( gfx_ );
+	swordSlashComboEffect_.render( gfx_ );
 	dustParticleSystem_.render( gfx_ );
 
 	uiManager_.render( gfx_ );
@@ -1269,7 +1264,9 @@ void Game::processInput(Milliseconds deltaTime) {
 		const auto slashPos = player_->renderState().pos
 		                    + player_->forward() * 1.f
 		                    + mu::Vec3(0.f, 1.0f, 0.f);
-		swordSlash1Effect_.play(slashPos);
+		swordSlashComboEffect_.play( slashPos );
+		// swordSlash7Effect_.play( slashPos );
+		//swordSlash1Effect_.play(slashPos);
 	}
 
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때
