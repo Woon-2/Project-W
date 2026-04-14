@@ -291,6 +291,9 @@
     <ClCompile Include="ui\UIManager.cpp">
       <Filter>UI</Filter>
     </ClCompile>
+    <ClCompile Include="terrainDeferredPipeline.cpp">
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="binaryImport.hpp">
@@ -563,6 +566,9 @@
     <ClInclude Include="ui\UITypes.hpp">
       <Filter>UI</Filter>
     </ClInclude>
+    <ClInclude Include="terrainDeferredPipeline.hpp">
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="billboard.hlsl">
@@ -608,6 +614,9 @@
       <Filter>셰이더 파일</Filter>
     </FxCompile>
     <FxCompile Include="meshParticle.hlsl">
+      <Filter>셰이더 파일</Filter>
+    </FxCompile>
+    <FxCompile Include="terrainDeferred.hlsl">
       <Filter>셰이더 파일</Filter>
     </FxCompile>
   </ItemGroup>

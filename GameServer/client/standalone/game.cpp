@@ -925,6 +925,9 @@ void Game::render() {
 		gfx_.addFrameData(TerrainPipeline::FrameData{
 			.globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f)
 		});
+		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{
+			.globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f)
+		});
 	}
 
 	gfx_.render();

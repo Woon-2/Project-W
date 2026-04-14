@@ -16,6 +16,7 @@
 #include "BVPipeline.hpp"
 #include "uiPipeline.hpp"
 #include "terrainPipeline.hpp"
+#include "terrainDeferredPipeline.hpp"
 #include "spriteAnimation.hpp"
 #include "pbrDeferredPipeline.hpp"
 #include "pbrDeferredSkinnedPipeline.hpp"
@@ -195,6 +196,14 @@ public:
 	void addLightData(const TerrainPipeline::LightData& lightData);
 	// 프레임 데이터를 입력한다.
 	void addFrameData(const TerrainPipeline::FrameData& frameData);
+	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+	void addDrawEvent(const TerrainDeferredPipeline::DrawEvent& drawEvent);
+	// 카메라 데이터를 입력한다.
+	void addCameraData(const TerrainDeferredPipeline::CameraData& cameraData);
+	// 조명 데이터를 입력한다.
+	void addLightData(const TerrainDeferredPipeline::LightData& lightData);
+	// 프레임 데이터를 입력한다.
+	void addFrameData(const TerrainDeferredPipeline::FrameData& frameData);
 
 	void addRequestModelLoad(const RequestModelLoad& request);
 	void addRequestSkyboxLoad(const RequestSkyboxLoad& request);
@@ -333,6 +342,12 @@ private:
 	std::vector<TerrainPipeline::LightData> lightDataTerrainPipeline_{};
 	TerrainPipeline::LightData              mainDirectionalLightTerrainPipeline_{};
 	TerrainPipeline::FrameData              frameDataTerrainPipeline_{};
+	// Terrain Deferred Pipeline (deferred GBuffer pass)
+	std::vector<TerrainDeferredPipeline::DrawEvent> drawEventsTerrainDeferredPipeline_{};
+	TerrainDeferredPipeline::Resources              resourcesTerrainDeferredPipeline_{};
+	TerrainDeferredPipeline::CameraData             cameraDataTerrainDeferredPipeline_{};
+	TerrainDeferredPipeline::LightData              mainDirectionalLightTerrainDeferredPipeline_{};
+	TerrainDeferredPipeline::FrameData              frameDataTerrainDeferredPipeline_{};
 	// PBR Deferred Pipeline (static mesh GBuffer pass)
 	std::vector<PBRDeferredPipeline::DrawEvent> drawEventsPBRDeferredPipeline_{};
 	PBRDeferredPipeline::Resources resourcesPBRDeferredPipeline_{};

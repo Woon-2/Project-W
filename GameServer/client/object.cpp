@@ -2,6 +2,7 @@
 #include "object.hpp"
 #include "physicsWorld.hpp"
 #include "terrainPipeline.hpp"
+#include "terrainDeferredPipeline.hpp"
 #include "errorHandling.hpp"
 #include "AssetManager.hpp"
 #include "Timer.hpp"
@@ -2396,8 +2397,15 @@ void Gargoyle::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Eve
 
 void TerrainObject::render(GFX& gfx, mu::Mat4x4 /*offsetXform*/) {
 	if (!terrainData_ || terrainData_->mesh.subMeshes.empty()) return;
-	gfx.addDrawEvent(TerrainPipeline::DrawEvent{
-		.terrain = terrainData_,
-		.world   = renderState_.world
-	});
+	if (gfx.renderPath() == GFX::RenderPath::Deferred) {
+		gfx.addDrawEvent(TerrainDeferredPipeline::DrawEvent{
+			.terrain = terrainData_,
+			.world   = renderState_.world
+		});
+	} else {
+		gfx.addDrawEvent(TerrainPipeline::DrawEvent{
+			.terrain = terrainData_,
+			.world   = renderState_.world
+		});
+	}
 }

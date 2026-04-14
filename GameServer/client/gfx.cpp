@@ -255,6 +255,7 @@ void GFX::init() {
 	shaders_.try_emplace("PBRDeferredGBufferShader",        createPBRDeferredGBufferShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRDeferredSkinnedGBufferShader", createPBRDeferredSkinnedGBufferShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRDeferredLightingShader",       createPBRDeferredLightingShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("TerrainDeferredGBufferShader",    createTerrainDeferredGBufferShader(device_.Get(), defaultRootSig.get()));
 
 	rootSigs_.try_emplace("DefaultRootSignature", std::make_shared<DefaultRootSig>(std::move(defaultRootSig)));
 
@@ -276,6 +277,7 @@ void GFX::init() {
 	drawEventsMeshParticlePipeline_.reserve(256u);
 	drawEventsSkyboxPipeline_.reserve(10u);
 	drawEventsTerrainPipeline_.reserve(4u);
+	drawEventsTerrainDeferredPipeline_.reserve(4u);
 	drawEventsPBRDeferredPipeline_.reserve(1000u);
 	drawEventsPBRDeferredSkinnedPipeline_.reserve(1000u);
 }
@@ -484,6 +486,19 @@ void GFX::createSwapChain() {
 	);
 	resourcesTerrainPipeline_.mainPass.lightData.init(
 		device_.Get(), sizeof(PBRShader::Light) * 32u, backBuffers_.size(), "Terrain_Main_LightData"
+	);
+	// Terrain Deferred Pipeline ----
+	resourcesTerrainDeferredPipeline_.shadowPass.perDrawcallData.init(
+		device_.Get(), sizeof(TerrainShadowMapShader::PerDrawcallData), backBuffers_.size(), "TerrainDeferred_Shadow_PerDrawcallData"
+	);
+	resourcesTerrainDeferredPipeline_.shadowPass.perFrameData = createConstantBufferArray(
+		device_.Get(), sizeof(TerrainShadowMapCSMShader::PerFrameData), MAX_CSM_CASCADES, backBuffers_.size(), "TerrainDeferred_Shadow_PerFrameData"
+	);
+	resourcesTerrainDeferredPipeline_.gBufferPass.perDrawcallData.init(
+		device_.Get(), sizeof(TerrainShader::PerDrawcallData), backBuffers_.size(), "TerrainDeferred_GBuffer_PerDrawcallData"
+	);
+	resourcesTerrainDeferredPipeline_.gBufferPass.perFrameData.init(
+		device_.Get(), sizeof(TerrainDeferredGBufferShader::PerFrameData), backBuffers_.size(), "TerrainDeferred_GBuffer_PerFrameData"
 	);
 	// PBR Deferred Pipeline ----
 	resourcesPBRDeferredPipeline_.shadowPass.perInstanceData.init(
@@ -741,6 +756,24 @@ void GFX::addLightData(const TerrainPipeline::LightData& lightData) {
 // 프레임 데이터를 입력한다.
 void GFX::addFrameData( const TerrainPipeline::FrameData& frameData ) {
 	frameDataTerrainPipeline_ = frameData;
+}
+// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+void GFX::addDrawEvent(const TerrainDeferredPipeline::DrawEvent& drawEvent) {
+	drawEventsTerrainDeferredPipeline_.push_back(drawEvent);
+}
+// 카메라 데이터를 입력한다.
+void GFX::addCameraData(const TerrainDeferredPipeline::CameraData& cameraData) {
+	cameraDataTerrainDeferredPipeline_ = cameraData;
+}
+// 조명 데이터를 입력한다.
+void GFX::addLightData(const TerrainDeferredPipeline::LightData& lightData) {
+	if (lightData.isMainDirectionalLight) {
+		mainDirectionalLightTerrainDeferredPipeline_ = lightData;
+	}
+}
+// 프레임 데이터를 입력한다.
+void GFX::addFrameData(const TerrainDeferredPipeline::FrameData& frameData) {
+	frameDataTerrainDeferredPipeline_ = frameData;
 }
 
 void GFX::addRequestMeshBinLoad(const RequestMeshBinLoad& request)
@@ -1182,6 +1215,22 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	auto terrainDeferredDispatcher = TerrainDeferredPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at("DefaultRootSignature"),
+		shaders_.at("TerrainShadowMapCSMShader"),
+		shaders_.at("TerrainDeferredGBufferShader"),
+		&dsvPool_,
+		cmdQ_, viewport, clRect,
+		&fenceToSignal, &resourcesTerrainDeferredPipeline_,
+		threadPool_, &cmdListPool_, std::move(drawEventsTerrainDeferredPipeline_),
+		mainDirectionalLightTerrainDeferredPipeline_,
+		cameraDataTerrainDeferredPipeline_, frameDataTerrainDeferredPipeline_,
+		frameIdx_ % backBuffers_.size()
+	);
+
 	auto pbrDeferredDispatcher = PBRDeferredPipeline::Dispatcher(
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
@@ -1251,11 +1300,11 @@ void GFX::render() {
 		if (!threadPool_) {
 			pbrDeferredDispatcher.shadowPass();
 			pbrDeferredSkinnedDispatcher.shadowPass();
-			terrainPipelineDispatcher.shadowPass();
+			terrainDeferredDispatcher.shadowPass();
 		} else {
 			pbrDeferredDispatcher.shadowPassMT();
 			pbrDeferredSkinnedDispatcher.shadowPassMT();
-			terrainPipelineDispatcher.shadowPassMT();
+			terrainDeferredDispatcher.shadowPassMT();
 		}
 
 		// --- GBuffer passes ---
@@ -1266,9 +1315,11 @@ void GFX::render() {
 		if (!threadPool_) {
 			pbrDeferredDispatcher.gBufferPass();
 			pbrDeferredSkinnedDispatcher.gBufferPass();
+			terrainDeferredDispatcher.gBufferPass();
 		} else {
 			pbrDeferredDispatcher.gBufferPassMT();
 			pbrDeferredSkinnedDispatcher.gBufferPassMT();
+			terrainDeferredDispatcher.gBufferPassMT();
 		}
 
 		// --- Deferred Lighting pass ---
@@ -1412,11 +1463,11 @@ void GFX::render() {
 		}
 
 		// Forward passes that always run regardless of render path
+		// (Terrain is now rendered into GBuffer above, so it is excluded here)
 		skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
 		skyboxPipelineDispatcher.drawSingleThreaded();
 
 		if (!threadPool_) {
-			terrainPipelineDispatcher.mainPass();
 			bvPipelineDispatcher.updateGPUDataSingleThreaded();
 			bvPipelineDispatcher.drawSingleThreaded();
 			billboardPipelineDispatcher.updateGPUDataSingleThreaded();
@@ -1424,7 +1475,6 @@ void GFX::render() {
 			meshParticleDispatcher.updateGPUDataSingleThreaded();
 			meshParticleDispatcher.drawSingleThreaded();
 		} else {
-			terrainPipelineDispatcher.mainPassMT();
 			bvPipelineDispatcher.updateGPUDataMultiThreaded();
 			bvPipelineDispatcher.drawMultiThreaded();
 			billboardPipelineDispatcher.updateGPUDataMultiThreaded();

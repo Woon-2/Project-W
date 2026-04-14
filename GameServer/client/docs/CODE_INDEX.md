@@ -237,7 +237,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 - PBRDeferredPipeline (GBuffer pass): Position(0), Normal(1), Tangent(2), Bitangent(3), UV(4)
 - PBRDeferredSkinnedPipeline (Shadow pass): Position(0), BoneIndices(1), BoneWeights(2)
 - PBRDeferredSkinnedPipeline (GBuffer pass): Position(0), Normal(1), Tangent(2), Bitangent(3), UV(4), BoneIndices(5), BoneWeights(6)
-- TerrainPipeline: Position(0), Normal(1), Tangent(2), Bitangent(3), UV(4)
+- TerrainPipeline (mainPass / gBufferPass): Position(0), Normal(1), Tangent(2), Bitangent(3), UV(4)
 
 **스킨드 메시 판별 조건:** `mesh.vbIdxMap.contains(mesh.name + "_VB_BoneIndices") && animBlender`
 
@@ -312,7 +312,8 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | SkyboxPipeline | `skyboxPipeline.hpp` | 스카이박스 |
 | UIPipeline | `uiPipeline.hpp` | UI 요소 |
 | SamplePipeline | `samplePipeline.hpp` | 샘플 렌더 |
-| TerrainPipeline | `terrainPipeline.hpp` / `terrainPipeline.cpp` | Height map 지형 렌더 (Splat 블렌딩 + PBR BRDF) |
+| TerrainPipeline | `terrainPipeline.hpp` / `terrainPipeline.cpp` | Height map 지형 렌더 (Forward path: shadowPass + mainPass) |
+| TerrainDeferredPipeline | `terrainDeferredPipeline.hpp` / `terrainDeferredPipeline.cpp` | Height map 지형 렌더 (Deferred path: shadowPass + GBuffer pass) |
 
 **Terrain 관련 파일:**
 
@@ -320,9 +321,12 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 |------|------|
 | `terrain.hpp` | `TerrainLayer`, `TerrainData` 구조체, `loadTerrainFromFiles()` 선언 |
 | `terrain.cpp` | manifest/meta 파싱, height.raw → GPU 메시 생성, 텍스처 로드 |
-| `terrain.hlsl` | Terrain VS/PS (Splat map 레이어 블렌딩 + PBR Cook-Torrance BRDF + PCF Shadow) |
+| `terrain.hlsl` | Terrain VS/PS (Forward path: Splat map 블렌딩 + PBR BRDF + PCF Shadow) |
+| `terrainDeferred.hlsl` | Terrain VS/GBufferOutput PS (Deferred path: GBuffer 기록, 조명 없음) |
 | `terrainPipeline.hpp` | `TerrainPipeline` 네임스페이스 (DrawEvent, Resources, Dispatcher) |
-| `terrainPipeline.cpp` | `Dispatcher::mainPass()` 구현 |
+| `terrainPipeline.cpp` | `Dispatcher::shadowPass()` / `mainPass()` 구현 |
+| `terrainDeferredPipeline.hpp` | `TerrainDeferredPipeline` 네임스페이스 (DrawEvent, Resources, Dispatcher) |
+| `terrainDeferredPipeline.cpp` | `Dispatcher::shadowPass()` / `gBufferPass()` 구현 |
 | `pbrLighting.hlsli` | PBR BRDF 함수 라이브러리 — terrain에서 `#define TERRAIN_SHADER` 후 include 시 `illuminate()` 제외됨 |
 
 **TerrainData 구조 (`terrain.hpp #18-31`):**

@@ -2,7 +2,7 @@
 `GFX` - 렌더링을 총괄 책임지는 클래스
 
 - 코어: `gfx.hpp`, `gfxUtil.hpp`, `mesh.hpp`, `shader.hpp`, `font.hpp`, `collision.hpp`
-- 파이프라인: `pbrPipeline.hpp`, `pbrSkinnedPipeline.hpp`, `pbrDeferredPipeline.hpp`, `pbrDeferredSkinnedPipeline.hpp`, `billboardPipeline.hpp`, `bvPipeline.hpp`, `samplePipeline.hpp`, `skyboxPipeline.hpp`, `uiPipeline.hpp`, `terrainPipeline.hpp`, `sharedResources.hpp`
+- 파이프라인: `pbrPipeline.hpp`, `pbrSkinnedPipeline.hpp`, `pbrDeferredPipeline.hpp`, `pbrDeferredSkinnedPipeline.hpp`, `billboardPipeline.hpp`, `bvPipeline.hpp`, `samplePipeline.hpp`, `skyboxPipeline.hpp`, `uiPipeline.hpp`, `terrainPipeline.hpp`, `terrainDeferredPipeline.hpp`, `sharedResources.hpp`
 
 #### 장치 초기화
 - `GFX::setupDXGI`
@@ -55,14 +55,15 @@
 **Deferred Path (`GFX::RenderPath::Deferred`):**
 1. GBuffer clear (GB0~GB3 RTV + GBuffer DSV)
 2. shadowPass(PBRDeferred) → shadowPass(PBRDeferredSkinned) → **shadowPass(Terrain)**
-3. gBufferPass(PBRDeferred) → gBufferPass(PBRDeferredSkinned) — MRT 4개(GB0~GB3) + GBuffer DSV에 기록
+3. gBufferPass(PBRDeferred) → gBufferPass(PBRDeferredSkinned) → **gBufferPass(Terrain)** — MRT 4개(GB0~GB3) + GBuffer DSV에 기록
 4. GBuffer 상태 전환: RTV→SRV, GBuffer DSV→SRV (`transitionToRead`)
 5. Lighting Pass — fullscreen triangle `DrawInstanced(3,1,0,0)`, GBuffer SRV 읽기, backbuffer RTV 출력
 6. **GBuffer depth → backbuffer DSV 복사** (`copyResource`) — 이후 Forward 패스가 올바른 깊이 기준으로 렌더링하도록
-7. mainPass(Skybox) → **mainPass(Terrain)** → mainPass(BV) → mainPass(Billboard) ← Forward-always 패스
+7. mainPass(Skybox) → mainPass(BV) → mainPass(Billboard) ← Forward-always 패스
 8. mainPass(UI)
 
-Terrain / Skybox / Billboard / UI는 renderPath에 관계없이 항상 Forward로 실행 (GBuffer에 기록하지 않음)
+Skybox / Billboard / UI는 renderPath에 관계없이 항상 Forward로 실행 (GBuffer에 기록하지 않음).
+Terrain은 Deferred path에서 gBufferPass를 통해 GBuffer에 기록하고, Forward path에서만 mainPass로 실행한다.
 
 #### CSM (Cascaded Shadow Mapping)
 

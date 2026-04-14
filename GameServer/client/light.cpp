@@ -2,6 +2,7 @@
 #include "light.hpp"
 #include "errorHandling.hpp"
 #include "camera.hpp"
+#include "terrainDeferredPipeline.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -256,6 +257,20 @@ void Light::render(GFX& gfx) {
 		.cascadeNormalOffsets   = cascadeNormalOffsets_
 	};
 	gfx.addLightData(terrainLD);
+
+	auto terrainDeferredLD = TerrainDeferredPipeline::LightData{
+		.dir                    = mu::NVec3(orient().rotate(mu::Vec3(0.f, 0.f, 1.f))),
+		.color                  = color,
+		.intensity              = intensity,
+		.type                   = static_cast<TerrainDeferredPipeline::LightData::Type>(type),
+		.isMainDirectionalLight = isMainDirectionalLight,
+		.cascadeViews           = cascadeViews_,
+		.cascadeProjs           = cascadeProjs_,
+		.cascadeSplitsFarV      = cascadeSplitsFarV_,
+		.cascadeCount           = cascadeCount_,
+		.cascadeNormalOffsets   = cascadeNormalOffsets_
+	};
+	gfx.addLightData(terrainDeferredLD);
 }
 
 void MU_CALLCONV Light::setPos(mu::Vec3 newPos) {

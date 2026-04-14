@@ -38,6 +38,7 @@ ComPtr<ID3D12PipelineState> createTerrainShader(ID3D12Device* device, ID3D12Root
 ComPtr<ID3D12PipelineState> createTerrainShaderCSMDebug(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createTerrainShadowMapShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createTerrainShadowMapCSMShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createTerrainDeferredGBufferShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 
 // 루트 파라미터 접근을 이해하기 쉽도록 하기 위해 만든 클래스
 // 루트 파라미터에 이름을 지어 그 인덱스 및 D3D12_ROOT_PARAMETER 구조체와 매핑한다.
@@ -456,6 +457,16 @@ struct PerFrameData {
     XMUINT3    _pfd0;
 };
 }  // namespace TerrainShadowMapCSMShader
+
+// TerrainDeferredGBufferShader — Matches terrainDeferred.hlsl (GBuffer geometry pass for terrain)
+namespace TerrainDeferredGBufferShader {
+// PerDrawcallData is identical to TerrainShader::PerDrawcallData — reuse that struct.
+// Matches cbuffer PerFrameData : register(b1) in terrainDeferred.hlsl
+struct PerFrameData {
+	XMFLOAT3 globalAmbient;
+	float    _pad;
+};
+}  // namespace TerrainDeferredGBufferShader
 
 // PBRDeferredGBufferShader — same data layout as PBRShader (static mesh GBuffer geometry pass)
 namespace PBRDeferredGBufferShader {
