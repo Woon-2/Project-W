@@ -37,6 +37,7 @@ struct DrawEvent {
 	mu::Vec4 tint = {1.f, 1.f, 1.f, 1.f};
 	bool additive = false;
 	float rotation = 0.f;
+	mu::Vec4 stretchAxisAndMode = { 0.f, 0.f, 0.f, 0.f }; // xyz=world axis, w=1 when stretched
 	int renderOrder = 0;	// 낮을수록 먼저 렌더 (Unity Order in Layer 동일 개념)
 
 	// Non-additive events sort before additive so we can switch PSO once.

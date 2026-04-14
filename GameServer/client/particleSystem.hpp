@@ -10,6 +10,9 @@ class GFX;
 
 struct Particle {
     mu::Vec3        pos, vel;
+    mu::Vec3        motionVelocity = { 0.f, 0.f, 0.f };
+    mu::Vec3        emitterPosition = { 0.f, 0.f, 0.f };
+    mu::Mat4x4      emitterRotation;
     float           lifetime, maxLifetime;
     mu::Vec4        startColor;
     ColorGradient   colorOverLifetime;
@@ -20,7 +23,12 @@ struct Particle {
     // Mesh renderer fields
     float           angularVelocity = 0.f;   // rad/sec, local Z axis
     float           angularAngle    = 0.f;   // accumulated rotation (radians)
+    mu::Vec3        angularVelocity3D = { 0.f, 0.f, 0.f };
+    mu::Vec3        angularAngle3D    = { 0.f, 0.f, 0.f };
+    mu::Vec3        rotationRandom3D  = { 0.f, 0.f, 0.f };
     mu::Mat4x4      baseRotation;            // fixed 3D orientation set at spawn
+    mu::Vec2        custom1Random   = { 0.f, 0.f };
+    mu::Vec2        custom2Random   = { 0.f, 0.f };
 
     // 'active' 필드 없음: pool_[0..activeCount_-1] 이 항상 활성 상태
 };
@@ -55,6 +63,7 @@ private:
     float    randomFloat(float lo, float hi);
 
     void     spawnParticle();
+    void     emitScheduledBursts(float prevTime, float currTime);
     mu::Vec3 sampleShapeOrigin();
     mu::Vec3 sampleShapeDirection(const mu::Vec3& origin);
 
@@ -66,6 +75,7 @@ private:
     std::mt19937 rng_{ std::random_device{}() };
 
     ps::ParticleSystemConfig config_;
+    std::vector<int>          burstNextCycle_;
     float                    emitAccumNew_   = 0.f;
     bool                     continuousNew_  = false;
     float                    systemTime_     = 0.f;

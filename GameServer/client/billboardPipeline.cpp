@@ -146,6 +146,7 @@ void Dispatcher::updateGPUDataSingleThreaded() {
 		[]( const BillboardPipeline::DrawEvent& drawEvent ) {
 			return BillboardShader::PerInstanceData{
 				.world    = mu::transpose( drawEvent.world ).getXmf(),
+				.stretchAxisAndMode = drawEvent.stretchAxisAndMode.getXmf(),
 				.rotation = drawEvent.rotation,
 			};
 		}
@@ -498,6 +499,7 @@ void MU_CALLCONV Dispatcher::addJobUpdate( mu::Mat4x4 viewProj, const DrawEvent*
 			[]( const BillboardPipeline::DrawEvent& drawEvent ) {
 				return BillboardShader::PerInstanceData{
 					.world    = mu::transpose( drawEvent.world ).getXmf(),
+					.stretchAxisAndMode = drawEvent.stretchAxisAndMode.getXmf(),
 					.rotation = drawEvent.rotation,
 				};
 			}

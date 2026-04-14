@@ -12,6 +12,8 @@
 #include "pbrSkinnedPipeline.hpp"
 #include "billboardPipeline.hpp"
 #include "meshParticlePipeline.hpp"
+#include "smokeBlendCGPipeline.hpp"
+#include "swordSlashPipeline.hpp"
 #include "skyboxPipeline.hpp"
 #include "BVPipeline.hpp"
 #include "uiPipeline.hpp"
@@ -37,6 +39,7 @@ struct RequestTextureLoad {
 	Texture* pDest;
 	std::unordered_map<std::string, Texture>* pTexHashMap;
 	bool needsUploadInfo;
+	Samplers sampler = Samplers::TrilinearWrap;
 };
 
 struct RequestSpriteAnimLoad {
@@ -156,6 +159,18 @@ public:
 	void addCameraData( const MeshParticlePipeline::CameraData& cameraData );
 	// 프레임 데이터를 입력한다.
 	void addFrameData( const MeshParticlePipeline::FrameData& frameData );
+	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+	void addDrawEvent( const SmokeBlendCGPipeline::DrawEvent& drawEvent );
+	// 카메라 데이터를 입력한다.
+	void addCameraData( const SmokeBlendCGPipeline::CameraData& cameraData );
+	// 프레임 데이터를 입력한다.
+	void addFrameData( const SmokeBlendCGPipeline::FrameData& frameData );
+	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+	void addDrawEvent( const SwordSlashPipeline::DrawEvent& drawEvent );
+	// 카메라 데이터를 입력한다.
+	void addCameraData( const SwordSlashPipeline::CameraData& cameraData );
+	// 프레임 데이터를 입력한다.
+	void addFrameData( const SwordSlashPipeline::FrameData& frameData );
 	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 	void addDrawEvent(const SkyboxPipeline::DrawEvent& drawEvent);
 	// 카메라 데이터를 입력한다.
@@ -295,6 +310,16 @@ private:
 	MeshParticlePipeline::Resources              resourcesMeshParticlePipeline_{};
 	MeshParticlePipeline::CameraData             cameraDataMeshParticlePipeline_{};
 	MeshParticlePipeline::FrameData              frameDataMeshParticlePipeline_{};
+	// Smoke Blend CG Pipeline
+	std::vector<SmokeBlendCGPipeline::DrawEvent> drawEventsSmokeBlendCGPipeline_{};
+	SmokeBlendCGPipeline::Resources              resourcesSmokeBlendCGPipeline_{};
+	SmokeBlendCGPipeline::CameraData             cameraDataSmokeBlendCGPipeline_{};
+	SmokeBlendCGPipeline::FrameData              frameDataSmokeBlendCGPipeline_{};
+	// Sword Slash Pipeline
+	std::vector<SwordSlashPipeline::DrawEvent> drawEventsSwordSlashPipeline_{};
+	SwordSlashPipeline::Resources              resourcesSwordSlashPipeline_{};
+	SwordSlashPipeline::CameraData             cameraDataSwordSlashPipeline_{};
+	SwordSlashPipeline::FrameData              frameDataSwordSlashPipeline_{};
 	// UI Pipeline
 	std::vector<UIPipeline::DrawEvent> drawEventsUIPipeline_{};
 	UIPipeline::Resources resourcesUIPipeline_{};

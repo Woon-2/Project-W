@@ -1,10 +1,44 @@
 #pragma once
 #include "gfxUtil.hpp"   // ColorGradient, Texture, mu::Vec2/3/4/Mat4x4
 
+#include <vector>
+#include <variant>
+
 struct Mesh;
 struct SubMesh;
 
 namespace ps {
+
+// ---------------------------------------------------------------------------
+// Shared curve type used by Unity-style MinMaxCurve-backed modules.
+// ---------------------------------------------------------------------------
+struct FloatKey {
+    float t          = 0.f;
+    float value      = 0.f;
+    float inTangent  = 0.f;
+    float outTangent = 0.f;
+};
+
+struct FloatCurve {
+    std::vector<FloatKey> keys;
+
+    float evaluate(float t) const;
+};
+
+struct MinMaxCurveChannel {
+    enum class Mode { Constant, TwoConstants, Curve, TwoCurves };
+    Mode mode = Mode::Constant;
+
+    float constant    = 0.f;
+    float constantMin = 0.f;
+    float constantMax = 0.f;
+    float curveMultiplier = 1.f;
+    FloatCurve curve;
+    FloatCurve curveMin;
+    FloatCurve curveMax;
+
+    float evaluate(float t, float random01) const;
+};
 
 // ---------------------------------------------------------------------------
 // Main Module
@@ -19,34 +53,60 @@ struct MainModule {
     float    startSizeMax       = 1.f;
     float    startRotationMin   = 0.f;   // radians (billboard Z-axis)
     float    startRotationMax   = 0.f;
-    mu::Mat4x4 startRotation3D = mu::Mat4x4{};  // mesh: full 3D orientation at spawn
+    bool     startRotation3DEnabled = false;
+    mu::Vec3 startRotation3DMin = { 0.f, 0.f, 0.f };  // radians, Unity Start Rotation XYZ
+    mu::Vec3 startRotation3DMax = { 0.f, 0.f, 0.f };
+    mu::Mat4x4 startRotation3D = mu::Mat4x4{};  // mesh: externally supplied base orientation
+    float    flipRotation      = 0.f;
     float    gravityModifierMin = 0.f;
     float    gravityModifierMax = 0.f;
     mu::Vec3 gravity            = { 0.f, -9.8f, 0.f };
     float    duration           = 5.f;   // cycle length in seconds; 0 = no limit
     bool     looping            = true;
+    bool     prewarm            = false;
+    bool     playOnAwake        = true;
     float    startDelay         = 0.f;
     float    simulationSpeed    = 1.f;
+    int      maxParticles       = 0;      // 0 = ParticleSystem::init argument/default
 
     enum class SimulationSpace { World, Local };
     SimulationSpace simulationSpace = SimulationSpace::World;
+
+    enum class ScalingMode { Hierarchy, Local, Shape };
+    ScalingMode scalingMode = ScalingMode::Hierarchy;
 };
 
 // ---------------------------------------------------------------------------
 // Emission Module
 // ---------------------------------------------------------------------------
 struct EmissionModule {
-    float emitRate = 0.f;   // particles/sec; 0 = manual emit only
+    struct Burst {
+        float time           = 0.f;
+        int   countMin       = 1;
+        int   countMax       = 1;
+        int   cycleCount     = 1;
+        float repeatInterval = 0.01f;
+        float probability    = 1.f;
+    };
+
+    bool  enabled          = true;
+    float emitRate         = 0.f;   // particles/sec; 0 = manual emit only
+    float rateOverDistance = 0.f;   // deferred: requires emitter movement tracking
+    std::vector<Burst> bursts;
 };
 
 // ---------------------------------------------------------------------------
 // Shape Module
 // ---------------------------------------------------------------------------
 struct ShapeModule {
-    enum class Type { Point, Edge, Cone, Sphere, Box };
+    enum class Type { Point, Edge, Cone, Sphere, Box, Circle };
+    bool     enabled   = true;
     Type     type      = Type::Point;
     mu::Vec3 position  = { 0.f, 0.f, 0.f };
+    mu::Vec3 rotation  = { 0.f, 0.f, 0.f };  // radians
+    mu::Vec3 scale     = { 1.f, 1.f, 1.f };
     mu::Vec3 direction = { 0.f, 1.f, 0.f };
+    mu::Mat4x4 orientation = mu::Mat4x4{};   // local shape axes to world axes
 
     float    edgeLength   = 1.f;
     mu::Vec3 edgeDir      = { 1.f, 0.f, 0.f };
@@ -57,6 +117,13 @@ struct ShapeModule {
     float    sphereRadius = 1.f;
 
     mu::Vec3 boxSize      = { 1.f, 1.f, 1.f };
+
+    float    radiusThickness         = 1.f;
+    float    arc                     = 2.f * 3.14159265f;
+    bool     alignToDirection        = false;
+    float    randomDirectionAmount   = 0.f;
+    float    sphericalDirectionAmount = 0.f;
+    float    randomPositionAmount    = 0.f;
 };
 
 // ---------------------------------------------------------------------------
@@ -65,6 +132,11 @@ struct ShapeModule {
 struct VelocityOverLifetimeModule {
     bool  enabled = false;
     float drag    = 0.f;   // exponential velocity decay (1/sec)
+    mu::Vec3 linear = { 0.f, 0.f, 0.f };
+    mu::Vec3 orbital = { 0.f, 0.f, 0.f };
+    float radial = 0.f;
+    float speedModifier = 1.f;
+    bool  inWorldSpace = false;
 };
 
 // ---------------------------------------------------------------------------
@@ -82,6 +154,12 @@ struct SizeOverLifetimeModule {
     bool  enabled   = false;
     float sizeBegin = 1.f;
     float sizeEnd   = 0.f;
+
+    bool separateAxes = false;
+    FloatCurve curve;
+    FloatCurve x;
+    FloatCurve y;
+    FloatCurve z;
 };
 
 // ---------------------------------------------------------------------------
@@ -91,21 +169,46 @@ struct RotationOverLifetimeModule {
     bool  enabled            = false;
     float angularVelocityMin = 0.f;   // rad/sec, local Z axis
     float angularVelocityMax = 0.f;
+    bool  separateAxes       = false;
+    mu::Vec3 angularVelocityMin3D = { 0.f, 0.f, 0.f };
+    mu::Vec3 angularVelocityMax3D = { 0.f, 0.f, 0.f };
+
+    bool useCurves = false;
+    MinMaxCurveChannel x;
+    MinMaxCurveChannel y;
+    MinMaxCurveChannel z;
 };
 
 // ---------------------------------------------------------------------------
 // CustomData Module
-// Phase 0-1: Constant mode only.
-// Phase 1.5: Curve mode (FloatCurve per channel) -- deferred.
+// Mirrors Unity ParticleSystem Custom Data streams used by Custom Vertex
+// Streams: Custom1.xy and Custom2.xy.
 // ---------------------------------------------------------------------------
+struct CustomDataChannel {
+    enum class Mode { Constant, TwoConstants, Curve, TwoCurves };
+    Mode mode = Mode::Constant;
+
+    float constant    = 0.f;
+    float constantMin = 0.f;
+    float constantMax = 0.f;
+    float curveMultiplier = 1.f;
+    FloatCurve curve;
+    FloatCurve curveMin;
+    FloatCurve curveMax;
+
+    float evaluate(float t, float random01) const;
+};
+
+struct CustomDataStream {
+    CustomDataChannel x;
+    CustomDataChannel y;
+};
+
 struct CustomDataModule {
     bool enabled = false;
 
-    enum class Mode { Constant /*, Curve -- Phase 1.5 */ };
-    Mode mode = Mode::Constant;
-
-    mu::Vec2 custom0Constant = { 0.f, 0.f };
-    mu::Vec2 custom1Constant = { 0.f, 0.f };
+    CustomDataStream custom1;
+    CustomDataStream custom2;
 };
 
 // ---------------------------------------------------------------------------
@@ -128,7 +231,12 @@ struct MatSwordSlash {
     const Texture* flowTex     = nullptr;
 
     mu::Vec2 speedMainTexUV    = { 0.f, 0.f };
+    mu::Vec2 speedDissolveUV   = { 0.f, 0.f };
     mu::Vec2 speedFlow         = { 0.f, 0.f };
+    mu::Vec4 mainTexST         = { 1.f, 1.f, 0.f, 0.f };
+    mu::Vec4 emissionTexST     = { 1.f, 1.f, 0.f, 0.f };
+    mu::Vec4 dissolveTexST     = { 1.f, 1.f, 0.f, 0.f };
+    mu::Vec4 flowTexST         = { 1.f, 1.f, 0.f, 0.f };
     float    flowPower         = 0.f;
     float    emission          = 1.f;
     float    desaturation      = 0.f;
@@ -138,15 +246,59 @@ struct MatSwordSlash {
     bool     useSmoothDissolve = false;
 };
 
-using AnyMat = std::variant<MatUnlit, MatSwordSlash>;
+// MatSmokeBlendCG: Shader Graphs/HS_Blend_CG port used by Smoke24bcg.
+struct MatSmokeBlendCG {
+    const Texture* mainTex = nullptr;
+    const Texture* noiseTex = nullptr;
+    const Texture* flowTex = nullptr;
+    const Texture* maskTex = nullptr;
+
+    mu::Vec4 mainTexST = { 1.f, 1.f, 0.f, 0.f };
+    mu::Vec4 noiseTexST = { 1.f, 1.f, 0.f, 0.f };
+    mu::Vec4 flowTexST = { 1.f, 1.f, 0.f, 0.f };
+    mu::Vec4 maskTexST = { 1.f, 1.f, 0.f, 0.f };
+    mu::Vec4 speedMainTexUVNoiseZW = { 0.f, 0.f, 0.f, 0.f };
+    mu::Vec4 distortionSpeedXYPowerZ = { 0.f, 0.f, 0.f, 0.f };
+    mu::Vec4 color = { 1.f, 1.f, 1.f, 1.f };
+
+    float emission = 2.f;
+    float opacity = 1.f;
+    float textureOpacity = 0.f;
+    float multiplyTexture = 1.f;
+    float useOnlyColor = 0.f;
+    float useFresnel = 0.f;
+    float fresnelPower = 3.f;
+    float fresnelScale = 3.f;
+    float useCenterGlow = 0.f;
+    float useDepth = 1.f;
+    float depthPower = 0.5f;
+};
+
+using AnyMat = std::variant<MatUnlit, MatSwordSlash, MatSmokeBlendCG>;
 
 // ---------------------------------------------------------------------------
 // Renderer Module
 // ---------------------------------------------------------------------------
 struct RendererModule {
     enum class Mode { Billboard, StretchedBillboard /* Phase 3 */, Mesh };
+    enum class Alignment { View, World, Local, Facing };
+    enum class SortMode { None, Distance, OldestInFront, YoungestInFront };
+
     Mode mode        = Mode::Billboard;
+    Alignment alignment = Alignment::View;
+    SortMode sortMode   = SortMode::None;
     int  renderOrder = 0;
+    float sortingFudge = 0.f;
+    float minParticleSize = 0.f;
+    float maxParticleSize = 0.5f;
+    float normalDirection = 1.f;
+    bool  allowRoll       = true;
+    mu::Vec3 pivot        = { 0.f, 0.f, 0.f };
+    mu::Vec3 flip         = { 0.f, 0.f, 0.f };
+
+    float cameraVelocityScale = 0.f;  // StretchedBillboard deferred
+    float velocityScale       = 0.f;  // StretchedBillboard deferred
+    float lengthScale         = 2.f;  // StretchedBillboard deferred
 
     const Mesh*    pMesh    = nullptr;
     const SubMesh* pSubMesh = nullptr;

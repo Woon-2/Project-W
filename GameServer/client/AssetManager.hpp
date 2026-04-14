@@ -3,6 +3,7 @@
 
 #include "gfx.hpp"
 #include "animation.hpp"
+#include "swordSlashMaterial.hpp"
 
 class AssetManager {
 public:
@@ -26,8 +27,13 @@ public:
 	const Texture* playerHpFrame() const { return &playerHpFrame_; }
 	const Texture* flameTex() const { return &flameTex_; }
 	const Texture* smokeTex() const { return &smokeTex_; }
-	const Mesh*    swordSlashMesh() const { return &swordSlashMesh_; }
-	const Texture* swordSlashTex()  const { return &swordSlashTex_; }
+	const Mesh*    swordSlashMesh()        const { return &swordSlashMesh_; }
+	const Texture* smoke24Tex()            const { return &smoke24Tex_; }
+	const Texture* smoke12Tex()            const { return &smoke12Tex_; }
+	const Texture* crater62Tex()           const { return &crater62Tex_; }
+	const Texture* noise43bTex()           const { return &noise43bTex_; }
+	const ps::MatSwordSlash& swordSlashMaterial() const { return swordSlashMaterial_; }
+	const ps::MatSmokeBlendCG& smokeBlendCGMaterial() const { return smokeBlendCGMaterial_; }
 	const std::vector<std::shared_ptr<AnimClip>>& playerAnimations() const { return playerAnimations_; }
 	const std::vector<std::shared_ptr<AnimClip>>& goblinAnimations() const { return goblinAnimations_; }
 	const std::vector<std::shared_ptr<AnimClip>>& anubisAnimations() const { return anubisAnimations_; }
@@ -69,7 +75,12 @@ private:
 	Texture flameTex_{};
 	Texture smokeTex_{};
 	Mesh    swordSlashMesh_{};
-	Texture swordSlashTex_{};
+	Texture smoke24Tex_{};
+	Texture smoke12Tex_{};
+	Texture crater62Tex_{};
+	Texture noise43bTex_{};
+	ps::MatSwordSlash swordSlashMaterial_{};
+	ps::MatSmokeBlendCG smokeBlendCGMaterial_{};
 };
 
 #endif	// __AssetManager_HPP

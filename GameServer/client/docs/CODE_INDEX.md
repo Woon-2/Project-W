@@ -341,6 +341,14 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `meshParticlePipeline.cpp` | updateGPUDataSingleThreaded / drawSingleThreaded 구현 |
 | `meshParticle.hlsl` | PerInstanceData(world+tint), bindless texture PS |
 
+**SwordSlashPipeline:**
+
+| 파일 | 설명 |
+|------|------|
+| `swordSlashPipeline.hpp` | DrawEvent (world, tint, t, 텍스처 4종, FX 파라미터), Dispatcher |
+| `swordSlashPipeline.cpp` | updateGPUDataSingleThreaded / drawSingleThreaded 구현 |
+| `swordSlash.hlsl` | Flow+Dissolve+Emission 효과 VS/PS. b0=PerDrawcallData(bindless+FX), b1=PerFrameData(VP) |
+
 ---
 
 ## 8-B. 파티클 시스템
@@ -382,15 +390,20 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 - `Billboard` — `material.mainTex`가 있으면 항상 `BillboardPipeline::DrawEvent` 제출
   - `TextureSheetAnimationModule.enabled = true` → 그리드 기반 UV 프레임 계산
   - `TextureSheetAnimationModule.enabled = false` → 전체 텍스처 (uvOffset=0, uvScale=1)
-- `Mesh` — `MeshParticlePipeline::DrawEvent` 직접 제출 (angularAngle + startRotation3D + translate)
+- `Mesh` + `MatUnlit` — `MeshParticlePipeline::DrawEvent` 제출 (angularAngle + startRotation3D + translate)
+- `Mesh` + `MatSwordSlash` — `SwordSlashPipeline::DrawEvent` 제출 (동일 transform 계산, 텍스처 4종 + FX 파라미터 포함)
 
-**Material** (`particleModules.hpp`):
-- `shader` — 렌더링 알고리즘 / PSO 변형 힌트
-  - `Unlit` — 알파 블렌드 (기본)
-  - `UnlitAdditive` — 가산 혼합
-- `mainTex` — 메인 텍스처 (Billboard 렌더링 활성화 조건이기도 함)
-- `emissionTex / flowTex / dissolveTex` — Phase 4 예약
-- `softParticles` — 깊이 페이드 (Phase 4)
+**AnyMat / Material 타입** (`particleModules.hpp`):
+- `using AnyMat = std::variant<MatUnlit, MatSwordSlash>` — per-shader 독립 구조체 + variant
+- `MatUnlit` — BillboardPipeline / MeshParticlePipeline용: `mainTex`, `additive`
+- `MatSwordSlash` — SwordSlashPipeline용: `mainTex`, `emissionTex`, `dissolveTex`, `flowTex`, 스크롤/Flow/디졸브/Emission FX 파라미터
+- `RendererModule::mat` (`AnyMat`) — `render()` 내 `std::visit`으로 파이프라인 디스패치
+
+**SwordSlashPipeline** (`swordSlashPipeline.hpp` / `swordSlashPipeline.cpp` / `swordSlash.hlsl`):
+- Flow Map UV 왜곡 + UV 스크롤 + EmissionTex 발광 + Dissolve 마스크(파티클 수명 기반)
+- DrawEvent: world, tint, t(normalized age), 텍스처 4종, FX 파라미터 전체
+- PerDrawcallData(b0): bindless 텍스처 인덱스 4종 + instanceOffset + FX 파라미터 + time
+- PerFrameData(b1): VP 행렬 (SystemTime은 particleSystem::render()에서 FrameData로 전달)
 
 **TextureSheetAnimationModule** (`particleModules.hpp`):
 - `enabled` — 활성화 시 Billboard UV를 그리드 기반 프레임으로 교체 (비활성 시 전체 텍스처)

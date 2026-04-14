@@ -134,6 +134,7 @@ private:
 	ParticleSystem flameParticleSystem_{};
 	ParticleSystem smokeParticleSystem_{};
 	ParticleSystem swordSlashSystem_{};
+	ParticleSystem swordSlashSmokeSystem_{};
 	ParticleSystem dustParticleSystem_{};
 	int            footBoneIdxLeft_  = -1;
 	int            footBoneIdxRight_ = -1;
