@@ -2,7 +2,7 @@
 `GFX` - 렌더링을 총괄 책임지는 클래스
 
 - 코어: `gfx.hpp`, `gfxUtil.hpp`, `mesh.hpp`, `shader.hpp`, `font.hpp`, `collision.hpp`
-- 파이프라인: `pbrPipeline.hpp`, `pbrSkinnedPipeline.hpp`, `billboardPipeline.hpp`, `bvPipeline.hpp`, `samplePipeline.hpp`, `skyboxPipeline.hpp`, `uiPipeline.hpp`, `terrainPipeline.hpp`, `sharedResource.hpp`
+- 파이프라인: `pbrPipeline.hpp`, `pbrSkinnedPipeline.hpp`, `pbrDeferredPipeline.hpp`, `pbrDeferredSkinnedPipeline.hpp`, `billboardPipeline.hpp`, `bvPipeline.hpp`, `samplePipeline.hpp`, `skyboxPipeline.hpp`, `uiPipeline.hpp`, `terrainPipeline.hpp`, `sharedResources.hpp`
 
 #### 장치 초기화
 - `GFX::setupDXGI`
@@ -21,9 +21,20 @@
 
 `GFX`에 객체 그리기를 요청할 때에는 어떤 파이프라인을 통할지를 정해야 함
 함수 오버로딩을 통해 어떤 파이프라인에 종속된 인자를 전달하느냐에 따라 결정
+`GFX::renderPath()` 로 Forward / Deferred 경로를 런타임에 선택 가능
 
 파이프라인은 모두 개별 네임스페이스를 가지고 있음
 파이프라인은 여러 개의 렌더링 패스를 가질 수 있으며, 각 패스의 실행에 대한 함수를 public하게 제공
+
+**파이프라인별 리소스 구조체 작성 규칙:**
+- `LightData`, `CameraData`, `FrameData`, `Resources` 등은 내용이 동일하더라도 `using` alias 대신 각 파이프라인 namespace에 직접 작성
+- 파이프라인이 독립적으로 진화할 수 있도록 하기 위함
+
+**Root Parameter 레지스터 규약 (전 파이프라인 공통):**
+- `PerDrawcallData` → b0
+- `PerFrameData` → b1
+- `PerInstanceData` → t0, `LightData` → t1, `BoneData` → t2
+- 새 셰이더 cbuffer 선언 시 반드시 이 규약을 따를 것 (잘못된 register 사용 시 데이터 미전달)
 
 #### 셰이더의 추가/수정
 
@@ -34,11 +45,24 @@
 
 #### 렌더 패스 실행 순서 (gfx.cpp render())
 
+**Forward Path (기본):**
 1. shadowPass(PBR) → shadowPass(PBRSkinned) → **shadowPass(Terrain)**
 2. mainPass(PBR) → mainPass(PBRSkinned)
 3. **mainPass(Terrain)** — shadow map SRV 상태에서 실행, 그림자 수신 O, 단일 스레드
 4. mainPass(Skybox) → mainPass(BV) → mainPass(Billboard)
 5. mainPass(UI)
+
+**Deferred Path (`GFX::RenderPath::Deferred`):**
+1. GBuffer clear (GB0~GB3 RTV + GBuffer DSV)
+2. shadowPass(PBRDeferred) → shadowPass(PBRDeferredSkinned) → **shadowPass(Terrain)**
+3. gBufferPass(PBRDeferred) → gBufferPass(PBRDeferredSkinned) — MRT 4개(GB0~GB3) + GBuffer DSV에 기록
+4. GBuffer 상태 전환: RTV→SRV, GBuffer DSV→SRV (`transitionToRead`)
+5. Lighting Pass — fullscreen triangle `DrawInstanced(3,1,0,0)`, GBuffer SRV 읽기, backbuffer RTV 출력
+6. **GBuffer depth → backbuffer DSV 복사** (`copyResource`) — 이후 Forward 패스가 올바른 깊이 기준으로 렌더링하도록
+7. mainPass(Skybox) → **mainPass(Terrain)** → mainPass(BV) → mainPass(Billboard) ← Forward-always 패스
+8. mainPass(UI)
+
+Terrain / Skybox / Billboard / UI는 renderPath에 관계없이 항상 Forward로 실행 (GBuffer에 기록하지 않음)
 
 #### CSM (Cascaded Shadow Mapping)
 
@@ -76,6 +100,54 @@ Light::updateCSMCascades()
 - cascade DSV clear는 `gfx.cpp::clearCSMAllShadowMaps()`에서만 수행 (각 파이프라인 shadowDraw에서 개별 클리어 금지)
 - MT shadow draw latch count = `cascadeCount * jobCnt` (cascadeCount만이면 버그)
 - `cascadeNormalOffsets`의 rawNdotl은 **saturate 금지** — back-lit 감지에 음수 값이 필요
+
+#### Deferred Shading (PBRDeferredPipeline / PBRDeferredSkinnedPipeline)
+
+**파일:**
+- `pbrDeferredPipeline.hpp/cpp`, `pbrDeferredSkinnedPipeline.hpp/cpp`
+- `pbrDeferred.hlsl` (정적 메시 GBuffer geometry pass)
+- `pbrDeferredSkinned.hlsl` (스킨드 메시 GBuffer geometry pass)
+- `pbrDeferredLighting.hlsl` (fullscreen triangle deferred lighting pass)
+- `sharedResources.hpp/cpp` — `SharedResources::GBuffer` 네임스페이스
+
+**GBuffer 레이아웃 (`SharedResources::GBufferData`):**
+
+| 슬롯 | 포맷 | 내용 |
+|------|------|------|
+| GB0 | R8G8B8A8_UNORM | Albedo.rgb (linear) + AO.a |
+| GB1 | R16G16_FLOAT | NormalV oct-encoded (view-space), 클리어값 (0.5, 0.5) → (0,0,1) |
+| GB2 | R8G8B8A8_UNORM | LightAccum.rgb (ambient+emissive 선계산) + Roughness.a |
+| GB3 | R8_UNORM | Metallic |
+| Depth | R32_TYPELESS (DSV=D32_FLOAT, SRV=R32_FLOAT) | Scene depth |
+
+**Normal Oct Encoding (`pbrLighting.hlsli`):**
+- `octEncode(float3 n)` — view-space unit normal → float2 [0,1]
+- `octDecode(float2 oct)` — float2 [0,1] → view-space unit normal
+- GB1 클리어 색상 (0.5, 0.5, 0, 0) → octDecode → 정면 법선 (0,0,1)
+
+**pbrLighting.hlsli include 방식:**
+- `pbrDeferred.hlsl`, `pbrDeferredSkinned.hlsl`: 일반 `#include` (geometry pass용)
+- `pbrDeferredLighting.hlsl`: `#define DEFERRED_LIGHTING_PASS` 후 `#include` — `illuminateCSM()` guard 활성화
+
+**Lighting Pass 설계:**
+- VS: SV_VertexID 기반 fullscreen triangle (VB 없음), `DrawInstanced(3, 1, 0, 0)`
+- PS: GB0~Depth SRV 샘플링 → depth+invProj→posV, posV+invView→posW, octDecode→normalV, invView→normalW
+- LightData: 별도 StructuredBuffer (t1)로 전달 (`deferredLightingLightData_`)
+- PerFrameData: 단일 ConstantBuffer (b1) — CSM 데이터 + invView/invProj + GBuffer SRV bindless 인덱스 + debugMode
+
+**GBuffer depth → backbuffer DSV 복사:**
+- Lighting pass cmdList와 동일 batch에서 `copyResource` 실행
+- GBuffer DSV (D32_FLOAT) 내용을 backbuffer depth buffer에 복사
+- 이후 Skybox/Terrain/Billboard 등 Forward-always 패스가 올바른 깊이를 기준으로 렌더링 가능
+
+**GBuffer 디버그 뷰:**
+- 'G' 키 → `GFX::cycleGBufferDebugMode()` → `gBufferDebugMode_` (0~7) 순환
+- 순서: None → Albedo → Normal → AO → Roughness → Metallic → LightAccum → Depth
+- Lighting PSO의 `debugMode` (cbuffer b1 내 uint) 로 전달, PSO permutation 불필요
+
+**주의사항:**
+- GBuffer DSV와 backbuffer DSV는 별개 리소스 — Deferred path에서 geometry pass는 GBuffer DSV 사용, depth 복사 없이 Forward 패스를 이어 실행하면 깊이가 초기화된 상태로 모든 Forward 오브젝트가 GBuffer 위에 그려짐
+- `PBRDeferredSkinnedPipeline`의 Lighting pass는 직접 담당하지 않음 — `PBRDeferredPipeline`의 Lighting pass가 정적/스킨드 GBuffer를 모두 처리
 
 #### TerrainPipeline 특성
 

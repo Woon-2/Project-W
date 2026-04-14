@@ -1666,27 +1666,50 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 
 	const auto pModel = renderState_.pModel;
 	if (pModel) {
+		const bool useDeferred = (gfx.renderPath() == GFX::RenderPath::Deferred);
+
 		for (auto& [mesh, meshXform] : pModel->meshWithDressXforms) {
 			const bool isSkinned = renderState_.animBlender
 				&& mesh.vbIdxMap.contains(mesh.name + "_VB_BoneIndices");
 
 			for (std::size_t i = 0u; i < mesh.subMeshes.size(); ++i) {
-				if (isSkinned) {
-					gfx.addDrawEvent(PBRSkinnedPipeline::DrawEvent{
-						.world = meshXform * offsetXform * renderState_.world,
-						.boneXforms = renderState_.animBlender->finalXformData(),
-						.mesh = &mesh,
-						.subMesh = &mesh.subMeshes[i],
-						.material = &mesh.materialSets[materialSetIdx_].materials[i],
-					});
+				if (useDeferred) {
+					if (isSkinned) {
+						gfx.addDrawEvent(PBRDeferredSkinnedPipeline::DrawEvent{
+							.world      = meshXform * offsetXform * renderState_.world,
+							.boneXforms = renderState_.animBlender->finalXformData(),
+							.mesh       = &mesh,
+							.subMesh    = &mesh.subMeshes[i],
+							.material   = &mesh.materialSets[materialSetIdx_].materials[i],
+						});
+					}
+					else {
+						gfx.addDrawEvent(PBRDeferredPipeline::DrawEvent{
+							.world    = meshXform * offsetXform * renderState_.world,
+							.mesh     = &mesh,
+							.subMesh  = &mesh.subMeshes[i],
+							.material = &mesh.materialSets[materialSetIdx_].materials[i],
+						});
+					}
 				}
 				else {
-					gfx.addDrawEvent(PBRPipeline::DrawEvent{
-						.world = meshXform * offsetXform * renderState_.world,
-						.mesh = &mesh,
-						.subMesh = &mesh.subMeshes[i],
-						.material = &mesh.materialSets[materialSetIdx_].materials[i],
-					});
+					if (isSkinned) {
+						gfx.addDrawEvent(PBRSkinnedPipeline::DrawEvent{
+							.world      = meshXform * offsetXform * renderState_.world,
+							.boneXforms = renderState_.animBlender->finalXformData(),
+							.mesh       = &mesh,
+							.subMesh    = &mesh.subMeshes[i],
+							.material   = &mesh.materialSets[materialSetIdx_].materials[i],
+						});
+					}
+					else {
+						gfx.addDrawEvent(PBRPipeline::DrawEvent{
+							.world    = meshXform * offsetXform * renderState_.world,
+							.mesh     = &mesh,
+							.subMesh  = &mesh.subMeshes[i],
+							.material = &mesh.materialSets[materialSetIdx_].materials[i],
+						});
+					}
 				}
 			}
 		}

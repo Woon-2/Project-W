@@ -189,6 +189,12 @@
     <ClCompile Include="pbrSkinnedPipeline.cpp">
       <Filter>그래픽스\파이프라인\소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="pbrDeferredPipeline.cpp">
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="pbrDeferredSkinnedPipeline.cpp">
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
+    </ClCompile>
     <ClCompile Include="samplePipeline.cpp">
       <Filter>그래픽스\파이프라인\소스 파일</Filter>
     </ClCompile>
@@ -443,6 +449,12 @@
     <ClInclude Include="pbrSkinnedPipeline.hpp">
       <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="pbrDeferredPipeline.hpp">
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="pbrDeferredSkinnedPipeline.hpp">
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
+    </ClInclude>
     <ClInclude Include="samplePipeline.hpp">
       <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
@@ -560,6 +572,15 @@
       <Filter>셰이더 파일</Filter>
     </FxCompile>
     <FxCompile Include="pbrSkinned.hlsl">
+      <Filter>셰이더 파일</Filter>
+    </FxCompile>
+    <FxCompile Include="pbrDeferred.hlsl">
+      <Filter>셰이더 파일</Filter>
+    </FxCompile>
+    <FxCompile Include="pbrDeferredSkinned.hlsl">
+      <Filter>셰이더 파일</Filter>
+    </FxCompile>
+    <FxCompile Include="pbrDeferredLighting.hlsl">
       <Filter>셰이더 파일</Filter>
     </FxCompile>
     <FxCompile Include="sample.hlsl">

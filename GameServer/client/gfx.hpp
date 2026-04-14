@@ -17,6 +17,8 @@
 #include "uiPipeline.hpp"
 #include "terrainPipeline.hpp"
 #include "spriteAnimation.hpp"
+#include "pbrDeferredPipeline.hpp"
+#include "pbrDeferredSkinnedPipeline.hpp"
 
 extern HWND ghWnd;
 
@@ -93,6 +95,7 @@ struct AssetConfigs {
 //					이후 render 함수를 호출해 한번에 전부 그리기
 class GFX {
 public:
+	enum class RenderPath { Forward, Deferred };
 	GFX() = default;
 	GFX(const GFX&) = delete;
 	GFX& operator=(const GFX&) = delete;
@@ -145,6 +148,22 @@ public:
 	// 프레임 데이터를 입력한다.
 	void addFrameData(const PBRSkinnedPipeline::FrameData& frameData);
 	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+	void addDrawEvent(const PBRDeferredPipeline::DrawEvent& drawEvent);
+	// 카메라 데이터를 입력한다.
+	void addCameraData(const PBRDeferredPipeline::CameraData& cameraData);
+	// 조명 데이터를 입력한다.
+	void addLightData(const PBRDeferredPipeline::LightData& lightData);
+	// 프레임 데이터를 입력한다.
+	void addFrameData(const PBRDeferredPipeline::FrameData& frameData);
+	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+	void addDrawEvent(const PBRDeferredSkinnedPipeline::DrawEvent& drawEvent);
+	// 카메라 데이터를 입력한다.
+	void addCameraData(const PBRDeferredSkinnedPipeline::CameraData& cameraData);
+	// 조명 데이터를 입력한다.
+	void addLightData(const PBRDeferredSkinnedPipeline::LightData& lightData);
+	// 프레임 데이터를 입력한다.
+	void addFrameData(const PBRDeferredSkinnedPipeline::FrameData& frameData);
+	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 	void addDrawEvent( const BillboardPipeline::DrawEvent& drawEvent );
 	// 카메라 데이터를 입력한다.
 	void addCameraData( const BillboardPipeline::CameraData& cameraData );
@@ -194,6 +213,14 @@ public:
 
 	// CSM cascade 디버그 시각화를 토글한다 ('C' 키에 연결됨).
 	void toggleCsmDebugVisualization() { csmDebugVisualization_ = !csmDebugVisualization_; }
+
+	// Deferred / Forward 렌더 경로 선택
+	RenderPath renderPath() const { return renderPath_; }
+	void setRenderPath(RenderPath path) { renderPath_ = path; }
+
+	// GBuffer 채널 debug 뷰를 순환한다 ('G' 키에 연결됨).
+	// None(0) → Albedo → Normal → AO → Roughness → Metallic → LightAccum → Depth → None
+	void cycleGBufferDebugMode() { gBufferDebugMode_ = (gBufferDebugMode_ + 1u) % 8u; }
 
 	void WriteTextToBitmap( TextImage* pDestImage, UINT DestWidth, UINT DestHeight, UINT DestPitch, int* piOutWidth, int* piOutHeight, void* pFontObjHandle, const WCHAR* wchString, DWORD dwLen, D2D1_COLOR_F color = D2D1::ColorF( D2D1::ColorF::White ) );
 	void UpdateTextureWithTextImage( TextImage* srcImage, UINT srcWidth, UINT srcHeight );
@@ -306,6 +333,24 @@ private:
 	std::vector<TerrainPipeline::LightData> lightDataTerrainPipeline_{};
 	TerrainPipeline::LightData              mainDirectionalLightTerrainPipeline_{};
 	TerrainPipeline::FrameData              frameDataTerrainPipeline_{};
+	// PBR Deferred Pipeline (static mesh GBuffer pass)
+	std::vector<PBRDeferredPipeline::DrawEvent> drawEventsPBRDeferredPipeline_{};
+	PBRDeferredPipeline::Resources resourcesPBRDeferredPipeline_{};
+	PBRDeferredPipeline::CameraData cameraDataPBRDeferredPipeline_{};
+	std::vector<PBRDeferredPipeline::LightData> lightDataPBRDeferredPipeline_{};
+	PBRDeferredPipeline::LightData mainDirectionalLightPBRDeferredPipeline_{};
+	PBRDeferredPipeline::FrameData frameDataPBRDeferredPipeline_{};
+	// PBR Deferred Skinned Pipeline (skinned mesh GBuffer pass)
+	std::vector<PBRDeferredSkinnedPipeline::DrawEvent> drawEventsPBRDeferredSkinnedPipeline_{};
+	PBRDeferredSkinnedPipeline::Resources resourcesPBRDeferredSkinnedPipeline_{};
+	PBRDeferredSkinnedPipeline::CameraData cameraDataPBRDeferredSkinnedPipeline_{};
+	std::vector<PBRDeferredSkinnedPipeline::LightData> lightDataPBRDeferredSkinnedPipeline_{};
+	PBRDeferredSkinnedPipeline::LightData mainDirectionalLightPBRDeferredSkinnedPipeline_{};
+	PBRDeferredSkinnedPipeline::FrameData frameDataPBRDeferredSkinnedPipeline_{};
+	// Deferred Lighting Pass resources (fullscreen triangle)
+	std::vector<PBRDeferredPipeline::LightData> lightDataPBRDeferredLighting_{};
+	StructuredBuffer deferredLightingLightData_{};    // t1 per-room
+	ConstantBuffer   deferredLightingPerFrameData_{}; // b0 per-room
 
 	// Font
 	Font font_{};
@@ -326,6 +371,8 @@ private:
 
 	ThreadPool* threadPool_ = nullptr;	// 설정되어있을 경우 멀티스레드로 동작한다.
 	bool csmDebugVisualization_ = false;
+	RenderPath renderPath_    = RenderPath::Deferred;
+	u32t gBufferDebugMode_    = 0u;  // 0=None, 1=Albedo, ..., 7=Depth
 };
 
 #endif	// __GFX_HPP

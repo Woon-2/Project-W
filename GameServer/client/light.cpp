@@ -205,6 +205,44 @@ void Light::render(GFX& gfx) {
 	};
 	gfx.addLightData(pbrSkinnedLD);
 
+	auto pbrDeferredLD = PBRDeferredPipeline::LightData{
+		.pos = pos_,
+		.dir = mu::NVec3(orient().rotate(mu::Vec3(0.f, 0.f, 1.f))),
+		.color = color,
+		.intensity = intensity,
+		.cosTheta = cosTheta,
+		.cosPhi = cosPhi,
+		.falloff = falloff,
+		.atten = atten,
+		.type = static_cast<PBRDeferredPipeline::LightData::Type>(type),
+		.isMainDirectionalLight = isMainDirectionalLight,
+		.cascadeViews        = cascadeViews_,
+		.cascadeProjs        = cascadeProjs_,
+		.cascadeSplitsFarV   = cascadeSplitsFarV_,
+		.cascadeCount        = cascadeCount_,
+		.cascadeNormalOffsets = cascadeNormalOffsets_
+	};
+	gfx.addLightData(pbrDeferredLD);
+
+	auto pbrDeferredSkinnedLD = PBRDeferredSkinnedPipeline::LightData{
+		.pos = pos_,
+		.dir = mu::NVec3(orient().rotate(mu::Vec3(0.f, 0.f, 1.f))),
+		.color = color,
+		.intensity = intensity,
+		.cosTheta = cosTheta,
+		.cosPhi = cosPhi,
+		.falloff = falloff,
+		.atten = atten,
+		.type = static_cast<PBRDeferredSkinnedPipeline::LightData::Type>(type),
+		.isMainDirectionalLight = isMainDirectionalLight,
+		.cascadeViews        = cascadeViews_,
+		.cascadeProjs        = cascadeProjs_,
+		.cascadeSplitsFarV   = cascadeSplitsFarV_,
+		.cascadeCount        = cascadeCount_,
+		.cascadeNormalOffsets = cascadeNormalOffsets_
+	};
+	gfx.addLightData(pbrDeferredSkinnedLD);
+
 	auto terrainLD = TerrainPipeline::LightData{
 		.dir                    = mu::NVec3(orient().rotate(mu::Vec3(0.f, 0.f, 1.f))),
 		.color                  = color,

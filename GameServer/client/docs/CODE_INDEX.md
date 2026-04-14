@@ -234,6 +234,9 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 **파이프라인별 필수 VB 슬롯:**
 - PBRPipeline: Position(0), Normal(1), Tangent(2), Bitangent(3), UV(4)
 - PBRSkinnedPipeline: 위 5개 + BoneIndices(5), BoneWeights(6)
+- PBRDeferredPipeline (GBuffer pass): Position(0), Normal(1), Tangent(2), Bitangent(3), UV(4)
+- PBRDeferredSkinnedPipeline (Shadow pass): Position(0), BoneIndices(1), BoneWeights(2)
+- PBRDeferredSkinnedPipeline (GBuffer pass): Position(0), Normal(1), Tangent(2), Bitangent(3), UV(4), BoneIndices(5), BoneWeights(6)
 - TerrainPipeline: Position(0), Normal(1), Tangent(2), Bitangent(3), UV(4)
 
 **스킨드 메시 판별 조건:** `mesh.vbIdxMap.contains(mesh.name + "_VB_BoneIndices") && animBlender`
@@ -300,8 +303,10 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 | 파이프라인 | 헤더 파일 | 용도 |
 |-----------|----------|------|
-| PBRPipeline | `pbrPipeline.hpp` | 정적 메시 PBR |
-| PBRSkinnedPipeline | `pbrSkinnedPipeline.hpp` | 스킨드 메시 PBR |
+| PBRPipeline | `pbrPipeline.hpp` | 정적 메시 PBR (Forward) |
+| PBRSkinnedPipeline | `pbrSkinnedPipeline.hpp` | 스킨드 메시 PBR (Forward) |
+| PBRDeferredPipeline | `pbrDeferredPipeline.hpp` / `pbrDeferredPipeline.cpp` | 정적 메시 Deferred Shading (Shadow + GBuffer + Lighting) |
+| PBRDeferredSkinnedPipeline | `pbrDeferredSkinnedPipeline.hpp` / `pbrDeferredSkinnedPipeline.cpp` | 스킨드 메시 Deferred Shading (Shadow + GBuffer만; Lighting은 PBRDeferredPipeline 담당) |
 | BVPipeline | `BVPipeline.hpp` | 바운딩 볼륨 디버그 |
 | BillboardPipeline | `billboardPipeline.hpp` | 빌보드 |
 | SkyboxPipeline | `skyboxPipeline.hpp` | 스카이박스 |
@@ -347,6 +352,47 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 4. calcSingleShadow(posV, posL) → PCF 9-tap 그림자 적용
 5. globalAmbient 더하기 → Reinhard tonemapping → gamma correction
 
+**Deferred Shading 관련 파일:**
+
+| 파일 | 설명 |
+|------|------|
+| `pbrDeferredPipeline.hpp` / `.cpp` | PBRDeferredPipeline 네임스페이스 — Shadow + GBuffer + Lighting 패스 |
+| `pbrDeferredSkinnedPipeline.hpp` / `.cpp` | PBRDeferredSkinnedPipeline 네임스페이스 — Shadow + GBuffer 패스 |
+| `pbrDeferred.hlsl` | GBuffer Geometry Pass VS/PS (정적 메시) |
+| `pbrDeferredSkinned.hlsl` | GBuffer Geometry Pass VS/PS (스킨드 메시) |
+| `pbrDeferredLighting.hlsl` | Deferred Lighting Pass (fullscreen triangle, GBuffer SRV 읽기) |
+| `sharedResources.hpp` / `.cpp` | `SharedResources::GBuffer` 네임스페이스 — GBuffer 텍스처 생성/관리 |
+
+**GBuffer 레이아웃 (`sharedResources.hpp`):**
+
+| 슬롯 | 포맷 | 내용 |
+|------|------|------|
+| GB0 | R8G8B8A8_UNORM | Albedo.rgb (linear) + AO.a |
+| GB1 | R16G16_FLOAT | NormalV oct-encoded (view-space, 2채널 [0,1]) |
+| GB2 | R8G8B8A8_UNORM | LightAccum.rgb (ambient+emissive 선계산) + Roughness.a |
+| GB3 | R8_UNORM | Metallic |
+| Depth | R32_TYPELESS (DSV=D32_FLOAT, SRV=R32_FLOAT) | Scene depth |
+
+- GB1 클리어 값: `(0.5, 0.5, 0, 0)` → octDecode 시 정면 법선 (0, 0, 1)
+- Normal Oct Encoding: `pbrLighting.hlsli`의 `octEncode()` / `octDecode()` 유틸리티 사용
+- depth + invProj → posV, posV + invView → posW (Lighting 패스에서 위치 재구성)
+
+**Deferred 렌더 패스 순서 (`gfx.cpp::render()`):**
+1. GBuffer 클리어 (`clearGBuffer`)
+2. Shadow Pass — PBRDeferredPipeline + PBRDeferredSkinnedPipeline + TerrainPipeline (CSM)
+3. GBuffer Pass (정적) — MRT 4개(GB0~GB3) + DSV에 geometry 기록
+4. GBuffer Pass (스킨드) — 동일 MRT + DSV
+5. GBuffer 상태 전환: RTV→SRV (`transitionToRead`)
+6. Deferred Lighting Pass — fullscreen `DrawInstanced(3, 1, 0, 0)`, backbuffer에 출력
+7. **GBuffer depth → backbuffer DSV 복사** (`copyResource`): Lighting pass와 같은 cmdList batch에서 실행. 이후 Forward 패스가 올바른 장면 깊이를 기준으로 렌더링할 수 있도록 GBuffer DSV 내용을 backbuffer depth buffer로 복사.
+8. Forward-always 패스: Skybox, Terrain main, BV debug, Billboard (GBuffer 미사용)
+
+**GFX RenderPath 선택 (`gfx.hpp`):**
+- `enum class RenderPath { Forward, Deferred }`
+- `GFX::setRenderPath(RenderPath)` — 런타임 전환
+- `GFX::cycleGBufferDebugMode()` — 'G' 키로 GBuffer 채널 디버그 뷰 순환 (None→Albedo→Normal→AO→Roughness→Metallic→LightAccum→Depth)
+- `gBufferDebugMode_` (uint, 0~7) — Lighting PSO의 `debugMode` cbuffer 필드로 전달
+
 **gfx.cpp 라이트 스테이징 (`gfx.cpp`):**
 - PBR Dispatcher 생성 직전에 `lightDataPBRPipeline_` → `PBRShader::Light` 변환 후 `resourcesTerrainPipeline_.mainPass.lightData` 스테이징
 - `frameDataTerrainPipeline_.lightCount` 동시 갱신
@@ -368,6 +414,8 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | BillboardPipeline | `gfx.hpp #238` |
 | UIPipeline | `gfx.hpp #243` |
 | TerrainPipeline | `gfx.hpp #247` |
+| PBRDeferredPipeline | `gfx.hpp` — `drawEventsPBRDeferredPipeline_` |
+| PBRDeferredSkinnedPipeline | `gfx.hpp` — `drawEventsPBRDeferredSkinnedPipeline_` |
 
 ---
 

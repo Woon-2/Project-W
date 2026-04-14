@@ -50,6 +50,7 @@ Game::Game() {
 	gfx_.createSwapChain();
 	gfx_.setThreadPool(&threadPool_);
 
+
 	assetManager_.loadGFXAssets(gfx_, assetConfigs_);
 	assetManager_.loadAnimations();
 }
@@ -910,6 +911,14 @@ void Game::render() {
 		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
 	};
 	gfx_.addFrameData( frameDataPBRSkinned );
+	auto frameDataPBRDeferred = PBRDeferredPipeline::FrameData{
+		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
+	};
+	gfx_.addFrameData( frameDataPBRDeferred );
+	auto frameDataPBRDeferredSkinned = PBRDeferredSkinnedPipeline::FrameData{
+		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
+	};
+	gfx_.addFrameData( frameDataPBRDeferredSkinned );
 
 	if (terrain_) {
 		terrain_->render(gfx_);
@@ -1147,6 +1156,11 @@ void Game::processInput(Milliseconds deltaTime) {
 	// C key: toggle CSM cascade debug visualization
 	if ( (keyboardStateCurr_['C'] & 0x80) && !(keyboardStatePrev_['C'] & 0x80) ) {
 		gfx_.toggleCsmDebugVisualization();
+	}
+
+	// G key: cycle GBuffer debug view (deferred path only)
+	if ( (keyboardStateCurr_['G'] & 0x80) && !(keyboardStatePrev_['G'] & 0x80) ) {
+		gfx_.cycleGBufferDebugMode();
 	}
 
 	// U key: toggle UI debug overlay (colored bounding boxes)

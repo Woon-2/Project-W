@@ -23,6 +23,9 @@ ComPtr<ID3D12PipelineState> createShadowMapSkinnedShader(ID3D12Device* device, I
 ComPtr<ID3D12PipelineState> createShadowMapSkinnedCSMShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRShaderCSMDebug(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createPBRDeferredGBufferShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createPBRDeferredSkinnedGBufferShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createPBRDeferredLightingShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRSkinnedShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createPBRSkinnedShaderCSMDebug(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBillboardShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
@@ -224,7 +227,6 @@ struct PerFrameData {
 	XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
 	XMFLOAT4   cascadeNormalOffsets;
 };
-
 }	// namespace PBRSkinnedShader
 
 // BillboardShader
@@ -454,6 +456,171 @@ struct PerFrameData {
     XMUINT3    _pfd0;
 };
 }  // namespace TerrainShadowMapCSMShader
+
+// PBRDeferredGBufferShader — same data layout as PBRShader (static mesh GBuffer geometry pass)
+namespace PBRDeferredGBufferShader {
+struct Light {
+	enum class Type {
+		PointLight,
+		Spotlight,
+		DirectionalLight
+	};
+
+	XMFLOAT3 color;
+	float falloff;
+	XMFLOAT3 posV;
+	float cosTheta;
+	XMFLOAT3 dirV;
+	float cosPhi;
+	XMFLOAT3 atten;
+	float intensity;
+	int type;
+	XMINT3 padding;
+};
+
+struct Material {
+	BindlessIndex idxAlbedo;
+	BindlessIndex idxMetallicSmoothness;	// 유니티 익스포터를 사용하기 때문에 유니티와 텍스처 포맷 맞춰준다.
+											// R 채널에 metallic, A 채널에 Smoothness (1 - roughness) 값이 들어있게 된다.
+	BindlessIndex idxNormal;
+	BindlessIndex idxEmmisive;
+	BindlessIndex idxAmbientOcllusion;
+
+	XMFLOAT4 cAlbedo;
+	float cRoughness;
+	float cMetallic;
+	float cAOStrength;
+	float padding0;
+	XMFLOAT3 cEmmisive;
+	float padding1;
+};
+
+struct PerInstanceData {
+	XMFLOAT4X4 world;
+	XMFLOAT4X4 wvp;
+	XMFLOAT4X4 wv;
+	XMFLOAT3X3 wvNormal;
+	XMFLOAT3X3 worldNormal;  // inverse(Mat3x3(world)) — non-uniform scale safe normal transform
+};
+
+struct PerDrawcallData {
+	Material material;
+	u32t firstInstanceOffset;
+};
+
+struct PerFrameData {
+	XMFLOAT3   globalAmbient;
+	float      padding0;
+	u32t       lightCnt;
+	u32t       cascadeCount;
+	XMUINT2    padding1;
+	BindlessIndex idxShadowMap[MAX_CSM_CASCADES];  // cascade별 독립 Texture2D SRV
+	XMFLOAT4   cascadeSplitsFarV;
+	XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
+	XMFLOAT4   cascadeNormalOffsets;  // world units of normal offset per cascade (for shadow acne elimination)
+};
+}	// namespace PBRDeferredGBufferShader
+
+// PBRDeferredSkinnedGBufferShader — same data layout as PBRSkinnedShader (skinned mesh GBuffer geometry pass)
+namespace PBRDeferredSkinnedGBufferShader {
+struct Light {
+	enum class Type {
+		PointLight,
+		Spotlight,
+		DirectionalLight
+	};
+
+	XMFLOAT3 color;
+	float falloff;
+	XMFLOAT3 posV;
+	float cosTheta;
+	XMFLOAT3 dirV;
+	float cosPhi;
+	XMFLOAT3 atten;
+	float intensity;
+	int type;
+	XMINT3 padding;
+};
+
+struct Material {
+	BindlessIndex idxAlbedo;
+	BindlessIndex idxMetallicSmoothness;	// 유니티 익스포터를 사용하기 때문에 유니티와 텍스처 포맷 맞춰준다.
+											// R 채널에 metallic, A 채널에 Smoothness (1 - roughness) 값이 들어있게 된다.
+	BindlessIndex idxNormal;
+	BindlessIndex idxEmmisive;
+	BindlessIndex idxAmbientOcllusion;
+
+	XMFLOAT4 cAlbedo;
+	float cRoughness;
+	float cMetallic;
+	float cAOStrength;
+	float padding0;
+	XMFLOAT3 cEmmisive;
+	float padding1;
+};
+
+struct BoneData {
+	XMFLOAT4X4 xform;
+};
+
+struct PerInstanceData {
+	XMFLOAT4X4 world;
+	XMFLOAT4X4 wvp;
+	XMFLOAT4X4 wv;
+	XMFLOAT3X3 wvNormal;
+	XMFLOAT3X3 worldNormal;  // inverse(Mat3x3(world)) — non-uniform scale safe normal transform
+	u32t rootBoneOffset;
+	XMUINT3 padding;
+};
+
+struct PerDrawcallData {
+	Material material;
+	u32t firstInstanceOffset;
+};
+
+struct PerFrameData {
+	XMFLOAT3   globalAmbient;
+	float      padding0;
+	u32t       lightCnt;
+	u32t       cascadeCount;
+	XMUINT2    padding1;
+	BindlessIndex idxShadowMap[MAX_CSM_CASCADES];  // cascade별 독립 Texture2D SRV
+	XMFLOAT4   cascadeSplitsFarV;
+	XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
+	XMFLOAT4   cascadeNormalOffsets;
+};
+}	// namespace PBRDeferredSkinnedGBufferShader
+
+// PBRDeferredLightingShader — fullscreen triangle deferred lighting pass
+namespace PBRDeferredLightingShader {
+
+// Matches cbuffer PerFrameData : register(b0) in pbrDeferredLighting.hlsl
+struct PerFrameData {
+	// CSM / lighting (same as PBRShader::PerFrameData)
+	XMFLOAT3   globalAmbient;
+	float      _pfd0;
+	u32t       lightCnt;
+	u32t       cascadeCount;
+	XMUINT2    _pfd1;
+	BindlessIndex idxShadowMap[MAX_CSM_CASCADES];
+	XMFLOAT4   cascadeSplitsFarV;
+	XMFLOAT4X4 lightVP[MAX_CSM_CASCADES];
+	XMFLOAT4   cascadeNormalOffsets;
+	// Deferred reconstruction
+	XMFLOAT4X4 invView;
+	XMFLOAT4X4 invProj;
+	// GBuffer bindless SRV indices
+	BindlessIndex idxGB0;
+	BindlessIndex idxGB1;
+	BindlessIndex idxGB2;
+	BindlessIndex idxGB3;
+	BindlessIndex idxDepth;
+	// Debug
+	u32t       debugMode;
+	XMUINT3    _pad;
+};
+
+}	// namespace PBRDeferredLightingShader
 
 namespace UIShader {
 	struct Material {

@@ -105,6 +105,57 @@ extern std::unordered_map<std::string, std::vector<CSMShadowMapData>> csmShadowM
 
 }	// namespace SharedResources::ShadowMap
 
+// GBuffer 텍스처 1세트 (4 color RT + 1 depth RT)
+struct GBufferData {
+	Texture gb0;    // R8G8B8A8_UNORM  — Albedo.rgb + AO.a
+	Texture gb1;    // R16G16_FLOAT    — NormalV oct-encoded
+	Texture gb2;    // R8G8B8A8_UNORM  — LightAccum.rgb + Roughness.a
+	Texture gb3;    // R8_UNORM        — Metallic
+	Texture depth;  // R32_TYPELESS resource; DSV=D32_FLOAT, SRV=R32_FLOAT
+	u32t width;
+	u32t height;
+	// OMSetRenderTargets / ClearRenderTargetView 용 RTV 핸들 (addGBuffer 시 캐싱)
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[4];
+	// ClearDepthStencilView 용 DSV 핸들 (addGBuffer 시 캐싱)
+	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle;
+	// 리소스 상태 추적 (전환 최적화용)
+	D3D12_RESOURCE_STATES curStateGB[4];
+	D3D12_RESOURCE_STATES curStateDepth;
+};
+
+namespace GBuffer {
+
+// gBufferData[roomIdx]: roomIdx번째 방의 GBuffer 리소스 세트.
+// addGBuffer() 호출 전에는 비어 있다.
+extern std::vector<GBufferData> gBufferData;
+
+// roomCnt개 방 각각에 대해 GBuffer 텍스처 세트를 생성하여 gBufferData에 등록한다.
+// rtvPool: 색상 RT 4개 × roomCnt 슬롯이 필요하다 (호출자가 미리 크기 확보).
+// dsvPool: 깊이 버퍼 1개 × roomCnt 슬롯이 필요하다.
+// srvTexPool: bindless SRV 5개 × roomCnt 슬롯이 필요하다.
+void addGBuffer( ID3D12Device* device, u32t width, u32t height,
+	std::size_t roomCnt, DescriptorPool& rtvPool,
+	DescriptorPool& dsvPool, DescriptorPool& srvTexPool
+);
+
+// roomIdx번째 GBuffer의 모든 리소스를 쓰기 상태로 전환한다.
+// 색상 RT: PIXEL_SHADER_RESOURCE → RENDER_TARGET
+// 깊이 버퍼: PIXEL_SHADER_RESOURCE → DEPTH_WRITE
+// (이미 쓰기 상태인 리소스는 전환하지 않는다.)
+void transitionToWrite(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
+
+// roomIdx번째 GBuffer의 모든 리소스를 읽기 상태로 전환한다.
+// 색상 RT: RENDER_TARGET → PIXEL_SHADER_RESOURCE
+// 깊이 버퍼: DEPTH_WRITE → PIXEL_SHADER_RESOURCE
+// (이미 읽기 상태인 리소스는 전환하지 않는다.)
+void transitionToRead(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
+
+// roomIdx번째 GBuffer의 색상 RT 4개와 깊이 버퍼를 클리어한다.
+// 호출 전에 transitionToWrite()로 리소스 상태를 쓰기 상태로 만들어야 한다.
+void clearGBuffer(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
+
+}	// namespace GBuffer
+
 }	// namespace SharedResources
 
 #endif	// __sharedResources_HPP
