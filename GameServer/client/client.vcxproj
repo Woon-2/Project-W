@@ -198,6 +198,7 @@
     <ClCompile Include="online\onlineGame.cpp" />
     <ClCompile Include="particleRenderMode.cpp" />
     <ClCompile Include="particleRenderSubmit.cpp" />
+    <ClCompile Include="particleEffect.cpp" />
     <ClCompile Include="particleSystem.cpp" />
     <ClCompile Include="physicsWorld.cpp" />
     <ClCompile Include="rigidBody.cpp" />
@@ -297,6 +298,7 @@
     <ClInclude Include="online\onlineGame.hpp" />
     <ClInclude Include="particleRenderMode.hpp" />
     <ClInclude Include="particleRenderSubmit.hpp" />
+    <ClInclude Include="particleEffect.hpp" />
     <ClInclude Include="particleSystem.hpp" />
     <ClInclude Include="physicsWorld.hpp" />
     <ClInclude Include="rigidBody.hpp" />

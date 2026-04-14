@@ -20,6 +20,7 @@
 #include "../crosshair.hpp"
 #include "../debugBVView.hpp"
 #include "../particleSystem.hpp"
+#include "../particleEffect.hpp"
 #include "../ui/UIManager.hpp"
 #include "../ui/widgets/ProgressBar.hpp"
 
@@ -133,8 +134,7 @@ private:
 
 	ParticleSystem flameParticleSystem_{};
 	ParticleSystem smokeParticleSystem_{};
-	ParticleSystem swordSlashSystem_{};
-	ParticleSystem swordSlashSmokeSystem_{};
+	ParticleEffect swordSlash1Effect_{};
 	ParticleSystem dustParticleSystem_{};
 	int            footBoneIdxLeft_  = -1;
 	int            footBoneIdxRight_ = -1;

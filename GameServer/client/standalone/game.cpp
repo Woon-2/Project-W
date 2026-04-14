@@ -385,7 +385,7 @@ void Game::setParticle()
 			{ 1.f, 1.f, 0.f, 0.f },
 		};
 
-		swordSlashSystem_.init(cfg);
+		swordSlash1Effect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);
 	}
 
 	// ── Sword Slash Smoke (HS_Blend_CG / Smoke24bcg) ─────────────────────────
@@ -468,7 +468,7 @@ void Game::setParticle()
 		cfg.renderer.renderOrder = 0;
 		cfg.renderer.mat = assetManager_.smokeBlendCGMaterial();
 
-		swordSlashSmokeSystem_.init(cfg);
+		swordSlash1Effect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
 	}
 
 	// ── 발 본 인덱스 탐색 (흙먼지 VFX용) ────────────────────────────────────
@@ -1071,8 +1071,7 @@ void Game::update(Milliseconds deltaTime) {
 	// 파티클
 	flameParticleSystem_.update( deltaTime );
 	smokeParticleSystem_.update( deltaTime );
-	swordSlashSystem_.update( deltaTime );
-	swordSlashSmokeSystem_.update( deltaTime );
+	swordSlash1Effect_.update( deltaTime );
 	dustParticleSystem_.update( deltaTime );
 
 	// UI 동기화
@@ -1100,8 +1099,7 @@ void Game::render() {
 
 	flameParticleSystem_.render( gfx_ );
 	smokeParticleSystem_.render( gfx_ );
-	swordSlashSystem_.render( gfx_ );
-	swordSlashSmokeSystem_.render( gfx_ );
+	swordSlash1Effect_.render( gfx_ );
 	dustParticleSystem_.render( gfx_ );
 
 	uiManager_.render( gfx_ );
@@ -1271,10 +1269,7 @@ void Game::processInput(Milliseconds deltaTime) {
 		const auto slashPos = player_->renderState().pos
 		                    + player_->forward() * 1.f
 		                    + mu::Vec3(0.f, 1.0f, 0.f);
-		swordSlashSystem_.config().shape.position       = slashPos;
-		swordSlashSystem_.emit(1);
-		swordSlashSmokeSystem_.config().shape.position = slashPos;
-		swordSlashSmokeSystem_.startContinuous();
+		swordSlash1Effect_.play(slashPos);
 	}
 
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때
@@ -1361,10 +1356,7 @@ void Game::processInput(Milliseconds deltaTime) {
 		const auto slashPos = player_->renderState().pos
 			+ player_->forward() * 1.f
 			+ mu::Vec3( 0.f, 1.0f, 0.f );
-		swordSlashSystem_.config().shape.position       = slashPos;
-		swordSlashSystem_.emit(1);
-		swordSlashSmokeSystem_.config().shape.position = slashPos;
-		swordSlashSmokeSystem_.startContinuous();
+		swordSlash1Effect_.play(slashPos);
 	}
 
 	// Space 키를 누르면 커서 보이기 플래그를 활성화/비활성화한다.

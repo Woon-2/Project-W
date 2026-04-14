@@ -360,6 +360,8 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `particleModules.hpp` | `MainModule`, `EmissionModule`, `ShapeModule`, `VelocityOverLifetimeModule`, `ColorOverLifetimeModule`, `SizeOverLifetimeModule`, `RotationOverLifetimeModule`, `CustomDataModule`, `Material`, `RendererModule`, `TextureSheetAnimationModule`, `ParticleSystemConfig` |
 | `particleSystem.hpp` | `ParticleSystem`, `Particle` |
 | `particleSystem.cpp` | `init()`, `emit()`, `startContinuous()`, `spawnParticle()`, `sampleShapeOrigin/Direction()`, `update()`, `render()` |
+| `particleEffect.hpp` | `ParticleEffect` — Unity 프리팹 대응 그룹 컨테이너. `PlayMode::Emit` / `Continuous` |
+| `particleEffect.cpp` | `addSystem()`, `play()`, `stop()`, `isAlive()`, `update()`, `render()` |
 
 **ParticleSystem API (`particleSystem.hpp`):**
 
