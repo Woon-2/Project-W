@@ -11,8 +11,9 @@
 #include "../AssetManager.hpp"
 #include "../physicsWorld.hpp"
 #include "../animation.hpp"
-#include "../basicPlayerHpUI.hpp"
 #include "../event.hpp"
+#include "../ui/UIManager.hpp"
+#include "../ui/widgets/ProgressBar.hpp"
 #include "../spriteAnimation.hpp"
 #include "../crosshair.hpp"
 
@@ -143,8 +144,21 @@ private:
 
 	int64 serverClockOffset_{ 0 };   // clockOffset = serverMs - localNow (S_TimeSync 수신 시 갱신)
 
-	BasicPlayerHpUI playerHpUI_{};
-	std::unordered_map<i32t, BasicPlayerHpUI> otherPlayerHpUIs_{};
+	UI::UIManager    uiManager_{};
+	UI::ProgressBar* playerHpBar_ = nullptr;  // owned by uiManager_
+
+	struct OtherPlayerHpEntry {
+		Player*          player;       // non-owning; lifetime owned by shared_ptr in otherPlayers_
+		UI::ProgressBar* hpBar;        // owned by uiManager_
+	};
+	std::unordered_map<i32t, OtherPlayerHpEntry> otherPlayerHpBars_{};
+
+	struct GoblinHpEntry {
+		Goblin*          goblin;       // non-owning; lifetime owned by shared_ptr in goblins_
+		UI::ProgressBar* hpBar;        // owned by uiManager_
+		float            worldYOffset;
+	};
+	std::unordered_map<uint16, GoblinHpEntry> goblinHpBars_{};
 
 	LONG mouseDeltaX_{};
 	LONG mouseDeltaY_{};

@@ -64,6 +64,26 @@ void Game::setupStage() {
 	dirLight_.intensity = 2.f;
 	dirLight_.type = PBRPipeline::LightData::Type::DirectionalLight;
 	dirLight_.isMainDirectionalLight = true;
+
+	uiManager_.setScreenSize(
+		static_cast<float>(gClientRect.right - gClientRect.left),
+		static_cast<float>(gClientRect.bottom - gClientRect.top)
+	);
+	uiManager_.requestDebugResources(gfx_);
+
+	playerHpBar_ = static_cast<UI::ProgressBar*>(
+		uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
+	);
+	playerHpBar_->name    = "playerHpBar";
+	playerHpBar_->anchor  = UI::Anchors::TopLeft;
+	playerHpBar_->pivot   = UI::Pivots::TopLeft;
+	playerHpBar_->width   = UI::DimValue::px(300.f);
+	playerHpBar_->height  = UI::DimValue::px(18.f);
+	playerHpBar_->offsetX = UI::DimValue::px(20.f);
+	playerHpBar_->offsetY = UI::DimValue::px(20.f);
+	playerHpBar_->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
+	playerHpBar_->fillColor = { 1.0f, 0.0f, 0.0f, 1.00f };
+	playerHpBar_->setProgress(1.f);
 }
 
 void Game::importNode(std::ifstream& ifs) {
@@ -131,6 +151,8 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 	player_->setScale(DirectX::XMLoadFloat3(&playerInfo.scale));
 	player_->setModel(assetManager_.modelPlayer());
 	player_->setAnimBlender(animSystem_, assetManager_);
+	player_->setHp(100);
+	player_->setMaxHp(100);
 	player_->enableBVRendering();
 
 	player_->body().setMotionType(MotionType::Dynamic);
@@ -174,6 +196,8 @@ void Game::createOtherPlayer(const ObjectInfo& otherPlayerInfo) {
 	otherPlayer->setScale(DirectX::XMLoadFloat3(&otherPlayerInfo.scale));
 	otherPlayer->setModel(assetManager_.modelPlayer());
 	otherPlayer->setAnimBlender(animSystem_, assetManager_);
+	otherPlayer->setHp(100);
+	otherPlayer->setMaxHp(100);
 	otherPlayer->enableBVRendering();
 
 	otherPlayer->body().setMotionType(MotionType::Kinematic);
@@ -188,6 +212,20 @@ void Game::createOtherPlayer(const ObjectInfo& otherPlayerInfo) {
 	// 패킷 간격 사이를 dead-reckoning 보간한다.
 	physicsWorld_.registerBody(&otherPlayer->body(),
 		[p = otherPlayer.get()]() { p->rebuildBodyBVH(); });
+
+	{
+		auto* bar = static_cast<UI::ProgressBar*>(
+			uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
+		);
+		bar->anchor    = UI::Anchors::TopLeft;
+		bar->pivot     = UI::Pivots::TopLeft;
+		bar->width     = UI::DimValue::px(80.f);
+		bar->height    = UI::DimValue::px(8.f);
+		bar->fillColor = { 0.2f, 0.6f, 1.0f, 1.f };
+		bar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
+		bar->visible   = false;
+		otherPlayerHpBars_[otherPlayerInfo.objectId] = { otherPlayer.get(), bar };
+	}
 
 	otherPlayers_.push_back(otherPlayer);
 	idPlayerMap_[otherPlayerInfo.objectId] = otherPlayer;
@@ -202,6 +240,8 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 	otherPlayer->setScale(DirectX::XMLoadFloat3(&otherPlayerInfo.scale));
 	otherPlayer->setModel(assetManager_.modelPlayer());
 	otherPlayer->setAnimBlender(animSystem_, assetManager_);
+	otherPlayer->setHp(100);
+	otherPlayer->setMaxHp(100);
 	otherPlayer->enableBVRendering();
 
 	otherPlayer->body().setMotionType(MotionType::Kinematic);
@@ -217,6 +257,20 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 	physicsWorld_.registerBody(&otherPlayer->body(),
 		[p = otherPlayer.get()]() { p->rebuildBodyBVH(); });
 
+	{
+		auto* bar = static_cast<UI::ProgressBar*>(
+			uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
+		);
+		bar->anchor    = UI::Anchors::TopLeft;
+		bar->pivot     = UI::Pivots::TopLeft;
+		bar->width     = UI::DimValue::px(80.f);
+		bar->height    = UI::DimValue::px(8.f);
+		bar->fillColor = { 0.2f, 0.6f, 1.0f, 1.f };
+		bar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
+		bar->visible   = false;
+		otherPlayerHpBars_[otherPlayerInfo.playerId] = { otherPlayer.get(), bar };
+	}
+
 	otherPlayers_.push_back(otherPlayer);
 	idPlayerMap_[otherPlayerInfo.playerId] = otherPlayer;
 }
@@ -230,6 +284,8 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 	goblin->setScale(DirectX::XMLoadFloat3(&goblinInfo.scale));
 	goblin->setModel(assetManager_.modelGoblin());
 	goblin->setAnimBlender(animSystem_, assetManager_);
+	goblin->setHp(90);
+	goblin->setMaxHp(90);
 	goblin->enableBVRendering();
 
 	goblin->body().setMotionType(MotionType::Kinematic);
@@ -240,6 +296,20 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 
 	physicsWorld_.registerBody(&goblin->body(),
 		[p = goblin.get()]() { p->rebuildBodyBVH(); });
+
+	{
+		auto* bar = static_cast<UI::ProgressBar*>(
+			uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
+		);
+		bar->anchor    = UI::Anchors::TopLeft;
+		bar->pivot     = UI::Pivots::TopLeft;
+		bar->width     = UI::DimValue::px(80.f);
+		bar->height    = UI::DimValue::px(8.f);
+		bar->fillColor = { 0.9f, 0.15f, 0.1f, 1.f };
+		bar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
+		bar->visible   = false;
+		goblinHpBars_[goblinInfo.objectId] = { goblin.get(), bar, 2.5f };
+	}
 
 	goblins_.push_back(goblin);
 	idGoblinMap_[goblinInfo.objectId] = goblin;
@@ -264,9 +334,13 @@ void Game::removePlayer( i32t playerId ) {
 	animSystem_.untrackAnimBlender(itPlayer->get()->renderState().animBlender.get());
 	physicsWorld_.unregisterBody(&(*itPlayer)->body());
 
+	if (auto it = otherPlayerHpBars_.find(playerId); it != otherPlayerHpBars_.end()) {
+		uiManager_.root()->removeChild(it->second.hpBar);
+		otherPlayerHpBars_.erase(it);
+	}
+
 	otherPlayers_.erase(itPlayer);
 	idPlayerMap_.erase( playerId );
-	otherPlayerHpUIs_.erase( playerId );
 }
 
 void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity) {
@@ -481,33 +555,71 @@ void Game::update(Milliseconds deltaTime) {
 	dirLight_.update(deltaTime);
 	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), assetConfigs_.cascade, assetConfigs_.shadowMap);
 
-	/*playerHpUI_.update(deltaTime, gfx_, nullptr);
-	for (auto& [id, ui] : otherPlayerHpUIs_) {
-		auto pPlayer = idPlayerMap_.at(id);
-		auto projPos = mu::Vec4(pPlayer->pos(), 1.0f) * camera_.view() * camera_.proj();
-		if (projPos.z() < 0.f) {
-			ui.setCulled(true);
-			continue;
-		}
-		ui.setCulled(false);
-		ui.setPivot( ( projPos.xy() / projPos.w() + mu::Vec2(1.f, 1.f) ) * 0.5f
-			* mu::Vec2(1024.f, 768.f)
-		);
-		auto d = std::max( (pPlayer->pos() - camera_.eye()).len(), 0.001f );
-		ui.setScale( mu::Vec2(100.f, 20.f) * std::min(1.f, 5.f / d));
-
-		ui.update(deltaTime, gfx_, nullptr);
-	}*/
-
 	// 애니메이션 업데이트
 	animSystem_.update(0.016s);
 
-	// UI 동기화
-	/*playerHpUI_.setHp(player_->hp());
+	// HP 바 위치 및 값 갱신
+	{
+		constexpr float kBarHalfWidth = 40.f;
 
-	for (auto& [id, ui] : otherPlayerHpUIs_) {
-		ui.setHp(idPlayerMap_.at(id)->hp());
-	}*/
+		if (playerHpBar_)
+			playerHpBar_->setProgress(
+				static_cast<float>(player_->hp()) / static_cast<float>(player_->maxHp())
+			);
+
+		for (auto& [id, entry] : otherPlayerHpBars_) {
+			if (!entry.player || entry.player->hp() <= 0) {
+				entry.hpBar->visible = false;
+				continue;
+			}
+			const mu::Vec3 barWorldPos = entry.player->renderState().pos
+				+ mu::Vec3{ 0.f, 2.5f, 0.f };
+			float sx{}, sy{};
+			const bool onScreen = worldToScreen(
+				barWorldPos,
+				camera_.view(), camera_.proj(),
+				uiManager_.screenWidth(), uiManager_.screenHeight(),
+				sx, sy
+			);
+			entry.hpBar->visible = onScreen;
+			if (onScreen) {
+				entry.hpBar->offsetX = UI::DimValue::px(sx - kBarHalfWidth);
+				entry.hpBar->offsetY = UI::DimValue::px(sy);
+				entry.hpBar->setProgress(
+					static_cast<float>(entry.player->hp()) /
+					static_cast<float>(entry.player->maxHp())
+				);
+			}
+		}
+
+		for (auto& [id, entry] : goblinHpBars_) {
+			if (!entry.goblin || entry.goblin->hp() <= 0) {
+				entry.hpBar->visible = false;
+				continue;
+			}
+			const mu::Vec3 barWorldPos = entry.goblin->renderState().pos
+				+ mu::Vec3{ 0.f, entry.worldYOffset, 0.f };
+			float sx{}, sy{};
+			const bool onScreen = worldToScreen(
+				barWorldPos,
+				camera_.view(), camera_.proj(),
+				uiManager_.screenWidth(), uiManager_.screenHeight(),
+				sx, sy
+			);
+			entry.hpBar->visible = onScreen;
+			if (onScreen) {
+				entry.hpBar->offsetX = UI::DimValue::px(sx - kBarHalfWidth);
+				entry.hpBar->offsetY = UI::DimValue::px(sy);
+				entry.hpBar->setProgress(
+					static_cast<float>(entry.goblin->hp()) /
+					static_cast<float>(entry.goblin->maxHp())
+				);
+			}
+		}
+
+		uiManager_.layout();
+		uiManager_.update(std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont());
+	}
 
 	clearEvents(eventList_);
 
@@ -544,6 +656,14 @@ void Game::render() {
 		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
 	};
 	gfx_.addFrameData(frameDataPBRSkinned);
+	auto frameDataPBRDeferred = PBRDeferredPipeline::FrameData{
+		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
+	};
+	gfx_.addFrameData( frameDataPBRDeferred );
+	auto frameDataPBRDeferredSkinned = PBRDeferredSkinnedPipeline::FrameData{
+		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
+	};
+	gfx_.addFrameData( frameDataPBRDeferredSkinned );
 
 	if (terrain_) {
 		terrain_->render(gfx_);
@@ -555,10 +675,7 @@ void Game::render() {
 		});
 	}
 
-	/*playerHpUI_.render(gfx_);
-	for (auto& [id, ui] : otherPlayerHpUIs_) {
-		ui.render(gfx_);
-	}*/
+	uiManager_.render(gfx_);
 
 	auto frameDataUI = UIPipeline::FrameData{
 		.screenWidth = static_cast<float>( gClientRect.right - gClientRect.left ),
