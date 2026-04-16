@@ -1,6 +1,7 @@
 #include "pch.hpp"
 #include "particleRenderSubmit.hpp"
 #include "particleRenderMode.hpp"
+#include "twoSidesPipeline.hpp"
 #include "gfx.hpp"
 
 void submitParticleDraw(GFX& gfx, const ParticleRenderContext& ctx, const ps::MatUnlit& mat) {
@@ -117,5 +118,40 @@ void submitParticleDraw(GFX& gfx, const ParticleRenderContext& ctx, const ps::Ma
         .useCenterGlow = mat.useCenterGlow,
         .useDepth = mat.useDepth,
         .depthPower = mat.depthPower,
+    });
+}
+
+void submitParticleDraw(GFX& gfx, const ParticleRenderContext& ctx, const ps::MatTwoSides& mat) {
+    const auto& rend = ctx.renderer;
+    if (!mat.mainTex || !mat.maskTex) return;
+    const auto geometry = buildParticleMeshGeometry(ctx);
+    if (!geometry) return;
+
+    if (!ctx.frameState.twoSidesFrameDataSubmitted) {
+        gfx.addFrameData(TwoSidesPipeline::FrameData{ .time = ctx.systemTime });
+        ctx.frameState.twoSidesFrameDataSubmitted = true;
+    }
+
+    gfx.addDrawEvent(TwoSidesPipeline::DrawEvent{
+        .world           = geometry->world,
+        .tint            = ctx.tint,
+        .t               = ctx.t,
+        .custom1         = ctx.custom1,
+        .custom2         = ctx.custom2,
+        .customDataEnabled = ctx.customDataEnabled,
+        .renderOrder     = rend.renderOrder,
+        .pMesh           = geometry->pMesh,
+        .pSubMesh        = geometry->pSubMesh,
+        .pMainTex        = mat.mainTex,
+        .pMaskTex        = mat.maskTex,
+        .pNoiseTex       = mat.noiseTex,
+        .mainTexST       = mat.mainTexST,
+        .maskTexST       = mat.maskTexST,
+        .noiseTexST      = mat.noiseTexST,
+        .noiseSpeed      = mat.noiseSpeed,
+        .emission        = mat.emission,
+        .opacity         = mat.opacity,
+        .useBackFresnel  = mat.useBackFresnel,
+        .backFresnel     = mat.backFresnel,
     });
 }

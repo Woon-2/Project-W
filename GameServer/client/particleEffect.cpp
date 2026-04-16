@@ -8,14 +8,24 @@ ParticleSystem& ParticleEffect::addSystem(const ps::ParticleSystemConfig& cfg,
     auto& entry = systems_.emplace_back();
     entry.mode = mode;
     entry.shapeBasePosition = cfg.shape.position;
+    entry.shapeBaseOrientation = cfg.shape.orientation;
+    entry.meshBaseRotation = cfg.main.startRotation3D;
     entry.ps.init(cfg, maxParticles);
     return entry.ps;
 }
 
 void ParticleEffect::play(const mu::Vec3& pos)
 {
+    play(pos, mu::NQuat{});
+}
+
+void ParticleEffect::play(const mu::Vec3& pos, mu::NQuat orient)
+{
+    const auto orientXform = mu::Mat4x4(orient);
     for (auto& e : systems_) {
-        e.ps.config().shape.position = pos + e.shapeBasePosition;
+        e.ps.config().shape.position = pos + orient.rotate(e.shapeBasePosition);
+        e.ps.config().shape.orientation = e.shapeBaseOrientation * orientXform;
+        e.ps.config().main.startRotation3D = e.meshBaseRotation * orientXform;
         if (e.mode == PlayMode::Emit)
             e.ps.emit(1);
         else

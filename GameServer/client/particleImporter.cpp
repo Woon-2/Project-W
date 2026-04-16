@@ -462,7 +462,7 @@ void readRotationModule(const json::Value* rotation, ps::ParticleSystemConfig& c
     cfg.rotationOverLifetime.z = readMinMaxCurve(find(rotation, "z"));
 
     if (!cfg.rotationOverLifetime.separateAxes) {
-        const auto range = readCurveRange(find(rotation, "z"));
+        const auto range = orderedRange(readCurveRange(find(rotation, "z")));
         cfg.rotationOverLifetime.angularVelocityMin = range.first;
         cfg.rotationOverLifetime.angularVelocityMax = range.second;
     }

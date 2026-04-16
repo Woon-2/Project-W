@@ -9,6 +9,7 @@ struct Particle;
 struct ParticleRenderFrameState {
     bool swordSlashFrameDataSubmitted = false;
     bool smokeBlendCGFrameDataSubmitted = false;
+    bool twoSidesFrameDataSubmitted = false;
 };
 
 struct ParticleRenderContext {
@@ -28,5 +29,6 @@ struct ParticleRenderContext {
 void submitParticleDraw(GFX& gfx, const ParticleRenderContext& ctx, const ps::MatUnlit& mat);
 void submitParticleDraw(GFX& gfx, const ParticleRenderContext& ctx, const ps::MatSwordSlash& mat);
 void submitParticleDraw(GFX& gfx, const ParticleRenderContext& ctx, const ps::MatSmokeBlendCG& mat);
+void submitParticleDraw(GFX& gfx, const ParticleRenderContext& ctx, const ps::MatTwoSides& mat);
 
 #endif  // __particleRenderSubmit_HPP

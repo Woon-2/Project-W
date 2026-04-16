@@ -349,6 +349,14 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `swordSlashPipeline.cpp` | updateGPUDataSingleThreaded / drawSingleThreaded 구현 |
 | `swordSlash.hlsl` | Flow+Dissolve+Emission 효과 VS/PS. b0=PerDrawcallData(bindless+FX), b1=PerFrameData(VP) |
 
+**TwoSidesPipeline:**
+
+| 파일 | 설명 |
+|------|------|
+| `twoSidesPipeline.hpp` | DrawEvent (world, tint, mainTex/maskTex/noiseTex, emission, backFresnel 등), Dispatcher |
+| `twoSidesPipeline.cpp` | updateGPUDataSingleThreaded / drawSingleThreaded 구현. CullMode=None (양면 렌더링) |
+| `twoSides.hlsl` | Unity HS_Blend_TwoSides 포팅. Noise 왜곡 UV, Mask알파, SV_IsFrontFace로 후면 fresnel 처리 |
+
 ---
 
 ## 8-B. 파티클 시스템
@@ -396,9 +404,11 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 - `Mesh` + `MatSwordSlash` — `SwordSlashPipeline::DrawEvent` 제출 (동일 transform 계산, 텍스처 4종 + FX 파라미터 포함)
 
 **AnyMat / Material 타입** (`particleModules.hpp`):
-- `using AnyMat = std::variant<MatUnlit, MatSwordSlash>` — per-shader 독립 구조체 + variant
+- `using AnyMat = std::variant<MatUnlit, MatSwordSlash, MatSmokeBlendCG, MatTwoSides>` — per-shader 독립 구조체 + variant
 - `MatUnlit` — BillboardPipeline / MeshParticlePipeline용: `mainTex`, `additive`
 - `MatSwordSlash` — SwordSlashPipeline용: `mainTex`, `emissionTex`, `dissolveTex`, `flowTex`, 스크롤/Flow/디졸브/Emission FX 파라미터
+- `MatSmokeBlendCG` — SmokeBlendCGPipeline용: `mainTex`, 스프라이트 시트 애니메이션
+- `MatTwoSides` — TwoSidesPipeline용: `mainTex`, `maskTex`, `noiseTex`, `emission`, `backFresnel`, UV 타일링 3종
 - `RendererModule::mat` (`AnyMat`) — `render()` 내 `std::visit`으로 파이프라인 디스패치
 
 **SwordSlashPipeline** (`swordSlashPipeline.hpp` / `swordSlashPipeline.cpp` / `swordSlash.hlsl`):
@@ -460,8 +470,20 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `Light::render()` | `light.hpp #35` | PBR, PBRSkinned, Terrain 세 파이프라인에 LightData 자기등록 |
 | `Light::dir()` | `light.hpp #52` | 조명 방향 (NVec3) |
 
+**ParticleEffect 멤버 (game.hpp):**
+
+| 멤버 | 설명 |
+|------|------|
+| `flameParticleSystem_` | 불꽃 빌보드 파티클 (FlameTex) |
+| `smokeParticleSystem_` | 연기 빌보드 파티클 (SmokeTex) |
+| `swordSlash1Effect_` | 검기1 효과 — SwordSlash 메시 + Smoke 서브시스템 |
+| `swordSlash7Effect_` | 검기7 효과 — Sword Slash 7 + Slashes 서브시스템 |
+| `swordSlashComboEffect_` | 콤보 검기 효과 |
+| `slashWaveEffect_` | 슬래시 웨이브 — HalfTrail 메시 + TwoSidesPipeline (MatTwoSides) |
+| `dustParticleSystem_` | 발 착지 흙먼지 빌보드 파티클 |
+
 **Camera::updateGFX() 등록 파이프라인 (`camera.cpp`):**
-- PBRPipeline, PBRSkinnedPipeline, SkyboxPipeline, BVPipeline, BillboardPipeline, **TerrainPipeline** CameraData 자기등록
+- PBRPipeline, PBRSkinnedPipeline, SkyboxPipeline, BVPipeline, BillboardPipeline, **TerrainPipeline**, MeshParticlePipeline, SmokeBlendCGPipeline, SwordSlashPipeline, **TwoSidesPipeline** CameraData 자기등록
 
 **AssetManager::loadGFXAssets (`AssetManager.hpp #9`):**
 - `loadGFXAssets(GFX& gfx, const GFX::AssetConfigs& configs = {})` — configs를 `gfx.loadAssets(configs)`로 전달

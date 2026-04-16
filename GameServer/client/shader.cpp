@@ -2189,6 +2189,109 @@ ComPtr<ID3D12PipelineState> createSwordSlashShader( ID3D12Device* device, ID3D12
 	return ret;
 }
 
+ComPtr<ID3D12PipelineState> createTwoSidesShader( ID3D12Device* device, ID3D12RootSignature* rootSig ) {
+	ComPtr<ID3D12PipelineState> ret{};
+
+	auto vsCode = compileShader( "twoSides.hlsl", nullptr, "VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
+	auto psCode = compileShader( "twoSides.hlsl", nullptr, "PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
+
+	// Input layout: Slot0=POSITION(float3), Slot1=UV(float2), Slot2=COLOR(float4)
+	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
+		D3D12_INPUT_ELEMENT_DESC{
+			.SemanticName = "POSITION",
+			.SemanticIndex = 0u,
+			.Format = DXGI_FORMAT_R32G32B32_FLOAT,
+			.InputSlot = 0u,
+			.AlignedByteOffset = 0u,
+			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			.InstanceDataStepRate = 0u
+		},
+		D3D12_INPUT_ELEMENT_DESC{
+			.SemanticName = "UV",
+			.SemanticIndex = 0u,
+			.Format = DXGI_FORMAT_R32G32_FLOAT,
+			.InputSlot = 1u,
+			.AlignedByteOffset = 0u,
+			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			.InstanceDataStepRate = 0u
+		},
+		D3D12_INPUT_ELEMENT_DESC{
+			.SemanticName = "COLOR",
+			.SemanticIndex = 0u,
+			.Format = DXGI_FORMAT_R32G32B32A32_FLOAT,
+			.InputSlot = 2u,
+			.AlignedByteOffset = 0u,
+			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			.InstanceDataStepRate = 0u
+		}
+	};
+
+	auto inputLayoutDesc = D3D12_INPUT_LAYOUT_DESC{
+		.pInputElementDescs = elemDescs.data(),
+		.NumElements = static_cast<UINT>(elemDescs.size())
+	};
+
+	auto psoDesc = D3D12_GRAPHICS_PIPELINE_STATE_DESC{
+		.pRootSignature = rootSig,
+		.VS = vsCode.byteCode,
+		.PS = psCode.byteCode,
+		.BlendState = D3D12_BLEND_DESC{
+			.AlphaToCoverageEnable = false,
+			.IndependentBlendEnable = false
+		},
+		.SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
+		.RasterizerState = D3D12_RASTERIZER_DESC{
+			.FillMode = D3D12_FILL_MODE_SOLID,
+			.CullMode = D3D12_CULL_MODE_NONE,  // two-sided
+			.FrontCounterClockwise = false,
+			.DepthBias = 0,
+			.DepthBiasClamp = 0.f,
+			.SlopeScaledDepthBias = 0.f,
+			.DepthClipEnable = true,
+			.MultisampleEnable = false,
+			.AntialiasedLineEnable = false,
+			.ForcedSampleCount = 0u
+		},
+		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
+			.DepthEnable = true,
+			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
+			.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+			.StencilEnable = false,
+			.StencilReadMask = 0u,
+			.StencilWriteMask = 0u,
+			.FrontFace = D3D12_DEPTH_STENCILOP_DESC{},
+			.BackFace = D3D12_DEPTH_STENCILOP_DESC{}
+		},
+		.InputLayout = inputLayoutDesc,
+		.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+		.SampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
+		.NodeMask = 0u,
+		.Flags = D3D12_PIPELINE_STATE_FLAG_NONE
+	};
+
+	// Standard alpha blend
+	psoDesc.NumRenderTargets = 1u;
+	psoDesc.BlendState.RenderTarget[0].BlendEnable = true;
+	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+	psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+	psoDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+	psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+	psoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+	psoDesc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+	psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+
+	DISPLAY_ERROR_DX_HR(
+		device->CreateGraphicsPipelineState( &psoDesc, __uuidof(ID3D12PipelineState), &ret ),
+		false
+	);
+
+	setD3DName( ret.Get(), "TwoSidesShader" );
+
+	return ret;
+}
+
 void RootSig::addParam(const std::string& paramName,
 	UINT paramIdx, const D3D12_ROOT_PARAMETER& paramDesc
 ) {

@@ -275,7 +275,25 @@ struct MatSmokeBlendCG {
     float depthPower = 0.5f;
 };
 
-using AnyMat = std::variant<MatUnlit, MatSwordSlash, MatSmokeBlendCG>;
+// MatTwoSides: Shader Graphs/HS_Blend_TwoSides port used by TwoSides22.
+// Mesh-mode particles with two-sided rendering, mask + noise distortion.
+struct MatTwoSides {
+    const Texture* mainTex  = nullptr;
+    const Texture* maskTex  = nullptr;
+    const Texture* noiseTex = nullptr;
+
+    mu::Vec4 mainTexST  = { 1.f, 1.f, 0.f, 0.f };
+    mu::Vec4 maskTexST  = { 1.f, 1.f, 0.f, 0.f };
+    mu::Vec4 noiseTexST = { 1.f, 1.f, 0.f, 0.f };
+    mu::Vec2 noiseSpeed = { 0.f, 0.f };
+
+    float emission      = 1.f;
+    float opacity       = 1.f;
+    float useBackFresnel = 1.f;  // 0=off, 1=on
+    float backFresnel   = -4.f;  // negative = darker back faces
+};
+
+using AnyMat = std::variant<MatUnlit, MatSwordSlash, MatSmokeBlendCG, MatTwoSides>;
 
 // ---------------------------------------------------------------------------
 // Renderer Module

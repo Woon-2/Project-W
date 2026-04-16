@@ -140,6 +140,20 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 		.pDestTex    = nullptr
 	} );
 
+	gfx.addRequestMeshBinLoad( RequestMeshBinLoad{
+		.meshPath    = "../resources/effects/HalfTrail.meshbin",
+		.pTexHashMap = &texHashMap_,
+		.pDestMesh   = &meshHalfTrail_,
+		.pDestTex    = nullptr
+	} );
+
+	gfx.addRequestMeshBinLoad( RequestMeshBinLoad{
+		.meshPath    = "../resources/effects/SlashWave.meshbin",
+		.pTexHashMap = &texHashMap_,
+		.pDestMesh   = &meshSlashWave_,
+		.pDestTex    = nullptr
+	} );
+
 	gfx.addRequestTextureLoad( RequestTextureLoad{
 		.name            = "Smoke24",
 		.texturePath     = "../resources/Textures/Smoke24.dds",
@@ -184,6 +198,51 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 		.sampler         = Samplers::BilinearClamp
 	} );
 
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "Trail62For",
+		.texturePath     = "../resources/Textures/Trail62For.dds",
+		.pDest           = &trail62ForTex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "Trail62",
+		.texturePath     = "../resources/Textures/Trail62.dds",
+		.pDest           = &trail62Tex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "Gradient3t",
+		.texturePath     = "../resources/Textures/Gradient3t.dds",
+		.pDest           = &gradient3tTex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "Gradient4.3",
+		.texturePath     = "../resources/Textures/Gradient4.3.dds",
+		.pDest           = &gradient4_3Tex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "Waves21",
+		.texturePath     = "../resources/Textures/Waves21.dds",
+		.pDest           = &waves21Tex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearWrap
+	} );
+
 	swordSlashMaterial_ = makeDefaultSwordSlashMaterial();
 	if (loadSwordSlashMaterialMetadata("../resources/effects/SwordSlashMat.json", swordSlashMaterial_)) {
 		gSharedLog << "[SwordSlash Material] File I/O: ../resources/effects/SwordSlashMat.json 로드 완료\n";
@@ -212,6 +271,31 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 
 	smokeBlendCGMaterial_ = ps::MatSmokeBlendCG{};
 	smokeBlendCGMaterial_.mainTex = &smoke24Tex_;
+
+	// TwoSides22 material — textures loaded from TwoSides22.json property names:
+	//   _MainTex=Trail62For, _Mask=Trail62, _Noise=Noise (reuse Noise43b)
+	twoSidesMaterial_ = ps::MatTwoSides{};
+	twoSidesMaterial_.mainTex      = &trail62ForTex_;
+	twoSidesMaterial_.maskTex      = &trail62Tex_;
+	twoSidesMaterial_.noiseTex     = &noise43bTex_;   // closest available noise texture
+	twoSidesMaterial_.noiseTexST   = { 0.1f, 2.0f, 0.f, 0.f };  // _Noise tiling from TwoSides22.json
+	twoSidesMaterial_.emission     = 3.0f;            // _Emission from TwoSides22.json
+	twoSidesMaterial_.opacity      = 1.0f;
+	twoSidesMaterial_.useBackFresnel = 1.0f;
+	twoSidesMaterial_.backFresnel    = -4.0f;         // _BackFresnel from TwoSides22.json
+
+	// Waves21cg5 material for SlashPath. This uses the existing mesh-capable
+	// TwoSides path as a close runtime material for the HS_Blend_CG asset.
+	slashPathMaterial_ = ps::MatTwoSides{};
+	slashPathMaterial_.mainTex      = &gradient3tTex_;
+	slashPathMaterial_.maskTex      = &gradient4_3Tex_;
+	slashPathMaterial_.noiseTex     = &waves21Tex_;
+	slashPathMaterial_.noiseTexST   = { 1.f, 1.f, 0.f, 0.f };
+	slashPathMaterial_.noiseSpeed   = { 0.f, -0.5f };
+	slashPathMaterial_.emission     = 2.0f;
+	slashPathMaterial_.opacity      = 1.0f;
+	slashPathMaterial_.useBackFresnel = 0.0f;
+	slashPathMaterial_.backFresnel    = 0.0f;
 }
 
 void AssetManager::loadAnimations() {

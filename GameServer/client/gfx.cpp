@@ -244,6 +244,7 @@ void GFX::init() {
 	shaders_.try_emplace("MeshParticleShader", createMeshParticleShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("SmokeBlendCGShader", createSmokeBlendCGShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("SwordSlashShader", createSwordSlashShader( device_.Get(), defaultRootSig.get() ));
+	shaders_.try_emplace("TwoSidesShader",  createTwoSidesShader(  device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("SkyboxShader", createSkyboxShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("BVShader", createBVShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace( "UIShader", createUIShader( device_.Get(), defaultRootSig.get() ) );
@@ -274,6 +275,7 @@ void GFX::init() {
 	drawEventsMeshParticlePipeline_.reserve(256u);
 	drawEventsSmokeBlendCGPipeline_.reserve(256u);
 	drawEventsSwordSlashPipeline_.reserve(256u);
+	drawEventsTwoSidesPipeline_.reserve(256u);
 	drawEventsSkyboxPipeline_.reserve(10u);
 	drawEventsTerrainPipeline_.reserve(4u);
 }
@@ -477,6 +479,16 @@ void GFX::createSwapChain() {
 	resourcesSwordSlashPipeline_.perFrameData.init(
 		device_.Get(), sizeof( SwordSlashShader::PerFrameData ), backBuffers_.size(), "SwordSlash_PerFrameData"
 	);
+	// Two Sides Pipeline ----
+	resourcesTwoSidesPipeline_.perInstanceData.init(
+		device_.Get(), sizeof( TwoSidesShader::PerInstanceData ) * 256u, backBuffers_.size(), "TwoSides_PerInstanceData"
+	);
+	resourcesTwoSidesPipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof( TwoSidesShader::PerDrawcallData ), 256u, backBuffers_.size(), "TwoSides_PerDrawcallData"
+	);
+	resourcesTwoSidesPipeline_.perFrameData.init(
+		device_.Get(), sizeof( TwoSidesShader::PerFrameData ), backBuffers_.size(), "TwoSides_PerFrameData"
+	);
 	// UI Pipeline ----
 	resourcesUIPipeline_.perInstanceData.init(
 		device_.Get(), sizeof( UIShader::PerInstanceData ) * 1000u, backBuffers_.size(), "UI_PerInstanceData"
@@ -624,6 +636,18 @@ void GFX::addCameraData( const SwordSlashPipeline::CameraData& cameraData ) {
 
 void GFX::addFrameData( const SwordSlashPipeline::FrameData& frameData ) {
 	frameDataSwordSlashPipeline_ = frameData;
+}
+
+void GFX::addDrawEvent( const TwoSidesPipeline::DrawEvent& drawEvent ) {
+	drawEventsTwoSidesPipeline_.push_back( drawEvent );
+}
+
+void GFX::addCameraData( const TwoSidesPipeline::CameraData& cameraData ) {
+	cameraDataTwoSidesPipeline_ = cameraData;
+}
+
+void GFX::addFrameData( const TwoSidesPipeline::FrameData& frameData ) {
+	frameDataTwoSidesPipeline_ = frameData;
 }
 
 // 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
@@ -1111,6 +1135,19 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	auto twoSidesDispatcher = TwoSidesPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "TwoSidesShader" ),
+		cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesTwoSidesPipeline_, threadPool_,
+		&cmdListPool_, std::move( drawEventsTwoSidesPipeline_ ),
+		cameraDataTwoSidesPipeline_, frameDataTwoSidesPipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
 	auto bvPipelineDispatcher = BVPipeline::Dispatcher(
 		tmpDescriptorHeaps, rootSigs_.at("DefaultRootSignature"),
 		shaders_.at("BVShader"), cmdQ_, viewport, clRect,
@@ -1212,6 +1249,9 @@ void GFX::render() {
 
 		swordSlashDispatcher.updateGPUDataSingleThreaded();
 		swordSlashDispatcher.drawSingleThreaded();
+
+		twoSidesDispatcher.updateGPUDataSingleThreaded();
+		twoSidesDispatcher.drawSingleThreaded();
 		dumpLog();
 	}
 	else {
@@ -1269,6 +1309,9 @@ void GFX::render() {
 
 		swordSlashDispatcher.updateGPUDataMultiThreaded();
 		swordSlashDispatcher.drawMultiThreaded();
+
+		twoSidesDispatcher.updateGPUDataMultiThreaded();
+		twoSidesDispatcher.drawMultiThreaded();
 		dumpLog();
 	}
 

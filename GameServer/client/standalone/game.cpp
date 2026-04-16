@@ -462,6 +462,35 @@ void Game::setParticle()
 		swordSlash7Effect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);
 	}
 
+	// ── Slash Wave effect ─────────────────────────────────────────────────────
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/Slash wave_ParticleSystems.json",
+			"Slash wave"
+		);
+		cfg.main.looping = false;
+		cfg.renderer.pMesh = assetManager_.meshHalfTrail();
+		cfg.renderer.pSubMesh = assetManager_.meshHalfTrail()->subMeshes.empty()
+		                       ? nullptr
+		                       : &assetManager_.meshHalfTrail()->subMeshes[0];
+		cfg.renderer.mat = assetManager_.twoSidesMaterial();
+		slashWaveEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
+	}
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/Slash wave_ParticleSystems.json",
+			"Slash wave/SlashPath"
+		);
+		cfg.main.looping = false;
+		cfg.shape.direction = { 0.f, 0.f, 1.f };
+		cfg.renderer.pMesh = assetManager_.meshSlashWave();
+		cfg.renderer.pSubMesh = assetManager_.meshSlashWave()->subMeshes.empty()
+		                       ? nullptr
+		                       : &assetManager_.meshSlashWave()->subMeshes[0];
+		cfg.renderer.mat = assetManager_.slashPathMaterial();
+		slashWaveEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
+	}
+
 	// ── 발 본 인덱스 탐색 (흙먼지 VFX용) ────────────────────────────────────
 	const auto& playerSkeleton = player_->model()->skeleton;
 	if ( playerSkeleton.bones ) {
@@ -1065,6 +1094,7 @@ void Game::update(Milliseconds deltaTime) {
 	swordSlash1Effect_.update( deltaTime );
 	swordSlash7Effect_.update( deltaTime );
 	swordSlashComboEffect_.update( deltaTime );
+	slashWaveEffect_.update( deltaTime );
 	dustParticleSystem_.update( deltaTime );
 
 	// UI 동기화
@@ -1095,6 +1125,7 @@ void Game::render() {
 	swordSlash1Effect_.render( gfx_ );
 	swordSlash7Effect_.render( gfx_ );
 	swordSlashComboEffect_.render( gfx_ );
+	slashWaveEffect_.render( gfx_ );
 	dustParticleSystem_.render( gfx_ );
 
 	uiManager_.render( gfx_ );
@@ -1260,13 +1291,14 @@ void Game::processInput(Milliseconds deltaTime) {
 			debugBVView_.pushLive(spec->obj, spec->halfExtent, spec->offsetFwd, 1500ms);
 		}
 
-		// 검기 이펙트 emit: 에셋의 원본 방출 형태를 보기 위해 추가 회전 변환은 적용하지 않는다.
+		// 검기 이펙트 emit: SlashPath가 플레이어 forward 방향으로 날아가도록 회전을 함께 전달한다.
 		const auto slashPos = player_->renderState().pos
 		                    + player_->forward() * 1.f
 		                    + mu::Vec3(0.f, 1.0f, 0.f);
-		swordSlashComboEffect_.play( slashPos );
+		//swordSlashComboEffect_.play( slashPos );
 		// swordSlash7Effect_.play( slashPos );
 		//swordSlash1Effect_.play(slashPos);
+		slashWaveEffect_.play( slashPos, player_->orient() );
 	}
 
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때

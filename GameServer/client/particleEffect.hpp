@@ -26,6 +26,7 @@ public:
 
     // Sets shape.position on all sub-systems and triggers each per its PlayMode.
     void play(const mu::Vec3& pos);
+    void play(const mu::Vec3& pos, mu::NQuat orient);
 
     // Calls stopContinuous() on all sub-systems.
     void stop();
@@ -41,6 +42,8 @@ private:
         ParticleSystem ps;
         PlayMode       mode;
         mu::Vec3       shapeBasePosition = { 0.f, 0.f, 0.f };
+        mu::Mat4x4     shapeBaseOrientation = {};
+        mu::Mat4x4     meshBaseRotation = {};
     };
     std::vector<Entry> systems_;
 };

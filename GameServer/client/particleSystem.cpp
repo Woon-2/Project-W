@@ -185,6 +185,8 @@ static mu::Vec3 calcVelocityOverLifetime(
 }
 
 float ParticleSystem::randomFloat(float lo, float hi) {
+    if (hi < lo)
+        std::swap(lo, hi);
     return std::uniform_real_distribution<float>{lo, hi}(rng_);
 }
 
