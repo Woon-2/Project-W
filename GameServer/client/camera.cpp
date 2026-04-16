@@ -60,6 +60,11 @@ void Camera::updateGFX(GFX& gfx) {
 		.proj = proj_,
 		.pos = eye_
 	});
+	gfx.addCameraData(BlendCGMeshPipeline::CameraData{
+		.view = view_,
+		.proj = proj_,
+		.pos = eye_
+	});
 	gfx.addCameraData(SwordSlashPipeline::CameraData{
 		.view = view_,
 		.proj = proj_

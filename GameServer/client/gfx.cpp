@@ -243,6 +243,7 @@ void GFX::init() {
 	shaders_.try_emplace("BillboardShaderAdditive", createBillboardShaderAdditive( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("MeshParticleShader", createMeshParticleShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("SmokeBlendCGShader", createSmokeBlendCGShader( device_.Get(), defaultRootSig.get() ));
+	shaders_.try_emplace("BlendCGMeshShader", createBlendCGMeshShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("SwordSlashShader", createSwordSlashShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("TwoSidesShader",  createTwoSidesShader(  device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("SkyboxShader", createSkyboxShader(device_.Get(), defaultRootSig.get()));
@@ -274,6 +275,7 @@ void GFX::init() {
 	drawEventsBillboardPipeline_.reserve(1000u);
 	drawEventsMeshParticlePipeline_.reserve(256u);
 	drawEventsSmokeBlendCGPipeline_.reserve(256u);
+	drawEventsBlendCGMeshPipeline_.reserve(256u);
 	drawEventsSwordSlashPipeline_.reserve(256u);
 	drawEventsTwoSidesPipeline_.reserve(256u);
 	drawEventsSkyboxPipeline_.reserve(10u);
@@ -469,6 +471,16 @@ void GFX::createSwapChain() {
 	resourcesSmokeBlendCGPipeline_.perFrameData.init(
 		device_.Get(), sizeof( SmokeBlendCGShader::PerFrameData ), backBuffers_.size(), "SmokeBlendCG_PerFrameData"
 	);
+	// Blend CG Mesh Pipeline ----
+	resourcesBlendCGMeshPipeline_.perInstanceData.init(
+		device_.Get(), sizeof( BlendCGMeshShader::PerInstanceData ) * 256u, backBuffers_.size(), "BlendCGMesh_PerInstanceData"
+	);
+	resourcesBlendCGMeshPipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof( BlendCGMeshShader::PerDrawcallData ), 256u, backBuffers_.size(), "BlendCGMesh_PerDrawcallData"
+	);
+	resourcesBlendCGMeshPipeline_.perFrameData.init(
+		device_.Get(), sizeof( BlendCGMeshShader::PerFrameData ), backBuffers_.size(), "BlendCGMesh_PerFrameData"
+	);
 	// Sword Slash Pipeline ----
 	resourcesSwordSlashPipeline_.perInstanceData.init(
 		device_.Get(), sizeof( SwordSlashShader::PerInstanceData ) * 256u, backBuffers_.size(), "SwordSlash_PerInstanceData"
@@ -624,6 +636,18 @@ void GFX::addCameraData( const SmokeBlendCGPipeline::CameraData& cameraData ) {
 
 void GFX::addFrameData( const SmokeBlendCGPipeline::FrameData& frameData ) {
 	frameDataSmokeBlendCGPipeline_ = frameData;
+}
+
+void GFX::addDrawEvent( const BlendCGMeshPipeline::DrawEvent& drawEvent ) {
+	drawEventsBlendCGMeshPipeline_.push_back( drawEvent );
+}
+
+void GFX::addCameraData( const BlendCGMeshPipeline::CameraData& cameraData ) {
+	cameraDataBlendCGMeshPipeline_ = cameraData;
+}
+
+void GFX::addFrameData( const BlendCGMeshPipeline::FrameData& frameData ) {
+	frameDataBlendCGMeshPipeline_ = frameData;
 }
 
 void GFX::addDrawEvent( const SwordSlashPipeline::DrawEvent& drawEvent ) {
@@ -1122,6 +1146,19 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	auto blendCGMeshDispatcher = BlendCGMeshPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "BlendCGMeshShader" ),
+		cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesBlendCGMeshPipeline_, threadPool_,
+		&cmdListPool_, std::move( drawEventsBlendCGMeshPipeline_ ),
+		cameraDataBlendCGMeshPipeline_, frameDataBlendCGMeshPipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
 	auto swordSlashDispatcher = SwordSlashPipeline::Dispatcher(
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
@@ -1244,6 +1281,9 @@ void GFX::render() {
 		smokeBlendCGDispatcher.updateGPUDataSingleThreaded();
 		smokeBlendCGDispatcher.drawSingleThreaded();
 
+		blendCGMeshDispatcher.updateGPUDataSingleThreaded();
+		blendCGMeshDispatcher.drawSingleThreaded();
+
 		meshParticleDispatcher.updateGPUDataSingleThreaded();
 		meshParticleDispatcher.drawSingleThreaded();
 
@@ -1303,6 +1343,9 @@ void GFX::render() {
 
 		smokeBlendCGDispatcher.updateGPUDataMultiThreaded();
 		smokeBlendCGDispatcher.drawMultiThreaded();
+
+		blendCGMeshDispatcher.updateGPUDataMultiThreaded();
+		blendCGMeshDispatcher.drawMultiThreaded();
 
 		meshParticleDispatcher.updateGPUDataMultiThreaded();
 		meshParticleDispatcher.drawMultiThreaded();

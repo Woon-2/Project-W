@@ -44,7 +44,7 @@ public:
 	const ps::MatSwordSlash& swordSlash2Material() const { return swordSlash2Material_; }
 	const ps::MatSmokeBlendCG& smokeBlendCGMaterial() const { return smokeBlendCGMaterial_; }
 	const ps::MatTwoSides& twoSidesMaterial()      const { return twoSidesMaterial_; }
-	const ps::MatTwoSides& slashPathMaterial()     const { return slashPathMaterial_; }
+	const ps::MatSmokeBlendCG& slashPathMaterial() const { return slashPathMaterial_; }
 	const std::vector<std::shared_ptr<AnimClip>>& playerAnimations() const { return playerAnimations_; }
 	const std::vector<std::shared_ptr<AnimClip>>& goblinAnimations() const { return goblinAnimations_; }
 	const std::vector<std::shared_ptr<AnimClip>>& anubisAnimations() const { return anubisAnimations_; }
@@ -102,7 +102,7 @@ private:
 	ps::MatSwordSlash   swordSlash2Material_{};
 	ps::MatSmokeBlendCG smokeBlendCGMaterial_{};
 	ps::MatTwoSides     twoSidesMaterial_{};
-	ps::MatTwoSides     slashPathMaterial_{};
+	ps::MatSmokeBlendCG slashPathMaterial_{};
 };
 
 #endif	// __AssetManager_HPP

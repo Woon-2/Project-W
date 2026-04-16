@@ -284,18 +284,23 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 	twoSidesMaterial_.useBackFresnel = 1.0f;
 	twoSidesMaterial_.backFresnel    = -4.0f;         // _BackFresnel from TwoSides22.json
 
-	// Waves21cg5 material for SlashPath. This uses the existing mesh-capable
-	// TwoSides path as a close runtime material for the HS_Blend_CG asset.
-	slashPathMaterial_ = ps::MatTwoSides{};
+	// Waves21cg5 material for SlashPath. HS_Blend_CG uses the Waves21 texture
+	// as the flow/distortion map, not as the generic noise slot.
+	slashPathMaterial_ = ps::MatSmokeBlendCG{};
 	slashPathMaterial_.mainTex      = &gradient3tTex_;
+	slashPathMaterial_.flowTex      = &waves21Tex_;
 	slashPathMaterial_.maskTex      = &gradient4_3Tex_;
-	slashPathMaterial_.noiseTex     = &waves21Tex_;
-	slashPathMaterial_.noiseTexST   = { 1.f, 1.f, 0.f, 0.f };
-	slashPathMaterial_.noiseSpeed   = { 0.f, -0.5f };
+	slashPathMaterial_.flowTexST    = { 1.f, 1.f, 0.f, 0.f };
+	slashPathMaterial_.maskTexST    = { 1.f, 1.f, 0.f, 0.f };
+	slashPathMaterial_.distortionSpeedXYPowerZ = { 0.f, -0.5f, 0.5f, 0.f };
 	slashPathMaterial_.emission     = 2.0f;
 	slashPathMaterial_.opacity      = 1.0f;
-	slashPathMaterial_.useBackFresnel = 0.0f;
-	slashPathMaterial_.backFresnel    = 0.0f;
+	slashPathMaterial_.textureOpacity = 0.0f;
+	slashPathMaterial_.multiplyTexture = 1.0f;
+	slashPathMaterial_.useFresnel   = 0.0f;
+	slashPathMaterial_.useCenterGlow = 0.0f;
+	slashPathMaterial_.useDepth     = 1.0f;
+	slashPathMaterial_.depthPower   = 1.0f;
 }
 
 void AssetManager::loadAnimations() {

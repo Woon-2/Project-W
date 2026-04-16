@@ -168,6 +168,7 @@
     <ClCompile Include="basicPlayerHPUI.cpp" />
     <ClCompile Include="billboard.cpp" />
     <ClCompile Include="billboardPipeline.cpp" />
+    <ClCompile Include="blendCGMeshPipeline.cpp" />
     <ClCompile Include="meshParticlePipeline.cpp" />
     <ClCompile Include="smokeBlendCGPipeline.cpp" />
     <ClCompile Include="binaryImport.cpp" />
@@ -253,6 +254,7 @@
     <ClInclude Include="basicPlayerHpUI.hpp" />
     <ClInclude Include="billboard.hpp" />
     <ClInclude Include="billboardPipeline.hpp" />
+    <ClInclude Include="blendCGMeshPipeline.hpp" />
     <ClInclude Include="binaryImport.hpp" />
     <ClInclude Include="BVPipeline.hpp" />
     <ClInclude Include="camera.hpp" />
@@ -346,6 +348,10 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
     <FxCompile Include="smokeBlendCG.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="blendCGMesh.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>

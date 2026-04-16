@@ -9,6 +9,7 @@ struct Particle;
 struct ParticleRenderFrameState {
     bool swordSlashFrameDataSubmitted = false;
     bool smokeBlendCGFrameDataSubmitted = false;
+    bool blendCGMeshFrameDataSubmitted = false;
     bool twoSidesFrameDataSubmitted = false;
 };
 

@@ -13,6 +13,7 @@
 #include "billboardPipeline.hpp"
 #include "meshParticlePipeline.hpp"
 #include "smokeBlendCGPipeline.hpp"
+#include "blendCGMeshPipeline.hpp"
 #include "swordSlashPipeline.hpp"
 #include "twoSidesPipeline.hpp"
 #include "skyboxPipeline.hpp"
@@ -166,6 +167,12 @@ public:
 	void addCameraData( const SmokeBlendCGPipeline::CameraData& cameraData );
 	// 프레임 데이터를 입력한다.
 	void addFrameData( const SmokeBlendCGPipeline::FrameData& frameData );
+	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+	void addDrawEvent( const BlendCGMeshPipeline::DrawEvent& drawEvent );
+	// 카메라 데이터를 입력한다.
+	void addCameraData( const BlendCGMeshPipeline::CameraData& cameraData );
+	// 프레임 데이터를 입력한다.
+	void addFrameData( const BlendCGMeshPipeline::FrameData& frameData );
 	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 	void addDrawEvent( const SwordSlashPipeline::DrawEvent& drawEvent );
 	// 카메라 데이터를 입력한다.
@@ -322,6 +329,11 @@ private:
 	SmokeBlendCGPipeline::Resources              resourcesSmokeBlendCGPipeline_{};
 	SmokeBlendCGPipeline::CameraData             cameraDataSmokeBlendCGPipeline_{};
 	SmokeBlendCGPipeline::FrameData              frameDataSmokeBlendCGPipeline_{};
+	// Blend CG Mesh Pipeline
+	std::vector<BlendCGMeshPipeline::DrawEvent> drawEventsBlendCGMeshPipeline_{};
+	BlendCGMeshPipeline::Resources              resourcesBlendCGMeshPipeline_{};
+	BlendCGMeshPipeline::CameraData             cameraDataBlendCGMeshPipeline_{};
+	BlendCGMeshPipeline::FrameData              frameDataBlendCGMeshPipeline_{};
 	// Sword Slash Pipeline
 	std::vector<SwordSlashPipeline::DrawEvent> drawEventsSwordSlashPipeline_{};
 	SwordSlashPipeline::Resources              resourcesSwordSlashPipeline_{};

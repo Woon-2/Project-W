@@ -29,6 +29,7 @@ ComPtr<ID3D12PipelineState> createBillboardShader(ID3D12Device* device, ID3D12Ro
 ComPtr<ID3D12PipelineState> createBillboardShaderAdditive(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createMeshParticleShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSmokeBlendCGShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createBlendCGMeshShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSwordSlashShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createTwoSidesShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
@@ -351,6 +352,24 @@ struct PerFrameData {           // 80B
 };
 
 }  // namespace SmokeBlendCGShader
+
+// BlendCGMeshShader
+namespace BlendCGMeshShader {
+
+struct PerInstanceData {        // 112B
+	XMFLOAT4X4 world;           // 64B
+	XMFLOAT4   tint;            // 16B
+	XMFLOAT2   custom1;         // 8B
+	XMFLOAT2   custom2;         // 8B
+	float      t;               // 4B
+	float      customDataEnabled;// 4B
+	XMFLOAT2   pad;             // 8B
+};
+
+using PerDrawcallData = SmokeBlendCGShader::PerDrawcallData;
+using PerFrameData = SmokeBlendCGShader::PerFrameData;
+
+}  // namespace BlendCGMeshShader
 
 // ShadowMapShader
 namespace ShadowMapShader {
