@@ -242,6 +242,8 @@ void GFX::init() {
 	shaders_.try_emplace("BillboardShader", createBillboardShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("BillboardShaderAdditive", createBillboardShaderAdditive( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("MeshParticleShader", createMeshParticleShader( device_.Get(), defaultRootSig.get() ));
+	shaders_.try_emplace("SmokeBlendCGShader", createSmokeBlendCGShader( device_.Get(), defaultRootSig.get() ));
+	shaders_.try_emplace("SwordSlashShader", createSwordSlashShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("SkyboxShader", createSkyboxShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("BVShader", createBVShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace( "UIShader", createUIShader( device_.Get(), defaultRootSig.get() ) );
@@ -270,6 +272,8 @@ void GFX::init() {
 	drawEventsBVPipeline_.reserve(1000u);
 	drawEventsBillboardPipeline_.reserve(1000u);
 	drawEventsMeshParticlePipeline_.reserve(256u);
+	drawEventsSmokeBlendCGPipeline_.reserve(256u);
+	drawEventsSwordSlashPipeline_.reserve(256u);
 	drawEventsSkyboxPipeline_.reserve(10u);
 	drawEventsTerrainPipeline_.reserve(4u);
 }
@@ -453,6 +457,26 @@ void GFX::createSwapChain() {
 	resourcesMeshParticlePipeline_.perFrameData.init(
 		device_.Get(), sizeof( MeshParticleShader::PerFrameData ), backBuffers_.size(), "MeshParticle_PerFrameData"
 	);
+	// Smoke Blend CG Pipeline ----
+	resourcesSmokeBlendCGPipeline_.perInstanceData.init(
+		device_.Get(), sizeof( SmokeBlendCGShader::PerInstanceData ) * 256u, backBuffers_.size(), "SmokeBlendCG_PerInstanceData"
+	);
+	resourcesSmokeBlendCGPipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof( SmokeBlendCGShader::PerDrawcallData ), 256u, backBuffers_.size(), "SmokeBlendCG_PerDrawcallData"
+	);
+	resourcesSmokeBlendCGPipeline_.perFrameData.init(
+		device_.Get(), sizeof( SmokeBlendCGShader::PerFrameData ), backBuffers_.size(), "SmokeBlendCG_PerFrameData"
+	);
+	// Sword Slash Pipeline ----
+	resourcesSwordSlashPipeline_.perInstanceData.init(
+		device_.Get(), sizeof( SwordSlashShader::PerInstanceData ) * 256u, backBuffers_.size(), "SwordSlash_PerInstanceData"
+	);
+	resourcesSwordSlashPipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof( SwordSlashShader::PerDrawcallData ), 256u, backBuffers_.size(), "SwordSlash_PerDrawcallData"
+	);
+	resourcesSwordSlashPipeline_.perFrameData.init(
+		device_.Get(), sizeof( SwordSlashShader::PerFrameData ), backBuffers_.size(), "SwordSlash_PerFrameData"
+	);
 	// UI Pipeline ----
 	resourcesUIPipeline_.perInstanceData.init(
 		device_.Get(), sizeof( UIShader::PerInstanceData ) * 1000u, backBuffers_.size(), "UI_PerInstanceData"
@@ -576,6 +600,30 @@ void GFX::addCameraData( const MeshParticlePipeline::CameraData& cameraData ) {
 
 void GFX::addFrameData( const MeshParticlePipeline::FrameData& frameData ) {
 	frameDataMeshParticlePipeline_ = frameData;
+}
+
+void GFX::addDrawEvent( const SmokeBlendCGPipeline::DrawEvent& drawEvent ) {
+	drawEventsSmokeBlendCGPipeline_.push_back( drawEvent );
+}
+
+void GFX::addCameraData( const SmokeBlendCGPipeline::CameraData& cameraData ) {
+	cameraDataSmokeBlendCGPipeline_ = cameraData;
+}
+
+void GFX::addFrameData( const SmokeBlendCGPipeline::FrameData& frameData ) {
+	frameDataSmokeBlendCGPipeline_ = frameData;
+}
+
+void GFX::addDrawEvent( const SwordSlashPipeline::DrawEvent& drawEvent ) {
+	drawEventsSwordSlashPipeline_.push_back( drawEvent );
+}
+
+void GFX::addCameraData( const SwordSlashPipeline::CameraData& cameraData ) {
+	cameraDataSwordSlashPipeline_ = cameraData;
+}
+
+void GFX::addFrameData( const SwordSlashPipeline::FrameData& frameData ) {
+	frameDataSwordSlashPipeline_ = frameData;
 }
 
 // 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
@@ -728,7 +776,7 @@ void GFX::loadAssets(const AssetConfigs& configs) {
 			auto [pPair, _] = request.pTexHashMap->try_emplace( request.name, loadTexture( device_.Get(), cmdList.Get(), request.texturePath, fence, type ) );
 			auto& tex = pPair->second;
 			createSRV( device_.Get(), tex, srvTexPool_ );
-			tex.idxSrv.idxSampler = etoi( Samplers::TrilinearWrap );
+			tex.idxSrv.idxSampler = etoi( request.sampler );
 			*request.pDest = tex;
 
 			if (request.needsUploadInfo) {
@@ -743,6 +791,9 @@ void GFX::loadAssets(const AssetConfigs& configs) {
 					tex.uploadInfo->rowSizes.data(), &tex.uploadInfo->totalSize
 				);
 			}
+		}
+		else {
+			*request.pDest = request.pTexHashMap->at(request.name);
 		}
 	}
 
@@ -1034,6 +1085,32 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	auto smokeBlendCGDispatcher = SmokeBlendCGPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "SmokeBlendCGShader" ),
+		cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesSmokeBlendCGPipeline_, threadPool_,
+		&cmdListPool_, std::move( drawEventsSmokeBlendCGPipeline_ ),
+		cameraDataSmokeBlendCGPipeline_, frameDataSmokeBlendCGPipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
+	auto swordSlashDispatcher = SwordSlashPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "SwordSlashShader" ),
+		cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesSwordSlashPipeline_, threadPool_,
+		&cmdListPool_, std::move( drawEventsSwordSlashPipeline_ ),
+		cameraDataSwordSlashPipeline_, frameDataSwordSlashPipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
 	auto bvPipelineDispatcher = BVPipeline::Dispatcher(
 		tmpDescriptorHeaps, rootSigs_.at("DefaultRootSignature"),
 		shaders_.at("BVShader"), cmdQ_, viewport, clRect,
@@ -1127,8 +1204,14 @@ void GFX::render() {
 		billboardPipelineDispatcher.updateGPUDataSingleThreaded();
 		billboardPipelineDispatcher.drawSingleThreaded();
 
+		smokeBlendCGDispatcher.updateGPUDataSingleThreaded();
+		smokeBlendCGDispatcher.drawSingleThreaded();
+
 		meshParticleDispatcher.updateGPUDataSingleThreaded();
 		meshParticleDispatcher.drawSingleThreaded();
+
+		swordSlashDispatcher.updateGPUDataSingleThreaded();
+		swordSlashDispatcher.drawSingleThreaded();
 		dumpLog();
 	}
 	else {
@@ -1178,8 +1261,14 @@ void GFX::render() {
 		billboardPipelineDispatcher.updateGPUDataMultiThreaded();
 		billboardPipelineDispatcher.drawMultiThreaded();
 
+		smokeBlendCGDispatcher.updateGPUDataMultiThreaded();
+		smokeBlendCGDispatcher.drawMultiThreaded();
+
 		meshParticleDispatcher.updateGPUDataMultiThreaded();
 		meshParticleDispatcher.drawMultiThreaded();
+
+		swordSlashDispatcher.updateGPUDataMultiThreaded();
+		swordSlashDispatcher.drawMultiThreaded();
 		dumpLog();
 	}
 

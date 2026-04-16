@@ -1673,9 +1673,15 @@ std::pair<Mesh, std::string> loadMeshBin(
 	// version
 	uint8_t version{};
 	ifs.read(reinterpret_cast<char*>(&version), 1);
-	DISPLAY_ERROR_STR(version == 1u,
+	DISPLAY_ERROR_STR(version == 1u || version == 2u,
 		"[File I/O Error]: loadMeshBin: unsupported version "s + std::to_string(version), false);
-	if (version != 1u) return ret;
+	if (version != 1u && version != 2u) return ret;
+
+	// v2: flags (bit 0 = hasColor)
+	uint8_t flags = 0u;
+	if (version == 2u)
+		ifs.read(reinterpret_cast<char*>(&flags), 1);
+	const bool hasColor = (flags & 0x1u) != 0u;
 
 	// counts
 	uint32_t vertexCount{}, indexCount{};
@@ -1693,6 +1699,13 @@ std::pair<Mesh, std::string> loadMeshBin(
 	for (uint32_t i = 0; i < vertexCount; ++i) {
 		positions[i] = rawVertices[i].pos;
 		uvs[i]       = rawVertices[i].uv;
+	}
+
+	// v2: color channel (flat float4 array, after pos+uv block)
+	auto colors = std::vector<XMFLOAT4>{};
+	if (hasColor) {
+		colors.resize(vertexCount);
+		ifs.read(reinterpret_cast<char*>(colors.data()), vertexCount * sizeof(XMFLOAT4));
 	}
 
 	// indices
@@ -1723,6 +1736,16 @@ std::pair<Mesh, std::string> loadMeshBin(
 	setD3DName(vbUVu.Get(), (meshName + "_VB_UV_Upload").c_str());
 	copyResource(cmdList, vbUVu.Get(), vbUV.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
 
+	// color VB (Slot 2, v2 only)
+	ComPtr<ID3D12Resource> vbColor{}, vbColoru{};
+	if (hasColor) {
+		vbColor  = createBufferResource(device, nullptr, colors.size() * sizeof(XMFLOAT4), BufferCreationType::VertexBuffer);
+		setD3DName(vbColor.Get(), (meshName + "_VB_Color").c_str());
+		vbColoru = createBufferResource(device, colors.data(), colors.size() * sizeof(XMFLOAT4), BufferCreationType::UploadBuffer);
+		setD3DName(vbColoru.Get(), (meshName + "_VB_Color_Upload").c_str());
+		copyResource(cmdList, vbColoru.Get(), vbColor.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+	}
+
 	// IB
 	auto ib  = createBufferResource(device, nullptr, indices.size() * sizeof(u16t), BufferCreationType::IndexBuffer);
 	setD3DName(ib.Get(), (meshName + "_IB").c_str());
@@ -1735,6 +1758,10 @@ std::pair<Mesh, std::string> loadMeshBin(
 	mesh.vbViews.emplace_back(vbUV->GetGPUVirtualAddress(), static_cast<UINT>(uvs.size() * sizeof(XMFLOAT2)), static_cast<UINT>(sizeof(XMFLOAT2)));
 	mesh.vbIdxMap.try_emplace(meshName + "_VB_Position", 0u);
 	mesh.vbIdxMap.try_emplace(meshName + "_VB_UV", 1u);
+	if (hasColor) {
+		mesh.vbViews.emplace_back(vbColor->GetGPUVirtualAddress(), static_cast<UINT>(colors.size() * sizeof(XMFLOAT4)), static_cast<UINT>(sizeof(XMFLOAT4)));
+		mesh.vbIdxMap.try_emplace(meshName + "_VB_Color", 2u);
+	}
 
 	// IB + submesh
 	mesh.subMeshes.emplace_back(
@@ -1749,14 +1776,17 @@ std::pair<Mesh, std::string> loadMeshBin(
 	// ownership
 	mesh.vbs.push_back(std::move(vbPos));
 	mesh.vbs.push_back(std::move(vbUV));
+	if (hasColor) mesh.vbs.push_back(std::move(vbColor));
 	mesh.ibs.push_back(std::move(ib));
 
 	fenceToAssociate.associatedResources_.push_back(std::move(vbPosu));
 	fenceToAssociate.associatedResources_.push_back(std::move(vbUVu));
+	if (hasColor) fenceToAssociate.associatedResources_.push_back(std::move(vbColoru));
 	fenceToAssociate.associatedResources_.push_back(std::move(ibu));
 
 	gSharedLog << "[Resource Load] loadMeshBin: " << meshName << " (" << path << ") loaded, "
-		<< vertexCount << " verts, " << indexCount << " indices, tex=" << texPath << '\n';
+		<< vertexCount << " verts, " << indexCount << " indices, "
+		<< "color=" << (hasColor ? "yes" : "no") << ", tex=" << texPath << '\n';
 
 	return ret;
 }

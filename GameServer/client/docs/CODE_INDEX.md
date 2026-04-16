@@ -333,6 +333,88 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | UIPipeline | `gfx.hpp #243` |
 | TerrainPipeline | `gfx.hpp #247` |
 
+**MeshParticlePipeline:**
+
+| 파일 | 설명 |
+|------|------|
+| `meshParticlePipeline.hpp` | DrawEvent (world, pMesh, pSubMesh, pTex, tint, renderOrder), Dispatcher |
+| `meshParticlePipeline.cpp` | updateGPUDataSingleThreaded / drawSingleThreaded 구현 |
+| `meshParticle.hlsl` | PerInstanceData(world+tint), bindless texture PS |
+
+**SwordSlashPipeline:**
+
+| 파일 | 설명 |
+|------|------|
+| `swordSlashPipeline.hpp` | DrawEvent (world, tint, t, 텍스처 4종, FX 파라미터), Dispatcher |
+| `swordSlashPipeline.cpp` | updateGPUDataSingleThreaded / drawSingleThreaded 구현 |
+| `swordSlash.hlsl` | Flow+Dissolve+Emission 효과 VS/PS. b0=PerDrawcallData(bindless+FX), b1=PerFrameData(VP) |
+
+---
+
+## 8-B. 파티클 시스템
+
+**설계 원칙:** Unity Particle System 모듈 구조 — 공통 simulation core, `RendererModule.mode`로 렌더 백엔드 선택
+
+| 파일 | 설명 |
+|------|------|
+| `particleModules.hpp` | `MainModule`, `EmissionModule`, `ShapeModule`, `VelocityOverLifetimeModule`, `ColorOverLifetimeModule`, `SizeOverLifetimeModule`, `RotationOverLifetimeModule`, `CustomDataModule`, `Material`, `RendererModule`, `TextureSheetAnimationModule`, `ParticleSystemConfig` |
+| `particleSystem.hpp` | `ParticleSystem`, `Particle` |
+| `particleSystem.cpp` | `init()`, `emit()`, `startContinuous()`, `spawnParticle()`, `sampleShapeOrigin/Direction()`, `update()`, `render()` |
+| `particleEffect.hpp` | `ParticleEffect` — Unity 프리팹 대응 그룹 컨테이너. `PlayMode::Emit` / `Continuous` |
+| `particleEffect.cpp` | `addSystem()`, `play()`, `stop()`, `isAlive()`, `update()`, `render()` |
+
+**ParticleSystem API (`particleSystem.hpp`):**
+
+| 메서드 | 설명 |
+|--------|------|
+| `init(config, maxParticles=4096)` | 모듈 config 설정 + pool 크기 결정 |
+| `emit(int count)` | init() 후 수동 방출 |
+| `config()` | 설정 참조 반환 — emit 전 shape.position, main.startRotation3D 등 변경에 사용 |
+| `startContinuous()` | init() 기반 연속 방출 시작 |
+| `startContinuous(ParticleSystemConfig)` | config 설정 + 연속 방출 편의 오버로드 |
+| `stopContinuous()` | 연속 방출 정지 |
+
+**MainModule 주요 필드:**
+- `duration` — 한 사이클 길이(초); 0 = 시간 제한 없음
+- `looping` — duration 후 재시작 여부
+- `startDelay` — 첫 방출 전 대기 시간
+- `simulationSpeed` — 전역 재생 속도 배율
+- `startRotation3D` — mesh 파티클 초기 3D 방향(`mu::Mat4x4`); emit 전 `config().main.startRotation3D`로 설정
+
+**ShapeModule::Type 지원:**
+- `Point` — 단일 점, `direction` 방향으로 emit
+- `Edge` — 선분 위 랜덤 위치, `direction` 방향으로 emit
+- `Cone` — apex 또는 base disc에서 원뿔 내 랜덤 방향
+- `Sphere` — 구면에서 outward 방향
+- `Box` — 박스 내 랜덤 위치, 중심 outward 방향
+
+**RendererModule::Mode:**
+- `Billboard` — `material.mainTex`가 있으면 항상 `BillboardPipeline::DrawEvent` 제출
+  - `TextureSheetAnimationModule.enabled = true` → 그리드 기반 UV 프레임 계산
+  - `TextureSheetAnimationModule.enabled = false` → 전체 텍스처 (uvOffset=0, uvScale=1)
+- `Mesh` + `MatUnlit` — `MeshParticlePipeline::DrawEvent` 제출 (angularAngle + startRotation3D + translate)
+- `Mesh` + `MatSwordSlash` — `SwordSlashPipeline::DrawEvent` 제출 (동일 transform 계산, 텍스처 4종 + FX 파라미터 포함)
+
+**AnyMat / Material 타입** (`particleModules.hpp`):
+- `using AnyMat = std::variant<MatUnlit, MatSwordSlash>` — per-shader 독립 구조체 + variant
+- `MatUnlit` — BillboardPipeline / MeshParticlePipeline용: `mainTex`, `additive`
+- `MatSwordSlash` — SwordSlashPipeline용: `mainTex`, `emissionTex`, `dissolveTex`, `flowTex`, 스크롤/Flow/디졸브/Emission FX 파라미터
+- `RendererModule::mat` (`AnyMat`) — `render()` 내 `std::visit`으로 파이프라인 디스패치
+
+**SwordSlashPipeline** (`swordSlashPipeline.hpp` / `swordSlashPipeline.cpp` / `swordSlash.hlsl`):
+- Flow Map UV 왜곡 + UV 스크롤 + EmissionTex 발광 + Dissolve 마스크(파티클 수명 기반)
+- DrawEvent: world, tint, t(normalized age), 텍스처 4종, FX 파라미터 전체
+- PerDrawcallData(b0): bindless 텍스처 인덱스 4종 + instanceOffset + FX 파라미터 + time
+- PerFrameData(b1): VP 행렬 (SystemTime은 particleSystem::render()에서 FrameData로 전달)
+
+**TextureSheetAnimationModule** (`particleModules.hpp`):
+- `enabled` — 활성화 시 Billboard UV를 그리드 기반 프레임으로 교체 (비활성 시 전체 텍스처)
+- `tilesX / tilesY` — 스프라이트 시트 분할 수
+- `animation` — `WholeSheet`(전체 시트 순회) / `SingleRow`(한 행만, RowMode 미구현)
+- `timeMode` — `Lifetime`만 구현 (Speed/FPS 미구현)
+- `cycles` — 수명 동안 반복 횟수 (기본 1)
+- `startFrame` — 시작 프레임 오프셋 (기본 0)
+
 ---
 
 ## 9. 게임 루프

@@ -2,6 +2,7 @@
 
 struct PerInstanceData {
     float4x4 world;
+    float4   stretchAxisAndMode; // xyz=world-space stretch axis, w=1 when enabled
     float    rotation;
     float3   pad;
 };
@@ -18,8 +19,10 @@ struct Material
 struct VSOutput
 {
     float3 worldPos : TEXCOORD0;
-    float  size     : TEXCOORD1;
+    float2 size     : TEXCOORD1;
     float  rotation : TEXCOORD2;
+    float3 stretchAxisW : TEXCOORD3;
+    float  stretchMode  : TEXCOORD4;
 };
 
 struct PSInput
@@ -54,10 +57,13 @@ VSOutput VSMain( float3 position : POSITION, float size : SIZE,
     PerInstanceData instance = gInstances[idxInst + idxDrawcall];
     ret.worldPos = mul(float4(position, 1.0f), instance.world).xyz;
 
-    // Extract true X scale from world matrix column length (robust against rotation).
+    // Extract true XY scale from world matrix column length (robust against rotation).
     float scaleX = length(float3(instance.world._m00, instance.world._m10, instance.world._m20));
-    ret.size     = size * scaleX;
+    float scaleY = length(float3(instance.world._m01, instance.world._m11, instance.world._m21));
+    ret.size     = float2(size * scaleX, size * scaleY);
     ret.rotation = instance.rotation;
+    ret.stretchAxisW = instance.stretchAxisAndMode.xyz;
+    ret.stretchMode = instance.stretchAxisAndMode.w;
 
     return ret;
 }
@@ -75,19 +81,31 @@ void GSMain(point VSOutput input[1],
     float3 vRight = normalize(cross(worldUp, vLook));
     float3 vUP    = cross(vLook, vRight);
 
-    float c = cos(input[0].rotation);
-    float s = sin(input[0].rotation);
-    float3 vRightR = c * vRight + s * vUP;
-    float3 vUPR    = -s * vRight + c * vUP;
+    float3 vRightR = vRight;
+    float3 vUPR = vUP;
 
-    float half = input[0].size * 0.5f;
+    float3 stretchAxis = input[0].stretchAxisW;
+    float3 stretchAxisOnPlane = stretchAxis - dot(stretchAxis, vLook) * vLook;
+    float stretchLenSq = dot(stretchAxisOnPlane, stretchAxisOnPlane);
+    if (input[0].stretchMode > 0.5f && stretchLenSq > 0.000001f) {
+        vUPR = stretchAxisOnPlane * rsqrt(stretchLenSq);
+        vRightR = normalize(cross(vUPR, vLook));
+    } else {
+        float c = cos(input[0].rotation);
+        float s = sin(input[0].rotation);
+        vRightR = c * vRight + s * vUP;
+        vUPR    = -s * vRight + c * vUP;
+    }
+
+    float halfWidth = input[0].size.x * 0.5f;
+    float halfHeight = input[0].size.y * 0.5f;
 
     // Triangle strip order: bottom-left(0), bottom-right(1), top-left(2), top-right(3)
     float3 p[4];
-    p[0] = pos - half * vRightR - half * vUPR;
-    p[1] = pos + half * vRightR - half * vUPR;
-    p[2] = pos - half * vRightR + half * vUPR;
-    p[3] = pos + half * vRightR + half * vUPR;
+    p[0] = pos - halfWidth * vRightR - halfHeight * vUPR;
+    p[1] = pos + halfWidth * vRightR - halfHeight * vUPR;
+    p[2] = pos - halfWidth * vRightR + halfHeight * vUPR;
+    p[3] = pos + halfWidth * vRightR + halfHeight * vUPR;
     // 로컬 UV (0~1 범위) → 스프라이트 시트 UV로 변환
     float2 baseUV[4] = { float2(0.f, 1.f), float2(1.f, 1.f), float2(0.f, 0.f), float2(1.f, 0.f) };
     float2 uv[4];

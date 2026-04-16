@@ -1,82 +1,86 @@
-﻿#ifndef __particleSystem_HPP
+#ifndef __particleSystem_HPP
 #define __particleSystem_HPP
 
-#include "spriteAnimation.hpp"
+#include "particleModules.hpp"
 
-#include <array>
+#include <vector>
 #include <random>
-
-enum class EmitterShape { Point, Edge };
-
-struct EmitterConfig {
-    mu::Vec3                   position;
-    mu::Vec3                   direction   = {0, 1, 0};  // world-space emit axis
-    float                      spread      = 0.3f;       // cone half-angle (radians), 흩뿌리는 방식을 원한다면 이 옵션을.
-    float                      speedMin    = 1.f;
-    float                      speedMax    = 3.f;
-    float                      lifetimeMin = 0.5f;
-    float                      lifetimeMax = 1.5f;
-    mu::Vec4                   startColor          = {1.f, 1.f, 1.f, 1.f};
-    ColorGradient              colorOverLifetime   = ColorGradient::constant({1.f, 1.f, 1.f, 1.f});
-    float                      sizeBegin        = 1.f;
-    float                      sizeEnd          = 1.f;
-    float                      sizeMultiplierMin = 1.f;  // 파티클 크기 배율 min (Unity Start Size)
-    float                      sizeMultiplierMax = 1.f;  // 파티클 크기 배율 max
-    float                      drag        = 0.f;
-    mu::Vec3                   gravity     = {0.f, -9.8f, 0.f};
-    float                      gravityModifierMin = 1.f;  
-    float                      gravityModifierMax = 1.f; 
-    float                      startRotationMin = 0.f;   // radians
-    float                      startRotationMax = 0.f;
-    const SpriteAnimationClip* pClip       = nullptr;
-    EmitterShape               shape        = EmitterShape::Point;
-    float                      edgeLength   = 1.f;
-    mu::Vec3                   edgeDir      = {1.f, 0.f, 0.f};
-    bool                       additiveBlend = true;
-    int                        renderOrder  = 0;         // 낮을수록 먼저 렌더 (같은 blend 모드 내 정렬 기준)
-    float                      emitRate     = 0.f;       // particles/sec (0이면 수동 emit)
-};
 
 class GFX;
 
 struct Particle {
     mu::Vec3        pos, vel;
+    mu::Vec3        motionVelocity = { 0.f, 0.f, 0.f };
+    mu::Vec3        emitterPosition = { 0.f, 0.f, 0.f };
+    mu::Mat4x4      emitterRotation;
     float           lifetime, maxLifetime;
     mu::Vec4        startColor;
     ColorGradient   colorOverLifetime;
     float           sizeBegin, sizeEnd, drag;
     mu::Vec3        gravity;
-    SpriteAnimation anim;
     float           rotation;
-    bool            additive;
+
+    // Mesh renderer fields
+    float           angularVelocity = 0.f;   // rad/sec, local Z axis
+    float           angularAngle    = 0.f;   // accumulated rotation (radians)
+    mu::Vec3        angularVelocity3D = { 0.f, 0.f, 0.f };
+    mu::Vec3        angularAngle3D    = { 0.f, 0.f, 0.f };
+    mu::Vec3        rotationRandom3D  = { 0.f, 0.f, 0.f };
+    mu::Mat4x4      baseRotation;            // fixed 3D orientation set at spawn
+    mu::Vec3        transformScale = { 1.f, 1.f, 1.f };
+    mu::Vec2        custom1Random   = { 0.f, 0.f };
+    mu::Vec2        custom2Random   = { 0.f, 0.f };
+
     // 'active' 필드 없음: pool_[0..activeCount_-1] 이 항상 활성 상태
 };
 
 class ParticleSystem {
 public:
-    static constexpr int kMaxParticles = 4096;
+    static constexpr int kDefaultMaxParticles = 4096;
+    static constexpr int kMaxParticles = kDefaultMaxParticles;  // backward-compat alias
 
-    void emit(const EmitterConfig& config, int count);
+    // Configures the system and sizes the pool. Must be called before emit(int).
+    void init(const ps::ParticleSystemConfig& config, int maxParticles = kDefaultMaxParticles);
+
+    // Emit particles using the config set by init().
+    void emit(int count);
+
+    // Start/stop continuous emission using the config set by init().
+    void startContinuous();
+
+    // Convenience overload: sets config then starts continuous emission.
+    void startContinuous(const ps::ParticleSystemConfig& config);
+
     void update(Seconds dt);
     void render(GFX& gfx) const;
-
-    void startContinuous(const EmitterConfig& config);
     void stopContinuous();
 
     int activeCount() const { return activeCount_; }
 
+    ps::ParticleSystemConfig&       config()       { return config_; }
+    const ps::ParticleSystemConfig& config() const { return config_; }
+
 private:
-    float randomFloat(float lo, float hi);
+    float    randomFloat(float lo, float hi);
+
+    void     spawnParticle();
+    void     emitScheduledBursts(float prevTime, float currTime);
+    mu::Vec3 sampleShapeOrigin();
+    mu::Vec3 sampleShapeDirection(const mu::Vec3& origin);
 
     // pool_[0..activeCount_-1] 이 항상 활성 파티클 (compact array)
-    std::array<Particle, kMaxParticles> pool_{};
-    int           activeCount_     = 0;
-    int           overwriteCursor_ = 0;   // full-pool 덮어쓰기용 round-robin 커서
-    std::mt19937  rng_{ std::random_device{}() };
+    std::vector<Particle> pool_ = std::vector<Particle>(kDefaultMaxParticles);
+    int          activeCount_     = 0;
+    int          overwriteCursor_ = 0;
+    int          maxParticles_    = kDefaultMaxParticles;
+    std::mt19937 rng_{ std::random_device{}() };
 
-    EmitterConfig continuousConfig_{};
-    float         emitAccum_  = 0.f;
-    bool          continuous_ = false;
+    ps::ParticleSystemConfig config_;
+    std::vector<int>          burstNextCycle_;
+    float                    emitAccumNew_   = 0.f;
+    bool                     continuousNew_  = false;
+    float                    systemTime_     = 0.f;
+    float                    delayRemaining_ = 0.f;
 };
 
 #endif  // __particleSystem_HPP

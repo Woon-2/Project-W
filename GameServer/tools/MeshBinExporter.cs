@@ -27,7 +27,7 @@ using UnityEngine;
 public class MeshBinExporter : EditorWindow {
 
     private MeshFilter  targetMeshFilter;
-    private string      texturePath    = "SwordSlash.dds";
+    private string      texturePath    = "Smoke12.dds";
     private string      outputPath     = "";
     private bool        flipZ          = false;  // enable if mesh appears mirrored in engine
 

@@ -28,6 +28,8 @@ ComPtr<ID3D12PipelineState> createPBRSkinnedShaderCSMDebug(ID3D12Device* device,
 ComPtr<ID3D12PipelineState> createBillboardShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBillboardShaderAdditive(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createMeshParticleShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createSmokeBlendCGShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createSwordSlashShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSignature* rootSig );
@@ -237,7 +239,8 @@ struct Material {
 
 struct PerInstanceData {
 	XMFLOAT4X4 world;
-	float       rotation;   // 빌보드 평면 내 회전 (라디안)
+	XMFLOAT4   stretchAxisAndMode; // xyz=world axis, w=1 when stretched
+	float      rotation;   // 빌보드 평면 내 회전 (라디안)
 	float       pad[3];
 };
 
@@ -285,6 +288,68 @@ struct PerFrameData {
 };
 
 }	// namespace MeshParticleShader
+
+// SmokeBlendCGShader
+namespace SmokeBlendCGShader {
+
+struct PerInstanceData {        // 112B
+	XMFLOAT4X4 world;           // 64B
+	XMFLOAT4   tint;            // 16B
+	XMFLOAT4   stretchAxisAndMode;// 16B, xyz=world axis, w=1 when stretched
+	float      rotation;        // 4B
+	XMFLOAT3   pad;             // 12B
+};
+
+struct PerDrawcallData {        // 288B
+	BindlessIndex idxMainTex;       // 16B
+	BindlessIndex idxNoiseTex;      // 16B
+	BindlessIndex idxFlowTex;       // 16B
+	BindlessIndex idxMaskTex;       // 16B
+	BindlessIndex idxCameraDepthTex;// 16B
+
+	u32t firstInstanceOffset;       // 4B
+	u32t hasNoiseTex;               // 4B
+	u32t hasFlowTex;                // 4B
+	u32t hasMaskTex;                // 4B
+
+	u32t  hasCameraDepthTex;        // 4B
+	float time;                     // 4B
+	float cameraNear;               // 4B
+	float cameraFar;                // 4B
+
+	XMFLOAT4 mainTexST;             // 16B
+	XMFLOAT4 noiseTexST;            // 16B
+	XMFLOAT4 flowTexST;             // 16B
+	XMFLOAT4 maskTexST;             // 16B
+
+	XMFLOAT4 speedMainTexUVNoiseZW; // 16B
+	XMFLOAT4 distortionSpeedXYPowerZ;// 16B
+	XMFLOAT4 color;                 // 16B
+	XMFLOAT4 uvRect;                // 16B, xy=offset, zw=scale
+
+	float emission;                 // 4B
+	float opacity;                  // 4B
+	float textureOpacity;           // 4B
+	float multiplyTexture;          // 4B
+
+	float useOnlyColor;             // 4B
+	float useFresnel;               // 4B
+	float fresnelPower;             // 4B
+	float fresnelScale;             // 4B
+
+	float useCenterGlow;            // 4B
+	float useDepth;                 // 4B
+	float depthPower;               // 4B
+	float pad0;                     // 4B
+};
+
+struct PerFrameData {           // 80B
+	XMFLOAT4X4 matViewProj;     // 64B
+	XMFLOAT3   cameraPosW;      // 12B
+	float      pad1;            // 4B
+};
+
+}  // namespace SmokeBlendCGShader
 
 // ShadowMapShader
 namespace ShadowMapShader {
@@ -454,6 +519,55 @@ struct PerFrameData {
     XMUINT3    _pfd0;
 };
 }  // namespace TerrainShadowMapCSMShader
+
+// SwordSlashShader
+namespace SwordSlashShader {
+
+// t0 — per-instance data in StructuredBuffer
+// world: row-major — CPU에서 mu::transpose().getXmf() 후 전달
+struct PerInstanceData {        // 112B
+    XMFLOAT4X4 world;           // 64B
+    XMFLOAT4   tint;            // 16B
+    XMFLOAT2   custom1;         // 8B   (Unity Custom1.xy)
+    XMFLOAT2   custom2;         // 8B   (Unity Custom2.xy)
+    float      t;               // 4B   (normalized particle age [0, 1])
+    float      customDataEnabled;// 4B
+    XMFLOAT2   pad;             // 8B
+};
+
+// b0 — bindless indices + instance offset + FX parameters (all per-drawcall)
+struct PerDrawcallData {        // 240B
+    BindlessIndex idxMainTex;       // 16B
+    BindlessIndex idxEmissionTex;   // 16B
+    BindlessIndex idxDissolveTex;   // 16B
+    BindlessIndex idxFlowTex;       // 16B
+    u32t          firstInstanceOffset; // 4B
+    XMUINT3       pad0;             // 12B
+    XMFLOAT2      speedMainTexUV;   // 8B
+    XMFLOAT2      speedDissolveUV;  // 8B
+    XMFLOAT2      speedFlow;        // 8B
+    XMFLOAT2      padUV0;           // 8B
+    XMFLOAT4      mainTexST;        // 16B
+    XMFLOAT4      emissionTexST;    // 16B
+    XMFLOAT4      dissolveTexST;    // 16B
+    XMFLOAT4      flowTexST;        // 16B
+    XMFLOAT4      addColor;         // 16B
+    float         emission;         // 4B
+    float         desaturation;     // 4B
+    float         opacity;          // 4B
+    float         flowPower;        // 4B
+    float         useSmoothDissolve;// 4B  (0=hard, 1=smooth)
+    float         time;             // 4B
+    XMFLOAT2      remapMinMax;      // 8B  (x=min, y=max)
+    XMFLOAT4      pad1;             // 16B
+};
+
+// b1 — per-frame
+struct PerFrameData {           // 64B
+    XMFLOAT4X4 matViewProj;     // 64B (row-major)
+};
+
+}  // namespace SwordSlashShader
 
 namespace UIShader {
 	struct Material {

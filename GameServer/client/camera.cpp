@@ -55,6 +55,15 @@ void Camera::updateGFX(GFX& gfx) {
 		.view = view_,
 		.proj = proj_
 	});
+	gfx.addCameraData(SmokeBlendCGPipeline::CameraData{
+		.view = view_,
+		.proj = proj_,
+		.pos = eye_
+	});
+	gfx.addCameraData(SwordSlashPipeline::CameraData{
+		.view = view_,
+		.proj = proj_
+	});
 }
 
 void Camera::setPerspective(mu::Degree fovy, float aspect, float nearz, float farz) {

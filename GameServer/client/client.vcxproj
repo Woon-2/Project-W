@@ -169,7 +169,7 @@
     <ClCompile Include="billboard.cpp" />
     <ClCompile Include="billboardPipeline.cpp" />
     <ClCompile Include="meshParticlePipeline.cpp" />
-    <ClCompile Include="meshParticleSystem.cpp" />
+    <ClCompile Include="smokeBlendCGPipeline.cpp" />
     <ClCompile Include="binaryImport.cpp" />
     <ClCompile Include="bvPipeline.cpp" />
     <ClCompile Include="camera.cpp" />
@@ -196,6 +196,10 @@
     <ClCompile Include="mesh.cpp" />
     <ClCompile Include="object.cpp" />
     <ClCompile Include="online\onlineGame.cpp" />
+    <ClCompile Include="particleRenderMode.cpp" />
+    <ClCompile Include="particleRenderSubmit.cpp" />
+    <ClCompile Include="particleEffect.cpp" />
+    <ClCompile Include="particleImporter.cpp" />
     <ClCompile Include="particleSystem.cpp" />
     <ClCompile Include="physicsWorld.cpp" />
     <ClCompile Include="rigidBody.cpp" />
@@ -212,11 +216,14 @@
     <ClCompile Include="ServerSession.cpp" />
     <ClCompile Include="shader.cpp" />
     <ClCompile Include="sharedResources.cpp" />
+    <ClCompile Include="simpleJson.cpp" />
     <ClCompile Include="skybox.cpp" />
     <ClCompile Include="skyboxPipeline.cpp" />
     <ClCompile Include="spriteAnimation.cpp" />
     <ClCompile Include="standalone\combatSystem.cpp" />
     <ClCompile Include="standalone\game.cpp" />
+    <ClCompile Include="swordSlashMaterial.cpp" />
+    <ClCompile Include="swordSlashPipeline.cpp" />
     <ClCompile Include="terrain.cpp" />
     <ClCompile Include="terrainPipeline.cpp" />
     <ClCompile Include="texloader\DDSTextureLoader12.cpp">
@@ -288,9 +295,13 @@
     <ClInclude Include="log.hpp" />
     <ClInclude Include="mesh.hpp" />
     <ClInclude Include="meshParticlePipeline.hpp" />
-    <ClInclude Include="meshParticleSystem.hpp" />
+    <ClInclude Include="smokeBlendCGPipeline.hpp" />
     <ClInclude Include="object.hpp" />
     <ClInclude Include="online\onlineGame.hpp" />
+    <ClInclude Include="particleRenderMode.hpp" />
+    <ClInclude Include="particleRenderSubmit.hpp" />
+    <ClInclude Include="particleEffect.hpp" />
+    <ClInclude Include="particleImporter.hpp" />
     <ClInclude Include="particleSystem.hpp" />
     <ClInclude Include="physicsWorld.hpp" />
     <ClInclude Include="rigidBody.hpp" />
@@ -302,11 +313,14 @@
     <ClInclude Include="ServerSession.hpp" />
     <ClInclude Include="shader.hpp" />
     <ClInclude Include="sharedResources.hpp" />
+    <ClInclude Include="simpleJson.hpp" />
     <ClInclude Include="skybox.hpp" />
     <ClInclude Include="skyboxPipeline.hpp" />
     <ClInclude Include="spriteAnimation.hpp" />
     <ClInclude Include="standalone\combatSystem.hpp" />
     <ClInclude Include="standalone\game.hpp" />
+    <ClInclude Include="swordSlashMaterial.hpp" />
+    <ClInclude Include="swordSlashPipeline.hpp" />
     <ClInclude Include="terrain.hpp" />
     <ClInclude Include="terrainPipeline.hpp" />
     <ClInclude Include="texloader\DDSTextureLoader12.h" />
@@ -326,6 +340,10 @@
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="meshParticle.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="smokeBlendCG.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
