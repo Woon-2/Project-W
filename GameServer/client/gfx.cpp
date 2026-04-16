@@ -130,15 +130,16 @@ void GFX::init() {
 	cmdListPool_.init(device_.Get(), CommandListUsage::ResourceLoading, 16u);
 
 	// Descriptor Heap 및 Pool들 생성
+	// RTV 슬롯: 3 backbuffer + 4 GBuffer × 3 rooms = 15 → 여유 포함 16
 	rtvHeap_ = DescriptorHeap( device_.Get(), D3D12_DESCRIPTOR_HEAP_DESC{
 		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-		.NumDescriptors = 4u,
+		.NumDescriptors = 16u,
 		.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
 		.NodeMask = 0
 	} );
 
-	// RTV Pool: RTVHeap의 [0, 4) 범위
-	rtvPool_ = DescriptorPool( 4u, rtvHeap_.cpuStart, rtvHeap_.gpuStart, rtvHeap_.desc.Type,
+	// RTV Pool: RTVHeap의 [0, 16) 범위
+	rtvPool_ = DescriptorPool( 16u, rtvHeap_.cpuStart, rtvHeap_.gpuStart, rtvHeap_.desc.Type,
 		rtvHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 		device_->GetDescriptorHandleIncrementSize(rtvHeap_.desc.Type)
 	);
@@ -253,6 +254,10 @@ void GFX::init() {
 	shaders_.try_emplace("PBRShaderCSMDebug", createPBRShaderCSMDebug(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRSkinnedShaderCSMDebug", createPBRSkinnedShaderCSMDebug(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("TerrainShaderCSMDebug", createTerrainShaderCSMDebug(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("PBRDeferredGBufferShader",        createPBRDeferredGBufferShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("PBRDeferredSkinnedGBufferShader", createPBRDeferredSkinnedGBufferShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("PBRDeferredLightingShader",       createPBRDeferredLightingShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("TerrainDeferredGBufferShader",    createTerrainDeferredGBufferShader(device_.Get(), defaultRootSig.get()));
 
 	rootSigs_.try_emplace("DefaultRootSignature", std::make_shared<DefaultRootSig>(std::move(defaultRootSig)));
 
@@ -276,6 +281,9 @@ void GFX::init() {
 	drawEventsSwordSlashPipeline_.reserve(256u);
 	drawEventsSkyboxPipeline_.reserve(10u);
 	drawEventsTerrainPipeline_.reserve(4u);
+	drawEventsTerrainDeferredPipeline_.reserve(4u);
+	drawEventsPBRDeferredPipeline_.reserve(1000u);
+	drawEventsPBRDeferredSkinnedPipeline_.reserve(1000u);
 }
 
 // 윈도우와 연결된 SwapChain을 만든다.
@@ -503,8 +511,76 @@ void GFX::createSwapChain() {
 	resourcesTerrainPipeline_.mainPass.lightData.init(
 		device_.Get(), sizeof(PBRShader::Light) * 32u, backBuffers_.size(), "Terrain_Main_LightData"
 	);
-
-
+	// Terrain Deferred Pipeline ----
+	resourcesTerrainDeferredPipeline_.shadowPass.perDrawcallData.init(
+		device_.Get(), sizeof(TerrainShadowMapShader::PerDrawcallData), backBuffers_.size(), "TerrainDeferred_Shadow_PerDrawcallData"
+	);
+	resourcesTerrainDeferredPipeline_.shadowPass.perFrameData = createConstantBufferArray(
+		device_.Get(), sizeof(TerrainShadowMapCSMShader::PerFrameData), MAX_CSM_CASCADES, backBuffers_.size(), "TerrainDeferred_Shadow_PerFrameData"
+	);
+	resourcesTerrainDeferredPipeline_.gBufferPass.perDrawcallData.init(
+		device_.Get(), sizeof(TerrainShader::PerDrawcallData), backBuffers_.size(), "TerrainDeferred_GBuffer_PerDrawcallData"
+	);
+	resourcesTerrainDeferredPipeline_.gBufferPass.perFrameData.init(
+		device_.Get(), sizeof(TerrainDeferredGBufferShader::PerFrameData), backBuffers_.size(), "TerrainDeferred_GBuffer_PerFrameData"
+	);
+	// PBR Deferred Pipeline ----
+	resourcesPBRDeferredPipeline_.shadowPass.perInstanceData.init(
+		device_.Get(), sizeof(ShadowMapCSMShader::PerInstanceData) * 1000u, backBuffers_.size(), "PBRDeferred_Shadow_PerInstanceData"
+	);
+	resourcesPBRDeferredPipeline_.shadowPass.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof(ShadowMapCSMShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBRDeferred_Shadow_PerDrawcallData"
+	);
+	resourcesPBRDeferredPipeline_.shadowPass.perFrameData = createConstantBufferArray(
+		device_.Get(), sizeof(ShadowMapCSMShader::PerFrameData), MAX_CSM_CASCADES, backBuffers_.size(), "PBRDeferred_Shadow_PerFrameData"
+	);
+	resourcesPBRDeferredPipeline_.gBufferPass.perInstanceData.init(
+		device_.Get(), sizeof(PBRDeferredGBufferShader::PerInstanceData) * 1000u, backBuffers_.size(), "PBRDeferred_GBuffer_PerInstanceData"
+	);
+	resourcesPBRDeferredPipeline_.gBufferPass.lightData.init(
+		device_.Get(), sizeof(PBRDeferredGBufferShader::Light) * 32u, backBuffers_.size(), "PBRDeferred_GBuffer_LightData"
+	);
+	resourcesPBRDeferredPipeline_.gBufferPass.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof(PBRDeferredGBufferShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBRDeferred_GBuffer_PerDrawcallData"
+	);
+	resourcesPBRDeferredPipeline_.gBufferPass.perFrameData.init(
+		device_.Get(), sizeof(PBRDeferredGBufferShader::PerFrameData), backBuffers_.size(), "PBRDeferred_GBuffer_PerFrameData"
+	);
+	// PBR Deferred Skinned Pipeline ----
+	resourcesPBRDeferredSkinnedPipeline_.shadowPass.perInstanceData.init(
+		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::PerInstanceData) * 1000u, backBuffers_.size(), "PBRDeferredSkinned_Shadow_PerInstanceData"
+	);
+	resourcesPBRDeferredSkinnedPipeline_.shadowPass.boneData.init(
+		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::BoneData) * 100'000u, backBuffers_.size(), "PBRDeferredSkinned_Shadow_BoneData"
+	);
+	resourcesPBRDeferredSkinnedPipeline_.shadowPass.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBRDeferredSkinned_Shadow_PerDrawcallData"
+	);
+	resourcesPBRDeferredSkinnedPipeline_.shadowPass.perFrameData = createConstantBufferArray(
+		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::PerFrameData), MAX_CSM_CASCADES, backBuffers_.size(), "PBRDeferredSkinned_Shadow_PerFrameData"
+	);
+	resourcesPBRDeferredSkinnedPipeline_.gBufferPass.perInstanceData.init(
+		device_.Get(), sizeof(PBRDeferredSkinnedGBufferShader::PerInstanceData) * 1000u, backBuffers_.size(), "PBRDeferredSkinned_GBuffer_PerInstanceData"
+	);
+	resourcesPBRDeferredSkinnedPipeline_.gBufferPass.lightData.init(
+		device_.Get(), sizeof(PBRDeferredSkinnedGBufferShader::Light) * 32u, backBuffers_.size(), "PBRDeferredSkinned_GBuffer_LightData"
+	);
+	resourcesPBRDeferredSkinnedPipeline_.gBufferPass.boneData.init(
+		device_.Get(), sizeof(PBRDeferredSkinnedGBufferShader::BoneData) * 100'000u, backBuffers_.size(), "PBRDeferredSkinned_GBuffer_BoneData"
+	);
+	resourcesPBRDeferredSkinnedPipeline_.gBufferPass.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof(PBRDeferredSkinnedGBufferShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBRDeferredSkinned_GBuffer_PerDrawcallData"
+	);
+	resourcesPBRDeferredSkinnedPipeline_.gBufferPass.perFrameData.init(
+		device_.Get(), sizeof(PBRDeferredSkinnedGBufferShader::PerFrameData), backBuffers_.size(), "PBRDeferredSkinned_GBuffer_PerFrameData"
+	);
+	// Deferred Lighting Pass ----
+	deferredLightingLightData_.init(
+		device_.Get(), sizeof(PBRShader::Light) * 32u, backBuffers_.size(), "DeferredLighting_LightData"
+	);
+	deferredLightingPerFrameData_.init(
+		device_.Get(), sizeof(PBRDeferredLightingShader::PerFrameData), backBuffers_.size(), "DeferredLighting_PerFrameData"
+	);
 
 	// 프레임 펜스 생성
 	// i번째 프레임을 렌더링한 후 i-(백버퍼 수 - 1)번째 프레임의 펜스를 기다리도록 한다.
@@ -573,6 +649,53 @@ void GFX::addLightData(const PBRSkinnedPipeline::LightData& lightData) {
 // 프레임 데이터를 입력한다.
 void GFX::addFrameData(const PBRSkinnedPipeline::FrameData& frameData) {
 	frameDataPBRSkinnedPipeline_ = frameData;
+}
+
+// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+void GFX::addDrawEvent(const PBRDeferredPipeline::DrawEvent& drawEvent) {
+	drawEventsPBRDeferredPipeline_.push_back(drawEvent);
+}
+
+// 카메라 데이터를 입력한다.
+void GFX::addCameraData(const PBRDeferredPipeline::CameraData& cameraData) {
+	cameraDataPBRDeferredPipeline_ = cameraData;
+}
+
+// 조명 데이터를 입력한다.
+void GFX::addLightData(const PBRDeferredPipeline::LightData& lightData) {
+	lightDataPBRDeferredPipeline_.push_back(lightData);
+	lightDataPBRDeferredLighting_.push_back(lightData);
+	if (lightData.isMainDirectionalLight) {
+		mainDirectionalLightPBRDeferredPipeline_ = lightData;
+	}
+}
+
+// 프레임 데이터를 입력한다.
+void GFX::addFrameData(const PBRDeferredPipeline::FrameData& frameData) {
+	frameDataPBRDeferredPipeline_ = frameData;
+}
+
+// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+void GFX::addDrawEvent(const PBRDeferredSkinnedPipeline::DrawEvent& drawEvent) {
+	drawEventsPBRDeferredSkinnedPipeline_.push_back(drawEvent);
+}
+
+// 카메라 데이터를 입력한다.
+void GFX::addCameraData(const PBRDeferredSkinnedPipeline::CameraData& cameraData) {
+	cameraDataPBRDeferredSkinnedPipeline_ = cameraData;
+}
+
+// 조명 데이터를 입력한다.
+void GFX::addLightData(const PBRDeferredSkinnedPipeline::LightData& lightData) {
+	lightDataPBRDeferredSkinnedPipeline_.push_back(lightData);
+	if (lightData.isMainDirectionalLight) {
+		mainDirectionalLightPBRDeferredSkinnedPipeline_ = lightData;
+	}
+}
+
+// 프레임 데이터를 입력한다.
+void GFX::addFrameData(const PBRDeferredSkinnedPipeline::FrameData& frameData) {
+	frameDataPBRDeferredSkinnedPipeline_ = frameData;
 }
 
 // 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
@@ -682,6 +805,24 @@ void GFX::addLightData(const TerrainPipeline::LightData& lightData) {
 void GFX::addFrameData( const TerrainPipeline::FrameData& frameData ) {
 	frameDataTerrainPipeline_ = frameData;
 }
+// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+void GFX::addDrawEvent(const TerrainDeferredPipeline::DrawEvent& drawEvent) {
+	drawEventsTerrainDeferredPipeline_.push_back(drawEvent);
+}
+// 카메라 데이터를 입력한다.
+void GFX::addCameraData(const TerrainDeferredPipeline::CameraData& cameraData) {
+	cameraDataTerrainDeferredPipeline_ = cameraData;
+}
+// 조명 데이터를 입력한다.
+void GFX::addLightData(const TerrainDeferredPipeline::LightData& lightData) {
+	if (lightData.isMainDirectionalLight) {
+		mainDirectionalLightTerrainDeferredPipeline_ = lightData;
+	}
+}
+// 프레임 데이터를 입력한다.
+void GFX::addFrameData(const TerrainDeferredPipeline::FrameData& frameData) {
+	frameDataTerrainDeferredPipeline_ = frameData;
+}
 
 void GFX::addRequestMeshBinLoad(const RequestMeshBinLoad& request)
 {
@@ -737,6 +878,13 @@ void GFX::loadAssets(const AssetConfigs& configs) {
 		configs.shadowMap.cascadeResolutions,
 		configs.shadowMap.cascadeCount,
 		backBuffers_.size(), srvTexPool_, dsvPool_
+	);
+	// GBuffer 생성 (deferred path용)
+	SharedResources::GBuffer::addGBuffer(
+		device_.Get(),
+		static_cast<u32t>(gClientRect.right  - gClientRect.left),
+		static_cast<u32t>(gClientRect.bottom - gClientRect.top),
+		backBuffers_.size(), rtvPool_, dsvPool_, srvTexPool_
 	);
 	// 파이프라인 자체 리소스 로드
 	// BVPipeline
@@ -949,6 +1097,13 @@ void GFX::render() {
 		}
 	}
 
+	// Deferred path: GBuffer를 RENDER_TARGET 상태로 전환하고 클리어
+	if (renderPath_ == RenderPath::Deferred && !SharedResources::GBuffer::gBufferData.empty()) {
+		const auto gbRoomIdx = frameIdx_ % backBuffers_.size();
+		SharedResources::GBuffer::transitionToWrite(gbRoomIdx, cmdListClear);
+		SharedResources::GBuffer::clearGBuffer(gbRoomIdx, cmdListClear);
+	}
+
 	const auto clRect = gClientRect;
 
 	const auto viewport = D3D12_VIEWPORT{
@@ -1137,6 +1292,52 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	auto terrainDeferredDispatcher = TerrainDeferredPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at("DefaultRootSignature"),
+		shaders_.at("TerrainShadowMapCSMShader"),
+		shaders_.at("TerrainDeferredGBufferShader"),
+		&dsvPool_,
+		cmdQ_, viewport, clRect,
+		&fenceToSignal, &resourcesTerrainDeferredPipeline_,
+		threadPool_, &cmdListPool_, std::move(drawEventsTerrainDeferredPipeline_),
+		mainDirectionalLightTerrainDeferredPipeline_,
+		cameraDataTerrainDeferredPipeline_, frameDataTerrainDeferredPipeline_,
+		frameIdx_ % backBuffers_.size()
+	);
+
+	auto pbrDeferredDispatcher = PBRDeferredPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_, &dsvPool_,
+		rootSigs_.at("DefaultRootSignature"),
+		shaders_.at("PBRDeferredGBufferShader"),
+		shaders_.at("ShadowMapCSMShader"),
+		cmdQ_, viewport, clRect,
+		&fenceToSignal, &resourcesPBRDeferredPipeline_, threadPool_, &cmdListPool_,
+		std::move(drawEventsPBRDeferredPipeline_), std::move(lightDataPBRDeferredPipeline_),
+		mainDirectionalLightPBRDeferredPipeline_, cameraDataPBRDeferredPipeline_,
+		frameDataPBRDeferredPipeline_,
+		frameIdx_ % backBuffers_.size()
+	);
+
+	auto pbrDeferredSkinnedDispatcher = PBRDeferredSkinnedPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_, &dsvPool_,
+		rootSigs_.at("DefaultRootSignature"),
+		shaders_.at("PBRDeferredSkinnedGBufferShader"),
+		shaders_.at("ShadowMapSkinnedCSMShader"),
+		cmdQ_, viewport, clRect,
+		&fenceToSignal, &resourcesPBRDeferredSkinnedPipeline_, threadPool_, &cmdListPool_,
+		std::move(drawEventsPBRDeferredSkinnedPipeline_), std::move(lightDataPBRDeferredSkinnedPipeline_),
+		mainDirectionalLightPBRDeferredSkinnedPipeline_, cameraDataPBRDeferredSkinnedPipeline_,
+		frameDataPBRDeferredSkinnedPipeline_,
+		frameIdx_ % backBuffers_.size()
+	);
+
 	// UI Pipeline의 Dispatch
 	auto uiPipelineDispatcher = UIPipeline::Dispatcher(
 		tmpDescriptorHeaps,
@@ -1156,50 +1357,195 @@ void GFX::render() {
 	// 각 파이프라인의 모든 그림자 패스를 수행한 후에 동기화되어
 	// 각 파이프라인의 모든 메인 패스를 수행해야 한다.
 
-	// threadPool_이 활성화된 경우엔 멀티스레드로 처리한다.
-	if (!threadPool_) {
-		samplePipelineDispatcher.updateGPUDataSingleThreaded();
-		samplePipelineDispatcher.drawSingleThreaded();
-		dumpLog();
+	// ============================================================
+	// Deferred rendering path
+	// ============================================================
+	if (renderPath_ == RenderPath::Deferred) {
+		const auto roomIdx = frameIdx_ % backBuffers_.size();
 
-		// == 그림자 패스들 ==
+		// --- Shadow passes ---
 		SharedResources::ShadowMap::getCSMAllReadyAsDepthWrite(
-			std::string(SharedResources::ShadowMap::kDefaultKey), frameIdx_ % backBuffers_.size(), cmdListPool_, cmdQ_.Get(), fenceToSignal
+			std::string(SharedResources::ShadowMap::kDefaultKey), roomIdx, cmdListPool_, cmdQ_.Get(), fenceToSignal
 		);
 		SharedResources::ShadowMap::clearCSMAllShadowMaps(
-			std::string(SharedResources::ShadowMap::kDefaultKey), frameIdx_ % backBuffers_.size(), cmdListPool_, cmdQ_.Get(), fenceToSignal
+			std::string(SharedResources::ShadowMap::kDefaultKey), roomIdx, cmdListPool_, cmdQ_.Get(), fenceToSignal
 		);
 
-		pbrPipelineDispatcher.sortDrawEvents();
-		pbrPipelineDispatcher.shadowPass();
-		dumpLog();
+		pbrDeferredDispatcher.sortDrawEvents();
+		pbrDeferredSkinnedDispatcher.sortDrawEvents();
 
-		pbrSkinnedPipelineDispatcher.sortDrawEvents();
-		pbrSkinnedPipelineDispatcher.shadowPass();
-		dumpLog();
+		if (!threadPool_) {
+			pbrDeferredDispatcher.shadowPass();
+			pbrDeferredSkinnedDispatcher.shadowPass();
+			terrainDeferredDispatcher.shadowPass();
+		} else {
+			pbrDeferredDispatcher.shadowPassMT();
+			pbrDeferredSkinnedDispatcher.shadowPassMT();
+			terrainDeferredDispatcher.shadowPassMT();
+		}
 
-		terrainPipelineDispatcher.shadowPass();
-		dumpLog();
-
-		// == 메인 패스들 ==
+		// --- GBuffer passes ---
 		SharedResources::ShadowMap::getCSMAllReadyAsShaderResource(
-			std::string(SharedResources::ShadowMap::kDefaultKey), frameIdx_ % backBuffers_.size(), cmdListPool_, cmdQ_.Get(), fenceToSignal
+			std::string(SharedResources::ShadowMap::kDefaultKey), roomIdx, cmdListPool_, cmdQ_.Get(), fenceToSignal
 		);
 
-		pbrPipelineDispatcher.mainPass();
-		dumpLog();
-		pbrSkinnedPipelineDispatcher.mainPass();
-		dumpLog();
+		if (!threadPool_) {
+			pbrDeferredDispatcher.gBufferPass();
+			pbrDeferredSkinnedDispatcher.gBufferPass();
+			terrainDeferredDispatcher.gBufferPass();
+		} else {
+			pbrDeferredDispatcher.gBufferPassMT();
+			pbrDeferredSkinnedDispatcher.gBufferPassMT();
+			terrainDeferredDispatcher.gBufferPassMT();
+		}
 
-		terrainPipelineDispatcher.mainPass();
-		dumpLog();
+		// --- Deferred Lighting pass ---
+		// Transition GBuffer to PIXEL_SHADER_RESOURCE for the lighting pass
+		{
+			CommandContext cmdCtxBarrier{};
+			DISPLAY_ERROR_STR(cmdListPool_.allocOne(CommandListUsage::RenderingSlave, cmdCtxBarrier),
+				"[GFX Error] GFX::render deferred: no command list for GBuffer barrier.", false);
+			if (cmdCtxBarrier.cmdList) {
+				DISPLAY_ERROR_DX_HR(cmdCtxBarrier.cmdAlloc->Reset(), false);
+				DISPLAY_ERROR_DX_HR(cmdCtxBarrier.cmdList->Reset(cmdCtxBarrier.cmdAlloc.Get(), nullptr), false);
+				SharedResources::GBuffer::transitionToRead(roomIdx, cmdCtxBarrier.cmdList.Get());
+				DISPLAY_ERROR_DX_HR(cmdCtxBarrier.cmdList->Close(), false);
+				ID3D12CommandList* barrierCmds[] = { cmdCtxBarrier.cmdList.Get() };
+				DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, barrierCmds), false);
+				fenceToSignal.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtxBarrier));
+			}
+		}
+
+		// Lighting pass: fullscreen triangle, reads GBuffer SRVs, writes to backbuffer
+		{
+			const auto& gbData = SharedResources::GBuffer::gBufferData[roomIdx];
+			const auto& csmData = SharedResources::ShadowMap::csmShadowMapData.at(
+				std::string(SharedResources::ShadowMap::kDefaultKey))[roomIdx];
+
+			// Build PerFrameData for deferred lighting
+			PBRDeferredLightingShader::PerFrameData lpfd{};
+			lpfd.globalAmbient = frameDataPBRDeferredPipeline_.globalAmbient.getXmf();
+			lpfd.lightCnt      = static_cast<u32t>(lightDataPBRDeferredLighting_.size());
+			lpfd.cascadeCount  = mainDirectionalLightPBRDeferredPipeline_.cascadeCount;
+			for (u32t ci = 0u; ci < mainDirectionalLightPBRDeferredPipeline_.cascadeCount; ++ci)
+				lpfd.idxShadowMap[ci] = csmData.cascades[ci].tex.idxSrv;
+			lpfd.cascadeSplitsFarV = mainDirectionalLightPBRDeferredPipeline_.cascadeSplitsFarV;
+			for (u32t i = 0u; i < mainDirectionalLightPBRDeferredPipeline_.cascadeCount; ++i)
+				lpfd.lightVP[i] = mu::transpose(
+					mainDirectionalLightPBRDeferredPipeline_.cascadeViews[i] * mainDirectionalLightPBRDeferredPipeline_.cascadeProjs[i]
+				).getXmf();
+			{
+				const auto& o = mainDirectionalLightPBRDeferredPipeline_.cascadeNormalOffsets;
+				lpfd.cascadeNormalOffsets = XMFLOAT4(o[0], o[1], o[2], o[3]);
+			}
+			// invView, invProj
+			{
+				const auto view = cameraDataPBRDeferredPipeline_.view;
+				const auto proj = cameraDataPBRDeferredPipeline_.proj;
+				lpfd.invView = mu::transpose(mu::inverse(view)).getXmf();
+				lpfd.invProj = mu::transpose(mu::inverse(proj)).getXmf();
+			}
+			lpfd.idxGB0   = gbData.gb0.idxSrv;
+			lpfd.idxGB1   = gbData.gb1.idxSrv;
+			lpfd.idxGB2   = gbData.gb2.idxSrv;
+			lpfd.idxGB3   = gbData.gb3.idxSrv;
+			lpfd.idxDepth = gbData.depth.idxSrv;
+			lpfd.debugMode = gBufferDebugMode_;
+			deferredLightingPerFrameData_.stage(roomIdx, &lpfd, 1u);
+
+			// Build light data
+			static auto lpLights = std::vector<PBRDeferredGBufferShader::Light>();
+			lpLights.resize(lightDataPBRDeferredLighting_.size());
+			const auto view = cameraDataPBRDeferredPipeline_.view;
+			std::ranges::transform(lightDataPBRDeferredLighting_, lpLights.begin(),
+				[view](const PBRDeferredPipeline::LightData& ld) {
+					return PBRDeferredGBufferShader::Light{
+						.color     = ld.color.getXmf(),
+						.falloff   = ld.falloff,
+						.posV      = mu::Vec3(mu::Vec4(ld.pos, 1.f) * view).getXmf(),
+						.cosTheta  = ld.cosTheta,
+						.dirV      = mu::NVec3(mu::Vec4(ld.dir, 0.f) * view).getXmf(),
+						.cosPhi    = ld.cosPhi,
+						.atten     = ld.atten.getXmf(),
+						.intensity = ld.intensity,
+						.type      = static_cast<int>(ld.type),
+						.padding   = {}
+					};
+				});
+			deferredLightingLightData_.stage(roomIdx, lpLights);
+			lpLights.clear();
+			lightDataPBRDeferredLighting_.clear();
+
+			// Record lighting pass command list
+			CommandContext cmdCtxLight{};
+			CommandContext cmdCtxCopy{};
+			DISPLAY_ERROR_STR(cmdListPool_.allocOne(CommandListUsage::RenderingSlave, cmdCtxLight),
+				"[GFX Error] GFX::render deferred: no command list for lighting pass.", false);
+			DISPLAY_ERROR_STR(cmdListPool_.allocOne(CommandListUsage::RenderingSlave, cmdCtxCopy),
+				"[GFX Error] GFX::render deferred: no command list for lighting pass copy.", false);
+			if (cmdCtxLight.cmdList) {
+				auto* cl  = cmdCtxLight.cmdList.Get();
+				auto* ca  = cmdCtxLight.cmdAlloc.Get();
+				DISPLAY_ERROR_DX_HR(ca->Reset(), false);
+				DISPLAY_ERROR_DX_HR(cl->Reset(ca, nullptr), false);
+
+				const auto rootSig = rootSigs_.at("DefaultRootSignature");
+				DISPLAY_ERROR_DX_VOID(cl->SetGraphicsRootSignature(rootSig->get()), false);
+				DISPLAY_ERROR_DX_VOID(cl->SetPipelineState(shaders_.at("PBRDeferredLightingShader").Get()), false);
+				DISPLAY_ERROR_DX_VOID(cl->OMSetRenderTargets(1u, &backBufferRtvs_[backbufIdx], false, nullptr), false);
+				DISPLAY_ERROR_DX_VOID(cl->RSSetViewports(1u, &viewport), false);
+				DISPLAY_ERROR_DX_VOID(cl->RSSetScissorRects(1u, &clRect), false);
+
+				auto heapsRaw = std::vector<ID3D12DescriptorHeap*>(tmpDescriptorHeaps.size());
+				std::ranges::transform(tmpDescriptorHeaps, heapsRaw.begin(),
+					[](ComPtr<ID3D12DescriptorHeap>& h) { return h.Get(); });
+				DISPLAY_ERROR_DX_VOID(cl->SetDescriptorHeaps(static_cast<UINT>(heapsRaw.size()), heapsRaw.data()), false);
+
+				const auto rootSigPtr = rootSigs_.at("DefaultRootSignature");
+				srvTexPool_.bind(cl, rootSigPtr->paramIdx("TexturePool"));
+				srvTexArrayPool_.bind(cl, rootSigPtr->paramIdx("TextureArrayPool"));
+				srvTexCubePool_.bind(cl, rootSigPtr->paramIdx("TextureCubePool"));
+				samPool_.bind(cl, rootSigPtr->paramIdx("SamplerPool"));
+				cmpSamPool_.bind(cl, rootSigPtr->paramIdx("ComparisonSamplerPool"));
+
+				deferredLightingPerFrameData_.bind(cl, rootSigPtr->paramIdx("PerFrameData"), roomIdx);
+				deferredLightingLightData_.bind(cl, rootSigPtr->paramIdx("LightData"), roomIdx);
+
+				DISPLAY_ERROR_DX_VOID(cl->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST), false);
+				DISPLAY_ERROR_DX_VOID(cl->DrawInstanced(3u, 1u, 0u, 0u), false);  // fullscreen triangle
+
+				auto hrClose = cl->Close();
+				DISPLAY_ERROR_DX_HR(hrClose, false);
+
+				DISPLAY_ERROR_DX_HR(cmdCtxCopy.cmdAlloc->Reset(), false);
+				DISPLAY_ERROR_DX_HR(cmdCtxCopy.cmdList->Reset(cmdCtxCopy.cmdAlloc.Get(), nullptr), false);
+
+				copyResource( cmdCtxCopy.cmdList.Get(),
+					SharedResources::GBuffer::gBufferData[roomIdx].depth.res.Get(),
+					depthBuffers_[backbufIdx].Get(),
+					D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+					D3D12_RESOURCE_STATE_DEPTH_WRITE
+				);
+
+				auto hrClose2 = cmdCtxCopy.cmdList->Close();
+				DISPLAY_ERROR_DX_HR(hrClose2, false);
+
+				if (hrClose >= 0) {
+					ID3D12CommandList* staged[] = { cl, cmdCtxCopy.cmdList.Get() };
+					DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(2u, staged), false);
+				}
+				fenceToSignal.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtxLight));
+				fenceToSignal.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtxCopy));
+			}
+		}
+
+		// Forward passes that always run regardless of render path
+		// (Terrain is now rendered into GBuffer above, so it is excluded here)
+		skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
+		skyboxPipelineDispatcher.drawSingleThreaded();
 
 		bvPipelineDispatcher.updateGPUDataSingleThreaded();
 		bvPipelineDispatcher.drawSingleThreaded();
-		dumpLog();
-
-		skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
-		skyboxPipelineDispatcher.drawSingleThreaded();
 
 		billboardPipelineDispatcher.updateGPUDataSingleThreaded();
 		billboardPipelineDispatcher.drawSingleThreaded();
@@ -1214,62 +1560,126 @@ void GFX::render() {
 		swordSlashDispatcher.drawSingleThreaded();
 		dumpLog();
 	}
-	else {
-		samplePipelineDispatcher.updateGPUDataMultiThreaded();
-		samplePipelineDispatcher.drawMultiThreaded();
-		dumpLog();
 
-		// == 그림자 패스들 ==
-		SharedResources::ShadowMap::getCSMAllReadyAsDepthWrite(
-			std::string(SharedResources::ShadowMap::kDefaultKey), frameIdx_ % backBuffers_.size(), cmdListPool_, cmdQ_.Get(), fenceToSignal
-		);
-		SharedResources::ShadowMap::clearCSMAllShadowMaps(
-			std::string(SharedResources::ShadowMap::kDefaultKey), frameIdx_ % backBuffers_.size(), cmdListPool_, cmdQ_.Get(), fenceToSignal
-		);
+	// ============================================================
+	// Forward rendering path
+	// ============================================================
+	if (renderPath_ == RenderPath::Forward) {
+		// threadPool_이 활성화된 경우엔 멀티스레드로 처리한다.
+		if (!threadPool_) {
+			samplePipelineDispatcher.updateGPUDataSingleThreaded();
+			samplePipelineDispatcher.drawSingleThreaded();
+			dumpLog();
 
-		pbrPipelineDispatcher.sortDrawEvents();
-		pbrPipelineDispatcher.shadowPassMT();
-		dumpLog();
+			// == 그림자 패스들 ==
+			SharedResources::ShadowMap::getCSMAllReadyAsDepthWrite(
+				std::string(SharedResources::ShadowMap::kDefaultKey), frameIdx_ % backBuffers_.size(), cmdListPool_, cmdQ_.Get(), fenceToSignal
+			);
+			SharedResources::ShadowMap::clearCSMAllShadowMaps(
+				std::string(SharedResources::ShadowMap::kDefaultKey), frameIdx_ % backBuffers_.size(), cmdListPool_, cmdQ_.Get(), fenceToSignal
+			);
 
-		pbrSkinnedPipelineDispatcher.sortDrawEvents();
-		pbrSkinnedPipelineDispatcher.shadowPassMT();
-		dumpLog();
+			pbrPipelineDispatcher.sortDrawEvents();
+			pbrPipelineDispatcher.shadowPass();
+			dumpLog();
 
-		terrainPipelineDispatcher.shadowPassMT();
-		dumpLog();
+			pbrSkinnedPipelineDispatcher.sortDrawEvents();
+			pbrSkinnedPipelineDispatcher.shadowPass();
+			dumpLog();
 
-		// == 메인 패스들 ==
-		SharedResources::ShadowMap::getCSMAllReadyAsShaderResource(
-			std::string(SharedResources::ShadowMap::kDefaultKey), frameIdx_ % backBuffers_.size(), cmdListPool_, cmdQ_.Get(), fenceToSignal
-		);
+			terrainPipelineDispatcher.shadowPass();
+			dumpLog();
 
-		pbrPipelineDispatcher.mainPassMT();
-		dumpLog();
-		pbrSkinnedPipelineDispatcher.mainPassMT();
-		dumpLog();
+			// == 메인 패스들 ==
+			SharedResources::ShadowMap::getCSMAllReadyAsShaderResource(
+				std::string(SharedResources::ShadowMap::kDefaultKey), frameIdx_ % backBuffers_.size(), cmdListPool_, cmdQ_.Get(), fenceToSignal
+			);
 
-		terrainPipelineDispatcher.mainPassMT();
-		dumpLog();
+			pbrPipelineDispatcher.mainPass();
+			dumpLog();
+			pbrSkinnedPipelineDispatcher.mainPass();
+			dumpLog();
 
-		bvPipelineDispatcher.updateGPUDataMultiThreaded();
-		bvPipelineDispatcher.drawMultiThreaded();
-		dumpLog();
+			terrainPipelineDispatcher.mainPass();
+			dumpLog();
 
-		skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
-		skyboxPipelineDispatcher.drawSingleThreaded();
+			bvPipelineDispatcher.updateGPUDataSingleThreaded();
+			bvPipelineDispatcher.drawSingleThreaded();
+			dumpLog();
 
-		billboardPipelineDispatcher.updateGPUDataMultiThreaded();
-		billboardPipelineDispatcher.drawMultiThreaded();
+			skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
+			skyboxPipelineDispatcher.drawSingleThreaded();
 
-		smokeBlendCGDispatcher.updateGPUDataMultiThreaded();
-		smokeBlendCGDispatcher.drawMultiThreaded();
+			billboardPipelineDispatcher.updateGPUDataSingleThreaded();
+			billboardPipelineDispatcher.drawSingleThreaded();
 
-		meshParticleDispatcher.updateGPUDataMultiThreaded();
-		meshParticleDispatcher.drawMultiThreaded();
+			smokeBlendCGDispatcher.updateGPUDataMultiThreaded();
+			smokeBlendCGDispatcher.drawMultiThreaded();
 
-		swordSlashDispatcher.updateGPUDataMultiThreaded();
-		swordSlashDispatcher.drawMultiThreaded();
-		dumpLog();
+			meshParticleDispatcher.updateGPUDataMultiThreaded();
+			meshParticleDispatcher.drawMultiThreaded();
+
+			swordSlashDispatcher.updateGPUDataMultiThreaded();
+			swordSlashDispatcher.drawMultiThreaded();
+			dumpLog();
+		}
+		else {
+			samplePipelineDispatcher.updateGPUDataMultiThreaded();
+			samplePipelineDispatcher.drawMultiThreaded();
+			dumpLog();
+
+			// == 그림자 패스들 ==
+			SharedResources::ShadowMap::getCSMAllReadyAsDepthWrite(
+				std::string(SharedResources::ShadowMap::kDefaultKey), frameIdx_ % backBuffers_.size(), cmdListPool_, cmdQ_.Get(), fenceToSignal
+			);
+			SharedResources::ShadowMap::clearCSMAllShadowMaps(
+				std::string(SharedResources::ShadowMap::kDefaultKey), frameIdx_ % backBuffers_.size(), cmdListPool_, cmdQ_.Get(), fenceToSignal
+			);
+
+			pbrPipelineDispatcher.sortDrawEvents();
+			pbrPipelineDispatcher.shadowPassMT();
+			dumpLog();
+
+			pbrSkinnedPipelineDispatcher.sortDrawEvents();
+			pbrSkinnedPipelineDispatcher.shadowPassMT();
+			dumpLog();
+
+			terrainPipelineDispatcher.shadowPassMT();
+			dumpLog();
+
+			// == 메인 패스들 ==
+			SharedResources::ShadowMap::getCSMAllReadyAsShaderResource(
+				std::string(SharedResources::ShadowMap::kDefaultKey), frameIdx_ % backBuffers_.size(), cmdListPool_, cmdQ_.Get(), fenceToSignal
+			);
+
+			pbrPipelineDispatcher.mainPassMT();
+			dumpLog();
+			pbrSkinnedPipelineDispatcher.mainPassMT();
+			dumpLog();
+
+			terrainPipelineDispatcher.mainPassMT();
+			dumpLog();
+
+			bvPipelineDispatcher.updateGPUDataMultiThreaded();
+			bvPipelineDispatcher.drawMultiThreaded();
+			dumpLog();
+
+			skyboxPipelineDispatcher.updateGPUDataSingleThreaded();
+			skyboxPipelineDispatcher.drawSingleThreaded();
+
+			billboardPipelineDispatcher.updateGPUDataMultiThreaded();
+			billboardPipelineDispatcher.drawMultiThreaded();
+
+			smokeBlendCGDispatcher.updateGPUDataMultiThreaded();
+			smokeBlendCGDispatcher.drawMultiThreaded();
+
+			meshParticleDispatcher.updateGPUDataMultiThreaded();
+			meshParticleDispatcher.drawMultiThreaded();
+
+			swordSlashDispatcher.updateGPUDataMultiThreaded();
+			swordSlashDispatcher.drawMultiThreaded();
+			dumpLog();
+		}
 	}
 
 	// Ui Pipeline의 rendering

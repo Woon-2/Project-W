@@ -1,7 +1,8 @@
-### 물리 아키텍처 (Phase 1–5 완료)
+### 물리 아키텍처 (Phase 1–8 완료)
 
 연관 파일: `rigidBody.hpp/cpp`, `physicsWorld.hpp/cpp`, `constraint.hpp`,
-`contactConstraint.hpp/cpp`, `broadPhase.hpp/cpp`, `collision.hpp/cpp`, `object.hpp/cpp`
+`contactConstraint.hpp/cpp`, `broadPhase.hpp/cpp`, `collision.hpp/cpp`, `object.hpp/cpp`,
+`jointConstraint.hpp/cpp`, `ragdollDef.hpp/cpp`, `ragdoll.hpp/cpp`, `activeRagdoll.hpp/cpp`
 
 ---
 
@@ -9,10 +10,12 @@
 
 ```
 PhysicsWorld
- ├─ std::vector<Entry>             // { RigidBody*, onRebuildBVH 콜백 }
+ ├─ std::vector<Entry>             // { RigidBody*, onRebuildBVH 콜백, collisionGroup, collisionMask }
  ├─ SAPBroadPhase                  // X축 Sort-and-Sweep, O(n log n)
  ├─ std::optional<TerrainCollider> // 지형 충돌 (BroadPhase 우회)
- └─ std::vector<ContactConstraint> // 매 step 재생성
+ ├─ std::vector<ContactConstraint> // 매 step 재생성
+ ├─ std::vector<unique_ptr<Constraint>> jointConstraints_  // 소유 joint (독립 사용)
+ └─ std::vector<Constraint*>       jointRefs_              // 비소유 ref (Ragdoll용)
 
 RigidBody
  ├─ BodyState curr, prev           // 더블 버퍼 (렌더 보간용)
@@ -21,12 +24,27 @@ RigidBody
  └─ Dynamic 전용: invMass, invInertiaLocal/World, forceAccum, torqueAccum,
                   linearDamping, angularDamping, restitution, friction
 
-ContactConstraint : Constraint
- └─ PGS velocity solve (Normal impulse + Coulomb friction)
-    Baumgarte bias로 위치 수정 (split impulse는 solvePosition()에서 no-op)
+ContactConstraint : Constraint     // PGS velocity (Normal + Coulomb friction) + Baumgarte
+BallSocketJoint   : Constraint     // 3 translational DOF 제거, bilateral warmstart
+HingeJoint        : Constraint     // 1 rotational DOF + optional angle limits, refOrient
+ConeTwistJoint    : Constraint     // swing cone + twist limits, T-pose refOrient
+
+Ragdoll
+ ├─ std::vector<RagdollBone>       // { boneIdx, body*(비소유), parentJoint*(비소유), capsuleOffset }
+ ├─ std::vector<unique_ptr<RigidBody>>   bodies_  // 소유
+ └─ std::vector<unique_ptr<Constraint>> joints_  // 소유
+
+Object
+ ├─ RigidBody body_                // 인라인 (항상 유효)
+ └─ unique_ptr<Ragdoll> ragdoll_   // null = 비활성
 ```
 
-`Object`는 `RigidBody body_`를 인라인으로 소유한다. `PhysicsWorld`는 포인터만 참조 (등록/해제 패턴).
+`Object`는 `RigidBody body_`를 인라인으로, `Ragdoll` (활성 시)을 `unique_ptr`로 소유한다.
+`PhysicsWorld`는 모든 포인터를 비소유로 참조 (등록/해제 패턴).
+
+**충돌 필터링:** `Entry::collisionGroup` + `collisionMask` 비트필드.
+조건: `(a.group & b.mask) != 0 && (b.group & a.mask) != 0` 일 때만 충돌 처리.
+Ragdoll 뼈대: group=2, mask=0xFFFD → 뼈대끼리 self-collision 필터링.
 
 ---
 
@@ -46,11 +64,78 @@ generateContacts()
 
 solveConstraints(dt)
     ├─ prepare(dt)  : rA/rB, tangent frame, effMass, Baumgarte bias 계산
-    ├─ PGS × 10 iter: solveVelocity() — Normal impulse + Coulomb friction
+    │               + joint warmstart (accImpulse 이전 프레임 값 재적용)
+    ├─ PGS × N iter : solveVelocity() — Contact + BallSocket/Hinge/ConeTwist 혼합
+    │               N = solverIterations_ (기본 10, ragdoll 활성 시 20)
     └─ solvePosition(): no-op (Baumgarte only)
 ```
 
 > Phase 4(TerrainCollider) 완료로 중력이 활성화됨. (`physicsWorld.cpp` integrate)
+
+---
+
+## Joint Constraint 설계 원칙 (Phase 6)
+
+**공통 규약:**
+- `kJointBeta = 0.1f` (ContactConstraint의 `kBaumgarteBeta = 0.2f`보다 softer)
+- kSlop 없음 — joint는 위치 오차가 0이어야 함
+- 모든 joint에 warmstart (`accImpulse` 누적값 유지)
+- row-vector convention: `K_ij = (invMA+invMB)*δij + dot(rA×ei, (rA×ej)*iA) + dot(rB×ei, (rB×ej)*iB)`
+
+**BallSocketJoint**: 3×3 K matrix inversion, bilateral (clamp 없음)
+
+**HingeJoint**:
+- 3 translational rows (BallSocket 동일) + 2 angular alignment rows (hinge 수직축)
+- limit row (one-sided): `refOrient_ = conj(bodyA.orient) * bodyB.orient` at build time
+- limit clamp: lo 위반 → `accImp >= 0`, hi 위반 → `accImp <= 0`
+
+**ConeTwistJoint**:
+- 3 translational rows + swing cone row (one-sided, `coneAccImp >= 0`)
+- twist row (bilateral, clamped to `[-twistLimit, +twistLimit]`)
+- `swingTwistDecompose`: twist = q 성분 twistAxis 방향 투영, swing = q * conj(twist)
+- `coneHalfAngle` max = `pi * 0.85f` (gimbal lock 방지)
+
+---
+
+## Ragdoll 소유권 모델 (Phase 7)
+
+```
+Ragdoll::bodies_  ──owns──>  unique_ptr<RigidBody>
+Ragdoll::joints_  ──owns──>  unique_ptr<Constraint>
+PhysicsWorld::entries_       ──ref──>  RigidBody*     (registerBody/unregisterBody)
+PhysicsWorld::jointRefs_     ──ref──>  Constraint*    (addJointRef/removeJointRef)
+```
+
+**destroy() 순서 보장**: joints 먼저 제거 (joint가 body raw ptr 참조), bodies 나중 제거.
+
+**syncFromPose**: row-vector 규약 `boneWorldMat = localAnimMat * parentWorldMat`
+**syncToPose**: `localMat = boneWorldMat / parentWorldMat` (= boneWorldMat * inv(parent))
+**seedFromFinalXforms**: `boneWorldMat = bone.toDress * finalXformData[i] * objectWorldMat`
+
+**Object::update() ragdoll override**:
+```cpp
+// ragdoll 활성 시 finalXformData를 body transform으로 직접 덮어씀
+finalXforms[boneIdx] = bone.toLocal * (boneWorldMat / renderState_.world);
+// boneWorldMat: orient=body->orient(), translation=bone origin (캡슐 중심 - orient.rotate(capsuleOffset))
+```
+
+---
+
+## ActiveRagdollController 설계 (Phase 8)
+
+**PD 토크 공식** (bone당):
+```
+q = target * conj(current)       // 오차 quaternion
+if q.w < 0: q = -q               // 최단 경로 보장
+error = q.xyz * 2                // 소각도 근사: scaled axis-angle
+torque = kp * error - kd * omega
+body->applyTorqueImpulse(torque * dt)
+```
+
+**onImpact**: kp만 0으로 감소 (kd 유지 → 에너지 흡수 유지), impactRecoveryTime_ 동안 선형 복원.
+
+**목표 orientation 계산**: DFS로 `targetPose` AnimFrame에서 bone별 world orientation 계산
+(`boneWorldMat = convertAnimFrameToMatrix(pose[i]) * parentWorldMat`, row-vector 규약).
 
 ---
 
@@ -197,18 +282,3 @@ effective mass 오산 방지). `applyImpulse()`는 이미 `invMass == 0` guard �
 
 `ContactPoint` struct는 `collision.hpp`에 정의한다 (Phase 4에서 이동).
 `contactConstraint.hpp`는 `rigidBody.hpp → collision.hpp` 체인으로 이를 획득한다.
-
----
-
-## Phase 로드맵
-
-| Phase | 목표 | 상태 |
-|-------|------|------|
-| 1 | PhysicsWorld + RigidBody 골격, Kinematic 이동 | 완료 |
-| 2 | Dynamic body + 힘/관성 적분 | 완료 |
-| 3 | ContactConstraint + PGS solver | 완료 |
-| 4 | TerrainCollider + 지형 충돌 (중력 활성화) | 완료 |
-| 5 | SAPBroadPhase (O(n²) → O(n log n)) | 완료 |
-| 6 | Joint Constraints (BallSocket, Hinge, ConeTwist) | 미구현 |
-| 7 | Ragdoll 구조 | 미구현 |
-| 8 | ActiveRagdollController | 미구현 |

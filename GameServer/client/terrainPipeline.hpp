@@ -55,6 +55,7 @@ struct Resources {
         ConstantBuffer   perFrameData;     // b1
         StructuredBuffer lightData;        // t1
     } mainPass;
+
 };
 
 // Ensures that the TerrainPipeline VBV cache exists in mesh.vbViewsByPipeline.

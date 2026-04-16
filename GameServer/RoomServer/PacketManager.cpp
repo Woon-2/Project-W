@@ -14,6 +14,14 @@ void PacketManager::handlePacket(GameSession* session, byte* buffer, int32 len) 
 		handleCMovePacket(session, buffer, len);
 		break;
 
+	case PacketType::C_MouseMove:
+		handleCMouseMovePacket(session, buffer, len);
+		break;
+
+	case PacketType::C_Attack:
+		handleCAttackPacket(session, buffer, len);
+		break;
+
 	default:
 		std::cout << "Unknown packet type received. Type: " << static_cast<uint16>(header->type) << '\n';
 		break;
@@ -25,7 +33,6 @@ void PacketManager::handleCMovePacket(GameSession* session, byte* buffer, int32 
 	auto cMvPktClone = ObjectPool<CMovePacket>::pop();
 
 	cMvPktClone->pos = clientMovePacket->pos;
-	cMvPktClone->orient = clientMovePacket->orient;
 	cMvPktClone->velocity = clientMovePacket->velocity;
 	
 	session->room()->doAsync([session, cMvPktClone]() {
@@ -33,7 +40,25 @@ void PacketManager::handleCMovePacket(GameSession* session, byte* buffer, int32 
 	});
 }
 
-SendBuffer* PacketManager::makeSEnterPacket(const PlayerInfo& playerInfo, const std::vector<ObjectInfo>& objInfos) {
+void PacketManager::handleCMouseMovePacket(GameSession* session, byte* buffer, int32 len) {
+	auto clientMouseMovePacket = reinterpret_cast<CMouseMovePacket*>(buffer);
+	auto cMouseMvPktClone = ObjectPool<CMouseMovePacket>::pop();
+
+	cMouseMvPktClone->yawRadian = clientMouseMovePacket->yawRadian;
+
+	session->room()->doAsync([session, cMouseMvPktClone]() {
+		session->room()->rotate(session->id(), cMouseMvPktClone);
+	});
+}
+
+void PacketManager::handleCAttackPacket( GameSession* session, byte* buffer, int32 len ) {
+	uint64 clientMs = reinterpret_cast<CAttackPacket*>(buffer)->clientMs;
+	session->room()->doAsync( [ session, clientMs ]() {
+		session->room()->attack( session->id(), clientMs );
+		} );
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSEnterPacket(const PlayerInfo& playerInfo, const std::vector<ObjectInfo>& objInfos) {
 	int32 objCnt = static_cast<int32>(objInfos.size());
 	auto sendBuffer = SendBufferManager::open(sizeof(SEnterPacket) + sizeof(ObjectInfo) * objCnt);
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
@@ -60,7 +85,7 @@ SendBuffer* PacketManager::makeSEnterPacket(const PlayerInfo& playerInfo, const 
 	return sendBuffer;
 }
 
-SendBuffer* PacketManager::makeSEnterOtherPacket(const PlayerInfo& playerInfo) {
+std::shared_ptr<SendBuffer> PacketManager::makeSEnterOtherPacket(const PlayerInfo& playerInfo) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SEnterOtherPacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
@@ -74,7 +99,7 @@ SendBuffer* PacketManager::makeSEnterOtherPacket(const PlayerInfo& playerInfo) {
 	return sendBuffer;
 }
 
-SendBuffer* PacketManager::makeSLeavePacket(uint16 playerId) {
+std::shared_ptr<SendBuffer> PacketManager::makeSLeavePacket(uint16 playerId) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SLeavePacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
@@ -88,18 +113,89 @@ SendBuffer* PacketManager::makeSLeavePacket(uint16 playerId) {
 	return sendBuffer;
 }
 
-SendBuffer* PacketManager::makeSMovePacket(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
+std::shared_ptr<SendBuffer> PacketManager::makeSMovePacket(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SMovePacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
 	auto sMvPkt = bw.reserve<SMovePacket>();
 	sMvPkt->playerId = playerId;
 	sMvPkt->pos = pos;
-	sMvPkt->orient = orient;
 	sMvPkt->velocity = velocity;
 
 	sMvPkt->size = bw.writeSize();
 	sMvPkt->type = PacketType::S_Move;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSMouseMovePacket(uint16 playerId, float yawRad) {
+	auto sendBuffer = SendBufferManager::open(sizeof(SMouseMovePacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto sMouseMvPkt = bw.reserve<SMouseMovePacket>();
+	sMouseMvPkt->playerId = playerId;
+	sMouseMvPkt->yawRadian = yawRad;
+
+	sMouseMvPkt->size = bw.writeSize();
+	sMouseMvPkt->type = PacketType::S_MouseMove;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSNpcMovePacket(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity) {
+	auto sendBuffer = SendBufferManager::open(sizeof(SNpcMovePacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto sNpcMvPkt = bw.reserve<SNpcMovePacket>();
+	sNpcMvPkt->npcId = npcId;
+	sNpcMvPkt->pos = pos;
+	sNpcMvPkt->orient = orient;
+	sNpcMvPkt->velocity = velocity;
+
+	sNpcMvPkt->size = bw.writeSize();
+	sNpcMvPkt->type = PacketType::S_NpcMove;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSNpcAttackPacket( uint16 npcId ) {
+	auto sendBuffer = SendBufferManager::open( sizeof( SNpcAttackPacket ) );
+	auto bw = BufferWriter( sendBuffer->data(), sendBuffer->allocSize() );
+
+	auto pkt = bw.reserve<SNpcAttackPacket>();
+	pkt->npcId = npcId;
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_NpcAttack;
+
+	sendBuffer->close( bw.writeSize() );
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSHitPacket(uint16 targetId, int32 newHp) {
+	auto sendBuffer = SendBufferManager::open(sizeof(SHitPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<SHitPacket>();
+	pkt->targetId = targetId;
+	pkt->newHp    = newHp;
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_Hit;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSTimeSyncPacket(uint64 serverMs) {
+	auto sendBuffer = SendBufferManager::open(sizeof(STimeSyncPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<STimeSyncPacket>();
+	pkt->serverMs = serverMs;
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_TimeSync;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;

@@ -4,6 +4,8 @@
 #include "job.hpp"
 #include "objectPool.hpp"
 
+using CallbackType = std::function<void()>;
+
 class JobQueue {
 public:
 	JobQueue() = default;

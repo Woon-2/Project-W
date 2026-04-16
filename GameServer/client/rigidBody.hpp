@@ -106,6 +106,11 @@ public:
     // Directly modifies linearVel_ and omega_ (bypasses the force accumulator).
     void MU_CALLCONV applyImpulse(mu::Vec3 j, mu::Vec3 worldPoint);
 
+    // Apply an instantaneous angular impulse (torque impulse) in world space.
+    // Directly modifies omega_ without affecting linear velocity.
+    // Used by joint constraints and ActiveRagdollController.
+    void MU_CALLCONV applyTorqueImpulse(mu::Vec3 tau);
+
     // Zero the force and torque accumulators.  Call at the end of each tick.
     void clearAccumulators();
 

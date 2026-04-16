@@ -26,6 +26,12 @@ public:
 
 	IEventBus* eventBus() override { return &eventBus_; }
 
+	void triggerDeath() override {
+		animTimeDeath_ = 0s;
+		cooldownDeath_ = 200ms;
+		dead_ = true;
+	}
+
 	Seconds runAnimTime() const { return animTimeRun_; }
 	Seconds runDuration() const { return targetClip("Player_Run_Forward")->duration; }
 	bool isRunning() const { return (tRunForward_ + tRunBackward_ + tRunLeft_ + tRunRight_) > 0.f; }
@@ -74,6 +80,12 @@ public:
 	void onCalcLocal(PassKey<AnimSystem>) override;
 
 	IEventBus* eventBus() override { return &eventBus_; }
+
+	void triggerDeath() override {
+		animTimeDeath_ = 0s;
+		cooldownDeath_ = 200ms;
+		dead_ = true;
+	}
 
 private:
 	std::vector<AnimFrame> framesBlended_{};
@@ -450,6 +462,7 @@ struct RenderState {
 	std::vector<mu::Mat4x4> worldBVs;
 	std::unique_ptr<AnimBlender> animBlender;
 	const Model* pModel;
+	bool shouldCull;
 };
 
 struct Equipment {
@@ -548,8 +561,17 @@ public:
 	void setHp(i32t hp) { hp_ = hp; }
 	i32t hp() const { return hp_; }
 
+	void setDead(bool dead) {
+		isDead_ = dead;
+		if (dead && renderState_.animBlender) {
+			renderState_.animBlender->triggerDeath();
+		}
+	}
+	bool isDead() const { return isDead_; }
 	void setMaxHp(i32t v) { maxHp_ = v; }
 	i32t maxHp() const    { return maxHp_; }
+
+	void setCulled(bool culled) { renderState_.shouldCull = culled; }
 
 protected:
 	RigidBody body_{};
@@ -568,6 +590,7 @@ protected:
 	i32t id_{ -1 };
 
 	i32t hp_{};
+	bool isDead_ = false;
 	i32t maxHp_{};
 
 private:
@@ -601,6 +624,11 @@ public:
 
 		animSystem.trackAnimBlender(renderState_.animBlender.get());
 	}
+
+	// 원격 플레이어 네트워크 보간 상태. 로컬 플레이어에서는 사용되지 않음.
+	// onlineGame.cpp의 Game 루프에서 관리됨.
+	Seconds netInterpDuration_{ 1s / 20.f };
+	Seconds netInterpAcc_{ 0s };
 
 private:
 	EventBus eventBus_{};

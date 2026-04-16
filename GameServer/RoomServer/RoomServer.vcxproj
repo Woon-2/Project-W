@@ -121,12 +121,14 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
-      <SDLCheck>true</SDLCheck>
+      <SDLCheck>false</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>rspch.hpp</PrecompiledHeaderFile>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <FloatingPointModel>Fast</FloatingPointModel>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -138,12 +140,14 @@
       <WarningLevel>Level3</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>true</SDLCheck>
+      <SDLCheck>false</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>rspch.hpp</PrecompiledHeaderFile>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <FloatingPointModel>Fast</FloatingPointModel>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -156,14 +160,18 @@
     <ClCompile Include="collision.cpp" />
     <ClCompile Include="errorHandling.cpp" />
     <ClCompile Include="GameSession.cpp" />
+    <ClCompile Include="JobTimer.cpp" />
     <ClCompile Include="Level.cpp" />
     <ClCompile Include="Listener.cpp" />
     <ClCompile Include="log.cpp" />
     <ClCompile Include="Model.cpp" />
     <ClCompile Include="object.cpp" />
     <ClCompile Include="PacketManager.cpp" />
+    <ClCompile Include="broadPhase.cpp" />
+    <ClCompile Include="contactConstraint.cpp" />
     <ClCompile Include="physics.cpp" />
-    <ClCompile Include="Player.cpp" />
+    <ClCompile Include="physicsWorld.cpp" />
+    <ClCompile Include="rigidBody.cpp" />
     <ClCompile Include="Room.cpp" />
     <ClCompile Include="RoomManager.cpp" />
     <ClCompile Include="RoomServer.cpp" />
@@ -174,6 +182,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="roomServerMain.cpp" />
+    <ClCompile Include="terrain.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AssetManager.hpp" />
@@ -181,18 +190,24 @@
     <ClInclude Include="collision.hpp" />
     <ClInclude Include="errorHandling.hpp" />
     <ClInclude Include="GameSession.hpp" />
+    <ClInclude Include="JobTimer.hpp" />
     <ClInclude Include="Level.hpp" />
     <ClInclude Include="Listener.hpp" />
     <ClInclude Include="log.hpp" />
     <ClInclude Include="Model.hpp" />
     <ClInclude Include="object.hpp" />
     <ClInclude Include="PacketManager.hpp" />
+    <ClInclude Include="broadPhase.hpp" />
+    <ClInclude Include="constraint.hpp" />
+    <ClInclude Include="contactConstraint.hpp" />
     <ClInclude Include="physics.hpp" />
-    <ClInclude Include="Player.hpp" />
+    <ClInclude Include="physicsWorld.hpp" />
+    <ClInclude Include="rigidBody.hpp" />
     <ClInclude Include="Room.hpp" />
     <ClInclude Include="RoomManager.hpp" />
     <ClInclude Include="RoomServer.hpp" />
     <ClInclude Include="rspch.hpp" />
+    <ClInclude Include="terrain.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

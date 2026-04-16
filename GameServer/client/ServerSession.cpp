@@ -4,6 +4,8 @@
 #include "MemoryManager.hpp"
 #include "PacketManager.hpp"
 
+extern bool gClose;
+
 bool ServerSession::connect() {
 	if (::connect(sock_, reinterpret_cast<const SOCKADDR*>(&netAddr_.sockAddr()), sizeof(SOCKADDR_IN)) == SOCKET_ERROR) {
 		return false;
@@ -11,18 +13,25 @@ bool ServerSession::connect() {
 	else {
 		SocketUtils::setTcpNoDelay(sock_, true);
 
-		connected_.store(true);
+		connected_ = true;
 		registerRecv();
 		return true;
 	}
 }
 
-void ServerSession::send(SendBuffer* sendBuffer) {
-	registerSend(sendBuffer);
+void ServerSession::send() {
+	if (pendingSendBuffers_.empty()) {
+		return;
+	}
+	if (sending_) {
+		return;
+	}
+
+	registerSend();
 }
 
 void ServerSession::registerRecv() {
-	if (!isConnected()) {
+	if (!connected_) {
 		return;
 	}
 
@@ -39,31 +48,41 @@ void ServerSession::registerRecv() {
 		auto error = WSAGetLastError();
 		if (error != WSA_IO_PENDING) {
 			std::cout << "WSARecv failed with error: " << error << '\n';
-			connected_.store(false);
+			connected_ = false;
 		}
 	}
 }
 
-void ServerSession::registerSend(SendBuffer* sendBuffer) {
-	if (!isConnected()) {
+void ServerSession::registerSend() {
+	if (!connected_) {
 		return;
 	}
-
+	
+	sending_ = true;
 	sendOver_.clear();
-	sendOver_.sendBuffer = sendBuffer;	// Send 완료 후 해제할 SendBuffer 설정
 
-	auto wsaBuf = WSABUF{
-		.len = static_cast<ULONG>(sendBuffer->writeSize()),
-		.buf = reinterpret_cast<char*>(sendBuffer->data())
-	};
+	// Send 완료 후 해제할 SendBuffer 설정
+	sendOver_.sendBuffers = std::move(pendingSendBuffers_);
+
+	auto wsaBufs = std::vector<WSABUF>();
+	wsaBufs.reserve(sendOver_.sendBuffers.size());
+
+	for(auto sendBuf : sendOver_.sendBuffers) {
+		 wsaBufs.emplace_back(WSABUF{
+			.len = static_cast<ULONG>(sendBuf->writeSize()),
+			.buf = reinterpret_cast<char*>(sendBuf->data())
+		});
+	}
 
 	DWORD numBytes{};
-	if (WSASend(sock_, &wsaBuf, 1, &numBytes, 0, &sendOver_.over, &completionCallback) == SOCKET_ERROR) {
+	if (WSASend(sock_, wsaBufs.data(), static_cast<DWORD>(wsaBufs.size()) , &numBytes, 0, &sendOver_.over, &completionCallback) == SOCKET_ERROR) {
 		auto error = WSAGetLastError();
 		if (error != WSA_IO_PENDING) {
 			std::cout << "WSASend failed with error: " << error << '\n';
-			odelete(sendBuffer);
-			connected_.store(false);
+
+			sendOver_.sendBuffers.clear();
+			sending_ = false;
+			connected_ = false;
 		}
 	}
 }
@@ -71,12 +90,12 @@ void ServerSession::registerSend(SendBuffer* sendBuffer) {
 void ServerSession::processRecv(int32 numBytes) {
 	if (numBytes == 0) {
 		std::cout << "Recv 0\n";
-		connected_.store(false);
+		connected_ = false;
 		return;
 	}
 	if(!recvBuf_.moveWritePos(numBytes)) {
 		std::cout << "Failed to move write position in receive buffer.\n";
-		connected_.store(false);
+		connected_ = false;
 		return;
 	}
 
@@ -103,7 +122,7 @@ void ServerSession::processRecv(int32 numBytes) {
 
 	if(recvLen < 0 || recvLen > dataSize || !recvBuf_.moveReadPos(recvLen)) {
 		std::cout << "Failed to move read position in receive buffer.\n";
-		connected_.store(false);
+		connected_ = false;
 		return;
 	}
 
@@ -117,22 +136,32 @@ void ServerSession::processPacket(byte* buffer, int32 len) {
 }
 
 void ServerSession::processSend(int32 numBytes) {
-	if (numBytes > 0) {
-		odelete(sendOver_.sendBuffer);
-	}
-	else {
+	sendOver_.sendBuffers.clear();
+	sending_ = false;
+
+	if(numBytes == 0) {
 		std::cout << "Connection closed by the server during send.\n";
-		connected_.store(false);
+		connected_ = false;
 	}
 }
 
 void CALLBACK ServerSession::completionCallback(DWORD error, DWORD numBytes, LPWSAOVERLAPPED overlapped, DWORD flags) {
+	if (gClose) {
+		return;
+	}
+
 	auto overEx = reinterpret_cast<OverlappedEx*>(overlapped);
 	auto session = overEx->owner;
 
 	if (error != 0) {
 		std::cout << "I/O operation failed with error: " << error << '\n';
-		session->connected_.store(false);
+
+		if(overEx->type == IoType::Send) {
+			overEx->sendBuffers.clear();
+			session->sending_ = false;
+		}
+
+		session->connected_ = false;
 		return;
 	}
 

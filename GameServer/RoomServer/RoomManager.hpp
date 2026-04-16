@@ -11,7 +11,7 @@ struct Model;
 class RoomManager {
 public:
 	static Room* makeRoom();
-	static Room* getRoom(int32 roomId);
+	static Room* findRoom(int32 roomId);
 	static void removeRoom(int32 roomId);
 
 	static void setLevelData(const Level* pLevel) { pLevel_ = pLevel; }
@@ -23,8 +23,8 @@ private:
 	static std::vector<Room*> rooms_;
 	static std::unordered_map<int32, Room*> roomIdMap_;
 
-	static const Level* pLevel_;
-	static const Model* pPlayerModel_;
+	static const Level*  pLevel_;
+	static const Model*  pPlayerModel_;
 };
 
 #endif // room_manager_hpp

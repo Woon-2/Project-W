@@ -21,7 +21,7 @@ public:
 
 	virtual void dispatch(IoEvent* event, int32 numBytes) override;
 	void disconnect(std::string_view cause);
-	void send(SendBuffer* sendBuffer);
+	void send(const std::shared_ptr<SendBuffer>& sendBuffer);
 
 	void setNetAddress(const NetAddress& addr) { netAddr_ = addr; }
 	const NetAddress& netAddress() const { return netAddr_; }
@@ -64,7 +64,7 @@ private:
 	SendEvent sendEv_;
 
 	RecvBuffer recvBuf_;
-	ccqueue<SendBuffer*> sendQueue_;
+	ccqueue<std::shared_ptr<SendBuffer>> sendQueue_;
 	std::atomic_bool sending_;
 
 	int32 id_;

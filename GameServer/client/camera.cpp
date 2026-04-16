@@ -32,6 +32,16 @@ void Camera::updateGFX(GFX& gfx) {
 		.proj = proj_,
 		.pos = eye_
 	});
+	gfx.addCameraData(PBRDeferredPipeline::CameraData{
+		.view = view_,
+		.proj = proj_,
+		.pos = eye_
+	});
+	gfx.addCameraData(PBRDeferredSkinnedPipeline::CameraData{
+		.view = view_,
+		.proj = proj_,
+		.pos = eye_
+	});
 	gfx.addCameraData(SkyboxPipeline::CameraData{
 		.view = view_,
 		.proj = proj_
@@ -50,6 +60,11 @@ void Camera::updateGFX(GFX& gfx) {
 		.proj = proj_,
 		.pos = eye_
 		} );
+	gfx.addCameraData(TerrainDeferredPipeline::CameraData{
+		.view = view_,
+		.proj = proj_,
+		.pos = eye_
+	});
 
 	gfx.addCameraData(MeshParticlePipeline::CameraData{
 		.view = view_,

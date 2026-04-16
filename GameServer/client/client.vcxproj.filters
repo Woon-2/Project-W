@@ -189,6 +189,12 @@
     <ClCompile Include="pbrSkinnedPipeline.cpp">
       <Filter>그래픽스\파이프라인\소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="pbrDeferredPipeline.cpp">
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="pbrDeferredSkinnedPipeline.cpp">
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
+    </ClCompile>
     <ClCompile Include="samplePipeline.cpp">
       <Filter>그래픽스\파이프라인\소스 파일</Filter>
     </ClCompile>
@@ -243,6 +249,33 @@
     <ClCompile Include="meshParticlePipeline.cpp">
       <Filter>그래픽스\파이프라인\소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="meshParticleSystem.cpp">
+      <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="broadPhase.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="contactConstraint.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="physicsWorld.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="rigidBody.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="activeRagdoll.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="jointConstraint.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="ragdoll.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="ragdollDef.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
     <ClCompile Include="ui\widgets\Button.cpp">
       <Filter>UI</Filter>
     </ClCompile>
@@ -267,17 +300,8 @@
     <ClCompile Include="ui\UIManager.cpp">
       <Filter>UI</Filter>
     </ClCompile>
-    <ClCompile Include="broadPhase.cpp">
-      <Filter>게임%28공용%29\소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="contactConstraint.cpp">
-      <Filter>게임%28공용%29\소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="physicsWorld.cpp">
-      <Filter>게임%28공용%29\소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="rigidBody.cpp">
-      <Filter>게임%28공용%29\소스 파일</Filter>
+    <ClCompile Include="terrainDeferredPipeline.cpp">
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="swordSlashPipeline.cpp">
       <Filter>그래픽스\파이프라인\소스 파일</Filter>
@@ -449,6 +473,12 @@
     <ClInclude Include="pbrSkinnedPipeline.hpp">
       <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="pbrDeferredPipeline.hpp">
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="pbrDeferredSkinnedPipeline.hpp">
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
+    </ClInclude>
     <ClInclude Include="samplePipeline.hpp">
       <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
@@ -509,6 +539,36 @@
     <ClInclude Include="meshParticlePipeline.hpp">
       <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="meshParticleSystem.hpp">
+      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="broadPhase.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="constraint.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="contactConstraint.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="physicsWorld.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="rigidBody.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="ragdoll.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="ragdollDef.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="jointConstraint.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="activeRagdoll.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
     <ClInclude Include="ui\widgets\Button.hpp">
       <Filter>UI</Filter>
     </ClInclude>
@@ -536,20 +596,8 @@
     <ClInclude Include="ui\UITypes.hpp">
       <Filter>UI</Filter>
     </ClInclude>
-    <ClInclude Include="broadPhase.hpp">
-      <Filter>게임%28공용%29\헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="constraint.hpp">
-      <Filter>게임%28공용%29\헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="contactConstraint.hpp">
-      <Filter>게임%28공용%29\헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="physicsWorld.hpp">
-      <Filter>게임%28공용%29\헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="rigidBody.hpp">
-      <Filter>게임%28공용%29\헤더 파일</Filter>
+    <ClInclude Include="terrainDeferredPipeline.hpp">
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="swordSlashPipeline.hpp">
       <Filter>그래픽스\파이프라인\헤더 파일</Filter>
@@ -572,6 +620,15 @@
       <Filter>셰이더 파일</Filter>
     </FxCompile>
     <FxCompile Include="pbrSkinned.hlsl">
+      <Filter>셰이더 파일</Filter>
+    </FxCompile>
+    <FxCompile Include="pbrDeferred.hlsl">
+      <Filter>셰이더 파일</Filter>
+    </FxCompile>
+    <FxCompile Include="pbrDeferredSkinned.hlsl">
+      <Filter>셰이더 파일</Filter>
+    </FxCompile>
+    <FxCompile Include="pbrDeferredLighting.hlsl">
       <Filter>셰이더 파일</Filter>
     </FxCompile>
     <FxCompile Include="sample.hlsl">
@@ -602,6 +659,9 @@
       <Filter>셰이더 파일</Filter>
     </FxCompile>
     <FxCompile Include="smokeBlendCG.hlsl">
+      <Filter>셰이더 파일</Filter>
+    </FxCompile>
+    <FxCompile Include="terrainDeferred.hlsl">
       <Filter>셰이더 파일</Filter>
     </FxCompile>
   </ItemGroup>

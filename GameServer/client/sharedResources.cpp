@@ -550,4 +550,210 @@ void validateRequiredKeys(std::initializer_list<std::string_view> keys) {
 
 }	// namespace SharedResources::ShadowMap
 
+namespace GBuffer {
+
+std::vector<GBufferData> gBufferData;
+
+namespace {
+
+// 색상 렌더 타겟 텍스처를 생성하고 RTV + SRV를 등록한다.
+Texture createColorRT( ID3D12Device* device, u32t width, u32t height,
+	DXGI_FORMAT format, DescriptorPool& rtvPool, DescriptorPool& srvTexPool,
+	const char* name
+) {
+	const auto clearVal = D3D12_CLEAR_VALUE{ .Format = format, .Color= {0.f, 0.f, 0.f, 0.f} };
+	Texture tex = createTexture( device, width, height, format,
+		D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET, D3D12_RESOURCE_STATE_RENDER_TARGET,
+		clearVal
+	);
+	setD3DName(tex.res.Get(), name);
+
+	// RTV
+	createRTV(device, tex, D3D12_RENDER_TARGET_VIEW_DESC{
+		.Format        = format,
+		.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D,
+		.Texture2D     = D3D12_TEX2D_RTV{ .MipSlice = 0u, .PlaneSlice = 0u }
+	}, rtvPool);
+
+	// SRV (bindless)
+	tex.idxSrv.idxRange = etoi(Texture::Type::Tex2D);
+	createSRV(device, tex, D3D12_SHADER_RESOURCE_VIEW_DESC{
+		.Format                  = format,
+		.ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D,
+		.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+		.Texture2D               = D3D12_TEX2D_SRV{ .MostDetailedMip = 0u, .MipLevels = 1u }
+	}, srvTexPool);
+	tex.idxSrv.idxInArray  = 0;
+	tex.idxSrv.idxSampler  = etoi(Samplers::NearestClamp);
+
+	return tex;
+}
+
+// GB1 (R16G16_FLOAT) 전용 — 클리어 색상을 (0.5, 0.5, 0, 0)으로 설정하여
+// octDecode 시 forward normal (0, 0, 1)이 되도록 한다.
+Texture createGB1RT( ID3D12Device* device, u32t width, u32t height,
+	DescriptorPool& rtvPool, DescriptorPool& srvTexPool, const char* name
+) {
+	constexpr DXGI_FORMAT format = DXGI_FORMAT_R16G16_FLOAT;
+	const auto clearVal = D3D12_CLEAR_VALUE{ .Format = format, .Color= {0.5f, 0.5f, 0.f, 0.f} };
+	Texture tex = createTexture( device, width, height, format,
+		D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET, D3D12_RESOURCE_STATE_RENDER_TARGET,
+		clearVal
+	);
+	setD3DName(tex.res.Get(), name);
+
+	createRTV(device, tex, D3D12_RENDER_TARGET_VIEW_DESC{
+		.Format        = format,
+		.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D,
+		.Texture2D     = D3D12_TEX2D_RTV{ .MipSlice = 0u, .PlaneSlice = 0u }
+	}, rtvPool);
+
+	tex.idxSrv.idxRange = etoi(Texture::Type::Tex2D);
+	createSRV(device, tex, D3D12_SHADER_RESOURCE_VIEW_DESC{
+		.Format                  = format,
+		.ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D,
+		.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+		.Texture2D               = D3D12_TEX2D_SRV{ .MostDetailedMip = 0u, .MipLevels = 1u }
+	}, srvTexPool);
+	tex.idxSrv.idxInArray  = 0;
+	tex.idxSrv.idxSampler  = etoi(Samplers::NearestClamp);
+
+	return tex;
+}
+
+// 깊이 버퍼 텍스처를 생성하고 DSV + SRV(R32_FLOAT)를 등록한다.
+Texture createDepthRT( ID3D12Device* device, u32t width, u32t height,
+	DescriptorPool& dsvPool, DescriptorPool& srvTexPool, const char* name
+) {
+	constexpr DXGI_FORMAT format = DXGI_FORMAT_R32_TYPELESS;
+	constexpr DXGI_FORMAT formatD = DXGI_FORMAT_D32_FLOAT;
+
+	const auto clearVal = D3D12_CLEAR_VALUE{ .Format = formatD, .DepthStencil = { .Depth = 1.f } };
+	Texture tex = createTexture( device, width, height, format,
+		D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL, D3D12_RESOURCE_STATE_DEPTH_WRITE,
+		clearVal
+	);
+	setD3DName(tex.res.Get(), name);
+
+	// DSV (D32_FLOAT)
+	createDSV(device, tex, D3D12_DEPTH_STENCIL_VIEW_DESC{
+		.Format        = DXGI_FORMAT_D32_FLOAT,
+		.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D,
+		.Flags         = D3D12_DSV_FLAG_NONE,
+		.Texture2D     = D3D12_TEX2D_DSV{ .MipSlice = 0u }
+	}, dsvPool);
+
+	// SRV (R32_FLOAT, bindless)
+	tex.idxSrv.idxRange = etoi(Texture::Type::Tex2D);
+	createSRV(device, tex, D3D12_SHADER_RESOURCE_VIEW_DESC{
+		.Format                  = DXGI_FORMAT_R32_FLOAT,
+		.ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D,
+		.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+		.Texture2D               = D3D12_TEX2D_SRV{ .MostDetailedMip = 0u, .MipLevels = 1u }
+	}, srvTexPool);
+	tex.idxSrv.idxInArray  = 0;
+	tex.idxSrv.idxSampler  = etoi(Samplers::NearestClamp);
+
+	return tex;
+}
+
+}	// anonymous namespace
+
+void addGBuffer( ID3D12Device* device, u32t width, u32t height,
+	std::size_t roomCnt, DescriptorPool& rtvPool,
+	DescriptorPool& dsvPool, DescriptorPool& srvTexPool
+) {
+	gBufferData.reserve(roomCnt);
+
+	for (std::size_t r = 0u; r < roomCnt; ++r) {
+		GBufferData gb{};
+		gb.width  = width;
+		gb.height = height;
+
+		auto suffix = "[" + std::to_string(r) + "]";
+		gb.gb0   = createColorRT(device, width, height, DXGI_FORMAT_R8G8B8A8_UNORM,   rtvPool, srvTexPool, ("GBuffer_GB0" + suffix).c_str());
+		gb.gb1   = createGB1RT  (device, width, height,                               rtvPool, srvTexPool, ("GBuffer_GB1" + suffix).c_str());
+		gb.gb2   = createColorRT(device, width, height, DXGI_FORMAT_R8G8B8A8_UNORM,   rtvPool, srvTexPool, ("GBuffer_GB2" + suffix).c_str());
+		gb.gb3   = createColorRT(device, width, height, DXGI_FORMAT_R8_UNORM,          rtvPool, srvTexPool, ("GBuffer_GB3" + suffix).c_str());
+		gb.depth = createDepthRT(device, width, height,                 dsvPool, srvTexPool, ("GBuffer_Depth" + suffix).c_str());
+
+		gb.rtvHandles[0] = rtvPool.cpuHandle(gb.gb0.idxRtv);
+		gb.rtvHandles[1] = rtvPool.cpuHandle(gb.gb1.idxRtv);
+		gb.rtvHandles[2] = rtvPool.cpuHandle(gb.gb2.idxRtv);
+		gb.rtvHandles[3] = rtvPool.cpuHandle(gb.gb3.idxRtv);
+		gb.dsvHandle     = dsvPool.cpuHandle(gb.depth.idxDsv);
+
+		gb.curStateGB[0] = D3D12_RESOURCE_STATE_RENDER_TARGET;
+		gb.curStateGB[1] = D3D12_RESOURCE_STATE_RENDER_TARGET;
+		gb.curStateGB[2] = D3D12_RESOURCE_STATE_RENDER_TARGET;
+		gb.curStateGB[3] = D3D12_RESOURCE_STATE_RENDER_TARGET;
+		gb.curStateDepth = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+
+		gBufferData.push_back(std::move(gb));
+	}
+}
+
+void transitionToWrite(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
+	auto& gb = gBufferData[roomIdx];
+	Texture* colorTex[4] = { &gb.gb0, &gb.gb1, &gb.gb2, &gb.gb3 };
+
+	for (int i = 0; i < 4; ++i) {
+		if (gb.curStateGB[i] != D3D12_RESOURCE_STATE_RENDER_TARGET) {
+			transitionResourceState(cmdList, colorTex[i]->res.Get(),
+				D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+				D3D12_RESOURCE_STATE_RENDER_TARGET
+			);
+			gb.curStateGB[i] = D3D12_RESOURCE_STATE_RENDER_TARGET;
+		}
+	}
+
+	if (gb.curStateDepth != D3D12_RESOURCE_STATE_DEPTH_WRITE) {
+		transitionResourceState(cmdList, gb.depth.res.Get(),
+			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+			D3D12_RESOURCE_STATE_DEPTH_WRITE
+		);
+		gb.curStateDepth = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+	}
+}
+
+void transitionToRead(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
+	auto& gb = gBufferData[roomIdx];
+	Texture* colorTex[4] = { &gb.gb0, &gb.gb1, &gb.gb2, &gb.gb3 };
+
+	for (int i = 0; i < 4; ++i) {
+		if (gb.curStateGB[i] != D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE) {
+			transitionResourceState(cmdList, colorTex[i]->res.Get(),
+				D3D12_RESOURCE_STATE_RENDER_TARGET,
+				D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+			);
+			gb.curStateGB[i] = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+		}
+	}
+
+	if (gb.curStateDepth != D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE) {
+		transitionResourceState(cmdList, gb.depth.res.Get(),
+			D3D12_RESOURCE_STATE_DEPTH_WRITE,
+			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+		);
+		gb.curStateDepth = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+	}
+}
+
+void clearGBuffer(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
+	auto& gb = gBufferData[roomIdx];
+
+	// GB0, GB2, GB3: clear to (0, 0, 0, 0)
+	const float kBlack[4] = { 0.f, 0.f, 0.f, 0.f };
+	// GB1: clear to (0.5, 0.5, 0, 0) — octDecode((0.5,0.5)) = (0,0,1) forward normal
+	const float kNormalClear[4] = { 0.5f, 0.5f, 0.f, 0.f };
+
+	cmdList->ClearRenderTargetView(gb.rtvHandles[0], kBlack,       0u, nullptr);
+	cmdList->ClearRenderTargetView(gb.rtvHandles[1], kNormalClear, 0u, nullptr);
+	cmdList->ClearRenderTargetView(gb.rtvHandles[2], kBlack,       0u, nullptr);
+	cmdList->ClearRenderTargetView(gb.rtvHandles[3], kBlack,       0u, nullptr);
+	cmdList->ClearDepthStencilView(gb.dsvHandle,     D3D12_CLEAR_FLAG_DEPTH, 1.f, 0u, 0u, nullptr);
+}
+
+}	// namespace GBuffer
+
 }	// namespace SharedResources

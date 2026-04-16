@@ -20,7 +20,6 @@ public:
     }
 
     int32 allocSize;
-	int32 padding[3];
 };
 
 /*------------------

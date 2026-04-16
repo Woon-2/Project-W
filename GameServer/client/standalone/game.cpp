@@ -51,6 +51,7 @@ Game::Game() {
 	gfx_.createSwapChain();
 	gfx_.setThreadPool(&threadPool_);
 
+
 	assetManager_.loadGFXAssets(gfx_, assetConfigs_);
 	assetManager_.loadAnimations();
 }
@@ -969,6 +970,12 @@ void Game::update(Milliseconds deltaTime) {
 	eyeball_->update(deltaTime, tPhysicInterpolation);
 	fishman_->update(deltaTime, tPhysicInterpolation);
 	gargoyle_->update(deltaTime, tPhysicInterpolation);
+
+	animSystem_.updatePriorities(
+		std::chrono::duration_cast<Seconds>(deltaTime),
+		player_->pos()
+	);
+
 	camera_.update();
 	dirLight_.update(deltaTime);
 	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), assetConfigs_.cascade, assetConfigs_.shadowMap);
@@ -1075,6 +1082,8 @@ void Game::update(Milliseconds deltaTime) {
 }
 
 void Game::render() {
+	cullObjects();
+
 	debugBVView_.render(gfx_);
 	player_->render(gfx_);
 	goblin_->render(gfx_);
@@ -1107,10 +1116,21 @@ void Game::render() {
 		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
 	};
 	gfx_.addFrameData( frameDataPBRSkinned );
+	auto frameDataPBRDeferred = PBRDeferredPipeline::FrameData{
+		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
+	};
+	gfx_.addFrameData( frameDataPBRDeferred );
+	auto frameDataPBRDeferredSkinned = PBRDeferredSkinnedPipeline::FrameData{
+		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
+	};
+	gfx_.addFrameData( frameDataPBRDeferredSkinned );
 
 	if (terrain_) {
 		terrain_->render(gfx_);
 		gfx_.addFrameData(TerrainPipeline::FrameData{
+			.globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f)
+		});
+		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{
 			.globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f)
 		});
 	}
@@ -1343,6 +1363,11 @@ void Game::processInput(Milliseconds deltaTime) {
 		gfx_.toggleCsmDebugVisualization();
 	}
 
+	// G key: cycle GBuffer debug view (deferred path only)
+	if ( (keyboardStateCurr_['G'] & 0x80) && !(keyboardStatePrev_['G'] & 0x80) ) {
+		gfx_.cycleGBufferDebugMode();
+	}
+
 	// U key: toggle UI debug overlay (colored bounding boxes)
 	if ( (keyboardStateCurr_['U'] & 0x80) && !(keyboardStatePrev_['U'] & 0x80) ) {
 		uiManager_.toggleDebugMode();
@@ -1364,6 +1389,72 @@ void Game::processInput(Milliseconds deltaTime) {
 		}
 		else {
 			hideCursor();
+		}
+	}
+}
+
+void Game::cullObjects() {
+	auto entities = std::vector< std::shared_ptr<Object> >{
+		goblin_, anubis_, bat_, bomber_, demon_, dragon_, eyeball_, fishman_, gargoyle_
+	};
+
+	// perform view frusutum culling
+	for (auto& entt : entities) {
+		auto& rootShape = entt->body().worldBVH().nodes[0].shape;
+
+		auto vertices = std::vector<mu::Vec3>();
+		vertices.reserve(8u);
+		auto out = std::back_inserter(vertices);
+
+		if (std::holds_alternative<AABB>(rootShape)) {
+			const auto& aabb = std::get<AABB>(rootShape);
+
+			const mu::Vec3 c = aabb.center;
+			const mu::Vec3 h = aabb.size * 0.5f;
+
+			out = mu::Vec3(c.x() - h.x(), c.y() - h.y(), c.z() - h.z());
+			out = mu::Vec3(c.x() + h.x(), c.y() - h.y(), c.z() - h.z());
+			out = mu::Vec3(c.x() - h.x(), c.y() - h.y(), c.z() + h.z());
+			out = mu::Vec3(c.x() + h.x(), c.y() - h.y(), c.z() + h.z());
+			out = mu::Vec3(c.x() - h.x(), c.y() + h.y(), c.z() - h.z());
+			out = mu::Vec3(c.x() + h.x(), c.y() + h.y(), c.z() - h.z());
+			out = mu::Vec3(c.x() - h.x(), c.y() + h.y(), c.z() + h.z());
+			out = mu::Vec3(c.x() + h.x(), c.y() + h.y(), c.z() + h.z());
+
+		} else {
+			const auto& obb = std::get<OBB>(rootShape);
+			// Compute OBB axes from orientation
+			const mu::Vec3 ax = obb.orient.rotate(mu::Vec3(1.f, 0.f, 0.f));
+			const mu::Vec3 ay = obb.orient.rotate(mu::Vec3(0.f, 1.f, 0.f));
+			const mu::Vec3 az = obb.orient.rotate(mu::Vec3(0.f, 0.f, 1.f));
+			const float    hx = obb.halfExtents.x();
+			const float    hy = obb.halfExtents.y();
+			const float    hz = obb.halfExtents.z();
+			// All 8 corners; testVertex will filter by penetration depth
+			for (int sx : {-1, 1})
+				for (int sy : {-1, 1})
+					for (int sz : {-1, 1}) {
+						out = obb.center
+							+ ax * (hx * sx)
+							+ ay * (hy * sy)
+							+ az * (hz * sz);
+					}
+		}
+
+		entt->setCulled(true);
+
+		for (auto& v : vertices) {
+			auto ndc = mu::Vec4(v, 1.f) * camera_.view() * camera_.proj();
+			ndc /= ndc.w();
+
+			if (ndc.x() >= -1.f && ndc.x() <= 1.f
+				&& ndc.y() >= -1.f && ndc.y() <= 1.f
+				&& ndc.z() >= 0.f && ndc.z() <= 1.f
+			) {
+				// a vertex is in the view frustum, it should not be culled.
+				entt->setCulled(false);
+				break;
+			}
 		}
 	}
 }

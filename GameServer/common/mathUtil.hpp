@@ -14,6 +14,7 @@ namespace mu {
 namespace dx = DirectX;
 
 inline constexpr auto pi = 3.1415926f;
+inline constexpr auto half_pi = pi * 0.5f;
 
 class Degree;
 

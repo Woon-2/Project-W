@@ -12,7 +12,7 @@ public:
 	~Listener() {
 		SocketUtils::closeSocket(listenSock_);
 		for (auto ev : acceptEvs_) {
-			odelete(ev);
+			ObjectPool<AcceptEvent>::push(ev);
 		}
 	}
 

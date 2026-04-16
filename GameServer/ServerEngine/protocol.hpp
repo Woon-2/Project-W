@@ -17,12 +17,22 @@ enum class PacketType : uint16 {
 
 	C_Move,
 	S_Move,
+
+	C_MouseMove,
+	S_MouseMove,
+
+	S_NpcMove,
+
+	C_Attack,
+	S_NpcAttack,
+	S_Hit,
+	S_TimeSync,
 };
 
 enum class ObjectType : uint16 {
 	Player,
+	Goblin,
 	Ground,
-
 };
 
 struct PacketHeader {
@@ -96,15 +106,46 @@ struct SLeavePacket : public PacketHeader {
 
 struct CMovePacket : public PacketHeader {
 	DirectX::XMFLOAT3 pos;
-	DirectX::XMFLOAT4 orient;
 	DirectX::XMFLOAT3 velocity;
 };
 
 struct SMovePacket : public PacketHeader {
 	uint16 playerId;
 	DirectX::XMFLOAT3 pos;
+	DirectX::XMFLOAT3 velocity;
+};
+
+struct CMouseMovePacket : public PacketHeader {
+	float yawRadian;
+};
+
+struct SMouseMovePacket : public PacketHeader {
+	uint16 playerId;
+	float yawRadian;
+};
+
+struct SNpcMovePacket : public PacketHeader {
+	uint16 npcId;
+	DirectX::XMFLOAT3 pos;
 	DirectX::XMFLOAT4 orient;
 	DirectX::XMFLOAT3 velocity;
+};
+
+struct CAttackPacket : public PacketHeader {
+	uint64 clientMs;
+};
+
+struct SNpcAttackPacket : public PacketHeader {
+	uint16 npcId;
+};
+
+struct SHitPacket : public PacketHeader {
+	uint16 targetId;
+	int32  newHp;
+};
+
+struct STimeSyncPacket : public PacketHeader {
+	uint64 serverMs;
 };
 
 #pragma pack(pop)

@@ -12,9 +12,11 @@ PhysicsWorld::PhysicsWorld()
 {}
 
 void PhysicsWorld::registerBody(RigidBody* body,
-                                std::function<void()> onRebuildBVH)
+                                std::function<void()> onRebuildBVH,
+                                uint16_t collisionGroup,
+                                uint16_t collisionMask)
 {
-    entries_.push_back({ body, std::move(onRebuildBVH) });
+    entries_.push_back({ body, std::move(onRebuildBVH), collisionGroup, collisionMask });
     broadPhase_->add(body);
 }
 
@@ -24,6 +26,31 @@ void PhysicsWorld::unregisterBody(RigidBody* body)
     if (it != entries_.end())
         entries_.erase(it);
     broadPhase_->remove(body);
+}
+
+void PhysicsWorld::addJointConstraint(std::unique_ptr<Constraint> joint)
+{
+    jointConstraints_.push_back(std::move(joint));
+}
+
+void PhysicsWorld::removeJointConstraint(Constraint* joint)
+{
+    auto it = std::ranges::find_if(jointConstraints_,
+        [joint](const auto& p) { return p.get() == joint; });
+    if (it != jointConstraints_.end())
+        jointConstraints_.erase(it);
+}
+
+void PhysicsWorld::addJointRef(Constraint* joint)
+{
+    jointRefs_.push_back(joint);
+}
+
+void PhysicsWorld::removeJointRef(Constraint* joint)
+{
+    auto it = std::ranges::find(jointRefs_, joint);
+    if (it != jointRefs_.end())
+        jointRefs_.erase(it);
 }
 
 void PhysicsWorld::registerTerrain(RigidBody* terrainBody,
@@ -129,6 +156,19 @@ void PhysicsWorld::generateContacts()
     const auto pairs = broadPhase_->queryPairs();
 
     for (const auto& [a, b] : pairs) {
+        // Collision group/mask filter.
+        auto findEntry = [&](RigidBody* body) -> const Entry* {
+            auto it = std::ranges::find(entries_, body, &Entry::body);
+            return (it != entries_.end()) ? &*it : nullptr;
+        };
+        const Entry* ea = findEntry(a);
+        const Entry* eb = findEntry(b);
+        if (ea && eb) {
+            const bool ab = (ea->collisionGroup & eb->collisionMask) != 0;
+            const bool ba = (eb->collisionGroup & ea->collisionMask) != 0;
+            if (!ab && !ba) continue;
+        }
+
         const BVH& bvhA = a->worldBVH();
         const BVH& bvhB = b->worldBVH();
 
@@ -189,6 +229,7 @@ void PhysicsWorld::solveConstraints(Seconds dt)
     auto allConstraints = [&](auto fn) {
         for (auto& c : contactConstraints_) fn(*c);
         for (auto& c : jointConstraints_)   fn(*c);
+        for (auto  c : jointRefs_)          fn(*c);
     };
 
     // prepare() caches effective masses and biases.

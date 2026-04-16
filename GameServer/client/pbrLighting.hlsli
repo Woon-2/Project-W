@@ -1,5 +1,20 @@
 #include "bindless.hlsli"
 
+// Oct encoding for view-space unit normals → 2-channel float2 [0,1]
+float2 octEncode(float3 n) {
+    n /= abs(n.x) + abs(n.y) + abs(n.z);
+    if (n.z < 0.0f) n.xy = (1.0f - abs(n.yx)) * sign(n.xy);
+    return n.xy * 0.5f + 0.5f;
+}
+
+// Oct decoding: 2-channel float2 [0,1] → view-space unit normal
+float3 octDecode(float2 oct) {
+    oct = oct * 2.0f - 1.0f;
+    float3 n = float3(oct, 1.0f - abs(oct.x) - abs(oct.y));
+    if (n.z < 0.0f) n.xy = (1.0f - abs(n.yx)) * sign(n.xy);
+    return normalize(n);
+}
+
 // 이 hlsl 코드에서 조명의 BRDF 모델은
 // Cook-Torrance BRDF 모델을 따른다.
 
@@ -392,6 +407,7 @@ float4 illuminate(float3 posV, float4 posL, float3 normalV, float2 tex) {
 }
 #endif
 
+#ifndef DEFERRED_LIGHTING_PASS
 // illuminateCSM: CSM(Cascaded Shadow Map) 버전. illuminate()와 별도로 유지.
 // posW: world-space position (cascade 선택 후 light-space 변환에 사용)
 // normalW: world-space geometric normal (normal offset shadow bias용)
@@ -473,4 +489,37 @@ float4 illuminateCSM(float3 posV, float3 posW, float3 normalV, float2 tex, float
 
     return float4(color, albedo.w);
 }
+#endif // DEFERRED_LIGHTING_PASS
+
 #endif // TERRAIN_SHADER
+
+#ifdef DEFERRED_LIGHTING_PASS
+// illuminateFromGBuffer: deferred lighting pass에서 GBuffer로부터 직접 조명을 계산한다.
+// Returns direct lighting * shadow only (pre-tonemap, pre-ambient/emissive).
+// Caller adds precompLight (GB2.rgb = ambient+emissive) then tonemaps the combined result.
+float3 illuminateFromGBuffer(
+    float3 posV, float3 posW,
+    float3 normalV, float3 normalW,
+    float3 albedo, float roughness, float metallic, float ao
+) {
+    float3 posVNormalized = normalize(posV);
+    float3 color = float3(0.f, 0.f, 0.f);
+    for (uint i = 0u; i < lightCnt; i++) {
+        if (gLightData[i].type == LIGHT_TYPE_POINT)
+            color += pointLight(i, posV, posVNormalized, normalV, float2(0.f, 0.f), albedo, roughness, metallic, ao);
+        else if (gLightData[i].type == LIGHT_TYPE_SPOT)
+            color += spotLight(i, posV, posVNormalized, normalV, float2(0.f, 0.f), albedo, roughness, metallic, ao);
+        else if (gLightData[i].type == LIGHT_TYPE_DIRECTIONAL)
+            color += dirLight(i, posV, posVNormalized, normalV, float2(0.f, 0.f), albedo, roughness, metallic, ao);
+    }
+
+    float rawNdotl = 0.5f;
+    for (uint si = 0u; si < lightCnt; ++si) {
+        if (gLightData[si].type == LIGHT_TYPE_DIRECTIONAL) {
+            rawNdotl = dot(normalV, -gLightData[si].dirV);
+            break;
+        }
+    }
+    return color * calcCSMShadow(posV, posW, normalW, rawNdotl);
+}
+#endif // DEFERRED_LIGHTING_PASS

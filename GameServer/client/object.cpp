@@ -2,6 +2,7 @@
 #include "object.hpp"
 #include "physicsWorld.hpp"
 #include "terrainPipeline.hpp"
+#include "terrainDeferredPipeline.hpp"
 #include "errorHandling.hpp"
 #include "AssetManager.hpp"
 #include "Timer.hpp"
@@ -18,6 +19,7 @@ void AnimBlenderPlayer::init(const AssetManager& assetManager) {
 // 애니메이션 블렌딩 상태를 갱신한다.
 void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
 	
 	// 객체의 속력이 runThreshold를 넘는지를 기준으로
 	// run 애니메이션이 필요한지 idle 애니메이션이 필요한지 판단한다.
@@ -138,7 +140,6 @@ void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 		animTimeRun_ -= durationRun;
 	}
 
-	priority_ = 0.f;
 }
 
 void AnimBlenderPlayer::onCalcLocal(PassKey<AnimSystem>) {
@@ -236,6 +237,7 @@ void AnimBlenderGoblin::init(const AssetManager& assetManager) {
 // 애니메이션 블렌딩 상태를 갱신한다.
 void AnimBlenderGoblin::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
 
 	// 객체의 속력이 walkThreshold를 넘는지를 기준으로
 	// walk 애니메이션이 필요한지 idle 애니메이션이 필요한지 판단한다.
@@ -250,8 +252,11 @@ void AnimBlenderGoblin::update(Seconds deltaTime, void* pVoidOwner) {
 	// blendRange 설정
 	const auto walkBlendRangeStart = walkThreshold - 0.03f;
 	const auto walkBlendRangeEnd = walkThreshold + 3.f;
-	// tWalk 구하기
-	tWalk_ = std::clamp( (speed - walkBlendRangeStart) / (walkBlendRangeEnd - walkBlendRangeStart), 0.f, 1.f );
+	// tWalk 목표값 구하기
+	const auto targetTWalk = std::clamp( (speed - walkBlendRangeStart) / (walkBlendRangeEnd - walkBlendRangeStart), 0.f, 1.f );
+
+	// 지수 감쇠로 tWalk를 부드럽게 보간한다 (시상수 0.12s → 전환의 63%가 ~120ms 내 완료)
+	tWalk_ += (targetTWalk - tWalk_) * (1.f - std::exp(-deltaTime.count() / 0.12f));
 
 	// tIdle 구하기
 	tIdle_ = 1.f - tWalk_;
@@ -262,6 +267,14 @@ void AnimBlenderGoblin::update(Seconds deltaTime, void* pVoidOwner) {
 	const auto durationIdle = targetClip("Goblin_Idle")->duration;
 	while (animTimeIdle_ > durationIdle) {
 		animTimeIdle_ -= durationIdle;
+	}
+
+	if (tWalk_ > 0.f) {
+		animTimeWalk_ += deltaTime;
+		const auto durationWalk = targetClip("Goblin_Walk")->duration;
+		while (animTimeWalk_ > durationWalk) {
+			animTimeWalk_ -= durationWalk;
+		}
 	}
 
 	if (cooldownAttack_ > 0ms) {
@@ -309,7 +322,6 @@ void AnimBlenderGoblin::update(Seconds deltaTime, void* pVoidOwner) {
 		tHit_ = 0.f;
 	}
 
-	priority_ = 0.f;
 }
 
 void AnimBlenderGoblin::onCalcLocal(PassKey<AnimSystem>) {
@@ -383,6 +395,7 @@ void AnimBlenderAnubis::init(const AssetManager& assetManager) {
 // 애니메이션 블렌딩 상태를 갱신한다.
 void AnimBlenderAnubis::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
 
 	// 객체의 속력이 walkThreshold를 넘는지를 기준으로
 	// walk 애니메이션이 필요한지 idle 애니메이션이 필요한지 판단한다.
@@ -456,7 +469,6 @@ void AnimBlenderAnubis::update(Seconds deltaTime, void* pVoidOwner) {
 		tHit_ = 0.f;
 	}
 
-	priority_ = 0.f;
 }
 
 void AnimBlenderAnubis::onCalcLocal(PassKey<AnimSystem>) {
@@ -530,6 +542,7 @@ void AnimBlenderBat::init(const AssetManager& assetManager) {
 // 애니메이션 블렌딩 상태를 갱신한다.
 void AnimBlenderBat::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
 
 	// 객체의 속력이 walkThreshold를 넘는지를 기준으로
 	// walk 애니메이션이 필요한지 idle 애니메이션이 필요한지 판단한다.
@@ -603,7 +616,6 @@ void AnimBlenderBat::update(Seconds deltaTime, void* pVoidOwner) {
 		tHit_ = 0.f;
 	}
 
-	priority_ = 0.f;
 }
 
 void AnimBlenderBat::onCalcLocal(PassKey<AnimSystem>) {
@@ -677,6 +689,7 @@ void AnimBlenderBomber::init(const AssetManager& assetManager) {
 // 애니메이션 블렌딩 상태를 갱신한다.
 void AnimBlenderBomber::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
 
 	// 객체의 속력이 walkThreshold를 넘는지를 기준으로
 	// walk 애니메이션이 필요한지 idle 애니메이션이 필요한지 판단한다.
@@ -750,7 +763,6 @@ void AnimBlenderBomber::update(Seconds deltaTime, void* pVoidOwner) {
 		tHit_ = 0.f;
 	}
 
-	priority_ = 0.f;
 }
 
 void AnimBlenderBomber::onCalcLocal(PassKey<AnimSystem>) {
@@ -824,6 +836,7 @@ void AnimBlenderDemon::init(const AssetManager& assetManager) {
 // 애니메이션 블렌딩 상태를 갱신한다.
 void AnimBlenderDemon::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
 
 	// 객체의 속력이 walkThreshold를 넘는지를 기준으로
 	// walk 애니메이션이 필요한지 idle 애니메이션이 필요한지 판단한다.
@@ -897,7 +910,6 @@ void AnimBlenderDemon::update(Seconds deltaTime, void* pVoidOwner) {
 		tHit_ = 0.f;
 	}
 
-	priority_ = 0.f;
 }
 
 void AnimBlenderDemon::onCalcLocal(PassKey<AnimSystem>) {
@@ -971,6 +983,7 @@ void AnimBlenderDragon::init(const AssetManager& assetManager) {
 // 애니메이션 블렌딩 상태를 갱신한다.
 void AnimBlenderDragon::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
 
 	// 객체의 속력이 walkThreshold를 넘는지를 기준으로
 	// walk 애니메이션이 필요한지 idle 애니메이션이 필요한지 판단한다.
@@ -1044,7 +1057,6 @@ void AnimBlenderDragon::update(Seconds deltaTime, void* pVoidOwner) {
 		tHit_ = 0.f;
 	}
 
-	priority_ = 0.f;
 }
 
 void AnimBlenderDragon::onCalcLocal(PassKey<AnimSystem>) {
@@ -1118,6 +1130,7 @@ void AnimBlenderEyeball::init(const AssetManager& assetManager) {
 // 애니메이션 블렌딩 상태를 갱신한다.
 void AnimBlenderEyeball::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
 
 	// 객체의 속력이 walkThreshold를 넘는지를 기준으로
 	// walk 애니메이션이 필요한지 idle 애니메이션이 필요한지 판단한다.
@@ -1191,7 +1204,6 @@ void AnimBlenderEyeball::update(Seconds deltaTime, void* pVoidOwner) {
 		tHit_ = 0.f;
 	}
 
-	priority_ = 0.f;
 }
 
 void AnimBlenderEyeball::onCalcLocal(PassKey<AnimSystem>) {
@@ -1265,6 +1277,7 @@ void AnimBlenderFishman::init(const AssetManager& assetManager) {
 // 애니메이션 블렌딩 상태를 갱신한다.
 void AnimBlenderFishman::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
 
 	// 객체의 속력이 walkThreshold를 넘는지를 기준으로
 	// walk 애니메이션이 필요한지 idle 애니메이션이 필요한지 판단한다.
@@ -1338,7 +1351,6 @@ void AnimBlenderFishman::update(Seconds deltaTime, void* pVoidOwner) {
 		tHit_ = 0.f;
 	}
 
-	priority_ = 0.f;
 }
 
 void AnimBlenderFishman::onCalcLocal(PassKey<AnimSystem>) {
@@ -1412,6 +1424,7 @@ void AnimBlenderGargoyle::init(const AssetManager& assetManager) {
 // 애니메이션 블렌딩 상태를 갱신한다.
 void AnimBlenderGargoyle::update(Seconds deltaTime, void* pVoidOwner) {
 	auto pOwner = static_cast<Object*>(pVoidOwner);
+	setOwnerPos(pOwner->pos());
 
 	// 객체의 속력이 walkThreshold를 넘는지를 기준으로
 	// walk 애니메이션이 필요한지 idle 애니메이션이 필요한지 판단한다.
@@ -1485,7 +1498,6 @@ void AnimBlenderGargoyle::update(Seconds deltaTime, void* pVoidOwner) {
 		tHit_ = 0.f;
 	}
 
-	priority_ = 0.f;
 }
 
 void AnimBlenderGargoyle::onCalcLocal(PassKey<AnimSystem>) {
@@ -1649,29 +1661,56 @@ void Object::update(Milliseconds deltaTime, float tPhysicInterpolation) {
 }
 
 void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
+	if (renderState_.shouldCull) {
+		return;
+	}
+
 	const auto pModel = renderState_.pModel;
 	if (pModel) {
+		const bool useDeferred = (gfx.renderPath() == GFX::RenderPath::Deferred);
+
 		for (auto& [mesh, meshXform] : pModel->meshWithDressXforms) {
 			const bool isSkinned = renderState_.animBlender
 				&& mesh.vbIdxMap.contains(mesh.name + "_VB_BoneIndices");
 
 			for (std::size_t i = 0u; i < mesh.subMeshes.size(); ++i) {
-				if (isSkinned) {
-					gfx.addDrawEvent(PBRSkinnedPipeline::DrawEvent{
-						.world = meshXform * offsetXform * renderState_.world,
-						.boneXforms = renderState_.animBlender->finalXformData(),
-						.mesh = &mesh,
-						.subMesh = &mesh.subMeshes[i],
-						.material = &mesh.materialSets[materialSetIdx_].materials[i],
-					});
+				if (useDeferred) {
+					if (isSkinned) {
+						gfx.addDrawEvent(PBRDeferredSkinnedPipeline::DrawEvent{
+							.world      = meshXform * offsetXform * renderState_.world,
+							.boneXforms = renderState_.animBlender->finalXformData(),
+							.mesh       = &mesh,
+							.subMesh    = &mesh.subMeshes[i],
+							.material   = &mesh.materialSets[materialSetIdx_].materials[i],
+						});
+					}
+					else {
+						gfx.addDrawEvent(PBRDeferredPipeline::DrawEvent{
+							.world    = meshXform * offsetXform * renderState_.world,
+							.mesh     = &mesh,
+							.subMesh  = &mesh.subMeshes[i],
+							.material = &mesh.materialSets[materialSetIdx_].materials[i],
+						});
+					}
 				}
 				else {
-					gfx.addDrawEvent(PBRPipeline::DrawEvent{
-						.world = meshXform * offsetXform * renderState_.world,
-						.mesh = &mesh,
-						.subMesh = &mesh.subMeshes[i],
-						.material = &mesh.materialSets[materialSetIdx_].materials[i],
-					});
+					if (isSkinned) {
+						gfx.addDrawEvent(PBRSkinnedPipeline::DrawEvent{
+							.world      = meshXform * offsetXform * renderState_.world,
+							.boneXforms = renderState_.animBlender->finalXformData(),
+							.mesh       = &mesh,
+							.subMesh    = &mesh.subMeshes[i],
+							.material   = &mesh.materialSets[materialSetIdx_].materials[i],
+						});
+					}
+					else {
+						gfx.addDrawEvent(PBRPipeline::DrawEvent{
+							.world    = meshXform * offsetXform * renderState_.world,
+							.mesh     = &mesh,
+							.subMesh  = &mesh.subMeshes[i],
+							.material = &mesh.materialSets[materialSetIdx_].materials[i],
+						});
+					}
 				}
 			}
 		}
@@ -2358,8 +2397,15 @@ void Gargoyle::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Eve
 
 void TerrainObject::render(GFX& gfx, mu::Mat4x4 /*offsetXform*/) {
 	if (!terrainData_ || terrainData_->mesh.subMeshes.empty()) return;
-	gfx.addDrawEvent(TerrainPipeline::DrawEvent{
-		.terrain = terrainData_,
-		.world   = renderState_.world
-	});
+	if (gfx.renderPath() == GFX::RenderPath::Deferred) {
+		gfx.addDrawEvent(TerrainDeferredPipeline::DrawEvent{
+			.terrain = terrainData_,
+			.world   = renderState_.world
+		});
+	} else {
+		gfx.addDrawEvent(TerrainPipeline::DrawEvent{
+			.terrain = terrainData_,
+			.world   = renderState_.world
+		});
+	}
 }

@@ -12,6 +12,7 @@ inline constexpr const char* wndName = "Project1";
 HWND ghWnd = nullptr;
 RECT gWndRect{ 0, 0, 1024, 768 };
 RECT gClientRect{ 0, 0, 1024, 768 };
+bool gClose = false;
 
 LRESULT wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -84,7 +85,9 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 	while ( true ) {
 		while ( PeekMessageA( &msg, nullptr, 0, 0, PM_REMOVE ) ) {
 			if ( msg.message == WM_QUIT ) {
-				SendBufferManager::clear();
+				gClose = true;
+				INet::ClientApp::release();
+				SendBufferManager::release();
 				MemoryManager::release();
 				SocketUtils::release();
 				return static_cast<int>( msg.wParam );

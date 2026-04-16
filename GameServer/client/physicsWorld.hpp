@@ -31,11 +31,26 @@ public:
     // Register a body for simulation.
     // onRebuildBVH is called after integration to keep the BVH in sync.
     // Pass an empty function if the body has no BVH (e.g. a simple trigger).
+    // collisionGroup / collisionMask: bit-field pair for filtering.
+    // A pair (a, b) is skipped if (a.collisionGroup & b.collisionMask) == 0.
+    // Default (group=1, mask=0xFFFF) matches all bodies.
     void registerBody(RigidBody* body,
-                      std::function<void()> onRebuildBVH = {});
+                      std::function<void()> onRebuildBVH = {},
+                      uint16_t collisionGroup = 1,
+                      uint16_t collisionMask  = 0xFFFF);
 
     // Remove a body from simulation. Safe to call with an unregistered body.
     void unregisterBody(RigidBody* body);
+
+    // --- Joint constraint API ---
+    // Owning: PhysicsWorld takes ownership. Use for standalone joints.
+    void addJointConstraint(std::unique_ptr<Constraint> joint);
+    void removeJointConstraint(Constraint* joint);
+
+    // Non-owning: caller retains ownership (e.g. Ragdoll). Use for ragdoll joints.
+    // The pointed-to Constraint must remain valid until removeJointRef is called.
+    void addJointRef(Constraint* joint);
+    void removeJointRef(Constraint* joint);
 
     // Register a static height-field terrain for body-terrain collision.
     // terrainBody must be MotionType::Static; it is NOT added to the broad phase.
@@ -66,6 +81,8 @@ private:
     struct Entry {
         RigidBody*            body;
         std::function<void()> onRebuildBVH;
+        uint16_t              collisionGroup = 1;
+        uint16_t              collisionMask  = 0xFFFF;
     };
 
     std::vector<Entry>                          entries_;
@@ -77,8 +94,11 @@ private:
     // Per-step contact constraints (rebuilt every step).
     std::vector<std::unique_ptr<ContactConstraint>> contactConstraints_;
 
-    // Persistent constraints: joints, springs, etc. (added by the game).
+    // Owned persistent constraints (added via addJointConstraint).
     std::vector<std::unique_ptr<Constraint>>    jointConstraints_;
+
+    // Non-owning joint references (added via addJointRef, e.g. from Ragdoll).
+    std::vector<Constraint*>                    jointRefs_;
 
     // Optional terrain collider (null when no terrain is registered).
     // Terrain body is NOT in entries_ or broadPhase_; TerrainCollider
