@@ -1,4 +1,4 @@
-#ifndef __UI_BUTTON_HPP
+﻿#ifndef __UI_BUTTON_HPP
 #define __UI_BUTTON_HPP
 
 #include "../UIElement.hpp"

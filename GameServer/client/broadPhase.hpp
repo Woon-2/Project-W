@@ -1,4 +1,4 @@
-#ifndef __BroadPhase_HPP
+﻿#ifndef __BroadPhase_HPP
 #define __BroadPhase_HPP
 
 #include "rigidBody.hpp"

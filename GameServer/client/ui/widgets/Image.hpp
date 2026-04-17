@@ -1,4 +1,4 @@
-#ifndef __UI_IMAGE_HPP
+﻿#ifndef __UI_IMAGE_HPP
 #define __UI_IMAGE_HPP
 
 #include "../UIElement.hpp"

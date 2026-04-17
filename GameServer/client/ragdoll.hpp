@@ -1,4 +1,4 @@
-#ifndef __Ragdoll_HPP
+﻿#ifndef __Ragdoll_HPP
 #define __Ragdoll_HPP
 
 #include "rigidBody.hpp"

@@ -1,4 +1,4 @@
-#ifndef __pbrDeferredSkinnedPipeline_HPP
+﻿#ifndef __pbrDeferredSkinnedPipeline_HPP
 #define __pbrDeferredSkinnedPipeline_HPP
 
 #include "gfxUtil.hpp"

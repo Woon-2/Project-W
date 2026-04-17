@@ -1,4 +1,4 @@
-#ifndef __ContactConstraint_HPP
+﻿#ifndef __ContactConstraint_HPP
 #define __ContactConstraint_HPP
 
 #include "constraint.hpp"
