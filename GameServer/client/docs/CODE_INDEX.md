@@ -353,9 +353,9 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 | 파일 | 설명 |
 |------|------|
-| `twoSidesPipeline.hpp` | DrawEvent (world, tint, mainTex/maskTex/noiseTex, emission, backFresnel 등), Dispatcher |
-| `twoSidesPipeline.cpp` | updateGPUDataSingleThreaded / drawSingleThreaded 구현. CullMode=None (양면 렌더링) |
-| `twoSides.hlsl` | Unity HS_Blend_TwoSides 포팅. Noise 왜곡 UV, Mask알파, SV_IsFrontFace로 후면 fresnel 처리 |
+| `twoSidesPipeline.hpp` | DrawEvent (world, tint, textures, texSpeed, frontFacesColor/backFacesColor/fresnelColor 등), Dispatcher |
+| `twoSidesPipeline.cpp` | updateGPUDataSingleThreaded / drawSingleThreaded 구현. CullMode=None. Slot0=Position, Slot1=Normal, Slot2=UV, Slot3=Color |
+| `twoSides.hlsl` | Unity HS_Blend_TwoSides 완전 포팅. NORMAL 입력, worldNormal+worldPos 전달, N.V Fresnel, frontFacesColor/backFacesColor/backFresnelColor 적용 |
 
 ---
 

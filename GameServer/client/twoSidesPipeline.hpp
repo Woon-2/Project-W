@@ -12,6 +12,7 @@ namespace TwoSidesPipeline {
 struct CameraData {
     mu::Mat4x4 view;
     mu::Mat4x4 proj;
+    mu::Vec3   pos;
 };
 
 struct FrameData {
@@ -41,11 +42,19 @@ struct DrawEvent {
     mu::Vec4 mainTexST   = { 1.f, 1.f, 0.f, 0.f };
     mu::Vec4 maskTexST   = { 1.f, 1.f, 0.f, 0.f };
     mu::Vec4 noiseTexST  = { 1.f, 1.f, 0.f, 0.f };
-    mu::Vec2 noiseSpeed  = { 0.f, 0.f };
+    mu::Vec4 texSpeed    = { 0.f, 0.f, 0.f, 0.f };  // xy=main UV, zw=noise UV
     float    emission    = 1.f;
     float    opacity     = 1.f;
-    float    useBackFresnel = 1.f;
-    float    backFresnel    = -4.f;
+    float    useFresnel        = 0.f;
+    float    fresnelPower      = 2.f;
+    mu::Vec4 frontFacesColor   = { 1.f, 1.f, 1.f, 1.f };
+    mu::Vec4 backFacesColor    = { 1.f, 1.f, 1.f, 1.f };
+    mu::Vec4 fresnelColor      = { 1.f, 1.f, 1.f, 1.f };
+    float    fresnelEmission   = 1.f;
+    float    useBackFresnel    = 0.f;
+    float    backFresnel       = -4.f;
+    float    backFresnelEmission = 1.f;
+    mu::Vec4 backFresnelColor  = { 1.f, 1.f, 1.f, 1.f };
 };
 
 struct Resources {

@@ -71,7 +71,8 @@ void Camera::updateGFX(GFX& gfx) {
 	});
 	gfx.addCameraData(TwoSidesPipeline::CameraData{
 		.view = view_,
-		.proj = proj_
+		.proj = proj_,
+		.pos  = eye_
 	});
 }
 

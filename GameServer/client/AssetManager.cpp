@@ -275,14 +275,23 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 	// TwoSides22 material — textures loaded from TwoSides22.json property names:
 	//   _MainTex=Trail62For, _Mask=Trail62, _Noise=Noise (reuse Noise43b)
 	twoSidesMaterial_ = ps::MatTwoSides{};
-	twoSidesMaterial_.mainTex      = &trail62ForTex_;
-	twoSidesMaterial_.maskTex      = &trail62Tex_;
-	twoSidesMaterial_.noiseTex     = &noise43bTex_;   // closest available noise texture
-	twoSidesMaterial_.noiseTexST   = { 0.1f, 2.0f, 0.f, 0.f };  // _Noise tiling from TwoSides22.json
-	twoSidesMaterial_.emission     = 3.0f;            // _Emission from TwoSides22.json
-	twoSidesMaterial_.opacity      = 1.0f;
-	twoSidesMaterial_.useBackFresnel = 1.0f;
-	twoSidesMaterial_.backFresnel    = -4.0f;         // _BackFresnel from TwoSides22.json
+	twoSidesMaterial_.mainTex           = &trail62ForTex_;
+	twoSidesMaterial_.maskTex           = &trail62Tex_;
+	twoSidesMaterial_.noiseTex          = &noise43bTex_;
+	twoSidesMaterial_.noiseTexST        = { 0.1f, 2.0f, 0.f, 0.f };
+	twoSidesMaterial_.texSpeed          = { 0.f, 0.f, 0.f, 0.f };
+	twoSidesMaterial_.emission          = 3.0f;
+	twoSidesMaterial_.opacity           = 1.0f;
+	twoSidesMaterial_.useFresnel        = 0.0f;
+	twoSidesMaterial_.fresnelPower      = 2.0f;
+	twoSidesMaterial_.frontFacesColor   = { 1.f, 1.f, 1.f, 1.f };
+	twoSidesMaterial_.backFacesColor    = { 0.6415f, 0.6415f, 0.6415f, 1.f };
+	twoSidesMaterial_.fresnelColor      = { 1.f, 1.f, 1.f, 1.f };
+	twoSidesMaterial_.fresnelEmission   = 1.0f;
+	twoSidesMaterial_.useBackFresnel    = 1.0f;
+	twoSidesMaterial_.backFresnel       = -4.0f;
+	twoSidesMaterial_.backFresnelEmission = 1.0f;
+	twoSidesMaterial_.backFresnelColor  = { 1.f, 1.f, 1.f, 1.f };
 
 	// Waves21cg5 material for SlashPath. HS_Blend_CG uses the Waves21 texture
 	// as the flow/distortion map, not as the generic noise slot.

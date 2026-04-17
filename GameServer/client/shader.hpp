@@ -606,7 +606,7 @@ struct PerInstanceData {        // 112B  (layout matches SwordSlashShader)
 };
 
 // b0 — bindless indices + instance offset + FX parameters (all per-drawcall)
-struct PerDrawcallData {        // 160B
+struct PerDrawcallData {        // 256B
     BindlessIndex idxMainTex;        // 16B
     BindlessIndex idxMaskTex;        // 16B
     BindlessIndex idxNoiseTex;       // 16B
@@ -617,19 +617,28 @@ struct PerDrawcallData {        // 160B
     XMFLOAT4      mainTexST;         // 16B
     XMFLOAT4      maskTexST;         // 16B
     XMFLOAT4      noiseTexST;        // 16B
-    XMFLOAT2      noiseSpeed;        // 8B
-    XMFLOAT2      pad2;              // 8B
+    XMFLOAT4      texSpeed;          // 16B  xy=main UV speed, zw=noise UV speed
     float         emission;          // 4B
     float         opacity;           // 4B
+    float         useFresnel;        // 4B
+    float         fresnelPower;      // 4B
+    XMFLOAT4      frontFacesColor;   // 16B
+    XMFLOAT4      backFacesColor;    // 16B
+    XMFLOAT4      fresnelColor;      // 16B
+    float         fresnelEmission;   // 4B
     float         useBackFresnel;    // 4B
     float         backFresnel;       // 4B
+    float         backFresnelEmission; // 4B
+    XMFLOAT4      backFresnelColor;  // 16B
     float         time;              // 4B
     XMFLOAT3      pad3;              // 12B
 };
 
 // b1 — per-frame
-struct PerFrameData {           // 64B
+struct PerFrameData {           // 80B
     XMFLOAT4X4 matViewProj;     // 64B (row-major)
+    XMFLOAT3   cameraPos;       // 12B
+    float      cbpad;           // 4B
 };
 
 }  // namespace TwoSidesShader

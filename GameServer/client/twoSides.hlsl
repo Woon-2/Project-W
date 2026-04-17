@@ -15,7 +15,7 @@ struct PerInstanceData {
     float2   pad;
 };
 
-// b0: per-drawcall — bindless indices + FX params
+// b0: per-drawcall
 cbuffer PerDrawcallData : register(b0) {
     uint4  idxMainTex;           // 16B
     uint4  idxMaskTex;           // 16B
@@ -27,12 +27,19 @@ cbuffer PerDrawcallData : register(b0) {
     float4 mainTexST;            // 16B  xy=tiling, zw=offset
     float4 maskTexST;            // 16B
     float4 noiseTexST;           // 16B
-    float2 noiseSpeed;           // 8B   UV animation speed
-    float2 pad2;                 // 8B
+    float4 texSpeed;             // 16B  xy=main UV speed, zw=noise UV speed
     float  emission;             // 4B
     float  opacity;              // 4B
+    float  useFresnel;           // 4B   0=off, 1=on
+    float  fresnelPower;         // 4B   exponent
+    float4 frontFacesColor;      // 16B  used in SeparateFresnel path
+    float4 backFacesColor;       // 16B  base tint (front face default + back face no-fresnel)
+    float4 fresnelColor;         // 16B  front Fresnel rim color
+    float  fresnelEmission;      // 4B
     float  useBackFresnel;       // 4B   0=off, 1=on
-    float  backFresnel;          // 4B   negative = darker back faces
+    float  backFresnel;          // 4B   exponent (negative -> saturates to 1 = full rim)
+    float  backFresnelEmission;  // 4B
+    float4 backFresnelColor;     // 16B  back face rim color
     float  time;                 // 4B
     float3 pad3;                 // 12B
 };
@@ -40,6 +47,8 @@ cbuffer PerDrawcallData : register(b0) {
 // b1: per-frame
 cbuffer PerFrameData : register(b1) {
     float4x4 matViewProj;        // 64B  row-major
+    float3   cameraPos;          // 12B  world-space
+    float    cbpad;              // 4B
 };
 
 StructuredBuffer<PerInstanceData> gInstances : register(t0);
@@ -50,6 +59,7 @@ float2 transformUV(float2 uv, float4 st) {
 
 struct VSInput {
     float3 position : POSITION;
+    float3 normal   : NORMAL;
     float2 uv       : UV;
     float4 color    : COLOR;
     uint   instID   : SV_InstanceID;
@@ -61,14 +71,19 @@ struct PSInput {
     float4 vertexColor : COLOR;
     float4 tint        : TINT;
     float  t           : PRAGE;
+    float3 worldPos    : TEXCOORD1;
+    float3 worldNormal : TEXCOORD2;
 };
 
 PSInput VSMain(VSInput input) {
     PSInput ret;
     PerInstanceData inst = gInstances[firstInstanceOffset + input.instID];
 
-    float4 worldPos = mul(float4(input.position, 1.0f), inst.world);
-    ret.pos         = mul(worldPos, matViewProj);
+    float4 worldPos4 = mul(float4(input.position, 1.0f), inst.world);
+    ret.pos         = mul(worldPos4, matViewProj);
+    ret.worldPos    = worldPos4.xyz;
+    // inst.world = transpose(W_true); mul(n, W_true^T) gives correct world-space normal
+    ret.worldNormal = normalize(mul(input.normal, (float3x3)inst.world));
     ret.uv          = input.uv;
     ret.vertexColor = input.color;
     ret.tint        = inst.tint;
@@ -80,30 +95,51 @@ float4 PSMain(PSInput input, bool isFrontFace : SV_IsFrontFace) : SV_TARGET {
     // --- Noise-based UV distortion ---
     float2 distortedUV = input.uv;
     if (hasNoiseTex != 0u) {
-        float2 noiseUV     = transformUV(input.uv, noiseTexST) + noiseSpeed * time;
+        float2 noiseUV     = transformUV(input.uv, noiseTexST) + texSpeed.zw * time;
         float2 noiseSample = sampleBindless(idxNoiseTex, noiseUV).rg;
         distortedUV += (noiseSample * 2.0f - 1.0f) * 0.04f;
     }
 
-    // --- Main texture ---
-    float2 mainUV    = transformUV(distortedUV, mainTexST);
+    // --- Main texture (with UV animation) ---
+    float2 mainUV    = transformUV(distortedUV + texSpeed.xy * time, mainTexST);
     float4 mainColor = sampleBindless(idxMainTex, mainUV);
 
     // --- Mask ---
     float2 maskUV    = transformUV(input.uv, maskTexST);
     float  maskAlpha = sampleBindless(idxMaskTex, maskUV).r;
 
+    // --- Fresnel (view-angle rim, N.V based) ---
+    float3 N    = normalize(input.worldNormal);
+    float3 V    = normalize(cameraPos - input.worldPos);
+    float  NdotV = saturate(dot(N, V));
+
+    // --- Front face color (Unity: backFacesColor is the base, fresnelColor adds rim) ---
+    float3 frontColor;
+    if (useFresnel > 0.5f) {
+        float fresnel = pow(1.0f - NdotV, max(fresnelPower, 0.001f));
+        frontColor = backFacesColor.rgb * (1.0f - fresnel)
+                   + fresnelColor.rgb * fresnelEmission * fresnel;
+    } else {
+        frontColor = backFacesColor.rgb;
+    }
+
+    // --- Back face color ---
+    // pow(base, negative_exp) saturates to 1 for all valid NdotV, giving full rim.
+    float3 backColor;
+    if (useBackFresnel > 0.5f) {
+        float backF = saturate(pow(max(1.0f - NdotV, 0.0001f), backFresnel));
+        backColor = backFacesColor.rgb * max(1.0f - backF, 0.0f)
+                  + backFresnelColor.rgb * backFresnelEmission * backF;
+    } else {
+        backColor = backFacesColor.rgb;
+    }
+
+    float3 faceColor = isFrontFace ? frontColor : backColor;
+
     // --- Composite ---
     float4 vc       = input.vertexColor * input.tint;
-    float3 finalRGB = mainColor.rgb * emission * vc.rgb;
+    float3 finalRGB = mainColor.rgb * emission * faceColor * vc.rgb;
     float  finalA   = mainColor.a * maskAlpha * opacity * vc.a;
-
-    // --- Back-face darkening via pseudo-Fresnel ---
-    // backFresnel=-4 -> saturate(1+(-4)*0.25)=0 -> back faces fully transparent.
-    if (useBackFresnel > 0.5f && !isFrontFace) {
-        float fresnelFactor = saturate(1.0f + backFresnel * 0.25f);
-        finalA *= fresnelFactor;
-    }
 
     return float4(finalRGB, finalA);
 }

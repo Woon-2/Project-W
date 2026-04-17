@@ -2296,7 +2296,7 @@ ComPtr<ID3D12PipelineState> createTwoSidesShader( ID3D12Device* device, ID3D12Ro
 	auto vsCode = compileShader( "twoSides.hlsl", nullptr, "VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
 	auto psCode = compileShader( "twoSides.hlsl", nullptr, "PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
 
-	// Input layout: Slot0=POSITION(float3), Slot1=UV(float2), Slot2=COLOR(float4)
+	// Input layout: Slot0=POSITION(float3), Slot1=NORMAL(float3), Slot2=UV(float2), Slot3=COLOR(float4)
 	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
 		D3D12_INPUT_ELEMENT_DESC{
 			.SemanticName = "POSITION",
@@ -2308,10 +2308,19 @@ ComPtr<ID3D12PipelineState> createTwoSidesShader( ID3D12Device* device, ID3D12Ro
 			.InstanceDataStepRate = 0u
 		},
 		D3D12_INPUT_ELEMENT_DESC{
+			.SemanticName = "NORMAL",
+			.SemanticIndex = 0u,
+			.Format = DXGI_FORMAT_R32G32B32_FLOAT,
+			.InputSlot = 1u,
+			.AlignedByteOffset = 0u,
+			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+			.InstanceDataStepRate = 0u
+		},
+		D3D12_INPUT_ELEMENT_DESC{
 			.SemanticName = "UV",
 			.SemanticIndex = 0u,
 			.Format = DXGI_FORMAT_R32G32_FLOAT,
-			.InputSlot = 1u,
+			.InputSlot = 2u,
 			.AlignedByteOffset = 0u,
 			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
 			.InstanceDataStepRate = 0u
@@ -2320,7 +2329,7 @@ ComPtr<ID3D12PipelineState> createTwoSidesShader( ID3D12Device* device, ID3D12Ro
 			.SemanticName = "COLOR",
 			.SemanticIndex = 0u,
 			.Format = DXGI_FORMAT_R32G32B32A32_FLOAT,
-			.InputSlot = 2u,
+			.InputSlot = 3u,
 			.AlignedByteOffset = 0u,
 			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
 			.InstanceDataStepRate = 0u

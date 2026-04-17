@@ -81,12 +81,19 @@ void Dispatcher::updateGPUDataSingleThreaded() {
             .mainTexST            = e.mainTexST.getXmf(),
             .maskTexST            = e.maskTexST.getXmf(),
             .noiseTexST           = e.noiseTexST.getXmf(),
-            .noiseSpeed           = { e.noiseSpeed.x(), e.noiseSpeed.y() },
-            .pad2                 = {},
+            .texSpeed             = e.texSpeed.getXmf(),
             .emission             = e.emission,
             .opacity              = e.opacity,
+            .useFresnel           = e.useFresnel,
+            .fresnelPower         = e.fresnelPower,
+            .frontFacesColor      = e.frontFacesColor.getXmf(),
+            .backFacesColor       = e.backFacesColor.getXmf(),
+            .fresnelColor         = e.fresnelColor.getXmf(),
+            .fresnelEmission      = e.fresnelEmission,
             .useBackFresnel       = e.useBackFresnel,
             .backFresnel          = e.backFresnel,
+            .backFresnelEmission  = e.backFresnelEmission,
+            .backFresnelColor     = e.backFresnelColor.getXmf(),
             .time                 = frameData_.time,
             .pad3                 = {},
         };
@@ -96,6 +103,8 @@ void Dispatcher::updateGPUDataSingleThreaded() {
     const auto vp = cameraData_.view * cameraData_.proj;
     auto pfd = TwoSidesShader::PerFrameData{
         .matViewProj = mu::transpose(vp).getXmf(),
+        .cameraPos   = { cameraData_.pos.x(), cameraData_.pos.y(), cameraData_.pos.z() },
+        .cbpad       = 0.f,
     };
     pResources_->perFrameData.stage(roomIdx_, &pfd, 1u);
 }
@@ -153,10 +162,11 @@ void Dispatcher::drawSingleThreaded() {
         // Lazily build pipeline-specific VB view array for this mesh
         if (e.pMesh->vbViewsByPipeline.find("TwoSidesPipeline") == e.pMesh->vbViewsByPipeline.end()) {
             auto& views = e.pMesh->vbViewsByPipeline["TwoSidesPipeline"];
-            views.resize(3u);
+            views.resize(4u);
             views[0] = e.pMesh->vbViews[e.pMesh->vbIdxMap.at(e.pMesh->name + "_VB_Position")];
-            views[1] = e.pMesh->vbViews[e.pMesh->vbIdxMap.at(e.pMesh->name + "_VB_UV")];
-            views[2] = e.pMesh->vbViews[e.pMesh->vbIdxMap.at(e.pMesh->name + "_VB_Color")];
+            views[1] = e.pMesh->vbViews[e.pMesh->vbIdxMap.at(e.pMesh->name + "_VB_Normal")];
+            views[2] = e.pMesh->vbViews[e.pMesh->vbIdxMap.at(e.pMesh->name + "_VB_UV")];
+            views[3] = e.pMesh->vbViews[e.pMesh->vbIdxMap.at(e.pMesh->name + "_VB_Color")];
         }
         const auto& vbViews = e.pMesh->vbViewsByPipeline.at("TwoSidesPipeline");
 
