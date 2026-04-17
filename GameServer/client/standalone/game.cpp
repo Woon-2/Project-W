@@ -1323,7 +1323,7 @@ void Game::processInput(Milliseconds deltaTime) {
 		// swordSlash7Effect_.play( slashPos );
 		// swordSlash1Effect_.play(slashPos);
 		// slashWaveEffect_.play( slashPos, player_->orient() );
-		// spikesAttackEffect_.play( slashPos );
+		spikesAttackEffect_.play( slashPos );
 	}
 
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때
