@@ -75,6 +75,7 @@ void Dispatcher::updateGPUDataSingleThreaded() {
             .idxMaskTex           = idxMask,
             .idxNoiseTex          = idxNoise,
             .hasNoiseTex          = e.pNoiseTex ? 1u : 0u,
+            .hasMaskTex           = e.pMaskTex  ? 1u : 0u,
             .pad0                 = {},
             .firstInstanceOffset  = static_cast<u32t>(i),
             .pad1                 = {},

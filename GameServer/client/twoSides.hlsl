@@ -21,7 +21,8 @@ cbuffer PerDrawcallData : register(b0) {
     uint4  idxMaskTex;           // 16B
     uint4  idxNoiseTex;          // 16B
     uint   hasNoiseTex;          // 4B
-    uint3  pad0;                 // 12B
+    uint   hasMaskTex;           // 4B
+    uint2  pad0;                 // 8B
     uint   firstInstanceOffset;  // 4B
     uint3  pad1;                 // 12B
     float4 mainTexST;            // 16B  xy=tiling, zw=offset
@@ -32,8 +33,8 @@ cbuffer PerDrawcallData : register(b0) {
     float  opacity;              // 4B
     float  useFresnel;           // 4B   0=off, 1=on
     float  fresnelPower;         // 4B   exponent
-    float4 frontFacesColor;      // 16B  used in SeparateFresnel path
-    float4 backFacesColor;       // 16B  base tint (front face default + back face no-fresnel)
+    float4 frontFacesColor;      // 16B  front face base tint
+    float4 backFacesColor;       // 16B  back face base tint
     float4 fresnelColor;         // 16B  front Fresnel rim color
     float  fresnelEmission;      // 4B
     float  useBackFresnel;       // 4B   0=off, 1=on
@@ -106,21 +107,21 @@ float4 PSMain(PSInput input, bool isFrontFace : SV_IsFrontFace) : SV_TARGET {
 
     // --- Mask ---
     float2 maskUV    = transformUV(input.uv, maskTexST);
-    float  maskAlpha = sampleBindless(idxMaskTex, maskUV).r;
+    float  maskAlpha = hasMaskTex ? sampleBindless(idxMaskTex, maskUV).r : 1.0f;
 
     // --- Fresnel (view-angle rim, N.V based) ---
     float3 N    = normalize(input.worldNormal);
     float3 V    = normalize(cameraPos - input.worldPos);
     float  NdotV = saturate(dot(N, V));
 
-    // --- Front face color (Unity: backFacesColor is the base, fresnelColor adds rim) ---
+    // --- Front face color ---
     float3 frontColor;
     if (useFresnel > 0.5f) {
         float fresnel = pow(1.0f - NdotV, max(fresnelPower, 0.001f));
-        frontColor = backFacesColor.rgb * (1.0f - fresnel)
+        frontColor = frontFacesColor.rgb * (1.0f - fresnel)
                    + fresnelColor.rgb * fresnelEmission * fresnel;
     } else {
-        frontColor = backFacesColor.rgb;
+        frontColor = frontFacesColor.rgb;
     }
 
     // --- Back face color ---

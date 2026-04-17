@@ -462,6 +462,28 @@ void Game::setParticle()
 		swordSlash7Effect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);
 	}
 
+	// ── Spikes Attack effect ───────────────────────────────────────────────
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/Spikes attack_ParticleSystems.json",
+			"Spikes attack/Spikes"
+		);
+		cfg.renderer.pMesh = assetManager_.meshIceSpikes2();
+		cfg.renderer.pSubMesh = assetManager_.meshIceSpikes2()->subMeshes.empty()
+		                       ? nullptr
+		                       : &assetManager_.meshIceSpikes2()->subMeshes[0];
+		cfg.renderer.mat = assetManager_.spikesMaterial();
+		cfg.colorOverLifetime.enabled = true;
+		cfg.colorOverLifetime.gradient = ColorGradient{
+			.keys = {
+				{ 0.0f, { 1.f, 1.f, 1.f, 1.f } },
+				{ 0.78f, { 1.f, 1.f, 1.f, 1.f } },
+				{ 1.0f, { 1.f, 1.f, 1.f, 0.f } },
+			}
+		};
+		spikesAttackEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);
+	}
+
 	// ── Slash Wave effect ─────────────────────────────────────────────────────
 	{
 		auto cfg = loadUnityParticleConfig(
@@ -1095,6 +1117,7 @@ void Game::update(Milliseconds deltaTime) {
 	swordSlash7Effect_.update( deltaTime );
 	swordSlashComboEffect_.update( deltaTime );
 	slashWaveEffect_.update( deltaTime );
+	spikesAttackEffect_.update( deltaTime );
 	dustParticleSystem_.update( deltaTime );
 
 	// UI 동기화
@@ -1126,6 +1149,7 @@ void Game::render() {
 	swordSlash7Effect_.render( gfx_ );
 	swordSlashComboEffect_.render( gfx_ );
 	slashWaveEffect_.render( gfx_ );
+	spikesAttackEffect_.render( gfx_ );
 	dustParticleSystem_.render( gfx_ );
 
 	uiManager_.render( gfx_ );
@@ -1295,10 +1319,11 @@ void Game::processInput(Milliseconds deltaTime) {
 		const auto slashPos = player_->renderState().pos
 		                    + player_->forward() * 1.f
 		                    + mu::Vec3(0.f, 1.0f, 0.f);
-		//swordSlashComboEffect_.play( slashPos );
+		// swordSlashComboEffect_.play( slashPos );
 		// swordSlash7Effect_.play( slashPos );
-		//swordSlash1Effect_.play(slashPos);
-		slashWaveEffect_.play( slashPos, player_->orient() );
+		// swordSlash1Effect_.play(slashPos);
+		// slashWaveEffect_.play( slashPos, player_->orient() );
+		// spikesAttackEffect_.play( slashPos );
 	}
 
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때

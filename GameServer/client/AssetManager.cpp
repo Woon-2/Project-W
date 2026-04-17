@@ -154,6 +154,13 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 		.pDestTex    = nullptr
 	} );
 
+	gfx.addRequestMeshBinLoad( RequestMeshBinLoad{
+		.meshPath    = "../resources/effects/IceSpikes2.meshbin",
+		.pTexHashMap = &texHashMap_,
+		.pDestMesh   = &meshIceSpikes2_,
+		.pDestTex    = nullptr
+	} );
+
 	gfx.addRequestTextureLoad( RequestTextureLoad{
 		.name            = "Smoke24",
 		.texturePath     = "../resources/Textures/Smoke24.dds",
@@ -243,6 +250,24 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 		.sampler         = Samplers::BilinearWrap
 	} );
 
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "Noise62",
+		.texturePath     = "../resources/Textures/Noise62.dds",
+		.pDest           = &noise62Tex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearWrap
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "Noise1",
+		.texturePath     = "../resources/Textures/Noise1.dds",
+		.pDest           = &noise1Tex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearWrap
+	} );
+
 	swordSlashMaterial_ = makeDefaultSwordSlashMaterial();
 	if (loadSwordSlashMaterialMetadata("../resources/effects/SwordSlashMat.json", swordSlashMaterial_)) {
 		gSharedLog << "[SwordSlash Material] File I/O: ../resources/effects/SwordSlashMat.json 로드 완료\n";
@@ -292,6 +317,29 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 	twoSidesMaterial_.backFresnel       = -4.0f;
 	twoSidesMaterial_.backFresnelEmission = 1.0f;
 	twoSidesMaterial_.backFresnelColor  = { 1.f, 1.f, 1.f, 1.f };
+
+	// TwoSides37 material — IceSpikes2 mesh particle.
+	// _MainTex=Noise62 (ST 1x1), _Noise=Noise1 (ST 2x2), _Mask=none
+	spikesMaterial_ = ps::MatTwoSides{};
+	spikesMaterial_.mainTex            = &noise62Tex_;
+	spikesMaterial_.maskTex            = nullptr;
+	spikesMaterial_.noiseTex           = &noise1Tex_;
+	spikesMaterial_.mainTexST          = { 1.f, 1.f, 0.f, 0.f };
+	spikesMaterial_.maskTexST          = { 1.f, 1.f, 0.f, 0.f };
+	spikesMaterial_.noiseTexST         = { 2.f, 2.f, 0.f, 0.f };
+	spikesMaterial_.texSpeed           = { 0.f, 0.f, 0.f, 0.f };
+	spikesMaterial_.emission           = 7.0f;
+	spikesMaterial_.opacity            = 1.0f;
+	spikesMaterial_.useFresnel         = 1.0f;
+	spikesMaterial_.fresnelPower       = 2.0f;
+	spikesMaterial_.frontFacesColor    = { 0.5755f, 0.5755f, 0.5755f, 1.f };
+	spikesMaterial_.backFacesColor     = { 1.f, 1.f, 1.f, 1.f };
+	spikesMaterial_.fresnelColor       = { 1.f, 1.f, 1.f, 1.f };
+	spikesMaterial_.fresnelEmission    = 1.0f;
+	spikesMaterial_.useBackFresnel     = 1.0f;
+	spikesMaterial_.backFresnel        = -4.0f;
+	spikesMaterial_.backFresnelEmission = 1.0f;
+	spikesMaterial_.backFresnelColor   = { 1.f, 1.f, 1.f, 1.f };
 
 	// Waves21cg5 material for SlashPath. HS_Blend_CG uses the Waves21 texture
 	// as the flow/distortion map, not as the generic noise slot.

@@ -444,10 +444,13 @@ void readSizeModule(const json::Value* size, ps::ParticleSystemConfig& cfg) {
         return;
 
     cfg.sizeOverLifetime.enabled = readBool(size, "enabled", cfg.sizeOverLifetime.enabled);
+    const auto sizeCurve = readMinMaxCurve(find(size, "size"));
     const auto range = readCurveRange(find(size, "size"));
     cfg.sizeOverLifetime.sizeBegin = range.first;
     cfg.sizeOverLifetime.sizeEnd = range.second;
-    cfg.sizeOverLifetime.curve = readMinMaxCurve(find(size, "size")).curve;
+    cfg.sizeOverLifetime.useCurve = true;
+    cfg.sizeOverLifetime.size = sizeCurve;
+    cfg.sizeOverLifetime.curve = sizeCurve.curve;
 }
 
 void readRotationModule(const json::Value* rotation, ps::ParticleSystemConfig& cfg) {

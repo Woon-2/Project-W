@@ -155,6 +155,8 @@ struct SizeOverLifetimeModule {
     bool  enabled   = false;
     float sizeBegin = 1.f;
     float sizeEnd   = 0.f;
+    bool  useCurve  = false;
+    MinMaxCurveChannel size;
 
     bool separateAxes = false;
     FloatCurve curve;

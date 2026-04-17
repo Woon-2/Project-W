@@ -163,7 +163,7 @@ void submitParticleDraw(GFX& gfx, const ParticleRenderContext& ctx, const ps::Ma
 
 void submitParticleDraw(GFX& gfx, const ParticleRenderContext& ctx, const ps::MatTwoSides& mat) {
     const auto& rend = ctx.renderer;
-    if (!mat.mainTex || !mat.maskTex) return;
+    if (!mat.mainTex) return;
     const auto geometry = buildParticleMeshGeometry(ctx);
     if (!geometry) return;
 

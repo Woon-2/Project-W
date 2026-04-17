@@ -138,6 +138,7 @@ private:
 	ParticleEffect swordSlash7Effect_{};
 	ParticleEffect swordSlashComboEffect_{};
 	ParticleEffect slashWaveEffect_{};
+	ParticleEffect spikesAttackEffect_{};
 	ParticleSystem dustParticleSystem_{};
 	int            footBoneIdxLeft_  = -1;
 	int            footBoneIdxRight_ = -1;

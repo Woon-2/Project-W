@@ -611,7 +611,8 @@ struct PerDrawcallData {        // 256B
     BindlessIndex idxMaskTex;        // 16B
     BindlessIndex idxNoiseTex;       // 16B
     u32t          hasNoiseTex;        // 4B
-    XMUINT3       pad0;               // 12B
+    u32t          hasMaskTex;         // 4B
+    XMUINT2       pad0;               // 8B
     u32t          firstInstanceOffset; // 4B
     XMUINT3       pad1;              // 12B
     XMFLOAT4      mainTexST;         // 16B
