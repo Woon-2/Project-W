@@ -33,7 +33,7 @@ class SendBufferChunk;
 
 class SendBuffer {
 public:
-    SendBuffer(SendBufferChunk* owner, byte* buffer, uint32 allocSize)
+    SendBuffer(const std::shared_ptr<SendBufferChunk>& owner, byte* buffer, uint32 allocSize)
         : owner_(owner), buffer_(buffer), allocSize_(allocSize), writeSize_(0) {}
 
     void close(uint32 writeSize);
@@ -43,7 +43,7 @@ public:
 	uint32 writeSize() const { return writeSize_; }
 
 private:
-    SendBufferChunk* owner_;
+    std::shared_ptr<SendBufferChunk> owner_;
     byte* buffer_;
 	uint32 allocSize_;
 	uint32 writeSize_;
@@ -53,7 +53,7 @@ private:
      SendBufferChunk
 -----------------------*/
 
-class SendBufferChunk {
+class SendBufferChunk : public std::enable_shared_from_this<SendBufferChunk> {
 public:
     SendBufferChunk() : buffer_(), open_(false), usedSize_(0u) {}
 
@@ -62,7 +62,7 @@ public:
         ASSERT_CRASH(!open_);
 
         open_ = true;
-		return ObjectPool<SendBuffer>::makeShared(this, buffer(), size);
+		return ObjectPool<SendBuffer>::makeShared(shared_from_this(), buffer(), size);
     }
 
     void close(uint32 writeSize) {
@@ -81,7 +81,7 @@ public:
 	uint32 freeSize() const { return chunkSize_ - usedSize_; }
 
 private:
-	static const uint32 chunkSize_{0x1000};
+	static const uint32 chunkSize_{8192u};
 	std::array<byte, chunkSize_> buffer_;
 	bool open_;
 	uint32 usedSize_;
@@ -96,27 +96,13 @@ private:
 */
 class SendBufferManager {
 public:
-    static std::shared_ptr<SendBuffer> open(uint32 size) {
-        if (LSendBufferChunk == nullptr) {
-            LSendBufferChunk = onew<SendBufferChunk>();
-        }
-        else if (LSendBufferChunk->freeSize() < size) {
-			LSendBufferChunk->reset();
-        }
-        else {
-            // no-op
-        }
+    static std::shared_ptr<SendBuffer> open( uint32 size );
 
-		//std::cout << "Free Size: " << LSendBufferChunk->freeSize() << '\n';
-        return LSendBufferChunk->open(size);
-    }
+private:
+    static void push( SendBufferChunk* chunk );
+    static std::shared_ptr<SendBufferChunk> pop();
 
-    static void release() {
-        if (LSendBufferChunk != nullptr) {
-			odelete(LSendBufferChunk);
-			LSendBufferChunk = nullptr;
-        }
-    }
+	static ccqueue< std::shared_ptr<SendBufferChunk> > sendBufferChunks_;
 };
 
 #endif // send_buffer_hpp
