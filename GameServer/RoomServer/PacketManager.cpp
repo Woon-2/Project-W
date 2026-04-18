@@ -55,7 +55,7 @@ void PacketManager::handleCAttackPacket( GameSession* session, byte* buffer, int
 	uint64 clientMs = reinterpret_cast<CAttackPacket*>(buffer)->clientMs;
 	session->room()->doAsync( [ session, clientMs ]() {
 		session->room()->attack( session->id(), clientMs );
-		} );
+	} );
 }
 
 std::shared_ptr<SendBuffer> PacketManager::makeSEnterPacket(const PlayerInfo& playerInfo, const std::vector<ObjectInfo>& objInfos) {
@@ -156,6 +156,28 @@ std::shared_ptr<SendBuffer> PacketManager::makeSNpcMovePacket(uint16 npcId, Dire
 
 	sNpcMvPkt->size = bw.writeSize();
 	sNpcMvPkt->type = PacketType::S_NpcMove;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSNpcMoveBatchPacket(const std::vector<SNpcMoveInfo>& infos) {
+	const uint16 count = static_cast<uint16>(infos.size());
+	auto sendBuffer = SendBufferManager::open( sizeof( SNpcMoveBatchPacket ) + sizeof( SNpcMoveInfo ) * count );
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto sNpcMvBatPkt = bw.reserve<SNpcMoveBatchPacket>();
+
+	auto entries = bw.reserve<SNpcMoveInfo>(count);
+	for ( uint16 i = 0; i < count; ++i ) {
+		entries[ i ] = infos[ i ];
+	}
+
+	sNpcMvBatPkt->dataOffset = static_cast<uint16>( reinterpret_cast<uint64>( entries ) - reinterpret_cast<uint64>( sNpcMvBatPkt ) );
+	sNpcMvBatPkt->npcCount = count;
+
+	sNpcMvBatPkt->size = bw.writeSize();
+	sNpcMvBatPkt->type = PacketType::S_NpcMoveBatch;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;

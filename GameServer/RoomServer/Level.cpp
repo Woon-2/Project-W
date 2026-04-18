@@ -61,8 +61,18 @@ void importNode(std::ifstream& ifs, const AssetManager& assetManager, Level& lev
 		importTerrain(ifs, level.terrain);
 	}
 	else if (type == "GoblinSpawner") {
-		auto& g = level.goblins.emplace_back(std::move(object));
-		importGoblinSpawner(ifs, assetManager, g);
+		std::mt19937 rng{ std::random_device{}() };
+		std::uniform_real_distribution<float> distXZ(-50.f, 50.f);
+		const float baseX = object.pos().x();
+		const float baseY = object.pos().y();
+		const float baseZ = object.pos().z();
+
+		for ( int32 i = 0; i < 50; ++i ) {
+			Object copy = object;
+			copy.setPos( mu::Vec3( baseX + distXZ( rng ), baseY, baseZ + distXZ( rng ) ) );
+			auto& g = level.goblins.emplace_back(Goblin(std::move(copy)));
+			importGoblinSpawner(ifs, assetManager, g);
+		}
 	}
 	else {
 		// no-op

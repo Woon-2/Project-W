@@ -90,11 +90,21 @@
     <ClCompile Include="JobTimer.cpp">
       <Filter>utils\JobTimer</Filter>
     </ClCompile>
-    <ClCompile Include="broadPhase.cpp" />
-    <ClCompile Include="contactConstraint.cpp" />
-    <ClCompile Include="physicsWorld.cpp" />
-    <ClCompile Include="rigidBody.cpp" />
-    <ClCompile Include="terrain.cpp" />
+    <ClCompile Include="broadPhase.cpp">
+      <Filter>contents</Filter>
+    </ClCompile>
+    <ClCompile Include="contactConstraint.cpp">
+      <Filter>contents</Filter>
+    </ClCompile>
+    <ClCompile Include="physicsWorld.cpp">
+      <Filter>contents</Filter>
+    </ClCompile>
+    <ClCompile Include="rigidBody.cpp">
+      <Filter>contents</Filter>
+    </ClCompile>
+    <ClCompile Include="terrain.cpp">
+      <Filter>contents</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Listener.hpp">
@@ -148,11 +158,21 @@
     <ClInclude Include="JobTimer.hpp">
       <Filter>utils\JobTimer</Filter>
     </ClInclude>
-    <ClInclude Include="broadPhase.hpp" />
-    <ClInclude Include="constraint.hpp" />
-    <ClInclude Include="contactConstraint.hpp" />
-    <ClInclude Include="physicsWorld.hpp" />
-    <ClInclude Include="rigidBody.hpp" />
     <ClInclude Include="terrain.hpp" />
+    <ClInclude Include="broadPhase.hpp">
+      <Filter>contents</Filter>
+    </ClInclude>
+    <ClInclude Include="constraint.hpp">
+      <Filter>contents</Filter>
+    </ClInclude>
+    <ClInclude Include="contactConstraint.hpp">
+      <Filter>contents</Filter>
+    </ClInclude>
+    <ClInclude Include="physicsWorld.hpp">
+      <Filter>contents</Filter>
+    </ClInclude>
+    <ClInclude Include="rigidBody.hpp">
+      <Filter>contents</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

@@ -33,7 +33,7 @@ void DoWork(IocpReactor& reactor) {
 		LWorkStartTime = HighResolutionClock::now();
 
 		// IOCP 이벤트 처리
-		reactor.dispatch(10);
+		reactor.dispatch(17);
 
 		// 예약된 작업 처리
 		JobTimer::distribute();

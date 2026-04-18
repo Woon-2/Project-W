@@ -11,9 +11,10 @@ Room* RoomManager::makeRoom() {
 	ASSERT_CRASH(pLevel_ != nullptr);
 	newRoom->init(pLevel_);
 
-	newRoom->doTimer(17ms, [newRoom] {	// 60fps
+	Milliseconds delay = 15s;
+	newRoom->doTimer( delay, [newRoom] {
 		newRoom->update();
-	});
+	} );
 
 	rmMtx_.lock();
 	rooms_.push_back(newRoom);
