@@ -87,7 +87,6 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 			if ( msg.message == WM_QUIT ) {
 				gClose = true;
 				INet::ClientApp::release();
-				SendBufferManager::release();
 				MemoryManager::release();
 				SocketUtils::release();
 				return static_cast<int>( msg.wParam );
