@@ -13,6 +13,12 @@ public:
     const Texture* texHovered = nullptr;
     const Texture* texPressed = nullptr;
 
+    // Solid-color fallback used when the corresponding texture is nullptr.
+    // Alpha = 0 means transparent (no quad submitted).
+    XMFLOAT4 bgColor        = { 1.f, 1.f, 1.f, 0.f };
+    XMFLOAT4 bgColorHovered = { 0.f, 0.f, 0.f, 0.f }; // 0 = inherit bgColor
+    XMFLOAT4 bgColorPressed = { 0.f, 0.f, 0.f, 0.f }; // 0 = inherit bgColor
+
     std::function<void()> onClick;
 
     void onRender(const RenderContext& rc) override;

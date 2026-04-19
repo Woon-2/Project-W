@@ -23,6 +23,7 @@
 #include "../particleEffect.hpp"
 #include "../ui/UIManager.hpp"
 #include "../ui/widgets/ProgressBar.hpp"
+#include "../ui/widgets/Dropdown.hpp"
 
 class Timer;
 
@@ -129,8 +130,12 @@ private:
 
 	TextImage textFPS_{};
 
-	UI::UIManager   uiManager_{};
-	UI::ProgressBar* playerHpBar_ = nullptr;  // owned by uiManager_
+	enum class SwordEffect { SlashWave, SlashCombo, Slash7, Slash1, Spikes };
+
+	UI::UIManager    uiManager_{};
+	UI::ProgressBar* playerHpBar_    = nullptr;  // owned by uiManager_
+	UI::Dropdown*    effectDropdown_ = nullptr;  // owned by uiManager_
+	SwordEffect      currentEffect_  = SwordEffect::SlashWave;
 
 	ParticleSystem flameParticleSystem_{};
 	ParticleSystem smokeParticleSystem_{};

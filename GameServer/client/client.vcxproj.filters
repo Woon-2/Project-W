@@ -261,6 +261,9 @@
     <ClCompile Include="ui\widgets\Slider.cpp">
       <Filter>UI</Filter>
     </ClCompile>
+    <ClCompile Include="ui\widgets\Dropdown.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
     <ClCompile Include="ui\UIElement.cpp">
       <Filter>UI</Filter>
     </ClCompile>
@@ -528,6 +531,9 @@
       <Filter>UI</Filter>
     </ClInclude>
     <ClInclude Include="ui\widgets\Slider.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\widgets\Dropdown.hpp">
       <Filter>UI</Filter>
     </ClInclude>
     <ClInclude Include="ui\UIElement.hpp">

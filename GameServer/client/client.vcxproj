@@ -246,6 +246,7 @@
     <ClCompile Include="ui\widgets\ProgressBar.cpp" />
     <ClCompile Include="ui\widgets\Button.cpp" />
     <ClCompile Include="ui\widgets\Slider.cpp" />
+    <ClCompile Include="ui\widgets\Dropdown.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common\pool.hpp" />
@@ -341,6 +342,7 @@
     <ClInclude Include="ui\widgets\ProgressBar.hpp" />
     <ClInclude Include="ui\widgets\Button.hpp" />
     <ClInclude Include="ui\widgets\Slider.hpp" />
+    <ClInclude Include="ui\widgets\Dropdown.hpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="meshParticle.hlsl">
