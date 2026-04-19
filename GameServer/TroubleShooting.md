@@ -268,3 +268,116 @@ freeSize < 2108 → LSendBufferChunk = pop() (새 chunk_B)
 session1, session2 WSASend 완료 → SendBuffer 소멸 → ref: 1→0
   → push(chunk_A) 호출 → 풀 귀환  ✅
 ```
+
+---
+### 2026.04.19 / 일요일
+## [Optimization] RoomServer 스레드 아키텍처 3-way 분리 (IOCP / JobTimer / Job)
+
+### 현상
+
+Visual Studio Concurrency Visualizer에서 RoomServer 워커 스레드들이 **99% 동기화** 상태로 관찰됨.
+실제 게임 로직 실행 시간이 거의 없고 대부분의 시간을 커널 대기에 소비하고 있었다.
+
+### 원인
+
+기존 `DoWork()` 루프 구조:
+
+```cpp
+void DoWork(IocpReactor& reactor) {
+    while (true) {
+        LWorkStartTime = HighResolutionClock::now();
+        reactor.dispatch(17);       // 매 루프마다 최대 17ms 커널 대기
+        JobTimer::distribute();
+        DoJob();
+    }
+}
+```
+
+모든 워커 스레드가 `dispatch(17)`으로 17ms마다 커널 대기에 진입했다.
+IOCP 이벤트가 없으면 스레드 전체가 타임아웃까지 블로킹되어 CPU가 실제 게임 로직을 실행하지 못했다.
+
+추가로 100방 목표 시 단일 스레드 순차 처리로는 `100방 × 1ms = 100ms/tick`이 되어 16.7ms 예산 초과.
+
+### 수정 — 3-way 스레드 분리
+
+| 스레드 | 수 | 역할 | 대기 방식 |
+|---|---|---|---|
+| IOCP | 2 | 패킷 수신/발신 전담 | `dispatch(INFINITE)` |
+| JobTimer | 1 | 예약된 job을 room에 전달 | pure busy wait |
+| Job | coreCnt-3 | 방 물리/AI 병렬 실행 | pure busy wait |
+
+```cpp
+void DoIocp(IocpReactor& reactor) {
+    while (true) { reactor.dispatch(); }
+}
+
+void DoJobTimer() {
+    while (true) { JobTimer::distribute(); }
+}
+
+void DoJob() {
+    while (true) {
+        auto* jq = JobQueuePool::pop();
+        if (!jq) continue;
+        jq->execute();
+    }
+}
+```
+
+IOCP/JobTimer 스레드는 대부분 커널 대기 또는 빈 큐 상태이므로 Job 스레드들과 코어 경쟁이 거의 없다.
+
+### 변경 파일
+
+| 파일 | 변경 내용 |
+|---|---|
+| `ServerEngine/JobQueue.hpp` | `push()` `pushOnly` 파라미터 제거 |
+| `ServerEngine/JobQueue.cpp` | `push()` 항상 `JobQueuePool`로, `execute()` 64ms 타임아웃 및 `LJobQueue` 제거 |
+| `ServerEngine/globalTLS.hpp` | `LJobQueue`, `LWorkStartTime` 제거 |
+| `ServerEngine/globalTLS.cpp` | 위 두 정의 제거 |
+| `RoomServer/RoomServer.hpp` | `workerThreads_` → `iocpThreads_`, `jobTimerThread_`, `jobThreads_` |
+| `RoomServer/RoomServer.cpp` | `DoWork()` → `DoIocp()`, `DoJobTimer()`, `DoJob()`, `start()` 재편 |
+
+### 결과
+
+Concurrency Visualizer 재측정: **실행 75%, 동기화 23%**
+
+남은 23% 동기화는 `JobTimer::jobTimerMtx_` 경합으로 추정.
+DoJobTimer가 busy wait으로 `distribute()`를 호출하는 동시에 Job 스레드들이 `room->update()` 완료 후 `JobTimer::addJob()`으로 같은 mutex를 경쟁함.
+
+### 보충 — 기존 구조의 99% 동기화에 대한 이해
+
+**Q. 기존 코드에서 왜 동기화가 99%였던 거지? 플레이어 enter, leave, move 등 잘 됐고, room update도 잘 됐는데?**
+
+99% 동기화는 고장이 아니라 설계 특성이었다. `dispatch(17)`이 루프마다 최대 17ms 커널 대기를 소비했고, I/O 이벤트가 적은 테스트 환경에서는 그 대기가 대부분 타임아웃으로 채워졌다. 실제 작업(distribute + DoJob)은 짧게 실행되고 있었으므로 게임은 정상 동작했다.
+
+```
+동기화% ≈ 17ms / (17ms + 실제작업시간)
+실제작업이 0.17ms → 동기화 99%
+```
+
+**Q. 모든 스레드가 같은 작업 순서를 반복하니 병목이 없는 구조 아닌가?**
+
+correctness 관점에서는 맞다. dispatch → distribute → DoJob 순서로 모든 스레드가 균등하게 일하고, 64ms 타임아웃으로 독점도 방지했다. 문제는 correctness가 아니라 **Job 스레드의 실행 시작 시점이 dispatch(17) 사이클에 종속**된다는 점이었다.
+
+**Q. 방이 늘어나면 동기화%가 줄어들었을까?**
+
+줄어들었겠지만 그게 개선이 아니다. 방이 늘수록 실제 작업 시간이 길어지고 동기화%는 낮아지지만, 그 시점은 루프 주기가 16.7ms를 초과하기 시작하는 구간이다.
+
+```
+방 10개:  [17ms 대기] + [2ms 작업]  = 19ms 루프  → room update 약간 지연
+방 100개: [17ms 대기] + [17ms 작업] = 34ms 루프  → 60Hz → 30Hz로 저하
+```
+
+동기화%가 낮아지는 건 서버가 한계에 다가간다는 신호였다.
+
+**Q. 여러 스레드가 작업을 분배하면 60Hz를 맞출 수 있지 않을까?**
+
+이론상 스레드들이 엇갈려서 돌면 가능하지만, 실제로는 스레드들이 **같이 잠들고 같이 깨어나는 경향**이 있다. I/O 이벤트가 적으면 모든 스레드가 dispatch(17)에서 동시에 타임아웃으로 깨어나 distribute → DoJob을 같이 실행한다.
+
+```
+스레드A: [====17ms 대기====][짧은 작업]
+스레드B: [====17ms 대기====][짧은 작업]
+스레드C: [====17ms 대기====][짧은 작업]
+```
+
+분산이 아니라 오히려 동기화가 일어나는 구조였고, 스레드가 자연스럽게 엇갈리는 건 충분한 I/O 부하가 있을 때만 발생하는 우연한 효과였다.

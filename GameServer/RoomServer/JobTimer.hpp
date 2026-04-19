@@ -41,7 +41,7 @@ public:
 private:
     static std::mutex jobTimerMtx_;
 	static std::priority_queue<TimerItem> timerQueue_;
-	static std::atomic_bool distributing_;
+	//static std::atomic_bool distributing_;
 };
 
 #endif // job_timer_hpp

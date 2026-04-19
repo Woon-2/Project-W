@@ -39,8 +39,8 @@ public:
 	void broadcast(const std::shared_ptr<SendBuffer>& sendBuffer);
 	void broadcastExcept(GameSession* exceptSession, const std::shared_ptr<SendBuffer>& sendBuffer);
 
-	void pushJob(Job* job, bool pushOnly = false) {
-		jobQueue_.push(job, pushOnly);
+	void pushJob( Job* job ) {
+		jobQueue_.push( job );
 	}
 
 	void doAsync(CallbackType&& callback) {

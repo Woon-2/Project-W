@@ -1,29 +1,17 @@
 ﻿#include "sepch.hpp"
 #include "JobQueue.hpp"
 #include "JobQueuePool.hpp"
-#include "globalTLS.hpp"
 
-void JobQueue::push(Job* job, bool pushOnly) {
+void JobQueue::push(Job* job) {
 	const int32 prevCnt = jobCount_.fetch_add(1);
 	queue_.enqueue(job);
 
-	// 첫 번째 job을 넣은 스레드가 실행까지 담당한다.
 	if (prevCnt == 0) {
-		if (LJobQueue == nullptr && pushOnly == false) {
-			execute();
-		}
-		else {
-			// 여유있는 스레드에게 실행을 넘긴다.
-			JobQueuePool::push(this);
-		}
+		JobQueuePool::push(this);
 	}
 }
 
 void JobQueue::execute() {
-	LJobQueue = this;
-
-	static constexpr Milliseconds timeOut = 64ms;
-
 	while (true) {
 		const int32 bulkSize = 100;
 		auto jobs = std::vector<Job*>(bulkSize);
@@ -34,19 +22,6 @@ void JobQueue::execute() {
 			ObjectPool<Job>::push(jobs[i]);
 		}
 
-		// 남은 job이 0개라면 종료
-		if (jobCount_.fetch_sub(jobCount) == jobCount) {
-			LJobQueue = nullptr;
-			break;
-		}
-
-		const auto now = HighResolutionClock::now();
-		if (now - LWorkStartTime >= timeOut) {
-			LJobQueue = nullptr;
-
-			// 작업을 수행해야 하는 시간이 지났다면 여유있는 스레드에게 실행을 넘긴다.
-			JobQueuePool::push(this);
-			break;
-		}
+		if ( jobCount_.fetch_sub( jobCount ) == jobCount ) break;
 	}
 }
