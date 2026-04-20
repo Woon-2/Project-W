@@ -30,6 +30,13 @@ static constexpr float kPlayerMaxSpeed      = 10.f;   // m/s
 static constexpr float kPlayerLinearDamping = 12.f;   // adjust stop time
 static constexpr float kPlayerAccelRate     = kPlayerMaxSpeed * kPlayerLinearDamping;
 
+static constexpr int     kRenderSkipLagFrames = 3;
+static constexpr int     kMaxPhysicsStepsPerFrame = 4;
+static constexpr Seconds kMaxPhysicsDeltaTime{ 1.f / 60.f * kMaxPhysicsStepsPerFrame };
+static constexpr int     kMaxPhysicsScaleK    = 4;   // physicUpdateInterval 최대 배율
+static constexpr int     kLagScaleUpFrames    = 2;   // 연속 렉 N프레임 → 배율 1 증가
+static constexpr int     kLagScaleDownFrames  = 120; // 연속 정상 N프레임 → 배율 1 감소
+
 Game::Game() {
 	// 스레드 풀 초기화
 	std::cout << "----------[게임 초기화 설정]----------\n";
@@ -372,7 +379,7 @@ void Game::importNode(std::ifstream& ifs) {
 
 		auto urd = std::uniform_real_distribution<float>(-160.f, 160.f);
 
-		for (std::size_t i = 0; i < 100u; ++i) {
+		for (std::size_t i = 0; i < 500u; ++i) {
 			auto& g = goblins_.emplace_back( std::make_shared<Goblin>() );
 			g->setPos( mu::Vec3( DirectX::XMLoadFloat3(&worldT) )
 				+ mu::Vec3( urd(gRandomEngine), urd(gRandomEngine) + 320.f, urd(gRandomEngine) )
@@ -556,14 +563,38 @@ void Game::update(Milliseconds deltaTime) {
 	// update 함수에서 physicUpdateAcc_ 변수를 통해
 	// 물리량 갱신의 주기가 돌아왔는지 판단하고
 	// 주기가 되었다면 물리량 갱신을 수행한다.
-	physicUpdateAcc_ += deltaTime;
+	const Seconds clampedDt = std::min(Seconds(deltaTime), kMaxPhysicsDeltaTime);
+	physicUpdateAcc_ += clampedDt;
 
-	if (physicUpdateAcc_ >= physicUpdateInterval) {
-		while (physicUpdateAcc_ >= physicUpdateInterval) {
-			physicsWorld_.step(physicUpdateInterval);
-			physicUpdateAcc_ -= physicUpdateInterval;
+	const Seconds effectiveInterval = physicUpdateInterval * static_cast<float>(physicUpdateScaleK_);
+
+	int physicsStepsDone = 0;
+	while (physicUpdateAcc_ >= effectiveInterval
+		   && physicsStepsDone < kMaxPhysicsStepsPerFrame) {
+		physicsWorld_.step(effectiveInterval);
+		physicUpdateAcc_ -= effectiveInterval;
+		++physicsStepsDone;
+	}
+
+	if (physicsStepsDone >= kMaxPhysicsStepsPerFrame) {
+		++consecutiveLagFrames_;
+		consecutiveNonLagFrames_ = 0;
+		if (consecutiveLagFrames_ >= kLagScaleUpFrames && physicUpdateScaleK_ < kMaxPhysicsScaleK) {
+			++physicUpdateScaleK_;
+			consecutiveLagFrames_ = 0;
+		}
+	} else {
+		consecutiveLagFrames_ = 0;
+		if (physicUpdateScaleK_ > 1) {
+			if (++consecutiveNonLagFrames_ >= kLagScaleDownFrames) {
+				--physicUpdateScaleK_;
+				consecutiveNonLagFrames_ = 0;
+			}
+		} else {
+			consecutiveNonLagFrames_ = 0;
 		}
 	}
+	skipNextRender_ = (consecutiveLagFrames_ >= kRenderSkipLagFrames);
 
 	// 객체별 업데이트 루틴
 	//
@@ -571,7 +602,7 @@ void Game::update(Milliseconds deltaTime) {
 	// 마지막 물리량 갱신으로부터 얼마나 지났는지의 비율로
 	// RenderState 갱신을 위한 PhysicState 보간 계수를 설정한다.
 	// 게임 객체의 update 함수에 전달된다.
-	const auto tPhysicInterpolation = physicUpdateAcc_ / physicUpdateInterval;
+	const auto tPhysicInterpolation = physicUpdateAcc_ / effectiveInterval;
 
 	player_->update(deltaTime, tPhysicInterpolation);
 	goblin_->update(deltaTime, tPhysicInterpolation);
@@ -699,6 +730,11 @@ void Game::update(Milliseconds deltaTime) {
 }
 
 void Game::render() {
+	if (skipNextRender_) {
+		skipNextRender_ = false;
+		return;
+	}
+
 	cullObjects();
 
 	debugBVView_.render(gfx_);
@@ -718,31 +754,16 @@ void Game::render() {
 
 	uiManager_.render( gfx_ );
 
-	auto frameDataPBR = PBRPipeline::FrameData{
-		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
-	};
-	gfx_.addFrameData( frameDataPBR );
-	auto frameDataPBRSkinned = PBRSkinnedPipeline::FrameData{
-		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
-	};
-	gfx_.addFrameData( frameDataPBRSkinned );
-	auto frameDataPBRDeferred = PBRDeferredPipeline::FrameData{
-		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
-	};
-	gfx_.addFrameData( frameDataPBRDeferred );
-	auto frameDataPBRDeferredSkinned = PBRDeferredSkinnedPipeline::FrameData{
-		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
-	};
-	gfx_.addFrameData( frameDataPBRDeferredSkinned );
+	// FrameData와 gfx_.render()는 렉 상황에도 항상 호출한다 (DX12 swapchain 동기화 유지).
+	gfx_.addFrameData( PBRPipeline::FrameData{ .globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f ) } );
+	gfx_.addFrameData( PBRSkinnedPipeline::FrameData{ .globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f ) } );
+	gfx_.addFrameData( PBRDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f ) } );
+	gfx_.addFrameData( PBRDeferredSkinnedPipeline::FrameData{ .globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f ) } );
 
 	if (terrain_) {
 		terrain_->render(gfx_);
-		gfx_.addFrameData(TerrainPipeline::FrameData{
-			.globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f)
-		});
-		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{
-			.globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f)
-		});
+		gfx_.addFrameData(TerrainPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
+		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 	}
 
 	gfx_.render();

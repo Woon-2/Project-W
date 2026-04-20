@@ -91,6 +91,11 @@ private:
 	Seconds physicUpdateAcc_{0s};	// 물리 업데이트를 위한 시간 누산기
 	Seconds physicUpdateInterval{1s/60.f};	// 60fps로 물리 업데이트
 
+	bool skipNextRender_ = false;
+	int  physicUpdateScaleK_ = 1;
+	int  consecutiveLagFrames_ = 0;
+	int  consecutiveNonLagFrames_ = 0;
+
 	GFX gfx_{};
 	ThreadPool threadPool_{};
 

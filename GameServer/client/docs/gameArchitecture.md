@@ -14,7 +14,12 @@
 3. 평가 물리량 갱신
 4. combatSystem_.update()  — 몬스터 AI 공격 판정 (쿨타임 + AABB 교차)
 5. 이벤트 처리 루프        — EventList 순회, Hit/Death/Attack/Blood 분배
-6. PhysicsWorld::step()    — 고정 주기(60Hz) 물리 시뮬레이션
+6. 물리 업데이트 (적응형 고정 타임스텝)
+   - deltaTime을 kMaxPhysicsDeltaTime(4/60s)으로 클램프 → death spiral 방지
+   - effectiveInterval = physicUpdateInterval * physicUpdateScaleK_
+   - while (acc >= effectiveInterval && stepsDone < kMaxPhysicsStepsPerFrame): PhysicsWorld::step(effectiveInterval)
+   - 연속 kLagScaleUpFrames 프레임 step limit 도달 → physicUpdateScaleK_ 1 증가(최대 kMaxPhysicsScaleK=4)
+   - 연속 kLagScaleDownFrames 프레임 정상 → physicUpdateScaleK_ 1 감소 (복원)
 7. Object::update()        — viewFrustumCulled || hiZCulled_ 이면 조기 반환; 아니면 PhysicsState 보간 → RenderState 갱신
 8. AnimSystem::update()    — 애니메이션 스케줄링 (culled 오브젝트 스킵)
 9. Game::render():
@@ -24,6 +29,13 @@
    d. applyHiZCulling()     — 이전 프레임 readback → setHiZCulled + AnimBlender::setCulled 갱신
                                (다음 프레임 7번 Object::update에 반영됨)
 ```
+
+**물리 렉 관리 (Lag Management) 설계 원칙:**
+- `physicUpdateScaleK_`: 렉 수준에 따라 1~4 사이에서 자동 조절. k=2이면 30Hz, k=4이면 15Hz로 물리 실행.
+- step에 전달하는 dt = `effectiveInterval` (= baseInterval * k). 시뮬레이션 시간 단위도 함께 늘어나 실시간 대응 유지.
+- 배율 증가 조건: 2프레임 연속 step limit 도달 (`kLagScaleUpFrames`).
+- 배율 감소 조건: 120프레임(약 2초) 연속 정상 (`kLagScaleDownFrames`) — 조기 복구로 인한 진동 방지.
+- render 스킵은 깜빡임 문제로 채택하지 않음.
 
 **컬링 시스템 설계 원칙:**
 - `viewFrustumCulled`: DrawEvent 제출 차단 전용. Hi-Z와 무관.

@@ -467,7 +467,10 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `physicsWorld_` | `PhysicsWorld` | 물리 시뮬레이션 (integrate + contact + PGS solver) |
 | `combatSystem_` | `CombatSystem` | 공격 판정 / 몬스터 AI |
 | `debugBVView_` | `DebugBVView` | BV 디버그 렌더링 |
-| `physicUpdateInterval` | `Seconds` | `1s/60f` 고정 타임스텝 |
+| `physicUpdateInterval` | `Seconds` | `1s/60f` 기준 타임스텝 (effectiveInterval = interval * scaleK) |
+| `physicUpdateScaleK_` | `int` | 적응형 물리 주기 배율 (1~4, 렉 시 자동 증가) |
+| `consecutiveLagFrames_` | `int` | 연속 렉 프레임 카운터 (scale-up 판단용) |
+| `consecutiveNonLagFrames_` | `int` | 연속 정상 프레임 카운터 (scale-down 판단용) |
 | `eventList_` | `EventList` | 프레임별 이벤트 큐 |
 | 몬스터 shared_ptr들 | `#97-107` | goblin_, anubis_, bat_ 등 |
 | `terrain_` | `std::shared_ptr<TerrainObject>` | `game.hpp #110` — 지형 게임 엔티티 |
