@@ -30,12 +30,12 @@ static constexpr float kPlayerMaxSpeed      = 10.f;   // m/s
 static constexpr float kPlayerLinearDamping = 12.f;   // adjust stop time
 static constexpr float kPlayerAccelRate     = kPlayerMaxSpeed * kPlayerLinearDamping;
 
-static constexpr int     kRenderSkipLagFrames = 3;
-static constexpr int     kMaxPhysicsStepsPerFrame = 4;
+static constexpr int     kRenderSkipLagFrames = 4;
+static constexpr int     kMaxPhysicsStepsPerFrame = 3;
 static constexpr Seconds kMaxPhysicsDeltaTime{ 1.f / 60.f * kMaxPhysicsStepsPerFrame };
 static constexpr int     kMaxPhysicsScaleK    = 4;   // physicUpdateInterval 최대 배율
 static constexpr int     kLagScaleUpFrames    = 2;   // 연속 렉 N프레임 → 배율 1 증가
-static constexpr int     kLagScaleDownFrames  = 120; // 연속 정상 N프레임 → 배율 1 감소
+static constexpr int     kLagScaleDownFrames  = 100; // 연속 정상 N프레임 → 배율 1 감소
 
 Game::Game() {
 	// 스레드 풀 초기화
