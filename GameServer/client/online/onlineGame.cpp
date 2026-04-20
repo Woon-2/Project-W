@@ -891,7 +891,7 @@ void Game::cullObjects() {
 					}
 		}
 
-		entt->setCulled(true);
+		entt->setFrustumCulled(true);
 
 		for (auto& v : vertices) {
 			auto ndc = mu::Vec4(v, 1.f) * camera_.view() * camera_.proj();
@@ -902,10 +902,13 @@ void Game::cullObjects() {
 				&& ndc.z() >= 0.f && ndc.z() <= 1.f
 			) {
 				// a vertex is in the view frustum, it should not be culled.
-				entt->setCulled(false);
+				entt->setFrustumCulled(false);
 				break;
 			}
 		}
+
+		if (auto* blender = entt->animBlender())
+			blender->setCulled(entt->isFrustumCulled());
 	}
 }
 

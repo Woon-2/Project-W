@@ -161,6 +161,37 @@ void Dispatcher::hiZPassUpdate() {
         pResources_->hiZPass.lastTotalCount   = pResources_->hiZPass.lastObjCnt;
     }
 
+    // 이전 프레임 visibleFlags readback → lastVisibilityFlags + objectVisibility 갱신
+    if (pResources_->hiZPass.visibilityMapped
+        && pResources_->hiZPass.lastVisibilityObjCnt > 0u
+        && !pResources_->hiZPass.lastDrawEventObjectIds.empty())
+    {
+        const u32t cnt = pResources_->hiZPass.lastVisibilityObjCnt;
+        pResources_->hiZPass.lastVisibilityFlags.assign(
+            pResources_->hiZPass.visibilityMapped,
+            pResources_->hiZPass.visibilityMapped + cnt);
+
+        std::fill(pResources_->hiZPass.objectVisibility.begin(),
+                  pResources_->hiZPass.objectVisibility.end(), false);
+        const auto& ids = pResources_->hiZPass.lastDrawEventObjectIds;
+        for (u32t i = 0u; i < cnt && i < static_cast<u32t>(ids.size()); ++i) {
+            const u32t oid = ids[i];
+            if (oid < static_cast<u32t>(pResources_->hiZPass.objectVisibility.size())) {
+                pResources_->hiZPass.objectVisibility[oid] =
+                    pResources_->hiZPass.objectVisibility[oid]
+                    || (pResources_->hiZPass.lastVisibilityFlags[i] != 0u);
+            }
+        }
+    }
+
+    // 현재 프레임 DrawEvents의 renderObjectId 저장 (다음 프레임에 사용)
+    {
+        auto& ids = pResources_->hiZPass.lastDrawEventObjectIds;
+        ids.resize(drawEvents_.size());
+        for (u32t i = 0u; i < static_cast<u32t>(drawEvents_.size()); ++i)
+            ids[i] = drawEvents_[i].renderObjectId;
+    }
+
     // 1. Hi-Z Cull Pass
     static auto perInstanceDataCull = std::vector<HiZCullShader::PerInstanceData>();
     perInstanceDataCull.resize(drawEvents_.size());
@@ -331,6 +362,24 @@ void Dispatcher::hiZPassCompute() {
         pResources_->hiZPass.indirectCmd.resource(roomIdx_),
         D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
         D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+
+    // readback: visibleFlags → CPU-readable buffer (1-frame delay)
+    // Compact Pass 이후 실행: visibleFlags는 이미 SRV로 소비됐으므로 COPY_SOURCE 전환 안전
+    if (pResources_->hiZPass.visibilityReadback && !drawEvents_.empty()) {
+        transitionResourceState(cmdList,
+            pResources_->hiZPass.visibleFlags.resource(roomIdx_),
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+            D3D12_RESOURCE_STATE_COPY_SOURCE);
+        cmdList->CopyBufferRegion(
+            pResources_->hiZPass.visibilityReadback.Get(), 0,
+            pResources_->hiZPass.visibleFlags.resource(roomIdx_), 0,
+            drawEvents_.size() * sizeof(u32t));
+        transitionResourceState(cmdList,
+            pResources_->hiZPass.visibleFlags.resource(roomIdx_),
+            D3D12_RESOURCE_STATE_COPY_SOURCE,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        pResources_->hiZPass.lastVisibilityObjCnt = static_cast<u32t>(drawEvents_.size());
+    }
 
     // readback: perGroupCnt → CPU-readable buffer (1-frame delay)
     if (pResources_->hiZPass.visibleCountReadback) {
@@ -779,6 +828,9 @@ void Dispatcher::gBufferIndirectDrawMT() {
 void Dispatcher::gBufferUpdate() {
     if (drawEvents_.empty()) return;
 
+    const auto& lastFlags    = pResources_->hiZPass.lastVisibilityFlags;
+    const bool  hasLastFlags = (lastFlags.size() == drawEvents_.size());
+
     static auto perInstanceData = std::vector<PBRDeferredSkinnedGBufferShader::PerInstanceData>();
     perInstanceData.resize(drawEvents_.size());
 
@@ -786,32 +838,42 @@ void Dispatcher::gBufferUpdate() {
     const auto viewProj = cameraData_.view * cameraData_.proj;
 
     u32t boneUploadCnt = 0u;
-    std::ranges::transform(drawEvents_, perInstanceData.begin(),
-        [view, viewProj, &boneUploadCnt](const DrawEvent& e) {
-            auto ret = PBRDeferredSkinnedGBufferShader::PerInstanceData{
-                .world       = mu::transpose(e.world).getXmf(),
-                .wvp         = mu::transpose(e.world * viewProj).getXmf(),
-                .wv          = mu::transpose(e.world * view).getXmf(),
-                .wvNormal    = mu::inverse(mu::Mat3x3(e.world * view)).getXmf(),
-                .worldNormal = mu::inverse(mu::Mat3x3(e.world)).getXmf(),
-                .rootBoneOffset = boneUploadCnt
-            };
-            boneUploadCnt += static_cast<u32t>(e.boneXforms.size());
-            return ret;
-        });
+    for (u32t i = 0u; i < static_cast<u32t>(drawEvents_.size()); ++i) {
+        const auto& e        = drawEvents_[i];
+        const bool  isCulled = hasLastFlags && (lastFlags[i] == 0u);
+
+        perInstanceData[i].rootBoneOffset = boneUploadCnt;
+
+        if (!isCulled) {
+            perInstanceData[i].world       = mu::transpose(e.world).getXmf();
+            perInstanceData[i].wvp         = mu::transpose(e.world * viewProj).getXmf();
+            perInstanceData[i].wv          = mu::transpose(e.world * view).getXmf();
+            perInstanceData[i].wvNormal    = mu::inverse(mu::Mat3x3(e.world * view)).getXmf();
+            perInstanceData[i].worldNormal = mu::inverse(mu::Mat3x3(e.world)).getXmf();
+        }
+
+        boneUploadCnt += static_cast<u32t>(e.boneXforms.size());
+    }
 
     pResources_->gBufferPass.perInstanceData.stage(roomIdx_, perInstanceData);
     perInstanceData.clear();
 
+    // boneData: static 재사용. culled 인스턴스 슬롯은 이전 프레임 값 유지 (어차피 드로우 안 됨).
     static auto boneData = std::vector<PBRDeferredSkinnedGBufferShader::BoneData>();
     boneData.resize(boneUploadCnt);
-    auto itBone = boneData.begin();
-    std::ranges::for_each(drawEvents_, [&itBone](const DrawEvent& e) {
-        for (auto& bx : e.boneXforms) {
-            *itBone = PBRDeferredSkinnedGBufferShader::BoneData{ mu::transpose(bx).getXmf() };
-            ++itBone;
+    u32t boneIdx = 0u;
+    for (u32t i = 0u; i < static_cast<u32t>(drawEvents_.size()); ++i) {
+        const bool isCulled = hasLastFlags && (lastFlags[i] == 0u);
+        if (!isCulled) {
+            for (auto& bx : drawEvents_[i].boneXforms) {
+                boneData[boneIdx] = PBRDeferredSkinnedGBufferShader::BoneData{
+                    mu::transpose(bx).getXmf() };
+                ++boneIdx;
+            }
+        } else {
+            boneIdx += static_cast<u32t>(drawEvents_[i].boneXforms.size());
         }
-    });
+    }
     pResources_->gBufferPass.boneData.stage(roomIdx_, boneData);
     boneData.clear();
 
@@ -866,11 +928,15 @@ void Dispatcher::gBufferUpdateMT() {
 
     const auto viewProj = cameraData_.view * cameraData_.proj;
 
+    const auto& lastFlags    = pResources_->hiZPass.lastVisibilityFlags;
+    const bool  hasLastFlags = (lastFlags.size() == drawEvents_.size());
+
     std::size_t accEventCnt = 0u;
     while (accEventCnt + (jobSizeUpdate_ - 1) < drawEvents_.size()) {
         addJobGBufferUpdate(cameraData_.view, viewProj,
             drawEvents_.data() + accEventCnt,
             drawEvents_.data() + accEventCnt + jobSizeUpdate_,
+            hasLastFlags ? lastFlags.data() + accEventCnt : nullptr,
             perInstanceData.data() + accEventCnt, latch);
         accEventCnt += jobSizeUpdate_;
     }
@@ -878,6 +944,7 @@ void Dispatcher::gBufferUpdateMT() {
         addJobGBufferUpdate(cameraData_.view, viewProj,
             drawEvents_.data() + accEventCnt,
             drawEvents_.data() + drawEvents_.size(),
+            hasLastFlags ? lastFlags.data() + accEventCnt : nullptr,
             perInstanceData.data() + accEventCnt, latch);
     }
 
@@ -934,13 +1001,18 @@ void Dispatcher::gBufferUpdateMT() {
     static auto boneData = std::vector<PBRDeferredSkinnedGBufferShader::BoneData>();
     boneData.resize(perInstanceData.back().rootBoneOffset
         + static_cast<u32t>(drawEvents_.back().boneXforms.size()));
-    auto itBone = boneData.begin();
-    std::ranges::for_each(drawEvents_, [&itBone](const DrawEvent& e) {
-        for (auto& bx : e.boneXforms) {
-            *itBone = PBRDeferredSkinnedGBufferShader::BoneData{ mu::transpose(bx).getXmf() };
-            ++itBone;
+    for (u32t i = 0u; i < static_cast<u32t>(drawEvents_.size()); ++i) {
+        const bool isCulled = hasLastFlags && (lastFlags[i] == 0u);
+        const auto& e = drawEvents_[i];
+        u32t boneIdx = perInstanceData[i].rootBoneOffset;
+        if (!isCulled) {
+            for (auto& bx : e.boneXforms) {
+                boneData[boneIdx] = PBRDeferredSkinnedGBufferShader::BoneData{
+                    mu::transpose(bx).getXmf() };
+                ++boneIdx;
+            }
         }
-    });
+    }
     pResources_->gBufferPass.boneData.stage(roomIdx_, boneData);
     boneData.clear();
 
@@ -1098,22 +1170,25 @@ void Dispatcher::gBufferDrawMT() {
 void MU_CALLCONV Dispatcher::addJobGBufferUpdate(
     mu::Mat4x4 view, const mu::Mat4x4& viewProj,
     const DrawEvent* pFirst, const DrawEvent* pLast,
+    const u32t* pVisFlags,
     PBRDeferredSkinnedGBufferShader::PerInstanceData* pOut,
     std::latch& latch
 ) {
     // NOTE: rootBoneOffset is set to 0 here; fixed up sequentially after latch.wait()
     threadPool_->addJob([=, &latch]() {
-        std::transform(pFirst, pLast, pOut,
-            [view, viewProj](const DrawEvent& e) {
-                return PBRDeferredSkinnedGBufferShader::PerInstanceData{
-                    .world          = mu::transpose(e.world).getXmf(),
-                    .wvp            = mu::transpose(e.world * viewProj).getXmf(),
-                    .wv             = mu::transpose(e.world * view).getXmf(),
-                    .wvNormal       = mu::inverse(mu::Mat3x3(e.world * view)).getXmf(),
-                    .worldNormal    = mu::inverse(mu::Mat3x3(e.world)).getXmf(),
-                    .rootBoneOffset = 0u  // fixed up sequentially after latch
-                };
-            });
+        const std::ptrdiff_t cnt = pLast - pFirst;
+        for (std::ptrdiff_t i = 0; i < cnt; ++i) {
+            const DrawEvent& e        = pFirst[i];
+            const bool       isCulled = pVisFlags && (pVisFlags[i] == 0u);
+            pOut[i].rootBoneOffset = 0u;  // fixed up sequentially after latch
+            if (!isCulled) {
+                pOut[i].world       = mu::transpose(e.world).getXmf();
+                pOut[i].wvp         = mu::transpose(e.world * viewProj).getXmf();
+                pOut[i].wv          = mu::transpose(e.world * view).getXmf();
+                pOut[i].wvNormal    = mu::inverse(mu::Mat3x3(e.world * view)).getXmf();
+                pOut[i].worldNormal = mu::inverse(mu::Mat3x3(e.world)).getXmf();
+            }
+        }
         latch.count_down();
     });
 }

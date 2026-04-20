@@ -126,7 +126,7 @@ struct RenderState {
 	std::vector<mu::Mat4x4> worldBVs;
 	std::unique_ptr<AnimBlender> animBlender;
 	const Model* pModel;
-	bool shouldCull = false;
+	bool viewFrustumCulled = false;
 	bool willOcclude = false;
 };
 
@@ -236,8 +236,14 @@ public:
 	void setMaxHp(i32t v) { maxHp_ = v; }
 	i32t maxHp() const    { return maxHp_; }
 
-	void setCulled(bool culled) { renderState_.shouldCull = culled; }
+	void setFrustumCulled(bool v) { renderState_.viewFrustumCulled = v; }
+	bool isFrustumCulled() const  { return renderState_.viewFrustumCulled; }
 	void activateOcclusion(bool willOcclude) { renderState_.willOcclude = true; }
+
+	void setRenderObjectId(u32t id) { renderObjectId_ = id; }
+	u32t renderObjectId() const     { return renderObjectId_; }
+	void setHiZCulled(bool v)       { hiZCulled_ = v; }
+	bool isHiZCulled() const        { return hiZCulled_; }
 
 protected:
 	RigidBody body_{};
@@ -258,6 +264,9 @@ protected:
 	i32t hp_{};
 	bool isDead_ = false;
 	i32t maxHp_{};
+
+	u32t renderObjectId_ = std::numeric_limits<u32t>::max();
+	bool hiZCulled_      = false;
 
 private:
 };

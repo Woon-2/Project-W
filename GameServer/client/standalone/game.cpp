@@ -158,6 +158,15 @@ void Game::setupStage() {
 	hiZStatsLabel_->setTextColor(0.2f, 1.0f, 0.2f, 1.0f);
 	hiZStatsLabel_->setText(L"HiZ: OFF");
 
+	// Hi-Z occlusion culling용 renderObjectId 할당
+	{
+		u32t nextRenderObjId = 0u;
+		goblin_->setRenderObjectId(nextRenderObjId++);
+		for (auto& g : goblins_)
+			g->setRenderObjectId(nextRenderObjId++);
+		gfx_.setMaxRenderObjectId(nextRenderObjId - 1u);
+	}
+
 	setupMonsterHpBars();
 }
 
@@ -625,7 +634,7 @@ void Game::update(Milliseconds deltaTime) {
 	uiManager_.update( std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont() );
 
 	// 애니메이션 업데이트
-	animSystem_.update(0.005s);
+	animSystem_.update(0.01s);
 
 	// 발 흙먼지 방출
 	if (footBoneIdxLeft_ >= 0 && footBoneIdxRight_ >= 0
@@ -737,6 +746,7 @@ void Game::render() {
 	}
 
 	gfx_.render();
+	applyHiZCulling();
 }
 
 // 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
@@ -1059,7 +1069,7 @@ void Game::cullObjects() {
 					}
 		}
 
-		entt->setCulled(true);
+		entt->setFrustumCulled(true);
 
 		for (auto& v : vertices) {
 			auto ndc = mu::Vec4(v, 1.f) * camera_.view() * camera_.proj();
@@ -1070,14 +1080,37 @@ void Game::cullObjects() {
 				&& ndc.z() >= 0.f && ndc.z() <= 1.f
 			) {
 				// a vertex is in the view frustum, it should not be culled.
-				entt->setCulled(false);
+				entt->setFrustumCulled(false);
 				break;
 			}
 		}
-
-		if (auto* blender = entt->animBlender())
-			blender->setCulled(entt->renderState().shouldCull);
 	}
+}
+
+void Game::applyHiZCulling() {
+	if (!gfx_.isHiZCullEnabled()) {
+		for (auto& entt : { std::static_pointer_cast<Object>(goblin_) }) {
+			entt->setHiZCulled(false);
+			if (auto* blender = entt->animBlender())
+				blender->setCulled(entt->isFrustumCulled());
+		}
+		for (auto& g : goblins_) {
+			g->setHiZCulled(false);
+			if (auto* blender = g->animBlender())
+				blender->setCulled(g->isFrustumCulled());
+		}
+		return;
+	}
+
+	auto applyToEntity = [&](const std::shared_ptr<Object>& entt) {
+		const bool hiZVisible = gfx_.getHiZObjectVisible(entt->renderObjectId());
+		entt->setHiZCulled(!hiZVisible);
+		if (auto* blender = entt->animBlender())
+			blender->setCulled(entt->isFrustumCulled() || !hiZVisible);
+	};
+	applyToEntity(goblin_);
+	for (auto& g : goblins_)
+		applyToEntity(g);
 }
 
 // 커서가 클라이언트 영역 바깥으로 나가지 못하도록 한다.

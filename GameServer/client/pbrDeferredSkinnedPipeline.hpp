@@ -61,6 +61,7 @@ struct DrawEvent {
     const Mesh*             mesh;
     const SubMesh*          subMesh;
     const Material*         material;
+    u32t                    renderObjectId = std::numeric_limits<u32t>::max();
 
     auto operator<=>(const DrawEvent& rhs) const noexcept {
         auto e = mesh <=> rhs.mesh;
@@ -96,6 +97,14 @@ struct Resources {
         u32t  lastObjCnt        = 0u;
         u32t  lastVisibleCount  = 0u;
         u32t  lastTotalCount    = 0u;
+
+        // GPU readback: visibleFlags 복사 대상 (D3D12_HEAP_TYPE_READBACK)
+        ComPtr<ID3D12Resource> visibilityReadback;
+        u32t* visibilityMapped       = nullptr;
+        u32t  lastVisibilityObjCnt   = 0u;
+        std::vector<u32t> lastVisibilityFlags;      // CPU 복사본 (직전 프레임)
+        std::vector<u32t> lastDrawEventObjectIds;   // 직전 프레임 정렬된 DrawEvents의 renderObjectId
+        std::vector<bool> objectVisibility;          // renderObjectId → visible?
     } hiZPass;
 
     struct ShadowPass {
@@ -183,6 +192,7 @@ private:
 
     void MU_CALLCONV addJobGBufferUpdate( mu::Mat4x4 view, const mu::Mat4x4& viewProj,
         const DrawEvent* pFirst, const DrawEvent* pLast,
+        const u32t* pVisFlags,
         PBRDeferredSkinnedGBufferShader::PerInstanceData* pOut,
         std::latch& latch
     );

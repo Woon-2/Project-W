@@ -235,6 +235,13 @@ public:
 	struct HiZStats { u32t visible; u32t total; };
 	HiZStats getHiZStats() const;
 
+	// Hi-Z occlusion culling 결과 조회 (1-frame delay).
+	// renderObjectId가 범위 밖이거나 Hi-Z 비활성화면 true (visible로 가정).
+	bool getHiZObjectVisible(u32t renderObjectId) const;
+
+	// objectVisibility 배열 크기를 [0, maxId] 범위로 초기화 (setupStage 이후 호출).
+	void setMaxRenderObjectId(u32t maxId);
+
 	// Deferred / Forward 렌더 경로 선택
 	RenderPath renderPath() const { return renderPath_; }
 	void setRenderPath(RenderPath path) { renderPath_ = path; }

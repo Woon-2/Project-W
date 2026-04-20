@@ -415,7 +415,7 @@ void Object::update(Milliseconds deltaTime, float tPhysicInterpolation) {
 	up_ = curr.orient.rotate(mu::Vec3(0.f, 1.f, 0.f));
 	forward_ = curr.orient.rotate(mu::Vec3(0.f, 0.f, 1.f));
 
-	if (renderState_.shouldCull)
+	if (renderState_.viewFrustumCulled || hiZCulled_)
 		return;
 
 	// 렌더 상태 갱신
@@ -488,7 +488,7 @@ void Object::update(Milliseconds deltaTime, float tPhysicInterpolation) {
 }
 
 void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
-	if (renderState_.shouldCull) {
+	if (renderState_.viewFrustumCulled) {
 		return;
 	}
 
@@ -504,11 +504,12 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 				if (useDeferred) {
 					if (isSkinned) {
 						gfx.addDrawEvent(PBRDeferredSkinnedPipeline::DrawEvent{
-							.world      = meshXform * offsetXform * renderState_.world,
-							.boneXforms = renderState_.animBlender->finalXformData(),
-							.mesh       = &mesh,
-							.subMesh    = &mesh.subMeshes[i],
-							.material   = &mesh.materialSets[materialSetIdx_].materials[i],
+							.world          = meshXform * offsetXform * renderState_.world,
+							.boneXforms     = renderState_.animBlender->finalXformData(),
+							.mesh           = &mesh,
+							.subMesh        = &mesh.subMeshes[i],
+							.material       = &mesh.materialSets[materialSetIdx_].materials[i],
+							.renderObjectId = renderObjectId_,
 						});
 					}
 					else {
