@@ -9,6 +9,11 @@ struct Mesh;
 
 namespace TerrainPipeline {
 
+struct OccluderInfo {
+	const TerrainData* terrain = nullptr;
+    mu::Mat4x4         world   = {};    // world transform; default is identity
+};
+
 struct CameraData {
     mu::Mat4x4 view;
     mu::Mat4x4 proj;
@@ -45,13 +50,18 @@ struct DrawEvent {
 };
 
 struct Resources {
+    struct OccluderPass {
+        StructuredBuffer perInstanceData;   // t0
+        ConstantBufferArray perDrawcallData;    // b0
+    } occluderPass;
+
     struct ShadowPass {
-        ConstantBuffer      perDrawcallData;  // b0: TerrainShadowMapShader::PerDrawcallData
+        ConstantBufferArray      perDrawcallData;  // b0: TerrainShadowMapShader::PerDrawcallData
         ConstantBufferArray perFrameData;     // b1: cascade별 별도 슬롯 (MAX_CSM_CASCADES)
     } shadowPass;
 
     struct MainPass {
-        ConstantBuffer   perDrawcallData;  // b0
+        ConstantBufferArray   perDrawcallData;  // b0
         ConstantBuffer   perFrameData;     // b1
         StructuredBuffer lightData;        // t1
     } mainPass;
@@ -87,13 +97,15 @@ public:
         ThreadPool* threadPool,
         CommandListPool* commandListPool,
         std::vector<DrawEvent>&& drawEvents,
+        std::vector<OccluderInfo>&& occluderInfos,
         std::vector<LightData>&& lightData,
         const LightData& mainDirectionalLightData,
         const CameraData& cameraData,
         const FrameData& frameData,
         std::size_t roomIdx
     );
-
+    
+    void occluderPass();
     // Records terrain geometry to the shared shadow map (single-threaded).
     // Does nothing if drawEvents is empty.
     void shadowPass();
@@ -108,6 +120,9 @@ public:
     void mainPassMT();
 
 private:
+    void occluderUpdate();
+    void occluderDraw();
+
     // Stages shadow pass GPU constant buffer (PerFrameData) and records draw calls.
     void shadowUpdate();
     void shadowDraw();
@@ -143,6 +158,8 @@ private:
     CommandListPool*                  cmdListPool_ = nullptr;
     Resources*                        pResources_  = nullptr;
     std::vector<DrawEvent>            drawEvents_{};
+    // hi-z map을 구성하기 전 원본 depth buffer를 만들기 위해 occluder들을 한 번씩 그려야 한다.
+    std::vector<OccluderInfo>         occluderInfos_{};
     std::vector<LightData>            lightData_{};
     LightData                         mainDirectionalLightData_{};
     CameraData                        cameraData_{};

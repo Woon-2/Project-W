@@ -596,6 +596,19 @@ void importMesh( std::ifstream& ifs, ID3D12Device* device,
     ID3D12GraphicsCommandList* cmdList, const std::string& name,
     Fence& fenceToAssociate, Mesh& mesh
 ) {
+    // AABB 구축
+    readHeadTag(ifs, "Bounds");
+    const auto center = readVec3(ifs, "Center");
+    const auto extents = readVec3(ifs, "Extents");
+    const auto mins = readVec3(ifs, "Min");
+    const auto maxs = readVec3(ifs, "Max");
+    readTailTag(ifs, "Bounds");
+
+    mesh.bounds = AABB{
+        .center = XMLoadFloat3(&center),
+        .size = mu::Vec3(XMLoadFloat3(&extents)) * 2.f
+    };
+
     // 정점 버퍼들 구축
     readHeadTag(ifs, "VertexBuffers");
     

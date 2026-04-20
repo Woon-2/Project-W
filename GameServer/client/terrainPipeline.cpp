@@ -11,12 +11,58 @@ namespace TerrainPipeline {
 // layoutMeshIfNeeded
 // ---------------------------------------------------------------------------
 
-void layoutMeshIfNeeded(const Mesh& mesh) {
-    if (mesh.vbViewsByPipeline.contains("TerrainPipeline")) {
+// Terrain Pipeline Occluder 패스의 input layout을 위한 Vertex Buffer View 배열이
+// mesh에 존재하지 않는다면, 추가한다.
+// 0: position
+void __layoutMeshIfNeededOccluderPass(const Mesh& mesh) {
+	if (mesh.vbViewsByPipeline.contains("TerrainPipeline_Occluder")) {
+		return;
+	}
+
+	auto [pvbViews, _] = mesh.vbViewsByPipeline.try_emplace("TerrainPipeline_Occluder");
+	auto& vbViews = pvbViews->second;
+	vbViews.reserve(1u);	// position
+
+	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_Position"),
+		"[GFX Error] TerrainPipeline::__layoutMeshIfNeededShadowPass: " + mesh.name + "_VB_Position"
+		"의 이름을 가진 정점 버퍼가 요구되었으나, 존재하지 않습니다.",
+		false
+	);
+
+	auto& vbViewPos = mesh.vbViews[ mesh.vbIdxMap.at(mesh.name + "_VB_Position") ];
+
+	vbViews.push_back(vbViewPos);
+}
+
+// Terrain Pipeline 그림자 패스의 input layout을 위한 Vertex Buffer View 배열이
+// mesh에 존재하지 않는다면, 추가한다.
+// 0: position
+void __layoutMeshIfNeededShadowPass(const Mesh& mesh) {
+	if (mesh.vbViewsByPipeline.contains("TerrainPipeline_Shadow")) {
+		return;
+	}
+
+	auto [pvbViews, _] = mesh.vbViewsByPipeline.try_emplace("TerrainPipeline_Shadow");
+	auto& vbViews = pvbViews->second;
+	vbViews.reserve(1u);	// position
+
+	DISPLAY_ERROR_STR( mesh.vbIdxMap.contains(mesh.name + "_VB_Position"),
+		"[GFX Error] TerrainPipeline::__layoutMeshIfNeededShadowPass: " + mesh.name + "_VB_Position"
+		"의 이름을 가진 정점 버퍼가 요구되었으나, 존재하지 않습니다.",
+		false
+	);
+
+	auto& vbViewPos = mesh.vbViews[ mesh.vbIdxMap.at(mesh.name + "_VB_Position") ];
+
+	vbViews.push_back(vbViewPos);
+}
+
+void __layoutMeshIfNeededMainPass(const Mesh& mesh) {
+    if (mesh.vbViewsByPipeline.contains("TerrainPipeline_Main")) {
         return;
     }
 
-    auto [pvbViews, _] = mesh.vbViewsByPipeline.try_emplace("TerrainPipeline");
+    auto [pvbViews, _] = mesh.vbViewsByPipeline.try_emplace("TerrainPipeline_Main");
     auto& vbViews = pvbViews->second;
     vbViews.reserve(5u);    // Position, Normal, Tangent, Bitangent, UV
 
@@ -38,6 +84,12 @@ void layoutMeshIfNeeded(const Mesh& mesh) {
     vbViews.push_back(mesh.vbViews[mesh.vbIdxMap.at(mesh.name + "_VB_UV")]);
 }
 
+void layoutMeshIfNeeded(const Mesh& mesh) {
+    __layoutMeshIfNeededOccluderPass(mesh);
+    __layoutMeshIfNeededShadowPass(mesh);
+    __layoutMeshIfNeededMainPass(mesh);
+}
+
 // ---------------------------------------------------------------------------
 // Dispatcher constructor
 // ---------------------------------------------------------------------------
@@ -57,6 +109,7 @@ Dispatcher::Dispatcher(
     Fence* pFence, Resources* pResources,
     ThreadPool* threadPool, CommandListPool* commandListPool,
     std::vector<DrawEvent>&& drawEvents,
+    std::vector<OccluderInfo>&& occluderInfos,
     std::vector<LightData>&& lightData,
     const LightData& mainDirectionalLightData,
     const CameraData& cameraData, const FrameData& frameData,
@@ -68,7 +121,7 @@ Dispatcher::Dispatcher(
     cmdQ_(cmdQ),
     viewport_(viewport), scissorRect_(scissorRect), rtv_(rtv), dsv_(dsv),
     pFence_(pFence), pResources_(pResources), threadPool_(threadPool), cmdListPool_(commandListPool),
-    drawEvents_(std::move(drawEvents)),
+    drawEvents_(std::move(drawEvents)), occluderInfos_(std::move(occluderInfos)),
     lightData_(std::move(lightData)), mainDirectionalLightData_(mainDirectionalLightData),
     cameraData_(cameraData), frameData_(frameData),
     roomIdx_(roomIdx),
@@ -82,6 +135,116 @@ Dispatcher::Dispatcher(
     rootParamIdxCmpSamPool_(rootSig->paramIdx("ComparisonSamplerPool"))
 {
     SharedResources::ShadowMap::validateRequiredKeys({SharedResources::ShadowMap::kDefaultKey});
+}
+
+void Dispatcher::occluderPass() {
+    occluderUpdate();
+    occluderDraw();
+}
+
+void Dispatcher::occluderUpdate() {
+     if (occluderInfos_.empty()) return;
+
+    static auto perInstanceData = std::vector<HiZOccluderShader::PerInstanceData>();
+    perInstanceData.resize(occluderInfos_.size());
+
+    std::ranges::transform(occluderInfos_, perInstanceData.begin(),
+        [viewProj = cameraData_.view * cameraData_.proj](const OccluderInfo& e) {
+            return HiZOccluderShader::PerInstanceData{
+                .wvp = mu::transpose(e.world * viewProj).getXmf()
+            };
+        }
+    );
+
+    pResources_->occluderPass.perInstanceData.stage(roomIdx_, perInstanceData);
+    perInstanceData.clear();
+}
+
+void Dispatcher::occluderDraw() {
+    if (occluderInfos_.empty()) {
+        return;
+    }
+
+    CommandContext cmdCtx{};
+    DISPLAY_ERROR_STR(cmdListPool_->allocOne(CommandListUsage::RenderingSlave, cmdCtx),
+        "[GFX Error] TerrainPipeline::occluderPass: no command context available.", false);
+    if (!cmdCtx.cmdList) {
+        return;
+    }
+
+    auto* cmdList  = cmdCtx.cmdList.Get();
+    auto* cmdAlloc = cmdCtx.cmdAlloc.Get();
+
+    auto hrReset = cmdAlloc->Reset();
+    DISPLAY_ERROR_DX_HR(hrReset, false);
+    if (hrReset < 0) {
+        cmdListPool_->freeOne(CommandListUsage::RenderingSlave, std::move(cmdCtx));
+        return;
+    }
+    auto hrListReset = cmdList->Reset(cmdAlloc, nullptr);
+    DISPLAY_ERROR_DX_HR(hrListReset, false);
+    if (hrListReset < 0) {
+        cmdListPool_->freeOne(CommandListUsage::RenderingSlave, std::move(cmdCtx));
+        return;
+    }
+
+    DISPLAY_ERROR_DX_VOID(cmdList->SetGraphicsRootSignature(rootSig_->get()), false);
+    DISPLAY_ERROR_DX_VOID(cmdList->SetPipelineState(shadowShader_.Get()), false);
+
+    auto heapsRaw = std::vector<ID3D12DescriptorHeap*>(descriptorHeaps_.size());
+    std::ranges::transform(descriptorHeaps_, heapsRaw.begin(),
+        [](const ComPtr<ID3D12DescriptorHeap>& h) { return h.Get(); });
+    DISPLAY_ERROR_DX_VOID(cmdList->SetDescriptorHeaps(
+        static_cast<UINT>(heapsRaw.size()), heapsRaw.data()), false);
+
+    DISPLAY_ERROR_DX_VOID(cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST), false);
+
+    DISPLAY_ERROR_DX_VOID(cmdList->OMSetRenderTargets(
+        0u, nullptr, false, &SharedResources::HiZMap::hiZMaps[roomIdx_].dsvHandle), false
+    );
+    DISPLAY_ERROR_DX_VOID(cmdList->RSSetViewports(1u, &viewport_), false);
+    DISPLAY_ERROR_DX_VOID(cmdList->RSSetScissorRects(1u, &scissorRect_), false);
+
+    const auto viewProj = cameraData_.view * cameraData_.proj;
+
+    u32t idxDrawcall = 0u;
+
+    for (const auto& ev : occluderInfos_) {
+        if (!ev.terrain) continue;
+        const auto& mesh = ev.terrain->mesh;
+        if (mesh.subMeshes.empty()) continue;
+
+        auto pdd = HiZOccluderShader::PerDrawcallData{
+            .firstInstanceOffset = idxDrawcall
+        };
+        pResources_->occluderPass.perDrawcallData.cbuffers[idxDrawcall].stage(roomIdx_, &pdd, 1u);
+        pResources_->occluderPass.perDrawcallData.cbuffers[idxDrawcall].bind(cmdList, rootParamIdxPDD_, roomIdx_);
+
+        layoutMeshIfNeeded(mesh);
+        const auto& allVbViews = mesh.vbViewsByPipeline.at("TerrainPipeline_Occluder");
+        DISPLAY_ERROR_DX_VOID(cmdList->IASetVertexBuffers(0u, 1u, &allVbViews[0]), false);
+
+        const auto& subMesh = mesh.subMeshes[0];
+        DISPLAY_ERROR_DX_VOID(cmdList->IASetIndexBuffer(&subMesh.ibView), false);
+
+        const UINT indexCount = subMesh.ibView.SizeInBytes / sizeof(u32t);
+        DISPLAY_ERROR_DX_VOID(cmdList->DrawIndexedInstanced(indexCount, 1u, 0u, 0, 0u), false);
+
+        ++idxDrawcall;
+    }
+
+    auto hrClose = cmdList->Close();
+    DISPLAY_ERROR_DX_HR(hrClose, false);
+    if (hrClose < 0) {
+        cmdListPool_->freeOne(CommandListUsage::RenderingSlave, std::move(cmdCtx));
+        return;
+    }
+
+    ID3D12CommandList* lists[] = { cmdList };
+    DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, lists), false);
+
+    pFence_->associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)]
+        .push_back(std::move(cmdCtx));
 }
 
 // ---------------------------------------------------------------------------
@@ -162,6 +325,8 @@ void Dispatcher::shadowDraw() {
 
     DISPLAY_ERROR_DX_VOID(cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST), false);
 
+    u32t idxDrawcall = 0u;
+
     // cascade별로 별도 pass 수행
     for (u32t ci = 0u; ci < cascadeCount; ++ci) {
         const auto& cascadeSlice = csmData.cascades[ci];
@@ -194,11 +359,11 @@ void Dispatcher::shadowDraw() {
             auto pdd = TerrainShadowMapShader::PerDrawcallData{
                 .world = mu::transpose(ev.world).getXmf()
             };
-            pResources_->shadowPass.perDrawcallData.stage(roomIdx_, &pdd, 1u);
-            pResources_->shadowPass.perDrawcallData.bind(cmdList, rootParamIdxPDD_, roomIdx_);
+            pResources_->shadowPass.perDrawcallData.cbuffers[idxDrawcall].stage(roomIdx_, &pdd, 1u);
+            pResources_->shadowPass.perDrawcallData.cbuffers[idxDrawcall].bind(cmdList, rootParamIdxPDD_, roomIdx_);
 
             layoutMeshIfNeeded(mesh);
-            const auto& allVbViews = mesh.vbViewsByPipeline.at("TerrainPipeline");
+            const auto& allVbViews = mesh.vbViewsByPipeline.at("TerrainPipeline_Shadow");
             DISPLAY_ERROR_DX_VOID(cmdList->IASetVertexBuffers(0u, 1u, &allVbViews[0]), false);
 
             const auto& subMesh = mesh.subMeshes[0];
@@ -206,6 +371,8 @@ void Dispatcher::shadowDraw() {
 
             const UINT indexCount = subMesh.ibView.SizeInBytes / sizeof(u32t);
             DISPLAY_ERROR_DX_VOID(cmdList->DrawIndexedInstanced(indexCount, 1u, 0u, 0, 0u), false);
+
+            ++idxDrawcall;
         }
     }
 
@@ -343,6 +510,8 @@ void Dispatcher::mainDraw() {
     // Bind PerFrameData (staged in mainUpdate).
     pResources_->mainPass.perFrameData.bind(cmdList, rootParamIdxPFD_, roomIdx_);
 
+    u32t idxDrawcall = 0u;
+
     // Iterate draw events (usually just one terrain)
     for (const auto& ev : drawEvents_) {
         if (!ev.terrain) continue;
@@ -398,12 +567,12 @@ void Dispatcher::mainDraw() {
             pdd.metallicRoughness[i]      = XMFLOAT4(0.f, 0.85f, 0.f, 0.f);
         }
 
-        pResources_->mainPass.perDrawcallData.stage(roomIdx_, &pdd, 1u);
-        pResources_->mainPass.perDrawcallData.bind(cmdList, rootParamIdxPDD_, roomIdx_);
+        pResources_->mainPass.perDrawcallData.cbuffers[idxDrawcall].stage(roomIdx_, &pdd, 1u);
+        pResources_->mainPass.perDrawcallData.cbuffers[idxDrawcall].bind(cmdList, rootParamIdxPDD_, roomIdx_);
 
         // Bind vertex and index buffers
         layoutMeshIfNeeded(mesh);
-        const auto& vbViews = mesh.vbViewsByPipeline.at("TerrainPipeline");
+        const auto& vbViews = mesh.vbViewsByPipeline.at("TerrainPipeline_Main");
         DISPLAY_ERROR_DX_VOID(cmdList->IASetVertexBuffers(
             0u, static_cast<UINT>(vbViews.size()), vbViews.data()), false);
 
@@ -413,6 +582,8 @@ void Dispatcher::mainDraw() {
         // 32-bit index buffer: SizeInBytes / 4
         const UINT indexCount = subMesh.ibView.SizeInBytes / sizeof(u32t);
         DISPLAY_ERROR_DX_VOID(cmdList->DrawIndexedInstanced(indexCount, 1u, 0u, 0, 0u), false);
+
+        ++idxDrawcall;
     }
 
     auto hrClose = cmdList->Close();

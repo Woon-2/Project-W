@@ -9,7 +9,8 @@ extern RECT gClientRect;
 enum class BufferCreationType {
 	VertexBuffer,
 	IndexBuffer,
-	UploadBuffer
+	UploadBuffer,
+	DefaultBufferUAV,	// Default Heap + ALLOW_UNORDERED_ACCESS (RWStructuredBuffer용)
 };
 
 // 버퍼 리소스를 생성하는 함수
@@ -161,9 +162,18 @@ void transitionResourceState(ID3D12GraphicsCommandList* cmdList,
 	D3D12_RESOURCE_STATES afterState
 );
 
+void uavBarrier(ID3D12GraphicsCommandList* cmdList,
+	ID3D12Resource* resource	
+);
+
 // 리소스 상태 전환과 관련된 사항을 간략화하는 리소스 복사 함수
 void copyResource( ID3D12GraphicsCommandList* cmdList,
 	ID3D12Resource* srcRes, ID3D12Resource* destRes,
+	D3D12_RESOURCE_STATES srcResState, D3D12_RESOURCE_STATES destResState
+);
+
+void copyTextureRegion( ID3D12GraphicsCommandList* cmdList,
+	D3D12_TEXTURE_COPY_LOCATION srcRegion, D3D12_TEXTURE_COPY_LOCATION destRegion,
 	D3D12_RESOURCE_STATES srcResState, D3D12_RESOURCE_STATES destResState
 );
 
@@ -192,6 +202,10 @@ public:
 	void init(ID3D12Device* device, UINT64 byteWidth, std::size_t roomCnt, const std::string& name);
 	// roomIdx의 리소스를 루트 시그너처에 바인드한다.
 	virtual void bind( ID3D12GraphicsCommandList* cmdList,
+		UINT rootParamIdx, std::size_t roomIdx
+	) = 0;
+	// roomIdx의 리소스를 compute 루트 시그너처에 바인드한다.
+	virtual void bindCompute( ID3D12GraphicsCommandList* cmdList,
 		UINT rootParamIdx, std::size_t roomIdx
 	) = 0;
 
@@ -231,6 +245,10 @@ public:
 	void bind( ID3D12GraphicsCommandList* cmdList,
 		UINT rootParamIdx, std::size_t roomIdx
 	) override;
+	// roomIdx의 리소스를 compute 루트 시그너처에 cbv로 연결한다.
+	void bindCompute( ID3D12GraphicsCommandList* cmdList,
+		UINT rootParamIdx, std::size_t roomIdx
+	) override;
 };
 
 // 셰이더의 StructuredBuffer와 연동되는 클래스,
@@ -244,6 +262,65 @@ public:
 	void bind( ID3D12GraphicsCommandList* cmdList,
 		UINT rootParamIdx, std::size_t roomIdx
 	) override;
+	// roomIdx의 리소스를 compute 루트 시그너처에 srv로 연결한다.
+	void bindCompute( ID3D12GraphicsCommandList* cmdList,
+		UINT rootParamIdx, std::size_t roomIdx
+	) override;
+};
+
+// 셰이더의 RWStructuredBuffer<T>와 연동되는 클래스.
+// Default Heap + ALLOW_UNORDERED_ACCESS 리소스를 생성한다.
+// GPU가 쓰고 읽는 버퍼이며, CPU에서 직접 쓸 수 없다.
+// ShaderInputBuffer를 상속하지 않는다 — 힙 타입이 다르고 stage() 의미론이 없다.
+class RWStructuredBuffer {
+public:
+	RWStructuredBuffer() = default;
+
+	// byteWidth 크기의 리소스를 roomCnt 개 만든다.
+	void init( ID3D12Device* device, UINT64 byteWidth,
+		std::size_t roomCnt, const std::string& name
+	);
+
+	// roomIdx의 리소스를 compute 루트 시그너처에 UAV로 연결한다.
+	void bindCompute( ID3D12GraphicsCommandList* cmdList,
+		UINT rootParamIdx, std::size_t roomIdx
+	);
+	// roomIdx의 리소스를 graphics 루트 시그너처에 UAV로 연결한다.
+	void bindGraphics( ID3D12GraphicsCommandList* cmdList,
+		UINT rootParamIdx, std::size_t roomIdx
+	);
+	// roomIdx의 리소스를 compute 루트 시그너처에 SRV로 연결한다.
+	// 이전 패스의 RW 결과를 다음 compute 패스에서 읽을 때 사용한다.
+	void bindComputeAsSRV( ID3D12GraphicsCommandList* cmdList,
+		UINT rootParamIdx, std::size_t roomIdx
+	);
+	// roomIdx의 리소스를 graphics 루트 시그너처에 SRV로 연결한다.
+	// compute 패스의 RW 결과를 graphics 패스에서 읽을 때 사용한다.
+	void bindGraphicsAsSRV( ID3D12GraphicsCommandList* cmdList,
+		UINT rootParamIdx, std::size_t roomIdx
+	);
+
+	// UAV 배리어를 삽입한다. 동일 버퍼에 대한 연속 dispatch 사이에 필요하다.
+	void uavBarrier( ID3D12GraphicsCommandList* cmdList, std::size_t roomIdx );
+
+	// roomIdx 버퍼 전체를 clearValue로 초기화한다 (ClearUnorderedAccessViewUint).
+	// cpuHandle: 비셰이더-visible CPU 핸들 (호출자가 할당)
+	// gpuHandle: 현재 바인딩된 셰이더-visible 힙의 GPU 핸들 (호출자가 할당)
+	void clearUint( ID3D12GraphicsCommandList* cmdList,
+		D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
+		D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle,
+		std::size_t roomIdx, UINT clearValue = 0u
+	);
+
+	// roomIdx 리소스의 GPU 가상 주소를 반환한다. ExecuteIndirect 등에서 활용한다.
+	D3D12_GPU_VIRTUAL_ADDRESS gpuAddress( std::size_t roomIdx ) const;
+	// roomIdx 리소스의 원시 포인터를 반환한다. 리소스 배리어, ClearUAV 등에서 활용한다.
+	ID3D12Resource* resource( std::size_t roomIdx ) const;
+
+private:
+	std::vector<ComPtr<ID3D12Resource>> resources_{};
+	std::vector<D3D12_GPU_VIRTUAL_ADDRESS> addresses_{};
+	std::string name_{};
 };
 
 // 크기가 작지 않은 ConstantBuffer 여러 개를 사용해야 할 경우,
@@ -356,6 +433,19 @@ Texture loadTexture( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
 Texture createTexture( ID3D12Device* device, std::uint32_t width, std::uint32_t height,
 	DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES initialState,
 	const D3D12_CLEAR_VALUE& optimizedClearValue
+);
+
+// 특정한 width, height의 텍스처로 밉맵을 만들 때
+// 몇 개의 밉이 만들어지는지 계산하는 함수
+inline uint32_t calcMipCount(uint32_t width, uint32_t height)
+{
+    return static_cast<uint32_t>(
+        std::floor(std::log2(std::max(width, height)))
+    ) + 1;
+}
+
+Texture createTextureWithMips( ID3D12Device* device, uint32_t width, uint32_t height,
+    DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES initialState
 );
 
 // 텍스처의 gpu 리소스를 담는 ComPtr 부분은 제외하고,

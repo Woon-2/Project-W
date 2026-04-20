@@ -114,14 +114,6 @@ private:
 	std::shared_ptr<TerrainObject> terrain_{};
 	std::vector<std::shared_ptr<Goblin>> goblins_{};
 	std::unordered_map<uint16, std::shared_ptr<Goblin>> idGoblinMap_{};
-	std::shared_ptr<Anubis> anubis_{};
-	std::shared_ptr<Bat> bat_{};
-	std::shared_ptr<Bomber> bomber_{};
-	std::shared_ptr<Demon> demon_{};
-	std::shared_ptr<Dragon> dragon_{};
-	std::shared_ptr<Eyeball> eyeball_{};
-	std::shared_ptr<Fishman> fishman_{};
-	std::shared_ptr<Gargoyle> gargoyle_{};
 
 	std::shared_ptr<Player> player_{};
 	std::vector<std::shared_ptr<Player>> otherPlayers_{ };

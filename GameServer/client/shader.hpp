@@ -4,7 +4,7 @@
 #include "gfxUtil.hpp"
 
 struct CompiledShaderOutput {
-	ComPtr<ID3DBlob> blob;
+	ComPtr<IDxcBlob> blob;
 	D3D12_SHADER_BYTECODE byteCode;
 };
 
@@ -39,6 +39,13 @@ ComPtr<ID3D12PipelineState> createTerrainShaderCSMDebug(ID3D12Device* device, ID
 ComPtr<ID3D12PipelineState> createTerrainShadowMapShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createTerrainShadowMapCSMShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createTerrainDeferredGBufferShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createHiZOccluderShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createHiZMapShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createHiZClearShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createHiZCullShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createHiZCompactShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createHiZCommandShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createPrefixSumShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 
 // 루트 파라미터 접근을 이해하기 쉽도록 하기 위해 만든 클래스
 // 루트 파라미터에 이름을 지어 그 인덱스 및 D3D12_ROOT_PARAMETER 구조체와 매핑한다.
@@ -69,6 +76,25 @@ public:
 	const std::string& name() const override;
 
 private:
+};
+
+class CmdSig {
+public:
+	void build(ID3D12Device* device, const RootSig& root);
+	ID3D12CommandSignature* get() const { return cmdSig_.Get(); }
+
+private:
+	ComPtr<ID3D12CommandSignature> cmdSig_;
+	std::string name_{"unbuilt command signature"};
+};
+
+struct DrawIndexedInstancedArgs
+{
+    u32t IndexCountPerInstance;
+    u32t InstanceCount;
+    u32t StartIndexLocation;
+    i32t  BaseVertexLocation;
+    u32t StartInstanceLocation;
 };
 
 // 셰이더별 구조체 ------------------------------------
@@ -586,7 +612,6 @@ struct PerInstanceData {
 
 struct PerDrawcallData {
 	Material material;
-	u32t firstInstanceOffset;
 };
 
 struct PerFrameData {
@@ -632,6 +657,99 @@ struct PerFrameData {
 };
 
 }	// namespace PBRDeferredLightingShader
+
+// hiZOccluderShader
+namespace HiZOccluderShader {
+
+struct PerInstanceData {
+	XMFLOAT4X4 wvp;
+};
+
+struct PerDrawcallData {
+	u32t firstInstanceOffset;
+	XMUINT3 padding;
+};
+
+}	// namespace HiZOccluderShader
+
+// HiZCullShader
+namespace HiZCullShader {
+
+struct PerInstanceData {
+	XMFLOAT4X4 world;
+	XMFLOAT3 aabbMin;
+	float padding0;
+	XMFLOAT3 aabbMax;
+	float padding1;
+	u32t instanceGroupId;
+	XMUINT3 padding2;
+};
+
+struct PerFrameData {
+	XMFLOAT4X4 viewProj;
+	XMFLOAT2 screenSize;
+	XMFLOAT2 padding0;
+	u32t objCnt;
+	XMUINT3 padding1;
+};
+
+}	// namespace HiZCullShader
+
+// HiZCompactShader
+namespace HiZCompactShader {
+
+struct PerInstanceData {
+	u32t instanceGroupId;
+	u32t idxCnt;
+	XMUINT2 padding;
+};
+
+struct PerGroupData {
+	u32t instCnt;
+	u32t idxCnt;
+	u32t groupOffset;
+	u32t padding;
+};
+
+struct PerFrameData {
+	u32t objCnt;
+	XMUINT3 padding;
+};
+
+}	// namespace HiZCompactShader
+
+// HiZClearShader
+namespace HiZClearShader {
+
+struct PerFrameData {
+	u32t groupCnt;
+	XMUINT3 padding;
+};
+
+}	// namespace HiZClearShader
+
+// HiZCommandShader
+namespace HiZCommandShader {
+
+struct PerGroupData {
+	u32t instCnt;
+	u32t idxCnt;
+	u32t groupOffset;
+	u32t padding;
+};
+
+struct PerFrameData {
+	u32t groupCnt;
+	XMUINT3 padding;
+};
+
+struct IndirectCommand
+{
+	u32t groupOffset;
+	DrawIndexedInstancedArgs drawArgs;
+};
+
+}	// namespace HiZCommandShader
 
 namespace UIShader {
 	struct Material {

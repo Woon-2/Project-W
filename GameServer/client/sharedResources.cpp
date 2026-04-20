@@ -421,6 +421,33 @@ void getCSMReadyAsShaderResource(const std::string& key, std::size_t roomIdx, u3
 	}
 }
 
+void getCSMAllReadyAsDepthWrite(const std::string& key, std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
+	DISPLAY_ERROR_STR(csmShadowMapData.contains(key), "[GFX Error] SharedResources::ShadowMap::getCSMAllReadyAsDepthWrite: \""s
+		+ key + "\" 키의 CSM 그림자 맵이 존재하지 않습니다.", false
+	);
+	if (!csmShadowMapData.contains(key)) {
+		return;
+	}
+
+	// 이미 모든 cascade가 DEPTH_WRITE 상태이면 배리어 제출 불필요
+
+	auto& csmData = csmShadowMapData.at(key)[roomIdx];
+	bool anyNeedsTransition = false;
+	for (u32t ci = 0u; ci < csmData.cascadeCount; ++ci) {
+		if (csmData.cascades[ci].curState != D3D12_RESOURCE_STATE_DEPTH_WRITE) {
+			anyNeedsTransition = true;
+			break;
+		}
+	}
+	if (!anyNeedsTransition) {
+		return;
+	}
+
+	for (u32t ci = 0u; ci < csmData.cascadeCount; ++ci) {
+		getCSMReadyAsDepthWrite(key, roomIdx, ci, cmdList);
+	}
+}
+
 void getCSMAllReadyAsDepthWrite(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence) {
 	DISPLAY_ERROR_STR(csmShadowMapData.contains(key), "[GFX Error] SharedResources::ShadowMap::getCSMAllReadyAsDepthWrite: \""s
 		+ key + "\" 키의 CSM 그림자 맵이 존재하지 않습니다.", false
@@ -503,6 +530,48 @@ void getCSMAllReadyAsShaderResource(const std::string& key, std::size_t roomIdx,
 	ID3D12CommandList* lists[] = { cmdCtx.cmdList.Get() };
 	DISPLAY_ERROR_DX_VOID( cmdQ->ExecuteCommandLists(1u, lists), false );
 	fence.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtx));
+}
+
+void getCSMAllReadyAsShaderResource(const std::string& key, std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
+	DISPLAY_ERROR_STR(csmShadowMapData.contains(key), "[GFX Error] SharedResources::ShadowMap::getCSMAllReadyAsShaderResource: \""s
+		+ key + "\" 키의 CSM 그림자 맵이 존재하지 않습니다.", false
+	);
+	if (!csmShadowMapData.contains(key)) {
+		return;
+	}
+
+	auto& csmData = csmShadowMapData.at(key)[roomIdx];
+	bool anyNeedsTransition = false;
+	for (u32t ci = 0u; ci < csmData.cascadeCount; ++ci) {
+		if (csmData.cascades[ci].curState != D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE) {
+			anyNeedsTransition = true;
+			break;
+		}
+	}
+	if (!anyNeedsTransition) {
+		return;
+	}
+
+	for (u32t ci = 0u; ci < csmData.cascadeCount; ++ci) {
+		getCSMReadyAsShaderResource(key, roomIdx, ci, cmdList);
+	}
+}
+
+void clearCSMAllShadowMaps(const std::string& key, std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
+	DISPLAY_ERROR_STR(csmShadowMapData.contains(key), "[GFX Error] SharedResources::ShadowMap::clearCSMAllShadowMaps: \""s
+		+ key + "\" 키의 CSM 그림자 맵이 존재하지 않습니다.", false
+	);
+	if (!csmShadowMapData.contains(key)) {
+		return;
+	}
+
+	const auto& csmData = csmShadowMapData.at(key)[roomIdx];
+
+	for (u32t ci = 0u; ci < csmData.cascadeCount; ++ci) {
+		DISPLAY_ERROR_DX_VOID( cmdList->ClearDepthStencilView(
+			csmData.cascades[ci].dsv, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0u, 0u, nullptr
+		), false );
+	}
 }
 
 void clearCSMAllShadowMaps(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence) {
@@ -755,5 +824,121 @@ void clearGBuffer(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
 }
 
 }	// namespace GBuffer
+
+namespace HiZMap {
+
+std::vector<HiZMapData> hiZMaps;
+
+// hiZMap은 화면(뷰포트) 해상도가 바뀌면 다시 만들어야 한다.
+// 해상도가 바뀔 경우 eraseHiZMaps를 호출 후 다시 변경된 해상도에 맞게 addHiZMaps를 호출해야 한다.
+void addHiZMaps( ID3D12Device* device, u32t width, u32t height,
+	std::size_t roomCnt, DescriptorPool& srvTexPool, DescriptorPool& uavPool,
+	DescriptorPool& dsvPool
+) {
+	hiZMaps.reserve(roomCnt);
+
+	constexpr DXGI_FORMAT formatF = DXGI_FORMAT_R32_FLOAT;
+	constexpr DXGI_FORMAT formatD = DXGI_FORMAT_D32_FLOAT;
+
+	const auto clearVal = D3D12_CLEAR_VALUE{ .Format = formatD, .DepthStencil = { .Depth = 1.f } };
+
+	for (std::size_t r = 0u; r < roomCnt; ++r) {
+		auto& mapData = hiZMaps.emplace_back();
+
+		mapData.srcWidth = width;
+		mapData.srcHeight = height;
+
+		mapData.mipLevelCnt = calcMipCount(width, height);
+
+		// level 0 -> dsv로 연결해 occluder 직접 렌더링
+		mapData.srcTex = createTexture( device, width, height, formatD,
+			D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL,
+			D3D12_RESOURCE_STATE_DEPTH_WRITE, clearVal
+		);
+
+		setD3DName(mapData.srcTex.res.Get(), "HiZMap_Src");
+
+		createDSV( device, mapData.srcTex, D3D12_DEPTH_STENCIL_VIEW_DESC{
+			.Format        = formatD,
+			.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D,
+			.Flags         = D3D12_DSV_FLAG_NONE,
+			.Texture2D     = D3D12_TEX2D_DSV{ .MipSlice = 0u }
+		}, dsvPool);
+		mapData.dsvHandle = dsvPool.cpuHandle(mapData.srcTex.idxDsv);
+
+
+		mapData.mips = createTextureWithMips( device, width, height,
+			formatF, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, 
+			D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+		);
+
+		setD3DName(mapData.mips.res.Get(), "HiZMap_Mips");
+
+		// 읽을 때는 hlsl load/sample 함수에서 mip level을 지정할 수 있기 때문에
+		// 하나의 srv를 사용해야 하고,
+		// 쓸 때는 반드시 하나의 텍스처를 지정해야 하기 때문에,
+		// mip별 uav가 있어야 한다.
+		createSRV( device, mapData.mips, D3D12_SHADER_RESOURCE_VIEW_DESC{
+			.Format = formatF,
+			.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D,
+			.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+			.Texture2D = D3D12_TEX2D_SRV{ .MostDetailedMip = 0u, .MipLevels = mapData.mipLevelCnt }
+		}, srvTexPool );
+		mapData.srvHandle = srvTexPool.gpuHandle(mapData.mips.idxSrv.idxResource);
+
+		mapData.uavHandles.reserve(mapData.mipLevelCnt);
+		for (auto i = 0u; i < mapData.mipLevelCnt; ++i) {
+			createUAV( device, mapData.mips, D3D12_UNORDERED_ACCESS_VIEW_DESC{
+				.Format = formatF,
+				.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D,
+				.Texture2D = D3D12_TEX2D_UAV{ .MipSlice = i },
+			}, uavPool );
+			mapData.uavHandles.push_back( uavPool.gpuHandle(mapData.mips.idxUav.idxResource) );
+		}
+	}
+}
+
+void eraseHiZMaps( DescriptorPool& srvTexPool,
+	DescriptorPool& uavPool, DescriptorPool& dsvPool
+) {
+	for (auto& mapData : hiZMaps) {
+		dsvPool.free(mapData.srcTex.idxDsv);
+
+		srvTexPool.free(mapData.mips.idxSrv.idxResource);
+		uavPool.free(mapData.mips.idxUav.idxResource);
+	}
+
+	hiZMaps.clear();
+}
+
+void clearHiZMap(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
+	cmdList->ClearDepthStencilView( hiZMaps[roomIdx].dsvHandle,
+		D3D12_CLEAR_FLAG_DEPTH, 1.f, 0u, 0u, nullptr
+	);
+}
+
+void clearHiZMap(std::size_t roomIdx, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence) {
+	CommandContext cmdCtx{};
+	DISPLAY_ERROR_STR( cmdListPool.allocOne(CommandListUsage::RenderingSlave, cmdCtx),
+		"[GFX Error] SharedResources::ShadowMap::clearCSMAllShadowMaps: 사용 가능한 명령 리스트가 없습니다.", false
+	);
+	if (!cmdCtx.cmdList) {
+		return;
+	}
+
+	DISPLAY_ERROR_DX_VOID( cmdCtx.cmdAlloc->Reset(), false );
+	DISPLAY_ERROR_DX_VOID( cmdCtx.cmdList->Reset(cmdCtx.cmdAlloc.Get(), nullptr), false );
+
+	cmdCtx.cmdList->ClearDepthStencilView( hiZMaps[roomIdx].dsvHandle,
+		D3D12_CLEAR_FLAG_DEPTH, 1.f, 0u, 0u, nullptr
+	);
+
+	DISPLAY_ERROR_DX_VOID( cmdCtx.cmdList->Close(), false );
+	ID3D12CommandList* lists[] = { cmdCtx.cmdList.Get() };
+	DISPLAY_ERROR_DX_VOID( cmdQ->ExecuteCommandLists(1u, lists), false );
+	fence.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtx));
+}
+
+}	// namespace SharedResources::HiZMap
 
 }	// namespace SharedResources

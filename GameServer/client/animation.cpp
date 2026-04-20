@@ -323,6 +323,8 @@ void AnimSystem::update(Seconds timeSlice) {
 			blender->onCalcFinal({});
 			blender->setStage({}, AnimBlender::Stage::committedFinal);
 			std::pop_heap(blenders_.begin(), std::prev(blenders_.end(), i));
+
+			elapsed = HighResolutionClock::now() - tp;
 		}
 
 		cntProcessed += iteration;
@@ -330,12 +332,14 @@ void AnimSystem::update(Seconds timeSlice) {
 		elapsed = HighResolutionClock::now() - tp;
 	}
 
+	std::cout << elapsed << " elapsed.\n";
+
 	// jobSize_ 비례 제어
 	const float ratio = static_cast<float>(jobCnt) / 8.f;	// 목적: job의 개수가 8개에 근접하기
 	const float error = ratio - 1.f;
 
 	static constexpr float Kp = 0.1f;
 
-	jobSize_ -= std::size_t(jobSize_ * error * Kp);
-	jobSize_ = std::max(jobSize_, 1ull);
+	float delta = jobSize_ * error * Kp;
+	jobSize_ = static_cast<std::size_t>(std::max(1.0f, jobSize_ + delta));
 }
