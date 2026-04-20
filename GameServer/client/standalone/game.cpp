@@ -1343,7 +1343,7 @@ void Game::processInput(Milliseconds deltaTime) {
 		case SwordEffect::SlashCombo: swordSlashComboEffect_.play(slashPos); break;
 		case SwordEffect::Slash7:     swordSlash7Effect_.play(slashPos);     break;
 		case SwordEffect::Slash1:     swordSlash1Effect_.play(slashPos);     break;
-		case SwordEffect::SlashWave:  slashWaveEffect_.play(slashPos);       break;
+		case SwordEffect::SlashWave:  slashWaveEffect_.play(slashPos, player_->orient());       break;
 		case SwordEffect::Spikes:     spikesAttackEffect_.play(slashPos);    break;
 		}
 	}
