@@ -7,15 +7,30 @@ namespace UI {
 void Button::onRender(const RenderContext& rc) {
     const Texture* tex = nullptr;
     switch (state_) {
-    case State::Normal:  tex = texNormal;  break;
-    case State::Hovered: tex = texHovered ? texHovered : texNormal; break;
-    case State::Pressed: tex = texPressed ? texPressed : texNormal; break;
+    case State::Normal:  tex = texNormal;                            break;
+    case State::Hovered: tex = texHovered ? texHovered : texNormal;  break;
+    case State::Pressed: tex = texPressed ? texPressed : texNormal;  break;
     }
-    if (!tex) return;
+
+    if (tex) {
+        rc.gfx->addDrawEvent(UIPipeline::DrawEvent{
+            .world = buildWorldMatrix(rc.screenHeight),
+            .pTex  = tex
+        });
+        return;
+    }
+
+    // Solid-color fallback
+    XMFLOAT4 col = bgColor;
+    if (state_ == State::Hovered && bgColorHovered.w > 0.f) col = bgColorHovered;
+    if (state_ == State::Pressed && bgColorPressed.w > 0.f) col = bgColorPressed;
+    if (col.w <= 0.f) return;
 
     rc.gfx->addDrawEvent(UIPipeline::DrawEvent{
-        .world = buildWorldMatrix(rc.screenHeight),
-        .pTex = tex
+        .world    = buildWorldMatrix(rc.screenHeight),
+        .pTex     = rc.gfx->solidColorTex(),
+        .pCopySrc = nullptr,
+        .colorMul = col
     });
 }
 

@@ -1677,11 +1677,12 @@ std::pair<Mesh, std::string> loadMeshBin(
 		"[File I/O Error]: loadMeshBin: unsupported version "s + std::to_string(version), false);
 	if (version != 1u && version != 2u) return ret;
 
-	// v2: flags (bit 0 = hasColor)
+	// v2: flags (bit 0 = hasColor, bit 1 = hasNormal)
 	uint8_t flags = 0u;
 	if (version == 2u)
 		ifs.read(reinterpret_cast<char*>(&flags), 1);
-	const bool hasColor = (flags & 0x1u) != 0u;
+	const bool hasColor  = (flags & 0x1u) != 0u;
+	const bool hasNormal = (flags & 0x2u) != 0u;
 
 	// counts
 	uint32_t vertexCount{}, indexCount{};
@@ -1706,6 +1707,13 @@ std::pair<Mesh, std::string> loadMeshBin(
 	if (hasColor) {
 		colors.resize(vertexCount);
 		ifs.read(reinterpret_cast<char*>(colors.data()), vertexCount * sizeof(XMFLOAT4));
+	}
+
+	// v2: normal channel (flat float3 array, after color block)
+	auto normals = std::vector<XMFLOAT3>{};
+	if (hasNormal) {
+		normals.resize(vertexCount);
+		ifs.read(reinterpret_cast<char*>(normals.data()), vertexCount * sizeof(XMFLOAT3));
 	}
 
 	// indices
@@ -1746,6 +1754,16 @@ std::pair<Mesh, std::string> loadMeshBin(
 		copyResource(cmdList, vbColoru.Get(), vbColor.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
 	}
 
+	// normal VB (v2, bit1)
+	ComPtr<ID3D12Resource> vbNormal{}, vbNormalu{};
+	if (hasNormal) {
+		vbNormal  = createBufferResource(device, nullptr, normals.size() * sizeof(XMFLOAT3), BufferCreationType::VertexBuffer);
+		setD3DName(vbNormal.Get(), (meshName + "_VB_Normal").c_str());
+		vbNormalu = createBufferResource(device, normals.data(), normals.size() * sizeof(XMFLOAT3), BufferCreationType::UploadBuffer);
+		setD3DName(vbNormalu.Get(), (meshName + "_VB_Normal_Upload").c_str());
+		copyResource(cmdList, vbNormalu.Get(), vbNormal.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+	}
+
 	// IB
 	auto ib  = createBufferResource(device, nullptr, indices.size() * sizeof(u16t), BufferCreationType::IndexBuffer);
 	setD3DName(ib.Get(), (meshName + "_IB").c_str());
@@ -1753,14 +1771,18 @@ std::pair<Mesh, std::string> loadMeshBin(
 	setD3DName(ibu.Get(), (meshName + "_IB_Upload").c_str());
 	copyResource(cmdList, ibu.Get(), ib.Get(), D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_INDEX_BUFFER);
 
-	// VB views
+	// VB views (Position=0, UV=1 always; Color and Normal at dynamic indices)
 	mesh.vbViews.emplace_back(vbPos->GetGPUVirtualAddress(), static_cast<UINT>(positions.size() * sizeof(XMFLOAT3)), static_cast<UINT>(sizeof(XMFLOAT3)));
 	mesh.vbViews.emplace_back(vbUV->GetGPUVirtualAddress(), static_cast<UINT>(uvs.size() * sizeof(XMFLOAT2)), static_cast<UINT>(sizeof(XMFLOAT2)));
 	mesh.vbIdxMap.try_emplace(meshName + "_VB_Position", 0u);
 	mesh.vbIdxMap.try_emplace(meshName + "_VB_UV", 1u);
 	if (hasColor) {
+		mesh.vbIdxMap.try_emplace(meshName + "_VB_Color", static_cast<u32t>(mesh.vbViews.size()));
 		mesh.vbViews.emplace_back(vbColor->GetGPUVirtualAddress(), static_cast<UINT>(colors.size() * sizeof(XMFLOAT4)), static_cast<UINT>(sizeof(XMFLOAT4)));
-		mesh.vbIdxMap.try_emplace(meshName + "_VB_Color", 2u);
+	}
+	if (hasNormal) {
+		mesh.vbIdxMap.try_emplace(meshName + "_VB_Normal", static_cast<u32t>(mesh.vbViews.size()));
+		mesh.vbViews.emplace_back(vbNormal->GetGPUVirtualAddress(), static_cast<UINT>(normals.size() * sizeof(XMFLOAT3)), static_cast<UINT>(sizeof(XMFLOAT3)));
 	}
 
 	// IB + submesh
@@ -1776,17 +1798,20 @@ std::pair<Mesh, std::string> loadMeshBin(
 	// ownership
 	mesh.vbs.push_back(std::move(vbPos));
 	mesh.vbs.push_back(std::move(vbUV));
-	if (hasColor) mesh.vbs.push_back(std::move(vbColor));
+	if (hasColor)  mesh.vbs.push_back(std::move(vbColor));
+	if (hasNormal) mesh.vbs.push_back(std::move(vbNormal));
 	mesh.ibs.push_back(std::move(ib));
 
 	fenceToAssociate.associatedResources_.push_back(std::move(vbPosu));
 	fenceToAssociate.associatedResources_.push_back(std::move(vbUVu));
-	if (hasColor) fenceToAssociate.associatedResources_.push_back(std::move(vbColoru));
+	if (hasColor)  fenceToAssociate.associatedResources_.push_back(std::move(vbColoru));
+	if (hasNormal) fenceToAssociate.associatedResources_.push_back(std::move(vbNormalu));
 	fenceToAssociate.associatedResources_.push_back(std::move(ibu));
 
 	gSharedLog << "[Resource Load] loadMeshBin: " << meshName << " (" << path << ") loaded, "
 		<< vertexCount << " verts, " << indexCount << " indices, "
-		<< "color=" << (hasColor ? "yes" : "no") << ", tex=" << texPath << '\n';
+		<< "color=" << (hasColor ? "yes" : "no") << ", normal=" << (hasNormal ? "yes" : "no")
+		<< ", tex=" << texPath << '\n';
 
 	return ret;
 }

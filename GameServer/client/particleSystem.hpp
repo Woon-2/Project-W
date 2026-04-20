@@ -17,6 +17,8 @@ struct Particle {
     mu::Vec4        startColor;
     ColorGradient   colorOverLifetime;
     float           sizeBegin, sizeEnd, drag;
+    float           sizeStart = 1.f;
+    float           sizeRandom = 0.f;
     mu::Vec3        gravity;
     float           rotation;
 

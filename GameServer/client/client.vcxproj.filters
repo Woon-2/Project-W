@@ -294,6 +294,9 @@
     <ClCompile Include="ui\widgets\Slider.cpp">
       <Filter>UI</Filter>
     </ClCompile>
+    <ClCompile Include="ui\widgets\Dropdown.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
     <ClCompile Include="ui\UIElement.cpp">
       <Filter>UI</Filter>
     </ClCompile>
@@ -307,6 +310,9 @@
       <Filter>그래픽스\파이프라인\소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="smokeBlendCGPipeline.cpp">
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="blendCGMeshPipeline.cpp">
       <Filter>그래픽스\파이프라인\소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="swordSlashMaterial.cpp">
@@ -587,6 +593,9 @@
     <ClInclude Include="ui\widgets\Slider.hpp">
       <Filter>UI</Filter>
     </ClInclude>
+    <ClInclude Include="ui\widgets\Dropdown.hpp">
+      <Filter>UI</Filter>
+    </ClInclude>
     <ClInclude Include="ui\UIElement.hpp">
       <Filter>UI</Filter>
     </ClInclude>
@@ -603,6 +612,9 @@
       <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="smokeBlendCGPipeline.hpp">
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="blendCGMeshPipeline.hpp">
       <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="swordSlashMaterial.hpp">
@@ -662,6 +674,9 @@
       <Filter>셰이더 파일</Filter>
     </FxCompile>
     <FxCompile Include="terrainDeferred.hlsl">
+      <Filter>셰이더 파일</Filter>
+    </FxCompile>
+    <FxCompile Include="blendCGMesh.hlsl">
       <Filter>셰이더 파일</Filter>
     </FxCompile>
   </ItemGroup>

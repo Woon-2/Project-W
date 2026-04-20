@@ -32,7 +32,9 @@ ComPtr<ID3D12PipelineState> createBillboardShader(ID3D12Device* device, ID3D12Ro
 ComPtr<ID3D12PipelineState> createBillboardShaderAdditive(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createMeshParticleShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSmokeBlendCGShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createBlendCGMeshShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSwordSlashShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createTwoSidesShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSignature* rootSig );
@@ -353,6 +355,24 @@ struct PerFrameData {           // 80B
 };
 
 }  // namespace SmokeBlendCGShader
+
+// BlendCGMeshShader
+namespace BlendCGMeshShader {
+
+struct PerInstanceData {        // 112B
+	XMFLOAT4X4 world;           // 64B
+	XMFLOAT4   tint;            // 16B
+	XMFLOAT2   custom1;         // 8B
+	XMFLOAT2   custom2;         // 8B
+	float      t;               // 4B
+	float      customDataEnabled;// 4B
+	XMFLOAT2   pad;             // 8B
+};
+
+using PerDrawcallData = SmokeBlendCGShader::PerDrawcallData;
+using PerFrameData = SmokeBlendCGShader::PerFrameData;
+
+}  // namespace BlendCGMeshShader
 
 // ShadowMapShader
 namespace ShadowMapShader {
@@ -745,6 +765,61 @@ struct PerFrameData {
 };
 
 }	// namespace PBRDeferredLightingShader
+
+// TwoSidesShader
+// Port of Unity Shader Graphs/HS_Blend_TwoSides.
+// Mesh-mode particles with two-sided rendering, mask + noise distortion.
+namespace TwoSidesShader {
+
+// t0 — per-instance data in StructuredBuffer
+struct PerInstanceData {        // 112B  (layout matches SwordSlashShader)
+    XMFLOAT4X4 world;           // 64B
+    XMFLOAT4   tint;            // 16B
+    XMFLOAT2   custom1;         // 8B
+    XMFLOAT2   custom2;         // 8B
+    float      t;               // 4B
+    float      customDataEnabled;// 4B
+    XMFLOAT2   pad;             // 8B
+};
+
+// b0 — bindless indices + instance offset + FX parameters (all per-drawcall)
+struct PerDrawcallData {        // 256B
+    BindlessIndex idxMainTex;        // 16B
+    BindlessIndex idxMaskTex;        // 16B
+    BindlessIndex idxNoiseTex;       // 16B
+    u32t          hasNoiseTex;        // 4B
+    u32t          hasMaskTex;         // 4B
+    XMUINT2       pad0;               // 8B
+    u32t          firstInstanceOffset; // 4B
+    XMUINT3       pad1;              // 12B
+    XMFLOAT4      mainTexST;         // 16B
+    XMFLOAT4      maskTexST;         // 16B
+    XMFLOAT4      noiseTexST;        // 16B
+    XMFLOAT4      texSpeed;          // 16B  xy=main UV speed, zw=noise UV speed
+    float         emission;          // 4B
+    float         opacity;           // 4B
+    float         useFresnel;        // 4B
+    float         fresnelPower;      // 4B
+    XMFLOAT4      frontFacesColor;   // 16B
+    XMFLOAT4      backFacesColor;    // 16B
+    XMFLOAT4      fresnelColor;      // 16B
+    float         fresnelEmission;   // 4B
+    float         useBackFresnel;    // 4B
+    float         backFresnel;       // 4B
+    float         backFresnelEmission; // 4B
+    XMFLOAT4      backFresnelColor;  // 16B
+    float         time;              // 4B
+    XMFLOAT3      pad3;              // 12B
+};
+
+// b1 — per-frame
+struct PerFrameData {           // 80B
+    XMFLOAT4X4 matViewProj;     // 64B (row-major)
+    XMFLOAT3   cameraPos;       // 12B
+    float      cbpad;           // 4B
+};
+
+}  // namespace TwoSidesShader
 
 namespace UIShader {
 	struct Material {

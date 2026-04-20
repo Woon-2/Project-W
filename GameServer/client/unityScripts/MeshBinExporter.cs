@@ -18,14 +18,15 @@
 //   [u8]      texturePathLen
 //   [char x texturePathLen]   (path relative to ../resources/Textures/, '/' separator)
 //
-// .meshbin v2 format (adds optional vertex color):
+// .meshbin v2 format (adds optional vertex color and normals):
 //   [u8 x 8]  magic = "MESHBIN\0"
 //   [u8]      version = 2
-//   [u8]      flags  (bit 0 = hasColor)
+//   [u8]      flags  (bit 0 = hasColor, bit 1 = hasNormal)
 //   [u32]     vertexCount
 //   [u32]     indexCount
 //   [struct { float3 pos, float2 uv }] x vertexCount   (stride = 20B)
 //   [struct { float4 color }] x vertexCount             (only if flags & 1, stride = 16B)
+//   [struct { float3 normal }] x vertexCount            (only if flags & 2, stride = 12B)
 //   [u16] x indexCount
 //   [u8]      texturePathLen
 //   [char x texturePathLen]   (path relative to ../resources/Textures/, '/' separator)
@@ -47,6 +48,7 @@ public class MeshBinExporter : EditorWindow {
     private string                 outputPath    = "";
     private bool                   flipZ         = false;  // enable if mesh appears mirrored in engine
     private bool                   exportColor   = true;   // export vertex colors as v2 (COLOR0 channel)
+    private bool                   exportNormal  = false;  // export vertex normals (flags bit 1)
 
     [MenuItem("Tools/Export Mesh Bin")]
     public static void ShowWindow() {
@@ -73,6 +75,7 @@ public class MeshBinExporter : EditorWindow {
 
         flipZ        = EditorGUILayout.Toggle("Flip Z (if mirrored in engine)", flipZ);
         exportColor  = EditorGUILayout.Toggle("Export Vertex Colors (v2)", exportColor);
+        exportNormal = EditorGUILayout.Toggle("Export Normals (v2, bit1)", exportNormal);
 
         EditorGUILayout.Space();
 
@@ -107,24 +110,24 @@ public class MeshBinExporter : EditorWindow {
 
         GUI.enabled = resolvedMesh != null && !string.IsNullOrEmpty(outputPath);
         if (GUILayout.Button("Export")) {
-            Export(resolvedMesh, texturePath, outputPath, flipZ, exportColor, subMeshIndex);
+            Export(resolvedMesh, texturePath, outputPath, flipZ, exportColor, subMeshIndex, exportNormal);
         }
         GUI.enabled = true;
     }
 
     public static void Export(MeshFilter mf, string texPath, string outputPath, bool flipZ,
-                              bool exportColor = false) {
+                              bool exportColor = false, int subMeshIndex = 0, bool exportNormal = false) {
         Mesh mesh = mf.sharedMesh;
         if (mesh == null) {
             Debug.LogError("MeshBinExporter: MeshFilter has no mesh.");
             return;
         }
 
-        Export(mesh, texPath, outputPath, flipZ, exportColor, 0);
+        Export(mesh, texPath, outputPath, flipZ, exportColor, subMeshIndex, exportNormal);
     }
 
     public static void Export(Mesh mesh, string texPath, string outputPath, bool flipZ,
-                              bool exportColor = false, int subMeshIndex = 0) {
+                              bool exportColor = false, int subMeshIndex = 0, bool exportNormal = false) {
         if (mesh == null) {
             Debug.LogError("MeshBinExporter: mesh is null.");
             return;
@@ -144,6 +147,7 @@ public class MeshBinExporter : EditorWindow {
         Vector3[] positions = mesh.vertices;
         Vector2[] uvs       = mesh.uv;
         Color[]   colors    = mesh.colors;
+        Vector3[] normals   = mesh.normals;
         int[]     triangles = mesh.GetTriangles(subMeshIndex);
 
         // UV fallback
@@ -160,6 +164,16 @@ public class MeshBinExporter : EditorWindow {
             colors  = new Color[positions.Length];
             for (int i = 0; i < colors.Length; ++i) colors[i] = Color.white;
             hasColor = true;
+        }
+
+        // Normal fallback: if mesh has no normals, recalculate
+        bool hasNormal = exportNormal;
+        if (exportNormal) {
+            if (normals == null || normals.Length != positions.Length) {
+                Debug.LogWarning("MeshBinExporter: exportNormal=true but mesh has no normals. Recalculating.");
+                mesh.RecalculateNormals();
+                normals = mesh.normals;
+            }
         }
 
         int vertexCount = positions.Length;
@@ -186,12 +200,13 @@ public class MeshBinExporter : EditorWindow {
         writer.Write((byte)0);
 
         // version + flags
-        bool useV2 = exportColor;
+        bool useV2 = exportColor || exportNormal;
         if (useV2) {
-            writer.Write((byte)2);                          // version = 2
-            writer.Write((byte)(hasColor ? 1 : 0));        // flags: bit0 = hasColor
+            byte flags = (byte)((hasColor ? 1 : 0) | (hasNormal ? 2 : 0));
+            writer.Write((byte)2);      // version = 2
+            writer.Write(flags);        // bit0=hasColor, bit1=hasNormal
         } else {
-            writer.Write((byte)1);                          // version = 1
+            writer.Write((byte)1);      // version = 1
         }
 
         // counts
@@ -210,13 +225,24 @@ public class MeshBinExporter : EditorWindow {
             writer.Write(1.0f - uvs[i].y);  // flip UV.y
         }
 
-        // color channel (v2 only, flat array after pos+uv block)
+        // color channel (v2, bit0, flat array after pos+uv block)
         if (useV2 && hasColor) {
             for (int i = 0; i < vertexCount; ++i) {
                 writer.Write(colors[i].r);
                 writer.Write(colors[i].g);
                 writer.Write(colors[i].b);
                 writer.Write(colors[i].a);
+            }
+        }
+
+        // normal channel (v2, bit1, flat array after color block)
+        if (useV2 && hasNormal) {
+            for (int i = 0; i < vertexCount; ++i) {
+                Vector3 n = normals[i];
+                if (flipZ) n.z = -n.z;
+                writer.Write(n.x);
+                writer.Write(n.y);
+                writer.Write(n.z);
             }
         }
 
@@ -241,7 +267,7 @@ public class MeshBinExporter : EditorWindow {
         Debug.Log($"MeshBinExporter: exported '{mesh.name}' -> {outputPath} "
                 + $"(v{(useV2 ? 2 : 1)}, subMesh={subMeshIndex}, "
                 + $"{vertexCount} verts, {indexCount} indices, "
-                + $"color={hasColor}, tex={texPath}, flipZ={flipZ}, "
+                + $"color={hasColor}, normal={hasNormal}, tex={texPath}, flipZ={flipZ}, "
                 + $"bounds={mesh.bounds}, uvMin={uvMin}, uvMax={uvMax})");
     }
 

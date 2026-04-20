@@ -170,6 +170,7 @@
     <ClCompile Include="billboard.cpp" />
     <ClCompile Include="billboardPipeline.cpp" />
     <ClCompile Include="jointConstraint.cpp" />
+    <ClCompile Include="blendCGMeshPipeline.cpp" />
     <ClCompile Include="meshParticlePipeline.cpp" />
     <ClCompile Include="smokeBlendCGPipeline.cpp" />
     <ClCompile Include="binaryImport.cpp" />
@@ -230,6 +231,7 @@
     <ClCompile Include="standalone\game.cpp" />
     <ClCompile Include="swordSlashMaterial.cpp" />
     <ClCompile Include="swordSlashPipeline.cpp" />
+    <ClCompile Include="twoSidesPipeline.cpp" />
     <ClCompile Include="terrain.cpp" />
     <ClCompile Include="terrainDeferredPipeline.cpp" />
     <ClCompile Include="terrainPipeline.cpp" />
@@ -251,6 +253,7 @@
     <ClCompile Include="ui\widgets\ProgressBar.cpp" />
     <ClCompile Include="ui\widgets\Button.cpp" />
     <ClCompile Include="ui\widgets\Slider.cpp" />
+    <ClCompile Include="ui\widgets\Dropdown.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common\pool.hpp" />
@@ -260,6 +263,7 @@
     <ClInclude Include="basicPlayerHpUI.hpp" />
     <ClInclude Include="billboard.hpp" />
     <ClInclude Include="billboardPipeline.hpp" />
+    <ClInclude Include="blendCGMeshPipeline.hpp" />
     <ClInclude Include="binaryImport.hpp" />
     <ClInclude Include="BVPipeline.hpp" />
     <ClInclude Include="camera.hpp" />
@@ -334,6 +338,7 @@
     <ClInclude Include="standalone\game.hpp" />
     <ClInclude Include="swordSlashMaterial.hpp" />
     <ClInclude Include="swordSlashPipeline.hpp" />
+    <ClInclude Include="twoSidesPipeline.hpp" />
     <ClInclude Include="terrain.hpp" />
     <ClInclude Include="terrainDeferredPipeline.hpp" />
     <ClInclude Include="terrainPipeline.hpp" />
@@ -351,6 +356,7 @@
     <ClInclude Include="ui\widgets\ProgressBar.hpp" />
     <ClInclude Include="ui\widgets\Button.hpp" />
     <ClInclude Include="ui\widgets\Slider.hpp" />
+    <ClInclude Include="ui\widgets\Dropdown.hpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="meshParticle.hlsl">
@@ -358,6 +364,10 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
     <FxCompile Include="smokeBlendCG.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="blendCGMesh.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
@@ -402,6 +412,10 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
     <FxCompile Include="skybox.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="twoSides.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>

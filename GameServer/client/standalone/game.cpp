@@ -159,6 +159,20 @@ void Game::setupStage() {
 	playerHpBar_->fillColor = { 1.0f, 0.0f, 0.0f, 1.00f };
 	playerHpBar_->setProgress(1.f);
 
+	effectDropdown_ = static_cast<UI::Dropdown*>(
+		uiManager_.root()->addChild(std::make_unique<UI::Dropdown>())
+	);
+	effectDropdown_->name    = "effectDropdown";
+	effectDropdown_->anchor  = UI::Anchors::TopRight;
+	effectDropdown_->pivot   = UI::Pivots::TopRight;
+	effectDropdown_->offsetX = UI::DimValue::px(-12.f);
+	effectDropdown_->offsetY = UI::DimValue::px(12.f);
+	effectDropdown_->width   = UI::DimValue::px(180.f);
+	effectDropdown_->setup({ "Slash Wave", "Slash Combo", "Slash 7", "Slash 1", "Spikes" });
+	effectDropdown_->onSelectionChanged = [this](int idx) {
+		currentEffect_ = static_cast<SwordEffect>(idx);
+	};
+
 	setupMonsterHpBars();
 }
 
@@ -461,6 +475,57 @@ void Game::setParticle()
 		cfg.renderer.mat = assetManager_.swordSlash2Material();
 		cfg.renderer.renderOrder = 2;
 		swordSlash7Effect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);
+	}
+
+	// ── Spikes Attack effect ───────────────────────────────────────────────
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/Spikes attack_ParticleSystems.json",
+			"Spikes attack/Spikes"
+		);
+		cfg.renderer.pMesh = assetManager_.meshIceSpikes2();
+		cfg.renderer.pSubMesh = assetManager_.meshIceSpikes2()->subMeshes.empty()
+		                       ? nullptr
+		                       : &assetManager_.meshIceSpikes2()->subMeshes[0];
+		cfg.renderer.mat = assetManager_.spikesMaterial();
+		cfg.colorOverLifetime.enabled = true;
+		cfg.colorOverLifetime.gradient = ColorGradient{
+			.keys = {
+				{ 0.0f, { 1.f, 1.f, 1.f, 1.f } },
+				{ 0.78f, { 1.f, 1.f, 1.f, 1.f } },
+				{ 1.0f, { 1.f, 1.f, 1.f, 0.f } },
+			}
+		};
+		spikesAttackEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);
+	}
+
+	// ── Slash Wave effect ─────────────────────────────────────────────────────
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/Slash wave_ParticleSystems.json",
+			"Slash wave"
+		);
+		cfg.main.looping = false;
+		cfg.renderer.pMesh = assetManager_.meshHalfTrail();
+		cfg.renderer.pSubMesh = assetManager_.meshHalfTrail()->subMeshes.empty()
+		                       ? nullptr
+		                       : &assetManager_.meshHalfTrail()->subMeshes[0];
+		cfg.renderer.mat = assetManager_.twoSidesMaterial();
+		slashWaveEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
+	}
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/Slash wave_ParticleSystems.json",
+			"Slash wave/SlashPath"
+		);
+		cfg.main.looping = false;
+		cfg.shape.direction = { 0.f, 0.f, 1.f };
+		cfg.renderer.pMesh = assetManager_.meshSlashWave();
+		cfg.renderer.pSubMesh = assetManager_.meshSlashWave()->subMeshes.empty()
+		                       ? nullptr
+		                       : &assetManager_.meshSlashWave()->subMeshes[0];
+		cfg.renderer.mat = assetManager_.slashPathMaterial();
+		slashWaveEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
 	}
 
 	// ── 발 본 인덱스 탐색 (흙먼지 VFX용) ────────────────────────────────────
@@ -1023,7 +1088,11 @@ void Game::update(Milliseconds deltaTime) {
 		auto* animBlender = static_cast<AnimBlenderPlayer*>(
 			player_->renderState().animBlender.get());
 
-		if (animBlender->isRunning()) {
+		const auto vel = player_->velocity();
+		const float hSpeed2 = vel.x() * vel.x() + vel.z() * vel.z();
+		constexpr float kDustMinSpeed = 1.0f;
+
+		if (animBlender->isRunning() && hSpeed2 >= kDustMinSpeed * kDustMinSpeed) {
 			const auto duration = animBlender->runDuration();
 			const auto currTime = animBlender->runAnimTime();
 			const float currPhase = currTime / duration;
@@ -1072,6 +1141,8 @@ void Game::update(Milliseconds deltaTime) {
 	swordSlash1Effect_.update( deltaTime );
 	swordSlash7Effect_.update( deltaTime );
 	swordSlashComboEffect_.update( deltaTime );
+	slashWaveEffect_.update( deltaTime );
+	spikesAttackEffect_.update( deltaTime );
 	dustParticleSystem_.update( deltaTime );
 
 	// UI 동기화
@@ -1104,6 +1175,8 @@ void Game::render() {
 	swordSlash1Effect_.render( gfx_ );
 	swordSlash7Effect_.render( gfx_ );
 	swordSlashComboEffect_.render( gfx_ );
+	slashWaveEffect_.render( gfx_ );
+	spikesAttackEffect_.render( gfx_ );
 	dustParticleSystem_.render( gfx_ );
 
 	uiManager_.render( gfx_ );
@@ -1212,6 +1285,7 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		break;
 
 	default:
+		uiManager_.onWndMsg(msg, wParam, lParam);
 		break;
 	}
 
@@ -1271,6 +1345,7 @@ void Game::processInput(Milliseconds deltaTime) {
 
 	// 플레이어 공격: LButton 클릭 시 forward 방향 hitbox와 몬스터 AABB 교차 검사
 	if ( !playerDead_
+		&& !uiManager_.needsCursor()
 		&& (keyboardStateCurr_[VK_LBUTTON] & 0x80)
 		&& !(keyboardStatePrev_[VK_LBUTTON] & 0x80)
 	) {
@@ -1280,13 +1355,17 @@ void Game::processInput(Milliseconds deltaTime) {
 			debugBVView_.pushLive(spec->obj, spec->halfExtent, spec->offsetFwd, 1500ms);
 		}
 
-		// 검기 이펙트 emit: 에셋의 원본 방출 형태를 보기 위해 추가 회전 변환은 적용하지 않는다.
+		// 검기 이펙트 emit: SlashPath가 플레이어 forward 방향으로 날아가도록 회전을 함께 전달한다.
 		const auto slashPos = player_->renderState().pos
 		                    + player_->forward() * 1.f
 		                    + mu::Vec3(0.f, 1.0f, 0.f);
-		swordSlashComboEffect_.play( slashPos );
-		// swordSlash7Effect_.play( slashPos );
-		//swordSlash1Effect_.play(slashPos);
+		switch (currentEffect_) {
+		case SwordEffect::SlashCombo: swordSlashComboEffect_.play(slashPos); break;
+		case SwordEffect::Slash7:     swordSlash7Effect_.play(slashPos);     break;
+		case SwordEffect::Slash1:     swordSlash1Effect_.play(slashPos);     break;
+		case SwordEffect::SlashWave:  slashWaveEffect_.play(slashPos, player_->orient());       break;
+		case SwordEffect::Spikes:     spikesAttackEffect_.play(slashPos);    break;
+		}
 	}
 
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때

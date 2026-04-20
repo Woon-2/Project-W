@@ -155,6 +155,8 @@ struct SizeOverLifetimeModule {
     bool  enabled   = false;
     float sizeBegin = 1.f;
     float sizeEnd   = 0.f;
+    bool  useCurve  = false;
+    MinMaxCurveChannel size;
 
     bool separateAxes = false;
     FloatCurve curve;
@@ -275,7 +277,33 @@ struct MatSmokeBlendCG {
     float depthPower = 0.5f;
 };
 
-using AnyMat = std::variant<MatUnlit, MatSwordSlash, MatSmokeBlendCG>;
+// MatTwoSides: Shader Graphs/HS_Blend_TwoSides port used by TwoSides22.
+// Mesh-mode particles with two-sided rendering, mask + noise distortion.
+struct MatTwoSides {
+    const Texture* mainTex  = nullptr;
+    const Texture* maskTex  = nullptr;
+    const Texture* noiseTex = nullptr;
+
+    mu::Vec4 mainTexST  = { 1.f, 1.f, 0.f, 0.f };
+    mu::Vec4 maskTexST  = { 1.f, 1.f, 0.f, 0.f };
+    mu::Vec4 noiseTexST = { 1.f, 1.f, 0.f, 0.f };
+    mu::Vec4 texSpeed   = { 0.f, 0.f, 0.f, 0.f };  // xy=main UV, zw=noise UV
+
+    float emission           = 1.f;
+    float opacity            = 1.f;
+    float useFresnel         = 0.f;
+    float fresnelPower       = 2.f;
+    mu::Vec4 frontFacesColor  = { 1.f, 1.f, 1.f, 1.f };
+    mu::Vec4 backFacesColor   = { 1.f, 1.f, 1.f, 1.f };
+    mu::Vec4 fresnelColor     = { 1.f, 1.f, 1.f, 1.f };
+    float    fresnelEmission  = 1.f;
+    float    useBackFresnel   = 0.f;
+    float    backFresnel      = -4.f;
+    float    backFresnelEmission = 1.f;
+    mu::Vec4 backFresnelColor = { 1.f, 1.f, 1.f, 1.f };
+};
+
+using AnyMat = std::variant<MatUnlit, MatSwordSlash, MatSmokeBlendCG, MatTwoSides>;
 
 // ---------------------------------------------------------------------------
 // Renderer Module

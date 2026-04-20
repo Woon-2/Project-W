@@ -139,16 +139,7 @@ bool UIManager::onWndMsg(UINT msg, WPARAM wParam, LPARAM lParam) {
 }
 
 bool UIManager::needsCursor() const {
-    struct Finder {
-        static bool any(const UIElement& e) {
-            if (!e.visible) return false;
-            if (e.interactive) return true;
-            for (const auto& c : e.children())
-                if (any(*c)) return true;
-            return false;
-        }
-    };
-    return Finder::any(root_);
+    return hoveredElement_ != nullptr || pressedElement_ != nullptr;
 }
 
 UIElement* UIManager::hitTest(float x, float y) {

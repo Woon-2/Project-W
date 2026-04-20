@@ -185,6 +185,8 @@ static mu::Vec3 calcVelocityOverLifetime(
 }
 
 float ParticleSystem::randomFloat(float lo, float hi) {
+    if (hi < lo)
+        std::swap(lo, hi);
     return std::uniform_real_distribution<float>{lo, hi}(rng_);
 }
 
@@ -308,7 +310,9 @@ void ParticleSystem::render(GFX& gfx) const {
     for (int i = 0; i < activeCount_; ++i) {
         const Particle& p    = pool_[i];
         const float    t     = 1.f - p.lifetime / p.maxLifetime;
-        const float    size  = std::lerp(p.sizeBegin, p.sizeEnd, t);
+        const float    size  = (config_.sizeOverLifetime.enabled && config_.sizeOverLifetime.useCurve)
+                             ? p.sizeStart * config_.sizeOverLifetime.size.evaluate(t, p.sizeRandom)
+                             : std::lerp(p.sizeBegin, p.sizeEnd, t);
         const mu::Vec4 tint  = p.startColor * p.colorOverLifetime.evaluate(t);
         const bool     customDataEnabled = config_.customData.enabled;
         const mu::Vec2 custom1 = customDataEnabled
@@ -500,6 +504,8 @@ void ParticleSystem::spawnParticle() {
         p.colorOverLifetime = ColorGradient::constant({ 1.f, 1.f, 1.f, 1.f });
 
     const float sizeMult = randomFloat(config_.main.startSizeMin, config_.main.startSizeMax);
+    p.sizeStart = sizeMult;
+    p.sizeRandom = randomFloat(0.f, 1.f);
     if (config_.sizeOverLifetime.enabled) {
         p.sizeBegin = config_.sizeOverLifetime.sizeBegin * sizeMult;
         p.sizeEnd   = config_.sizeOverLifetime.sizeEnd   * sizeMult;
