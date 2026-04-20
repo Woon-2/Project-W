@@ -42,7 +42,7 @@ void Room::init(const Level* levelData) {
 void Room::update() {
 	static constexpr Milliseconds dt = 1s / 60.f;	// 60fps
 	static constexpr Seconds dtSec   = 1s / 60.f;
-
+	
 	physicsWorld_.step(dtSec);
 	updateGoblinAI(dt);
 
@@ -62,24 +62,31 @@ void Room::updateGoblinAI(Milliseconds dt) {
 		).count()
 	);
 
+	std::vector<SNpcMoveInfo> moveInfos;
+	moveInfos.reserve(goblins_.size());
+
 	for (auto& goblin : goblins_) {
 		goblin.recordSnapshot(serverNow);
 
 		auto result = goblin.update(dt, sessions_);
 
 		if (goblin.hp() > 0) {
-			broadcast(PacketManager::makeSNpcMovePacket(
+			moveInfos.push_back({
 				static_cast<uint16>(goblin.getId()),
 				goblin.pos().getXmf(),
 				goblin.orient().getXmf(),
 				result.velocity.getXmf()
-			));
+			});
 		}
 
 		if (result.hit) {
 			broadcast(PacketManager::makeSNpcAttackPacket(static_cast<uint16>(goblin.getId())));
 			broadcast(PacketManager::makeSHitPacket(result.hit->targetId, result.hit->newHp));
 		}
+	}
+
+	if ( !moveInfos.empty() ) {
+		broadcast( PacketManager::makeSNpcMoveBatchPacket( moveInfos ) );
 	}
 }
 

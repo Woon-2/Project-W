@@ -22,6 +22,7 @@ enum class PacketType : uint16 {
 	S_MouseMove,
 
 	S_NpcMove,
+	S_NpcMoveBatch,
 
 	C_Attack,
 	S_NpcAttack,
@@ -129,6 +130,24 @@ struct SNpcMovePacket : public PacketHeader {
 	DirectX::XMFLOAT3 pos;
 	DirectX::XMFLOAT4 orient;
 	DirectX::XMFLOAT3 velocity;
+};
+
+struct SNpcMoveInfo {
+	uint16              npcId;
+	DirectX::XMFLOAT3   pos;
+	DirectX::XMFLOAT4   orient;
+	DirectX::XMFLOAT3   velocity;
+};
+
+struct SNpcMoveBatchPacket : public PacketHeader {
+	uint16 dataOffset;
+	uint16 npcCount;
+
+	using NpcMoveList = DataList<SNpcMoveInfo>;
+	NpcMoveList getNpcMoveList() {
+		byte* dataStart = reinterpret_cast<byte*>(this) + dataOffset;
+		return NpcMoveList(reinterpret_cast<SNpcMoveInfo*>(dataStart), npcCount);
+	}
 };
 
 struct CAttackPacket : public PacketHeader {

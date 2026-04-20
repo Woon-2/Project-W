@@ -38,7 +38,9 @@ public:
 	}
 
 	void clean() {
-		if (dataSize() == 0) {
+		int32 remaining = dataSize();
+
+		if (remaining == 0) {
 			// read, write 커서가 동일안 위치라면, 둘 다 초기화
 			readPos_ = 0;
 			writePos_ = 0;
@@ -46,9 +48,9 @@ public:
 		else {
 			// 여유 공간이 버퍼 1개 크기 미만일 경우, 데이터를 앞으로 당김
 			if (freeSize() < bufferSize_) {
-				memcpy(&buffer_[0], &buffer_[readPos_], dataSize());
+				memcpy(&buffer_[0], &buffer_[readPos_], remaining);
 				readPos_ = 0;
-				writePos_ = dataSize();
+				writePos_ = remaining;
 			}
 		}
 	}

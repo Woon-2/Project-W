@@ -106,6 +106,7 @@ private:
 
 	std::shared_ptr<Player> player_{};
 	std::shared_ptr<Goblin> goblin_{};
+	std::vector< std::shared_ptr<Goblin> > goblins_{};
 	std::shared_ptr<Anubis> anubis_{};
 	std::shared_ptr<Bat> bat_{};
 	std::shared_ptr<Bomber> bomber_{};

@@ -10,7 +10,7 @@ class JobQueue {
 public:
 	JobQueue() = default;
 
-	void push(Job* job, bool pushOnly = false);
+	void push(Job* job);
 	void execute();
 
 	void doAsync(CallbackType&& callback) {

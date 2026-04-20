@@ -25,9 +25,6 @@
     <Filter Include="게임%28스탠드얼론%29">
       <UniqueIdentifier>{e6078ef2-f978-437d-b3df-17181c671a04}</UniqueIdentifier>
     </Filter>
-    <Filter Include="게임%28온라인%29">
-      <UniqueIdentifier>{097ec996-9d3a-4d03-b004-2fb4020e98db}</UniqueIdentifier>
-    </Filter>
     <Filter Include="그래픽스">
       <UniqueIdentifier>{b4c66ba3-25b3-4394-a7a7-837a50973875}</UniqueIdentifier>
     </Filter>
@@ -61,12 +58,6 @@
     <Filter Include="게임%28스탠드얼론%29\헤더 파일">
       <UniqueIdentifier>{15f8913c-a41b-4d2d-88e9-173d362a7533}</UniqueIdentifier>
     </Filter>
-    <Filter Include="게임%28온라인%29\소스 파일">
-      <UniqueIdentifier>{85624a36-af49-4ca2-86fb-0ce3e6ea8022}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="게임%28온라인%29\헤더 파일">
-      <UniqueIdentifier>{9e0f42ac-9196-4dfd-b91f-600a01fea160}</UniqueIdentifier>
-    </Filter>
     <Filter Include="그래픽스\코어\소스 파일">
       <UniqueIdentifier>{0ab476cc-a939-4cc1-a16b-1e31c8728612}</UniqueIdentifier>
     </Filter>
@@ -99,6 +90,15 @@
     </Filter>
     <Filter Include="UI">
       <UniqueIdentifier>{9c49d4b2-413a-418a-8eb4-a338ba8dd257}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="그래픽스\게임%28온라인%29">
+      <UniqueIdentifier>{097ec996-9d3a-4d03-b004-2fb4020e98db}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="그래픽스\게임%28온라인%29\소스 파일">
+      <UniqueIdentifier>{85624a36-af49-4ca2-86fb-0ce3e6ea8022}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="그래픽스\게임%28온라인%29\헤더 파일">
+      <UniqueIdentifier>{9e0f42ac-9196-4dfd-b91f-600a01fea160}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -160,7 +160,7 @@
       <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="online\onlineGame.cpp">
-      <Filter>게임%28온라인%29\소스 파일</Filter>
+      <Filter>그래픽스\게임%28온라인%29\소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="collision.cpp">
       <Filter>그래픽스\코어\헤더 파일</Filter>
@@ -450,7 +450,7 @@
       <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="online\onlineGame.hpp">
-      <Filter>게임%28온라인%29\헤더 파일</Filter>
+      <Filter>그래픽스\게임%28온라인%29\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="collision.hpp">
       <Filter>그래픽스\코어\소스 파일</Filter>

@@ -18,9 +18,9 @@ void JobTimer::addJob(Milliseconds delay, uint32 roomId, Job* job) {
 }
 
 void JobTimer::distribute() {
-	if(distributing_.exchange(true) == true) {
-		return; // 이미 분배 중인 경우, 중복 실행 방지
-	}
+	//if(distributing_.exchange(true) == true) {
+	//	return; // 이미 분배 중인 경우, 중복 실행 방지
+	//}
 
 	std::vector<TimerItem> readyItems;
 	const auto now = HighResolutionClock::now();
@@ -50,7 +50,7 @@ void JobTimer::distribute() {
 		ObjectPool<JobData>::push(item.jobData);
 	}
 
-	distributing_.store(false);
+	//distributing_.store(false);
 }
 
 void JobTimer::clear() {
@@ -66,4 +66,4 @@ void JobTimer::clear() {
 
 std::mutex JobTimer::jobTimerMtx_;
 std::priority_queue<TimerItem> JobTimer::timerQueue_;
-std::atomic_bool JobTimer::distributing_ = false;
+//std::atomic_bool JobTimer::distributing_ = false;

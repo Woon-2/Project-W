@@ -409,10 +409,10 @@ void GFX::createSwapChain() {
 	);
 	// PBR-skinned Pipeline ----
 	resourcesPBRSkinnedPipeline_.shadowPass.perInstanceData.init(
-		device_.Get(), sizeof(ShadowMapSkinnedShader::PerInstanceData) * 1000u, backBuffers_.size(), "PBRSkinned_Shadow_PerInstanceData"
+		device_.Get(), sizeof(ShadowMapSkinnedShader::PerInstanceData) * 50000u, backBuffers_.size(), "PBRSkinned_Shadow_PerInstanceData"
 	);
 	resourcesPBRSkinnedPipeline_.shadowPass.boneData.init(
-		device_.Get(), sizeof(ShadowMapSkinnedShader::BoneData) * 100'000u, backBuffers_.size(), "PBRSkinned_Shadow_BoneData"
+		device_.Get(), sizeof(ShadowMapSkinnedShader::BoneData) * 5000'000u, backBuffers_.size(), "PBRSkinned_Shadow_BoneData"
 	);
 	resourcesPBRSkinnedPipeline_.shadowPass.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(ShadowMapSkinnedShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBRSkinned_Shadow_PerDrawcallData"
@@ -421,10 +421,10 @@ void GFX::createSwapChain() {
 		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::PerFrameData), MAX_CSM_CASCADES, backBuffers_.size(), "PBRSkinned_Shadow_PerFrameData"
 	);
 	resourcesPBRSkinnedPipeline_.mainPass.perInstanceData.init(
-		device_.Get(), sizeof(PBRSkinnedShader::PerInstanceData) * 1000u, backBuffers_.size(), "PBRSkinned_Main_PerInstanceData"
+		device_.Get(), sizeof(PBRSkinnedShader::PerInstanceData) * 50000u, backBuffers_.size(), "PBRSkinned_Main_PerInstanceData"
 	);
 	resourcesPBRSkinnedPipeline_.mainPass.boneData.init(
-		device_.Get(), sizeof(PBRSkinnedShader::BoneData) * 100'000u, backBuffers_.size(), "PBRSkinned_Main_BoneData"
+		device_.Get(), sizeof(PBRSkinnedShader::BoneData) * 5000'000u, backBuffers_.size(), "PBRSkinned_Main_BoneData"
 	);
 	resourcesPBRSkinnedPipeline_.mainPass.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(PBRSkinnedShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBRSkinned_Main_PerDrawcallData"

@@ -13,6 +13,7 @@ public:
 	static void handleSMovePacket(byte* buffer, int32 len);
 	static void handleSMouseMovePacket(byte* buffer, int32 len);
 	static void handleSNpcMovePacket(byte* buffer, int32 len);
+	static void handleSNpcMoveBatchPacket(byte* buffer, int32 len);
 	static void handleSNpcAttackPacket(byte* buffer, int32 len);
 	static void handleSHitPacket(byte* buffer, int32 len);
 	static void handleSTimeSyncPacket(byte* buffer, int32 len);

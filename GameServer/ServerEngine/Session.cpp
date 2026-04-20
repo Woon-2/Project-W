@@ -204,6 +204,10 @@ int32 PacketSession::onRecv(byte* buffer, int32 len) {
 		auto header = reinterpret_cast<PacketHeader*>(buffer + recvLen);
 		// 패킷 헤더에 명시된 크기만큼의 데이터가 수신되어야 한다.
 		// size는 패킷 헤더 크기 + 패킷 크기
+		//if (header->size < sizeof(PacketHeader)) {
+		//	recvLen = -1;	// disconnect 트리거
+		//	break;
+		//}
 		if (dataSize < header->size) {
 			break;
 		}

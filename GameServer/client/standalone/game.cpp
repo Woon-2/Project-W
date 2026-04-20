@@ -630,6 +630,26 @@ void Game::importNode(std::ifstream& ifs) {
 		}
 	}
 	else if (type == "GoblinSpawner") {
+		std::mt19937 rng{ std::random_device{}() };
+		std::uniform_real_distribution<float> distXZ( -50.f, 50.f );
+		const float baseX = object.pos().x();
+		const float baseY = object.pos().y();
+		const float baseZ = object.pos().z();
+
+		for ( int32 i = 0; i < 500; ++i ) {
+			Object copy{};
+
+			copy.setPos( mu::Vec3( baseX + distXZ( rng ), baseY, baseZ + distXZ( rng ) ) );
+			copy.setOrient( DirectX::XMLoadFloat4( &worldR ) );
+			copy.setScale( DirectX::XMLoadFloat3( &worldS ) );
+
+			auto& g = goblins_.emplace_back( std::make_shared<Goblin>( std::move( copy ) ) );
+			importGoblinSpawner( ifs, *g );
+			physicsWorld_.registerBody( &g->body(),
+				[p = g.get()]() { p->rebuildBodyBVH(); } );
+		}
+
+
 		goblin_ = std::make_shared<Goblin>(std::move(object));
 		importGoblinSpawner(ifs, *goblin_);
 		physicsWorld_.registerBody(&goblin_->body(),
@@ -1027,6 +1047,9 @@ void Game::update(Milliseconds deltaTime) {
 
 	player_->update(deltaTime, tPhysicInterpolation);
 	goblin_->update(deltaTime, tPhysicInterpolation);
+	for ( auto& g : goblins_ ) {
+		g->update( deltaTime, tPhysicInterpolation );
+	}
 	anubis_->update(deltaTime, tPhysicInterpolation);
 	bat_->update(deltaTime, tPhysicInterpolation);
 	bomber_->update(deltaTime, tPhysicInterpolation);
@@ -1158,6 +1181,9 @@ void Game::render() {
 	debugBVView_.render(gfx_);
 	player_->render(gfx_);
 	goblin_->render(gfx_);
+	for ( auto& g : goblins_ ) {
+		g->render( gfx_ );
+	}
 	anubis_->render(gfx_);
 	bat_->render(gfx_);
 	bomber_->render(gfx_);

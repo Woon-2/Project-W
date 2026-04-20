@@ -27,7 +27,6 @@ int main()
 	server.start();
 
 	JobTimer::clear();
-	SendBufferManager::release();
 	MemoryManager::release();
 	SocketUtils::release();
 }

@@ -7,7 +7,7 @@
 
 void PacketManager::handlePacket(byte* buffer, int32 len) {
 	auto header = reinterpret_cast<PacketHeader*>(buffer);
-
+	
 	switch (header->type) {
 	case PacketType::S_Enter:
 		handleSEnterPacket(buffer, len);
@@ -31,6 +31,10 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 
 	case PacketType::S_NpcMove:
 		handleSNpcMovePacket(buffer, len);
+		break;
+
+	case PacketType::S_NpcMoveBatch:
+		handleSNpcMoveBatchPacket(buffer, len);
 		break;
 
 	case PacketType::S_NpcAttack:
@@ -59,7 +63,7 @@ void PacketManager::handleSEnterPacket(byte* buffer, int32 len) {
 	game->setupPlayer(playerInfo);
 
 	auto objList = enterPacket->getObjectList();
-
+	
 	for (int32 i = 0; i < objList.count(); ++i) {
 		const auto& objInfo = objList[i];
 
@@ -115,6 +119,18 @@ void PacketManager::handleSMouseMovePacket(byte* buffer, int32 len) {
 void PacketManager::handleSNpcMovePacket(byte* buffer, int32 len) {
 	auto sNpcMvPkt = reinterpret_cast<SNpcMovePacket*>(buffer);
 	INet::ClientApp::onlineGame()->moveGoblin(sNpcMvPkt->npcId, sNpcMvPkt->pos, sNpcMvPkt->orient, sNpcMvPkt->velocity);
+}
+
+void PacketManager::handleSNpcMoveBatchPacket(byte* buffer, int32 len) {
+	auto sNpcMvBatPkt = reinterpret_cast<SNpcMoveBatchPacket*>(buffer);
+	auto list = sNpcMvBatPkt->getNpcMoveList();
+
+	auto game = INet::ClientApp::onlineGame();
+
+	for (uint16 i = 0; i < list.count(); ++i) {
+		const auto& info = list[i];
+		game->moveGoblin(info.npcId, info.pos, info.orient, info.velocity);
+	}
 }
 
 void PacketManager::handleSNpcAttackPacket( byte* buffer, int32 len ) {

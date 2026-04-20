@@ -1,45 +1,28 @@
-#include "rspch.hpp"
+ï»¿#include "rspch.hpp"
 #include "RoomServer.hpp"
 #include "IocpReactor.hpp"
 #include "Listener.hpp"
 #include "JobQueuePool.hpp"
 #include "JobTimer.hpp"
-#include "globalTLS.hpp"
 
-void DoReservedJob() {
-	JobTimer::distribute();
-}
-
-void DoJob() {
-	static constexpr Milliseconds timeOut = 64ms;
-
+void DoIocp(IocpReactor& reactor) {
 	while (true) {
-		const auto now = HighResolutionClock::now();
-		if (now - LWorkStartTime >= timeOut) {
-			break;
-		}
-
-		auto jobQueue = JobQueuePool::pop();
-		if (jobQueue == nullptr) {
-			break;
-		}
-
-		jobQueue->execute();
+		reactor.dispatch();
 	}
 }
 
-void DoWork(IocpReactor& reactor) {
+void DoJobTimer() {
 	while (true) {
-		LWorkStartTime = HighResolutionClock::now();
-
-		// IOCP ÀÌº¥Æ® Ã³¸®
-		reactor.dispatch(10);
-
-		// ¿¹¾àµÈ ÀÛ¾÷ Ã³¸®
 		JobTimer::distribute();
+	}
+}
 
-		// ÀÛ¾÷ Å¥ Ã³¸®
-		DoJob();
+void DoJob() {
+	while (true) {
+		auto jq = JobQueuePool::pop();
+		if (!jq) continue;
+
+		jq->execute();
 	}
 }
 
@@ -47,21 +30,29 @@ void RoomServer::start() {
 	reactor_.registerHandle(listener_.getHandle());
 	listener_.startAccept();
 
-	const int32 threadCnt = static_cast<int32>(numberOfPhysicalCores());
-	workerThreads_.reserve(threadCnt);
+	const int32 coreCnt			= static_cast<int32>(numberOfPhysicalCores());
+	const int32 iocpThreadCnt	= 2;
+	const int32 jobThreadCnt	= std::max(1, coreCnt - iocpThreadCnt - 1);
 
-	for (int32 i = 0; i < threadCnt - 1; ++i) {
-		workerThreads_.emplace_back([this]() {
-			DoWork(reactor_);
-		});
+	iocpThreads_.reserve( iocpThreadCnt );
+	for (int32 i = 0; i < iocpThreadCnt - 1; ++i) {
+		iocpThreads_.emplace_back( [this]() { DoIocp( reactor_ ); } );
 	}
 
-	// ¸ÞÀÎ ½º·¹µåµµ ÀÛ¾÷À» ¼öÇàÇÏµµ·Ï ÇÑ´Ù.
-	DoWork(reactor_);
+	jobTimerThread_ = std::thread( DoJobTimer );
 
-	std::cout << "Room Server started with " << threadCnt << " worker threads.\n";
-
-	for(auto& th : workerThreads_) {
-		th.join();
+	jobThreads_.reserve( jobThreadCnt );
+	for (int32 i = 0; i < jobThreadCnt; ++i) {
+		jobThreads_.emplace_back( DoJob );
 	}
+
+	std::cout << "Room Server started. IOCP: " << iocpThreadCnt
+		<< ", Room Update: 1, Execute Job: " << jobThreadCnt << '\n';
+
+	// ë©”ì¸	ìŠ¤ë ˆë“œëŠ” IOCPë¥¼ ë‹´ë‹¹
+	DoIocp(reactor_);
+
+	for ( auto& t : jobThreads_ ) t.join();
+	jobTimerThread_.join();
+	for ( auto& t : iocpThreads_ ) t.join();
 }
