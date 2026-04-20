@@ -105,6 +105,8 @@
 #include <variant>
 #include <mutex>
 #include <span>
+#include <stack>
+#include <queue>
 
 #include "mathUtil.hpp"
 #include "function.hpp"

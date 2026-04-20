@@ -372,7 +372,7 @@ void Game::importNode(std::ifstream& ifs) {
 
 		auto urd = std::uniform_real_distribution<float>(-160.f, 160.f);
 
-		for (std::size_t i = 0; i < 120u; ++i) {
+		for (std::size_t i = 0; i < 100u; ++i) {
 			auto& g = goblins_.emplace_back( std::make_shared<Goblin>() );
 			g->setPos( mu::Vec3( DirectX::XMLoadFloat3(&worldT) )
 				+ mu::Vec3( urd(gRandomEngine), urd(gRandomEngine) + 320.f, urd(gRandomEngine) )

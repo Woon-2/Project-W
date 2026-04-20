@@ -77,4 +77,41 @@ private:
     static bool overlapYZ(const AABB& a, const AABB& b);
 };
 
+class DBVTBroadPhase : public BroadPhase {
+private:
+    struct Node {
+        AABB aabb;
+        Node* parent = nullptr;
+        Node* left   = nullptr;
+        Node* right  = nullptr;
+        RigidBody* body = nullptr; // leaf만 사용
+
+        bool isLeaf() const { return left == nullptr; }
+    };
+
+public:
+    void add(RigidBody* body) override;
+    void remove(RigidBody* body) override;
+    void update() override;
+
+    std::vector<BodyPair> queryPairs() override;
+
+private:
+    static AABB merge(const AABB& a, const AABB& b);
+    static float surfaceArea(const AABB& a);
+    AABB fatten(const AABB& aabb) const;
+
+    void insertLeaf(Node* leaf);
+    void removeLeaf(Node* leaf);
+    void updateLeaf(Node* leaf, const AABB& newAABB);
+    
+    Node* root_ = nullptr;
+
+    std::vector<RigidBody*> bodies_;
+    std::unordered_map<RigidBody*, Node*> leafMap_;
+
+    // fatten factor (움직임 대비 여유)
+    float fatMargin_ = 0.2f;
+};
+
 #endif // __BroadPhase_HPP

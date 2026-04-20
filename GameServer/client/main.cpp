@@ -80,6 +80,8 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 		INet::ClientApp::setup(INet::GameType::Online, &timer);
 	}
 	
+	timer.tick( );
+
 	// 윈도우 메시지 루프
 	MSG msg;
 	while ( true ) {
