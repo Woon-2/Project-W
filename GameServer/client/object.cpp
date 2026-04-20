@@ -410,10 +410,13 @@ void Object::update(Milliseconds deltaTime, float tPhysicInterpolation) {
 	const auto& curr = body_.curr();
 	const auto t = tPhysicInterpolation;
 
-	// 방향 벡터 갱신
+	// 방향 벡터 갱신 (physics state 기반, 로직에서도 사용)
 	right_ = curr.orient.rotate(mu::Vec3(1.f, 0.f, 0.f));
 	up_ = curr.orient.rotate(mu::Vec3(0.f, 1.f, 0.f));
 	forward_ = curr.orient.rotate(mu::Vec3(0.f, 0.f, 1.f));
+
+	if (renderState_.shouldCull)
+		return;
 
 	// 렌더 상태 갱신
 	auto& pos = renderState_.pos;

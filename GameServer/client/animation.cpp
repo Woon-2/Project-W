@@ -298,18 +298,28 @@ void AnimSystem::updatePriorities(Seconds dt, mu::Vec3 refPos) {
 // AnimBlender::onCalcLocal, AnimBlender::onCalcDress, AnimBlender::onCalcFinal이
 // 순서대로 불리며 업데이트된다.
 void AnimSystem::update(Seconds timeSlice) {
+	// culled 블렌더를 뒤로 밀고, visible range([begin, visibleEnd))만 처리한다.
+	const auto visibleEnd = std::partition(blenders_.begin(), blenders_.end(),
+		[](AnimBlender* b) { return !b->isCulled(); });
+	const std::size_t visibleCount =
+		static_cast<std::size_t>(std::distance(blenders_.begin(), visibleEnd));
+
+	if (visibleCount == 0u) return;
+
 	auto tp = HighResolutionClock::now();
 	Seconds elapsed = 0s;
 
-	// priority 기준 max-heapify
-	std::ranges::make_heap(blenders_, std::less<>{}, &AnimBlender::priority);
+	// priority 기준 max-heapify (visible range만)
+	std::ranges::make_heap(
+		std::ranges::subrange(blenders_.begin(), visibleEnd),
+		std::less<>{}, &AnimBlender::priority);
 
 	std::size_t cntProcessed = 0u;	// 처리한 블렌더 수
 	std::size_t jobCnt = 0u;	// 처리한 job 수
-	while (elapsed < timeSlice && cntProcessed < blenders_.size()) {
+	while (elapsed < timeSlice && cntProcessed < visibleCount) {
 		// 남은 블렌더의 수가 jobSize_보다 작을 수 있다.
 		// 그럴 경우엔 남은 블렌더의 수만큼 블렌더들을 처리하도록 한다.
-		const auto iteration = std::min(jobSize_, blenders_.size() - cntProcessed);
+		const auto iteration = std::min(jobSize_, visibleCount - cntProcessed);
 
 		for (std::size_t i = 0; i < iteration; ++i) {
 			auto& blender = blenders_.front();
@@ -322,7 +332,7 @@ void AnimSystem::update(Seconds timeSlice) {
 
 			blender->onCalcFinal({});
 			blender->setStage({}, AnimBlender::Stage::committedFinal);
-			std::pop_heap(blenders_.begin(), std::prev(blenders_.end(), i));
+			std::pop_heap(blenders_.begin(), std::prev(visibleEnd, i));
 
 			elapsed = HighResolutionClock::now() - tp;
 		}
@@ -331,8 +341,6 @@ void AnimSystem::update(Seconds timeSlice) {
 		++jobCnt;
 		elapsed = HighResolutionClock::now() - tp;
 	}
-
-	std::cout << elapsed << " elapsed.\n";
 
 	// jobSize_ 비례 제어
 	const float ratio = static_cast<float>(jobCnt) / 8.f;	// 목적: job의 개수가 8개에 근접하기

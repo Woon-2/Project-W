@@ -152,6 +152,15 @@ void Dispatcher::gBufferPassMT() { gBufferUpdateMT(); gBufferDrawMT(); }
 void Dispatcher::hiZPassUpdate() {
     if (drawEvents_.empty()) return;
 
+    // 이전 프레임의 readback 결과 합산 (1-frame delay)
+    if (pResources_->hiZPass.visibleCountMapped && pResources_->hiZPass.lastGroupCnt > 0u) {
+        u32t visible = 0u;
+        for (u32t g = 0u; g < pResources_->hiZPass.lastGroupCnt; ++g)
+            visible += pResources_->hiZPass.visibleCountMapped[g];
+        pResources_->hiZPass.lastVisibleCount = visible;
+        pResources_->hiZPass.lastTotalCount   = pResources_->hiZPass.lastObjCnt;
+    }
+
     // 1. Hi-Z Cull Pass
     static auto perInstanceDataCull = std::vector<HiZCullShader::PerInstanceData>();
     perInstanceDataCull.resize(drawEvents_.size());
@@ -322,6 +331,24 @@ void Dispatcher::hiZPassCompute() {
         pResources_->hiZPass.indirectCmd.resource(roomIdx_),
         D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
         D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+
+    // readback: perGroupCnt → CPU-readable buffer (1-frame delay)
+    if (pResources_->hiZPass.visibleCountReadback) {
+        transitionResourceState(cmdList,
+            pResources_->hiZPass.perGroupCnt.resource(roomIdx_),
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+            D3D12_RESOURCE_STATE_COPY_SOURCE);
+        cmdList->CopyBufferRegion(
+            pResources_->hiZPass.visibleCountReadback.Get(), 0,
+            pResources_->hiZPass.perGroupCnt.resource(roomIdx_), 0,
+            groupCnt * sizeof(u32t));
+        transitionResourceState(cmdList,
+            pResources_->hiZPass.perGroupCnt.resource(roomIdx_),
+            D3D12_RESOURCE_STATE_COPY_SOURCE,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        pResources_->hiZPass.lastGroupCnt = static_cast<u32t>(groupCnt);
+        pResources_->hiZPass.lastObjCnt   = static_cast<u32t>(drawEvents_.size());
+    }
 
     auto hrClose = cmdList->Close();
     DISPLAY_ERROR_DX_HR(hrClose, false);

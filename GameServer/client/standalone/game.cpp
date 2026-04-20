@@ -123,7 +123,7 @@ void Game::setupStage() {
 	pLabel->offsetY = UI::DimValue::px( -220.f );
 	pLabel->setTextHAlign(UI::TextHAlign::Center);
 	pLabel->setTextVAlign(UI::TextVAlign::Center);
-	pLabel->setText(L"U: UI영역 표시\nEnter: 마우스 포인터 캡처\nSpace: 마우스 포인터 감추기\nWASD: 이동\nC: Cascade Debug View\n좌클릭: 공격 ");
+	pLabel->setText(L"U: UI영역 표시\nEnter: 마우스 포인터 캡처\nSpace: 마우스 포인터 감추기\nWASD: 이동\nC: Cascade Debug View\nH: Hi-Z Cull ON/OFF\n좌클릭: 공격 ");
 	pLabel->setFontSize(24.0f);
 	//pLabel->setAutoSize( true );
 	pLabel->setTextColor( 1.0f, 1.0f, 1.0f, 1.0f );
@@ -141,6 +141,22 @@ void Game::setupStage() {
 	playerHpBar_->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
 	playerHpBar_->fillColor = { 1.0f, 0.0f, 0.0f, 1.00f };
 	playerHpBar_->setProgress(1.f);
+
+	hiZStatsLabel_ = static_cast<UI::Label*>(
+		uiManager_.root()->addChild(std::make_unique<UI::Label>())
+	);
+	hiZStatsLabel_->name    = "hiZStatsLabel";
+	hiZStatsLabel_->anchor  = UI::Anchors::TopLeft;
+	hiZStatsLabel_->pivot   = UI::Pivots::TopLeft;
+	hiZStatsLabel_->width   = UI::DimValue::px(300.0f);
+	hiZStatsLabel_->height  = UI::DimValue::px(60.0f);
+	hiZStatsLabel_->offsetX = UI::DimValue::px(20.f);
+	hiZStatsLabel_->offsetY = UI::DimValue::px(50.f);
+	hiZStatsLabel_->setTextHAlign(UI::TextHAlign::Leading);
+	hiZStatsLabel_->setTextVAlign(UI::TextVAlign::Top);
+	hiZStatsLabel_->setFontSize(18.0f);
+	hiZStatsLabel_->setTextColor(0.2f, 1.0f, 0.2f, 1.0f);
+	hiZStatsLabel_->setText(L"HiZ: OFF");
 
 	setupMonsterHpBars();
 }
@@ -594,6 +610,17 @@ void Game::update(Milliseconds deltaTime) {
 		}
 	}
 
+	if (hiZStatsLabel_) {
+		if (gfx_.isHiZCullEnabled()) {
+			const auto stats = gfx_.getHiZStats();
+			wchar_t buf[64];
+			swprintf_s(buf, 64, L"HiZ: ON  Visible %u / %u", stats.visible, stats.total);
+			hiZStatsLabel_->setText(buf);
+		} else {
+			hiZStatsLabel_->setText(L"HiZ: OFF");
+		}
+	}
+
 	uiManager_.layout();
 	uiManager_.update( std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont() );
 
@@ -940,6 +967,11 @@ void Game::processInput(Milliseconds deltaTime) {
 		gfx_.toggleCsmDebugVisualization();
 	}
 
+	// H key: toggle Hi-Z occlusion culling
+	if ( (keyboardStateCurr_['H'] & 0x80) && !(keyboardStatePrev_['H'] & 0x80) ) {
+		gfx_.setHiZCullEnabled(!gfx_.isHiZCullEnabled());
+	}
+
 	// G key: cycle GBuffer debug view (deferred path only)
 	if ( (keyboardStateCurr_['G'] & 0x80) && !(keyboardStatePrev_['G'] & 0x80) ) {
 		gfx_.cycleGBufferDebugMode();
@@ -1042,6 +1074,9 @@ void Game::cullObjects() {
 				break;
 			}
 		}
+
+		if (auto* blender = entt->animBlender())
+			blender->setCulled(entt->renderState().shouldCull);
 	}
 }
 

@@ -2,6 +2,13 @@
 #include "gfx.hpp"
 #include "errorHandling.hpp"
 
+GFX::HiZStats GFX::getHiZStats() const {
+	return {
+		resourcesPBRDeferredSkinnedPipeline_.hiZPass.lastVisibleCount,
+		resourcesPBRDeferredSkinnedPipeline_.hiZPass.lastTotalCount
+	};
+}
+
 // GFX가 소멸할 때, 제출된 모든 GPU작업이 완료되고 나서 소멸하도록 한다.
 GFX::~GFX() {
 	for (std::size_t i = 0u; i < backBuffers_.size(); ++i) {
@@ -269,6 +276,7 @@ void GFX::init() {
 	shaders_.try_emplace("TerrainShaderCSMDebug", createTerrainShaderCSMDebug(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRDeferredGBufferShader",        createPBRDeferredGBufferShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRDeferredSkinnedGBufferShader", createPBRDeferredSkinnedGBufferShader(device_.Get(), defaultRootSig.get()));
+	shaders_.try_emplace("PBRDeferredSkinnedIndirectGBufferShader", createPBRDeferredSkinnedIndirectGBufferShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("PBRDeferredLightingShader",       createPBRDeferredLightingShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("TerrainDeferredGBufferShader",    createTerrainDeferredGBufferShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("HiZOccluderShader", createHiZOccluderShader(device_.Get(), defaultRootSig.get()));
@@ -587,6 +595,31 @@ void GFX::createSwapChain() {
 	resourcesPBRDeferredSkinnedPipeline_.hiZPass.visibleIndices.init(
 		device_.Get(), sizeof(u32t) * 100'000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_VisibleIndices"
 	);
+	{
+		static constexpr u32t kMaxGroups = 4000u;
+		const D3D12_HEAP_PROPERTIES heapProps{ .Type = D3D12_HEAP_TYPE_READBACK };
+		const D3D12_RESOURCE_DESC resDesc{
+			.Dimension        = D3D12_RESOURCE_DIMENSION_BUFFER,
+			.Alignment        = 0,
+			.Width            = sizeof(u32t) * kMaxGroups,
+			.Height           = 1,
+			.DepthOrArraySize = 1,
+			.MipLevels        = 1,
+			.Format           = DXGI_FORMAT_UNKNOWN,
+			.SampleDesc       = { 1, 0 },
+			.Layout           = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+			.Flags            = D3D12_RESOURCE_FLAG_NONE,
+		};
+		DISPLAY_ERROR_DX_HR(device_->CreateCommittedResource(
+			&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
+			D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+			IID_PPV_ARGS(&resourcesPBRDeferredSkinnedPipeline_.hiZPass.visibleCountReadback)
+		), false);
+		DISPLAY_ERROR_DX_HR(resourcesPBRDeferredSkinnedPipeline_.hiZPass.visibleCountReadback->Map(
+			0, nullptr,
+			reinterpret_cast<void**>(&resourcesPBRDeferredSkinnedPipeline_.hiZPass.visibleCountMapped)
+		), false);
+	}
 	resourcesPBRDeferredSkinnedPipeline_.shadowPass.perInstanceData.init(
 		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::PerInstanceData) * 100'000u, backBuffers_.size(), "PBRDeferredSkinned_Shadow_PerInstanceData"
 	);
@@ -1340,7 +1373,7 @@ void GFX::render() {
 		shaders_.at("PrefixSumShader"),
 		shaders_.at("HiZCompactShader"),
 		shaders_.at("HiZCommandShader"),
-		shaders_.at("PBRDeferredSkinnedGBufferShader"),
+		hiZCullEnabled_ ? shaders_.at("PBRDeferredSkinnedIndirectGBufferShader") : shaders_.at("PBRDeferredSkinnedGBufferShader"),
 		shaders_.at("ShadowMapSkinnedCSMShader"),
 		cmdQ_, viewport, clRect,
 		&fenceToSignal, &resourcesPBRDeferredSkinnedPipeline_, threadPool_, &cmdListPool_,
@@ -1404,101 +1437,103 @@ void GFX::render() {
 			fenceToSignal.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtxBarrier));
 		}
 
-		// --- Occluder pass ---
-		terrainDeferredDispatcher.occluderPass();
+		if (hiZCullEnabled_) {
+			// --- Occluder pass ---
+			terrainDeferredDispatcher.occluderPass();
 
-		// --- Hi-Z pass ---
-		{
-			auto& root = rootSigs_.at("DefaultRootSignature");
+			// --- Hi-Z map build pass ---
+			{
+				auto& root = rootSigs_.at("DefaultRootSignature");
 
-			CommandContext cmdCtxHiZ{};
-			DISPLAY_ERROR_STR(cmdListPool_.allocOne(CommandListUsage::RenderingSlave, cmdCtxHiZ),
-				"[GFX Error] GFX::render: no command list available.", false);
-			if (!cmdCtxHiZ.cmdList) {
-				return;
-			}
+				CommandContext cmdCtxHiZ{};
+				DISPLAY_ERROR_STR(cmdListPool_.allocOne(CommandListUsage::RenderingSlave, cmdCtxHiZ),
+					"[GFX Error] GFX::render: no command list available.", false);
+				if (!cmdCtxHiZ.cmdList) {
+					return;
+				}
 
-			auto cmdAlloc = cmdCtxHiZ.cmdAlloc.Get();
-			auto cmdList = cmdCtxHiZ.cmdList.Get();
+				auto cmdAlloc = cmdCtxHiZ.cmdAlloc.Get();
+				auto cmdList = cmdCtxHiZ.cmdList.Get();
 
-			DISPLAY_ERROR_DX_HR(cmdAlloc->Reset(), false);
-			DISPLAY_ERROR_DX_HR(cmdList->Reset(cmdAlloc, nullptr), false);
+				DISPLAY_ERROR_DX_HR(cmdAlloc->Reset(), false);
+				DISPLAY_ERROR_DX_HR(cmdList->Reset(cmdAlloc, nullptr), false);
 
-			// === 명령 기록 ===
-			DISPLAY_ERROR_DX_VOID( 
-				cmdList->SetComputeRootSignature(root->get()),
-				false
-			);
-
-			auto descriptorHeapsRaw = std::vector<ID3D12DescriptorHeap*>(tmpDescriptorHeaps.size());
-			std::ranges::transform(tmpDescriptorHeaps, descriptorHeapsRaw.begin(),
-				[](ComPtr<ID3D12DescriptorHeap>& comPtrHeap) { return comPtrHeap.Get(); }
-			);
-			DISPLAY_ERROR_DX_VOID( cmdList->SetDescriptorHeaps(
-				static_cast<UINT>(descriptorHeapsRaw.size()), descriptorHeapsRaw.data()
-			), false );
-			DISPLAY_ERROR_DX_VOID( cmdList->SetPipelineState(shaders_.at("HiZMapShader").Get()), false );
-
-			DISPLAY_ERROR_DX_VOID( cmdList->SetComputeRootDescriptorTable( root->paramIdx("SrcTex"),
-				SharedResources::HiZMap::hiZMaps[roomIdx].srvHandle
-			), false );
-
-
-			// level 0 - copy
-			copyTextureRegion(cmdList,
-				D3D12_TEXTURE_COPY_LOCATION{
-					.pResource = SharedResources::HiZMap::hiZMaps[roomIdx].srcTex.res.Get(),
-					.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
-					.SubresourceIndex = 0u
-				},
-				D3D12_TEXTURE_COPY_LOCATION{
-					.pResource = SharedResources::HiZMap::hiZMaps[roomIdx].mips.res.Get(),
-					.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
-					.SubresourceIndex = 0u
-				},
-				D3D12_RESOURCE_STATE_DEPTH_WRITE,
-				D3D12_RESOURCE_STATE_UNORDERED_ACCESS
-			);
-
-			uavBarrier(cmdList, SharedResources::HiZMap::hiZMaps[roomIdx].mips.res.Get());
-
-			// level n - compute
-			auto prevWidth = SharedResources::HiZMap::hiZMaps[roomIdx].srcWidth;
-			auto prevHeight = SharedResources::HiZMap::hiZMaps[roomIdx].srcHeight;
-
-			for (u32t mipLevel = 1u; mipLevel < SharedResources::HiZMap::hiZMaps[roomIdx].mipLevelCnt; ++mipLevel) {
-				cmdList->SetComputeRoot32BitConstant(
-					root->paramIdx("FirstInstanceOffset"), mipLevel - 1u, 0u
-				);
-
+				// === 명령 기록 ===
 				DISPLAY_ERROR_DX_VOID(
-					cmdList->SetComputeRootDescriptorTable( root->paramIdx("DestTex"),
-						SharedResources::HiZMap::hiZMaps[roomIdx].uavHandles[mipLevel]
-					),
+					cmdList->SetComputeRootSignature(root->get()),
 					false
 				);
 
-				const auto width  = std::max(1u, prevWidth / 2u);
-				const auto height = std::max(1u, prevHeight / 2u);
+				auto descriptorHeapsRaw = std::vector<ID3D12DescriptorHeap*>(tmpDescriptorHeaps.size());
+				std::ranges::transform(tmpDescriptorHeaps, descriptorHeapsRaw.begin(),
+					[](ComPtr<ID3D12DescriptorHeap>& comPtrHeap) { return comPtrHeap.Get(); }
+				);
+				DISPLAY_ERROR_DX_VOID( cmdList->SetDescriptorHeaps(
+					static_cast<UINT>(descriptorHeapsRaw.size()), descriptorHeapsRaw.data()
+				), false );
+				DISPLAY_ERROR_DX_VOID( cmdList->SetPipelineState(shaders_.at("HiZMapShader").Get()), false );
 
-				DISPLAY_ERROR_DX_VOID(
-					cmdList->Dispatch( static_cast<UINT>(ceil(width / 8.0f)), static_cast<UINT>(ceil(height / 8.0f)), 1 ),
-					false
+				DISPLAY_ERROR_DX_VOID( cmdList->SetComputeRootDescriptorTable( root->paramIdx("SrcTex"),
+					SharedResources::HiZMap::hiZMaps[roomIdx].srvHandle
+				), false );
+
+
+				// level 0 - copy
+				copyTextureRegion(cmdList,
+					D3D12_TEXTURE_COPY_LOCATION{
+						.pResource = SharedResources::HiZMap::hiZMaps[roomIdx].srcTex.res.Get(),
+						.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+						.SubresourceIndex = 0u
+					},
+					D3D12_TEXTURE_COPY_LOCATION{
+						.pResource = SharedResources::HiZMap::hiZMaps[roomIdx].mips.res.Get(),
+						.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+						.SubresourceIndex = 0u
+					},
+					D3D12_RESOURCE_STATE_DEPTH_WRITE,
+					D3D12_RESOURCE_STATE_UNORDERED_ACCESS
 				);
 
 				uavBarrier(cmdList, SharedResources::HiZMap::hiZMaps[roomIdx].mips.res.Get());
 
-				prevWidth  = width;
-				prevHeight = height;
+				// level n - compute
+				auto prevWidth = SharedResources::HiZMap::hiZMaps[roomIdx].srcWidth;
+				auto prevHeight = SharedResources::HiZMap::hiZMaps[roomIdx].srcHeight;
+
+				for (u32t mipLevel = 1u; mipLevel < SharedResources::HiZMap::hiZMaps[roomIdx].mipLevelCnt; ++mipLevel) {
+					cmdList->SetComputeRoot32BitConstant(
+						root->paramIdx("FirstInstanceOffset"), mipLevel - 1u, 0u
+					);
+
+					DISPLAY_ERROR_DX_VOID(
+						cmdList->SetComputeRootDescriptorTable( root->paramIdx("DestTex"),
+							SharedResources::HiZMap::hiZMaps[roomIdx].uavHandles[mipLevel]
+						),
+						false
+					);
+
+					const auto width  = std::max(1u, prevWidth / 2u);
+					const auto height = std::max(1u, prevHeight / 2u);
+
+					DISPLAY_ERROR_DX_VOID(
+						cmdList->Dispatch( static_cast<UINT>(ceil(width / 8.0f)), static_cast<UINT>(ceil(height / 8.0f)), 1 ),
+						false
+					);
+
+					uavBarrier(cmdList, SharedResources::HiZMap::hiZMaps[roomIdx].mips.res.Get());
+
+					prevWidth  = width;
+					prevHeight = height;
+				}
+
+				// === 명령 기록 끝, 제출 및 실행 ===
+				DISPLAY_ERROR_DX_HR(cmdList->Close(), false);
+				ID3D12CommandList* cmds[] = { cmdList };
+				DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, cmds), false);
+				fenceToSignal.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtxHiZ));
+
+				pbrDeferredSkinnedDispatcher.hiZPass();
 			}
-
-			// === 명령 기록 끝, 제출 및 실행 ===
-			DISPLAY_ERROR_DX_HR(cmdList->Close(), false);
-			ID3D12CommandList* cmds[] = { cmdList };
-			DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, cmds), false);
-			fenceToSignal.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtxHiZ));
-
-			pbrDeferredSkinnedDispatcher.hiZPass();
 		}
 
 		// --- Shadow passes ---
@@ -1515,11 +1550,17 @@ void GFX::render() {
 		// --- GBuffer passes ---
 		if (!threadPool_) {
 			pbrDeferredDispatcher.gBufferPass();
-			pbrDeferredSkinnedDispatcher.gBufferIndirectPass();
+			if (hiZCullEnabled_)
+				pbrDeferredSkinnedDispatcher.gBufferIndirectPass();
+			else
+				pbrDeferredSkinnedDispatcher.gBufferPass();
 			terrainDeferredDispatcher.gBufferPass();
 		} else {
 			pbrDeferredDispatcher.gBufferPassMT();
-			pbrDeferredSkinnedDispatcher.gBufferIndirectPassMT();
+			if (hiZCullEnabled_)
+				pbrDeferredSkinnedDispatcher.gBufferIndirectPassMT();
+			else
+				pbrDeferredSkinnedDispatcher.gBufferPassMT();
 			terrainDeferredDispatcher.gBufferPassMT();
 		}
 

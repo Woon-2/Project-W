@@ -88,6 +88,14 @@ struct Resources {
         RWStructuredBuffer perGroupData;   // t5, u3
         RWStructuredBuffer visibleIndices;   // u1
         RWStructuredBuffer indirectCmd;   // u0, space1
+
+        // GPU readback: perGroupCnt 복사 대상 (D3D12_HEAP_TYPE_READBACK)
+        ComPtr<ID3D12Resource> visibleCountReadback;
+        u32t* visibleCountMapped = nullptr;
+        u32t  lastGroupCnt      = 0u;
+        u32t  lastObjCnt        = 0u;
+        u32t  lastVisibleCount  = 0u;
+        u32t  lastTotalCount    = 0u;
     } hiZPass;
 
     struct ShadowPass {

@@ -191,14 +191,15 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `sumWeightedAnimFrames()` | `animation.hpp #33` | 가중합 (nlerp) |
 | `AnimClip` struct | `animation.hpp #42-54` | 키프레임, duration, skeletonEnum, flags |
 | `loadAnimClipsFromFile()` | `animation.hpp #56` | 바이너리 → AnimClip 벡터 |
-| `AnimBlender` class | `animation.hpp #84-193` | 추상 base; 상속 필수 |
-| `AnimBlender::update()` | `animation.hpp #116` | priority_ 갱신 (오브젝트가 호출) |
-| `AnimBlender::onCalcLocal()` | `animation.hpp #121` | 로컬 변환 행렬 계산 (AnimSystem이 호출) |
-| `AnimBlender::onCalcDress()` | `animation.hpp #124` | dress 공간으로 환원 |
-| `AnimBlender::onCalcFinal()` | `animation.hpp #134` | toLocal 적용 → finalXformData |
-| `AnimBlender::finalXformData()` | `animation.hpp #138-139` | 셰이더 입력용 최종 행렬 배열 |
-| `AnimSystem` class | `animation.hpp #197-228` | 스케줄링 / 로드밸런싱 |
-| `AnimSystem::update()` | `animation.hpp #216` | timeSlice 기반 업데이트 |
+| `AnimBlender` class | `animation.hpp #84` | 추상 base; 상속 필수 |
+| `AnimBlender::update()` | `animation.hpp #118` | priority_ 갱신 (오브젝트가 호출) |
+| `AnimBlender::setCulled()/isCulled()` | `animation.hpp #112` | culled 플래그; shouldCull과 동기화 — culled면 bone matrix 계산 및 Object::update 스킵 |
+| `AnimBlender::onCalcLocal()` | `animation.hpp #123` | 로컬 변환 행렬 계산 (AnimSystem이 호출) |
+| `AnimBlender::onCalcDress()` | `animation.hpp #126` | dress 공간으로 환원 |
+| `AnimBlender::onCalcFinal()` | `animation.hpp #136` | toLocal 적용 → finalXformData |
+| `AnimBlender::finalXformData()` | `animation.hpp #140-141` | 셰이더 입력용 최종 행렬 배열 |
+| `AnimSystem` class | `animation.hpp #214` | 스케줄링 / 로드밸런싱 |
+| `AnimSystem::update()` | `animation.cpp #300` | culled 파티셔닝 후 visible range만 timeSlice 기반 heap 처리 |
 
 **오브젝트별 AnimBlender (object.hpp):**
 
@@ -252,7 +253,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `RenderState` struct | `object.hpp` | world, pos, orient, scale, worldBVs, animBlender, pModel |
 | `Equipment` struct | `object.hpp` | socketType + Object (장비 소켓) |
 | `Object` class | `object.hpp` | 모든 게임 오브젝트의 base |
-| `Object::update()` | `object.hpp` | RenderState 갱신 (물리 보간: PhysicsWorld::interpolatePos/Orient) |
+| `Object::update()` | `object.cpp #408` | 방향벡터 갱신 후 shouldCull이면 조기 반환; 아니면 RenderState 보간 + animBlender::update |
 | `Object::render()` | `object.hpp` | GFX DrawEvent 제출 (파이프라인 선택) |
 | `Object::body()` | `object.hpp` | 인라인 RigidBody 참조 (PhysicsWorld 등록 시 사용) |
 | `Object::worldBVH()` | `object.hpp` | `body_.worldBVH()` 위임 (CombatSystem 호환) |

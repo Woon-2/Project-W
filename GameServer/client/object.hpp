@@ -126,8 +126,8 @@ struct RenderState {
 	std::vector<mu::Mat4x4> worldBVs;
 	std::unique_ptr<AnimBlender> animBlender;
 	const Model* pModel;
-	bool shouldCull;
-	bool willOcclude;
+	bool shouldCull = false;
+	bool willOcclude = false;
 };
 
 struct Equipment {

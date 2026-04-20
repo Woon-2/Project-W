@@ -227,6 +227,14 @@ public:
 	// CSM cascade 디버그 시각화를 토글한다 ('C' 키에 연결됨).
 	void toggleCsmDebugVisualization() { csmDebugVisualization_ = !csmDebugVisualization_; }
 
+	// Hi-Z occlusion culling 활성화 여부 ('H' 키에 연결됨).
+	void setHiZCullEnabled(bool v) { hiZCullEnabled_ = v; }
+	bool isHiZCullEnabled() const  { return hiZCullEnabled_; }
+
+	// Hi-Z 컬링 통계 (이전 프레임 기준).
+	struct HiZStats { u32t visible; u32t total; };
+	HiZStats getHiZStats() const;
+
 	// Deferred / Forward 렌더 경로 선택
 	RenderPath renderPath() const { return renderPath_; }
 	void setRenderPath(RenderPath path) { renderPath_ = path; }
@@ -395,6 +403,7 @@ private:
 
 	ThreadPool* threadPool_ = nullptr;	// 설정되어있을 경우 멀티스레드로 동작한다.
 	bool csmDebugVisualization_ = false;
+	bool hiZCullEnabled_      = true;
 	RenderPath renderPath_    = RenderPath::Deferred;
 	u32t gBufferDebugMode_    = 0u;  // 0=None, 1=Albedo, ..., 7=Depth
 };
