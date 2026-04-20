@@ -403,11 +403,12 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 1. GBuffer 클리어 (`clearGBuffer`)
 2. Shadow Pass — PBRDeferredPipeline + PBRDeferredSkinnedPipeline + TerrainPipeline (CSM)
 3. GBuffer Pass (정적) — MRT 4개(GB0~GB3) + DSV에 geometry 기록
-4. GBuffer Pass (스킨드) — 동일 MRT + DSV
-5. GBuffer 상태 전환: RTV→SRV (`transitionToRead`)
-6. Deferred Lighting Pass — fullscreen `DrawInstanced(3, 1, 0, 0)`, backbuffer에 출력
-7. **GBuffer depth → backbuffer DSV 복사** (`copyResource`): Lighting pass와 같은 cmdList batch에서 실행. 이후 Forward 패스가 올바른 장면 깊이를 기준으로 렌더링할 수 있도록 GBuffer DSV 내용을 backbuffer depth buffer로 복사.
-8. Forward-always 패스: Skybox, Terrain main, BV debug, Billboard (GBuffer 미사용)
+4. **GBuffer Indirect Pass (스킨드)** — Hi-Z 5단계 compute(Clear→Cull→PrefixSum→Compact→Command) 후 indirect draw. Compact Pass 이후 visibleFlags → `visibilityReadback` 복사(1-frame delay). 동일 MRT + DSV.
+5. GBuffer Pass (지형) — TerrainDeferredPipeline, 동일 MRT + DSV
+6. GBuffer 상태 전환: RTV→SRV (`transitionToRead`)
+7. Deferred Lighting Pass — fullscreen `DrawInstanced(3, 1, 0, 0)`, backbuffer에 출력
+8. **GBuffer depth → backbuffer DSV 복사** (`copyResource`): Lighting pass와 같은 cmdList batch에서 실행. 이후 Forward 패스가 올바른 장면 깊이를 기준으로 렌더링할 수 있도록 GBuffer DSV 내용을 backbuffer depth buffer로 복사.
+9. Forward-always 패스: Skybox, Terrain main, BV debug, Billboard (GBuffer 미사용)
 
 **GFX RenderPath 선택 (`gfx.hpp`):**
 - `enum class RenderPath { Forward, Deferred }`

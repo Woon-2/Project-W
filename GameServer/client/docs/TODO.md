@@ -24,9 +24,10 @@
 - [X] Rigid Body Physics 구현: 중력, 공기 저항, 마찰력 등 반영
 - [X] Active Ragdoll 기반 구현
 - [X] 시분할 애니메이션 제대로 적용
-- [ ] Software Occlusion(Culling)을 통한 최적화
-- [ ] Deferred Shading을 위한 GBuffer 설계
-- [ ] Deferred Shading 구현
+- [X] GPU Hi-Z Occlusion Culling 구현 (PBRDeferredSkinnedPipeline): GPU 5단계 compute (Clear→Cull→PrefixSum→Compact→Command), visibleFlags readback → Object::update/AnimBlender 스킵, GBuffer PID 계산 스킵
+- [ ] Software Occlusion(Culling)을 통한 추가 최적화 (정적 메시, 지형 등 나머지 파이프라인 확장)
+- [X] Deferred Shading을 위한 GBuffer 설계
+- [X] Deferred Shading 구현
 - [ ] 청크 구현 및 리소스 멀티스레드 동적 로딩 구현 (Seamless Openworld가 가능하도록)
 - [ ] Image Based Lighting 구현
 
