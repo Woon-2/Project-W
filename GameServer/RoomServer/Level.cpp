@@ -67,7 +67,7 @@ void importNode(std::ifstream& ifs, const AssetManager& assetManager, Level& lev
 		const float baseY = object.pos().y();
 		const float baseZ = object.pos().z();
 
-		for ( int32 i = 0; i < 100; ++i ) {
+		for ( int32 i = 0; i < 10; ++i ) {
 			Object copy = object;
 			copy.setPos( mu::Vec3( baseX + distXZ( rng ), baseY, baseZ + distXZ( rng ) ) );
 			auto& g = level.goblins.emplace_back(Goblin(std::move(copy)));

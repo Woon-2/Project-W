@@ -3,6 +3,8 @@
 #include "../errorHandling.hpp"
 #include "../binaryImport.hpp"
 #include "../timer.hpp"
+#include "../particleImporter.hpp"
+#include "../ui/widgets/Dropdown.hpp"
 #include "SendBuffer.hpp"
 #include "../PacketManager.hpp"
 #include "../ClientApp.hpp"
@@ -91,6 +93,20 @@ void Game::setupStage() {
 	playerHpBar_->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
 	playerHpBar_->fillColor = { 1.0f, 0.0f, 0.0f, 1.00f };
 	playerHpBar_->setProgress(1.f);
+
+	effectDropdown_ = static_cast<UI::Dropdown*>(
+		uiManager_.root()->addChild(std::make_unique<UI::Dropdown>())
+	);
+	effectDropdown_->name    = "effectDropdown";
+	effectDropdown_->anchor  = UI::Anchors::TopRight;
+	effectDropdown_->pivot   = UI::Pivots::TopRight;
+	effectDropdown_->offsetX = UI::DimValue::px(-12.f);
+	effectDropdown_->offsetY = UI::DimValue::px(12.f);
+	effectDropdown_->width   = UI::DimValue::px(180.f);
+	effectDropdown_->setup({ "Slash Wave", "Slash Combo", "Slash 7", "Slash 1", "Spikes" });
+	effectDropdown_->onSelectionChanged = [this](int idx) {
+		currentEffect_ = static_cast<SwordEffect>(idx);
+	};
 }
 
 void Game::importNode(std::ifstream& ifs) {
@@ -149,6 +165,319 @@ void Game::importTerrain(std::ifstream& ifs, TerrainObject& terrain) {
 		physicsWorld_.registerTerrain(&terrain.body(), &td->heightField);
 }
 
+void Game::setParticle()
+{
+	// ── Flame ────────────────────────────────────────────────────────────────
+	{
+		ps::ParticleSystemConfig cfg;
+		cfg.main.lifetimeMin        = 0.5f;
+		cfg.main.lifetimeMax        = 1.0f;
+		cfg.main.speedMin           = 0.f;
+		cfg.main.speedMax           = 0.3f;
+		cfg.main.startColor         = { 1.f, 0.4f, 0.f, 1.f };
+		cfg.main.startSizeMin       = 0.8f;
+		cfg.main.startSizeMax       = 1.0f;
+		cfg.main.startRotationMin   = 0.f;
+		cfg.main.startRotationMax   = mu::pi * 2.f;
+		cfg.main.gravityModifierMin = -0.3f;
+		cfg.main.gravityModifierMax = 0.f;
+		cfg.main.gravity            = { 0.f, -9.8f, 0.f };
+		cfg.main.duration           = 0.f;
+
+		cfg.emission.emitRate = 15.f;
+
+		cfg.shape.type       = ps::ShapeModule::Type::Edge;
+		cfg.shape.position   = { -6.f, 58.5f, -5.f };
+		cfg.shape.direction  = { 0.f, 1.f, 0.f };
+		cfg.shape.edgeLength = 1.5f;
+		cfg.shape.edgeDir    = { 1.f, 0.f, 0.f };
+
+		cfg.colorOverLifetime.enabled  = true;
+		cfg.colorOverLifetime.gradient = ColorGradient::constant({ 1.f, 1.f, 1.f, 1.f });
+
+		cfg.sizeOverLifetime.enabled   = true;
+		cfg.sizeOverLifetime.sizeBegin = 1.0f;
+		cfg.sizeOverLifetime.sizeEnd   = 1.0f;
+
+		cfg.renderer.mode               = ps::RendererModule::Mode::Billboard;
+		cfg.renderer.renderOrder        = 0;
+		cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.flameTex(), .additive = true };
+
+		cfg.textureSheetAnimation.enabled   = true;
+		cfg.textureSheetAnimation.tilesX    = 3;
+		cfg.textureSheetAnimation.tilesY    = 3;
+		cfg.textureSheetAnimation.animation = ps::TextureSheetAnimationModule::Animation::WholeSheet;
+		cfg.textureSheetAnimation.cycles    = 1.f;
+
+		flameParticleSystem_.startContinuous(cfg);
+	}
+
+	// ── Smoke ────────────────────────────────────────────────────────────────
+	{
+		ps::ParticleSystemConfig cfg;
+		cfg.main.lifetimeMin        = 0.5f;
+		cfg.main.lifetimeMax        = 1.0f;
+		cfg.main.speedMin           = 0.5f;
+		cfg.main.speedMax           = 2.f;
+		cfg.main.startColor         = { 0.5f, 0.5f, 0.5f, 1.f };
+		cfg.main.startSizeMin       = 1.f;
+		cfg.main.startSizeMax       = 1.f;
+		cfg.main.startRotationMin   = 0.f;
+		cfg.main.startRotationMax   = mu::pi * 2.f;
+		cfg.main.gravityModifierMin = -0.5f;
+		cfg.main.gravityModifierMax = -0.2f;
+		cfg.main.gravity            = { 0.f, -1.f, 0.f };
+		cfg.main.duration           = 0.f;
+
+		cfg.emission.emitRate = 10.f;
+
+		cfg.shape.type       = ps::ShapeModule::Type::Edge;
+		cfg.shape.position   = { -6.f, 58.5f, -5.f };
+		cfg.shape.direction  = { 0.f, 1.f, 0.f };
+		cfg.shape.edgeLength = 1.5f;
+		cfg.shape.edgeDir    = { 1.f, 0.f, 0.f };
+
+		cfg.colorOverLifetime.enabled  = true;
+		cfg.colorOverLifetime.gradient = ColorGradient{
+			.keys = {
+				{ 0.0f, { 1.f,  1.f,  1.f,  0.f } },
+				{ 0.5f, { 0.5f, 0.5f, 0.5f, 1.f } },
+				{ 1.0f, { 0.f,  0.f,  0.f,  0.f } },
+			}
+		};
+
+		cfg.sizeOverLifetime.enabled   = true;
+		cfg.sizeOverLifetime.sizeBegin = 1.f;
+		cfg.sizeOverLifetime.sizeEnd   = 1.f;
+
+		cfg.renderer.mode               = ps::RendererModule::Mode::Billboard;
+		cfg.renderer.renderOrder        = 1;
+		cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.smokeTex() };
+
+		cfg.textureSheetAnimation.enabled   = true;
+		cfg.textureSheetAnimation.tilesX    = 3;
+		cfg.textureSheetAnimation.tilesY    = 3;
+		cfg.textureSheetAnimation.animation = ps::TextureSheetAnimationModule::Animation::WholeSheet;
+		cfg.textureSheetAnimation.cycles    = 1.f;
+
+		smokeParticleSystem_.startContinuous(cfg);
+	}
+
+	auto loadUnityParticleConfig = [](const std::filesystem::path& jsonPath,
+	                                  std::string_view relativePath) {
+		ps::ParticleSystemConfig cfg;
+		loadParticleSystemConfigFromUnityJson(jsonPath, relativePath, cfg);
+		return cfg;
+	};
+
+	// ── Sword Slash 1 effect ─────────────────────────────────────────────────
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/Sword Slash 1_ParticleSystems.json",
+			"Sword Slash 1"
+		);
+		cfg.renderer.pMesh = assetManager_.meshSlash3();
+		cfg.renderer.pSubMesh = assetManager_.meshSlash3()->subMeshes.empty()
+		                       ? nullptr
+		                       : &assetManager_.meshSlash3()->subMeshes[0];
+		cfg.renderer.mat = assetManager_.swordSlashMaterial();
+		cfg.renderer.renderOrder = 2;
+		swordSlash1Effect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);
+	}
+
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/Sword Slash 1_ParticleSystems.json",
+			"Sword Slash 1/Smoke"
+		);
+		cfg.main.looping = false;
+		cfg.renderer.mat = assetManager_.smokeBlendCGMaterial();
+		swordSlash1Effect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
+	}
+
+	// ── Sword Slash Combo ─────────────────────────────────────────────────────
+	{
+		auto baseCfg = loadUnityParticleConfig(
+			"../resources/effects/Sword Slash 1_ParticleSystems.json",
+			"Sword Slash 1"
+		);
+		baseCfg.renderer.pMesh = assetManager_.meshSlash3();
+		baseCfg.renderer.pSubMesh = assetManager_.meshSlash3()->subMeshes.empty()
+		                           ? nullptr
+		                           : &assetManager_.meshSlash3()->subMeshes[0];
+		baseCfg.renderer.mat = assetManager_.swordSlashMaterial();
+		baseCfg.renderer.renderOrder = 2;
+		baseCfg.main.looping = false;
+		baseCfg.main.startRotation3DEnabled = true;
+		baseCfg.emission.enabled = true;
+		baseCfg.emission.emitRate = 0.f;
+		baseCfg.emission.rateOverDistance = 0.f;
+
+		struct ComboLayer { float time; float rotZ; };
+		const ComboLayer layers[] = {
+			{ 0.10f, -0.62831855f },
+			{ 0.45f,  0.31415927f },
+			{ 0.60f, -0.20943952f },
+			{ 1.15f,  0.59341192f },
+			{ 1.15f,  0.f        },
+		};
+		for (const auto& layer : layers) {
+			auto cfg = baseCfg;
+			cfg.main.startRotation3DMin = { 0.f, -2.44346094f, layer.rotZ };
+			cfg.main.startRotation3DMax = cfg.main.startRotation3DMin;
+			cfg.emission.bursts = {
+				ps::EmissionModule::Burst{
+					.time = layer.time,
+					.countMin = 1,
+					.countMax = 1,
+					.cycleCount = 1,
+					.repeatInterval = 0.01f,
+					.probability = 1.f,
+				}
+			};
+			swordSlashComboEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
+		}
+	}
+
+	// ── Sword Slash 7 ─────────────────────────────────────────────────────────
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/Slash_ParticleSystems.json",
+			"Slash"
+		);
+		cfg.renderer.pMesh = assetManager_.meshSlash3();
+		cfg.renderer.pSubMesh = assetManager_.meshSlash3()->subMeshes.empty()
+		                       ? nullptr
+		                       : &assetManager_.meshSlash3()->subMeshes[0];
+		cfg.renderer.mat = assetManager_.swordSlash2Material();
+		cfg.renderer.renderOrder = 2;
+		swordSlash7Effect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);
+	}
+
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/Slashes_ParticleSystems.json",
+			"Slashes"
+		);
+		cfg.renderer.pMesh = assetManager_.meshSlash3();
+		cfg.renderer.pSubMesh = assetManager_.meshSlash3()->subMeshes.empty()
+		                       ? nullptr
+		                       : &assetManager_.meshSlash3()->subMeshes[0];
+		cfg.renderer.mat = assetManager_.swordSlash2Material();
+		cfg.renderer.renderOrder = 2;
+		swordSlash7Effect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);
+	}
+
+	// ── Spikes Attack effect ───────────────────────────────────────────────────
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/Spikes attack_ParticleSystems.json",
+			"Spikes attack/Spikes"
+		);
+		cfg.renderer.pMesh = assetManager_.meshIceSpikes2();
+		cfg.renderer.pSubMesh = assetManager_.meshIceSpikes2()->subMeshes.empty()
+		                       ? nullptr
+		                       : &assetManager_.meshIceSpikes2()->subMeshes[0];
+		cfg.renderer.mat = assetManager_.spikesMaterial();
+		cfg.colorOverLifetime.enabled = true;
+		cfg.colorOverLifetime.gradient = ColorGradient{
+			.keys = {
+				{ 0.0f,  { 1.f, 1.f, 1.f, 1.f } },
+				{ 0.78f, { 1.f, 1.f, 1.f, 1.f } },
+				{ 1.0f,  { 1.f, 1.f, 1.f, 0.f } },
+			}
+		};
+		spikesAttackEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);
+	}
+
+	// ── Slash Wave effect ──────────────────────────────────────────────────────
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/Slash wave_ParticleSystems.json",
+			"Slash wave"
+		);
+		cfg.main.looping = false;
+		cfg.renderer.pMesh = assetManager_.meshHalfTrail();
+		cfg.renderer.pSubMesh = assetManager_.meshHalfTrail()->subMeshes.empty()
+		                       ? nullptr
+		                       : &assetManager_.meshHalfTrail()->subMeshes[0];
+		cfg.renderer.mat = assetManager_.twoSidesMaterial();
+		slashWaveEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
+	}
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/Slash wave_ParticleSystems.json",
+			"Slash wave/SlashPath"
+		);
+		cfg.main.looping = false;
+		cfg.shape.direction = { 0.f, 0.f, 1.f };
+		cfg.renderer.pMesh = assetManager_.meshSlashWave();
+		cfg.renderer.pSubMesh = assetManager_.meshSlashWave()->subMeshes.empty()
+		                       ? nullptr
+		                       : &assetManager_.meshSlashWave()->subMeshes[0];
+		cfg.renderer.mat = assetManager_.slashPathMaterial();
+		slashWaveEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
+	}
+
+	// ── foot bone indices (for dust VFX) ──────────────────────────────────────
+	const auto& playerSkeleton = player_->model()->skeleton;
+	if (playerSkeleton.bones) {
+		for (const auto& bone : *playerSkeleton.bones) {
+			if (bone.name == "foot_l")       footBoneIdxLeft_  = bone.boneIdx;
+			else if (bone.name == "foot_r")  footBoneIdxRight_ = bone.boneIdx;
+		}
+	}
+	if (footBoneIdxLeft_ < 0 || footBoneIdxRight_ < 0) {
+		gSharedLog << "[Dust VFX] Warning: foot bones not found.\n";
+	}
+
+	// ── Dust (foot impact VFX) ────────────────────────────────────────────────
+	{
+		ps::ParticleSystemConfig cfg;
+		cfg.main.lifetimeMin        = 0.3f;
+		cfg.main.lifetimeMax        = 0.6f;
+		cfg.main.speedMin           = 0.3f;
+		cfg.main.speedMax           = 0.8f;
+		cfg.main.startColor         = { 0.55f, 0.4f, 0.25f, 0.8f };
+		cfg.main.startSizeMin       = 0.8f;
+		cfg.main.startSizeMax       = 1.2f;
+		cfg.main.startRotationMin   = 0.f;
+		cfg.main.startRotationMax   = mu::pi * 2.f;
+		cfg.main.gravityModifierMin = 0.f;
+		cfg.main.gravityModifierMax = 0.05f;
+		cfg.main.gravity            = { 0.f, -9.8f, 0.f };
+
+		cfg.shape.type      = ps::ShapeModule::Type::Cone;
+		cfg.shape.coneAngle = 1.2f;
+		cfg.shape.direction = { 0.f, 1.f, 0.f };
+
+		cfg.colorOverLifetime.enabled  = true;
+		cfg.colorOverLifetime.gradient = ColorGradient{
+			.keys = {
+				{ 0.0f, { 1.f, 1.f, 1.f, 0.f } },
+				{ 0.2f, { 1.f, 1.f, 1.f, 1.f } },
+				{ 1.0f, { 0.7f, 0.7f, 0.7f, 0.f } },
+			}
+		};
+
+		cfg.sizeOverLifetime.enabled   = true;
+		cfg.sizeOverLifetime.sizeBegin = 0.3f;
+		cfg.sizeOverLifetime.sizeEnd   = 0.8f;
+
+		cfg.renderer.mode               = ps::RendererModule::Mode::Billboard;
+		cfg.renderer.renderOrder        = 1;
+		cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.smokeTex() };
+
+		cfg.textureSheetAnimation.enabled   = true;
+		cfg.textureSheetAnimation.tilesX    = 3;
+		cfg.textureSheetAnimation.tilesY    = 3;
+		cfg.textureSheetAnimation.animation = ps::TextureSheetAnimationModule::Animation::WholeSheet;
+		cfg.textureSheetAnimation.cycles    = 1.f;
+
+		dustParticleSystem_.init(cfg);
+	}
+}
+
 void Game::setupPlayer(const PlayerInfo& playerInfo) {
 	player_ = std::make_shared<Player>();
 
@@ -180,6 +509,8 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 	);
 
 	idPlayerMap_[playerInfo.playerId] = player_;
+
+	setParticle();
 }
 
 void Game::setupGround(const ObjectInfo& groundInfo) {
@@ -652,6 +983,69 @@ void Game::update(Milliseconds deltaTime) {
 		uiManager_.update(std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont());
 	}
 
+	// particle update
+	if (player_) {
+		flameParticleSystem_.update(deltaTime);
+		smokeParticleSystem_.update(deltaTime);
+		swordSlash1Effect_.update(deltaTime);
+		swordSlash7Effect_.update(deltaTime);
+		swordSlashComboEffect_.update(deltaTime);
+		slashWaveEffect_.update(deltaTime);
+		spikesAttackEffect_.update(deltaTime);
+		dustParticleSystem_.update(deltaTime);
+
+		// foot dust emit
+		if (footBoneIdxLeft_ >= 0 && footBoneIdxRight_ >= 0
+			&& player_->renderState().animBlender) {
+			auto* animBlender = static_cast<AnimBlenderPlayer*>(
+				player_->renderState().animBlender.get());
+
+			const auto vel = player_->velocity();
+			const float hSpeed2 = vel.x() * vel.x() + vel.z() * vel.z();
+			constexpr float kDustMinSpeed = 1.0f;
+
+			if (animBlender->isRunning() && hSpeed2 >= kDustMinSpeed * kDustMinSpeed) {
+				const auto duration  = animBlender->runDuration();
+				const auto currTime  = animBlender->runAnimTime();
+				const float currPhase = currTime / duration;
+				const float prevPhase = prevAnimTimeRun_ / duration;
+
+				constexpr float kLeftFootContact  = 0.0f;
+				constexpr float kRightFootContact = 0.5f;
+
+				auto crossedPhase = [&](float phase) -> bool {
+					if (currPhase >= prevPhase)
+						return prevPhase < phase && currPhase >= phase;
+					else
+						return prevPhase < phase || currPhase >= phase;
+				};
+
+				const auto& skeleton   = player_->model()->skeleton;
+				const auto& boneXforms = animBlender->finalXformData();
+				const auto& world      = player_->renderState().world;
+
+				auto getBoneWorldPos = [&](int boneIdx) -> mu::Vec3 {
+					const auto& bone = skeleton.bones->at(boneIdx);
+					const mu::Mat4x4 boneToWorld = bone.toDress * boneXforms[boneIdx] * world;
+					return mu::Vec3(mu::Vec4(0.f, 0.f, 0.f, 1.f) * boneToWorld);
+				};
+
+				if (crossedPhase(kLeftFootContact)) {
+					dustParticleSystem_.config().shape.position = getBoneWorldPos(footBoneIdxLeft_);
+					dustParticleSystem_.emit(4);
+				}
+				if (crossedPhase(kRightFootContact)) {
+					dustParticleSystem_.config().shape.position = getBoneWorldPos(footBoneIdxRight_);
+					dustParticleSystem_.emit(4);
+				}
+
+				prevAnimTimeRun_ = currTime;
+			} else {
+				prevAnimTimeRun_ = 0s;
+			}
+		}
+	}
+
 	clearEvents(eventList_);
 
 	INet::ClientApp::send();
@@ -683,6 +1077,15 @@ void Game::render() {
 
 	camera_.updateGFX(gfx_);
 	dirLight_.render(gfx_);
+
+	flameParticleSystem_.render(gfx_);
+	smokeParticleSystem_.render(gfx_);
+	swordSlash1Effect_.render(gfx_);
+	swordSlash7Effect_.render(gfx_);
+	swordSlashComboEffect_.render(gfx_);
+	slashWaveEffect_.render(gfx_);
+	spikesAttackEffect_.render(gfx_);
+	dustParticleSystem_.render(gfx_);
 
 	auto frameDataPBR = PBRPipeline::FrameData{
 		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
@@ -791,7 +1194,8 @@ LRESULT Game::receiveWndMsg(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		return DefWindowProcA(hWnd, msg, wParam, lParam);
 
 	default:
-		return DefWindowProcA(hWnd, msg, wParam, lParam);
+		uiManager_.onWndMsg(msg, wParam, lParam);
+		break;
 	}
 
 	return DefWindowProcA(hWnd, msg, wParam, lParam);
@@ -982,12 +1386,24 @@ void Game::processInputGame(Milliseconds deltaTime) {
 	}
 	}
 
-	// 플레이어 공격: LButton 클릭 시 서버에 C_Attack 전송
+	// 플레이어 공격: LButton 클릭 시 서버에 C_Attack 전송 + 로컬 이펙트 재생
 	if (!playerDead_
+		&& !uiManager_.needsCursor()	// ui가 커서를 필요로 하는 상태가 아니어야 한다. (UI 상호작용 중에 공격이 나가는 것을 방지)
 		&& (keyboardStateCurr_[VK_LBUTTON] & 0x80)
 		&& !(keyboardStatePrev_[VK_LBUTTON] & 0x80))
 	{
 		sendAttackPacket();
+
+		const auto slashPos = player_->renderState().pos
+		                    + player_->forward() * 1.f
+		                    + mu::Vec3(0.f, 1.0f, 0.f);
+		switch (currentEffect_) {
+		case SwordEffect::SlashCombo: swordSlashComboEffect_.play(slashPos);                    break;
+		case SwordEffect::Slash7:     swordSlash7Effect_.play(slashPos);                        break;
+		case SwordEffect::Slash1:     swordSlash1Effect_.play(slashPos);                        break;
+		case SwordEffect::SlashWave:  slashWaveEffect_.play(slashPos, player_->orient());       break;
+		case SwordEffect::Spikes:     spikesAttackEffect_.play(slashPos);                       break;
+		}
 	}
 }
 

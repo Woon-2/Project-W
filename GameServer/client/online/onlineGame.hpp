@@ -16,6 +16,9 @@
 #include "../ui/widgets/ProgressBar.hpp"
 #include "../spriteAnimation.hpp"
 #include "../crosshair.hpp"
+#include "../particleSystem.hpp"
+#include "../particleEffect.hpp"
+#include "../ui/widgets/Dropdown.hpp"
 
 class Timer;
 class SendBuffer;
@@ -35,6 +38,7 @@ public:
 	void setupStage();
 
 	void setupPlayer(const PlayerInfo& playerInfo);
+	void setParticle();
 	void setupGround(const ObjectInfo& groundInfo);
 	void createOtherPlayer(const ObjectInfo& otherPlayerInfo);
 	void createOtherPlayer(const PlayerInfo& otherPlayerInfo);
@@ -142,7 +146,23 @@ private:
 	int64 serverClockOffset_{ 0 };   // clockOffset = serverMs - localNow (S_TimeSync 수신 시 갱신)
 
 	UI::UIManager    uiManager_{};
-	UI::ProgressBar* playerHpBar_ = nullptr;  // owned by uiManager_
+	UI::ProgressBar* playerHpBar_    = nullptr;  // owned by uiManager_
+	UI::Dropdown*    effectDropdown_ = nullptr;  // owned by uiManager_
+
+	enum class SwordEffect { SlashWave, SlashCombo, Slash7, Slash1, Spikes };
+	SwordEffect currentEffect_ = SwordEffect::SlashWave;
+
+	ParticleSystem flameParticleSystem_{};
+	ParticleSystem smokeParticleSystem_{};
+	ParticleEffect swordSlash1Effect_{};
+	ParticleEffect swordSlash7Effect_{};
+	ParticleEffect swordSlashComboEffect_{};
+	ParticleEffect slashWaveEffect_{};
+	ParticleEffect spikesAttackEffect_{};
+	ParticleSystem dustParticleSystem_{};
+	int            footBoneIdxLeft_  = -1;
+	int            footBoneIdxRight_ = -1;
+	Seconds        prevAnimTimeRun_  = 0s;
 
 	struct OtherPlayerHpEntry {
 		Player*          player;       // non-owning; lifetime owned by shared_ptr in otherPlayers_
