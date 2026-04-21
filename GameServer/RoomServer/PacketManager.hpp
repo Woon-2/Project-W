@@ -22,6 +22,7 @@ public:
 	static std::shared_ptr<SendBuffer> makeSNpcMovePacket(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
 	static std::shared_ptr<SendBuffer> makeSNpcMoveBatchPacket(const std::vector<SNpcMoveInfo>& infos);
 	static std::shared_ptr<SendBuffer> makeSNpcAttackPacket(uint16 npcId);
+	static std::shared_ptr<SendBuffer> makeSPlayerAttackPacket(uint16 attackerId);
 	static std::shared_ptr<SendBuffer> makeSHitPacket(uint16 targetId, int32 newHp);
 	static std::shared_ptr<SendBuffer> makeSTimeSyncPacket(uint64 serverMs);
 };

@@ -196,6 +196,19 @@ std::shared_ptr<SendBuffer> PacketManager::makeSNpcAttackPacket( uint16 npcId ) 
 	return sendBuffer;
 }
 
+std::shared_ptr<SendBuffer> PacketManager::makeSPlayerAttackPacket( uint16 attackerId ) {
+	auto sendBuffer = SendBufferManager::open( sizeof( SPlayerAttackPacket ) );
+	auto bw = BufferWriter( sendBuffer->data(), sendBuffer->allocSize() );
+
+	auto pkt = bw.reserve<SPlayerAttackPacket>();
+	pkt->attackerId = attackerId;
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_PlayerAttack;
+
+	sendBuffer->close( bw.writeSize() );
+	return sendBuffer;
+}
+
 std::shared_ptr<SendBuffer> PacketManager::makeSHitPacket(uint16 targetId, int32 newHp) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SHitPacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());

@@ -27,9 +27,15 @@ public:
 	IEventBus* eventBus() override { return &eventBus_; }
 
 	void triggerDeath() override {
+		if (dead_) return;
 		animTimeDeath_ = 0s;
 		cooldownDeath_ = 200ms;
 		dead_ = true;
+	}
+
+	void triggerAttack() override {
+		animTimeHit_ = 0s;
+		cooldownHit_ = 600ms;
 	}
 
 	Seconds runAnimTime() const { return animTimeRun_; }
@@ -82,9 +88,15 @@ public:
 	IEventBus* eventBus() override { return &eventBus_; }
 
 	void triggerDeath() override {
+		if (dead_) return;
 		animTimeDeath_ = 0s;
 		cooldownDeath_ = 200ms;
 		dead_ = true;
+	}
+
+	void triggerAttack() override {
+		animTimeAttack_ = 0s;
+		cooldownAttack_ = 3000ms;
 	}
 
 private:

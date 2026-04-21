@@ -231,6 +231,9 @@ void Room::attack(int32 sessionId, uint64 clientMs) {
 		return;
 	}
 
+	broadcastExcept(sessionIt->second,
+		PacketManager::makeSPlayerAttackPacket(static_cast<uint16>(player->getId())));
+
 	static const mu::Vec3 kHalfExtent{ 1.5f, 1.5f, 1.5f };
 	static constexpr float kOffsetFwd = 1.0f;
 	static constexpr int32 kDamage = 30;

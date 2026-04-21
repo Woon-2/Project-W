@@ -26,6 +26,7 @@ enum class PacketType : uint16 {
 
 	C_Attack,
 	S_NpcAttack,
+	S_PlayerAttack,
 	S_Hit,
 	S_TimeSync,
 };
@@ -156,6 +157,10 @@ struct CAttackPacket : public PacketHeader {
 
 struct SNpcAttackPacket : public PacketHeader {
 	uint16 npcId;
+};
+
+struct SPlayerAttackPacket : public PacketHeader {
+	uint16 attackerId;
 };
 
 struct SHitPacket : public PacketHeader {

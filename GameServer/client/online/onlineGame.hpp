@@ -50,6 +50,7 @@ public:
 	void rotatePlayer(uint16 playerId, float yawRad);
 	void moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
 	void onNpcAttack(uint16 npcId);
+	void onPlayerAttack(uint16 attackerId);
 	void applyHit(uint16 targetId, int32 newHp);
 	void applyTimeSync(uint64 serverMs);
 

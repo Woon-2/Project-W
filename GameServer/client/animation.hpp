@@ -94,6 +94,7 @@ public:
 	virtual ~AnimBlender() = default;
 
 	virtual void triggerDeath() {}
+	virtual void triggerAttack() {}
 
 	// 대상 애니메이션 클립을 추가한다.
 	// 웬만하면 상속한 클래스에서 초기화시점에 사용할 클립들을 전부 push해놓고
@@ -181,6 +182,7 @@ protected:
 
 	const Skeleton& skeleton() const { return skeleton_; }
 
+	Seconds updateLag_{};
 	float priority_{};
 	bool  culled_ = false;
 	// Object::update() 시점의 소유자 위치를 캐싱한다.

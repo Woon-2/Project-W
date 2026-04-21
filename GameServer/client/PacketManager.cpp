@@ -41,6 +41,10 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 		handleSNpcAttackPacket( buffer, len );
 		break;
 
+	case PacketType::S_PlayerAttack:
+		handleSPlayerAttackPacket( buffer, len );
+		break;
+
 	case PacketType::S_Hit:
 		handleSHitPacket(buffer, len);
 		break;
@@ -136,6 +140,11 @@ void PacketManager::handleSNpcMoveBatchPacket(byte* buffer, int32 len) {
 void PacketManager::handleSNpcAttackPacket( byte* buffer, int32 len ) {
 	auto sNpcAtkPkt = reinterpret_cast<SNpcAttackPacket*>(buffer);
 	INet::ClientApp::onlineGame()->onNpcAttack( sNpcAtkPkt->npcId );
+}
+
+void PacketManager::handleSPlayerAttackPacket( byte* buffer, int32 len ) {
+	auto pkt = reinterpret_cast<SPlayerAttackPacket*>(buffer);
+	INet::ClientApp::onlineGame()->onPlayerAttack( pkt->attackerId );
 }
 
 void PacketManager::handleSHitPacket(byte* buffer, int32 len) {

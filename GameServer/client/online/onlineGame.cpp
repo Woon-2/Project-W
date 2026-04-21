@@ -803,7 +803,16 @@ void Game::onNpcAttack( uint16 npcId ) {
 		return;
 	}
 
-	holdEvent( eventList_, EvAttack( static_cast<i32t>(npcId) ) );
+	if ( npc->animBlender() ) {
+		npc->animBlender()->triggerAttack();
+	}
+}
+
+void Game::onPlayerAttack( uint16 attackerId ) {
+	auto it = idPlayerMap_.find( attackerId );
+	if ( it != idPlayerMap_.end() && it->second->animBlender() ) {
+		it->second->animBlender()->triggerAttack();
+	}
 }
 
 void Game::applyHit( uint16 targetId, int32 newHp ) {
@@ -812,19 +821,20 @@ void Game::applyHit( uint16 targetId, int32 newHp ) {
 
 		if ( newHp <= 0 ) {
 			playerDead_ = true;
+			player_->setDead( true );
 		}
 		return;
 	}
 	if ( auto it = idPlayerMap_.find( targetId ); it != idPlayerMap_.end() ) {
 		it->second->setHp( newHp );
-		if ( newHp <= 0 ) {
+		if ( newHp <= 0 && !it->second->isDead() ) {
 			it->second->setDead( true );
 		}
 		return;
 	}
 	if ( auto it = idGoblinMap_.find( targetId ); it != idGoblinMap_.end() ) {
 		it->second->setHp( newHp );
-		if ( newHp <= 0 ) {
+		if ( newHp <= 0 && !it->second->isDead() ) {
 			it->second->setDead( true );
 		}
 	}
@@ -1471,6 +1481,8 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		&& !(keyboardStatePrev_[VK_LBUTTON] & 0x80))
 	{
 		sendAttackPacket();
+		if ( player_->animBlender() )
+			player_->animBlender()->triggerAttack();
 
 		const auto slashPos = player_->renderState().pos
 		                    + player_->forward() * 1.f
