@@ -553,7 +553,8 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 		for (std::size_t i = 0u; i < pModel->bvh.nodes.size(); ++i) {
 			gfx.addDrawEvent( BVPipeline::DrawEvent{
 				.world   = offsetXform * renderState_.worldBVs[i],
-				.bvModel = BVPipeline::BVModel::Box
+				.bvModel = BVPipeline::BVModel::Box,
+				.color   = bvColor_
 			} );
 		}
 	}

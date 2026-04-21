@@ -634,6 +634,7 @@ void Game::importNode(std::ifstream& ifs) {
 			importPlayerStart(ifs, *player_);
 			physicsWorld_.registerBody(&player_->body(),
 				[p = player_.get()]() { p->rebuildBodyBVH(); });
+			player_->body().setUserData(player_.get());
 		}
 	}
 	else if (type == "GoblinSpawner") {
@@ -647,6 +648,7 @@ void Game::importNode(std::ifstream& ifs) {
 		importGoblinSpawner(ifs, *goblin_);
 		physicsWorld_.registerBody(&goblin_->body(),
 			[p = goblin_.get()]() { p->rebuildBodyBVH(); });
+		goblin_->body().setUserData(goblin_.get());
 
 		auto urd = std::uniform_real_distribution<float>(-160.f, 160.f);
 
@@ -670,8 +672,9 @@ void Game::importNode(std::ifstream& ifs) {
 			g->enableBVRendering();
 
 			physicsWorld_.registerBody(&g->body(),
-				[p = g.get()]() { p->rebuildBodyBVH(); }	
+				[p = g.get()]() { p->rebuildBodyBVH(); }
 			);
+			g->body().setUserData(g.get());
 		}
 	}
 	else if (type == "Terrain") {
@@ -867,6 +870,34 @@ void Game::update(Milliseconds deltaTime) {
 		}
 	}
 	skipNextRender_ = (consecutiveLagFrames_ >= kRenderSkipLagFrames);
+
+	// BV 충돌 색상 업데이트: 기본=초록, Terrain-Object=빨강, Object-Object=파랑
+	if (physicsStepsDone > 0) {
+		static const mu::Vec4 kColDefault{ 0.f, 1.f, 0.f, 1.f };
+		static const mu::Vec4 kColTerrain{ 1.f, 0.f, 0.f, 1.f };
+		static const mu::Vec4 kColObjObj { 0.f, 0.f, 1.f, 1.f };
+
+		if (player_) player_->setBVColor(kColDefault);
+		if (goblin_) goblin_->setBVColor(kColDefault);
+		for (auto& g : goblins_) g->setBVColor(kColDefault);
+
+		// 1패스: Terrain-Object (빨강)
+		physicsWorld_.forEachContact([&](const ContactConstraint& cc) {
+			auto* objA = static_cast<Object*>(cc.bodyA->userData());
+			auto* objB = static_cast<Object*>(cc.bodyB->userData());
+			if (objA && !objB) objA->setBVColor(kColTerrain);
+			if (objB && !objA) objB->setBVColor(kColTerrain);
+		});
+		// 2패스: Object-Object (파랑, 빨강보다 우선)
+		physicsWorld_.forEachContact([&](const ContactConstraint& cc) {
+			auto* objA = static_cast<Object*>(cc.bodyA->userData());
+			auto* objB = static_cast<Object*>(cc.bodyB->userData());
+			if (objA && objB) {
+				objA->setBVColor(kColObjObj);
+				objB->setBVColor(kColObjObj);
+			}
+		});
+	}
 
 	// 객체별 업데이트 루틴
 	//

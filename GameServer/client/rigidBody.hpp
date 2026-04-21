@@ -137,11 +137,17 @@ public:
     // Called by PhysicsWorld::integrate() after updating orientation.
     void updateInertiaWorld();
 
+    // Arbitrary pointer for associating a game-layer owner (e.g. Object*) with this body.
+    // PhysicsWorld does not interpret it; the game sets and reads it freely.
+    void  setUserData(void* data) { userData_ = data; }
+    void* userData()        const { return userData_; }
+
 private:
     MotionType type_;
     BodyState  curr_{};
     BodyState  prev_{};
     BVH        worldBVH_{};
+    void*      userData_ = nullptr;
 
     // --- Dynamic body properties (unused for Kinematic/Static) ---
     float      invMass_        = 0.f;
