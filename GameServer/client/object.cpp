@@ -69,13 +69,18 @@ void AnimBlenderPlayer::update(Seconds deltaTime, void* pVoidOwner) {
 		const auto blendSpaceY = mu::dot(pOwner->velocity(), pOwner->forward());
 	
 		// blend space 좌표를 바탕으로 각 애니메이션의 가중치를 정한다.
-		const auto wForward = std::max(0.f, blendSpaceY);
-		const auto wBackward = std::max(0.f, -blendSpaceY);
-		const auto wLeft = std::max(0.f, -blendSpaceX);
-		const auto wRight = std::max(0.f, blendSpaceX);
+		auto wForward = std::max(0.f, blendSpaceY);
+		auto wBackward = std::max(0.f, -blendSpaceY);
+		auto wLeft = std::max(0.f, -blendSpaceX);
+		auto wRight = std::max(0.f, blendSpaceX);
 
 		// 가중치의 총합이 1이 되게끔 한다.
 		float total = wForward + wBackward + wLeft + wRight;
+		// total이 0이되어 nan이 나는 것을 방지한다.
+		if (total < 1e-4f) {
+			wForward += 1e-2f;
+			total += 1e-2f;
+		}
 
 		tRunForward_ = tRun * wForward / total;
 		tRunBackward_ = tRun * wBackward / total;
