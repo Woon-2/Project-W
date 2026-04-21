@@ -249,9 +249,6 @@
     <ClCompile Include="meshParticlePipeline.cpp">
       <Filter>그래픽스\파이프라인\소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="meshParticleSystem.cpp">
-      <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
-    </ClCompile>
     <ClCompile Include="broadPhase.cpp">
       <Filter>게임%28공용%29\소스 파일</Filter>
     </ClCompile>
@@ -320,6 +317,12 @@
     </ClCompile>
     <ClCompile Include="simpleJson.cpp">
       <Filter>독립 구현체\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="particleEffect.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="twoSidesPipeline.cpp">
+      <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -545,9 +548,6 @@
     <ClInclude Include="meshParticlePipeline.hpp">
       <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="meshParticleSystem.hpp">
-      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
-    </ClInclude>
     <ClInclude Include="broadPhase.hpp">
       <Filter>게임%28공용%29\헤더 파일</Filter>
     </ClInclude>
@@ -622,6 +622,12 @@
     </ClInclude>
     <ClInclude Include="simpleJson.hpp">
       <Filter>독립 구현체\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="particleEffect.hpp">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="twoSidesPipeline.hpp">
+      <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -709,6 +715,7 @@
     <FxCompile Include="hiZCommand.hlsl">
       <Filter>셰이더 파일</Filter>
     </FxCompile>
+    <FxCompile Include="twoSides.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="bindless.hlsli">
