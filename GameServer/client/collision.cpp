@@ -99,7 +99,7 @@ CollisionResult collides(const OBB& a, const OBB& b) {
 
         if (overlap < minOverlap) {
             minOverlap = overlap;
-            const float sign = (dProj >= 0.f) ? 1.f : -1.f;
+            const float sign = (dProj >= 0.f) ? -1.f : 1.f;  // B→A convention
             bestAxis = axis * sign;
         }
     }

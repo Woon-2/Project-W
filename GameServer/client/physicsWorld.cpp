@@ -180,14 +180,16 @@ void PhysicsWorld::generateContacts()
 
         auto cc = std::make_unique<ContactConstraint>(a, b);
 
-        // Contact normal: direction B-toward-A (A separates in +normal direction).
-        // We derive this from the center-to-center vector for reliability, since
-        // the collision.cpp mtv convention may differ between AABB and OBB shapes.
-        mu::Vec3 sep = a->pos() - b->pos();
-        const float sepLen2 = sep.len2();
-        mu::NVec3 normal = (sepLen2 > 1e-6f)
-            ? mu::normalize(sep)
-            : mu::NVec3(0.f, 1.f, 0.f, mu::NVec3::NoNormalize_t{});
+        // Contact normal: from narrow-phase geometry (B→A convention, fixed in collision.cpp).
+        // Fall back to center-to-center only when the narrow-phase normal is degenerate.
+        mu::NVec3 normal = res.normal;
+        if (mu::Vec3(normal).len2() < 0.5f) {
+            const mu::Vec3 sep = a->pos() - b->pos();
+            const float sepLen2 = sep.len2();
+            normal = (sepLen2 > 1e-6f)
+                ? mu::normalize(sep)
+                : mu::NVec3(0.f, 1.f, 0.f, mu::NVec3::NoNormalize_t{});
+        }
 
         ContactPoint cp;
         cp.worldPos = res.contactPoint;
@@ -196,6 +198,10 @@ void PhysicsWorld::generateContacts()
         cp.localA   = res.contactPoint - a->pos();
         cp.localB   = res.contactPoint - b->pos();
         cc->addContact(cp);
+
+        const mu::Vec3 gravA = (a->motionType() == MotionType::Dynamic) ? gravity_ : mu::Vec3(0.f, 0.f, 0.f);
+        const mu::Vec3 gravB = (b->motionType() == MotionType::Dynamic) ? gravity_ : mu::Vec3(0.f, 0.f, 0.f);
+        cc->setExternalAccels(gravA, gravB);
 
         contactConstraints_.push_back(std::move(cc));
     }
@@ -213,6 +219,7 @@ void PhysicsWorld::generateContacts()
             if (cnt == 0) continue;
 
             auto cc = std::make_unique<ContactConstraint>(body, terrainCollider_->terrainBody());
+            cc->setExternalAccels(gravity_, mu::Vec3(0.f, 0.f, 0.f));
             for (auto& cp : contacts) {
                 cp.localA = cp.worldPos - body->pos();
                 cp.localB = cp.worldPos - terrainCollider_->terrainBody()->pos();

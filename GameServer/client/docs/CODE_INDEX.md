@@ -36,7 +36,7 @@
 | `BVH` struct | `collision.hpp #46-50` | linearized N-ary tree, nodes[0]=root |
 | `CollisionVolume` alias | `collision.hpp #52` | `using CollisionVolume = BVH` |
 | `collides(AABB, AABB)` | `collision.hpp #54` | AABB-AABB 교차 |
-| `collides(OBB, OBB)` | `collision.hpp #55` | 15축 SAT |
+| `collides(OBB, OBB)` | `collision.hpp #55` | 15축 SAT; normal = B→A convention |
 | `collides(BVH, BVH)` | `collision.hpp #56` | BVH-BVH 재귀 교차 (leaf-leaf 쌍에서만 정밀 판정; 내부 노드는 bounds AABB fast-reject만 사용) |
 | `collides(BVH, AABB)` | `collision.hpp #57` | BVH vs 공격 hitbox |
 | `RayHit` / `RaycastAABB` | `collision.hpp #62-69` | 레이-AABB 교차 |
@@ -80,7 +80,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `computeCapsuleInertia()` | `rigidBody.hpp #27` | 캡슐 관성 텐서 헬퍼 |
 | `Constraint` (abstract) | `constraint.hpp #12` | prepare/solveVelocity/solvePosition 인터페이스 |
 | `ContactPoint` struct | `collision.hpp` | worldPos, normal(B→A), depth, acc 누적값 |
-| `ContactConstraint` class | `contactConstraint.hpp` | PGS Normal + Coulomb 마찰 impulse solver |
+| `ContactConstraint` class | `contactConstraint.hpp` | PGS Normal + Coulomb 마찰 impulse solver; setExternalAccels()로 외력 보상 |
 | `BodyPair` struct | `broadPhase.hpp` | broad phase 결과 쌍 |
 | `BroadPhase` (abstract) | `broadPhase.hpp` | add/remove/update/queryPairs 인터페이스 |
 | `BruteForceBroadPhase` | `broadPhase.hpp` | O(n²) 참조 구현 (후보 비교용으로 보존) |
