@@ -209,9 +209,6 @@ CollisionResult collides(const BVH& a, const BVH& b) {
 
         if (!collides(na.bounds, nb.bounds).hit) continue;
 
-        const auto result = collidesShapes(na.shape, nb.shape);
-        if (result.hit) return result;
-
         const bool aLeaf = na.isLeaf();
         const bool bLeaf = nb.isLeaf();
 

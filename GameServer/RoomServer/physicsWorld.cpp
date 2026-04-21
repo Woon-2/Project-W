@@ -161,6 +161,8 @@ void PhysicsWorld::generateContacts()
             if (cnt == 0) continue;
 
             auto cc = std::make_unique<ContactConstraint>(body, terrainCollider_->terrainBody());
+            cc->setExternalAccels(gravity_, mu::Vec3(0.f, 0.f, 0.f));
+
             for (auto& cp : contacts) {
                 cp.localA = cp.worldPos - body->pos();
                 cp.localB = cp.worldPos - terrainCollider_->terrainBody()->pos();
