@@ -56,7 +56,12 @@
 #include "d3dx12/include/directx/d3dx12.h"
 #include "d3dx12/include/directx/d3d12.h"
 #include "texloader/DDSTextureLoader12.h"
-#include <d3dcompiler.h>
+#include <dxcapi.h>
+
+// D3DCompiler.h 제거 후 하위 호환성 유지용 — DXC에서는 실제로 사용되지 않음
+#ifndef D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES
+#define D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES 0x04000000
+#endif
 #include <d3d11on12.h>
 #include <d2d1_3.h>
 #include <dwrite_3.h>
@@ -100,6 +105,8 @@
 #include <variant>
 #include <mutex>
 #include <span>
+#include <stack>
+#include <queue>
 
 #include "mathUtil.hpp"
 #include "function.hpp"
@@ -117,7 +124,7 @@
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "dxguid.lib")
-#pragma comment(lib, "D3DCompiler.lib")
+#pragma comment(lib, "dxcompiler.lib")
 #pragma comment(lib, "d2d1.lib")
 #pragma comment(lib, "dwrite.lib")
 #pragma comment( lib, "d3d11.lib" )

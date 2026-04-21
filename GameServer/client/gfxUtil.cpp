@@ -60,6 +60,11 @@ ComPtr<ID3D12Resource> createBufferResource(
 		initialState = D3D12_RESOURCE_STATE_GENERIC_READ;
 		break;
 
+	case BufferCreationType::DefaultBufferUAV:
+		heapType = D3D12_HEAP_TYPE_DEFAULT;
+		initialState = D3D12_RESOURCE_STATE_COMMON;
+		break;
+
 	default:
 		DISPLAY_ERROR_STR(false, "[GFX Error] createBufferResource: creationType이 알 수 없는 값입니다: "s +
 			std::to_string(etoi(creationType)) + "\n"s, false
@@ -87,7 +92,9 @@ ComPtr<ID3D12Resource> createBufferResource(
 										// 무조건 Format이 DXGI_FORMAT_UNKNOWN이어야 한다.
 		.SampleDesc = DXGI_SAMPLE_DESC{.Count = 1u, .Quality = 0u },
 		.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-		.Flags = D3D12_RESOURCE_FLAG_NONE
+		.Flags = (creationType == BufferCreationType::DefaultBufferUAV)
+			? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+			: D3D12_RESOURCE_FLAG_NONE
 	};
 
 	DISPLAY_ERROR_DX_HR(
@@ -334,6 +341,20 @@ void transitionResourceState(ID3D12GraphicsCommandList* cmdList,
 	DISPLAY_ERROR_DX_VOID(cmdList->ResourceBarrier(1u, &barrier), false);
 }
 
+void uavBarrier(ID3D12GraphicsCommandList* cmdList,
+	ID3D12Resource* resource	
+) {
+	auto barrier = D3D12_RESOURCE_BARRIER{
+		.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV,
+		.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+		.UAV = D3D12_RESOURCE_UAV_BARRIER{
+			.pResource = resource
+		}
+	};
+
+	DISPLAY_ERROR_DX_VOID(cmdList->ResourceBarrier(1u, &barrier), false);
+}
+
 // 리소스 상태 전환과 관련된 사항을 간략화하는 리소스 복사 함수
 void copyResource(ID3D12GraphicsCommandList* cmdList,
 	ID3D12Resource* srcRes, ID3D12Resource* destRes,
@@ -344,6 +365,17 @@ void copyResource(ID3D12GraphicsCommandList* cmdList,
 	DISPLAY_ERROR_DX_VOID( cmdList->CopyResource(destRes, srcRes), false );
 	transitionResourceState(cmdList, destRes, D3D12_RESOURCE_STATE_COPY_DEST, destResState);
 	transitionResourceState(cmdList, srcRes, D3D12_RESOURCE_STATE_COPY_SOURCE, srcResState);
+}
+
+void copyTextureRegion( ID3D12GraphicsCommandList* cmdList,
+	D3D12_TEXTURE_COPY_LOCATION srcRegion, D3D12_TEXTURE_COPY_LOCATION destRegion,
+	D3D12_RESOURCE_STATES srcResState, D3D12_RESOURCE_STATES destResState
+) {
+	transitionResourceState(cmdList, destRegion.pResource, destResState, D3D12_RESOURCE_STATE_COPY_DEST);
+	transitionResourceState(cmdList, srcRegion.pResource, srcResState, D3D12_RESOURCE_STATE_COPY_SOURCE);
+	DISPLAY_ERROR_DX_VOID( cmdList->CopyTextureRegion(&destRegion, 0u, 0u, 0u, &srcRegion, nullptr), false );
+	transitionResourceState(cmdList, destRegion.pResource, D3D12_RESOURCE_STATE_COPY_DEST, destResState);
+	transitionResourceState(cmdList, srcRegion.pResource, D3D12_RESOURCE_STATE_COPY_SOURCE, srcResState);
 }
 
 // 이미 만들어진 리소스를 가져와서, 메모리 영역을 분배받아 사용하는 경우
@@ -414,12 +446,115 @@ void ConstantBuffer::bind(ID3D12GraphicsCommandList* cmdList, UINT rootParamIdx,
 	);
 }
 
+// roomIdx의 리소스를 compute 루트 시그너처에 cbv로 연결한다.
+void ConstantBuffer::bindCompute(ID3D12GraphicsCommandList* cmdList, UINT rootParamIdx, std::size_t roomIdx) {
+	DISPLAY_ERROR_DX_VOID(
+		cmdList->SetComputeRootConstantBufferView(rootParamIdx, addresses_.at(roomIdx)),
+		false
+	);
+}
+
 // roomIdx의 리소스를 루트 시그너처에 srv로 연결한다.
 void StructuredBuffer::bind(ID3D12GraphicsCommandList* cmdList, UINT rootParamIdx, std::size_t roomIdx) {
 	DISPLAY_ERROR_DX_VOID(
 		cmdList->SetGraphicsRootShaderResourceView(rootParamIdx, addresses_.at(roomIdx)),
 		false
 	);
+}
+
+// roomIdx의 리소스를 compute 루트 시그너처에 srv로 연결한다.
+void StructuredBuffer::bindCompute(ID3D12GraphicsCommandList* cmdList, UINT rootParamIdx, std::size_t roomIdx) {
+	DISPLAY_ERROR_DX_VOID(
+		cmdList->SetComputeRootShaderResourceView(rootParamIdx, addresses_.at(roomIdx)),
+		false
+	);
+}
+
+// byteWidth 크기의 리소스를 roomCnt 개 만든다.
+void RWStructuredBuffer::init( ID3D12Device* device, UINT64 byteWidth,
+	std::size_t roomCnt, const std::string& name
+) {
+	for (std::size_t i = 0u; i < roomCnt; ++i) {
+		auto res = createBufferResource(device, nullptr,
+			byteWidth, BufferCreationType::DefaultBufferUAV
+		);
+		setD3DName(res.Get(), name + std::to_string(i));
+		addresses_.push_back(res->GetGPUVirtualAddress());
+		resources_.push_back(std::move(res));
+	}
+	name_ = name;
+}
+
+// roomIdx의 리소스를 compute 루트 시그너처에 UAV로 연결한다.
+void RWStructuredBuffer::bindCompute( ID3D12GraphicsCommandList* cmdList,
+	UINT rootParamIdx, std::size_t roomIdx
+) {
+	DISPLAY_ERROR_DX_VOID(
+		cmdList->SetComputeRootUnorderedAccessView(rootParamIdx, addresses_.at(roomIdx)),
+		false
+	);
+}
+
+// roomIdx의 리소스를 graphics 루트 시그너처에 UAV로 연결한다.
+void RWStructuredBuffer::bindGraphics( ID3D12GraphicsCommandList* cmdList,
+	UINT rootParamIdx, std::size_t roomIdx
+) {
+	DISPLAY_ERROR_DX_VOID(
+		cmdList->SetGraphicsRootUnorderedAccessView(rootParamIdx, addresses_.at(roomIdx)),
+		false
+	);
+}
+
+// roomIdx의 리소스를 compute 루트 시그너처에 SRV로 연결한다.
+void RWStructuredBuffer::bindComputeAsSRV( ID3D12GraphicsCommandList* cmdList,
+	UINT rootParamIdx, std::size_t roomIdx
+) {
+	DISPLAY_ERROR_DX_VOID(
+		cmdList->SetComputeRootShaderResourceView(rootParamIdx, addresses_.at(roomIdx)),
+		false
+	);
+}
+
+// roomIdx의 리소스를 graphics 루트 시그너처에 SRV로 연결한다.
+void RWStructuredBuffer::bindGraphicsAsSRV( ID3D12GraphicsCommandList* cmdList,
+	UINT rootParamIdx, std::size_t roomIdx
+) {
+	DISPLAY_ERROR_DX_VOID(
+		cmdList->SetGraphicsRootShaderResourceView(rootParamIdx, addresses_.at(roomIdx)),
+		false
+	);
+}
+
+// UAV 배리어를 삽입한다. 동일 버퍼에 대한 연속 dispatch 사이에 필요하다.
+void RWStructuredBuffer::uavBarrier( ID3D12GraphicsCommandList* cmdList, std::size_t roomIdx ) {
+	auto barrier = D3D12_RESOURCE_BARRIER{
+		.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV,
+		.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+		.UAV = D3D12_RESOURCE_UAV_BARRIER{ .pResource = resources_.at(roomIdx).Get() }
+	};
+	cmdList->ResourceBarrier(1u, &barrier);
+}
+
+// roomIdx 버퍼 전체를 clearValue로 초기화한다 (ClearUnorderedAccessViewUint).
+void RWStructuredBuffer::clearUint( ID3D12GraphicsCommandList* cmdList,
+	D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
+	D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle,
+	std::size_t roomIdx, UINT clearValue
+) {
+	const UINT values[4] = { clearValue, clearValue, clearValue, clearValue };
+	cmdList->ClearUnorderedAccessViewUint(gpuHandle, cpuHandle,
+		resources_.at(roomIdx).Get(), values, 0u, nullptr
+	);
+}
+
+// roomIdx 리소스의 GPU 가상 주소를 반환한다.
+D3D12_GPU_VIRTUAL_ADDRESS RWStructuredBuffer::gpuAddress( std::size_t roomIdx ) const {
+	return addresses_.at(roomIdx);
+}
+
+// roomIdx 리소스의 원시 포인터를 반환한다.
+ID3D12Resource* RWStructuredBuffer::resource( std::size_t roomIdx ) const {
+	return resources_.at(roomIdx).Get();
 }
 
 // ConstantBufferArray 객체를 생성한다.
@@ -666,6 +801,44 @@ Texture createTexture( ID3D12Device* device, std::uint32_t width, std::uint32_t 
 	);
 
 	return ret;
+}
+
+Texture createTextureWithMips( ID3D12Device* device, uint32_t width, uint32_t height,
+    DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES initialState
+) {
+    Texture ret{};
+
+    const auto mipLevels = calcMipCount(width, height);
+
+    auto heapProperties = D3D12_HEAP_PROPERTIES{
+		.Type = D3D12_HEAP_TYPE_DEFAULT,
+		.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+		.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+		.CreationNodeMask = 0u,
+		.VisibleNodeMask = 0u
+	};
+
+	auto desc = D3D12_RESOURCE_DESC{
+		.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+		.Alignment = 0u,
+		.Width = width,
+		.Height = height,
+		.DepthOrArraySize = 1u,
+		.MipLevels = static_cast<UINT16>(mipLevels),
+		.Format = format,
+		.SampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
+		.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+		.Flags = flags
+	};
+
+    DISPLAY_ERROR_DX_HR(
+        device->CreateCommittedResource(
+            &heapProperties, D3D12_HEAP_FLAG_NONE, &desc, initialState,
+            nullptr, __uuidof(ID3D12Resource), &ret.res
+        ), false
+    );
+
+    return ret;
 }
 
 // 텍스처의 gpu 리소스를 담는 ComPtr 부분은 제외하고,

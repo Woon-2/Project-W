@@ -45,6 +45,7 @@ struct SubMesh {
 // * 드로우콜 시에는 Mesh가 아니라 SubMesh를 활용하도록 한다.
 struct Mesh {
 	std::string name;
+	AABB bounds;
 	std::vector<ComPtr<ID3D12Resource>> vbs;
 	// 파이프라인에 바인드할 용도라면 vbViewsByPipeline 멤버를 사용한다.
 	std::vector<D3D12_VERTEX_BUFFER_VIEW> vbViews;

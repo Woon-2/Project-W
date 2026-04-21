@@ -1,4 +1,4 @@
-#ifndef __UI_ELEMENT_HPP
+﻿#ifndef __UI_ELEMENT_HPP
 #define __UI_ELEMENT_HPP
 
 #include "UITypes.hpp"

@@ -100,7 +100,6 @@ float4 PSMain(VSOutput input) : SV_TARGET {
     float3 albedo        = float3(0.f, 0.f, 0.f);
     float3 blendedNormalTS = float3(0.f, 0.f, 0.f);
 
-    [unroll]
     for (int i = 0; i < MAX_TERRAIN_LAYERS; ++i) {
         if (i >= layerCount) break;
         float w = weights[i];
@@ -141,7 +140,7 @@ float4 PSMain(VSOutput input) : SV_TARGET {
     // 4. Blend per-layer metallic/roughness by splat weights.
     float roughness = 0.f;
     float metallic  = 0.f;
-    [unroll]
+
     for (int mi = 0; mi < MAX_TERRAIN_LAYERS; ++mi) {
         if (mi >= layerCount) break;
         roughness += metallicRoughness[mi].y * weights[mi];
@@ -188,7 +187,7 @@ float4 PSMain(VSOutput input) : SV_TARGET {
             cascadeSplitsFarV.x, cascadeSplitsFarV.y,
             cascadeSplitsFarV.z, cascadeSplitsFarV.w
         };
-        [unroll]
+
         for (uint dci = 0u; dci < cascadeCount; ++dci) {
             if (input.posV.z < dbgSplits[dci]) { dbgCascade = dci; break; }
         }

@@ -1,4 +1,4 @@
-#ifndef __UI_PROGRESSBAR_HPP
+﻿#ifndef __UI_PROGRESSBAR_HPP
 #define __UI_PROGRESSBAR_HPP
 
 #include "../UIElement.hpp"

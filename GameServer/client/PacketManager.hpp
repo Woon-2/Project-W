@@ -1,4 +1,4 @@
-#ifndef client_packet_manager_hpp
+﻿#ifndef client_packet_manager_hpp
 #define client_packet_manager_hpp
 
 namespace Online { class Game; }

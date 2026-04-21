@@ -1,4 +1,4 @@
-#ifndef __ActiveRagdoll_HPP
+﻿#ifndef __ActiveRagdoll_HPP
 #define __ActiveRagdoll_HPP
 
 #include "ragdoll.hpp"

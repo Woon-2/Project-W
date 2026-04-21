@@ -79,6 +79,11 @@ struct DrawEvent {
 };
 
 struct Resources {
+	struct HiZPass {
+
+	};
+
+
 	struct ShadowPass {
 		StructuredBuffer    perInstanceData;   // t0
 		ConstantBufferArray perDrawcallData;   // b0

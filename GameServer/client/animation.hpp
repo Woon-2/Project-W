@@ -108,6 +108,9 @@ public:
 
 	float priority() const { return priority_; }
 
+	void setCulled(bool v) { culled_ = v; }
+	bool isCulled() const  { return culled_; }
+
 	// 이벤트 수신을 지원하려면 상속 클래스에서 이 함수를 오버라이드해
 	// 자신만의 EventBus 구현에 대한 포인터를 리턴하도록 한다.
 	virtual IEventBus* eventBus() { return nullptr; }
@@ -179,6 +182,7 @@ protected:
 	const Skeleton& skeleton() const { return skeleton_; }
 
 	float priority_{};
+	bool  culled_ = false;
 	// Object::update() 시점의 소유자 위치를 캐싱한다.
 	// AnimSystem::updatePriorities에서 priority 계산에 사용된다.
 	mu::Vec3 cachedPos_{};

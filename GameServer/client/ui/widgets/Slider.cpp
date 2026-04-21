@@ -1,4 +1,4 @@
-#include "pch.hpp"
+﻿#include "pch.hpp"
 #include "Slider.hpp"
 #include "../../gfx.hpp"
 

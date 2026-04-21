@@ -31,6 +31,13 @@ static constexpr float kPlayerMaxSpeed      = 10.f;   // m/s
 static constexpr float kPlayerLinearDamping = 12.f;   // adjust stop time
 static constexpr float kPlayerAccelRate     = kPlayerMaxSpeed * kPlayerLinearDamping;
 
+static constexpr int     kRenderSkipLagFrames = 4;
+static constexpr int     kMaxPhysicsStepsPerFrame = 3;
+static constexpr Seconds kMaxPhysicsDeltaTime{ 1.f / 60.f * kMaxPhysicsStepsPerFrame };
+static constexpr int     kMaxPhysicsScaleK    = 4;   // physicUpdateInterval 최대 배율
+static constexpr int     kLagScaleUpFrames    = 2;   // 연속 렉 N프레임 → 배율 1 증가
+static constexpr int     kLagScaleDownFrames  = 100; // 연속 정상 N프레임 → 배율 1 감소
+
 Game::Game() {
 	// 스레드 풀 초기화
 	std::cout << "----------[게임 초기화 설정]----------\n";
@@ -98,14 +105,6 @@ void Game::setupStage() {
 
 	player_->enableBVRendering();
 	goblin_->enableBVRendering();
-	anubis_->enableBVRendering();
-	bat_->enableBVRendering();
-	bomber_->enableBVRendering();
-	demon_->enableBVRendering();
-	dragon_->enableBVRendering();
-	eyeball_->enableBVRendering();
-	fishman_->enableBVRendering();
-	gargoyle_->enableBVRendering();
 
 	setParticle();
 
@@ -114,14 +113,6 @@ void Game::setupStage() {
 	combatSystem_.registerCombatant(player_.get(),   { {1.5f, 1.5f, 1.5f}, 1.0f, 30, 500ms  });
 	// 몬스터: 종류별로 공격 범위·데미지·쿨타임 차등 적용
 	combatSystem_.registerCombatant(goblin_.get(),   { {1.2f, 1.5f, 1.2f}, 0.8f, 15, 2000ms });
-	combatSystem_.registerCombatant(anubis_.get(),   { {1.5f, 2.0f, 1.5f}, 1.0f, 25, 3000ms });
-	combatSystem_.registerCombatant(bat_.get(),      { {0.8f, 0.8f, 0.8f}, 0.6f, 10, 1500ms });
-	combatSystem_.registerCombatant(bomber_.get(),   { {1.5f, 1.5f, 1.5f}, 1.2f, 30, 4000ms });
-	combatSystem_.registerCombatant(demon_.get(),    { {1.5f, 2.0f, 1.5f}, 1.0f, 20, 2500ms });
-	combatSystem_.registerCombatant(dragon_.get(),   { {2.5f, 2.0f, 2.5f}, 1.5f, 40, 5000ms });
-	combatSystem_.registerCombatant(eyeball_.get(),  { {1.2f, 1.2f, 1.2f}, 1.0f, 15, 2000ms });
-	combatSystem_.registerCombatant(fishman_.get(),  { {1.2f, 1.8f, 1.2f}, 0.9f, 20, 2500ms });
-	combatSystem_.registerCombatant(gargoyle_.get(), { {1.5f, 2.0f, 1.5f}, 1.0f, 25, 3000ms });
 
 	uiManager_.setScreenSize(
 		static_cast<float>(gClientRect.right - gClientRect.left),
@@ -140,7 +131,7 @@ void Game::setupStage() {
 	pLabel->offsetY = UI::DimValue::px( -220.f );
 	pLabel->setTextHAlign(UI::TextHAlign::Center);
 	pLabel->setTextVAlign(UI::TextVAlign::Center);
-	pLabel->setText(L"U: UI영역 표시\nEnter: 마우스 포인터 캡처\nSpace: 마우스 포인터 감추기\nWASD: 이동\nC: Cascade Debug View\n좌클릭: 공격 ");
+	pLabel->setText(L"U: UI영역 표시\nEnter: 마우스 포인터 캡처\nSpace: 마우스 포인터 감추기\nWASD: 이동\nC: Cascade Debug View\nH: Hi-Z Cull ON/OFF\n좌클릭: 공격 ");
 	pLabel->setFontSize(24.0f);
 	//pLabel->setAutoSize( true );
 	pLabel->setTextColor( 1.0f, 1.0f, 1.0f, 1.0f );
@@ -172,6 +163,30 @@ void Game::setupStage() {
 	effectDropdown_->onSelectionChanged = [this](int idx) {
 		currentEffect_ = static_cast<SwordEffect>(idx);
 	};
+	hiZStatsLabel_ = static_cast<UI::Label*>(
+		uiManager_.root()->addChild(std::make_unique<UI::Label>())
+	);
+	hiZStatsLabel_->name    = "hiZStatsLabel";
+	hiZStatsLabel_->anchor  = UI::Anchors::TopRight;
+	hiZStatsLabel_->pivot   = UI::Pivots::TopRight;
+	hiZStatsLabel_->width   = UI::DimValue::px(300.0f);
+	hiZStatsLabel_->height  = UI::DimValue::px(60.0f);
+	hiZStatsLabel_->offsetX = UI::DimValue::px(-40.f);
+	hiZStatsLabel_->offsetY = UI::DimValue::px(50.f);
+	hiZStatsLabel_->setTextHAlign(UI::TextHAlign::Trailing);
+	hiZStatsLabel_->setTextVAlign(UI::TextVAlign::Top);
+	hiZStatsLabel_->setFontSize(18.0f);
+	hiZStatsLabel_->setTextColor(0.2f, 1.0f, 0.2f, 1.0f);
+	hiZStatsLabel_->setText(L"HiZ: OFF");
+
+	// Hi-Z occlusion culling용 renderObjectId 할당
+	{
+		u32t nextRenderObjId = 0u;
+		goblin_->setRenderObjectId(nextRenderObjId++);
+		for (auto& g : goblins_)
+			g->setRenderObjectId(nextRenderObjId++);
+		gfx_.setMaxRenderObjectId(nextRenderObjId - 1u);
+	}
 
 	setupMonsterHpBars();
 }
@@ -193,14 +208,6 @@ void Game::setupMonsterHpBars() {
 	};
 
 	registerBar(goblin_.get(),   2.5f);
-	registerBar(anubis_.get(),   3.5f);
-	registerBar(bat_.get(),      1.5f);
-	registerBar(bomber_.get(),   3.0f);
-	registerBar(demon_.get(),    4.0f);
-	registerBar(dragon_.get(),   6.0f);
-	registerBar(eyeball_.get(),  1.5f);
-	registerBar(fishman_.get(),  3.0f);
-	registerBar(gargoyle_.get(), 3.5f);
 }
 
 void Game::setParticle()
@@ -654,54 +661,31 @@ void Game::importNode(std::ifstream& ifs) {
 		importGoblinSpawner(ifs, *goblin_);
 		physicsWorld_.registerBody(&goblin_->body(),
 			[p = goblin_.get()]() { p->rebuildBodyBVH(); });
-	}
-	else if (type == "AnubisSpawner") {
-		anubis_ = std::make_shared<Anubis>(std::move(object));
-		importAnubisSpawner(ifs, *anubis_);
-		physicsWorld_.registerBody(&anubis_->body(),
-			[p = anubis_.get()]() { p->rebuildBodyBVH(); });
-	}
-	else if (type == "BatSpawner") {
-		bat_ = std::make_shared<Bat>(std::move(object));
-		importBatSpawner(ifs, *bat_);
-		physicsWorld_.registerBody(&bat_->body(),
-			[p = bat_.get()]() { p->rebuildBodyBVH(); });
-	}
-	else if (type == "BomberSpawner") {
-		bomber_ = std::make_shared<Bomber>(std::move(object));
-		importBomberSpawner(ifs, *bomber_);
-		physicsWorld_.registerBody(&bomber_->body(),
-			[p = bomber_.get()]() { p->rebuildBodyBVH(); });
-	}
-	else if (type == "DemonSpawner") {
-		demon_ = std::make_shared<Demon>(std::move(object));
-		importDemonSpawner(ifs, *demon_);
-		physicsWorld_.registerBody(&demon_->body(),
-			[p = demon_.get()]() { p->rebuildBodyBVH(); });
-	}
-	else if (type == "DragonSpawner") {
-		dragon_ = std::make_shared<Dragon>(std::move(object));
-		importDragonSpawner(ifs, *dragon_);
-		physicsWorld_.registerBody(&dragon_->body(),
-			[p = dragon_.get()]() { p->rebuildBodyBVH(); });
-	}
-	else if (type == "EyeballSpawner") {
-		eyeball_ = std::make_shared<Eyeball>(std::move(object));
-		importEyeballSpawner(ifs, *eyeball_);
-		physicsWorld_.registerBody(&eyeball_->body(),
-			[p = eyeball_.get()]() { p->rebuildBodyBVH(); });
-	}
-	else if (type == "FishmanSpawner") {
-		fishman_ = std::make_shared<Fishman>(std::move(object));
-		importFishmanSpawner(ifs, *fishman_);
-		physicsWorld_.registerBody(&fishman_->body(),
-			[p = fishman_.get()]() { p->rebuildBodyBVH(); });
-	}
-	else if (type == "GargoyleSpawner") {
-		gargoyle_ = std::make_shared<Gargoyle>(std::move(object));
-		importGargoyleSpawner(ifs, *gargoyle_);
-		physicsWorld_.registerBody(&gargoyle_->body(),
-			[p = gargoyle_.get()]() { p->rebuildBodyBVH(); });
+
+		auto urd = std::uniform_real_distribution<float>(-160.f, 160.f);
+
+		for (std::size_t i = 0; i < 500u; ++i) {
+			auto& g = goblins_.emplace_back( std::make_shared<Goblin>() );
+			g->setPos( mu::Vec3( DirectX::XMLoadFloat3(&worldT) )
+				+ mu::Vec3( urd(gRandomEngine), urd(gRandomEngine) + 320.f, urd(gRandomEngine) )
+			);
+			g->setOrient(DirectX::XMLoadFloat4(&worldR));
+			g->setScale(DirectX::XMLoadFloat3(&worldS));
+
+			g->setModel(assetManager_.modelGoblin());
+			g->setAnimBlender(animSystem_, assetManager_);
+			g->setHp(90);
+			g->setMaxHp(90);
+			g->setId(1);
+			g->body().setMotionType(MotionType::Dynamic);
+			g->body().setMass(40.f);
+			g->body().setLinearDamping(20.f);
+			g->body().setAngularDamping(100.f);  // prevent impulse-driven tipping/spinning
+
+			physicsWorld_.registerBody(&g->body(),
+				[p = g.get()]() { p->rebuildBodyBVH(); }	
+			);
+		}
 	}
 	else if (type == "Terrain") {
 		terrain_ = std::make_shared<TerrainObject>(std::move(object));
@@ -768,84 +752,15 @@ void Game::importGoblinSpawner(std::ifstream& ifs, Goblin& goblin) {
 	setupMonsterBody(goblin.body(), 40.f);
 }
 
-void Game::importAnubisSpawner(std::ifstream& ifs, Anubis& anubis) {
-	anubis.setModel(assetManager_.modelAnubis());
-	anubis.setAnimBlender(animSystem_, assetManager_);
-	anubis.setHp(110);
-	anubis.setMaxHp(110);
-	anubis.setId(2);
-	setupMonsterBody(anubis.body(), 90.f);
-}
-
-void Game::importBatSpawner(std::ifstream& ifs, Bat& bat) {
-	bat.setModel(assetManager_.modelBat());
-	bat.setAnimBlender(animSystem_, assetManager_);
-	bat.setHp(40);
-	bat.setMaxHp(40);
-	bat.setId(3);
-	setupMonsterBody(bat.body(), 20.f);
-}
-
-void Game::importBomberSpawner(std::ifstream& ifs, Bomber& bomber) {
-	bomber.setModel(assetManager_.modelBomber());
-	bomber.setAnimBlender(animSystem_, assetManager_);
-	bomber.setHp(60);
-	bomber.setMaxHp(60);
-	bomber.setId(4);
-	setupMonsterBody(bomber.body(), 60.f);
-}
-
-void Game::importDemonSpawner(std::ifstream& ifs, Demon& demon) {
-	demon.setModel(assetManager_.modelDemon());
-	demon.setAnimBlender(animSystem_, assetManager_);
-	demon.setHp(140);
-	demon.setMaxHp(140);
-	demon.setId(5);
-	setupMonsterBody(demon.body(), 100.f);
-}
-
-void Game::importDragonSpawner(std::ifstream& ifs, Dragon& dragon) {
-	dragon.setModel(assetManager_.modelDragon());
-	dragon.setAnimBlender(animSystem_, assetManager_);
-	dragon.setHp(250);
-	dragon.setMaxHp(250);
-	dragon.setId(6);
-	setupMonsterBody(dragon.body(), 200.f);
-}
-
-void Game::importEyeballSpawner(std::ifstream& ifs, Eyeball& eyeball) {
-	eyeball.setModel(assetManager_.modelEyeball());
-	eyeball.setAnimBlender(animSystem_, assetManager_);
-	eyeball.setHp(120);
-	eyeball.setMaxHp(120);
-	eyeball.setId(7);
-	setupMonsterBody(eyeball.body(), 30.f);
-}
-
-void Game::importFishmanSpawner(std::ifstream& ifs, Fishman& fishman) {
-	fishman.setModel(assetManager_.modelFishman());
-	fishman.setAnimBlender(animSystem_, assetManager_);
-	fishman.setHp(80);
-	fishman.setMaxHp(80);
-	fishman.setId(8);
-	setupMonsterBody(fishman.body(), 70.f);
-}
-
-void Game::importGargoyleSpawner(std::ifstream& ifs, Gargoyle& gargoyle) {
-	gargoyle.setModel(assetManager_.modelGargoyle());
-	gargoyle.setAnimBlender(animSystem_, assetManager_);
-	gargoyle.setHp(160);
-	gargoyle.setMaxHp(160);
-	gargoyle.setId(9);
-	setupMonsterBody(gargoyle.body(), 120.f);
-}
-
 void Game::importTerrain(std::ifstream& ifs, TerrainObject& terrain) {
 	const auto manifestPath = readText(ifs, "ManifestPath");
 	terrain.setTerrainData(assetManager_.terrain());
 
 	// 지형 물리 바디 설정: Static body (위치는 importNode WorldTRS에서 설정됨)
 	terrain.body().setMotionType(MotionType::Static);
+
+	// Hi-Z Occlusion Occluder 설정
+	terrain.activateOcclusion(true);
 
 	// TerrainCollider 등록 (BVH 불필요 — heightField 직접 조회)
 	const TerrainData* td = assetManager_.terrain();
@@ -883,54 +798,6 @@ void Game::update(Milliseconds deltaTime) {
 					holdEvent( eventList_, EvDeath(goblin_->getId()) );
 				}
 			}
-			else if (static_cast<EvHit*>(pEv)->targetId == anubis_->getId()) {
-				anubis_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, anubis_.get());
-				if (anubis_->hp() == 0) {
-					holdEvent( eventList_, EvDeath(anubis_->getId()) );
-				}
-			}
-			else if (static_cast<EvHit*>(pEv)->targetId == bat_->getId()) {
-				bat_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, bat_.get());
-				if (bat_->hp() == 0) {
-					holdEvent(eventList_, EvDeath(bat_->getId()));
-				}
-			}
-			else if (static_cast<EvHit*>(pEv)->targetId == bomber_->getId()) {
-				bomber_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, bomber_.get());
-				if (bomber_->hp() == 0) {
-					holdEvent(eventList_, EvDeath(bomber_->getId()));
-				}
-			}
-			else if (static_cast<EvHit*>(pEv)->targetId == demon_->getId()) {
-				demon_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, demon_.get());
-				if (demon_->hp() == 0) {
-					holdEvent(eventList_, EvDeath(demon_->getId()));
-				}
-			}
-			else if (static_cast<EvHit*>(pEv)->targetId == dragon_->getId()) {
-				dragon_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, dragon_.get());
-				if (dragon_->hp() == 0) {
-					holdEvent(eventList_, EvDeath(dragon_->getId()));
-				}
-			}
-			else if (static_cast<EvHit*>(pEv)->targetId == eyeball_->getId()) {
-				eyeball_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, eyeball_.get());
-				if (eyeball_->hp() == 0) {
-					holdEvent(eventList_, EvDeath(eyeball_->getId()));
-				}
-			}
-			else if (static_cast<EvHit*>(pEv)->targetId == fishman_->getId()) {
-				fishman_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, fishman_.get());
-				if (fishman_->hp() == 0) {
-					holdEvent( eventList_, EvDeath(fishman_->getId()) );
-				}
-			}
-			else if (static_cast<EvHit*>(pEv)->targetId == gargoyle_->getId()) {
-				gargoyle_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, gargoyle_.get());
-				if (gargoyle_->hp() == 0) {
-					holdEvent(eventList_, EvDeath(gargoyle_->getId()));
-				}
-			}
 			else if (static_cast<EvHit*>(pEv)->targetId == player_->getId()) {
 				player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
 				if (player_->hp() <= 0 && !playerDead_) {
@@ -944,30 +811,6 @@ void Game::update(Milliseconds deltaTime) {
 			auto* attack = static_cast<EvAttack*>(pEv);
 			if (attack->attackerId == goblin_->getId()) {
 				goblin_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, goblin_.get());
-			}
-			else if (attack->attackerId == anubis_->getId()) {
-				anubis_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, anubis_.get());
-			}
-			else if (attack->attackerId == bat_->getId()) {
-				bat_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, bat_.get());
-			}
-			else if (attack->attackerId == bomber_->getId()) {
-				bomber_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, bomber_.get());
-			}
-			else if (attack->attackerId == demon_->getId()) {
-				demon_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, demon_.get());
-			}
-			else if (attack->attackerId == dragon_->getId()) {
-				dragon_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, dragon_.get());
-			}
-			else if (attack->attackerId == eyeball_->getId()) {
-				eyeball_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, eyeball_.get());
-			}
-			else if (attack->attackerId == fishman_->getId()) {
-				fishman_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, fishman_.get());
-			}
-			else if (attack->attackerId == gargoyle_->getId()) {
-				gargoyle_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, gargoyle_.get());
 			}
 
 			// 공격 발동 시 attack hitbox를 1500ms 동안 live 추적으로 렌더링
@@ -983,33 +826,10 @@ void Game::update(Milliseconds deltaTime) {
 			if (death->victimId == goblin_->getId()) {
 				goblin_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, goblin_.get());
 			}
-			else if (death->victimId == anubis_->getId()) {
-				anubis_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, anubis_.get());
-			}
-			else if (death->victimId == bat_->getId()) {
-				bat_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, bat_.get());
-			}
-			else if (death->victimId == bomber_->getId()) {
-				bomber_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, bomber_.get());
-			}
-			else if (death->victimId == demon_->getId()) {
-				demon_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, demon_.get());
-			}
-			else if (death->victimId == dragon_->getId()) {
-				dragon_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, dragon_.get());
-			}
-			else if (death->victimId == eyeball_->getId()) {
-				eyeball_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, eyeball_.get());
-			}
-			else if (death->victimId == fishman_->getId()) {
-				fishman_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, fishman_.get());
-			}
-			else if (death->victimId == gargoyle_->getId()) {
-				gargoyle_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, gargoyle_.get());
-			}
 			else if (death->victimId == player_->getId()) {
 				player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
 			}
+
 			break;
 		}
 
@@ -1028,14 +848,38 @@ void Game::update(Milliseconds deltaTime) {
 	// update 함수에서 physicUpdateAcc_ 변수를 통해
 	// 물리량 갱신의 주기가 돌아왔는지 판단하고
 	// 주기가 되었다면 물리량 갱신을 수행한다.
-	physicUpdateAcc_ += deltaTime;
+	const Seconds clampedDt = std::min(Seconds(deltaTime), kMaxPhysicsDeltaTime);
+	physicUpdateAcc_ += clampedDt;
 
-	if (physicUpdateAcc_ >= physicUpdateInterval) {
-		while (physicUpdateAcc_ >= physicUpdateInterval) {
-			physicsWorld_.step(physicUpdateInterval);
-			physicUpdateAcc_ -= physicUpdateInterval;
+	const Seconds effectiveInterval = physicUpdateInterval * static_cast<float>(physicUpdateScaleK_);
+
+	int physicsStepsDone = 0;
+	while (physicUpdateAcc_ >= effectiveInterval
+		   && physicsStepsDone < kMaxPhysicsStepsPerFrame) {
+		physicsWorld_.step(effectiveInterval);
+		physicUpdateAcc_ -= effectiveInterval;
+		++physicsStepsDone;
+	}
+
+	if (physicsStepsDone >= kMaxPhysicsStepsPerFrame) {
+		++consecutiveLagFrames_;
+		consecutiveNonLagFrames_ = 0;
+		if (consecutiveLagFrames_ >= kLagScaleUpFrames && physicUpdateScaleK_ < kMaxPhysicsScaleK) {
+			++physicUpdateScaleK_;
+			consecutiveLagFrames_ = 0;
+		}
+	} else {
+		consecutiveLagFrames_ = 0;
+		if (physicUpdateScaleK_ > 1) {
+			if (++consecutiveNonLagFrames_ >= kLagScaleDownFrames) {
+				--physicUpdateScaleK_;
+				consecutiveNonLagFrames_ = 0;
+			}
+		} else {
+			consecutiveNonLagFrames_ = 0;
 		}
 	}
+	skipNextRender_ = (consecutiveLagFrames_ >= kRenderSkipLagFrames);
 
 	// 객체별 업데이트 루틴
 	//
@@ -1043,22 +887,14 @@ void Game::update(Milliseconds deltaTime) {
 	// 마지막 물리량 갱신으로부터 얼마나 지났는지의 비율로
 	// RenderState 갱신을 위한 PhysicState 보간 계수를 설정한다.
 	// 게임 객체의 update 함수에 전달된다.
-	const auto tPhysicInterpolation = physicUpdateAcc_ / physicUpdateInterval;
+	const auto tPhysicInterpolation = physicUpdateAcc_ / effectiveInterval;
 
 	player_->update(deltaTime, tPhysicInterpolation);
 	goblin_->update(deltaTime, tPhysicInterpolation);
-	for ( auto& g : goblins_ ) {
-		g->update( deltaTime, tPhysicInterpolation );
+	for (auto& g : goblins_) {
+		g->update(deltaTime, tPhysicInterpolation);
 	}
-	anubis_->update(deltaTime, tPhysicInterpolation);
-	bat_->update(deltaTime, tPhysicInterpolation);
-	bomber_->update(deltaTime, tPhysicInterpolation);
-	demon_->update(deltaTime, tPhysicInterpolation);
-	dragon_->update(deltaTime, tPhysicInterpolation);
-	eyeball_->update(deltaTime, tPhysicInterpolation);
-	fishman_->update(deltaTime, tPhysicInterpolation);
-	gargoyle_->update(deltaTime, tPhysicInterpolation);
-
+	
 	animSystem_.updatePriorities(
 		std::chrono::duration_cast<Seconds>(deltaTime),
 		player_->pos()
@@ -1099,11 +935,22 @@ void Game::update(Milliseconds deltaTime) {
 		}
 	}
 
+	if (hiZStatsLabel_) {
+		if (gfx_.isHiZCullEnabled()) {
+			const auto stats = gfx_.getHiZStats();
+			wchar_t buf[64];
+			swprintf_s(buf, 64, L"HiZ: ON  Visible %u / %u", stats.visible, stats.total);
+			hiZStatsLabel_->setText(buf);
+		} else {
+			hiZStatsLabel_->setText(L"HiZ: OFF");
+		}
+	}
+
 	uiManager_.layout();
 	uiManager_.update( std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont() );
 
 	// 애니메이션 업데이트
-	animSystem_.update(0.016s);
+	animSystem_.update(0.01s);
 
 	// 발 흙먼지 방출
 	if (footBoneIdxLeft_ >= 0 && footBoneIdxRight_ >= 0
@@ -1176,22 +1023,19 @@ void Game::update(Milliseconds deltaTime) {
 }
 
 void Game::render() {
+	if (skipNextRender_) {
+		skipNextRender_ = false;
+		return;
+	}
+
 	cullObjects();
 
 	debugBVView_.render(gfx_);
 	player_->render(gfx_);
 	goblin_->render(gfx_);
-	for ( auto& g : goblins_ ) {
-		g->render( gfx_ );
+	for (auto& g : goblins_) {
+		g->render(gfx_);
 	}
-	anubis_->render(gfx_);
-	bat_->render(gfx_);
-	bomber_->render(gfx_);
-	demon_->render(gfx_);
-	dragon_->render(gfx_);
-	eyeball_->render(gfx_);
-	fishman_->render(gfx_);
-	gargoyle_->render(gfx_);
 	skybox_.render(gfx_);
 	camera_.updateGFX(gfx_);
 	dirLight_.render(gfx_);
@@ -1207,34 +1051,20 @@ void Game::render() {
 
 	uiManager_.render( gfx_ );
 
-	auto frameDataPBR = PBRPipeline::FrameData{
-		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
-	};
-	gfx_.addFrameData( frameDataPBR );
-	auto frameDataPBRSkinned = PBRSkinnedPipeline::FrameData{
-		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
-	};
-	gfx_.addFrameData( frameDataPBRSkinned );
-	auto frameDataPBRDeferred = PBRDeferredPipeline::FrameData{
-		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
-	};
-	gfx_.addFrameData( frameDataPBRDeferred );
-	auto frameDataPBRDeferredSkinned = PBRDeferredSkinnedPipeline::FrameData{
-		.globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f )
-	};
-	gfx_.addFrameData( frameDataPBRDeferredSkinned );
+	// FrameData와 gfx_.render()는 렉 상황에도 항상 호출한다 (DX12 swapchain 동기화 유지).
+	gfx_.addFrameData( PBRPipeline::FrameData{ .globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f ) } );
+	gfx_.addFrameData( PBRSkinnedPipeline::FrameData{ .globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f ) } );
+	gfx_.addFrameData( PBRDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f ) } );
+	gfx_.addFrameData( PBRDeferredSkinnedPipeline::FrameData{ .globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f ) } );
 
 	if (terrain_) {
 		terrain_->render(gfx_);
-		gfx_.addFrameData(TerrainPipeline::FrameData{
-			.globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f)
-		});
-		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{
-			.globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f)
-		});
+		gfx_.addFrameData(TerrainPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
+		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 	}
 
 	gfx_.render();
+	applyHiZCulling();
 }
 
 // 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
@@ -1468,6 +1298,11 @@ void Game::processInput(Milliseconds deltaTime) {
 		gfx_.toggleCsmDebugVisualization();
 	}
 
+	// H key: toggle Hi-Z occlusion culling
+	if ( (keyboardStateCurr_['H'] & 0x80) && !(keyboardStatePrev_['H'] & 0x80) ) {
+		gfx_.setHiZCullEnabled(!gfx_.isHiZCullEnabled());
+	}
+
 	// G key: cycle GBuffer debug view (deferred path only)
 	if ( (keyboardStateCurr_['G'] & 0x80) && !(keyboardStatePrev_['G'] & 0x80) ) {
 		gfx_.cycleGBufferDebugMode();
@@ -1499,9 +1334,13 @@ void Game::processInput(Milliseconds deltaTime) {
 }
 
 void Game::cullObjects() {
-	auto entities = std::vector< std::shared_ptr<Object> >{
-		goblin_, anubis_, bat_, bomber_, demon_, dragon_, eyeball_, fishman_, gargoyle_
-	};
+	auto entities = std::vector< std::shared_ptr<Object> >{};
+	entities.reserve(1u + goblins_.size());
+
+	entities.push_back(goblin_);
+	for (auto& g : goblins_) {
+		entities.push_back(g);
+	}
 
 	// perform view frusutum culling
 	for (auto& entt : entities) {
@@ -1546,7 +1385,7 @@ void Game::cullObjects() {
 					}
 		}
 
-		entt->setCulled(true);
+		entt->setFrustumCulled(true);
 
 		for (auto& v : vertices) {
 			auto ndc = mu::Vec4(v, 1.f) * camera_.view() * camera_.proj();
@@ -1557,11 +1396,37 @@ void Game::cullObjects() {
 				&& ndc.z() >= 0.f && ndc.z() <= 1.f
 			) {
 				// a vertex is in the view frustum, it should not be culled.
-				entt->setCulled(false);
+				entt->setFrustumCulled(false);
 				break;
 			}
 		}
 	}
+}
+
+void Game::applyHiZCulling() {
+	if (!gfx_.isHiZCullEnabled()) {
+		for (auto& entt : { std::static_pointer_cast<Object>(goblin_) }) {
+			entt->setHiZCulled(false);
+			if (auto* blender = entt->animBlender())
+				blender->setCulled(entt->isFrustumCulled());
+		}
+		for (auto& g : goblins_) {
+			g->setHiZCulled(false);
+			if (auto* blender = g->animBlender())
+				blender->setCulled(g->isFrustumCulled());
+		}
+		return;
+	}
+
+	auto applyToEntity = [&](const std::shared_ptr<Object>& entt) {
+		const bool hiZVisible = gfx_.getHiZObjectVisible(entt->renderObjectId());
+		entt->setHiZCulled(!hiZVisible);
+		if (auto* blender = entt->animBlender())
+			blender->setCulled(entt->isFrustumCulled() || !hiZVisible);
+	};
+	applyToEntity(goblin_);
+	for (auto& g : goblins_)
+		applyToEntity(g);
 }
 
 // 커서가 클라이언트 영역 바깥으로 나가지 못하도록 한다.

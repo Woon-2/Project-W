@@ -118,7 +118,7 @@ public:
 	// D3D12 Device와 Command Queue, Descriptor Heap, Descriptor Pool들을 만든다.
 	// 공용 샘플러들을 생성한다.
 	// RenderingSlave, ResourceLoading 카테고리의 Command List Pool을 초기화한다.
-	// Root Signature와 Shader(PSO)들을 만든다.
+	// Root Signature, Command Signature와 Shader(PSO)들을 만든다.
 	// Load Fence를 만든다.
 	// 그리고 DrawEvent들을 저장하기 위한 메모리를 예약한다.
 	void init();
@@ -233,6 +233,10 @@ public:
 	void addLightData(const TerrainDeferredPipeline::LightData& lightData);
 	// 프레임 데이터를 입력한다.
 	void addFrameData(const TerrainDeferredPipeline::FrameData& frameData);
+	// Hi-z occlusion culling에 사용할 occluder의 정보를 입력한다.
+	void addOccluder(const TerrainPipeline::OccluderInfo& occluderInfo);
+	// Hi-z occlusion culling에 사용할 occluder의 정보를 입력한다.
+	void addOccluder(const TerrainDeferredPipeline::OccluderInfo& occluderInfo);
 
 	void addRequestModelLoad(const RequestModelLoad& request);
 	void addRequestSkyboxLoad(const RequestSkyboxLoad& request);
@@ -251,6 +255,21 @@ public:
 
 	// CSM cascade 디버그 시각화를 토글한다 ('C' 키에 연결됨).
 	void toggleCsmDebugVisualization() { csmDebugVisualization_ = !csmDebugVisualization_; }
+
+	// Hi-Z occlusion culling 활성화 여부 ('H' 키에 연결됨).
+	void setHiZCullEnabled(bool v) { hiZCullEnabled_ = v; }
+	bool isHiZCullEnabled() const  { return hiZCullEnabled_; }
+
+	// Hi-Z 컬링 통계 (이전 프레임 기준).
+	struct HiZStats { u32t visible; u32t total; };
+	HiZStats getHiZStats() const;
+
+	// Hi-Z occlusion culling 결과 조회 (1-frame delay).
+	// renderObjectId가 범위 밖이거나 Hi-Z 비활성화면 true (visible로 가정).
+	bool getHiZObjectVisible(u32t renderObjectId) const;
+
+	// objectVisibility 배열 크기를 [0, maxId] 범위로 초기화 (setupStage 이후 호출).
+	void setMaxRenderObjectId(u32t maxId);
 
 	// Deferred / Forward 렌더 경로 선택
 	RenderPath renderPath() const { return renderPath_; }
@@ -315,12 +334,14 @@ private:
 	DescriptorPool srvTexPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
 	DescriptorPool srvTexArrayPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
 	DescriptorPool srvTexCubePool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
+	DescriptorPool uavPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
 	DescriptorHeap samHeap_{};	// gpuVisible, SetDescriptorHeaps 함수 호출 필요
 	DescriptorPool samPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
 	DescriptorPool cmpSamPool_{};	// 파이프라인에서 사용하려면 bind 호출 필요
 
-	// 루트 시그너처와 셰이더들
+	// 루트 시그너처, 명령 시그너처와 셰이더들
 	std::map<std::string, std::shared_ptr<RootSig>> rootSigs_{};
+	std::shared_ptr<CmdSig> cmdSig_{};
 	std::map<std::string, ComPtr<ID3D12PipelineState>> shaders_{};
 
 	// 파이프라인 관련 변수들
@@ -415,6 +436,9 @@ private:
 	std::vector<PBRDeferredPipeline::LightData> lightDataPBRDeferredLighting_{};
 	StructuredBuffer deferredLightingLightData_{};    // t1 per-room
 	ConstantBuffer   deferredLightingPerFrameData_{}; // b0 per-room
+	// Hi-z Occluder Pass resources
+	std::vector<TerrainPipeline::OccluderInfo> occluderInfosTerrain_{};
+	std::vector<TerrainDeferredPipeline::OccluderInfo> occluderInfosTerrainDeferred_{};
 
 	// Font
 	Font font_{};
@@ -435,7 +459,8 @@ private:
 
 	ThreadPool* threadPool_ = nullptr;	// 설정되어있을 경우 멀티스레드로 동작한다.
 	bool csmDebugVisualization_ = false;
-	RenderPath renderPath_    = RenderPath::Forward;
+	bool hiZCullEnabled_      = true;
+	RenderPath renderPath_    = RenderPath::Deferred;
 	u32t gBufferDebugMode_    = 0u;  // 0=None, 1=Albedo, ..., 7=Depth
 };
 

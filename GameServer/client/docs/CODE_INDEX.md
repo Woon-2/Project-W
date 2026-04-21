@@ -191,14 +191,15 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `sumWeightedAnimFrames()` | `animation.hpp #33` | 가중합 (nlerp) |
 | `AnimClip` struct | `animation.hpp #42-54` | 키프레임, duration, skeletonEnum, flags |
 | `loadAnimClipsFromFile()` | `animation.hpp #56` | 바이너리 → AnimClip 벡터 |
-| `AnimBlender` class | `animation.hpp #84-193` | 추상 base; 상속 필수 |
-| `AnimBlender::update()` | `animation.hpp #116` | priority_ 갱신 (오브젝트가 호출) |
-| `AnimBlender::onCalcLocal()` | `animation.hpp #121` | 로컬 변환 행렬 계산 (AnimSystem이 호출) |
-| `AnimBlender::onCalcDress()` | `animation.hpp #124` | dress 공간으로 환원 |
-| `AnimBlender::onCalcFinal()` | `animation.hpp #134` | toLocal 적용 → finalXformData |
-| `AnimBlender::finalXformData()` | `animation.hpp #138-139` | 셰이더 입력용 최종 행렬 배열 |
-| `AnimSystem` class | `animation.hpp #197-228` | 스케줄링 / 로드밸런싱 |
-| `AnimSystem::update()` | `animation.hpp #216` | timeSlice 기반 업데이트 |
+| `AnimBlender` class | `animation.hpp #84` | 추상 base; 상속 필수 |
+| `AnimBlender::update()` | `animation.hpp #118` | priority_ 갱신 (오브젝트가 호출) |
+| `AnimBlender::setCulled()/isCulled()` | `animation.hpp #112` | culled 플래그; viewFrustumCulled || hiZCulled_ 통합 값으로 동기화 — culled면 bone matrix 계산 및 Object::update 스킵 |
+| `AnimBlender::onCalcLocal()` | `animation.hpp #123` | 로컬 변환 행렬 계산 (AnimSystem이 호출) |
+| `AnimBlender::onCalcDress()` | `animation.hpp #126` | dress 공간으로 환원 |
+| `AnimBlender::onCalcFinal()` | `animation.hpp #136` | toLocal 적용 → finalXformData |
+| `AnimBlender::finalXformData()` | `animation.hpp #140-141` | 셰이더 입력용 최종 행렬 배열 |
+| `AnimSystem` class | `animation.hpp #214` | 스케줄링 / 로드밸런싱 |
+| `AnimSystem::update()` | `animation.cpp #300` | culled 파티셔닝 후 visible range만 timeSlice 기반 heap 처리 |
 
 **오브젝트별 AnimBlender (object.hpp):**
 
@@ -249,11 +250,14 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
-| `RenderState` struct | `object.hpp` | world, pos, orient, scale, worldBVs, animBlender, pModel |
+| `RenderState` struct | `object.hpp` | world, pos, orient, scale, worldBVs, animBlender, pModel, viewFrustumCulled, willOcclude |
 | `Equipment` struct | `object.hpp` | socketType + Object (장비 소켓) |
 | `Object` class | `object.hpp` | 모든 게임 오브젝트의 base |
-| `Object::update()` | `object.hpp` | RenderState 갱신 (물리 보간: PhysicsWorld::interpolatePos/Orient) |
-| `Object::render()` | `object.hpp` | GFX DrawEvent 제출 (파이프라인 선택) |
+| `Object::update()` | `object.cpp #408` | 방향벡터 갱신 후 viewFrustumCulled\|\|hiZCulled_ 이면 조기 반환; 아니면 RenderState 보간 + animBlender::update |
+| `Object::render()` | `object.cpp #490` | viewFrustumCulled 체크 후 GFX DrawEvent 제출 (Hi-Z culled는 제출함, renderObjectId 포함) |
+| `Object::setFrustumCulled()/isFrustumCulled()` | `object.hpp` | view frustum culling 결과 — DrawEvent 제출 차단 |
+| `Object::setHiZCulled()/isHiZCulled()` | `object.hpp` | Hi-Z occlusion culling 결과 (1-frame delay) — update/anim 스킵 |
+| `Object::setRenderObjectId()/renderObjectId()` | `object.hpp` | GPU→CPU Hi-Z 역매핑용 정수 쿠키 |
 | `Object::body()` | `object.hpp` | 인라인 RigidBody 참조 (PhysicsWorld 등록 시 사용) |
 | `Object::worldBVH()` | `object.hpp` | `body_.worldBVH()` 위임 (CombatSystem 호환) |
 | `Object::rebuildBodyBVH()` | `object.cpp` | BVH 월드 공간 재빌드 (setPos/setOrient 시 호출) |
@@ -287,6 +291,18 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 ## 8. 렌더링 (GFX / Pipeline)
 
+**파일:** `client/gfxUtil.hpp` / `client/gfxUtil.cpp` — 버퍼 유틸리티
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| `BufferCreationType` enum | `gfxUtil.hpp #9` | VertexBuffer / IndexBuffer / UploadBuffer / DefaultBufferUAV |
+| `createBufferResource()` | `gfxUtil.hpp #21` | 버퍼 리소스 생성 유틸 |
+| `ShaderInputBuffer` class | `gfxUtil.hpp #181` | Upload Heap 기반 CPU→GPU 버퍼 베이스 클래스 (room 단위 다중 CommandList 지원) |
+| `ConstantBuffer` class | `gfxUtil.hpp #231` | ShaderInputBuffer 상속 — `SetGraphicsRootConstantBufferView` 바인딩 |
+| `StructuredBuffer` class | `gfxUtil.hpp #244` | ShaderInputBuffer 상속 — `SetGraphicsRootShaderResourceView` 바인딩 |
+| `RWStructuredBuffer` class | `gfxUtil.hpp #257` | Default Heap + UAV — `SetComputeRootUnorderedAccessView` 바인딩. GPU 전용 쓰기 (CPU stage 없음). `bindCompute` / `bindGraphics` / `bindComputeAsSRV` / `uavBarrier` / `clearUint` / `gpuAddress` / `resource` 제공 |
+| `ConstantBufferArray` struct | `gfxUtil.hpp #307` | 큰 ConstantBuffer 여러 개를 단일 리소스에서 분할해 사용 |
+
 **파일:** `client/gfx.hpp` / `client/gfx.cpp`
 
 | 항목 | 위치 | 설명 |
@@ -298,6 +314,8 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `GFX::addDrawEvent()` | `gfx.hpp #97-135` | 파이프라인별 오버로드 |
 | `GFX::loadAssets()` | `gfx.hpp #152` | 요청된 리소스 로드 |
 | `GFX::render()` | `gfx.hpp #155` | 전체 파이프라인 실행 |
+| `GFX::getHiZObjectVisible()` | `gfx.cpp` | renderObjectId → Hi-Z visibility 조회 (1-frame delay; Hi-Z OFF면 true 반환) |
+| `GFX::setMaxRenderObjectId()` | `gfx.cpp` | objectVisibility 배열 크기 초기화 (setupStage 이후 호출) |
 
 **파이프라인 파일 목록:**
 
@@ -385,11 +403,12 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 1. GBuffer 클리어 (`clearGBuffer`)
 2. Shadow Pass — PBRDeferredPipeline + PBRDeferredSkinnedPipeline + TerrainPipeline (CSM)
 3. GBuffer Pass (정적) — MRT 4개(GB0~GB3) + DSV에 geometry 기록
-4. GBuffer Pass (스킨드) — 동일 MRT + DSV
-5. GBuffer 상태 전환: RTV→SRV (`transitionToRead`)
-6. Deferred Lighting Pass — fullscreen `DrawInstanced(3, 1, 0, 0)`, backbuffer에 출력
-7. **GBuffer depth → backbuffer DSV 복사** (`copyResource`): Lighting pass와 같은 cmdList batch에서 실행. 이후 Forward 패스가 올바른 장면 깊이를 기준으로 렌더링할 수 있도록 GBuffer DSV 내용을 backbuffer depth buffer로 복사.
-8. Forward-always 패스: Skybox, Terrain main, BV debug, Billboard (GBuffer 미사용)
+4. **GBuffer Indirect Pass (스킨드)** — Hi-Z 5단계 compute(Clear→Cull→PrefixSum→Compact→Command) 후 indirect draw. Compact Pass 이후 visibleFlags → `visibilityReadback` 복사(1-frame delay). 동일 MRT + DSV.
+5. GBuffer Pass (지형) — TerrainDeferredPipeline, 동일 MRT + DSV
+6. GBuffer 상태 전환: RTV→SRV (`transitionToRead`)
+7. Deferred Lighting Pass — fullscreen `DrawInstanced(3, 1, 0, 0)`, backbuffer에 출력
+8. **GBuffer depth → backbuffer DSV 복사** (`copyResource`): Lighting pass와 같은 cmdList batch에서 실행. 이후 Forward 패스가 올바른 장면 깊이를 기준으로 렌더링할 수 있도록 GBuffer DSV 내용을 backbuffer depth buffer로 복사.
+9. Forward-always 패스: Skybox, Terrain main, BV debug, Billboard (GBuffer 미사용)
 
 **GFX RenderPath 선택 (`gfx.hpp`):**
 - `enum class RenderPath { Forward, Deferred }`
@@ -522,9 +541,11 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | 항목 | 위치 | 설명 |
 |------|------|------|
 | `StandAlone::Game` class | `standalone/game.hpp #28` | IGame 구현 |
-| `Game::setupStage()` | `standalone/game.hpp #37` | 씬 오브젝트 생성 + CombatSystem 등록 |
+| `Game::setupStage()` | `standalone/game.hpp #37` | 씬 오브젝트 생성 + CombatSystem 등록 + renderObjectId 할당 + setMaxRenderObjectId |
 | `Game::update()` | `standalone/game.hpp #45` | 메인 루프 (입력→이벤트→물리→오브젝트→애니메이션) |
-| `Game::render()` | `standalone/game.hpp #46` | GFX 렌더 호출 |
+| `Game::render()` | `standalone/game.hpp #46` | cullObjects → GFX → applyHiZCulling |
+| `Game::cullObjects()` | `standalone/game.cpp #1010` | view frustum culling → setFrustumCulled |
+| `Game::applyHiZCulling()` | `standalone/game.cpp` | Hi-Z readback → setHiZCulled + AnimBlender::setCulled (gfx_.render() 이후 호출) |
 | `Game::processInput()` | `standalone/game.hpp #57` | 키보드/마우스 입력 처리 |
 | `importNode()` 계열 | `standalone/game.hpp #68-80` | 씬 바이너리 파일 파싱 |
 | `importTerrain()` | `standalone/game.hpp #80` | Terrain 노드 처리 — `TerrainObject`에 TerrainData 연결 |
@@ -538,7 +559,10 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `physicsWorld_` | `PhysicsWorld` | 물리 시뮬레이션 (integrate + contact + PGS solver) |
 | `combatSystem_` | `CombatSystem` | 공격 판정 / 몬스터 AI |
 | `debugBVView_` | `DebugBVView` | BV 디버그 렌더링 |
-| `physicUpdateInterval` | `Seconds` | `1s/60f` 고정 타임스텝 |
+| `physicUpdateInterval` | `Seconds` | `1s/60f` 기준 타임스텝 (effectiveInterval = interval * scaleK) |
+| `physicUpdateScaleK_` | `int` | 적응형 물리 주기 배율 (1~4, 렉 시 자동 증가) |
+| `consecutiveLagFrames_` | `int` | 연속 렉 프레임 카운터 (scale-up 판단용) |
+| `consecutiveNonLagFrames_` | `int` | 연속 정상 프레임 카운터 (scale-down 판단용) |
 | `eventList_` | `EventList` | 프레임별 이벤트 큐 |
 | 몬스터 shared_ptr들 | `#97-107` | goblin_, anubis_, bat_ 등 |
 | `terrain_` | `std::shared_ptr<TerrainObject>` | `game.hpp #110` — 지형 게임 엔티티 |
@@ -600,9 +624,13 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 2. `combatSystem_.update()` → EvAttack, EvHit 생성
 3. 이벤트 처리 루프 (Hit/Death/Blood/Attack → 각 오브젝트 eventBus)
 4. `physicsWorld_.step()` (고정 타임스텝 누산기 패턴)
-5. 각 `Object::update()` (물리 보간, RenderState 갱신)
+5. 각 `Object::update()` (물리 보간, RenderState 갱신; viewFrustumCulled||hiZCulled_ 이면 스킵)
 6. `animSystem_.update()` (timeSlice 기반 스케줄링)
-7. `Game::render()` → `gfx_.render()`
+7. `Game::render()`:
+   a. `cullObjects()` — frustum culling → setFrustumCulled
+   b. Object::render() 호출들 — frustum culled만 제외, Hi-Z culled는 DrawEvent 제출
+   c. `gfx_.render()` — Hi-Z readback 복사 포함
+   d. `applyHiZCulling()` — 이전 프레임 readback → setHiZCulled + AnimBlender::setCulled
 
 ---
 

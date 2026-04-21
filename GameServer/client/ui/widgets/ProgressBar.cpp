@@ -1,4 +1,4 @@
-#include "pch.hpp"
+﻿#include "pch.hpp"
 #include "ProgressBar.hpp"
 #include "../../gfx.hpp"
 

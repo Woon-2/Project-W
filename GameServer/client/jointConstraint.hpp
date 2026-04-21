@@ -1,4 +1,4 @@
-#ifndef __JointConstraint_HPP
+﻿#ifndef __JointConstraint_HPP
 #define __JointConstraint_HPP
 
 #include "constraint.hpp"

@@ -24,6 +24,7 @@
 #include "../ui/UIManager.hpp"
 #include "../ui/widgets/ProgressBar.hpp"
 #include "../ui/widgets/Dropdown.hpp"
+#include "../ui/widgets/Label.hpp"
 
 class Timer;
 
@@ -62,7 +63,8 @@ private:
 	void processInput(Milliseconds deltaTime);
 	
 	void cullObjects();
-	
+	void applyHiZCulling();
+
 	void setupMonsterHpBars();
 
 	// 커서가 클라이언트 영역 바깥으로 나가지 못하도록 한다.
@@ -78,14 +80,6 @@ private:
 	void importCube(std::ifstream& ifs, Cube& cube);
 	void importPlayerStart(std::ifstream& ifs, Player& player);
 	void importGoblinSpawner(std::ifstream& ifs, Goblin& goblin);
-	void importAnubisSpawner(std::ifstream& ifs, Anubis& anubis);
-	void importBatSpawner(std::ifstream& ifs, Bat& bat);
-	void importBomberSpawner(std::ifstream& ifs, Bomber& bomber);
-	void importDemonSpawner(std::ifstream& ifs, Demon& demon);
-	void importDragonSpawner(std::ifstream& ifs, Dragon& dragon);
-	void importEyeballSpawner(std::ifstream& ifs, Eyeball& eyeball);
-	void importFishmanSpawner(std::ifstream& ifs, Fishman& fishman);
-	void importGargoyleSpawner(std::ifstream& ifs, Gargoyle& gargoyle);
 	void importTerrain(std::ifstream& ifs, TerrainObject& terrain);
 
 	AssetManager assetManager_{};
@@ -98,6 +92,11 @@ private:
 	Seconds physicUpdateAcc_{0s};	// 물리 업데이트를 위한 시간 누산기
 	Seconds physicUpdateInterval{1s/60.f};	// 60fps로 물리 업데이트
 
+	bool skipNextRender_ = false;
+	int  physicUpdateScaleK_ = 1;
+	int  consecutiveLagFrames_ = 0;
+	int  consecutiveNonLagFrames_ = 0;
+
 	GFX gfx_{};
 	ThreadPool threadPool_{};
 
@@ -105,16 +104,8 @@ private:
 	Timer* pTimer_ = nullptr;
 
 	std::shared_ptr<Player> player_{};
-	std::shared_ptr<Goblin> goblin_{};
 	std::vector< std::shared_ptr<Goblin> > goblins_{};
-	std::shared_ptr<Anubis> anubis_{};
-	std::shared_ptr<Bat> bat_{};
-	std::shared_ptr<Bomber> bomber_{};
-	std::shared_ptr<Demon> demon_{};
-	std::shared_ptr<Dragon> dragon_{};
-	std::shared_ptr<Eyeball> eyeball_{};
-	std::shared_ptr<Fishman> fishman_{};
-	std::shared_ptr<Gargoyle> gargoyle_{};
+	std::shared_ptr<Goblin> goblin_{};
 
 	SkyboxObject skybox_{};
 	std::shared_ptr<TerrainObject> terrain_{};
@@ -140,6 +131,7 @@ private:
 	UI::ProgressBar* playerHpBar_    = nullptr;  // owned by uiManager_
 	UI::Dropdown*    effectDropdown_ = nullptr;  // owned by uiManager_
 	SwordEffect      currentEffect_  = SwordEffect::SlashWave;
+	UI::Label*       hiZStatsLabel_ = nullptr;  // owned by uiManager_
 
 	ParticleSystem flameParticleSystem_{};
 	ParticleSystem smokeParticleSystem_{};
