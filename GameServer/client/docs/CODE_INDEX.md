@@ -81,6 +81,9 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `Constraint` (abstract) | `constraint.hpp #12` | prepare/solveVelocity/solvePosition 인터페이스 |
 | `ContactPoint` struct | `collision.hpp` | worldPos, normal(B→A), depth, acc 누적값 |
 | `ContactConstraint` class | `contactConstraint.hpp` | PGS Normal + Coulomb 마찰 impulse solver; setExternalAccels()로 외력 보상 |
+| `ContactConstraint::setExternalAccels()` | `contactConstraint.hpp` | 외력 가속도 설정 (prepare() 전 호출); Baumgarte bias에 외력 보상항 추가 |
+| `RigidBody::setUserData()` / `userData()` | `rigidBody.hpp` | void* 게임 레이어 연결 포인터 (Object* 역참조용) |
+| `PhysicsWorld::forEachContact()` | `physicsWorld.hpp` | step() 후 활성 ContactConstraint 순회 (템플릿) |
 | `BodyPair` struct | `broadPhase.hpp` | broad phase 결과 쌍 |
 | `BroadPhase` (abstract) | `broadPhase.hpp` | add/remove/update/queryPairs 인터페이스 |
 | `BruteForceBroadPhase` | `broadPhase.hpp` | O(n²) 참조 구현 (후보 비교용으로 보존) |

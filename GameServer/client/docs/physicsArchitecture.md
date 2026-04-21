@@ -59,8 +59,10 @@ integrate(dt)
 generateContacts()
     ├─ broadPhase_->update() + queryPairs()
     ├─ collides(bvhA, bvhB) → leaf-leaf 쌍에서만 정밀 판정
-    ├─ ContactConstraint 생성 (법선 = center-to-center 벡터, 신뢰성 우선)
+    ├─ ContactConstraint 생성 (법선 = narrow-phase 기하학적 normal res.normal; degenerate 시 center-to-center fallback)
+    │   └─ cc->setExternalAccels(gravA, gravB): Dynamic body = gravity_, Static = (0,0,0)
     └─ TerrainCollider::generateContacts() → Dynamic body별 지형 contact 생성
+        └─ cc->setExternalAccels(gravity_, {0,0,0})
 
 solveConstraints(dt)
     ├─ prepare(dt)  : rA/rB, tangent frame, effMass, Baumgarte bias 계산
@@ -136,6 +138,93 @@ body->applyTorqueImpulse(torque * dt)
 
 **목표 orientation 계산**: DFS로 `targetPose` AnimFrame에서 bone별 world orientation 계산
 (`boneWorldMat = convertAnimFrameToMatrix(pose[i]) * parentWorldMat`, row-vector 규약).
+
+---
+
+## 충돌 normal 개선 (OBB convention 수정)
+
+**배경:** `collision.cpp` `collides(OBB, OBB)` 에서 AABB는 B→A normal을 반환하나 OBB는
+A→B 방향을 반환하는 convention 불일치가 있었다. 때문에 `generateContacts()`에서
+`res.normal`을 신뢰할 수 없어 center-to-center fallback을 항상 사용했다.
+center-to-center는 한 오브젝트가 조금이라도 위에 있으면 +Y 성분이 생겨 충돌 해소가 위쪽으로 쏠리는 문제가 있었다.
+
+**수정 (`collision.cpp` line 102):**
+```cpp
+// B→A convention으로 통일 (dProj > 0 → B가 axis 방향으로 앞 → B→A = -axis)
+const float sign = (dProj >= 0.f) ? -1.f : 1.f;
+```
+
+**결과:** `res.normal`이 신뢰 가능해져 `generateContacts()`가 기하학적 normal을 직접 사용.
+두 오브젝트가 옆으로 접촉 시 normal이 수평 → 수평 해소.
+
+---
+
+## ContactConstraint 외력 보상 (External Force Compensation)
+
+**배경:** Baumgarte bias는 침투 깊이 보정 속도를 나타낸다. 중력처럼 body를 normal 반대 방향으로
+계속 끌어당기는 외력이 있으면 그 다음 스텝에서 bias가 극복해야 할 속도가 더 많아진다.
+보상 없이는 지형 위 오브젝트가 중력에 의해 조금씩 뚫고 내려가는 현상(creep)이 발생한다.
+
+**인터페이스:** `ContactConstraint::setExternalAccels(mu::Vec3 aA, mu::Vec3 aB)`
+→ `prepare()` 호출 전에 설정. body-body 쌍과 body-terrain 쌍 모두에서 호출.
+
+**prepare() bias 공식:**
+```
+penetration = max(0, depth - kSlop)
+extVelProj  = dot((extAccelA - extAccelB) * dt, n)
+extComp     = max(0, -extVelProj)
+bias = kBaumgarteBeta * invDt * penetration + extComp
+```
+
+**두 동적 오브젝트(같은 중력):** `extAccelA - extAccelB = 0` → `extComp = 0` (보상 없음, 올바름)
+**동적 vs 지형(static):** `extAccelA = gravity, extAccelB = 0` → `extComp = max(0, -dot(gravity*dt, n))` → 양수 → 중력 보상
+
+---
+
+## RigidBody::userData_ — 게임 레이어 연결
+
+`RigidBody`는 `void* userData_` 필드를 가진다. 게임 레이어(`Object*` 등)를 physics solver가
+역참조할 필요 없이 contact 순회 시 오브젝트를 찾기 위해 사용한다.
+
+- `setUserData(void*)` / `userData()` 접근자 제공
+- `PhysicsWorld::registerBody()` 호출 후 `body().setUserData(this)` 패턴
+- `forEachContact()` 내에서 `static_cast<Object*>(cc.bodyA->userData())` 로 역참조
+
+---
+
+## PhysicsWorld::forEachContact() — post-step contact 순회
+
+```cpp
+template<typename Fn>
+void forEachContact(Fn&& fn) const;
+```
+
+`step()` 직후 활성 `ContactConstraint` 목록을 순회한다. 주로 게임 레이어에서
+충돌 상태(충돌 여부, 대상 body)를 읽기 위해 사용한다.
+
+**BV 충돌 색상 시각화 패턴 (`standalone/game.cpp`):**
+```
+Pass 1: forEachContact → terrain 접촉 body → setBVColor(red)
+Pass 2: forEachContact → object-object 접촉 body → setBVColor(blue)  ← 우선순위 높음
+```
+두 패스를 나눔으로써 Terrain+Object-Object 동시 접촉 시 파란색이 우선 적용된다.
+
+---
+
+## BV 충돌 색상 시각화
+
+BV(Bounding Volume) 렌더링 시 충돌 상태에 따라 색상을 변경한다.
+
+| 상태 | 색상 |
+|------|------|
+| 기본 | 초록 (0, 1, 0, 1) |
+| Terrain 접촉 | 빨강 (1, 0, 0, 1) |
+| Object-Object 접촉 | 파랑 (0, 0, 1, 1) — Terrain보다 우선 |
+
+**구현:**
+- `Object::bvColor_` (mu::Vec4): 매 프레임 `setBVColor()`로 갱신, `addDrawEvent()`에서 DrawEvent.color에 전달
+- `BVPipeline::DrawEvent::color`: 기본 초록. `BVPipeline.cpp`의 `PerInstanceData` 생성 시 `drawEvent.color` 사용
+- `BVShader::PerInstanceData::color`: StructuredBuffer를 통해 셰이더로 전달 (기존부터 지원)
 
 ---
 

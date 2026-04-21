@@ -14,6 +14,7 @@
 #include "../event.hpp"
 #include "../ui/UIManager.hpp"
 #include "../ui/widgets/ProgressBar.hpp"
+#include "../ui/widgets/Label.hpp"
 #include "../spriteAnimation.hpp"
 #include "../crosshair.hpp"
 
@@ -80,6 +81,7 @@ private:
 	void processInputGame(Milliseconds deltaTime);
 
 	void cullObjects();
+	void applyHiZCulling();
 
 	// 커서가 클라이언트 영역 바깥으로 나가지 못하도록 한다.
 	// 한번 설정해놓으면, releaseCursor를 호출하기 전까지 커서는 계속 클라이언트 영역에 갇혀있는다.
@@ -157,6 +159,8 @@ private:
 	};
 	std::unordered_map<uint16, GoblinHpEntry> goblinHpBars_{};
 
+	UI::Label*       hiZStatsLabel_ = nullptr;  // owned by uiManager_
+
 	LONG mouseDeltaX_{};
 	LONG mouseDeltaY_{};
 	bool cursorCaptureEnabled_ = false;
@@ -169,6 +173,8 @@ private:
 
 	mu::Vec3 prevVelocity_{};
 	mu::Vec3 currVelocity_{};
+
+	u32t nextRenderObjId_ = 0u;
 };
 
 }	// namespace Online

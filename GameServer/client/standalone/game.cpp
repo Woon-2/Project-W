@@ -127,12 +127,12 @@ void Game::setupStage() {
 	pLabel->pivot   = UI::Pivots::Center;	 // 내 박스의 어느 점에 못을 걸지	
 	pLabel->width   = UI::DimValue::px(1000.0f);
 	pLabel->height  = UI::DimValue::px(500.0f);
-	pLabel->offsetX = UI::DimValue::px( -340.f );
-	pLabel->offsetY = UI::DimValue::px( -220.f );
+	pLabel->offsetX = UI::DimValue::px( -225.f );
+	pLabel->offsetY = UI::DimValue::px( -250.f );
 	pLabel->setTextHAlign(UI::TextHAlign::Center);
 	pLabel->setTextVAlign(UI::TextVAlign::Center);
-	pLabel->setText(L"U: UI영역 표시\nEnter: 마우스 포인터 캡처\nSpace: 마우스 포인터 감추기\nWASD: 이동\nC: Cascade Debug View\nH: Hi-Z Cull ON/OFF\n좌클릭: 공격 ");
-	pLabel->setFontSize(24.0f);
+	pLabel->setText(L"U: UI영역 표시\nEnter: 마우스 포인터 캡처\nSpace: 마우스 포인터 감추기\nWASD: 이동\nG: GBuffer 버퍼내용 순환(0=None, 1=Albedo, ..., 7=Depth)\nH: Hi-Z Cull ON/OFF\n좌클릭: 공격 ");
+	pLabel->setFontSize(20.0f);
 	//pLabel->setAutoSize( true );
 	pLabel->setTextColor( 1.0f, 1.0f, 1.0f, 1.0f );
 
@@ -650,12 +650,12 @@ void Game::importNode(std::ifstream& ifs) {
 			[p = goblin_.get()]() { p->rebuildBodyBVH(); });
 		goblin_->body().setUserData(goblin_.get());
 
-		auto urd = std::uniform_real_distribution<float>(-160.f, 160.f);
+		auto urd = std::uniform_real_distribution<float>(-30.f, 30.f);
 
-		for (std::size_t i = 0; i < 100u; ++i) {
+		for (std::size_t i = 0; i < 120u; ++i) {
 			auto& g = goblins_.emplace_back( std::make_shared<Goblin>() );
 			g->setPos( mu::Vec3( DirectX::XMLoadFloat3(&worldT) )
-				+ mu::Vec3( urd(gRandomEngine), urd(gRandomEngine) + 320.f, urd(gRandomEngine) )
+				+ mu::Vec3( urd(gRandomEngine), urd(gRandomEngine) + 80.f, urd(gRandomEngine) )
 			);
 			g->setOrient(DirectX::XMLoadFloat4(&worldR));
 			g->setScale(DirectX::XMLoadFloat3(&worldS));

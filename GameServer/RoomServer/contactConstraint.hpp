@@ -23,6 +23,10 @@ public:
 
     void prepare(Seconds dt) override;
     void solveVelocity() override;
+    // Set per-body external accelerations (gravity, buoyancy, etc.) that the
+    // constraint solver should compensate for.  Call before prepare().
+    void setExternalAccels(mu::Vec3 aA, mu::Vec3 aB);
+
     void solvePosition() override {}
 
 private:
@@ -38,6 +42,9 @@ private:
 
     static constexpr float kBaumgarteBeta = 0.2f;
     static constexpr float kSlop          = 0.005f;
+
+    mu::Vec3 externalAccelA_{ 0.f, 0.f, 0.f };
+    mu::Vec3 externalAccelB_{ 0.f, 0.f, 0.f };
 };
 
 #endif // room_server_contactConstraint_hpp
