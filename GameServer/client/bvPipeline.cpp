@@ -145,10 +145,10 @@ void Dispatcher::updateGPUDataSingleThreaded() {
 	std::ranges::transform(drawEvents_, perInstanceData.begin(),
 		[viewProj](const BVPipeline::DrawEvent& drawEvent) {
 			return BVShader::PerInstanceData{
-				.wvp = mu::transpose(drawEvent.world * viewProj).getXmf(),
-				.color = mu::Vec4(1.f, 0.f, 0.f, 1.f).getXmf()
+				.wvp   = mu::transpose(drawEvent.world * viewProj).getXmf(),
+				.color = drawEvent.color.getXmf()
 			};
-		}	
+		}
 	);
 
 	// perInstanceData의 내용을 바탕으로 GPU 데이터를 갱신한다.
@@ -495,10 +495,10 @@ void MU_CALLCONV Dispatcher::addJobUpdate( mu::Mat4x4 viewProj,
 		std::transform( pFirst, pLast, pOut,
 			[viewProj](const BVPipeline::DrawEvent& drawEvent) {
 				return BVShader::PerInstanceData{
-					.wvp = mu::transpose(drawEvent.world * viewProj).getXmf(),
-					.color = mu::Vec4(1.f, 0.f, 0.f, 1.f).getXmf()
+					.wvp   = mu::transpose(drawEvent.world * viewProj).getXmf(),
+					.color = drawEvent.color.getXmf()
 				};
-			}	
+			}
 		);
 
 		latch.count_down();

@@ -99,7 +99,7 @@ CollisionResult collides(const OBB& a, const OBB& b) {
 
         if (overlap < minOverlap) {
             minOverlap = overlap;
-            const float sign = (dProj >= 0.f) ? 1.f : -1.f;
+            const float sign = (dProj >= 0.f) ? -1.f : 1.f; // B→A convention
             bestAxis = axis * sign;
         }
     }
@@ -215,25 +215,27 @@ CollisionResult collides(const BVH& a, const BVH& b) {
         const bool aLeaf = na.isLeaf();
         const bool bLeaf = nb.isLeaf();
 
-        if (!aLeaf && !bLeaf) {
+        if (aLeaf && bLeaf) {
+            // Both leaf: precise shape test is definitive.
+            const auto result = collidesShapes(na.shape, nb.shape);
+            if (result.hit) return result;
+        } else if (!aLeaf && !bLeaf) {
+            // Descend into the subtree with the larger volume.
             const float volA = na.bounds.size.x() * na.bounds.size.y() * na.bounds.size.z();
             const float volB = nb.bounds.size.x() * nb.bounds.size.y() * nb.bounds.size.z();
             if (volA >= volB) {
-                for (int ca : na.children) stack.push_back({ca, bi});
+                for (int ca : na.children) stack.push_back({ ca, bi });
+            } else {
+                for (int cb : nb.children) stack.push_back({ ai, cb });
             }
-            else {
-                for (int cb : nb.children) stack.push_back({ai, cb});
-            }
-        }
-        else if (!aLeaf) {
-            for (int ca : na.children) stack.push_back({ca, bi});
-        }
-        else if (!bLeaf) {
-            for (int cb : nb.children) stack.push_back({ai, cb});
+        } else if (!aLeaf) {
+            for (int ca : na.children) stack.push_back({ ca, bi });
+        } else {
+            for (int cb : nb.children) stack.push_back({ ai, cb });
         }
     }
 
-    return CollisionResult{.hit = false};
+    return CollisionResult{ .hit = false };
 }
 
 AABB buildAttackAABB(mu::Vec3 pos, mu::Vec3 forward, mu::Vec3 halfExtent, float offsetFwd) {

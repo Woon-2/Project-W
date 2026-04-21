@@ -69,6 +69,14 @@ public:
     // Set the number of PGS velocity iterations per step (default: 10).
     void setSolverIterations(int n) { solverIterations_ = n; }
 
+    // Iterate over all active contact constraints for the current step.
+    // fn receives a const ContactConstraint& — call after step(), before the next step().
+    template<typename Fn>
+    void forEachContact(Fn&& fn) const {
+        for (const auto& c : contactConstraints_)
+            fn(*c);
+    }
+
     // Render-interpolation helpers. t=0 -> prev state, t=1 -> curr state.
     static mu::Vec3  MU_CALLCONV interpolatePos(const RigidBody& b, float t);
     static mu::NQuat MU_CALLCONV interpolateOrient(const RigidBody& b, float t);

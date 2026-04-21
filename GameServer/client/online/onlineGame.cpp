@@ -22,12 +22,12 @@ static constexpr float kPlayerMaxSpeed      = 10.f;
 static constexpr float kPlayerLinearDamping = 12.f;
 static constexpr float kPlayerAccelRate     = kPlayerMaxSpeed * kPlayerLinearDamping;
 
-static constexpr int     kRenderSkipLagFrames = 3;
+static constexpr int     kRenderSkipLagFrames = 4;
 static constexpr int     kMaxPhysicsStepsPerFrame = 3;
 static constexpr Seconds kMaxPhysicsDeltaTime{ 1.f / 60.f * kMaxPhysicsStepsPerFrame };
 static constexpr int     kMaxPhysicsScaleK    = 4;
-static constexpr int     kLagScaleUpFrames    = 3;
-static constexpr int     kLagScaleDownFrames  = 80;
+static constexpr int     kLagScaleUpFrames    = 2;
+static constexpr int     kLagScaleDownFrames  = 100;
 
 Game::Game() {
 	// 스레드 풀 초기화
@@ -79,6 +79,22 @@ void Game::setupStage() {
 		static_cast<float>(gClientRect.bottom - gClientRect.top)
 	);
 	uiManager_.requestDebugResources(gfx_);
+	auto* pLabel = static_cast<UI::Label*>(
+		uiManager_.root()->addChild(std::make_unique<UI::Label>())
+	);
+	pLabel->name    = "hpLabel";
+	pLabel->anchor  = UI::Anchors::Center; // 부모의 어느 점에 붙을 지
+	pLabel->pivot   = UI::Pivots::Center;	 // 내 박스의 어느 점에 못을 걸지	
+	pLabel->width   = UI::DimValue::px(1000.0f);
+	pLabel->height  = UI::DimValue::px(500.0f);
+	pLabel->offsetX = UI::DimValue::px( -225.f );
+	pLabel->offsetY = UI::DimValue::px( -250.f );
+	pLabel->setTextHAlign(UI::TextHAlign::Center);
+	pLabel->setTextVAlign(UI::TextVAlign::Center);
+	pLabel->setText(L"U: UI영역 표시\nEnter: 마우스 포인터 캡처\nSpace: 마우스 포인터 감추기\nWASD: 이동\nG: GBuffer 버퍼내용 순환(0=None, 1=Albedo, ..., 7=Depth)\nH: Hi-Z Cull ON/OFF\n좌클릭: 공격 ");
+	pLabel->setFontSize(20.0f);
+	//pLabel->setAutoSize( true );
+	pLabel->setTextColor( 1.0f, 1.0f, 1.0f, 1.0f );
 
 	playerHpBar_ = static_cast<UI::ProgressBar*>(
 		uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
@@ -107,6 +123,25 @@ void Game::setupStage() {
 	effectDropdown_->onSelectionChanged = [this](int idx) {
 		currentEffect_ = static_cast<SwordEffect>(idx);
 	};
+	hiZStatsLabel_ = static_cast<UI::Label*>(
+		uiManager_.root()->addChild(std::make_unique<UI::Label>())
+	);
+	hiZStatsLabel_->name    = "hiZStatsLabel";
+	hiZStatsLabel_->anchor  = UI::Anchors::TopRight;
+	hiZStatsLabel_->pivot   = UI::Pivots::TopRight;
+	hiZStatsLabel_->width   = UI::DimValue::px(300.0f);
+	hiZStatsLabel_->height  = UI::DimValue::px(60.0f);
+	hiZStatsLabel_->offsetX = UI::DimValue::px(-40.f);
+	hiZStatsLabel_->offsetY = UI::DimValue::px(50.f);
+	hiZStatsLabel_->setTextHAlign(UI::TextHAlign::Trailing);
+	hiZStatsLabel_->setTextVAlign(UI::TextVAlign::Top);
+	hiZStatsLabel_->setFontSize(18.0f);
+	hiZStatsLabel_->setTextColor(0.2f, 1.0f, 0.2f, 1.0f);
+	hiZStatsLabel_->setText(L"HiZ: OFF");
+
+	// 1000개 이상의 render object가 필요하다면 여기를 수정
+	// hi-z culling 대상 개수
+	gfx_.setMaxRenderObjectId(1000u);
 }
 
 void Game::importNode(std::ifstream& ifs) {
@@ -158,6 +193,9 @@ void Game::importTerrain(std::ifstream& ifs, TerrainObject& terrain) {
 
 	// 지형 물리 바디 설정: Static body (위치는 importNode WorldTRS에서 설정됨)
 	terrain.body().setMotionType(MotionType::Static);
+
+	// Hi-Z Occlusion Occluder 설정
+	terrain.activateOcclusion(true);
 
 	// TerrainCollider 등록 (BVH 불필요 — heightField 직접 조회)
 	const TerrainData* td = assetManager_.terrain();
@@ -565,6 +603,8 @@ void Game::createOtherPlayer(const ObjectInfo& otherPlayerInfo) {
 		otherPlayerHpBars_[otherPlayerInfo.objectId] = { otherPlayer.get(), bar };
 	}
 
+	otherPlayer->setRenderObjectId(nextRenderObjId_++);
+
 	otherPlayers_.push_back(otherPlayer);
 	idPlayerMap_[otherPlayerInfo.objectId] = otherPlayer;
 }
@@ -592,8 +632,8 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 
 	// 서버 주도 객체: 패킷으로 pos/vel이 설정되면 PhysicsWorld가 Kinematic 적분으로
 	// 패킷 간격 사이를 dead-reckoning 보간한다.
-	physicsWorld_.registerBody(&otherPlayer->body(),
-		[p = otherPlayer.get()]() { p->rebuildBodyBVH(); });
+	// physicsWorld_.registerBody(&otherPlayer->body(),
+		// [p = otherPlayer.get()]() { p->rebuildBodyBVH(); });
 
 	{
 		auto* bar = static_cast<UI::ProgressBar*>(
@@ -608,6 +648,8 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 		bar->visible   = false;
 		otherPlayerHpBars_[otherPlayerInfo.playerId] = { otherPlayer.get(), bar };
 	}
+
+	otherPlayer->setRenderObjectId(nextRenderObjId_++);
 
 	otherPlayers_.push_back(otherPlayer);
 	idPlayerMap_[otherPlayerInfo.playerId] = otherPlayer;
@@ -632,8 +674,8 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 	goblin->body().setLinearDamping(0.f);
 	goblin->body().setAngularDamping(100.f);
 
-	physicsWorld_.registerBody(&goblin->body(),
-		[p = goblin.get()]() { p->rebuildBodyBVH(); });
+	// physicsWorld_.registerBody(&goblin->body(),
+		// [p = goblin.get()]() { p->rebuildBodyBVH(); });
 
 	{
 		auto* bar = static_cast<UI::ProgressBar*>(
@@ -648,6 +690,8 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 		bar->visible   = false;
 		goblinHpBars_[goblinInfo.objectId] = { goblin.get(), bar, 2.5f };
 	}
+
+	goblin->setRenderObjectId(nextRenderObjId_++);
 
 	goblins_.push_back(goblin);
 	idGoblinMap_[goblinInfo.objectId] = goblin;
@@ -869,6 +913,13 @@ void Game::update(Milliseconds deltaTime) {
 	}
 	skipNextRender_ = (consecutiveLagFrames_ >= kRenderSkipLagFrames);
 
+	for (auto& p : otherPlayers_) {
+		p->rebuildBodyBVH();
+	}
+	for (auto& g : goblins_) {
+		g->rebuildBodyBVH();
+	}
+
 	//std::cout << "player pos : " << player_->pos().x() << ", " << player_->pos().y() << ", " << player_->pos().z() << '\n';
 	if (moveStateSendAcc_ >= moveStateSendInterval_) {
 		moveStateSendAcc_ = 0s;
@@ -918,7 +969,7 @@ void Game::update(Milliseconds deltaTime) {
 	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), assetConfigs_.cascade, assetConfigs_.shadowMap);
 
 	// 애니메이션 업데이트
-	animSystem_.update(0.016s);
+	animSystem_.update(0.01s);
 
 	// HP 바 위치 및 값 갱신
 	{
@@ -976,6 +1027,17 @@ void Game::update(Milliseconds deltaTime) {
 					static_cast<float>(entry.goblin->hp()) /
 					static_cast<float>(entry.goblin->maxHp())
 				);
+			}
+		}
+
+		if (hiZStatsLabel_) {
+			if (gfx_.isHiZCullEnabled()) {
+				const auto stats = gfx_.getHiZStats();
+				wchar_t buf[64];
+				swprintf_s(buf, 64, L"HiZ: ON  Visible %u / %u", stats.visible, stats.total);
+				hiZStatsLabel_->setText(buf);
+			} else {
+				hiZStatsLabel_->setText(L"HiZ: OFF");
 			}
 		}
 
@@ -1119,6 +1181,7 @@ void Game::render() {
 	gfx_.addFrameData(frameDataUI);
 
 	gfx_.render();
+	applyHiZCulling();
 }
 
 // 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
@@ -1318,6 +1381,21 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		cameraMode_ = CameraMode::ThirdPerson;
 	}
 
+	// C key: toggle CSM cascade debug visualization
+	if ( (keyboardStateCurr_['C'] & 0x80) && !(keyboardStatePrev_['C'] & 0x80) ) {
+		gfx_.toggleCsmDebugVisualization();
+	}
+
+	// H key: toggle Hi-Z occlusion culling
+	if ( (keyboardStateCurr_['H'] & 0x80) && !(keyboardStatePrev_['H'] & 0x80) ) {
+		gfx_.setHiZCullEnabled(!gfx_.isHiZCullEnabled());
+	}
+
+	// G key: cycle GBuffer debug view (deferred path only)
+	if ( (keyboardStateCurr_['G'] & 0x80) && !(keyboardStatePrev_['G'] & 0x80) ) {
+		gfx_.cycleGBufferDebugMode();
+	}
+
 	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때
 	// 각각의 플레이어 yaw, 카메라 pitch를 계산한다.
 	// (pitch를 플레이어에 적용하게 되면, 플레이어가 고개를 들고 내리는 게 아니라 굴러버린다.)
@@ -1471,10 +1549,34 @@ void Game::cullObjects() {
 				break;
 			}
 		}
-
-		if (auto* blender = entt->animBlender())
-			blender->setCulled(entt->isFrustumCulled());
 	}
+}
+
+void Game::applyHiZCulling() {
+	if (!gfx_.isHiZCullEnabled()) {
+		for (auto& p : otherPlayers_) {
+			p->setHiZCulled(false);
+			if (auto* blender = p->animBlender())
+				blender->setCulled(p->isFrustumCulled());
+		}
+		for (auto& g : goblins_) {
+			g->setHiZCulled(false);
+			if (auto* blender = g->animBlender())
+				blender->setCulled(g->isFrustumCulled());
+		}
+		return;
+	}
+
+	auto applyToEntity = [&](const std::shared_ptr<Object>& entt) {
+		const bool hiZVisible = gfx_.getHiZObjectVisible(entt->renderObjectId());
+		entt->setHiZCulled(!hiZVisible);
+		if (auto* blender = entt->animBlender())
+			blender->setCulled(entt->isFrustumCulled() || !hiZVisible);
+	};
+	for (auto& g : goblins_)
+		applyToEntity(g);
+	for (auto& p : otherPlayers_)
+		applyToEntity(p);
 }
 
 // 커서가 클라이언트 영역 바깥으로 나가지 못하도록 한다.

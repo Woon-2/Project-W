@@ -25,7 +25,8 @@ struct CameraData {
 
 struct DrawEvent {
 	mu::Mat4x4 world;
-	BVModel bvModel;
+	BVModel    bvModel;
+	mu::Vec4   color{ 0.f, 1.f, 0.f, 1.f };  // default: green
 
 	auto operator<=>(const DrawEvent& rhs) const noexcept {
 		return etoi(bvModel) <=> etoi(rhs.bvModel);

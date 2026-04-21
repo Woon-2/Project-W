@@ -5,6 +5,12 @@ ContactConstraint::ContactConstraint(RigidBody* a, RigidBody* b)
     : bodyA(a), bodyB(b)
 {}
 
+void ContactConstraint::setExternalAccels(mu::Vec3 aA, mu::Vec3 aB)
+{
+    externalAccelA_ = aA;
+    externalAccelB_ = aB;
+}
+
 void ContactConstraint::addContact(const ContactPoint& cp)
 {
     if (count < 4)
@@ -70,9 +76,13 @@ void ContactConstraint::prepare(Seconds dt)
             c.effMassTangent[t] = 1.f / (bodyA->invMass() + bodyB->invMass() + angA_t + angB_t);
         }
 
-        // Baumgarte stabilization bias: pushes overlapping bodies apart each step.
+        // Baumgarte stabilization bias with external-force compensation.
+        // extVelProj: velocity the external force difference adds along the normal per step.
+        // If negative (forces push bodies together), compensate so the constraint overcomes it.
         const float penetration = std::max(0.f, cp.depth - kSlop);
-        c.bias = kBaumgarteBeta * invDt * penetration;
+        const float extVelProj  = mu::dot((externalAccelA_ - externalAccelB_) * dtf, n);
+        const float extComp     = std::max(0.f, -extVelProj);
+        c.bias = kBaumgarteBeta * invDt * penetration + extComp;
     }
 }
 

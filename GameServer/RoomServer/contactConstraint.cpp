@@ -5,15 +5,25 @@ ContactConstraint::ContactConstraint(RigidBody* a, RigidBody* b)
     : bodyA(a), bodyB(b)
 {}
 
+void ContactConstraint::setExternalAccels(mu::Vec3 aA, mu::Vec3 aB)
+{
+    externalAccelA_ = aA;
+    externalAccelB_ = aB;
+}
+
 void ContactConstraint::addContact(const ContactPoint& cp)
 {
     if (count < 4)
         contacts[count++] = cp;
 }
 
+// Build a tangent frame perpendicular to n.
+// Returns two orthonormal vectors tangent[0] and tangent[1] that span the
+// contact plane (both perpendicular to n and to each other).
 static void buildTangentFrame(mu::NVec3 normal, mu::Vec3 outTangent[2])
 {
     const mu::Vec3 n = normal;
+    // Choose a reference vector that is not parallel to n.
     mu::Vec3 ref = (std::abs(n.x()) < 0.57735f)
                    ? mu::Vec3(1.f, 0.f, 0.f)
                    : mu::Vec3(0.f, 1.f, 0.f);
@@ -22,6 +32,8 @@ static void buildTangentFrame(mu::NVec3 normal, mu::Vec3 outTangent[2])
     outTangent[1] = mu::Vec3(mu::normalize(mu::cross(n, outTangent[0])));
 }
 
+// Compute the angular contribution to effective mass along direction d at radius r.
+// Returns dot(r x d, (r x d) * invInertiaWorld).
 static float angularEffectiveMass(mu::Vec3 r, mu::Vec3 d,
                                    const mu::Mat3x3& invI)
 {
@@ -45,12 +57,16 @@ void ContactConstraint::prepare(Seconds dt)
 
         const mu::Vec3 n = cp.normal;
 
+        // Normal effective mass: 1 / (sum of inverse mass contributions).
+        // Static bodies (invMass == 0) have infinite inertia, so their
+        // angular contribution is excluded to avoid distorting effMass.
         const float angA_n = (bodyA->invMass() > 0.f)
             ? angularEffectiveMass(c.rA, n, bodyA->invInertiaWorld()) : 0.f;
         const float angB_n = (bodyB->invMass() > 0.f)
             ? angularEffectiveMass(c.rB, n, bodyB->invInertiaWorld()) : 0.f;
         c.effMassNormal = 1.f / (bodyA->invMass() + bodyB->invMass() + angA_n + angB_n);
 
+        // Tangent effective masses.
         for (int t = 0; t < 2; ++t) {
             const mu::Vec3 tv = c.tangent[t];
             const float angA_t = (bodyA->invMass() > 0.f)
@@ -60,19 +76,30 @@ void ContactConstraint::prepare(Seconds dt)
             c.effMassTangent[t] = 1.f / (bodyA->invMass() + bodyB->invMass() + angA_t + angB_t);
         }
 
+        // Baumgarte stabilization bias with external-force compensation.
+        // extVelProj: velocity the external force difference adds along the normal per step.
+        // If negative (forces push bodies together), compensate so the constraint overcomes it.
         const float penetration = std::max(0.f, cp.depth - kSlop);
-        c.bias = kBaumgarteBeta * invDt * penetration;
+        const float extVelProj  = mu::dot((externalAccelA_ - externalAccelB_) * dtf, n);
+        const float extComp     = std::max(0.f, -extVelProj);
+        c.bias = kBaumgarteBeta * invDt * penetration + extComp;
     }
 }
 
+// Apply an impulse j*dir to bodyA (+=) and -j*dir to bodyB (-=) at their
+// respective contact radii, modifying both linear and angular velocity.
 static void applyImpulsePair(RigidBody* a, RigidBody* b,
                               float j, mu::Vec3 dir,
                               mu::Vec3 rA, mu::Vec3 rB)
 {
     const mu::Vec3 jDir = dir * j;
 
+    // Guard on invMass: Static bodies (invMass==0) must not be moved.
+    // Without this guard, a Static body's omega gets set via the identity
+    // invInertiaWorld, corrupting subsequent relVel calculations in PGS.
     if (a->invMass() > 0.f) {
         a->setLinearVel(a->linearVel() + jDir * a->invMass());
+        // In row-vector form: delta_omega = (r x J) * invInertiaWorld
         a->setOmega(a->omega() + mu::cross(rA, jDir) * a->invInertiaWorld());
     }
     if (b->invMass() > 0.f) {
@@ -93,12 +120,13 @@ void ContactConstraint::solveVelocity()
         const mu::Vec3 rA = c.rA;
         const mu::Vec3 rB = c.rB;
 
+        // Relative velocity at contact point (A w.r.t. B).
         auto relVel = [&]() -> mu::Vec3 {
             return (bodyA->linearVel() + mu::cross(bodyA->omega(), rA))
                  - (bodyB->linearVel() + mu::cross(bodyB->omega(), rB));
         };
 
-        // Normal impulse
+        // --- Normal impulse ---
         {
             const float Jv   = mu::dot(relVel(), n);
             float       jn   = -(Jv - c.bias) * c.effMassNormal;
@@ -109,7 +137,7 @@ void ContactConstraint::solveVelocity()
             applyImpulsePair(bodyA, bodyB, jn, n, rA, rB);
         }
 
-        // Friction impulses
+        // --- Friction impulses (two tangent directions) ---
         const float maxFriction = friction * std::abs(cp.accNormal);
         for (int t = 0; t < 2; ++t) {
             const mu::Vec3 tv = c.tangent[t];
