@@ -596,16 +596,16 @@ void GFX::createSwapChain() {
 		device_.Get(), sizeof(HiZCompactShader::PerGroupData) * 1000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_PerGroupData"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.hiZPass.perInstanceDataCompact.init(
-		device_.Get(), sizeof(HiZCompactShader::PerInstanceData) * 100'000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_PerInstanceDataCompact"
+		device_.Get(), sizeof(HiZCompactShader::PerInstanceData) * 200'000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_PerInstanceDataCompact"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.hiZPass.perInstanceDataCull.init(
-		device_.Get(), sizeof(HiZCullShader::PerInstanceData) * 100'000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_PerInstanceDataCull"
+		device_.Get(), sizeof(HiZCullShader::PerInstanceData) * 200'000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_PerInstanceDataCull"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.hiZPass.visibleFlags.init(
-		device_.Get(), sizeof(u32t) * 100'000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_VisibleFlags"
+		device_.Get(), sizeof(u32t) * 200'000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_VisibleFlags"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.hiZPass.visibleIndices.init(
-		device_.Get(), sizeof(u32t) * 100'000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_VisibleIndices"
+		device_.Get(), sizeof(u32t) * 200'000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_VisibleIndices"
 	);
 	{
 		static constexpr u32t kMaxGroups = 1000u;
@@ -658,10 +658,10 @@ void GFX::createSwapChain() {
 		), false);
 	}
 	resourcesPBRDeferredSkinnedPipeline_.shadowPass.perInstanceData.init(
-		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::PerInstanceData) * 10'000u, backBuffers_.size(), "PBRDeferredSkinned_Shadow_PerInstanceData"
+		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::PerInstanceData) * 12'000u, backBuffers_.size(), "PBRDeferredSkinned_Shadow_PerInstanceData"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.shadowPass.boneData.init(
-		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::BoneData) * 800'000u, backBuffers_.size(), "PBRDeferredSkinned_Shadow_BoneData"
+		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::BoneData) * 1'000'000u, backBuffers_.size(), "PBRDeferredSkinned_Shadow_BoneData"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.shadowPass.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBRDeferredSkinned_Shadow_PerDrawcallData"
@@ -670,13 +670,13 @@ void GFX::createSwapChain() {
 		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::PerFrameData), MAX_CSM_CASCADES, backBuffers_.size(), "PBRDeferredSkinned_Shadow_PerFrameData"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.gBufferPass.perInstanceData.init(
-		device_.Get(), sizeof(PBRDeferredSkinnedGBufferShader::PerInstanceData) * 10'000u, backBuffers_.size(), "PBRDeferredSkinned_GBuffer_PerInstanceData"
+		device_.Get(), sizeof(PBRDeferredSkinnedGBufferShader::PerInstanceData) * 12'000u, backBuffers_.size(), "PBRDeferredSkinned_GBuffer_PerInstanceData"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.gBufferPass.lightData.init(
 		device_.Get(), sizeof(PBRDeferredSkinnedGBufferShader::Light) * 32u, backBuffers_.size(), "PBRDeferredSkinned_GBuffer_LightData"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.gBufferPass.boneData.init(
-		device_.Get(), sizeof(PBRDeferredSkinnedGBufferShader::BoneData) * 800'000u, backBuffers_.size(), "PBRDeferredSkinned_GBuffer_BoneData"
+		device_.Get(), sizeof(PBRDeferredSkinnedGBufferShader::BoneData) * 1'000'000u, backBuffers_.size(), "PBRDeferredSkinned_GBuffer_BoneData"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.gBufferPass.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(PBRDeferredSkinnedGBufferShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBRDeferredSkinned_GBuffer_PerDrawcallData"
