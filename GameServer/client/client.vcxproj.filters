@@ -318,11 +318,11 @@
     <ClCompile Include="simpleJson.cpp">
       <Filter>독립 구현체\소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="particleEffect.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
     <ClCompile Include="twoSidesPipeline.cpp">
-      <Filter>소스 파일</Filter>
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="particleEffect.cpp">
+      <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -623,11 +623,11 @@
     <ClInclude Include="simpleJson.hpp">
       <Filter>독립 구현체\헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="particleEffect.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
     <ClInclude Include="twoSidesPipeline.hpp">
-      <Filter>헤더 파일</Filter>
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="particleEffect.hpp">
+      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
