@@ -2184,9 +2184,9 @@ ComPtr<ID3D12PipelineState> createMeshParticleShader( ID3D12Device* device, ID3D
 ComPtr<ID3D12PipelineState> createSmokeBlendCGShader( ID3D12Device* device, ID3D12RootSignature* rootSig ) {
 	ComPtr<ID3D12PipelineState> ret{};
 
-	auto vsCode = compileShader( "smokeBlendCG.hlsl", nullptr, "VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
-	auto psCode = compileShader( "smokeBlendCG.hlsl", nullptr, "PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
-	auto gsCode = compileShader( "smokeBlendCG.hlsl", nullptr, "GSMain", "gs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
+	auto vsCode = compileShader( "smokeBlendCG.hlsl", nullptr, "VSMain", "vs_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
+	auto psCode = compileShader( "smokeBlendCG.hlsl", nullptr, "PSMain", "ps_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
+	auto gsCode = compileShader( "smokeBlendCG.hlsl", nullptr, "GSMain", "gs_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
 
 	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
 		D3D12_INPUT_ELEMENT_DESC{
@@ -2278,8 +2278,8 @@ ComPtr<ID3D12PipelineState> createSmokeBlendCGShader( ID3D12Device* device, ID3D
 ComPtr<ID3D12PipelineState> createBlendCGMeshShader( ID3D12Device* device, ID3D12RootSignature* rootSig ) {
 	ComPtr<ID3D12PipelineState> ret{};
 
-	auto vsCode = compileShader( "blendCGMesh.hlsl", nullptr, "VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
-	auto psCode = compileShader( "blendCGMesh.hlsl", nullptr, "PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
+	auto vsCode = compileShader( "blendCGMesh.hlsl", nullptr, "VSMain", "vs_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
+	auto psCode = compileShader( "blendCGMesh.hlsl", nullptr, "PSMain", "ps_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
 
 	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
 		D3D12_INPUT_ELEMENT_DESC{
@@ -2379,8 +2379,8 @@ ComPtr<ID3D12PipelineState> createBlendCGMeshShader( ID3D12Device* device, ID3D1
 ComPtr<ID3D12PipelineState> createSwordSlashShader( ID3D12Device* device, ID3D12RootSignature* rootSig ) {
 	ComPtr<ID3D12PipelineState> ret{};
 
-	auto vsCode = compileShader( "swordSlash.hlsl", nullptr, "VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
-	auto psCode = compileShader( "swordSlash.hlsl", nullptr, "PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
+	auto vsCode = compileShader( "swordSlash.hlsl", nullptr, "VSMain", "vs_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
+	auto psCode = compileShader( "swordSlash.hlsl", nullptr, "PSMain", "ps_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
 
 	// Input layout: Slot0=POSITION(float3), Slot1=UV(float2), Slot2=COLOR(float4)
 	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
@@ -2482,8 +2482,8 @@ ComPtr<ID3D12PipelineState> createSwordSlashShader( ID3D12Device* device, ID3D12
 ComPtr<ID3D12PipelineState> createTwoSidesShader( ID3D12Device* device, ID3D12RootSignature* rootSig ) {
 	ComPtr<ID3D12PipelineState> ret{};
 
-	auto vsCode = compileShader( "twoSides.hlsl", nullptr, "VSMain", "vs_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
-	auto psCode = compileShader( "twoSides.hlsl", nullptr, "PSMain", "ps_5_1", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
+	auto vsCode = compileShader( "twoSides.hlsl", nullptr, "VSMain", "vs_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
+	auto psCode = compileShader( "twoSides.hlsl", nullptr, "PSMain", "ps_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
 
 	// Input layout: Slot0=POSITION(float3), Slot1=NORMAL(float3), Slot2=UV(float2), Slot3=COLOR(float4)
 	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{

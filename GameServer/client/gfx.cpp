@@ -486,10 +486,10 @@ void GFX::createSwapChain() {
 	);
 	// Bounding Volume Pipeline ----
 	resourcesBVPipeline_.perInstanceData.init(
-		device_.Get(), sizeof(BVShader::PerInstanceData) * 1000u, backBuffers_.size(), "BV_PerInstanceData"
+		device_.Get(), sizeof(BVShader::PerInstanceData) * 5'000u, backBuffers_.size(), "BV_PerInstanceData"
 	);
 	resourcesBVPipeline_.perDrawcallData = createConstantBufferArray(
-		device_.Get(), sizeof(BVShader::PerDrawcallData), 1000u, backBuffers_.size(), "BV_PerDrawcallData"
+		device_.Get(), sizeof(BVShader::PerDrawcallData), 5'000u, backBuffers_.size(), "BV_PerDrawcallData"
 	);
 	// Billboard Pipeline ----
 	resourcesBillboardPipeline_.perInstanceData.init(
@@ -553,7 +553,7 @@ void GFX::createSwapChain() {
 	);
 	// UI Pipeline ----
 	resourcesUIPipeline_.perInstanceData.init(
-		device_.Get(), sizeof( UIShader::PerInstanceData ) * 1000u, backBuffers_.size(), "UI_PerInstanceData"
+		device_.Get(), sizeof( UIShader::PerInstanceData ) * 1'000u, backBuffers_.size(), "UI_PerInstanceData"
 	);
 	resourcesUIPipeline_.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof( UIShader::PerDrawcallData ), 1000u, backBuffers_.size(), "UI_PerDrawcallData"
@@ -681,7 +681,7 @@ void GFX::createSwapChain() {
 		), false);
 	}
 	{
-		static constexpr u32t kMaxDrawEvents = 100'000u;
+		static constexpr u32t kMaxDrawEvents = 200'000u;
 		const D3D12_HEAP_PROPERTIES heapProps{ .Type = D3D12_HEAP_TYPE_READBACK };
 		const D3D12_RESOURCE_DESC resDesc{
 			.Dimension        = D3D12_RESOURCE_DIMENSION_BUFFER,
@@ -706,10 +706,10 @@ void GFX::createSwapChain() {
 		), false);
 	}
 	resourcesPBRDeferredSkinnedPipeline_.shadowPass.perInstanceData.init(
-		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::PerInstanceData) * 12'000u, backBuffers_.size(), "PBRDeferredSkinned_Shadow_PerInstanceData"
+		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::PerInstanceData) * 5'000u, backBuffers_.size(), "PBRDeferredSkinned_Shadow_PerInstanceData"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.shadowPass.boneData.init(
-		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::BoneData) * 1'000'000u, backBuffers_.size(), "PBRDeferredSkinned_Shadow_BoneData"
+		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::BoneData) * 250'000u, backBuffers_.size(), "PBRDeferredSkinned_Shadow_BoneData"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.shadowPass.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBRDeferredSkinned_Shadow_PerDrawcallData"
@@ -718,13 +718,13 @@ void GFX::createSwapChain() {
 		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::PerFrameData), MAX_CSM_CASCADES, backBuffers_.size(), "PBRDeferredSkinned_Shadow_PerFrameData"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.gBufferPass.perInstanceData.init(
-		device_.Get(), sizeof(PBRDeferredSkinnedGBufferShader::PerInstanceData) * 12'000u, backBuffers_.size(), "PBRDeferredSkinned_GBuffer_PerInstanceData"
+		device_.Get(), sizeof(PBRDeferredSkinnedGBufferShader::PerInstanceData) * 50'000u, backBuffers_.size(), "PBRDeferredSkinned_GBuffer_PerInstanceData"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.gBufferPass.lightData.init(
 		device_.Get(), sizeof(PBRDeferredSkinnedGBufferShader::Light) * 32u, backBuffers_.size(), "PBRDeferredSkinned_GBuffer_LightData"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.gBufferPass.boneData.init(
-		device_.Get(), sizeof(PBRDeferredSkinnedGBufferShader::BoneData) * 1'000'000u, backBuffers_.size(), "PBRDeferredSkinned_GBuffer_BoneData"
+		device_.Get(), sizeof(PBRDeferredSkinnedGBufferShader::BoneData) * 250'000u, backBuffers_.size(), "PBRDeferredSkinned_GBuffer_BoneData"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.gBufferPass.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(PBRDeferredSkinnedGBufferShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBRDeferredSkinned_GBuffer_PerDrawcallData"
@@ -1876,6 +1876,11 @@ void GFX::render() {
 				auto hrClose = cl->Close();
 				DISPLAY_ERROR_DX_HR(hrClose, false);
 
+				if (hrClose >= 0) {
+					ID3D12CommandList* staged[] = { cl };
+					DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, staged), false);
+				}
+
 				DISPLAY_ERROR_DX_HR(cmdCtxCopy.cmdAlloc->Reset(), false);
 				DISPLAY_ERROR_DX_HR(cmdCtxCopy.cmdList->Reset(cmdCtxCopy.cmdAlloc.Get(), nullptr), false);
 
@@ -1889,9 +1894,9 @@ void GFX::render() {
 				auto hrClose2 = cmdCtxCopy.cmdList->Close();
 				DISPLAY_ERROR_DX_HR(hrClose2, false);
 
-				if (hrClose >= 0) {
-					ID3D12CommandList* staged[] = { cl, cmdCtxCopy.cmdList.Get() };
-					DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(2u, staged), false);
+				if (hrClose2 >= 0) {
+					ID3D12CommandList* staged[] = { cmdCtxCopy.cmdList.Get() };
+					DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, staged), false);
 				}
 				fenceToSignal.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtxLight));
 				fenceToSignal.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cmdCtxCopy));

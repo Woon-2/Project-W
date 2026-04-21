@@ -643,20 +643,6 @@ void Game::importNode(std::ifstream& ifs) {
 		const float baseY = object.pos().y();
 		const float baseZ = object.pos().z();
 
-		for ( int32 i = 0; i < 500; ++i ) {
-			Object copy{};
-
-			copy.setPos( mu::Vec3( baseX + distXZ( rng ), baseY, baseZ + distXZ( rng ) ) );
-			copy.setOrient( DirectX::XMLoadFloat4( &worldR ) );
-			copy.setScale( DirectX::XMLoadFloat3( &worldS ) );
-
-			auto& g = goblins_.emplace_back( std::make_shared<Goblin>( std::move( copy ) ) );
-			importGoblinSpawner( ifs, *g );
-			physicsWorld_.registerBody( &g->body(),
-				[p = g.get()]() { p->rebuildBodyBVH(); } );
-		}
-
-
 		goblin_ = std::make_shared<Goblin>(std::move(object));
 		importGoblinSpawner(ifs, *goblin_);
 		physicsWorld_.registerBody(&goblin_->body(),
@@ -664,7 +650,7 @@ void Game::importNode(std::ifstream& ifs) {
 
 		auto urd = std::uniform_real_distribution<float>(-160.f, 160.f);
 
-		for (std::size_t i = 0; i < 500u; ++i) {
+		for (std::size_t i = 0; i < 100u; ++i) {
 			auto& g = goblins_.emplace_back( std::make_shared<Goblin>() );
 			g->setPos( mu::Vec3( DirectX::XMLoadFloat3(&worldT) )
 				+ mu::Vec3( urd(gRandomEngine), urd(gRandomEngine) + 320.f, urd(gRandomEngine) )
@@ -681,6 +667,7 @@ void Game::importNode(std::ifstream& ifs) {
 			g->body().setMass(40.f);
 			g->body().setLinearDamping(20.f);
 			g->body().setAngularDamping(100.f);  // prevent impulse-driven tipping/spinning
+			g->enableBVRendering();
 
 			physicsWorld_.registerBody(&g->body(),
 				[p = g.get()]() { p->rebuildBodyBVH(); }	
