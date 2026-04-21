@@ -55,7 +55,9 @@
 **Deferred Path (`GFX::RenderPath::Deferred`):**
 1. GBuffer clear (GB0~GB3 RTV + GBuffer DSV)
 2. shadowPass(PBRDeferred) → shadowPass(PBRDeferredSkinned) → **shadowPass(Terrain)**
-3. gBufferPass(PBRDeferred) → gBufferPass(PBRDeferredSkinned) → **gBufferPass(Terrain)** — MRT 4개(GB0~GB3) + GBuffer DSV에 기록
+3. gBufferPass(PBRDeferred) → **gBufferIndirectPass(PBRDeferredSkinned)** → **gBufferPass(Terrain)** — MRT 4개(GB0~GB3) + GBuffer DSV에 기록
+   - PBRDeferredSkinned는 Hi-Z 5단계 compute(Clear→Cull→PrefixSum→Compact→Command) 후 indirect draw 실행
+   - Hi-Z Cull Pass에서 visibleFlags 생성 → Compact Pass 이후 CPU readback 복사 (1-frame delay)
 4. GBuffer 상태 전환: RTV→SRV, GBuffer DSV→SRV (`transitionToRead`)
 5. Lighting Pass — fullscreen triangle `DrawInstanced(3,1,0,0)`, GBuffer SRV 읽기, backbuffer RTV 출력
 6. **GBuffer depth → backbuffer DSV 복사** (`copyResource`) — 이후 Forward 패스가 올바른 깊이 기준으로 렌더링하도록
@@ -149,6 +151,44 @@ Light::updateCSMCascades()
 **주의사항:**
 - GBuffer DSV와 backbuffer DSV는 별개 리소스 — Deferred path에서 geometry pass는 GBuffer DSV 사용, depth 복사 없이 Forward 패스를 이어 실행하면 깊이가 초기화된 상태로 모든 Forward 오브젝트가 GBuffer 위에 그려짐
 - `PBRDeferredSkinnedPipeline`의 Lighting pass는 직접 담당하지 않음 — `PBRDeferredPipeline`의 Lighting pass가 정적/스킨드 GBuffer를 모두 처리
+
+#### Hi-Z Occlusion Culling (PBRDeferredSkinnedPipeline)
+
+파일: `pbrDeferredSkinnedPipeline.hpp/cpp`
+
+**5단계 GPU 파이프라인 (`hiZPassCompute()`):**
+1. **Clear** — perGroupCnt / groupOffsets / visibleFlags 초기화
+2. **Cull** — HiZ depth map으로 각 DrawEvent visibility 판정 → `visibleFlags[]` (u32t per DrawEvent, 0=culled, 1=visible)
+3. **PrefixSum** — groupOffsets 계산
+4. **Compact** — visibleFlags(SRV)를 읽어 visibleIndices 작성
+5. **Command** — indirect draw args 생성 → `gBufferIndirectDraw()`에서 소비
+
+**visibleFlags readback (1-frame delay):**
+- Compact Pass 이후, `CopyBufferRegion`으로 `visibilityReadback`(READBACK heap)에 복사
+- 다음 프레임 `hiZPassUpdate()`에서 CPU 읽기 → `objectVisibility[]` 집계 (OR)
+- `DrawEvent::renderObjectId` 쿠키로 GPU→CPU 역매핑 (GFX/game 레이어 분리 유지)
+
+**readback 타이밍 규칙:** `visibleFlags`는 Compact Pass에서 SRV로 소비되므로, CopyBufferRegion은 반드시 Compact Pass 완료 이후에 수행. Cull Pass 직후 복사 시 상태 전환 충돌.
+
+**GBuffer PID 최적화:**
+- 이전 프레임 `visibleFlags[i] == 0` (culled)인 경우 wvp/wv/wvNormal/worldNormal/boneData 계산 스킵
+- `rootBoneOffset`은 culled 여부 무관하게 순차 누산 (boneData 레이아웃 유지)
+- `boneData` static 배열 재사용: culled 슬롯은 이전 프레임 값 유지 (memcpy 스킵)
+
+**컬링 플래그 분리 (self-reinforcing culling 방지):**
+
+| 플래그 | 역할 |
+|---|---|
+| `Object::viewFrustumCulled` | `Object::render()` — DrawEvent 제출 차단 |
+| `Object::hiZCulled_` | `Object::update()` + AnimBlender — 물리/애니 연산 스킵 |
+
+Hi-Z culled 오브젝트도 `viewFrustumCulled`가 false인 한 DrawEvent를 계속 제출해야 함. DrawEvent를 차단하면 Hi-Z 파이프라인이 visibility 변화를 감지할 수 없어 영구 culled 상태(self-reinforcing) 발생.
+
+**새 오브젝트를 Hi-Z culling에 참여시킬 때 필수 체크리스트:**
+1. `setupStage()`에서 `obj->setRenderObjectId(nextRenderObjId++)` 할당
+2. `gfx_.setMaxRenderObjectId(nextRenderObjId - 1u)` 호출
+3. `applyHiZCulling()` 내에 `applyToEntity(obj)` 추가
+4. Hi-Z OFF(`isHiZCullEnabled() == false`) 상태에서도 `setHiZCulled(false)` + `animBlender->setCulled(isFrustumCulled())` 복원 필요
 
 #### TerrainPipeline 특성
 

@@ -1,4 +1,4 @@
-#ifndef __UI_LABEL_HPP
+﻿#ifndef __UI_LABEL_HPP
 #define __UI_LABEL_HPP
 
 #include "../UIElement.hpp"

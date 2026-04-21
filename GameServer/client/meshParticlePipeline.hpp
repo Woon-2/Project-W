@@ -1,4 +1,4 @@
-#ifndef __meshParticlePipeline_HPP
+﻿#ifndef __meshParticlePipeline_HPP
 #define __meshParticlePipeline_HPP
 
 #include "gfxUtil.hpp"

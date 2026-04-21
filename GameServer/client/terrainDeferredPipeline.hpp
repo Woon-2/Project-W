@@ -1,4 +1,4 @@
-#ifndef __terrainDeferredPipeline_HPP
+﻿#ifndef __terrainDeferredPipeline_HPP
 #define __terrainDeferredPipeline_HPP
 
 #include "gfxUtil.hpp"
@@ -8,6 +8,11 @@ class RootSig;
 struct Mesh;
 
 namespace TerrainDeferredPipeline {
+
+struct OccluderInfo {
+	const TerrainData* terrain = nullptr;
+    mu::Mat4x4         world   = {};    // world transform; default is identity
+};
 
 // Identical layout to TerrainPipeline::CameraData.
 struct CameraData {
@@ -46,13 +51,17 @@ struct DrawEvent {
 };
 
 struct Resources {
+    struct OccluderPass {
+        StructuredBuffer perInstanceData;   // t0
+        ConstantBufferArray perDrawcallData;    // b0
+    } occluderPass;
     struct ShadowPass {
-        ConstantBuffer      perDrawcallData;  // b0: TerrainShadowMapShader::PerDrawcallData
+        ConstantBufferArray      perDrawcallData;  // b0: TerrainShadowMapShader::PerDrawcallData
         ConstantBufferArray perFrameData;     // b1: cascade-per-slot (MAX_CSM_CASCADES)
     } shadowPass;
 
     struct GBufferPass {
-        ConstantBuffer perDrawcallData;  // b0: TerrainShader::PerDrawcallData
+        ConstantBufferArray perDrawcallData;  // b0: TerrainShader::PerDrawcallData
         ConstantBuffer perFrameData;     // b1: TerrainDeferredGBufferShader::PerFrameData
     } gBufferPass;
 };
@@ -72,6 +81,7 @@ public:
         DescriptorPool* pTexCubePool, DescriptorPool* pSamPool,
         DescriptorPool* pCmpSamPool,
         const std::shared_ptr<RootSig>& rootSig,
+        const ComPtr<ID3D12PipelineState>& occluderShader,
         const ComPtr<ID3D12PipelineState>& shadowShader,
         const ComPtr<ID3D12PipelineState>& gBufferShader,
         DescriptorPool* pDsvPool,
@@ -83,12 +93,14 @@ public:
         ThreadPool* threadPool,
         CommandListPool* commandListPool,
         std::vector<DrawEvent>&& drawEvents,
+        std::vector<OccluderInfo>&& occluderInfos,
         const LightData& mainDirectionalLightData,
         const CameraData& cameraData,
         const FrameData& frameData,
         std::size_t roomIdx
     );
 
+    void occluderPass();
     // Records terrain geometry to the shared CSM shadow map (single-threaded).
     void shadowPass();
     // Multi-threaded path. Delegates to shadowPass(): terrain has 1-4 draw events.
@@ -99,6 +111,8 @@ public:
     void gBufferPassMT();
 
 private:
+    void occluderUpdate();
+    void occluderDraw();
     void shadowUpdate();
     void shadowDraw();
     void gBufferUpdate();
@@ -111,6 +125,7 @@ private:
     DescriptorPool* pSamPool_      = nullptr;
     DescriptorPool* pCmpSamPool_   = nullptr;
     std::shared_ptr<RootSig>          rootSig_       = nullptr;
+    ComPtr<ID3D12PipelineState>       occluderShader_  = nullptr;
     ComPtr<ID3D12PipelineState>       shadowShader_  = nullptr;
     ComPtr<ID3D12PipelineState>       gBufferShader_ = nullptr;
     DescriptorPool*                   pDsvPool_      = nullptr;
@@ -124,11 +139,13 @@ private:
     ThreadPool*                       threadPool_    = nullptr;
     CommandListPool*                  cmdListPool_   = nullptr;
     std::vector<DrawEvent>            drawEvents_{};
+    std::vector<OccluderInfo>         occluderInfos_{};
     LightData                         mainDirectionalLightData_{};
     CameraData                        cameraData_{};
     FrameData                         frameData_{};
     std::size_t                       roomIdx_{};
 
+    UINT rootParamIdxPID_{};
     UINT rootParamIdxPDD_{};
     UINT rootParamIdxPFD_{};
     UINT rootParamIdxTexPool_{};

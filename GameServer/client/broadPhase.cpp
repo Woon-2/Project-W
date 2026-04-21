@@ -1,4 +1,4 @@
-#include "pch.hpp"
+﻿#include "pch.hpp"
 #include "broadPhase.hpp"
 
 void BruteForceBroadPhase::add(RigidBody* body)
@@ -130,4 +130,202 @@ std::vector<BodyPair> SAPBroadPhase::queryPairs()
     }
 
     return pairs;
+}
+
+void DBVTBroadPhase::add(RigidBody* body) {
+    bodies_.push_back(body);
+
+    Node* leaf = new Node();
+    leaf->body = body;
+    leaf->aabb = fatten(body->worldAABB());
+
+    leafMap_[body] = leaf;
+    insertLeaf(leaf);
+}
+
+void DBVTBroadPhase::remove(RigidBody* body) {
+    auto it = leafMap_.find(body);
+    if (it == leafMap_.end()) return;
+
+    Node* leaf = it->second;
+    removeLeaf(leaf);
+    delete leaf;
+
+    leafMap_.erase(it);
+    bodies_.erase(std::remove(bodies_.begin(), bodies_.end(), body), bodies_.end());
+}
+
+void DBVTBroadPhase::update() {
+    for (RigidBody* body : bodies_) {
+        Node* leaf = leafMap_[body];
+        updateLeaf(leaf, body->worldAABB());
+    }
+}
+
+std::vector<BodyPair> DBVTBroadPhase::queryPairs() {
+    std::vector<BodyPair> pairs;
+    if (!root_) return pairs;
+
+    std::stack<std::pair<Node*, Node*>> stack;
+    stack.push({ root_, root_ });
+
+    while (!stack.empty()) {
+        auto [a, b] = stack.top();
+        stack.pop();
+
+        if (a == b) {
+            if (!a->isLeaf()) {
+                stack.push({ a->left, a->left });
+                stack.push({ a->right, a->right });
+                stack.push({ a->left, a->right });
+            }
+            continue;
+        }
+
+        if (!collides(a->aabb, b->aabb).hit)
+            continue;
+
+        if (a->isLeaf() && b->isLeaf()) {
+            const bool aStatic = (a->body->motionType() == MotionType::Static);
+            const bool bStatic = (b->body->motionType() == MotionType::Static);
+            if (!(aStatic && bStatic))
+                pairs.push_back({ a->body, b->body });
+        } else if (a->isLeaf()) {
+            stack.push({ a, b->left });
+            stack.push({ a, b->right });
+        } else if (b->isLeaf()) {
+            stack.push({ a->left, b });
+            stack.push({ a->right, b });
+        } else {
+            stack.push({ a->left, b->left });
+            stack.push({ a->left, b->right });
+            stack.push({ a->right, b->left });
+            stack.push({ a->right, b->right });
+        }
+    }
+    // std::cout << "done with " << pairs.size() << " pairs.\n";
+
+    return pairs;
+}
+
+AABB DBVTBroadPhase::merge(const AABB& a, const AABB& b) {
+    mu::Vec3 minA = a.center - a.size * 0.5f;
+    mu::Vec3 maxA = a.center + a.size * 0.5f;
+    mu::Vec3 minB = b.center - b.size * 0.5f;
+    mu::Vec3 maxB = b.center + b.size * 0.5f;
+
+    mu::Vec3 minC = min(minA, minB);
+    mu::Vec3 maxC = max(maxA, maxB);
+
+    AABB out;
+    out.center = (minC + maxC) * 0.5f;
+    out.size   = (maxC - minC);
+    return out;
+}
+
+float DBVTBroadPhase::surfaceArea(const AABB& a) {
+    mu::Vec3 s = a.size;
+    return 2.0f * (s.x()*s.y() + s.y()*s.z() + s.z()*s.x());
+}
+
+AABB DBVTBroadPhase::fatten(const AABB& aabb) const {
+    AABB out = aabb;
+    out.size = aabb.size * (1.0f + fatMargin_);
+    return out;
+}
+
+void DBVTBroadPhase::insertLeaf(Node* leaf) {
+    if (!root_) {
+        root_ = leaf;
+        leaf->parent = nullptr;
+        return;
+    }
+
+    Node* current = root_;
+    while (!current->isLeaf()) {
+        AABB merged = merge(current->aabb, leaf->aabb);
+        float cost = surfaceArea(merged) - surfaceArea(current->aabb);
+
+        float costLeft;
+        {
+            AABB m = merge(current->left->aabb, leaf->aabb);
+            costLeft = current->left->isLeaf()
+                ? surfaceArea(m)
+                : surfaceArea(m) - surfaceArea(current->left->aabb);
+        }
+
+        float costRight;
+        {
+            AABB m = merge(current->right->aabb, leaf->aabb);
+            costRight = current->right->isLeaf()
+                ? surfaceArea(m)
+                : surfaceArea(m) - surfaceArea(current->right->aabb);
+        }
+
+        if (cost < costLeft && cost < costRight)
+            break;
+
+        current = (costLeft < costRight) ? current->left : current->right;
+    }
+
+    Node* oldParent = current->parent;
+    Node* newParent = new Node();
+    newParent->parent = oldParent;
+    newParent->aabb = merge(current->aabb, leaf->aabb);
+    newParent->left = current;
+    newParent->right = leaf;
+
+    current->parent = newParent;
+    leaf->parent = newParent;
+
+    if (!oldParent) {
+        root_ = newParent;
+    } else {
+        if (oldParent->left == current) oldParent->left = newParent;
+        else oldParent->right = newParent;
+    }
+
+    // refit
+    Node* p = leaf->parent;
+    while (p) {
+        p->aabb = merge(p->left->aabb, p->right->aabb);
+        p = p->parent;
+    }
+}
+
+void DBVTBroadPhase::removeLeaf(Node* leaf) {
+    if (leaf == root_) {
+        root_ = nullptr;
+        return;
+    }
+
+    Node* parent = leaf->parent;
+    Node* grand = parent->parent;
+    Node* sibling = (parent->left == leaf) ? parent->right : parent->left;
+
+    if (!grand) {
+        root_ = sibling;
+        sibling->parent = nullptr;
+    } else {
+        if (grand->left == parent) grand->left = sibling;
+        else grand->right = sibling;
+        sibling->parent = grand;
+
+        Node* p = grand;
+        while (p) {
+            p->aabb = merge(p->left->aabb, p->right->aabb);
+            p = p->parent;
+        }
+    }
+
+    delete parent;
+}
+
+void DBVTBroadPhase::updateLeaf(Node* leaf, const AABB& newAABB) {
+    if (collides(leaf->aabb, newAABB).hit)
+        return; // fat AABB 안에 있음
+
+    removeLeaf(leaf);
+    leaf->aabb = fatten(newAABB);
+    insertLeaf(leaf);
 }

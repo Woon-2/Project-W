@@ -1,4 +1,4 @@
-#ifndef __Constraint_HPP
+﻿#ifndef __Constraint_HPP
 #define __Constraint_HPP
 
 // Abstract base for all velocity-level + position-level constraints.

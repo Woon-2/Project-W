@@ -1,4 +1,4 @@
-#include "bindless.hlsli"
+﻿#include "bindless.hlsli"
 
 // Oct encoding for view-space unit normals → 2-channel float2 [0,1]
 float2 octEncode(float3 n) {
@@ -288,7 +288,6 @@ float calcCSMShadow(float3 posV, float3 posW, float3 normalW, float rawNdotl) {
 
     // Select cascade: find first cascade whose far depth exceeds |posV.z|
     uint cascadeIdx = cascadeCount - 1u;
-    [unroll]
     for (uint ci = 0u; ci < cascadeCount; ++ci) {
         if (posV.z < splits[ci]) { 
             cascadeIdx = ci; 
@@ -473,7 +472,6 @@ float4 illuminateCSM(float3 posV, float3 posW, float3 normalV, float2 tex, float
             cascadeSplitsFarV.x, cascadeSplitsFarV.y,
             cascadeSplitsFarV.z, cascadeSplitsFarV.w
         };
-        [unroll]
         for (uint dci = 0u; dci < cascadeCount; ++dci) {
             if (posV.z < dbgSplits[dci]) { dbgCascade = dci; break; }
         }

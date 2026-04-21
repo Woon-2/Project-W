@@ -1,4 +1,4 @@
-#ifndef __UI_MANAGER_HPP
+﻿#ifndef __UI_MANAGER_HPP
 #define __UI_MANAGER_HPP
 
 #include "UIElement.hpp"

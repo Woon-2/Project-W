@@ -1,4 +1,4 @@
-#ifndef __UI_TYPES_HPP
+﻿#ifndef __UI_TYPES_HPP
 #define __UI_TYPES_HPP
 
 // No Korean comments in new files (encoding issue per CLAUDE.md)

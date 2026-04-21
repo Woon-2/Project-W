@@ -1,10 +1,11 @@
-#ifndef __pbrDeferredSkinnedPipeline_HPP
+﻿#ifndef __pbrDeferredSkinnedPipeline_HPP
 #define __pbrDeferredSkinnedPipeline_HPP
 
 #include "gfxUtil.hpp"
 #include "sharedResources.hpp"
 
 class RootSig;
+class CmdSig;
 
 struct Mesh;
 struct SubMesh;
@@ -60,6 +61,7 @@ struct DrawEvent {
     const Mesh*             mesh;
     const SubMesh*          subMesh;
     const Material*         material;
+    u32t                    renderObjectId = std::numeric_limits<u32t>::max();
 
     auto operator<=>(const DrawEvent& rhs) const noexcept {
         auto e = mesh <=> rhs.mesh;
@@ -74,6 +76,37 @@ struct DrawEvent {
 };
 
 struct Resources {
+    struct HiZPass {
+        StructuredBuffer perInstanceDataCull;   // t0
+        StructuredBuffer perInstanceDataCompact;   // t0
+        ConstantBuffer perFrameDataClear;      // b1
+        ConstantBuffer perFrameDataCull;    // b1
+        ConstantBuffer perFrameDataCompact;    // b1
+        ConstantBuffer perFrameDataCommand;    // b1
+        RWStructuredBuffer perGroupCnt;   // t3, u1
+        RWStructuredBuffer groupOffsets;   // t3, u1
+        RWStructuredBuffer visibleFlags;   // t4, u2
+        RWStructuredBuffer perGroupData;   // t5, u3
+        RWStructuredBuffer visibleIndices;   // u1
+        RWStructuredBuffer indirectCmd;   // u0, space1
+
+        // GPU readback: perGroupCnt 복사 대상 (D3D12_HEAP_TYPE_READBACK)
+        ComPtr<ID3D12Resource> visibleCountReadback;
+        u32t* visibleCountMapped = nullptr;
+        u32t  lastGroupCnt      = 0u;
+        u32t  lastObjCnt        = 0u;
+        u32t  lastVisibleCount  = 0u;
+        u32t  lastTotalCount    = 0u;
+
+        // GPU readback: visibleFlags 복사 대상 (D3D12_HEAP_TYPE_READBACK)
+        ComPtr<ID3D12Resource> visibilityReadback;
+        u32t* visibilityMapped       = nullptr;
+        u32t  lastVisibilityObjCnt   = 0u;
+        std::vector<u32t> lastVisibilityFlags;      // CPU 복사본 (직전 프레임)
+        std::vector<u32t> lastDrawEventObjectIds;   // 직전 프레임 정렬된 DrawEvents의 renderObjectId
+        std::vector<bool> objectVisibility;          // renderObjectId → visible?
+    } hiZPass;
+
     struct ShadowPass {
         StructuredBuffer    perInstanceData;   // t0
         StructuredBuffer    boneData;          // t2
@@ -108,6 +141,12 @@ public:
         DescriptorPool* pTexCubePool, DescriptorPool* pSamPool,
         DescriptorPool* pCmpSamPool, DescriptorPool* pDsvPool,
         const std::shared_ptr<RootSig>& rootSig,
+        const std::shared_ptr<CmdSig>& cmdSig,
+        const ComPtr<ID3D12PipelineState>& hiZClearShader,
+        const ComPtr<ID3D12PipelineState>& hiZCullShader,
+        const ComPtr<ID3D12PipelineState>& prefixSumShader,
+        const ComPtr<ID3D12PipelineState>& hiZCompactShader,
+        const ComPtr<ID3D12PipelineState>& hiZCommandShader,
         const ComPtr<ID3D12PipelineState>& gBufferShader,
         const ComPtr<ID3D12PipelineState>& shadowShader,
         const ComPtr<ID3D12CommandQueue>& cmdQ,
@@ -124,16 +163,27 @@ public:
     );
 
     void sortDrawEvents();
+    void hiZPass();
     void shadowPass();
     void shadowPassMT();
+    void gBufferIndirectPass();
+    void gBufferIndirectPassMT();
     void gBufferPass();
     void gBufferPassMT();
 
 private:
+    void hiZPassUpdate();
+    void hiZPassCompute();
+
     void shadowUpdate();
     void shadowUpdateMT();
     void shadowDraw();
     void shadowDrawMT();
+
+    void gBufferIndirectUpdate();
+    void gBufferIndirectUpdateMT();
+    void gBufferIndirectDraw();
+    void gBufferIndirectDrawMT();
 
     void gBufferUpdate();
     void gBufferUpdateMT();
@@ -142,8 +192,14 @@ private:
 
     void MU_CALLCONV addJobGBufferUpdate( mu::Mat4x4 view, const mu::Mat4x4& viewProj,
         const DrawEvent* pFirst, const DrawEvent* pLast,
+        const u32t* pVisFlags,
         PBRDeferredSkinnedGBufferShader::PerInstanceData* pOut,
         std::latch& latch
+    );
+    void addJobGBufferIndirectDraw( ID3D12GraphicsCommandList* threadCmdList,
+        const std::vector<DrawEvent>::const_iterator* pItFirst,
+        const std::vector<DrawEvent>::const_iterator* pItLast,
+        std::size_t firstDrawcallIdx, std::latch& latch
     );
     void addJobGBufferDraw( ID3D12GraphicsCommandList* threadCmdList,
         const std::vector<DrawEvent>::const_iterator* pItFirst,
@@ -170,6 +226,12 @@ private:
     DescriptorPool* pCmpSamPool_   = nullptr;
     DescriptorPool* pDsvPool_      = nullptr;
     std::shared_ptr<RootSig> rootSig_ = nullptr;
+    std::shared_ptr<CmdSig> cmdSig_ = nullptr;
+    ComPtr<ID3D12PipelineState> hiZClearShader_   = nullptr;
+    ComPtr<ID3D12PipelineState> hiZCullShader_ = nullptr;
+    ComPtr<ID3D12PipelineState> prefixSumShader_ = nullptr;
+    ComPtr<ID3D12PipelineState> hiZCompactShader_ = nullptr;
+    ComPtr<ID3D12PipelineState> hiZCommandShader_ = nullptr;
     ComPtr<ID3D12PipelineState> gBufferShader_ = nullptr;
     ComPtr<ID3D12PipelineState> shadowShader_  = nullptr;
     ComPtr<ID3D12CommandQueue>  cmdQ_          = nullptr;
@@ -182,12 +244,14 @@ private:
     CommandListPool*  cmdListPool_ = nullptr;
     Resources*        pResources_  = nullptr;
     std::vector<DrawEvent> drawEvents_{};
+    std::vector<u32t> instanceGroups_{};
     std::vector<LightData> lightData_{};
     LightData  mainDirectionalLightData_{};
     CameraData cameraData_{};
     FrameData  frameData_{};
     std::size_t roomIdx_{};
 
+    UINT rootParamIdxFirstInstOffset_{};
     UINT rootParamIdxPID_{};
     UINT rootParamIdxPDD_{};
     UINT rootParamIdxPFD_{};
@@ -198,6 +262,14 @@ private:
     UINT rootParamIdxTexCubePool_{};
     UINT rootParamIdxSamPool_{};
     UINT rootParamIdxCmpSamPool_{};
+    UINT rootParamIdxSrcCnts0_{};
+    UINT rootParamIdxSrcCnts1_{};
+    UINT rootParamIdxPerGroupData_{};
+    UINT rootParamIdxDestCnts0_{};
+    UINT rootParamIdxDestCnts1_{};
+    UINT rootParamIdxOutPerGroupData_{};
+    UINT rootParamIdxIndirectCmd_{};
+    UINT rootParamIdxHiZMap_{};
 
     std::size_t jobSizeUpdate_ = 120u;
     std::size_t jobSizeDraw_   = 200u;

@@ -1,4 +1,4 @@
-#include "pch.hpp"
+﻿#include "pch.hpp"
 #include "contactConstraint.hpp"
 
 ContactConstraint::ContactConstraint(RigidBody* a, RigidBody* b)

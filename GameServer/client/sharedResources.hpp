@@ -85,10 +85,18 @@ void getReadyAsShaderResource(const std::string& key, std::size_t roomIdx, Comma
 void getCSMReadyAsDepthWrite(const std::string& key, std::size_t roomIdx, u32t cascadeIdx, ID3D12GraphicsCommandList* cmdList);
 // CSM shadow map의 cascade ci를 Shader Resource 상태로 전환한다.
 void getCSMReadyAsShaderResource(const std::string& key, std::size_t roomIdx, u32t cascadeIdx, ID3D12GraphicsCommandList* cmdList);
+// 모든 cascade를 Depth Write 상태로 전환하는 배리어 명령을 기록한다.
+void getCSMAllReadyAsDepthWrite(const std::string& key, std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
 // 모든 cascade를 Depth Write 상태로 전환하는 배리어 명령을 기록하고 제출한다.
 void getCSMAllReadyAsDepthWrite(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence);
+// 모든 cascade를 Shader Resource 상태로 전환하는 배리어 명령을 기록한다.
+void getCSMAllReadyAsShaderResource(const std::string& key, std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
 // 모든 cascade를 Shader Resource 상태로 전환하는 배리어 명령을 기록하고 제출한다.
 void getCSMAllReadyAsShaderResource(const std::string& key, std::size_t roomIdx, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence);
+// 모든 cascade DSV를 depth=1로 클리어하는 명령을 단 한 번 기록한다.
+// 각 shadow pipeline이 개별 클리어 없이 누적 기록할 수 있도록,
+// getCSMAllReadyAsDepthWrite() 직후에 호출해야 한다.
+void clearCSMAllShadowMaps(const std::string& key, std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
 // 모든 cascade DSV를 depth=1로 클리어하는 명령을 단 한 번 제출한다.
 // 각 shadow pipeline이 개별 클리어 없이 누적 기록할 수 있도록,
 // getCSMAllReadyAsDepthWrite() 직후에 호출해야 한다.
@@ -155,6 +163,38 @@ void transitionToRead(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
 void clearGBuffer(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
 
 }	// namespace GBuffer
+
+namespace HiZMap {
+
+struct HiZMapData {
+	Texture srcTex;
+	Texture mips;
+	u32t mipLevelCnt;
+	u32t srcWidth;
+	u32t srcHeight;
+	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle;	// srcTex dsv
+	D3D12_GPU_DESCRIPTOR_HANDLE srvHandle;	// mips srv
+	std::vector<D3D12_GPU_DESCRIPTOR_HANDLE> uavHandles;	// mips uav (per-mip uav)
+};
+
+extern std::vector<HiZMapData> hiZMaps;
+
+// hiZMap은 화면(뷰포트) 해상도가 바뀌면 다시 만들어야 한다.
+// 해상도가 바뀔 경우 eraseHiZMaps를 호출 후 다시 변경된 해상도에 맞게 addHiZMaps를 호출해야 한다.
+void addHiZMaps( ID3D12Device* device,
+	u32t width, u32t height,
+	std::size_t roomCnt, DescriptorPool& srvTexPool, DescriptorPool& uavPool,
+	DescriptorPool& dsvPool
+);
+
+void eraseHiZMaps( DescriptorPool& srvTexPool,
+	DescriptorPool& uavPool, DescriptorPool& dsvPool
+);
+
+void clearHiZMap(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
+void clearHiZMap(std::size_t roomIdx, CommandListPool& cmdListPool, ID3D12CommandQueue* cmdQ, Fence& fence);
+
+}	// namespace SharedResources::HiZMap
 
 }	// namespace SharedResources
 

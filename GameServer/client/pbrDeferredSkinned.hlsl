@@ -47,8 +47,11 @@ struct GBufferOutput {
 
 cbuffer PerDrawcallData : register(b0) {
     Material material;
-    uint firstInstanceOffset;
 };
+
+cbuffer FirstInstanceOffset : register(b0, space1) {
+    uint firstInstanceOffset;
+}
 
 // Full PerFrameData layout — must match PBRSkinnedShader::PerFrameData so that
 // pbrLighting.hlsli (included below) compiles successfully.
@@ -66,6 +69,9 @@ cbuffer PerFrameData : register(b1) {
 
 StructuredBuffer<PerInstanceData> gInstances : register(t0);
 StructuredBuffer<float4x4>        gBoneData  : register(t2);
+#ifdef HiZCull
+StructuredBuffer<uint> gVisibleIndices : register(t3);
+#endif
 
 static float4x4 gmtxTexturize = {
     0.5f,  0.0f, 0.0f, 0.0f,
@@ -96,7 +102,11 @@ VSOutput VSMain(
 ) {
     VSOutput ret;
 
+#ifdef HiZCull
+    uint idx = gVisibleIndices[idxInst + firstInstanceOffset];
+#else
     uint idx = idxInst + firstInstanceOffset;
+#endif
     float4x4 anim = blendBoneTransform(
         gInstances[idx].rootBoneOffset,
         (uint4)boneIndices, boneWeights

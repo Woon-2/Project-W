@@ -1,4 +1,4 @@
-#ifndef __RagdollDef_HPP
+﻿#ifndef __RagdollDef_HPP
 #define __RagdollDef_HPP
 
 #include <span>

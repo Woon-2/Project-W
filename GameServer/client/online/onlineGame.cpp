@@ -20,6 +20,13 @@ static constexpr float kPlayerMaxSpeed      = 10.f;
 static constexpr float kPlayerLinearDamping = 12.f;
 static constexpr float kPlayerAccelRate     = kPlayerMaxSpeed * kPlayerLinearDamping;
 
+static constexpr int     kRenderSkipLagFrames = 3;
+static constexpr int     kMaxPhysicsStepsPerFrame = 3;
+static constexpr Seconds kMaxPhysicsDeltaTime{ 1.f / 60.f * kMaxPhysicsStepsPerFrame };
+static constexpr int     kMaxPhysicsScaleK    = 4;
+static constexpr int     kLagScaleUpFrames    = 3;
+static constexpr int     kLagScaleDownFrames  = 80;
+
 Game::Game() {
 	// 스레드 풀 초기화
 	std::cout << "----------[게임 초기화 설정]----------\n";
@@ -495,17 +502,41 @@ void Game::update(Milliseconds deltaTime) {
 	// update 함수에서 physicUpdateAcc_ 변수를 통해
 	// 물리량 갱신의 주기가 돌아왔는지 판단하고
 	// 주기가 되었다면 물리량 갱신을 수행한다.
-	physicUpdateAcc_ += deltaTime;
+	const Seconds clampedDt = std::min(Seconds(deltaTime), kMaxPhysicsDeltaTime);
+	physicUpdateAcc_ += clampedDt;
 
 	// move 패킷 전송 주기 판단
 	moveStateSendAcc_ += deltaTime;
 
-	if ( physicUpdateAcc_ >= physicUpdateInterval ) {
-		while ( physicUpdateAcc_ >= physicUpdateInterval ) {
-			physicsWorld_.step(physicUpdateInterval);
-			physicUpdateAcc_ -= physicUpdateInterval;
+	const Seconds effectiveInterval = physicUpdateInterval * static_cast<float>(physicUpdateScaleK_);
+
+	int physicsStepsDone = 0;
+	while (physicUpdateAcc_ >= effectiveInterval
+		   && physicsStepsDone < kMaxPhysicsStepsPerFrame) {
+		physicsWorld_.step(effectiveInterval);
+		physicUpdateAcc_ -= effectiveInterval;
+		++physicsStepsDone;
+	}
+
+	if (physicsStepsDone >= kMaxPhysicsStepsPerFrame) {
+		++consecutiveLagFrames_;
+		consecutiveNonLagFrames_ = 0;
+		if (consecutiveLagFrames_ >= kLagScaleUpFrames && physicUpdateScaleK_ < kMaxPhysicsScaleK) {
+			++physicUpdateScaleK_;
+			consecutiveLagFrames_ = 0;
+		}
+	} else {
+		consecutiveLagFrames_ = 0;
+		if (physicUpdateScaleK_ > 1) {
+			if (++consecutiveNonLagFrames_ >= kLagScaleDownFrames) {
+				--physicUpdateScaleK_;
+				consecutiveNonLagFrames_ = 0;
+			}
+		} else {
+			consecutiveNonLagFrames_ = 0;
 		}
 	}
+	skipNextRender_ = (consecutiveLagFrames_ >= kRenderSkipLagFrames);
 
 	//std::cout << "player pos : " << player_->pos().x() << ", " << player_->pos().y() << ", " << player_->pos().z() << '\n';
 	if (moveStateSendAcc_ >= moveStateSendInterval_) {
@@ -523,7 +554,7 @@ void Game::update(Milliseconds deltaTime) {
 	// 마지막 물리량 갱신으로부터 얼마나 지났는지의 비율로
 	// RenderState 갱신을 위한 PhysicState 보간 계수를 설정한다.
 	// 게임 객체의 update 함수에 전달된다.
-	const auto tPhysicInterpolation = physicUpdateAcc_ / physicUpdateInterval;
+	const auto tPhysicInterpolation = physicUpdateAcc_ / effectiveInterval;
 
 	// 게임 객체들 갱신
 	// ground_->update(deltaTime, tPhysicInterpolation);
@@ -627,6 +658,11 @@ void Game::update(Milliseconds deltaTime) {
 }
 
 void Game::render() {
+	if (skipNextRender_) {
+		skipNextRender_ = false;
+		return;
+	}
+
 	if (player_ == nullptr) {
 		return;
 	}
@@ -667,12 +703,8 @@ void Game::render() {
 
 	if (terrain_) {
 		terrain_->render(gfx_);
-		gfx_.addFrameData(TerrainPipeline::FrameData{
-			.globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f)
-		});
-		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{
-			.globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f)
-		});
+		gfx_.addFrameData(TerrainPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
+		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 	}
 
 	uiManager_.render(gfx_);
@@ -1008,7 +1040,7 @@ void Game::cullObjects() {
 					}
 		}
 
-		entt->setCulled(true);
+		entt->setFrustumCulled(true);
 
 		for (auto& v : vertices) {
 			auto ndc = mu::Vec4(v, 1.f) * camera_.view() * camera_.proj();
@@ -1019,10 +1051,13 @@ void Game::cullObjects() {
 				&& ndc.z() >= 0.f && ndc.z() <= 1.f
 			) {
 				// a vertex is in the view frustum, it should not be culled.
-				entt->setCulled(false);
+				entt->setFrustumCulled(false);
 				break;
 			}
 		}
+
+		if (auto* blender = entt->animBlender())
+			blender->setCulled(entt->isFrustumCulled());
 	}
 }
 

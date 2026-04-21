@@ -1,4 +1,4 @@
-#ifndef __RigidBody_HPP
+﻿#ifndef __RigidBody_HPP
 #define __RigidBody_HPP
 
 #include "collision.hpp"

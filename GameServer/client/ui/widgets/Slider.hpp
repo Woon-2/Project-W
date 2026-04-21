@@ -1,4 +1,4 @@
-#ifndef __UI_SLIDER_HPP
+﻿#ifndef __UI_SLIDER_HPP
 #define __UI_SLIDER_HPP
 
 #include "../UIElement.hpp"

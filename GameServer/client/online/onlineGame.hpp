@@ -99,6 +99,11 @@ private:
 	Seconds physicUpdateAcc_{ 0s };				// 물리 업데이트를 위한 시간 누산기
 	Seconds physicUpdateInterval{ 1s / 60.f };	// 60fps로 물리 업데이트
 
+	bool skipNextRender_ = false;
+	int  physicUpdateScaleK_{ 1 };
+	int  consecutiveLagFrames_{ 0 };
+	int  consecutiveNonLagFrames_{ 0 };
+
 	bool moveChange_{};
 	Seconds moveStateSendAcc_{0s};				// move 패킷 전송을 위한 시간 누산기
 	Seconds moveStateSendInterval_{1s / 20.f};	// 50ms(20Hz)마다 move 패킷 전송
@@ -115,14 +120,6 @@ private:
 	std::shared_ptr<TerrainObject> terrain_{};
 	std::vector<std::shared_ptr<Goblin>> goblins_{};
 	std::unordered_map<uint16, std::shared_ptr<Goblin>> idGoblinMap_{};
-	std::shared_ptr<Anubis> anubis_{};
-	std::shared_ptr<Bat> bat_{};
-	std::shared_ptr<Bomber> bomber_{};
-	std::shared_ptr<Demon> demon_{};
-	std::shared_ptr<Dragon> dragon_{};
-	std::shared_ptr<Eyeball> eyeball_{};
-	std::shared_ptr<Fishman> fishman_{};
-	std::shared_ptr<Gargoyle> gargoyle_{};
 
 	std::shared_ptr<Player> player_{};
 	std::vector<std::shared_ptr<Player>> otherPlayers_{ };
