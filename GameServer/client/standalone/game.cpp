@@ -153,13 +153,13 @@ void Game::setupStage() {
 		uiManager_.root()->addChild(std::make_unique<UI::Label>())
 	);
 	hiZStatsLabel_->name    = "hiZStatsLabel";
-	hiZStatsLabel_->anchor  = UI::Anchors::TopLeft;
-	hiZStatsLabel_->pivot   = UI::Pivots::TopLeft;
+	hiZStatsLabel_->anchor  = UI::Anchors::TopRight;
+	hiZStatsLabel_->pivot   = UI::Pivots::TopRight;
 	hiZStatsLabel_->width   = UI::DimValue::px(300.0f);
 	hiZStatsLabel_->height  = UI::DimValue::px(60.0f);
-	hiZStatsLabel_->offsetX = UI::DimValue::px(20.f);
+	hiZStatsLabel_->offsetX = UI::DimValue::px(-40.f);
 	hiZStatsLabel_->offsetY = UI::DimValue::px(50.f);
-	hiZStatsLabel_->setTextHAlign(UI::TextHAlign::Leading);
+	hiZStatsLabel_->setTextHAlign(UI::TextHAlign::Trailing);
 	hiZStatsLabel_->setTextVAlign(UI::TextVAlign::Top);
 	hiZStatsLabel_->setFontSize(18.0f);
 	hiZStatsLabel_->setTextColor(0.2f, 1.0f, 0.2f, 1.0f);
