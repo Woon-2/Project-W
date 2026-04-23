@@ -1399,6 +1399,9 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	// 스카이박스 텍스처 임시 저장
+	const auto skyboxIdxSrv = drawEventsSkyboxPipeline_[0].texSkybox->idxSrv;
+
 	auto skyboxPipelineDispatcher = SkyboxPipeline::Dispatcher(
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
@@ -1810,6 +1813,12 @@ void GFX::render() {
 			lpfd.idxGB3   = gbData.gb3.idxSrv;
 			lpfd.idxDepth = gbData.depth.idxSrv;
 			lpfd.debugMode = gBufferDebugMode_;
+			lpfd.idxSkybox = skyboxIdxSrv;
+			lpfd.camPos = cameraDataPBRDeferredPipeline_.pos.getXmf();
+			// TODO: 레벨의 특성에 맞게 fog 관련 값들은 런타임 수정이 필요
+			lpfd.fogDensity = 0.001f;
+			lpfd.fogBaseHeight = 25.f;
+			lpfd.heightFalloff = 0.024f;
 			deferredLightingPerFrameData_.stage(roomIdx, &lpfd, 1u);
 
 			// Build light data

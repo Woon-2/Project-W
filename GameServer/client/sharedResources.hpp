@@ -168,7 +168,7 @@ namespace HiZMap {
 
 // clearDepth를 1.0f보다 작은 값으로 설정함으로써
 // distance culling의 효과를 동시에 볼 수 있다.
-inline constexpr auto clearDepth = 0.999f;
+inline constexpr auto clearDepth = 0.9988f;
 
 struct HiZMapData {
 	Texture srcTex;

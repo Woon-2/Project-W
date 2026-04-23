@@ -15,6 +15,56 @@ float3 octDecode(float2 oct) {
     return normalize(n);
 }
 
+//// - worldPos : 픽셀의 월드 좌표
+//// - camPos : 카메라의 월드 좌표
+//// - fogDensity : 전체적인 안개 강도, 값이 클수록 멀리 있는 객체가 안 보임
+//// - heightFalloff : 높이에 따른 안개 감소 속도, 값이 클수록 높이 차가 큰 지역에 대한 안개가 짙어짐
+//// - fogBaseHeight : 안개가 시작되는 기준 높이, 지면이나 해수면 등의 높이로 설정하기
+//float computeExponentialHeightFog(float3 worldPos, float3 camPos, float fogDensity, float heightFalloff, float fogBaseHeight) {
+//    float3 ray = worldPos - camPos;
+//    float dist = length(ray);
+//    float3 dir = ray / dist;
+    
+//    float camHeight = camPos.y;
+//    float pixHeight = worldPos.y;
+    
+//    float heightDiff = pixHeight - camHeight;
+    
+//    float fogDensityHeight = exp(-heightFalloff * (camHeight - fogBaseHeight));
+    
+//    float fogFactor = fogDensityHeight * (1 - exp(-fogDensity * dist)) / (heightFalloff * max(abs(dir.y), 0.001f));
+//    return saturate(fogFactor);
+//}
+
+float computeExponentialHeightFog(float3 worldPos, float3 camPos, float fogDensity, float heightFalloff, float fogBaseHeight) {
+    float3 ray = worldPos - camPos;
+    float dist = length(ray);
+    float3 dir = ray / dist;
+
+    // 1. 카메라와 픽셀의 상대적 높이 계산 (Base Height 기준)
+    float relativeCamHeight = camPos.y - fogBaseHeight;
+    
+    // 2. 적분 공식의 핵심 파트
+    // Falloff가 적용된 카메라 지점의 안개 농도
+    float fogAtStart = fogDensity * exp(-heightFalloff * relativeCamHeight);
+
+    // 3. 수평 방향(dir.y 가 0에 가까울 때)의 제로 디비전 방지 및 정밀도 확보
+    // dir.y가 매우 작으면 높이 변화가 없으므로 단순히 (농도 * 거리)로 수렴함
+    float slope = heightFalloff * dir.y;
+    float precisionThreshold = 0.0001f;
+    float fogIntegral;
+
+    if (abs(slope) > precisionThreshold) {
+        // 표준적인 지수 높이 안개 적분 공식
+        fogIntegral = fogAtStart * (1.0f - exp(-slope * dist)) / slope;
+    } else {
+        // 수평에 가까울 경우 선형 근사 (L'Hopital's rule 적용 결과와 같음)
+        fogIntegral = fogAtStart * dist;
+    }
+
+    return saturate(fogIntegral);
+}
+
 // 이 hlsl 코드에서 조명의 BRDF 모델은
 // Cook-Torrance BRDF 모델을 따른다.
 

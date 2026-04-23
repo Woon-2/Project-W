@@ -58,6 +58,16 @@ float4 sampleLevelBindless(uint4 bindlessIdx, float2 tex, float LOD) {
     return float4(0.f, 0.f, 0.f, 1.f);
 }
 
+float4 sampleLevelBindlessCube(uint4 bindlessIdx, float3 tex, float LOD) {
+    if (bindlessIdx.x < 0) {
+        return float4(0.f, 0.f, 0.f, 1.f);
+    }
+    if (bindlessIdx.x == IDX_RANGE_TEXTURECUBE) {
+        return gTexCubes[bindlessIdx.y].SampleLevel(gSamplers[bindlessIdx.w], tex, LOD);
+    }
+    return float4(0.f, 0.f, 0.f, 1.f);
+}
+
 float4 sampleBindless2DOffset(uint4 bindlessIdx, float2 tex, int2 offset) {
     if (bindlessIdx.x == IDX_RANGE_TEXTURE2D) {
         return gTex2Ds[bindlessIdx.y].Sample(gSamplers[bindlessIdx.w], tex, offset);

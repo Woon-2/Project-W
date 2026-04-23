@@ -787,7 +787,15 @@ struct PerFrameData {
 	BindlessIndex idxDepth;
 	// Debug
 	u32t       debugMode;
-	XMUINT3    _pad;
+	XMUINT3    _pad0;
+	// Exponential Height Fog
+	BindlessIndex idxSkybox;
+	float fogDensity;
+    float heightFalloff;
+    float fogBaseHeight;
+    float _pad1;
+	XMFLOAT3 camPos;
+	float _pad2;
 };
 
 }	// namespace PBRDeferredLightingShader

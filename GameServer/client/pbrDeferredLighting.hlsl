@@ -40,7 +40,15 @@ cbuffer PerFrameData : register(b1) {
     int4     idxDepth;
     // Debug
     uint     debugMode;
-    uint3    _pad;
+    uint3    _pad0;
+    // Exponential Height Fog
+    int4 idxSkybox;
+    float fogDensity;
+    float heightFalloff;
+    float fogBaseHeight;
+    float _pad1;
+    float3 camPos;
+    float _pad2;
 }
 
 // gmtxTexturize required by sampleCascadePCF in pbrLighting.hlsli
@@ -134,6 +142,12 @@ float4 PSMain(VSOutput input) : SV_TARGET {
     // Add pre-computed ambient + emissive from GB2.rgb
     float3 color = directLight + precompLight;
 
+    // Apply Exponential Height Fog
+    float3 viewDir = normalize(posW);
+    float3 fogColor = sampleLevelBindlessCube(idxSkybox, viewDir, 6.f).rgb;
+    
+    color = lerp(color, fogColor, computeExponentialHeightFog(posW, camPos, fogDensity, heightFalloff, fogBaseHeight));
+    
     // Reinhard tonemapping + gamma correction
     color = color / (color + float3(1.0f, 1.0f, 1.0f));
     color = pow(abs(color), 1.0f / 2.2f);

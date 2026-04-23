@@ -1569,6 +1569,7 @@ void importSkyboxCubemap( std::ifstream& ifs,
     skybox.texSkybox = loadTexture(device, cmdList, path, fenceToAssociate, type);
     skybox.name = name;
 
+    // TODO : mip levels를 dds에서 읽은 내용으로 설정해야 한다.
     // 큐브맵 텍스처는 D3D12_SHADER_RESOURCE_VIEW_DESC를 기본값(null)으로 사용하면 안 그려진다.
     // 직접 작성해서 넘겨주어야 한다.
     createSRV( device, skybox.texSkybox, D3D12_SHADER_RESOURCE_VIEW_DESC{
@@ -1577,7 +1578,7 @@ void importSkyboxCubemap( std::ifstream& ifs,
 		.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
 		.TextureCube = D3D12_TEXCUBE_SRV{
 			.MostDetailedMip = 0u,
-			.MipLevels = 1u
+			.MipLevels = 10u
 		}
 	}, texCubePool );
 
