@@ -216,9 +216,6 @@
     <ClCompile Include="threadPool.cpp">
       <Filter>독립 구현체\소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="ServerSession.cpp">
-      <Filter>Network\Session</Filter>
-    </ClCompile>
     <ClCompile Include="standalone\combatSystem.cpp">
       <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
     </ClCompile>
@@ -323,6 +320,9 @@
     </ClCompile>
     <ClCompile Include="particleEffect.cpp">
       <Filter>게임%28스탠드얼론%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="ServerSession.cpp">
+      <Filter>Network\Session</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

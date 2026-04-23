@@ -913,7 +913,7 @@ void eraseHiZMaps( DescriptorPool& srvTexPool,
 
 void clearHiZMap(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
 	cmdList->ClearDepthStencilView( hiZMaps[roomIdx].dsvHandle,
-		D3D12_CLEAR_FLAG_DEPTH, 1.f, 0u, 0u, nullptr
+		D3D12_CLEAR_FLAG_DEPTH, clearDepth, 0u, 0u, nullptr
 	);
 }
 
@@ -930,7 +930,7 @@ void clearHiZMap(std::size_t roomIdx, CommandListPool& cmdListPool, ID3D12Comman
 	DISPLAY_ERROR_DX_VOID( cmdCtx.cmdList->Reset(cmdCtx.cmdAlloc.Get(), nullptr), false );
 
 	cmdCtx.cmdList->ClearDepthStencilView( hiZMaps[roomIdx].dsvHandle,
-		D3D12_CLEAR_FLAG_DEPTH, 1.f, 0u, 0u, nullptr
+		D3D12_CLEAR_FLAG_DEPTH, clearDepth, 0u, 0u, nullptr
 	);
 
 	DISPLAY_ERROR_DX_VOID( cmdCtx.cmdList->Close(), false );

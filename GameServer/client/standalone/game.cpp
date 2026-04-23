@@ -647,8 +647,6 @@ void Game::importNode(std::ifstream& ifs) {
 		}
 	}
 	else if (type == "GoblinSpawner") {
-		std::mt19937 rng{ std::random_device{}() };
-		std::uniform_real_distribution<float> distXZ( -50.f, 50.f );
 		const float baseX = object.pos().x();
 		const float baseY = object.pos().y();
 		const float baseZ = object.pos().z();
@@ -659,7 +657,7 @@ void Game::importNode(std::ifstream& ifs) {
 			[p = goblin_.get()]() { p->rebuildBodyBVH(); });
 		goblin_->body().setUserData(goblin_.get());
 
-		auto urd = std::uniform_real_distribution<float>(-30.f, 30.f);
+		auto urd = std::uniform_real_distribution<float>(-80.f, 80.f);
 
 		for (std::size_t i = 0; i < 120u; ++i) {
 			auto& g = goblins_.emplace_back( std::make_shared<Goblin>() );
