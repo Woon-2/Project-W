@@ -25,8 +25,9 @@ void Room::init(const Level* levelData) {
 		g.body().setMotionType(MotionType::Dynamic);
 		g.body().setMass(70.f);
 		g.body().setLinearDamping(0.1f);
-		g.body().setAngularDamping(0.99f);
+		g.body().setAngularDamping(25.f);
 		g.body().setRestitution(0.0f);
+		g.body().setUprightStiffness(4000.f);
 		g.body().snapToCurrent();
 		physicsWorld_.registerBody(&g.body(), [&g]() { g.rebuildBodyBVH(); });
 	}

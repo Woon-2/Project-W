@@ -86,7 +86,7 @@ private:
 	uint32 materialSetIdx_ = 0u;
 	int32 id_{ -1 };
 
-	int32 hp_{100};
+	int32 hp_{1'000'000};
 
 	uint32 lastMoveTimestamp_{0u};
 

@@ -7,6 +7,8 @@
 #include "broadPhase.hpp"
 #include "collision.hpp"
 #include <functional>
+#include <unordered_map>
+#include <utility>
 
 struct TerrainHeightField;
 
@@ -69,6 +71,15 @@ public:
     // Set the number of PGS velocity iterations per step (default: 10).
     void setSolverIterations(int n) { solverIterations_ = n; }
 
+    // Set the number of Split Impulse position correction iterations (default: 3).
+    // More iterations improve convergence for fast-moving Dynamic bodies.
+    void setPositionSolveIterations(int n) { positionSolveIterations_ = n; }
+
+    // Set the number of physics sub-steps per step() call (default: 2).
+    // Each sub-step divides dt by n and runs integrate+detect+solve.
+    // Higher values reduce steady-state penetration depth at the cost of CPU.
+    void setSubStepCount(int n) { subStepCount_ = n; }
+
     // Iterate over all active contact constraints for the current step.
     // fn receives a const ContactConstraint& — call after step(), before the next step().
     template<typename Fn>
@@ -113,7 +124,28 @@ private:
     // iterates Dynamic bodies directly.
     std::unique_ptr<TerrainCollider>            terrainCollider_;
 
-    int solverIterations_ = 10;
+    int     solverIterations_         = 10;
+    int     positionSolveIterations_  = 3;
+    int     subStepCount_             = 2;
+    Seconds currentSubDt_{}; // set at start of each sub-step; used by generateContacts()
+
+    // Warm-starting cache: carries accumulated contact impulses across steps
+    // so PGS starts from the previous solution instead of zero.
+    struct WarmEntry {
+        float accNormal     = 0.f;
+        float accTangent[2] = {};
+    };
+    struct WarmPairHash {
+        size_t operator()(std::pair<RigidBody*, RigidBody*> p) const noexcept {
+            auto h1 = std::hash<RigidBody*>{}(p.first);
+            auto h2 = std::hash<RigidBody*>{}(p.second);
+            return h1 ^ (h2 * 2654435761u);
+        }
+    };
+    static std::pair<RigidBody*, RigidBody*> normKey(RigidBody* a, RigidBody* b) {
+        return (a < b) ? std::make_pair(a, b) : std::make_pair(b, a);
+    }
+    std::unordered_map<std::pair<RigidBody*, RigidBody*>, WarmEntry, WarmPairHash> warmCache_;
 };
 
 #endif // __PhysicsWorld_HPP

@@ -76,13 +76,15 @@ void ContactConstraint::prepare(Seconds dt)
             c.effMassTangent[t] = 1.f / (bodyA->invMass() + bodyB->invMass() + angA_t + angB_t);
         }
 
-        // Baumgarte stabilization bias with external-force compensation.
-        // extVelProj: velocity the external force difference adds along the normal per step.
-        // If negative (forces push bodies together), compensate so the constraint overcomes it.
-        const float penetration = std::max(0.f, cp.depth - kSlop);
-        const float extVelProj  = mu::dot((externalAccelA_ - externalAccelB_) * dtf, n);
-        const float extComp     = std::max(0.f, -extVelProj);
-        c.bias = kBaumgarteBeta * invDt * penetration + extComp;
+        // Dual penetration correction (velocity-level Baumgarte + position-level split impulse).
+        // Terrain contacts skip Baumgarte to prevent ground vibration.
+        const float penetration  = std::max(0.f, cp.depth - kSlop);
+        const float extVelProj   = mu::dot((externalAccelA_ - externalAccelB_) * dtf, n);
+        const float extComp      = std::max(0.f, -extVelProj);
+        const float baumgarteBeta = isTerrainContact_ ? 0.f : kBaumgarteBeta;
+        c.bias             = baumgarteBeta * invDt * penetration + extComp;
+        c.pseudoBias       = kSplitImpulseBeta * invDt * penetration;
+        c.accNormalPseudo  = 0.f;
     }
 }
 
@@ -105,6 +107,31 @@ static void applyImpulsePair(RigidBody* a, RigidBody* b,
     if (b->invMass() > 0.f) {
         b->setLinearVel(b->linearVel() - jDir * b->invMass());
         b->setOmega(b->omega() - mu::cross(rB, jDir) * b->invInertiaWorld());
+    }
+}
+
+static void applyPseudoImpulsePair(RigidBody* a, RigidBody* b,
+                                    mu::Vec3 jDir,
+                                    mu::Vec3 rA, mu::Vec3 rB)
+{
+    if (a->invMass() > 0.f) {
+        a->addPseudoLinearVel( jDir * a->invMass());
+        a->addPseudoOmega    ( mu::cross(rA, jDir) * a->invInertiaWorld());
+    }
+    if (b->invMass() > 0.f) {
+        b->addPseudoLinearVel(-jDir * b->invMass());
+        b->addPseudoOmega    (-mu::cross(rB, jDir) * b->invInertiaWorld());
+    }
+}
+
+void ContactConstraint::applyWarmStart()
+{
+    for (int i = 0; i < count; ++i) {
+        const Cache& c = cache_[i];
+        const ContactPoint& cp = contacts[i];
+        applyImpulsePair(bodyA, bodyB, cp.accNormal,     mu::Vec3(cp.normal),  c.rA, c.rB);
+        applyImpulsePair(bodyA, bodyB, cp.accTangent[0], c.tangent[0],         c.rA, c.rB);
+        applyImpulsePair(bodyA, bodyB, cp.accTangent[1], c.tangent[1],         c.rA, c.rB);
     }
 }
 
@@ -149,5 +176,30 @@ void ContactConstraint::solveVelocity()
 
             applyImpulsePair(bodyA, bodyB, jt, tv, rA, rB);
         }
+    }
+}
+
+void ContactConstraint::solvePosition()
+{
+    for (int i = 0; i < count; ++i) {
+        Cache& c = cache_[i];
+        if (c.pseudoBias <= 0.f) continue;
+
+        const ContactPoint& cp = contacts[i];
+        const mu::Vec3 n = cp.normal;
+
+        const mu::Vec3 pvA = bodyA->pseudoLinearVel()
+                           + mu::cross(bodyA->pseudoOmega(), c.rA);
+        const mu::Vec3 pvB = bodyB->pseudoLinearVel()
+                           + mu::cross(bodyB->pseudoOmega(), c.rB);
+        const float Jpv = mu::dot(pvA - pvB, n);
+
+        float jpn = -(Jpv - c.pseudoBias) * c.effMassNormal;
+
+        const float prev   = c.accNormalPseudo;
+        c.accNormalPseudo  = std::max(0.f, prev + jpn);
+        jpn                = c.accNormalPseudo - prev;
+
+        applyPseudoImpulsePair(bodyA, bodyB, n * jpn, c.rA, c.rB);
     }
 }

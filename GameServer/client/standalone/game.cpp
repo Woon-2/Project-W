@@ -598,6 +598,15 @@ void Game::setParticle()
 	}
 }
 
+// Helper: configure a monster body as Dynamic with shared character properties.
+static void setupMonsterBody(RigidBody& body, float mass) {
+	body.setMotionType(MotionType::Dynamic);
+	body.setMass(mass);
+	body.setLinearDamping(20.f);
+	body.setAngularDamping(25.f);
+	body.setUprightStiffness(4000.f);
+}
+
 void Game::importNode(std::ifstream& ifs) {
 	readHeadTag(ifs, "Node");
 	const auto type = readText(ifs, "Type");
@@ -665,10 +674,7 @@ void Game::importNode(std::ifstream& ifs) {
 			g->setHp(90);
 			g->setMaxHp(90);
 			g->setId(1);
-			g->body().setMotionType(MotionType::Dynamic);
-			g->body().setMass(40.f);
-			g->body().setLinearDamping(20.f);
-			g->body().setAngularDamping(100.f);  // prevent impulse-driven tipping/spinning
+			setupMonsterBody(g->body(), 40.f);
 			g->enableBVRendering();
 
 			physicsWorld_.registerBody(&g->body(),
@@ -713,8 +719,8 @@ void Game::importPlayerStart(std::ifstream& ifs, Player& player) {
 	player.body().setMotionType(MotionType::Dynamic);
 	player.body().setMass(80.f);
 	player.body().setLinearDamping(kPlayerLinearDamping);
-	// Prevent collision impulses from tipping/spinning the character.
-	player.body().setAngularDamping(100.f);
+	player.body().setAngularDamping(25.f);
+	player.body().setUprightStiffness(4000.f);
 
 	//Equipment rifle{};
 	//rifle.socketType = Bone::SocketType::RightHand;
@@ -723,14 +729,6 @@ void Game::importPlayerStart(std::ifstream& ifs, Player& player) {
 	//rifle.object->setScale(mu::Vec3(1.f, 1.f, 1.f));
 
 	//player.equip(std::move(rifle));
-}
-
-// Helper: configure a monster body as Dynamic with shared character properties.
-static void setupMonsterBody(RigidBody& body, float mass) {
-	body.setMotionType(MotionType::Dynamic);
-	body.setMass(mass);
-	body.setLinearDamping(20.f);
-	body.setAngularDamping(100.f);  // prevent impulse-driven tipping/spinning
 }
 
 void Game::importGoblinSpawner(std::ifstream& ifs, Goblin& goblin) {

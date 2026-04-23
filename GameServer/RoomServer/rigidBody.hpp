@@ -86,6 +86,16 @@ public:
     void setLinearDamping(float d)  { linearDamping_  = d; }
     void setAngularDamping(float d) { angularDamping_ = d; }
 
+    // Lock all rotational DOF: sets invInertia to zero so no impulse or torque
+    // can rotate this body. Orientation is controlled solely by setOrient().
+    // Call after setMass().
+    void lockRotation();
+
+    // Gravity-aligned self-righting torque strength (N·m per radian of tilt).
+    // 0 = disabled. ~500 gives ~1 s correction from a 10° tilt.
+    void  setUprightStiffness(float k) { uprightStiffness_ = k; }
+    float uprightStiffness()     const { return uprightStiffness_; }
+
     // Coefficient of restitution (0 = perfectly inelastic, 1 = elastic).
     void setRestitution(float r)    { restitution_ = r; }
 
@@ -104,8 +114,20 @@ public:
     // Zero the force and torque accumulators.
     void clearAccumulators();
 
+    // Pseudo-velocity API for Split Impulse position correction.
+    mu::Vec3 pseudoLinearVel() const { return pseudoLinearVel_; }
+    mu::Vec3 pseudoOmega()     const { return pseudoOmega_; }
+    void addPseudoLinearVel(mu::Vec3 v) { pseudoLinearVel_ += v; }
+    void addPseudoOmega    (mu::Vec3 w) { pseudoOmega_     += w; }
+    void clearPseudoVelocities() { pseudoLinearVel_ = {}; pseudoOmega_ = {}; }
+    void applyPseudoVelocity(Seconds dt) {
+        if (type_ == MotionType::Static || type_ == MotionType::Kinematic) return;
+        curr_.pos += pseudoLinearVel_ * dt.count();
+    }
+
     // Getters used by PhysicsWorld::integrate().
-    float            invMass()          const { return invMass_; }
+    // Non-Dynamic bodies always appear as infinite mass (0) to the constraint solver.
+    float            invMass()          const { return (type_ == MotionType::Dynamic) ? invMass_ : 0.f; }
     float            restitution()      const { return restitution_; }
     float            friction()         const { return friction_; }
     float            linearDamping()    const { return linearDamping_; }
@@ -122,6 +144,7 @@ public:
     }
 
     // Recompute invInertiaWorld_ from the current orientation and invInertiaLocal_.
+    // No-op when rotation is locked (invInertiaWorld_ stays zero).
     void updateInertiaWorld();
 
 private:
@@ -131,7 +154,9 @@ private:
     BVH        worldBVH_{};
 
     // --- Dynamic body properties (unused for Kinematic/Static) ---
-    float      invMass_        = 0.f;
+    bool       rotationLocked_   = false;
+    float      uprightStiffness_ = 0.f;
+    float      invMass_          = 0.f;
     float      restitution_    = 0.3f;
     float      friction_       = 0.5f;
     float      linearDamping_  = 0.05f;
@@ -140,6 +165,8 @@ private:
     mu::Mat3x3 invInertiaWorld_{};
     mu::Vec3   forceAccum_{};
     mu::Vec3   torqueAccum_{};
+    mu::Vec3   pseudoLinearVel_{};
+    mu::Vec3   pseudoOmega_{};
 };
 
 #endif // room_server_rigidBody_hpp

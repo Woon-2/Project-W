@@ -89,6 +89,18 @@ public:
     void setLinearDamping(float d)  { linearDamping_  = d; }
     void setAngularDamping(float d) { angularDamping_ = d; }
 
+    // Lock all rotational DOF: sets invInertia to zero so no impulse or torque
+    // can rotate this body. Orientation is controlled solely by setOrient().
+    // Call after setMass(). Replaces the setAngularDamping(large_value) hack.
+    void lockRotation();
+
+    // Strength of the gravity-aligned self-righting torque (N·m per radian of tilt).
+    // Each integrate step a corrective torque = cross(bodyUp, worldUp) * stiffness
+    // is applied, pulling the body's local Y-axis toward world Y-up.
+    // 0 (default) disables the correction; ~500 gives a 1–2 s correction time.
+    void  setUprightStiffness(float k) { uprightStiffness_ = k; }
+    float uprightStiffness()     const { return uprightStiffness_; }
+
     // Coefficient of restitution (0 = perfectly inelastic, 1 = elastic).
     void setRestitution(float r)    { restitution_ = r; }
 
@@ -114,8 +126,24 @@ public:
     // Zero the force and torque accumulators.  Call at the end of each tick.
     void clearAccumulators();
 
+    // Pseudo-velocity API for Split Impulse position correction.
+    // pseudo-velocities are accumulated during solvePosition() and applied
+    // once to position at the end of each step; they never affect real velocity.
+    mu::Vec3 pseudoLinearVel() const { return pseudoLinearVel_; }
+    mu::Vec3 pseudoOmega()     const { return pseudoOmega_; }
+    void MU_CALLCONV addPseudoLinearVel(mu::Vec3 v) { pseudoLinearVel_ += v; }
+    void MU_CALLCONV addPseudoOmega    (mu::Vec3 w) { pseudoOmega_     += w; }
+    void clearPseudoVelocities() { pseudoLinearVel_ = {}; pseudoOmega_ = {}; }
+    void applyPseudoVelocity(Seconds dt) {
+        if (type_ == MotionType::Static || type_ == MotionType::Kinematic) return;
+        curr_.pos += pseudoLinearVel_ * dt.count();
+    }
+
     // Getters used by PhysicsWorld::integrate().
-    float            invMass()          const { return invMass_; }
+    // Non-Dynamic bodies always appear as infinite mass (0) to the constraint solver,
+    // even when setMass() was called.  This prevents the solver from applying
+    // impulses to Kinematic or Static bodies whose positions are externally driven.
+    float            invMass()          const { return (type_ == MotionType::Dynamic) ? invMass_ : 0.f; }
     float            restitution()      const { return restitution_; }
     float            friction()         const { return friction_; }
     float            linearDamping()    const { return linearDamping_; }
@@ -135,6 +163,7 @@ public:
 
     // Recompute invInertiaWorld_ from the current orientation and invInertiaLocal_.
     // Called by PhysicsWorld::integrate() after updating orientation.
+    // No-op when rotation is locked (invInertiaWorld_ stays zero).
     void updateInertiaWorld();
 
     // Arbitrary pointer for associating a game-layer owner (e.g. Object*) with this body.
@@ -150,7 +179,9 @@ private:
     void*      userData_ = nullptr;
 
     // --- Dynamic body properties (unused for Kinematic/Static) ---
-    float      invMass_        = 0.f;
+    bool       rotationLocked_   = false;
+    float      uprightStiffness_ = 0.f;
+    float      invMass_          = 0.f;
     float      restitution_    = 0.3f;
     float      friction_       = 0.5f;
     float      linearDamping_  = 0.05f;
@@ -159,6 +190,8 @@ private:
     mu::Mat3x3 invInertiaWorld_{};   // world-space inverse inertia tensor
     mu::Vec3   forceAccum_{};        // accumulated force  (reset each step)
     mu::Vec3   torqueAccum_{};       // accumulated torque (reset each step)
+    mu::Vec3   pseudoLinearVel_{};   // split-impulse position correction velocity (reset each step)
+    mu::Vec3   pseudoOmega_{};       // split-impulse angular correction          (reset each step)
 };
 
 #endif // __RigidBody_HPP

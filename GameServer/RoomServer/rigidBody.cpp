@@ -47,9 +47,22 @@ void RigidBody::setInertia(const mu::Mat3x3& localInertia)
 
 void RigidBody::updateInertiaWorld()
 {
+    if (rotationLocked_) return;
     const mu::Mat3x3 M  = mu::Mat3x3(curr_.orient);
     const mu::Mat3x3 Mt = mu::transpose(M);
     invInertiaWorld_ = Mt * invInertiaLocal_ * M;
+}
+
+void RigidBody::lockRotation()
+{
+    rotationLocked_ = true;
+    mu::Mat3x3 zero{};
+    zero.setRow(0, mu::Vec3(0.f, 0.f, 0.f));
+    zero.setRow(1, mu::Vec3(0.f, 0.f, 0.f));
+    zero.setRow(2, mu::Vec3(0.f, 0.f, 0.f));
+    invInertiaLocal_ = zero;
+    invInertiaWorld_ = zero;
+    curr_.omega = mu::Vec3{};
 }
 
 void RigidBody::applyForce(mu::Vec3 f)

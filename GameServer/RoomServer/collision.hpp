@@ -96,9 +96,11 @@ public:
     TerrainCollider(RigidBody* terrainBody, const TerrainHeightField* hf);
 
     // Collects up to 4 deepest ContactPoints into outContacts (appends).
+    // lookAhead: also generate contacts for vertices within this distance above terrain.
     // Returns the number of contacts added.
     int generateContacts(const RigidBody& dynamic,
-                         std::vector<ContactPoint>& outContacts) const;
+                         std::vector<ContactPoint>& outContacts,
+                         float lookAhead = 0.f) const;
 
     RigidBody* terrainBody() const { return terrainBody_; }
 
@@ -106,7 +108,7 @@ private:
     static void extractBottomVertices(const BVHNode& leaf,
                                       std::vector<mu::Vec3>& out);
 
-    bool testVertex(mu::Vec3 worldVert, ContactPoint& outCp) const;
+    bool testVertex(mu::Vec3 worldVert, ContactPoint& outCp, float lookAhead = 0.f) const;
 
     RigidBody*                terrainBody_ = nullptr;
     const TerrainHeightField* heightField_ = nullptr;

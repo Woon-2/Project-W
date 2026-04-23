@@ -333,7 +333,7 @@ void TerrainCollider::extractBottomVertices(const BVHNode& leaf,
     }
 }
 
-bool TerrainCollider::testVertex(mu::Vec3 worldVert, ContactPoint& outCp) const
+bool TerrainCollider::testVertex(mu::Vec3 worldVert, ContactPoint& outCp, float lookAhead) const
 {
     const mu::Vec3 origin = terrainBody_->pos();
 
@@ -345,17 +345,20 @@ bool TerrainCollider::testVertex(mu::Vec3 worldVert, ContactPoint& outCp) const
 
     const float terrainWorldY = origin.y() + heightField_->getHeightAt(localX, localZ);
     const float depth         = terrainWorldY - worldVert.y();
-    if (depth <= 0.f) return false;
+    // Also accept vertices within lookAhead above the surface (free-fall snap).
+    if (depth <= -lookAhead) return false;
 
     outCp.worldPos = mu::Vec3(worldVert.x(), terrainWorldY, worldVert.z());
-    outCp.normal   = mu::NVec3(heightField_->getNormalAt(localX, localZ));
-    outCp.depth    = depth;
+    // Always use Y-up: slope-perpendicular normal would apply a tilting torque to the body.
+    outCp.normal   = mu::NVec3(0.f, 1.f, 0.f, mu::NVec3::NoNormalize_t{});
+    outCp.depth    = std::max(0.f, depth);
     // localA/localB filled by PhysicsWorld::generateContacts
     return true;
 }
 
 int TerrainCollider::generateContacts(const RigidBody& dynamic,
-                                      std::vector<ContactPoint>& outContacts) const
+                                      std::vector<ContactPoint>& outContacts,
+                                      float lookAhead) const
 {
     if (!heightField_ || heightField_->empty()) return 0;
     if (dynamic.worldBVH().empty())             return 0;
@@ -373,7 +376,7 @@ int TerrainCollider::generateContacts(const RigidBody& dynamic,
     candidates.reserve(verts.size());
     for (const mu::Vec3& v : verts) {
         ContactPoint cp;
-        if (testVertex(v, cp))
+        if (testVertex(v, cp, lookAhead))
             candidates.push_back(cp);
     }
 

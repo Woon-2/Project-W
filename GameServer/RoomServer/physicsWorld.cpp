@@ -36,17 +36,23 @@ void PhysicsWorld::unregisterBody(RigidBody* body)
 
 void PhysicsWorld::step(Seconds dt)
 {
-    integrate(dt);
-    generateContacts();
-    solveConstraints(dt);
+    const int     n     = subStepCount_;
+    const Seconds subDt = Seconds(dt.count() / n);
+
+    for (auto& e : entries_) e.body->advanceState();
+
+    for (int s = 0; s < n; ++s) {
+        currentSubDt_ = subDt;
+        integrate(subDt);
+        generateContacts();
+        solveConstraints(subDt);
+    }
 }
 
 void PhysicsWorld::integrate(Seconds dt)
 {
     for (auto& e : entries_) {
         RigidBody& b = *e.body;
-
-        b.advanceState();
 
         switch (b.motionType()) {
         case MotionType::Kinematic:
@@ -87,6 +93,13 @@ void PhysicsWorld::integrate(Seconds dt)
             const auto angAcc = b.torqueAccum() * b.invInertiaWorld();
             b.setOmega(b.omega() + angAcc * dtf);
 
+            // Upright correction: restoring torque proportional to tilt from world Y-up.
+            if (b.uprightStiffness() > 0.f) {
+                const mu::Vec3 bodyUp   = b.orient().rotate(mu::Vec3(0.f, 1.f, 0.f));
+                const mu::Vec3 torqDir  = mu::cross(bodyUp, mu::Vec3(0.f, 1.f, 0.f));
+                b.setOmega(b.omega() + (torqDir * (b.uprightStiffness() * dtf)) * b.invInertiaWorld());
+            }
+
             b.setPos(b.pos() + b.linearVel() * dtf);
             const auto wq = mu::Quat(b.omega(), 0.f);
             auto newOrient = mu::Quat(b.orient()) + mu::Quat(b.orient()) * wq * 0.5f * dtf;
@@ -122,7 +135,7 @@ void PhysicsWorld::generateContacts()
 
         auto cc = std::make_unique<ContactConstraint>(a, b);
 
-        // Contact normal: from narrow-phase geometry (B¡æA convention, fixed in collision.cpp).
+        // Contact normal: from narrow-phase geometry (Bï¿½ï¿½A convention, fixed in collision.cpp).
         // Fall back to center-to-center only when the narrow-phase normal is degenerate.
         mu::NVec3 normal = res.normal;
         if (mu::Vec3(normal).len2() < 0.5f) {
@@ -155,13 +168,19 @@ void PhysicsWorld::generateContacts()
             if (body->motionType() != MotionType::Dynamic) continue;
             if (body->worldBVH().empty()) continue;
 
+            const float vy = body->linearVel().y();
+            const float lookAhead = (vy < 0.f)
+                ? std::min(0.15f, std::abs(vy) * currentSubDt_.count())
+                : 0.f;
+
             std::vector<ContactPoint> contacts;
             contacts.reserve(4);
-            const int cnt = terrainCollider_->generateContacts(*body, contacts);
+            const int cnt = terrainCollider_->generateContacts(*body, contacts, lookAhead);
             if (cnt == 0) continue;
 
             auto cc = std::make_unique<ContactConstraint>(body, terrainCollider_->terrainBody());
             cc->setExternalAccels(gravity_, mu::Vec3(0.f, 0.f, 0.f));
+            cc->setTerrainContact(true);
 
             for (auto& cp : contacts) {
                 cp.localA = cp.worldPos - body->pos();
@@ -182,10 +201,39 @@ void PhysicsWorld::solveConstraints(Seconds dt)
 
     allConstraints([&](Constraint& c) { c.prepare(dt); });
 
+    for (auto& cc : contactConstraints_) {
+        auto it = warmCache_.find(normKey(cc->bodyA, cc->bodyB));
+        if (it != warmCache_.end()) {
+            const auto& w = it->second;
+            for (int i = 0; i < cc->count; ++i) {
+                cc->contacts[i].accNormal     = w.accNormal;
+                cc->contacts[i].accTangent[0] = w.accTangent[0];
+                cc->contacts[i].accTangent[1] = w.accTangent[1];
+            }
+            cc->applyWarmStart();
+        }
+    }
+
     for (int iter = 0; iter < solverIterations_; ++iter)
         allConstraints([](Constraint& c) { c.solveVelocity(); });
 
-    allConstraints([](Constraint& c) { c.solvePosition(); });
+    for (int iter = 0; iter < positionSolveIterations_; ++iter) {
+        allConstraints([](Constraint& c) { c.solvePosition(); });
+        for (auto& e : entries_) {
+            e.body->applyPseudoVelocity(dt);
+            e.body->clearPseudoVelocities();
+        }
+    }
+
+    warmCache_.clear();
+    for (auto& cc : contactConstraints_) {
+        if (cc->count == 0) continue;
+        WarmEntry w;
+        w.accNormal     = cc->contacts[0].accNormal;
+        w.accTangent[0] = cc->contacts[0].accTangent[0];
+        w.accTangent[1] = cc->contacts[0].accTangent[1];
+        warmCache_[normKey(cc->bodyA, cc->bodyB)] = w;
+    }
 }
 
 mu::Vec3 MU_CALLCONV PhysicsWorld::interpolatePos(const RigidBody& b, float t)

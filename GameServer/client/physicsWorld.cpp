@@ -66,18 +66,26 @@ void PhysicsWorld::unregisterTerrain()
 
 void PhysicsWorld::step(Seconds dt)
 {
-    integrate(dt);        // advance state, apply forces, rebuild BVHs
-    generateContacts();   // broad phase -> narrow phase -> ContactConstraints
-    solveConstraints(dt); // PGS: prepare, iterate velocity solve, position solve
+    const int     n     = subStepCount_;
+    const Seconds subDt = Seconds(dt.count() / n);
+
+    // advanceState once per game step so prev/curr interpolation spans the full step.
+    for (auto& e : entries_) e.body->advanceState();
+
+    for (int s = 0; s < n; ++s) {
+        currentSubDt_ = subDt;
+        for (auto& e : entries_) e.body->clearPseudoVelocities();
+        integrate(subDt);
+        generateContacts();
+        solveConstraints(subDt);
+        for (auto& e : entries_) e.body->applyPseudoVelocity(subDt);
+    }
 }
 
 void PhysicsWorld::integrate(Seconds dt)
 {
     for (auto& e : entries_) {
         RigidBody& b = *e.body;
-
-        // Advance double buffer so prev holds the state from before this tick.
-        b.advanceState();
 
         switch (b.motionType()) {
         case MotionType::Kinematic:
@@ -126,6 +134,17 @@ void PhysicsWorld::integrate(Seconds dt)
             b.updateInertiaWorld();
             const auto angAcc = b.torqueAccum() * b.invInertiaWorld();
             b.setOmega(b.omega() + angAcc * dtf);
+
+            // Upright correction: apply a restoring torque that pulls the body's
+            // local Y-axis back toward world Y-up (gravity's reference direction).
+            // cross(bodyUp, worldUp) points along the axis that rotates bodyUp onto
+            // worldUp; its magnitude equals sin(tilt angle) so the correction is
+            // proportional to how far the body has tilted.
+            if (b.uprightStiffness() > 0.f) {
+                const mu::Vec3 bodyUp   = b.orient().rotate(mu::Vec3(0.f, 1.f, 0.f));
+                const mu::Vec3 torqDir  = mu::cross(bodyUp, mu::Vec3(0.f, 1.f, 0.f));
+                b.setOmega(b.omega() + (torqDir * (b.uprightStiffness() * dtf)) * b.invInertiaWorld());
+            }
 
             // Integrate position and orientation.
             b.setPos(b.pos() + b.linearVel() * dtf);
@@ -213,13 +232,22 @@ void PhysicsWorld::generateContacts()
             if (body->motionType() != MotionType::Dynamic) continue;
             if (body->worldBVH().empty()) continue;
 
+            // Look-ahead: for a falling body, extend the contact range by one
+            // sub-step's worth of travel so the constraint catches the body just
+            // before it would tunnel through the terrain surface.
+            const float vy = body->linearVel().y();
+            const float lookAhead = (vy < 0.f)
+                ? std::min(0.15f, std::abs(vy) * currentSubDt_.count())
+                : 0.f;
+
             std::vector<ContactPoint> contacts;
             contacts.reserve(4);
-            const int cnt = terrainCollider_->generateContacts(*body, contacts);
+            const int cnt = terrainCollider_->generateContacts(*body, contacts, lookAhead);
             if (cnt == 0) continue;
 
             auto cc = std::make_unique<ContactConstraint>(body, terrainCollider_->terrainBody());
             cc->setExternalAccels(gravity_, mu::Vec3(0.f, 0.f, 0.f));
+            cc->setTerrainContact(true);
             for (auto& cp : contacts) {
                 cp.localA = cp.worldPos - body->pos();
                 cp.localB = cp.worldPos - terrainCollider_->terrainBody()->pos();
@@ -232,22 +260,45 @@ void PhysicsWorld::generateContacts()
 
 void PhysicsWorld::solveConstraints(Seconds dt)
 {
-    // Gather all constraints (contacts first, then persistent joints).
     auto allConstraints = [&](auto fn) {
         for (auto& c : contactConstraints_) fn(*c);
         for (auto& c : jointConstraints_)   fn(*c);
         for (auto  c : jointRefs_)          fn(*c);
     };
 
-    // prepare() caches effective masses and biases.
     allConstraints([&](Constraint& c) { c.prepare(dt); });
 
-    // PGS velocity iterations.
+    // Warm-start: apply previous step's accumulated impulses as initial guess.
+    // Called after prepare() so rA/rB/tangent are fresh.
+    for (auto& cc : contactConstraints_) {
+        auto it = warmCache_.find(normKey(cc->bodyA, cc->bodyB));
+        if (it != warmCache_.end()) {
+            const auto& w = it->second;
+            for (int i = 0; i < cc->count; ++i) {
+                cc->contacts[i].accNormal     = w.accNormal;
+                cc->contacts[i].accTangent[0] = w.accTangent[0];
+                cc->contacts[i].accTangent[1] = w.accTangent[1];
+            }
+            cc->applyWarmStart();
+        }
+    }
+
     for (int iter = 0; iter < solverIterations_; ++iter)
         allConstraints([](Constraint& c) { c.solveVelocity(); });
 
-    // Position-level correction (split impulse or no-op for Baumgarte-only).
-    allConstraints([](Constraint& c) { c.solvePosition(); });
+    for (int iter = 0; iter < positionSolveIterations_; ++iter)
+        allConstraints([](Constraint& c) { c.solvePosition(); });
+
+    // Save accumulated impulses for next step's warm-start.
+    warmCache_.clear();
+    for (auto& cc : contactConstraints_) {
+        if (cc->count == 0) continue;
+        WarmEntry w;
+        w.accNormal     = cc->contacts[0].accNormal;
+        w.accTangent[0] = cc->contacts[0].accTangent[0];
+        w.accTangent[1] = cc->contacts[0].accTangent[1];
+        warmCache_[normKey(cc->bodyA, cc->bodyB)] = w;
+    }
 }
 
 mu::Vec3 MU_CALLCONV PhysicsWorld::interpolatePos(const RigidBody& b, float t)

@@ -8,6 +8,8 @@
 #include "collision.hpp"
 #include "terrain.hpp"
 #include <functional>
+#include <unordered_map>
+#include <utility>
 
 // PhysicsWorld manages the physics simulation tick.
 // It holds non-owning pointers to RigidBody instances (owned inline by Object).
@@ -48,6 +50,12 @@ public:
     // Set the number of PGS velocity iterations per step (default: 10).
     void setSolverIterations(int n) { solverIterations_ = n; }
 
+    // Set the number of Split Impulse position correction iterations (default: 3).
+    void setPositionSolveIterations(int n) { positionSolveIterations_ = n; }
+
+    // Set the number of physics sub-steps per step() call (default: 2).
+    void setSubStepCount(int n) { subStepCount_ = n; }
+
     // Interpolation helpers. t=0 -> prev state, t=1 -> curr state.
     static mu::Vec3  MU_CALLCONV interpolatePos(const RigidBody& b, float t);
     static mu::NQuat MU_CALLCONV interpolateOrient(const RigidBody& b, float t);
@@ -73,7 +81,26 @@ private:
     // iterates Dynamic bodies directly.
     std::unique_ptr<TerrainCollider>                terrainCollider_;
 
-    int solverIterations_ = 10;
+    int     solverIterations_         = 10;
+    int     positionSolveIterations_  = 3;
+    int     subStepCount_             = 2;
+    Seconds currentSubDt_{};
+
+    struct WarmEntry {
+        float accNormal     = 0.f;
+        float accTangent[2] = {};
+    };
+    struct WarmPairHash {
+        size_t operator()(std::pair<RigidBody*, RigidBody*> p) const noexcept {
+            auto h1 = std::hash<RigidBody*>{}(p.first);
+            auto h2 = std::hash<RigidBody*>{}(p.second);
+            return h1 ^ (h2 * 2654435761u);
+        }
+    };
+    static std::pair<RigidBody*, RigidBody*> normKey(RigidBody* a, RigidBody* b) {
+        return (a < b) ? std::make_pair(a, b) : std::make_pair(b, a);
+    }
+    std::unordered_map<std::pair<RigidBody*, RigidBody*>, WarmEntry, WarmPairHash> warmCache_;
 };
 
 #endif // room_server_physicsWorld_hpp

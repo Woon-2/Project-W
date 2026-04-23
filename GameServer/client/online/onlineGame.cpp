@@ -532,8 +532,8 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 	player_->body().setMotionType(MotionType::Dynamic);
 	player_->body().setMass(80.f);
 	player_->body().setLinearDamping(kPlayerLinearDamping);
-	// Prevent collision impulses from tipping/spinning the character.
-	player_->body().setAngularDamping(100.f);
+	player_->body().setAngularDamping(25.f);
+	player_->body().setUprightStiffness(4000.f);
 
 	physicsWorld_.registerBody(&player_->body(),
 		[p = player_.get()]() { p->rebuildBodyBVH(); });

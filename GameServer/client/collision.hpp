@@ -101,9 +101,12 @@ public:
 	TerrainCollider(RigidBody* terrainBody, const TerrainHeightField* hf);
 
 	// Collects up to 4 deepest ContactPoints into outContacts (appends).
+	// lookAhead: also generate contacts for vertices within this distance above terrain
+	// (free-fall snap: prevents tunneling when body is close and moving fast downward).
 	// Returns the number of contacts added.
 	int generateContacts(const RigidBody& dynamic,
-	                     std::vector<ContactPoint>& outContacts) const;
+	                     std::vector<ContactPoint>& outContacts,
+	                     float lookAhead = 0.f) const;
 
 	RigidBody* terrainBody() const { return terrainBody_; }
 
@@ -114,9 +117,9 @@ private:
 	                                  std::vector<mu::Vec3>& out);
 
 	// Tests one world-space vertex against the terrain surface.
-	// Returns true if penetrating; fills outCp (worldPos, normal, depth).
-	// localA/localB must be set by the caller.
-	bool testVertex(mu::Vec3 worldVert, ContactPoint& outCp) const;
+	// lookAhead: treat vertices up to this distance above terrain as contacting.
+	// Always uses Y-up as the contact normal (prevents slope-induced body tilt).
+	bool testVertex(mu::Vec3 worldVert, ContactPoint& outCp, float lookAhead = 0.f) const;
 
 	RigidBody*                terrainBody_ = nullptr;
 	const TerrainHeightField* heightField_ = nullptr;

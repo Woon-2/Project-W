@@ -29,30 +29,51 @@ public:
     // Apply one PGS iteration of normal + Coulomb friction impulses.
     void solveVelocity() override;
 
+    // Apply warm-start impulses (previous step's accumulated values) to bodies.
+    // Call after prepare() and before the first solveVelocity() iteration.
+    void applyWarmStart();
+
     // Set per-body external accelerations (gravity, buoyancy, etc.) that the
     // constraint solver should compensate for.  Call before prepare().
     void setExternalAccels(mu::Vec3 aA, mu::Vec3 aB);
 
-    // Position correction is handled by the Baumgarte bias in solveVelocity.
-    void solvePosition() override {}
+    // Mark this constraint as a body-terrain contact.
+    // Terrain contacts skip the Baumgarte bias to prevent the artificial upward
+    // velocity that causes visible ground vibration. Position correction is
+    // handled exclusively by Split Impulse.
+    void setTerrainContact(bool v) { isTerrainContact_ = v; }
+
+    // Split Impulse position correction: accumulates pseudo-velocities that are
+    // applied to body positions at the end of the step (never to real velocity).
+    void solvePosition() override;
 
 private:
     // Per-contact cache filled by prepare().
     struct Cache {
         float    effMassNormal;
         float    effMassTangent[2];
-        float    bias;        // Baumgarte velocity correction
-        mu::Vec3 rA;          // worldPos - bodyA->pos()
-        mu::Vec3 rB;          // worldPos - bodyB->pos()
-        mu::Vec3 tangent[2];  // orthonormal tangent frame (perp to normal)
+        float    bias;             // velocity-level: external-force compensation only
+        float    pseudoBias;       // position-level: β/dt * penetration
+        float    accNormalPseudo;  // accumulated pseudo-impulse this step (reset in prepare)
+        mu::Vec3 rA;               // worldPos - bodyA->pos()
+        mu::Vec3 rB;               // worldPos - bodyB->pos()
+        mu::Vec3 tangent[2];       // orthonormal tangent frame (perp to normal)
     };
     Cache cache_[4];
 
-    // Baumgarte beta controls how fast penetration is corrected.
-    static constexpr float kBaumgarteBeta = 0.2f;
+    // Baumgarte beta (velocity-level): creates real separating velocity each step.
+    // This is ERP in Bullet Physics. Without it, the velocity solve only zeroes
+    // relative velocity, but never generates separating velocity to push bodies apart.
+    // Combined with split impulse (below), this is how Bullet Physics handles contacts.
+    static constexpr float kBaumgarteBeta    = 0.2f;
+    // Split Impulse beta (position-level): corrects residual penetration via
+    // pseudo-velocity so it never injects energy into the real velocity solve.
+    // Bullet Physics uses erp2 = 0.8 for the same purpose.
+    static constexpr float kSplitImpulseBeta = 0.8f;
     // Penetration slop: small overlaps below this threshold are ignored.
-    static constexpr float kSlop          = 0.005f;
+    static constexpr float kSlop             = 0.005f;
 
+    bool     isTerrainContact_ = false;
     mu::Vec3 externalAccelA_{ 0.f, 0.f, 0.f };
     mu::Vec3 externalAccelB_{ 0.f, 0.f, 0.f };
 };

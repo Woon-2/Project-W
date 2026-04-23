@@ -23,26 +23,36 @@ public:
 
     void prepare(Seconds dt) override;
     void solveVelocity() override;
+    void applyWarmStart();
     // Set per-body external accelerations (gravity, buoyancy, etc.) that the
     // constraint solver should compensate for.  Call before prepare().
     void setExternalAccels(mu::Vec3 aA, mu::Vec3 aB);
 
-    void solvePosition() override {}
+    // Mark this constraint as a body-terrain contact.
+    // Terrain contacts skip the Baumgarte bias to prevent ground vibration.
+    // Position correction is handled exclusively by Split Impulse.
+    void setTerrainContact(bool v) { isTerrainContact_ = v; }
+
+    void solvePosition() override;
 
 private:
     struct Cache {
         float    effMassNormal;
         float    effMassTangent[2];
-        float    bias;
+        float    bias;             // velocity-level: external-force compensation only
+        float    pseudoBias;       // position-level: β/dt * penetration
+        float    accNormalPseudo;  // accumulated pseudo-impulse this step (reset in prepare)
         mu::Vec3 rA;
         mu::Vec3 rB;
         mu::Vec3 tangent[2];
     };
     Cache cache_[4];
 
-    static constexpr float kBaumgarteBeta = 0.2f;
-    static constexpr float kSlop          = 0.005f;
+    static constexpr float kBaumgarteBeta    = 0.2f;
+    static constexpr float kSplitImpulseBeta = 0.8f;
+    static constexpr float kSlop             = 0.005f;
 
+    bool     isTerrainContact_ = false;
     mu::Vec3 externalAccelA_{ 0.f, 0.f, 0.f };
     mu::Vec3 externalAccelB_{ 0.f, 0.f, 0.f };
 };
