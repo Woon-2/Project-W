@@ -1816,7 +1816,7 @@ void GFX::render() {
 			lpfd.idxSkybox = skyboxIdxSrv;
 			lpfd.camPos = cameraDataPBRDeferredPipeline_.pos.getXmf();
 			// TODO: 레벨의 특성에 맞게 fog 관련 값들은 런타임 수정이 필요
-			lpfd.fogDensity = 0.001f;
+			lpfd.fogDensity = 0.0005f;
 			lpfd.fogBaseHeight = 25.f;
 			lpfd.heightFalloff = 0.024f;
 			deferredLightingPerFrameData_.stage(roomIdx, &lpfd, 1u);

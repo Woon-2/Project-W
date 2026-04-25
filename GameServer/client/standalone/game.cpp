@@ -1356,64 +1356,60 @@ void Game::cullObjects() {
 		entities.push_back(g);
 	}
 
-	// perform view frusutum culling
+	// Gribb-Hartmann: extract 6 frustum planes from view-proj matrix.
+	// DirectXMath row-vector convention: v' = v * M, so P_clip[j] = dot(P, col(j)).
+	// Plane equation: dot(plane.xyz, P) + plane.w >= 0 means inside.
+	const auto vp = camera_.view() * camera_.proj();
+	const auto c0 = vp.col(0);
+	const auto c1 = vp.col(1);
+	const auto c2 = vp.col(2);
+	const auto c3 = vp.col(3);
+
+	const mu::Vec4 planes[6] = {
+		c3 + c0,   // left
+		c3 - c0,   // right
+		c3 + c1,   // bottom
+		c3 - c1,   // top
+		c2,        // near
+		c3 - c2,   // far
+	};
+
 	for (auto& entt : entities) {
 		auto& rootShape = entt->body().worldBVH().nodes[0].shape;
-
-		auto vertices = std::vector<mu::Vec3>();
-		vertices.reserve(8u);
-		auto out = std::back_inserter(vertices);
+		bool culled = false;
 
 		if (std::holds_alternative<AABB>(rootShape)) {
 			const auto& aabb = std::get<AABB>(rootShape);
-
 			const mu::Vec3 c = aabb.center;
 			const mu::Vec3 h = aabb.size * 0.5f;
 
-			out = mu::Vec3(c.x() - h.x(), c.y() - h.y(), c.z() - h.z());
-			out = mu::Vec3(c.x() + h.x(), c.y() - h.y(), c.z() - h.z());
-			out = mu::Vec3(c.x() - h.x(), c.y() - h.y(), c.z() + h.z());
-			out = mu::Vec3(c.x() + h.x(), c.y() - h.y(), c.z() + h.z());
-			out = mu::Vec3(c.x() - h.x(), c.y() + h.y(), c.z() - h.z());
-			out = mu::Vec3(c.x() + h.x(), c.y() + h.y(), c.z() - h.z());
-			out = mu::Vec3(c.x() - h.x(), c.y() + h.y(), c.z() + h.z());
-			out = mu::Vec3(c.x() + h.x(), c.y() + h.y(), c.z() + h.z());
-
+			for (const auto& pl : planes) {
+				// Projection radius of AABB onto plane normal
+				const float e = std::abs(pl.x()) * h.x()
+							  + std::abs(pl.y()) * h.y()
+							  + std::abs(pl.z()) * h.z();
+				const float dist = pl.x() * c.x() + pl.y() * c.y()
+								 + pl.z() * c.z() + pl.w();
+				if (dist + e < 0.f) { culled = true; break; }
+			}
 		} else {
 			const auto& obb = std::get<OBB>(rootShape);
-			// Compute OBB axes from orientation
+			const mu::Vec3 c  = obb.center;
 			const mu::Vec3 ax = obb.orient.rotate(mu::Vec3(1.f, 0.f, 0.f));
 			const mu::Vec3 ay = obb.orient.rotate(mu::Vec3(0.f, 1.f, 0.f));
 			const mu::Vec3 az = obb.orient.rotate(mu::Vec3(0.f, 0.f, 1.f));
-			const float    hx = obb.halfExtents.x();
-			const float    hy = obb.halfExtents.y();
-			const float    hz = obb.halfExtents.z();
-			// All 8 corners; testVertex will filter by penetration depth
-			for (int sx : {-1, 1})
-				for (int sy : {-1, 1})
-					for (int sz : {-1, 1}) {
-						out = obb.center
-							+ ax * (hx * sx)
-							+ ay * (hy * sy)
-							+ az * (hz * sz);
-					}
-		}
 
-		entt->setFrustumCulled(true);
-
-		for (auto& v : vertices) {
-			auto ndc = mu::Vec4(v, 1.f) * camera_.view() * camera_.proj();
-			ndc /= ndc.w();
-
-			if (ndc.x() >= -1.f && ndc.x() <= 1.f
-				&& ndc.y() >= -1.f && ndc.y() <= 1.f
-				&& ndc.z() >= 0.f && ndc.z() <= 1.f
-			) {
-				// a vertex is in the view frustum, it should not be culled.
-				entt->setFrustumCulled(false);
-				break;
+			for (const auto& pl : planes) {
+				const float e =
+					std::abs(pl.x()*ax.x() + pl.y()*ax.y() + pl.z()*ax.z()) * obb.halfExtents.x()
+				  + std::abs(pl.x()*ay.x() + pl.y()*ay.y() + pl.z()*ay.z()) * obb.halfExtents.y()
+				  + std::abs(pl.x()*az.x() + pl.y()*az.y() + pl.z()*az.z()) * obb.halfExtents.z();
+				const float dist = pl.x()*c.x() + pl.y()*c.y() + pl.z()*c.z() + pl.w();
+				if (dist + e < 0.f) { culled = true; break; }
 			}
 		}
+
+		entt->setFrustumCulled(culled);
 	}
 }
 
