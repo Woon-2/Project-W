@@ -67,6 +67,8 @@ struct RayHit {
 };
 
 RayHit RaycastAABB(const AABB& box, const Ray& ray);
+RayHit RaycastOBB (const OBB&  obb, const Ray& ray);
+RayHit RaycastBVH (const BVH&  bvh, const Ray& ray);
 
 AABB buildAttackAABB(mu::Vec3 pos, mu::Vec3 forward, mu::Vec3 halfExtent, float offsetFwd);
 

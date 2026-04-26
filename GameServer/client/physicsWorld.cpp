@@ -9,6 +9,7 @@ static constexpr float kAirDamping = 0.5f;
 
 PhysicsWorld::PhysicsWorld()
     : broadPhase_(std::make_unique<SAPBroadPhase>())
+    , cameraBroadPhase_(std::make_unique<SAPBroadPhase>())
 {}
 
 void PhysicsWorld::registerBody(RigidBody* body,
@@ -57,11 +58,71 @@ void PhysicsWorld::registerTerrain(RigidBody* terrainBody,
                                     const TerrainHeightField* heightField)
 {
     terrainCollider_ = std::make_unique<TerrainCollider>(terrainBody, heightField);
+    terrainHF_ = heightField;
 }
 
 void PhysicsWorld::unregisterTerrain()
 {
     terrainCollider_.reset();
+    terrainHF_ = nullptr;
+}
+
+void PhysicsWorld::registerCameraObstacle(RigidBody* body)
+{
+    cameraBroadPhase_->add(body);
+    cameraBroadPhase_->update();
+}
+
+void PhysicsWorld::unregisterCameraObstacle(RigidBody* body)
+{
+    cameraBroadPhase_->remove(body);
+    cameraBroadPhase_->update();
+}
+
+float PhysicsWorld::queryCameraArm(mu::Vec3 pivot, mu::Vec3 desiredEye, float spherePad) const
+{
+    const float armLen = (desiredEye - pivot).len();
+    if (armLen < 1e-6f) return 0.f;
+    const mu::Vec3 armDir = (desiredEye - pivot) * (1.0f / armLen);
+    const Ray armRay{ pivot, armDir };
+    float allowed = armLen;
+
+    // Terrain: sample N=6 points along the arm, find the first below ground.
+    if (terrainHF_ && terrainCollider_) {
+        const mu::Vec3 origin = terrainCollider_->terrainBody()->pos();
+        constexpr int N = 6;
+        for (int i = 1; i <= N; ++i) {
+            const float t  = static_cast<float>(i) / N;
+            const mu::Vec3 p = pivot + armDir * (t * armLen);
+            const float lx = p.x() - origin.x();
+            const float lz = p.z() - origin.z();
+            if (lx < 0.f || lx > terrainHF_->sizeX) continue;
+            if (lz < 0.f || lz > terrainHF_->sizeZ) continue;
+            const float groundY = origin.y() + terrainHF_->getHeightAt(lx, lz);
+            if (p.y() < groundY + kCameraMinGroundClearance) {
+                allowed = std::min(allowed, (t - 1.0f / N) * armLen);
+                break;
+            }
+        }
+    }
+
+    // Obstacle broad phase: arm AABB expanded by spherePad.
+    const mu::Vec3 armMin = min(pivot, desiredEye) - mu::Vec3(spherePad, spherePad, spherePad);
+    const mu::Vec3 armMax = max(pivot, desiredEye) + mu::Vec3(spherePad, spherePad, spherePad);
+    const AABB armAABB{
+        .center = (armMin + armMax) * 0.5f,
+        .size   = armMax - armMin
+    };
+    const auto candidates = cameraBroadPhase_->queryAABB(armAABB);
+
+    // Obstacle narrow phase: BVH ray cast on each candidate.
+    for (const auto* body : candidates) {
+        const RayHit hit = RaycastBVH(body->worldBVH(), armRay);
+        if (hit.hit)
+            allowed = std::min(allowed, hit.t - spherePad);
+    }
+
+    return std::max(0.f, allowed);
 }
 
 void PhysicsWorld::step(Seconds dt)

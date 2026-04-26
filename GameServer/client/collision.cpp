@@ -237,6 +237,50 @@ CollisionResult collides(const BVH& a, const BVH& b) {
     return CollisionResult{ .hit = false };
 }
 
+RayHit RaycastOBB(const OBB& obb, const Ray& ray)
+{
+    const auto invRot = ~obb.orient;
+    const Ray local   = { invRot.rotate(ray.origin - obb.center),
+                          invRot.rotate(ray.dir) };
+    const AABB box    = { mu::Vec3(0.f, 0.f, 0.f), obb.halfExtents * 2.f };
+    RayHit hit = RaycastAABB(box, local);
+    if (hit.hit)
+        hit.normal = obb.orient.rotate(mu::Vec3(hit.normal));
+    return hit;
+}
+
+RayHit RaycastBVH(const BVH& bvh, const Ray& ray)
+{
+    RayHit best{ .hit = false, .t = std::numeric_limits<float>::max() };
+    if (bvh.empty()) return best;
+
+    int stack[64];
+    int top = 0;
+    stack[top++] = 0;
+
+    while (top > 0) {
+        const BVHNode& node = bvh.nodes[stack[--top]];
+        const RayHit b = RaycastAABB(node.bounds, ray);
+        if (!b.hit || b.t >= best.t) continue;
+
+        if (node.isLeaf()) {
+            const RayHit s = std::visit([&](const auto& shape) -> RayHit {
+                if constexpr (std::is_same_v<std::decay_t<decltype(shape)>, AABB>)
+                    return RaycastAABB(shape, ray);
+                else
+                    return RaycastOBB(shape, ray);
+            }, node.shape);
+            if (s.hit && s.t < best.t) best = s;
+        } else {
+            for (int c : node.children)
+                stack[top++] = c;
+        }
+    }
+
+    best.hit = (best.t < std::numeric_limits<float>::max());
+    return best;
+}
+
 AABB buildAttackAABB(mu::Vec3 pos, mu::Vec3 forward, mu::Vec3 halfExtent, float offsetFwd) {
     return AABB{
         .center = pos + forward * offsetFwd,

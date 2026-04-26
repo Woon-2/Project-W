@@ -1,22 +1,39 @@
 ﻿#include "pch.hpp"
 #include "camera.hpp"
+#include "physicsWorld.hpp"
 
-void Camera::update() {
+void Camera::update(float dt) {
 	auto pTarget = pTargetObject_.lock();
 	if (!pTarget) {
 		return;
 	}
 
-	// 카메라 자체의 회전 적용
 	auto rotatedOffsetFromTarget = offsetFromTargetPreRotation_.rotate(offsetFromTarget_);
-	// 타겟 오브젝트의 회전 적용
 	rotatedOffsetFromTarget = pTarget->orient().rotate(rotatedOffsetFromTarget);
-	// 타겟 오브젝트에 대한 카메라의 초점 오프셋 적용
 	auto rotatedOffsetTargetPivot = xxPreRotation_.rotate(offsetTargetPivot_);
 	rotatedOffsetTargetPivot = pTarget->orient().rotate(rotatedOffsetTargetPivot);
 
-	eye_ = pTarget->renderState().pos + rotatedOffsetFromTarget;
 	at_ = pTarget->renderState().pos + rotatedOffsetTargetPivot;
+	const mu::Vec3 desiredEye = pTarget->renderState().pos + rotatedOffsetFromTarget;
+	const float desiredLen = (desiredEye - at_).len();
+
+	if (currentArmLength_ <= 0.f)
+		currentArmLength_ = desiredLen;
+
+	const float allowed = (physicsWorld_ && desiredLen > 1e-6f)
+		? physicsWorld_->queryCameraArm(at_, desiredEye, cameraRadius_)
+		: desiredLen;
+
+	// fast-in: snap immediately when blocked; slow-out: lerp back to full distance.
+	if (allowed < currentArmLength_)
+		currentArmLength_ = allowed;
+	else
+		currentArmLength_ += std::min(armReturnRate_ * dt, allowed - currentArmLength_);
+
+	if (desiredLen > 1e-6f)
+		eye_ = at_ + (desiredEye - at_) * (currentArmLength_ / desiredLen);
+	else
+		eye_ = desiredEye;
 
 	view_ = mu::lookAt(eye_, at_, mu::NVec3(0.f, 1.f, 0.f));
 }

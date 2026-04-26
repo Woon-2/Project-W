@@ -11,8 +11,10 @@
 ```
 PhysicsWorld
  ├─ std::vector<Entry>             // { RigidBody*, onRebuildBVH 콜백, collisionGroup, collisionMask }
- ├─ SAPBroadPhase                  // X축 Sort-and-Sweep, O(n log n)
+ ├─ SAPBroadPhase broadPhase_      // X축 Sort-and-Sweep, O(n log n) — 일반 body-body 충돌
+ ├─ SAPBroadPhase cameraBroadPhase_// 카메라 장애물 전용 독립 broad phase
  ├─ std::optional<TerrainCollider> // 지형 충돌 (BroadPhase 우회)
+ ├─ const TerrainHeightField* terrainHF_  // queryCameraArm 지형 샘플링용
  ├─ std::vector<ContactConstraint> // 매 step 재생성
  ├─ std::vector<unique_ptr<Constraint>> jointConstraints_  // 소유 joint (독립 사용)
  └─ std::vector<Constraint*>       jointRefs_              // 비소유 ref (Ragdoll용)
@@ -360,6 +362,10 @@ player_->setVelocity(mu::Vec3(newX, fullVel.y(), newZ));
    - min endpoint 도달: active set 내 모든 body와 Y/Z overlap 검사 → 쌍 생성
    - max endpoint 도달: active set에서 제거
    - Static-Static 쌍 제외
+3. `queryAABB(const AABB& box)`: query box를 기준으로 겹치는 body 목록 반환
+   - 정렬된 `endpoints_` sweep: `!ep.isMax && ep.value > boxXMax`에서 early break
+   - max endpoint 발견 시: `ep.value >= boxXMin && overlapYZ()` 충족하면 result에 추가
+   - break 이후 active에 남은 body: xMax > boxXMax > boxXMin → X 조건 자동 충족, YZ만 재검
 
 **Static body 처리:** `ContactConstraint::prepare()`에서 `invMass == 0`인 body의
 angular 기여를 0으로 처리 (static body의 default `invInertiaWorld_`가 identity여서
@@ -371,3 +377,104 @@ effective mass 오산 방지). `applyImpulse()`는 이미 `invMass == 0` guard �
 
 `ContactPoint` struct는 `collision.hpp`에 정의한다 (Phase 4에서 이동).
 `contactConstraint.hpp`는 `rigidBody.hpp → collision.hpp` 체인으로 이를 획득한다.
+
+---
+
+## 카메라 충돌 회피 (Spring Arm + BVH Raycast)
+
+`camera.hpp/cpp`, `physicsWorld.hpp/cpp`, `broadPhase.hpp/cpp`, `collision.hpp/cpp`
+
+### 설계 원칙
+
+impulse 기반 충돌 해소는 진동(jitter) 유발 → arm 길이 직접 제어 방식(Spring Arm) 채택.
+- **fast-in**: 장애물 감지 시 arm 길이 즉시 단축 (snap)
+- **slow-out**: 장애물 소멸 시 `armReturnRate_ * dt` 속도로 천천히 복귀 (lerp)
+
+### queryCameraArm 알고리즘
+
+```
+PhysicsWorld::queryCameraArm(pivot, desiredEye, spherePad) → allowedArmLength:
+  armLen = length(desiredEye - pivot)
+  armDir = normalize(desiredEye - pivot)
+  allowed = armLen
+
+  [지형 N=6 샘플링]
+    origin = terrainCollider_->terrainBody()->pos()
+    for i in 1..6:
+      t = i / 6.f
+      p = pivot + armDir * (t * armLen)
+      groundY = origin.y + terrainHF_->getHeightAt(p.x-origin.x, p.z-origin.z)
+        // getHeightAt() 내부에서 이미 * sizeY 처리 → 외부에서 추가 곱셈 불필요
+      if p.y < groundY + kCameraMinGroundClearance(0.3f):
+        allowed = min(allowed, (t - 1/6.f) * armLen); break
+
+  [장애물 broad phase]
+    armAABB = AABB enclosing [pivot, desiredEye] expanded by spherePad
+    candidates = cameraBroadPhase_->queryAABB(armAABB)
+
+  [장애물 narrow phase]
+    for body in candidates:
+      hit = RaycastBVH(body->worldBVH(), armRay)
+      if hit.hit: allowed = min(allowed, hit.t - spherePad)
+
+  return max(0.f, allowed)
+```
+
+### Camera::update(float dt)
+
+```
+desiredLen = length(desiredEye - at_)
+if currentArmLength_ <= 0: currentArmLength_ = desiredLen  // 초기화 가드
+allowed = physicsWorld_ ? queryCameraArm(at_, desiredEye, cameraRadius_) : desiredLen
+
+if allowed < currentArmLength_:
+  currentArmLength_ = allowed                                 // fast-in (즉시)
+else:
+  currentArmLength_ += min(armReturnRate_ * dt, allowed - currentArmLength_)  // slow-out
+
+eye_ = at_ + (desiredEye - at_) * (currentArmLength_ / desiredLen)
+```
+
+### RaycastOBB 구현 원칙
+
+OBB를 로컬 공간 AABB로 환원해 기존 `RaycastAABB`를 재사용.
+```cpp
+invRot = ~obb.orient   // NQuat::operator~ = XMQuaternionConjugate (켤레 사각수)
+local.origin = invRot.rotate(ray.origin - obb.center)
+local.dir    = invRot.rotate(ray.dir)
+box = AABB{ {0,0,0}, obb.halfExtents * 2.f }
+hit = RaycastAABB(box, local)
+// t 값은 회전 불변 → 별도 변환 불필요
+if hit.hit: hit.normal = obb.orient.rotate(hit.normal)  // normal만 월드 복원
+```
+
+### RaycastBVH 구현 원칙
+
+고정 크기 `int stack[64]`으로 BVH 트리 순회 (힙 할당 없음, 깊이 < 20).
+```
+while stack not empty:
+  node = bvh.nodes[stack.pop()]
+  b = RaycastAABB(node.bounds, ray)
+  if !b.hit || b.t >= best.t: continue  // bounds fast-reject
+  if node.isLeaf():
+    s = std::visit(AABB→RaycastAABB / OBB→RaycastOBB, node.shape)
+    if s.hit && s.t < best.t: best = s
+  else:
+    for child in node.children: stack.push(child)
+```
+
+### 카메라 장애물 등록
+
+```cpp
+// 씬 오브젝트(벽, 나무 등)를 장애물로 등록 — 일반 physicsWorld broadPhase와 독립
+physicsWorld_.registerCameraObstacle(&obj.body());
+// 해제
+physicsWorld_.unregisterCameraObstacle(&obj.body());
+// 현재 지형은 queryCameraArm 내부에서 terrainHF_ 직접 샘플링, 별도 등록 불필요
+```
+
+Camera와 PhysicsWorld 연결:
+```cpp
+camera_.setPhysicsWorld(&physicsWorld_);
+// Camera::update(dt) 에서 physicsWorld_->queryCameraArm() 호출
+```

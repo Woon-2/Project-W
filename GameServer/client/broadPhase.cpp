@@ -13,6 +13,16 @@ void BruteForceBroadPhase::remove(RigidBody* body)
         bodies_.erase(it);
 }
 
+std::vector<RigidBody*> BruteForceBroadPhase::queryAABB(const AABB& box) const
+{
+    std::vector<RigidBody*> result;
+    for (auto* body : bodies_) {
+        if (collides(body->worldAABB(), box).hit)
+            result.push_back(body);
+    }
+    return result;
+}
+
 std::vector<BodyPair> BruteForceBroadPhase::queryPairs()
 {
     std::vector<BodyPair> pairs;
@@ -99,6 +109,41 @@ bool SAPBroadPhase::overlapYZ(const AABB& a, const AABB& b)
     return true;
 }
 
+std::vector<RigidBody*> SAPBroadPhase::queryAABB(const AABB& box) const
+{
+    std::vector<RigidBody*> result;
+    std::vector<RigidBody*> active;
+
+    const float boxXMin = box.center.x() - box.size.x() * 0.5f;
+    const float boxXMax = box.center.x() + box.size.x() * 0.5f;
+
+    for (const Endpoint& ep : endpoints_) {
+        if (!ep.isMax && ep.value > boxXMax)
+            break; // min endpoint past box right edge: no further overlaps possible
+
+        if (!ep.isMax) {
+            // min endpoint within range: body starts before box ends in X
+            active.push_back(ep.body);
+        } else {
+            // max endpoint: body's X range ends here
+            auto it = std::ranges::find(active, ep.body);
+            if (it != active.end()) {
+                if (ep.value >= boxXMin && overlapYZ(ep.body->worldAABB(), box))
+                    result.push_back(ep.body);
+                active.erase(it);
+            }
+        }
+    }
+
+    // Bodies still in active had xMin <= boxXMax and xMax > boxXMax > boxXMin: X overlap guaranteed.
+    for (RigidBody* body : active) {
+        if (overlapYZ(body->worldAABB(), box))
+            result.push_back(body);
+    }
+
+    return result;
+}
+
 std::vector<BodyPair> SAPBroadPhase::queryPairs()
 {
     std::vector<BodyPair> pairs;
@@ -130,6 +175,26 @@ std::vector<BodyPair> SAPBroadPhase::queryPairs()
     }
 
     return pairs;
+}
+
+std::vector<RigidBody*> DBVTBroadPhase::queryAABB(const AABB& box) const
+{
+    std::vector<RigidBody*> result;
+    if (!root_) return result;
+
+    std::vector<const Node*> stack;
+    stack.push_back(root_);
+    while (!stack.empty()) {
+        const Node* node = stack.back(); stack.pop_back();
+        if (!collides(node->aabb, box).hit) continue;
+        if (node->isLeaf()) {
+            result.push_back(node->body);
+        } else {
+            if (node->left)  stack.push_back(node->left);
+            if (node->right) stack.push_back(node->right);
+        }
+    }
+    return result;
 }
 
 void DBVTBroadPhase::add(RigidBody* body) {

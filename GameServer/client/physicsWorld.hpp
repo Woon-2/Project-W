@@ -61,6 +61,17 @@ public:
     // Remove the terrain collider. Safe to call when no terrain is registered.
     void unregisterTerrain();
 
+    // Register a body as a camera obstacle for queryCameraArm().
+    // Call update() on the camera broad phase immediately, so subsequent
+    // queryCameraArm() calls see the updated state.
+    void registerCameraObstacle(RigidBody* body);
+    void unregisterCameraObstacle(RigidBody* body);
+
+    // Compute the maximum arm length from pivot toward desiredEye that
+    // avoids registered terrain and camera obstacles.
+    // spherePad expands obstacle AABBs and offsets hit distances.
+    float MU_CALLCONV queryCameraArm(mu::Vec3 pivot, mu::Vec3 desiredEye, float spherePad) const;
+
     // Main simulation tick (integrate + detect + solve).
     void step(Seconds dt);
 
@@ -123,6 +134,12 @@ private:
     // Terrain body is NOT in entries_ or broadPhase_; TerrainCollider
     // iterates Dynamic bodies directly.
     std::unique_ptr<TerrainCollider>            terrainCollider_;
+    const TerrainHeightField*                   terrainHF_ = nullptr;
+
+    // Separate broad phase for camera obstacle queries (not part of physics sim).
+    std::unique_ptr<BroadPhase>                 cameraBroadPhase_;
+
+    static constexpr float kCameraMinGroundClearance = 0.3f;
 
     int     solverIterations_         = 10;
     int     positionSolveIterations_  = 3;

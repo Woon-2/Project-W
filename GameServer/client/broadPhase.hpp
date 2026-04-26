@@ -33,6 +33,10 @@ public:
     // May include false positives; the narrow phase filters them.
     // Static-Static pairs are never returned.
     virtual std::vector<BodyPair> queryPairs() = 0;
+
+    // Return all bodies whose world AABB overlaps box.
+    // Must be called after update() to reflect current body positions.
+    virtual std::vector<RigidBody*> queryAABB(const AABB& box) const = 0;
 };
 
 // O(n^2) reference implementation.
@@ -42,7 +46,8 @@ public:
     void add(RigidBody* body) override;
     void remove(RigidBody* body) override;
     void update() override {}   // no data structure to update
-    std::vector<BodyPair> queryPairs() override;
+    std::vector<BodyPair>    queryPairs() override;
+    std::vector<RigidBody*>  queryAABB(const AABB& box) const override;
 
 private:
     std::vector<RigidBody*> bodies_;
@@ -62,7 +67,11 @@ public:
 
     // Sweeps the sorted endpoint list with an active set, then checks Y/Z overlap.
     // Static-Static pairs are never returned.
-    std::vector<BodyPair> queryPairs() override;
+    std::vector<BodyPair>   queryPairs() override;
+
+    // Sweeps sorted endpoints up to box.xMax, then filters by Y/Z.
+    // Must be called after update().
+    std::vector<RigidBody*> queryAABB(const AABB& box) const override;
 
 private:
     struct Endpoint {
@@ -94,7 +103,10 @@ public:
     void remove(RigidBody* body) override;
     void update() override;
 
-    std::vector<BodyPair> queryPairs() override;
+    std::vector<BodyPair>   queryPairs() override;
+
+    // Traverses the DBVT tree and collects leaves whose fat AABB overlaps box.
+    std::vector<RigidBody*> queryAABB(const AABB& box) const override;
 
 private:
     static AABB merge(const AABB& a, const AABB& b);

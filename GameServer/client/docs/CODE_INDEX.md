@@ -40,7 +40,9 @@
 | `collides(BVH, BVH)` | `collision.hpp #56` | BVH-BVH 재귀 교차 (leaf-leaf 쌍에서만 정밀 판정; 내부 노드는 bounds AABB fast-reject만 사용) |
 | `collides(BVH, AABB)` | `collision.hpp #57` | BVH vs 공격 hitbox |
 | `RayHit` / `RaycastAABB` | `collision.hpp #62-69` | 레이-AABB 교차 |
-| `buildAttackAABB` | `collision.hpp #71` | pos + forward + halfExtent + offsetFwd → AABB |
+| `RaycastOBB` | `collision.hpp #70` | OBB 로컬 공간으로 ray 변환 후 RaycastAABB, normal 월드 복원 |
+| `RaycastBVH` | `collision.hpp #71` | 고정 크기 스택(64) BVH 순회; leaf에서 AABB/OBB std::visit 분기 |
+| `buildAttackAABB` | `collision.hpp #73` | pos + forward + halfExtent + offsetFwd → AABB |
 
 **bone 연결 BVH 월드 변환 체인:**
 ```
@@ -85,9 +87,11 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `RigidBody::setUserData()` / `userData()` | `rigidBody.hpp` | void* 게임 레이어 연결 포인터 (Object* 역참조용) |
 | `PhysicsWorld::forEachContact()` | `physicsWorld.hpp` | step() 후 활성 ContactConstraint 순회 (템플릿) |
 | `BodyPair` struct | `broadPhase.hpp` | broad phase 결과 쌍 |
-| `BroadPhase` (abstract) | `broadPhase.hpp` | add/remove/update/queryPairs 인터페이스 |
-| `BruteForceBroadPhase` | `broadPhase.hpp` | O(n²) 참조 구현 (후보 비교용으로 보존) |
-| `SAPBroadPhase` | `broadPhase.hpp` | X축 Sort-and-Sweep, O(n log n) (기본 사용) |
+| `BroadPhase` (abstract) | `broadPhase.hpp #36-40` | add/remove/update/queryPairs/queryAABB 인터페이스 |
+| `BroadPhase::queryAABB` | `broadPhase.hpp #39` | AABB 쿼리 순수 가상 메서드 — 카메라 arm 장애물 후보 조회 |
+| `BruteForceBroadPhase` | `broadPhase.hpp #50` | O(n²) 참조 구현 (후보 비교용으로 보존) |
+| `SAPBroadPhase` | `broadPhase.hpp #74` | X축 Sort-and-Sweep, O(n log n) (기본 사용) |
+| `SAPBroadPhase::queryAABB` | `broadPhase.hpp #74` | 정렬된 endpoints + active-set sweep으로 box 겹침 후보 반환 |
 | `TerrainHeightField` struct | `terrain.hpp` | CPU-side 높이 데이터 (getHeightAt, getNormalAt) |
 | `TerrainCollider` class | `collision.hpp` | Dynamic body ↔ 지형 높이맵 contact 생성 |
 | `PhysicsWorld` class | `physicsWorld.hpp` | 시뮬레이션 진입점 |
@@ -99,6 +103,10 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `PhysicsWorld::removeJointRef()` | `physicsWorld.hpp #53` | 비소유 joint ref 제거 |
 | `PhysicsWorld::registerTerrain()` | `physicsWorld.hpp #57` | Static 지형 body + heightField 등록 |
 | `PhysicsWorld::unregisterTerrain()` | `physicsWorld.hpp #60` | 지형 collider 해제 |
+| `PhysicsWorld::registerCameraObstacle()` | `physicsWorld.hpp #67` | body를 카메라 obstacle로 cameraBroadPhase_에 등록 |
+| `PhysicsWorld::unregisterCameraObstacle()` | `physicsWorld.hpp #68` | 카메라 obstacle 등록 해제 |
+| `PhysicsWorld::queryCameraArm()` | `physicsWorld.hpp #73` | pivot→desiredEye arm 허용 길이 반환 (지형 N=6 샘플 + BVH raycast) |
+| `PhysicsWorld::cameraBroadPhase_` | `physicsWorld.hpp #140` | 카메라 전용 SAPBroadPhase 인스턴스 (일반 physicsWorld broadPhase와 독립) |
 | `PhysicsWorld::step()` | `physicsWorld.hpp #63` | integrate → generateContacts → solveConstraints |
 | `PhysicsWorld::setGravity()` | `physicsWorld.hpp #67` | Dynamic body 중력 설정 |
 | `PhysicsWorld::setSolverIterations()` | `physicsWorld.hpp #70` | PGS 반복 횟수 (기본 10, ragdoll 활성 시 20) |
@@ -599,6 +607,16 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 **Camera::updateGFX() 등록 파이프라인 (`camera.cpp`):**
 - PBRPipeline, PBRSkinnedPipeline, SkyboxPipeline, BVPipeline, BillboardPipeline, **TerrainPipeline**, MeshParticlePipeline, SmokeBlendCGPipeline, SwordSlashPipeline, **TwoSidesPipeline** CameraData 자기등록
+
+**Camera Spring Arm 시스템 (`camera.hpp` / `camera.cpp`):**
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| `Camera::update(float dt)` | `camera.cpp #5` | Spring Arm 충돌 회피: queryCameraArm → fast-in/slow-out arm 길이 제어 |
+| `Camera::setPhysicsWorld()` | `camera.hpp #31` | PhysicsWorld 연결 (queryCameraArm 호출 경로) |
+| `Camera::currentArmLength_` | `camera.hpp #74` | 현재 arm 길이 (fast-in 즉시 단축 / slow-out dt 기반 복귀) |
+| `Camera::armReturnRate_` | `camera.hpp #75` | slow-out 복귀 속도 (units/sec, 기본 3.f) |
+| `Camera::cameraRadius_` | `camera.hpp #76` | BVH raycast spherePad (기본 0.2f) |
 
 **AssetManager::loadGFXAssets (`AssetManager.hpp #9`):**
 - `loadGFXAssets(GFX& gfx, const GFX::AssetConfigs& configs = {})` — configs를 `gfx.loadAssets(configs)`로 전달

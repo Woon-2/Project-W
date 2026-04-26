@@ -4,6 +4,8 @@
 #include "gfx.hpp"
 #include "object.hpp"
 
+class PhysicsWorld;
+
 class Camera {
 public:
 	void setTargetObject(const std::shared_ptr<Object>& pObject) { pTargetObject_ = pObject; }
@@ -23,8 +25,10 @@ public:
 	void MU_CALLCONV setOffsetTargetPivot(mu::Vec3 offset) { offsetTargetPivot_ = offset; }
 	mu::Vec3 MU_CALLCONV offsetTargetPivot() const { return offsetTargetPivot_; }
 
-	void update();
+	void update(float dt);
 	void updateGFX(GFX& gfx);
+
+	void setPhysicsWorld(PhysicsWorld* pw) { physicsWorld_ = pw; }
 
 	void setPerspective(mu::Degree fovy, float aspect, float nearz, float farz);
 	void setOrtho(float minX, float minY, float maxX, float maxY, float minZ, float maxZ);
@@ -65,6 +69,11 @@ private:
 	mu::Vec3 at_{};
 	mu::Mat4x4 view_{};
 	mu::Mat4x4 proj_{};
+
+	PhysicsWorld* physicsWorld_  = nullptr;
+	float currentArmLength_      = 0.f;   // actual arm length (may be shorter than desired)
+	float armReturnRate_         = 3.f;   // units/sec, slow-out return speed
+	float cameraRadius_          = 0.2f;  // sphere pad for obstacle queries
 };
 
 // Returns the screen-space pixel position of a world-space point.

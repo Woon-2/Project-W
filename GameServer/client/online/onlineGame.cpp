@@ -974,7 +974,7 @@ void Game::update(Milliseconds deltaTime) {
 		player_->pos()
 	);
 
-	camera_.update();
+	camera_.update(std::chrono::duration_cast<Seconds>(deltaTime).count());
 	dirLight_.update(deltaTime);
 	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), assetConfigs_.cascade, assetConfigs_.shadowMap);
 
