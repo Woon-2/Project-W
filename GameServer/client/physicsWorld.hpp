@@ -139,7 +139,7 @@ private:
     // Separate broad phase for camera obstacle queries (not part of physics sim).
     std::unique_ptr<BroadPhase>                 cameraBroadPhase_;
 
-    static constexpr float kCameraMinGroundClearance = 0.3f;
+    static constexpr float kCameraMinGroundClearance = 0.15f;
 
     int     solverIterations_         = 10;
     int     positionSolveIterations_  = 3;

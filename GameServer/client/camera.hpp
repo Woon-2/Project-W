@@ -31,6 +31,11 @@ public:
 	void setPerspective(mu::Degree fovy, float aspect, float nearz, float farz);
 	void setOrtho(float minX, float minY, float maxX, float maxY, float minZ, float maxZ);
 
+	void setStiffness(float stiffness) { stiffness_ = stiffness; }
+	float stiffness() const { return stiffness_; }
+	void setDamping(float damping) { damping_ = damping; }
+	float damping() const { return damping_; }
+
 	mu::Vec3 MU_CALLCONV eye() const { return eye_; }
 	mu::Vec3 MU_CALLCONV at() const { return at_; }
 
@@ -45,6 +50,13 @@ private:
 	mu::NQuat offsetFromTargetPreRotation_{};
 	// 타겟 오브젝트에 대한 카메라의 초점 오프셋
 	mu::Vec3 offsetTargetPivot_{};
+
+	// 스프링 기능 관련 변수들
+	mu::Vec3 springPos_{};          // 충돌 미적용 스프링 위치 (스프링 앵커)
+	mu::Vec3 velocity_{};
+	float stiffness_ = 200.f;
+	float damping_ = 20.f;
+	bool springInitialized_ = false;
 
 	// perspective용
 	mu::Degree fovy_ = 90.f;
@@ -70,7 +82,7 @@ private:
 	PhysicsWorld* physicsWorld_  = nullptr;
 	float currentArmLength_      = 0.f;   // actual arm length (may be shorter than desired)
 	float armReturnRate_         = 3.f;   // units/sec, slow-out return speed
-	float cameraRadius_          = 0.2f;  // sphere pad for obstacle queries
+	float cameraRadius_          = 0.15f;  // sphere pad for obstacle queries
 };
 
 // Returns the screen-space pixel position of a world-space point.

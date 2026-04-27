@@ -719,7 +719,7 @@ void Game::importPlayerStart(std::ifstream& ifs, Player& player) {
 	player.body().setMass(80.f);
 	player.body().setLinearDamping(kPlayerLinearDamping);
 	player.body().setAngularDamping(25.f);
-	player.body().setUprightStiffness(4000.f);
+	player.body().setUprightStiffness(40000.f);
 
 	//Equipment rifle{};
 	//rifle.socketType = Bone::SocketType::RightHand;
