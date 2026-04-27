@@ -930,7 +930,6 @@ void Game::update(Milliseconds deltaTime) {
 		g->rebuildBodyBVH();
 	}
 
-	//std::cout << "player pos : " << player_->pos().x() << ", " << player_->pos().y() << ", " << player_->pos().z() << '\n';
 	if (moveStateSendAcc_ >= moveStateSendInterval_) {
 		moveStateSendAcc_ = 0s;
 
@@ -974,7 +973,7 @@ void Game::update(Milliseconds deltaTime) {
 		player_->pos()
 	);
 
-	camera_.update(std::chrono::duration_cast<Seconds>(deltaTime).count());
+	camera_.update(deltaTime);
 	dirLight_.update(deltaTime);
 	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), assetConfigs_.cascade, assetConfigs_.shadowMap);
 
@@ -1372,25 +1371,6 @@ void Game::processInputGame(Milliseconds deltaTime) {
 
 	currVelocity_ = player_->velocity();
 
-	// 카메라 1인칭 모드 설정
-	if ( !(keyboardStatePrev_['1'] & 0x80)
-		&& keyboardStateCurr_['1'] & 0x80
-	) {
-		camera_.setOffsetFromTargetPreRotation( mu::NQuat{} );
-		camera_.setOffsetFromTarget( mu::Vec3( 0.f, 1.6f, 0.25f ) );
-		camera_.setOffsetTargetPivot( mu::Vec3(0.f, 1.6f, 8.f));
-		cameraMode_ = CameraMode::FirstPerson;
-	} 
-	// 카메라 3인칭 모드 설정
-	if ( !(keyboardStatePrev_['3'] & 0x80)
-		&& keyboardStateCurr_['3'] & 0x80
-	) {
-		camera_.setXXPreRotation( mu::NQuat{} );
-		camera_.setOffsetFromTarget( mu::Vec3( 0.f, 1.8f, -2.5f ) );
-		camera_.setOffsetTargetPivot( mu::Vec3(0.f, 1.f, 0.f));
-		cameraMode_ = CameraMode::ThirdPerson;
-	}
-
 	// C key: toggle CSM cascade debug visualization
 	if ( (keyboardStateCurr_['C'] & 0x80) && !(keyboardStatePrev_['C'] & 0x80) ) {
 		gfx_.toggleCsmDebugVisualization();
@@ -1411,68 +1391,34 @@ void Game::processInputGame(Milliseconds deltaTime) {
 	// (pitch를 플레이어에 적용하게 되면, 플레이어가 고개를 들고 내리는 게 아니라 굴러버린다.)
 	const auto mouseSensitivity = mu::pi * 2.f;
 
-	switch (cameraMode_) {
-	case CameraMode::ThirdPerson: {
-		const auto prevForward = player_->forward();
+	const auto prevForward = player_->forward();
 
-		const auto yaw = mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left));
-		auto yawRotation = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), yaw);
+	const auto yaw = mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left));
+	auto yawRotation = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), yaw);
 
-		cameraPitch_ = std::clamp(
-			static_cast<float>(cameraPitch_) + mouseDeltaY_ * mouseSensitivity / static_cast<float>(gClientRect.bottom - gClientRect.top),
-			-mu::pi * 0.16f,
-			mu::pi * 0.3f
-		);
+	cameraPitch_ = std::clamp(
+		static_cast<float>(cameraPitch_) + mouseDeltaY_ * mouseSensitivity / static_cast<float>(gClientRect.bottom - gClientRect.top),
+		-mu::pi * 0.16f,
+		mu::pi * 0.3f
+	);
 
-		if (!playerDead_) {
-			player_->setOrient(player_->orient() * yawRotation);
-			camera_.setOffsetFromTargetPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, mu::Radian(0.f)) );
-		}
-		else {
-			cameraYaw_ += yaw;
-			camera_.setOffsetFromTargetPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, cameraYaw_) );
-		}
-
-		const auto currForward = player_->forward();
-
-		if (prevForward != currForward) {
-			sendMouseMovePacket();
-		}
-
-		mouseDeltaX_ = 0;
-		mouseDeltaY_ = 0;
-		break;
+	if (!playerDead_) {
+		player_->setOrient(player_->orient() * yawRotation);
+		camera_.setOffsetFromTargetPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, mu::Radian(0.f)) );
 	}
-	case CameraMode::FirstPerson: {
-		const auto yaw = mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left));
-		auto yawRotation = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), yaw);
+	else {
+		cameraYaw_ += yaw;
+		camera_.setOffsetFromTargetPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, cameraYaw_) );
+	}
 
-		if (!playerDead_) {
-			player_->setOrient(player_->orient() * yawRotation);
-		}
+	const auto currForward = player_->forward();
 
-		cameraPitch_ = std::clamp(
-			static_cast<float>(cameraPitch_) + mouseDeltaY_ * mouseSensitivity / static_cast<float>(gClientRect.bottom - gClientRect.top),
-			-mu::pi * 0.16f,
-			mu::pi * 0.3f
-		);
-
-		if (!playerDead_) {
-			player_->setOrient(player_->orient() * yawRotation);
-			camera_.setXXPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, mu::Radian(0.f)) );
-		}
-		else {
-			cameraYaw_ += yaw;
-			camera_.setXXPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, cameraYaw_) );
-		}
-
+	if (prevForward != currForward) {
 		sendMouseMovePacket();
+	}
 
-		mouseDeltaX_ = 0;
-		mouseDeltaY_ = 0;
-		break;
-	}
-	}
+	mouseDeltaX_ = 0;
+	mouseDeltaY_ = 0;
 
 	// 플레이어 공격: LButton 클릭 시 서버에 C_Attack 전송 + 로컬 이펙트 재생
 	if (!playerDead_

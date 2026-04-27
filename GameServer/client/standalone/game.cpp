@@ -915,7 +915,7 @@ void Game::update(Milliseconds deltaTime) {
 		player_->pos()
 	);
 
-	camera_.update(std::chrono::duration_cast<Seconds>(deltaTime).count());
+	camera_.update(deltaTime);
 	dirLight_.update(deltaTime);
 	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), assetConfigs_.cascade, assetConfigs_.shadowMap);
 
@@ -1199,21 +1199,6 @@ void Game::processInput(Milliseconds deltaTime) {
 		player_->setVelocity(mu::Vec3(newX, fullVel.y(), newZ));
 	}
 
-	// 카메라 1인칭 모드 설정
-	if ( keyboardStateCurr_['1'] & 0x80 ) {
-		camera_.setOffsetFromTargetPreRotation( mu::NQuat{} );
-		camera_.setOffsetFromTarget( mu::Vec3( 0.f, 2.f, 0.5f ) );
-		camera_.setOffsetTargetPivot( mu::Vec3(0.f, 2.f, 8.f));
-		cameraMode_ = CameraMode::FirstPerson;
-	} 
-	// 카메라 3인칭 모드 설정
-	if ( keyboardStateCurr_['3'] & 0x80 ) {
-		camera_.setXXPreRotation( mu::NQuat{} );
-		camera_.setOffsetFromTarget( mu::Vec3( 0.f, 1.8f, -2.5f ) );
-		camera_.setOffsetTargetPivot( mu::Vec3(0.f, 1.f, 0.f));
-		cameraMode_ = CameraMode::ThirdPerson;
-	}
-
 	// 플레이어 공격: LButton 클릭 시 forward 방향 hitbox와 몬스터 AABB 교차 검사
 	if ( !playerDead_
 		&& !uiManager_.needsCursor()
@@ -1239,63 +1224,30 @@ void Game::processInput(Milliseconds deltaTime) {
 		}
 	}
 
-	// 마우스 민감도를 기반으로 1인칭 카메라 모드와 3인칭 카메라 모드일 때
-	// 각각의 플레이어 yaw, 카메라 pitch를 계산한다.
+	// 마우스 민감도를 기반으로 플레이어 yaw, 카메라 pitch를 계산한다.
 	// (pitch를 플레이어에 적용하게 되면, 플레이어가 고개를 들고 내리는 게 아니라 굴러버린다.)
     const auto mouseSensitivity = mu::pi * 2.f;
 
-	switch (cameraMode_) {
-	case CameraMode::ThirdPerson: {
-		const auto yaw = mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left));
-		auto yawRotation = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), yaw);
+	const auto yaw = mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left));
+	auto yawRotation = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), yaw);
 
-		cameraPitch_ = std::clamp(
-			static_cast<float>(cameraPitch_) + mouseDeltaY_ * mouseSensitivity / static_cast<float>(gClientRect.bottom - gClientRect.top),
-			-mu::pi * 0.16f,
-			mu::pi * 0.3f
-		);
+	cameraPitch_ = std::clamp(
+		static_cast<float>(cameraPitch_) + mouseDeltaY_ * mouseSensitivity / static_cast<float>(gClientRect.bottom - gClientRect.top),
+		-mu::pi * 0.16f,
+		mu::pi * 0.3f
+	);
 
-		if (!playerDead_) {
-			player_->setOrient(player_->orient() * yawRotation);
-			camera_.setOffsetFromTargetPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, mu::Radian(0.f)) );
-		}
-		else {
-			cameraYaw_ += yaw;
-			camera_.setOffsetFromTargetPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, cameraYaw_) );
-		}
-
-		mouseDeltaX_ = 0;
-		mouseDeltaY_ = 0;
-		break;
+	if (!playerDead_) {
+		player_->setOrient(player_->orient() * yawRotation);
+		camera_.setOffsetFromTargetPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, mu::Radian(0.f)) );
 	}
-	case CameraMode::FirstPerson: {
-		const auto yaw = mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left));
-		auto yawRotation = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), yaw);
-
-		if (!playerDead_) {
-			player_->setOrient(player_->orient() * yawRotation);
-		}
-
-		cameraPitch_ = std::clamp(
-			static_cast<float>(cameraPitch_) + mouseDeltaY_ * mouseSensitivity / static_cast<float>(gClientRect.bottom - gClientRect.top),
-			-mu::pi * 0.16f,
-			mu::pi * 0.3f
-		);
-
-		if (!playerDead_) {
-			player_->setOrient(player_->orient() * yawRotation);
-			camera_.setXXPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, mu::Radian(0.f)) );
-		}
-		else {
-			cameraYaw_ += yaw;
-			camera_.setXXPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, cameraYaw_) );
-		}
-
-		mouseDeltaX_ = 0;
-		mouseDeltaY_ = 0;
-		break;
+	else {
+		cameraYaw_ += yaw;
+		camera_.setOffsetFromTargetPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, cameraYaw_) );
 	}
-	}
+
+	mouseDeltaX_ = 0;
+	mouseDeltaY_ = 0;
 
 	// Enter 키를 누르면 커서 캡처 플래그를 활성화/비활성화한다.
 	if ( (keyboardStateCurr_[VK_RETURN] & 0x80) && !(keyboardStatePrev_[VK_RETURN] & 0x80) ) {

@@ -67,11 +67,6 @@ public:
 	LRESULT receiveWndMsg( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam ) override;
 
 private:
-	enum class CameraMode {
-		FirstPerson,
-		ThirdPerson
-	};
-
 	struct SpriteAnimationOwned {
 		SpriteAnimation anim;
 		std::shared_ptr<Object> pOwner;
@@ -139,7 +134,6 @@ private:
 	// 카메라 yaw는 기본적으로 플레이어에 대한 오프셋으로만 작동하지만,
 	// 플레이어 사망 이후에는 이 변수로 작동한다.
 	mu::Radian cameraYaw_ = 0.f;
-	CameraMode cameraMode_ = CameraMode::ThirdPerson;
 
 	Light dirLight_{};
 	AssetConfigs assetConfigs_{};

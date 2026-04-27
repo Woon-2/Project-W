@@ -2,7 +2,7 @@
 #include "camera.hpp"
 #include "physicsWorld.hpp"
 
-void Camera::update(float dt) {
+void Camera::update(Milliseconds deltaTime) {
 	auto pTarget = pTargetObject_.lock();
 	if (!pTarget) {
 		return;
@@ -10,10 +10,8 @@ void Camera::update(float dt) {
 
 	auto rotatedOffsetFromTarget = offsetFromTargetPreRotation_.rotate(offsetFromTarget_);
 	rotatedOffsetFromTarget = pTarget->orient().rotate(rotatedOffsetFromTarget);
-	auto rotatedOffsetTargetPivot = xxPreRotation_.rotate(offsetTargetPivot_);
-	rotatedOffsetTargetPivot = pTarget->orient().rotate(rotatedOffsetTargetPivot);
 
-	at_ = pTarget->renderState().pos + rotatedOffsetTargetPivot;
+	at_ = pTarget->renderState().pos + offsetTargetPivot_;
 	const mu::Vec3 desiredEye = pTarget->renderState().pos + rotatedOffsetFromTarget;
 	const float desiredLen = (desiredEye - at_).len();
 
@@ -28,7 +26,7 @@ void Camera::update(float dt) {
 	if (allowed < currentArmLength_)
 		currentArmLength_ = allowed;
 	else
-		currentArmLength_ += std::min(armReturnRate_ * dt, allowed - currentArmLength_);
+		currentArmLength_ += std::min(armReturnRate_ * Seconds(deltaTime).count(), allowed - currentArmLength_);
 
 	if (desiredLen > 1e-6f)
 		eye_ = at_ + (desiredEye - at_) * (currentArmLength_ / desiredLen);
