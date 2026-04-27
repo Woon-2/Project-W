@@ -545,6 +545,7 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 		static_cast<float>(gClientRect.right - gClientRect.left) / (gClientRect.bottom - gClientRect.top),
 		0.1f, 500.f
 	);
+	camera_.setPhysicsWorld( &physicsWorld_ );
 
 	idPlayerMap_[playerInfo.playerId] = player_;
 
