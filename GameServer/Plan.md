@@ -176,13 +176,127 @@ private:
 |-----------|-----------|
 | `Vec3::distance(a,b)` | `(a-b).len()` |
 | `Vec3::distanceSq(a,b)` | `(a-b).len2()` |
-| `p->getPosition()` | `session->player().pos()` |
+| `v.length()` | `v.len()` |
+| `v.normalized()` | `mu::NVec3(v)` (NVec3 타입; 성분 필요 시 `.x()/.y()/.z()` 추출) |
+| `position_ += dir * spd * dt` | `setLinearVel(mu::Vec3(nd.x()*spd, body().linearVel().y(), nd.z()*spd))` |
+| `facing_ = dir` | `float yaw = std::atan2(nd.x(), nd.z()); setOrient(mu::NQuat(Radian(), Radian(), Radian(yaw)))` |
+| `position_ = spawnPos_` (순간이동) | `setPos(spawnPos_); body().snapToCurrent();` |
+| `alive_` / `isAlive()` | `hp() > 0` |
+| `id_` 직접 접근 | `getId()` |
+| `room.findActorById(targetId_)` | `room.findLivingSessionByPlayerId(targetId_)` (신규) |
+| `p->getPosition()` | `session->player()->pos()` |
 | `target->takeDamage(dmg)` | `result.hit = {targetId, newHp}` |
 | `room.getLivingPlayers()` → `Player*` | `GameSession*` 벡터 |
-| `p->getHp()` | `session->player().hp()` |
+| `p->getHp()` | `session->player()->hp()` |
 | `float dt` | `Seconds dt` (`.count()` 필요 시) |
+| `Logger::get().log*(...)` | 제거 |
 
 **피격 처리**: sim은 `takeDamage()` 직접 호출. RoomServer는 `NpcUpdateResult.hit`에 채워서 반환 → Room이 broadcast.
+
+**생성자**: `nearbyCache_.reserve(16)` 호출. 매 틱 `clear()`+`push_back()` 반복 시 capacity 16 이하에서 재할당 방지.
+
+### facing\_ / 이동 방식 결정
+
+#### 배경: sim과 RoomServer의 위치 관리 차이
+
+sim(`Actor`)은 `position_`(Vec3)과 `facing_`(Vec3)을 직접 멤버로 보유하고 매 틱 직접 수정한다.
+물리 엔진이 없으므로 `position_ += dir * speed * dt` 한 줄로 이동이 완성된다.
+
+RoomServer `Object`는 위치를 `body_`(RigidBody) 안에 저장한다. 위치 수정 경로가 두 가지다:
+- **`Object::setPos()`**: 위치를 즉시 덮어쓴다. 내부에서 `rebuildBodyBVH()`를 호출한다.
+- **`setLinearVel()` + `PhysicsWorld::step()`**: 속도를 기록해두면 물리 엔진이 다음 `step()`에서 적분해 위치를 갱신한다. `Object::setPos()`를 거치지 않는다.
+
+#### 왜 매 틱 `setPos()` 직접 호출은 안 되는가
+
+`Object::rebuildBodyBVH()`는 모델의 모든 BVH 노드를 순회하며 월드 행렬 변환(스케일 → 쿼터니언 회전 → 평행이동)을 재계산한다. 정적 배치 시 1회 호출하도록 설계된 함수다. NPC가 매 틱 이동할 때마다 호출되면 불필요한 행렬 연산이 반복된다.
+
+또한 `setPos()`로 직접 이동하면 물리 충돌 처리를 우회한다. 물리 엔진의 contact solver가 관여하지 않으므로 지형을 뚫고 지나가거나 경사면에서 미끄러지는 처리가 깨진다.
+
+#### 채택 방식: `setLinearVel` + `setOrient`
+
+현재 `Goblin::update()`와 동일한 패턴을 Npc에서도 사용한다.
+
+**일반 이동 (Chase / Return / Reposition / Investigate)**
+```cpp
+// sim
+Vec3 moveDir = (chaseDir + sepForce * separationWeight_).normalized();
+facing_   = moveDir;
+position_ += moveDir * (moveSpeed_ * dt);
+
+// RoomServer
+mu::NVec3 nd(chaseDir + sepForce * separationWeight_);   // normalized
+setLinearVel(mu::Vec3(nd.x() * moveSpeed_, body().linearVel().y(), nd.z() * moveSpeed_));
+float yaw = std::atan2(nd.x(), nd.z());
+setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yaw)));
+```
+- y축 linearVel을 `body().linearVel().y()`로 보존 → 중력 계속 작용
+- `(chaseDir + sepForce * separationWeight_)` 합산 후 `mu::NVec3(...)` 생성자로 정규화 — sim의 `.normalized()` 대체
+- 현재 facing을 읽어야 할 때는 `forward()`로 접근 (orient 기반으로 자동 계산됨)
+
+**AttackWindup — 이동 없이 facing만 미세 조정**
+```cpp
+// sim
+Vec3 sep = calcSeparationForce(nearbyCache_);
+if (sep.length() > 0.1f)
+    facing_ = (facing_ + sep * 0.3f).normalized();
+
+// RoomServer
+mu::Vec3 sep = calcSeparationForce(nearbyCache_);
+if (sep.len() > 0.1f) {
+    mu::NVec3 newFacing(forward() + sep * 0.3f);
+    float yaw = std::atan2(newFacing.x(), newFacing.z());
+    setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(yaw)));
+    // setLinearVel 호출 없음 — windup 중 이동 없음
+}
+```
+현재 facing은 `forward()`로 읽는다. `facing_` 멤버 불필요.
+
+**AttackRecover — 분리력에 의한 미세 밀림**
+```cpp
+// sim
+Vec3 sep = calcSeparationForce(nearbyCache_);
+if (sep.length() > 0.1f)
+    position_ += sep * (separationWeight_ * 0.3f * moveSpeed_ * dt);
+
+// RoomServer
+mu::Vec3 sep = calcSeparationForce(nearbyCache_);
+if (sep.len() > 0.1f) {
+    float driftSpd = sep.len() * separationWeight_ * 0.3f * moveSpeed_;
+    mu::NVec3 nd(sep);
+    setLinearVel(mu::Vec3(nd.x() * driftSpd, body().linearVel().y(), nd.z() * driftSpd));
+    // setOrient 호출 없음 — recover 중 facing 변경 없음
+}
+```
+
+**스폰 복귀 스냅 (Return 완료 시)**
+```cpp
+// sim
+position_ = spawnPos_;
+transitionTo(NpcState::Idle, "reached home");
+
+// RoomServer
+setPos(spawnPos_);
+body().snapToCurrent();   // double-buffered body state 동기화
+setLinearVel(mu::Vec3{});
+transitionTo(NpcState::Idle, "reached home");
+```
+스냅은 1회성 순간이동이므로 `setPos()` + `snapToCurrent()` 사용이 정당하다.
+
+#### 결론
+
+`facing_` Vec3 멤버를 Npc에 추가할 필요가 없다.
+- 이동 방향 → `setLinearVel`의 x/z 성분으로 표현
+- 현재 facing 읽기 → `forward()` (orient 기반으로 자동 갱신)
+- 시각적 방향 → `setOrient`
+
+---
+
+**sim에서 이식 시 제외할 멤버/메서드** (Renderer/Logger 전용):
+- `facing_` 멤버, `logPrefix_` 멤버
+- `dump()` 메서드
+- `getWindupProgress()`, `getRecoverProgress()`
+- `getSpawnPos()`, `getActivityZoneCenter()`, `getActivityZoneRadius()`, `getSeparationRadius()`
+- `Logger::get().log*()` 호출 전체
 
 ### Step 5. `RoomServer/object.hpp` 수정
 
@@ -236,6 +350,7 @@ void MU_CALLCONV findNearbyNpcPositions(mu::Vec3 pos, float radius, uint32 exclu
 int  countNpcsTargeting(uint32 playerId) const;
 NpcGroup* getNpcGroup(int groupId);
 uint64 getTickCount() const { return tickCount_; }
+GameSession* findLivingSessionByPlayerId(uint32 playerId) const;
 
 // private 추가
 uint64 tickCount_{ 0 };
@@ -293,11 +408,12 @@ void Room::updateGoblinAI(Milliseconds dt) {
 ```
 
 **쿼리 구현:**
-- `getLivingPlayers()`: 세션 순회, `session->player().hp() > 0`인 것만 캐싱
+- `getLivingPlayers()`: 세션 순회, `session->player()->hp() > 0`인 것만 캐싱
 - `findNearbyNpcPositions()`: goblins_ 순회, `(g.pos()-pos).len() < radius && g.getId() != excludeId`
 - `countNpcsTargeting(id)`: `aggroCount_[id]` 조회
-- `getNpcGroup(id)`: npcGroups_ 순회, `grp->getGroupId() == id`
-- `rebuildAggroCount()`: goblins_ 순회, `aggroCount_[g.getTargetId()]++`
+- `getNpcGroup(id)`: `npcGroups_[groupId]` → O(1). groupId == vector 인덱스로 설계 (sim과 동일)
+- `rebuildAggroCount()`: 살아있는 goblin 중 `Chase/AttackWindup/AttackRecover/Reposition` 상태인 것만 `aggroCount_[g.getTargetId()]++`. Idle/Return/Investigate/Dead는 제외 — 포함하면 타깃 선택 점수 계산 오류
+- `findLivingSessionByPlayerId(id)`: `idSessionMap_.find((int32)id)` → O(1). session->id() == playerId이므로 기존 맵 재사용. hp > 0 확인 후 반환
 
 ### Step 9. `RoomServer/Level.cpp` 수정
 
@@ -348,3 +464,34 @@ goblin.setModel(assetManager.modelGoblin());
 4. 공격 Windup/Recover 타이밍 확인
 5. 복수 Goblin이 동일 플레이어에 몰리지 않고 분산되는지 확인 (Reposition/Separation)
 6. 활동 구역 밖으로 이동 후 Return하는지 확인
+
+---
+
+## 향후 최적화 메모
+
+현재 구현은 의도적으로 단순한 O(N) 구현을 유지한다.
+고블린 수가 충분히 많아질 때 아래 최적화를 별도 커밋으로 적용한다.
+
+### 공간 분할 그리드 (`findNearbyNpcPositions` O(N²) → O(1))
+
+현재 `findNearbyNpcPositions`는 `goblins_` 전체를 순회(O(N)).
+N개 NPC가 매 틱 각각 호출하면 총 O(N²).
+N ≤ 30 수준에서는 무시 가능하나, 그 이상이면 그리드 도입 검토.
+
+구현 참고: `sim/Room.cpp` — `rebuildSpatialGrid()` / `findNearbyNpcPositions()`
+
+핵심 아이디어:
+- `GRID_CELL_SIZE = 6.f` (separationRadius=4 기준 쿼리 시 최대 3×3=9셀)
+- 셀 키: `(cx + OFFSET) * RANGE + (cz + OFFSET)` → `int64_t` 하나로 인코딩
+- 매 틱 `rebuildSpatialGrid()`로 NPC 위치를 그리드에 등록
+- `findNearbyNpcPositions()`에서 반경에 걸치는 셀만 조회
+
+추가 멤버 (`Room.hpp` private):
+```cpp
+static constexpr float GRID_CELL_SIZE = 6.f;
+std::unordered_map<int64_t, std::vector<uint32>> spatialGrid_{};
+static int64_t gridKey(int cx, int cz);
+void rebuildSpatialGrid();
+```
+
+`updateGoblinAI()`에서 `rebuildLivingPlayersCache()` / `rebuildAggroCount()` 이후 `rebuildSpatialGrid()` 추가 호출.
