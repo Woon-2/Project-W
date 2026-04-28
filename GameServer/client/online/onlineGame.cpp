@@ -837,6 +837,8 @@ void Game::applyHit( uint16 targetId, int32 newHp ) {
 		if ( newHp <= 0 && !it->second->isDead() ) {
 			it->second->setDead( true );
 		}
+		if ( auto barIt = goblinHpBars_.find( targetId ); barIt != goblinHpBars_.end() )
+			barIt->second.hpBarVisibleSeconds = 5.f;
 	}
 }
 
@@ -1014,8 +1016,15 @@ void Game::update(Milliseconds deltaTime) {
 			}
 		}
 
+		const float dtSec = std::chrono::duration<float>(deltaTime).count();
 		for (auto& [id, entry] : goblinHpBars_) {
 			if (!entry.goblin || entry.goblin->hp() <= 0) {
+				entry.hpBar->visible = false;
+				entry.hpBarVisibleSeconds = 0.f;
+				continue;
+			}
+			entry.hpBarVisibleSeconds = std::max(0.f, entry.hpBarVisibleSeconds - dtSec);
+			if (entry.hpBarVisibleSeconds <= 0.f) {
 				entry.hpBar->visible = false;
 				continue;
 			}
