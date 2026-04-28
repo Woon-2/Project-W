@@ -34,36 +34,36 @@ NPC-AI-Lab에서 검증한 **8-state FSM + NpcGroup 공유 기억 시스템**으
 
 ```cpp
 struct SharedTargetMemory {
-    uint32   playerId = 0;          // 0 = 빈 슬롯
-    uint32   reporterNpcId = 0;
-    mu::Vec3 lastKnownPosition{};
-    uint32   lastSeenTick = 0;
-    uint32   expireTick = 0;
-    bool     valid = false;
+    uint32       playerId = 0;          // 0 = 빈 슬롯
+    uint32       reporterNpcId = 0;
+    mu::Vec3     lastKnownPosition{};
+    Milliseconds lastSeenMs{ 0ms };
+    Milliseconds expireMs  { 0ms };
+    bool         valid = false;
 };
 
 class NpcGroup {
 public:
     NpcGroup(int groupId, mu::Vec3 center, float radius,
-             uint32 memoryDurationTick = 180);
+             Milliseconds memoryDuration = 3000ms);
     void addMember(uint32 npcId);
     void removeMember(uint32 npcId);
     void MU_CALLCONV reportSight(uint32 npcId, uint32 playerId,
-                                  mu::Vec3 pos, uint32 currentTick);
-    bool                      hasValidMemory(uint32 currentTick) const;
-    const SharedTargetMemory* getBestMemory(uint32 currentTick) const;
-    const SharedTargetMemory* getBestMemoryInsideActivityArea(uint32 currentTick) const;
+                                  mu::Vec3 pos, Milliseconds currentMs);
+    bool                      hasValidMemory                 (Milliseconds currentMs) const;
+    const SharedTargetMemory* getBestMemory                  (Milliseconds currentMs) const;
+    const SharedTargetMemory* getBestMemoryInsideActivityArea(Milliseconds currentMs) const;
     bool MU_CALLCONV isInsideActivityArea(mu::Vec3 pos) const;
     void clearMemory();
-    void update(uint32 currentTick);
-    int      getGroupId() const;
-    mu::Vec3 getCenter()  const;
-    float    getRadius()  const;
+    void update(Milliseconds currentMs);
+    int          getGroupId() const;
+    mu::Vec3     getCenter()  const;
+    float        getRadius()  const;
 private:
-    int      groupId_;
-    mu::Vec3 activityCenter_;
-    float    activityRadius_;
-    uint32   memoryDurationTick_;
+    int          groupId_;
+    mu::Vec3     activityCenter_;
+    float        activityRadius_;
+    Milliseconds memoryDuration_;
     std::vector<uint32> members_;
     std::array<SharedTargetMemory, 4> memories_{};
 };
@@ -71,7 +71,13 @@ private:
 
 ### Step 2. `RoomServer/NpcGroup.cpp` (신규)
 
-원본 `sim/NpcGroup.cpp` 이식. Vec3 API만 치환.
+원본 `sim/NpcGroup.cpp` 이식. Vec3 API 및 시간 타입 치환:
+
+| 원본 (sim) | RoomServer |
+|-----------|-----------|
+| `uint32_t currentTick` | `Milliseconds currentMs` |
+| `mem.expireTick = currentTick + memoryDurationTick_` | `mem.expireMs = currentMs + memoryDuration_` |
+| `mem.expireTick <= currentTick` | `mem.expireMs <= currentMs` |
 
 ### Step 3. `RoomServer/Npc.hpp` (신규)
 
@@ -349,11 +355,11 @@ void MU_CALLCONV findNearbyNpcPositions(mu::Vec3 pos, float radius, uint32 exclu
                                          std::vector<mu::Vec3>& out) const;
 int  countNpcsTargeting(uint32 playerId) const;
 NpcGroup* getNpcGroup(int groupId);
-uint64 getTickCount() const { return tickCount_; }
+Milliseconds getElapsedMs() const { return elapsedMs_; }
 GameSession* findLivingSessionByPlayerId(uint32 playerId) const;
 
 // private 추가
-uint64 tickCount_{ 0 };
+Milliseconds elapsedMs_{ 0ms };
 std::vector<std::unique_ptr<NpcGroup>> npcGroups_{};
 std::vector<GameSession*> livingPlayersCache_{};
 std::unordered_map<uint32, int> aggroCount_{};
@@ -376,8 +382,9 @@ for (auto& g : goblins_) {
 void Room::updateGoblinAI(Milliseconds dt) {
     if (sessions_.empty()) return;
 
-    // 1. NpcGroup 메모리 만료 정리
-    for (auto& grp : npcGroups_) grp->update(static_cast<uint32>(tickCount_));
+    // 1. 경과 시간 누적 및 NpcGroup 메모리 만료 정리
+    elapsedMs_ += dt;
+    for (auto& grp : npcGroups_) grp->update(elapsedMs_);
 
     // 2. 캐시 재구성
     rebuildLivingPlayersCache();
@@ -402,8 +409,6 @@ void Room::updateGoblinAI(Milliseconds dt) {
 
     if (!moveInfos.empty())
         broadcast(PacketManager::makeSNpcMoveBatchPacket(moveInfos));
-
-    ++tickCount_;
 }
 ```
 
