@@ -22,6 +22,7 @@ void Room::init(const Level* levelData) {
 	for (auto& g : goblins_) {
 		g.setId(IdPool::pop());
 		g.setSpawnPos(g.pos());
+		g.applyGoblinConfig();
 		g.body().setMotionType(MotionType::Dynamic);
 		g.body().setMass(70.f);
 		g.body().setLinearDamping(0.1f);
@@ -30,6 +31,17 @@ void Room::init(const Level* levelData) {
 		g.body().setUprightStiffness(4000.f);
 		g.body().snapToCurrent();
 		physicsWorld_.registerBody(&g.body(), [&g]() { g.rebuildBodyBVH(); });
+	}
+
+	for (const auto& spawner : levelData->goblinSpawners) {
+		int groupId = static_cast<int>(npcGroups_.size());
+		npcGroups_.emplace_back(
+			std::make_unique<NpcGroup>(groupId, spawner.center, spawner.activityRadius)
+		);
+		for (int32 i = spawner.startIdx; i < spawner.startIdx + spawner.count; ++i) {
+			goblins_[i].setGroupId(groupId);
+			goblins_[i].setActivityZone(spawner.center, spawner.activityRadius);
+		}
 	}
 
 	terrain_ = levelData->terrain;
@@ -53,9 +65,14 @@ void Room::update() {
 }
 
 void Room::updateGoblinAI(Milliseconds dt) {
-	if (sessions_.empty()) {
-		return;
-	}
+	if (sessions_.empty()) return;
+
+	// 경과 시간 누적 및 NpcGroup 기억 만료 정리
+	elapsedMs_ += dt;
+	for (auto& grp : npcGroups_) grp->update(elapsedMs_);
+
+	rebuildLivingPlayersCache();
+	rebuildAggroCount();
 
 	uint64 serverNow = static_cast<uint64>(
 		std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -63,20 +80,24 @@ void Room::updateGoblinAI(Milliseconds dt) {
 		).count()
 	);
 
+	// Goblin의 angular velocity 고정 (물리 solver 누적 방지)
+	for (auto& goblin : goblins_)
+		goblin.body().setOmega(mu::Vec3{});
+
 	std::vector<SNpcMoveInfo> moveInfos;
 	moveInfos.reserve(goblins_.size());
 
 	for (auto& goblin : goblins_) {
 		goblin.recordSnapshot(serverNow);
 
-		auto result = goblin.update(dt, sessions_);
+		auto result = goblin.update(dt, *this);
 
 		if (goblin.hp() > 0) {
 			moveInfos.push_back({
 				static_cast<uint16>(goblin.getId()),
 				goblin.pos().getXmf(),
 				goblin.orient().getXmf(),
-				result.velocity.getXmf()
+				goblin.linearVel().getXmf()
 			});
 		}
 
@@ -86,9 +107,56 @@ void Room::updateGoblinAI(Milliseconds dt) {
 		}
 	}
 
-	if ( !moveInfos.empty() ) {
-		broadcast( PacketManager::makeSNpcMoveBatchPacket( moveInfos ) );
+	if (!moveInfos.empty())
+		broadcast(PacketManager::makeSNpcMoveBatchPacket(moveInfos));
+}
+
+void Room::rebuildLivingPlayersCache() {
+	livingPlayersCache_.clear();
+	for (auto* s : sessions_) {
+		if (s->player()->hp() > 0)
+			livingPlayersCache_.push_back(s);
 	}
+}
+
+void Room::rebuildAggroCount() {
+	aggroCount_.clear();
+	for (const auto& g : goblins_) {
+		if (g.hp() <= 0) continue;
+		NpcState s = g.getState();
+		if (s == NpcState::Chase        ||
+		    s == NpcState::AttackWindup  ||
+		    s == NpcState::AttackRecover ||
+		    s == NpcState::Reposition)
+			aggroCount_[g.getTargetId()]++;
+	}
+}
+
+void MU_CALLCONV Room::findNearbyNpcPositions(mu::Vec3 from, float radius,
+                                               uint32 excludeId,
+                                               std::vector<mu::Vec3>& out) const {
+	float r2 = radius * radius;
+	for (const auto& g : goblins_) {
+		if (g.getId() == excludeId || g.hp() <= 0) continue;
+		if ((g.pos() - from).len2() < r2)
+			out.push_back(g.pos());
+	}
+}
+
+int32 Room::countNpcsTargeting(int32 playerId) const {
+	auto it = aggroCount_.find(playerId);
+	return (it != aggroCount_.end()) ? it->second : 0;
+}
+
+NpcGroup* Room::getNpcGroup(int32 groupId) {
+	if (groupId < 0 || groupId >= static_cast<int>(npcGroups_.size())) return nullptr;
+	return npcGroups_[groupId].get();
+}
+
+GameSession* Room::findLivingSessionByPlayerId(int32 playerId) const {
+	auto it = idSessionMap_.find(playerId);
+	if (it == idSessionMap_.end()) return nullptr;
+	return (it->second->player()->hp() > 0) ? it->second : nullptr;
 }
 
 void Room::enter(GameSession* session) {

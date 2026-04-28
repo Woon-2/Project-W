@@ -98,70 +98,10 @@ private:
 	Milliseconds reloadCooldown_{2000ms};
 };
 
-enum class GoblinAIState {
-	Patrol,
-	Chase,
-	Attack,
-	Return
-};
-
-struct GoblinUpdateResult {
-	mu::Vec3 velocity;
-	struct HitInfo { uint16 targetId; int32 newHp; };
-	std::optional<HitInfo> hit;
-};
-
 class Player : public Object {
 public:
 	Player() = default;
 	Player(Object&& base) : Object(std::move(base)) {}
-};
-
-class Goblin : public Object {
-public:
-	Goblin() = default;
-	Goblin(Object&& base) : Object(std::move(base)) {}
-
-	void setAIState(GoblinAIState s) { aiState_ = s; }
-	GoblinAIState aiState() const { return aiState_; }
-
-	void setSpawnPos(mu::Vec3 p) { spawnPos_ = p; patrolTarget_ = p; }
-	mu::Vec3 spawnPos() const { return spawnPos_; }
-
-	void setPatrolTarget(mu::Vec3 p) { patrolTarget_ = p; }
-	mu::Vec3 patrolTarget() const { return patrolTarget_; }
-
-	float aggroRange() const { return aggroRange_; }
-	float deaggroRange() const { return deaggroRange_; }
-	float attackRange() const { return attackRange_; }
-	float moveSpeed() const { return moveSpeed_; }
-
-	GoblinUpdateResult update(Seconds dt, const std::vector<GameSession*>& sessions);
-
-	void recordSnapshot(uint64 serverMs);
-	mu::Vec3 rewindPos(uint64 targetMs) const;
-
-private:
-	GoblinAIState aiState_ = GoblinAIState::Patrol;
-	mu::Vec3 spawnPos_{};
-	mu::Vec3 patrolTarget_{};
-	float aggroRange_ = 15.f;
-	float deaggroRange_ = 20.f;
-	float attackRange_ = 1.5f;
-	float moveSpeed_ = 3.f;
-
-	Seconds attackCooldown_{ 0s };
-	static constexpr Seconds attackCooldownMax_{ 2.0f };
-	static constexpr int32 attackDamage_{ 15 };
-
-	struct PosSnapshot {
-		uint64 serverMs;
-		mu::Vec3 pos;
-	};
-
-	static constexpr int32 historySize_ = 16;
-	std::array<PosSnapshot, historySize_> posHistory_{};
-	int32 historyHead_ = 0;
 };
 
 class Cube : public Object {

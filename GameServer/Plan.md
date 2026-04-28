@@ -500,3 +500,78 @@ void rebuildSpatialGrid();
 ```
 
 `updateGoblinAI()`에서 `rebuildLivingPlayersCache()` / `rebuildAggroCount()` 이후 `rebuildSpatialGrid()` 추가 호출.
+
+---
+
+## NPC AI 동작 설명
+
+### 호출 구조
+
+`Room::updateGoblinAI()` (매 틱, 60fps) → 각 `Goblin::update()` → `Npc::update()` → 현재 상태 핸들러
+
+### 상태 전이 흐름
+
+```
+                    ┌─────────────────────────────────────────┐
+                    │                                         ▼
+  [Idle] ──플레이어 감지──► [Chase] ──사정거리 진입──► [AttackWindup]
+    ▲                         │                              │
+    │                         │ 타겟 소실/구역 이탈           │ 시간 경과
+    │                   [Return] ◄──────────────────── [AttackRecover]
+    │                      │                                  │
+    └──── 스폰 도달 ────────┘               과밀 감지 ──► [Reposition]
+
+  [Idle] ──그룹 메모리 있음──► [Investigate]
+  [Dead] (hp ≤ 0, 종단 상태)
+```
+
+### 각 상태 세부 동작
+
+**Idle** — 매 틱 `selectBestTarget()`으로 감지 범위(15m) 내 플레이어 탐색. 없으면 그룹 공유 메모리를 확인해서 유효한 기억이 있으면 `Investigate`로 전이.
+
+**Chase** — 0.5초마다 타겟 재평가(더 좋은 타겟으로 교체 가능). 매 틱 분리력(separation force)을 계산해서 다른 고블린과 겹치지 않도록 방향을 보정하면서 추격. `setLinearVel` + `setOrient`로 물리 엔진에 속도를 넘기고 충돌은 물리 solver가 처리. 사정거리(1.5m) 내 진입 시 `AttackWindup`.
+
+**AttackWindup** — 이동 없음, 0.4초 대기. 시간이 지나면 타겟이 아직 범위 내에 있는지 확인 후 맞으면 데미지(15) 적용 → `AttackRecover`. 빗나가도 `AttackRecover`로.
+
+**AttackRecover** — 0.6초 회복. 분리력이 충분히 크면 살짝 밀려남. 회복 후 과밀이면 `Reposition`, 타겟이 가까우면 `AttackWindup`, 멀면 `Chase`.
+
+**Reposition** — 타겟 방향에 수직인 방향(짝수 ID는 우측, 홀수는 좌측)으로 이동해서 과밀 해소. 1.5초 타임아웃 또는 과밀 해소 시 `Chase`/`AttackWindup`.
+
+**Return** — 스폰 위치로 귀환(속도 2.5배). 도중에 활동 구역 안에서 플레이어가 보이면 즉시 `Chase`로 재전이(`canReAggroOnReturn = true`). 스폰 도달 시 `Idle`.
+
+**Investigate** — 그룹 메모리의 마지막 목격 위치로 이동. 도착하거나 유효 메모리 소멸 시 `Return`. 도중에 실제 플레이어가 보이면 즉시 `Chase`.
+
+**Dead** — hp ≤ 0이면 진입, 이후 아무 처리 없음. `Room`에서 hp 체크로 moveInfos에서 제외.
+
+### NpcGroup 시야 공유
+
+같은 `groupId`를 공유하는 고블린들은 한 마리가 플레이어를 발견했을 때 `reportSight()`로 그룹 메모리에 위치를 기록한다. 기억은 3초 후 만료. 아직 못 본 다른 고블린은 Idle 상태에서 이 메모리를 읽어 `Investigate`로 전이 — 직접 보지 않아도 반응하는 효과.
+
+현재 `Room::init()`에서 `npcGroups_`를 생성하지 않으므로 모든 고블린의 `groupId_ = -1`이다. 그룹 기능을 활성화하려면 `init()`에서 `npcGroups_.emplace_back(...)` 후 각 고블린에 `setGroupId()`를 호출해야 한다.
+
+---
+### 최적화 해야 할 부분
+### setOrient → rebuildBodyBVH 이중 호출
+
+NPC가 이동할 때마다 매 틱 BVH 재빌드가 두 번 발생한다:
+
+```
+setOrient(yaw)       → rebuildBodyBVH()  // 구 position, 새 orientation
+physicsWorld_.step() → rebuildBodyBVH()  // 새 position, 새 orientation (콜백)
+```
+
+첫 번째 rebuild는 position이 곧 바뀌므로 낭비다. N=300, 60fps 기준 틱당 600회 불필요한 재빌드.
+수정 방향: `setOrient`에서 BVH rebuild를 즉시 호출하지 않고 physics step 이후 콜백에만 위임.
+Object 수준 변경이 필요하므로 NPC 수가 충분히 늘어난 시점에 별도 커밋으로 적용.
+
+### Dead NPC 조기 스킵
+
+현재 `Room::updateGoblinAI()`에서 죽은 고블린도 루프를 통과한다:
+
+```cpp
+goblin.body().setOmega(mu::Vec3{});  // dead도 실행
+goblin.recordSnapshot(serverNow);    // dead도 실행
+goblin.update(Seconds{dt}, *this);   // updateDead() 즉시 return
+```
+
+`hp() <= 0`이면 세 줄 모두 건너뛰는 것으로 간단히 해결 가능. N이 작을 때는 무시 가능.

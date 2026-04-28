@@ -34,6 +34,15 @@
     <Filter Include="utils\JobTimer">
       <UniqueIdentifier>{443eabbb-1f42-406a-8d53-b05580083898}</UniqueIdentifier>
     </Filter>
+    <Filter Include="contents\Player">
+      <UniqueIdentifier>{924c9f42-23cf-43ca-ac1c-1752f9c0d27a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="contents\Npc">
+      <UniqueIdentifier>{a209254e-b43b-4b27-9ebb-56aa479fe449}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="contents\Npc\Goblin">
+      <UniqueIdentifier>{e9f12e23-f142-4eb6-b060-6be395ca791c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Listener.cpp">
@@ -105,6 +114,15 @@
     <ClCompile Include="terrain.cpp">
       <Filter>contents</Filter>
     </ClCompile>
+    <ClCompile Include="npc.cpp">
+      <Filter>contents\Npc</Filter>
+    </ClCompile>
+    <ClCompile Include="npcGroup.cpp">
+      <Filter>contents\Npc</Filter>
+    </ClCompile>
+    <ClCompile Include="goblin.cpp">
+      <Filter>contents\Npc\Goblin</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Listener.hpp">
@@ -173,6 +191,15 @@
     </ClInclude>
     <ClInclude Include="rigidBody.hpp">
       <Filter>contents</Filter>
+    </ClInclude>
+    <ClInclude Include="npcGroup.hpp">
+      <Filter>contents\Npc</Filter>
+    </ClInclude>
+    <ClInclude Include="npc.hpp">
+      <Filter>contents\Npc</Filter>
+    </ClInclude>
+    <ClInclude Include="goblin.hpp">
+      <Filter>contents\Npc\Goblin</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
