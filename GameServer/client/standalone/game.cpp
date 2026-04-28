@@ -204,7 +204,7 @@ void Game::setupMonsterHpBars() {
 		bar->fillColor = { 0.9f, 0.15f, 0.1f, 1.f };
 		bar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
 		bar->visible   = false;
-		monsterHpBars_.push_back({ monster, bar, yOffset });
+		monsterHpBars_.emplace(monster->getId(), MonsterHpEntry{ monster, bar, yOffset });
 	};
 
 	registerBar(goblin_.get(),   2.5f);
@@ -787,6 +787,8 @@ void Game::update(Milliseconds deltaTime) {
 				if (goblin_->hp() == 0) {
 					holdEvent( eventList_, EvDeath(goblin_->getId()) );
 				}
+				if (auto it = monsterHpBars_.find(goblin_->getId()); it != monsterHpBars_.end())
+					it->second.hpBarVisibleSeconds = 5.f;
 			}
 			else if (static_cast<EvHit*>(pEv)->targetId == player_->getId()) {
 				player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
@@ -925,12 +927,18 @@ void Game::update(Milliseconds deltaTime) {
 	// 몬스터 HP바 위치 갱신 (layout() 이전에 offset 갱신해야 반영됨)
 	{
 		constexpr float kBarHalfWidth = 40.f;
-		for (auto& entry : monsterHpBars_) {
+		const float dtSec = std::chrono::duration<float>(deltaTime).count();
+		for (auto& [id, entry] : monsterHpBars_) {
 			if (!entry.monster || entry.monster->hp() <= 0) {
+				entry.hpBar->visible = false;
+				entry.hpBarVisibleSeconds = 0.f;
+				continue;
+			}
+			entry.hpBarVisibleSeconds = std::max(0.f, entry.hpBarVisibleSeconds - dtSec);
+			if (entry.hpBarVisibleSeconds <= 0.f) {
 				entry.hpBar->visible = false;
 				continue;
 			}
-			
 			const mu::Vec3 barWorldPos = entry.monster->renderState().pos
 				+ mu::Vec3{ 0.f, entry.worldYOffset, 0.f };
 

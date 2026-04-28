@@ -146,11 +146,12 @@ private:
 	Seconds        prevAnimTimeRun_  = 0s;
 
 	struct MonsterHpEntry {
-		Object*          monster;      // non-owning; lifetime owned by shared_ptr in Game
-		UI::ProgressBar* hpBar;        // owned by uiManager_
-		float            worldYOffset; // monster pos()로부터 HP바를 붙일 월드Y 오프셋
+		Object*          monster;               // non-owning; lifetime owned by shared_ptr in Game
+		UI::ProgressBar* hpBar;                 // owned by uiManager_
+		float            worldYOffset;          // monster pos()로부터 HP바를 붙일 월드Y 오프셋
+		float            hpBarVisibleSeconds = 0.f; // 피격 후 HP바 표시 잔여 시간 (초)
 	};
-	std::vector<MonsterHpEntry> monsterHpBars_{};
+	std::unordered_map<int, MonsterHpEntry> monsterHpBars_{}; // key: monster ID
 
 	LONG mouseDeltaX_{};
 	LONG mouseDeltaY_{};

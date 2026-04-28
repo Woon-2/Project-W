@@ -174,9 +174,10 @@ private:
 	std::unordered_map<i32t, OtherPlayerHpEntry> otherPlayerHpBars_{};
 
 	struct GoblinHpEntry {
-		Goblin*          goblin;       // non-owning; lifetime owned by shared_ptr in goblins_
-		UI::ProgressBar* hpBar;        // owned by uiManager_
+		Goblin*          goblin;               // non-owning; lifetime owned by shared_ptr in goblins_
+		UI::ProgressBar* hpBar;                // owned by uiManager_
 		float            worldYOffset;
+		float            hpBarVisibleSeconds = 0.f; // 피격 후 HP바 표시 잔여 시간 (초)
 	};
 	std::unordered_map<uint16, GoblinHpEntry> goblinHpBars_{};
 
