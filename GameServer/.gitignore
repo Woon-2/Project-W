@@ -2,6 +2,3 @@
 graphify-out/
 .graphify_*.json
 .graphify_python
-
-TODO.md
-TroubleShooting.md
