@@ -1,5 +1,7 @@
 ﻿#include "rspch.hpp"
 #include "npcGroup.hpp"
+#include "Room.hpp"
+#include "GameSession.hpp"
 #include <algorithm>
 
 // ─── 생성자 ───────────────────────────────────────────────────────────────────
@@ -94,6 +96,17 @@ bool MU_CALLCONV NpcGroup::isInsideActivityArea(mu::Vec3 pos) const {
 
 void NpcGroup::clearMemory() {
     for (auto& m : memories_) m = SharedTargetMemory{};
+}
+
+// ─── clearMemoryIfPlayerOutside ───────────────────────────────────────────────
+
+void NpcGroup::clearMemoryIfPlayerOutside(Room& room) {
+    for (auto& m : memories_) {
+        if (!m.valid) continue;
+        GameSession* s = room.findLivingSessionByPlayerId(m.playerId);
+        if (!s || !isInsideActivityArea(s->player()->pos()))
+            m = SharedTargetMemory{};
+    }
 }
 
 // ─── update ──────────────────────────────────────────────────────────────────

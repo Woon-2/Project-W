@@ -3,6 +3,8 @@
 #include <array>
 #include <vector>
 
+class Room;
+
 static constexpr int MaxPlayerCount = 4;
 
 // ─── SharedTargetMemory ──────────────────────────────────────────────────────
@@ -43,6 +45,7 @@ public:
 
     // ── 메모리 초기화 / 틱 갱신 (NPC 업데이트 전 호출) ────────────────────
     void clearMemory();
+    void clearMemoryIfPlayerOutside(Room& room);
     void update(Milliseconds currentMs);
 
     // ── 접근자 ─────────────────────────────────────────────────────────────

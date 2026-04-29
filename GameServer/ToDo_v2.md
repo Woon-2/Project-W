@@ -135,53 +135,17 @@ do {
 
 ## 4. 고쳐야 할 버그 목록
 
-### Bug-1. Return 상태에서 그룹 메모리 미체크 (우선순위 높음)
+### Bug-1. Return 상태에서 그룹 메모리 미체크 ✅ 부분 수정됨 (2026-04-29)
 
 **파일:** `RoomServer/npc.cpp` — `updateReturn()`
 
 **현상:** 어그로가 풀렸다가 플레이어가 재진입하면 일부 고블린(직접 감지 범위 15m 이내)만
 반응하고, 나머지는 반응하지 않는다.
 
-**원인:**  
-`updateReturn`은 `selectBestTarget()`(직접 감지)만 체크하고 그룹 메모리를 보지 않는다.
-두 번째 감지 시 일부 고블린이 아직 Return 상태라면, 직접 감지 범위 밖에 있는 고블린은
-새로운 그룹 메모리를 무시하고 계속 귀환한다.
+**수정 내용:** `updateReturn()`에 스폰 1.0f 이내 도달 시 그룹 메모리 체크 후 Investigate 전환 추가.  
+전체 귀환 경로에서 체크하지 않고 스폰 근처로 제한한 이유: 중간에 체크하면 Investigate → Return → Investigate 진동 발생 가능.
 
-**수정 방향:** `updateReturn` 내부에서 직접 감지 실패 시 그룹 메모리 체크 추가:
-
-```cpp
-// 현재
-if (canReAggroOnReturn_ && !isOutsideActivityZone()) {
-    GameSession* candidate = selectBestTarget(room);
-    if (candidate) { ... Chase ... }
-}
-// 그룹 메모리 체크 없음 → 귀환만 함
-
-// 수정 후
-if (!isOutsideActivityZone()) {
-    if (canReAggroOnReturn_) {
-        GameSession* candidate = selectBestTarget(room);
-        if (candidate) {
-            if (groupId_ >= 0) {
-                NpcGroup* group = room.getNpcGroup(groupId_);
-                if (group)
-                    group->reportSight(getId(), candidate->id(),   // Bug-2도 동시 수정
-                                       candidate->player()->pos(), room.getElapsedMs());
-            }
-            targetId_ = candidate->id();
-            transitionTo(NpcState::Chase);
-            return {};
-        }
-    }
-    if (groupId_ >= 0) {
-        NpcGroup* group = room.getNpcGroup(groupId_);
-        if (group && group->getBestMemoryInsideActivityArea(room.getElapsedMs())) {
-            transitionTo(NpcState::Investigate);
-            return {};
-        }
-    }
-}
-```
+**남은 문제:** Bug-4 참조 (수정 후 Return 무한 루프 현상 발생).
 
 ---
 
@@ -221,9 +185,33 @@ if (s->id() == targetId_ && aggro > 0) --aggro;
 
 ---
 
+---
+
+### Bug-4. Return 상태 무한 루프 (우선순위 높음)
+
+**파일:** `RoomServer/npc.cpp` — `updateReturn()`
+
+**현상:** 고블린이 Return 상태에서 빠져나오지 못하고 무한히 귀환 상태가 지속된다.
+
+**발생 시점:** Bug-1 부분 수정(스폰 근처 그룹 메모리 체크) 이후 발생 확인.
+
+**원인 후보:**
+1. Investigate → Return → Investigate 진동 — 스폰 1.0f 근처에서 그룹 메모리를 보고 Investigate로 갔다가, 목표 위치에 도달해도 플레이어를 못 찾으면 Return으로 돌아오고, 다시 메모리를 보고 Investigate 반복
+2. 스폰 도달(0.3f) 조건 불충족 — 다른 고블린과의 분리력(sepForce) 때문에 스폰 위치에 정확히 수렴하지 못하는 경우
+3. `isOutsideActivityZone()` 오판 — 스폰이 활동 구역 경계 근처일 때 Return 중 조건이 불안정하게 바뀌는 경우
+
+**확인 방법:** 각 고블린의 id, state, pos, distToSpawn, groupMemory 존재 여부를 매 틱 로그로 출력해 어느 경로로 무한 루프에 빠지는지 확인.
+
+**수정 방향 후보:**
+- Investigate에서 Return으로 전환할 때 그룹 메모리를 삭제 (`clearMemoryIfPlayerOutside` 외 추가 삭제)하거나 쿨다운을 두어 진동 방지
+- 스폰 도달 임계값(0.3f)을 올리거나, 도달 판정 시 linearVel을 먼저 0으로 만든 후 위치 보정
+
+---
+
 ## 5. 향후 작업 (기존 Plan.md에서 이전)
 
-- [ ] **Bug-1, 2, 3 수정** — `npc.cpp` 단독 수정
+- [ ] **Bug-4 수정** — Return 무한 루프 원인 파악 및 수정 (최우선)
+- [ ] **Bug-2, 3 수정** — `npc.cpp` 단독 수정
 - [ ] **`kCount = 20`으로 복구** — Level.cpp
 - [ ] **공간 분할 그리드** — `findNearbyNpcPositions` O(N²) → O(1). NPC 30마리 초과 시 적용
 - [ ] **setOrient 이중 BVH rebuild 제거** — NPC 수가 충분히 늘어난 시점에 별도 커밋

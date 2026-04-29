@@ -60,9 +60,10 @@ void importNode(std::ifstream& ifs, const AssetManager& assetManager, Level& lev
 		importTerrain(ifs, level.terrain);
 	}
 	else if (type == "GoblinSpawner") {
-		static constexpr float kActivityRadius = 28.f;
+		static constexpr float kActivityRadius = 40.f;
+		static constexpr float kSpawnRadius    = 15.f;
 		static constexpr int32 kCount          = 5;
-		static constexpr float kMinDist        = 3.f;
+		static constexpr float kMinDist        = 2.f;
 
 		std::mt19937 rng{ std::random_device{}() };
 		std::uniform_real_distribution<float> distR    (0.f, 1.f);
@@ -79,7 +80,7 @@ void importNode(std::ifstream& ifs, const AssetManager& assetManager, Level& lev
 			mu::Vec3 spawnPos;
 			int32 attempts = 0;
 			do {
-				float r     = kActivityRadius * std::sqrt(distR(rng));
+				float r     = kSpawnRadius * std::sqrt(distR(rng));
 				float theta = distAngle(rng);
 				spawnPos    = mu::Vec3(center.x() + r * std::cosf(theta),
 				                      baseY,

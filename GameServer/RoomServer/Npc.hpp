@@ -18,14 +18,13 @@ struct NpcConfig {
     float moveSpeed          = 4.f;
     float detectionRange     = 10.f;
     float attackRange        = 2.f;
-    float activityZoneRadius = 28.f;
     float attackDamage       = 10.f;
     Seconds attackWindupTime { 0.4f };
     Seconds attackRecoverTime{ 0.6f };
-    float separationRadius   = 4.f;
-    float separationWeight   = 0.6f;
+    float separationRadius   = 2.5f;
+    float separationWeight   = 0.4f;
     bool  canReAggroOnReturn = true;
-    int   overlapThreshold   = 2;
+    int   overlapThreshold   = 3;
     float returnSpeedMult    = 2.5f;
 };
 
@@ -71,7 +70,7 @@ private:
     NpcUpdateResult updateDead         ();
     NpcUpdateResult updateInvestigate  (Seconds dt, Room& room);
 
-    GameSession* selectBestTarget(Room& room) const;
+    GameSession* selectBestVisibleTarget(Room& room) const;
     float        evaluateTargetScore(GameSession* s, Room& room) const;
     mu::Vec3     MU_CALLCONV calcSeparationForce(const std::vector<mu::Vec3>& nearby) const;
     bool         isOutsideActivityZone() const;

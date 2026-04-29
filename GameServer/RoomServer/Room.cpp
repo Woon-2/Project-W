@@ -67,9 +67,12 @@ void Room::update() {
 void Room::updateGoblinAI(Milliseconds dt) {
 	if (sessions_.empty()) return;
 
-	// 경과 시간 누적 및 NpcGroup 기억 만료 정리
+	// 경과 시간 누적, NpcGroup 기억 만료 정리, 활동 영역 밖 플레이어 메모리 정리
 	elapsedMs_ += dt;
-	for (auto& grp : npcGroups_) grp->update(elapsedMs_);
+	for (auto& grp : npcGroups_) {
+		grp->update(elapsedMs_);
+		grp->clearMemoryIfPlayerOutside(*this);
+	}
 
 	rebuildLivingPlayersCache();
 	rebuildAggroCount();

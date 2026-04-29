@@ -6,7 +6,7 @@ void Goblin::applyGoblinConfig() {
     cfg.maxHp          = 90.f;
     cfg.moveSpeed      = 3.f;
     cfg.attackRange    = 1.5f;
-    cfg.detectionRange = 15.f;
+    cfg.detectionRange = 10.f;
     cfg.attackDamage   = 15.f;
     applyConfig(cfg);
     setHp(static_cast<int32>(cfg.maxHp));
