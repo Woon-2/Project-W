@@ -727,3 +727,32 @@
  - 클라 : Active Rag Doll Physics
  - 클라 : Seeamless Map Loading (마인크래프트 처럼 넓은 맵 구현)
  - 서버 : 계층 구조 집단 AI => (구현 기획문서 작성)
+
+2026-04-29
+-------------
+1.진행상황
+ - ( X ) 맵 작성 (마을, 숲,  이동 동선)
+ - ( O ) 친구 호출
+ - ( X ) 집단 전술 전투
+ - ( X )실제 스킬 구현
+ - ( X ) 시체 소멸, 리스폰 
+ - ( X ) 쉐이딩 문제 해결 (플레이어 캐릭터가 이상하게 나온다.)  => 다운 받아서 렌더링 해본다 https://github.khronos.org/glTF-Assets/model/DamagedHelmet
+   * 일단 Normal Map의 UV 값부터 수정해야 함.
+ - 게임학회 논문 써올것 => 200 마리 이상의 몬스터 렌더링 (HW 인스턴싱 + Indirect Draw)
+ - 중점연구과제 구현
+  * ( X ) Active Rag Doll : 쓰러질때 자연스럽게 무너지기 (똑같은 애니메이션으로 쓰러지지 않기)
+  * ( X ) Seamless Loading : CHUNK Loading 부터 구현 (맵의 끝에 가면, 다음 맵이 로딩되서 보임)
+  * ( X ) AI : 이동 시 네모난 진형으로 이동.
+2. ToDo
+ - 집단 전술 전투
+ - 시체 소멸, 리스폰 
+ - 게임학회 논문 완성해 올것 => Hi-Z Occlusion culling에 animation 적용, 성능 평가와 분석
+ - 중점연구과제 구현
+  * Active Rag Doll : 쓰러질때 자연스럽게 무너지기 (똑같은 애니메이션으로 쓰러지지 않기)
+  * Seamless Loading : CHUNK Loading 부터 구현 (맵의 끝에 가면, 다음 맵이 로딩되서 보임)
+  * AI : 이동 시 네모난 진형으로 이동.
+ - 구현 스케줄을 작성해 올것
+3. 졸작 마감
+ - 6월 22일까지 완성해야 함.
+4. 다음 미팅
+ - 5월 7일 목요일 오후 7시 
