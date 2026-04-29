@@ -246,6 +246,7 @@ const std::vector<mu::Mat4x4>& AnimBlender::finalXformData() const {
 // key에 해당하는 클립을 elapsed 만큼의 시간이 지났을 때의 프레임으로 갱신한다.
 void AnimBlender::updateFrames(const std::string& key, Seconds elapsed) {
 	updateLag_ = 0s;
+	priority_ = 0.f;
 
 	DISPLAY_ERROR_STR( frameInfoMap_.contains(key),
 		"[Animation Error] AnimBlender::updateFrames: key \""s + key
@@ -284,7 +285,7 @@ void AnimBlender::updateFrames(const std::string& key, Seconds elapsed) {
 void AnimBlender::accumulatePriority(PassKey<AnimSystem>, Seconds dt, mu::Vec3 refPos) {
     const float dist = (cachedPos_ - refPos).len();
 
-    constexpr float kDistScale = 20.f;
+    constexpr float kDistScale = 50.f;
     const float d = dist / kDistScale;
 
     // 거리 기반 weight
@@ -292,13 +293,13 @@ void AnimBlender::accumulatePriority(PassKey<AnimSystem>, Seconds dt, mu::Vec3 r
 
     // 시간 기반 weight
     const float t = static_cast<float>(updateLag_.count());
-    constexpr float kTimeScale = 0.3f; // 0.2~0.5
+    constexpr float kTimeScale = 0.5f; // 0.2~0.5
 
     // saturating 형태 (폭주 방지)
     const float wTime = 1.f + (t / (t + kTimeScale));
 
     // 최종 priority 누적
-    priority_ += static_cast<float>(dt.count()) * wDist * wTime;
+    priority_ = wDist * wTime;
 
     // lastUpdateTime_ 누적
     updateLag_ += dt;
@@ -359,6 +360,8 @@ void AnimSystem::update(Seconds timeSlice) {
 		++jobCnt;
 		elapsed = HighResolutionClock::now() - tp;
 	}
+	
+	std::cout << "processed " << cntProcessed << " anim blenders, " << elapsed << " elapsed.\n";
 
 	// jobSize_ 비례 제어
 	const float ratio = static_cast<float>(jobCnt) / 8.f;	// 목적: job의 개수가 8개에 근접하기
