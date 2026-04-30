@@ -381,3 +381,60 @@ correctness 관점에서는 맞다. dispatch → distribute → DoJob 순서로 
 ```
 
 분산이 아니라 오히려 동기화가 일어나는 구조였고, 스레드가 자연스럽게 엇갈리는 건 충분한 I/O 부하가 있을 때만 발생하는 우연한 효과였다.
+
+---
+### 2026.04.30 / 목요일
+## [Bug Fix] NPC Return 상태에서 스폰 위치 도달 실패 → Idle 전환 불가
+
+### 현상
+
+Return 상태의 NPC가 스폰 방향으로 계속 이동하지만 Idle 상태로 전환되지 않고 영구적으로 Return 상태에 머무름.
+
+### 원인
+
+**`spawnPos_.y`와 실제 `pos().y`의 불일치.**
+
+`Room::init()`에서 `setSpawnPos(g.pos())`를 호출하는 시점에는 물리 시뮬레이션이 아직 실행되지 않은 상태다. 이 시점의 `g.pos().y`는 레벨 파일 노드의 월드 Y(지형 표면 기준)이다.
+
+이후 `physicsWorld_.step()`이 실행되면 중력이 적용되고, Dynamic 바디인 Goblin이 지형 위에 안착한다. 이때 `pos().y`는 모델 중심점 오프셋(모델 바닥 ~ 중심 높이)만큼 `spawnPos_.y`보다 높아진다.
+
+```
+spawnPos_.y  = 레벨 노드 Y (예: 0.0)
+pos().y      = 지형 Y + 모델 중심 오프셋 (예: 1.0)
+```
+
+`updateReturn()`의 스폰 도달 조건은 **3D 거리** 비교였다.
+
+```cpp
+mu::Vec3 toSpawn = spawnPos_ - pos();
+if (toSpawn.len2() < 0.6f * 0.6f) { ... }  // 버그: 3D 거리
+```
+
+XZ 평면 기준으로는 스폰 위치에 완전히 도달해도 Y 차이(~1.0m)만으로 3D 거리가 0.6m를 초과해 조건이 영원히 충족되지 않는다.
+
+### 수정
+
+**`RoomServer/Npc.cpp` — `updateReturn()`**
+
+도달 판정과 이동 방향 계산을 모두 XZ 2D로 변경. Idle 전환 시 Y는 물리 엔진이 관리하는 현재값을 유지.
+
+```cpp
+// 변경 전
+mu::Vec3 toSpawn = spawnPos_ - pos();
+if (!isOutsideActivityZone() && toSpawn.len2() < 1.0f * 1.0f && ...) { ... }
+if (toSpawn.len2() < 0.6f * 0.6f) {
+    setPos(spawnPos_);          // Y도 spawnPos_.y로 덮어씀
+    ...
+}
+mu::NVec3 nd(toSpawn + sep * ...);    // Y 성분 포함된 채로 정규화 → XZ 이동량 왜곡
+
+// 변경 후
+mu::Vec3 toSpawn = spawnPos_ - pos();
+float xzToSpawn2 = toSpawn.x() * toSpawn.x() + toSpawn.z() * toSpawn.z();
+if (!isOutsideActivityZone() && xzToSpawn2 < 1.0f * 1.0f && ...) { ... }
+if (xzToSpawn2 < 0.6f * 0.6f) {
+    setPos(mu::Vec3(spawnPos_.x(), pos().y(), spawnPos_.z()));  // Y 보존
+    ...
+}
+mu::Vec3 toSpawnXZ(toSpawn.x(), 0.f, toSpawn.z());
+mu::NVec3 nd(toSpawnXZ + sep * ...);  // Y 제거 후 정규화 → XZ 이동량 정확

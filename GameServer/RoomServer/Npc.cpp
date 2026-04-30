@@ -311,7 +311,9 @@ NpcUpdateResult Npc::updateReturn( Seconds dt, Room& room ) {
     // 스폰 근처에 도달했고 그룹 메모리가 있으면 Investigate로 전환
     // 귀환 도중 진행 방향이 바뀌는 것을 막기 위해 스폰 근처에서만 확인
     mu::Vec3 toSpawn = spawnPos_ - pos();
-    if ( !isOutsideActivityZone() && toSpawn.len2() < 1.0f * 1.0f && groupId_ >= 0 ) {
+    // Dynamic 물리로 인해 pos().y가 spawnPos_.y와 다를 수 있으므로 XZ 2D 거리로 판정
+    float xzToSpawn2 = toSpawn.x() * toSpawn.x() + toSpawn.z() * toSpawn.z();
+    if ( !isOutsideActivityZone() && xzToSpawn2 < 1.0f * 1.0f && groupId_ >= 0 ) {
         NpcGroup* group = room.getNpcGroup( groupId_ );
 
         if ( group && group->getBestMemoryInsideActivityArea( room.getElapsedMs() ) ) {
@@ -320,9 +322,9 @@ NpcUpdateResult Npc::updateReturn( Seconds dt, Room& room ) {
         }
     }
 
-	// 스폰 위치로 이동. 스폰 위치에 거의 도달했으면 정확히 스폰 위치로 보정 후 Idle로 전환
-    if ( toSpawn.len2() < 0.6f * 0.6f ) {
-        setPos( spawnPos_ );
+	// 스폰 위치에 거의 도달했으면 XZ를 스폰 위치로 보정하고 Idle로 전환. Y는 물리 엔진이 관리.
+    if ( xzToSpawn2 < 0.3f * 0.3f ) {
+        setPos( mu::Vec3( spawnPos_.x(), pos().y(), spawnPos_.z() ) );
         body().snapToCurrent();
         setLinearVel( mu::Vec3{} );
         transitionTo( NpcState::Idle );
@@ -332,7 +334,8 @@ NpcUpdateResult Npc::updateReturn( Seconds dt, Room& room ) {
     nearbyCache_.clear();
     room.findNearbyNpcPositions( pos(), separationRadius_, getId(), nearbyCache_ );
     mu::Vec3 sep = calcSeparationForce( nearbyCache_ );
-    mu::NVec3 nd( toSpawn + sep * (separationWeight_ * 0.25f) );
+    mu::Vec3 toSpawnXZ( toSpawn.x(), 0.f, toSpawn.z() );
+    mu::NVec3 nd( toSpawnXZ + sep * (separationWeight_ * 0.25f) );
 
     float spd = moveSpeed_ * returnSpeedMult_;
     setLinearVel( mu::Vec3( nd.x() * spd, body().linearVel().y(), nd.z() * spd ) );
