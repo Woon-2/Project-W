@@ -3,6 +3,7 @@
 
 #include "physicsWorld.hpp"
 #include "terrain.hpp"
+#include <vector>
 
 class GameSession;
 
@@ -69,6 +70,9 @@ public:
 	void setLastFireTime(Milliseconds time) { lastFireTime_ = time; }
 	Milliseconds lastFireTime() const { return lastFireTime_; }
 	Milliseconds fireCooldown() const { return fireCooldown_; }
+
+protected:
+	mu::Vec3 MU_CALLCONV calcSeparationForce( const std::vector<mu::Vec3>& nearby, float radius ) const;
 
 private:
 	float oldX_{};

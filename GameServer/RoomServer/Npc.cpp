@@ -171,8 +171,11 @@ NpcUpdateResult Npc::updateChase(Seconds dt, Room& room) {
 
     nearbyCache_.clear();
     room.findNearbyNpcPositions( pos(), separationRadius_, getId(), nearbyCache_ );
-    mu::Vec3 sepForce = calcSeparationForce( nearbyCache_ );
-    mu::NVec3 nd( toTarget + sepForce * separationWeight_ );
+    mu::NVec3 chaseDirN( toTarget );
+    mu::Vec3  chaseDir = { chaseDirN.x(), 0.f, chaseDirN.z() };
+    mu::Vec3  sep      = calcSeparationForce( nearbyCache_, separationRadius_ );
+    mu::Vec3  sepPerp  = sep - chaseDir * mu::dot( sep, chaseDir );
+    mu::NVec3 nd( chaseDir + sepPerp * separationWeight_ );
 
     setLinearVel( mu::Vec3( nd.x() * moveSpeed_, body().linearVel().y(), nd.z() * moveSpeed_ ) );
     setOrient( mu::NQuat( mu::Radian(), mu::Radian(), mu::Radian( std::atan2( nd.x(), nd.z() ) ) ) );
@@ -195,15 +198,6 @@ NpcUpdateResult Npc::updateAttackWindup( Seconds dt, Room& room ) {
         targetId_ = -1;
         transitionTo( NpcState::Return );
         return {};
-    }
-
-    nearbyCache_.clear();
-    room.findNearbyNpcPositions( pos(), separationRadius_, getId(), nearbyCache_ );
-    mu::Vec3 sep = calcSeparationForce( nearbyCache_ );
-
-    if ( sep.len() > 0.1f ) {
-        mu::NVec3 newFacing( forward() + sep * 0.3f );
-        setOrient( mu::NQuat( mu::Radian(), mu::Radian(), mu::Radian( std::atan2( newFacing.x(), newFacing.z() ) ) ) );
     }
 
     windupTimer_ += dt;
@@ -254,21 +248,24 @@ NpcUpdateResult Npc::updateAttackRecover( Seconds dt, Room& room ) {
         return {};
     }
 
+    constexpr float BODY_RADIUS = 0.8f;
     nearbyCache_.clear();
-    room.findNearbyNpcPositions( pos(), separationRadius_, getId(), nearbyCache_ );
-    mu::Vec3 sep = calcSeparationForce( nearbyCache_ );
+    room.findNearbyNpcPositions( pos(), BODY_RADIUS * 2.f, getId(), nearbyCache_ );
+    mu::Vec3 push = calcSeparationForce( nearbyCache_, BODY_RADIUS * 2.f );
 
-    if ( sep.len() > 0.1f ) {
-        float driftSpd = sep.len() * separationWeight_ * 0.3f * moveSpeed_;
-        mu::NVec3 nd( sep );
+    if ( push.len() > 0.1f ) {
+        mu::NVec3 nd( push );
+        float driftSpd = moveSpeed_ * 0.15f;
         setLinearVel( mu::Vec3( nd.x() * driftSpd, body().linearVel().y(), nd.z() * driftSpd ) );
     }
 
     recoverTimer_ += dt;
     if ( recoverTimer_ >= attackRecoverTime_ ) {
+        nearbyCache_.clear();
+        room.findNearbyNpcPositions( pos(), separationRadius_, getId(), nearbyCache_ );
         mu::Vec3 toTarget = targetSession->player()->pos() - pos();
 
-		// 회복 타임이 끝났는데도 여전히 과밀이면 Repostion 시도
+		// 회복 타임이 끝났는데도 여전히 과밀이면 Reposition 시도
         if ( isOvercrowded( nearbyCache_ ) ) {
             mu::NVec3 tt( toTarget );
             repositionDir_ = (getId() % 2 == 0) ? mu::Vec3{ tt.z(), 0.f, -tt.x() } : mu::Vec3{ -tt.z(), 0.f,  tt.x() };
@@ -333,9 +330,12 @@ NpcUpdateResult Npc::updateReturn( Seconds dt, Room& room ) {
 
     nearbyCache_.clear();
     room.findNearbyNpcPositions( pos(), separationRadius_, getId(), nearbyCache_ );
-    mu::Vec3 sep = calcSeparationForce( nearbyCache_ );
     mu::Vec3 toSpawnXZ( toSpawn.x(), 0.f, toSpawn.z() );
-    mu::NVec3 nd( toSpawnXZ + sep * (separationWeight_ * 0.25f) );
+    mu::NVec3 homeDirN( toSpawnXZ );
+    mu::Vec3  homeDir = { homeDirN.x(), 0.f, homeDirN.z() };
+    mu::Vec3  sep     = calcSeparationForce( nearbyCache_, separationRadius_ );
+    mu::Vec3  sepPerp = sep - homeDir * mu::dot( sep, homeDirN );
+    mu::NVec3 nd( homeDir + sepPerp * separationWeight_ );
 
     float spd = moveSpeed_ * returnSpeedMult_;
     setLinearVel( mu::Vec3( nd.x() * spd, body().linearVel().y(), nd.z() * spd ) );
@@ -385,7 +385,7 @@ NpcUpdateResult Npc::updateReposition( Seconds dt, Room& room ) {
     }
 
     mu::Vec3 toTarget = targetSession->player()->pos() - pos();
-    mu::Vec3 sep = calcSeparationForce( nearbyCache_ );
+    mu::Vec3 sep = calcSeparationForce( nearbyCache_, separationRadius_ );
     mu::NVec3 nd( toTarget + repositionDir_ * 0.8f + sep * separationWeight_ );
 
     setLinearVel( mu::Vec3( nd.x() * moveSpeed_, body().linearVel().y(), nd.z() * moveSpeed_ ) );
@@ -489,23 +489,6 @@ GameSession* Npc::selectBestVisibleTarget( Room& room ) const {
     return best;
 }
 
-// ─── calcSeparationForce ──────────────────────────────────────────────────────
-
-mu::Vec3 MU_CALLCONV Npc::calcSeparationForce( const std::vector<mu::Vec3>& nearby ) const {
-    mu::Vec3 force{ 0.f, 0.f, 0.f };
-    for ( const mu::Vec3& op : nearby ) {
-        mu::Vec3 away = pos() - op;
-        float d = away.len();
-        if ( d < 1e-4f ) {
-            float a = static_cast<float>( getId() ) * 1.2f;
-            force += mu::Vec3{ std::cosf( a ), 0.f, std::sinf( a ) };
-            continue;
-        }
-        float strength = 1.f - (d / separationRadius_);
-        force += (away / d) * strength;
-    }
-    return force;
-}
 
 // ─── isOutsideActivityZone ───────────────────────────────────────────────────
 

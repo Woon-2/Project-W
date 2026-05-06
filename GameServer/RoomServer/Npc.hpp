@@ -22,9 +22,9 @@ struct NpcConfig {
     float attackRange        = 2.f;
     float attackDamage       = 10.f;
     Seconds attackWindupTime { 0.4f };
-    Seconds attackRecoverTime{ 0.6f };
+    Seconds attackRecoverTime{ 1.5f };
     float separationRadius   = 2.5f;
-    float separationWeight   = 0.4f;
+    float separationWeight   = 0.6f;
     bool  canReAggroOnReturn = true;
     int   overlapThreshold   = 3;
     float returnSpeedMult    = 2.5f;
@@ -74,7 +74,6 @@ private:
 
     GameSession* selectBestVisibleTarget(Room& room) const;
     float        evaluateTargetScore(GameSession* s, Room& room) const;
-    mu::Vec3     MU_CALLCONV calcSeparationForce(const std::vector<mu::Vec3>& nearby) const;
     bool         isOutsideActivityZone() const;
     bool         isOvercrowded        (const std::vector<mu::Vec3>& nearby) const;
 

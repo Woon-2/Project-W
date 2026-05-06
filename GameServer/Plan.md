@@ -575,3 +575,65 @@ goblin.update(Seconds{dt}, *this);   // updateDead() 즉시 return
 ```
 
 `hp() <= 0`이면 세 줄 모두 건너뛰는 것으로 간단히 해결 가능. N이 작을 때는 무시 가능.
+
+---
+
+## 2026-05-06 — 원본(NPC-AI-Lab) Actor/Npc 대비 누락 로직 적용
+
+원본 `sim/Actor.cpp` + `sim/Npc.cpp`와 이식된 `RoomServer/Npc.cpp`를 비교해 4가지 차이를 발견하고 적용했다.
+
+### [1] `calcSeparationForce` — `Npc` → `Object`로 이동
+
+원본에서 이 함수는 `Actor` 클래스에 정의돼 있었다. `Actor`가 `Object`로 대체됐으므로 함수도 `Object`로 이관.  
+파라미터에 `radius`를 명시적으로 추가해 호출 사이트마다 반경을 다르게 지정할 수 있게 변경.
+
+```cpp
+// object.hpp (protected)
+mu::Vec3 MU_CALLCONV calcSeparationForce(const std::vector<mu::Vec3>& nearby, float radius) const;
+```
+
+### [2] `updateChase` + `updateReturn` — 분리 힘 수직 성분만 사용
+
+원본은 추격/귀환 방향에 수직인 성분만 분리 힘으로 적용해 NPC 전진 속도가 줄지 않게 했다.  
+이식된 코드는 전체 분리 힘을 더해 역방향 성분이 속도를 늦추는 버그가 있었다.
+
+```cpp
+// 수정 후 (Chase / Return 공통 패턴)
+mu::NVec3 chaseDirN( toTarget );
+mu::Vec3  chaseDir = { chaseDirN.x(), 0.f, chaseDirN.z() };
+mu::Vec3  sep      = calcSeparationForce( nearbyCache_, separationRadius_ );
+mu::Vec3  sepPerp  = sep - chaseDir * mu::dot( sep, chaseDir );  // Gram-Schmidt
+mu::NVec3 nd( chaseDir + sepPerp * separationWeight_ );
+```
+
+Return은 `separationWeight_ * 0.25f` 감쇠를 유지.
+
+### [3] `updateAttackWindup` — 방향 보정 코드 제거
+
+이식 과정에서 Windup 중 분리 힘으로 facing을 보정하는 코드가 추가됐으나, 원본에는 없던 동작.  
+삭제해 원본처럼 Windup 중 이동/회전 없이 타이머만 진행하도록 복원.
+
+### [4] `updateAttackRecover` — 드리프트에 체반경(`BODY_RADIUS`) 사용
+
+원본은 공격 회복 중 밀림 계산에 체반경(`0.8f × 2 = 1.6f`)을 사용하고, 과밀 판정에만 `separationRadius_`를 별도 쿼리로 사용했다.  
+이식된 코드는 `separationRadius_` 단일 쿼리로 두 목적을 겸해 밀림 범위가 필요 이상으로 넓었다.
+
+```cpp
+// 수정 후
+constexpr float BODY_RADIUS = 0.8f;
+
+// 드리프트: 체반경으로만 검색 + 고정 속도
+room.findNearbyNpcPositions(pos(), BODY_RADIUS * 2.f, getId(), nearbyCache_);
+mu::Vec3 push = calcSeparationForce(nearbyCache_, BODY_RADIUS * 2.f);
+if (push.len() > 0.1f) {
+    mu::NVec3 nd(push);
+    setLinearVel(mu::Vec3(nd.x() * moveSpeed_ * 0.15f, body().linearVel().y(), nd.z() * moveSpeed_ * 0.15f));
+}
+
+// 과밀 판정: separationRadius_ 재쿼리
+recoverTimer_ += dt;
+if (recoverTimer_ >= attackRecoverTime_) {
+    room.findNearbyNpcPositions(pos(), separationRadius_, getId(), nearbyCache_);
+    if (isOvercrowded(nearbyCache_)) { ... }
+}
+```

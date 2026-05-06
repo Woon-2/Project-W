@@ -2,6 +2,7 @@
 #include "object.hpp"
 #include "Model.hpp"
 #include "GameSession.hpp"
+#include <cmath>
 
 void Object::setModel(const Model* pModel){
 	DISPLAY_ERROR_STR(pModel != nullptr, "[Game Error] Object::setModel: null model.", false);
@@ -42,6 +43,25 @@ void MU_CALLCONV Object::setScale(mu::Vec3 newScale) {
 	if (pModel_ && !pModel_->bvh.empty()) {
 		rebuildBodyBVH();
 	}
+}
+
+mu::Vec3 MU_CALLCONV Object::calcSeparationForce( const std::vector<mu::Vec3>& nearby, float radius ) const {
+	mu::Vec3 force{ 0.f, 0.f, 0.f };
+
+	for ( const mu::Vec3& op : nearby ) {
+		mu::Vec3 away = pos() - op;
+		float d = away.len();
+
+		if ( d < 1e-4f ) {
+			float a = static_cast<float>( getId() ) * 1.2f;
+			force += mu::Vec3{ std::cosf( a ), 0.f, std::sinf( a ) };
+			continue;
+		}
+
+		float strength = 1.f - (d / radius);
+		force += (away / d) * strength;
+	}
+	return force;
 }
 
 // Rebuilds the world-space BVH in body_ from the model's local-space BVH template.
