@@ -1,7 +1,7 @@
 ﻿#ifndef __animation_HPP
 #define __animation_HPP
 
-#include "mesh.hpp"
+#include "gfx.hpp"
 
 // 애니메이션의 한 프레임의 정보를 담는 구조체
 // lerpAnimFrames 함수로 서로 다른 AnimFrame을 보간하거나
@@ -40,20 +40,28 @@ enum class AnimClipFlag {
 // 한 개의 애니메이션 클립을 나타내는 구조체
 // 키프레임들과 재생 시간, 스켈레톤 구조, 플래그를 저장한다.
 struct AnimClip {
+	Texture bakedSamples;
 	std::string name;
 	// 본별 키프레임들
 	// i번째 본의 j번째 키프레임은 keyFramesOfBones[i][j]이다.
 	// sentinel 값으로 time이 +infinity인 프레임을 각 본의 마지막 키프레임으로 둔다.
 	std::vector< std::vector<AnimFrame> > keyFramesOfBones;
+	// 본별 baked samples
+	// i번째 본의 j번째 sample은 bakedSamplesOfBones[i][j]이다.
+	// sentinel 값으로 time이 +infinity인 프레임을 각 본의 마지막 샘플로 둔다.
+	std::vector< std::vector<mu::Mat4x4> > bakedSamplesOfBones;
 	Seconds duration;	// 애니메이션이 지속될 시간
+	float bakedSampleRate;	// baked samples의 fps
 	// 해당 클립이 대상으로 하는 스켈레톤 구조
 	SkeletonEnumeration skeletonEnumeration;
 	// AnimClipFlag에 해당하는 값들과 bitwise-or를 통해 플래그를 추가하고,
 	// bitwise-and를 통해 플래그를 검사한다.
 	u32t flags;
+	i32t id;	// unique한 애니메이션 id,
+				// importAnimClip에서 baked animation texture를 만들면서 설정됨
 };
 
-std::vector<AnimClip> loadAnimClipsFromFile(const std::filesystem::path& path);
+std::vector<AnimClip> loadAnimClipsFromFile(const std::filesystem::path& path, GFX& gfx);
 
 class AnimSystem;
 class IEventBus;
@@ -83,6 +91,12 @@ class IEventBus;
 // 상속한 클래스를 위해 protected로 제공한다.
 class AnimBlender {
 public:
+	enum class Mode {
+		Keyframe,
+		Baked,
+		SIZE
+	};
+
 	enum class Stage {
 		noop,
 		committedLocal,
@@ -143,6 +157,8 @@ public:
 	// 렌더링 시에는 이 행렬들을 참조한다.
 	std::vector<mu::Mat4x4>& finalXformData();
 	const std::vector<mu::Mat4x4>& finalXformData() const;
+	int finalBakedClipId() const { return finalBakedClipId_; }
+	int finalBakedClipFrame() const { return finalBakedClipFrame_; }
 
 	// AnimSystem에서, 이 AnimBlender 객체의 계산 단계를 설정하기 위해 만들어진 함수
 	void setStage(PassKey<AnimSystem>, Stage stage) {
@@ -155,7 +171,9 @@ public:
 
 	// 이 AnimBlender의 priority를 누적 갱신한다.
 	// AnimSystem::updatePriorities에서 호출된다.
-	void accumulatePriority(PassKey<AnimSystem>, Seconds dt, mu::Vec3 refPos);
+	void updatePriority(PassKey<AnimSystem>, Seconds dt, mu::Vec3 refPos);
+
+	Mode mode() const { return mode_; }
 
 protected:
 	// 본들의 로컬 변환 행렬들에 접근한다.
@@ -181,19 +199,23 @@ protected:
 	}
 
 	const Skeleton& skeleton() const { return skeleton_; }
+	void setOwnerPos(mu::Vec3 pos) { cachedPos_ = pos; }
 
-	Seconds updateLag_{};
-	float priority_{};
-	bool  culled_ = false;
 	// Object::update() 시점의 소유자 위치를 캐싱한다.
 	// AnimSystem::updatePriorities에서 priority 계산에 사용된다.
 	mu::Vec3 cachedPos_{};
-	void setOwnerPos(mu::Vec3 pos) { cachedPos_ = pos; }
+	Seconds updateLag_{};
+	float priority_{};
+	bool  culled_ = false;
+	Mode mode_{ Mode::Keyframe };
+	int finalBakedClipId_{};
+	int finalBakedClipFrame_{};
 
 private:
 	// 특정한 클립의 현재 프레임 상태 및
 	// 현재 프레임 상태를 갱신하기 위한 정보를 저장하는 구조체
 	struct FrameInfo {
+		// ----[Keyframe Mode 관련]----
 		std::shared_ptr<const AnimClip> targetClip;	// 프레임 계산 대상이 되는 클립
 		// 본별로 현재 어느 키프레임을 참조하고 있는지 저장하는 벡터
 		// keyFrameIteratorCache_[i] == iteratorA일 때,
@@ -202,7 +224,14 @@ private:
 		std::vector< decltype(AnimClip::keyFramesOfBones)::value_type::const_iterator > keyFrameIteratorCache_{};
 		// 키프레임들을 보간하여 계산된 현재 프레임 정보를 저장한다.
 		std::vector<AnimFrame> frameCache_;
+		// ----[Baked Mode 관련]----
+		std::size_t bakedSampleIdx;
 	};
+
+	// key에 해당하는 클립을 elapsed 만큼의 시간이 지났을 때의 프레임으로 갱신한다.
+	void updateFramesKeyframeMode(const std::string& key, Seconds elapsed);
+	// key에 해당하는 클립을 elapsed 만큼의 시간이 지났을 때의 프레임으로 갱신한다.
+	void updateFramesBakedMode(const std::string& key, Seconds elapsed);
 
 	// onCalcDress에서, 본 트리를 순회하며 행렬들을 갱신하는데 사용된다.
 	void MU_CALLCONV traverseBone(const Bone& bone, mu::Mat4x4 parentXform = mu::Mat4x4());
@@ -210,7 +239,7 @@ private:
 	std::vector<mu::Mat4x4> boneXformCache_{};
 	std::map<std::string, FrameInfo> frameInfoMap_{};
 	Skeleton skeleton_{};
-	Stage stage_{Stage::noop};
+	Stage stage_{ Stage::noop };
 };
 
 // 애니메이션 업데이트를 스케줄링하며 실행하는 클래스

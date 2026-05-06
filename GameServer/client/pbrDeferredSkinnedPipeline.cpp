@@ -402,9 +402,13 @@ void Dispatcher::shadowUpdate() {
         [&boneUploadCnt](const DrawEvent& e) {
             const auto ret = ShadowMapSkinnedCSMShader::PerInstanceData{
                 .world          = mu::transpose(e.world).getXmf(),
-                .rootBoneOffset = boneUploadCnt
+                .rootBoneOffset = boneUploadCnt,
+                .bakedClipId = e.bakedClipId,
+                .bakedClipFrame = e.bakedClipFrame
             };
-            boneUploadCnt += static_cast<u32t>(e.boneXforms.size());
+            if (e.bakedClipId == -1) {
+                boneUploadCnt += static_cast<u32t>(e.boneXforms.size());
+            }
             return ret;
         });
 
@@ -415,9 +419,11 @@ void Dispatcher::shadowUpdate() {
     boneData.resize(boneUploadCnt);
     auto itBone = boneData.begin();
     std::ranges::for_each(drawEvents_, [&itBone](const DrawEvent& e) {
-        for (auto& bx : e.boneXforms) {
-            *itBone = ShadowMapSkinnedCSMShader::BoneData{ mu::transpose(bx).getXmf() };
-            ++itBone;
+        if (e.bakedClipId == -1) {
+            for (auto& bx : e.boneXforms) {
+                *itBone = ShadowMapSkinnedCSMShader::BoneData{ mu::transpose(bx).getXmf() };
+                ++itBone;
+            }
         }
     });
     pResources_->shadowPass.boneData.stage(roomIdx_, boneData);
@@ -468,19 +474,27 @@ void Dispatcher::shadowUpdateMT() {
 
     // rootBoneOffset must be computed sequentially — fix up after parallel world-xform pass
     for (std::size_t i = 1u; i < drawEvents_.size(); ++i) {
-        perInstanceData[i].rootBoneOffset = static_cast<u32t>(
-            drawEvents_[i-1].boneXforms.size() + perInstanceData[i-1].rootBoneOffset
-        );
+        perInstanceData[i].rootBoneOffset = perInstanceData[i-1].rootBoneOffset;
+        if (drawEvents_[i-1].bakedClipId == -1) {
+            perInstanceData[i].rootBoneOffset += static_cast<u32t>( drawEvents_[i-1].boneXforms.size() );
+        }
+    }
+
+    u32t boneUploadCnt = perInstanceData.back().rootBoneOffset;
+    if (drawEvents_.back().bakedClipId == -1) {
+        boneUploadCnt += static_cast<u32t>( drawEvents_.back().boneXforms.size() );
     }
 
     static auto boneData = std::vector<ShadowMapSkinnedCSMShader::BoneData>();
-    boneData.resize(perInstanceData.back().rootBoneOffset
-        + static_cast<u32t>(drawEvents_.back().boneXforms.size()));
+    boneData.resize(boneUploadCnt);
+
     auto itBone = boneData.begin();
     std::ranges::for_each(drawEvents_, [&itBone](const DrawEvent& e) {
-        for (auto& bx : e.boneXforms) {
-            *itBone = ShadowMapSkinnedCSMShader::BoneData{ mu::transpose(bx).getXmf() };
-            ++itBone;
+         if (e.bakedClipId == -1) {
+            for (auto& bx : e.boneXforms) {
+                *itBone = ShadowMapSkinnedCSMShader::BoneData{ mu::transpose(bx).getXmf() };
+                ++itBone;
+            }
         }
     });
     pResources_->shadowPass.boneData.stage(roomIdx_, boneData);
@@ -829,9 +843,13 @@ void Dispatcher::gBufferUpdate() {
             perInstanceData[i].wv          = mu::transpose(e.world * view).getXmf();
             perInstanceData[i].wvNormal    = mu::inverse(mu::Mat3x3(e.world * view)).getXmf();
             perInstanceData[i].worldNormal = mu::inverse(mu::Mat3x3(e.world)).getXmf();
-        }
+            perInstanceData[i].bakedClipId = e.bakedClipId;
+            perInstanceData[i].bakedClipFrame = e.bakedClipFrame;
 
-        boneUploadCnt += static_cast<u32t>(e.boneXforms.size());
+            if (e.bakedClipId == -1) {
+                boneUploadCnt += static_cast<u32t>(e.boneXforms.size());
+            }
+        }
     }
 
     pResources_->gBufferPass.perInstanceData.stage(roomIdx_, perInstanceData);
@@ -843,14 +861,13 @@ void Dispatcher::gBufferUpdate() {
     u32t boneIdx = 0u;
     for (u32t i = 0u; i < static_cast<u32t>(drawEvents_.size()); ++i) {
         const bool isCulled = hasLastFlags && (lastFlags[i] == 0u);
-        if (!isCulled) {
+        if (!isCulled && drawEvents_[i].bakedClipId == -1) {
             for (auto& bx : drawEvents_[i].boneXforms) {
                 boneData[boneIdx] = PBRDeferredSkinnedGBufferShader::BoneData{
-                    mu::transpose(bx).getXmf() };
+                    mu::transpose(bx).getXmf()
+                };
                 ++boneIdx;
             }
-        } else {
-            boneIdx += static_cast<u32t>(drawEvents_[i].boneXforms.size());
         }
     }
     pResources_->gBufferPass.boneData.stage(roomIdx_, boneData);
@@ -972,22 +989,31 @@ void Dispatcher::gBufferUpdateMT() {
 
     // rootBoneOffset must be computed sequentially — fix up after parallel world-xform pass
     for (std::size_t i = 1u; i < drawEvents_.size(); ++i) {
-        perInstanceData[i].rootBoneOffset = static_cast<u32t>(
-            drawEvents_[i-1].boneXforms.size() + perInstanceData[i-1].rootBoneOffset
-        );
+        const bool isCulled = hasLastFlags && (lastFlags[i-1] == 0u);
+
+        perInstanceData[i].rootBoneOffset = perInstanceData[i-1].rootBoneOffset;
+        if (!isCulled && drawEvents_[i-1].bakedClipId == -1) {
+            perInstanceData[i].rootBoneOffset += static_cast<u32t>( drawEvents_[i-1].boneXforms.size() );
+        }
+    }
+
+    u32t boneUploadCnt = perInstanceData.back().rootBoneOffset;
+    const bool isCulled = hasLastFlags && (lastFlags.back() == 0u);
+    if (!isCulled && drawEvents_.back().bakedClipId == -1) {
+        boneUploadCnt += static_cast<u32t>( drawEvents_.back().boneXforms.size() );
     }
 
     static auto boneData = std::vector<PBRDeferredSkinnedGBufferShader::BoneData>();
-    boneData.resize(perInstanceData.back().rootBoneOffset
-        + static_cast<u32t>(drawEvents_.back().boneXforms.size()));
+    boneData.resize(boneUploadCnt);
     for (u32t i = 0u; i < static_cast<u32t>(drawEvents_.size()); ++i) {
         const bool isCulled = hasLastFlags && (lastFlags[i] == 0u);
         const auto& e = drawEvents_[i];
         u32t boneIdx = perInstanceData[i].rootBoneOffset;
-        if (!isCulled) {
+        if (!isCulled && drawEvents_[i].bakedClipId == -1) {
             for (auto& bx : e.boneXforms) {
                 boneData[boneIdx] = PBRDeferredSkinnedGBufferShader::BoneData{
-                    mu::transpose(bx).getXmf() };
+                    mu::transpose(bx).getXmf()
+                };
                 ++boneIdx;
             }
         }
@@ -1166,6 +1192,8 @@ void MU_CALLCONV Dispatcher::addJobGBufferUpdate(
                 pOut[i].wv          = mu::transpose(e.world * view).getXmf();
                 pOut[i].wvNormal    = mu::inverse(mu::Mat3x3(e.world * view)).getXmf();
                 pOut[i].worldNormal = mu::inverse(mu::Mat3x3(e.world)).getXmf();
+                pOut[i].bakedClipId = e.bakedClipId;
+                pOut[i].bakedClipFrame = e.bakedClipFrame;
             }
         }
         latch.count_down();
@@ -1355,7 +1383,9 @@ void Dispatcher::addJobShadowUpdate(
             [](const DrawEvent& e) {
                 return ShadowMapSkinnedCSMShader::PerInstanceData{
                     .world          = mu::transpose(e.world).getXmf(),
-                    .rootBoneOffset = 0u  // fixed up sequentially after latch
+                    .rootBoneOffset = 0u,  // fixed up sequentially after latch
+                    .bakedClipId = e.bakedClipId,
+                    .bakedClipFrame = e.bakedClipFrame
                 };
             });
         latch.count_down();

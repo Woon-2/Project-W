@@ -7,7 +7,9 @@ struct PerInstanceData {
     float3x3 wvNormal;
     float3x3 worldNormal;
     uint rootBoneOffset;
-    uint3 padding;
+    int bakedClipId;
+    int bakedClipFrame;
+    int padding;
 };
 
 struct Material {
@@ -80,6 +82,41 @@ static float4x4 gmtxTexturize = {
     0.5f,  0.5f, 0.0f, 1.0f
 };
 
+#include "pbrLighting.hlsli"
+
+float4x4 loadBakedMatrix(int clipIdx, int frameIdx, int boneIdx) {
+    float4x4 M;
+    int vIdx = boneIdx * 4;
+    // as a texture stores float4 values, we need to load 4x4 matrix as 4 float4 values.
+    M[0] = loadBindless(
+        int4(IDX_RANGE_TEXTURE2D, clipIdx, 0, 0),
+        int2(frameIdx, vIdx + 0), 0
+    );
+    M[1] = loadBindless(
+        int4(IDX_RANGE_TEXTURE2D, clipIdx, 0, 0),
+        int2(frameIdx, vIdx + 1), 0
+    );
+    M[2] = loadBindless(
+        int4(IDX_RANGE_TEXTURE2D, clipIdx, 0, 0),
+        int2(frameIdx, vIdx + 2), 0
+    );
+    M[3] = loadBindless(
+        int4(IDX_RANGE_TEXTURE2D, clipIdx, 0, 0),
+        int2(frameIdx, vIdx + 3), 0
+    );
+
+    return M;
+}
+
+float4x4 blendBakedTransform(int clipIdx, int frameIdx, uint4 boneIndices, float4 boneWeights)
+{
+    return
+        loadBakedMatrix(clipIdx, frameIdx, boneIndices.x) * boneWeights.x +
+        loadBakedMatrix(clipIdx, frameIdx, boneIndices.y) * boneWeights.y +
+        loadBakedMatrix(clipIdx, frameIdx, boneIndices.z) * boneWeights.z +
+        loadBakedMatrix(clipIdx, frameIdx, boneIndices.w) * boneWeights.w;
+}
+
 float4x4 blendBoneTransform(uint rootBoneOffset, uint4 boneIndices, float4 boneWeights) {
     return
         gBoneData[rootBoneOffset + boneIndices.x] * boneWeights.x +
@@ -87,8 +124,6 @@ float4x4 blendBoneTransform(uint rootBoneOffset, uint4 boneIndices, float4 boneW
         gBoneData[rootBoneOffset + boneIndices.z] * boneWeights.z +
         gBoneData[rootBoneOffset + boneIndices.w] * boneWeights.w;
 }
-
-#include "pbrLighting.hlsli"
 
 VSOutput VSMain(
     float3 position   : POSITION,
@@ -107,10 +142,20 @@ VSOutput VSMain(
 #else
     uint idx = idxInst + firstInstanceOffset;
 #endif
-    float4x4 anim = blendBoneTransform(
-        gInstances[idx].rootBoneOffset,
-        (uint4)boneIndices, boneWeights
-    );
+    float4x4 anim;
+    if (gInstances[idx].bakedClipId == -1) {
+        anim = blendBoneTransform(
+            gInstances[idx].rootBoneOffset,
+            (uint4)boneIndices, boneWeights
+        );
+    }
+    else {
+        anim = blendBakedTransform(
+            gInstances[idx].bakedClipId,
+            gInstances[idx].bakedClipFrame,
+            (uint4)boneIndices, boneWeights
+        );
+    }
 
     float4 animPos    = mul(float4(position, 1.0f), anim);
     float4 animNormal = mul(float4(normal,   0.0f), anim);

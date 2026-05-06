@@ -160,33 +160,61 @@ void AnimBlenderPlayer::onCalcLocal(PassKey<AnimSystem>) {
 	updateFrames("Player_Run_Left", animTimeRun_);
 	updateFrames("Player_Run_Right", animTimeRun_);
 
-	auto& localXforms = localXformData();
-	auto& framesIdle0 = curFrames("Player_Idle0");
-	auto& framesIdle1 = curFrames("Player_Idle1");
-	auto& framesHit = curFrames("Player_Hit");
-	auto& framesDeath = curFrames("Player_Death");
-	auto& framesRunForward = curFrames("Player_Run_Forward");
-	auto& framesRunBackward = curFrames("Player_Run_Backward");
-	auto& framesRunLeft = curFrames("Player_Run_Left");
-	auto& framesRunRight = curFrames("Player_Run_Right");
+	if (mode_ == Mode::Baked) {
+		// death는 우선도가 가장 높음
+		if (tDeath_ > 0.01f) {
+			auto& deathClip = targetClip("Player_Death");
+			finalBakedClipId_ = deathClip->id;
+			finalBakedClipFrame_ = static_cast<int>( deathClip->bakedSampleRate * animTimeDeath_.count() );
+		}
+		else {
+			// baked animation에는 hit 제외시킴
+			float weights[] = { tIdle0_, tIdle1_, tRunForward_, tRunBackward_, tRunLeft_, tRunRight_ };
+			Seconds animTimes[] = { animTimeIdle0_, animTimeIdle1_, animTimeRun_, animTimeRun_, animTimeRun_, animTimeRun_ };
+			const AnimClip* clips[] = {
+				targetClip("Player_Idle0").get(),
+				targetClip("Player_Idle1").get(),
+				targetClip("Player_Run_Forward").get(),
+				targetClip("Player_Run_Backward").get(),
+				targetClip("Player_Run_Left").get(),
+				targetClip("Player_Run_Right").get()
+			};
+			auto i = static_cast<int>( std::distance(std::begin(weights), std::ranges::max_element(weights)) );
+			finalBakedClipId_ = clips[i]->id;
+			finalBakedClipFrame_ = static_cast<int>( clips[i]->bakedSampleRate * animTimes[i].count() );
+		}
+		// std::ranges::max_element()
 
-	// 애니메이션의 프레임들을 블렌딩한다.
-	for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
-		WeightedAnimFrame frames[] = {
-			WeightedAnimFrame{ .frame = framesIdle0[i], .w = tIdle0_ },
-			WeightedAnimFrame{ .frame = framesIdle1[i], .w = tIdle1_ },
-			WeightedAnimFrame{ .frame = framesRunForward[i], .w = tRunForward_ },
-			WeightedAnimFrame{ .frame = framesRunBackward[i], .w = tRunBackward_ },
-			WeightedAnimFrame{ .frame = framesRunLeft[i], .w = tRunLeft_ },
-			WeightedAnimFrame{ .frame = framesRunRight[i], .w = tRunRight_ },
-		};
-		framesBlended_[i] = sumWeightedAnimFrames(frames);
-		// hit animation 보간 (nlerp 쓰면 팔꿈치 꼬임)
-		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i], tHit_);
-		// death animation 보간
-		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i], tDeath_);
 	}
-	std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
+	else /* if (mode_ == Mode::Keyframe) */ {
+		auto& localXforms = localXformData();
+		auto& framesIdle0 = curFrames("Player_Idle0");
+		auto& framesIdle1 = curFrames("Player_Idle1");
+		auto& framesHit = curFrames("Player_Hit");
+		auto& framesDeath = curFrames("Player_Death");
+		auto& framesRunForward = curFrames("Player_Run_Forward");
+		auto& framesRunBackward = curFrames("Player_Run_Backward");
+		auto& framesRunLeft = curFrames("Player_Run_Left");
+		auto& framesRunRight = curFrames("Player_Run_Right");
+
+		// 애니메이션의 프레임들을 블렌딩한다.
+		for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
+			WeightedAnimFrame frames[] = {
+				WeightedAnimFrame{ .frame = framesIdle0[i], .w = tIdle0_ },
+				WeightedAnimFrame{ .frame = framesIdle1[i], .w = tIdle1_ },
+				WeightedAnimFrame{ .frame = framesRunForward[i], .w = tRunForward_ },
+				WeightedAnimFrame{ .frame = framesRunBackward[i], .w = tRunBackward_ },
+				WeightedAnimFrame{ .frame = framesRunLeft[i], .w = tRunLeft_ },
+				WeightedAnimFrame{ .frame = framesRunRight[i], .w = tRunRight_ },
+			};
+			framesBlended_[i] = sumWeightedAnimFrames(frames);
+			// hit animation 보간 (nlerp 쓰면 팔꿈치 꼬임)
+			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i], tHit_);
+			// death animation 보간
+			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i], tDeath_);
+		}
+		std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
+	}
 }
 
 void AnimBlenderPlayer::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
@@ -346,21 +374,51 @@ void AnimBlenderGoblin::onCalcLocal(PassKey<AnimSystem>) {
 	auto& framesHit = curFrames("Goblin_Hit");
 	auto& framesDeath = curFrames("Goblin_Death");
 
-	// 애니메이션의 프레임들을 블렌딩한다.
-	for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
-		WeightedAnimFrame frames[] = {
-			WeightedAnimFrame{ .frame = framesIdle[i], .w = tIdle_ },
-			WeightedAnimFrame{ .frame = framesWalk[i], .w = tWalk_ }
-		};
-		framesBlended_[i] = sumWeightedAnimFrames(frames);
-		// attack animation 보간
-		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesAttack[i], tAttack_);
-		// hit animation 보간 (nlerp 쓰면 팔꿈치 꼬임)
-		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i], tHit_);
-		// death animation 보간
-		framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i], tDeath_);
+	if (mode_ == Mode::Baked) {
+		// death는 우선도가 가장 높음
+		if (tDeath_ > 0.01f) {
+			auto& deathClip = targetClip("Goblin_Death");
+			finalBakedClipId_ = deathClip->id;
+			finalBakedClipFrame_ = static_cast<int>( deathClip->bakedSampleRate * animTimeDeath_.count() );
+		}
+		// 그 다음 공격 애니메이션 우선도 높게 주기
+		else if (tAttack_ > 0.01f) {
+			auto& attackClip = targetClip("Goblin_Attack");
+			finalBakedClipId_ = attackClip->id;
+			finalBakedClipFrame_ = static_cast<int>( attackClip->bakedSampleRate * animTimeDeath_.count() );
+		}
+		else {
+			// baked animation에는 hit 제외시킴
+			float weights[] = { tIdle_, tWalk_ };
+			Seconds animTimes[] = { animTimeIdle_, animTimeWalk_ };
+			const AnimClip* clips[] = {
+				targetClip("Goblin_Idle").get(),
+				targetClip("Goblin_Walk").get()
+			};
+			auto i = static_cast<int>( std::distance(std::begin(weights), std::ranges::max_element(weights)) );
+			finalBakedClipId_ = clips[i]->id;
+			finalBakedClipFrame_ = static_cast<int>( clips[i]->bakedSampleRate * animTimes[i].count() );
+		}
+		// std::ranges::max_element()
+
 	}
-	std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
+	else /* if (mode_ == Mode::Keyframe) */ {
+		// 애니메이션의 프레임들을 블렌딩한다.
+		for (std::size_t i = 0u; i < framesBlended_.size(); ++i) {
+			WeightedAnimFrame frames[] = {
+				WeightedAnimFrame{ .frame = framesIdle[i], .w = tIdle_ },
+				WeightedAnimFrame{ .frame = framesWalk[i], .w = tWalk_ }
+			};
+			framesBlended_[i] = sumWeightedAnimFrames(frames);
+			// attack animation 보간
+			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesAttack[i], tAttack_);
+			// hit animation 보간 (nlerp 쓰면 팔꿈치 꼬임)
+			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesHit[i], tHit_);
+			// death animation 보간
+			framesBlended_[i] = lerpAnimFrames(framesBlended_[i], framesDeath[i], tDeath_);
+		}
+		std::ranges::transform(framesBlended_, localXforms.begin(), convertAnimFrameToMatrix);
+	}
 }
 
 void AnimBlenderGoblin::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {
@@ -515,6 +573,10 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 							.subMesh        = &mesh.subMeshes[i],
 							.material       = &mesh.materialSets[materialSetIdx_].materials[i],
 							.renderObjectId = renderObjectId_,
+							.bakedClipId	= renderState_.animBlender->mode() == AnimBlender::Mode::Baked
+								? renderState_.animBlender->finalBakedClipId() : -1,
+							.bakedClipFrame	= renderState_.animBlender->mode() == AnimBlender::Mode::Baked
+								? renderState_.animBlender->finalBakedClipFrame() : -1,
 						});
 					}
 					else {

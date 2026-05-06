@@ -56,12 +56,15 @@ struct FrameData {
 };
 
 struct DrawEvent {
-    mu::Mat4x4              world;
-    std::span<mu::Mat4x4>   boneXforms;
-    const Mesh*             mesh;
-    const SubMesh*          subMesh;
-    const Material*         material;
-    u32t                    renderObjectId = std::numeric_limits<u32t>::max();
+    mu::Mat4x4 world;
+    std::span<mu::Mat4x4> boneXforms;
+    const Mesh* mesh;
+    const SubMesh* subMesh;
+    const Material* material;
+    u32t renderObjectId = std::numeric_limits<u32t>::max();
+    // baked animation 모드에서만 사용
+    i32t bakedClipId = -1;
+    i32t bakedClipFrame = -1;
 
     auto operator<=>(const DrawEvent& rhs) const noexcept {
         auto e = mesh <=> rhs.mesh;
@@ -90,17 +93,10 @@ struct Resources {
         RWStructuredBuffer visibleIndices;   // u1
         RWStructuredBuffer indirectCmd;   // u0, space1
 
-        // GPU readback: perGroupCnt 복사 대상 (D3D12_HEAP_TYPE_READBACK)
-        ComPtr<ID3D12Resource> visibleCountReadback;
-        u32t* visibleCountMapped = nullptr;
         u32t  lastGroupCnt      = 0u;
         u32t  lastObjCnt        = 0u;
         u32t  lastVisibleCount  = 0u;
         u32t  lastTotalCount    = 0u;
-
-        // GPU readback: visibleFlags 복사 대상 (D3D12_HEAP_TYPE_READBACK)
-        ComPtr<ID3D12Resource> visibilityReadback;
-        u32t* visibilityMapped       = nullptr;
         u32t  lastVisibilityObjCnt   = 0u;
         std::vector<u32t> lastVisibilityFlags;      // CPU 복사본 (직전 프레임)
         std::vector<u32t> lastDrawEventObjectIds;   // 직전 프레임 정렬된 DrawEvents의 renderObjectId

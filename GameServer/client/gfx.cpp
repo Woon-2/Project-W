@@ -972,9 +972,12 @@ void GFX::addOccluder(const TerrainDeferredPipeline::OccluderInfo& occluderInfo)
 	occluderInfosTerrainDeferred_.push_back(occluderInfo);
 }
 
-void GFX::addRequestMeshBinLoad(const RequestMeshBinLoad& request)
-{
+void GFX::addRequestMeshBinLoad(const RequestMeshBinLoad& request) {
 	requestsMeshBinLoad_.push_back(request);
+}
+
+void GFX::addRequestBakeAnimation(const RequestBakeAnimation& request) {
+	requestsBakeAnimation_.push_back(request);
 }
 
 // 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
@@ -1148,6 +1151,12 @@ void GFX::loadAssets(const AssetConfigs& configs) {
 
 	dumpLog();
 
+	// bake animations
+	for (auto& request : requestsBakeAnimation_) {
+		*request.pDest = bakeAnimation(device_.Get(), cmdList.Get(), request.samples, request.uploadBuffer);
+		createSRV(device_.Get(), *request.pDest, srvTexPool_);
+	}
+
 	// 명령 기록 끝, 명령 실행
 	DISPLAY_ERROR_DX_VOID(cmdList->Close(), false);
 
@@ -1159,6 +1168,16 @@ void GFX::loadAssets(const AssetConfigs& configs) {
 	fence.associatedCmdCtxs_[etoi(CommandListUsage::ResourceLoading)].push_back(std::move(cmdCtx));
 	signalFence("LoadFence");
 	waitOnFence("LoadFence");
+
+	// 요청 비우기
+	requestsModelLoad_.clear();
+	requestsSkyboxLoad_.clear();
+	requestsTextureLoad_.clear();
+	requestsSpritesLoad_.clear();
+	requestsTextImageLoad_.clear();
+	requestsTerrainLoad_.clear();
+	requestsMeshBinLoad_.clear();
+	requestsBakeAnimation_.clear();
 }
 
 void GFX::render() {
@@ -2163,14 +2182,6 @@ void GFX::UpdateTextureWithTextImage( TextImage* srcImage, UINT srcWidth, UINT s
 
 void GFX::createTextImageImmediate(UINT width, UINT height, TextImage* pDest) {
 	*pDest = TextImage(device_.Get(), width, height, srvTexPool_);
-}
-
-Texture GFX::createTex2D(UINT width, UINT height, DXGI_FORMAT format) {
-	auto ret = createTexture(device_.Get(), width, height, format,
-		D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON
-	);
-	createSRV(device_.Get(), ret, srvTexPool_);
-	return ret;
 }
 
 // 공용 샘플러들 생성

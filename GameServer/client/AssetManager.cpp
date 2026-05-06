@@ -234,7 +234,23 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 		gSharedLog << "[SwordSlash2 Material] Warning: ../resources/effects/SwordSlash2.json 로드 실패. 기본값을 사용합니다.\n";
 	}
 
+	auto tmpPlayerAnims = loadAnimClipsFromFile("../resources/animations/playerAnimations.anim", gfx);
+	playerAnimations_.reserve(tmpPlayerAnims.size());
+
+	auto tmpGoblinAnims = loadAnimClipsFromFile("../resources/animations/goblinAnimations.anim", gfx);
+	goblinAnimations_.reserve(tmpGoblinAnims.size());
+
 	gfx.loadAssets(configs);
+
+	for (auto& clip : tmpPlayerAnims) {
+		playerAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+	}
+
+	for (auto& clip : tmpGoblinAnims) {
+		goblinAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+	}
+
+	setupBakedAnimationIds();
 
 	swordSlashMaterial_.mainTex = &smoke12Tex_;
 	swordSlashMaterial_.emissionTex = &crater62Tex_;
@@ -312,18 +328,12 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 	slashPathMaterial_.depthPower   = 1.0f;
 }
 
-void AssetManager::loadAnimations() {
-	auto tmpPlayerAnims = loadAnimClipsFromFile("../resources/animations/playerAnimations.anim");
-	playerAnimations_.reserve(tmpPlayerAnims.size());
-
-	for (auto& clip : tmpPlayerAnims) {
-		playerAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+void AssetManager::setupBakedAnimationIds() {
+	for (auto& clip : playerAnimations_) {
+		clip->id = clip->bakedSamples.idxSrv.idxResource;
 	}
 
-	auto tmpGoblinAnims = loadAnimClipsFromFile("../resources/animations/goblinAnimations.anim");
-	goblinAnimations_.reserve(tmpGoblinAnims.size());
-
-	for (auto& clip : tmpGoblinAnims) {
-		goblinAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+	for (auto& clip : goblinAnimations_) {
+		clip->id = clip->bakedSamples.idxSrv.idxResource;
 	}
 }

@@ -38,7 +38,7 @@ AnimFrame MU_CALLCONV sumWeightedAnimFrames(std::span<WeightedAnimFrame> frames)
 	return ret;
 }
 
-void importAnimClip(std::ifstream& ifs, AnimClip& clip) {
+void importAnimClip(std::ifstream& ifs, AnimClip& clip, GFX& gfx) {
 	readHeadTag(ifs, "Clip");
 
 	clip.name = readText(ifs, "Name");
@@ -59,6 +59,9 @@ void importAnimClip(std::ifstream& ifs, AnimClip& clip) {
 			false
 		);
 	}
+
+	// 키 프레임 임포트
+	readHeadTag(ifs, "KeyFrames");
 
 	for (auto& keyFrames : clip.keyFramesOfBones) {
 		const auto boneIdx = readInteger(ifs, "Bone");
@@ -90,13 +93,46 @@ void importAnimClip(std::ifstream& ifs, AnimClip& clip) {
 		keyFrames[keyFrameCnt].rotation = keyFrames[keyFrameCnt - 1].rotation;
 		keyFrames[keyFrameCnt].scale = keyFrames[keyFrameCnt - 1].scale;
 	}
+	
+	readTailTag(ifs, "KeyFrames");
+
+	// baked samples 임포트
+	readHeadTag(ifs, "BakedSamples");
+
+	clip.bakedSampleRate = readFloat(ifs, "SampleRate");
+
+	for (auto& bakedSamples : clip.bakedSamplesOfBones) {
+		const auto boneIdx = readInteger(ifs, "Bone");
+		const auto sampleCnt = readInteger(ifs, "sampleCnt");
+
+		bakedSamples.resize(sampleCnt + 1u);	// sentinel 값을 위함
+		for (int i = 0; i < sampleCnt; ++i) {
+			auto& sample = bakedSamples[i];
+
+			readHeadTag(ifs, "Sample");
+			const auto mtx = readMatrix(ifs, "Matrix");
+			sample = mu::Mat4x4( DirectX::XMLoadFloat4x4(&mtx) );
+			readTailTag(ifs, "Sample");
+		}
+
+		// sentinel 값 추가: 애니메이션 시간은 +inf, 변환은 마지막 프레임과 같음
+		bakedSamples[sampleCnt] = bakedSamples[sampleCnt - 1];
+	}
+
+	readTailTag(ifs, "BakedSamples");
 
 	readTailTag(ifs, "Clip");
 
-	gSharedLog << "[Resource Load] 애니메이션 클립 " << clip.name << " 로드 완료\n";
+	// d3d12단 baked sample 텍스처 생성 및 srv 등록
+	gfx.addRequestBakeAnimation( RequestBakeAnimation{
+		.samples = clip.bakedSamplesOfBones,
+		.pDest = &clip.bakedSamples
+	});
+
+	gSharedLog << "[Resource Load] 애니메이션 클립 \"" << clip.name << "\"로드 완료\n";
 }
 
-std::vector<AnimClip> loadAnimClipsFromFile(const std::filesystem::path& path) {
+std::vector<AnimClip> loadAnimClipsFromFile(const std::filesystem::path& path, GFX& gfx) {
 	std::vector<AnimClip> ret{};
 
     auto ifs = std::ifstream(path, std::ios::binary);
@@ -109,10 +145,13 @@ std::vector<AnimClip> loadAnimClipsFromFile(const std::filesystem::path& path) {
 	const auto clipCnt = readInteger(ifs, "ClipCnt");
 	const auto boneCnt = readInteger(ifs, "BoneCnt");
 
+	ret.reserve(clipCnt);
+
 	for (int i = 0; i < clipCnt; ++i) {
 		auto& clip = ret.emplace_back();
 		clip.keyFramesOfBones.resize(boneCnt);
-		importAnimClip(ifs, clip);
+		clip.bakedSamplesOfBones.resize(boneCnt);
+		importAnimClip(ifs, clip, gfx);
 	}
 
     gSharedLog << "[Resource Load] File I/O: 애니메이션 세트 " << animationSetName << '(' << path << ") 로드 완료\n";
@@ -176,6 +215,9 @@ void AnimBlender::setSkeleton(const Skeleton& skeleton) {
 // 본들의 로컬 변환을 스켈레톤의 본 트리를 순회하며
 // 드레스 공간 변환으로 환원한다.
 void AnimBlender::onCalcDress(PassKey<AnimSystem>) {
+	if (mode_ == Mode::Baked) {
+		return;
+	}
 	traverseBone(*skeleton_.pRoot);
 }
 
@@ -198,6 +240,9 @@ void MU_CALLCONV AnimBlender::traverseBone(const Bone& bone, mu::Mat4x4 parentXf
 // 그 결과 행렬의 앞쪽에 본들의 toLocal 행렬을 곱해주어
 // 1.의 단계를 수행한다.
 void AnimBlender::onCalcFinal(PassKey<AnimSystem>) {
+	if (mode_ == Mode::Baked) {
+		return;
+	}
 	auto& bones = *skeleton_.bones;
 	for (std::size_t i = 0; i < bones.size(); ++i) {
 		boneXformCache_[i] = bones[i].toLocal * boneXformCache_[i];
@@ -258,6 +303,16 @@ void AnimBlender::updateFrames(const std::string& key, Seconds elapsed) {
 		return;
 	}
 
+	if (mode_ == Mode::Keyframe) {
+		updateFramesKeyframeMode(key, elapsed);
+	}
+	else /* if (mode_ == Mode::Baked) */ {
+		updateFramesBakedMode(key, elapsed);
+	}
+}
+
+// key에 해당하는 클립을 elapsed 만큼의 시간이 지났을 때의 프레임으로 갱신한다.
+void AnimBlender::updateFramesKeyframeMode(const std::string& key, Seconds elapsed) {
 	auto& frameInfo = frameInfoMap_.at(key);
 
 	for (std::size_t i = 0; i < frameInfo.frameCache_.size(); ++i) {
@@ -282,7 +337,17 @@ void AnimBlender::updateFrames(const std::string& key, Seconds elapsed) {
 	}
 }
 
-void AnimBlender::accumulatePriority(PassKey<AnimSystem>, Seconds dt, mu::Vec3 refPos) {
+// key에 해당하는 클립을 elapsed 만큼의 시간이 지났을 때의 프레임으로 갱신한다.
+void AnimBlender::updateFramesBakedMode(const std::string& key, Seconds elapsed) {
+	auto& frameInfo = frameInfoMap_.at(key);
+	frameInfo.bakedSampleIdx = static_cast<std::size_t>(
+		std::min( elapsed.count() * frameInfo.targetClip->bakedSampleRate,
+			frameInfo.targetClip->duration.count() * frameInfo.targetClip->bakedSampleRate
+		)
+	);
+}
+
+void AnimBlender::updatePriority(PassKey<AnimSystem>, Seconds dt, mu::Vec3 refPos) {
     const float dist = (cachedPos_ - refPos).len();
 
     constexpr float kDistScale = 50.f;
@@ -290,6 +355,9 @@ void AnimBlender::accumulatePriority(PassKey<AnimSystem>, Seconds dt, mu::Vec3 r
 
     // 거리 기반 weight
     const float wDist = 1.f / (1.f + d * d);
+
+	mode_ = Mode::Baked;
+	// mode_ = wDist < 0.25f ? Mode::Baked : Mode::Keyframe;
 
     // 시간 기반 weight
     const float t = static_cast<float>(updateLag_.count());
@@ -307,7 +375,7 @@ void AnimBlender::accumulatePriority(PassKey<AnimSystem>, Seconds dt, mu::Vec3 r
 
 void AnimSystem::updatePriorities(Seconds dt, mu::Vec3 refPos) {
 	for (auto* b : blenders_) {
-		b->accumulatePriority({}, dt, refPos);
+		b->updatePriority({}, dt, refPos);
 	}
 }
 

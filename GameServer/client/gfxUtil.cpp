@@ -893,6 +893,52 @@ Texture createTextureWithMips( ID3D12Device* device, uint32_t width, uint32_t he
     return ret;
 }
 
+Texture bakeAnimation( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
+	std::span< std::vector<mu::Mat4x4> > samples, ComPtr<ID3D12Resource>& uploadBuffer	
+) {
+	const auto boneCnt = samples.size();
+	const auto sampleCnt = samples.front().size();
+
+	auto ret = createTexture( device, static_cast<u32t>( sampleCnt ),
+		static_cast<u32t>( 4u * boneCnt ),
+		DXGI_FORMAT_R32G32B32A32_FLOAT, D3D12_RESOURCE_FLAG_NONE,
+		D3D12_RESOURCE_STATE_COPY_DEST
+	);
+
+	auto storedSamples = std::vector<XMFLOAT4>(
+		(4u * boneCnt) * sampleCnt
+	);
+
+	for (std::size_t i = 0; i < boneCnt; ++i) {
+        for (std::size_t j = 0; j < sampleCnt; ++j) {
+			const auto& mat = samples[i][j];
+            storedSamples[(i * 4u + 0u) * sampleCnt + j] = mat.row(0u).getXmf();
+            storedSamples[(i * 4u + 1u) * sampleCnt + j] = mat.row(1u).getXmf();
+            storedSamples[(i * 4u + 2u) * sampleCnt + j] = mat.row(2u).getXmf();
+            storedSamples[(i * 4u + 3u) * sampleCnt + j] = mat.row(3u).getXmf();
+        }
+    }
+
+	const auto uploadBufferSize = GetRequiredIntermediateSize(ret.res.Get(), 0u, 1u);
+	uploadBuffer = createBufferResource(device, nullptr, uploadBufferSize, BufferCreationType::UploadBuffer);
+
+	D3D12_SUBRESOURCE_DATA texSubresource{
+        .pData = storedSamples.data(),
+        .RowPitch = static_cast<std::int64_t>(sampleCnt * sizeof(XMFLOAT4))
+    };
+    texSubresource.SlicePitch = static_cast<std::int64_t>(texSubresource.RowPitch * 4u * boneCnt);
+
+    UpdateSubresources(cmdList, ret.res.Get(),
+        uploadBuffer.Get(), 0u, 0u, 1u, &texSubresource
+    );
+
+	transitionResourceState( cmdList, ret.res.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
+		D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE
+	);
+
+	return ret;
+}
+
 // 텍스처의 gpu 리소스를 담는 ComPtr 부분은 제외하고,
 // Bindless 셰이더에서 인덱싱하기 위한 인덱스들만 복사한 텍스처를 반환한다.
 // 리소스 자체에 접근할 일은 거의 없기 때문에, 인덱스들만 복사하는 것이

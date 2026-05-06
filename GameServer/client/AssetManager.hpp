@@ -8,7 +8,6 @@
 class AssetManager {
 public:
 	void loadGFXAssets(GFX& gfx, const AssetConfigs& configs = AssetConfigs{});
-	void loadAnimations();
 
 	const Model* modelCube() const { return &modelCube_; }
 	const Model* modelPlayer() const { return &modelPlayer_; }
@@ -45,6 +44,8 @@ public:
 	const std::vector<std::shared_ptr<AnimClip>>& goblinAnimations() const { return goblinAnimations_; }
 
 private:
+	void setupBakedAnimationIds();
+
 	std::unordered_map<std::string, Texture> texHashMap_{};
 	std::vector<std::shared_ptr<AnimClip>> playerAnimations_{};
 	std::vector<std::shared_ptr<AnimClip>> goblinAnimations_{};

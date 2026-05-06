@@ -466,7 +466,9 @@ struct BoneData {
 struct PerInstanceData {
 	XMFLOAT4X4 world;
 	u32t rootBoneOffset;
-	XMUINT3 padding;
+	i32t bakedClipId;
+	i32t bakedClipFrame;
+	i32t padding;
 };
 
 struct PerDrawcallData {
@@ -741,7 +743,9 @@ struct PerInstanceData {
 	XMFLOAT3X3 wvNormal;
 	XMFLOAT3X3 worldNormal;  // inverse(Mat3x3(world)) — non-uniform scale safe normal transform
 	u32t rootBoneOffset;
-	XMUINT3 padding;
+	i32t bakedClipId;
+	i32t bakedClipFrame;
+	i32t padding;
 };
 
 struct PerDrawcallData {

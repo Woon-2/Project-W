@@ -50,7 +50,6 @@ Game::Game() {
 	gfx_.setThreadPool(&threadPool_);
 
 	assetManager_.loadGFXAssets( gfx_, assetConfigs_ );
-	assetManager_.loadAnimations();
 }
 
 void Game::setupStage() {

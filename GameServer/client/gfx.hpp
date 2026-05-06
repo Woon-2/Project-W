@@ -47,6 +47,12 @@ struct RequestTextureLoad {
 	Samplers sampler = Samplers::TrilinearWrap;
 };
 
+struct RequestBakeAnimation {
+	std::span< std::vector<mu::Mat4x4> > samples;
+	ComPtr<ID3D12Resource> uploadBuffer;
+	Texture* pDest;
+};
+
 struct RequestSpriteAnimLoad {
 	std::filesystem::path sheetPath;	// DDS 포맷의 스프라이트 시트 경로
 	int rows;							// 스프라이트 시트의 행 수
@@ -245,6 +251,7 @@ public:
 	void addRequestTextImageLoad( const RequestTextImageLoad& request );
 	void addRequestTerrainLoad(const RequestTerrainLoad& request);
 	void addRequestMeshBinLoad(const RequestMeshBinLoad& request);
+	void addRequestBakeAnimation(const RequestBakeAnimation& request);
 
 	// 파이프라인들이 자체적으로 사용하는 리소스들과
 	// addRequestXXLoad 꼴의 함수로 요청된 리소스들을 로드한다.
@@ -283,7 +290,6 @@ public:
 	void UpdateTextureWithTextImage( TextImage* srcImage, UINT srcWidth, UINT srcHeight );
 	// Creates a TextImage immediately (loadAssets must have been called first).
 	void createTextImageImmediate(UINT width, UINT height, TextImage* pDest);
-	Texture createTex2D(UINT width, UINT height, DXGI_FORMAT format);
 	// Returns the built-in default font handle (Tahoma 16pt).
 	FontHandle* defaultFont() { return &tahomaFont_; }
 	// Returns a 1x1 white pixel texture for solid-color UI rendering.
@@ -457,6 +463,7 @@ private:
 	std::vector<RequestTextImageLoad> requestsTextImageLoad_{};
 	std::vector<RequestTerrainLoad> requestsTerrainLoad_{};
 	std::vector<RequestMeshBinLoad> requestsMeshBinLoad_{};
+	std::vector<RequestBakeAnimation> requestsBakeAnimation_{};
 
 	ThreadPool* threadPool_ = nullptr;	// 설정되어있을 경우 멀티스레드로 동작한다.
 	bool csmDebugVisualization_ = false;
