@@ -11,6 +11,7 @@ enum class BufferCreationType {
 	IndexBuffer,
 	UploadBuffer,
 	DefaultBufferUAV,	// Default Heap + ALLOW_UNORDERED_ACCESS (RWStructuredBuffer용)
+	ReadbackBuffer,		// Readback Heap, 초기 상태 COPY_DEST (GPU→CPU 읽기용)
 };
 
 // 버퍼 리소스를 생성하는 함수
@@ -317,10 +318,36 @@ public:
 	// roomIdx 리소스의 원시 포인터를 반환한다. 리소스 배리어, ClearUAV 등에서 활용한다.
 	ID3D12Resource* resource( std::size_t roomIdx ) const;
 
+	// init() 호출 이후에 호출해야 한다.
+	// roomIdx별로 독립된 readback 버퍼를 생성하여 in-flight 프레임 간 data race를 방지한다.
+	// roomIdx=k 프레임에서 GPU가 readbackResources_[k]에 쓰고,
+	// 다음 번 roomIdx=k 프레임의 CPU가 읽는다.
+	void initReadback( ID3D12Device* device, UINT64 byteWidth );
+
+	// roomIdx 리소스의 [0, byteWidth) 구간을 readbackResources_[roomIdx]에 복사하는
+	// GPU 명령을 cmdList에 기록한다.
+	// prevState: 현재 roomIdx 리소스의 상태 (복사 전후로 복원된다)
+	void copyToReadback( ID3D12GraphicsCommandList* cmdList,
+		std::size_t roomIdx, UINT64 byteWidth,
+		D3D12_RESOURCE_STATES prevState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+	);
+
+	// roomIdx readback 버퍼의 CPU 매핑 포인터를 T* 로 반환한다.
+	// initReadback()을 호출하지 않은 경우 동작이 정의되지 않는다.
+	template <class T = void>
+	T* readbackPtr( std::size_t roomIdx ) const {
+		return static_cast<T*>(readbackMapped_.at(roomIdx));
+	}
+
+	// readback 버퍼가 초기화됐는지 여부를 반환한다.
+	bool hasReadback() const { return !readbackResources_.empty(); }
+
 private:
 	std::vector<ComPtr<ID3D12Resource>> resources_{};
 	std::vector<D3D12_GPU_VIRTUAL_ADDRESS> addresses_{};
 	std::string name_{};
+	std::vector<ComPtr<ID3D12Resource>> readbackResources_{};
+	std::vector<void*>                  readbackMapped_{};
 };
 
 // 크기가 작지 않은 ConstantBuffer 여러 개를 사용해야 할 경우,
@@ -424,6 +451,15 @@ struct Texture {
 // 펜스에서 gpu 작업 완료를 확인하고 난 뒤에 임시 업로드 버퍼들을 해제할 필요가 있다.
 Texture loadTexture( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
 	const std::filesystem::path& path, Fence& fenceToAssociate, Texture::Type& texType
+);
+
+// 커스텀 텍스처(Texture2D)를 생성한다.
+// bindless index 관련 설정은 하지 않으므로
+// createSRV, calcIdxBindlessSampler와 같은 함수를 적절히 활용하여
+// bindless index들을 설정하자.
+// optimized clear value에 대해 null을 설정한다.
+Texture createTexture( ID3D12Device* device, std::uint32_t width, std::uint32_t height,
+	DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES initialState
 );
 
 // 커스텀 텍스처(Texture2D)를 생성한다.

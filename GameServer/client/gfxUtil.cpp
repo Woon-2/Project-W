@@ -65,6 +65,11 @@ ComPtr<ID3D12Resource> createBufferResource(
 		initialState = D3D12_RESOURCE_STATE_COMMON;
 		break;
 
+	case BufferCreationType::ReadbackBuffer:
+		heapType = D3D12_HEAP_TYPE_READBACK;
+		initialState = D3D12_RESOURCE_STATE_COPY_DEST;
+		break;
+
 	default:
 		DISPLAY_ERROR_STR(false, "[GFX Error] createBufferResource: creationType이 알 수 없는 값입니다: "s +
 			std::to_string(etoi(creationType)) + "\n"s, false
@@ -557,6 +562,31 @@ ID3D12Resource* RWStructuredBuffer::resource( std::size_t roomIdx ) const {
 	return resources_.at(roomIdx).Get();
 }
 
+void RWStructuredBuffer::initReadback( ID3D12Device* device, UINT64 byteWidth ) {
+	for (std::size_t i = 0u; i < resources_.size(); ++i) {
+		auto res = createBufferResource(device, nullptr, byteWidth, BufferCreationType::ReadbackBuffer);
+		setD3DName(res.Get(), name_ + "_Readback" + std::to_string(i));
+		void* mapped = nullptr;
+		DISPLAY_ERROR_DX_HR(res->Map(0, nullptr, &mapped), false);
+		readbackResources_.push_back(std::move(res));
+		readbackMapped_.push_back(mapped);
+	}
+}
+
+void RWStructuredBuffer::copyToReadback( ID3D12GraphicsCommandList* cmdList,
+	std::size_t roomIdx, UINT64 byteWidth, D3D12_RESOURCE_STATES prevState
+) {
+	if (readbackResources_.empty()) return;
+	transitionResourceState(cmdList,
+		resources_.at(roomIdx).Get(), prevState, D3D12_RESOURCE_STATE_COPY_SOURCE);
+	cmdList->CopyBufferRegion(
+		readbackResources_.at(roomIdx).Get(), 0,
+		resources_.at(roomIdx).Get(), 0,
+		byteWidth);
+	transitionResourceState(cmdList,
+		resources_.at(roomIdx).Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, prevState);
+}
+
 // ConstantBufferArray 객체를 생성한다.
 // room 개수만큼의 큰 리소스들을 생성하고
 // 그 리소스들을 기반으로 ConstantBuffer들을 생성해 담는다.
@@ -765,9 +795,9 @@ Texture loadTexture( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
 // bindless index 관련 설정은 하지 않으므로
 // createSRV, calcIdxBindlessSampler와 같은 함수를 적절히 활용하여
 // bindless index들을 설정하자.
-Texture createTexture( ID3D12Device* device, std::uint32_t width, std::uint32_t height,
+Texture __createTexture( ID3D12Device* device, std::uint32_t width, std::uint32_t height,
 	DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES initialState,
-	const D3D12_CLEAR_VALUE& optimizedClearValue
+	const D3D12_CLEAR_VALUE* optimizedClearValue
 ) {
 	Texture ret{};
 
@@ -795,12 +825,34 @@ Texture createTexture( ID3D12Device* device, std::uint32_t width, std::uint32_t 
 
 	DISPLAY_ERROR_DX_HR(
 		device->CreateCommittedResource(
-			&heapProperties, D3D12_HEAP_FLAG_NONE, &desc, initialState, &optimizedClearValue,
+			&heapProperties, D3D12_HEAP_FLAG_NONE, &desc, initialState, optimizedClearValue,
 			__uuidof(ID3D12Resource), &ret.res
 		), false
 	);
 
 	return ret;
+}
+
+// 커스텀 텍스처(Texture2D)를 생성한다.
+// bindless index 관련 설정은 하지 않으므로
+// createSRV, calcIdxBindlessSampler와 같은 함수를 적절히 활용하여
+// bindless index들을 설정하자.
+// optimized clear value에 대해 null을 설정한다.
+Texture createTexture( ID3D12Device* device, std::uint32_t width, std::uint32_t height,
+	DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES initialState
+) {
+	return __createTexture(device, width, height, format, flags, initialState, nullptr);
+}
+
+// 커스텀 텍스처(Texture2D)를 생성한다.
+// bindless index 관련 설정은 하지 않으므로
+// createSRV, calcIdxBindlessSampler와 같은 함수를 적절히 활용하여
+// bindless index들을 설정하자.
+Texture createTexture( ID3D12Device* device, std::uint32_t width, std::uint32_t height,
+	DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES initialState,
+	const D3D12_CLEAR_VALUE& optimizedClearValue
+) {
+	return __createTexture(device, width, height, format, flags, initialState, &optimizedClearValue);
 }
 
 Texture createTextureWithMips( ID3D12Device* device, uint32_t width, uint32_t height,
