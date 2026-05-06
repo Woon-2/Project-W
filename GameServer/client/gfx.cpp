@@ -655,56 +655,12 @@ void GFX::createSwapChain() {
 	resourcesPBRDeferredSkinnedPipeline_.hiZPass.visibleIndices.init(
 		device_.Get(), sizeof(u32t) * 200'000u, backBuffers_.size(), "PBRDeferredSkinned_HiZ_VisibleIndices"
 	);
-	{
-		static constexpr u32t kMaxGroups = 1000u;
-		const D3D12_HEAP_PROPERTIES heapProps{ .Type = D3D12_HEAP_TYPE_READBACK };
-		const D3D12_RESOURCE_DESC resDesc{
-			.Dimension        = D3D12_RESOURCE_DIMENSION_BUFFER,
-			.Alignment        = 0,
-			.Width            = sizeof(u32t) * kMaxGroups,
-			.Height           = 1,
-			.DepthOrArraySize = 1,
-			.MipLevels        = 1,
-			.Format           = DXGI_FORMAT_UNKNOWN,
-			.SampleDesc       = { 1, 0 },
-			.Layout           = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-			.Flags            = D3D12_RESOURCE_FLAG_NONE,
-		};
-		DISPLAY_ERROR_DX_HR(device_->CreateCommittedResource(
-			&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
-			D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
-			IID_PPV_ARGS(&resourcesPBRDeferredSkinnedPipeline_.hiZPass.visibleCountReadback)
-		), false);
-		DISPLAY_ERROR_DX_HR(resourcesPBRDeferredSkinnedPipeline_.hiZPass.visibleCountReadback->Map(
-			0, nullptr,
-			reinterpret_cast<void**>(&resourcesPBRDeferredSkinnedPipeline_.hiZPass.visibleCountMapped)
-		), false);
-	}
-	{
-		static constexpr u32t kMaxDrawEvents = 200'000u;
-		const D3D12_HEAP_PROPERTIES heapProps{ .Type = D3D12_HEAP_TYPE_READBACK };
-		const D3D12_RESOURCE_DESC resDesc{
-			.Dimension        = D3D12_RESOURCE_DIMENSION_BUFFER,
-			.Alignment        = 0,
-			.Width            = sizeof(u32t) * kMaxDrawEvents,
-			.Height           = 1,
-			.DepthOrArraySize = 1,
-			.MipLevels        = 1,
-			.Format           = DXGI_FORMAT_UNKNOWN,
-			.SampleDesc       = {1, 0},
-			.Layout           = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-			.Flags            = D3D12_RESOURCE_FLAG_NONE,
-		};
-		DISPLAY_ERROR_DX_HR(device_->CreateCommittedResource(
-			&heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
-			D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
-			IID_PPV_ARGS(&resourcesPBRDeferredSkinnedPipeline_.hiZPass.visibilityReadback)
-		), false);
-		DISPLAY_ERROR_DX_HR(resourcesPBRDeferredSkinnedPipeline_.hiZPass.visibilityReadback->Map(
-			0, nullptr,
-			reinterpret_cast<void**>(&resourcesPBRDeferredSkinnedPipeline_.hiZPass.visibilityMapped)
-		), false);
-	}
+	resourcesPBRDeferredSkinnedPipeline_.hiZPass.perGroupCnt.initReadback(
+		device_.Get(), sizeof(u32t) * 1000u
+	);
+	resourcesPBRDeferredSkinnedPipeline_.hiZPass.visibleFlags.initReadback(
+		device_.Get(), sizeof(u32t) * 200'000u
+	);
 	resourcesPBRDeferredSkinnedPipeline_.shadowPass.perInstanceData.init(
 		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::PerInstanceData) * 10'000u, backBuffers_.size(), "PBRDeferredSkinned_Shadow_PerInstanceData"
 	);
@@ -2207,6 +2163,14 @@ void GFX::UpdateTextureWithTextImage( TextImage* srcImage, UINT srcWidth, UINT s
 
 void GFX::createTextImageImmediate(UINT width, UINT height, TextImage* pDest) {
 	*pDest = TextImage(device_.Get(), width, height, srvTexPool_);
+}
+
+Texture GFX::createTex2D(UINT width, UINT height, DXGI_FORMAT format) {
+	auto ret = createTexture(device_.Get(), width, height, format,
+		D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON
+	);
+	createSRV(device_.Get(), ret, srvTexPool_);
+	return ret;
 }
 
 // 공용 샘플러들 생성

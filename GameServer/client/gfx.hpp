@@ -283,6 +283,7 @@ public:
 	void UpdateTextureWithTextImage( TextImage* srcImage, UINT srcWidth, UINT srcHeight );
 	// Creates a TextImage immediately (loadAssets must have been called first).
 	void createTextImageImmediate(UINT width, UINT height, TextImage* pDest);
+	Texture createTex2D(UINT width, UINT height, DXGI_FORMAT format);
 	// Returns the built-in default font handle (Tahoma 16pt).
 	FontHandle* defaultFont() { return &tahomaFont_; }
 	// Returns a 1x1 white pixel texture for solid-color UI rendering.

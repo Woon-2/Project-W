@@ -152,24 +152,24 @@ void Dispatcher::gBufferPassMT() { gBufferUpdateMT(); gBufferDrawMT(); }
 void Dispatcher::hiZPassUpdate() {
     if (drawEvents_.empty()) return;
 
-    // 이전 프레임의 readback 결과 합산 (1-frame delay)
-    if (pResources_->hiZPass.visibleCountMapped && pResources_->hiZPass.lastGroupCnt > 0u) {
+    // 이전 프레임의 readback 결과 합산 (roomCnt-frame delay)
+    if (pResources_->hiZPass.perGroupCnt.hasReadback() && pResources_->hiZPass.lastGroupCnt > 0u) {
+        const auto* mapped = pResources_->hiZPass.perGroupCnt.readbackPtr<u32t>(roomIdx_);
         u32t visible = 0u;
         for (u32t g = 0u; g < pResources_->hiZPass.lastGroupCnt; ++g)
-            visible += pResources_->hiZPass.visibleCountMapped[g];
+            visible += mapped[g];
         pResources_->hiZPass.lastVisibleCount = visible;
         pResources_->hiZPass.lastTotalCount   = pResources_->hiZPass.lastObjCnt;
     }
 
     // 이전 프레임 visibleFlags readback → lastVisibilityFlags + objectVisibility 갱신
-    if (pResources_->hiZPass.visibilityMapped
+    if (pResources_->hiZPass.visibleFlags.hasReadback()
         && pResources_->hiZPass.lastVisibilityObjCnt > 0u
         && !pResources_->hiZPass.lastDrawEventObjectIds.empty())
     {
         const u32t cnt = pResources_->hiZPass.lastVisibilityObjCnt;
-        pResources_->hiZPass.lastVisibilityFlags.assign(
-            pResources_->hiZPass.visibilityMapped,
-            pResources_->hiZPass.visibilityMapped + cnt);
+        const auto* mapped = pResources_->hiZPass.visibleFlags.readbackPtr<u32t>(roomIdx_);
+        pResources_->hiZPass.lastVisibilityFlags.assign(mapped, mapped + cnt);
 
         std::fill(pResources_->hiZPass.objectVisibility.begin(),
                   pResources_->hiZPass.objectVisibility.end(), false);
@@ -363,41 +363,20 @@ void Dispatcher::hiZPassCompute() {
         D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
         D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 
-    // readback: visibleFlags → CPU-readable buffer (1-frame delay)
-    // Compact Pass 이후 실행: visibleFlags는 이미 SRV로 소비됐으므로 COPY_SOURCE 전환 안전
-    if (pResources_->hiZPass.visibilityReadback && !drawEvents_.empty()) {
-        transitionResourceState(cmdList,
-            pResources_->hiZPass.visibleFlags.resource(roomIdx_),
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-            D3D12_RESOURCE_STATE_COPY_SOURCE);
-        cmdList->CopyBufferRegion(
-            pResources_->hiZPass.visibilityReadback.Get(), 0,
-            pResources_->hiZPass.visibleFlags.resource(roomIdx_), 0,
-            drawEvents_.size() * sizeof(u32t));
-        transitionResourceState(cmdList,
-            pResources_->hiZPass.visibleFlags.resource(roomIdx_),
-            D3D12_RESOURCE_STATE_COPY_SOURCE,
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    // readback: visibleFlags → CPU-readable buffer (Compact Pass 이후: SRV로 소비됐으므로 COPY_SOURCE 전환 안전)
+    if (!drawEvents_.empty()) {
+        pResources_->hiZPass.visibleFlags.copyToReadback(
+            cmdList, roomIdx_, drawEvents_.size() * sizeof(u32t)
+        );
         pResources_->hiZPass.lastVisibilityObjCnt = static_cast<u32t>(drawEvents_.size());
     }
 
-    // readback: perGroupCnt → CPU-readable buffer (1-frame delay)
-    if (pResources_->hiZPass.visibleCountReadback) {
-        transitionResourceState(cmdList,
-            pResources_->hiZPass.perGroupCnt.resource(roomIdx_),
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-            D3D12_RESOURCE_STATE_COPY_SOURCE);
-        cmdList->CopyBufferRegion(
-            pResources_->hiZPass.visibleCountReadback.Get(), 0,
-            pResources_->hiZPass.perGroupCnt.resource(roomIdx_), 0,
-            groupCnt * sizeof(u32t));
-        transitionResourceState(cmdList,
-            pResources_->hiZPass.perGroupCnt.resource(roomIdx_),
-            D3D12_RESOURCE_STATE_COPY_SOURCE,
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        pResources_->hiZPass.lastGroupCnt = static_cast<u32t>(groupCnt);
-        pResources_->hiZPass.lastObjCnt   = static_cast<u32t>(drawEvents_.size());
-    }
+    // readback: perGroupCnt → CPU-readable buffer
+    pResources_->hiZPass.perGroupCnt.copyToReadback(
+        cmdList, roomIdx_, groupCnt * sizeof(u32t)
+    );
+    pResources_->hiZPass.lastGroupCnt = static_cast<u32t>(groupCnt);
+    pResources_->hiZPass.lastObjCnt   = static_cast<u32t>(drawEvents_.size());
 
     auto hrClose = cmdList->Close();
     DISPLAY_ERROR_DX_HR(hrClose, false);

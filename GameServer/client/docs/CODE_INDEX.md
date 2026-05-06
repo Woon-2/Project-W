@@ -306,13 +306,13 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
-| `BufferCreationType` enum | `gfxUtil.hpp #9` | VertexBuffer / IndexBuffer / UploadBuffer / DefaultBufferUAV |
+| `BufferCreationType` enum | `gfxUtil.hpp #9` | VertexBuffer / IndexBuffer / UploadBuffer / DefaultBufferUAV / ReadbackBuffer |
 | `createBufferResource()` | `gfxUtil.hpp #21` | 버퍼 리소스 생성 유틸 |
-| `ShaderInputBuffer` class | `gfxUtil.hpp #181` | Upload Heap 기반 CPU→GPU 버퍼 베이스 클래스 (room 단위 다중 CommandList 지원) |
-| `ConstantBuffer` class | `gfxUtil.hpp #231` | ShaderInputBuffer 상속 — `SetGraphicsRootConstantBufferView` 바인딩 |
-| `StructuredBuffer` class | `gfxUtil.hpp #244` | ShaderInputBuffer 상속 — `SetGraphicsRootShaderResourceView` 바인딩 |
-| `RWStructuredBuffer` class | `gfxUtil.hpp #257` | Default Heap + UAV — `SetComputeRootUnorderedAccessView` 바인딩. GPU 전용 쓰기 (CPU stage 없음). `bindCompute` / `bindGraphics` / `bindComputeAsSRV` / `uavBarrier` / `clearUint` / `gpuAddress` / `resource` 제공 |
-| `ConstantBufferArray` struct | `gfxUtil.hpp #307` | 큰 ConstantBuffer 여러 개를 단일 리소스에서 분할해 사용 |
+| `ShaderInputBuffer` class | `gfxUtil.hpp #186` | Upload Heap 기반 CPU→GPU 버퍼 베이스 클래스 (room 단위 다중 CommandList 지원) |
+| `ConstantBuffer` class | `gfxUtil.hpp #240` | ShaderInputBuffer 상속 — `SetGraphicsRootConstantBufferView` 바인딩 |
+| `StructuredBuffer` class | `gfxUtil.hpp #257` | ShaderInputBuffer 상속 — `SetGraphicsRootShaderResourceView` 바인딩 |
+| `RWStructuredBuffer` class | `gfxUtil.hpp #275` | Default Heap + UAV — `bindCompute` / `bindGraphics` / `bindComputeAsSRV` / `uavBarrier` / `clearUint` / `gpuAddress` / `resource` 제공. opt-in readback: `initReadback` / `copyToReadback` / `readbackPtr<T>(roomIdx)` / `hasReadback` |
+| `ConstantBufferArray` struct | `gfxUtil.hpp #356` | 큰 ConstantBuffer 여러 개를 단일 리소스에서 분할해 사용 |
 
 **파일:** `client/gfx.hpp` / `client/gfx.cpp`
 
