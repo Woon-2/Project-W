@@ -385,7 +385,7 @@ void AnimBlenderGoblin::onCalcLocal(PassKey<AnimSystem>) {
 		else if (tAttack_ > 0.01f) {
 			auto& attackClip = targetClip("Goblin_Attack");
 			finalBakedClipId_ = attackClip->id;
-			finalBakedClipFrame_ = static_cast<int>( attackClip->bakedSampleRate * animTimeDeath_.count() );
+			finalBakedClipFrame_ = static_cast<int>( attackClip->bakedSampleRate * animTimeAttack_.count() );
 		}
 		else {
 			// baked animation에는 hit 제외시킴

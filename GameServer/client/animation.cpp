@@ -356,8 +356,7 @@ void AnimBlender::updatePriority(PassKey<AnimSystem>, Seconds dt, mu::Vec3 refPo
     // 거리 기반 weight
     const float wDist = 1.f / (1.f + d * d);
 
-	mode_ = Mode::Baked;
-	// mode_ = wDist < 0.25f ? Mode::Baked : Mode::Keyframe;
+	mode_ = wDist < 0.75f ? Mode::Baked : Mode::Keyframe;
 
     // 시간 기반 weight
     const float t = static_cast<float>(updateLag_.count());
