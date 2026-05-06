@@ -6,6 +6,8 @@
 #include <cmath>
 #include <algorithm>
 
+static thread_local std::mt19937 s_rng{ std::random_device{}() };
+
 // ─── 생성자 ───────────────────────────────────────────────────────────────────
 
 Npc::Npc(Object&& base, const NpcConfig& cfg)
@@ -27,6 +29,8 @@ void Npc::applyConfig(const NpcConfig& cfg) {
     canReAggroOnReturn_ = cfg.canReAggroOnReturn;
     overlapThreshold_   = cfg.overlapThreshold;
     returnSpeedMult_    = cfg.returnSpeedMult;
+    maxDirectReactDelay_ = cfg.maxDirectReactDelay;
+    maxGroupReactDelay_  = cfg.maxGroupReactDelay;
 }
 
 void MU_CALLCONV Npc::setSpawnPos(mu::Vec3 p) {
@@ -43,6 +47,10 @@ void MU_CALLCONV Npc::setActivityZone(mu::Vec3 center, float radius) {
 
 void Npc::transitionTo(NpcState next) {
     if (state_ == next) return;
+    if (state_ == NpcState::Idle) {
+        directReactTimer_ = -1s;
+        groupReactTimer_  = -1s;
+    }
     if (next == NpcState::AttackWindup)  windupTimer_     = 0s;
     if (next == NpcState::AttackRecover) recoverTimer_    = 0s;
     if (next == NpcState::Reposition)    repositionTimer_ = 0s;
@@ -71,36 +79,57 @@ NpcUpdateResult Npc::update(Seconds dt, Room& room) {
 
 // ─── Idle ─────────────────────────────────────────────────────────────────────
 
-NpcUpdateResult Npc::updateIdle( Seconds dt, Room& room ) {
-    GameSession* best = selectBestVisibleTarget( room );
+NpcUpdateResult Npc::updateIdle(Seconds dt, Room& room) {
+    // --- 직접 감지 ---
+    GameSession* best = selectBestVisibleTarget(room);
 
-    if ( best ) {
-        targetId_ = best->id();
-
-        // 타깃을 발견했으므로 그룹에 보고
-        if ( groupId_ >= 0 ) {
-            NpcGroup* group = room.getNpcGroup( groupId_ );
-            if ( group ) {
-                group->reportSight( getId(), targetId_, best->player()->pos(), room.getElapsedMs() );
-            }
+    if (best) {
+        if (directReactTimer_ < 0s) {
+            std::uniform_real_distribution<float> dist(0.f, maxDirectReactDelay_.count());
+            directReactTimer_ = Seconds{dist(s_rng)};
         }
-		// 타깃을 발견했으므로 Chase로 전환
-        transitionTo( NpcState::Chase );
+
+        directReactTimer_ -= dt;
+        if (directReactTimer_ <= 0s) {
+            best = selectBestVisibleTarget(room);
+
+            if (best) {
+                targetId_ = best->id();
+                if (groupId_ >= 0) {
+                    NpcGroup* group = room.getNpcGroup(groupId_);
+                    if (group)
+                        group->reportSight(getId(), targetId_, best->player()->pos(), room.getElapsedMs());
+                }
+                transitionTo(NpcState::Chase);
+            }
+            directReactTimer_ = -1s;
+        }
         return {};
     }
+    directReactTimer_ = -1s;
 
-	// 직접 감지 실패 시 공유 메모리 위치 확인 후 Investigate로 전환
-    if ( groupId_ >= 0 ) {
-        NpcGroup* group = room.getNpcGroup( groupId_ );
+    // --- 그룹 메모리 ---
+    if (groupId_ >= 0) {
+        NpcGroup* group = room.getNpcGroup(groupId_);
 
-        if ( group ) {
-            if ( group->getBestMemoryInsideActivityArea( room.getElapsedMs() ) ) {
-                transitionTo( NpcState::Investigate );
+        if (group) {
+            if (group->getBestMemoryInsideActivityArea(room.getElapsedMs())) {
+                if (groupReactTimer_ < 0s) {
+                    std::uniform_real_distribution<float> dist(0.f, maxGroupReactDelay_.count());
+                    groupReactTimer_ = Seconds{dist(s_rng)};
+                }
+
+                groupReactTimer_ -= dt;
+                if (groupReactTimer_ <= 0s) {
+                    transitionTo(NpcState::Investigate);
+                    return {};
+                }
                 return {};
             }
-            if ( group->hasValidMemory( room.getElapsedMs() ) ) {
-                return {};  // npc 활동 구역 밖 메모리만 있음 - 자연 만료 대기
-            }
+            groupReactTimer_ = -1s;
+
+            if (group->hasValidMemory(room.getElapsedMs()))
+                return {};  // 활동 구역 밖 메모리만 있음 — 자연 만료 대기
         }
     }
     return {};

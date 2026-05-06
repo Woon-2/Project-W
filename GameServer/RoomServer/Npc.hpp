@@ -28,6 +28,8 @@ struct NpcConfig {
     bool  canReAggroOnReturn = true;
     int   overlapThreshold   = 3;
     float returnSpeedMult    = 2.5f;
+    Seconds maxDirectReactDelay{ 0.3s };
+    Seconds maxGroupReactDelay { 2.0s };
 };
 
 // ─── NpcState ────────────────────────────────────────────────────────────────
@@ -102,6 +104,11 @@ private:
 
     mu::Vec3 repositionDir_  { 1.f, 0.f, 0.f };
     Seconds  repositionTimer_{ 0s };
+
+    Seconds directReactTimer_   { -1s };
+    Seconds groupReactTimer_    { -1s };
+    Seconds maxDirectReactDelay_{ 0.3s };
+    Seconds maxGroupReactDelay_ { 2.0s };
 
     std::vector<mu::Vec3> nearbyCache_;
 
