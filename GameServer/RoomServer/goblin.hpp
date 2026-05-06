@@ -1,4 +1,6 @@
-#pragma once
+#ifndef goblin_hpp
+#define goblin_hpp
+
 #include "Npc.hpp"
 #include <array>
 
@@ -22,3 +24,5 @@ private:
     std::array<PosSnapshot, historySize_> posHistory_{};
     int32 historyHead_ = 0;
 };
+
+#endif // goblin_hpp

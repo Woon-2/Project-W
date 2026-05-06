@@ -1,4 +1,6 @@
-﻿#pragma once
+﻿#ifndef npc_group_hpp
+#define npc_group_hpp
+
 #include "../common/mathUtil.hpp"
 #include <array>
 #include <vector>
@@ -62,3 +64,5 @@ private:
     std::vector<uint32>                          members_;
     std::array<SharedTargetMemory, MaxPlayerCount> memories_{};
 };
+
+#endif // npc_group_hpp

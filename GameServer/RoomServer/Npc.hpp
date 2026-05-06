@@ -1,4 +1,6 @@
-﻿#pragma once
+﻿#ifndef npc_hpp
+#define npc_hpp
+
 #include "object.hpp"
 #include <vector>
 #include <optional>
@@ -107,3 +109,5 @@ private:
     static constexpr Seconds TARGET_EVAL_INTERVAL{ 0.5f };
     static constexpr Seconds REPOSITION_TIMEOUT  { 1.5f };
 };
+
+#endif // npc_hpp
