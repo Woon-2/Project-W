@@ -12,7 +12,7 @@ Texture2D gTex2Ds[] : register(t10, space1);
 Texture2DArray gTex2DArrays[] : register(t10, space2);
 TextureCube gTexCubes[] : register(t10, space3);
 
-float4 loadBindless(uint4 bindlessIdx, int2 tex, int LOD) {
+float4 loadBindless(int4 bindlessIdx, int2 tex, int LOD) {
     if (bindlessIdx.x < 0) {
         return float4(0.f, 0.f, 0.f, 1.f);
     }
@@ -24,7 +24,7 @@ float4 loadBindless(uint4 bindlessIdx, int2 tex, int LOD) {
     return float4(0.f, 0.f, 0.f, 1.f);
 }
 
-float4 sampleBindless(uint4 bindlessIdx, float2 tex) {
+float4 sampleBindless(int4 bindlessIdx, float2 tex) {
     if (bindlessIdx.x < 0) {
         return float4(0.f, 0.f, 0.f, 1.f);
     }
@@ -36,7 +36,7 @@ float4 sampleBindless(uint4 bindlessIdx, float2 tex) {
     return float4(0.f, 0.f, 0.f, 1.f);
 }
 
-float4 sampleBindlessCube(uint4 bindlessIdx, float3 tex) {
+float4 sampleBindlessCube(int4 bindlessIdx, float3 tex) {
     if (bindlessIdx.x < 0) {
         return float4(0.f, 0.f, 0.f, 1.f);
     }
@@ -46,7 +46,7 @@ float4 sampleBindlessCube(uint4 bindlessIdx, float3 tex) {
     return float4(0.f, 0.f, 0.f, 1.f);
 }
 
-float4 sampleLevelBindless(uint4 bindlessIdx, float2 tex, float LOD) {
+float4 sampleLevelBindless(int4 bindlessIdx, float2 tex, float LOD) {
     if (bindlessIdx.x < 0) {
         return float4(0.f, 0.f, 0.f, 1.f);
     }
@@ -58,7 +58,7 @@ float4 sampleLevelBindless(uint4 bindlessIdx, float2 tex, float LOD) {
     return float4(0.f, 0.f, 0.f, 1.f);
 }
 
-float4 sampleLevelBindlessCube(uint4 bindlessIdx, float3 tex, float LOD) {
+float4 sampleLevelBindlessCube(int4 bindlessIdx, float3 tex, float LOD) {
     if (bindlessIdx.x < 0) {
         return float4(0.f, 0.f, 0.f, 1.f);
     }
@@ -68,21 +68,21 @@ float4 sampleLevelBindlessCube(uint4 bindlessIdx, float3 tex, float LOD) {
     return float4(0.f, 0.f, 0.f, 1.f);
 }
 
-float4 sampleBindless2DOffset(uint4 bindlessIdx, float2 tex, int2 offset) {
+float4 sampleBindless2DOffset(int4 bindlessIdx, float2 tex, int2 offset) {
     if (bindlessIdx.x == IDX_RANGE_TEXTURE2D) {
         return gTex2Ds[bindlessIdx.y].Sample(gSamplers[bindlessIdx.w], tex, offset);
     } 
     return float4(0.f, 0.f, 0.f, 1.f);
 }
 
-float4 sampleLevelBindless2DOffset(uint4 bindlessIdx, float2 tex, float LOD, int2 offset) {
+float4 sampleLevelBindless2DOffset(int4 bindlessIdx, float2 tex, float LOD, int2 offset) {
     if (bindlessIdx.x == IDX_RANGE_TEXTURE2D) {
         return gTex2Ds[bindlessIdx.y].SampleLevel(gSamplers[bindlessIdx.w], tex, LOD, offset);
     } 
     return float4(0.f, 0.f, 0.f, 1.f);
 }
 
-float sampleCmpBindless(uint4 bindlessIdx, float2 tex, float val) {
+float sampleCmpBindless(int4 bindlessIdx, float2 tex, float val) {
     if (bindlessIdx.x < 0) {
         return 1.f;
     }
@@ -94,7 +94,7 @@ float sampleCmpBindless(uint4 bindlessIdx, float2 tex, float val) {
     return 0.f;
 }
 
-float sampleCmpBindless2DOffset(uint4 bindlessIdx, float2 tex, float val, int2 offset) {
+float sampleCmpBindless2DOffset(int4 bindlessIdx, float2 tex, float val, int2 offset) {
     if (bindlessIdx.x == IDX_RANGE_TEXTURE2D) {
         return gTex2Ds[bindlessIdx.y].SampleCmpLevelZero(gComparisonSamplers[bindlessIdx.w], tex, val, offset);
     }
