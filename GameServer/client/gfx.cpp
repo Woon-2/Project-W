@@ -451,10 +451,10 @@ void GFX::createSwapChain() {
 	);
 	// PBR-skinned Pipeline ----
 	resourcesPBRSkinnedPipeline_.shadowPass.perInstanceData.init(
-		device_.Get(), sizeof(ShadowMapSkinnedShader::PerInstanceData) * 50000u, backBuffers_.size(), "PBRSkinned_Shadow_PerInstanceData"
+		device_.Get(), sizeof(ShadowMapSkinnedShader::PerInstanceData) * 10000u, backBuffers_.size(), "PBRSkinned_Shadow_PerInstanceData"
 	);
 	resourcesPBRSkinnedPipeline_.shadowPass.boneData.init(
-		device_.Get(), sizeof(ShadowMapSkinnedShader::BoneData) * 5'000'000u, backBuffers_.size(), "PBRSkinned_Shadow_BoneData"
+		device_.Get(), sizeof(ShadowMapSkinnedShader::BoneData) * 400'000u, backBuffers_.size(), "PBRSkinned_Shadow_BoneData"
 	);
 	resourcesPBRSkinnedPipeline_.shadowPass.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(ShadowMapSkinnedShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBRSkinned_Shadow_PerDrawcallData"
@@ -463,10 +463,10 @@ void GFX::createSwapChain() {
 		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::PerFrameData), MAX_CSM_CASCADES, backBuffers_.size(), "PBRSkinned_Shadow_PerFrameData"
 	);
 	resourcesPBRSkinnedPipeline_.mainPass.perInstanceData.init(
-		device_.Get(), sizeof(PBRSkinnedShader::PerInstanceData) * 50000u, backBuffers_.size(), "PBRSkinned_Main_PerInstanceData"
+		device_.Get(), sizeof(PBRSkinnedShader::PerInstanceData) * 10000u, backBuffers_.size(), "PBRSkinned_Main_PerInstanceData"
 	);
 	resourcesPBRSkinnedPipeline_.mainPass.boneData.init(
-		device_.Get(), sizeof(PBRSkinnedShader::BoneData) * 5'000'000u, backBuffers_.size(), "PBRSkinned_Main_BoneData"
+		device_.Get(), sizeof(PBRSkinnedShader::BoneData) * 400'000u, backBuffers_.size(), "PBRSkinned_Main_BoneData"
 	);
 	resourcesPBRSkinnedPipeline_.mainPass.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(PBRSkinnedShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBRSkinned_Main_PerDrawcallData"
@@ -665,7 +665,7 @@ void GFX::createSwapChain() {
 		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::PerInstanceData) * 10'000u, backBuffers_.size(), "PBRDeferredSkinned_Shadow_PerInstanceData"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.shadowPass.boneData.init(
-		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::BoneData) * 800'000u, backBuffers_.size(), "PBRDeferredSkinned_Shadow_BoneData"
+		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::BoneData) * 400'000u, backBuffers_.size(), "PBRDeferredSkinned_Shadow_BoneData"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.shadowPass.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(ShadowMapSkinnedCSMShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBRDeferredSkinned_Shadow_PerDrawcallData"
@@ -680,7 +680,7 @@ void GFX::createSwapChain() {
 		device_.Get(), sizeof(PBRDeferredSkinnedGBufferShader::Light) * 32u, backBuffers_.size(), "PBRDeferredSkinned_GBuffer_LightData"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.gBufferPass.boneData.init(
-		device_.Get(), sizeof(PBRDeferredSkinnedGBufferShader::BoneData) * 800'000u, backBuffers_.size(), "PBRDeferredSkinned_GBuffer_BoneData"
+		device_.Get(), sizeof(PBRDeferredSkinnedGBufferShader::BoneData) * 400'000u, backBuffers_.size(), "PBRDeferredSkinned_GBuffer_BoneData"
 	);
 	resourcesPBRDeferredSkinnedPipeline_.gBufferPass.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(PBRDeferredSkinnedGBufferShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBRDeferredSkinned_GBuffer_PerDrawcallData"
@@ -1156,6 +1156,8 @@ void GFX::loadAssets(const AssetConfigs& configs) {
 		*request.pDest = bakeAnimation(device_.Get(), cmdList.Get(), request.samples, request.uploadBuffer);
 		createSRV(device_.Get(), *request.pDest, srvTexPool_);
 	}
+
+	dumpLog();
 
 	// 명령 기록 끝, 명령 실행
 	DISPLAY_ERROR_DX_VOID(cmdList->Close(), false);
