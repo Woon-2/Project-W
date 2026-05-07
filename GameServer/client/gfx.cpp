@@ -454,7 +454,7 @@ void GFX::createSwapChain() {
 		device_.Get(), sizeof(ShadowMapSkinnedShader::PerInstanceData) * 10000u, backBuffers_.size(), "PBRSkinned_Shadow_PerInstanceData"
 	);
 	resourcesPBRSkinnedPipeline_.shadowPass.boneData.init(
-		device_.Get(), sizeof(ShadowMapSkinnedShader::BoneData) * 400'000u, backBuffers_.size(), "PBRSkinned_Shadow_BoneData"
+		device_.Get(), sizeof(ShadowMapSkinnedShader::BoneData) * 800'000u, backBuffers_.size(), "PBRSkinned_Shadow_BoneData"
 	);
 	resourcesPBRSkinnedPipeline_.shadowPass.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(ShadowMapSkinnedShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBRSkinned_Shadow_PerDrawcallData"
@@ -466,7 +466,7 @@ void GFX::createSwapChain() {
 		device_.Get(), sizeof(PBRSkinnedShader::PerInstanceData) * 10000u, backBuffers_.size(), "PBRSkinned_Main_PerInstanceData"
 	);
 	resourcesPBRSkinnedPipeline_.mainPass.boneData.init(
-		device_.Get(), sizeof(PBRSkinnedShader::BoneData) * 400'000u, backBuffers_.size(), "PBRSkinned_Main_BoneData"
+		device_.Get(), sizeof(PBRSkinnedShader::BoneData) * 800'000u, backBuffers_.size(), "PBRSkinned_Main_BoneData"
 	);
 	resourcesPBRSkinnedPipeline_.mainPass.perDrawcallData = createConstantBufferArray(
 		device_.Get(), sizeof(PBRSkinnedShader::PerDrawcallData), 1000u, backBuffers_.size(), "PBRSkinned_Main_PerDrawcallData"
@@ -1541,7 +1541,7 @@ void GFX::render() {
 		shaders_.at("PrefixSumShader"),
 		shaders_.at("HiZCompactShader"),
 		shaders_.at("HiZCommandShader"),
-		hiZCullEnabled_ ? shaders_.at("PBRDeferredSkinnedIndirectGBufferShader") : shaders_.at("PBRDeferredSkinnedGBufferShader"),
+		shaders_.at("PBRDeferredSkinnedGBufferShader"),
 		shaders_.at("ShadowMapSkinnedCSMShader"),
 		cmdQ_, viewport, clRect,
 		&fenceToSignal, &resourcesPBRDeferredSkinnedPipeline_, threadPool_, &cmdListPool_,
@@ -1718,14 +1718,14 @@ void GFX::render() {
 		// --- GBuffer passes ---
 		if (!threadPool_) {
 			pbrDeferredDispatcher.gBufferPass();
-			if (hiZCullEnabled_)
+			if (false)
 				pbrDeferredSkinnedDispatcher.gBufferIndirectPass();
 			else
 				pbrDeferredSkinnedDispatcher.gBufferPass();
 			terrainDeferredDispatcher.gBufferPass();
 		} else {
 			pbrDeferredDispatcher.gBufferPassMT();
-			if (hiZCullEnabled_)
+			if (false)
 				pbrDeferredSkinnedDispatcher.gBufferIndirectPassMT();
 			else
 				pbrDeferredSkinnedDispatcher.gBufferPassMT();
