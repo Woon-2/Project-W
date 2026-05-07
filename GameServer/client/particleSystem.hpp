@@ -29,6 +29,7 @@ struct Particle {
     mu::Vec3        angularAngle3D    = { 0.f, 0.f, 0.f };
     mu::Vec3        rotationRandom3D  = { 0.f, 0.f, 0.f };
     mu::Mat4x4      baseRotation;            // fixed 3D orientation set at spawn
+    mu::Mat4x4      billboardRotation3D;     // Unity Start Rotation 3D for billboard quads
     mu::Vec3        transformScale = { 1.f, 1.f, 1.f };
     mu::Vec2        custom1Random   = { 0.f, 0.f };
     mu::Vec2        custom2Random   = { 0.f, 0.f };
@@ -84,12 +85,14 @@ public:
     const ps::ParticleSystemConfig& config() const { return config_; }
 
 private:
-    float    randomFloat(float lo, float hi);
+    struct ShapeSample { mu::Vec3 origin; mu::Vec3 dir; };
 
-    void     spawnParticle();
-    void     emitScheduledBursts(float prevTime, float currTime);
-    mu::Vec3 sampleShapeOrigin();
-    mu::Vec3 sampleShapeDirection(const mu::Vec3& origin);
+    float        randomFloat(float lo, float hi);
+    void         spawnParticle();
+    void         emitScheduledBursts(float prevTime, float currTime);
+    ShapeSample  sampleCircle();
+    mu::Vec3     sampleShapeOrigin();
+    mu::Vec3     sampleShapeDirection(const mu::Vec3& origin);
 
     // pool_[0..activeCount_-1] 이 항상 활성 파티클 (compact array)
     std::vector<Particle> pool_ = std::vector<Particle>(kDefaultMaxParticles);

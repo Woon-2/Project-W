@@ -405,6 +405,28 @@ void ParticleSystem::startContinuous(const ps::ParticleSystemConfig& config) {
 
 // ── Shape sampling ───────────────────────────────────────────────────────────
 
+// Circle: origin and dir share the same arc angle so direction is always the
+// correct radial unit vector regardless of how small the radius is.
+ParticleSystem::ShapeSample ParticleSystem::sampleCircle() {
+    const ps::ShapeModule& s = config_.shape;
+    const float angle = randomFloat(0.f, s.arc);
+    const float inner = std::clamp(1.f - s.radiusThickness, 0.f, 1.f);
+    const float r     = s.coneRadius * std::sqrt(randomFloat(inner * inner, 1.f));
+    const mu::Vec3 localDir = { std::cos(angle), std::sin(angle), 0.f };
+
+    const auto withRandomOffset = [&](mu::Vec3 p) {
+        if (s.randomPositionAmount <= 0.f) return p;
+        const mu::Vec3 randomDir = sampleConeDirection(mu::NVec3(mu::Vec3{ 0.f, 1.f, 0.f }),
+                                                       3.14159265f, rng_);
+        return p + randomDir * randomFloat(0.f, s.randomPositionAmount);
+    };
+
+    return {
+        withRandomOffset(s.position + rotateShapeVector(localDir * r, s)),
+        rotateShapeVector(localDir, s)
+    };
+}
+
 mu::Vec3 ParticleSystem::sampleShapeOrigin() {
     const ps::ShapeModule& s = config_.shape;
     if (!s.enabled)
@@ -513,8 +535,15 @@ void ParticleSystem::spawnParticle() {
     }
     Particle& p = *pSlot;
 
-    const mu::Vec3 origin = sampleShapeOrigin();
-    const mu::Vec3 dir    = sampleShapeDirection(origin);
+    mu::Vec3 origin, dir;
+    if (config_.shape.enabled && config_.shape.type == ps::ShapeModule::Type::Circle) {
+        const auto s = sampleCircle();
+        origin = s.origin;
+        dir    = s.dir;
+    } else {
+        origin = sampleShapeOrigin();
+        dir    = sampleShapeDirection(origin);
+    }
     const float    speed  = randomFloat(config_.main.speedMin, config_.main.speedMax);
 
     p.pos             = origin;
@@ -567,6 +596,7 @@ void ParticleSystem::spawnParticle() {
     p.angularAngle3D  = { 0.f, 0.f, 0.f };
     p.rotationRandom3D = { randomFloat(0.f, 1.f), randomFloat(0.f, 1.f), randomFloat(0.f, 1.f) };
     p.baseRotation    = config_.main.startRotation3D;
+    p.billboardRotation3D = mu::Mat4x4{};
     p.transformScale  = config_.main.transformScale;
     if (config_.main.startRotation3DEnabled) {
         const mu::Vec3 startRotation = {
@@ -574,7 +604,9 @@ void ParticleSystem::spawnParticle() {
             randomFloat(config_.main.startRotation3DMin.y(), config_.main.startRotation3DMax.y()),
             randomFloat(config_.main.startRotation3DMin.z(), config_.main.startRotation3DMax.z())
         };
-        p.baseRotation = buildEulerRotation(startRotation) * p.baseRotation;
+        const mu::Mat4x4 startRotationMatrix = buildEulerRotation(startRotation);
+        p.baseRotation = startRotationMatrix * p.baseRotation;
+        p.billboardRotation3D = startRotationMatrix;
     }
     p.custom1Random   = { randomFloat(0.f, 1.f), randomFloat(0.f, 1.f) };
     p.custom2Random   = { randomFloat(0.f, 1.f), randomFloat(0.f, 1.f) };

@@ -2,6 +2,7 @@
 
 struct PerInstanceData {
     float4x4 world;
+    float4x4 rotation3D;
     float4   stretchAxisAndMode; // xyz=world-space stretch axis, w=1 when enabled
     float    rotation;
     float3   pad;
@@ -23,6 +24,9 @@ struct VSOutput
     float  rotation : TEXCOORD2;
     float3 stretchAxisW : TEXCOORD3;
     float  stretchMode  : TEXCOORD4;
+    float3 rotX : TEXCOORD5;
+    float3 rotY : TEXCOORD6;
+    float3 rotZ : TEXCOORD7;
 };
 
 struct PSInput
@@ -64,8 +68,19 @@ VSOutput VSMain( float3 position : POSITION, float size : SIZE,
     ret.rotation = instance.rotation;
     ret.stretchAxisW = instance.stretchAxisAndMode.xyz;
     ret.stretchMode = instance.stretchAxisAndMode.w;
+    ret.rotX = mul(float4(1.0f, 0.0f, 0.0f, 0.0f), instance.rotation3D).xyz;
+    ret.rotY = mul(float4(0.0f, 1.0f, 0.0f, 0.0f), instance.rotation3D).xyz;
+    ret.rotZ = mul(float4(0.0f, 0.0f, 1.0f, 0.0f), instance.rotation3D).xyz;
 
     return ret;
+}
+
+float3 rotateBillboardOffset(float2 localXY, VSOutput input,
+                             float3 rightW, float3 upW, float3 lookW) {
+    float3 rotatedLocal = localXY.x * input.rotX + localXY.y * input.rotY;
+    return rotatedLocal.x * rightW
+         + rotatedLocal.y * upW
+         + rotatedLocal.z * lookW;
 }
 
 [maxvertexcount(4)]
@@ -101,11 +116,18 @@ void GSMain(point VSOutput input[1],
     float halfHeight = input[0].size.y * 0.5f;
 
     // Triangle strip order: bottom-left(0), bottom-right(1), top-left(2), top-right(3)
+    float2 local[4];
+    local[0] = float2(-halfWidth, -halfHeight);
+    local[1] = float2( halfWidth, -halfHeight);
+    local[2] = float2(-halfWidth,  halfHeight);
+    local[3] = float2( halfWidth,  halfHeight);
+
     float3 p[4];
-    p[0] = pos - halfWidth * vRightR - halfHeight * vUPR;
-    p[1] = pos + halfWidth * vRightR - halfHeight * vUPR;
-    p[2] = pos - halfWidth * vRightR + halfHeight * vUPR;
-    p[3] = pos + halfWidth * vRightR + halfHeight * vUPR;
+    [unroll]
+    for (int k = 0; k < 4; ++k)
+        p[k] = pos + rotateBillboardOffset(local[k], input[0], vRightR, vUPR, vLook);
+
+    float3 quadNormal = normalize(cross(p[1] - p[0], p[2] - p[0]));
     // 로컬 UV (0~1 범위) → 스프라이트 시트 UV로 변환
     float2 baseUV[4] = { float2(0.f, 1.f), float2(1.f, 1.f), float2(0.f, 0.f), float2(1.f, 0.f) };
     float2 uv[4];
@@ -117,7 +139,7 @@ void GSMain(point VSOutput input[1],
     [unroll]
     for(int i = 0; i < 4; ++i) {
         output.pos    = mul(float4(p[i], 1.0f), matViewProj);
-        output.normal = vLook;
+        output.normal = quadNormal;
         output.uv     = uv[i];
         triStream.Append(output);
     }

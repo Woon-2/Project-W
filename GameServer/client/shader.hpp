@@ -271,6 +271,7 @@ struct Material {
 
 struct PerInstanceData {
 	XMFLOAT4X4 world;
+	XMFLOAT4X4 rotation3D; // transposed before upload; local billboard 3D start/lifetime rotation
 	XMFLOAT4   stretchAxisAndMode; // xyz=world axis, w=1 when stretched
 	float      rotation;   // 빌보드 평면 내 회전 (라디안)
 	float       pad[3];
@@ -324,8 +325,9 @@ struct PerFrameData {
 // SmokeBlendCGShader
 namespace SmokeBlendCGShader {
 
-struct PerInstanceData {        // 112B
+struct PerInstanceData {        // 176B
 	XMFLOAT4X4 world;           // 64B
+	XMFLOAT4X4 rotation3D;      // 64B
 	XMFLOAT4   tint;            // 16B
 	XMFLOAT4   stretchAxisAndMode;// 16B, xyz=world axis, w=1 when stretched
 	float      rotation;        // 4B

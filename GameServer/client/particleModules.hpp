@@ -309,7 +309,7 @@ using AnyMat = std::variant<MatUnlit, MatSwordSlash, MatSmokeBlendCG, MatTwoSide
 // Renderer Module
 // ---------------------------------------------------------------------------
 struct RendererModule {
-    enum class Mode { Billboard, StretchedBillboard /* Phase 3 */, Mesh };
+    enum class Mode { Billboard, StretchedBillboard, Mesh };
     enum class Alignment { View, World, Local, Facing };
     enum class SortMode { None, Distance, OldestInFront, YoungestInFront };
 
@@ -325,9 +325,9 @@ struct RendererModule {
     mu::Vec3 pivot        = { 0.f, 0.f, 0.f };
     mu::Vec3 flip         = { 0.f, 0.f, 0.f };
 
-    float cameraVelocityScale = 0.f;  // StretchedBillboard deferred
-    float velocityScale       = 0.f;  // StretchedBillboard deferred
-    float lengthScale         = 2.f;  // StretchedBillboard deferred
+    float cameraVelocityScale = 0.f;
+    float velocityScale       = 0.f;
+    float lengthScale         = 2.f;
 
     const Mesh*    pMesh    = nullptr;
     const SubMesh* pSubMesh = nullptr;

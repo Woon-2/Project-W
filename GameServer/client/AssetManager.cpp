@@ -228,6 +228,24 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 		.needsUploadInfo = false
 	} );
 
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "Circle2",
+		.texturePath     = "../resources/Textures/Circle2.dds",
+		.pDest           = &circle2Tex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "Slash",
+		.texturePath     = "../resources/Textures/Slash.dds",
+		.pDest           = &slashTex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
 	swordSlashMaterial_ = makeDefaultSwordSlashMaterial();
 	if (loadSwordSlashMaterialMetadata("../resources/effects/SwordSlashMat.json", swordSlashMaterial_)) {
 		gSharedLog << "[SwordSlash Material] File I/O: ../resources/effects/SwordSlashMat.json 로드 완료\n";

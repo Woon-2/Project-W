@@ -612,6 +612,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `swordSlashComboEffect_` | 콤보 검기 효과 |
 | `slashWaveEffect_` | 슬래시 웨이브 — HalfTrail 메시 + TwoSidesPipeline (MatTwoSides) |
 | `dustParticleSystem_` | 발 착지 흙먼지 빌보드 파티클 |
+| `aoESlashGreenEffect_` | AoE 슬래시 그린 이펙트 (Circle2 + Slash, Billboard) |
 
 **Camera::updateGFX() 등록 파이프라인 (`camera.cpp`):**
 - PBRPipeline, PBRSkinnedPipeline, SkyboxPipeline, BVPipeline, BillboardPipeline, **TerrainPipeline**, MeshParticlePipeline, SmokeBlendCGPipeline, SwordSlashPipeline, **TwoSidesPipeline** CameraData 자기등록

@@ -36,8 +36,7 @@ std::optional<ParticleBillboardGeometry> buildParticleBillboardGeometry(
     if (rend.mode == ps::RendererModule::Mode::StretchedBillboard) {
         constexpr float kMinStableStretchSpeed = 0.05f;
         const float speed = vecLength(ctx.particle.motionVelocity);
-        height = std::max(ctx.size, ctx.size * std::max(1.f, rend.lengthScale)
-                                    + speed * rend.velocityScale);
+        height = ctx.size * rend.lengthScale + speed * rend.velocityScale;
 
         if (speed > kMinStableStretchSpeed) {
             const mu::Vec3 axis = ctx.particle.motionVelocity * (1.f / speed);
@@ -55,6 +54,8 @@ std::optional<ParticleBillboardGeometry> buildParticleBillboardGeometry(
     return ParticleBillboardGeometry{
         .world = mu::scaleH(mu::Vec3{ width, height, width })
                * mu::translate(ctx.particle.pos),
+        .rotation3D = buildParticleAngularRotation(ctx.particle)
+                    * ctx.particle.billboardRotation3D,
         .stretchAxisAndMode = stretchAxisAndMode,
         .rotation = ctx.particle.rotation,
     };
