@@ -3,6 +3,8 @@
 
 #include "gfxUtil.hpp"
 #include "collision.hpp"
+#include "ragdollDef.hpp"
+#include <optional>
 
 // 재질 정보를 표현하는 구조체
 // 드로우콜 시 사용할 텍스처나 상수를 지정한다.
@@ -161,6 +163,7 @@ struct Model {
 	BVH bvh;   // model-space BVH template; world-space copy lives in PhysicState
 	std::map<Bone::SocketType, mu::Mat4x4> socketOffsets;
 	Skeleton skeleton;
+	std::optional<RagdollDef> ragdollDef;
 };
 
 // 바이너리 파일로부터 모델을 읽어온다.

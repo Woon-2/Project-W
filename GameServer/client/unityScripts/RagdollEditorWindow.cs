@@ -13,6 +13,9 @@ public class RagdollEditorWindow : EditorWindow
     private bool showBodies = true;
     private bool showJoints = true;
 
+    private int selectedBodyIdx  = -1;   // scene highlight: body index, -1 = none
+    private int selectedJointIdx = -1;   // scene highlight: joint index, -1 = none
+
     [MenuItem("Tools/Ragdoll Editor")]
     public static void OpenWindow()
     {
@@ -45,6 +48,8 @@ public class RagdollEditorWindow : EditorWindow
         EditorGUI.BeginChangeCheck();
         config.skeletonRoot = (GameObject)EditorGUILayout.ObjectField(
             "Skeleton Root", config.skeletonRoot, typeof(GameObject), true);
+        config.mbvSource = (MultiBoundingVolume)EditorGUILayout.ObjectField(
+            "MBV Source", config.mbvSource, typeof(MultiBoundingVolume), true);
         if (EditorGUI.EndChangeCheck())
             EditorUtility.SetDirty(config);
 
@@ -53,6 +58,11 @@ public class RagdollEditorWindow : EditorWindow
         {
             if (GUILayout.Button("Add All Bones"))
                 AddAllBonesAsBodies();
+        }
+        using (new EditorGUI.DisabledScope(config.mbvSource == null))
+        {
+            if (GUILayout.Button("Import from MBV"))
+                ImportFromMBV();
         }
         if (GUILayout.Button("Clear Bodies") && EditorUtility.DisplayDialog(
                 "Clear Bodies", "Remove all bodies?", "Yes", "Cancel"))
@@ -80,7 +90,7 @@ public class RagdollEditorWindow : EditorWindow
     }
 
     // -------------------------------------------------------------------------
-    // Bodies  (maps to BoneCapsuleDef)
+    // Bodies  (maps to BoneBoxDef)
     // -------------------------------------------------------------------------
     private void AddAllBonesAsBodies()
     {
@@ -110,8 +120,14 @@ public class RagdollEditorWindow : EditorWindow
             EditorGUILayout.BeginVertical("box");
 
             EditorGUILayout.BeginHorizontal();
-            bodyFoldouts[i] = EditorGUILayout.Foldout(
-                bodyFoldouts[i], $"{i}: {body.name}", true);
+            bool bodyWasOpen = bodyFoldouts[i];
+            bodyFoldouts[i] = EditorGUILayout.Foldout(bodyFoldouts[i], $"{i}: {body.name}", true);
+            if (bodyFoldouts[i] != bodyWasOpen)
+            {
+                selectedBodyIdx  = bodyFoldouts[i] ? i : (selectedBodyIdx == i ? -1 : selectedBodyIdx);
+                selectedJointIdx = bodyFoldouts[i] ? -1 : selectedJointIdx;
+                SceneView.RepaintAll();
+            }
             if (GUILayout.Button("Remove", GUILayout.Width(60)))
                 removeIdx = i;
             EditorGUILayout.EndHorizontal();
@@ -121,17 +137,15 @@ public class RagdollEditorWindow : EditorWindow
                 EditorGUI.indentLevel++;
                 EditorGUI.BeginChangeCheck();
 
-                body.name         = EditorGUILayout.TextField("Bone Name", body.name);
-                body.bone         = (Transform)EditorGUILayout.ObjectField(
+                body.name = EditorGUILayout.TextField("Bone Name", body.name);
+                body.bone = (Transform)EditorGUILayout.ObjectField(
                     "Bone (scene)", body.bone, typeof(Transform), true);
 
-                EditorGUILayout.LabelField("Capsule", EditorStyles.miniLabel);
-                body.capsuleOffset = EditorGUILayout.Vector3Field("Offset (bone-local)", body.capsuleOffset);
-                body.capsuleRadius = Mathf.Max(0.001f, EditorGUILayout.FloatField("Radius", body.capsuleRadius));
-                body.halfHeight    = Mathf.Max(body.capsuleRadius,
-                    EditorGUILayout.FloatField("Half Height", body.halfHeight));
-                body.capsuleDir    = EditorGUILayout.Popup(
-                    "Gizmo Dir", body.capsuleDir, new[] { "X-Axis", "Y-Axis", "Z-Axis" });
+                EditorGUILayout.LabelField("Box (bone-local)", EditorStyles.miniLabel);
+                body.center        = EditorGUILayout.Vector3Field("Center", body.center);
+                body.halfExtents   = Vector3.Max(Vector3.one * 0.001f,
+                    EditorGUILayout.Vector3Field("Half Extents", body.halfExtents));
+                body.rotationEuler = EditorGUILayout.Vector3Field("Rotation", body.rotationEuler);
 
                 EditorGUILayout.LabelField("Physics", EditorStyles.miniLabel);
                 body.mass = Mathf.Max(0.001f, EditorGUILayout.FloatField("Mass", body.mass));
@@ -184,9 +198,16 @@ public class RagdollEditorWindow : EditorWindow
             EditorGUILayout.BeginVertical("box");
 
             EditorGUILayout.BeginHorizontal();
+            bool jointWasOpen = jointFoldouts[i];
             jointFoldouts[i] = EditorGUILayout.Foldout(
                 jointFoldouts[i],
                 $"{i}: [{joint.jointType}]  {joint.parentBoneName} → {joint.childBoneName}", true);
+            if (jointFoldouts[i] != jointWasOpen)
+            {
+                selectedJointIdx = jointFoldouts[i] ? i : (selectedJointIdx == i ? -1 : selectedJointIdx);
+                selectedBodyIdx  = jointFoldouts[i] ? -1 : selectedBodyIdx;
+                SceneView.RepaintAll();
+            }
             if (GUILayout.Button("Remove", GUILayout.Width(60)))
                 removeIdx = i;
             EditorGUILayout.EndHorizontal();
@@ -285,25 +306,75 @@ public class RagdollEditorWindow : EditorWindow
     }
 
     // -------------------------------------------------------------------------
+    // MBV Import  (highest LOD = most detailed = best for physics)
+    // -------------------------------------------------------------------------
+    private void ImportFromMBV()
+    {
+        var mbv = config.mbvSource;
+        if (mbv == null || mbv.lods.Count == 0) return;
+
+        var lod = mbv.lods[mbv.lods.Count - 1];
+
+        Undo.RecordObject(config, "Import from MBV");
+        foreach (var box in lod.boxes)
+        {
+            if (config.bodies.Exists(b => b.name == box.name)) continue;
+            config.bodies.Add(new RagdollBody
+            {
+                name          = box.name,
+                bone          = box.bone,
+                center        = box.localCenter,
+                halfExtents   = box.size * 0.5f,
+                rotationEuler = box.rotationEuler,
+                mass          = 1.0f,
+            });
+        }
+        EditorUtility.SetDirty(config);
+    }
+
+    // -------------------------------------------------------------------------
     // Scene gizmos
     // -------------------------------------------------------------------------
     private void OnSceneGUI(SceneView sv)
     {
         if (config == null) return;
 
-        // Bodies: draw capsule wireframes
-        foreach (var body in config.bodies)
+        // Determine which body names the selected joint references.
+        string jointParentName = "";
+        string jointChildName  = "";
+        if (selectedJointIdx >= 0 && selectedJointIdx < config.joints.Count)
         {
-            if (body.bone == null) continue;
-
-            Handles.color  = new Color(0.3f, 1f, 0.3f, 0.85f);
-            Handles.matrix = body.bone.localToWorldMatrix
-                * Matrix4x4.Translate(body.capsuleOffset);
-
-            DrawHandlesCapsule(body.capsuleDir, body.capsuleRadius, body.halfHeight);
+            var sj = config.joints[selectedJointIdx];
+            jointParentName = sj.parentBoneName;
+            jointChildName  = sj.childBoneName;
         }
 
-        Handles.matrix = Matrix4x4.identity;
+        bool anySelection = selectedBodyIdx >= 0 || selectedJointIdx >= 0;
+
+        // Bodies: draw OBB wireframes with highlight
+        for (int i = 0; i < config.bodies.Count; i++)
+        {
+            var body = config.bodies[i];
+            if (body.bone == null) continue;
+
+            Color c;
+            if (i == selectedBodyIdx)
+                c = Color.yellow;                                       // body selected
+            else if (body.name == jointParentName)
+                c = new Color(1f, 0.55f, 0.1f, 1f);                   // joint parent: orange
+            else if (body.name == jointChildName)
+                c = new Color(0.2f, 0.9f, 1f, 1f);                    // joint child:  cyan
+            else
+                c = new Color(0.3f, 1f, 0.3f, anySelection ? 0.2f : 0.85f); // dim when something else is selected
+
+            Handles.color = c;
+            Matrix4x4 mat = Matrix4x4.TRS(
+                body.bone.position,
+                body.bone.rotation * Quaternion.Euler(body.rotationEuler),
+                Vector3.one);
+            using (new Handles.DrawingScope(mat))
+                Handles.DrawWireCube(body.center, body.halfExtents * 2f);
+        }
 
         // Joints: anchor point + axis/limit visualization
         foreach (var joint in config.joints)
@@ -373,28 +444,6 @@ public class RagdollEditorWindow : EditorWindow
     }
 
     // -------------------------------------------------------------------------
-    // Gizmo helpers
-    // -------------------------------------------------------------------------
-    private static void DrawHandlesCapsule(int direction, float radius, float halfHeight)
-    {
-        // halfHeight = total_height / 2  →  half of cylindrical part = halfHeight - radius
-        float halfCyl = Mathf.Max(0f, halfHeight - radius);
-        Vector3 dir   = direction == 0 ? Vector3.right   : (direction == 1 ? Vector3.up      : Vector3.forward);
-        Vector3 p1    = direction == 0 ? Vector3.up      : Vector3.right;
-        Vector3 p2    = direction == 2 ? Vector3.up      : Vector3.forward;
-
-        Vector3 top = dir * halfCyl;
-        Vector3 bot = -dir * halfCyl;
-
-        Handles.DrawWireDisc(top, dir, radius);
-        Handles.DrawWireDisc(bot, dir, radius);
-        Handles.DrawLine(top + p1 * radius, bot + p1 * radius);
-        Handles.DrawLine(top - p1 * radius, bot - p1 * radius);
-        Handles.DrawLine(top + p2 * radius, bot + p2 * radius);
-        Handles.DrawLine(top - p2 * radius, bot - p2 * radius);
-    }
-
-    // -------------------------------------------------------------------------
     // Binary export  —  mirrors BoneCapsuleDef / JointDef in ragdollDef.hpp
     // -------------------------------------------------------------------------
     private void ExportBinary()
@@ -407,16 +456,16 @@ public class RagdollEditorWindow : EditorWindow
         {
             ExtractUtil.WriteHeadTag(w, "RagdollConfig");
 
-            // --- BoneCapsuleDefs ---
+            // --- BoneBoxDefs ---
             ExtractUtil.WriteInteger(w, "BodyCnt", config.bodies.Count);
             foreach (var body in config.bodies)
             {
                 ExtractUtil.WriteHeadTag(w, "Body");
-                ExtractUtil.WriteText(w,   "BoneName",      body.name);
-                ExtractUtil.WriteFloat(w,  "Radius",        body.capsuleRadius);
-                ExtractUtil.WriteFloat(w,  "HalfHeight",    body.halfHeight);
-                ExtractUtil.WriteFloat(w,  "Mass",          body.mass);
-                ExtractUtil.WriteVector(w, "CapsuleOffset", body.capsuleOffset);
+                ExtractUtil.WriteText(w,   "BoneName",    body.name);
+                ExtractUtil.WriteVector(w, "HalfExtents", body.halfExtents);
+                ExtractUtil.WriteVector(w, "Center",      body.center);
+                ExtractUtil.WriteVector(w, "RotEuler",    body.rotationEuler);
+                ExtractUtil.WriteFloat(w,  "Mass",        body.mass);
                 ExtractUtil.WriteTailTag(w, "Body");
             }
 

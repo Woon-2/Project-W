@@ -1390,6 +1390,63 @@ void importItemData(std::ifstream& ifs, Model& model) {
     readTailTag(ifs, "ItemData");
 }
 
+// Reads ragdoll body/joint definitions exported from GoblinRagdollConfig (Unity).
+// Mirrors ExtractRagdollConfig in ModelExtractor.cs.
+static void importRagdollConfig(std::ifstream& ifs, Model& model)
+{
+    readHeadTag(ifs, "RagdollConfig");
+
+    RagdollDef def{};
+
+    const int bodyCnt = readInteger(ifs, "BodyCnt");
+    def.bones.reserve(bodyCnt);
+    for (int i = 0; i < bodyCnt; ++i) {
+        readHeadTag(ifs, "Body");
+        BoneBoxDef bd{};
+        bd.boneName       = readText(ifs, "BoneName");
+        const auto he     = readVec3(ifs, "HalfExtents");
+        const auto ctr    = readVec3(ifs, "Center");
+        const auto re     = readVec3(ifs, "RotEuler");
+        bd.halfExtents    = mu::Vec3(XMLoadFloat3(&he));
+        bd.center         = mu::Vec3(XMLoadFloat3(&ctr));
+        bd.rotEuler       = mu::Vec3(XMLoadFloat3(&re));
+        bd.mass           = readFloat(ifs, "Mass");
+        def.bones.push_back(std::move(bd));
+        readTailTag(ifs, "Body");
+    }
+
+    const int jointCnt = readInteger(ifs, "JointCnt");
+    def.joints.reserve(jointCnt);
+    for (int i = 0; i < jointCnt; ++i) {
+        readHeadTag(ifs, "Joint");
+        JointDef jd{};
+        jd.parentBoneName  = readText(ifs, "ParentBone");
+        jd.childBoneName   = readText(ifs, "ChildBone");
+        const auto typeStr = readText(ifs, "JointType");
+        if      (typeStr == "Hinge")      jd.type = JointType::Hinge;
+        else if (typeStr == "BallSocket") jd.type = JointType::BallSocket;
+        else                              jd.type = JointType::ConeTwist;
+
+        if (jd.type == JointType::Hinge) {
+            const auto axis = readVec3(ifs, "AxisLocalA");
+            jd.axisLocalA   = mu::Vec3(XMLoadFloat3(&axis));
+            jd.minAngle     = readFloat(ifs, "MinAngle");
+            jd.maxAngle     = readFloat(ifs, "MaxAngle");
+        } else if (jd.type == JointType::ConeTwist) {
+            jd.coneHalfAngle = readFloat(ifs, "ConeHalfAngle");
+            jd.twistLimit    = readFloat(ifs, "TwistLimit");
+        }
+
+        def.joints.push_back(std::move(jd));
+        readTailTag(ifs, "Joint");
+    }
+
+    model.ragdollDef = std::move(def);
+    gSharedLog << "[Resource Load] Ragdoll config: " << bodyCnt << " bodies, " << jointCnt << " joints\n";
+
+    readTailTag(ifs, "RagdollConfig");
+}
+
 // 바이너리 파일로부터 모델을 읽어온다.
 // 메시들을 생성하며 각 메시들의 버텍스 버퍼와 서브메시, 그리고 재질 집합을 생성한다.
 // 그 과정에서 필요한 텍스처들이 texHashMap에 존재하지 않는다면, 로드한다.
@@ -1430,6 +1487,11 @@ Model loadModelFromFile( const std::filesystem::path& path,
     const auto hasWeaponInfo = static_cast<bool>(readInteger(ifs, "HasWeaponInfo"));
     if (hasWeaponInfo) {
         importItemData(ifs, ret);
+    }
+
+    const auto hasRagdollConfig = static_cast<bool>(readInteger(ifs, "HasRagdollConfig"));
+    if (hasRagdollConfig) {
+        importRagdollConfig(ifs, ret);
     }
 
     gSharedLog << "[Resource Load] File I/O: 모델 " << ret.name << '(' << path << ") 로드 완료\n";

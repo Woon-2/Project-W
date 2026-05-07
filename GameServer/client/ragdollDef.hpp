@@ -1,25 +1,25 @@
 ﻿#ifndef __RagdollDef_HPP
 #define __RagdollDef_HPP
 
-#include <span>
-#include <string_view>
+#include <vector>
+#include <string>
 #include "../common/mathUtil.hpp"
 
 enum class JointType { BallSocket, Hinge, ConeTwist };
 
-// Physical representation of one bone as a capsule.
-struct BoneCapsuleDef {
-    std::string_view boneName;
-    float radius;
-    float halfHeight;
-    float mass;
-    mu::Vec3 capsuleOffset;   // offset from bone origin to capsule centre (bone-local)
+// Physical representation of one bone as an OBB.
+struct BoneBoxDef {
+    std::string boneName;
+    mu::Vec3 halfExtents;     // half-size of the box (bone-local)
+    mu::Vec3 center;          // offset from bone origin to box centre (bone-local)
+    mu::Vec3 rotEuler;        // bone-local box orientation in degrees (XYZ Euler, reserved for future collision shape)
+    float    mass;
 };
 
 // Joint connecting parentBone to childBone.
 struct JointDef {
-    std::string_view parentBoneName;
-    std::string_view childBoneName;
+    std::string parentBoneName;
+    std::string childBoneName;
     JointType type;
     // Hinge fields (ignored for BallSocket / ConeTwist):
     mu::Vec3 axisLocalA;              // hinge axis in parent-bone local space
@@ -30,10 +30,10 @@ struct JointDef {
     float twistLimit    = mu::pi * 0.25f;
 };
 
-// A complete ragdoll definition: set of capsule bones + joints between them.
+// A complete ragdoll definition: set of OBB bones + joints between them.
 struct RagdollDef {
-    std::span<const BoneCapsuleDef> bones;
-    std::span<const JointDef>       joints;
+    std::vector<BoneBoxDef> bones;
+    std::vector<JointDef>   joints;
 };
 
 // Predefined humanoid ragdoll.

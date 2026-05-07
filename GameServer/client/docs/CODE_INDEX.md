@@ -116,10 +116,12 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `HingeJoint` class | `jointConstraint.hpp #50` | 1 rotational DOF, angle limits, refOrient |
 | `ConeTwistJoint` class | `jointConstraint.hpp #103` | swing cone + twist limit, T-pose refOrient |
 | `JointType` enum | `ragdollDef.hpp #8` | BallSocket / Hinge / ConeTwist |
-| `BoneCapsuleDef` struct | `ragdollDef.hpp #11` | boneName, radius, halfHeight, mass, capsuleOffset |
-| `JointDef` struct | `ragdollDef.hpp #20` | parentBoneName, childBoneName, type, limits |
-| `RagdollDef` struct | `ragdollDef.hpp #34` | span<BoneCapsuleDef> + span<JointDef> |
-| `getHumanoidRagdollDef()` | `ragdollDef.hpp #41` | Unity Humanoid 뼈대 정의 (static 싱글턴) |
+| `BoneBoxDef` struct | `ragdollDef.hpp #11` | boneName(string), halfExtents, center, rotEuler, mass |
+| `JointDef` struct | `ragdollDef.hpp #20` | parentBoneName(string), childBoneName(string), type, limits |
+| `RagdollDef` struct | `ragdollDef.hpp #34` | vector<BoneBoxDef> + vector<JointDef> |
+| `getHumanoidRagdollDef()` | `ragdollDef.cpp #10` | Unity Humanoid 뼈대 정의 (static 싱글턴) |
+| `importRagdollConfig()` | `mesh.cpp` | binary → Model::ragdollDef 로드 |
+| `Model::ragdollDef` | `mesh.hpp` | std::optional<RagdollDef>, 파일에서 로드된 ragdoll 설정 |
 | `RagdollBone` struct | `ragdoll.hpp #15` | boneIdx, body*(non-owning), parentJoint*(non-owning), capsuleOffset |
 | `Ragdoll` class | `ragdoll.hpp #33` | bone별 RigidBody + Constraint 소유, PhysicsWorld 비소유 등록 |
 | `Ragdoll::build()` | `ragdoll.cpp` | 스켈레톤 + def → body/joint 생성 + world 등록 |

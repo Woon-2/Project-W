@@ -64,17 +64,17 @@ void Ragdoll::build(const Skeleton& skel, const RagdollDef& def, PhysicsWorld& w
     bodies_.reserve(def.bones.size());
 
     // ------------------------------------------------------------------
-    // Pass 1: create one RigidBody per BoneCapsuleDef.
+    // Pass 1: create one RigidBody per BoneBoxDef.
     // Seed T-pose orientation so HingeJoint can read a valid orient when
     // joints are built in Pass 2.
     // ------------------------------------------------------------------
-    for (const BoneCapsuleDef& bd : def.bones) {
+    for (const BoneBoxDef& bd : def.bones) {
         const Bone* bone = findBoneByName(skel, bd.boneName);
         if (!bone) continue;
 
         auto body = std::make_unique<RigidBody>(MotionType::Kinematic);
         body->setMass(bd.mass);
-        body->setInertia(computeCapsuleInertia(bd.mass, bd.radius, bd.halfHeight));
+        body->setInertia(computeBoxInertia(bd.mass, bd.halfExtents));
         body->setLinearDamping(0.1f);
         body->setAngularDamping(0.2f);
         body->setFriction(0.5f);
@@ -87,7 +87,7 @@ void Ragdoll::build(const Skeleton& skel, const RagdollDef& def, PhysicsWorld& w
         RagdollBone rb;
         rb.boneIdx       = bone->boneIdx;
         rb.body          = body.get();
-        rb.capsuleOffset = bd.capsuleOffset;
+        rb.capsuleOffset = bd.center;
 
         bones_.push_back(rb);
         bodies_.push_back(std::move(body));

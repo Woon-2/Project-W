@@ -4,19 +4,18 @@ using System.Collections.Generic;
 // Matches JointType in ragdollDef.hpp
 public enum RagdollJointType { BallSocket, Hinge, ConeTwist }
 
-// Matches BoneCapsuleDef in ragdollDef.hpp.
+// Matches BoneBoxDef in ragdollDef.hpp.
 // Anchors and ref-orientations are derived from the T-pose skeleton on the C++ side,
 // so they are not stored here.
 [System.Serializable]
 public class RagdollBody
 {
     public string    name          = "Body";
-    public Transform bone;                              // scene reference for gizmos
-    public Vector3   capsuleOffset = Vector3.zero;     // bone-local, matches BoneCapsuleDef::capsuleOffset
-    public float     capsuleRadius = 0.1f;             // matches BoneCapsuleDef::radius
-    public float     halfHeight    = 0.15f;            // matches BoneCapsuleDef::halfHeight (total height = halfHeight*2)
-    public int       capsuleDir    = 1;                // 0=X 1=Y 2=Z  -- gizmo only, not exported
-    public float     mass          = 1.0f;             // matches BoneCapsuleDef::mass
+    public Transform bone;                                                    // scene reference for gizmos
+    public Vector3   center        = Vector3.zero;                            // bone-local box centre, matches BoneBoxDef::center
+    public Vector3   halfExtents   = new Vector3(0.1f, 0.15f, 0.1f);        // matches BoneBoxDef::halfExtents
+    public Vector3   rotationEuler = Vector3.zero;                            // bone-local box rotation, matches BoneBoxDef::rotEuler
+    public float     mass          = 1.0f;                                    // matches BoneBoxDef::mass
 }
 
 // Matches JointDef in ragdollDef.hpp.
@@ -41,7 +40,8 @@ public class RagdollJoint
 
 public class GoblinRagdollConfig : MonoBehaviour
 {
-    public GameObject          skeletonRoot;
-    public List<RagdollBody>   bodies = new List<RagdollBody>();
-    public List<RagdollJoint>  joints = new List<RagdollJoint>();
+    public GameObject           skeletonRoot;
+    public MultiBoundingVolume  mbvSource;
+    public List<RagdollBody>    bodies = new List<RagdollBody>();
+    public List<RagdollJoint>   joints = new List<RagdollJoint>();
 }

@@ -108,6 +108,50 @@ public class ModelExtractorWindow : EditorWindow
         Debug.Log($"[TextureMapper] Found {textureMappings.Count} textures in {obj.name}");
     }
 
+    void ExtractRagdollConfig(GoblinRagdollConfig ragdoll)
+    {
+        var w = itemDataWriter;
+        ExtractUtil.WriteHeadTag(w, "RagdollConfig");
+
+        ExtractUtil.WriteInteger(w, "BodyCnt", ragdoll.bodies.Count);
+        foreach (var body in ragdoll.bodies)
+        {
+            ExtractUtil.WriteHeadTag(w, "Body");
+            ExtractUtil.WriteText(w,   "BoneName",    body.name);
+            ExtractUtil.WriteVector(w, "HalfExtents", body.halfExtents);
+            ExtractUtil.WriteVector(w, "Center",      body.center);
+            ExtractUtil.WriteVector(w, "RotEuler",    body.rotationEuler);
+            ExtractUtil.WriteFloat(w,  "Mass",        body.mass);
+            ExtractUtil.WriteTailTag(w, "Body");
+        }
+
+        ExtractUtil.WriteInteger(w, "JointCnt", ragdoll.joints.Count);
+        foreach (var joint in ragdoll.joints)
+        {
+            ExtractUtil.WriteHeadTag(w, "Joint");
+            ExtractUtil.WriteText(w, "ParentBone", joint.parentBoneName);
+            ExtractUtil.WriteText(w, "ChildBone",  joint.childBoneName);
+            ExtractUtil.WriteText(w, "JointType",  joint.jointType.ToString());
+
+            switch (joint.jointType)
+            {
+                case RagdollJointType.Hinge:
+                    ExtractUtil.WriteVector(w, "AxisLocalA", joint.hingeAxisLocal);
+                    ExtractUtil.WriteFloat(w,  "MinAngle",   Mathf.Deg2Rad * joint.minAngleDeg);
+                    ExtractUtil.WriteFloat(w,  "MaxAngle",   Mathf.Deg2Rad * joint.maxAngleDeg);
+                    break;
+                case RagdollJointType.ConeTwist:
+                    ExtractUtil.WriteFloat(w, "ConeHalfAngle", Mathf.Deg2Rad * joint.coneHalfAngleDeg);
+                    ExtractUtil.WriteFloat(w, "TwistLimit",    Mathf.Deg2Rad * joint.twistLimitDeg);
+                    break;
+            }
+
+            ExtractUtil.WriteTailTag(w, "Joint");
+        }
+
+        ExtractUtil.WriteTailTag(w, "RagdollConfig");
+    }
+
     [System.Serializable]
     public class TextureMappingData
     {
@@ -165,6 +209,18 @@ public class ModelExtractorWindow : EditorWindow
         ExtractUtil.WriteHeadTag(geometryWriter, "Mesh");
 
         mesh.RecalculateTangents();
+
+        // =========================
+        // AABB 추출
+        // =========================
+        Bounds bounds = mesh.bounds;
+
+        ExtractUtil.WriteHeadTag(geometryWriter, "Bounds");
+        ExtractUtil.WriteVector(geometryWriter, "Center", bounds.center);
+        ExtractUtil.WriteVector(geometryWriter, "Extents", bounds.extents);
+        ExtractUtil.WriteVector(geometryWriter, "Min", bounds.min);
+        ExtractUtil.WriteVector(geometryWriter, "Max", bounds.max);
+        ExtractUtil.WriteTailTag(geometryWriter, "Bounds");
 
         // 버텍스 버퍼들 추출
         ExtractUtil.WriteHeadTag(geometryWriter, "VertexBuffers");
@@ -597,6 +653,11 @@ public class ModelExtractorWindow : EditorWindow
             ItemData itemData = weapon.itemData;
             itemData.WriteBinaryInfo(itemDataWriter);
         }
+
+        GoblinRagdollConfig ragdoll = targetObject.GetComponent<GoblinRagdollConfig>();
+        ExtractUtil.WriteInteger(itemDataWriter, "HasRagdollConfig", Convert.ToInt32(ragdoll != null));
+        if (ragdoll != null)
+            ExtractRagdollConfig(ragdoll);
 
         geometryWriter.Flush();
         geometryWriter.Close();
