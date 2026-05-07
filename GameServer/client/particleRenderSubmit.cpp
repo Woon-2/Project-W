@@ -1,6 +1,7 @@
 #include "pch.hpp"
 #include "particleRenderSubmit.hpp"
 #include "particleRenderMode.hpp"
+#include "particleSystem.hpp"
 #include "blendCGMeshPipeline.hpp"
 #include "twoSidesPipeline.hpp"
 #include "gfx.hpp"
@@ -20,8 +21,12 @@ void submitParticleDraw(GFX& gfx, const ParticleRenderContext& ctx, const ps::Ma
             .tint = ctx.tint,
             .additive = mat.additive,
             .rotation = geometry->rotation,
+            .rotation3D = geometry->rotation3D,
             .stretchAxisAndMode = geometry->stretchAxisAndMode,
             .renderOrder = rend.renderOrder,
+            .sortMode = rend.sortMode,
+            .sortingFudge = rend.sortingFudge,
+            .sortPos = ctx.particle.pos,
         });
     } else if (const auto geometry = buildParticleMeshGeometry(ctx)) {
         gfx.addDrawEvent(MeshParticlePipeline::DrawEvent{
@@ -92,6 +97,7 @@ void submitParticleDraw(GFX& gfx, const ParticleRenderContext& ctx, const ps::Ma
             .world = geometry->world,
             .tint = ctx.tint,
             .rotation = geometry->rotation,
+            .rotation3D = geometry->rotation3D,
             .stretchAxisAndMode = geometry->stretchAxisAndMode,
             .renderOrder = rend.renderOrder,
             .pMainTex = mat.mainTex,

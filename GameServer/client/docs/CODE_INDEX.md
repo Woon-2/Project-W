@@ -483,11 +483,11 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 | 파일 | 설명 |
 |------|------|
-| `particleModules.hpp` | `MainModule`, `EmissionModule`, `ShapeModule`, `VelocityOverLifetimeModule`, `ColorOverLifetimeModule`, `SizeOverLifetimeModule`, `RotationOverLifetimeModule`, `CustomDataModule`, `Material`, `RendererModule`, `TextureSheetAnimationModule`, `ParticleSystemConfig` |
-| `particleSystem.hpp` | `ParticleSystem`, `Particle` |
-| `particleSystem.cpp` | `init()`, `emit()`, `startContinuous()`, `spawnParticle()`, `sampleShapeOrigin/Direction()`, `update()`, `render()` |
-| `particleEffect.hpp` | `ParticleEffect` — Unity 프리팹 대응 그룹 컨테이너. `PlayMode::Emit` / `Continuous` |
-| `particleEffect.cpp` | `addSystem()`, `play()`, `stop()`, `isAlive()`, `update()`, `render()` |
+| `particleModules.hpp` | `MainModule`, `EmissionModule`, `ShapeModule`, `VelocityOverLifetimeModule`, `ColorOverLifetimeModule`, `SizeOverLifetimeModule`, `RotationOverLifetimeModule`, `CustomDataModule`, `Material`, `RendererModule`, `TextureSheetAnimationModule`, `SubEmittersModule`, `ParticleSystemConfig` |
+| `particleSystem.hpp` | `ParticleSystem`, `Particle`, `SubEmitterEvent` |
+| `particleSystem.cpp` | `init()`, `emit()`, `emitAt()`, `startContinuous()`, `spawnParticle()`, `sampleShapeOrigin/Direction()`, `update()`, `render()` |
+| `particleEffect.hpp` | `ParticleEffect` — Unity 프리팹 대응 그룹 컨테이너. `PlayMode::Emit` / `Continuous`. `SubEmitterBinding`, `PendingSubEmitterBurst` |
+| `particleEffect.cpp` | `addSystem()`, `play()`, `stop()`, `isAlive()`, `update()`, `render()`, `bindSubEmitter()` |
 
 **ParticleSystem API (`particleSystem.hpp`):**
 
@@ -495,10 +495,18 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 |--------|------|
 | `init(config, maxParticles=4096)` | 모듈 config 설정 + pool 크기 결정 |
 | `emit(int count)` | init() 후 수동 방출 |
+| `emitAt(count, worldPos, inheritVel, inheritColor, inheritSize)` | 지정 위치에서 spawn — ParticleEffect sub-emitter 디스패치용 |
+| `pendingSubEmitterEvents()` | update() 이후 수집된 Birth/Death 이벤트 목록 반환 |
 | `config()` | 설정 참조 반환 — emit 전 shape.position, main.startRotation3D 등 변경에 사용 |
 | `startContinuous()` | init() 기반 연속 방출 시작 |
 | `startContinuous(ParticleSystemConfig)` | config 설정 + 연속 방출 편의 오버로드 |
 | `stopContinuous()` | 연속 방출 정지 |
+
+**Sub Emitters (`particleEffect.hpp` / `particleModules.hpp`):**
+- `SubEmittersModule` — `Event::Birth` / `Event::Death`, `emitProbability`, `inheritVelocity/Color/Size`
+- `SubEmitterBinding` — parentIdx + subEmitterCfgIdx + childIdx 연결 레코드
+- `PendingSubEmitterBurst` — 활성 burst-sequence 인스턴스; 시간 시뮬레이션으로 Unity burst 타이밍 재현
+- `ParticleEffect::bindSubEmitter(parentIdx, cfgIdx, childIdx)` — 자식 시스템 등록; 이후 play()에서 자식 자동 재생 차단, update()에서 ParentEvent → PendingBurst 변환
 
 **MainModule 주요 필드:**
 - `duration` — 한 사이클 길이(초); 0 = 시간 제한 없음
@@ -604,6 +612,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `swordSlashComboEffect_` | 콤보 검기 효과 |
 | `slashWaveEffect_` | 슬래시 웨이브 — HalfTrail 메시 + TwoSidesPipeline (MatTwoSides) |
 | `dustParticleSystem_` | 발 착지 흙먼지 빌보드 파티클 |
+| `aoESlashGreenEffect_` | AoE 슬래시 그린 이펙트 (Circle2 + Slash, Billboard) |
 
 **Camera::updateGFX() 등록 파이프라인 (`camera.cpp`):**
 - PBRPipeline, PBRSkinnedPipeline, SkyboxPipeline, BVPipeline, BillboardPipeline, **TerrainPipeline**, MeshParticlePipeline, SmokeBlendCGPipeline, SwordSlashPipeline, **TwoSidesPipeline** CameraData 자기등록

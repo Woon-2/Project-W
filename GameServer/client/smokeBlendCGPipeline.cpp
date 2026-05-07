@@ -61,6 +61,7 @@ void Dispatcher::updateGPUDataSingleThreaded() {
         [](const DrawEvent& e) {
             return SmokeBlendCGShader::PerInstanceData{
                 .world = mu::transpose(e.world).getXmf(),
+                .rotation3D = mu::transpose(e.rotation3D).getXmf(),
                 .tint = e.tint.getXmf(),
                 .stretchAxisAndMode = e.stretchAxisAndMode.getXmf(),
                 .rotation = e.rotation,
