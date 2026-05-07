@@ -2,6 +2,7 @@
 #define __billboardPipeline_HPP
 
 #include "gfxUtil.hpp"
+#include "particleModules.hpp"
 
 class RootSig;
 
@@ -39,6 +40,9 @@ struct DrawEvent {
 	float rotation = 0.f;
 	mu::Vec4 stretchAxisAndMode = { 0.f, 0.f, 0.f, 0.f }; // xyz=world axis, w=1 when stretched
 	int renderOrder = 0;	// 낮을수록 먼저 렌더 (Unity Order in Layer 동일 개념)
+	ps::RendererModule::SortMode sortMode = ps::RendererModule::SortMode::None;
+	float sortingFudge = 0.f;
+	mu::Vec3 sortPos = { 0.f, 0.f, 0.f };
 
 	// Non-additive events sort before additive so we can switch PSO once.
 	// Within the same blend mode, sort by renderOrder (ascending).

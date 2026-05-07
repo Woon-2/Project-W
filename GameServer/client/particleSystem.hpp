@@ -36,6 +36,16 @@ struct Particle {
     // 'active' 필드 없음: pool_[0..activeCount_-1] 이 항상 활성 상태
 };
 
+// Event emitted by ParticleSystem::update() for each sub-emitter trigger.
+// ParticleEffect reads these after update() and calls emitAt() on child systems.
+struct SubEmitterEvent {
+    int      configIndex;  // index into config_.subEmitters.subEmitters
+    mu::Vec3 pos;
+    mu::Vec3 vel;
+    mu::Vec4 color;
+    float    size;
+};
+
 class ParticleSystem {
 public:
     static constexpr int kDefaultMaxParticles = 4096;
@@ -56,6 +66,17 @@ public:
     void update(Seconds dt);
     void render(GFX& gfx) const;
     void stopContinuous();
+
+    // Spawn particles at worldPos (used by ParticleEffect sub-emitter dispatch).
+    void emitAt(int count, mu::Vec3 worldPos,
+                mu::Vec3 inheritVel   = {},
+                mu::Vec4 inheritColor = { 1.f, 1.f, 1.f, 1.f },
+                float    inheritSize  = 1.f);
+
+    const std::vector<SubEmitterEvent>& pendingSubEmitterEvents() const {
+        return pendingSubEmitterEvents_;
+    }
+    void clearPendingSubEmitterEvents() { pendingSubEmitterEvents_.clear(); }
 
     int activeCount() const { return activeCount_; }
 
@@ -83,6 +104,12 @@ private:
     bool                     continuousNew_  = false;
     float                    systemTime_     = 0.f;
     float                    delayRemaining_ = 0.f;
+
+    std::vector<SubEmitterEvent> pendingSubEmitterEvents_;
+    bool      inheritEmit_      = false;
+    mu::Vec3  inheritedVel_     = {};
+    mu::Vec4  inheritedColor_   = { 1.f, 1.f, 1.f, 1.f };
+    float     inheritedSize_    = 1.f;
 };
 
 #endif  // __particleSystem_HPP

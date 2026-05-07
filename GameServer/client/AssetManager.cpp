@@ -220,6 +220,14 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 		.sampler         = Samplers::BilinearWrap
 	} );
 
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "CrystalFree1",
+		.texturePath     = "../resources/Textures/CrystalFree1.dds",
+		.pDest           = &crystalFree1Tex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false
+	} );
+
 	swordSlashMaterial_ = makeDefaultSwordSlashMaterial();
 	if (loadSwordSlashMaterialMetadata("../resources/effects/SwordSlashMat.json", swordSlashMaterial_)) {
 		gSharedLog << "[SwordSlash Material] File I/O: ../resources/effects/SwordSlashMat.json 로드 완료\n";

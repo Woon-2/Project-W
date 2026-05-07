@@ -375,6 +375,26 @@ struct TextureSheetAnimationModule {
 };
 
 // ---------------------------------------------------------------------------
+// SubEmitters Module
+// Triggers child particle systems when a particle is born or dies.
+// ---------------------------------------------------------------------------
+struct SubEmittersModule {
+    enum class Event { Birth, Death };
+
+    struct SubEmitter {
+        Event event           = Event::Death;
+        float emitProbability = 1.f;   // 0..1 chance per particle event
+        int   emitCount       = 1;     // particles spawned in child system per event
+        bool  inheritVelocity = false;
+        bool  inheritColor    = false;
+        bool  inheritSize     = false;
+    };
+
+    bool                    enabled = false;
+    std::vector<SubEmitter> subEmitters;
+};
+
+// ---------------------------------------------------------------------------
 // ParticleSystemConfig
 // ---------------------------------------------------------------------------
 struct ParticleSystemConfig {
@@ -387,6 +407,7 @@ struct ParticleSystemConfig {
     RotationOverLifetimeModule  rotationOverLifetime;
     TextureSheetAnimationModule textureSheetAnimation;
     CustomDataModule            customData;
+    SubEmittersModule           subEmitters;
     RendererModule              renderer;
 };
 

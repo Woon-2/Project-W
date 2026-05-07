@@ -160,7 +160,7 @@ void Game::setupStage() {
 	effectDropdown_->offsetX = UI::DimValue::px(-12.f);
 	effectDropdown_->offsetY = UI::DimValue::px(12.f);
 	effectDropdown_->width   = UI::DimValue::px(180.f);
-	effectDropdown_->setup({ "Slash Wave", "Slash Combo", "Slash 7", "Slash 1", "Spikes" });
+	effectDropdown_->setup({ "Slash Wave", "Slash Combo", "Slash 7", "Slash 1", "Spikes", "Crystals Front Attack" });
 	effectDropdown_->onSelectionChanged = [this](int idx) {
 		currentEffect_ = static_cast<SwordEffect>(idx);
 	};
@@ -505,6 +505,41 @@ void Game::setParticle()
 			}
 		};
 		spikesAttackEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);
+	}
+
+	// ── Crystals Front Attack effect ──────────────────────────────────────────
+	{
+		const std::filesystem::path crystalsJson =
+			"../resources/effects/Crystals front attack_ParticleSystems.json";
+
+		// parent: 7-burst trigger particles (invisible, just fires sub-emitter birth events)
+		{
+			auto cfg = loadUnityParticleConfig(crystalsJson, "Crystals front attack");
+			cfg.renderer.mode = ps::RendererModule::Mode::Billboard;
+			cfg.renderer.mat  = ps::MatUnlit{ .mainTex = nullptr, .additive = true };
+			cfg.main.looping  = false;
+			// importer does not parse subEmitters yet — set manually
+			cfg.subEmitters.enabled = true;
+			cfg.subEmitters.subEmitters = { {
+				.event           = ps::SubEmittersModule::Event::Birth,
+				.emitProbability = 1.f,
+				.inheritSize     = true,
+			} };
+			crystalsFrontAttackEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);  // idx 0
+		}
+
+		// child: crystal pillars (StretchedBillboard in Unity)
+		{
+			auto cfg = loadUnityParticleConfig(crystalsJson, "Crystals front attack/Crystals");
+			cfg.renderer.mat  = ps::MatUnlit{
+				.mainTex = assetManager_.crystalFree1Tex(),
+				.additive = false
+			};
+			crystalsFrontAttackEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);  // idx 1
+		}
+
+		// parent[0] subEmitters[0] (Crystals entry) -> child[1]
+		crystalsFrontAttackEffect_.bindSubEmitter(0, 0, 1, true);
 	}
 
 	// ── Slash Wave effect ─────────────────────────────────────────────────────
@@ -1036,6 +1071,7 @@ void Game::update(Milliseconds deltaTime) {
 	swordSlashComboEffect_.update( deltaTime );
 	slashWaveEffect_.update( deltaTime );
 	spikesAttackEffect_.update( deltaTime );
+	crystalsFrontAttackEffect_.update( deltaTime );
 	dustParticleSystem_.update( deltaTime );
 
 	// UI 동기화
@@ -1070,6 +1106,7 @@ void Game::render() {
 	swordSlashComboEffect_.render( gfx_ );
 	slashWaveEffect_.render( gfx_ );
 	spikesAttackEffect_.render( gfx_ );
+	crystalsFrontAttackEffect_.render( gfx_ );
 	dustParticleSystem_.render( gfx_ );
 
 	uiManager_.render( gfx_ );
@@ -1228,7 +1265,13 @@ void Game::processInput(Milliseconds deltaTime) {
 		case SwordEffect::Slash7:     swordSlash7Effect_.play(slashPos);     break;
 		case SwordEffect::Slash1:     swordSlash1Effect_.play(slashPos);     break;
 		case SwordEffect::SlashWave:  slashWaveEffect_.play(slashPos, player_->orient());       break;
-		case SwordEffect::Spikes:     spikesAttackEffect_.play(slashPos);    break;
+		case SwordEffect::Spikes:              spikesAttackEffect_.play(slashPos);          break;
+		case SwordEffect::CrystalsFrontAttack: {
+			const auto crystalPos = player_->renderState().pos + player_->forward() * 1.f;
+			const mu::Mat4x4 crystalOrient = mu::rotateYH(mu::Degree(-90.f)) * player_->orient().mat4();
+			crystalsFrontAttackEffect_.play(crystalPos, crystalOrient, player_->forward());
+			break;
+		}
 		}
 	}
 

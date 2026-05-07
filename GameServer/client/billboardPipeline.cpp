@@ -14,6 +14,39 @@ namespace Detail {
 	D3D12_INDEX_BUFFER_VIEW staticIBViewPoint;
 }	// namespace BillboardPipeline::Detail
 
+namespace {
+
+float calcSortDistance(const DrawEvent& e, mu::Vec3 cameraPos) {
+	const mu::Vec3 diff = e.sortPos - cameraPos;
+	return std::sqrt(mu::dot(diff, diff)) + e.sortingFudge;
+}
+
+void sortDrawEvents(std::vector<DrawEvent>& drawEvents, mu::Vec3 cameraPos) {
+	std::sort(drawEvents.begin(), drawEvents.end(),
+		[&](const DrawEvent& lhs, const DrawEvent& rhs) {
+			if (lhs.additive != rhs.additive)
+				return !lhs.additive && rhs.additive;
+			if (lhs.renderOrder != rhs.renderOrder)
+				return lhs.renderOrder < rhs.renderOrder;
+
+			const bool lhsDistance = lhs.sortMode == ps::RendererModule::SortMode::Distance;
+			const bool rhsDistance = rhs.sortMode == ps::RendererModule::SortMode::Distance;
+			if (lhsDistance != rhsDistance)
+				return lhsDistance && !rhsDistance;
+			if (lhsDistance && rhsDistance) {
+				const float lhsDist = calcSortDistance(lhs, cameraPos);
+				const float rhsDist = calcSortDistance(rhs, cameraPos);
+				if (std::abs(lhsDist - rhsDist) > 0.0001f)
+					return lhsDist > rhsDist;
+			}
+
+			return false;
+		}
+	);
+}
+
+}	// namespace
+
 void initStaticPointMesh( ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, Fence& fenceToAssociate ) {
 	static const auto positions = std::vector<XMFLOAT3>{
 	XMFLOAT3( 0.f, 0.f, 0.f )
@@ -129,9 +162,7 @@ void Dispatcher::updateGPUDataSingleThreaded() {
 		return;
 	}
 
-	// 메시 데이터 업로드
-	// 정렬을 통해 인스턴싱이 가능하도록 한다.
-	std::sort( drawEvents_.begin(), drawEvents_.end() );
+	sortDrawEvents(drawEvents_, cameraData_.pos);
 
 	// perInstanceData를 static으로 선언하여
 	// 매번 처음부터 메모리를 구축하지 않고 재사용할 수 있도록 한다.
@@ -176,9 +207,7 @@ void Dispatcher::updateGPUDataMultiThreaded() {
 		return;
 	}
 
-	// 메시 데이터 업로드
-	// 정렬을 통해 인스턴싱이 가능하도록 한다.
-	std::sort( drawEvents_.begin(), drawEvents_.end() );
+	sortDrawEvents(drawEvents_, cameraData_.pos);
 
 	// perInstanceData를 static으로 선언하여
 	// 매번 처음부터 메모리를 구축하지 않고 재사용할 수 있도록 한다.
