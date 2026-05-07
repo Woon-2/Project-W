@@ -43,6 +43,9 @@
     <Filter Include="contents\Npc\Goblin">
       <UniqueIdentifier>{e9f12e23-f142-4eb6-b060-6be395ca791c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="contents\etc">
+      <UniqueIdentifier>{10ae73a8-1d9a-4902-91ef-7e03d3f6212d}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Listener.cpp">
@@ -63,26 +66,11 @@
     <ClCompile Include="PacketManager.cpp">
       <Filter>network\PacketManager</Filter>
     </ClCompile>
-    <ClCompile Include="AssetManager.cpp">
-      <Filter>contents</Filter>
-    </ClCompile>
-    <ClCompile Include="Model.cpp">
-      <Filter>contents</Filter>
-    </ClCompile>
-    <ClCompile Include="Level.cpp">
-      <Filter>contents</Filter>
-    </ClCompile>
-    <ClCompile Include="collision.cpp">
-      <Filter>contents</Filter>
-    </ClCompile>
     <ClCompile Include="binaryImport.cpp">
       <Filter>utils</Filter>
     </ClCompile>
     <ClCompile Include="errorHandling.cpp">
       <Filter>utils</Filter>
-    </ClCompile>
-    <ClCompile Include="physics.cpp">
-      <Filter>contents</Filter>
     </ClCompile>
     <ClCompile Include="Room.cpp">
       <Filter>contents\Room</Filter>
@@ -99,21 +87,6 @@
     <ClCompile Include="JobTimer.cpp">
       <Filter>utils\JobTimer</Filter>
     </ClCompile>
-    <ClCompile Include="broadPhase.cpp">
-      <Filter>contents</Filter>
-    </ClCompile>
-    <ClCompile Include="contactConstraint.cpp">
-      <Filter>contents</Filter>
-    </ClCompile>
-    <ClCompile Include="physicsWorld.cpp">
-      <Filter>contents</Filter>
-    </ClCompile>
-    <ClCompile Include="rigidBody.cpp">
-      <Filter>contents</Filter>
-    </ClCompile>
-    <ClCompile Include="terrain.cpp">
-      <Filter>contents</Filter>
-    </ClCompile>
     <ClCompile Include="npc.cpp">
       <Filter>contents\Npc</Filter>
     </ClCompile>
@@ -122,6 +95,36 @@
     </ClCompile>
     <ClCompile Include="goblin.cpp">
       <Filter>contents\Npc\Goblin</Filter>
+    </ClCompile>
+    <ClCompile Include="AssetManager.cpp">
+      <Filter>contents\etc</Filter>
+    </ClCompile>
+    <ClCompile Include="broadPhase.cpp">
+      <Filter>contents\etc</Filter>
+    </ClCompile>
+    <ClCompile Include="collision.cpp">
+      <Filter>contents\etc</Filter>
+    </ClCompile>
+    <ClCompile Include="contactConstraint.cpp">
+      <Filter>contents\etc</Filter>
+    </ClCompile>
+    <ClCompile Include="Level.cpp">
+      <Filter>contents\etc</Filter>
+    </ClCompile>
+    <ClCompile Include="Model.cpp">
+      <Filter>contents\etc</Filter>
+    </ClCompile>
+    <ClCompile Include="physics.cpp">
+      <Filter>contents\etc</Filter>
+    </ClCompile>
+    <ClCompile Include="physicsWorld.cpp">
+      <Filter>contents\etc</Filter>
+    </ClCompile>
+    <ClCompile Include="rigidBody.cpp">
+      <Filter>contents\etc</Filter>
+    </ClCompile>
+    <ClCompile Include="terrain.cpp">
+      <Filter>contents\etc</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -140,26 +143,11 @@
     <ClInclude Include="PacketManager.hpp">
       <Filter>network\PacketManager</Filter>
     </ClInclude>
-    <ClInclude Include="AssetManager.hpp">
-      <Filter>contents</Filter>
-    </ClInclude>
-    <ClInclude Include="Level.hpp">
-      <Filter>contents</Filter>
-    </ClInclude>
-    <ClInclude Include="Model.hpp">
-      <Filter>contents</Filter>
-    </ClInclude>
-    <ClInclude Include="collision.hpp">
-      <Filter>contents</Filter>
-    </ClInclude>
     <ClInclude Include="binaryImport.hpp">
       <Filter>utils</Filter>
     </ClInclude>
     <ClInclude Include="errorHandling.hpp">
       <Filter>utils</Filter>
-    </ClInclude>
-    <ClInclude Include="physics.hpp">
-      <Filter>contents</Filter>
     </ClInclude>
     <ClInclude Include="Room.hpp">
       <Filter>contents\Room</Filter>
@@ -177,21 +165,6 @@
       <Filter>utils\JobTimer</Filter>
     </ClInclude>
     <ClInclude Include="terrain.hpp" />
-    <ClInclude Include="broadPhase.hpp">
-      <Filter>contents</Filter>
-    </ClInclude>
-    <ClInclude Include="constraint.hpp">
-      <Filter>contents</Filter>
-    </ClInclude>
-    <ClInclude Include="contactConstraint.hpp">
-      <Filter>contents</Filter>
-    </ClInclude>
-    <ClInclude Include="physicsWorld.hpp">
-      <Filter>contents</Filter>
-    </ClInclude>
-    <ClInclude Include="rigidBody.hpp">
-      <Filter>contents</Filter>
-    </ClInclude>
     <ClInclude Include="npcGroup.hpp">
       <Filter>contents\Npc</Filter>
     </ClInclude>
@@ -200,6 +173,36 @@
     </ClInclude>
     <ClInclude Include="goblin.hpp">
       <Filter>contents\Npc\Goblin</Filter>
+    </ClInclude>
+    <ClInclude Include="AssetManager.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="broadPhase.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="collision.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="constraint.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="contactConstraint.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="Level.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="Model.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="physics.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="physicsWorld.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="rigidBody.hpp">
+      <Filter>contents\etc</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

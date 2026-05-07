@@ -8,6 +8,7 @@ void Goblin::applyGoblinConfig() {
     cfg.attackRange    = 1.5f;
     cfg.detectionRange = 10.f;
     cfg.attackDamage   = 15.f;
+    cfg.respawnDelay   = 15s;
     applyConfig(cfg);
     setHp(static_cast<int32>(cfg.maxHp));
 }

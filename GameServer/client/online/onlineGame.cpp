@@ -848,6 +848,23 @@ void Game::applyTimeSync( uint64 serverMs ) {
 		).count());
 }
 
+void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos ) {
+	auto npc = idGoblinMap_[ npcId ];
+
+	DISPLAY_ERROR_STR( npc != nullptr,
+		"[Game Error] Game::onNpcRespawn: 리스폰하는 NPC가 존재하지 않습니다.\n",
+		false
+	);
+
+	if ( npc == nullptr ) {
+		return;
+	}
+
+	npc->setHp( newHp );
+	npc->setDead( false );
+	npc->setPos( DirectX::XMLoadFloat3( &spawnPos ) );
+}
+
 // 게임의 업데이트는 다음 순서대로 이루어진다.
 // 네트워크 패킷 처리
 // 입력 처리

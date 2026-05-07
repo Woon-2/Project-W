@@ -18,6 +18,8 @@ Npc::Npc(Object&& base, const NpcConfig& cfg)
 }
 
 void Npc::applyConfig(const NpcConfig& cfg) {
+    maxHp_              = cfg.maxHp;
+    respawnDelay_       = cfg.respawnDelay;
     detectionRange_     = cfg.detectionRange;
     attackRange_        = cfg.attackRange;
     moveSpeed_          = cfg.moveSpeed;
@@ -61,7 +63,7 @@ void Npc::transitionTo(NpcState next) {
 
 NpcUpdateResult Npc::update(Seconds dt, Room& room) {
     if (hp() <= 0) {
-        return updateDead();
+        return updateDead(dt);
     }
 
     switch (state_) {
@@ -473,11 +475,29 @@ NpcUpdateResult Npc::updateInvestigate( Seconds dt, Room& room ) {
 
 // ─── Dead ─────────────────────────────────────────────────────────────────────
 
-NpcUpdateResult Npc::updateDead() {
-    if ( state_ != NpcState::Dead ) {
-        transitionTo( NpcState::Dead );
-    }
-    return {};
+NpcUpdateResult Npc::updateDead(Seconds dt) {
+    if (state_ != NpcState::Dead)
+        transitionTo(NpcState::Dead);
+
+    respawnTimer_ += dt;
+    if (respawnTimer_ < respawnDelay_)
+        return {};
+
+    respawn();
+    return { .respawned = true };
+}
+
+void Npc::respawn() {
+    setHp(static_cast<int32>(maxHp_));
+    setPos(spawnPos_);
+    setLinearVel({ 0.f, 0.f, 0.f });
+    targetId_         = -1;
+    respawnTimer_     = 0s;
+    windupTimer_      = 0s;
+    recoverTimer_     = 0s;
+    directReactTimer_ = -1s;
+    groupReactTimer_  = -1s;
+    state_            = NpcState::Idle;
 }
 
 // ─── evaluateTargetScore ──────────────────────────────────────────────────────

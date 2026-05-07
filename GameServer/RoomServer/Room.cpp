@@ -108,6 +108,14 @@ void Room::updateGoblinAI(Milliseconds dt) {
 			broadcast(PacketManager::makeSNpcAttackPacket(static_cast<uint16>(goblin.getId())));
 			broadcast(PacketManager::makeSHitPacket(result.hit->targetId, result.hit->newHp));
 		}
+
+		if (result.respawned) {
+			broadcast(PacketManager::makeSNpcRespawnPacket(
+				static_cast<uint16>(goblin.getId()),
+				goblin.hp(),
+				goblin.pos().getXmf()
+			));
+		}
 	}
 
 	if (!moveInfos.empty())

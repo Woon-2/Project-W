@@ -12,11 +12,13 @@ class GameSession;
 struct NpcUpdateResult {
     struct HitInfo { uint16 targetId; int32 newHp; };
     std::optional<HitInfo> hit;
+    bool respawned = false;
 };
 
 // ─── NpcConfig ───────────────────────────────────────────────────────────────
 struct NpcConfig {
-    float maxHp              = 80.f;
+    float   maxHp        = 80.f;
+    Seconds respawnDelay { 10.f };
     float moveSpeed          = 4.f;
     float detectionRange     = 10.f;
     float attackRange        = 2.f;
@@ -71,7 +73,8 @@ private:
     NpcUpdateResult updateAttackRecover(Seconds dt, Room& room);
     NpcUpdateResult updateReturn       (Seconds dt, Room& room);
     NpcUpdateResult updateReposition   (Seconds dt, Room& room);
-    NpcUpdateResult updateDead         ();
+    NpcUpdateResult updateDead         (Seconds dt);
+    void            respawn            ();
     NpcUpdateResult updateInvestigate  (Seconds dt, Room& room);
 
     GameSession* selectBestVisibleTarget(Room& room) const;
@@ -97,6 +100,10 @@ private:
     bool  canReAggroOnReturn_{ true };
     int   overlapThreshold_  { 2 };
     float returnSpeedMult_   { 2.5f };
+
+    float   maxHp_          { 80.f };
+    Seconds respawnDelay_   { 10s };
+    Seconds respawnTimer_   { 0s };
 
     Seconds windupTimer_    { 0s };
     Seconds recoverTimer_   { 0s };
