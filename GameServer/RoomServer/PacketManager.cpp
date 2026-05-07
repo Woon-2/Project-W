@@ -189,6 +189,7 @@ std::shared_ptr<SendBuffer> PacketManager::makeSNpcAttackPacket( uint16 npcId ) 
 
 	auto pkt = bw.reserve<SNpcAttackPacket>();
 	pkt->npcId = npcId;
+
 	pkt->size = bw.writeSize();
 	pkt->type = PacketType::S_NpcAttack;
 
@@ -202,6 +203,7 @@ std::shared_ptr<SendBuffer> PacketManager::makeSPlayerAttackPacket( uint16 attac
 
 	auto pkt = bw.reserve<SPlayerAttackPacket>();
 	pkt->attackerId = attackerId;
+
 	pkt->size = bw.writeSize();
 	pkt->type = PacketType::S_PlayerAttack;
 
@@ -216,6 +218,7 @@ std::shared_ptr<SendBuffer> PacketManager::makeSHitPacket(uint16 targetId, int32
 	auto pkt = bw.reserve<SHitPacket>();
 	pkt->targetId = targetId;
 	pkt->newHp    = newHp;
+
 	pkt->size = bw.writeSize();
 	pkt->type = PacketType::S_Hit;
 
@@ -229,8 +232,25 @@ std::shared_ptr<SendBuffer> PacketManager::makeSTimeSyncPacket(uint64 serverMs) 
 
 	auto pkt = bw.reserve<STimeSyncPacket>();
 	pkt->serverMs = serverMs;
+
 	pkt->size = bw.writeSize();
 	pkt->type = PacketType::S_TimeSync;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSNpcRespawnPacket(uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos) {
+	auto sendBuffer = SendBufferManager::open(sizeof(SNpcRespawnPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt      = bw.reserve<SNpcRespawnPacket>();
+	pkt->npcId    = npcId;
+	pkt->newHp    = newHp;
+	pkt->spawnPos = spawnPos;
+
+	pkt->size     = bw.writeSize();
+	pkt->type     = PacketType::S_NpcRespawn;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;

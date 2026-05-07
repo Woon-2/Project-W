@@ -545,6 +545,7 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 		static_cast<float>(gClientRect.right - gClientRect.left) / (gClientRect.bottom - gClientRect.top),
 		0.1f, 500.f
 	);
+	camera_.setPhysicsWorld( &physicsWorld_ );
 
 	idPlayerMap_[playerInfo.playerId] = player_;
 
@@ -847,6 +848,23 @@ void Game::applyTimeSync( uint64 serverMs ) {
 		static_cast<int64>(std::chrono::duration_cast<std::chrono::milliseconds>(
 			std::chrono::high_resolution_clock::now().time_since_epoch()
 		).count());
+}
+
+void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos ) {
+	auto npc = idGoblinMap_[ npcId ];
+
+	DISPLAY_ERROR_STR( npc != nullptr,
+		"[Game Error] Game::onNpcRespawn: 리스폰하는 NPC가 존재하지 않습니다.\n",
+		false
+	);
+
+	if ( npc == nullptr ) {
+		return;
+	}
+
+	npc->setHp( newHp );
+	npc->setDead( false );
+	npc->setPos( DirectX::XMLoadFloat3( &spawnPos ) );
 }
 
 // 게임의 업데이트는 다음 순서대로 이루어진다.

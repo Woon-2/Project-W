@@ -53,6 +53,10 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 		handleSTimeSyncPacket(buffer, len);
 		break;
 
+	case PacketType::S_NpcRespawn:
+		handleSNpcRespawnPacket( buffer, len );
+		break;
+
 	default:
 		std::cout << "Unknown packet type received. Type: " << static_cast<uint16>(header->type) << '\n';
 		break;
@@ -155,6 +159,11 @@ void PacketManager::handleSHitPacket(byte* buffer, int32 len) {
 void PacketManager::handleSTimeSyncPacket(byte* buffer, int32 len) {
 	auto sTimeSyncPkt = reinterpret_cast<STimeSyncPacket*>(buffer);
 	INet::ClientApp::onlineGame()->applyTimeSync( sTimeSyncPkt->serverMs );
+}
+
+void PacketManager::handleSNpcRespawnPacket( byte* buffer, int32 len ) {
+	auto sNpcRespawnPkt = reinterpret_cast<SNpcRespawnPacket*>(buffer);
+	INet::ClientApp::onlineGame()->onNpcRespawn( sNpcRespawnPkt->npcId, sNpcRespawnPkt->newHp, sNpcRespawnPkt->spawnPos );
 }
 
 std::shared_ptr<SendBuffer> PacketManager::makeCAttackPacket(uint64 clientMs) {

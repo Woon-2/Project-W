@@ -29,6 +29,8 @@ enum class PacketType : uint16 {
 	S_PlayerAttack,
 	S_Hit,
 	S_TimeSync,
+
+	S_NpcRespawn,
 };
 
 enum class ObjectType : uint16 {
@@ -170,6 +172,12 @@ struct SHitPacket : public PacketHeader {
 
 struct STimeSyncPacket : public PacketHeader {
 	uint64 serverMs;
+};
+
+struct SNpcRespawnPacket : public PacketHeader {
+	uint16 npcId;
+	int32 newHp;
+	DirectX::XMFLOAT3 spawnPos;
 };
 
 #pragma pack(pop)

@@ -14,7 +14,6 @@ void importCube(std::ifstream& ifs, const AssetManager& assetManager, Object& cu
 }
 
 void importGoblinSpawner(std::ifstream& ifs, const AssetManager& assetManager, Goblin& goblin) {
-	goblin.setHp(90);
 	goblin.setModel(assetManager.modelGoblin());
 }
 
@@ -61,18 +60,45 @@ void importNode(std::ifstream& ifs, const AssetManager& assetManager, Level& lev
 		importTerrain(ifs, level.terrain);
 	}
 	else if (type == "GoblinSpawner") {
-		std::mt19937 rng{ std::random_device{}() };
-		std::uniform_real_distribution<float> distXZ(-50.f, 50.f);
-		const float baseX = object.pos().x();
-		const float baseY = object.pos().y();
-		const float baseZ = object.pos().z();
+		static constexpr float kActivityRadius = 40.f;
+		static constexpr float kSpawnRadius    = 15.f;
+		static constexpr int32 kCount          = 15;
+		static constexpr float kMinDist        = 2.f;
 
-		for ( int32 i = 0; i < 100; ++i ) {
+		std::mt19937 rng{ std::random_device{}() };
+		std::uniform_real_distribution<float> distR    (0.f, 1.f);
+		std::uniform_real_distribution<float> distAngle(0.f, 2.f * DirectX::XM_PI);
+
+		const mu::Vec3 center   = object.pos();
+		const float    baseY    = center.y();
+		const int32    startIdx = static_cast<int32>(level.goblins.size());
+
+		std::vector<mu::Vec3> placed;
+		placed.reserve(kCount);
+
+		for (int32 i = 0; i < kCount; ++i) {
+			mu::Vec3 spawnPos;
+			int32 attempts = 0;
+			do {
+				float r     = kSpawnRadius * std::sqrt(distR(rng));
+				float theta = distAngle(rng);
+				spawnPos    = mu::Vec3(center.x() + r * std::cosf(theta),
+				                      baseY,
+				                      center.z() + r * std::sinf(theta));
+				++attempts;
+			} while (attempts < 100 &&
+			         std::any_of(placed.begin(), placed.end(), [&](const mu::Vec3& p) {
+			             return (spawnPos - p).len2() < kMinDist * kMinDist;
+			         }));
+
+			placed.push_back(spawnPos);
 			Object copy = object;
-			copy.setPos( mu::Vec3( baseX + distXZ( rng ), baseY, baseZ + distXZ( rng ) ) );
+			copy.setPos(spawnPos);
 			auto& g = level.goblins.emplace_back(Goblin(std::move(copy)));
 			importGoblinSpawner(ifs, assetManager, g);
 		}
+
+		level.goblinSpawners.push_back({ center, kActivityRadius, startIdx, kCount });
 	}
 	else {
 		// no-op

@@ -5,7 +5,10 @@
 #include "JobQueue.hpp"
 #include "GameSession.hpp"
 #include "object.hpp"
+#include "goblin.hpp"
+#include "NpcGroup.hpp"
 #include "physicsWorld.hpp"
+#include <memory>
 
 class SendBuffer;
 struct Level;
@@ -56,6 +59,14 @@ public:
 
 	int32 id() const { return id_; }
 
+	// ── NPC AI 쿼리 ──────────────────────────────────────────────────────────
+	const std::vector<GameSession*>& getLivingPlayers() const { return livingPlayersCache_; }
+	void MU_CALLCONV findNearbyNpcPositions( mu::Vec3 pos, float radius, uint32 excludeId, std::vector<mu::Vec3>& out ) const;
+	int32 countNpcsTargeting( int32 playerId ) const;
+	NpcGroup* getNpcGroup( int32 groupId );
+	Milliseconds getElapsedMs() const { return elapsedMs_; }
+	GameSession* findLivingSessionByPlayerId( int32 playerId ) const;
+
 private:
 	int32 id_;
 	std::vector<GameSession*> sessions_;
@@ -63,13 +74,21 @@ private:
 	JobQueue jobQueue_;
 
 	void updateGoblinAI(Milliseconds dt);
+	void rebuildLivingPlayersCache();
+	void rebuildAggroCount();
 
-	std::vector<Cube> cubes_;			// 데이터
-	std::vector<Player> playerStarts_;	// 데이터
-	std::vector<Goblin> goblins_;		// 개임 내의 몬스터
+	std::vector<Cube>   cubes_;
+	std::vector<Player> playerStarts_;
+	std::vector<Goblin> goblins_;
 
 	PhysicsWorld  physicsWorld_;
 	TerrainObject terrain_;
+
+	// ── NPC AI 상태 ──────────────────────────────────────────────────────────
+	Milliseconds elapsedMs_{ 0ms };
+	std::vector<std::unique_ptr<NpcGroup>> npcGroups_;
+	std::vector<GameSession*> livingPlayersCache_;
+	std::unordered_map<int32/* player id */, int32/* count */> aggroCount_;
 };
 
 #endif // room_hpp
