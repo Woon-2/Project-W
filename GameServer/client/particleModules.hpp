@@ -309,7 +309,7 @@ using AnyMat = std::variant<MatUnlit, MatSwordSlash, MatSmokeBlendCG, MatTwoSide
 // Renderer Module
 // ---------------------------------------------------------------------------
 struct RendererModule {
-    enum class Mode { Billboard, StretchedBillboard /* Phase 3 */, Mesh };
+    enum class Mode { Billboard, StretchedBillboard, Mesh };
     enum class Alignment { View, World, Local, Facing };
     enum class SortMode { None, Distance, OldestInFront, YoungestInFront };
 
@@ -325,9 +325,9 @@ struct RendererModule {
     mu::Vec3 pivot        = { 0.f, 0.f, 0.f };
     mu::Vec3 flip         = { 0.f, 0.f, 0.f };
 
-    float cameraVelocityScale = 0.f;  // StretchedBillboard deferred
-    float velocityScale       = 0.f;  // StretchedBillboard deferred
-    float lengthScale         = 2.f;  // StretchedBillboard deferred
+    float cameraVelocityScale = 0.f;
+    float velocityScale       = 0.f;
+    float lengthScale         = 2.f;
 
     const Mesh*    pMesh    = nullptr;
     const SubMesh* pSubMesh = nullptr;
@@ -375,6 +375,26 @@ struct TextureSheetAnimationModule {
 };
 
 // ---------------------------------------------------------------------------
+// SubEmitters Module
+// Triggers child particle systems when a particle is born or dies.
+// ---------------------------------------------------------------------------
+struct SubEmittersModule {
+    enum class Event { Birth, Death };
+
+    struct SubEmitter {
+        Event event           = Event::Death;
+        float emitProbability = 1.f;   // 0..1 chance per particle event
+        int   emitCount       = 1;     // particles spawned in child system per event
+        bool  inheritVelocity = false;
+        bool  inheritColor    = false;
+        bool  inheritSize     = false;
+    };
+
+    bool                    enabled = false;
+    std::vector<SubEmitter> subEmitters;
+};
+
+// ---------------------------------------------------------------------------
 // ParticleSystemConfig
 // ---------------------------------------------------------------------------
 struct ParticleSystemConfig {
@@ -387,6 +407,7 @@ struct ParticleSystemConfig {
     RotationOverLifetimeModule  rotationOverLifetime;
     TextureSheetAnimationModule textureSheetAnimation;
     CustomDataModule            customData;
+    SubEmittersModule           subEmitters;
     RendererModule              renderer;
 };
 

@@ -48,11 +48,15 @@ public:
 	void removePlayer( i32t playerId );
 	void movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity);
 	void rotatePlayer(uint16 playerId, float yawRad);
+
 	void moveGoblin(uint16 npcId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 orient, DirectX::XMFLOAT3 velocity);
+
 	void onNpcAttack(uint16 npcId);
 	void onPlayerAttack(uint16 attackerId);
 	void applyHit(uint16 targetId, int32 newHp);
 	void applyTimeSync(uint64 serverMs);
+
+	void onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos );
 
 	// 게임의 업데이트는 다음 순서대로 이루어진다.
 	// 네트워크 패킷 처리(SleepEx)
@@ -146,7 +150,7 @@ private:
 	UI::ProgressBar* playerHpBar_    = nullptr;  // owned by uiManager_
 	UI::Dropdown*    effectDropdown_ = nullptr;  // owned by uiManager_
 
-	enum class SwordEffect { SlashWave, SlashCombo, Slash7, Slash1, Spikes };
+	enum class SwordEffect { SlashWave, SlashCombo, Slash7, Slash1, Spikes, CrystalsFrontAttack, AoESlashGreen };
 	SwordEffect currentEffect_ = SwordEffect::SlashWave;
 
 	ParticleSystem flameParticleSystem_{};
@@ -156,6 +160,8 @@ private:
 	ParticleEffect swordSlashComboEffect_{};
 	ParticleEffect slashWaveEffect_{};
 	ParticleEffect spikesAttackEffect_{};
+	ParticleEffect crystalsFrontAttackEffect_{};
+	ParticleEffect aoESlashGreenEffect_{};
 	ParticleSystem dustParticleSystem_{};
 	int            footBoneIdxLeft_  = -1;
 	int            footBoneIdxRight_ = -1;

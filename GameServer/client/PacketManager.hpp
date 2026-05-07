@@ -18,6 +18,7 @@ public:
 	static void handleSPlayerAttackPacket(byte* buffer, int32 len);
 	static void handleSHitPacket(byte* buffer, int32 len);
 	static void handleSTimeSyncPacket(byte* buffer, int32 len);
+	static void handleSNpcRespawnPacket( byte* buffer, int32 len );
 
 	static std::shared_ptr<SendBuffer> makeCMovePacket(DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity);
 	static std::shared_ptr<SendBuffer> makeCMouseMovePacket(float yawRad);

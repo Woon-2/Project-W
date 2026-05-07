@@ -34,6 +34,13 @@ public:
 		dead_ = true;
 	}
 
+	void triggerRespawn() override {
+		dead_         = false;
+		tDeath_       = 0.f;
+		animTimeDeath_ = 0s;
+		cooldownDeath_ = 0ms;
+	}
+
 	void triggerAttack() override {
 		animTimeHit_ = 0s;
 		cooldownHit_ = 600ms;
@@ -93,6 +100,13 @@ public:
 		animTimeDeath_ = 0s;
 		cooldownDeath_ = 200ms;
 		dead_ = true;
+	}
+
+	void triggerRespawn() override {
+		dead_          = false;
+		tDeath_        = 0.f;
+		animTimeDeath_ = 0s;
+		cooldownDeath_ = 0ms;
 	}
 
 	void triggerAttack() override {
@@ -241,9 +255,11 @@ public:
 
 	void setDead(bool dead) {
 		isDead_ = dead;
-		if (dead && renderState_.animBlender) {
+		if (!renderState_.animBlender) return;
+		if (dead)
 			renderState_.animBlender->triggerDeath();
-		}
+		else
+			renderState_.animBlender->triggerRespawn();
 	}
 	bool isDead() const { return isDead_; }
 	void setMaxHp(i32t v) { maxHp_ = v; }

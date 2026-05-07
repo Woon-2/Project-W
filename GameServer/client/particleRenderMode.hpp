@@ -7,6 +7,7 @@
 
 struct ParticleBillboardGeometry {
     mu::Mat4x4 world;
+    mu::Mat4x4 rotation3D;
     mu::Vec4 stretchAxisAndMode = { 0.f, 0.f, 0.f, 0.f };
     float rotation = 0.f;
 };

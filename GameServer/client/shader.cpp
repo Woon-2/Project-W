@@ -1933,7 +1933,7 @@ ComPtr<ID3D12PipelineState> createBillboardShader( ID3D12Device* device, ID3D12R
 		// 래스터라이저 설정
 		.RasterizerState = D3D12_RASTERIZER_DESC{
 			.FillMode = D3D12_FILL_MODE_SOLID,
-			.CullMode = D3D12_CULL_MODE_BACK,
+			.CullMode = D3D12_CULL_MODE_NONE,
 			.FrontCounterClockwise = false,
 			.DepthBias = 0,
 			.DepthBiasClamp = 0.f,
@@ -2036,7 +2036,7 @@ ComPtr<ID3D12PipelineState> createBillboardShaderAdditive( ID3D12Device* device,
 		.SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
 		.RasterizerState = D3D12_RASTERIZER_DESC{
 			.FillMode = D3D12_FILL_MODE_SOLID,
-			.CullMode = D3D12_CULL_MODE_BACK,
+			.CullMode = D3D12_CULL_MODE_NONE,
 			.FrontCounterClockwise = false,
 			.DepthBias = 0,
 			.DepthBiasClamp = 0.f,

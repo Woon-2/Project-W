@@ -11,7 +11,7 @@ Room* RoomManager::makeRoom() {
 	ASSERT_CRASH(pLevel_ != nullptr);
 	newRoom->init(pLevel_);
 
-	Milliseconds delay = 15s;
+	Milliseconds delay = 5s;
 	newRoom->doTimer( delay, [newRoom] {
 		newRoom->update();
 	} );

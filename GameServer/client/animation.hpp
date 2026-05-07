@@ -108,6 +108,7 @@ public:
 	virtual ~AnimBlender() = default;
 
 	virtual void triggerDeath() {}
+	virtual void triggerRespawn() {}
 	virtual void triggerAttack() {}
 
 	// 대상 애니메이션 클립을 추가한다.

@@ -8,6 +8,7 @@
 
 struct PerInstanceData {
     float4x4 world;  // row-major (transposed before upload from CPU)
+    float4x4 rotation3D;
     float4   tint;   // particle start color * color over lifetime
     float4   stretchAxisAndMode; // xyz=world-space stretch axis, w=1 when enabled
     float    rotation;
@@ -78,6 +79,9 @@ struct VSOutput {
     float4 tint     : COLOR;
     float3 stretchAxisW : TEXCOORD3;
     float  stretchMode  : TEXCOORD4;
+    float3 rotX : TEXCOORD5;
+    float3 rotY : TEXCOORD6;
+    float3 rotZ : TEXCOORD7;
 };
 
 struct PSInput {
@@ -133,7 +137,18 @@ VSOutput VSMain(VSInput input) {
     ret.tint = inst.tint;
     ret.stretchAxisW = inst.stretchAxisAndMode.xyz;
     ret.stretchMode = inst.stretchAxisAndMode.w;
+    ret.rotX = mul(float4(1.0f, 0.0f, 0.0f, 0.0f), inst.rotation3D).xyz;
+    ret.rotY = mul(float4(0.0f, 1.0f, 0.0f, 0.0f), inst.rotation3D).xyz;
+    ret.rotZ = mul(float4(0.0f, 0.0f, 1.0f, 0.0f), inst.rotation3D).xyz;
     return ret;
+}
+
+float3 rotateBillboardOffset(float2 localXY, VSOutput input,
+                             float3 rightW, float3 upW, float3 lookW) {
+    float3 rotatedLocal = localXY.x * input.rotX + localXY.y * input.rotY;
+    return rotatedLocal.x * rightW
+         + rotatedLocal.y * upW
+         + rotatedLocal.z * lookW;
 }
 
 [maxvertexcount(4)]
@@ -165,11 +180,19 @@ void GSMain(point VSOutput input[1], inout TriangleStream<PSInput> triStream) {
     float halfWidth = input[0].size.x * 0.5f;
     float halfHeight = input[0].size.y * 0.5f;
 
+    float2 local[4] = {
+        float2(-halfWidth, -halfHeight),
+        float2( halfWidth, -halfHeight),
+        float2(-halfWidth,  halfHeight),
+        float2( halfWidth,  halfHeight)
+    };
+
     float3 p[4];
-    p[0] = pos - halfWidth * vRightR - halfHeight * vUpR;
-    p[1] = pos + halfWidth * vRightR - halfHeight * vUpR;
-    p[2] = pos - halfWidth * vRightR + halfHeight * vUpR;
-    p[3] = pos + halfWidth * vRightR + halfHeight * vUpR;
+    [unroll]
+    for (int k = 0; k < 4; ++k)
+        p[k] = pos + rotateBillboardOffset(local[k], input[0], vRightR, vUpR, vLook);
+
+    float3 quadNormal = normalize(cross(p[1] - p[0], p[2] - p[0]));
 
     float2 baseUV[4] = {
         float2(0.0f, 1.0f),
@@ -185,7 +208,7 @@ void GSMain(point VSOutput input[1], inout TriangleStream<PSInput> triStream) {
         output.pos = clipPos;
         output.clipPos = clipPos;
         output.worldPos = p[i];
-        output.normalW = vLook;
+        output.normalW = quadNormal;
         output.uv = baseUV[i] * uvRect.zw + uvRect.xy;
         output.vertexColor = input[0].tint;
         triStream.Append(output);

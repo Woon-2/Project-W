@@ -4,25 +4,44 @@
 
 
 // Samples a random direction within a cone of half-angle `spread` around `axis`.
-// Uses rejection-free spherical cap sampling.
-static mu::Vec3 sampleConeDirection(mu::NVec3 axis, float spread, std::mt19937& rng) {
+// `arc` (radians, default 2pi) restricts the azimuth range around the cone axis.
+// `tangentHint` (default zero = unset) sets the world-space phi=0 reference direction;
+// it is orthogonalized against `axis`. When unset, falls back to a stable arbitrary tangent.
+// bitangent = cross(tangent, axis) so that (cos,sin) matches sampleShapeOrigin Cone's XZ convention.
+static mu::Vec3 sampleConeDirection(mu::NVec3 axis, float spread, std::mt19937& rng,
+                                     float arc = 2.f * 3.14159265f,
+                                     mu::Vec3 tangentHint = { 0.f, 0.f, 0.f }) {
     std::uniform_real_distribution<float> u01(0.f, 1.f);
     const float cosSpread = std::cos(spread);
 
     // uniform sample on spherical cap: cos(theta) in [cosSpread, 1]
     const float cosTheta = cosSpread + (1.f - cosSpread) * u01(rng);
     const float sinTheta = std::sqrt(1.f - cosTheta * cosTheta);
-    const float phi      = 2.f * 3.14159265f * u01(rng);
+    const float phi      = arc * u01(rng);
 
-    // build orthonormal frame around axis
     const mu::Vec3 axisV = mu::Vec3(axis);
-    const mu::Vec3 up    = (std::abs(axisV.x()) < 0.9f)
-                           ? mu::Vec3{1.f, 0.f, 0.f}
-                           : mu::Vec3{0.f, 1.f, 0.f};
-    const mu::NVec3 tangent   = mu::cross(axis, mu::NVec3(up));
-    const mu::Vec3  bitangent = mu::cross(axis, tangent);
 
-    return sinTheta * std::cos(phi) * mu::Vec3(tangent)
+    // Build tangent: use tangentHint projected onto the plane perpendicular to axis,
+    // falling back to an arbitrary stable tangent when hint is unset or parallel to axis.
+    mu::Vec3 tangent;
+    bool hintUsed = false;
+    if (mu::dot(tangentHint, tangentHint) > 1e-6f) {
+        mu::Vec3 t = tangentHint - axisV * mu::dot(tangentHint, axisV);
+        const float tLenSq = mu::dot(t, t);
+        if (tLenSq > 1e-6f) {
+            tangent  = t * (1.f / std::sqrt(tLenSq));
+            hintUsed = true;
+        }
+    }
+    if (!hintUsed) {
+        const mu::Vec3 up = (std::abs(axisV.x()) < 0.9f)
+                          ? mu::Vec3{ 1.f, 0.f, 0.f }
+                          : mu::Vec3{ 0.f, 1.f, 0.f };
+        tangent = mu::Vec3(mu::cross(axis, mu::NVec3(up)));
+    }
+    const mu::Vec3 bitangent = mu::Vec3(mu::cross(mu::NVec3(tangent), axis));
+
+    return sinTheta * std::cos(phi) * tangent
          + sinTheta * std::sin(phi) * bitangent
          + cosTheta * axisV;
 }
@@ -292,6 +311,15 @@ void ParticleSystem::update(Seconds dt) {
         }
 
         if (p.lifetime <= 0.f) {
+            if (config_.subEmitters.enabled) {
+                for (int j = 0; j < (int)config_.subEmitters.subEmitters.size(); ++j) {
+                    const auto& sub = config_.subEmitters.subEmitters[j];
+                    if (sub.event == ps::SubEmittersModule::Event::Death
+                        && randomFloat(0.f, 1.f) <= sub.emitProbability) {
+                        pendingSubEmitterEvents_.push_back({ j, p.pos, p.vel, p.startColor, p.sizeStart });
+                    }
+                }
+            }
             if (i != activeCount_ - 1)
                 pool_[i] = std::move(pool_[activeCount_ - 1]);
             --activeCount_;
@@ -377,6 +405,28 @@ void ParticleSystem::startContinuous(const ps::ParticleSystemConfig& config) {
 
 // ── Shape sampling ───────────────────────────────────────────────────────────
 
+// Circle: origin and dir share the same arc angle so direction is always the
+// correct radial unit vector regardless of how small the radius is.
+ParticleSystem::ShapeSample ParticleSystem::sampleCircle() {
+    const ps::ShapeModule& s = config_.shape;
+    const float angle = randomFloat(0.f, s.arc);
+    const float inner = std::clamp(1.f - s.radiusThickness, 0.f, 1.f);
+    const float r     = s.coneRadius * std::sqrt(randomFloat(inner * inner, 1.f));
+    const mu::Vec3 localDir = { std::cos(angle), std::sin(angle), 0.f };
+
+    const auto withRandomOffset = [&](mu::Vec3 p) {
+        if (s.randomPositionAmount <= 0.f) return p;
+        const mu::Vec3 randomDir = sampleConeDirection(mu::NVec3(mu::Vec3{ 0.f, 1.f, 0.f }),
+                                                       3.14159265f, rng_);
+        return p + randomDir * randomFloat(0.f, s.randomPositionAmount);
+    };
+
+    return {
+        withRandomOffset(s.position + rotateShapeVector(localDir * r, s)),
+        rotateShapeVector(localDir, s)
+    };
+}
+
 mu::Vec3 ParticleSystem::sampleShapeOrigin() {
     const ps::ShapeModule& s = config_.shape;
     if (!s.enabled)
@@ -411,8 +461,7 @@ mu::Vec3 ParticleSystem::sampleShapeOrigin() {
 
     case ps::ShapeModule::Type::Cone:
         if (s.coneRadius > 0.f) {
-            // random point on base disc; disc is perpendicular to the up axis by default
-            const float angle = randomFloat(0.f, 2.f * 3.14159265f);
+            const float angle = randomFloat(0.f, s.arc);
             const float r     = s.coneRadius * std::sqrt(randomFloat(0.f, 1.f));
             const mu::Vec3 localOffset = { r * std::cos(angle), 0.f, r * std::sin(angle) };
             return withRandomOffset(s.position + rotateShapeVector(localOffset, s));
@@ -455,7 +504,12 @@ mu::Vec3 ParticleSystem::sampleShapeDirection(const mu::Vec3& origin) {
         return rotateShapeDirection(s.direction, s);
 
     case ps::ShapeModule::Type::Cone:
-        return sampleConeDirection(mu::NVec3(rotateShapeDirection(s.direction, s)), s.coneAngle, rng_);
+        return sampleConeDirection(
+            mu::NVec3(rotateShapeDirection(s.direction, s)),
+            s.coneAngle,
+            rng_,
+            s.arc,
+            rotateShapeVector(mu::Vec3{ 1.f, 0.f, 0.f }, s));
 
     case ps::ShapeModule::Type::Circle:
     case ps::ShapeModule::Type::Sphere:
@@ -481,8 +535,15 @@ void ParticleSystem::spawnParticle() {
     }
     Particle& p = *pSlot;
 
-    const mu::Vec3 origin = sampleShapeOrigin();
-    const mu::Vec3 dir    = sampleShapeDirection(origin);
+    mu::Vec3 origin, dir;
+    if (config_.shape.enabled && config_.shape.type == ps::ShapeModule::Type::Circle) {
+        const auto s = sampleCircle();
+        origin = s.origin;
+        dir    = s.dir;
+    } else {
+        origin = sampleShapeOrigin();
+        dir    = sampleShapeDirection(origin);
+    }
     const float    speed  = randomFloat(config_.main.speedMin, config_.main.speedMax);
 
     p.pos             = origin;
@@ -535,6 +596,7 @@ void ParticleSystem::spawnParticle() {
     p.angularAngle3D  = { 0.f, 0.f, 0.f };
     p.rotationRandom3D = { randomFloat(0.f, 1.f), randomFloat(0.f, 1.f), randomFloat(0.f, 1.f) };
     p.baseRotation    = config_.main.startRotation3D;
+    p.billboardRotation3D = mu::Mat4x4{};
     p.transformScale  = config_.main.transformScale;
     if (config_.main.startRotation3DEnabled) {
         const mu::Vec3 startRotation = {
@@ -542,8 +604,45 @@ void ParticleSystem::spawnParticle() {
             randomFloat(config_.main.startRotation3DMin.y(), config_.main.startRotation3DMax.y()),
             randomFloat(config_.main.startRotation3DMin.z(), config_.main.startRotation3DMax.z())
         };
-        p.baseRotation = buildEulerRotation(startRotation) * p.baseRotation;
+        const mu::Mat4x4 startRotationMatrix = buildEulerRotation(startRotation);
+        p.baseRotation = startRotationMatrix * p.baseRotation;
+        p.billboardRotation3D = startRotationMatrix;
     }
     p.custom1Random   = { randomFloat(0.f, 1.f), randomFloat(0.f, 1.f) };
     p.custom2Random   = { randomFloat(0.f, 1.f), randomFloat(0.f, 1.f) };
+
+    if (inheritEmit_) {
+        p.vel        += inheritedVel_;
+        p.startColor  = p.startColor * inheritedColor_;
+        p.sizeBegin  *= inheritedSize_;
+        p.sizeEnd    *= inheritedSize_;
+        p.sizeStart  *= inheritedSize_;
+    }
+
+    if (config_.subEmitters.enabled && !inheritEmit_) {
+        for (int j = 0; j < (int)config_.subEmitters.subEmitters.size(); ++j) {
+            const auto& sub = config_.subEmitters.subEmitters[j];
+            if (sub.event == ps::SubEmittersModule::Event::Birth
+                && randomFloat(0.f, 1.f) <= sub.emitProbability) {
+                pendingSubEmitterEvents_.push_back({ j, p.pos, p.vel, p.startColor, p.sizeStart });
+            }
+        }
+    }
+}
+
+void ParticleSystem::emitAt(int count, mu::Vec3 worldPos,
+                             mu::Vec3 inheritVel, mu::Vec4 inheritColor, float inheritSize) {
+    const mu::Vec3 savedPos = config_.shape.position;
+    config_.shape.position  = worldPos;
+
+    inheritEmit_    = true;
+    inheritedVel_   = inheritVel;
+    inheritedColor_ = inheritColor;
+    inheritedSize_  = inheritSize;
+
+    for (int i = 0; i < count; ++i)
+        spawnParticle();
+
+    inheritEmit_           = false;
+    config_.shape.position = savedPos;
 }

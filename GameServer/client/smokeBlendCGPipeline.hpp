@@ -23,6 +23,7 @@ struct DrawEvent {
     mu::Mat4x4 world;
     mu::Vec4   tint = { 1.f, 1.f, 1.f, 1.f };
     float      rotation = 0.f;
+    mu::Mat4x4 rotation3D = mu::Mat4x4{};
     mu::Vec4   stretchAxisAndMode = { 0.f, 0.f, 0.f, 0.f }; // xyz=world axis, w=1 when stretched
     int        renderOrder = 0;
 

@@ -25,6 +25,7 @@ public:
 	static std::shared_ptr<SendBuffer> makeSPlayerAttackPacket(uint16 attackerId);
 	static std::shared_ptr<SendBuffer> makeSHitPacket(uint16 targetId, int32 newHp);
 	static std::shared_ptr<SendBuffer> makeSTimeSyncPacket(uint64 serverMs);
+	static std::shared_ptr<SendBuffer> makeSNpcRespawnPacket(uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos);
 };
 
 #endif // packet_manager_hpp

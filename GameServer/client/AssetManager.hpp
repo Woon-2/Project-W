@@ -34,6 +34,9 @@ public:
 	const Texture* waves21Tex()            const { return &waves21Tex_; }
 	const Texture* noise62Tex()            const { return &noise62Tex_; }
 	const Texture* noise1Tex()             const { return &noise1Tex_; }
+	const Texture* crystalFree1Tex()       const { return &crystalFree1Tex_; }
+	const Texture* circle2Tex()            const { return &circle2Tex_; }
+	const Texture* slashTex()              const { return &slashTex_; }
 	const ps::MatSwordSlash& swordSlashMaterial()  const { return swordSlashMaterial_; }
 	const ps::MatSwordSlash& swordSlash2Material() const { return swordSlash2Material_; }
 	const ps::MatSmokeBlendCG& smokeBlendCGMaterial() const { return smokeBlendCGMaterial_; }
@@ -74,6 +77,9 @@ private:
 	Texture waves21Tex_{};
 	Texture noise62Tex_{};
 	Texture noise1Tex_{};
+	Texture crystalFree1Tex_{};
+	Texture circle2Tex_{};
+	Texture slashTex_{};
 	ps::MatSwordSlash   swordSlashMaterial_{};
 	ps::MatSwordSlash   swordSlash2Material_{};
 	ps::MatSmokeBlendCG smokeBlendCGMaterial_{};
