@@ -896,6 +896,8 @@ void Goblin::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Event
 				);
 			}
 			pOwner->hp_ = 0;
+			if (pOwner->ragdoll_.isBuilt())
+				pOwner->ragdollPendingActivation_ = true;
 		}
 		break;
 
@@ -909,7 +911,7 @@ void Goblin::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Event
 			}
 		}
 		break;
-	
+
 	default:
 		break;
 	}

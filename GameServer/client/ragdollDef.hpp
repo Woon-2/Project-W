@@ -9,6 +9,7 @@ enum class JointType { BallSocket, Hinge, ConeTwist };
 
 // Physical representation of one bone as an OBB.
 struct BoneBoxDef {
+    std::string bodyName;
     std::string boneName;
     mu::Vec3 halfExtents;     // half-size of the box (bone-local)
     mu::Vec3 center;          // offset from bone origin to box centre (bone-local)
@@ -18,6 +19,8 @@ struct BoneBoxDef {
 
 // Joint connecting parentBone to childBone.
 struct JointDef {
+    std::string parentBodyName;
+    std::string childBodyName;
     std::string parentBoneName;
     std::string childBoneName;
     JointType type;

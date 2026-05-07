@@ -30,7 +30,9 @@
       "Bash(find D:DirectX12Project-WGameServerclient -type f \\\\\\(-name *.hlsl -o -name *billboard* -o -name *shader* \\\\\\))",
       "Bash(wc -l /c/Users/PC/Desktop/zolzak/Project-W/GameServer/RoomServer/*.cpp /c/Users/PC/Desktop/zolzak/Project-W/GameServer/RoomServer/*.hpp)",
       "Bash(ls -la /c/Users/PC/Desktop/zolzak/Project-W/GameServer/client/*.hpp)",
-      "Bash(wc -l \"C:\\\\Users\\\\PC\\\\Desktop\\\\zolzak\\\\Project-W\\\\GameServer\\\\RoomServer\"/*.cpp)"
+      "Bash(wc -l \"C:\\\\Users\\\\PC\\\\Desktop\\\\zolzak\\\\Project-W\\\\GameServer\\\\RoomServer\"/*.cpp)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\PC\\\\Desktop\\\\zolzak\\\\Project-W\\\\GameServer\\\\client\" -Recurse -Filter \"*.hpp\" -o Name)",
+      "Bash(Select-Object -First 30)"
     ]
   }
 }

@@ -222,6 +222,32 @@ void Ragdoll::seedFromFinalXforms(const std::vector<mu::Mat4x4>& finalXforms,
 }
 
 // ---------------------------------------------------------------------------
+// Ragdoll::syncToFinalXforms
+//
+// Inverse of seedFromFinalXforms.
+//   seedFromFinalXforms: boneWorldMat = bone.toDress * finalXforms[i] * objectWorldMat
+//   syncToFinalXforms:  finalXforms[i] = bone.toLocal * (boneWorldMat / objectWorldMat)
+// ---------------------------------------------------------------------------
+
+void Ragdoll::syncToFinalXforms(std::vector<mu::Mat4x4>& finalXforms,
+                                 const Skeleton& skel,
+                                 mu::Mat4x4 objectWorldMat) const
+{
+    if (!skel.bones) return;
+    for (const RagdollBone& rb : bones_) {
+        if (rb.boneIdx < 0 || rb.boneIdx >= static_cast<int>(skel.bones->size())) continue;
+        if (rb.boneIdx >= static_cast<int>(finalXforms.size())) continue;
+        const Bone& bone = (*skel.bones)[rb.boneIdx];
+
+        const mu::Vec3 boneOriginWorld =
+            rb.body->pos() - rb.body->orient().rotate(rb.capsuleOffset);
+        const mu::Mat4x4 boneWorldMat = makeRigidMat(boneOriginWorld, rb.body->orient());
+
+        finalXforms[rb.boneIdx] = bone.toLocal * (boneWorldMat / objectWorldMat);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Ragdoll::activate / deactivate
 // ---------------------------------------------------------------------------
 

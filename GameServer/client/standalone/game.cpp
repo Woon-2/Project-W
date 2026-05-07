@@ -62,6 +62,11 @@ Game::Game() {
 	assetManager_.loadGFXAssets(gfx_, assetConfigs_);
 }
 
+Game::~Game() {
+	if (goblin_ && goblin_->ragdoll().isBuilt())
+		goblin_->ragdoll().destroy(physicsWorld_);
+}
+
 void Game::setupStage() {
 	const auto path = std::filesystem::path("../resources/levels/level.bin");
 	auto ifs = std::ifstream(path, std::ios::binary);
@@ -659,7 +664,7 @@ void Game::importNode(std::ifstream& ifs) {
 
 		auto urd = std::uniform_real_distribution<float>(-80.f, 80.f);
 
-		for (std::size_t i = 0; i < 300u; ++i) {
+		for (std::size_t i = 0; i < 1u; ++i) {
 			auto& g = goblins_.emplace_back( std::make_shared<Goblin>() );
 			g->setPos( mu::Vec3( DirectX::XMLoadFloat3(&worldT) )
 				+ mu::Vec3( urd(gRandomEngine), urd(gRandomEngine) + 80.f, urd(gRandomEngine) )
@@ -736,6 +741,14 @@ void Game::importGoblinSpawner(std::ifstream& ifs, Goblin& goblin) {
 	goblin.setMaxHp(90);
 	goblin.setId(1);
 	setupMonsterBody(goblin.body(), 40.f);
+
+	if (goblin.model() && goblin.model()->ragdollDef) {
+		goblin.ragdoll().build(
+			goblin.model()->skeleton,
+			*goblin.model()->ragdollDef,
+			physicsWorld_
+		);
+	}
 }
 
 void Game::importTerrain(std::ifstream& ifs, TerrainObject& terrain) {
@@ -973,6 +986,37 @@ void Game::update(Milliseconds deltaTime) {
 
 	// 애니메이션 업데이트
 	animSystem_.update(0.01s);
+
+	// Ragdoll 활성화: 이번 프레임 사망 → finalXformData 확정 후 seed + activate
+	// Ragdoll 동기화: 활성 ragdoll body 위치를 finalXformData에 덮어씀
+	{
+		auto activateRagdollIfPending = [&](Goblin& g) {
+			if (!g.ragdollPendingActivation()) return;
+			g.setRagdollPendingActivation(false);
+			Ragdoll& rd = g.ragdoll();
+			if (!rd.isBuilt() || !g.animBlender() || !g.model()) return;
+			rd.seedFromFinalXforms(
+				g.animBlender()->finalXformData(),
+				g.model()->skeleton,
+				g.renderState().world
+			);
+			rd.activate();
+			physicsWorld_.unregisterBody(&g.body());
+		};
+
+		auto syncRagdollToAnim = [&](Goblin& g) {
+			Ragdoll& rd = g.ragdoll();
+			if (!rd.isActive() || !g.animBlender() || !g.model()) return;
+			rd.syncToFinalXforms(
+				g.animBlender()->finalXformData(),
+				g.model()->skeleton,
+				g.renderState().world
+			);
+		};
+
+		activateRagdollIfPending(*goblin_);
+		syncRagdollToAnim(*goblin_);
+	}
 
 	// 발 흙먼지 방출
 	if (footBoneIdxLeft_ >= 0 && footBoneIdxRight_ >= 0

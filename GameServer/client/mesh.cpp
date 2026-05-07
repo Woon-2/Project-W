@@ -1403,6 +1403,7 @@ static void importRagdollConfig(std::ifstream& ifs, Model& model)
     for (int i = 0; i < bodyCnt; ++i) {
         readHeadTag(ifs, "Body");
         BoneBoxDef bd{};
+        bd.bodyName       = readText(ifs, "BodyName");
         bd.boneName       = readText(ifs, "BoneName");
         const auto he     = readVec3(ifs, "HalfExtents");
         const auto ctr    = readVec3(ifs, "Center");
@@ -1420,6 +1421,8 @@ static void importRagdollConfig(std::ifstream& ifs, Model& model)
     for (int i = 0; i < jointCnt; ++i) {
         readHeadTag(ifs, "Joint");
         JointDef jd{};
+        jd.parentBodyName  = readText(ifs, "ParentBody");
+        jd.childBodyName   = readText(ifs, "ChildBody");
         jd.parentBoneName  = readText(ifs, "ParentBone");
         jd.childBoneName   = readText(ifs, "ChildBone");
         const auto typeStr = readText(ifs, "JointType");

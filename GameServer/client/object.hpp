@@ -6,6 +6,7 @@
 #include "animation.hpp"
 #include "event.hpp"
 #include "rigidBody.hpp"
+#include "ragdoll.hpp"
 
 class AssetManager;
 class Object;
@@ -347,8 +348,15 @@ public:
 		animSystem.trackAnimBlender(renderState_.animBlender.get());
 	}
 
+	Ragdoll& ragdoll() { return ragdoll_; }
+
+	bool ragdollPendingActivation() const { return ragdollPendingActivation_; }
+	void setRagdollPendingActivation(bool v) { ragdollPendingActivation_ = v; }
+
 private:
 	EventBus eventBus_{};
+	Ragdoll  ragdoll_{};
+	bool     ragdollPendingActivation_ = false;
 };
 
 struct TerrainData;

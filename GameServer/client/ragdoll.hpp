@@ -66,6 +66,13 @@ public:
     void syncToPose(std::vector<AnimFrame>& outPose, const Skeleton& skel,
                     mu::Mat4x4 objectWorldMat) const;
 
+    // Overwrite finalXformData entries for ragdoll bones with current physics body positions.
+    // Inverse of seedFromFinalXforms: finalXforms[i] = bone.toLocal * (boneWorldMat / objectWorldMat).
+    // Call after animSystem_.update() and before rendering when ragdoll is active.
+    void syncToFinalXforms(std::vector<mu::Mat4x4>& finalXforms,
+                            const Skeleton& skel,
+                            mu::Mat4x4 objectWorldMat) const;
+
     // Switch all Dynamic bodies from Kinematic to Dynamic.
     // Call syncFromPose() before this to seed positions from animation.
     void activate();
