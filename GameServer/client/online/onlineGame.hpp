@@ -150,7 +150,7 @@ private:
 	UI::ProgressBar* playerHpBar_    = nullptr;  // owned by uiManager_
 	UI::Dropdown*    effectDropdown_ = nullptr;  // owned by uiManager_
 
-	enum class SwordEffect { SlashWave, SlashCombo, Slash7, Slash1, Spikes };
+	enum class SwordEffect { SlashWave, SlashCombo, Slash7, Slash1, Spikes, CrystalsFrontAttack, AoESlashGreen };
 	SwordEffect currentEffect_ = SwordEffect::SlashWave;
 
 	ParticleSystem flameParticleSystem_{};
@@ -160,6 +160,8 @@ private:
 	ParticleEffect swordSlashComboEffect_{};
 	ParticleEffect slashWaveEffect_{};
 	ParticleEffect spikesAttackEffect_{};
+	ParticleEffect crystalsFrontAttackEffect_{};
+	ParticleEffect aoESlashGreenEffect_{};
 	ParticleSystem dustParticleSystem_{};
 	int            footBoneIdxLeft_  = -1;
 	int            footBoneIdxRight_ = -1;
