@@ -1541,7 +1541,7 @@ void GFX::render() {
 		shaders_.at("PrefixSumShader"),
 		shaders_.at("HiZCompactShader"),
 		shaders_.at("HiZCommandShader"),
-		shaders_.at("PBRDeferredSkinnedGBufferShader"),
+		hiZCullEnabled_ ? shaders_.at("PBRDeferredSkinnedIndirectGBufferShader") : shaders_.at("PBRDeferredSkinnedGBufferShader"),
 		shaders_.at("ShadowMapSkinnedCSMShader"),
 		cmdQ_, viewport, clRect,
 		&fenceToSignal, &resourcesPBRDeferredSkinnedPipeline_, threadPool_, &cmdListPool_,
@@ -1718,14 +1718,14 @@ void GFX::render() {
 		// --- GBuffer passes ---
 		if (!threadPool_) {
 			pbrDeferredDispatcher.gBufferPass();
-			if (false)
+			if (hiZCullEnabled_)
 				pbrDeferredSkinnedDispatcher.gBufferIndirectPass();
 			else
 				pbrDeferredSkinnedDispatcher.gBufferPass();
 			terrainDeferredDispatcher.gBufferPass();
 		} else {
 			pbrDeferredDispatcher.gBufferPassMT();
-			if (false)
+			if (hiZCullEnabled_)
 				pbrDeferredSkinnedDispatcher.gBufferIndirectPassMT();
 			else
 				pbrDeferredSkinnedDispatcher.gBufferPassMT();
