@@ -21,6 +21,15 @@ struct RagdollBone {
     mu::Vec3    halfExtents;           // OBB half-extents for terrain/body collision BVH
 };
 
+// Bone not directly simulated by a RigidBody; rigidly follows its nearest ragdoll ancestor.
+// relativeXform = finalXforms[passenger] / finalXforms[ancestor] captured at buildPassengers().
+// Reconstructed each frame: finalXforms[boneIdx] = relativeXform * finalXforms[ancestorBoneIdx].
+struct PassengerBone {
+    int        boneIdx;          // index into Skeleton::bones
+    int        ancestorBoneIdx;  // nearest ragdoll ancestor's boneIdx
+    mu::Mat4x4 relativeXform;    // passenger / ancestor at capture time
+};
+
 // Manages the per-character ragdoll: creates RigidBody/Constraint instances,
 // synchronises with animation, and controls the active/inactive state.
 //
@@ -74,6 +83,11 @@ public:
                             const Skeleton& skel,
                             mu::Mat4x4 objectWorldMat) const;
 
+    // Capture passenger bone bindings from the current finalXforms pose.
+    // Call after seedFromFinalXforms() and before activate().
+    // On re-activation, call again to refresh bindings with the new death pose.
+    void buildPassengers(const Skeleton& skel, const std::vector<mu::Mat4x4>& finalXforms);
+
     // Register bodies/joints with world and switch all bodies to Dynamic.
     // Call seedFromFinalXforms() before this to seed positions from animation.
     void activate(PhysicsWorld& world);
@@ -99,12 +113,17 @@ private:
                        mu::Mat4x4 parentBodyWorldMat,
                        std::vector<AnimFrame>& outPose) const;
 
+    // Recursive DFS helper for buildPassengers.
+    void buildPassengersDFS(const Bone* bone, int currentAncestorIdx,
+                             const std::vector<mu::Mat4x4>& finalXforms);
+
     // Returns the RagdollBone for the given boneIdx, or nullptr if not found.
     const RagdollBone* findBone(int boneIdx) const;
 
     std::vector<RagdollBone>                   bones_;
     std::vector<std::unique_ptr<RigidBody>>    bodies_;   // owns memory
     std::vector<std::unique_ptr<Constraint>>   joints_;   // owns memory
+    std::vector<PassengerBone>                 passengers_;
     bool active_ = false;
 };
 

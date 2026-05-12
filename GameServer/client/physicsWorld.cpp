@@ -212,6 +212,7 @@ void PhysicsWorld::integrate(Seconds dt)
             const auto wq = mu::Quat(b.omega(), 0.f);
             auto newOrient = mu::Quat(b.orient()) + mu::Quat(b.orient()) * wq * 0.5f * dtf;
             b.setOrient(mu::NQuat{ newOrient });
+            b.updateInertiaWorld();
 
             b.clearAccumulators();
             break;

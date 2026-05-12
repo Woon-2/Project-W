@@ -23,6 +23,11 @@ public:
     // Apply position-level correction (split impulse / pseudo-velocity).
     // Called once per step after all velocity iterations.
     virtual void solvePosition() = 0;
+
+    // Recompute anchorA from the current body positions so joint pivots are
+    // satisfied at the seeded (animation) pose.  Call after seedFromFinalXforms()
+    // and before activate() to prevent large initial Baumgarte corrections.
+    virtual void resetAnchors() {}
 };
 
 #endif // __Constraint_HPP

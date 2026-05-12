@@ -139,6 +139,12 @@ BallSocketJoint::BallSocketJoint(RigidBody* a, RigidBody* b,
     : bodyA_(a), bodyB_(b), anchorA_(anchorA), anchorB_(anchorB)
 {}
 
+void BallSocketJoint::resetAnchors()
+{
+    const mu::Vec3 pivotWorld = bodyB_->pos() + bodyB_->orient().rotate(anchorB_);
+    anchorA_ = (~bodyA_->orient()).rotate(pivotWorld - bodyA_->pos());
+}
+
 void BallSocketJoint::prepare(Seconds dt)
 {
     const float dtf   = dt.count();
@@ -179,6 +185,13 @@ HingeJoint::HingeJoint(RigidBody* a, RigidBody* b,
     , minAngle_(minAngle), maxAngle_(maxAngle)
 {
     // Reference relative orientation: q_ref = conj(bodyA) * bodyB at build time.
+    refOrient_ = mulQ(~bodyA_->orient(), bodyB_->orient());
+}
+
+void HingeJoint::resetAnchors()
+{
+    const mu::Vec3 pivotWorld = bodyB_->pos() + bodyB_->orient().rotate(anchorB_);
+    anchorA_ = (~bodyA_->orient()).rotate(pivotWorld - bodyA_->pos());
     refOrient_ = mulQ(~bodyA_->orient(), bodyB_->orient());
 }
 
@@ -309,6 +322,14 @@ ConeTwistJoint::ConeTwistJoint(RigidBody* a, RigidBody* b,
     , coneHalfAngle_(std::min(coneHalfAngle, mu::pi * 0.85f))
     , twistLimit_(std::abs(twistLimit))
 {}
+
+void ConeTwistJoint::resetAnchors()
+{
+    const mu::Vec3 pivotWorld = bodyB_->pos() + bodyB_->orient().rotate(anchorB_);
+    anchorA_ = (~bodyA_->orient()).rotate(pivotWorld - bodyA_->pos());
+    refOrientA_ = bodyA_->orient();
+    refOrientB_ = bodyB_->orient();
+}
 
 void ConeTwistJoint::prepare(Seconds dt)
 {

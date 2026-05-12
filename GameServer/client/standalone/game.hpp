@@ -154,6 +154,7 @@ private:
 	LONG mouseDeltaY_{};
 	bool cursorCaptureEnabled_ = false;
 	bool cursorShowEnabled_ = true;
+	bool gravityEnabled_ = true;
 
 	std::array<BYTE, std::numeric_limits<u8t>::max()> keyboardStateCurr_{};
 	std::array<BYTE, std::numeric_limits<u8t>::max()> keyboardStatePrev_{};

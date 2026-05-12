@@ -611,7 +611,7 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 		}
 	}
 
-	/*if (willRenderBV_ && pModel && !pModel->bvh.empty()) {
+	if (willRenderBV_ && pModel && !pModel->bvh.empty()) {
 		for (std::size_t i = 0u; i < pModel->bvh.nodes.size(); ++i) {
 			gfx.addDrawEvent( BVPipeline::DrawEvent{
 				.world   = offsetXform * renderState_.worldBVs[i],
@@ -619,7 +619,7 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 				.color   = bvColor_
 			} );
 		}
-	}*/
+	}
 
 	// 부속 객체 렌더링
 	if (renderState_.animBlender) {

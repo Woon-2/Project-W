@@ -230,6 +230,7 @@ void Ragdoll::destroy(PhysicsWorld& world)
     joints_.clear();
     bodies_.clear();
     bones_.clear();
+    passengers_.clear();
     active_ = false;
 }
 
@@ -251,7 +252,7 @@ void Ragdoll::seedFromFinalXforms(const std::vector<mu::Mat4x4>& finalXforms,
         const Bone& bone = (*skel.bones)[rb.boneIdx];
         if (rb.boneIdx >= static_cast<int>(finalXforms.size())) continue;
 
-        const mu::Mat4x4 boneWorldMat = finalXforms[rb.boneIdx] * objectWorldMat;
+        const mu::Mat4x4 boneWorldMat = bone.toDress * finalXforms[rb.boneIdx] * objectWorldMat;
         const mu::NQuat  boneOrient   = extractOrient(boneWorldMat);
         const mu::Vec3   boneOrigin   = extractPos(boneWorldMat);
 
@@ -283,7 +284,13 @@ void Ragdoll::syncToFinalXforms(std::vector<mu::Mat4x4>& finalXforms,
             rb.body->pos() - rb.body->orient().rotate(rb.capsuleOffset);
         const mu::Mat4x4 boneWorldMat = makeRigidMat(boneOriginWorld, rb.body->orient());
 
-        finalXforms[rb.boneIdx] = boneWorldMat / objectWorldMat;
+        finalXforms[rb.boneIdx] = bone.toLocal * (boneWorldMat / objectWorldMat);
+    }
+
+    for (const PassengerBone& pb : passengers_) {
+        if (pb.boneIdx         >= static_cast<int>(finalXforms.size()) ||
+            pb.ancestorBoneIdx >= static_cast<int>(finalXforms.size())) continue;
+        finalXforms[pb.boneIdx] = pb.relativeXform * finalXforms[pb.ancestorBoneIdx];
     }
 }
 
@@ -293,6 +300,13 @@ void Ragdoll::syncToFinalXforms(std::vector<mu::Mat4x4>& finalXforms,
 
 void Ragdoll::activate(PhysicsWorld& world)
 {
+    // Recompute joint anchors (anchorA_) from current seeded body positions.
+    // build() computed them from T-pose; without this reset the joints would have
+    // a large initial position error equal to the T-pose vs animation-pose offset,
+    // producing huge Baumgarte correction impulses that cause the ragdoll to spin.
+    for (auto& joint : joints_)
+        joint->resetAnchors();
+
     // Build initial BVH from seeded positions, then register with a rebuild callback
     // so TerrainCollider can generate contacts every physics step.
     for (const RagdollBone& rb : bones_) {
@@ -320,7 +334,48 @@ void Ragdoll::deactivate(PhysicsWorld& world)
     for (auto& body : bodies_)
         world.unregisterBody(body.get());
 
+    passengers_.clear();
     active_ = false;
+}
+
+// ---------------------------------------------------------------------------
+// Ragdoll::buildPassengers
+//
+// Walk the skeleton hierarchy and, for each non-ragdoll bone that descends from
+// a ragdoll bone, capture a relative transform so it can be driven rigidly by
+// its nearest ragdoll ancestor in syncToFinalXforms().
+//
+// Row-vector convention: passenger = relativeXform * ancestor
+// => relativeXform = passenger / ancestor = passenger * inv(ancestor)
+// ---------------------------------------------------------------------------
+
+void Ragdoll::buildPassengers(const Skeleton& skel,
+                               const std::vector<mu::Mat4x4>& finalXforms)
+{
+    passengers_.clear();
+    if (!skel.pRoot) return;
+    buildPassengersDFS(skel.pRoot, -1, finalXforms);
+}
+
+void Ragdoll::buildPassengersDFS(const Bone* bone, int currentAncestorIdx,
+                                  const std::vector<mu::Mat4x4>& finalXforms)
+{
+    const RagdollBone* rdBone = findBone(bone->boneIdx);
+
+    if (rdBone) {
+        currentAncestorIdx = bone->boneIdx;
+    } else if (currentAncestorIdx >= 0 &&
+               bone->boneIdx         < static_cast<int>(finalXforms.size()) &&
+               currentAncestorIdx    < static_cast<int>(finalXforms.size())) {
+        PassengerBone pb;
+        pb.boneIdx         = bone->boneIdx;
+        pb.ancestorBoneIdx = currentAncestorIdx;
+        pb.relativeXform   = finalXforms[bone->boneIdx] / finalXforms[currentAncestorIdx];
+        passengers_.push_back(pb);
+    }
+
+    for (const Bone* child : bone->children)
+        buildPassengersDFS(child, currentAncestorIdx, finalXforms);
 }
 
 // ---------------------------------------------------------------------------

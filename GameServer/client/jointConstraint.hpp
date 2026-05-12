@@ -21,6 +21,7 @@ public:
     void prepare(Seconds dt) override;
     void solveVelocity() override;
     void solvePosition() override {}
+    void resetAnchors() override;
 
 private:
     RigidBody* bodyA_;
@@ -59,6 +60,7 @@ public:
     void prepare(Seconds dt) override;
     void solveVelocity() override;
     void solvePosition() override {}
+    void resetAnchors() override;
 
 private:
     RigidBody* bodyA_;
@@ -113,6 +115,7 @@ public:
     void prepare(Seconds dt) override;
     void solveVelocity() override;
     void solvePosition() override {}
+    void resetAnchors() override;
 
 private:
     RigidBody* bodyA_;

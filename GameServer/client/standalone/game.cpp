@@ -1070,6 +1070,7 @@ void Game::update(Milliseconds deltaTime) {
 				g.model()->skeleton,
 				g.renderState().world
 			);
+			rd.buildPassengers(g.model()->skeleton, g.animBlender()->finalXformData());
 			rd.activate(physicsWorld_);
 			physicsWorld_.setSolverIterations(20);
 			physicsWorld_.unregisterBody(&g.body());
@@ -1083,6 +1084,7 @@ void Game::update(Milliseconds deltaTime) {
 				g.model()->skeleton,
 				g.renderState().world
 			);
+			g.rebuildBodyBVH();
 		};
 
 		activateRagdollIfPending(*goblin_);
@@ -1435,6 +1437,12 @@ void Game::processInput(Milliseconds deltaTime) {
 		else {
 			hideCursor();
 		}
+	}
+
+	// Z 키를 누르면 중력을 켜고 끈다 (임시 디버그 기능).
+	if ( (keyboardStateCurr_['Z'] & 0x80) && !(keyboardStatePrev_['Z'] & 0x80) ) {
+		gravityEnabled_ = !gravityEnabled_;
+		physicsWorld_.setGravity(gravityEnabled_ ? mu::Vec3{ 0.f, -9.8f, 0.f } : mu::Vec3{ 0.f, 0.f, 0.f });
 	}
 }
 
