@@ -17,8 +17,8 @@ struct RagdollBone {
     RigidBody*  body        = nullptr; // non-owning; owned by Ragdoll::bodies_
     Constraint* parentJoint = nullptr; // non-owning; owned by Ragdoll::joints_
                                        // null for the root bone
-    mu::Vec3    capsuleOffset;         // capsule centre offset in body local space
-                                       // (same as BoneCapsuleDef::capsuleOffset)
+    mu::Vec3    capsuleOffset;         // body pos offset from bone origin (= BoneBoxDef::center)
+    mu::Vec3    halfExtents;           // OBB half-extents for terrain/body collision BVH
 };
 
 // Manages the per-character ragdoll: creates RigidBody/Constraint instances,
@@ -39,7 +39,8 @@ public:
     Ragdoll(Ragdoll&&)                   = default;
     Ragdoll& operator=(Ragdoll&&)        = default;
 
-    // Build ragdoll from skeleton + def.  Registers bodies and joints with world.
+    // Build ragdoll from skeleton + def.  Allocates bodies and joints but does NOT
+    // register them with the world — registration happens in activate().
     // Call once after Object creation.
     void build(const Skeleton& skel, const RagdollDef& def, PhysicsWorld& world);
 
@@ -73,12 +74,12 @@ public:
                             const Skeleton& skel,
                             mu::Mat4x4 objectWorldMat) const;
 
-    // Switch all Dynamic bodies from Kinematic to Dynamic.
-    // Call syncFromPose() before this to seed positions from animation.
-    void activate();
+    // Register bodies/joints with world and switch all bodies to Dynamic.
+    // Call seedFromFinalXforms() before this to seed positions from animation.
+    void activate(PhysicsWorld& world);
 
-    // Switch all Dynamic bodies back to Kinematic.
-    void deactivate();
+    // Switch all bodies back to Kinematic and unregister from world.
+    void deactivate(PhysicsWorld& world);
 
     bool isActive() const { return active_; }
     bool isBuilt()  const { return !bodies_.empty(); }

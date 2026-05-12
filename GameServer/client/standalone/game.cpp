@@ -1070,7 +1070,8 @@ void Game::update(Milliseconds deltaTime) {
 				g.model()->skeleton,
 				g.renderState().world
 			);
-			rd.activate();
+			rd.activate(physicsWorld_);
+			physicsWorld_.setSolverIterations(20);
 			physicsWorld_.unregisterBody(&g.body());
 		};
 

@@ -43,6 +43,45 @@ static mu::Mat4x4 makeRigidMat(mu::Vec3 pos, mu::NQuat orient)
 static constexpr uint16_t kRagdollGroup = 2u;
 static constexpr uint16_t kRagdollMask  = static_cast<uint16_t>(0xFFFFu & ~uint16_t(kRagdollGroup));
 
+// Build (or rebuild) the world-space single-OBB BVH for a ragdoll bone body.
+// body->pos() == OBB world centre (capsuleOffset is already baked into the body position).
+// Called once before activate() to seed the BVH, then every physics step via the
+// registered onRebuildBVH callback so TerrainCollider can generate contacts.
+static void rebuildBoneBodyBVH(RigidBody* body, mu::Vec3 halfExtents)
+{
+    OBB obb;
+    obb.center      = body->pos();
+    obb.halfExtents = halfExtents;
+    obb.orient      = body->orient();
+
+    // Enclosing AABB via rotation-matrix projection (R = local-to-world, row-vector convention):
+    //   world_half_i = sum_j |R[j][i]| * half_j
+    const mu::Mat4x4 rotMat(body->orient());
+    const auto r0 = rotMat.row(0);  // local X axis in world
+    const auto r1 = rotMat.row(1);  // local Y axis in world
+    const auto r2 = rotMat.row(2);  // local Z axis in world
+    const float wx = std::abs(r0.x()) * halfExtents.x()
+                   + std::abs(r1.x()) * halfExtents.y()
+                   + std::abs(r2.x()) * halfExtents.z();
+    const float wy = std::abs(r0.y()) * halfExtents.x()
+                   + std::abs(r1.y()) * halfExtents.y()
+                   + std::abs(r2.y()) * halfExtents.z();
+    const float wz = std::abs(r0.z()) * halfExtents.x()
+                   + std::abs(r1.z()) * halfExtents.y()
+                   + std::abs(r2.z()) * halfExtents.z();
+
+    AABB bounds;
+    bounds.center = obb.center;
+    bounds.size   = mu::Vec3(wx * 2.f, wy * 2.f, wz * 2.f);
+
+    BVH& bvh = body->worldBVH();
+    if (bvh.nodes.empty()) bvh.nodes.resize(1);
+    bvh.nodes[0].shape    = obb;
+    bvh.nodes[0].bounds   = bounds;
+    bvh.nodes[0].children.clear();
+    bvh.nodes[0].boneIdx  = -1;
+}
+
 // ---------------------------------------------------------------------------
 // Ragdoll::findBone
 // ---------------------------------------------------------------------------
@@ -88,11 +127,10 @@ void Ragdoll::build(const Skeleton& skel, const RagdollDef& def, PhysicsWorld& w
         rb.boneIdx       = bone->boneIdx;
         rb.body          = body.get();
         rb.capsuleOffset = bd.center;
+        rb.halfExtents   = bd.halfExtents;
 
         bones_.push_back(rb);
         bodies_.push_back(std::move(body));
-
-        world.registerBody(bones_.back().body, {}, kRagdollGroup, kRagdollMask);
     }
 
     // ------------------------------------------------------------------
@@ -169,7 +207,6 @@ void Ragdoll::build(const Skeleton& skel, const RagdollDef& def, PhysicsWorld& w
             }
         }
 
-        world.addJointRef(joint.get());
         joints_.push_back(std::move(joint));
     }
 }
@@ -180,15 +217,18 @@ void Ragdoll::build(const Skeleton& skel, const RagdollDef& def, PhysicsWorld& w
 
 void Ragdoll::destroy(PhysicsWorld& world)
 {
-    // Joints first: they hold raw RigidBody* and must not outlive the bodies.
-    for (auto& j : joints_)
-        world.removeJointRef(j.get());
+    // Unregister only if active (i.e., activate() was called and registered them).
+    // If the ragdoll was never activated, bodies/joints were never registered.
+    if (active_) {
+        // Joints first: they hold raw RigidBody* and must not outlive the bodies.
+        for (auto& j : joints_)
+            world.removeJointRef(j.get());
+        for (auto& b : bodies_)
+            world.unregisterBody(b.get());
+    }
+
     joints_.clear();
-
-    for (auto& b : bodies_)
-        world.unregisterBody(b.get());
     bodies_.clear();
-
     bones_.clear();
     active_ = false;
 }
@@ -211,7 +251,7 @@ void Ragdoll::seedFromFinalXforms(const std::vector<mu::Mat4x4>& finalXforms,
         const Bone& bone = (*skel.bones)[rb.boneIdx];
         if (rb.boneIdx >= static_cast<int>(finalXforms.size())) continue;
 
-        const mu::Mat4x4 boneWorldMat = bone.toDress * finalXforms[rb.boneIdx] * objectWorldMat;
+        const mu::Mat4x4 boneWorldMat = finalXforms[rb.boneIdx] * objectWorldMat;
         const mu::NQuat  boneOrient   = extractOrient(boneWorldMat);
         const mu::Vec3   boneOrigin   = extractPos(boneWorldMat);
 
@@ -243,7 +283,7 @@ void Ragdoll::syncToFinalXforms(std::vector<mu::Mat4x4>& finalXforms,
             rb.body->pos() - rb.body->orient().rotate(rb.capsuleOffset);
         const mu::Mat4x4 boneWorldMat = makeRigidMat(boneOriginWorld, rb.body->orient());
 
-        finalXforms[rb.boneIdx] = bone.toLocal * (boneWorldMat / objectWorldMat);
+        finalXforms[rb.boneIdx] = boneWorldMat / objectWorldMat;
     }
 }
 
@@ -251,17 +291,35 @@ void Ragdoll::syncToFinalXforms(std::vector<mu::Mat4x4>& finalXforms,
 // Ragdoll::activate / deactivate
 // ---------------------------------------------------------------------------
 
-void Ragdoll::activate()
+void Ragdoll::activate(PhysicsWorld& world)
 {
+    // Build initial BVH from seeded positions, then register with a rebuild callback
+    // so TerrainCollider can generate contacts every physics step.
+    for (const RagdollBone& rb : bones_) {
+        rebuildBoneBodyBVH(rb.body, rb.halfExtents);
+        world.registerBody(rb.body,
+            [body = rb.body, h = rb.halfExtents]() { rebuildBoneBodyBVH(body, h); },
+            kRagdollGroup, kRagdollMask);
+    }
+    for (auto& joint : joints_)
+        world.addJointRef(joint.get());
+
     for (auto& body : bodies_)
         body->setMotionType(MotionType::Dynamic);
     active_ = true;
 }
 
-void Ragdoll::deactivate()
+void Ragdoll::deactivate(PhysicsWorld& world)
 {
     for (auto& body : bodies_)
         body->setMotionType(MotionType::Kinematic);
+
+    // Joints first: they hold raw RigidBody* and must not outlive the bodies.
+    for (auto& joint : joints_)
+        world.removeJointRef(joint.get());
+    for (auto& body : bodies_)
+        world.unregisterBody(body.get());
+
     active_ = false;
 }
 
