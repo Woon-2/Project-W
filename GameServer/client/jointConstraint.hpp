@@ -117,17 +117,31 @@ public:
                    mu::Vec3 anchorA, mu::Vec3 anchorB,
                    mu::NQuat refOrientA, mu::NQuat refOrientB,
                    float coneHalfAngle, float twistLimit);
+    ConeTwistJoint(RigidBody* a, RigidBody* b,
+                   mu::Vec3 anchorA, mu::Vec3 anchorB,
+                   mu::NQuat refOrientA, mu::NQuat refOrientB,
+                   mu::Vec3 twistAxisLocalA,
+                   float coneHalfAngle, float twistLimit);
 
     void prepare(Seconds dt) override;
     void solveVelocity() override;
     void solvePosition() override;
     void resetAnchors() override;
 
+    float linearError() const { return cache_.linearError; }
+    float coneViolation() const { return cache_.coneViolation; }
+    float twistViolation() const { return cache_.twistViolation; }
+    float coneImpulse() const { return cache_.coneAccImp; }
+    float twistImpulse() const { return cache_.twistAccImp; }
+    bool  coneActive() const { return cache_.coneActive; }
+    bool  twistActive() const { return cache_.twistActive; }
+
 private:
     RigidBody* bodyA_;
     RigidBody* bodyB_;
     mu::Vec3  anchorA_, anchorB_;
     mu::NQuat refOrientA_, refOrientB_;
+    mu::Vec3  twistAxisLocalA_;
     float     coneHalfAngle_;
     float     twistLimit_;
 
@@ -139,32 +153,41 @@ private:
         mu::Vec3   linAccImp;
         mu::Vec3   linPseudoBias;
         mu::Vec3   linPseudoAccImp;
+        float      linearError;
         // Cone limit (one-sided, accImp >= 0):
         bool       coneActive;
         mu::Vec3   coneAxis;       // world-space correction axis
+        float      coneViolation;
         float      coneEffMass;
         float      coneBias;
         float      coneAccImp;
         float      conePseudoBias;
         float      conePseudoAccImp;
+        bool       coneWarmValid;
         // Twist limit (bilateral, clamped to [-twistLimit, +twistLimit]):
         bool       twistActive;
         bool       twistLo;
         mu::Vec3   twistAxis;      // world-space twist axis
+        float      twistViolation;
         float      twistEffMass;
         float      twistBias;
         float      twistAccImp;
         float      twistPseudoBias;
         float      twistPseudoAccImp;
+        bool       twistWarmValid;
     } cache_{};
 
     // Translational correction (same as BallSocket/HingeJoint).
     static constexpr float kLinBeta   = 0.1f;
-    // Angular correction (swing/twist limits). 0.05 is half of HingeJoint's 0.1,
-    // conservative but 5x stronger than the previous 0.01.
-    static constexpr float kAngBeta   = 0.05f;
+    // Angular velocity-level correction stays conservative; large limit errors
+    // are handled mostly by split impulse so chains do not gain real velocity.
+    static constexpr float kAngBeta   = 0.025f;
     // Position-level (split impulse) angular correction beta.
     static constexpr float kSplitBeta = 0.3f;
+    static constexpr float kMaxVelCorrectionAngle   = mu::pi / 18.f; // 10 deg/step
+    static constexpr float kMaxSplitCorrectionAngle = mu::pi / 9.f;  // 20 deg/step
+    static constexpr float kWarmStartAxisDotMin     = 0.85f;
+    static constexpr float kWarmStartScale          = 0.5f;
 };
 
 // ConeTwistJoint::solvePosition is declared non-inline and implemented in

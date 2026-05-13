@@ -131,6 +131,11 @@ static mu::NQuat mulQ(mu::NQuat a, mu::NQuat b)
     return mu::NQuat(mu::Quat(a) * mu::Quat(b));
 }
 
+static float clampAbs(float v, float maxAbs)
+{
+    return std::clamp(v, -maxAbs, maxAbs);
+}
+
 // Decompose q = swing * twist  where twist is a rotation around twistAxis.
 static void swingTwistDecompose(mu::NQuat q, mu::Vec3 twistAxis,
                                 mu::NQuat& outSwing, mu::NQuat& outTwist)
@@ -374,9 +379,21 @@ ConeTwistJoint::ConeTwistJoint(RigidBody* a, RigidBody* b,
                                mu::Vec3 anchorA, mu::Vec3 anchorB,
                                mu::NQuat refOrientA, mu::NQuat refOrientB,
                                float coneHalfAngle, float twistLimit)
+    : ConeTwistJoint(a, b, anchorA, anchorB, refOrientA, refOrientB,
+                     mu::Vec3{ 0.f, 0.f, 1.f }, coneHalfAngle, twistLimit)
+{}
+
+ConeTwistJoint::ConeTwistJoint(RigidBody* a, RigidBody* b,
+                               mu::Vec3 anchorA, mu::Vec3 anchorB,
+                               mu::NQuat refOrientA, mu::NQuat refOrientB,
+                               mu::Vec3 twistAxisLocalA,
+                               float coneHalfAngle, float twistLimit)
     : bodyA_(a), bodyB_(b)
     , anchorA_(anchorA), anchorB_(anchorB)
     , refOrientA_(refOrientA), refOrientB_(refOrientB)
+    , twistAxisLocalA_((twistAxisLocalA.len2() > 1e-8f)
+        ? mu::Vec3(mu::normalize(twistAxisLocalA))
+        : mu::Vec3{ 0.f, 0.f, 1.f })
     , coneHalfAngle_(std::min(coneHalfAngle, mu::pi * 0.85f))
     , twistLimit_(std::abs(twistLimit))
 {}
@@ -385,8 +402,6 @@ void ConeTwistJoint::resetAnchors()
 {
     const mu::Vec3 pivotWorld = bodyB_->pos() + bodyB_->orient().rotate(anchorB_);
     anchorA_ = (~bodyA_->orient()).rotate(pivotWorld - bodyA_->pos());
-    refOrientA_ = bodyA_->orient();
-    refOrientB_ = bodyB_->orient();
 }
 
 void ConeTwistJoint::prepare(Seconds dt)
@@ -400,6 +415,7 @@ void ConeTwistJoint::prepare(Seconds dt)
 
     const mu::Vec3 posError = (bodyA_->pos() + cache_.rA)
                             - (bodyB_->pos() + cache_.rB);
+    cache_.linearError = posError.len();
     cache_.linEffMassInv = build3x3EffMassInv(bodyA_, cache_.rA, bodyB_, cache_.rB);
     cache_.linBias       = posError * (kLinBeta * invDt);
     cache_.linPseudoBias = posError * (kSplitBeta * invDt);
@@ -412,9 +428,16 @@ void ConeTwistJoint::prepare(Seconds dt)
     // q_rel = qJointA^-1 * qJointB  (relative rotation in joint space)
     const mu::NQuat qRel    = mulQ(~qJointA, qJointB);
 
-    // Twist axis is +Z in joint space, brought to world space via bodyA orientation.
-    const mu::Vec3 twistAxisJoint(0.f, 0.f, 1.f);
+    // Twist axis is stored in bodyA/rest joint space. Ragdoll joints pass the
+    // parent-to-child bone direction here instead of assuming every bone twists
+    // around local Z.
+    const mu::Vec3 twistAxisJoint = twistAxisLocalA_;
     const mu::Vec3 twistAxisWorld = mu::Vec3(mu::normalize(bodyA_->orient().rotate(twistAxisJoint)));
+
+    const bool oldConeWarmValid  = cache_.coneWarmValid;
+    const bool oldTwistWarmValid = cache_.twistWarmValid;
+    const mu::Vec3 oldConeAxis   = cache_.coneAxis;
+    const mu::Vec3 oldTwistAxis  = cache_.twistAxis;
 
     // Decompose relative rotation into swing + twist around the joint Z axis.
     mu::NQuat swing, twist;
@@ -422,6 +445,7 @@ void ConeTwistJoint::prepare(Seconds dt)
 
     // --- Cone violation ---
     cache_.coneActive = false;
+    cache_.coneViolation = 0.f;
     {
         const float sw = std::clamp(swing.w(), -1.f, 1.f);
         const float swingAngle = 2.f * std::acos(std::abs(sw));
@@ -429,6 +453,7 @@ void ConeTwistJoint::prepare(Seconds dt)
         if (swingAngle > coneHalfAngle_) {
             cache_.coneActive = true;
             const float viol  = swingAngle - coneHalfAngle_;
+            cache_.coneViolation = viol;
 
             // Correction axis: swing rotation axis in world space.
             const mu::Vec3 swingXYZ(swing.x(), swing.y(), swing.z());
@@ -442,21 +467,25 @@ void ConeTwistJoint::prepare(Seconds dt)
             const float cB = (bodyB_->invMass() > 0.f)
                 ? angEff1D(cache_.coneAxis, bodyB_->invInertiaWorld()) : 0.f;
             cache_.coneEffMass      = 1.f / (cA + cB + 1e-10f);
-            cache_.coneBias         = -(viol * (kAngBeta   * invDt));
-            cache_.conePseudoBias   = -(viol * (kSplitBeta * invDt));
+            cache_.coneBias         = -(std::min(viol, kMaxVelCorrectionAngle) * (kAngBeta   * invDt));
+            cache_.conePseudoBias   = -(std::min(viol, kMaxSplitCorrectionAngle) * (kSplitBeta * invDt));
             cache_.conePseudoAccImp = 0.f;
+            cache_.coneWarmValid    = true;
         } else {
             cache_.coneAccImp       = 0.f;
             cache_.conePseudoAccImp = 0.f;
+            cache_.coneWarmValid    = false;
         }
     }
 
     // --- Twist violation ---
     cache_.twistActive = false;
+    cache_.twistViolation = 0.f;
     {
         const float tw = std::clamp(twist.w(), -1.f, 1.f);
         const float twistAngle = 2.f * std::acos(std::abs(tw));
-        const float sign = (twist.z() >= 0.f) ? 1.f : -1.f;
+        const mu::Vec3 twistXYZ(twist.x(), twist.y(), twist.z());
+        const float sign = (mu::dot(twistXYZ, twistAxisJoint) >= 0.f) ? 1.f : -1.f;
         const float signedTwist = sign * twistAngle;
 
         if (signedTwist < -twistLimit_ || signedTwist > twistLimit_) {
@@ -471,28 +500,37 @@ void ConeTwistJoint::prepare(Seconds dt)
                 ? angEff1D(twistAxisWorld, bodyB_->invInertiaWorld()) : 0.f;
             cache_.twistEffMass      = 1.f / (cA + cB + 1e-10f);
             const float limitAngle   = cache_.twistLo ? -twistLimit_ : twistLimit_;
-            cache_.twistBias         = (signedTwist - limitAngle) * (kAngBeta   * invDt);
-            cache_.twistPseudoBias   = (signedTwist - limitAngle) * (kSplitBeta * invDt);
+            const float twistError   = signedTwist - limitAngle;
+            cache_.twistViolation    = std::abs(twistError);
+            cache_.twistBias         = clampAbs(twistError, kMaxVelCorrectionAngle) * (kAngBeta   * invDt);
+            cache_.twistPseudoBias   = clampAbs(twistError, kMaxSplitCorrectionAngle) * (kSplitBeta * invDt);
             cache_.twistPseudoAccImp = 0.f;
+            cache_.twistWarmValid    = true;
         } else {
             cache_.twistAccImp       = 0.f;
             cache_.twistPseudoAccImp = 0.f;
+            cache_.twistWarmValid    = false;
         }
     }
     // Warm-start: linear + angular rows.
-    // Cone/twist correction axes are recomputed each frame, so we cannot carry over
-    // the previous impulse vector directly. Instead, carry over the magnitude at 0.5x
-    // along the new axis. This halves any energy injection from axis drift while
-    // providing a non-zero starting point that speeds up convergence in chains.
+    // Cone/twist axes can rotate sharply under large violations. Reusing an
+    // impulse along a very different axis injects energy into joint chains, so
+    // discard angular warm-start unless the new row is close to last frame's row.
     applyLinearImpulsePair(bodyA_, bodyB_, cache_.linAccImp, cache_.rA, cache_.rB);
     if (cache_.coneActive) {
-        const float seed = cache_.coneAccImp * 0.5f;
+        const float axisDot = oldConeWarmValid ? std::abs(mu::dot(oldConeAxis, cache_.coneAxis)) : 0.f;
+        const float seed = (axisDot >= kWarmStartAxisDotMin)
+            ? cache_.coneAccImp * (kWarmStartScale * axisDot)
+            : 0.f;
         cache_.coneAccImp = seed;
         if (seed > 0.f)
             applyAngularImpulsePair(bodyA_, bodyB_, seed, cache_.coneAxis);
     }
     if (cache_.twistActive) {
-        const float seed = cache_.twistAccImp * 0.5f;
+        const float axisDot = oldTwistWarmValid ? std::abs(mu::dot(oldTwistAxis, cache_.twistAxis)) : 0.f;
+        const float seed = (axisDot >= kWarmStartAxisDotMin)
+            ? cache_.twistAccImp * (kWarmStartScale * axisDot)
+            : 0.f;
         cache_.twistAccImp = seed;
         if (seed != 0.f)
             applyAngularImpulsePair(bodyA_, bodyB_, seed, cache_.twistAxis);

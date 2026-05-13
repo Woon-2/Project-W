@@ -4,6 +4,7 @@
 #include "../jointConstraint.hpp"
 #include "../errorHandling.hpp"
 #include "../binaryImport.hpp"
+#include "../log.hpp"
 #include "../timer.hpp"
 #include "../particleImporter.hpp"
 #include "../ui/widgets/Label.hpp"
@@ -38,6 +39,7 @@ static constexpr Seconds kMaxPhysicsDeltaTime{ 1.f / 60.f * kMaxPhysicsStepsPerF
 static constexpr int     kMaxPhysicsScaleK    = 4;   // physicUpdateInterval 최대 배율
 static constexpr int     kLagScaleUpFrames    = 2;   // 연속 렉 N프레임 → 배율 1 증가
 static constexpr int     kLagScaleDownFrames  = 100; // 연속 정상 N프레임 → 배율 1 감소
+static constexpr float   kRagdollLimitGraceDecay = mu::pi; // 180 deg/sec
 
 // ---------------------------------------------------------------------------
 // Physics test object factories
@@ -1059,10 +1061,6 @@ void Game::spawnTestObject(int kind) {
     obj.activate(physicsWorld_);
     rdObjects_.push_back(std::move(obj));
     rdShowBodies_ = true;  // auto-enable visualization when anything is spawned
-    physicsWorld_.setSolverIterations(16);
-    physicsWorld_.setJointSolverExtraIterations(8);
-    physicsWorld_.setPositionSolveIterations(4);
-    physicsWorld_.setSubStepCount(4);
 }
 
 void Game::clearTestObjects() {
@@ -1349,10 +1347,6 @@ void Game::update(Milliseconds deltaTime) {
 			);
 			rd.buildPassengers(g.model()->skeleton, g.animBlender()->finalXformData());
 			rd.activate(physicsWorld_);
-			physicsWorld_.setSolverIterations(16);
-			physicsWorld_.setJointSolverExtraIterations(8);
-			physicsWorld_.setPositionSolveIterations(4);
-			physicsWorld_.setSubStepCount(4);
 			physicsWorld_.unregisterBody(&g.body());
 		};
 
@@ -1725,7 +1719,7 @@ void Game::processInput(Milliseconds deltaTime) {
 		physicsWorld_.setGravity(gravityEnabled_ ? mu::Vec3{ 0.f, -9.8f, 0.f } : mu::Vec3{ 0.f, 0.f, 0.f });
 	}
 
-	// --- Physics constraint debug test objects ---
+	// --- Physics constraint / ragdoll debug tools ---
 	// Keys 1-5: spawn test structures. K: clear all. R: impulse ray.
 	// Comma/Period: halve/double impulse strength. M: slow motion cycle.
 	// V: OBB visualization. I: random blast. P: freeze toggle.

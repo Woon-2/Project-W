@@ -427,8 +427,6 @@ void AnimSystem::update(Seconds timeSlice) {
 		++jobCnt;
 		elapsed = HighResolutionClock::now() - tp;
 	}
-	
-	std::cout << "processed " << cntProcessed << " anim blenders, " << elapsed << " elapsed.\n";
 
 	// jobSize_ 비례 제어
 	const float ratio = static_cast<float>(jobCnt) / 8.f;	// 목적: job의 개수가 8개에 근접하기

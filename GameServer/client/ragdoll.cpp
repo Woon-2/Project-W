@@ -38,6 +38,11 @@ static mu::Mat4x4 makeRigidMat(mu::Vec3 pos, mu::NQuat orient)
     return m;
 }
 
+static mu::Vec3 safeNormalizeOr(mu::Vec3 v, mu::Vec3 fallback)
+{
+    return (v.len2() > 1e-8f) ? mu::Vec3(mu::normalize(v)) : fallback;
+}
+
 // Collision-filter constants for ragdoll bones.
 // Group 2 clears bit 1 from its own mask so ragdoll bones skip each other.
 static constexpr uint16_t kRagdollGroup = 2u;
@@ -189,12 +194,23 @@ void Ragdoll::build(const Skeleton& skel, const RagdollDef& def, PhysicsWorld& w
             break;
 
         case JointType::ConeTwist:
+        {
+            const mu::Vec3 childOriginDress = extractPos(childBone->toDress);
+            const mu::Vec3 parentOriginDress = extractPos(parentBone->toDress);
+            const mu::Vec3 axisWorldDress = safeNormalizeOr(
+                childOriginDress - parentOriginDress,
+                parentOrient.rotate(mu::Vec3{ 0.f, 0.f, 1.f }));
+            const mu::Vec3 axisLocalA = safeNormalizeOr(
+                (~parentOrient).rotate(axisWorldDress),
+                mu::Vec3{ 0.f, 0.f, 1.f });
             joint = std::make_unique<ConeTwistJoint>(
                 bodyA, bodyB, anchorA, anchorB,
                 extractOrient(parentBone->toDress),
                 extractOrient(childBone->toDress),
+                axisLocalA,
                 jd.coneHalfAngle, jd.twistLimit);
             break;
+        }
         }
 
         if (!joint) continue;

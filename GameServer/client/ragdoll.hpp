@@ -6,6 +6,7 @@
 #include "animation.hpp"
 #include "ragdollDef.hpp"
 #include <memory>
+#include <string>
 #include <vector>
 
 struct Skeleton;
