@@ -114,7 +114,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `PhysicsWorld::interpolateOrient()` | `physicsWorld.hpp #74` | 렌더 보간 헬퍼 (slerp) |
 | `BallSocketJoint` class | `jointConstraint.hpp #16` | 3 translational DOF 제거, bilateral warmstart |
 | `HingeJoint` class | `jointConstraint.hpp #50` | 1 rotational DOF, angle limits, refOrient |
-| `ConeTwistJoint` class | `jointConstraint.hpp #103` | swing cone + twist limit, T-pose refOrient |
+| `ConeTwistJoint` class | `jointConstraint.hpp #103` | swing cone + twist limit; kLinBeta=0.1/kAngBeta=0.05/kSplitBeta=0.3; solvePosition()으로 split-impulse angular 보정 |
 | `JointType` enum | `ragdollDef.hpp #8` | BallSocket / Hinge / ConeTwist |
 | `BoneBoxDef` struct | `ragdollDef.hpp #11` | boneName(string), halfExtents, center, rotEuler, mass |
 | `JointDef` struct | `ragdollDef.hpp #20` | parentBoneName(string), childBoneName(string), type, limits |

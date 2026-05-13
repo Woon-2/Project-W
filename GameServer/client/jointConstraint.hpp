@@ -114,7 +114,7 @@ public:
 
     void prepare(Seconds dt) override;
     void solveVelocity() override;
-    void solvePosition() override {}
+    void solvePosition() override;
     void resetAnchors() override;
 
 private:
@@ -137,6 +137,8 @@ private:
         float      coneEffMass;
         float      coneBias;
         float      coneAccImp;
+        float      conePseudoBias;
+        float      conePseudoAccImp;
         // Twist limit (bilateral, clamped to [-twistLimit, +twistLimit]):
         bool       twistActive;
         bool       twistLo;
@@ -144,9 +146,20 @@ private:
         float      twistEffMass;
         float      twistBias;
         float      twistAccImp;
+        float      twistPseudoBias;
+        float      twistPseudoAccImp;
     } cache_{};
 
-    static constexpr float kJointBeta = 0.01f;
+    // Translational correction (same as BallSocket/HingeJoint).
+    static constexpr float kLinBeta   = 0.1f;
+    // Angular correction (swing/twist limits). 0.05 is half of HingeJoint's 0.1,
+    // conservative but 5x stronger than the previous 0.01.
+    static constexpr float kAngBeta   = 0.05f;
+    // Position-level (split impulse) angular correction beta.
+    static constexpr float kSplitBeta = 0.3f;
 };
+
+// ConeTwistJoint::solvePosition is declared non-inline and implemented in
+// jointConstraint.cpp because it uses the file-scope angEff1D helper.
 
 #endif // __JointConstraint_HPP

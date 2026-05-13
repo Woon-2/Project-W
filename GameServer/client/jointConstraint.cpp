@@ -258,7 +258,7 @@ void HingeJoint::prepare(Seconds dt)
         if (currentAngle < minAngle_) {
             cache_.limitActive = true;
             cache_.limitLo     = true;
-            cache_.limitBias   = (minAngle_ - currentAngle) * (kJointBeta * invDt);
+            cache_.limitBias   = (currentAngle - minAngle_) * (kJointBeta * invDt);
         } else if (currentAngle > maxAngle_) {
             cache_.limitActive = true;
             cache_.limitLo     = false;
@@ -347,7 +347,7 @@ void ConeTwistJoint::prepare(Seconds dt)
     const mu::Vec3 posError = (bodyA_->pos() + cache_.rA)
                             - (bodyB_->pos() + cache_.rB);
     cache_.linEffMassInv = build3x3EffMassInv(bodyA_, cache_.rA, bodyB_, cache_.rB);
-    cache_.linBias       = posError * (kJointBeta * invDt);
+    cache_.linBias       = posError * (kLinBeta * invDt);
 
     // --- Joint-space relative orientation ---
     // q_jointA = refOrientA^-1 * bodyA.orient  (current bodyA orientation in joint space)
@@ -358,7 +358,7 @@ void ConeTwistJoint::prepare(Seconds dt)
 
     // Twist axis is +Z in joint space, brought to world space via bodyA orientation.
     const mu::Vec3 twistAxisJoint(0.f, 0.f, 1.f);
-    const mu::Vec3 twistAxisWorld = mu::Vec3(mu::normalize(bodyA_->orient().rotate(twistAxisJoint)));
+    const mu::Vec3 twistAxisWorld = mu::Vec3(mu::normalize(qJointA.rotate(twistAxisJoint)));
 
     // Decompose relative rotation into swing + twist around the joint Z axis.
     mu::NQuat swing, twist;
@@ -378,17 +378,20 @@ void ConeTwistJoint::prepare(Seconds dt)
             const mu::Vec3 swingXYZ(swing.x(), swing.y(), swing.z());
             const float swLen = std::sqrt(swingXYZ.len2());
             cache_.coneAxis = (swLen > 1e-6f)
-                ? mu::Vec3(mu::normalize(bodyA_->orient().rotate(swingXYZ / swLen)))
+                ? mu::Vec3(mu::normalize(qJointA.rotate(swingXYZ / swLen)))
                 : twistAxisWorld;
 
             const float cA = (bodyA_->invMass() > 0.f)
                 ? angEff1D(cache_.coneAxis, bodyA_->invInertiaWorld()) : 0.f;
             const float cB = (bodyB_->invMass() > 0.f)
                 ? angEff1D(cache_.coneAxis, bodyB_->invInertiaWorld()) : 0.f;
-            cache_.coneEffMass = 1.f / (cA + cB + 1e-10f);
-            cache_.coneBias    = viol * (kJointBeta * invDt);
+            cache_.coneEffMass      = 1.f / (cA + cB + 1e-10f);
+            cache_.coneBias         = -(viol * (kAngBeta   * invDt));
+            cache_.conePseudoBias   = -(viol * (kSplitBeta * invDt));
+            cache_.conePseudoAccImp = 0.f;
         } else {
-            cache_.coneAccImp = 0.f;
+            cache_.coneAccImp       = 0.f;
+            cache_.conePseudoAccImp = 0.f;
         }
     }
 
@@ -403,9 +406,6 @@ void ConeTwistJoint::prepare(Seconds dt)
         if (signedTwist < -twistLimit_ || signedTwist > twistLimit_) {
             cache_.twistActive = true;
             cache_.twistLo     = (signedTwist < -twistLimit_);
-            const float viol   = cache_.twistLo
-                ? (-twistLimit_ - signedTwist)
-                : (signedTwist  - twistLimit_);
 
             cache_.twistAxis = twistAxisWorld;
 
@@ -413,19 +413,60 @@ void ConeTwistJoint::prepare(Seconds dt)
                 ? angEff1D(twistAxisWorld, bodyA_->invInertiaWorld()) : 0.f;
             const float cB = (bodyB_->invMass() > 0.f)
                 ? angEff1D(twistAxisWorld, bodyB_->invInertiaWorld()) : 0.f;
-            cache_.twistEffMass = 1.f / (cA + cB + 1e-10f);
-            cache_.twistBias    = viol * (kJointBeta * invDt);
+            cache_.twistEffMass      = 1.f / (cA + cB + 1e-10f);
+            const float limitAngle   = cache_.twistLo ? -twistLimit_ : twistLimit_;
+            cache_.twistBias         = (signedTwist - limitAngle) * (kAngBeta   * invDt);
+            cache_.twistPseudoBias   = (signedTwist - limitAngle) * (kSplitBeta * invDt);
+            cache_.twistPseudoAccImp = 0.f;
         } else {
-            cache_.twistAccImp = 0.f;
+            cache_.twistAccImp       = 0.f;
+            cache_.twistPseudoAccImp = 0.f;
         }
     }
-
-    // Warm-start.
+    // Warm-start: linear rows only.
+    // Angular (cone/twist) accumulated impulses are reset to 0 here because the
+    // correction axis recomputes from the current swing/twist direction every step.
+    // Carrying over the previous frame's impulse magnitude along the new (potentially
+    // different) axis injects energy in the wrong direction, causing drift/twisting.
+    cache_.coneAccImp  = 0.f;
+    cache_.twistAccImp = 0.f;
     applyLinearImpulsePair(bodyA_, bodyB_, cache_.linAccImp, cache_.rA, cache_.rB);
-    if (cache_.coneActive)
-        applyAngularImpulsePair(bodyA_, bodyB_, cache_.coneAccImp, cache_.coneAxis);
-    if (cache_.twistActive)
-        applyAngularImpulsePair(bodyA_, bodyB_, cache_.twistAccImp, cache_.twistAxis);
+}
+
+void ConeTwistJoint::solvePosition()
+{
+    // Cone angular position correction via split impulse (pseudo-omega).
+    // This runs in addition to the velocity-level Baumgarte correction in
+    // solveVelocity() and directly adjusts body orientations without injecting
+    // energy into the real velocity state.
+    if (cache_.coneActive) {
+        const mu::Vec3 pseudoRelOmega = bodyA_->pseudoOmega() - bodyB_->pseudoOmega();
+        const float Jpv = mu::dot(pseudoRelOmega, cache_.coneAxis);
+        const float djp = -(Jpv + cache_.conePseudoBias) * cache_.coneEffMass;
+        const float prev = cache_.conePseudoAccImp;
+        cache_.conePseudoAccImp = std::max(0.f, prev + djp);  // one-sided, same as velocity solver
+        const float delta = cache_.conePseudoAccImp - prev;
+        if (bodyA_->invMass() > 0.f)
+            bodyA_->addPseudoOmega((cache_.coneAxis *  delta) * bodyA_->invInertiaWorld());
+        if (bodyB_->invMass() > 0.f)
+            bodyB_->addPseudoOmega((cache_.coneAxis * -delta) * bodyB_->invInertiaWorld());
+    }
+
+    // Twist angular position correction.
+    if (cache_.twistActive) {
+        const mu::Vec3 pseudoRelOmega = bodyA_->pseudoOmega() - bodyB_->pseudoOmega();
+        const float Jpv = mu::dot(pseudoRelOmega, cache_.twistAxis);
+        const float djp = -(Jpv + cache_.twistPseudoBias) * cache_.twistEffMass;
+        const float prev = cache_.twistPseudoAccImp;
+        cache_.twistPseudoAccImp = cache_.twistLo
+            ? std::max(0.f, prev + djp)
+            : std::min(0.f, prev + djp);
+        const float delta = cache_.twistPseudoAccImp - prev;
+        if (bodyA_->invMass() > 0.f)
+            bodyA_->addPseudoOmega((cache_.twistAxis *  delta) * bodyA_->invInertiaWorld());
+        if (bodyB_->invMass() > 0.f)
+            bodyB_->addPseudoOmega((cache_.twistAxis * -delta) * bodyB_->invInertiaWorld());
+    }
 }
 
 void ConeTwistJoint::solveVelocity()

@@ -136,7 +136,16 @@ public:
     void clearPseudoVelocities() { pseudoLinearVel_ = {}; pseudoOmega_ = {}; }
     void applyPseudoVelocity(Seconds dt) {
         if (type_ == MotionType::Static || type_ == MotionType::Kinematic) return;
-        curr_.pos += pseudoLinearVel_ * dt.count();
+        const float dtf = dt.count();
+        curr_.pos += pseudoLinearVel_ * dtf;
+        // Angular position correction: integrate pseudo-omega into orientation.
+        // Used by ConeTwistJoint::solvePosition() to correct angular limit violations
+        // without affecting the real velocity state (split impulse, energy-neutral).
+        if (pseudoOmega_.len2() > 1e-10f) {
+            const auto wq = mu::Quat(pseudoOmega_, 0.f);
+            auto newOrient = mu::Quat(curr_.orient) + mu::Quat(curr_.orient) * wq * 0.5f * dtf;
+            curr_.orient = mu::NQuat{ newOrient };
+        }
     }
 
     // Getters used by PhysicsWorld::integrate().

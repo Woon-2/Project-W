@@ -348,6 +348,10 @@ void PhysicsWorld::solveConstraints(Seconds dt)
     for (int iter = 0; iter < solverIterations_; ++iter) {
         allConstraints([](Constraint& c) { c.solveVelocity(); });
         allConstraints([](Constraint& c) { c.solvePosition(); });
+        for (auto& e : entries_) {
+            e.body->setLinearVel(e.body->linearVel().xyz());
+            e.body->setOmega(e.body->omega().xyz());
+        }
     }
 
     // Save accumulated impulses for next step's warm-start.

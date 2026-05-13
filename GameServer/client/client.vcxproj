@@ -308,6 +308,7 @@
     <ClInclude Include="log.hpp" />
     <ClInclude Include="mesh.hpp" />
     <ClInclude Include="meshParticlePipeline.hpp" />
+    <ClInclude Include="physicsTestObject.hpp" />
     <ClInclude Include="smokeBlendCGPipeline.hpp" />
     <ClInclude Include="object.hpp" />
     <ClInclude Include="online\onlineGame.hpp" />

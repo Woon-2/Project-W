@@ -141,7 +141,7 @@ private:
 
     static constexpr float kCameraMinGroundClearance = 0.15f;
 
-    int     solverIterations_         = 10;
+    int     solverIterations_         = 4;
     int     positionSolveIterations_  = 3;
     int     subStepCount_             = 2;
     Seconds currentSubDt_{}; // set at start of each sub-step; used by generateContacts()
