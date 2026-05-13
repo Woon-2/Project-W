@@ -29,14 +29,14 @@ std::optional<ParticleBillboardGeometry> buildParticleBillboardGeometry(
         return std::nullopt;
     }
 
-    float width = ctx.size;
-    float height = ctx.size;
+    float width = ctx.size3D.x();
+    float height = ctx.size3D.y();
     mu::Vec4 stretchAxisAndMode = { 0.f, 0.f, 0.f, 0.f };
 
     if (rend.mode == ps::RendererModule::Mode::StretchedBillboard) {
         constexpr float kMinStableStretchSpeed = 0.05f;
         const float speed = vecLength(ctx.particle.motionVelocity);
-        height = ctx.size * rend.lengthScale + speed * rend.velocityScale;
+        height = ctx.size3D.y() * rend.lengthScale + speed * rend.velocityScale;
 
         if (speed > kMinStableStretchSpeed) {
             const mu::Vec3 axis = ctx.particle.motionVelocity * (1.f / speed);
@@ -52,7 +52,7 @@ std::optional<ParticleBillboardGeometry> buildParticleBillboardGeometry(
     }
 
     return ParticleBillboardGeometry{
-        .world = mu::scaleH(mu::Vec3{ width, height, width })
+        .world = mu::scaleH(mu::Vec3{ width, height, ctx.size3D.z() })
                * mu::translate(ctx.particle.pos),
         .rotation3D = buildParticleAngularRotation(ctx.particle)
                     * ctx.particle.billboardRotation3D,
@@ -71,7 +71,7 @@ std::optional<ParticleMeshGeometry> buildParticleMeshGeometry(
     }
 
     return ParticleMeshGeometry{
-        .world = mu::scaleH(ctx.particle.transformScale * ctx.size)
+        .world = mu::scaleH(ctx.particle.transformScale * ctx.size3D)
                * buildParticleAngularRotation(ctx.particle)
                * ctx.particle.baseRotation
                * mu::translate(ctx.particle.pos),

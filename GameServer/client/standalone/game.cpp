@@ -164,7 +164,7 @@ void Game::setupStage() {
 	effectDropdown_->offsetX = UI::DimValue::px(-12.f);
 	effectDropdown_->offsetY = UI::DimValue::px(12.f);
 	effectDropdown_->width   = UI::DimValue::px(180.f);
-	effectDropdown_->setup({ "Slash Wave", "Slash Combo", "Slash 7", "Slash 1", "Spikes", "Crystals Front Attack", "AoE Slash Green" });
+	effectDropdown_->setup({ "Slash Wave", "Slash Combo", "Slash 7", "Slash 1", "Spikes", "Crystals Front Attack", "AoE Slash Green", "Red Energy Explosion", "Crystals Cross Fade" });
 	effectDropdown_->onSelectionChanged = [this](int idx) {
 		currentEffect_ = static_cast<SwordEffect>(idx);
 	};
@@ -537,7 +537,8 @@ void Game::setParticle()
 			auto cfg = loadUnityParticleConfig(crystalsJson, "Crystals front attack/Crystals");
 			cfg.renderer.mat  = ps::MatUnlit{
 				.mainTex = assetManager_.crystalFree1Tex(),
-				.additive = false
+				.additive = false,
+				.color = { 1.15271747f, 1.1794312f, 1.41421354f, 1.f }
 			};
 			crystalsFrontAttackEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);  // idx 1
 		}
@@ -670,6 +671,124 @@ void Game::setParticle()
 		cfg.textureSheetAnimation.cycles    = 1.f;
 
 		dustParticleSystem_.init(cfg);
+	}
+
+	// ── Red Energy Explosion effect ──────────────────────────────────────────
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/Red energy explosion_ParticleSystems.json",
+			"Red energy explosion/Core"
+		);
+		cfg.main.looping         = false;
+		cfg.renderer.mode        = ps::RendererModule::Mode::Billboard;
+		cfg.renderer.mat         = ps::MatUnlit{ .mainTex = assetManager_.stoneTex(), .additive = true };
+		redEnergyExplosionEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
+	}
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/Red energy explosion_ParticleSystems.json",
+			"Red energy explosion/Trails"
+		);
+		cfg.main.looping         = false;
+		cfg.renderer.mode        = ps::RendererModule::Mode::Billboard;
+		cfg.renderer.mat         = ps::MatUnlit{ .mainTex = nullptr, .additive = false };
+
+		cfg.trail.enabled              = true;
+		cfg.trail.material.mainTex     = assetManager_.trail67Tex();
+		cfg.trail.material.additive    = true;
+		redEnergyExplosionEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
+	}
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/Red energy explosion_ParticleSystems.json",
+			"Red energy explosion/Circle"
+		);
+		cfg.main.looping                = false;
+		cfg.main.startColor             = {
+			cfg.main.startColor.x() * 2.3773584f,
+			cfg.main.startColor.y() * 2.3773584f,
+			cfg.main.startColor.z() * 2.3773584f,
+			cfg.main.startColor.w()
+		};
+		cfg.renderer.mode               = ps::RendererModule::Mode::Billboard;
+		cfg.renderer.mat                = ps::MatUnlit{ .mainTex = assetManager_.circleTex(), .additive = false };
+		redEnergyExplosionEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
+	}
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/Red energy explosion_ParticleSystems.json",
+			"Red energy explosion/ShockWaveIn"
+		);
+		cfg.main.looping = false;
+		cfg.renderer.mode = ps::RendererModule::Mode::Billboard;
+		cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.circleTex(), .additive = false };
+
+		redEnergyExplosionEffect_.addSystem( cfg, ParticleEffect::PlayMode::Continuous );
+	}
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/Red energy explosion_ParticleSystems.json",
+			"Red energy explosion/ShockWave"
+		);
+		cfg.main.looping = false;
+		cfg.renderer.mode = ps::RendererModule::Mode::Billboard;
+		cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.circleTex(), .additive = false };
+
+		redEnergyExplosionEffect_.addSystem( cfg, ParticleEffect::PlayMode::Continuous );
+	}
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/Red energy explosion_ParticleSystems.json",
+			"Red energy explosion/Smoke"
+		);
+		cfg.main.looping = false;
+		cfg.renderer.mode = ps::RendererModule::Mode::Billboard;
+		cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.smoke26Tex(), .additive = false };
+
+		redEnergyExplosionEffect_.addSystem( cfg, ParticleEffect::PlayMode::Continuous );
+	}
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/Red energy explosion_ParticleSystems.json",
+			"Red energy explosion/Flash"
+		);
+		cfg.main.looping = false;
+		cfg.renderer.mode = ps::RendererModule::Mode::StretchedBillboard;
+		cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.flashTex(), .additive = false };
+
+		redEnergyExplosionEffect_.addSystem( cfg, ParticleEffect::PlayMode::Continuous );
+	}
+	// Crystal Cross Fade effect: parent trigger + Crystals sub-emitter only.
+	{
+		const std::filesystem::path crystalsCrossFadeJson =
+			"../resources/effects/Crystals crossfade 2_ParticleSystems.json";
+
+		{
+			auto cfg = loadUnityParticleConfig(crystalsCrossFadeJson, "Crystals crossfade 2");
+			cfg.renderer.mode = ps::RendererModule::Mode::Billboard;
+			cfg.renderer.mat  = ps::MatUnlit{ .mainTex = nullptr, .additive = true };
+			cfg.main.looping  = false;
+			cfg.subEmitters.enabled = true;
+			cfg.subEmitters.subEmitters = { {
+				.event           = ps::SubEmittersModule::Event::Birth,
+				.emitProbability = 1.f,
+				.inheritSize     = true,
+			} };
+			crystalsCrossFadeEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);  // idx 0
+		}
+
+		{
+			auto cfg = loadUnityParticleConfig(crystalsCrossFadeJson, "Crystals crossfade 2/Crystals");
+			cfg.renderer.mode = ps::RendererModule::Mode::StretchedBillboard;
+			cfg.renderer.mat  = ps::MatUnlit{
+				.mainTex = assetManager_.crystalFree1Tex(),
+				.additive = false,
+				.color = { 1.15271747f, 1.1794312f, 1.41421354f, 1.f }
+			};
+			crystalsCrossFadeEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);  // idx 1
+		}
+
+		crystalsCrossFadeEffect_.bindSubEmitter(0, 0, 1);
 	}
 }
 
@@ -1152,6 +1271,8 @@ void Game::update(Milliseconds deltaTime) {
 	crystalsFrontAttackEffect_.update( deltaTime );
 	aoESlashGreenEffect_.update( deltaTime );
 	dustParticleSystem_.update( deltaTime );
+	redEnergyExplosionEffect_.update( deltaTime );
+	crystalsCrossFadeEffect_.update( deltaTime );
 
 	// UI 동기화
 	if (playerHpBar_)
@@ -1188,6 +1309,8 @@ void Game::render() {
 	crystalsFrontAttackEffect_.render( gfx_ );
 	aoESlashGreenEffect_.render( gfx_ );
 	dustParticleSystem_.render( gfx_ );
+	redEnergyExplosionEffect_.render( gfx_ );
+	crystalsCrossFadeEffect_.render( gfx_ );
 
 	uiManager_.render( gfx_ );
 
@@ -1357,6 +1480,26 @@ void Game::processInput(Milliseconds deltaTime) {
 			aoESlashGreenEffect_.play( aoePos, player_->orient(), player_->forward() );
 			break;
 
+		}
+		case SwordEffect::RedEnergyExplosion: {
+			auto explosionPos = player_->renderState().pos + player_->forward() * 6.5f;
+			if ( terrain_ && !assetManager_.terrain()->heightField.empty() ) {
+				const auto terrainPos = terrain_->renderState().pos;
+				const float localX = explosionPos.x() - terrainPos.x();
+				const float localZ = explosionPos.z() - terrainPos.z();
+				const float groundY = terrainPos.y()
+					+ assetManager_.terrain()->heightField.getHeightAt( localX, localZ );
+				explosionPos = { explosionPos.x(), groundY + 0.1f, explosionPos.z() };
+			}
+			else {
+				explosionPos += mu::Vec3( 0.f, 0.1f, 0.f );
+			}
+			redEnergyExplosionEffect_.play( explosionPos, player_->orient(), player_->forward() );
+			break;
+		}
+		case SwordEffect::CrystalsCrossFade: {
+			crystalsCrossFadeEffect_.play( slashPos );
+			break;
 		}
 		}
 	}

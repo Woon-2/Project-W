@@ -5,7 +5,8 @@ struct PerInstanceData {
     float4x4 rotation3D;
     float4   stretchAxisAndMode; // xyz=world-space stretch axis, w=1 when enabled
     float    rotation;
-    float3   pad;
+    float    alignmentMode;      // 0=view-facing, 1=local/world axes
+    float2   pad;
 };
 
 struct Material
@@ -27,6 +28,7 @@ struct VSOutput
     float3 rotX : TEXCOORD5;
     float3 rotY : TEXCOORD6;
     float3 rotZ : TEXCOORD7;
+    float  alignmentMode : TEXCOORD8;
 };
 
 struct PSInput
@@ -71,6 +73,7 @@ VSOutput VSMain( float3 position : POSITION, float size : SIZE,
     ret.rotX = mul(float4(1.0f, 0.0f, 0.0f, 0.0f), instance.rotation3D).xyz;
     ret.rotY = mul(float4(0.0f, 1.0f, 0.0f, 0.0f), instance.rotation3D).xyz;
     ret.rotZ = mul(float4(0.0f, 0.0f, 1.0f, 0.0f), instance.rotation3D).xyz;
+    ret.alignmentMode = instance.alignmentMode;
 
     return ret;
 }
@@ -103,8 +106,12 @@ void GSMain(point VSOutput input[1],
     float3 stretchAxisOnPlane = stretchAxis - dot(stretchAxis, vLook) * vLook;
     float stretchLenSq = dot(stretchAxisOnPlane, stretchAxisOnPlane);
     if (input[0].stretchMode > 0.5f && stretchLenSq > 0.000001f) {
-        vUPR = stretchAxisOnPlane * rsqrt(stretchLenSq);
-        vRightR = normalize(cross(vUPR, vLook));
+        float3 stretchUp    = stretchAxisOnPlane * rsqrt(stretchLenSq);
+        float3 stretchRight = normalize(cross(stretchUp, vLook));
+        float c = cos(input[0].rotation);
+        float s = sin(input[0].rotation);
+        vUPR    =  c * stretchUp + s * stretchRight;
+        vRightR = -s * stretchUp + c * stretchRight;
     } else {
         float c = cos(input[0].rotation);
         float s = sin(input[0].rotation);
@@ -123,9 +130,20 @@ void GSMain(point VSOutput input[1],
     local[3] = float2( halfWidth,  halfHeight);
 
     float3 p[4];
-    [unroll]
-    for (int k = 0; k < 4; ++k)
-        p[k] = pos + rotateBillboardOffset(local[k], input[0], vRightR, vUPR, vLook);
+    if (input[0].alignmentMode > 0.5f && input[0].stretchMode < 0.5f) {
+        float c = cos(input[0].rotation);
+        float s = sin(input[0].rotation);
+        float3 axisX = normalize(c * input[0].rotX + s * input[0].rotY);
+        float3 axisY = normalize(-s * input[0].rotX + c * input[0].rotY);
+
+        [unroll]
+        for (int k = 0; k < 4; ++k)
+            p[k] = pos + local[k].x * axisX + local[k].y * axisY;
+    } else {
+        [unroll]
+        for (int k = 0; k < 4; ++k)
+            p[k] = pos + rotateBillboardOffset(local[k], input[0], vRightR, vUPR, vLook);
+    }
 
     float3 quadNormal = normalize(cross(p[1] - p[0], p[2] - p[0]));
     // 로컬 UV (0~1 범위) → 스프라이트 시트 UV로 변환

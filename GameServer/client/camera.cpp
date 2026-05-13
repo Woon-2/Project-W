@@ -121,6 +121,11 @@ void Camera::updateGFX(GFX& gfx) {
 		.proj = proj_,
 		.pos  = eye_
 	});
+	gfx.addCameraData(TrailPipeline::CameraData{
+		.view = view_,
+		.proj = proj_,
+		.pos  = eye_
+	});
 }
 
 void Camera::setPerspective(mu::Degree fovy, float aspect, float nearz, float farz) {

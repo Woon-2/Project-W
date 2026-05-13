@@ -36,6 +36,8 @@ ComPtr<ID3D12PipelineState> createSmokeBlendCGShader(ID3D12Device* device, ID3D1
 ComPtr<ID3D12PipelineState> createBlendCGMeshShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSwordSlashShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createTwoSidesShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createTrailShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createTrailShaderAdditive(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSkyboxShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBVShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createUIShader( ID3D12Device* device, ID3D12RootSignature* rootSig );
@@ -274,7 +276,8 @@ struct PerInstanceData {
 	XMFLOAT4X4 rotation3D; // transposed before upload; local billboard 3D start/lifetime rotation
 	XMFLOAT4   stretchAxisAndMode; // xyz=world axis, w=1 when stretched
 	float      rotation;   // 빌보드 평면 내 회전 (라디안)
-	float       pad[3];
+	float      alignmentMode; // 0=view-facing, 1=local/world axes
+	float      pad[2];
 };
 
 // cbuffer b0 레이아웃 (총 56B):
@@ -860,6 +863,53 @@ struct PerFrameData {           // 80B
 };
 
 }  // namespace TwoSidesShader
+
+// TrailShader
+// Camera-facing ribbon strip rendered from a per-particle ring buffer.
+// VertexCount per drawcall = (trailCount - 1) * 6 ; VS expands segments via SV_VertexID.
+namespace TrailShader {
+
+// t0 — packed trail vertices for ALL particles' trails in one StructuredBuffer.
+// pos: world or emitter-local position
+// age: seconds since this vertex was emitted
+// cumulativeDist: arc length from the first vertex of this trail (Tile UV mode)
+struct PerInstanceData {           // 32B (matches HLSL TrailVertex)
+    XMFLOAT3 pos;                  // 12B
+    float    age;                  // 4B
+    float    cumulativeDist;       // 4B
+    XMFLOAT3 pad;                  // 12B
+};
+
+// b0 — per-drawcall: one drawcall = one particle's trail.
+struct PerDrawcallData {           // 144B
+    XMFLOAT4X4    localToWorld;        // 64B
+    BindlessIndex idxMainTex;          // 16B
+    XMFLOAT4      baseColor;           // 16B
+
+    u32t          trailStart;          // 4B   first vertex index in PerInstanceData buffer
+    u32t          trailCount;          // 4B   number of vertices for this trail
+    u32t          textureMode;         // 4B   0 = Stretch, 1 = Tile
+    u32t          inheritParticleColor;// 4B   reserved (0/1)
+
+    float         widthStart;          // 4B
+    float         widthEnd;            // 4B
+    float         widthMultiplier;     // 4B
+    float         tileLength;          // 4B
+
+    float         trailLifetime;       // 4B
+    float         currentSystemTime;   // 4B
+    XMFLOAT2      pad0;                // 8B
+};
+
+// b1 — per-frame.
+struct PerFrameData {              // 80B
+    XMFLOAT4X4 matViewProj;        // 64B (row-major)
+    XMFLOAT3   cameraPos;          // 12B
+    float      pad;                // 4B
+};
+
+}  // namespace TrailShader
+
 // hiZOccluderShader
 namespace HiZOccluderShader {
 

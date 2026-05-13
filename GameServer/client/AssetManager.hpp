@@ -29,6 +29,9 @@ public:
 	const Texture* fire13Tex()             const { return &fire13Tex_; }
 	const Texture* trail62ForTex()         const { return &trail62ForTex_; }
 	const Texture* trail62Tex()            const { return &trail62Tex_; }
+	const Texture* trail67Tex()            const { return &trail67Tex_; }
+	const Texture* circleTex()             const { return &circleTex_; }
+	const Texture* stoneTex()              const { return &stoneTex_; }
 	const Texture* gradient3tTex()         const { return &gradient3tTex_; }
 	const Texture* gradient4_3Tex()        const { return &gradient4_3Tex_; }
 	const Texture* waves21Tex()            const { return &waves21Tex_; }
@@ -37,6 +40,8 @@ public:
 	const Texture* crystalFree1Tex()       const { return &crystalFree1Tex_; }
 	const Texture* circle2Tex()            const { return &circle2Tex_; }
 	const Texture* slashTex()              const { return &slashTex_; }
+	const Texture* smoke26Tex()            const { return &smoke26Tex_; }
+	const Texture* flashTex()              const { return &flashTex_; }
 	const ps::MatSwordSlash& swordSlashMaterial()  const { return swordSlashMaterial_; }
 	const ps::MatSwordSlash& swordSlash2Material() const { return swordSlash2Material_; }
 	const ps::MatSmokeBlendCG& smokeBlendCGMaterial() const { return smokeBlendCGMaterial_; }
@@ -72,6 +77,9 @@ private:
 	Texture fire13Tex_{};
 	Texture trail62ForTex_{};
 	Texture trail62Tex_{};
+	Texture trail67Tex_{};
+	Texture circleTex_{};
+	Texture stoneTex_{};
 	Texture gradient3tTex_{};
 	Texture gradient4_3Tex_{};
 	Texture waves21Tex_{};
@@ -80,6 +88,8 @@ private:
 	Texture crystalFree1Tex_{};
 	Texture circle2Tex_{};
 	Texture slashTex_{};
+	Texture smoke26Tex_{};
+	Texture flashTex_{};
 	ps::MatSwordSlash   swordSlashMaterial_{};
 	ps::MatSwordSlash   swordSlash2Material_{};
 	ps::MatSmokeBlendCG smokeBlendCGMaterial_{};

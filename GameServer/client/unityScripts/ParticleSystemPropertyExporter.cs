@@ -101,6 +101,7 @@ public static class ParticleSystemPropertyExporter
         ParticleSystem.ColorOverLifetimeModule colorOverLifetime = ps.colorOverLifetime;
         ParticleSystem.SizeOverLifetimeModule sizeOverLifetime = ps.sizeOverLifetime;
         ParticleSystem.CustomDataModule customDataModule = ps.customData;
+        ParticleSystem.TrailModule trails = ps.trails;
 
         var summary = new ParticleSystemSummary
         {
@@ -183,6 +184,30 @@ public static class ParticleSystemPropertyExporter
             {
                 enabled = sizeOverLifetime.enabled,
                 size = Curve(sizeOverLifetime.size)
+            },
+
+            trails = new TrailsModuleExport
+            {
+                enabled = trails.enabled,
+                mode = trails.mode.ToString(),
+                ratio = trails.ratio,
+                lifetime = Curve(trails.lifetime),
+                minVertexDistance = trails.minVertexDistance,
+                textureMode = trails.textureMode.ToString(),
+                textureScale = trails.textureScale,
+                ribbonCount = trails.ribbonCount,
+                shadowBias = trails.shadowBias,
+                worldSpace = trails.worldSpace,
+                dieWithParticles = trails.dieWithParticles,
+                sizeAffectsWidth = trails.sizeAffectsWidth,
+                sizeAffectsLifetime = trails.sizeAffectsLifetime,
+                inheritParticleColor = trails.inheritParticleColor,
+                generateLightingData = trails.generateLightingData,
+                splitSubEmitterRibbons = trails.splitSubEmitterRibbons,
+                attachRibbonsToTransform = trails.attachRibbonsToTransform,
+                colorOverLifetime = Gradient(trails.colorOverLifetime),
+                widthOverTrail = Curve(trails.widthOverTrail),
+                colorOverTrail = Gradient(trails.colorOverTrail)
             },
 
             customData = CaptureCustomData(customDataModule)
@@ -576,6 +601,7 @@ public class ParticleSystemSummary
     public RotationOverLifetimeModuleExport rotationOverLifetime;
     public ColorOverLifetimeModuleExport colorOverLifetime;
     public SizeOverLifetimeModuleExport sizeOverLifetime;
+    public TrailsModuleExport trails;
     public RendererModuleExport renderer;
     public CustomDataModuleExport customData;
 }
@@ -700,6 +726,31 @@ public class RendererModuleExport
     public Vector3 flip;
     public ObjectReferenceExport sharedMaterial;
     public ObjectReferenceExport trailMaterial;
+}
+
+[Serializable]
+public class TrailsModuleExport
+{
+    public bool enabled;
+    public string mode;
+    public float ratio;
+    public MinMaxCurveExport lifetime;
+    public float minVertexDistance;
+    public string textureMode;
+    public Vector2 textureScale;
+    public int ribbonCount;
+    public float shadowBias;
+    public bool worldSpace;
+    public bool dieWithParticles;
+    public bool sizeAffectsWidth;
+    public bool sizeAffectsLifetime;
+    public bool inheritParticleColor;
+    public bool generateLightingData;
+    public bool splitSubEmitterRibbons;
+    public bool attachRibbonsToTransform;
+    public MinMaxGradientExport colorOverLifetime;
+    public MinMaxCurveExport widthOverTrail;
+    public MinMaxGradientExport colorOverTrail;
 }
 
 [Serializable]

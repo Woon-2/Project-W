@@ -281,6 +281,8 @@ void GFX::init() {
 	shaders_.try_emplace("BlendCGMeshShader", createBlendCGMeshShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("SwordSlashShader", createSwordSlashShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("TwoSidesShader",  createTwoSidesShader(  device_.Get(), defaultRootSig.get() ));
+	shaders_.try_emplace("TrailShader",          createTrailShader(         device_.Get(), defaultRootSig.get() ));
+	shaders_.try_emplace("TrailShaderAdditive",  createTrailShaderAdditive( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("SkyboxShader", createSkyboxShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("BVShader", createBVShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace( "UIShader", createUIShader( device_.Get(), defaultRootSig.get() ) );
@@ -325,6 +327,7 @@ void GFX::init() {
 	drawEventsBlendCGMeshPipeline_.reserve(256u);
 	drawEventsSwordSlashPipeline_.reserve(256u);
 	drawEventsTwoSidesPipeline_.reserve(256u);
+	drawEventsTrailPipeline_.reserve(TrailPipeline::kMaxDrawEvents);
 	drawEventsSkyboxPipeline_.reserve(10u);
 	drawEventsTerrainPipeline_.reserve(4u);
 	drawEventsTerrainDeferredPipeline_.reserve(4u);
@@ -550,6 +553,18 @@ void GFX::createSwapChain() {
 	);
 	resourcesTwoSidesPipeline_.perFrameData.init(
 		device_.Get(), sizeof( TwoSidesShader::PerFrameData ), backBuffers_.size(), "TwoSides_PerFrameData"
+	);
+	// Trail Pipeline ----
+	// System-wide trail vertex pool. Sized for "kMaxParticles * kMaxTrailSegments"
+	// in the worst case (4096 * 32 = 131072 vertices ~= 4MB per back-buffer copy).
+	resourcesTrailPipeline_.perInstanceData.init(
+		device_.Get(), sizeof( TrailShader::PerInstanceData ) * TrailPipeline::kMaxTrailVertices, backBuffers_.size(), "Trail_PerInstanceData"
+	);
+	resourcesTrailPipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof( TrailShader::PerDrawcallData ), TrailPipeline::kMaxDrawEvents, backBuffers_.size(), "Trail_PerDrawcallData"
+	);
+	resourcesTrailPipeline_.perFrameData.init(
+		device_.Get(), sizeof( TrailShader::PerFrameData ), backBuffers_.size(), "Trail_PerFrameData"
 	);
 	// UI Pipeline ----
 	resourcesUIPipeline_.perInstanceData.init(
@@ -885,6 +900,18 @@ void GFX::addCameraData( const TwoSidesPipeline::CameraData& cameraData ) {
 
 void GFX::addFrameData( const TwoSidesPipeline::FrameData& frameData ) {
 	frameDataTwoSidesPipeline_ = frameData;
+}
+
+void GFX::addDrawEvent( TrailPipeline::DrawEvent&& drawEvent ) {
+	drawEventsTrailPipeline_.push_back( std::move( drawEvent ) );
+}
+
+void GFX::addCameraData( const TrailPipeline::CameraData& cameraData ) {
+	cameraDataTrailPipeline_ = cameraData;
+}
+
+void GFX::addFrameData( const TrailPipeline::FrameData& frameData ) {
+	frameDataTrailPipeline_ = frameData;
 }
 
 // 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
@@ -1470,6 +1497,21 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	auto trailDispatcher = TrailPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at( "DefaultRootSignature" ),
+		shaders_.at( "TrailShader" ),
+		shaders_.at( "TrailShaderAdditive" ),
+		cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesTrailPipeline_, threadPool_,
+		&cmdListPool_, std::move( drawEventsTrailPipeline_ ),
+		cameraDataTrailPipeline_, frameDataTrailPipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
 	auto bvPipelineDispatcher = BVPipeline::Dispatcher(
 		tmpDescriptorHeaps, rootSigs_.at("DefaultRootSignature"),
 		shaders_.at("BVShader"), cmdQ_, viewport, clRect,
@@ -1914,6 +1956,9 @@ void GFX::render() {
 
 		twoSidesDispatcher.updateGPUDataSingleThreaded();
 		twoSidesDispatcher.drawSingleThreaded();
+
+		trailDispatcher.updateGPUDataSingleThreaded();
+		trailDispatcher.drawSingleThreaded();
 		dumpLog();
 	}
 
@@ -2007,6 +2052,9 @@ void GFX::render() {
 
 			twoSidesDispatcher.updateGPUDataMultiThreaded();
 			twoSidesDispatcher.drawMultiThreaded();
+
+			trailDispatcher.updateGPUDataMultiThreaded();
+			trailDispatcher.drawMultiThreaded();
 			dumpLog();
 		}
 		else {
@@ -2066,6 +2114,9 @@ void GFX::render() {
 
 			twoSidesDispatcher.updateGPUDataMultiThreaded();
 			twoSidesDispatcher.drawMultiThreaded();
+
+			trailDispatcher.updateGPUDataMultiThreaded();
+			trailDispatcher.drawMultiThreaded();
 
 			dumpLog();
 		}

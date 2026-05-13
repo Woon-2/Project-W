@@ -231,6 +231,7 @@
     <ClCompile Include="standalone\game.cpp" />
     <ClCompile Include="swordSlashMaterial.cpp" />
     <ClCompile Include="swordSlashPipeline.cpp" />
+    <ClCompile Include="trailPipeline.cpp" />
     <ClCompile Include="twoSidesPipeline.cpp" />
     <ClCompile Include="terrain.cpp" />
     <ClCompile Include="terrainDeferredPipeline.cpp" />
@@ -338,6 +339,7 @@
     <ClInclude Include="standalone\game.hpp" />
     <ClInclude Include="swordSlashMaterial.hpp" />
     <ClInclude Include="swordSlashPipeline.hpp" />
+    <ClInclude Include="trailPipeline.hpp" />
     <ClInclude Include="twoSidesPipeline.hpp" />
     <ClInclude Include="terrain.hpp" />
     <ClInclude Include="terrainDeferredPipeline.hpp" />
@@ -448,6 +450,10 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
     <FxCompile Include="skybox.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="trail.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>

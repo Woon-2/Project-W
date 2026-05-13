@@ -481,7 +481,8 @@ void Game::setParticle()
 			auto cfg = loadUnityParticleConfig(crystalsJson, "Crystals front attack/Crystals");
 			cfg.renderer.mat  = ps::MatUnlit{
 				.mainTex = assetManager_.crystalFree1Tex(),
-				.additive = false
+				.additive = false,
+				.color = { 1.15271747f, 1.1794312f, 1.41421354f, 1.f }
 			};
 			crystalsFrontAttackEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);  // idx 1
 		}

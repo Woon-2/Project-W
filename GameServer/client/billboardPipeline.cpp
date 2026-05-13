@@ -180,6 +180,8 @@ void Dispatcher::updateGPUDataSingleThreaded() {
 				.rotation3D = mu::transpose( drawEvent.rotation3D ).getXmf(),
 				.stretchAxisAndMode = drawEvent.stretchAxisAndMode.getXmf(),
 				.rotation = drawEvent.rotation,
+				.alignmentMode = (drawEvent.alignment == ps::RendererModule::Alignment::Local
+				               || drawEvent.alignment == ps::RendererModule::Alignment::World) ? 1.f : 0.f,
 			};
 		}
 	);
@@ -532,6 +534,8 @@ void MU_CALLCONV Dispatcher::addJobUpdate( mu::Mat4x4 viewProj, const DrawEvent*
 					.rotation3D = mu::transpose( drawEvent.rotation3D ).getXmf(),
 					.stretchAxisAndMode = drawEvent.stretchAxisAndMode.getXmf(),
 					.rotation = drawEvent.rotation,
+					.alignmentMode = (drawEvent.alignment == ps::RendererModule::Alignment::Local
+					               || drawEvent.alignment == ps::RendererModule::Alignment::World) ? 1.f : 0.f,
 				};
 			}
 		);

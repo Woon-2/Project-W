@@ -16,6 +16,7 @@
 #include "blendCGMeshPipeline.hpp"
 #include "swordSlashPipeline.hpp"
 #include "twoSidesPipeline.hpp"
+#include "trailPipeline.hpp"
 #include "skyboxPipeline.hpp"
 #include "BVPipeline.hpp"
 #include "uiPipeline.hpp"
@@ -211,6 +212,12 @@ public:
 	void addCameraData( const TwoSidesPipeline::CameraData& cameraData );
 	// 프레임 데이터를 입력한다.
 	void addFrameData( const TwoSidesPipeline::FrameData& frameData );
+	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+	void addDrawEvent( TrailPipeline::DrawEvent&& drawEvent );
+	// 카메라 데이터를 입력한다.
+	void addCameraData( const TrailPipeline::CameraData& cameraData );
+	// 프레임 데이터를 입력한다.
+	void addFrameData( const TrailPipeline::FrameData& frameData );
 	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 	void addDrawEvent(const SkyboxPipeline::DrawEvent& drawEvent);
 	// 카메라 데이터를 입력한다.
@@ -408,6 +415,11 @@ private:
 	TwoSidesPipeline::Resources              resourcesTwoSidesPipeline_{};
 	TwoSidesPipeline::CameraData             cameraDataTwoSidesPipeline_{};
 	TwoSidesPipeline::FrameData              frameDataTwoSidesPipeline_{};
+	// Trail Pipeline
+	std::vector<TrailPipeline::DrawEvent>    drawEventsTrailPipeline_{};
+	TrailPipeline::Resources                 resourcesTrailPipeline_{};
+	TrailPipeline::CameraData                cameraDataTrailPipeline_{};
+	TrailPipeline::FrameData                 frameDataTrailPipeline_{};
 	// UI Pipeline
 	std::vector<UIPipeline::DrawEvent> drawEventsUIPipeline_{};
 	UIPipeline::Resources resourcesUIPipeline_{};

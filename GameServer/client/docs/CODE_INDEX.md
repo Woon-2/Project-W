@@ -477,6 +477,16 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `twoSidesPipeline.cpp` | updateGPUDataSingleThreaded / drawSingleThreaded 구현. CullMode=None. Slot0=Position, Slot1=Normal, Slot2=UV, Slot3=Color |
 | `twoSides.hlsl` | Unity HS_Blend_TwoSides 완전 포팅. NORMAL 입력, worldNormal+worldPos 전달, N.V Fresnel, frontFacesColor/backFacesColor/backFresnelColor 적용 |
 
+**TrailPipeline:**
+
+Unity ParticleSystem Trails 모듈 (Mode=Particles). RendererModule과 독립된 overlay 레이어로 동작 — 파티클 본체 렌더링과 공존 가능.
+
+| 파일 | 설명 |
+|------|------|
+| `trailPipeline.hpp` | DrawEvent (`std::vector<TrailVertexCPU>` + per-trail constants), Resources (system-wide perInstanceData pool + per-drawcall PDD), Dispatcher (alpha/additive 2 PSO) |
+| `trailPipeline.cpp` | updateGPUDataSingleThreaded: 모든 trail vertex를 한 StructuredBuffer에 패킹 + trailStartOffsets 기록. drawSingleThreaded: VB/IB 없이 `DrawInstanced((N-1)*6, 1, 0, 0)` |
+| `trail.hlsl` | VS expansion via `SV_VertexID` — kStripOffsets/kSides 룩업 테이블로 segment 당 6 vertex로 quad strip 생성. 중앙 차분 tangent × cameraDir 외적으로 side 벡터 산출. UV: `Stretch`(1-segmentT) / `Tile`(cumulativeDist/tileLength). PS: bindless sample × baseColor × (1-age/lifetime) |
+
 ---
 
 ## 8-B. 파티클 시스템
@@ -485,8 +495,8 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 | 파일 | 설명 |
 |------|------|
-| `particleModules.hpp` | `MainModule`, `EmissionModule`, `ShapeModule`, `VelocityOverLifetimeModule`, `ColorOverLifetimeModule`, `SizeOverLifetimeModule`, `RotationOverLifetimeModule`, `CustomDataModule`, `Material`, `RendererModule`, `TextureSheetAnimationModule`, `SubEmittersModule`, `ParticleSystemConfig` |
-| `particleSystem.hpp` | `ParticleSystem`, `Particle`, `SubEmitterEvent` |
+| `particleModules.hpp` | `MainModule`, `EmissionModule`, `ShapeModule`, `VelocityOverLifetimeModule`, `ColorOverLifetimeModule`, `SizeOverLifetimeModule`, `RotationOverLifetimeModule`, `CustomDataModule`, `Material`, `RendererModule`, `TextureSheetAnimationModule`, `SubEmittersModule`, `TrailModule`, `ParticleSystemConfig` |
+| `particleSystem.hpp` | `ParticleSystem`, `Particle` (`trail` ring buffer 포함, kMaxTrailSegments=32), `TrailPoint`, `SubEmitterEvent` |
 | `particleSystem.cpp` | `init()`, `emit()`, `emitAt()`, `startContinuous()`, `spawnParticle()`, `sampleShapeOrigin/Direction()`, `update()`, `render()` |
 | `particleEffect.hpp` | `ParticleEffect` — Unity 프리팹 대응 그룹 컨테이너. `PlayMode::Emit` / `Continuous`. `SubEmitterBinding`, `PendingSubEmitterBurst` |
 | `particleEffect.cpp` | `addSystem()`, `play()`, `stop()`, `isAlive()`, `update()`, `render()`, `bindSubEmitter()` |
@@ -617,7 +627,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `aoESlashGreenEffect_` | AoE 슬래시 그린 이펙트 (Circle2 + Slash, Billboard) |
 
 **Camera::updateGFX() 등록 파이프라인 (`camera.cpp`):**
-- PBRPipeline, PBRSkinnedPipeline, SkyboxPipeline, BVPipeline, BillboardPipeline, **TerrainPipeline**, MeshParticlePipeline, SmokeBlendCGPipeline, SwordSlashPipeline, **TwoSidesPipeline** CameraData 자기등록
+- PBRPipeline, PBRSkinnedPipeline, SkyboxPipeline, BVPipeline, BillboardPipeline, **TerrainPipeline**, MeshParticlePipeline, SmokeBlendCGPipeline, SwordSlashPipeline, **TwoSidesPipeline**, **TrailPipeline** CameraData 자기등록
 
 **Camera Spring Arm 시스템 (`camera.hpp` / `camera.cpp`):**
 

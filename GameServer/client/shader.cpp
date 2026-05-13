@@ -3487,3 +3487,99 @@ ComPtr<ID3D12PipelineState> createPBRDeferredLightingShader(ID3D12Device* device
 	setD3DName(ret.Get(), "PBRDeferredLightingShader");
 	return ret;
 }
+
+// Builds the PSO used by TrailPipeline. No vertex buffer is bound — the VS
+// pulls each segment's endpoints from a StructuredBuffer (gTrailVertices) via
+// SV_VertexID. CullMode = NONE so trails are visible from either side.
+// `additive == true` uses additive blending (One/One); otherwise standard alpha.
+static ComPtr<ID3D12PipelineState> createTrailShaderImpl(
+	ID3D12Device* device, ID3D12RootSignature* rootSig, bool additive
+) {
+	ComPtr<ID3D12PipelineState> ret{};
+
+	auto vsCode = compileShader( "trail.hlsl", nullptr, "VSMain", "vs_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
+	auto psCode = compileShader( "trail.hlsl", nullptr, "PSMain", "ps_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
+
+	// No input layout — VS reads from StructuredBuffer indexed by SV_VertexID.
+	auto inputLayoutDesc = D3D12_INPUT_LAYOUT_DESC{
+		.pInputElementDescs = nullptr,
+		.NumElements = 0u
+	};
+
+	auto psoDesc = D3D12_GRAPHICS_PIPELINE_STATE_DESC{
+		.pRootSignature = rootSig,
+		.VS = vsCode.byteCode,
+		.PS = psCode.byteCode,
+		.BlendState = D3D12_BLEND_DESC{
+			.AlphaToCoverageEnable = false,
+			.IndependentBlendEnable = false
+		},
+		.SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
+		.RasterizerState = D3D12_RASTERIZER_DESC{
+			.FillMode = D3D12_FILL_MODE_SOLID,
+			.CullMode = D3D12_CULL_MODE_NONE,
+			.FrontCounterClockwise = false,
+			.DepthBias = 0,
+			.DepthBiasClamp = 0.f,
+			.SlopeScaledDepthBias = 0.f,
+			.DepthClipEnable = true,
+			.MultisampleEnable = false,
+			.AntialiasedLineEnable = false,
+			.ForcedSampleCount = 0u
+		},
+		// Depth-test against scene geometry but do NOT write depth — overlapping
+		// trail segments must all blend correctly.
+		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
+			.DepthEnable = true,
+			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
+			.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+			.StencilEnable = false,
+			.StencilReadMask = 0u,
+			.StencilWriteMask = 0u,
+			.FrontFace = D3D12_DEPTH_STENCILOP_DESC{},
+			.BackFace = D3D12_DEPTH_STENCILOP_DESC{}
+		},
+		.InputLayout = inputLayoutDesc,
+		.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+		.SampleDesc = DXGI_SAMPLE_DESC{ .Count = 1u, .Quality = 0u },
+		.NodeMask = 0u,
+		.Flags = D3D12_PIPELINE_STATE_FLAG_NONE
+	};
+
+	psoDesc.NumRenderTargets = 1u;
+	psoDesc.BlendState.RenderTarget[0].BlendEnable = true;
+	if (additive) {
+		// Additive: src * 1 + dst * 1
+		psoDesc.BlendState.RenderTarget[0].SrcBlend  = D3D12_BLEND_ONE;
+		psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
+	} else {
+		// Standard alpha blend
+		psoDesc.BlendState.RenderTarget[0].SrcBlend  = D3D12_BLEND_SRC_ALPHA;
+		psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+	}
+	psoDesc.BlendState.RenderTarget[0].BlendOp        = D3D12_BLEND_OP_ADD;
+	psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha  = D3D12_BLEND_ONE;
+	psoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+	psoDesc.BlendState.RenderTarget[0].BlendOpAlpha   = D3D12_BLEND_OP_ADD;
+	psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+	psoDesc.DSVFormat     = DXGI_FORMAT_D32_FLOAT;
+
+	DISPLAY_ERROR_DX_HR(
+		device->CreateGraphicsPipelineState( &psoDesc, __uuidof(ID3D12PipelineState), &ret ),
+		false
+	);
+
+	setD3DName( ret.Get(), additive ? "TrailShaderAdditive" : "TrailShader" );
+
+	return ret;
+}
+
+ComPtr<ID3D12PipelineState> createTrailShader( ID3D12Device* device, ID3D12RootSignature* rootSig ) {
+	return createTrailShaderImpl( device, rootSig, /*additive=*/false );
+}
+
+ComPtr<ID3D12PipelineState> createTrailShaderAdditive( ID3D12Device* device, ID3D12RootSignature* rootSig ) {
+	return createTrailShaderImpl( device, rootSig, /*additive=*/true );
+}

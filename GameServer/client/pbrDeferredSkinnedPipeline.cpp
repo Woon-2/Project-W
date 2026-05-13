@@ -833,7 +833,7 @@ void Dispatcher::gBufferUpdate() {
     u32t boneUploadCnt = 0u;
     for (u32t i = 0u; i < static_cast<u32t>(drawEvents_.size()); ++i) {
         const auto& e        = drawEvents_[i];
-        const bool  isCulled = false; // hasLastFlags && (lastFlags[i] == 0u);
+        const bool  isCulled = hasLastFlags && (lastFlags[i] == 0u);
 
         perInstanceData[i].rootBoneOffset = boneUploadCnt;
 
@@ -860,7 +860,7 @@ void Dispatcher::gBufferUpdate() {
     boneData.resize(boneUploadCnt);
     u32t boneIdx = 0u;
     for (u32t i = 0u; i < static_cast<u32t>(drawEvents_.size()); ++i) {
-        const bool isCulled = false; // hasLastFlags && (lastFlags[i] == 0u);
+        const bool isCulled = hasLastFlags && (lastFlags[i] == 0u);
         if (!isCulled && drawEvents_[i].bakedClipId == -1) {
             for (auto& bx : drawEvents_[i].boneXforms) {
                 boneData[boneIdx] = PBRDeferredSkinnedGBufferShader::BoneData{
@@ -989,7 +989,7 @@ void Dispatcher::gBufferUpdateMT() {
 
     // rootBoneOffset must be computed sequentially — fix up after parallel world-xform pass
     for (std::size_t i = 1u; i < drawEvents_.size(); ++i) {
-        const bool isCulled = false; // hasLastFlags && (lastFlags[i-1] == 0u);
+        const bool isCulled = hasLastFlags && (lastFlags[i-1] == 0u);
 
         perInstanceData[i].rootBoneOffset = perInstanceData[i-1].rootBoneOffset;
         if (!isCulled && drawEvents_[i-1].bakedClipId == -1) {
@@ -1006,7 +1006,7 @@ void Dispatcher::gBufferUpdateMT() {
     static auto boneData = std::vector<PBRDeferredSkinnedGBufferShader::BoneData>();
     boneData.resize(boneUploadCnt);
     for (u32t i = 0u; i < static_cast<u32t>(drawEvents_.size()); ++i) {
-        const bool isCulled = false; // hasLastFlags && (lastFlags[i] == 0u);
+        const bool isCulled = hasLastFlags && (lastFlags[i] == 0u);
         const auto& e = drawEvents_[i];
         u32t boneIdx = perInstanceData[i].rootBoneOffset;
         if (!isCulled && drawEvents_[i].bakedClipId == -1) {
@@ -1184,7 +1184,7 @@ void MU_CALLCONV Dispatcher::addJobGBufferUpdate(
         const std::ptrdiff_t cnt = pLast - pFirst;
         for (std::ptrdiff_t i = 0; i < cnt; ++i) {
             const DrawEvent& e        = pFirst[i];
-            const bool       isCulled = false; // pVisFlags && (pVisFlags[i] == 0u);
+            const bool       isCulled = pVisFlags && (pVisFlags[i] == 0u);
             pOut[i].rootBoneOffset = 0u;  // fixed up sequentially after latch
             if (!isCulled) {
                 pOut[i].world       = mu::transpose(e.world).getXmf();

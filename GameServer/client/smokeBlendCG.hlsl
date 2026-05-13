@@ -168,8 +168,12 @@ void GSMain(point VSOutput input[1], inout TriangleStream<PSInput> triStream) {
     float3 stretchAxisOnPlane = stretchAxis - dot(stretchAxis, vLook) * vLook;
     float stretchLenSq = dot(stretchAxisOnPlane, stretchAxisOnPlane);
     if (input[0].stretchMode > 0.5f && stretchLenSq > 0.000001f) {
-        vUpR = stretchAxisOnPlane * rsqrt(stretchLenSq);
-        vRightR = normalize(cross(vUpR, vLook));
+        float3 stretchUp    = stretchAxisOnPlane * rsqrt(stretchLenSq);
+        float3 stretchRight = normalize(cross(stretchUp, vLook));
+        float c = cos(input[0].rotation);
+        float s = sin(input[0].rotation);
+        vUpR    =  c * stretchUp + s * stretchRight;
+        vRightR = -s * stretchUp + c * stretchRight;
     } else {
         float c = cos(input[0].rotation);
         float s = sin(input[0].rotation);

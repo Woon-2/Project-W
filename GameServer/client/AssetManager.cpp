@@ -123,6 +123,24 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 	} );
 
 	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "Smoke26",
+		.texturePath     = "../resources/Textures/Smoke26.dds",
+		.pDest           = &smoke26Tex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "Flash",
+		.texturePath     = "../resources/Textures/Flash.dds",
+		.pDest           = &flashTex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
 		.name            = "Smoke12",
 		.texturePath     = "../resources/Textures/Smoke12.dds",
 		.pDest           = &smoke12Tex_,
@@ -170,6 +188,33 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 		.name            = "Trail62",
 		.texturePath     = "../resources/Textures/Trail62.dds",
 		.pDest           = &trail62Tex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "Trail67",
+		.texturePath     = "../resources/Textures/Trail67.dds",
+		.pDest           = &trail67Tex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "Circle",
+		.texturePath     = "../resources/Textures/Circle.dds",
+		.pDest           = &circleTex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "Stone",
+		.texturePath     = "../resources/Textures/Stone.dds",
+		.pDest           = &stoneTex_,
 		.pTexHashMap     = &texHashMap_,
 		.needsUploadInfo = false,
 		.sampler         = Samplers::BilinearClamp

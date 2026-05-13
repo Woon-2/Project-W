@@ -40,6 +40,7 @@ struct DrawEvent {
 	float rotation = 0.f;
 	mu::Mat4x4 rotation3D = mu::Mat4x4{};
 	mu::Vec4 stretchAxisAndMode = { 0.f, 0.f, 0.f, 0.f }; // xyz=world axis, w=1 when stretched
+	ps::RendererModule::Alignment alignment = ps::RendererModule::Alignment::View;
 	int renderOrder = 0;	// 낮을수록 먼저 렌더 (Unity Order in Layer 동일 개념)
 	ps::RendererModule::SortMode sortMode = ps::RendererModule::SortMode::None;
 	float sortingFudge = 0.f;

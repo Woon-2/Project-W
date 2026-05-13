@@ -51,6 +51,9 @@ struct MainModule {
     mu::Vec4 startColor         = { 1.f, 1.f, 1.f, 1.f };
     float    startSizeMin       = 1.f;
     float    startSizeMax       = 1.f;
+    bool     startSize3DEnabled = false;
+    mu::Vec3 startSize3DMin     = { 1.f, 1.f, 1.f };
+    mu::Vec3 startSize3DMax     = { 1.f, 1.f, 1.f };
     float    startRotationMin   = 0.f;   // radians (billboard Z-axis)
     float    startRotationMax   = 0.f;
     bool     startRotation3DEnabled = false;
@@ -100,7 +103,7 @@ struct EmissionModule {
 // Shape Module
 // ---------------------------------------------------------------------------
 struct ShapeModule {
-    enum class Type { Point, Edge, Cone, Sphere, Box, Circle };
+    enum class Type { Point, Edge, Cone, Sphere, Hemisphere, Box, Circle };
     bool     enabled   = true;
     Type     type      = Type::Point;
     mu::Vec3 position  = { 0.f, 0.f, 0.f };
@@ -121,6 +124,7 @@ struct ShapeModule {
 
     float    radiusThickness         = 1.f;
     float    arc                     = 2.f * 3.14159265f;
+    int      arcMode                 = 0;  // Unity ShapeModule.arc.mode: 3 = burst spread
     bool     alignToDirection        = false;
     float    randomDirectionAmount   = 0.f;
     float    sphericalDirectionAmount = 0.f;
@@ -138,6 +142,15 @@ struct VelocityOverLifetimeModule {
     float radial = 0.f;
     float speedModifier = 1.f;
     bool  inWorldSpace = false;
+    bool  useCurves = false;
+    MinMaxCurveChannel linearX;
+    MinMaxCurveChannel linearY;
+    MinMaxCurveChannel linearZ;
+    MinMaxCurveChannel orbitalX;
+    MinMaxCurveChannel orbitalY;
+    MinMaxCurveChannel orbitalZ;
+    MinMaxCurveChannel radialCurve;
+    MinMaxCurveChannel speedModifierCurve;
 };
 
 // ---------------------------------------------------------------------------
@@ -224,6 +237,7 @@ struct CustomDataModule {
 struct MatUnlit {
     const Texture* mainTex = nullptr;
     bool additive = false;   // false = alpha blend, true = additive blend
+    mu::Vec4 color = { 1.f, 1.f, 1.f, 1.f };
 };
 
 // MatSwordSlash: SwordSlashPipeline (Mode::Mesh only)
@@ -395,6 +409,51 @@ struct SubEmittersModule {
 };
 
 // ---------------------------------------------------------------------------
+// Trail Module
+// Unity Particle System Trails (Mode = Particles). Each particle records a
+// ring buffer of recent positions; a separate pipeline renders camera-facing
+// quad strips from that history. Coexists with the main RendererModule pass
+// (Trails are an additive overlay, not a replacement renderer mode).
+//
+// Scope (first pass):
+//   - dieWithParticles = true (no detached trails yet)
+//   - widthOverTrail / widthOverLifetime represented by two endpoints
+//   - TextureMode Stretch | Tile
+//   - World/Local capture follows MainModule::simulationSpace
+// ---------------------------------------------------------------------------
+struct TrailModule {
+    enum class Mode { Particles, Ribbon };
+    Mode   mode                 = Mode::Particles;
+    bool   enabled              = false;
+    float  ratio                = 1.f;     // 0..1, fraction of particles that emit trails
+    float  lifetimeMin          = 0.5f;    // per-vertex lifetime (seconds)
+    float  lifetimeMax          = 0.5f;
+    float  minVertexDistance    = 0.1f;
+    bool   worldSpace           = false;
+    bool   dieWithParticles     = true;    // pinned true for first implementation
+    bool   sizeAffectsWidth     = true;
+    bool   sizeAffectsLifetime  = false;
+    bool   inheritParticleColor = true;
+    bool   generateLightingData = false;
+    bool   splitSubEmitterRibbons = false;
+    bool   attachRibbonsToTransform = false;
+    int    ribbonCount          = 1;
+    float  shadowBias           = 0.5f;
+    float  widthOverTrailStart  = 1.f;
+    float  widthOverTrailEnd    = 1.f;
+    float  widthMultiplier      = 1.f;     // = Unity Start Width
+    ColorGradient colorOverTrail    = ColorGradient::constant({ 1.f, 1.f, 1.f, 1.f });
+    ColorGradient colorOverLifetime = ColorGradient::constant({ 1.f, 1.f, 1.f, 1.f });
+
+    enum class TextureMode { Stretch, Tile };
+    TextureMode textureMode = TextureMode::Stretch;
+    mu::Vec2    textureScale = { 1.f, 1.f };
+    float       tileLength  = 1.f;         // world units per UV tile when textureMode == Tile
+
+    MatUnlit material;                     // trail-specific material (reuses MatUnlit)
+};
+
+// ---------------------------------------------------------------------------
 // ParticleSystemConfig
 // ---------------------------------------------------------------------------
 struct ParticleSystemConfig {
@@ -408,6 +467,7 @@ struct ParticleSystemConfig {
     TextureSheetAnimationModule textureSheetAnimation;
     CustomDataModule            customData;
     SubEmittersModule           subEmitters;
+    TrailModule                 trail;
     RendererModule              renderer;
 };
 

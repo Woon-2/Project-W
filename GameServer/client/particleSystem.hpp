@@ -3,21 +3,36 @@
 
 #include "particleModules.hpp"
 
+#include <array>
+#include <cstdint>
 #include <vector>
 #include <random>
 
 class GFX;
 
+// Trail ring buffer entry. simulationSpace == World -> pos is world-space.
+// simulationSpace == Local -> pos is emitter-local (applied with localToWorld at draw time).
+struct TrailPoint {
+    mu::Vec3 pos       = { 0.f, 0.f, 0.f };
+    float    spawnTime = 0.f;   // ParticleSystem::systemTime_ at capture
+};
+
 struct Particle {
+    static constexpr int kMaxTrailSegments = 32;
+
     mu::Vec3        pos, vel;
     mu::Vec3        motionVelocity = { 0.f, 0.f, 0.f };
     mu::Vec3        emitterPosition = { 0.f, 0.f, 0.f };
     mu::Mat4x4      emitterRotation;
+    mu::Mat4x4      emitterTransformRotation;
     float           lifetime, maxLifetime;
     mu::Vec4        startColor;
     ColorGradient   colorOverLifetime;
     float           sizeBegin, sizeEnd, drag;
     float           sizeStart = 1.f;
+    mu::Vec3        sizeBegin3D = { 1.f, 1.f, 1.f };
+    mu::Vec3        sizeEnd3D   = { 1.f, 1.f, 1.f };
+    mu::Vec3        sizeStart3D = { 1.f, 1.f, 1.f };
     float           sizeRandom = 0.f;
     mu::Vec3        gravity;
     float           rotation;
@@ -28,11 +43,22 @@ struct Particle {
     mu::Vec3        angularVelocity3D = { 0.f, 0.f, 0.f };
     mu::Vec3        angularAngle3D    = { 0.f, 0.f, 0.f };
     mu::Vec3        rotationRandom3D  = { 0.f, 0.f, 0.f };
+    mu::Vec3        velocityRandom3D  = { 0.f, 0.f, 0.f };
+    mu::Vec3        orbitalRandom3D   = { 0.f, 0.f, 0.f };
+    mu::Vec2        velocityRandomExtra = { 0.f, 0.f };
     mu::Mat4x4      baseRotation;            // fixed 3D orientation set at spawn
     mu::Mat4x4      billboardRotation3D;     // Unity Start Rotation 3D for billboard quads
     mu::Vec3        transformScale = { 1.f, 1.f, 1.f };
     mu::Vec2        custom1Random   = { 0.f, 0.f };
     mu::Vec2        custom2Random   = { 0.f, 0.f };
+
+    // Trail ring buffer. Only valid when trailEnabled is true.
+    // Layout: trail[(trailHead - trailCount + 32) & 31] = oldest, ..., trail[(trailHead - 1 + 32) & 31] = newest.
+    std::array<TrailPoint, kMaxTrailSegments> trail{};
+    std::uint8_t   trailHead     = 0;
+    std::uint8_t   trailCount    = 0;
+    bool           trailEnabled  = false;
+    float          trailLifetime = 0.f;     // sampled per-particle from TrailModule.lifetime[Min|Max]
 
     // 'active' 필드 없음: pool_[0..activeCount_-1] 이 항상 활성 상태
 };
@@ -88,9 +114,11 @@ private:
     struct ShapeSample { mu::Vec3 origin; mu::Vec3 dir; };
 
     float        randomFloat(float lo, float hi);
+    float        sampleArcAngle();
     void         spawnParticle();
     void         emitScheduledBursts(float prevTime, float currTime);
     ShapeSample  sampleCircle();
+    ShapeSample  sampleCone();
     mu::Vec3     sampleShapeOrigin();
     mu::Vec3     sampleShapeDirection(const mu::Vec3& origin);
 
@@ -113,6 +141,8 @@ private:
     mu::Vec3  inheritedVel_     = {};
     mu::Vec4  inheritedColor_   = { 1.f, 1.f, 1.f, 1.f };
     float     inheritedSize_    = 1.f;
+    int       shapeEmitIndex_   = 0;
+    int       shapeEmitCount_   = 1;
 };
 
 #endif  // __particleSystem_HPP

@@ -162,12 +162,46 @@ static mu::Vec3 rotateDirection(mu::Vec3 v, mu::Mat4x4 rotation) {
     return mu::Vec3(mu::normalize(rotateVector(v, rotation)));
 }
 
+static float maxComponent(mu::Vec3 v) {
+    return std::max(v.x(), std::max(v.y(), v.z()));
+}
+
+static mu::Vec3 lerpVec3(mu::Vec3 a, mu::Vec3 b, float t) {
+    return {
+        std::lerp(a.x(), b.x(), t),
+        std::lerp(a.y(), b.y(), t),
+        std::lerp(a.z(), b.z(), t)
+    };
+}
+
 static mu::Vec3 calcVelocityOverLifetime(
     const ps::ParticleSystemConfig& cfg, const Particle& p
 ) {
     const auto& vol = cfg.velocityOverLifetime;
     if (!vol.enabled)
         return { 0.f, 0.f, 0.f };
+
+    const float t = 1.f - p.lifetime / p.maxLifetime;
+    const mu::Vec3 linear = vol.useCurves
+        ? mu::Vec3{
+            vol.linearX.evaluate(t, p.velocityRandom3D.x()),
+            vol.linearY.evaluate(t, p.velocityRandom3D.y()),
+            vol.linearZ.evaluate(t, p.velocityRandom3D.z())
+        }
+        : vol.linear;
+    const mu::Vec3 orbital = vol.useCurves
+        ? mu::Vec3{
+            vol.orbitalX.evaluate(t, p.orbitalRandom3D.x()),
+            vol.orbitalY.evaluate(t, p.orbitalRandom3D.y()),
+            vol.orbitalZ.evaluate(t, p.orbitalRandom3D.z())
+        }
+        : vol.orbital;
+    const float radial = vol.useCurves
+        ? vol.radialCurve.evaluate(t, p.velocityRandomExtra.x())
+        : vol.radial;
+    const float speedModifier = vol.useCurves
+        ? vol.speedModifierCurve.evaluate(t, p.velocityRandomExtra.y())
+        : vol.speedModifier;
 
     const mu::Vec3 radialOffset = p.pos - p.emitterPosition;
     const float radius = std::sqrt(mu::dot(radialOffset, radialOffset));
@@ -176,10 +210,10 @@ static mu::Vec3 calcVelocityOverLifetime(
                              : rotateDirection(cfg.shape.direction, p.emitterRotation);
 
     const mu::Vec3 localLinear = vol.inWorldSpace
-                               ? vol.linear
-                               : rotateVector(vol.linear, p.emitterRotation);
+                               ? linear
+                               : rotateVector(linear, p.emitterTransformRotation);
 
-    mu::Vec3 velocity = localLinear + radialDir * vol.radial;
+    mu::Vec3 velocity = localLinear + radialDir * radial;
 
     auto addOrbitalVelocity = [&](mu::Vec3 localAxis, float angularSpeed) {
         if (std::abs(angularSpeed) <= 1e-6f || radius <= 1e-6f)
@@ -187,7 +221,7 @@ static mu::Vec3 calcVelocityOverLifetime(
 
         const mu::Vec3 axis = vol.inWorldSpace
                             ? localAxis
-                            : rotateDirection(localAxis, p.emitterRotation);
+                            : rotateDirection(localAxis, p.emitterTransformRotation);
         const mu::Vec3 tangentRaw = mu::cross(axis, radialDir);
         const float tangentLenSq = mu::dot(tangentRaw, tangentRaw);
         if (tangentLenSq > 1e-6f) {
@@ -196,17 +230,29 @@ static mu::Vec3 calcVelocityOverLifetime(
         }
     };
 
-    addOrbitalVelocity({ 1.f, 0.f, 0.f }, vol.orbital.x());
-    addOrbitalVelocity({ 0.f, 1.f, 0.f }, vol.orbital.y());
-    addOrbitalVelocity({ 0.f, 0.f, 1.f }, vol.orbital.z());
+    addOrbitalVelocity({ 1.f, 0.f, 0.f }, orbital.x());
+    addOrbitalVelocity({ 0.f, 1.f, 0.f }, orbital.y());
+    addOrbitalVelocity({ 0.f, 0.f, 1.f }, orbital.z());
 
-    return velocity * vol.speedModifier;
+    return velocity * speedModifier;
 }
 
 float ParticleSystem::randomFloat(float lo, float hi) {
     if (hi < lo)
         std::swap(lo, hi);
     return std::uniform_real_distribution<float>{lo, hi}(rng_);
+}
+
+float ParticleSystem::sampleArcAngle() {
+    const auto& s = config_.shape;
+    if (s.arcMode != 3 || shapeEmitCount_ <= 1)
+        return randomFloat(0.f, s.arc);
+
+    const bool fullCircle = std::abs(s.arc - 2.f * 3.14159265f) < 1e-4f;
+    const float denom = fullCircle
+                      ? static_cast<float>(shapeEmitCount_)
+                      : static_cast<float>(shapeEmitCount_ - 1);
+    return s.arc * static_cast<float>(shapeEmitIndex_) / std::max(1.f, denom);
 }
 
 void ParticleSystem::emitScheduledBursts(float prevTime, float currTime) {
@@ -296,6 +342,46 @@ void ParticleSystem::update(Seconds dt) {
         p.pos      += p.motionVelocity * scaledDtf;
         p.lifetime -= scaledDtf;
 
+        // Trail capture + ageing. Stored coordinate follows MainModule::simulationSpace
+        // (World -> world-space; Local -> emitter-local). For Local space we apply
+        // emitter inverse at capture so draw-time only needs the current emitter transform.
+        if (p.trailEnabled) {
+            constexpr int kCap = Particle::kMaxTrailSegments;
+            mu::Vec3 capturePos = p.pos;
+            // NOTE: Local-space simulation currently stores world positions because
+            // the existing simulation pipeline keeps p.pos in world coords even when
+            // simulationSpace == Local. When emitter-relative storage is needed we'll
+            // transform here against emitterPosition/emitterRotation. (Deferred.)
+
+            // Distance gate: emit a new vertex only when we've moved far enough from
+            // the most recent recorded point. minVertexDistance <= 0 disables the gate.
+            bool acceptNew = true;
+            if (p.trailCount > 0 && config_.trail.minVertexDistance > 0.f) {
+                const int lastIdx = (p.trailHead - 1 + kCap) % kCap;
+                const mu::Vec3 d  = capturePos - p.trail[lastIdx].pos;
+                const float    d2 = mu::dot(d, d);
+                const float    md = config_.trail.minVertexDistance;
+                acceptNew = (d2 >= md * md);
+            }
+            if (acceptNew) {
+                p.trail[p.trailHead] = TrailPoint{ capturePos, systemTime_ };
+                p.trailHead = static_cast<std::uint8_t>((p.trailHead + 1) % kCap);
+                if (p.trailCount < kCap) ++p.trailCount;
+                // If buffer is full, oldest entry is overwritten implicitly by the
+                // head advance; trailCount stays at kCap.
+            }
+
+            // Age out tail points older than trailLifetime.
+            while (p.trailCount > 0) {
+                const int tailIdx = (p.trailHead - p.trailCount + kCap) % kCap;
+                if (systemTime_ - p.trail[tailIdx].spawnTime > p.trailLifetime) {
+                    --p.trailCount;
+                } else {
+                    break;
+                }
+            }
+        }
+
         if (p.angularVelocity != 0.f)
             p.angularAngle += p.angularVelocity * scaledDtf;
 
@@ -338,9 +424,10 @@ void ParticleSystem::render(GFX& gfx) const {
     for (int i = 0; i < activeCount_; ++i) {
         const Particle& p    = pool_[i];
         const float    t     = 1.f - p.lifetime / p.maxLifetime;
-        const float    size  = (config_.sizeOverLifetime.enabled && config_.sizeOverLifetime.useCurve)
-                             ? p.sizeStart * config_.sizeOverLifetime.size.evaluate(t, p.sizeRandom)
-                             : std::lerp(p.sizeBegin, p.sizeEnd, t);
+        const mu::Vec3 size3D = (config_.sizeOverLifetime.enabled && config_.sizeOverLifetime.useCurve)
+                              ? p.sizeStart3D * config_.sizeOverLifetime.size.evaluate(t, p.sizeRandom)
+                              : lerpVec3(p.sizeBegin3D, p.sizeEnd3D, t);
+        const float    size  = maxComponent(size3D);
         const mu::Vec4 tint  = p.startColor * p.colorOverLifetime.evaluate(t);
         const bool     customDataEnabled = config_.customData.enabled;
         const mu::Vec2 custom1 = customDataEnabled
@@ -358,6 +445,7 @@ void ParticleSystem::render(GFX& gfx) const {
             .systemTime = systemTime_,
             .t = t,
             .size = size,
+            .size3D = size3D,
             .tint = tint,
             .custom1 = custom1,
             .custom2 = custom2,
@@ -367,6 +455,11 @@ void ParticleSystem::render(GFX& gfx) const {
         std::visit([&](const auto& mat) {
             submitParticleDraw(gfx, ctx, mat);
         }, rend.mat);
+
+        // Trails are an additive overlay independent of the renderer mode —
+        // submit alongside the primary draw. submitParticleTrail() is a no-op
+        // when the TrailModule is disabled or this particle has no trail.
+        submitParticleTrail(gfx, ctx, config_.trail);
     }
 }
 
@@ -386,8 +479,15 @@ void ParticleSystem::init(const ps::ParticleSystemConfig& config, int maxParticl
 }
 
 void ParticleSystem::emit(int count) {
-    for (int i = 0; i < count; ++i)
+    const int savedIndex = shapeEmitIndex_;
+    const int savedCount = shapeEmitCount_;
+    shapeEmitCount_ = std::max(1, count);
+    for (int i = 0; i < count; ++i) {
+        shapeEmitIndex_ = i;
         spawnParticle();
+    }
+    shapeEmitIndex_ = savedIndex;
+    shapeEmitCount_ = savedCount;
 }
 
 void ParticleSystem::startContinuous() {
@@ -409,7 +509,7 @@ void ParticleSystem::startContinuous(const ps::ParticleSystemConfig& config) {
 // correct radial unit vector regardless of how small the radius is.
 ParticleSystem::ShapeSample ParticleSystem::sampleCircle() {
     const ps::ShapeModule& s = config_.shape;
-    const float angle = randomFloat(0.f, s.arc);
+    const float angle = sampleArcAngle();
     const float inner = std::clamp(1.f - s.radiusThickness, 0.f, 1.f);
     const float r     = s.coneRadius * std::sqrt(randomFloat(inner * inner, 1.f));
     const mu::Vec3 localDir = { std::cos(angle), std::sin(angle), 0.f };
@@ -424,6 +524,38 @@ ParticleSystem::ShapeSample ParticleSystem::sampleCircle() {
     return {
         withRandomOffset(s.position + rotateShapeVector(localDir * r, s)),
         rotateShapeVector(localDir, s)
+    };
+}
+
+// Unity Cone uses local +Z as the cone axis. Angle is the side angle from that
+// axis, and Arc selects the azimuth around it. Keep origin and direction on the
+// same azimuth so partial arcs emit as coherent fan wedges.
+ParticleSystem::ShapeSample ParticleSystem::sampleCone() {
+    const ps::ShapeModule& s = config_.shape;
+    const float angle = sampleArcAngle();
+    const float inner = std::clamp(1.f - s.radiusThickness, 0.f, 1.f);
+    const float r     = s.coneRadius * std::sqrt(randomFloat(inner * inner, 1.f));
+
+    const float sideSin = std::sin(s.coneAngle);
+    const float sideCos = std::cos(s.coneAngle);
+    const mu::Vec3 localRadial = { std::cos(angle), std::sin(angle), 0.f };
+    const mu::Vec3 localOffset = localRadial * r;
+    const mu::Vec3 localDir = {
+        localRadial.x() * sideSin,
+        localRadial.y() * sideSin,
+        sideCos
+    };
+
+    const auto withRandomOffset = [&](mu::Vec3 p) {
+        if (s.randomPositionAmount <= 0.f) return p;
+        const mu::Vec3 randomDir = sampleConeDirection(mu::NVec3(mu::Vec3{ 0.f, 1.f, 0.f }),
+                                                       3.14159265f, rng_);
+        return p + randomDir * randomFloat(0.f, s.randomPositionAmount);
+    };
+
+    return {
+        withRandomOffset(s.position + rotateShapeVector(localOffset, s)),
+        rotateShapeDirection(localDir, s)
     };
 }
 
@@ -452,7 +584,7 @@ mu::Vec3 ParticleSystem::sampleShapeOrigin() {
     }
 
     case ps::ShapeModule::Type::Circle: {
-        const float angle = randomFloat(0.f, s.arc);
+        const float angle = sampleArcAngle();
         const float inner = std::clamp(1.f - s.radiusThickness, 0.f, 1.f);
         const float r     = s.coneRadius * std::sqrt(randomFloat(inner * inner, 1.f));
         const mu::Vec3 localOffset = { r * std::cos(angle), r * std::sin(angle), 0.f };
@@ -461,9 +593,10 @@ mu::Vec3 ParticleSystem::sampleShapeOrigin() {
 
     case ps::ShapeModule::Type::Cone:
         if (s.coneRadius > 0.f) {
-            const float angle = randomFloat(0.f, s.arc);
-            const float r     = s.coneRadius * std::sqrt(randomFloat(0.f, 1.f));
-            const mu::Vec3 localOffset = { r * std::cos(angle), 0.f, r * std::sin(angle) };
+            const float angle = sampleArcAngle();
+            const float inner = std::clamp(1.f - s.radiusThickness, 0.f, 1.f);
+            const float r     = s.coneRadius * std::sqrt(randomFloat(inner * inner, 1.f));
+            const mu::Vec3 localOffset = { r * std::cos(angle), r * std::sin(angle), 0.f };
             return withRandomOffset(s.position + rotateShapeVector(localOffset, s));
         }
         return withRandomOffset(s.position);  // apex emit
@@ -478,6 +611,20 @@ mu::Vec3 ParticleSystem::sampleShapeOrigin() {
             r * sp * std::cos(theta),
             r * std::cos(phi),
             r * sp * std::sin(theta) });
+    }
+
+    case ps::ShapeModule::Type::Hemisphere: {
+        const float theta = 2.f * 3.14159265f * randomFloat(0.f, 1.f);
+        const float y     = randomFloat(0.f, 1.f);
+        const float sp    = std::sqrt(std::max(0.f, 1.f - y * y));
+        const float inner = std::clamp(1.f - s.radiusThickness, 0.f, 1.f);
+        const float r     = s.sphereRadius * std::cbrt(randomFloat(inner * inner * inner, 1.f));
+        const mu::Vec3 localOffset = {
+            r * sp * std::cos(theta),
+            r * y,
+            r * sp * std::sin(theta)
+        };
+        return withRandomOffset(s.position + rotateShapeVector(localOffset, s));
     }
 
     case ps::ShapeModule::Type::Box:
@@ -504,15 +651,20 @@ mu::Vec3 ParticleSystem::sampleShapeDirection(const mu::Vec3& origin) {
         return rotateShapeDirection(s.direction, s);
 
     case ps::ShapeModule::Type::Cone:
-        return sampleConeDirection(
-            mu::NVec3(rotateShapeDirection(s.direction, s)),
-            s.coneAngle,
-            rng_,
-            s.arc,
-            rotateShapeVector(mu::Vec3{ 1.f, 0.f, 0.f }, s));
+    {
+        const float angle = sampleArcAngle();
+        const float sideSin = std::sin(s.coneAngle);
+        const float sideCos = std::cos(s.coneAngle);
+        return rotateShapeDirection({
+            std::cos(angle) * sideSin,
+            std::sin(angle) * sideSin,
+            sideCos
+        }, s);
+    }
 
     case ps::ShapeModule::Type::Circle:
     case ps::ShapeModule::Type::Sphere:
+    case ps::ShapeModule::Type::Hemisphere:
     case ps::ShapeModule::Type::Box: {
         // Outward from shape centre
         const mu::Vec3 outward = origin - s.position;
@@ -540,6 +692,10 @@ void ParticleSystem::spawnParticle() {
         const auto s = sampleCircle();
         origin = s.origin;
         dir    = s.dir;
+    } else if (config_.shape.enabled && config_.shape.type == ps::ShapeModule::Type::Cone) {
+        const auto s = sampleCone();
+        origin = s.origin;
+        dir    = s.dir;
     } else {
         origin = sampleShapeOrigin();
         dir    = sampleShapeDirection(origin);
@@ -550,9 +706,13 @@ void ParticleSystem::spawnParticle() {
     p.vel             = dir * speed;
     p.emitterPosition = config_.shape.position;
     p.emitterRotation = buildShapeRotation(config_.shape);
-    p.motionVelocity  = p.vel + calcVelocityOverLifetime(config_, p);
+    p.emitterTransformRotation = config_.shape.orientation;
     p.lifetime    = randomFloat(config_.main.lifetimeMin, config_.main.lifetimeMax);
     p.maxLifetime = p.lifetime;
+    p.velocityRandom3D = { randomFloat(0.f, 1.f), randomFloat(0.f, 1.f), randomFloat(0.f, 1.f) };
+    p.orbitalRandom3D = { randomFloat(0.f, 1.f), randomFloat(0.f, 1.f), randomFloat(0.f, 1.f) };
+    p.velocityRandomExtra = { randomFloat(0.f, 1.f), randomFloat(0.f, 1.f) };
+    p.motionVelocity  = p.vel + calcVelocityOverLifetime(config_, p);
     p.startColor  = config_.main.startColor;
     p.drag        = config_.velocityOverLifetime.enabled ? config_.velocityOverLifetime.drag : 0.f;
     p.gravity     = config_.main.gravity *
@@ -564,14 +724,26 @@ void ParticleSystem::spawnParticle() {
     else
         p.colorOverLifetime = ColorGradient::constant({ 1.f, 1.f, 1.f, 1.f });
 
-    const float sizeMult = randomFloat(config_.main.startSizeMin, config_.main.startSizeMax);
+    const float scalarSizeMult = randomFloat(config_.main.startSizeMin, config_.main.startSizeMax);
+    const mu::Vec3 sizeMult3D = config_.main.startSize3DEnabled
+                              ? mu::Vec3{
+                                  randomFloat(config_.main.startSize3DMin.x(), config_.main.startSize3DMax.x()),
+                                  randomFloat(config_.main.startSize3DMin.y(), config_.main.startSize3DMax.y()),
+                                  randomFloat(config_.main.startSize3DMin.z(), config_.main.startSize3DMax.z())
+                                }
+                              : mu::Vec3{ scalarSizeMult, scalarSizeMult, scalarSizeMult };
+    const float sizeMult = maxComponent(sizeMult3D);
     p.sizeStart = sizeMult;
+    p.sizeStart3D = sizeMult3D;
     p.sizeRandom = randomFloat(0.f, 1.f);
     if (config_.sizeOverLifetime.enabled) {
         p.sizeBegin = config_.sizeOverLifetime.sizeBegin * sizeMult;
         p.sizeEnd   = config_.sizeOverLifetime.sizeEnd   * sizeMult;
+        p.sizeBegin3D = sizeMult3D * config_.sizeOverLifetime.sizeBegin;
+        p.sizeEnd3D   = sizeMult3D * config_.sizeOverLifetime.sizeEnd;
     } else {
         p.sizeBegin = p.sizeEnd = sizeMult;
+        p.sizeBegin3D = p.sizeEnd3D = sizeMult3D;
     }
 
     p.angularVelocity = config_.rotationOverLifetime.enabled
@@ -617,6 +789,27 @@ void ParticleSystem::spawnParticle() {
         p.sizeBegin  *= inheritedSize_;
         p.sizeEnd    *= inheritedSize_;
         p.sizeStart  *= inheritedSize_;
+        p.sizeBegin3D *= inheritedSize_;
+        p.sizeEnd3D   *= inheritedSize_;
+        p.sizeStart3D *= inheritedSize_;
+    }
+
+    // Trail initialization
+    p.trailHead    = 0;
+    p.trailCount   = 0;
+    p.trailEnabled = false;
+    p.trailLifetime = 0.f;
+    if (config_.trail.enabled) {
+        const float roll = randomFloat(0.f, 1.f);
+        if (roll <= config_.trail.ratio) {
+            p.trailEnabled = true;
+            p.trailLifetime = randomFloat(config_.trail.lifetimeMin, config_.trail.lifetimeMax);
+            // Seed the ring buffer with the spawn position so the very first segment
+            // can be drawn as soon as the second capture lands.
+            p.trail[0] = TrailPoint{ p.pos, systemTime_ };
+            p.trailHead  = 1;
+            p.trailCount = 1;
+        }
     }
 
     if (config_.subEmitters.enabled && !inheritEmit_) {
@@ -640,8 +833,15 @@ void ParticleSystem::emitAt(int count, mu::Vec3 worldPos,
     inheritedColor_ = inheritColor;
     inheritedSize_  = inheritSize;
 
-    for (int i = 0; i < count; ++i)
+    const int savedIndex = shapeEmitIndex_;
+    const int savedCount = shapeEmitCount_;
+    shapeEmitCount_ = std::max(1, count);
+    for (int i = 0; i < count; ++i) {
+        shapeEmitIndex_ = i;
         spawnParticle();
+    }
+    shapeEmitIndex_ = savedIndex;
+    shapeEmitCount_ = savedCount;
 
     inheritEmit_           = false;
     config_.shape.position = savedPos;

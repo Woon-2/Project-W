@@ -10,6 +10,7 @@ constexpr float kDegToRad = 3.14159265358979323846f / 180.f;
 struct SerializedProp {
     std::string type;
     std::string value;
+    const json::Value* animationCurve = nullptr;
 };
 
 using PropMap = std::unordered_map<std::string, SerializedProp>;
@@ -64,6 +65,16 @@ mu::Vec3 readVec3(const json::Value* object, std::string_view key, mu::Vec3 fall
     };
 }
 
+mu::Vec2 readVec2(const json::Value* object, std::string_view key, mu::Vec2 fallback = {}) {
+    const auto* value = find(object, key);
+    if (!value || !value->isObject())
+        return fallback;
+    return {
+        readFloat(value, "x", fallback.x()),
+        readFloat(value, "y", fallback.y())
+    };
+}
+
 mu::Vec4 readColor(const json::Value* object,
                    std::string_view key,
                    mu::Vec4 fallback = { 1.f, 1.f, 1.f, 1.f }) {
@@ -110,7 +121,8 @@ PropMap buildPropMap(const json::Value* arrayValue) {
             continue;
         props[path] = SerializedProp{
             .type = readString(&prop, "type"),
-            .value = readString(&prop, "value")
+            .value = readString(&prop, "value"),
+            .animationCurve = find(&prop, "animationCurve")
         };
     }
     return props;
@@ -153,6 +165,61 @@ ps::MinMaxCurveChannel readMinMaxCurve(const json::Value* value) {
     out.curve = readCurveKeys(find(value, "curve"));
     out.curveMin = readCurveKeys(find(value, "curveMin"));
     out.curveMax = readCurveKeys(find(value, "curveMax"));
+    return out;
+}
+
+const SerializedProp* findProp(const PropMap& props, std::string_view path) {
+    const auto it = props.find(std::string(path));
+    return it == props.end() ? nullptr : &it->second;
+}
+
+ps::FloatCurve propAnimationCurve(const PropMap& props, const std::string& path) {
+    const auto* prop = findProp(props, path);
+    return prop ? readCurveKeys(prop->animationCurve) : ps::FloatCurve{};
+}
+
+ps::MinMaxCurveChannel readSerializedMinMaxCurve(
+    const PropMap& props,
+    std::string_view basePath,
+    float fallback = 0.f
+) {
+    const std::string base(basePath);
+    ps::MinMaxCurveChannel out;
+    out.constant = fallback;
+    out.constantMin = fallback;
+    out.constantMax = fallback;
+
+    const int state = static_cast<int>(propFloat(props, base + ".minMaxState", 0.f));
+    const float scalar = propFloat(props, base + ".scalar", fallback);
+    const float minScalar = propFloat(props, base + ".minScalar", fallback);
+
+    out.constant = scalar;
+    out.constantMin = minScalar;
+    out.constantMax = scalar;
+
+    switch (state) {
+    case 1:  // Curve
+        out.mode = ps::MinMaxCurveChannel::Mode::Curve;
+        out.curveMultiplier = scalar;
+        out.curve = propAnimationCurve(props, base + ".maxCurve");
+        if (out.curve.keys.empty())
+            out.curve = propAnimationCurve(props, base + ".minCurve");
+        break;
+    case 2:  // TwoCurves
+        out.mode = ps::MinMaxCurveChannel::Mode::TwoCurves;
+        out.curveMultiplier = scalar;
+        out.curveMin = propAnimationCurve(props, base + ".minCurve");
+        out.curveMax = propAnimationCurve(props, base + ".maxCurve");
+        break;
+    case 3:  // TwoConstants
+        out.mode = ps::MinMaxCurveChannel::Mode::TwoConstants;
+        break;
+    case 0:  // Constant
+    default:
+        out.mode = ps::MinMaxCurveChannel::Mode::Constant;
+        break;
+    }
+
     return out;
 }
 
@@ -275,6 +342,7 @@ ps::ShapeModule::Type readShapeType(std::string_view type) {
     if (type == "Edge") return ps::ShapeModule::Type::Edge;
     if (type == "Cone") return ps::ShapeModule::Type::Cone;
     if (type == "Sphere") return ps::ShapeModule::Type::Sphere;
+    if (type == "Hemisphere") return ps::ShapeModule::Type::Hemisphere;
     if (type == "Box") return ps::ShapeModule::Type::Box;
     if (type == "Circle") return ps::ShapeModule::Type::Circle;
     return ps::ShapeModule::Type::Point;
@@ -301,6 +369,19 @@ ps::RendererModule::SortMode readSortMode(std::string_view sortMode) {
     return ps::RendererModule::SortMode::None;
 }
 
+ps::TrailModule::Mode readTrailMode(std::string_view mode) {
+    if (mode == "Ribbon") return ps::TrailModule::Mode::Ribbon;
+    return ps::TrailModule::Mode::Particles;
+}
+
+ps::TrailModule::TextureMode readTrailTextureMode(std::string_view textureMode) {
+    if (textureMode == "Tile"
+        || textureMode == "DistributePerSegment"
+        || textureMode == "RepeatPerSegment")
+        return ps::TrailModule::TextureMode::Tile;
+    return ps::TrailModule::TextureMode::Stretch;
+}
+
 mu::Mat4x4 eulerDegreesToMat(mu::Vec3 degrees) {
     return mu::rotateXH(mu::Degree{ degrees.x() })
          * mu::rotateYH(mu::Degree{ degrees.y() })
@@ -323,6 +404,17 @@ void readMainModule(const json::Value* main, ps::ParticleSystemConfig& cfg) {
     cfg.main.speedMax = speedMax;
     cfg.main.startSizeMin = sizeMin;
     cfg.main.startSizeMax = sizeMax;
+    cfg.main.startSize3DEnabled = readBool(main, "startSize3D", false);
+    if (cfg.main.startSize3DEnabled) {
+        auto [xMin, xMax] = orderedRange(readCurveRange(find(main, "startSizeX")));
+        auto [yMin, yMax] = orderedRange(readCurveRange(find(main, "startSizeY")));
+        auto [zMin, zMax] = orderedRange(readCurveRange(find(main, "startSizeZ")));
+        cfg.main.startSize3DMin = { xMin, yMin, zMin };
+        cfg.main.startSize3DMax = { xMax, yMax, zMax };
+    } else {
+        cfg.main.startSize3DMin = { sizeMin, sizeMin, sizeMin };
+        cfg.main.startSize3DMax = { sizeMax, sizeMax, sizeMax };
+    }
     cfg.main.gravityModifierMin = gravityMin;
     cfg.main.gravityModifierMax = gravityMax;
     cfg.main.startRotationMin = rotationMin;
@@ -406,6 +498,7 @@ void readEmissionModule(const json::Value* emission, ps::ParticleSystemConfig& c
 }
 
 void readShapeModule(const json::Value* shape,
+                     const PropMap& props,
                      ps::ParticleSystemConfig& cfg) {
     if (!shape)
         return;
@@ -421,6 +514,7 @@ void readShapeModule(const json::Value* shape,
     cfg.shape.sphereRadius = readFloat(shape, "radius", cfg.shape.sphereRadius);
     cfg.shape.radiusThickness = readFloat(shape, "radiusThickness", cfg.shape.radiusThickness);
     cfg.shape.arc = readFloat(shape, "arc", 360.f) * kDegToRad;
+    cfg.shape.arcMode = static_cast<int>(propFloat(props, "ShapeModule.arc.mode", cfg.shape.arcMode));
     cfg.shape.alignToDirection = readBool(shape, "alignToDirection", cfg.shape.alignToDirection);
     cfg.shape.randomDirectionAmount = readFloat(shape, "randomDirectionAmount", cfg.shape.randomDirectionAmount);
     cfg.shape.sphericalDirectionAmount = readFloat(shape, "sphericalDirectionAmount", cfg.shape.sphericalDirectionAmount);
@@ -500,18 +594,29 @@ void readVelocityModule(const PropMap& props, ps::ParticleSystemConfig& cfg) {
     if (!cfg.velocityOverLifetime.enabled)
         return;
 
-    cfg.velocityOverLifetime.linear = {
-        propFloat(props, "VelocityModule.x.scalar"),
-        propFloat(props, "VelocityModule.y.scalar"),
-        propFloat(props, "VelocityModule.z.scalar")
+    auto& vol = cfg.velocityOverLifetime;
+    vol.useCurves = true;
+    vol.linearX = readSerializedMinMaxCurve(props, "VelocityModule.x");
+    vol.linearY = readSerializedMinMaxCurve(props, "VelocityModule.y");
+    vol.linearZ = readSerializedMinMaxCurve(props, "VelocityModule.z");
+    vol.orbitalX = readSerializedMinMaxCurve(props, "VelocityModule.orbitalX");
+    vol.orbitalY = readSerializedMinMaxCurve(props, "VelocityModule.orbitalY");
+    vol.orbitalZ = readSerializedMinMaxCurve(props, "VelocityModule.orbitalZ");
+    vol.radialCurve = readSerializedMinMaxCurve(props, "VelocityModule.radial");
+    vol.speedModifierCurve = readSerializedMinMaxCurve(props, "VelocityModule.speedModifier", 1.f);
+
+    vol.linear = {
+        vol.linearX.evaluate(0.f, 0.f),
+        vol.linearY.evaluate(0.f, 0.f),
+        vol.linearZ.evaluate(0.f, 0.f)
     };
-    cfg.velocityOverLifetime.orbital = {
-        propFloat(props, "VelocityModule.orbitalX.scalar"),
-        propFloat(props, "VelocityModule.orbitalY.scalar"),
-        propFloat(props, "VelocityModule.orbitalZ.scalar")
+    vol.orbital = {
+        vol.orbitalX.evaluate(0.f, 0.f),
+        vol.orbitalY.evaluate(0.f, 0.f),
+        vol.orbitalZ.evaluate(0.f, 0.f)
     };
-    cfg.velocityOverLifetime.radial = propFloat(props, "VelocityModule.radial.scalar");
-    cfg.velocityOverLifetime.speedModifier = propFloat(props, "VelocityModule.speedModifier.scalar", 1.f);
+    vol.radial = vol.radialCurve.evaluate(0.f, 0.f);
+    vol.speedModifier = vol.speedModifierCurve.evaluate(0.f, 0.f);
     cfg.velocityOverLifetime.inWorldSpace = propBool(props, "VelocityModule.inWorldSpace");
 }
 
@@ -543,6 +648,104 @@ void readTextureSheetModule(const PropMap& props, ps::ParticleSystemConfig& cfg)
     cfg.textureSheetAnimation.animation = animationType == 1
                                         ? ps::TextureSheetAnimationModule::Animation::SingleRow
                                         : ps::TextureSheetAnimationModule::Animation::WholeSheet;
+}
+
+void readTrailModule(const json::Value* trails,
+                     const PropMap& props,
+                     ps::ParticleSystemConfig& cfg) {
+    if (props.contains("TrailModule.enabled")) {
+        cfg.trail.enabled = propBool(props, "TrailModule.enabled", cfg.trail.enabled);
+        cfg.trail.mode = static_cast<int>(std::lround(propFloat(props, "TrailModule.mode", 0.f))) == 1
+                       ? ps::TrailModule::Mode::Ribbon
+                       : ps::TrailModule::Mode::Particles;
+        cfg.trail.ratio = propFloat(props, "TrailModule.ratio", cfg.trail.ratio);
+        const int lifetimeMode = static_cast<int>(std::lround(
+            propFloat(props, "TrailModule.lifetime.minMaxState", 0.f)));
+        const float lifetimeScalar = propFloat(props, "TrailModule.lifetime.scalar",
+                                               cfg.trail.lifetimeMax);
+        cfg.trail.lifetimeMin = lifetimeMode == 0
+                              ? lifetimeScalar
+                              : propFloat(props, "TrailModule.lifetime.minScalar",
+                                          lifetimeScalar);
+        cfg.trail.lifetimeMax = lifetimeScalar;
+        cfg.trail.minVertexDistance = propFloat(props, "TrailModule.minVertexDistance",
+                                                cfg.trail.minVertexDistance);
+        cfg.trail.textureMode = static_cast<int>(std::lround(propFloat(
+            props, "TrailModule.textureMode", 0.f))) > 0
+            ? ps::TrailModule::TextureMode::Tile
+            : ps::TrailModule::TextureMode::Stretch;
+        cfg.trail.textureScale = {
+            propFloat(props, "TrailModule.textureScale.x", cfg.trail.textureScale.x()),
+            propFloat(props, "TrailModule.textureScale.y", cfg.trail.textureScale.y())
+        };
+        cfg.trail.tileLength = std::max(0.001f, cfg.trail.textureScale.x());
+        cfg.trail.ribbonCount = std::max(1, static_cast<int>(std::lround(propFloat(
+            props, "TrailModule.ribbonCount", static_cast<float>(cfg.trail.ribbonCount)))));
+        cfg.trail.shadowBias = propFloat(props, "TrailModule.shadowBias", cfg.trail.shadowBias);
+        cfg.trail.worldSpace = propBool(props, "TrailModule.worldSpace", cfg.trail.worldSpace);
+        cfg.trail.dieWithParticles = propBool(props, "TrailModule.dieWithParticles",
+                                              cfg.trail.dieWithParticles);
+        cfg.trail.sizeAffectsWidth = propBool(props, "TrailModule.sizeAffectsWidth",
+                                              cfg.trail.sizeAffectsWidth);
+        cfg.trail.sizeAffectsLifetime = propBool(props, "TrailModule.sizeAffectsLifetime",
+                                                 cfg.trail.sizeAffectsLifetime);
+        cfg.trail.inheritParticleColor = propBool(props, "TrailModule.inheritParticleColor",
+                                                  cfg.trail.inheritParticleColor);
+        cfg.trail.generateLightingData = propBool(props, "TrailModule.generateLightingData",
+                                                  cfg.trail.generateLightingData);
+        cfg.trail.splitSubEmitterRibbons = propBool(props, "TrailModule.splitSubEmitterRibbons",
+                                                    cfg.trail.splitSubEmitterRibbons);
+        cfg.trail.attachRibbonsToTransform = propBool(props, "TrailModule.attachRibbonsToTransform",
+                                                      cfg.trail.attachRibbonsToTransform);
+        const int widthMode = static_cast<int>(std::lround(
+            propFloat(props, "TrailModule.widthOverTrail.minMaxState", 0.f)));
+        const float widthScalar = propFloat(props, "TrailModule.widthOverTrail.scalar",
+                                            cfg.trail.widthOverTrailStart);
+        cfg.trail.widthOverTrailStart = widthMode == 0
+                                      ? widthScalar
+                                      : propFloat(props, "TrailModule.widthOverTrail.minScalar",
+                                                  widthScalar);
+        cfg.trail.widthOverTrailEnd = cfg.trail.widthOverTrailStart;
+    }
+
+    if (!trails)
+        return;
+
+    cfg.trail.enabled = readBool(trails, "enabled", cfg.trail.enabled);
+    cfg.trail.mode = readTrailMode(readString(trails, "mode"));
+    cfg.trail.ratio = readFloat(trails, "ratio", cfg.trail.ratio);
+
+    auto [lifetimeMin, lifetimeMax] = orderedRange(readCurveRange(find(trails, "lifetime")));
+    cfg.trail.lifetimeMin = lifetimeMin;
+    cfg.trail.lifetimeMax = lifetimeMax;
+    cfg.trail.minVertexDistance = readFloat(trails, "minVertexDistance",
+                                            cfg.trail.minVertexDistance);
+    cfg.trail.textureMode = readTrailTextureMode(readString(trails, "textureMode"));
+    cfg.trail.textureScale = readVec2(trails, "textureScale", cfg.trail.textureScale);
+    cfg.trail.tileLength = std::max(0.001f, cfg.trail.textureScale.x());
+    cfg.trail.ribbonCount = std::max(1, readInt(trails, "ribbonCount", cfg.trail.ribbonCount));
+    cfg.trail.shadowBias = readFloat(trails, "shadowBias", cfg.trail.shadowBias);
+    cfg.trail.worldSpace = readBool(trails, "worldSpace", cfg.trail.worldSpace);
+    cfg.trail.dieWithParticles = readBool(trails, "dieWithParticles",
+                                          cfg.trail.dieWithParticles);
+    cfg.trail.sizeAffectsWidth = readBool(trails, "sizeAffectsWidth",
+                                          cfg.trail.sizeAffectsWidth);
+    cfg.trail.sizeAffectsLifetime = readBool(trails, "sizeAffectsLifetime",
+                                             cfg.trail.sizeAffectsLifetime);
+    cfg.trail.inheritParticleColor = readBool(trails, "inheritParticleColor",
+                                              cfg.trail.inheritParticleColor);
+    cfg.trail.generateLightingData = readBool(trails, "generateLightingData",
+                                              cfg.trail.generateLightingData);
+    cfg.trail.splitSubEmitterRibbons = readBool(trails, "splitSubEmitterRibbons",
+                                                cfg.trail.splitSubEmitterRibbons);
+    cfg.trail.attachRibbonsToTransform = readBool(trails, "attachRibbonsToTransform",
+                                                  cfg.trail.attachRibbonsToTransform);
+    cfg.trail.colorOverLifetime = readMinMaxGradient(find(trails, "colorOverLifetime"));
+    cfg.trail.colorOverTrail = readMinMaxGradient(find(trails, "colorOverTrail"));
+
+    const auto widthRange = readCurveRange(find(trails, "widthOverTrail"));
+    cfg.trail.widthOverTrailStart = widthRange.first;
+    cfg.trail.widthOverTrailEnd = widthRange.second;
 }
 
 void readRendererModule(const json::Value* renderer,
@@ -583,7 +786,8 @@ void logUnhandledEnabledModules(const std::filesystem::path& path,
         "RotationModule",
         "VelocityModule",
         "CustomDataModule",
-        "UVModule"
+        "UVModule",
+        "TrailModule"
     };
 
     for (const auto& [propPath, prop] : props) {
@@ -623,7 +827,7 @@ bool parseSystem(const std::filesystem::path& path,
 
     readMainModule(find(summary, "main"), out.config);
     readEmissionModule(find(summary, "emission"), out.config);
-    readShapeModule(find(summary, "shape"), out.config);
+    readShapeModule(find(summary, "shape"), psProps, out.config);
     readTransform(find(&system, "transform"), out.relativePath, out.config);
     readVelocityModule(psProps, out.config);
     readTextureSheetModule(psProps, out.config);
@@ -631,6 +835,7 @@ bool parseSystem(const std::filesystem::path& path,
     readSizeModule(find(summary, "sizeOverLifetime"), out.config);
     readRotationModule(find(summary, "rotationOverLifetime"), out.config);
     readCustomDataModule(find(summary, "customData"), out.config);
+    readTrailModule(find(summary, "trails"), psProps, out.config);
     readRendererModule(find(summary, "renderer"), rendererProps, out.config);
 
     logUnhandledEnabledModules(path, out.relativePath, psProps, options.logDiagnostics);
