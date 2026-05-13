@@ -146,7 +146,7 @@ private:
         float      twistAccImp;
     } cache_{};
 
-    static constexpr float kJointBeta = 0.1f;
+    static constexpr float kJointBeta = 0.01f;
 };
 
 #endif // __JointConstraint_HPP

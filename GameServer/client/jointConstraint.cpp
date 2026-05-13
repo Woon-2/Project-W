@@ -218,15 +218,17 @@ void HingeJoint::prepare(Seconds dt)
     const mu::Vec3 axisBWorld = mu::Vec3(mu::normalize(bodyB_->orient().rotate(axisA_)));
 
     for (int i = 0; i < 2; ++i) {
-        const mu::Vec3& perp = cache_.perpAxes[i];
+        // Correct Jacobian: d/dt[dot(axisB, perp_i)] = (perp_i x axisB)·(wA-wB)
+        // With {perp[0], perp[1], n} right-handed: J_0 = perp[0]×n = -perp[1], J_1 = perp[1]×n = +perp[0]
+        const mu::Vec3 axisJ = (i == 0) ? -cache_.perpAxes[1] : cache_.perpAxes[0];
         const float contribA = (bodyA_->invMass() > 0.f)
-            ? angEff1D(perp, bodyA_->invInertiaWorld()) : 0.f;
+            ? angEff1D(axisJ, bodyA_->invInertiaWorld()) : 0.f;
         const float contribB = (bodyB_->invMass() > 0.f)
-            ? angEff1D(perp, bodyB_->invInertiaWorld()) : 0.f;
+            ? angEff1D(axisJ, bodyB_->invInertiaWorld()) : 0.f;
         cache_.angEffMass[i] = 1.f / (contribA + contribB + 1e-10f);
 
-        // Angular velocity bias: drive axisB toward axisA.
-        const float angViol = mu::dot(axisBWorld, perp);
+        // Bias uses position-level violation: dot(axisB, perp_i) → 0
+        const float angViol = mu::dot(axisBWorld, cache_.perpAxes[i]);
         cache_.angBias[i] = angViol * (kJointBeta * invDt);
     }
 
@@ -268,8 +270,10 @@ void HingeJoint::prepare(Seconds dt)
 
     // Warm-start.
     applyLinearImpulsePair(bodyA_, bodyB_, cache_.linAccImp, cache_.rA, cache_.rB);
-    for (int i = 0; i < 2; ++i)
-        applyAngularImpulsePair(bodyA_, bodyB_, cache_.angAccImp[i], cache_.perpAxes[i]);
+    for (int i = 0; i < 2; ++i) {
+        const mu::Vec3 axisJ = (i == 0) ? -cache_.perpAxes[1] : cache_.perpAxes[0];
+        applyAngularImpulsePair(bodyA_, bodyB_, cache_.angAccImp[i], axisJ);
+    }
     if (cache_.limitActive)
         applyAngularImpulsePair(bodyA_, bodyB_, cache_.limitAccImp, cache_.hingeAxisWorld);
 }
@@ -288,12 +292,12 @@ void HingeJoint::solveVelocity()
     // --- Angular alignment ---
     const mu::Vec3 relOmega = bodyA_->omega() - bodyB_->omega();
     for (int i = 0; i < 2; ++i) {
-        const mu::Vec3& perp = cache_.perpAxes[i];
-        const float Jv       = mu::dot(relOmega, perp);
+        const mu::Vec3 axisJ = (i == 0) ? -cache_.perpAxes[1] : cache_.perpAxes[0];
+        const float Jv       = mu::dot(relOmega, axisJ);
         const float dL       = -(Jv + cache_.angBias[i]) * cache_.angEffMass[i];
         const float prev     = cache_.angAccImp[i];
         cache_.angAccImp[i] += dL;  // bilateral, no clamp
-        applyAngularImpulsePair(bodyA_, bodyB_, cache_.angAccImp[i] - prev, perp);
+        applyAngularImpulsePair(bodyA_, bodyB_, cache_.angAccImp[i] - prev, axisJ);
     }
 
     // --- Limit ---

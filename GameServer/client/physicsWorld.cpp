@@ -345,11 +345,10 @@ void PhysicsWorld::solveConstraints(Seconds dt)
         }
     }
 
-    for (int iter = 0; iter < solverIterations_; ++iter)
+    for (int iter = 0; iter < solverIterations_; ++iter) {
         allConstraints([](Constraint& c) { c.solveVelocity(); });
-
-    for (int iter = 0; iter < positionSolveIterations_; ++iter)
         allConstraints([](Constraint& c) { c.solvePosition(); });
+    }
 
     // Save accumulated impulses for next step's warm-start.
     warmCache_.clear();

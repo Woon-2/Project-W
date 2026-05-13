@@ -1072,7 +1072,7 @@ void Game::update(Milliseconds deltaTime) {
 			);
 			rd.buildPassengers(g.model()->skeleton, g.animBlender()->finalXformData());
 			rd.activate(physicsWorld_);
-			physicsWorld_.setSolverIterations(20);
+			// physicsWorld_.setSolverIterations(20);
 			physicsWorld_.unregisterBody(&g.body());
 		};
 
