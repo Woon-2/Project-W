@@ -149,34 +149,36 @@ void ContactConstraint::solveVelocity()
         const mu::Vec3 rA = c.rA;
         const mu::Vec3 rB = c.rB;
 
-        // Relative velocity at contact point (A w.r.t. B).
-        auto relVel = [&]() -> mu::Vec3 {
-            return (bodyA->linearVel() + mu::cross(bodyA->omega(), rA))
-                 - (bodyB->linearVel() + mu::cross(bodyB->omega(), rB));
-        };
-
         // --- Normal impulse ---
         {
-            const float Jv   = mu::dot(relVel(), n);
-            float       jn   = -(Jv - c.bias) * c.effMassNormal;
-            const float prev = cp.accNormal;
-            cp.accNormal     = std::max(0.f, prev + jn);
-            jn               = cp.accNormal - prev;
-
-            applyImpulsePair(bodyA, bodyB, jn, n, rA, rB);
+            JacobianRow row;
+            row.bodyA   = bodyA;
+            row.bodyB   = bodyB;
+            row.linA    = n;
+            row.angA    = mu::cross(rA, n);
+            row.linB    = -n;
+            row.angB    = -mu::cross(rB, n);
+            row.effMass = c.effMassNormal;
+            row.rhs     = -c.bias;
+            row.lower   = 0.f;
+            solveJacobianRow(row, cp.accNormal);
         }
 
         // --- Friction impulses (two tangent directions) ---
         const float maxFriction = friction * std::abs(cp.accNormal);
         for (int t = 0; t < 2; ++t) {
             const mu::Vec3 tv = c.tangent[t];
-            const float    Jv = mu::dot(relVel(), tv);
-            float          jt = -Jv * c.effMassTangent[t];
-            const float    prev = cp.accTangent[t];
-            cp.accTangent[t] = std::clamp(prev + jt, -maxFriction, maxFriction);
-            jt               = cp.accTangent[t] - prev;
-
-            applyImpulsePair(bodyA, bodyB, jt, tv, rA, rB);
+            JacobianRow row;
+            row.bodyA   = bodyA;
+            row.bodyB   = bodyB;
+            row.linA    = tv;
+            row.angA    = mu::cross(rA, tv);
+            row.linB    = -tv;
+            row.angB    = -mu::cross(rB, tv);
+            row.effMass = c.effMassTangent[t];
+            row.lower   = -maxFriction;
+            row.upper   =  maxFriction;
+            solveJacobianRow(row, cp.accTangent[t]);
         }
     }
 }
@@ -190,20 +192,17 @@ void ContactConstraint::solvePosition()
         const ContactPoint& cp = contacts[i];
         const mu::Vec3 n = cp.normal;
 
-        // Pseudo relative velocity at contact point.
-        const mu::Vec3 pvA = bodyA->pseudoLinearVel()
-                           + mu::cross(bodyA->pseudoOmega(), c.rA);
-        const mu::Vec3 pvB = bodyB->pseudoLinearVel()
-                           + mu::cross(bodyB->pseudoOmega(), c.rB);
-        const float Jpv = mu::dot(pvA - pvB, n);
-
-        float jpn = -(Jpv - c.pseudoBias) * c.effMassNormal;
-
-        // Accumulated clamping: only push apart, never pull together.
-        const float prev   = c.accNormalPseudo;
-        c.accNormalPseudo  = std::max(0.f, prev + jpn);
-        jpn                = c.accNormalPseudo - prev;
-
-        applyPseudoImpulsePair(bodyA, bodyB, n * jpn, c.rA, c.rB);
+        JacobianRow row;
+        row.bodyA   = bodyA;
+        row.bodyB   = bodyB;
+        row.linA    = n;
+        row.angA    = mu::cross(c.rA, n);
+        row.linB    = -n;
+        row.angB    = -mu::cross(c.rB, n);
+        row.effMass = c.effMassNormal;
+        row.rhs     = -c.pseudoBias;
+        row.lower   = 0.f;
+        row.pseudo  = true;
+        solveJacobianRow(row, c.accNormalPseudo);
     }
 }

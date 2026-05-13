@@ -1059,7 +1059,9 @@ void Game::spawnTestObject(int kind) {
     obj.activate(physicsWorld_);
     rdObjects_.push_back(std::move(obj));
     rdShowBodies_ = true;  // auto-enable visualization when anything is spawned
-    physicsWorld_.setSolverIterations(4);
+    physicsWorld_.setSolverIterations(16);
+    physicsWorld_.setJointSolverExtraIterations(8);
+    physicsWorld_.setPositionSolveIterations(4);
     physicsWorld_.setSubStepCount(4);
 }
 
@@ -1068,6 +1070,8 @@ void Game::clearTestObjects() {
     rdObjects_.clear();
     rdFrozen_ = false;
     physicsWorld_.setSolverIterations(4);
+    physicsWorld_.setJointSolverExtraIterations(0);
+    physicsWorld_.setPositionSolveIterations(3);
     physicsWorld_.setSubStepCount(2);
 }
 
@@ -1345,7 +1349,10 @@ void Game::update(Milliseconds deltaTime) {
 			);
 			rd.buildPassengers(g.model()->skeleton, g.animBlender()->finalXformData());
 			rd.activate(physicsWorld_);
-			physicsWorld_.setSolverIterations(4);
+			physicsWorld_.setSolverIterations(16);
+			physicsWorld_.setJointSolverExtraIterations(8);
+			physicsWorld_.setPositionSolveIterations(4);
+			physicsWorld_.setSubStepCount(4);
 			physicsWorld_.unregisterBody(&g.body());
 		};
 

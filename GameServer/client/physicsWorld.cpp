@@ -207,6 +207,14 @@ void PhysicsWorld::integrate(Seconds dt)
                 b.setOmega(b.omega() + (torqDir * (b.uprightStiffness() * dtf)) * b.invInertiaWorld());
             }
 
+            // Clamp angular speed to prevent runaway spin (e.g. from unsolved joint chains).
+            {
+                static constexpr float kMaxAngularSpeed = 50.f;
+                const float omegaLen2 = b.omega().len2();
+                if (omegaLen2 > kMaxAngularSpeed * kMaxAngularSpeed)
+                    b.setOmega(b.omega() * (kMaxAngularSpeed / std::sqrt(omegaLen2)));
+            }
+
             // Integrate position and orientation.
             b.setPos(b.pos() + b.linearVel() * dtf);
             const auto wq = mu::Quat(b.omega(), 0.f);
@@ -345,14 +353,16 @@ void PhysicsWorld::solveConstraints(Seconds dt)
         }
     }
 
-    for (int iter = 0; iter < solverIterations_; ++iter) {
+    for (int iter = 0; iter < solverIterations_; ++iter)
         allConstraints([](Constraint& c) { c.solveVelocity(); });
-        allConstraints([](Constraint& c) { c.solvePosition(); });
-        for (auto& e : entries_) {
-            e.body->setLinearVel(e.body->linearVel().xyz());
-            e.body->setOmega(e.body->omega().xyz());
-        }
+
+    for (int iter = 0; iter < jointSolverExtraIterations_; ++iter) {
+        for (auto& c : jointConstraints_) c->solveVelocity();
+        for (auto  c : jointRefs_)        c->solveVelocity();
     }
+
+    for (int iter = 0; iter < positionSolveIterations_; ++iter)
+        allConstraints([](Constraint& c) { c.solvePosition(); });
 
     // Save accumulated impulses for next step's warm-start.
     warmCache_.clear();

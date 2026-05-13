@@ -169,6 +169,7 @@
     <ClCompile Include="basicPlayerHPUI.cpp" />
     <ClCompile Include="billboard.cpp" />
     <ClCompile Include="billboardPipeline.cpp" />
+    <ClCompile Include="constraint.cpp" />
     <ClCompile Include="jointConstraint.cpp" />
     <ClCompile Include="blendCGMeshPipeline.cpp" />
     <ClCompile Include="meshParticlePipeline.cpp" />

@@ -1,6 +1,26 @@
 ﻿#ifndef __Constraint_HPP
 #define __Constraint_HPP
 
+#include "rigidBody.hpp"
+#include <algorithm>
+#include <limits>
+
+struct JacobianRow {
+    RigidBody* bodyA = nullptr;
+    RigidBody* bodyB = nullptr;
+    mu::Vec3   linA{};
+    mu::Vec3   angA{};
+    mu::Vec3   linB{};
+    mu::Vec3   angB{};
+    float      effMass = 0.f;
+    float      rhs = 0.f; // Solves Jv + rhs = 0.
+    float      lower = -std::numeric_limits<float>::infinity();
+    float      upper =  std::numeric_limits<float>::infinity();
+    bool       pseudo = false;
+};
+
+float solveJacobianRow(const JacobianRow& row, float& accImpulse);
+
 // Abstract base for all velocity-level + position-level constraints.
 // Concrete types: ContactConstraint, BallSocketJoint, HingeJoint, ConeTwistJoint.
 //

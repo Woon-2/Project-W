@@ -88,6 +88,19 @@ static void applyLinearImpulsePair(RigidBody* a, RigidBody* b,
     }
 }
 
+static void applyPseudoLinearImpulsePair(RigidBody* a, RigidBody* b,
+                                         mu::Vec3 j, mu::Vec3 rA, mu::Vec3 rB)
+{
+    if (a->invMass() > 0.f) {
+        a->addPseudoLinearVel(j * a->invMass());
+        a->addPseudoOmega(mu::cross(rA, j) * a->invInertiaWorld());
+    }
+    if (b->invMass() > 0.f) {
+        b->addPseudoLinearVel(-j * b->invMass());
+        b->addPseudoOmega(-mu::cross(rB, j) * b->invInertiaWorld());
+    }
+}
+
 // Apply a scalar angular impulse j*axis to bodyA (+) and bodyB (-).
 static void applyAngularImpulsePair(RigidBody* a, RigidBody* b,
                                     float j, mu::Vec3 axis)
@@ -102,6 +115,13 @@ static mu::Vec3 relVelAt(const RigidBody* a, const RigidBody* b,
 {
     return (a->linearVel() + mu::cross(a->omega(), rA))
          - (b->linearVel() + mu::cross(b->omega(), rB));
+}
+
+static mu::Vec3 pseudoRelVelAt(const RigidBody* a, const RigidBody* b,
+                               mu::Vec3 rA, mu::Vec3 rB)
+{
+    return (a->pseudoLinearVel() + mu::cross(a->pseudoOmega(), rA))
+         - (b->pseudoLinearVel() + mu::cross(b->pseudoOmega(), rB));
 }
 
 // Multiply two NQuats via Quat intermediary and return normalised NQuat.
@@ -157,6 +177,8 @@ void BallSocketJoint::prepare(Seconds dt)
                             - (bodyB_->pos() + cache_.rB);
     cache_.effMassInv = build3x3EffMassInv(bodyA_, cache_.rA, bodyB_, cache_.rB);
     cache_.bias       = posError * (kJointBeta * invDt);
+    cache_.pseudoBias = posError * (kSplitBeta * invDt);
+    cache_.pseudoAccImpulse = {};
 
     // Warm-start: re-apply accumulated impulse.
     applyLinearImpulsePair(bodyA_, bodyB_, cache_.accImpulse, cache_.rA, cache_.rB);
@@ -172,6 +194,16 @@ void BallSocketJoint::solveVelocity()
     applyLinearImpulsePair(bodyA_, bodyB_, dLambda, cache_.rA, cache_.rB);
 }
 
+void BallSocketJoint::solvePosition()
+{
+    const mu::Vec3 rv      = pseudoRelVelAt(bodyA_, bodyB_, cache_.rA, cache_.rB);
+    const mu::Vec3 cVel    = rv + cache_.pseudoBias;
+    const mu::Vec3 dLambda = -(cVel * cache_.effMassInv);
+
+    cache_.pseudoAccImpulse = cache_.pseudoAccImpulse + dLambda;
+    applyPseudoLinearImpulsePair(bodyA_, bodyB_, dLambda, cache_.rA, cache_.rB);
+}
+
 // ---------------------------------------------------------------------------
 // HingeJoint
 // ---------------------------------------------------------------------------
@@ -182,6 +214,7 @@ HingeJoint::HingeJoint(RigidBody* a, RigidBody* b,
     : bodyA_(a), bodyB_(b)
     , anchorA_(anchorA), anchorB_(anchorB)
     , axisA_(mu::Vec3(mu::normalize(axisA)))
+    , axisB_(mu::Vec3(mu::normalize((~b->orient()).rotate(a->orient().rotate(axisA_)))))
     , minAngle_(minAngle), maxAngle_(maxAngle)
 {
     // Reference relative orientation: q_ref = conj(bodyA) * bodyB at build time.
@@ -192,6 +225,7 @@ void HingeJoint::resetAnchors()
 {
     const mu::Vec3 pivotWorld = bodyB_->pos() + bodyB_->orient().rotate(anchorB_);
     anchorA_ = (~bodyA_->orient()).rotate(pivotWorld - bodyA_->pos());
+    axisB_ = mu::Vec3(mu::normalize((~bodyB_->orient()).rotate(bodyA_->orient().rotate(axisA_))));
     refOrient_ = mulQ(~bodyA_->orient(), bodyB_->orient());
 }
 
@@ -208,6 +242,8 @@ void HingeJoint::prepare(Seconds dt)
                             - (bodyB_->pos() + cache_.rB);
     cache_.linEffMassInv = build3x3EffMassInv(bodyA_, cache_.rA, bodyB_, cache_.rB);
     cache_.linBias       = posError * (kJointBeta * invDt);
+    cache_.linPseudoBias = posError * (kJointBeta * 3.f * invDt);
+    cache_.linPseudoAccImp = {};
 
     // --- Angular alignment ---
     // hingeAxis in world space (derived from bodyA orientation).
@@ -215,7 +251,7 @@ void HingeJoint::prepare(Seconds dt)
     buildPerp(cache_.hingeAxisWorld, cache_.perpAxes);
 
     // World-space axis of bodyB — should align with hingeAxisWorld.
-    const mu::Vec3 axisBWorld = mu::Vec3(mu::normalize(bodyB_->orient().rotate(axisA_)));
+    const mu::Vec3 axisBWorld = mu::Vec3(mu::normalize(bodyB_->orient().rotate(axisB_)));
 
     for (int i = 0; i < 2; ++i) {
         // Correct Jacobian: d/dt[dot(axisB, perp_i)] = (perp_i x axisB)·(wA-wB)
@@ -272,7 +308,10 @@ void HingeJoint::prepare(Seconds dt)
     applyLinearImpulsePair(bodyA_, bodyB_, cache_.linAccImp, cache_.rA, cache_.rB);
     for (int i = 0; i < 2; ++i) {
         const mu::Vec3 axisJ = (i == 0) ? -cache_.perpAxes[1] : cache_.perpAxes[0];
-        applyAngularImpulsePair(bodyA_, bodyB_, cache_.angAccImp[i], axisJ);
+        // Scale by 0.8 to dampen energy injection when perpAxes rotates between frames.
+        const float warmImp = cache_.angAccImp[i] * 0.8f;
+        cache_.angAccImp[i] = warmImp;
+        applyAngularImpulsePair(bodyA_, bodyB_, warmImp, axisJ);
     }
     if (cache_.limitActive)
         applyAngularImpulsePair(bodyA_, bodyB_, cache_.limitAccImp, cache_.hingeAxisWorld);
@@ -290,26 +329,41 @@ void HingeJoint::solveVelocity()
     }
 
     // --- Angular alignment ---
-    const mu::Vec3 relOmega = bodyA_->omega() - bodyB_->omega();
     for (int i = 0; i < 2; ++i) {
         const mu::Vec3 axisJ = (i == 0) ? -cache_.perpAxes[1] : cache_.perpAxes[0];
-        const float Jv       = mu::dot(relOmega, axisJ);
-        const float dL       = -(Jv + cache_.angBias[i]) * cache_.angEffMass[i];
-        const float prev     = cache_.angAccImp[i];
-        cache_.angAccImp[i] += dL;  // bilateral, no clamp
-        applyAngularImpulsePair(bodyA_, bodyB_, cache_.angAccImp[i] - prev, axisJ);
+        JacobianRow row;
+        row.bodyA   = bodyA_;
+        row.bodyB   = bodyB_;
+        row.angA    = axisJ;
+        row.angB    = -axisJ;
+        row.effMass = cache_.angEffMass[i];
+        row.rhs     = cache_.angBias[i];
+        solveJacobianRow(row, cache_.angAccImp[i]);
     }
 
     // --- Limit ---
     if (cache_.limitActive) {
-        const float Jv   = mu::dot(relOmega, cache_.hingeAxisWorld);
-        const float dL   = -(Jv + cache_.limitBias) * cache_.limitEffMass;
-        const float prev = cache_.limitAccImp;
-        cache_.limitAccImp = cache_.limitLo
-            ? std::max(0.f, prev + dL)
-            : std::min(0.f, prev + dL);
-        applyAngularImpulsePair(bodyA_, bodyB_, cache_.limitAccImp - prev, cache_.hingeAxisWorld);
+        JacobianRow row;
+        row.bodyA   = bodyA_;
+        row.bodyB   = bodyB_;
+        row.angA    = cache_.hingeAxisWorld;
+        row.angB    = -cache_.hingeAxisWorld;
+        row.effMass = cache_.limitEffMass;
+        row.rhs     = cache_.limitBias;
+        row.lower   = cache_.limitLo ? 0.f : -std::numeric_limits<float>::infinity();
+        row.upper   = cache_.limitLo ? std::numeric_limits<float>::infinity() : 0.f;
+        solveJacobianRow(row, cache_.limitAccImp);
     }
+}
+
+void HingeJoint::solvePosition()
+{
+    const mu::Vec3 rv      = pseudoRelVelAt(bodyA_, bodyB_, cache_.rA, cache_.rB);
+    const mu::Vec3 cVel    = rv + cache_.linPseudoBias;
+    const mu::Vec3 dLambda = -(cVel * cache_.linEffMassInv);
+
+    cache_.linPseudoAccImp = cache_.linPseudoAccImp + dLambda;
+    applyPseudoLinearImpulsePair(bodyA_, bodyB_, dLambda, cache_.rA, cache_.rB);
 }
 
 // ---------------------------------------------------------------------------
@@ -348,6 +402,8 @@ void ConeTwistJoint::prepare(Seconds dt)
                             - (bodyB_->pos() + cache_.rB);
     cache_.linEffMassInv = build3x3EffMassInv(bodyA_, cache_.rA, bodyB_, cache_.rB);
     cache_.linBias       = posError * (kLinBeta * invDt);
+    cache_.linPseudoBias = posError * (kSplitBeta * invDt);
+    cache_.linPseudoAccImp = {};
 
     // --- Joint-space relative orientation ---
     // q_jointA = refOrientA^-1 * bodyA.orient  (current bodyA orientation in joint space)
@@ -358,7 +414,7 @@ void ConeTwistJoint::prepare(Seconds dt)
 
     // Twist axis is +Z in joint space, brought to world space via bodyA orientation.
     const mu::Vec3 twistAxisJoint(0.f, 0.f, 1.f);
-    const mu::Vec3 twistAxisWorld = mu::Vec3(mu::normalize(qJointA.rotate(twistAxisJoint)));
+    const mu::Vec3 twistAxisWorld = mu::Vec3(mu::normalize(bodyA_->orient().rotate(twistAxisJoint)));
 
     // Decompose relative rotation into swing + twist around the joint Z axis.
     mu::NQuat swing, twist;
@@ -378,7 +434,7 @@ void ConeTwistJoint::prepare(Seconds dt)
             const mu::Vec3 swingXYZ(swing.x(), swing.y(), swing.z());
             const float swLen = std::sqrt(swingXYZ.len2());
             cache_.coneAxis = (swLen > 1e-6f)
-                ? mu::Vec3(mu::normalize(qJointA.rotate(swingXYZ / swLen)))
+                ? mu::Vec3(mu::normalize(bodyA_->orient().rotate(swingXYZ / swLen)))
                 : twistAxisWorld;
 
             const float cA = (bodyA_->invMass() > 0.f)
@@ -423,49 +479,66 @@ void ConeTwistJoint::prepare(Seconds dt)
             cache_.twistPseudoAccImp = 0.f;
         }
     }
-    // Warm-start: linear rows only.
-    // Angular (cone/twist) accumulated impulses are reset to 0 here because the
-    // correction axis recomputes from the current swing/twist direction every step.
-    // Carrying over the previous frame's impulse magnitude along the new (potentially
-    // different) axis injects energy in the wrong direction, causing drift/twisting.
-    cache_.coneAccImp  = 0.f;
-    cache_.twistAccImp = 0.f;
+    // Warm-start: linear + angular rows.
+    // Cone/twist correction axes are recomputed each frame, so we cannot carry over
+    // the previous impulse vector directly. Instead, carry over the magnitude at 0.5x
+    // along the new axis. This halves any energy injection from axis drift while
+    // providing a non-zero starting point that speeds up convergence in chains.
     applyLinearImpulsePair(bodyA_, bodyB_, cache_.linAccImp, cache_.rA, cache_.rB);
+    if (cache_.coneActive) {
+        const float seed = cache_.coneAccImp * 0.5f;
+        cache_.coneAccImp = seed;
+        if (seed > 0.f)
+            applyAngularImpulsePair(bodyA_, bodyB_, seed, cache_.coneAxis);
+    }
+    if (cache_.twistActive) {
+        const float seed = cache_.twistAccImp * 0.5f;
+        cache_.twistAccImp = seed;
+        if (seed != 0.f)
+            applyAngularImpulsePair(bodyA_, bodyB_, seed, cache_.twistAxis);
+    }
 }
 
 void ConeTwistJoint::solvePosition()
 {
+    {
+        const mu::Vec3 rv      = pseudoRelVelAt(bodyA_, bodyB_, cache_.rA, cache_.rB);
+        const mu::Vec3 cVel    = rv + cache_.linPseudoBias;
+        const mu::Vec3 dLambda = -(cVel * cache_.linEffMassInv);
+        cache_.linPseudoAccImp = cache_.linPseudoAccImp + dLambda;
+        applyPseudoLinearImpulsePair(bodyA_, bodyB_, dLambda, cache_.rA, cache_.rB);
+    }
+
     // Cone angular position correction via split impulse (pseudo-omega).
     // This runs in addition to the velocity-level Baumgarte correction in
     // solveVelocity() and directly adjusts body orientations without injecting
     // energy into the real velocity state.
     if (cache_.coneActive) {
-        const mu::Vec3 pseudoRelOmega = bodyA_->pseudoOmega() - bodyB_->pseudoOmega();
-        const float Jpv = mu::dot(pseudoRelOmega, cache_.coneAxis);
-        const float djp = -(Jpv + cache_.conePseudoBias) * cache_.coneEffMass;
-        const float prev = cache_.conePseudoAccImp;
-        cache_.conePseudoAccImp = std::max(0.f, prev + djp);  // one-sided, same as velocity solver
-        const float delta = cache_.conePseudoAccImp - prev;
-        if (bodyA_->invMass() > 0.f)
-            bodyA_->addPseudoOmega((cache_.coneAxis *  delta) * bodyA_->invInertiaWorld());
-        if (bodyB_->invMass() > 0.f)
-            bodyB_->addPseudoOmega((cache_.coneAxis * -delta) * bodyB_->invInertiaWorld());
+        JacobianRow row;
+        row.bodyA   = bodyA_;
+        row.bodyB   = bodyB_;
+        row.angA    = cache_.coneAxis;
+        row.angB    = -cache_.coneAxis;
+        row.effMass = cache_.coneEffMass;
+        row.rhs     = cache_.conePseudoBias;
+        row.lower   = 0.f;
+        row.pseudo  = true;
+        solveJacobianRow(row, cache_.conePseudoAccImp);
     }
 
     // Twist angular position correction.
     if (cache_.twistActive) {
-        const mu::Vec3 pseudoRelOmega = bodyA_->pseudoOmega() - bodyB_->pseudoOmega();
-        const float Jpv = mu::dot(pseudoRelOmega, cache_.twistAxis);
-        const float djp = -(Jpv + cache_.twistPseudoBias) * cache_.twistEffMass;
-        const float prev = cache_.twistPseudoAccImp;
-        cache_.twistPseudoAccImp = cache_.twistLo
-            ? std::max(0.f, prev + djp)
-            : std::min(0.f, prev + djp);
-        const float delta = cache_.twistPseudoAccImp - prev;
-        if (bodyA_->invMass() > 0.f)
-            bodyA_->addPseudoOmega((cache_.twistAxis *  delta) * bodyA_->invInertiaWorld());
-        if (bodyB_->invMass() > 0.f)
-            bodyB_->addPseudoOmega((cache_.twistAxis * -delta) * bodyB_->invInertiaWorld());
+        JacobianRow row;
+        row.bodyA   = bodyA_;
+        row.bodyB   = bodyB_;
+        row.angA    = cache_.twistAxis;
+        row.angB    = -cache_.twistAxis;
+        row.effMass = cache_.twistEffMass;
+        row.rhs     = cache_.twistPseudoBias;
+        row.lower   = cache_.twistLo ? 0.f : -std::numeric_limits<float>::infinity();
+        row.upper   = cache_.twistLo ? std::numeric_limits<float>::infinity() : 0.f;
+        row.pseudo  = true;
+        solveJacobianRow(row, cache_.twistPseudoAccImp);
     }
 }
 
@@ -480,25 +553,30 @@ void ConeTwistJoint::solveVelocity()
         applyLinearImpulsePair(bodyA_, bodyB_, dLambda, cache_.rA, cache_.rB);
     }
 
-    const mu::Vec3 relOmega = bodyA_->omega() - bodyB_->omega();
-
     // --- Cone ---
     if (cache_.coneActive) {
-        const float Jv   = mu::dot(relOmega, cache_.coneAxis);
-        const float dL   = -(Jv + cache_.coneBias) * cache_.coneEffMass;
-        const float prev = cache_.coneAccImp;
-        cache_.coneAccImp = std::max(0.f, prev + dL);  // one-sided
-        applyAngularImpulsePair(bodyA_, bodyB_, cache_.coneAccImp - prev, cache_.coneAxis);
+        JacobianRow row;
+        row.bodyA   = bodyA_;
+        row.bodyB   = bodyB_;
+        row.angA    = cache_.coneAxis;
+        row.angB    = -cache_.coneAxis;
+        row.effMass = cache_.coneEffMass;
+        row.rhs     = cache_.coneBias;
+        row.lower   = 0.f;
+        solveJacobianRow(row, cache_.coneAccImp);
     }
 
     // --- Twist ---
     if (cache_.twistActive) {
-        const float Jv   = mu::dot(relOmega, cache_.twistAxis);
-        const float dL   = -(Jv + cache_.twistBias) * cache_.twistEffMass;
-        const float prev = cache_.twistAccImp;
-        cache_.twistAccImp = cache_.twistLo
-            ? std::max(0.f, prev + dL)
-            : std::min(0.f, prev + dL);
-        applyAngularImpulsePair(bodyA_, bodyB_, cache_.twistAccImp - prev, cache_.twistAxis);
+        JacobianRow row;
+        row.bodyA   = bodyA_;
+        row.bodyB   = bodyB_;
+        row.angA    = cache_.twistAxis;
+        row.angB    = -cache_.twistAxis;
+        row.effMass = cache_.twistEffMass;
+        row.rhs     = cache_.twistBias;
+        row.lower   = cache_.twistLo ? 0.f : -std::numeric_limits<float>::infinity();
+        row.upper   = cache_.twistLo ? std::numeric_limits<float>::infinity() : 0.f;
+        solveJacobianRow(row, cache_.twistAccImp);
     }
 }

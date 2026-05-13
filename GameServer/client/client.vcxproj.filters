@@ -324,6 +324,9 @@
     <ClCompile Include="ServerSession.cpp">
       <Filter>Network\Session</Filter>
     </ClCompile>
+    <ClCompile Include="constraint.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="binaryImport.hpp">

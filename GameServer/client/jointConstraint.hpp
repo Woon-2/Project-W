@@ -20,7 +20,7 @@ public:
 
     void prepare(Seconds dt) override;
     void solveVelocity() override;
-    void solvePosition() override {}
+    void solvePosition() override;
     void resetAnchors() override;
 
 private:
@@ -35,9 +35,12 @@ private:
         mu::Mat3x3 effMassInv;    // 3x3 effective mass matrix inverse
         mu::Vec3   bias;          // Baumgarte position-correction bias
         mu::Vec3   accImpulse;    // accumulated impulse for warm-starting
+        mu::Vec3   pseudoBias;    // split-impulse position-correction bias
+        mu::Vec3   pseudoAccImpulse;
     } cache_{};
 
     static constexpr float kJointBeta = 0.1f;  // Baumgarte beta (softer than contact 0.2)
+    static constexpr float kSplitBeta = 0.3f;
 };
 
 // ---------------------------------------------------------------------------
@@ -59,7 +62,7 @@ public:
 
     void prepare(Seconds dt) override;
     void solveVelocity() override;
-    void solvePosition() override {}
+    void solvePosition() override;
     void resetAnchors() override;
 
 private:
@@ -67,6 +70,7 @@ private:
     RigidBody* bodyB_;
     mu::Vec3  anchorA_, anchorB_;
     mu::Vec3  axisA_;              // hinge axis in bodyA local space (unit)
+    mu::Vec3  axisB_;              // matching hinge axis in bodyB local space (unit)
     float     minAngle_, maxAngle_;
     mu::NQuat refOrient_;          // bodyB orient relative to bodyA at build time
 
@@ -76,6 +80,8 @@ private:
         mu::Mat3x3 linEffMassInv;
         mu::Vec3   linBias;
         mu::Vec3   linAccImp;
+        mu::Vec3   linPseudoBias;
+        mu::Vec3   linPseudoAccImp;
         // Angular alignment rows (2 perpendicular to hinge axis):
         mu::Vec3   perpAxes[2];    // world-space
         float      angEffMass[2];
@@ -131,6 +137,8 @@ private:
         mu::Mat3x3 linEffMassInv;
         mu::Vec3   linBias;
         mu::Vec3   linAccImp;
+        mu::Vec3   linPseudoBias;
+        mu::Vec3   linPseudoAccImp;
         // Cone limit (one-sided, accImp >= 0):
         bool       coneActive;
         mu::Vec3   coneAxis;       // world-space correction axis

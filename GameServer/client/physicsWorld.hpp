@@ -82,6 +82,10 @@ public:
     // Set the number of PGS velocity iterations per step (default: 10).
     void setSolverIterations(int n) { solverIterations_ = n; }
 
+    // Extra velocity iterations applied only to persistent joint constraints.
+    // Useful for ragdoll/chain stability without increasing contact cost.
+    void setJointSolverExtraIterations(int n) { jointSolverExtraIterations_ = n; }
+
     // Set the number of Split Impulse position correction iterations (default: 3).
     // More iterations improve convergence for fast-moving Dynamic bodies.
     void setPositionSolveIterations(int n) { positionSolveIterations_ = n; }
@@ -142,6 +146,7 @@ private:
     static constexpr float kCameraMinGroundClearance = 0.15f;
 
     int     solverIterations_         = 4;
+    int     jointSolverExtraIterations_ = 0;
     int     positionSolveIterations_  = 3;
     int     subStepCount_             = 2;
     Seconds currentSubDt_{}; // set at start of each sub-step; used by generateContacts()

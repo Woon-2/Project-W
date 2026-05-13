@@ -109,7 +109,8 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `PhysicsWorld::cameraBroadPhase_` | `physicsWorld.hpp #140` | 카메라 전용 SAPBroadPhase 인스턴스 (일반 physicsWorld broadPhase와 독립) |
 | `PhysicsWorld::step()` | `physicsWorld.hpp #63` | integrate → generateContacts → solveConstraints |
 | `PhysicsWorld::setGravity()` | `physicsWorld.hpp #67` | Dynamic body 중력 설정 |
-| `PhysicsWorld::setSolverIterations()` | `physicsWorld.hpp #70` | PGS 반복 횟수 (기본 10, ragdoll 활성 시 20) |
+| `PhysicsWorld::setSolverIterations()` | `physicsWorld.hpp #70` | velocity PGS 반복 횟수 (기본 4, ragdoll 활성 시 16) |
+| `PhysicsWorld::setPositionSolveIterations()` | `physicsWorld.hpp #87` | split impulse position correction 반복 횟수 (기본 3, ragdoll 활성 시 4) |
 | `PhysicsWorld::interpolatePos()` | `physicsWorld.hpp #73` | 렌더 보간 헬퍼 (prev→curr, t) |
 | `PhysicsWorld::interpolateOrient()` | `physicsWorld.hpp #74` | 렌더 보간 헬퍼 (slerp) |
 | `BallSocketJoint` class | `jointConstraint.hpp #16` | 3 translational DOF 제거, bilateral warmstart |
