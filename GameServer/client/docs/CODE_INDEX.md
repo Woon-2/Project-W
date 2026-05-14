@@ -93,7 +93,9 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `makeHingeDoor()` | `standalone/game.cpp #136` | kind=3: HingeJoint 문 |
 | `makeConeTwistArm()` | `standalone/game.cpp #170` | kind=4: ConeTwist 단일 팔 |
 | `makeConeTwistChain()` | `standalone/game.cpp #203` | kind=5: ConeTwist 5-link 체인 |
-| `makeHumanoidRagdoll()` | `standalone/game.cpp #243` | kind=6: 12 bodies A-pose, 11 joints(ConeTwist×7+Hinge×4), 1-hop+2-hop 충돌 무시 |
+| `makeHumanoidRagdoll()` | `standalone/game.cpp #244` | kind=6: 12 bodies A-pose, 11 joints(ConeTwist×7+Hinge×4), 1-hop+2-hop 충돌 무시; 팔·다리 twist axis=(0,-1,0) (A-pose 기준) |
+| `makeUpperBodyRagdoll()` | `standalone/game.cpp #~427` | kind=7: Kinematic Hips anchor + Dynamic 상체 7 bodies(척추·머리·팔), 7 joints |
+| `makeLowerBodyRagdoll()` | `standalone/game.cpp #~517` | kind=8: Kinematic Hips anchor + Dynamic 하체 4 bodies(양쪽 upper/lower leg), 4 joints |
 | `BodyPair` struct | `broadPhase.hpp` | broad phase 결과 쌍 |
 | `BroadPhase` (abstract) | `broadPhase.hpp #36-40` | add/remove/update/queryPairs/queryAABB 인터페이스 |
 | `BroadPhase::queryAABB` | `broadPhase.hpp #39` | AABB 쿼리 순수 가상 메서드 — 카메라 arm 장애물 후보 조회 |
@@ -574,7 +576,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 |------|------|------|
 | `StandAlone::Game` class | `standalone/game.hpp #28` | IGame 구현 |
 | `Game::setupStage()` | `standalone/game.hpp #37` | 씬 오브젝트 생성 + CombatSystem 등록 + renderObjectId 할당 + setMaxRenderObjectId |
-| `Game::spawnTestObject(int kind)` | `standalone/game.cpp` | kind 1~6 switch: 각 factory로 PhysicsTestObject 생성 후 activate |
+| `Game::spawnTestObject(int kind)` | `standalone/game.cpp` | kind 1~8 switch: 각 factory로 PhysicsTestObject 생성 후 activate |
 | `Game::update()` | `standalone/game.hpp #45` | 메인 루프 (입력→이벤트→물리→오브젝트→애니메이션) |
 | `Game::render()` | `standalone/game.hpp #46` | cullObjects → GFX → applyHiZCulling |
 | `Game::cullObjects()` | `standalone/game.cpp #1350` | view frustum culling (plane-based) → setFrustumCulled |
