@@ -5,9 +5,6 @@
 #include "constraint.hpp"
 #include "animation.hpp"
 #include "ragdollDef.hpp"
-#include <memory>
-#include <string>
-#include <vector>
 
 struct Skeleton;
 class PhysicsWorld;

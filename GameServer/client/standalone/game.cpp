@@ -201,7 +201,7 @@ static PhysicsTestObject makeConeTwistArm(mu::Vec3 origin) {
 //     Tests simultaneous cone+twist limit enforcement across multiple chained joints.
 //     Cone: 30 deg, Twist: 22.5 deg per link.
 static PhysicsTestObject makeConeTwistChain(mu::Vec3 origin) {
-    constexpr int    kLinks     = 3;
+    constexpr int    kLinks     = 5;
     constexpr float  kSpacing   = 0.30f;  // centre-to-centre gap between consecutive links
     const mu::Vec3 anchorHe { 0.06f, 0.06f, 0.06f };
     const mu::Vec3 linkHe   { 0.05f, 0.10f, 0.05f };
@@ -213,8 +213,11 @@ static PhysicsTestObject makeConeTwistChain(mu::Vec3 origin) {
     obj.halfExtents.push_back(anchorHe);
 
     for (int i = 0; i < kLinks; ++i) {
+		const float mass = (kLinks - i) * 2.f;
         const mu::Vec3 linkPos = anchorPos + mu::Vec3{ 0.f, -kSpacing * (i + 1), 0.f };
-        obj.bodies.push_back(makeDynBody(linkPos, 3.f, 1.5f, 4.f));
+        obj.bodies.push_back(makeDynBody(linkPos, (kLinks - i) * 2.f, 1.5f, 4.f));
+		auto& bd = obj.bodies.back();
+		bd->setInertia(computeBoxInertia(mass, linkHe));
         obj.halfExtents.push_back(linkHe);
     }
 

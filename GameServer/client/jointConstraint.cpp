@@ -47,12 +47,17 @@ static mu::Mat3x3 build3x3EffMassInv(RigidBody* a, mu::Vec3 rA,
         return diag + mu::dot(rAxEi, rAxEj * iA) + mu::dot(rBxEi, rBxEj * iB);
     };
 
-    const float k00 = Kij(rAxEx, rAxEx, rBxEx, rBxEx, mAB);
-    const float k11 = Kij(rAxEy, rAxEy, rBxEy, rBxEy, mAB);
-    const float k22 = Kij(rAxEz, rAxEz, rBxEz, rBxEz, mAB);
-    const float k01 = Kij(rAxEx, rAxEy, rBxEx, rBxEy, 0.f);
-    const float k02 = Kij(rAxEx, rAxEz, rBxEx, rBxEz, 0.f);
-    const float k12 = Kij(rAxEy, rAxEz, rBxEy, rBxEz, 0.f);
+    float k00 = Kij(rAxEx, rAxEx, rBxEx, rBxEx, mAB);
+    float k11 = Kij(rAxEy, rAxEy, rBxEy, rBxEy, mAB);
+    float k22 = Kij(rAxEz, rAxEz, rBxEz, rBxEz, mAB);
+    float k01 = Kij(rAxEx, rAxEy, rBxEx, rBxEy, 0.f);
+    float k02 = Kij(rAxEx, rAxEz, rBxEx, rBxEz, 0.f);
+    float k12 = Kij(rAxEy, rAxEz, rBxEy, rBxEz, 0.f);
+
+    // CFM
+    k00 += Constraint::linearCFM;
+    k11 += Constraint::linearCFM;
+    k22 += Constraint::linearCFM;
 
     mu::Mat3x3 K{};
     K.setRow(0, mu::Vec3(k00, k01, k02));
@@ -161,7 +166,7 @@ static void swingTwistDecompose(mu::NQuat q, mu::Vec3 twistAxis,
 
 BallSocketJoint::BallSocketJoint(RigidBody* a, RigidBody* b,
                                  mu::Vec3 anchorA, mu::Vec3 anchorB)
-    : bodyA_(a), bodyB_(b), anchorA_(anchorA), anchorB_(anchorB)
+    : bodyA_(a), bodyB_(b), anchorA_(anchorA), anchorB_(anchorB), damping_(0.1f)
 {}
 
 void BallSocketJoint::resetAnchors()
@@ -191,7 +196,12 @@ void BallSocketJoint::prepare(Seconds dt)
 
 void BallSocketJoint::solveVelocity()
 {
-    const mu::Vec3 rv      = relVelAt(bodyA_, bodyB_, cache_.rA, cache_.rB);
+    // damping
+    const mu::Vec3 rv = relVelAt(bodyA_, bodyB_, cache_.rA, cache_.rB);
+    mu::Vec3 dampingImp = -(rv * cache_.effMassInv) * damping_;
+    applyLinearImpulsePair(bodyA_, bodyB_, dampingImp, cache_.rA, cache_.rB);
+
+    // impulse
     const mu::Vec3 cVel    = rv + cache_.bias;
     const mu::Vec3 dLambda = -(cVel * cache_.effMassInv);  // row-vector: v * M^-1
 
@@ -220,7 +230,7 @@ HingeJoint::HingeJoint(RigidBody* a, RigidBody* b,
     , anchorA_(anchorA), anchorB_(anchorB)
     , axisA_(mu::Vec3(mu::normalize(axisA)))
     , axisB_(mu::Vec3(mu::normalize((~b->orient()).rotate(a->orient().rotate(axisA_)))))
-    , minAngle_(minAngle), maxAngle_(maxAngle)
+    , minAngle_(minAngle), maxAngle_(maxAngle), linearDamping_(0.1f), angularDamping_(0.1f)
 {
     // Reference relative orientation: q_ref = conj(bodyA) * bodyB at build time.
     refOrient_ = mulQ(~bodyA_->orient(), bodyB_->orient());
@@ -266,7 +276,7 @@ void HingeJoint::prepare(Seconds dt)
             ? angEff1D(axisJ, bodyA_->invInertiaWorld()) : 0.f;
         const float contribB = (bodyB_->invMass() > 0.f)
             ? angEff1D(axisJ, bodyB_->invInertiaWorld()) : 0.f;
-        cache_.angEffMass[i] = 1.f / (contribA + contribB + 1e-10f);
+        cache_.angEffMass[i] = 1.f / (contribA + contribB + angularCFM);
 
         // Bias uses position-level violation: dot(axisB, perp_i) → 0
         const float angViol = mu::dot(axisBWorld, cache_.perpAxes[i]);
@@ -294,7 +304,7 @@ void HingeJoint::prepare(Seconds dt)
             ? angEff1D(cache_.hingeAxisWorld, bodyA_->invInertiaWorld()) : 0.f;
         const float contribB = (bodyB_->invMass() > 0.f)
             ? angEff1D(cache_.hingeAxisWorld, bodyB_->invInertiaWorld()) : 0.f;
-        cache_.limitEffMass = 1.f / (contribA + contribB + 1e-10f);
+        cache_.limitEffMass = 1.f / (contribA + contribB + angularCFM);
 
         if (currentAngle < minAngle_) {
             cache_.limitActive = true;
@@ -326,12 +336,25 @@ void HingeJoint::solveVelocity()
 {
     // --- Translational ---
     {
-        const mu::Vec3 rv      = relVelAt(bodyA_, bodyB_, cache_.rA, cache_.rB);
+        // damping
+        const mu::Vec3 rv = relVelAt(bodyA_, bodyB_, cache_.rA, cache_.rB);
+        mu::Vec3 dampingImp = -(rv * cache_.linEffMassInv) * linearDamping_;
+        applyLinearImpulsePair(bodyA_, bodyB_, dampingImp, cache_.rA, cache_.rB);
+
+        // impulse
         const mu::Vec3 cVel    = rv + cache_.linBias;
         const mu::Vec3 dLambda = -(cVel * cache_.linEffMassInv);
         cache_.linAccImp = cache_.linAccImp + dLambda;
         applyLinearImpulsePair(bodyA_, bodyB_, dLambda, cache_.rA, cache_.rB);
     }
+
+    // --- Angular Damping (Hinge Axis 기준) ---
+    mu::Vec3 relOmega = bodyA_->omega() - bodyB_->omega();
+    float rvAng = mu::dot(relOmega, cache_.hingeAxisWorld);
+    
+    // 자유 회전축에 대한 감쇠 (limitEffMass를 재활용하거나 새로 계산)
+    float angDampingImp = -rvAng * cache_.limitEffMass * angularDamping_;
+    applyAngularImpulsePair(bodyA_, bodyB_, angDampingImp, cache_.hingeAxisWorld);
 
     // --- Angular alignment ---
     for (int i = 0; i < 2; ++i) {
@@ -396,6 +419,9 @@ ConeTwistJoint::ConeTwistJoint(RigidBody* a, RigidBody* b,
         : mu::Vec3{ 0.f, 0.f, 1.f })
     , coneHalfAngle_(std::min(coneHalfAngle, mu::pi * 0.85f))
     , twistLimit_(std::abs(twistLimit))
+    , linearDamping_(0.1f)
+    , coneDamping_(0.1f)
+    , twistDamping_(0.1f)
 {}
 
 void ConeTwistJoint::resetAnchors()
@@ -466,7 +492,7 @@ void ConeTwistJoint::prepare(Seconds dt)
                 ? angEff1D(cache_.coneAxis, bodyA_->invInertiaWorld()) : 0.f;
             const float cB = (bodyB_->invMass() > 0.f)
                 ? angEff1D(cache_.coneAxis, bodyB_->invInertiaWorld()) : 0.f;
-            cache_.coneEffMass      = 1.f / (cA + cB + 1e-10f);
+            cache_.coneEffMass      = 1.f / (cA + cB + angularCFM);
             cache_.coneBias         = -(std::min(viol, kMaxVelCorrectionAngle) * (kAngBeta   * invDt));
             cache_.conePseudoBias   = -(std::min(viol, kMaxSplitCorrectionAngle) * (kSplitBeta * invDt));
             cache_.conePseudoAccImp = 0.f;
@@ -498,7 +524,7 @@ void ConeTwistJoint::prepare(Seconds dt)
                 ? angEff1D(twistAxisWorld, bodyA_->invInertiaWorld()) : 0.f;
             const float cB = (bodyB_->invMass() > 0.f)
                 ? angEff1D(twistAxisWorld, bodyB_->invInertiaWorld()) : 0.f;
-            cache_.twistEffMass      = 1.f / (cA + cB + 1e-10f);
+            cache_.twistEffMass      = 1.f / (cA + cB + angularCFM);
             const float limitAngle   = cache_.twistLo ? -twistLimit_ : twistLimit_;
             const float twistError   = signedTwist - limitAngle;
             cache_.twistViolation    = std::abs(twistError);
@@ -584,11 +610,37 @@ void ConeTwistJoint::solveVelocity()
 {
     // --- Translational ---
     {
-        const mu::Vec3 rv      = relVelAt(bodyA_, bodyB_, cache_.rA, cache_.rB);
+        // damping
+        const mu::Vec3 rv = relVelAt(bodyA_, bodyB_, cache_.rA, cache_.rB);
+        mu::Vec3 dampingImp = -(rv * cache_.linEffMassInv) * linearDamping_;
+        applyLinearImpulsePair(bodyA_, bodyB_, dampingImp, cache_.rA, cache_.rB);
+
         const mu::Vec3 cVel    = rv + cache_.linBias;
         const mu::Vec3 dLambda = -(cVel * cache_.linEffMassInv);
         cache_.linAccImp = cache_.linAccImp + dLambda;
         applyLinearImpulsePair(bodyA_, bodyB_, dLambda, cache_.rA, cache_.rB);
+    }
+
+    // --- 3D Angular Damping ---
+    mu::Vec3 relOmega = bodyA_->omega() - bodyB_->omega();
+    
+    // 각 축별로 Effective Mass가 다르지만, 안정성을 위해 
+    // ConeAxis와 TwistAxis의 평균적인 EffMass를 사용하거나 
+    // 각 축에 투영해서 개별 적용
+    
+    // 1. Twist 축 감쇄
+    float rvTwist = mu::dot(relOmega, cache_.twistAxis);
+    float twistDamp = -rvTwist * cache_.twistEffMass * twistDamping_;
+    applyAngularImpulsePair(bodyA_, bodyB_, twistDamp, cache_.twistAxis);
+
+    // 2. Cone(Swing) 축 감쇄
+    if (cache_.coneActive) {
+        float rvCone = mu::dot(relOmega, cache_.coneAxis);
+        float coneDamp = -rvCone * cache_.coneEffMass * coneDamping_;
+        applyAngularImpulsePair(bodyA_, bodyB_, coneDamp, cache_.coneAxis);
+    } else {
+        // 제약 조건이 활성화되지 않았더라도 묵직함을 위해 
+        // 임의의 직교축(Perp)에 대해 감쇄를 줄 수 있음
     }
 
     // --- Cone ---

@@ -30,6 +30,9 @@ float solveJacobianRow(const JacobianRow& row, float& accImpulse);
 //   3. solvePosition() - position-level correction (called once, split impulse)
 class Constraint {
 public:
+    static constexpr float linearCFM = 1e-3f;
+    static constexpr float angularCFM = 1e-2f;
+
     virtual ~Constraint() = default;
 
     // Pre-compute cached data (effective mass, bias) for this step.
