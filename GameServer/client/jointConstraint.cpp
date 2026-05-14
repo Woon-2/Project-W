@@ -5,6 +5,14 @@
 // Shared helpers
 // ---------------------------------------------------------------------------
 
+// Under-relaxation factor for angular constraint impulses.
+// Branching joint structures (e.g. Chest with 3 child joints) can create
+// PGS interference: each joint independently over-corrects the shared body.
+// Scaling the per-iteration delta by kAngSOR prevents overshoot without
+// needing more iterations.  Position-level solveJacobianRow calls are
+// unaffected (they use the default sor=1.f).
+static constexpr float kAngSOR = 0.6f;
+
 // Angular effective mass for a pure angular constraint along axis d:
 //   dot(d, d * invI)  [row-vector convention]
 static float angEff1D(mu::Vec3 d, const mu::Mat3x3& invI)
@@ -145,19 +153,24 @@ static float clampAbs(float v, float maxAbs)
 static void swingTwistDecompose(mu::NQuat q, mu::Vec3 twistAxis,
                                 mu::NQuat& outSwing, mu::NQuat& outTwist)
 {
-    const mu::Vec3 qxyz(q.x(), q.y(), q.z());
+    // Canonicalise: q and -q represent the same rotation. Ensure w >= 0 so
+    // that outTwist and outSwing come out in canonical form, preventing
+    // sign-flip artefacts in the angle/axis extraction in prepare().
+    const float cs = (q.w() >= 0.f) ? 1.f : -1.f;
+    const float qx = q.x() * cs, qy = q.y() * cs, qz = q.z() * cs, qw = q.w() * cs;
+
+    const mu::Vec3 qxyz(qx, qy, qz);
     const mu::Vec3 proj = twistAxis * mu::dot(qxyz, twistAxis);
-    const float twistLen2 = proj.len2() + q.w() * q.w();
+    const float twistLen2 = proj.len2() + qw * qw;
 
     if (twistLen2 > 1e-10f) {
-        // Normalise directly via XMVECTOR to avoid extra sqrt.
-        const mu::Quat twistRaw(proj.x(), proj.y(), proj.z(), q.w());
+        const mu::Quat twistRaw(proj.x(), proj.y(), proj.z(), qw);
         outTwist = mu::NQuat(twistRaw);
     } else {
         outTwist = mu::NQuat{};
     }
-    // swing = q * twist^-1
-    outSwing = mulQ(q, ~outTwist);
+    // swing = q_canon * twist^-1
+    outSwing = mulQ(mu::NQuat(mu::Quat(qx, qy, qz, qw)), ~outTwist);
 }
 
 // ---------------------------------------------------------------------------
@@ -366,7 +379,7 @@ void HingeJoint::solveVelocity()
         row.angB    = -axisJ;
         row.effMass = cache_.angEffMass[i];
         row.rhs     = cache_.angBias[i];
-        solveJacobianRow(row, cache_.angAccImp[i]);
+        solveJacobianRow(row, cache_.angAccImp[i], kAngSOR);
     }
 
     // --- Limit ---
@@ -378,9 +391,9 @@ void HingeJoint::solveVelocity()
         row.angB    = -cache_.hingeAxisWorld;
         row.effMass = cache_.limitEffMass;
         row.rhs     = cache_.limitBias;
-        row.lower   = cache_.limitLo ? 0.f : -std::numeric_limits<float>::infinity();
-        row.upper   = cache_.limitLo ? std::numeric_limits<float>::infinity() : 0.f;
-        solveJacobianRow(row, cache_.limitAccImp);
+        row.lower   = cache_.limitLo ? -std::numeric_limits<float>::infinity() : 0.f;
+        row.upper   = cache_.limitLo ? 0.f : std::numeric_limits<float>::infinity();
+        solveJacobianRow(row, cache_.limitAccImp, kAngSOR);
     }
 }
 
@@ -493,8 +506,8 @@ void ConeTwistJoint::prepare(Seconds dt)
             const float cB = (bodyB_->invMass() > 0.f)
                 ? angEff1D(cache_.coneAxis, bodyB_->invInertiaWorld()) : 0.f;
             cache_.coneEffMass      = 1.f / (cA + cB + angularCFM);
-            cache_.coneBias         = -(std::min(viol, kMaxVelCorrectionAngle) * (kAngBeta   * invDt));
-            cache_.conePseudoBias   = -(std::min(viol, kMaxSplitCorrectionAngle) * (kSplitBeta * invDt));
+            cache_.coneBias         = (std::min(viol, kMaxVelCorrectionAngle) * (kAngBeta   * invDt));
+            cache_.conePseudoBias   = (std::min(viol, kMaxSplitCorrectionAngle) * (kSplitBeta * invDt));
             cache_.conePseudoAccImp = 0.f;
             cache_.coneWarmValid    = true;
         } else {
@@ -599,8 +612,8 @@ void ConeTwistJoint::solvePosition()
         row.angB    = -cache_.twistAxis;
         row.effMass = cache_.twistEffMass;
         row.rhs     = cache_.twistPseudoBias;
-        row.lower   = cache_.twistLo ? 0.f : -std::numeric_limits<float>::infinity();
-        row.upper   = cache_.twistLo ? std::numeric_limits<float>::infinity() : 0.f;
+        row.lower   = cache_.twistLo ? -std::numeric_limits<float>::infinity() : 0.f;
+        row.upper   = cache_.twistLo ? 0.f : std::numeric_limits<float>::infinity();
         row.pseudo  = true;
         solveJacobianRow(row, cache_.twistPseudoAccImp);
     }
@@ -653,7 +666,7 @@ void ConeTwistJoint::solveVelocity()
         row.effMass = cache_.coneEffMass;
         row.rhs     = cache_.coneBias;
         row.lower   = 0.f;
-        solveJacobianRow(row, cache_.coneAccImp);
+        solveJacobianRow(row, cache_.coneAccImp, kAngSOR);
     }
 
     // --- Twist ---
@@ -665,8 +678,8 @@ void ConeTwistJoint::solveVelocity()
         row.angB    = -cache_.twistAxis;
         row.effMass = cache_.twistEffMass;
         row.rhs     = cache_.twistBias;
-        row.lower   = cache_.twistLo ? 0.f : -std::numeric_limits<float>::infinity();
-        row.upper   = cache_.twistLo ? std::numeric_limits<float>::infinity() : 0.f;
-        solveJacobianRow(row, cache_.twistAccImp);
+        row.lower   = cache_.twistLo ? -std::numeric_limits<float>::infinity() : 0.f;
+        row.upper   = cache_.twistLo ? 0.f : std::numeric_limits<float>::infinity();
+        solveJacobianRow(row, cache_.twistAccImp, kAngSOR);
     }
 }

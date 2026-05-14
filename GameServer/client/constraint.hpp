@@ -19,7 +19,11 @@ struct JacobianRow {
     bool       pseudo = false;
 };
 
-float solveJacobianRow(const JacobianRow& row, float& accImpulse);
+// sor: successive over/under-relaxation factor (default 1.0).
+// Passing sor < 1.0 scales the applied delta, preventing per-iteration
+// overshoot in branching joint structures.  accImpulse is updated by the
+// scaled amount so warm-starting reflects what was actually applied.
+float solveJacobianRow(const JacobianRow& row, float& accImpulse, float sor = 1.f);
 
 // Abstract base for all velocity-level + position-level constraints.
 // Concrete types: ContactConstraint, BallSocketJoint, HingeJoint, ConeTwistJoint.

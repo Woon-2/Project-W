@@ -1,7 +1,7 @@
 #include "pch.hpp"
 #include "constraint.hpp"
 
-float solveJacobianRow(const JacobianRow& row, float& accImpulse)
+float solveJacobianRow(const JacobianRow& row, float& accImpulse, float sor)
 {
     auto linVel = [&](const RigidBody* b) {
         return row.pseudo ? b->pseudoLinearVel() : b->linearVel();
@@ -16,8 +16,9 @@ float solveJacobianRow(const JacobianRow& row, float& accImpulse)
 
     const float rawDelta = -(Jv + row.rhs) * row.effMass;
     const float prev = accImpulse;
-    accImpulse = std::clamp(prev + rawDelta, row.lower, row.upper);
-    const float delta = accImpulse - prev;
+    const float candidate = std::clamp(prev + rawDelta, row.lower, row.upper);
+    const float delta = (candidate - prev) * sor;
+    accImpulse = prev + delta;
     if (delta == 0.f)
         return 0.f;
 

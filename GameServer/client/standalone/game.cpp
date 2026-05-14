@@ -483,21 +483,24 @@ static PhysicsTestObject makeUpperBodyRagdoll(mu::Vec3 origin) {
         idQ, idQ, mu::Vec3{ 0.f, 1.f, 0.f },
         mu::pi * 0.3f, mu::pi * 0.2f));
 
-    // Arms: A-pose twist axis = (0,-1,0) (arms hang down)
+    // Arms: A-pose twist axis = (0,-1,0) (arms hang down).
+    // BFS depth ordering: all depth-3 joints (Chest→*UA) before depth-4
+    // joints (*UA→*LA) so each solver iteration propagates corrections
+    // root-to-leaf (shock propagation).
     obj.joints.push_back(std::make_unique<ConeTwistJoint>(
         bChest, bLUA,
         mu::Vec3{ -0.22f, 0.f, 0.f }, mu::Vec3{ 0.f, 0.14f, 0.f },
+        idQ, idQ, mu::Vec3{ 0.f, -1.f, 0.f },
+        mu::pi * 0.6f, mu::pi * 0.5f));
+    obj.joints.push_back(std::make_unique<ConeTwistJoint>(
+        bChest, bRUA,
+        mu::Vec3{  0.22f, 0.f, 0.f }, mu::Vec3{ 0.f, 0.14f, 0.f },
         idQ, idQ, mu::Vec3{ 0.f, -1.f, 0.f },
         mu::pi * 0.6f, mu::pi * 0.5f));
     obj.joints.push_back(std::make_unique<HingeJoint>(
         bLUA, bLLA,
         mu::Vec3{ 0.f, -0.14f, 0.f }, mu::Vec3{ 0.f, 0.12f, 0.f },
         mu::Vec3{ 0.f, 0.f, 1.f }, 0.f, mu::pi * 0.9f));
-    obj.joints.push_back(std::make_unique<ConeTwistJoint>(
-        bChest, bRUA,
-        mu::Vec3{  0.22f, 0.f, 0.f }, mu::Vec3{ 0.f, 0.14f, 0.f },
-        idQ, idQ, mu::Vec3{ 0.f, -1.f, 0.f },
-        mu::pi * 0.6f, mu::pi * 0.5f));
     obj.joints.push_back(std::make_unique<HingeJoint>(
         bRUA, bRLA,
         mu::Vec3{ 0.f, -0.14f, 0.f }, mu::Vec3{ 0.f, 0.12f, 0.f },
@@ -569,21 +572,23 @@ static PhysicsTestObject makeLowerBodyRagdoll(mu::Vec3 origin) {
     RigidBody* bRLL  = obj.bodies[4].get();
     const mu::NQuat idQ{};
 
-    // Hip sockets: A-pose legs hang down → twist axis (0,-1,0)
+    // Hip sockets: A-pose legs hang down → twist axis (0,-1,0).
+    // BFS depth ordering: both depth-1 joints (Hips→*UL) before depth-2
+    // joints (*UL→*LL).
     obj.joints.push_back(std::make_unique<ConeTwistJoint>(
         bHips, bLUL,
         mu::Vec3{ -0.11f, -0.10f, 0.f }, mu::Vec3{ 0.f, 0.20f, 0.f },
+        idQ, idQ, mu::Vec3{ 0.f, -1.f, 0.f },
+        mu::pi * 0.5f, mu::pi * 0.25f));
+    obj.joints.push_back(std::make_unique<ConeTwistJoint>(
+        bHips, bRUL,
+        mu::Vec3{  0.11f, -0.10f, 0.f }, mu::Vec3{ 0.f, 0.20f, 0.f },
         idQ, idQ, mu::Vec3{ 0.f, -1.f, 0.f },
         mu::pi * 0.5f, mu::pi * 0.25f));
     obj.joints.push_back(std::make_unique<HingeJoint>(
         bLUL, bLLL,
         mu::Vec3{ 0.f, -0.20f, 0.f }, mu::Vec3{ 0.f, 0.18f, 0.f },
         mu::Vec3{ 1.f, 0.f, 0.f }, 0.f, mu::pi * 0.9f));
-    obj.joints.push_back(std::make_unique<ConeTwistJoint>(
-        bHips, bRUL,
-        mu::Vec3{  0.11f, -0.10f, 0.f }, mu::Vec3{ 0.f, 0.20f, 0.f },
-        idQ, idQ, mu::Vec3{ 0.f, -1.f, 0.f },
-        mu::pi * 0.5f, mu::pi * 0.25f));
     obj.joints.push_back(std::make_unique<HingeJoint>(
         bRUL, bRLL,
         mu::Vec3{ 0.f, -0.20f, 0.f }, mu::Vec3{ 0.f, 0.18f, 0.f },
@@ -1446,6 +1451,12 @@ void Game::spawnTestObject(int kind) {
     obj.activate(physicsWorld_);
     rdObjects_.push_back(std::move(obj));
     rdShowBodies_ = true;  // auto-enable visualization when anything is spawned
+
+    // Ragdoll-style objects (kind >= 6) have branching or deep joint chains that
+    // require more PGS iterations to converge.  Extra joint-only iterations are
+    // cheap (contacts are unaffected) and clearTestObjects() resets them to 0.
+    if (kind >= 6)
+        physicsWorld_.setJointSolverExtraIterations(48);
 }
 
 void Game::clearTestObjects() {

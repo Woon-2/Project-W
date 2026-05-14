@@ -40,7 +40,8 @@
       "Bash(Select-Object FullName)",
       "Bash(Select-Object -ExpandProperty Name)",
       "Bash(Sort-Object)",
-      "Bash(Select-Object -First 50)"
+      "Bash(Select-Object -First 50)",
+      "Bash(findstr /I \"joint\")"
     ]
   }
 }
