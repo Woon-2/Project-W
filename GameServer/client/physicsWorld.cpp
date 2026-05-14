@@ -54,6 +54,13 @@ void PhysicsWorld::removeJointRef(Constraint* joint)
         jointRefs_.erase(it);
 }
 
+void PhysicsWorld::setIgnoreCollision(RigidBody* a, RigidBody* b, bool ignore)
+{
+    const auto key = normKey(a, b);
+    if (ignore) ignoreCollisionPairs_.insert(key);
+    else        ignoreCollisionPairs_.erase(key);
+}
+
 void PhysicsWorld::registerTerrain(RigidBody* terrainBody,
                                     const TerrainHeightField* heightField)
 {
@@ -257,6 +264,9 @@ void PhysicsWorld::generateContacts()
             const bool ba = (eb->collisionGroup & ea->collisionMask) != 0;
             if (!ab && !ba) continue;
         }
+
+        // Per-pair ignore (ragdoll joint-connected and near-chain pairs).
+        if (ignoreCollisionPairs_.count(normKey(a, b))) continue;
 
         const BVH& bvhA = a->worldBVH();
         const BVH& bvhB = b->worldBVH();

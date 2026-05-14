@@ -8,6 +8,7 @@
 #include "collision.hpp"
 #include <functional>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 struct TerrainHeightField;
@@ -53,6 +54,11 @@ public:
     // The pointed-to Constraint must remain valid until removeJointRef is called.
     void addJointRef(Constraint* joint);
     void removeJointRef(Constraint* joint);
+
+    // Per-pair collision ignore. When ignore=true, contact generation between a and b
+    // is suppressed regardless of collisionGroup/Mask. Symmetric: (a,b)==(b,a).
+    // Ragdoll uses this for joint-connected pairs (1-hop) and near-chain pairs (2-hop).
+    void setIgnoreCollision(RigidBody* a, RigidBody* b, bool ignore);
 
     // Register a static height-field terrain for body-terrain collision.
     // terrainBody must be MotionType::Static; it is NOT added to the broad phase.
@@ -168,6 +174,10 @@ private:
         return (a < b) ? std::make_pair(a, b) : std::make_pair(b, a);
     }
     std::unordered_map<std::pair<RigidBody*, RigidBody*>, WarmEntry, WarmPairHash> warmCache_;
+
+    // Body pairs excluded from contact generation regardless of group/mask.
+    // Keys are normalized (smaller ptr first) via normKey().
+    std::unordered_set<std::pair<RigidBody*, RigidBody*>, WarmPairHash> ignoreCollisionPairs_;
 };
 
 #endif // __PhysicsWorld_HPP

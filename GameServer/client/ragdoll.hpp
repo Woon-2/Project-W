@@ -120,7 +120,9 @@ private:
 
     std::vector<RagdollBone>                   bones_;
     std::vector<std::unique_ptr<RigidBody>>    bodies_;   // owns memory
-    std::vector<std::unique_ptr<Constraint>>   joints_;   // owns memory
+    std::vector<std::unique_ptr<Constraint>>   joints_;      // owns memory
+    std::vector<std::pair<RigidBody*, RigidBody*>> jointBodies_;  // parallel to joints_; built in build()
+    std::vector<std::pair<RigidBody*, RigidBody*>> ignoredPairs_; // registered in activate(); cleared in deactivate()/destroy()
     std::vector<PassengerBone>                 passengers_;
     bool active_ = false;
 };

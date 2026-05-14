@@ -241,6 +241,189 @@ static PhysicsTestObject makeConeTwistChain(mu::Vec3 origin) {
     return obj;
 }
 
+// 6 - Humanoid ragdoll: 12 Dynamic bodies (A-pose) connected by 11 joints.
+//     Layout mirrors getHumanoidRagdollDef() but requires no skeleton or model.
+//     All bodies start at identity orientation (arms hang downward at sides).
+//     Body positions, half-extents, masses, and joint limits match the
+//     production ragdoll definition so simulation behaviour is representative.
+static PhysicsTestObject makeHumanoidRagdoll(mu::Vec3 origin) {
+    constexpr int kHips          = 0;
+    constexpr int kSpine         = 1;
+    constexpr int kChest         = 2;
+    constexpr int kHead          = 3;
+    constexpr int kLeftUpperArm  = 4;
+    constexpr int kLeftLowerArm  = 5;
+    constexpr int kRightUpperArm = 6;
+    constexpr int kRightLowerArm = 7;
+    constexpr int kLeftUpperLeg  = 8;
+    constexpr int kLeftLowerLeg  = 9;
+    constexpr int kRightUpperLeg = 10;
+    constexpr int kRightLowerLeg = 11;
+
+    constexpr float kLin = 0.1f;
+    constexpr float kAng = 0.2f;
+
+    const mu::Vec3 heHips     { 0.12f, 0.08f, 0.10f };
+    const mu::Vec3 heSpine    { 0.10f, 0.10f, 0.09f };
+    const mu::Vec3 heChest    { 0.11f, 0.10f, 0.09f };
+    const mu::Vec3 heHead     { 0.10f, 0.10f, 0.10f };
+    const mu::Vec3 heUpperArm { 0.06f, 0.14f, 0.06f };
+    const mu::Vec3 heLowerArm { 0.05f, 0.12f, 0.05f };
+    const mu::Vec3 heUpperLeg { 0.08f, 0.20f, 0.08f };
+    const mu::Vec3 heLowerLeg { 0.06f, 0.18f, 0.06f };
+
+    const float masses[12] = { 12.f, 8.f, 8.f, 5.f,
+                                3.f, 2.f, 3.f, 2.f,
+                                8.f, 5.f, 8.f, 5.f };
+    const mu::Vec3 hes[12] = { heHips, heSpine, heChest, heHead,
+                                heUpperArm, heLowerArm, heUpperArm, heLowerArm,
+                                heUpperLeg, heLowerLeg, heUpperLeg, heLowerLeg };
+
+    // Body CoM positions relative to origin (feet of the humanoid).
+    // Shoulder pivots are at ±0.22 on X at chest height (1.38).
+    // Hip sockets are at ±0.11 on X, 0.10 below hips CoM.
+    const mu::Vec3 positions[12] = {
+        origin + mu::Vec3{  0.f,    1.00f, 0.f },  // Hips
+        origin + mu::Vec3{  0.f,    1.18f, 0.f },  // Spine
+        origin + mu::Vec3{  0.f,    1.38f, 0.f },  // Chest
+        origin + mu::Vec3{  0.f,    1.58f, 0.f },  // Head
+        origin + mu::Vec3{ -0.22f,  1.24f, 0.f },  // LeftUpperArm
+        origin + mu::Vec3{ -0.22f,  0.98f, 0.f },  // LeftLowerArm
+        origin + mu::Vec3{  0.22f,  1.24f, 0.f },  // RightUpperArm
+        origin + mu::Vec3{  0.22f,  0.98f, 0.f },  // RightLowerArm
+        origin + mu::Vec3{ -0.11f,  0.70f, 0.f },  // LeftUpperLeg
+        origin + mu::Vec3{ -0.11f,  0.32f, 0.f },  // LeftLowerLeg
+        origin + mu::Vec3{  0.11f,  0.70f, 0.f },  // RightUpperLeg
+        origin + mu::Vec3{  0.11f,  0.32f, 0.f },  // RightLowerLeg
+    };
+
+    PhysicsTestObject obj;
+    for (int i = 0; i < 12; ++i) {
+        obj.bodies.push_back(makeDynBody(positions[i], masses[i], kLin, kAng));
+        obj.bodies.back()->setInertia(computeBoxInertia(masses[i], hes[i]));
+        obj.halfExtents.push_back(hes[i]);
+    }
+
+    RigidBody* bHips = obj.bodies[kHips].get();
+    RigidBody* bSpine = obj.bodies[kSpine].get();
+    RigidBody* bChest = obj.bodies[kChest].get();
+    RigidBody* bHead  = obj.bodies[kHead].get();
+    RigidBody* bLUA   = obj.bodies[kLeftUpperArm].get();
+    RigidBody* bLLA   = obj.bodies[kLeftLowerArm].get();
+    RigidBody* bRUA   = obj.bodies[kRightUpperArm].get();
+    RigidBody* bRLA   = obj.bodies[kRightLowerArm].get();
+    RigidBody* bLUL   = obj.bodies[kLeftUpperLeg].get();
+    RigidBody* bLLL   = obj.bodies[kLeftLowerLeg].get();
+    RigidBody* bRUL   = obj.bodies[kRightUpperLeg].get();
+    RigidBody* bRLL   = obj.bodies[kRightLowerLeg].get();
+    const mu::NQuat idQ{};
+
+    // Spine chain — ConeTwist, Y-up twist axis.
+    obj.joints.push_back(std::make_unique<ConeTwistJoint>(
+        bHips, bSpine,
+        mu::Vec3{ 0.f,  0.08f, 0.f }, mu::Vec3{ 0.f, -0.10f, 0.f },
+        idQ, idQ, mu::Vec3{ 0.f, 1.f, 0.f },
+        mu::pi * 0.2f, mu::pi * 0.15f));
+    obj.joints.push_back(std::make_unique<ConeTwistJoint>(
+        bSpine, bChest,
+        mu::Vec3{ 0.f,  0.10f, 0.f }, mu::Vec3{ 0.f, -0.10f, 0.f },
+        idQ, idQ, mu::Vec3{ 0.f, 1.f, 0.f },
+        mu::pi * 0.2f, mu::pi * 0.15f));
+    obj.joints.push_back(std::make_unique<ConeTwistJoint>(
+        bChest, bHead,
+        mu::Vec3{ 0.f,  0.10f, 0.f }, mu::Vec3{ 0.f, -0.10f, 0.f },
+        idQ, idQ, mu::Vec3{ 0.f, 1.f, 0.f },
+        mu::pi * 0.3f, mu::pi * 0.2f));
+
+    // Arm chains — ConeTwist at shoulder, Hinge at elbow.
+    obj.joints.push_back(std::make_unique<ConeTwistJoint>(
+        bChest, bLUA,
+        mu::Vec3{ -0.22f, 0.f, 0.f }, mu::Vec3{ 0.f, 0.14f, 0.f },
+        idQ, idQ, mu::Vec3{ -1.f, 0.f, 0.f },
+        mu::pi * 0.6f, mu::pi * 0.5f));
+    obj.joints.push_back(std::make_unique<HingeJoint>(
+        bLUA, bLLA,
+        mu::Vec3{ 0.f, -0.14f, 0.f }, mu::Vec3{ 0.f, 0.12f, 0.f },
+        mu::Vec3{ 0.f, 0.f, 1.f }, 0.f, mu::pi * 0.9f));
+    obj.joints.push_back(std::make_unique<ConeTwistJoint>(
+        bChest, bRUA,
+        mu::Vec3{  0.22f, 0.f, 0.f }, mu::Vec3{ 0.f, 0.14f, 0.f },
+        idQ, idQ, mu::Vec3{  1.f, 0.f, 0.f },
+        mu::pi * 0.6f, mu::pi * 0.5f));
+    obj.joints.push_back(std::make_unique<HingeJoint>(
+        bRUA, bRLA,
+        mu::Vec3{ 0.f, -0.14f, 0.f }, mu::Vec3{ 0.f, 0.12f, 0.f },
+        mu::Vec3{ 0.f, 0.f, 1.f }, 0.f, mu::pi * 0.9f));
+
+    // Leg chains — ConeTwist at hip socket, Hinge at knee.
+    // Twist axis points from hips CoM toward hip socket.
+    const mu::Vec3 leftHipAxis  = mu::Vec3(mu::normalize(mu::Vec3{ -0.11f, -0.10f, 0.f }));
+    const mu::Vec3 rightHipAxis = mu::Vec3(mu::normalize(mu::Vec3{  0.11f, -0.10f, 0.f }));
+    obj.joints.push_back(std::make_unique<ConeTwistJoint>(
+        bHips, bLUL,
+        mu::Vec3{ -0.11f, -0.10f, 0.f }, mu::Vec3{ 0.f, 0.20f, 0.f },
+        idQ, idQ, leftHipAxis,
+        mu::pi * 0.5f, mu::pi * 0.25f));
+    obj.joints.push_back(std::make_unique<HingeJoint>(
+        bLUL, bLLL,
+        mu::Vec3{ 0.f, -0.20f, 0.f }, mu::Vec3{ 0.f, 0.18f, 0.f },
+        mu::Vec3{ 1.f, 0.f, 0.f }, 0.f, mu::pi * 0.9f));
+    obj.joints.push_back(std::make_unique<ConeTwistJoint>(
+        bHips, bRUL,
+        mu::Vec3{  0.11f, -0.10f, 0.f }, mu::Vec3{ 0.f, 0.20f, 0.f },
+        idQ, idQ, rightHipAxis,
+        mu::pi * 0.5f, mu::pi * 0.25f));
+    obj.joints.push_back(std::make_unique<HingeJoint>(
+        bRUL, bRLL,
+        mu::Vec3{ 0.f, -0.20f, 0.f }, mu::Vec3{ 0.f, 0.18f, 0.f },
+        mu::Vec3{ 1.f, 0.f, 0.f }, 0.f, mu::pi * 0.9f));
+
+    for (auto& j : obj.joints)
+        j->resetAnchors();
+
+    // Collision ignore pairs: 1-hop (directly connected) + 2-hop (common neighbour).
+    // Mirrors Ragdoll::activate() to prevent intra-body contact instability.
+    {
+        const std::pair<RigidBody*, RigidBody*> jointPairs[] = {
+            {bHips, bSpine},
+            {bSpine, bChest},
+            {bChest, bHead},
+            {bChest, bLUA},
+            {bLUA,   bLLA},
+            {bChest, bRUA},
+            {bRUA,   bRLA},
+            {bHips,  bLUL},
+            {bLUL,   bLLL},
+            {bHips,  bRUL},
+            {bRUL,   bRLL},
+        };
+
+        auto normPair = [](RigidBody* a, RigidBody* b) {
+            return a < b ? std::make_pair(a, b) : std::make_pair(b, a);
+        };
+        std::set<std::pair<RigidBody*, RigidBody*>> pending;
+        for (const auto& [a, b] : jointPairs)
+            pending.insert(normPair(a, b));
+
+        std::unordered_map<RigidBody*, std::vector<RigidBody*>> adj;
+        for (const auto& [a, b] : jointPairs) {
+            adj[a].push_back(b);
+            adj[b].push_back(a);
+        }
+        for (auto& [mid, nb] : adj) {
+            const int n = static_cast<int>(nb.size());
+            for (int i = 0; i < n; ++i)
+                for (int j = i + 1; j < n; ++j)
+                    pending.insert(normPair(nb[i], nb[j]));
+        }
+
+        for (const auto& p : pending)
+            obj.ignoredPairs.push_back(p);
+    }
+
+    return obj;
+}
+
 Game::Game() {
 	// 스레드 풀 초기화
 	std::cout << "----------[게임 초기화 설정]----------\n";
@@ -1057,7 +1240,8 @@ void Game::spawnTestObject(int kind) {
     case 2: obj = makeDoublePendulum(base); break;
     case 3: obj = makeHingeDoor(base);      break;
     case 4: obj = makeConeTwistArm(base);   break;
-    case 5: obj = makeConeTwistChain(base); break;
+    case 5: obj = makeConeTwistChain(base);    break;
+    case 6: obj = makeHumanoidRagdoll(base);  break;
     default: return;
     }
 
@@ -1725,13 +1909,14 @@ void Game::processInput(Milliseconds deltaTime) {
 	// --- Physics constraint / ragdoll debug tools ---
 	// Keys 1-5: spawn test structures. K: clear all. R: impulse ray.
 	// Comma/Period: halve/double impulse strength. M: slow motion cycle.
-	// V: OBB visualization. I: random blast. P: freeze toggle.
+	// 1-6: spawn test object. V: OBB visualization. I: random blast. P: freeze toggle.
 #define RD_KEY_DOWN(k) ((keyboardStateCurr_[k] & 0x80) && !(keyboardStatePrev_[k] & 0x80))
 	if (RD_KEY_DOWN('1')) spawnTestObject(1);
 	if (RD_KEY_DOWN('2')) spawnTestObject(2);
 	if (RD_KEY_DOWN('3')) spawnTestObject(3);
 	if (RD_KEY_DOWN('4')) spawnTestObject(4);
 	if (RD_KEY_DOWN('5')) spawnTestObject(5);
+	if (RD_KEY_DOWN('6')) spawnTestObject(6);
 	if (RD_KEY_DOWN('K')) clearTestObjects();
 	if (RD_KEY_DOWN('R')) fireImpulseRay();
 

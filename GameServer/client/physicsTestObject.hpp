@@ -52,6 +52,9 @@ struct PhysicsTestObject {
     std::vector<std::unique_ptr<RigidBody>>  bodies;
     std::vector<mu::Vec3>                    halfExtents; // per-body box half-sizes (index matches bodies)
     std::vector<std::unique_ptr<Constraint>> joints;
+    // Per-pair collision ignores: 1-hop joint pairs + 2-hop sibling pairs.
+    // Populated by factory functions before activate().
+    std::vector<std::pair<RigidBody*, RigidBody*>> ignoredPairs;
 
     // Register all bodies and joint refs.
     // Bodies receive a proper BVH rebuild callback so TerrainCollider and
@@ -71,6 +74,8 @@ struct PhysicsTestObject {
         }
         for (auto& j : joints)
             pw.addJointRef(j.get());
+        for (const auto& [a, b] : ignoredPairs)
+            pw.setIgnoreCollision(a, b, true);
     }
 
     // Remove all joint refs and bodies from the physics world.
@@ -78,6 +83,8 @@ struct PhysicsTestObject {
     void deactivate(PhysicsWorld& pw) {
         for (auto& j : joints) pw.removeJointRef(j.get());
         for (auto& b : bodies) pw.unregisterBody(b.get());
+        for (const auto& [a, b] : ignoredPairs)
+            pw.setIgnoreCollision(a, b, false);
     }
 
     // Push one OBB per body into the debug view with the given TTL.

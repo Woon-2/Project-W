@@ -44,9 +44,11 @@ static mu::Vec3 safeNormalizeOr(mu::Vec3 v, mu::Vec3 fallback)
 }
 
 // Collision-filter constants for ragdoll bones.
-// Group 2 clears bit 1 from its own mask so ragdoll bones skip each other.
+// kRagdollMask allows ragdoll-ragdoll contacts; per-pair filtering via
+// PhysicsWorld::ignoreCollisionPairs_ (registered in activate()) handles
+// joint-connected and near-chain pair suppression.
 static constexpr uint16_t kRagdollGroup = 2u;
-static constexpr uint16_t kRagdollMask  = static_cast<uint16_t>(0xFFFFu & ~uint16_t(kRagdollGroup));
+static constexpr uint16_t kRagdollMask  = 0xFFFFu;
 
 // Build (or rebuild) the world-space single-OBB BVH for a ragdoll bone body.
 // body->pos() == OBB world centre (capsuleOffset is already baked into the body position).
@@ -104,6 +106,9 @@ const RagdollBone* Ragdoll::findBone(int boneIdx) const
 
 void Ragdoll::build(const Skeleton& skel, const RagdollDef& def, PhysicsWorld& world)
 {
+    bones_.clear(); bodies_.clear(); joints_.clear();
+    jointBodies_.clear(); ignoredPairs_.clear();
+
     bones_.reserve(def.bones.size());
     bodies_.reserve(def.bones.size());
 
@@ -215,6 +220,9 @@ void Ragdoll::build(const Skeleton& skel, const RagdollDef& def, PhysicsWorld& w
 
         if (!joint) continue;
 
+        // Parallel record before ownership is moved.
+        jointBodies_.push_back({ bodyA, bodyB });
+
         // Tag the child RagdollBone with its parent joint (non-owning view).
         for (RagdollBone& rb : bones_) {
             if (rb.boneIdx == childBone->boneIdx) {
@@ -241,9 +249,13 @@ void Ragdoll::destroy(PhysicsWorld& world)
             world.removeJointRef(j.get());
         for (auto& b : bodies_)
             world.unregisterBody(b.get());
+        for (const auto& [a, b] : ignoredPairs_)
+            world.setIgnoreCollision(a, b, false);
+        ignoredPairs_.clear();
     }
 
     joints_.clear();
+    jointBodies_.clear();
     bodies_.clear();
     bones_.clear();
     passengers_.clear();
@@ -316,6 +328,8 @@ void Ragdoll::syncToFinalXforms(std::vector<mu::Mat4x4>& finalXforms,
 
 void Ragdoll::activate(PhysicsWorld& world)
 {
+    if (active_) return;
+
     // Recompute joint anchors (anchorA_) from current seeded body positions.
     // build() computed them from T-pose; without this reset the joints would have
     // a large initial position error equal to the T-pose vs animation-pose offset,
@@ -334,6 +348,42 @@ void Ragdoll::activate(PhysicsWorld& world)
     for (auto& joint : joints_)
         world.addJointRef(joint.get());
 
+    // Register per-pair collision ignores.
+    // 1-hop: directly jointed body pairs.
+    // 2-hop: bodies sharing a common joint-neighbor (sibling pairs in chain).
+    {
+        ignoredPairs_.clear();
+
+        auto normPair = [](RigidBody* a, RigidBody* b) {
+            return a < b ? std::make_pair(a, b) : std::make_pair(b, a);
+        };
+        std::set<std::pair<RigidBody*, RigidBody*>> pending;
+
+        // 1-hop: each joint's body pair.
+        for (const auto& [bA, bB] : jointBodies_)
+            pending.insert(normPair(bA, bB));
+
+        // Build adjacency map for 2-hop computation.
+        std::unordered_map<RigidBody*, std::vector<RigidBody*>> adj;
+        for (const auto& [bA, bB] : jointBodies_) {
+            adj[bA].push_back(bB);
+            adj[bB].push_back(bA);
+        }
+
+        // 2-hop: every pair of neighbors sharing the same intermediate body.
+        for (auto& [mid, neighbors] : adj) {
+            const int n = static_cast<int>(neighbors.size());
+            for (int i = 0; i < n; ++i)
+                for (int j = i + 1; j < n; ++j)
+                    pending.insert(normPair(neighbors[i], neighbors[j]));
+        }
+
+        for (const auto& p : pending) {
+            ignoredPairs_.push_back(p);
+            world.setIgnoreCollision(p.first, p.second, true);
+        }
+    }
+
     for (auto& body : bodies_)
         body->setMotionType(MotionType::Dynamic);
     active_ = true;
@@ -349,6 +399,10 @@ void Ragdoll::deactivate(PhysicsWorld& world)
         world.removeJointRef(joint.get());
     for (auto& body : bodies_)
         world.unregisterBody(body.get());
+
+    for (const auto& [a, b] : ignoredPairs_)
+        world.setIgnoreCollision(a, b, false);
+    ignoredPairs_.clear();
 
     passengers_.clear();
     active_ = false;

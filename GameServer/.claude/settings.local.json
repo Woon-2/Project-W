@@ -37,7 +37,10 @@
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(msbuild GameServer.sln /t:client /p:Configuration=Debug /p:Platform=x64 /m /nologo)",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\PC\\\\Desktop\\\\zolzak\\\\Project-W\\\\GameServer\\\\client\" -Recurse -Include \"physicsTestObject.hpp\", \"game.cpp\", \"game.hpp\", \"jointConstraint.cpp\")",
-      "Bash(Select-Object FullName)"
+      "Bash(Select-Object FullName)",
+      "Bash(Select-Object -ExpandProperty Name)",
+      "Bash(Sort-Object)",
+      "Bash(Select-Object -First 50)"
     ]
   }
 }
