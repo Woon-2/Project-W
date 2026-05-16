@@ -120,7 +120,7 @@ private:
 
 	TextImage textFPS_{};
 
-	enum class SwordEffect { SlashWave, SlashCombo, Slash7, Slash1, Spikes, CrystalsFrontAttack, AoESlashGreen, RedEnergyExplosion, CrystalsCrossFade };
+	enum class SwordEffect { SlashWave, SlashCombo, Slash7, Slash1, Spikes, CrystalsFrontAttack, AoESlashGreen, RedEnergyExplosion, CrystalsCrossFade, Arrow };
 
 	UI::UIManager    uiManager_{};
 	UI::ProgressBar* playerHpBar_    = nullptr;  // owned by uiManager_
@@ -140,6 +140,7 @@ private:
 	ParticleEffect crystalsCrossFadeEffect_{};
 	ParticleSystem dustParticleSystem_{};
 	ParticleEffect redEnergyExplosionEffect_{};
+	ParticleEffect arrowEffect_{};
 	int            footBoneIdxLeft_  = -1;
 	int            footBoneIdxRight_ = -1;
 	Seconds        prevAnimTimeRun_  = 0s;

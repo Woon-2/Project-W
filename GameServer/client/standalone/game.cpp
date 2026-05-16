@@ -164,7 +164,7 @@ void Game::setupStage() {
 	effectDropdown_->offsetX = UI::DimValue::px(-12.f);
 	effectDropdown_->offsetY = UI::DimValue::px(12.f);
 	effectDropdown_->width   = UI::DimValue::px(180.f);
-	effectDropdown_->setup({ "Slash Wave", "Slash Combo", "Slash 7", "Slash 1", "Spikes", "Crystals Front Attack", "AoE Slash Green", "Red Energy Explosion", "Crystals Cross Fade" });
+	effectDropdown_->setup({ "Slash Wave", "Slash Combo", "Slash 7", "Slash 1", "Spikes", "Crystals Front Attack", "AoE Slash Green", "Red Energy Explosion", "Crystals Cross Fade", "Arrow" });
 	effectDropdown_->onSelectionChanged = [this](int idx) {
 		currentEffect_ = static_cast<SwordEffect>(idx);
 	};
@@ -789,6 +789,133 @@ void Game::setParticle()
 		}
 
 		crystalsCrossFadeEffect_.bindSubEmitter(0, 0, 1);
+	// ── Arrow Effect (Muzzle → mesh flight → Hit) ───────────────────────────
+	{
+		// System 0: Arrow mesh (parent) — flies in player's forward direction
+		{
+			ps::ParticleSystemConfig cfg;
+			cfg.main.lifetimeMin        = 0.4f;
+			cfg.main.lifetimeMax        = 0.4f;
+			cfg.main.speedMin           = 40.f;
+			cfg.main.speedMax           = 40.f;
+			cfg.main.startSizeMin       = 0.3f;
+			cfg.main.startSizeMax       = 0.3f;
+			cfg.main.startColor         = { 1.f, 1.f, 1.f, 1.f };
+			cfg.main.gravityModifierMin = 0.f;
+			cfg.main.gravityModifierMax = 0.f;
+			cfg.main.looping            = false;
+			cfg.main.duration           = 0.f;
+
+			cfg.emission.emitRate = 0.f;
+
+			cfg.shape.type      = ps::ShapeModule::Type::Point;
+			cfg.shape.position  = { 0.f, 0.f, 0.f };
+			cfg.shape.direction = { 0.f, 0.f, 1.f };  // local +Z, rotated by player orient at play()
+
+			cfg.renderer.mode        = ps::RendererModule::Mode::Mesh;
+			cfg.renderer.renderOrder = 2;
+			cfg.renderer.mat         = ps::MatUnlit{ .mainTex = assetManager_.arrowTex(), .additive = false };
+			cfg.renderer.pMesh       = assetManager_.meshArrow();
+			cfg.renderer.pSubMesh    = assetManager_.meshArrow()->subMeshes.empty()
+			                           ? nullptr : &assetManager_.meshArrow()->subMeshes[0];
+
+			// Sub-emitter index 0 = Birth (muzzle), index 1 = Death (hit)
+			cfg.subEmitters.enabled = true;
+			cfg.subEmitters.subEmitters = {
+				ps::SubEmittersModule::SubEmitter{
+					.event           = ps::SubEmittersModule::Event::Birth,
+					.emitProbability = 1.f,
+					.emitCount       = 1,
+					.inheritVelocity = false,
+					.inheritColor    = false,
+					.inheritSize     = false,
+				},
+				ps::SubEmittersModule::SubEmitter{
+					.event           = ps::SubEmittersModule::Event::Death,
+					.emitProbability = 1.f,
+					.emitCount       = 1,
+					.inheritVelocity = false,
+					.inheritColor    = false,
+					.inheritSize     = false,
+				},
+			};
+
+			arrowEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit, 32);
+		}
+
+		// System 1: ArrowMuzzle — spawned at arrow birth position
+		{
+			ps::ParticleSystemConfig cfg;
+			cfg.main.lifetimeMin = 0.4f;
+			cfg.main.lifetimeMax = 0.4f;
+			cfg.main.speedMin    = 0.f;
+			cfg.main.speedMax    = 0.f;
+			cfg.main.startSizeMin = 2.0f;
+			cfg.main.startSizeMax = 2.0f;
+			cfg.main.startColor  = { 1.f, 1.f, 1.f, 1.f };
+			cfg.main.looping     = false;
+
+			cfg.emission.emitRate = 0.f;
+			cfg.emission.bursts   = {
+				ps::EmissionModule::Burst{
+					.time = 0.f, .countMin = 1, .countMax = 1, .cycleCount = 1
+				}
+			};
+
+			cfg.shape.type     = ps::ShapeModule::Type::Point;
+			cfg.shape.position = { 0.f, 0.f, 0.f };
+
+			cfg.renderer.mode        = ps::RendererModule::Mode::Billboard;
+			cfg.renderer.renderOrder = 3;
+			cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.arrowMuzzleTex(), .additive = true };
+
+			cfg.textureSheetAnimation.enabled   = true;
+			cfg.textureSheetAnimation.tilesX    = 8;
+			cfg.textureSheetAnimation.tilesY    = 4;
+			cfg.textureSheetAnimation.animation = ps::TextureSheetAnimationModule::Animation::WholeSheet;
+			cfg.textureSheetAnimation.cycles    = 1.f;
+
+			arrowEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit, 16);
+		}
+
+		// System 2: ArrowHit — spawned at arrow death position
+		{
+			ps::ParticleSystemConfig cfg;
+			cfg.main.lifetimeMin  = 0.4f;
+			cfg.main.lifetimeMax  = 0.4f;
+			cfg.main.speedMin     = 0.f;
+			cfg.main.speedMax     = 0.f;
+			cfg.main.startSizeMin = 2.5f;
+			cfg.main.startSizeMax = 2.5f;
+			cfg.main.startColor   = { 1.f, 1.f, 1.f, 1.f };
+			cfg.main.looping      = false;
+
+			cfg.emission.emitRate = 0.f;
+			cfg.emission.bursts   = {
+				ps::EmissionModule::Burst{
+					.time = 0.f, .countMin = 1, .countMax = 1, .cycleCount = 1
+				}
+			};
+
+			cfg.shape.type     = ps::ShapeModule::Type::Point;
+			cfg.shape.position = { 0.f, 0.f, 0.f };
+
+			cfg.renderer.mode        = ps::RendererModule::Mode::Billboard;
+			cfg.renderer.renderOrder = 3;
+			cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.arrowHitTex(), .additive = true };
+
+			cfg.textureSheetAnimation.enabled   = true;
+			cfg.textureSheetAnimation.tilesX    = 8;
+			cfg.textureSheetAnimation.tilesY    = 4;
+			cfg.textureSheetAnimation.animation = ps::TextureSheetAnimationModule::Animation::WholeSheet;
+			cfg.textureSheetAnimation.cycles    = 1.f;
+
+			arrowEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit, 16);
+		}
+
+		// System 0 Birth → System 1 (muzzle), System 0 Death → System 2 (hit)
+		arrowEffect_.bindSubEmitter(0, 0, 1);
+		arrowEffect_.bindSubEmitter(0, 1, 2);
 	}
 }
 
@@ -1273,6 +1400,7 @@ void Game::update(Milliseconds deltaTime) {
 	dustParticleSystem_.update( deltaTime );
 	redEnergyExplosionEffect_.update( deltaTime );
 	crystalsCrossFadeEffect_.update( deltaTime );
+	arrowEffect_.update( deltaTime );
 
 	// UI 동기화
 	if (playerHpBar_)
@@ -1311,6 +1439,7 @@ void Game::render() {
 	dustParticleSystem_.render( gfx_ );
 	redEnergyExplosionEffect_.render( gfx_ );
 	crystalsCrossFadeEffect_.render( gfx_ );
+	arrowEffect_.render( gfx_ );
 
 	uiManager_.render( gfx_ );
 
@@ -1479,7 +1608,13 @@ void Game::processInput(Milliseconds deltaTime) {
 			const auto aoePos = slashPos + player_->forward() * 5.5f;
 			aoESlashGreenEffect_.play( aoePos, player_->orient(), player_->forward() );
 			break;
-
+		}
+		case SwordEffect::Arrow: {
+			const auto arrowOrigin = player_->renderState().pos
+				+ mu::Vec3{ 0.f, 1.2f, 0.f }
+				+ player_->forward() * 0.5f;
+			arrowEffect_.play( arrowOrigin, player_->orient() );
+			break;
 		}
 		case SwordEffect::RedEnergyExplosion: {
 			auto explosionPos = player_->renderState().pos + player_->forward() * 6.5f;

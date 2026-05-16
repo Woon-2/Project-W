@@ -113,6 +113,22 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 		.pDestTex    = nullptr
 	} );
 
+	gfx.addRequestMeshBinLoad( RequestMeshBinLoad{
+		.meshPath    = "../resources/effects/Arrow.meshbin",
+		.pTexHashMap = &texHashMap_,
+		.pDestMesh   = &meshArrow_,
+		.pDestTex    = nullptr
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "Arrow",
+		.texturePath     = "../resources/Textures/Arrow.dds",
+		.pDest           = &arrowTex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearWrap
+	} );
+
 	gfx.addRequestTextureLoad( RequestTextureLoad{
 		.name            = "Smoke24",
 		.texturePath     = "../resources/Textures/Smoke24.dds",
@@ -286,6 +302,24 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 		.name            = "Slash",
 		.texturePath     = "../resources/Textures/Slash.dds",
 		.pDest           = &slashTex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "ArrowHit",
+		.texturePath     = "../resources/Textures/ArrowHit_8x4.dds",
+		.pDest           = &arrowHitTex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "ArrowMuzzle",
+		.texturePath     = "../resources/Textures/ArrowMuzzle_8x4.dds",
+		.pDest           = &arrowMuzzleTex_,
 		.pTexHashMap     = &texHashMap_,
 		.needsUploadInfo = false,
 		.sampler         = Samplers::BilinearClamp

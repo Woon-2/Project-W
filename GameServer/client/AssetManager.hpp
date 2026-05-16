@@ -22,6 +22,8 @@ public:
 	const Mesh*    meshHalfTrail()         const { return &meshHalfTrail_; }
 	const Mesh*    meshSlashWave()         const { return &meshSlashWave_; }
 	const Mesh*    meshIceSpikes2()        const { return &meshIceSpikes2_; }
+	const Mesh*    meshArrow()             const { return &meshArrow_; }
+	const Texture* arrowTex()              const { return &arrowTex_; }
 	const Texture* smoke24Tex()            const { return &smoke24Tex_; }
 	const Texture* smoke12Tex()            const { return &smoke12Tex_; }
 	const Texture* crater62Tex()           const { return &crater62Tex_; }
@@ -42,6 +44,8 @@ public:
 	const Texture* slashTex()              const { return &slashTex_; }
 	const Texture* smoke26Tex()            const { return &smoke26Tex_; }
 	const Texture* flashTex()              const { return &flashTex_; }
+	const Texture* arrowHitTex()           const { return &arrowHitTex_; }
+	const Texture* arrowMuzzleTex()        const { return &arrowMuzzleTex_; }
 	const ps::MatSwordSlash& swordSlashMaterial()  const { return swordSlashMaterial_; }
 	const ps::MatSwordSlash& swordSlash2Material() const { return swordSlash2Material_; }
 	const ps::MatSmokeBlendCG& smokeBlendCGMaterial() const { return smokeBlendCGMaterial_; }
@@ -70,6 +74,8 @@ private:
 	Mesh    meshHalfTrail_{};
 	Mesh    meshSlashWave_{};
 	Mesh    meshIceSpikes2_{};
+	Mesh    meshArrow_{};
+	Texture arrowTex_{};
 	Texture smoke24Tex_{};
 	Texture smoke12Tex_{};
 	Texture crater62Tex_{};
@@ -90,6 +96,8 @@ private:
 	Texture slashTex_{};
 	Texture smoke26Tex_{};
 	Texture flashTex_{};
+	Texture arrowHitTex_{};
+	Texture arrowMuzzleTex_{};
 	ps::MatSwordSlash   swordSlashMaterial_{};
 	ps::MatSwordSlash   swordSlash2Material_{};
 	ps::MatSmokeBlendCG smokeBlendCGMaterial_{};
