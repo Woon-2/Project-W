@@ -1,6 +1,7 @@
 ﻿#include "pch.hpp"
 #include "game.hpp"
 
+#include "../skill/skillCompiler.hpp"
 #include "../jointConstraint.hpp"
 #include "../errorHandling.hpp"
 #include "../binaryImport.hpp"
@@ -654,6 +655,7 @@ Game::~Game() {
 		goblin_->ragdoll().destroy(physicsWorld_);
 }
 
+
 void Game::setupStage() {
 	const auto path = std::filesystem::path("../resources/levels/level.bin");
 	auto ifs = std::ifstream(path, std::ios::binary);
@@ -781,6 +783,30 @@ void Game::setupStage() {
 	}
 
 	setupMonsterHpBars();
+
+	// Skill system: compile Lua skill files and build lookup tables.
+	// objectById is a sparse array indexed by object ID (player=0, goblin=1).
+	// vfxById maps vfxId to a pre-loaded ParticleEffect (vfxId 1 = sword_slash_1).
+	{
+		SkillCompiler compiler;
+		const Skeleton* pSkeleton = (player_ && player_->model())
+		    ? &player_->model()->skeleton : nullptr;
+		auto skillAssets = compiler.compileAll("../resources/skills", pSkeleton);
+		skillSystem_.registerAssets(std::move(skillAssets));
+
+		skillObjectById_.assign(2, nullptr);
+		if (player_) skillObjectById_[0] = player_.get();
+		if (goblin_) skillObjectById_[1] = goblin_.get();
+
+		skillVfxById_.assign(2, nullptr);
+		skillVfxById_[1] = &swordSlash1Effect_;  // effects/sword_slash_1.json
+
+		skillCtx_.objectById     = skillObjectById_.data();
+		skillCtx_.objectByIdSize = static_cast<int>(skillObjectById_.size());
+		skillCtx_.vfxById        = skillVfxById_.data();
+		skillCtx_.vfxByIdSize    = static_cast<int>(skillVfxById_.size());
+		skillCtx_.camera         = &camera_;
+	}
 }
 
 void Game::setupMonsterHpBars() {
@@ -1371,6 +1397,7 @@ void Game::importCube(std::ifstream& ifs, Cube& cube) {
 }
 
 void Game::importPlayerStart(std::ifstream& ifs, Player& player) {
+	player.setId(0);
 	player.setModel(assetManager_.modelPlayer());
 	player.setAnimBlender(animSystem_, assetManager_);
 	player.setHp(100);
@@ -1507,6 +1534,10 @@ void Game::fireImpulseRay() {
 // 객체별 업데이트 루틴
 // 애니메이션 업데이트
 void Game::update(Milliseconds deltaTime) {
+	// Per-frame skill dispatch context: evList and pTimer may change each frame.
+	skillCtx_.evList = &eventList_;
+	skillCtx_.pTimer = pTimer_;
+
 	// 입력 처리
 	processInput(deltaTime);
 
@@ -1517,6 +1548,12 @@ void Game::update(Milliseconds deltaTime) {
 	// 쿨타임 감소 후 플레이어와 AABB 교차 시 EvAttack + EvHit 발생
 	if (!playerDead_) {
 		combatSystem_.update(deltaTime, player_->getId(), eventList_);
+	}
+
+	// Skill system: advance timers, fire timeline events, update hitboxes, detect collisions.
+	if (!playerDead_) {
+		skillSystem_.update(deltaTime, skillCtx_);
+		if (skillDebugBV_) skillSystem_.renderDebugHitboxes(debugBVView_);
 	}
 
 	// 이벤트 처리
@@ -1566,6 +1603,28 @@ void Game::update(Milliseconds deltaTime) {
 
 			break;
 		}
+
+		case EventType::SkillHit: {
+			// Translate skill damage into an EvHit so existing HP/animation logic is reused.
+			auto* sh = static_cast<EvSkillHit*>(pEv);
+			if (sh->targetId == goblin_->getId()) {
+				const i32t newHp = std::max(goblin_->hp() - sh->damage, 0);
+				holdEvent(eventList_, EvHit(sh->targetId, newHp));
+				if (newHp == 0)
+					holdEvent(eventList_, EvDeath(sh->targetId));
+				if (auto it = monsterHpBars_.find(sh->targetId); it != monsterHpBars_.end())
+					it->second.hpBarVisibleSeconds = 5.f;
+			}
+			break;
+		}
+
+		case EventType::CameraShake:
+			// Camera shake is not yet implemented; event is consumed silently.
+			break;
+
+		case EventType::VFXSpawn:
+			// VFX spawn is handled directly by SkillSystem::processHitResults; no further action.
+			break;
 
 		default:
 			break;
@@ -1995,6 +2054,22 @@ void Game::processInput(Milliseconds deltaTime) {
 			newZ *= scale;
 		}
 		player_->setVelocity(mu::Vec3(newX, fullVel.y(), newZ));
+	}
+
+	// Q key: trigger SwordSlash skill on the player.
+	if ( !playerDead_
+		&& !uiManager_.needsCursor()
+		&& (keyboardStateCurr_['Q'] & 0x80)
+		&& !(keyboardStatePrev_['Q'] & 0x80)
+		) {
+		skillSystem_.startSkill("SwordSlash", player_->getId(), skillCtx_);
+	}
+
+	// H key: toggle skill hitbox BV debug rendering.
+	if ( (keyboardStateCurr_['H'] & 0x80)
+		&& !(keyboardStatePrev_['H'] & 0x80)
+		) {
+		skillDebugBV_ = !skillDebugBV_;
 	}
 
 	// 플레이어 공격: LButton 클릭 시 forward 방향 hitbox와 몬스터 AABB 교차 검사

@@ -228,6 +228,8 @@
     <ClCompile Include="skybox.cpp" />
     <ClCompile Include="skyboxPipeline.cpp" />
     <ClCompile Include="spriteAnimation.cpp" />
+    <ClCompile Include="skill\skillSystem.cpp" />
+    <ClCompile Include="skill\skillCompiler.cpp" />
     <ClCompile Include="standalone\combatSystem.cpp" />
     <ClCompile Include="standalone\game.cpp" />
     <ClCompile Include="swordSlashMaterial.cpp" />
@@ -336,6 +338,9 @@
     <ClInclude Include="skybox.hpp" />
     <ClInclude Include="skyboxPipeline.hpp" />
     <ClInclude Include="spriteAnimation.hpp" />
+    <ClInclude Include="skill\skillTypes.hpp" />
+    <ClInclude Include="skill\skillSystem.hpp" />
+    <ClInclude Include="skill\skillCompiler.hpp" />
     <ClInclude Include="standalone\combatSystem.hpp" />
     <ClInclude Include="standalone\game.hpp" />
     <ClInclude Include="swordSlashMaterial.hpp" />
@@ -496,5 +501,11 @@
       <Command>xcopy /Y /D "$(WindowsSdkDir)Redist\D3D\x64\dxcompiler.dll" "$(OutDir)"
 xcopy /Y /D "$(WindowsSdkDir)Redist\D3D\x64\dxil.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
+    <ClCompile>
+      <RuntimeLibrary Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MultiThreadedDLL</RuntimeLibrary>
+    </ClCompile>
+    <ClCompile>
+      <RuntimeLibrary Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">MultiThreadedDebugDLL</RuntimeLibrary>
+    </ClCompile>
   </ItemDefinitionGroup>
 </Project>

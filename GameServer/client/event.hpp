@@ -69,6 +69,10 @@ enum class EventType : u32t {
 	Blood,
 	Death,
 	Attack,
+	// Skill system events
+	SkillHit,      // skill-caused hit: carries targetId + damage (12B, fits gPool16)
+	CameraShake,   // camera shake request: magnitude + duration (12B, fits gPool16)
+	VFXSpawn,      // spawn VFX at a location (12B, fits gPool16)
 	SIZE
 };
 
@@ -100,11 +104,40 @@ struct EvDeath : BasicEvent {
 
 	i32t victimId{-1};
 };
-struct EvAttack : BasicEvent { 
+struct EvAttack : BasicEvent {
 	EvAttack() : BasicEvent{EventType::Attack} {}
 	EvAttack(i32t attackerId) : BasicEvent{EventType::Attack}, attackerId{attackerId} {}
 
 	i32t attackerId{-1};
+};
+
+// Skill system events (all <= 16B, use gPool16)
+struct EvSkillHit : BasicEvent {
+	EvSkillHit() : BasicEvent{EventType::SkillHit} {}
+	EvSkillHit(i32t targetId, i32t damage)
+		: BasicEvent{EventType::SkillHit}, targetId{targetId}, damage{damage} {}
+
+	i32t targetId{ -1 };
+	i32t damage  { 0 };
+};
+
+struct EvCameraShake : BasicEvent {
+	EvCameraShake() : BasicEvent{EventType::CameraShake} {}
+	EvCameraShake(float magnitude, Milliseconds duration)
+		: BasicEvent{EventType::CameraShake}, magnitude{magnitude}, duration{duration} {}
+
+	float        magnitude{ 0.f };
+	Milliseconds duration { 0.f };
+};
+
+struct EvVFXSpawn : BasicEvent {
+	EvVFXSpawn() : BasicEvent{EventType::VFXSpawn} {}
+	EvVFXSpawn(u8t vfxId, i32t attachObjectId)
+		: BasicEvent{EventType::VFXSpawn}, vfxId{vfxId}, attachObjectId{attachObjectId} {}
+
+	u8t  vfxId         { 0xFF };
+	u8t  pad[3]        {};
+	i32t attachObjectId{ -1 };
 };
 
 class Timer;

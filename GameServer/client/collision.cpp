@@ -192,6 +192,39 @@ CollisionResult collides(const BVH& bvh, const AABB& hitbox) {
     return CollisionResult{ .hit = false };
 }
 
+// BVH vs OBB (used for skill hitboxes — supports rotated shapes).
+// Same DFS pattern as BVH vs AABB, using obbToAABB for the fast bounds reject.
+CollisionResult collides(const BVH& bvh, const OBB& hitbox) {
+    if (bvh.empty()) return CollisionResult{ .hit = false };
+
+    const AABB hitboxBounds = obbToAABB(hitbox);
+
+    std::vector<int> stack;
+    stack.reserve(8);
+    stack.push_back(0);
+
+    while (!stack.empty()) {
+        const int idx = stack.back(); stack.pop_back();
+        const auto& node = bvh.nodes[idx];
+
+        if (!collides(node.bounds, hitboxBounds).hit) continue;
+
+        const auto result = std::visit([&](auto&& s) -> CollisionResult {
+            using T = std::decay_t<decltype(s)>;
+            if constexpr (std::is_same_v<T, AABB>)
+                return collides(toOBB(s), hitbox);
+            else
+                return collides(s, hitbox);
+        }, node.shape);
+
+        if (result.hit) return result;
+
+        for (int c : node.children) stack.push_back(c);
+    }
+
+    return CollisionResult{ .hit = false };
+}
+
 // BVH vs BVH (used for physics body-body collision).
 // Dual-tree DFS. A hit is only reported when BOTH nodes are leaves, so
 // coarse parent volumes cannot produce false positives.

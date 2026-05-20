@@ -13,6 +13,7 @@
 
 #include "../physicsWorld.hpp"
 #include "combatSystem.hpp"
+#include "../skill/skillSystem.hpp"
 
 #include "../billboard.hpp"
 #include "../spriteAnimation.hpp"
@@ -91,6 +92,11 @@ private:
 	PhysicsWorld physicsWorld_{};
 	CombatSystem combatSystem_{};
 	DebugBVView  debugBVView_{};
+
+	SkillSystem          skillSystem_{};
+	SkillDispatchContext skillCtx_{};
+	std::vector<Object*>         skillObjectById_{};
+	std::vector<ParticleEffect*> skillVfxById_{};
 	Seconds physicUpdateAcc_{0s};	// 물리 업데이트를 위한 시간 누산기
 	Seconds physicUpdateInterval{1s/60.f};	// 60fps로 물리 업데이트
 
@@ -168,6 +174,7 @@ private:
 	float rdDebugTimeScale_  = 1.0f;   // physics time multiplier: 1.0 / 0.25 / 0.05
 	bool  rdShowBodies_      = false;  // V key: push body OBBs to debugBVView_ each frame
 	bool  rdFrozen_          = false;  // P key: zero all test-body velocities each step
+	bool  skillDebugBV_      = false;  // H key: push skill hitbox OBBs to debugBVView_ each frame
 
 	std::array<BYTE, std::numeric_limits<u8t>::max()> keyboardStateCurr_{};
 	std::array<BYTE, std::numeric_limits<u8t>::max()> keyboardStatePrev_{};

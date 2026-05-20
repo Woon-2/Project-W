@@ -41,7 +41,8 @@
       "Bash(Select-Object -ExpandProperty Name)",
       "Bash(Sort-Object)",
       "Bash(Select-Object -First 50)",
-      "Bash(findstr /I \"joint\")"
+      "Bash(findstr /I \"joint\")",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\PC\\\\Desktop\\\\zolzak\\\\Project-W\\\\GameServer\" -Recurse -ErrorAction SilentlyContinue)"
     ]
   }
 }

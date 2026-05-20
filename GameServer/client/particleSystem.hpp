@@ -81,6 +81,9 @@ public:
 
     int activeCount() const { return activeCount_; }
 
+    // Read-only access to the compact active-particle array [0..activeCount()-1].
+    const Particle* particles() const { return pool_.data(); }
+
     ps::ParticleSystemConfig&       config()       { return config_; }
     const ps::ParticleSystemConfig& config() const { return config_; }
 

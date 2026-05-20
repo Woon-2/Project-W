@@ -327,6 +327,12 @@
     <ClCompile Include="constraint.cpp">
       <Filter>게임%28공용%29\소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="skill\skillCompiler.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="skill\skillSystem.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="binaryImport.hpp">
@@ -634,6 +640,15 @@
     </ClInclude>
     <ClInclude Include="physicsTestObject.hpp">
       <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="skill\skillTypes.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="skill\skillSystem.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="skill\skillCompiler.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
