@@ -484,6 +484,8 @@
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\resources\skills\lua\skill_api.lua" />
+    <None Include="..\resources\skills\sword_slash.lua" />
     <None Include="bindless.hlsli">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>

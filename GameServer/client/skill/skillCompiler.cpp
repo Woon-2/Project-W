@@ -6,9 +6,9 @@
 // skill_api.lua is executed before each individual skill file.
 // ---------------------------------------------------------------------------
 
-static HitboxAttachType parseAttachType(std::string_view s) {
-    if (s == "VFXParticle") return HitboxAttachType::VFXParticle;
-    return HitboxAttachType::Bone;
+static AttachType parseAttachType(std::string_view s) {
+    if (s == "VFXParticle") return AttachType::VFXParticle;
+    return AttachType::Bone;
 }
 
 static SkillEventType parseEventType(std::string_view s) {
@@ -33,9 +33,9 @@ OnHitDef SkillCompiler::tableToOnHitDef(const sol::table& tbl) {
     sol::optional<sol::table> dir = tbl["impulseDir"];
     if (dir) {
         oh.impulseDirLocal = {
-            (*dir).get_or(0, 0.f),
             (*dir).get_or(1, 0.f),
-            (*dir).get_or(2, 1.f)
+            (*dir).get_or(2, 0.f),
+            (*dir).get_or(3, 1.f)
         };
     }
     return oh;
@@ -43,19 +43,19 @@ OnHitDef SkillCompiler::tableToOnHitDef(const sol::table& tbl) {
 
 SkillHitboxDef SkillCompiler::tableToHitboxDef(const sol::table& tbl) {
     SkillHitboxDef def{};
-    def.slot     = static_cast<u8t>(tbl.get_or("slot", 0));
-    def.obbCount = 0;
+    def.slot                = static_cast<u8t>(tbl.get_or("slot",              0));
+    def.hitGroup            = static_cast<u8t>(tbl.get_or("hitGroup",          0));
+    def.hitGroupCooldownMs  =                  tbl.get_or("hitGroupCooldownMs", 0.f);
+    def.applyAttachRotation =                  tbl.get_or("applyAttachRotation", true);
 
     // localOBBs: array of { center={x,y,z}, halfExtents={x,y,z} }
     sol::optional<sol::table> obbList = tbl["localOBBs"];
     if (obbList) {
         obbList->for_each([&](sol::object /*key*/, sol::object val) {
-            if (def.obbCount >= SkillHitboxDef::kMaxOBBs) return;
             if (!val.is<sol::table>()) return;
             sol::table obbTbl = val.as<sol::table>();
 
-            OBB& obb = def.localOBBs[def.obbCount++];
-            obb = OBB{};  // zero-init (identity orient)
+            OBB obb{};  // zero-init (identity orient)
 
             sol::optional<sol::table> center = obbTbl["center"];
             if (center) {
@@ -73,6 +73,16 @@ SkillHitboxDef SkillCompiler::tableToHitboxDef(const sol::table& tbl) {
                     (*he).get_or(3, 0.5f)
                 };
             }
+            // orient: optional { yaw_deg, pitch_deg, roll_deg } (positional)
+            sol::optional<sol::table> orient = obbTbl["orient"];
+            if (orient) {
+                float yaw   = (*orient).get_or(1, 0.f);
+                float pitch = (*orient).get_or(2, 0.f);
+                float roll  = (*orient).get_or(3, 0.f);
+                // mu::NQuat(roll, pitch, yaw) -> XMQuaternionRotationRollPitchYaw(pitch, yaw, roll)
+                obb.orient = mu::NQuat(mu::Degree{roll}, mu::Degree{pitch}, mu::Degree{yaw});
+            }
+            def.localOBBs.push_back(obb);
         });
     }
 
@@ -90,6 +100,9 @@ SkillHitboxDef SkillCompiler::tableToHitboxDef(const sol::table& tbl) {
     sol::optional<sol::table> onHit = tbl["onHit"];
     if (onHit)
         def.onHit = tableToOnHitDef(*onHit);
+
+    // useParticleSize: VFXParticle only -- scale OBB halfExtents by each particle's current visual size
+    def.useParticleSize = tbl.get_or("useParticleSize", false);
 
     return def;
 }
@@ -145,6 +158,7 @@ SkillAsset SkillCompiler::tableToAsset(const sol::table& tbl, const Skeleton* pS
             case SkillEventType::PlayVFX: {
                 auto& p = ev.payload.playVFX;
                 p.vfxId = static_cast<u8t>(evTbl.get_or("vfxId", 0));
+
                 sol::optional<sol::table> attach = evTbl["attach"];
                 if (attach) {
                     std::string typeStr2 = (*attach).get_or<std::string>("type", "Bone");
@@ -153,6 +167,15 @@ SkillAsset SkillCompiler::tableToAsset(const sol::table& tbl, const Skeleton* pS
                     std::strncpy(p.attachTargetName, tgtName.c_str(), sizeof(p.attachTargetName) - 1);
                     p.attachTargetName[sizeof(p.attachTargetName) - 1] = '\0';
                     p.attachVfxId = static_cast<u8t>((*attach).get_or("vfxId", 0));
+                }
+
+                // offset: attach-local position offset (right, up, forward). Zero if omitted.
+                sol::optional<sol::table> offset = evTbl["offset"];
+                if (offset) {
+                    p.localOffset = mu::Vec3( (*offset).get_or(1, 0.f),
+                            (*offset).get_or(2, 0.f),
+                            (*offset).get_or(3, 0.f)
+                    );
                 }
                 break;
             }

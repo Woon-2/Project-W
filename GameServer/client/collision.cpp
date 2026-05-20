@@ -158,10 +158,9 @@ static CollisionResult collidesShapes(
 }
 
 // BVH vs AABB (used for combat attack hitboxes).
-// Traverses the BVH with DFS. For each node whose bounds overlap the hitbox,
-// runs a precise shape test. Returns on the first precise hit.
-// If shape misses, still descends into children (parent shape may not tightly
-// contain children — children can still overlap the hitbox).
+// Traverses the BVH with DFS using bounds AABB for fast subtree rejection.
+// Precise shape test is performed only on leaf nodes, matching the BVH vs BVH
+// convention and ensuring maximum collision fidelity.
 CollisionResult collides(const BVH& bvh, const AABB& hitbox) {
     if (bvh.empty()) return CollisionResult{ .hit = false };
 
@@ -175,25 +174,26 @@ CollisionResult collides(const BVH& bvh, const AABB& hitbox) {
 
         if (!collides(node.bounds, hitbox).hit) continue;
 
-        const CollisionVolume dummy{};  // not used below
-        const auto result = std::visit([&](auto&& s) -> CollisionResult {
-            using T = std::decay_t<decltype(s)>;
-            if constexpr (std::is_same_v<T, AABB>)
-                return collides(s, hitbox);
-            else
-                return collides(s, toOBB(hitbox));
-        }, node.shape);
+        if (node.isLeaf()) {
+            const auto result = std::visit([&](auto&& s) -> CollisionResult {
+                using T = std::decay_t<decltype(s)>;
+                if constexpr (std::is_same_v<T, AABB>)
+                    return collides(s, hitbox);
+                else
+                    return collides(s, toOBB(hitbox));
+            }, node.shape);
 
-        if (result.hit) return result;
-
-        for (int c : node.children) stack.push_back(c);
+            if (result.hit) return result;
+        } else {
+            for (int c : node.children) stack.push_back(c);
+        }
     }
 
     return CollisionResult{ .hit = false };
 }
 
 // BVH vs OBB (used for skill hitboxes — supports rotated shapes).
-// Same DFS pattern as BVH vs AABB, using obbToAABB for the fast bounds reject.
+// Same leaf-only precise test pattern as BVH vs AABB.
 CollisionResult collides(const BVH& bvh, const OBB& hitbox) {
     if (bvh.empty()) return CollisionResult{ .hit = false };
 
@@ -209,17 +209,19 @@ CollisionResult collides(const BVH& bvh, const OBB& hitbox) {
 
         if (!collides(node.bounds, hitboxBounds).hit) continue;
 
-        const auto result = std::visit([&](auto&& s) -> CollisionResult {
-            using T = std::decay_t<decltype(s)>;
-            if constexpr (std::is_same_v<T, AABB>)
-                return collides(toOBB(s), hitbox);
-            else
-                return collides(s, hitbox);
-        }, node.shape);
+        if (node.isLeaf()) {
+            const auto result = std::visit([&](auto&& s) -> CollisionResult {
+                using T = std::decay_t<decltype(s)>;
+                if constexpr (std::is_same_v<T, AABB>)
+                    return collides(toOBB(s), hitbox);
+                else
+                    return collides(s, hitbox);
+            }, node.shape);
 
-        if (result.hit) return result;
-
-        for (int c : node.children) stack.push_back(c);
+            if (result.hit) return result;
+        } else {
+            for (int c : node.children) stack.push_back(c);
+        }
     }
 
     return CollisionResult{ .hit = false };

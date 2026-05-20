@@ -175,7 +175,7 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
 
         Object* owner = lookupObject(ctx, inst.ownerObjectId);
 
-        if (def.attach.type == HitboxAttachType::Bone) {
+        if (def.attach.type == AttachType::Bone) {
             // Free existing bone hitbox in this slot
             int oldH = inst.getBoneHandle(slot);
             if (oldH >= 0) { freeHitbox(oldH); }
@@ -185,29 +185,32 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
             inst.setBoneHandle(slot, hi);
 
             AttachedHitbox& hb = hitboxPool_[hi];
-            hb.active             = true;
-            hb.particleSourceIdx  = -1;
-            hb.obbCount           = def.obbCount;
-            for (int i = 0; i < def.obbCount; ++i) hb.localOBBs[i] = def.localOBBs[i];
-            hb.onHit              = def.onHit;
-            hb.ownerObjectId      = inst.ownerObjectId;
-            hb.instanceIdx        = static_cast<i32t>(&inst - instancePool_.instances);
-            hb.slot               = static_cast<u8t>(slot);
+            hb.active                = true;
+            hb.particleSourceIdx     = -1;
+            hb.localOBBs             = def.localOBBs;
+            hb.worldOBBs.resize(def.localOBBs.size());
+            hb.onHit                 = def.onHit;
+            hb.ownerObjectId         = inst.ownerObjectId;
+            hb.instanceIdx           = static_cast<i32t>(&inst - instancePool_.instances);
+            hb.slot                  = static_cast<u8t>(slot);
+            hb.hitGroup              = def.hitGroup;
+            hb.hitGroupCooldownMs    = def.hitGroupCooldownMs;
+            hb.applyAttachRotation   = def.applyAttachRotation;
 
             if (owner) {
                 hb.resolvedAttach = resolveAttach(def.attach, *owner, ctx);
                 mu::Mat4x4 xform  = computeAttachTransform(*owner, hb);
                 mu::NQuat boneOrient(mu::quatRotMat(xform));
-                for (int i = 0; i < hb.obbCount; ++i) {
-                    hb.worldOBBs[i].center     = mu::Vec3(mu::Vec4(hb.localOBBs[i].center, 1.f) * xform);
-                    hb.worldOBBs[i].halfExtents = hb.localOBBs[i].halfExtents;
-                    hb.worldOBBs[i].orient     = hb.localOBBs[i].orient;
-                    hb.worldOBBs[i].orient    *= boneOrient;
+                for (int i = 0; i < (int)hb.localOBBs.size(); ++i) {
+                    hb.worldOBBs[i].center      = mu::Vec3(mu::Vec4(hb.localOBBs[i].center, 1.f) * xform);
+                    hb.worldOBBs[i].halfExtents  = hb.localOBBs[i].halfExtents;
+                    hb.worldOBBs[i].orient       = hb.localOBBs[i].orient;
+                    hb.worldOBBs[i].orient      *= boneOrient;
                 }
             } else {
-                hb.resolvedAttach.type    = HitboxAttachType::Bone;
+                hb.resolvedAttach.type    = AttachType::Bone;
                 hb.resolvedAttach.boneIdx = -1;
-                for (int i = 0; i < hb.obbCount; ++i) hb.worldOBBs[i] = hb.localOBBs[i];
+                hb.worldOBBs              = hb.localOBBs;
             }
         } else {
             // VFXParticle: create a ParticleHitboxSource
@@ -218,14 +221,17 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
             inst.setParticleHandle(slot, si);
 
             ParticleHitboxSource& src = particleSources_[si];
-            src.active        = true;
-            src.templateOBB   = (def.obbCount > 0) ? def.localOBBs[0] : OBB{};
-            src.onHit         = def.onHit;
-            src.ownerObjectId = inst.ownerObjectId;
-            src.instanceIdx   = static_cast<i32t>(&inst - instancePool_.instances);
-            src.slot          = static_cast<u8t>(slot);
+            src.active             = true;
+            src.templateOBBs       = def.localOBBs;
+            src.onHit              = def.onHit;
+            src.ownerObjectId      = inst.ownerObjectId;
+            src.instanceIdx        = static_cast<i32t>(&inst - instancePool_.instances);
+            src.slot               = static_cast<u8t>(slot);
+            src.hitGroup           = def.hitGroup;
+            src.hitGroupCooldownMs = def.hitGroupCooldownMs;
+            src.useParticleSize    = def.useParticleSize;
+            src.applyRotation      = def.applyAttachRotation;
             src.hitboxHandles.clear();
-            src.hitTargets.clear();
 
             // Resolve pSystem
             if (owner) {
@@ -265,25 +271,29 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
         mu::NQuat worldOrient{};
 
         if (owner) {
-            bool hasBoneAttach = (p.attachType == static_cast<u8t>(HitboxAttachType::Bone) &&
+            // Start with the owner's world transform as the base.
+            // If a non-empty bone name is specified, override with the bone-to-world transform.
+            mu::Mat4x4 baseXform = owner->renderState().world;
+
+            bool hasBoneAttach = (p.attachType == static_cast<u8t>(AttachType::Bone) &&
                                   p.attachTargetName[0] != '\0');
             if (hasBoneAttach && owner->animBlender() && owner->model()) {
                 const auto& bones = *owner->model()->skeleton.bones;
                 for (i32t bi = 0; bi < (i32t)bones.size(); ++bi) {
                     if (bones[static_cast<size_t>(bi)].name == std::string_view{ p.attachTargetName }) {
-                        const Bone& bone = bones[static_cast<size_t>(bi)];
-                        mu::Mat4x4 boneToWorld = bone.toDress
-                            * owner->animBlender()->finalXformData()[static_cast<size_t>(bi)]
-                            * owner->renderState().world;
-                        worldPos    = mu::Vec3(mu::Vec4(0.f, 0.f, 0.f, 1.f) * boneToWorld);
-                        worldOrient = mu::NQuat(mu::quatRotMat(boneToWorld));
+                        baseXform = bones[static_cast<size_t>(bi)].toDress
+                                  * owner->animBlender()->finalXformData()[static_cast<size_t>(bi)]
+                                  * owner->renderState().world;
                         break;
                     }
                 }
-            } else {
-                worldPos    = owner->pos();
-                worldOrient = owner->orient();
             }
+
+            // localOffset is in attach-local space (right=X, up=Y, forward=Z).
+            // Vec4 w=1 transforms it as a point, naturally adding the translation.
+            const mu::Vec3& off = p.localOffset;
+            worldPos    = mu::Vec3(mu::Vec4(off.x(), off.y(), off.z(), 1.f) * baseXform);
+            worldOrient = mu::NQuat(mu::quatRotMat(baseXform));
         }
         fx->play(worldPos, worldOrient);
         break;
@@ -330,18 +340,20 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
 void SkillSystem::updateHitboxes(SkillDispatchContext& ctx) {
     for (AttachedHitbox& hb : hitboxPool_) {
         if (!hb.active) continue;
-        if (hb.resolvedAttach.type != HitboxAttachType::Bone) continue;
+        if (hb.resolvedAttach.type != AttachType::Bone) continue;
 
         Object* owner = lookupObject(ctx, hb.ownerObjectId);
         if (!owner) { hb.active = false; continue; }
 
         mu::Mat4x4 xform = computeAttachTransform(*owner, hb);
         mu::NQuat boneOrient(mu::quatRotMat(xform));
-        for (int oi = 0; oi < hb.obbCount; ++oi) {
-            hb.worldOBBs[oi].center     = mu::Vec3(mu::Vec4(hb.localOBBs[oi].center, 1.f) * xform);
-            hb.worldOBBs[oi].halfExtents = hb.localOBBs[oi].halfExtents;
-            hb.worldOBBs[oi].orient     = hb.localOBBs[oi].orient;
-            hb.worldOBBs[oi].orient    *= boneOrient;
+        hb.worldOBBs.resize(hb.localOBBs.size());
+        for (int oi = 0; oi < (int)hb.localOBBs.size(); ++oi) {
+            hb.worldOBBs[oi].center      = mu::Vec3(mu::Vec4(hb.localOBBs[oi].center, 1.f) * xform);
+            hb.worldOBBs[oi].halfExtents  = hb.localOBBs[oi].halfExtents;
+            hb.worldOBBs[oi].orient       = hb.localOBBs[oi].orient;
+            if (hb.applyAttachRotation)
+                hb.worldOBBs[oi].orient  *= boneOrient;
         }
     }
 }
@@ -369,19 +381,54 @@ void SkillSystem::updateParticleHitboxSources(SkillDispatchContext& ctx) {
             int hi = allocHitbox();
             if (hi < 0) break;
 
-            AttachedHitbox& hb         = hitboxPool_[hi];
-            hb.active                  = true;
-            hb.obbCount                = 1;
-            hb.localOBBs[0]            = src.templateOBB;
-            hb.worldOBBs[0]            = src.templateOBB;
-            hb.worldOBBs[0].center     = parts[pi].pos;
-            hb.onHit                   = src.onHit;
-            hb.ownerObjectId           = src.ownerObjectId;
-            hb.instanceIdx             = src.instanceIdx;
-            hb.slot                    = src.slot;
-            hb.particleSourceIdx       = si;
-            hb.resolvedAttach.type     = HitboxAttachType::VFXParticle;
-            hb.resolvedAttach.pSystem  = src.pSystem;
+            AttachedHitbox& hb        = hitboxPool_[hi];
+            hb.active                 = true;
+            hb.localOBBs              = src.templateOBBs;
+            hb.onHit                  = src.onHit;
+            hb.ownerObjectId          = src.ownerObjectId;
+            hb.instanceIdx            = src.instanceIdx;
+            hb.slot                   = src.slot;
+            hb.hitGroup               = src.hitGroup;
+            hb.hitGroupCooldownMs     = src.hitGroupCooldownMs;
+            hb.applyAttachRotation    = src.applyRotation;
+            hb.particleSourceIdx      = si;
+            hb.resolvedAttach.type    = AttachType::VFXParticle;
+            hb.resolvedAttach.pSystem = src.pSystem;
+
+            const Particle& p = parts[pi];
+
+            float sz = 1.f;
+            if (src.useParticleSize) {
+                float t = (p.maxLifetime > 0.f)
+                          ? (1.f - p.lifetime / p.maxLifetime)
+                          : 0.f;
+                sz = p.sizeBegin + (p.sizeEnd - p.sizeBegin) * t;
+            }
+
+            hb.worldOBBs.resize(src.templateOBBs.size());
+            if (src.applyRotation) {
+                // Replicate buildParticleMeshGeometry rotation: angularAngle3D euler + baseRotation.
+                mu::Mat4x4 particleRot = mu::rotateXH(mu::Radian{ p.angularAngle3D.x() })
+                                       * mu::rotateYH(mu::Radian{ p.angularAngle3D.y() })
+                                       * mu::rotateZH(mu::Radian{ p.angularAngle3D.z() })
+                                       * p.baseRotation;
+                mu::NQuat particleOrient(mu::quatRotMat(particleRot));
+                for (int oi = 0; oi < (int)src.templateOBBs.size(); ++oi) {
+                    const OBB& tmpl = src.templateOBBs[oi];
+                    mu::Vec3 rotatedCenter = mu::Vec3(mu::Vec4(tmpl.center, 0.f) * particleRot);
+                    hb.worldOBBs[oi].center      = p.pos + rotatedCenter;
+                    hb.worldOBBs[oi].halfExtents  = tmpl.halfExtents * sz;
+                    hb.worldOBBs[oi].orient       = tmpl.orient * particleOrient;
+                }
+            } else {
+                // Position follows the particle; orientation is fixed (no particle spin).
+                for (int oi = 0; oi < (int)src.templateOBBs.size(); ++oi) {
+                    const OBB& tmpl = src.templateOBBs[oi];
+                    hb.worldOBBs[oi].center      = p.pos + tmpl.center;
+                    hb.worldOBBs[oi].halfExtents  = tmpl.halfExtents * sz;
+                    hb.worldOBBs[oi].orient       = tmpl.orient;
+                }
+            }
 
             src.hitboxHandles.push_back(hi);
         }
@@ -392,12 +439,12 @@ void SkillSystem::updateParticleHitboxSources(SkillDispatchContext& ctx) {
 // Attachment resolve / transform
 // ---------------------------------------------------------------------------
 
-ResolvedAttach SkillSystem::resolveAttach(const HitboxAttachTarget& attach,
-                                          const Object& owner,
+ResolvedAttach SkillSystem::resolveAttach(const AttachTarget&        attach,
+                                          const Object&              owner,
                                           const SkillDispatchContext& ctx) const {
-    if (attach.type == HitboxAttachType::Bone) {
+    if (attach.type == AttachType::Bone) {
         ResolvedAttach ra{};
-        ra.type = HitboxAttachType::Bone;
+        ra.type = AttachType::Bone;
         if (!owner.model()) { ra.boneIdx = -1; return ra; }
         const auto& bones = *owner.model()->skeleton.bones;
         for (i32t i = 0; i < (i32t)bones.size(); ++i) {
@@ -412,7 +459,7 @@ ResolvedAttach SkillSystem::resolveAttach(const HitboxAttachTarget& attach,
 
     // VFXParticle: look up the ParticleSystem from the effect registry.
     ResolvedAttach ra{};
-    ra.type = HitboxAttachType::VFXParticle;
+    ra.type = AttachType::VFXParticle;
     if (ctx.vfxById && attach.vfxId < static_cast<u8t>(ctx.vfxByIdSize)) {
         ParticleEffect* fx = ctx.vfxById[attach.vfxId];
         if (fx && attach.particleSystemIdx < fx->systemCount())
@@ -443,9 +490,7 @@ void SkillSystem::checkHitboxCollisions(SkillDispatchContext& ctx) {
 
     for (int hi = 0; hi < (int)hitboxPool_.size(); ++hi) {
         const AttachedHitbox& hb = hitboxPool_[hi];
-        if (!hb.active || hb.obbCount == 0) continue;
-
-        const bool isParticle = (hb.particleSourceIdx >= 0);
+        if (!hb.active || hb.worldOBBs.empty()) continue;
 
         for (int oi = 0; oi < ctx.objectByIdSize; ++oi) {
             Object* target = ctx.objectById[oi];
@@ -453,16 +498,25 @@ void SkillSystem::checkHitboxCollisions(SkillDispatchContext& ctx) {
             if (target->getId() == hb.ownerObjectId) continue;
             if (target->isDead())                    continue;
 
-            // For particle hitboxes, skip targets already hit by this source.
-            if (isParticle && hb.particleSourceIdx < (int)particleSources_.size()) {
-                const auto& src = particleSources_[hb.particleSourceIdx];
-                if (src.hitTargets.count(target->getId())) continue;
+            // Check hit group cooldown (applies uniformly to bone and particle hitboxes).
+            if (hb.instanceIdx >= 0 && hb.instanceIdx < SkillInstancePool::kMaxInstances) {
+                const SkillInstance& inst = instancePool_.instances[hb.instanceIdx];
+                auto git = inst.hitGroups.find(hb.hitGroup);
+                if (git != inst.hitGroups.end()) {
+                    auto tit = git->second.lastHitByTarget.find(target->getId());
+                    if (tit != git->second.lastHitByTarget.end()) {
+                        float since = inst.elapsed.count() - tit->second.count();
+                        if (hb.hitGroupCooldownMs <= 0.f || since < hb.hitGroupCooldownMs)
+                            continue;
+                    }
+                }
             }
 
             const BVH& bvh = target->worldBVH();
             bool hit = false;
-            for (int oi2 = 0; oi2 < hb.obbCount && !hit; ++oi2)
-                hit = collides(bvh, hb.worldOBBs[oi2]).hit;
+            for (const OBB& obb : hb.worldOBBs) {
+                if (collides(bvh, obb).hit) { hit = true; break; }
+            }
 
             if (hit)
                 pendingHits_.push_back({ hi, target->getId() });
@@ -478,23 +532,11 @@ void SkillSystem::processHitResults(SkillDispatchContext& ctx) {
         if (!hb.active) continue;
 
         const OnHitDef& oh = hb.onHit;
-        const bool isParticle = (hb.particleSourceIdx >= 0);
 
-        if (isParticle) {
-            // Register hit target in source so it won't be hit again across frames.
-            if (hb.particleSourceIdx < (int)particleSources_.size())
-                particleSources_[hb.particleSourceIdx].hitTargets.insert(hr.targetObjectId);
-            // Do NOT deactivate the hitbox: particle hitboxes are recreated each frame.
-        } else {
-            // Bone hitbox: single-hit semantics — deactivate after first hit.
-            hb.active = false;
-            i32t instIdx = hb.instanceIdx;
-            if (instIdx >= 0 && instIdx < SkillInstancePool::kMaxInstances) {
-                SkillInstance& inst = instancePool_.instances[instIdx];
-                int s = hb.slot;
-                if (inst.getBoneHandle(s) == hr.hitboxIdx)
-                    inst.setBoneHandle(s, -1);
-            }
+        // Register hit in instance's hitGroup so sibling hitboxes skip this target.
+        if (hb.instanceIdx >= 0 && hb.instanceIdx < SkillInstancePool::kMaxInstances) {
+            SkillInstance& inst = instancePool_.instances[hb.instanceIdx];
+            inst.hitGroups[hb.hitGroup].lastHitByTarget[hr.targetObjectId] = inst.elapsed;
         }
 
         holdEvent((*ctx.evList), EvSkillHit{ hr.targetObjectId, oh.damage });
@@ -555,7 +597,6 @@ void SkillSystem::freeParticleSource(int idx) {
     ParticleHitboxSource& src = particleSources_[idx];
     for (int h : src.hitboxHandles) freeHitbox(h);
     src.hitboxHandles.clear();
-    src.hitTargets.clear();
     src.active = false;
 }
 
@@ -575,7 +616,7 @@ Object* SkillSystem::lookupObject(const SkillDispatchContext& ctx, i32t id) cons
 void SkillSystem::renderDebugHitboxes(DebugBVView& bvView) const {
     for (const AttachedHitbox& hb : hitboxPool_) {
         if (!hb.active) continue;
-        for (int i = 0; i < hb.obbCount; ++i)
-            bvView.push(hb.worldOBBs[i], Milliseconds{ 32.f });
+        for (const OBB& obb : hb.worldOBBs)
+            bvView.push(obb, Milliseconds{ 32.f });
     }
 }

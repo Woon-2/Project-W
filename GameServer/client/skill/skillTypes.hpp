@@ -17,20 +17,20 @@
 #include "../collision.hpp"
 
 // ---------------------------------------------------------------------------
-// Attach target
+// Attach type (used by both hitbox definitions and PlayVFX events)
 // ---------------------------------------------------------------------------
 
-enum class HitboxAttachType : u8t {
+enum class AttachType : u8t {
     Bone,         // follow a named skeleton bone of the caster
     VFXParticle,  // attach to all active particles of a ParticleSystem within a VFX effect
 };
 
 // String-based attach target. Resolved to a runtime handle once at SpawnHitbox dispatch.
-struct HitboxAttachTarget {
-    HitboxAttachType type             = HitboxAttachType::Bone;
-    std::string      targetName;       // bone name (e.g. "Weapon_R"); unused for VFXParticle
-    u8t              vfxId            = 0;  // index into SkillDispatchContext::vfxById
-    int              particleSystemIdx = 0;  // index into ParticleEffect::system(n)
+struct AttachTarget {
+    AttachType  type             = AttachType::Bone;
+    std::string targetName;       // bone name (e.g. "Weapon_R"); unused for VFXParticle
+    u8t         vfxId            = 0;  // index into SkillDispatchContext::vfxById
+    int         particleSystemIdx = 0;  // index into ParticleEffect::system(n)
 };
 
 // ---------------------------------------------------------------------------
@@ -38,10 +38,10 @@ struct HitboxAttachTarget {
 // ---------------------------------------------------------------------------
 
 struct OnHitDef {
-    i32t     damage           = 0;
-    u8t      hitVfxId         = 0xFF;  // 0xFF = no VFX
-    float    impulseStrength  = 0.f;
-    mu::Vec3 impulseDirLocal  = { 0.f, 0.f, 1.f };  // attacker-local space
+    i32t     damage          = 0;
+    u8t      hitVfxId        = 0xFF;  // 0xFF = no VFX
+    float    impulseStrength = 0.f;
+    mu::Vec3 impulseDirLocal = { 0.f, 0.f, 1.f };  // attacker-local space
 };
 
 // ---------------------------------------------------------------------------
@@ -49,12 +49,14 @@ struct OnHitDef {
 // ---------------------------------------------------------------------------
 
 struct SkillHitboxDef {
-    static constexpr int kMaxOBBs = 4;
-    OBB  localOBBs[kMaxOBBs];  // OBBs in attachment-local space (bone or particle space)
-    int  obbCount = 0;
-    HitboxAttachTarget attach;
-    OnHitDef           onHit;
-    u8t                slot = 0;  // 0..kMaxHitboxSlots-1; DestroyHitbox references this
+    std::vector<OBB> localOBBs;    // OBBs in attachment-local space (bone or particle space)
+    AttachTarget     attach;
+    OnHitDef         onHit;
+    u8t              slot                 = 0;      // DestroyHitbox references this slot
+    u8t              hitGroup             = 0;      // hitboxes sharing same group deduplicate hits per instance
+    float            hitGroupCooldownMs   = 0.f;    // 0 = hit target only once; >0 = re-hit after N ms
+    bool             useParticleSize      = false;  // VFXParticle only: scale halfExtents by particle's current visual size
+    bool             applyAttachRotation  = true;   // false = ignore attachment orientation (position still tracks)
 };
 
 // ---------------------------------------------------------------------------
@@ -86,20 +88,23 @@ union SkillEventPayload {
     } destroyHitbox;
 
     struct PlayAnimation {
-        char clipName[24];  // null-terminated, max 23 chars
+        char  clipName[24];  // null-terminated, max 23 chars
         float blendTime;
     } playAnimation;
 
     struct PlayVFX {
-        u8t  vfxId;
-        char attachTargetName[20];   // bone name or VFX anchor name, empty = caster root
-        u8t  attachType;             // HitboxAttachType ordinal
-        u8t  attachVfxId;            // only used when attachType == VFXNode
+        mu::Vec3 localOffset;          // attach-local space offset (right, up, forward); zero = at attach origin
+        u8t      vfxId;                //  1 byte  [12]
+        u8t      attachType;           //  1 byte  [13]: AttachType ordinal; Bone + empty name = caster root
+        u8t      attachVfxId;          //  1 byte  [14]
+        u8t      pad;                  //  1 byte  [15]
+        char     attachTargetName[16]; // 16 bytes [16-31]: bone name, null-terminated; empty = use owner root
+        // total: 32 bytes
     } playVFX;
 
     struct ModifyStat {
-        i32t     hpDelta;
-        float    speedMultiplier;
+        i32t         hpDelta;
+        float        speedMultiplier;
         Milliseconds duration;
     } modifyStat;
 
@@ -118,18 +123,17 @@ union SkillEventPayload {
         i32t param;
     } sendGameplayEvent;
 
-    // SpawnProjectile: future extension
-    struct SpawnProjectile {
+    struct SpawnProjectile {  // future extension
         u8t  projectileAssetId;
         float speedMps;
     } spawnProjectile;
 
-    u8t raw[32];  // padding to fix union size
+    u8t raw[32];  // fixes union size at 32 bytes
 };
 
 // One entry in the timeline. Keep this small -- it lives in a sorted vector.
 struct TimelineEvent {
-    Milliseconds      time;     // time from skill start
+    Milliseconds      time;    // time from skill start
     SkillEventType    type;
     u8t               pad[3];
     SkillEventPayload payload;
@@ -140,16 +144,16 @@ struct TimelineEvent {
 // ---------------------------------------------------------------------------
 
 struct SkillAsset {
-    std::string name;
-    u32t        id            = 0;
-    bool        interruptible = true;
-    Milliseconds totalDuration{ 0.f };
+    std::string  name;
+    u32t         id            = 0;
+    bool         interruptible = true;
+    Milliseconds totalDuration { 0.f };
 
-    // Sorted by time ascending. Binary search or linear scan depending on count.
+    // Sorted by time ascending.
     std::vector<TimelineEvent>  timeline;
 
     // Hitbox definitions referenced by SpawnHitbox::defIdx.
-    // Stored here (not in union) to allow std::string in HitboxAttachTarget.
+    // Stored here (not in union) to allow std::string in AttachTarget.
     std::vector<SkillHitboxDef> hitboxDefs;
 
     // VFX asset paths indexed by vfxId (used in PlayVFX and OnHitDef::hitVfxId).

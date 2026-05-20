@@ -340,8 +340,8 @@ struct SSkillStartPacket : PacketHeader {
 |-------|------|------|
 | **Phase 1** | 핵심 데이터 구조 + 컴파일러 | ✅ 완료 |
 | **Phase 2** | SkillSystem 런타임 + 게임 루프 연동 | ✅ 완료 |
-| **Phase 3** | Hitbox 시스템 고도화 (VFX NamedAnchor) | 🔲 미착수 |
-| **Phase 4** | 나머지 이벤트 타입 완성 | 🔲 미착수 |
+| **Phase 3** | Hitbox 시스템 (VFXParticle 동적 hitbox) | ✅ 완료 |
+| **Phase 4** | 나머지 이벤트 타입 완성 | ✅ 완료 |
 | **Phase 5** | 멀티플레이어 통합 | 🔲 미착수 |
 | **Phase 6** | 컨텐츠 추가 + 최적화 | 🔲 미착수 |
 
@@ -358,10 +358,26 @@ struct SSkillStartPacket : PacketHeader {
 - `client/standalone/game.hpp` — SkillSystem, SkillDispatchContext, objectById/vfxById 멤버 추가
 - `client/standalone/game.cpp` — Q키 핸들러, skillSystem_.update() 삽입, EvSkillHit/EvCameraShake 핸들러
 
-### Phase 3 예정
-- `ParticleEffect`에 `NamedAnchor` 배열 + `anchorWorldXform()` 추가 (VFX node attachment)
-- `DebugBVView`로 hitbox 시각화 검증
-- 검증: RightHand 본에 붙은 hitbox가 애니메이션 따라 이동하는지 확인
+### Phase 3 완료 목록
+- **VFXParticle 동적 hitbox 시스템**: `ParticleHitboxSource` 구조체 도입 — SpawnHitbox(VFXParticle) 시 소스 생성, `updateParticleHitboxSources()`가 매 프레임 파티클 수에 맞춰 hitbox 재생성
+- **one-hit-per-target**: `hitTargets` unordered_set으로 같은 대상 중복 피격 방지 (프레임 간 유지)
+- **useParticleSize 플래그**: `SkillHitboxDef`와 `ParticleHitboxSource`에 추가 — 파티클의 현재 sizeBegin→sizeEnd 보간값으로 OBB halfExtents 자동 스케일링
+- **std::vector 풀 전환**: `hitboxPool_`, `particleSources_`, `pendingHits_` 모두 `std::vector` 기반으로 전환 (kMaxHitboxSlots 제한 제거)
+- **SkillInstance 슬롯 구조 재설계**: 고정 배열 `hitboxHandles[8]` → `boneHitboxBySlot` + `particleSourceBySlot` 두 벡터로 분리
+- **center offset 버그 수정**: 파티클 hitbox center = `parts[pi].pos + src.templateOBB.center` (이전엔 local offset 무시)
+- **BV 디버그 렌더링**: `renderDebugHitboxes(DebugBVView&)` + H키 토글 (`skillDebugBV_` 플래그)
+- **VFX 방향 수정**: `PlayVFX` 디스패치 시 bone-to-world에서 `worldOrient` 추출 (이전엔 identity 고정)
+- **sword_slash.lua 업데이트**: bone 부착 → VFXParticle 부착 (VFX system 0 = root slash mesh 파티클)
+
+### Phase 4 완료 목록
+모든 핵심 이벤트 타입 구현 (`skillSystem.cpp::dispatchEvent()`):
+- `SpawnHitbox` / `DestroyHitbox` ✅
+- `PlayAnimation` → `animBlender->triggerAttack()` ✅
+- `PlayVFX` → `ParticleEffect::play()` (bone attach + 방향 포함) ✅
+- `ApplyImpulse` → `body.applyImpulse()` ✅
+- `CameraShake` → `EvCameraShake` 이벤트 발생 ✅
+- `ModifyStat` → `object->setHp()` ✅
+- `SendGameplayEvent`, `SpawnProjectile` — 미래 확장용 stub
 
 ---
 
