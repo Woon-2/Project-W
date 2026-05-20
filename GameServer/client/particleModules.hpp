@@ -233,10 +233,17 @@ struct CustomDataModule {
 // Named with 'Mat' prefix to avoid collision with XxxShader::Material in shader.hpp.
 // ---------------------------------------------------------------------------
 
+enum class BlendMode {
+    Alpha            = 0,   // SRC_ALPHA / INV_SRC_ALPHA  — standard transparency
+    Additive         = 1,   // ONE / ONE                  — additive glow
+    Multiply         = 2,   // DEST_COLOR / ZERO          — darkening (white = transparent)
+    PremultipliedAlpha = 3, // ONE / INV_SRC_ALPHA        — premultiplied / additive-baked
+};
+
 // MatUnlit: BillboardPipeline (Mode::Billboard) or MeshParticlePipeline (Mode::Mesh)
 struct MatUnlit {
     const Texture* mainTex = nullptr;
-    bool additive = false;   // false = alpha blend, true = additive blend
+    BlendMode blend = BlendMode::Alpha;
     mu::Vec4 color = { 1.f, 1.f, 1.f, 1.f };
 };
 

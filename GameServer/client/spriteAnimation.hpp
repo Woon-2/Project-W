@@ -2,6 +2,7 @@
 #define __spriteAnimation_HPP
 
 #include "gfxUtil.hpp"
+#include "particleModules.hpp"
 
 class GFX;
 
@@ -24,8 +25,8 @@ public:
 	mu::Vec4 MU_CALLCONV tint() const { return tint_; }
 	void MU_CALLCONV setTint(mu::Vec4 tint) { tint_ = tint; }
 
-	bool additive() const { return additive_; }
-	void setAdditive(bool additive) { additive_ = additive; }
+	ps::BlendMode blend() const { return blend_; }
+	void setBlend(ps::BlendMode blend) { blend_ = blend; }
 
 	float rotation() const { return rotation_; }
 	void setRotation(float rad) { rotation_ = rad; }
@@ -40,7 +41,7 @@ private:
 	mu::Vec3 pos_{};
 	mu::Vec4 tint_ = mu::Vec4(1.f, 1.f, 1.f, 1.f);
 	mu::Vec2 scale_ = mu::Vec2(1.f, 1.f);	// 향후 셰이더에서 반영할 수 있도록
-	bool additive_ = false;
+	ps::BlendMode blend_ = ps::BlendMode::Alpha;
 	float rotation_ = 0.f;
 	int renderOrder_ = 0;
 

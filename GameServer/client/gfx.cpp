@@ -276,6 +276,8 @@ void GFX::init() {
 	shaders_.try_emplace("PBRSkinnedShader", createPBRSkinnedShader(device_.Get(), defaultRootSig.get()));
 	shaders_.try_emplace("BillboardShader", createBillboardShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("BillboardShaderAdditive", createBillboardShaderAdditive( device_.Get(), defaultRootSig.get() ));
+	shaders_.try_emplace("BillboardShaderMultiply", createBillboardShaderMultiply( device_.Get(), defaultRootSig.get() ));
+	shaders_.try_emplace("BillboardShaderPremultiplied", createBillboardShaderPremultiplied( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("MeshParticleShader", createMeshParticleShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("SmokeBlendCGShader", createSmokeBlendCGShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("BlendCGMeshShader", createBlendCGMeshShader( device_.Get(), defaultRootSig.get() ));
@@ -1422,8 +1424,13 @@ void GFX::render() {
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
 		&samPool_, &cmpSamPool_,
-		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "BillboardShader" ),
-		shaders_.at( "BillboardShaderAdditive" ),
+		rootSigs_.at( "DefaultRootSignature" ),
+		std::array<ComPtr<ID3D12PipelineState>, 4>{
+			shaders_.at( "BillboardShader" ),           // BlendMode::Alpha = 0
+			shaders_.at( "BillboardShaderAdditive" ),   // BlendMode::Additive = 1
+			shaders_.at( "BillboardShaderMultiply" ),   // BlendMode::Multiply = 2
+			shaders_.at( "BillboardShaderPremultiplied" ) // BlendMode::PremultipliedAlpha = 3
+		},
 		cmdQ_, viewport, clRect,
 		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
 		&fenceToSignal, &resourcesBillboardPipeline_, threadPool_,

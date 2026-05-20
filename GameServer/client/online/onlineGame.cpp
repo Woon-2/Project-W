@@ -238,7 +238,7 @@ void Game::setParticle()
 
 		cfg.renderer.mode               = ps::RendererModule::Mode::Billboard;
 		cfg.renderer.renderOrder        = 0;
-		cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.flameTex(), .additive = true };
+		cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.flameTex(), .blend = ps::BlendMode::Additive };
 
 		cfg.textureSheetAnimation.enabled   = true;
 		cfg.textureSheetAnimation.tilesX    = 3;
@@ -465,7 +465,7 @@ void Game::setParticle()
 		{
 			auto cfg = loadUnityParticleConfig(crystalsJson, "Crystals front attack");
 			cfg.renderer.mode = ps::RendererModule::Mode::Billboard;
-			cfg.renderer.mat  = ps::MatUnlit{ .mainTex = nullptr, .additive = true };
+			cfg.renderer.mat  = ps::MatUnlit{ .mainTex = nullptr, .blend = ps::BlendMode::Additive };
 			cfg.main.looping  = false;
 			cfg.subEmitters.enabled = true;
 			cfg.subEmitters.subEmitters = { {
@@ -481,7 +481,7 @@ void Game::setParticle()
 			auto cfg = loadUnityParticleConfig(crystalsJson, "Crystals front attack/Crystals");
 			cfg.renderer.mat  = ps::MatUnlit{
 				.mainTex = assetManager_.crystalFree1Tex(),
-				.additive = false,
+				.blend = ps::BlendMode::Alpha,
 				.color = { 1.15271747f, 1.1794312f, 1.41421354f, 1.f }
 			};
 			crystalsFrontAttackEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);  // idx 1
@@ -500,7 +500,7 @@ void Game::setParticle()
 		cfg.main.looping      = false;
 		cfg.main.startColor   = { 1.f, 1.f, 1.f, 1.f };
 		cfg.renderer.mode     = ps::RendererModule::Mode::Billboard;
-		cfg.renderer.mat      = ps::MatUnlit{ .mainTex = assetManager_.circle2Tex(), .additive = true };
+		cfg.renderer.mat      = ps::MatUnlit{ .mainTex = assetManager_.circle2Tex(), .blend = ps::BlendMode::Additive };
 		aoESlashGreenEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
 	}
 	{
@@ -512,7 +512,7 @@ void Game::setParticle()
 		cfg.main.startColor     = { 1.f, 1.f, 1.f, 0.5f };
 		cfg.renderer.mode       = ps::RendererModule::Mode::StretchedBillboard;
 		cfg.renderer.lengthScale  = 5.f;
-		cfg.renderer.mat        = ps::MatUnlit{ .mainTex = assetManager_.slashTex(), .additive = true };
+		cfg.renderer.mat        = ps::MatUnlit{ .mainTex = assetManager_.slashTex(), .blend = ps::BlendMode::Additive };
 		aoESlashGreenEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
 	}
 	{
@@ -522,7 +522,7 @@ void Game::setParticle()
 		);
 		cfg.main.looping    = false;
 		cfg.renderer.mode   = ps::RendererModule::Mode::Billboard;
-		cfg.renderer.mat    = ps::MatUnlit{ .mainTex = assetManager_.slashTex(), .additive = true };
+		cfg.renderer.mat    = ps::MatUnlit{ .mainTex = assetManager_.slashTex(), .blend = ps::BlendMode::Additive };
 		aoESlashGreenEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
 	}
 

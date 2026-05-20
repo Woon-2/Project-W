@@ -164,7 +164,7 @@ void Game::setupStage() {
 	effectDropdown_->offsetX = UI::DimValue::px(-12.f);
 	effectDropdown_->offsetY = UI::DimValue::px(12.f);
 	effectDropdown_->width   = UI::DimValue::px(180.f);
-	effectDropdown_->setup({ "Slash Wave", "Slash Combo", "Slash 7", "Slash 1", "Spikes", "Crystals Front Attack", "AoE Slash Green", "Red Energy Explosion", "Crystals Cross Fade", "Arrow" });
+	effectDropdown_->setup({ "Slash Wave", "Slash Combo", "Slash 7", "Slash 1", "Spikes", "Crystals Front Attack", "AoE Slash Green", "Red Energy Explosion", "Crystals Cross Fade", "Arrow", "Energy Explosion Arrow" });
 	effectDropdown_->onSelectionChanged = [this](int idx) {
 		currentEffect_ = static_cast<SwordEffect>(idx);
 	};
@@ -251,7 +251,7 @@ void Game::setParticle()
 
 		cfg.renderer.mode               = ps::RendererModule::Mode::Billboard;
 		cfg.renderer.renderOrder        = 0;
-		cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.flameTex(), .additive = true };
+		cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.flameTex(), .blend = ps::BlendMode::Additive };
 
 		cfg.textureSheetAnimation.enabled   = true;
 		cfg.textureSheetAnimation.tilesX    = 3;
@@ -520,7 +520,7 @@ void Game::setParticle()
 		{
 			auto cfg = loadUnityParticleConfig(crystalsJson, "Crystals front attack");
 			cfg.renderer.mode = ps::RendererModule::Mode::Billboard;
-			cfg.renderer.mat  = ps::MatUnlit{ .mainTex = nullptr, .additive = true };
+			cfg.renderer.mat  = ps::MatUnlit{ .mainTex = nullptr, .blend = ps::BlendMode::Additive };
 			cfg.main.looping  = false;
 			// importer does not parse subEmitters yet — set manually
 			cfg.subEmitters.enabled = true;
@@ -537,7 +537,7 @@ void Game::setParticle()
 			auto cfg = loadUnityParticleConfig(crystalsJson, "Crystals front attack/Crystals");
 			cfg.renderer.mat  = ps::MatUnlit{
 				.mainTex = assetManager_.crystalFree1Tex(),
-				.additive = false,
+				.blend = ps::BlendMode::Alpha,
 				.color = { 1.15271747f, 1.1794312f, 1.41421354f, 1.f }
 			};
 			crystalsFrontAttackEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);  // idx 1
@@ -556,7 +556,7 @@ void Game::setParticle()
 		cfg.main.looping      = false;
 		cfg.main.startColor   = { 1.f, 1.f, 1.f, 1.f };
 		cfg.renderer.mode     = ps::RendererModule::Mode::Billboard;
-		cfg.renderer.mat      = ps::MatUnlit{ .mainTex = assetManager_.circle2Tex(), .additive = true };
+		cfg.renderer.mat      = ps::MatUnlit{ .mainTex = assetManager_.circle2Tex(), .blend = ps::BlendMode::Additive };
 		aoESlashGreenEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
 	}
 	{
@@ -568,7 +568,7 @@ void Game::setParticle()
 		cfg.main.startColor     = { 1.f, 1.f, 1.f, 0.5f };
 		cfg.renderer.mode       = ps::RendererModule::Mode::StretchedBillboard;
 		cfg.renderer.lengthScale  = 5.f;
-		cfg.renderer.mat        = ps::MatUnlit{ .mainTex = assetManager_.slashTex(), .additive = true };
+		cfg.renderer.mat        = ps::MatUnlit{ .mainTex = assetManager_.slashTex(), .blend = ps::BlendMode::Additive };
 		aoESlashGreenEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
 	}
 	{
@@ -578,7 +578,7 @@ void Game::setParticle()
 		);
 		cfg.main.looping    = false;
 		cfg.renderer.mode   = ps::RendererModule::Mode::Billboard;
-		cfg.renderer.mat    = ps::MatUnlit{ .mainTex = assetManager_.slashTex(), .additive = true };
+		cfg.renderer.mat    = ps::MatUnlit{ .mainTex = assetManager_.slashTex(), .blend = ps::BlendMode::Additive };
 		aoESlashGreenEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
 	}
 
@@ -681,7 +681,7 @@ void Game::setParticle()
 		);
 		cfg.main.looping         = false;
 		cfg.renderer.mode        = ps::RendererModule::Mode::Billboard;
-		cfg.renderer.mat         = ps::MatUnlit{ .mainTex = assetManager_.stoneTex(), .additive = true };
+		cfg.renderer.mat         = ps::MatUnlit{ .mainTex = assetManager_.stoneTex(), .blend = ps::BlendMode::Additive };
 		redEnergyExplosionEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
 	}
 	{
@@ -691,11 +691,11 @@ void Game::setParticle()
 		);
 		cfg.main.looping         = false;
 		cfg.renderer.mode        = ps::RendererModule::Mode::Billboard;
-		cfg.renderer.mat         = ps::MatUnlit{ .mainTex = nullptr, .additive = false };
+		cfg.renderer.mat         = ps::MatUnlit{ .mainTex = nullptr, .blend = ps::BlendMode::Alpha };
 
 		cfg.trail.enabled              = true;
 		cfg.trail.material.mainTex     = assetManager_.trail67Tex();
-		cfg.trail.material.additive    = true;
+		cfg.trail.material.blend       = ps::BlendMode::Additive;
 		redEnergyExplosionEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
 	}
 	{
@@ -711,7 +711,7 @@ void Game::setParticle()
 			cfg.main.startColor.w()
 		};
 		cfg.renderer.mode               = ps::RendererModule::Mode::Billboard;
-		cfg.renderer.mat                = ps::MatUnlit{ .mainTex = assetManager_.circleTex(), .additive = false };
+		cfg.renderer.mat                = ps::MatUnlit{ .mainTex = assetManager_.circleTex(), .blend = ps::BlendMode::Alpha };
 		redEnergyExplosionEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous);
 	}
 	{
@@ -721,7 +721,7 @@ void Game::setParticle()
 		);
 		cfg.main.looping = false;
 		cfg.renderer.mode = ps::RendererModule::Mode::Billboard;
-		cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.circleTex(), .additive = false };
+		cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.circleTex(), .blend = ps::BlendMode::Alpha };
 
 		redEnergyExplosionEffect_.addSystem( cfg, ParticleEffect::PlayMode::Continuous );
 	}
@@ -732,7 +732,7 @@ void Game::setParticle()
 		);
 		cfg.main.looping = false;
 		cfg.renderer.mode = ps::RendererModule::Mode::Billboard;
-		cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.circleTex(), .additive = false };
+		cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.circleTex(), .blend = ps::BlendMode::Alpha };
 
 		redEnergyExplosionEffect_.addSystem( cfg, ParticleEffect::PlayMode::Continuous );
 	}
@@ -743,7 +743,7 @@ void Game::setParticle()
 		);
 		cfg.main.looping = false;
 		cfg.renderer.mode = ps::RendererModule::Mode::Billboard;
-		cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.smoke26Tex(), .additive = false };
+		cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.smoke26Tex(), .blend = ps::BlendMode::Alpha };
 
 		redEnergyExplosionEffect_.addSystem( cfg, ParticleEffect::PlayMode::Continuous );
 	}
@@ -754,7 +754,7 @@ void Game::setParticle()
 		);
 		cfg.main.looping = false;
 		cfg.renderer.mode = ps::RendererModule::Mode::StretchedBillboard;
-		cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.flashTex(), .additive = false };
+		cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.flashTex(), .blend = ps::BlendMode::Alpha };
 
 		redEnergyExplosionEffect_.addSystem( cfg, ParticleEffect::PlayMode::Continuous );
 	}
@@ -766,7 +766,7 @@ void Game::setParticle()
 		{
 			auto cfg = loadUnityParticleConfig(crystalsCrossFadeJson, "Crystals crossfade 2");
 			cfg.renderer.mode = ps::RendererModule::Mode::Billboard;
-			cfg.renderer.mat  = ps::MatUnlit{ .mainTex = nullptr, .additive = true };
+			cfg.renderer.mat  = ps::MatUnlit{ .mainTex = nullptr, .blend = ps::BlendMode::Additive };
 			cfg.main.looping  = false;
 			cfg.subEmitters.enabled = true;
 			cfg.subEmitters.subEmitters = { {
@@ -782,7 +782,7 @@ void Game::setParticle()
 			cfg.renderer.mode = ps::RendererModule::Mode::StretchedBillboard;
 			cfg.renderer.mat  = ps::MatUnlit{
 				.mainTex = assetManager_.crystalFree1Tex(),
-				.additive = false,
+				.blend = ps::BlendMode::Alpha,
 				.color = { 1.15271747f, 1.1794312f, 1.41421354f, 1.f }
 			};
 			crystalsCrossFadeEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);  // idx 1
@@ -790,108 +790,152 @@ void Game::setParticle()
 
 		crystalsCrossFadeEffect_.bindSubEmitter(0, 0, 1);
 	// ── Arrow Effect (Muzzle → mesh flight → Hit) ───────────────────────────
+		{
+			// System 0: Arrow mesh (parent) — flies in player's forward direction
+			{
+				ps::ParticleSystemConfig cfg;
+				cfg.main.lifetimeMin = 0.4f;
+				cfg.main.lifetimeMax = 0.4f;
+				cfg.main.speedMin = 40.f;
+				cfg.main.speedMax = 40.f;
+				cfg.main.startSizeMin = 0.3f;
+				cfg.main.startSizeMax = 0.3f;
+				cfg.main.startColor = { 1.f, 1.f, 1.f, 1.f };
+				cfg.main.gravityModifierMin = 0.f;
+				cfg.main.gravityModifierMax = 0.f;
+				cfg.main.looping = false;
+				cfg.main.duration = 0.f;
+
+				cfg.emission.emitRate = 0.f;
+
+				cfg.shape.type = ps::ShapeModule::Type::Point;
+				cfg.shape.position = { 0.f, 0.f, 0.f };
+				cfg.shape.direction = { 0.f, 0.f, 1.f };  // local +Z, rotated by player orient at play()
+
+				cfg.renderer.mode = ps::RendererModule::Mode::Mesh;
+				cfg.renderer.renderOrder = 2;
+				cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.arrowTex(), .blend = ps::BlendMode::Alpha };
+				cfg.renderer.pMesh = assetManager_.meshArrow();
+				cfg.renderer.pSubMesh = assetManager_.meshArrow()->subMeshes.empty()
+					? nullptr : &assetManager_.meshArrow()->subMeshes[0];
+
+				// Sub-emitter index 0 = Birth (muzzle), index 1 = Death (hit)
+				cfg.subEmitters.enabled = true;
+				cfg.subEmitters.subEmitters = {
+					ps::SubEmittersModule::SubEmitter{
+						.event = ps::SubEmittersModule::Event::Birth,
+						.emitProbability = 1.f,
+						.emitCount = 1,
+						.inheritVelocity = false,
+						.inheritColor = false,
+						.inheritSize = false,
+					},
+					ps::SubEmittersModule::SubEmitter{
+						.event = ps::SubEmittersModule::Event::Death,
+						.emitProbability = 1.f,
+						.emitCount = 1,
+						.inheritVelocity = false,
+						.inheritColor = false,
+						.inheritSize = false,
+					},
+				};
+
+				arrowEffect_.addSystem( cfg, ParticleEffect::PlayMode::Emit, 32 );
+			}
+
+			// System 1: ArrowMuzzle — spawned at arrow birth position
+			{
+				ps::ParticleSystemConfig cfg;
+				cfg.main.lifetimeMin = 0.4f;
+				cfg.main.lifetimeMax = 0.4f;
+				cfg.main.speedMin = 0.f;
+				cfg.main.speedMax = 0.f;
+				cfg.main.startSizeMin = 2.0f;
+				cfg.main.startSizeMax = 2.0f;
+				cfg.main.startColor = { 1.f, 1.f, 1.f, 1.f };
+				cfg.main.looping = false;
+
+				cfg.emission.emitRate = 0.f;
+				cfg.emission.bursts = {
+					ps::EmissionModule::Burst{
+						.time = 0.f, .countMin = 1, .countMax = 1, .cycleCount = 1
+					}
+				};
+
+				cfg.shape.type = ps::ShapeModule::Type::Point;
+				cfg.shape.position = { 0.f, 0.f, 0.f };
+
+				cfg.renderer.mode = ps::RendererModule::Mode::Billboard;
+				cfg.renderer.renderOrder = 3;
+				cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.arrowMuzzleTex(), .blend = ps::BlendMode::Additive };
+
+				cfg.textureSheetAnimation.enabled = true;
+				cfg.textureSheetAnimation.tilesX = 8;
+				cfg.textureSheetAnimation.tilesY = 4;
+				cfg.textureSheetAnimation.animation = ps::TextureSheetAnimationModule::Animation::WholeSheet;
+				cfg.textureSheetAnimation.cycles = 1.f;
+
+				arrowEffect_.addSystem( cfg, ParticleEffect::PlayMode::Emit, 16 );
+			}
+
+			// System 2: ArrowHit — spawned at arrow death position
+			{
+				ps::ParticleSystemConfig cfg;
+				cfg.main.lifetimeMin = 0.4f;
+				cfg.main.lifetimeMax = 0.4f;
+				cfg.main.speedMin = 0.f;
+				cfg.main.speedMax = 0.f;
+				cfg.main.startSizeMin = 2.5f;
+				cfg.main.startSizeMax = 2.5f;
+				cfg.main.startColor = { 1.f, 1.f, 1.f, 1.f };
+				cfg.main.looping = false;
+
+				cfg.emission.emitRate = 0.f;
+				cfg.emission.bursts = {
+					ps::EmissionModule::Burst{
+						.time = 0.f, .countMin = 1, .countMax = 1, .cycleCount = 1
+					}
+				};
+
+				cfg.shape.type = ps::ShapeModule::Type::Point;
+				cfg.shape.position = { 0.f, 0.f, 0.f };
+
+				cfg.renderer.mode = ps::RendererModule::Mode::Billboard;
+				cfg.renderer.renderOrder = 3;
+				cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.arrowHitTex(), .blend = ps::BlendMode::Additive };
+
+				cfg.textureSheetAnimation.enabled = true;
+				cfg.textureSheetAnimation.tilesX = 8;
+				cfg.textureSheetAnimation.tilesY = 4;
+				cfg.textureSheetAnimation.animation = ps::TextureSheetAnimationModule::Animation::WholeSheet;
+				cfg.textureSheetAnimation.cycles = 1.f;
+
+				arrowEffect_.addSystem( cfg, ParticleEffect::PlayMode::Emit, 16 );
+			}
+
+			// System 0 Birth → System 1 (muzzle), System 0 Death → System 2 (hit)
+			arrowEffect_.bindSubEmitter( 0, 0, 1 );
+			arrowEffect_.bindSubEmitter( 0, 1, 2 );
+		}
+	}
+
+	// ── EnergyExplosionArrow effect (Charge / Arrow / Hit / HitWhiteBG) ─────
+	// Sequence: Charge Death → Arrow, Arrow Death → Hit + HitWhiteBG
 	{
-		// System 0: Arrow mesh (parent) — flies in player's forward direction
+		// System 0: Charge — plays first, then spawns Arrow on death
 		{
 			ps::ParticleSystemConfig cfg;
-			cfg.main.lifetimeMin        = 0.4f;
-			cfg.main.lifetimeMax        = 0.4f;
-			cfg.main.speedMin           = 40.f;
-			cfg.main.speedMax           = 40.f;
-			cfg.main.startSizeMin       = 0.3f;
-			cfg.main.startSizeMax       = 0.3f;
-			cfg.main.startColor         = { 1.f, 1.f, 1.f, 1.f };
-			cfg.main.gravityModifierMin = 0.f;
-			cfg.main.gravityModifierMax = 0.f;
-			cfg.main.looping            = false;
-			cfg.main.duration           = 0.f;
-
-			cfg.emission.emitRate = 0.f;
-
-			cfg.shape.type      = ps::ShapeModule::Type::Point;
-			cfg.shape.position  = { 0.f, 0.f, 0.f };
-			cfg.shape.direction = { 0.f, 0.f, 1.f };  // local +Z, rotated by player orient at play()
-
-			cfg.renderer.mode        = ps::RendererModule::Mode::Mesh;
-			cfg.renderer.renderOrder = 2;
-			cfg.renderer.mat         = ps::MatUnlit{ .mainTex = assetManager_.arrowTex(), .additive = false };
-			cfg.renderer.pMesh       = assetManager_.meshArrow();
-			cfg.renderer.pSubMesh    = assetManager_.meshArrow()->subMeshes.empty()
-			                           ? nullptr : &assetManager_.meshArrow()->subMeshes[0];
-
-			// Sub-emitter index 0 = Birth (muzzle), index 1 = Death (hit)
-			cfg.subEmitters.enabled = true;
-			cfg.subEmitters.subEmitters = {
-				ps::SubEmittersModule::SubEmitter{
-					.event           = ps::SubEmittersModule::Event::Birth,
-					.emitProbability = 1.f,
-					.emitCount       = 1,
-					.inheritVelocity = false,
-					.inheritColor    = false,
-					.inheritSize     = false,
-				},
-				ps::SubEmittersModule::SubEmitter{
-					.event           = ps::SubEmittersModule::Event::Death,
-					.emitProbability = 1.f,
-					.emitCount       = 1,
-					.inheritVelocity = false,
-					.inheritColor    = false,
-					.inheritSize     = false,
-				},
-			};
-
-			arrowEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit, 32);
-		}
-
-		// System 1: ArrowMuzzle — spawned at arrow birth position
-		{
-			ps::ParticleSystemConfig cfg;
-			cfg.main.lifetimeMin = 0.4f;
-			cfg.main.lifetimeMax = 0.4f;
-			cfg.main.speedMin    = 0.f;
-			cfg.main.speedMax    = 0.f;
-			cfg.main.startSizeMin = 2.0f;
-			cfg.main.startSizeMax = 2.0f;
-			cfg.main.startColor  = { 1.f, 1.f, 1.f, 1.f };
-			cfg.main.looping     = false;
-
-			cfg.emission.emitRate = 0.f;
-			cfg.emission.bursts   = {
-				ps::EmissionModule::Burst{
-					.time = 0.f, .countMin = 1, .countMax = 1, .cycleCount = 1
-				}
-			};
-
-			cfg.shape.type     = ps::ShapeModule::Type::Point;
-			cfg.shape.position = { 0.f, 0.f, 0.f };
-
-			cfg.renderer.mode        = ps::RendererModule::Mode::Billboard;
-			cfg.renderer.renderOrder = 3;
-			cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.arrowMuzzleTex(), .additive = true };
-
-			cfg.textureSheetAnimation.enabled   = true;
-			cfg.textureSheetAnimation.tilesX    = 8;
-			cfg.textureSheetAnimation.tilesY    = 4;
-			cfg.textureSheetAnimation.animation = ps::TextureSheetAnimationModule::Animation::WholeSheet;
-			cfg.textureSheetAnimation.cycles    = 1.f;
-
-			arrowEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit, 16);
-		}
-
-		// System 2: ArrowHit — spawned at arrow death position
-		{
-			ps::ParticleSystemConfig cfg;
-			cfg.main.lifetimeMin  = 0.4f;
-			cfg.main.lifetimeMax  = 0.4f;
+			cfg.main.lifetimeMin  = 1.6f;
+			cfg.main.lifetimeMax  = 1.6f;
 			cfg.main.speedMin     = 0.f;
 			cfg.main.speedMax     = 0.f;
-			cfg.main.startSizeMin = 2.5f;
-			cfg.main.startSizeMax = 2.5f;
+			cfg.main.startSizeMin = 8.f;
+			cfg.main.startSizeMax = 8.f;
 			cfg.main.startColor   = { 1.f, 1.f, 1.f, 1.f };
 			cfg.main.looping      = false;
 
 			cfg.emission.emitRate = 0.f;
-			cfg.emission.bursts   = {
+			cfg.emission.bursts = {
 				ps::EmissionModule::Burst{
 					.time = 0.f, .countMin = 1, .countMax = 1, .cycleCount = 1
 				}
@@ -902,20 +946,154 @@ void Game::setParticle()
 
 			cfg.renderer.mode        = ps::RendererModule::Mode::Billboard;
 			cfg.renderer.renderOrder = 3;
-			cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.arrowHitTex(), .additive = true };
+			cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.EnergyExplosionChargeTex(), .blend = ps::BlendMode::Additive };
 
 			cfg.textureSheetAnimation.enabled   = true;
 			cfg.textureSheetAnimation.tilesX    = 8;
-			cfg.textureSheetAnimation.tilesY    = 4;
+			cfg.textureSheetAnimation.tilesY    = 6;
 			cfg.textureSheetAnimation.animation = ps::TextureSheetAnimationModule::Animation::WholeSheet;
 			cfg.textureSheetAnimation.cycles    = 1.f;
 
-			arrowEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit, 16);
+			cfg.subEmitters.enabled = true;
+			cfg.subEmitters.subEmitters = {
+				ps::SubEmittersModule::SubEmitter{
+					.event = ps::SubEmittersModule::Event::Death,
+					.emitProbability = 1.f, .emitCount = 1,
+				},
+			};
+
+			energyExplosionArrowEffect_.addSystem( cfg, ParticleEffect::PlayMode::Emit, 16 );
 		}
 
-		// System 0 Birth → System 1 (muzzle), System 0 Death → System 2 (hit)
-		arrowEffect_.bindSubEmitter(0, 0, 1);
-		arrowEffect_.bindSubEmitter(0, 1, 2);
+		// System 1: Arrow — spawned on Charge Death, then spawns hit effects on death
+		{
+			ps::ParticleSystemConfig cfg;
+			cfg.main.lifetimeMin = 0.6f;
+			cfg.main.lifetimeMax = 0.6f;
+			cfg.main.speedMin    = 40.f;
+			cfg.main.speedMax    = 40.f;
+			cfg.main.startSizeMin = 0.3f;
+			cfg.main.startSizeMax = 0.3f;
+			cfg.main.startColor   = { 1.f, 1.f, 1.f, 1.f };
+			cfg.main.gravityModifierMin = 0.f;
+			cfg.main.gravityModifierMax = 0.f;
+			cfg.main.looping = false;
+			cfg.main.duration = 0.f;
+
+			cfg.emission.emitRate = 0.f;
+			cfg.emission.bursts = {
+				ps::EmissionModule::Burst{
+					.time = 0.f, .countMin = 1, .countMax = 1, .cycleCount = 1
+				}
+			};
+
+			cfg.shape.type = ps::ShapeModule::Type::Point;
+			cfg.shape.position = { 0.f, 0.f, 0.f };
+			cfg.shape.direction = { 0.f, 0.f, 1.f };
+
+			cfg.renderer.mode = ps::RendererModule::Mode::Mesh;
+			cfg.renderer.renderOrder = 2;
+			cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.arrowTex(), .blend = ps::BlendMode::Alpha };
+			cfg.renderer.pMesh = assetManager_.meshArrow();
+			cfg.renderer.pSubMesh = assetManager_.meshArrow()->subMeshes.empty()
+				? nullptr : &assetManager_.meshArrow()->subMeshes[0];
+			cfg.subEmitters.enabled = true;
+			cfg.subEmitters.subEmitters = {
+				ps::SubEmittersModule::SubEmitter{
+					.event = ps::SubEmittersModule::Event::Death,
+					.emitProbability = 1.f,
+					.emitCount = 1,
+					.inheritVelocity = false,
+					.inheritColor = false,
+					.inheritSize = false,
+				},
+				ps::SubEmittersModule::SubEmitter{
+					.event = ps::SubEmittersModule::Event::Death,
+					.emitProbability = 1.f,
+					.emitCount = 1,
+					.inheritVelocity = false,
+					.inheritColor = false,
+					.inheritSize = false,
+				},
+			};
+
+			energyExplosionArrowEffect_.addSystem( cfg, ParticleEffect::PlayMode::Emit, 32 );
+		}
+
+		// System 2: Hit — spawned on Arrow Death (8x6 sprite, Additive)
+		{
+			ps::ParticleSystemConfig cfg;
+			cfg.main.lifetimeMin  = 1.6f;
+			cfg.main.lifetimeMax  = 1.6f;
+			cfg.main.speedMin     = 0.f;
+			cfg.main.speedMax     = 0.f;
+			cfg.main.startSizeMin = 10.0f;
+			cfg.main.startSizeMax = 10.0f;
+			cfg.main.startColor   = { 1.f, 1.f, 1.f, 1.f };
+			cfg.main.looping      = false;
+
+			cfg.emission.emitRate = 0.f;
+			cfg.emission.bursts = {
+				ps::EmissionModule::Burst{
+					.time = 0.f, .countMin = 1, .countMax = 1, .cycleCount = 1
+				}
+			};
+
+			cfg.shape.type     = ps::ShapeModule::Type::Point;
+			cfg.shape.position = { 0.f, 0.f, 0.f };
+
+			cfg.renderer.mode        = ps::RendererModule::Mode::Billboard;
+			cfg.renderer.renderOrder = 3;
+			cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.EnergyExplosionHitTex(), .blend = ps::BlendMode::Additive };
+
+			cfg.textureSheetAnimation.enabled   = true;
+			cfg.textureSheetAnimation.tilesX    = 8;
+			cfg.textureSheetAnimation.tilesY    = 6;
+			cfg.textureSheetAnimation.animation = ps::TextureSheetAnimationModule::Animation::WholeSheet;
+			cfg.textureSheetAnimation.cycles    = 1.f;
+
+			energyExplosionArrowEffect_.addSystem( cfg, ParticleEffect::PlayMode::Emit, 16 );
+		}
+
+		// System 3: HitWhiteBG — spawned on Arrow Death (8x6 sprite, Multiply)
+		{
+			ps::ParticleSystemConfig cfg;
+			cfg.main.lifetimeMin  = 1.6f;
+			cfg.main.lifetimeMax  = 1.6f;
+			cfg.main.speedMin     = 0.f;
+			cfg.main.speedMax     = 0.f;
+			cfg.main.startSizeMin = 10.0f;
+			cfg.main.startSizeMax = 10.0f;
+			cfg.main.startColor   = { 1.f, 1.f, 1.f, 1.f };
+			cfg.main.looping      = false;
+
+			cfg.emission.emitRate = 0.f;
+			cfg.emission.bursts = {
+				ps::EmissionModule::Burst{
+					.time = 0.f, .countMin = 1, .countMax = 1, .cycleCount = 1
+				}
+			};
+
+			cfg.shape.type     = ps::ShapeModule::Type::Point;
+			cfg.shape.position = { 0.f, 0.f, 0.f };
+
+			cfg.renderer.mode        = ps::RendererModule::Mode::Billboard;
+			cfg.renderer.renderOrder = 3;
+			cfg.renderer.mat = ps::MatUnlit{ .mainTex = assetManager_.EnergyExplosionHitWhiteBGTex(), .blend = ps::BlendMode::Multiply };
+
+			cfg.textureSheetAnimation.enabled   = true;
+			cfg.textureSheetAnimation.tilesX    = 8;
+			cfg.textureSheetAnimation.tilesY    = 6;
+			cfg.textureSheetAnimation.animation = ps::TextureSheetAnimationModule::Animation::WholeSheet;
+			cfg.textureSheetAnimation.cycles    = 1.f;
+
+			energyExplosionArrowEffect_.addSystem( cfg, ParticleEffect::PlayMode::Emit, 16 );
+		}
+
+		// Charge.Death → Arrow, Arrow.Death → Hit, Arrow.Death → HitWhiteBG
+		energyExplosionArrowEffect_.bindSubEmitter( 0, 0, 1 );
+		energyExplosionArrowEffect_.bindSubEmitter( 1, 0, 2 );
+		energyExplosionArrowEffect_.bindSubEmitter( 1, 1, 3 );
 	}
 }
 
@@ -1401,6 +1579,7 @@ void Game::update(Milliseconds deltaTime) {
 	redEnergyExplosionEffect_.update( deltaTime );
 	crystalsCrossFadeEffect_.update( deltaTime );
 	arrowEffect_.update( deltaTime );
+	energyExplosionArrowEffect_.update( deltaTime );
 
 	// UI 동기화
 	if (playerHpBar_)
@@ -1440,6 +1619,7 @@ void Game::render() {
 	redEnergyExplosionEffect_.render( gfx_ );
 	crystalsCrossFadeEffect_.render( gfx_ );
 	arrowEffect_.render( gfx_ );
+	energyExplosionArrowEffect_.render( gfx_ );
 
 	uiManager_.render( gfx_ );
 
@@ -1634,6 +1814,13 @@ void Game::processInput(Milliseconds deltaTime) {
 		}
 		case SwordEffect::CrystalsCrossFade: {
 			crystalsCrossFadeEffect_.play( slashPos );
+			break;
+		}
+		case SwordEffect::EnergyExplosionArrow: {
+			const auto origin = player_->renderState().pos
+				+ mu::Vec3{ 0.f, 1.2f, 0.f }
+				+ player_->forward() * 0.5f;
+			energyExplosionArrowEffect_.play( origin, player_->orient() );
 			break;
 		}
 		}

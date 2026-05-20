@@ -24,8 +24,8 @@ float calcSortDistance(const DrawEvent& e, mu::Vec3 cameraPos) {
 void sortDrawEvents(std::vector<DrawEvent>& drawEvents, mu::Vec3 cameraPos) {
 	std::sort(drawEvents.begin(), drawEvents.end(),
 		[&](const DrawEvent& lhs, const DrawEvent& rhs) {
-			if (lhs.additive != rhs.additive)
-				return !lhs.additive && rhs.additive;
+			if (lhs.blend != rhs.blend)
+				return static_cast<int>(lhs.blend) < static_cast<int>(rhs.blend);
 			if (lhs.renderOrder != rhs.renderOrder)
 				return lhs.renderOrder < rhs.renderOrder;
 
@@ -130,15 +130,14 @@ Dispatcher::Dispatcher(
 	DescriptorPool* pTexPool, DescriptorPool* pTexArrayPool,
 	DescriptorPool* pTexCubePool, DescriptorPool* pSamPool,
 	DescriptorPool* pCmpSamPool,
-	const std::shared_ptr<RootSig>& rootSig, const ComPtr<ID3D12PipelineState>& shader,
-	const ComPtr<ID3D12PipelineState>& shaderAdditive,
+	const std::shared_ptr<RootSig>& rootSig, std::array<ComPtr<ID3D12PipelineState>, 4> psoByBlend,
 	const ComPtr<ID3D12CommandQueue>& cmdQ, const D3D12_VIEWPORT& viewport, const D3D12_RECT& scissorRect,
 	D3D12_CPU_DESCRIPTOR_HANDLE rtv, D3D12_CPU_DESCRIPTOR_HANDLE dsv, Fence* pFence, Resources* pResources,
 	ThreadPool* threadPool, CommandListPool* commandListPool, std::vector<DrawEvent>&& drawEvents,
 	const CameraData& cameraData, const FrameData& frameData, std::size_t roomIdx
 ) : descriptorHeaps_(descriptorHeaps), pTexPool_(pTexPool), pTexArrayPool_(pTexArrayPool),
 	pTexCubePool_(pTexCubePool), pSamPool_(pSamPool), pCmpSamPool_(pCmpSamPool),
-	rootSig_(rootSig), shader_(shader), shaderAdditive_(shaderAdditive), cmdQ_(cmdQ),
+	rootSig_(rootSig), psoByBlend_(std::move(psoByBlend)), cmdQ_(cmdQ),
 	viewport_(viewport), scissorRect_(scissorRect), rtv_(rtv), dsv_(dsv), pFence_(pFence),
 	pResources_(pResources), threadPool_(threadPool), cmdListPool_(commandListPool), drawEvents_(std::move(drawEvents)),
 	cameraData_(cameraData), frameData_( frameData ), roomIdx_(roomIdx),
@@ -298,9 +297,9 @@ void Dispatcher::drawSingleThreaded() {
 		return;
 	}
 
-	// 명령 기록 시작 — 첫 PSO는 비가산(non-additive)
+	// 명령 기록 시작 — 첫 PSO는 Alpha (첫 이벤트에서 갱신됨)
 	DISPLAY_ERROR_DX_VOID( cmdList->SetGraphicsRootSignature( rootSig_->get() ), false );
-	DISPLAY_ERROR_DX_VOID( cmdList->SetPipelineState( shader_.Get() ), false );
+	DISPLAY_ERROR_DX_VOID( cmdList->SetPipelineState( psoFor( ps::BlendMode::Alpha ) ), false );
 	DISPLAY_ERROR_DX_VOID( cmdList->OMSetRenderTargets( 1u, &rtv_, false, &dsv_ ), false );
 	DISPLAY_ERROR_DX_VOID( cmdList->RSSetViewports( 1u, &viewport_ ), false );
 	DISPLAY_ERROR_DX_VOID( cmdList->RSSetScissorRects( 1u, &scissorRect_ ), false );
@@ -334,15 +333,13 @@ void Dispatcher::drawSingleThreaded() {
 	pResources_->perFrameData.bind( cmdList, rootParamIdxPFD_, roomIdx_ );
 
 	u32t idxDrawcall = 0u;
-	bool currentAdditive = false;
+	// Use a sentinel value that can never match a real BlendMode to guarantee SetPipelineState on first event.
+	ps::BlendMode currentBlend = static_cast<ps::BlendMode>(-1);
 
-	// DrawEvent들을 하나씩 처리한다. (정렬 후: non-additive → additive 순)
 	for ( const auto& drawEvent : drawEvents_ ) {
-		// additive 경계에서 PSO 전환
-		if ( drawEvent.additive != currentAdditive ) {
-			currentAdditive = drawEvent.additive;
-			auto* pso = currentAdditive ? shaderAdditive_.Get() : shader_.Get();
-			DISPLAY_ERROR_DX_VOID( cmdList->SetPipelineState( pso ), false );
+		if ( drawEvent.blend != currentBlend ) {
+			currentBlend = drawEvent.blend;
+			DISPLAY_ERROR_DX_VOID( cmdList->SetPipelineState( psoFor( currentBlend ) ), false );
 		}
 
 		// PerDrawcallData 바인드
@@ -440,15 +437,6 @@ void Dispatcher::drawMultiThreaded() {
 	// 각 작업마다 명령 컨텍스트를 분배한다.
 	auto currCmdCtx = cmdCtxs.begin();
 
-	// 정렬된 이벤트에서 첫 additive 이벤트 인덱스를 파악한다.
-	// (각 job이 PSO 전환 여부를 판단하는 데 사용)
-	// partition_point: !e.additive가 true인 구간(non-additive)의 끝 = additive 시작 위치
-	const std::size_t additiveStart = static_cast<std::size_t>(
-		std::ranges::partition_point( drawEvents_,
-			[]( const DrawEvent& e ) { return !e.additive; }
-		) - drawEvents_.begin()
-	);
-
 	while ( accEventCnt + (jobSizeDraw_ - 1) < drawEvents_.size() ) {
 		// 명령 컨텍스트 초기화
 		auto hrCmdAllocReset = currCmdCtx->cmdAlloc->Reset();
@@ -464,8 +452,7 @@ void Dispatcher::drawMultiThreaded() {
 			return;
 		}
 
-		// 이 job의 첫 이벤트가 additive 구간에 속하는지 여부로 초기 PSO 결정
-		auto* initialPso = (accEventCnt >= additiveStart) ? shaderAdditive_.Get() : shader_.Get();
+		auto* initialPso = psoFor( drawEvents_[accEventCnt].blend );
 
 		// 명령 기록
 		addJobDraw( currCmdCtx->cmdList.Get(), drawEvents_.data() + accEventCnt,
@@ -494,7 +481,7 @@ void Dispatcher::drawMultiThreaded() {
 			return;
 		}
 
-		auto* initialPso = (accEventCnt >= additiveStart) ? shaderAdditive_.Get() : shader_.Get();
+		auto* initialPso = psoFor( drawEvents_[accEventCnt].blend );
 
 		// 명령 기록
 		addJobDraw( currCmdCtx->cmdList.Get(), drawEvents_.data() + accEventCnt,
@@ -590,7 +577,7 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 		// PerFrameData 바인드
 		pResources_->perFrameData.bind( threadCmdList, rootParamIdxPFD_, roomIdx_ );
 
-		bool jobCurrentAdditive = pFirst->additive;
+		ps::BlendMode jobCurrentBlend = pFirst->blend;
 
 		for ( auto idxDrawcall = firstInstanceOffset;
 			idxDrawcall < firstInstanceOffset + jobSize;
@@ -600,11 +587,10 @@ void Dispatcher::addJobDraw( ID3D12GraphicsCommandList* threadCmdList,
 			// 입력 조립기 설정을 하고 드로우콜을 수행한다.
 			const auto& drawEvent = drawEvents_[idxDrawcall];
 
-			// job이 additive 경계를 걸칠 경우 PSO 전환
-			if ( drawEvent.additive != jobCurrentAdditive ) {
-				jobCurrentAdditive = drawEvent.additive;
-				auto* nextPso = jobCurrentAdditive ? shaderAdditive_.Get() : shader_.Get();
-				DISPLAY_ERROR_DX_VOID( threadCmdList->SetPipelineState( nextPso ), false );
+			// blend mode 경계에서 PSO 전환
+			if ( drawEvent.blend != jobCurrentBlend ) {
+				jobCurrentBlend = drawEvent.blend;
+				DISPLAY_ERROR_DX_VOID( threadCmdList->SetPipelineState( psoFor( jobCurrentBlend ) ), false );
 			}
 
 			// PerDrawcallData 바인드

@@ -325,6 +325,42 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 		.sampler         = Samplers::BilinearClamp
 	} );
 
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name = "EnergyExplosionHit",
+		.texturePath = "../resources/Textures/EnergyExplosionHit_8x6_Core.dds",
+		.pDest = &energyExplosionHitTex_,
+		.pTexHashMap = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name = "EnergyExplosionHitWhiteBG",
+		.texturePath = "../resources/Textures/EnergyExplosionHit_8x6_WightBG.dds",
+		.pDest = &energyExplosionHitWhiteBGTex_,
+		.pTexHashMap = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name = "EnergyExplosionCharge",
+		.texturePath = "../resources/Textures/EnergyExplosionCharge_8x6.dds",
+		.pDest = &energyExplosionChargeTex_,
+		.pTexHashMap = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name = "EnergyExplosionArrow",
+		.texturePath = "../resources/Textures/ArrowEnergyExplosion.dds",
+		.pDest = &energyExplosionArrowTex_,
+		.pTexHashMap = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler = Samplers::BilinearClamp
+	} );
+
 	swordSlashMaterial_ = makeDefaultSwordSlashMaterial();
 	if (loadSwordSlashMaterialMetadata("../resources/effects/SwordSlashMat.json", swordSlashMaterial_)) {
 		gSharedLog << "[SwordSlash Material] File I/O: ../resources/effects/SwordSlashMat.json 로드 완료\n";

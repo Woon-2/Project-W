@@ -26,7 +26,7 @@ void submitParticleDraw(GFX& gfx, const ParticleRenderContext& ctx, const ps::Ma
             .uvOffset = uv.offset,
             .uvScale = uv.scale,
             .tint = tint,
-            .additive = mat.additive,
+            .blend = mat.blend,
             .rotation = geometry->rotation,
             .rotation3D = geometry->rotation3D,
             .stretchAxisAndMode = geometry->stretchAxisAndMode,
@@ -272,7 +272,7 @@ void submitParticleTrail(GFX& gfx, const ParticleRenderContext& ctx, const ps::T
         .trailLifetime        = p.trailLifetime,
         .currentSystemTime    = ctx.systemTime,
         .pMainTex             = trail.material.mainTex,
-        .additive             = trail.material.additive,
+        .additive             = trail.material.blend == ps::BlendMode::Additive,
         .renderOrder          = ctx.renderer.renderOrder,
     });
 }

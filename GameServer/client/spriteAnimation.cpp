@@ -65,7 +65,7 @@ void SpriteAnimation::render( GFX& gfx ) const {
 		.uvOffset    = frame.uvOffset,
 		.uvScale     = frame.uvScale,
 		.tint        = tint_,
-		.additive    = additive_,
+		.blend       = blend_,
 		.rotation    = rotation_,
 		.renderOrder = renderOrder_,
 	} );

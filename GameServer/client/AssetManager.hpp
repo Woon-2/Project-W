@@ -46,6 +46,10 @@ public:
 	const Texture* flashTex()              const { return &flashTex_; }
 	const Texture* arrowHitTex()           const { return &arrowHitTex_; }
 	const Texture* arrowMuzzleTex()        const { return &arrowMuzzleTex_; }
+	const Texture* EnergyExplosionHitTex() const { return &energyExplosionHitTex_; }
+	const Texture* EnergyExplosionHitWhiteBGTex() const { return &energyExplosionHitWhiteBGTex_; }
+	const Texture* EnergyExplosionChargeTex() const { return &energyExplosionChargeTex_; }
+	const Texture* EnergyExplosionArrowTex() const { return &energyExplosionArrowTex_; }
 	const ps::MatSwordSlash& swordSlashMaterial()  const { return swordSlashMaterial_; }
 	const ps::MatSwordSlash& swordSlash2Material() const { return swordSlash2Material_; }
 	const ps::MatSmokeBlendCG& smokeBlendCGMaterial() const { return smokeBlendCGMaterial_; }
@@ -98,6 +102,10 @@ private:
 	Texture flashTex_{};
 	Texture arrowHitTex_{};
 	Texture arrowMuzzleTex_{};
+	Texture energyExplosionHitTex_{};
+	Texture energyExplosionHitWhiteBGTex_{};
+	Texture energyExplosionChargeTex_{};
+	Texture energyExplosionArrowTex_{};
 	ps::MatSwordSlash   swordSlashMaterial_{};
 	ps::MatSwordSlash   swordSlash2Material_{};
 	ps::MatSmokeBlendCG smokeBlendCGMaterial_{};

@@ -1,5 +1,6 @@
 ﻿#include "pch.hpp"
 #include "shader.hpp"
+#include "particleModules.hpp"
 
 #include "errorHandling.hpp"
 
@@ -1884,15 +1885,17 @@ ComPtr<ID3D12PipelineState> createTerrainShadowMapCSMShader(ID3D12Device* device
 	return ret;
 }
 
-ComPtr<ID3D12PipelineState> createBillboardShader( ID3D12Device* device, ID3D12RootSignature* rootSig ) {
+// Builds the PSO used by BillboardPipeline. Same HLSL for all modes; only the
+// blend state differs between them.
+static ComPtr<ID3D12PipelineState> createBillboardShaderImpl(
+	ID3D12Device* device, ID3D12RootSignature* rootSig, ps::BlendMode mode
+) {
 	ComPtr<ID3D12PipelineState> ret{};
 
-	// 셰이더 컴파일
 	auto vsCode = compileShader( "billboard.hlsl", nullptr, "VSMain", "vs_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
 	auto psCode = compileShader( "billboard.hlsl", nullptr, "PSMain", "ps_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
 	auto gsCode = compileShader( "billboard.hlsl", nullptr, "GSMain", "gs_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
 
-	// 입력 조립기 설정
 	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
 		D3D12_INPUT_ELEMENT_DESC{
 			.SemanticName = "POSITION",
@@ -1924,13 +1927,11 @@ ComPtr<ID3D12PipelineState> createBillboardShader( ID3D12Device* device, ID3D12R
 		.VS = vsCode.byteCode,
 		.PS = psCode.byteCode,
 		.GS = gsCode.byteCode,
-		// 블렌드 상태 설정
 		.BlendState = D3D12_BLEND_DESC{
 			.AlphaToCoverageEnable = false,
 			.IndependentBlendEnable = false
 		},
 		.SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
-		// 래스터라이저 설정
 		.RasterizerState = D3D12_RASTERIZER_DESC{
 			.FillMode = D3D12_FILL_MODE_SOLID,
 			.CullMode = D3D12_CULL_MODE_NONE,
@@ -1943,111 +1944,7 @@ ComPtr<ID3D12PipelineState> createBillboardShader( ID3D12Device* device, ID3D12R
 			.AntialiasedLineEnable = false,
 			.ForcedSampleCount = 0u
 		},
-		// 깊이 스텐실 설정
-		// 반투명 파티클은 depth test만 하고 쓰기는 하지 않는다.
-		// depth write를 하면 뒤에 오는 반투명 오브젝트가 클리핑된다.
-		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
-			.DepthEnable = true,
-			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
-			.DepthFunc = D3D12_COMPARISON_FUNC_LESS,
-			.StencilEnable = false,
-			.StencilReadMask = 0u,
-			.StencilWriteMask = 0u,
-			.FrontFace = D3D12_DEPTH_STENCILOP_DESC{},
-			.BackFace = D3D12_DEPTH_STENCILOP_DESC{}
-		},
-		.InputLayout = inputLayoutDesc,
-		// 프리미티브 토폴로지 설정
-		.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT,
-		.SampleDesc = DXGI_SAMPLE_DESC{
-			.Count = 1u, .Quality = 0u
-		},
-		.NodeMask = 0u,
-		.Flags = D3D12_PIPELINE_STATE_FLAG_NONE
-	};
-
-	// 렌더 타겟 관련 설정
-	// 표준 알파 블렌딩: result = src.rgb * src.a + dst.rgb * (1 - src.a)
-	psoDesc.NumRenderTargets = 1u;
-	psoDesc.BlendState.RenderTarget[0].BlendEnable = true;
-	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
-	psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-	psoDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-	psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-	psoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
-	psoDesc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
-	psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-	psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
-
-	DISPLAY_ERROR_DX_HR(
-		device->CreateGraphicsPipelineState(&psoDesc, __uuidof(ID3D12PipelineState), &ret),
-		false
-	);
-
-	setD3DName( ret.Get(), "BillboardShader" );
-
-	return ret;
-}
-
-ComPtr<ID3D12PipelineState> createBillboardShaderAdditive( ID3D12Device* device, ID3D12RootSignature* rootSig ) {
-	ComPtr<ID3D12PipelineState> ret{};
-
-	// Reuse the same HLSL — only the PSO blend state differs.
-	auto vsCode = compileShader( "billboard.hlsl", nullptr, "VSMain", "vs_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
-	auto psCode = compileShader( "billboard.hlsl", nullptr, "PSMain", "ps_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
-	auto gsCode = compileShader( "billboard.hlsl", nullptr, "GSMain", "gs_6_0", D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES, 0u );
-
-	auto elemDescs = std::vector<D3D12_INPUT_ELEMENT_DESC>{
-		D3D12_INPUT_ELEMENT_DESC{
-			.SemanticName = "POSITION",
-			.SemanticIndex = 0u,
-			.Format = DXGI_FORMAT_R32G32B32_FLOAT,
-			.InputSlot = 0u,
-			.AlignedByteOffset = 0u,
-			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-			.InstanceDataStepRate = 0u
-		},
-		D3D12_INPUT_ELEMENT_DESC{
-			.SemanticName = "SIZE",
-			.SemanticIndex = 0u,
-			.Format = DXGI_FORMAT_R32_FLOAT,
-			.InputSlot = 1u,
-			.AlignedByteOffset = 0u,
-			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-			.InstanceDataStepRate = 0u
-		}
-	};
-
-	auto inputLayoutDesc = D3D12_INPUT_LAYOUT_DESC{
-		.pInputElementDescs = elemDescs.data(),
-		.NumElements = static_cast<UINT>(elemDescs.size())
-	};
-
-	auto psoDesc = D3D12_GRAPHICS_PIPELINE_STATE_DESC{
-		.pRootSignature = rootSig,
-		.VS = vsCode.byteCode,
-		.PS = psCode.byteCode,
-		.GS = gsCode.byteCode,
-		.BlendState = D3D12_BLEND_DESC{
-			.AlphaToCoverageEnable = false,	// additive blend — alpha-to-coverage off
-			.IndependentBlendEnable = false
-		},
-		.SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
-		.RasterizerState = D3D12_RASTERIZER_DESC{
-			.FillMode = D3D12_FILL_MODE_SOLID,
-			.CullMode = D3D12_CULL_MODE_NONE,
-			.FrontCounterClockwise = false,
-			.DepthBias = 0,
-			.DepthBiasClamp = 0.f,
-			.SlopeScaledDepthBias = 0.f,
-			.DepthClipEnable = true,
-			.MultisampleEnable = false,
-			.AntialiasedLineEnable = false,
-			.ForcedSampleCount = 0u
-		},
-		// Depth-test against scene geometry but do NOT write depth —
-		// additive particles behind each other must all contribute light.
+		// Transparent particles: depth-test only, no depth write.
 		.DepthStencilState = D3D12_DEPTH_STENCIL_DESC{
 			.DepthEnable = true,
 			.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
@@ -2065,27 +1962,69 @@ ComPtr<ID3D12PipelineState> createBillboardShaderAdditive( ID3D12Device* device,
 		.Flags = D3D12_PIPELINE_STATE_FLAG_NONE
 	};
 
-	// Additive blend: src * 1 + dst * 1
 	psoDesc.NumRenderTargets = 1u;
 	psoDesc.BlendState.RenderTarget[0].BlendEnable = true;
-	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
-	psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
-	psoDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-	psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+
+	switch (mode) {
+	case ps::BlendMode::Additive:
+		// src * 1 + dst * 1
+		psoDesc.BlendState.RenderTarget[0].SrcBlend  = D3D12_BLEND_ONE;
+		psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_ONE;
+		break;
+	case ps::BlendMode::Multiply:
+		// src.rgb * dst  (white = transparent, black = fully dark)
+		psoDesc.BlendState.RenderTarget[0].SrcBlend  = D3D12_BLEND_DEST_COLOR;
+		psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
+		break;
+	case ps::BlendMode::PremultipliedAlpha:
+		// src.rgb + dst * (1 - src.a)  — additive-baked textures
+		psoDesc.BlendState.RenderTarget[0].SrcBlend  = D3D12_BLEND_ONE;
+		psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+		break;
+	case ps::BlendMode::Alpha:
+	default:
+		// src.rgb * src.a + dst * (1 - src.a)
+		psoDesc.BlendState.RenderTarget[0].SrcBlend  = D3D12_BLEND_SRC_ALPHA;
+		psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+		break;
+	}
+
+	psoDesc.BlendState.RenderTarget[0].BlendOp        = D3D12_BLEND_OP_ADD;
+	psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha  = D3D12_BLEND_ONE;
 	psoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
-	psoDesc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	psoDesc.BlendState.RenderTarget[0].BlendOpAlpha   = D3D12_BLEND_OP_ADD;
 	psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-	psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+	psoDesc.DSVFormat     = DXGI_FORMAT_D32_FLOAT;
 
 	DISPLAY_ERROR_DX_HR(
 		device->CreateGraphicsPipelineState( &psoDesc, __uuidof(ID3D12PipelineState), &ret ),
 		false
 	);
 
-	setD3DName( ret.Get(), "BillboardShaderAdditive" );
+	static constexpr const char* kNames[] = {
+		"BillboardShader", "BillboardShaderAdditive",
+		"BillboardShaderMultiply", "BillboardShaderPremultiplied"
+	};
+	setD3DName( ret.Get(), kNames[static_cast<int>(mode)] );
 
 	return ret;
+}
+
+ComPtr<ID3D12PipelineState> createBillboardShader( ID3D12Device* device, ID3D12RootSignature* rootSig ) {
+	return createBillboardShaderImpl( device, rootSig, ps::BlendMode::Alpha );
+}
+
+ComPtr<ID3D12PipelineState> createBillboardShaderAdditive( ID3D12Device* device, ID3D12RootSignature* rootSig ) {
+	return createBillboardShaderImpl( device, rootSig, ps::BlendMode::Additive );
+}
+
+ComPtr<ID3D12PipelineState> createBillboardShaderMultiply( ID3D12Device* device, ID3D12RootSignature* rootSig ) {
+	return createBillboardShaderImpl( device, rootSig, ps::BlendMode::Multiply );
+}
+
+ComPtr<ID3D12PipelineState> createBillboardShaderPremultiplied( ID3D12Device* device, ID3D12RootSignature* rootSig ) {
+	return createBillboardShaderImpl( device, rootSig, ps::BlendMode::PremultipliedAlpha );
 }
 
 ComPtr<ID3D12PipelineState> createMeshParticleShader( ID3D12Device* device, ID3D12RootSignature* rootSig ) {

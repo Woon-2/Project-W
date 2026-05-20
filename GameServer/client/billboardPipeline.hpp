@@ -3,6 +3,7 @@
 
 #include "gfxUtil.hpp"
 #include "particleModules.hpp"
+#include <array>
 
 class RootSig;
 
@@ -36,7 +37,7 @@ struct DrawEvent {
 	mu::Vec2 uvOffset = mu::Vec2(0.f, 0.f);	// 스프라이트 시트 내 현재 프레임의 좌상단 UV
 	mu::Vec2 uvScale  = mu::Vec2(1.f, 1.f);	// 현재 프레임의 UV 크기 (= 1/cols, 1/rows)
 	mu::Vec4 tint = {1.f, 1.f, 1.f, 1.f};
-	bool additive = false;
+	ps::BlendMode blend = ps::BlendMode::Alpha;
 	float rotation = 0.f;
 	mu::Mat4x4 rotation3D = mu::Mat4x4{};
 	mu::Vec4 stretchAxisAndMode = { 0.f, 0.f, 0.f, 0.f }; // xyz=world axis, w=1 when stretched
@@ -46,11 +47,12 @@ struct DrawEvent {
 	float sortingFudge = 0.f;
 	mu::Vec3 sortPos = { 0.f, 0.f, 0.f };
 
-	// Non-additive events sort before additive so we can switch PSO once.
-	// Within the same blend mode, sort by renderOrder (ascending).
+	// Group by blend mode (PSO switch minimisation), then by renderOrder (ascending).
 	auto operator<=>( const DrawEvent& rhs ) const noexcept {
-		if ( additive != rhs.additive )
-			return additive ? std::strong_ordering::greater : std::strong_ordering::less;
+		const int lBlend = static_cast<int>(blend);
+		const int rBlend = static_cast<int>(rhs.blend);
+		if ( lBlend != rBlend )
+			return lBlend <=> rBlend;
 		return renderOrder <=> rhs.renderOrder;
 	}
 };
@@ -76,8 +78,7 @@ public:
 		DescriptorPool* pTexCubePool, DescriptorPool* pSamPool,
 		DescriptorPool* pCmpSamPool,
 		const std::shared_ptr<RootSig>& rootSig,
-		const ComPtr<ID3D12PipelineState>& shader,
-		const ComPtr<ID3D12PipelineState>& shaderAdditive,
+		std::array<ComPtr<ID3D12PipelineState>, 4> psoByBlend,
 		const ComPtr<ID3D12CommandQueue>& cmdQ,
 		const D3D12_VIEWPORT& viewport,
 		const D3D12_RECT& scissorRect, D3D12_CPU_DESCRIPTOR_HANDLE rtv,
@@ -115,6 +116,11 @@ public:
 	void drawMultiThreaded();
 
 private:
+	// Returns the PSO for the given blend mode.
+	ID3D12PipelineState* psoFor( ps::BlendMode mode ) const {
+		return psoByBlend_[static_cast<std::size_t>(mode)].Get();
+	}
+
 	// 멀티스레드 작업 시, GPU 데이터 갱신 작업에 대해
 	// 단위 작업을 생성하여 스레드에 할당하는데 사용된다.
 	void MU_CALLCONV addJobUpdate( mu::Mat4x4 viewProj, const DrawEvent* pFirst,
@@ -135,8 +141,7 @@ private:
 	DescriptorPool* pSamPool_ = nullptr;
 	DescriptorPool* pCmpSamPool_ = nullptr;
 	std::shared_ptr<RootSig> rootSig_ = nullptr;
-	ComPtr<ID3D12PipelineState> shader_ = nullptr;
-	ComPtr<ID3D12PipelineState> shaderAdditive_ = nullptr;
+	std::array<ComPtr<ID3D12PipelineState>, 4> psoByBlend_{};
 	ComPtr<ID3D12CommandQueue> cmdQ_ = nullptr;
 	D3D12_VIEWPORT viewport_{};
 	D3D12_RECT scissorRect_{};
