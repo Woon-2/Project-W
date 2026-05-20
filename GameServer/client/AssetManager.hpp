@@ -50,6 +50,11 @@ public:
 	const Texture* EnergyExplosionHitWhiteBGTex() const { return &energyExplosionHitWhiteBGTex_; }
 	const Texture* EnergyExplosionChargeTex() const { return &energyExplosionChargeTex_; }
 	const Texture* EnergyExplosionArrowTex() const { return &energyExplosionArrowTex_; }
+	const Mesh*    meshRing()              const { return &meshRing_; }
+	const Texture* texWindRing()           const { return &texWindRing_; }
+	const Texture* texDotParticle()        const { return &texDotParticle_; }
+	const Texture* windBulletMuzzleTex()   const { return &texWindBulletMuzzle_; }
+	const Texture* windBulletHitTex()      const { return &texWindBulletHit_; }
 	const ps::MatSwordSlash& swordSlashMaterial()  const { return swordSlashMaterial_; }
 	const ps::MatSwordSlash& swordSlash2Material() const { return swordSlash2Material_; }
 	const ps::MatSmokeBlendCG& smokeBlendCGMaterial() const { return smokeBlendCGMaterial_; }
@@ -106,6 +111,11 @@ private:
 	Texture energyExplosionHitWhiteBGTex_{};
 	Texture energyExplosionChargeTex_{};
 	Texture energyExplosionArrowTex_{};
+	Mesh    meshRing_{};
+	Texture texWindRing_{};
+	Texture texDotParticle_{};
+	Texture texWindBulletMuzzle_{};
+	Texture texWindBulletHit_{};
 	ps::MatSwordSlash   swordSlashMaterial_{};
 	ps::MatSwordSlash   swordSlash2Material_{};
 	ps::MatSmokeBlendCG smokeBlendCGMaterial_{};

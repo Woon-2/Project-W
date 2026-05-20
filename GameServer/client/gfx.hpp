@@ -12,6 +12,7 @@
 #include "pbrSkinnedPipeline.hpp"
 #include "billboardPipeline.hpp"
 #include "meshParticlePipeline.hpp"
+#include "windRingPipeline.hpp"
 #include "smokeBlendCGPipeline.hpp"
 #include "blendCGMeshPipeline.hpp"
 #include "swordSlashPipeline.hpp"
@@ -188,6 +189,10 @@ public:
 	void addCameraData( const MeshParticlePipeline::CameraData& cameraData );
 	// 프레임 데이터를 입력한다.
 	void addFrameData( const MeshParticlePipeline::FrameData& frameData );
+	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
+	void addDrawEvent( const WindRingPipeline::DrawEvent& drawEvent );
+	// 카메라 데이터를 입력한다.
+	void addCameraData( const WindRingPipeline::CameraData& cameraData );
 	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 	void addDrawEvent( const SmokeBlendCGPipeline::DrawEvent& drawEvent );
 	// 카메라 데이터를 입력한다.
@@ -395,6 +400,11 @@ private:
 	MeshParticlePipeline::Resources              resourcesMeshParticlePipeline_{};
 	MeshParticlePipeline::CameraData             cameraDataMeshParticlePipeline_{};
 	MeshParticlePipeline::FrameData              frameDataMeshParticlePipeline_{};
+	// Wind Ring Pipeline
+	std::vector<WindRingPipeline::DrawEvent> drawEventsWindRingPipeline_{};
+	WindRingPipeline::Resources              resourcesWindRingPipeline_{};
+	WindRingPipeline::CameraData             cameraDataWindRingPipeline_{};
+	WindRingPipeline::FrameData              frameDataWindRingPipeline_{};
 	// Smoke Blend CG Pipeline
 	std::vector<SmokeBlendCGPipeline::DrawEvent> drawEventsSmokeBlendCGPipeline_{};
 	SmokeBlendCGPipeline::Resources              resourcesSmokeBlendCGPipeline_{};

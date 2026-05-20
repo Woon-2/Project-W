@@ -120,7 +120,7 @@ private:
 
 	TextImage textFPS_{};
 
-	enum class SwordEffect { SlashWave, SlashCombo, Slash7, Slash1, Spikes, CrystalsFrontAttack, AoESlashGreen, RedEnergyExplosion, CrystalsCrossFade, Arrow, EnergyExplosionArrow };
+	enum class SwordEffect { SlashWave, SlashCombo, Slash7, Slash1, Spikes, CrystalsFrontAttack, AoESlashGreen, RedEnergyExplosion, CrystalsCrossFade, Arrow, ArrowVolley, ArrowRain, EnergyExplosionArrow, TornadoShot };
 
 	UI::UIManager    uiManager_{};
 	UI::ProgressBar* playerHpBar_    = nullptr;  // owned by uiManager_
@@ -141,7 +141,20 @@ private:
 	ParticleSystem dustParticleSystem_{};
 	ParticleEffect redEnergyExplosionEffect_{};
 	ParticleEffect arrowEffect_{};
+	ParticleEffect arrowVolleyMuzzleEffect_{};
+	ParticleEffect arrowVolleyEffect_{};
+	ParticleEffect arrowRainMuzzleEffect_{};
+	ParticleEffect arrowRainEffect_{};
 	ParticleEffect energyExplosionArrowEffect_{};
+	ParticleEffect tornadoShotEffect_{};
+	ParticleEffect tornadoMuzzleEffect_{};
+	ParticleEffect tornadoHitEffect_{};
+
+	bool      tornadoShotActive_   = false;
+	mu::Vec3  tornadoShotPos_{};
+	mu::Vec3  tornadoShotDir_{};
+	mu::NQuat tornadoShotOrient_{};
+	Seconds   tornadoShotElapsed_{ 0s };
 	int            footBoneIdxLeft_  = -1;
 	int            footBoneIdxRight_ = -1;
 	Seconds        prevAnimTimeRun_  = 0s;

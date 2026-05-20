@@ -52,6 +52,11 @@ public:
     void play(const mu::Vec3& pos, mu::Mat4x4 orientXform);
     void play(const mu::Vec3& pos, mu::Mat4x4 orientXform, mu::Vec3 advanceForward);
 
+    // Updates emission origin for all sub-systems without restarting emission.
+    // Call each frame while a continuous effect is in flight.
+    void setOrigin(const mu::Vec3& pos, mu::NQuat orient);
+    void setOrigin(const mu::Vec3& pos, mu::Mat4x4 orientXform);
+
     // Calls stopContinuous() on all sub-systems.
     void stop();
 

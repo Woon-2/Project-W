@@ -64,6 +64,24 @@ void ParticleEffect::play(const mu::Vec3& pos, mu::Mat4x4 orientXform, mu::Vec3 
     }
 }
 
+void ParticleEffect::setOrigin(const mu::Vec3& pos, mu::NQuat orient)
+{
+    setOrigin(pos, mu::Mat4x4(orient));
+}
+
+void ParticleEffect::setOrigin(const mu::Vec3& pos, mu::Mat4x4 orientXform)
+{
+    for (auto& e : systems_) {
+        const auto rotatedBasePosition = mu::Vec3(
+            mu::Vec4(e.shapeBasePosition.x(), e.shapeBasePosition.y(), e.shapeBasePosition.z(), 0.f)
+            * orientXform
+        );
+        e.ps.config().shape.position       = pos + rotatedBasePosition;
+        e.ps.config().shape.orientation    = e.shapeBaseOrientation * orientXform;
+        e.ps.config().main.startRotation3D = e.meshBaseRotation * orientXform;
+    }
+}
+
 void ParticleEffect::stop()
 {
     for (auto& e : systems_)

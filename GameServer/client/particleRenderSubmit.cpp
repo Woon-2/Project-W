@@ -4,6 +4,7 @@
 #include "particleSystem.hpp"
 #include "blendCGMeshPipeline.hpp"
 #include "twoSidesPipeline.hpp"
+#include "windRingPipeline.hpp"
 #include "trailPipeline.hpp"
 #include "gfx.hpp"
 
@@ -215,6 +216,31 @@ void submitParticleDraw(GFX& gfx, const ParticleRenderContext& ctx, const ps::Ma
         .backFresnel          = mat.backFresnel,
         .backFresnelEmission  = mat.backFresnelEmission,
         .backFresnelColor     = mat.backFresnelColor,
+    });
+}
+
+void submitParticleDraw(GFX& gfx, const ParticleRenderContext& ctx, const ps::MatWindRing& mat) {
+    const auto& rend = ctx.renderer;
+    if (!mat.mainTex) return;
+    const auto geometry = buildParticleMeshGeometry(ctx);
+    if (!geometry) return;
+
+    const mu::Vec4 tint = {
+        ctx.tint.x() * mat.color.x(),
+        ctx.tint.y() * mat.color.y(),
+        ctx.tint.z() * mat.color.z(),
+        ctx.tint.w() * mat.color.w()
+    };
+
+    gfx.addDrawEvent(WindRingPipeline::DrawEvent{
+        .world           = geometry->world,
+        .pMesh           = geometry->pMesh,
+        .pSubMesh        = geometry->pSubMesh,
+        .pTex            = mat.mainTex,
+        .tint            = tint,
+        .edgeFadePower   = mat.edgeFadePower,
+        .edgeFadeStrength = mat.edgeFadeStrength,
+        .renderOrder     = rend.renderOrder,
     });
 }
 

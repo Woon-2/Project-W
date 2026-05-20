@@ -324,7 +324,15 @@ struct MatTwoSides {
     mu::Vec4 backFresnelColor = { 1.f, 1.f, 1.f, 1.f };
 };
 
-using AnyMat = std::variant<MatUnlit, MatSwordSlash, MatSmokeBlendCG, MatTwoSides>;
+// MatWindRing: WindRingPipeline (Mesh mode) — ring mesh with Fresnel edge fade.
+struct MatWindRing {
+    const Texture* mainTex          = nullptr;
+    float          edgeFadePower    = 2.f;
+    float          edgeFadeStrength = 1.f;
+    mu::Vec4       color            = { 1.f, 1.f, 1.f, 1.f };
+};
+
+using AnyMat = std::variant<MatUnlit, MatSwordSlash, MatSmokeBlendCG, MatTwoSides, MatWindRing>;
 
 // ---------------------------------------------------------------------------
 // Renderer Module

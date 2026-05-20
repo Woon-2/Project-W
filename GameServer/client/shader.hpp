@@ -34,6 +34,7 @@ ComPtr<ID3D12PipelineState> createBillboardShaderAdditive(ID3D12Device* device, 
 ComPtr<ID3D12PipelineState> createBillboardShaderMultiply(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBillboardShaderPremultiplied(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createMeshParticleShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createWindRingShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSmokeBlendCGShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBlendCGMeshShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSwordSlashShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
@@ -326,6 +327,33 @@ struct PerFrameData {
 };
 
 }	// namespace MeshParticleShader
+
+// WindRingShader
+namespace WindRingShader {
+
+// 80B, 16B-aligned
+struct PerInstanceData {
+	XMFLOAT4X4 world;  // 64B  row-major
+	XMFLOAT4   tint;   // 16B
+};
+
+// 48B, 16B-aligned
+struct PerDrawcallData {
+	BindlessIndex idxTex;               // 16B
+	u32t          firstInstanceOffset;  // 4B
+	float         edgeFadePower;        // 4B
+	float         edgeFadeStrength;     // 4B
+	float         pad0;                 // 4B
+	XMFLOAT3      cameraPosW;           // 12B
+	float         pad1;                 // 4B
+};
+
+// 64B
+struct PerFrameData {
+	XMFLOAT4X4 vp;  // row-major
+};
+
+}	// namespace WindRingShader
 
 // SmokeBlendCGShader
 namespace SmokeBlendCGShader {

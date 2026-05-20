@@ -361,6 +361,45 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 		.sampler = Samplers::BilinearClamp
 	} );
 
+	gfx.addRequestMeshBinLoad( RequestMeshBinLoad{
+		.meshPath    = "../resources/effects/Ring.meshbin",
+		.pTexHashMap = &texHashMap_,
+		.pDestMesh   = &meshRing_,
+		.pDestTex    = nullptr
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "TexWindRing",
+		.texturePath     = "../resources/textures/Tex_WindRing.dds",
+		.pDest           = &texWindRing_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "TexDotParticle",
+		.texturePath     = "../resources/textures/Tex_DotParticle.dds",
+		.pDest           = &texDotParticle_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "WindBulletMuzzle",
+		.texturePath     = "../resources/Textures/WindBulletMuzzle_8x6.dds",
+		.pDest           = &texWindBulletMuzzle_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "WindBulletHit",
+		.texturePath     = "../resources/Textures/WindBulletHit_8x6.dds",
+		.pDest           = &texWindBulletHit_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false
+	} );
+
 	swordSlashMaterial_ = makeDefaultSwordSlashMaterial();
 	if (loadSwordSlashMaterialMetadata("../resources/effects/SwordSlashMat.json", swordSlashMaterial_)) {
 		gSharedLog << "[SwordSlash Material] File I/O: ../resources/effects/SwordSlashMat.json 로드 완료\n";

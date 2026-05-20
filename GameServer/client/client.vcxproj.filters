@@ -246,6 +246,9 @@
     <ClCompile Include="meshParticlePipeline.cpp">
       <Filter>그래픽스\파이프라인\소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="windRingPipeline.cpp">
+      <Filter>그래픽스\파이프라인\소스 파일</Filter>
+    </ClCompile>
     <ClCompile Include="broadPhase.cpp">
       <Filter>게임%28공용%29\소스 파일</Filter>
     </ClCompile>
@@ -546,6 +549,9 @@
       <Filter>Network\ClientApp</Filter>
     </ClInclude>
     <ClInclude Include="meshParticlePipeline.hpp">
+      <Filter>그래픽스\파이프라인\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="windRingPipeline.hpp">
       <Filter>그래픽스\파이프라인\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="broadPhase.hpp">

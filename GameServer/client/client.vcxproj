@@ -172,6 +172,7 @@
     <ClCompile Include="jointConstraint.cpp" />
     <ClCompile Include="blendCGMeshPipeline.cpp" />
     <ClCompile Include="meshParticlePipeline.cpp" />
+    <ClCompile Include="windRingPipeline.cpp" />
     <ClCompile Include="smokeBlendCGPipeline.cpp" />
     <ClCompile Include="binaryImport.cpp" />
     <ClCompile Include="bvPipeline.cpp" />
@@ -309,6 +310,7 @@
     <ClInclude Include="log.hpp" />
     <ClInclude Include="mesh.hpp" />
     <ClInclude Include="meshParticlePipeline.hpp" />
+    <ClInclude Include="windRingPipeline.hpp" />
     <ClInclude Include="smokeBlendCGPipeline.hpp" />
     <ClInclude Include="object.hpp" />
     <ClInclude Include="online\onlineGame.hpp" />

@@ -279,6 +279,7 @@ void GFX::init() {
 	shaders_.try_emplace("BillboardShaderMultiply", createBillboardShaderMultiply( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("BillboardShaderPremultiplied", createBillboardShaderPremultiplied( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("MeshParticleShader", createMeshParticleShader( device_.Get(), defaultRootSig.get() ));
+	shaders_.try_emplace("WindRingShader", createWindRingShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("SmokeBlendCGShader", createSmokeBlendCGShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("BlendCGMeshShader", createBlendCGMeshShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("SwordSlashShader", createSwordSlashShader( device_.Get(), defaultRootSig.get() ));
@@ -515,6 +516,16 @@ void GFX::createSwapChain() {
 	);
 	resourcesMeshParticlePipeline_.perFrameData.init(
 		device_.Get(), sizeof( MeshParticleShader::PerFrameData ), backBuffers_.size(), "MeshParticle_PerFrameData"
+	);
+	// Wind Ring Pipeline ----
+	resourcesWindRingPipeline_.perInstanceData.init(
+		device_.Get(), sizeof( WindRingShader::PerInstanceData ) * 256u, backBuffers_.size(), "WindRing_PerInstanceData"
+	);
+	resourcesWindRingPipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof( WindRingShader::PerDrawcallData ), 256u, backBuffers_.size(), "WindRing_PerDrawcallData"
+	);
+	resourcesWindRingPipeline_.perFrameData.init(
+		device_.Get(), sizeof( WindRingShader::PerFrameData ), backBuffers_.size(), "WindRing_PerFrameData"
 	);
 	// Smoke Blend CG Pipeline ----
 	resourcesSmokeBlendCGPipeline_.perInstanceData.init(
@@ -854,6 +865,14 @@ void GFX::addCameraData( const MeshParticlePipeline::CameraData& cameraData ) {
 
 void GFX::addFrameData( const MeshParticlePipeline::FrameData& frameData ) {
 	frameDataMeshParticlePipeline_ = frameData;
+}
+
+void GFX::addDrawEvent( const WindRingPipeline::DrawEvent& drawEvent ) {
+	drawEventsWindRingPipeline_.push_back( drawEvent );
+}
+
+void GFX::addCameraData( const WindRingPipeline::CameraData& cameraData ) {
+	cameraDataWindRingPipeline_ = cameraData;
 }
 
 void GFX::addDrawEvent( const SmokeBlendCGPipeline::DrawEvent& drawEvent ) {
@@ -1452,6 +1471,19 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	auto windRingDispatcher = WindRingPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "WindRingShader" ),
+		cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesWindRingPipeline_, threadPool_,
+		&cmdListPool_, std::move( drawEventsWindRingPipeline_ ),
+		cameraDataWindRingPipeline_, frameDataWindRingPipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
 	auto smokeBlendCGDispatcher = SmokeBlendCGPipeline::Dispatcher(
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
@@ -1958,6 +1990,9 @@ void GFX::render() {
 		meshParticleDispatcher.updateGPUDataSingleThreaded();
 		meshParticleDispatcher.drawSingleThreaded();
 
+		windRingDispatcher.updateGPUDataSingleThreaded();
+		windRingDispatcher.drawSingleThreaded();
+
 		swordSlashDispatcher.updateGPUDataSingleThreaded();
 		swordSlashDispatcher.drawSingleThreaded();
 
@@ -2051,6 +2086,9 @@ void GFX::render() {
 			meshParticleDispatcher.updateGPUDataMultiThreaded();
 			meshParticleDispatcher.drawMultiThreaded();
 
+			windRingDispatcher.updateGPUDataMultiThreaded();
+			windRingDispatcher.drawMultiThreaded();
+
 			swordSlashDispatcher.updateGPUDataMultiThreaded();
 			swordSlashDispatcher.drawMultiThreaded();
 
@@ -2112,6 +2150,9 @@ void GFX::render() {
 
 			meshParticleDispatcher.updateGPUDataMultiThreaded();
 			meshParticleDispatcher.drawMultiThreaded();
+
+			windRingDispatcher.updateGPUDataMultiThreaded();
+			windRingDispatcher.drawMultiThreaded();
 
 			swordSlashDispatcher.updateGPUDataMultiThreaded();
 			swordSlashDispatcher.drawMultiThreaded();

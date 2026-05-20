@@ -32,6 +32,7 @@ void submitParticleDraw(GFX& gfx, const ParticleRenderContext& ctx, const ps::Ma
 void submitParticleDraw(GFX& gfx, const ParticleRenderContext& ctx, const ps::MatSwordSlash& mat);
 void submitParticleDraw(GFX& gfx, const ParticleRenderContext& ctx, const ps::MatSmokeBlendCG& mat);
 void submitParticleDraw(GFX& gfx, const ParticleRenderContext& ctx, const ps::MatTwoSides& mat);
+void submitParticleDraw(GFX& gfx, const ParticleRenderContext& ctx, const ps::MatWindRing& mat);
 
 // Submits a TrailPipeline draw call for the single particle in `ctx`.
 // Independent of the renderer mode — coexists with the primary submitParticleDraw.

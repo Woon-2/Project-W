@@ -487,6 +487,16 @@ Unity ParticleSystem Trails 모듈 (Mode=Particles). RendererModule과 독립된
 | `trailPipeline.cpp` | updateGPUDataSingleThreaded: 모든 trail vertex를 한 StructuredBuffer에 패킹 + trailStartOffsets 기록. drawSingleThreaded: VB/IB 없이 `DrawInstanced((N-1)*6, 1, 0, 0)` |
 | `trail.hlsl` | VS expansion via `SV_VertexID` — kStripOffsets/kSides 룩업 테이블로 segment 당 6 vertex로 quad strip 생성. 중앙 차분 tangent × cameraDir 외적으로 side 벡터 산출. UV: `Stretch`(1-segmentT) / `Tile`(cumulativeDist/tileLength). PS: bindless sample × baseColor × (1-age/lifetime) |
 
+**WindRingPipeline:**
+
+Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel 엣지 소프트닝 적용. CullMode=None, ZWrite=Off, Alpha Blend.
+
+| 파일 | 설명 |
+|------|------|
+| `windRingPipeline.hpp` | CameraData (view, proj, pos), DrawEvent (world, pMesh, pSubMesh, pTex, tint, edgeFadePower, edgeFadeStrength, renderOrder), Dispatcher |
+| `windRingPipeline.cpp` | VB binding key `"WindRingPipeline"`, 3 views: Position(0)+Normal(1)+UV(2). PerInstanceData(80B): world(transposed 64B)+tint(16B). PerDrawcallData(48B): idxTex+instanceOffset+edgeFadePower+edgeFadeStrength+cameraPosW |
+| `windRing.hlsl` | POSITION+NORMAL+UV 입력. PS: `NdotV = abs(dot(normalW, viewDir))`, `alpha *= lerp(1, pow(NdotV, power), strength)` — 링 실루엣 투명화 |
+
 ---
 
 ## 8-B. 파티클 시스템
@@ -540,13 +550,15 @@ Unity ParticleSystem Trails 모듈 (Mode=Particles). RendererModule과 독립된
   - `TextureSheetAnimationModule.enabled = false` → 전체 텍스처 (uvOffset=0, uvScale=1)
 - `Mesh` + `MatUnlit` — `MeshParticlePipeline::DrawEvent` 제출 (angularAngle + startRotation3D + translate)
 - `Mesh` + `MatSwordSlash` — `SwordSlashPipeline::DrawEvent` 제출 (동일 transform 계산, 텍스처 4종 + FX 파라미터 포함)
+- `Mesh` + `MatWindRing` — `WindRingPipeline::DrawEvent` 제출 (NORMAL 입력 + Fresnel edge fade)
 
 **AnyMat / Material 타입** (`particleModules.hpp`):
-- `using AnyMat = std::variant<MatUnlit, MatSwordSlash, MatSmokeBlendCG, MatTwoSides>` — per-shader 독립 구조체 + variant
+- `using AnyMat = std::variant<MatUnlit, MatSwordSlash, MatSmokeBlendCG, MatTwoSides, MatWindRing>` — per-shader 독립 구조체 + variant
 - `MatUnlit` — BillboardPipeline / MeshParticlePipeline용: `mainTex`, `additive`
 - `MatSwordSlash` — SwordSlashPipeline용: `mainTex`, `emissionTex`, `dissolveTex`, `flowTex`, 스크롤/Flow/디졸브/Emission FX 파라미터
 - `MatSmokeBlendCG` — SmokeBlendCGPipeline용: `mainTex`, 스프라이트 시트 애니메이션
 - `MatTwoSides` — TwoSidesPipeline용: `mainTex`, `maskTex`, `noiseTex`, `emission`, `backFresnel`, UV 타일링 3종
+- `MatWindRing` — WindRingPipeline용: `mainTex`, `edgeFadePower(2f)`, `edgeFadeStrength(1f)`, `color` — Fresnel 엣지 소프트닝 링 메시용
 - `RendererModule::mat` (`AnyMat`) — `render()` 내 `std::visit`으로 파이프라인 디스패치
 
 **SwordSlashPipeline** (`swordSlashPipeline.hpp` / `swordSlashPipeline.cpp` / `swordSlash.hlsl`):
@@ -626,9 +638,10 @@ Unity ParticleSystem Trails 모듈 (Mode=Particles). RendererModule과 독립된
 | `dustParticleSystem_` | 발 착지 흙먼지 빌보드 파티클 |
 | `aoESlashGreenEffect_` | AoE 슬래시 그린 이펙트 (Circle2 + Slash, Billboard) |
 | `energyExplosionArrowEffect_` | 에너지 발사체 복합 이펙트. 4 시스템: [0] Arrow StretchedBillboard (`Arrow_ParticleSystems.json` → `EnergyExplosionArrowTex`), [1] Charge (8x6 Additive, sub-emitter on Arrow Birth), [2] Hit (8x6 Additive, sub-emitter on Arrow Death), [3] HitWhiteBG (8x6 Multiply, sub-emitter on Arrow Death) |
+| `tornadoEffect_` | 토네이도 연속 이펙트. 4 시스템 (`Par_TornadoContinous_ParticleSystems.json`): [0] 메인 링 (`Par_TornadoContinous`, MatWindRing), [1] 하단 링 (`/Bottom`, MatWindRing), [2] 링 라이즈 (`/RingRise`, MatWindRing), [3] 버스트 점 (`/Par_BurstParticles`, MatUnlit Billboard) |
 
 **Camera::updateGFX() 등록 파이프라인 (`camera.cpp`):**
-- PBRPipeline, PBRSkinnedPipeline, SkyboxPipeline, BVPipeline, BillboardPipeline, **TerrainPipeline**, MeshParticlePipeline, SmokeBlendCGPipeline, SwordSlashPipeline, **TwoSidesPipeline**, **TrailPipeline** CameraData 자기등록
+- PBRPipeline, PBRSkinnedPipeline, SkyboxPipeline, BVPipeline, BillboardPipeline, **TerrainPipeline**, MeshParticlePipeline, SmokeBlendCGPipeline, SwordSlashPipeline, **TwoSidesPipeline**, **TrailPipeline**, **WindRingPipeline** CameraData 자기등록
 
 **Camera Spring Arm 시스템 (`camera.hpp` / `camera.cpp`):**
 
