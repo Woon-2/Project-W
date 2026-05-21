@@ -54,6 +54,13 @@ void PhysicsWorld::removeJointRef(Constraint* joint)
         jointRefs_.erase(it);
 }
 
+void PhysicsWorld::setIgnoreCollision(RigidBody* a, RigidBody* b, bool ignore)
+{
+    const auto key = normKey(a, b);
+    if (ignore) ignoreCollisionPairs_.insert(key);
+    else        ignoreCollisionPairs_.erase(key);
+}
+
 void PhysicsWorld::registerTerrain(RigidBody* terrainBody,
                                     const TerrainHeightField* heightField)
 {
@@ -207,11 +214,20 @@ void PhysicsWorld::integrate(Seconds dt)
                 b.setOmega(b.omega() + (torqDir * (b.uprightStiffness() * dtf)) * b.invInertiaWorld());
             }
 
+            // Clamp angular speed to prevent runaway spin (e.g. from unsolved joint chains).
+            {
+                static constexpr float kMaxAngularSpeed = 50.f;
+                const float omegaLen2 = b.omega().len2();
+                if (omegaLen2 > kMaxAngularSpeed * kMaxAngularSpeed)
+                    b.setOmega(b.omega() * (kMaxAngularSpeed / std::sqrt(omegaLen2)));
+            }
+
             // Integrate position and orientation.
             b.setPos(b.pos() + b.linearVel() * dtf);
             const auto wq = mu::Quat(b.omega(), 0.f);
             auto newOrient = mu::Quat(b.orient()) + mu::Quat(b.orient()) * wq * 0.5f * dtf;
             b.setOrient(mu::NQuat{ newOrient });
+            b.updateInertiaWorld();
 
             b.clearAccumulators();
             break;
@@ -248,6 +264,9 @@ void PhysicsWorld::generateContacts()
             const bool ba = (eb->collisionGroup & ea->collisionMask) != 0;
             if (!ab && !ba) continue;
         }
+
+        // Per-pair ignore (ragdoll joint-connected and near-chain pairs).
+        if (ignoreCollisionPairs_.count(normKey(a, b))) continue;
 
         const BVH& bvhA = a->worldBVH();
         const BVH& bvhB = b->worldBVH();
@@ -346,6 +365,11 @@ void PhysicsWorld::solveConstraints(Seconds dt)
 
     for (int iter = 0; iter < solverIterations_; ++iter)
         allConstraints([](Constraint& c) { c.solveVelocity(); });
+
+    for (int iter = 0; iter < jointSolverExtraIterations_; ++iter) {
+        for (auto& c : jointConstraints_) c->solveVelocity();
+        for (auto  c : jointRefs_)        c->solveVelocity();
+    }
 
     for (int iter = 0; iter < positionSolveIterations_; ++iter)
         allConstraints([](Constraint& c) { c.solvePosition(); });

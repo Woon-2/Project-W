@@ -86,6 +86,16 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `ContactConstraint::setExternalAccels()` | `contactConstraint.hpp` | 외력 가속도 설정 (prepare() 전 호출); Baumgarte bias에 외력 보상항 추가 |
 | `RigidBody::setUserData()` / `userData()` | `rigidBody.hpp` | void* 게임 레이어 연결 포인터 (Object* 역참조용) |
 | `PhysicsWorld::forEachContact()` | `physicsWorld.hpp` | step() 후 활성 ContactConstraint 순회 (템플릿) |
+| `PhysicsTestObject` struct | `physicsTestObject.hpp #51` | bodies/halfExtents/joints/ignoredPairs 소유; activate/deactivate/visualize/applyImpulseAll/freezeAll |
+| `PhysicsTestObject::ignoredPairs` | `physicsTestObject.hpp` | 1-hop+2-hop 충돌 무시 쌍; factory 함수가 채우고 activate/deactivate에서 setIgnoreCollision 호출 |
+| `makePendulum()` | `standalone/game.cpp #75` | PhysicsTestObject factory: BallSocket 단진자 (kind=1) |
+| `makeDoublePendulum()` | `standalone/game.cpp #100` | kind=2: BallSocket 이중 진자 |
+| `makeHingeDoor()` | `standalone/game.cpp #136` | kind=3: HingeJoint 문 |
+| `makeConeTwistArm()` | `standalone/game.cpp #170` | kind=4: ConeTwist 단일 팔 |
+| `makeConeTwistChain()` | `standalone/game.cpp #203` | kind=5: ConeTwist 5-link 체인 |
+| `makeHumanoidRagdoll()` | `standalone/game.cpp #244` | kind=6: 12 bodies A-pose, 11 joints(ConeTwist×7+Hinge×4), 1-hop+2-hop 충돌 무시; 팔·다리 twist axis=(0,-1,0) (A-pose 기준) |
+| `makeUpperBodyRagdoll()` | `standalone/game.cpp #~427` | kind=7: Kinematic Hips anchor + Dynamic 상체 7 bodies(척추·머리·팔), 7 joints |
+| `makeLowerBodyRagdoll()` | `standalone/game.cpp #~517` | kind=8: Kinematic Hips anchor + Dynamic 하체 4 bodies(양쪽 upper/lower leg), 4 joints |
 | `BodyPair` struct | `broadPhase.hpp` | broad phase 결과 쌍 |
 | `BroadPhase` (abstract) | `broadPhase.hpp #36-40` | add/remove/update/queryPairs/queryAABB 인터페이스 |
 | `BroadPhase::queryAABB` | `broadPhase.hpp #39` | AABB 쿼리 순수 가상 메서드 — 카메라 arm 장애물 후보 조회 |
@@ -101,6 +111,8 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `PhysicsWorld::removeJointConstraint()` | `physicsWorld.hpp #48` | 소유 joint 제거 |
 | `PhysicsWorld::addJointRef()` | `physicsWorld.hpp #52` | 비소유 joint ref 등록 (Ragdoll용) |
 | `PhysicsWorld::removeJointRef()` | `physicsWorld.hpp #53` | 비소유 joint ref 제거 |
+| `PhysicsWorld::setIgnoreCollision()` | `physicsWorld.hpp #58` | 특정 body 쌍의 충돌 완전 무시 (symmetric). Ragdoll이 joint 연결/2-hop 쌍 등록에 사용 |
+| `PhysicsWorld::ignoreCollisionPairs_` | `physicsWorld.hpp #182` | normKey 정규화된 per-pair ignore set; generateContacts()에서 group/mask 이후 체크 |
 | `PhysicsWorld::registerTerrain()` | `physicsWorld.hpp #57` | Static 지형 body + heightField 등록 |
 | `PhysicsWorld::unregisterTerrain()` | `physicsWorld.hpp #60` | 지형 collider 해제 |
 | `PhysicsWorld::registerCameraObstacle()` | `physicsWorld.hpp #67` | body를 카메라 obstacle로 cameraBroadPhase_에 등록 |
@@ -109,12 +121,13 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `PhysicsWorld::cameraBroadPhase_` | `physicsWorld.hpp #140` | 카메라 전용 SAPBroadPhase 인스턴스 (일반 physicsWorld broadPhase와 독립) |
 | `PhysicsWorld::step()` | `physicsWorld.hpp #63` | integrate → generateContacts → solveConstraints |
 | `PhysicsWorld::setGravity()` | `physicsWorld.hpp #67` | Dynamic body 중력 설정 |
-| `PhysicsWorld::setSolverIterations()` | `physicsWorld.hpp #70` | PGS 반복 횟수 (기본 10, ragdoll 활성 시 20) |
+| `PhysicsWorld::setSolverIterations()` | `physicsWorld.hpp #70` | velocity PGS 반복 횟수 (기본 4, ragdoll 활성 시 16) |
+| `PhysicsWorld::setPositionSolveIterations()` | `physicsWorld.hpp #87` | split impulse position correction 반복 횟수 (기본 3, ragdoll 활성 시 4) |
 | `PhysicsWorld::interpolatePos()` | `physicsWorld.hpp #73` | 렌더 보간 헬퍼 (prev→curr, t) |
 | `PhysicsWorld::interpolateOrient()` | `physicsWorld.hpp #74` | 렌더 보간 헬퍼 (slerp) |
 | `BallSocketJoint` class | `jointConstraint.hpp #16` | 3 translational DOF 제거, bilateral warmstart |
 | `HingeJoint` class | `jointConstraint.hpp #50` | 1 rotational DOF, angle limits, refOrient |
-| `ConeTwistJoint` class | `jointConstraint.hpp #103` | swing cone + twist limit, T-pose refOrient |
+| `ConeTwistJoint` class | `jointConstraint.hpp #103` | swing cone + twist limit; kLinBeta=0.1/kAngBeta=0.05/kSplitBeta=0.3; solvePosition()으로 split-impulse angular 보정 |
 | `JointType` enum | `ragdollDef.hpp #8` | BallSocket / Hinge / ConeTwist |
 | `BoneBoxDef` struct | `ragdollDef.hpp #11` | boneName(string), halfExtents, center, rotEuler, mass |
 | `JointDef` struct | `ragdollDef.hpp #20` | parentBoneName(string), childBoneName(string), type, limits |
@@ -585,6 +598,7 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 |------|------|------|
 | `StandAlone::Game` class | `standalone/game.hpp #28` | IGame 구현 |
 | `Game::setupStage()` | `standalone/game.hpp #37` | 씬 오브젝트 생성 + CombatSystem 등록 + renderObjectId 할당 + setMaxRenderObjectId |
+| `Game::spawnTestObject(int kind)` | `standalone/game.cpp` | kind 1~8 switch: 각 factory로 PhysicsTestObject 생성 후 activate |
 | `Game::update()` | `standalone/game.hpp #45` | 메인 루프 (입력→이벤트→물리→오브젝트→애니메이션) |
 | `Game::render()` | `standalone/game.hpp #46` | cullObjects → GFX → applyHiZCulling |
 | `Game::cullObjects()` | `standalone/game.cpp #1350` | view frustum culling (plane-based) → setFrustumCulled |

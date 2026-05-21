@@ -43,10 +43,14 @@
 
 #define DXGI_DEBUG_INFO		// DXGI에서 발생한 예외 정보들을 출력할 경우 활성화
 
+#define SKILL_SYSTEM_ENABLE_LUA
+
 #ifdef _DEBUG
 #pragma comment(lib, "Debug/ServerEngine.lib")
+#pragma comment(lib, "Debug/lua54.lib")
 #else
 #pragma comment(lib, "Release/ServerEngine.lib")
+#pragma comment(lib, "Release/lua54.lib")
 #endif
 
 #include "sepch.hpp"

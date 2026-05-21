@@ -100,6 +100,9 @@
     <Filter Include="게임%28온라인%29\헤더 파일">
       <UniqueIdentifier>{9e0f42ac-9196-4dfd-b91f-600a01fea160}</UniqueIdentifier>
     </Filter>
+    <Filter Include="게임%28공용%29\스크립트 파일">
+      <UniqueIdentifier>{d926056e-7f75-4a0e-abd1-f8c4d093b9f0}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -326,6 +329,15 @@
     </ClCompile>
     <ClCompile Include="ServerSession.cpp">
       <Filter>Network\Session</Filter>
+    </ClCompile>
+    <ClCompile Include="constraint.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="skill\skillCompiler.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="skill\skillSystem.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -635,6 +647,18 @@
     <ClInclude Include="particleEffect.hpp">
       <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="physicsTestObject.hpp">
+      <Filter>게임%28스탠드얼론%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="skill\skillTypes.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="skill\skillSystem.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="skill\skillCompiler.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="billboard.hlsl">
@@ -729,6 +753,12 @@
     </None>
     <None Include="pbrLighting.hlsli">
       <Filter>셰이더 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\sword_slash.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
+    </None>
+    <None Include="..\resources\skills\lua\skill_api.lua">
+      <Filter>게임%28공용%29\스크립트 파일</Filter>
     </None>
   </ItemGroup>
 </Project>

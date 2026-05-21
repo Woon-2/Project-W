@@ -5,6 +5,7 @@
 #include "mesh.hpp"
 #include "errorHandling.hpp"
 
+
 namespace PBRDeferredPipeline {
 
 // --- Mesh layout helpers ---
@@ -101,6 +102,12 @@ Dispatcher::Dispatcher(
 
 void Dispatcher::sortDrawEvents() {
     std::sort(drawEvents_.begin(), drawEvents_.end());
+    gBufferEvents_.clear();
+    shadowEvents_.clear();
+    for (const auto& e : drawEvents_) {
+        if (!e.viewFrustumCulled) gBufferEvents_.push_back(e);
+        if (!e.shadowCulled)      shadowEvents_.push_back(e);
+    }
 }
 
 void Dispatcher::shadowPass()   { shadowUpdate();   shadowDraw();   }
@@ -113,13 +120,13 @@ void Dispatcher::gBufferPassMT(){ gBufferUpdateMT(); gBufferDrawMT(); }
 // ============================================================
 
 void Dispatcher::shadowUpdate() {
-    if (drawEvents_.empty()) return;
+    if (shadowEvents_.empty()) return;
 
     static auto perInstanceData = std::vector<ShadowMapCSMShader::PerInstanceData>();
-    perInstanceData.resize(drawEvents_.size());
+    perInstanceData.resize(shadowEvents_.size());
 
-    std::ranges::transform(drawEvents_, perInstanceData.begin(),
-        [](const DrawEvent& e) {
+    std::ranges::transform(shadowEvents_, perInstanceData.begin(),
+        [](const DrawEvent& e) -> ShadowMapCSMShader::PerInstanceData {
             return ShadowMapCSMShader::PerInstanceData{ .world = mu::transpose(e.world).getXmf() };
         });
 
@@ -137,24 +144,24 @@ void Dispatcher::shadowUpdate() {
 }
 
 void Dispatcher::shadowUpdateMT() {
-    if (drawEvents_.empty()) return;
+    if (shadowEvents_.empty()) return;
 
     static auto perInstanceData = std::vector<ShadowMapCSMShader::PerInstanceData>();
-    perInstanceData.resize(drawEvents_.size());
+    perInstanceData.resize(shadowEvents_.size());
 
-    auto latch = std::latch(drawEvents_.size() / jobSizeUpdate_
-        + ((drawEvents_.size() % jobSizeUpdate_) != 0));
+    auto latch = std::latch(shadowEvents_.size() / jobSizeUpdate_
+        + ((shadowEvents_.size() % jobSizeUpdate_) != 0));
 
     std::size_t accEventCnt = 0u;
-    while (accEventCnt + (jobSizeUpdate_ - 1) < drawEvents_.size()) {
-        addJobShadowUpdate(drawEvents_.data() + accEventCnt,
-            drawEvents_.data() + accEventCnt + jobSizeUpdate_,
+    while (accEventCnt + (jobSizeUpdate_ - 1) < shadowEvents_.size()) {
+        addJobShadowUpdate(shadowEvents_.data() + accEventCnt,
+            shadowEvents_.data() + accEventCnt + jobSizeUpdate_,
             perInstanceData.data() + accEventCnt, latch);
         accEventCnt += jobSizeUpdate_;
     }
-    if (accEventCnt != drawEvents_.size()) {
-        addJobShadowUpdate(drawEvents_.data() + accEventCnt,
-            drawEvents_.data() + drawEvents_.size(),
+    if (accEventCnt != shadowEvents_.size()) {
+        addJobShadowUpdate(shadowEvents_.data() + accEventCnt,
+            shadowEvents_.data() + shadowEvents_.size(),
             perInstanceData.data() + accEventCnt, latch);
     }
 
@@ -173,7 +180,7 @@ void Dispatcher::shadowUpdateMT() {
 }
 
 void Dispatcher::shadowDraw() {
-    if (drawEvents_.empty()) return;
+    if (shadowEvents_.empty()) return;
 
     CommandContext cmdCtx{};
     DISPLAY_ERROR_STR(cmdListPool_->allocOne(CommandListUsage::RenderingSlave, cmdCtx),
@@ -216,14 +223,14 @@ void Dispatcher::shadowDraw() {
         pResources_->shadowPass.perFrameData.cbuffers[ci].bind(cmdList, rootParamIdxPFD_, roomIdx_);
 
         u32t idxDC = 0u;
-        auto gFirst = drawEvents_.begin();
-        while (gFirst != drawEvents_.end()) {
+        auto gFirst = shadowEvents_.begin();
+        while (gFirst != shadowEvents_.end()) {
             auto& de   = *gFirst;
-            auto gLast = std::upper_bound(gFirst, drawEvents_.end(), de);
+            auto gLast = std::upper_bound(gFirst, shadowEvents_.end(), de);
 
             pResources_->shadowPass.perDrawcallData.cbuffers[idxDC].bind(cmdList, rootParamIdxPDD_, roomIdx_);
             auto pdd = ShadowMapCSMShader::PerDrawcallData{
-                .firstInstanceOffset = static_cast<u32t>(gFirst - drawEvents_.begin())
+                .firstInstanceOffset = static_cast<u32t>(gFirst - shadowEvents_.begin())
             };
             pResources_->shadowPass.perDrawcallData.cbuffers[idxDC].stage(roomIdx_, &pdd, 1u);
 
@@ -252,15 +259,15 @@ void Dispatcher::shadowDraw() {
 }
 
 void Dispatcher::shadowDrawMT() {
-    if (drawEvents_.empty()) return;
+    if (shadowEvents_.empty()) return;
 
-    static auto instancingGroups = std::vector<decltype(drawEvents_)::const_iterator>();
-    auto it = drawEvents_.cbegin();
-    while (it != drawEvents_.cend()) {
+    static auto instancingGroups = std::vector<decltype(shadowEvents_)::const_iterator>();
+    auto it = shadowEvents_.cbegin();
+    while (it != shadowEvents_.cend()) {
         instancingGroups.push_back(it);
-        it = std::upper_bound(it, drawEvents_.cend(), *it);
+        it = std::upper_bound(it, shadowEvents_.cend(), *it);
     }
-    instancingGroups.push_back(drawEvents_.cend());
+    instancingGroups.push_back(shadowEvents_.cend());
 
     const auto& csmDataMT = SharedResources::ShadowMap::csmShadowMapData.at(
         std::string(SharedResources::ShadowMap::kDefaultKey))[roomIdx_];
@@ -284,7 +291,7 @@ void Dispatcher::shadowDrawMT() {
         const auto& de = *instancingGroups[k];
         layoutMeshIfNeeded(*de.mesh);
         auto pdd = ShadowMapCSMShader::PerDrawcallData{
-            .firstInstanceOffset = static_cast<u32t>(instancingGroups[k] - drawEvents_.begin())
+            .firstInstanceOffset = static_cast<u32t>(instancingGroups[k] - shadowEvents_.begin())
         };
         pResources_->shadowPass.perDrawcallData.cbuffers[k].stage(roomIdx_, &pdd, 1u);
     }
@@ -328,16 +335,16 @@ void Dispatcher::shadowDrawMT() {
 // ============================================================
 
 void Dispatcher::gBufferUpdate() {
-    if (drawEvents_.empty()) return;
+    if (gBufferEvents_.empty()) return;
 
     static auto perInstanceData = std::vector<PBRDeferredGBufferShader::PerInstanceData>();
-    perInstanceData.resize(drawEvents_.size());
+    perInstanceData.resize(gBufferEvents_.size());
 
     const auto view     = cameraData_.view;
     const auto viewProj = cameraData_.view * cameraData_.proj;
 
-    std::ranges::transform(drawEvents_, perInstanceData.begin(),
-        [view, viewProj](const DrawEvent& e) {
+    std::ranges::transform(gBufferEvents_, perInstanceData.begin(),
+        [view, viewProj](const DrawEvent& e) -> PBRDeferredGBufferShader::PerInstanceData {
             return PBRDeferredGBufferShader::PerInstanceData{
                 .world      = mu::transpose(e.world).getXmf(),
                 .wvp        = mu::transpose(e.world * viewProj).getXmf(),
@@ -393,28 +400,28 @@ void Dispatcher::gBufferUpdate() {
 }
 
 void Dispatcher::gBufferUpdateMT() {
-    if (drawEvents_.empty()) return;
+    if (gBufferEvents_.empty()) return;
 
     static auto perInstanceData = std::vector<PBRDeferredGBufferShader::PerInstanceData>();
-    perInstanceData.resize(drawEvents_.size());
+    perInstanceData.resize(gBufferEvents_.size());
 
-    auto latch = std::latch(drawEvents_.size() / jobSizeUpdate_
-        + ((drawEvents_.size() % jobSizeUpdate_) != 0));
+    auto latch = std::latch(gBufferEvents_.size() / jobSizeUpdate_
+        + ((gBufferEvents_.size() % jobSizeUpdate_) != 0));
 
     const auto viewProj = cameraData_.view * cameraData_.proj;
 
     std::size_t accEventCnt = 0u;
-    while (accEventCnt + (jobSizeUpdate_ - 1) < drawEvents_.size()) {
+    while (accEventCnt + (jobSizeUpdate_ - 1) < gBufferEvents_.size()) {
         addJobGBufferUpdate(cameraData_.view, viewProj,
-            drawEvents_.data() + accEventCnt,
-            drawEvents_.data() + accEventCnt + jobSizeUpdate_,
+            gBufferEvents_.data() + accEventCnt,
+            gBufferEvents_.data() + accEventCnt + jobSizeUpdate_,
             perInstanceData.data() + accEventCnt, latch);
         accEventCnt += jobSizeUpdate_;
     }
-    if (accEventCnt != drawEvents_.size()) {
+    if (accEventCnt != gBufferEvents_.size()) {
         addJobGBufferUpdate(cameraData_.view, viewProj,
-            drawEvents_.data() + accEventCnt,
-            drawEvents_.data() + drawEvents_.size(),
+            gBufferEvents_.data() + accEventCnt,
+            gBufferEvents_.data() + gBufferEvents_.size(),
             perInstanceData.data() + accEventCnt, latch);
     }
 
@@ -465,7 +472,7 @@ void Dispatcher::gBufferUpdateMT() {
 }
 
 void Dispatcher::gBufferDraw() {
-    if (drawEvents_.empty()) return;
+    if (gBufferEvents_.empty()) return;
 
     CommandContext cmdCtx{};
     DISPLAY_ERROR_STR(cmdListPool_->allocOne(CommandListUsage::RenderingSlave, cmdCtx),
@@ -502,10 +509,10 @@ void Dispatcher::gBufferDraw() {
     pResources_->gBufferPass.perFrameData.bind(cmdList, rootParamIdxPFD_, roomIdx_);
 
     u32t idxDC = 0u;
-    auto gFirst = drawEvents_.begin();
-    while (gFirst != drawEvents_.end()) {
+    auto gFirst = gBufferEvents_.begin();
+    while (gFirst != gBufferEvents_.end()) {
         auto& de   = *gFirst;
-        auto gLast = std::upper_bound(gFirst, drawEvents_.end(), de);
+        auto gLast = std::upper_bound(gFirst, gBufferEvents_.end(), de);
 
         pResources_->gBufferPass.perDrawcallData.cbuffers[idxDC].bind(cmdList, rootParamIdxPDD_, roomIdx_);
 
@@ -522,7 +529,7 @@ void Dispatcher::gBufferDraw() {
                 .cAOStrength          = de.material->constantAOStrength,
                 .cEmmisive            = de.material->constantEmmisive
             },
-            .firstInstanceOffset = static_cast<u32t>(gFirst - drawEvents_.begin())
+            .firstInstanceOffset = static_cast<u32t>(gFirst - gBufferEvents_.begin())
         };
         pResources_->gBufferPass.perDrawcallData.cbuffers[idxDC].stage(roomIdx_, &pdd, 1u);
 
@@ -550,15 +557,15 @@ void Dispatcher::gBufferDraw() {
 }
 
 void Dispatcher::gBufferDrawMT() {
-    if (drawEvents_.empty()) return;
+    if (gBufferEvents_.empty()) return;
 
-    static auto instancingGroups = std::vector<decltype(drawEvents_)::const_iterator>();
-    auto it = drawEvents_.cbegin();
-    while (it != drawEvents_.cend()) {
+    static auto instancingGroups = std::vector<decltype(gBufferEvents_)::const_iterator>();
+    auto it = gBufferEvents_.cbegin();
+    while (it != gBufferEvents_.cend()) {
         instancingGroups.push_back(it);
-        it = std::upper_bound(it, drawEvents_.cend(), *it);
+        it = std::upper_bound(it, gBufferEvents_.cend(), *it);
     }
-    instancingGroups.push_back(drawEvents_.cend());
+    instancingGroups.push_back(gBufferEvents_.cend());
 
     const std::size_t jobCnt = ((instancingGroups.size() - 1u) + (jobSizeDraw_ - 1u)) / jobSizeDraw_;
     auto latch = std::latch(jobCnt);
@@ -615,7 +622,7 @@ void MU_CALLCONV Dispatcher::addJobGBufferUpdate(
 ) {
     threadPool_->addJob([=, &latch]() {
         std::transform(pFirst, pLast, pOut,
-            [view, viewProj](const DrawEvent& e) {
+            [view, viewProj](const DrawEvent& e) -> PBRDeferredGBufferShader::PerInstanceData {
                 return PBRDeferredGBufferShader::PerInstanceData{
                     .world       = mu::transpose(e.world).getXmf(),
                     .wvp         = mu::transpose(e.world * viewProj).getXmf(),
@@ -683,7 +690,7 @@ void Dispatcher::addJobGBufferDraw(
                     .cAOStrength           = de.material->constantAOStrength,
                     .cEmmisive             = de.material->constantEmmisive
                 },
-                .firstInstanceOffset = static_cast<u32t>(gFirst - drawEvents_.begin())
+                .firstInstanceOffset = static_cast<u32t>(gFirst - gBufferEvents_.begin())
             };
             pResources_->gBufferPass.perDrawcallData.cbuffers[idxDC].stage(roomIdx_, &pdd, 1u);
 
@@ -713,7 +720,7 @@ void Dispatcher::addJobShadowUpdate(
 ) {
     threadPool_->addJob([=, &latch]() {
         std::transform(pFirst, pLast, pOut,
-            [](const DrawEvent& e) {
+            [](const DrawEvent& e) -> ShadowMapCSMShader::PerInstanceData {
                 return ShadowMapCSMShader::PerInstanceData{ .world = mu::transpose(e.world).getXmf() };
             });
         latch.count_down();
@@ -762,11 +769,6 @@ void Dispatcher::addJobShadowDraw(
 
             pResources_->shadowPass.perDrawcallData.cbuffers[idxDC].bind(
                 threadCmdList, rootParamIdxPDD_, roomIdx_);
-
-            auto pdd = ShadowMapCSMShader::PerDrawcallData{
-                .firstInstanceOffset = static_cast<u32t>(gFirst - drawEvents_.begin())
-            };
-            pResources_->shadowPass.perDrawcallData.cbuffers[idxDC].stage(roomIdx_, &pdd, 1u);
 
             auto& vbViews = de.mesh->vbViewsByPipeline.at("PBRDeferredPipeline_Shadow");
             DISPLAY_ERROR_DX_VOID(threadCmdList->IASetVertexBuffers(

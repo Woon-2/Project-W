@@ -5,6 +5,7 @@
 #include "mesh.hpp"
 #include "errorHandling.hpp"
 
+
 namespace PBRDeferredSkinnedPipeline {
 
 // --- Mesh layout helpers ---
@@ -133,10 +134,18 @@ Dispatcher::Dispatcher(
 void Dispatcher::sortDrawEvents() {
     std::sort(drawEvents_.begin(), drawEvents_.end());
 
-    auto it = drawEvents_.cbegin();
-    while (it != drawEvents_.cend()) {
-        instanceGroups_.push_back(static_cast<u32t>( std::distance(drawEvents_.cbegin(), it) ));
-        it = std::upper_bound(it, drawEvents_.cend(), *it);
+    gBufferEvents_.clear();
+    shadowEvents_.clear();
+    for (const auto& e : drawEvents_) {
+        if (!e.viewFrustumCulled) gBufferEvents_.push_back(e);
+        if (!e.shadowCulled)      shadowEvents_.push_back(e);
+    }
+
+    instanceGroups_.clear();
+    auto it = gBufferEvents_.cbegin();
+    while (it != gBufferEvents_.cend()) {
+        instanceGroups_.push_back(static_cast<u32t>( std::distance(gBufferEvents_.cbegin(), it) ));
+        it = std::upper_bound(it, gBufferEvents_.cend(), *it);
     }
     instanceGroups_.push_back(std::numeric_limits<u32t>::max());
 }
@@ -150,7 +159,7 @@ void Dispatcher::gBufferPass()   { gBufferUpdate();   gBufferDraw();   }
 void Dispatcher::gBufferPassMT() { gBufferUpdateMT(); gBufferDrawMT(); }
 
 void Dispatcher::hiZPassUpdate() {
-    if (drawEvents_.empty()) return;
+    if (gBufferEvents_.empty()) return;
 
     // 이전 프레임의 readback 결과 합산 (roomCnt-frame delay)
     if (pResources_->hiZPass.perGroupCnt.hasReadback() && pResources_->hiZPass.lastGroupCnt > 0u) {
@@ -184,23 +193,23 @@ void Dispatcher::hiZPassUpdate() {
         }
     }
 
-    // 현재 프레임 DrawEvents의 renderObjectId 저장 (다음 프레임에 사용)
+    // 현재 프레임 gBufferEvents의 renderObjectId 저장 (다음 프레임에 사용)
     {
         auto& ids = pResources_->hiZPass.lastDrawEventObjectIds;
-        ids.resize(drawEvents_.size());
-        for (u32t i = 0u; i < static_cast<u32t>(drawEvents_.size()); ++i)
-            ids[i] = drawEvents_[i].renderObjectId;
+        ids.resize(gBufferEvents_.size());
+        for (u32t i = 0u; i < static_cast<u32t>(gBufferEvents_.size()); ++i)
+            ids[i] = gBufferEvents_[i].renderObjectId;
     }
 
     // 1. Hi-Z Cull Pass
     static auto perInstanceDataCull = std::vector<HiZCullShader::PerInstanceData>();
-    perInstanceDataCull.resize(drawEvents_.size());
+    perInstanceDataCull.resize(gBufferEvents_.size());
 
-    for (u32t i = 0u, gid = 0u; i < drawEvents_.size(); ++i) {
+    for (u32t i = 0u, gid = 0u; i < gBufferEvents_.size(); ++i) {
         if (i >= instanceGroups_[gid + 1u]) {
             ++gid;
         }
-        auto& e = drawEvents_[i];
+        auto& e = gBufferEvents_[i];
 
         perInstanceDataCull[i] = HiZCullShader::PerInstanceData{
             .world = mu::transpose(e.world).getXmf(),
@@ -216,19 +225,19 @@ void Dispatcher::hiZPassUpdate() {
     const auto pfdCull = HiZCullShader::PerFrameData{
         .viewProj = mu::transpose(cameraData_.view * cameraData_.proj).getXmf(),
         .screenSize = XMFLOAT2(viewport_.Width, viewport_.Height),
-        .objCnt = static_cast<u32t>(drawEvents_.size()),
+        .objCnt = static_cast<u32t>(gBufferEvents_.size()),
     };
     pResources_->hiZPass.perFrameDataCull.stage(roomIdx_, &pfdCull, 1u);
-    
+
     // 2. Hi-Z Compact Pass
     static auto perInstanceDataCompact = std::vector<HiZCompactShader::PerInstanceData>();
-    perInstanceDataCompact.resize(drawEvents_.size());
+    perInstanceDataCompact.resize(gBufferEvents_.size());
 
-    for (u32t i = 0u, gid = 0u; i < drawEvents_.size(); ++i) {
+    for (u32t i = 0u, gid = 0u; i < gBufferEvents_.size(); ++i) {
         if (i >= instanceGroups_[gid + 1u]) {
             ++gid;
         }
-        auto& e = drawEvents_[i];
+        auto& e = gBufferEvents_[i];
 
         const auto stride = e.subMesh->ibView.Format == DXGI_FORMAT_R16_UINT ? sizeof(u16t) : sizeof(u32t);
         perInstanceDataCompact[i] = HiZCompactShader::PerInstanceData{
@@ -241,7 +250,7 @@ void Dispatcher::hiZPassUpdate() {
     perInstanceDataCompact.clear();
 
     const auto pfdCompact = HiZCompactShader::PerFrameData{
-        .objCnt = static_cast<u32t>( drawEvents_.size() )
+        .objCnt = static_cast<u32t>( gBufferEvents_.size() )
     };
     pResources_->hiZPass.perFrameDataCompact.stage(roomIdx_, &pfdCompact, 1u);
 
@@ -259,7 +268,7 @@ void Dispatcher::hiZPassUpdate() {
 }
 
 void Dispatcher::hiZPassCompute() {
-    if (drawEvents_.empty()) return;
+    if (gBufferEvents_.empty()) return;
 
     CommandContext cmdCtx{};
     DISPLAY_ERROR_STR(cmdListPool_->allocOne(CommandListUsage::RenderingSlave, cmdCtx),
@@ -306,7 +315,7 @@ void Dispatcher::hiZPassCompute() {
 
     static constexpr auto cullDispatchUnit = 64u;
     DISPLAY_ERROR_DX_VOID( cmdList->Dispatch(
-        static_cast<u32t>( (drawEvents_.size() + cullDispatchUnit - 1u) / cullDispatchUnit ), 1u, 1u
+        static_cast<u32t>( (gBufferEvents_.size() + cullDispatchUnit - 1u) / cullDispatchUnit ), 1u, 1u
     ), false );
 
     pResources_->hiZPass.perGroupCnt.uavBarrier(cmdList, roomIdx_);
@@ -336,7 +345,7 @@ void Dispatcher::hiZPassCompute() {
 
     static constexpr auto compactDispatchUnit = 64u;
     DISPLAY_ERROR_DX_VOID( cmdList->Dispatch(
-        static_cast<u32t>( (drawEvents_.size() + compactDispatchUnit - 1u) / compactDispatchUnit ), 1u, 1u
+        static_cast<u32t>( (gBufferEvents_.size() + compactDispatchUnit - 1u) / compactDispatchUnit ), 1u, 1u
     ), false );
 
     pResources_->hiZPass.perGroupData.uavBarrier(cmdList, roomIdx_);
@@ -364,11 +373,11 @@ void Dispatcher::hiZPassCompute() {
         D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 
     // readback: visibleFlags → CPU-readable buffer (Compact Pass 이후: SRV로 소비됐으므로 COPY_SOURCE 전환 안전)
-    if (!drawEvents_.empty()) {
+    if (!gBufferEvents_.empty()) {
         pResources_->hiZPass.visibleFlags.copyToReadback(
-            cmdList, roomIdx_, drawEvents_.size() * sizeof(u32t)
+            cmdList, roomIdx_, gBufferEvents_.size() * sizeof(u32t)
         );
-        pResources_->hiZPass.lastVisibilityObjCnt = static_cast<u32t>(drawEvents_.size());
+        pResources_->hiZPass.lastVisibilityObjCnt = static_cast<u32t>(gBufferEvents_.size());
     }
 
     // readback: perGroupCnt → CPU-readable buffer
@@ -376,7 +385,7 @@ void Dispatcher::hiZPassCompute() {
         cmdList, roomIdx_, groupCnt * sizeof(u32t)
     );
     pResources_->hiZPass.lastGroupCnt = static_cast<u32t>(groupCnt);
-    pResources_->hiZPass.lastObjCnt   = static_cast<u32t>(drawEvents_.size());
+    pResources_->hiZPass.lastObjCnt   = static_cast<u32t>(gBufferEvents_.size());
 
     auto hrClose = cmdList->Close();
     DISPLAY_ERROR_DX_HR(hrClose, false);
@@ -392,18 +401,18 @@ void Dispatcher::hiZPassCompute() {
 // ============================================================
 
 void Dispatcher::shadowUpdate() {
-    if (drawEvents_.empty()) return;
+    if (shadowEvents_.empty()) return;
 
     static auto perInstanceData = std::vector<ShadowMapSkinnedCSMShader::PerInstanceData>();
-    perInstanceData.resize(drawEvents_.size());
+    perInstanceData.resize(shadowEvents_.size());
 
     u32t boneUploadCnt = 0u;
-    std::ranges::transform(drawEvents_, perInstanceData.begin(),
-        [&boneUploadCnt](const DrawEvent& e) {
+    std::ranges::transform(shadowEvents_, perInstanceData.begin(),
+        [&boneUploadCnt](const DrawEvent& e) -> ShadowMapSkinnedCSMShader::PerInstanceData {
             const auto ret = ShadowMapSkinnedCSMShader::PerInstanceData{
                 .world          = mu::transpose(e.world).getXmf(),
                 .rootBoneOffset = boneUploadCnt,
-                .bakedClipId = e.bakedClipId,
+                .bakedClipId    = e.bakedClipId,
                 .bakedClipFrame = e.bakedClipFrame
             };
             if (e.bakedClipId == -1) {
@@ -418,7 +427,7 @@ void Dispatcher::shadowUpdate() {
     static auto boneData = std::vector<ShadowMapSkinnedCSMShader::BoneData>();
     boneData.resize(boneUploadCnt);
     auto itBone = boneData.begin();
-    std::ranges::for_each(drawEvents_, [&itBone](const DrawEvent& e) {
+    std::ranges::for_each(shadowEvents_, [&itBone](const DrawEvent& e) {
         if (e.bakedClipId == -1) {
             for (auto& bx : e.boneXforms) {
                 *itBone = ShadowMapSkinnedCSMShader::BoneData{ mu::transpose(bx).getXmf() };
@@ -440,24 +449,24 @@ void Dispatcher::shadowUpdate() {
 }
 
 void Dispatcher::shadowUpdateMT() {
-    if (drawEvents_.empty()) return;
+    if (shadowEvents_.empty()) return;
 
     static auto perInstanceData = std::vector<ShadowMapSkinnedCSMShader::PerInstanceData>();
-    perInstanceData.resize(drawEvents_.size());
+    perInstanceData.resize(shadowEvents_.size());
 
-    auto latch = std::latch(drawEvents_.size() / jobSizeUpdate_
-        + ((drawEvents_.size() % jobSizeUpdate_) != 0));
+    auto latch = std::latch(shadowEvents_.size() / jobSizeUpdate_
+        + ((shadowEvents_.size() % jobSizeUpdate_) != 0));
 
     std::size_t accEventCnt = 0u;
-    while (accEventCnt + (jobSizeUpdate_ - 1) < drawEvents_.size()) {
-        addJobShadowUpdate(drawEvents_.data() + accEventCnt,
-            drawEvents_.data() + accEventCnt + jobSizeUpdate_,
+    while (accEventCnt + (jobSizeUpdate_ - 1) < shadowEvents_.size()) {
+        addJobShadowUpdate(shadowEvents_.data() + accEventCnt,
+            shadowEvents_.data() + accEventCnt + jobSizeUpdate_,
             perInstanceData.data() + accEventCnt, latch);
         accEventCnt += jobSizeUpdate_;
     }
-    if (accEventCnt != drawEvents_.size()) {
-        addJobShadowUpdate(drawEvents_.data() + accEventCnt,
-            drawEvents_.data() + drawEvents_.size(),
+    if (accEventCnt != shadowEvents_.size()) {
+        addJobShadowUpdate(shadowEvents_.data() + accEventCnt,
+            shadowEvents_.data() + shadowEvents_.size(),
             perInstanceData.data() + accEventCnt, latch);
     }
 
@@ -472,25 +481,25 @@ void Dispatcher::shadowUpdateMT() {
 
     latch.wait();
 
-    // rootBoneOffset must be computed sequentially — fix up after parallel world-xform pass
-    for (std::size_t i = 1u; i < drawEvents_.size(); ++i) {
+    // rootBoneOffset prefix-sum (sequential); all events in shadowEvents_ contribute bones
+    for (std::size_t i = 1u; i < shadowEvents_.size(); ++i) {
         perInstanceData[i].rootBoneOffset = perInstanceData[i-1].rootBoneOffset;
-        if (drawEvents_[i-1].bakedClipId == -1) {
-            perInstanceData[i].rootBoneOffset += static_cast<u32t>( drawEvents_[i-1].boneXforms.size() );
+        if (shadowEvents_[i-1].bakedClipId == -1) {
+            perInstanceData[i].rootBoneOffset += static_cast<u32t>( shadowEvents_[i-1].boneXforms.size() );
         }
     }
 
     u32t boneUploadCnt = perInstanceData.back().rootBoneOffset;
-    if (drawEvents_.back().bakedClipId == -1) {
-        boneUploadCnt += static_cast<u32t>( drawEvents_.back().boneXforms.size() );
+    if (shadowEvents_.back().bakedClipId == -1) {
+        boneUploadCnt += static_cast<u32t>( shadowEvents_.back().boneXforms.size() );
     }
 
     static auto boneData = std::vector<ShadowMapSkinnedCSMShader::BoneData>();
     boneData.resize(boneUploadCnt);
 
     auto itBone = boneData.begin();
-    std::ranges::for_each(drawEvents_, [&itBone](const DrawEvent& e) {
-         if (e.bakedClipId == -1) {
+    std::ranges::for_each(shadowEvents_, [&itBone](const DrawEvent& e) {
+        if (e.bakedClipId == -1) {
             for (auto& bx : e.boneXforms) {
                 *itBone = ShadowMapSkinnedCSMShader::BoneData{ mu::transpose(bx).getXmf() };
                 ++itBone;
@@ -505,7 +514,7 @@ void Dispatcher::shadowUpdateMT() {
 }
 
 void Dispatcher::shadowDraw() {
-    if (drawEvents_.empty()) return;
+    if (shadowEvents_.empty()) return;
 
     CommandContext cmdCtx{};
     DISPLAY_ERROR_STR(cmdListPool_->allocOne(CommandListUsage::RenderingSlave, cmdCtx),
@@ -549,14 +558,14 @@ void Dispatcher::shadowDraw() {
         pResources_->shadowPass.perFrameData.cbuffers[ci].bind(cmdList, rootParamIdxPFD_, roomIdx_);
 
         u32t idxDC = 0u;
-        auto gFirst = drawEvents_.begin();
-        while (gFirst != drawEvents_.end()) {
+        auto gFirst = shadowEvents_.begin();
+        while (gFirst != shadowEvents_.end()) {
             auto& de   = *gFirst;
-            auto gLast = std::upper_bound(gFirst, drawEvents_.end(), de);
+            auto gLast = std::upper_bound(gFirst, shadowEvents_.end(), de);
 
             pResources_->shadowPass.perDrawcallData.cbuffers[idxDC].bind(cmdList, rootParamIdxPDD_, roomIdx_);
             auto pdd = ShadowMapSkinnedCSMShader::PerDrawcallData{
-                .firstInstanceOffset = static_cast<u32t>(gFirst - drawEvents_.begin())
+                .firstInstanceOffset = static_cast<u32t>(gFirst - shadowEvents_.begin())
             };
             pResources_->shadowPass.perDrawcallData.cbuffers[idxDC].stage(roomIdx_, &pdd, 1u);
 
@@ -585,15 +594,15 @@ void Dispatcher::shadowDraw() {
 }
 
 void Dispatcher::shadowDrawMT() {
-    if (drawEvents_.empty()) return;
+    if (shadowEvents_.empty()) return;
 
-    static auto instancingGroups = std::vector<decltype(drawEvents_)::const_iterator>();
-    auto it = drawEvents_.cbegin();
-    while (it != drawEvents_.cend()) {
+    static auto instancingGroups = std::vector<decltype(shadowEvents_)::const_iterator>();
+    auto it = shadowEvents_.cbegin();
+    while (it != shadowEvents_.cend()) {
         instancingGroups.push_back(it);
-        it = std::upper_bound(it, drawEvents_.cend(), *it);
+        it = std::upper_bound(it, shadowEvents_.cend(), *it);
     }
-    instancingGroups.push_back(drawEvents_.cend());
+    instancingGroups.push_back(shadowEvents_.cend());
 
     const auto& csmDataMT   = SharedResources::ShadowMap::csmShadowMapData.at(
         std::string(SharedResources::ShadowMap::kDefaultKey))[roomIdx_];
@@ -617,7 +626,7 @@ void Dispatcher::shadowDrawMT() {
         const auto& de = *instancingGroups[k];
         layoutMeshIfNeeded(*de.mesh);
         auto pdd = ShadowMapSkinnedCSMShader::PerDrawcallData{
-            .firstInstanceOffset = static_cast<u32t>(instancingGroups[k] - drawEvents_.begin())
+            .firstInstanceOffset = static_cast<u32t>(instancingGroups[k] - shadowEvents_.begin())
         };
         pResources_->shadowPass.perDrawcallData.cbuffers[k].stage(roomIdx_, &pdd, 1u);
     }
@@ -669,7 +678,7 @@ void Dispatcher::gBufferIndirectUpdateMT() {
 }
 
 void Dispatcher::gBufferIndirectDraw() {
-    if (drawEvents_.empty()) return;
+    if (gBufferEvents_.empty()) return;
 
     CommandContext cmdCtx{};
     DISPLAY_ERROR_STR(cmdListPool_->allocOne(CommandListUsage::RenderingSlave, cmdCtx),
@@ -708,10 +717,10 @@ void Dispatcher::gBufferIndirectDraw() {
     pResources_->hiZPass.visibleIndices.bindGraphicsAsSRV(cmdList, rootParamIdxSrcCnts0_, roomIdx_);
 
     u32t idxDC = 0u;
-    auto gFirst = drawEvents_.begin();
-    while (gFirst != drawEvents_.end()) {
+    auto gFirst = gBufferEvents_.begin();
+    while (gFirst != gBufferEvents_.end()) {
         auto& de   = *gFirst;
-        auto gLast = std::upper_bound(gFirst, drawEvents_.end(), de);
+        auto gLast = std::upper_bound(gFirst, gBufferEvents_.end(), de);
 
         pResources_->gBufferPass.perDrawcallData.cbuffers[idxDC].bind(cmdList, rootParamIdxPDD_, roomIdx_);
 
@@ -765,15 +774,15 @@ void Dispatcher::gBufferIndirectDraw() {
 }
 
 void Dispatcher::gBufferIndirectDrawMT() {
-    if (drawEvents_.empty()) return;
+    if (gBufferEvents_.empty()) return;
 
-    static auto instancingGroups = std::vector<decltype(drawEvents_)::const_iterator>();
-    auto it = drawEvents_.cbegin();
-    while (it != drawEvents_.cend()) {
+    static auto instancingGroups = std::vector<decltype(gBufferEvents_)::const_iterator>();
+    auto it = gBufferEvents_.cbegin();
+    while (it != gBufferEvents_.cend()) {
         instancingGroups.push_back(it);
-        it = std::upper_bound(it, drawEvents_.cend(), *it);
+        it = std::upper_bound(it, gBufferEvents_.cend(), *it);
     }
-    instancingGroups.push_back(drawEvents_.cend());
+    instancingGroups.push_back(gBufferEvents_.cend());
 
     const std::size_t jobCnt = ((instancingGroups.size() - 1u) + (jobSizeDraw_ - 1u)) / jobSizeDraw_;
     auto latch = std::latch(jobCnt);
@@ -819,54 +828,40 @@ void Dispatcher::gBufferIndirectDrawMT() {
 }
 
 void Dispatcher::gBufferUpdate() {
-    if (drawEvents_.empty()) return;
-
-    const auto& lastFlags    = pResources_->hiZPass.lastVisibilityFlags;
-    const bool  hasLastFlags = (lastFlags.size() == drawEvents_.size());
+    if (gBufferEvents_.empty()) return;
 
     static auto perInstanceData = std::vector<PBRDeferredSkinnedGBufferShader::PerInstanceData>();
-    perInstanceData.resize(drawEvents_.size());
+    perInstanceData.resize(gBufferEvents_.size());
 
     const auto view     = cameraData_.view;
     const auto viewProj = cameraData_.view * cameraData_.proj;
 
     u32t boneUploadCnt = 0u;
-    for (u32t i = 0u; i < static_cast<u32t>(drawEvents_.size()); ++i) {
-        const auto& e        = drawEvents_[i];
-        const bool  isCulled = hasLastFlags && (lastFlags[i] == 0u);
-
+    for (u32t i = 0u; i < static_cast<u32t>(gBufferEvents_.size()); ++i) {
+        const auto& e              = gBufferEvents_[i];
         perInstanceData[i].rootBoneOffset = boneUploadCnt;
-
-        if (!isCulled) {
-            perInstanceData[i].world       = mu::transpose(e.world).getXmf();
-            perInstanceData[i].wvp         = mu::transpose(e.world * viewProj).getXmf();
-            perInstanceData[i].wv          = mu::transpose(e.world * view).getXmf();
-            perInstanceData[i].wvNormal    = mu::inverse(mu::Mat3x3(e.world * view)).getXmf();
-            perInstanceData[i].worldNormal = mu::inverse(mu::Mat3x3(e.world)).getXmf();
-            perInstanceData[i].bakedClipId = e.bakedClipId;
-            perInstanceData[i].bakedClipFrame = e.bakedClipFrame;
-
-            if (e.bakedClipId == -1) {
-                boneUploadCnt += static_cast<u32t>(e.boneXforms.size());
-            }
+        perInstanceData[i].world          = mu::transpose(e.world).getXmf();
+        perInstanceData[i].wvp            = mu::transpose(e.world * viewProj).getXmf();
+        perInstanceData[i].wv             = mu::transpose(e.world * view).getXmf();
+        perInstanceData[i].wvNormal       = mu::inverse(mu::Mat3x3(e.world * view)).getXmf();
+        perInstanceData[i].worldNormal    = mu::inverse(mu::Mat3x3(e.world)).getXmf();
+        perInstanceData[i].bakedClipId    = e.bakedClipId;
+        perInstanceData[i].bakedClipFrame = e.bakedClipFrame;
+        if (e.bakedClipId == -1) {
+            boneUploadCnt += static_cast<u32t>(e.boneXforms.size());
         }
     }
 
     pResources_->gBufferPass.perInstanceData.stage(roomIdx_, perInstanceData);
     perInstanceData.clear();
 
-    // boneData: static 재사용. culled 인스턴스 슬롯은 이전 프레임 값 유지 (어차피 드로우 안 됨).
     static auto boneData = std::vector<PBRDeferredSkinnedGBufferShader::BoneData>();
     boneData.resize(boneUploadCnt);
     u32t boneIdx = 0u;
-    for (u32t i = 0u; i < static_cast<u32t>(drawEvents_.size()); ++i) {
-        const bool isCulled = hasLastFlags && (lastFlags[i] == 0u);
-        if (!isCulled && drawEvents_[i].bakedClipId == -1) {
-            for (auto& bx : drawEvents_[i].boneXforms) {
-                boneData[boneIdx] = PBRDeferredSkinnedGBufferShader::BoneData{
-                    mu::transpose(bx).getXmf()
-                };
-                ++boneIdx;
+    for (const auto& e : gBufferEvents_) {
+        if (e.bakedClipId == -1) {
+            for (auto& bx : e.boneXforms) {
+                boneData[boneIdx++] = PBRDeferredSkinnedGBufferShader::BoneData{ mu::transpose(bx).getXmf() };
             }
         }
     }
@@ -914,33 +909,28 @@ void Dispatcher::gBufferUpdate() {
 }
 
 void Dispatcher::gBufferUpdateMT() {
-    if (drawEvents_.empty()) return;
+    if (gBufferEvents_.empty()) return;
 
     static auto perInstanceData = std::vector<PBRDeferredSkinnedGBufferShader::PerInstanceData>();
-    perInstanceData.resize(drawEvents_.size());
+    perInstanceData.resize(gBufferEvents_.size());
 
-    auto latch = std::latch(drawEvents_.size() / jobSizeUpdate_
-        + ((drawEvents_.size() % jobSizeUpdate_) != 0));
+    auto latch = std::latch(gBufferEvents_.size() / jobSizeUpdate_
+        + ((gBufferEvents_.size() % jobSizeUpdate_) != 0));
 
     const auto viewProj = cameraData_.view * cameraData_.proj;
 
-    const auto& lastFlags    = pResources_->hiZPass.lastVisibilityFlags;
-    const bool  hasLastFlags = (lastFlags.size() == drawEvents_.size());
-
     std::size_t accEventCnt = 0u;
-    while (accEventCnt + (jobSizeUpdate_ - 1) < drawEvents_.size()) {
+    while (accEventCnt + (jobSizeUpdate_ - 1) < gBufferEvents_.size()) {
         addJobGBufferUpdate(cameraData_.view, viewProj,
-            drawEvents_.data() + accEventCnt,
-            drawEvents_.data() + accEventCnt + jobSizeUpdate_,
-            hasLastFlags ? lastFlags.data() + accEventCnt : nullptr,
+            gBufferEvents_.data() + accEventCnt,
+            gBufferEvents_.data() + accEventCnt + jobSizeUpdate_,
             perInstanceData.data() + accEventCnt, latch);
         accEventCnt += jobSizeUpdate_;
     }
-    if (accEventCnt != drawEvents_.size()) {
+    if (accEventCnt != gBufferEvents_.size()) {
         addJobGBufferUpdate(cameraData_.view, viewProj,
-            drawEvents_.data() + accEventCnt,
-            drawEvents_.data() + drawEvents_.size(),
-            hasLastFlags ? lastFlags.data() + accEventCnt : nullptr,
+            gBufferEvents_.data() + accEventCnt,
+            gBufferEvents_.data() + gBufferEvents_.size(),
             perInstanceData.data() + accEventCnt, latch);
     }
 
@@ -987,34 +977,27 @@ void Dispatcher::gBufferUpdateMT() {
 
     latch.wait();
 
-    // rootBoneOffset must be computed sequentially — fix up after parallel world-xform pass
-    for (std::size_t i = 1u; i < drawEvents_.size(); ++i) {
-        const bool isCulled = hasLastFlags && (lastFlags[i-1] == 0u);
-
+    // rootBoneOffset prefix-sum (sequential); all gBufferEvents_ contribute bones
+    for (std::size_t i = 1u; i < gBufferEvents_.size(); ++i) {
         perInstanceData[i].rootBoneOffset = perInstanceData[i-1].rootBoneOffset;
-        if (!isCulled && drawEvents_[i-1].bakedClipId == -1) {
-            perInstanceData[i].rootBoneOffset += static_cast<u32t>( drawEvents_[i-1].boneXforms.size() );
+        if (gBufferEvents_[i-1].bakedClipId == -1) {
+            perInstanceData[i].rootBoneOffset += static_cast<u32t>( gBufferEvents_[i-1].boneXforms.size() );
         }
     }
 
     u32t boneUploadCnt = perInstanceData.back().rootBoneOffset;
-    const bool isCulled = hasLastFlags && (lastFlags.back() == 0u);
-    if (!isCulled && drawEvents_.back().bakedClipId == -1) {
-        boneUploadCnt += static_cast<u32t>( drawEvents_.back().boneXforms.size() );
+    if (gBufferEvents_.back().bakedClipId == -1) {
+        boneUploadCnt += static_cast<u32t>( gBufferEvents_.back().boneXforms.size() );
     }
 
     static auto boneData = std::vector<PBRDeferredSkinnedGBufferShader::BoneData>();
     boneData.resize(boneUploadCnt);
-    for (u32t i = 0u; i < static_cast<u32t>(drawEvents_.size()); ++i) {
-        const bool isCulled = hasLastFlags && (lastFlags[i] == 0u);
-        const auto& e = drawEvents_[i];
-        u32t boneIdx = perInstanceData[i].rootBoneOffset;
-        if (!isCulled && drawEvents_[i].bakedClipId == -1) {
+    for (u32t i = 0u; i < static_cast<u32t>(gBufferEvents_.size()); ++i) {
+        const auto& e    = gBufferEvents_[i];
+        u32t         boneIdx = perInstanceData[i].rootBoneOffset;
+        if (e.bakedClipId == -1) {
             for (auto& bx : e.boneXforms) {
-                boneData[boneIdx] = PBRDeferredSkinnedGBufferShader::BoneData{
-                    mu::transpose(bx).getXmf()
-                };
-                ++boneIdx;
+                boneData[boneIdx++] = PBRDeferredSkinnedGBufferShader::BoneData{ mu::transpose(bx).getXmf() };
             }
         }
     }
@@ -1026,7 +1009,7 @@ void Dispatcher::gBufferUpdateMT() {
 }
 
 void Dispatcher::gBufferDraw() {
-    if (drawEvents_.empty()) return;
+    if (gBufferEvents_.empty()) return;
 
     CommandContext cmdCtx{};
     DISPLAY_ERROR_STR(cmdListPool_->allocOne(CommandListUsage::RenderingSlave, cmdCtx),
@@ -1064,13 +1047,13 @@ void Dispatcher::gBufferDraw() {
     pResources_->gBufferPass.perFrameData.bind(cmdList, rootParamIdxPFD_, roomIdx_);
 
     u32t idxDC = 0u;
-    auto gFirst = drawEvents_.begin();
-    while (gFirst != drawEvents_.end()) {
+    auto gFirst = gBufferEvents_.begin();
+    while (gFirst != gBufferEvents_.end()) {
         auto& de   = *gFirst;
-        auto gLast = std::upper_bound(gFirst, drawEvents_.end(), de);
+        auto gLast = std::upper_bound(gFirst, gBufferEvents_.end(), de);
 
         cmdList->SetGraphicsRoot32BitConstant( rootParamIdxFirstInstOffset_,
-            static_cast<u32t>(gFirst - drawEvents_.begin()), 0u
+            static_cast<u32t>(gFirst - gBufferEvents_.begin()), 0u
         );
 
         pResources_->gBufferPass.perDrawcallData.cbuffers[idxDC].bind(cmdList, rootParamIdxPDD_, roomIdx_);
@@ -1115,15 +1098,15 @@ void Dispatcher::gBufferDraw() {
 }
 
 void Dispatcher::gBufferDrawMT() {
-    if (drawEvents_.empty()) return;
+    if (gBufferEvents_.empty()) return;
 
-    static auto instancingGroups = std::vector<decltype(drawEvents_)::const_iterator>();
-    auto it = drawEvents_.cbegin();
-    while (it != drawEvents_.cend()) {
+    static auto instancingGroups = std::vector<decltype(gBufferEvents_)::const_iterator>();
+    auto it = gBufferEvents_.cbegin();
+    while (it != gBufferEvents_.cend()) {
         instancingGroups.push_back(it);
-        it = std::upper_bound(it, drawEvents_.cend(), *it);
+        it = std::upper_bound(it, gBufferEvents_.cend(), *it);
     }
-    instancingGroups.push_back(drawEvents_.cend());
+    instancingGroups.push_back(gBufferEvents_.cend());
 
     const std::size_t jobCnt = ((instancingGroups.size() - 1u) + (jobSizeDraw_ - 1u)) / jobSizeDraw_;
     auto latch = std::latch(jobCnt);
@@ -1175,7 +1158,6 @@ void Dispatcher::gBufferDrawMT() {
 void MU_CALLCONV Dispatcher::addJobGBufferUpdate(
     mu::Mat4x4 view, const mu::Mat4x4& viewProj,
     const DrawEvent* pFirst, const DrawEvent* pLast,
-    const u32t* pVisFlags,
     PBRDeferredSkinnedGBufferShader::PerInstanceData* pOut,
     std::latch& latch
 ) {
@@ -1183,18 +1165,15 @@ void MU_CALLCONV Dispatcher::addJobGBufferUpdate(
     threadPool_->addJob([=, &latch]() {
         const std::ptrdiff_t cnt = pLast - pFirst;
         for (std::ptrdiff_t i = 0; i < cnt; ++i) {
-            const DrawEvent& e        = pFirst[i];
-            const bool       isCulled = pVisFlags && (pVisFlags[i] == 0u);
+            const DrawEvent& e     = pFirst[i];
             pOut[i].rootBoneOffset = 0u;  // fixed up sequentially after latch
-            if (!isCulled) {
-                pOut[i].world       = mu::transpose(e.world).getXmf();
-                pOut[i].wvp         = mu::transpose(e.world * viewProj).getXmf();
-                pOut[i].wv          = mu::transpose(e.world * view).getXmf();
-                pOut[i].wvNormal    = mu::inverse(mu::Mat3x3(e.world * view)).getXmf();
-                pOut[i].worldNormal = mu::inverse(mu::Mat3x3(e.world)).getXmf();
-                pOut[i].bakedClipId = e.bakedClipId;
-                pOut[i].bakedClipFrame = e.bakedClipFrame;
-            }
+            pOut[i].world          = mu::transpose(e.world).getXmf();
+            pOut[i].wvp            = mu::transpose(e.world * viewProj).getXmf();
+            pOut[i].wv             = mu::transpose(e.world * view).getXmf();
+            pOut[i].wvNormal       = mu::inverse(mu::Mat3x3(e.world * view)).getXmf();
+            pOut[i].worldNormal    = mu::inverse(mu::Mat3x3(e.world)).getXmf();
+            pOut[i].bakedClipId    = e.bakedClipId;
+            pOut[i].bakedClipFrame = e.bakedClipFrame;
         }
         latch.count_down();
     });
@@ -1328,9 +1307,9 @@ void Dispatcher::addJobGBufferDraw( ID3D12GraphicsCommandList* threadCmdList,
             auto gFirst = *pGroup;
             auto gLast  = *(pGroup + 1);
             const auto& de = *gFirst;
-            
+
             threadCmdList->SetGraphicsRoot32BitConstant( rootParamIdxFirstInstOffset_,
-                static_cast<u32t>(gFirst - drawEvents_.begin()), 0u
+                static_cast<u32t>(gFirst - gBufferEvents_.begin()), 0u
             );
 
             pResources_->gBufferPass.perDrawcallData.cbuffers[idxDC].bind(
@@ -1377,14 +1356,14 @@ void Dispatcher::addJobShadowUpdate(
     const DrawEvent* pFirst, const DrawEvent* pLast,
     ShadowMapSkinnedCSMShader::PerInstanceData* pOut, std::latch& latch
 ) {
-    // NOTE: rootBoneOffset is set to 0 here; fixed up sequentially after latch.wait()
+    // rootBoneOffset is set to 0 here; fixed up sequentially after latch.wait()
     threadPool_->addJob([=, &latch]() {
         std::transform(pFirst, pLast, pOut,
-            [](const DrawEvent& e) {
+            [](const DrawEvent& e) -> ShadowMapSkinnedCSMShader::PerInstanceData {
                 return ShadowMapSkinnedCSMShader::PerInstanceData{
                     .world          = mu::transpose(e.world).getXmf(),
-                    .rootBoneOffset = 0u,  // fixed up sequentially after latch
-                    .bakedClipId = e.bakedClipId,
+                    .rootBoneOffset = 0u,
+                    .bakedClipId    = e.bakedClipId,
                     .bakedClipFrame = e.bakedClipFrame
                 };
             });
@@ -1435,11 +1414,6 @@ void Dispatcher::addJobShadowDraw(
 
             pResources_->shadowPass.perDrawcallData.cbuffers[idxDC].bind(
                 threadCmdList, rootParamIdxPDD_, roomIdx_);
-
-            auto pdd = ShadowMapSkinnedCSMShader::PerDrawcallData{
-                .firstInstanceOffset = static_cast<u32t>(gFirst - drawEvents_.begin())
-            };
-            pResources_->shadowPass.perDrawcallData.cbuffers[idxDC].stage(roomIdx_, &pdd, 1u);
 
             auto& vbViews = de.mesh->vbViewsByPipeline.at("PBRDeferredSkinnedPipeline_Shadow");
             DISPLAY_ERROR_DX_VOID(threadCmdList->IASetVertexBuffers(

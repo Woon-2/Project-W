@@ -1,8 +1,11 @@
 ﻿#include "pch.hpp"
 #include "game.hpp"
 
+#include "../skill/skillCompiler.hpp"
+#include "../jointConstraint.hpp"
 #include "../errorHandling.hpp"
 #include "../binaryImport.hpp"
+#include "../log.hpp"
 #include "../timer.hpp"
 #include "../particleImporter.hpp"
 #include "../ui/widgets/Label.hpp"
@@ -40,6 +43,591 @@ static constexpr int     kLagScaleDownFrames  = 100; // 연속 정상 N프레임
 static constexpr float   kArrowRainRadius     = 4.75f;
 static constexpr int     kArrowVolleyCount    = 9;
 static constexpr float   kArrowVolleySpreadDegrees = 56.f;
+static constexpr float   kRagdollLimitGraceDecay = mu::pi; // 180 deg/sec
+
+// ---------------------------------------------------------------------------
+// Physics test object factories
+//
+// Each factory builds a PhysicsTestObject with a small set of rigid bodies
+// connected by one joint type, centred around 'origin'.
+// Pivot convention: anchorA = {0,0,0} places the pivot at body A's CoM.
+//                   anchorB = {0, dist, 0} places the pivot 'dist' metres
+//                   above body B's CoM, equalling body A's CoM when
+//                   body B is spawned 'dist' metres below body A.
+// ---------------------------------------------------------------------------
+
+static std::unique_ptr<RigidBody> makeAnchorBody(mu::Vec3 pos) {
+    auto b = std::make_unique<RigidBody>(MotionType::Kinematic);
+    b->setPos(pos);
+    b->snapToCurrent();
+    return b;
+}
+
+static std::unique_ptr<RigidBody> makeDynBody(mu::Vec3 pos, float mass,
+                                               float linDamp = 2.f, float angDamp = 4.f) {
+    auto b = std::make_unique<RigidBody>(MotionType::Dynamic);
+    b->setMass(mass);
+    b->setLinearDamping(linDamp);
+    b->setAngularDamping(angDamp);
+    b->setPos(pos);
+    b->snapToCurrent();
+    return b;
+}
+
+// 1 - Single pendulum: anchor + 1 bob connected by a BallSocket.
+//     Arm length 1.5 m (anchor CoM to bob CoM).
+static PhysicsTestObject makePendulum(mu::Vec3 origin) {
+    const mu::Vec3 anchorPos = origin + mu::Vec3{ 0.f, 5.f, 0.f };
+    const mu::Vec3 bobPos    = anchorPos + mu::Vec3{ 0.f, -1.5f, 0.f };
+    const mu::Vec3 anchorHe{ 0.15f, 0.15f, 0.15f };
+    const mu::Vec3 bobHe   { 0.20f, 0.20f, 0.20f };
+
+    auto anchor = makeAnchorBody(anchorPos);
+    auto bob    = makeDynBody(bobPos, 1.f);
+
+    auto joint = std::make_unique<BallSocketJoint>(
+        anchor.get(), bob.get(),
+        mu::Vec3{ 0.f, 0.f, 0.f },   // anchorA: pivot at anchor CoM
+        mu::Vec3{ 0.f, 1.5f, 0.f }   // anchorB: pivot 1.5 m above bob CoM = anchorPos
+    );
+
+    PhysicsTestObject obj;
+    obj.bodies.push_back(std::move(anchor));
+    obj.bodies.push_back(std::move(bob));
+    obj.halfExtents = { anchorHe, bobHe };
+    obj.joints.push_back(std::move(joint));
+    return obj;
+}
+
+// 2 - Double pendulum: anchor + 2 links, each connected by a BallSocket.
+//     Tests chain solver convergence with chaotic motion under gravity.
+static PhysicsTestObject makeDoublePendulum(mu::Vec3 origin) {
+    const mu::Vec3 anchorPos = origin + mu::Vec3{ 0.f, 5.f, 0.f };
+    const mu::Vec3 link1Pos  = anchorPos + mu::Vec3{ 0.f, -1.2f, 0.f };
+    const mu::Vec3 link2Pos  = link1Pos  + mu::Vec3{ 0.f, -1.2f, 0.f };
+    const mu::Vec3 anchorHe{ 0.12f, 0.12f, 0.12f };
+    const mu::Vec3 linkHe  { 0.15f, 0.15f, 0.15f };
+
+    auto anchor = makeAnchorBody(anchorPos);
+    auto link1  = makeDynBody(link1Pos, 1.f);
+    auto link2  = makeDynBody(link2Pos, 1.f);
+
+    // Joint 0: anchor -> link1; pivot at anchor CoM.
+    auto j0 = std::make_unique<BallSocketJoint>(
+        anchor.get(), link1.get(),
+        mu::Vec3{ 0.f, 0.f, 0.f },
+        mu::Vec3{ 0.f, 1.2f, 0.f }
+    );
+    // Joint 1: link1 -> link2; pivot at link1 CoM.
+    auto j1 = std::make_unique<BallSocketJoint>(
+        link1.get(), link2.get(),
+        mu::Vec3{ 0.f, 0.f, 0.f },
+        mu::Vec3{ 0.f, 1.2f, 0.f }
+    );
+
+    PhysicsTestObject obj;
+    obj.bodies.push_back(std::move(anchor));
+    obj.bodies.push_back(std::move(link1));
+    obj.bodies.push_back(std::move(link2));
+    obj.halfExtents = { anchorHe, linkHe, linkHe };
+    obj.joints.push_back(std::move(j0));
+    obj.joints.push_back(std::move(j1));
+    return obj;
+}
+
+// 3 - Hinge door: static wall block + swinging door panel connected by a HingeJoint.
+//     Hinge axis: world Y (vertical). Angular limits: +/-120 deg.
+static PhysicsTestObject makeHingeDoor(mu::Vec3 origin) {
+    const mu::Vec3 wallPos = origin + mu::Vec3{ 0.f, 2.f, 0.f };
+    const mu::Vec3 wallHe{ 0.15f, 0.50f, 0.15f };
+    const mu::Vec3 doorHe{ 0.80f, 0.50f, 0.05f };
+
+    // Door is placed so its left face aligns with wall's right face at the hinge pivot.
+    // World pivot = wallPos + {wallHe.x, 0, 0} = wallPos + {0.15, 0, 0}
+    // Door CoM    = pivot   + {doorHe.x, 0, 0} = wallPos + {0.95, 0, 0}
+    const mu::Vec3 doorPos = wallPos + mu::Vec3{ wallHe.x() + doorHe.x(), 0.f, 0.f };
+
+    auto wall = makeAnchorBody(wallPos);
+    auto door = makeDynBody(doorPos, 5.f, 2.f, 4.f);
+
+    // anchorA: right face of wall (+X)
+    // anchorB: left face of door  (-X), so world pivot = doorPos + {-0.80, 0, 0} = wallPos + {0.15, 0, 0}
+    auto joint = std::make_unique<HingeJoint>(
+        wall.get(), door.get(),
+        mu::Vec3{  wallHe.x(), 0.f, 0.f },
+        mu::Vec3{ -doorHe.x(), 0.f, 0.f },
+        mu::Vec3{  0.f, 1.f, 0.f },          // hinge axis: world Y in wall local space
+        -mu::pi * 2.f / 3.f,                  // -120 deg
+         mu::pi * 2.f / 3.f                   // +120 deg
+    );
+
+    PhysicsTestObject obj;
+    obj.bodies.push_back(std::move(wall));
+    obj.bodies.push_back(std::move(door));
+    obj.halfExtents = { wallHe, doorHe };
+    obj.joints.push_back(std::move(joint));
+    return obj;
+}
+
+// 4 - Cone-twist arm: static shoulder + dangling arm connected by a ConeTwistJoint.
+//     Tests both swing (cone 45 deg) and twist (30 deg) limits simultaneously.
+static PhysicsTestObject makeConeTwistArm(mu::Vec3 origin) {
+    const mu::Vec3 shoulderPos = origin + mu::Vec3{ 0.f, 4.f, 0.f };
+    const mu::Vec3 armPos      = shoulderPos + mu::Vec3{ 0.f, -1.5f, 0.f };
+    const mu::Vec3 shoulderHe{ 0.20f, 0.20f, 0.20f };
+    const mu::Vec3 armHe     { 0.10f, 0.40f, 0.10f };
+
+    auto shoulder = makeAnchorBody(shoulderPos);
+    auto arm      = makeDynBody(armPos, 1.f, 1.5f, 5.f);
+
+    // refOrients: both bodies at identity orientation at construction.
+    const mu::NQuat refA = shoulder->orient();
+    const mu::NQuat refB = arm->orient();
+
+    auto joint = std::make_unique<ConeTwistJoint>(
+        shoulder.get(), arm.get(),
+        mu::Vec3{ 0.f, 0.f, 0.f },   // anchorA: pivot at shoulder CoM
+        mu::Vec3{ 0.f, 1.5f, 0.f },  // anchorB: pivot 1.5 m above arm CoM = shoulderPos
+        refA, refB,
+        mu::pi / 4.f,    // cone half-angle: 45 deg
+        mu::pi / 6.f     // twist limit:     30 deg
+    );
+
+    PhysicsTestObject obj;
+    obj.bodies.push_back(std::move(shoulder));
+    obj.bodies.push_back(std::move(arm));
+    obj.halfExtents = { shoulderHe, armHe };
+    obj.joints.push_back(std::move(joint));
+    return obj;
+}
+
+// 5 - Cone-twist chain: anchor + 5 links, each connected by a ConeTwistJoint.
+//     Tests simultaneous cone+twist limit enforcement across multiple chained joints.
+//     Cone: 30 deg, Twist: 22.5 deg per link.
+static PhysicsTestObject makeConeTwistChain(mu::Vec3 origin) {
+    constexpr int    kLinks     = 5;
+    constexpr float  kSpacing   = 0.30f;  // centre-to-centre gap between consecutive links
+    const mu::Vec3 anchorHe { 0.06f, 0.06f, 0.06f };
+    const mu::Vec3 linkHe   { 0.05f, 0.10f, 0.05f };
+
+    const mu::Vec3 anchorPos = origin + mu::Vec3{ 0.f, 5.f, 0.f };
+
+    PhysicsTestObject obj;
+    obj.bodies.push_back(makeAnchorBody(anchorPos));
+    obj.halfExtents.push_back(anchorHe);
+
+    for (int i = 0; i < kLinks; ++i) {
+		const float mass = (kLinks - i) * 2.f;
+        const mu::Vec3 linkPos = anchorPos + mu::Vec3{ 0.f, -kSpacing * (i + 1), 0.f };
+        obj.bodies.push_back(makeDynBody(linkPos, (kLinks - i) * 2.f, 1.5f, 4.f));
+		auto& bd = obj.bodies.back();
+		bd->setInertia(computeBoxInertia(mass, linkHe));
+        obj.halfExtents.push_back(linkHe);
+    }
+
+    // Connect consecutive bodies with ConeTwist joints.
+    // anchorA = {0,0,0}: pivot at the upper body's CoM.
+    // anchorB = {0, kSpacing, 0}: pivot kSpacing above lower body's CoM = upper body CoM.
+    for (int i = 0; i < kLinks; ++i) {
+        RigidBody* upper = obj.bodies[i].get();
+        RigidBody* lower = obj.bodies[i + 1].get();
+        obj.joints.push_back(std::make_unique<ConeTwistJoint>(
+            upper, lower,
+            mu::Vec3{ 0.f, 0.f, 0.f },
+            mu::Vec3{ 0.f, kSpacing, 0.f },
+            upper->orient(), lower->orient(),
+            mu::pi / 3.f,     // cone half-angle: 60 deg
+            mu::pi / 4.f      // twist limit:     45 deg
+        ));
+		obj.joints.back()->resetAnchors();
+    }
+
+    return obj;
+}
+
+// 6 - Humanoid ragdoll: 12 Dynamic bodies (A-pose) connected by 11 joints.
+//     Layout mirrors getHumanoidRagdollDef() but requires no skeleton or model.
+//     All bodies start at identity orientation (arms hang downward at sides).
+//     Body positions, half-extents, masses, and joint limits match the
+//     production ragdoll definition so simulation behaviour is representative.
+static PhysicsTestObject makeHumanoidRagdoll(mu::Vec3 origin) {
+    constexpr int kHips          = 0;
+    constexpr int kSpine         = 1;
+    constexpr int kChest         = 2;
+    constexpr int kHead          = 3;
+    constexpr int kLeftUpperArm  = 4;
+    constexpr int kLeftLowerArm  = 5;
+    constexpr int kRightUpperArm = 6;
+    constexpr int kRightLowerArm = 7;
+    constexpr int kLeftUpperLeg  = 8;
+    constexpr int kLeftLowerLeg  = 9;
+    constexpr int kRightUpperLeg = 10;
+    constexpr int kRightLowerLeg = 11;
+
+    constexpr float kLin = 0.1f;
+    constexpr float kAng = 0.2f;
+
+    const mu::Vec3 heHips     { 0.12f, 0.08f, 0.10f };
+    const mu::Vec3 heSpine    { 0.10f, 0.10f, 0.09f };
+    const mu::Vec3 heChest    { 0.11f, 0.10f, 0.09f };
+    const mu::Vec3 heHead     { 0.10f, 0.10f, 0.10f };
+    const mu::Vec3 heUpperArm { 0.06f, 0.14f, 0.06f };
+    const mu::Vec3 heLowerArm { 0.05f, 0.12f, 0.05f };
+    const mu::Vec3 heUpperLeg { 0.08f, 0.20f, 0.08f };
+    const mu::Vec3 heLowerLeg { 0.06f, 0.18f, 0.06f };
+
+    const float masses[12] = { 12.f, 8.f, 8.f, 5.f,
+                                3.f, 2.f, 3.f, 2.f,
+                                8.f, 5.f, 8.f, 5.f };
+    const mu::Vec3 hes[12] = { heHips, heSpine, heChest, heHead,
+                                heUpperArm, heLowerArm, heUpperArm, heLowerArm,
+                                heUpperLeg, heLowerLeg, heUpperLeg, heLowerLeg };
+
+    // Body CoM positions relative to origin (feet of the humanoid).
+    // Shoulder pivots are at ±0.22 on X at chest height (1.38).
+    // Hip sockets are at ±0.11 on X, 0.10 below hips CoM.
+    const mu::Vec3 positions[12] = {
+        origin + mu::Vec3{  0.f,    1.00f, 0.f },  // Hips
+        origin + mu::Vec3{  0.f,    1.18f, 0.f },  // Spine
+        origin + mu::Vec3{  0.f,    1.38f, 0.f },  // Chest
+        origin + mu::Vec3{  0.f,    1.58f, 0.f },  // Head
+        origin + mu::Vec3{ -0.22f,  1.24f, 0.f },  // LeftUpperArm
+        origin + mu::Vec3{ -0.22f,  0.98f, 0.f },  // LeftLowerArm
+        origin + mu::Vec3{  0.22f,  1.24f, 0.f },  // RightUpperArm
+        origin + mu::Vec3{  0.22f,  0.98f, 0.f },  // RightLowerArm
+        origin + mu::Vec3{ -0.11f,  0.70f, 0.f },  // LeftUpperLeg
+        origin + mu::Vec3{ -0.11f,  0.32f, 0.f },  // LeftLowerLeg
+        origin + mu::Vec3{  0.11f,  0.70f, 0.f },  // RightUpperLeg
+        origin + mu::Vec3{  0.11f,  0.32f, 0.f },  // RightLowerLeg
+    };
+
+    PhysicsTestObject obj;
+    for (int i = 0; i < 12; ++i) {
+        obj.bodies.push_back(makeDynBody(positions[i], masses[i], kLin, kAng));
+        obj.bodies.back()->setInertia(computeBoxInertia(masses[i], hes[i]));
+        obj.halfExtents.push_back(hes[i]);
+    }
+
+    RigidBody* bHips = obj.bodies[kHips].get();
+    RigidBody* bSpine = obj.bodies[kSpine].get();
+    RigidBody* bChest = obj.bodies[kChest].get();
+    RigidBody* bHead  = obj.bodies[kHead].get();
+    RigidBody* bLUA   = obj.bodies[kLeftUpperArm].get();
+    RigidBody* bLLA   = obj.bodies[kLeftLowerArm].get();
+    RigidBody* bRUA   = obj.bodies[kRightUpperArm].get();
+    RigidBody* bRLA   = obj.bodies[kRightLowerArm].get();
+    RigidBody* bLUL   = obj.bodies[kLeftUpperLeg].get();
+    RigidBody* bLLL   = obj.bodies[kLeftLowerLeg].get();
+    RigidBody* bRUL   = obj.bodies[kRightUpperLeg].get();
+    RigidBody* bRLL   = obj.bodies[kRightLowerLeg].get();
+    const mu::NQuat idQ{};
+
+    // Spine chain — ConeTwist, Y-up twist axis.
+    obj.joints.push_back(std::make_unique<ConeTwistJoint>(
+        bHips, bSpine,
+        mu::Vec3{ 0.f,  0.08f, 0.f }, mu::Vec3{ 0.f, -0.10f, 0.f },
+        idQ, idQ, mu::Vec3{ 0.f, 1.f, 0.f },
+        mu::pi * 0.2f, mu::pi * 0.15f));
+    obj.joints.push_back(std::make_unique<ConeTwistJoint>(
+        bSpine, bChest,
+        mu::Vec3{ 0.f,  0.10f, 0.f }, mu::Vec3{ 0.f, -0.10f, 0.f },
+        idQ, idQ, mu::Vec3{ 0.f, 1.f, 0.f },
+        mu::pi * 0.2f, mu::pi * 0.15f));
+    obj.joints.push_back(std::make_unique<ConeTwistJoint>(
+        bChest, bHead,
+        mu::Vec3{ 0.f,  0.10f, 0.f }, mu::Vec3{ 0.f, -0.10f, 0.f },
+        idQ, idQ, mu::Vec3{ 0.f, 1.f, 0.f },
+        mu::pi * 0.3f, mu::pi * 0.2f));
+
+    // Arm chains — ConeTwist at shoulder, Hinge at elbow.
+    // A-pose: arms hang down, so the bone direction from shoulder is (0,-1,0).
+    obj.joints.push_back(std::make_unique<ConeTwistJoint>(
+        bChest, bLUA,
+        mu::Vec3{ -0.22f, 0.f, 0.f }, mu::Vec3{ 0.f, 0.14f, 0.f },
+        idQ, idQ, mu::Vec3{ 0.f, -1.f, 0.f },
+        mu::pi * 0.6f, mu::pi * 0.5f));
+    obj.joints.push_back(std::make_unique<HingeJoint>(
+        bLUA, bLLA,
+        mu::Vec3{ 0.f, -0.14f, 0.f }, mu::Vec3{ 0.f, 0.12f, 0.f },
+        mu::Vec3{ 0.f, 0.f, 1.f }, 0.f, mu::pi * 0.9f));
+    obj.joints.push_back(std::make_unique<ConeTwistJoint>(
+        bChest, bRUA,
+        mu::Vec3{  0.22f, 0.f, 0.f }, mu::Vec3{ 0.f, 0.14f, 0.f },
+        idQ, idQ, mu::Vec3{ 0.f, -1.f, 0.f },
+        mu::pi * 0.6f, mu::pi * 0.5f));
+    obj.joints.push_back(std::make_unique<HingeJoint>(
+        bRUA, bRLA,
+        mu::Vec3{ 0.f, -0.14f, 0.f }, mu::Vec3{ 0.f, 0.12f, 0.f },
+        mu::Vec3{ 0.f, 0.f, 1.f }, 0.f, mu::pi * 0.9f));
+
+    // Leg chains — ConeTwist at hip socket, Hinge at knee.
+    // A-pose: legs hang straight down, so the bone direction from hip socket is (0,-1,0).
+    obj.joints.push_back(std::make_unique<ConeTwistJoint>(
+        bHips, bLUL,
+        mu::Vec3{ -0.11f, -0.10f, 0.f }, mu::Vec3{ 0.f, 0.20f, 0.f },
+        idQ, idQ, mu::Vec3{ 0.f, -1.f, 0.f },
+        mu::pi * 0.5f, mu::pi * 0.25f));
+    obj.joints.push_back(std::make_unique<HingeJoint>(
+        bLUL, bLLL,
+        mu::Vec3{ 0.f, -0.20f, 0.f }, mu::Vec3{ 0.f, 0.18f, 0.f },
+        mu::Vec3{ 1.f, 0.f, 0.f }, 0.f, mu::pi * 0.9f));
+    obj.joints.push_back(std::make_unique<ConeTwistJoint>(
+        bHips, bRUL,
+        mu::Vec3{  0.11f, -0.10f, 0.f }, mu::Vec3{ 0.f, 0.20f, 0.f },
+        idQ, idQ, mu::Vec3{ 0.f, -1.f, 0.f },
+        mu::pi * 0.5f, mu::pi * 0.25f));
+    obj.joints.push_back(std::make_unique<HingeJoint>(
+        bRUL, bRLL,
+        mu::Vec3{ 0.f, -0.20f, 0.f }, mu::Vec3{ 0.f, 0.18f, 0.f },
+        mu::Vec3{ 1.f, 0.f, 0.f }, 0.f, mu::pi * 0.9f));
+
+    for (auto& j : obj.joints)
+        j->resetAnchors();
+
+    // Collision ignore pairs: 1-hop (directly connected) + 2-hop (common neighbour).
+    // Mirrors Ragdoll::activate() to prevent intra-body contact instability.
+    {
+        const std::pair<RigidBody*, RigidBody*> jointPairs[] = {
+            {bHips, bSpine},
+            {bSpine, bChest},
+            {bChest, bHead},
+            {bChest, bLUA},
+            {bLUA,   bLLA},
+            {bChest, bRUA},
+            {bRUA,   bRLA},
+            {bHips,  bLUL},
+            {bLUL,   bLLL},
+            {bHips,  bRUL},
+            {bRUL,   bRLL},
+        };
+
+        auto normPair = [](RigidBody* a, RigidBody* b) {
+            return a < b ? std::make_pair(a, b) : std::make_pair(b, a);
+        };
+        std::set<std::pair<RigidBody*, RigidBody*>> pending;
+        for (const auto& [a, b] : jointPairs)
+            pending.insert(normPair(a, b));
+
+        std::unordered_map<RigidBody*, std::vector<RigidBody*>> adj;
+        for (const auto& [a, b] : jointPairs) {
+            adj[a].push_back(b);
+            adj[b].push_back(a);
+        }
+        for (auto& [mid, nb] : adj) {
+            const int n = static_cast<int>(nb.size());
+            for (int i = 0; i < n; ++i)
+                for (int j = i + 1; j < n; ++j)
+                    pending.insert(normPair(nb[i], nb[j]));
+        }
+
+        for (const auto& p : pending)
+            obj.ignoredPairs.push_back(p);
+    }
+
+    return obj;
+}
+
+// 7 - Upper body ragdoll: Kinematic Hips anchor + Dynamic spine/chest/head/arms (8 bodies, 7 joints).
+//     Isolates upper-body joint behaviour from leg interactions.
+static PhysicsTestObject makeUpperBodyRagdoll(mu::Vec3 origin) {
+    constexpr float kLin = 0.1f, kAng = 0.2f;
+    const mu::Vec3 heHips { 0.12f, 0.08f, 0.10f };
+    const mu::Vec3 heSpine{ 0.10f, 0.10f, 0.09f };
+    const mu::Vec3 heChest{ 0.11f, 0.10f, 0.09f };
+    const mu::Vec3 heHead { 0.10f, 0.10f, 0.10f };
+    const mu::Vec3 heUA   { 0.06f, 0.14f, 0.06f };
+    const mu::Vec3 heLa   { 0.05f, 0.12f, 0.05f };
+
+    PhysicsTestObject obj;
+
+    // index 0: Kinematic Hips (anchor)
+    obj.bodies.push_back(makeAnchorBody(origin + mu::Vec3{ 0.f, 1.00f, 0.f }));
+    obj.halfExtents.push_back(heHips);
+
+    // indices 1-7: Dynamic upper-body parts
+    const struct { mu::Vec3 off; float mass; mu::Vec3 he; } dyn[] = {
+        { { 0.f,    1.18f, 0.f }, 8.f, heSpine },
+        { { 0.f,    1.38f, 0.f }, 8.f, heChest },
+        { { 0.f,    1.58f, 0.f }, 5.f, heHead  },
+        { {-0.22f,  1.24f, 0.f }, 3.f, heUA    },
+        { {-0.22f,  0.98f, 0.f }, 2.f, heLa    },
+        { { 0.22f,  1.24f, 0.f }, 3.f, heUA    },
+        { { 0.22f,  0.98f, 0.f }, 2.f, heLa    },
+    };
+    for (const auto& d : dyn) {
+        obj.bodies.push_back(makeDynBody(origin + d.off, d.mass, kLin, kAng));
+        obj.bodies.back()->setInertia(computeBoxInertia(d.mass, d.he));
+        obj.halfExtents.push_back(d.he);
+    }
+
+    RigidBody* bHips  = obj.bodies[0].get();
+    RigidBody* bSpine = obj.bodies[1].get();
+    RigidBody* bChest = obj.bodies[2].get();
+    RigidBody* bHead  = obj.bodies[3].get();
+    RigidBody* bLUA   = obj.bodies[4].get();
+    RigidBody* bLLA   = obj.bodies[5].get();
+    RigidBody* bRUA   = obj.bodies[6].get();
+    RigidBody* bRLA   = obj.bodies[7].get();
+    const mu::NQuat idQ{};
+
+    // Spine chain
+    obj.joints.push_back(std::make_unique<ConeTwistJoint>(
+        bHips, bSpine,
+        mu::Vec3{ 0.f,  0.08f, 0.f }, mu::Vec3{ 0.f, -0.10f, 0.f },
+        idQ, idQ, mu::Vec3{ 0.f, 1.f, 0.f },
+        mu::pi * 0.2f, mu::pi * 0.15f));
+    obj.joints.push_back(std::make_unique<ConeTwistJoint>(
+        bSpine, bChest,
+        mu::Vec3{ 0.f,  0.10f, 0.f }, mu::Vec3{ 0.f, -0.10f, 0.f },
+        idQ, idQ, mu::Vec3{ 0.f, 1.f, 0.f },
+        mu::pi * 0.2f, mu::pi * 0.15f));
+    obj.joints.push_back(std::make_unique<ConeTwistJoint>(
+        bChest, bHead,
+        mu::Vec3{ 0.f,  0.10f, 0.f }, mu::Vec3{ 0.f, -0.10f, 0.f },
+        idQ, idQ, mu::Vec3{ 0.f, 1.f, 0.f },
+        mu::pi * 0.3f, mu::pi * 0.2f));
+
+    // Arms: A-pose twist axis = (0,-1,0) (arms hang down).
+    // BFS depth ordering: all depth-3 joints (Chest→*UA) before depth-4
+    // joints (*UA→*LA) so each solver iteration propagates corrections
+    // root-to-leaf (shock propagation).
+    obj.joints.push_back(std::make_unique<ConeTwistJoint>(
+        bChest, bLUA,
+        mu::Vec3{ -0.22f, 0.f, 0.f }, mu::Vec3{ 0.f, 0.14f, 0.f },
+        idQ, idQ, mu::Vec3{ 0.f, -1.f, 0.f },
+        mu::pi * 0.6f, mu::pi * 0.5f));
+    obj.joints.push_back(std::make_unique<ConeTwistJoint>(
+        bChest, bRUA,
+        mu::Vec3{  0.22f, 0.f, 0.f }, mu::Vec3{ 0.f, 0.14f, 0.f },
+        idQ, idQ, mu::Vec3{ 0.f, -1.f, 0.f },
+        mu::pi * 0.6f, mu::pi * 0.5f));
+    obj.joints.push_back(std::make_unique<HingeJoint>(
+        bLUA, bLLA,
+        mu::Vec3{ 0.f, -0.14f, 0.f }, mu::Vec3{ 0.f, 0.12f, 0.f },
+        mu::Vec3{ 0.f, 0.f, 1.f }, 0.f, mu::pi * 0.9f));
+    obj.joints.push_back(std::make_unique<HingeJoint>(
+        bRUA, bRLA,
+        mu::Vec3{ 0.f, -0.14f, 0.f }, mu::Vec3{ 0.f, 0.12f, 0.f },
+        mu::Vec3{ 0.f, 0.f, 1.f }, 0.f, mu::pi * 0.9f));
+
+    for (auto& j : obj.joints)
+        j->resetAnchors();
+
+    {
+        const std::pair<RigidBody*, RigidBody*> jointPairs[] = {
+            {bHips, bSpine}, {bSpine, bChest}, {bChest, bHead},
+            {bChest, bLUA}, {bLUA, bLLA},
+            {bChest, bRUA}, {bRUA, bRLA},
+        };
+        auto normPair = [](RigidBody* a, RigidBody* b) {
+            return a < b ? std::make_pair(a, b) : std::make_pair(b, a);
+        };
+        std::set<std::pair<RigidBody*, RigidBody*>> pending;
+        for (const auto& [a, b] : jointPairs)
+            pending.insert(normPair(a, b));
+        std::unordered_map<RigidBody*, std::vector<RigidBody*>> adj;
+        for (const auto& [a, b] : jointPairs) {
+            adj[a].push_back(b);
+            adj[b].push_back(a);
+        }
+        for (auto& [mid, nb] : adj) {
+            const int n = static_cast<int>(nb.size());
+            for (int i = 0; i < n; ++i)
+                for (int j = i + 1; j < n; ++j)
+                    pending.insert(normPair(nb[i], nb[j]));
+        }
+        for (const auto& p : pending)
+            obj.ignoredPairs.push_back(p);
+    }
+    return obj;
+}
+
+// 8 - Lower body ragdoll: Kinematic Hips anchor + Dynamic legs (5 bodies, 4 joints).
+//     Isolates hip-socket and knee joint behaviour from upper-body interactions.
+static PhysicsTestObject makeLowerBodyRagdoll(mu::Vec3 origin) {
+    constexpr float kLin = 0.1f, kAng = 0.2f;
+    const mu::Vec3 heHips{ 0.12f, 0.08f, 0.10f };
+    const mu::Vec3 heUL  { 0.08f, 0.20f, 0.08f };
+    const mu::Vec3 heLL  { 0.06f, 0.18f, 0.06f };
+
+    PhysicsTestObject obj;
+
+    // index 0: Kinematic Hips (anchor)
+    obj.bodies.push_back(makeAnchorBody(origin + mu::Vec3{ 0.f, 1.00f, 0.f }));
+    obj.halfExtents.push_back(heHips);
+
+    // indices 1-4: Dynamic leg parts
+    const struct { mu::Vec3 off; float mass; mu::Vec3 he; } dyn[] = {
+        { {-0.11f, 0.70f, 0.f }, 8.f, heUL },
+        { {-0.11f, 0.32f, 0.f }, 5.f, heLL },
+        { { 0.11f, 0.70f, 0.f }, 8.f, heUL },
+        { { 0.11f, 0.32f, 0.f }, 5.f, heLL },
+    };
+    for (const auto& d : dyn) {
+        obj.bodies.push_back(makeDynBody(origin + d.off, d.mass, kLin, kAng));
+        obj.bodies.back()->setInertia(computeBoxInertia(d.mass, d.he));
+        obj.halfExtents.push_back(d.he);
+    }
+
+    RigidBody* bHips = obj.bodies[0].get();
+    RigidBody* bLUL  = obj.bodies[1].get();
+    RigidBody* bLLL  = obj.bodies[2].get();
+    RigidBody* bRUL  = obj.bodies[3].get();
+    RigidBody* bRLL  = obj.bodies[4].get();
+    const mu::NQuat idQ{};
+
+    // Hip sockets: A-pose legs hang down → twist axis (0,-1,0).
+    // BFS depth ordering: both depth-1 joints (Hips→*UL) before depth-2
+    // joints (*UL→*LL).
+    obj.joints.push_back(std::make_unique<ConeTwistJoint>(
+        bHips, bLUL,
+        mu::Vec3{ -0.11f, -0.10f, 0.f }, mu::Vec3{ 0.f, 0.20f, 0.f },
+        idQ, idQ, mu::Vec3{ 0.f, -1.f, 0.f },
+        mu::pi * 0.5f, mu::pi * 0.25f));
+    obj.joints.push_back(std::make_unique<ConeTwistJoint>(
+        bHips, bRUL,
+        mu::Vec3{  0.11f, -0.10f, 0.f }, mu::Vec3{ 0.f, 0.20f, 0.f },
+        idQ, idQ, mu::Vec3{ 0.f, -1.f, 0.f },
+        mu::pi * 0.5f, mu::pi * 0.25f));
+    obj.joints.push_back(std::make_unique<HingeJoint>(
+        bLUL, bLLL,
+        mu::Vec3{ 0.f, -0.20f, 0.f }, mu::Vec3{ 0.f, 0.18f, 0.f },
+        mu::Vec3{ 1.f, 0.f, 0.f }, 0.f, mu::pi * 0.9f));
+    obj.joints.push_back(std::make_unique<HingeJoint>(
+        bRUL, bRLL,
+        mu::Vec3{ 0.f, -0.20f, 0.f }, mu::Vec3{ 0.f, 0.18f, 0.f },
+        mu::Vec3{ 1.f, 0.f, 0.f }, 0.f, mu::pi * 0.9f));
+
+    for (auto& j : obj.joints)
+        j->resetAnchors();
+
+    {
+        const std::pair<RigidBody*, RigidBody*> jointPairs[] = {
+            {bHips, bLUL}, {bLUL, bLLL},
+            {bHips, bRUL}, {bRUL, bRLL},
+        };
+        auto normPair = [](RigidBody* a, RigidBody* b) {
+            return a < b ? std::make_pair(a, b) : std::make_pair(b, a);
+        };
+        std::set<std::pair<RigidBody*, RigidBody*>> pending;
+        for (const auto& [a, b] : jointPairs)
+            pending.insert(normPair(a, b));
+        std::unordered_map<RigidBody*, std::vector<RigidBody*>> adj;
+        for (const auto& [a, b] : jointPairs) {
+            adj[a].push_back(b);
+            adj[b].push_back(a);
+        }
+        for (auto& [mid, nb] : adj) {
+            const int n = static_cast<int>(nb.size());
+            for (int i = 0; i < n; ++i)
+                for (int j = i + 1; j < n; ++j)
+                    pending.insert(normPair(nb[i], nb[j]));
+        }
+        for (const auto& p : pending)
+            obj.ignoredPairs.push_back(p);
+    }
+    return obj;
+}
 
 Game::Game() {
 	// 스레드 풀 초기화
@@ -69,6 +657,7 @@ Game::~Game() {
 	if (goblin_ && goblin_->ragdoll().isBuilt())
 		goblin_->ragdoll().destroy(physicsWorld_);
 }
+
 
 void Game::setupStage() {
 	const auto path = std::filesystem::path("../resources/levels/level.bin");
@@ -197,6 +786,30 @@ void Game::setupStage() {
 	}
 
 	setupMonsterHpBars();
+
+	// Skill system: compile Lua skill files and build lookup tables.
+	// objectById is a sparse array indexed by object ID (player=0, goblin=1).
+	// vfxById maps vfxId to a pre-loaded ParticleEffect (vfxId 1 = sword_slash_1).
+	{
+		SkillCompiler compiler;
+		const Skeleton* pSkeleton = (player_ && player_->model())
+		    ? &player_->model()->skeleton : nullptr;
+		auto skillAssets = compiler.compileAll("../resources/skills", pSkeleton);
+		skillSystem_.registerAssets(std::move(skillAssets));
+
+		skillObjectById_.assign(2, nullptr);
+		if (player_) skillObjectById_[0] = player_.get();
+		if (goblin_) skillObjectById_[1] = goblin_.get();
+
+		skillVfxById_.assign(2, nullptr);
+		skillVfxById_[1] = &swordSlash1Effect_;  // effects/sword_slash_1.json
+
+		skillCtx_.objectById     = skillObjectById_.data();
+		skillCtx_.objectByIdSize = static_cast<int>(skillObjectById_.size());
+		skillCtx_.vfxById        = skillVfxById_.data();
+		skillCtx_.vfxByIdSize    = static_cast<int>(skillVfxById_.size());
+		skillCtx_.camera         = &camera_;
+	}
 }
 
 void Game::setupMonsterHpBars() {
@@ -1578,6 +2191,7 @@ void Game::importCube(std::ifstream& ifs, Cube& cube) {
 }
 
 void Game::importPlayerStart(std::ifstream& ifs, Player& player) {
+	player.setId(0);
 	player.setModel(assetManager_.modelPlayer());
 	player.setAnimBlender(animSystem_, assetManager_);
 	player.setHp(100);
@@ -1631,6 +2245,82 @@ void Game::importTerrain(std::ifstream& ifs, TerrainObject& terrain) {
 		physicsWorld_.registerTerrain(&terrain.body(), &td->heightField);
 }
 
+// ---------------------------------------------------------------------------
+// Physics test object helpers
+// ---------------------------------------------------------------------------
+
+void Game::spawnTestObject(int kind) {
+    // Offset successive spawns sideways so structures don't overlap.
+    const float lateralOffset = static_cast<float>(rdObjects_.size()) * 4.f;
+    const mu::Vec3 base = player_->pos()
+        + player_->forward() * 4.f
+        + player_->right() * lateralOffset;
+
+    PhysicsTestObject obj;
+    switch (kind) {
+    case 1: obj = makePendulum(base);       break;
+    case 2: obj = makeDoublePendulum(base); break;
+    case 3: obj = makeHingeDoor(base);      break;
+    case 4: obj = makeConeTwistArm(base);   break;
+    case 5: obj = makeConeTwistChain(base);    break;
+    case 6: obj = makeHumanoidRagdoll(base);   break;
+    case 7: obj = makeUpperBodyRagdoll(base);  break;
+    case 8: obj = makeLowerBodyRagdoll(base);  break;
+    default: return;
+    }
+
+    obj.activate(physicsWorld_);
+    rdObjects_.push_back(std::move(obj));
+    rdShowBodies_ = true;  // auto-enable visualization when anything is spawned
+
+    // Ragdoll-style objects (kind >= 6) have branching or deep joint chains that
+    // require more PGS iterations to converge.  Extra joint-only iterations are
+    // cheap (contacts are unaffected) and clearTestObjects() resets them to 0.
+    if (kind >= 6)
+        physicsWorld_.setJointSolverExtraIterations(48);
+}
+
+void Game::clearTestObjects() {
+    for (auto& obj : rdObjects_) obj.deactivate(physicsWorld_);
+    rdObjects_.clear();
+    rdFrozen_ = false;
+    physicsWorld_.setSolverIterations(4);
+    physicsWorld_.setJointSolverExtraIterations(0);
+    physicsWorld_.setPositionSolveIterations(3);
+    physicsWorld_.setSubStepCount(2);
+}
+
+void Game::fireImpulseRay() {
+    if (rdObjects_.empty()) return;
+
+    const mu::NVec3 dir{ camera_.at() - camera_.eye() };
+    const Ray ray{ camera_.eye(), mu::Vec3(dir) * 100.f };
+
+    RigidBody* hitBody = nullptr;
+    mu::Vec3   hitHe{};
+    float      hitT = FLT_MAX;
+
+    for (auto& obj : rdObjects_) {
+        for (int i = 0; i < static_cast<int>(obj.bodies.size()); ++i) {
+            auto* b = obj.bodies[i].get();
+            if (b->motionType() != MotionType::Dynamic) continue;
+            const mu::Vec3 he = (i < static_cast<int>(obj.halfExtents.size()))
+                ? obj.halfExtents[i] : mu::Vec3{ 0.15f, 0.15f, 0.15f };
+            const auto hit = RaycastOBB(OBB{ b->pos(), he, b->orient() }, ray);
+            if (hit.hit && hit.t < hitT) {
+                hitT    = hit.t;
+                hitBody = b;
+                hitHe   = he;
+            }
+        }
+    }
+
+    if (hitBody) {
+        hitBody->applyImpulse(mu::Vec3(dir) * rdImpulseStrength_, hitBody->pos());
+        debugBVView_.push(OBB{ hitBody->pos(), hitHe, hitBody->orient() }, 400ms);
+    }
+}
+
 // 게임의 업데이트는 다음 순서대로 이루어진다.
 // 입력 처리
 // 이벤트 처리
@@ -1638,6 +2328,10 @@ void Game::importTerrain(std::ifstream& ifs, TerrainObject& terrain) {
 // 객체별 업데이트 루틴
 // 애니메이션 업데이트
 void Game::update(Milliseconds deltaTime) {
+	// Per-frame skill dispatch context: evList and pTimer may change each frame.
+	skillCtx_.evList = &eventList_;
+	skillCtx_.pTimer = pTimer_;
+
 	// 입력 처리
 	processInput(deltaTime);
 
@@ -1648,6 +2342,12 @@ void Game::update(Milliseconds deltaTime) {
 	// 쿨타임 감소 후 플레이어와 AABB 교차 시 EvAttack + EvHit 발생
 	if (!playerDead_) {
 		combatSystem_.update(deltaTime, player_->getId(), eventList_);
+	}
+
+	// Skill system: advance timers, fire timeline events, update hitboxes, detect collisions.
+	if (!playerDead_) {
+		skillSystem_.update(deltaTime, skillCtx_);
+		if (skillDebugBV_) skillSystem_.renderDebugHitboxes(debugBVView_);
 	}
 
 	// 이벤트 처리
@@ -1698,6 +2398,28 @@ void Game::update(Milliseconds deltaTime) {
 			break;
 		}
 
+		case EventType::SkillHit: {
+			// Translate skill damage into an EvHit so existing HP/animation logic is reused.
+			auto* sh = static_cast<EvSkillHit*>(pEv);
+			if (sh->targetId == goblin_->getId()) {
+				const i32t newHp = std::max(goblin_->hp() - sh->damage, 0);
+				holdEvent(eventList_, EvHit(sh->targetId, newHp));
+				if (newHp == 0)
+					holdEvent(eventList_, EvDeath(sh->targetId));
+				if (auto it = monsterHpBars_.find(sh->targetId); it != monsterHpBars_.end())
+					it->second.hpBarVisibleSeconds = 5.f;
+			}
+			break;
+		}
+
+		case EventType::CameraShake:
+			// Camera shake is not yet implemented; event is consumed silently.
+			break;
+
+		case EventType::VFXSpawn:
+			// VFX spawn is handled directly by SkillSystem::processHitResults; no further action.
+			break;
+
 		default:
 			break;
 		}
@@ -1714,7 +2436,7 @@ void Game::update(Milliseconds deltaTime) {
 	// 물리량 갱신의 주기가 돌아왔는지 판단하고
 	// 주기가 되었다면 물리량 갱신을 수행한다.
 	const Seconds clampedDt = std::min(Seconds(deltaTime), kMaxPhysicsDeltaTime);
-	physicUpdateAcc_ += clampedDt;
+	physicUpdateAcc_ += clampedDt * rdDebugTimeScale_;
 
 	const Seconds effectiveInterval = physicUpdateInterval * static_cast<float>(physicUpdateScaleK_);
 
@@ -1745,6 +2467,14 @@ void Game::update(Milliseconds deltaTime) {
 		}
 	}
 	skipNextRender_ = (consecutiveLagFrames_ >= kRenderSkipLagFrames);
+
+	// Keep test bodies frozen: re-zero velocities every frame to resist gravity/constraints.
+	if (rdFrozen_)
+		for (auto& obj : rdObjects_) obj.freezeAll();
+
+	// Push test-body OBBs each frame with a short TTL so they update live.
+	if (rdShowBodies_)
+		for (auto& obj : rdObjects_) obj.visualize(debugBVView_, 32ms);
 
 	// BV 충돌 색상 업데이트: 기본=초록, Terrain-Object=빨강, Object-Object=파랑
 	if (physicsStepsDone > 0) {
@@ -1864,7 +2594,8 @@ void Game::update(Milliseconds deltaTime) {
 				g.model()->skeleton,
 				g.renderState().world
 			);
-			rd.activate();
+			rd.buildPassengers(g.model()->skeleton, g.animBlender()->finalXformData());
+			rd.activate(physicsWorld_);
 			physicsWorld_.unregisterBody(&g.body());
 		};
 
@@ -1876,6 +2607,7 @@ void Game::update(Milliseconds deltaTime) {
 				g.model()->skeleton,
 				g.renderState().world
 			);
+			g.rebuildBodyBVH();
 		};
 
 		activateRagdollIfPending(*goblin_);
@@ -1988,6 +2720,7 @@ void Game::render() {
 	}
 
 	cullObjects();
+	cullObjectsForShadow();
 
 	debugBVView_.render(gfx_);
 	player_->render(gfx_);
@@ -2154,6 +2887,22 @@ void Game::processInput(Milliseconds deltaTime) {
 			newZ *= scale;
 		}
 		player_->setVelocity(mu::Vec3(newX, fullVel.y(), newZ));
+	}
+
+	// Q key: trigger SwordSlash skill on the player.
+	if ( !playerDead_
+		&& !uiManager_.needsCursor()
+		&& (keyboardStateCurr_['Q'] & 0x80)
+		&& !(keyboardStatePrev_['Q'] & 0x80)
+		) {
+		skillSystem_.startSkill("SwordSlash", player_->getId(), skillCtx_);
+	}
+
+	// H key: toggle skill hitbox BV debug rendering.
+	if ( (keyboardStateCurr_['H'] & 0x80)
+		&& !(keyboardStatePrev_['H'] & 0x80)
+		) {
+		skillDebugBV_ = !skillDebugBV_;
 	}
 
 	// 플레이어 공격: LButton 클릭 시 forward 방향 hitbox와 몬스터 AABB 교차 검사
@@ -2339,6 +3088,59 @@ void Game::processInput(Milliseconds deltaTime) {
 			hideCursor();
 		}
 	}
+
+	// Z 키를 누르면 중력을 켜고 끈다 (임시 디버그 기능).
+	if ( (keyboardStateCurr_['Z'] & 0x80) && !(keyboardStatePrev_['Z'] & 0x80) ) {
+		gravityEnabled_ = !gravityEnabled_;
+		physicsWorld_.setGravity(gravityEnabled_ ? mu::Vec3{ 0.f, -9.8f, 0.f } : mu::Vec3{ 0.f, 0.f, 0.f });
+	}
+
+	// --- Physics constraint / ragdoll debug tools ---
+	// Keys 1-5: spawn test structures. K: clear all. R: impulse ray.
+	// Comma/Period: halve/double impulse strength. M: slow motion cycle.
+	// 1-8: spawn test object. V: OBB visualization. I: random blast. P: freeze toggle.
+#define RD_KEY_DOWN(k) ((keyboardStateCurr_[k] & 0x80) && !(keyboardStatePrev_[k] & 0x80))
+	if (RD_KEY_DOWN('1')) spawnTestObject(1);
+	if (RD_KEY_DOWN('2')) spawnTestObject(2);
+	if (RD_KEY_DOWN('3')) spawnTestObject(3);
+	if (RD_KEY_DOWN('4')) spawnTestObject(4);
+	if (RD_KEY_DOWN('5')) spawnTestObject(5);
+	if (RD_KEY_DOWN('6')) spawnTestObject(6);
+	if (RD_KEY_DOWN('7')) spawnTestObject(7);
+	if (RD_KEY_DOWN('8')) spawnTestObject(8);
+	if (RD_KEY_DOWN('K')) clearTestObjects();
+	if (RD_KEY_DOWN('R')) fireImpulseRay();
+
+	if (RD_KEY_DOWN(VK_OEM_COMMA))  rdImpulseStrength_ = std::max(0.5f,  rdImpulseStrength_ * 0.5f);
+	if (RD_KEY_DOWN(VK_OEM_PERIOD)) rdImpulseStrength_ = std::min(500.f, rdImpulseStrength_ * 2.0f);
+
+	if (RD_KEY_DOWN('M')) {
+		if      (rdDebugTimeScale_ >= 1.f)   rdDebugTimeScale_ = 0.25f;
+		else if (rdDebugTimeScale_ >= 0.25f) rdDebugTimeScale_ = 0.05f;
+		else                                  rdDebugTimeScale_ = 1.0f;
+	}
+	if (RD_KEY_DOWN('V')) rdShowBodies_ = !rdShowBodies_;
+
+	if (RD_KEY_DOWN('I')) {
+		static std::mt19937 rng{ std::random_device{}() };
+		std::uniform_real_distribution<float> d(-1.f, 1.f);
+		for (auto& obj : rdObjects_) {
+			for (auto& b : obj.bodies) {
+				if (b->motionType() != MotionType::Dynamic) continue;
+				// Bias upward component so blasts send bodies outward, not into the floor.
+				const mu::Vec3 rawDir{ d(rng), std::abs(d(rng)) * 0.5f + 0.3f, d(rng) };
+				const mu::Vec3 dir = mu::Vec3(mu::NVec3(rawDir));
+				b->applyImpulse(dir * rdImpulseStrength_, b->pos());
+			}
+		}
+	}
+
+	if (RD_KEY_DOWN('P')) {
+		rdFrozen_ = !rdFrozen_;
+		if (rdFrozen_)
+			for (auto& obj : rdObjects_) obj.freezeAll();
+	}
+#undef RD_KEY_DOWN
 }
 
 void Game::cullObjects() {
@@ -2404,6 +3206,72 @@ void Game::cullObjects() {
 		}
 
 		entt->setFrustumCulled(culled);
+	}
+}
+
+void Game::cullObjectsForShadow() {
+	const u32t cascadeCount = dirLight_.cascadeCount();
+	if (cascadeCount == 0u) return;
+
+	auto entities = std::vector<std::shared_ptr<Object>>{};
+	entities.reserve(1u + goblins_.size());
+	entities.push_back(goblin_);
+	for (auto& g : goblins_) entities.push_back(g);
+
+	// Gribb-Hartmann planes for each cascade (row-vector convention: col(i))
+	struct CascadePlanes { mu::Vec4 p[6]; };
+	auto cascadePlanes = std::vector<CascadePlanes>(cascadeCount);
+	for (u32t ci = 0u; ci < cascadeCount; ++ci) {
+		const auto vp = dirLight_.cascadeViews()[ci] * dirLight_.cascadeProjs()[ci];
+		const auto c0 = vp.col(0), c1 = vp.col(1), c2 = vp.col(2), c3 = vp.col(3);
+		cascadePlanes[ci].p[0] = c3 + c0;
+		cascadePlanes[ci].p[1] = c3 - c0;
+		cascadePlanes[ci].p[2] = c3 + c1;
+		cascadePlanes[ci].p[3] = c3 - c1;
+		cascadePlanes[ci].p[4] = c2;
+		cascadePlanes[ci].p[5] = c3 - c2;
+	}
+
+	for (auto& entt : entities) {
+		auto& rootShape = entt->body().worldBVH().nodes[0].shape;
+
+		// Visible in any cascade => not shadow-culled
+		bool visibleInAny = false;
+		for (u32t ci = 0u; ci < cascadeCount && !visibleInAny; ++ci) {
+			const auto* pl = cascadePlanes[ci].p;
+			bool inside = true;
+
+			if (std::holds_alternative<AABB>(rootShape)) {
+				const auto& aabb = std::get<AABB>(rootShape);
+				const mu::Vec3 c = aabb.center;
+				const mu::Vec3 h = aabb.size * 0.5f;
+				for (int i = 0; i < 6 && inside; ++i) {
+					const float e = std::abs(pl[i].x()) * h.x()
+					              + std::abs(pl[i].y()) * h.y()
+					              + std::abs(pl[i].z()) * h.z();
+					const float dist = pl[i].x()*c.x() + pl[i].y()*c.y() + pl[i].z()*c.z() + pl[i].w();
+					if (dist + e < 0.f) inside = false;
+				}
+			} else {
+				const auto& obb = std::get<OBB>(rootShape);
+				const mu::Vec3 c  = obb.center;
+				const mu::Vec3 ax = obb.orient.rotate(mu::Vec3(1.f, 0.f, 0.f));
+				const mu::Vec3 ay = obb.orient.rotate(mu::Vec3(0.f, 1.f, 0.f));
+				const mu::Vec3 az = obb.orient.rotate(mu::Vec3(0.f, 0.f, 1.f));
+				for (int i = 0; i < 6 && inside; ++i) {
+					const float e =
+						std::abs(pl[i].x()*ax.x() + pl[i].y()*ax.y() + pl[i].z()*ax.z()) * obb.halfExtents.x()
+					  + std::abs(pl[i].x()*ay.x() + pl[i].y()*ay.y() + pl[i].z()*ay.z()) * obb.halfExtents.y()
+					  + std::abs(pl[i].x()*az.x() + pl[i].y()*az.y() + pl[i].z()*az.z()) * obb.halfExtents.z();
+					const float dist = pl[i].x()*c.x() + pl[i].y()*c.y() + pl[i].z()*c.z() + pl[i].w();
+					if (dist + e < 0.f) inside = false;
+				}
+			}
+
+			if (inside) visibleInAny = true;
+		}
+
+		entt->setShadowCulled(!visibleInAny);
 	}
 }
 

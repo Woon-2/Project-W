@@ -8,6 +8,7 @@
 #include "collision.hpp"
 #include <functional>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 struct TerrainHeightField;
@@ -54,6 +55,11 @@ public:
     void addJointRef(Constraint* joint);
     void removeJointRef(Constraint* joint);
 
+    // Per-pair collision ignore. When ignore=true, contact generation between a and b
+    // is suppressed regardless of collisionGroup/Mask. Symmetric: (a,b)==(b,a).
+    // Ragdoll uses this for joint-connected pairs (1-hop) and near-chain pairs (2-hop).
+    void setIgnoreCollision(RigidBody* a, RigidBody* b, bool ignore);
+
     // Register a static height-field terrain for body-terrain collision.
     // terrainBody must be MotionType::Static; it is NOT added to the broad phase.
     void registerTerrain(RigidBody* terrainBody, const TerrainHeightField* heightField);
@@ -81,6 +87,10 @@ public:
 
     // Set the number of PGS velocity iterations per step (default: 10).
     void setSolverIterations(int n) { solverIterations_ = n; }
+
+    // Extra velocity iterations applied only to persistent joint constraints.
+    // Useful for ragdoll/chain stability without increasing contact cost.
+    void setJointSolverExtraIterations(int n) { jointSolverExtraIterations_ = n; }
 
     // Set the number of Split Impulse position correction iterations (default: 3).
     // More iterations improve convergence for fast-moving Dynamic bodies.
@@ -141,7 +151,8 @@ private:
 
     static constexpr float kCameraMinGroundClearance = 0.15f;
 
-    int     solverIterations_         = 10;
+    int     solverIterations_         = 4;
+    int     jointSolverExtraIterations_ = 0;
     int     positionSolveIterations_  = 3;
     int     subStepCount_             = 2;
     Seconds currentSubDt_{}; // set at start of each sub-step; used by generateContacts()
@@ -163,6 +174,10 @@ private:
         return (a < b) ? std::make_pair(a, b) : std::make_pair(b, a);
     }
     std::unordered_map<std::pair<RigidBody*, RigidBody*>, WarmEntry, WarmPairHash> warmCache_;
+
+    // Body pairs excluded from contact generation regardless of group/mask.
+    // Keys are normalized (smaller ptr first) via normKey().
+    std::unordered_set<std::pair<RigidBody*, RigidBody*>, WarmPairHash> ignoreCollisionPairs_;
 };
 
 #endif // __PhysicsWorld_HPP

@@ -55,6 +55,7 @@ CollisionResult collides(const AABB& a, const AABB& b);
 CollisionResult collides(const OBB& a,  const OBB& b);
 CollisionResult collides(const BVH& a,  const BVH& b);
 CollisionResult collides(const BVH& bvh, const AABB& hitbox);
+CollisionResult collides(const BVH& bvh, const OBB&  hitbox);
 
 OBB  toOBB(const AABB& aabb);
 AABB obbToAABB(const OBB& obb);

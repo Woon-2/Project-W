@@ -13,12 +13,14 @@
 
 #include "../physicsWorld.hpp"
 #include "combatSystem.hpp"
+#include "../skill/skillSystem.hpp"
 
 #include "../billboard.hpp"
 #include "../spriteAnimation.hpp"
 #include "../event.hpp"
 #include "../crosshair.hpp"
 #include "../debugBVView.hpp"
+#include "../physicsTestObject.hpp"
 #include "../particleSystem.hpp"
 #include "../particleEffect.hpp"
 #include "../ui/UIManager.hpp"
@@ -59,6 +61,7 @@ private:
 	void processInput(Milliseconds deltaTime);
 	
 	void cullObjects();
+	void cullObjectsForShadow();
 	void applyHiZCulling();
 
 	void setupMonsterHpBars();
@@ -78,6 +81,11 @@ private:
 	void importGoblinSpawner(std::ifstream& ifs, Goblin& goblin);
 	void importTerrain(std::ifstream& ifs, TerrainObject& terrain);
 
+	// Physics test object debug tools (keys 1-5, K, R, comma, period, M, V, I, P)
+	void spawnTestObject(int kind);   // 1=pendulum 2=doublePendulum 3=hingeDoor 4=coneTwistArm 5=coneTwistChain
+	void clearTestObjects();
+	void fireImpulseRay();
+
 	AssetManager assetManager_{};
 
 	AnimSystem animSystem_{};
@@ -85,6 +93,11 @@ private:
 	PhysicsWorld physicsWorld_{};
 	CombatSystem combatSystem_{};
 	DebugBVView  debugBVView_{};
+
+	SkillSystem          skillSystem_{};
+	SkillDispatchContext skillCtx_{};
+	std::vector<Object*>         skillObjectById_{};
+	std::vector<ParticleEffect*> skillVfxById_{};
 	Seconds physicUpdateAcc_{0s};	// 물리 업데이트를 위한 시간 누산기
 	Seconds physicUpdateInterval{1s/60.f};	// 60fps로 물리 업데이트
 
@@ -171,6 +184,15 @@ private:
 	LONG mouseDeltaY_{};
 	bool cursorCaptureEnabled_ = false;
 	bool cursorShowEnabled_ = true;
+	bool gravityEnabled_ = true;
+
+	// --- Physics constraint debug state ---
+	std::vector<PhysicsTestObject> rdObjects_{};
+	float rdImpulseStrength_ = 5.f;    // N*s applied by R key
+	float rdDebugTimeScale_  = 1.0f;   // physics time multiplier: 1.0 / 0.25 / 0.05
+	bool  rdShowBodies_      = false;  // V key: push body OBBs to debugBVView_ each frame
+	bool  rdFrozen_          = false;  // P key: zero all test-body velocities each step
+	bool  skillDebugBV_      = false;  // H key: push skill hitbox OBBs to debugBVView_ each frame
 
 	std::array<BYTE, std::numeric_limits<u8t>::max()> keyboardStateCurr_{};
 	std::array<BYTE, std::numeric_limits<u8t>::max()> keyboardStatePrev_{};

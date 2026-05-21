@@ -551,13 +551,11 @@ void Object::update(Milliseconds deltaTime, float tPhysicInterpolation) {
 }
 
 void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
-	if (renderState_.viewFrustumCulled) {
-		return;
-	}
-
 	const auto pModel = renderState_.pModel;
 	if (pModel) {
-		const bool useDeferred = (gfx.renderPath() == GFX::RenderPath::Deferred);
+		const bool useDeferred  = (gfx.renderPath() == GFX::RenderPath::Deferred);
+		const bool culled       = renderState_.viewFrustumCulled;
+		const bool shadowCulled = shadowLightFrustumCulled_;
 
 		for (auto& [mesh, meshXform] : pModel->meshWithDressXforms) {
 			const bool isSkinned = renderState_.animBlender
@@ -567,43 +565,51 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 				if (useDeferred) {
 					if (isSkinned) {
 						gfx.addDrawEvent(PBRDeferredSkinnedPipeline::DrawEvent{
-							.world          = meshXform * offsetXform * renderState_.world,
-							.boneXforms     = renderState_.animBlender->finalXformData(),
-							.mesh           = &mesh,
-							.subMesh        = &mesh.subMeshes[i],
-							.material       = &mesh.materialSets[materialSetIdx_].materials[i],
-							.renderObjectId = renderObjectId_,
-							.bakedClipId	= renderState_.animBlender->mode() == AnimBlender::Mode::Baked
+							.world             = meshXform * offsetXform * renderState_.world,
+							.boneXforms        = renderState_.animBlender->finalXformData(),
+							.mesh              = &mesh,
+							.subMesh           = &mesh.subMeshes[i],
+							.material          = &mesh.materialSets[materialSetIdx_].materials[i],
+							.renderObjectId    = renderObjectId_,
+							.bakedClipId       = renderState_.animBlender->mode() == AnimBlender::Mode::Baked
 								? renderState_.animBlender->finalBakedClipId() : -1,
-							.bakedClipFrame	= renderState_.animBlender->mode() == AnimBlender::Mode::Baked
+							.bakedClipFrame    = renderState_.animBlender->mode() == AnimBlender::Mode::Baked
 								? renderState_.animBlender->finalBakedClipFrame() : -1,
+							.viewFrustumCulled = culled,
+							.shadowCulled      = shadowCulled,
 						});
 					}
 					else {
 						gfx.addDrawEvent(PBRDeferredPipeline::DrawEvent{
-							.world    = meshXform * offsetXform * renderState_.world,
-							.mesh     = &mesh,
-							.subMesh  = &mesh.subMeshes[i],
-							.material = &mesh.materialSets[materialSetIdx_].materials[i],
+							.world             = meshXform * offsetXform * renderState_.world,
+							.mesh              = &mesh,
+							.subMesh           = &mesh.subMeshes[i],
+							.material          = &mesh.materialSets[materialSetIdx_].materials[i],
+							.viewFrustumCulled = culled,
+							.shadowCulled      = shadowCulled,
 						});
 					}
 				}
 				else {
 					if (isSkinned) {
 						gfx.addDrawEvent(PBRSkinnedPipeline::DrawEvent{
-							.world      = meshXform * offsetXform * renderState_.world,
-							.boneXforms = renderState_.animBlender->finalXformData(),
-							.mesh       = &mesh,
-							.subMesh    = &mesh.subMeshes[i],
-							.material   = &mesh.materialSets[materialSetIdx_].materials[i],
+							.world             = meshXform * offsetXform * renderState_.world,
+							.boneXforms        = renderState_.animBlender->finalXformData(),
+							.mesh              = &mesh,
+							.subMesh           = &mesh.subMeshes[i],
+							.material          = &mesh.materialSets[materialSetIdx_].materials[i],
+							.viewFrustumCulled = culled,
+							.shadowCulled      = shadowCulled,
 						});
 					}
 					else {
 						gfx.addDrawEvent(PBRPipeline::DrawEvent{
-							.world    = meshXform * offsetXform * renderState_.world,
-							.mesh     = &mesh,
-							.subMesh  = &mesh.subMeshes[i],
-							.material = &mesh.materialSets[materialSetIdx_].materials[i],
+							.world             = meshXform * offsetXform * renderState_.world,
+							.mesh              = &mesh,
+							.subMesh           = &mesh.subMeshes[i],
+							.material          = &mesh.materialSets[materialSetIdx_].materials[i],
+							.viewFrustumCulled = culled,
+							.shadowCulled      = shadowCulled,
 						});
 					}
 				}
@@ -641,6 +647,9 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 			// 4. 객체의 월드변환 행렬(renderState_.world) 또는 부모 부속 객체의 최종 오프셋 행렬(offsetXform)
 			// (둘 중 하나는 무조건 단위 행렬이다. 둘을 곱셈으로 이은 것에 헷갈리지 말자.)
 			// 이다.
+			// equipment는 cullObjects()에서 독립적으로 컬링되지 않으므로 부모의 컬링 상태를 상속한다.
+			equipment.object->setFrustumCulled(renderState_.viewFrustumCulled);
+			equipment.object->setShadowCulled(shadowLightFrustumCulled_);
 			equipment.object->render( gfx,
 				equipment.object->renderState_.pModel->socketOffsets.at(equipment.socketType)
 				* skeleton.bones->at( skeleton.socketToBoneIdx.at(equipment.socketType) ).toDress

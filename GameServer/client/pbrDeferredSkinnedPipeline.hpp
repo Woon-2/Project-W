@@ -65,6 +65,8 @@ struct DrawEvent {
     // baked animation 모드에서만 사용
     i32t bakedClipId = -1;
     i32t bakedClipFrame = -1;
+    bool viewFrustumCulled = false;
+    bool shadowCulled      = false;
 
     auto operator<=>(const DrawEvent& rhs) const noexcept {
         auto e = mesh <=> rhs.mesh;
@@ -188,7 +190,6 @@ private:
 
     void MU_CALLCONV addJobGBufferUpdate( mu::Mat4x4 view, const mu::Mat4x4& viewProj,
         const DrawEvent* pFirst, const DrawEvent* pLast,
-        const u32t* pVisFlags,
         PBRDeferredSkinnedGBufferShader::PerInstanceData* pOut,
         std::latch& latch
     );
@@ -240,6 +241,8 @@ private:
     CommandListPool*  cmdListPool_ = nullptr;
     Resources*        pResources_  = nullptr;
     std::vector<DrawEvent> drawEvents_{};
+    std::vector<DrawEvent> gBufferEvents_{};
+    std::vector<DrawEvent> shadowEvents_{};
     std::vector<u32t> instanceGroups_{};
     std::vector<LightData> lightData_{};
     LightData  mainDirectionalLightData_{};
