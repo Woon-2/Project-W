@@ -153,6 +153,10 @@ struct SkillDispatchContext {
 
     Camera*          camera         = nullptr;
     Timer*           pTimer         = nullptr;
+
+    // Online mode: server is authoritative for damage.
+    // When true, processHitResults skips EvSkillHit but still applies VFX + impulse.
+    bool             clientPredictionOnly = false;
 };
 
 // ---------------------------------------------------------------------------
@@ -164,12 +168,17 @@ public:
     // Register compiled assets. Call once at startup before update().
     void registerAssets(std::vector<SkillAsset>&& assets);
 
-    // Returns the asset for the given name, or nullptr.
+    // Returns the asset for the given name or numeric ID, or nullptr.
     const SkillAsset* findAsset(std::string_view name) const;
+    const SkillAsset* findAsset(u32t id) const;
 
     // Start executing a skill on the given owner.
     int startSkill(std::string_view assetName, i32t ownerObjectId, SkillDispatchContext& ctx);
     int startSkill(u32t assetId,              i32t ownerObjectId, SkillDispatchContext& ctx);
+    // Overload for late-joiners: starts the skill with an initial elapsed time offset
+    // (used by remote clients receiving S_SkillStart mid-skill).
+    int startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchContext& ctx,
+                   Milliseconds initialElapsed);
 
     // Interrupt all interruptible skills owned by the given object.
     void interruptAll(i32t ownerObjectId, SkillDispatchContext& ctx);

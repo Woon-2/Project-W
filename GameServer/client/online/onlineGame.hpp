@@ -21,6 +21,7 @@
 #include "../particleEffect.hpp"
 #include "../ui/widgets/Dropdown.hpp"
 #include "../debugBVView.hpp"
+#include "../skill/skillSystem.hpp"
 
 class Timer;
 class SendBuffer;
@@ -58,6 +59,8 @@ public:
 	void applyTimeSync(uint64 serverMs);
 
 	void onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos );
+	void onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs );
+	void onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId );
 
 	// 게임의 업데이트는 다음 순서대로 이루어진다.
 	// 네트워크 패킷 처리(SleepEx)
@@ -80,6 +83,7 @@ private:
 	void sendMovePacket();
 	void sendMouseMovePacket();
 	void sendAttackPacket();
+	void sendSkillStartPacket(uint32 skillAssetId);
 
 	void processInput(Milliseconds deltaTime);
 	void processInputLobby(Milliseconds deltaTime);
@@ -101,6 +105,11 @@ private:
 	void importTerrain(std::ifstream& ifs, TerrainObject& terrain);
 
 	AssetManager assetManager_{};
+
+	SkillSystem          skillSystem_{};
+	SkillDispatchContext skillCtx_{};
+	std::vector<Object*>          skillObjectById_{};
+	std::vector<ParticleEffect*>  skillVfxById_{};
 
 	PhysicsWorld physicsWorld_{};
 	Seconds physicUpdateAcc_{ 0s };				// 물리 업데이트를 위한 시간 누산기

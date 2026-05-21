@@ -897,7 +897,8 @@ void Goblin::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Event
 		break;
 
 	case EventType::Death:
-		if (pOwner) {
+		if (pOwner && !pOwner->isDead_) {
+			pOwner->isDead_ = true;
 			if (pOwner->renderState_.animBlender) {
 				pOwner->renderState_.animBlender->eventBus()->receive(
 					event, deltaTime, evList, timer,

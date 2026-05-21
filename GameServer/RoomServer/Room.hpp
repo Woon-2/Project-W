@@ -8,7 +8,9 @@
 #include "goblin.hpp"
 #include "NpcGroup.hpp"
 #include "physicsWorld.hpp"
+#include "skill/skillSystem.hpp"
 #include <memory>
+#include <unordered_map>
 
 class SendBuffer;
 struct Level;
@@ -38,6 +40,7 @@ public:
 	void move(int32 sessionId, CMovePacket* cMvPkt);
 	void rotate(int32 sessionId, CMouseMovePacket* cMouseMvPkt);
 	void attack(int32 sessionId, uint64 clientMs);
+	void skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs);
 
 	void broadcast(const std::shared_ptr<SendBuffer>& sendBuffer);
 	void broadcastExcept(GameSession* exceptSession, const std::shared_ptr<SendBuffer>& sendBuffer);
@@ -74,6 +77,7 @@ private:
 	JobQueue jobQueue_;
 
 	void updateGoblinAI(Milliseconds dt);
+	void updateSkillSystem(Milliseconds dt);
 	void rebuildLivingPlayersCache();
 	void rebuildAggroCount();
 
@@ -81,8 +85,9 @@ private:
 	std::vector<Player> playerStarts_;
 	std::vector<Goblin> goblins_;
 
-	PhysicsWorld  physicsWorld_;
-	TerrainObject terrain_;
+	PhysicsWorld      physicsWorld_;
+	TerrainObject     terrain_;
+	ServerSkillSystem skillSystem_;
 
 	// ── NPC AI 상태 ──────────────────────────────────────────────────────────
 	Milliseconds elapsedMs_{ 0ms };

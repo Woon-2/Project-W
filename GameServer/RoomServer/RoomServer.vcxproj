@@ -71,19 +71,19 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <IncludePath>$(SolutionDir)ServerEngine\;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)ServerEngine\;$(SolutionDir)common\;$(IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)lib\;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <IncludePath>$(SolutionDir)ServerEngine\;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)ServerEngine\;$(SolutionDir)common\;$(IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)lib\;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>$(SolutionDir)ServerEngine\;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)ServerEngine\;$(SolutionDir)common\;$(IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)lib\;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>$(SolutionDir)ServerEngine\;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)ServerEngine\;$(SolutionDir)common\;$(IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)lib\;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -186,6 +186,8 @@
     </ClCompile>
     <ClCompile Include="roomServerMain.cpp" />
     <ClCompile Include="terrain.cpp" />
+    <ClCompile Include="skill\skillCompiler.cpp" />
+    <ClCompile Include="skill\skillSystem.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AssetManager.hpp" />
