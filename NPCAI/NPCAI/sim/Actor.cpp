@@ -16,12 +16,19 @@ Actor::Actor(const std::string& name, const Vec3& pos, float maxHp)
 void Actor::takeDamage(float dmg) {
     if (!alive_) return;
 
-    hp_ -= dmg;
+    hp_ -= dmg * damageTakenMultiplier_;
     if (hp_ <= 0.f) {
         hp_    = 0.f;
         alive_ = false;
         Logger::get().log(std::string(typeName()) + ":" + name_, "DEAD (hp depleted)");
     }
+}
+
+void Actor::reviveAt(const Vec3& pos) {
+    position_ = pos;
+    hp_ = maxHp_;
+    alive_ = true;
+    damageTakenMultiplier_ = 1.f;
 }
 
 // ─── calcSeparationForce ──────────────────────────────────────────────────────

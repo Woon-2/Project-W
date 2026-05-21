@@ -4,6 +4,7 @@
 #include "NpcGroup.hpp"
 #include "TacticalSquad.hpp"
 #include <unordered_map>
+#include <unordered_set>
 #include <memory>
 #include <cstdint>
 #include <vector>
@@ -48,10 +49,25 @@ public:
     const std::vector<Player*>& getLivingPlayers() const;
     void findNearbyNpcPositions(const Vec3& from, float radius, uint32_t excludeId,
                                 std::vector<Vec3>& out) const;
+    Vec3 adjustPlayerMoveForNpcSoftBlock(const Vec3& playerPos,
+                                         const Vec3& desiredMove,
+                                         float dt,
+                                         bool applyShieldWallHardBlock = true) const;
+    void setShieldWallBlockers(const std::vector<uint32_t>& blockerIds);
+    void clearShieldWallBlockers();
+    void knockPlayersOutOfShieldWall(const Vec3& center, float ringRadius);
     int  countNpcsTargeting(uint32_t playerId) const;
 
     // 플레이어 공격: 범위 내 생존 NPC + TacticalNpc에게 피해 적용
     int  applyDamageToActorsInRange (const Vec3& center, float radius, float damage);
+    int  applyDamageToPlayersInRange(const Vec3& center, float radius, float damage);
+
+    void addDebugTelegraph(const DebugTelegraphEntry& telegraph);
+
+    // 쐐기 돌진: 같은 돌진에서는 플레이어당 1회만 피해 적용
+    uint32_t beginWedgeCharge();
+    bool     tryApplyWedgeChargeHit(uint32_t chargeId, Player& player, float damage);
+    void     endWedgeCharge(uint32_t chargeId);
 
     // ── NpcGroup 관리 ─────────────────────────────────────────────────────────
     // 그룹 생성 후 Room이 소유; 반환된 포인터는 Room 생존 기간 동안 유효
@@ -62,6 +78,8 @@ public:
     // ── 전술 NPC 시스템 ───────────────────────────────────────────────────────
     void addTacticalNpc (std::shared_ptr<TacticalNpc> npc);
     void addTacticalSquad(std::unique_ptr<TacticalSquad> squad);
+    void removeTacticalNpc(uint32_t npcId);
+    void removeTacticalSquad(int squadId);
     // PlatoonLeader는 addTacticalNpc로 추가 후 이 함수로 리더 등록
     void registerPlatoonLeader(PlatoonLeader* leader);
 
@@ -100,6 +118,12 @@ private:
     std::unordered_map<uint32_t, std::shared_ptr<TacticalNpc>> tacticalNpcs_{};
     std::vector<std::unique_ptr<TacticalSquad>>                 tacticalSquads_{};
     std::vector<PlatoonLeader*>                                  platoonLeaders_{};  // 비소유
+
+    std::vector<uint32_t> shieldWallBlockerIds_{};
+
+    uint32_t nextWedgeChargeId_{ 1 };
+    std::unordered_map<uint32_t, std::unordered_set<uint32_t>> wedgeChargeHits_{};
+    std::vector<DebugTelegraphEntry> debugTelegraphs_{};
 };
 
 } // namespace sim

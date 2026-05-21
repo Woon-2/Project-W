@@ -1,4 +1,5 @@
 ﻿#include "Renderer.hpp"
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -8,7 +9,7 @@ namespace viz {
 // ─── 색상 테이블 ─────────────────────────────────────────────────────────────
 // NpcState int 값: 0=Idle 1=Chase 2=AttackWindup 3=AttackRecover 4=Return 5=Reposition 6=Dead 7=Investigate
 
-// TacticalNpcState int 값: 0=Idle 1=Chase 2=AttackWindup 3=AttackRecover 4=Flank 5=AlternateWait 6=Return 7=Dead
+// TacticalNpcState int 값: 0=Idle 1=Chase 2=AttackWindup 3=AttackRecover 4=Flank 5=ChargeThrough 7=Dead 8=HoldSlot
 COLORREF Renderer::tacticalStateColor(int state) {
     switch (state) {
         case 0: return RGB(140, 140, 140);  // Idle          - 회색
@@ -16,11 +17,9 @@ COLORREF Renderer::tacticalStateColor(int state) {
         case 2: return RGB(255, 140,   0);  // AttackWindup  - 주황색
         case 3: return RGB(160,  70,   0);  // AttackRecover - 진한 주황색
         case 4: return RGB(  0, 200, 220);  // Flank         - 청록색
-        case 5: return RGB( 50,  80, 220);  // AlternateWait - 파란색
-        case 6: return RGB( 50, 200,  80);  // Return        - 초록색
+        case 5: return RGB(255,  40, 220);  // ChargeThrough - 마젠타
         case 7: return RGB( 40,  40,  40);  // Dead          - 거의 검정
         case 8: return RGB(255, 220,   0);  // HoldSlot      - 노란색 (경계)
-        case 9: return RGB(180, 180, 255);  // CircleGuard   - 연보라 (무적 대기)
     }
     return RGB(255, 255, 255);
 }
@@ -203,6 +202,37 @@ void Renderer::drawGroups(HDC hdc, int w, int h, const sim::DebugSnapshot& snap)
             SelectObject(hdc, op_);
             DeleteObject(mp_);
         }
+    }
+}
+
+void Renderer::drawTelegraphs(HDC hdc, int w, int h,
+                              const sim::DebugSnapshot& snap) {
+    for (const auto& t : snap.telegraphs) {
+        POINT center = worldToScreen(t.x, t.z, w, h);
+        int radiusPx = static_cast<int>(t.radius * camera_.scale);
+        int innerPx = static_cast<int>(radiusPx * std::clamp(t.progress, 0.f, 1.f));
+
+        HPEN outerPen = CreatePen(PS_SOLID, 2, RGB(255, 90, 40));
+        HPEN oldPen = static_cast<HPEN>(SelectObject(hdc, outerPen));
+        drawCircleOutline(hdc, center, radiusPx);
+        SelectObject(hdc, oldPen);
+        DeleteObject(outerPen);
+
+        HPEN innerPen = CreatePen(PS_DOT, 2, RGB(255, 190, 60));
+        oldPen = static_cast<HPEN>(SelectObject(hdc, innerPen));
+        drawCircleOutline(hdc, center, innerPx);
+        SelectObject(hdc, oldPen);
+        DeleteObject(innerPen);
+
+        const int cross = 6;
+        HPEN crossPen = CreatePen(PS_SOLID, 1, RGB(255, 180, 80));
+        oldPen = static_cast<HPEN>(SelectObject(hdc, crossPen));
+        MoveToEx(hdc, center.x - cross, center.y, nullptr);
+        LineTo(hdc, center.x + cross, center.y);
+        MoveToEx(hdc, center.x, center.y - cross, nullptr);
+        LineTo(hdc, center.x, center.y + cross);
+        SelectObject(hdc, oldPen);
+        DeleteObject(crossPen);
     }
 }
 
@@ -408,9 +438,9 @@ void Renderer::drawPlayer(HDC hdc, int w, int h,
         DeleteObject(pen);
     }
 
-    drawFilledCircle(hdc, center, 10,
-        RGB( 40,  90, 200),
-        RGB(120, 180, 255));
+    COLORREF fillCol    = p.isDummy ? RGB(220, 140,  30) : RGB( 40,  90, 200);
+    COLORREF outlineCol = p.isDummy ? RGB(255, 200,  80) : RGB(120, 180, 255);
+    drawFilledCircle(hdc, center, 10, fillCol, outlineCol);
 
     if ((std::fabsf(p.dirX) + std::fabsf(p.dirZ)) > 0.05f) {
         POINT tip = {
@@ -429,7 +459,7 @@ void Renderer::drawPlayer(HDC hdc, int w, int h,
         drawProgressBar(hdc, center, center.y - 14, p.attackProgress, fc);
     }
 
-    SetTextColor(hdc, RGB(140, 200, 255));
+    SetTextColor(hdc, p.isDummy ? RGB(255, 200, 80) : RGB(140, 200, 255));
     SetBkMode   (hdc, TRANSPARENT);
     TextOutA    (hdc, center.x - 10, center.y - 30,
                  p.name.c_str(), static_cast<int>(p.name.size()));
@@ -487,6 +517,29 @@ void Renderer::drawHUD(HDC hdc, int w, int h,
         }
         TextOutA(hdc, 10, aggroY, buf, static_cast<int>(std::strlen(buf)));
         aggroY += 16;
+    }
+
+    // P1-P2 거리 및 집결/분산 상태 표시
+    {
+        const sim::DebugPlayerEntry* p1entry = nullptr;
+        const sim::DebugPlayerEntry* p2entry = nullptr;
+        for (const auto& p : snap.players) {
+            if (!p.alive) continue;
+            if (p.isDummy) p2entry = &p;
+            else           p1entry = &p;
+        }
+        if (p1entry && p2entry) {
+            float dx   = p1entry->x - p2entry->x;
+            float dz   = p1entry->z - p2entry->z;
+            float dist = std::sqrtf(dx * dx + dz * dz);
+            bool  clustered = (dist <= 20.f);
+
+            char distBuf[64];
+            std::snprintf(distBuf, sizeof(distBuf), "P1-P2 dist: %.1fm  [%s]",
+                dist, clustered ? "CLUSTERED" : "SCATTERED");
+            SetTextColor(hdc, clustered ? RGB(100, 220, 255) : RGB(255, 160, 50));
+            TextOutA(hdc, 10, aggroY + 4, distBuf, static_cast<int>(std::strlen(distBuf)));
+        }
     }
 
     // 상태 범례 (좌측 하단) - 8개 항목
@@ -623,9 +676,9 @@ void Renderer::drawTacticalNpc(HDC hdc, int w, int h,
     // ── 레이블 ──────────────────────────────────────────────────────────────
     {
         static const char* stateNames[] = {
-            "Idle","Chase","Windup","Recover","Flank","AltWait","Return","Dead"
+            "Idle","Chase","Windup","Recover","Flank","?","?","Dead","HoldSlot"
         };
-        const char* sname = (tnpc.state >= 0 && tnpc.state < 8)
+        const char* sname = (tnpc.state >= 0 && tnpc.state < 9)
             ? stateNames[tnpc.state] : "?";
         char label[80];
         std::snprintf(label, sizeof(label), "%s%s [%s]",
@@ -645,6 +698,7 @@ void Renderer::render(HDC hdc, int clientW, int clientH,
     drawBackground(hdc, clientW, clientH);
     drawGrid(hdc, clientW, clientH);
     drawGroups(hdc, clientW, clientH, snapshot);
+    drawTelegraphs(hdc, clientW, clientH, snapshot);
 
     for (const auto& npc : snapshot.npcs) {
         drawNpc(hdc, clientW, clientH, npc, snapshot);

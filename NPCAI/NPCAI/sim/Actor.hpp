@@ -20,12 +20,16 @@ public:
 
     // 피해 / 사망
     void takeDamage(float dmg);
+    void reviveAt(const Vec3& pos);
+    void setDamageTakenMultiplier(float multiplier) { damageTakenMultiplier_ = multiplier; }
+    float getDamageTakenMultiplier() const { return damageTakenMultiplier_; }
 
     // 접근자
     uint32_t getId() const { return id_; }
     const std::string& getName() const { return name_; }
     Vec3 getPosition() const { return position_; }
     void setPosition(const Vec3& p) { position_ = p; }
+    void setFacing(const Vec3& f) { facing_ = f; }
     float getHp() const { return hp_; }
     float getMaxHp() const { return maxHp_; }
     bool isAlive() const { return alive_; }
@@ -38,6 +42,7 @@ protected:
     Vec3 facing_ = { 1.f, 0.f, 0.f };  // XZ 평면 단위 방향 벡터
     float hp_;
     float maxHp_;
+    float damageTakenMultiplier_{ 1.f };
     bool alive_{ true };
 
     Vec3 calcSeparationForce(float separationRadius, const std::vector<Vec3>& nearby) const;

@@ -17,6 +17,14 @@ namespace sim {
 // gridKey 인코딩 상수 — 월드 좌표 ±60,000 유닛까지 충돌 없이 커버
 static constexpr int   GRID_COORD_OFFSET = 10000;
 static constexpr int64_t GRID_COORD_RANGE = 20001LL;
+static constexpr float SOFT_BLOCK_RADIUS = 2.4f;
+static constexpr float SOFT_BLOCK_MIN_SPEED = 0.35f;
+static constexpr float SOFT_BLOCK_PUSH_SPEED = 5.0f;
+static constexpr float SHIELD_WALL_HARD_BLOCK_RADIUS = 2.6f;
+static constexpr int SHIELD_WALL_HARD_BLOCK_ITERATIONS = 3;
+static constexpr float SHIELD_WALL_KNOCKBACK_PADDING = 0.4f;
+static constexpr float SHIELD_WALL_KNOCKBACK_SPEED = 90.f;
+static constexpr float SHIELD_WALL_KNOCKBACK_DURATION = 0.32f;
 
 Room::Room(uint32_t roomId, uint32_t dumpInterval)
     : roomId_(roomId), dumpInterval_(dumpInterval)
@@ -35,6 +43,22 @@ void Room::addTacticalNpc(std::shared_ptr<TacticalNpc> npc) {
 
 void Room::addTacticalSquad(std::unique_ptr<TacticalSquad> squad) {
     tacticalSquads_.push_back(std::move(squad));
+}
+
+void Room::removeTacticalNpc(uint32_t npcId) {
+    tacticalNpcs_.erase(npcId);
+    shieldWallBlockerIds_.erase(
+        std::remove(shieldWallBlockerIds_.begin(), shieldWallBlockerIds_.end(), npcId),
+        shieldWallBlockerIds_.end());
+}
+
+void Room::removeTacticalSquad(int squadId) {
+    tacticalSquads_.erase(
+        std::remove_if(tacticalSquads_.begin(), tacticalSquads_.end(),
+            [squadId](const std::unique_ptr<TacticalSquad>& squad) {
+                return squad && squad->getSquadId() == squadId;
+            }),
+        tacticalSquads_.end());
 }
 
 void Room::registerPlatoonLeader(PlatoonLeader* leader) {
@@ -57,6 +81,7 @@ void Room::registerPlatoonLeader(PlatoonLeader* leader) {
 
 void Room::tick(float dt) {
     Logger::get().setTick(tickCount_);
+    debugTelegraphs_.clear();
 
     dummyCtrl_.update(dt, *this);
 
@@ -167,6 +192,139 @@ void Room::findNearbyNpcPositions(const Vec3& from, float radius,
     }
 }
 
+Vec3 Room::adjustPlayerMoveForNpcSoftBlock(const Vec3& playerPos,
+                                           const Vec3& desiredMove,
+                                           float dt,
+                                           bool applyShieldWallHardBlock) const {
+    if (desiredMove.lengthSq() < 1e-6f)
+        return desiredMove;
+
+    Vec3 predicted = playerPos + desiredMove;
+    Vec3 push{};
+    float strongest = 0.f;
+    const float radiusSq = SOFT_BLOCK_RADIUS * SOFT_BLOCK_RADIUS;
+
+    auto accumulateBlock = [&](const Actor* actor) {
+        if (!actor || !actor->isAlive()) return;
+
+        Vec3 away = predicted - actor->getPosition();
+        float distSq = away.lengthSq();
+        if (distSq >= radiusSq) return;
+
+        float dist = std::sqrt(std::max(distSq, 1e-6f));
+        float t = 1.f - (dist / SOFT_BLOCK_RADIUS);
+        if (t > strongest) strongest = t;
+
+        Vec3 pushDir = (dist > 1e-3f) ? (away / dist) : desiredMove.normalized() * -1.f;
+        push += pushDir * t;
+    };
+
+    for (const auto& [id, npc] : npcs_)
+        accumulateBlock(npc.get());
+    for (const auto& [id, tnpc] : tacticalNpcs_)
+        accumulateBlock(tnpc.get());
+
+    float speedScale = 1.f - strongest * (1.f - SOFT_BLOCK_MIN_SPEED);
+    Vec3 adjusted = desiredMove * speedScale;
+
+    float pushLen = push.length();
+    if (pushLen > 1e-3f) {
+        float maxPush = SOFT_BLOCK_PUSH_SPEED * dt;
+        adjusted += (push / pushLen) * std::min(pushLen * maxPush, maxPush);
+    }
+
+    if (applyShieldWallHardBlock && !shieldWallBlockerIds_.empty()) {
+        Vec3 blockedPos = playerPos + adjusted;
+        const float hardRadiusSq =
+            SHIELD_WALL_HARD_BLOCK_RADIUS * SHIELD_WALL_HARD_BLOCK_RADIUS;
+
+        for (int iter = 0; iter < SHIELD_WALL_HARD_BLOCK_ITERATIONS; ++iter) {
+            bool changed = false;
+
+            for (uint32_t blockerId : shieldWallBlockerIds_) {
+                const Actor* blocker = findActorById(blockerId);
+                if (!blocker || !blocker->isAlive())
+                    continue;
+
+                Vec3 fromBlocker = playerPos - blocker->getPosition();
+                Vec3 toBlocker = blockedPos - blocker->getPosition();
+                fromBlocker.y = 0.f;
+                toBlocker.y = 0.f;
+
+                Vec3 move = toBlocker - fromBlocker;
+                float moveLenSq = move.lengthSq();
+                float t = 1.f;
+                if (moveLenSq > 1e-6f)
+                    t = std::max(0.f, std::min(1.f, (-fromBlocker.dot(move)) / moveLenSq));
+
+                Vec3 closest = fromBlocker + move * t;
+                if (closest.lengthSq() >= hardRadiusSq)
+                    continue;
+
+                Vec3 pushDir;
+                if (fromBlocker.lengthSq() >= hardRadiusSq && fromBlocker.lengthSq() > 1e-6f) {
+                    pushDir = fromBlocker.normalized();
+                } else if (toBlocker.lengthSq() > 1e-6f) {
+                    pushDir = toBlocker.normalized();
+                } else if (desiredMove.lengthSq() > 1e-6f) {
+                    pushDir = desiredMove.normalized() * -1.f;
+                } else {
+                    pushDir = Vec3{ 1.f, 0.f, 0.f };
+                }
+
+                blockedPos = blocker->getPosition() +
+                    pushDir * SHIELD_WALL_HARD_BLOCK_RADIUS;
+                blockedPos.y = playerPos.y;
+                changed = true;
+            }
+
+            if (!changed)
+                break;
+        }
+
+        adjusted = blockedPos - playerPos;
+    }
+
+    return adjusted;
+}
+
+void Room::setShieldWallBlockers(const std::vector<uint32_t>& blockerIds) {
+    shieldWallBlockerIds_ = blockerIds;
+}
+
+void Room::clearShieldWallBlockers() {
+    shieldWallBlockerIds_.clear();
+}
+
+void Room::knockPlayersOutOfShieldWall(const Vec3& center, float ringRadius) {
+    float safeRadius = ringRadius + SHIELD_WALL_HARD_BLOCK_RADIUS +
+        SHIELD_WALL_KNOCKBACK_PADDING;
+    float safeRadiusSq = safeRadius * safeRadius;
+
+    for (auto& [id, player] : players_) {
+        if (!player || !player->isAlive())
+            continue;
+
+        Vec3 offset = player->getPosition() - center;
+        offset.y = 0.f;
+        float distSq = offset.lengthSq();
+        if (distSq >= safeRadiusSq)
+            continue;
+
+        float dist = std::sqrt(std::max(distSq, 1e-6f));
+        Vec3 outDir = (distSq > 1e-6f) ? (offset / dist) : Vec3{ 1.f, 0.f, 0.f };
+        float requiredSpeed = (safeRadius - dist) / SHIELD_WALL_KNOCKBACK_DURATION;
+        float knockbackSpeed = std::max(SHIELD_WALL_KNOCKBACK_SPEED, requiredSpeed);
+
+        Vec3 targetOffset = player->getMoveTarget() - center;
+        targetOffset.y = 0.f;
+        if (targetOffset.lengthSq() < safeRadiusSq)
+            player->setMoveTarget(center + outDir * safeRadius);
+
+        player->applyKnockback(outDir, knockbackSpeed, SHIELD_WALL_KNOCKBACK_DURATION);
+    }
+}
+
 // ─── applyDamageToActorsInRange ──────────────────────────────────────────────
 
 int Room::applyDamageToActorsInRange(const Vec3& center, float radius, float damage) {
@@ -190,8 +348,59 @@ int Room::applyDamageToActorsInRange(const Vec3& center, float radius, float dam
     return hits;
 }
 
+int Room::applyDamageToPlayersInRange(const Vec3& center, float radius, float damage) {
+    int   hits     = 0;
+    float radiusSq = radius * radius;
+
+    for (auto& [id, player] : players_) {
+        if (!player || !player->isAlive())
+            continue;
+        if (Vec3::distanceSq(center, player->getPosition()) <= radiusSq) {
+            player->takeDamage(damage);
+            ++hits;
+        }
+    }
+    return hits;
+}
+
+void Room::addDebugTelegraph(const DebugTelegraphEntry& telegraph) {
+    debugTelegraphs_.push_back(telegraph);
+}
+
 // ─── countNpcsTargeting ──────────────────────────────────────────────────────
 // B: aggroCount_ 캐시 조회 O(1) (rebuildAggroCount()에서 틱당 1회 재구성)
+
+// WedgeCharge hit registry.
+
+uint32_t Room::beginWedgeCharge() {
+    uint32_t chargeId = nextWedgeChargeId_++;
+    if (nextWedgeChargeId_ == 0)
+        nextWedgeChargeId_ = 1;
+    wedgeChargeHits_[chargeId];
+    return chargeId;
+}
+
+bool Room::tryApplyWedgeChargeHit(uint32_t chargeId, Player& player, float damage) {
+    if (chargeId == 0 || !player.isAlive())
+        return false;
+
+    auto& hits = wedgeChargeHits_[chargeId];
+    uint32_t playerId = player.getId();
+    if (hits.find(playerId) != hits.end())
+        return false;
+
+    player.takeDamage(damage);
+    hits.insert(playerId);
+    return true;
+}
+
+void Room::endWedgeCharge(uint32_t chargeId) {
+    if (chargeId == 0)
+        return;
+    wedgeChargeHits_.erase(chargeId);
+}
+
+// countNpcsTargeting.
 
 int Room::countNpcsTargeting(uint32_t playerId) const {
     auto it = aggroCount_.find(playerId);
@@ -289,6 +498,7 @@ void Room::dumpSnapshot() const {
 DebugSnapshot Room::buildSnapshot() const {
     DebugSnapshot snap;
     snap.tick = tickCount_;
+    snap.telegraphs = debugTelegraphs_;
 
     for (const auto& [id, p] : players_) {
         Vec3 pos    = p->getPosition();
@@ -307,6 +517,7 @@ DebugSnapshot Room::buildSnapshot() const {
         e.attackState    = p->getAttackState();
         e.attackProgress = p->getAttackProgress();
         e.attackRange    = p->getAttackRange();
+        e.isDummy        = dummyCtrl_.hasControl(p->getId());
         snap.players.push_back(e);
     }
 
