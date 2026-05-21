@@ -20,6 +20,7 @@
 #include "../particleSystem.hpp"
 #include "../particleEffect.hpp"
 #include "../ui/widgets/Dropdown.hpp"
+#include "../debugBVView.hpp"
 
 class Timer;
 class SendBuffer;
@@ -118,6 +119,7 @@ private:
 
 	GFX gfx_{};
 	ThreadPool threadPool_{};
+	DebugBVView debugBVView_{};
 
 	EventList eventList_{};
 	Timer* pTimer_ = nullptr;
@@ -150,7 +152,7 @@ private:
 	UI::ProgressBar* playerHpBar_    = nullptr;  // owned by uiManager_
 	UI::Dropdown*    effectDropdown_ = nullptr;  // owned by uiManager_
 
-	enum class SwordEffect { SlashWave, SlashCombo, Slash7, Slash1, Spikes, CrystalsFrontAttack, AoESlashGreen };
+	enum class SwordEffect { SlashWave, SlashCombo, Slash7, Slash1, Spikes, CrystalsFrontAttack, AoESlashGreen, RedEnergyExplosion, CrystalsCrossFade, Arrow, ArrowVolley, ArrowRain, EnergyExplosionArrow, TornadoShot };
 	SwordEffect currentEffect_ = SwordEffect::SlashWave;
 
 	ParticleSystem flameParticleSystem_{};
@@ -162,7 +164,23 @@ private:
 	ParticleEffect spikesAttackEffect_{};
 	ParticleEffect crystalsFrontAttackEffect_{};
 	ParticleEffect aoESlashGreenEffect_{};
+	ParticleEffect crystalsCrossFadeEffect_{};
+	ParticleEffect redEnergyExplosionEffect_{};
+	ParticleEffect arrowEffect_{};
+	ParticleEffect arrowVolleyMuzzleEffect_{};
+	ParticleEffect arrowVolleyEffect_{};
+	ParticleEffect arrowRainMuzzleEffect_{};
+	ParticleEffect arrowRainEffect_{};
+	ParticleEffect energyExplosionArrowEffect_{};
+	ParticleEffect tornadoShotEffect_{};
+	ParticleEffect tornadoMuzzleEffect_{};
+	ParticleEffect tornadoHitEffect_{};
 	ParticleSystem dustParticleSystem_{};
+	bool      tornadoShotActive_   = false;
+	mu::Vec3  tornadoShotPos_{};
+	mu::Vec3  tornadoShotDir_{};
+	mu::NQuat tornadoShotOrient_{};
+	Seconds   tornadoShotElapsed_{ 0s };
 	int            footBoneIdxLeft_  = -1;
 	int            footBoneIdxRight_ = -1;
 	Seconds        prevAnimTimeRun_  = 0s;
