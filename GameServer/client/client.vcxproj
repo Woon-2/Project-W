@@ -509,7 +509,8 @@
   <ItemDefinitionGroup>
     <PostBuildEvent>
       <Command>xcopy /Y /D "$(WindowsSdkDir)Redist\D3D\x64\dxcompiler.dll" "$(OutDir)"
-xcopy /Y /D "$(WindowsSdkDir)Redist\D3D\x64\dxil.dll" "$(OutDir)"</Command>
+xcopy /Y /D "$(WindowsSdkDir)Redist\D3D\x64\dxil.dll" "$(OutDir)"
+xcopy /Y /D "$(SolutionDir)lua54.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
     <ClCompile>
       <RuntimeLibrary Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MultiThreadedDLL</RuntimeLibrary>
