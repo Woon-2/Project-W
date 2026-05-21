@@ -768,6 +768,15 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 	goblin->setScale(DirectX::XMLoadFloat3(&goblinInfo.scale));
 	goblin->setModel(assetManager_.modelGoblin());
 	goblin->setAnimBlender(animSystem_, assetManager_);
+
+	if (goblin->model() && goblin->model()->ragdollDef) {
+		goblin->ragdoll().build(
+			goblin->model()->skeleton,
+			*goblin->model()->ragdollDef,
+			physicsWorld_
+		);
+	}
+
 	goblin->setHp(90);
 	goblin->setMaxHp(90);
 	goblin->enableBVRendering();
@@ -947,6 +956,7 @@ void Game::applyHit( uint16 targetId, int32 newHp ) {
 		it->second->setHp( newHp );
 		if ( newHp <= 0 && !it->second->isDead() ) {
 			it->second->setDead( true );
+			it->second->setRagdollPendingActivation( true );
 		}
 		if ( auto barIt = goblinHpBars_.find( targetId ); barIt != goblinHpBars_.end() )
 			barIt->second.hpBarVisibleSeconds = 5.f;
@@ -974,6 +984,8 @@ void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos )
 
 	npc->setHp( newHp );
 	npc->setDead( false );
+	if (npc->ragdoll().isActive())
+		npc->ragdoll().deactivate(physicsWorld_);
 	npc->setPos( DirectX::XMLoadFloat3( &spawnPos ) );
 }
 
@@ -1154,6 +1166,39 @@ void Game::update(Milliseconds deltaTime) {
 
 	// 애니메이션 업데이트
 	animSystem_.update(0.01s);
+
+	// Ragdoll 활성화/동기화: animSystem_.update() 이후 finalXformData 확정된 시점에 실행
+	{
+		auto activateRagdollIfPending = [&](Goblin& g) {
+			if (!g.ragdollPendingActivation()) return;
+			g.setRagdollPendingActivation(false);
+			Ragdoll& rd = g.ragdoll();
+			if (!rd.isBuilt() || !g.animBlender() || !g.model()) return;
+			rd.seedFromFinalXforms(
+				g.animBlender()->finalXformData(),
+				g.model()->skeleton,
+				g.renderState().world
+			);
+			rd.buildPassengers(g.model()->skeleton, g.animBlender()->finalXformData());
+			rd.activate(physicsWorld_);
+		};
+
+		auto syncRagdollToAnim = [&](Goblin& g) {
+			Ragdoll& rd = g.ragdoll();
+			if (!rd.isActive() || !g.animBlender() || !g.model()) return;
+			rd.syncToFinalXforms(
+				g.animBlender()->finalXformData(),
+				g.model()->skeleton,
+				g.renderState().world
+			);
+			g.rebuildBodyBVH();
+		};
+
+		for (auto& goblin : goblins_) {
+			activateRagdollIfPending(*goblin);
+			syncRagdollToAnim(*goblin);
+		}
+	}
 
 	// HP 바 위치 및 값 갱신
 	{
