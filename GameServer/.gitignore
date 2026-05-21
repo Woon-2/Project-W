@@ -9,5 +9,8 @@ DEVLOG.md
 Plan.md
 ToDo_v2.md
 
+!lib/Debug
+!lib/Release
 !lib/Debug/*.lib
 !lib/Release/*.lib
+!lua54.dll
