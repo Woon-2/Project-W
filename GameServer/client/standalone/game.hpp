@@ -61,6 +61,7 @@ private:
 	void processInput(Milliseconds deltaTime);
 	
 	void cullObjects();
+	void cullObjectsForShadow();
 	void applyHiZCulling();
 
 	void setupMonsterHpBars();

@@ -267,6 +267,8 @@ public:
 
 	void setFrustumCulled(bool v) { renderState_.viewFrustumCulled = v; }
 	bool isFrustumCulled() const  { return renderState_.viewFrustumCulled; }
+	void setShadowCulled(bool v)  { shadowLightFrustumCulled_ = v; }
+	bool isShadowCulled() const   { return shadowLightFrustumCulled_; }
 	void activateOcclusion(bool willOcclude) { renderState_.willOcclude = true; }
 
 	void setRenderObjectId(u32t id) { renderObjectId_ = id; }
@@ -299,8 +301,9 @@ protected:
 	bool isDead_ = false;
 	i32t maxHp_{};
 
-	u32t     renderObjectId_ = std::numeric_limits<u32t>::max();
-	bool     hiZCulled_      = false;
+	u32t     renderObjectId_          = std::numeric_limits<u32t>::max();
+	bool     hiZCulled_               = false;
+	bool     shadowLightFrustumCulled_ = false;
 	mu::Vec4 bvColor_{ 0.f, 1.f, 0.f, 1.f };
 
 private:

@@ -59,6 +59,8 @@ struct DrawEvent {
     const Mesh*    mesh;
     const SubMesh* subMesh;
     const Material* material;
+    bool viewFrustumCulled = false;
+    bool shadowCulled      = false;
 
     auto operator<=>(const DrawEvent& rhs) const noexcept {
         auto e = mesh <=> rhs.mesh;
@@ -178,6 +180,8 @@ private:
     CommandListPool*  cmdListPool_  = nullptr;
     Resources*        pResources_   = nullptr;
     std::vector<DrawEvent> drawEvents_{};
+    std::vector<DrawEvent> gBufferEvents_{};
+    std::vector<DrawEvent> shadowEvents_{};
     std::vector<LightData> lightData_{};
     LightData  mainDirectionalLightData_{};
     CameraData cameraData_{};

@@ -60,6 +60,8 @@ struct DrawEvent {
 	const Mesh* mesh;
 	const SubMesh* subMesh;
 	const Material* material;
+	bool viewFrustumCulled = false;
+	bool shadowCulled      = false;
 
 	// 이 함수로 인해 DrawEvent 정렬 시
 	// 같은 메시를 공유하는 DrawEvent들끼리 1차적,

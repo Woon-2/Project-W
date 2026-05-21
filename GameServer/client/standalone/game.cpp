@@ -1899,6 +1899,7 @@ void Game::render() {
 	}
 
 	cullObjects();
+	cullObjectsForShadow();
 
 	debugBVView_.render(gfx_);
 	player_->render(gfx_);
@@ -2301,6 +2302,72 @@ void Game::cullObjects() {
 		}
 
 		entt->setFrustumCulled(culled);
+	}
+}
+
+void Game::cullObjectsForShadow() {
+	const u32t cascadeCount = dirLight_.cascadeCount();
+	if (cascadeCount == 0u) return;
+
+	auto entities = std::vector<std::shared_ptr<Object>>{};
+	entities.reserve(1u + goblins_.size());
+	entities.push_back(goblin_);
+	for (auto& g : goblins_) entities.push_back(g);
+
+	// Gribb-Hartmann planes for each cascade (row-vector convention: col(i))
+	struct CascadePlanes { mu::Vec4 p[6]; };
+	auto cascadePlanes = std::vector<CascadePlanes>(cascadeCount);
+	for (u32t ci = 0u; ci < cascadeCount; ++ci) {
+		const auto vp = dirLight_.cascadeViews()[ci] * dirLight_.cascadeProjs()[ci];
+		const auto c0 = vp.col(0), c1 = vp.col(1), c2 = vp.col(2), c3 = vp.col(3);
+		cascadePlanes[ci].p[0] = c3 + c0;
+		cascadePlanes[ci].p[1] = c3 - c0;
+		cascadePlanes[ci].p[2] = c3 + c1;
+		cascadePlanes[ci].p[3] = c3 - c1;
+		cascadePlanes[ci].p[4] = c2;
+		cascadePlanes[ci].p[5] = c3 - c2;
+	}
+
+	for (auto& entt : entities) {
+		auto& rootShape = entt->body().worldBVH().nodes[0].shape;
+
+		// Visible in any cascade => not shadow-culled
+		bool visibleInAny = false;
+		for (u32t ci = 0u; ci < cascadeCount && !visibleInAny; ++ci) {
+			const auto* pl = cascadePlanes[ci].p;
+			bool inside = true;
+
+			if (std::holds_alternative<AABB>(rootShape)) {
+				const auto& aabb = std::get<AABB>(rootShape);
+				const mu::Vec3 c = aabb.center;
+				const mu::Vec3 h = aabb.size * 0.5f;
+				for (int i = 0; i < 6 && inside; ++i) {
+					const float e = std::abs(pl[i].x()) * h.x()
+					              + std::abs(pl[i].y()) * h.y()
+					              + std::abs(pl[i].z()) * h.z();
+					const float dist = pl[i].x()*c.x() + pl[i].y()*c.y() + pl[i].z()*c.z() + pl[i].w();
+					if (dist + e < 0.f) inside = false;
+				}
+			} else {
+				const auto& obb = std::get<OBB>(rootShape);
+				const mu::Vec3 c  = obb.center;
+				const mu::Vec3 ax = obb.orient.rotate(mu::Vec3(1.f, 0.f, 0.f));
+				const mu::Vec3 ay = obb.orient.rotate(mu::Vec3(0.f, 1.f, 0.f));
+				const mu::Vec3 az = obb.orient.rotate(mu::Vec3(0.f, 0.f, 1.f));
+				for (int i = 0; i < 6 && inside; ++i) {
+					const float e =
+						std::abs(pl[i].x()*ax.x() + pl[i].y()*ax.y() + pl[i].z()*ax.z()) * obb.halfExtents.x()
+					  + std::abs(pl[i].x()*ay.x() + pl[i].y()*ay.y() + pl[i].z()*ay.z()) * obb.halfExtents.y()
+					  + std::abs(pl[i].x()*az.x() + pl[i].y()*az.y() + pl[i].z()*az.z()) * obb.halfExtents.z();
+					const float dist = pl[i].x()*c.x() + pl[i].y()*c.y() + pl[i].z()*c.z() + pl[i].w();
+					if (dist + e < 0.f) inside = false;
+				}
+			}
+
+			if (inside) visibleInAny = true;
+		}
+
+		entt->setShadowCulled(!visibleInAny);
 	}
 }
 
