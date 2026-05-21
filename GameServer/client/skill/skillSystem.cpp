@@ -52,6 +52,12 @@ const SkillAsset* SkillSystem::findAsset(std::string_view name) const {
     return nullptr;
 }
 
+const SkillAsset* SkillSystem::findAsset(u32t id) const {
+    for (const SkillAsset& a : assetRegistry_)
+        if (a.id == id) return &a;
+    return nullptr;
+}
+
 // ---------------------------------------------------------------------------
 // SkillSystem -- lifecycle
 // ---------------------------------------------------------------------------
@@ -79,6 +85,32 @@ int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchConte
         dispatchEvent(asset->timeline[inst.nextEventIdx], inst, ctx);
         ++inst.nextEventIdx;
     }
+    return idx;
+}
+
+int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchContext& ctx,
+                            Milliseconds initialElapsed) {
+    const SkillAsset* asset = nullptr;
+    for (const SkillAsset& a : assetRegistry_)
+        if (a.id == assetId) { asset = &a; break; }
+    if (!asset) return -1;
+
+    int idx = instancePool_.alloc(asset, ownerObjectId);
+    if (idx < 0) return -1;
+
+    SkillInstance& inst = instancePool_.instances[idx];
+    inst.elapsed = initialElapsed;
+
+    // Fire all events that fall at or before initialElapsed
+    while (inst.nextEventIdx < (int)asset->timeline.size()) {
+        if (asset->timeline[inst.nextEventIdx].time > initialElapsed) break;
+        dispatchEvent(asset->timeline[inst.nextEventIdx], inst, ctx);
+        ++inst.nextEventIdx;
+    }
+
+    if (asset->totalDuration.count() > 0 && initialElapsed >= asset->totalDuration)
+        terminateInstance(inst, ctx);
+
     return idx;
 }
 
@@ -539,7 +571,9 @@ void SkillSystem::processHitResults(SkillDispatchContext& ctx) {
             inst.hitGroups[hb.hitGroup].lastHitByTarget[hr.targetObjectId] = inst.elapsed;
         }
 
-        holdEvent((*ctx.evList), EvSkillHit{ hr.targetObjectId, oh.damage });
+        // In online mode server is authoritative for damage; skip local damage event.
+        if (!ctx.clientPredictionOnly)
+            holdEvent((*ctx.evList), EvSkillHit{ hr.targetObjectId, oh.damage });
 
         if (oh.hitVfxId != 0xFF && ctx.vfxById &&
             oh.hitVfxId < static_cast<u8t>(ctx.vfxByIdSize)) {

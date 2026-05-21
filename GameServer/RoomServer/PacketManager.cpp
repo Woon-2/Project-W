@@ -22,6 +22,10 @@ void PacketManager::handlePacket(GameSession* session, byte* buffer, int32 len) 
 		handleCAttackPacket(session, buffer, len);
 		break;
 
+	case PacketType::C_SkillStart:
+		handleCSkillStartPacket(session, buffer, len);
+		break;
+
 	default:
 		std::cout << "Unknown packet type received. Type: " << static_cast<uint16>(header->type) << '\n';
 		break;
@@ -55,6 +59,15 @@ void PacketManager::handleCAttackPacket( GameSession* session, byte* buffer, int
 	uint64 clientMs = reinterpret_cast<CAttackPacket*>(buffer)->clientMs;
 	session->room()->doAsync( [ session, clientMs ]() {
 		session->room()->attack( session->id(), clientMs );
+	} );
+}
+
+void PacketManager::handleCSkillStartPacket( GameSession* session, byte* buffer, int32 len ) {
+	auto pkt = reinterpret_cast<CSkillStartPacket*>(buffer);
+	uint32 skillAssetId = pkt->skillAssetId;
+	uint64 clientMs     = pkt->clientMs;
+	session->room()->doAsync( [session, skillAssetId, clientMs]() {
+		session->room()->skillStart( session->id(), skillAssetId, clientMs );
 	} );
 }
 
@@ -235,6 +248,38 @@ std::shared_ptr<SendBuffer> PacketManager::makeSTimeSyncPacket(uint64 serverMs) 
 
 	pkt->size = bw.writeSize();
 	pkt->type = PacketType::S_TimeSync;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSSkillStartPacket(uint32 skillAssetId, uint16 ownerId, uint16 elapsedMs) {
+	auto sendBuffer = SendBufferManager::open(sizeof(SSkillStartPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt          = bw.reserve<SSkillStartPacket>();
+	pkt->skillAssetId = skillAssetId;
+	pkt->ownerId      = ownerId;
+	pkt->elapsedMs    = elapsedMs;
+	pkt->size         = bw.writeSize();
+	pkt->type         = PacketType::S_SkillStart;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSSkillHitPacket(uint16 attackerId, uint16 targetId,
+                                                                int32 newHp, uint32 skillAssetId) {
+	auto sendBuffer = SendBufferManager::open(sizeof(SSkillHitPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt          = bw.reserve<SSkillHitPacket>();
+	pkt->attackerId   = attackerId;
+	pkt->targetId     = targetId;
+	pkt->newHp        = newHp;
+	pkt->skillAssetId = skillAssetId;
+	pkt->size         = bw.writeSize();
+	pkt->type         = PacketType::S_SkillHit;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;

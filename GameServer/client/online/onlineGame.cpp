@@ -8,6 +8,7 @@
 #include "SendBuffer.hpp"
 #include "../PacketManager.hpp"
 #include "../ClientApp.hpp"
+#include "../skill/skillCompiler.hpp"
 
 extern HWND ghWnd;
 extern RECT gClientRect;
@@ -619,6 +620,27 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 	idPlayerMap_[playerInfo.playerId] = player_;
 
 	setParticle();
+
+	// Compile skills and build dispatch context (online mode: prediction-only, no damage events).
+	{
+		SkillCompiler compiler;
+		const Skeleton* pSkeleton = player_->model() ? &player_->model()->skeleton : nullptr;
+		auto assets = compiler.compileAll("../resources/skills", pSkeleton);
+		skillSystem_.registerAssets(std::move(assets));
+
+		skillObjectById_.assign(256, nullptr);
+		skillObjectById_[player_->getId()] = player_.get();
+
+		skillVfxById_.assign(2, nullptr);
+		skillVfxById_[1] = &swordSlash1Effect_;   // effects/sword_slash_1.json
+
+		skillCtx_.objectById          = skillObjectById_.data();
+		skillCtx_.objectByIdSize      = static_cast<int>(skillObjectById_.size());
+		skillCtx_.vfxById             = skillVfxById_.data();
+		skillCtx_.vfxByIdSize         = static_cast<int>(skillVfxById_.size());
+		skillCtx_.camera              = &camera_;
+		skillCtx_.clientPredictionOnly = true;
+	}
 }
 
 void Game::setupGround(const ObjectInfo& groundInfo) {
@@ -675,6 +697,12 @@ void Game::createOtherPlayer(const ObjectInfo& otherPlayerInfo) {
 
 	otherPlayer->setRenderObjectId(nextRenderObjId_++);
 
+	if (!skillObjectById_.empty()) {
+		auto id = static_cast<size_t>(otherPlayerInfo.objectId);
+		if (id >= skillObjectById_.size()) skillObjectById_.resize(id + 1, nullptr);
+		skillObjectById_[id] = otherPlayer.get();
+	}
+
 	otherPlayers_.push_back(otherPlayer);
 	idPlayerMap_[otherPlayerInfo.objectId] = otherPlayer;
 }
@@ -721,6 +749,12 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 
 	otherPlayer->setRenderObjectId(nextRenderObjId_++);
 
+	if (!skillObjectById_.empty()) {
+		auto id = static_cast<size_t>(otherPlayerInfo.playerId);
+		if (id >= skillObjectById_.size()) skillObjectById_.resize(id + 1, nullptr);
+		skillObjectById_[id] = otherPlayer.get();
+	}
+
 	otherPlayers_.push_back(otherPlayer);
 	idPlayerMap_[otherPlayerInfo.playerId] = otherPlayer;
 }
@@ -762,6 +796,13 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 	}
 
 	goblin->setRenderObjectId(nextRenderObjId_++);
+
+	// Register goblin in skill system's object lookup table.
+	if (!skillObjectById_.empty()) {
+		auto id = static_cast<size_t>(goblinInfo.objectId);
+		if (id >= skillObjectById_.size()) skillObjectById_.resize(id + 1, nullptr);
+		skillObjectById_[id] = goblin.get();
+	}
 
 	goblins_.push_back(goblin);
 	idGoblinMap_[goblinInfo.objectId] = goblin;
@@ -936,6 +977,42 @@ void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos )
 	npc->setPos( DirectX::XMLoadFloat3( &spawnPos ) );
 }
 
+void Game::onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs ) {
+	// Trigger attack animation on the remote player that cast the skill.
+	if (auto it = idPlayerMap_.find(ownerId); it != idPlayerMap_.end()) {
+		if (it->second->animBlender())
+			it->second->animBlender()->triggerAttack();
+	}
+
+	// Start skill visuals for the remote owner (clientPredictionOnly — no damage).
+	skillSystem_.startSkill(skillAssetId, static_cast<i32t>(ownerId), skillCtx_,
+	                        Milliseconds{ static_cast<float>(elapsedMs) });
+}
+
+void Game::onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId ) {
+	applyHit(targetId, newHp);
+
+	// Spawn impact VFX at the target's position.
+	const SkillAsset* asset = skillSystem_.findAsset(skillAssetId);
+	if (asset && !asset->hitboxDefs.empty()) {
+		const u8t vfxId = asset->hitboxDefs[0].onHit.hitVfxId;
+		if (vfxId != 0xFF && vfxId < static_cast<u8t>(skillVfxById_.size())
+		    && skillVfxById_[vfxId])
+		{
+			Object* target = nullptr;
+			if (player_ && static_cast<uint16>(player_->getId()) == targetId)
+				target = player_.get();
+			else if (auto it = idPlayerMap_.find(targetId); it != idPlayerMap_.end())
+				target = it->second.get();
+			else if (auto it = idGoblinMap_.find(targetId); it != idGoblinMap_.end())
+				target = it->second.get();
+
+			if (target)
+				skillVfxById_[vfxId]->play(target->pos());
+		}
+	}
+}
+
 // 게임의 업데이트는 다음 순서대로 이루어진다.
 // 네트워크 패킷 처리
 // 입력 처리
@@ -949,6 +1026,12 @@ void Game::update(Milliseconds deltaTime) {
 	if (player_ == nullptr) {
 		return;
 	}
+
+	// Skill dispatch context: refresh per-frame pointers.
+	skillCtx_.evList         = &eventList_;
+	skillCtx_.pTimer         = pTimer_;
+	skillCtx_.objectById     = skillObjectById_.data();
+	skillCtx_.objectByIdSize = static_cast<int>(skillObjectById_.size());
 
 	// 이전 프레임 속도 저장
 	prevVelocity_ = currVelocity_;
@@ -1018,6 +1101,9 @@ void Game::update(Milliseconds deltaTime) {
 	for (auto& g : goblins_) {
 		g->rebuildBodyBVH();
 	}
+
+	if (!playerDead_)
+		skillSystem_.update(deltaTime, skillCtx_);
 
 	if (moveStateSendAcc_ >= moveStateSendInterval_) {
 		moveStateSendAcc_ = 0s;
@@ -1394,6 +1480,14 @@ void Game::sendAttackPacket() {
 	INet::ClientApp::addSendBuffer(PacketManager::makeCAttackPacket(clientMs));
 }
 
+void Game::sendSkillStartPacket(uint32 skillAssetId) {
+	uint64 clientMs = static_cast<uint64>(
+		static_cast<int64>(std::chrono::duration_cast<std::chrono::milliseconds>(
+			std::chrono::high_resolution_clock::now().time_since_epoch()
+		).count()) + serverClockOffset_);
+	INet::ClientApp::addSendBuffer(PacketManager::makeCSkillStartPacket(skillAssetId, clientMs));
+}
+
 void Game::processInput(Milliseconds deltaTime) {
 	if (GetForegroundWindow() != ghWnd) {
 		return;
@@ -1519,6 +1613,19 @@ void Game::processInputGame(Milliseconds deltaTime) {
 
 	mouseDeltaX_ = 0;
 	mouseDeltaY_ = 0;
+
+	// Q key: start skill
+	if (!playerDead_
+		&& !uiManager_.needsCursor()
+		&& (keyboardStateCurr_['Q'] & 0x80)
+		&& !(keyboardStatePrev_['Q'] & 0x80))
+	{
+		const SkillAsset* asset = skillSystem_.findAsset("SwordSlash");
+		if (asset && !skillSystem_.hasActiveSkill(player_->getId())) {
+			skillSystem_.startSkill(asset->id, player_->getId(), skillCtx_);
+			sendSkillStartPacket(asset->id);
+		}
+	}
 
 	// 플레이어 공격: LButton 클릭 시 서버에 C_Attack 전송 + 로컬 이펙트 재생
 	if (!playerDead_

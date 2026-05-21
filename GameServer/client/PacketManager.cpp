@@ -57,6 +57,14 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 		handleSNpcRespawnPacket( buffer, len );
 		break;
 
+	case PacketType::S_SkillStart:
+		handleSSkillStartPacket( buffer, len );
+		break;
+
+	case PacketType::S_SkillHit:
+		handleSSkillHitPacket( buffer, len );
+		break;
+
 	default:
 		std::cout << "Unknown packet type received. Type: " << static_cast<uint16>(header->type) << '\n';
 		break;
@@ -164,6 +172,31 @@ void PacketManager::handleSTimeSyncPacket(byte* buffer, int32 len) {
 void PacketManager::handleSNpcRespawnPacket( byte* buffer, int32 len ) {
 	auto sNpcRespawnPkt = reinterpret_cast<SNpcRespawnPacket*>(buffer);
 	INet::ClientApp::onlineGame()->onNpcRespawn( sNpcRespawnPkt->npcId, sNpcRespawnPkt->newHp, sNpcRespawnPkt->spawnPos );
+}
+
+void PacketManager::handleSSkillStartPacket( byte* buffer, int32 len ) {
+	auto pkt = reinterpret_cast<SSkillStartPacket*>(buffer);
+	INet::ClientApp::onlineGame()->onSkillStart( pkt->ownerId, pkt->skillAssetId, pkt->elapsedMs );
+}
+
+void PacketManager::handleSSkillHitPacket( byte* buffer, int32 len ) {
+	auto pkt = reinterpret_cast<SSkillHitPacket*>(buffer);
+	INet::ClientApp::onlineGame()->onSkillHit( pkt->attackerId, pkt->targetId, pkt->newHp, pkt->skillAssetId );
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeCSkillStartPacket(uint32 skillAssetId, uint64 clientMs) {
+	auto sendBuffer = SendBufferManager::open(sizeof(CSkillStartPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<CSkillStartPacket>();
+	pkt->skillAssetId = skillAssetId;
+	pkt->clientMs     = clientMs;
+
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::C_SkillStart;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
 }
 
 std::shared_ptr<SendBuffer> PacketManager::makeCAttackPacket(uint64 clientMs) {

@@ -7,6 +7,7 @@
 #include "Level.hpp"
 #include "JobTimer.hpp"
 #include "collision.hpp"
+#include "skill/skillCompiler.hpp"
 
 void Room::init(const Level* levelData) {
 	cubes_ = levelData->cubes;
@@ -50,14 +51,22 @@ void Room::init(const Level* levelData) {
 		terrain_.body().snapToCurrent();
 		physicsWorld_.registerTerrain(&terrain_.body(), &terrain_.heightField());
 	}
+
+	// Compile skill assets from the shared Lua skill directory.
+	{
+		ServerSkillCompiler compiler;
+		auto assets = compiler.compileAll("../resources/skills");
+		skillSystem_.registerAssets(std::move(assets));
+	}
 }
 
 void Room::update() {
 	static constexpr Milliseconds dt = 1s / 60.f;	// 60fps
 	static constexpr Seconds dtSec   = 1s / 60.f;
-	
+
 	physicsWorld_.step(dtSec);
 	updateGoblinAI(dt);
+	updateSkillSystem(dt);
 
 	doTimer(dt, [this]() {
 		update();
@@ -296,6 +305,75 @@ void Room::rotate(int32 sessionId, CMouseMovePacket* cMouseMvPkt) {
 	broadcastExcept(session, sMouseMvPkt);
 
 	ObjectPool<CMouseMovePacket>::push(cMouseMvPkt);
+}
+
+void Room::updateSkillSystem(Milliseconds dt) {
+	if (sessions_.empty()) return;
+
+	// Build owner states from all live player sessions
+	std::vector<ServerSkillOwner> owners;
+	owners.reserve(sessions_.size());
+	for (auto* s : sessions_) {
+		auto* p = s->player();
+		if (p->hp() <= 0) continue;
+		owners.push_back({ static_cast<i32t>( p->getId() ), p->pos(), p->orient() });
+	}
+
+	// Build targets from live goblins
+	std::vector<ServerSkillTarget> targets;
+	targets.reserve(goblins_.size());
+	for (auto& g : goblins_) {
+		if (g.hp() <= 0) continue;
+		targets.push_back({ static_cast<i32t>( g.getId() ), AABB{ g.pos(), { 1.0f, 2.0f, 1.0f } }, g.hp() });
+	}
+
+	std::vector<SkillHitResult> hits;
+	skillSystem_.update(dt, owners, targets, hits);
+
+	for (const auto& hit : hits) {
+		for (auto& g : goblins_) {
+			if (g.getId() != hit.targetId) continue;
+			int32 newHp = std::max(g.hp() - hit.damage, 0);
+			g.setHp(newHp);
+			broadcast(PacketManager::makeSSkillHitPacket(
+				static_cast<uint16>(hit.attackerId),
+				static_cast<uint16>(hit.targetId),
+				newHp,
+				hit.skillAssetId
+			));
+			break;
+		}
+	}
+}
+
+void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs) {
+	auto sessionIt = idSessionMap_.find(sessionId);
+	if (sessionIt == idSessionMap_.end()) return;
+
+	auto* player = sessionIt->second->player();
+	if (player->hp() <= 0) return;
+
+	// Compute elapsed time for lag compensation (same pattern as attack())
+	uint64 serverNow = static_cast<uint64>(
+		std::chrono::duration_cast<std::chrono::milliseconds>(
+			HighResolutionClock::now().time_since_epoch()
+		).count()
+	);
+	uint64 elapsedRaw = (serverNow > clientMs) ? (serverNow - clientMs) : 0u;
+	uint16 elapsedMs  = static_cast<uint16>(std::min(elapsedRaw, static_cast<uint64>(65535u)));
+
+	// Start server-side skill instance for authoritative hit detection
+	skillSystem_.startSkill(skillAssetId, player->getId(),
+	                        Milliseconds{ static_cast<float>(elapsedMs) });
+
+	// Broadcast to OTHER clients so they play the visual effect
+	broadcastExcept(sessionIt->second,
+		PacketManager::makeSSkillStartPacket(
+			skillAssetId,
+			static_cast<uint16>(player->getId()),
+			elapsedMs
+		)
+	);
 }
 
 void Room::attack(int32 sessionId, uint64 clientMs) {
