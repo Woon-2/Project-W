@@ -2400,12 +2400,11 @@ void Game::update(Milliseconds deltaTime) {
 
 		case EventType::SkillHit: {
 			// Translate skill damage into an EvHit so existing HP/animation logic is reused.
+			// Skip dead targets — EventType::Hit handler emits EvDeath when hp reaches 0.
 			auto* sh = static_cast<EvSkillHit*>(pEv);
-			if (sh->targetId == goblin_->getId()) {
+			if (sh->targetId == goblin_->getId() && !goblin_->isDead()) {
 				const i32t newHp = std::max(goblin_->hp() - sh->damage, 0);
 				holdEvent(eventList_, EvHit(sh->targetId, newHp));
-				if (newHp == 0)
-					holdEvent(eventList_, EvDeath(sh->targetId));
 				if (auto it = monsterHpBars_.find(sh->targetId); it != monsterHpBars_.end())
 					it->second.hpBarVisibleSeconds = 5.f;
 			}
