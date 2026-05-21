@@ -8,3 +8,6 @@ TroubleShooting.md
 DEVLOG.md
 Plan.md
 ToDo_v2.md
+
+!lib/Debug/*.lib
+!lib/Release/*.lib
