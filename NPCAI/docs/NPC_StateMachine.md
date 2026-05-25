@@ -465,12 +465,13 @@ TacticalSquad        ← 비(非) Actor 코디네이터
 | 0 | `Idle` | 명령 대기. 자율 감지 없음. 명령이 올 때까지 아무것도 하지 않음. |
 | 1 | `Chase` | `EngageTarget` 명령 후 타겟 추격. 분리 힘 블렌드 적용. |
 | 2 | `AttackWindup` | 공격 선딜. 이동 없음. `windupTimer_` 완료 시 hit/miss 판정. 타겟 이탈해도 취소 없음. |
-| 3 | `AttackRecover` | 공격 후딜. 약한 separation drift 허용. `recoverTimer_` 완료 후 재공격 또는 Chase. |
+| 3 | `AttackRecover` | 공격 후딜. 거의 정지하며 아주 약한 겹침 해소 drift만 허용한다. `recoverTimer_` 완료 후 재공격 또는 PressureWait. |
 | 4 | `Flank` | `FlankTarget` 명령. `assignedSlot_`(월드 좌표) 위치까지 이동. 도착 후 Chase 또는 AttackWindup. 타겟이 `abandonDist_` 이상 이탈하면 슬롯 포기 → Chase. |
-| 5 | `AlternateWait` | 교대 공격에서 자기 순번이 아닌 대기 상태. 다음 EngageTarget 명령 수신 시 전환. |
-| 6 | `Return` | `Retreat` 명령 또는 타겟 소실 시 `spawnPos_`로 귀환. |
+| 5 | `ChargeThrough` | 쐐기 대형 돌진. 지정 방향으로 통과하며 충돌한 플레이어에게 피해를 준다. |
+| 6 | `Confused` | PlatoonLeader 사망 직후 일정 시간 리더 사망 위치 주변에서 방황한다. |
 | 7 | `Dead` | 종단 상태. |
 | 8 | `HoldSlot` | `DenseHold` 명령. `assignedSlot_` 위치까지 이동 후 제자리 유지. 타겟이 범위 내여도 공격하지 않음 (경계 상태). |
+| 9 | `PressureWait` | 공격 슬롯이 가득 찼을 때 타겟을 유지한 채 플레이어 전방의 좁은 탈출 틈을 제외한 주변 외곽에 seed 기반으로 분산 대기한다. 외곽 목표는 진입 시 정한 offset을 유지하고 플레이어 이동량만큼 평행 이동하며, 목표 근처에서 감속/정지하되 보수적인 overlap drift로 겹침 해소를 지속한다. 공격권은 sticky 예약으로 유지되며, 빈 슬롯은 플레이어와 가까운 후보부터 채운다. 재진입 추격 중에는 실제 상태는 유지하되 스냅샷/렌더 표시만 `Chase`로 내보낸다. |
 
 #### 상태 전이 다이어그램
 
@@ -508,20 +509,25 @@ Dead: 종단 상태 (alive_ == false)
 
 | 현재 상태 | 전이 대상 | 조건 |
 |---|---|---|
-| `Chase` | `AttackWindup` | `dist ≤ attackRange_` |
+| `Chase` | `AttackWindup` | `dist ≤ attackRange_` && 해당 플레이어 공격권 예약 보유 |
+| `Chase` | `PressureWait` | 해당 플레이어 공격권 예약 실패 |
 | `Chase` | `Idle` | 타겟 소실/사망 |
 | `AttackWindup` | `AttackRecover` | `windupTimer_ ≥ attackWindupTime_` |
 | `AttackWindup` | `Idle` | 타겟 소실/사망 (windup 도중) |
-| `AttackRecover` | `AttackWindup` | `recoverTimer_` 완료 && `dist ≤ attackRange_` |
-| `AttackRecover` | `Chase` | `recoverTimer_` 완료 && `dist > attackRange_` |
+| `AttackRecover` | `AttackWindup` | `recoverTimer_` 완료 && `dist ≤ attackRange_` && 해당 플레이어 공격권 예약 보유 |
+| `AttackRecover` | `PressureWait` | `recoverTimer_` 완료 && 즉시 재공격 조건이 아님 |
 | `AttackRecover` | `Idle` | 타겟 소실/사망 (recover 도중) |
-| `Flank` | `AttackWindup` | `assignedSlot_` 도달(dist < 0.5) && `dist to target ≤ attackRange_` |
-| `Flank` | `Chase` | `assignedSlot_` 도달(dist < 0.5) && `dist to target > attackRange_` |
+| `Flank` | `AttackWindup` | `assignedSlot_` 도달(dist < 0.5) && `dist to target ≤ attackRange_` && 해당 플레이어 공격권 예약 보유 |
+| `Flank` | `Chase` | `assignedSlot_` 도달(dist < 0.5) && 공격권 예약 보유 && 사거리 밖 |
+| `Flank` | `PressureWait` | `assignedSlot_` 도달(dist < 0.5) && 공격권 예약 실패 |
 | `Flank` | `Chase` | 이동 중 타겟이 `slotRefTargetPos_`에서 `abandonDist_` 이상 이탈 (슬롯 포기) |
 | `Flank` | `Idle` | 타겟 소실/사망 (Flank 도중) |
+| `PressureWait` | `AttackWindup` | 최소 체류/ID stagger 이후 공격권 예약 보유 && `dist ≤ attackRange_` |
+| `PressureWait` | `Idle` | 타겟 소실/사망 |
 | `HoldSlot` | `Idle` | 타겟 소실/사망 |
 | `AlternateWait` | `Idle` | 타겟 소실/사망 |
 | `Return` | `Idle` | `dist to spawnPos_ < 0.3` |
+| `Confused` | `Confused` | 명시적인 새 명령이나 사망 전까지 방황 |
 | `Dead` | — | 종단 상태 (alive_ == false 감지 즉시) |
 
 #### 명령 구동 전이 (TacticalSquad → TacticalNpc)
@@ -533,10 +539,10 @@ Dead: 종단 상태 (alive_ == false)
 | `EngageTarget` | `Chase` | `targetId_` 갱신 |
 | `FlankTarget` | `Flank` | `targetId_` + `assignedSlot_`(월드 좌표) + `slotRefTargetPos_` + `abandonDist_` 갱신 |
 | `HoldSlot` | `HoldSlot` | `targetId_` + `assignedSlot_`(월드 좌표) 갱신. 도착 후 공격 없이 제자리 유지. |
-| `AlternateWait` | `AlternateWait` | `targetId_` 갱신 |
-| `Retreat` | `Return` | — |
+| `GuardSlot` | `HoldSlot` | `targetId_` + `assignedSlot_` 갱신. 도착 후 가장 가까운 생존 플레이어를 바라봄. |
+| `ChargeThrough` | `ChargeThrough` | `chargeDir`, `chargeId`, 충돌 피해 설정 |
 | `Idle` | `Idle` | `targetId_ = 0` |
-| `Confused` | `Idle` | `targetId_ = 0` (PlatoonLeader 사망 시 발행) |
+| `Confused` | `Confused` | `targetId_ = 0`, 리더 사망 위치 주변 방황 시작 |
 
 #### TacticalNpcConfig 파라미터
 
@@ -544,7 +550,7 @@ Dead: 종단 상태 (alive_ == false)
 |---|---|---|
 | `maxHp` | 100.0 | 최대 HP |
 | `moveSpeed` | 4.0 | 이동 속도 (units/s) |
-| `attackRange` | 2.0 | 공격 사정거리 |
+| `attackRange` | 2.8 | 일반 TacticalNpc 공격 사정거리. 플레이어 몸에 과하게 붙지 않도록 기존보다 +0.8 조정 |
 | `attackDamage` | 15.0 | 타격 데미지 |
 | `attackWindupTime` | 0.4s | 공격 선딜 시간 |
 | `attackRecoverTime` | 0.8s | 공격 후딜 시간 |
@@ -695,7 +701,7 @@ void TacticalSquad::pushConfusedToMembers(Room& room) {
 }
 ```
 
-PlatoonLeader의 `update()`에서 `alive_`가 false로 바뀌는 틱에 `deathReported_` 플래그로 1회만 호출된다. Confused 명령을 받은 TacticalNpc는 즉시 `Idle`로 전환된다.
+PlatoonLeader의 `update()`에서 `alive_`가 false로 바뀌는 틱에 `deathReported_` 플래그로 1회만 호출된다. Confused 명령을 받은 TacticalNpc는 즉시 `Confused(6)` 상태로 전환되어 리더 사망 위치 주변을 방황한다. 각 Squad는 6초 뒤 리더 없는 난투 모드로 전환하고, Squad 중심에서 가장 가까운 생존 플레이어에게 `EngageTarget`을 발행한다.
 
 ---
 
@@ -905,10 +911,13 @@ std::vector<DebugTacticalNpcEntry> tacticalNpcs;
 | `AttackWindup(2)` | 주황 | (255, 165, 0) |
 | `AttackRecover(3)` | 진주황 | (200, 100, 0) |
 | `Flank(4)` | 청록 | (0, 200, 220) |
-| `AlternateWait(5)` | 파랑 | (50, 80, 220) |
-| `Return(6)` | 초록 | (50, 180, 50) |
+| `ChargeThrough(5)` | 파랑 | (50, 80, 220) |
+| `Confused(6)` | 연보라 | (170, 120, 255) |
 | `Dead(7)` | 거의 검정 | (40, 40, 40) |
 | `HoldSlot(8)` | 노랑 | (255, 220, 0) |
+| `PressureWait(9)` | 하늘색 | (80, 180, 255) |
+
+`PressureWait`는 플레이어별 실공격자(`AttackWindup`/`AttackRecover`)와 예약자를 합쳐 5명 이하가 되도록 `Room`의 공격권 예약을 사용한다. 이미 공격권을 받은 일반 `TacticalNpc`는 유효한 동안 예약을 유지하고, 가까운 후보 우선 정렬은 빈 슬롯을 채울 때만 사용한다. 예약자가 타겟을 잃거나 죽거나 너무 멀어지거나 오래 사거리 안에 들어가지 못하면 예약을 반환해 다른 후보가 들어올 수 있다. 슬롯 증가로 외곽 대기 인원 자체를 줄이고, 남은 외곽 대기자는 전방 좁은 cone을 제외한 넓은 각도와 반경 offset에 seed 기반으로 흩어진다. 플레이어가 움직일 때는 새 자리를 뽑지 않고 기존 상대 위치를 따라가며, 겹친 경우에는 안쪽으로 파고들지 않는 drift만 적용해 현재 위치 근처에서 벌어진다. 예약을 받은 재진입자는 실제 FSM 상태를 `PressureWait`로 유지하지만, `DebugTacticalNpcEntry.state`는 `Chase(1)`로 기록되어 화면에는 추격 상태로 보인다.
 
 #### drawTacticalNpc() 시각화 요소
 

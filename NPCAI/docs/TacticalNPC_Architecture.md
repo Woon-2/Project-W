@@ -128,7 +128,7 @@ public:
 | `GoblinMidBossTactic` | 기존 고블린 중간보스 전술 전체 |
 | `GrandBaumMidBossTactic` | 그랜드밤 방패벽 및 (ㄹ) 외곽 웨이브 기습 |
 
-`MidBossTacticBase`는 전술 phase를 갖지 않는다. `PlayerCluster` 생성, 플레이어 centroid/facing 계산, 가장 가까운 플레이어 선택, Squad별 플레이어 타겟 분배, 전체 Squad `Engage`/`Idle` 발행, 리더 사망 시 `Confused` 발행만 담당한다.
+`MidBossTacticBase`는 전술 phase를 갖지 않는다. `PlayerCluster` 생성, 플레이어 centroid/facing 계산, 가장 가까운 플레이어 선택, Squad별 플레이어 타겟 분배, 전체 Squad `Engage`/`Idle` 발행, 리더 사망 시 `Confused` 발행만 담당한다. `Confused`를 받은 멤버는 `TacticalNpcState::Confused(6)`으로 전환되어 리더 사망 위치 주변을 방황하고, 6초 뒤 각 Squad는 가장 가까운 생존 플레이어를 향한 리더 없는 난투로 전환한다.
 
 ---
 
@@ -146,7 +146,18 @@ Encircle
 Vigilance
 DivideAndConquer
 Cooldown
+BossSolo
 ```
+
+### 4-1-1. 고블린 보스 개인 전투
+
+`GoblinMidBossTactic`은 고블린 중간보스 본체의 개인 전투 FSM도 함께 소유한다. 공용 `PlatoonLeader`는 종족별 상태를 모르고 지휘 실행자로만 유지되며, 고블린 전용 보스 상태는 전술 객체 내부에 둔다.
+
+- 보스는 살아 있는 플레이어 군집을 평가해 가장 우선순위가 높은 타겟을 추격한다. 점수는 `clusterSize * 1000 - distanceToBoss`를 사용한다.
+- 추격 중에는 0.5초마다 타겟을 재평가하되, 새 타겟 점수가 현재 타겟보다 120 이상 높을 때만 교체한다.
+- 개인 전투 FSM은 `EvaluateTarget -> ChaseTarget -> AttackWindup -> AttackRecover` 흐름이다. 표시 상태는 기존 `Idle`, `Chase`, `AttackWindup`, `AttackRecover`를 재사용한다.
+- `TacticalRetreat` 중에는 개인 추격보다 전술 후퇴 이동이 우선한다.
+- 모든 Squad가 전멸하면 phase가 `BossSolo`로 바뀐다. 이 상태에서는 SquadOrder 발행을 중단하고, 보스가 개인 추격/공격 루프만으로 단독 전투를 계속한다.
 
 기본 흐름:
 
@@ -197,6 +208,9 @@ Cooldown 종료:
 `Encircle`:
 
 - 플레이어 centroid 주변 원형 섹터를 Squad별 생존 인원 비율로 나눈다.
+- 플레이어 군집 1개일 때만 발동하며, 군집 크기별 최소 생존 부대원이 필요하다. 기준은 플레이어 1/2/3/4명 이상에 대해 6/8/10/12명이다.
+- 포위 반경은 생존 부대원 수와 `ENCIRCLE_SLOT_SPACING`으로 계산해 `ENCIRCLE_MIN_RADIUS`와 `ENCIRCLE_RADIUS` 사이로 제한한다. 부대원이 줄면 원을 줄여 빈틈을 줄인다.
+- 발동 조건을 만족하지 못하거나 포위 중 최소 인원 아래로 떨어지면 `Engage` fallback과 짧은 fail cooldown으로 전환한다.
 - Squad는 `Encircle` 명령을 받아 멤버별 `HoldSlot`으로 이동한다.
 - 모든 멤버가 슬롯에 도착하면 `Engage` 후 `Cooldown`에 들어간다.
 
@@ -333,7 +347,7 @@ SnakeThreat > SlimeThreat > Nearest
 
 ## 6. TacticalSquad
 
-`TacticalSquad`는 Actor가 아닌 지휘 보조 객체다. 멤버 `TacticalNpc`의 id 목록을 보유하고, `SquadOrder`를 개별 `TacticalCommand`로 변환한다.
+`TacticalSquad`는 Actor가 아닌 지휘 보조 객체다. 멤버 `TacticalNpc`의 id 목록(`memberIds_`)과 raw 포인터 캐시(`memberCache_`)를 병행 보유하고, `SquadOrder`를 개별 `TacticalCommand`로 변환한다.
 
 ### 6-1. 주요 책임
 
@@ -380,7 +394,10 @@ slot_i = center
 Encircle 슬롯:
 
 ```text
-slot_i = tacticCenter + direction(theta_i) * approachRadius
+dynamicRadius = clamp(liveMembers * ENCIRCLE_SLOT_SPACING / 2π,
+                      ENCIRCLE_MIN_RADIUS,
+                      ENCIRCLE_RADIUS)
+slot_i = tacticCenter + direction(theta_i) * dynamicRadius
 ```
 
 RingGuard 슬롯:
@@ -410,11 +427,13 @@ exitApex    = targetCenter  + forward * WEDGE_EXIT_DISTANCE
 | 0 | `Idle` | 명령 대기 |
 | 1 | `Chase` | 타겟 추격 |
 | 2 | `AttackWindup` | 공격 준비 |
-| 3 | `AttackRecover` | 공격 후 회복 |
+| 3 | `AttackRecover` | 공격 후 회복. 거의 정지하며 약한 겹침 해소만 수행 |
 | 4 | `Flank` | 지정 측면 슬롯으로 이동 |
 | 5 | `ChargeThrough` | 쐐기 돌진 |
+| 6 | `Confused` | 리더 사망 후 방황 |
 | 7 | `Dead` | 사망 |
 | 8 | `HoldSlot` | 지정 슬롯 이동/유지 |
+| 9 | `PressureWait` | 공격 슬롯 대기 |
 
 ### 7-2. 명령
 
@@ -426,9 +445,11 @@ exitApex    = targetCenter  + forward * WEDGE_EXIT_DISTANCE
 | `GuardSlot` | `HoldSlot` | `targetId`, `slotOffset`, `speedMult`, `guardNearestPlayer_ = true` |
 | `ChargeThrough` | `ChargeThrough` | `targetId`, `slotOffset`, `chargeDir`, `chargeId`, 피해 설정 |
 | `Idle` | `Idle` | 타겟 초기화 |
-| `Confused` | `Idle` | 타겟 초기화 |
+| `Confused` | `Confused` | 타겟 초기화 후 리더 사망 위치 주변 방황 시작 |
 
 `GuardSlot`은 상태 자체는 `HoldSlot`을 사용하지만, 도착 후 고정 타겟 대신 가장 가까운 생존 플레이어를 바라본다.
+
+일반 `TacticalNpc` 부대원의 근접 공격은 플레이어당 최대 5명까지 동시에 허용된다. 제한은 실공격자(`AttackWindup`/`AttackRecover`)와 `Room`의 공격권 예약자를 합산해 관리한다. 이미 공격권을 받은 부대원은 유효한 동안 sticky 예약을 유지하고, 플레이어와 가까운 후보 우선 정렬은 빈 슬롯을 채울 때만 사용한다. 예약자가 타겟을 잃거나 죽거나 너무 멀어지거나 오래 사거리 안에 들어가지 못하면 예약을 반환한다. 슬롯 증가로 외곽 대기 인원 자체를 줄이고, 예약을 받지 못한 부대원은 같은 타겟을 유지하되 `PressureWait`으로 전환되어 플레이어 전방의 좁은 탈출 틈을 제외한 주변 외곽에 seed 기반으로 흩어져 압박 대기한다. `PressureWait`은 진입 시 정한 외곽 목표 offset을 유지하고 플레이어 이동 시 목표를 평행 이동하며, 목표 근처에서 감속/정지한다. 겹친 대기자는 위치를 재추첨하지 않고 현재 위치 근처에서 더 적극적인 overlap drift로 벌어지며, 안쪽으로 밀고 들어가지 않게 보정한다. 외곽 간격은 약간 넓게 조정했고, `Chase`로 왕복하지 않고 상태 내부에서 최소 체류/ID stagger 이후 예약 성공자만 순차 재진입한다. 재진입 추격 중에는 실제 상태만 유지하고 스냅샷/렌더 표시 상태는 `Chase`로 내보낸다. 일반 부대원 공격 사거리는 기존보다 +0.8 늘려 플레이어 몸에 과하게 붙지 않도록 조정한다. `PlatoonLeader` 보스 본체의 개인 공격은 이 제한과 사거리 조정에 포함하지 않는다.
 
 ### 7-3. 명령 소비
 
@@ -507,7 +528,7 @@ else if (race == GrandBaum) { ... }
 | 위치 | 상수 예 |
 |---|---|
 | `MidBossTacticBase` | 공용 helper, 종족별 전술 상수 없음 |
-| `GoblinMidBossTactic` | `TACTIC_INTERVAL`, `CLUSTER_RADIUS`, `ENCIRCLE_RADIUS`, `TACTIC_HP_THRESHOLD`, `BOX_FRONT_OFFSET`, `REGROUP_DIST` |
+| `GoblinMidBossTactic` | `TACTIC_INTERVAL`, `CLUSTER_RADIUS`, `ENCIRCLE_RADIUS`, `ENCIRCLE_MIN_RADIUS`, `ENCIRCLE_SLOT_SPACING`, `TACTIC_HP_THRESHOLD`, `BOX_FRONT_OFFSET`, `REGROUP_DIST` |
 | `GrandBaumMidBossTactic` | `FIRST_SHIELD_WALL_HP_RATIO`, `SECOND_SHIELD_WALL_HP_RATIO`, `MIN_SHIELD_RING_RADIUS`, `MAX_SHIELD_RING_RADIUS`, `SLIME_RING_SLOT_SPACING`, `MIN_SHIELD_WALL_SLIME_COUNT`, `SHIELDWALL_DAMAGE_MULT`, `BOSS_CHASE_SPEED_MULT`, `BOSS_TARGET_LOCK_DURATION`, `BOSS_SAME_PRIORITY_RETARGET_INTERVAL`, `BOSS_SLIME_THREAT_RANGE`, `SNAKE_OUTER_RADIUS`, `SNAKE_EVASION_RADIUS`, `SNAKE_EVASION_SPEED_MULT`, `SNAKE_STOP_EVADE_RANGE`, `SNAKE_WAVE_MAX_COUNT`, `SNAKE_WAVE_MULTIPLIER` |
 | `TacticalSquad` | `WEDGE_EXIT_DISTANCE`, `WEDGE_PREP_APEX_DISTANCE`, `WEDGE_IMPACT_RADIUS`, `WEDGE_SPEED_MULT` |
 | `TacticalNpc` | `TACTICAL_SPEED_MULT` |

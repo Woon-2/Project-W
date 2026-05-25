@@ -6,8 +6,8 @@
 #include "../sim/ScenarioIsis.hpp"
 #include <cstdio>
 
-//#define USE_GRANDBAUM_SCENARIO
 //#define USE_ISIS_SCENARIO
+//#define USE_GRANDBAUM_SCENARIO
 
 namespace viz {
 

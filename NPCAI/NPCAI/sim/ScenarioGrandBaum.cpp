@@ -27,7 +27,7 @@ void ScenarioGrandBaum::setup(Room& room) {
     TacticalNpcConfig slimeCfg;
     slimeCfg.maxHp             = 60.f;
     slimeCfg.moveSpeed         = 8.f;
-    slimeCfg.attackRange       = 1.8f;
+    slimeCfg.attackRange       = 2.6f;
     slimeCfg.attackDamage      = 8.f;
     slimeCfg.attackWindupTime  = 0.35f;
     slimeCfg.attackRecoverTime = 0.8f;
@@ -73,7 +73,7 @@ void ScenarioGrandBaum::setup(Room& room) {
             float z = origin.z + static_cast<float>(i / columns) * 2.f;
             auto npc = std::make_shared<TacticalNpc>(name, Vec3{ x, 0.f, z }, cfg);
             npc->setSquadId(squadId);
-            squadPtr->addMember(npc->getId());
+            squadPtr->addMember(npc.get());
             room.addTacticalNpc(npc);
         }
 
