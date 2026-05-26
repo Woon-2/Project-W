@@ -4,6 +4,7 @@
 #include "gfx.hpp"
 #include "animation.hpp"
 #include "swordSlashMaterial.hpp"
+#include "piercingMaterial.hpp"
 
 class AssetManager {
 public:
@@ -61,6 +62,8 @@ public:
 	const ps::MatTwoSides& twoSidesMaterial()      const { return twoSidesMaterial_; }
 	const ps::MatTwoSides& spikesMaterial()        const { return spikesMaterial_; }
 	const ps::MatSmokeBlendCG& slashPathMaterial() const { return slashPathMaterial_; }
+	const ps::MatPiercing& piercingMaterial()      const { return piercingMaterial_; }
+	const Mesh*    meshVfxProjectile02()   const { return &meshVfxProjectile02_; }
 	const std::vector<std::shared_ptr<AnimClip>>& playerAnimations() const { return playerAnimations_; }
 	const std::vector<std::shared_ptr<AnimClip>>& goblinAnimations() const { return goblinAnimations_; }
 
@@ -122,6 +125,12 @@ private:
 	ps::MatTwoSides     twoSidesMaterial_{};
 	ps::MatTwoSides     spikesMaterial_{};
 	ps::MatSmokeBlendCG slashPathMaterial_{};
+	Texture piercingFireTex_{};
+	Texture vfxNoise01Tex_{};
+	Texture vfxNoise02Tex_{};
+	Texture piercingGradientMaskTex_{};
+	Mesh    meshVfxProjectile02_{};
+	ps::MatPiercing piercingMaterial_{};
 };
 
 #endif	// __AssetManager_HPP

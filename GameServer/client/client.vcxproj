@@ -172,6 +172,8 @@
     <ClCompile Include="constraint.cpp" />
     <ClCompile Include="jointConstraint.cpp" />
     <ClCompile Include="blendCGMeshPipeline.cpp" />
+    <ClCompile Include="piercingMeshPipeline.cpp" />
+    <ClCompile Include="piercingMaterial.cpp" />
     <ClCompile Include="meshParticlePipeline.cpp" />
     <ClCompile Include="windRingPipeline.cpp" />
     <ClCompile Include="smokeBlendCGPipeline.cpp" />
@@ -269,6 +271,8 @@
     <ClInclude Include="billboard.hpp" />
     <ClInclude Include="billboardPipeline.hpp" />
     <ClInclude Include="blendCGMeshPipeline.hpp" />
+    <ClInclude Include="piercingMeshPipeline.hpp" />
+    <ClInclude Include="piercingMaterial.hpp" />
     <ClInclude Include="binaryImport.hpp" />
     <ClInclude Include="BVPipeline.hpp" />
     <ClInclude Include="camera.hpp" />
@@ -403,6 +407,10 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>
     <FxCompile Include="blendCGMesh.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="piercing.hlsl">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </FxCompile>

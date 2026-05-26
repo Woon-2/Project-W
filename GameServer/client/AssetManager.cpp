@@ -368,6 +368,46 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 		.pDestTex    = nullptr
 	} );
 
+	gfx.addRequestMeshBinLoad( RequestMeshBinLoad{
+		.meshPath    = "../resources/effects/SM_VFX_Projectile_02.meshbin",
+		.pTexHashMap = &texHashMap_,
+		.pDestMesh   = &meshVfxProjectile02_,
+		.pDestTex    = nullptr
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "PiercingFire",
+		.texturePath     = "../resources/Textures/T_VFX_Piercing_Fire.dds",
+		.pDest           = &piercingFireTex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "VfxNoise01",
+		.texturePath     = "../resources/Textures/T_VFX_Noises_01.dds",
+		.pDest           = &vfxNoise01Tex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "VfxNoise02",
+		.texturePath     = "../resources/Textures/T_VFX_Noises_02.dds",
+		.pDest           = &vfxNoise02Tex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "PiercingGradientMask",
+		.texturePath     = "../resources/Textures/T_VFX_Piercing_Generic_Gradient_Mask_01.dds",
+		.pDest           = &piercingGradientMaskTex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false
+	} );
+
 	gfx.addRequestTextureLoad( RequestTextureLoad{
 		.name            = "TexWindRing",
 		.texturePath     = "../resources/textures/Tex_WindRing.dds",
@@ -506,6 +546,23 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 	slashPathMaterial_.useCenterGlow = 0.0f;
 	slashPathMaterial_.useDepth     = 1.0f;
 	slashPathMaterial_.depthPower   = 1.0f;
+
+	// M_VFX_Piercing_Fire — Vefects Piercing slash material.
+	// Numeric/color/vector params come from the exported .json; texture slots
+	// are bound here. _Distortion_Mask (gradient mask) and _Texture1 (opacity
+	// mask) have no DDS yet, so they stay null (shader treats null as white).
+	piercingMaterial_ = ps::MatPiercing{};
+	if (!loadPiercingMaterialMetadata("../resources/effects/M_VFX_Piercing_Fire.json", piercingMaterial_)) {
+		gSharedLog << "[Piercing Material] Warning: ../resources/effects/M_VFX_Piercing_Fire.json 로드 실패. 기본값을 사용합니다.\n";
+	}
+	piercingMaterial_.colorNoiseTex      = &vfxNoise01Tex_;    // _Color_Noise_Texture
+	piercingMaterial_.piercingTex        = &piercingFireTex_;  // _Piercing_Texture
+	piercingMaterial_.piercingNoiseTex   = &vfxNoise02Tex_;    // _TextureSample1
+	piercingMaterial_.distortionNoiseTex = &vfxNoise02Tex_;    // _Distortion_Noise_Texture
+	piercingMaterial_.distortionMaskTex  = &piercingGradientMaskTex_;  // _Distortion_Mask
+	piercingMaterial_.emissiveNoiseTex   = &vfxNoise01Tex_;    // _Emissive_Noise_Texture
+	piercingMaterial_.emissiveMaskTex    = &piercingFireTex_;  // _Texture0
+	piercingMaterial_.opacityMaskTex     = nullptr;            // _Texture1 (null in material)
 }
 
 void AssetManager::setupBakedAnimationIds() {

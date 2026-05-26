@@ -332,7 +332,42 @@ struct MatWindRing {
     mu::Vec4       color            = { 1.f, 1.f, 1.f, 1.f };
 };
 
-using AnyMat = std::variant<MatUnlit, MatSwordSlash, MatSmokeBlendCG, MatTwoSides, MatWindRing>;
+// MatPiercing: PiercingMeshPipeline (Mesh mode) — Vefects Piercing slash shader.
+// Layered color-noise lerp + piercing texture/noise + distortion + emissive dissolve.
+// Custom1.xy drives the per-particle alpha/emissive reveal (uv2.z / uv2.w).
+struct MatPiercing {
+    const Texture* colorNoiseTex      = nullptr;
+    const Texture* piercingTex        = nullptr;
+    const Texture* piercingNoiseTex   = nullptr;
+    const Texture* distortionNoiseTex = nullptr;
+    const Texture* distortionMaskTex  = nullptr;
+    const Texture* emissiveNoiseTex   = nullptr;
+    const Texture* emissiveMaskTex    = nullptr;
+    const Texture* opacityMaskTex     = nullptr;
+
+    mu::Vec4 color1        = { 1.f, 1.f, 1.f, 1.f };
+    mu::Vec4 color2        = { 1.f, 1.f, 1.f, 1.f };
+    mu::Vec4 emissiveColor = { 1.f, 1.f, 1.f, 1.f };
+
+    mu::Vec2 colorNoiseScale       = { 1.f, 1.f };
+    mu::Vec2 colorNoiseSpeed       = { 0.f, 0.f };
+    mu::Vec2 piercingNoiseScale    = { 1.f, 1.f };
+    mu::Vec2 piercingNoiseSpeed    = { 0.f, 0.f };
+    mu::Vec2 distortionNoiseScale  = { 1.f, 1.f };
+    mu::Vec2 distortionNoiseSpeed  = { 0.f, 0.f };
+    mu::Vec2 emissiveDissolveScale = { 1.f, 1.f };
+    mu::Vec2 emissiveDissolveSpeed = { 0.f, 0.f };
+    mu::Vec4 distortionMaskST       = { 1.f, 1.f, 0.f, 0.f };
+    mu::Vec4 opacityMaskST          = { 1.f, 1.f, 0.f, 0.f };
+
+    float colorBoost             = 1.f;
+    float piercingNoiseIntensity = 0.f;
+    float distortionIntensity    = 1.f;
+    float emissiveIntensity      = 1.f;
+    float opacityBoost           = 1.f;
+};
+
+using AnyMat = std::variant<MatUnlit, MatSwordSlash, MatSmokeBlendCG, MatTwoSides, MatWindRing, MatPiercing>;
 
 // ---------------------------------------------------------------------------
 // Renderer Module

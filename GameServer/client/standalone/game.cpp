@@ -756,7 +756,7 @@ void Game::setupStage() {
 	effectDropdown_->offsetX = UI::DimValue::px(-12.f);
 	effectDropdown_->offsetY = UI::DimValue::px(12.f);
 	effectDropdown_->width   = UI::DimValue::px(180.f);
-	effectDropdown_->setup({ "Slash Wave", "Slash Combo", "Slash 7", "Slash 1", "Spikes", "Crystals Front Attack", "AoE Slash Green", "Red Energy Explosion", "Crystals Cross Fade", "Arrow", "Arrow Volley", "Arrow Rain", "Energy Explosion Arrow", "Tornado Shot" });
+	effectDropdown_->setup({ "Slash Wave", "Slash Combo", "Slash 7", "Slash 1", "Spikes", "Crystals Front Attack", "AoE Slash Green", "Red Energy Explosion", "Crystals Cross Fade", "Arrow", "Arrow Volley", "Arrow Rain", "Energy Explosion Arrow", "Tornado Shot", "Piercing" });
 	effectDropdown_->onSelectionChanged = [this](int idx) {
 		currentEffect_ = static_cast<SwordEffect>(idx);
 	};
@@ -1125,6 +1125,26 @@ void Game::setParticle()
 			}
 		};
 		spikesAttackEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);
+	}
+
+	// ── Piercing effect ────────────────────────────────────────────────────
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/PS_VFX_Piercing_ParticleSystems.json",
+			"PS_VFX_Piercing"
+		);
+		cfg.renderer.pMesh = assetManager_.meshVfxProjectile02();
+		cfg.renderer.pSubMesh = assetManager_.meshVfxProjectile02()->subMeshes.empty()
+		                       ? nullptr
+		                       : &assetManager_.meshVfxProjectile02()->subMeshes[0];
+		cfg.renderer.mat = assetManager_.piercingMaterial();
+		// 이 VFX는 Unity에서 로컬 +X 축으로 발사/정렬되도록 제작됨 (VelocityModule.x=20).
+		// 엔진 forward는 +Z이므로 이미터 방향과 메시 기준 회전을 -90° yaw 보정해
+		// 로컬 +X → +Z 로 맞춘다. 이후 play()의 orient가 플레이어 방향으로 회전시킨다.
+		const mu::Mat4x4 piercingForwardFix = mu::rotateYH(mu::Degree(-90.f));
+		cfg.shape.orientation    = piercingForwardFix;
+		cfg.main.startRotation3D = piercingForwardFix;
+		piercingEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);
 	}
 
 	// ── Crystals Front Attack effect ──────────────────────────────────────────
@@ -2674,6 +2694,7 @@ void Game::update(Milliseconds deltaTime) {
 	swordSlashComboEffect_.update( deltaTime );
 	slashWaveEffect_.update( deltaTime );
 	spikesAttackEffect_.update( deltaTime );
+	piercingEffect_.update( deltaTime );
 	crystalsFrontAttackEffect_.update( deltaTime );
 	aoESlashGreenEffect_.update( deltaTime );
 	dustParticleSystem_.update( deltaTime );
@@ -2738,6 +2759,7 @@ void Game::render() {
 	swordSlashComboEffect_.render( gfx_ );
 	slashWaveEffect_.render( gfx_ );
 	spikesAttackEffect_.render( gfx_ );
+	piercingEffect_.render( gfx_ );
 	crystalsFrontAttackEffect_.render( gfx_ );
 	aoESlashGreenEffect_.render( gfx_ );
 	dustParticleSystem_.render( gfx_ );
@@ -2926,6 +2948,7 @@ void Game::processInput(Milliseconds deltaTime) {
 		case SwordEffect::Slash1:     swordSlash1Effect_.play( slashPos );     break;
 		case SwordEffect::SlashWave:  slashWaveEffect_.play( slashPos, player_->orient() );       break;
 		case SwordEffect::Spikes:              spikesAttackEffect_.play( slashPos );          break;
+		case SwordEffect::Piercing:            piercingEffect_.play( slashPos, player_->orient() );              break;
 		case SwordEffect::CrystalsFrontAttack: {
 			const auto crystalPos = player_->renderState().pos + player_->forward() * 1.f;
 			const mu::Mat4x4 crystalOrient = mu::rotateYH( mu::Degree( -90.f ) ) * player_->orient().mat4();
