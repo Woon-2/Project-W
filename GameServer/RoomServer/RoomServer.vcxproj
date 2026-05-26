@@ -161,6 +161,11 @@
     <ClCompile Include="errorHandling.cpp" />
     <ClCompile Include="GameSession.cpp" />
     <ClCompile Include="goblin.cpp" />
+    <ClCompile Include="MidBossTactics.cpp" />
+    <ClCompile Include="PlatoonLeader.cpp" />
+    <ClCompile Include="TacticalGoblin.cpp" />
+    <ClCompile Include="TacticalNpc.cpp" />
+    <ClCompile Include="TacticalSquad.cpp" />
     <ClCompile Include="JobTimer.cpp" />
     <ClCompile Include="Level.cpp" />
     <ClCompile Include="Listener.cpp" />
@@ -196,6 +201,12 @@
     <ClInclude Include="errorHandling.hpp" />
     <ClInclude Include="GameSession.hpp" />
     <ClInclude Include="goblin.hpp" />
+    <ClInclude Include="IMidBossTactic.hpp" />
+    <ClInclude Include="MidBossTactics.hpp" />
+    <ClInclude Include="PlatoonLeader.hpp" />
+    <ClInclude Include="TacticalGoblin.hpp" />
+    <ClInclude Include="TacticalNpc.hpp" />
+    <ClInclude Include="TacticalSquad.hpp" />
     <ClInclude Include="JobTimer.hpp" />
     <ClInclude Include="Level.hpp" />
     <ClInclude Include="Listener.hpp" />

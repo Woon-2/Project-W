@@ -9,8 +9,12 @@
 #include "NpcGroup.hpp"
 #include "physicsWorld.hpp"
 #include "skill/skillSystem.hpp"
+#include "TacticalNpc.hpp"
+#include "TacticalSquad.hpp"
+#include "PlatoonLeader.hpp"
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 
 class SendBuffer;
 struct Level;
@@ -29,6 +33,17 @@ public:
 		}
 		for (const auto& g : goblins_) {
 			IdPool::push(g.getId());
+		}
+		// Unregister tactical NPC bodies before unique_ptrs are destroyed
+		if (platoonLeader_) {
+			physicsWorld_.unregisterBody(&platoonLeader_->body());
+			IdPool::push(platoonLeader_->getId());
+		}
+		for (const auto& npc : tacticalNpcs_) {
+			if (npc) {
+				physicsWorld_.unregisterBody(&npc->body());
+				IdPool::push(npc->getId());
+			}
 		}
 	}
 
@@ -70,6 +85,17 @@ public:
 	Milliseconds getElapsedMs() const { return elapsedMs_; }
 	GameSession* findLivingSessionByPlayerId( int32 playerId ) const;
 
+	// ── Tactical AI ──────────────────────────────────────────────────────────
+	bool     tryReserveTacticalAttackSlot(uint32_t targetId, uint32_t npcId);
+	void     releaseTacticalAttackSlot(uint32_t targetId, uint32_t npcId);
+	uint32_t beginWedgeCharge();
+	void     endWedgeCharge(uint32_t chargeId);
+	int32    tryApplyWedgeChargeHit(uint32_t chargeId, int32 playerId, float damage);
+	void MU_CALLCONV spawnTacticalGoblinEncounter(mu::Vec3 spawnCenter,
+	                                               mu::Vec3 bossPos,
+	                                               int numSquads        = 3,
+	                                               int troopersPerSquad = 20);
+
 private:
 	int32 id_;
 	std::vector<GameSession*> sessions_;
@@ -77,6 +103,7 @@ private:
 	JobQueue jobQueue_;
 
 	void updateGoblinAI(Milliseconds dt);
+	void updateTacticalAI(Milliseconds dt);
 	void updateSkillSystem(Milliseconds dt);
 	void rebuildLivingPlayersCache();
 	void rebuildAggroCount();
@@ -94,6 +121,14 @@ private:
 	std::vector<std::unique_ptr<NpcGroup>> npcGroups_;
 	std::vector<GameSession*> livingPlayersCache_;
 	std::unordered_map<int32/* player id */, int32/* count */> aggroCount_;
+
+	// ── Tactical AI 상태 ─────────────────────────────────────────────────────
+	std::vector<std::unique_ptr<TacticalNpc>>   tacticalNpcs_;
+	std::vector<std::unique_ptr<TacticalSquad>> tacticalSquads_;
+	std::unique_ptr<PlatoonLeader>              platoonLeader_;
+	std::unordered_map<uint32_t, std::unordered_set<uint32_t>> tacticalAttackSlots_;
+	std::unordered_map<uint32_t, std::unordered_set<uint32_t>> wedgeHitRecord_;
+	uint32_t nextWedgeChargeId_{ 1 };
 };
 
 #endif // room_hpp
