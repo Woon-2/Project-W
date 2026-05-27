@@ -1,4 +1,6 @@
-#pragma once
+#ifndef tactical_npc_hpp
+#define tactical_npc_hpp
+
 #include "object.hpp"
 #include <vector>
 #include <cstdint>
@@ -6,7 +8,10 @@
 class Room;
 class GameSession;
 
-// ─── TacticalNpcState ────────────────────────────────────────────────────────
+/*--------------------------
+      TacticalNpcState
+--------------------------*/
+
 enum class TacticalNpcState {
     Idle          = 0,
     Chase         = 1,
@@ -20,7 +25,10 @@ enum class TacticalNpcState {
     PressureWait  = 9,
 };
 
-// ─── TacticalCommand ─────────────────────────────────────────────────────────
+/*-------------------------
+      TacticalCommand
+-------------------------*/
+
 enum class TacticalCommandType {
     None,
     EngageTarget,
@@ -34,13 +42,13 @@ enum class TacticalCommandType {
 
 struct TacticalCommand {
     TacticalCommandType type             = TacticalCommandType::None;
-    uint32_t            targetId         = 0;
+    uint32              targetId         = 0;
     mu::Vec3            slotOffset       = {};
     mu::Vec3            slotRefTargetPos = {};
     float               abandonDist      = 15.f;
     float               speedMult        = 1.f;
-    std::vector<uint32_t> targetIds      = {};
-    uint32_t            chargeId         = 0;
+    std::vector<uint32> targetIds        = {};
+    uint32              chargeId         = 0;
     mu::Vec3            chargeDir        = {};
     mu::Vec3            chargeCenter     = {};
     float               impactRadius     = 3.f;
@@ -50,7 +58,10 @@ struct TacticalCommand {
     mu::Vec3            holdFacing       = {};
 };
 
-// ─── TacticalNpcConfig ───────────────────────────────────────────────────────
+/*---------------------------
+      TacticalNpcConfig
+---------------------------*/
+
 struct TacticalNpcConfig {
     float maxHp             = 100.f;
     float moveSpeed         = 4.f;
@@ -62,26 +73,36 @@ struct TacticalNpcConfig {
     float separationWeight  = 0.5f;
 };
 
-// ─── TacticalNpcUpdateResult ─────────────────────────────────────────────────
+/*---------------------------------
+      TacticalNpcUpdateResult
+---------------------------------*/
+
 struct TacticalNpcUpdateResult {
-    struct HitInfo { uint16 targetId; int32 newHp; };
+    struct HitInfo {
+        uint16 targetId;
+        int32 newHp;
+    };
+
     std::vector<HitInfo> hits;
 };
 
-// ─── TacticalNpc ─────────────────────────────────────────────────────────────
+/*---------------------
+      TacticalNpc
+---------------------*/
+
 class TacticalNpc : public Object {
 public:
     TacticalNpc() = default;
-    TacticalNpc(Object&& base, const TacticalNpcConfig& cfg = {});
+    TacticalNpc( Object&& base, const TacticalNpcConfig& cfg = {} );
 
-    TacticalNpcUpdateResult update(Seconds dt, Room& room);
+    TacticalNpcUpdateResult update( Seconds dt, Room& room );
 
-    void receiveCommand(const TacticalCommand& cmd);
+    void receiveCommand( const TacticalCommand& cmd );
 
     TacticalNpcState  getState()             const { return state_; }
     TacticalNpcState  getDisplayState()      const;
-    uint32_t          getTargetId()          const { return targetId_; }
-    int               getSquadId()           const { return squadId_; }
+    uint32            getTargetId()          const { return targetId_; }
+    int32             getSquadId()           const { return squadId_; }
     mu::Vec3          getSpawnPos()          const { return spawnPos_; }
     mu::Vec3          getAssignedSlot()      const { return assignedSlot_; }
     float             getAttackRange()       const { return attackRange_; }
@@ -91,43 +112,43 @@ public:
     bool              isAtSlot()             const;
     bool              isChargeComplete()     const { return chargeComplete_; }
 
-    void setSquadId(int id) { squadId_ = id; }
-    void MU_CALLCONV reviveAt(mu::Vec3 pos);
+    void setSquadId( int32 id ) { squadId_ = id; }
+    void MU_CALLCONV reviveAt( mu::Vec3 pos );
 
 protected:
-    void applyConfig(const TacticalNpcConfig& cfg);
-    void transitionTo(TacticalNpcState next);
+    void applyConfig( const TacticalNpcConfig& cfg );
+    void transitionTo( TacticalNpcState next );
 
-    void updateIdle         (float dt, Room& room);
-    void updateChase        (float dt, Room& room);
-    void updateAttackWindup (float dt, Room& room);
-    void updateAttackRecover(float dt, Room& room);
-    void updateFlank        (float dt, Room& room);
-    void updateChargeThrough(float dt, Room& room);
-    void updateConfused     (float dt, Room& room);
-    void updateHoldSlot     (float dt, Room& room);
-    void updatePressureWait (float dt, Room& room);
-    void updateDead         (Room& room);
+    void updateIdle         ( float dt, Room& room );
+    void updateChase        ( float dt, Room& room );
+    void updateAttackWindup ( float dt, Room& room );
+    void updateAttackRecover( float dt, Room& room );
+    void updateFlank        ( float dt, Room& room );
+    void updateChargeThrough( float dt, Room& room );
+    void updateConfused     ( float dt, Room& room );
+    void updateHoldSlot     ( float dt, Room& room );
+    void updatePressureWait ( float dt, Room& room );
+    void updateDead         ( Room& room );
 
-    void        consumePendingCommand(Room& room);
-    GameSession* resolveTarget(Room& room) const;
+    void        consumePendingCommand( Room& room );
+    GameSession* resolveTarget( Room& room ) const;
     bool        hasReservedAttackSlot() const;
-    void        updateReservedAttackStaleTimer(float dt, Room& room);
-    bool        canEnterAttackSlot(Room& room);
-    void        releaseAttackReservation(Room& room);
+    void        updateReservedAttackStaleTimer( float dt, Room& room );
+    bool        canEnterAttackSlot( Room& room );
+    void        releaseAttackReservation( Room& room );
     void        resetPressureWaitTarget();
     void        refreshPressureWaitScatterOffsets();
-    mu::Vec3    computePressureWaitDesired(mu::Vec3 targetPos, mu::Vec3 targetFacing) const;
-    void        moveTowardPressureWait(float dt, Room& room, mu::Vec3 targetPos, mu::Vec3 targetFacing);
-    void        recordHit(uint16 targetId, int32 newHp);
+    mu::Vec3    computePressureWaitDesired( mu::Vec3 targetPos, mu::Vec3 targetFacing ) const;
+    void        moveTowardPressureWait( float dt, Room& room, mu::Vec3 targetPos, mu::Vec3 targetFacing );
+    void        recordHit( uint16 targetId, int32 newHp );
 
     TacticalNpcState state_{ TacticalNpcState::Idle };
     TacticalCommand  pendingCmd_{};
-    uint32_t         targetId_{ 0 };
+    uint32           targetId_{ 0 };
     mu::Vec3         assignedSlot_{};
     mu::Vec3         slotRefTargetPos_{};
     float            abandonDist_{ 15.f };
-    uint32_t         chargeId_{ 0 };
+    uint32           chargeId_{ 0 };
     mu::Vec3         chargeDir_{};
     mu::Vec3         chargeCenter_{};
     float            impactRadius_{ 3.f };
@@ -140,9 +161,9 @@ protected:
     mu::Vec3         confusedAnchor_{};
     mu::Vec3         confusedTarget_{};
     float            confusedRetargetTimer_{ 0.f };
-    int              confusedWanderStep_{ 0 };
+    int32            confusedWanderStep_{ 0 };
     mu::Vec3         spawnPos_{};
-    int              squadId_{ -1 };
+    int32            squadId_{ -1 };
 
     float maxHp_{ 100.f };
     float moveSpeed_{ 4.f };
@@ -163,10 +184,10 @@ protected:
     float pressureWaitRetargetTimer_{ 0.f };
     float pressureWaitAngleOffset_{ 0.f };
     float pressureWaitRadiusOffset_{ 0.f };
-    uint32_t pressureWaitScatterSeed_{ 0 };
+    uint32 pressureWaitScatterSeed_{ 0 };
     bool  pressureWaitDesiredValid_{ false };
     bool  pressureReentering_{ false };
-    uint32_t reservedAttackTargetId_{ 0 };
+    uint32 reservedAttackTargetId_{ 0 };
     float reservedAttackStaleTimer_{ 0.f };
 
     std::vector<mu::Vec3>                  nearbyCache_;
@@ -204,3 +225,5 @@ protected:
     static constexpr float CONFUSED_RETARGET_MIN                      = 0.35f;
     static constexpr float CONFUSED_RETARGET_SPAN                     = 0.75f;
 };
+
+#endif // tactical_npc_hpp

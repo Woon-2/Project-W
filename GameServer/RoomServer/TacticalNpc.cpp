@@ -5,9 +5,12 @@
 #include <cmath>
 #include <algorithm>
 
-// ─── 파일 범위 헬퍼 ──────────────────────────────────────────────────────────
+/*-----------------------------
+      파일 범위 헬퍼 함수
+-----------------------------*/
 
-static float hash01(uint32_t v) {
+// 0~1 사이의 균등 분포 해시값 반환. 입력이 같으면 항상 같은 값, 입력이 다르면 거의 항상 다른 값.
+static float hash01( uint32 v ) {
     v ^= v >> 16;
     v *= 0x7feb352du;
     v ^= v >> 15;
@@ -17,26 +20,28 @@ static float hash01(uint32_t v) {
 }
 
 // 정규화. 입력이 너무 작으면 영벡터 반환
-static mu::Vec3 norm3(mu::Vec3 v) {
+static mu::Vec3 norm3( mu::Vec3 v ) {
     float l = v.len();
-    return l > 0.0001f ? v * (1.f / l) : mu::Vec3(0.f, 0.f, 0.f);
+    return l > 0.0001f ? v * (1.f / l) : mu::Vec3( 0.f, 0.f, 0.f );
 }
 
 // XZ 방향벡터로 Y축 회전 설정
-static void setFacingDir(Object& obj, mu::Vec3 dir) {
-    if (dir.len2() > 0.01f)
-        obj.setOrient(mu::NQuat(mu::Radian(), mu::Radian(),
-            mu::Radian(std::atan2(dir.x(), dir.z()))));
+static void setFacingDir( Object& obj, mu::Vec3 dir ) {
+    if ( dir.len2() > 0.01f ) {
+        obj.setOrient( mu::NQuat( mu::Radian(), mu::Radian(), mu::Radian( std::atan2( dir.x(), dir.z() ) ) ) );
+    }
 }
 
-// ─── 생성자 / applyConfig ─────────────────────────────────────────────────────
+/*---------------------
+      TacticalNpc
+---------------------*/
 
-TacticalNpc::TacticalNpc(Object&& base, const TacticalNpcConfig& cfg)
-    : Object(std::move(base))
+TacticalNpc::TacticalNpc( Object&& base, const TacticalNpcConfig& cfg )
+    : Object( std::move( base ) )
 {
     spawnPos_ = pos();
-    applyConfig(cfg);
-    nearbyCache_.reserve(8);
+    applyConfig( cfg );
+    nearbyCache_.reserve( 8 );
 }
 
 void TacticalNpc::applyConfig(const TacticalNpcConfig& cfg) {

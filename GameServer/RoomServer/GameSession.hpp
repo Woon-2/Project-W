@@ -11,8 +11,8 @@ public:
 	GameSession() : myRoom_(nullptr), myPlayer_(nullptr) {}
 	virtual ~GameSession();
 
-	Room* room() { return myRoom_; }
-	Player* player() { return myPlayer_; }
+	Room*   room()   const { return myRoom_;   }
+	Player* player() const { return myPlayer_; }
 
 protected:
 	virtual void onConnected() override;
