@@ -114,6 +114,9 @@
     <ClCompile Include="Model.cpp">
       <Filter>contents\etc</Filter>
     </ClCompile>
+    <ClCompile Include="serverAnimation.cpp">
+      <Filter>contents\etc</Filter>
+    </ClCompile>
     <ClCompile Include="physics.cpp">
       <Filter>contents\etc</Filter>
     </ClCompile>
@@ -124,6 +127,12 @@
       <Filter>contents\etc</Filter>
     </ClCompile>
     <ClCompile Include="terrain.cpp">
+      <Filter>contents\etc</Filter>
+    </ClCompile>
+    <ClCompile Include="skill\skillCompiler.cpp">
+      <Filter>contents\etc</Filter>
+    </ClCompile>
+    <ClCompile Include="skill\skillSystem.cpp">
       <Filter>contents\etc</Filter>
     </ClCompile>
   </ItemGroup>
@@ -164,7 +173,6 @@
     <ClInclude Include="JobTimer.hpp">
       <Filter>utils\JobTimer</Filter>
     </ClInclude>
-    <ClInclude Include="terrain.hpp" />
     <ClInclude Include="npcGroup.hpp">
       <Filter>contents\Npc</Filter>
     </ClInclude>
@@ -195,6 +203,9 @@
     <ClInclude Include="Model.hpp">
       <Filter>contents\etc</Filter>
     </ClInclude>
+    <ClInclude Include="serverAnimation.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
     <ClInclude Include="physics.hpp">
       <Filter>contents\etc</Filter>
     </ClInclude>
@@ -202,6 +213,18 @@
       <Filter>contents\etc</Filter>
     </ClInclude>
     <ClInclude Include="rigidBody.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="terrain.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="skill\skillCompiler.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="skill\skillSystem.hpp">
+      <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="skill\skillTypes.hpp">
       <Filter>contents\etc</Filter>
     </ClInclude>
   </ItemGroup>

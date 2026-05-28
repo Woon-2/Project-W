@@ -25,10 +25,10 @@ public:
 	static std::shared_ptr<SendBuffer> makeSNpcAttackPacket(uint16 npcId);
 	static std::shared_ptr<SendBuffer> makeSPlayerAttackPacket(uint16 attackerId);
 	static std::shared_ptr<SendBuffer> makeSHitPacket(uint16 targetId, int32 newHp);
-	static std::shared_ptr<SendBuffer> makeSTimeSyncPacket(uint64 serverMs);
 	static std::shared_ptr<SendBuffer> makeSNpcRespawnPacket(uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos);
 	static std::shared_ptr<SendBuffer> makeSSkillStartPacket(uint32 skillAssetId, uint16 ownerId, uint16 elapsedMs);
 	static std::shared_ptr<SendBuffer> makeSSkillHitPacket(uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId);
+	static std::shared_ptr<SendBuffer> makeSDebugHitboxPacket(const OBBInfo* obbs, uint16 count);
 };
 
 #endif // packet_manager_hpp

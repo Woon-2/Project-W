@@ -95,7 +95,7 @@ void Game::setupStage() {
 	pLabel->offsetY = UI::DimValue::px( -250.f );
 	pLabel->setTextHAlign(UI::TextHAlign::Center);
 	pLabel->setTextVAlign(UI::TextVAlign::Center);
-	pLabel->setText(L"U: UI영역 표시\nEnter: 마우스 포인터 캡처\nSpace: 마우스 포인터 감추기\nWASD: 이동\nG: GBuffer 버퍼내용 순환(0=None, 1=Albedo, ..., 7=Depth)\nH: Hi-Z Cull ON/OFF\n좌클릭: 공격 ");
+	// pLabel->setText(L"U: UI영역 표시\nEnter: 마우스 포인터 캡처\nSpace: 마우스 포인터 감추기\nWASD: 이동\nG: GBuffer 버퍼내용 순환(0=None, 1=Albedo, ..., 7=Depth)\nH: Hi-Z Cull ON/OFF\n좌클릭: 공격 ");
 	pLabel->setFontSize(20.0f);
 	//pLabel->setAutoSize( true );
 	pLabel->setTextColor( 1.0f, 1.0f, 1.0f, 1.0f );
@@ -1421,6 +1421,12 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 
 		skillObjectById_.assign(256, nullptr);
 		skillObjectById_[player_->getId()] = player_.get();
+		// Register goblins that arrived before setupPlayer() was called.
+		for (auto& [gobId, goblin] : idGoblinMap_) {
+			auto sid = static_cast<size_t>(gobId);
+			if (sid >= skillObjectById_.size()) skillObjectById_.resize(sid + 1, nullptr);
+			skillObjectById_[sid] = goblin.get();
+		}
 
 		skillVfxById_.assign(2, nullptr);
 		skillVfxById_[1] = &swordSlash1Effect_;   // effects/sword_slash_1.json
@@ -1754,13 +1760,6 @@ void Game::applyHit( uint16 targetId, int32 newHp ) {
 	}
 }
 
-void Game::applyTimeSync( uint64 serverMs ) {
-	serverClockOffset_ = static_cast<int64>(serverMs) -
-		static_cast<int64>(std::chrono::duration_cast<std::chrono::milliseconds>(
-			std::chrono::high_resolution_clock::now().time_since_epoch()
-		).count());
-}
-
 void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos ) {
 	auto npc = idGoblinMap_[ npcId ];
 
@@ -1813,6 +1812,21 @@ void Game::onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 s
 			if (target)
 				skillVfxById_[vfxId]->play(target->pos());
 		}
+	}
+}
+
+void Game::onDebugHitboxes( SDebugHitboxPacket* pkt ) {
+	auto list = pkt->getOBBList();
+	for (uint16 i = 0; i < list.count(); ++i) {
+		const OBBInfo& info = list[i];
+		debugBVView_.push(
+			OBB{
+				mu::Vec3(DirectX::XMLoadFloat3(&info.center)),
+				mu::Vec3(DirectX::XMLoadFloat3(&info.halfExtents)),
+				mu::NQuat(DirectX::XMLoadFloat4(&info.orient), mu::NQuat::NoNormalize_t{})
+			},
+			Milliseconds{ 100.f }
+		);
 	}
 }
 
@@ -2349,9 +2363,9 @@ void Game::sendMouseMovePacket() {
 
 void Game::sendAttackPacket() {
 	uint64 clientMs = static_cast<uint64>(
-		static_cast<int64>(std::chrono::duration_cast<std::chrono::milliseconds>(
+		std::chrono::duration_cast<std::chrono::milliseconds>(
 			std::chrono::high_resolution_clock::now().time_since_epoch()
-		).count()) + serverClockOffset_);
+		).count());
 	INet::ClientApp::addSendBuffer(PacketManager::makeCAttackPacket(clientMs));
 }
 
@@ -2359,7 +2373,7 @@ void Game::sendSkillStartPacket(uint32 skillAssetId) {
 	uint64 clientMs = static_cast<uint64>(
 		static_cast<int64>(std::chrono::duration_cast<std::chrono::milliseconds>(
 			std::chrono::high_resolution_clock::now().time_since_epoch()
-		).count()) + serverClockOffset_);
+		).count()));
 	INet::ClientApp::addSendBuffer(PacketManager::makeCSkillStartPacket(skillAssetId, clientMs));
 }
 

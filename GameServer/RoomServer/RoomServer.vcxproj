@@ -166,6 +166,7 @@
     <ClCompile Include="Listener.cpp" />
     <ClCompile Include="log.cpp" />
     <ClCompile Include="Model.cpp" />
+    <ClCompile Include="serverAnimation.cpp" />
     <ClCompile Include="npc.cpp" />
     <ClCompile Include="npcGroup.cpp" />
     <ClCompile Include="object.cpp" />
@@ -201,6 +202,7 @@
     <ClInclude Include="Listener.hpp" />
     <ClInclude Include="log.hpp" />
     <ClInclude Include="Model.hpp" />
+    <ClInclude Include="serverAnimation.hpp" />
     <ClInclude Include="npc.hpp" />
     <ClInclude Include="npcGroup.hpp" />
     <ClInclude Include="object.hpp" />
@@ -215,6 +217,9 @@
     <ClInclude Include="RoomManager.hpp" />
     <ClInclude Include="RoomServer.hpp" />
     <ClInclude Include="rspch.hpp" />
+    <ClInclude Include="skill\skillCompiler.hpp" />
+    <ClInclude Include="skill\skillSystem.hpp" />
+    <ClInclude Include="skill\skillTypes.hpp" />
     <ClInclude Include="terrain.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

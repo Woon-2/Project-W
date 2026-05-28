@@ -1,6 +1,7 @@
 ﻿#include "rspch.hpp"
 #include "RoomManager.hpp"
 #include "Room.hpp"
+#include "serverAnimation.hpp"
 #include "IdPool.hpp"
 #include "JobTimer.hpp"
 
@@ -50,5 +51,6 @@ std::mutex RoomManager::rmMtx_;
 std::vector<Room*> RoomManager::rooms_;
 std::unordered_map<int32, Room*> RoomManager::roomIdMap_;
 
-const Level*  RoomManager::pLevel_       = nullptr;
-const Model*  RoomManager::pPlayerModel_ = nullptr;
+const Level*  RoomManager::pLevel_            = nullptr;
+const Model*  RoomManager::pPlayerModel_      = nullptr;
+const std::vector<ServerAnimClip>* RoomManager::pPlayerAnimations_ = nullptr;

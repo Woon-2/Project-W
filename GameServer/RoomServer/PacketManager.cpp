@@ -239,19 +239,6 @@ std::shared_ptr<SendBuffer> PacketManager::makeSHitPacket(uint16 targetId, int32
 	return sendBuffer;
 }
 
-std::shared_ptr<SendBuffer> PacketManager::makeSTimeSyncPacket(uint64 serverMs) {
-	auto sendBuffer = SendBufferManager::open(sizeof(STimeSyncPacket));
-	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
-
-	auto pkt = bw.reserve<STimeSyncPacket>();
-	pkt->serverMs = serverMs;
-
-	pkt->size = bw.writeSize();
-	pkt->type = PacketType::S_TimeSync;
-
-	sendBuffer->close(bw.writeSize());
-	return sendBuffer;
-}
 
 std::shared_ptr<SendBuffer> PacketManager::makeSSkillStartPacket(uint32 skillAssetId, uint16 ownerId, uint16 elapsedMs) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SSkillStartPacket));
@@ -263,6 +250,24 @@ std::shared_ptr<SendBuffer> PacketManager::makeSSkillStartPacket(uint32 skillAss
 	pkt->elapsedMs    = elapsedMs;
 	pkt->size         = bw.writeSize();
 	pkt->type         = PacketType::S_SkillStart;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeSDebugHitboxPacket(const OBBInfo* obbs, uint16 count) {
+	auto sendBuffer = SendBufferManager::open(sizeof(SDebugHitboxPacket) + sizeof(OBBInfo) * count);
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<SDebugHitboxPacket>();
+	auto entries = bw.reserve<OBBInfo>(count);
+	for (uint16 i = 0; i < count; ++i)
+		entries[i] = obbs[i];
+
+	pkt->dataOffset = static_cast<uint16>(reinterpret_cast<uint64>(entries) - reinterpret_cast<uint64>(pkt));
+	pkt->obbCount   = count;
+	pkt->size       = bw.writeSize();
+	pkt->type       = PacketType::S_DebugHitbox;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;

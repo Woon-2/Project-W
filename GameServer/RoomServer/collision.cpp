@@ -235,6 +235,55 @@ CollisionResult collides(const BVH& a, const BVH& b) {
     return CollisionResult{ .hit = false };
 }
 
+OBB transformOBBByMatrix(const OBB& obb, const mu::Mat4x4& xform) {
+    const mu::Vec3 newCenter(
+        DirectX::XMVector3TransformCoord(obb.center.get(), xform.get()));
+    const DirectX::XMVECTOR matRotQuat =
+        DirectX::XMQuaternionRotationMatrix(xform.get());
+    const DirectX::XMVECTOR combined =
+        DirectX::XMQuaternionMultiply(obb.orient.get(), matRotQuat);
+    return OBB{ newCenter, obb.halfExtents, mu::NQuat(combined, mu::NQuat::NoNormalize_t{}) };
+}
+
+BVHHitResult collides(const BVH& bvh, const OBB& hitbox) {
+    BVHHitResult result{};
+    if (bvh.empty()) return result;
+
+    const AABB hitboxAABB = obbToAABB(hitbox);
+
+    std::vector<int> stack;
+    stack.reserve(8);
+    stack.push_back(0);
+
+    while (!stack.empty()) {
+        const int idx = stack.back(); stack.pop_back();
+        const auto& node = bvh.nodes[idx];
+
+        if (!collides(node.bounds, hitboxAABB).hit) continue;
+
+        if (node.isLeaf()) {
+            const CollisionResult cr = std::visit([&](auto&& s) -> CollisionResult {
+                using T = std::decay_t<decltype(s)>;
+                if constexpr (std::is_same_v<T, OBB>)
+                    return collides(s, hitbox);
+                else
+                    return collides(toOBB(s), hitbox);
+            }, node.shape);
+
+            if (cr.hit) {
+                static_cast<CollisionResult&>(result) = cr;
+                result.hitNodeIdx  = idx;
+                result.damageCoeff = node.damageCoeff;
+                return result;
+            }
+        } else {
+            for (int c : node.children) stack.push_back(c);
+        }
+    }
+
+    return result;
+}
+
 AABB buildAttackAABB(mu::Vec3 pos, mu::Vec3 forward, mu::Vec3 halfExtent, float offsetFwd) {
     return AABB{
         .center = pos + forward * offsetFwd,

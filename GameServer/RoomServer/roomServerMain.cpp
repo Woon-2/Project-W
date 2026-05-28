@@ -15,6 +15,7 @@ int main()
 
 	RoomManager::setLevelData(assetManager.level());
 	RoomManager::setPlayerModelData(assetManager.modelPlayer());
+	RoomManager::setPlayerAnimations(&assetManager.playerAnimations());
 
 	dumpLog();
 

@@ -56,11 +56,10 @@ public:
 	void onNpcAttack(uint16 npcId);
 	void onPlayerAttack(uint16 attackerId);
 	void applyHit(uint16 targetId, int32 newHp);
-	void applyTimeSync(uint64 serverMs);
-
 	void onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos );
 	void onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs );
 	void onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId );
+	void onDebugHitboxes( SDebugHitboxPacket* pkt );
 
 	// 게임의 업데이트는 다음 순서대로 이루어진다.
 	// 네트워크 패킷 처리(SleepEx)
@@ -154,8 +153,6 @@ private:
 	AssetConfigs assetConfigs_{};
 
 	bool playerDead_{};
-
-	int64 serverClockOffset_{ 0 };   // clockOffset = serverMs - localNow (S_TimeSync 수신 시 갱신)
 
 	UI::UIManager    uiManager_{};
 	UI::ProgressBar* playerHpBar_    = nullptr;  // owned by uiManager_

@@ -550,8 +550,13 @@ void SkillSystem::checkHitboxCollisions(SkillDispatchContext& ctx) {
                 if (collides(bvh, obb).hit) { hit = true; break; }
             }
 
-            if (hit)
+            if (hit) {
                 pendingHits_.push_back({ hi, target->getId() });
+                if (hb.instanceIdx >= 0 && hb.instanceIdx < SkillInstancePool::kMaxInstances) {
+                    SkillInstance& inst = instancePool_.instances[hb.instanceIdx];
+                    inst.hitGroups[hb.hitGroup].lastHitByTarget[target->getId()] = inst.elapsed;
+                }
+            }
         }
     }
 }
@@ -564,12 +569,6 @@ void SkillSystem::processHitResults(SkillDispatchContext& ctx) {
         if (!hb.active) continue;
 
         const OnHitDef& oh = hb.onHit;
-
-        // Register hit in instance's hitGroup so sibling hitboxes skip this target.
-        if (hb.instanceIdx >= 0 && hb.instanceIdx < SkillInstancePool::kMaxInstances) {
-            SkillInstance& inst = instancePool_.instances[hb.instanceIdx];
-            inst.hitGroups[hb.hitGroup].lastHitByTarget[hr.targetObjectId] = inst.elapsed;
-        }
 
         // In online mode server is authoritative for damage; skip local damage event.
         if (!ctx.clientPredictionOnly)

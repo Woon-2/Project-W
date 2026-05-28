@@ -49,10 +49,6 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 		handleSHitPacket(buffer, len);
 		break;
 
-	case PacketType::S_TimeSync:
-		handleSTimeSyncPacket(buffer, len);
-		break;
-
 	case PacketType::S_NpcRespawn:
 		handleSNpcRespawnPacket( buffer, len );
 		break;
@@ -63,6 +59,10 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 
 	case PacketType::S_SkillHit:
 		handleSSkillHitPacket( buffer, len );
+		break;
+
+	case PacketType::S_DebugHitbox:
+		handleSDebugHitboxPacket( buffer, len );
 		break;
 
 	default:
@@ -164,11 +164,6 @@ void PacketManager::handleSHitPacket(byte* buffer, int32 len) {
 	INet::ClientApp::onlineGame()->applyHit( sHitPkt->targetId, sHitPkt->newHp);
 }
 
-void PacketManager::handleSTimeSyncPacket(byte* buffer, int32 len) {
-	auto sTimeSyncPkt = reinterpret_cast<STimeSyncPacket*>(buffer);
-	INet::ClientApp::onlineGame()->applyTimeSync( sTimeSyncPkt->serverMs );
-}
-
 void PacketManager::handleSNpcRespawnPacket( byte* buffer, int32 len ) {
 	auto sNpcRespawnPkt = reinterpret_cast<SNpcRespawnPacket*>(buffer);
 	INet::ClientApp::onlineGame()->onNpcRespawn( sNpcRespawnPkt->npcId, sNpcRespawnPkt->newHp, sNpcRespawnPkt->spawnPos );
@@ -182,6 +177,11 @@ void PacketManager::handleSSkillStartPacket( byte* buffer, int32 len ) {
 void PacketManager::handleSSkillHitPacket( byte* buffer, int32 len ) {
 	auto pkt = reinterpret_cast<SSkillHitPacket*>(buffer);
 	INet::ClientApp::onlineGame()->onSkillHit( pkt->attackerId, pkt->targetId, pkt->newHp, pkt->skillAssetId );
+}
+
+void PacketManager::handleSDebugHitboxPacket( byte* buffer, int32 len ) {
+	auto pkt = reinterpret_cast<SDebugHitboxPacket*>(buffer);
+	INet::ClientApp::onlineGame()->onDebugHitboxes( pkt );
 }
 
 std::shared_ptr<SendBuffer> PacketManager::makeCSkillStartPacket(uint32 skillAssetId, uint64 clientMs) {

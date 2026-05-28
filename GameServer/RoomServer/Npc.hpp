@@ -53,6 +53,7 @@ public:
     Npc(Object&& base, const NpcConfig& cfg = {});
 
     NpcUpdateResult update(Seconds dt, Room& room);
+    void onHitImpulse() override;
 
     NpcState getState()    const { return state_; }
     int32    getTargetId() const { return targetId_; }  // countNpcsTargeting용 — public 필수
@@ -117,10 +118,13 @@ private:
     Seconds maxDirectReactDelay_{ 0.3s };
     Seconds maxGroupReactDelay_ { 2.0s };
 
+    Seconds knockbackTimer_{ 0s };
+
     std::vector<mu::Vec3> nearbyCache_;
 
-    static constexpr Seconds TARGET_EVAL_INTERVAL{ 0.5f };
-    static constexpr Seconds REPOSITION_TIMEOUT  { 1.5f };
+    static constexpr Seconds TARGET_EVAL_INTERVAL  { 0.5f };
+    static constexpr Seconds REPOSITION_TIMEOUT    { 1.5f };
+    static constexpr Seconds kKnockbackDuration    { 0.4f };
 };
 
 #endif // npc_hpp

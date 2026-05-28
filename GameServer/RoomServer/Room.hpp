@@ -76,7 +76,11 @@ private:
 	std::unordered_map<int32, GameSession*> idSessionMap_;
 	JobQueue jobQueue_;
 
+	void registerObject(Object* obj);
+	void unregisterObject(Object* obj);
+
 	void updateGoblinAI(Milliseconds dt);
+	void updatePlayerAnimations(Milliseconds dt);
 	void updateSkillSystem(Milliseconds dt);
 	void rebuildLivingPlayersCache();
 	void rebuildAggroCount();
@@ -84,10 +88,11 @@ private:
 	std::vector<Cube>   cubes_;
 	std::vector<Player> playerStarts_;
 	std::vector<Goblin> goblins_;
+	std::vector<Object*> objectById_;  // sparse: objectById_[id] = Object*, nullptr if unused
 
 	PhysicsWorld      physicsWorld_;
 	TerrainObject     terrain_;
-	ServerSkillSystem skillSystem_;
+	SkillSystem skillSystem_;
 
 	// ── NPC AI 상태 ──────────────────────────────────────────────────────────
 	Milliseconds elapsedMs_{ 0ms };

@@ -1,5 +1,6 @@
 ﻿#include "rspch.hpp"
 #include "binaryImport.hpp"
+#include "Model.hpp"
 
 // 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
 void readHeadTag(std::ifstream& ifs, const std::string& expectedSource) {
@@ -218,4 +219,54 @@ std::vector<XMFLOAT4> readVec4s(std::ifstream& ifs) {
         ifs.read(reinterpret_cast<char*>(&ret[i]), sizeof(XMFLOAT4));
     }
     return ret;
+}
+
+// ---------------------------------------------------------------------------
+// Skeleton import
+// ---------------------------------------------------------------------------
+
+// Recursively reads one <Bone:>...</Bone> block from ifs into sk.
+// boneIdx is the pre-order DFS index (incremented on each call).
+// parentIdx is the index of the parent bone (-1 for root).
+static void importServerBone(std::ifstream& ifs, ServerSkeleton& sk,
+                              int& boneIdx, int parentIdx) {
+    readHeadTag(ifs, "Bone");
+
+    ServerBone& bone  = sk.bones[boneIdx];
+    bone.name         = readText(ifs, "Name");
+    const auto toDressRaw = readMatrix(ifs, "Dress");
+    bone.toDress      = mu::Mat4x4(DirectX::XMLoadFloat4x4(&toDressRaw));
+    readMatrix(ifs, "ToLocal");  // not needed server-side; consume from stream
+    readText(ifs, "SocketType"); // not needed server-side; consume from stream
+    bone.parentIdx    = parentIdx;
+
+    sk.nameToIdx[bone.name] = boneIdx;
+    const int selfIdx = boneIdx++;
+
+    readHeadTag(ifs, "Children");
+    const int childCnt = readInteger(ifs, "ChildCnt");
+    for (int i = 0; i < childCnt; ++i)
+        importServerBone(ifs, sk, boneIdx, selfIdx);
+    readTailTag(ifs, "Children");
+
+    readTailTag(ifs, "Bone");
+}
+
+void importSkeleton(std::ifstream& ifs, ServerSkeleton& sk) {
+    readHeadTag(ifs, "Skeleton");
+
+    sk.name = readText(ifs, "Name");
+    readText(ifs, "SkeletonEnumeration"); // not used server-side; consume
+
+    const int boneCnt = readInteger(ifs, "Count");
+    sk.bones.resize(boneCnt);
+    sk.nameToIdx.reserve(boneCnt);
+
+    int boneIdx = 0;
+    importServerBone(ifs, sk, boneIdx, -1);
+
+    readTailTag(ifs, "Skeleton");
+
+    gSharedLog << "[Resource Load] Skeleton \"" << sk.name
+               << "\" loaded (" << boneCnt << " bones)\n";
 }

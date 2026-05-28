@@ -8,8 +8,9 @@ struct ImportedBVBox {
     std::string name;
     std::string boneName;
     DirectX::XMFLOAT3 center;
-    DirectX::XMFLOAT3 size;      // full extents (width, height, depth)
-    DirectX::XMFLOAT3 rotEuler;  // degrees
+    DirectX::XMFLOAT3 size;       // full extents (width, height, depth)
+    DirectX::XMFLOAT3 rotEuler;   // degrees
+    float             damageCoeff = 1.0f;
 };
 
 static bool isZeroEuler(const DirectX::XMFLOAT3& e) {
@@ -47,15 +48,14 @@ static BVHNode makeBVHNode(const ImportedBVBox& box) {
     const mu::Vec3 center = DirectX::XMLoadFloat3(&box.center);
     const mu::Vec3 size = DirectX::XMLoadFloat3(&box.size);
 
-    node.shape = OBB{center, size * 0.5f, eulerDegsToQuat(box.rotEuler)};
-
     if (isZeroEuler(box.rotEuler)) {
         node.shape = AABB{center, size};
     }
     else {
         node.shape = OBB{center, size * 0.5f, eulerDegsToQuat(box.rotEuler)};
     }
-    node.bounds = computeNodeBounds(node.shape);
+    node.bounds      = computeNodeBounds(node.shape);
+    node.damageCoeff = box.damageCoeff;
     return node;
 }
 
@@ -137,11 +137,12 @@ void importBoundingVolumes(std::ifstream& ifs, Model& model) {
         for (int b = 0; b < boxCount; ++b) {
             readHeadTag(ifs, "Box");
             ImportedBVBox box;
-            box.name = readText(ifs, "Name");
-            box.boneName = readText(ifs, "Bone");
-            box.center = readVec3(ifs, "Center");
-            box.size = readVec3(ifs, "Size");
-            box.rotEuler = readVec3(ifs, "Rotation");
+            box.name        = readText(ifs, "Name");
+            box.boneName    = readText(ifs, "Bone");
+            box.center      = readVec3(ifs, "Center");
+            box.size        = readVec3(ifs, "Size");
+            box.rotEuler    = readVec3(ifs, "Rotation");
+            box.damageCoeff = readFloat(ifs, "DamageCoeff");
             allLODs[target].push_back(box);
             readTailTag(ifs, "Box");
 
@@ -173,6 +174,19 @@ Model loadModelFromFile(const std::filesystem::path& path) {
 
     ret.name = readText(ifs, "ModelName");
     importBoundingVolumes(ifs, ret);
+
+    const bool hasSkeleton = static_cast<bool>(readInteger(ifs, "HasSkeleton"));
+    if (hasSkeleton)
+        importSkeleton(ifs, ret.skeleton);
+
+    for (auto& node : ret.bvh.nodes) {
+        if (!node.boneName.empty()) {
+            auto it = ret.skeleton.nameToIdx.find(node.boneName);
+            if (it != ret.skeleton.nameToIdx.end())
+                node.boneIdx = it->second;
+        }
+    }
+
     gSharedLog << "[Resource Load] File I/O: 모델 " << ret.name << '(' << path << ") 로드 완료\n";
 
     return ret;

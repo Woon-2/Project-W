@@ -3,15 +3,34 @@
 
 #include "collision.hpp"
 
-// 서버에서 게임 객체의 모델과 관련하여 알아야 할 정보는 현재
-// 이름과 충돌체 정보 뿐이다.
-struct Model {
-	std::string name;
-	BVH bvh;
+// Minimal bone descriptor for server-side animation.
+// Stores the bind-pose transform (bone-local -> model space) and parent index.
+struct ServerBone {
+	std::string  name;
+	int          parentIdx = -1;   // -1 for root
+	mu::Mat4x4   toDress;          // bind pose: bone-local -> model (dress) space
 };
 
-// 바이너리 파일로부터 모델을 읽어온다.
-// * 수정 시 주의사항: 유니티의 추출 스크립트와 구조가 대칭이어야 한다.
+// Skeleton used by the server to resolve BVH node bone indices and provide
+// bind-pose transforms for animated hit detection.
+struct ServerSkeleton {
+	std::string name;
+	std::vector<ServerBone>                  bones;
+	std::unordered_map<std::string, int>     nameToIdx;
+
+	bool empty() const { return bones.empty(); }
+	int  boneCount() const { return static_cast<int>(bones.size()); }
+};
+
+// Server-side model: collision geometry + skeleton for animated hit detection.
+struct Model {
+	std::string    name;
+	BVH            bvh;
+	ServerSkeleton skeleton;
+};
+
+// Reads a model from its binary file.
+// * When modifying: the Unity extraction script must stay symmetric.
 Model loadModelFromFile(const std::filesystem::path& path);
 
 #endif // room_server_model_hpp

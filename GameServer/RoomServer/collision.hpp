@@ -31,12 +31,13 @@ using AABBCollisionResult = CollisionResult;
 // Every node carries a shape (AABB or OBB) for precise collision testing.
 // Leaf nodes have no children (children.empty() == true).
 struct BVHNode {
-	AABB                    bounds;    // AABB encompassing this subtree (fast reject)
-	std::variant<AABB, OBB> shape;     // actual shape for precise collision
-	std::vector<int>        children;  // child indices into BVH::nodes (empty = leaf)
-	std::string             name;      // box name (debug)
-	std::string             boneName;  // bone name used at load time to resolve boneIdx
-	int                     boneIdx = -1; // resolved bone index; -1 = root transform only
+	AABB                    bounds;             // AABB encompassing this subtree (fast reject)
+	std::variant<AABB, OBB> shape;              // actual shape for precise collision
+	std::vector<int>        children;           // child indices into BVH::nodes (empty = leaf)
+	std::string             name;               // box name (debug)
+	std::string             boneName;           // bone name used at load time to resolve boneIdx
+	int                     boneIdx     = -1;   // resolved bone index; -1 = root transform only
+	float                   damageCoeff = 1.0f; // hit damage multiplier for this region
 
 	bool isLeaf() const { return children.empty(); }
 };
@@ -57,6 +58,18 @@ CollisionResult collides(const BVH& bvh, const AABB& hitbox);
 
 OBB  toOBB(const AABB& aabb);
 AABB obbToAABB(const OBB& obb);
+// Transforms an OBB by a 4x4 matrix (row-major): full 4x4 for center, 3x3 for orientation.
+OBB  transformOBBByMatrix(const OBB& obb, const mu::Mat4x4& xform);
+
+// Result of a BVH hit that also identifies which node was struck.
+struct BVHHitResult : CollisionResult {
+	int   hitNodeIdx  = -1;   // index into BVH::nodes; -1 if no hit
+	float damageCoeff = 1.0f; // copied from BVHNode::damageCoeff on hit
+};
+
+// BVH vs OBB — returns first hit leaf with hitNodeIdx and damageCoeff.
+// The BVH must already be in world space (e.g. RigidBody::worldBVH()).
+BVHHitResult collides(const BVH& bvh, const OBB& hitbox);
 
 // One contact point between two rigid bodies.
 // Stores warm-start accumulators that persist within a single step.

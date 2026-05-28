@@ -15,6 +15,11 @@ void importCube(std::ifstream& ifs, const AssetManager& assetManager, Object& cu
 
 void importGoblinSpawner(std::ifstream& ifs, const AssetManager& assetManager, Goblin& goblin) {
 	goblin.setModel(assetManager.modelGoblin());
+	goblin.animController().registerClip("Idle",   findServerAnimClip(assetManager.goblinAnimations(), "Goblin_Idle"));
+	goblin.animController().registerClip("Walk",   findServerAnimClip(assetManager.goblinAnimations(), "Goblin_Walk"));
+	goblin.animController().registerClip("Attack", findServerAnimClip(assetManager.goblinAnimations(), "Goblin_Attack"));
+	goblin.animController().registerClip("Die",    findServerAnimClip(assetManager.goblinAnimations(), "Goblin_Death"));
+	goblin.animController().switchClip("Idle");
 }
 
 void importTerrain(std::ifstream& ifs, TerrainObject& terrain) {

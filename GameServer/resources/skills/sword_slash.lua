@@ -20,7 +20,7 @@ skill:addEvent(100, "PlayVFX", {
 })
 
 local onHitDefBase = OnHit({
-    damage          = 5,
+    damage          = 25,
     vfxId           = 0,
     impulseStrength = 500.0,
     impulseDir      = Vec3(0.0, 0.0, 1.0)
@@ -41,7 +41,7 @@ local hitboxBase = {
     attach             = BoneAttach("spine_02"),
     applyAttachRotation = true,
     hitGroup           = 0,
-    hitGroupCooldownMs = 100,
+    hitGroupCooldownMs = 600,
     onHit              = onHitDefBase
 }
 

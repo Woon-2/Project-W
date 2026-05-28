@@ -8,6 +8,20 @@
 #include "JobTimer.hpp"
 #include "collision.hpp"
 #include "skill/skillCompiler.hpp"
+#include "serverAnimation.hpp"
+
+void Room::registerObject(Object* obj) {
+	const int id = static_cast<int>(obj->getId());
+	if (id >= static_cast<int>(objectById_.size()))
+		objectById_.resize(id + 1, nullptr);
+	objectById_[id] = obj;
+}
+
+void Room::unregisterObject(Object* obj) {
+	const int id = static_cast<int>(obj->getId());
+	if (id >= 0 && id < static_cast<int>(objectById_.size()))
+		objectById_[id] = nullptr;
+}
 
 void Room::init(const Level* levelData) {
 	cubes_ = levelData->cubes;
@@ -34,6 +48,10 @@ void Room::init(const Level* levelData) {
 		physicsWorld_.registerBody(&g.body(), [&g]() { g.rebuildBodyBVH(); });
 	}
 
+	// Register all goblins after the vector is fully built (no reallocation risk).
+	for (auto& g : goblins_)
+		registerObject(&g);
+
 	for (const auto& spawner : levelData->goblinSpawners) {
 		int groupId = static_cast<int>(npcGroups_.size());
 		npcGroups_.emplace_back(
@@ -56,6 +74,7 @@ void Room::init(const Level* levelData) {
 	{
 		ServerSkillCompiler compiler;
 		auto assets = compiler.compileAll("../resources/skills");
+		std::cout << "[Room::init] Loaded " << assets.size() << " skill(s)\n";
 		skillSystem_.registerAssets(std::move(assets));
 	}
 }
@@ -66,6 +85,7 @@ void Room::update() {
 
 	physicsWorld_.step(dtSec);
 	updateGoblinAI(dt);
+	updatePlayerAnimations(dt);
 	updateSkillSystem(dt);
 
 	doTimer(dt, [this]() {
@@ -131,6 +151,16 @@ void Room::updateGoblinAI(Milliseconds dt) {
 		broadcast(PacketManager::makeSNpcMoveBatchPacket(moveInfos));
 }
 
+void Room::updatePlayerAnimations(Milliseconds dt) {
+	static constexpr float kWalkThreshold = 0.3f;
+	for (auto* s : sessions_) {
+		auto* player = s->player();
+		const float speed = player->linearVel().len();
+		player->animController().switchClip(speed > kWalkThreshold ? "Run_Forward" : "Idle");
+		player->updateAnimBones(dt);
+	}
+}
+
 void Room::rebuildLivingPlayersCache() {
 	livingPlayersCache_.clear();
 	for (auto* s : sessions_) {
@@ -190,6 +220,15 @@ void Room::enter(GameSession* session) {
 	player->body().snapToCurrent();
 	physicsWorld_.registerBody(&player->body(), [player]() { player->rebuildBodyBVH(); });
 
+	if (const auto* anims = RoomManager::playerAnimations()) {
+		player->animController().registerClip("Idle",         findServerAnimClip(*anims, "Player_Idle0"));
+		player->animController().registerClip("Run_Forward",  findServerAnimClip(*anims, "Player_Run_Forward"));
+		player->animController().registerClip("Run_Backward", findServerAnimClip(*anims, "Player_Run_Backward"));
+		player->animController().registerClip("Run_Left",     findServerAnimClip(*anims, "Player_Run_Left"));
+		player->animController().registerClip("Run_Right",    findServerAnimClip(*anims, "Player_Run_Right"));
+		player->animController().switchClip("Idle");
+	}
+
 	// 새로 들어오는 플레이어에 대한 snapshot 만들기
 	auto newPlayerInfo = PlayerInfo{
 		.playerId = static_cast<uint16>(session->id()),
@@ -230,15 +269,6 @@ void Room::enter(GameSession* session) {
 	auto enterPkt = PacketManager::makeSEnterPacket(newPlayerInfo, objInfos);
 	session->send(enterPkt);
 
-	// 시계 동기화 패킷 전송 (지연 보상용)
-	auto timeSyncPkt = PacketManager::makeSTimeSyncPacket(
-		static_cast<uint64>(
-			std::chrono::duration_cast<std::chrono::milliseconds>(
-				HighResolutionClock::now().time_since_epoch()
-			).count()
-		));
-	session->send(timeSyncPkt);
-
 	// 새로 들어온 플레이어의 정보를 기존 플레이어들에게 브로드캐스트
 	if (sessions_.size() > 0) {	// 기존 플레이어가 있을 때만 브로드캐스트
 		auto enterOtherPkt = PacketManager::makeSEnterOtherPacket(newPlayerInfo);
@@ -248,9 +278,11 @@ void Room::enter(GameSession* session) {
 	// room 상태 변경
 	sessions_.push_back(session);
 	idSessionMap_[session->id()] = session;
+	registerObject(player);
 }
 
 void Room::leave(GameSession* session) {
+	unregisterObject(session->player());
 	physicsWorld_.unregisterBody(&session->player()->body());
 
 	std::erase_if(sessions_, [session](GameSession* s) { return s == session; });
@@ -278,6 +310,7 @@ void Room::move(int32 sessionId, CMovePacket* cMvPkt) {
 
 	auto player = session->player();
 	player->setPos(DirectX::XMLoadFloat3(&cMvPkt->pos));
+	player->setLinearVel(DirectX::XMLoadFloat3(&cMvPkt->velocity));
 
 	auto sMvPkt = PacketManager::makeSMovePacket(
 		static_cast<uint16>(sessionId),
@@ -310,39 +343,44 @@ void Room::rotate(int32 sessionId, CMouseMovePacket* cMouseMvPkt) {
 void Room::updateSkillSystem(Milliseconds dt) {
 	if (sessions_.empty()) return;
 
-	// Build owner states from all live player sessions
-	std::vector<ServerSkillOwner> owners;
-	owners.reserve(sessions_.size());
-	for (auto* s : sessions_) {
-		auto* p = s->player();
-		if (p->hp() <= 0) continue;
-		owners.push_back({ static_cast<i32t>( p->getId() ), p->pos(), p->orient() });
+	EventList evList;
+	SkillDispatchContext ctx {
+		&evList,
+		objectById_.data(),
+		static_cast<int>(objectById_.size())
+	};
+
+	skillSystem_.update(dt, ctx);
+
+	for (const auto* p : evList) {
+		const auto* ev = reinterpret_cast<const BasicEvent*>(p);
+		if (ev->type != EventType::SkillHit) continue;
+
+		const auto* hit = reinterpret_cast<const EvSkillHit*>(ev);
+		if (hit->targetId < 0 || hit->targetId >= static_cast<int>(objectById_.size())) continue;
+		Object* tgt = objectById_[hit->targetId];
+		if (!tgt) continue;
+
+		int32 newHp = std::max(tgt->hp() - hit->damage, 0);
+		tgt->setHp(newHp);
+		broadcast(PacketManager::makeSSkillHitPacket(
+			static_cast<uint16>(hit->attackerId),
+			static_cast<uint16>(hit->targetId),
+			newHp,
+			hit->skillAssetId
+		));
 	}
 
-	// Build targets from live goblins
-	std::vector<ServerSkillTarget> targets;
-	targets.reserve(goblins_.size());
-	for (auto& g : goblins_) {
-		if (g.hp() <= 0) continue;
-		targets.push_back({ static_cast<i32t>( g.getId() ), AABB{ g.pos(), { 1.0f, 2.0f, 1.0f } }, g.hp() });
-	}
+	clearEvents(evList);
 
-	std::vector<SkillHitResult> hits;
-	skillSystem_.update(dt, owners, targets, hits);
-
-	for (const auto& hit : hits) {
-		for (auto& g : goblins_) {
-			if (g.getId() != hit.targetId) continue;
-			int32 newHp = std::max(g.hp() - hit.damage, 0);
-			g.setHp(newHp);
-			broadcast(PacketManager::makeSSkillHitPacket(
-				static_cast<uint16>(hit.attackerId),
-				static_cast<uint16>(hit.targetId),
-				newHp,
-				hit.skillAssetId
-			));
-			break;
-		}
+	std::vector<OBB> activeOBBs;
+	skillSystem_.collectActiveOBBs(activeOBBs);
+	if (!activeOBBs.empty()) {
+		std::vector<OBBInfo> obbInfos;
+		obbInfos.reserve(activeOBBs.size());
+		for (const OBB& o : activeOBBs)
+			obbInfos.push_back({ o.center.getXmf(), o.halfExtents.getXmf(), o.orient.getXmf() });
+		broadcast(PacketManager::makeSDebugHitboxPacket(obbInfos.data(), static_cast<uint16>(obbInfos.size())));
 	}
 }
 
@@ -363,8 +401,13 @@ void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs) {
 	uint16 elapsedMs  = static_cast<uint16>(std::min(elapsedRaw, static_cast<uint64>(65535u)));
 
 	// Start server-side skill instance for authoritative hit detection
-	skillSystem_.startSkill(skillAssetId, player->getId(),
-	                        Milliseconds{ static_cast<float>(elapsedMs) });
+	EventList dummyEvList;
+	SkillDispatchContext startCtx{ &dummyEvList, objectById_.data(), static_cast<int>(objectById_.size()) };
+	int instIdx = skillSystem_.startSkill(skillAssetId, static_cast<i32t>(player->getId()),
+	                                      startCtx, Milliseconds{ static_cast<float>(elapsedMs) });
+	clearEvents(dummyEvList);
+	if (instIdx < 0)
+		std::cout << "[Room::skillStart] WARNING: startSkill failed (asset id=" << skillAssetId << " not in registry)\n";
 
 	// Broadcast to OTHER clients so they play the visual effect
 	broadcastExcept(sessionIt->second,

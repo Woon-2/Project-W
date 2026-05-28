@@ -1,6 +1,8 @@
 ﻿#ifndef room_server_binaryImport_hpp
 #define room_server_binaryImport_hpp
 
+struct ServerSkeleton; // defined in Model.hpp
+
 // 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
 void readHeadTag(std::ifstream& ifs, const std::string& expectedSource);
 
@@ -69,5 +71,9 @@ std::vector<XMFLOAT3> readVec3s(std::ifstream& ifs);
 
 // 바이너리 파일에서 데이터를 읽는데 쓰이는 유틸리티 함수
 std::vector<XMFLOAT4> readVec4s(std::ifstream& ifs);
+
+// Reads a Skeleton section from a binary model file into sk.
+// After loading, sk.nameToIdx is populated for fast bone name lookup.
+void importSkeleton(std::ifstream& ifs, ServerSkeleton& sk);
 
 #endif // room_server_binaryImport_hpp

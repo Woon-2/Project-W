@@ -1,248 +1,521 @@
 #include "rspch.hpp"
 #include "skillSystem.hpp"
+#include "../Model.hpp"
 #include "../collision.hpp"
 #include <algorithm>
+#include <string_view>
 
 // ---------------------------------------------------------------------------
-// ServerSkillSystem
+// SkillInstancePool
 // ---------------------------------------------------------------------------
 
-void ServerSkillSystem::registerAssets(std::vector<SkillAsset>&& assets) {
-    assetRegistry_ = std::move(assets);
-    assetRegistry_.shrink_to_fit();
-}
-
-const SkillAsset* ServerSkillSystem::findAsset(u32t id) const {
-    for (const SkillAsset& a : assetRegistry_)
-        if (a.id == id) return &a;
-    return nullptr;
-}
-
-int ServerSkillSystem::allocInstance(const SkillAsset* asset, i32t ownerId) {
+int SkillInstancePool::alloc(const SkillAsset* asset, i32t ownerObjectId) {
     for (int i = 0; i < kMaxInstances; ++i) {
-        if (!instances_[i].active) {
-            auto& inst = instances_[i];
-            inst = ServerSkillInstance{};
-            inst.asset   = asset;
-            inst.ownerId = ownerId;
-            inst.active  = true;
+        if (!instances[i].active) {
+            SkillInstance& inst = instances[i];
+            inst.asset         = asset;
+            inst.ownerObjectId = ownerObjectId;
+            inst.elapsed       = Milliseconds{ 0.f };
+            inst.nextEventIdx  = 0;
+            inst.active        = true;
+            inst.interrupted   = false;
+            inst.resetSlots();
             return i;
         }
     }
     return -1;
 }
 
-void ServerSkillSystem::terminateInstance(ServerSkillInstance& inst) {
-    for (auto& slot : inst.slots)
-        slot.live = false;
-    inst.active = false;
+void SkillInstancePool::free(int idx) {
+    if (idx >= 0 && idx < kMaxInstances)
+        instances[idx].active = false;
 }
 
-int ServerSkillSystem::startSkill(u32t assetId, i32t ownerId, Milliseconds initialElapsed) {
+void SkillInstancePool::compact() {
+    // Flag-based reuse; no compaction needed.
+}
+
+// ---------------------------------------------------------------------------
+// Asset management
+// ---------------------------------------------------------------------------
+
+void SkillSystem::registerAssets(std::vector<SkillAsset>&& assets) {
+    assetRegistry_ = std::move(assets);
+    assetRegistry_.shrink_to_fit();
+    for (u32t i = 0; i < static_cast<u32t>(assetRegistry_.size()); ++i)
+        if (assetRegistry_[i].id == 0)
+            assetRegistry_[i].id = i + 1;
+}
+
+const SkillAsset* SkillSystem::findAsset(std::string_view name) const {
+    for (const SkillAsset& a : assetRegistry_)
+        if (a.name == name) return &a;
+    return nullptr;
+}
+
+const SkillAsset* SkillSystem::findAsset(u32t id) const {
+    for (const SkillAsset& a : assetRegistry_)
+        if (a.id == id) return &a;
+    return nullptr;
+}
+
+// ---------------------------------------------------------------------------
+// Lifecycle
+// ---------------------------------------------------------------------------
+
+int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchContext& ctx) {
     const SkillAsset* asset = findAsset(assetId);
     if (!asset) return -1;
 
-    int idx = allocInstance(asset, ownerId);
+    int idx = instancePool_.alloc(asset, ownerObjectId);
     if (idx < 0) return -1;
 
-    ServerSkillInstance& inst = instances_[idx];
+    SkillInstance& inst = instancePool_.instances[idx];
+    while (inst.nextEventIdx < (int)asset->timeline.size()) {
+        if (asset->timeline[inst.nextEventIdx].time > Milliseconds{ 0.f }) break;
+        dispatchEvent(asset->timeline[inst.nextEventIdx], inst, ctx);
+        ++inst.nextEventIdx;
+    }
+    return idx;
+}
+
+int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchContext& ctx,
+                            Milliseconds initialElapsed) {
+    const SkillAsset* asset = findAsset(assetId);
+    if (!asset) return -1;
+
+    int idx = instancePool_.alloc(asset, ownerObjectId);
+    if (idx < 0) return -1;
+
+    SkillInstance& inst = instancePool_.instances[idx];
     inst.elapsed = initialElapsed;
 
-    // Fast-forward timeline events that have already passed
-    while (inst.nextEvIdx < (int)asset->timeline.size()) {
-        const TimelineEvent& ev = asset->timeline[inst.nextEvIdx];
-        if (ev.time > initialElapsed) break;
-
-        if (ev.type == SkillEventType::SpawnHitbox) {
-            u8t slot = asset->hitboxDefs[ev.payload.spawnHitbox.defIdx].slot;
-            if (slot < ServerSkillInstance::kMaxSlots) {
-                inst.slots[slot].live   = true;
-                inst.slots[slot].defIdx = ev.payload.spawnHitbox.defIdx;
-            }
-        } else if (ev.type == SkillEventType::DestroyHitbox) {
-            u8t slot = ev.payload.destroyHitbox.slot;
-            if (slot < ServerSkillInstance::kMaxSlots)
-                inst.slots[slot].live = false;
-        }
-        ++inst.nextEvIdx;
+    while (inst.nextEventIdx < (int)asset->timeline.size()) {
+        if (asset->timeline[inst.nextEventIdx].time > initialElapsed) break;
+        dispatchEvent(asset->timeline[inst.nextEventIdx], inst, ctx);
+        ++inst.nextEventIdx;
     }
 
-    if (asset->totalDuration.count() > 0.f && initialElapsed >= asset->totalDuration)
-        terminateInstance(inst);
+    if (asset->totalDuration.count() > 0 && initialElapsed >= asset->totalDuration)
+        terminateInstance(inst, ctx);
 
     return idx;
 }
 
-// ---------------------------------------------------------------------------
-// Bone height approximation table
-// ---------------------------------------------------------------------------
+void SkillSystem::interruptAll(i32t ownerObjectId, SkillDispatchContext& ctx) {
+    for (int i = 0; i < SkillInstancePool::kMaxInstances; ++i) {
+        SkillInstance& inst = instancePool_.instances[i];
+        if (!inst.active || inst.ownerObjectId != ownerObjectId) continue;
+        if (inst.asset && !inst.asset->interruptible)               continue;
+        terminateInstance(inst, ctx);
+    }
+}
 
-float ServerSkillSystem::approxBoneHeight(std::string_view boneName) {
-    if (boneName.find("head")   != std::string_view::npos) return 1.6f;
-    if (boneName.find("neck")   != std::string_view::npos) return 1.5f;
-    if (boneName.find("spine")  != std::string_view::npos) return 1.0f;
-    if (boneName.find("chest")  != std::string_view::npos) return 1.2f;
-    if (boneName.find("hand")   != std::string_view::npos) return 1.0f;
-    if (boneName.find("weapon") != std::string_view::npos) return 1.0f;
-    if (boneName.find("foot")   != std::string_view::npos) return 0.1f;
-    return 0.8f;
+bool SkillSystem::hasActiveSkill(i32t ownerObjectId) const {
+    for (int i = 0; i < SkillInstancePool::kMaxInstances; ++i) {
+        const SkillInstance& inst = instancePool_.instances[i];
+        if (inst.active && inst.ownerObjectId == ownerObjectId) return true;
+    }
+    return false;
 }
 
 // ---------------------------------------------------------------------------
-// Hitbox AABB approximation (server has no animation state)
+// Update (5 passes — mirrors client)
 // ---------------------------------------------------------------------------
 
-AABB ServerSkillSystem::approximateHitboxAABB(const SkillHitboxDef& def,
-                                               const mu::Vec3& ownerPos,
-                                               const mu::NQuat& ownerOrient) const {
-    // Bone attach: translate bone origin using height table
-    mu::Vec3 boneOrigin = ownerPos;
-
-    if (def.attach.type == AttachType::Bone) {
-        float h = approxBoneHeight(def.attach.targetName);
-        boneOrigin = ownerPos + mu::Vec3{ 0.f, h, 0.f };
+void SkillSystem::update(Milliseconds dt, SkillDispatchContext& ctx) {
+    auto cnt = 0;
+    for (int i = 0; i < SkillInstancePool::kMaxInstances; ++i) {
+        SkillInstance& inst = instancePool_.instances[i];
+        if (!inst.active) continue;
+        tickInstance(inst, dt, ctx);
+        ++cnt;
     }
-    // VFXParticle hitboxes are skipped on server (no particle system)
+    std::cout << "Skill Instance Count: " << cnt << '\n';
 
-    if (def.localOBBs.empty())
-        return AABB{ boneOrigin, { 1.f, 1.f, 1.f } };
+    updateHitboxes(ctx);
+    updateParticleHitboxSources(ctx);
 
-    // Merge all local OBBs into one world-space AABB (conservative)
-    mu::Vec3 minP{ std::numeric_limits<float>::max() };
-    mu::Vec3 maxP{ std::numeric_limits<float>::lowest() };
+    pendingHits_.clear();
+    checkHitboxCollisions(ctx);
 
-    for (const OBB& obb : def.localOBBs) {
-        // Rotate local center by owner orientation then offset by bone origin
-        mu::Vec3 worldCenter = boneOrigin + ownerOrient.rotate(obb.center);
+    processHitResults(ctx);
 
-        // Conservatively expand by OBB halfExtent magnitude
-        float r = obb.halfExtents.len();
-        minP = mu::Vec3{
-            std::min(minP.x(), worldCenter.x() - r),
-            std::min(minP.y(), worldCenter.y() - r),
-            std::min(minP.z(), worldCenter.z() - r)
-        };
-        maxP = mu::Vec3{
-            std::max(maxP.x(), worldCenter.x() + r),
-            std::max(maxP.y(), worldCenter.y() + r),
-            std::max(maxP.z(), worldCenter.z() + r)
-        };
+    instancePool_.compact();
+}
+
+void SkillSystem::tickInstance(SkillInstance& inst, Milliseconds dt, SkillDispatchContext& ctx) {
+    inst.elapsed += dt;
+
+    const std::vector<TimelineEvent>& tl = inst.asset->timeline;
+    while (inst.nextEventIdx < (int)tl.size()) {
+        if (tl[inst.nextEventIdx].time > inst.elapsed) break;
+        dispatchEvent(tl[inst.nextEventIdx], inst, ctx);
+        ++inst.nextEventIdx;
     }
 
-    mu::Vec3 center = (minP + maxP) * 0.5f;
-    mu::Vec3 size   = maxP - minP;
-    return AABB{ center, size };
+    if (inst.asset->totalDuration.count() > 0.f &&
+        inst.elapsed >= inst.asset->totalDuration) {
+        terminateInstance(inst, ctx);
+    }
+}
+
+void SkillSystem::terminateInstance(SkillInstance& inst, SkillDispatchContext& ctx) {
+    cleanupHitboxes(inst);
+    inst.active = false;
+}
+
+void SkillSystem::cleanupHitboxes(SkillInstance& inst) {
+    for (int h : inst.boneHitboxBySlot)
+        if (h >= 0) freeHitbox(h);
+    inst.boneHitboxBySlot.clear();
+
+    for (int s : inst.particleSourceBySlot)
+        if (s >= 0) freeParticleSource(s);
+    inst.particleSourceBySlot.clear();
 }
 
 // ---------------------------------------------------------------------------
-// Collision check: all live slots vs. all targets
+// Event dispatch
 // ---------------------------------------------------------------------------
 
-void ServerSkillSystem::checkCollisions(ServerSkillInstance& inst,
-                                         const std::vector<ServerSkillOwner>& owners,
-                                         const std::vector<ServerSkillTarget>& targets,
-                                         std::vector<SkillHitResult>& outHits) {
-    // Find owner state
-    const ServerSkillOwner* ownerState = nullptr;
-    for (const auto& o : owners) {
-        if (o.id == inst.ownerId) { ownerState = &o; break; }
+void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
+                                SkillDispatchContext& ctx) {
+    switch (ev.type) {
+
+    case SkillEventType::SpawnHitbox: {
+        const u8t defIdx = ev.payload.spawnHitbox.defIdx;
+        if (defIdx >= inst.asset->hitboxDefs.size()) break;
+        const SkillHitboxDef& def = inst.asset->hitboxDefs[defIdx];
+        const int slot = def.slot;
+
+        Object* owner = lookupObject(ctx, inst.ownerObjectId);
+
+        if (def.attach.type == AttachType::Bone) {
+            int oldH = inst.getBoneHandle(slot);
+            if (oldH >= 0) freeHitbox(oldH);
+
+            int hi = allocHitbox();
+            if (hi < 0) break;
+            inst.setBoneHandle(slot, hi);
+
+            AttachedHitbox& hb        = hitboxPool_[hi];
+            hb.active                 = true;
+            hb.particleSourceIdx      = -1;
+            hb.localOBBs              = def.localOBBs;
+            hb.worldOBBs.resize(def.localOBBs.size());
+            hb.onHit                  = def.onHit;
+            hb.ownerObjectId          = inst.ownerObjectId;
+            hb.instanceIdx            = static_cast<i32t>(&inst - instancePool_.instances);
+            hb.slot                   = static_cast<u8t>(slot);
+            hb.hitGroup               = def.hitGroup;
+            hb.hitGroupCooldownMs     = def.hitGroupCooldownMs;
+            hb.applyAttachRotation    = def.applyAttachRotation;
+
+            if (owner) {
+                hb.resolvedAttach = resolveAttach(def.attach, *owner, ctx);
+                mu::Mat4x4 xform  = computeAttachTransform(*owner, hb);
+                mu::NQuat boneOrient(mu::quatRotMat(xform));
+                for (int i = 0; i < (int)hb.localOBBs.size(); ++i) {
+                    hb.worldOBBs[i].center     = mu::Vec3(mu::Vec4(hb.localOBBs[i].center, 1.f) * xform);
+                    hb.worldOBBs[i].halfExtents = hb.localOBBs[i].halfExtents;
+                    hb.worldOBBs[i].orient      = hb.localOBBs[i].orient;
+                    hb.worldOBBs[i].orient     *= boneOrient;
+                }
+            } else {
+                hb.resolvedAttach.type    = AttachType::Bone;
+                hb.resolvedAttach.boneIdx = -1;
+                hb.worldOBBs              = hb.localOBBs;
+            }
+        } else {
+            // VFXParticle: create source entry; pSystem always null on server
+            int oldS = inst.getParticleHandle(slot);
+            if (oldS >= 0) freeParticleSource(oldS);
+
+            int si = allocParticleSource();
+            inst.setParticleHandle(slot, si);
+
+            ParticleHitboxSource& src = particleSources_[si];
+            src.active             = true;
+            src.templateOBBs       = def.localOBBs;
+            src.onHit              = def.onHit;
+            src.ownerObjectId      = inst.ownerObjectId;
+            src.instanceIdx        = static_cast<i32t>(&inst - instancePool_.instances);
+            src.slot               = static_cast<u8t>(slot);
+            src.hitGroup           = def.hitGroup;
+            src.hitGroupCooldownMs = def.hitGroupCooldownMs;
+            src.useParticleSize    = def.useParticleSize;
+            src.applyRotation      = def.applyAttachRotation;
+            src.hitboxHandles.clear();
+            // src.pSystem = nullptr (not present; VFXParticle hitboxes are no-ops on server)
+        }
+        break;
     }
-    if (!ownerState) return;
 
-    for (int s = 0; s < ServerSkillInstance::kMaxSlots; ++s) {
-        if (!inst.slots[s].live) continue;
+    case SkillEventType::DestroyHitbox: {
+        const int slot = ev.payload.destroyHitbox.slot;
+        int bh = inst.getBoneHandle(slot);
+        if (bh >= 0) { freeHitbox(bh); inst.setBoneHandle(slot, -1); }
+        int ps = inst.getParticleHandle(slot);
+        if (ps >= 0) { freeParticleSource(ps); inst.setParticleHandle(slot, -1); }
+        break;
+    }
 
-        const SkillHitboxDef& def = inst.asset->hitboxDefs[inst.slots[s].defIdx];
+    case SkillEventType::PlayAnimation: {
+        // No-op on server (animation driven by Npc AI state machine, not skill events)
+        break;
+    }
 
-        // VFXParticle hitboxes are skipped on server
-        if (def.attach.type == AttachType::VFXParticle) continue;
+    case SkillEventType::PlayVFX: {
+        // No-op on server (no ParticleEffect registry)
+        break;
+    }
 
-        const AABB hitbox = approximateHitboxAABB(def, ownerState->pos, ownerState->orient);
-        const u8t  group  = def.hitGroup;
+    case SkillEventType::ApplyImpulse: {
+        const auto& p = ev.payload.applyImpulse;
+        Object* owner = lookupObject(ctx, inst.ownerObjectId);
+        if (!owner) break;
+        // Transform local direction to world space via owner's orientation
+        mu::Mat4x4 orientMat(owner->orient());
+        mu::Vec3 impulseJ = mu::Vec3(mu::Vec4(p.dirLocal, 0.f) * orientMat) * p.strength;
+        owner->body().applyImpulse(impulseJ, owner->pos());
+        break;
+    }
 
-        auto& groupState = inst.hitGroups[group];
-        const float cooldownMs = def.hitGroupCooldownMs;
+    case SkillEventType::CameraShake: {
+        // No-op on server (no camera)
+        break;
+    }
 
-        for (const ServerSkillTarget& tgt : targets) {
-            if (tgt.hp <= 0) continue;
-            if (tgt.id == inst.ownerId) continue;
+    case SkillEventType::ModifyStat: {
+        const auto& p = ev.payload.modifyStat;
+        Object* owner = lookupObject(ctx, inst.ownerObjectId);
+        if (!owner || p.hpDelta == 0) break;
+        owner->setHp(owner->hp() + p.hpDelta);
+        break;
+    }
 
-            // Check hit group cooldown
-            if (auto it = groupState.lastHitByTarget.find(tgt.id);
-                it != groupState.lastHitByTarget.end())
-            {
-                if (cooldownMs <= 0.f) continue;  // hit once only
-                if ((inst.elapsed - it->second).count() < cooldownMs) continue;
+    case SkillEventType::SendGameplayEvent:
+    case SkillEventType::SpawnProjectile:
+        break;
+
+    default:
+        break;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Hitbox world transform update (bone type only)
+// ---------------------------------------------------------------------------
+
+void SkillSystem::updateHitboxes(SkillDispatchContext& ctx) {
+    for (AttachedHitbox& hb : hitboxPool_) {
+        if (!hb.active) continue;
+        if (hb.resolvedAttach.type != AttachType::Bone) continue;
+
+        Object* owner = lookupObject(ctx, hb.ownerObjectId);
+        if (!owner) { hb.active = false; continue; }
+
+        mu::Mat4x4 xform = computeAttachTransform(*owner, hb);
+        mu::NQuat boneOrient(mu::quatRotMat(xform));
+        hb.worldOBBs.resize(hb.localOBBs.size());
+        for (int oi = 0; oi < (int)hb.localOBBs.size(); ++oi) {
+            hb.worldOBBs[oi].center     = mu::Vec3(mu::Vec4(hb.localOBBs[oi].center, 1.f) * xform);
+            hb.worldOBBs[oi].halfExtents = hb.localOBBs[oi].halfExtents;
+            hb.worldOBBs[oi].orient      = hb.localOBBs[oi].orient;
+            if (hb.applyAttachRotation)
+                hb.worldOBBs[oi].orient *= boneOrient;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// VFX particle hitbox source sync (no-op on server: pSystem always null)
+// ---------------------------------------------------------------------------
+
+void SkillSystem::updateParticleHitboxSources(SkillDispatchContext& ctx) {
+    for (ParticleHitboxSource& src : particleSources_) {
+        if (!src.active) continue;
+        // No ParticleSystem on server; release any stale hitbox handles and leave empty
+        for (int h : src.hitboxHandles) freeHitbox(h);
+        src.hitboxHandles.clear();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Attachment resolve and transform
+// ---------------------------------------------------------------------------
+
+ResolvedAttach SkillSystem::resolveAttach(const AttachTarget&        attach,
+                                          const Object&              owner,
+                                          const SkillDispatchContext& /*ctx*/) const {
+    ResolvedAttach ra{};
+    ra.type = attach.type;
+
+    if (attach.type == AttachType::Bone) {
+        if (!owner.model() || owner.model()->skeleton.empty()) { ra.boneIdx = -1; return ra; }
+        const auto& nameToIdx = owner.model()->skeleton.nameToIdx;
+        auto it = nameToIdx.find(attach.targetName);
+        ra.boneIdx = (it != nameToIdx.end()) ? it->second : -1;
+        return ra;
+    }
+
+    // VFXParticle: no pSystem on server
+    return ra;
+}
+
+mu::Mat4x4 SkillSystem::computeAttachTransform(const Object& owner,
+                                                const AttachedHitbox& hb) const {
+    const i32t idx = hb.resolvedAttach.boneIdx;
+    if (idx >= 0) {
+        const auto& boneXforms = owner.boneWorldXforms();
+        if (idx < static_cast<i32t>(boneXforms.size()))
+            return boneXforms[static_cast<std::size_t>(idx)];
+    }
+    // Fallback: owner world transform without bone specificity
+    return mu::Mat4x4(owner.orient()) * mu::translate(owner.pos());
+}
+
+// ---------------------------------------------------------------------------
+// Collision detection
+// ---------------------------------------------------------------------------
+
+void SkillSystem::checkHitboxCollisions(SkillDispatchContext& ctx) {
+    if (!ctx.objectById) return;
+
+    for (int hi = 0; hi < (int)hitboxPool_.size(); ++hi) {
+        const AttachedHitbox& hb = hitboxPool_[hi];
+        if (!hb.active || hb.worldOBBs.empty()) continue;
+
+        for (int oi = 0; oi < ctx.objectByIdSize; ++oi) {
+            Object* target = ctx.objectById[oi];
+            if (!target)                                               continue;
+            if (static_cast<i32t>(target->getId()) == hb.ownerObjectId) continue;
+            if (!target->canReceiveDamage())                           continue;
+            if (target->hp() <= 0)                                     continue;
+
+            // Hit group cooldown
+            if (hb.instanceIdx >= 0 && hb.instanceIdx < SkillInstancePool::kMaxInstances) {
+                const SkillInstance& inst = instancePool_.instances[hb.instanceIdx];
+                auto git = inst.hitGroups.find(hb.hitGroup);
+                if (git != inst.hitGroups.end()) {
+                    auto tit = git->second.lastHitByTarget.find(static_cast<i32t>(target->getId()));
+                    if (tit != git->second.lastHitByTarget.end()) {
+                        float since = inst.elapsed.count() - tit->second.count();
+                        if (hb.hitGroupCooldownMs <= 0.f || since < hb.hitGroupCooldownMs)
+                            continue;
+                    }
+                }
             }
 
-            if (!collides(hitbox, tgt.worldAABB).hit) continue;
+            // BVH hit check — capture damageCoeff from the hit leaf node
+            const BVH& bvh      = target->body().worldBVH();
+            float      coeff    = 1.0f;
+            bool       hit      = false;
+            for (const OBB& obb : hb.worldOBBs) {
+                BVHHitResult r = collides(bvh, obb);
+                if (r.hit) { coeff = r.damageCoeff; hit = true; break; }
+            }
+            if (hit) {
+                pendingHits_.push_back({ hi, static_cast<i32t>(target->getId()), coeff });
+                if (hb.instanceIdx >= 0 && hb.instanceIdx < SkillInstancePool::kMaxInstances) {
+                    SkillInstance& inst = instancePool_.instances[hb.instanceIdx];
+                    inst.hitGroups[hb.hitGroup].lastHitByTarget[static_cast<i32t>(target->getId())] = inst.elapsed;
+                }
+            }
+        }
+    }
+}
 
-            outHits.push_back({
-                inst.ownerId,
-                tgt.id,
-                def.onHit.damage,
-                inst.asset->id
+void SkillSystem::processHitResults(SkillDispatchContext& ctx) {
+    if (!ctx.evList) return;
+
+    for (const HitResult& hr : pendingHits_) {
+        AttachedHitbox& hb = hitboxPool_[hr.hitboxIdx];
+        if (!hb.active) continue;
+
+        const OnHitDef& oh = hb.onHit;
+
+        const SkillInstance* instPtr = nullptr;
+        if (hb.instanceIdx >= 0 && hb.instanceIdx < SkillInstancePool::kMaxInstances) {
+            instPtr = &instancePool_.instances[hb.instanceIdx];
+        }
+
+        if (!ctx.clientPredictionOnly && instPtr) {
+            holdEvent((*ctx.evList), EvSkillHit{
+                hr.targetObjectId,
+                static_cast<int32>(oh.damage * hr.damageCoeff),
+                instPtr->ownerObjectId,
+                instPtr->asset ? instPtr->asset->id : 0u
             });
-            groupState.lastHitByTarget[tgt.id] = inst.elapsed;
         }
-    }
-}
 
-// ---------------------------------------------------------------------------
-// Per-instance tick
-// ---------------------------------------------------------------------------
+        // (PlayVFX hit effect: no-op on server)
 
-void ServerSkillSystem::tickInstance(ServerSkillInstance& inst, Milliseconds dt,
-                                      const std::vector<ServerSkillOwner>& owners,
-                                      const std::vector<ServerSkillTarget>& targets,
-                                      std::vector<SkillHitResult>& outHits) {
-    inst.elapsed = inst.elapsed + dt;
-
-    // Fire timeline events
-    while (inst.nextEvIdx < (int)inst.asset->timeline.size()) {
-        const TimelineEvent& ev = inst.asset->timeline[inst.nextEvIdx];
-        if (ev.time > inst.elapsed) break;
-
-        switch (ev.type) {
-        case SkillEventType::SpawnHitbox: {
-            u8t slot = inst.asset->hitboxDefs[ev.payload.spawnHitbox.defIdx].slot;
-            if (slot < ServerSkillInstance::kMaxSlots) {
-                inst.slots[slot].live   = true;
-                inst.slots[slot].defIdx = ev.payload.spawnHitbox.defIdx;
+        if (oh.impulseStrength > 0.f) {
+            Object* tgt   = lookupObject(ctx, hr.targetObjectId);
+            Object* owner = lookupObject(ctx, hb.ownerObjectId);
+            if (tgt && owner) {
+                mu::Mat4x4 orientMat(owner->orient());
+                mu::Vec3 impulseJ = mu::Vec3(mu::Vec4(oh.impulseDirLocal, 0.f) * orientMat)
+                                    * oh.impulseStrength;
+                tgt->body().applyImpulse(impulseJ, tgt->pos());
+                tgt->onHitImpulse();
             }
-            break;
         }
-        case SkillEventType::DestroyHitbox: {
-            u8t slot = ev.payload.destroyHitbox.slot;
-            if (slot < ServerSkillInstance::kMaxSlots)
-                inst.slots[slot].live = false;
-            break;
-        }
-        // PlayAnimation, PlayVFX, CameraShake: no-op on server
-        default:
-            break;
-        }
-        ++inst.nextEvIdx;
     }
-
-    // Check collisions for all live hitboxes
-    checkCollisions(inst, owners, targets, outHits);
-
-    // Terminate if duration exceeded
-    if (inst.asset->totalDuration.count() > 0.f && inst.elapsed >= inst.asset->totalDuration)
-        terminateInstance(inst);
 }
 
 // ---------------------------------------------------------------------------
-// Main update
+// Pool helpers
 // ---------------------------------------------------------------------------
 
-void ServerSkillSystem::update(Milliseconds dt,
-                                const std::vector<ServerSkillOwner>& owners,
-                                const std::vector<ServerSkillTarget>& targets,
-                                std::vector<SkillHitResult>& outHits) {
-    for (int i = 0; i < kMaxInstances; ++i) {
-        if (!instances_[i].active) continue;
-        tickInstance(instances_[i], dt, owners, targets, outHits);
+int SkillSystem::allocHitbox() {
+    for (int i = 0; i < (int)hitboxPool_.size(); ++i) {
+        if (!hitboxPool_[i].active) { hitboxPool_[i] = AttachedHitbox{}; return i; }
+    }
+    hitboxPool_.emplace_back();
+    return static_cast<int>(hitboxPool_.size()) - 1;
+}
+
+void SkillSystem::freeHitbox(int idx) {
+    if (idx >= 0 && idx < (int)hitboxPool_.size())
+        hitboxPool_[idx].active = false;
+}
+
+int SkillSystem::allocParticleSource() {
+    for (int i = 0; i < (int)particleSources_.size(); ++i) {
+        if (!particleSources_[i].active) { particleSources_[i] = ParticleHitboxSource{}; return i; }
+    }
+    particleSources_.emplace_back();
+    return static_cast<int>(particleSources_.size()) - 1;
+}
+
+void SkillSystem::freeParticleSource(int idx) {
+    if (idx < 0 || idx >= (int)particleSources_.size()) return;
+    ParticleHitboxSource& src = particleSources_[idx];
+    for (int h : src.hitboxHandles) freeHitbox(h);
+    src.hitboxHandles.clear();
+    src.active = false;
+}
+
+// ---------------------------------------------------------------------------
+// Object lookup
+// ---------------------------------------------------------------------------
+
+Object* SkillSystem::lookupObject(const SkillDispatchContext& ctx, i32t id) const {
+    if (!ctx.objectById || id < 0 || id >= ctx.objectByIdSize) return nullptr;
+    return ctx.objectById[id];
+}
+
+// ---------------------------------------------------------------------------
+// Debug
+// ---------------------------------------------------------------------------
+
+void SkillSystem::collectActiveOBBs(std::vector<OBB>& out) const {
+    for (const AttachedHitbox& hb : hitboxPool_) {
+        if (!hb.active) continue;
+        for (const OBB& obb : hb.worldOBBs)
+            out.push_back(obb);
     }
 }

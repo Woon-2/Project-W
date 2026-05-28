@@ -1,5 +1,6 @@
 ﻿#include "rspch.hpp"
 #include "npc.hpp"
+#include "Model.hpp"
 #include "Room.hpp"
 #include "GameSession.hpp"
 #include "NpcGroup.hpp"
@@ -15,6 +16,7 @@ Npc::Npc(Object&& base, const NpcConfig& cfg)
 {
     applyConfig(cfg);
     nearbyCache_.reserve(16);
+    setCanReceiveDamage(true);
 }
 
 void Npc::applyConfig(const NpcConfig& cfg) {
@@ -57,14 +59,36 @@ void Npc::transitionTo(NpcState next) {
     if (next == NpcState::AttackRecover) recoverTimer_    = 0s;
     if (next == NpcState::Reposition)    repositionTimer_ = 0s;
     state_ = next;
+
+    switch (next) {
+        case NpcState::Idle:
+        case NpcState::Return:
+        case NpcState::Investigate:
+            animController().switchClip("Idle");    break;
+        case NpcState::Chase:
+        case NpcState::Reposition:
+            animController().switchClip("Walk");    break;
+        case NpcState::AttackWindup:
+        case NpcState::AttackRecover:
+            animController().switchClip("Attack");  break;
+        case NpcState::Dead:
+            animController().switchClip("Die");     break;
+    }
 }
 
 // ─── 메인 업데이트 분기 ──────────────────────────────────────────────────────
 
 NpcUpdateResult Npc::update(Seconds dt, Room& room) {
+    updateAnimBones(dt);
+
+    if (knockbackTimer_ > 0s) knockbackTimer_ -= dt;
+
     if (hp() <= 0) {
         return updateDead(dt);
     }
+
+    if (knockbackTimer_ > 0s)
+        return {};
 
     switch (state_) {
         case NpcState::Idle:           return updateIdle          (dt, room);
@@ -497,7 +521,12 @@ void Npc::respawn() {
     recoverTimer_     = 0s;
     directReactTimer_ = -1s;
     groupReactTimer_  = -1s;
+    knockbackTimer_   = 0s;
     state_            = NpcState::Idle;
+}
+
+void Npc::onHitImpulse() {
+    knockbackTimer_ = kKnockbackDuration;
 }
 
 // ─── evaluateTargetScore ──────────────────────────────────────────────────────

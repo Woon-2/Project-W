@@ -1,105 +1,202 @@
 #ifndef __rs_skill_skillSystem_HPP
 #define __rs_skill_skillSystem_HPP
 
-#include "skillTypes.hpp"
-#include <unordered_set>
-#include <unordered_map>
-#include <limits>
-
-// ---------------------------------------------------------------------------
 // Server-side skill system.
-// Runs hitbox collision only; no animation/VFX/camera. BoneAttach is
-// approximated using player position + a bone-height table.
-// ---------------------------------------------------------------------------
+// Structure mirrors client/skill/skillSystem.hpp.
+// Key differences from client:
+//   - ResolvedAttach: no pSystem (no ParticleSystem on server)
+//   - SkillDispatchContext: no vfxById / camera / pTimer
+//   - EvSkillHit carries attackerId + skillAssetId for server broadcast
+//   - PlayVFX / CameraShake / PlayAnimation are no-ops
+//   - checkHitboxCollisions uses body().worldBVH() and applies damageCoeff
 
-struct SkillHitResult {
-    i32t attackerId;
-    i32t targetId;
-    i32t damage;
-    u32t skillAssetId;
-};
+#include "skillTypes.hpp"
+#include "../event.hpp"
+#include "../object.hpp"
+#include <unordered_map>
+#include <vector>
 
-struct ServerSkillTarget {
-    i32t     id;
-    AABB     worldAABB;   // target bounding box in world space
-    int      hp;
-};
-
-struct ServerSkillOwner {
-    i32t     id;
-    mu::Vec3 pos;
-    mu::NQuat orient;
-};
+class Object;
 
 // ---------------------------------------------------------------------------
+// Resolved attach handle (no strings; filled once at SpawnHitbox dispatch)
+// ---------------------------------------------------------------------------
 
-struct HitGroupState {
-    std::unordered_map<i32t, Milliseconds> lastHitByTarget;
+struct ResolvedAttach {
+    AttachType type    = AttachType::Bone;
+    i32t       boneIdx = -1;
+    // VFXParticle: pSystem always null on server
 };
 
-struct ServerSkillInstance {
-    const SkillAsset* asset      = nullptr;
-    i32t              ownerId    = -1;
-    Milliseconds      elapsed    { 0.f };
-    int               nextEvIdx  = 0;
-    bool              active     = false;
+// ---------------------------------------------------------------------------
+// Active hitbox (lives in the flat pool inside SkillSystem)
+// ---------------------------------------------------------------------------
 
-    static constexpr int kMaxSlots = 8;
-    struct HitSlot {
-        bool live   = false;
-        u8t  defIdx = 0;
-    } slots[kMaxSlots]{};
+struct AttachedHitbox {
+    std::vector<OBB> worldOBBs;
+    std::vector<OBB> localOBBs;
+    int              particleSourceIdx    = -1;
+    OnHitDef         onHit;
+    ResolvedAttach   resolvedAttach;
+    i32t             ownerObjectId        = -1;
+    i32t             instanceIdx          = -1;
+    u8t              slot                 = 0;
+    u8t              hitGroup             = 0;
+    float            hitGroupCooldownMs   = 0.f;
+    bool             active               = false;
+    bool             applyAttachRotation  = true;
+};
 
+// ---------------------------------------------------------------------------
+// VFX particle hitbox source
+// Structurally mirrors client. pSystem is always null on server,
+// so updateParticleHitboxSources() is effectively a no-op.
+// ---------------------------------------------------------------------------
+
+struct ParticleHitboxSource {
+    // pSystem always null on server (no ParticleSystem)
+    std::vector<OBB> templateOBBs;
+    OnHitDef         onHit;
+    i32t             ownerObjectId         = -1;
+    i32t             instanceIdx           = -1;
+    u8t              slot                  = 0;
+    u8t              hitGroup              = 0;
+    float            hitGroupCooldownMs    = 0.f;
+    bool             active                = false;
+    bool             useParticleSize       = false;
+    bool             applyRotation         = true;
+    std::vector<int> hitboxHandles;
+};
+
+// ---------------------------------------------------------------------------
+// Skill instance (one executing skill)
+// ---------------------------------------------------------------------------
+
+struct SkillInstance {
+    const SkillAsset* asset         = nullptr;
+    i32t              ownerObjectId = -1;
+    Milliseconds      elapsed       { 0.f };
+    i32t              nextEventIdx  = 0;
+    bool              active        = false;
+    bool              interrupted   = false;
+
+    // slot -> hitboxPool_ index (bone attach); -1 = empty
+    std::vector<int> boneHitboxBySlot;
+    // slot -> particleSources_ index (VFXParticle attach); -1 = empty
+    std::vector<int> particleSourceBySlot;
+
+    struct HitGroupState {
+        std::unordered_map<i32t, Milliseconds> lastHitByTarget;
+    };
     std::unordered_map<u8t, HitGroupState> hitGroups;
+
+    int  getBoneHandle(int slot) const {
+        return (slot < (int)boneHitboxBySlot.size()) ? boneHitboxBySlot[slot] : -1;
+    }
+    void setBoneHandle(int slot, int val) {
+        if (slot >= (int)boneHitboxBySlot.size()) boneHitboxBySlot.resize(slot + 1, -1);
+        boneHitboxBySlot[slot] = val;
+    }
+    int  getParticleHandle(int slot) const {
+        return (slot < (int)particleSourceBySlot.size()) ? particleSourceBySlot[slot] : -1;
+    }
+    void setParticleHandle(int slot, int val) {
+        if (slot >= (int)particleSourceBySlot.size()) particleSourceBySlot.resize(slot + 1, -1);
+        particleSourceBySlot[slot] = val;
+    }
+    void resetSlots() {
+        boneHitboxBySlot.clear();
+        particleSourceBySlot.clear();
+        hitGroups.clear();
+    }
 };
 
 // ---------------------------------------------------------------------------
+// Instance pool (static array)
+// ---------------------------------------------------------------------------
 
-class ServerSkillSystem {
+struct SkillInstancePool {
+    static constexpr int kMaxInstances = 128;
+
+    SkillInstance instances[kMaxInstances]{};
+    int           count = 0;
+
+    int  alloc(const SkillAsset* asset, i32t ownerObjectId);
+    void free(int idx);
+    void compact();
+};
+
+// ---------------------------------------------------------------------------
+// Dispatch context (one per frame)
+// ---------------------------------------------------------------------------
+
+struct SkillDispatchContext {
+    EventList*       evList         = nullptr;
+
+    // Sparse: objectById[id] is the Object with that ID, or nullptr.
+    Object**         objectById     = nullptr;
+    int              objectByIdSize = 0;
+
+    // Always false on server (server is authoritative).
+    bool             clientPredictionOnly = false;
+};
+
+// ---------------------------------------------------------------------------
+// Skill system
+// ---------------------------------------------------------------------------
+
+class SkillSystem {
 public:
     void registerAssets(std::vector<SkillAsset>&& assets);
 
+    const SkillAsset* findAsset(std::string_view name) const;
     const SkillAsset* findAsset(u32t id) const;
 
-    // Start a skill. initialElapsed allows lag-compensated remote starts.
-    // Returns instance index or -1 on failure.
-    int startSkill(u32t assetId, i32t ownerId,
-                   Milliseconds initialElapsed = Milliseconds{ 0.f });
+    int startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchContext& ctx);
+    int startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchContext& ctx,
+                   Milliseconds initialElapsed);
 
-    // Per-frame update. Caller provides current owner states and all valid targets.
-    void update(Milliseconds dt,
-                const std::vector<ServerSkillOwner>& owners,
-                const std::vector<ServerSkillTarget>& targets,
-                std::vector<SkillHitResult>& outHits);
+    void interruptAll(i32t ownerObjectId, SkillDispatchContext& ctx);
+    void update(Milliseconds dt, SkillDispatchContext& ctx);
+    bool hasActiveSkill(i32t ownerObjectId) const;
+
+    // Debug: collect world-space OBBs of all active hitboxes.
+    void collectActiveOBBs(std::vector<OBB>& out) const;
 
 private:
-    std::vector<SkillAsset> assetRegistry_;
+    void tickInstance(SkillInstance& inst, Milliseconds dt, SkillDispatchContext& ctx);
+    void dispatchEvent(const TimelineEvent& ev, SkillInstance& inst, SkillDispatchContext& ctx);
+    void updateHitboxes(SkillDispatchContext& ctx);
+    void updateParticleHitboxSources(SkillDispatchContext& ctx);
+    void checkHitboxCollisions(SkillDispatchContext& ctx);
+    void processHitResults(SkillDispatchContext& ctx);
 
-    static constexpr int kMaxInstances = 64;
-    ServerSkillInstance   instances_[kMaxInstances]{};
-    int                   instanceCount_ = 0;
+    void terminateInstance(SkillInstance& inst, SkillDispatchContext& ctx);
+    void cleanupHitboxes(SkillInstance& inst);
 
-    int  allocInstance(const SkillAsset* asset, i32t ownerId);
-    void terminateInstance(ServerSkillInstance& inst);
+    int  allocHitbox();
+    void freeHitbox(int idx);
+    int  allocParticleSource();
+    void freeParticleSource(int idx);
 
-    void tickInstance(ServerSkillInstance& inst, Milliseconds dt,
-                      const std::vector<ServerSkillOwner>& owners,
-                      const std::vector<ServerSkillTarget>& targets,
-                      std::vector<SkillHitResult>& outHits);
+    ResolvedAttach resolveAttach(const AttachTarget&        attach,
+                                 const Object&              owner,
+                                 const SkillDispatchContext& ctx) const;
 
-    void checkCollisions(ServerSkillInstance& inst,
-                         const std::vector<ServerSkillOwner>& owners,
-                         const std::vector<ServerSkillTarget>& targets,
-                         std::vector<SkillHitResult>& outHits);
+    mu::Mat4x4 computeAttachTransform(const Object& owner, const AttachedHitbox& hb) const;
+    Object*    lookupObject(const SkillDispatchContext& ctx, i32t id) const;
 
-    // Approximate the world-space AABB for a hitbox given owner's pos/orient.
-    // Server has no animation state so bone positions are approximated by a
-    // height table derived from the bone name.
-    AABB approximateHitboxAABB(const SkillHitboxDef& def,
-                                const mu::Vec3& ownerPos,
-                                const mu::NQuat& ownerOrient) const;
+    std::vector<SkillAsset>           assetRegistry_;
+    SkillInstancePool                 instancePool_;
+    std::vector<AttachedHitbox>       hitboxPool_;
+    std::vector<ParticleHitboxSource> particleSources_;
 
-    static float approxBoneHeight(std::string_view boneName);
+    struct HitResult {
+        int   hitboxIdx;
+        i32t  targetObjectId;
+        float damageCoeff = 1.0f;  // from BVH node; applied to oh.damage in processHitResults
+    };
+    std::vector<HitResult> pendingHits_;
 };
 
 #endif  // __rs_skill_skillSystem_HPP

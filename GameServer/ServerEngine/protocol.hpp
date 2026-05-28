@@ -28,13 +28,14 @@ enum class PacketType : uint16 {
 	S_NpcAttack,
 	S_PlayerAttack,
 	S_Hit,
-	S_TimeSync,
 
 	S_NpcRespawn,
 
 	C_SkillStart,
 	S_SkillStart,
 	S_SkillHit,
+
+	S_DebugHitbox,
 };
 
 enum class ObjectType : uint16 {
@@ -174,10 +175,6 @@ struct SHitPacket : public PacketHeader {
 	int32  newHp;
 };
 
-struct STimeSyncPacket : public PacketHeader {
-	uint64 serverMs;
-};
-
 struct SNpcRespawnPacket : public PacketHeader {
 	uint16 npcId;
 	int32 newHp;
@@ -200,6 +197,23 @@ struct SSkillHitPacket : public PacketHeader {
 	uint16 targetId;
 	int32  newHp;
 	uint32 skillAssetId;
+};
+
+struct OBBInfo {
+	DirectX::XMFLOAT3 center;
+	DirectX::XMFLOAT3 halfExtents;
+	DirectX::XMFLOAT4 orient;
+};
+
+struct SDebugHitboxPacket : public PacketHeader {
+	uint16 dataOffset;
+	uint16 obbCount;
+
+	using OBBList = DataList<OBBInfo>;
+	OBBList getOBBList() {
+		byte* dataStart = reinterpret_cast<byte*>(this) + dataOffset;
+		return OBBList(reinterpret_cast<OBBInfo*>(dataStart), obbCount);
+	}
 };
 
 #pragma pack(pop)

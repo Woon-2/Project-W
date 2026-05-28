@@ -3,6 +3,7 @@
 
 #include "physicsWorld.hpp"
 #include "terrain.hpp"
+#include "serverAnimation.hpp"
 #include <vector>
 
 class GameSession;
@@ -45,6 +46,25 @@ public:
 	// Called as onRebuildBVH callback by PhysicsWorld, and directly by setters.
 	void rebuildBodyBVH();
 
+	// Stores pre-computed world-space bone transforms and rebuilds the BVH.
+	// boneWorldXforms[i] = toDress * bakedSample[i][sampleIdx] * entityWorldMatrix
+	void updateBoneWorldXforms(std::vector<mu::Mat4x4>&& xforms);
+	const std::vector<mu::Mat4x4>& boneWorldXforms() const { return boneWorldXforms_; }
+
+	// Advances the animation clock by dt, computes bone model-space transforms,
+	// and rebuilds the world-space BVH. Call once per frame on animated objects.
+	void updateAnimBones(Seconds dt);
+
+	AnimController&       animController()       { return animController_; }
+	const AnimController& animController() const { return animController_; }
+
+	const Model* model() const { return pModel_; }
+
+	bool canReceiveDamage() const { return canReceiveDamage_; }
+	void setCanReceiveDamage(bool v) { canReceiveDamage_ = v; }
+
+	virtual void onHitImpulse() {}
+
 	void setMaterialSetIdx(uint32 idx) { materialSetIdx_ = idx; }
 	uint32 materialSetIdx() const { return materialSetIdx_; }
 
@@ -84,6 +104,9 @@ private:
 	mu::Vec3 up_{};
 
 	const Model* pModel_ = nullptr;
+	AnimController animController_;
+	std::vector<mu::Mat4x4> boneWorldXforms_;
+	bool canReceiveDamage_ = false;
 
 	float cameraPitch_{};
 
