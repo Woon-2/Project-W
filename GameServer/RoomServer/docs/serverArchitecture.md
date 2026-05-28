@@ -160,6 +160,25 @@ AI 상태 전환 시점에 `animController_.switchClip()` 호출:
 
 ---
 
+## 사망 시 래그돌 초기 속도 전달
+
+`SSkillHitPacket`에 `targetVelocity (XMFLOAT3)` 필드가 포함된다. 킬링 블로우 처리 순서:
+
+```
+Room::updateSkillSystem()
+  skillSystem_.update()         ← applyImpulse(knockbackJ) 적용
+  evList 순회 (EvSkillHit)
+    → tgt->setHp(newHp)
+    → broadcast(makeSSkillHitPacket(..., tgt->linearVel().getXmf()))
+                                ← impulse 적용 직후 속도 읽음
+```
+
+- velocity는 킬링 블로우 충격량 포함 후의 값 (타이밍 보장)
+- 클라이언트는 이 값을 `Goblin::ragdollInitVelocity_`에 저장 → 래그돌 활성화 시 모든 뼈에 `setLinearVel(v)` 적용
+- `newHp > 0`인 비치명 피격에도 velocity 필드가 포함되지만 클라이언트가 무시함 (사망 조건 `newHp <= 0`에서만 저장)
+
+---
+
 ## 패킷 / 네트워크
 
 파일: `PacketManager.hpp/.cpp`, `GameSession.hpp/.cpp`, `ServerEngine/protocol.hpp`

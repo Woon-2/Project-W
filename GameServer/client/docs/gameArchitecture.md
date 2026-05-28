@@ -171,22 +171,30 @@ skillSystem_.update()
 
 ### Ragdoll 시스템
 
-사망 시 물리 기반 래그돌 전환. `Goblin` 클래스가 `Ragdoll` 멤버를 보유.
+사망 시 물리 기반 래그돌 전환. `Goblin` 클래스가 `Ragdoll ragdoll_`과 `ragdollInitVelocity_`를 보유.
 
 **전환 패턴 (Pending 플래그):**
 ```
-S_SkillHit / EvHit → hp <= 0
-  → goblin->setDead(true)
-  → goblin->setRagdollPendingActivation(true)   // 즉시 활성화 않음
+[Online] S_SkillHit(newHp<=0) → onSkillHit():
+  → goblin->setRagdollInitVelocity(pkt->targetVelocity)  // 사망 시점 서버 속도 저장
+  → applyHit() → goblin->setDead(true) + setRagdollPendingActivation(true)
+
+[Standalone] EvHit → hp <= 0:
+  → goblin->setDead(true) + setRagdollPendingActivation(true)
+  // initVel은 activate 직전 g.body().linearVel()에서 읽음
 
 같은 프레임 animSystem_.update() 후:
   → activateRagdollIfPending:
        seedFromFinalXforms(finalXformData, skeleton, worldMat)
        buildPassengers(skeleton, finalXformData)
        activate(physicsWorld_)
-       physicsWorld_.unregisterBody(&g.body())   // standalone만, 키네마틱 바디 해제
+       physicsWorld_.unregisterBody(&g.body())   // standalone만
+       // 초기 속도: 모든 뼈에 setLinearVel(initVel)
+       // noise impulse: 뼈별 BoneBoxDef::noiseImpulse 크기, velDir 방향 bias(0.6)
 ```
 
 activateRagdollIfPending을 animSystem_.update() **이후**에 호출하는 이유: finalXformData가 최신 포즈로 확정된 후 seed해야 올바른 초기 래그돌 자세가 된다.
 
 매 프레임 `syncRagdollToAnim`: ragdoll 물리 결과를 finalXformData에 덮어써 렌더링에 반영.
+
+**Ragdoll 물리 파라미터:** Unity Inspector에서 뼈별로 설정 → `ModelExtractor.cs` 익스포트 → `.bin` 파일에 포함 → `importRagdollConfig(mesh.cpp)`로 `BoneBoxDef`에 로드.

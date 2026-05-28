@@ -190,9 +190,30 @@ ContactConstraint의 `solvePosition()`은 no-op — contact는 Baumgarte + 외�
 **래그돌은 클라이언트에만 존재한다.** 서버에는 `Ragdoll` 클래스가 없으며 래그돌 바디의 충돌을 인지·처리하지 않는다. 사망한 고블린은 서버에서 `Dead` 상태로 전환만 되고 물리 시뮬레이션은 멈춘다.
 
 클라이언트에서의 사망→래그돌 전환 흐름:
-1. `S_SkillHit` / `EvHit` → `hp <= 0` → `goblin->setRagdollPendingActivation(true)` (즉시 활성화 않음)
+1. `S_SkillHit` → `onSkillHit()`:
+   - `newHp <= 0`이면 `goblin->setRagdollInitVelocity(pkt->targetVelocity)` 저장 (사망 직전 서버 속도)
+   - `applyHit()` → `goblin->setRagdollPendingActivation(true)`
 2. 같은 프레임 `animSystem_.update()` 후 `activateRagdollIfPending()` 호출 (finalXformData 확정 후)
-3. 이후 매 프레임 `syncRagdollToAnim()` — ragdoll body transform → finalXformData 덮어씀
+3. `activate(physicsWorld_)` 이후 초기 속도 + noise impulse 적용:
+   - **초기 속도**: 모든 뼈에 `setLinearVel(initVel)` — 강체이던 고블린의 운동량 보존
+   - **noise impulse**: 뼈별 `BoneBoxDef::noiseImpulse` 크기, velDir 방향으로 bias된 랜덤 impulse
+     ```
+     dir = normalize(velDir * kNoiseBias + randUnit * (1 - kNoiseBias))  // kNoiseBias = 0.6
+     body->applyImpulse(dir * noiseImpulse, body->pos())
+     ```
+4. 이후 매 프레임 `syncRagdollToAnim()` — ragdoll body transform → finalXformData 덮어씀
+
+**초기 속도가 물리적으로 올바른 이유:**
+- 서버 속도는 킬링 블로우 `applyImpulse()` 직후 읽힌 값
+- 강체의 모든 부분이 같은 선속도를 공유 → 뼈 질량 무관하게 `setLinearVel(v)` 적용이 옳음
+- 전체 래그돌 질량 ≈ 고블린 바디 질량(70 kg) → 운동량 보존
+
+**Ragdoll 물리 파라미터 (Unity에서 설정):**
+`BoneBoxDef`에 포함되어 `.bin` 파일로 익스포트:
+- `linearDamping`, `angularDamping`, `friction`, `restitution` — 뼈별 물리 특성
+- `noiseImpulse` — 뼈별 최대 noise impulse (N·s)
+
+Unity 익스포트 경로: `GoblinRagdollConfig.cs` Inspector → `ModelExtractor.cs` → `.bin`
 
 ---
 
@@ -350,6 +371,35 @@ accNormal  : clamp(prev + jn, 0, ∞)   (비음수, 당기는 impulse 금지)
 
 DirectXMath 기반 `mu::Mat3x3`은 항상 4×4 XMMATRIX를 내부에 사용한다.
 row 3은 `(0, 0, 0, 1)`이어야 역행렬 계산이 정상 동작한다.
+
+---
+
+## VelocityMotor (NPC 전용)
+
+`RigidBody`에 내장된 속도 수렴기. AI가 `setLinearVelocity()`로 속도를 덮어쓰는 대신 `setDesiredVel()`로 목표 속도를 선언하면, `integrate()` 안에서 매 sub-step마다 보정 impulse를 계산해 실제 속도를 목표로 수렴시킨다.
+
+```
+// physicsWorld.cpp::integrate() — Dynamic branch, damping 적용 직후
+velError = desiredVel - currVel  (XZ only, Y는 중력 전용)
+corrAccel = gain * velError                   // 비례 제어
+corrAccel = clamp(|corrAccel|, maxDecel 또는 maxAcceleration)
+currVel.xz += corrAccel * subDt
+```
+
+**파라미터 (`VelocityMotor` struct in `rigidBody.hpp`):**
+| 필드 | 기본값 | 의미 |
+|------|--------|------|
+| `desiredVel` | `{0,0,0}` | AI가 선언한 목표 수평 속도 |
+| `maxAcceleration` | 20 m/s² | 목표 방향 가속 한계 |
+| `maxDeceleration` | 40 m/s² | 제동 한계 (가속보다 크게) |
+| `gain` | 10 | 비례 게인 (≈ 1/수렴시간_s) |
+| `enabled` | false | 활성화 여부 |
+
+**설계 원칙:**
+- knockback impulse가 적용된 다음 프레임부터 motor가 수렴을 시작 → `knockbackTimer_` 기반 AI 스킵 불필요
+- Y축 제외: 중력은 물리 엔진이 담당
+- sub-step 구조에서 `dtf = subDt`이므로 전체 보정량은 `maxA * fullDt`로 수렴
+- `NpcConfig::motorMaxAcceleration`을 낮출수록 knockback이 더 오래 유지되는 느낌
 
 ---
 
