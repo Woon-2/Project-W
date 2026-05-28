@@ -10,6 +10,20 @@ class GameSession;
 
 struct Model;
 
+// Combat allegiance. A skill hitbox only damages factions in its hostile mask,
+// so allies (same faction) never hit each other. Neutral attacks and is hit by
+// nothing by default. Faction is set at object creation/registration sites.
+enum class Faction : uint8 { Neutral = 0, Players, Monsters };
+
+inline uint32 factionBit(Faction f) { return 1u << static_cast<uint32>(f); }
+inline uint32 hostileMask(Faction f) {
+	switch (f) {
+	case Faction::Players:  return factionBit(Faction::Monsters);
+	case Faction::Monsters: return factionBit(Faction::Players);
+	default:                return 0u;   // Neutral: attacks nothing
+	}
+}
+
 class Object {
 public:
 	void update(Milliseconds deltaTime);
@@ -68,6 +82,9 @@ public:
 	bool canReceiveDamage() const { return canReceiveDamage_; }
 	void setCanReceiveDamage(bool v) { canReceiveDamage_ = v; }
 
+	Faction faction() const { return faction_; }
+	void setFaction(Faction f) { faction_ = f; }
+
 	virtual void onHitImpulse() {}
 
 	void setMaterialSetIdx(uint32 idx) { materialSetIdx_ = idx; }
@@ -112,6 +129,7 @@ private:
 	AnimController animController_;
 	std::vector<mu::Mat4x4> boneWorldXforms_;
 	bool canReceiveDamage_ = false;
+	Faction faction_ = Faction::Neutral;
 
 	float cameraPitch_{};
 

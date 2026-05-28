@@ -798,8 +798,8 @@ void Game::setupStage() {
 		skillSystem_.registerAssets(std::move(skillAssets));
 
 		skillObjectById_.assign(2, nullptr);
-		if (player_) skillObjectById_[0] = player_.get();
-		if (goblin_) skillObjectById_[1] = goblin_.get();
+		if (player_) { player_->setFaction(Faction::Players);  skillObjectById_[0] = player_.get(); }
+		if (goblin_) { goblin_->setFaction(Faction::Monsters); skillObjectById_[1] = goblin_.get(); }
 
 		skillVfxById_.assign(2, nullptr);
 		skillVfxById_[1] = &swordSlash1Effect_;  // effects/sword_slash_1.json

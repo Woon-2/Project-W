@@ -36,6 +36,7 @@ struct AttachedHitbox {
     std::vector<OBB> worldOBBs;
     std::vector<OBB> localOBBs;
     AABB             worldAABB            {};   // union AABB of worldOBBs (broad phase)
+    u32t             targetMask           = 0;   // faction bits this hitbox may damage (hostileMask of owner)
     int              particleSourceIdx    = -1;
     OnHitDef         onHit;
     ResolvedAttach   resolvedAttach;
@@ -58,6 +59,7 @@ struct ParticleHitboxSource {
     // pSystem always null on server (no ParticleSystem)
     std::vector<OBB> templateOBBs;
     OnHitDef         onHit;
+    u32t             targetMask            = 0;   // faction bits this source's hitboxes may damage
     i32t             ownerObjectId         = -1;
     i32t             instanceIdx           = -1;
     u8t              slot                  = 0;
@@ -135,8 +137,8 @@ struct SkillInstancePool {
 
 class SkillBroadPhase {
 public:
-    struct HitboxEntry { AABB aabb; int     hitboxIdx; };
-    struct TargetEntry { AABB aabb; Object* target;    };
+    struct HitboxEntry { AABB aabb; int     hitboxIdx; u32t mask;     };  // mask: faction bits it may hit
+    struct TargetEntry { AABB aabb; Object* target;    u32t category; };  // category: target's faction bit
     struct Candidate   { int  hitboxIdx; Object* target; };
 
     void build(const std::vector<HitboxEntry>& hitboxes,

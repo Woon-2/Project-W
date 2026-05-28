@@ -1420,6 +1420,7 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 		skillSystem_.registerAssets(std::move(assets));
 
 		skillObjectById_.assign(256, nullptr);
+		player_->setFaction(Faction::Players);
 		skillObjectById_[player_->getId()] = player_.get();
 		// Register goblins that arrived before setupPlayer() was called.
 		for (auto& [gobId, goblin] : idGoblinMap_) {
@@ -1463,6 +1464,7 @@ void Game::createOtherPlayer(const ObjectInfo& otherPlayerInfo) {
 	otherPlayer->setAnimBlender(animSystem_, assetManager_);
 	otherPlayer->setHp(100);
 	otherPlayer->setMaxHp(100);
+	otherPlayer->setFaction(Faction::Players);
 	otherPlayer->enableBVRendering();
 
 	otherPlayer->body().setMotionType(MotionType::Kinematic);
@@ -1515,6 +1517,7 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 	otherPlayer->setAnimBlender(animSystem_, assetManager_);
 	otherPlayer->setHp(100);
 	otherPlayer->setMaxHp(100);
+	otherPlayer->setFaction(Faction::Players);
 	otherPlayer->enableBVRendering();
 
 	otherPlayer->body().setMotionType(MotionType::Kinematic);
@@ -1576,6 +1579,7 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 
 	goblin->setHp(90);
 	goblin->setMaxHp(90);
+	goblin->setFaction(Faction::Monsters);
 	goblin->enableBVRendering();
 
 	goblin->body().setMotionType(MotionType::Kinematic);

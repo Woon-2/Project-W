@@ -36,6 +36,7 @@ void Room::init(const Level* levelData) {
 
 	for (auto& g : goblins_) {
 		g.setId(IdPool::pop());
+		g.setFaction(Faction::Monsters);
 		g.setSpawnPos(g.pos());
 		g.applyGoblinConfig();
 		g.body().setMotionType(MotionType::Dynamic);
@@ -213,6 +214,7 @@ GameSession* Room::findLivingSessionByPlayerId(int32 playerId) const {
 void Room::enter(GameSession* session) {
 	// 서버에서 사용할 player 객체 세팅
 	auto player = session->player();
+	player->setFaction(Faction::Players);
 	player->setModel(RoomManager::playerModelData());
 	player->setPos(playerStarts_[sessions_.size() % playerStarts_.size()].pos());	// 새로 들어오는 플레이어는 playerStarts_에서 순서대로 위치를 받는다.
 	player->setOrient(playerStarts_[sessions_.size() % playerStarts_.size()].orient());

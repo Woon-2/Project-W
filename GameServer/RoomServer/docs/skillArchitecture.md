@@ -228,6 +228,32 @@ per-particle 히트박스를 매 프레임 free/realloc하던 것을 핸들 재�
 
 ---
 
+## 피아 식별 (Faction, 2026-05-29)
+
+아군(같은 진영)끼리는 서로 타격할 수 없어야 한다. 진영 개념을 도입해 **피격 정확성 + broad
+phase 충돌 회피 최적화**를 동시에 달성한다. **client/server 동일 규칙**(클라 예측이 서버 권위와
+일치해야 하므로).
+
+- **Faction은 엔티티 속성**: `object.hpp`에 `enum class Faction { Neutral, Players, Monsters }`,
+  `factionBit(f)=1<<f`, `hostileMask(f)`(Players↔Monsters 적대, Neutral은 0), `Object::faction_`
+  (+접근자). 진영 의미론은 모두 object.hpp에 모았다 — `SkillBroadPhase`는 게임 의미를 모른 채
+  일반 `u32 마스크`만 다룬다(디커플).
+- **진영 설정 지점**: `Room::init()` 고블린 루프 → `Monsters`, `Room::enter()` 플레이어 →
+  `Players`. 명시 설정 안 된 객체는 `Neutral`(공격·피격 모두 불가, 안전한 기본값).
+- **히트박스 targetMask 캐시**: `SpawnHitbox` 시점에 owner faction으로부터 `hostileMask`를 계산해
+  `AttachedHitbox::targetMask`(및 `ParticleHitboxSource::targetMask`)에 캐시. 충돌 시 owner를 다시
+  조회하지 않는다.
+- **broad phase 마스크 필터(최적화 핵심)**: `SkillBroadPhase::HitboxEntry`에 `mask`(=히트박스
+  targetMask), `TargetEntry`에 `category`(=타깃 `factionBit`). `build()`의 후보 emit 직전에
+  `(mask & category)`를 **YZ overlap보다 먼저** 검사 → 아군 쌍은 candidate가 되기 전에 sweep
+  단계에서 제거 → narrow phase(BVH vs OBB) 미실행.
+- narrow phase의 owner 제외(`targetId == ownerObjectId`)는 유지(저렴, self/미래 아군 타깃 대비).
+
+> **새 진영/캐릭터 추가 시:** 생성 지점에서 `setFaction` 호출 필수. 빠뜨리면 `Neutral`이 되어
+> 플레이어가 그 몬스터를 타격하지 못한다(회귀). `hostileMask`에 새 적대 관계를 추가할 것.
+
+---
+
 ## 객체 수명주기와 연결 해제 (중요 제약)
 
 SkillSystem은 **객체를 raw 포인터로 직접 들고 있지 않고**, `SkillDispatchContext::objectById`

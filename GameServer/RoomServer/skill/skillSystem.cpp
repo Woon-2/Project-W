@@ -126,16 +126,16 @@ void SkillBroadPhase::build(const std::vector<HitboxEntry>& hitboxes,
     for (const Endpoint& ep : endpoints_) {
         if (!ep.isMax) {
             if (ep.isHitbox) {
-                const AABB& ha = hitboxes[ep.idx].aabb;
+                const HitboxEntry& he = hitboxes[ep.idx];
                 for (int t : activeTargets_)
-                    if (overlapYZ(ha, targets[t].aabb))
-                        candidates_.push_back({ hitboxes[ep.idx].hitboxIdx, targets[t].target });
+                    if ((he.mask & targets[t].category) && overlapYZ(he.aabb, targets[t].aabb))
+                        candidates_.push_back({ he.hitboxIdx, targets[t].target });
                 activeHitboxes_.push_back(ep.idx);
             } else {
-                const AABB& ta = targets[ep.idx].aabb;
+                const TargetEntry& te = targets[ep.idx];
                 for (int h : activeHitboxes_)
-                    if (overlapYZ(hitboxes[h].aabb, ta))
-                        candidates_.push_back({ hitboxes[h].hitboxIdx, targets[ep.idx].target });
+                    if ((hitboxes[h].mask & te.category) && overlapYZ(hitboxes[h].aabb, te.aabb))
+                        candidates_.push_back({ hitboxes[h].hitboxIdx, te.target });
                 activeTargets_.push_back(ep.idx);
             }
         } else {
@@ -338,7 +338,8 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
                 hb.resolvedAttach.boneIdx = -1;
                 hb.worldOBBs              = hb.localOBBs;
             }
-            hb.worldAABB = unionAABBOfOBBs(hb.worldOBBs, kHitboxAABBMargin);
+            hb.worldAABB   = unionAABBOfOBBs(hb.worldOBBs, kHitboxAABBMargin);
+            hb.targetMask  = owner ? hostileMask(owner->faction()) : 0u;
         } else {
             // VFXParticle: create source entry; pSystem always null on server
             int oldS = inst.getParticleHandle(slot);
@@ -351,6 +352,7 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
             src.active             = true;
             src.templateOBBs       = def.localOBBs;
             src.onHit              = def.onHit;
+            src.targetMask         = owner ? hostileMask(owner->faction()) : 0u;
             src.ownerObjectId      = inst.ownerObjectId;
             src.instanceIdx        = static_cast<i32t>(&inst - instancePool_.instances.data());
             src.slot               = static_cast<u8t>(slot);
@@ -507,7 +509,7 @@ void SkillSystem::checkHitboxCollisions(SkillDispatchContext& ctx) {
         const BVH& bvh = t->body().worldBVH();
         AABB aabb = !bvh.empty() ? bvh.nodes[0].bounds
                                  : AABB{ t->pos(), mu::Vec3(1.f, 1.f, 1.f) };
-        targetEntries_.push_back({ aabb, t });
+        targetEntries_.push_back({ aabb, t, factionBit(t->faction()) });
     }
     if (targetEntries_.empty()) return;
 
@@ -516,7 +518,7 @@ void SkillSystem::checkHitboxCollisions(SkillDispatchContext& ctx) {
     for (int hi = 0; hi < (int)hitboxPool_.size(); ++hi) {
         const AttachedHitbox& hb = hitboxPool_[hi];
         if (!hb.active || hb.worldOBBs.empty()) continue;
-        hitboxEntries_.push_back({ hb.worldAABB, hi });
+        hitboxEntries_.push_back({ hb.worldAABB, hi, hb.targetMask });
     }
     if (hitboxEntries_.empty()) return;
 

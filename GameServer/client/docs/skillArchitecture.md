@@ -246,6 +246,28 @@ freeList로 O(1) alloc.
 
 ---
 
+## 피아 식별 (Faction, 2026-05-29)
+
+아군(같은 진영)끼리는 타격할 수 없다. **서버와 동일 규칙**으로 적용해 클라 예측이 서버 권위와
+일치한다(`RoomServer/docs/skillArchitecture.md`「피아 식별」과 동일 설계).
+
+- `object.hpp`에 `enum class Faction { Neutral, Players, Monsters }` + `factionBit`/`hostileMask`
+  + `Object::faction_`. `SkillBroadPhase`는 게임 의미를 모른 채 일반 `u32 마스크`만 다룬다.
+- **진영 설정 지점**: online은 `setupPlayer`(`player_`)·`createOtherPlayer` → `Players`,
+  `createGoblin` → `Monsters`. standalone은 `player_`/`goblin_`. 모두 `skillObjectById_` 등록부와
+  같은 자리에서 `setFaction` 호출.
+- **targetMask 캐시 + broad phase 필터**: `SpawnHitbox` 시 owner faction의 `hostileMask`를
+  `AttachedHitbox::targetMask`/`ParticleHitboxSource::targetMask`에 캐시(`updateParticleHitboxSources`
+  가 per-particle 히트박스에 전파). `SkillBroadPhase::build()`가 후보 emit 직전 `(mask & category)`를
+  YZ overlap보다 먼저 검사 → 아군 쌍은 narrow phase 진입 전에 제거.
+- 클라 예측(`clientPredictionOnly`)에서도 아군에게 히트 FX/impulse 예측이 발생하지 않는다.
+- 타깃 수집 필터는 `!isDead()` 유지, narrow phase의 owner 제외 유지.
+
+> **새 캐릭터/몬스터 추가 시:** 생성 지점에서 `setFaction` 호출 필수(누락 시 `Neutral` → 피격 불가
+> 회귀). `skillObjectById_`에 등록되지 않는 객체는 애초에 스킬 타깃이 아니다.
+
+---
+
 ## 객체 수명주기와 연결 해제 (중요 제약)
 
 SkillSystem은 `SkillDispatchContext::objectById`(= `skillObjectById_`, id로 색인되는 raw `Object*`

@@ -190,13 +190,15 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
-| `AttachedHitbox` struct | `skillSystem.hpp` | worldOBBs + `worldAABB`(broad phase 캐시) + onHit + hitGroup |
+| `AttachedHitbox` struct | `skillSystem.hpp` | worldOBBs + `worldAABB`(broad phase 캐시) + `targetMask`(피아 식별) + onHit + hitGroup |
 | `SkillInstancePool` struct | `skillSystem.hpp` | 동적 풀: `instances`(vector) + `freeList` + `activeList` |
-| `SkillBroadPhase` class | `skillSystem.hpp` | Object–Hitbox bipartite sweep-and-prune (후보 쌍 생성) |
-| `SkillBroadPhase::build()` | `skillSystem.cpp` | 엔드포인트 정렬 → sweep, hitbox×target 쌍만 emit |
+| `SkillBroadPhase` class | `skillSystem.hpp` | Object–Hitbox bipartite sweep-and-prune; `HitboxEntry.mask`×`TargetEntry.category` 마스크 필터 |
+| `SkillBroadPhase::build()` | `skillSystem.cpp` | 엔드포인트 정렬 → sweep, `(mask & category)` 후 hitbox×target 쌍만 emit |
 | `SkillSystem::update()` | `skillSystem.cpp` | activeList 순회 → updateHitboxes → checkHitboxCollisions → processHitResults |
-| `checkHitboxCollisions()` | `skillSystem.cpp` | 타깃 1회 수집 → SkillBroadPhase → 후보 쌍 narrow phase(BVH vs OBB) |
-| `updateParticleHitboxSources()` | `skillSystem.cpp` | VFXParticle: 핸들 재사용으로 파티클 수만큼 증감 |
+| `checkHitboxCollisions()` | `skillSystem.cpp` | 타깃 1회 수집(category=factionBit) → SkillBroadPhase → 후보 쌍 narrow phase(BVH vs OBB) |
+| `updateParticleHitboxSources()` | `skillSystem.cpp` | VFXParticle: 핸들 재사용으로 파티클 수만큼 증감, `targetMask` 전파 |
+| `Faction` enum / `hostileMask()` | `object.hpp` | 피아 식별: Neutral/Players/Monsters; 히트박스 targetMask = hostileMask(owner.faction) |
+| `Object::faction()`/`setFaction()` | `object.hpp` | 진영 접근자(생성 지점에서 setFaction 호출) |
 
 > 서버 전용 차이(damageCoeff, ServerAnimController 변환)는 `RoomServer/skill/skillSystem.*` 및 서버 설계 문서 참조.
 
