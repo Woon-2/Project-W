@@ -25,8 +25,6 @@
 
 ## 물리 시스템
 
-> 상세 문서는 추후 작성 예정.
-
 파일: `physicsWorld.hpp/.cpp`, `rigidBody.hpp/.cpp`, `collision.hpp/.cpp`, `broadPhase.hpp/.cpp`, `contactConstraint.hpp/.cpp`, `terrain.hpp/.cpp`
 
 | 구성 요소 | 역할 |
@@ -42,6 +40,11 @@
 - 플레이어(서버): Kinematic — 클라이언트 위치 패킷을 직접 적용
 - 고블린: Dynamic — AI가 `setLinearVel()` 로 이동 제어, 물리는 중력·충돌 담당
 - 지형: Static (`TerrainCollider` 별도)
+
+**래그돌(Ragdoll) — 서버에 없음:**
+서버에는 `Ragdoll` 클래스가 존재하지 않으며 앞으로도 추가 예정이 없다. 고블린 사망 시 서버에서는 `Dead` 상태 전환과 물리 비활성화만 처리한다. 래그돌 바디 충돌은 클라이언트가 자체 물리로 처리하며 서버가 인지할 필요가 없다. 관련 시각적 결과(래그돌 포즈 등)는 클라이언트-only 연산이다.
+
+상세 물리 설계(솔버 규약, CFM, split impulse 등)는 클라이언트 측 `client/docs/physicsArchitecture.md` 참조.
 
 ---
 

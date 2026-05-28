@@ -53,25 +53,33 @@ Ragdoll 뼈대: group=2, mask=0xFFFD → 뼈대끼리 self-collision 필터링.
 ## PhysicsWorld::step() 흐름
 
 ```
-integrate(dt)
-    ├─ Kinematic: damping → vel/omega snap → pos/orient 적분
-    ├─ Dynamic:   damping → force/torque 적분 → pos/orient 적분 → clearAccumulators()
-    └─ 각 body: onRebuildBVH 콜백 → worldBVH 재빌드
-
-generateContacts()
-    ├─ broadPhase_->update() + queryPairs()
-    ├─ collides(bvhA, bvhB) → leaf-leaf 쌍에서만 정밀 판정
-    ├─ ContactConstraint 생성 (법선 = narrow-phase 기하학적 normal res.normal; degenerate 시 center-to-center fallback)
-    │   └─ cc->setExternalAccels(gravA, gravB): Dynamic body = gravity_, Static = (0,0,0)
-    └─ TerrainCollider::generateContacts() → Dynamic body별 지형 contact 생성
-        └─ cc->setExternalAccels(gravity_, {0,0,0})
-
-solveConstraints(dt)
-    ├─ prepare(dt)  : rA/rB, tangent frame, effMass, Baumgarte bias 계산
-    │               + joint warmstart (accImpulse 이전 프레임 값 재적용)
-    ├─ PGS × N iter : solveVelocity() — Contact + BallSocket/Hinge/ConeTwist 혼합
-    │               N = solverIterations_ (기본 10, ragdoll 활성 시 20)
-    └─ solvePosition(): no-op (Baumgarte only)
+step(dt)
+    ├─ advanceState()              — BodyState prev ← curr (렌더 보간용, 전체 step 1회만)
+    └─ [sub-step × subStepCount_ (기본 2)]:
+        subDt = dt / subStepCount_
+        ├─ clearPseudoVelocities() — split impulse 누적값 초기화
+        ├─ integrate(subDt)
+        │   ├─ Kinematic: damping → vel/omega snap → pos/orient 적분
+        │   ├─ Dynamic:   damping → force/torque 적분 → pos/orient 적분 → clearAccumulators()
+        │   └─ 각 body: onRebuildBVH 콜백 → worldBVH 재빌드
+        ├─ generateContacts()
+        │   ├─ broadPhase_->update() + queryPairs()
+        │   ├─ collides(bvhA, bvhB) → leaf-leaf 쌍에서만 정밀 판정
+        │   ├─ ContactConstraint 생성 (법선 = res.normal; degenerate 시 center-to-center fallback)
+        │   │   └─ cc->setExternalAccels(gravA, gravB): Dynamic=gravity_, Static=(0,0,0)
+        │   └─ TerrainCollider::generateContacts() → Dynamic body별 지형 contact
+        │       └─ cc->setExternalAccels(gravity_, {0,0,0})
+        ├─ solveConstraints(subDt)
+        │   ├─ prepare(subDt) : rA/rB, tangent frame, effMass, Baumgarte bias 계산
+        │   │                  + joint warmstart (accImpulse 이전 값 재적용)
+        │   ├─ velocity solve × solverIterations_ (기본 10, ragdoll 활성 시 20)
+        │   │   └─ Contact + BallSocket/Hinge/ConeTwist 혼합 solveVelocity()
+        │   ├─ joint velocity extra × jointSolverExtraIterations_
+        │   │   └─ joint 전용 solveVelocity() (contact 제외) — 분기 많은 ragdoll 체인 안정화
+        │   ├─ position solve × positionSolveIterations_ (기본 3)
+        │   │   └─ joint solvePosition() — split impulse (pseudoBias/pseudoAccImpulse)
+        │   └─ warmstart 저장 (accImpulse)
+        └─ applyPseudoVelocity(subDt) — split impulse 결과를 위치에 적분
 ```
 
 > Phase 4(TerrainCollider) 완료로 중력이 활성화됨. (`physicsWorld.cpp` integrate)
@@ -98,6 +106,93 @@ solveConstraints(dt)
 - twist row (bilateral, clamped to `[-twistLimit, +twistLimit]`)
 - `swingTwistDecompose`: twist = q 성분 twistAxis 방향 투영, swing = q * conj(twist)
 - `coneHalfAngle` max = `pi * 0.85f` (gimbal lock 방지)
+
+---
+
+## CFM (Constraint Force Mixing)
+
+수치 안정성을 위해 effective mass 행렬의 대각선에 CFM 값을 더한다.
+`Constraint` 기반 클래스 static 상수로 정의:
+
+```cpp
+static constexpr float linearCFM  = 1e-3f;  // 3×3 K 행렬 대각선에 가산
+static constexpr float angularCFM = 1e-2f;  // 각 angular DOF effMass 분모에 가산
+```
+
+- `linearCFM`: `build3x3EffMassInv()` 내부에서 `k00 += linearCFM`, `k11 += linearCFM`, `k22 += linearCFM`
+- `angularCFM`: `cache_.angEffMass[i] = 1.f / (contribA + contribB + angularCFM)`
+
+ContactConstraint는 별도 CFM을 사용하지 않는다 (contact는 Baumgarte bias로만 제어).
+
+---
+
+## Per-Constraint Damping
+
+각 joint 타입이 독립적으로 damping 계수를 보유한다.
+`prepare()` 호출 시 velocity 목표에서 현재 상대속도의 일부를 빼 속도 오차가 0 수렴 속도를 줄인다.
+
+| Joint | 필드 | 기본값 |
+|-------|------|--------|
+| BallSocketJoint | `damping_` | 0.1f |
+| HingeJoint | `linearDamping_`, `angularDamping_` | 별도 설정 |
+| ConeTwistJoint | `linearDamping_`, `coneDamping_`, `twistDamping_` | 별도 설정 |
+
+damping이 0이면 joint는 오차를 완전히 해소하려는 강한 impulse를 생성한다.
+ragdoll 자연스러운 움직임을 위해 적절한 damping이 필요하다.
+
+---
+
+## SOR (Successive Over-Relaxation)
+
+angular row에 `kAngSOR = 0.6f`를 impulse에 곱해 over-shoot을 방지한다.
+
+```cpp
+static constexpr float kAngSOR = 0.6f;
+// solveVelocity() 내부:
+deltaAng *= kAngSOR;  // angular impulse 일부만 적용
+```
+
+분기가 많은 ragdoll 체인에서 angular impulse의 연쇄 overshoot(폭발)을 억제한다.
+linear row에는 SOR 미적용 (translational 수렴이 더 안정적).
+
+---
+
+## Split Impulse (Position Solve)
+
+velocity-level Baumgarte bias만으로는 constraint 위치 오차(drift)가 에너지를 추가한다.
+Split impulse는 위치 수정용 pseudo-velocity를 별도로 누적해 에너지 추가 없이 drift를 줄인다.
+
+**각 joint Cache에 별도 필드:**
+```cpp
+mu::Vec3 pseudoBias;       // 위치 오차에서 계산한 목표 pseudo-velocity
+float    pseudoAccImpulse; // 누적 pseudo-impulse (sub-step마다 리셋)
+```
+
+**흐름:**
+1. `prepare()`: `pseudoBias` 계산 (`kSplitBeta * invDt * positionError`)
+2. `solvePosition()` × `positionSolveIterations_` (기본 3): pseudo-velocity만 갱신
+3. `applyPseudoVelocity(subDt)`: pseudo-velocity를 위치에 적분 (`pos += pseudoVel * subDt`)
+   — 실제 velocity에는 영향 없음
+
+**ConeTwistJoint beta 상수:**
+```cpp
+static constexpr float kLinBeta   = 0.1f;   // linear Baumgarte
+static constexpr float kAngBeta   = 0.025f; // angular velocity-level (conservative)
+static constexpr float kSplitBeta = 0.3f;   // position-level (split impulse)
+```
+
+ContactConstraint의 `solvePosition()`은 no-op — contact는 Baumgarte + 외력 보상으로만 처리.
+
+---
+
+## Ragdoll — CLIENT ONLY
+
+**래그돌은 클라이언트에만 존재한다.** 서버에는 `Ragdoll` 클래스가 없으며 래그돌 바디의 충돌을 인지·처리하지 않는다. 사망한 고블린은 서버에서 `Dead` 상태로 전환만 되고 물리 시뮬레이션은 멈춘다.
+
+클라이언트에서의 사망→래그돌 전환 흐름:
+1. `S_SkillHit` / `EvHit` → `hp <= 0` → `goblin->setRagdollPendingActivation(true)` (즉시 활성화 않음)
+2. 같은 프레임 `animSystem_.update()` 후 `activateRagdollIfPending()` 호출 (finalXformData 확정 후)
+3. 이후 매 프레임 `syncRagdollToAnim()` — ragdoll body transform → finalXformData 덮어씀
 
 ---
 
