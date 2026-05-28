@@ -283,6 +283,14 @@ void Room::enter(GameSession* session) {
 }
 
 void Room::leave(GameSession* session) {
+	// Terminate this player's active skills before dropping the object, so a
+	// lingering instance can't rebind to a recycled object id (new player).
+	{
+		SkillDispatchContext ctx{ &skillEvList_, objectById_.data(), static_cast<int>(objectById_.size()) };
+		skillSystem_.interruptAll(static_cast<i32t>(session->player()->getId()), ctx);
+		clearEvents(skillEvList_);
+	}
+
 	unregisterObject(session->player());
 	physicsWorld_.unregisterBody(&session->player()->body());
 
@@ -341,19 +349,23 @@ void Room::rotate(int32 sessionId, CMouseMovePacket* cMouseMvPkt) {
 	ObjectPool<CMouseMovePacket>::push(cMouseMvPkt);
 }
 
+// Debug-only: broadcast every active skill hitbox OBB to all clients each frame
+// for visualization. Off by default — it allocates + serializes + fans out per
+// frame, which is pure overhead in production.
+static constexpr bool kBroadcastDebugHitboxes = false;
+
 void Room::updateSkillSystem(Milliseconds dt) {
 	if (sessions_.empty()) return;
 
-	EventList evList;
 	SkillDispatchContext ctx {
-		&evList,
+		&skillEvList_,
 		objectById_.data(),
 		static_cast<int>(objectById_.size())
 	};
 
 	skillSystem_.update(dt, ctx);
 
-	for (const auto* p : evList) {
+	for (const auto* p : skillEvList_) {
 		const auto* ev = reinterpret_cast<const BasicEvent*>(p);
 		if (ev->type != EventType::SkillHit) continue;
 
@@ -373,16 +385,18 @@ void Room::updateSkillSystem(Milliseconds dt) {
 		));
 	}
 
-	clearEvents(evList);
+	clearEvents(skillEvList_);
 
-	std::vector<OBB> activeOBBs;
-	skillSystem_.collectActiveOBBs(activeOBBs);
-	if (!activeOBBs.empty()) {
-		std::vector<OBBInfo> obbInfos;
-		obbInfos.reserve(activeOBBs.size());
-		for (const OBB& o : activeOBBs)
-			obbInfos.push_back({ o.center.getXmf(), o.halfExtents.getXmf(), o.orient.getXmf() });
-		broadcast(PacketManager::makeSDebugHitboxPacket(obbInfos.data(), static_cast<uint16>(obbInfos.size())));
+	if constexpr (kBroadcastDebugHitboxes) {
+		std::vector<OBB> activeOBBs;
+		skillSystem_.collectActiveOBBs(activeOBBs);
+		if (!activeOBBs.empty()) {
+			std::vector<OBBInfo> obbInfos;
+			obbInfos.reserve(activeOBBs.size());
+			for (const OBB& o : activeOBBs)
+				obbInfos.push_back({ o.center.getXmf(), o.halfExtents.getXmf(), o.orient.getXmf() });
+			broadcast(PacketManager::makeSDebugHitboxPacket(obbInfos.data(), static_cast<uint16>(obbInfos.size())));
+		}
 	}
 }
 
@@ -402,12 +416,12 @@ void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs) {
 	uint64 elapsedRaw = (serverNow > clientMs) ? (serverNow - clientMs) : 0u;
 	uint16 elapsedMs  = static_cast<uint16>(std::min(elapsedRaw, static_cast<uint64>(65535u)));
 
-	// Start server-side skill instance for authoritative hit detection
-	EventList dummyEvList;
-	SkillDispatchContext startCtx{ &dummyEvList, objectById_.data(), static_cast<int>(objectById_.size()) };
+	// Start server-side skill instance for authoritative hit detection.
+	// Reuse skillEvList_ (serialized with updateSkillSystem via the room job queue).
+	SkillDispatchContext startCtx{ &skillEvList_, objectById_.data(), static_cast<int>(objectById_.size()) };
 	int instIdx = skillSystem_.startSkill(skillAssetId, static_cast<i32t>(player->getId()),
 	                                      startCtx, Milliseconds{ static_cast<float>(elapsedMs) });
-	clearEvents(dummyEvList);
+	clearEvents(skillEvList_);
 	if (instIdx < 0)
 		std::cout << "[Room::skillStart] WARNING: startSkill failed (asset id=" << skillAssetId << " not in registry)\n";
 

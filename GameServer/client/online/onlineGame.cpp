@@ -1633,6 +1633,13 @@ void Game::removePlayer( i32t playerId ) {
 	animSystem_.untrackAnimBlender(itPlayer->get()->renderState().animBlender.get());
 	physicsWorld_.unregisterBody(&(*itPlayer)->body());
 
+	// Stop any skills this player owns and drop the skill-system reference before
+	// the Object is destroyed, so checkHitboxCollisions never dereferences a
+	// dangling pointer through skillObjectById_.
+	skillSystem_.interruptAll(static_cast<i32t>(playerId), skillCtx_);
+	if (playerId >= 0 && static_cast<size_t>(playerId) < skillObjectById_.size())
+		skillObjectById_[playerId] = nullptr;
+
 	if (auto it = otherPlayerHpBars_.find(playerId); it != otherPlayerHpBars_.end()) {
 		uiManager_.root()->removeChild(it->second.hpBar);
 		otherPlayerHpBars_.erase(it);

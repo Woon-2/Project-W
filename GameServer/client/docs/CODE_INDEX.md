@@ -183,6 +183,25 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 ---
 
+## 3-B. 스킬 시스템
+
+**파일:** `client/skill/skillSystem.hpp` / `client/skill/skillSystem.cpp`
+**설계 문서:** `client/docs/skillArchitecture.md` (서버: `RoomServer/docs/skillArchitecture.md`)
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| `AttachedHitbox` struct | `skillSystem.hpp` | worldOBBs + `worldAABB`(broad phase 캐시) + onHit + hitGroup |
+| `SkillInstancePool` struct | `skillSystem.hpp` | 동적 풀: `instances`(vector) + `freeList` + `activeList` |
+| `SkillBroadPhase` class | `skillSystem.hpp` | Object–Hitbox bipartite sweep-and-prune (후보 쌍 생성) |
+| `SkillBroadPhase::build()` | `skillSystem.cpp` | 엔드포인트 정렬 → sweep, hitbox×target 쌍만 emit |
+| `SkillSystem::update()` | `skillSystem.cpp` | activeList 순회 → updateHitboxes → checkHitboxCollisions → processHitResults |
+| `checkHitboxCollisions()` | `skillSystem.cpp` | 타깃 1회 수집 → SkillBroadPhase → 후보 쌍 narrow phase(BVH vs OBB) |
+| `updateParticleHitboxSources()` | `skillSystem.cpp` | VFXParticle: 핸들 재사용으로 파티클 수만큼 증감 |
+
+> 서버 전용 차이(damageCoeff, ServerAnimController 변환)는 `RoomServer/skill/skillSystem.*` 및 서버 설계 문서 참조.
+
+---
+
 ## 4. 이벤트 시스템
 
 **파일:** `client/event.hpp` / `client/event.cpp`

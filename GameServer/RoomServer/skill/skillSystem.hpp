@@ -35,6 +35,7 @@ struct ResolvedAttach {
 struct AttachedHitbox {
     std::vector<OBB> worldOBBs;
     std::vector<OBB> localOBBs;
+    AABB             worldAABB            {};   // union AABB of worldOBBs (broad phase)
     int              particleSourceIdx    = -1;
     OnHitDef         onHit;
     ResolvedAttach   resolvedAttach;
@@ -107,23 +108,51 @@ struct SkillInstance {
     void resetSlots() {
         boneHitboxBySlot.clear();
         particleSourceBySlot.clear();
-        hitGroups.clear();
+        // Keep hitGroups entries (and their bucket capacity) for reuse; just
+        // empty the per-target records. Avoids per-cast unordered_map churn.
+        for (auto& [g, st] : hitGroups) st.lastHitByTarget.clear();
     }
 };
 
 // ---------------------------------------------------------------------------
-// Instance pool (static array)
+// Instance pool (dynamic; index-stable free list + dense active list)
 // ---------------------------------------------------------------------------
 
 struct SkillInstancePool {
-    static constexpr int kMaxInstances = 128;
-
-    SkillInstance instances[kMaxInstances]{};
-    int           count = 0;
+    std::vector<SkillInstance> instances;   // grows on demand; never shrinks
+    std::vector<int>           freeList;     // reusable indices
+    std::vector<int>           activeList;   // dense list of active indices
 
     int  alloc(const SkillAsset* asset, i32t ownerObjectId);
     void free(int idx);
-    void compact();
+};
+
+// ---------------------------------------------------------------------------
+// Object–Hitbox broad phase (bipartite sweep-and-prune along X)
+// Produces only (hitbox, target) candidate pairs in a single sweep.
+// All buffers are reused across frames (cleared, not freed).
+// ---------------------------------------------------------------------------
+
+class SkillBroadPhase {
+public:
+    struct HitboxEntry { AABB aabb; int     hitboxIdx; };
+    struct TargetEntry { AABB aabb; Object* target;    };
+    struct Candidate   { int  hitboxIdx; Object* target; };
+
+    void build(const std::vector<HitboxEntry>& hitboxes,
+               const std::vector<TargetEntry>& targets);
+
+    const std::vector<Candidate>& candidates() const { return candidates_; }
+
+private:
+    struct Endpoint { float x; int idx; bool isMax; bool isHitbox; };
+
+    std::vector<Endpoint>  endpoints_;
+    std::vector<int>       activeHitboxes_;
+    std::vector<int>       activeTargets_;
+    std::vector<Candidate> candidates_;
+
+    static bool overlapYZ(const AABB& a, const AABB& b);
 };
 
 // ---------------------------------------------------------------------------
@@ -189,7 +218,15 @@ private:
     std::vector<SkillAsset>           assetRegistry_;
     SkillInstancePool                 instancePool_;
     std::vector<AttachedHitbox>       hitboxPool_;
+    std::vector<int>                  hitboxFreeList_;
     std::vector<ParticleHitboxSource> particleSources_;
+    std::vector<int>                  particleSourceFreeList_;
+
+    // Reused per-frame scratch buffers (cleared, not freed).
+    SkillBroadPhase                          skillBroadPhase_;
+    std::vector<SkillBroadPhase::HitboxEntry> hitboxEntries_;
+    std::vector<SkillBroadPhase::TargetEntry> targetEntries_;
+    std::vector<int>                          instanceScratch_;  // snapshot of activeList for safe iteration
 
     struct HitResult {
         int   hitboxIdx;
