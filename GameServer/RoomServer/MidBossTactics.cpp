@@ -49,23 +49,23 @@ std::vector<MidBossTacticBase::PlayerCluster> MidBossTacticBase::buildPlayerClus
     }
 
     float clusterRadiusSq = clusterRadius * clusterRadius;
-    std::vector<bool> visited( static_cast<size_t>(count), false );
+    std::vector<bool> visited( count, false );
 
     for ( int32 i = 0; i < count; ++i ) {
-        if ( visited[ static_cast<size_t>( i ) ] ) {
+        if ( visited[ i ] ) {
             continue;
         }
 
         PlayerCluster cluster;
         std::vector<int32> stack;
         stack.push_back( i );
-        visited[ static_cast<size_t>( i ) ] = true;
+        visited[ i ] = true;
 
         while ( !stack.empty() ) {
             int32 cur = stack.back();
             stack.pop_back();
 
-            GameSession* s = players[ static_cast<size_t>(cur) ];
+            GameSession* s = players[ cur ];
             mu::Vec3 curPos = s->player()->pos();
             cluster.centroid = cluster.centroid + curPos;
             uint32 pid = static_cast<uint32>(s->id());
@@ -76,13 +76,13 @@ std::vector<MidBossTacticBase::PlayerCluster> MidBossTacticBase::buildPlayerClus
             }
 
             for ( int32 j = 0; j < count; ++j ) {
-                if ( visited[ static_cast<size_t>( j ) ] ) {
+                if ( visited[ j ] ) {
                     continue;
                 }
 
-                mu::Vec3 otherPos = players[ static_cast<size_t>( j ) ]->player()->pos();
+                mu::Vec3 otherPos = players[ j ]->player()->pos();
                 if ( (curPos - otherPos).len2() <= clusterRadiusSq ) {
-                    visited[ static_cast<size_t>( j ) ] = true;
+                    visited[ j ] = true;
                     stack.push_back( j );
                 }
             }
@@ -201,13 +201,13 @@ void MidBossTacticBase::assignSquadsToPlayers( const Room& room, const PlatoonLe
     };
 
     std::vector<DistEntry> entries;
-    entries.reserve( static_cast<size_t>(numSquads * numPlayers) );
+    entries.reserve( numSquads * numPlayers );
 
     for ( int32 si = 0; si < numSquads; ++si ) {
         mu::Vec3 centroid{};
         int32 cnt{};
 
-        for ( TacticalNpc* npc : liveSquads[ static_cast<size_t>( si ) ]->getMemberCache() ) {
+        for ( TacticalNpc* npc : liveSquads[ si ]->getMemberCache() ) {
             if ( npc && npc->hp() > 0 ) {
                 centroid = centroid + npc->pos();
                 ++cnt;
@@ -222,7 +222,7 @@ void MidBossTacticBase::assignSquadsToPlayers( const Room& room, const PlatoonLe
         }
 
         for ( int32 pi = 0; pi < numPlayers; ++pi ) {
-            float dSq = ( centroid - players[ static_cast<size_t>( pi ) ]->player()->pos() ).len2();
+            float dSq = ( centroid - players[ pi ]->player()->pos() ).len2();
             entries.push_back( { dSq, si, pi } );
         }
     }
@@ -233,20 +233,20 @@ void MidBossTacticBase::assignSquadsToPlayers( const Room& room, const PlatoonLe
         }
     );
 
-    std::vector<bool>  squadDone( static_cast<size_t>( numSquads ), false );
-    std::vector<int32> playerCount( static_cast<size_t>( numPlayers ), 0 );
+    std::vector<bool>  squadDone( numSquads, false );
+    std::vector<int32> playerCount( numPlayers, 0 );
 
     for ( const auto& e : entries ) {
-        if ( squadDone[ static_cast<size_t>( e.squadIdx ) ] ) {
+        if ( squadDone[ e.squadIdx ] ) {
             continue;
         }
-        if ( playerCount[ static_cast<size_t>(e.playerIdx) ] >= maxPerPlayer ) {
+        if ( playerCount[ e.playerIdx ] >= maxPerPlayer ) {
             continue;
         }
 
-        outTargetIds[ static_cast<size_t>(e.squadIdx) ] = static_cast<uint32_t>(players[ static_cast<size_t>(e.playerIdx) ]->id());
-        squadDone[ static_cast<size_t>(e.squadIdx) ] = true;
-        ++playerCount[ static_cast<size_t>(e.playerIdx) ];
+        outTargetIds[ e.squadIdx ] = static_cast<uint32_t>(players[ e.playerIdx ]->id());
+        squadDone[ e.squadIdx ] = true;
+        ++playerCount[ e.playerIdx ];
     }
 }
 
@@ -522,7 +522,7 @@ void GoblinMidBossTactic::evaluateTactics( Room& room, PlatoonLeader& leader ) {
                 .formationTargetPos = playerCent,
                 .tacticCenter = retreatTargetPos_
             };
-            liveSquads[ static_cast<size_t>( i ) ]->receiveOrder( ord );
+            liveSquads[ i ]->receiveOrder( ord );
         }
 
         phaseOrderIssued_ = true;
@@ -542,7 +542,7 @@ void GoblinMidBossTactic::evaluateTactics( Room& room, PlatoonLeader& leader ) {
         mu::Vec3 boxCenter = leader.pos() + fwd * BOX_FRONT_OFFSET;
 
         std::vector<std::pair<float, TacticalSquad*>> sqByLat;
-        sqByLat.reserve( static_cast<size_t>(numSquads) );
+        sqByLat.reserve( numSquads );
 
         for ( TacticalSquad* sq : liveSquads ) {
             mu::Vec3 sum{};
@@ -571,11 +571,11 @@ void GoblinMidBossTactic::evaluateTactics( Room& room, PlatoonLeader& leader ) {
                 .type = SquadOrderType::BoxAdvance,
                 .targetId = primaryTargetId_,
                 .leaderPos = leader.pos(),
-                .sectorPos = offsets[ static_cast<size_t>( i ) ],
+                .sectorPos = offsets[ i ],
                 .formationTargetPos = boxAdvanceTargetPos_,
                 .tacticCenter = boxCenter
             };
-            sqByLat[ static_cast<size_t>( i ) ].second->receiveOrder( ord );
+            sqByLat[ i ].second->receiveOrder( ord );
         }
 
         phaseOrderIssued_ = true;
@@ -603,7 +603,7 @@ void GoblinMidBossTactic::evaluateTactics( Room& room, PlatoonLeader& leader ) {
                 .formationTargetPos = playerCent,
                 .tacticCenter = leader.pos()
             };
-            liveSquads[ static_cast<size_t>( i ) ]->receiveOrder( ord );
+            liveSquads[ i ]->receiveOrder( ord );
         }
 
         phaseOrderIssued_ = true;
@@ -655,7 +655,7 @@ void GoblinMidBossTactic::evaluateTactics( Room& room, PlatoonLeader& leader ) {
         float angleAccum = 0.f;
 
         for ( int32 i = 0; i < numSquads; ++i ) {
-            int32 memberCount = static_cast<int32>( liveSquads[ static_cast<size_t>( i ) ]->getMembers().size() );
+            int32 memberCount = static_cast<int32>( liveSquads[ i ]->getMembers().size() );
             float fraction = static_cast<float>( memberCount ) / static_cast<float>( totalMembers );
             float sectorSpan = TWO_PI * fraction;
             float sectorAngle = angleAccum + sectorSpan * 0.5f;
@@ -668,7 +668,7 @@ void GoblinMidBossTactic::evaluateTactics( Room& room, PlatoonLeader& leader ) {
                 .approachRadius = encircleRadius,
                 .tacticCenter = encircleCenter
             };
-            liveSquads[ static_cast<size_t>(i) ]->receiveOrder( ord );
+            liveSquads[ i ]->receiveOrder( ord );
             angleAccum += sectorSpan;
         }
 
@@ -677,15 +677,15 @@ void GoblinMidBossTactic::evaluateTactics( Room& room, PlatoonLeader& leader ) {
         return;
     }
 
-    std::vector<uint32_t> targets(static_cast<size_t>(numSquads), primaryId);
-    assignSquadsToPlayers(room, leader, liveSquads, targets);
+    std::vector<uint32_t> targets( numSquads, primaryId );
+    assignSquadsToPlayers( room, leader, liveSquads, targets );
 
     for ( int32 i = 0; i < numSquads; ++i ) {
         auto ord = SquadOrder{
             .type = SquadOrderType::Engage,
-			.targetId = targets[ static_cast<size_t>( i ) ]
+			.targetId = targets[ i ]
 		};
-        liveSquads[ static_cast<size_t>( i ) ]->receiveOrder( ord );
+        liveSquads[ i ]->receiveOrder( ord );
     }
 }
 
@@ -820,14 +820,14 @@ void GoblinMidBossTactic::issueDivideAndConquer( Room& room, PlatoonLeader& lead
     float bestDist = -1.f;
 
     for ( int32 i = 0; i < static_cast<int32>( liveSquads.size() ); ++i ) {
-        float d = ( liveSquads[ static_cast<size_t>( i ) ]->calcCentroid() - chargeCluster.centroid ).len();
+        float d = ( liveSquads[ i ]->calcCentroid() - chargeCluster.centroid ).len();
         if ( bestDist < 0.f || d < bestDist ) {
             bestDist = d;
             chargeSquadIdx = i;
         }
     }
 
-    TacticalSquad* chargeSquad = liveSquads[ static_cast<size_t>( chargeSquadIdx ) ];
+    TacticalSquad* chargeSquad = liveSquads[ chargeSquadIdx ];
     auto charge = SquadOrder{
         .type = SquadOrderType::WedgeCharge,
         .targetId = chargeCluster.representativeId,
@@ -888,8 +888,8 @@ void GoblinMidBossTactic::issueDivideAndConquer( Room& room, PlatoonLeader& lead
             .formationTargetPos = supportCentroid,
             .tacticCenter = blockCenter
         };
-        liveSquads[ static_cast<size_t>( i ) ]->receiveOrder( screen );
-        divideTasks_.push_back( { liveSquads[ static_cast<size_t>( i ) ], DivideTaskType::Screen, screen.targetId, supportPlayerIds } );
+        liveSquads[ i ]->receiveOrder( screen );
+        divideTasks_.push_back( { liveSquads[ i ], DivideTaskType::Screen, screen.targetId, supportPlayerIds } );
         ++screenIdx;
     }
 }
@@ -1214,7 +1214,7 @@ std::vector<mu::Vec3> GoblinMidBossTactic::calcSquadBoxOffsets( int32 numSquads 
     int32 cols = (numSquads + rows - 1) / rows;
 
     std::vector<mu::Vec3> offsets;
-    offsets.reserve( static_cast<size_t>(numSquads) );
+    offsets.reserve( numSquads );
 
     for ( int32 i = 0; i < numSquads; ++i ) {
         int32 col = i % cols;

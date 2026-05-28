@@ -1,4 +1,6 @@
-#pragma once
+#ifndef platoon_leader_hpp
+#define platoon_leader_hpp
+
 #include "TacticalNpc.hpp"
 #include "TacticalSquad.hpp"
 #include <memory>
@@ -10,28 +12,29 @@ class IMidBossTactic;
 
 class PlatoonLeader : public TacticalNpc {
 public:
-    PlatoonLeader(Object&& base, const TacticalNpcConfig& cfg = {});
-    PlatoonLeader(Object&& base, const TacticalNpcConfig& cfg,
-                  std::unique_ptr<IMidBossTactic> tactic);
-    ~PlatoonLeader();
+    PlatoonLeader( Object&& base, const TacticalNpcConfig& cfg = {} );
+    PlatoonLeader( Object&& base, const TacticalNpcConfig& cfg, std::unique_ptr<IMidBossTactic> tactic );
+    ~PlatoonLeader() = default;
 
-    TacticalNpcUpdateResult update(Seconds dt, Room& room);
+    TacticalNpcUpdateResult update( Seconds dt, Room& room );
 
-    void addSquad(TacticalSquad* squad);
+    void addSquad( TacticalSquad* squad );
     const std::vector<TacticalSquad*>& getSquads() const { return squads_; }
-    void setTactic(std::unique_ptr<IMidBossTactic> tactic);
+    void setTactic( std::unique_ptr<IMidBossTactic> tactic );
 
-    void removeDeadMembersFromSquads(Room& room);
-    void pushConfusedToSquads(Room& room);
-    void setTacticalTarget(uint32_t targetId) { targetId_ = targetId; }
-    void transitionTacticalState(TacticalNpcState next) { transitionTo(next); }
+    void removeDeadMembersFromSquads( Room& room );
+    void pushConfusedToSquads( Room& room );
+    void setTacticalTarget( uint32 targetId ) { targetId_ = targetId; }
+    void transitionTacticalState( TacticalNpcState next ) { transitionTo( next ); }
     float getLeaderMoveSpeed() const { return moveSpeed_; }
 
-    void MU_CALLCONV setFacing(mu::Vec3 dir);
-    void             applyHitToSession(GameSession* session, float damage);
+    void MU_CALLCONV setFacing( mu::Vec3 dir );
+    void             applyHitToSession( GameSession* session, float damage );
 
 private:
     std::vector<TacticalSquad*>     squads_;
     std::unique_ptr<IMidBossTactic> tactic_;
     bool                            deathReported_{ false };
 };
+
+#endif // platoon_leader_hpp
