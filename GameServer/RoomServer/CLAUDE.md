@@ -1,4 +1,7 @@
 ### RoomServer
+서버 아키텍처 참조 - `docs/serverArchitecture.md`
+스킬 시스템 아키텍처 참조 - `docs/skillArchitecture.md`
+
 Entry: `RoomServer/roomServerMain.cpp`
 
 - `Room` — central game room: holds player sessions, game objects, and physics state. All mutations go through its `JobQueue`.
