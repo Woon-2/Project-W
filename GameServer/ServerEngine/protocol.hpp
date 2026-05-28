@@ -193,10 +193,11 @@ struct SSkillStartPacket : public PacketHeader {
 };
 
 struct SSkillHitPacket : public PacketHeader {
-	uint16 attackerId;
-	uint16 targetId;
-	int32  newHp;
-	uint32 skillAssetId;
+	uint16              attackerId;
+	uint16              targetId;
+	int32               newHp;
+	uint32              skillAssetId;
+	DirectX::XMFLOAT3  targetVelocity;  // target's linear velocity at hit time; used for ragdoll impulse on kill
 };
 
 struct OBBInfo {

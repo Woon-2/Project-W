@@ -124,10 +124,10 @@ void Ragdoll::build(const Skeleton& skel, const RagdollDef& def, PhysicsWorld& w
         auto body = std::make_unique<RigidBody>(MotionType::Kinematic);
         body->setMass(bd.mass);
         body->setInertia(computeBoxInertia(bd.mass, bd.halfExtents));
-        body->setLinearDamping(0.1f);
-        body->setAngularDamping(0.2f);
-        body->setFriction(0.5f);
-        body->setRestitution(0.1f);
+        body->setLinearDamping(bd.linearDamping);
+        body->setAngularDamping(bd.angularDamping);
+        body->setFriction(bd.friction);
+        body->setRestitution(bd.restitution);
 
         // Set T-pose orientation (no position yet; syncFromPose seeds it later).
         body->setOrient(extractOrient(bone->toDress));
@@ -138,6 +138,7 @@ void Ragdoll::build(const Skeleton& skel, const RagdollDef& def, PhysicsWorld& w
         rb.body          = body.get();
         rb.capsuleOffset = bd.center;
         rb.halfExtents   = bd.halfExtents;
+        rb.noiseImpulse  = bd.noiseImpulse;
 
         bones_.push_back(rb);
         bodies_.push_back(std::move(body));

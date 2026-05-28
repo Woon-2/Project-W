@@ -86,6 +86,32 @@ void PhysicsWorld::integrate(Seconds dt)
             }
             b.setOmega(b.omega() * std::max(0.f, 1.f - b.angularDamping() * dtf));
 
+            // Velocity motor: drive XZ velocity toward desiredVel.
+            // Applied after damping so knockback bleeds off first,
+            // then motor corrects toward desired each sub-step.
+            if (b.motorEnabled()) {
+                const mu::Vec3 vCurr    = b.linearVel();
+                const mu::Vec3 vDesired = b.desiredVel();
+                const mu::Vec3 vError   = mu::Vec3(
+                    vDesired.x() - vCurr.x(), 0.f, vDesired.z() - vCurr.z());
+
+                const float errLen = vError.len();
+                if (errLen > 1e-4f) {
+                    const float curSpd = mu::Vec3(vCurr.x(),    0.f, vCurr.z()).len();
+                    const float dstSpd = mu::Vec3(vDesired.x(), 0.f, vDesired.z()).len();
+                    const float maxA   = (dstSpd < curSpd)
+                        ? b.motor().maxDeceleration
+                        : b.motor().maxAcceleration;
+
+                    // Proportional control clamped to maxA.
+                    const float corrMag = std::min(errLen * b.motor().gain, maxA);
+                    const mu::Vec3 dv   = (vError * (corrMag / errLen)) * dtf;
+
+                    b.setLinearVel(mu::Vec3(
+                        vCurr.x() + dv.x(), vCurr.y(), vCurr.z() + dv.z()));
+                }
+            }
+
             const auto linAcc = gravity_ + b.forceAccum() * b.invMass();
             b.setLinearVel(b.linearVel() + linAcc * dtf);
 

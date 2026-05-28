@@ -35,6 +35,9 @@ void Npc::applyConfig(const NpcConfig& cfg) {
     returnSpeedMult_    = cfg.returnSpeedMult;
     maxDirectReactDelay_ = cfg.maxDirectReactDelay;
     maxGroupReactDelay_  = cfg.maxGroupReactDelay;
+    body().setMotorMaxAcceleration(cfg.motorMaxAcceleration);
+    body().setMotorMaxDeceleration(cfg.motorMaxDeceleration);
+    body().setMotorGain(cfg.motorGain);
 }
 
 void MU_CALLCONV Npc::setSpawnPos(mu::Vec3 p) {
@@ -58,6 +61,10 @@ void Npc::transitionTo(NpcState next) {
     if (next == NpcState::AttackWindup)  windupTimer_     = 0s;
     if (next == NpcState::AttackRecover) recoverTimer_    = 0s;
     if (next == NpcState::Reposition)    repositionTimer_ = 0s;
+    if (next == NpcState::AttackWindup ||
+        next == NpcState::Idle         ||
+        next == NpcState::Dead)
+        setDesiredVel(mu::Vec3{});
     state_ = next;
 
     switch (next) {
@@ -81,14 +88,9 @@ void Npc::transitionTo(NpcState next) {
 NpcUpdateResult Npc::update(Seconds dt, Room& room) {
     updateAnimBones(dt);
 
-    if (knockbackTimer_ > 0s) knockbackTimer_ -= dt;
-
     if (hp() <= 0) {
         return updateDead(dt);
     }
-
-    if (knockbackTimer_ > 0s)
-        return {};
 
     switch (state_) {
         case NpcState::Idle:           return updateIdle          (dt, room);
@@ -232,7 +234,7 @@ NpcUpdateResult Npc::updateChase(Seconds dt, Room& room) {
     mu::Vec3  sepPerp  = sep - chaseDir * mu::dot( sep, chaseDir );
     mu::NVec3 nd( chaseDir + sepPerp * separationWeight_ );
 
-    setLinearVel( mu::Vec3( nd.x() * moveSpeed_, body().linearVel().y(), nd.z() * moveSpeed_ ) );
+    setDesiredVel( mu::Vec3( nd.x() * moveSpeed_, 0.f, nd.z() * moveSpeed_ ) );
     setOrient( mu::NQuat( mu::Radian(), mu::Radian(), mu::Radian( std::atan2( nd.x(), nd.z() ) ) ) );
     return {};
 }
@@ -311,7 +313,7 @@ NpcUpdateResult Npc::updateAttackRecover( Seconds dt, Room& room ) {
     if ( push.len() > 0.1f ) {
         mu::NVec3 nd( push );
         float driftSpd = moveSpeed_ * 0.15f;
-        setLinearVel( mu::Vec3( nd.x() * driftSpd, body().linearVel().y(), nd.z() * driftSpd ) );
+        setDesiredVel( mu::Vec3( nd.x() * driftSpd, 0.f, nd.z() * driftSpd ) );
     }
 
     recoverTimer_ += dt;
@@ -393,7 +395,7 @@ NpcUpdateResult Npc::updateReturn( Seconds dt, Room& room ) {
     mu::NVec3 nd( homeDir + sepPerp * separationWeight_ );
 
     float spd = moveSpeed_ * returnSpeedMult_;
-    setLinearVel( mu::Vec3( nd.x() * spd, body().linearVel().y(), nd.z() * spd ) );
+    setDesiredVel( mu::Vec3( nd.x() * spd, 0.f, nd.z() * spd ) );
     setOrient( mu::NQuat( mu::Radian(), mu::Radian(), mu::Radian( std::atan2( nd.x(), nd.z() ) ) ) );
     return {};
 }
@@ -443,7 +445,7 @@ NpcUpdateResult Npc::updateReposition( Seconds dt, Room& room ) {
     mu::Vec3 sep = calcSeparationForce( nearbyCache_, separationRadius_ );
     mu::NVec3 nd( toTarget + repositionDir_ * 0.8f + sep * separationWeight_ );
 
-    setLinearVel( mu::Vec3( nd.x() * moveSpeed_, body().linearVel().y(), nd.z() * moveSpeed_ ) );
+    setDesiredVel( mu::Vec3( nd.x() * moveSpeed_, 0.f, nd.z() * moveSpeed_ ) );
     setOrient( mu::NQuat( mu::Radian(), mu::Radian(), mu::Radian( std::atan2( nd.x(), nd.z() ) ) ) );
     return {};
 }
@@ -487,7 +489,7 @@ NpcUpdateResult Npc::updateInvestigate( Seconds dt, Room& room ) {
     mu::Vec3 diff = mem->lastKnownPosition - pos();
     if ( diff.len() > 0.5f ) {
         mu::NVec3 nd( diff );
-        setLinearVel( mu::Vec3( nd.x() * moveSpeed_, body().linearVel().y(), nd.z() * moveSpeed_ ) );
+        setDesiredVel( mu::Vec3( nd.x() * moveSpeed_, 0.f, nd.z() * moveSpeed_ ) );
         setOrient( mu::NQuat( mu::Radian(), mu::Radian(), mu::Radian( std::atan2( nd.x(), nd.z() ) ) ) );
     }
 	// Investigate 했지만 플레이어가 없다면 Return으로 전환
@@ -515,18 +517,18 @@ void Npc::respawn() {
     setHp(static_cast<int32>(maxHp_));
     setPos(spawnPos_);
     setLinearVel({ 0.f, 0.f, 0.f });
+    setDesiredVel(mu::Vec3{});
     targetId_         = -1;
     respawnTimer_     = 0s;
     windupTimer_      = 0s;
     recoverTimer_     = 0s;
     directReactTimer_ = -1s;
     groupReactTimer_  = -1s;
-    knockbackTimer_   = 0s;
     state_            = NpcState::Idle;
 }
 
 void Npc::onHitImpulse() {
-    knockbackTimer_ = kKnockbackDuration;
+    // Velocity motor handles knockback convergence — no timer needed.
 }
 
 // ─── evaluateTargetScore ──────────────────────────────────────────────────────

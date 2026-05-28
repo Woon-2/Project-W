@@ -16,12 +16,19 @@ public class RagdollBody
     public Vector3   halfExtents   = new Vector3(0.1f, 0.15f, 0.1f);        // matches BoneBoxDef::halfExtents
     public Vector3   rotationEuler = Vector3.zero;                            // bone-local box rotation, matches BoneBoxDef::rotEuler
     public float     mass          = 1.0f;                                    // matches BoneBoxDef::mass
+    public float     linearDamping  = 2.0f;                                   // matches BoneBoxDef::linearDamping
+    public float     angularDamping = 2.0f;                                   // matches BoneBoxDef::angularDamping
+    public float     friction       = 0.5f;                                   // matches BoneBoxDef::friction
+    public float     restitution    = 0.1f;                                   // matches BoneBoxDef::restitution
+    public float     noiseImpulse   = 1.0f;                                   // matches BoneBoxDef::noiseImpulse (N·s)
 }
 
 // Matches JointDef in ragdollDef.hpp.
 [System.Serializable]
 public class RagdollJoint
 {
+    public string         parentBodyName = "";
+    public string         childBodyName  = "";
     public string         parentBoneName = "";
     public string         childBoneName  = "";
     public RagdollJointType jointType    = RagdollJointType.ConeTwist;

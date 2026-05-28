@@ -25,6 +25,17 @@ struct BodyState {
 mu::Mat3x3 computeBoxInertia(float mass, mu::Vec3 halfExtents);
 mu::Mat3x3 computeCapsuleInertia(float mass, float radius, float halfHeight);
 
+// AI velocity motor: drives actual velocity toward desiredVel via
+// per-frame corrective impulses (XZ only; Y is under gravity control).
+// Applied inside PhysicsWorld::integrate() for Dynamic bodies.
+struct VelocityMotor {
+    mu::Vec3 desiredVel{};
+    float    maxAcceleration{ 20.f };  // m/s² — toward desired
+    float    maxDeceleration{ 40.f };  // m/s² — braking
+    float    gain           { 10.f };  // proportional gain (≈ 1/convergence_time_s)
+    bool     enabled        { false };
+};
+
 // Physics representation for a single simulated body.
 // Owned inline by Object (for game entities).
 //
@@ -114,6 +125,16 @@ public:
     // Zero the force and torque accumulators.
     void clearAccumulators();
 
+    // Velocity motor API (see VelocityMotor above).
+    void     enableMotor(bool v)                    { motor_.enabled = v; }
+    bool     motorEnabled()                   const { return motor_.enabled; }
+    void MU_CALLCONV setDesiredVel(mu::Vec3 v)      { motor_.desiredVel = v; }
+    mu::Vec3 desiredVel()                     const { return motor_.desiredVel; }
+    void     setMotorMaxAcceleration(float a)       { motor_.maxAcceleration = a; }
+    void     setMotorMaxDeceleration(float d)       { motor_.maxDeceleration = d; }
+    void     setMotorGain(float g)                  { motor_.gain = g; }
+    const VelocityMotor& motor()              const { return motor_; }
+
     // Pseudo-velocity API for Split Impulse position correction.
     mu::Vec3 pseudoLinearVel() const { return pseudoLinearVel_; }
     mu::Vec3 pseudoOmega()     const { return pseudoOmega_; }
@@ -167,6 +188,8 @@ private:
     mu::Vec3   torqueAccum_{};
     mu::Vec3   pseudoLinearVel_{};
     mu::Vec3   pseudoOmega_{};
+
+    VelocityMotor motor_{};
 };
 
 #endif // room_server_rigidBody_hpp

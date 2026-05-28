@@ -117,11 +117,17 @@ public class ModelExtractorWindow : EditorWindow
         foreach (var body in ragdoll.bodies)
         {
             ExtractUtil.WriteHeadTag(w, "Body");
-            ExtractUtil.WriteText(w,   "BoneName",    body.name);
+            ExtractUtil.WriteText(w, "BodyName", body.name);
+            ExtractUtil.WriteText(w, "BoneName", body.bone.name);
             ExtractUtil.WriteVector(w, "HalfExtents", body.halfExtents);
-            ExtractUtil.WriteVector(w, "Center",      body.center);
-            ExtractUtil.WriteVector(w, "RotEuler",    body.rotationEuler);
-            ExtractUtil.WriteFloat(w,  "Mass",        body.mass);
+            ExtractUtil.WriteVector(w, "Center", body.center);
+            ExtractUtil.WriteVector(w, "RotEuler", body.rotationEuler);
+            ExtractUtil.WriteFloat(w, "Mass",           body.mass);
+            ExtractUtil.WriteFloat(w, "LinearDamping",  body.linearDamping);
+            ExtractUtil.WriteFloat(w, "AngularDamping", body.angularDamping);
+            ExtractUtil.WriteFloat(w, "Friction",       body.friction);
+            ExtractUtil.WriteFloat(w, "Restitution",    body.restitution);
+            ExtractUtil.WriteFloat(w, "NoiseImpulse",   body.noiseImpulse);
             ExtractUtil.WriteTailTag(w, "Body");
         }
 
@@ -129,20 +135,22 @@ public class ModelExtractorWindow : EditorWindow
         foreach (var joint in ragdoll.joints)
         {
             ExtractUtil.WriteHeadTag(w, "Joint");
+            ExtractUtil.WriteText(w, "ParentBody", joint.parentBodyName);
+            ExtractUtil.WriteText(w, "ChildBody", joint.childBodyName);
             ExtractUtil.WriteText(w, "ParentBone", joint.parentBoneName);
-            ExtractUtil.WriteText(w, "ChildBone",  joint.childBoneName);
-            ExtractUtil.WriteText(w, "JointType",  joint.jointType.ToString());
+            ExtractUtil.WriteText(w, "ChildBone", joint.childBoneName);
+            ExtractUtil.WriteText(w, "JointType", joint.jointType.ToString());
 
             switch (joint.jointType)
             {
                 case RagdollJointType.Hinge:
                     ExtractUtil.WriteVector(w, "AxisLocalA", joint.hingeAxisLocal);
-                    ExtractUtil.WriteFloat(w,  "MinAngle",   Mathf.Deg2Rad * joint.minAngleDeg);
-                    ExtractUtil.WriteFloat(w,  "MaxAngle",   Mathf.Deg2Rad * joint.maxAngleDeg);
+                    ExtractUtil.WriteFloat(w, "MinAngle", Mathf.Deg2Rad * joint.minAngleDeg);
+                    ExtractUtil.WriteFloat(w, "MaxAngle", Mathf.Deg2Rad * joint.maxAngleDeg);
                     break;
                 case RagdollJointType.ConeTwist:
                     ExtractUtil.WriteFloat(w, "ConeHalfAngle", Mathf.Deg2Rad * joint.coneHalfAngleDeg);
-                    ExtractUtil.WriteFloat(w, "TwistLimit",    Mathf.Deg2Rad * joint.twistLimitDeg);
+                    ExtractUtil.WriteFloat(w, "TwistLimit", Mathf.Deg2Rad * joint.twistLimitDeg);
                     break;
             }
 
@@ -227,7 +235,7 @@ public class ModelExtractorWindow : EditorWindow
         if ((mesh.vertices != null) && (mesh.vertices.Length > 0)) ExtractUtil.WriteVectors(geometryWriter, "Positions", mesh.vertices);
         if ((mesh.colors != null) && (mesh.colors.Length > 0)) ExtractUtil.WriteColors(geometryWriter, "Colors", mesh.colors);
         if ((mesh.normals != null) && (mesh.normals.Length > 0)) ExtractUtil.WriteVectors(geometryWriter, "Normals", mesh.normals);
-        if ( (mesh.normals != null) && (mesh.normals.Length > 0)
+        if ((mesh.normals != null) && (mesh.normals.Length > 0)
             && (mesh.tangents != null) && (mesh.tangents.Length > 0)
         )
         {

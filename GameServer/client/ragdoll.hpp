@@ -17,6 +17,7 @@ struct RagdollBone {
                                        // null for the root bone
     mu::Vec3    capsuleOffset;         // body pos offset from bone origin (= BoneBoxDef::center)
     mu::Vec3    halfExtents;           // OBB half-extents for terrain/body collision BVH
+    float       noiseImpulse = 0.f;    // max random impulse (N·s) applied at activation
 };
 
 // Bone not directly simulated by a RigidBody; rigidly follows its nearest ragdoll ancestor.

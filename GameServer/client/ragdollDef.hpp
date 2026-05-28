@@ -11,10 +11,15 @@ enum class JointType { BallSocket, Hinge, ConeTwist };
 struct BoneBoxDef {
     std::string bodyName;
     std::string boneName;
-    mu::Vec3 halfExtents;     // half-size of the box (bone-local)
-    mu::Vec3 center;          // offset from bone origin to box centre (bone-local)
-    mu::Vec3 rotEuler;        // bone-local box orientation in degrees (XYZ Euler, reserved for future collision shape)
-    float    mass;
+    mu::Vec3 halfExtents;       // half-size of the box (bone-local)
+    mu::Vec3 center;            // offset from bone origin to box centre (bone-local)
+    mu::Vec3 rotEuler;          // bone-local box orientation in degrees (XYZ Euler, reserved for future collision shape)
+    float    mass           = 1.f;
+    float    linearDamping  = 2.0f;
+    float    angularDamping = 2.0f;
+    float    friction       = 0.5f;
+    float    restitution    = 0.1f;
+    float    noiseImpulse   = 1.0f;  // max random impulse (N·s) applied at ragdoll activation
 };
 
 // Joint connecting parentBone to childBone.

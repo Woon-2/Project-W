@@ -44,6 +44,7 @@ void Room::init(const Level* levelData) {
 		g.body().setAngularDamping(25.f);
 		g.body().setRestitution(0.0f);
 		g.body().setUprightStiffness(4000.f);
+		g.body().enableMotor(true);
 		g.body().snapToCurrent();
 		physicsWorld_.registerBody(&g.body(), [&g]() { g.rebuildBodyBVH(); });
 	}
@@ -367,7 +368,8 @@ void Room::updateSkillSystem(Milliseconds dt) {
 			static_cast<uint16>(hit->attackerId),
 			static_cast<uint16>(hit->targetId),
 			newHp,
-			hit->skillAssetId
+			hit->skillAssetId,
+			tgt->linearVel().getXmf()
 		));
 	}
 

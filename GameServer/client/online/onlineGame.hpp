@@ -58,7 +58,7 @@ public:
 	void applyHit(uint16 targetId, int32 newHp);
 	void onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos );
 	void onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs );
-	void onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId );
+	void onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity );
 	void onDebugHitboxes( SDebugHitboxPacket* pkt );
 
 	// 게임의 업데이트는 다음 순서대로 이루어진다.

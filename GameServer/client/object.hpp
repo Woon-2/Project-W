@@ -372,10 +372,14 @@ public:
 	bool ragdollPendingActivation() const { return ragdollPendingActivation_; }
 	void setRagdollPendingActivation(bool v) { ragdollPendingActivation_ = v; }
 
+	mu::Vec3 ragdollInitVelocity() const { return ragdollInitVelocity_; }
+	void MU_CALLCONV setRagdollInitVelocity(mu::Vec3 v) { ragdollInitVelocity_ = v; }
+
 private:
 	EventBus eventBus_{};
 	Ragdoll  ragdoll_{};
 	bool     ragdollPendingActivation_ = false;
+	mu::Vec3 ragdollInitVelocity_{};
 };
 
 struct TerrainData;

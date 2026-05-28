@@ -26,6 +26,11 @@ public:
 	mu::Vec3 velocity() const { return body_.linearVel(); }
 	void MU_CALLCONV setVelocity(mu::Vec3 v) { body_.setLinearVel(v); }
 
+	// Velocity motor: AI declares desired velocity; physics converges toward it.
+	void MU_CALLCONV setDesiredVel(mu::Vec3 v) { body_.setDesiredVel(v); }
+	mu::Vec3 desiredVel() const { return body_.desiredVel(); }
+	void enableMotor(bool v) { body_.enableMotor(v); }
+
 	void MU_CALLCONV setOmega(mu::Vec3 newOmega) { body_.setOmega(newOmega); }
 	mu::Vec3 omega() const { return body_.omega(); }
 

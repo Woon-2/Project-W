@@ -1412,6 +1412,11 @@ static void importRagdollConfig(std::ifstream& ifs, Model& model)
         bd.center         = mu::Vec3(XMLoadFloat3(&ctr));
         bd.rotEuler       = mu::Vec3(XMLoadFloat3(&re));
         bd.mass           = readFloat(ifs, "Mass");
+        bd.linearDamping  = readFloat(ifs, "LinearDamping");
+        bd.angularDamping = readFloat(ifs, "AngularDamping");
+        bd.friction       = readFloat(ifs, "Friction");
+        bd.restitution    = readFloat(ifs, "Restitution");
+        bd.noiseImpulse   = readFloat(ifs, "NoiseImpulse");
         def.bones.push_back(std::move(bd));
         readTailTag(ifs, "Body");
     }

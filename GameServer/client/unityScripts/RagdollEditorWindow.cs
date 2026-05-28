@@ -8,12 +8,12 @@ public class RagdollEditorWindow : EditorWindow
     private GoblinRagdollConfig config;
     private Vector2 scrollPos;
 
-    private bool[] bodyFoldouts  = new bool[0];
+    private bool[] bodyFoldouts = new bool[0];
     private bool[] jointFoldouts = new bool[0];
     private bool showBodies = true;
     private bool showJoints = true;
 
-    private int selectedBodyIdx  = -1;   // scene highlight: body index, -1 = none
+    private int selectedBodyIdx = -1;   // scene highlight: body index, -1 = none
     private int selectedJointIdx = -1;   // scene highlight: joint index, -1 = none
 
     [MenuItem("Tools/Ragdoll Editor")]
@@ -22,7 +22,7 @@ public class RagdollEditorWindow : EditorWindow
         GetWindow<RagdollEditorWindow>("Ragdoll Editor");
     }
 
-    private void OnEnable()  => SceneView.duringSceneGui += OnSceneGUI;
+    private void OnEnable() => SceneView.duringSceneGui += OnSceneGUI;
     private void OnDisable() => SceneView.duringSceneGui -= OnSceneGUI;
 
     // -------------------------------------------------------------------------
@@ -111,8 +111,8 @@ public class RagdollEditorWindow : EditorWindow
 
         EnsureArray(ref bodyFoldouts, config.bodies.Count);
 
-        int  removeIdx = -1;
-        bool changed   = false;
+        int removeIdx = -1;
+        bool changed = false;
 
         for (int i = 0; i < config.bodies.Count; i++)
         {
@@ -124,7 +124,7 @@ public class RagdollEditorWindow : EditorWindow
             bodyFoldouts[i] = EditorGUILayout.Foldout(bodyFoldouts[i], $"{i}: {body.name}", true);
             if (bodyFoldouts[i] != bodyWasOpen)
             {
-                selectedBodyIdx  = bodyFoldouts[i] ? i : (selectedBodyIdx == i ? -1 : selectedBodyIdx);
+                selectedBodyIdx = bodyFoldouts[i] ? i : (selectedBodyIdx == i ? -1 : selectedBodyIdx);
                 selectedJointIdx = bodyFoldouts[i] ? -1 : selectedJointIdx;
                 SceneView.RepaintAll();
             }
@@ -137,13 +137,13 @@ public class RagdollEditorWindow : EditorWindow
                 EditorGUI.indentLevel++;
                 EditorGUI.BeginChangeCheck();
 
-                body.name = EditorGUILayout.TextField("Bone Name", body.name);
+                body.name = EditorGUILayout.TextField("Body Name", body.name);
                 body.bone = (Transform)EditorGUILayout.ObjectField(
                     "Bone (scene)", body.bone, typeof(Transform), true);
 
                 EditorGUILayout.LabelField("Box (bone-local)", EditorStyles.miniLabel);
-                body.center        = EditorGUILayout.Vector3Field("Center", body.center);
-                body.halfExtents   = Vector3.Max(Vector3.one * 0.001f,
+                body.center = EditorGUILayout.Vector3Field("Center", body.center);
+                body.halfExtents = Vector3.Max(Vector3.one * 0.001f,
                     EditorGUILayout.Vector3Field("Half Extents", body.halfExtents));
                 body.rotationEuler = EditorGUILayout.Vector3Field("Rotation", body.rotationEuler);
 
@@ -188,9 +188,12 @@ public class RagdollEditorWindow : EditorWindow
         string[] names = config.bodies.Count > 0
             ? config.bodies.ConvertAll(b => b.name).ToArray()
             : new[] { "(no bodies)" };
+        string[] boneNames = config.bodies.Count > 0
+            ? config.bodies.ConvertAll(b => b.bone.name).ToArray()
+            : new[] { "(no bodies)" };
 
-        int  removeIdx = -1;
-        bool changed   = false;
+        int removeIdx = -1;
+        bool changed = false;
 
         for (int i = 0; i < config.joints.Count; i++)
         {
@@ -201,11 +204,11 @@ public class RagdollEditorWindow : EditorWindow
             bool jointWasOpen = jointFoldouts[i];
             jointFoldouts[i] = EditorGUILayout.Foldout(
                 jointFoldouts[i],
-                $"{i}: [{joint.jointType}]  {joint.parentBoneName} → {joint.childBoneName}", true);
+                $"{i}: [{joint.jointType}]  {joint.parentBodyName} → {joint.childBodyName}", true);
             if (jointFoldouts[i] != jointWasOpen)
             {
                 selectedJointIdx = jointFoldouts[i] ? i : (selectedJointIdx == i ? -1 : selectedJointIdx);
-                selectedBodyIdx  = jointFoldouts[i] ? -1 : selectedBodyIdx;
+                selectedBodyIdx = jointFoldouts[i] ? -1 : selectedBodyIdx;
                 SceneView.RepaintAll();
             }
             if (GUILayout.Button("Remove", GUILayout.Width(60)))
@@ -218,14 +221,16 @@ public class RagdollEditorWindow : EditorWindow
                 EditorGUI.BeginChangeCheck();
 
                 // Parent / child dropdowns
-                int pi = Mathf.Max(0, Array.IndexOf(names, joint.parentBoneName));
-                int ci = Mathf.Max(0, Array.IndexOf(names, joint.childBoneName));
+                int pi = Mathf.Max(0, Array.IndexOf(names, joint.parentBodyName));
+                int ci = Mathf.Max(0, Array.IndexOf(names, joint.childBodyName));
                 pi = EditorGUILayout.Popup("Parent Body", pi, names);
-                ci = EditorGUILayout.Popup("Child Body",  ci, names);
+                ci = EditorGUILayout.Popup("Child Body", ci, names);
                 if (config.bodies.Count > 0)
                 {
-                    joint.parentBoneName = names[pi];
-                    joint.childBoneName  = names[ci];
+                    joint.parentBodyName = names[pi];
+                    joint.childBodyName = names[ci];
+                    joint.parentBoneName = boneNames[pi];
+                    joint.childBoneName = boneNames[ci];
                 }
 
                 joint.jointType = (RagdollJointType)EditorGUILayout.EnumPopup("Joint Type", joint.jointType);
@@ -321,12 +326,12 @@ public class RagdollEditorWindow : EditorWindow
             if (config.bodies.Exists(b => b.name == box.name)) continue;
             config.bodies.Add(new RagdollBody
             {
-                name          = box.name,
-                bone          = box.bone,
-                center        = box.localCenter,
-                halfExtents   = box.size * 0.5f,
+                name = box.name,
+                bone = box.bone,
+                center = box.localCenter,
+                halfExtents = box.size * 0.5f,
                 rotationEuler = box.rotationEuler,
-                mass          = 1.0f,
+                mass = 1.0f,
             });
         }
         EditorUtility.SetDirty(config);
@@ -341,12 +346,12 @@ public class RagdollEditorWindow : EditorWindow
 
         // Determine which body names the selected joint references.
         string jointParentName = "";
-        string jointChildName  = "";
+        string jointChildName = "";
         if (selectedJointIdx >= 0 && selectedJointIdx < config.joints.Count)
         {
             var sj = config.joints[selectedJointIdx];
-            jointParentName = sj.parentBoneName;
-            jointChildName  = sj.childBoneName;
+            jointParentName = sj.parentBodyName;
+            jointChildName = sj.childBodyName;
         }
 
         bool anySelection = selectedBodyIdx >= 0 || selectedJointIdx >= 0;
@@ -379,8 +384,8 @@ public class RagdollEditorWindow : EditorWindow
         // Joints: anchor point + axis/limit visualization
         foreach (var joint in config.joints)
         {
-            var parentBody = config.bodies.Find(b => b.name == joint.parentBoneName);
-            var childBody  = config.bodies.Find(b => b.name == joint.childBoneName);
+            var parentBody = config.bodies.Find(b => b.name == joint.parentBodyName);
+            var childBody = config.bodies.Find(b => b.name == joint.childBodyName);
             if (parentBody?.bone == null || childBody?.bone == null) continue;
 
             // Approximate anchor: child bone origin (C++ computes this from T-pose)
@@ -394,52 +399,52 @@ public class RagdollEditorWindow : EditorWindow
                     break;
 
                 case RagdollJointType.Hinge:
-                {
-                    Vector3 worldAxis = parentBody.bone.TransformDirection(joint.hingeAxisLocal).normalized;
-                    Handles.color = new Color(1f, 0.8f, 0.2f, 0.9f);
-                    Handles.DrawLine(anchor - worldAxis * 0.1f, anchor + worldAxis * 0.1f);
-
-                    // Draw arc showing angle range
-                    Vector3 perp = Vector3.Cross(worldAxis, Vector3.up);
-                    if (perp.sqrMagnitude < 0.01f) perp = Vector3.Cross(worldAxis, Vector3.right);
-                    perp.Normalize();
-                    float range = joint.maxAngleDeg - joint.minAngleDeg;
-                    if (Mathf.Abs(range) > 0.5f)
                     {
-                        Handles.color = new Color(1f, 0.8f, 0.2f, 0.3f);
-                        Vector3 fromDir = Quaternion.AngleAxis(joint.minAngleDeg, worldAxis) * perp;
-                        Handles.DrawSolidArc(anchor, worldAxis, fromDir, range, 0.08f);
+                        Vector3 worldAxis = parentBody.bone.TransformDirection(joint.hingeAxisLocal).normalized;
+                        Handles.color = new Color(1f, 0.8f, 0.2f, 0.9f);
+                        Handles.DrawLine(anchor - worldAxis * 0.1f, anchor + worldAxis * 0.1f);
+
+                        // Draw arc showing angle range
+                        Vector3 perp = Vector3.Cross(worldAxis, Vector3.up);
+                        if (perp.sqrMagnitude < 0.01f) perp = Vector3.Cross(worldAxis, Vector3.right);
+                        perp.Normalize();
+                        float range = joint.maxAngleDeg - joint.minAngleDeg;
+                        if (Mathf.Abs(range) > 0.5f)
+                        {
+                            Handles.color = new Color(1f, 0.8f, 0.2f, 0.3f);
+                            Vector3 fromDir = Quaternion.AngleAxis(joint.minAngleDeg, worldAxis) * perp;
+                            Handles.DrawSolidArc(anchor, worldAxis, fromDir, range, 0.08f);
+                        }
+                        break;
                     }
-                    break;
-                }
 
                 case RagdollJointType.ConeTwist:
-                {
-                    // Draw cone opening and twist disc
-                    Vector3 fwd = (anchor - parentBody.bone.position).normalized;
-                    if (fwd.sqrMagnitude < 0.001f) fwd = parentBody.bone.forward;
+                    {
+                        // Draw cone opening and twist disc
+                        Vector3 fwd = (anchor - parentBody.bone.position).normalized;
+                        if (fwd.sqrMagnitude < 0.001f) fwd = parentBody.bone.forward;
 
-                    Handles.color = new Color(0.5f, 0.7f, 1f, 0.3f);
-                    if (joint.coneHalfAngleDeg > 0.5f)
-                    {
-                        Vector3 perp = Vector3.Cross(fwd, Vector3.up).normalized;
-                        if (perp.sqrMagnitude < 0.01f) perp = Vector3.Cross(fwd, Vector3.right).normalized;
-                        Handles.DrawSolidArc(anchor, perp, fwd, joint.coneHalfAngleDeg,  0.07f);
-                        Handles.DrawSolidArc(anchor, perp, fwd, -joint.coneHalfAngleDeg, 0.07f);
+                        Handles.color = new Color(0.5f, 0.7f, 1f, 0.3f);
+                        if (joint.coneHalfAngleDeg > 0.5f)
+                        {
+                            Vector3 perp = Vector3.Cross(fwd, Vector3.up).normalized;
+                            if (perp.sqrMagnitude < 0.01f) perp = Vector3.Cross(fwd, Vector3.right).normalized;
+                            Handles.DrawSolidArc(anchor, perp, fwd, joint.coneHalfAngleDeg, 0.07f);
+                            Handles.DrawSolidArc(anchor, perp, fwd, -joint.coneHalfAngleDeg, 0.07f);
+                        }
+                        if (joint.twistLimitDeg > 0.5f)
+                        {
+                            Handles.color = new Color(1f, 0.55f, 0.2f, 0.3f);
+                            Vector3 up = Vector3.Cross(fwd, parentBody.bone.right).normalized;
+                            Handles.DrawSolidArc(anchor, fwd, up, joint.twistLimitDeg, 0.05f);
+                            Handles.DrawSolidArc(anchor, fwd, up, -joint.twistLimitDeg, 0.05f);
+                        }
+                        break;
                     }
-                    if (joint.twistLimitDeg > 0.5f)
-                    {
-                        Handles.color = new Color(1f, 0.55f, 0.2f, 0.3f);
-                        Vector3 up = Vector3.Cross(fwd, parentBody.bone.right).normalized;
-                        Handles.DrawSolidArc(anchor, fwd, up,  joint.twistLimitDeg, 0.05f);
-                        Handles.DrawSolidArc(anchor, fwd, up, -joint.twistLimitDeg, 0.05f);
-                    }
-                    break;
-                }
             }
         }
 
-        Handles.color  = Color.white;
+        Handles.color = Color.white;
         Handles.matrix = Matrix4x4.identity;
     }
 
@@ -461,11 +466,12 @@ public class RagdollEditorWindow : EditorWindow
             foreach (var body in config.bodies)
             {
                 ExtractUtil.WriteHeadTag(w, "Body");
-                ExtractUtil.WriteText(w,   "BoneName",    body.name);
+                ExtractUtil.WriteText(w, "BodyName", body.name);
+                ExtractUtil.WriteText(w, "BoneName", body.bone.name);
                 ExtractUtil.WriteVector(w, "HalfExtents", body.halfExtents);
-                ExtractUtil.WriteVector(w, "Center",      body.center);
-                ExtractUtil.WriteVector(w, "RotEuler",    body.rotationEuler);
-                ExtractUtil.WriteFloat(w,  "Mass",        body.mass);
+                ExtractUtil.WriteVector(w, "Center", body.center);
+                ExtractUtil.WriteVector(w, "RotEuler", body.rotationEuler);
+                ExtractUtil.WriteFloat(w, "Mass", body.mass);
                 ExtractUtil.WriteTailTag(w, "Body");
             }
 
@@ -474,24 +480,26 @@ public class RagdollEditorWindow : EditorWindow
             foreach (var joint in config.joints)
             {
                 ExtractUtil.WriteHeadTag(w, "Joint");
-                ExtractUtil.WriteText(w,    "ParentBone", joint.parentBoneName);
-                ExtractUtil.WriteText(w,    "ChildBone",  joint.childBoneName);
-                ExtractUtil.WriteText(w,    "JointType",  joint.jointType.ToString());
+                ExtractUtil.WriteText(w, "ParentBody", joint.parentBodyName);
+                ExtractUtil.WriteText(w, "ChildBody", joint.childBodyName);
+                ExtractUtil.WriteText(w, "ParentBone", joint.parentBoneName);
+                ExtractUtil.WriteText(w, "ChildBone", joint.childBoneName);
+                ExtractUtil.WriteText(w, "JointType", joint.jointType.ToString());
 
                 switch (joint.jointType)
                 {
                     case RagdollJointType.Hinge:
                         ExtractUtil.WriteVector(w, "AxisLocalA", joint.hingeAxisLocal);
-                        ExtractUtil.WriteFloat(w,  "MinAngle",   Mathf.Deg2Rad * joint.minAngleDeg);
-                        ExtractUtil.WriteFloat(w,  "MaxAngle",   Mathf.Deg2Rad * joint.maxAngleDeg);
+                        ExtractUtil.WriteFloat(w, "MinAngle", Mathf.Deg2Rad * joint.minAngleDeg);
+                        ExtractUtil.WriteFloat(w, "MaxAngle", Mathf.Deg2Rad * joint.maxAngleDeg);
                         break;
 
                     case RagdollJointType.ConeTwist:
                         ExtractUtil.WriteFloat(w, "ConeHalfAngle", Mathf.Deg2Rad * joint.coneHalfAngleDeg);
-                        ExtractUtil.WriteFloat(w, "TwistLimit",    Mathf.Deg2Rad * joint.twistLimitDeg);
+                        ExtractUtil.WriteFloat(w, "TwistLimit", Mathf.Deg2Rad * joint.twistLimitDeg);
                         break;
 
-                    // BallSocket: no extra params
+                        // BallSocket: no extra params
                 }
 
                 ExtractUtil.WriteTailTag(w, "Joint");

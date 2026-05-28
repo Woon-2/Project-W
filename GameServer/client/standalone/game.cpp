@@ -2594,8 +2594,32 @@ void Game::update(Milliseconds deltaTime) {
 				g.renderState().world
 			);
 			rd.buildPassengers(g.model()->skeleton, g.animBlender()->finalXformData());
+
+			// Read knockback velocity before unregistering the main body.
+			const mu::Vec3 initVel = g.body().linearVel();
+
 			rd.activate(physicsWorld_);
 			physicsWorld_.unregisterBody(&g.body());
+
+			// Apply death velocity so the ragdoll flies in the knockback direction.
+			if (initVel.len2() > 0.01f) {
+				for (auto& rb : rd.bones()) {
+					if (rb.body) rb.body->setLinearVel(initVel);
+				}
+			}
+
+			// Per-bone random noise impulse, biased toward the death velocity direction.
+			constexpr float kNoiseBias = 0.6f;
+			const mu::Vec3 velDir = (initVel.len2() > 0.01f)
+			    ? mu::Vec3(mu::NVec3(initVel)) : mu::Vec3{};
+			for (const auto& rb : rd.bones()) {
+				if (rb.noiseImpulse <= 0.f || !rb.body) continue;
+				mu::Vec3 rnd(rand(-1.f, 1.f), rand(-1.f, 1.f), rand(-1.f, 1.f));
+				if (rnd.len2() < 1e-8f) rnd = mu::Vec3(0.f, 0.f, 1.f);
+				mu::Vec3 dir = velDir * kNoiseBias + mu::Vec3(mu::NVec3(rnd)) * (1.f - kNoiseBias);
+				if (dir.len2() < 1e-8f) dir = mu::Vec3(0.f, 0.f, 1.f);
+				rb.body->applyImpulse(mu::Vec3(mu::NVec3(dir)) * rb.noiseImpulse, rb.body->pos());
+			}
 		};
 
 		auto syncRagdollToAnim = [&](Goblin& g) {

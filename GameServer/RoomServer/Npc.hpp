@@ -32,6 +32,9 @@ struct NpcConfig {
     float returnSpeedMult    = 2.5f;
     Seconds maxDirectReactDelay{ 0.3s };
     Seconds maxGroupReactDelay { 2.0s };
+    float motorMaxAcceleration = 20.f;  // m/s²
+    float motorMaxDeceleration = 40.f;  // m/s²
+    float motorGain            = 10.f;
 };
 
 // ─── NpcState ────────────────────────────────────────────────────────────────
@@ -118,13 +121,10 @@ private:
     Seconds maxDirectReactDelay_{ 0.3s };
     Seconds maxGroupReactDelay_ { 2.0s };
 
-    Seconds knockbackTimer_{ 0s };
-
     std::vector<mu::Vec3> nearbyCache_;
 
     static constexpr Seconds TARGET_EVAL_INTERVAL  { 0.5f };
     static constexpr Seconds REPOSITION_TIMEOUT    { 1.5f };
-    static constexpr Seconds kKnockbackDuration    { 0.4f };
 };
 
 #endif // npc_hpp

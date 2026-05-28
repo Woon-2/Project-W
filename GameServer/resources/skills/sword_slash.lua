@@ -22,20 +22,20 @@ skill:addEvent(100, "PlayVFX", {
 local onHitDefBase = OnHit({
     damage          = 25,
     vfxId           = 0,
-    impulseStrength = 500.0,
+    impulseStrength = 700.0,
     impulseDir      = Vec3(0.0, 0.0, 1.0)
 })
 
 local onHitLB = deepCopy(onHitDefBase)
-onHitLB.impulseDir = Vec3(-0.6, 0.01, 0.5)
+onHitLB.impulseDir = Vec3(-0.97, 0.1, 0.2)
 local onHitLF = deepCopy(onHitDefBase)
-onHitLF.impulseDir = Vec3(-0.3, 0.01, 0.7)
+onHitLF.impulseDir = Vec3(-0.52, 0.1, 0.85)
 local onHitF = deepCopy(onHitDefBase)
-onHitF.impulseDir = Vec3(0.0, 0.01, 0.9)
+onHitF.impulseDir = Vec3(0.0, 0.1, 0.99)
 local onHitRB = deepCopy(onHitDefBase)
-onHitRB.impulseDir = Vec3(0.6, 0.01, 0.5)
+onHitRB.impulseDir = Vec3(0.97, 0.1, 0.2)
 local onHitRF = deepCopy(onHitDefBase)
-onHitRF.impulseDir = Vec3(0.3, 0.01, 0.7)
+onHitRF.impulseDir = Vec3(0.52, 0.1, 0.85)
 
 local hitboxBase = {
     attach             = BoneAttach("spine_02"),

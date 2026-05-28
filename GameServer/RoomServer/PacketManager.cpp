@@ -274,17 +274,19 @@ std::shared_ptr<SendBuffer> PacketManager::makeSDebugHitboxPacket(const OBBInfo*
 }
 
 std::shared_ptr<SendBuffer> PacketManager::makeSSkillHitPacket(uint16 attackerId, uint16 targetId,
-                                                                int32 newHp, uint32 skillAssetId) {
+                                                                int32 newHp, uint32 skillAssetId,
+                                                                DirectX::XMFLOAT3 targetVelocity) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SSkillHitPacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
 
-	auto pkt          = bw.reserve<SSkillHitPacket>();
-	pkt->attackerId   = attackerId;
-	pkt->targetId     = targetId;
-	pkt->newHp        = newHp;
-	pkt->skillAssetId = skillAssetId;
-	pkt->size         = bw.writeSize();
-	pkt->type         = PacketType::S_SkillHit;
+	auto pkt              = bw.reserve<SSkillHitPacket>();
+	pkt->attackerId       = attackerId;
+	pkt->targetId         = targetId;
+	pkt->newHp            = newHp;
+	pkt->skillAssetId     = skillAssetId;
+	pkt->targetVelocity   = targetVelocity;
+	pkt->size             = bw.writeSize();
+	pkt->type             = PacketType::S_SkillHit;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;

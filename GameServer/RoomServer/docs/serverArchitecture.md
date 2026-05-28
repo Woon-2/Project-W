@@ -18,8 +18,8 @@
 ```
 
 **프레임 순서 주의사항:**
-- `physicsWorld_.step()`이 먼저 실행되므로 `applyImpulse()`의 효과는 이미 다음 step 이전에 AI가 `setLinearVel()`로 덮어쓸 수 있다.
-- 이를 막기 위해 `Npc::knockbackTimer_`(0.4 s)가 피격 직후 AI 속도 제어를 일시 중단한다.
+- `physicsWorld_.step()` 내 `integrate()`에서 VelocityMotor가 실행되어 AI가 선언한 `desiredVel` 방향으로 수렴 impulse를 적용한다.
+- AI는 `setLinearVel()` 대신 `setDesiredVel()`를 호출하므로 실제 속도를 덮어쓰지 않는다. knockback impulse는 motor가 여러 프레임에 걸쳐 점진적으로 보정한다.
 
 ---
 
@@ -95,7 +95,7 @@ bone world-space = boneModelXform * entityWorldMatrix      // 모델→월드 �
 
 - **스킬 시스템**: `SkillSystem::computeAttachTransform()` 에서 뼈 월드 변환으로 히트박스 OBB 배치
 - **충돌 판정**: `BVHNode::boneIdx`로 대상 BVH 리프를 해당 뼈의 월드 변환으로 이동 후 OBB vs OBB 정밀 검사
-- **물리 피드백**: `Npc::onHitImpulse()`가 `knockbackTimer_`를 설정해 AI 속도 제어 억제
+- **물리 피드백**: `Npc::onHitImpulse()` 콜백 — VelocityMotor가 넉백 수렴을 처리하므로 타이머 불필요; 히트 반응 애니메이션 트리거 추가 시 여기에 작성
 
 ---
 
@@ -128,9 +128,18 @@ bone world-space = boneModelXform * entityWorldMatrix      // 모델→월드 �
 | `Investigate` | 그룹 공유 기억 위치 조사 |
 | `Dead` | HP ≤ 0; 리스폰 타이머 후 → Idle |
 
-### 넉백 처리
+### 넉백 처리 — VelocityMotor
 
-AI 상태가 `setLinearVel()`로 물리 속도를 매 프레임 덮어쓰므로, `onHitImpulse()`가 `knockbackTimer_`(0.4 s)를 설정해 피격 직후 AI 갱신을 차단한다. 타이머 만료 후 AI 재개.
+AI는 이동 속도를 `setDesiredVel()`로 선언하고, `physicsWorld_.step()` 내 `VelocityMotor`가 매 sub-step마다 실제 속도를 desired 방향으로 수렴시킨다.
+
+```
+velError = desiredVel - currVel  (XZ only)
+corrAccel = gain * velError,  clamped by maxAcceleration / maxDeceleration
+currVel.xz += corrAccel * dt
+```
+
+넉백 충격량이 클수록 오차가 커져 최대 보정이 가해지고, 수 프레임(~0.2 s)에 걸쳐 선형 수렴한다. 오차가 작아지면 비례(지수) 수렴으로 전환된다.  
+`NpcConfig`의 `motorMaxAcceleration`(기본 20 m/s²)을 낮출수록 넉백이 더 오래 유지된다.
 
 ### AnimController 연동
 

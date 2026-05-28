@@ -131,7 +131,6 @@ void SkillSystem::update(Milliseconds dt, SkillDispatchContext& ctx) {
         tickInstance(inst, dt, ctx);
         ++cnt;
     }
-    std::cout << "Skill Instance Count: " << cnt << '\n';
 
     updateHitboxes(ctx);
     updateParticleHitboxSources(ctx);

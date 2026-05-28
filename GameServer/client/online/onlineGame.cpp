@@ -1791,7 +1791,13 @@ void Game::onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs )
 	                        Milliseconds{ static_cast<float>(elapsedMs) });
 }
 
-void Game::onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId ) {
+void Game::onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity ) {
+	// Store hit velocity on goblin before applyHit so ragdoll activation can use it.
+	if (newHp <= 0) {
+		if (auto it = idGoblinMap_.find(targetId); it != idGoblinMap_.end()) {
+			it->second->setRagdollInitVelocity(DirectX::XMLoadFloat3(&targetVelocity));
+		}
+	}
 	applyHit(targetId, newHp);
 
 	// Spawn impact VFX at the target's position.
@@ -1986,6 +1992,30 @@ void Game::update(Milliseconds deltaTime) {
 			);
 			rd.buildPassengers(g.model()->skeleton, g.animBlender()->finalXformData());
 			rd.activate(physicsWorld_);
+
+			// Apply death velocity so the ragdoll flies in the knockback direction.
+			const mu::Vec3 initVel = g.ragdollInitVelocity();
+			if (initVel.len2() > 0.01f) {
+				for (auto& rb : rd.bones()) {
+					if (rb.body) rb.body->setLinearVel(initVel);
+				}
+				g.setRagdollInitVelocity(mu::Vec3{});
+			}
+
+			// Per-bone random noise impulse, biased toward the death velocity direction.
+			// velDir * kNoiseBias + randomUnit * (1-kNoiseBias) gives a cosine-like
+			// distribution: closer to velDir is more probable, but still varied.
+			constexpr float kNoiseBias = 0.6f;
+			const mu::Vec3 velDir = (initVel.len2() > 0.01f)
+			    ? mu::Vec3(mu::NVec3(initVel)) : mu::Vec3{};
+			for (const auto& rb : rd.bones()) {
+				if (rb.noiseImpulse <= 0.f || !rb.body) continue;
+				mu::Vec3 rnd(rand(-1.f, 1.f), rand(-1.f, 1.f), rand(-1.f, 1.f));
+				if (rnd.len2() < 1e-8f) rnd = mu::Vec3(0.f, 0.f, 1.f);
+				mu::Vec3 dir = velDir * kNoiseBias + mu::Vec3(mu::NVec3(rnd)) * (1.f - kNoiseBias);
+				if (dir.len2() < 1e-8f) dir = mu::Vec3(0.f, 0.f, 1.f);
+				rb.body->applyImpulse(mu::Vec3(mu::NVec3(dir)) * rb.noiseImpulse, rb.body->pos());
+			}
 		};
 
 		auto syncRagdollToAnim = [&](Goblin& g) {

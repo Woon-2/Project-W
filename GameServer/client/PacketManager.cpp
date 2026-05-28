@@ -176,7 +176,7 @@ void PacketManager::handleSSkillStartPacket( byte* buffer, int32 len ) {
 
 void PacketManager::handleSSkillHitPacket( byte* buffer, int32 len ) {
 	auto pkt = reinterpret_cast<SSkillHitPacket*>(buffer);
-	INet::ClientApp::onlineGame()->onSkillHit( pkt->attackerId, pkt->targetId, pkt->newHp, pkt->skillAssetId );
+	INet::ClientApp::onlineGame()->onSkillHit( pkt->attackerId, pkt->targetId, pkt->newHp, pkt->skillAssetId, pkt->targetVelocity );
 }
 
 void PacketManager::handleSDebugHitboxPacket( byte* buffer, int32 len ) {
