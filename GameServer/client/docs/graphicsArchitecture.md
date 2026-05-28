@@ -170,19 +170,35 @@ Light::updateCSMCascades()
 
 **readback 타이밍 규칙:** `visibleFlags`는 Compact Pass에서 SRV로 소비되므로, CopyBufferRegion은 반드시 Compact Pass 완료 이후에 수행. Cull Pass 직후 복사 시 상태 전환 충돌.
 
-**GBuffer PID 최적화:**
-- 이전 프레임 `visibleFlags[i] == 0` (culled)인 경우 wvp/wv/wvNormal/worldNormal/boneData 계산 스킵
-- `rootBoneOffset`은 culled 여부 무관하게 순차 누산 (boneData 레이아웃 유지)
-- `boneData` static 배열 재사용: culled 슬롯은 이전 프레임 값 유지 (memcpy 스킵)
+**visibleFlags readback 용도:** `objectVisibility[]` 집계를 통한 **애니메이션 최적화 및 디버그 전용**.
+Draw call skip에는 사용하지 않는다 — GPU indirect draw가 직접 instance count를 결정하므로.
+
+**컬링 아키텍처 — compact event array 설계:**
+
+`Object::render()`는 항상 DrawEvent를 제출한다 (컬링 상태로 제출 차단 없음).
+DrawEvent 내 플래그로 컬링 상태를 전달하며, `sortDrawEvents()` 시점에 compact 배열로 분리:
+
+| compact 배열 | 조건 | 사용 패스 |
+|---|---|---|
+| `gBufferEvents_` | `!viewFrustumCulled` | gBuffer 패스 전체 (direct + Hi-Z indirect) |
+| `shadowEvents_` | `!shadowCulled` | shadow 패스 전체 |
+
+- `perInstanceData`는 항상 compact — culled 인스턴스는 삽입조차 안 됨 (zero-init placeholder 없음)
+- `firstInstanceOffset = gFirst - gBufferEvents_.begin()` (또는 `shadowEvents_`) — compact 배열 기준 절대 오프셋
+- Hi-Z 5단계 compute 및 indirect draw 도 `gBufferEvents_` 기준으로 동작
+  - `hiZPassUpdate()`: `perInstanceDataCull/Compact`, `lastDrawEventObjectIds` 크기 = `gBufferEvents_.size()`
+  - `hiZPassCompute()`: Cull/Compact dispatch = `gBufferEvents_.size()`, readback 복사 크기 동일
 
 **컬링 플래그 분리 (self-reinforcing culling 방지):**
 
-| 플래그 | 역할 |
-|---|---|
-| `Object::viewFrustumCulled` | `Object::render()` — DrawEvent 제출 차단 |
-| `Object::hiZCulled_` | `Object::update()` + AnimBlender — 물리/애니 연산 스킵 |
+| 플래그 | 위치 | 역할 |
+|---|---|---|
+| `viewFrustumCulled` | `DrawEvent` 내 | gBuffer compact 배열 필터링 기준 |
+| `shadowCulled` | `DrawEvent` 내 | shadow compact 배열 필터링 기준 |
+| `hiZCulled_` | `Object` 멤버 | `Object::update()` + AnimBlender — 물리/애니 연산 스킵 |
 
-Hi-Z culled 오브젝트도 `viewFrustumCulled`가 false인 한 DrawEvent를 계속 제출해야 함. DrawEvent를 차단하면 Hi-Z 파이프라인이 visibility 변화를 감지할 수 없어 영구 culled 상태(self-reinforcing) 발생.
+Hi-Z culled 오브젝트도 `viewFrustumCulled`가 false인 한 DrawEvent를 계속 제출해야 함.
+DrawEvent를 차단하면 Hi-Z 파이프라인이 visibility 변화를 감지할 수 없어 영구 culled 상태(self-reinforcing) 발생.
 
 **새 오브젝트를 Hi-Z culling에 참여시킬 때 필수 체크리스트:**
 1. `setupStage()`에서 `obj->setRenderObjectId(nextRenderObjId++)` 할당
