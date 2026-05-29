@@ -10,6 +10,27 @@ public static class ParticleSystemPropertyExporter
 {
     private const string MenuPath = "Tools/Effects/Export Selected Particle Systems To JSON";
 
+    // Only the serialized properties consumed by the C++ particle importer are exported.
+    // Dumping every visible property produced multi-megabyte files (10k+ properties),
+    // the vast majority of which are unused modules the importer never reads.
+    // A property is kept when its path equals one of these prefixes or starts with
+    // "<prefix>." (so a whole module subtree is captured by naming the module once).
+    private static readonly string[] ParticleSystemPropertyPrefixes =
+    {
+        "ShapeModule.arc.mode",
+        "VelocityModule",
+        "UVModule",
+        "TrailModule",
+    };
+
+    private static readonly string[] RendererPropertyPrefixes =
+    {
+        "m_CameraVelocityScale",
+        "m_VelocityScale",
+        "m_LengthScale",
+        "m_SortingFudge",
+    };
+
     [MenuItem(MenuPath)]
     private static void ExportSelected()
     {
@@ -85,9 +106,10 @@ public static class ParticleSystemPropertyExporter
             activeInHierarchy = ps.gameObject.activeInHierarchy,
             transform = CaptureTransform(ps.transform),
             summary = CaptureSummary(ps, renderer),
-            particleSystemSerializedProperties = DumpSerializedObject(ps),
+            particleSystemSerializedProperties = DumpSerializedObject(
+                ps, ParticleSystemPropertyPrefixes, keepModuleEnableFlags: true),
             rendererSerializedProperties = renderer != null
-                ? DumpSerializedObject(renderer)
+                ? DumpSerializedObject(renderer, RendererPropertyPrefixes, keepModuleEnableFlags: false)
                 : new List<SerializedPropertyExport>()
         };
     }
@@ -300,7 +322,8 @@ public static class ParticleSystemPropertyExporter
         return result;
     }
 
-    private static List<SerializedPropertyExport> DumpSerializedObject(UnityEngine.Object target)
+    private static List<SerializedPropertyExport> DumpSerializedObject(
+        UnityEngine.Object target, string[] keepPrefixes, bool keepModuleEnableFlags)
     {
         var result = new List<SerializedPropertyExport>();
 
@@ -313,6 +336,11 @@ public static class ParticleSystemPropertyExporter
         bool enterChildren = true;
         while (iterator.NextVisible(enterChildren))
         {
+            enterChildren = true;
+
+            if (!ShouldExportProperty(iterator, keepPrefixes, keepModuleEnableFlags))
+                continue;
+
             SerializedProperty prop = iterator.Copy();
 
             var exported = new SerializedPropertyExport
@@ -336,10 +364,38 @@ public static class ParticleSystemPropertyExporter
             }
 
             result.Add(exported);
-            enterChildren = true;
         }
 
         return result;
+    }
+
+    private static bool ShouldExportProperty(
+        SerializedProperty prop, string[] keepPrefixes, bool keepModuleEnableFlags)
+    {
+        string path = prop.propertyPath;
+
+        // Preserve every top-level module enable flag (e.g. "NoiseModule.enabled") so the
+        // importer's "active but unsupported module" diagnostic keeps working even though
+        // the rest of those modules are no longer exported.
+        if (keepModuleEnableFlags && prop.depth == 1 && path.EndsWith(".enabled", StringComparison.Ordinal))
+            return true;
+
+        foreach (string prefix in keepPrefixes)
+        {
+            if (path.Length == prefix.Length)
+            {
+                if (path == prefix)
+                    return true;
+            }
+            else if (path.Length > prefix.Length &&
+                     path[prefix.Length] == '.' &&
+                     path.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string GetSerializedPropertyValue(SerializedProperty prop)
