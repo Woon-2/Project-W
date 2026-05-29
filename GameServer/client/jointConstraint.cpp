@@ -461,11 +461,17 @@ void ConeTwistJoint::prepare(Seconds dt)
     cache_.linPseudoAccImp = {};
 
     // --- Joint-space relative orientation ---
-    // q_jointA = refOrientA^-1 * bodyA.orient  (current bodyA orientation in joint space)
-    const mu::NQuat qJointA = mulQ(~refOrientA_, bodyA_->orient());
-    const mu::NQuat qJointB = mulQ(~refOrientB_, bodyB_->orient());
-    // q_rel = qJointA^-1 * qJointB  (relative rotation in joint space)
-    const mu::NQuat qRel    = mulQ(~qJointA, qJointB);
+    // Measure the deviation of B-relative-to-A from its rest value, expressed in
+    // A's body frame.  Removing the rest offset as a *constant* (qRest) keeps the
+    // decomposition frame-consistent with the world-space twist/cone axes, which
+    // are obtained via bodyA.orient.rotate(). Using deltaA^-1 * deltaB instead
+    // (rest offsets baked into each body's delta) mixes the two rest frames when
+    // refOrientA != refOrientB and reports spurious violations as bodyA rotates
+    // away from its dress pose. This matches HingeJoint::prepare and Bullet's
+    // btConeTwistConstraint (constant frames factored outside the relative rotation).
+    const mu::NQuat qRest = mulQ(~refOrientA_, refOrientB_);             // rest B-rel-A, A frame (const)
+    const mu::NQuat qCur  = mulQ(~bodyA_->orient(), bodyB_->orient());   // current B-rel-A, A frame
+    const mu::NQuat qRel  = mulQ(~qRest, qCur);                          // deviation from rest (I at rest)
 
     // Twist axis is stored in bodyA/rest joint space. Ragdoll joints pass the
     // parent-to-child bone direction here instead of assuming every bone twists

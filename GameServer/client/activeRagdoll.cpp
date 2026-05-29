@@ -16,13 +16,18 @@ static mu::NQuat mulQ(mu::NQuat a, mu::NQuat b)
 // ---------------------------------------------------------------------------
 // computeOrientError  (file-scope helper)
 //
-// q = target * conj(current); negate if q.w < 0 (shortest-path guarantee).
-// Small-angle approximation: axis*angle ~= q.xyz * 2.
+// World-frame error rotation that drives current -> target: q = conj(current) * target,
+// i.e. R(current)^-1 * R(target) in row-vector convention (= Unity's
+// target * Inverse(current)). Its xyz axis lives in WORLD space, matching the
+// world-frame torque applied via applyTorqueImpulse(omega += tau * invInertiaWorld).
+// Using target * conj(current) would yield a body-frame axis and steer the torque
+// about the wrong world axis once the bone is significantly rotated.
+// Negate if q.w < 0 (shortest-path). Small-angle approximation: axis*angle ~= q.xyz * 2.
 // ---------------------------------------------------------------------------
 
 static mu::Vec3 MU_CALLCONV computeOrientError(mu::NQuat current, mu::NQuat target)
 {
-    mu::NQuat q = mulQ(target, ~current);
+    mu::NQuat q = mulQ(~current, target);
     if (q.w() < 0.f)
         q = -q;
     return mu::Vec3(q.x() * 2.f, q.y() * 2.f, q.z() * 2.f);

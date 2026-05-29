@@ -104,6 +104,12 @@ step(dt)
 **ConeTwistJoint**:
 - 3 translational rows + swing cone row (one-sided, `coneAccImp >= 0`)
 - twist row (bilateral, clamped to `[-twistLimit, +twistLimit]`)
+- **상대 회전 `qRel` 구성 (frame 일관성 핵심):**
+  - `qRest = ~refOrientA * refOrientB` — 정지 시 A body 프레임에서 본 B의 상대 orientation (상수)
+  - `qCur  = ~bodyA.orient * bodyB.orient` — 현재 A body 프레임에서 본 B의 상대 orientation
+  - `qRel  = ~qRest * qCur` — rest로부터의 편차 (정지 시 identity). **HingeJoint::prepare와 동일 구성**이며 Bullet `btConeTwistConstraint`처럼 rest 오프셋을 *상수*로 분리한다.
+  - ⚠️ `deltaA⁻¹·deltaB`(= `~(~refA·qA) · (~refB·qB)`) 형태로 쓰면 refA≠refB일 때 두 rest 프레임이 섞여, bodyA가 dress 자세에서 회전할수록 swing/twist 위반을 허위 보고하고 실제 twist가 swing으로 새어 twist 제한이 무력화된다. 반드시 위 `~qRest * qCur` 형태를 유지할 것.
+- twist/cone world 축은 `bodyA.orient.rotate(...)`로 변환 — `qRel`이 A body 프레임에 존재하므로 일관됨. twist 축 = `bodyA.orient.rotate(twistAxisLocalA)`(부모 body-local 본 방향), cone 축 = `bodyA.orient.rotate(swing.xyz)`(twist 축과 직교).
 - `swingTwistDecompose`: twist = q 성분 twistAxis 방향 투영, swing = q * conj(twist)
 - `coneHalfAngle` max = `pi * 0.85f` (gimbal lock 방지)
 
