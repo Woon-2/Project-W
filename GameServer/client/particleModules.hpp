@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "gfxUtil.hpp"   // ColorGradient, Texture, mu::Vec2/3/4/Mat4x4
 
 #include <vector>

@@ -1,4 +1,4 @@
-#ifndef room_server_event_hpp
+﻿#ifndef room_server_event_hpp
 #define room_server_event_hpp
 
 // Server-side event system.

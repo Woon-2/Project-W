@@ -1,4 +1,4 @@
-#ifndef __windRingPipeline_HPP
+﻿#ifndef __windRingPipeline_HPP
 #define __windRingPipeline_HPP
 
 #include "gfxUtil.hpp"

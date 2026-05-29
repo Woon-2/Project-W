@@ -1,4 +1,4 @@
-#ifndef __twoSidesPipeline_HPP
+﻿#ifndef __twoSidesPipeline_HPP
 #define __twoSidesPipeline_HPP
 
 #include "gfxUtil.hpp"

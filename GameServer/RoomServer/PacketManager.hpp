@@ -1,4 +1,4 @@
-#ifndef packet_manager_hpp
+﻿#ifndef packet_manager_hpp
 #define packet_manager_hpp
 
 class SendBuffer;

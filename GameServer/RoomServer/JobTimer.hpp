@@ -1,4 +1,4 @@
-#ifndef job_timer_hpp
+ï»¿#ifndef job_timer_hpp
 #define job_timer_hpp
 
 class Job;
@@ -21,7 +21,7 @@ struct TimerItem {
 	JobData* jobData;
 
 	bool operator<(const TimerItem& other) const {
-		return executionTime > other.executionTime; // ¿ì¼±¼øÀ§ Å¥¿¡¼­ °¡Àå ÀÛÀº executionTimeÀÌ ¸ÕÀú ³ª¿Àµµ·Ï
+		return executionTime > other.executionTime; // ìš°ì„ ìˆœìœ„ íì—ì„œ ê°€ì¥ ì‘ì€ executionTimeì´ ë¨¼ì € ë‚˜ì˜¤ë„ë¡
 	}
 };
 

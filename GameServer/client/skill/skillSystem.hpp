@@ -1,4 +1,4 @@
-#ifndef __skill_skillSystem_HPP
+﻿#ifndef __skill_skillSystem_HPP
 #define __skill_skillSystem_HPP
 
 // Runtime skill system.

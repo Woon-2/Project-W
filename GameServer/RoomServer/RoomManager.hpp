@@ -1,4 +1,4 @@
-#ifndef room_manager_hpp
+﻿#ifndef room_manager_hpp
 #define room_manager_hpp
 
 #include <vector>

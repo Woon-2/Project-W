@@ -1,4 +1,4 @@
-#include "rspch.hpp"
+ï»¿#include "rspch.hpp"
 #include "JobTimer.hpp"
 #include "Job.hpp"
 #include "RoomManager.hpp"
@@ -19,7 +19,7 @@ void JobTimer::addJob(Milliseconds delay, uint32 roomId, Job* job) {
 
 void JobTimer::distribute() {
 	//if(distributing_.exchange(true) == true) {
-	//	return; // ÀÌ¹Ì ºĞ¹è ÁßÀÎ °æ¿ì, Áßº¹ ½ÇÇà ¹æÁö
+	//	return; // ì´ë¯¸ ë¶„ë°° ì¤‘ì¸ ê²½ìš°, ì¤‘ë³µ ì‹¤í–‰ ë°©ì§€
 	//}
 
 	std::vector<TimerItem> readyItems;
@@ -30,7 +30,7 @@ void JobTimer::distribute() {
 		while (!timerQueue_.empty()) {
 			const TimerItem& item = timerQueue_.top();
 			if (item.executionTime > now) {
-				break; // ¾ÆÁ÷ ½ÇÇà ½Ã°£ÀÌ µÇÁö ¾ÊÀº ÀÛ¾÷ÀÌ ÀÖÀ¸¹Ç·Î Á¾·á
+				break; // ì•„ì§ ì‹¤í–‰ ì‹œê°„ì´ ë˜ì§€ ì•Šì€ ì‘ì—…ì´ ìˆìœ¼ë¯€ë¡œ ì¢…ë£Œ
 			}
 
 			readyItems.push_back(item);
@@ -43,7 +43,7 @@ void JobTimer::distribute() {
 			room->pushJob(item.jobData->job);
 		}
 		else {
-			// ¹æÀÌ Á¸ÀçÇÏÁö ¾Ê´Â °æ¿ì, ÀÛ¾÷À» ½ÇÇàÇÒ ¼ö ¾øÀ¸¹Ç·Î JobÀ» ¹İÈ¯
+			// ë°©ì´ ì¡´ì¬í•˜ì§€ ì•ŠëŠ” ê²½ìš°, ì‘ì—…ì„ ì‹¤í–‰í•  ìˆ˜ ì—†ìœ¼ë¯€ë¡œ Jobì„ ë°˜í™˜
 			ObjectPool<Job>::push(item.jobData->job);
 		}
 

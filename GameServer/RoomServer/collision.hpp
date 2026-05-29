@@ -1,4 +1,4 @@
-#ifndef room_server_collision_hpp
+﻿#ifndef room_server_collision_hpp
 #define room_server_collision_hpp
 
 struct AABB {

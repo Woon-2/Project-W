@@ -1,4 +1,4 @@
-#ifndef __skill_skillCompiler_HPP
+﻿#ifndef __skill_skillCompiler_HPP
 #define __skill_skillCompiler_HPP
 
 // Skill compiler: converts Lua skill definition files into SkillAsset instances.

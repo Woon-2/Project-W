@@ -1,4 +1,4 @@
-#ifndef __skill_skillTypes_HPP
+﻿#ifndef __skill_skillTypes_HPP
 #define __skill_skillTypes_HPP
 
 // Skill system data types: immutable asset structures and timeline event definitions.

@@ -1,4 +1,4 @@
-#ifndef __particleEffect_HPP
+﻿#ifndef __particleEffect_HPP
 #define __particleEffect_HPP
 
 #include "particleSystem.hpp"

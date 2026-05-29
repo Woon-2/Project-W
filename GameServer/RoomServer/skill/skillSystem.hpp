@@ -1,4 +1,4 @@
-#ifndef __rs_skill_skillSystem_HPP
+﻿#ifndef __rs_skill_skillSystem_HPP
 #define __rs_skill_skillSystem_HPP
 
 // Server-side skill system.

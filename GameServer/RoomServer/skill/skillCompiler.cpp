@@ -1,4 +1,4 @@
-#include "rspch.hpp"
+﻿#include "rspch.hpp"
 #include "skillCompiler.hpp"
 
 static AttachType parseAttachType(std::string_view s) {

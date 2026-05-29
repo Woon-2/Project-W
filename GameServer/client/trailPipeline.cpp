@@ -1,4 +1,4 @@
-#include "pch.hpp"
+﻿#include "pch.hpp"
 #include "trailPipeline.hpp"
 #include "shader.hpp"
 #include "errorHandling.hpp"

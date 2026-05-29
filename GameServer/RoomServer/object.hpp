@@ -1,4 +1,4 @@
-#ifndef room_server_object_hpp
+﻿#ifndef room_server_object_hpp
 #define room_server_object_hpp
 
 #include "physicsWorld.hpp"

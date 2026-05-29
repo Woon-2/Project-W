@@ -1,4 +1,4 @@
-#ifndef room_server_contactConstraint_hpp
+﻿#ifndef room_server_contactConstraint_hpp
 #define room_server_contactConstraint_hpp
 
 #include "constraint.hpp"

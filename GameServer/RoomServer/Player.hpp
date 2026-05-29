@@ -1,4 +1,4 @@
-#ifndef player_hpp
+﻿#ifndef player_hpp
 #define player_hpp
 
 class GameSession;
