@@ -16,6 +16,7 @@
 #include "smokeBlendCGPipeline.hpp"
 #include "blendCGMeshPipeline.hpp"
 #include "piercingMeshPipeline.hpp"
+#include "piercingSlashMeshPipeline.hpp"
 #include "swordSlashPipeline.hpp"
 #include "twoSidesPipeline.hpp"
 #include "trailPipeline.hpp"
@@ -212,6 +213,10 @@ public:
 	void addCameraData( const PiercingMeshPipeline::CameraData& cameraData );
 	// 프레임 데이터를 입력한다.
 	void addFrameData( const PiercingMeshPipeline::FrameData& frameData );
+	// PiercingSlashMeshPipeline: per-pipeline draw/camera/frame submissions.
+	void addDrawEvent( const PiercingSlashMeshPipeline::DrawEvent& drawEvent );
+	void addCameraData( const PiercingSlashMeshPipeline::CameraData& cameraData );
+	void addFrameData( const PiercingSlashMeshPipeline::FrameData& frameData );
 	// 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 	void addDrawEvent( const SwordSlashPipeline::DrawEvent& drawEvent );
 	// 카메라 데이터를 입력한다.
@@ -427,6 +432,11 @@ private:
 	PiercingMeshPipeline::Resources              resourcesPiercingMeshPipeline_{};
 	PiercingMeshPipeline::CameraData             cameraDataPiercingMeshPipeline_{};
 	PiercingMeshPipeline::FrameData              frameDataPiercingMeshPipeline_{};
+	// Piercing Slash Mesh Pipeline
+	std::vector<PiercingSlashMeshPipeline::DrawEvent> drawEventsPiercingSlashMeshPipeline_{};
+	PiercingSlashMeshPipeline::Resources              resourcesPiercingSlashMeshPipeline_{};
+	PiercingSlashMeshPipeline::CameraData             cameraDataPiercingSlashMeshPipeline_{};
+	PiercingSlashMeshPipeline::FrameData              frameDataPiercingSlashMeshPipeline_{};
 	// Sword Slash Pipeline
 	std::vector<SwordSlashPipeline::DrawEvent> drawEventsSwordSlashPipeline_{};
 	SwordSlashPipeline::Resources              resourcesSwordSlashPipeline_{};

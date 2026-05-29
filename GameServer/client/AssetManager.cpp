@@ -409,6 +409,55 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 	} );
 
 	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "SlashFire",
+		.texturePath     = "../resources/Textures/T_VFX_Slash_Fire.dds",
+		.pDest           = &slashFireTex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "SlashMask",
+		.texturePath     = "../resources/Textures/T_VFX_Slash_Mask_01.dds",
+		.pDest           = &slashMaskTex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "GradientMirrorVertical",
+		.texturePath     = "../resources/Textures/T_VFX_Linear_Gradient_Mirror_Vertical_01.dds",
+		.pDest           = &gradientMirrorVerticalTex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "SlashGeneric",
+		.texturePath     = "../resources/Textures/T_VFX_Slash_Generic.dds",
+		.pDest           = &slashGenericTex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
+		.name            = "SlashCircleMask",
+		.texturePath     = "../resources/Textures/T_VFX_Slash_Circle_Mask_01.dds",
+		.pDest           = &slashCircleMaskTex_,
+		.pTexHashMap     = &texHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	} );
+
+	gfx.addRequestMeshBinLoad( RequestMeshBinLoad{
+		.meshPath    = "../resources/effects/SM_VFX_Slash_01_HD.meshbin",
+		.pTexHashMap = &texHashMap_,
+		.pDestMesh   = &meshVfxSlash01HD_,
+		.pDestTex    = nullptr
+	} );
+
+	gfx.addRequestTextureLoad( RequestTextureLoad{
 		.name            = "TexWindRing",
 		.texturePath     = "../resources/textures/Tex_WindRing.dds",
 		.pDest           = &texWindRing_,
@@ -563,6 +612,34 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 	piercingMaterial_.emissiveNoiseTex   = &vfxNoise01Tex_;    // _Emissive_Noise_Texture
 	piercingMaterial_.emissiveMaskTex    = &piercingFireTex_;  // _Texture0
 	piercingMaterial_.opacityMaskTex     = nullptr;            // _Texture1 (null in material)
+
+	// M_VFX_Slash_Fire — Vefects Slash material (SH_VFX_Vefects_Slash_BIRP_New).
+	piercingSlashMaterial_ = ps::MatPiercingSlash{};
+	if (!loadPiercingSlashMaterialMetadata("../resources/effects/M_VFX_Slash_Fire.json", piercingSlashMaterial_)) {
+		gSharedLog << "[PiercingSlash Material] Warning: ../resources/effects/M_VFX_Slash_Fire.json 로드 실패. 기본값을 사용합니다.\n";
+	}
+	piercingSlashMaterial_.slashTex            = &slashFireTex_;               // _Slash_Texture
+	piercingSlashMaterial_.slashNoiseTex       = &vfxNoise02Tex_;              // _Slash_Noise_Texture
+	piercingSlashMaterial_.emissiveSlashTex    = &slashFireTex_;               // _Emissive_Slash_Texture
+	piercingSlashMaterial_.emissiveDissolveTex = &vfxNoise02Tex_;              // _Emissive_Dissolve_Texture
+	piercingSlashMaterial_.distortionNoiseTex  = &vfxNoise02Tex_;              // _Distortion_Noise_Texture
+	piercingSlashMaterial_.colorNoiseTex       = &vfxNoise01Tex_;              // _Color_Noise_Texture
+	piercingSlashMaterial_.maskTex             = &slashMaskTex_;               // _Mask
+	piercingSlashMaterial_.cutoutTex           = &gradientMirrorVerticalTex_;  // _Cutout
+
+	// M_VFX_Slash_Circle_Fire — Vefects Slash material (Slash Circle variant).
+	piercingCircleSlashMaterial_ = ps::MatPiercingSlash{};
+	if (!loadPiercingSlashMaterialMetadata("../resources/effects/M_VFX_Slash_Circle_Fire.json", piercingCircleSlashMaterial_)) {
+		gSharedLog << "[PiercingCircleSlash Material] Warning: ../resources/effects/M_VFX_Slash_Circle_Fire.json 로드 실패. 기본값을 사용합니다.\n";
+	}
+	piercingCircleSlashMaterial_.slashTex            = &slashGenericTex_;            // _Slash_Texture (Generic)
+	piercingCircleSlashMaterial_.slashNoiseTex       = &vfxNoise02Tex_;              // _Slash_Noise_Texture
+	piercingCircleSlashMaterial_.emissiveSlashTex    = &slashGenericTex_;            // _Emissive_Slash_Texture
+	piercingCircleSlashMaterial_.emissiveDissolveTex = &vfxNoise02Tex_;              // _Emissive_Dissolve_Texture
+	piercingCircleSlashMaterial_.distortionNoiseTex  = &vfxNoise02Tex_;              // _Distortion_Noise_Texture
+	piercingCircleSlashMaterial_.colorNoiseTex       = &vfxNoise01Tex_;              // _Color_Noise_Texture
+	piercingCircleSlashMaterial_.maskTex             = &slashCircleMaskTex_;         // _Mask (Circle Mask)
+	piercingCircleSlashMaterial_.cutoutTex           = &gradientMirrorVerticalTex_;  // _Cutout
 }
 
 void AssetManager::setupBakedAnimationIds() {

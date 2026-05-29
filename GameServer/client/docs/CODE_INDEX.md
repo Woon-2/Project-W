@@ -565,15 +565,17 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 - `Mesh` + `MatSwordSlash` — `SwordSlashPipeline::DrawEvent` 제출 (동일 transform 계산, 텍스처 4종 + FX 파라미터 포함)
 - `Mesh` + `MatWindRing` — `WindRingPipeline::DrawEvent` 제출 (NORMAL 입력 + Fresnel edge fade)
 - `Mesh` + `MatPiercing` — `PiercingMeshPipeline::DrawEvent` 제출 (Custom1.xy→uv2.z/.w dissolve, 3중 노이즈 + distortion)
+- `Mesh` + `MatPiercingSlash` — `PiercingSlashMeshPipeline::DrawEvent` 제출 (Vefects Slash: 회전 Cutout + AdditiveLerp emission)
 
 **AnyMat / Material 타입** (`particleModules.hpp`):
-- `using AnyMat = std::variant<MatUnlit, MatSwordSlash, MatSmokeBlendCG, MatTwoSides, MatWindRing, MatPiercing>` — per-shader 독립 구조체 + variant
+- `using AnyMat = std::variant<MatUnlit, MatSwordSlash, MatSmokeBlendCG, MatTwoSides, MatWindRing, MatPiercing, MatPiercingSlash>` — per-shader 독립 구조체 + variant
 - `MatUnlit` — BillboardPipeline / MeshParticlePipeline용: `mainTex`, `additive`
 - `MatSwordSlash` — SwordSlashPipeline용: `mainTex`, `emissionTex`, `dissolveTex`, `flowTex`, 스크롤/Flow/디졸브/Emission FX 파라미터
 - `MatSmokeBlendCG` — SmokeBlendCGPipeline용: `mainTex`, 스프라이트 시트 애니메이션
 - `MatTwoSides` — TwoSidesPipeline용: `mainTex`, `maskTex`, `noiseTex`, `emission`, `backFresnel`, UV 타일링 3종
 - `MatWindRing` — WindRingPipeline용: `mainTex`, `edgeFadePower(2f)`, `edgeFadeStrength(1f)`, `color` — Fresnel 엣지 소프트닝 링 메시용
 - `MatPiercing` — PiercingMeshPipeline용 (Vefects Piercing): 텍스처 8종(colorNoise/piercing/piercingNoise/distortionNoise/distortionMask/emissiveNoise/emissiveMask/opacityMask), color1/2/emissive, scale·speed 4쌍, ST 2종, colorBoost/piercingNoiseIntensity/distortionIntensity/emissiveIntensity/opacityBoost. 머테리얼 로더: `piercingMaterial.cpp::loadPiercingMaterialMetadata` (`shaderProperties` 파싱)
+- `MatPiercingSlash` — PiercingSlashMeshPipeline용 (Vefects Slash): 텍스처 8종(slash/slashNoise/emissiveSlash/emissiveDissolve/distortionNoise/colorNoise/mask/cutout), color1/2/emissive, scale·speed 4쌍, maskST, cutoutOffset, slashScale·slashSpeed·emissiveSlashScale·emissiveSlashSpeed·slashNoiseIntensity·distortionIntensity·colorBoost·emissiveIntensity·opacityBoost·additiveLerp·cutoutErosion·cutoutErosionSmoothness·cutoutRotation. 머테리얼 로더: `piercingSlashMaterial.cpp::loadPiercingSlashMaterialMetadata`
 - `RendererModule::mat` (`AnyMat`) — `render()` 내 `std::visit`으로 파이프라인 디스패치
 
 **SwordSlashPipeline** (`swordSlashPipeline.hpp` / `swordSlashPipeline.cpp` / `swordSlash.hlsl`):
@@ -652,19 +654,27 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `swordSlashComboEffect_` | 콤보 검기 효과 |
 | `slashWaveEffect_` | 슬래시 웨이브 — HalfTrail 메시 + TwoSidesPipeline (MatTwoSides) |
 | `piercingEffect_` | Piercing 슬래시 — `SM_VFX_Projectile_02` 메시 + PiercingMeshPipeline (MatPiercing), `PS_VFX_Piercing_ParticleSystems.json` / `M_VFX_Piercing_Fire.json` |
+| `piercingSlashEffect_` | PiercingSlash — `SM_VFX_Slash_01_HD` 메시 + PiercingSlashMeshPipeline (MatPiercingSlash), `PS_VFX_Slash_ParticleSystems.json` / `M_VFX_Slash_Fire.json` |
 | `dustParticleSystem_` | 발 착지 흙먼지 빌보드 파티클 |
 | `aoESlashGreenEffect_` | AoE 슬래시 그린 이펙트 (Circle2 + Slash, Billboard) |
 | `energyExplosionArrowEffect_` | 에너지 발사체 복합 이펙트. 4 시스템: [0] Arrow StretchedBillboard (`Arrow_ParticleSystems.json` → `EnergyExplosionArrowTex`), [1] Charge (8x6 Additive, sub-emitter on Arrow Birth), [2] Hit (8x6 Additive, sub-emitter on Arrow Death), [3] HitWhiteBG (8x6 Multiply, sub-emitter on Arrow Death) |
 | `tornadoEffect_` | 토네이도 연속 이펙트. 4 시스템 (`Par_TornadoContinous_ParticleSystems.json`): [0] 메인 링 (`Par_TornadoContinous`, MatWindRing), [1] 하단 링 (`/Bottom`, MatWindRing), [2] 링 라이즈 (`/RingRise`, MatWindRing), [3] 버스트 점 (`/Par_BurstParticles`, MatUnlit Billboard) |
 
 **Camera::updateGFX() 등록 파이프라인 (`camera.cpp`):**
-- PBRPipeline, PBRSkinnedPipeline, SkyboxPipeline, BVPipeline, BillboardPipeline, **TerrainPipeline**, MeshParticlePipeline, SmokeBlendCGPipeline, BlendCGMeshPipeline, **PiercingMeshPipeline**, SwordSlashPipeline, **TwoSidesPipeline**, **TrailPipeline**, **WindRingPipeline** CameraData 자기등록
+- PBRPipeline, PBRSkinnedPipeline, SkyboxPipeline, BVPipeline, BillboardPipeline, **TerrainPipeline**, MeshParticlePipeline, SmokeBlendCGPipeline, BlendCGMeshPipeline, **PiercingMeshPipeline**, **PiercingSlashMeshPipeline**, SwordSlashPipeline, **TwoSidesPipeline**, **TrailPipeline**, **WindRingPipeline** CameraData 자기등록
 
 **PiercingMeshPipeline** (`piercingMeshPipeline.hpp` / `.cpp` / `piercing.hlsl`):
 - Vefects `SH_VFX_Vefects_Piercing_BIRP_New` 포팅. 메시 모드 전용, CULL_NONE(양면), SrcAlpha/InvSrcAlpha, depth read-only(LEqual).
 - VB: Position/UV/Color (BlendCGMeshPipeline와 동일 입력 레이아웃). 셰이더 구조체 `PiercingMeshShader` (`PerInstanceData`=BlendCGMesh 재사용, `PerFrameData`=SmokeBlendCG 재사용, `PerDrawcallData` 신규).
 - Custom1.x→uv2.z(alpha reveal), Custom1.y→uv2.w(emissive reveal). PerInstanceData가 custom1을 PS까지 전달.
 - 텍스처: colorNoise/emissiveNoise=T_VFX_Noises_01, piercingNoise/distortionNoise=T_VFX_Noises_02, piercing/emissiveMask=T_VFX_Piercing_Fire, distortionMask=T_VFX_Piercing_Generic_Gradient_Mask_01. `_Texture1`(opacity mask)는 머테리얼에서 null(=white) 폴백.
+
+**PiercingSlashMeshPipeline** (`piercingSlashMeshPipeline.hpp` / `.cpp` / `piercingSlash.hlsl`):
+- Vefects `SH_VFX_Vefects_Slash_BIRP_New` 포팅. 메시 모드 전용, CULL_NONE(양면), SrcAlpha/InvSrcAlpha, depth read-only(LEqual).
+- Piercing과 구분되는 핵심 차이: (1) Slash/EmissiveSlash 텍스처가 각자 `scale·speed` 1D 흐름(uv * (scale, 1) + time * (speed, 0)), (2) 회전 가능 Cutout 텍스처(`_CutoutRotation`/`_CutoutOffset`/`_CutoutErosion`/`_CutoutErosionSmoothness` smoothstep erosion), (3) AdditiveLerp로 pre-multiplied emission과 blend, (4) distortion mask 없음.
+- VB: Position/UV/Color. 셰이더 구조체 `PiercingSlashMeshShader` (`PerInstanceData`=BlendCGMesh 재사용, `PerFrameData`=SmokeBlendCG 재사용, `PerDrawcallData` 신규: idxSlash/idxSlashNoise/idxEmissiveSlash/idxEmissiveDissolve/idxDistortionNoise/idxColorNoise/idxMask/idxCutout + 스칼라 13 + scaleSpeed 4쌍 + maskST + cutoutOffset).
+- Custom1.x→uv2.z(alpha reveal), Custom1.y→uv2.w(emissive reveal). Piercing과 동일 매핑.
+- 텍스처: slash/emissiveSlash=T_VFX_Slash_Fire, slashNoise/emissiveDissolve/distortionNoise=T_VFX_Noises_02, colorNoise=T_VFX_Noises_01, mask=T_VFX_Slash_Mask_01, cutout=T_VFX_Linear_Gradient_Mirror_Vertical_01.
 
 **Camera Spring Arm 시스템 (`camera.hpp` / `camera.cpp`):**
 

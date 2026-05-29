@@ -1,0 +1,2676 @@
+{
+    "materialName": "M_VFX_Slash_Circle_Fire",
+    "materialAssetPath": "Assets/Vefects/Stylized VFX/Stylized VFX Shuriken/Skills/Slashes Piercing/Fire/Materials/M_VFX_Slash_Circle_Fire.mat",
+    "shaderName": "Vefects/SH_VFX_Vefects_Slash_BIRP_New",
+    "shaderAssetPath": "Assets/Vefects/Stylized VFX/Stylized VFX Shuriken/Shared/Shaders/SH_VFX_Vefects_Slash_BIRP_New.shader",
+    "renderQueue": 3000,
+    "rawRenderQueue": -1,
+    "enableInstancing": true,
+    "doubleSidedGI": false,
+    "globalIlluminationFlags": "None",
+    "shaderKeywords": [],
+    "tags": [
+        {
+            "name": "Queue",
+            "value": "Transparent+0"
+        },
+        {
+            "name": "RenderType",
+            "value": "Transparent"
+        }
+    ],
+    "shaderProperties": [
+        {
+            "index": 0,
+            "name": "_Slash_Texture",
+            "displayName": "Slash Texture",
+            "type": "TexEnv",
+            "flags": "",
+            "attributes": [],
+            "value": "T_VFX_Slash_Generic",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "T_VFX_Slash_Generic",
+                "assetPath": "Assets/Vefects/Stylized VFX/Stylized VFX Shuriken/Skills/Slashes Piercing/Generic/Textures/T_VFX_Slash_Generic.png",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "Repeat",
+                "wrapModeV": "Repeat",
+                "wrapModeW": "Repeat",
+                "filterMode": "Bilinear",
+                "anisoLevel": 1,
+                "width": 256,
+                "height": 256
+            }
+        },
+        {
+            "index": 1,
+            "name": "_Slash_Scale",
+            "displayName": "Slash Scale",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "5",
+            "floatValue": 5.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 2,
+            "name": "_Slash_Speed",
+            "displayName": "Slash Speed",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "-0.7",
+            "floatValue": -0.699999988079071,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 3,
+            "name": "_Slash_Noise_Texture",
+            "displayName": "Slash Noise Texture",
+            "type": "TexEnv",
+            "flags": "",
+            "attributes": [],
+            "value": "T_VFX_Noises_02",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "T_VFX_Noises_02",
+                "assetPath": "Assets/Vefects/Stylized VFX/Stylized VFX Shuriken/Shared/Textures/T_VFX_Noises_02.png",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "Repeat",
+                "wrapModeV": "Repeat",
+                "wrapModeW": "Repeat",
+                "filterMode": "Bilinear",
+                "anisoLevel": 1,
+                "width": 256,
+                "height": 256
+            }
+        },
+        {
+            "index": 4,
+            "name": "_Slash_Noise_Scale",
+            "displayName": "Slash Noise Scale",
+            "type": "Vector",
+            "flags": "",
+            "attributes": [],
+            "value": "(2, 1, 0, 0)",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 2.0,
+                "y": 1.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 5,
+            "name": "_Slash_Noise_Speed",
+            "displayName": "Slash Noise Speed",
+            "type": "Vector",
+            "flags": "",
+            "attributes": [],
+            "value": "(1, -0.4, 0, 0)",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 1.0,
+                "y": -0.4000000059604645,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 6,
+            "name": "_Slash_Noise_Intensity",
+            "displayName": "Slash Noise Intensity",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "0.7",
+            "floatValue": 0.699999988079071,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 7,
+            "name": "_Emissive_Slash_Texture",
+            "displayName": "Emissive Slash Texture",
+            "type": "TexEnv",
+            "flags": "",
+            "attributes": [],
+            "value": "T_VFX_Slash_Generic",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "T_VFX_Slash_Generic",
+                "assetPath": "Assets/Vefects/Stylized VFX/Stylized VFX Shuriken/Skills/Slashes Piercing/Generic/Textures/T_VFX_Slash_Generic.png",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "Repeat",
+                "wrapModeV": "Repeat",
+                "wrapModeW": "Repeat",
+                "filterMode": "Bilinear",
+                "anisoLevel": 1,
+                "width": 256,
+                "height": 256
+            }
+        },
+        {
+            "index": 8,
+            "name": "_Emissive_Slash_Scale",
+            "displayName": "Emissive Slash Scale",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "1",
+            "floatValue": 1.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 9,
+            "name": "_Emissive_Slash_Speed",
+            "displayName": "Emissive Slash Speed",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "1",
+            "floatValue": 1.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 10,
+            "name": "_Emissive_Intensity",
+            "displayName": "Emissive Intensity",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "30",
+            "floatValue": 30.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 11,
+            "name": "_Emissive_Dissolve_Texture",
+            "displayName": "Emissive Dissolve Texture",
+            "type": "TexEnv",
+            "flags": "",
+            "attributes": [],
+            "value": "T_VFX_Noises_02",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "T_VFX_Noises_02",
+                "assetPath": "Assets/Vefects/Stylized VFX/Stylized VFX Shuriken/Shared/Textures/T_VFX_Noises_02.png",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "Repeat",
+                "wrapModeV": "Repeat",
+                "wrapModeW": "Repeat",
+                "filterMode": "Bilinear",
+                "anisoLevel": 1,
+                "width": 256,
+                "height": 256
+            }
+        },
+        {
+            "index": 12,
+            "name": "_Emissive_Dissolve_Scale",
+            "displayName": "Emissive Dissolve Scale",
+            "type": "Vector",
+            "flags": "",
+            "attributes": [],
+            "value": "(1, 1, 0, 0)",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 13,
+            "name": "_Emissive_Dissolve_Speed",
+            "displayName": "Emissive Dissolve Speed",
+            "type": "Vector",
+            "flags": "",
+            "attributes": [],
+            "value": "(1, 1, 0, 0)",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 14,
+            "name": "_Distortion_Noise_Texture",
+            "displayName": "Distortion Noise Texture",
+            "type": "TexEnv",
+            "flags": "",
+            "attributes": [],
+            "value": "T_VFX_Noises_02",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "T_VFX_Noises_02",
+                "assetPath": "Assets/Vefects/Stylized VFX/Stylized VFX Shuriken/Shared/Textures/T_VFX_Noises_02.png",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "Repeat",
+                "wrapModeV": "Repeat",
+                "wrapModeW": "Repeat",
+                "filterMode": "Bilinear",
+                "anisoLevel": 1,
+                "width": 256,
+                "height": 256
+            }
+        },
+        {
+            "index": 15,
+            "name": "_Distortion_Noise_Scale",
+            "displayName": "Distortion Noise Scale",
+            "type": "Vector",
+            "flags": "",
+            "attributes": [],
+            "value": "(1, 1.2, 0, 0)",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 1.0,
+                "y": 1.2000000476837159,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 16,
+            "name": "_Distortion_Noise_Speed",
+            "displayName": "Distortion Noise Speed",
+            "type": "Vector",
+            "flags": "",
+            "attributes": [],
+            "value": "(0.7, 0.5, 0, 0)",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.699999988079071,
+                "y": 0.5,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 17,
+            "name": "_Distortion_Intensity",
+            "displayName": "Distortion Intensity",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "2",
+            "floatValue": 2.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 18,
+            "name": "_Color_Noise_Texture",
+            "displayName": "Color Noise Texture",
+            "type": "TexEnv",
+            "flags": "",
+            "attributes": [],
+            "value": "T_VFX_Noises_01",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "T_VFX_Noises_01",
+                "assetPath": "Assets/Vefects/Stylized VFX/Stylized VFX Shuriken/Shared/Textures/T_VFX_Noises_01.png",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "Repeat",
+                "wrapModeV": "Repeat",
+                "wrapModeW": "Repeat",
+                "filterMode": "Bilinear",
+                "anisoLevel": 1,
+                "width": 256,
+                "height": 256
+            }
+        },
+        {
+            "index": 19,
+            "name": "_ColorNoise_Scale",
+            "displayName": "Color Noise Scale",
+            "type": "Vector",
+            "flags": "",
+            "attributes": [],
+            "value": "(2, 0.8, 0, 0)",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 2.0,
+                "y": 0.800000011920929,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 20,
+            "name": "_ColorNoise_Speed",
+            "displayName": "Color Noise Speed",
+            "type": "Vector",
+            "flags": "",
+            "attributes": [],
+            "value": "(-0.4, 0.1, 0, 0)",
+            "floatValue": 0.0,
+            "vector": {
+                "x": -0.4000000059604645,
+                "y": 0.10000000149011612,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 21,
+            "name": "_Color_Boost",
+            "displayName": "Color Boost",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "1.4",
+            "floatValue": 1.399999976158142,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 22,
+            "name": "_Mask",
+            "displayName": "Mask",
+            "type": "TexEnv",
+            "flags": "",
+            "attributes": [],
+            "value": "T_VFX_Slash_Circle_Mask_01",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "T_VFX_Slash_Circle_Mask_01",
+                "assetPath": "Assets/Vefects/Stylized VFX/Stylized VFX Shuriken/Shared/Textures/T_VFX_Slash_Circle_Mask_01.png",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "Clamp",
+                "wrapModeV": "Clamp",
+                "wrapModeW": "Clamp",
+                "filterMode": "Bilinear",
+                "anisoLevel": 1,
+                "width": 256,
+                "height": 256
+            }
+        },
+        {
+            "index": 23,
+            "name": "_Opacity_Boost",
+            "displayName": "Opacity Boost",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "1",
+            "floatValue": 1.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 24,
+            "name": "_Color_1",
+            "displayName": "Color 01",
+            "type": "Color",
+            "flags": "",
+            "attributes": [],
+            "value": "(0.496, 0, 0.0248000938, 0)",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.4959999918937683,
+                "g": 0.0,
+                "b": 0.024800093844532968,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 25,
+            "name": "_Color_2",
+            "displayName": "Color 02",
+            "type": "Color",
+            "flags": "",
+            "attributes": [],
+            "value": "(1, 0.122750022, 0.04300002, 0)",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 1.0,
+                "g": 0.12275002151727677,
+                "b": 0.04300002008676529,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 26,
+            "name": "_Emissive_Color",
+            "displayName": "Emissive Color",
+            "type": "Color",
+            "flags": "",
+            "attributes": [],
+            "value": "(1, 0.139959455, 0.0299999714, 0)",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 1.0,
+                "g": 0.139959454536438,
+                "b": 0.029999971389770509,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 27,
+            "name": "_AdditiveLerp",
+            "displayName": "Additive Lerp",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "0",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 28,
+            "name": "_Cutout",
+            "displayName": "Cutout",
+            "type": "TexEnv",
+            "flags": "",
+            "attributes": [],
+            "value": "T_VFX_Linear_Gradient_Mirror_Vertical_01",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "T_VFX_Linear_Gradient_Mirror_Vertical_01",
+                "assetPath": "Assets/Vefects/Stylized VFX/Stylized VFX Shuriken/Shared/Textures/T_VFX_Linear_Gradient_Mirror_Vertical_01.tga",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "Clamp",
+                "wrapModeV": "Repeat",
+                "wrapModeW": "Repeat",
+                "filterMode": "Bilinear",
+                "anisoLevel": 1,
+                "width": 256,
+                "height": 256
+            }
+        },
+        {
+            "index": 29,
+            "name": "_CutoutErosion",
+            "displayName": "Cutout Erosion",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "0",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 30,
+            "name": "_CutoutErosionSmoothness",
+            "displayName": "Cutout Erosion Smoothness",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "0",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 31,
+            "name": "_CutoutRotation",
+            "displayName": "Cutout Rotation",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "0",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 32,
+            "name": "_CutoutOffset",
+            "displayName": "Cutout Offset",
+            "type": "Vector",
+            "flags": "",
+            "attributes": [],
+            "value": "(0, 0, 0, 0)",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 33,
+            "name": "_Cull",
+            "displayName": "Cull",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "0",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 34,
+            "name": "_Src",
+            "displayName": "Src",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "5",
+            "floatValue": 5.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 35,
+            "name": "_Dst",
+            "displayName": "Dst",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "10",
+            "floatValue": 10.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 36,
+            "name": "_ZWrite",
+            "displayName": "ZWrite",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "0",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 37,
+            "name": "_ZTest",
+            "displayName": "ZTest",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "2",
+            "floatValue": 2.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 38,
+            "name": "_texcoord",
+            "displayName": "",
+            "type": "TexEnv",
+            "flags": "",
+            "attributes": [],
+            "value": "<null>",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 39,
+            "name": "_texcoord2",
+            "displayName": "",
+            "type": "TexEnv",
+            "flags": "",
+            "attributes": [],
+            "value": "<null>",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        },
+        {
+            "index": 40,
+            "name": "__dirty",
+            "displayName": "",
+            "type": "Float",
+            "flags": "",
+            "attributes": [],
+            "value": "0",
+            "floatValue": 0.0,
+            "vector": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "w": 0.0
+            },
+            "color": {
+                "r": 0.0,
+                "g": 0.0,
+                "b": 0.0,
+                "a": 0.0
+            },
+            "texture": {
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                },
+                "wrapModeU": "",
+                "wrapModeV": "",
+                "wrapModeW": "",
+                "filterMode": "",
+                "anisoLevel": 0,
+                "width": 0,
+                "height": 0
+            }
+        }
+    ],
+    "savedProperties": {
+        "texEnvs": [
+            {
+                "name": "_BumpMap",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_ColorNoiseTexture",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_Color_Noise_Texture",
+                "textureName": "T_VFX_Noises_01",
+                "assetPath": "Assets/Vefects/Stylized VFX/Stylized VFX Shuriken/Shared/Textures/T_VFX_Noises_01.png",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_Cutout",
+                "textureName": "T_VFX_Linear_Gradient_Mirror_Vertical_01",
+                "assetPath": "Assets/Vefects/Stylized VFX/Stylized VFX Shuriken/Shared/Textures/T_VFX_Linear_Gradient_Mirror_Vertical_01.tga",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_DetailAlbedoMap",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_DetailMask",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_DetailNormalMap",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_Distortion_Noise_Texture",
+                "textureName": "T_VFX_Noises_02",
+                "assetPath": "Assets/Vefects/Stylized VFX/Stylized VFX Shuriken/Shared/Textures/T_VFX_Noises_02.png",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_EmissionMap",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_EmissiveDissolveTexture",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_EmissiveSlashTexture",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_Emissive_Dissolve_Texture",
+                "textureName": "T_VFX_Noises_02",
+                "assetPath": "Assets/Vefects/Stylized VFX/Stylized VFX Shuriken/Shared/Textures/T_VFX_Noises_02.png",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_Emissive_Noise_Texture",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_Emissive_Noise_Texture1",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_Emissive_Slash_Texture",
+                "textureName": "T_VFX_Slash_Generic",
+                "assetPath": "Assets/Vefects/Stylized VFX/Stylized VFX Shuriken/Skills/Slashes Piercing/Generic/Textures/T_VFX_Slash_Generic.png",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_MainTex",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_Mask",
+                "textureName": "T_VFX_Slash_Circle_Mask_01",
+                "assetPath": "Assets/Vefects/Stylized VFX/Stylized VFX Shuriken/Shared/Textures/T_VFX_Slash_Circle_Mask_01.png",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_MetallicGlossMap",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_OcclusionMap",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_ParallaxMap",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_SlashTexture",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_Slash_Noise_Texture",
+                "textureName": "T_VFX_Noises_02",
+                "assetPath": "Assets/Vefects/Stylized VFX/Stylized VFX Shuriken/Shared/Textures/T_VFX_Noises_02.png",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_Slash_Texture",
+                "textureName": "T_VFX_Slash_Generic",
+                "assetPath": "Assets/Vefects/Stylized VFX/Stylized VFX Shuriken/Skills/Slashes Piercing/Generic/Textures/T_VFX_Slash_Generic.png",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_Slash_Texture1",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_TextureSample0",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_TextureSample1",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_texcoord",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "_texcoord2",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "unity_Lightmaps",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "unity_LightmapsInd",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            },
+            {
+                "name": "unity_ShadowMasks",
+                "textureName": "",
+                "assetPath": "",
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0
+                },
+                "offset": {
+                    "x": 0.0,
+                    "y": 0.0
+                }
+            }
+        ],
+        "floats": [
+            {
+                "name": "_AdditiveLerp",
+                "value": 0.0
+            },
+            {
+                "name": "_AlphaCutoff",
+                "value": 0.5
+            },
+            {
+                "name": "_Boost_Opacity",
+                "value": 1.2999999523162842
+            },
+            {
+                "name": "_BumpScale",
+                "value": 1.0
+            },
+            {
+                "name": "_ColorBoost",
+                "value": 1.0
+            },
+            {
+                "name": "_Color_Boost",
+                "value": 1.399999976158142
+            },
+            {
+                "name": "_Cull",
+                "value": 0.0
+            },
+            {
+                "name": "_Cutoff",
+                "value": 0.5
+            },
+            {
+                "name": "_CutoutErosion",
+                "value": 0.0
+            },
+            {
+                "name": "_CutoutErosionSmoothness",
+                "value": 0.0
+            },
+            {
+                "name": "_CutoutRotation",
+                "value": 0.0
+            },
+            {
+                "name": "_DetailNormalMapScale",
+                "value": 1.0
+            },
+            {
+                "name": "_DistortionIntensity",
+                "value": 1.0
+            },
+            {
+                "name": "_Distortion_Intensity",
+                "value": 2.0
+            },
+            {
+                "name": "_Dst",
+                "value": 10.0
+            },
+            {
+                "name": "_DstBlend",
+                "value": 0.0
+            },
+            {
+                "name": "_EmissiveIntensity",
+                "value": 3.0
+            },
+            {
+                "name": "_EmissiveSlashScale",
+                "value": 1.0
+            },
+            {
+                "name": "_EmissiveSlashSpeed",
+                "value": 1.0
+            },
+            {
+                "name": "_EmissiveSlash_Scale",
+                "value": 5.0
+            },
+            {
+                "name": "_EmissiveSlash_Speed",
+                "value": 0.44999998807907107
+            },
+            {
+                "name": "_Emissive_Intensity",
+                "value": 30.0
+            },
+            {
+                "name": "_Emissive_Slash_Scale",
+                "value": 1.0
+            },
+            {
+                "name": "_Emissive_Slash_Speed",
+                "value": 1.0
+            },
+            {
+                "name": "_GlossMapScale",
+                "value": 1.0
+            },
+            {
+                "name": "_Glossiness",
+                "value": 0.5
+            },
+            {
+                "name": "_GlossyReflections",
+                "value": 1.0
+            },
+            {
+                "name": "_Metallic",
+                "value": 0.0
+            },
+            {
+                "name": "_Mode",
+                "value": 0.0
+            },
+            {
+                "name": "_OcclusionStrength",
+                "value": 1.0
+            },
+            {
+                "name": "_OpacityBoost",
+                "value": 1.0
+            },
+            {
+                "name": "_Opacity_Boost",
+                "value": 1.0
+            },
+            {
+                "name": "_Parallax",
+                "value": 0.019999999552965165
+            },
+            {
+                "name": "_QueueControl",
+                "value": 0.0
+            },
+            {
+                "name": "_QueueOffset",
+                "value": 0.0
+            },
+            {
+                "name": "_ReceiveShadows",
+                "value": 1.0
+            },
+            {
+                "name": "_SlashNoiseIntensity",
+                "value": 1.0
+            },
+            {
+                "name": "_SlashScale",
+                "value": 1.0
+            },
+            {
+                "name": "_SlashSpeed",
+                "value": 1.0
+            },
+            {
+                "name": "_Slash_Noise_Intensity",
+                "value": 0.699999988079071
+            },
+            {
+                "name": "_Slash_Scale",
+                "value": 5.0
+            },
+            {
+                "name": "_Slash_Speed",
+                "value": -0.699999988079071
+            },
+            {
+                "name": "_SmoothnessTextureChannel",
+                "value": 0.0
+            },
+            {
+                "name": "_SpecularHighlights",
+                "value": 1.0
+            },
+            {
+                "name": "_Src",
+                "value": 5.0
+            },
+            {
+                "name": "_SrcBlend",
+                "value": 1.0
+            },
+            {
+                "name": "_UVSec",
+                "value": 0.0
+            },
+            {
+                "name": "_ZTest",
+                "value": 2.0
+            },
+            {
+                "name": "_ZWrite",
+                "value": 0.0
+            },
+            {
+                "name": "__dirty",
+                "value": 0.0
+            },
+            {
+                "name": "_met",
+                "value": 0.0
+            },
+            {
+                "name": "_smoothness",
+                "value": 0.0
+            }
+        ],
+        "colors": [
+            {
+                "name": "_Color",
+                "value": {
+                    "r": 1.0,
+                    "g": 1.0,
+                    "b": 1.0,
+                    "a": 1.0
+                }
+            },
+            {
+                "name": "_Color01",
+                "value": {
+                    "r": 1.0,
+                    "g": 0.0,
+                    "b": 0.6261435151100159,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_Color02",
+                "value": {
+                    "r": 0.0658712163567543,
+                    "g": 0.0,
+                    "b": 1.0,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_ColorNoiseScale",
+                "value": {
+                    "r": 1.0,
+                    "g": 1.0,
+                    "b": 0.0,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_ColorNoiseSpeed",
+                "value": {
+                    "r": 1.0,
+                    "g": 1.0,
+                    "b": 0.0,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_ColorNoise_Scale",
+                "value": {
+                    "r": 2.0,
+                    "g": 0.800000011920929,
+                    "b": 0.0,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_ColorNoise_Speed",
+                "value": {
+                    "r": -0.4000000059604645,
+                    "g": 0.10000000149011612,
+                    "b": 0.0,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_Color_1",
+                "value": {
+                    "r": 0.4959999918937683,
+                    "g": 0.0,
+                    "b": 0.024800093844532968,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_Color_2",
+                "value": {
+                    "r": 1.0,
+                    "g": 0.12275004386901856,
+                    "b": 0.04300004243850708,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_CutoutOffset",
+                "value": {
+                    "r": 0.0,
+                    "g": 0.0,
+                    "b": 0.0,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_DistortionNoiseScale",
+                "value": {
+                    "r": 1.0,
+                    "g": 1.0,
+                    "b": 0.0,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_DistortionNoiseSpeed",
+                "value": {
+                    "r": 1.0,
+                    "g": 1.0,
+                    "b": 0.0,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_Distortion_Noise_Scale",
+                "value": {
+                    "r": 1.0,
+                    "g": 1.2000000476837159,
+                    "b": 0.0,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_Distortion_Noise_Speed",
+                "value": {
+                    "r": 0.699999988079071,
+                    "g": 0.5,
+                    "b": 0.0,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_EmissionColor",
+                "value": {
+                    "r": 0.0,
+                    "g": 0.0,
+                    "b": 0.0,
+                    "a": 1.0
+                }
+            },
+            {
+                "name": "_EmissiveColor",
+                "value": {
+                    "r": 1.0,
+                    "g": 0.0,
+                    "b": 0.6261435151100159,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_EmissiveDissolveScale",
+                "value": {
+                    "r": 1.0,
+                    "g": 1.0,
+                    "b": 0.0,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_EmissiveDissolveSpeed",
+                "value": {
+                    "r": 1.0,
+                    "g": 1.0,
+                    "b": 0.0,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_EmissiveDissolve_Scale",
+                "value": {
+                    "r": 3.0,
+                    "g": 1.0,
+                    "b": 0.0,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_EmissiveDissolve_Speed",
+                "value": {
+                    "r": 0.30000001192092898,
+                    "g": 0.4000000059604645,
+                    "b": 0.0,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_Emissive_Color",
+                "value": {
+                    "r": 1.0,
+                    "g": 0.13995949923992158,
+                    "b": 0.029999971389770509,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_Emissive_Dissolve_Scale",
+                "value": {
+                    "r": 1.0,
+                    "g": 1.0,
+                    "b": 0.0,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_Emissive_Dissolve_Speed",
+                "value": {
+                    "r": 1.0,
+                    "g": 1.0,
+                    "b": 0.0,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_SlashNoiseScale",
+                "value": {
+                    "r": 1.0,
+                    "g": 1.0,
+                    "b": 0.0,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_SlashNoiseSpeed",
+                "value": {
+                    "r": -1.0,
+                    "g": 0.5,
+                    "b": 0.0,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_Slash_Noise_Scale",
+                "value": {
+                    "r": 2.0,
+                    "g": 1.0,
+                    "b": 0.0,
+                    "a": 0.0
+                }
+            },
+            {
+                "name": "_Slash_Noise_Speed",
+                "value": {
+                    "r": 1.0,
+                    "g": -0.4000000059604645,
+                    "b": 0.0,
+                    "a": 0.0
+                }
+            }
+        ],
+        "ints": []
+    },
+    "swordSlashMappedValues": {
+        "opacity": 1.0,
+        "emission": 1.0,
+        "desaturation": 0.0,
+        "useSmoothDissolve": 0.0,
+        "useDepth": 0.0,
+        "flowPower": 0.0,
+        "remap": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "w": 0.0
+        },
+        "addColor": {
+            "r": 0.0,
+            "g": 0.0,
+            "b": 0.0,
+            "a": 0.0
+        },
+        "speedMainTexUVNoise": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "w": 0.0
+        },
+        "speedFlow": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "w": 0.0
+        },
+        "mainTexture": {
+            "textureName": "",
+            "assetPath": "",
+            "scale": {
+                "x": 0.0,
+                "y": 0.0
+            },
+            "offset": {
+                "x": 0.0,
+                "y": 0.0
+            },
+            "wrapModeU": "",
+            "wrapModeV": "",
+            "wrapModeW": "",
+            "filterMode": "",
+            "anisoLevel": 0,
+            "width": 0,
+            "height": 0
+        },
+        "emissionTex": {
+            "textureName": "",
+            "assetPath": "",
+            "scale": {
+                "x": 0.0,
+                "y": 0.0
+            },
+            "offset": {
+                "x": 0.0,
+                "y": 0.0
+            },
+            "wrapModeU": "",
+            "wrapModeV": "",
+            "wrapModeW": "",
+            "filterMode": "",
+            "anisoLevel": 0,
+            "width": 0,
+            "height": 0
+        },
+        "dissolveTex": {
+            "textureName": "",
+            "assetPath": "",
+            "scale": {
+                "x": 0.0,
+                "y": 0.0
+            },
+            "offset": {
+                "x": 0.0,
+                "y": 0.0
+            },
+            "wrapModeU": "",
+            "wrapModeV": "",
+            "wrapModeW": "",
+            "filterMode": "",
+            "anisoLevel": 0,
+            "width": 0,
+            "height": 0
+        },
+        "flowTex": {
+            "textureName": "",
+            "assetPath": "",
+            "scale": {
+                "x": 0.0,
+                "y": 0.0
+            },
+            "offset": {
+                "x": 0.0,
+                "y": 0.0
+            },
+            "wrapModeU": "",
+            "wrapModeV": "",
+            "wrapModeW": "",
+            "filterMode": "",
+            "anisoLevel": 0,
+            "width": 0,
+            "height": 0
+        }
+    }
+}

@@ -367,7 +367,51 @@ struct MatPiercing {
     float opacityBoost           = 1.f;
 };
 
-using AnyMat = std::variant<MatUnlit, MatSwordSlash, MatSmokeBlendCG, MatTwoSides, MatWindRing, MatPiercing>;
+// MatPiercingSlash: PiercingSlashMeshPipeline (Mesh mode) — Vefects Slash shader.
+// Distinct from MatPiercing: per-axis slash UV flow (scale-x/speed-x), Cutout
+// (rotated + erosion smoothstep), AdditiveLerp emission blend, and no
+// distortion mask. Custom1.xy drives the per-particle alpha/emissive reveal.
+struct MatPiercingSlash {
+    const Texture* slashTex            = nullptr;
+    const Texture* slashNoiseTex       = nullptr;
+    const Texture* emissiveSlashTex    = nullptr;
+    const Texture* emissiveDissolveTex = nullptr;
+    const Texture* distortionNoiseTex  = nullptr;
+    const Texture* colorNoiseTex       = nullptr;
+    const Texture* maskTex             = nullptr;
+    const Texture* cutoutTex           = nullptr;
+
+    mu::Vec4 color1        = { 1.f, 1.f, 1.f, 1.f };
+    mu::Vec4 color2        = { 1.f, 1.f, 1.f, 1.f };
+    mu::Vec4 emissiveColor = { 1.f, 1.f, 1.f, 1.f };
+
+    mu::Vec2 colorNoiseScale       = { 1.f, 1.f };
+    mu::Vec2 colorNoiseSpeed       = { 0.f, 0.f };
+    mu::Vec2 slashNoiseScale       = { 1.f, 1.f };
+    mu::Vec2 slashNoiseSpeed       = { 0.f, 0.f };
+    mu::Vec2 emissiveDissolveScale = { 1.f, 1.f };
+    mu::Vec2 emissiveDissolveSpeed = { 0.f, 0.f };
+    mu::Vec2 distortionNoiseScale  = { 1.f, 1.f };
+    mu::Vec2 distortionNoiseSpeed  = { 0.f, 0.f };
+    mu::Vec4 maskST                = { 1.f, 1.f, 0.f, 0.f };
+    mu::Vec2 cutoutOffset          = { 0.f, 0.f };
+
+    float slashScale              = 1.f;
+    float slashSpeed              = 0.f;
+    float emissiveSlashScale      = 1.f;
+    float emissiveSlashSpeed      = 0.f;
+    float slashNoiseIntensity     = 1.f;
+    float distortionIntensity     = 1.f;
+    float colorBoost              = 1.f;
+    float emissiveIntensity       = 1.f;
+    float opacityBoost            = 1.f;
+    float additiveLerp            = 0.f;
+    float cutoutErosion           = 0.f;
+    float cutoutErosionSmoothness = 0.05f;
+    float cutoutRotation          = 0.f;
+};
+
+using AnyMat = std::variant<MatUnlit, MatSwordSlash, MatSmokeBlendCG, MatTwoSides, MatWindRing, MatPiercing, MatPiercingSlash>;
 
 // ---------------------------------------------------------------------------
 // Renderer Module

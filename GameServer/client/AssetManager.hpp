@@ -5,6 +5,7 @@
 #include "animation.hpp"
 #include "swordSlashMaterial.hpp"
 #include "piercingMaterial.hpp"
+#include "piercingSlashMaterial.hpp"
 
 class AssetManager {
 public:
@@ -63,7 +64,10 @@ public:
 	const ps::MatTwoSides& spikesMaterial()        const { return spikesMaterial_; }
 	const ps::MatSmokeBlendCG& slashPathMaterial() const { return slashPathMaterial_; }
 	const ps::MatPiercing& piercingMaterial()      const { return piercingMaterial_; }
+	const ps::MatPiercingSlash& piercingSlashMaterial() const { return piercingSlashMaterial_; }
+	const ps::MatPiercingSlash& piercingCircleSlashMaterial() const { return piercingCircleSlashMaterial_; }
 	const Mesh*    meshVfxProjectile02()   const { return &meshVfxProjectile02_; }
+	const Mesh*    meshVfxSlash01HD()      const { return &meshVfxSlash01HD_; }
 	const std::vector<std::shared_ptr<AnimClip>>& playerAnimations() const { return playerAnimations_; }
 	const std::vector<std::shared_ptr<AnimClip>>& goblinAnimations() const { return goblinAnimations_; }
 
@@ -131,6 +135,14 @@ private:
 	Texture piercingGradientMaskTex_{};
 	Mesh    meshVfxProjectile02_{};
 	ps::MatPiercing piercingMaterial_{};
+	Texture slashFireTex_{};
+	Texture slashMaskTex_{};
+	Texture gradientMirrorVerticalTex_{};
+	Mesh    meshVfxSlash01HD_{};
+	ps::MatPiercingSlash piercingSlashMaterial_{};
+	Texture slashGenericTex_{};
+	Texture slashCircleMaskTex_{};
+	ps::MatPiercingSlash piercingCircleSlashMaterial_{};
 };
 
 #endif	// __AssetManager_HPP
