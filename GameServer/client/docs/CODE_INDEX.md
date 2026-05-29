@@ -628,6 +628,12 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `importNode()` 계열 | `standalone/game.hpp #68-80` | 씬 바이너리 파일 파싱 |
 | `importTerrain()` | `standalone/game.hpp #80` | Terrain 노드 처리 — `TerrainObject`에 TerrainData 연결 |
 
+**Online::Game 전용 (`online/onlineGame.hpp` / `online/onlineGame.cpp`):**
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| `Game::resolvePlayerSeparation()` | `onlineGame.cpp` (`removePlayer` 직후) | 플레이어 간 reciprocal soft separation. 매 물리 step 후 호출. 로컬 플레이어를 XZ 침투량의 절반만큼 `setCurrPos`로 밀어냄. Faction `Players` 게이팅, `getId` 결정론적 tie-break, 적용 시 `moveChange_=true`. 상수: `kPlayerSeparationRadius`/`kMaxSeparationSpeed`/`kSeparationStiffness`, 충돌 레이어 `kLayerPlayer`/`kPlayerCollisionMask` (파일 상단) |
+
 **Game 멤버 변수 (game.hpp #81-135):**
 
 | 멤버 | 타입 | 역할 |

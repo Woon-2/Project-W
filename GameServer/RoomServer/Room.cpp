@@ -320,7 +320,27 @@ void Room::move(int32 sessionId, CMovePacket* cMvPkt) {
 	}
 
 	auto player = session->player();
-	player->setPos(DirectX::XMLoadFloat3(&cMvPkt->pos));
+
+	// ── 경량 위치 검증 (안티-텔레포트/스피드핵) ─────────────────────────────
+	// 클라가 reciprocal soft separation으로 자기 위치를 산출해 보내므로 서버는
+	// 그 결과를 신뢰하되, 직전 위치 대비 수평 변위가 물리적으로 불가능한 수준이면
+	// 허용치로 클램프한다. (클램프만; 겹침 강제 해소·보정 명령은 하지 않음)
+	//   허용치 = (최대 이동속도 + 최대 분리속도) × 최대 패킷 간격(여유 포함)
+	//          = (10 m/s + 4 m/s) × 0.5 s = 7 m. 클라 상수와 동기화 필요.
+	static constexpr float kMaxMovePerPacket = 7.f;
+	const mu::Vec3 oldPos = player->pos();
+	mu::Vec3 newPos = DirectX::XMLoadFloat3(&cMvPkt->pos);
+	const mu::Vec3 deltaXZ{ newPos.x() - oldPos.x(), 0.f, newPos.z() - oldPos.z() };
+	const float horizDist = deltaXZ.len();
+	if (horizDist > kMaxMovePerPacket) {
+		const float s = kMaxMovePerPacket / horizDist;
+		// XZ만 허용치로 클램프, Y(낙하/지형)는 그대로 둔다.
+		newPos = mu::Vec3{ oldPos.x() + deltaXZ.x() * s, newPos.y(), oldPos.z() + deltaXZ.z() * s };
+		std::cout << "[move() 검증] 비정상 이동 감지 (sessionId: " << sessionId
+		          << ", dist: " << horizDist << "m) → 허용치로 클램프\n";
+	}
+
+	player->setPos(newPos);
 	player->setLinearVel(DirectX::XMLoadFloat3(&cMvPkt->velocity));
 
 	auto sMvPkt = PacketManager::makeSMovePacket(

@@ -70,6 +70,27 @@
 
 ---
 
+### 온라인 플레이어 간 Soft Separation (Reciprocal Client-Prediction)
+
+다른 플레이어는 `Kinematic`(무한 질량)이므로, 로컬 `Dynamic` 플레이어가 `ContactConstraint`로 부딪치면 침투 해소량 100%가 로컬에게만 실려 "벽에 튕기는" 느낌이 난다. 이를 reciprocal soft separation으로 대체한다.
+
+**핵심 원리:** 각 클라는 자기 플레이어만 소유한다(위치 권위). 두 플레이어가 겹치면 이 클라는 로컬 플레이어를 침투량의 **절반**만큼만 민다. 상대의 절반은 상대 클라가 동일 규칙으로 처리하며, 그 결과는 **기존 `C_Move`/`S_Move`로 전파**된다(신규 패킷 없음).
+- 절반인 이유: 양쪽이 전부 밀면 합이 2×침투 → 과분리·진동. 각자 절반이면 합이 정확히 침투량이라 매끄럽게 수렴(RVO/ORCA reciprocity).
+- 상대(B)가 "밀려나야 함"을 아는 방법: B의 클라도 매 step `resolvePlayerSeparation()`을 돌려 아직 남은 겹침을 직접 감지해 자기 절반을 처리한다(입력 없어도 실행). 명령 수신이 아닌 자기 관측 기반.
+
+**구현 위치:** `Online::Game::resolvePlayerSeparation(Seconds)` (엔진 `PhysicsWorld`가 아닌 Game 레벨 — 레이어 분리 원칙). 물리 while 루프에서 `physicsWorld_.step()` 직후 매 step 호출.
+- 수평(XZ) 원기둥 모델, Faction `Players`끼리만, 사망/래그돌 제외.
+- `correction = clamp(0.5 × penetration × stiffness, maxSpeed × dt)`. 완전 겹침은 `getId()` 비교로 결정론적 방향(양쪽 클라 반대 방향).
+- `setCurrPos`로 **curr만 갱신**(렌더 보간 prev 보존). velocity에는 분리 변위를 주입하지 않음(원격 dead-reckoning·애니메이션 안정성). 정지 중 밀려나도 전파되도록 적용 시 `moveChange_ = true`.
+
+**hard contact 차단:** 충돌 레이어(`kLayerPlayer`/`kPlayerCollisionMask`)로 플레이어-플레이어 쌍을 `generateContacts` 필터에서 제외. 지형 충돌은 `TerrainCollider`가 Dynamic만 순회하므로 영향 없음.
+
+**서버 (경량 검증):** `Room::move`는 클라가 보낸 분리 결과를 신뢰하되, 직전 위치 대비 수평 변위가 허용치(≈7m)를 넘으면 클램프(안티-텔레포트). 겹침 강제 해소·보정 명령은 하지 않는다. 서버 플레이어는 `Kinematic`이라 reciprocity 불필요 — 클라 결과 저장만으로 정합.
+
+> **향후 과제 — 플레이어-몬스터 충돌:** 권위 모델이 다르다(몬스터는 서버 `Dynamic`, 클라 `Kinematic`). 플레이어가 몬스터를 못 뚫게 하려면 별도 설계 필요(클라 예측 + 서버 권위 넉백). 현 separation은 플레이어-플레이어 한정.
+
+---
+
 ### 물리 렉 관리 설계 원칙
 
 ```

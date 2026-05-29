@@ -91,6 +91,12 @@ private:
 	void cullObjects();
 	void applyHiZCulling();
 
+	// 플레이어 간 reciprocal soft separation (클라 예측).
+	// 로컬 플레이어를 다른 플레이어와의 수평 침투량의 "절반"만큼만 밀어낸다.
+	// 상대의 절반은 상대 클라가 동일 규칙으로 처리하며, 결과는 기존 C_Move/S_Move로
+	// 전파된다(신규 패킷 없음). 매 물리 step마다 step() 직후 호출된다.
+	void resolvePlayerSeparation(Seconds dt);
+
 	// 커서가 클라이언트 영역 바깥으로 나가지 못하도록 한다.
 	// 한번 설정해놓으면, releaseCursor를 호출하기 전까지 커서는 계속 클라이언트 영역에 갇혀있는다.
 	void captureCursor();
