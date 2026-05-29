@@ -37,6 +37,8 @@ ComPtr<ID3D12PipelineState> createMeshParticleShader(ID3D12Device* device, ID3D1
 ComPtr<ID3D12PipelineState> createWindRingShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSmokeBlendCGShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createBlendCGMeshShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createPiercingMeshShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
+ComPtr<ID3D12PipelineState> createPiercingSlashMeshShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createSwordSlashShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createTwoSidesShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
 ComPtr<ID3D12PipelineState> createTrailShader(ID3D12Device* device, ID3D12RootSignature* rootSig);
@@ -435,6 +437,105 @@ using PerDrawcallData = SmokeBlendCGShader::PerDrawcallData;
 using PerFrameData = SmokeBlendCGShader::PerFrameData;
 
 }  // namespace BlendCGMeshShader
+
+// PiercingMeshShader
+namespace PiercingMeshShader {
+
+using PerInstanceData = BlendCGMeshShader::PerInstanceData;  // 112B
+using PerFrameData    = SmokeBlendCGShader::PerFrameData;    // 80B
+
+struct PerDrawcallData {
+	BindlessIndex idxColorNoiseTex;        // 16B
+	BindlessIndex idxPiercingTex;          // 16B
+	BindlessIndex idxPiercingNoiseTex;     // 16B
+	BindlessIndex idxDistortionNoiseTex;   // 16B
+	BindlessIndex idxDistortionMaskTex;    // 16B
+	BindlessIndex idxEmissiveNoiseTex;     // 16B
+	BindlessIndex idxEmissiveMaskTex;      // 16B
+	BindlessIndex idxOpacityMaskTex;       // 16B
+
+	u32t firstInstanceOffset;              // 4B
+	u32t hasDistortionMask;                // 4B
+	u32t hasEmissiveMask;                  // 4B
+	u32t hasOpacityMask;                   // 4B
+
+	float time;                            // 4B
+	float colorBoost;                      // 4B
+	float piercingNoiseIntensity;          // 4B
+	float distortionIntensity;             // 4B
+
+	float    emissiveIntensity;            // 4B
+	float    opacityBoost;                 // 4B
+	XMFLOAT2 pad0;                         // 8B
+
+	XMFLOAT4 color1;                       // 16B
+	XMFLOAT4 color2;                       // 16B
+	XMFLOAT4 emissiveColor;                // 16B
+
+	XMFLOAT4 colorNoiseScaleSpeed;         // 16B, xy=scale zw=speed
+	XMFLOAT4 piercingNoiseScaleSpeed;      // 16B
+	XMFLOAT4 distortionNoiseScaleSpeed;    // 16B
+	XMFLOAT4 emissiveDissolveScaleSpeed;   // 16B
+
+	XMFLOAT4 distortionMaskST;             // 16B, xy=scale zw=offset
+	XMFLOAT4 opacityMaskST;                // 16B
+};
+
+}  // namespace PiercingMeshShader
+
+// PiercingSlashMeshShader
+namespace PiercingSlashMeshShader {
+
+using PerInstanceData = BlendCGMeshShader::PerInstanceData;  // 112B
+using PerFrameData    = SmokeBlendCGShader::PerFrameData;    // 80B
+
+struct PerDrawcallData {
+	BindlessIndex idxSlashTex;             // 16B
+	BindlessIndex idxSlashNoiseTex;        // 16B
+	BindlessIndex idxEmissiveSlashTex;     // 16B
+	BindlessIndex idxEmissiveDissolveTex;  // 16B
+	BindlessIndex idxDistortionNoiseTex;   // 16B
+	BindlessIndex idxColorNoiseTex;        // 16B
+	BindlessIndex idxMaskTex;              // 16B
+	BindlessIndex idxCutoutTex;            // 16B
+
+	u32t firstInstanceOffset;              // 4B
+	u32t hasMaskTex;                       // 4B
+	u32t hasCutoutTex;                     // 4B
+	u32t pad0;                             // 4B
+
+	float time;                            // 4B
+	float colorBoost;                      // 4B
+	float slashScale;                      // 4B
+	float slashSpeed;                      // 4B
+
+	float emissiveSlashScale;              // 4B
+	float emissiveSlashSpeed;              // 4B
+	float slashNoiseIntensity;             // 4B
+	float distortionIntensity;             // 4B
+
+	float emissiveIntensity;               // 4B
+	float opacityBoost;                    // 4B
+	float additiveLerp;                    // 4B
+	float cutoutErosion;                   // 4B
+
+	float    cutoutErosionSmoothness;      // 4B
+	float    cutoutRotation;               // 4B
+	XMFLOAT2 cutoutOffset;                 // 8B
+
+	XMFLOAT4 color1;                       // 16B
+	XMFLOAT4 color2;                       // 16B
+	XMFLOAT4 emissiveColor;                // 16B
+
+	XMFLOAT4 colorNoiseScaleSpeed;         // 16B, xy=scale zw=speed
+	XMFLOAT4 slashNoiseScaleSpeed;         // 16B
+	XMFLOAT4 emissiveDissolveScaleSpeed;   // 16B
+	XMFLOAT4 distortionNoiseScaleSpeed;    // 16B
+
+	XMFLOAT4 maskST;                       // 16B, xy=scale zw=offset
+};
+
+}  // namespace PiercingSlashMeshShader
 
 // ShadowMapShader
 namespace ShadowMapShader {

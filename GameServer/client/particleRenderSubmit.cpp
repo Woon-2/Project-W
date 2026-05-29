@@ -3,6 +3,8 @@
 #include "particleRenderMode.hpp"
 #include "particleSystem.hpp"
 #include "blendCGMeshPipeline.hpp"
+#include "piercingMeshPipeline.hpp"
+#include "piercingSlashMeshPipeline.hpp"
 #include "twoSidesPipeline.hpp"
 #include "windRingPipeline.hpp"
 #include "trailPipeline.hpp"
@@ -241,6 +243,114 @@ void submitParticleDraw(GFX& gfx, const ParticleRenderContext& ctx, const ps::Ma
         .edgeFadePower   = mat.edgeFadePower,
         .edgeFadeStrength = mat.edgeFadeStrength,
         .renderOrder     = rend.renderOrder,
+    });
+}
+
+void submitParticleDraw(GFX& gfx, const ParticleRenderContext& ctx, const ps::MatPiercing& mat) {
+    const auto& rend = ctx.renderer;
+    if (!mat.piercingTex) return;
+    const auto geometry = buildParticleMeshGeometry(ctx);
+    if (!geometry) return;
+
+    if (!ctx.frameState.piercingFrameDataSubmitted) {
+        gfx.addFrameData(PiercingMeshPipeline::FrameData{ .time = ctx.systemTime });
+        ctx.frameState.piercingFrameDataSubmitted = true;
+    }
+
+    const auto pack = [](mu::Vec2 scale, mu::Vec2 speed) {
+        return mu::Vec4{ scale.x(), scale.y(), speed.x(), speed.y() };
+    };
+
+    gfx.addDrawEvent(PiercingMeshPipeline::DrawEvent{
+        .world               = geometry->world,
+        .tint                = ctx.tint,
+        .t                   = ctx.t,
+        .custom1             = ctx.custom1,
+        .custom2             = ctx.custom2,
+        .customDataEnabled   = ctx.customDataEnabled,
+        .renderOrder         = rend.renderOrder,
+        .pMesh               = geometry->pMesh,
+        .pSubMesh            = geometry->pSubMesh,
+        .pColorNoiseTex      = mat.colorNoiseTex,
+        .pPiercingTex        = mat.piercingTex,
+        .pPiercingNoiseTex   = mat.piercingNoiseTex,
+        .pDistortionNoiseTex = mat.distortionNoiseTex,
+        .pDistortionMaskTex  = mat.distortionMaskTex,
+        .pEmissiveNoiseTex   = mat.emissiveNoiseTex,
+        .pEmissiveMaskTex    = mat.emissiveMaskTex,
+        .pOpacityMaskTex     = mat.opacityMaskTex,
+        .color1              = mat.color1,
+        .color2              = mat.color2,
+        .emissiveColor       = mat.emissiveColor,
+        .colorNoiseScaleSpeed       = pack(mat.colorNoiseScale, mat.colorNoiseSpeed),
+        .piercingNoiseScaleSpeed    = pack(mat.piercingNoiseScale, mat.piercingNoiseSpeed),
+        .distortionNoiseScaleSpeed  = pack(mat.distortionNoiseScale, mat.distortionNoiseSpeed),
+        .emissiveDissolveScaleSpeed = pack(mat.emissiveDissolveScale, mat.emissiveDissolveSpeed),
+        .distortionMaskST    = mat.distortionMaskST,
+        .opacityMaskST       = mat.opacityMaskST,
+        .colorBoost             = mat.colorBoost,
+        .piercingNoiseIntensity = mat.piercingNoiseIntensity,
+        .distortionIntensity    = mat.distortionIntensity,
+        .emissiveIntensity      = mat.emissiveIntensity,
+        .opacityBoost           = mat.opacityBoost,
+    });
+}
+
+void submitParticleDraw(GFX& gfx, const ParticleRenderContext& ctx, const ps::MatPiercingSlash& mat) {
+    const auto& rend = ctx.renderer;
+    if (!mat.slashTex) return;
+    const auto geometry = buildParticleMeshGeometry(ctx);
+    if (!geometry) return;
+
+    if (!ctx.frameState.piercingSlashFrameDataSubmitted) {
+        gfx.addFrameData(PiercingSlashMeshPipeline::FrameData{ .time = ctx.systemTime });
+        ctx.frameState.piercingSlashFrameDataSubmitted = true;
+    }
+
+    const auto pack = [](mu::Vec2 scale, mu::Vec2 speed) {
+        return mu::Vec4{ scale.x(), scale.y(), speed.x(), speed.y() };
+    };
+
+    gfx.addDrawEvent(PiercingSlashMeshPipeline::DrawEvent{
+        .world                = geometry->world,
+        .tint                 = ctx.tint,
+        .t                    = ctx.t,
+        .custom1              = ctx.custom1,
+        .custom2              = ctx.custom2,
+        .customDataEnabled    = ctx.customDataEnabled,
+        .renderOrder          = rend.renderOrder,
+        .pMesh                = geometry->pMesh,
+        .pSubMesh             = geometry->pSubMesh,
+        .pSlashTex            = mat.slashTex,
+        .pSlashNoiseTex       = mat.slashNoiseTex,
+        .pEmissiveSlashTex    = mat.emissiveSlashTex,
+        .pEmissiveDissolveTex = mat.emissiveDissolveTex,
+        .pDistortionNoiseTex  = mat.distortionNoiseTex,
+        .pColorNoiseTex       = mat.colorNoiseTex,
+        .pMaskTex             = mat.maskTex,
+        .pCutoutTex           = mat.cutoutTex,
+        .color1               = mat.color1,
+        .color2               = mat.color2,
+        .emissiveColor        = mat.emissiveColor,
+        .colorNoiseScaleSpeed       = pack(mat.colorNoiseScale, mat.colorNoiseSpeed),
+        .slashNoiseScaleSpeed       = pack(mat.slashNoiseScale, mat.slashNoiseSpeed),
+        .emissiveDissolveScaleSpeed = pack(mat.emissiveDissolveScale, mat.emissiveDissolveSpeed),
+        .distortionNoiseScaleSpeed  = pack(mat.distortionNoiseScale, mat.distortionNoiseSpeed),
+        .maskST                = mat.maskST,
+        .slashScale            = mat.slashScale,
+        .slashSpeed            = mat.slashSpeed,
+        .emissiveSlashScale    = mat.emissiveSlashScale,
+        .emissiveSlashSpeed    = mat.emissiveSlashSpeed,
+        .slashNoiseIntensity   = mat.slashNoiseIntensity,
+        .distortionIntensity   = mat.distortionIntensity,
+        .colorBoost            = mat.colorBoost,
+        .emissiveIntensity     = mat.emissiveIntensity,
+        .opacityBoost          = mat.opacityBoost,
+        .additiveLerp          = mat.additiveLerp,
+        .cutoutErosion         = mat.cutoutErosion,
+        .cutoutErosionSmoothness = mat.cutoutErosionSmoothness,
+        .cutoutRotation        = mat.cutoutRotation,
+        .cutoutOffset          = mat.cutoutOffset,
     });
 }
 

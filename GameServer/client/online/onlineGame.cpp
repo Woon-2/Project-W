@@ -32,6 +32,13 @@ static constexpr int     kLagScaleDownFrames  = 100;
 
 static constexpr float   kArrowRainRadius          = 4.75f;
 static constexpr int     kArrowVolleyCount          = 9;
+static constexpr float   kPiercingMultiRadius       = 2.0f;
+static constexpr int     kPiercingMultiWaveCount    = 10;
+static constexpr int     kPiercingMultiBurstCount   = 2;
+static constexpr float   kPiercingMultiInterval     = 0.06f;
+static constexpr float   kPiercingMultiLifetime     = 0.42f;
+static constexpr float   kPiercingMultiHalfWidth    = 2.5f;
+static constexpr float   kPiercingMultiHalfHeight   = 1.25f;
 static constexpr float   kArrowVolleySpreadDegrees  = 56.f;
 
 Game::Game() {
@@ -123,7 +130,7 @@ void Game::setupStage() {
 	effectDropdown_->offsetX = UI::DimValue::px(-12.f);
 	effectDropdown_->offsetY = UI::DimValue::px(12.f);
 	effectDropdown_->width   = UI::DimValue::px(180.f);
-	effectDropdown_->setup({ "Slash Wave", "Slash Combo", "Slash 7", "Slash 1", "Spikes", "Crystals Front Attack", "AoE Slash Green", "Red Energy Explosion", "Crystals Cross Fade", "Arrow", "Arrow Volley", "Arrow Rain", "Energy Explosion Arrow", "Tornado Shot" });
+	effectDropdown_->setup({ "Slash Wave", "Slash Combo", "Slash 7", "Slash 1", "Spikes", "Crystals Front Attack", "AoE Slash Green", "Red Energy Explosion", "Crystals Cross Fade", "Arrow", "Arrow Volley", "Arrow Rain", "Energy Explosion Arrow", "Tornado Shot", "Piercing", "Piercing Slash", "Piercing Circle Slash", "Piercing Multi" });
 	effectDropdown_->onSelectionChanged = [this](int idx) {
 		currentEffect_ = static_cast<SwordEffect>(idx);
 	};
@@ -430,6 +437,130 @@ void Game::setParticle()
 			}
 		};
 		spikesAttackEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);
+	}
+
+	// ── Piercing effect ────────────────────────────────────────────────────
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/PS_VFX_Piercing_ParticleSystems.json",
+			"PS_VFX_Piercing"
+		);
+		cfg.renderer.pMesh = assetManager_.meshVfxProjectile02();
+		cfg.renderer.pSubMesh = assetManager_.meshVfxProjectile02()->subMeshes.empty()
+		                       ? nullptr
+		                       : &assetManager_.meshVfxProjectile02()->subMeshes[0];
+		cfg.renderer.mat = assetManager_.piercingMaterial();
+		// Unity 로컬 +X 축으로 발사되는 VFX. 엔진 forward(+Z) 정렬을 위해 -90° yaw 보정.
+		const mu::Mat4x4 piercingForwardFix = mu::rotateYH(mu::Degree(-90.f));
+		cfg.shape.orientation    = piercingForwardFix;
+		cfg.main.startRotation3D = piercingForwardFix;
+		piercingEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);
+	}
+
+	// ── PiercingMulti effect: player forward에 수직인 전방 벽에 비처럼 분포해 2발씩 10웨이브 stab ──
+	{
+		const mu::Mat4x4 piercingForwardFix = mu::rotateYH(mu::Degree(-90.f));
+		const mu::Vec2 offsets[kPiercingMultiWaveCount][kPiercingMultiBurstCount] = {
+			{ { -2.24f,  1.04f }, {  0.88f, -0.62f } },
+			{ { -0.62f, -1.08f }, {  2.18f,  0.38f } },
+			{ { -1.78f,  0.24f }, {  1.46f,  1.12f } },
+			{ { -2.38f, -0.72f }, {  0.34f,  0.82f } },
+			{ { -0.96f,  1.18f }, {  2.34f, -0.24f } },
+			{ { -1.42f, -0.38f }, {  0.72f, -1.16f } },
+			{ { -2.08f,  0.62f }, {  1.88f,  0.92f } },
+			{ { -0.28f, -0.84f }, {  2.48f, -1.02f } },
+			{ { -2.46f,  0.06f }, {  0.18f,  1.24f } },
+			{ { -1.12f, -1.22f }, {  1.24f,  0.14f } },
+		};
+
+		for (int wave = 0; wave < kPiercingMultiWaveCount; ++wave) {
+			for (int lane = 0; lane < kPiercingMultiBurstCount; ++lane) {
+				auto cfg = loadUnityParticleConfig(
+					"../resources/effects/PS_VFX_Piercing_ParticleSystems.json",
+					"PS_VFX_Piercing"
+				);
+				cfg.renderer.pMesh = assetManager_.meshVfxProjectile02();
+				cfg.renderer.pSubMesh = assetManager_.meshVfxProjectile02()->subMeshes.empty()
+				                       ? nullptr
+				                       : &assetManager_.meshVfxProjectile02()->subMeshes[0];
+				cfg.renderer.mat = assetManager_.piercingMaterial();
+
+				cfg.main.startRotation3D = piercingForwardFix;
+				cfg.main.speedMin        = 0.f;
+				cfg.main.speedMax        = 0.f;
+				cfg.main.lifetimeMin     = kPiercingMultiLifetime;
+				cfg.main.lifetimeMax     = kPiercingMultiLifetime;
+				cfg.main.looping         = false;
+				cfg.main.duration        = kPiercingMultiInterval * static_cast<float>(kPiercingMultiWaveCount - 1) + 0.1f;
+				cfg.main.maxParticles    = 4;
+
+				cfg.velocityOverLifetime.enabled      = true;
+				cfg.velocityOverLifetime.useCurves    = false;
+				cfg.velocityOverLifetime.inWorldSpace = false;
+				cfg.velocityOverLifetime.linear       = { 0.f, 0.f, 25.f };
+				cfg.velocityOverLifetime.orbital      = { 0.f, 0.f, 0.f };
+				cfg.velocityOverLifetime.radial       = 0.f;
+				cfg.velocityOverLifetime.drag         = 0.f;
+
+				cfg.shape.type        = ps::ShapeModule::Type::Box;
+				cfg.shape.position    = {
+					std::clamp(offsets[wave][lane].x(), -kPiercingMultiHalfWidth, kPiercingMultiHalfWidth),
+					std::clamp(offsets[wave][lane].y(), -kPiercingMultiHalfHeight, kPiercingMultiHalfHeight),
+					0.f
+				};
+				cfg.shape.rotation    = { 0.f, 0.f, 0.f };
+				cfg.shape.orientation = mu::Mat4x4{};
+				cfg.shape.direction   = { 0.f, 0.f, 1.f };
+				cfg.shape.boxSize     = { 0.56f, 0.42f, 0.f };
+
+				cfg.emission.enabled  = true;
+				cfg.emission.emitRate = 0.f;
+				cfg.emission.bursts   = {
+					ps::EmissionModule::Burst{
+						.time = kPiercingMultiInterval * static_cast<float>(wave),
+						.countMin = 1, .countMax = 1, .cycleCount = 1
+					}
+				};
+
+				piercingMultiEffect_.addSystem(cfg, ParticleEffect::PlayMode::Continuous, 4);
+			}
+		}
+	}
+
+	// ── PiercingSlash effect (Vefects SH_VFX_Vefects_Slash_BIRP_New) ──────
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/PS_VFX_Slash_ParticleSystems.json",
+			"PS_VFX_Slash"
+		);
+		cfg.renderer.pMesh = assetManager_.meshVfxSlash01HD();
+		cfg.renderer.pSubMesh = assetManager_.meshVfxSlash01HD()->subMeshes.empty()
+		                       ? nullptr
+		                       : &assetManager_.meshVfxSlash01HD()->subMeshes[0];
+		cfg.renderer.mat = assetManager_.piercingSlashMaterial();
+		cfg.main.simulationSpeed = 2.0f;
+		piercingSlashEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);
+	}
+
+	// ── PiercingCircleSlash effect (same shader as PiercingSlash, Circle variant)
+	{
+		auto cfg = loadUnityParticleConfig(
+			"../resources/effects/PS_VFX_PiercingCircleSlash_ParticleSystems.json",
+			"PS_VFX_Slash"
+		);
+		cfg.renderer.pMesh = assetManager_.meshVfxSlash01HD();
+		cfg.renderer.pSubMesh = assetManager_.meshVfxSlash01HD()->subMeshes.empty()
+		                       ? nullptr
+		                       : &assetManager_.meshVfxSlash01HD()->subMeshes[0];
+		cfg.renderer.mat = assetManager_.piercingCircleSlashMaterial();
+		cfg.main.startSizeMin *= 2.0f;
+		cfg.main.startSizeMax *= 2.0f;
+		cfg.rotationOverLifetime.enabled = true;
+		cfg.rotationOverLifetime.useCurves = false;
+		cfg.rotationOverLifetime.separateAxes = false;
+		cfg.rotationOverLifetime.angularVelocityMin = 6.2831853f * 2.0f;  // 2 rev/sec (local Z)
+		cfg.rotationOverLifetime.angularVelocityMax = 6.2831853f * 2.0f;
+		piercingCircleSlashEffect_.addSystem(cfg, ParticleEffect::PlayMode::Emit);
 	}
 
 	// ── Slash Wave effect ──────────────────────────────────────────────────────
@@ -2125,6 +2256,10 @@ void Game::update(Milliseconds deltaTime) {
 		swordSlashComboEffect_.update(deltaTime);
 		slashWaveEffect_.update(deltaTime);
 		spikesAttackEffect_.update(deltaTime);
+		piercingEffect_.update(deltaTime);
+		piercingMultiEffect_.update(deltaTime);
+		piercingSlashEffect_.update(deltaTime);
+		piercingCircleSlashEffect_.update(deltaTime);
 		crystalsFrontAttackEffect_.update(deltaTime);
 		aoESlashGreenEffect_.update(deltaTime);
 		crystalsCrossFadeEffect_.update(deltaTime);
@@ -2247,6 +2382,10 @@ void Game::render() {
 	swordSlashComboEffect_.render(gfx_);
 	slashWaveEffect_.render(gfx_);
 	spikesAttackEffect_.render(gfx_);
+	piercingEffect_.render(gfx_);
+	piercingMultiEffect_.render(gfx_);
+	piercingSlashEffect_.render(gfx_);
+	piercingCircleSlashEffect_.render(gfx_);
 	crystalsFrontAttackEffect_.render(gfx_);
 	aoESlashGreenEffect_.render(gfx_);
 	crystalsCrossFadeEffect_.render(gfx_);
@@ -2565,6 +2704,16 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		case SwordEffect::Slash1:     swordSlash1Effect_.play(slashPos);                        break;
 		case SwordEffect::SlashWave:  slashWaveEffect_.play(slashPos, player_->orient());       break;
 		case SwordEffect::Spikes:     spikesAttackEffect_.play(slashPos);                       break;
+		case SwordEffect::Piercing:            piercingEffect_.play( slashPos, player_->orient() );              break;
+		case SwordEffect::PiercingSlash:       piercingSlashEffect_.play( slashPos, player_->orient() );         break;
+		case SwordEffect::PiercingCircleSlash: piercingCircleSlashEffect_.play( slashPos, player_->orient() );   break;
+		case SwordEffect::PiercingMulti: {
+			const auto multiCenter = player_->renderState().pos
+				+ player_->forward() * (kPiercingMultiRadius + 1.f)
+				+ mu::Vec3( 0.f, 1.0f, 0.f );
+			piercingMultiEffect_.play( multiCenter, player_->orient() );
+			break;
+		}
 		case SwordEffect::CrystalsFrontAttack: {
 			const auto crystalPos = player_->renderState().pos + player_->forward() * 1.f;
 			const mu::Mat4x4 crystalOrient = mu::rotateYH( mu::Degree( -90.f ) ) * player_->orient().mat4();

@@ -117,6 +117,16 @@ void Camera::updateGFX(GFX& gfx) {
 		.proj = proj_,
 		.pos = eye_
 	});
+	gfx.addCameraData(PiercingMeshPipeline::CameraData{
+		.view = view_,
+		.proj = proj_,
+		.pos = eye_
+	});
+	gfx.addCameraData(PiercingSlashMeshPipeline::CameraData{
+		.view = view_,
+		.proj = proj_,
+		.pos = eye_
+	});
 	gfx.addCameraData(SwordSlashPipeline::CameraData{
 		.view = view_,
 		.proj = proj_

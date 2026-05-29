@@ -282,6 +282,8 @@ void GFX::init() {
 	shaders_.try_emplace("WindRingShader", createWindRingShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("SmokeBlendCGShader", createSmokeBlendCGShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("BlendCGMeshShader", createBlendCGMeshShader( device_.Get(), defaultRootSig.get() ));
+	shaders_.try_emplace("PiercingMeshShader", createPiercingMeshShader( device_.Get(), defaultRootSig.get() ));
+	shaders_.try_emplace("PiercingSlashMeshShader", createPiercingSlashMeshShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("SwordSlashShader", createSwordSlashShader( device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("TwoSidesShader",  createTwoSidesShader(  device_.Get(), defaultRootSig.get() ));
 	shaders_.try_emplace("TrailShader",          createTrailShader(         device_.Get(), defaultRootSig.get() ));
@@ -328,6 +330,8 @@ void GFX::init() {
 	drawEventsMeshParticlePipeline_.reserve(256u);
 	drawEventsSmokeBlendCGPipeline_.reserve(256u);
 	drawEventsBlendCGMeshPipeline_.reserve(256u);
+	drawEventsPiercingMeshPipeline_.reserve(256u);
+	drawEventsPiercingSlashMeshPipeline_.reserve(256u);
 	drawEventsSwordSlashPipeline_.reserve(256u);
 	drawEventsTwoSidesPipeline_.reserve(256u);
 	drawEventsTrailPipeline_.reserve(TrailPipeline::kMaxDrawEvents);
@@ -546,6 +550,26 @@ void GFX::createSwapChain() {
 	);
 	resourcesBlendCGMeshPipeline_.perFrameData.init(
 		device_.Get(), sizeof( BlendCGMeshShader::PerFrameData ), backBuffers_.size(), "BlendCGMesh_PerFrameData"
+	);
+	// Piercing Mesh Pipeline ----
+	resourcesPiercingMeshPipeline_.perInstanceData.init(
+		device_.Get(), sizeof( PiercingMeshShader::PerInstanceData ) * 256u, backBuffers_.size(), "PiercingMesh_PerInstanceData"
+	);
+	resourcesPiercingMeshPipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof( PiercingMeshShader::PerDrawcallData ), 256u, backBuffers_.size(), "PiercingMesh_PerDrawcallData"
+	);
+	resourcesPiercingMeshPipeline_.perFrameData.init(
+		device_.Get(), sizeof( PiercingMeshShader::PerFrameData ), backBuffers_.size(), "PiercingMesh_PerFrameData"
+	);
+	// Piercing Slash Mesh Pipeline ----
+	resourcesPiercingSlashMeshPipeline_.perInstanceData.init(
+		device_.Get(), sizeof( PiercingSlashMeshShader::PerInstanceData ) * 256u, backBuffers_.size(), "PiercingSlashMesh_PerInstanceData"
+	);
+	resourcesPiercingSlashMeshPipeline_.perDrawcallData = createConstantBufferArray(
+		device_.Get(), sizeof( PiercingSlashMeshShader::PerDrawcallData ), 256u, backBuffers_.size(), "PiercingSlashMesh_PerDrawcallData"
+	);
+	resourcesPiercingSlashMeshPipeline_.perFrameData.init(
+		device_.Get(), sizeof( PiercingSlashMeshShader::PerFrameData ), backBuffers_.size(), "PiercingSlashMesh_PerFrameData"
 	);
 	// Sword Slash Pipeline ----
 	resourcesSwordSlashPipeline_.perInstanceData.init(
@@ -897,6 +921,30 @@ void GFX::addCameraData( const BlendCGMeshPipeline::CameraData& cameraData ) {
 
 void GFX::addFrameData( const BlendCGMeshPipeline::FrameData& frameData ) {
 	frameDataBlendCGMeshPipeline_ = frameData;
+}
+
+void GFX::addDrawEvent( const PiercingMeshPipeline::DrawEvent& drawEvent ) {
+	drawEventsPiercingMeshPipeline_.push_back( drawEvent );
+}
+
+void GFX::addCameraData( const PiercingMeshPipeline::CameraData& cameraData ) {
+	cameraDataPiercingMeshPipeline_ = cameraData;
+}
+
+void GFX::addFrameData( const PiercingMeshPipeline::FrameData& frameData ) {
+	frameDataPiercingMeshPipeline_ = frameData;
+}
+
+void GFX::addDrawEvent( const PiercingSlashMeshPipeline::DrawEvent& drawEvent ) {
+	drawEventsPiercingSlashMeshPipeline_.push_back( drawEvent );
+}
+
+void GFX::addCameraData( const PiercingSlashMeshPipeline::CameraData& cameraData ) {
+	cameraDataPiercingSlashMeshPipeline_ = cameraData;
+}
+
+void GFX::addFrameData( const PiercingSlashMeshPipeline::FrameData& frameData ) {
+	frameDataPiercingSlashMeshPipeline_ = frameData;
 }
 
 void GFX::addDrawEvent( const SwordSlashPipeline::DrawEvent& drawEvent ) {
@@ -1510,6 +1558,32 @@ void GFX::render() {
 		frameIdx_ % backBuffers_.size()	// room index
 	);
 
+	auto piercingMeshDispatcher = PiercingMeshPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "PiercingMeshShader" ),
+		cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesPiercingMeshPipeline_, threadPool_,
+		&cmdListPool_, std::move( drawEventsPiercingMeshPipeline_ ),
+		cameraDataPiercingMeshPipeline_, frameDataPiercingMeshPipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
+	auto piercingSlashMeshDispatcher = PiercingSlashMeshPipeline::Dispatcher(
+		tmpDescriptorHeaps,
+		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+		&samPool_, &cmpSamPool_,
+		rootSigs_.at( "DefaultRootSignature" ), shaders_.at( "PiercingSlashMeshShader" ),
+		cmdQ_, viewport, clRect,
+		backBufferRtvs_[backbufIdx], depthBufferDsvs_[backbufIdx],
+		&fenceToSignal, &resourcesPiercingSlashMeshPipeline_, threadPool_,
+		&cmdListPool_, std::move( drawEventsPiercingSlashMeshPipeline_ ),
+		cameraDataPiercingSlashMeshPipeline_, frameDataPiercingSlashMeshPipeline_,
+		frameIdx_ % backBuffers_.size()	// room index
+	);
+
 	auto swordSlashDispatcher = SwordSlashPipeline::Dispatcher(
 		tmpDescriptorHeaps,
 		&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
@@ -1987,6 +2061,12 @@ void GFX::render() {
 		blendCGMeshDispatcher.updateGPUDataSingleThreaded();
 		blendCGMeshDispatcher.drawSingleThreaded();
 
+		piercingMeshDispatcher.updateGPUDataSingleThreaded();
+		piercingMeshDispatcher.drawSingleThreaded();
+
+		piercingSlashMeshDispatcher.updateGPUDataSingleThreaded();
+		piercingSlashMeshDispatcher.drawSingleThreaded();
+
 		meshParticleDispatcher.updateGPUDataSingleThreaded();
 		meshParticleDispatcher.drawSingleThreaded();
 
@@ -2095,6 +2175,12 @@ void GFX::render() {
 			blendCGMeshDispatcher.updateGPUDataMultiThreaded();
 			blendCGMeshDispatcher.drawMultiThreaded();
 
+			piercingMeshDispatcher.updateGPUDataMultiThreaded();
+			piercingMeshDispatcher.drawMultiThreaded();
+
+			piercingSlashMeshDispatcher.updateGPUDataMultiThreaded();
+			piercingSlashMeshDispatcher.drawMultiThreaded();
+
 			twoSidesDispatcher.updateGPUDataMultiThreaded();
 			twoSidesDispatcher.drawMultiThreaded();
 
@@ -2159,6 +2245,12 @@ void GFX::render() {
 
 			blendCGMeshDispatcher.updateGPUDataMultiThreaded();
 			blendCGMeshDispatcher.drawMultiThreaded();
+
+			piercingMeshDispatcher.updateGPUDataMultiThreaded();
+			piercingMeshDispatcher.drawMultiThreaded();
+
+			piercingSlashMeshDispatcher.updateGPUDataMultiThreaded();
+			piercingSlashMeshDispatcher.drawMultiThreaded();
 
 			twoSidesDispatcher.updateGPUDataMultiThreaded();
 			twoSidesDispatcher.drawMultiThreaded();
