@@ -141,10 +141,20 @@ ContactConstraint는 별도 CFM을 사용하지 않는다 (contact는 Baumgarte 
 |-------|------|--------|
 | BallSocketJoint | `damping_` | 0.1f |
 | HingeJoint | `linearDamping_`, `angularDamping_` | 별도 설정 |
-| ConeTwistJoint | `linearDamping_`, `coneDamping_`, `twistDamping_` | 별도 설정 |
+| ConeTwistJoint | `linearDamping_`, `coneDamping_`, `twistDamping_` | 0.1f |
 
 damping이 0이면 joint는 오차를 완전히 해소하려는 강한 impulse를 생성한다.
 ragdoll 자연스러운 움직임을 위해 적절한 damping이 필요하다.
+
+**ConeTwistJoint angular damping (always on):** `solveVelocity()`에서 상대 각속도
+`ωrel = ωA - ωB`를 twist 축(`cache_.twistAxis`, 한계 활성 여부와 무관하게 매 prepare에서
+설정)에 대해 분해한다.
+- twist 성분 `dot(ωrel, tAxis)` → `twistDamping_`로 감쇠
+- swing 성분 `ωrel - dot(ωrel,tAxis)·tAxis`(twist 축에 수직인 평면) → `coneDamping_`로 감쇠
+  (순간 swing 축에 투영). **cone 한계 내부에서도 항상 적용**되어 관절이 한계까지 자유
+  회전하지 않고 묵직하게 움직인다.
+- effective mass는 cache가 아니라 매번 `angEff1D(axis, invInertiaWorld)`로 재계산한다.
+  `cone/twistEffMass` 캐시 필드는 해당 한계가 active일 때만 채워지므로 감쇠에 쓰면 stale.
 
 ---
 
