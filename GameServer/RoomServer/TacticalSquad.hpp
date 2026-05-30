@@ -88,7 +88,7 @@ public:
 
 private:
     void     pushCommandsToMembers( Room& room );
-    void     updateLeaderlessBrawl( float dt, Room& room );
+    void     updateLeaderlessBrawl( Seconds dt, Room& room );
     uint32   selectNearestPlayerToSquad( Room& room ) const;
 
     std::vector<mu::Vec3> MU_CALLCONV calcEncircleSlots( mu::Vec3 targetPos, float sectorAngle, float sectorSpan, float radius, int32 count ) const;
@@ -110,12 +110,12 @@ private:
     std::vector<mu::Vec3>     wedgeExitSlots_{};
     uint32                    activeWedgeChargeId_{ 0 };
     bool                      leaderlessBrawlEnabled_{ false };
-    float                     leaderlessBrawlTimer_{ 0.f };
-    float                     leaderlessRetargetTimer_{ 0.f };
-    float                     boxRefreshTimer_{ 0.f };
+    Seconds                   leaderlessBrawlTimer_{};
+    Seconds                   leaderlessRetargetTimer_{};
+    Seconds                   boxRefreshTimer_{};
 
-    static constexpr float LEADERLESS_CONFUSED_DURATION = 6.0f;
-    static constexpr float LEADERLESS_RETARGET_INTERVAL = 1.5f;
+    static constexpr Seconds LEADERLESS_CONFUSED_DURATION{ 6.0f };
+    static constexpr Seconds LEADERLESS_RETARGET_INTERVAL{ 1.5f };
 };
 
 #endif // tactical_squad_hpp

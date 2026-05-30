@@ -40,9 +40,9 @@ void TacticalSquad::removeMember( uint32 npcId ) {
 
 void TacticalSquad::receiveOrder( const SquadOrder& order ) {
     leaderlessBrawlEnabled_ = false;
-    leaderlessBrawlTimer_ = 0.f;
-    leaderlessRetargetTimer_ = 0.f;
-    boxRefreshTimer_ = 0.f;
+    leaderlessBrawlTimer_ = 0s;
+    leaderlessRetargetTimer_ = 0s;
+    boxRefreshTimer_ = 0s;
     currentOrder_ = order;
     orderDirty_ = true;
     wedgePrepared_ = false;
@@ -66,10 +66,8 @@ void TacticalSquad::update( Seconds dt, Room& room ) {
         return;
     }
 
-    float dtf = dt.count();
-
     if ( leaderlessBrawlEnabled_ ) {
-        updateLeaderlessBrawl( dtf, room );
+        updateLeaderlessBrawl( dt, room );
         return;
     }
 
@@ -79,10 +77,10 @@ void TacticalSquad::update( Seconds dt, Room& room ) {
         return;
     }
     else if ( currentOrder_.type == SquadOrderType::BoxAdvance ) {
-        boxRefreshTimer_ -= dtf;
-        if ( boxRefreshTimer_ <= 0.f ) {
+        boxRefreshTimer_ -= dt;
+        if ( boxRefreshTimer_ <= 0s ) {
             pushCommandsToMembers( room );
-            boxRefreshTimer_ = 0.1f;
+            boxRefreshTimer_ = 0.1s;
         }
         return;
     }
@@ -99,19 +97,19 @@ void TacticalSquad::update( Seconds dt, Room& room ) {
 
 // ─── leaderless brawl ─────────────────────────────────────────────────────────
 
-void TacticalSquad::updateLeaderlessBrawl( float dt, Room& room ) {
-    if ( leaderlessBrawlTimer_ > 0.f ) {
+void TacticalSquad::updateLeaderlessBrawl( Seconds dt, Room& room ) {
+    if ( leaderlessBrawlTimer_ > 0s ) {
         leaderlessBrawlTimer_ -= dt;
 
-        if ( leaderlessBrawlTimer_ > 0.f ) {
+        if ( leaderlessBrawlTimer_ > 0s ) {
             return;
         }
-        leaderlessRetargetTimer_ = 0.f;
+        leaderlessRetargetTimer_ = 0s;
     }
 
     leaderlessRetargetTimer_ -= dt;
 
-    if ( leaderlessRetargetTimer_ > 0.f ) {
+    if ( leaderlessRetargetTimer_ > 0s ) {
         return;
     }
     leaderlessRetargetTimer_ = LEADERLESS_RETARGET_INTERVAL;
@@ -819,7 +817,7 @@ void TacticalSquad::pushConfusedToMembers( Room& room ) {
     wedgeExitSlots_.clear();
     leaderlessBrawlEnabled_  = true;
     leaderlessBrawlTimer_    = LEADERLESS_CONFUSED_DURATION;
-    leaderlessRetargetTimer_ = 0.f;
+    leaderlessRetargetTimer_ = 0s;
 
     auto cmd = TacticalCommand{
 		.type = TacticalCommandType::Confused

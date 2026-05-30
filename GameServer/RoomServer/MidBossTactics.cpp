@@ -254,7 +254,7 @@ void MidBossTacticBase::assignSquadsToPlayers( const Room& room, const PlatoonLe
       GoblinMidBossTactic
 -----------------------------*/
 
-void GoblinMidBossTactic::update(float dt, Room& room, PlatoonLeader& leader) {
+void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) {
     const auto& squads = leader.getSquads();
 
     if ( !initialSizesSet_ ) {
@@ -275,13 +275,13 @@ void GoblinMidBossTactic::update(float dt, Room& room, PlatoonLeader& leader) {
     }
 
     if ( !hasLiveSquad && leaderPhase_ != LeaderPhase::BossSolo ) {
-        tacticCooldown_ = 0.f;
+        tacticCooldown_ = 0s;
         enterPhase( LeaderPhase::BossSolo, leader );
     }
 
     if ( leaderPhase_ == LeaderPhase::Cooldown ) {
         tacticCooldown_ -= dt;
-        if ( tacticCooldown_ <= 0.f ) {
+        if ( tacticCooldown_ <= 0s ) {
             enterPhase( tacticsUnlocked_ ? LeaderPhase::TacticalRetreat : LeaderPhase::BoxAdvance, leader );
         }
     }
@@ -297,7 +297,7 @@ void GoblinMidBossTactic::update(float dt, Room& room, PlatoonLeader& leader) {
 
             if ( phaseOrderIssued_ && liveMembers != encircleIssuedLiveMembers_ ) {
                 phaseOrderIssued_ = false;
-                tacticTimer_ = 0.f;
+                tacticTimer_ = 0s;
             }
         }
 
@@ -393,9 +393,9 @@ void GoblinMidBossTactic::update(float dt, Room& room, PlatoonLeader& leader) {
     }
 
     tacticTimer_ -= dt;
-    if (tacticTimer_ <= 0.f) {
+    if ( tacticTimer_ <= 0s ) {
         tacticTimer_ = TACTIC_INTERVAL;
-        evaluateTactics(room, leader);
+        evaluateTactics( room, leader );
     }
 
     if ( leaderPhase_ == LeaderPhase::TacticalRetreat ) {
@@ -426,7 +426,7 @@ void GoblinMidBossTactic::enterPhase( LeaderPhase next, PlatoonLeader& leader ) 
         divideTasks_.clear();
     }
     if ( next != LeaderPhase::Cooldown ) {
-        tacticTimer_ = 0.f;
+        tacticTimer_ = 0s;
     }
 }
 
@@ -894,7 +894,7 @@ void GoblinMidBossTactic::issueDivideAndConquer( PlatoonLeader& leader,
     }
 }
 
-void GoblinMidBossTactic::updateDivideAndConquer( float dt, Room& room, PlatoonLeader& leader ) {
+void GoblinMidBossTactic::updateDivideAndConquer( Seconds dt, Room& room, PlatoonLeader& leader ) {
     if ( !phaseOrderIssued_ ) {
         return;
     }
@@ -953,7 +953,7 @@ void GoblinMidBossTactic::updateDivideAndConquer( float dt, Room& room, PlatoonL
             }
 
             task.engageIssued = true;
-            task.engageProtectTimer = 0.f;
+            task.engageProtectTimer = 0s;
         }
 
         if ( task.engageIssued ) {
@@ -987,7 +987,7 @@ void GoblinMidBossTactic::updateDivideAndConquer( float dt, Room& room, PlatoonL
     }
 }
 
-bool GoblinMidBossTactic::updateBossPersonalCombat( float dt, Room& room, PlatoonLeader& leader ) {
+bool GoblinMidBossTactic::updateBossPersonalCombat( Seconds dt, Room& room, PlatoonLeader& leader ) {
     auto resolveCurrentTarget = [&]() -> GameSession* {
         GameSession* s = resolveBossPersonalTarget( room, bossPersonalTargetId_ );
         if ( !s ) {
@@ -1000,7 +1000,7 @@ bool GoblinMidBossTactic::updateBossPersonalCombat( float dt, Room& room, Platoo
     if ( bossPersonalState_ == BossPersonalState::EvaluateTarget ) {
         bossPersonalTargetId_ = selectBossPersonalTarget( room, leader );
         leader.setTacticalTarget( bossPersonalTargetId_ );
-        bossPersonalTimer_ = 0.f;
+        bossPersonalTimer_ = 0s;
         bossTargetEvalTimer_ = BOSS_TARGET_EVAL_INTERVAL;
 
         if ( bossPersonalTargetId_ == 0 ) {
@@ -1027,7 +1027,7 @@ bool GoblinMidBossTactic::updateBossPersonalCombat( float dt, Room& room, Platoo
         leader.transitionTacticalState( TacticalNpcState::Chase );
 
         bossTargetEvalTimer_ -= dt;
-        if ( bossTargetEvalTimer_ <= 0.f ) {
+        if ( bossTargetEvalTimer_ <= 0s ) {
             bossTargetEvalTimer_ = BOSS_TARGET_EVAL_INTERVAL;
 
             BossTargetScore candidate = selectBossPersonalTargetScore( room, leader );
@@ -1054,13 +1054,13 @@ bool GoblinMidBossTactic::updateBossPersonalCombat( float dt, Room& room, Platoo
         }
 
         if ( dist <= leader.getAttackRange() ) {
-            bossPersonalTimer_ = 0.f;
+            bossPersonalTimer_ = 0s;
             bossPersonalState_ = BossPersonalState::AttackWindup;
             leader.transitionTacticalState( TacticalNpcState::AttackWindup );
             return true;
         }
 
-        moveBossToward( leader, target->player()->pos(), BOSS_CHASE_SPEED_MULT, dt );
+        moveBossToward( leader, target->player()->pos(), BOSS_CHASE_SPEED_MULT );
         return true;
     }
 
@@ -1077,7 +1077,7 @@ bool GoblinMidBossTactic::updateBossPersonalCombat( float dt, Room& room, Platoo
             leader.applyHitToSession( target, leader.getAttackDamage() );
         }
 
-        bossPersonalTimer_ = 0.f;
+        bossPersonalTimer_ = 0s;
         bossPersonalState_ = BossPersonalState::AttackRecover;
         leader.transitionTacticalState( TacticalNpcState::AttackRecover );
         return true;
@@ -1092,7 +1092,7 @@ bool GoblinMidBossTactic::updateBossPersonalCombat( float dt, Room& room, Platoo
             return true;
         }
 
-        bossPersonalTimer_ = 0.f;
+        bossPersonalTimer_ = 0s;
         bossPersonalState_ = BossPersonalState::EvaluateTarget;
         return true;
     }
@@ -1168,7 +1168,7 @@ GameSession* GoblinMidBossTactic::resolveBossPersonalTarget( Room& room, uint32 
     return room.findLivingSessionByPlayerId( static_cast<int32>(targetId) );
 }
 
-void GoblinMidBossTactic::moveBossToward( PlatoonLeader& leader, mu::Vec3 targetPos, float speedMult, float dt ) const {
+void GoblinMidBossTactic::moveBossToward( PlatoonLeader& leader, mu::Vec3 targetPos, float speedMult ) const {
     mu::Vec3 toTarget = targetPos - leader.pos();
     float dist = toTarget.len();
 

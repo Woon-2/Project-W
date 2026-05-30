@@ -125,19 +125,19 @@ void MU_CALLCONV TacticalNpc::reviveAt( mu::Vec3 p ) {
     holdFacing_               = {};
     confusedAnchor_           = p;
     confusedTarget_           = p;
-    confusedRetargetTimer_    = 0.f;
+    confusedRetargetTimer_    = 0s;
     confusedWanderStep_       = 0;
     speedMult_                = 1.f;
-    windupTimer_              = 0.f;
-    recoverTimer_             = 0.f;
-    pressureWaitTimer_        = 0.f;
+    windupTimer_              = 0s;
+    recoverTimer_             = 0s;
+    pressureWaitTimer_        = 0s;
     resetPressureWaitTarget();
     pressureWaitAngleOffset_  = 0.f;
     pressureWaitRadiusOffset_ = 0.f;
     pressureWaitScatterSeed_  = 0;
     pressureReentering_       = false;
     reservedAttackTargetId_   = 0;
-    reservedAttackStaleTimer_ = 0.f;
+    reservedAttackStaleTimer_ = 0s;
 }
 
 // ─── transitionTo ─────────────────────────────────────────────────────────────
@@ -147,13 +147,13 @@ void TacticalNpc::transitionTo( TacticalNpcState next ) {
         return;
     }
     if ( next == TacticalNpcState::AttackWindup ) {
-        windupTimer_ = 0.f;
+        windupTimer_ = 0s;
     }
     if ( next == TacticalNpcState::AttackRecover ) {
-        recoverTimer_ = 0.f;
+        recoverTimer_ = 0s;
     }
     if ( next == TacticalNpcState::PressureWait ) {
-        pressureWaitTimer_ = 0.f;
+        pressureWaitTimer_ = 0s;
         resetPressureWaitTarget();
         ++pressureWaitScatterSeed_;
         refreshPressureWaitScatterOffsets();
@@ -174,7 +174,7 @@ void TacticalNpc::consumePendingCommand( Room& room ) {
     case TacticalCommandType::EngageTarget:
         guardNearestPlayer_    = false;
         useHoldFacing_         = false;
-        confusedRetargetTimer_ = 0.f;
+        confusedRetargetTimer_ = 0s;
         speedMult_             = 1.f;
 
         if ( targetId_ == pendingCmd_.targetId &&
@@ -199,7 +199,7 @@ void TacticalNpc::consumePendingCommand( Room& room ) {
         releaseAttackReservation( room );
         guardNearestPlayer_    = false;
         useHoldFacing_         = false;
-        confusedRetargetTimer_ = 0.f;
+        confusedRetargetTimer_ = 0s;
         pressureReentering_    = false;
         chargeComplete_        = false;
         targetId_         = pendingCmd_.targetId;
@@ -214,7 +214,7 @@ void TacticalNpc::consumePendingCommand( Room& room ) {
         releaseAttackReservation( room );
         guardNearestPlayer_    = false;
         useHoldFacing_         = false;
-        confusedRetargetTimer_ = 0.f;
+        confusedRetargetTimer_ = 0s;
         pressureReentering_    = false;
         targetId_       = pendingCmd_.targetId;
         assignedSlot_   = pendingCmd_.slotOffset;
@@ -234,7 +234,7 @@ void TacticalNpc::consumePendingCommand( Room& room ) {
         guardNearestPlayer_    = false;
         useHoldFacing_         = pendingCmd_.useHoldFacing;
         holdFacing_            = pendingCmd_.holdFacing;
-        confusedRetargetTimer_ = 0.f;
+        confusedRetargetTimer_ = 0s;
         pressureReentering_    = false;
         speedMult_             = pendingCmd_.speedMult;
         chargeComplete_        = false;
@@ -248,7 +248,7 @@ void TacticalNpc::consumePendingCommand( Room& room ) {
         guardNearestPlayer_    = true;
         useHoldFacing_         = pendingCmd_.useHoldFacing;
         holdFacing_            = pendingCmd_.holdFacing;
-        confusedRetargetTimer_ = 0.f;
+        confusedRetargetTimer_ = 0s;
         pressureReentering_    = false;
         speedMult_             = pendingCmd_.speedMult;
         targetId_     = pendingCmd_.targetId;
@@ -261,7 +261,7 @@ void TacticalNpc::consumePendingCommand( Room& room ) {
         guardNearestPlayer_    = false;
         useHoldFacing_         = false;
         chargeComplete_        = false;
-        confusedRetargetTimer_ = 0.f;
+        confusedRetargetTimer_ = 0s;
         pressureReentering_    = false;
         speedMult_             = 1.f;
         targetId_              = 0;
@@ -279,7 +279,7 @@ void TacticalNpc::consumePendingCommand( Room& room ) {
         assignedSlot_          = {};
         confusedAnchor_        = pos();
         confusedTarget_        = pos();
-        confusedRetargetTimer_ = 0.f;
+        confusedRetargetTimer_ = 0s;
         confusedWanderStep_    = 0;
         transitionTo( TacticalNpcState::Confused );
         break;
@@ -307,17 +307,16 @@ TacticalNpcUpdateResult TacticalNpc::update( Seconds dt, Room& room ) {
         consumePendingCommand( room );
     }
 
-    float dtf = dt.count();
     switch ( state_ ) {
-    case TacticalNpcState::Idle:          updateIdle        ();            break;
-    case TacticalNpcState::Chase:         updateChase       ( dtf, room ); break;
-    case TacticalNpcState::AttackWindup:  updateAttackWindup( dtf, room ); break;
-    case TacticalNpcState::AttackRecover: updateAttackRecover( dtf, room ); break;
-    case TacticalNpcState::Flank:         updateFlank       ( dtf, room ); break;
-    case TacticalNpcState::ChargeThrough: updateChargeThrough( room );     break;
-    case TacticalNpcState::Confused:      updateConfused    ( dtf, room ); break;
-    case TacticalNpcState::HoldSlot:      updateHoldSlot    ( room );      break;
-    case TacticalNpcState::PressureWait:  updatePressureWait( dtf, room ); break;
+    case TacticalNpcState::Idle:          updateIdle        ();           break;
+    case TacticalNpcState::Chase:         updateChase       ( dt, room ); break;
+    case TacticalNpcState::AttackWindup:  updateAttackWindup( dt, room ); break;
+    case TacticalNpcState::AttackRecover: updateAttackRecover( dt, room ); break;
+    case TacticalNpcState::Flank:         updateFlank       ( dt, room ); break;
+    case TacticalNpcState::ChargeThrough: updateChargeThrough( room );    break;
+    case TacticalNpcState::Confused:      updateConfused    ( dt, room ); break;
+    case TacticalNpcState::HoldSlot:      updateHoldSlot    ( room );     break;
+    case TacticalNpcState::PressureWait:  updatePressureWait( dt, room ); break;
     case TacticalNpcState::Dead:                                           break;
     }
 
@@ -338,21 +337,21 @@ bool TacticalNpc::hasReservedAttackSlot() const {
     return reservedAttackTargetId_ != 0 && reservedAttackTargetId_ == targetId_;
 }
 
-void TacticalNpc::updateReservedAttackStaleTimer( float dt, Room& room ) {
+void TacticalNpc::updateReservedAttackStaleTimer( Seconds dt, Room& room ) {
     if ( !hasReservedAttackSlot() ) {
-        reservedAttackStaleTimer_ = 0.f;
+        reservedAttackStaleTimer_ = 0s;
         return;
     }
 
     GameSession* target = resolveTarget( room );
     if ( !target ) {
-        reservedAttackStaleTimer_ = 0.f;
+        reservedAttackStaleTimer_ = 0s;
         return;
     }
 
     float distSq = (pos() - target->player()->pos()).len2();
     if ( state_ == TacticalNpcState::AttackWindup || state_ == TacticalNpcState::AttackRecover || distSq <= attackRange_ * attackRange_ ) {
-        reservedAttackStaleTimer_ = 0.f;
+        reservedAttackStaleTimer_ = 0s;
         return;
     }
     reservedAttackStaleTimer_ += dt;
@@ -383,13 +382,13 @@ bool TacticalNpc::canEnterAttackSlot( Room& room ) {
 
     if ( !room.tryReserveTacticalAttackSlot( targetId_, getId() ) ) {
         reservedAttackTargetId_ = 0;
-        reservedAttackStaleTimer_ = 0.f;
+        reservedAttackStaleTimer_ = 0s;
         pressureReentering_ = false;
         return false;
     }
 
     reservedAttackTargetId_ = targetId_;
-    reservedAttackStaleTimer_ = 0.f;
+    reservedAttackStaleTimer_ = 0s;
     return true;
 }
 
@@ -400,7 +399,7 @@ void TacticalNpc::releaseAttackReservation( Room& room ) {
 
     room.releaseTacticalAttackSlot( reservedAttackTargetId_, getId() );
     reservedAttackTargetId_ = 0;
-    reservedAttackStaleTimer_ = 0.f;
+    reservedAttackStaleTimer_ = 0s;
     pressureReentering_ = false;
 }
 
@@ -410,7 +409,7 @@ void TacticalNpc::resetPressureWaitTarget() {
     pressureWaitDesired_       = {};
     pressureWaitTargetAnchor_  = {};
     pressureWaitFacingAnchor_  = mu::Vec3( 1.f, 0.f, 0.f );
-    pressureWaitRetargetTimer_ = 0.f;
+    pressureWaitRetargetTimer_ = 0s;
     pressureWaitDesiredValid_  = false;
 }
 
@@ -445,7 +444,7 @@ mu::Vec3 TacticalNpc::computePressureWaitDesired( mu::Vec3 targetPos, mu::Vec3 t
     return targetPos + radial * ringRadius;
 }
 
-void TacticalNpc::moveTowardPressureWait( float dt, Room& room, mu::Vec3 targetPos, mu::Vec3 targetFacing ) {
+void TacticalNpc::moveTowardPressureWait( Seconds dt, Room& room, mu::Vec3 targetPos, mu::Vec3 targetFacing ) {
     mu::Vec3 tf = mu::Vec3( targetFacing.x(), 0.f, targetFacing.z() );
     if ( tf.len2() <= 0.01f ) {
         tf = mu::Vec3((targetPos - pos()).x(), 0.f, (targetPos - pos()).z());
@@ -465,7 +464,7 @@ void TacticalNpc::moveTowardPressureWait( float dt, Room& room, mu::Vec3 targetP
         pressureWaitDesired_        = computePressureWaitDesired( targetPos, tf );
         pressureWaitTargetAnchor_   = targetPos;
         pressureWaitFacingAnchor_   = tf;
-        pressureWaitRetargetTimer_  = 0.f;
+        pressureWaitRetargetTimer_  = 0s;
         pressureWaitDesiredValid_   = true;
     }
     else if ( pressureWaitRetargetTimer_ >= TACTICAL_PRESSURE_RETARGET_INTERVAL && (targetMoved || facingChanged) ) {
@@ -500,7 +499,7 @@ void TacticalNpc::moveTowardPressureWait( float dt, Room& room, mu::Vec3 targetP
 
         pressureWaitTargetAnchor_  = targetPos;
         pressureWaitFacingAnchor_  = tf;
-        pressureWaitRetargetTimer_ = 0.f;
+        pressureWaitRetargetTimer_ = 0s;
     }
 
     mu::Vec3 toDesired = pressureWaitDesired_ - pos();
@@ -577,7 +576,7 @@ void TacticalNpc::moveTowardPressureWait( float dt, Room& room, mu::Vec3 targetP
 
 // ─── Chase ────────────────────────────────────────────────────────────────────
 
-void TacticalNpc::updateChase( float dt, Room& room ) {
+void TacticalNpc::updateChase( Seconds dt, Room& room ) {
     GameSession* target = resolveTarget( room );
     if ( !target ) {
         releaseAttackReservation( room );
@@ -614,7 +613,7 @@ void TacticalNpc::updateChase( float dt, Room& room ) {
 
 // ─── AttackWindup ─────────────────────────────────────────────────────────────
 
-void TacticalNpc::updateAttackWindup( float dt, Room& room ) {
+void TacticalNpc::updateAttackWindup( Seconds dt, Room& room ) {
     GameSession* target = resolveTarget( room );
     if ( !target ) {
         releaseAttackReservation( room );
@@ -646,7 +645,7 @@ void TacticalNpc::updateAttackWindup( float dt, Room& room ) {
 
 // ─── AttackRecover ────────────────────────────────────────────────────────────
 
-void TacticalNpc::updateAttackRecover( float dt, Room& room ) {
+void TacticalNpc::updateAttackRecover( Seconds dt, Room& room ) {
     GameSession* target = resolveTarget( room );
     if ( !target ) {
         releaseAttackReservation( room );
@@ -683,7 +682,7 @@ void TacticalNpc::updateAttackRecover( float dt, Room& room ) {
 
 // ─── PressureWait ─────────────────────────────────────────────────────────────
 
-void TacticalNpc::updatePressureWait( float dt, Room& room ) {
+void TacticalNpc::updatePressureWait( Seconds dt, Room& room ) {
     GameSession* target = resolveTarget( room );
     if ( !target ) {
         releaseAttackReservation( room );
@@ -696,7 +695,7 @@ void TacticalNpc::updatePressureWait( float dt, Room& room ) {
     pressureWaitTimer_ += dt;
     updateReservedAttackStaleTimer( dt, room );
 
-    float reenterDelay = TACTICAL_PRESSURE_REENTER_MIN_TIME + static_cast<float>(getId() % 4u) * TACTICAL_PRESSURE_REENTER_STAGGER;
+    Seconds reenterDelay = TACTICAL_PRESSURE_REENTER_MIN_TIME + static_cast<float>(getId() % 4u) * TACTICAL_PRESSURE_REENTER_STAGGER;
     bool canReenter = pressureWaitTimer_ >= reenterDelay && canEnterAttackSlot( room );
 
     if ( canReenter ) {
@@ -733,7 +732,7 @@ void TacticalNpc::updatePressureWait( float dt, Room& room ) {
 
 // ─── Flank ────────────────────────────────────────────────────────────────────
 
-void TacticalNpc::updateFlank( float dt, Room& room ) {
+void TacticalNpc::updateFlank( Seconds dt, Room& room ) {
     GameSession* target = resolveTarget( room );
     if ( !target ) {
         releaseAttackReservation( room );
@@ -831,13 +830,13 @@ void TacticalNpc::updateChargeThrough( Room& room ) {
 
 // ─── Confused ─────────────────────────────────────────────────────────────────
 
-void TacticalNpc::updateConfused( float dt, Room& room ) {
+void TacticalNpc::updateConfused( Seconds dt, Room& room ) {
     targetId_ = 0;
     confusedRetargetTimer_ -= dt;
 
     float distToTarget = (pos() - confusedTarget_).len();
 
-    if ( confusedRetargetTimer_ <= 0.f || distToTarget < 0.75f ) {
+    if ( confusedRetargetTimer_ <= 0s || distToTarget < 0.75f ) {
         ++confusedWanderStep_;
         float seedA = static_cast<float>( (getId() * 37u + static_cast<uint32_t>( confusedWanderStep_ ) * 101u) % 997u );
         float seedB = static_cast<float>( (getId() * 53u + static_cast<uint32_t>( confusedWanderStep_ ) * 193u) % 991u );

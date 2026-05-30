@@ -75,7 +75,7 @@ TacticalNpcUpdateResult PlatoonLeader::update( Seconds dt, Room& room ) {
     }
 
     if ( tactic_ ) {
-        tactic_->update( dt.count(), room, *this );
+        tactic_->update( dt, room, *this );
     }
 
     auto result = TacticalNpcUpdateResult{
