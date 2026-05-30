@@ -22,7 +22,7 @@ public:
     const std::vector<TacticalSquad*>& getSquads() const { return squads_; }
     void setTactic( std::unique_ptr<IMidBossTactic> tactic );
 
-    void removeDeadMembersFromSquads( Room& room );
+    void removeDeadMembersFromSquads();
     void pushConfusedToSquads( Room& room );
     void setTacticalTarget( uint32 targetId ) { targetId_ = targetId; }
     void transitionTacticalState( TacticalNpcState next ) { transitionTo( next ); }

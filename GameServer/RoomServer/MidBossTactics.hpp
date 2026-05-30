@@ -102,7 +102,7 @@ private:
     float        evaluatePlayerScore( const GameSession* s, const PlatoonLeader& leader ) const;
     int32        clusterPlayers( const Room& room, const PlatoonLeader& leader ) const;
     std::vector<PlayerCluster> buildPlayerClusters( const Room& room, const PlatoonLeader& leader ) const;
-    void         issueDivideAndConquer( Room& room, PlatoonLeader& leader,
+    void         issueDivideAndConquer( PlatoonLeader& leader,
                                         const std::vector<TacticalSquad*>& liveSquads, const std::vector<PlayerCluster>& clusters );
     void         updateDivideAndConquer( float dt, Room& room, PlatoonLeader& leader );
     uint32       selectReplacementTarget( Room& room, const PlatoonLeader& leader, const std::vector<uint32>& playerIds ) const;

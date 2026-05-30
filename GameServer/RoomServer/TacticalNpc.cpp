@@ -309,14 +309,14 @@ TacticalNpcUpdateResult TacticalNpc::update( Seconds dt, Room& room ) {
 
     float dtf = dt.count();
     switch ( state_ ) {
-    case TacticalNpcState::Idle:          updateIdle        ( dtf, room ); break;
+    case TacticalNpcState::Idle:          updateIdle        ();            break;
     case TacticalNpcState::Chase:         updateChase       ( dtf, room ); break;
     case TacticalNpcState::AttackWindup:  updateAttackWindup( dtf, room ); break;
     case TacticalNpcState::AttackRecover: updateAttackRecover( dtf, room ); break;
     case TacticalNpcState::Flank:         updateFlank       ( dtf, room ); break;
-    case TacticalNpcState::ChargeThrough: updateChargeThrough( dtf, room ); break;
+    case TacticalNpcState::ChargeThrough: updateChargeThrough( room );     break;
     case TacticalNpcState::Confused:      updateConfused    ( dtf, room ); break;
-    case TacticalNpcState::HoldSlot:      updateHoldSlot    ( dtf, room ); break;
+    case TacticalNpcState::HoldSlot:      updateHoldSlot    ( room );      break;
     case TacticalNpcState::PressureWait:  updatePressureWait( dtf, room ); break;
     case TacticalNpcState::Dead:                                           break;
     }
@@ -328,7 +328,7 @@ TacticalNpcUpdateResult TacticalNpc::update( Seconds dt, Room& room ) {
 
 // ─── Idle ─────────────────────────────────────────────────────────────────────
 
-void TacticalNpc::updateIdle( float /*dt*/, Room& /*room*/ ) {
+void TacticalNpc::updateIdle() {
     setLinearVel( mu::Vec3( 0.f, body().linearVel().y(), 0.f ) );
 }
 
@@ -782,7 +782,7 @@ void TacticalNpc::updateFlank( float dt, Room& room ) {
 
 // ─── ChargeThrough ────────────────────────────────────────────────────────────
 
-void TacticalNpc::updateChargeThrough( float /*dt*/, Room& room ) {
+void TacticalNpc::updateChargeThrough( Room& room ) {
     GameSession* target = resolveTarget( room );
 
     if ( chargeComplete_ ) {
@@ -879,7 +879,7 @@ void TacticalNpc::updateConfused( float dt, Room& room ) {
 
 // ─── HoldSlot ─────────────────────────────────────────────────────────────────
 
-void TacticalNpc::updateHoldSlot( float /*dt*/, Room& room ) {
+void TacticalNpc::updateHoldSlot( Room& room ) {
     GameSession* target = resolveTarget( room );
     if ( guardNearestPlayer_ ) {
         target = nullptr;

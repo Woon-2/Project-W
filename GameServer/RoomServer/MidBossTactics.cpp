@@ -264,7 +264,7 @@ void GoblinMidBossTactic::update(float dt, Room& room, PlatoonLeader& leader) {
         }
     }
 
-    leader.removeDeadMembersFromSquads( room );
+    leader.removeDeadMembersFromSquads();
 
     bool hasLiveSquad = false;
     for ( TacticalSquad* sq : squads ) {
@@ -431,7 +431,7 @@ void GoblinMidBossTactic::enterPhase( LeaderPhase next, PlatoonLeader& leader ) 
 }
 
 void GoblinMidBossTactic::enterTacticFailCooldown( Room& room, PlatoonLeader& leader ) {
-    leader.removeDeadMembersFromSquads( room );
+    leader.removeDeadMembersFromSquads();
 
     tacticCooldown_ = TACTIC_FAIL_COOLDOWN_DURATION;
     enterPhase( LeaderPhase::Cooldown, leader );
@@ -461,7 +461,7 @@ void GoblinMidBossTactic::enterTacticFailCooldown( Room& room, PlatoonLeader& le
 }
 
 void GoblinMidBossTactic::evaluateTactics( Room& room, PlatoonLeader& leader ) {
-    leader.removeDeadMembersFromSquads( room );
+    leader.removeDeadMembersFromSquads();
 
     std::vector<TacticalSquad*> liveSquads;
     for ( TacticalSquad* sq : leader.getSquads() ) {
@@ -626,7 +626,7 @@ void GoblinMidBossTactic::evaluateTactics( Room& room, PlatoonLeader& leader ) {
             return;
         }
 
-        issueDivideAndConquer( room, leader, liveSquads, clusters );
+        issueDivideAndConquer( leader, liveSquads, clusters );
         phaseOrderIssued_ = true;
         return;
     }
@@ -801,7 +801,7 @@ uint32 GoblinMidBossTactic::selectReplacementTarget( Room& room, const PlatoonLe
     return best ? static_cast<uint32>( best->id() ) : 0;
 }
 
-void GoblinMidBossTactic::issueDivideAndConquer( Room& room, PlatoonLeader& leader,
+void GoblinMidBossTactic::issueDivideAndConquer( PlatoonLeader& leader,
                                                  const std::vector<TacticalSquad*>& liveSquads, const std::vector<PlayerCluster>& clusters ) {
     divideTasks_.clear();
     if ( liveSquads.empty() || clusters.size() <= 1 ) {

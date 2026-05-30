@@ -119,14 +119,14 @@ protected:
     void applyConfig( const TacticalNpcConfig& cfg );
     void transitionTo( TacticalNpcState next );
 
-    void updateIdle         ( float dt, Room& room );
+    void updateIdle         ();
     void updateChase        ( float dt, Room& room );
     void updateAttackWindup ( float dt, Room& room );
     void updateAttackRecover( float dt, Room& room );
     void updateFlank        ( float dt, Room& room );
-    void updateChargeThrough( float dt, Room& room );
+    void updateChargeThrough( Room& room );
     void updateConfused     ( float dt, Room& room );
-    void updateHoldSlot     ( float dt, Room& room );
+    void updateHoldSlot     ( Room& room );
     void updatePressureWait ( float dt, Room& room );
     void updateDead         ( Room& room );
 
