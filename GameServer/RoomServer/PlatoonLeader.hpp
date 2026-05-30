@@ -3,12 +3,12 @@
 
 #include "TacticalNpc.hpp"
 #include "TacticalSquad.hpp"
+#include "IMidBossTactic.hpp"
 #include <memory>
 #include <vector>
 
 class Room;
 class GameSession;
-class IMidBossTactic;
 
 class PlatoonLeader : public TacticalNpc {
 public:
