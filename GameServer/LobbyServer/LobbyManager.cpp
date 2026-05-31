@@ -20,10 +20,13 @@ namespace {
 
 LobbyRoom* LobbyManager::createRoom() {
 	std::unique_lock lock(mutex_);
+
 	std::string code;
 	do { code = generateCode(); } while (rooms_.count(code));
+
 	auto* room = new LobbyRoom(code);
 	rooms_[code] = room;
+
 	return room;
 }
 
@@ -35,9 +38,11 @@ LobbyRoom* LobbyManager::findRoom(std::string_view code) {
 
 void LobbyManager::removeRoom(std::string_view code) {
 	std::unique_lock lock(mutex_);
+
 	auto it = rooms_.find(std::string(code));
 	if (it == rooms_.end())
 		return;
+
 	delete it->second;
 	rooms_.erase(it);
 }

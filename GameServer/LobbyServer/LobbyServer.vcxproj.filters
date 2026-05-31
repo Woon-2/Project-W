@@ -19,6 +19,9 @@
     <Filter Include="network\PacketManager">
       <UniqueIdentifier>{a66f1e84-423d-4a7a-9001-821c6be716d7}</UniqueIdentifier>
     </Filter>
+    <Filter Include="contents">
+      <UniqueIdentifier>{0714be00-d0e7-4874-87df-f8396c34964a}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Listener.cpp">
@@ -36,9 +39,14 @@
     <ClCompile Include="lspch.cpp">
       <Filter>default</Filter>
     </ClCompile>
-    <ClCompile Include="LobbyRoom.cpp" />
     <ClCompile Include="PacketManager.cpp">
       <Filter>network\PacketManager</Filter>
+    </ClCompile>
+    <ClCompile Include="LobbyManager.cpp">
+      <Filter>contents</Filter>
+    </ClCompile>
+    <ClCompile Include="LobbyRoom.cpp">
+      <Filter>contents</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -54,10 +62,14 @@
     <ClInclude Include="lspch.hpp">
       <Filter>default</Filter>
     </ClInclude>
-    <ClInclude Include="LobbyManager.hpp" />
-    <ClInclude Include="LobbyRoom.hpp" />
     <ClInclude Include="PacketManager.hpp">
       <Filter>network\PacketManager</Filter>
+    </ClInclude>
+    <ClInclude Include="LobbyRoom.hpp">
+      <Filter>contents</Filter>
+    </ClInclude>
+    <ClInclude Include="LobbyManager.hpp">
+      <Filter>contents</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

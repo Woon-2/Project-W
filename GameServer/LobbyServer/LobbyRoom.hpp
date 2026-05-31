@@ -6,9 +6,7 @@ class SendBuffer;
 
 class LobbyRoom {
 public:
-	static constexpr int maxPlayers = 4;
-
-	explicit LobbyRoom( const std::string& code );
+	LobbyRoom( const std::string& code ) : code_( code ), hostId_( 0u ), players_(), mutex_() {}
 
 	// 입장 - 방이 꽉 찼으면 false 반환
 	bool enter( GameSession* session );
@@ -22,13 +20,15 @@ public:
 	std::vector<uint16> playerIds() const;
 	std::vector<LobbyPlayerInfo> playerInfos() const;
 	bool isFull() const;
-	int  playerCnt() const;
+	int32 playerCnt() const;
 
 private:
 	void broadcast( const std::shared_ptr<SendBuffer>& buf );
 
+	static constexpr int32 maxPlayers = 4;
+
 	std::string code_;
-	uint16 hostId_ = 0;
+	uint16 hostId_;
 	std::vector<GameSession*> players_;
 	mutable std::mutex mutex_;
 };
