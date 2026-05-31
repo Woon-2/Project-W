@@ -89,7 +89,7 @@ private:
         float    score{ 0.f };
     };
 
-    void        enterPhase( LeaderPhase next, PlatoonLeader& leader );
+    void        enterPhase( LeaderPhase next );
     void        enterTacticFailCooldown( Room& room, PlatoonLeader& leader );
     void        evaluateTactics( Room& room, PlatoonLeader& leader );
     bool        updateBossPersonalCombat( Seconds dt, Room& room, PlatoonLeader& leader );
@@ -110,7 +110,7 @@ private:
     int32        minMembersForEncircle( int32 playerCount ) const;
     bool         canStartEncircle( const std::vector<TacticalSquad*>& liveSquads, const PlayerCluster& cluster ) const;
     float        calcEncircleRadius( int32 liveMembers ) const;
-    bool         allMembersArrived( const Room& room, const PlatoonLeader& leader ) const;
+    bool         allMembersArrived( const PlatoonLeader& leader ) const;
     std::vector<mu::Vec3> calcSquadBoxOffsets( int32 numSquads ) const;
     bool         checkTacticsConditions( const PlatoonLeader& leader ) const;
 

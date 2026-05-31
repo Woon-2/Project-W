@@ -276,13 +276,13 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
 
     if ( !hasLiveSquad && leaderPhase_ != LeaderPhase::BossSolo ) {
         tacticCooldown_ = 0s;
-        enterPhase( LeaderPhase::BossSolo, leader );
+        enterPhase( LeaderPhase::BossSolo );
     }
 
     if ( leaderPhase_ == LeaderPhase::Cooldown ) {
         tacticCooldown_ -= dt;
         if ( tacticCooldown_ <= 0s ) {
-            enterPhase( tacticsUnlocked_ ? LeaderPhase::TacticalRetreat : LeaderPhase::BoxAdvance, leader );
+            enterPhase( tacticsUnlocked_ ? LeaderPhase::TacticalRetreat : LeaderPhase::BoxAdvance );
         }
     }
     else if ( leaderPhase_ == LeaderPhase::Encircle ) {
@@ -301,7 +301,7 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
             }
         }
 
-        if ( phaseOrderIssued_ && allMembersArrived( room, leader ) ) {
+        if ( phaseOrderIssued_ && allMembersArrived( leader ) ) {
             GameSession* encircleTarget = selectPrimaryTarget( room, leader );
 
             if ( encircleTarget ) {
@@ -319,7 +319,7 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
             }
 
             tacticCooldown_ = TACTIC_COOLDOWN_DURATION;
-            enterPhase( LeaderPhase::Cooldown, leader );
+            enterPhase( LeaderPhase::Cooldown );
         }
     }
     else if ( leaderPhase_ == LeaderPhase::DivideAndConquer ) {
@@ -335,12 +335,12 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
         && primary && checkTacticsConditions( leader ) 
     ) {
         tacticsUnlocked_ = true;
-        enterPhase( LeaderPhase::TacticalRetreat, leader );
+        enterPhase( LeaderPhase::TacticalRetreat );
     }
 
-    if ( leaderPhase_ == LeaderPhase::BoxAdvance && primary && allMembersArrived( room, leader ) ) {
+    if ( leaderPhase_ == LeaderPhase::BoxAdvance && primary && allMembersArrived( leader ) ) {
         if ( !tacticsUnlocked_ ) {
-            enterPhase( LeaderPhase::Engage, leader );
+            enterPhase( LeaderPhase::Engage );
 
             for ( auto* sq : squads ) {
                 if ( sq->isEmpty() ) {
@@ -359,37 +359,37 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
             auto liveSquads = collectLiveSquads( leader );
 
             if ( clusters.size() == 1 && canStartEncircle( liveSquads, clusters.front() ) ) {
-                enterPhase( LeaderPhase::Encircle, leader );
+                enterPhase( LeaderPhase::Encircle );
             }
             else if ( clusters.size() == 1 ) {
                 enterTacticFailCooldown( room, leader );
             }
             else {
-                enterPhase( LeaderPhase::Vigilance, leader );
+                enterPhase( LeaderPhase::Vigilance );
             }
         }
     }
 
-    if ( leaderPhase_ == LeaderPhase::Vigilance && phaseOrderIssued_ && allMembersArrived( room, leader ) ) {
+    if ( leaderPhase_ == LeaderPhase::Vigilance && phaseOrderIssued_ && allMembersArrived( leader ) ) {
         auto clusters = buildPlayerClusters( room, leader );
         auto liveSquads = collectLiveSquads( leader );
 
         if ( clusters.size() <= 1 && !clusters.empty() && canStartEncircle( liveSquads, clusters.front() ) ) {
-            enterPhase( LeaderPhase::Encircle, leader );
+            enterPhase( LeaderPhase::Encircle );
         }
         else if ( clusters.size() <= 1 ) {
             enterTacticFailCooldown( room, leader );
         }
         else {
-            enterPhase( LeaderPhase::DivideAndConquer, leader );
+            enterPhase( LeaderPhase::DivideAndConquer );
         }
     }
 
     bool leaderAtRetreat = ( leader.pos() - retreatTargetPos_ ).len() <= 1.5f;
     if ( leaderPhase_ == LeaderPhase::TacticalRetreat && phaseOrderIssued_
-        && allMembersArrived( room, leader ) && leaderAtRetreat
+        && allMembersArrived( leader ) && leaderAtRetreat
     ) {
-        enterPhase( LeaderPhase::BoxAdvance, leader );
+        enterPhase( LeaderPhase::BoxAdvance );
     }
 
     tacticTimer_ -= dt;
@@ -415,7 +415,7 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
     updateBossPersonalCombat( dt, room, leader );
 }
 
-void GoblinMidBossTactic::enterPhase( LeaderPhase next, PlatoonLeader& leader ) {
+void GoblinMidBossTactic::enterPhase( LeaderPhase next ) {
     leaderPhase_ = next;
     phaseOrderIssued_ = false;
 
@@ -434,7 +434,7 @@ void GoblinMidBossTactic::enterTacticFailCooldown( Room& room, PlatoonLeader& le
     leader.removeDeadMembersFromSquads();
 
     tacticCooldown_ = TACTIC_FAIL_COOLDOWN_DURATION;
-    enterPhase( LeaderPhase::Cooldown, leader );
+    enterPhase( LeaderPhase::Cooldown );
 
     std::vector<TacticalSquad*> liveSquads;
     for ( TacticalSquad* sq : leader.getSquads() ) {
@@ -498,7 +498,7 @@ void GoblinMidBossTactic::evaluateTactics( Room& room, PlatoonLeader& leader ) {
         if ( leader.getState() == TacticalNpcState::Idle ) {
             leader.transitionTacticalState( TacticalNpcState::Chase );
         }
-    };
+    }
 
     int32 numSquads = static_cast<int32>(liveSquads.size());
     primaryTargetId_ = primaryId;
@@ -618,7 +618,7 @@ void GoblinMidBossTactic::evaluateTactics( Room& room, PlatoonLeader& leader ) {
         auto clusters = buildPlayerClusters( room, leader );
         if ( clusters.size() <= 1 ) {
             if ( !clusters.empty() && canStartEncircle( liveSquads, clusters.front() ) ) {
-                enterPhase( LeaderPhase::Encircle, leader );
+                enterPhase( LeaderPhase::Encircle );
             }
             else {
                 enterTacticFailCooldown( room, leader );
@@ -983,7 +983,7 @@ void GoblinMidBossTactic::updateDivideAndConquer( Seconds dt, Room& room, Platoo
 
     if ( allProtected ) {
         tacticCooldown_ = TACTIC_COOLDOWN_DURATION;
-        enterPhase( LeaderPhase::Cooldown, leader );
+        enterPhase( LeaderPhase::Cooldown );
     }
 }
 
@@ -1192,7 +1192,7 @@ float GoblinMidBossTactic::evaluatePlayerScore( const GameSession* s, const Plat
     return distScore * 0.5f + hpScore * 0.5f;
 }
 
-bool GoblinMidBossTactic::allMembersArrived( const Room& /*room*/, const PlatoonLeader& leader ) const {
+bool GoblinMidBossTactic::allMembersArrived( const PlatoonLeader& leader ) const {
     bool anyAlive = false;
 
     for ( TacticalSquad* sq : leader.getSquads() ) {
