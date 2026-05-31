@@ -1,35 +1,32 @@
-﻿#include "pch.hpp"
-#include "Memory.hpp"
-#include "Server.hpp"
-#include "IdPool.hpp"
-#include "SendBuffer.hpp"
+#include "lspch.hpp"
+#include "LobbyServer.hpp"
 
-int main()
-{
+int main() {
 	SocketUtils::init();
-	Memory::init();
+	MemoryManager::init();
 	IdPool::init();
 
-	Server::start();
+	LobbyServer server;
+	server.start();
 
-	// 물리 코어 수 - 1(main 쓰래드) 개 만큼 쓰래드 생성
-	auto coreCnt = numberOfPhysicalCores() - 1;
-	auto threads = std::vector<std::thread>(coreCnt);
-	for (size_t i = 0; i < coreCnt; ++i) {
-		threads[i] = std::thread([]() {
-			while (true) {
-				Server::iocpCore().dispatch();
+	const auto coreCnt = numberOfPhysicalCores() - 1;
+	std::vector<std::thread> threads( coreCnt );
+	for ( size_t i = 0; i < coreCnt; ++i ) {
+		threads[ i ] = std::thread( [&server] { 
+			while ( true ) {
+				server.reactor().dispatch();
 			}
-		});
+		} );
 	}
 
-	for (auto& th : threads) {
-		th.join();
+	while ( true ) {
+		server.reactor().dispatch();
 	}
 
-	Server::stop();
+	for( auto& t : threads ) {
+		t.join();
+	}
 
-	SendBufferManager::clear();
-	Memory::release();
+	MemoryManager::release();
 	SocketUtils::release();
 }

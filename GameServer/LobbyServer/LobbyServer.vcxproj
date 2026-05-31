@@ -70,6 +70,22 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <IncludePath>$(SolutionDir)ServerEngine\;$(SolutionDir)common\;$(IncludePath)</IncludePath>
+    <LibraryPath>$(SolutionDir)lib\;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <IncludePath>$(SolutionDir)ServerEngine\;$(SolutionDir)common\;$(IncludePath)</IncludePath>
+    <LibraryPath>$(SolutionDir)lib\;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <IncludePath>$(SolutionDir)ServerEngine\;$(SolutionDir)common\;$(IncludePath)</IncludePath>
+    <LibraryPath>$(SolutionDir)lib\;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IncludePath>$(SolutionDir)ServerEngine\;$(SolutionDir)common\;$(IncludePath)</IncludePath>
+    <LibraryPath>$(SolutionDir)lib\;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -77,7 +93,7 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
-      <PrecompiledHeaderFile>pch.hpp</PrecompiledHeaderFile>
+      <PrecompiledHeaderFile>lspch.hpp</PrecompiledHeaderFile>
       <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
@@ -94,7 +110,7 @@
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
-      <PrecompiledHeaderFile>pch.hpp</PrecompiledHeaderFile>
+      <PrecompiledHeaderFile>lspch.hpp</PrecompiledHeaderFile>
       <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
@@ -109,7 +125,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
-      <PrecompiledHeaderFile>pch.hpp</PrecompiledHeaderFile>
+      <PrecompiledHeaderFile>lspch.hpp</PrecompiledHeaderFile>
       <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
@@ -126,7 +142,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
-      <PrecompiledHeaderFile>pch.hpp</PrecompiledHeaderFile>
+      <PrecompiledHeaderFile>lspch.hpp</PrecompiledHeaderFile>
       <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
@@ -136,54 +152,21 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="GameSession.cpp" />
-    <ClCompile Include="GameSessionManager.cpp" />
-    <ClCompile Include="globalTLS.cpp" />
-    <ClCompile Include="IdPool.cpp" />
     <ClCompile Include="Listener.cpp" />
+    <ClCompile Include="LobbyServer.cpp" />
     <ClCompile Include="lobbyServerMain.cpp" />
-    <ClCompile Include="Memory.cpp" />
-    <ClCompile Include="MemoryPool.cpp" />
-    <ClCompile Include="pch.cpp">
+    <ClCompile Include="lspch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="SendBuffer.cpp" />
-    <ClCompile Include="Server.cpp" />
-    <ClCompile Include="ServerPacketFactory.cpp" />
-    <ClCompile Include="ServerPacketHandler.cpp" />
-    <ClCompile Include="Session.cpp" />
-    <ClCompile Include="SocketUtils.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\common\concurrentqueue.h" />
-    <ClInclude Include="..\common\macro.hpp" />
-    <ClInclude Include="..\common\protocol.hpp" />
-    <ClInclude Include="..\common\types.hpp" />
-    <ClInclude Include="BufferReader.hpp" />
-    <ClInclude Include="BufferWriter.hpp" />
     <ClInclude Include="GameSession.hpp" />
-    <ClInclude Include="GameSessionManager.hpp" />
-    <ClInclude Include="globalTLS.hpp" />
-    <ClInclude Include="IdPool.hpp" />
-    <ClInclude Include="IocpCore.hpp" />
-    <ClInclude Include="IocpObject.hpp" />
-    <ClInclude Include="IoEvent.hpp" />
     <ClInclude Include="Listener.hpp" />
-    <ClInclude Include="Memory.hpp" />
-    <ClInclude Include="MemoryPool.hpp" />
-    <ClInclude Include="NetAddress.hpp" />
-    <ClInclude Include="ObjectPool.hpp" />
-    <ClInclude Include="pch.hpp" />
-    <ClInclude Include="RecvBuffer.hpp" />
-    <ClInclude Include="SendBuffer.hpp" />
-    <ClInclude Include="Server.hpp" />
-    <ClInclude Include="ServerPacketFactory.hpp" />
-    <ClInclude Include="ServerPacketHandler.hpp" />
-    <ClInclude Include="Session.hpp" />
-    <ClInclude Include="simpleWindows.hpp" />
-    <ClInclude Include="SocketUtils.hpp" />
+    <ClInclude Include="LobbyServer.hpp" />
+    <ClInclude Include="lspch.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

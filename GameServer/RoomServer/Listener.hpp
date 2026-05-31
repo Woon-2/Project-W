@@ -9,7 +9,7 @@ class Listener : public IocpDispatchable {
 public:
 	Listener(HANDLE iocpHandle) : listenSock_(SocketUtils::createSocket()), acceptEvs_(), iocpHandle_(iocpHandle) {}
 
-	~Listener() {
+	virtual ~Listener() {
 		SocketUtils::closeSocket(listenSock_);
 		for (auto ev : acceptEvs_) {
 			ObjectPool<AcceptEvent>::push(ev);

@@ -1,206 +1,51 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="소스 파일">
-      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
-      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
-    </Filter>
-    <Filter Include="헤더 파일">
-      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
-    </Filter>
-    <Filter Include="common">
-      <UniqueIdentifier>{14cdd222-a6bd-492b-b992-341ca4185b44}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="utils">
-      <UniqueIdentifier>{05c12569-0ff3-4236-b788-d770110d42eb}</UniqueIdentifier>
-    </Filter>
     <Filter Include="network">
       <UniqueIdentifier>{21b88202-a30f-4ac2-aee2-6fb5d1e064fb}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="utils\SocketUtils">
-      <UniqueIdentifier>{0474c45f-f478-4ed5-94a0-5c9d4bcf6b3f}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="utils\NetAddress">
-      <UniqueIdentifier>{3bee54b9-4738-44e6-882c-e0d3099e2402}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="utils\Buffer">
-      <UniqueIdentifier>{849fc5ae-5e43-4d46-bb61-006a7ded3908}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="network\IocpCore">
-      <UniqueIdentifier>{02ed9743-cf4f-4b61-a9e4-1cd27a5f4858}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="network\IocpObject">
-      <UniqueIdentifier>{7015d90f-0275-49e8-9b31-dcf8ba8dce88}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="network\IoEvent">
-      <UniqueIdentifier>{7b9f77f5-3fd2-44cf-9c0b-f6c5987204e1}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="network\IocpObject\Listener">
-      <UniqueIdentifier>{1709caec-e56d-42fe-8edc-b0580ad6a391}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="network\Session">
-      <UniqueIdentifier>{990ff1b7-4dfd-461e-90eb-ae01eb6aaa8f}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="utils\Memory">
-      <UniqueIdentifier>{4360e37c-94c4-4ac2-9cb4-404123b9f869}</UniqueIdentifier>
     </Filter>
     <Filter Include="network\Server">
       <UniqueIdentifier>{d9bce966-3e52-4e65-8a0c-7f1e46f43350}</UniqueIdentifier>
     </Filter>
-    <Filter Include="network\Session\GameSession">
+    <Filter Include="network\Listener">
+      <UniqueIdentifier>{1709caec-e56d-42fe-8edc-b0580ad6a391}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="network\GameSession">
       <UniqueIdentifier>{4b323e29-b802-4d38-881f-e3af0963c9b1}</UniqueIdentifier>
     </Filter>
-    <Filter Include="utils\IdPool">
-      <UniqueIdentifier>{796b43b0-c203-45d3-aee1-2fd3a1fc53f5}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="network\Session\GameSessionManager">
-      <UniqueIdentifier>{c4afd60a-aede-4a9e-b2a5-439baf2b283e}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="utils\GlobalTLS">
-      <UniqueIdentifier>{4380def8-e736-46ca-a998-bfc5597dd3e5}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="utils\BufferHelper">
-      <UniqueIdentifier>{32c45ada-a83e-49bc-8ff8-2905521175e4}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="utils\Packet">
-      <UniqueIdentifier>{d56303e4-3e37-4354-a6dc-ad1b78a0a584}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="utils\Packet\ServerPacketFactory">
-      <UniqueIdentifier>{e012b847-b204-4030-840c-9cf9f5740133}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="utils\Packet\ServerPacketHandler">
-      <UniqueIdentifier>{91dfe1f5-cd5a-411e-a827-8c281cf747b8}</UniqueIdentifier>
+    <Filter Include="default">
+      <UniqueIdentifier>{2964c557-2e37-41c4-a3f8-52a5130263d9}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="lobbyServerMain.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="pch.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="SocketUtils.cpp">
-      <Filter>utils\SocketUtils</Filter>
-    </ClCompile>
-    <ClCompile Include="Session.cpp">
-      <Filter>network\Session</Filter>
-    </ClCompile>
-    <ClCompile Include="SendBuffer.cpp">
-      <Filter>utils\Buffer</Filter>
-    </ClCompile>
-    <ClCompile Include="Memory.cpp">
-      <Filter>utils\Memory</Filter>
-    </ClCompile>
-    <ClCompile Include="MemoryPool.cpp">
-      <Filter>utils\Memory</Filter>
-    </ClCompile>
     <ClCompile Include="Listener.cpp">
-      <Filter>network\IocpObject\Listener</Filter>
-    </ClCompile>
-    <ClCompile Include="Server.cpp">
-      <Filter>network\Server</Filter>
-    </ClCompile>
-    <ClCompile Include="IdPool.cpp">
-      <Filter>utils\IdPool</Filter>
+      <Filter>network\Listener</Filter>
     </ClCompile>
     <ClCompile Include="GameSession.cpp">
-      <Filter>network\Session\GameSession</Filter>
+      <Filter>network\GameSession</Filter>
     </ClCompile>
-    <ClCompile Include="GameSessionManager.cpp">
-      <Filter>network\Session\GameSessionManager</Filter>
+    <ClCompile Include="LobbyServer.cpp">
+      <Filter>network\Server</Filter>
     </ClCompile>
-    <ClCompile Include="globalTLS.cpp">
-      <Filter>utils\GlobalTLS</Filter>
+    <ClCompile Include="lobbyServerMain.cpp">
+      <Filter>default</Filter>
     </ClCompile>
-    <ClCompile Include="ServerPacketHandler.cpp">
-      <Filter>utils\Packet\ServerPacketHandler</Filter>
-    </ClCompile>
-    <ClCompile Include="ServerPacketFactory.cpp">
-      <Filter>utils\Packet\ServerPacketFactory</Filter>
+    <ClCompile Include="lspch.cpp">
+      <Filter>default</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="pch.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="..\common\macro.hpp">
-      <Filter>common</Filter>
-    </ClInclude>
-    <ClInclude Include="simpleWindows.hpp">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="SocketUtils.hpp">
-      <Filter>utils\SocketUtils</Filter>
-    </ClInclude>
-    <ClInclude Include="NetAddress.hpp">
-      <Filter>utils\NetAddress</Filter>
-    </ClInclude>
-    <ClInclude Include="RecvBuffer.hpp">
-      <Filter>utils\Buffer</Filter>
-    </ClInclude>
-    <ClInclude Include="IocpCore.hpp">
-      <Filter>network\IocpCore</Filter>
-    </ClInclude>
-    <ClInclude Include="IocpObject.hpp">
-      <Filter>network\IocpObject</Filter>
-    </ClInclude>
-    <ClInclude Include="IoEvent.hpp">
-      <Filter>network\IoEvent</Filter>
-    </ClInclude>
-    <ClInclude Include="..\common\types.hpp">
-      <Filter>common</Filter>
-    </ClInclude>
-    <ClInclude Include="Session.hpp">
-      <Filter>network\Session</Filter>
-    </ClInclude>
-    <ClInclude Include="..\common\concurrentqueue.h">
-      <Filter>common</Filter>
-    </ClInclude>
-    <ClInclude Include="SendBuffer.hpp">
-      <Filter>utils\Buffer</Filter>
-    </ClInclude>
-    <ClInclude Include="Memory.hpp">
-      <Filter>utils\Memory</Filter>
-    </ClInclude>
-    <ClInclude Include="MemoryPool.hpp">
-      <Filter>utils\Memory</Filter>
-    </ClInclude>
-    <ClInclude Include="ObjectPool.hpp">
-      <Filter>utils\Memory</Filter>
-    </ClInclude>
     <ClInclude Include="Listener.hpp">
-      <Filter>network\IocpObject\Listener</Filter>
-    </ClInclude>
-    <ClInclude Include="Server.hpp">
-      <Filter>network\Server</Filter>
-    </ClInclude>
-    <ClInclude Include="IdPool.hpp">
-      <Filter>utils\IdPool</Filter>
+      <Filter>network\Listener</Filter>
     </ClInclude>
     <ClInclude Include="GameSession.hpp">
-      <Filter>network\Session\GameSession</Filter>
+      <Filter>network\GameSession</Filter>
     </ClInclude>
-    <ClInclude Include="GameSessionManager.hpp">
-      <Filter>network\Session\GameSessionManager</Filter>
+    <ClInclude Include="LobbyServer.hpp">
+      <Filter>network\Server</Filter>
     </ClInclude>
-    <ClInclude Include="globalTLS.hpp">
-      <Filter>utils\GlobalTLS</Filter>
-    </ClInclude>
-    <ClInclude Include="..\common\protocol.hpp">
-      <Filter>common</Filter>
-    </ClInclude>
-    <ClInclude Include="BufferReader.hpp">
-      <Filter>utils\BufferHelper</Filter>
-    </ClInclude>
-    <ClInclude Include="BufferWriter.hpp">
-      <Filter>utils\BufferHelper</Filter>
-    </ClInclude>
-    <ClInclude Include="ServerPacketHandler.hpp">
-      <Filter>utils\Packet\ServerPacketHandler</Filter>
-    </ClInclude>
-    <ClInclude Include="ServerPacketFactory.hpp">
-      <Filter>utils\Packet\ServerPacketFactory</Filter>
+    <ClInclude Include="lspch.hpp">
+      <Filter>default</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

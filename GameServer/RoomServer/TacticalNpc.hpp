@@ -94,6 +94,7 @@ class TacticalNpc : public Object {
 public:
     TacticalNpc() = default;
     TacticalNpc( Object&& base, const TacticalNpcConfig& cfg = {} );
+	virtual ~TacticalNpc() = default;
 
     TacticalNpcUpdateResult update( Seconds dt, Room& room );
 
