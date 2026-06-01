@@ -1,4 +1,4 @@
-#ifndef lobby_room_hpp
+﻿#ifndef lobby_room_hpp
 #define lobby_room_hpp
 
 class GameSession;
