@@ -10,6 +10,7 @@
 #include "../light.hpp"
 #include "../AssetManager.hpp"
 #include "../physicsWorld.hpp"
+#include "../terrainChunkManager.hpp"
 #include "../animation.hpp"
 #include "../event.hpp"
 #include "../ui/UIManager.hpp"
@@ -107,7 +108,6 @@ private:
 	void showCursor();
 
 	void importNode(std::ifstream& ifs);
-	void importTerrain(std::ifstream& ifs, TerrainObject& terrain);
 
 	AssetManager assetManager_{};
 
@@ -139,7 +139,7 @@ private:
 	Timer* pTimer_ = nullptr;
 
 	std::shared_ptr<Cube> ground_{};
-	std::shared_ptr<TerrainObject> terrain_{};
+	TerrainChunkManager chunkManager_{};
 	std::vector<std::shared_ptr<Goblin>> goblins_{};
 	std::unordered_map<uint16, std::shared_ptr<Goblin>> idGoblinMap_{};
 

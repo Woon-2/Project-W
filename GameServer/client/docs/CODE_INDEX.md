@@ -113,8 +113,9 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `PhysicsWorld::removeJointRef()` | `physicsWorld.hpp #53` | 비소유 joint ref 제거 |
 | `PhysicsWorld::setIgnoreCollision()` | `physicsWorld.hpp #58` | 특정 body 쌍의 충돌 완전 무시 (symmetric). Ragdoll이 joint 연결/2-hop 쌍 등록에 사용 |
 | `PhysicsWorld::ignoreCollisionPairs_` | `physicsWorld.hpp #182` | normKey 정규화된 per-pair ignore set; generateContacts()에서 group/mask 이후 체크 |
-| `PhysicsWorld::registerTerrain()` | `physicsWorld.hpp #57` | Static 지형 body + heightField 등록 |
-| `PhysicsWorld::unregisterTerrain()` | `physicsWorld.hpp #60` | 지형 collider 해제 |
+| `PhysicsWorld::registerTerrain()` | `physicsWorld.hpp` | **다중 지형**: Static body+heightField 등록 → `TerrainHandle` 반환. 여러 청크 동시 등록 가능(각 collider가 XZ footprint 밖 body 자체 reject) |
+| `PhysicsWorld::unregisterTerrain(handle)` | `physicsWorld.hpp` | 핸들로 개별 청크 collider 해제 (slot tombstone 재사용) |
+| `PhysicsWorld::terrains_` | `physicsWorld.hpp` | `vector<TerrainEntry{collider, hf}>` + `freeTerrainSlots_`; generateContacts/queryCameraArm가 전 청크 순회(XZ reject) |
 | `PhysicsWorld::registerCameraObstacle()` | `physicsWorld.hpp #67` | body를 카메라 obstacle로 cameraBroadPhase_에 등록 |
 | `PhysicsWorld::unregisterCameraObstacle()` | `physicsWorld.hpp #68` | 카메라 obstacle 등록 해제 |
 | `PhysicsWorld::queryCameraArm()` | `physicsWorld.hpp #73` | pivot→desiredEye arm 허용 길이 반환 (지형 N=6 샘플 + BVH raycast) |
@@ -382,10 +383,13 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 **Terrain 관련 파일:**
 
+> **Chunk 스트리밍 전환:** 단일 terrain → 다중 Chunk 스트리밍. 설계 문서 `docs/terrainChunkStreaming.md`.
+
 | 파일 | 설명 |
 |------|------|
-| `terrain.hpp` | `TerrainLayer`, `TerrainData` 구조체, `loadTerrainFromFiles()` 선언 |
-| `terrain.cpp` | manifest/meta 파싱, height.raw → GPU 메시 생성, 텍스처 로드 |
+| `terrain.hpp` | `TerrainLayer`/`TerrainData`(+`chunkCol/Row`)/`TerrainLayerPalette`/`ChunkIndex(Entry)`/`ChunkCpuBuild` 구조체, chunk streaming 함수 선언 |
+| `terrain.cpp` | `genChunkGeometryCpu`(CPU, 워커 스레드 안전)/`assembleChunkMeshGpu`(메인), `parseChunkIndex`/`loadLayerPalette`/`buildChunkCpu`/`finalizeChunkGpu`, `TerrainHeightField` 메서드 |
+| `terrainChunkManager.hpp` / `.cpp` | `TerrainChunkManager` — 팔레트/인덱스 소유, hop≤3 BFS 스트리밍(load/unload+grace), 워커 CPU build + 메인 GPU finalize, `heightAtWorld`/`normalAtWorld`/`chunkCoordAtWorld`/`submitDrawEvents` |
 | `terrain.hlsl` | Terrain VS/PS (Forward path: Splat map 블렌딩 + PBR BRDF + PCF Shadow) |
 | `terrainDeferred.hlsl` | Terrain VS/GBufferOutput PS (Deferred path: GBuffer 기록, 조명 없음) |
 | `terrainPipeline.hpp` | `TerrainPipeline` 네임스페이스 (DrawEvent, Resources, Dispatcher) |

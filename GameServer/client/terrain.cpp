@@ -46,103 +46,6 @@ static Texture loadAndRegisterTexture(
 }
 
 // ---------------------------------------------------------------------------
-// Manifest parsing
-// ---------------------------------------------------------------------------
-
-struct TerrainManifest {
-    std::string heightMapPath;
-    std::string metaPath;
-    std::vector<std::string> splatPaths;
-    std::vector<std::string> diffusePaths;
-    std::vector<std::string> normalPaths;
-};
-
-static TerrainManifest parseManifest(const std::filesystem::path& manifestPath) {
-    TerrainManifest result;
-
-    auto ifs = std::ifstream(manifestPath, std::ios::binary);
-    DISPLAY_ERROR_STR(ifs.good(),
-        "[Terrain] parseManifest: cannot open " + manifestPath.string(), true);
-
-    readHeadTag(ifs, "Terrain");
-
-    // TerrainName (skip)
-    readHeadTag(ifs, "TerrainName");
-    readString(ifs);
-    readTailTag(ifs, "TerrainName");
-
-    // The exporter writes mappings in insertion order:
-    //   HeightMap -> SplatPath(s) -> DiffusePath / NormalPath (alternating per layer) -> MetaData
-    // So we must not assume a fixed order after TerrainName; read tag-by-tag instead.
-    while (ifs) {
-        auto rawTag = readString(ifs);
-        if (isTailTag(rawTag, "Terrain")) {
-            break;
-        }
-        auto tagName = untagHead(rawTag);
-        auto value   = readString(ifs);
-        readString(ifs); // consume tail tag
-
-        if (tagName == "HeightMap") {
-            result.heightMapPath = value;
-        } else if (tagName == "MetaData") {
-            result.metaPath = value;
-        } else if (tagName == "SplatPath") {
-            result.splatPaths.push_back(value);
-        } else if (tagName == "DiffusePath") {
-            result.diffusePaths.push_back(value);
-        } else if (tagName == "NormalPath") {
-            result.normalPaths.push_back(value);
-        }
-    }
-
-    return result;
-}
-
-// ---------------------------------------------------------------------------
-// Metadata parsing
-// ---------------------------------------------------------------------------
-
-struct TerrainMeta {
-    int   heightmapResolution;
-    int   alphamapResolution;
-    float sizeX, sizeY, sizeZ;
-    int   layerCount;
-    struct LayerInfo {
-        float tileSizeX, tileSizeY;
-        float tileOffsetX, tileOffsetY;
-        float metallic;
-        float roughness;
-    };
-    std::vector<LayerInfo> layers;
-};
-
-static TerrainMeta parseMeta(const std::filesystem::path& metaPath) {
-    TerrainMeta m{};
-    auto ifs = std::ifstream(metaPath, std::ios::binary);
-    DISPLAY_ERROR_STR(ifs.good(),
-        "[Terrain] parseMeta: cannot open " + metaPath.string(), true);
-
-    // Raw binary layout: no tags
-    m.heightmapResolution = readInteger(ifs);
-    m.alphamapResolution  = readInteger(ifs);
-    m.sizeX = readFloat(ifs);
-    m.sizeY = readFloat(ifs);
-    m.sizeZ = readFloat(ifs);
-    m.layerCount = readInteger(ifs);
-    m.layers.resize(m.layerCount);
-    for (auto& layer : m.layers) {
-        layer.tileSizeX   = readFloat(ifs);
-        layer.tileSizeY   = readFloat(ifs);
-        layer.tileOffsetX = readFloat(ifs);
-        layer.tileOffsetY = readFloat(ifs);
-        layer.metallic    = readFloat(ifs);
-        layer.roughness   = readFloat(ifs);
-    }
-    return m;
-}
-
-// ---------------------------------------------------------------------------
 // Mesh building
 // ---------------------------------------------------------------------------
 
@@ -151,49 +54,53 @@ static int clampIdx(int x, int N) {
     return x < 0 ? 0 : (x >= N ? N - 1 : x);
 }
 
-// Reads height.raw and builds a fully indexed grid mesh on the GPU.
-// Uses 32-bit indices to support large heightmaps (N > 256).
-// outNormalizedHeights receives normalized [0,1] height values for CPU physics use.
-static Mesh buildTerrainMesh(
-    const std::filesystem::path& heightRawPath,
-    const TerrainMeta& meta,
-    ID3D12Device* device,
-    ID3D12GraphicsCommandList* cmdList,
-    Fence& fence,
+// Resolves a stored engine path: if it does not exist as-is, fall back to
+// terrainDir/filename. Shared by the index/palette/chunk loaders.
+static std::filesystem::path resolveTerrainPath(
+    const std::filesystem::path& terrainDir, const std::string& pathStr
+) {
+    auto p = std::filesystem::path(pathStr);
+    if (!p.is_absolute() && !std::filesystem::exists(p)) {
+        auto fallback = terrainDir / p.filename();
+        if (std::filesystem::exists(fallback)) return fallback;
+    }
+    return p;
+}
+
+// Generates CPU-side vertex attributes, 32-bit indices, and normalized heights for
+// an N x N height grid. PURE CPU (no D3D) so it can run on a worker thread.
+// Shared by buildTerrainMesh and buildChunkCpu.
+static void genChunkGeometryCpu(
+    int N, float sizeX, float sizeY, float sizeZ,
+    const std::vector<u16t>& rawHeights,
+    std::vector<XMFLOAT3>& positions,
+    std::vector<XMFLOAT3>& normals,
+    std::vector<XMFLOAT3>& tangents,
+    std::vector<XMFLOAT3>& bitangents,
+    std::vector<XMFLOAT2>& uvs,
+    std::vector<u32t>& indices,
     std::vector<float>& outNormalizedHeights
 ) {
-    const int N = meta.heightmapResolution;
-
-    // --- Load height.raw ---
-    auto hifs = std::ifstream(heightRawPath, std::ios::binary);
-    DISPLAY_ERROR_STR(hifs.good(),
-        "[Terrain] buildTerrainMesh: cannot open " + heightRawPath.string(), true);
-
-    // Unity writes heights in y (row) outer, x (col) inner order.
-    auto rawHeights = std::vector<u16t>(static_cast<size_t>(N) * N);
-    hifs.read(reinterpret_cast<char*>(rawHeights.data()),
-              static_cast<std::streamsize>(N) * N * sizeof(u16t));
-
-    // Helper: normalized height at (x, y), clamped.
+    // Helper: normalized height at (x, y), clamped. (Unity writes y outer, x inner.)
     auto height = [&](int x, int y) -> float {
         return rawHeights[clampIdx(y, N) * N + clampIdx(x, N)] / 65535.f;
     };
 
-    // Populate CPU-side normalized heights for physics collision.
+    // CPU-side normalized heights for physics collision.
     outNormalizedHeights.resize(static_cast<size_t>(N) * N);
     for (int y = 0; y < N; ++y)
         for (int x = 0; x < N; ++x)
             outNormalizedHeights[y * N + x] = height(x, y);
 
     // --- Build vertices ---
-    const float dx = (N > 1) ? meta.sizeX / (N - 1) : 0.f;
-    const float dz = (N > 1) ? meta.sizeZ / (N - 1) : 0.f;
+    const float dx = (N > 1) ? sizeX / (N - 1) : 0.f;
+    const float dz = (N > 1) ? sizeZ / (N - 1) : 0.f;
 
-    auto positions  = std::vector<XMFLOAT3>(static_cast<size_t>(N) * N);
-    auto normals    = std::vector<XMFLOAT3>(static_cast<size_t>(N) * N);
-    auto tangents   = std::vector<XMFLOAT3>(static_cast<size_t>(N) * N);
-    auto bitangents = std::vector<XMFLOAT3>(static_cast<size_t>(N) * N);
-    auto uvs        = std::vector<XMFLOAT2>(static_cast<size_t>(N) * N);
+    positions.assign(static_cast<size_t>(N) * N, XMFLOAT3{});
+    normals.assign(static_cast<size_t>(N) * N, XMFLOAT3{});
+    tangents.assign(static_cast<size_t>(N) * N, XMFLOAT3{});
+    bitangents.assign(static_cast<size_t>(N) * N, XMFLOAT3{});
+    uvs.assign(static_cast<size_t>(N) * N, XMFLOAT2{});
 
     for (int y = 0; y < N; ++y) {
         for (int x = 0; x < N; ++x) {
@@ -202,34 +109,25 @@ static Mesh buildTerrainMesh(
             const float fz  = static_cast<float>(y) / (N - 1);
             const float fy  = height(x, y);
 
-            positions[idx] = XMFLOAT3(fx * meta.sizeX, fy * meta.sizeY, fz * meta.sizeZ);
+            positions[idx] = XMFLOAT3(fx * sizeX, fy * sizeY, fz * sizeZ);
             uvs[idx]       = XMFLOAT2(fx, fz);
 
             // Central-difference normal in world space.
-            // Gradient in x: (h(x+1,y) - h(x-1,y)) * sizeY / (2 * dx)
-            // Gradient in z: (h(x,y+1) - h(x,y-1)) * sizeY / (2 * dz)
-            const float gx = (dx > 0.f) ? (height(x - 1, y) - height(x + 1, y)) * meta.sizeY / (2.f * dx) : 0.f;
-            const float gz = (dz > 0.f) ? (height(x, y - 1) - height(x, y + 1)) * meta.sizeY / (2.f * dz) : 0.f;
+            const float gx = (dx > 0.f) ? (height(x - 1, y) - height(x + 1, y)) * sizeY / (2.f * dx) : 0.f;
+            const float gz = (dz > 0.f) ? (height(x, y - 1) - height(x, y + 1)) * sizeY / (2.f * dz) : 0.f;
 
             auto n = DirectX::XMVector3Normalize(DirectX::XMVectorSet(gx, 1.f, gz, 0.f));
             DirectX::XMStoreFloat3(&normals[idx], n);
 
-            // Tangent: world-space dP/dU direction (U increases with x).
-            // dP/dU = (sizeX, (h(x+1,y)-h(x-1,y))*sizeY/(2*dx), 0)
-            //       = (1, -gx_unsigned, 0) after direction reduction
-            const float rawTy = (dx > 0.f) ? (height(x + 1, y) - height(x - 1, y)) * meta.sizeY / (2.f * dx) : 0.f;
+            // Tangent: world-space dP/dU direction (U increases with x), Gram-Schmidt vs normal.
+            const float rawTy = (dx > 0.f) ? (height(x + 1, y) - height(x - 1, y)) * sizeY / (2.f * dx) : 0.f;
             auto rawT = DirectX::XMVector3Normalize(DirectX::XMVectorSet(1.f, rawTy, 0.f, 0.f));
 
-            // Bitangent: world-space dP/dV direction (V increases with y/z).
-            const float rawBy = (dz > 0.f) ? (height(x, y + 1) - height(x, y - 1)) * meta.sizeY / (2.f * dz) : 0.f;
-            auto rawB = DirectX::XMVector3Normalize(DirectX::XMVectorSet(0.f, rawBy, 1.f, 0.f));
-
-            // Gram-Schmidt: orthogonalize tangent against normal, then derive bitangent.
             auto t = DirectX::XMVector3Normalize(
                 DirectX::XMVectorSubtract(rawT,
                     DirectX::XMVectorScale(n, DirectX::XMVectorGetX(DirectX::XMVector3Dot(rawT, n))))
             );
-            auto b = DirectX::XMVector3Cross(n, t);
+            auto b = DirectX::XMVector3Cross(n, t);  // orthonormal bitangent
 
             DirectX::XMStoreFloat3(&tangents[idx],   t);
             DirectX::XMStoreFloat3(&bitangents[idx], b);
@@ -239,7 +137,7 @@ static Mesh buildTerrainMesh(
     // --- Build 32-bit indices ---
     const int cellsX = N - 1;
     const int cellsZ = N - 1;
-    auto indices = std::vector<u32t>(static_cast<size_t>(cellsX) * cellsZ * 6u);
+    indices.assign(static_cast<size_t>(cellsX) * cellsZ * 6u, 0u);
     size_t idxWrite = 0;
     for (int y = 0; y < cellsZ; ++y) {
         for (int x = 0; x < cellsX; ++x) {
@@ -257,6 +155,21 @@ static Mesh buildTerrainMesh(
             indices[idxWrite++] = i3;
         }
     }
+}
+
+// Uploads CPU geometry arrays to GPU vertex/index buffers and assembles a Mesh.
+// MAIN THREAD ONLY (records copies into cmdList, associates upload buffers w/ fence).
+static Mesh assembleChunkMeshGpu(
+    const std::vector<XMFLOAT3>& positions,
+    const std::vector<XMFLOAT3>& normals,
+    const std::vector<XMFLOAT3>& tangents,
+    const std::vector<XMFLOAT3>& bitangents,
+    const std::vector<XMFLOAT2>& uvs,
+    const std::vector<u32t>& indices,
+    ID3D12Device* device,
+    ID3D12GraphicsCommandList* cmdList,
+    Fence& fence
+) {
 
     // --- Upload to GPU ---
     const size_t posByteSize  = positions.size()  * sizeof(XMFLOAT3);
@@ -368,17 +281,79 @@ static Mesh buildTerrainMesh(
     fence.associatedResources_.push_back(std::move(vbUVU));
     fence.associatedResources_.push_back(std::move(ibU));
 
-    gSharedLog << "[Terrain] TerrainMesh built: " << N << "x" << N
+    gSharedLog << "[Terrain] TerrainMesh built: " << positions.size()
                << " vertices, " << indices.size() / 3 << " triangles\n";
 
     return mesh;
 }
 
 // ---------------------------------------------------------------------------
-// Public API
+// Chunk streaming API
 // ---------------------------------------------------------------------------
 
-TerrainData loadTerrainFromFiles(
+ChunkIndex parseChunkIndex(const std::filesystem::path& terrainDir) {
+    ChunkIndex result;
+
+    const auto indexPath = terrainDir / "chunks_index.bin";
+    auto ifs = std::ifstream(indexPath, std::ios::binary);
+    DISPLAY_ERROR_STR(ifs.good(),
+        "[Terrain] parseChunkIndex: cannot open " + indexPath.string(), true);
+
+    readHeadTag(ifs, "ChunkIndex");
+    result.version = readInteger(ifs, "Version");
+
+    // ---- shared palette ----
+    const int L = readInteger(ifs, "LayerCount");
+    result.palette.layerCount = L;
+    result.palette.layers.resize(L);
+    result.palette.diffusePaths.resize(L);
+    result.palette.normalPaths.resize(L);
+    for (int i = 0; i < L; ++i) {
+        auto& ly = result.palette.layers[i];
+        result.palette.diffusePaths[i] = readText(ifs, "DiffusePath");
+        result.palette.normalPaths[i]  = readText(ifs, "NormalPath");
+        ly.tileSizeX   = readFloat(ifs, "TileSizeX");
+        ly.tileSizeY   = readFloat(ifs, "TileSizeY");
+        ly.tileOffsetX = readFloat(ifs, "TileOffsetX");
+        ly.tileOffsetY = readFloat(ifs, "TileOffsetY");
+        ly.metallic    = readFloat(ifs, "Metallic");
+        ly.roughness   = readFloat(ifs, "Roughness");
+    }
+
+    // ---- chunk records ----
+    const int C = readInteger(ifs, "ChunkCount");
+    result.chunks.resize(C);
+    for (int c = 0; c < C; ++c) {
+        auto& e = result.chunks[c];
+        readHeadTag(ifs, "Chunk");
+        e.col = readInteger(ifs, "Col");
+        e.row = readInteger(ifs, "Row");
+        e.sizeX = readFloat(ifs, "SizeX");
+        e.sizeY = readFloat(ifs, "SizeY");
+        e.sizeZ = readFloat(ifs, "SizeZ");
+        e.resolution         = readInteger(ifs, "Resolution");
+        e.alphamapResolution = readInteger(ifs, "AlphamapResolution");
+        const int K = readInteger(ifs, "NeighborCount");
+        e.neighbors.reserve(K);
+        for (int k = 0; k < K; ++k) {
+            const int nc = readInteger(ifs, "NCol");
+            const int nr = readInteger(ifs, "NRow");
+            e.neighbors.emplace_back(nc, nr);
+        }
+        e.heightPath = readText(ifs, "HeightPath");
+        e.splatPath  = readText(ifs, "SplatPath");
+        readTailTag(ifs, "Chunk");
+    }
+
+    readTailTag(ifs, "ChunkIndex");
+
+    gSharedLog << "[Terrain] Chunk index parsed: " << C << " chunks, "
+               << L << " shared layers\n";
+    return result;
+}
+
+TerrainLayerPalette loadLayerPalette(
+    const ChunkIndex& index,
     const std::filesystem::path& terrainDir,
     ID3D12Device* device,
     ID3D12GraphicsCommandList* cmdList,
@@ -386,100 +361,111 @@ TerrainData loadTerrainFromFiles(
     DescriptorPool& texPool,
     Fence& fenceToAssociate
 ) {
-    // 1. Parse manifest for file paths
-    const auto manifestPath = terrainDir / "terrain_manifest.bin";
-    auto manifest = parseManifest(manifestPath);
+    TerrainLayerPalette pal = index.palette;   // copies scalars + load-time paths
+    for (int i = 0; i < pal.layerCount; ++i) {
+        auto& ly = pal.layers[i];
 
-    // Resolve paths: if the path is not absolute, treat it as relative to working dir.
-    auto resolvePath = [&](const std::string& pathStr) -> std::filesystem::path {
-        auto p = std::filesystem::path(pathStr);
-        if (!p.is_absolute() && !std::filesystem::exists(p)) {
-            // Fallback: look in terrainDir using the filename only
-            auto fallback = terrainDir / p.filename();
-            if (std::filesystem::exists(fallback)) {
-                return fallback;
-            }
-        }
-        return p;
-    };
-
-    // 2. Parse terrain metadata
-    auto meta = parseMeta(resolvePath(manifest.metaPath));
-
-    // 3. Build terrain mesh from heightmap
-    TerrainData terrain;
-    terrain.heightmapResolution = meta.heightmapResolution;
-    terrain.alphamapResolution  = meta.alphamapResolution;
-    terrain.sizeX = meta.sizeX;
-    terrain.sizeY = meta.sizeY;
-    terrain.sizeZ = meta.sizeZ;
-    terrain.layerCount = meta.layerCount;
-
-    std::vector<float> cpuHeights;
-    terrain.mesh = buildTerrainMesh(
-        resolvePath(manifest.heightMapPath),
-        meta, device, cmdList, fenceToAssociate,
-        cpuHeights
-    );
-
-    terrain.heightField.resolution = meta.heightmapResolution;
-    terrain.heightField.sizeX      = meta.sizeX;
-    terrain.heightField.sizeY      = meta.sizeY;
-    terrain.heightField.sizeZ      = meta.sizeZ;
-    terrain.heightField.heights    = std::move(cpuHeights);
-
-    // 4. Load splat map (take first splat; each RGBA covers 4 layers)
-    if (!manifest.splatPaths.empty()) {
-        terrain.splatMap = loadAndRegisterTexture(
-            resolvePath(manifest.splatPaths[0]),
-            "Terrain_SplatMap_0",
-            device, cmdList, texHashMap, texPool, fenceToAssociate
-        );
-        gSharedLog << "[Terrain] Splat map loaded: " << manifest.splatPaths[0] << "\n";
-    } else {
-        markTextureInvalid(terrain.splatMap);
-    }
-
-    // 5. Load per-layer textures
-    terrain.layers.resize(meta.layerCount);
-    for (int i = 0; i < meta.layerCount; ++i) {
-        auto& layer         = terrain.layers[i];
-        layer.tileSizeX     = meta.layers[i].tileSizeX;
-        layer.tileSizeY     = meta.layers[i].tileSizeY;
-        layer.tileOffsetX   = meta.layers[i].tileOffsetX;
-        layer.tileOffsetY   = meta.layers[i].tileOffsetY;
-        layer.metallic      = meta.layers[i].metallic;
-        layer.roughness     = meta.layers[i].roughness;
-
-        if (i < static_cast<int>(manifest.diffusePaths.size())) {
-            const auto& diffusePath = manifest.diffusePaths[i];
-            layer.diffuse = loadAndRegisterTexture(
-                resolvePath(diffusePath),
-                "Terrain_Layer" + std::to_string(i) + "_Diffuse",
-                device, cmdList, texHashMap, texPool, fenceToAssociate
-            );
-            gSharedLog << "[Terrain] Layer " << i << " diffuse loaded: " << diffusePath << "\n";
+        if (i < static_cast<int>(pal.diffusePaths.size()) && !pal.diffusePaths[i].empty()) {
+            ly.diffuse = loadAndRegisterTexture(
+                resolveTerrainPath(terrainDir, pal.diffusePaths[i]),
+                "Terrain_Palette_Layer" + std::to_string(i) + "_Diffuse",
+                device, cmdList, texHashMap, texPool, fenceToAssociate);
         } else {
-            markTextureInvalid(layer.diffuse);
+            markTextureInvalid(ly.diffuse);
         }
 
-        if (i < static_cast<int>(manifest.normalPaths.size())) {
-            const auto& normalPath = manifest.normalPaths[i];
-            layer.normalMap = loadAndRegisterTexture(
-                resolvePath(normalPath),
-                "Terrain_Layer" + std::to_string(i) + "_Normal",
-                device, cmdList, texHashMap, texPool, fenceToAssociate
-            );
-            gSharedLog << "[Terrain] Layer " << i << " normal map loaded: " << normalPath << "\n";
+        if (i < static_cast<int>(pal.normalPaths.size()) && !pal.normalPaths[i].empty()) {
+            ly.normalMap = loadAndRegisterTexture(
+                resolveTerrainPath(terrainDir, pal.normalPaths[i]),
+                "Terrain_Palette_Layer" + std::to_string(i) + "_Normal",
+                device, cmdList, texHashMap, texPool, fenceToAssociate);
         } else {
-            markTextureInvalid(layer.normalMap);
+            markTextureInvalid(ly.normalMap);
         }
     }
+    pal.loaded = true;
+    gSharedLog << "[Terrain] Layer palette loaded: " << pal.layerCount << " layers\n";
+    return pal;
+}
 
-    gSharedLog << "[Terrain] Load complete: " << meta.layerCount << " layers, "
-               << "world size (" << meta.sizeX << ", " << meta.sizeY << ", " << meta.sizeZ << ")\n";
+void buildChunkCpu(
+    const ChunkIndexEntry& entry,
+    const std::filesystem::path& terrainDir,
+    ChunkCpuBuild& out
+) {
+    out.col = entry.col;
+    out.row = entry.row;
+    out.sizeX = entry.sizeX;
+    out.sizeY = entry.sizeY;
+    out.sizeZ = entry.sizeZ;
+    out.resolution = entry.resolution;
+    out.alphamapResolution = entry.alphamapResolution;
+    out.splatPath = entry.splatPath;
 
-    return terrain;
+    const int N = entry.resolution;
+
+    // No DISPLAY_ERROR_STR here: this runs on a worker thread. Signal failure via flag.
+    auto heightPath = resolveTerrainPath(terrainDir, entry.heightPath);
+    auto hifs = std::ifstream(heightPath, std::ios::binary);
+    if (!hifs.good() || N <= 0) {
+        out.failed = true;
+        out.done.store(true, std::memory_order_release);
+        return;
+    }
+
+    auto rawHeights = std::vector<u16t>(static_cast<size_t>(N) * N);
+    hifs.read(reinterpret_cast<char*>(rawHeights.data()),
+              static_cast<std::streamsize>(N) * N * sizeof(u16t));
+
+    genChunkGeometryCpu(N, entry.sizeX, entry.sizeY, entry.sizeZ, rawHeights,
+        out.positions, out.normals, out.tangents, out.bitangents, out.uvs,
+        out.indices, out.normalizedHeights);
+
+    out.done.store(true, std::memory_order_release);
+}
+
+TerrainData finalizeChunkGpu(
+    const ChunkCpuBuild& cpu,
+    const TerrainLayerPalette& palette,
+    const std::filesystem::path& terrainDir,
+    ID3D12Device* device,
+    ID3D12GraphicsCommandList* cmdList,
+    std::unordered_map<std::string, Texture>& texHashMap,
+    DescriptorPool& texPool,
+    Fence& fenceToAssociate
+) {
+    TerrainData td;
+    td.heightmapResolution = cpu.resolution;
+    td.alphamapResolution  = cpu.alphamapResolution;
+    td.sizeX = cpu.sizeX;
+    td.sizeY = cpu.sizeY;
+    td.sizeZ = cpu.sizeZ;
+    td.layerCount = palette.layerCount;
+    td.chunkCol = cpu.col;
+    td.chunkRow = cpu.row;
+
+    // Shared palette layer handles (cheap BindlessIndex copies; one GPU texture set).
+    td.layers = palette.layers;
+
+    // GPU mesh from CPU arrays.
+    td.mesh = assembleChunkMeshGpu(cpu.positions, cpu.normals, cpu.tangents,
+        cpu.bitangents, cpu.uvs, cpu.indices, device, cmdList, fenceToAssociate);
+
+    // Per-chunk splat map.
+    const std::string splatKey =
+        "Terrain_Splat_" + std::to_string(cpu.col) + "_" + std::to_string(cpu.row);
+    td.splatMap = loadAndRegisterTexture(
+        resolveTerrainPath(terrainDir, cpu.splatPath), splatKey,
+        device, cmdList, texHashMap, texPool, fenceToAssociate);
+
+    // CPU height field for physics.
+    td.heightField.resolution = cpu.resolution;
+    td.heightField.sizeX = cpu.sizeX;
+    td.heightField.sizeY = cpu.sizeY;
+    td.heightField.sizeZ = cpu.sizeZ;
+    td.heightField.heights = cpu.normalizedHeights;
+
+    return td;
 }
 
 // ---------------------------------------------------------------------------

@@ -678,6 +678,11 @@ void Game::setupStage() {
 
 	dumpLog();
 
+	// 지형 청크 스트리밍 매니저 초기화 (팔레트 + 인덱스 로드, 동기 baseline 로드).
+	chunkManager_.init(gfx_, physicsWorld_, &threadPool_, "../resources/terrains/");
+
+	dumpLog();
+
 	skybox_.setModel(assetManager_.modelCube());
 	skybox_.setSkyboxMaterial(assetManager_.skyboxMaterial());
 
@@ -2164,9 +2169,9 @@ void Game::importNode(std::ifstream& ifs) {
 		}
 	}
 	else if (type == "Terrain") {
-		terrain_ = std::make_shared<TerrainObject>(std::move(object));
-		importTerrain(ifs, *terrain_);
-		terrain_->update(0ms, 1.f);
+		// Terrain is now streamed by TerrainChunkManager (chunks_index.bin).
+		// Consume the legacy ManifestPath field to keep the scene stream aligned, then ignore.
+		readText(ifs, "ManifestPath");
 	}
 	else {
 		// no-op
@@ -2227,22 +2232,6 @@ void Game::importGoblinSpawner(std::ifstream& ifs, Goblin& goblin) {
 			physicsWorld_
 		);
 	}
-}
-
-void Game::importTerrain(std::ifstream& ifs, TerrainObject& terrain) {
-	const auto manifestPath = readText(ifs, "ManifestPath");
-	terrain.setTerrainData(assetManager_.terrain());
-
-	// 지형 물리 바디 설정: Static body (위치는 importNode WorldTRS에서 설정됨)
-	terrain.body().setMotionType(MotionType::Static);
-
-	// Hi-Z Occlusion Occluder 설정
-	terrain.activateOcclusion(true);
-
-	// TerrainCollider 등록 (BVH 불필요 — heightField 직접 조회)
-	const TerrainData* td = assetManager_.terrain();
-	if (td && !td->heightField.empty())
-		physicsWorld_.registerTerrain(&terrain.body(), &td->heightField);
 }
 
 // ---------------------------------------------------------------------------
@@ -2522,6 +2511,9 @@ void Game::update(Milliseconds deltaTime) {
 		player_->pos()
 	);
 
+	// 지형 청크 스트리밍 틱 (카메라 갱신 전에 호출하여 카메라가 최신 지형을 질의하도록 함).
+	chunkManager_.update(player_->pos(), deltaTime);
+
 	camera_.update(deltaTime);
 	dirLight_.update(deltaTime);
 	dirLight_.updateCSMCascades(camera_.view(), camera_.proj(), assetConfigs_.cascade, assetConfigs_.shadowMap);
@@ -2785,8 +2777,8 @@ void Game::render() {
 	gfx_.addFrameData( PBRDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f ) } );
 	gfx_.addFrameData( PBRDeferredSkinnedPipeline::FrameData{ .globalAmbient = mu::Vec3( 0.16f, 0.16f, 0.16f ) } );
 
-	if (terrain_) {
-		terrain_->render(gfx_);
+	if (!chunkManager_.empty()) {
+		chunkManager_.submitDrawEvents(gfx_);
 		gfx_.addFrameData(TerrainPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 	}
@@ -2979,12 +2971,8 @@ void Game::processInput(Milliseconds deltaTime) {
 		case SwordEffect::ArrowRain: {
 			const auto muzzlePos = player_->renderState().pos + mu::Vec3{ 0.f, 1.2f, 0.f };
 			auto rainCenter = player_->renderState().pos + player_->forward() * 6.5f;
-			if ( terrain_ && !assetManager_.terrain()->heightField.empty() ) {
-				const auto terrainPos = terrain_->renderState().pos;
-				const float localX = rainCenter.x() - terrainPos.x();
-				const float localZ = rainCenter.z() - terrainPos.z();
-				const float groundY = terrainPos.y()
-					+ assetManager_.terrain()->heightField.getHeightAt( localX, localZ );
+			if ( !chunkManager_.empty() ) {
+				const float groundY = chunkManager_.heightAtWorld( rainCenter.x(), rainCenter.z() );
 				rainCenter = { rainCenter.x(), groundY, rainCenter.z() };
 			}
 			arrowRainMuzzleEffect_.play( muzzlePos, player_->orient() );
@@ -2994,12 +2982,8 @@ void Game::processInput(Milliseconds deltaTime) {
 		}
 		case SwordEffect::RedEnergyExplosion: {
 			auto explosionPos = player_->renderState().pos + player_->forward() * 6.5f;
-			if ( terrain_ && !assetManager_.terrain()->heightField.empty() ) {
-				const auto terrainPos = terrain_->renderState().pos;
-				const float localX = explosionPos.x() - terrainPos.x();
-				const float localZ = explosionPos.z() - terrainPos.z();
-				const float groundY = terrainPos.y()
-					+ assetManager_.terrain()->heightField.getHeightAt( localX, localZ );
+			if ( !chunkManager_.empty() ) {
+				const float groundY = chunkManager_.heightAtWorld( explosionPos.x(), explosionPos.z() );
 				explosionPos = { explosionPos.x(), groundY + 0.1f, explosionPos.z() };
 			}
 			else {
