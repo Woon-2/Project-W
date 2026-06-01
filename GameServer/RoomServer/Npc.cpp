@@ -194,7 +194,7 @@ NpcUpdateResult Npc::updateChase(Seconds dt, Room& room) {
     }
 
 	// 타깃과의 거리가 공격 범위 안이면 AttackWindup으로 전환
-    mu::Vec3 toTarget = targetSession->player()->pos() - pos();
+    mu::Vec3 toTarget = targetSession->player()->estimatedPos(room.getElapsedMs()) - pos();
     if ( toTarget.len2() <= attackRange_ * attackRange_ ) {
         transitionTo( NpcState::AttackWindup );
         return {};
@@ -231,9 +231,18 @@ NpcUpdateResult Npc::updateAttackWindup( Seconds dt, Room& room ) {
         return {};
     }
 
+    mu::Vec3 toTarget = targetSession->player()->estimatedPos(room.getElapsedMs()) - pos();
+    if ( toTarget.len2() > attackRange_ * attackRange_ ) {
+        mu::NVec3 nd( toTarget );
+        setLinearVel( mu::Vec3( nd.x() * moveSpeed_, body().linearVel().y(), nd.z() * moveSpeed_ ) );
+        setOrient( mu::NQuat( mu::Radian(), mu::Radian(), mu::Radian( std::atan2( nd.x(), nd.z() ) ) ) );
+        transitionTo( NpcState::Chase );
+        return {};
+    }
+
     windupTimer_ += dt;
     if ( windupTimer_ >= attackWindupTime_ ) {
-        mu::Vec3 toTarget = targetSession->player()->pos() - pos();
+        mu::Vec3 toTarget = targetSession->player()->estimatedPos(room.getElapsedMs()) - pos();
 
         if ( toTarget.len() <= attackRange_ ) {
             int32 newHp = std::max( targetSession->player()->hp() - static_cast<int32>(attackDamage_), 0 );
@@ -292,9 +301,16 @@ NpcUpdateResult Npc::updateAttackRecover( Seconds dt, Room& room ) {
 
     recoverTimer_ += dt;
     if ( recoverTimer_ >= attackRecoverTime_ ) {
+        mu::Vec3 toTargetXZ = targetSession->player()->pos() - pos();
+        toTargetXZ = mu::Vec3( toTargetXZ.x(), 0.f, toTargetXZ.z() );
+        if ( toTargetXZ.len() > 0.001f ) {
+            mu::NVec3 nd( toTargetXZ );
+            setOrient( mu::NQuat( mu::Radian(), mu::Radian(), mu::Radian( std::atan2( nd.x(), nd.z() ) ) ) );
+        }
+
         nearbyCache_.clear();
         room.findNearbyNpcPositions( pos(), separationRadius_, getId(), nearbyCache_ );
-        mu::Vec3 toTarget = targetSession->player()->pos() - pos();
+        mu::Vec3 toTarget = targetSession->player()->estimatedPos(room.getElapsedMs()) - pos();
 
 		// 회복 타임이 끝났는데도 여전히 과밀이면 Reposition 시도
         if ( isOvercrowded( nearbyCache_ ) ) {
@@ -404,7 +420,7 @@ NpcUpdateResult Npc::updateReposition( Seconds dt, Room& room ) {
 
 	// 과밀이 해소되었으면 타깃과의 거리에 따라 AttackWindup 또는 Chase로 전환
     if ( !isOvercrowded( nearbyCache_ ) ) {
-        mu::Vec3 toTarget = targetSession->player()->pos() - pos();
+        mu::Vec3 toTarget = targetSession->player()->estimatedPos(room.getElapsedMs()) - pos();
 
         if ( toTarget.len2() <= attackRange_ * attackRange_ ) {
             transitionTo( NpcState::AttackWindup );

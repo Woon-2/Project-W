@@ -93,3 +93,103 @@ struct SNpcRespawnPacket : public PacketHeader {
 
 - `PacketManager::handleSNpcRespawnPacket()` 추가.
 - `onlineGame`에서 해당 NPC 오브젝트를 spawnPos로 이동, HP 갱신, 시체 상태 해제.
+
+---
+
+### 2026.06.01
+## [mod] NPC 공격 판정 Dead Reckoning 적용
+## [mod] AttackWindup 범위 이탈 시 즉시 Chase 복귀
+## [mod] AttackRecover 종료 후 플레이어 방향 보정
+
+**수정 파일:** `RoomServer/Npc.cpp`, `RoomServer/object.hpp`, `RoomServer/Room.cpp`
+
+---
+
+### [1] Dead Reckoning — 플레이어 위치 예측
+
+NPC가 `player->pos()`(마지막 CMovePacket 수신 시점 위치)로 공격 판정을 해 패킷 미수신 구간에
+이동한 플레이어를 잘못 공격하는 버그를 수정.
+
+**설계:**
+
+CMovePacket에 이미 포함된 `velocity`를 서버 플레이어 객체에 저장하고,
+공격 판정 시 `pos + velocity × elapsed`로 추정 위치를 계산(Dead Reckoning).
+최대 예측 창은 300 ms로 제한.
+
+**`object.hpp`:**
+
+```cpp
+Milliseconds posUpdateMs_{ 0ms };  // 마지막 위치 패킷 수신 시각
+
+void         setPosUpdateMs(Milliseconds t) { posUpdateMs_ = t; }
+Milliseconds posUpdateMs()            const { return posUpdateMs_; }
+
+mu::Vec3 estimatedPos(Milliseconds serverNow,
+                      Milliseconds maxWindow = Milliseconds{300.f}) const {
+    float elapsed = (serverNow - posUpdateMs_).count();
+    if (elapsed > maxWindow.count()) elapsed = maxWindow.count();
+    if (elapsed < 0.f) elapsed = 0.f;
+    return pos() + linearVel() * (elapsed / 1000.f);
+}
+```
+
+**`Room.cpp` `move()`:**
+
+```cpp
+player->setPos(DirectX::XMLoadFloat3(&cMvPkt->pos));
+player->setLinearVel(DirectX::XMLoadFloat3(&cMvPkt->velocity));  // 추가
+player->setPosUpdateMs(elapsedMs_);                              // 추가
+```
+
+**`Npc.cpp` — 공격 판정 교체 위치:**
+
+| 상태 | 용도 |
+|---|---|
+| Chase → AttackWindup 전환 | 공격 범위 진입 판정 |
+| AttackWindup 피격 확정 | 실제 데미지 적용 |
+| AttackRecover → 다음 전환 | 재공격/Chase 범위 판정 |
+| Reposition → 다음 전환 | 과밀 해소 후 범위 판정 |
+
+탐지(`selectBestVisibleTarget`)는 raw `pos()` 유지 — 미래 위치 기반 조기 aggro 방지.
+
+---
+
+### [2] AttackWindup 범위 이탈 시 즉시 Chase 복귀
+
+Chase에서 `estimatedPos` 거리가 `attackRange` 이하가 되면 단 1틱이라도 AttackWindup으로
+전환된다. 기존 코드는 플레이어가 이탈해도 `windupTime(0.4s) + recoverTime(1.5s) ≈ 2초`를
+그 자리에 서서 대기했다.
+
+**수정:** `updateAttackWindup()` 매 틱마다 범위 체크 추가.
+플레이어가 사거리 밖이면 windupTimer 진행 여부와 무관하게 즉시 Chase로 복귀.
+
+```cpp
+mu::Vec3 toTarget = targetSession->player()->estimatedPos(room.getElapsedMs()) - pos();
+if ( toTarget.len2() > attackRange_ * attackRange_ ) {
+    mu::NVec3 nd( toTarget );
+    setLinearVel( mu::Vec3( nd.x() * moveSpeed_, body().linearVel().y(), nd.z() * moveSpeed_ ) );
+    setOrient( mu::NQuat( mu::Radian(), mu::Radian(), mu::Radian( std::atan2( nd.x(), nd.z() ) ) ) );
+    transitionTo( NpcState::Chase );
+    return {};
+}
+```
+
+---
+
+### [3] AttackRecover 종료 후 플레이어 방향 보정
+
+AttackWindup 진입 시 `setOrient`가 호출되지 않아 공격 사이클 내내 방향이 고정되는 문제.
+플레이어가 NPC 뒤로 이동하면 회복 종료 후 엉뚱한 방향을 향한 채 공격/추격했다.
+
+**설계:** 윈드업 + 리커버리를 하나의 공격 사이클로 보고, 사이클이 완전히 끝난 뒤
+(recoverTimer 만료 시) 플레이어 방향으로 1회 `setOrient`. 이후 Chase/AttackWindup이
+올바른 방향에서 시작.
+
+```cpp
+// recoverTimer_ >= attackRecoverTime_ 블록 진입 직후
+mu::Vec3 toTargetXZ = targetSession->player()->pos() - pos();
+toTargetXZ = mu::Vec3( toTargetXZ.x(), 0.f, toTargetXZ.z() );
+if ( toTargetXZ.len() > 0.001f ) {
+    mu::NVec3 nd( toTargetXZ );
+    setOrient( mu::NQuat( mu::Radian(), mu::Radian(), mu::Radian( std::atan2( nd.x(), nd.z() ) ) ) );
+}

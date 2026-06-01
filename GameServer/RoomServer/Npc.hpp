@@ -24,7 +24,7 @@ struct NpcConfig {
     float attackRange        = 2.f;
     float attackDamage       = 10.f;
     Seconds attackWindupTime { 0.4f };
-    Seconds attackRecoverTime{ 1.5f };
+    Seconds attackRecoverTime{ 1.f };
     float separationRadius   = 2.5f;
     float separationWeight   = 0.6f;
     bool  canReAggroOnReturn = true;

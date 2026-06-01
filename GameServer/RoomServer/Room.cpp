@@ -289,6 +289,8 @@ void Room::move(int32 sessionId, CMovePacket* cMvPkt) {
 
 	auto player = session->player();
 	player->setPos(DirectX::XMLoadFloat3(&cMvPkt->pos));
+	player->setLinearVel(DirectX::XMLoadFloat3(&cMvPkt->velocity));
+	player->setPosUpdateMs(elapsedMs_);
 
 	auto sMvPkt = PacketManager::makeSMovePacket(
 		static_cast<uint16>(sessionId),
