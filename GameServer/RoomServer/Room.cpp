@@ -36,6 +36,7 @@ void Room::init(const Level* levelData) {
 
 	for (auto& g : goblins_) {
 		g.setId(IdPool::pop());
+		g.setFaction(Faction::Monsters);
 		g.setSpawnPos(g.pos());
 		g.applyGoblinConfig();
 		g.body().setMotionType(MotionType::Dynamic);
@@ -213,6 +214,7 @@ GameSession* Room::findLivingSessionByPlayerId(int32 playerId) const {
 void Room::enter(GameSession* session) {
 	// 서버에서 사용할 player 객체 세팅
 	auto player = session->player();
+	player->setFaction(Faction::Players);
 	player->setModel(RoomManager::playerModelData());
 	player->setPos(playerStarts_[sessions_.size() % playerStarts_.size()].pos());	// 새로 들어오는 플레이어는 playerStarts_에서 순서대로 위치를 받는다.
 	player->setOrient(playerStarts_[sessions_.size() % playerStarts_.size()].orient());
@@ -283,6 +285,14 @@ void Room::enter(GameSession* session) {
 }
 
 void Room::leave(GameSession* session) {
+	// Terminate this player's active skills before dropping the object, so a
+	// lingering instance can't rebind to a recycled object id (new player).
+	{
+		SkillDispatchContext ctx{ &skillEvList_, objectById_.data(), static_cast<int>(objectById_.size()) };
+		skillSystem_.interruptAll(static_cast<i32t>(session->player()->getId()), ctx);
+		clearEvents(skillEvList_);
+	}
+
 	unregisterObject(session->player());
 	physicsWorld_.unregisterBody(&session->player()->body());
 
@@ -310,7 +320,27 @@ void Room::move(int32 sessionId, CMovePacket* cMvPkt) {
 	}
 
 	auto player = session->player();
-	player->setPos(DirectX::XMLoadFloat3(&cMvPkt->pos));
+
+	// ── 경량 위치 검증 (안티-텔레포트/스피드핵) ─────────────────────────────
+	// 클라가 reciprocal soft separation으로 자기 위치를 산출해 보내므로 서버는
+	// 그 결과를 신뢰하되, 직전 위치 대비 수평 변위가 물리적으로 불가능한 수준이면
+	// 허용치로 클램프한다. (클램프만; 겹침 강제 해소·보정 명령은 하지 않음)
+	//   허용치 = (최대 이동속도 + 최대 분리속도) × 최대 패킷 간격(여유 포함)
+	//          = (10 m/s + 4 m/s) × 0.5 s = 7 m. 클라 상수와 동기화 필요.
+	static constexpr float kMaxMovePerPacket = 7.f;
+	const mu::Vec3 oldPos = player->pos();
+	mu::Vec3 newPos = DirectX::XMLoadFloat3(&cMvPkt->pos);
+	const mu::Vec3 deltaXZ{ newPos.x() - oldPos.x(), 0.f, newPos.z() - oldPos.z() };
+	const float horizDist = deltaXZ.len();
+	if (horizDist > kMaxMovePerPacket) {
+		const float s = kMaxMovePerPacket / horizDist;
+		// XZ만 허용치로 클램프, Y(낙하/지형)는 그대로 둔다.
+		newPos = mu::Vec3{ oldPos.x() + deltaXZ.x() * s, newPos.y(), oldPos.z() + deltaXZ.z() * s };
+		std::cout << "[move() 검증] 비정상 이동 감지 (sessionId: " << sessionId
+		          << ", dist: " << horizDist << "m) → 허용치로 클램프\n";
+	}
+
+	player->setPos(newPos);
 	player->setLinearVel(DirectX::XMLoadFloat3(&cMvPkt->velocity));
 
 	auto sMvPkt = PacketManager::makeSMovePacket(
@@ -341,19 +371,23 @@ void Room::rotate(int32 sessionId, CMouseMovePacket* cMouseMvPkt) {
 	ObjectPool<CMouseMovePacket>::push(cMouseMvPkt);
 }
 
+// Debug-only: broadcast every active skill hitbox OBB to all clients each frame
+// for visualization. Off by default — it allocates + serializes + fans out per
+// frame, which is pure overhead in production.
+static constexpr bool kBroadcastDebugHitboxes = false;
+
 void Room::updateSkillSystem(Milliseconds dt) {
 	if (sessions_.empty()) return;
 
-	EventList evList;
 	SkillDispatchContext ctx {
-		&evList,
+		&skillEvList_,
 		objectById_.data(),
 		static_cast<int>(objectById_.size())
 	};
 
 	skillSystem_.update(dt, ctx);
 
-	for (const auto* p : evList) {
+	for (const auto* p : skillEvList_) {
 		const auto* ev = reinterpret_cast<const BasicEvent*>(p);
 		if (ev->type != EventType::SkillHit) continue;
 
@@ -373,16 +407,18 @@ void Room::updateSkillSystem(Milliseconds dt) {
 		));
 	}
 
-	clearEvents(evList);
+	clearEvents(skillEvList_);
 
-	std::vector<OBB> activeOBBs;
-	skillSystem_.collectActiveOBBs(activeOBBs);
-	if (!activeOBBs.empty()) {
-		std::vector<OBBInfo> obbInfos;
-		obbInfos.reserve(activeOBBs.size());
-		for (const OBB& o : activeOBBs)
-			obbInfos.push_back({ o.center.getXmf(), o.halfExtents.getXmf(), o.orient.getXmf() });
-		broadcast(PacketManager::makeSDebugHitboxPacket(obbInfos.data(), static_cast<uint16>(obbInfos.size())));
+	if constexpr (kBroadcastDebugHitboxes) {
+		std::vector<OBB> activeOBBs;
+		skillSystem_.collectActiveOBBs(activeOBBs);
+		if (!activeOBBs.empty()) {
+			std::vector<OBBInfo> obbInfos;
+			obbInfos.reserve(activeOBBs.size());
+			for (const OBB& o : activeOBBs)
+				obbInfos.push_back({ o.center.getXmf(), o.halfExtents.getXmf(), o.orient.getXmf() });
+			broadcast(PacketManager::makeSDebugHitboxPacket(obbInfos.data(), static_cast<uint16>(obbInfos.size())));
+		}
 	}
 }
 
@@ -402,12 +438,12 @@ void Room::skillStart(int32 sessionId, uint32 skillAssetId, uint64 clientMs) {
 	uint64 elapsedRaw = (serverNow > clientMs) ? (serverNow - clientMs) : 0u;
 	uint16 elapsedMs  = static_cast<uint16>(std::min(elapsedRaw, static_cast<uint64>(65535u)));
 
-	// Start server-side skill instance for authoritative hit detection
-	EventList dummyEvList;
-	SkillDispatchContext startCtx{ &dummyEvList, objectById_.data(), static_cast<int>(objectById_.size()) };
+	// Start server-side skill instance for authoritative hit detection.
+	// Reuse skillEvList_ (serialized with updateSkillSystem via the room job queue).
+	SkillDispatchContext startCtx{ &skillEvList_, objectById_.data(), static_cast<int>(objectById_.size()) };
 	int instIdx = skillSystem_.startSkill(skillAssetId, static_cast<i32t>(player->getId()),
 	                                      startCtx, Milliseconds{ static_cast<float>(elapsedMs) });
-	clearEvents(dummyEvList);
+	clearEvents(skillEvList_);
 	if (instIdx < 0)
 		std::cout << "[Room::skillStart] WARNING: startSkill failed (asset id=" << skillAssetId << " not in registry)\n";
 

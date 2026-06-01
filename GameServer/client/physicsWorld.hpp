@@ -60,12 +60,18 @@ public:
     // Ragdoll uses this for joint-connected pairs (1-hop) and near-chain pairs (2-hop).
     void setIgnoreCollision(RigidBody* a, RigidBody* b, bool ignore);
 
-    // Register a static height-field terrain for body-terrain collision.
-    // terrainBody must be MotionType::Static; it is NOT added to the broad phase.
-    void registerTerrain(RigidBody* terrainBody, const TerrainHeightField* heightField);
+    // Opaque handle to a registered terrain chunk (stable across other (un)registers).
+    using TerrainHandle = std::size_t;
+    static constexpr TerrainHandle kInvalidTerrainHandle = static_cast<std::size_t>(-1);
 
-    // Remove the terrain collider. Safe to call when no terrain is registered.
-    void unregisterTerrain();
+    // Register a static height-field terrain chunk for body-terrain collision.
+    // terrainBody must be MotionType::Static; it is NOT added to the broad phase.
+    // Multiple chunks may be registered simultaneously; each collider self-rejects
+    // bodies outside its [origin, origin+size] XZ footprint. Returns a handle.
+    TerrainHandle registerTerrain(RigidBody* terrainBody, const TerrainHeightField* heightField);
+
+    // Remove a previously registered terrain chunk. Safe with kInvalidTerrainHandle.
+    void unregisterTerrain(TerrainHandle handle);
 
     // Register a body as a camera obstacle for queryCameraArm().
     // Call update() on the camera broad phase immediately, so subsequent
@@ -140,11 +146,16 @@ private:
     // Non-owning joint references (added via addJointRef, e.g. from Ragdoll).
     std::vector<Constraint*>                    jointRefs_;
 
-    // Optional terrain collider (null when no terrain is registered).
-    // Terrain body is NOT in entries_ or broadPhase_; TerrainCollider
-    // iterates Dynamic bodies directly.
-    std::unique_ptr<TerrainCollider>            terrainCollider_;
-    const TerrainHeightField*                   terrainHF_ = nullptr;
+    // Registered terrain chunks. Terrain bodies are NOT in entries_ or broadPhase_;
+    // each TerrainCollider iterates Dynamic bodies directly and self-rejects bodies
+    // outside its XZ footprint. Slots are stable; unregister leaves an inactive
+    // tombstone (collider == nullptr) reused by later registerTerrain calls.
+    struct TerrainEntry {
+        std::unique_ptr<TerrainCollider> collider;   // null == inactive slot
+        const TerrainHeightField*        hf = nullptr;
+    };
+    std::vector<TerrainEntry>                   terrains_;
+    std::vector<std::size_t>                    freeTerrainSlots_;
 
     // Separate broad phase for camera obstacle queries (not part of physics sim).
     std::unique_ptr<BroadPhase>                 cameraBroadPhase_;

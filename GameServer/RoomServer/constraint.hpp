@@ -1,4 +1,4 @@
-#ifndef room_server_constraint_hpp
+﻿#ifndef room_server_constraint_hpp
 #define room_server_constraint_hpp
 
 // Abstract base for all velocity-level + position-level constraints.

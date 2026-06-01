@@ -1,4 +1,4 @@
-#ifndef room_server_serverAnimation_hpp
+﻿#ifndef room_server_serverAnimation_hpp
 #define room_server_serverAnimation_hpp
 
 #include <filesystem>

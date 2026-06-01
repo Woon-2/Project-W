@@ -1,4 +1,4 @@
-#ifndef __smokeBlendCGPipeline_HPP
+﻿#ifndef __smokeBlendCGPipeline_HPP
 #define __smokeBlendCGPipeline_HPP
 
 #include "gfxUtil.hpp"

@@ -44,9 +44,10 @@ TimelineEvent
 ```
 SkillSystem
   assetRegistry_[]   — registerAssets()로 등록, 이후 불변
-  instancePool_[]    — SkillInstance 정적 배열 (최대 128)
-  hitboxPool_[]      — AttachedHitbox (비활성 슬롯 재사용)
-  particleSources_[] — ParticleHitboxSource (VFXParticle attach 전용)
+  instancePool_      — SkillInstance 동적 풀 (vector + freeList + activeList)
+  hitboxPool_[]      — AttachedHitbox (freeList로 O(1) 재사용)
+  particleSources_[] — ParticleHitboxSource (VFXParticle attach 전용, freeList)
+  skillBroadPhase_   — Object–Hitbox bipartite sweep-and-prune (후보 쌍 생성)
   pendingHits_[]     — checkHitboxCollisions → processHitResults 전달용
 
 SkillInstance
@@ -70,9 +71,9 @@ SkillSystem::update(dt, ctx)
   1. tickInstance()           — elapsed 증가, 타임라인 이벤트 발동
      └─ dispatchEvent()       — SpawnHitbox → allocHitbox + resolveAttach
                               — DestroyHitbox, PlayAnimation, PlayVFX, ...
-  2. updateHitboxes()         — Bone attach: boneWorldXform * localOBBs → worldOBBs
-  3. updateParticleHitboxSources() — VFXParticle: 파티클 수에 맞게 hitbox 생성/제거
-  4. checkHitboxCollisions()  — worldOBBs vs target BVH → pendingHits_
+  2. updateHitboxes()         — Bone attach: boneWorldXform * localOBBs → worldOBBs (+worldAABB 캐시)
+  3. updateParticleHitboxSources() — VFXParticle: 핸들 재사용으로 파티클 수만큼 증감
+  4. checkHitboxCollisions()  — SkillBroadPhase(후보쌍) → worldOBBs vs target BVH → pendingHits_
   5. processHitResults()      — EvSkillHit 발행, VFX 재생, 충격량 적용
 ```
 
@@ -213,3 +214,72 @@ bone.toDress                         — bind pose: bone-local → model space
 - `hitGroupCooldownMs > 0`: 마지막 피격 이후 N ms가 지나면 재피격 가능
 
 같은 `hitGroup` 번호를 가진 히트박스들은 서로 쿨타임을 공유한다.
+
+내부 dedup은 타깃 多 AoE에서도 O(1) 조회를 위해 `unordered_map`을 유지한다. 인스턴스 풀이
+파괴 없이 재사용되므로 `resetSlots()`는 맵을 `clear()`만 하여 버킷 capacity를 보존한다(할당 churn 제거).
+
+---
+
+## 성능 최적화 (2026-05-29)
+
+서버와 동일한 구조 변경을 클라이언트에도 적용했다(`RoomServer/docs/skillArchitecture.md` 성능
+최적화 항목과 동일). 핵심:
+
+### Object–Hitbox broad phase (`SkillBroadPhase`)
+
+`checkHitboxCollisions()`가 히트박스마다 전체 객체를 순회하던 O(N·M)을 제거. 히트박스 AABB와
+타깃 AABB의 X축 엔드포인트를 한 번에 정렬·sweep하는 **bipartite sweep-and-prune**으로
+(히트박스, 타깃) 후보 쌍만 생성(O(K log K + pairs)). 물리 broad phase와 독립이며, 각 히트박스의
+합집합 AABB는 `AttachedHitbox::worldAABB`에 캐시(margin `kHitboxAABBMargin` fatten).
+타깃 수집 필터는 기존과 동일하게 `!isDead()`.
+
+### 동적 인스턴스 풀 + freeList
+
+`SkillInstancePool`을 고정 `instances[128]` → `vector + freeList + activeList`로 교체.
+`update()/hasActiveSkill()/interruptAll()`은 activeList만 순회. `hitboxPool_`/`particleSources_`도
+freeList로 O(1) alloc.
+
+### updateParticleHitboxSources 핸들 재사용
+
+매 프레임 per-particle 히트박스를 free/realloc하던 것을, 파티클 수 변화에만 증감하고 기존
+핸들의 `worldOBBs`/`worldAABB`만 갱신하도록 변경(매 프레임 alloc/free 제거).
+
+---
+
+## 피아 식별 (Faction, 2026-05-29)
+
+아군(같은 진영)끼리는 타격할 수 없다. **서버와 동일 규칙**으로 적용해 클라 예측이 서버 권위와
+일치한다(`RoomServer/docs/skillArchitecture.md`「피아 식별」과 동일 설계).
+
+- `object.hpp`에 `enum class Faction { Neutral, Players, Monsters }` + `factionBit`/`hostileMask`
+  + `Object::faction_`. `SkillBroadPhase`는 게임 의미를 모른 채 일반 `u32 마스크`만 다룬다.
+- **진영 설정 지점**: online은 `setupPlayer`(`player_`)·`createOtherPlayer` → `Players`,
+  `createGoblin` → `Monsters`. standalone은 `player_`/`goblin_`. 모두 `skillObjectById_` 등록부와
+  같은 자리에서 `setFaction` 호출.
+- **targetMask 캐시 + broad phase 필터**: `SpawnHitbox` 시 owner faction의 `hostileMask`를
+  `AttachedHitbox::targetMask`/`ParticleHitboxSource::targetMask`에 캐시(`updateParticleHitboxSources`
+  가 per-particle 히트박스에 전파). `SkillBroadPhase::build()`가 후보 emit 직전 `(mask & category)`를
+  YZ overlap보다 먼저 검사 → 아군 쌍은 narrow phase 진입 전에 제거.
+- 클라 예측(`clientPredictionOnly`)에서도 아군에게 히트 FX/impulse 예측이 발생하지 않는다.
+- 타깃 수집 필터는 `!isDead()` 유지, narrow phase의 owner 제외 유지.
+
+> **새 캐릭터/몬스터 추가 시:** 생성 지점에서 `setFaction` 호출 필수(누락 시 `Neutral` → 피격 불가
+> 회귀). `skillObjectById_`에 등록되지 않는 객체는 애초에 스킬 타깃이 아니다.
+
+---
+
+## 객체 수명주기와 연결 해제 (중요 제약)
+
+SkillSystem은 `SkillDispatchContext::objectById`(= `skillObjectById_`, id로 색인되는 raw `Object*`
+배열)를 통해 owner/target을 매 프레임 해소한다. `AttachedHitbox`는 id만 저장하므로, 객체가
+파괴되기 전에 슬롯을 비우지 않으면 `checkHitboxCollisions()`가 dangling 포인터를 역참조한다.
+
+- **`Game::removePlayer()`** — 원격 플레이어 퇴장 시 `otherPlayers_`/`idPlayerMap_`에서 제거하기
+  전에 ① `skillSystem_.interruptAll(playerId, skillCtx_)`로 그 플레이어 소유 스킬을 종료하고
+  ② `skillObjectById_[playerId] = nullptr`로 슬롯을 비운다. (이 정리 누락이 2026-05-29
+  `checkHitboxCollisions` 크래시의 원인이었다.)
+- **소유자 제거는 허용** — `updateHitboxes()`가 owner null이면 히트박스를 비활성화한다.
+- **재접속/씬 재진입** — 씬 셋업에서 `skillObjectById_.assign(256, nullptr)`로 전체 초기화하며,
+  신규 플레이어 추가 경로(`onEnterOther` 등)가 해당 id 슬롯을 갱신한다.
+
+> 서버 측 동일 제약은 `RoomServer/docs/skillArchitecture.md`의 「객체 수명주기와 연결 해제」 참조.

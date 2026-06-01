@@ -61,17 +61,29 @@ void PhysicsWorld::setIgnoreCollision(RigidBody* a, RigidBody* b, bool ignore)
     else        ignoreCollisionPairs_.erase(key);
 }
 
-void PhysicsWorld::registerTerrain(RigidBody* terrainBody,
+PhysicsWorld::TerrainHandle PhysicsWorld::registerTerrain(RigidBody* terrainBody,
                                     const TerrainHeightField* heightField)
 {
-    terrainCollider_ = std::make_unique<TerrainCollider>(terrainBody, heightField);
-    terrainHF_ = heightField;
+    std::size_t slot;
+    if (!freeTerrainSlots_.empty()) {
+        slot = freeTerrainSlots_.back();
+        freeTerrainSlots_.pop_back();
+    } else {
+        slot = terrains_.size();
+        terrains_.emplace_back();
+    }
+    terrains_[slot].collider = std::make_unique<TerrainCollider>(terrainBody, heightField);
+    terrains_[slot].hf       = heightField;
+    return static_cast<TerrainHandle>(slot);
 }
 
-void PhysicsWorld::unregisterTerrain()
+void PhysicsWorld::unregisterTerrain(TerrainHandle handle)
 {
-    terrainCollider_.reset();
-    terrainHF_ = nullptr;
+    if (handle == kInvalidTerrainHandle || handle >= terrains_.size()) return;
+    if (!terrains_[handle].collider) return;   // already inactive
+    terrains_[handle].collider.reset();
+    terrains_[handle].hf = nullptr;
+    freeTerrainSlots_.push_back(handle);
 }
 
 void PhysicsWorld::registerCameraObstacle(RigidBody* body)
@@ -95,20 +107,24 @@ float PhysicsWorld::queryCameraArm(mu::Vec3 pivot, mu::Vec3 desiredEye, float sp
     float allowed = armLen;
 
     // Terrain: sample N=6 points along the arm, find the first below ground.
-    if (terrainHF_ && terrainCollider_) {
-        const mu::Vec3 origin = terrainCollider_->terrainBody()->pos();
+    // Each sample is routed to whichever registered chunk contains its XZ.
+    if (!terrains_.empty()) {
         constexpr int N = 6;
         for (int i = 1; i <= N; ++i) {
             const float t  = static_cast<float>(i) / N;
             const mu::Vec3 p = pivot + armDir * (t * armLen);
-            const float lx = p.x() - origin.x();
-            const float lz = p.z() - origin.z();
-            if (lx < 0.f || lx > terrainHF_->sizeX) continue;
-            if (lz < 0.f || lz > terrainHF_->sizeZ) continue;
-            const float groundY = origin.y() + terrainHF_->getHeightAt(lx, lz);
-            if (p.y() < groundY + kCameraMinGroundClearance) {
-                allowed = std::min(allowed, (t - 1.0f / N) * armLen);
-                break;
+            for (const auto& te : terrains_) {
+                if (!te.collider || !te.hf) continue;
+                const mu::Vec3 origin = te.collider->terrainBody()->pos();
+                const float lx = p.x() - origin.x();
+                const float lz = p.z() - origin.z();
+                if (lx < 0.f || lx > te.hf->sizeX) continue;
+                if (lz < 0.f || lz > te.hf->sizeZ) continue;
+                const float groundY = origin.y() + te.hf->getHeightAt(lx, lz);
+                if (p.y() < groundY + kCameraMinGroundClearance) {
+                    allowed = std::min(allowed, (t - 1.0f / N) * armLen);
+                }
+                break;  // sample lies in exactly one chunk
             }
         }
     }
@@ -306,7 +322,10 @@ void PhysicsWorld::generateContacts()
     }
 
     // --- Body-Terrain contacts ---
-    if (terrainCollider_) {
+    // For each dynamic body, test against every registered chunk. Each collider
+    // self-rejects vertices outside its XZ footprint, so a body straddling a chunk
+    // boundary correctly gets contacts from both chunks.
+    if (!terrains_.empty()) {
         for (auto& e : entries_) {
             RigidBody* body = e.body;
             if (body->motionType() != MotionType::Dynamic) continue;
@@ -320,20 +339,33 @@ void PhysicsWorld::generateContacts()
                 ? std::min(0.15f, std::abs(vy) * currentSubDt_.count())
                 : 0.f;
 
-            std::vector<ContactPoint> contacts;
-            contacts.reserve(4);
-            const int cnt = terrainCollider_->generateContacts(*body, contacts, lookAhead);
-            if (cnt == 0) continue;
+            for (auto& te : terrains_) {
+                if (!te.collider) continue;
 
-            auto cc = std::make_unique<ContactConstraint>(body, terrainCollider_->terrainBody());
-            cc->setExternalAccels(gravity_, mu::Vec3(0.f, 0.f, 0.f));
-            cc->setTerrainContact(true);
-            for (auto& cp : contacts) {
-                cp.localA = cp.worldPos - body->pos();
-                cp.localB = cp.worldPos - terrainCollider_->terrainBody()->pos();
-                cc->addContact(cp);
+                // Cheap XZ-footprint reject before walking the body's BVH leaves.
+                const mu::Vec3 origin = te.collider->terrainBody()->pos();
+                const mu::Vec3 bp = body->pos();
+                constexpr float kPad = 4.f;   // generous: body half-extent + look-ahead
+                if (te.hf) {
+                    if (bp.x() < origin.x() - kPad || bp.x() > origin.x() + te.hf->sizeX + kPad) continue;
+                    if (bp.z() < origin.z() - kPad || bp.z() > origin.z() + te.hf->sizeZ + kPad) continue;
+                }
+
+                std::vector<ContactPoint> contacts;
+                contacts.reserve(4);
+                const int cnt = te.collider->generateContacts(*body, contacts, lookAhead);
+                if (cnt == 0) continue;
+
+                auto cc = std::make_unique<ContactConstraint>(body, te.collider->terrainBody());
+                cc->setExternalAccels(gravity_, mu::Vec3(0.f, 0.f, 0.f));
+                cc->setTerrainContact(true);
+                for (auto& cp : contacts) {
+                    cp.localA = cp.worldPos - body->pos();
+                    cp.localB = cp.worldPos - origin;
+                    cc->addContact(cp);
+                }
+                contactConstraints_.push_back(std::move(cc));
             }
-            contactConstraints_.push_back(std::move(cc));
         }
     }
 }

@@ -1,4 +1,4 @@
-#ifndef __blendCGMeshPipeline_HPP
+﻿#ifndef __blendCGMeshPipeline_HPP
 #define __blendCGMeshPipeline_HPP
 
 #include "gfxUtil.hpp"

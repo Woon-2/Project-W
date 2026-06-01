@@ -1,4 +1,4 @@
-#ifndef room_server_rigidBody_hpp
+﻿#ifndef room_server_rigidBody_hpp
 #define room_server_rigidBody_hpp
 
 #include "collision.hpp"

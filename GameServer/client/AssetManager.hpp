@@ -15,7 +15,6 @@ public:
 	const Model* modelPlayer() const { return &modelPlayer_; }
 	const Model* modelGoblin() const { return &modelGoblin_; }
 	const Skybox* skyboxMaterial() const { return &skyboxMaterial_; }
-	const TerrainData* terrain() const { return &terrain_; }
 	const Texture* playerHpLine() const { return &playerHpLine_; }
 	const Texture* playerHpFrame() const { return &playerHpFrame_; }
 	const Texture* flameTex() const { return &flameTex_; }
@@ -81,7 +80,6 @@ private:
 	Model modelPlayer_{};
 	Model modelGoblin_{};
 	Skybox skyboxMaterial_{};
-	TerrainData terrain_{};
 	Texture playerHpLine_{};
 	Texture playerHpFrame_{};
 	Texture flameTex_{};

@@ -56,13 +56,13 @@ Room::update() (60 Hz 고정)
   3. updatePlayerAnimations(dt)
   4. updateSkillSystem(dt)           ← 여기서 스킬 시스템 실행
      └─ skillSystem_.update(dt, ctx)
-          tickInstance + dispatchEvent
-          updateHitboxes              ← 뼈 변환으로 worldOBBs 갱신
-          checkHitboxCollisions       ← BVHHitResult (damageCoeff 포함)
+          tickInstance + dispatchEvent  ← activeList만 순회 (고정 128 배열 아님)
+          updateHitboxes              ← 뼈 변환으로 worldOBBs + worldAABB 갱신
+          checkHitboxCollisions       ← SkillBroadPhase(후보쌍) → BVHHitResult
           processHitResults           ← EvSkillHit 생성 + 충격량 적용
-  5. EvSkillHit 이벤트 처리
+  5. EvSkillHit 이벤트 처리 (skillEvList_ 멤버 재사용)
      └─ HP 갱신 + S_SkillHit 브로드캐스트
-  6. S_DebugHitbox 브로드캐스트 (활성 OBB 목록)
+  6. (선택) S_DebugHitbox 브로드캐스트 — kBroadcastDebugHitboxes 플래그, 기본 off
 ```
 
 ---
@@ -174,11 +174,105 @@ skillSystem_.registerAssets(std::move(assets));
 
 ## 디버그 히트박스 패킷
 
-매 프레임, 활성화된 모든 히트박스 OBB를 클라이언트에 전송해 시각적 디버깅을 지원한다:
+활성화된 모든 히트박스 OBB를 클라이언트에 전송해 시각적 디버깅을 지원한다:
 
 ```cpp
-skillSystem_.collectActiveOBBs(activeOBBs);
-broadcast(PacketManager::makeSDebugHitboxPacket(...));
+if constexpr (kBroadcastDebugHitboxes) {   // Room.cpp, 기본 false
+    skillSystem_.collectActiveOBBs(activeOBBs);
+    broadcast(PacketManager::makeSDebugHitboxPacket(...));
+}
 ```
 
 클라이언트는 `S_DebugHitbox`를 수신하면 `debugBVView_`에 100 ms 유효 기간으로 OBB를 표시한다.
+
+> **주의:** 이 브로드캐스트는 매 프레임 OBB 벡터 할당 + 직렬화 + 전 클라이언트 fan-out이라
+> 순수 오버헤드다. `Room.cpp`의 `kBroadcastDebugHitboxes`(기본 `false`)로 게이팅한다.
+> 시각화가 필요할 때만 `true`로 바꿔 빌드한다.
+
+---
+
+## 성능 최적화 (2026-05-29)
+
+다수 Room × 다수 몬스터 × 모든 공격이 SkillSystem 경유라는 전제([[프로젝트: 게임 장르·규모]])
+하에 per-Room per-frame 비용과 힙 할당을 제거했다. **client/server 공통 구조**.
+
+### 1. Object–Hitbox 전용 broad phase (`SkillBroadPhase`)
+
+`checkHitboxCollisions()`가 히트박스마다 전체 객체를 순회하던 O(N·M)을 제거.
+`SkillBroadPhase`는 히트박스 AABB와 타깃 AABB의 X축 엔드포인트를 한 번에 정렬·sweep하는
+**bipartite sweep-and-prune**으로 (히트박스, 타깃) 후보 쌍만 생성한다. O(K log K + pairs).
+
+- 물리의 Object-Object BroadPhase(`queryPairs`)를 재사용하지 않는다(종류가 다름). SAP sweep
+  기법과 물리가 유지하는 타깃 `worldBVH` 루트 AABB만 읽는다 → 물리와 구조적 결합 없음.
+- 각 히트박스는 `worldOBBs` 갱신 시 합집합 AABB를 `AttachedHitbox::worldAABB`에 캐시
+  (margin `kHitboxAABBMargin=0.2m` fatten으로 1-tick stale 보정 → false negative 방지).
+- 타깃은 `checkHitboxCollisions()` 시작 시 1회 수집(`canReceiveDamage() && hp()>0`).
+
+### 2. 동적 인스턴스 풀
+
+`SkillInstancePool`을 고정 `instances[128]` 배열 → `std::vector + freeList + activeList`로 교체.
+`update()/hasActiveSkill()/interruptAll()`은 **activeList만 순회**(활성 수). 풀은 파괴하지 않고
+재사용해 인스턴스 내부 dedup 맵의 버킷 capacity를 보존한다. `hitboxPool_`/`particleSources_`도
+freeList로 O(1) alloc(기존 O(poolSize) 선형 스캔 제거).
+
+### 3. 히트 중복 제거
+
+`SkillInstance`의 그룹·타깃 dedup은 **해시 조회 유지**(타깃 多 AoE에서도 O(1)). `resetSlots()`는
+맵을 파괴하지 않고 `clear()`만 호출 → per-cast 할당 churn 제거.
+
+### 4. 할당 정리
+
+`Room::updateSkillSystem`의 `EventList`를 멤버(`skillEvList_`)로 재사용(std::list 노드 재할당
+제거), 디버그 브로드캐스트 게이팅(위 참조). 클라이언트는 `updateParticleHitboxSources()`가
+per-particle 히트박스를 매 프레임 free/realloc하던 것을 핸들 재사용으로 변경.
+
+---
+
+## 피아 식별 (Faction, 2026-05-29)
+
+아군(같은 진영)끼리는 서로 타격할 수 없어야 한다. 진영 개념을 도입해 **피격 정확성 + broad
+phase 충돌 회피 최적화**를 동시에 달성한다. **client/server 동일 규칙**(클라 예측이 서버 권위와
+일치해야 하므로).
+
+- **Faction은 엔티티 속성**: `object.hpp`에 `enum class Faction { Neutral, Players, Monsters }`,
+  `factionBit(f)=1<<f`, `hostileMask(f)`(Players↔Monsters 적대, Neutral은 0), `Object::faction_`
+  (+접근자). 진영 의미론은 모두 object.hpp에 모았다 — `SkillBroadPhase`는 게임 의미를 모른 채
+  일반 `u32 마스크`만 다룬다(디커플).
+- **진영 설정 지점**: `Room::init()` 고블린 루프 → `Monsters`, `Room::enter()` 플레이어 →
+  `Players`. 명시 설정 안 된 객체는 `Neutral`(공격·피격 모두 불가, 안전한 기본값).
+- **히트박스 targetMask 캐시**: `SpawnHitbox` 시점에 owner faction으로부터 `hostileMask`를 계산해
+  `AttachedHitbox::targetMask`(및 `ParticleHitboxSource::targetMask`)에 캐시. 충돌 시 owner를 다시
+  조회하지 않는다.
+- **broad phase 마스크 필터(최적화 핵심)**: `SkillBroadPhase::HitboxEntry`에 `mask`(=히트박스
+  targetMask), `TargetEntry`에 `category`(=타깃 `factionBit`). `build()`의 후보 emit 직전에
+  `(mask & category)`를 **YZ overlap보다 먼저** 검사 → 아군 쌍은 candidate가 되기 전에 sweep
+  단계에서 제거 → narrow phase(BVH vs OBB) 미실행.
+- narrow phase의 owner 제외(`targetId == ownerObjectId`)는 유지(저렴, self/미래 아군 타깃 대비).
+
+> **새 진영/캐릭터 추가 시:** 생성 지점에서 `setFaction` 호출 필수. 빠뜨리면 `Neutral`이 되어
+> 플레이어가 그 몬스터를 타격하지 못한다(회귀). `hostileMask`에 새 적대 관계를 추가할 것.
+
+---
+
+## 객체 수명주기와 연결 해제 (중요 제약)
+
+SkillSystem은 **객체를 raw 포인터로 직접 들고 있지 않고**, `SkillDispatchContext::objectById`
+(sparse `Object**`, id로 색인)를 통해 매 프레임 해소한다. `AttachedHitbox`는 owner/target을
+**id로** 저장하고 `lookupObject(id)`로 조회한다. 따라서 객체 수명주기 관리에 다음 제약이 있다.
+
+1. **제거 시 슬롯 null 필수** — 객체가 사라지는 모든 경로는 `objectById[id]`를 `nullptr`로 만들어야
+   한다. 서버는 `Room::leave()`가 `unregisterObject()`로 슬롯을 비운다. 이를 누락하면
+   `checkHitboxCollisions()`의 타깃 수집이 해제된 메모리를 역참조해 크래시한다(클라이언트에서
+   `skillObjectById_` 미정리로 실제 발생했던 버그, 2026-05-29).
+
+2. **연결 해제 시 소유 스킬 종료** — `Room::leave()`는 `skillSystem_.interruptAll(playerId, ctx)`로
+   나가는 플레이어의 스킬 인스턴스를 종료한다. 이를 빠뜨리면 `IdPool`이 그 id를 신규 플레이어에게
+   재할당했을 때, 잔존 인스턴스가 신규 플레이어에게 **재바인딩**되어 엉뚱한 히트박스/데미지를
+   유발한다. (단 `interruptAll`은 `interruptible=true`만 종료 — 슬롯 null 윈도우 동안은
+   `updateHitboxes`의 owner 비활성화로 무해.)
+
+3. **소유자 제거는 허용** — `updateHitboxes()`는 매 프레임 owner를 `lookupObject`로 조회하고
+   null이면 해당 히트박스를 비활성화한다. 즉 소유자가 먼저 사라져도 크래시하지 않는다.
+
+> **신규 엔티티/디스폰 경로 추가 시:** objectById 슬롯 null + (필요 시) 소유 스킬 interrupt를
+> 반드시 함께 처리할 것.

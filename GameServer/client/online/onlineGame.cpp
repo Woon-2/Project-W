@@ -23,6 +23,24 @@ static constexpr float kPlayerMaxSpeed      = 10.f;
 static constexpr float kPlayerLinearDamping = 12.f;
 static constexpr float kPlayerAccelRate     = kPlayerMaxSpeed * kPlayerLinearDamping;
 
+// ---------------------------------------------------------------------------
+// 충돌 레이어 — 플레이어끼리는 hard contact(ContactConstraint)를 만들지 않고
+// resolvePlayerSeparation()의 soft separation으로 처리한다.
+// generateContacts()의 (group & mask)==0 필터로 플레이어-플레이어 쌍을 제외한다.
+// ---------------------------------------------------------------------------
+static constexpr uint16_t kLayerDefault        = 1 << 0;
+static constexpr uint16_t kLayerPlayer         = 1 << 1;
+static constexpr uint16_t kPlayerCollisionMask = static_cast<uint16_t>(0xFFFF & ~kLayerPlayer);
+
+// ---------------------------------------------------------------------------
+// 플레이어 간 reciprocal soft separation 파라미터 (게임 느낌 튜닝).
+//   - 반경을 시각 캡슐보다 살짝 작게 잡으면 가벼운 스침을 허용해 더 자연스럽다.
+//   - 분리 속도 상한으로 깊은 침투에서도 "튕김" 없이 부드럽게 밀려난다.
+// ---------------------------------------------------------------------------
+static constexpr float kPlayerSeparationRadius = 0.4f;  // 플레이어 수평(XZ) 반경 (m)
+static constexpr float kMaxSeparationSpeed     = 4.f;   // 분리 보정 속도 상한 (m/s)
+static constexpr float kSeparationStiffness    = 1.0f;  // 0~1, 1=이번 step에 절반 전부 보정
+
 static constexpr int     kRenderSkipLagFrames = 4;
 static constexpr int     kMaxPhysicsStepsPerFrame = 3;
 static constexpr Seconds kMaxPhysicsDeltaTime{ 1.f / 60.f * kMaxPhysicsStepsPerFrame };
@@ -75,6 +93,9 @@ void Game::setupStage() {
 	importNode(ifs);
 
 	readTailTag(ifs, "Level");
+
+	// 지형 청크 스트리밍 매니저 초기화 (팔레트 + 인덱스 로드, 동기 baseline 로드).
+	chunkManager_.init(gfx_, physicsWorld_, &threadPool_, "../resources/terrains/");
 
 	skybox_.setModel( assetManager_.modelCube( ) );
 	skybox_.setSkyboxMaterial( assetManager_.skyboxMaterial( ) );
@@ -180,9 +201,9 @@ void Game::importNode(std::ifstream& ifs) {
 	object.setScale(DirectX::XMLoadFloat3(&worldS));
 
 	if (type == "Terrain") {
-		terrain_ = std::make_shared<TerrainObject>(std::move(object));
-		importTerrain(ifs, *terrain_);
-		terrain_->update(0ms, 1.f);
+		// Terrain is now streamed by TerrainChunkManager (chunks_index.bin).
+		// Consume the legacy ManifestPath field to keep the scene stream aligned, then ignore.
+		readText(ifs, "ManifestPath");
 	}
 	else {
 		// no-op
@@ -196,22 +217,6 @@ void Game::importNode(std::ifstream& ifs) {
 	readTailTag(ifs, "Children");
 
 	readTailTag(ifs, "Node");
-}
-
-void Game::importTerrain(std::ifstream& ifs, TerrainObject& terrain) {
-	const auto manifestPath = readText(ifs, "ManifestPath");
-	terrain.setTerrainData(assetManager_.terrain());
-
-	// 지형 물리 바디 설정: Static body (위치는 importNode WorldTRS에서 설정됨)
-	terrain.body().setMotionType(MotionType::Static);
-
-	// Hi-Z Occlusion Occluder 설정
-	terrain.activateOcclusion(true);
-
-	// TerrainCollider 등록 (BVH 불필요 — heightField 직접 조회)
-	const TerrainData* td = assetManager_.terrain();
-	if (td && !td->heightField.empty())
-		physicsWorld_.registerTerrain(&terrain.body(), &td->heightField);
 }
 
 void Game::setParticle()
@@ -1527,8 +1532,11 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 	player_->body().setAngularDamping(25.f);
 	player_->body().setUprightStiffness(4000.f);
 
+	// 플레이어 레이어로 등록 — 플레이어-플레이어 hard contact는 제외되고
+	// resolvePlayerSeparation()의 soft separation이 대신 처리한다.
 	physicsWorld_.registerBody(&player_->body(),
-		[p = player_.get()]() { p->rebuildBodyBVH(); });
+		[p = player_.get()]() { p->rebuildBodyBVH(); },
+		kLayerPlayer, kPlayerCollisionMask);
 
 	camera_.setTargetObject(player_);
 	camera_.setOffsetFromTarget(mu::Vec3(0.f, 1.8f, -2.5f));
@@ -1551,6 +1559,7 @@ void Game::setupPlayer(const PlayerInfo& playerInfo) {
 		skillSystem_.registerAssets(std::move(assets));
 
 		skillObjectById_.assign(256, nullptr);
+		player_->setFaction(Faction::Players);
 		skillObjectById_[player_->getId()] = player_.get();
 		// Register goblins that arrived before setupPlayer() was called.
 		for (auto& [gobId, goblin] : idGoblinMap_) {
@@ -1594,6 +1603,7 @@ void Game::createOtherPlayer(const ObjectInfo& otherPlayerInfo) {
 	otherPlayer->setAnimBlender(animSystem_, assetManager_);
 	otherPlayer->setHp(100);
 	otherPlayer->setMaxHp(100);
+	otherPlayer->setFaction(Faction::Players);
 	otherPlayer->enableBVRendering();
 
 	otherPlayer->body().setMotionType(MotionType::Kinematic);
@@ -1606,8 +1616,11 @@ void Game::createOtherPlayer(const ObjectInfo& otherPlayerInfo) {
 
 	// 서버 주도 객체: 패킷으로 pos/vel이 설정되면 PhysicsWorld가 Kinematic 적분으로
 	// 패킷 간격 사이를 dead-reckoning 보간한다.
+	// 플레이어 레이어로 등록 — 로컬 플레이어와의 hard contact는 제외되고
+	// resolvePlayerSeparation()이 soft separation으로 처리한다.
 	physicsWorld_.registerBody(&otherPlayer->body(),
-		[p = otherPlayer.get()]() { p->rebuildBodyBVH(); });
+		[p = otherPlayer.get()]() { p->rebuildBodyBVH(); },
+		kLayerPlayer, kPlayerCollisionMask);
 
 	{
 		auto* bar = static_cast<UI::ProgressBar*>(
@@ -1646,6 +1659,7 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 	otherPlayer->setAnimBlender(animSystem_, assetManager_);
 	otherPlayer->setHp(100);
 	otherPlayer->setMaxHp(100);
+	otherPlayer->setFaction(Faction::Players);
 	otherPlayer->enableBVRendering();
 
 	otherPlayer->body().setMotionType(MotionType::Kinematic);
@@ -1658,8 +1672,11 @@ void Game::createOtherPlayer(const PlayerInfo& otherPlayerInfo) {
 
 	// 서버 주도 객체: 패킷으로 pos/vel이 설정되면 PhysicsWorld가 Kinematic 적분으로
 	// 패킷 간격 사이를 dead-reckoning 보간한다.
-	// physicsWorld_.registerBody(&otherPlayer->body(),
-		// [p = otherPlayer.get()]() { p->rebuildBodyBVH(); });
+	// 플레이어 레이어로 등록 — 로컬 플레이어와의 hard contact는 제외되고
+	// resolvePlayerSeparation()이 soft separation으로 처리한다.
+	physicsWorld_.registerBody(&otherPlayer->body(),
+		[p = otherPlayer.get()]() { p->rebuildBodyBVH(); },
+		kLayerPlayer, kPlayerCollisionMask);
 
 	{
 		auto* bar = static_cast<UI::ProgressBar*>(
@@ -1707,6 +1724,7 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 
 	goblin->setHp(90);
 	goblin->setMaxHp(90);
+	goblin->setFaction(Faction::Monsters);
 	goblin->enableBVRendering();
 
 	goblin->body().setMotionType(MotionType::Kinematic);
@@ -1764,6 +1782,13 @@ void Game::removePlayer( i32t playerId ) {
 	animSystem_.untrackAnimBlender(itPlayer->get()->renderState().animBlender.get());
 	physicsWorld_.unregisterBody(&(*itPlayer)->body());
 
+	// Stop any skills this player owns and drop the skill-system reference before
+	// the Object is destroyed, so checkHitboxCollisions never dereferences a
+	// dangling pointer through skillObjectById_.
+	skillSystem_.interruptAll(static_cast<i32t>(playerId), skillCtx_);
+	if (playerId >= 0 && static_cast<size_t>(playerId) < skillObjectById_.size())
+		skillObjectById_[playerId] = nullptr;
+
 	if (auto it = otherPlayerHpBars_.find(playerId); it != otherPlayerHpBars_.end()) {
 		uiManager_.root()->removeChild(it->second.hpBar);
 		otherPlayerHpBars_.erase(it);
@@ -1771,6 +1796,65 @@ void Game::removePlayer( i32t playerId ) {
 
 	otherPlayers_.erase(itPlayer);
 	idPlayerMap_.erase( playerId );
+}
+
+// 플레이어 간 reciprocal soft separation (클라 예측).
+//
+// 각 클라는 자기 플레이어만 소유한다(위치 권위). 두 플레이어가 겹치면 이 클라는
+// 로컬 플레이어를 침투량의 "절반"만큼만 밀어낸다. 상대의 절반은 상대 클라가 동일
+// 규칙으로 처리하고, 그 결과는 기존 C_Move/S_Move 동기화로 전파된다.
+//   - 절반인 이유: 양쪽이 전부 밀면 합이 2×침투 → 과분리·진동. 각자 절반이면 합이
+//     정확히 침투량이라 매끄럽게 0으로 수렴한다(RVO/ORCA reciprocity).
+//   - 상대(B)가 밀려나야 함을 아는 방법: B의 클라도 매 step 이 함수를 돌려, 아직 남은
+//     겹침을 직접 감지해 자기 절반을 처리한다(입력 없어도 실행). 명령 수신이 아님.
+// 보고 정책: 분리 변위는 위치(setCurrPos)로만 운반하고 velocity에는 주입하지 않는다
+// (원격 dead-reckoning·애니메이션 블렌딩 안정성 유지).
+void Game::resolvePlayerSeparation(Seconds dt) {
+	if (!player_ || player_->faction() != Faction::Players) return;
+	if (playerDead_) return;
+
+	const float maxStep = kMaxSeparationSpeed * dt.count();
+	const float sumR    = 2.f * kPlayerSeparationRadius;
+	const float sumR2   = sumR * sumR;
+
+	const mu::Vec3 myPos = player_->pos();
+	mu::Vec3 accumXZ{ 0.f, 0.f, 0.f };  // 이번 step의 누적 분리 보정 (XZ, Y는 항상 0)
+
+	for (const auto& p : otherPlayers_) {
+		if (!p || p->faction() != Faction::Players) continue;
+		if (p->hp() <= 0) continue;  // 사망/래그돌 상태는 분리 대상에서 제외
+
+		const mu::Vec3 oPos = p->pos();
+		const float dx = myPos.x() - oPos.x();
+		const float dz = myPos.z() - oPos.z();
+		const float dist2 = dx * dx + dz * dz;
+		if (dist2 >= sumR2) continue;  // 수평으로 겹치지 않음
+
+		float dist = std::sqrt(dist2);
+		float dirX, dirZ;
+		if (dist > 1e-4f) {
+			dirX = dx / dist;
+			dirZ = dz / dist;
+		} else {
+			// 완전 겹침: 전역 고유 id로 결정론적 방향 부여 → 양쪽 클라가 반대 방향으로
+			// 분리되어 결과가 일관된다.
+			const float s = (player_->getId() < p->getId()) ? 1.f : -1.f;
+			dirX = s; dirZ = 0.f;
+			dist = 0.f;
+		}
+
+		const float penetration = sumR - dist;
+		// 절반 책임 + stiffness, 분리 속도 상한으로 클램프(soft·순간이동 방지).
+		const float corr = std::min(0.5f * penetration * kSeparationStiffness, maxStep);
+		accumXZ = accumXZ + mu::Vec3(dirX * corr, 0.f, dirZ * corr);
+	}
+
+	if (accumXZ.len2() > 1e-10f) {
+		player_->setCurrPos(myPos + accumXZ);  // Y 불변 (accumXZ.y == 0)
+		// 정지 상태(velocity≈0)에서 밀려나도 분리된 위치가 다른 클라에 전파되도록
+		// move 패킷 전송 플래그를 켠다. (그렇지 않으면 moveChange_가 false로 남는다)
+		moveChange_ = true;
+	}
 }
 
 void Game::movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity) {
@@ -2025,6 +2109,9 @@ void Game::update(Milliseconds deltaTime) {
 	while (physicUpdateAcc_ >= effectiveInterval
 		   && physicsStepsDone < kMaxPhysicsStepsPerFrame) {
 		physicsWorld_.step(effectiveInterval);
+		// 물리 적분 직후, 로컬 플레이어를 다른 플레이어와 reciprocal soft separation.
+		// (setCurrPos로 curr만 갱신 → 렌더 보간의 prev는 보존된다)
+		resolvePlayerSeparation(effectiveInterval);
 		physicUpdateAcc_ -= effectiveInterval;
 		++physicsStepsDone;
 	}
@@ -2101,6 +2188,9 @@ void Game::update(Milliseconds deltaTime) {
 		std::chrono::duration_cast<Seconds>(deltaTime),
 		player_->pos()
 	);
+
+	// 지형 청크 스트리밍 틱 (카메라 갱신 전에 호출).
+	chunkManager_.update(player_->pos(), deltaTime);
 
 	camera_.update(deltaTime);
 	dirLight_.update(deltaTime);
@@ -2419,8 +2509,8 @@ void Game::render() {
 	};
 	gfx_.addFrameData( frameDataPBRDeferredSkinned );
 
-	if (terrain_) {
-		terrain_->render(gfx_);
+	if (!chunkManager_.empty()) {
+		chunkManager_.submitDrawEvents(gfx_);
 		gfx_.addFrameData(TerrainPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 	}
@@ -2743,12 +2833,8 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		case SwordEffect::ArrowRain: {
 			const auto muzzlePos = player_->renderState().pos + mu::Vec3{ 0.f, 1.2f, 0.f };
 			auto rainCenter = player_->renderState().pos + player_->forward() * 6.5f;
-			if ( terrain_ && !assetManager_.terrain()->heightField.empty() ) {
-				const auto terrainPos = terrain_->renderState().pos;
-				const float localX = rainCenter.x() - terrainPos.x();
-				const float localZ = rainCenter.z() - terrainPos.z();
-				const float groundY = terrainPos.y()
-					+ assetManager_.terrain()->heightField.getHeightAt( localX, localZ );
+			if ( !chunkManager_.empty() ) {
+				const float groundY = chunkManager_.heightAtWorld( rainCenter.x(), rainCenter.z() );
 				rainCenter = { rainCenter.x(), groundY, rainCenter.z() };
 			}
 			arrowRainMuzzleEffect_.play( muzzlePos, player_->orient() );
@@ -2758,12 +2844,8 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		}
 		case SwordEffect::RedEnergyExplosion: {
 			auto explosionPos = player_->renderState().pos + player_->forward() * 6.5f;
-			if ( terrain_ && !assetManager_.terrain()->heightField.empty() ) {
-				const auto terrainPos = terrain_->renderState().pos;
-				const float localX = explosionPos.x() - terrainPos.x();
-				const float localZ = explosionPos.z() - terrainPos.z();
-				const float groundY = terrainPos.y()
-					+ assetManager_.terrain()->heightField.getHeightAt( localX, localZ );
+			if ( !chunkManager_.empty() ) {
+				const float groundY = chunkManager_.heightAtWorld( explosionPos.x(), explosionPos.z() );
 				explosionPos = { explosionPos.x(), groundY + 0.1f, explosionPos.z() };
 			}
 			else {

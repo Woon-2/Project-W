@@ -1,4 +1,4 @@
-#ifndef __swordSlashPipeline_HPP
+﻿#ifndef __swordSlashPipeline_HPP
 #define __swordSlashPipeline_HPP
 
 #include "gfxUtil.hpp"

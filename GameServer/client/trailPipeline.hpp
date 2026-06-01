@@ -1,4 +1,4 @@
-#ifndef __trailPipeline_HPP
+﻿#ifndef __trailPipeline_HPP
 #define __trailPipeline_HPP
 
 #include "gfxUtil.hpp"

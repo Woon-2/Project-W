@@ -242,6 +242,7 @@
     <ClCompile Include="trailPipeline.cpp" />
     <ClCompile Include="twoSidesPipeline.cpp" />
     <ClCompile Include="terrain.cpp" />
+    <ClCompile Include="terrainChunkManager.cpp" />
     <ClCompile Include="terrainDeferredPipeline.cpp" />
     <ClCompile Include="terrainPipeline.cpp" />
     <ClCompile Include="texloader\DDSTextureLoader12.cpp">
@@ -359,6 +360,7 @@
     <ClInclude Include="trailPipeline.hpp" />
     <ClInclude Include="twoSidesPipeline.hpp" />
     <ClInclude Include="terrain.hpp" />
+    <ClInclude Include="terrainChunkManager.hpp" />
     <ClInclude Include="terrainDeferredPipeline.hpp" />
     <ClInclude Include="terrainPipeline.hpp" />
     <ClInclude Include="texloader\DDSTextureLoader12.h" />

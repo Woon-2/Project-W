@@ -1,4 +1,4 @@
-#include "rspch.hpp"
+﻿#include "rspch.hpp"
 #include "goblin.hpp"
 
 void Goblin::applyGoblinConfig() {

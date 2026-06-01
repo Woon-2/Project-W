@@ -1,4 +1,4 @@
-#ifndef room_server_asset_manager_hpp
+﻿#ifndef room_server_asset_manager_hpp
 #define room_server_asset_manager_hpp
 
 #include "Model.hpp"

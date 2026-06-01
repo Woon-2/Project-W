@@ -93,6 +93,7 @@ private:
 	PhysicsWorld      physicsWorld_;
 	TerrainObject     terrain_;
 	SkillSystem skillSystem_;
+	EventList         skillEvList_;  // reused across frames (cleared, not reallocated)
 
 	// ── NPC AI 상태 ──────────────────────────────────────────────────────────
 	Milliseconds elapsedMs_{ 0ms };

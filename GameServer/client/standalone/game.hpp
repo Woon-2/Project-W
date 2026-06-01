@@ -12,6 +12,7 @@
 #include "../animation.hpp"
 
 #include "../physicsWorld.hpp"
+#include "../terrainChunkManager.hpp"
 #include "combatSystem.hpp"
 #include "../skill/skillSystem.hpp"
 
@@ -79,7 +80,6 @@ private:
 	void importCube(std::ifstream& ifs, Cube& cube);
 	void importPlayerStart(std::ifstream& ifs, Player& player);
 	void importGoblinSpawner(std::ifstream& ifs, Goblin& goblin);
-	void importTerrain(std::ifstream& ifs, TerrainObject& terrain);
 
 	// Physics test object debug tools (keys 1-5, K, R, comma, period, M, V, I, P)
 	void spawnTestObject(int kind);   // 1=pendulum 2=doublePendulum 3=hingeDoor 4=coneTwistArm 5=coneTwistChain
@@ -117,7 +117,7 @@ private:
 	std::shared_ptr<Goblin> goblin_{};
 
 	SkyboxObject skybox_{};
-	std::shared_ptr<TerrainObject> terrain_{};
+	TerrainChunkManager chunkManager_{};
 
 	Camera camera_{};
 	mu::Radian cameraPitch_ = 0.f;

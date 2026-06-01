@@ -1,4 +1,4 @@
-#ifndef __particleRenderSubmit_HPP
+﻿#ifndef __particleRenderSubmit_HPP
 #define __particleRenderSubmit_HPP
 
 #include "particleModules.hpp"

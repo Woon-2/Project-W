@@ -1,4 +1,4 @@
-#include "pch.hpp"
+﻿#include "pch.hpp"
 #include "constraint.hpp"
 
 float solveJacobianRow(const JacobianRow& row, float& accImpulse, float sor)

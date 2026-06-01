@@ -1,4 +1,4 @@
-#include "pch.hpp"
+﻿#include "pch.hpp"
 #include "particleRenderSubmit.hpp"
 #include "particleRenderMode.hpp"
 #include "particleSystem.hpp"

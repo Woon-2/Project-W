@@ -1,4 +1,4 @@
-#ifndef __particleSystem_HPP
+﻿#ifndef __particleSystem_HPP
 #define __particleSystem_HPP
 
 #include "particleModules.hpp"

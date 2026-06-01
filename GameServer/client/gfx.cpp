@@ -1016,10 +1016,6 @@ void GFX::addRequestTextImageLoad( const RequestTextImageLoad& request )
 	requestsTextImageLoad_.push_back( request );
 }
 
-void GFX::addRequestTerrainLoad(const RequestTerrainLoad& request) {
-	requestsTerrainLoad_.push_back(request);
-}
-
 // 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 void GFX::addDrawEvent(const TerrainPipeline::DrawEvent& drawEvent) {
 	drawEventsTerrainPipeline_.push_back(drawEvent);
@@ -1218,13 +1214,7 @@ void GFX::loadAssets(const AssetConfigs& configs) {
 
 	dumpLog();
 
-	// load terrain
-	for ( auto& request : requestsTerrainLoad_ ) {
-		*request.pDest = loadTerrainFromFiles(
-			request.terrainDir, device_.Get(), cmdList.Get(),
-			*request.pTexHashMap, srvTexPool_, fence
-		);
-	}
+	// (Terrain is streamed per-chunk by TerrainChunkManager, not loaded here.)
 	// load .meshbin files
 	for (auto& request : requestsMeshBinLoad_) {
 		auto [mesh, texRelPath] = loadMeshBin(request.meshPath, device_.Get(), cmdList.Get(), fence);
@@ -1273,9 +1263,38 @@ void GFX::loadAssets(const AssetConfigs& configs) {
 	requestsTextureLoad_.clear();
 	requestsSpritesLoad_.clear();
 	requestsTextImageLoad_.clear();
-	requestsTerrainLoad_.clear();
 	requestsMeshBinLoad_.clear();
 	requestsBakeAnimation_.clear();
+}
+
+void GFX::recordTerrainResourceLoad(
+	const std::function<void(ID3D12Device*, ID3D12GraphicsCommandList*, DescriptorPool&, Fence&)>& recorder,
+	bool wait
+) {
+	auto& fence = fences_.at("LoadFence");
+
+	CommandContext cmdCtx{};
+	DISPLAY_ERROR_STR(
+		cmdListPool_.allocOne(CommandListUsage::ResourceLoading, cmdCtx),
+		"[GFX Error] GFX::recordTerrainResourceLoad: 사용 가능한 명령 리스트가 없습니다.",
+		false
+	);
+	auto& cmdList  = cmdCtx.cmdList;
+	auto& cmdAlloc = cmdCtx.cmdAlloc;
+
+	DISPLAY_ERROR_DX_VOID(cmdAlloc->Reset(), false);
+	DISPLAY_ERROR_DX_VOID(cmdList->Reset(cmdAlloc.Get(), nullptr), false);
+
+	// Record terrain GPU work (mesh uploads, splat SRV creation, ...).
+	recorder(device_.Get(), cmdList.Get(), srvTexPool_, fence);
+
+	DISPLAY_ERROR_DX_VOID(cmdList->Close(), false);
+	ID3D12CommandList* tmpCmdLists[] = { cmdList.Get() };
+	DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, tmpCmdLists), false);
+
+	fence.associatedCmdCtxs_[etoi(CommandListUsage::ResourceLoading)].push_back(std::move(cmdCtx));
+	signalFence("LoadFence");
+	if (wait) waitOnFence("LoadFence");
 }
 
 void GFX::render() {

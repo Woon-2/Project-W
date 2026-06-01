@@ -461,11 +461,17 @@ void ConeTwistJoint::prepare(Seconds dt)
     cache_.linPseudoAccImp = {};
 
     // --- Joint-space relative orientation ---
-    // q_jointA = refOrientA^-1 * bodyA.orient  (current bodyA orientation in joint space)
-    const mu::NQuat qJointA = mulQ(~refOrientA_, bodyA_->orient());
-    const mu::NQuat qJointB = mulQ(~refOrientB_, bodyB_->orient());
-    // q_rel = qJointA^-1 * qJointB  (relative rotation in joint space)
-    const mu::NQuat qRel    = mulQ(~qJointA, qJointB);
+    // Measure the deviation of B-relative-to-A from its rest value, expressed in
+    // A's body frame.  Removing the rest offset as a *constant* (qRest) keeps the
+    // decomposition frame-consistent with the world-space twist/cone axes, which
+    // are obtained via bodyA.orient.rotate(). Using deltaA^-1 * deltaB instead
+    // (rest offsets baked into each body's delta) mixes the two rest frames when
+    // refOrientA != refOrientB and reports spurious violations as bodyA rotates
+    // away from its dress pose. This matches HingeJoint::prepare and Bullet's
+    // btConeTwistConstraint (constant frames factored outside the relative rotation).
+    const mu::NQuat qRest = mulQ(~refOrientA_, refOrientB_);             // rest B-rel-A, A frame (const)
+    const mu::NQuat qCur  = mulQ(~bodyA_->orient(), bodyB_->orient());   // current B-rel-A, A frame
+    const mu::NQuat qRel  = mulQ(~qRest, qCur);                          // deviation from rest (I at rest)
 
     // Twist axis is stored in bodyA/rest joint space. Ragdoll joints pass the
     // parent-to-child bone direction here instead of assuming every bone twists
@@ -477,6 +483,12 @@ void ConeTwistJoint::prepare(Seconds dt)
     const bool oldTwistWarmValid = cache_.twistWarmValid;
     const mu::Vec3 oldConeAxis   = cache_.coneAxis;
     const mu::Vec3 oldTwistAxis  = cache_.twistAxis;
+
+    // Twist axis is valid every frame regardless of limit activation, so the
+    // angular damping path in solveVelocity() can always split relative angular
+    // velocity into a twist component (along this axis) and a swing component
+    // (the perpendicular remainder). Captured after oldTwistAxis above.
+    cache_.twistAxis = twistAxisWorld;
 
     // Decompose relative rotation into swing + twist around the joint Z axis.
     mu::NQuat swing, twist;
@@ -530,8 +542,7 @@ void ConeTwistJoint::prepare(Seconds dt)
         if (signedTwist < -twistLimit_ || signedTwist > twistLimit_) {
             cache_.twistActive = true;
             cache_.twistLo     = (signedTwist < -twistLimit_);
-
-            cache_.twistAxis = twistAxisWorld;
+            // cache_.twistAxis already set unconditionally above.
 
             const float cA = (bodyA_->invMass() > 0.f)
                 ? angEff1D(twistAxisWorld, bodyA_->invInertiaWorld()) : 0.f;
@@ -634,26 +645,40 @@ void ConeTwistJoint::solveVelocity()
         applyLinearImpulsePair(bodyA_, bodyB_, dLambda, cache_.rA, cache_.rB);
     }
 
-    // --- 3D Angular Damping ---
-    mu::Vec3 relOmega = bodyA_->omega() - bodyB_->omega();
-    
-    // 각 축별로 Effective Mass가 다르지만, 안정성을 위해 
-    // ConeAxis와 TwistAxis의 평균적인 EffMass를 사용하거나 
-    // 각 축에 투영해서 개별 적용
-    
-    // 1. Twist 축 감쇄
-    float rvTwist = mu::dot(relOmega, cache_.twistAxis);
-    float twistDamp = -rvTwist * cache_.twistEffMass * twistDamping_;
-    applyAngularImpulsePair(bodyA_, bodyB_, twistDamp, cache_.twistAxis);
+    // --- Angular damping (always on, independent of limit activation) ---
+    // Split the relative angular velocity about the twist axis (always valid in
+    // cache_.twistAxis) into a twist component and the perpendicular swing plane,
+    // then damp each separately. Damping the swing component even while inside the
+    // cone makes the joint feel "heavy" instead of free-spinning up to the limit.
+    // Effective masses are recomputed here (not read from cache_) because the
+    // cone/twist effMass fields are only populated when their limit is active.
+    {
+        const mu::Vec3 relOmega = bodyA_->omega() - bodyB_->omega();
+        const mu::Vec3 tAxis    = cache_.twistAxis;
 
-    // 2. Cone(Swing) 축 감쇄
-    if (cache_.coneActive) {
-        float rvCone = mu::dot(relOmega, cache_.coneAxis);
-        float coneDamp = -rvCone * cache_.coneEffMass * coneDamping_;
-        applyAngularImpulsePair(bodyA_, bodyB_, coneDamp, cache_.coneAxis);
-    } else {
-        // 제약 조건이 활성화되지 않았더라도 묵직함을 위해 
-        // 임의의 직교축(Perp)에 대해 감쇄를 줄 수 있음
+        // 1. Twist damping (about the bone axis).
+        if (twistDamping_ > 0.f) {
+            const float rvTwist = mu::dot(relOmega, tAxis);
+            const float cA = (bodyA_->invMass() > 0.f) ? angEff1D(tAxis, bodyA_->invInertiaWorld()) : 0.f;
+            const float cB = (bodyB_->invMass() > 0.f) ? angEff1D(tAxis, bodyB_->invInertiaWorld()) : 0.f;
+            const float effMass = 1.f / (cA + cB + angularCFM);
+            applyAngularImpulsePair(bodyA_, bodyB_, -rvTwist * effMass * twistDamping_, tAxis);
+        }
+
+        // 2. Swing damping (relative angular velocity perpendicular to the twist
+        //    axis). Applied along the instantaneous swing axis every iteration.
+        if (coneDamping_ > 0.f) {
+            const mu::Vec3 swingOmega = relOmega - tAxis * mu::dot(relOmega, tAxis);
+            const float    swingSpeed2 = swingOmega.len2();
+            if (swingSpeed2 > 1e-12f) {
+                const mu::Vec3 sAxis = mu::Vec3(swingOmega * (1.f / std::sqrt(swingSpeed2)));
+                const float cA = (bodyA_->invMass() > 0.f) ? angEff1D(sAxis, bodyA_->invInertiaWorld()) : 0.f;
+                const float cB = (bodyB_->invMass() > 0.f) ? angEff1D(sAxis, bodyB_->invInertiaWorld()) : 0.f;
+                const float effMass = 1.f / (cA + cB + angularCFM);
+                const float rvSwing = std::sqrt(swingSpeed2);  // = dot(relOmega, sAxis)
+                applyAngularImpulsePair(bodyA_, bodyB_, -rvSwing * effMass * coneDamping_, sAxis);
+            }
+        }
     }
 
     // --- Cone ---

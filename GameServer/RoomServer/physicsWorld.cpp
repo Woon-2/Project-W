@@ -1,4 +1,4 @@
-#include "rspch.hpp"
+﻿#include "rspch.hpp"
 #include "physicsWorld.hpp"
 
 // Vertical air resistance coefficient (y-axis only).

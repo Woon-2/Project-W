@@ -1,4 +1,4 @@
-#include "rspch.hpp"
+﻿#include "rspch.hpp"
 #include "rigidBody.hpp"
 
 // Build a 3x3 diagonal matrix from three diagonal values.

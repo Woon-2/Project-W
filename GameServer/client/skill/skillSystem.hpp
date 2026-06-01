@@ -1,4 +1,4 @@
-#ifndef __skill_skillSystem_HPP
+﻿#ifndef __skill_skillSystem_HPP
 #define __skill_skillSystem_HPP
 
 // Runtime skill system.
@@ -36,6 +36,8 @@ struct ResolvedAttach {
 struct AttachedHitbox {
     std::vector<OBB> worldOBBs;        // rebuilt each frame (bone) or set by particle source (VFXParticle)
     std::vector<OBB> localOBBs;        // OBBs in attachment-local space
+    AABB             worldAABB            {};     // union AABB of worldOBBs (broad phase)
+    u32t             targetMask           = 0;     // faction bits this hitbox may damage (hostileMask of owner)
     int              particleSourceIdx    = -1;   // -1 = bone hitbox; >= 0 = owned by ParticleHitboxSource
     OnHitDef         onHit;
     ResolvedAttach   resolvedAttach;
@@ -59,6 +61,7 @@ struct ParticleHitboxSource {
     ParticleSystem*  pSystem               = nullptr;
     std::vector<OBB> templateOBBs;         // OBBs in particle-local space (from SkillHitboxDef::localOBBs)
     OnHitDef         onHit;
+    u32t             targetMask            = 0;    // faction bits this source's hitboxes may damage
     i32t             ownerObjectId         = -1;
     i32t             instanceIdx           = -1;  // owning SkillInstance index
     u8t              slot                  = 0;
@@ -112,28 +115,54 @@ struct SkillInstance {
     void resetSlots() {
         boneHitboxBySlot.clear();
         particleSourceBySlot.clear();
-        hitGroups.clear();
+        // Keep hitGroups entries (and bucket capacity) for reuse; just empty the
+        // per-target records. Avoids per-cast unordered_map churn.
+        for (auto& [g, st] : hitGroups) st.lastHitByTarget.clear();
     }
 };
 
 // ---------------------------------------------------------------------------
-// Instance pool (static array for zero heap allocation at runtime)
+// Instance pool (dynamic; index-stable free list + dense active list)
 // ---------------------------------------------------------------------------
 
 struct SkillInstancePool {
-    static constexpr int kMaxInstances = 128;
+    std::vector<SkillInstance> instances;   // grows on demand; never shrinks
+    std::vector<int>           freeList;     // reusable indices
+    std::vector<int>           activeList;   // dense list of active indices
 
-    SkillInstance instances[kMaxInstances]{};
-    int           count = 0;
-
-    // Returns index of a freshly initialised slot, or -1 if full.
+    // Returns index of a freshly initialised slot.
     int alloc(const SkillAsset* asset, i32t ownerObjectId);
 
-    // Marks a slot inactive.
+    // Marks a slot inactive and recycles it.
     void free(int idx);
+};
 
-    // No-op: flag-based reuse means no compaction needed.
-    void compact();
+// ---------------------------------------------------------------------------
+// Object–Hitbox broad phase (bipartite sweep-and-prune along X)
+// Produces only (hitbox, target) candidate pairs in a single sweep.
+// All buffers are reused across frames (cleared, not freed).
+// ---------------------------------------------------------------------------
+
+class SkillBroadPhase {
+public:
+    struct HitboxEntry { AABB aabb; int     hitboxIdx; u32t mask;     };  // mask: faction bits it may hit
+    struct TargetEntry { AABB aabb; Object* target;    u32t category; };  // category: target's faction bit
+    struct Candidate   { int  hitboxIdx; Object* target; };
+
+    void build(const std::vector<HitboxEntry>& hitboxes,
+               const std::vector<TargetEntry>& targets);
+
+    const std::vector<Candidate>& candidates() const { return candidates_; }
+
+private:
+    struct Endpoint { float x; int idx; bool isMax; bool isHitbox; };
+
+    std::vector<Endpoint>  endpoints_;
+    std::vector<int>       activeHitboxes_;
+    std::vector<int>       activeTargets_;
+    std::vector<Candidate> candidates_;
+
+    static bool overlapYZ(const AABB& a, const AABB& b);
 };
 
 // ---------------------------------------------------------------------------
@@ -223,7 +252,15 @@ private:
     std::vector<SkillAsset>           assetRegistry_;  // stable after registerAssets()
     SkillInstancePool                 instancePool_;
     std::vector<AttachedHitbox>       hitboxPool_;      // grows as needed; inactive entries are reused
+    std::vector<int>                  hitboxFreeList_;
     std::vector<ParticleHitboxSource> particleSources_; // one per active VFXParticle SpawnHitbox
+    std::vector<int>                  particleSourceFreeList_;
+
+    // Reused per-frame scratch buffers (cleared, not freed).
+    SkillBroadPhase                           skillBroadPhase_;
+    std::vector<SkillBroadPhase::HitboxEntry>  hitboxEntries_;
+    std::vector<SkillBroadPhase::TargetEntry>  targetEntries_;
+    std::vector<int>                           instanceScratch_;  // snapshot of activeList for safe iteration
 
     struct HitResult {
         int  hitboxIdx;

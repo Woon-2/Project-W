@@ -1,4 +1,4 @@
-#ifndef __PhysicsTestObject_HPP
+﻿#ifndef __PhysicsTestObject_HPP
 #define __PhysicsTestObject_HPP
 
 #include "physicsWorld.hpp"

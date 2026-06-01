@@ -1,37 +1,149 @@
-#include "pch.hpp"
+﻿#include "pch.hpp"
 #include "skillSystem.hpp"
 
 #include "../mesh.hpp"       // Bone, Skeleton
 #include "../debugBVView.hpp"
+#include <algorithm>
 
 // ---------------------------------------------------------------------------
-// SkillInstancePool
+// Local helpers
+// ---------------------------------------------------------------------------
+
+// Margin added to hitbox broad-phase AABBs to prevent false negatives from
+// one-tick staleness between transform updates and collision.
+static constexpr float kHitboxAABBMargin = 0.2f;
+
+// Union AABB of a set of OBBs, fattened by `margin` on each side.
+static AABB unionAABBOfOBBs(const std::vector<OBB>& obbs, float margin) {
+    if (obbs.empty()) return AABB{ {}, {} };
+
+    AABB     first = obbToAABB(obbs[0]);
+    mu::Vec3 mn    = first.center - first.size * 0.5f;
+    mu::Vec3 mx    = first.center + first.size * 0.5f;
+
+    for (std::size_t i = 1; i < obbs.size(); ++i) {
+        AABB a = obbToAABB(obbs[i]);
+        mn = mu::min(mn, a.center - a.size * 0.5f);
+        mx = mu::max(mx, a.center + a.size * 0.5f);
+    }
+
+    const mu::Vec3 m{ margin, margin, margin };
+    mn = mn - m;
+    mx = mx + m;
+
+    AABB out;
+    out.center = (mn + mx) * 0.5f;
+    out.size   = (mx - mn);
+    return out;
+}
+
+// ---------------------------------------------------------------------------
+// SkillInstancePool (dynamic free-list + active-list)
 // ---------------------------------------------------------------------------
 
 int SkillInstancePool::alloc(const SkillAsset* asset, i32t ownerObjectId) {
-    for (int i = 0; i < kMaxInstances; ++i) {
-        if (!instances[i].active) {
-            SkillInstance& inst = instances[i];
-            inst.asset         = asset;
-            inst.ownerObjectId = ownerObjectId;
-            inst.elapsed       = Milliseconds{ 0.f };
-            inst.nextEventIdx  = 0;
-            inst.active        = true;
-            inst.interrupted   = false;
-            inst.resetSlots();
-            return i;
-        }
+    int idx;
+    if (!freeList.empty()) {
+        idx = freeList.back();
+        freeList.pop_back();
+    } else {
+        idx = static_cast<int>(instances.size());
+        instances.emplace_back();
     }
-    return -1;
+
+    SkillInstance& inst = instances[idx];
+    inst.asset         = asset;
+    inst.ownerObjectId = ownerObjectId;
+    inst.elapsed       = Milliseconds{ 0.f };
+    inst.nextEventIdx  = 0;
+    inst.active        = true;
+    inst.interrupted   = false;
+    inst.resetSlots();
+
+    activeList.push_back(idx);
+    return idx;
 }
 
 void SkillInstancePool::free(int idx) {
-    if (idx >= 0 && idx < kMaxInstances)
-        instances[idx].active = false;
+    if (idx < 0 || idx >= static_cast<int>(instances.size())) return;
+    if (!instances[idx].active) return;
+    instances[idx].active = false;
+
+    auto it = std::find(activeList.begin(), activeList.end(), idx);
+    if (it != activeList.end()) {
+        *it = activeList.back();
+        activeList.pop_back();
+    }
+    freeList.push_back(idx);
 }
 
-void SkillInstancePool::compact() {
-    // Flag-based reuse; no compaction needed for correctness.
+// ---------------------------------------------------------------------------
+// SkillBroadPhase
+// ---------------------------------------------------------------------------
+
+bool SkillBroadPhase::overlapYZ(const AABB& a, const AABB& b) {
+    const float aMinY = a.center.y() - a.size.y() * 0.5f;
+    const float aMaxY = a.center.y() + a.size.y() * 0.5f;
+    const float bMinY = b.center.y() - b.size.y() * 0.5f;
+    const float bMaxY = b.center.y() + b.size.y() * 0.5f;
+    if (aMaxY < bMinY || bMaxY < aMinY) return false;
+
+    const float aMinZ = a.center.z() - a.size.z() * 0.5f;
+    const float aMaxZ = a.center.z() + a.size.z() * 0.5f;
+    const float bMinZ = b.center.z() - b.size.z() * 0.5f;
+    const float bMaxZ = b.center.z() + b.size.z() * 0.5f;
+    if (aMaxZ < bMinZ || bMaxZ < aMinZ) return false;
+
+    return true;
+}
+
+void SkillBroadPhase::build(const std::vector<HitboxEntry>& hitboxes,
+                            const std::vector<TargetEntry>& targets) {
+    endpoints_.clear();
+    activeHitboxes_.clear();
+    activeTargets_.clear();
+    candidates_.clear();
+
+    endpoints_.reserve((hitboxes.size() + targets.size()) * 2);
+
+    auto pushEndpoints = [this](const AABB& a, int idx, bool isHitbox) {
+        const float minX = a.center.x() - a.size.x() * 0.5f;
+        const float maxX = a.center.x() + a.size.x() * 0.5f;
+        endpoints_.push_back({ minX, idx, false, isHitbox });
+        endpoints_.push_back({ maxX, idx, true,  isHitbox });
+    };
+    for (int i = 0; i < static_cast<int>(hitboxes.size()); ++i)
+        pushEndpoints(hitboxes[i].aabb, i, true);
+    for (int i = 0; i < static_cast<int>(targets.size()); ++i)
+        pushEndpoints(targets[i].aabb, i, false);
+
+    std::sort(endpoints_.begin(), endpoints_.end(),
+              [](const Endpoint& a, const Endpoint& b) {
+                  if (a.x != b.x) return a.x < b.x;
+                  return (!a.isMax) && b.isMax;  // min before max at same coord
+              });
+
+    for (const Endpoint& ep : endpoints_) {
+        if (!ep.isMax) {
+            if (ep.isHitbox) {
+                const HitboxEntry& he = hitboxes[ep.idx];
+                for (int t : activeTargets_)
+                    if ((he.mask & targets[t].category) && overlapYZ(he.aabb, targets[t].aabb))
+                        candidates_.push_back({ he.hitboxIdx, targets[t].target });
+                activeHitboxes_.push_back(ep.idx);
+            } else {
+                const TargetEntry& te = targets[ep.idx];
+                for (int h : activeHitboxes_)
+                    if ((hitboxes[h].mask & te.category) && overlapYZ(hitboxes[h].aabb, te.aabb))
+                        candidates_.push_back({ hitboxes[h].hitboxIdx, te.target });
+                activeTargets_.push_back(ep.idx);
+            }
+        } else {
+            std::vector<int>& act = ep.isHitbox ? activeHitboxes_ : activeTargets_;
+            auto it = std::find(act.begin(), act.end(), ep.idx);
+            if (it != act.end()) { *it = act.back(); act.pop_back(); }
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -115,8 +227,10 @@ int SkillSystem::startSkill(u32t assetId, i32t ownerObjectId, SkillDispatchConte
 }
 
 void SkillSystem::interruptAll(i32t ownerObjectId, SkillDispatchContext& ctx) {
-    for (int i = 0; i < SkillInstancePool::kMaxInstances; ++i) {
-        SkillInstance& inst = instancePool_.instances[i];
+    // Snapshot active indices: terminateInstance() mutates activeList.
+    instanceScratch_ = instancePool_.activeList;
+    for (int idx : instanceScratch_) {
+        SkillInstance& inst = instancePool_.instances[idx];
         if (!inst.active || inst.ownerObjectId != ownerObjectId) continue;
         if (inst.asset && !inst.asset->interruptible)               continue;
         terminateInstance(inst, ctx);
@@ -124,8 +238,8 @@ void SkillSystem::interruptAll(i32t ownerObjectId, SkillDispatchContext& ctx) {
 }
 
 bool SkillSystem::hasActiveSkill(i32t ownerObjectId) const {
-    for (int i = 0; i < SkillInstancePool::kMaxInstances; ++i) {
-        const SkillInstance& inst = instancePool_.instances[i];
+    for (int idx : instancePool_.activeList) {
+        const SkillInstance& inst = instancePool_.instances[idx];
         if (inst.active && inst.ownerObjectId == ownerObjectId) return true;
     }
     return false;
@@ -136,9 +250,11 @@ bool SkillSystem::hasActiveSkill(i32t ownerObjectId) const {
 // ---------------------------------------------------------------------------
 
 void SkillSystem::update(Milliseconds dt, SkillDispatchContext& ctx) {
-    // Pass 1+2: advance timers and fire timeline events
-    for (int i = 0; i < SkillInstancePool::kMaxInstances; ++i) {
-        SkillInstance& inst = instancePool_.instances[i];
+    // Pass 1+2: advance timers and fire timeline events.
+    // Snapshot active indices: tickInstance() may terminate (mutating activeList).
+    instanceScratch_ = instancePool_.activeList;
+    for (int idx : instanceScratch_) {
+        SkillInstance& inst = instancePool_.instances[idx];
         if (!inst.active) continue;
         tickInstance(inst, dt, ctx);
     }
@@ -155,8 +271,6 @@ void SkillSystem::update(Milliseconds dt, SkillDispatchContext& ctx) {
 
     // Pass 5: emit hit events into EventList
     processHitResults(ctx);
-
-    instancePool_.compact();
 }
 
 void SkillSystem::tickInstance(SkillInstance& inst, Milliseconds dt,
@@ -178,7 +292,8 @@ void SkillSystem::tickInstance(SkillInstance& inst, Milliseconds dt,
 
 void SkillSystem::terminateInstance(SkillInstance& inst, SkillDispatchContext& ctx) {
     cleanupHitboxes(inst);
-    inst.active = false;
+    const int idx = static_cast<int>(&inst - instancePool_.instances.data());
+    instancePool_.free(idx);
 }
 
 void SkillSystem::cleanupHitboxes(SkillInstance& inst) {
@@ -223,7 +338,7 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
             hb.worldOBBs.resize(def.localOBBs.size());
             hb.onHit                 = def.onHit;
             hb.ownerObjectId         = inst.ownerObjectId;
-            hb.instanceIdx           = static_cast<i32t>(&inst - instancePool_.instances);
+            hb.instanceIdx           = static_cast<i32t>(&inst - instancePool_.instances.data());
             hb.slot                  = static_cast<u8t>(slot);
             hb.hitGroup              = def.hitGroup;
             hb.hitGroupCooldownMs    = def.hitGroupCooldownMs;
@@ -244,6 +359,8 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
                 hb.resolvedAttach.boneIdx = -1;
                 hb.worldOBBs              = hb.localOBBs;
             }
+            hb.worldAABB   = unionAABBOfOBBs(hb.worldOBBs, kHitboxAABBMargin);
+            hb.targetMask  = owner ? hostileMask(owner->faction()) : 0u;
         } else {
             // VFXParticle: create a ParticleHitboxSource
             int oldS = inst.getParticleHandle(slot);
@@ -256,8 +373,9 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
             src.active             = true;
             src.templateOBBs       = def.localOBBs;
             src.onHit              = def.onHit;
+            src.targetMask         = owner ? hostileMask(owner->faction()) : 0u;
             src.ownerObjectId      = inst.ownerObjectId;
-            src.instanceIdx        = static_cast<i32t>(&inst - instancePool_.instances);
+            src.instanceIdx        = static_cast<i32t>(&inst - instancePool_.instances.data());
             src.slot               = static_cast<u8t>(slot);
             src.hitGroup           = def.hitGroup;
             src.hitGroupCooldownMs = def.hitGroupCooldownMs;
@@ -387,6 +505,7 @@ void SkillSystem::updateHitboxes(SkillDispatchContext& ctx) {
             if (hb.applyAttachRotation)
                 hb.worldOBBs[oi].orient  *= boneOrient;
         }
+        hb.worldAABB = unionAABBOfOBBs(hb.worldOBBs, kHitboxAABBMargin);
     }
 }
 
@@ -401,22 +520,24 @@ void SkillSystem::updateParticleHitboxSources(SkillDispatchContext& ctx) {
         ParticleHitboxSource& src = particleSources_[si];
         if (!src.active || !src.pSystem) continue;
 
-        // Free all hitboxes from the previous frame; recreate for the current particle set.
-        for (int h : src.hitboxHandles) freeHitbox(h);
-        src.hitboxHandles.clear();
-
         const int        needed = src.pSystem->activeCount();
         const Particle*  parts  = src.pSystem->particles();
 
-        src.hitboxHandles.reserve(needed);
-        for (int pi = 0; pi < needed; ++pi) {
+        // Reuse existing per-particle hitbox handles; only grow/shrink the count.
+        while ((int)src.hitboxHandles.size() > needed) {
+            freeHitbox(src.hitboxHandles.back());
+            src.hitboxHandles.pop_back();
+        }
+        while ((int)src.hitboxHandles.size() < needed) {
             int hi = allocHitbox();
             if (hi < 0) break;
 
+            // Set the source-constant fields once on allocation.
             AttachedHitbox& hb        = hitboxPool_[hi];
             hb.active                 = true;
             hb.localOBBs              = src.templateOBBs;
             hb.onHit                  = src.onHit;
+            hb.targetMask             = src.targetMask;
             hb.ownerObjectId          = src.ownerObjectId;
             hb.instanceIdx            = src.instanceIdx;
             hb.slot                   = src.slot;
@@ -426,8 +547,15 @@ void SkillSystem::updateParticleHitboxSources(SkillDispatchContext& ctx) {
             hb.particleSourceIdx      = si;
             hb.resolvedAttach.type    = AttachType::VFXParticle;
             hb.resolvedAttach.pSystem = src.pSystem;
+            hb.worldOBBs.resize(src.templateOBBs.size());
 
-            const Particle& p = parts[pi];
+            src.hitboxHandles.push_back(hi);
+        }
+
+        // Refresh per-particle world transforms (and broad-phase AABB) each frame.
+        for (int pi = 0; pi < (int)src.hitboxHandles.size(); ++pi) {
+            AttachedHitbox& hb = hitboxPool_[src.hitboxHandles[pi]];
+            const Particle& p  = parts[pi];
 
             float sz = 1.f;
             if (src.useParticleSize) {
@@ -461,8 +589,7 @@ void SkillSystem::updateParticleHitboxSources(SkillDispatchContext& ctx) {
                     hb.worldOBBs[oi].orient       = tmpl.orient;
                 }
             }
-
-            src.hitboxHandles.push_back(hi);
+            hb.worldAABB = unionAABBOfOBBs(hb.worldOBBs, kHitboxAABBMargin);
         }
     }
 }
@@ -520,42 +647,67 @@ mu::Mat4x4 SkillSystem::computeAttachTransform(const Object& owner,
 void SkillSystem::checkHitboxCollisions(SkillDispatchContext& ctx) {
     if (!ctx.objectById) return;
 
+    // 1. Gather live targets (once per frame, not per hitbox).
+    targetEntries_.clear();
+    for (int oi = 0; oi < ctx.objectByIdSize; ++oi) {
+        Object* t = ctx.objectById[oi];
+        if (!t)           continue;
+        if (t->isDead())  continue;
+
+        const BVH& bvh = t->worldBVH();
+        AABB aabb = !bvh.empty() ? bvh.nodes[0].bounds
+                                 : AABB{ t->pos(), mu::Vec3(1.f, 1.f, 1.f) };
+        targetEntries_.push_back({ aabb, t, factionBit(t->faction()) });
+    }
+    if (targetEntries_.empty()) return;
+
+    // 2. Gather active hitboxes.
+    hitboxEntries_.clear();
     for (int hi = 0; hi < (int)hitboxPool_.size(); ++hi) {
         const AttachedHitbox& hb = hitboxPool_[hi];
         if (!hb.active || hb.worldOBBs.empty()) continue;
+        hitboxEntries_.push_back({ hb.worldAABB, hi, hb.targetMask });
+    }
+    if (hitboxEntries_.empty()) return;
 
-        for (int oi = 0; oi < ctx.objectByIdSize; ++oi) {
-            Object* target = ctx.objectById[oi];
-            if (!target)                             continue;
-            if (target->getId() == hb.ownerObjectId) continue;
-            if (target->isDead())                    continue;
+    // 3. Object–Hitbox broad phase -> candidate (hitbox, target) pairs.
+    skillBroadPhase_.build(hitboxEntries_, targetEntries_);
 
-            // Check hit group cooldown (applies uniformly to bone and particle hitboxes).
-            if (hb.instanceIdx >= 0 && hb.instanceIdx < SkillInstancePool::kMaxInstances) {
-                const SkillInstance& inst = instancePool_.instances[hb.instanceIdx];
-                auto git = inst.hitGroups.find(hb.hitGroup);
-                if (git != inst.hitGroups.end()) {
-                    auto tit = git->second.lastHitByTarget.find(target->getId());
-                    if (tit != git->second.lastHitByTarget.end()) {
-                        float since = inst.elapsed.count() - tit->second.count();
-                        if (hb.hitGroupCooldownMs <= 0.f || since < hb.hitGroupCooldownMs)
-                            continue;
-                    }
+    // 4. Narrow phase on candidate pairs only.
+    const int poolSize = static_cast<int>(instancePool_.instances.size());
+    for (const auto& c : skillBroadPhase_.candidates()) {
+        const AttachedHitbox& hb = hitboxPool_[c.hitboxIdx];
+        if (!hb.active) continue;
+
+        Object*    target   = c.target;
+        const i32t targetId = target->getId();
+        if (targetId == hb.ownerObjectId) continue;
+
+        // Hit group cooldown (applies uniformly to bone and particle hitboxes).
+        if (hb.instanceIdx >= 0 && hb.instanceIdx < poolSize) {
+            const SkillInstance& inst = instancePool_.instances[hb.instanceIdx];
+            auto git = inst.hitGroups.find(hb.hitGroup);
+            if (git != inst.hitGroups.end()) {
+                auto tit = git->second.lastHitByTarget.find(targetId);
+                if (tit != git->second.lastHitByTarget.end()) {
+                    float since = inst.elapsed.count() - tit->second.count();
+                    if (hb.hitGroupCooldownMs <= 0.f || since < hb.hitGroupCooldownMs)
+                        continue;
                 }
             }
+        }
 
-            const BVH& bvh = target->worldBVH();
-            bool hit = false;
-            for (const OBB& obb : hb.worldOBBs) {
-                if (collides(bvh, obb).hit) { hit = true; break; }
-            }
+        const BVH& bvh = target->worldBVH();
+        bool hit = false;
+        for (const OBB& obb : hb.worldOBBs) {
+            if (collides(bvh, obb).hit) { hit = true; break; }
+        }
 
-            if (hit) {
-                pendingHits_.push_back({ hi, target->getId() });
-                if (hb.instanceIdx >= 0 && hb.instanceIdx < SkillInstancePool::kMaxInstances) {
-                    SkillInstance& inst = instancePool_.instances[hb.instanceIdx];
-                    inst.hitGroups[hb.hitGroup].lastHitByTarget[target->getId()] = inst.elapsed;
-                }
+        if (hit) {
+            pendingHits_.push_back({ c.hitboxIdx, targetId });
+            if (hb.instanceIdx >= 0 && hb.instanceIdx < poolSize) {
+                SkillInstance& inst = instancePool_.instances[hb.instanceIdx];
+                inst.hitGroups[hb.hitGroup].lastHitByTarget[targetId] = inst.elapsed;
             }
         }
     }
@@ -599,38 +751,46 @@ void SkillSystem::processHitResults(SkillDispatchContext& ctx) {
 // ---------------------------------------------------------------------------
 
 int SkillSystem::allocHitbox() {
-    for (int i = 0; i < (int)hitboxPool_.size(); ++i) {
-        if (!hitboxPool_[i].active) {
-            hitboxPool_[i] = AttachedHitbox{};
-            return i;
-        }
+    int idx;
+    if (!hitboxFreeList_.empty()) {
+        idx = hitboxFreeList_.back();
+        hitboxFreeList_.pop_back();
+        hitboxPool_[idx] = AttachedHitbox{};
+    } else {
+        idx = static_cast<int>(hitboxPool_.size());
+        hitboxPool_.emplace_back();
     }
-    hitboxPool_.emplace_back();
-    return static_cast<int>(hitboxPool_.size()) - 1;
+    return idx;
 }
 
 void SkillSystem::freeHitbox(int idx) {
-    if (idx >= 0 && idx < (int)hitboxPool_.size())
-        hitboxPool_[idx].active = false;
+    if (idx < 0 || idx >= (int)hitboxPool_.size()) return;
+    if (!hitboxPool_[idx].active) return;  // already free; avoid double free-list entry
+    hitboxPool_[idx].active = false;
+    hitboxFreeList_.push_back(idx);
 }
 
 int SkillSystem::allocParticleSource() {
-    for (int i = 0; i < (int)particleSources_.size(); ++i) {
-        if (!particleSources_[i].active) {
-            particleSources_[i] = ParticleHitboxSource{};
-            return i;
-        }
+    int idx;
+    if (!particleSourceFreeList_.empty()) {
+        idx = particleSourceFreeList_.back();
+        particleSourceFreeList_.pop_back();
+        particleSources_[idx] = ParticleHitboxSource{};
+    } else {
+        idx = static_cast<int>(particleSources_.size());
+        particleSources_.emplace_back();
     }
-    particleSources_.emplace_back();
-    return static_cast<int>(particleSources_.size()) - 1;
+    return idx;
 }
 
 void SkillSystem::freeParticleSource(int idx) {
     if (idx < 0 || idx >= (int)particleSources_.size()) return;
     ParticleHitboxSource& src = particleSources_[idx];
+    if (!src.active) return;
     for (int h : src.hitboxHandles) freeHitbox(h);
     src.hitboxHandles.clear();
     src.active = false;
+    particleSourceFreeList_.push_back(idx);
 }
 
 // ---------------------------------------------------------------------------

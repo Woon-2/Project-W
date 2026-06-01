@@ -113,8 +113,9 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `PhysicsWorld::removeJointRef()` | `physicsWorld.hpp #53` | 비소유 joint ref 제거 |
 | `PhysicsWorld::setIgnoreCollision()` | `physicsWorld.hpp #58` | 특정 body 쌍의 충돌 완전 무시 (symmetric). Ragdoll이 joint 연결/2-hop 쌍 등록에 사용 |
 | `PhysicsWorld::ignoreCollisionPairs_` | `physicsWorld.hpp #182` | normKey 정규화된 per-pair ignore set; generateContacts()에서 group/mask 이후 체크 |
-| `PhysicsWorld::registerTerrain()` | `physicsWorld.hpp #57` | Static 지형 body + heightField 등록 |
-| `PhysicsWorld::unregisterTerrain()` | `physicsWorld.hpp #60` | 지형 collider 해제 |
+| `PhysicsWorld::registerTerrain()` | `physicsWorld.hpp` | **다중 지형**: Static body+heightField 등록 → `TerrainHandle` 반환. 여러 청크 동시 등록 가능(각 collider가 XZ footprint 밖 body 자체 reject) |
+| `PhysicsWorld::unregisterTerrain(handle)` | `physicsWorld.hpp` | 핸들로 개별 청크 collider 해제 (slot tombstone 재사용) |
+| `PhysicsWorld::terrains_` | `physicsWorld.hpp` | `vector<TerrainEntry{collider, hf}>` + `freeTerrainSlots_`; generateContacts/queryCameraArm가 전 청크 순회(XZ reject) |
 | `PhysicsWorld::registerCameraObstacle()` | `physicsWorld.hpp #67` | body를 카메라 obstacle로 cameraBroadPhase_에 등록 |
 | `PhysicsWorld::unregisterCameraObstacle()` | `physicsWorld.hpp #68` | 카메라 obstacle 등록 해제 |
 | `PhysicsWorld::queryCameraArm()` | `physicsWorld.hpp #73` | pivot→desiredEye arm 허용 길이 반환 (지형 N=6 샘플 + BVH raycast) |
@@ -180,6 +181,27 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `update()` | `combatSystem.hpp #55` | 매 프레임 몬스터 AI 쿨타임 + 공격 판정 |
 | `queryAttackSpec()` | `combatSystem.hpp #60` | 공격 사양 조회 (부작용 없음) |
 | `overlapsAny()` (private) | `combatSystem.hpp #72` | AABB hitbox vs target BVH |
+
+---
+
+## 3-B. 스킬 시스템
+
+**파일:** `client/skill/skillSystem.hpp` / `client/skill/skillSystem.cpp`
+**설계 문서:** `client/docs/skillArchitecture.md` (서버: `RoomServer/docs/skillArchitecture.md`)
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| `AttachedHitbox` struct | `skillSystem.hpp` | worldOBBs + `worldAABB`(broad phase 캐시) + `targetMask`(피아 식별) + onHit + hitGroup |
+| `SkillInstancePool` struct | `skillSystem.hpp` | 동적 풀: `instances`(vector) + `freeList` + `activeList` |
+| `SkillBroadPhase` class | `skillSystem.hpp` | Object–Hitbox bipartite sweep-and-prune; `HitboxEntry.mask`×`TargetEntry.category` 마스크 필터 |
+| `SkillBroadPhase::build()` | `skillSystem.cpp` | 엔드포인트 정렬 → sweep, `(mask & category)` 후 hitbox×target 쌍만 emit |
+| `SkillSystem::update()` | `skillSystem.cpp` | activeList 순회 → updateHitboxes → checkHitboxCollisions → processHitResults |
+| `checkHitboxCollisions()` | `skillSystem.cpp` | 타깃 1회 수집(category=factionBit) → SkillBroadPhase → 후보 쌍 narrow phase(BVH vs OBB) |
+| `updateParticleHitboxSources()` | `skillSystem.cpp` | VFXParticle: 핸들 재사용으로 파티클 수만큼 증감, `targetMask` 전파 |
+| `Faction` enum / `hostileMask()` | `object.hpp` | 피아 식별: Neutral/Players/Monsters; 히트박스 targetMask = hostileMask(owner.faction) |
+| `Object::faction()`/`setFaction()` | `object.hpp` | 진영 접근자(생성 지점에서 setFaction 호출) |
+
+> 서버 전용 차이(damageCoeff, ServerAnimController 변환)는 `RoomServer/skill/skillSystem.*` 및 서버 설계 문서 참조.
 
 ---
 
@@ -361,10 +383,13 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 **Terrain 관련 파일:**
 
+> **Chunk 스트리밍 전환:** 단일 terrain → 다중 Chunk 스트리밍. 설계 문서 `docs/terrainChunkStreaming.md`.
+
 | 파일 | 설명 |
 |------|------|
-| `terrain.hpp` | `TerrainLayer`, `TerrainData` 구조체, `loadTerrainFromFiles()` 선언 |
-| `terrain.cpp` | manifest/meta 파싱, height.raw → GPU 메시 생성, 텍스처 로드 |
+| `terrain.hpp` | `TerrainLayer`/`TerrainData`(+`chunkCol/Row`)/`TerrainLayerPalette`/`ChunkIndex(Entry)`/`ChunkCpuBuild` 구조체, chunk streaming 함수 선언 |
+| `terrain.cpp` | `genChunkGeometryCpu`(CPU, 워커 스레드 안전)/`assembleChunkMeshGpu`(메인), `parseChunkIndex`/`loadLayerPalette`/`buildChunkCpu`/`finalizeChunkGpu`, `TerrainHeightField` 메서드 |
+| `terrainChunkManager.hpp` / `.cpp` | `TerrainChunkManager` — 팔레트/인덱스 소유, hop≤3 BFS 스트리밍(load/unload+grace), 워커 CPU build + 메인 GPU finalize, `heightAtWorld`/`normalAtWorld`/`chunkCoordAtWorld`/`submitDrawEvents` |
 | `terrain.hlsl` | Terrain VS/PS (Forward path: Splat map 블렌딩 + PBR BRDF + PCF Shadow) |
 | `terrainDeferred.hlsl` | Terrain VS/GBufferOutput PS (Deferred path: GBuffer 기록, 조명 없음) |
 | `terrainPipeline.hpp` | `TerrainPipeline` 네임스페이스 (DrawEvent, Resources, Dispatcher) |
@@ -610,6 +635,12 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `Game::processInput()` | `standalone/game.hpp #57` | 키보드/마우스 입력 처리 |
 | `importNode()` 계열 | `standalone/game.hpp #68-80` | 씬 바이너리 파일 파싱 |
 | `importTerrain()` | `standalone/game.hpp #80` | Terrain 노드 처리 — `TerrainObject`에 TerrainData 연결 |
+
+**Online::Game 전용 (`online/onlineGame.hpp` / `online/onlineGame.cpp`):**
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| `Game::resolvePlayerSeparation()` | `onlineGame.cpp` (`removePlayer` 직후) | 플레이어 간 reciprocal soft separation. 매 물리 step 후 호출. 로컬 플레이어를 XZ 침투량의 절반만큼 `setCurrPos`로 밀어냄. Faction `Players` 게이팅, `getId` 결정론적 tie-break, 적용 시 `moveChange_=true`. 상수: `kPlayerSeparationRadius`/`kMaxSeparationSpeed`/`kSeparationStiffness`, 충돌 레이어 `kLayerPlayer`/`kPlayerCollisionMask` (파일 상단) |
 
 **Game 멤버 변수 (game.hpp #81-135):**
 

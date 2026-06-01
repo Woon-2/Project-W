@@ -104,6 +104,12 @@ step(dt)
 **ConeTwistJoint**:
 - 3 translational rows + swing cone row (one-sided, `coneAccImp >= 0`)
 - twist row (bilateral, clamped to `[-twistLimit, +twistLimit]`)
+- **상대 회전 `qRel` 구성 (frame 일관성 핵심):**
+  - `qRest = ~refOrientA * refOrientB` — 정지 시 A body 프레임에서 본 B의 상대 orientation (상수)
+  - `qCur  = ~bodyA.orient * bodyB.orient` — 현재 A body 프레임에서 본 B의 상대 orientation
+  - `qRel  = ~qRest * qCur` — rest로부터의 편차 (정지 시 identity). **HingeJoint::prepare와 동일 구성**이며 Bullet `btConeTwistConstraint`처럼 rest 오프셋을 *상수*로 분리한다.
+  - ⚠️ `deltaA⁻¹·deltaB`(= `~(~refA·qA) · (~refB·qB)`) 형태로 쓰면 refA≠refB일 때 두 rest 프레임이 섞여, bodyA가 dress 자세에서 회전할수록 swing/twist 위반을 허위 보고하고 실제 twist가 swing으로 새어 twist 제한이 무력화된다. 반드시 위 `~qRest * qCur` 형태를 유지할 것.
+- twist/cone world 축은 `bodyA.orient.rotate(...)`로 변환 — `qRel`이 A body 프레임에 존재하므로 일관됨. twist 축 = `bodyA.orient.rotate(twistAxisLocalA)`(부모 body-local 본 방향), cone 축 = `bodyA.orient.rotate(swing.xyz)`(twist 축과 직교).
 - `swingTwistDecompose`: twist = q 성분 twistAxis 방향 투영, swing = q * conj(twist)
 - `coneHalfAngle` max = `pi * 0.85f` (gimbal lock 방지)
 
@@ -135,10 +141,20 @@ ContactConstraint는 별도 CFM을 사용하지 않는다 (contact는 Baumgarte 
 |-------|------|--------|
 | BallSocketJoint | `damping_` | 0.1f |
 | HingeJoint | `linearDamping_`, `angularDamping_` | 별도 설정 |
-| ConeTwistJoint | `linearDamping_`, `coneDamping_`, `twistDamping_` | 별도 설정 |
+| ConeTwistJoint | `linearDamping_`, `coneDamping_`, `twistDamping_` | 0.1f |
 
 damping이 0이면 joint는 오차를 완전히 해소하려는 강한 impulse를 생성한다.
 ragdoll 자연스러운 움직임을 위해 적절한 damping이 필요하다.
+
+**ConeTwistJoint angular damping (always on):** `solveVelocity()`에서 상대 각속도
+`ωrel = ωA - ωB`를 twist 축(`cache_.twistAxis`, 한계 활성 여부와 무관하게 매 prepare에서
+설정)에 대해 분해한다.
+- twist 성분 `dot(ωrel, tAxis)` → `twistDamping_`로 감쇠
+- swing 성분 `ωrel - dot(ωrel,tAxis)·tAxis`(twist 축에 수직인 평면) → `coneDamping_`로 감쇠
+  (순간 swing 축에 투영). **cone 한계 내부에서도 항상 적용**되어 관절이 한계까지 자유
+  회전하지 않고 묵직하게 움직인다.
+- effective mass는 cache가 아니라 매번 `angEff1D(axis, invInertiaWorld)`로 재계산한다.
+  `cone/twistEffMass` 캐시 필드는 해당 한계가 active일 때만 채워지므로 감쇠에 쓰면 stale.
 
 ---
 

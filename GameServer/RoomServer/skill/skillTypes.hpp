@@ -1,4 +1,4 @@
-#ifndef __rs_skill_skillTypes_HPP
+﻿#ifndef __rs_skill_skillTypes_HPP
 #define __rs_skill_skillTypes_HPP
 
 // Server-side copy of client/skill/skillTypes.hpp.

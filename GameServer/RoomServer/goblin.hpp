@@ -1,4 +1,4 @@
-#ifndef goblin_hpp
+﻿#ifndef goblin_hpp
 #define goblin_hpp
 
 #include "Npc.hpp"

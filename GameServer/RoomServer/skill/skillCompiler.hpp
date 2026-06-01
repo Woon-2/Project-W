@@ -1,4 +1,4 @@
-#ifndef __rs_skill_skillCompiler_HPP
+﻿#ifndef __rs_skill_skillCompiler_HPP
 #define __rs_skill_skillCompiler_HPP
 
 // Server-side Lua skill compiler.

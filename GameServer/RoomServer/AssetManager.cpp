@@ -1,4 +1,4 @@
-#include "rspch.hpp"
+﻿#include "rspch.hpp"
 #include "AssetManager.hpp"
 
 void AssetManager::loadAssets() {

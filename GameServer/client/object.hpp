@@ -168,6 +168,20 @@ struct Equipment {
 //
 // PhysicsWorld::step()이 body_의 prev/curr를 갱신하고,
 // Object::update()가 두 스냅샷을 보간하여 RenderState를 갱신한다.
+// Combat allegiance. A skill hitbox only damages factions in its hostile mask,
+// so allies (same faction) never hit each other. Neutral attacks and is hit by
+// nothing by default. Faction is set at object creation sites.
+enum class Faction : u8t { Neutral = 0, Players, Monsters };
+
+inline u32t factionBit(Faction f) { return 1u << static_cast<u32t>(f); }
+inline u32t hostileMask(Faction f) {
+	switch (f) {
+	case Faction::Players:  return factionBit(Faction::Monsters);
+	case Faction::Monsters: return factionBit(Faction::Players);
+	default:                return 0u;   // Neutral: attacks nothing
+	}
+}
+
 class Object {
 public:
 	Object() = default;
@@ -253,6 +267,9 @@ public:
 	void setHp(i32t hp) { hp_ = hp; }
 	i32t hp() const { return hp_; }
 
+	Faction faction() const { return faction_; }
+	void setFaction(Faction f) { faction_ = f; }
+
 	void setDead(bool dead) {
 		isDead_ = dead;
 		if (!renderState_.animBlender) return;
@@ -300,6 +317,7 @@ protected:
 	i32t hp_{};
 	bool isDead_ = false;
 	i32t maxHp_{};
+	Faction faction_ = Faction::Neutral;
 
 	u32t     renderObjectId_          = std::numeric_limits<u32t>::max();
 	bool     hiZCulled_               = false;

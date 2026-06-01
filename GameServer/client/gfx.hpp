@@ -6,6 +6,8 @@
 #include "mesh.hpp"
 #include "font.hpp"
 
+#include <functional>
+
 #include "sharedResources.hpp"
 #include "samplePipeline.hpp"
 #include "pbrPipeline.hpp"
@@ -80,12 +82,6 @@ struct RequestTextImageLoad {
 	UINT width;
 	UINT height;
 	TextImage* pDest;
-};
-
-struct RequestTerrainLoad {
-	std::filesystem::path terrainDir;
-	std::unordered_map<std::string, Texture>* pTexHashMap;
-	TerrainData* pDest;
 };
 
 // Configuration passed to GFX::loadAssets()
@@ -273,13 +269,27 @@ public:
 	void addRequestTextureLoad( const RequestTextureLoad& request );
 	void addRequestSpritesLoad( const RequestSpriteAnimLoad& request );
 	void addRequestTextImageLoad( const RequestTextImageLoad& request );
-	void addRequestTerrainLoad(const RequestTerrainLoad& request);
 	void addRequestMeshBinLoad(const RequestMeshBinLoad& request);
 	void addRequestBakeAnimation(const RequestBakeAnimation& request);
 
 	// 파이프라인들이 자체적으로 사용하는 리소스들과
 	// addRequestXXLoad 꼴의 함수로 요청된 리소스들을 로드한다.
 	void loadAssets(const AssetConfigs& configs = AssetConfigs{});
+
+	// Terrain chunk streaming support.
+	// Runs a resource-load recording on a ResourceLoading command context bound to
+	// "LoadFence": the recorder records GPU copies / SRV creation using the supplied
+	// device, command list, bindless texture pool, and fence. When wait==true the CPU
+	// blocks until the GPU finishes (synchronous baseline). MAIN THREAD ONLY.
+	// (loadAssets() must have run first so the command list pool / fence exist.)
+	void recordTerrainResourceLoad(
+		const std::function<void(ID3D12Device*, ID3D12GraphicsCommandList*, DescriptorPool&, Fence&)>& recorder,
+		bool wait);
+
+	// Bindless texture descriptor pool — terrain chunk splat/palette SRVs allocate
+	// here, and the manager frees a chunk's splat descriptor on unload.
+	DescriptorPool& bindlessTexPool() { return srvTexPool_; }
+	ID3D12Device*   device()          { return device_.Get(); }
 
 	// 요청된 드로우콜들을 모아 객체들을 그리고 화면에 띄운다.
 	void render();
@@ -505,7 +515,6 @@ private:
 	std::vector<RequestTextureLoad> requestsTextureLoad_{};
 	std::vector<RequestSpriteAnimLoad> requestsSpritesLoad_{};
 	std::vector<RequestTextImageLoad> requestsTextImageLoad_{};
-	std::vector<RequestTerrainLoad> requestsTerrainLoad_{};
 	std::vector<RequestMeshBinLoad> requestsMeshBinLoad_{};
 	std::vector<RequestBakeAnimation> requestsBakeAnimation_{};
 

@@ -1,4 +1,4 @@
-#ifndef game_session_hpp
+﻿#ifndef game_session_hpp
 #define game_session_hpp
 
 #include "Session.hpp"

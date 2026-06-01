@@ -64,11 +64,7 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 	//	.needsUploadInfo = false
 	//} );
 
-	gfx.addRequestTerrainLoad( RequestTerrainLoad{
-		.terrainDir  = "../resources/terrains/",
-		.pTexHashMap = &texHashMap_,
-		.pDest       = &terrain_
-	} );
+	// Terrain is now streamed by TerrainChunkManager (chunks_index.bin), not loaded here.
 	gfx.addRequestTextureLoad( RequestTextureLoad{
 		.name           = "FlameTex",
 		.texturePath    = "../resources/Sprites/Flame.dds",
