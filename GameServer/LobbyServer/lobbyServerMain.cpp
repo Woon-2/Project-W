@@ -9,10 +9,10 @@ int main() {
 	LobbyServer server;
 	server.start();
 
-	const int32 coreCnt = numberOfPhysicalCores() - 1;
+	const auto coreCnt = numberOfPhysicalCores() - 1;
 	std::vector<std::thread> threads( coreCnt );
 
-	for ( int32 i = 0; i < coreCnt; ++i ) {
+	for ( size_t i = 0; i < coreCnt; ++i ) {
 		threads[ i ] = std::thread( [&server] { 
 			while ( true ) {
 				server.reactor().dispatch();

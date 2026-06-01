@@ -50,7 +50,7 @@ void PacketManager::handleCJoinRoomPacket( GameSession* session, byte* buffer, i
 	}
 
 	auto* pkt = reinterpret_cast<CJoinRoomPacket*>(buffer);
-	std::string_view code( pkt->code, strnlen_s( pkt->code, sizeof( pkt->code ) ) );
+	std::string code( pkt->code, strnlen_s( pkt->code, sizeof( pkt->code ) ) );
 
 	auto* room = LobbyManager::findRoom( code );
 	if ( !room ) {
@@ -88,7 +88,7 @@ void PacketManager::handleCGameStartPacket( GameSession* session, byte* buffer, 
 	session->myRoom_->startGame();
 }
 
-std::shared_ptr<SendBuffer> PacketManager::makeSCreateRoomPacket( std::string_view code ) {
+std::shared_ptr<SendBuffer> PacketManager::makeSCreateRoomPacket( const std::string& code ) {
 	auto sendBuffer = SendBufferManager::open( sizeof( SCreateRoomPacket ) );
 	auto bw = BufferWriter( sendBuffer->data(), sendBuffer->allocSize() );
 
@@ -102,8 +102,8 @@ std::shared_ptr<SendBuffer> PacketManager::makeSCreateRoomPacket( std::string_vi
 	return sendBuffer;
 }
 
-std::shared_ptr<SendBuffer> PacketManager::makeSJoinRoomPacket( bool success, uint16 hostId, std::string_view code, const std::vector<LobbyPlayerInfo>& playerInfos ) {
-	const uint16 cnt = static_cast<uint16>(playerInfos.size());
+std::shared_ptr<SendBuffer> PacketManager::makeSJoinRoomPacket( bool success, uint16 hostId, const std::string& code, const std::vector<LobbyPlayerInfo>& playerInfos ) {
+	const uint8 cnt = static_cast<uint8>(playerInfos.size());
 	auto sendBuffer = SendBufferManager::open( sizeof( SJoinRoomPacket ) + sizeof( LobbyPlayerInfo ) * cnt );
 	auto bw = BufferWriter( sendBuffer->data(), sendBuffer->allocSize() );
 
@@ -159,7 +159,7 @@ std::shared_ptr<SendBuffer> PacketManager::makeSLobbyRoomPlayerLeftPacket( uint1
 	return sendBuffer;
 }
 
-std::shared_ptr<SendBuffer> PacketManager::makeSGameStartPacket( std::string_view roomServerIp, uint16 port, std::string_view lobbyCode ) {
+std::shared_ptr<SendBuffer> PacketManager::makeSGameStartPacket( const std::string& roomServerIp, uint16 port, const std::string& lobbyCode ) {
 	auto sendBuffer = SendBufferManager::open( sizeof( SGameStartPacket ) );
 	auto bw = BufferWriter( sendBuffer->data(), sendBuffer->allocSize() );
 

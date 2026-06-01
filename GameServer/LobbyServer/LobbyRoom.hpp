@@ -15,7 +15,7 @@ public:
 	// 게임 시작 - 방 안 전원에게 S_GameStart 브로드캐스트
 	void startGame();
 
-	std::string_view code() const { return code_; }
+	const std::string& code() const { return code_; }
 	uint16 hostId() const;
 	std::vector<uint16> playerIds() const;
 	std::vector<LobbyPlayerInfo> playerInfos() const;
