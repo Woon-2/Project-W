@@ -191,37 +191,41 @@ struct ChunkCpuBuild {                  // 신규: ThreadPool 산출(GPU 자원 
 공유 팔레트/인덱스 로드, 청크 생명주기 상태기계, ThreadPool CPU 빌드 등록 + 메인 GPU 마감/fence 게이팅,
 매 프레임 DrawEvent/Occluder 제출, 월드→청크 라우팅 높이/법선 질의, PhysicsWorld collider 등록/해제.
 
-### 5.2 상태기계 (청크별)
+### 5.2 상태기계 (청크별) — **as-built**
 ```
-Unloaded → Loading(CPU)  : ThreadPool 작업 등록, ChunkCpuBuild 채우는 중
-Loading(CPU) → Uploading : done==true, 메인 GPU 마감 + fence signal
-Uploading → Ready        : fence 완료 → TerrainObject 활성 + 물리 등록
-Ready → Expiring         : desired 이탈, grace timer 시작
+Unloaded → Loading(CPU)  : ThreadPool 작업 등록, ChunkCpuBuild 채우는 중 (cpu->done atomic)
+Loading  → Ready         : cpu->done && !failed → 메인 GPU finalize(짧은 wait) → TerrainObject + 물리 등록
+Loading  → (erase)       : cpu->failed → 슬롯 제거
+Ready    → Expiring      : desired 이탈, grace timer 시작
 Expiring → Ready         : grace 내 desired 재진입(취소)
-Expiring → Unloading     : grace 만료 → 물리 해제 + GPU 자원/디스크립터 해제 → Unloaded
+Expiring → (unload)      : grace 만료 → 물리 즉시 해제 + GPU 자원은 graveyard(지연 해제) → 슬롯 제거
 ```
 불변식: **플레이어가 선 청크는 절대 언로드/expire 하지 않는다.**
 
-### 5.3 API (개략)
+> 계획 대비 변경: 별도 `Uploading` 상태 + fence-value 추적은 두지 않았다. CPU build(무거운 부분)가 워커에서
+> 선행되므로, 메인의 GPU finalize는 `GFX::recordTerrainResourceLoad(..., wait=true)`로 **프레임당 소수만** 처리해도
+> hitch가 작다. wait=true가 `waitOnFence`로 upload buffer 회수까지 담당하므로 fence 게이팅 코드가 불필요해졌다.
+> 언로드 GPU 자원은 즉시 해제하지 않고 **graveyard(N프레임 지연)**로 회수해 in-flight GPU 참조를 회피한다.
+
+### 5.3 API (as-built)
 ```cpp
 class TerrainChunkManager {
 public:
-    void init(ThreadPool&, GFX&, PhysicsWorld&, const std::filesystem::path& terrainDir);
-    void update(mu::Vec3 playerWorldPos, Seconds dt);
+    void init(GFX&, PhysicsWorld&, ThreadPool* /*nullable*/, const std::filesystem::path& terrainDir);
+    void update(mu::Vec3 playerWorldPos, Milliseconds dt);
     void submitDrawEvents(GFX&);
     float    heightAtWorld(float x, float z) const;
     mu::Vec3 normalAtWorld(float x, float z) const;
     std::optional<std::pair<int,int>> chunkCoordAtWorld(float x, float z) const;
+    bool empty() const;   // index_.chunks.empty() — 지형 시스템 활성 여부
 private:
-    TerrainLayerPalette palette_;
-    ChunkIndex          index_;
-    std::unordered_map<int64_t, LoadedChunk> chunks_;          // key = pack(col,row)
-    std::unordered_map<int64_t, const ChunkIndexEntry*> indexByCoord_;
-    int     maxHop_ = 3;
-    Seconds graceTime_ = 5s;
-    int     maxGpuFinalizePerFrame_ = 1;
+    // ... palette_/index_/chunks_/indexByCoord_/graveyard_ + texHashMap_(팔레트+splat) ...
+    // 튜너블: maxHop_=3, graceSeconds_=5, maxConcurrentLoads_=4,
+    //         maxGpuFinalizePerFrame_=2, graveyardFrameDelay_=4
 };
 ```
+> `init`은 **팔레트 + 인덱스만** 로드한다(전 청크 일괄 로드 아님). 첫 `update`부터 hop≤3 이웃을 스트리밍한다.
+> `ThreadPool*`이 null이면 CPU build를 동기로 수행한다(폴백).
 
 ### 5.4 좌표 라우팅 (희소 · 임의 좌표 범위)
 
@@ -242,13 +246,14 @@ private:
 ### 5.5 스트리밍 틱 (`update`)
 1. `cur = chunkCoordAtWorld(player)`; 없으면 마지막 유효 유지.
 2. **neighbor 그래프 BFS**(4-이웃, explicit neighbor), depth ≤ `maxHop_` → `desired`. (hop≤3 → 최대 25 청크)
-3. `desired` 중 Unloaded → CPU 작업 등록(Loading). in-flight 상한.
-4. Ready/Uploading이며 desired 밖 → Expiring(타이머). `cur` 제외.
-5. Expiring이며 desired 재진입 → Ready 복귀(취소).
-6. Expiring 타이머 ≥ `graceTime_` → Unload.
-7. **GPU 마감 드레인**: Loading & `cpu->done` 인 청크를 프레임당 `maxGpuFinalizePerFrame_`개까지 finalize →
-   fence signal → Uploading.
-8. Uploading 중 fence 완료 → Ready(TerrainObject 배치 + 물리 등록).
+3. `desired` 중 미존재 → CPU 작업 등록(Loading). in-flight `< maxConcurrentLoads_` 일 때만.
+   desired에 재진입한 Expiring 청크는 Ready 복귀(타이머 취소).
+4. desired 밖 Ready → Expiring(타이머 시작). `cur` 청크는 제외(절대 expire 안 함).
+5. Expiring 타이머 `+= dtSec`; ≥ `graceSeconds_` → `unloadChunk` + 슬롯 erase.
+6. **GPU 마감 드레인**(`drainCompletedBuilds`): Loading & `cpu->done` 인 청크를 프레임당
+   `maxGpuFinalizePerFrame_`개까지 `recordTerrainResourceLoad(wait=true)`로 finalize → 즉시 `Ready`(배치+물리).
+   `cpu->failed`면 슬롯 제거.
+7. `tickGraveyard`: 언로드 GPU 자원 프레임 카운트다운 → 0 이면 splat 디스크립터 free + ComPtr 해제.
 
 ---
 
@@ -259,12 +264,13 @@ texHashMap/CommandList 경합이 남으므로 CPU/GPU 경계를 분리한다.
 
 - **Phase A (init, 메인 1회)**: `loadLayerPalette()` — 팔레트 텍스처 + SRV 단일 스레드.
 - **Stage 1 (ThreadPool, `addJob`)**: `buildChunkCpu()` — height 파싱 + 정점/법선/탄젠트/인덱스/heightField 생성.
-  공유 가변 상태 미접근. `cpu->done=true`(atomic).
-- **Stage 2 (메인, `update` 드레인)**: `finalizeChunkGpu()` — VB/IB GPU 자원 + copy 기록(cmdListPool alloc),
-  splat `loadDDS`+SRV, execute + fence signal.
-- **Stage 3 (메인, 게이팅)**: fence 완료 후에만 Ready 승격 → 미완성 자원 미렌더(seamless).
+  공유 가변 상태 미접근. `cpu->done.store(release)`. (worker→main happens-before: main은 `done.load(acquire)`.)
+- **Stage 2 (메인, `update` 드레인)**: 프레임당 `maxGpuFinalizePerFrame_`개까지 `GFX::recordTerrainResourceLoad(
+  recorder, wait=true)` 안에서 `finalizeChunkGpu()`(VB/IB GPU 자원 + copy 기록, splat `loadDDS`+SRV) → execute →
+  **짧은 wait**(=`waitOnFence`가 upload buffer 회수까지 처리) → 즉시 Ready. 별도 fence 게이팅/Uploading 상태 없음.
 
-향후 최적화(기록만): per-thread CommandContext + DescriptorPool/texHashMap 뮤텍스화로 GPU 마감 병렬화.
+GPU finalize·DescriptorPool·texHashMap·CommandList는 전부 **메인 스레드 전용**(스레드 비안전). 향후 최적화(기록만):
+per-thread CommandContext + 풀 뮤텍스화로 GPU 마감도 병렬화 가능.
 
 ---
 
@@ -357,3 +363,54 @@ texHashMap/CommandList 경합이 남으므로 CPU/GPU 경계를 분리한다.
 6. 실행: `/run` 또는 VS2022 빌드 후 `client`(standalone, online).
 
 > 자동화 테스트 없음(프로젝트 정책) — DummyClient/수동 검증.
+
+---
+
+## 14. As-Built — 구현 결정 및 계획 대비 변경 사항
+
+이 섹션은 §1–13의 계획을 실제 구현하며 내린 결정과 달라진 점을 기록한다(2026-06, client 브랜치).
+
+### 14.1 새로 추가된 코드/구조
+- **`terrain.{hpp,cpp}`**
+  - 구조체: `TerrainLayerPalette`(+로드 시점 `diffusePaths`/`normalPaths`), `ChunkIndexEntry`, `ChunkIndex`,
+    `ChunkCpuBuild`(`std::atomic<bool> done`). `TerrainData`에 `chunkCol/chunkRow` 추가.
+  - 함수: `parseChunkIndex`, `loadLayerPalette`(메인), `buildChunkCpu`(워커, D3D 호출 없음), `finalizeChunkGpu`(메인).
+  - 메시 빌더를 `genChunkGeometryCpu`(CPU 전용) + `assembleChunkMeshGpu`(GPU)로 분리. `resolveTerrainPath` 헬퍼 공용화.
+- **`terrainChunkManager.{hpp,cpp}`** (신규, 영문 주석): §5 의 `TerrainChunkManager` 전체.
+- **`GFX`**: `recordTerrainResourceLoad(recorder, wait)` 추가(ResourceLoading 컨텍스트 + LoadFence 재사용).
+  접근자 `bindlessTexPool()`(splat 디스크립터 free용), `device()` 추가. `<functional>` include.
+- **`PhysicsWorld`**: 단일 `terrainCollider_`/`terrainHF_` → `std::vector<TerrainEntry{collider, hf}>` +
+  `freeTerrainSlots_`. `registerTerrain(...) → TerrainHandle`(슬롯 인덱스), `unregisterTerrain(handle)`(tombstone 재사용).
+
+### 14.2 계획과 달라진 결정
+- **Uploading 상태/펜스-값 추적 제거**: 계획(§5.2/§6 Stage 3)의 fence-게이팅 대신, 메인에서 프레임당 소수 청크만
+  `recordTerrainResourceLoad(wait=true)`로 마감. CPU build가 워커 선행이라 per-chunk wait 비용이 작고, `waitOnFence`가
+  upload buffer 회수까지 처리하므로 별도 게이팅 불필요. 상태기계는 `{Unloaded, Loading, Ready, Expiring}`로 단순화.
+- **언로드 시 지연 해제(graveyard)**: 즉시 free 대신 `PendingUnload{ data, object, retainedTex, splatSrvIdx, framesLeft }`로
+  `graveyardFrameDelay_`(=4) 프레임 보류 후 splat 디스크립터 free + ComPtr 해제 → in-flight GPU 참조 회피.
+  splat GPU 자원 소유자(texHashMap_ 엔트리)를 graveyard로 **이동**하고 키를 erase(재로드 시 새 SRV 생성). **팔레트
+  텍스처는 unload 시 free 금지**(공유).
+- **물리 라우팅은 O(1) 그리드 해시 대신 "전 청크 순회 + XZ-footprint reject"**(`kPad=4`)로 구현. 활성 청크 수가
+  작아(M≤~25) 충분. 각 `TerrainCollider`도 범위 밖 vertex를 자체 reject하므로 경계 straddle도 정상.
+- **`PhysicsWorld`는 grid 셀 크기만 보유하지 않고**, 각 collider가 자기 `terrainBody->pos()`를 origin으로 self-reject.
+  populated origin·연속 범위 가정 없음(희소/임의 좌표 그대로 동작).
+- **`init`은 전 청크 일괄 로드 안 함**(계획 Phase 3 baseline은 중간 단계였고 최종은 스트리밍). 팔레트+인덱스만 로드.
+- **`empty()`는 `index_.chunks.empty()`** 반환(스트리밍 지연 중에도 게임이 terrain frame data/높이 질의를 일관 제출).
+- **API 인자 순서**: `init(GFX&, PhysicsWorld&, ThreadPool*, dir)`, `update(mu::Vec3, Milliseconds)` 로 확정.
+
+### 14.3 제거된 단일-terrain 경로 (dead code)
+- `terrain.{hpp,cpp}`: `loadTerrainFromFiles`, `buildTerrainMesh`(thin), `parseManifest`/`parseMeta` + `TerrainManifest`/
+  `TerrainMeta` 구조체.
+- `gfx.{hpp,cpp}`: `RequestTerrainLoad`, `addRequestTerrainLoad`, `requestsTerrainLoad_` + loadAssets 내 terrain 로드 루프.
+- `AssetManager.{hpp,cpp}`: `TerrainData terrain_`, `terrain()`, `addRequestTerrainLoad` 호출.
+- 씬 `importNode`의 `type=="Terrain"` 분기 + `importTerrain()`(standalone/online 둘 다). 레거시 `ManifestPath`만
+  consume 후 무시(스트림 정렬 유지).
+
+### 14.4 추출기(`TerrainExtractor.cs`) 확정 사항
+- 청크 식별은 **GameObject 이름과 무관**, 오직 `transform.position`→`(col,row)`. 파일명도 좌표 기반.
+- 좌표 충돌·사이즈 불일치·팔레트 불일치·레이어>4 시 export 중단(에러 로그).
+- splat은 **첫 4채널(레이어 0–3)만** 기록(splat0 1장). 인덱스에는 `.dds` 경로 기록(PNG→DDS 변환은 외부 단계).
+
+### 14.5 빌드 검증
+- 각 Phase마다 `MSBuild GameServer.sln /t:client /p:Configuration=Debug /p:Platform=x64` 그린(`client.exe` 생성).
+- 단독 `client.vcxproj` 빌드는 `sepch.hpp`(ServerEngine) 경로 때문에 실패 → **솔루션 타깃으로 빌드**해야 함.

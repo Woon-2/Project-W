@@ -212,10 +212,12 @@ DrawEvent를 차단하면 Hi-Z 파이프라인이 visibility 변화를 감지할
 - **shadow pass 있음** — 지형 기하가 공유 shadow map("ShadowMap" DSV)에 기록되어 PBR 객체 위에 지형 그림자를 드리움
 - shadow pass: `shadowPass()` / `shadowPassMT()` (MT는 단일 스레드 위임, draw event 수가 적어 MT 효과 없음)
 - shadow shader: `terrainShadowMap.hlsl` — position-only VS, PS 없음, NumRenderTargets=0
-- 리소스 로드: `loadTerrainFromFiles()` — manifest 파싱 → height.raw 메시 빌드 → 텍스처 로드
-- **manifest 태그 순서**: `HeightMap → SplatPath(s) → DiffusePath(s) → MetaData` (MetaData가 마지막)
+- 리소스 로드: **Chunk 스트리밍으로 전환됨** — 단일 `loadTerrainFromFiles()`/manifest·meta 파서는 제거되고
+  `TerrainChunkManager`가 `chunks_index.bin` 기반으로 청크를 워커(CPU build)+메인(GPU finalize)로 스트리밍.
+  상세는 `docs/terrainChunkStreaming.md`.
 - VB 5슬롯: Position(0) / Normal(1) / Tangent(2) / Bitangent(3) / UV(4), IB 32-bit (513×513 정점 초과 가능)
-- Tangent/Bitangent: `terrain.cpp buildTerrainMesh()`에서 중앙 차분 + Gram-Schmidt로 CPU 사전 계산
+- Tangent/Bitangent: `terrain.cpp genChunkGeometryCpu()`에서 중앙 차분 + Gram-Schmidt로 CPU 사전 계산
+  (청크 build는 ThreadPool 워커 스레드에서 수행)
 - Splat map: RGBA 채널 = 레이어 0~3 블렌딩 가중치, 각 레이어마다 diffuse + normal map
 - Normal map 포맷: **Unity DXT5nm** — X는 Alpha 채널, Y는 Green 채널, R은 더미(1.0) → `nmSample.ag * 2 - 1`로 읽어야 함
 - Normal mapping: `hasAnyNormal` 플래그(cbuffer b0)로 조건부 처리, `float3x3(tangentV, bitangentV, normalV)` 패턴 (pbr.hlsl과 동일)
