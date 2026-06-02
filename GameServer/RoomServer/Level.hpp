@@ -3,6 +3,7 @@
 
 #include "object.hpp"
 #include "goblin.hpp"
+#include "terrain.hpp"
 
 class AssetManager;
 
@@ -17,8 +18,12 @@ struct Level {
 	std::vector<Cube>              cubes;
 	std::vector<Player>            playerStarts;
 	std::vector<Goblin>            goblins;
-	TerrainObject                  terrain;
 	std::vector<GoblinSpawnerInfo> goblinSpawners;
+
+	// Shared, read-only terrain chunk height fields. Loaded once at boot; the
+	// single Level instance is shared across all rooms (see RoomManager), so
+	// this height field data is shared too (no per-room copy).
+	TerrainChunkManager            terrainChunks;
 };
 
 Level loadLevelFromFile(const std::filesystem::path& path, const AssetManager& assetManager);

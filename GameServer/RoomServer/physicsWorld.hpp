@@ -37,12 +37,19 @@ public:
     // Main simulation tick (integrate + detect + solve).
     void step(Seconds dt);
 
-    // Register a static height-field terrain for body-terrain collision.
-    // terrainBody must be MotionType::Static; it is NOT added to the broad phase.
-    void registerTerrain(RigidBody* terrainBody, const TerrainHeightField* heightField);
+    // Multi-terrain support (mirror of the client): several static height-field
+    // chunks can be registered simultaneously. Each Dynamic body is routed to the
+    // chunk(s) overlapping its XZ footprint during generateContacts().
+    using TerrainHandle = std::size_t;
+    static constexpr TerrainHandle kInvalidTerrainHandle = static_cast<std::size_t>(-1);
 
-    // Remove the terrain collider. Safe to call when no terrain is registered.
-    void unregisterTerrain();
+    // Register a static height-field terrain chunk for body-terrain collision.
+    // terrainBody must be MotionType::Static; it is NOT added to the broad phase.
+    // Returns a handle (reused slot index) for later unregisterTerrain().
+    TerrainHandle registerTerrain(RigidBody* terrainBody, const TerrainHeightField* heightField);
+
+    // Remove a terrain chunk collider by handle. Safe with an invalid handle.
+    void unregisterTerrain(TerrainHandle handle);
 
     // Set the gravitational acceleration applied to Dynamic bodies each step.
     void MU_CALLCONV setGravity(mu::Vec3 g) { gravity_ = g; }
@@ -76,10 +83,15 @@ private:
     std::vector<std::unique_ptr<ContactConstraint>> contactConstraints_;
     std::vector<std::unique_ptr<Constraint>>        jointConstraints_;
 
-    // Optional terrain collider (null when no terrain is registered).
-    // Terrain body is NOT in entries_ or broadPhase_; TerrainCollider
-    // iterates Dynamic bodies directly.
-    std::unique_ptr<TerrainCollider>                terrainCollider_;
+    // Registered terrain chunks. Terrain bodies are NOT in entries_ or
+    // broadPhase_; each TerrainCollider iterates Dynamic bodies directly.
+    // A slot with a null collider is inactive (reusable via freeTerrainSlots_).
+    struct TerrainEntry {
+        std::unique_ptr<TerrainCollider> collider;   // null == inactive slot
+        const TerrainHeightField*        hf = nullptr;
+    };
+    std::vector<TerrainEntry>                       terrains_;
+    std::vector<std::size_t>                        freeTerrainSlots_;
 
     int     solverIterations_         = 10;
     int     positionSolveIterations_  = 3;

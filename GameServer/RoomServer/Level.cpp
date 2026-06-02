@@ -22,12 +22,6 @@ void importGoblinSpawner(std::ifstream& ifs, const AssetManager& assetManager, G
 	goblin.animController().switchClip("Idle");
 }
 
-void importTerrain(std::ifstream& ifs, TerrainObject& terrain) {
-	const auto manifestPath = readText(ifs, "ManifestPath");
-	const auto terrainDir   = std::filesystem::path(manifestPath).parent_path();
-	terrain.heightField()   = loadTerrainHeightFieldFromFiles(terrainDir);
-}
-
 void importNode(std::ifstream& ifs, const AssetManager& assetManager, Level& level) {
 	readHeadTag(ifs, "Node");
 	const auto type = readText(ifs, "Type");
@@ -61,8 +55,10 @@ void importNode(std::ifstream& ifs, const AssetManager& assetManager, Level& lev
 		level.playerStarts.push_back(std::move(object));
 	}
 	else if (type == "Terrain") {
-		level.terrain = TerrainObject(std::move(object));
-		importTerrain(ifs, level.terrain);
+		// Terrain is loaded by the shared TerrainChunkManager (chunks_index.bin).
+		// Consume the legacy ManifestPath field to keep the scene stream aligned,
+		// then ignore it.
+		readText(ifs, "ManifestPath");
 	}
 	else if (type == "GoblinSpawner") {
 		static constexpr float kActivityRadius = 40.f;

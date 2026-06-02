@@ -1,112 +1,111 @@
-﻿#include "rspch.hpp"
+#include "rspch.hpp"
 #include "terrain.hpp"
 #include "binaryImport.hpp"
+#include <algorithm>
+#include <cmath>
 
 // ---------------------------------------------------------------------------
-// Manifest parsing
+// Path resolution (mirror of the client resolveTerrainPath helper)
 // ---------------------------------------------------------------------------
 
-struct TerrainManifest {
-    std::string heightMapPath;
-    std::string metaPath;
-};
+static std::filesystem::path resolveTerrainPath(const std::filesystem::path& terrainDir,
+                                                 const std::string& pathStr) {
+    auto p = std::filesystem::path(pathStr);
+    if (!p.is_absolute() && !std::filesystem::exists(p)) {
+        auto fallback = terrainDir / p.filename();
+        if (std::filesystem::exists(fallback))
+            return fallback;
+    }
+    return p;
+}
 
-static TerrainManifest parseManifest(const std::filesystem::path& manifestPath) {
-    TerrainManifest result;
+// ---------------------------------------------------------------------------
+// Chunk index parsing (mirror of client terrain.cpp parseChunkIndex).
+// The shared palette descriptor is read but discarded; the server has no
+// rendering and only needs the per-chunk height data.
+// ---------------------------------------------------------------------------
 
-    auto ifs = std::ifstream(manifestPath, std::ios::binary);
-    DISPLAY_ERROR_STR(ifs.good(),
-        "[Terrain] parseManifest: cannot open " + manifestPath.string(), true);
+ChunkIndex parseChunkIndex(const std::filesystem::path& terrainDir) {
+    ChunkIndex result;
 
-    readHeadTag(ifs, "Terrain");
-
-    // Skip TerrainName
-    readHeadTag(ifs, "TerrainName");
-    readString(ifs);
-    readTailTag(ifs, "TerrainName");
-
-    while (ifs) {
-        auto rawTag = readString(ifs);
-        if (isTailTag(rawTag, "Terrain")) break;
-        auto tagName = untagHead(rawTag);
-        auto value   = readString(ifs);
-        readString(ifs); // consume tail tag
-
-        if (tagName == "HeightMap") {
-            result.heightMapPath = value;
-        } else if (tagName == "MetaData") {
-            result.metaPath = value;
-        }
-        // Other tags (SplatPath, DiffusePath, NormalPath) are skipped
+    const auto indexPath = terrainDir / "chunks_index.bin";
+    auto ifs = std::ifstream(indexPath, std::ios::binary);
+    if (!ifs.good()) {
+        gSharedLog << "[Terrain] parseChunkIndex: cannot open " << indexPath
+                   << " (terrain disabled)\n";
+        return result; // empty -> terrain disabled (safe)
     }
 
+    readHeadTag(ifs, "ChunkIndex");
+    result.version = readInteger(ifs, "Version");
+
+    // ---- shared palette (read and discard; render-only) ----
+    const int L = readInteger(ifs, "LayerCount");
+    for (int i = 0; i < L; ++i) {
+        readText(ifs, "DiffusePath");
+        readText(ifs, "NormalPath");
+        readFloat(ifs, "TileSizeX");
+        readFloat(ifs, "TileSizeY");
+        readFloat(ifs, "TileOffsetX");
+        readFloat(ifs, "TileOffsetY");
+        readFloat(ifs, "Metallic");
+        readFloat(ifs, "Roughness");
+    }
+
+    // ---- chunk records ----
+    const int C = readInteger(ifs, "ChunkCount");
+    result.chunks.resize(C);
+    for (int c = 0; c < C; ++c) {
+        auto& e = result.chunks[c];
+        readHeadTag(ifs, "Chunk");
+        e.col = readInteger(ifs, "Col");
+        e.row = readInteger(ifs, "Row");
+        e.sizeX = readFloat(ifs, "SizeX");
+        e.sizeY = readFloat(ifs, "SizeY");
+        e.sizeZ = readFloat(ifs, "SizeZ");
+        e.resolution         = readInteger(ifs, "Resolution");
+        e.alphamapResolution = readInteger(ifs, "AlphamapResolution");
+        const int K = readInteger(ifs, "NeighborCount");
+        e.neighbors.reserve(K);
+        for (int k = 0; k < K; ++k) {
+            const int nc = readInteger(ifs, "NCol");
+            const int nr = readInteger(ifs, "NRow");
+            e.neighbors.emplace_back(nc, nr);
+        }
+        e.heightPath = readText(ifs, "HeightPath");
+        e.splatPath  = readText(ifs, "SplatPath");
+        readTailTag(ifs, "Chunk");
+    }
+
+    readTailTag(ifs, "ChunkIndex");
+
+    gSharedLog << "[Terrain] Chunk index parsed: " << C << " chunks\n";
     return result;
 }
 
 // ---------------------------------------------------------------------------
-// Metadata parsing
+// Per-chunk height field loading (CPU only).
+// Unity writes uint16 heights in y-outer, x-inner order.
 // ---------------------------------------------------------------------------
 
-struct TerrainMeta {
-    int   heightmapResolution;
-    float sizeX, sizeY, sizeZ;
-};
+TerrainHeightField loadChunkHeightField(const ChunkIndexEntry& entry,
+                                        const std::filesystem::path& terrainDir) {
+    const int N = entry.resolution;
 
-static TerrainMeta parseMeta(const std::filesystem::path& metaPath) {
-    TerrainMeta m{};
-    auto ifs = std::ifstream(metaPath, std::ios::binary);
-    DISPLAY_ERROR_STR(ifs.good(),
-        "[Terrain] parseMeta: cannot open " + metaPath.string(), true);
-
-    m.heightmapResolution = readInteger(ifs); // heightmapResolution
-    readInteger(ifs);                         // alphamapResolution (unused)
-    m.sizeX = readFloat(ifs);
-    m.sizeY = readFloat(ifs);
-    m.sizeZ = readFloat(ifs);
-    // Remaining layer data is not needed for CPU physics
-
-    return m;
-}
-
-// ---------------------------------------------------------------------------
-// Load function
-// ---------------------------------------------------------------------------
-
-TerrainHeightField loadTerrainHeightFieldFromFiles(const std::filesystem::path& terrainDir) {
-    const auto manifestPath = terrainDir / "terrain_manifest.bin";
-    const auto manifest = parseManifest(manifestPath);
-
-    // Resolve a path string: if not absolute or not found as-is, look in terrainDir.
-    auto resolvePath = [&](const std::string& pathStr) -> std::filesystem::path {
-        auto p = std::filesystem::path(pathStr);
-        if (!p.is_absolute() && !std::filesystem::exists(p)) {
-            auto fallback = terrainDir / p.filename();
-            if (std::filesystem::exists(fallback))
-                return fallback;
-        }
-        return p;
-    };
-
-    const auto metaPath = resolvePath(manifest.metaPath);
-    const auto meta = parseMeta(metaPath);
-
-    const int N = meta.heightmapResolution;
-
-    const auto heightRawPath = resolvePath(manifest.heightMapPath);
+    const auto heightRawPath = resolveTerrainPath(terrainDir, entry.heightPath);
     auto hifs = std::ifstream(heightRawPath, std::ios::binary);
     DISPLAY_ERROR_STR(hifs.good(),
-        "[Terrain] loadTerrainHeightFieldFromFiles: cannot open " + heightRawPath.string(), true);
+        "[Terrain] loadChunkHeightField: cannot open " + heightRawPath.string(), true);
 
-    // Unity writes uint16 heights in y-outer, x-inner order.
     auto rawHeights = std::vector<uint16>(static_cast<size_t>(N) * N);
     hifs.read(reinterpret_cast<char*>(rawHeights.data()),
               static_cast<std::streamsize>(N) * N * sizeof(uint16));
 
     TerrainHeightField hf;
     hf.resolution = N;
-    hf.sizeX = meta.sizeX;
-    hf.sizeY = meta.sizeY;
-    hf.sizeZ = meta.sizeZ;
+    hf.sizeX = entry.sizeX;
+    hf.sizeY = entry.sizeY;
+    hf.sizeZ = entry.sizeZ;
     hf.heights.resize(static_cast<size_t>(N) * N);
 
     for (int y = 0; y < N; ++y)
@@ -117,7 +116,66 @@ TerrainHeightField loadTerrainHeightFieldFromFiles(const std::filesystem::path& 
 }
 
 // ---------------------------------------------------------------------------
-// TerrainHeightField methods
+// TerrainChunkManager (server: load-all, shared, no streaming)
+// ---------------------------------------------------------------------------
+
+void TerrainChunkManager::init(const std::filesystem::path& terrainDir) {
+    index_ = parseChunkIndex(terrainDir);
+    if (index_.chunks.empty()) {
+        gSharedLog << "[Terrain] No chunks loaded (terrain disabled).\n";
+        dumpLog();
+        return;
+    }
+
+    chunkSizeX_ = index_.chunks[0].sizeX;
+    chunkSizeZ_ = index_.chunks[0].sizeZ;
+
+    for (const auto& e : index_.chunks) {
+        if (e.sizeX != chunkSizeX_ || e.sizeZ != chunkSizeZ_) {
+            gSharedLog << "[Terrain] WARNING: chunk (" << e.col << "," << e.row
+                       << ") size mismatch (" << e.sizeX << "," << e.sizeZ
+                       << ") vs (" << chunkSizeX_ << "," << chunkSizeZ_
+                       << ") -- world routing may be incorrect.\n";
+        }
+        TerrainHeightField hf = loadChunkHeightField(e, terrainDir);
+        heightFields_.emplace(packCoord(e.col, e.row), std::move(hf));
+    }
+
+    gSharedLog << "[Terrain] Loaded " << heightFields_.size()
+               << " chunk height fields (shared, read-only).\n";
+    dumpLog();
+}
+
+std::optional<std::pair<int, int>>
+TerrainChunkManager::chunkCoordAtWorld(float x, float z) const {
+    if (chunkSizeX_ <= 0.f || chunkSizeZ_ <= 0.f) return std::nullopt;
+    const int col = static_cast<int>(std::floor(x / chunkSizeX_));
+    const int row = static_cast<int>(std::floor(z / chunkSizeZ_));
+    if (heightFields_.find(packCoord(col, row)) == heightFields_.end())
+        return std::nullopt;
+    return std::make_pair(col, row);
+}
+
+float MU_CALLCONV TerrainChunkManager::heightAtWorld(float x, float z) const {
+    auto coord = chunkCoordAtWorld(x, z);
+    if (!coord) return 0.f;
+    const TerrainHeightField* hf = findHf(coord->first, coord->second);
+    if (!hf) return 0.f;
+    const mu::Vec3 off = worldOffset(coord->first, coord->second);
+    return off.y() + hf->getHeightAt(x - off.x(), z - off.z());
+}
+
+mu::Vec3 MU_CALLCONV TerrainChunkManager::normalAtWorld(float x, float z) const {
+    auto coord = chunkCoordAtWorld(x, z);
+    if (!coord) return mu::Vec3(0.f, 1.f, 0.f);
+    const TerrainHeightField* hf = findHf(coord->first, coord->second);
+    if (!hf) return mu::Vec3(0.f, 1.f, 0.f);
+    const mu::Vec3 off = worldOffset(coord->first, coord->second);
+    return hf->getNormalAt(x - off.x(), z - off.z());
+}
+
+// ---------------------------------------------------------------------------
+// TerrainHeightField methods (unchanged)
 // ---------------------------------------------------------------------------
 
 float TerrainHeightField::getHeightAt(float localX, float localZ) const

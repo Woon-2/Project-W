@@ -91,7 +91,7 @@ private:
 	std::vector<Object*> objectById_;  // sparse: objectById_[id] = Object*, nullptr if unused
 
 	PhysicsWorld      physicsWorld_;
-	TerrainObject     terrain_;
+	std::vector<TerrainObject> terrainChunks_;  // one per chunk; height fields are shared (non-owning)
 	SkillSystem skillSystem_;
 	EventList         skillEvList_;  // reused across frames (cleared, not reallocated)
 

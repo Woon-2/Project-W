@@ -10,6 +10,7 @@ void AssetManager::loadAssets() {
     goblinAnimations_ = loadServerAnimClipsFromFile("../resources/animations/goblinAnimations.anim");
 
     level_ = loadLevelFromFile("../resources/levels/level.bin", *this);
+    level_.terrainChunks.init("../resources/terrains/");
 }
 
 const ServerAnimClip* AssetManager::findClip(const std::vector<ServerAnimClip>& set,

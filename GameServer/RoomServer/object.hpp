@@ -165,11 +165,14 @@ public:
 	TerrainObject() = default;
 	TerrainObject(Object&& base) : Object(std::move(base)) {}
 
-	TerrainHeightField&       heightField()       { return heightField_; }
-	const TerrainHeightField& heightField() const { return heightField_; }
+	// Non-owning: references a shared, read-only height field owned by the
+	// boot-time TerrainChunkManager (mirror of the client TerrainObject holding
+	// a const TerrainData*). Multiple rooms share the same height field data.
+	void                      setHeightField(const TerrainHeightField* hf) { heightField_ = hf; }
+	const TerrainHeightField* heightField() const { return heightField_; }
 
 private:
-	TerrainHeightField heightField_;
+	const TerrainHeightField* heightField_ = nullptr;
 };
 
 #endif // room_server_object_hpp

@@ -65,12 +65,21 @@ void Room::init(const Level* levelData) {
 		}
 	}
 
-	terrain_ = levelData->terrain;
-	if (!terrain_.heightField().empty()) {
-		terrain_.body().setMotionType(MotionType::Static);
-		terrain_.body().snapToCurrent();
-		physicsWorld_.registerTerrain(&terrain_.body(), &terrain_.heightField());
-	}
+	// Register one static collider per terrain chunk. Height field data is owned
+	// by the shared (boot-time) TerrainChunkManager on the Level and referenced
+	// read-only. reserve() first: registerTerrain takes &chunk.body(), so the
+	// vector must not reallocate after registration (same invariant as goblins_).
+	const TerrainChunkManager& terrainChunks = levelData->terrainChunks;
+	terrainChunks_.reserve(terrainChunks.chunkCount());
+	terrainChunks.forEachChunk(
+		[&](int /*col*/, int /*row*/, mu::Vec3 worldOffset, const TerrainHeightField* hf) {
+			auto& t = terrainChunks_.emplace_back();
+			t.body().setMotionType(MotionType::Static);
+			t.setPos(worldOffset);            // collider origin = terrain body pos
+			t.body().snapToCurrent();
+			t.setHeightField(hf);             // shared, read-only
+			physicsWorld_.registerTerrain(&t.body(), hf);
+		});
 
 	// Compile skill assets from the shared Lua skill directory.
 	{
