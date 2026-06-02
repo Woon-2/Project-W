@@ -16,6 +16,18 @@ Entry: `RoomServer/roomServerMain.cpp`
 - `physics.hpp` — legacy shim; just includes `physicsWorld.hpp`
 - `Level` / `binaryImport` — level data loaded from binary asset files at startup
 
+### NPC AI (`Npc` / `Goblin`)
+
+`Npc` is a finite state machine (`NpcState`) ticked from `Room::updateGoblinAI()` at 60fps.
+States: `Idle` (대기) ↔ `Patrol` (스폰 근처 천천히 배회) loop while no target;
+`Chase` → `AttackWindup` → `AttackRecover`, plus `Return` (스폰 복귀), `Reposition` (과밀 회피),
+`Investigate` (그룹 공유 메모리 조사), `Dead` (리스폰 대기).
+- `checkAlert()` is the shared detection step used by both `Idle` and `Patrol`: 플레이어 직접 감지 → `Chase`,
+  그룹 메모리(활동 구역 내) → `Investigate`. Returns true when alert so the NPC stops wandering.
+- `Patrol` walks to a random waypoint within `patrolRadius` of spawn at `moveSpeed * patrolSpeedMult`,
+  then rests in `Idle`; timings/feel are tuned via `NpcConfig` (`min/maxIdleTime`, `min/maxPatrolTime`).
+- State is not sent to clients — they infer animation from the velocity in `S_NpcMoveBatch`.
+
 ### Protocol
 
 Defined in `ServerEngine/protocol.hpp`. Packet types:

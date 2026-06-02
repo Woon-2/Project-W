@@ -62,7 +62,7 @@ void importNode(std::ifstream& ifs, const AssetManager& assetManager, Level& lev
 	else if (type == "GoblinSpawner") {
 		static constexpr float kActivityRadius = 40.f;
 		static constexpr float kSpawnRadius    = 15.f;
-		static constexpr int32 kCount          = 1;
+		static constexpr int32 kCount          = 15;
 		static constexpr float kMinDist        = 2.f;
 
 		std::mt19937 rng{ std::random_device{}() };

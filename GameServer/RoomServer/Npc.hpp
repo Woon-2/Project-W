@@ -32,11 +32,16 @@ struct NpcConfig {
     float returnSpeedMult    = 2.5f;
     Seconds maxDirectReactDelay{ 0.3s };
     Seconds maxGroupReactDelay { 2.0s };
+    float patrolRadius       = 5.f;    // 스폰 기준 배회 반경
+    float patrolSpeedMult    = 0.4f;   // moveSpeed 대비 순찰 속도 배율
+    Seconds minIdleTime  { 1.5s };  Seconds maxIdleTime  { 4.0s };
+    Seconds minPatrolTime{ 3.0s };  Seconds maxPatrolTime{ 6.0s };
 };
 
 // ─── NpcState ────────────────────────────────────────────────────────────────
 enum class NpcState {
     Idle,           // 대기; 자율 타깃 선택
+    Patrol,         // 순찰; 스폰 근처 배회
     Chase,          // 추격
     AttackWindup,   // 공격 준비 (이동 없음)
     AttackRecover,  // 공격 후 딜레이
@@ -68,6 +73,7 @@ private:
     void transitionTo(NpcState next);
 
     NpcUpdateResult updateIdle         (Seconds dt, Room& room);
+    NpcUpdateResult updatePatrol       (Seconds dt, Room& room);
     NpcUpdateResult updateChase        (Seconds dt, Room& room);
     NpcUpdateResult updateAttackWindup (Seconds dt, Room& room);
     NpcUpdateResult updateAttackRecover(Seconds dt, Room& room);
@@ -76,6 +82,9 @@ private:
     NpcUpdateResult updateDead         (Seconds dt);
     void            respawn            ();
     NpcUpdateResult updateInvestigate  (Seconds dt, Room& room);
+
+    bool         checkAlert(Seconds dt, Room& room);  // 감지/반응 판정(전환 또는 대기 시 true)
+    mu::Vec3     pickPatrolDest() const;              // 스폰 근처 랜덤 웨이포인트
 
     GameSession* selectBestVisibleTarget(Room& room) const;
     float        evaluateTargetScore(GameSession* s, Room& room) const;
@@ -100,6 +109,10 @@ private:
     bool  canReAggroOnReturn_{ true };
     int   overlapThreshold_  { 2 };
     float returnSpeedMult_   { 2.5f };
+    float patrolRadius_      { 5.f };
+    float patrolSpeedMult_   { 0.4f };
+    Seconds minIdleTime_  { 1.5s };  Seconds maxIdleTime_  { 4.0s };
+    Seconds minPatrolTime_{ 3.0s };  Seconds maxPatrolTime_{ 6.0s };
 
     float   maxHp_          { 80.f };
     Seconds respawnDelay_   { 10s };
@@ -111,6 +124,11 @@ private:
 
     mu::Vec3 repositionDir_  { 1.f, 0.f, 0.f };
     Seconds  repositionTimer_{ 0s };
+
+    Seconds  idleTimer_      { 0s };
+    Seconds  patrolTimer_    { 0s };
+    Seconds  patrolDuration_ { 0s };
+    mu::Vec3 patrolDest_     {};
 
     Seconds directReactTimer_   { -1s };
     Seconds groupReactTimer_    { -1s };

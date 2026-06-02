@@ -8,6 +8,11 @@
 
 static thread_local std::mt19937 s_rng{ std::random_device{}() };
 
+static Seconds randomRange(Seconds lo, Seconds hi) {
+    std::uniform_real_distribution<float> dist(lo.count(), hi.count());
+    return Seconds{ dist(s_rng) };
+}
+
 // ─── 생성자 ───────────────────────────────────────────────────────────────────
 
 Npc::Npc(Object&& base, const NpcConfig& cfg)
@@ -33,6 +38,15 @@ void Npc::applyConfig(const NpcConfig& cfg) {
     returnSpeedMult_    = cfg.returnSpeedMult;
     maxDirectReactDelay_ = cfg.maxDirectReactDelay;
     maxGroupReactDelay_  = cfg.maxGroupReactDelay;
+    patrolRadius_        = cfg.patrolRadius;
+    patrolSpeedMult_     = cfg.patrolSpeedMult;
+    minIdleTime_         = cfg.minIdleTime;
+    maxIdleTime_         = cfg.maxIdleTime;
+    minPatrolTime_       = cfg.minPatrolTime;
+    maxPatrolTime_       = cfg.maxPatrolTime;
+
+    // 초기 상태는 transitionTo를 거치지 않는 Idle이므로 첫 휴식 길이를 직접 초기화
+    idleTimer_ = randomRange(minIdleTime_, maxIdleTime_);
 }
 
 void MU_CALLCONV Npc::setSpawnPos(mu::Vec3 p) {
@@ -49,13 +63,19 @@ void MU_CALLCONV Npc::setActivityZone(mu::Vec3 center, float radius) {
 
 void Npc::transitionTo(NpcState next) {
     if (state_ == next) return;
-    if (state_ == NpcState::Idle) {
+    if (state_ == NpcState::Idle || state_ == NpcState::Patrol) {
         directReactTimer_ = -1s;
         groupReactTimer_  = -1s;
     }
     if (next == NpcState::AttackWindup)  windupTimer_     = 0s;
     if (next == NpcState::AttackRecover) recoverTimer_    = 0s;
     if (next == NpcState::Reposition)    repositionTimer_ = 0s;
+    if (next == NpcState::Idle)          idleTimer_       = randomRange(minIdleTime_, maxIdleTime_);
+    if (next == NpcState::Patrol) {
+        patrolDest_     = pickPatrolDest();
+        patrolDuration_ = randomRange(minPatrolTime_, maxPatrolTime_);
+        patrolTimer_    = 0s;
+    }
     state_ = next;
 }
 
@@ -68,6 +88,7 @@ NpcUpdateResult Npc::update(Seconds dt, Room& room) {
 
     switch (state_) {
         case NpcState::Idle:           return updateIdle          (dt, room);
+        case NpcState::Patrol:         return updatePatrol        (dt, room);
         case NpcState::Chase:          return updateChase         (dt, room);
         case NpcState::AttackWindup:   return updateAttackWindup  (dt, room);
         case NpcState::AttackRecover:  return updateAttackRecover (dt, room);
@@ -79,9 +100,11 @@ NpcUpdateResult Npc::update(Seconds dt, Room& room) {
     return {};
 }
 
-// ─── Idle ─────────────────────────────────────────────────────────────────────
+// ─── checkAlert ───────────────────────────────────────────────────────────────
+// 직접 감지/그룹 메모리를 판정. 경계 상태(Chase/Investigate로 전환했거나 반응 타이머
+// 대기 중)면 true를 반환해 호출측이 배회하지 않고 즉시 멈추도록 한다.
 
-NpcUpdateResult Npc::updateIdle(Seconds dt, Room& room) {
+bool Npc::checkAlert(Seconds dt, Room& room) {
     // --- 직접 감지 ---
     GameSession* best = selectBestVisibleTarget(room);
 
@@ -106,7 +129,7 @@ NpcUpdateResult Npc::updateIdle(Seconds dt, Room& room) {
             }
             directReactTimer_ = -1s;
         }
-        return {};
+        return true;
     }
     directReactTimer_ = -1s;
 
@@ -124,17 +147,81 @@ NpcUpdateResult Npc::updateIdle(Seconds dt, Room& room) {
                 groupReactTimer_ -= dt;
                 if (groupReactTimer_ <= 0s) {
                     transitionTo(NpcState::Investigate);
-                    return {};
                 }
-                return {};
+                return true;
             }
             groupReactTimer_ = -1s;
 
             if (group->hasValidMemory(room.getElapsedMs()))
-                return {};  // 활동 구역 밖 메모리만 있음 — 자연 만료 대기
+                return true;  // 활동 구역 밖 메모리만 있음 — 자연 만료 대기
         }
     }
+    return false;
+}
+
+// ─── Idle ─────────────────────────────────────────────────────────────────────
+
+NpcUpdateResult Npc::updateIdle(Seconds dt, Room& room) {
+    if (checkAlert(dt, room)) return {};
+
+    // 잠시 쉬었다가 순찰 재개
+    idleTimer_ -= dt;
+    if (idleTimer_ <= 0s)
+        transitionTo(NpcState::Patrol);
     return {};
+}
+
+// ─── Patrol ───────────────────────────────────────────────────────────────────
+
+NpcUpdateResult Npc::updatePatrol(Seconds dt, Room& room) {
+    if (checkAlert(dt, room)) return {};
+
+    patrolTimer_ += dt;
+
+    mu::Vec3 toDest   = patrolDest_ - pos();
+    mu::Vec3 toDestXZ( toDest.x(), 0.f, toDest.z() );
+
+    // 웨이포인트 도착 또는 순찰 시간 만료 → 잠시 Idle로 휴식
+    if ( toDestXZ.len2() < 0.5f * 0.5f || patrolTimer_ >= patrolDuration_ ) {
+        setLinearVel( mu::Vec3( 0.f, body().linearVel().y(), 0.f ) );
+        transitionTo( NpcState::Idle );
+        return {};
+    }
+
+    // 천천히 이동 (Chase 이동 패턴 동일, 속도만 patrolSpeedMult_)
+    nearbyCache_.clear();
+    room.findNearbyNpcPositions( pos(), separationRadius_, getId(), nearbyCache_ );
+    mu::NVec3 dirN( toDestXZ );
+    mu::Vec3  dir = { dirN.x(), 0.f, dirN.z() };
+    mu::Vec3  sep = calcSeparationForce( nearbyCache_, separationRadius_ );
+    mu::Vec3  sepPerp = sep - dir * mu::dot( sep, dir );
+
+    // head-on 교착 방지: sep이 dir과 거의 정반대면 측면 성분(sepPerp)이 0에 수렴해
+    // 빗겨날 방향이 사라진다. 자기 기준 측면으로 틀어 주면 마주 본 둘이 서로 반대편으로 지나간다.
+    float sepLen = sep.len();
+    if ( sepLen > 0.01f && mu::dot( sep, dir ) < -0.7f * sepLen ) {
+        mu::Vec3 sideStep{ dir.z(), 0.f, -dir.x() };   // dir 기준 측면 (Y축 90° 회전)
+        sepPerp += sideStep * sepLen;
+    }
+
+    mu::NVec3 nd( dir + sepPerp * separationWeight_ );
+
+    float spd = moveSpeed_ * patrolSpeedMult_;
+    setLinearVel( mu::Vec3( nd.x() * spd, body().linearVel().y(), nd.z() * spd ) );
+    setOrient( mu::NQuat( mu::Radian(), mu::Radian(), mu::Radian( std::atan2( nd.x(), nd.z() ) ) ) );
+    return {};
+}
+
+// ─── pickPatrolDest ───────────────────────────────────────────────────────────
+
+mu::Vec3 Npc::pickPatrolDest() const {
+    // 스폰 근처 랜덤 각도 + [patrolRadius*0.3, patrolRadius] 반경.
+    // patrolRadius(~5) ≪ activityZoneRadius(28), 스폰=활동구역 중심이라 항상 구역 내.
+    std::uniform_real_distribution<float> ang( 0.f, 6.2831853f );
+    std::uniform_real_distribution<float> rad( patrolRadius_ * 0.3f, patrolRadius_ );
+    float a = ang( s_rng );
+    float r = rad( s_rng );
+    return mu::Vec3( spawnPos_.x() + std::cos(a) * r, spawnPos_.y(), spawnPos_.z() + std::sin(a) * r );
 }
 
 // ─── Chase ────────────────────────────────────────────────────────────────────
@@ -513,6 +600,7 @@ void Npc::respawn() {
     recoverTimer_     = 0s;
     directReactTimer_ = -1s;
     groupReactTimer_  = -1s;
+    idleTimer_        = randomRange(minIdleTime_, maxIdleTime_);
     state_            = NpcState::Idle;
 }
 
