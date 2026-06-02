@@ -83,7 +83,7 @@ private:
             if (!parseValue(value))
                 return false;
 
-            object[std::move(key)] = std::move(value);
+            object.emplace_back(std::move(key), std::move(value));
 
             skipWhitespace();
             if (consume('}')) {
@@ -175,18 +175,18 @@ private:
 
         if (pos_ < text_.size() && text_[pos_] == '-')
             ++pos_;
-        while (pos_ < text_.size() && std::isdigit(static_cast<unsigned char>(text_[pos_])))
+        while (pos_ < text_.size() && isDigit(text_[pos_]))
             ++pos_;
         if (pos_ < text_.size() && text_[pos_] == '.') {
             ++pos_;
-            while (pos_ < text_.size() && std::isdigit(static_cast<unsigned char>(text_[pos_])))
+            while (pos_ < text_.size() && isDigit(text_[pos_]))
                 ++pos_;
         }
         if (pos_ < text_.size() && (text_[pos_] == 'e' || text_[pos_] == 'E')) {
             ++pos_;
             if (pos_ < text_.size() && (text_[pos_] == '+' || text_[pos_] == '-'))
                 ++pos_;
-            while (pos_ < text_.size() && std::isdigit(static_cast<unsigned char>(text_[pos_])))
+            while (pos_ < text_.size() && isDigit(text_[pos_]))
                 ++pos_;
         }
 
@@ -215,8 +215,14 @@ private:
         return true;
     }
 
+    static bool isDigit(char c) { return c >= '0' && c <= '9'; }
+
+    static bool isSpace(char c) {
+        return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v';
+    }
+
     void skipWhitespace() {
-        while (pos_ < text_.size() && std::isspace(static_cast<unsigned char>(text_[pos_])))
+        while (pos_ < text_.size() && isSpace(text_[pos_]))
             ++pos_;
     }
 
@@ -267,8 +273,10 @@ const Value* Value::find(std::string_view key) const {
     if (!object)
         return nullptr;
 
-    const auto it = object->find(std::string(key));
-    return it == object->end() ? nullptr : &it->second;
+    for (const auto& [k, v] : *object)
+        if (k == key)
+            return &v;
+    return nullptr;
 }
 
 const Value* Value::findPath(std::string_view dottedPath) const {

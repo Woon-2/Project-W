@@ -1,6 +1,9 @@
 ﻿#ifndef __gfxUtil_HPP
 #define __gfxUtil_HPP
 
+#include <mutex>
+#include <memory>
+
 extern RECT gWndRect;
 extern RECT gClientRect;
 
@@ -148,6 +151,10 @@ private:
 	D3D12_DESCRIPTOR_HEAP_TYPE type_{};
 	UINT incrementSize_{};
 	bool gpuVisible_ = false;
+	// alloc/free의 thread-safety를 위한 뮤텍스.
+	// shared_ptr로 보관해 DescriptorPool의 복사/이동 의미를 유지한다.
+	// (백그라운드 리소스 로드가 메인 렌더와 동시에 디스크립터를 할당할 수 있다.)
+	std::shared_ptr<std::mutex> allocMtx_ = std::make_shared<std::mutex>();
 };
 
 // 깊이 버퍼를 쉽게 생성하는 유틸리티 함수

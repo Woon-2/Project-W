@@ -9,6 +9,7 @@
 #include <iostream>
 #include <string>
 #include <sstream>
+#include <atomic>
 
 template <class CharT>
 struct NullBuffer : public std::basic_streambuf<CharT> {
@@ -73,9 +74,17 @@ inline void popLoggerA(const std::string& key) {}
 inline void popLoggerW(const std::string& key) {}
 #endif
 
+// dumpLog 일시 정지 플래그.
+// 백그라운드 스레드가 gSharedLog/gwSharedLog를 단독으로 사용하는 구간 동안
+// 메인 스레드가 dumpLog로 같은 버퍼를 읽고/비우지 못하도록 막는다.
+extern std::atomic<bool> gLogMuted;
+inline void muteLog()   { gLogMuted.store(true,  std::memory_order_relaxed); }
+inline void unmuteLog() { gLogMuted.store(false, std::memory_order_relaxed); }
+
 // gSharedLog와 gwSharedLog에 기록된 로그들을
 // pushLoggerA, pushLoggerW 등의 함수로 등록된 모든 스트림들에 출력한다.
 // ENABLE_LOG 매크로가 활성화되어있지 않다면, 아무 일도 하지 않는다.
+// gLogMuted가 true이면 아무 일도 하지 않는다.
 void dumpLog();
 
 
