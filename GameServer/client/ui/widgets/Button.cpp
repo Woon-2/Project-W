@@ -13,10 +13,20 @@ void Button::onRender(const RenderContext& rc) {
     }
 
     if (tex) {
-        rc.gfx->addDrawEvent(UIPipeline::DrawEvent{
-            .world = buildWorldMatrix(rc.screenHeight),
-            .pTex  = tex
-        });
+        XMFLOAT4 tint = texTint;
+        if (state_ == State::Hovered) tint = texTintHovered;
+        else if (state_ == State::Pressed) tint = texTintPressed;
+
+        if (sliceCornerX > 0.f || sliceCornerY > 0.f) {
+            emitNineSlice(rc, resolvedRect_, tex,
+                sliceUvBorderX, sliceUvBorderY, sliceCornerX, sliceCornerY, tint);
+        } else {
+            rc.gfx->addDrawEvent(UIPipeline::DrawEvent{
+                .world    = buildWorldMatrix(rc.screenHeight),
+                .pTex     = tex,
+                .colorMul = tint
+            });
+        }
         return;
     }
 

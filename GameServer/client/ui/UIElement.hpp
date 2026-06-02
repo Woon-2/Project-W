@@ -22,6 +22,14 @@ struct RenderContext {
     float screenHeight = 768.f;
 };
 
+// Emits 9 textured quads (a 9-slice) covering `rect`. Corners keep a fixed
+// screen size (cornerX/cornerY, in pixels) while edges/center stretch.
+// uvBorderX/Y are the slice insets as a fraction (0..0.5) of the source texture.
+void emitNineSlice(const RenderContext& rc, const Rect& rect, const Texture* tex,
+                   float uvBorderX, float uvBorderY,
+                   float cornerX, float cornerY,
+                   const XMFLOAT4& colorMul);
+
 class UIElement {
 public:
     virtual ~UIElement() = default;

@@ -20,6 +20,7 @@
 #include "../ui/widgets/Label.hpp"
 #include "../ui/widgets/Button.hpp"
 #include "../ui/widgets/Panel.hpp"
+#include "../ui/widgets/Image.hpp"
 #include "../ui/widgets/TextInput.hpp"
 #include "../spriteAnimation.hpp"
 #include "../crosshair.hpp"
@@ -52,6 +53,10 @@ public:
 
 	// 객체들을 생성한다.
 	void setupStage();
+
+	// 3D 비주얼 리소스(지형 청크매니저 + 스카이박스 + 방향광)만 1회 초기화한다.
+	// 대기실 3D 배경과 인게임이 공유하며, stageVisualReady_로 중복 init을 막는다.
+	void setupStageVisual();
 
 	void setupPlayer(const PlayerInfo& playerInfo);
 	void setParticle();
@@ -106,6 +111,7 @@ private:
 	// 씬별 프레임 루틴. update()/render()가 scene_에 따라 분기 호출한다.
 	void LobbyScene(Milliseconds deltaTime);
 	void renderLobby();
+	void renderWaitingRoom();   // 대기실: 3D 맵 배경 + 반투명 UI 오버레이
 	void InGameScene(Milliseconds deltaTime);
 	void renderInGame();
 
@@ -118,6 +124,9 @@ private:
 	// effects/*_ParticleSystems.json을 미리 파싱해 캐시에 적재한다 (백그라운드 워커에서 호출).
 	// setParticle()이 디스크 재파싱 없이 캐시에서 config를 꺼내 쓰도록 한다.
 	void prefetchParticleConfigs();
+
+	// 로비 UI 텍스처(배경/로고)를 메인 스레드에서 즉시 로드한다.
+	void loadLobbyTextures();
 
 	// 로비 UI 구성/갱신 (mock 룸 상태 기반).
 	void buildLobbyUI();
@@ -323,18 +332,45 @@ private:
 	std::vector<LobbyPlayer> lobbyPlayers_{};
 	int                      dummySeed_ = 1;
 
+	// 로비 UI 텍스처 (메인 스레드에서 즉시 로드, 인게임 백그라운드 로드와 분리)
+	std::unordered_map<std::string, Texture> lobbyTexHashMap_{};
+	Texture lobbyBgTex_{};
+	Texture lobbyLogoTex_{};
+	Texture lobbyPanelTex_{};
+	Texture lobbyBtnPrimaryTex_{};
+	Texture lobbyBtnSecondaryTex_{};
+	Texture lobbyInputTex_{};
+
 	// 로비 UI (소유권은 uiManager_)
 	UI::UIElement* lobbyRoot_       = nullptr;
+	UI::Button*    lobbySkyBg_      = nullptr;
+	UI::Image*     lobbyBgImage_    = nullptr;
+	UI::Image*     lobbyLogoImage_  = nullptr;
 	UI::UIElement* mainMenuRoot_    = nullptr;
 	UI::UIElement* waitingRoomRoot_ = nullptr;
 	UI::TextInput* roomCodeInput_   = nullptr;
 	UI::Label*     mainMenuMsgLabel_= nullptr;
 	UI::Label*     roomCodeLabel_   = nullptr;
 	UI::Label*     playerCountLabel_= nullptr;
-	std::array<UI::Label*, kMaxLobbyPlayers> slotLabels_{};
+	// 스쿼드 스테이지 슬롯(4칸). slotBays_는 B-2에서 3D 캐릭터를 투영할 화면 사각형 제공.
+	std::array<UI::Button*,    kMaxLobbyPlayers> slotPanels_{};        // 슬롯 컬럼 프레임(반투명)
+	std::array<UI::UIElement*, kMaxLobbyPlayers> slotBays_{};          // 모델 베이(rect만 사용)
+	std::array<UI::Label*,     kMaxLobbyPlayers> slotNumberLabels_{};  // "01".."04"
+	std::array<UI::Button*,    kMaxLobbyPlayers> slotNameplateBgs_{};  // 이름표 배경(반투명)
+	std::array<UI::Label*,     kMaxLobbyPlayers> slotNameLabels_{};    // 플레이어 이름
+	std::array<UI::Label*,     kMaxLobbyPlayers> slotHostBadgeLabels_{};
 	UI::Button*    startGameButton_ = nullptr;
 	UI::Label*     startGameLabel_  = nullptr;
+	UI::Button*    waitMessageBg_   = nullptr;
 	UI::Label*     hostStatusLabel_ = nullptr;
+
+	// 대기실 3D 맵 배경
+	Camera lobbyCamera_{};
+	float  lobbyCameraTime_ = 0.f;                  // 대기실 카메라 연출 시간(느린 좌우 패닝)
+	bool   stageVisualReady_ = false;
+	std::vector<mu::Vec3> stageSpawnPositions_{};  // level.bin PlayerStart 노드 위치
+	mu::Vec3 stageFocus_{};                         // 대기실 카메라 포커스(스폰 중심, 지형 높이)
+	bool     lobby3DDiagLogged_ = false;            // 대기실 3D 진단 로그 1회용(임시)
 };
 
 }	// namespace Online

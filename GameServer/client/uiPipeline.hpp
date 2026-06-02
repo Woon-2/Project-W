@@ -29,6 +29,8 @@ namespace UIPipeline {
 		const Texture* pTex;
 		const Texture* pCopySrc;	// nullptr가 아닐 경우 이 텍스처를 원본으로 복사를 수행
 		XMFLOAT4 colorMul = { 1.f, 1.f, 1.f, 1.f };  // per-draw color multiplier
+		// uv' = uv * uvScaleBias.xy + uvScaleBias.zw (identity = full texture). 9-slice 시 슬라이스별 부분 UV.
+		XMFLOAT4 uvScaleBias = { 1.f, 1.f, 0.f, 0.f };
 
 		// 텍스처 포인터 기준으로 정렬 — 동일 텍스처 이벤트를 인접하게 배치해 향후 인스턴싱을 가능하게 한다.
 		// 주의: z-order는 DrawEvent에 저장되지 않으므로, updateGPUData에서 sort를 호출하면

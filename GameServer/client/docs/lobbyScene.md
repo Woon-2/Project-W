@@ -72,6 +72,69 @@ Online 클라이언트(`online/onlineGame`)를 **로비 씬 / 인게임 씬**으
   하고, 서버 미연동 상태라 실제 방 조회가 불가하므로 항상 "방을 찾을 수 없습니다" 로그/메시지를 출력한다
   (대기실 전환 없음). `방 만들기`는 self-host mock으로 대기실 전환.
 
+## 메인화면 배경 이미지 & 로고 (이미지 에셋)
+메인화면(`LobbyState::MainMenu`)을 단색 UI에서 **배경 키 아트 + 게임 로고(OutLander)** 구성으로 전환.
+- 에셋: `resources/UI/ui_lobby_bg.dds`(배경, 1672×941≈16:9), `resources/UI/ui_lobby_logo.dds`(로고, 2172×724≈3:1, 알파 포함).
+  파일명 컨벤션은 기존 UI 에셋(`player_hp_*`)을 따른 소문자 snake_case + `ui_` 접두사.
+- **즉시 로드**: `loadLobbyTextures()`가 `addRequestTextureLoad` 2건을 큐잉하고 **메인 스레드에서 즉시
+  `loadRequestedAssets()`**를 호출한다. `enterLobby()`에서 `buildLobbyUI()` **이전**에 불러 위젯에 텍스처를
+  연결한다. 인게임 백그라운드 로드(`startInGameAssetLoad`)가 시작되기 전이라 요청 큐가 겹치지 않는다.
+  텍스처는 전용 `lobbyTexHashMap_`/`lobbyBgTex_`/`lobbyLogoTex_`에 보관(인게임 `AssetManager` 해시맵과 분리).
+- **배경(cover 스케일)**: `UI::Image`를 화면 중앙에 두고, 원본 종횡비를 유지한 채 화면을 덮도록 크기를
+  계산(화면이 더 세로로 길면 높이 기준, 가로로 길면 너비 기준). 넘치는 영역은 뷰포트에서 클리핑.
+  텍스처 로드 실패 대비로 단색 sky(`zOrder -11`)를 뒤에 깔고 이미지를 `zOrder -10`에 올린다.
+- **로고**: `UI::Image`를 메인 패널 위(`Anchors::Center`/`Pivots::BottomCenter`, `offsetY = -(패널높이/2+16)`)에
+  종횡비 유지하여 배치(`zOrder 5`). 두 위젯 모두 `lobbyBgImage_`/`lobbyLogoImage_`로 핸들 보관.
+- 로더는 `DDSTextureLoader12`(압축/비압축·알파 지원). 대기실(3D 맵 배경)은 별도 후속 작업.
+
+## 9-slice 프레임 (패널/버튼/입력창 텍스처)
+단색 UI 블록을 **9-slice 텍스처 프레임**으로 교체. 에셋은 normal 상태 1장씩만 준비하고
+hover/pressed는 엔진 틴트로 처리.
+- 에셋: `ui_panel_frame.dds`(1254², 패널), `ui_btn_primary.dds`/`ui_btn_secondary.dds`(720², 버튼),
+  `ui_input.dds`(2048×768, 입력창). 모두 `loadLobbyTextures()`에서 즉시 로드(BilinearClamp).
+- **9-slice 렌더링**: `UIShader::PerInstanceData`/`ui.hlsl`에 `uvScaleBias`(uv'=uv*xy+zw) 추가,
+  `UIPipeline::DrawEvent`에 동일 필드 추가. `UI::emitNineSlice()`(`UIElement.cpp`)가 요소 사각형을
+  9개 셀로 나눠 셀마다 부분 UV로 `DrawEvent`를 emit한다. 코너는 화면 px 고정, 가장자리/중앙만 늘어남.
+- **위젯 지원**: `Button`에 `tex*`(기존) + `sliceUvBorderX/Y`/`sliceCornerX/Y` + 상태별 `texTint*`,
+  `TextInput`에 `backgroundTex` + 동일 slice 필드. 텍스처 경로에 `colorMul` 틴트 적용(hover 밝게/press 어둡게).
+- **적용 대상**: 메인/대기실 패널 배경, primary/secondary 버튼, 방 코드 입력창. 작은 배지·구분선·더미
+  버튼은 단색 유지. 텍스처 미로드 시 자동으로 기존 단색 폴백.
+- **튜닝**: slice 경계/코너 px는 `buildLobbyUI`의 `stylePanel`/`stylePrimary`/`styleSecondary` 람다와
+  입력창 블록의 상수로 조정(에셋 모양에 맞춰 눈으로 맞추는 값).
+
+## 대기실 3D 맵 배경 + 스쿼드 스테이지 레이아웃 (작업 B-1)
+대기실(`LobbyState::WaitingRoom`)을 단색/이미지 배경에서 **3D 맵(terrain+skybox) 배경 + 반투명
+스쿼드 스테이지 UI**로 전환. (HTML 프로토타입 `ui/html`의 squad-stage 구조 이식.)
+- **스테이지 비주얼 분리**: `setupStage()`에서 3D 비주얼부(`chunkManager_.init` + skybox + `dirLight_`)를
+  `setupStageVisual()`로 추출하고 `stageVisualReady_` 플래그로 1회만 init(idempotent). 대기실 3D 배경과
+  인게임이 공유 → `enterInGame()`의 `setupStage()`가 지형을 재init하지 않는다.
+- **정적 카메라**: 전용 `lobbyCamera_`(게임 `camera_`와 분리) + `Camera::setView(eye, at)` 신설(타겟
+  추종형과 무관하게 view 직접 설정). 포커스(`stageFocus_`)는 **`level.bin`의 `PlayerStart` 노드 위치**
+  평균 XZ를 지형 높이(`heightAtWorld`)에 앉힌 지점(스폰 좌표가 없으면 `worldCenter()` 폴백). `PlayerStart`는
+  `importNode`에서 `stageSpawnPositions_`로 캡처(레벨 파싱은 `setupStageVisual`로 이동 — 대기실도 스폰 정보
+  획득). orbit은 쓰지 않음(슬롯 정렬 유지). 카메라 오프셋/FOV는 `LobbyScene` 상수로 튜닝.
+- **타이밍/폴백**: 대기실 진입 후 `inGameAssetsLoaded_`가 true가 될 때까지는 키아트 bg(`lobbyBgImage_`)를
+  폴백으로 보여주고(Forward), 완료되면 `LobbyScene`에서 `setupStageVisual()` → Deferred 전환 + bg 숨김 +
+  카메라/`chunkManager_.update(center)` 갱신.
+- **렌더 분기**: `renderLobby()`는 `WaitingRoom && stageVisualReady_`이면 `renderWaitingRoom()`(=
+  `renderInGame()`의 3D 부분 최소 복제: skybox + terrain submit + `lobbyCamera_.updateGFX` +
+  `dirLight_.render` + PBR/Terrain FrameData → UI 오버레이 → `gfx_.render()`), 아니면 UI-only.
+  (플레이어/이펙트/HiZ/CSM 그림자 제외.)
+- **전환 보정**: `lobbyLeaveRoom()`(대기실→메인) Forward 복원 + 키아트 bg 재표시. `setRenderPath`는 단순
+  enum 대입이라 매 프레임/전환 호출 안전.
+- **반투명 UI 레이아웃**(`buildLobbyUI` 대기실 섹션 재작성): 넓은 패널 → 상단 툴바(방코드+복사 /
+  게임시작·대기메시지 / 방나가기) + 가로 4칸 슬롯(슬롯번호·모델베이·이름표·호스트뱃지) + 디버그 툴.
+  3D 위 가독성을 위해 어두운 반투명 scrim + 밝은 텍스트, 슬롯 컬럼은 더 투명(캐릭터/맵 비침). 반투명은
+  신규 에셋 없이 `colorMul.a`(단색)·`texTint.a`(9-slice 버튼)로 처리.
+- **슬롯 멤버**: `slotPanels_`/`slotBays_`/`slotNumberLabels_`/`slotNameplateBgs_`/`slotNameLabels_`/
+  `slotHostBadgeLabels_`. `slotBays_[i]`는 렌더 없는 `UIElement`로 **B-2에서 3D 캐릭터를 투영할 화면
+  사각형**(`resolvedRect_`)을 제공한다.
+
+### 작업 B-2 (후속, 미구현)
+- 슬롯별 3D 캐릭터 모델(`assetManager_.modelPlayer()` 재사용) + `AnimBlenderPlayer` IDLE 애니메이션
+  (`setAnimBlender(animSystem_, ...)` + `animSystem_.update()`). 캐릭터를 슬롯 컬럼(`slotBays_`)에 투영
+  되도록 배치(고정 카메라 + worldToScreen). 선택: 캐릭터 턴테이블 회전, CSM 그림자.
+
 ## 후속(범위 밖)
 - 실제 룸 프로토콜 설계·연동 (현재 방 생성/참가/시작은 mock)
 - TextInput 캐럿 블링킹/텍스트 선택/클립보드 등 고급 편집

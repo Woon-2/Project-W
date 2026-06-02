@@ -94,6 +94,21 @@ void TextInput::onChar(wchar_t ch) {
 }
 
 void TextInput::onRender(const RenderContext& rc) {
+    if (backgroundTex) {
+        const XMFLOAT4 tint = focused_ ? texTintFocused : texTint;
+        if (sliceCornerX > 0.f || sliceCornerY > 0.f) {
+            emitNineSlice(rc, resolvedRect_, backgroundTex,
+                sliceUvBorderX, sliceUvBorderY, sliceCornerX, sliceCornerY, tint);
+        } else {
+            rc.gfx->addDrawEvent(UIPipeline::DrawEvent{
+                .world    = buildWorldMatrix(rc.screenHeight),
+                .pTex     = backgroundTex,
+                .colorMul = tint
+            });
+        }
+        return;
+    }
+
     const XMFLOAT4 col = focused_ ? bgColorFocused : bgColor;
     if (col.w <= 0.f) return;
 
@@ -110,7 +125,7 @@ void TextInput::refreshDisplay() {
 
     if (text_.empty() && !focused_) {
         // Placeholder (dimmed).
-        label_->setTextColor(0.5f, 0.5f, 0.5f, 1.f);
+        label_->setTextColor(placeholderColor.x, placeholderColor.y, placeholderColor.z, placeholderColor.w);
         label_->setText(placeholder_.empty() ? L" " : placeholder_);
         return;
     }
@@ -118,7 +133,7 @@ void TextInput::refreshDisplay() {
     // Editing/filled: show text with a simple caret when focused.
     std::wstring shown = text_;
     if (focused_) shown += L"|";
-    label_->setTextColor(1.f, 1.f, 1.f, 1.f);
+    label_->setTextColor(textColor.x, textColor.y, textColor.z, textColor.w);
     label_->setText(shown.empty() ? L" " : shown);
 }
 

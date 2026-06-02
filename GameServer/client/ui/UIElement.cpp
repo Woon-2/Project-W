@@ -1,7 +1,61 @@
 ﻿#include "pch.hpp"
 #include "UIElement.hpp"
+#include "../gfx.hpp"
 
 namespace UI {
+
+void emitNineSlice(const RenderContext& rc, const Rect& rect, const Texture* tex,
+                   float uvBorderX, float uvBorderY,
+                   float cornerX, float cornerY,
+                   const XMFLOAT4& colorMul) {
+    if (!tex) return;
+
+    // Clamp so opposite corners never overlap, then snap edges to whole pixels
+    // (shared rounded edges keep adjacent slices seamless).
+    cornerX = std::min(cornerX, rect.width  * 0.5f);
+    cornerY = std::min(cornerY, rect.height * 0.5f);
+    uvBorderX = std::clamp(uvBorderX, 0.f, 0.5f);
+    uvBorderY = std::clamp(uvBorderY, 0.f, 0.5f);
+
+    const float xs[4] = {
+        std::round(rect.x),
+        std::round(rect.x + cornerX),
+        std::round(rect.x + rect.width - cornerX),
+        std::round(rect.x + rect.width)
+    };
+    const float ys[4] = {
+        std::round(rect.y),
+        std::round(rect.y + cornerY),
+        std::round(rect.y + rect.height - cornerY),
+        std::round(rect.y + rect.height)
+    };
+    const float us[4] = { 0.f, uvBorderX, 1.f - uvBorderX, 1.f };
+    const float vs[4] = { 0.f, uvBorderY, 1.f - uvBorderY, 1.f };
+
+    for (int row = 0; row < 3; ++row) {
+        const float cy = ys[row];
+        const float ch = ys[row + 1] - ys[row];
+        if (ch <= 0.f) continue;
+
+        for (int col = 0; col < 3; ++col) {
+            const float cx = xs[col];
+            const float cw = xs[col + 1] - xs[col];
+            if (cw <= 0.f) continue;
+
+            mu::Vec3 scl{ cw * 0.5f, ch * 0.5f, 1.f };
+            mu::Vec3 pos{ cx + cw * 0.5f, rc.screenHeight - (cy + ch * 0.5f), 0.f };
+            mu::Mat4x4 world = mu::Mat4x4(mu::scale(scl)) * mu::translate(pos);
+
+            rc.gfx->addDrawEvent(UIPipeline::DrawEvent{
+                .world       = world,
+                .pTex        = tex,
+                .pCopySrc    = nullptr,
+                .colorMul    = colorMul,
+                .uvScaleBias = XMFLOAT4{ us[col + 1] - us[col], vs[row + 1] - vs[row], us[col], vs[row] }
+            });
+        }
+    }
+}
 
 UIElement* UIElement::addChild(std::unique_ptr<UIElement> child) {
     child->parent_ = this;

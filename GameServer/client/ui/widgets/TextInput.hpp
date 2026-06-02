@@ -28,9 +28,22 @@ public:
     void setMaxLength(std::size_t n) { maxLength_ = n; }
     void setFontSize(float size);
 
+    // Optional 9-slice background texture (overrides the solid-color quad when set).
+    // sliceCornerX/Y > 0 enables 9-slice; uvBorderX/Y are slice insets (fraction of source).
+    const Texture* backgroundTex = nullptr;
+    float sliceUvBorderX = 0.f;
+    float sliceUvBorderY = 0.f;
+    float sliceCornerX   = 0.f;
+    float sliceCornerY   = 0.f;
+    // Color multiplier applied to the texture per state.
+    XMFLOAT4 texTint        = { 1.f, 1.f, 1.f, 1.f };
+    XMFLOAT4 texTintFocused = { 1.f, 1.f, 1.f, 1.f };
+
     // Solid-color backgrounds (alpha 0 = no quad).
     XMFLOAT4 bgColor        = { 0.10f, 0.10f, 0.14f, 0.95f };
     XMFLOAT4 bgColorFocused = { 0.16f, 0.18f, 0.26f, 1.00f };
+    XMFLOAT4 textColor        = { 1.00f, 1.00f, 1.00f, 1.00f };
+    XMFLOAT4 placeholderColor = { 0.50f, 0.50f, 0.50f, 1.00f };
 
     // Input filters.
     bool uppercase = false;   // transform letters to upper-case

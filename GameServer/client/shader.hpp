@@ -1147,6 +1147,9 @@ namespace UIShader {
 
 	struct PerInstanceData {
 		XMFLOAT4X4 world;
+		// uv' = uv * uvScaleBias.xy + uvScaleBias.zw  (identity = {1,1,0,0}).
+		// Used for 9-slice: each slice samples a sub-rect of the texture.
+		XMFLOAT4 uvScaleBias = { 1.f, 1.f, 0.f, 0.f };
 	};
 
 	struct PerDrawcallData {

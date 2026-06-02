@@ -51,6 +51,20 @@ public:
     // streaming latency so callers submit terrain frame data / height queries consistently.
     bool empty() const { return index_.chunks.empty(); }
 
+    // 인덱스의 모든 청크 중심을 평균한 월드 좌표(지형 위 한 점).
+    // 로비 대기실의 정적 카메라 포커스로 사용한다(sparse/임의 원점 대응).
+    mu::Vec3 MU_CALLCONV worldCenter() const {
+        if (index_.chunks.empty()) return mu::Vec3(0.f, 0.f, 0.f);
+        double sx = 0.0, sz = 0.0;
+        for (const auto& c : index_.chunks) {
+            sx += static_cast<double>(c.col) * chunkSizeX_ + chunkSizeX_ * 0.5;
+            sz += static_cast<double>(c.row) * chunkSizeZ_ + chunkSizeZ_ * 0.5;
+        }
+        const float cx = static_cast<float>(sx / index_.chunks.size());
+        const float cz = static_cast<float>(sz / index_.chunks.size());
+        return mu::Vec3(cx, heightAtWorld(cx, cz), cz);
+    }
+
 private:
     // Loading(CPU): worker-thread build in flight. Ready: render object + physics active.
     // Expiring: Ready but outside the desired set, counting down its grace timer.
