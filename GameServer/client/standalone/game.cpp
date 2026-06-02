@@ -3229,6 +3229,18 @@ void Game::processInput(Milliseconds deltaTime) {
 		uiManager_.toggleDebugMode();
 	}
 
+	// Numpad 9: print current player/camera coordinates for lobby camera staging.
+	if ( (keyboardStateCurr_[VK_NUMPAD9] & 0x80) && !(keyboardStatePrev_[VK_NUMPAD9] & 0x80) ) {
+		const auto p = player_->pos();
+		const auto eye = camera_.eye();
+		const auto at = camera_.at();
+		gSharedLog << "[StandalonePos] player=("
+			<< p.x() << ", " << p.y() << ", " << p.z() << ") cameraEye=("
+			<< eye.x() << ", " << eye.y() << ", " << eye.z() << ") cameraAt=("
+			<< at.x() << ", " << at.y() << ", " << at.z() << ")\n";
+		dumpLog();
+	}
+
 	// F key: emit particles for testing
 	if ( (keyboardStateCurr_['F'] & 0x80) && !(keyboardStatePrev_['F'] & 0x80) ) {
 		const auto slashPos = player_->renderState().pos

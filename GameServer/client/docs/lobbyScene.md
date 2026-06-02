@@ -102,6 +102,39 @@ hover/pressed는 엔진 틴트로 처리.
 - **튜닝**: slice 경계/코너 px는 `buildLobbyUI`의 `stylePanel`/`stylePrimary`/`styleSecondary` 람다와
   입력창 블록의 상수로 조정(에셋 모양에 맞춰 눈으로 맞추는 값).
 
+## 대기실 3D 맵 배경 + 스쿼드 스테이지 레이아웃 (작업 B-1)
+대기실(`LobbyState::WaitingRoom`)을 단색/이미지 배경에서 **3D 맵(terrain+skybox) 배경 + 반투명
+스쿼드 스테이지 UI**로 전환. (HTML 프로토타입 `ui/html`의 squad-stage 구조 이식.)
+- **스테이지 비주얼 분리**: `setupStage()`에서 3D 비주얼부(`chunkManager_.init` + skybox + `dirLight_`)를
+  `setupStageVisual()`로 추출하고 `stageVisualReady_` 플래그로 1회만 init(idempotent). 대기실 3D 배경과
+  인게임이 공유 → `enterInGame()`의 `setupStage()`가 지형을 재init하지 않는다.
+- **정적 카메라**: 전용 `lobbyCamera_`(게임 `camera_`와 분리) + `Camera::setView(eye, at)` 신설(타겟
+  추종형과 무관하게 view 직접 설정). 포커스(`stageFocus_`)는 **`level.bin`의 `PlayerStart` 노드 위치**
+  평균 XZ를 지형 높이(`heightAtWorld`)에 앉힌 지점(스폰 좌표가 없으면 `worldCenter()` 폴백). `PlayerStart`는
+  `importNode`에서 `stageSpawnPositions_`로 캡처(레벨 파싱은 `setupStageVisual`로 이동 — 대기실도 스폰 정보
+  획득). orbit은 쓰지 않음(슬롯 정렬 유지). 카메라 오프셋/FOV는 `LobbyScene` 상수로 튜닝.
+- **타이밍/폴백**: 대기실 진입 후 `inGameAssetsLoaded_`가 true가 될 때까지는 키아트 bg(`lobbyBgImage_`)를
+  폴백으로 보여주고(Forward), 완료되면 `LobbyScene`에서 `setupStageVisual()` → Deferred 전환 + bg 숨김 +
+  카메라/`chunkManager_.update(center)` 갱신.
+- **렌더 분기**: `renderLobby()`는 `WaitingRoom && stageVisualReady_`이면 `renderWaitingRoom()`(=
+  `renderInGame()`의 3D 부분 최소 복제: skybox + terrain submit + `lobbyCamera_.updateGFX` +
+  `dirLight_.render` + PBR/Terrain FrameData → UI 오버레이 → `gfx_.render()`), 아니면 UI-only.
+  (플레이어/이펙트/HiZ/CSM 그림자 제외.)
+- **전환 보정**: `lobbyLeaveRoom()`(대기실→메인) Forward 복원 + 키아트 bg 재표시. `setRenderPath`는 단순
+  enum 대입이라 매 프레임/전환 호출 안전.
+- **반투명 UI 레이아웃**(`buildLobbyUI` 대기실 섹션 재작성): 넓은 패널 → 상단 툴바(방코드+복사 /
+  게임시작·대기메시지 / 방나가기) + 가로 4칸 슬롯(슬롯번호·모델베이·이름표·호스트뱃지) + 디버그 툴.
+  3D 위 가독성을 위해 어두운 반투명 scrim + 밝은 텍스트, 슬롯 컬럼은 더 투명(캐릭터/맵 비침). 반투명은
+  신규 에셋 없이 `colorMul.a`(단색)·`texTint.a`(9-slice 버튼)로 처리.
+- **슬롯 멤버**: `slotPanels_`/`slotBays_`/`slotNumberLabels_`/`slotNameplateBgs_`/`slotNameLabels_`/
+  `slotHostBadgeLabels_`. `slotBays_[i]`는 렌더 없는 `UIElement`로 **B-2에서 3D 캐릭터를 투영할 화면
+  사각형**(`resolvedRect_`)을 제공한다.
+
+### 작업 B-2 (후속, 미구현)
+- 슬롯별 3D 캐릭터 모델(`assetManager_.modelPlayer()` 재사용) + `AnimBlenderPlayer` IDLE 애니메이션
+  (`setAnimBlender(animSystem_, ...)` + `animSystem_.update()`). 캐릭터를 슬롯 컬럼(`slotBays_`)에 투영
+  되도록 배치(고정 카메라 + worldToScreen). 선택: 캐릭터 턴테이블 회전, CSM 그림자.
+
 ## 후속(범위 밖)
 - 실제 룸 프로토콜 설계·연동 (현재 방 생성/참가/시작은 mock)
 - TextInput 캐럿 블링킹/텍스트 선택/클립보드 등 고급 편집

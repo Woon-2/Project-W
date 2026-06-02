@@ -62,6 +62,12 @@ void Camera::update(Milliseconds deltaTime) {
 	view_ = mu::lookAt(eye_, at_, mu::NVec3(0.f, 1.f, 0.f));
 }
 
+void MU_CALLCONV Camera::setView(mu::Vec3 eye, mu::Vec3 at) {
+	eye_ = eye;
+	at_  = at;
+	view_ = mu::lookAt(eye, at, mu::NVec3(0.f, 1.f, 0.f));
+}
+
 void Camera::updateGFX(GFX& gfx) {
 	gfx.addCameraData(PBRPipeline::CameraData{
 		.view = view_,

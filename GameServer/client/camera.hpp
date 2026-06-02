@@ -26,6 +26,9 @@ public:
 	void update(Milliseconds deltaTime);
 	void updateGFX(GFX& gfx);
 
+	// 타겟 추종 로직과 무관하게 view를 직접 설정한다(로비 대기실 정적 카메라 등).
+	void MU_CALLCONV setView(mu::Vec3 eye, mu::Vec3 at);
+
 	void setPhysicsWorld(PhysicsWorld* pw) { physicsWorld_ = pw; }
 
 	void setPerspective(mu::Degree fovy, float aspect, float nearz, float farz);
