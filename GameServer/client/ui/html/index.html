@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project-W 로비</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app-shell">
+    <section id="mainView" class="panel" aria-labelledby="mainTitle">
+      <div class="panel-header">
+        <p class="eyebrow">Project-W Multiplayer</p>
+        <h1 id="mainTitle">비공개 로비</h1>
+      </div>
+
+      <div class="menu-stack">
+        <button id="createRoomButton" class="button button-primary" type="button">
+          방 만들기
+          <span>Create Room</span>
+        </button>
+
+        <form id="joinRoomForm" class="join-box" autocomplete="off">
+          <label for="roomCodeInput">방 참가</label>
+          <div class="join-row">
+            <input id="roomCodeInput" name="roomCode" type="text" maxlength="6" inputmode="latin" placeholder="JOIN01" aria-label="6자리 방 코드">
+            <button class="button button-secondary" type="submit">참가</button>
+          </div>
+        </form>
+
+        <div class="menu-row">
+          <button id="settingsButton" class="button button-quiet" type="button">설정</button>
+          <button id="quitButton" class="button button-quiet" type="button">종료</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="lobbyView" class="panel is-hidden" aria-labelledby="lobbyTitle">
+      <div class="panel-header lobby-header">
+        <div>
+          <p class="eyebrow">Private Room</p>
+          <h1 id="lobbyTitle">대기실</h1>
+        </div>
+        <div class="player-count" id="playerCount">1 / 4</div>
+      </div>
+
+      <div class="room-code-area" aria-live="polite">
+        <span>방 코드</span>
+        <strong id="roomCodeText">------</strong>
+        <button id="copyCodeButton" class="button button-secondary" type="button">코드 복사</button>
+      </div>
+
+      <div id="playerSlots" class="player-slots" aria-label="플레이어 슬롯"></div>
+
+      <div id="hostActionArea" class="host-action-area"></div>
+
+      <div class="lobby-actions">
+        <button id="leaveRoomButton" class="button button-quiet" type="button">방 나가기</button>
+      </div>
+
+      <div class="debug-tools" aria-label="목업 플레이어 시뮬레이션">
+        <span>Mock</span>
+        <button id="addDummyButton" class="button button-small" type="button">더미 추가</button>
+        <button id="removeDummyButton" class="button button-small" type="button">더미 제거</button>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="transitionOverlay" class="transition-overlay is-hidden" aria-live="assertive">
+    <div class="loader"></div>
+    <p>RoomServer로 접속 중...</p>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
