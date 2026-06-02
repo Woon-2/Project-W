@@ -209,10 +209,38 @@ function createPlayerSlot(player, index) {
   const slot = document.createElement("div");
   slot.className = "player-slot";
 
-  const avatar = document.createElement("div");
-  avatar.className = "avatar";
+  const slotNumber = document.createElement("div");
+  slotNumber.className = "slot-number";
+  slotNumber.textContent = String(index + 1).padStart(2, "0");
 
-  const name = document.createElement("div");
+  const modelBay = document.createElement("div");
+  modelBay.className = "model-bay";
+
+  const character = document.createElement("div");
+  character.className = "slot-character";
+
+  [
+    ["head", "model-head"],
+    ["torso", "model-torso"],
+    ["arm", "model-arm model-arm-left"],
+    ["arm", "model-arm model-arm-right"],
+    ["leg", "model-leg model-leg-left"],
+    ["leg", "model-leg model-leg-right"]
+  ].forEach(([, className]) => {
+    const part = document.createElement("div");
+    part.className = `model-part ${className}`;
+    character.appendChild(part);
+  });
+
+  const platform = document.createElement("div");
+  platform.className = "model-platform";
+
+  modelBay.append(character, platform);
+
+  const info = document.createElement("div");
+  info.className = "player-nameplate";
+
+  const name = document.createElement("strong");
   name.className = "player-name";
 
   const badge = document.createElement("div");
@@ -220,16 +248,15 @@ function createPlayerSlot(player, index) {
 
   if (!player) {
     slot.classList.add("is-empty");
-    avatar.textContent = index + 1;
-    name.textContent = "비어있음";
+    name.textContent = "대기 중";
     badge.textContent = "";
   } else {
-    avatar.textContent = player.name.charAt(0).toUpperCase();
     name.textContent = player.name;
     badge.textContent = player.id === state.hostId ? "👑 호스트" : "";
   }
 
-  slot.append(avatar, name, badge);
+  info.append(name, badge);
+  slot.append(slotNumber, modelBay, info);
   return slot;
 }
 

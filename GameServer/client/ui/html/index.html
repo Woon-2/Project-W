@@ -35,7 +35,7 @@
       </div>
     </section>
 
-    <section id="lobbyView" class="panel is-hidden" aria-labelledby="lobbyTitle">
+    <section id="lobbyView" class="panel lobby-panel is-hidden" aria-labelledby="lobbyTitle">
       <div class="panel-header lobby-header">
         <div>
           <p class="eyebrow">Private Room</p>
@@ -44,24 +44,28 @@
         <div class="player-count" id="playerCount">1 / 4</div>
       </div>
 
-      <div class="room-code-area" aria-live="polite">
-        <span>방 코드</span>
-        <strong id="roomCodeText">------</strong>
-        <button id="copyCodeButton" class="button button-secondary" type="button">코드 복사</button>
-      </div>
+      <div class="lobby-layout">
+        <div class="lobby-toolbar">
+          <div class="room-code-area" aria-live="polite">
+            <span>방 코드</span>
+            <strong id="roomCodeText">------</strong>
+            <button id="copyCodeButton" class="button button-secondary" type="button">코드 복사</button>
+          </div>
 
-      <div id="playerSlots" class="player-slots" aria-label="플레이어 슬롯"></div>
+          <div id="hostActionArea" class="host-action-area"></div>
 
-      <div id="hostActionArea" class="host-action-area"></div>
+          <div class="lobby-actions">
+            <button id="leaveRoomButton" class="button button-quiet" type="button">방 나가기</button>
+          </div>
+        </div>
 
-      <div class="lobby-actions">
-        <button id="leaveRoomButton" class="button button-quiet" type="button">방 나가기</button>
-      </div>
+        <div id="playerSlots" class="player-slots squad-stage" aria-label="플레이어 캐릭터 모델"></div>
 
-      <div class="debug-tools" aria-label="목업 플레이어 시뮬레이션">
-        <span>Mock</span>
-        <button id="addDummyButton" class="button button-small" type="button">더미 추가</button>
-        <button id="removeDummyButton" class="button button-small" type="button">더미 제거</button>
+        <div class="debug-tools" aria-label="목업 플레이어 시뮬레이션">
+          <span>Mock</span>
+          <button id="addDummyButton" class="button button-small" type="button">더미 추가</button>
+          <button id="removeDummyButton" class="button button-small" type="button">더미 제거</button>
+        </div>
       </div>
     </section>
   </main>
@@ -72,6 +76,6 @@
     <p>RoomServer로 접속 중...</p>
   </div>
 
-  <script src="script.js"></script>
+  <script src="script.js?v=squad-models"></script>
 </body>
 </html>

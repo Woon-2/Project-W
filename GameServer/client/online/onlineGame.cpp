@@ -91,17 +91,23 @@ Game::~Game() {
 	assetLoadAbort_.store(true, std::memory_order_relaxed);
 }
 
-void Game::setupStage() {
-	const auto path = std::filesystem::path("../resources/levels/level.bin");
-	auto ifs = std::ifstream(path, std::ios::binary);
-	DISPLAY_ERROR_STR(ifs.good(), "[File I/O Error]: loadModelFromFile: "s + path.string() + " 파일을 열 수 없습니다."s, true);
+void Game::setupStageVisual() {
+	if (stageVisualReady_) {
+		return;
+	}
 
-	readHeadTag(ifs, "Level");
-	const auto nodeCnt = readInteger(ifs, "NodeCnt");
+	// 레벨(level.bin) 파싱 — PlayerStart 등 노드 정보를 읽는다(스폰 위치 캡처).
+	{
+		const auto path = std::filesystem::path("../resources/levels/level.bin");
+		auto ifs = std::ifstream(path, std::ios::binary);
+		DISPLAY_ERROR_STR(ifs.good(), "[File I/O Error]: setupStageVisual: "s + path.string() + " 파일을 열 수 없습니다."s, true);
 
-	importNode(ifs);
-
-	readTailTag(ifs, "Level");
+		readHeadTag(ifs, "Level");
+		const auto nodeCnt = readInteger(ifs, "NodeCnt");
+		stageSpawnPositions_.clear();
+		importNode(ifs);
+		readTailTag(ifs, "Level");
+	}
 
 	// 지형 청크 스트리밍 매니저 초기화 (팔레트 + 인덱스 로드, 동기 baseline 로드).
 	chunkManager_.init(gfx_, physicsWorld_, &threadPool_, "../resources/terrains/");
@@ -114,6 +120,34 @@ void Game::setupStage() {
 	dirLight_.intensity = 2.f;
 	dirLight_.type = PBRPipeline::LightData::Type::DirectionalLight;
 	dirLight_.isMainDirectionalLight = true;
+
+	// 대기실 카메라 포커스: 스폰 위치 평균 XZ를 지형 높이에 앉힌다(없으면 지형 중심).
+	if (!stageSpawnPositions_.empty()) {
+		float sx = 0.f, sz = 0.f;
+		for (const auto& p : stageSpawnPositions_) { sx += p.x(); sz += p.z(); }
+		const float n = static_cast<float>(stageSpawnPositions_.size());
+		const float cx = sx / n, cz = sz / n;
+		stageFocus_ = mu::Vec3(cx, chunkManager_.heightAtWorld(cx, cz), cz);
+	} else {
+		stageFocus_ = chunkManager_.worldCenter();
+	}
+
+	// [임시 진단] 3D 배경이 안 보이는 원인 추적용 로그.
+	const auto* cube = assetManager_.modelCube();
+	const mu::Vec3 wc = chunkManager_.worldCenter();
+	gSharedLog << "[Lobby3D] setupStageVisual: spawns=" << stageSpawnPositions_.size()
+	           << " focus=(" << stageFocus_.x() << ", " << stageFocus_.y() << ", " << stageFocus_.z() << ")"
+	           << " worldCenter=(" << wc.x() << ", " << wc.y() << ", " << wc.z() << ")"
+	           << " chunkEmpty=" << (chunkManager_.empty() ? 1 : 0)
+	           << " cubeMeshes=" << (cube ? cube->meshWithDressXforms.size() : 0)
+	           << "\n";
+
+	stageVisualReady_ = true;
+}
+
+void Game::setupStage() {
+	// 레벨 파싱 + 지형/스카이박스/방향광 (대기실 배경과 공유, 1회만 init).
+	setupStageVisual();
 
 	// UIManager 기본 리소스(setScreenSize / requestDebugResources)는
 	// enterLobby에서 이미 초기화되었다.
@@ -210,6 +244,10 @@ void Game::importNode(std::ifstream& ifs) {
 		// Terrain is now streamed by TerrainChunkManager (chunks_index.bin).
 		// Consume the legacy ManifestPath field to keep the scene stream aligned, then ignore.
 		readText(ifs, "ManifestPath");
+	}
+	else if (type == "PlayerStart") {
+		// 플레이어 스폰 위치(대기실 3D 카메라 포커스/캐릭터 배치에 사용).
+		stageSpawnPositions_.push_back(mu::Vec3(worldT.x, worldT.y, worldT.z));
 	}
 	else {
 		// no-op
@@ -2574,11 +2612,71 @@ void Game::enterLobby() {
 		uiBaseReady_ = true;
 	}
 
+	// 로비 UI 텍스처(배경/로고)는 메인 스레드에서 즉시 로드한다.
+	// (buildLobbyUI가 이 텍스처를 위젯에 연결하므로 빌드 전에 로드해야 한다.)
+	loadLobbyTextures();
+
 	buildLobbyUI();
 	refreshLobbyUI();
 
 	// 최소 로드로 로비 진입 후, 인게임 리소스를 백그라운드로 로드한다.
 	startInGameAssetLoad();
+}
+
+void Game::loadLobbyTextures() {
+	gfx_.addRequestTextureLoad(RequestTextureLoad{
+		.name            = "LobbyBg",
+		.texturePath     = "../resources/UI/ui_lobby_bg.dds",
+		.pDest           = &lobbyBgTex_,
+		.pTexHashMap     = &lobbyTexHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	});
+	gfx_.addRequestTextureLoad(RequestTextureLoad{
+		.name            = "LobbyLogo",
+		.texturePath     = "../resources/UI/ui_lobby_logo.dds",
+		.pDest           = &lobbyLogoTex_,
+		.pTexHashMap     = &lobbyTexHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	});
+
+	// 9-slice UI 프레임(패널/버튼/입력창) — 클램프 샘플러로 모서리 번짐 방지.
+	gfx_.addRequestTextureLoad(RequestTextureLoad{
+		.name            = "LobbyPanel",
+		.texturePath     = "../resources/UI/ui_panel_frame.dds",
+		.pDest           = &lobbyPanelTex_,
+		.pTexHashMap     = &lobbyTexHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	});
+	gfx_.addRequestTextureLoad(RequestTextureLoad{
+		.name            = "LobbyBtnPrimary",
+		.texturePath     = "../resources/UI/ui_btn_primary.dds",
+		.pDest           = &lobbyBtnPrimaryTex_,
+		.pTexHashMap     = &lobbyTexHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	});
+	gfx_.addRequestTextureLoad(RequestTextureLoad{
+		.name            = "LobbyBtnSecondary",
+		.texturePath     = "../resources/UI/ui_btn_secondary.dds",
+		.pDest           = &lobbyBtnSecondaryTex_,
+		.pTexHashMap     = &lobbyTexHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	});
+	gfx_.addRequestTextureLoad(RequestTextureLoad{
+		.name            = "LobbyInput",
+		.texturePath     = "../resources/UI/ui_input.dds",
+		.pDest           = &lobbyInputTex_,
+		.pTexHashMap     = &lobbyTexHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	});
+
+	// 인게임 백그라운드 로드가 시작되기 전(요청 큐가 비어 있을 때) 즉시 처리한다.
+	gfx_.loadRequestedAssets();
 }
 
 void Game::startInGameAssetLoad() {
@@ -2682,6 +2780,20 @@ void Game::buildLobbyUI() {
 
 	const float screenW = uiManager_.screenWidth();
 	const float screenH = uiManager_.screenHeight();
+	const float mainPanelW = std::min(560.f, std::max(360.f, screenW - 40.f));
+	const float mainPanelH = 500.f;
+	// 대기실은 3D 맵 위에 얹히는 넓은 스쿼드 스테이지 레이아웃.
+	const float roomPanelW = std::min(1120.f, std::max(640.f, screenW - 40.f));
+	const float roomPanelH = std::min(700.f,  std::max(460.f, screenH - 40.f));
+
+	const XMFLOAT4 skyBlue     = { 0.529f, 0.808f, 0.980f, 1.f };
+	const XMFLOAT4 ink         = { 0.090f, 0.125f, 0.200f, 1.f };
+	const XMFLOAT4 muted       = { 0.384f, 0.439f, 0.518f, 1.f };
+	const XMFLOAT4 surface     = { 1.000f, 1.000f, 1.000f, 1.f };
+	const XMFLOAT4 surfaceSoft = { 0.953f, 0.976f, 0.992f, 1.f };
+	const XMFLOAT4 primary     = { 0.082f, 0.365f, 0.545f, 1.f };
+	const XMFLOAT4 primaryDark = { 0.055f, 0.286f, 0.435f, 1.f };
+	const XMFLOAT4 primarySoft = { 0.847f, 0.937f, 0.988f, 1.f };
 
 	lobbyRoot_ = root->addChild(std::make_unique<UI::UIElement>());
 	lobbyRoot_->name    = "lobbyRoot";
@@ -2692,49 +2804,121 @@ void Game::buildLobbyUI() {
 	lobbyRoot_->width   = UI::DimValue::px(screenW);
 	lobbyRoot_->height  = UI::DimValue::px(screenH);
 
+	auto applyRect = [](UI::UIElement* e, UI::Anchor anchor, UI::Pivot pivot,
+	                    float x, float y, float w, float h) {
+		e->anchor  = anchor;
+		e->pivot   = pivot;
+		e->offsetX = UI::DimValue::px(x);
+		e->offsetY = UI::DimValue::px(y);
+		e->width   = UI::DimValue::px(w);
+		e->height  = UI::DimValue::px(h);
+	};
+
+	auto makeSolid = [&](UI::UIElement* parent, const std::string& name,
+	                     float x, float y, float w, float h, XMFLOAT4 color,
+	                     int zOrder = 0) -> UI::Button* {
+		auto* block = static_cast<UI::Button*>(parent->addChild(std::make_unique<UI::Button>()));
+		block->name = name;
+		applyRect(block, UI::Anchors::TopLeft, UI::Pivots::TopLeft, x, y, w, h);
+		block->interactive = false;
+		block->bgColor = color;
+		block->zOrder = zOrder;
+		return block;
+	};
+
+	auto makeGroup = [&](UI::UIElement* parent, const std::string& name,
+	                     float w, float h) -> UI::UIElement* {
+		auto* group = parent->addChild(std::make_unique<UI::UIElement>());
+		group->name = name;
+		applyRect(group, UI::Anchors::Center, UI::Pivots::Center, 0.f, 0.f, w, h);
+		return group;
+	};
+
 	auto makeLabel = [&](UI::UIElement* parent, const std::wstring& text,
-	                     float offY, float fontSize, float w, float h) -> UI::Label* {
+	                     float x, float y, float fontSize, float w, float h,
+	                     XMFLOAT4 color, UI::TextHAlign hAlign = UI::TextHAlign::Leading,
+	                     int zOrder = 1) -> UI::Label* {
 		auto* lbl = static_cast<UI::Label*>(parent->addChild(std::make_unique<UI::Label>()));
-		lbl->anchor  = UI::Anchors::Center;
-		lbl->pivot   = UI::Pivots::Center;
-		lbl->offsetX = UI::DimValue::px(0.f);
-		lbl->offsetY = UI::DimValue::px(offY);
-		lbl->width   = UI::DimValue::px(w);
-		lbl->height  = UI::DimValue::px(h);
-		lbl->setTextHAlign(UI::TextHAlign::Center);
+		applyRect(lbl, UI::Anchors::TopLeft, UI::Pivots::TopLeft, x, y, w, h);
+		lbl->setTextHAlign(hAlign);
 		lbl->setTextVAlign(UI::TextVAlign::Center);
 		lbl->setFontSize(fontSize);
-		lbl->setTextColor(1.f, 1.f, 1.f, 1.f);
+		lbl->setTextColor(color.x, color.y, color.z, color.w);
 		lbl->setText(text);
+		lbl->zOrder = zOrder;
 		return lbl;
 	};
 
 	auto makeButton = [&](UI::UIElement* parent, const std::wstring& text,
-	                      float offY, std::function<void()> onClick) -> UI::Button* {
+	                      float x, float y, float w, float h,
+	                      XMFLOAT4 normal, XMFLOAT4 hovered, XMFLOAT4 pressed,
+	                      float fontSize, std::function<void()> onClick,
+	                      XMFLOAT4 textColor) -> UI::Button* {
 		auto* btn = static_cast<UI::Button*>(parent->addChild(std::make_unique<UI::Button>()));
-		btn->anchor  = UI::Anchors::Center;
-		btn->pivot   = UI::Pivots::Center;
-		btn->offsetX = UI::DimValue::px(0.f);
-		btn->offsetY = UI::DimValue::px(offY);
-		btn->width   = UI::DimValue::px(280.f);
-		btn->height  = UI::DimValue::px(54.f);
-		btn->bgColor        = { 0.18f, 0.22f, 0.35f, 0.95f };
-		btn->bgColorHovered = { 0.28f, 0.34f, 0.52f, 1.f };
-		btn->bgColorPressed = { 0.12f, 0.15f, 0.25f, 1.f };
+		applyRect(btn, UI::Anchors::TopLeft, UI::Pivots::TopLeft, x, y, w, h);
+		btn->bgColor        = normal;
+		btn->bgColorHovered = hovered;
+		btn->bgColorPressed = pressed;
 		btn->onClick = std::move(onClick);
+		btn->zOrder = 1;
 
 		auto* lbl = static_cast<UI::Label*>(btn->addChild(std::make_unique<UI::Label>()));
-		lbl->anchor  = UI::Anchors::Center;
-		lbl->pivot   = UI::Pivots::Center;
-		lbl->width   = UI::DimValue::px(280.f);
-		lbl->height  = UI::DimValue::px(54.f);
+		applyRect(lbl, UI::Anchors::TopLeft, UI::Pivots::TopLeft, 0.f, 0.f, w, h);
 		lbl->setTextHAlign(UI::TextHAlign::Center);
 		lbl->setTextVAlign(UI::TextVAlign::Center);
-		lbl->setFontSize(22.f);
-		lbl->setTextColor(1.f, 1.f, 1.f, 1.f);
+		lbl->setFontSize(fontSize);
+		lbl->setTextColor(textColor.x, textColor.y, textColor.z, textColor.w);
 		lbl->setText(text);
 		return btn;
 	};
+
+	// 9-slice 텍스처 스타일 적용 헬퍼. 텍스처 로드 실패 시 기존 단색을 그대로 둔다.
+	// (slice 경계/코너 px는 에셋 모양에 맞춘 튜닝값 — 어색하면 이 숫자만 조정.)
+	auto stylePanel = [&](UI::Button* b) -> UI::Button* {
+		if (b && lobbyPanelTex_.res) {
+			b->texNormal = &lobbyPanelTex_;
+			b->sliceUvBorderX = 0.30f; b->sliceUvBorderY = 0.30f;
+			b->sliceCornerX = 40.f;    b->sliceCornerY = 40.f;
+		}
+		return b;
+	};
+	auto stylePrimary = [&](UI::Button* b) -> UI::Button* {
+		if (b && lobbyBtnPrimaryTex_.res) {
+			b->texNormal = &lobbyBtnPrimaryTex_;
+			b->sliceUvBorderX = 0.40f; b->sliceUvBorderY = 0.40f;
+			b->sliceCornerX = 22.f;    b->sliceCornerY = 22.f;
+		}
+		return b;
+	};
+	auto styleSecondary = [&](UI::Button* b) -> UI::Button* {
+		if (b && lobbyBtnSecondaryTex_.res) {
+			b->texNormal = &lobbyBtnSecondaryTex_;
+			b->sliceUvBorderX = 0.40f; b->sliceUvBorderY = 0.40f;
+			b->sliceCornerX = 22.f;    b->sliceCornerY = 22.f;
+		}
+		return b;
+	};
+
+	// 배경: 텍스처 로드 실패에 대비해 단색 sky를 가장 뒤(-11)에 깔고,
+	// 그 위(-10)에 키 아트를 cover 스케일(종횡비 유지 + 화면 덮기)로 올린다.
+	lobbySkyBg_ = makeSolid(lobbyRoot_, "lobbySkyBackground", 0.f, 0.f, screenW, screenH, skyBlue, -11);
+	if (lobbyBgTex_.res) {
+		const float bgAspect = 1672.f / 941.f;   // ui_lobby_bg.dds 원본 비율
+		float bgW, bgH;
+		if (screenW / screenH < bgAspect) {       // 화면이 더 세로로 길면 높이 기준
+			bgH = screenH;
+			bgW = screenH * bgAspect;
+		} else {                                   // 화면이 더 가로로 길면 너비 기준
+			bgW = screenW;
+			bgH = screenW / bgAspect;
+		}
+		auto* bg = static_cast<UI::Image*>(lobbyRoot_->addChild(std::make_unique<UI::Image>()));
+		bg->name    = "lobbyBgImage";
+		applyRect(bg, UI::Anchors::Center, UI::Pivots::Center, 0.f, 0.f, bgW, bgH);
+		bg->texture = &lobbyBgTex_;
+		bg->zOrder  = -10;
+		lobbyBgImage_ = bg;
+	}
 
 	// ---- 메인 메뉴 (mainView) ----
 	mainMenuRoot_ = lobbyRoot_->addChild(std::make_unique<UI::UIElement>());
@@ -2744,21 +2928,46 @@ void Game::buildLobbyUI() {
 	mainMenuRoot_->width  = UI::DimValue::px(screenW);
 	mainMenuRoot_->height = UI::DimValue::px(screenH);
 
-	makeLabel (mainMenuRoot_, L"비공개 로비", -210.f, 36.f, 600.f, 60.f);
-	makeButton(mainMenuRoot_, L"방 만들기",   -120.f, [this]() { lobbyCreateRoom(); });
+	// 게임 로고(OutLander) — 메인 패널 위쪽 중앙에 배치(투명 PNG 기반 텍스처).
+	if (lobbyLogoTex_.res) {
+		const float logoAspect = 2172.f / 724.f;          // ui_lobby_logo.dds 원본 비율(약 3:1)
+		const float logoH = 110.f;
+		const float logoW = logoH * logoAspect;
+		auto* logo = static_cast<UI::Image*>(mainMenuRoot_->addChild(std::make_unique<UI::Image>()));
+		logo->name    = "lobbyLogoImage";
+		applyRect(logo, UI::Anchors::Center, UI::Pivots::BottomCenter,
+			0.f, -(mainPanelH * 0.5f + 16.f), logoW, logoH);
+		logo->texture = &lobbyLogoTex_;
+		logo->zOrder  = 5;
+		lobbyLogoImage_ = logo;
+	}
+
+	auto* mainPanel = makeGroup(mainMenuRoot_, "mainPanel", mainPanelW, mainPanelH);
+	stylePanel(makeSolid(mainPanel, "mainPanelBg", 0.f, 0.f, mainPanelW, mainPanelH, surface));
+	makeLabel(mainPanel, L"PROJECT-W MULTIPLAYER", 34.f, 30.f, 13.f, mainPanelW - 68.f, 24.f, primary);
+	makeLabel(mainPanel, L"비공개 로비", 34.f, 56.f, 42.f, mainPanelW - 68.f, 58.f, ink);
+
+	auto* createBtn = makeButton(mainPanel, L"", 34.f, 132.f, mainPanelW - 68.f, 72.f,
+		primary, primaryDark, primaryDark, 22.f, [this]() { lobbyCreateRoom(); },
+		{ 1.f, 1.f, 1.f, 1.f });
+	stylePrimary(createBtn);
+	makeLabel(createBtn, L"방 만들기", 18.f, 0.f, 24.f, 220.f, 72.f, { 1.f, 1.f, 1.f, 1.f });
+	makeLabel(createBtn, L"Create Room", mainPanelW - 220.f, 0.f, 13.f, 130.f, 72.f,
+		{ 1.f, 1.f, 1.f, 0.82f }, UI::TextHAlign::Trailing);
 
 	// 방 코드 입력 + 참가 (프로토타입 joinRoomForm 대응)
-	makeLabel(mainMenuRoot_, L"방 코드로 참가", -56.f, 18.f, 360.f, 28.f);
+	makeSolid(mainPanel, "joinBox", 34.f, 220.f, mainPanelW - 68.f, 116.f, surfaceSoft);
+	makeLabel(mainPanel, L"방 코드로 참가", 52.f, 234.f, 18.f, 240.f, 28.f, ink);
 	{
 		roomCodeInput_ = static_cast<UI::TextInput*>(
-			mainMenuRoot_->addChild(std::make_unique<UI::TextInput>()));
+			mainPanel->addChild(std::make_unique<UI::TextInput>()));
 		roomCodeInput_->name    = "roomCodeInput";
-		roomCodeInput_->anchor  = UI::Anchors::Center;
-		roomCodeInput_->pivot   = UI::Pivots::Center;
-		roomCodeInput_->offsetX = UI::DimValue::px(-70.f);
-		roomCodeInput_->offsetY = UI::DimValue::px(-18.f);
-		roomCodeInput_->width   = UI::DimValue::px(180.f);
-		roomCodeInput_->height  = UI::DimValue::px(48.f);
+		applyRect(roomCodeInput_, UI::Anchors::TopLeft, UI::Pivots::TopLeft,
+			52.f, 274.f, mainPanelW - 232.f, 48.f);
+		roomCodeInput_->bgColor        = { 1.f, 1.f, 1.f, 1.f };
+		roomCodeInput_->bgColorFocused = { 0.953f, 0.976f, 0.992f, 1.f };
+		roomCodeInput_->textColor        = ink;
+		roomCodeInput_->placeholderColor = muted;
 		roomCodeInput_->uppercase = true;
 		roomCodeInput_->alnumOnly = true;
 		roomCodeInput_->setMaxLength(6);
@@ -2766,42 +2975,52 @@ void Game::buildLobbyUI() {
 		roomCodeInput_->onSubmit = [this](const std::wstring& code) {
 			lobbyJoinRoom(std::string(code.begin(), code.end()));
 		};
+		if (lobbyInputTex_.res) {
+			roomCodeInput_->backgroundTex  = &lobbyInputTex_;
+			roomCodeInput_->sliceUvBorderX = 0.15f;
+			roomCodeInput_->sliceUvBorderY = 0.42f;
+			roomCodeInput_->sliceCornerX   = 18.f;
+			roomCodeInput_->sliceCornerY   = 18.f;
+			roomCodeInput_->texTintFocused = { 1.10f, 1.10f, 1.10f, 1.f };
+		}
 
-		auto* joinBtn = static_cast<UI::Button*>(
-			mainMenuRoot_->addChild(std::make_unique<UI::Button>()));
+		auto* joinBtn = makeButton(mainPanel, L"참가", mainPanelW - 146.f, 274.f, 94.f, 48.f,
+			primary, primaryDark, primaryDark, 20.f, [this]() {
+				const std::wstring& w = roomCodeInput_->text();
+				lobbyJoinRoom(std::string(w.begin(), w.end()));
+			}, { 1.f, 1.f, 1.f, 1.f });
 		joinBtn->name    = "joinButton";
-		joinBtn->anchor  = UI::Anchors::Center;
-		joinBtn->pivot   = UI::Pivots::Center;
-		joinBtn->offsetX = UI::DimValue::px(110.f);
-		joinBtn->offsetY = UI::DimValue::px(-18.f);
-		joinBtn->width   = UI::DimValue::px(100.f);
-		joinBtn->height  = UI::DimValue::px(48.f);
-		joinBtn->bgColor        = { 0.18f, 0.22f, 0.35f, 0.95f };
-		joinBtn->bgColorHovered = { 0.28f, 0.34f, 0.52f, 1.f };
-		joinBtn->bgColorPressed = { 0.12f, 0.15f, 0.25f, 1.f };
-		joinBtn->onClick = [this]() {
-			const std::wstring& w = roomCodeInput_->text();
-			lobbyJoinRoom(std::string(w.begin(), w.end()));
-		};
-		auto* joinLbl = static_cast<UI::Label*>(
-			joinBtn->addChild(std::make_unique<UI::Label>()));
-		joinLbl->anchor  = UI::Anchors::Center;
-		joinLbl->pivot   = UI::Pivots::Center;
-		joinLbl->width   = UI::DimValue::px(100.f);
-		joinLbl->height  = UI::DimValue::px(48.f);
-		joinLbl->setTextHAlign(UI::TextHAlign::Center);
-		joinLbl->setTextVAlign(UI::TextVAlign::Center);
-		joinLbl->setFontSize(20.f);
-		joinLbl->setText(L"참가");
+		stylePrimary(joinBtn);
 	}
 
-	mainMenuMsgLabel_ = makeLabel(mainMenuRoot_, L"", 28.f, 18.f, 520.f, 28.f);
-	mainMenuMsgLabel_->setTextColor(1.f, 0.6f, 0.3f, 1.f);
+	mainMenuMsgLabel_ = makeLabel(mainPanel, L"", 34.f, 348.f, 18.f, mainPanelW - 68.f, 30.f,
+		{ 0.70f, 0.24f, 0.24f, 1.f }, UI::TextHAlign::Center);
 
-	makeButton(mainMenuRoot_, L"설정", 90.f, []() { gSharedLog << "[Lobby] 설정 (준비 중)\n"; });
-	makeButton(mainMenuRoot_, L"종료", 160.f, []() { PostQuitMessage(0); });
+	const float quietW = (mainPanelW - 80.f) * 0.5f;
+	styleSecondary(makeButton(mainPanel, L"설정", 34.f, 392.f, quietW, 48.f,
+		surfaceSoft, { 0.847f, 0.937f, 0.988f, 1.f }, primarySoft, 20.f,
+		[]() { gSharedLog << "[Lobby] 설정 (준비 중)\n"; }, ink));
+	styleSecondary(makeButton(mainPanel, L"종료", 46.f + quietW, 392.f, quietW, 48.f,
+		surfaceSoft, { 0.847f, 0.937f, 0.988f, 1.f }, primarySoft, 20.f,
+		[]() { PostQuitMessage(0); }, ink));
 
-	// ---- 대기실 (lobbyView) ----
+	// ---- 대기실 (lobbyView) : 3D 맵 위에 얹히는 반투명 스쿼드 스테이지 ----
+	// 색상은 밝은 3D 배경 위 가독성을 위해 어두운 반투명 scrim + 밝은 텍스트로 구성한다.
+	const XMFLOAT4 textLight   = { 0.95f, 0.97f, 1.00f, 1.f };
+	const XMFLOAT4 textMuted   = { 0.78f, 0.84f, 0.92f, 1.f };
+	const XMFLOAT4 buttonInk   = { 0.07f, 0.11f, 0.18f, 1.f };
+	const XMFLOAT4 scrimBar    = { 0.06f, 0.09f, 0.14f, 0.52f };  // 툴바/이름표 배경
+	const XMFLOAT4 slotFill    = { 0.10f, 0.14f, 0.20f, 0.26f };  // 슬롯 컬럼(캐릭터/맵이 비쳐 보임)
+	const XMFLOAT4 slotFillEmp = { 0.10f, 0.14f, 0.20f, 0.14f };  // 빈 슬롯(더 투명)
+	const XMFLOAT4 wrBtnAlpha  = { 1.f, 1.f, 1.f, 0.92f };        // 텍스처 버튼 반투명 틴트
+
+	// 텍스처 버튼에 반투명 틴트를 입히는 헬퍼(stylePrimary/Secondary 적용 이후 호출).
+	auto fadeBtn = [&](UI::Button* b) -> UI::Button* {
+		if (b) { b->texTint = wrBtnAlpha; b->texTintHovered = { 1.08f, 1.08f, 1.08f, 0.96f };
+		         b->texTintPressed = { 0.82f, 0.82f, 0.82f, 0.96f }; }
+		return b;
+	};
+
 	waitingRoomRoot_ = lobbyRoot_->addChild(std::make_unique<UI::UIElement>());
 	waitingRoomRoot_->name   = "waitingRoomRoot";
 	waitingRoomRoot_->anchor = UI::Anchors::TopLeft;
@@ -2809,25 +3028,94 @@ void Game::buildLobbyUI() {
 	waitingRoomRoot_->width  = UI::DimValue::px(screenW);
 	waitingRoomRoot_->height = UI::DimValue::px(screenH);
 
-	makeLabel(waitingRoomRoot_, L"대기실", -230.f, 32.f, 400.f, 50.f);
-	roomCodeLabel_    = makeLabel(waitingRoomRoot_, L"방 코드: ------", -180.f, 24.f, 500.f, 40.f);
-	playerCountLabel_ = makeLabel(waitingRoomRoot_, L"1 / 4",           -140.f, 20.f, 200.f, 32.f);
+	auto* roomPanel = makeGroup(waitingRoomRoot_, "waitingRoomPanel", roomPanelW, roomPanelH);
 
-	for (int i = 0; i < kMaxLobbyPlayers; ++i) {
-		slotLabels_[i] = makeLabel(waitingRoomRoot_, L"비어있음",
-			-90.f + static_cast<float>(i) * 40.f, 20.f, 360.f, 34.f);
-	}
+	const float pad   = 28.f;
+	const float gap   = 12.f;
+	const float innerW = roomPanelW - 2.f * pad;
 
-	startGameButton_ = makeButton(waitingRoomRoot_, L"게임 시작", 110.f,
-		[this]() { lobbyStartGame(); });
+	// 헤더
+	makeLabel(roomPanel, L"PRIVATE ROOM", pad, 18.f, 13.f, 280.f, 22.f, textLight);
+	makeLabel(roomPanel, L"대기실", pad, 40.f, 40.f, 320.f, 54.f, textLight);
+	makeSolid(roomPanel, "playerCountBadgeBg", roomPanelW - pad - 92.f, 30.f, 92.f, 44.f, scrimBar);
+	playerCountLabel_ = makeLabel(roomPanel, L"1 / 4", roomPanelW - pad - 92.f, 30.f, 22.f, 92.f, 44.f,
+		textLight, UI::TextHAlign::Center);
+
+	// 툴바: [방 코드 + 복사] [호스트 액션] [방 나가기]
+	const float toolbarY = 102.f;
+	const float toolbarH = 72.f;
+	const float leaveW   = 150.f;
+	const float hostW    = 220.f;
+	const float codeW    = innerW - hostW - leaveW - 2.f * gap;
+	const float hostX    = pad + codeW + gap;
+	const float leaveX   = hostX + hostW + gap;
+
+	// 방 코드 영역
+	makeSolid(roomPanel, "roomCodeArea", pad, toolbarY, codeW, toolbarH, scrimBar);
+	makeLabel(roomPanel, L"방 코드", pad + 18.f, toolbarY + 10.f, 13.f, 160.f, 20.f, textMuted);
+	roomCodeLabel_ = makeLabel(roomPanel, L"------", pad + 18.f, toolbarY + 28.f, 34.f,
+		codeW - 150.f, 40.f, textLight);
+	fadeBtn(stylePrimary(makeButton(roomPanel, L"코드 복사",
+		pad + codeW - 124.f, toolbarY + 12.f, 112.f, toolbarH - 24.f,
+		primary, primaryDark, primaryDark, 16.f,
+		[this]() { gSharedLog << "[Lobby] 방 코드: " << roomCode_ << "\n"; }, textLight)));
+
+	// 호스트 액션: 게임 시작 버튼 / 대기 메시지(겹쳐 두고 refreshLobbyUI에서 토글)
+	startGameButton_ = makeButton(roomPanel, L"게임 시작", hostX, toolbarY, hostW, toolbarH,
+		primary, primaryDark, primaryDark, 22.f, [this]() { lobbyStartGame(); }, textLight);
+	fadeBtn(stylePrimary(startGameButton_));
 	startGameLabel_  = static_cast<UI::Label*>(startGameButton_->children().front().get());
 
-	hostStatusLabel_ = makeLabel(waitingRoomRoot_, L"호스트가 시작하기를 기다리는 중...",
-		110.f, 20.f, 520.f, 34.f);
+	waitMessageBg_ = makeSolid(roomPanel, "waitMessageBg", hostX, toolbarY, hostW, toolbarH, scrimBar);
+	hostStatusLabel_ = makeLabel(roomPanel, L"호스트 대기 중...", hostX, toolbarY, 17.f,
+		hostW, toolbarH, textMuted, UI::TextHAlign::Center);
 
-	makeButton(waitingRoomRoot_, L"방 나가기", 180.f, [this]() { lobbyLeaveRoom(); });
-	makeButton(waitingRoomRoot_, L"더미 추가", 250.f, [this]() { lobbyAddDummy(); });
-	makeButton(waitingRoomRoot_, L"더미 제거", 320.f, [this]() { lobbyRemoveDummy(); });
+	// 방 나가기
+	fadeBtn(styleSecondary(makeButton(roomPanel, L"방 나가기", leaveX, toolbarY, leaveW, toolbarH,
+		surfaceSoft, primarySoft, primarySoft, 18.f, [this]() { lobbyLeaveRoom(); }, buttonInk)));
+
+	// 스쿼드 스테이지: 가로 4칸 슬롯
+	const float slotsY    = toolbarY + toolbarH + 16.f;
+	const float debugH    = 40.f;
+	const float slotsH    = roomPanelH - slotsY - debugH - 14.f;
+	const float slotW     = (innerW - 3.f * gap) / 4.f;
+	const float nameH     = 56.f;
+
+	for (int i = 0; i < kMaxLobbyPlayers; ++i) {
+		const float x = pad + static_cast<float>(i) * (slotW + gap);
+
+		slotPanels_[i] = makeSolid(roomPanel, "playerSlot", x, slotsY, slotW, slotsH, slotFill);
+
+		slotNumberLabels_[i] = makeLabel(roomPanel, L"", x + 12.f, slotsY + 10.f, 13.f, 60.f, 20.f,
+			textMuted, UI::TextHAlign::Leading, 2);
+
+		// 모델 베이: B-2에서 3D 캐릭터를 투영할 화면 사각형(렌더 없음, rect만 사용).
+		auto* bay = roomPanel->addChild(std::make_unique<UI::UIElement>());
+		bay->name = "slotBay";
+		applyRect(bay, UI::Anchors::TopLeft, UI::Pivots::TopLeft,
+			x + 8.f, slotsY + 8.f, slotW - 16.f, slotsH - nameH - 22.f);
+		slotBays_[i] = bay;
+
+		// 이름표(반투명 scrim + 이름 + 호스트 뱃지)
+		slotNameplateBgs_[i] = makeSolid(roomPanel, "nameplateBg",
+			x + 10.f, slotsY + slotsH - nameH - 8.f, slotW - 20.f, nameH, scrimBar);
+		slotNameLabels_[i] = makeLabel(roomPanel, L"대기 중",
+			x + 10.f, slotsY + slotsH - nameH - 4.f, 18.f, slotW - 20.f, 28.f,
+			textLight, UI::TextHAlign::Center, 2);
+		slotHostBadgeLabels_[i] = makeLabel(roomPanel, L"",
+			x + 10.f, slotsY + slotsH - 30.f, 12.f, slotW - 20.f, 22.f,
+			textMuted, UI::TextHAlign::Center, 2);
+	}
+
+	// 디버그 툴
+	const float debugY = roomPanelH - debugH + 2.f;
+	makeLabel(roomPanel, L"MOCK", pad, debugY, 12.f, 60.f, debugH, textMuted);
+	fadeBtn(styleSecondary(makeButton(roomPanel, L"더미 추가",
+		roomPanelW - pad - 218.f, debugY, 104.f, debugH - 4.f,
+		surface, primarySoft, primarySoft, 13.f, [this]() { lobbyAddDummy(); }, buttonInk)));
+	fadeBtn(styleSecondary(makeButton(roomPanel, L"더미 제거",
+		roomPanelW - pad - 104.f, debugY, 104.f, debugH - 4.f,
+		surface, primarySoft, primarySoft, 13.f, [this]() { lobbyRemoveDummy(); }, buttonInk)));
 }
 
 void Game::refreshLobbyUI() {
@@ -2835,9 +3123,21 @@ void Game::refreshLobbyUI() {
 		return;
 	}
 
+	const XMFLOAT4 primary     = { 0.082f, 0.365f, 0.545f, 1.f };
+	const XMFLOAT4 primaryDark = { 0.055f, 0.286f, 0.435f, 1.f };
+	// 대기실(반투명 스쿼드 스테이지) 색상
+	const XMFLOAT4 textLight   = { 0.95f, 0.97f, 1.00f, 1.f };
+	const XMFLOAT4 textMuted   = { 0.78f, 0.84f, 0.92f, 1.f };
+	const XMFLOAT4 slotFill    = { 0.10f, 0.14f, 0.20f, 0.26f };
+	const XMFLOAT4 slotFillEmp = { 0.10f, 0.14f, 0.20f, 0.14f };
+
 	lobbyRoot_->visible = (scene_ == Scene::Lobby);
 
 	const bool inMain = (lobbyState_ == LobbyState::MainMenu);
+	const bool waitingRoom3D = !inMain && stageVisualReady_;
+	if (lobbySkyBg_)   lobbySkyBg_->visible   = !waitingRoom3D;
+	if (lobbyBgImage_) lobbyBgImage_->visible = !waitingRoom3D;
+
 	if (mainMenuRoot_)    mainMenuRoot_->visible    = inMain;
 	if (waitingRoomRoot_) waitingRoomRoot_->visible = !inMain;
 
@@ -2848,7 +3148,7 @@ void Game::refreshLobbyUI() {
 	// 방 코드
 	if (roomCodeLabel_) {
 		const std::wstring code(roomCode_.begin(), roomCode_.end());
-		roomCodeLabel_->setText(L"방 코드: " + (code.empty() ? std::wstring(L"------") : code));
+		roomCodeLabel_->setText(code.empty() ? std::wstring(L"------") : code);
 	}
 
 	// 인원수
@@ -2857,31 +3157,57 @@ void Game::refreshLobbyUI() {
 			std::to_wstring(lobbyPlayers_.size()) + L" / " + std::to_wstring(kMaxLobbyPlayers));
 	}
 
-	// 플레이어 슬롯
+	// 플레이어 슬롯 (스쿼드 스테이지)
 	for (int i = 0; i < kMaxLobbyPlayers; ++i) {
-		if (!slotLabels_[i]) continue;
-		if (i < static_cast<int>(lobbyPlayers_.size())) {
-			std::wstring n = lobbyPlayers_[i].name;
-			if (lobbyPlayers_[i].id == hostId_) n += L" (호스트)";
-			slotLabels_[i]->setText(n);
-			slotLabels_[i]->setTextColor(1.f, 1.f, 1.f, 1.f);
+		if (slotNumberLabels_[i]) {
+			wchar_t num[4] = {};
+			swprintf_s(num, L"%02d", i + 1);
+			slotNumberLabels_[i]->setText(num);
+		}
+
+		const bool filled = (i < static_cast<int>(lobbyPlayers_.size()));
+		if (filled) {
+			const auto& player = lobbyPlayers_[i];
+			const bool isSlotHost = (player.id == hostId_);
+
+			if (slotPanels_[i]) slotPanels_[i]->bgColor = slotFill;
+			if (slotNameLabels_[i]) {
+				slotNameLabels_[i]->setText(player.name);
+				slotNameLabels_[i]->setTextColor(textLight.x, textLight.y, textLight.z, textLight.w);
+			}
+			if (slotHostBadgeLabels_[i]) {
+				slotHostBadgeLabels_[i]->setText(isSlotHost ? L"\U0001F451 호스트" : L"");
+			}
 		} else {
-			slotLabels_[i]->setText(L"비어있음");
-			slotLabels_[i]->setTextColor(0.5f, 0.5f, 0.5f, 1.f);
+			if (slotPanels_[i]) slotPanels_[i]->bgColor = slotFillEmp;
+			if (slotNameLabels_[i]) {
+				slotNameLabels_[i]->setText(L"대기 중");
+				slotNameLabels_[i]->setTextColor(textMuted.x, textMuted.y, textMuted.z, textMuted.w);
+			}
+			if (slotHostBadgeLabels_[i]) slotHostBadgeLabels_[i]->setText(L"");
 		}
 	}
 
-	// 게임 시작 버튼(호스트) / 대기 메시지(비호스트)
+	// 게임 시작 버튼(호스트) / 대기 메시지(비호스트) — 같은 자리에 겹쳐 두고 토글.
 	const bool loaded = inGameAssetsLoaded_.load(std::memory_order_acquire);
 	if (startGameButton_) startGameButton_->visible = isHost_;
+	if (waitMessageBg_)   waitMessageBg_->visible   = !isHost_;
 	if (hostStatusLabel_) hostStatusLabel_->visible = !isHost_;
 	if (isHost_ && startGameLabel_) {
 		startGameLabel_->setText(loaded ? L"게임 시작" : L"리소스 로딩 중...");
 	}
 	if (isHost_ && startGameButton_) {
-		startGameButton_->bgColor = loaded
-			? XMFLOAT4{ 0.16f, 0.40f, 0.22f, 0.95f }
-			: XMFLOAT4{ 0.25f, 0.25f, 0.25f, 0.80f };
+		// 단색 폴백 경로(texNormal 미설정 시).
+		startGameButton_->bgColor = loaded ? primary : XMFLOAT4{ 0.25f, 0.25f, 0.25f, 0.80f };
+		startGameButton_->bgColorHovered = loaded ? primaryDark : XMFLOAT4{ 0.30f, 0.30f, 0.30f, 0.90f };
+		startGameButton_->bgColorPressed = loaded ? primaryDark : XMFLOAT4{ 0.18f, 0.18f, 0.18f, 0.90f };
+
+		// 텍스처 경로(stylePrimary로 texNormal 설정됨)는 bgColor*를 무시하고 texTint*만 본다.
+		// 로딩 중에는 어둡게 낮춰 비활성 표시. 로드 완료 시 대기실 반투명(alpha 0.92) 틴트로 복원.
+		const XMFLOAT4 dimTint{ 0.45f, 0.45f, 0.50f, 0.92f };
+		startGameButton_->texTint        = loaded ? XMFLOAT4{ 1.f,   1.f,   1.f,   0.92f } : dimTint;
+		startGameButton_->texTintHovered = loaded ? XMFLOAT4{ 1.08f, 1.08f, 1.08f, 0.96f } : dimTint;
+		startGameButton_->texTintPressed = loaded ? XMFLOAT4{ 0.82f, 0.82f, 0.82f, 0.96f } : dimTint;
 	}
 }
 
@@ -2892,11 +3218,40 @@ void Game::LobbyScene(Milliseconds deltaTime) {
 		refreshLobbyUI();  // 게임 시작 버튼 활성 상태 갱신 (로그 재개는 워커가 수행)
 	}
 
+	// 대기실: 에셋 로드 완료 후 3D 맵 배경을 띄운다(에셋 미완료 시 키아트 bg 폴백).
+	if (lobbyState_ == LobbyState::WaitingRoom && loaded) {
+		setupStageVisual();   // idempotent (지형/스카이박스/라이트 1회 init)
+		gfx_.setRenderPath(GFX::RenderPath::Deferred);
+		if (lobbySkyBg_)   lobbySkyBg_->visible = false;
+		if (lobbyBgImage_) lobbyBgImage_->visible = false;
+
+		const float aspect = static_cast<float>(gClientRect.right - gClientRect.left)
+			/ std::max(1.f, static_cast<float>(gClientRect.bottom - gClientRect.top));
+		lobbyCamera_.setPerspective(mu::Degree(60.f), aspect, 0.1f, 1000.f);
+
+		// 대기실 카메라 연출: standalone에서 잡은 로비 쇼케이스 위치를 기준으로 약하게 좌우 패닝한다.
+		// 캐릭터 슬롯이 들어올 자리가 크게 흔들리지 않도록 eye 이동보다 at 이동을 작게 둔다.
+		lobbyCameraTime_ += std::chrono::duration<float>(deltaTime).count();
+		const float sway = std::sin(lobbyCameraTime_ * 0.25f) * 0.8f;
+		const mu::Vec3 baseEye(5126.42f, 57.0037f, 5170.04f);
+		const mu::Vec3 baseAt(5124.92f, 56.5513f, 5167.77f);
+		const mu::Vec3 eye = baseEye + mu::Vec3(sway, 0.f, 0.f);
+		const mu::Vec3 at  = baseAt  + mu::Vec3(sway * 0.25f, 0.f, 0.f);
+		lobbyCamera_.setView(eye, at);
+		chunkManager_.update(baseAt, deltaTime);
+	}
+
 	uiManager_.layout();
 	uiManager_.update(std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont());
 }
 
 void Game::renderLobby() {
+	// 대기실 3D 준비 완료 시 맵 배경 + UI, 아니면(메인화면/대기실-로딩중) UI만.
+	if (lobbyState_ == LobbyState::WaitingRoom && stageVisualReady_) {
+		renderWaitingRoom();
+		return;
+	}
+
 	uiManager_.render(gfx_);
 
 	auto frameDataUI = UIPipeline::FrameData{
@@ -2904,6 +3259,42 @@ void Game::renderLobby() {
 		.screenHeight = static_cast<float>(gClientRect.bottom - gClientRect.top)
 	};
 	gfx_.addFrameData(frameDataUI);
+
+	gfx_.render();
+}
+
+void Game::renderWaitingRoom() {
+	// [임시 진단] 렌더 경로 1회 확인.
+	if (!lobby3DDiagLogged_) {
+		lobby3DDiagLogged_ = true;
+		gSharedLog << "[Lobby3D] renderWaitingRoom: renderPath="
+		           << (gfx_.renderPath() == GFX::RenderPath::Deferred ? "Deferred" : "Forward")
+		           << " stageVisualReady=" << (stageVisualReady_ ? 1 : 0) << "\n";
+	}
+
+	// renderInGame()의 3D 부분 최소 복제: 스카이박스 + 지형 + 카메라 + 방향광.
+	// (플레이어/이펙트/HiZ/그림자 제외 — 캐릭터는 B-2, 그림자는 후속.)
+	skybox_.render(gfx_);
+
+	if (!chunkManager_.empty()) {
+		chunkManager_.submitDrawEvents(gfx_);
+		gfx_.addFrameData(TerrainPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
+		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
+	}
+
+	lobbyCamera_.updateGFX(gfx_);
+	dirLight_.render(gfx_);
+
+	gfx_.addFrameData(PBRPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
+	gfx_.addFrameData(PBRSkinnedPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
+	gfx_.addFrameData(PBRDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
+	gfx_.addFrameData(PBRDeferredSkinnedPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
+
+	uiManager_.render(gfx_);
+	gfx_.addFrameData(UIPipeline::FrameData{
+		.screenWidth  = static_cast<float>(gClientRect.right - gClientRect.left),
+		.screenHeight = static_cast<float>(gClientRect.bottom - gClientRect.top)
+	});
 
 	gfx_.render();
 }
@@ -2976,8 +3367,14 @@ void Game::lobbyLeaveRoom() {
 	lobbyPlayers_.clear();
 	dummySeed_  = 1;
 	lobbyState_ = LobbyState::MainMenu;
+	lobbyCameraTime_ = 0.f;
 	if (roomCodeInput_)    roomCodeInput_->clear();
 	if (mainMenuMsgLabel_) mainMenuMsgLabel_->setText(L"");
+
+	// 대기실 3D 배경 → 메인화면 복귀: Forward(UI-only) 경로 복원 + 키아트 bg 다시 표시.
+	gfx_.setRenderPath(GFX::RenderPath::Forward);
+	if (lobbyBgImage_) lobbyBgImage_->visible = true;
+
 	refreshLobbyUI();
 }
 

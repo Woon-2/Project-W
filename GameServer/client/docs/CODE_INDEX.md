@@ -391,7 +391,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 |------|------|
 | `terrain.hpp` | `TerrainLayer`/`TerrainData`(+`chunkCol/Row`)/`TerrainLayerPalette`/`ChunkIndex(Entry)`/`ChunkCpuBuild` 구조체, chunk streaming 함수 선언 |
 | `terrain.cpp` | `genChunkGeometryCpu`(CPU, 워커 스레드 안전)/`assembleChunkMeshGpu`(메인), `parseChunkIndex`/`loadLayerPalette`/`buildChunkCpu`/`finalizeChunkGpu`, `TerrainHeightField` 메서드 |
-| `terrainChunkManager.hpp` / `.cpp` | `TerrainChunkManager` — 팔레트/인덱스 소유, hop≤3 BFS 스트리밍(load/unload+grace), 워커 CPU build + 메인 GPU finalize, `heightAtWorld`/`normalAtWorld`/`chunkCoordAtWorld`/`submitDrawEvents` |
+| `terrainChunkManager.hpp` / `.cpp` | `TerrainChunkManager` — 팔레트/인덱스 소유, hop≤3 BFS 스트리밍(load/unload+grace), 워커 CPU build + 메인 GPU finalize, `heightAtWorld`/`normalAtWorld`/`chunkCoordAtWorld`/`submitDrawEvents`/`worldCenter`(인덱스 청크 평균 월드 좌표, 로비 카메라 포커스) |
 | `terrain.hlsl` | Terrain VS/PS (Forward path: Splat map 블렌딩 + PBR BRDF + PCF Shadow) |
 | `terrainDeferred.hlsl` | Terrain VS/GBufferOutput PS (Deferred path: GBuffer 기록, 조명 없음) |
 | `terrainPipeline.hpp` | `TerrainPipeline` 네임스페이스 (DrawEvent, Resources, Dispatcher) |
@@ -714,6 +714,7 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | 항목 | 위치 | 설명 |
 |------|------|------|
 | `Camera::update(float dt)` | `camera.cpp #5` | Spring Arm 충돌 회피: queryCameraArm → fast-in/slow-out arm 길이 제어 |
+| `Camera::setView(eye, at)` | `camera.cpp` | 타겟 추종과 무관하게 view 직접 설정(로비 대기실 정적 카메라) |
 | `Camera::setPhysicsWorld()` | `camera.hpp #31` | PhysicsWorld 연결 (queryCameraArm 호출 경로) |
 | `Camera::currentArmLength_` | `camera.hpp #74` | 현재 arm 길이 (fast-in 즉시 단축 / slow-out dt 기반 복귀) |
 | `Camera::armReturnRate_` | `camera.hpp #75` | slow-out 복귀 속도 (units/sec, 기본 3.f) |
@@ -825,8 +826,9 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 |--------|------|------|
 | `UI::Panel` | `Panel.hpp/cpp` | 컨테이너; `backgroundTex` 있으면 배경 렌더 |
 | `UI::Image` | `Image.hpp/cpp` | 단일 텍스처 표시 |
+| `UI::emitNineSlice()` | `UIElement.hpp/cpp` | 9-slice 헬퍼; 요소 사각형을 9셀로 나눠 셀별 부분 UV `DrawEvent` emit. 코너는 화면 px 고정, 가장자리/중앙 늘어남. `DrawEvent::uvScaleBias`(+`ui.hlsl`/`UIShader::PerInstanceData`)로 부분 UV 매핑 |
 | `UI::Label` | `Label.hpp/cpp` | `TextImage` 내부 소유; `resolvedRect_` 크기에 맞게 자동 재생성; dirty-check로 매 프레임 래스터화 방지 |
-| `UI::Button` | `Button.hpp/cpp` | Normal/Hovered/Pressed 상태 텍스처; `onClick` 콜백 (`std::function<void()>`) |
+| `UI::Button` | `Button.hpp/cpp` | Normal/Hovered/Pressed 상태 텍스처 + 9-slice(`slice*`) + 상태별 `texTint*`; `onClick` 콜백 (`std::function<void()>`) |
 | `UI::ProgressBar` | `ProgressBar.hpp/cpp` | 배경 + fill 이중 쿼드; `setProgress(0~1)` |
 | `UI::Slider` | `Slider.hpp/cpp` | 트랙 + 핸들 드래그; `onValueChanged` 콜백 (`std::function<void(float)>`) |
 | `UI::Dropdown` | `Dropdown.hpp/cpp` | 파란 헤더 버튼 + 확장 리스트; `setup(items)` 후 `onSelectionChanged` 콜백 (`std::function<void(int)>`) |
