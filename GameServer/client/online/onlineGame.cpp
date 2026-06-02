@@ -66,6 +66,13 @@ Game::Game() {
 	gfx_.initSharedResources( assetConfigs_ );
 }
 
+Game::~Game() {
+	// 소멸자 본문은 모든 멤버 소멸(threadPool_ 워커 join 포함)보다 먼저 실행된다.
+	// 백그라운드 파티클 JSON 파싱이 진행 중이면 즉시 중단을 요청해, 로딩 워커가
+	// 남은 파일을 끝까지 파싱하지 않고 빠르게 빠져나오도록 한다.
+	assetLoadAbort_.store(true, std::memory_order_relaxed);
+}
+
 void Game::setupStage() {
 	const auto path = std::filesystem::path("../resources/levels/level.bin");
 	auto ifs = std::ifstream(path, std::ios::binary);
@@ -2472,21 +2479,64 @@ void Game::prefetchParticleConfigs() {
 		return;
 	}
 
-	int fileCnt = 0, sysCnt = 0;
+	// 파싱 대상(_ParticleSystems.json, 최대 ~11MB/개)을 먼저 수집한다.
+	std::vector<fs::path> files;
 	for (const auto& entry : it) {
 		const auto& p = entry.path();
 		if (p.extension() != ".json") continue;
 		if (p.filename().string().find("_ParticleSystems") == std::string::npos) continue;
+		files.push_back(p);
+	}
+	if (files.empty()) {
+		gSharedLog << "[Particle Prefetch] 0 files, 0 systems cached\n";
+		return;
+	}
 
-		std::vector<ParticleImportSystem> systems;
-		ParticleImportOptions opt;
-		opt.logDiagnostics = false;
-		if (!loadParticleSystemsFromUnityJson(p, systems, opt)) continue;
+	// 파일별 디스크 I/O + 파싱은 서로 독립적이므로 여러 스레드로 분산한다.
+	// 주의: 공유 threadPool_ 에 하위 잡을 넣고 기다리면 안 된다 — 이 함수 자체가
+	// threadPool_ 워커 위에서 실행되므로, 로딩 도중 앱이 종료되어 ThreadPool 이
+	// done_=true 가 되면 큐에 남은 하위 잡이 실행되지 않아 영원히 대기하게 된다.
+	// 그래서 prefetch 가 직접 소유하고 여기서 join 하는 워커를 쓴다(유한 종료 보장).
+	// 각 워커는 자신의 결과를 전용 슬롯에 기록하므로 락이 필요 없다.
+	std::vector<std::vector<std::pair<std::string, ps::ParticleSystemConfig>>> results(files.size());
+	{
+		const unsigned hw = std::max(2u, std::thread::hardware_concurrency());
+		const std::size_t workerCnt = std::min<std::size_t>(files.size(), hw);
+		std::atomic<std::size_t> nextFile{ 0 };
 
-		++fileCnt;
-		const std::string fileKey = p.filename().string();
-		for (auto& s : systems) {
-			particleConfigCache_[fileKey + "|" + s.relativePath] = s.config;
+		auto parseWorker = [&]() {
+			for (std::size_t i = nextFile.fetch_add(1, std::memory_order_relaxed);
+			     i < files.size();
+			     i = nextFile.fetch_add(1, std::memory_order_relaxed)) {
+				// 로딩 중 종료 요청이 오면 남은 파일을 건너뛰고 즉시 빠져나온다.
+				if (assetLoadAbort_.load(std::memory_order_relaxed))
+					return;
+				std::vector<ParticleImportSystem> systems;
+				ParticleImportOptions opt;
+				opt.logDiagnostics = false;
+				if (!loadParticleSystemsFromUnityJson(files[i], systems, opt))
+					continue;
+
+				const std::string fileKey = files[i].filename().string();
+				auto& out = results[i];
+				out.reserve(systems.size());
+				for (auto& s : systems)
+					out.emplace_back(fileKey + "|" + s.relativePath, std::move(s.config));
+			}
+		};
+
+		std::vector<std::jthread> workers;
+		workers.reserve(workerCnt);
+		for (std::size_t w = 0; w < workerCnt; ++w)
+			workers.emplace_back(parseWorker);
+		// std::jthread 소멸 시 join — 이 블록을 벗어나면 모든 파싱이 완료된다.
+	}
+
+	int fileCnt = 0, sysCnt = 0;
+	for (auto& fileResult : results) {
+		if (!fileResult.empty()) ++fileCnt;
+		for (auto& entry : fileResult) {
+			particleConfigCache_[std::move(entry.first)] = std::move(entry.second);
 			++sysCnt;
 		}
 	}

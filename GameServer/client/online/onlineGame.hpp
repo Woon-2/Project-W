@@ -38,6 +38,9 @@ public:
 	// 사용자 입력을 받아 스레드 풀과 GFX 객체를 초기화한다.
 	Game();
 
+	// 백그라운드 에셋 로딩 중 종료될 경우, 로딩 워커가 빠르게 빠져나오도록 중단을 요청한다.
+	~Game() override;
+
 	GameType type() const override { return GameType::Online; }
 
 	void setTimer(Timer* pTimer) { pTimer_ = pTimer; }
@@ -285,6 +288,8 @@ private:
 	// 인게임 리소스 백그라운드 로드 상태.
 	// inGameAssetsLoaded_ 는 워커 스레드가 set, 메인 스레드가 read.
 	std::atomic<bool> inGameAssetsLoaded_{ false };
+	// 로딩 중 종료 시 set. prefetchParticleConfigs 의 파싱 워커가 폴링해 조기 중단한다.
+	std::atomic<bool> assetLoadAbort_{ false };
 	bool inGameLoadStarted_ = false;
 	bool inGameAssetsReady_ = false;   // 메인 스레드에서 1회 처리용
 	bool uiBaseReady_       = false;   // UIManager 기본 리소스 초기화 여부
