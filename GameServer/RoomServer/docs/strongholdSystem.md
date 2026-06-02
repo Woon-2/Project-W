@@ -64,3 +64,15 @@ repeat S:
 ## 8. 검증
 - 빌드: `MSBuild GameServer.sln /t:RoomServer;client Debug x64` **그린**(2026-06, RoomServer.exe + client.exe).
 - 런타임(미완, 추출 데이터 필요): 거점+고블린 추출 → 부팅 로그(거점/풀) → 클라 접속 시 구조물+고블린 표시(지형 위) → 고블린 처치 후 부활(인구 유지) → 거점 공격→파괴→재건. DummyClient/수동(자동화 테스트 없음).
+
+## 9. As-Built — 테스트 중 수정·결정 (2026-06)
+
+§4–6 계획 위에 실제 통합하며 내린 수정/결정. 아래는 함정(gotcha) 포함.
+
+- **거점 id 부여 필수(크래시 수정):** `Room::init`에서 거점도 `setId(IdPool::pop())` 해야 함. 누락 시 id=-1로 `registerObject`가 `objectById_[-1]` 기록 → 힙 손상(룸 생성/스킬 컴파일 단계에서 크래시). 거점이 1개라도 있어야 재현. `~Room()`에서 거점 id도 `IdPool::push`.
+- **고블린 `canReceiveDamage` 함정:** 풀을 `Goblin g{}`(기본 생성자)로 만들면 `Npc(Object&&,cfg)`의 `setCanReceiveDamage(true)`가 호출되지 않아 **스킬 시스템 타깃에서 제외**됨(레거시 `Room::attack`은 그 체크 없이 때려서 "스킬엔 안 맞고 레거시엔 맞는" 증상). → `setupGoblin`에서 `g.setCanReceiveDamage(true)` 명시.
+- **`Level` → AssetManager backref:** Level이 개별 에셋 포인터 대신 `const AssetManager* assetManager`(loadLevelFromFile이 설정)만 보유. Room이 `levelData->assetManager->modelGoblin()/goblinAnimations()/modelCube()`로 접근. Room.cpp는 `AssetManager.hpp` include.
+- **거점 placeholder 형상/배치:** `setupStronghold`가 authored `sd.scale` 대신 고정 세로 막대 스케일 `(1.5,5,1.5)` 사용. 큐브 pivot이 중심이라, groundY에 놓고 **월드 BVH 높이 절반만큼 상승**시켜 바닥면을 지면에 세움(`AABB.size`=full extent). + **바닥을 0.5m 지면 아래로 묻어**(coplanar z-fighting 줄무늬 방지). 상승된 pos·스케일은 ObjectInfo로 전송돼 클라 시각 자동 일치.
+- **클라 거점 충돌:** 클라는 거점을 렌더만 하면 로컬 player(클라 예측)가 통과함 → `createStronghold`에서 거점을 **클라 `physicsWorld_`에 Static body 등록**(setMotionType(Static)+snapToCurrent+registerBody). 큐브 모델 BVH가 충돌 형상 제공.
+- **거점 HP바 타이머:** 고블린처럼 피격 후에만 잠깐 표시. `StrongholdHpEntry.hpBarVisibleSeconds`(applyHit에서 5s 설정, 프레임마다 감소, ≤0/파괴 시 숨김).
+- **그림자 acne(줄무늬) 수정 [렌더링]:** 정적 메시 CSM 그림자 PSO `createShadowMapCSMShader`(`shader.cpp`)를 **`CullMode=FRONT`(앞면 컬링)**로 변경 → 그림자맵에 뒷면 깊이 기록, 빛 받는 앞면이 자기 그림자 안 받음(닫힌 솔리드 메시 acne 표준 해법). 이 PSO는 정적 deferred 메시 전용(현재 거점뿐)이라 캐릭터(스킨드 PSO)·지형 그림자 불변. 향후 얇은/열린 정적 캐스터 추가 시 재검토. [[project_csm_shadow]] 참조.
