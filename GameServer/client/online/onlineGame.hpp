@@ -1,6 +1,8 @@
 ﻿#ifndef __Online_game_HPP
 #define __Online_game_HPP
 
+#include <atomic>
+
 #include "../IGame.hpp"
 
 #include "../gfx.hpp"
@@ -15,6 +17,9 @@
 #include "../ui/UIManager.hpp"
 #include "../ui/widgets/ProgressBar.hpp"
 #include "../ui/widgets/Label.hpp"
+#include "../ui/widgets/Button.hpp"
+#include "../ui/widgets/Panel.hpp"
+#include "../ui/widgets/TextInput.hpp"
 #include "../spriteAnimation.hpp"
 #include "../crosshair.hpp"
 #include "../particleSystem.hpp"
@@ -36,6 +41,10 @@ public:
 	GameType type() const override { return GameType::Online; }
 
 	void setTimer(Timer* pTimer) { pTimer_ = pTimer; }
+
+	// 로비 씬으로 진입한다. 최소 UI 리소스만 사용하며,
+	// 인게임 리소스는 ThreadPool로 백그라운드 로드를 시작한다.
+	void enterLobby();
 
 	// 객체들을 생성한다.
 	void setupStage();
@@ -89,6 +98,35 @@ private:
 	void processInputLobby(Milliseconds deltaTime);
 	void processInputGame(Milliseconds deltaTime);
 
+	// 씬별 프레임 루틴. update()/render()가 scene_에 따라 분기 호출한다.
+	void LobbyScene(Milliseconds deltaTime);
+	void renderLobby();
+	void InGameScene(Milliseconds deltaTime);
+	void renderInGame();
+
+	// 로비 -> 인게임 전환. 로비 UI를 숨기고 스테이지/플레이어를 생성한다.
+	void enterInGame();
+
+	// 인게임 리소스 백그라운드 로드 시작 (ThreadPool).
+	void startInGameAssetLoad();
+
+	// effects/*_ParticleSystems.json을 미리 파싱해 캐시에 적재한다 (백그라운드 워커에서 호출).
+	// setParticle()이 디스크 재파싱 없이 캐시에서 config를 꺼내 쓰도록 한다.
+	void prefetchParticleConfigs();
+
+	// 로비 UI 구성/갱신 (mock 룸 상태 기반).
+	void buildLobbyUI();
+	void refreshLobbyUI();
+
+	// 로비 mock 액션 (script.js 프로토타입 이식).
+	void lobbyCreateRoom();
+	void lobbyJoinRoom(const std::string& code);
+	void lobbyLeaveRoom();
+	void lobbyStartGame();
+	void lobbyAddDummy();
+	void lobbyRemoveDummy();
+	std::string makeRoomCode();
+
 	void cullObjects();
 	void applyHiZCulling();
 
@@ -105,6 +143,10 @@ private:
 	void importTerrain(std::ifstream& ifs, TerrainObject& terrain);
 
 	AssetManager assetManager_{};
+
+	// 파티클 이펙트 JSON 파싱 결과 캐시. key = "<파일명>|<relativePath>".
+	// 백그라운드 워커(prefetchParticleConfigs)가 채우고, setParticle(메인)이 읽는다.
+	std::unordered_map<std::string, ps::ParticleSystemConfig> particleConfigCache_{};
 
 	SkillSystem          skillSystem_{};
 	SkillDispatchContext skillCtx_{};
@@ -228,6 +270,48 @@ private:
 	mu::Vec3 currVelocity_{};
 
 	u32t nextRenderObjId_ = 0u;
+
+	// ---------------------------------------------------------------------
+	// Scene / Lobby
+	// ---------------------------------------------------------------------
+	enum class Scene      { Lobby, InGame };
+	enum class LobbyState { MainMenu, WaitingRoom };
+
+	static constexpr int kMaxLobbyPlayers = 4;
+
+	Scene      scene_      = Scene::Lobby;
+	LobbyState lobbyState_ = LobbyState::MainMenu;
+
+	// 인게임 리소스 백그라운드 로드 상태.
+	// inGameAssetsLoaded_ 는 워커 스레드가 set, 메인 스레드가 read.
+	std::atomic<bool> inGameAssetsLoaded_{ false };
+	bool inGameLoadStarted_ = false;
+	bool inGameAssetsReady_ = false;   // 메인 스레드에서 1회 처리용
+	bool uiBaseReady_       = false;   // UIManager 기본 리소스 초기화 여부
+
+	// mock 룸 상태 (script.js 프로토타입 이식)
+	struct LobbyPlayer {
+		std::string  id;
+		std::wstring name;
+	};
+	std::string              roomCode_{};
+	bool                     isHost_ = false;
+	std::string              hostId_{};
+	std::vector<LobbyPlayer> lobbyPlayers_{};
+	int                      dummySeed_ = 1;
+
+	// 로비 UI (소유권은 uiManager_)
+	UI::UIElement* lobbyRoot_       = nullptr;
+	UI::UIElement* mainMenuRoot_    = nullptr;
+	UI::UIElement* waitingRoomRoot_ = nullptr;
+	UI::TextInput* roomCodeInput_   = nullptr;
+	UI::Label*     mainMenuMsgLabel_= nullptr;
+	UI::Label*     roomCodeLabel_   = nullptr;
+	UI::Label*     playerCountLabel_= nullptr;
+	std::array<UI::Label*, kMaxLobbyPlayers> slotLabels_{};
+	UI::Button*    startGameButton_ = nullptr;
+	UI::Label*     startGameLabel_  = nullptr;
+	UI::Label*     hostStatusLabel_ = nullptr;
 };
 
 }	// namespace Online

@@ -1099,7 +1099,7 @@ void GFX::addCameraData(const BVPipeline::CameraData& cameraData) {
 // 파이프라인들이 자체적으로 사용하는 리소스들과
 // addRequestXXLoad 꼴의 함수로 요청된 리소스들을 로드/생성한다.
 // 반드시 모든 장치 초기화가 끝나고 호출되어야 한다.
-void GFX::loadAssets(const AssetConfigs& configs) {
+void GFX::initSharedResources(const AssetConfigs& configs) {
 	auto& fence = fences_.at("LoadFence");
 
 	// 명령 리스트와 명령 할당자 할당
@@ -1154,6 +1154,35 @@ void GFX::loadAssets(const AssetConfigs& configs) {
 	::UpdateTexture( cmdList.Get(), solidColorImage_.textureUpload, solidColorImage_.texture );
 
 	dumpLog();
+
+	// 공용 리소스 명령 기록 끝, 명령 실행
+	DISPLAY_ERROR_DX_VOID(cmdList->Close(), false);
+	ID3D12CommandList* sharedCmdLists[] = { cmdList.Get() };
+	DISPLAY_ERROR_DX_VOID(cmdQ_->ExecuteCommandLists(1u, sharedCmdLists), false);
+
+	// 펜스 동기화
+	fence.associatedCmdCtxs_[etoi(CommandListUsage::ResourceLoading)].push_back(std::move(cmdCtx));
+	signalFence("LoadFence");
+	waitOnFence("LoadFence");
+}
+
+void GFX::loadRequestedAssets() {
+	auto& fence = fences_.at("LoadFence");
+
+	// 명령 리스트와 명령 할당자 할당
+	CommandContext cmdCtx{};
+	DISPLAY_ERROR_STR(
+		cmdListPool_.allocOne(CommandListUsage::ResourceLoading, cmdCtx),
+		"[GFX Error] GFX::loadRequestedAssets: 사용 가능한 명령 리스트가 없습니다. "
+		"CommandListPool::init 호출이 이루어지지 않았거나, 할당받은 명령 리스트가 반납되지 않았습니다.",
+		false
+	);
+	auto& cmdList = cmdCtx.cmdList;
+	auto& cmdAlloc = cmdCtx.cmdAlloc;
+
+	// 명령 리스트 초기화
+	DISPLAY_ERROR_DX_VOID(cmdAlloc->Reset(), false);
+	DISPLAY_ERROR_DX_VOID(cmdList->Reset(cmdAlloc.Get(), nullptr), false);
 
 	// 명령 기록 시작
 	for (auto& request : requestsModelLoad_) {
@@ -1473,7 +1502,11 @@ void GFX::render() {
 	);
 
 	// 스카이박스 텍스처 임시 저장
-	const auto skyboxIdxSrv = drawEventsSkyboxPipeline_[0].texSkybox->idxSrv;
+	// 로비 등 스카이박스 드로우 이벤트가 없는 씬에서는 빈 벡터를 인덱싱하지 않도록 가드한다.
+	auto skyboxIdxSrv = decltype(drawEventsSkyboxPipeline_.front().texSkybox->idxSrv){};
+	if (!drawEventsSkyboxPipeline_.empty() && drawEventsSkyboxPipeline_[0].texSkybox) {
+		skyboxIdxSrv = drawEventsSkyboxPipeline_[0].texSkybox->idxSrv;
+	}
 
 	auto skyboxPipelineDispatcher = SkyboxPipeline::Dispatcher(
 		tmpDescriptorHeaps,
@@ -2501,8 +2534,11 @@ void GFX::waitOnFence(const std::string& fenceName) {
 	auto& fence = fences_.at(fenceName);
 	if (fence.fence->GetCompletedValue() == fence.desiredValue) {
 		// GPU에서 사용이 끝난 명령 컨텍스트와 리소스를 반환한다.
+		// 비어있는 usage 리스트는 건너뛴다. (백그라운드 LoadFence 대기가 메인 렌더의
+		//  RenderingMaster/Slave 풀 리스트를 건드리지 않도록 — 동시 접근 방지)
 		for (int idxUsage = 0; idxUsage < etoi(CommandListUsage::SIZE); ++idxUsage) {
-			cmdListPool_.free(idxUsage, std::move(fence.associatedCmdCtxs_[idxUsage]));
+			if (!fence.associatedCmdCtxs_[idxUsage].empty())
+				cmdListPool_.free(idxUsage, std::move(fence.associatedCmdCtxs_[idxUsage]));
 		}
 		fence.associatedResources_.clear();
 		return;
@@ -2512,7 +2548,8 @@ void GFX::waitOnFence(const std::string& fenceName) {
 
 	// GPU에서 사용이 끝난 명령 컨텍스트와 리소스를 반환한다.
 	for (int idxUsage = 0; idxUsage < etoi(CommandListUsage::SIZE); ++idxUsage) {
-		cmdListPool_.free(idxUsage, std::move(fence.associatedCmdCtxs_[idxUsage]));
+		if (!fence.associatedCmdCtxs_[idxUsage].empty())
+			cmdListPool_.free(idxUsage, std::move(fence.associatedCmdCtxs_[idxUsage]));
 	}
 	fence.associatedResources_.clear();
 }

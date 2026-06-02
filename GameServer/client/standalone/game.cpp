@@ -657,6 +657,7 @@ Game::Game() {
 	gfx_.setThreadPool(&threadPool_);
 
 
+	gfx_.initSharedResources(assetConfigs_);
 	assetManager_.loadGFXAssets(gfx_, assetConfigs_);
 }
 

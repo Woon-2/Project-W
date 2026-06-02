@@ -509,7 +509,9 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 	auto tmpGoblinAnims = loadAnimClipsFromFile("../resources/animations/goblinAnimations.anim", gfx);
 	goblinAnimations_.reserve(tmpGoblinAnims.size());
 
-	gfx.loadAssets(configs);
+	// 공용 리소스(gfx.initSharedResources)는 호출부에서 미리 초기화되어 있어야 한다.
+	// 여기서는 요청된 리소스만 로드한다. (백그라운드 스레드에서 호출 가능)
+	gfx.loadRequestedAssets();
 
 	for (auto& clip : tmpPlayerAnims) {
 		playerAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );

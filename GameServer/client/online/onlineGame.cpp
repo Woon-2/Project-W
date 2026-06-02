@@ -61,7 +61,9 @@ Game::Game() {
 	gfx_.createSwapChain();
 	gfx_.setThreadPool(&threadPool_);
 
-	assetManager_.loadGFXAssets( gfx_, assetConfigs_ );
+	// 로비 표시에 필요한 공용 GPU 리소스만 즉시 초기화한다.
+	// 무거운 인게임 리소스(모델/지형/파티클)는 로비 진입 후 백그라운드로 로드한다.
+	gfx_.initSharedResources( assetConfigs_ );
 }
 
 void Game::setupStage() {
@@ -85,11 +87,8 @@ void Game::setupStage() {
 	dirLight_.type = PBRPipeline::LightData::Type::DirectionalLight;
 	dirLight_.isMainDirectionalLight = true;
 
-	uiManager_.setScreenSize(
-		static_cast<float>(gClientRect.right - gClientRect.left),
-		static_cast<float>(gClientRect.bottom - gClientRect.top)
-	);
-	uiManager_.requestDebugResources(gfx_);
+	// UIManager 기본 리소스(setScreenSize / requestDebugResources)는
+	// enterLobby에서 이미 초기화되었다.
 	auto* pLabel = static_cast<UI::Label*>(
 		uiManager_.root()->addChild(std::make_unique<UI::Label>())
 	);
@@ -312,8 +311,14 @@ void Game::setParticle()
 		smokeParticleSystem_.startContinuous(cfg);
 	}
 
-	auto loadUnityParticleConfig = [](const std::filesystem::path& jsonPath,
-	                                  std::string_view relativePath) {
+	auto loadUnityParticleConfig = [this](const std::filesystem::path& jsonPath,
+	                                      std::string_view relativePath) {
+		// 백그라운드에서 미리 파싱해둔 캐시를 우선 사용한다 (디스크 재파싱 회피).
+		const std::string key = jsonPath.filename().string() + "|" + std::string(relativePath);
+		if (auto it = particleConfigCache_.find(key); it != particleConfigCache_.end()) {
+			return it->second;
+		}
+		// 캐시 미스 시 폴백: 직접 파싱.
 		ps::ParticleSystemConfig cfg;
 		loadParticleSystemConfigFromUnityJson(jsonPath, relativePath, cfg);
 		return cfg;
@@ -1955,6 +1960,20 @@ void Game::onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 s
 // 객체별 업데이트 루틴
 // 애니메이션 업데이트
 void Game::update(Milliseconds deltaTime) {
+	switch (scene_) {
+	case Scene::Lobby:  LobbyScene(deltaTime);  break;
+	case Scene::InGame: InGameScene(deltaTime); break;
+	}
+}
+
+void Game::render() {
+	switch (scene_) {
+	case Scene::Lobby:  renderLobby();  break;
+	case Scene::InGame: renderInGame(); break;
+	}
+}
+
+void Game::InGameScene(Milliseconds deltaTime) {
 	SleepEx(1, true);
 
 	if (player_ == nullptr) {
@@ -2304,7 +2323,7 @@ void Game::update(Milliseconds deltaTime) {
 	INet::ClientApp::send();
 }
 
-void Game::render() {
+void Game::renderInGame() {
 	if (skipNextRender_) {
 		skipNextRender_ = false;
 		return;
@@ -2391,6 +2410,425 @@ void Game::render() {
 
 	gfx_.render();
 	applyHiZCulling();
+}
+
+// ===========================================================================
+// Lobby Scene
+// ===========================================================================
+
+void Game::enterLobby() {
+	scene_      = Scene::Lobby;
+	lobbyState_ = LobbyState::MainMenu;
+
+	// 로비는 2D UI만 그린다. Deferred 라이팅 풀스크린 패스가 빈 GBuffer를 덮어쓰지 않도록
+	// Forward 경로로 전환한다(클리어 + UI). 인게임 진입 시 Deferred로 복원.
+	gfx_.setRenderPath(GFX::RenderPath::Forward);
+
+	if (!uiBaseReady_) {
+		uiManager_.setScreenSize(
+			static_cast<float>(gClientRect.right - gClientRect.left),
+			static_cast<float>(gClientRect.bottom - gClientRect.top)
+		);
+		uiManager_.requestDebugResources(gfx_);
+		uiBaseReady_ = true;
+	}
+
+	buildLobbyUI();
+	refreshLobbyUI();
+
+	// 최소 로드로 로비 진입 후, 인게임 리소스를 백그라운드로 로드한다.
+	startInGameAssetLoad();
+}
+
+void Game::startInGameAssetLoad() {
+	if (inGameLoadStarted_) {
+		return;
+	}
+	inGameLoadStarted_ = true;
+
+	// 백그라운드 로드 동안 메인 스레드가 공유 로그 버퍼(gSharedLog)를
+	// 동시에 건드리지 않도록 dumpLog를 뮤트한다. 로드 완료 시 메인 스레드가 해제한다.
+	muteLog();
+
+	threadPool_.addJob([this]() {
+		assetManager_.loadGFXAssets(gfx_, assetConfigs_);
+		// 파티클 이펙트 JSON 파싱(디스크 I/O + 파싱)도 백그라운드에서 미리 수행해 캐시한다.
+		prefetchParticleConfigs();
+		// 로드 완료(모든 gSharedLog append 종료) 후 로그를 재개한다.
+		// store(true) 이전에 해제하므로, 메인이 완료를 관측하는 시점엔 이미 단독 사용이 끝나 있다.
+		unmuteLog();
+		inGameAssetsLoaded_.store(true, std::memory_order_release);
+	});
+}
+
+void Game::prefetchParticleConfigs() {
+	namespace fs = std::filesystem;
+	const fs::path effectsDir = "../resources/effects";
+
+	std::error_code ec;
+	auto it = fs::directory_iterator(effectsDir, ec);
+	if (ec) {
+		gSharedLog << "[Particle Prefetch] effects 디렉터리를 열 수 없습니다: " << effectsDir.string() << "\n";
+		return;
+	}
+
+	int fileCnt = 0, sysCnt = 0;
+	for (const auto& entry : it) {
+		const auto& p = entry.path();
+		if (p.extension() != ".json") continue;
+		if (p.filename().string().find("_ParticleSystems") == std::string::npos) continue;
+
+		std::vector<ParticleImportSystem> systems;
+		ParticleImportOptions opt;
+		opt.logDiagnostics = false;
+		if (!loadParticleSystemsFromUnityJson(p, systems, opt)) continue;
+
+		++fileCnt;
+		const std::string fileKey = p.filename().string();
+		for (auto& s : systems) {
+			particleConfigCache_[fileKey + "|" + s.relativePath] = s.config;
+			++sysCnt;
+		}
+	}
+	gSharedLog << "[Particle Prefetch] " << fileCnt << " files, " << sysCnt << " systems cached\n";
+}
+
+void Game::buildLobbyUI() {
+	auto* root = uiManager_.root();
+
+	const float screenW = uiManager_.screenWidth();
+	const float screenH = uiManager_.screenHeight();
+
+	lobbyRoot_ = root->addChild(std::make_unique<UI::UIElement>());
+	lobbyRoot_->name    = "lobbyRoot";
+	lobbyRoot_->anchor  = UI::Anchors::TopLeft;
+	lobbyRoot_->pivot   = UI::Pivots::TopLeft;
+	lobbyRoot_->offsetX = UI::DimValue::px(0.f);
+	lobbyRoot_->offsetY = UI::DimValue::px(0.f);
+	lobbyRoot_->width   = UI::DimValue::px(screenW);
+	lobbyRoot_->height  = UI::DimValue::px(screenH);
+
+	auto makeLabel = [&](UI::UIElement* parent, const std::wstring& text,
+	                     float offY, float fontSize, float w, float h) -> UI::Label* {
+		auto* lbl = static_cast<UI::Label*>(parent->addChild(std::make_unique<UI::Label>()));
+		lbl->anchor  = UI::Anchors::Center;
+		lbl->pivot   = UI::Pivots::Center;
+		lbl->offsetX = UI::DimValue::px(0.f);
+		lbl->offsetY = UI::DimValue::px(offY);
+		lbl->width   = UI::DimValue::px(w);
+		lbl->height  = UI::DimValue::px(h);
+		lbl->setTextHAlign(UI::TextHAlign::Center);
+		lbl->setTextVAlign(UI::TextVAlign::Center);
+		lbl->setFontSize(fontSize);
+		lbl->setTextColor(1.f, 1.f, 1.f, 1.f);
+		lbl->setText(text);
+		return lbl;
+	};
+
+	auto makeButton = [&](UI::UIElement* parent, const std::wstring& text,
+	                      float offY, std::function<void()> onClick) -> UI::Button* {
+		auto* btn = static_cast<UI::Button*>(parent->addChild(std::make_unique<UI::Button>()));
+		btn->anchor  = UI::Anchors::Center;
+		btn->pivot   = UI::Pivots::Center;
+		btn->offsetX = UI::DimValue::px(0.f);
+		btn->offsetY = UI::DimValue::px(offY);
+		btn->width   = UI::DimValue::px(280.f);
+		btn->height  = UI::DimValue::px(54.f);
+		btn->bgColor        = { 0.18f, 0.22f, 0.35f, 0.95f };
+		btn->bgColorHovered = { 0.28f, 0.34f, 0.52f, 1.f };
+		btn->bgColorPressed = { 0.12f, 0.15f, 0.25f, 1.f };
+		btn->onClick = std::move(onClick);
+
+		auto* lbl = static_cast<UI::Label*>(btn->addChild(std::make_unique<UI::Label>()));
+		lbl->anchor  = UI::Anchors::Center;
+		lbl->pivot   = UI::Pivots::Center;
+		lbl->width   = UI::DimValue::px(280.f);
+		lbl->height  = UI::DimValue::px(54.f);
+		lbl->setTextHAlign(UI::TextHAlign::Center);
+		lbl->setTextVAlign(UI::TextVAlign::Center);
+		lbl->setFontSize(22.f);
+		lbl->setTextColor(1.f, 1.f, 1.f, 1.f);
+		lbl->setText(text);
+		return btn;
+	};
+
+	// ---- 메인 메뉴 (mainView) ----
+	mainMenuRoot_ = lobbyRoot_->addChild(std::make_unique<UI::UIElement>());
+	mainMenuRoot_->name   = "mainMenuRoot";
+	mainMenuRoot_->anchor = UI::Anchors::TopLeft;
+	mainMenuRoot_->pivot  = UI::Pivots::TopLeft;
+	mainMenuRoot_->width  = UI::DimValue::px(screenW);
+	mainMenuRoot_->height = UI::DimValue::px(screenH);
+
+	makeLabel (mainMenuRoot_, L"비공개 로비", -210.f, 36.f, 600.f, 60.f);
+	makeButton(mainMenuRoot_, L"방 만들기",   -120.f, [this]() { lobbyCreateRoom(); });
+
+	// 방 코드 입력 + 참가 (프로토타입 joinRoomForm 대응)
+	makeLabel(mainMenuRoot_, L"방 코드로 참가", -56.f, 18.f, 360.f, 28.f);
+	{
+		roomCodeInput_ = static_cast<UI::TextInput*>(
+			mainMenuRoot_->addChild(std::make_unique<UI::TextInput>()));
+		roomCodeInput_->name    = "roomCodeInput";
+		roomCodeInput_->anchor  = UI::Anchors::Center;
+		roomCodeInput_->pivot   = UI::Pivots::Center;
+		roomCodeInput_->offsetX = UI::DimValue::px(-70.f);
+		roomCodeInput_->offsetY = UI::DimValue::px(-18.f);
+		roomCodeInput_->width   = UI::DimValue::px(180.f);
+		roomCodeInput_->height  = UI::DimValue::px(48.f);
+		roomCodeInput_->uppercase = true;
+		roomCodeInput_->alnumOnly = true;
+		roomCodeInput_->setMaxLength(6);
+		roomCodeInput_->setPlaceholder(L"JOIN01");
+		roomCodeInput_->onSubmit = [this](const std::wstring& code) {
+			lobbyJoinRoom(std::string(code.begin(), code.end()));
+		};
+
+		auto* joinBtn = static_cast<UI::Button*>(
+			mainMenuRoot_->addChild(std::make_unique<UI::Button>()));
+		joinBtn->name    = "joinButton";
+		joinBtn->anchor  = UI::Anchors::Center;
+		joinBtn->pivot   = UI::Pivots::Center;
+		joinBtn->offsetX = UI::DimValue::px(110.f);
+		joinBtn->offsetY = UI::DimValue::px(-18.f);
+		joinBtn->width   = UI::DimValue::px(100.f);
+		joinBtn->height  = UI::DimValue::px(48.f);
+		joinBtn->bgColor        = { 0.18f, 0.22f, 0.35f, 0.95f };
+		joinBtn->bgColorHovered = { 0.28f, 0.34f, 0.52f, 1.f };
+		joinBtn->bgColorPressed = { 0.12f, 0.15f, 0.25f, 1.f };
+		joinBtn->onClick = [this]() {
+			const std::wstring& w = roomCodeInput_->text();
+			lobbyJoinRoom(std::string(w.begin(), w.end()));
+		};
+		auto* joinLbl = static_cast<UI::Label*>(
+			joinBtn->addChild(std::make_unique<UI::Label>()));
+		joinLbl->anchor  = UI::Anchors::Center;
+		joinLbl->pivot   = UI::Pivots::Center;
+		joinLbl->width   = UI::DimValue::px(100.f);
+		joinLbl->height  = UI::DimValue::px(48.f);
+		joinLbl->setTextHAlign(UI::TextHAlign::Center);
+		joinLbl->setTextVAlign(UI::TextVAlign::Center);
+		joinLbl->setFontSize(20.f);
+		joinLbl->setText(L"참가");
+	}
+
+	mainMenuMsgLabel_ = makeLabel(mainMenuRoot_, L"", 28.f, 18.f, 520.f, 28.f);
+	mainMenuMsgLabel_->setTextColor(1.f, 0.6f, 0.3f, 1.f);
+
+	makeButton(mainMenuRoot_, L"설정", 90.f, []() { gSharedLog << "[Lobby] 설정 (준비 중)\n"; });
+	makeButton(mainMenuRoot_, L"종료", 160.f, []() { PostQuitMessage(0); });
+
+	// ---- 대기실 (lobbyView) ----
+	waitingRoomRoot_ = lobbyRoot_->addChild(std::make_unique<UI::UIElement>());
+	waitingRoomRoot_->name   = "waitingRoomRoot";
+	waitingRoomRoot_->anchor = UI::Anchors::TopLeft;
+	waitingRoomRoot_->pivot  = UI::Pivots::TopLeft;
+	waitingRoomRoot_->width  = UI::DimValue::px(screenW);
+	waitingRoomRoot_->height = UI::DimValue::px(screenH);
+
+	makeLabel(waitingRoomRoot_, L"대기실", -230.f, 32.f, 400.f, 50.f);
+	roomCodeLabel_    = makeLabel(waitingRoomRoot_, L"방 코드: ------", -180.f, 24.f, 500.f, 40.f);
+	playerCountLabel_ = makeLabel(waitingRoomRoot_, L"1 / 4",           -140.f, 20.f, 200.f, 32.f);
+
+	for (int i = 0; i < kMaxLobbyPlayers; ++i) {
+		slotLabels_[i] = makeLabel(waitingRoomRoot_, L"비어있음",
+			-90.f + static_cast<float>(i) * 40.f, 20.f, 360.f, 34.f);
+	}
+
+	startGameButton_ = makeButton(waitingRoomRoot_, L"게임 시작", 110.f,
+		[this]() { lobbyStartGame(); });
+	startGameLabel_  = static_cast<UI::Label*>(startGameButton_->children().front().get());
+
+	hostStatusLabel_ = makeLabel(waitingRoomRoot_, L"호스트가 시작하기를 기다리는 중...",
+		110.f, 20.f, 520.f, 34.f);
+
+	makeButton(waitingRoomRoot_, L"방 나가기", 180.f, [this]() { lobbyLeaveRoom(); });
+	makeButton(waitingRoomRoot_, L"더미 추가", 250.f, [this]() { lobbyAddDummy(); });
+	makeButton(waitingRoomRoot_, L"더미 제거", 320.f, [this]() { lobbyRemoveDummy(); });
+}
+
+void Game::refreshLobbyUI() {
+	if (!lobbyRoot_) {
+		return;
+	}
+
+	lobbyRoot_->visible = (scene_ == Scene::Lobby);
+
+	const bool inMain = (lobbyState_ == LobbyState::MainMenu);
+	if (mainMenuRoot_)    mainMenuRoot_->visible    = inMain;
+	if (waitingRoomRoot_) waitingRoomRoot_->visible = !inMain;
+
+	if (inMain) {
+		return;
+	}
+
+	// 방 코드
+	if (roomCodeLabel_) {
+		const std::wstring code(roomCode_.begin(), roomCode_.end());
+		roomCodeLabel_->setText(L"방 코드: " + (code.empty() ? std::wstring(L"------") : code));
+	}
+
+	// 인원수
+	if (playerCountLabel_) {
+		playerCountLabel_->setText(
+			std::to_wstring(lobbyPlayers_.size()) + L" / " + std::to_wstring(kMaxLobbyPlayers));
+	}
+
+	// 플레이어 슬롯
+	for (int i = 0; i < kMaxLobbyPlayers; ++i) {
+		if (!slotLabels_[i]) continue;
+		if (i < static_cast<int>(lobbyPlayers_.size())) {
+			std::wstring n = lobbyPlayers_[i].name;
+			if (lobbyPlayers_[i].id == hostId_) n += L" (호스트)";
+			slotLabels_[i]->setText(n);
+			slotLabels_[i]->setTextColor(1.f, 1.f, 1.f, 1.f);
+		} else {
+			slotLabels_[i]->setText(L"비어있음");
+			slotLabels_[i]->setTextColor(0.5f, 0.5f, 0.5f, 1.f);
+		}
+	}
+
+	// 게임 시작 버튼(호스트) / 대기 메시지(비호스트)
+	const bool loaded = inGameAssetsLoaded_.load(std::memory_order_acquire);
+	if (startGameButton_) startGameButton_->visible = isHost_;
+	if (hostStatusLabel_) hostStatusLabel_->visible = !isHost_;
+	if (isHost_ && startGameLabel_) {
+		startGameLabel_->setText(loaded ? L"게임 시작" : L"리소스 로딩 중...");
+	}
+	if (isHost_ && startGameButton_) {
+		startGameButton_->bgColor = loaded
+			? XMFLOAT4{ 0.16f, 0.40f, 0.22f, 0.95f }
+			: XMFLOAT4{ 0.25f, 0.25f, 0.25f, 0.80f };
+	}
+}
+
+void Game::LobbyScene(Milliseconds deltaTime) {
+	const bool loaded = inGameAssetsLoaded_.load(std::memory_order_acquire);
+	if (loaded && !inGameAssetsReady_) {
+		inGameAssetsReady_ = true;
+		refreshLobbyUI();  // 게임 시작 버튼 활성 상태 갱신 (로그 재개는 워커가 수행)
+	}
+
+	uiManager_.layout();
+	uiManager_.update(std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont());
+}
+
+void Game::renderLobby() {
+	uiManager_.render(gfx_);
+
+	auto frameDataUI = UIPipeline::FrameData{
+		.screenWidth  = static_cast<float>(gClientRect.right - gClientRect.left),
+		.screenHeight = static_cast<float>(gClientRect.bottom - gClientRect.top)
+	};
+	gfx_.addFrameData(frameDataUI);
+
+	gfx_.render();
+}
+
+void Game::enterInGame() {
+	if (lobbyRoot_) {
+		lobbyRoot_->visible = false;
+	}
+
+	// 인게임은 Deferred 경로로 렌더한다(로비에서 Forward로 바꿔둔 것을 복원).
+	gfx_.setRenderPath(GFX::RenderPath::Deferred);
+
+	setupStage();
+	scene_ = Scene::InGame;
+
+	// 플레이어/오브젝트 생성은 서버의 S_Enter 패킷이 담당한다.
+	// (패킷은 InGameScene의 SleepEx(alertable)에서 처리되므로, 씬 전환 후 첫 프레임부터 수신된다.)
+	// 여기서 별도로 플레이어를 만들면 S_Enter가 다시 setupPlayer를 호출해
+	// 이전 플레이어의 물리 바디가 물리월드에 dangling으로 남아 크래시한다.
+}
+
+std::string Game::makeRoomCode() {
+	static const char kAlphabet[] = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+	static std::mt19937 rng{ std::random_device{}() };
+	std::uniform_int_distribution<int> dist(0, static_cast<int>(sizeof(kAlphabet) - 2));
+	std::string code;
+	for (int i = 0; i < 6; ++i) {
+		code += kAlphabet[dist(rng)];
+	}
+	return code;
+}
+
+void Game::lobbyCreateRoom() {
+	roomCode_ = makeRoomCode();
+	isHost_   = true;
+	hostId_   = "local-player";
+	lobbyPlayers_.clear();
+	lobbyPlayers_.push_back({ "local-player", L"나" });
+	dummySeed_  = 1;
+	lobbyState_ = LobbyState::WaitingRoom;
+	refreshLobbyUI();
+	gSharedLog << "[Lobby] 방 생성: " << roomCode_ << "\n";
+}
+
+void Game::lobbyJoinRoom(const std::string& code) {
+	// 코드 정규화: 대문자 + 영숫자만 (TextInput에서 이미 필터되지만 방어적으로 한 번 더).
+	std::string norm;
+	for (char c : code) {
+		if (c >= 'a' && c <= 'z') c = static_cast<char>(c - ('a' - 'A'));
+		const bool isAlnum = (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
+		if (isAlnum) norm += c;
+	}
+
+	if (norm.size() != 6) {
+		if (mainMenuMsgLabel_) mainMenuMsgLabel_->setText(L"6자리 코드를 입력하세요");
+		gSharedLog << "[Lobby] 방 참가 실패: 잘못된 코드 길이\n";
+		return;
+	}
+
+	// 서버 미연동 상태에서는 실제 방을 조회할 수 없으므로 항상 "방 없음"으로 처리한다.
+	// (실제 룸 프로토콜 연동은 후속 작업)
+	if (mainMenuMsgLabel_) mainMenuMsgLabel_->setText(L"방을 찾을 수 없습니다");
+	gSharedLog << "[Lobby] 방 참가 실패: 방을 찾을 수 없습니다 (code=" << norm << ")\n";
+}
+
+void Game::lobbyLeaveRoom() {
+	roomCode_.clear();
+	isHost_ = false;
+	hostId_.clear();
+	lobbyPlayers_.clear();
+	dummySeed_  = 1;
+	lobbyState_ = LobbyState::MainMenu;
+	if (roomCodeInput_)    roomCodeInput_->clear();
+	if (mainMenuMsgLabel_) mainMenuMsgLabel_->setText(L"");
+	refreshLobbyUI();
+}
+
+void Game::lobbyStartGame() {
+	if (!isHost_) {
+		gSharedLog << "[Lobby] 호스트만 시작할 수 있습니다.\n";
+		return;
+	}
+	if (!inGameAssetsLoaded_.load(std::memory_order_acquire)) {
+		gSharedLog << "[Lobby] 리소스 로딩 중입니다.\n";
+		return;
+	}
+	enterInGame();
+}
+
+void Game::lobbyAddDummy() {
+	if (static_cast<int>(lobbyPlayers_.size()) >= kMaxLobbyPlayers) {
+		return;
+	}
+	++dummySeed_;
+	lobbyPlayers_.push_back({
+		"dummy-" + std::to_string(dummySeed_),
+		L"Player_" + std::to_wstring(dummySeed_)
+	});
+	refreshLobbyUI();
+}
+
+void Game::lobbyRemoveDummy() {
+	for (int i = static_cast<int>(lobbyPlayers_.size()) - 1; i >= 0; --i) {
+		if (lobbyPlayers_[i].id != "local-player" && lobbyPlayers_[i].id != hostId_) {
+			lobbyPlayers_.erase(lobbyPlayers_.begin() + i);
+			refreshLobbyUI();
+			return;
+		}
+	}
 }
 
 // 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.

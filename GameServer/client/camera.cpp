@@ -50,6 +50,15 @@ void Camera::update(Milliseconds deltaTime) {
 	else
 		eye_ = springPos_;
 
+	// 카메라 암이 0으로 붕괴(예: 스폰 직후 피벗이 지면 아래)하거나 타깃 orient가 degenerate한 경우
+	// eye_ == at_ 가 되어 lookAt 시선 방향이 0이 된다. lookAt이 degenerate되지 않도록 최소 거리를 보장한다.
+	if ((eye_ - at_).len2() < 1e-4f) {
+		mu::Vec3 dir = springPos_ - at_;
+		float dl = dir.len();
+		if (dl < 1e-6f) { dir = mu::Vec3(0.f, 0.f, -1.f); dl = 1.f; }
+		eye_ = at_ + dir * (0.1f / dl);
+	}
+
 	view_ = mu::lookAt(eye_, at_, mu::NVec3(0.f, 1.f, 0.f));
 }
 

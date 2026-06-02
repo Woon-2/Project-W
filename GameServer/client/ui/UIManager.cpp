@@ -73,9 +73,16 @@ bool UIManager::onWndMsg(UINT msg, WPARAM wParam, LPARAM lParam) {
 
     case WM_LBUTTONDOWN: {
         UIElement* hit = hitTest(cursorX_, cursorY_);
+
+        // Focus change (also blurs when clicking empty space).
+        if (hit != focusedElement_) {
+            if (focusedElement_) focusedElement_->onBlur();
+            focusedElement_ = hit;
+            if (focusedElement_) focusedElement_->onFocus();
+        }
+
         if (hit) {
             pressedElement_ = hit;
-            focusedElement_ = hit;
             float lx = cursorX_ - hit->resolvedRect().x;
             float ly = cursorY_ - hit->resolvedRect().y;
             hit->onMouseDown(MouseButton::Left, lx, ly);
@@ -128,6 +135,14 @@ bool UIManager::onWndMsg(UINT msg, WPARAM wParam, LPARAM lParam) {
     case WM_KEYUP: {
         if (focusedElement_) {
             focusedElement_->onKeyUp(static_cast<int>(wParam));
+            return true;
+        }
+        return false;
+    }
+
+    case WM_CHAR: {
+        if (focusedElement_) {
+            focusedElement_->onChar(static_cast<wchar_t>(wParam));
             return true;
         }
         return false;
