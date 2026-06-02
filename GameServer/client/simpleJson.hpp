@@ -1,7 +1,6 @@
 ﻿#pragma once
 
 #include <cstddef>
-#include <map>
 #include <string>
 #include <utility>
 #include <variant>
@@ -12,7 +11,10 @@ namespace json {
 class Value {
 public:
     using Array = std::vector<Value>;
-    using Object = std::map<std::string, Value>;
+    // Unity 익스포트는 키가 적은 작은 객체가 수백만 개라, 트리(std::map) 대신
+    // 평탄한 벡터를 쓰면 노드별 할당이 사라져 파싱이 크게 빨라진다.
+    // find()는 선형 탐색이지만 객체당 키 수가 적어 비용이 무시할 만하다.
+    using Object = std::vector<std::pair<std::string, Value>>;
 
     Value() = default;
     Value(std::nullptr_t) : data_(nullptr) {}

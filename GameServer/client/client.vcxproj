@@ -264,6 +264,7 @@
     <ClCompile Include="ui\widgets\Button.cpp" />
     <ClCompile Include="ui\widgets\Slider.cpp" />
     <ClCompile Include="ui\widgets\Dropdown.cpp" />
+    <ClCompile Include="ui\widgets\TextInput.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common\pool.hpp" />
@@ -378,6 +379,7 @@
     <ClInclude Include="ui\widgets\Button.hpp" />
     <ClInclude Include="ui\widgets\Slider.hpp" />
     <ClInclude Include="ui\widgets\Dropdown.hpp" />
+    <ClInclude Include="ui\widgets\TextInput.hpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="hiZClear.hlsl">

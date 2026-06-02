@@ -253,12 +253,14 @@ DescriptorPool::DescriptorPool(std::size_t viewCnt,
 }
 
 int DescriptorPool::alloc() {
+	std::lock_guard<std::mutex> lock(*allocMtx_);
 	auto ret = freeIndices_.front();
 	freeIndices_.pop_front();
 	return ret;
 }
 
 void DescriptorPool::free(int idx) {
+	std::lock_guard<std::mutex> lock(*allocMtx_);
 	freeIndices_.push_back(idx);
 }
 

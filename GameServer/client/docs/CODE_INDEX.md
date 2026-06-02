@@ -360,7 +360,9 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `GFX::init()` | `gfx.hpp #84` | Device, CmdQ, DescriptorHeap, PSO 생성 |
 | `GFX::createSwapChain()` | `gfx.hpp #90` | SwapChain + BackBuffer + FrameFence |
 | `GFX::addDrawEvent()` | `gfx.hpp #97-135` | 파이프라인별 오버로드 |
-| `GFX::loadAssets()` | `gfx.hpp #152` | 요청된 리소스 로드 |
+| `GFX::initSharedResources()` | `gfx.hpp` | 공용 GPU 리소스(그림자맵/GBuffer/HiZ/정적 메시/white tex) 생성. 실행 시 메인 스레드 1회 |
+| `GFX::loadRequestedAssets()` | `gfx.hpp` | 요청된 리소스(모델/텍스처/메시 등) 로드. ThreadPool 워커에서 백그라운드 호출 가능 |
+| `GFX::loadAssets()` | `gfx.hpp` | initSharedResources + loadRequestedAssets 편의 래퍼 |
 | `GFX::render()` | `gfx.hpp #155` | 전체 파이프라인 실행 |
 | `GFX::getHiZObjectVisible()` | `gfx.cpp` | renderObjectId → Hi-Z visibility 조회 (1-frame delay; Hi-Z OFF면 true 반환) |
 | `GFX::setMaxRenderObjectId()` | `gfx.cpp` | objectVisibility 배열 크기 초기화 (setupStage 이후 호출) |
@@ -718,7 +720,7 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `Camera::cameraRadius_` | `camera.hpp #76` | BVH raycast spherePad (기본 0.2f) |
 
 **AssetManager::loadGFXAssets (`AssetManager.hpp #9`):**
-- `loadGFXAssets(GFX& gfx, const GFX::AssetConfigs& configs = {})` — configs를 `gfx.loadAssets(configs)`로 전달
+- `loadGFXAssets(GFX& gfx, const GFX::AssetConfigs& configs = {})` — 요청 큐잉 후 `gfx.loadRequestedAssets()` 호출. 공용 리소스(`gfx.initSharedResources`)는 호출부에서 선행 초기화 필요. (Online 모드: 로비에서 ThreadPool로 백그라운드 호출)
 
 **GFX::AssetConfigs (`gfx.hpp #61`):**
 
@@ -828,6 +830,7 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `UI::ProgressBar` | `ProgressBar.hpp/cpp` | 배경 + fill 이중 쿼드; `setProgress(0~1)` |
 | `UI::Slider` | `Slider.hpp/cpp` | 트랙 + 핸들 드래그; `onValueChanged` 콜백 (`std::function<void(float)>`) |
 | `UI::Dropdown` | `Dropdown.hpp/cpp` | 파란 헤더 버튼 + 확장 리스트; `setup(items)` 후 `onSelectionChanged` 콜백 (`std::function<void(int)>`) |
+| `UI::TextInput` | `TextInput.hpp/cpp` | 한 줄 텍스트 입력; 포커스 시 `WM_CHAR` 수신, 내부 child `Label`로 표시 + `|` 캐럿; `uppercase`/`alnumOnly`/`maxLength`/`placeholder`, `onChange`/`onSubmit` 콜백. (`UIManager`가 `WM_CHAR`→`onChar`, 클릭 시 `onFocus`/`onBlur` 라우팅) |
 
 ### 사용 패턴 (game.cpp 통합 예시)
 

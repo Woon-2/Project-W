@@ -66,6 +66,11 @@ public:
     virtual void onMouseMove(float localX, float localY) {}
     virtual void onKeyDown(int vkCode) {}
     virtual void onKeyUp(int vkCode) {}
+    // Character input (WM_CHAR), routed to the focused element by UIManager.
+    virtual void onChar(wchar_t ch) {}
+    // Focus gained/lost. UIManager calls these when the focused element changes.
+    virtual void onFocus() {}
+    virtual void onBlur() {}
 
 protected:
     // Build world matrix from resolvedRect_ for UIPipeline.

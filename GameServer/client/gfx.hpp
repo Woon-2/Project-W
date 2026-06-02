@@ -272,9 +272,21 @@ public:
 	void addRequestMeshBinLoad(const RequestMeshBinLoad& request);
 	void addRequestBakeAnimation(const RequestBakeAnimation& request);
 
-	// 파이프라인들이 자체적으로 사용하는 리소스들과
-	// addRequestXXLoad 꼴의 함수로 요청된 리소스들을 로드한다.
-	void loadAssets(const AssetConfigs& configs = AssetConfigs{});
+	// 파이프라인들이 자체적으로 사용하는 공용 리소스들(그림자맵/GBuffer/HiZ/정적 메시/white 텍스처)을
+	// 생성한다. 실행 시 메인 스레드에서 한 번만 호출한다.
+	void initSharedResources(const AssetConfigs& configs = AssetConfigs{});
+
+	// addRequestXXLoad 꼴의 함수로 요청된 리소스들(모델/스카이박스/텍스처/메시 등)을 로드한다.
+	// initSharedResources 호출 이후에 사용한다. 요청 처리만 수행하므로
+	// ThreadPool 워커에서 백그라운드로 호출할 수 있다.
+	// (메인 렌더와 공유되는 디스크립터 풀은 자체 뮤텍스로 보호된다.)
+	void loadRequestedAssets();
+
+	// 공용 리소스 초기화 + 요청 리소스 로드를 한 번에 수행하는 편의 함수.
+	void loadAssets(const AssetConfigs& configs = AssetConfigs{}) {
+		initSharedResources(configs);
+		loadRequestedAssets();
+	}
 
 	// Terrain chunk streaming support.
 	// Runs a resource-load recording on a ResourceLoading command context bound to
