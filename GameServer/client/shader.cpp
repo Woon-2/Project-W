@@ -344,7 +344,13 @@ ComPtr<ID3D12PipelineState> createShadowMapCSMShader(ID3D12Device* device, ID3D1
 		.SampleMask = D3D12_DEFAULT_SAMPLE_MASK,
 		.RasterizerState = D3D12_RASTERIZER_DESC{
 			.FillMode = D3D12_FILL_MODE_SOLID,
-			.CullMode = D3D12_CULL_MODE_BACK,
+			// Front-face culling for the static-mesh CSM shadow pass: record the
+			// BACK faces into the shadow map so lit front faces never self-shadow.
+			// This eliminates shadow acne (stripes) on large flat solid surfaces
+			// like the stronghold box. Only static deferred meshes use this PSO,
+			// so characters/terrain are unaffected. (Valid for closed solid meshes;
+			// revisit if thin/open static casters are added.)
+			.CullMode = D3D12_CULL_MODE_FRONT,
 			.FrontCounterClockwise = false,
 			.DepthBias = 1000,
 			.DepthBiasClamp = 0.01f,

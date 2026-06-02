@@ -73,13 +73,16 @@ void Room::setupStronghold(Stronghold& sh, const StrongholdDef& sd, const Level&
 
 	// The cube model's pivot is at its center, so place it on the ground by
 	// lifting it half its world-space height (AABB.size is full extent). The
+	// base is then sunk slightly so its flat bottom face is NOT coplanar with the
+	// terrain mesh (coplanar surfaces z-fight, producing flickering stripes). The
 	// raised pos + scale are sent to clients via ObjectInfo, so the client
 	// visual matches without extra work.
 	const float groundY = groundHeightAtWorld(sd.center.x(), sd.center.z());
 	sh.setPos(mu::Vec3(sd.center.x(), groundY, sd.center.z()));
 	const BVH& bvh = sh.body().worldBVH();
 	const float halfH = bvh.empty() ? 0.f : bvh.nodes[0].bounds.size.y() * 0.5f;
-	sh.setPos(mu::Vec3(sd.center.x(), groundY + halfH, sd.center.z()));
+	const float kGroundBury = 0.5f;   // bury the bottom face below the terrain surface
+	sh.setPos(mu::Vec3(sd.center.x(), groundY + std::max(0.f, halfH - kGroundBury), sd.center.z()));
 
 	sh.body().setMotionType(MotionType::Static);
 }
