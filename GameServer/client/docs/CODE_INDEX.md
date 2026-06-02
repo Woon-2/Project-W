@@ -825,8 +825,9 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 |--------|------|------|
 | `UI::Panel` | `Panel.hpp/cpp` | 컨테이너; `backgroundTex` 있으면 배경 렌더 |
 | `UI::Image` | `Image.hpp/cpp` | 단일 텍스처 표시 |
+| `UI::emitNineSlice()` | `UIElement.hpp/cpp` | 9-slice 헬퍼; 요소 사각형을 9셀로 나눠 셀별 부분 UV `DrawEvent` emit. 코너는 화면 px 고정, 가장자리/중앙 늘어남. `DrawEvent::uvScaleBias`(+`ui.hlsl`/`UIShader::PerInstanceData`)로 부분 UV 매핑 |
 | `UI::Label` | `Label.hpp/cpp` | `TextImage` 내부 소유; `resolvedRect_` 크기에 맞게 자동 재생성; dirty-check로 매 프레임 래스터화 방지 |
-| `UI::Button` | `Button.hpp/cpp` | Normal/Hovered/Pressed 상태 텍스처; `onClick` 콜백 (`std::function<void()>`) |
+| `UI::Button` | `Button.hpp/cpp` | Normal/Hovered/Pressed 상태 텍스처 + 9-slice(`slice*`) + 상태별 `texTint*`; `onClick` 콜백 (`std::function<void()>`) |
 | `UI::ProgressBar` | `ProgressBar.hpp/cpp` | 배경 + fill 이중 쿼드; `setProgress(0~1)` |
 | `UI::Slider` | `Slider.hpp/cpp` | 트랙 + 핸들 드래그; `onValueChanged` 콜백 (`std::function<void(float)>`) |
 | `UI::Dropdown` | `Dropdown.hpp/cpp` | 파란 헤더 버튼 + 확장 리스트; `setup(items)` 후 `onSelectionChanged` 콜백 (`std::function<void(int)>`) |

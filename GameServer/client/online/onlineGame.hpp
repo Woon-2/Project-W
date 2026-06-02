@@ -20,6 +20,7 @@
 #include "../ui/widgets/Label.hpp"
 #include "../ui/widgets/Button.hpp"
 #include "../ui/widgets/Panel.hpp"
+#include "../ui/widgets/Image.hpp"
 #include "../ui/widgets/TextInput.hpp"
 #include "../spriteAnimation.hpp"
 #include "../crosshair.hpp"
@@ -116,6 +117,9 @@ private:
 	// effects/*_ParticleSystems.json을 미리 파싱해 캐시에 적재한다 (백그라운드 워커에서 호출).
 	// setParticle()이 디스크 재파싱 없이 캐시에서 config를 꺼내 쓰도록 한다.
 	void prefetchParticleConfigs();
+
+	// 로비 UI 텍스처(배경/로고)를 메인 스레드에서 즉시 로드한다.
+	void loadLobbyTextures();
 
 	// 로비 UI 구성/갱신 (mock 룸 상태 기반).
 	void buildLobbyUI();
@@ -308,8 +312,19 @@ private:
 	std::vector<LobbyPlayer> lobbyPlayers_{};
 	int                      dummySeed_ = 1;
 
+	// 로비 UI 텍스처 (메인 스레드에서 즉시 로드, 인게임 백그라운드 로드와 분리)
+	std::unordered_map<std::string, Texture> lobbyTexHashMap_{};
+	Texture lobbyBgTex_{};
+	Texture lobbyLogoTex_{};
+	Texture lobbyPanelTex_{};
+	Texture lobbyBtnPrimaryTex_{};
+	Texture lobbyBtnSecondaryTex_{};
+	Texture lobbyInputTex_{};
+
 	// 로비 UI (소유권은 uiManager_)
 	UI::UIElement* lobbyRoot_       = nullptr;
+	UI::Image*     lobbyBgImage_    = nullptr;
+	UI::Image*     lobbyLogoImage_  = nullptr;
 	UI::UIElement* mainMenuRoot_    = nullptr;
 	UI::UIElement* waitingRoomRoot_ = nullptr;
 	UI::TextInput* roomCodeInput_   = nullptr;

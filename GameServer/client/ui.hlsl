@@ -2,6 +2,7 @@
 
 struct PerInstanceData {
     float4x4 world;
+    float4 uvScaleBias;   // uv' = uv * xy + zw  (9-slice sub-rect mapping)
 };
 
 struct Material
@@ -48,7 +49,7 @@ VS_OUTPUT VSMain(VS_INPUT input, uint idxInst : SV_InstanceID)
     PerInstanceData instance = gInstances[idxInst + idxDrawcall];
 
     ret.pos = mul(float4(input.pos, 1.0f), instance.world);
-    ret.uv = input.uv;
+    ret.uv = input.uv * instance.uvScaleBias.xy + instance.uvScaleBias.zw;
     
     float2 ndc;
     ndc.x = (ret.pos.x / screenWidth) * 2.0f - 1.0f;

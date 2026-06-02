@@ -94,6 +94,21 @@ void TextInput::onChar(wchar_t ch) {
 }
 
 void TextInput::onRender(const RenderContext& rc) {
+    if (backgroundTex) {
+        const XMFLOAT4 tint = focused_ ? texTintFocused : texTint;
+        if (sliceCornerX > 0.f || sliceCornerY > 0.f) {
+            emitNineSlice(rc, resolvedRect_, backgroundTex,
+                sliceUvBorderX, sliceUvBorderY, sliceCornerX, sliceCornerY, tint);
+        } else {
+            rc.gfx->addDrawEvent(UIPipeline::DrawEvent{
+                .world    = buildWorldMatrix(rc.screenHeight),
+                .pTex     = backgroundTex,
+                .colorMul = tint
+            });
+        }
+        return;
+    }
+
     const XMFLOAT4 col = focused_ ? bgColorFocused : bgColor;
     if (col.w <= 0.f) return;
 

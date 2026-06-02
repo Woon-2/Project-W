@@ -72,6 +72,36 @@ Online 클라이언트(`online/onlineGame`)를 **로비 씬 / 인게임 씬**으
   하고, 서버 미연동 상태라 실제 방 조회가 불가하므로 항상 "방을 찾을 수 없습니다" 로그/메시지를 출력한다
   (대기실 전환 없음). `방 만들기`는 self-host mock으로 대기실 전환.
 
+## 메인화면 배경 이미지 & 로고 (이미지 에셋)
+메인화면(`LobbyState::MainMenu`)을 단색 UI에서 **배경 키 아트 + 게임 로고(OutLander)** 구성으로 전환.
+- 에셋: `resources/UI/ui_lobby_bg.dds`(배경, 1672×941≈16:9), `resources/UI/ui_lobby_logo.dds`(로고, 2172×724≈3:1, 알파 포함).
+  파일명 컨벤션은 기존 UI 에셋(`player_hp_*`)을 따른 소문자 snake_case + `ui_` 접두사.
+- **즉시 로드**: `loadLobbyTextures()`가 `addRequestTextureLoad` 2건을 큐잉하고 **메인 스레드에서 즉시
+  `loadRequestedAssets()`**를 호출한다. `enterLobby()`에서 `buildLobbyUI()` **이전**에 불러 위젯에 텍스처를
+  연결한다. 인게임 백그라운드 로드(`startInGameAssetLoad`)가 시작되기 전이라 요청 큐가 겹치지 않는다.
+  텍스처는 전용 `lobbyTexHashMap_`/`lobbyBgTex_`/`lobbyLogoTex_`에 보관(인게임 `AssetManager` 해시맵과 분리).
+- **배경(cover 스케일)**: `UI::Image`를 화면 중앙에 두고, 원본 종횡비를 유지한 채 화면을 덮도록 크기를
+  계산(화면이 더 세로로 길면 높이 기준, 가로로 길면 너비 기준). 넘치는 영역은 뷰포트에서 클리핑.
+  텍스처 로드 실패 대비로 단색 sky(`zOrder -11`)를 뒤에 깔고 이미지를 `zOrder -10`에 올린다.
+- **로고**: `UI::Image`를 메인 패널 위(`Anchors::Center`/`Pivots::BottomCenter`, `offsetY = -(패널높이/2+16)`)에
+  종횡비 유지하여 배치(`zOrder 5`). 두 위젯 모두 `lobbyBgImage_`/`lobbyLogoImage_`로 핸들 보관.
+- 로더는 `DDSTextureLoader12`(압축/비압축·알파 지원). 대기실(3D 맵 배경)은 별도 후속 작업.
+
+## 9-slice 프레임 (패널/버튼/입력창 텍스처)
+단색 UI 블록을 **9-slice 텍스처 프레임**으로 교체. 에셋은 normal 상태 1장씩만 준비하고
+hover/pressed는 엔진 틴트로 처리.
+- 에셋: `ui_panel_frame.dds`(1254², 패널), `ui_btn_primary.dds`/`ui_btn_secondary.dds`(720², 버튼),
+  `ui_input.dds`(2048×768, 입력창). 모두 `loadLobbyTextures()`에서 즉시 로드(BilinearClamp).
+- **9-slice 렌더링**: `UIShader::PerInstanceData`/`ui.hlsl`에 `uvScaleBias`(uv'=uv*xy+zw) 추가,
+  `UIPipeline::DrawEvent`에 동일 필드 추가. `UI::emitNineSlice()`(`UIElement.cpp`)가 요소 사각형을
+  9개 셀로 나눠 셀마다 부분 UV로 `DrawEvent`를 emit한다. 코너는 화면 px 고정, 가장자리/중앙만 늘어남.
+- **위젯 지원**: `Button`에 `tex*`(기존) + `sliceUvBorderX/Y`/`sliceCornerX/Y` + 상태별 `texTint*`,
+  `TextInput`에 `backgroundTex` + 동일 slice 필드. 텍스처 경로에 `colorMul` 틴트 적용(hover 밝게/press 어둡게).
+- **적용 대상**: 메인/대기실 패널 배경, primary/secondary 버튼, 방 코드 입력창. 작은 배지·구분선·더미
+  버튼은 단색 유지. 텍스처 미로드 시 자동으로 기존 단색 폴백.
+- **튜닝**: slice 경계/코너 px는 `buildLobbyUI`의 `stylePanel`/`stylePrimary`/`styleSecondary` 람다와
+  입력창 블록의 상수로 조정(에셋 모양에 맞춰 눈으로 맞추는 값).
+
 ## 후속(범위 밖)
 - 실제 룸 프로토콜 설계·연동 (현재 방 생성/참가/시작은 mock)
 - TextInput 캐럿 블링킹/텍스트 선택/클립보드 등 고급 편집

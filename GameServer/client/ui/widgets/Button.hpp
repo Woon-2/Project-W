@@ -13,6 +13,18 @@ public:
     const Texture* texHovered = nullptr;
     const Texture* texPressed = nullptr;
 
+    // 9-slice for the textured path. sliceCornerX/Y > 0 enables it; otherwise the
+    // texture is stretched. uvBorderX/Y are the slice insets (fraction of source).
+    float sliceUvBorderX = 0.f;
+    float sliceUvBorderY = 0.f;
+    float sliceCornerX   = 0.f;
+    float sliceCornerY   = 0.f;
+
+    // Per-state color multiplier applied to the texture (not the solid fallback).
+    XMFLOAT4 texTint        = { 1.f,  1.f,  1.f,  1.f };
+    XMFLOAT4 texTintHovered = { 1.12f, 1.12f, 1.12f, 1.f };
+    XMFLOAT4 texTintPressed = { 0.82f, 0.82f, 0.82f, 1.f };
+
     // Solid-color fallback used when the corresponding texture is nullptr.
     // Alpha = 0 means transparent (no quad submitted).
     XMFLOAT4 bgColor        = { 1.f, 1.f, 1.f, 0.f };

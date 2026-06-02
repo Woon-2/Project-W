@@ -2574,11 +2574,71 @@ void Game::enterLobby() {
 		uiBaseReady_ = true;
 	}
 
+	// 로비 UI 텍스처(배경/로고)는 메인 스레드에서 즉시 로드한다.
+	// (buildLobbyUI가 이 텍스처를 위젯에 연결하므로 빌드 전에 로드해야 한다.)
+	loadLobbyTextures();
+
 	buildLobbyUI();
 	refreshLobbyUI();
 
 	// 최소 로드로 로비 진입 후, 인게임 리소스를 백그라운드로 로드한다.
 	startInGameAssetLoad();
+}
+
+void Game::loadLobbyTextures() {
+	gfx_.addRequestTextureLoad(RequestTextureLoad{
+		.name            = "LobbyBg",
+		.texturePath     = "../resources/UI/ui_lobby_bg.dds",
+		.pDest           = &lobbyBgTex_,
+		.pTexHashMap     = &lobbyTexHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	});
+	gfx_.addRequestTextureLoad(RequestTextureLoad{
+		.name            = "LobbyLogo",
+		.texturePath     = "../resources/UI/ui_lobby_logo.dds",
+		.pDest           = &lobbyLogoTex_,
+		.pTexHashMap     = &lobbyTexHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	});
+
+	// 9-slice UI 프레임(패널/버튼/입력창) — 클램프 샘플러로 모서리 번짐 방지.
+	gfx_.addRequestTextureLoad(RequestTextureLoad{
+		.name            = "LobbyPanel",
+		.texturePath     = "../resources/UI/ui_panel_frame.dds",
+		.pDest           = &lobbyPanelTex_,
+		.pTexHashMap     = &lobbyTexHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	});
+	gfx_.addRequestTextureLoad(RequestTextureLoad{
+		.name            = "LobbyBtnPrimary",
+		.texturePath     = "../resources/UI/ui_btn_primary.dds",
+		.pDest           = &lobbyBtnPrimaryTex_,
+		.pTexHashMap     = &lobbyTexHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	});
+	gfx_.addRequestTextureLoad(RequestTextureLoad{
+		.name            = "LobbyBtnSecondary",
+		.texturePath     = "../resources/UI/ui_btn_secondary.dds",
+		.pDest           = &lobbyBtnSecondaryTex_,
+		.pTexHashMap     = &lobbyTexHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	});
+	gfx_.addRequestTextureLoad(RequestTextureLoad{
+		.name            = "LobbyInput",
+		.texturePath     = "../resources/UI/ui_input.dds",
+		.pDest           = &lobbyInputTex_,
+		.pTexHashMap     = &lobbyTexHashMap_,
+		.needsUploadInfo = false,
+		.sampler         = Samplers::BilinearClamp
+	});
+
+	// 인게임 백그라운드 로드가 시작되기 전(요청 큐가 비어 있을 때) 즉시 처리한다.
+	gfx_.loadRequestedAssets();
 }
 
 void Game::startInGameAssetLoad() {
@@ -2773,7 +2833,53 @@ void Game::buildLobbyUI() {
 		return btn;
 	};
 
-	makeSolid(lobbyRoot_, "lobbySkyBackground", 0.f, 0.f, screenW, screenH, skyBlue, -10);
+	// 9-slice 텍스처 스타일 적용 헬퍼. 텍스처 로드 실패 시 기존 단색을 그대로 둔다.
+	// (slice 경계/코너 px는 에셋 모양에 맞춘 튜닝값 — 어색하면 이 숫자만 조정.)
+	auto stylePanel = [&](UI::Button* b) -> UI::Button* {
+		if (b && lobbyPanelTex_.res) {
+			b->texNormal = &lobbyPanelTex_;
+			b->sliceUvBorderX = 0.30f; b->sliceUvBorderY = 0.30f;
+			b->sliceCornerX = 40.f;    b->sliceCornerY = 40.f;
+		}
+		return b;
+	};
+	auto stylePrimary = [&](UI::Button* b) -> UI::Button* {
+		if (b && lobbyBtnPrimaryTex_.res) {
+			b->texNormal = &lobbyBtnPrimaryTex_;
+			b->sliceUvBorderX = 0.40f; b->sliceUvBorderY = 0.40f;
+			b->sliceCornerX = 22.f;    b->sliceCornerY = 22.f;
+		}
+		return b;
+	};
+	auto styleSecondary = [&](UI::Button* b) -> UI::Button* {
+		if (b && lobbyBtnSecondaryTex_.res) {
+			b->texNormal = &lobbyBtnSecondaryTex_;
+			b->sliceUvBorderX = 0.40f; b->sliceUvBorderY = 0.40f;
+			b->sliceCornerX = 22.f;    b->sliceCornerY = 22.f;
+		}
+		return b;
+	};
+
+	// 배경: 텍스처 로드 실패에 대비해 단색 sky를 가장 뒤(-11)에 깔고,
+	// 그 위(-10)에 키 아트를 cover 스케일(종횡비 유지 + 화면 덮기)로 올린다.
+	makeSolid(lobbyRoot_, "lobbySkyBackground", 0.f, 0.f, screenW, screenH, skyBlue, -11);
+	if (lobbyBgTex_.res) {
+		const float bgAspect = 1672.f / 941.f;   // ui_lobby_bg.dds 원본 비율
+		float bgW, bgH;
+		if (screenW / screenH < bgAspect) {       // 화면이 더 세로로 길면 높이 기준
+			bgH = screenH;
+			bgW = screenH * bgAspect;
+		} else {                                   // 화면이 더 가로로 길면 너비 기준
+			bgW = screenW;
+			bgH = screenW / bgAspect;
+		}
+		auto* bg = static_cast<UI::Image*>(lobbyRoot_->addChild(std::make_unique<UI::Image>()));
+		bg->name    = "lobbyBgImage";
+		applyRect(bg, UI::Anchors::Center, UI::Pivots::Center, 0.f, 0.f, bgW, bgH);
+		bg->texture = &lobbyBgTex_;
+		bg->zOrder  = -10;
+		lobbyBgImage_ = bg;
+	}
 
 	// ---- 메인 메뉴 (mainView) ----
 	mainMenuRoot_ = lobbyRoot_->addChild(std::make_unique<UI::UIElement>());
@@ -2783,14 +2889,29 @@ void Game::buildLobbyUI() {
 	mainMenuRoot_->width  = UI::DimValue::px(screenW);
 	mainMenuRoot_->height = UI::DimValue::px(screenH);
 
+	// 게임 로고(OutLander) — 메인 패널 위쪽 중앙에 배치(투명 PNG 기반 텍스처).
+	if (lobbyLogoTex_.res) {
+		const float logoAspect = 2172.f / 724.f;          // ui_lobby_logo.dds 원본 비율(약 3:1)
+		const float logoH = 110.f;
+		const float logoW = logoH * logoAspect;
+		auto* logo = static_cast<UI::Image*>(mainMenuRoot_->addChild(std::make_unique<UI::Image>()));
+		logo->name    = "lobbyLogoImage";
+		applyRect(logo, UI::Anchors::Center, UI::Pivots::BottomCenter,
+			0.f, -(mainPanelH * 0.5f + 16.f), logoW, logoH);
+		logo->texture = &lobbyLogoTex_;
+		logo->zOrder  = 5;
+		lobbyLogoImage_ = logo;
+	}
+
 	auto* mainPanel = makeGroup(mainMenuRoot_, "mainPanel", mainPanelW, mainPanelH);
-	makeSolid(mainPanel, "mainPanelBg", 0.f, 0.f, mainPanelW, mainPanelH, surface);
+	stylePanel(makeSolid(mainPanel, "mainPanelBg", 0.f, 0.f, mainPanelW, mainPanelH, surface));
 	makeLabel(mainPanel, L"PROJECT-W MULTIPLAYER", 34.f, 30.f, 13.f, mainPanelW - 68.f, 24.f, primary);
 	makeLabel(mainPanel, L"비공개 로비", 34.f, 56.f, 42.f, mainPanelW - 68.f, 58.f, ink);
 
 	auto* createBtn = makeButton(mainPanel, L"", 34.f, 132.f, mainPanelW - 68.f, 72.f,
 		primary, primaryDark, primaryDark, 22.f, [this]() { lobbyCreateRoom(); },
 		{ 1.f, 1.f, 1.f, 1.f });
+	stylePrimary(createBtn);
 	makeLabel(createBtn, L"방 만들기", 18.f, 0.f, 24.f, 220.f, 72.f, { 1.f, 1.f, 1.f, 1.f });
 	makeLabel(createBtn, L"Create Room", mainPanelW - 220.f, 0.f, 13.f, 130.f, 72.f,
 		{ 1.f, 1.f, 1.f, 0.82f }, UI::TextHAlign::Trailing);
@@ -2815,6 +2936,14 @@ void Game::buildLobbyUI() {
 		roomCodeInput_->onSubmit = [this](const std::wstring& code) {
 			lobbyJoinRoom(std::string(code.begin(), code.end()));
 		};
+		if (lobbyInputTex_.res) {
+			roomCodeInput_->backgroundTex  = &lobbyInputTex_;
+			roomCodeInput_->sliceUvBorderX = 0.15f;
+			roomCodeInput_->sliceUvBorderY = 0.42f;
+			roomCodeInput_->sliceCornerX   = 18.f;
+			roomCodeInput_->sliceCornerY   = 18.f;
+			roomCodeInput_->texTintFocused = { 1.10f, 1.10f, 1.10f, 1.f };
+		}
 
 		auto* joinBtn = makeButton(mainPanel, L"참가", mainPanelW - 146.f, 274.f, 94.f, 48.f,
 			primary, primaryDark, primaryDark, 20.f, [this]() {
@@ -2822,18 +2951,19 @@ void Game::buildLobbyUI() {
 				lobbyJoinRoom(std::string(w.begin(), w.end()));
 			}, { 1.f, 1.f, 1.f, 1.f });
 		joinBtn->name    = "joinButton";
+		stylePrimary(joinBtn);
 	}
 
 	mainMenuMsgLabel_ = makeLabel(mainPanel, L"", 34.f, 348.f, 18.f, mainPanelW - 68.f, 30.f,
 		{ 0.70f, 0.24f, 0.24f, 1.f }, UI::TextHAlign::Center);
 
 	const float quietW = (mainPanelW - 80.f) * 0.5f;
-	makeButton(mainPanel, L"설정", 34.f, 392.f, quietW, 48.f,
+	styleSecondary(makeButton(mainPanel, L"설정", 34.f, 392.f, quietW, 48.f,
 		surfaceSoft, { 0.847f, 0.937f, 0.988f, 1.f }, primarySoft, 20.f,
-		[]() { gSharedLog << "[Lobby] 설정 (준비 중)\n"; }, ink);
-	makeButton(mainPanel, L"종료", 46.f + quietW, 392.f, quietW, 48.f,
+		[]() { gSharedLog << "[Lobby] 설정 (준비 중)\n"; }, ink));
+	styleSecondary(makeButton(mainPanel, L"종료", 46.f + quietW, 392.f, quietW, 48.f,
 		surfaceSoft, { 0.847f, 0.937f, 0.988f, 1.f }, primarySoft, 20.f,
-		[]() { PostQuitMessage(0); }, ink);
+		[]() { PostQuitMessage(0); }, ink));
 
 	// ---- 대기실 (lobbyView) ----
 	waitingRoomRoot_ = lobbyRoot_->addChild(std::make_unique<UI::UIElement>());
@@ -2844,7 +2974,7 @@ void Game::buildLobbyUI() {
 	waitingRoomRoot_->height = UI::DimValue::px(screenH);
 
 	auto* roomPanel = makeGroup(waitingRoomRoot_, "waitingRoomPanel", roomPanelW, roomPanelH);
-	makeSolid(roomPanel, "waitingRoomPanelBg", 0.f, 0.f, roomPanelW, roomPanelH, surface);
+	stylePanel(makeSolid(roomPanel, "waitingRoomPanelBg", 0.f, 0.f, roomPanelW, roomPanelH, surface));
 	makeLabel(roomPanel, L"PRIVATE ROOM", 34.f, 24.f, 13.f, 260.f, 24.f, primary);
 	makeLabel(roomPanel, L"대기실", 34.f, 50.f, 42.f, 260.f, 56.f, ink);
 	makeSolid(roomPanel, "playerCountBadgeBg", roomPanelW - 108.f, 32.f, 74.f, 40.f, primarySoft);
@@ -2854,10 +2984,10 @@ void Game::buildLobbyUI() {
 	makeSolid(roomPanel, "roomCodeArea", 34.f, 104.f, roomPanelW - 68.f, 100.f, surfaceSoft);
 	makeLabel(roomPanel, L"방 코드", 52.f, 116.f, 13.f, 140.f, 24.f, muted);
 	roomCodeLabel_ = makeLabel(roomPanel, L"------", 52.f, 142.f, 40.f, 260.f, 48.f, ink);
-	makeButton(roomPanel, L"코드 로그", roomPanelW - 150.f, 130.f, 98.f, 48.f,
+	stylePrimary(makeButton(roomPanel, L"코드 로그", roomPanelW - 150.f, 130.f, 98.f, 48.f,
 		primary, primaryDark, primaryDark, 18.f,
 		[this]() { gSharedLog << "[Lobby] 방 코드: " << roomCode_ << "\n"; },
-		{ 1.f, 1.f, 1.f, 1.f });
+		{ 1.f, 1.f, 1.f, 1.f }));
 
 	for (int i = 0; i < kMaxLobbyPlayers; ++i) {
 		const float y = 218.f + static_cast<float>(i) * 62.f;
@@ -2876,14 +3006,15 @@ void Game::buildLobbyUI() {
 	startGameButton_ = makeButton(roomPanel, L"게임 시작", 34.f, 476.f, roomPanelW - 68.f, 52.f,
 		primary, primaryDark, primaryDark, 22.f, [this]() { lobbyStartGame(); },
 		{ 1.f, 1.f, 1.f, 1.f });
+	stylePrimary(startGameButton_);
 	startGameLabel_  = static_cast<UI::Label*>(startGameButton_->children().front().get());
 
 	makeSolid(roomPanel, "waitMessageBg", 34.f, 476.f, roomPanelW - 68.f, 52.f, surfaceSoft);
 	hostStatusLabel_ = makeLabel(roomPanel, L"호스트가 시작하기를 기다리는 중...",
 		34.f, 476.f, 20.f, roomPanelW - 68.f, 52.f, muted, UI::TextHAlign::Center);
 
-	makeButton(roomPanel, L"방 나가기", 34.f, 540.f, roomPanelW - 68.f, 48.f,
-		surfaceSoft, primarySoft, primarySoft, 20.f, [this]() { lobbyLeaveRoom(); }, ink);
+	styleSecondary(makeButton(roomPanel, L"방 나가기", 34.f, 540.f, roomPanelW - 68.f, 48.f,
+		surfaceSoft, primarySoft, primarySoft, 20.f, [this]() { lobbyLeaveRoom(); }, ink));
 	makeSolid(roomPanel, "debugDivider", 34.f, 604.f, roomPanelW - 68.f, 1.f,
 		{ 0.780f, 0.867f, 0.922f, 1.f });
 	makeLabel(roomPanel, L"MOCK", 34.f, 616.f, 12.f, 58.f, 36.f, muted);
@@ -2977,9 +3108,18 @@ void Game::refreshLobbyUI() {
 		startGameLabel_->setText(loaded ? L"게임 시작" : L"리소스 로딩 중...");
 	}
 	if (isHost_ && startGameButton_) {
+		// 단색 폴백 경로(texNormal 미설정 시).
 		startGameButton_->bgColor = loaded ? primary : XMFLOAT4{ 0.25f, 0.25f, 0.25f, 0.80f };
 		startGameButton_->bgColorHovered = loaded ? primaryDark : XMFLOAT4{ 0.30f, 0.30f, 0.30f, 0.90f };
 		startGameButton_->bgColorPressed = loaded ? primaryDark : XMFLOAT4{ 0.18f, 0.18f, 0.18f, 0.90f };
+
+		// 텍스처 경로(stylePrimary로 texNormal 설정됨)는 bgColor*를 무시하고 texTint*만 본다.
+		// 로딩 중에는 모든 상태를 어둡게 낮춰 hover/press로도 밝아지지 않게 해 비활성임을 표시한다.
+		// 로드 완료 시 Button.hpp의 기본 틴트값으로 복원한다.
+		const XMFLOAT4 dimTint{ 0.45f, 0.45f, 0.50f, 1.f };
+		startGameButton_->texTint        = loaded ? XMFLOAT4{ 1.f,   1.f,   1.f,   1.f } : dimTint;
+		startGameButton_->texTintHovered = loaded ? XMFLOAT4{ 1.12f, 1.12f, 1.12f, 1.f } : dimTint;
+		startGameButton_->texTintPressed = loaded ? XMFLOAT4{ 0.82f, 0.82f, 0.82f, 1.f } : dimTint;
 	}
 }
 

@@ -157,6 +157,7 @@ namespace UIPipeline {
 			[]( const UIPipeline::DrawEvent& drawEvent ) {
 				return UIShader::PerInstanceData{
 					.world = mu::transpose( drawEvent.world ).getXmf(),
+					.uvScaleBias = drawEvent.uvScaleBias,
 				};
 			}
 		);
@@ -476,6 +477,7 @@ namespace UIPipeline {
 				[]( const UIPipeline::DrawEvent& drawEvent ) {
 					return UIShader::PerInstanceData{
 						.world = mu::transpose( drawEvent.world ).getXmf(),
+						.uvScaleBias = drawEvent.uvScaleBias,
 					};
 				}
 			);
