@@ -36,12 +36,15 @@ enum class PacketType : uint16 {
 	S_SkillHit,
 
 	S_DebugHitbox,
+
+	S_StrongholdState,
 };
 
 enum class ObjectType : uint16 {
 	Player,
 	Goblin,
 	Ground,
+	Stronghold,
 };
 
 struct PacketHeader {
@@ -204,6 +207,15 @@ struct OBBInfo {
 	DirectX::XMFLOAT3 center;
 	DirectX::XMFLOAT3 halfExtents;
 	DirectX::XMFLOAT4 orient;
+};
+
+// Stronghold structure state sync. HP-tick during damage rides on the existing
+// S_Hit / S_SkillHit (target id based); this packet conveys destroy/rebuild
+// transitions (and the post-rebuild full HP).
+struct SStrongholdStatePacket : public PacketHeader {
+	uint16 strongholdId;
+	int32  hp;
+	uint8  state;   // 0 = Alive, 1 = Destroyed
 };
 
 struct SDebugHitboxPacket : public PacketHeader {

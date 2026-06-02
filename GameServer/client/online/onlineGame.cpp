@@ -1775,6 +1775,47 @@ void Game::createGoblin(const ObjectInfo& goblinInfo) {
 	idGoblinMap_[goblinInfo.objectId] = goblin;
 }
 
+void Game::createStronghold(const ObjectInfo& info) {
+	auto sh = std::make_shared<Cube>();   // placeholder mesh (cube); structure model TBD
+
+	sh->setId(info.objectId);
+	sh->setPos(DirectX::XMLoadFloat3(&info.pos));
+	sh->setOrient(DirectX::XMLoadFloat4(&info.orient));
+	sh->setScale(DirectX::XMLoadFloat3(&info.scale));
+	sh->setModel(assetManager_.modelCube());
+	sh->setFaction(Faction::Monsters);
+	// HP is unknown from ObjectInfo; start full and learn maxHp from server packets.
+	sh->setHp(1);
+	sh->setMaxHp(1);
+	sh->setRenderObjectId(nextRenderObjId_++);
+
+	auto* bar = static_cast<UI::ProgressBar*>(
+		uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
+	);
+	bar->anchor    = UI::Anchors::TopLeft;
+	bar->pivot     = UI::Pivots::TopLeft;
+	bar->width     = UI::DimValue::px(120.f);
+	bar->height    = UI::DimValue::px(10.f);
+	bar->fillColor = { 0.9f, 0.7f, 0.1f, 1.f };
+	bar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
+	bar->visible   = false;
+	strongholdHpBars_[info.objectId] = { sh.get(), bar, 4.0f, false };
+
+	strongholds_.push_back(sh);
+}
+
+void Game::onStrongholdState( uint16 strongholdId, int32 hp, uint8 state ) {
+	auto it = strongholdHpBars_.find( strongholdId );
+	if ( it == strongholdHpBars_.end() ) return;
+
+	auto& e = it->second;
+	e.destroyed = ( state == 1 );
+	if ( e.obj ) {
+		if ( hp > e.obj->maxHp() ) e.obj->setMaxHp( hp );  // learn max-seen HP
+		e.obj->setHp( hp );
+	}
+}
+
 void Game::removePlayer( i32t playerId ) {
 	auto itPlayer = std::ranges::find_if(
 		otherPlayers_, [ playerId ]( const std::shared_ptr<Player>& obj ) {
@@ -1984,6 +2025,13 @@ void Game::applyHit( uint16 targetId, int32 newHp ) {
 		}
 		if ( auto barIt = goblinHpBars_.find( targetId ); barIt != goblinHpBars_.end() )
 			barIt->second.hpBarVisibleSeconds = 5.f;
+		return;
+	}
+	if ( auto it = strongholdHpBars_.find( targetId ); it != strongholdHpBars_.end() ) {
+		if ( it->second.obj ) {
+			if ( newHp > it->second.obj->maxHp() ) it->second.obj->setMaxHp( newHp );
+			it->second.obj->setHp( newHp );
+		}
 	}
 }
 
@@ -2210,6 +2258,10 @@ void Game::InGameScene(Milliseconds deltaTime) {
 		goblin->update(deltaTime, tPhysicInterpolation);
 	}
 
+	for (auto& sh : strongholds_) {
+		sh->update(deltaTime, tPhysicInterpolation);
+	}
+
 	animSystem_.updatePriorities(
 		std::chrono::duration_cast<Seconds>(deltaTime),
 		player_->pos()
@@ -2344,6 +2396,31 @@ void Game::InGameScene(Milliseconds deltaTime) {
 				entry.hpBar->setProgress(
 					static_cast<float>(entry.goblin->hp()) /
 					static_cast<float>(entry.goblin->maxHp())
+				);
+			}
+		}
+
+		for (auto& [id, entry] : strongholdHpBars_) {
+			if (!entry.obj || entry.destroyed || entry.obj->maxHp() <= 0) {
+				entry.hpBar->visible = false;
+				continue;
+			}
+			const mu::Vec3 barWorldPos = entry.obj->renderState().pos
+				+ mu::Vec3{ 0.f, entry.worldYOffset, 0.f };
+			float sx{}, sy{};
+			const bool onScreen = worldToScreen(
+				barWorldPos,
+				camera_.view(), camera_.proj(),
+				uiManager_.screenWidth(), uiManager_.screenHeight(),
+				sx, sy
+			);
+			entry.hpBar->visible = onScreen;
+			if (onScreen) {
+				entry.hpBar->offsetX = UI::DimValue::px(sx - kBarHalfWidth);
+				entry.hpBar->offsetY = UI::DimValue::px(sy);
+				entry.hpBar->setProgress(
+					static_cast<float>(entry.obj->hp()) /
+					static_cast<float>(entry.obj->maxHp())
 				);
 			}
 		}
@@ -2486,6 +2563,12 @@ void Game::renderInGame() {
 
 	for (auto& goblin : goblins_) {
 		goblin->render(gfx_);
+	}
+
+	for (auto& sh : strongholds_) {
+		auto it = strongholdHpBars_.find(static_cast<uint16>(sh->getId()));
+		if (it != strongholdHpBars_.end() && it->second.destroyed) continue;  // hide destroyed structure
+		sh->render(gfx_);
 	}
 
 	camera_.updateGFX(gfx_);

@@ -187,6 +187,7 @@
     </ClCompile>
     <ClCompile Include="roomServerMain.cpp" />
     <ClCompile Include="terrain.cpp" />
+    <ClCompile Include="stronghold.cpp" />
     <ClCompile Include="skill\skillCompiler.cpp" />
     <ClCompile Include="skill\skillSystem.cpp" />
   </ItemGroup>
@@ -221,6 +222,8 @@
     <ClInclude Include="skill\skillSystem.hpp" />
     <ClInclude Include="skill\skillTypes.hpp" />
     <ClInclude Include="terrain.hpp" />
+    <ClInclude Include="strongholdDef.hpp" />
+    <ClInclude Include="stronghold.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

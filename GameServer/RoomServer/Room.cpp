@@ -5,6 +5,7 @@
 #include "MemoryManager.hpp"
 #include "PacketManager.hpp"
 #include "Level.hpp"
+#include "AssetManager.hpp"
 #include "JobTimer.hpp"
 #include "collision.hpp"
 #include "skill/skillCompiler.hpp"
@@ -23,10 +24,56 @@ void Room::unregisterObject(Object* obj) {
 		objectById_[id] = nullptr;
 }
 
+float MU_CALLCONV Room::groundHeightAtWorld(float x, float z) const {
+	return worldTerrain_ ? worldTerrain_->heightAtWorld(x, z) : 0.f;
+}
+
+mu::Vec3 MU_CALLCONV Room::randomSpawnInDisc(mu::Vec3 center, float radius) const {
+	static thread_local std::mt19937 rng{ std::random_device{}() };
+	std::uniform_real_distribution<float> distR(0.f, 1.f);
+	std::uniform_real_distribution<float> distAngle(0.f, 2.f * DirectX::XM_PI);
+
+	const float r     = radius * std::sqrt(distR(rng));
+	const float theta = distAngle(rng);
+	const float x = center.x() + r * std::cos(theta);
+	const float z = center.z() + r * std::sin(theta);
+	return mu::Vec3(x, groundHeightAtWorld(x, z), z);
+}
+
+void Room::setupGoblin(Goblin& g, const Level& level) {
+	const auto& anims = level.assetManager->goblinAnimations();
+	g.setModel(level.assetManager->modelGoblin());
+	g.animController().registerClip("Idle",   findServerAnimClip(anims, "Goblin_Idle"));
+	g.animController().registerClip("Walk",   findServerAnimClip(anims, "Goblin_Walk"));
+	g.animController().registerClip("Attack", findServerAnimClip(anims, "Goblin_Attack"));
+	g.animController().registerClip("Die",    findServerAnimClip(anims, "Goblin_Death"));
+	g.animController().switchClip("Idle");
+	g.applyGoblinConfig();
+	g.body().setMotionType(MotionType::Dynamic);
+	g.body().setMass(70.f);
+	g.body().setLinearDamping(0.1f);
+	g.body().setAngularDamping(25.f);
+	g.body().setRestitution(0.0f);
+	g.body().setUprightStiffness(4000.f);
+	g.body().enableMotor(true);
+}
+
+void Room::setupStronghold(Stronghold& sh, const StrongholdDef& sd, const Level& level) {
+	sh.setModel(level.assetManager->modelCube());   // placeholder mesh (cube) -> BVH hit target
+	sh.setFaction(Faction::Monsters);     // player skills (hostile to Monsters) can damage it
+	sh.setCanReceiveDamage(true);
+	sh.setHp(sd.maxHp);
+	const float y = groundHeightAtWorld(sd.center.x(), sd.center.z());
+	sh.setPos(mu::Vec3(sd.center.x(), y, sd.center.z()));
+	sh.setOrient(sd.orient);
+	sh.setScale(sd.scale);
+	sh.body().setMotionType(MotionType::Static);
+}
+
 void Room::init(const Level* levelData) {
 	cubes_ = levelData->cubes;
 	playerStarts_ = levelData->playerStarts;
-	goblins_ = levelData->goblins;
+	worldTerrain_ = &levelData->terrainChunks;   // shared, read-only (height + stronghold defs)
 
 	for (auto& c : cubes_) {
 		c.body().setMotionType(MotionType::Static);
@@ -34,35 +81,61 @@ void Room::init(const Level* levelData) {
 		physicsWorld_.registerBody(&c.body(), [&c]() { c.rebuildBodyBVH(); });
 	}
 
-	for (auto& g : goblins_) {
-		g.setId(IdPool::pop());
-		g.setFaction(Faction::Monsters);
-		g.setSpawnPos(g.pos());
-		g.applyGoblinConfig();
-		g.body().setMotionType(MotionType::Dynamic);
-		g.body().setMass(70.f);
-		g.body().setLinearDamping(0.1f);
-		g.body().setAngularDamping(25.f);
-		g.body().setRestitution(0.0f);
-		g.body().setUprightStiffness(4000.f);
-		g.body().enableMotor(true);
-		g.body().snapToCurrent();
-		physicsWorld_.registerBody(&g.body(), [&g]() { g.rebuildBodyBVH(); });
+	// ── Strongholds drive monster spawning. Build a fixed goblin pool (sized to
+	//    the sum of per-stronghold target counts) plus one Stronghold structure
+	//    per definition. Pools are pre-sized so registerBody/registerObject can
+	//    take stable addresses (no reallocation after registration).
+	const auto& sdefs = worldTerrain_->strongholds();
+
+	int totalGoblins = 0;
+	for (const auto& sd : sdefs)
+		for (const auto& pop : sd.populations)
+			if (pop.type == ObjectType::Goblin) totalGoblins += pop.targetCount;
+	goblins_.reserve(static_cast<size_t>(totalGoblins));
+	strongholds_.reserve(sdefs.size());
+
+	for (const auto& sd : sdefs) {
+		const int groupId = static_cast<int>(npcGroups_.size());
+		npcGroups_.emplace_back(
+			std::make_unique<NpcGroup>(groupId, sd.center, sd.activityRadius));
+
+		int goblinCount = 0;
+		for (const auto& pop : sd.populations)
+			if (pop.type == ObjectType::Goblin) goblinCount += pop.targetCount;
+
+		const int poolStart = static_cast<int>(goblins_.size());
+		for (int i = 0; i < goblinCount; ++i) {
+			Goblin g{};
+			setupGoblin(g, *levelData);
+			const mu::Vec3 pos = randomSpawnInDisc(sd.center, sd.spawnRadius);
+			g.setId(IdPool::pop());
+			g.setFaction(Faction::Monsters);
+			g.setPos(pos);
+			g.setSpawnPos(pos);                              // leash home = spawn point
+			g.setActivityZone(sd.center, sd.activityRadius); // roam radius = stronghold area
+			g.setGroupId(groupId);
+			goblins_.push_back(std::move(g));
+		}
+
+		Stronghold sh{};
+		sh.setId(IdPool::pop());                 // required: registerObject indexes objectById_ by id
+		setupStronghold(sh, sd, *levelData);
+		sh.configure(sd, groupId, poolStart, goblinCount);
+		strongholds_.push_back(std::move(sh));
 	}
 
-	// Register all goblins after the vector is fully built (no reallocation risk).
-	for (auto& g : goblins_)
+	// Register all goblins after the pool is fully built (no reallocation risk).
+	for (auto& g : goblins_) {
+		g.body().snapToCurrent();
+		physicsWorld_.registerBody(&g.body(), [&g]() { g.rebuildBodyBVH(); });
 		registerObject(&g);
+	}
 
-	for (const auto& spawner : levelData->goblinSpawners) {
-		int groupId = static_cast<int>(npcGroups_.size());
-		npcGroups_.emplace_back(
-			std::make_unique<NpcGroup>(groupId, spawner.center, spawner.activityRadius)
-		);
-		for (int32 i = spawner.startIdx; i < spawner.startIdx + spawner.count; ++i) {
-			goblins_[i].setGroupId(groupId);
-			goblins_[i].setActivityZone(spawner.center, spawner.activityRadius);
-		}
+	// Strongholds are damageable static structures (collidable obstacles).
+	for (auto& sh : strongholds_) {
+		sh.body().snapToCurrent();
+		physicsWorld_.registerBody(&sh.body(), [&sh]() { sh.rebuildBodyBVH(); });
+		registerObject(&sh);
 	}
 
 	// Register one static collider per terrain chunk. Height field data is owned
@@ -148,14 +221,25 @@ void Room::updateGoblinAI(Milliseconds dt) {
 			broadcast(PacketManager::makeSNpcAttackPacket(static_cast<uint16>(goblin.getId())));
 			broadcast(PacketManager::makeSHitPacket(result.hit->targetId, result.hit->newHp));
 		}
+	}
 
-		if (result.respawned) {
-			broadcast(PacketManager::makeSNpcRespawnPacket(
-				static_cast<uint16>(goblin.getId()),
-				goblin.hp(),
-				goblin.pos().getXmf()
-			));
+	// ── Strongholds: structure destruction/rebuild + population maintenance ──
+	const Seconds dtSec = std::chrono::duration_cast<Seconds>(dt);
+	std::vector<uint32> revivedIds;
+	for (auto& sh : strongholds_) {
+		if (sh.updateStructure(dtSec)) {
+			broadcast(PacketManager::makeSStrongholdStatePacket(
+				static_cast<uint16>(sh.getId()),
+				sh.hp(),
+				sh.isDestroyed() ? uint8(1) : uint8(0)));
 		}
+		sh.updatePopulation(dtSec, goblins_, *this, revivedIds);
+	}
+	for (uint32 id : revivedIds) {
+		Object* o = (id < objectById_.size()) ? objectById_[id] : nullptr;
+		if (!o) continue;
+		broadcast(PacketManager::makeSNpcRespawnPacket(
+			static_cast<uint16>(id), o->hp(), o->pos().getXmf()));
 	}
 
 	if (!moveInfos.empty())
@@ -274,6 +358,17 @@ void Room::enter(GameSession* session) {
 			.pos = g.pos().getXmf(),
 			.orient = g.orient().getXmf(),
 			.scale = g.scale().getXmf(),
+		});
+	}
+
+	for (const auto& sh : strongholds_) {
+		objInfos.push_back(ObjectInfo{
+			.type = ObjectType::Stronghold,
+			.objectId = static_cast<uint16>(sh.getId()),
+			.materialSetIdx = 0,
+			.pos = sh.pos().getXmf(),
+			.orient = sh.orient().getXmf(),
+			.scale = sh.scale().getXmf(),
 		});
 	}
 

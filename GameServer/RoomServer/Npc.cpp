@@ -501,25 +501,23 @@ NpcUpdateResult Npc::updateInvestigate( Seconds dt, Room& room ) {
 
 // ─── Dead ─────────────────────────────────────────────────────────────────────
 
-NpcUpdateResult Npc::updateDead(Seconds dt) {
+NpcUpdateResult Npc::updateDead(Seconds /*dt*/) {
     if (state_ != NpcState::Dead)
         transitionTo(NpcState::Dead);
 
-    respawnTimer_ += dt;
-    if (respawnTimer_ < respawnDelay_)
-        return {};
-
-    respawn();
-    return { .respawned = true };
+    // Revival is driven by the owning Stronghold (fixed-pool population model),
+    // not by a per-NPC timer. The corpse simply stays Dead until reviveAt().
+    return {};
 }
 
-void Npc::respawn() {
+void MU_CALLCONV Npc::reviveAt(mu::Vec3 pos) {
     setHp(static_cast<int32>(maxHp_));
-    setPos(spawnPos_);
+    spawnPos_         = pos;          // new leash home
+    setPos(pos);
+    body().snapToCurrent();           // teleport: clear prev state, no interpolation drag
     setLinearVel({ 0.f, 0.f, 0.f });
     setDesiredVel(mu::Vec3{});
     targetId_         = -1;
-    respawnTimer_     = 0s;
     windupTimer_      = 0s;
     recoverTimer_     = 0s;
     directReactTimer_ = -1s;

@@ -21,6 +21,7 @@ public:
 	static void handleSSkillStartPacket( byte* buffer, int32 len );
 	static void handleSSkillHitPacket( byte* buffer, int32 len );
 	static void handleSDebugHitboxPacket( byte* buffer, int32 len );
+	static void handleSStrongholdStatePacket( byte* buffer, int32 len );
 
 	static std::shared_ptr<SendBuffer> makeCMovePacket(DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity);
 	static std::shared_ptr<SendBuffer> makeCMouseMovePacket(float yawRad);

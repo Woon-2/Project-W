@@ -323,6 +323,40 @@ public class TerrainExtractor : EditorWindow
                 ExtractUtil.WriteTailTag(w, "Chunk");
             }
 
+            // ---- stronghold records (gameplay; consumed by the server) ----
+            var marks = Object.FindObjectsByType<StrongholdMarker>(FindObjectsSortMode.InstanceID);
+            ExtractUtil.WriteInteger(w, "StrongholdCount", marks.Length);
+            for (int s = 0; s < marks.Length; s++)
+            {
+                var m = marks[s];
+                var t = m.transform;
+                ExtractUtil.WriteHeadTag(w, "Stronghold");
+                ExtractUtil.WriteInteger(w, "Id", s);                       // id = export index (stable per export)
+                ExtractUtil.WriteFloat(w, "CenterX", t.position.x);
+                ExtractUtil.WriteFloat(w, "CenterY", t.position.y);
+                ExtractUtil.WriteFloat(w, "CenterZ", t.position.z);
+                ExtractUtil.WriteFloat(w, "OrientX", t.rotation.x);
+                ExtractUtil.WriteFloat(w, "OrientY", t.rotation.y);
+                ExtractUtil.WriteFloat(w, "OrientZ", t.rotation.z);
+                ExtractUtil.WriteFloat(w, "OrientW", t.rotation.w);
+                ExtractUtil.WriteFloat(w, "ScaleX", t.lossyScale.x);
+                ExtractUtil.WriteFloat(w, "ScaleY", t.lossyScale.y);
+                ExtractUtil.WriteFloat(w, "ScaleZ", t.lossyScale.z);
+                ExtractUtil.WriteFloat(w, "ActivityRadius", m.activityRadius);
+                ExtractUtil.WriteFloat(w, "SpawnRadius", m.spawnRadius);
+                ExtractUtil.WriteInteger(w, "MaxHp", m.maxHp);
+                ExtractUtil.WriteFloat(w, "RespawnDelaySec", m.respawnDelaySec);
+                ExtractUtil.WriteInteger(w, "PopulationCount", m.populations.Count);
+                foreach (var pop in m.populations)
+                {
+                    ExtractUtil.WriteInteger(w, "MonsterType", (int)pop.type);
+                    ExtractUtil.WriteInteger(w, "TargetCount", pop.targetCount);
+                    ExtractUtil.WriteInteger(w, "MaxPerWave", pop.maxPerWave);
+                    ExtractUtil.WriteFloat(w, "RespawnIntervalSec", pop.respawnIntervalSec);
+                }
+                ExtractUtil.WriteTailTag(w, "Stronghold");
+            }
+
             ExtractUtil.WriteTailTag(w, "ChunkIndex");
         }
     }

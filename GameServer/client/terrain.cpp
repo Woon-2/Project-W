@@ -345,10 +345,33 @@ ChunkIndex parseChunkIndex(const std::filesystem::path& terrainDir) {
         readTailTag(ifs, "Chunk");
     }
 
+    // ---- stronghold records (server-only gameplay data) ----
+    // The client does not use strongholds (they are synced from the server as
+    // entities), but must consume the tags here to keep the binary stream aligned.
+    const int S = readInteger(ifs, "StrongholdCount");
+    for (int s = 0; s < S; ++s) {
+        readHeadTag(ifs, "Stronghold");
+        readInteger(ifs, "Id");
+        readFloat(ifs, "CenterX"); readFloat(ifs, "CenterY"); readFloat(ifs, "CenterZ");
+        readFloat(ifs, "OrientX"); readFloat(ifs, "OrientY"); readFloat(ifs, "OrientZ"); readFloat(ifs, "OrientW");
+        readFloat(ifs, "ScaleX"); readFloat(ifs, "ScaleY"); readFloat(ifs, "ScaleZ");
+        readFloat(ifs, "ActivityRadius"); readFloat(ifs, "SpawnRadius");
+        readInteger(ifs, "MaxHp");
+        readFloat(ifs, "RespawnDelaySec");
+        const int P = readInteger(ifs, "PopulationCount");
+        for (int p = 0; p < P; ++p) {
+            readInteger(ifs, "MonsterType");
+            readInteger(ifs, "TargetCount");
+            readInteger(ifs, "MaxPerWave");
+            readFloat(ifs, "RespawnIntervalSec");
+        }
+        readTailTag(ifs, "Stronghold");
+    }
+
     readTailTag(ifs, "ChunkIndex");
 
     gSharedLog << "[Terrain] Chunk index parsed: " << C << " chunks, "
-               << L << " shared layers\n";
+               << L << " shared layers, " << S << " strongholds\n";
     return result;
 }
 

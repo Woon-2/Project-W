@@ -59,6 +59,7 @@ public:
 	void createOtherPlayer(const ObjectInfo& otherPlayerInfo);
 	void createOtherPlayer(const PlayerInfo& otherPlayerInfo);
 	void createGoblin(const ObjectInfo& goblinInfo);
+	void createStronghold(const ObjectInfo& strongholdInfo);
 
 	void removePlayer( i32t playerId );
 	void movePlayer(uint16 playerId, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity);
@@ -70,6 +71,7 @@ public:
 	void onPlayerAttack(uint16 attackerId);
 	void applyHit(uint16 targetId, int32 newHp);
 	void onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos );
+	void onStrongholdState( uint16 strongholdId, int32 hp, uint8 state );
 	void onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs );
 	void onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity );
 	void onDebugHitboxes( SDebugHitboxPacket* pkt );
@@ -188,6 +190,10 @@ private:
 	std::vector<std::shared_ptr<Goblin>> goblins_{};
 	std::unordered_map<uint16, std::shared_ptr<Goblin>> idGoblinMap_{};
 
+	// Strongholds are server-authoritative structures; the client renders them as
+	// placeholder cubes and tracks HP/destroyed state from server packets.
+	std::vector<std::shared_ptr<Cube>> strongholds_{};
+
 	std::shared_ptr<Player> player_{};
 	std::vector<std::shared_ptr<Player>> otherPlayers_{ };
 	std::unordered_map<i32t, std::shared_ptr<Player>> idPlayerMap_{ };
@@ -259,6 +265,14 @@ private:
 		float            hpBarVisibleSeconds = 0.f; // 피격 후 HP바 표시 잔여 시간 (초)
 	};
 	std::unordered_map<uint16, GoblinHpEntry> goblinHpBars_{};
+
+	struct StrongholdHpEntry {
+		Cube*            obj;          // non-owning; owned by shared_ptr in strongholds_
+		UI::ProgressBar* hpBar;        // owned by uiManager_
+		float            worldYOffset;
+		bool             destroyed = false;
+	};
+	std::unordered_map<uint16, StrongholdHpEntry> strongholdHpBars_{};
 
 	UI::Label*       hiZStatsLabel_ = nullptr;  // owned by uiManager_
 

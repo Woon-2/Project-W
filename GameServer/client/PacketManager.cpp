@@ -65,6 +65,10 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 		handleSDebugHitboxPacket( buffer, len );
 		break;
 
+	case PacketType::S_StrongholdState:
+		handleSStrongholdStatePacket( buffer, len );
+		break;
+
 	default:
 		std::cout << "Unknown packet type received. Type: " << static_cast<uint16>(header->type) << '\n';
 		break;
@@ -94,6 +98,10 @@ void PacketManager::handleSEnterPacket(byte* buffer, int32 len) {
 
 		case ObjectType::Ground:
 			game->setupGround(objInfo);
+			break;
+
+		case ObjectType::Stronghold:
+			game->createStronghold(objInfo);
 			break;
 
 		default:
@@ -182,6 +190,11 @@ void PacketManager::handleSSkillHitPacket( byte* buffer, int32 len ) {
 void PacketManager::handleSDebugHitboxPacket( byte* buffer, int32 len ) {
 	auto pkt = reinterpret_cast<SDebugHitboxPacket*>(buffer);
 	INet::ClientApp::onlineGame()->onDebugHitboxes( pkt );
+}
+
+void PacketManager::handleSStrongholdStatePacket( byte* buffer, int32 len ) {
+	auto pkt = reinterpret_cast<SStrongholdStatePacket*>(buffer);
+	INet::ClientApp::onlineGame()->onStrongholdState( pkt->strongholdId, pkt->hp, pkt->state );
 }
 
 std::shared_ptr<SendBuffer> PacketManager::makeCSkillStartPacket(uint32 skillAssetId, uint64 clientMs) {

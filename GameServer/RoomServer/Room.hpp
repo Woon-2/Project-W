@@ -6,6 +6,7 @@
 #include "GameSession.hpp"
 #include "object.hpp"
 #include "goblin.hpp"
+#include "stronghold.hpp"
 #include "NpcGroup.hpp"
 #include "physicsWorld.hpp"
 #include "skill/skillSystem.hpp"
@@ -29,6 +30,9 @@ public:
 		}
 		for (const auto& g : goblins_) {
 			IdPool::push(g.getId());
+		}
+		for (const auto& sh : strongholds_) {
+			IdPool::push(sh.getId());
 		}
 	}
 
@@ -70,6 +74,10 @@ public:
 	Milliseconds getElapsedMs() const { return elapsedMs_; }
 	GameSession* findLivingSessionByPlayerId( int32 playerId ) const;
 
+	// World-routed terrain height (shared chunk height fields). Used by
+	// strongholds to snap monster spawn positions onto the ground.
+	float MU_CALLCONV groundHeightAtWorld( float x, float z ) const;
+
 private:
 	int32 id_;
 	std::vector<GameSession*> sessions_;
@@ -78,6 +86,10 @@ private:
 
 	void registerObject(Object* obj);
 	void unregisterObject(Object* obj);
+
+	void setupGoblin(Goblin& g, const Level& level);
+	void setupStronghold(Stronghold& sh, const StrongholdDef& sd, const Level& level);
+	mu::Vec3 MU_CALLCONV randomSpawnInDisc(mu::Vec3 center, float radius) const;
 
 	void updateGoblinAI(Milliseconds dt);
 	void updatePlayerAnimations(Milliseconds dt);
@@ -92,6 +104,8 @@ private:
 
 	PhysicsWorld      physicsWorld_;
 	std::vector<TerrainObject> terrainChunks_;  // one per chunk; height fields are shared (non-owning)
+	std::vector<Stronghold>    strongholds_;    // monster spawner bases (damageable structures)
+	const TerrainChunkManager* worldTerrain_ = nullptr;  // shared, owned by Level
 	SkillSystem skillSystem_;
 	EventList         skillEvList_;  // reused across frames (cleared, not reallocated)
 

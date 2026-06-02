@@ -77,9 +77,46 @@ ChunkIndex parseChunkIndex(const std::filesystem::path& terrainDir) {
         readTailTag(ifs, "Chunk");
     }
 
+    // ---- stronghold records (gameplay) ----
+    const int S = readInteger(ifs, "StrongholdCount");
+    result.strongholds.resize(S);
+    for (int s = 0; s < S; ++s) {
+        auto& sh = result.strongholds[s];
+        readHeadTag(ifs, "Stronghold");
+        sh.id = readInteger(ifs, "Id");
+        const float cx = readFloat(ifs, "CenterX");
+        const float cy = readFloat(ifs, "CenterY");
+        const float cz = readFloat(ifs, "CenterZ");
+        sh.center = mu::Vec3(cx, cy, cz);
+        const float ox = readFloat(ifs, "OrientX");
+        const float oy = readFloat(ifs, "OrientY");
+        const float oz = readFloat(ifs, "OrientZ");
+        const float ow = readFloat(ifs, "OrientW");
+        sh.orient = mu::NQuat(ox, oy, oz, ow);
+        const float sx = readFloat(ifs, "ScaleX");
+        const float sy = readFloat(ifs, "ScaleY");
+        const float sz = readFloat(ifs, "ScaleZ");
+        sh.scale = mu::Vec3(sx, sy, sz);
+        sh.activityRadius = readFloat(ifs, "ActivityRadius");
+        sh.spawnRadius    = readFloat(ifs, "SpawnRadius");
+        sh.maxHp          = readInteger(ifs, "MaxHp");
+        sh.respawnDelay   = Seconds{ readFloat(ifs, "RespawnDelaySec") };
+        const int P = readInteger(ifs, "PopulationCount");
+        sh.populations.resize(P);
+        for (int p = 0; p < P; ++p) {
+            auto& pop = sh.populations[p];
+            pop.type            = static_cast<ObjectType>(readInteger(ifs, "MonsterType"));
+            pop.targetCount     = readInteger(ifs, "TargetCount");
+            pop.maxPerWave      = readInteger(ifs, "MaxPerWave");
+            pop.respawnInterval = Seconds{ readFloat(ifs, "RespawnIntervalSec") };
+        }
+        readTailTag(ifs, "Stronghold");
+    }
+
     readTailTag(ifs, "ChunkIndex");
 
-    gSharedLog << "[Terrain] Chunk index parsed: " << C << " chunks\n";
+    gSharedLog << "[Terrain] Chunk index parsed: " << C << " chunks, "
+               << S << " strongholds\n";
     return result;
 }
 

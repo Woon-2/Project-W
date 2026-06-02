@@ -292,6 +292,22 @@ std::shared_ptr<SendBuffer> PacketManager::makeSSkillHitPacket(uint16 attackerId
 	return sendBuffer;
 }
 
+std::shared_ptr<SendBuffer> PacketManager::makeSStrongholdStatePacket(uint16 strongholdId, int32 hp, uint8 state) {
+	auto sendBuffer = SendBufferManager::open(sizeof(SStrongholdStatePacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt          = bw.reserve<SStrongholdStatePacket>();
+	pkt->strongholdId = strongholdId;
+	pkt->hp           = hp;
+	pkt->state        = state;
+
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_StrongholdState;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
 std::shared_ptr<SendBuffer> PacketManager::makeSNpcRespawnPacket(uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SNpcRespawnPacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());

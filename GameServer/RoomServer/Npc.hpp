@@ -12,7 +12,6 @@ class GameSession;
 struct NpcUpdateResult {
     struct HitInfo { uint16 targetId; int32 newHp; };
     std::optional<HitInfo> hit;
-    bool respawned = false;
 };
 
 // ─── NpcConfig ───────────────────────────────────────────────────────────────
@@ -65,6 +64,10 @@ public:
     void     MU_CALLCONV setSpawnPos    (mu::Vec3 p);
     void     MU_CALLCONV setActivityZone(mu::Vec3 center, float radius);
 
+    // Stronghold-driven revival (fixed-pool population model): restore HP, move
+    // to a new home position, and reset AI state. Replaces per-NPC self-respawn.
+    void     MU_CALLCONV reviveAt(mu::Vec3 pos);
+
 protected:
     void applyConfig(const NpcConfig& cfg);
 
@@ -78,7 +81,6 @@ private:
     NpcUpdateResult updateReturn       (Seconds dt, Room& room);
     NpcUpdateResult updateReposition   (Seconds dt, Room& room);
     NpcUpdateResult updateDead         (Seconds dt);
-    void            respawn            ();
     NpcUpdateResult updateInvestigate  (Seconds dt, Room& room);
 
     GameSession* selectBestVisibleTarget(Room& room) const;
