@@ -195,15 +195,6 @@ NpcUpdateResult Npc::updatePatrol(Seconds dt, Room& room) {
     mu::Vec3  dir = { dirN.x(), 0.f, dirN.z() };
     mu::Vec3  sep = calcSeparationForce( nearbyCache_, separationRadius_ );
     mu::Vec3  sepPerp = sep - dir * mu::dot( sep, dir );
-
-    // head-on 교착 방지: sep이 dir과 거의 정반대면 측면 성분(sepPerp)이 0에 수렴해
-    // 빗겨날 방향이 사라진다. 자기 기준 측면으로 틀어 주면 마주 본 둘이 서로 반대편으로 지나간다.
-    float sepLen = sep.len();
-    if ( sepLen > 0.01f && mu::dot( sep, dir ) < -0.7f * sepLen ) {
-        mu::Vec3 sideStep{ dir.z(), 0.f, -dir.x() };   // dir 기준 측면 (Y축 90° 회전)
-        sepPerp += sideStep * sepLen;
-    }
-
     mu::NVec3 nd( dir + sepPerp * separationWeight_ );
 
     float spd = moveSpeed_ * patrolSpeedMult_;

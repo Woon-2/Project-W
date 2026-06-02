@@ -193,3 +193,95 @@ if ( toTargetXZ.len() > 0.001f ) {
     mu::NVec3 nd( toTargetXZ );
     setOrient( mu::NQuat( mu::Radian(), mu::Radian(), mu::Radian( std::atan2( nd.x(), nd.z() ) ) ) );
 }
+```
+
+---
+
+### 2026.06.02
+## [feat] 일반 NPC Patrol(순찰) 상태 추가
+
+**수정 파일:** `RoomServer/Npc.hpp/cpp`, `RoomServer/CLAUDE.md`
+
+---
+
+### [1] Patrol 상태 추가 — Idle ↔ Patrol 배회
+
+타깃이 없을 때 Idle에서 완전히 멈춰 있던 일반 NPC(`Goblin`)를, 스폰 근처를 천천히 배회(Patrol)하다
+잠시 대기(Idle)하는 순환으로 개선. 두리번거리며 순찰하는 "살아있는" 느낌을 부여.
+
+**상태 순환:**
+
+```
+Idle ──(idleTimer 만료)──> Patrol ──(웨이포인트 도착 or patrolDuration 만료)──> Idle ──> ...
+   │                          │
+   └─ checkAlert: 플레이어 감지 → Chase / 그룹 메모리 → Investigate (두 상태 공통)
+```
+
+**설계:**
+
+- `NpcState`에 `Patrol` 추가.
+- **감지 로직 공용화** — 기존 `updateIdle`에 박혀 있던 직접 감지(→Chase)·그룹 메모리(→Investigate)
+  판정을 `checkAlert(dt, room)`로 추출. 경계 상태(전환했거나 반응 타이머 대기 중)면 `true`를 반환해
+  호출측이 배회를 멈추도록 함. `updateIdle`/`updatePatrol`이 공유 → 순찰 중에도 정상적으로 적을 감지.
+- **`updatePatrol`** — 스폰 근처 웨이포인트로 `moveSpeed * patrolSpeedMult`(느린 속도)로 이동.
+  웨이포인트 도착(0.5m 이내) 또는 `patrolDuration` 만료 시 Idle로 휴식. 이동 패턴은 Chase와 동일
+  (separation 적용), 속도만 낮춤.
+- **`pickPatrolDest()`** — 스폰 기준 랜덤 각도(0~360°) + `[patrolRadius*0.3, patrolRadius]` 반경.
+  `patrolRadius`(~5) ≪ `activityZoneRadius`(28), 스폰=활동구역 중심이라 항상 구역 내.
+- **`transitionTo`** — Idle/Patrol 진입 시 타이머·웨이포인트를 초기화하고, Patrol에서 이탈할 때도
+  반응 타이머를 리셋하도록 조건 확장(`Idle || Patrol`).
+- **동기화 방지** — idle/patrol 지속시간과 웨이포인트를 NPC마다 `thread_local mt19937`에서 독립
+  추첨. 초기 `idleTimer_`는 `applyConfig`/`respawn`(transitionTo 미경유 경로)에서 직접 초기화.
+  → 여러 NPC가 같은 움직임을 동시에 보이는 기계적 군무가 발생하지 않음.
+
+**`NpcConfig` 신규 필드:**
+
+| 필드 | 기본값 | 용도 |
+|---|---|---|
+| `patrolRadius` | `5.f` | 스폰 기준 배회 반경 |
+| `patrolSpeedMult` | `0.4f` | `moveSpeed` 대비 순찰 속도 배율 |
+| `minIdleTime` / `maxIdleTime` | `1.5s` / `4.0s` | 휴식 구간 길이 범위 |
+| `minPatrolTime` / `maxPatrolTime` | `3.0s` / `6.0s` | 순찰 구간 길이 범위(안전 타임아웃) |
+
+**`updatePatrol` 핵심:**
+
+```cpp
+if (checkAlert(dt, room)) return {};          // 경계 시 배회 중단
+patrolTimer_ += dt;
+
+mu::Vec3 toDestXZ( (patrolDest_ - pos()).x(), 0.f, (patrolDest_ - pos()).z() );
+if (toDestXZ.len2() < 0.5f*0.5f || patrolTimer_ >= patrolDuration_) {
+    setLinearVel(mu::Vec3(0.f, body().linearVel().y(), 0.f));
+    transitionTo(NpcState::Idle);             // 도착/만료 → 휴식
+    return {};
+}
+// dir + separation(수직 성분)으로 천천히 이동, 속도만 patrolSpeedMult_
+float spd = moveSpeed_ * patrolSpeedMult_;
+setLinearVel(mu::Vec3(nd.x()*spd, body().linearVel().y(), nd.z()*spd));
+setOrient(mu::NQuat(mu::Radian(), mu::Radian(), mu::Radian(std::atan2(nd.x(), nd.z()))));
+```
+
+프로토콜 변경 없음 — 클라는 기존 `S_NpcMoveBatch`의 velocity로 걷기/정지 애니메이션을 추론.
+
+---
+
+### [2] 알려진 이슈 — Patrol 정면 교착 (미해결, 검토 중)
+
+Patrol 중 두 NPC가 **거의 정확히 정면**으로 마주치면 서로 밀기만 하고 비켜나지 못해 멈춰 선다.
+
+**원인:** separation 스티어링은 이동 방향(`dir`)의 수직 성분만 사용해(slide-past 설계) 옆으로 빗겨나가게
+한다. 그런데 정면(degenerate) 케이스에선 `sep`이 `dir`과 거의 정반대라 수직 성분이 0에 수렴 →
+빗겨날 방향 자체가 소실. 고블린은 `MotionType::Dynamic`이라 contact solver가 둘을 막아 세우고,
+좌우 대칭이라 tie-break도 없어 교착.
+
+**1차 시도(제거됨):** `updatePatrol`에 정면 감지 시 자기 기준 측면으로 트는 보정 항을 추가.
+그러나 속도를 매 프레임 일정 속력으로 직접 설정하는 구조상, 접촉 상태에서 전진 성분이 여전히 커
+contact·마찰이 약한 측면 미끄러짐을 죽여 교착이 풀리지 않음.
+
+**검토 중인 근본 해결책(추후 커밋):**
+- 물리 엔진에 충돌 필터링이 없고 현재 `Dynamic` 바디는 고블린뿐 → `generateContacts`에서
+  "둘 다 Dynamic" 쌍의 contact를 스킵하면 NPC끼리 물리 충돌을 끄는 것으로 교착을 원천 차단 가능
+  (간격은 separation 스티어링이 담당). 단, 혼잡 시 살짝 겹쳐 보일 수 있음.
+- 대안: 충돌 유지 + 정면 시 전진 감속·강한 측면 회피, 또는 끼임 감지 후 리패스.
+
+> 버그 성격이므로 해결 시 `TroubleShooting.md`에도 기록 예정.
