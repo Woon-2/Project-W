@@ -1789,6 +1789,13 @@ void Game::createStronghold(const ObjectInfo& info) {
 	sh->setMaxHp(1);
 	sh->setRenderObjectId(nextRenderObjId_++);
 
+	// Static collidable obstacle: register to the client physics world so the
+	// locally-predicted player collides with it (server pos/scale already place
+	// the box on the ground; cube model provides the collision BVH).
+	sh->body().setMotionType(MotionType::Static);
+	sh->body().snapToCurrent();
+	physicsWorld_.registerBody(&sh->body(), [p = sh.get()]() { p->rebuildBodyBVH(); });
+
 	auto* bar = static_cast<UI::ProgressBar*>(
 		uiManager_.root()->addChild(std::make_unique<UI::ProgressBar>())
 	);
@@ -1799,7 +1806,7 @@ void Game::createStronghold(const ObjectInfo& info) {
 	bar->fillColor = { 0.9f, 0.7f, 0.1f, 1.f };
 	bar->bgColor   = { 0.15f, 0.15f, 0.15f, 0.85f };
 	bar->visible   = false;
-	strongholdHpBars_[info.objectId] = { sh.get(), bar, 4.0f, false };
+	strongholdHpBars_[info.objectId] = { sh.get(), bar, 4.0f, false, 0.f };
 
 	strongholds_.push_back(sh);
 }
@@ -2032,6 +2039,7 @@ void Game::applyHit( uint16 targetId, int32 newHp ) {
 			if ( newHp > it->second.obj->maxHp() ) it->second.obj->setMaxHp( newHp );
 			it->second.obj->setHp( newHp );
 		}
+		it->second.hpBarVisibleSeconds = 5.f;   // show HP bar briefly after a hit (same as goblins)
 	}
 }
 
@@ -2402,6 +2410,12 @@ void Game::InGameScene(Milliseconds deltaTime) {
 
 		for (auto& [id, entry] : strongholdHpBars_) {
 			if (!entry.obj || entry.destroyed || entry.obj->maxHp() <= 0) {
+				entry.hpBar->visible = false;
+				entry.hpBarVisibleSeconds = 0.f;
+				continue;
+			}
+			entry.hpBarVisibleSeconds = std::max(0.f, entry.hpBarVisibleSeconds - dtSec);
+			if (entry.hpBarVisibleSeconds <= 0.f) {
 				entry.hpBar->visible = false;
 				continue;
 			}

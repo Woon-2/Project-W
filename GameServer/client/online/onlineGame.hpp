@@ -271,6 +271,7 @@ private:
 		UI::ProgressBar* hpBar;        // owned by uiManager_
 		float            worldYOffset;
 		bool             destroyed = false;
+		float            hpBarVisibleSeconds = 0.f;  // remaining seconds to show after a hit
 	};
 	std::unordered_map<uint16, StrongholdHpEntry> strongholdHpBars_{};
 

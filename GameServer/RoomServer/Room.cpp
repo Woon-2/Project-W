@@ -49,6 +49,7 @@ void Room::setupGoblin(Goblin& g, const Level& level) {
 	g.animController().registerClip("Die",    findServerAnimClip(anims, "Goblin_Death"));
 	g.animController().switchClip("Idle");
 	g.applyGoblinConfig();
+	g.setCanReceiveDamage(true);   // skill system targets require this (default ctor leaves it false)
 	g.body().setMotionType(MotionType::Dynamic);
 	g.body().setMass(70.f);
 	g.body().setLinearDamping(0.1f);
@@ -59,14 +60,27 @@ void Room::setupGoblin(Goblin& g, const Level& level) {
 }
 
 void Room::setupStronghold(Stronghold& sh, const StrongholdDef& sd, const Level& level) {
+	// Placeholder visual: a tall vertical bar (the real stronghold model is TBD).
+	// The authored sd.scale is ignored for the placeholder.
+	const mu::Vec3 kPlaceholderScale{ 1.5f, 5.f, 1.5f };
+
 	sh.setModel(level.assetManager->modelCube());   // placeholder mesh (cube) -> BVH hit target
 	sh.setFaction(Faction::Monsters);     // player skills (hostile to Monsters) can damage it
 	sh.setCanReceiveDamage(true);
 	sh.setHp(sd.maxHp);
-	const float y = groundHeightAtWorld(sd.center.x(), sd.center.z());
-	sh.setPos(mu::Vec3(sd.center.x(), y, sd.center.z()));
 	sh.setOrient(sd.orient);
-	sh.setScale(sd.scale);
+	sh.setScale(kPlaceholderScale);
+
+	// The cube model's pivot is at its center, so place it on the ground by
+	// lifting it half its world-space height (AABB.size is full extent). The
+	// raised pos + scale are sent to clients via ObjectInfo, so the client
+	// visual matches without extra work.
+	const float groundY = groundHeightAtWorld(sd.center.x(), sd.center.z());
+	sh.setPos(mu::Vec3(sd.center.x(), groundY, sd.center.z()));
+	const BVH& bvh = sh.body().worldBVH();
+	const float halfH = bvh.empty() ? 0.f : bvh.nodes[0].bounds.size.y() * 0.5f;
+	sh.setPos(mu::Vec3(sd.center.x(), groundY + halfH, sd.center.z()));
+
 	sh.body().setMotionType(MotionType::Static);
 }
 
