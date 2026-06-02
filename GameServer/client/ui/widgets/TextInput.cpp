@@ -110,7 +110,7 @@ void TextInput::refreshDisplay() {
 
     if (text_.empty() && !focused_) {
         // Placeholder (dimmed).
-        label_->setTextColor(0.5f, 0.5f, 0.5f, 1.f);
+        label_->setTextColor(placeholderColor.x, placeholderColor.y, placeholderColor.z, placeholderColor.w);
         label_->setText(placeholder_.empty() ? L" " : placeholder_);
         return;
     }
@@ -118,7 +118,7 @@ void TextInput::refreshDisplay() {
     // Editing/filled: show text with a simple caret when focused.
     std::wstring shown = text_;
     if (focused_) shown += L"|";
-    label_->setTextColor(1.f, 1.f, 1.f, 1.f);
+    label_->setTextColor(textColor.x, textColor.y, textColor.z, textColor.w);
     label_->setText(shown.empty() ? L" " : shown);
 }
 

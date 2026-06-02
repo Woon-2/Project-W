@@ -31,6 +31,8 @@ public:
     // Solid-color backgrounds (alpha 0 = no quad).
     XMFLOAT4 bgColor        = { 0.10f, 0.10f, 0.14f, 0.95f };
     XMFLOAT4 bgColorFocused = { 0.16f, 0.18f, 0.26f, 1.00f };
+    XMFLOAT4 textColor        = { 1.00f, 1.00f, 1.00f, 1.00f };
+    XMFLOAT4 placeholderColor = { 0.50f, 0.50f, 0.50f, 1.00f };
 
     // Input filters.
     bool uppercase = false;   // transform letters to upper-case

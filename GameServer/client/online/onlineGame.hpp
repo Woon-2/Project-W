@@ -316,7 +316,12 @@ private:
 	UI::Label*     mainMenuMsgLabel_= nullptr;
 	UI::Label*     roomCodeLabel_   = nullptr;
 	UI::Label*     playerCountLabel_= nullptr;
+	std::array<UI::Button*, kMaxLobbyPlayers> slotCardBgs_{};
+	std::array<UI::Button*, kMaxLobbyPlayers> slotAvatarBgs_{};
+	std::array<UI::Label*, kMaxLobbyPlayers> slotAvatarLabels_{};
 	std::array<UI::Label*, kMaxLobbyPlayers> slotLabels_{};
+	std::array<UI::Button*, kMaxLobbyPlayers> slotHostBadgeBgs_{};
+	std::array<UI::Label*, kMaxLobbyPlayers> slotHostBadgeLabels_{};
 	UI::Button*    startGameButton_ = nullptr;
 	UI::Label*     startGameLabel_  = nullptr;
 	UI::Label*     hostStatusLabel_ = nullptr;

@@ -2682,6 +2682,19 @@ void Game::buildLobbyUI() {
 
 	const float screenW = uiManager_.screenWidth();
 	const float screenH = uiManager_.screenHeight();
+	const float mainPanelW = std::min(560.f, std::max(360.f, screenW - 40.f));
+	const float mainPanelH = 500.f;
+	const float roomPanelW = std::min(560.f, std::max(360.f, screenW - 40.f));
+	const float roomPanelH = 660.f;
+
+	const XMFLOAT4 skyBlue     = { 0.529f, 0.808f, 0.980f, 1.f };
+	const XMFLOAT4 ink         = { 0.090f, 0.125f, 0.200f, 1.f };
+	const XMFLOAT4 muted       = { 0.384f, 0.439f, 0.518f, 1.f };
+	const XMFLOAT4 surface     = { 1.000f, 1.000f, 1.000f, 1.f };
+	const XMFLOAT4 surfaceSoft = { 0.953f, 0.976f, 0.992f, 1.f };
+	const XMFLOAT4 primary     = { 0.082f, 0.365f, 0.545f, 1.f };
+	const XMFLOAT4 primaryDark = { 0.055f, 0.286f, 0.435f, 1.f };
+	const XMFLOAT4 primarySoft = { 0.847f, 0.937f, 0.988f, 1.f };
 
 	lobbyRoot_ = root->addChild(std::make_unique<UI::UIElement>());
 	lobbyRoot_->name    = "lobbyRoot";
@@ -2692,49 +2705,75 @@ void Game::buildLobbyUI() {
 	lobbyRoot_->width   = UI::DimValue::px(screenW);
 	lobbyRoot_->height  = UI::DimValue::px(screenH);
 
+	auto applyRect = [](UI::UIElement* e, UI::Anchor anchor, UI::Pivot pivot,
+	                    float x, float y, float w, float h) {
+		e->anchor  = anchor;
+		e->pivot   = pivot;
+		e->offsetX = UI::DimValue::px(x);
+		e->offsetY = UI::DimValue::px(y);
+		e->width   = UI::DimValue::px(w);
+		e->height  = UI::DimValue::px(h);
+	};
+
+	auto makeSolid = [&](UI::UIElement* parent, const std::string& name,
+	                     float x, float y, float w, float h, XMFLOAT4 color,
+	                     int zOrder = 0) -> UI::Button* {
+		auto* block = static_cast<UI::Button*>(parent->addChild(std::make_unique<UI::Button>()));
+		block->name = name;
+		applyRect(block, UI::Anchors::TopLeft, UI::Pivots::TopLeft, x, y, w, h);
+		block->interactive = false;
+		block->bgColor = color;
+		block->zOrder = zOrder;
+		return block;
+	};
+
+	auto makeGroup = [&](UI::UIElement* parent, const std::string& name,
+	                     float w, float h) -> UI::UIElement* {
+		auto* group = parent->addChild(std::make_unique<UI::UIElement>());
+		group->name = name;
+		applyRect(group, UI::Anchors::Center, UI::Pivots::Center, 0.f, 0.f, w, h);
+		return group;
+	};
+
 	auto makeLabel = [&](UI::UIElement* parent, const std::wstring& text,
-	                     float offY, float fontSize, float w, float h) -> UI::Label* {
+	                     float x, float y, float fontSize, float w, float h,
+	                     XMFLOAT4 color, UI::TextHAlign hAlign = UI::TextHAlign::Leading,
+	                     int zOrder = 1) -> UI::Label* {
 		auto* lbl = static_cast<UI::Label*>(parent->addChild(std::make_unique<UI::Label>()));
-		lbl->anchor  = UI::Anchors::Center;
-		lbl->pivot   = UI::Pivots::Center;
-		lbl->offsetX = UI::DimValue::px(0.f);
-		lbl->offsetY = UI::DimValue::px(offY);
-		lbl->width   = UI::DimValue::px(w);
-		lbl->height  = UI::DimValue::px(h);
-		lbl->setTextHAlign(UI::TextHAlign::Center);
+		applyRect(lbl, UI::Anchors::TopLeft, UI::Pivots::TopLeft, x, y, w, h);
+		lbl->setTextHAlign(hAlign);
 		lbl->setTextVAlign(UI::TextVAlign::Center);
 		lbl->setFontSize(fontSize);
-		lbl->setTextColor(1.f, 1.f, 1.f, 1.f);
+		lbl->setTextColor(color.x, color.y, color.z, color.w);
 		lbl->setText(text);
+		lbl->zOrder = zOrder;
 		return lbl;
 	};
 
 	auto makeButton = [&](UI::UIElement* parent, const std::wstring& text,
-	                      float offY, std::function<void()> onClick) -> UI::Button* {
+	                      float x, float y, float w, float h,
+	                      XMFLOAT4 normal, XMFLOAT4 hovered, XMFLOAT4 pressed,
+	                      float fontSize, std::function<void()> onClick,
+	                      XMFLOAT4 textColor) -> UI::Button* {
 		auto* btn = static_cast<UI::Button*>(parent->addChild(std::make_unique<UI::Button>()));
-		btn->anchor  = UI::Anchors::Center;
-		btn->pivot   = UI::Pivots::Center;
-		btn->offsetX = UI::DimValue::px(0.f);
-		btn->offsetY = UI::DimValue::px(offY);
-		btn->width   = UI::DimValue::px(280.f);
-		btn->height  = UI::DimValue::px(54.f);
-		btn->bgColor        = { 0.18f, 0.22f, 0.35f, 0.95f };
-		btn->bgColorHovered = { 0.28f, 0.34f, 0.52f, 1.f };
-		btn->bgColorPressed = { 0.12f, 0.15f, 0.25f, 1.f };
+		applyRect(btn, UI::Anchors::TopLeft, UI::Pivots::TopLeft, x, y, w, h);
+		btn->bgColor        = normal;
+		btn->bgColorHovered = hovered;
+		btn->bgColorPressed = pressed;
 		btn->onClick = std::move(onClick);
+		btn->zOrder = 1;
 
 		auto* lbl = static_cast<UI::Label*>(btn->addChild(std::make_unique<UI::Label>()));
-		lbl->anchor  = UI::Anchors::Center;
-		lbl->pivot   = UI::Pivots::Center;
-		lbl->width   = UI::DimValue::px(280.f);
-		lbl->height  = UI::DimValue::px(54.f);
+		applyRect(lbl, UI::Anchors::TopLeft, UI::Pivots::TopLeft, 0.f, 0.f, w, h);
 		lbl->setTextHAlign(UI::TextHAlign::Center);
 		lbl->setTextVAlign(UI::TextVAlign::Center);
-		lbl->setFontSize(22.f);
-		lbl->setTextColor(1.f, 1.f, 1.f, 1.f);
+		lbl->setFontSize(fontSize);
+		lbl->setTextColor(textColor.x, textColor.y, textColor.z, textColor.w);
 		lbl->setText(text);
 		return btn;
 	};
+
+	makeSolid(lobbyRoot_, "lobbySkyBackground", 0.f, 0.f, screenW, screenH, skyBlue, -10);
 
 	// ---- 메인 메뉴 (mainView) ----
 	mainMenuRoot_ = lobbyRoot_->addChild(std::make_unique<UI::UIElement>());
@@ -2744,21 +2783,31 @@ void Game::buildLobbyUI() {
 	mainMenuRoot_->width  = UI::DimValue::px(screenW);
 	mainMenuRoot_->height = UI::DimValue::px(screenH);
 
-	makeLabel (mainMenuRoot_, L"비공개 로비", -210.f, 36.f, 600.f, 60.f);
-	makeButton(mainMenuRoot_, L"방 만들기",   -120.f, [this]() { lobbyCreateRoom(); });
+	auto* mainPanel = makeGroup(mainMenuRoot_, "mainPanel", mainPanelW, mainPanelH);
+	makeSolid(mainPanel, "mainPanelBg", 0.f, 0.f, mainPanelW, mainPanelH, surface);
+	makeLabel(mainPanel, L"PROJECT-W MULTIPLAYER", 34.f, 30.f, 13.f, mainPanelW - 68.f, 24.f, primary);
+	makeLabel(mainPanel, L"비공개 로비", 34.f, 56.f, 42.f, mainPanelW - 68.f, 58.f, ink);
+
+	auto* createBtn = makeButton(mainPanel, L"", 34.f, 132.f, mainPanelW - 68.f, 72.f,
+		primary, primaryDark, primaryDark, 22.f, [this]() { lobbyCreateRoom(); },
+		{ 1.f, 1.f, 1.f, 1.f });
+	makeLabel(createBtn, L"방 만들기", 18.f, 0.f, 24.f, 220.f, 72.f, { 1.f, 1.f, 1.f, 1.f });
+	makeLabel(createBtn, L"Create Room", mainPanelW - 220.f, 0.f, 13.f, 130.f, 72.f,
+		{ 1.f, 1.f, 1.f, 0.82f }, UI::TextHAlign::Trailing);
 
 	// 방 코드 입력 + 참가 (프로토타입 joinRoomForm 대응)
-	makeLabel(mainMenuRoot_, L"방 코드로 참가", -56.f, 18.f, 360.f, 28.f);
+	makeSolid(mainPanel, "joinBox", 34.f, 220.f, mainPanelW - 68.f, 116.f, surfaceSoft);
+	makeLabel(mainPanel, L"방 코드로 참가", 52.f, 234.f, 18.f, 240.f, 28.f, ink);
 	{
 		roomCodeInput_ = static_cast<UI::TextInput*>(
-			mainMenuRoot_->addChild(std::make_unique<UI::TextInput>()));
+			mainPanel->addChild(std::make_unique<UI::TextInput>()));
 		roomCodeInput_->name    = "roomCodeInput";
-		roomCodeInput_->anchor  = UI::Anchors::Center;
-		roomCodeInput_->pivot   = UI::Pivots::Center;
-		roomCodeInput_->offsetX = UI::DimValue::px(-70.f);
-		roomCodeInput_->offsetY = UI::DimValue::px(-18.f);
-		roomCodeInput_->width   = UI::DimValue::px(180.f);
-		roomCodeInput_->height  = UI::DimValue::px(48.f);
+		applyRect(roomCodeInput_, UI::Anchors::TopLeft, UI::Pivots::TopLeft,
+			52.f, 274.f, mainPanelW - 232.f, 48.f);
+		roomCodeInput_->bgColor        = { 1.f, 1.f, 1.f, 1.f };
+		roomCodeInput_->bgColorFocused = { 0.953f, 0.976f, 0.992f, 1.f };
+		roomCodeInput_->textColor        = ink;
+		roomCodeInput_->placeholderColor = muted;
 		roomCodeInput_->uppercase = true;
 		roomCodeInput_->alnumOnly = true;
 		roomCodeInput_->setMaxLength(6);
@@ -2767,39 +2816,24 @@ void Game::buildLobbyUI() {
 			lobbyJoinRoom(std::string(code.begin(), code.end()));
 		};
 
-		auto* joinBtn = static_cast<UI::Button*>(
-			mainMenuRoot_->addChild(std::make_unique<UI::Button>()));
+		auto* joinBtn = makeButton(mainPanel, L"참가", mainPanelW - 146.f, 274.f, 94.f, 48.f,
+			primary, primaryDark, primaryDark, 20.f, [this]() {
+				const std::wstring& w = roomCodeInput_->text();
+				lobbyJoinRoom(std::string(w.begin(), w.end()));
+			}, { 1.f, 1.f, 1.f, 1.f });
 		joinBtn->name    = "joinButton";
-		joinBtn->anchor  = UI::Anchors::Center;
-		joinBtn->pivot   = UI::Pivots::Center;
-		joinBtn->offsetX = UI::DimValue::px(110.f);
-		joinBtn->offsetY = UI::DimValue::px(-18.f);
-		joinBtn->width   = UI::DimValue::px(100.f);
-		joinBtn->height  = UI::DimValue::px(48.f);
-		joinBtn->bgColor        = { 0.18f, 0.22f, 0.35f, 0.95f };
-		joinBtn->bgColorHovered = { 0.28f, 0.34f, 0.52f, 1.f };
-		joinBtn->bgColorPressed = { 0.12f, 0.15f, 0.25f, 1.f };
-		joinBtn->onClick = [this]() {
-			const std::wstring& w = roomCodeInput_->text();
-			lobbyJoinRoom(std::string(w.begin(), w.end()));
-		};
-		auto* joinLbl = static_cast<UI::Label*>(
-			joinBtn->addChild(std::make_unique<UI::Label>()));
-		joinLbl->anchor  = UI::Anchors::Center;
-		joinLbl->pivot   = UI::Pivots::Center;
-		joinLbl->width   = UI::DimValue::px(100.f);
-		joinLbl->height  = UI::DimValue::px(48.f);
-		joinLbl->setTextHAlign(UI::TextHAlign::Center);
-		joinLbl->setTextVAlign(UI::TextVAlign::Center);
-		joinLbl->setFontSize(20.f);
-		joinLbl->setText(L"참가");
 	}
 
-	mainMenuMsgLabel_ = makeLabel(mainMenuRoot_, L"", 28.f, 18.f, 520.f, 28.f);
-	mainMenuMsgLabel_->setTextColor(1.f, 0.6f, 0.3f, 1.f);
+	mainMenuMsgLabel_ = makeLabel(mainPanel, L"", 34.f, 348.f, 18.f, mainPanelW - 68.f, 30.f,
+		{ 0.70f, 0.24f, 0.24f, 1.f }, UI::TextHAlign::Center);
 
-	makeButton(mainMenuRoot_, L"설정", 90.f, []() { gSharedLog << "[Lobby] 설정 (준비 중)\n"; });
-	makeButton(mainMenuRoot_, L"종료", 160.f, []() { PostQuitMessage(0); });
+	const float quietW = (mainPanelW - 80.f) * 0.5f;
+	makeButton(mainPanel, L"설정", 34.f, 392.f, quietW, 48.f,
+		surfaceSoft, { 0.847f, 0.937f, 0.988f, 1.f }, primarySoft, 20.f,
+		[]() { gSharedLog << "[Lobby] 설정 (준비 중)\n"; }, ink);
+	makeButton(mainPanel, L"종료", 46.f + quietW, 392.f, quietW, 48.f,
+		surfaceSoft, { 0.847f, 0.937f, 0.988f, 1.f }, primarySoft, 20.f,
+		[]() { PostQuitMessage(0); }, ink);
 
 	// ---- 대기실 (lobbyView) ----
 	waitingRoomRoot_ = lobbyRoot_->addChild(std::make_unique<UI::UIElement>());
@@ -2809,31 +2843,67 @@ void Game::buildLobbyUI() {
 	waitingRoomRoot_->width  = UI::DimValue::px(screenW);
 	waitingRoomRoot_->height = UI::DimValue::px(screenH);
 
-	makeLabel(waitingRoomRoot_, L"대기실", -230.f, 32.f, 400.f, 50.f);
-	roomCodeLabel_    = makeLabel(waitingRoomRoot_, L"방 코드: ------", -180.f, 24.f, 500.f, 40.f);
-	playerCountLabel_ = makeLabel(waitingRoomRoot_, L"1 / 4",           -140.f, 20.f, 200.f, 32.f);
+	auto* roomPanel = makeGroup(waitingRoomRoot_, "waitingRoomPanel", roomPanelW, roomPanelH);
+	makeSolid(roomPanel, "waitingRoomPanelBg", 0.f, 0.f, roomPanelW, roomPanelH, surface);
+	makeLabel(roomPanel, L"PRIVATE ROOM", 34.f, 24.f, 13.f, 260.f, 24.f, primary);
+	makeLabel(roomPanel, L"대기실", 34.f, 50.f, 42.f, 260.f, 56.f, ink);
+	makeSolid(roomPanel, "playerCountBadgeBg", roomPanelW - 108.f, 32.f, 74.f, 40.f, primarySoft);
+	playerCountLabel_ = makeLabel(roomPanel, L"1 / 4", roomPanelW - 108.f, 32.f, 20.f, 74.f, 40.f,
+		primaryDark, UI::TextHAlign::Center);
+
+	makeSolid(roomPanel, "roomCodeArea", 34.f, 104.f, roomPanelW - 68.f, 100.f, surfaceSoft);
+	makeLabel(roomPanel, L"방 코드", 52.f, 116.f, 13.f, 140.f, 24.f, muted);
+	roomCodeLabel_ = makeLabel(roomPanel, L"------", 52.f, 142.f, 40.f, 260.f, 48.f, ink);
+	makeButton(roomPanel, L"코드 로그", roomPanelW - 150.f, 130.f, 98.f, 48.f,
+		primary, primaryDark, primaryDark, 18.f,
+		[this]() { gSharedLog << "[Lobby] 방 코드: " << roomCode_ << "\n"; },
+		{ 1.f, 1.f, 1.f, 1.f });
 
 	for (int i = 0; i < kMaxLobbyPlayers; ++i) {
-		slotLabels_[i] = makeLabel(waitingRoomRoot_, L"비어있음",
-			-90.f + static_cast<float>(i) * 40.f, 20.f, 360.f, 34.f);
+		const float y = 218.f + static_cast<float>(i) * 62.f;
+		slotCardBgs_[i] = makeSolid(roomPanel, "playerSlot", 34.f, y, roomPanelW - 68.f, 54.f, surface);
+		slotAvatarBgs_[i] = makeSolid(roomPanel, "playerAvatar", 46.f, y + 7.f, 40.f, 40.f, primary);
+		slotAvatarLabels_[i] = makeLabel(roomPanel, L"", 46.f, y + 7.f, 20.f, 40.f, 40.f,
+			{ 1.f, 1.f, 1.f, 1.f }, UI::TextHAlign::Center);
+		slotLabels_[i] = makeLabel(roomPanel, L"비어있음", 100.f, y + 9.f, 20.f,
+			roomPanelW - 250.f, 36.f, ink);
+		slotHostBadgeBgs_[i] = makeSolid(roomPanel, "hostBadgeBg", roomPanelW - 122.f, y + 13.f,
+			70.f, 28.f, primarySoft);
+		slotHostBadgeLabels_[i] = makeLabel(roomPanel, L"", roomPanelW - 122.f, y + 13.f, 13.f, 70.f, 28.f,
+			primaryDark, UI::TextHAlign::Center);
 	}
 
-	startGameButton_ = makeButton(waitingRoomRoot_, L"게임 시작", 110.f,
-		[this]() { lobbyStartGame(); });
+	startGameButton_ = makeButton(roomPanel, L"게임 시작", 34.f, 476.f, roomPanelW - 68.f, 52.f,
+		primary, primaryDark, primaryDark, 22.f, [this]() { lobbyStartGame(); },
+		{ 1.f, 1.f, 1.f, 1.f });
 	startGameLabel_  = static_cast<UI::Label*>(startGameButton_->children().front().get());
 
-	hostStatusLabel_ = makeLabel(waitingRoomRoot_, L"호스트가 시작하기를 기다리는 중...",
-		110.f, 20.f, 520.f, 34.f);
+	makeSolid(roomPanel, "waitMessageBg", 34.f, 476.f, roomPanelW - 68.f, 52.f, surfaceSoft);
+	hostStatusLabel_ = makeLabel(roomPanel, L"호스트가 시작하기를 기다리는 중...",
+		34.f, 476.f, 20.f, roomPanelW - 68.f, 52.f, muted, UI::TextHAlign::Center);
 
-	makeButton(waitingRoomRoot_, L"방 나가기", 180.f, [this]() { lobbyLeaveRoom(); });
-	makeButton(waitingRoomRoot_, L"더미 추가", 250.f, [this]() { lobbyAddDummy(); });
-	makeButton(waitingRoomRoot_, L"더미 제거", 320.f, [this]() { lobbyRemoveDummy(); });
+	makeButton(roomPanel, L"방 나가기", 34.f, 540.f, roomPanelW - 68.f, 48.f,
+		surfaceSoft, primarySoft, primarySoft, 20.f, [this]() { lobbyLeaveRoom(); }, ink);
+	makeSolid(roomPanel, "debugDivider", 34.f, 604.f, roomPanelW - 68.f, 1.f,
+		{ 0.780f, 0.867f, 0.922f, 1.f });
+	makeLabel(roomPanel, L"MOCK", 34.f, 616.f, 12.f, 58.f, 36.f, muted);
+	makeButton(roomPanel, L"더미 추가", roomPanelW - 232.f, 616.f, 100.f, 36.f,
+		surface, primarySoft, primarySoft, 14.f, [this]() { lobbyAddDummy(); }, ink);
+	makeButton(roomPanel, L"더미 제거", roomPanelW - 124.f, 616.f, 90.f, 36.f,
+		surface, primarySoft, primarySoft, 14.f, [this]() { lobbyRemoveDummy(); }, ink);
 }
 
 void Game::refreshLobbyUI() {
 	if (!lobbyRoot_) {
 		return;
 	}
+
+	const XMFLOAT4 ink         = { 0.090f, 0.125f, 0.200f, 1.f };
+	const XMFLOAT4 muted       = { 0.384f, 0.439f, 0.518f, 1.f };
+	const XMFLOAT4 surface     = { 1.000f, 1.000f, 1.000f, 1.f };
+	const XMFLOAT4 surfaceSoft = { 0.953f, 0.976f, 0.992f, 1.f };
+	const XMFLOAT4 primary     = { 0.082f, 0.365f, 0.545f, 1.f };
+	const XMFLOAT4 primaryDark = { 0.055f, 0.286f, 0.435f, 1.f };
 
 	lobbyRoot_->visible = (scene_ == Scene::Lobby);
 
@@ -2848,7 +2918,7 @@ void Game::refreshLobbyUI() {
 	// 방 코드
 	if (roomCodeLabel_) {
 		const std::wstring code(roomCode_.begin(), roomCode_.end());
-		roomCodeLabel_->setText(L"방 코드: " + (code.empty() ? std::wstring(L"------") : code));
+		roomCodeLabel_->setText(code.empty() ? std::wstring(L"------") : code);
 	}
 
 	// 인원수
@@ -2861,13 +2931,41 @@ void Game::refreshLobbyUI() {
 	for (int i = 0; i < kMaxLobbyPlayers; ++i) {
 		if (!slotLabels_[i]) continue;
 		if (i < static_cast<int>(lobbyPlayers_.size())) {
-			std::wstring n = lobbyPlayers_[i].name;
-			if (lobbyPlayers_[i].id == hostId_) n += L" (호스트)";
-			slotLabels_[i]->setText(n);
-			slotLabels_[i]->setTextColor(1.f, 1.f, 1.f, 1.f);
+			const auto& player = lobbyPlayers_[i];
+			const bool isSlotHost = (player.id == hostId_);
+			const std::wstring avatar = player.name.empty() ? std::wstring(L"?") : player.name.substr(0, 1);
+
+			if (slotCardBgs_[i]) slotCardBgs_[i]->bgColor = surface;
+			if (slotAvatarBgs_[i]) slotAvatarBgs_[i]->bgColor = primary;
+			if (slotAvatarLabels_[i]) {
+				slotAvatarLabels_[i]->setText(avatar);
+				slotAvatarLabels_[i]->setTextColor(1.f, 1.f, 1.f, 1.f);
+			}
+
+			slotLabels_[i]->setText(player.name);
+			slotLabels_[i]->setTextColor(ink.x, ink.y, ink.z, ink.w);
+
+			if (slotHostBadgeBgs_[i]) slotHostBadgeBgs_[i]->visible = isSlotHost;
+			if (slotHostBadgeLabels_[i]) {
+				slotHostBadgeLabels_[i]->visible = isSlotHost;
+				slotHostBadgeLabels_[i]->setText(isSlotHost ? L"호스트" : L"");
+			}
 		} else {
+			if (slotCardBgs_[i]) slotCardBgs_[i]->bgColor = surfaceSoft;
+			if (slotAvatarBgs_[i]) slotAvatarBgs_[i]->bgColor = surface;
+			if (slotAvatarLabels_[i]) {
+				slotAvatarLabels_[i]->setText(std::to_wstring(i + 1));
+				slotAvatarLabels_[i]->setTextColor(muted.x, muted.y, muted.z, muted.w);
+			}
+
 			slotLabels_[i]->setText(L"비어있음");
-			slotLabels_[i]->setTextColor(0.5f, 0.5f, 0.5f, 1.f);
+			slotLabels_[i]->setTextColor(muted.x, muted.y, muted.z, muted.w);
+
+			if (slotHostBadgeBgs_[i]) slotHostBadgeBgs_[i]->visible = false;
+			if (slotHostBadgeLabels_[i]) {
+				slotHostBadgeLabels_[i]->visible = false;
+				slotHostBadgeLabels_[i]->setText(L"");
+			}
 		}
 	}
 
@@ -2879,9 +2977,9 @@ void Game::refreshLobbyUI() {
 		startGameLabel_->setText(loaded ? L"게임 시작" : L"리소스 로딩 중...");
 	}
 	if (isHost_ && startGameButton_) {
-		startGameButton_->bgColor = loaded
-			? XMFLOAT4{ 0.16f, 0.40f, 0.22f, 0.95f }
-			: XMFLOAT4{ 0.25f, 0.25f, 0.25f, 0.80f };
+		startGameButton_->bgColor = loaded ? primary : XMFLOAT4{ 0.25f, 0.25f, 0.25f, 0.80f };
+		startGameButton_->bgColorHovered = loaded ? primaryDark : XMFLOAT4{ 0.30f, 0.30f, 0.30f, 0.90f };
+		startGameButton_->bgColorPressed = loaded ? primaryDark : XMFLOAT4{ 0.18f, 0.18f, 0.18f, 0.90f };
 	}
 }
 
