@@ -164,6 +164,43 @@ void clearGBuffer(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
 
 }	// namespace GBuffer
 
+// 로비 대기실 슬롯 캐릭터를 그리는 오프스크린 포트레이트 렌더 타깃.
+// 가로 아틀라스 1장(cellCount개 셀 × cellW)에 셀별 viewport로 캐릭터를 그린 뒤,
+// color SRV를 UI 슬롯 쿼드에 합성한다. depth는 샘플하지 않으므로 SRV 없이 DSV만 둔다.
+struct PortraitRTData {
+	Texture color;   // R8G8B8A8_UNORM — RTV + bindless SRV (UI 샘플)
+	Texture depth;   // D32_FLOAT      — DSV only (미샘플)
+	u32t width;
+	u32t height;
+	u32t cellCount;
+	// OMSetRenderTargets / ClearRenderTargetView 용 핸들 (addPortraitRT 시 캐싱)
+	D3D12_CPU_DESCRIPTOR_HANDLE rtv;
+	D3D12_CPU_DESCRIPTOR_HANDLE dsv;
+	// color 리소스 상태 추적 (depth는 항상 DEPTH_WRITE로 유지)
+	D3D12_RESOURCE_STATES curStateColor;
+};
+
+namespace Portrait {
+
+// portraitData[roomIdx]: roomIdx번째 방의 포트레이트 RT 세트. addPortraitRT() 전에는 비어 있다.
+extern std::vector<PortraitRTData> portraitData;
+
+// roomCnt개 방 각각에 대해 cellW*cellCount × cellH 크기의 가로 아틀라스 RT(color+depth)를 생성한다.
+// rtvPool: color RT 1개 × roomCnt, dsvPool: depth 1개 × roomCnt, srvTexPool: color SRV 1개 × roomCnt.
+void addPortraitRT( ID3D12Device* device, u32t cellW, u32t cellH, u32t cellCount,
+	std::size_t roomCnt, DescriptorPool& rtvPool, DescriptorPool& dsvPool, DescriptorPool& srvTexPool
+);
+
+// roomIdx번째 color RT를 쓰기 상태(RENDER_TARGET)로 전환한다. (이미 쓰기면 no-op)
+void transitionToWrite(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
+// roomIdx번째 color RT를 읽기 상태(PIXEL_SHADER_RESOURCE)로 전환한다. (이미 읽기면 no-op)
+void transitionToRead(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
+// roomIdx번째 color를 투명(0,0,0,0)으로, depth를 1.0으로 클리어한다.
+// 호출 전 transitionToWrite()로 color를 RENDER_TARGET 상태로 만들어야 한다.
+void clearPortraitRT(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList);
+
+}	// namespace Portrait
+
 namespace HiZMap {
 
 // clearDepth를 1.0f보다 작은 값으로 설정함으로써

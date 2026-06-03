@@ -105,7 +105,6 @@ private:
 	void sendSkillStartPacket(uint32 skillAssetId);
 
 	void processInput(Milliseconds deltaTime);
-	void processInputLobby(Milliseconds deltaTime);
 	void processInputGame(Milliseconds deltaTime);
 
 	// 씬별 프레임 루틴. update()/render()가 scene_에 따라 분기 호출한다.
@@ -134,6 +133,11 @@ private:
 	// 로비 UI 구성/갱신 (mock 룸 상태 기반).
 	void buildLobbyUI();
 	void refreshLobbyUI();
+
+	// Loading screen (black + logo + progress bar + spinner): build once, update per frame.
+	void buildLoadingScreen();
+	void updateLoadingScreen(float deltaTimeSec, bool visible);
+	float loadProgress01() const;
 
 	// 로비 mock 액션 (script.js 프로토타입 이식).
 	void lobbyCreateRoom();
@@ -318,9 +322,16 @@ private:
 	// 인게임 리소스 백그라운드 로드 상태.
 	// inGameAssetsLoaded_ 는 워커 스레드가 set, 메인 스레드가 read.
 	std::atomic<bool> inGameAssetsLoaded_{ false };
+	// Phase 1 (lobby/waiting-room 3D assets) done; Phase 2 mesh/texture load done.
+	std::atomic<bool> lobbyVisualAssetsLoaded_{ false };
+	std::atomic<bool> inGameMeshAssetsLoaded_{ false };
+	// Particle prefetch progress (Phase 2 second half).
+	std::atomic<u32t> particleFilesTotal_{ 0u };
+	std::atomic<u32t> particleFilesDone_{ 0u };
 	// 로딩 중 종료 시 set. prefetchParticleConfigs 의 파싱 워커가 폴링해 조기 중단한다.
 	std::atomic<bool> assetLoadAbort_{ false };
 	bool inGameLoadStarted_ = false;
+	bool pendingStart_      = false;   // start pressed while in-game assets still loading
 	bool inGameAssetsReady_ = false;   // 메인 스레드에서 1회 처리용
 	bool uiBaseReady_       = false;   // UIManager 기본 리소스 초기화 여부
 
@@ -356,7 +367,10 @@ private:
 	UI::Label*     roomCodeLabel_   = nullptr;
 	UI::Label*     playerCountLabel_= nullptr;
 	// 스쿼드 스테이지 슬롯(4칸). 반투명 배경은 제거하고 번호/이름/뱃지 텍스트만 유지.
-	std::array<UI::UIElement*, kMaxLobbyPlayers> slotBays_{};          // 모델 베이(rect만 사용)
+	// slotBays_: 포트레이트 RT(오프스크린 캐릭터)를 셀 sub-rect로 샘플해 합성하는 UI 이미지.
+	std::array<UI::Image*,     kMaxLobbyPlayers> slotBays_{};          // 모델 베이(포트레이트 합성)
+	std::array<UI::Button*,    kMaxLobbyPlayers> slotPanels_{};        // 캐릭터 뒤 배경 패널(불투명 scrim)
+	std::array<UI::Button*,    kMaxLobbyPlayers> slotNameplateBgs_{};  // 플레이어 이름 배경
 	std::array<UI::Label*,     kMaxLobbyPlayers> slotNumberLabels_{};  // "01".."04"
 	std::array<UI::Label*,     kMaxLobbyPlayers> slotNameLabels_{};    // 플레이어 이름
 	std::array<UI::Label*,     kMaxLobbyPlayers> slotHostBadgeLabels_{};
@@ -366,17 +380,33 @@ private:
 	UI::Button*    waitMessageBg_   = nullptr;
 	UI::Label*     hostStatusLabel_ = nullptr;
 
+	// Loading screen overlay (black + logo + progress bar + "loading..." + dot-ring spinner).
+	UI::UIElement*   loadingRoot_      = nullptr;
+	UI::ProgressBar* loadingBar_       = nullptr;
+	UI::Label*       loadingTextLabel_ = nullptr;
+	std::array<UI::Button*, 12> spinnerDots_{};
+	float            loadingSpinTime_  = 0.f;
+	// 대기실 3D 준비(stageVisualReady_) 후, 로딩 오버레이 뒤에서 실제로 렌더된 프레임 수.
+	// 이 값이 kWarmupFrames에 도달해야 오버레이를 내려 팝인(첫 프레임 그려지는 과정)을 가린다.
+	// 메인 스레드 전용(render에서 증가, LobbyScene update에서 읽음) — atomic 불필요.
+	int              waitingRoomWarmupFrames_ = 0;
+
 	// 대기실 3D 맵 배경
 	Camera lobbyCamera_{};
 	float  lobbyCameraTime_ = 0.f;                  // 대기실 카메라 연출 시간(느린 좌우 패닝)
-	bool   stageVisualReady_ = false;
+	// cross-thread 신호(워커가 Phase 2 시작 전 대기) — atomic.
+	std::atomic<bool> stageVisualReady_{ false };
 	std::vector<mu::Vec3> stageSpawnPositions_{};  // level.bin PlayerStart 노드 위치
 	mu::Vec3 stageFocus_{};                         // 대기실 카메라 포커스(스폰 중심, 지형 높이)
 	std::vector<std::shared_ptr<Player>> lobbyChars_{};  // 대기실 전시 캐릭터(물리 없음, idle)
-	// 전시 캐릭터 배치 튜닝값(대기실에서 키로 런타임 조정 가능).
-	float lobbyCharStandDist_  = 4.0f;   // 카메라 앞 거리
-	float lobbyCharSpacing_    = 1.5f;   // 좌우 슬롯 간격
-	float lobbyCharFootOffset_ = -1.3f;  // 발 높이 오프셋
+	// 슬롯별 포트레이트 카메라(배경 카메라와 무관, 오프스크린 RT로 렌더). 각 캐릭터는 자기 셀에만
+	// 그려지므로 모두 원점에 두고 동일 프레이밍 카메라를 쓴다.
+	std::array<Camera, kMaxLobbyPlayers> lobbyPortraitCams_{};
+	// 포트레이트 프레이밍 설정값.
+	float lobbyPortraitCamDist_   = 3.7f;   // 캐릭터 앞 거리(↑일수록 작게 보임)
+	float lobbyPortraitCamHeight_ = 0.95f;  // 카메라 높이(시선)
+	float lobbyPortraitLookHeight_= 0.95f;  // 바라보는 높이
+	float lobbyPortraitFovYDeg_   = 32.f;   // 수직 FOV(도)
 };
 
 }	// namespace Online

@@ -660,6 +660,29 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 	}
 }
 
+void MU_CALLCONV Object::renderPortrait(GFX& gfx, u32t slot) {
+	const auto pModel = renderState_.pModel;
+	if (!pModel) return;
+
+	for (auto& [mesh, meshXform] : pModel->meshWithDressXforms) {
+		const bool isSkinned = renderState_.animBlender
+			&& mesh.vbIdxMap.contains(mesh.name + "_VB_BoneIndices");
+		if (!isSkinned) continue;   // 포트레이트는 스킨드 캐릭터만 대상으로 한다.
+
+		for (std::size_t i = 0u; i < mesh.subMeshes.size(); ++i) {
+			gfx.addLobbyPortraitDrawEvent(slot, PBRSkinnedPipeline::DrawEvent{
+				.world             = meshXform * renderState_.world,
+				.boneXforms        = renderState_.animBlender->finalXformData(),
+				.mesh              = &mesh,
+				.subMesh           = &mesh.subMeshes[i],
+				.material          = &mesh.materialSets[materialSetIdx_].materials[i],
+				.viewFrustumCulled = false,   // 포트레이트 카메라는 항상 캐릭터를 본다.
+				.shadowCulled      = true,    // shadow pass 미수행.
+			});
+		}
+	}
+}
+
 void MU_CALLCONV Object::setPos(mu::Vec3 newPos) {
 	body_.setPos(newPos);
 	body_.snapToCurrent();

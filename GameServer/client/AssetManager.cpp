@@ -25,6 +25,16 @@ ps::MatSwordSlash makeDefaultSwordSlashMaterial() {
 }  // namespace
 
 void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
+	// Full load = Phase 1 (lobby visual) then Phase 2 (remaining in-game).
+	loadLobbyVisualAssets(gfx, configs);
+	loadRemainingInGameAssets(gfx, configs);
+}
+
+void AssetManager::loadLobbyVisualAssets(GFX& gfx, const AssetConfigs& configs) {
+	// Minimum set needed to render the waiting-room 3D: cube (skybox mesh),
+	// player model, skybox material, and the full player animation set.
+	// (Loading only idle would require changing AnimBlenderPlayer::init(), which
+	//  registers the whole playerAnimations() set — so load them all here.)
 	gfx.addRequestModelLoad( RequestModelLoad{
 		.modelPath = "../resources/models/cube/cube.bin",
 		.pTexHashMap = &texHashMap_,
@@ -37,15 +47,30 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 		.pDest = &modelPlayer_
 	} );
 
+	gfx.addRequestSkyboxLoad( RequestSkyboxLoad{
+		.skyboxPath = "../resources/skyboxes/skybox.bin",
+		.pDest = &skyboxMaterial_
+	} );
+
+	auto tmpPlayerAnims = loadAnimClipsFromFile("../resources/animations/playerAnimations.anim", gfx);
+	playerAnimations_.reserve(tmpPlayerAnims.size());
+
+	gfx.loadRequestedAssets();
+
+	for (auto& clip : tmpPlayerAnims) {
+		playerAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
+	}
+
+	// Player baked-anim ids (goblin vector is still empty here — handled in Phase 2).
+	setupBakedAnimationIds();
+}
+
+void AssetManager::loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& configs) {
+	// Remaining assets needed only in-game.
 	gfx.addRequestModelLoad( RequestModelLoad{
 		.modelPath = "../resources/models/goblin/goblin.bin",
 		.pTexHashMap = &texHashMap_,
 		.pDest = &modelGoblin_
-	} );
-	
-	gfx.addRequestSkyboxLoad( RequestSkyboxLoad{
-		.skyboxPath = "../resources/skyboxes/skybox.bin",
-		.pDest = &skyboxMaterial_
 	} );
 
 	//gfx.addRequestTextureLoad( RequestTextureLoad{
@@ -499,9 +524,6 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 		gSharedLog << "[SwordSlash2 Material] Warning: ../resources/effects/SwordSlash2.json 로드 실패. 기본값을 사용합니다.\n";
 	}
 
-	auto tmpPlayerAnims = loadAnimClipsFromFile("../resources/animations/playerAnimations.anim", gfx);
-	playerAnimations_.reserve(tmpPlayerAnims.size());
-
 	auto tmpGoblinAnims = loadAnimClipsFromFile("../resources/animations/goblinAnimations.anim", gfx);
 	goblinAnimations_.reserve(tmpGoblinAnims.size());
 
@@ -509,14 +531,11 @@ void AssetManager::loadGFXAssets(GFX& gfx, const AssetConfigs& configs) {
 	// 여기서는 요청된 리소스만 로드한다. (백그라운드 스레드에서 호출 가능)
 	gfx.loadRequestedAssets();
 
-	for (auto& clip : tmpPlayerAnims) {
-		playerAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
-	}
-
 	for (auto& clip : tmpGoblinAnims) {
 		goblinAnimations_.push_back( std::make_shared<AnimClip>(std::move(clip)) );
 	}
 
+	// Re-runs player ids (harmless) and assigns goblin baked-anim ids.
 	setupBakedAnimationIds();
 
 	swordSlashMaterial_.mainTex = &smoke12Tex_;

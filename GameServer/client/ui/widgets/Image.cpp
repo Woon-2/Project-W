@@ -9,7 +9,9 @@ void Image::onRender(const RenderContext& rc) {
 
     rc.gfx->addDrawEvent(UIPipeline::DrawEvent{
         .world = buildWorldMatrix(rc.screenHeight),
-        .pTex = texture
+        .pTex = texture,
+        .colorMul = colorMul,
+        .uvScaleBias = uvScaleBias
     });
 }
 

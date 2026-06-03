@@ -11,6 +11,13 @@ class AssetManager {
 public:
 	void loadGFXAssets(GFX& gfx, const AssetConfigs& configs = AssetConfigs{});
 
+	// Dependency-split loading. Phase 1 loads only what the lobby/waiting-room 3D
+	// needs (cube, player model, skybox, player animations); Phase 2 loads the
+	// remaining in-game assets (goblin, effect meshes/textures, particle materials,
+	// goblin animations). loadGFXAssets() runs both in order (used by standalone).
+	void loadLobbyVisualAssets(GFX& gfx, const AssetConfigs& configs = AssetConfigs{});
+	void loadRemainingInGameAssets(GFX& gfx, const AssetConfigs& configs = AssetConfigs{});
+
 	const Model* modelCube() const { return &modelCube_; }
 	const Model* modelPlayer() const { return &modelPlayer_; }
 	const Model* modelGoblin() const { return &modelGoblin_; }
