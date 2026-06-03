@@ -19,8 +19,12 @@ Online 클라이언트(`online/onlineGame`)를 **로비 씬 / 인게임 씬**으
    - UIManager 기본 리소스 초기화(`setScreenSize`/`requestDebugResources`, 1회)
    - `buildLobbyUI()` + `refreshLobbyUI()`
    - `startInGameAssetLoad()` — ThreadPool에 인게임 로드 잡 1개 등록
-3. 호스트가 "게임 시작"(로드 완료 시 활성) → `enterInGame()`:
-   - 로비 UI 숨김 → 렌더 경로 Deferred 복원 → `setupStage()` → `scene_=InGame`
+3. 호스트가 "게임 시작"(**로딩 중에도 항상 활성**) → `lobbyStartGame()`:
+   - 인게임 에셋 로드 완료면 즉시 `enterInGame()`.
+   - 아직 로딩 중이면 `pendingStart_=true`로 두고 **로딩 화면**을 띄운 뒤, `LobbyScene` 폴링이
+     `inGameAssetsLoaded_`를 보면 `enterInGame()` 자동 진입. (`pendingStart_`는 `enterLobby`/
+     `lobbyLeaveRoom`/`enterInGame`에서 초기화.)
+   - `enterInGame()`: 로비 UI 숨김 → 렌더 경로 Deferred 복원 → `setupStage()` → `scene_=InGame`
    - 플레이어/오브젝트 생성은 **서버 S_Enter 패킷**(`InGameScene`의 `SleepEx`에서 처리)이 담당.
      enterInGame에서 별도 플레이어를 만들면 S_Enter가 `setupPlayer`를 재호출해 이전 플레이어의
      물리 바디가 물리월드에 dangling으로 남아 크래시하므로, 클라에서 플레이어를 직접 만들지 않는다.
@@ -28,8 +32,18 @@ Online 클라이언트(`online/onlineGame`)를 **로비 씬 / 인게임 씬**으
 ## 리소스 분류
 - **로비(즉시, 메인 스레드)**: GFX 코어(폰트 포함) + `initSharedResources`(그림자맵/GBuffer/HiZ/
   정적 메시/white tex) + 로비 UI 위젯.
-- **인게임(로비 중 백그라운드)**: 모델(cube/player/goblin), 스카이박스, 지형, 파티클 텍스처(~30),
-  이펙트 메시(meshbin), 파티클 머티리얼, 애니메이션 클립(= `AssetManager::loadGFXAssets` 전체)
+- **인게임(로비 중 백그라운드, 2단계)**: `startInGameAssetLoad`가 ThreadPool 잡 1개로 처리.
+  - **Phase 1** (`AssetManager::loadLobbyVisualAssets`): 큐브/플레이어 모델, 스카이박스, 플레이어 애니 전체
+    → `lobbyVisualAssetsLoaded_` set. 대기실 3D를 띄울 최소 에셋.
+  - **직렬화 핸드셰이크**: 메인 스레드가 WaitingRoom 진입 시 `setupStageVisual()`(지형 동기 로드)을 돌려
+    `stageVisualReady_`를 세울 때까지 워커가 대기(같은 `LoadFence` 충돌 방지). 방 미생성 시 워커는 파킹.
+  - **지형 스트리밍 지연**: `chunkManager_.update()`(매 프레임)도 `recordTerrainResourceLoad`로 같은
+    `LoadFence`/`associatedResources_`를 쓴다. Phase 2 `loadRequestedAssets`(워커)와 동시 실행되면 워커의
+    업로드 버퍼가 `waitOnFence`의 `clear()`로 삭제돼 D3D12 `OBJECT_DELETED_WHILE_STILL_IN_USE` 크래시.
+    → 대기실 스트리밍은 `inGameMeshAssetsLoaded_`(Phase 2 GPU 로드 완료) 이후에만 수행. 그 전에는
+    `setupStageVisual`의 동기 baseline 지형으로 충분(로비 카메라는 거의 정지).
+  - **Phase 2** (`AssetManager::loadRemainingInGameAssets`): 고블린 모델, 파티클 텍스처(~30), 이펙트
+    메시(meshbin), 파티클 머티리얼, 고블린 애니 → `inGameMeshAssetsLoaded_` set
   **+ 파티클 이펙트 JSON 파싱**(`prefetchParticleConfigs`: `effects/*_ParticleSystems.json`을 모두 파싱해
   `particleConfigCache_`에 적재. key = "<파일명>|<relativePath>").
 - **인게임 진입 시(메인 스레드)**: `setupStage()`(지형/스카이박스/인게임 UI), `setupPlayer()`
@@ -113,9 +127,11 @@ hover/pressed는 엔진 틴트로 처리.
   평균 XZ를 지형 높이(`heightAtWorld`)에 앉힌 지점(스폰 좌표가 없으면 `worldCenter()` 폴백). `PlayerStart`는
   `importNode`에서 `stageSpawnPositions_`로 캡처(레벨 파싱은 `setupStageVisual`로 이동 — 대기실도 스폰 정보
   획득). orbit은 쓰지 않음(슬롯 정렬 유지). 카메라 오프셋/FOV는 `LobbyScene` 상수로 튜닝.
-- **타이밍/폴백**: 대기실 진입 후 `inGameAssetsLoaded_`가 true가 될 때까지는 키아트 bg(`lobbyBgImage_`)를
-  폴백으로 보여주고(Forward), 완료되면 `LobbyScene`에서 `setupStageVisual()` → Deferred 전환 + bg 숨김 +
-  카메라/`chunkManager_.update(center)` 갱신.
+- **타이밍/로딩 화면**: 대기실 진입 후 `lobbyVisualAssetsLoaded_`(Phase 1)가 true가 되면 `LobbyScene`에서
+  `setupStageVisual()` → Deferred 전환 + 카메라/`chunkManager_.update` 갱신. 그 전(및 `setupStageVisual`의
+  동기 지형 로드까지, 즉 `!stageVisualReady_`)에는 **로딩 화면**(검정+로고+ProgressBar+"loading..."+점 링
+  스피너, `buildLoadingScreen`/`updateLoadingScreen`)을 띄운다. `pendingStart_`일 때도 동일. 진행도는
+  `loadProgress01()`(Phase 1 → Phase 2 메시 → 파티클 순).
 - **렌더 분기**: `renderLobby()`는 `WaitingRoom && stageVisualReady_`이면 `renderWaitingRoom()`(=
   `renderInGame()`의 3D 부분 최소 복제: skybox + terrain submit + `lobbyCamera_.updateGFX` +
   `dirLight_.render` + PBR/Terrain FrameData → UI 오버레이 → `gfx_.render()`), 아니면 UI-only.

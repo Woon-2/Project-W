@@ -135,6 +135,11 @@ private:
 	void buildLobbyUI();
 	void refreshLobbyUI();
 
+	// Loading screen (black + logo + progress bar + spinner): build once, update per frame.
+	void buildLoadingScreen();
+	void updateLoadingScreen(float deltaTimeSec, bool visible);
+	float loadProgress01() const;
+
 	// 로비 mock 액션 (script.js 프로토타입 이식).
 	void lobbyCreateRoom();
 	void lobbyJoinRoom(const std::string& code);
@@ -318,9 +323,16 @@ private:
 	// 인게임 리소스 백그라운드 로드 상태.
 	// inGameAssetsLoaded_ 는 워커 스레드가 set, 메인 스레드가 read.
 	std::atomic<bool> inGameAssetsLoaded_{ false };
+	// Phase 1 (lobby/waiting-room 3D assets) done; Phase 2 mesh/texture load done.
+	std::atomic<bool> lobbyVisualAssetsLoaded_{ false };
+	std::atomic<bool> inGameMeshAssetsLoaded_{ false };
+	// Particle prefetch progress (Phase 2 second half).
+	std::atomic<u32t> particleFilesTotal_{ 0u };
+	std::atomic<u32t> particleFilesDone_{ 0u };
 	// 로딩 중 종료 시 set. prefetchParticleConfigs 의 파싱 워커가 폴링해 조기 중단한다.
 	std::atomic<bool> assetLoadAbort_{ false };
 	bool inGameLoadStarted_ = false;
+	bool pendingStart_      = false;   // start pressed while in-game assets still loading
 	bool inGameAssetsReady_ = false;   // 메인 스레드에서 1회 처리용
 	bool uiBaseReady_       = false;   // UIManager 기본 리소스 초기화 여부
 
@@ -366,10 +378,18 @@ private:
 	UI::Button*    waitMessageBg_   = nullptr;
 	UI::Label*     hostStatusLabel_ = nullptr;
 
+	// Loading screen overlay (black + logo + progress bar + "loading..." + dot-ring spinner).
+	UI::UIElement*   loadingRoot_      = nullptr;
+	UI::ProgressBar* loadingBar_       = nullptr;
+	UI::Label*       loadingTextLabel_ = nullptr;
+	std::array<UI::Button*, 12> spinnerDots_{};
+	float            loadingSpinTime_  = 0.f;
+
 	// 대기실 3D 맵 배경
 	Camera lobbyCamera_{};
 	float  lobbyCameraTime_ = 0.f;                  // 대기실 카메라 연출 시간(느린 좌우 패닝)
-	bool   stageVisualReady_ = false;
+	// cross-thread 신호(워커가 Phase 2 시작 전 대기) — atomic.
+	std::atomic<bool> stageVisualReady_{ false };
 	std::vector<mu::Vec3> stageSpawnPositions_{};  // level.bin PlayerStart 노드 위치
 	mu::Vec3 stageFocus_{};                         // 대기실 카메라 포커스(스폰 중심, 지형 높이)
 	std::vector<std::shared_ptr<Player>> lobbyChars_{};  // 대기실 전시 캐릭터(물리 없음, idle)

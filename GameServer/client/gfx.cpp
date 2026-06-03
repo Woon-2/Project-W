@@ -1180,17 +1180,26 @@ void GFX::loadRequestedAssets() {
 	DISPLAY_ERROR_DX_VOID(cmdAlloc->Reset(), false);
 	DISPLAY_ERROR_DX_VOID(cmdList->Reset(cmdAlloc.Get(), nullptr), false);
 
+	// Progress tracking for this batch (all 7 request vectors, incl. bake animation).
+	assetLoadTotal_.store(static_cast<uint32_t>(
+		requestsModelLoad_.size() + requestsSkyboxLoad_.size() + requestsTextureLoad_.size()
+		+ requestsSpritesLoad_.size() + requestsTextImageLoad_.size() + requestsMeshBinLoad_.size()
+		+ requestsBakeAnimation_.size()), std::memory_order_relaxed);
+	assetLoadDone_.store(0u, std::memory_order_relaxed);
+
 	// 명령 기록 시작
 	for (auto& request : requestsModelLoad_) {
 		*request.pDest = loadModelFromFile( request.modelPath,
 			device_.Get(), cmdList.Get(), *request.pTexHashMap, srvTexPool_, fence
 		);
+		assetLoadDone_.fetch_add(1, std::memory_order_relaxed);
 	}
 
 	dumpLog();
 
 	for (auto& request : requestsSkyboxLoad_) {
 		*request.pDest = loadSkyboxFromFile(request.skyboxPath, device_.Get(), cmdList.Get(), srvTexCubePool_, fence);
+		assetLoadDone_.fetch_add(1, std::memory_order_relaxed);
 	}
 
 	dumpLog();
@@ -1221,6 +1230,7 @@ void GFX::loadRequestedAssets() {
 		else {
 			*request.pDest = request.pTexHashMap->at(request.name);
 		}
+		assetLoadDone_.fetch_add(1, std::memory_order_relaxed);
 	}
 
 	dumpLog();
@@ -1232,6 +1242,7 @@ void GFX::loadRequestedAssets() {
 			request.type, request.frameTime,
 			device_.Get(), cmdList.Get(), srvTexPool_, fence
 		);
+		assetLoadDone_.fetch_add(1, std::memory_order_relaxed);
 	}
 
 	dumpLog();
@@ -1239,6 +1250,7 @@ void GFX::loadRequestedAssets() {
 	// load text texture
 	for( auto& request : requestsTextImageLoad_ ) {
 		*request.pDest = TextImage( device_.Get(), request.width, request.height, srvTexPool_ );
+		assetLoadDone_.fetch_add(1, std::memory_order_relaxed);
 	}
 
 	dumpLog();
@@ -1262,6 +1274,7 @@ void GFX::loadRequestedAssets() {
 			}
 			*request.pDestTex = request.pTexHashMap->at(texRelPath);
 		}
+		assetLoadDone_.fetch_add(1, std::memory_order_relaxed);
 	}
 
 	dumpLog();
@@ -1270,6 +1283,7 @@ void GFX::loadRequestedAssets() {
 	for (auto& request : requestsBakeAnimation_) {
 		*request.pDest = bakeAnimation(device_.Get(), cmdList.Get(), request.samples, request.uploadBuffer);
 		createSRV(device_.Get(), *request.pDest, srvTexPool_);
+		assetLoadDone_.fetch_add(1, std::memory_order_relaxed);
 	}
 
 	dumpLog();

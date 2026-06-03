@@ -282,6 +282,16 @@ public:
 	// (메인 렌더와 공유되는 디스크립터 풀은 자체 뮤텍스로 보호된다.)
 	void loadRequestedAssets();
 
+	// Coarse progress of the most recent loadRequestedAssets() batch: fraction of
+	// queued requests already processed (0..1). Lock-free; safe to read from another
+	// thread while a background load runs. Returns 1.0 when nothing is queued.
+	float assetLoadFraction() const noexcept {
+		const auto total = assetLoadTotal_.load(std::memory_order_relaxed);
+		if (total == 0u) return 1.f;
+		const auto done = assetLoadDone_.load(std::memory_order_relaxed);
+		return (std::min)(1.f, static_cast<float>(done) / static_cast<float>(total));
+	}
+
 	// 공용 리소스 초기화 + 요청 리소스 로드를 한 번에 수행하는 편의 함수.
 	void loadAssets(const AssetConfigs& configs = AssetConfigs{}) {
 		initSharedResources(configs);
@@ -529,6 +539,10 @@ private:
 	std::vector<RequestTextImageLoad> requestsTextImageLoad_{};
 	std::vector<RequestMeshBinLoad> requestsMeshBinLoad_{};
 	std::vector<RequestBakeAnimation> requestsBakeAnimation_{};
+
+	// loadRequestedAssets() progress counters (see assetLoadFraction()).
+	std::atomic<uint32_t> assetLoadTotal_{ 0u };
+	std::atomic<uint32_t> assetLoadDone_{ 0u };
 
 	ThreadPool* threadPool_ = nullptr;	// 설정되어있을 경우 멀티스레드로 동작한다.
 	bool csmDebugVisualization_ = false;

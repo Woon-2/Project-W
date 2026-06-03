@@ -92,7 +92,7 @@ Game::~Game() {
 }
 
 void Game::setupStageVisual() {
-	if (stageVisualReady_) {
+	if (stageVisualReady_.load(std::memory_order_acquire)) {
 		return;
 	}
 
@@ -135,7 +135,8 @@ void Game::setupStageVisual() {
 	// 전시 캐릭터(스킨드)의 renderObjectId 인덱싱이 안전하도록 가시성 배열을 확보한다.
 	gfx_.setMaxRenderObjectId(1000u);
 
-	stageVisualReady_ = true;
+	// release: 워커가 이 신호를 보고 Phase 2 로드를 시작한다(GFX 로딩 직렬화).
+	stageVisualReady_.store(true, std::memory_order_release);
 }
 
 void Game::setupLobbyCharacters() {
@@ -2751,6 +2752,7 @@ void Game::renderInGame() {
 void Game::enterLobby() {
 	scene_      = Scene::Lobby;
 	lobbyState_ = LobbyState::MainMenu;
+	pendingStart_ = false;
 
 	// 로비는 2D UI만 그린다. Deferred 라이팅 풀스크린 패스가 빈 GBuffer를 덮어쓰지 않도록
 	// Forward 경로로 전환한다(클리어 + UI). 인게임 진입 시 Deferred로 복원.
@@ -2839,11 +2841,29 @@ void Game::startInGameAssetLoad() {
 	inGameLoadStarted_ = true;
 
 	// 백그라운드 로드 동안 메인 스레드가 공유 로그 버퍼(gSharedLog)를
-	// 동시에 건드리지 않도록 dumpLog를 뮤트한다. 로드 완료 시 메인 스레드가 해제한다.
+	// 동시에 건드리지 않도록, 실제 로드 구간에서만 dumpLog를 뮤트한다.
 	muteLog();
 
 	threadPool_.addJob([this]() {
-		assetManager_.loadGFXAssets(gfx_, assetConfigs_);
+		// Phase 1: minimum assets to render the waiting-room 3D (cube/player/skybox/anims).
+		assetManager_.loadLobbyVisualAssets(gfx_, assetConfigs_);
+		lobbyVisualAssetsLoaded_.store(true, std::memory_order_release);
+		unmuteLog();
+
+		// GFX load serialization: wait until the main thread finishes setupStageVisual()
+		// (terrain GFX load) and sets stageVisualReady_, then start Phase 2 — prevents
+		// LoadFence / command-list / descriptor overlap. If no room is ever created,
+		// setupStageVisual() never runs, so we simply park here (in-game assets are only
+		// needed once the user enters a room to play).
+		while (!stageVisualReady_.load(std::memory_order_acquire)) {
+			if (assetLoadAbort_.load(std::memory_order_relaxed)) { return; }
+			std::this_thread::sleep_for(std::chrono::milliseconds(2));
+		}
+
+		// Phase 2: remaining in-game assets (goblin/effects/materials), then particle prefetch.
+		muteLog();
+		assetManager_.loadRemainingInGameAssets(gfx_, assetConfigs_);
+		inGameMeshAssetsLoaded_.store(true, std::memory_order_release);
 		// 파티클 이펙트 JSON 파싱(디스크 I/O + 파싱)도 백그라운드에서 미리 수행해 캐시한다.
 		prefetchParticleConfigs();
 		// 로드 완료(모든 gSharedLog append 종료) 후 로그를 재개한다.
@@ -2872,6 +2892,8 @@ void Game::prefetchParticleConfigs() {
 		if (p.filename().string().find("_ParticleSystems") == std::string::npos) continue;
 		files.push_back(p);
 	}
+	particleFilesTotal_.store(static_cast<u32t>(files.size()), std::memory_order_relaxed);
+	particleFilesDone_.store(0u, std::memory_order_relaxed);
 	if (files.empty()) {
 		gSharedLog << "[Particle Prefetch] 0 files, 0 systems cached\n";
 		return;
@@ -2899,14 +2921,17 @@ void Game::prefetchParticleConfigs() {
 				std::vector<ParticleImportSystem> systems;
 				ParticleImportOptions opt;
 				opt.logDiagnostics = false;
-				if (!loadParticleSystemsFromUnityJson(files[i], systems, opt))
+				if (!loadParticleSystemsFromUnityJson(files[i], systems, opt)) {
+					particleFilesDone_.fetch_add(1, std::memory_order_relaxed);
 					continue;
+				}
 
 				const std::string fileKey = files[i].filename().string();
 				auto& out = results[i];
 				out.reserve(systems.size());
 				for (auto& s : systems)
 					out.emplace_back(fileKey + "|" + s.relativePath, std::move(s.config));
+				particleFilesDone_.fetch_add(1, std::memory_order_relaxed);
 			}
 		};
 
@@ -3278,6 +3303,152 @@ void Game::buildLobbyUI() {
 	fadeBtn(styleSecondary(makeButton(roomPanel, L"더미 제거",
 		roomPanelW - pad - 104.f, debugY, 104.f, debugH - 4.f,
 		surface, primarySoft, primarySoft, 13.f, [this]() { lobbyRemoveDummy(); }, buttonInk)));
+
+	// Full-screen loading overlay (built last so it sits on top by zOrder).
+	buildLoadingScreen();
+}
+
+// Black full-screen loading overlay: centered logo, "loading..." text, a progress bar,
+// and a 12-dot ring spinner. Hidden by default; toggled/updated from LobbyScene().
+void Game::buildLoadingScreen() {
+	if (!lobbyRoot_) return;
+
+	const float screenW = uiManager_.screenWidth();
+	const float screenH = uiManager_.screenHeight();
+	constexpr int kZ = 100;  // above all lobby UI
+
+	loadingRoot_ = lobbyRoot_->addChild(std::make_unique<UI::UIElement>());
+	loadingRoot_->name    = "loadingRoot";
+	loadingRoot_->anchor  = UI::Anchors::TopLeft;
+	loadingRoot_->pivot   = UI::Pivots::TopLeft;
+	loadingRoot_->offsetX = UI::DimValue::px(0.f);
+	loadingRoot_->offsetY = UI::DimValue::px(0.f);
+	loadingRoot_->width   = UI::DimValue::px(screenW);
+	loadingRoot_->height  = UI::DimValue::px(screenH);
+	loadingRoot_->zOrder  = kZ;
+	loadingRoot_->visible = false;
+
+	// Opaque black background covering the whole screen.
+	auto* bg = static_cast<UI::Button*>(loadingRoot_->addChild(std::make_unique<UI::Button>()));
+	bg->name        = "loadingBg";
+	bg->anchor      = UI::Anchors::TopLeft;
+	bg->pivot       = UI::Pivots::TopLeft;
+	bg->offsetX     = UI::DimValue::px(0.f);
+	bg->offsetY     = UI::DimValue::px(0.f);
+	bg->width       = UI::DimValue::px(screenW);
+	bg->height      = UI::DimValue::px(screenH);
+	bg->interactive = true;  // absorb clicks so hidden lobby controls cannot fire through the overlay
+	bg->bgColor     = { 0.f, 0.f, 0.f, 1.f };
+	bg->zOrder      = kZ;
+
+	// Centered logo (above middle). Skipped if the logo texture failed to load.
+	if (lobbyLogoTex_.res) {
+		auto* logo = static_cast<UI::Image*>(loadingRoot_->addChild(std::make_unique<UI::Image>()));
+		logo->name    = "loadingLogo";
+		logo->anchor  = UI::Anchors::Center;
+		logo->pivot   = UI::Pivots::Center;
+		logo->offsetX = UI::DimValue::px(0.f);
+		logo->offsetY = UI::DimValue::px(-120.f);
+		logo->width   = UI::DimValue::px(420.f);
+		logo->height  = UI::DimValue::px(160.f);
+		logo->texture = &lobbyLogoTex_;
+		logo->zOrder  = kZ + 1;
+	}
+
+	// "loading..." label, just above the progress bar.
+	loadingTextLabel_ = static_cast<UI::Label*>(loadingRoot_->addChild(std::make_unique<UI::Label>()));
+	loadingTextLabel_->name    = "loadingText";
+	loadingTextLabel_->anchor  = UI::Anchors::Center;
+	loadingTextLabel_->pivot   = UI::Pivots::Center;
+	loadingTextLabel_->offsetX = UI::DimValue::px(0.f);
+	loadingTextLabel_->offsetY = UI::DimValue::px(64.f);
+	loadingTextLabel_->width   = UI::DimValue::px(420.f);
+	loadingTextLabel_->height  = UI::DimValue::px(28.f);
+	loadingTextLabel_->setTextHAlign(UI::TextHAlign::Center);
+	loadingTextLabel_->setTextVAlign(UI::TextVAlign::Center);
+	loadingTextLabel_->setFontSize(18.f);
+	loadingTextLabel_->setTextColor(0.92f, 0.95f, 1.f, 1.f);
+	loadingTextLabel_->setText(L"loading...");
+	loadingTextLabel_->zOrder = kZ + 1;
+
+	// Progress bar (real load progress).
+	loadingBar_ = static_cast<UI::ProgressBar*>(loadingRoot_->addChild(std::make_unique<UI::ProgressBar>()));
+	loadingBar_->name      = "loadingBar";
+	loadingBar_->anchor    = UI::Anchors::Center;
+	loadingBar_->pivot     = UI::Pivots::Center;
+	loadingBar_->offsetX   = UI::DimValue::px(0.f);
+	loadingBar_->offsetY   = UI::DimValue::px(100.f);
+	loadingBar_->width     = UI::DimValue::px(420.f);
+	loadingBar_->height    = UI::DimValue::px(14.f);
+	loadingBar_->bgColor   = { 0.16f, 0.18f, 0.22f, 1.f };
+	loadingBar_->fillColor = { 0.18f, 0.62f, 0.95f, 1.f };
+	loadingBar_->zOrder    = kZ + 1;
+	loadingBar_->setProgress(0.f);
+
+	// Dot-ring spinner below the bar. The rotating "arc" is faked by phase-shifting
+	// each dot's alpha (no rotation field / arc texture needed).
+	constexpr float kRadius = 26.f;
+	const float spinnerCY = 176.f;
+	for (int i = 0; i < static_cast<int>(spinnerDots_.size()); ++i) {
+		const float ang = (static_cast<float>(i) / static_cast<float>(spinnerDots_.size())) * 6.2831853f;
+		auto* dot = static_cast<UI::Button*>(loadingRoot_->addChild(std::make_unique<UI::Button>()));
+		dot->name        = "spinnerDot";
+		dot->anchor      = UI::Anchors::Center;
+		dot->pivot       = UI::Pivots::Center;
+		dot->offsetX     = UI::DimValue::px(std::sin(ang) * kRadius);
+		dot->offsetY     = UI::DimValue::px(spinnerCY - std::cos(ang) * kRadius);
+		dot->width       = UI::DimValue::px(7.f);
+		dot->height      = UI::DimValue::px(7.f);
+		dot->interactive = false;
+		dot->bgColor     = { 0.85f, 0.90f, 1.f, 0.25f };
+		dot->zOrder      = kZ + 1;
+		spinnerDots_[i] = dot;
+	}
+}
+
+// Toggle the loading overlay and, while visible, push real progress to the bar and
+// animate the spinner. Called every frame from LobbyScene().
+void Game::updateLoadingScreen(float deltaTimeSec, bool visible) {
+	if (!loadingRoot_) return;
+	loadingRoot_->visible = visible;
+	if (!visible) return;
+
+	if (loadingBar_) loadingBar_->setProgress(loadProgress01());
+
+	// Rotate the bright "head" around the dot ring; trailing dots fade out.
+	loadingSpinTime_ += deltaTimeSec;
+	const int n = static_cast<int>(spinnerDots_.size());
+	const float headF = std::fmod(loadingSpinTime_ * 1.6f, 1.f) * static_cast<float>(n);
+	for (int i = 0; i < n; ++i) {
+		if (!spinnerDots_[i]) continue;
+		float dist = static_cast<float>(i) - headF;
+		while (dist < 0.f) dist += static_cast<float>(n);   // forward angular distance from head
+		const float t = dist / static_cast<float>(n);        // 0 at head .. ~1 just behind it
+		const float alpha = 0.15f + 0.85f * (1.f - t);
+		auto c = spinnerDots_[i]->bgColor;
+		c.w = alpha;
+		spinnerDots_[i]->bgColor = c;
+	}
+}
+
+float Game::loadProgress01() const {
+	// Keyed on what is currently being waited on.
+	if (!stageVisualReady_.load(std::memory_order_acquire)) {
+		// Requirement 1: waiting for Phase 1 load + synchronous terrain init.
+		if (!lobbyVisualAssetsLoaded_.load(std::memory_order_acquire))
+			return (std::min)(gfx_.assetLoadFraction(), 0.9f);
+		return 0.95f;  // Phase 1 done; holding through the terrain-init hitch.
+	}
+	if (!inGameAssetsLoaded_.load(std::memory_order_acquire)) {
+		// Requirement 3: waiting for Phase 2 (remaining meshes, then particle prefetch).
+		if (!inGameMeshAssetsLoaded_.load(std::memory_order_acquire))
+			return 0.5f * gfx_.assetLoadFraction();
+		const auto total = particleFilesTotal_.load(std::memory_order_relaxed);
+		if (total == 0u) return 1.f;  // no files / dir access failure — avoid divide-by-zero
+		const auto done = particleFilesDone_.load(std::memory_order_relaxed);
+		return 0.5f + 0.5f * static_cast<float>(done) / static_cast<float>(total);
+	}
+	return 1.f;
 }
 
 void Game::refreshLobbyUI() {
@@ -3294,7 +3465,7 @@ void Game::refreshLobbyUI() {
 	lobbyRoot_->visible = (scene_ == Scene::Lobby);
 
 	const bool inMain = (lobbyState_ == LobbyState::MainMenu);
-	const bool waitingRoom3D = !inMain && stageVisualReady_;
+	const bool waitingRoom3D = !inMain && stageVisualReady_.load(std::memory_order_acquire);
 	if (lobbySkyBg_)   lobbySkyBg_->visible   = !waitingRoom3D;
 	if (lobbyBgImage_) lobbyBgImage_->visible = !waitingRoom3D;
 
@@ -3353,30 +3524,36 @@ void Game::refreshLobbyUI() {
 	}
 
 	// 게임 시작 버튼(호스트) / 대기 메시지(비호스트) — 같은 자리에 겹쳐 두고 토글.
-	const bool loaded = inGameAssetsLoaded_.load(std::memory_order_acquire);
+	// Start is allowed even while loading (req 2): keep the button active and labeled.
 	if (startGameButton_) startGameButton_->visible = isHost_;
 	if (waitMessageBg_)   waitMessageBg_->visible   = !isHost_;
 	if (hostStatusLabel_) hostStatusLabel_->visible = !isHost_;
 	if (isHost_ && startGameLabel_) {
-		startGameLabel_->setText(loaded ? L"게임 시작" : L"리소스 로딩 중...");
+		startGameLabel_->setText(L"게임 시작");
 	}
 	if (isHost_ && startGameButton_) {
 		// 단색 폴백 경로(texNormal 미설정 시).
-		startGameButton_->bgColor = loaded ? primary : XMFLOAT4{ 0.25f, 0.25f, 0.25f, 0.80f };
-		startGameButton_->bgColorHovered = loaded ? primaryDark : XMFLOAT4{ 0.30f, 0.30f, 0.30f, 0.90f };
-		startGameButton_->bgColorPressed = loaded ? primaryDark : XMFLOAT4{ 0.18f, 0.18f, 0.18f, 0.90f };
+		startGameButton_->bgColor        = primary;
+		startGameButton_->bgColorHovered = primaryDark;
+		startGameButton_->bgColorPressed = primaryDark;
 
 		// 텍스처 경로(stylePrimary로 texNormal 설정됨)는 bgColor*를 무시하고 texTint*만 본다.
-		// 로딩 중에는 어둡게 낮춰 비활성 표시. 로드 완료 시 대기실 반투명(alpha 0.92) 틴트로 복원.
-		const XMFLOAT4 dimTint{ 0.45f, 0.45f, 0.50f, 0.92f };
-		startGameButton_->texTint        = loaded ? XMFLOAT4{ 1.f,   1.f,   1.f,   0.92f } : dimTint;
-		startGameButton_->texTintHovered = loaded ? XMFLOAT4{ 1.08f, 1.08f, 1.08f, 0.96f } : dimTint;
-		startGameButton_->texTintPressed = loaded ? XMFLOAT4{ 0.82f, 0.82f, 0.82f, 0.96f } : dimTint;
+		startGameButton_->texTint        = XMFLOAT4{ 1.f,   1.f,   1.f,   0.92f };
+		startGameButton_->texTintHovered = XMFLOAT4{ 1.08f, 1.08f, 1.08f, 0.96f };
+		startGameButton_->texTintPressed = XMFLOAT4{ 0.82f, 0.82f, 0.82f, 0.96f };
 	}
 }
 
 void Game::LobbyScene(Milliseconds deltaTime) {
 	const bool loaded = inGameAssetsLoaded_.load(std::memory_order_acquire);
+
+	// Start was pressed while still loading → enter in-game once assets are ready (req 3).
+	if (pendingStart_ && loaded) {
+		pendingStart_ = false;
+		enterInGame();
+		return;
+	}
+
 	if (loaded && !inGameAssetsReady_) {
 		inGameAssetsReady_ = true;
 		refreshLobbyUI();  // 게임 시작 버튼 활성 상태 갱신 (로그 재개는 워커가 수행)
@@ -3390,8 +3567,9 @@ void Game::LobbyScene(Milliseconds deltaTime) {
 		processInputLobby(deltaTime);
 	}
 
-	// 대기실: 에셋 로드 완료 후 3D 맵 배경을 띄운다(에셋 미완료 시 키아트 bg 폴백).
-	if (lobbyState_ == LobbyState::WaitingRoom && loaded) {
+	// 대기실: Phase 1(대기실 3D 에셋) 로드 완료 후 setupStageVisual()로 3D를 준비한다.
+	// setupStageVisual() 완료 시 stageVisualReady_가 서며, 이를 워커가 보고 Phase 2를 시작한다.
+	if (lobbyState_ == LobbyState::WaitingRoom && lobbyVisualAssetsLoaded_.load(std::memory_order_acquire)) {
 		setupStageVisual();   // idempotent (지형/스카이박스/라이트 1회 init)
 		gfx_.setRenderPath(GFX::RenderPath::Deferred);
 		if (lobbySkyBg_)   lobbySkyBg_->visible = false;
@@ -3405,12 +3583,20 @@ void Game::LobbyScene(Milliseconds deltaTime) {
 		// 캐릭터 슬롯이 들어올 자리가 크게 흔들리지 않도록 eye 이동보다 at 이동을 작게 둔다.
 		lobbyCameraTime_ += std::chrono::duration<float>(deltaTime).count();
 		const float sway = std::sin(lobbyCameraTime_ * 0.25f) * 0.3f;
-		const mu::Vec3 baseEye(5126.42f, 57.0037f, 5170.04f);
-		const mu::Vec3 baseAt(5124.92f, 56.5513f, 5167.77f);
+		const mu::Vec3 baseEye(5142.34f, 84.0199f, 5125.55f);
+		const mu::Vec3 baseAt(5140.71f, 83.0828f, 5123.8f);
 		const mu::Vec3 eye = baseEye + mu::Vec3(sway, 0.f, 0.f);
 		const mu::Vec3 at  = baseAt  + mu::Vec3(sway * 0.25f, 0.f, 0.f);
 		lobbyCamera_.setView(eye, at);
-		chunkManager_.update(baseAt, deltaTime);
+		// Terrain streaming also records on the shared GFX "LoadFence". While the worker is
+		// running Phase 2 loadRequestedAssets, a concurrent recordTerrainResourceLoad here
+		// would clear fence.associatedResources_ and delete the worker's in-flight upload
+		// buffers (D3D12 OBJECT_DELETED_WHILE_STILL_IN_USE). The synchronous baseline terrain
+		// loaded in setupStageVisual() already covers the near-static lobby camera, so defer
+		// streaming until Phase 2 GPU loading is done.
+		if (inGameMeshAssetsLoaded_.load(std::memory_order_acquire)) {
+			chunkManager_.update(baseAt, deltaTime);
+		}
 
 		// 전시 캐릭터: 최초 진입 시 생성 후, 현재 카메라 기준으로 재배치해 화면 슬롯 위치를 고정한다.
 		// 매 프레임 update(idle 선택/월드 갱신) + 본 행렬 계산(animSystem).
@@ -3424,13 +3610,20 @@ void Game::LobbyScene(Milliseconds deltaTime) {
 		animSystem_.update(0.01s);
 	}
 
+	// Loading overlay: visible while the waiting-room 3D isn't ready (req 1) or while a
+	// pending start waits for the remaining in-game assets (req 3).
+	const bool showLoading =
+		(lobbyState_ == LobbyState::WaitingRoom && !stageVisualReady_.load(std::memory_order_acquire))
+		|| pendingStart_;
+	updateLoadingScreen(std::chrono::duration<float>(deltaTime).count(), showLoading);
+
 	uiManager_.layout();
 	uiManager_.update(std::chrono::duration<float>(deltaTime).count(), gfx_, gfx_.defaultFont());
 }
 
 void Game::renderLobby() {
 	// 대기실 3D 준비 완료 시 맵 배경 + UI, 아니면(메인화면/대기실-로딩중) UI만.
-	if (lobbyState_ == LobbyState::WaitingRoom && stageVisualReady_) {
+	if (lobbyState_ == LobbyState::WaitingRoom && stageVisualReady_.load(std::memory_order_acquire)) {
 		renderWaitingRoom();
 		return;
 	}
@@ -3481,6 +3674,8 @@ void Game::renderWaitingRoom() {
 }
 
 void Game::enterInGame() {
+	pendingStart_ = false;
+	if (loadingRoot_) loadingRoot_->visible = false;
 	if (lobbyRoot_) {
 		lobbyRoot_->visible = false;
 	}
@@ -3552,6 +3747,8 @@ void Game::lobbyLeaveRoom() {
 	dummySeed_  = 1;
 	lobbyState_ = LobbyState::MainMenu;
 	lobbyCameraTime_ = 0.f;
+	pendingStart_ = false;
+	if (loadingRoot_) loadingRoot_->visible = false;
 	if (roomCodeInput_)    roomCodeInput_->clear();
 	if (mainMenuMsgLabel_) mainMenuMsgLabel_->setText(L"");
 
@@ -3570,11 +3767,14 @@ void Game::lobbyStartGame() {
 		gSharedLog << "[Lobby] 호스트만 시작할 수 있습니다.\n";
 		return;
 	}
-	if (!inGameAssetsLoaded_.load(std::memory_order_acquire)) {
-		gSharedLog << "[Lobby] 리소스 로딩 중입니다.\n";
-		return;
+	// Do not block start while loading (req 2). If ready, enter now; otherwise mark a
+	// pending start, show the loading screen, and enter from LobbyScene once ready (req 3).
+	if (inGameAssetsLoaded_.load(std::memory_order_acquire)) {
+		enterInGame();
+	} else {
+		pendingStart_ = true;
+		gSharedLog << "[Lobby] loading assets - showing loading screen before entering.\n";
 	}
-	enterInGame();
 }
 
 void Game::lobbyAddDummy() {

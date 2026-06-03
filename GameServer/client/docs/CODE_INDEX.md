@@ -720,8 +720,11 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | `Camera::armReturnRate_` | `camera.hpp #75` | slow-out 복귀 속도 (units/sec, 기본 3.f) |
 | `Camera::cameraRadius_` | `camera.hpp #76` | BVH raycast spherePad (기본 0.2f) |
 
-**AssetManager::loadGFXAssets (`AssetManager.hpp #9`):**
-- `loadGFXAssets(GFX& gfx, const GFX::AssetConfigs& configs = {})` — 요청 큐잉 후 `gfx.loadRequestedAssets()` 호출. 공용 리소스(`gfx.initSharedResources`)는 호출부에서 선행 초기화 필요. (Online 모드: 로비에서 ThreadPool로 백그라운드 호출)
+**AssetManager::loadGFXAssets (`AssetManager.hpp #12`):**
+- `loadGFXAssets(...)` — 의존성 기준 2단계 로드를 순차 호출하는 래퍼. 스탠드얼론 모드에서 사용.
+- `loadLobbyVisualAssets(...)` (`AssetManager.hpp #18`) — **Phase 1**: 대기실 3D에 필요한 최소(큐브·플레이어 모델, 스카이박스, 플레이어 애니 전체) 큐잉 후 `gfx.loadRequestedAssets()` + 플레이어 baked-anim id.
+- `loadRemainingInGameAssets(...)` (`AssetManager.hpp #19`) — **Phase 2**: 고블린 모델·이펙트 텍스처/메시·파티클 머티리얼·고블린 애니. (Online 모드: `startInGameAssetLoad`가 Phase 1→직렬화 대기→Phase 2 순으로 ThreadPool 백그라운드 호출)
+- 진행도: `GFX::assetLoadFraction()`(요청 처리 비율) + `Online::Game::particleFilesDone_/Total_`(파티클 프리페치). 통합은 `Online::Game::loadProgress01()`.
 
 **GFX::AssetConfigs (`gfx.hpp #61`):**
 
