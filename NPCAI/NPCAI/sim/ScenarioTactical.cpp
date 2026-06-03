@@ -56,7 +56,7 @@ void ScenarioTactical::setup(Room& room) {
     TacticalNpcConfig cfg;
     cfg.maxHp             = 80.f;
     cfg.moveSpeed         = 17.f;
-    cfg.attackRange       = 2.f;
+    cfg.attackRange       = 2.8f;
     cfg.attackDamage      = 10.f;
     cfg.attackWindupTime  = 0.35f;
     cfg.attackRecoverTime = 0.7f;
@@ -85,7 +85,7 @@ void ScenarioTactical::setup(Room& room) {
         float z = -3.f - static_cast<float>(i / 2) * 2.f;
         auto npc = std::make_shared<TacticalNpc>(name, Vec3{ x, 0.f, z }, cfg);
         npc->setSquadId(0);
-        pSquadA->addMember(npc->getId());
+        pSquadA->addMember(npc.get());
         room.addTacticalNpc(npc);
     }
     room.addTacticalSquad(std::move(squadA));
@@ -101,7 +101,7 @@ void ScenarioTactical::setup(Room& room) {
         float z = -4.f + static_cast<float>(i % 4) * 2.f + (i % 2) * 1.f;
         auto npc = std::make_shared<TacticalNpc>(name, Vec3{ x, 0.f, z }, cfg);
         npc->setSquadId(1);
-        pSquadB->addMember(npc->getId());
+        pSquadB->addMember(npc.get());
         room.addTacticalNpc(npc);
     }
     room.addTacticalSquad(std::move(squadB));
@@ -117,7 +117,7 @@ void ScenarioTactical::setup(Room& room) {
         float z =  3.f + static_cast<float>(i / 2) * 2.f;
         auto npc = std::make_shared<TacticalNpc>(name, Vec3{ x, 0.f, z }, cfg);
         npc->setSquadId(2);
-        pSquadC->addMember(npc->getId());
+        pSquadC->addMember(npc.get());
         room.addTacticalNpc(npc);
     }
     room.addTacticalSquad(std::move(squadC));

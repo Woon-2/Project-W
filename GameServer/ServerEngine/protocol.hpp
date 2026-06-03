@@ -6,7 +6,8 @@
 #include "../common/mathUtil.hpp"
 
 constexpr const char* serverIp = "127.0.0.1";
-constexpr uint16 serverPort = 9000;
+constexpr uint16 lobbyServerPort = 8000;
+constexpr uint16 roomServerPort  = 9000;
 
 enum class PacketType : uint16 {
 	C_Enter,
@@ -38,6 +39,17 @@ enum class PacketType : uint16 {
 	S_DebugHitbox,
 
 	S_StrongholdState,
+	
+	// Lobby
+	C_CreateRoom,
+	S_CreateRoom,
+	C_JoinRoom,
+	S_JoinRoom,
+	C_LeaveRoom,
+	S_LobbyRoomPlayerJoined,
+	S_LobbyRoomPlayerLeft,
+	C_GameStart,
+	S_GameStart,
 };
 
 enum class ObjectType : uint16 {
@@ -227,6 +239,48 @@ struct SDebugHitboxPacket : public PacketHeader {
 		byte* dataStart = reinterpret_cast<byte*>(this) + dataOffset;
 		return OBBList(reinterpret_cast<OBBInfo*>(dataStart), obbCount);
 	}
+};
+
+// --- Lobby ---
+
+struct LobbyPlayerInfo {
+	uint16 sessionId;
+};
+
+struct SCreateRoomPacket : public PacketHeader {
+	char code[7];   // 6자리 영숫자 + null
+};
+
+struct CJoinRoomPacket : public PacketHeader {
+	char code[7];
+};
+
+struct SJoinRoomPacket : public PacketHeader {
+	bool   success;
+	uint8  playerCnt;
+	uint16 hostId;
+	char   code[7];
+	uint16 playersOffset;   // LobbyPlayerInfo 배열 시작 위치 (this 기준)
+
+	using PlayerList = DataList<LobbyPlayerInfo>;
+	PlayerList getPlayerList() {
+		byte* start = reinterpret_cast<byte*>(this) + playersOffset;
+		return PlayerList(reinterpret_cast<LobbyPlayerInfo*>(start), playerCnt);
+	}
+};
+
+struct SLobbyRoomPlayerJoinedPacket : public PacketHeader {
+	LobbyPlayerInfo info;
+};
+
+struct SLobbyRoomPlayerLeftPacket : public PacketHeader {
+	uint16 sessionId;
+};
+
+struct SGameStartPacket : public PacketHeader {
+	char   roomServerIp[16];
+	uint16 roomServerPort;
+	char   lobbyCode[7];
 };
 
 #pragma pack(pop)

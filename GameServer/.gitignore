@@ -3,12 +3,6 @@ graphify-out/
 .graphify_*.json
 .graphify_python
 
-TODO.md
-TroubleShooting.md
-DEVLOG.md
-Plan.md
-ToDo_v2.md
-
 !lib/Debug
 !lib/Release
 !lib/Debug/*.lib

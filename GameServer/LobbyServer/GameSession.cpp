@@ -1,16 +1,23 @@
-#include "pch.hpp"
+#include "lspch.hpp"
 #include "GameSession.hpp"
-#include "GameSessionManager.hpp"
+#include "LobbyRoom.hpp"
+#include "PacketManager.hpp"
+#include "IdPool.hpp"
 
 void GameSession::onConnected() {
-	std::cout << "GameSession connected. id: " << id() << '\n';
-	GameSessionManager::addSession(this);
+	std::cout << "Lobby client connected. id: " << id() << '\n';
 }
 
 void GameSession::onDisconnected() {
-	GameSessionManager::removeSession(static_cast<uint32>(id()));
+	if ( myRoom_ ) {
+		myRoom_->leave( this );
+		myRoom_ = nullptr;
+	}
+
+	IdPool::push( id() );
+	std::cout << "Lobby client disconnected. id: " << id() << '\n';
 }
 
-void GameSession::processPacket(uint8* buffer, int32 len) {
-
+void GameSession::processPacket( byte* buffer, int32 len ) {
+	PacketManager::handlePacket( this, buffer, len );
 }

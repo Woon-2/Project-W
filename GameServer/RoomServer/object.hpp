@@ -109,6 +109,17 @@ public:
 	void setLastMoveTimestamp(uint32 timestamp) { lastMoveTimestamp_ = timestamp; }
 	uint32 lastMoveTimestamp() const { return lastMoveTimestamp_; }
 
+	void         setPosUpdateMs(Milliseconds t) { posUpdateMs_ = t; }
+	Milliseconds posUpdateMs()            const { return posUpdateMs_; }
+
+	mu::Vec3 estimatedPos(Milliseconds serverNow,
+	                      Milliseconds maxWindow = Milliseconds{300.f}) const {
+	    float elapsed = (serverNow - posUpdateMs_).count();
+	    if (elapsed > maxWindow.count()) elapsed = maxWindow.count();
+	    if (elapsed < 0.f) elapsed = 0.f;
+	    return pos() + linearVel() * (elapsed / 1000.f);
+	}
+
 	void setLastFireTime(Milliseconds time) { lastFireTime_ = time; }
 	Milliseconds lastFireTime() const { return lastFireTime_; }
 	Milliseconds fireCooldown() const { return fireCooldown_; }
@@ -139,6 +150,8 @@ private:
 	int32 hp_{1'000'000};
 
 	uint32 lastMoveTimestamp_{0u};
+
+	Milliseconds posUpdateMs_{0ms};
 
 	Milliseconds lastFireTime_{0ms};
 	Milliseconds fireCooldown_{200ms};

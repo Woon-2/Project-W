@@ -40,11 +40,20 @@
     <Filter Include="contents\Npc">
       <UniqueIdentifier>{a209254e-b43b-4b27-9ebb-56aa479fe449}</UniqueIdentifier>
     </Filter>
-    <Filter Include="contents\Npc\Goblin">
-      <UniqueIdentifier>{e9f12e23-f142-4eb6-b060-6be395ca791c}</UniqueIdentifier>
-    </Filter>
     <Filter Include="contents\etc">
       <UniqueIdentifier>{10ae73a8-1d9a-4902-91ef-7e03d3f6212d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="contents\tacticalNpc">
+      <UniqueIdentifier>{c0d0bb44-dc1f-4c3a-8972-993424c04605}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="contents\tacticalNpc\goblin">
+      <UniqueIdentifier>{b810d21f-b979-44cf-be1e-2ffeea035757}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="contents\Npc\goblin">
+      <UniqueIdentifier>{e9f12e23-f142-4eb6-b060-6be395ca791c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="contents\tacticalNpc\tactical">
+      <UniqueIdentifier>{57395ede-88e6-4c05-bacd-e3a1705a9160}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -94,7 +103,7 @@
       <Filter>contents\Npc</Filter>
     </ClCompile>
     <ClCompile Include="goblin.cpp">
-      <Filter>contents\Npc\Goblin</Filter>
+      <Filter>contents\Npc\goblin</Filter>
     </ClCompile>
     <ClCompile Include="AssetManager.cpp">
       <Filter>contents\etc</Filter>
@@ -129,11 +138,22 @@
     <ClCompile Include="terrain.cpp">
       <Filter>contents\etc</Filter>
     </ClCompile>
-    <ClCompile Include="skill\skillCompiler.cpp">
-      <Filter>contents\etc</Filter>
+    <ClCompile Include="skill\skillCompiler.cpp" />
+    <ClCompile Include="skill\skillSystem.cpp" />
+    <ClCompile Include="PlatoonLeader.cpp">
+      <Filter>contents\tacticalNpc</Filter>
     </ClCompile>
-    <ClCompile Include="skill\skillSystem.cpp">
-      <Filter>contents\etc</Filter>
+    <ClCompile Include="TacticalNpc.cpp">
+      <Filter>contents\tacticalNpc</Filter>
+    </ClCompile>
+    <ClCompile Include="TacticalSquad.cpp">
+      <Filter>contents\tacticalNpc</Filter>
+    </ClCompile>
+    <ClCompile Include="TacticalGoblin.cpp">
+      <Filter>contents\tacticalNpc\goblin</Filter>
+    </ClCompile>
+    <ClCompile Include="MidBossTactics.cpp">
+      <Filter>contents\tacticalNpc\tactical</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -180,7 +200,7 @@
       <Filter>contents\Npc</Filter>
     </ClInclude>
     <ClInclude Include="goblin.hpp">
-      <Filter>contents\Npc\Goblin</Filter>
+      <Filter>contents\Npc\goblin</Filter>
     </ClInclude>
     <ClInclude Include="AssetManager.hpp">
       <Filter>contents\etc</Filter>
@@ -226,6 +246,24 @@
     </ClInclude>
     <ClInclude Include="skill\skillTypes.hpp">
       <Filter>contents\etc</Filter>
+    </ClInclude>
+    <ClInclude Include="PlatoonLeader.hpp">
+      <Filter>contents\tacticalNpc</Filter>
+    </ClInclude>
+    <ClInclude Include="TacticalNpc.hpp">
+      <Filter>contents\tacticalNpc</Filter>
+    </ClInclude>
+    <ClInclude Include="TacticalSquad.hpp">
+      <Filter>contents\tacticalNpc</Filter>
+    </ClInclude>
+    <ClInclude Include="TacticalGoblin.hpp">
+      <Filter>contents\tacticalNpc\goblin</Filter>
+    </ClInclude>
+    <ClInclude Include="IMidBossTactic.hpp">
+      <Filter>contents\tacticalNpc\tactical</Filter>
+    </ClInclude>
+    <ClInclude Include="MidBossTactics.hpp">
+      <Filter>contents\tacticalNpc\tactical</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

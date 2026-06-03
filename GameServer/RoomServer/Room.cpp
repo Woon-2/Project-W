@@ -10,6 +10,7 @@
 #include "collision.hpp"
 #include "skill/skillCompiler.hpp"
 #include "serverAnimation.hpp"
+#include "TacticalGoblin.hpp"
 
 void Room::registerObject(Object* obj) {
 	const int id = static_cast<int>(obj->getId());
@@ -186,6 +187,8 @@ void Room::update() {
 
 	physicsWorld_.step(dtSec);
 	updateGoblinAI(dt);
+	updateTacticalAI(dt);
+
 	updatePlayerAnimations(dt);
 	updateSkillSystem(dt);
 
@@ -303,6 +306,15 @@ void MU_CALLCONV Room::findNearbyNpcPositions(mu::Vec3 from, float radius,
 		if ((g.pos() - from).len2() < r2)
 			out.push_back(g.pos());
 	}
+	for (const auto& npc : tacticalNpcs_) {
+		if (!npc || npc->getId() == excludeId || npc->hp() <= 0) continue;
+		if ((npc->pos() - from).len2() < r2)
+			out.push_back(npc->pos());
+	}
+	if (platoonLeader_ && platoonLeader_->getId() != excludeId &&
+	    platoonLeader_->hp() > 0 &&
+	    (platoonLeader_->pos() - from).len2() < r2)
+		out.push_back(platoonLeader_->pos());
 }
 
 int32 Room::countNpcsTargeting(int32 playerId) const {
@@ -463,6 +475,7 @@ void Room::move(int32 sessionId, CMovePacket* cMvPkt) {
 
 	player->setPos(newPos);
 	player->setLinearVel(DirectX::XMLoadFloat3(&cMvPkt->velocity));
+	player->setPosUpdateMs(elapsedMs_);
 
 	auto sMvPkt = PacketManager::makeSMovePacket(
 		static_cast<uint16>(sessionId),
@@ -639,4 +652,146 @@ void Room::broadcastExcept(GameSession* exceptSession, const std::shared_ptr<Sen
 void Room::doTimer(Milliseconds delay, CallbackType&& callback) {
 	auto job = ObjectPool<Job>::pop(std::move(callback));
 	JobTimer::addJob(delay, id_, job);
+}
+
+// ── Tactical AI ──────────────────────────────────────────────────────────────
+
+void Room::updateTacticalAI(Milliseconds dt) {
+	if (tacticalNpcs_.empty() && !platoonLeader_) return;
+
+	Seconds dtSec = std::chrono::duration_cast<Seconds>(dt);
+
+	std::vector<SNpcMoveInfo> moveInfos;
+	moveInfos.reserve(tacticalNpcs_.size() + (platoonLeader_ ? 1 : 0));
+
+	for (auto& npc : tacticalNpcs_) {
+		if (!npc) continue;
+		npc->body().setOmega(mu::Vec3{});
+		auto result = npc->update(dtSec, *this);
+		if (npc->hp() > 0) {
+			moveInfos.push_back({
+				static_cast<uint16>(npc->getId()),
+				npc->pos().getXmf(),
+				npc->orient().getXmf(),
+				npc->linearVel().getXmf()
+			});
+		}
+		for (const auto& hit : result.hits)
+			broadcast(PacketManager::makeSHitPacket(hit.targetId, hit.newHp));
+	}
+
+	for (auto& squad : tacticalSquads_) {
+		if (squad) squad->update(dtSec, *this);
+	}
+
+	if (platoonLeader_) {
+		platoonLeader_->body().setOmega(mu::Vec3{});
+		auto result = platoonLeader_->update(dtSec, *this);
+		if (platoonLeader_->hp() > 0) {
+			moveInfos.push_back({
+				static_cast<uint16>(platoonLeader_->getId()),
+				platoonLeader_->pos().getXmf(),
+				platoonLeader_->orient().getXmf(),
+				platoonLeader_->linearVel().getXmf()
+			});
+		}
+		for (const auto& hit : result.hits)
+			broadcast(PacketManager::makeSHitPacket(hit.targetId, hit.newHp));
+	}
+
+	if (!moveInfos.empty())
+		broadcast(PacketManager::makeSNpcMoveBatchPacket(moveInfos));
+}
+
+bool Room::tryReserveTacticalAttackSlot(uint32_t targetId, uint32_t npcId) {
+	constexpr int MAX_ATTACKERS = 5;
+	auto& slots = tacticalAttackSlots_[targetId];
+	if (slots.count(npcId)) return true;
+	if (static_cast<int>(slots.size()) >= MAX_ATTACKERS) return false;
+	slots.insert(npcId);
+	return true;
+}
+
+void Room::releaseTacticalAttackSlot(uint32_t targetId, uint32_t npcId) {
+	auto it = tacticalAttackSlots_.find(targetId);
+	if (it == tacticalAttackSlots_.end()) return;
+	it->second.erase(npcId);
+	if (it->second.empty())
+		tacticalAttackSlots_.erase(it);
+}
+
+uint32_t Room::beginWedgeCharge() {
+	return nextWedgeChargeId_++;
+}
+
+void Room::endWedgeCharge(uint32_t chargeId) {
+	wedgeHitRecord_.erase(chargeId);
+}
+
+int32 Room::tryApplyWedgeChargeHit(uint32_t chargeId, int32 playerId, float damage) {
+	auto& record = wedgeHitRecord_[chargeId];
+	if (record.count(static_cast<uint32_t>(playerId))) return -1;
+	record.insert(static_cast<uint32_t>(playerId));
+
+	GameSession* s = findLivingSessionByPlayerId(playerId);
+	if (!s) return -1;
+
+	Player* p = s->player();
+	int32 newHp = std::max(0, p->hp() - static_cast<int32>(damage));
+	p->setHp(newHp);
+	return newHp;
+}
+
+void Room::spawnTacticalGoblinEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos,
+                                         int numSquads, int troopersPerSquad)
+{
+	auto makeBase = [](mu::Vec3 pos) {
+		Object base;
+		base.setPos(pos);
+		return base;
+	};
+	auto registerBody = [&](Object& obj) {
+		obj.setId(IdPool::pop());
+		obj.body().setMotionType(MotionType::Kinematic);
+		obj.body().snapToCurrent();
+		Object* raw = &obj;
+		physicsWorld_.registerBody(&obj.body(), [raw]() { raw->rebuildBodyBVH(); });
+	};
+
+	TacticalNpcConfig trooperCfg = TacticalGoblin::trooperConfig();
+	TacticalNpcConfig bossCfg    = TacticalGoblin::bossConfig();
+
+	constexpr float TWO_PI = 2.f * 3.14159265f;
+
+	for (int s = 0; s < numSquads; ++s) {
+		float squadAngleBase = TWO_PI * static_cast<float>(s) / static_cast<float>(numSquads);
+
+		auto squad = std::make_unique<TacticalSquad>(
+			s, trooperCfg.attackRange, trooperCfg.separationRadius);
+
+		for (int t = 0; t < troopersPerSquad; ++t) {
+			int   ring  = 1 + t / 5;
+			float angle = squadAngleBase + TWO_PI * static_cast<float>(t % 5) /
+			              5.f + static_cast<float>(ring) * 0.3f;
+			float r = 10.f + static_cast<float>(ring) * trooperCfg.separationRadius * 2.f;
+			mu::Vec3 trooperPos(spawnCenter.x() + r * std::cosf(angle),
+			                    spawnCenter.y(),
+			                    spawnCenter.z() + r * std::sinf(angle));
+
+			auto npc = std::make_unique<TacticalNpc>(makeBase(trooperPos), trooperCfg);
+			registerBody(*npc);
+			npc->setSquadId(s);
+
+			squad->addMember(npc.get());
+			tacticalNpcs_.push_back(std::move(npc));
+		}
+
+		tacticalSquads_.push_back(std::move(squad));
+	}
+
+	platoonLeader_ = std::make_unique<PlatoonLeader>(makeBase(bossPos), bossCfg);
+	registerBody(*platoonLeader_);
+
+	for (auto& sq : tacticalSquads_)
+		platoonLeader_->addSquad(sq.get());
 }
