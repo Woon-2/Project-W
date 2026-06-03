@@ -198,6 +198,11 @@ public:
 	virtual void update(Milliseconds deltaTime, float tPhysicInterpolation);
 	virtual void MU_CALLCONV render(GFX& gfx, mu::Mat4x4 offsetXform = mu::Mat4x4());
 
+	// 로비 대기실 슬롯 포트레이트 전용 렌더. 메인 씬 카메라/렌더패스와 무관하게,
+	// 스킨드 메시 draw event를 포워드 PBRSkinnedPipeline 포트레이트 채널(slot)로 제출한다.
+	// 컬링 플래그(메인 카메라 기준)는 무시하고 항상 그린다.
+	void MU_CALLCONV renderPortrait(GFX& gfx, u32t slot);
+
 	virtual void setAnimBlender(AnimSystem& animSystem, const AssetManager& assetManager) {}
 
 	// 모델을 설정한다.

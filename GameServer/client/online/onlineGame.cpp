@@ -48,6 +48,9 @@ static constexpr int     kMaxPhysicsScaleK    = 4;
 static constexpr int     kLagScaleUpFrames    = 2;
 static constexpr int     kLagScaleDownFrames  = 100;
 
+static const mu::Vec3 kLobbyCameraBaseEye(5142.34f, 84.0199f, 5125.55f);
+static const mu::Vec3 kLobbyCameraBaseAt(5140.71f, 83.0828f, 5123.8f);
+
 static constexpr float   kArrowRainRadius          = 4.75f;
 static constexpr int     kArrowVolleyCount          = 9;
 static constexpr float   kPiercingMultiRadius       = 2.0f;
@@ -159,37 +162,24 @@ void Game::setupLobbyCharacters() {
 void Game::updateLobbyCharacterTransforms() {
 	if (lobbyChars_.empty()) return;
 
-	// 캐릭터를 '카메라(eye) 기준' 화면 고정 위치에 배치한다. 배경 카메라가 sway로 움직일 때
-	// eye가 가장 크게 움직이는데, 캐릭터를 eye 기준으로 잡으면 카메라와 함께 이동해 화면 슬롯
-	// 위치/정면을 유지하고(고정처럼 보임), 월드 고정인 지형/스카이박스만 패럴랙스로 흐른다.
-	// (이전엔 at 기준이라 eye만큼 안 따라가 캐릭터가 좌우로 흔들렸다.)
-	const float standDist  = lobbyCharStandDist_;    // 카메라 앞 거리(↑일수록 캐릭터가 화면에서 작아짐)
-	const float spacing    = lobbyCharSpacing_;      // 좌우 슬롯 간격
-	const float footOffset = lobbyCharFootOffset_;   // 발 높이 미세조정(− = 아래로 내림)
-
-	const mu::Vec3 eye = lobbyCamera_.eye();
-	const mu::Vec3 at  = lobbyCamera_.at();
-
-	mu::Vec3 f = at - eye;
-	float flen = f.len();
-	if (flen < 1e-4f) { f = mu::Vec3(0.f, 0.f, 1.f); flen = 1.f; }
-	f = f * (1.f / flen);
-	float hlen = std::sqrt(f.x() * f.x() + f.z() * f.z());
-	if (hlen < 1e-4f) hlen = 1.f;
-	const mu::Vec3 right(f.z() / hlen, 0.f, -f.x() / hlen);   // 수평 우측 축
+	// 포트레이트는 슬롯마다 오프스크린 RT 셀에 '독립적으로' 렌더되므로(각 디스패처가 자기 슬롯
+	// 캐릭터만 그림), 모든 캐릭터를 원점에 두고 동일한 정면 프레이밍 카메라를 쓴다. 배경 카메라
+	// sway와 완전히 분리되며, 슬롯 정렬은 UI 쿼드(resolvedRect_)가 픽셀 단위로 보장한다.
+	// 모델 forward는 +Z이고 카메라를 +Z쪽에 두므로, yaw=0이면 캐릭터 정면이 카메라를 향한다.
+	const float aspect = static_cast<float>(GFX::kPortraitCellW) / static_cast<float>(GFX::kPortraitCellH);
+	const mu::Vec3 eye(0.f, lobbyPortraitCamHeight_, lobbyPortraitCamDist_);
+	const mu::Vec3 at (0.f, lobbyPortraitLookHeight_, 0.f);
 
 	for (int i = 0; i < static_cast<int>(lobbyChars_.size()); ++i) {
 		auto& ch = lobbyChars_[i];
-		if (!ch) continue;
-
-		const float lateral = (static_cast<float>(i) - 1.5f) * spacing;
-		const mu::Vec3 base = eye + f * standDist + right * lateral;
-		const mu::Vec3 pos(base.x(), at.y() + footOffset, base.z());   // Y는 시선 높이(지면 근처)로 안정화
-		ch->setPos(pos);
-
-		// 카메라(eye)를 바라보는 yaw(+Z forward 모델 기준). NQuat 인자 순서는 (roll, pitch, yaw).
-		const float yaw = std::atan2(eye.x() - pos.x(), eye.z() - pos.z());
-		ch->setOrient(mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), mu::Radian(yaw)));
+		if (ch) {
+			ch->setPos(mu::Vec3(0.f, 0.f, 0.f));
+			ch->setOrient(mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), mu::Radian(0.f)));
+		}
+		if (i < static_cast<int>(lobbyPortraitCams_.size())) {
+			lobbyPortraitCams_[i].setPerspective(mu::Degree(lobbyPortraitFovYDeg_), aspect, 0.1f, 20.f);
+			lobbyPortraitCams_[i].setView(eye, at);
+		}
 	}
 }
 
@@ -200,6 +190,12 @@ void Game::clearLobbyCharacters() {
 		}
 	}
 	lobbyChars_.clear();
+
+	// 포트레이트 패스 비활성화(인게임/메인메뉴 프레임에서 스킵) + 슬롯 이미지 숨김.
+	gfx_.setLobbyPortraitActive(false);
+	for (auto* bay : slotBays_) {
+		if (bay) { bay->visible = false; bay->texture = nullptr; }
+	}
 }
 
 void Game::setupStage() {
@@ -3256,6 +3252,9 @@ void Game::buildLobbyUI() {
 	const float slotsH    = roomPanelH - slotsY - debugH - 14.f;
 	const float slotW     = (innerW - 3.f * gap) / 4.f;
 	const float nameH     = 56.f;
+	// 슬롯 배경: 캐릭터 뒤 패널(불투명 scrim)과 이름표 배경. 캐릭터 뒤 3D맵이 비치지 않도록 복원.
+	const XMFLOAT4 slotPanelCol    = { 0.09f, 0.13f, 0.20f, 0.16f };  // 캐릭터 배경(거의 불투명)
+	const XMFLOAT4 slotNameplateCol= { 0.05f, 0.08f, 0.13f, 0.78f };  // 이름표 배경
 
 	for (int i = 0; i < kMaxLobbyPlayers; ++i) {
 		const float x = pad + static_cast<float>(i) * (slotW + gap);
@@ -3264,31 +3263,40 @@ void Game::buildLobbyUI() {
 		slotNumberLabels_[i] = makeLabel(roomPanel, L"", x + 12.f, slotsY + 10.f, 13.f, 60.f, 20.f,
 			textMuted, UI::TextHAlign::Leading, 2);
 
-		// 모델 베이: 3D 캐릭터를 투영할 화면 사각형(렌더 없음, rect만 사용).
-		auto* bay = roomPanel->addChild(std::make_unique<UI::UIElement>());
+		// 모델 베이: 오프스크린 포트레이트 RT(캐릭터)를 셀 sub-rect로 합성하는 이미지.
+		// 텍스처/uvScaleBias/visible는 매 프레임 renderWaitingRoom()에서 갱신한다.
+		// 캐릭터 뒤 배경 패널(불투명 scrim, zOrder 0): 캐릭터 뒤로 3D맵이 비치지 않게 한다.
+		slotPanels_[i] = makeSolid(roomPanel, "slotPanelBg",
+			x + 8.f, slotsY + 8.f, slotW - 16.f, slotsH - nameH - 22.f, slotPanelCol, 0);
+
+		auto* bay = roomPanel->addChild(std::make_unique<UI::Image>());
 		bay->name = "slotBay";
 		applyRect(bay, UI::Anchors::TopLeft, UI::Pivots::TopLeft,
 			x + 8.f, slotsY + 8.f, slotW - 16.f, slotsH - nameH - 22.f);
-		slotBays_[i] = bay;
+		bay->zOrder  = 1;       // 배경 패널 위에 캐릭터를 그린다.
+		bay->visible = false;   // 빈 슬롯은 숨김(채워진 슬롯만 표시 — 잔상 방지)
+		slotBays_[i] = static_cast<UI::Image*>(bay);
 
-		// 이름표(배경 없이 이름 + 호스트 뱃지 텍스트만)
+		// 이름표: 배경(scrim, zOrder 1) + 이름/호스트 뱃지 텍스트(zOrder 3). 배경은 이름+뱃지를 덮는다.
 		const float nameY = slotsY + slotsH - nameH - 4.f;
+		slotNameplateBgs_[i] = makeSolid(roomPanel, "nameplateBg",
+			x + 10.f, nameY, slotW - 20.f, 52.f, slotNameplateCol, 1);
 		slotNameLabels_[i] = makeLabel(roomPanel, L"대기 중",
 			x + 10.f, nameY, 18.f, slotW - 20.f, 28.f,
-			textLight, UI::TextHAlign::Center, 2);
+			textLight, UI::TextHAlign::Center, 3);
 		slotHostBadgeLabels_[i] = makeLabel(roomPanel, L"",
 			x + 10.f, slotsY + slotsH - 30.f, 12.f, slotW - 20.f, 22.f,
-			textMuted, UI::TextHAlign::Center, 2);
+			textMuted, UI::TextHAlign::Center, 3);
 
-		// 호스트 이름 사각 테두리(4변). 기본 숨김, refreshLobbyUI에서 호스트 슬롯만 표시.
+		// 호스트 이름 사각 테두리(4변, zOrder 2 — 이름표 배경 위). 기본 숨김, refreshLobbyUI에서 호스트만 표시.
 		const XMFLOAT4 borderCol = { 0.95f, 0.80f, 0.35f, 1.f };  // 골드(호스트 표식)
 		const float bpad = 4.f, bt = 2.f;
 		const float bx = x + 10.f - bpad, by = nameY - bpad;
 		const float bw = (slotW - 20.f) + 2.f * bpad, bh = 28.f + 2.f * bpad;
-		slotNameBorders_[i][0] = makeSolid(roomPanel, "nameBorderT", bx, by, bw, bt, borderCol, 1);
-		slotNameBorders_[i][1] = makeSolid(roomPanel, "nameBorderB", bx, by + bh - bt, bw, bt, borderCol, 1);
-		slotNameBorders_[i][2] = makeSolid(roomPanel, "nameBorderL", bx, by, bt, bh, borderCol, 1);
-		slotNameBorders_[i][3] = makeSolid(roomPanel, "nameBorderR", bx + bw - bt, by, bt, bh, borderCol, 1);
+		slotNameBorders_[i][0] = makeSolid(roomPanel, "nameBorderT", bx, by, bw, bt, borderCol, 2);
+		slotNameBorders_[i][1] = makeSolid(roomPanel, "nameBorderB", bx, by + bh - bt, bw, bt, borderCol, 2);
+		slotNameBorders_[i][2] = makeSolid(roomPanel, "nameBorderL", bx, by, bt, bh, borderCol, 2);
+		slotNameBorders_[i][3] = makeSolid(roomPanel, "nameBorderR", bx + bw - bt, by, bt, bh, borderCol, 2);
 		for (auto* edge : slotNameBorders_[i]) {
 			if (edge) edge->visible = false;
 		}
@@ -3439,10 +3447,17 @@ float Game::loadProgress01() const {
 			return (std::min)(gfx_.assetLoadFraction(), 0.9f);
 		return 0.95f;  // Phase 1 done; holding through the terrain-init hitch.
 	}
+	if (!inGameMeshAssetsLoaded_.load(std::memory_order_acquire)) {
+		// Terrain streaming is intentionally deferred while Phase 2 records on the shared
+		// LoadFence, so the waiting-room cannot be visually complete before this point.
+		return 0.95f;
+	}
+	const float terrainReady = chunkManager_.readyFractionAround(kLobbyCameraBaseAt);
+	if (terrainReady < 1.f) {
+		return 0.95f + 0.04f * terrainReady;
+	}
 	if (!inGameAssetsLoaded_.load(std::memory_order_acquire)) {
 		// Requirement 3: waiting for Phase 2 (remaining meshes, then particle prefetch).
-		if (!inGameMeshAssetsLoaded_.load(std::memory_order_acquire))
-			return 0.5f * gfx_.assetLoadFraction();
 		const auto total = particleFilesTotal_.load(std::memory_order_relaxed);
 		if (total == 0u) return 1.f;  // no files / dir access failure — avoid divide-by-zero
 		const auto done = particleFilesDone_.load(std::memory_order_relaxed);
@@ -3559,14 +3574,6 @@ void Game::LobbyScene(Milliseconds deltaTime) {
 		refreshLobbyUI();  // 게임 시작 버튼 활성 상태 갱신 (로그 재개는 워커가 수행)
 	}
 
-	// 로비 키보드 입력(전시 캐릭터 튜닝 키). processInput()은 player_ 없으면 조기 반환하므로
-	// 로비에선 여기서 직접 키보드 상태를 폴링하고 processInputLobby를 호출한다.
-	if (GetForegroundWindow() == ghWnd) {
-		keyboardStatePrev_ = keyboardStateCurr_;
-		GetKeyboardState(keyboardStateCurr_.data());
-		processInputLobby(deltaTime);
-	}
-
 	// 대기실: Phase 1(대기실 3D 에셋) 로드 완료 후 setupStageVisual()로 3D를 준비한다.
 	// setupStageVisual() 완료 시 stageVisualReady_가 서며, 이를 워커가 보고 Phase 2를 시작한다.
 	if (lobbyState_ == LobbyState::WaitingRoom && lobbyVisualAssetsLoaded_.load(std::memory_order_acquire)) {
@@ -3583,10 +3590,8 @@ void Game::LobbyScene(Milliseconds deltaTime) {
 		// 캐릭터 슬롯이 들어올 자리가 크게 흔들리지 않도록 eye 이동보다 at 이동을 작게 둔다.
 		lobbyCameraTime_ += std::chrono::duration<float>(deltaTime).count();
 		const float sway = std::sin(lobbyCameraTime_ * 0.25f) * 0.3f;
-		const mu::Vec3 baseEye(5142.34f, 84.0199f, 5125.55f);
-		const mu::Vec3 baseAt(5140.71f, 83.0828f, 5123.8f);
-		const mu::Vec3 eye = baseEye + mu::Vec3(sway, 0.f, 0.f);
-		const mu::Vec3 at  = baseAt  + mu::Vec3(sway * 0.25f, 0.f, 0.f);
+		const mu::Vec3 eye = kLobbyCameraBaseEye + mu::Vec3(sway, 0.f, 0.f);
+		const mu::Vec3 at  = kLobbyCameraBaseAt  + mu::Vec3(sway * 0.25f, 0.f, 0.f);
 		lobbyCamera_.setView(eye, at);
 		// Terrain streaming also records on the shared GFX "LoadFence". While the worker is
 		// running Phase 2 loadRequestedAssets, a concurrent recordTerrainResourceLoad here
@@ -3595,7 +3600,7 @@ void Game::LobbyScene(Milliseconds deltaTime) {
 		// loaded in setupStageVisual() already covers the near-static lobby camera, so defer
 		// streaming until Phase 2 GPU loading is done.
 		if (inGameMeshAssetsLoaded_.load(std::memory_order_acquire)) {
-			chunkManager_.update(baseAt, deltaTime);
+			chunkManager_.update(kLobbyCameraBaseAt, deltaTime);
 		}
 
 		// 전시 캐릭터: 최초 진입 시 생성 후, 현재 카메라 기준으로 재배치해 화면 슬롯 위치를 고정한다.
@@ -3612,8 +3617,22 @@ void Game::LobbyScene(Milliseconds deltaTime) {
 
 	// Loading overlay: visible while the waiting-room 3D isn't ready (req 1) or while a
 	// pending start waits for the remaining in-game assets (req 3).
+	// stageVisualReady_가 서더라도 곧장 내리지 않고, renderWaitingRoom()이 오버레이 뒤에서
+	// kWarmupFrames만큼 실제로 렌더를 돌릴 때까지 유지한다(지형/캐릭터/포트레이트 RT/GPU 업로드가
+	// settle된 뒤 노출 → 첫 프레임이 그려지는 "팝인"을 가린다).
+	constexpr int kWarmupFrames = 8;
+	const bool stageReady = stageVisualReady_.load(std::memory_order_acquire);
+	const bool waitingRoomTerrainReady =
+		stageReady
+		&& inGameMeshAssetsLoaded_.load(std::memory_order_acquire)
+		&& chunkManager_.readyAround(kLobbyCameraBaseAt);
+	if (!waitingRoomTerrainReady) {
+		waitingRoomWarmupFrames_ = 0;
+	}
+	const bool waitingRoomWarm =
+		waitingRoomTerrainReady && waitingRoomWarmupFrames_ >= kWarmupFrames;
 	const bool showLoading =
-		(lobbyState_ == LobbyState::WaitingRoom && !stageVisualReady_.load(std::memory_order_acquire))
+		(lobbyState_ == LobbyState::WaitingRoom && !waitingRoomWarm)
 		|| pendingStart_;
 	updateLoadingScreen(std::chrono::duration<float>(deltaTime).count(), showLoading);
 
@@ -3650,12 +3669,7 @@ void Game::renderWaitingRoom() {
 		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 	}
 
-	// 전시 캐릭터: 채워진 슬롯 수만큼만 렌더(빈 슬롯은 모델 없음).
-	const int filled = static_cast<int>(lobbyPlayers_.size());
-	for (int i = 0; i < filled && i < static_cast<int>(lobbyChars_.size()); ++i) {
-		if (lobbyChars_[i]) lobbyChars_[i]->render(gfx_);
-	}
-
+	// 배경(지형/스카이박스)용 카메라 + 방향광.
 	lobbyCamera_.updateGFX(gfx_);
 	dirLight_.render(gfx_);
 
@@ -3664,6 +3678,44 @@ void Game::renderWaitingRoom() {
 	gfx_.addFrameData(PBRDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 	gfx_.addFrameData(PBRDeferredSkinnedPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 
+	// ===== 슬롯 캐릭터: 오프스크린 포트레이트 RT로 분리 렌더 → UI 슬롯에 합성 =====
+	// 배경 카메라와 무관하게 각 캐릭터를 슬롯 전용 카메라로 RT 셀에 그린다(투명 배경).
+	const int filled = static_cast<int>(lobbyPlayers_.size());
+	gfx_.setLobbyPortraitActive(true);
+	gfx_.addLobbyPortraitFrameData(PBRSkinnedPipeline::FrameData{ .globalAmbient = mu::Vec3(0.20f, 0.20f, 0.22f) });
+	// 정면-상단 키 라이트(고정 방향, 배경광과 무관하게 캐릭터를 일관되게 비춤). shadow는 GFX에서 off.
+	{
+		const mu::NVec3 keyDir(-0.25f, -0.5f, -0.83f);
+		PBRSkinnedPipeline::LightData keyLight{};
+		keyLight.type      = PBRSkinnedPipeline::LightData::Type::DirectionalLight;
+		keyLight.dir       = mu::Vec3(keyDir.x(), keyDir.y(), keyDir.z());
+		keyLight.color     = (dirLight_.intensity > 0.f) ? dirLight_.color : mu::Vec3(1.f, 1.f, 1.f);
+		keyLight.intensity = (dirLight_.intensity > 0.f) ? dirLight_.intensity : 3.f;
+		keyLight.isMainDirectionalLight = false;
+		gfx_.addLobbyPortraitLightData(keyLight);
+	}
+
+	const Texture* portraitTex = gfx_.lobbyPortraitTextureForThisFrame();
+	for (int i = 0; i < kMaxLobbyPlayers; ++i) {
+		const bool isFilled = (i < filled) && (i < static_cast<int>(lobbyChars_.size())) && lobbyChars_[i];
+		if (isFilled) {
+			gfx_.setLobbyPortraitCamera(static_cast<u32t>(i), PBRSkinnedPipeline::CameraData{
+				.view = lobbyPortraitCams_[i].view(),
+				.proj = lobbyPortraitCams_[i].proj(),
+				.pos  = lobbyPortraitCams_[i].eye()
+			});
+			lobbyChars_[i]->renderPortrait(gfx_, static_cast<u32t>(i));
+		}
+		// UI 슬롯 이미지: 채워진 슬롯만 표시, 셀 sub-rect 샘플.
+		if (slotBays_[i]) {
+			slotBays_[i]->visible = isFilled && (portraitTex != nullptr);
+			if (slotBays_[i]->visible) {
+				slotBays_[i]->texture     = portraitTex;
+				slotBays_[i]->uvScaleBias = gfx_.lobbyPortraitCellUvScaleBias(static_cast<u32t>(i));
+			}
+		}
+	}
+
 	uiManager_.render(gfx_);
 	gfx_.addFrameData(UIPipeline::FrameData{
 		.screenWidth  = static_cast<float>(gClientRect.right - gClientRect.left),
@@ -3671,10 +3723,15 @@ void Game::renderWaitingRoom() {
 	});
 
 	gfx_.render();
+
+	// 실제로 렌더된 대기실 프레임만 카운트(워밍업 게이트). 오버레이가 위를 덮고 있는 동안
+	// 누적되며, kWarmupFrames에 도달하면 LobbyScene이 오버레이를 내린다. 포화 방지로 상한.
+	if (waitingRoomWarmupFrames_ < 64) ++waitingRoomWarmupFrames_;
 }
 
 void Game::enterInGame() {
 	pendingStart_ = false;
+	waitingRoomWarmupFrames_ = 0;  // 대기실 재입장 시 다시 워밍업하도록 리셋
 	if (loadingRoot_) loadingRoot_->visible = false;
 	if (lobbyRoot_) {
 		lobbyRoot_->visible = false;
@@ -3748,6 +3805,7 @@ void Game::lobbyLeaveRoom() {
 	lobbyState_ = LobbyState::MainMenu;
 	lobbyCameraTime_ = 0.f;
 	pendingStart_ = false;
+	waitingRoomWarmupFrames_ = 0;  // 대기실 재입장 시 다시 워밍업하도록 리셋
 	if (loadingRoot_) loadingRoot_->visible = false;
 	if (roomCodeInput_)    roomCodeInput_->clear();
 	if (mainMenuMsgLabel_) mainMenuMsgLabel_->setText(L"");
@@ -3941,54 +3999,6 @@ void Game::processInput(Milliseconds deltaTime) {
 		}
 		else {
 			hideCursor();
-		}
-	}
-}
-
-// 방에 들어가지 않은 상태일 때
-// 방 입장 키 처리
-void Game::processInputLobby(Milliseconds deltaTime) {
-	// 대기실 전시 캐릭터 배치 런타임 튜닝(대기실에서만, 0.1f 단위 엣지 트리거).
-	//   1/2 : standDist  -/+   (카메라 거리; ↑일수록 작아짐)
-	//   3/4 : spacing    -/+   (좌우 간격)
-	//   5/6 : footOffset -/+   (발 높이; ↑/↓)
-	//   P   : 현재 값 + 캐릭터/카메라 위치 로그 출력
-	if (lobbyState_ != LobbyState::WaitingRoom) {
-		return;
-	}
-
-	auto pressed = [&](int vk) {
-		return (keyboardStateCurr_[vk] & 0x80) && !(keyboardStatePrev_[vk] & 0x80);
-	};
-	const float step = 0.1f;
-	bool changed = false;
-
-	if (pressed('1')) { lobbyCharStandDist_  = std::max(0.5f, lobbyCharStandDist_ - step); changed = true; }
-	if (pressed('2')) { lobbyCharStandDist_ += step; changed = true; }
-	if (pressed('3')) { lobbyCharSpacing_    = std::max(0.1f, lobbyCharSpacing_ - step); changed = true; }
-	if (pressed('4')) { lobbyCharSpacing_   += step; changed = true; }
-	if (pressed('5')) { lobbyCharFootOffset_ -= step; changed = true; }
-	if (pressed('6')) { lobbyCharFootOffset_ += step; changed = true; }
-
-	if (changed) {
-		gSharedLog << "[LobbyTune] standDist=" << lobbyCharStandDist_
-		           << " spacing=" << lobbyCharSpacing_
-		           << " footOffset=" << lobbyCharFootOffset_ << "\n";
-	}
-
-	if (pressed('P')) {
-		const mu::Vec3 eye = lobbyCamera_.eye();
-		const mu::Vec3 at  = lobbyCamera_.at();
-		gSharedLog << "[LobbyTune] standDist=" << lobbyCharStandDist_
-		           << " spacing=" << lobbyCharSpacing_
-		           << " footOffset=" << lobbyCharFootOffset_
-		           << " | eye=(" << eye.x() << "," << eye.y() << "," << eye.z() << ")"
-		           << " at=(" << at.x() << "," << at.y() << "," << at.z() << ")\n";
-		for (int i = 0; i < static_cast<int>(lobbyChars_.size()); ++i) {
-			if (!lobbyChars_[i]) continue;
-			const mu::Vec3 p = lobbyChars_[i]->pos();
-			gSharedLog << "[LobbyTune]   char" << i
-			           << " pos=(" << p.x() << "," << p.y() << "," << p.z() << ")\n";
 		}
 	}
 }

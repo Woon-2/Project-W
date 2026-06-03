@@ -149,29 +149,31 @@ void GFX::init() {
 	cmdListPool_.init(device_.Get(), CommandListUsage::ResourceLoading, 16u);
 
 	// Descriptor Heap 및 Pool들 생성
-	// RTV 슬롯: 3 backbuffer + 4 GBuffer × 3 rooms = 15 → 여유 포함 16
+	// RTV 슬롯: 3 backbuffer + 4 GBuffer × 3 rooms = 15 + Portrait color × 3 rooms = 18 → 여유 포함 24
 	rtvHeap_ = DescriptorHeap( device_.Get(), D3D12_DESCRIPTOR_HEAP_DESC{
 		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-		.NumDescriptors = 16u,
-		.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
-		.NodeMask = 0
-	} );
-
-	// RTV Pool: RTVHeap의 [0, 16) 범위
-	rtvPool_ = DescriptorPool( 16u, rtvHeap_.cpuStart, rtvHeap_.gpuStart, rtvHeap_.desc.Type,
-		rtvHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
-		device_->GetDescriptorHandleIncrementSize(rtvHeap_.desc.Type)
-	);
-
-	dsvHeap_ = DescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_DESC{
-		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
 		.NumDescriptors = 24u,
 		.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
 		.NodeMask = 0
 	} );
 
-	// DSV Pool: DSVHeap의 [0, 24) 범위
-	dsvPool_ = DescriptorPool( 24u, dsvHeap_.cpuStart, dsvHeap_.gpuStart, dsvHeap_.desc.Type,
+	// RTV Pool: RTVHeap의 [0, 24) 범위
+	rtvPool_ = DescriptorPool( 24u, rtvHeap_.cpuStart, rtvHeap_.gpuStart, rtvHeap_.desc.Type,
+		rtvHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+		device_->GetDescriptorHandleIncrementSize(rtvHeap_.desc.Type)
+	);
+
+	// DSV 슬롯: backbuffer depth 3 + CSM(cascade 4 × 3 rooms) 12 + GBuffer depth 3 + HiZ depth 3 = 21
+	// + Portrait depth × 3 rooms = 24 → 여유 포함 32
+	dsvHeap_ = DescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_DESC{
+		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
+		.NumDescriptors = 32u,
+		.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+		.NodeMask = 0
+	} );
+
+	// DSV Pool: DSVHeap의 [0, 32) 범위
+	dsvPool_ = DescriptorPool( 32u, dsvHeap_.cpuStart, dsvHeap_.gpuStart, dsvHeap_.desc.Type,
 		dsvHeap_.desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 		device_->GetDescriptorHandleIncrementSize(dsvHeap_.desc.Type)
 	);
@@ -817,6 +819,42 @@ void GFX::addFrameData(const PBRSkinnedPipeline::FrameData& frameData) {
 	frameDataPBRSkinnedPipeline_ = frameData;
 }
 
+// ===== 로비 대기실 슬롯 포트레이트 =====
+void GFX::addLobbyPortraitDrawEvent(u32t slot, PBRSkinnedPipeline::DrawEvent&& drawEvent) {
+	if (slot >= kMaxPortraitSlots) return;
+	drawEventsLobbyPortrait_[slot].push_back(std::move(drawEvent));
+}
+
+void GFX::setLobbyPortraitCamera(u32t slot, const PBRSkinnedPipeline::CameraData& cameraData) {
+	if (slot >= kMaxPortraitSlots) return;
+	cameraDataLobbyPortrait_[slot] = cameraData;
+}
+
+void GFX::addLobbyPortraitLightData(const PBRSkinnedPipeline::LightData& lightData) {
+	lightDataLobbyPortrait_.push_back(lightData);
+}
+
+void GFX::addLobbyPortraitFrameData(const PBRSkinnedPipeline::FrameData& frameData) {
+	frameDataLobbyPortrait_ = frameData;
+}
+
+void GFX::setLobbyPortraitActive(bool active) {
+	lobbyPortraitActive_ = active;
+}
+
+const Texture* GFX::lobbyPortraitTextureForThisFrame() const {
+	if (SharedResources::Portrait::portraitData.empty()) return nullptr;
+	const auto roomIdx = frameIdx_ % backBuffers_.size();
+	return &SharedResources::Portrait::portraitData[roomIdx].color;
+}
+
+XMFLOAT4 GFX::lobbyPortraitCellUvScaleBias(u32t slot) const {
+	// 가로 아틀라스에서 slot 셀의 sub-rect. uv' = uv * (scaleX, scaleY) + (biasX, biasY).
+	const float scaleX = 1.f / static_cast<float>(kMaxPortraitSlots);
+	const float biasX  = static_cast<float>(slot) * scaleX;
+	return XMFLOAT4(scaleX, 1.f, biasX, 0.f);
+}
+
 // 드로우콜 요청을 제출한다. render() 호출 시 그려진다.
 void GFX::addDrawEvent(const PBRDeferredPipeline::DrawEvent& drawEvent) {
 	drawEventsPBRDeferredPipeline_.push_back(drawEvent);
@@ -1135,6 +1173,36 @@ void GFX::initSharedResources(const AssetConfigs& configs) {
 		static_cast<u32t>(gClientRect.bottom - gClientRect.top), backBuffers_.size(),
 		srvTexPool_, uavPool_, dsvPool_
 	);
+	// 로비 대기실 슬롯 캐릭터용 오프스크린 포트레이트 RT (가로 아틀라스, 세로형 셀)
+	SharedResources::Portrait::addPortraitRT(
+		device_.Get(), kPortraitCellW, kPortraitCellH, kMaxPortraitSlots,
+		backBuffers_.size(), rtvPool_, dsvPool_, srvTexPool_
+	);
+	// 포트레이트 슬롯별 전용 Resources (mainPass만, 소용량. shadowPass는 호출 안 하므로 미init).
+	for (u32t s = 0u; s < kMaxPortraitSlots; ++s) {
+		auto& res = resourcesLobbyPortrait_[s];
+		const auto sfx = "_Portrait" + std::to_string(s);
+		res.mainPass.perInstanceData.init(
+			device_.Get(), sizeof(PBRSkinnedShader::PerInstanceData) * kMaxPortraitDrawEventsPerSlot,
+			backBuffers_.size(), ("Skinned_Main_PerInstanceData" + sfx)
+		);
+		res.mainPass.boneData.init(
+			device_.Get(), sizeof(PBRSkinnedShader::BoneData) * kMaxPortraitBonesPerSlot,
+			backBuffers_.size(), ("Skinned_Main_BoneData" + sfx)
+		);
+		res.mainPass.perDrawcallData = createConstantBufferArray(
+			device_.Get(), sizeof(PBRSkinnedShader::PerDrawcallData), kMaxPortraitDrawEventsPerSlot,
+			backBuffers_.size(), ("Skinned_Main_PerDrawcallData" + sfx)
+		);
+		res.mainPass.lightData.init(
+			device_.Get(), sizeof(PBRSkinnedShader::Light) * 32u,
+			backBuffers_.size(), ("Skinned_Main_LightData" + sfx)
+		);
+		res.mainPass.perFrameData.init(
+			device_.Get(), sizeof(PBRSkinnedShader::PerFrameData),
+			backBuffers_.size(), ("Skinned_Main_PerFrameData" + sfx)
+		);
+	}
 	// 파이프라인 자체 리소스 로드
 	// BVPipeline
 	BVPipeline::initStaticModels(device_.Get(), cmdList.Get(), fence);
@@ -2326,6 +2394,85 @@ void GFX::render() {
 
 			dumpLog();
 		}
+	}
+
+	// ===== 로비 대기실 슬롯 포트레이트 패스 (오프스크린 RT → UI 합성) =====
+	// 대기실 활성 동안 수행. CSM 상태와 무관(cascadeCount=0 + 셰이더 가드). UI 디스패치 직전 배치.
+	// 채워진 슬롯이 0개여도 clear+transitionToRead는 수행 → 전 슬롯 비는 전환 프레임 잔상 방지.
+	if (lobbyPortraitActive_ && !SharedResources::Portrait::portraitData.empty()) {
+		const auto roomIdx = frameIdx_ % backBuffers_.size();
+		const auto& pData = SharedResources::Portrait::portraitData[roomIdx];
+
+		// (1) color RT를 RENDER_TARGET으로 전환 + 투명 클리어 (depth=1)
+		{
+			CommandContext cc{};
+			if (cmdListPool_.allocOne(CommandListUsage::RenderingSlave, cc) && cc.cmdList) {
+				DISPLAY_ERROR_DX_HR(cc.cmdAlloc->Reset(), false);
+				DISPLAY_ERROR_DX_HR(cc.cmdList->Reset(cc.cmdAlloc.Get(), nullptr), false);
+				SharedResources::Portrait::transitionToWrite(roomIdx, cc.cmdList.Get());
+				SharedResources::Portrait::clearPortraitRT(roomIdx, cc.cmdList.Get());
+				DISPLAY_ERROR_DX_HR(cc.cmdList->Close(), false);
+				ID3D12CommandList* cls[] = { cc.cmdList.Get() };
+				cmdQ_->ExecuteCommandLists(1u, cls);
+				fenceToSignal.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cc));
+			}
+		}
+
+		// (2) 슬롯별 캐릭터 그리기 (셀 viewport + 전용 카메라/Resources). shadow off.
+		mainDirectionalLightLobbyPortrait_.cascadeCount = 0u;
+		for (u32t s = 0u; s < kMaxPortraitSlots; ++s) {
+			if (drawEventsLobbyPortrait_[s].empty()) continue;
+
+			const auto cellViewport = D3D12_VIEWPORT{
+				.TopLeftX = static_cast<FLOAT>(s * kPortraitCellW),
+				.TopLeftY = 0.f,
+				.Width    = static_cast<FLOAT>(kPortraitCellW),
+				.Height   = static_cast<FLOAT>(kPortraitCellH),
+				.MinDepth = 0.f,
+				.MaxDepth = 1.f
+			};
+			const auto cellScissor = D3D12_RECT{
+				.left   = static_cast<LONG>(s * kPortraitCellW),
+				.top    = 0,
+				.right  = static_cast<LONG>((s + 1u) * kPortraitCellW),
+				.bottom = static_cast<LONG>(kPortraitCellH)
+			};
+
+			auto portraitDispatcher = PBRSkinnedPipeline::Dispatcher(
+				tmpDescriptorHeaps,
+				&srvTexPool_, &srvTexArrayPool_, &srvTexCubePool_,
+				&samPool_, &cmpSamPool_, &dsvPool_,
+				rootSigs_.at("DefaultRootSignature"), shaders_.at("PBRSkinnedShader"),
+				shaders_.at("ShadowMapSkinnedCSMShader"), cmdQ_, cellViewport, cellScissor,
+				pData.rtv, pData.dsv,
+				&fenceToSignal, &resourcesLobbyPortrait_[s], threadPool_, &cmdListPool_,
+				std::move(drawEventsLobbyPortrait_[s]),
+				std::vector<PBRSkinnedPipeline::LightData>(lightDataLobbyPortrait_),	// 슬롯별 복사
+				mainDirectionalLightLobbyPortrait_, cameraDataLobbyPortrait_[s], frameDataLobbyPortrait_,
+				roomIdx
+			);
+			portraitDispatcher.sortDrawEvents();
+			portraitDispatcher.mainPass();	// shadowPass 미호출
+		}
+		dumpLog();
+
+		// (3) color RT를 PIXEL_SHADER_RESOURCE로 전환 (UI 샘플용)
+		{
+			CommandContext cc{};
+			if (cmdListPool_.allocOne(CommandListUsage::RenderingSlave, cc) && cc.cmdList) {
+				DISPLAY_ERROR_DX_HR(cc.cmdAlloc->Reset(), false);
+				DISPLAY_ERROR_DX_HR(cc.cmdList->Reset(cc.cmdAlloc.Get(), nullptr), false);
+				SharedResources::Portrait::transitionToRead(roomIdx, cc.cmdList.Get());
+				DISPLAY_ERROR_DX_HR(cc.cmdList->Close(), false);
+				ID3D12CommandList* cls[] = { cc.cmdList.Get() };
+				cmdQ_->ExecuteCommandLists(1u, cls);
+				fenceToSignal.associatedCmdCtxs_[etoi(CommandListUsage::RenderingSlave)].push_back(std::move(cc));
+			}
+		}
+
+		// (4) per-frame 채널 clear (매 프레임 add → 누적 방지). draw event는 move로 비워졌다.
+		lightDataLobbyPortrait_.clear();
+		for (auto& dq : drawEventsLobbyPortrait_) dq.clear();
 	}
 
 	// Ui Pipeline의 rendering

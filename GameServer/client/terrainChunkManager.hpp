@@ -51,6 +51,11 @@ public:
     // streaming latency so callers submit terrain frame data / height queries consistently.
     bool empty() const { return index_.chunks.empty(); }
 
+    // Returns how much of the streamed chunk set around worldPos is fully activated.
+    // Used by scene loading gates so the first visible frame is not missing terrain.
+    float readyFractionAround(mu::Vec3 worldPos) const;
+    bool readyAround(mu::Vec3 worldPos) const { return readyFractionAround(worldPos) >= 1.f; }
+
     // 인덱스의 모든 청크 중심을 평균한 월드 좌표(지형 위 한 점).
     // 로비 대기실의 정적 카메라 포커스로 사용한다(sparse/임의 원점 대응).
     mu::Vec3 MU_CALLCONV worldCenter() const {

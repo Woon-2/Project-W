@@ -437,6 +437,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `pbrDeferredSkinned.hlsl` | GBuffer Geometry Pass VS/PS (스킨드 메시) |
 | `pbrDeferredLighting.hlsl` | Deferred Lighting Pass (fullscreen triangle, GBuffer SRV 읽기) |
 | `sharedResources.hpp` / `.cpp` | `SharedResources::GBuffer` 네임스페이스 — GBuffer 텍스처 생성/관리 |
+| `sharedResources.hpp` / `.cpp` | `SharedResources::Portrait` 네임스페이스 — 로비 슬롯 캐릭터용 오프스크린 포트레이트 RT(가로 아틀라스, room별 triple-buffer). `addPortraitRT`/`transitionToWrite`/`transitionToRead`/`clearPortraitRT`. GFX 채널: `addLobbyPortraitDrawEvent`/`setLobbyPortraitCamera`/`addLobbyPortraitLightData`/`setLobbyPortraitActive`/`lobbyPortraitTextureForThisFrame`/`lobbyPortraitCellUvScaleBias`. 제출: `Object::renderPortrait(gfx, slot)`. render() 삽입: deferred lighting 이후 → UI 이전. 상세: `docs/lobbyScene.md` 작업 B-3 |
 
 **GBuffer 레이아웃 (`sharedResources.hpp`):**
 
@@ -828,7 +829,7 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | 클래스 | 파일 | 설명 |
 |--------|------|------|
 | `UI::Panel` | `Panel.hpp/cpp` | 컨테이너; `backgroundTex` 있으면 배경 렌더 |
-| `UI::Image` | `Image.hpp/cpp` | 단일 텍스처 표시 |
+| `UI::Image` | `Image.hpp/cpp` | 단일 텍스처 표시. `uvScaleBias`(아틀라스 셀 sub-rect 샘플)/`colorMul`(틴트·알파) 필드 지원 |
 | `UI::emitNineSlice()` | `UIElement.hpp/cpp` | 9-slice 헬퍼; 요소 사각형을 9셀로 나눠 셀별 부분 UV `DrawEvent` emit. 코너는 화면 px 고정, 가장자리/중앙 늘어남. `DrawEvent::uvScaleBias`(+`ui.hlsl`/`UIShader::PerInstanceData`)로 부분 UV 매핑 |
 | `UI::Label` | `Label.hpp/cpp` | `TextImage` 내부 소유; `resolvedRect_` 크기에 맞게 자동 재생성; dirty-check로 매 프레임 래스터화 방지 |
 | `UI::Button` | `Button.hpp/cpp` | Normal/Hovered/Pressed 상태 텍스처 + 9-slice(`slice*`) + 상태별 `texTint*`; `onClick` 콜백 (`std::function<void()>`) |

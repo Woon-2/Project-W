@@ -264,6 +264,32 @@ public:
 	// Hi-z occlusion culling에 사용할 occluder의 정보를 입력한다.
 	void addOccluder(const TerrainDeferredPipeline::OccluderInfo& occluderInfo);
 
+	// ===== 로비 대기실 슬롯 포트레이트 (오프스크린 RT → UI 합성) =====
+	// 슬롯 수 / 셀 해상도(세로형). 포트레이트 카메라 aspect = kPortraitCellW / kPortraitCellH.
+	static constexpr u32t kMaxPortraitSlots = 4u;
+	static constexpr u32t kPortraitCellW    = 384u;
+	static constexpr u32t kPortraitCellH    = 640u;
+	// 슬롯당 캐릭터 1명이지만 Object::render는 submesh마다 DrawEvent를 내고
+	// mainUpdate는 boneData를 draw event마다 누적하므로, 상한을 submesh 단위로 잡는다.
+	static constexpr u32t kMaxPortraitDrawEventsPerSlot = 64u;
+	static constexpr u32t kMaxPortraitBonesPerCharacter = 256u;
+	static constexpr u32t kMaxPortraitBonesPerSlot = kMaxPortraitBonesPerCharacter * kMaxPortraitDrawEventsPerSlot;
+
+	// 슬롯 slot의 캐릭터 스킨드 draw event를 제출한다(포워드 PBRSkinnedPipeline).
+	void addLobbyPortraitDrawEvent(u32t slot, PBRSkinnedPipeline::DrawEvent&& drawEvent);
+	// 슬롯 slot의 포트레이트 카메라를 설정한다.
+	void setLobbyPortraitCamera(u32t slot, const PBRSkinnedPipeline::CameraData& cameraData);
+	// 포트레이트 조명(로비 방향광, 모든 슬롯 공유)을 추가한다. shadow는 끄되 direct light는 넣는다.
+	void addLobbyPortraitLightData(const PBRSkinnedPipeline::LightData& lightData);
+	// 포트레이트 프레임 데이터(globalAmbient)를 설정한다.
+	void addLobbyPortraitFrameData(const PBRSkinnedPipeline::FrameData& frameData);
+	// 대기실 활성 여부. true인 동안 render()가 포트레이트 패스를 수행(0슬롯이어도 clear+transitionToRead).
+	void setLobbyPortraitActive(bool active);
+	// 이번 프레임 render()가 사용할 room의 포트레이트 color 텍스처. UI 슬롯이 이 텍스처를 샘플한다.
+	const Texture* lobbyPortraitTextureForThisFrame() const;
+	// 슬롯 slot 셀의 sub-rect uvScaleBias(uv' = uv*xy + zw)를 반환한다.
+	XMFLOAT4 lobbyPortraitCellUvScaleBias(u32t slot) const;
+
 	void addRequestModelLoad(const RequestModelLoad& request);
 	void addRequestSkyboxLoad(const RequestSkyboxLoad& request);
 	void addRequestTextureLoad( const RequestTextureLoad& request );
@@ -426,6 +452,14 @@ private:
 	std::vector<PBRSkinnedPipeline::LightData> lightDataPBRSkinnedPipeline_{};
 	PBRSkinnedPipeline::LightData mainDirectionalLightPBRSkinnedPipeline_{};
 	PBRSkinnedPipeline::FrameData frameDataPBRSkinnedPipeline_{};
+	// 로비 대기실 슬롯 포트레이트 (슬롯별 전용 채널 — 버퍼 덮어쓰기 방지)
+	std::array<std::vector<PBRSkinnedPipeline::DrawEvent>, kMaxPortraitSlots> drawEventsLobbyPortrait_{};
+	std::array<PBRSkinnedPipeline::Resources, kMaxPortraitSlots> resourcesLobbyPortrait_{};
+	std::array<PBRSkinnedPipeline::CameraData, kMaxPortraitSlots> cameraDataLobbyPortrait_{};
+	std::vector<PBRSkinnedPipeline::LightData> lightDataLobbyPortrait_{};   // 모든 슬롯 공유
+	PBRSkinnedPipeline::LightData mainDirectionalLightLobbyPortrait_{};      // cascadeCount=0 (no-shadow)
+	PBRSkinnedPipeline::FrameData frameDataLobbyPortrait_{};
+	bool lobbyPortraitActive_ = false;
 	// Skybox Pipeline
 	std::vector<SkyboxPipeline::DrawEvent> drawEventsSkyboxPipeline_{};
 	SkyboxPipeline::Resources resourcesSkyboxPipeline_{};

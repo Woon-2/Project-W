@@ -825,6 +825,126 @@ void clearGBuffer(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
 
 }	// namespace GBuffer
 
+namespace Portrait {
+
+std::vector<PortraitRTData> portraitData;
+
+namespace {
+
+// 포트레이트 color RT(R8G8B8A8_UNORM)를 생성하고 RTV + bindless SRV를 등록한다.
+Texture createPortraitColor( ID3D12Device* device, u32t width, u32t height,
+	DescriptorPool& rtvPool, DescriptorPool& srvTexPool, const char* name
+) {
+	constexpr DXGI_FORMAT format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	const auto clearVal = D3D12_CLEAR_VALUE{ .Format = format, .Color = {0.f, 0.f, 0.f, 0.f} };
+	Texture tex = createTexture( device, width, height, format,
+		D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET, D3D12_RESOURCE_STATE_RENDER_TARGET,
+		clearVal
+	);
+	setD3DName(tex.res.Get(), name);
+
+	createRTV(device, tex, D3D12_RENDER_TARGET_VIEW_DESC{
+		.Format        = format,
+		.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D,
+		.Texture2D     = D3D12_TEX2D_RTV{ .MipSlice = 0u, .PlaneSlice = 0u }
+	}, rtvPool);
+
+	tex.idxSrv.idxRange = etoi(Texture::Type::Tex2D);
+	createSRV(device, tex, D3D12_SHADER_RESOURCE_VIEW_DESC{
+		.Format                  = format,
+		.ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D,
+		.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+		.Texture2D               = D3D12_TEX2D_SRV{ .MostDetailedMip = 0u, .MipLevels = 1u }
+	}, srvTexPool);
+	tex.idxSrv.idxInArray  = 0;
+	tex.idxSrv.idxSampler  = etoi(Samplers::BilinearClamp);
+
+	return tex;
+}
+
+// 포트레이트 depth RT(D32_FLOAT)를 생성하고 DSV만 등록한다. (SRV 없음 — depth 미샘플)
+Texture createPortraitDepth( ID3D12Device* device, u32t width, u32t height,
+	DescriptorPool& dsvPool, const char* name
+) {
+	constexpr DXGI_FORMAT format = DXGI_FORMAT_R32_TYPELESS;
+	constexpr DXGI_FORMAT formatD = DXGI_FORMAT_D32_FLOAT;
+
+	const auto clearVal = D3D12_CLEAR_VALUE{ .Format = formatD, .DepthStencil = { .Depth = 1.f } };
+	Texture tex = createTexture( device, width, height, format,
+		D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL, D3D12_RESOURCE_STATE_DEPTH_WRITE,
+		clearVal
+	);
+	setD3DName(tex.res.Get(), name);
+
+	createDSV(device, tex, D3D12_DEPTH_STENCIL_VIEW_DESC{
+		.Format        = formatD,
+		.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D,
+		.Flags         = D3D12_DSV_FLAG_NONE,
+		.Texture2D     = D3D12_TEX2D_DSV{ .MipSlice = 0u }
+	}, dsvPool);
+
+	return tex;
+}
+
+}	// anonymous namespace
+
+void addPortraitRT( ID3D12Device* device, u32t cellW, u32t cellH, u32t cellCount,
+	std::size_t roomCnt, DescriptorPool& rtvPool, DescriptorPool& dsvPool, DescriptorPool& srvTexPool
+) {
+	const u32t width = cellW * cellCount;
+	const u32t height = cellH;
+
+	portraitData.reserve(roomCnt);
+
+	for (std::size_t r = 0u; r < roomCnt; ++r) {
+		PortraitRTData p{};
+		p.width     = width;
+		p.height    = height;
+		p.cellCount = cellCount;
+
+		const auto suffix = "[" + std::to_string(r) + "]";
+		p.color = createPortraitColor(device, width, height, rtvPool, srvTexPool, ("Portrait_Color" + suffix).c_str());
+		p.depth = createPortraitDepth(device, width, height, dsvPool, ("Portrait_Depth" + suffix).c_str());
+
+		p.rtv = rtvPool.cpuHandle(p.color.idxRtv);
+		p.dsv = dsvPool.cpuHandle(p.depth.idxDsv);
+		p.curStateColor = D3D12_RESOURCE_STATE_RENDER_TARGET;
+
+		portraitData.push_back(std::move(p));
+	}
+}
+
+void transitionToWrite(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
+	auto& p = portraitData[roomIdx];
+	if (p.curStateColor != D3D12_RESOURCE_STATE_RENDER_TARGET) {
+		transitionResourceState(cmdList, p.color.res.Get(),
+			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+			D3D12_RESOURCE_STATE_RENDER_TARGET
+		);
+		p.curStateColor = D3D12_RESOURCE_STATE_RENDER_TARGET;
+	}
+}
+
+void transitionToRead(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
+	auto& p = portraitData[roomIdx];
+	if (p.curStateColor != D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE) {
+		transitionResourceState(cmdList, p.color.res.Get(),
+			D3D12_RESOURCE_STATE_RENDER_TARGET,
+			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+		);
+		p.curStateColor = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+	}
+}
+
+void clearPortraitRT(std::size_t roomIdx, ID3D12GraphicsCommandList* cmdList) {
+	auto& p = portraitData[roomIdx];
+	const float kTransparent[4] = { 0.f, 0.f, 0.f, 0.f };
+	cmdList->ClearRenderTargetView(p.rtv, kTransparent, 0u, nullptr);
+	cmdList->ClearDepthStencilView(p.dsv, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0u, 0u, nullptr);
+}
+
+}	// namespace Portrait
+
 namespace HiZMap {
 
 std::vector<HiZMapData> hiZMaps;

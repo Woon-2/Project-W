@@ -331,6 +331,10 @@ float sampleCascadePCF(uint cascadeIdx, float3 posW, float3 normalW, float sinTh
 // calcCSMShadow: selects related cascades by view-space depth, performs 9-tap PCF,
 //                then blends the results.
 float calcCSMShadow(float3 posV, float3 posW, float3 normalW, float rawNdotl) {
+    // No-shadow path (e.g. lobby portrait): cascadeCount == 0 means no CSM bound.
+    // Skip early to avoid `cascadeCount - 1u` unsigned underflow and OOB cascade sampling.
+    if (cascadeCount == 0u) return 1.0f;
+
     float splits[4] = {
         cascadeSplitsFarV.x, cascadeSplitsFarV.y,
         cascadeSplitsFarV.z, cascadeSplitsFarV.w
@@ -513,7 +517,7 @@ float4 illuminateCSM(float3 posV, float3 posW, float3 normalV, float2 tex, float
     color *= directFactor;
 
 #ifdef CSM_DEBUG_VIS
-    {
+    if (cascadeCount > 0u) {
         static const float3 kCascadeColors[4] = {
             float3(1,0,0), float3(0,1,0), float3(0,0,1), float3(1,1,0)
         };

@@ -254,6 +254,28 @@ void TerrainChunkManager::submitDrawEvents(GFX& gfx) {
     }
 }
 
+float TerrainChunkManager::readyFractionAround(mu::Vec3 worldPos) const {
+    if (index_.chunks.empty()) return 1.f;
+
+    const auto cur = chunkCoordAtWorld(worldPos.x(), worldPos.z());
+    if (!cur) return 1.f;
+
+    const auto desired = computeDesired(cur->first, cur->second);
+    if (desired.empty()) return 1.f;
+
+    int ready = 0;
+    for (const int64_t key : desired) {
+        auto it = chunks_.find(key);
+        if (it == chunks_.end()) continue;
+        const auto state = it->second.state;
+        if ((state == State::Ready || state == State::Expiring) && it->second.object) {
+            ++ready;
+        }
+    }
+
+    return static_cast<float>(ready) / static_cast<float>(desired.size());
+}
+
 const TerrainChunkManager::LoadedChunk*
 TerrainChunkManager::findReady(int col, int row) const {
     auto it = chunks_.find(packCoord(col, row));

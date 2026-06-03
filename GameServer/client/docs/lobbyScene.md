@@ -132,6 +132,16 @@ hover/pressed는 엔진 틴트로 처리.
   동기 지형 로드까지, 즉 `!stageVisualReady_`)에는 **로딩 화면**(검정+로고+ProgressBar+"loading..."+점 링
   스피너, `buildLoadingScreen`/`updateLoadingScreen`)을 띄운다. `pendingStart_`일 때도 동일. 진행도는
   `loadProgress01()`(Phase 1 → Phase 2 메시 → 파티클 순).
+- **워밍업 게이트(첫 프레임 팝인 가림)**: `stageVisualReady_`가 서는 순간 곧장 오버레이를 내리면, 지형 submit /
+  캐릭터 애니 settle / 포트레이트 오프스크린 RT / GPU 업로드가 1~수 프레임에 걸쳐 들어와 "그려지는 과정"이
+  노출된다. 이를 막기 위해 로딩 종료 조건을 렌더 시작과 분리했다. `renderLobby()`는 `stageVisualReady_`되면
+  바로 `renderWaitingRoom()`을 호출하되, **로딩 오버레이(불투명 검정, 화면 전체)가 위를 덮은 채로** 3D를
+  워밍업한다. `renderWaitingRoom()`이 실제 렌더한 프레임을 `waitingRoomWarmupFrames_`로 세고, 이 값이
+  `kWarmupFrames`(=4)에 도달해야(`waitingRoomWarm`) 오버레이를 내린다 → 플레이어가 보는 첫 프레임은 이미
+  지형·캐릭터·포트레이트가 채워진 완성 화면. 카운터는 메인 스레드 전용(render 증가 / LobbyScene update 읽기,
+  단일 루프라 atomic 불필요)이며 `lobbyLeaveRoom`/`enterInGame`에서 0으로 리셋(`stageVisualReady_`는
+  idempotent로 유지되므로, 재입장 시 게이트는 카운터 리셋으로만 다시 작동). `pendingStart_` 경로는 워밍업과
+  무관하게 오버레이를 유지한다.
 - **렌더 분기**: `renderLobby()`는 `WaitingRoom && stageVisualReady_`이면 `renderWaitingRoom()`(=
   `renderInGame()`의 3D 부분 최소 복제: skybox + terrain submit + `lobbyCamera_.updateGFX` +
   `dirLight_.render` + PBR/Terrain FrameData → UI 오버레이 → `gfx_.render()`), 아니면 UI-only.
@@ -165,6 +175,46 @@ hover/pressed는 엔진 틴트로 처리.
   트랙 해제 + shared_ptr 제거(재입장 시 재생성). `setupStageVisual`에서 `setMaxRenderObjectId`로 스킨드
   렌더 가시성 배열 확보.
 - 후속(선택): 캐릭터 턴테이블 회전, CSM 그림자, 이름표를 캐릭터에 정확 정렬(`worldToScreen`).
+
+### 작업 B-3 (구현됨) — 슬롯 캐릭터를 배경 카메라에서 분리(오프스크린 RT → UI 합성)
+B-2는 캐릭터를 배경 카메라(`lobbyCamera_`) 기준 월드 좌표에 놓아 sway 시 화면에 *대략* 고정되게
+하는 편법이라 슬롯 사각형에 정확히 정렬되지 않았다. B-3은 캐릭터 렌더링을 배경 카메라에서
+**완전히 분리**해 슬롯에 픽셀 단위로 정확히 들어가게 한다.
+- **오프스크린 포트레이트 RT**: `SharedResources::Portrait`(`sharedResources.hpp/.cpp`). 가로 아틀라스
+  1장(`kPortraitCellW × kMaxPortraitSlots` 폭 × `kPortraitCellH`)을 **roomIdx별(triple-buffer)** 로
+  생성. color(R8G8B8A8, RTV+bindless SRV) + depth(D32, DSV only, 미샘플). `transitionToWrite/Read`,
+  `clearPortraitRT`(투명 0,0,0,0). `GFX::initSharedResources`에서 생성. RTV heap 16→24, DSV heap 24→32 증설.
+- **포워드 스킨드로 렌더**: 배경은 기존대로 deferred로 backbuffer에, 캐릭터는 **포워드
+  `PBRSkinnedPipeline`**으로 포트레이트 RT 셀에 그린다(작은 RT에 GBuffer는 과함). 슬롯마다 전용
+  카메라/viewport로 `mainPass()`만 호출(`shadowPass` 미수행).
+- **그림자 off**: Dispatcher의 `mainDirectionalLight.cascadeCount=0`. 단 `pbrLighting.hlsli`의
+  `calcCSMShadow`/디버그 블록이 `cascadeCount - 1u` 언더플로를 일으키므로, 두 곳에 `cascadeCount==0`
+  early-return/가드를 추가했다. 포트레이트는 항상 일반 `PBRSkinnedShader` PSO 고정(디버그 토글 무시).
+- **직접광**: lightData가 비면 ambient만 받아 밋밋하므로 정면-상단 고정 키 라이트 1개를 공급
+  (`addLobbyPortraitLightData`). view-space 변환은 슬롯 카메라로 `mainUpdate`가 처리.
+- **슬롯별 전용 Resources**: `ShaderInputBuffer::stage()`가 같은 room 버퍼에 즉시 memcpy하므로 4슬롯이
+  Resources를 공유하면 프레임 내 덮어쓰기 발생 → `resourcesLobbyPortrait_[slot]` 분리. `Object::render`가
+  submesh마다 DrawEvent를 내고 boneData가 누적되므로 용량은 submesh 단위(`kMaxPortraitDrawEventsPerSlot`,
+  `kMaxPortraitBonesPerSlot`)로 산정. mainPass만 쓰므로 shadowPass 버퍼는 미init.
+- **GFX 채널**: `drawEventsLobbyPortrait_[slot]`/`cameraDataLobbyPortrait_[slot]`/`lightDataLobbyPortrait_`/
+  `mainDirectionalLightLobbyPortrait_`/`frameDataLobbyPortrait_`/`lobbyPortraitActive_` + API
+  (`addLobbyPortraitDrawEvent`/`setLobbyPortraitCamera`/`addLobbyPortraitLightData`/`addLobbyPortraitFrameData`/
+  `setLobbyPortraitActive`/`lobbyPortraitTextureForThisFrame`/`lobbyPortraitCellUvScaleBias`).
+- **render() 삽입 위치**: deferred lighting 이후 + UI 디스패치 이전. 활성(`lobbyPortraitActive_`) 동안
+  채워진 슬롯이 0개여도 clear+transitionToRead 수행(전 슬롯 비는 전환 프레임 잔상 방지). 인게임에선
+  비활성 → 패스 전체 스킵(비용 0). 패스 후 `lightDataLobbyPortrait_`/draw event clear(per-frame 누적 방지).
+- **UI 합성**: `slotBays_[i]`를 렌더 없는 `UIElement`에서 **`UI::Image`**로 전환. `UI::Image`에
+  `uvScaleBias`/`colorMul` 필드를 추가(`onRender`가 `UIPipeline::DrawEvent`로 전달)해, 아틀라스의 셀
+  sub-rect(`lobbyPortraitCellUvScaleBias`)를 샘플한다. 투명 배경 알파 블렌딩 → 뒤 3D맵 비침.
+  매 프레임 `renderWaitingRoom()`에서 `lobbyPortraitTextureForThisFrame()`(이번 프레임 room의 color SRV)로
+  텍스처를 갱신 → UI가 참조하는 SRV와 포트레이트 패스가 쓰는 room이 정합. 채워진 슬롯만 `visible=true`.
+- **캐릭터 배치**: 슬롯마다 독립 셀에 렌더되므로 모든 캐릭터를 원점·정면(+Z, 카메라가 +Z쪽)에 두고
+  동일 프레이밍 카메라(`lobbyPortraitCams_`, perspective aspect=cellW/cellH)를 쓴다. 프레이밍 튜닝값
+  (`lobbyPortraitCamDist_`/`CamHeight_`/`LookHeight_`/`FovYDeg_`)은 대기실 숫자키 1~6로 런타임 조정.
+- **제출 경로**: 기존 `Player::render`는 deferred로 라우팅되므로 재사용 불가. `Object::renderPortrait(gfx, slot)`
+  신설(스킨드 메시만, 컬링 무시) → 포워드 `PBRSkinnedPipeline::DrawEvent`를 포트레이트 채널로 제출.
+- **정리**: `clearLobbyCharacters()`(대기실 이탈/인게임 진입의 공통 chokepoint)에서 `setLobbyPortraitActive(false)`
+  + 슬롯 이미지 숨김/텍스처 해제. 포트레이트 RT는 공용 리소스로 상주(재입장 시 재사용).
 
 ## 후속(범위 밖)
 - 실제 룸 프로토콜 설계·연동 (현재 방 생성/참가/시작은 mock)
