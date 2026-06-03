@@ -89,7 +89,7 @@ step(dt)
 ## Joint Constraint 설계 원칙 (Phase 6)
 
 **공통 규약:**
-- `kJointBeta = 0.1f` (ContactConstraint의 `kBaumgarteBeta = 0.2f`보다 softer)
+- `kJointBeta = 0.1f` (joint 전용 velocity-level Baumgarte; ContactConstraint는 `kBaumgarteBeta = 0.2f` + `kSplitImpulseBeta = 0.3f` 조합으로 침투 회복)
 - kSlop 없음 — joint는 위치 오차가 0이어야 함
 - 모든 joint에 warmstart (`accImpulse` 누적값 유지)
 - row-vector convention: `K_ij = (invMA+invMB)*δij + dot(rA×ei, (rA×ej)*iA) + dot(rB×ei, (rB×ej)*iB)`
@@ -128,7 +128,7 @@ static constexpr float angularCFM = 1e-2f;  // 각 angular DOF effMass 분모에
 - `linearCFM`: `build3x3EffMassInv()` 내부에서 `k00 += linearCFM`, `k11 += linearCFM`, `k22 += linearCFM`
 - `angularCFM`: `cache_.angEffMass[i] = 1.f / (contribA + contribB + angularCFM)`
 
-ContactConstraint는 별도 CFM을 사용하지 않는다 (contact는 Baumgarte bias로만 제어).
+ContactConstraint는 별도 CFM을 사용하지 않는다. contact 침투는 velocity-level Baumgarte(`kBaumgarteBeta=0.2`, body-body 한정·부드러운 분산 보정)와 position-level split impulse(`kSplitImpulseBeta=0.3`, 에너지 중립·튐 방지)의 **조합**으로 회복한다. 외력(중력) 보상 extComp는 **두 채널에 분배**된다(`kExtCompVelFrac`로 velocity:split 비율 결정).
 
 ---
 
@@ -197,7 +197,20 @@ static constexpr float kAngBeta   = 0.025f; // angular velocity-level (conservat
 static constexpr float kSplitBeta = 0.3f;   // position-level (split impulse)
 ```
 
-ContactConstraint의 `solvePosition()`은 no-op — contact는 Baumgarte + 외력 보상으로만 처리.
+ContactConstraint의 침투 회복은 **Baumgarte + split impulse 조합**이다.
+- velocity-level Baumgarte (`bias = kBaumgarteBeta(0.2) * invDt * penetration`): 실제 분리속도를
+  주입해 침투를 여러 프레임에 걸쳐 부드럽게 빼낸다(팝 없음, 약간의 과분리 가능). **body-body 한정**
+  — terrain은 0(주입 속도가 지면을 잠깐 이탈시켜 진동 유발).
+- position-level split impulse (`solvePosition()`, `pseudoBias = kSplitImpulseBeta(0.3) * invDt * penetration + extCompSplit`):
+  pseudo-velocity로 위치만 보정, 에너지 중립. 높은 beta는 한 step에 침투를 즉시 스냅해 깊은 침투에서
+  "튀어 보임" → 0.3으로 낮추고 Baumgarte가 나머지를 부드럽게 분산.
+- **외력(중력) 보상 extComp는 두 채널에 분배된다**: `extCompVel = kExtCompVelFrac·extComp`(velocity bias),
+  `extCompSplit = extComp − extCompVel`(split). 둘 다 외력을 고려하되 합이 정확히 extComp라 integrate의
+  중력 sink와 상쇄되어 정지 body가 가라앉지도 떠오르지도 않는다. **full extComp를 양쪽에 두면 금지**(중력
+  이중 보상 → body가 천천히 부양). 어떤 비율이든 sink 상쇄는 성립한다(velocity 몫은 실제 속도, split 몫은 에너지 중립).
+
+**튜닝:** `kBaumgarteBeta`:`kSplitImpulseBeta` 비율로 부드러움↔단단함을 조절. 팝이 거슬리면 split↓,
+침투가 남으면 split↑ 또는 Baumgarte↑. 과거 split-only(0/0.8)는 너무 튀었고, Baumgarte-only는 침투 잔류.
 
 ---
 
@@ -291,6 +304,21 @@ const float sign = (dProj >= 0.f) ? -1.f : 1.f;
 **결과:** `res.normal`이 신뢰 가능해져 `generateContacts()`가 기하학적 normal을 직접 사용.
 두 오브젝트가 옆으로 접촉 시 normal이 수평 → 수평 해소.
 
+### 캐릭터-캐릭터 접촉 법선 수평화 (수직 발사 방지)
+
+**문제:** 두 직립 캐릭터의 BVH(뼈 박스)가 서로 다른 높이에서 닿으면 narrow-phase 법선에 +Y 성분이
+생긴다. body-body Baumgarte(`kBaumgarteBeta`)는 그 법선을 따라 **실제 분리속도**를 주입하므로,
++Y 성분만큼 캐릭터가 **위로 발사**된다(실제 속도라 지속 → 튀어오름). split impulse beta를 낮춰
+침투가 더 오래 남으면 발사 창이 길어져 악화된다.
+
+**수정 (`physicsWorld.cpp generateContacts()` body-body 루프):** 양쪽 모두 Static이 아닌 쌍(에이전트끼리
+= Dynamic/Kinematic)이면 법선을 **수평면에 투영**(`n = normalize(n.x, 0, n.z)`)하고 침투도 수평 성분으로
+스케일(`depth *= horizLen`). 거의 수직인 법선(드묾)은 수평 center-to-center로 fallback. **Static(거점)이
+포함된 쌍은 원래 법선 유지** → 막힘·올라타기 보존. 지형은 별도 경로(body-terrain)라 영향 없음.
+
+**근거:** 직립 캐릭터는 측면 충돌로 수직 속도를 얻으면 안 된다. 기존 '플레이어 간 XZ-only soft
+separation' 철학과 일치. (Dynamic↔Dynamic=standalone 캐릭터, Dynamic↔Kinematic=온라인 로컬 플레이어↔고블린 모두 적용.)
+
 ---
 
 ## ContactConstraint 외력 보상 (External Force Compensation)
@@ -307,8 +335,16 @@ const float sign = (dProj >= 0.f) ? -1.f : 1.f;
 penetration = max(0, depth - kSlop)
 extVelProj  = dot((extAccelA - extAccelB) * dt, n)
 extComp     = max(0, -extVelProj)
-bias = kBaumgarteBeta * invDt * penetration + extComp
+extCompVel   = kExtCompVelFrac * extComp        // velocity 몫
+extCompSplit = extComp - extCompVel             // split 몫 (합 = extComp)
+bias       = kBaumgarteBeta * invDt * penetration + extCompVel        // velocity-level (Baumgarte는 body-body만)
+pseudoBias = kSplitImpulseBeta * invDt * penetration + extCompSplit   // position-level
 ```
+
+**주의:** extComp(외력/중력 보상)는 **두 채널에 나눠** 싣는다(`kExtCompVelFrac` 비율). 둘 다 외력을 고려하되
+합이 정확히 extComp여야 한다 — full extComp를 velocity·split **양쪽에 두면 중력이 이중 보상**되어, integrate
+단계의 중력 sink(`g·subDt²`, 한 번)가 두 번 상쇄되며 body가 천천히 부양한다. 분배 시에는 어떤 비율이든
+sink와 정확히 상쇄되어 creep도 부양도 없다(velocity 몫은 실제 분리속도, split 몫은 에너지 중립 위치 보정).
 
 **두 동적 오브젝트(같은 중력):** `extAccelA - extAccelB = 0` → `extComp = 0` (보상 없음, 올바름)
 **동적 vs 지형(static):** `extAccelA = gravity, extAccelB = 0` → `extComp = max(0, -dot(gravity*dt, n))` → 양수 → 중력 보상
@@ -439,17 +475,26 @@ Dynamic body integrate 시 linear damping을 축별로 분리 적용한다.
 
 ```
 x/z (수평): linearDamping  → 지면 마찰 (캐릭터: 12)
-y   (수직): kAirDamping    → 공기 저항 (physicsWorld.cpp 상단 상수, 현재 0.5f)
+y   (수직): kAirDamping    → 공기 저항 (physicsWorld.cpp 상단 상수, 현재 0.15f)
 ```
 
 - **이유**: `linearDamping`은 수평 이동의 지면 마찰로 설계된 값(12)이다.
   이를 y축에도 적용하면 종단 속도 = 9.8 / 12 ≈ 0.82 m/s로 낙하가 거의 정지 수준이 된다.
-- `kAirDamping = 0.5f` → 종단 속도 ≈ 19.6 m/s (게임 스케일에서 적절)
-- 값 조정: `terminal_fall_vel = gravity / kAirDamping`
+- `kAirDamping = 0.15f` → 종단 속도 ≈ 65 m/s, 시상수 τ = 1/0.15 ≈ 6.7s.
+- **낙하 체감과 substepping (중요):** y축 점화식 `v' = v·(1−c·dt) + g·dt`의 종단속도
+  `g/c`는 substep 수에 **완전히 불변**이다(damping의 step당 배수 `(1−c·h/n)^n`은
+  n 증가 시 `e^(−c·h)`로 수렴하므로 substep이 많을수록 오히려 damping이 *덜* 걸림).
+  과거 `kAirDamping=0.5`(종단 19.6 m/s, τ=2s)는 체감 낙하 구간(0~2s)을 통째로 깎아
+  "느리게 떨어진다"의 원인이었다 — substepping 누적이 아니라 드래그 계수 자체가 문제.
+  0.15로 낮추면 1s에 ≈9.1 m/s(현실 9.8의 93%), 2s에 ≈16.9 m/s(86%)로 초반 낙하가
+  현실 `g·t`에 근접한다. 대부분의 게임 낙하(1~3m)는 종단 근처에 도달하지 않는다.
+- 값 조정: `terminal_fall_vel = gravity / kAirDamping` (합리적 밴드 0.12~0.2 → 종단 49~82 m/s)
+- **서버 동기:** `RoomServer/physicsWorld.cpp`의 `kAirDamping`과 반드시 동일해야 한다
+  (온라인은 서버 권위 + 클라 예측이므로 불일치 시 러버밴딩 발생).
 
 ---
 
-## processInput 속도 처리 원칙 (`standalone/game.cpp`)
+## processInput 속도 처리 원칙 (`standalone/game.cpp`, `online/onlineGame.cpp`)
 
 입력으로 인한 가속과 속도 클램프는 **x/z 수평 성분에만** 적용한다.
 
@@ -463,7 +508,15 @@ if (hSpd2 > kPlayerMaxSpeed²) { newX *= scale; newZ *= scale; }
 player_->setVelocity(mu::Vec3(newX, fullVel.y(), newZ));
 ```
 
-- **이유**: 낙하 중 y 속도가 크면 3D 속도 크기 기준 클램프 시 x/z가 의도치 않게 줄어듦.
+- **이유**: y는 물리 엔진(중력·`kAirDamping`)만 담당한다. 낙하 중 y 속도가 크면
+  3D 속도 크기 기준으로 클램프할 때 (1) x/z가 의도치 않게 줄어들고, (2) **물리가
+  적분한 y 낙하 속도가 매 프레임 `kPlayerMaxSpeed`(수평 상한) 안으로 재스케일되어
+  물리 damping과 별개로 낙하가 한 번 더 감속된다(이중 감속).**
+- **standalone/online 동일 규칙(필수):** `standalone/game.cpp::processInput`과
+  `online/onlineGame.cpp::processInputGame`은 반드시 같은 x/z-only 모델이어야 한다.
+  과거 online은 구버전 전체-3D-속도 클램프(`vel*=kPlayerMaxSpeed/vel.len()`)가 남아
+  있어, 온라인 낙하만 standalone보다 느리게 체감됐다 (2026-06-04 수정). 로컬 플레이어는
+  클라 권위 예측이므로 클라 쪽 입력 처리 불일치가 곧 체감 차이로 직결된다.
 
 ---
 

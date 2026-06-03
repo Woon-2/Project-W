@@ -4,8 +4,10 @@
 
 // 수직(y축) 공기 저항 계수. linearDamping은 수평 지면 마찰에 사용되므로
 // y축에는 별도의 작은 값을 적용한다.
-// 종단 속도 = gravity / kAirDamping (예: 9.8 / 0.5 ≈ 19.6 m/s)
-static constexpr float kAirDamping = 0.5f;
+// 종단 속도 = gravity / kAirDamping (예: 9.8 / 0.15 ≈ 65 m/s).
+// 값이 작을수록 종단 속도가 커지고 시상수(τ = 1/kAirDamping)도 길어져
+// 낙하 초반(체감 구간)이 현실의 자유낙하 g·t에 가까워진다.
+static constexpr float kAirDamping = 0.15f;
 
 PhysicsWorld::PhysicsWorld()
     : broadPhase_(std::make_unique<SAPBroadPhase>())
@@ -306,10 +308,32 @@ void PhysicsWorld::generateContacts()
                 : mu::NVec3(0.f, 1.f, 0.f, mu::NVec3::NoNormalize_t{});
         }
 
+        // Character-character separation is horizontal-only. Baumgarte injects REAL
+        // separating velocity along the contact normal, so a +Y-tilted normal (two
+        // upright characters whose bone-boxes touch at different heights) launches
+        // them upward. Project the normal and penetration onto the horizontal plane
+        // for non-Static pairs (agents). Static obstacles (stronghold) keep their true
+        // normal so bodies are blocked by / rest on them. Terrain is a separate path.
+        float depth = res.depth;
+        if (a->motionType() != MotionType::Static && b->motionType() != MotionType::Static) {
+            const mu::Vec3 n3 = mu::Vec3(normal);
+            const mu::Vec3 horiz(n3.x(), 0.f, n3.z());
+            const float horizLen = horiz.len();
+            if (horizLen > 1e-3f) {
+                normal = mu::normalize(horiz);
+                depth *= horizLen;            // horizontal component of the MTV
+            } else {
+                // Near-vertical normal (rare): use horizontal center-to-center.
+                const mu::Vec3 sepXZ(a->pos().x() - b->pos().x(), 0.f, a->pos().z() - b->pos().z());
+                if (sepXZ.len2() > 1e-6f)
+                    normal = mu::normalize(sepXZ);
+            }
+        }
+
         ContactPoint cp;
         cp.worldPos = res.contactPoint;
         cp.normal   = normal;
-        cp.depth    = res.depth;
+        cp.depth    = depth;
         cp.localA   = res.contactPoint - a->pos();
         cp.localB   = res.contactPoint - b->pos();
         cc->addContact(cp);

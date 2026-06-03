@@ -3806,12 +3806,23 @@ void Game::processInputGame(Milliseconds deltaTime) {
 			static_cast<float>(moveXSign) * player_->right() + static_cast<float>(moveZSign) * player_->forward()
 		);
 
-		// 입력 방향으로 가속. 최대 속력 초과분은 클램프한다.
-		auto vel = player_->velocity() + mu::Vec3(moveDirection) * (kPlayerAccelRate * Seconds(deltaTime).count());
-		if (vel.len2() > kPlayerMaxSpeed * kPlayerMaxSpeed) {
-			vel = vel * (kPlayerMaxSpeed / vel.len());
+		// x/z 방향으로만 가속. y(중력)는 물리 엔진이 담당한다.
+		// (구버전은 전체 3D 속도를 kPlayerMaxSpeed로 클램프해, 이동 중 낙하 시
+		//  물리가 적분한 y속도까지 매 프레임 재스케일 → 물리 damping과 이중으로 감속됐다.
+		//  standalone Game::processInput과 동일하게 y를 보존한다.)
+		const auto fullVel = player_->velocity();
+		const auto accel   = mu::Vec3(moveDirection) * (kPlayerAccelRate * Seconds(deltaTime).count());
+		float newX = fullVel.x() + accel.x();
+		float newZ = fullVel.z() + accel.z();
+
+		// x/z 속도만 클램프 (y는 건드리지 않음).
+		const float hSpd2 = newX * newX + newZ * newZ;
+		if (hSpd2 > kPlayerMaxSpeed * kPlayerMaxSpeed) {
+			const float scale = kPlayerMaxSpeed / std::sqrt(hSpd2);
+			newX *= scale;
+			newZ *= scale;
 		}
-		player_->setVelocity(vel);
+		player_->setVelocity(mu::Vec3(newX, fullVel.y(), newZ));
 	}
 
 	currVelocity_ = player_->velocity();

@@ -82,8 +82,13 @@ void ContactConstraint::prepare(Seconds dt)
         const float extVelProj   = mu::dot((externalAccelA_ - externalAccelB_) * dtf, n);
         const float extComp      = std::max(0.f, -extVelProj);
         const float baumgarteBeta = isTerrainContact_ ? 0.f : kBaumgarteBeta;
-        c.bias             = baumgarteBeta * invDt * penetration + extComp;
-        c.pseudoBias       = kSplitImpulseBeta * invDt * penetration;
+        // External-force (gravity) compensation is split across BOTH channels so each
+        // is gravity-aware, while the total stays exactly extComp (no double-comp float).
+        // The integrate-step sink and the combined push cancel: no creep, no float.
+        const float extCompVel   = kExtCompVelFrac * extComp;
+        const float extCompSplit = extComp - extCompVel;
+        c.bias             = baumgarteBeta * invDt * penetration + extCompVel;
+        c.pseudoBias       = kSplitImpulseBeta * invDt * penetration + extCompSplit;
         c.accNormalPseudo  = 0.f;
     }
 }
