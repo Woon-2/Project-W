@@ -165,6 +165,20 @@ void PhysicsWorld::step(Seconds dt)
         generateContacts();
         solveConstraints(subDt);
         for (auto& e : entries_) e.body->applyPseudoVelocity(subDt);
+
+        // Static contacts get the final word on position: resolved after the
+        // dynamic-dynamic solver so a body squeezed against a wall still ends up
+        // outside it. resolveStaticPenetration() writes curr_.pos directly, so
+        // the BVH built during integrate() is stale for moved bodies; rebuild
+        // only those (dirty set) so the next sub-step's narrow phase sees the
+        // corrected pose.
+        movedByStaticDepen_.clear();
+        resolveStaticPenetration(staticContacts_, movedByStaticDepen_);
+        for (RigidBody* b : movedByStaticDepen_) {
+            auto it = std::ranges::find(entries_, b, &Entry::body);
+            if (it != entries_.end() && it->onRebuildBVH)
+                it->onRebuildBVH();
+        }
     }
 }
 
@@ -265,6 +279,7 @@ void PhysicsWorld::generateContacts()
 {
     // Discard contacts from the previous step.
     contactConstraints_.clear();
+    staticContacts_.clear();
 
     broadPhase_->update();
     const auto pairs = broadPhase_->queryPairs();
@@ -294,6 +309,46 @@ void PhysicsWorld::generateContacts()
 
         const CollisionResult res = collides(bvhA, bvhB);
         if (!res.hit) continue;
+
+        // Static-Dynamic / Static-Kinematic: route to the lightweight
+        // depenetration path instead of the ContactConstraint solver. Static's
+        // infinite mass makes the impulse solver wasteful and prone to spurious
+        // spin / launch; positional depenetration pushes the movable body out by
+        // the penetration amount only. (Static-Static is already filtered by the
+        // broad phase, so this branch sees exactly one static body.)
+        const bool aStatic = a->motionType() == MotionType::Static;
+        const bool bStatic = b->motionType() == MotionType::Static;
+        if (aStatic != bStatic) {
+            RigidBody* movable    = aStatic ? b : a;
+            RigidBody* staticBody = aStatic ? a : b;
+
+            // Normal points static -> movable (push-out). res.normal is B->A;
+            // it already points static->movable when movable==a, and must be
+            // flipped when movable==b. Fall back to center-to-center only when
+            // the narrow-phase normal is degenerate.
+            mu::NVec3 n = res.normal;
+            if (mu::Vec3(n).len2() < 0.5f) {
+                const mu::Vec3 sep = movable->pos() - staticBody->pos();
+                n = (sep.len2() > 1e-6f)
+                    ? mu::normalize(sep)
+                    : mu::NVec3(0.f, 1.f, 0.f, mu::NVec3::NoNormalize_t{});
+            } else if (movable == b) {
+                // Negate in place; already unit length, so skip re-normalization.
+                n = mu::NVec3(-mu::Vec3(n), mu::NVec3::NoNormalize_t{});
+            }
+
+            StaticContact sc;
+            sc.movable    = movable;
+            sc.staticBody = staticBody;
+            ContactPoint cp;
+            cp.worldPos = res.contactPoint;
+            cp.normal   = n;            // static -> movable
+            cp.depth    = res.depth;
+            cp.localA   = res.contactPoint - movable->pos();
+            sc.addContact(cp);
+            staticContacts_.push_back(std::move(sc));
+            continue;                   // do NOT build a ContactConstraint
+        }
 
         auto cc = std::make_unique<ContactConstraint>(a, b);
 

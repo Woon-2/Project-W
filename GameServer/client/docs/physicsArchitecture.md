@@ -15,7 +15,8 @@ PhysicsWorld
  ├─ SAPBroadPhase cameraBroadPhase_// 카메라 장애물 전용 독립 broad phase
  ├─ std::optional<TerrainCollider> // 지형 충돌 (BroadPhase 우회)
  ├─ const TerrainHeightField* terrainHF_  // queryCameraArm 지형 샘플링용
- ├─ std::vector<ContactConstraint> // 매 step 재생성
+ ├─ std::vector<ContactConstraint> // 매 step 재생성 (Dynamic-Dynamic + Terrain)
+ ├─ std::vector<StaticContact>     // 매 step 재생성 (Static-Dynamic/Static-Kinematic depenetration)
  ├─ std::vector<unique_ptr<Constraint>> jointConstraints_  // 소유 joint (독립 사용)
  └─ std::vector<Constraint*>       jointRefs_              // 비소유 ref (Ragdoll용)
 
@@ -65,9 +66,11 @@ step(dt)
         ├─ generateContacts()
         │   ├─ broadPhase_->update() + queryPairs()
         │   ├─ collides(bvhA, bvhB) → leaf-leaf 쌍에서만 정밀 판정
-        │   ├─ ContactConstraint 생성 (법선 = res.normal; degenerate 시 center-to-center fallback)
+        │   ├─ static 포함 쌍(aStatic != bStatic): StaticContact로 라우팅 후 continue (ContactConstraint 미생성)
+        │   │   └─ 법선을 static→movable로 정규화 (res.normal B→A; movable==b면 부호 반전, degenerate 시 center-to-center)
+        │   ├─ Dynamic-Dynamic: ContactConstraint 생성 (법선 = res.normal; degenerate 시 center-to-center fallback)
         │   │   └─ cc->setExternalAccels(gravA, gravB): Dynamic=gravity_, Static=(0,0,0)
-        │   └─ TerrainCollider::generateContacts() → Dynamic body별 지형 contact
+        │   └─ TerrainCollider::generateContacts() → Dynamic body별 지형 contact (기존 경로 유지)
         │       └─ cc->setExternalAccels(gravity_, {0,0,0})
         ├─ solveConstraints(subDt)
         │   ├─ prepare(subDt) : rA/rB, tangent frame, effMass, Baumgarte bias 계산
@@ -79,7 +82,9 @@ step(dt)
         │   ├─ position solve × positionSolveIterations_ (기본 3)
         │   │   └─ joint solvePosition() — split impulse (pseudoBias/pseudoAccImpulse)
         │   └─ warmstart 저장 (accImpulse)
-        └─ applyPseudoVelocity(subDt) — split impulse 결과를 위치에 적분
+        ├─ applyPseudoVelocity(subDt) — split impulse 결과를 위치에 적분
+        └─ resolveStaticPenetration(staticContacts_, moved) — static 침투 해소 (마지막, 위치 최종 결정권)
+            └─ 직접 이동한 body만 onRebuildBVH 재호출 (dirty set; 다음 sub-step narrow phase가 보정 위치를 봄)
 ```
 
 > Phase 4(TerrainCollider) 완료로 중력이 활성화됨. (`physicsWorld.cpp` integrate)
@@ -318,6 +323,50 @@ const float sign = (dProj >= 0.f) ? -1.f : 1.f;
 
 **근거:** 직립 캐릭터는 측면 충돌로 수직 속도를 얻으면 안 된다. 기존 '플레이어 간 XZ-only soft
 separation' 철학과 일치. (Dynamic↔Dynamic=standalone 캐릭터, Dynamic↔Kinematic=온라인 로컬 플레이어↔고블린 모두 적용.)
+
+---
+
+## Static-Object Depenetration (Static 충돌 전용 경로)
+
+**파일:** `staticDepenetration.hpp/cpp` · `StaticContact` + `resolveStaticPenetration()`
+
+**문제:** Static이 포함된 충돌(Static-Dynamic, Static-Kinematic)을 ContactConstraint(velocity-level
+sequential impulse) solver로 처리하면 두 가지 결함이 있다.
+1. **불필요한 계산 과다** — 무한 질량 벽과의 단순 침투 해소에 PGS velocity 반복 + warmstart + friction +
+   각 impulse는 과하다.
+2. **무한 질량으로 인한 잘못된 결과** — 접촉점이 COM에서 벗어나면 `r×n` 토크 항이 잘못된 회전(spin)을
+   유발하고, Baumgarte bias가 실제 분리속도를 주입해 물체가 튕겨나간다.
+3. **(숨은 버그) Kinematic은 invMass()==0** → Static-Kinematic 쌍은 양쪽 invMass=0 → `effMass=1/0=inf`,
+   impulse 가드(`invMass>0`)에 막혀 무효. split impulse도 `applyPseudoVelocity`가 Kinematic을 건너뜀 →
+   **온라인 원격 플레이어·고블린(Kinematic)이 거점(Static)을 그대로 통과**했다.
+
+**설계 (AAA character-controller depenetration):** static 포함 쌍은 `generateContacts()`에서
+`StaticContact`로 라우팅하고 즉시 `continue`(ContactConstraint 미생성). `step()` 말미(solve +
+applyPseudoVelocity 이후)에 `resolveStaticPenetration()`이 일괄 해소한다.
+- **위치 보정:** movable body를 normal(static→movable) 방향으로 침투분만 밀어냄.
+  `d = min(kCorrectFrac * (depth - kSlop), kMaxCorrect)`. **COM 평행이동만 — 회전 미적용**(spin 제거).
+  static은 절대 안 움직임. movable별로 normal 축에 **max-combine** 누적 → 코너(다중 static)에서 공유
+  축 과보정 없이 양쪽 벽 밖으로 분리.
+- **속도 처리:** surface로 파고드는 inward normal 성분만 제거(`vn<0`일 때 `v -= n*vn`, restitution=0).
+  tangential(미끄러짐) 보존, **분리속도 주입 없음** → 정착 시 진동 없음.
+- **Kinematic 직접 이동:** `setPos`/`setLinearVel`은 invMass 무관하게 `curr_`에 기록 → impulse solver를
+  쓰지 않으므로 Kinematic도 정상적으로 밀려난다. (invMass 가드는 impulse solver 전용; 의미 불변.)
+- **BVH 재동기화:** 직접 `curr_.pos`를 쓰므로 integrate 시 만든 BVH가 stale. 이동된 body(dirty set)만
+  `onRebuildBVH` 재호출 → 다음 sub-step narrow phase가 보정 위치를 본다.
+
+**진동 방지 파라미터 근거:**
+| param | 값 | 근거 |
+|---|---|---|
+| `kSlop` | 0.005m | sub-slop 침투에서 정착시켜 push/낙하 재검출 진동 제거. `ContactConstraint::kSlop`과 일치 |
+| `kCorrectFrac` | 0.8/substep | full 보정은 overshoot→재침투→buzz. 부분 보정으로 기하급수 수렴+oscillation 감쇠 (Baraff/Catto) |
+| `kMaxCorrect` | 0.2m/substep | 깊은 터널링 시 순간이동 방지, 몇 substep에 걸쳐 완만히 해소 |
+
+**순서 근거:** dynamic-dynamic solver 이후 마지막에 실행 → static 벽이 위치의 최종 결정권을 가져,
+다른 dynamic body에 눌린 body도 벽 밖으로 나간다.
+
+**적용 범위:** broad phase에 RigidBody로 등록된 일반 static body(거점 등)만. **Terrain은 검증된 기존
+`TerrainCollider` 경로(split-impulse only, Baumgarte off)를 그대로 유지** — 지형은 height-field 정점
+샘플링+강제 Y-up 법선이라 경로가 다르고, 가장 눈에 띄는 지면 동작의 회귀 위험을 피한다.
 
 ---
 

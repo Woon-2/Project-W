@@ -4,6 +4,7 @@
 #include "rigidBody.hpp"
 #include "constraint.hpp"
 #include "contactConstraint.hpp"
+#include "staticDepenetration.hpp"
 #include "broadPhase.hpp"
 #include "collision.hpp"
 #include <functional>
@@ -139,6 +140,13 @@ private:
 
     // Per-step contact constraints (rebuilt every step).
     std::vector<std::unique_ptr<ContactConstraint>> contactConstraints_;
+
+    // Per-step static depenetration records (Static-Dynamic / Static-Kinematic).
+    // These bypass the ContactConstraint solver (see staticDepenetration.hpp).
+    // movedByStaticDepen_ is the dirty set of bodies whose position was written
+    // directly by resolveStaticPenetration(), needing a BVH rebuild afterward.
+    std::vector<StaticContact>                  staticContacts_;
+    std::vector<RigidBody*>                     movedByStaticDepen_;
 
     // Owned persistent constraints (added via addJointConstraint).
     std::vector<std::unique_ptr<Constraint>>    jointConstraints_;

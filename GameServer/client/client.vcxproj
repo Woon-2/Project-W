@@ -185,6 +185,7 @@
     <ClCompile Include="broadPhase.cpp" />
     <ClCompile Include="collision.cpp" />
     <ClCompile Include="contactConstraint.cpp" />
+    <ClCompile Include="staticDepenetration.cpp" />
     <ClCompile Include="crosshair.cpp" />
     <ClCompile Include="d3dx12\src\d3dx12_property_format_table.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
@@ -286,6 +287,7 @@
     <ClInclude Include="collision.hpp" />
     <ClInclude Include="constraint.hpp" />
     <ClInclude Include="contactConstraint.hpp" />
+    <ClInclude Include="staticDepenetration.hpp" />
     <ClInclude Include="concurrentqueue.h" />
     <ClInclude Include="crosshair.hpp" />
     <ClInclude Include="d3dx12\include\directx\d3d12.h" />
