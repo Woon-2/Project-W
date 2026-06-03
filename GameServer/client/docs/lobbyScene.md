@@ -130,10 +130,25 @@ hover/pressed는 엔진 틴트로 처리.
   `slotHostBadgeLabels_`. `slotBays_[i]`는 렌더 없는 `UIElement`로 **B-2에서 3D 캐릭터를 투영할 화면
   사각형**(`resolvedRect_`)을 제공한다.
 
-### 작업 B-2 (후속, 미구현)
-- 슬롯별 3D 캐릭터 모델(`assetManager_.modelPlayer()` 재사용) + `AnimBlenderPlayer` IDLE 애니메이션
-  (`setAnimBlender(animSystem_, ...)` + `animSystem_.update()`). 캐릭터를 슬롯 컬럼(`slotBays_`)에 투영
-  되도록 배치(고정 카메라 + worldToScreen). 선택: 캐릭터 턴테이블 회전, CSM 그림자.
+### 작업 B-2 (구현됨) — 슬롯별 3D 캐릭터 + IDLE
+- **카메라**(B-1 보정): `stageFocus_` 자동 계산 대신 standalone에서 잡은 **쇼케이스 위치(baseEye/baseAt)
+  하드코딩 + 느린 좌우 sway 패닝**(`lobbyCameraTime_`). 스폰 평균점은 지면 높이가 0으로 잡혀 부정확해
+  실제 보기 좋은 뷰를 직접 고정함.
+- **전시 캐릭터**: `lobbyChars_`(최대 4, `Player`, **물리 없음**). `setupLobbyCharacters()`가
+  모델/애니메이션/고유 `renderObjectId`(0..3 고정)를 준비하고, `updateLobbyCharacterTransforms()`가 배치한다.
+- **카메라-고정 배치(sway 대응)**: 캐릭터 XZ를 **`lobbyCamera_.eye()` 기준 카메라 공간**(eye + forward·standDist
+  + right·lateral)으로 잡는다. 배경 sway 시 eye가 가장 크게 움직이므로, eye 기준으로 두면 캐릭터가 카메라와
+  함께 이동해 **화면 슬롯 위치/정면이 고정**되고 월드 고정인 지형/스카이박스만 패럴랙스로 흐른다. (at 기준으로
+  잡으면 eye만큼 안 따라가 캐릭터가 좌우로 흔들려 얼굴이 프레임 안팎으로 드나든다.) Y는 시선 높이(`at.y`)로
+  안정화(스트리밍 타이밍 무관). 각 캐릭터는 매 프레임 `eye`를 향하도록 yaw(`NQuat` (roll,pitch,yaw)).
+  `standDist`/`spacing`/`footOffset` 튜닝.
+- **루프**: `LobbyScene`에서 최초 진입 시 생성(`lobbyChars_.empty()`), 이후 **매 프레임**
+  `updateLobbyCharacterTransforms()`(화면 슬롯 고정) → `ch->update(dt,1.f)`(idle 선택/월드행렬) →
+  `animSystem_.update(0.01s)`(본 행렬). `renderWaitingRoom`에서 **채워진 슬롯 수만큼만** `ch->render(gfx_)`.
+- **정리(누수 방지)**: `lobbyLeaveRoom`/`enterInGame`에서 `clearLobbyCharacters()`로 `animSystem_`
+  트랙 해제 + shared_ptr 제거(재입장 시 재생성). `setupStageVisual`에서 `setMaxRenderObjectId`로 스킨드
+  렌더 가시성 배열 확보.
+- 후속(선택): 캐릭터 턴테이블 회전, CSM 그림자, 이름표를 캐릭터에 정확 정렬(`worldToScreen`).
 
 ## 후속(범위 밖)
 - 실제 룸 프로토콜 설계·연동 (현재 방 생성/참가/시작은 mock)

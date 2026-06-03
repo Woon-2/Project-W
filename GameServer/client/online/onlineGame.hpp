@@ -110,6 +110,9 @@ private:
 	void LobbyScene(Milliseconds deltaTime);
 	void renderLobby();
 	void renderWaitingRoom();   // 대기실: 3D 맵 배경 + 반투명 UI 오버레이
+	void setupLobbyCharacters();   // 대기실 전시 캐릭터 생성(무대 위 일렬)
+	void updateLobbyCharacterTransforms();   // 카메라 sway 중에도 화면 슬롯 위치 유지
+	void clearLobbyCharacters();   // 전시 캐릭터 제거 + animSystem 트랙 해제
 	void InGameScene(Milliseconds deltaTime);
 	void renderInGame();
 
@@ -337,13 +340,12 @@ private:
 	UI::Label*     mainMenuMsgLabel_= nullptr;
 	UI::Label*     roomCodeLabel_   = nullptr;
 	UI::Label*     playerCountLabel_= nullptr;
-	// 스쿼드 스테이지 슬롯(4칸). slotBays_는 B-2에서 3D 캐릭터를 투영할 화면 사각형 제공.
-	std::array<UI::Button*,    kMaxLobbyPlayers> slotPanels_{};        // 슬롯 컬럼 프레임(반투명)
+	// 스쿼드 스테이지 슬롯(4칸). 반투명 배경은 제거하고 번호/이름/뱃지 텍스트만 유지.
 	std::array<UI::UIElement*, kMaxLobbyPlayers> slotBays_{};          // 모델 베이(rect만 사용)
 	std::array<UI::Label*,     kMaxLobbyPlayers> slotNumberLabels_{};  // "01".."04"
-	std::array<UI::Button*,    kMaxLobbyPlayers> slotNameplateBgs_{};  // 이름표 배경(반투명)
 	std::array<UI::Label*,     kMaxLobbyPlayers> slotNameLabels_{};    // 플레이어 이름
 	std::array<UI::Label*,     kMaxLobbyPlayers> slotHostBadgeLabels_{};
+	std::array<std::array<UI::Button*, 4>, kMaxLobbyPlayers> slotNameBorders_{};  // 호스트 이름 사각 테두리(상/하/좌/우)
 	UI::Button*    startGameButton_ = nullptr;
 	UI::Label*     startGameLabel_  = nullptr;
 	UI::Button*    waitMessageBg_   = nullptr;
@@ -355,7 +357,11 @@ private:
 	bool   stageVisualReady_ = false;
 	std::vector<mu::Vec3> stageSpawnPositions_{};  // level.bin PlayerStart 노드 위치
 	mu::Vec3 stageFocus_{};                         // 대기실 카메라 포커스(스폰 중심, 지형 높이)
-	bool     lobby3DDiagLogged_ = false;            // 대기실 3D 진단 로그 1회용(임시)
+	std::vector<std::shared_ptr<Player>> lobbyChars_{};  // 대기실 전시 캐릭터(물리 없음, idle)
+	// 전시 캐릭터 배치 튜닝값(대기실에서 키로 런타임 조정 가능).
+	float lobbyCharStandDist_  = 4.0f;   // 카메라 앞 거리
+	float lobbyCharSpacing_    = 1.5f;   // 좌우 슬롯 간격
+	float lobbyCharFootOffset_ = -1.3f;  // 발 높이 오프셋
 };
 
 }	// namespace Online

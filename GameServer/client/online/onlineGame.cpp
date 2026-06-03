@@ -132,17 +132,73 @@ void Game::setupStageVisual() {
 		stageFocus_ = chunkManager_.worldCenter();
 	}
 
-	// [임시 진단] 3D 배경이 안 보이는 원인 추적용 로그.
-	const auto* cube = assetManager_.modelCube();
-	const mu::Vec3 wc = chunkManager_.worldCenter();
-	gSharedLog << "[Lobby3D] setupStageVisual: spawns=" << stageSpawnPositions_.size()
-	           << " focus=(" << stageFocus_.x() << ", " << stageFocus_.y() << ", " << stageFocus_.z() << ")"
-	           << " worldCenter=(" << wc.x() << ", " << wc.y() << ", " << wc.z() << ")"
-	           << " chunkEmpty=" << (chunkManager_.empty() ? 1 : 0)
-	           << " cubeMeshes=" << (cube ? cube->meshWithDressXforms.size() : 0)
-	           << "\n";
+	// 전시 캐릭터(스킨드)의 renderObjectId 인덱싱이 안전하도록 가시성 배열을 확보한다.
+	gfx_.setMaxRenderObjectId(1000u);
 
 	stageVisualReady_ = true;
+}
+
+void Game::setupLobbyCharacters() {
+	for (int i = 0; i < kMaxLobbyPlayers; ++i) {
+		auto ch = std::make_shared<Player>();
+
+		// 가시성 배열 인덱싱이 OOB가 되지 않도록 고유 renderObjectId를 부여한다.
+		// (기본값은 UINT_MAX. 로비 동안엔 전시 캐릭터만 렌더되므로 0..kMaxLobbyPlayers-1 고정 사용.)
+		ch->setRenderObjectId(static_cast<u32t>(i));
+
+		ch->setScale(mu::Vec3(1.f, 1.f, 1.f));
+		ch->setModel(assetManager_.modelPlayer());
+		ch->setAnimBlender(animSystem_, assetManager_);   // AnimBlenderPlayer: 정지 시 idle
+		lobbyChars_.push_back(std::move(ch));
+	}
+
+	updateLobbyCharacterTransforms();
+}
+
+void Game::updateLobbyCharacterTransforms() {
+	if (lobbyChars_.empty()) return;
+
+	// 캐릭터를 '카메라(eye) 기준' 화면 고정 위치에 배치한다. 배경 카메라가 sway로 움직일 때
+	// eye가 가장 크게 움직이는데, 캐릭터를 eye 기준으로 잡으면 카메라와 함께 이동해 화면 슬롯
+	// 위치/정면을 유지하고(고정처럼 보임), 월드 고정인 지형/스카이박스만 패럴랙스로 흐른다.
+	// (이전엔 at 기준이라 eye만큼 안 따라가 캐릭터가 좌우로 흔들렸다.)
+	const float standDist  = lobbyCharStandDist_;    // 카메라 앞 거리(↑일수록 캐릭터가 화면에서 작아짐)
+	const float spacing    = lobbyCharSpacing_;      // 좌우 슬롯 간격
+	const float footOffset = lobbyCharFootOffset_;   // 발 높이 미세조정(− = 아래로 내림)
+
+	const mu::Vec3 eye = lobbyCamera_.eye();
+	const mu::Vec3 at  = lobbyCamera_.at();
+
+	mu::Vec3 f = at - eye;
+	float flen = f.len();
+	if (flen < 1e-4f) { f = mu::Vec3(0.f, 0.f, 1.f); flen = 1.f; }
+	f = f * (1.f / flen);
+	float hlen = std::sqrt(f.x() * f.x() + f.z() * f.z());
+	if (hlen < 1e-4f) hlen = 1.f;
+	const mu::Vec3 right(f.z() / hlen, 0.f, -f.x() / hlen);   // 수평 우측 축
+
+	for (int i = 0; i < static_cast<int>(lobbyChars_.size()); ++i) {
+		auto& ch = lobbyChars_[i];
+		if (!ch) continue;
+
+		const float lateral = (static_cast<float>(i) - 1.5f) * spacing;
+		const mu::Vec3 base = eye + f * standDist + right * lateral;
+		const mu::Vec3 pos(base.x(), at.y() + footOffset, base.z());   // Y는 시선 높이(지면 근처)로 안정화
+		ch->setPos(pos);
+
+		// 카메라(eye)를 바라보는 yaw(+Z forward 모델 기준). NQuat 인자 순서는 (roll, pitch, yaw).
+		const float yaw = std::atan2(eye.x() - pos.x(), eye.z() - pos.z());
+		ch->setOrient(mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), mu::Radian(yaw)));
+	}
+}
+
+void Game::clearLobbyCharacters() {
+	for (auto& ch : lobbyChars_) {
+		if (ch && ch->animBlender()) {
+			animSystem_.untrackAnimBlender(ch->animBlender());
+		}
+	}
+	lobbyChars_.clear();
 }
 
 void Game::setupStage() {
@@ -3009,9 +3065,7 @@ void Game::buildLobbyUI() {
 	const XMFLOAT4 textLight   = { 0.95f, 0.97f, 1.00f, 1.f };
 	const XMFLOAT4 textMuted   = { 0.78f, 0.84f, 0.92f, 1.f };
 	const XMFLOAT4 buttonInk   = { 0.07f, 0.11f, 0.18f, 1.f };
-	const XMFLOAT4 scrimBar    = { 0.06f, 0.09f, 0.14f, 0.52f };  // 툴바/이름표 배경
-	const XMFLOAT4 slotFill    = { 0.10f, 0.14f, 0.20f, 0.26f };  // 슬롯 컬럼(캐릭터/맵이 비쳐 보임)
-	const XMFLOAT4 slotFillEmp = { 0.10f, 0.14f, 0.20f, 0.14f };  // 빈 슬롯(더 투명)
+	const XMFLOAT4 scrimBar    = { 0.06f, 0.09f, 0.14f, 0.52f };  // 툴바 배경
 	const XMFLOAT4 wrBtnAlpha  = { 1.f, 1.f, 1.f, 0.92f };        // 텍스처 버튼 반투명 틴트
 
 	// 텍스처 버튼에 반투명 틴트를 입히는 헬퍼(stylePrimary/Secondary 적용 이후 호출).
@@ -3084,27 +3138,38 @@ void Game::buildLobbyUI() {
 	for (int i = 0; i < kMaxLobbyPlayers; ++i) {
 		const float x = pad + static_cast<float>(i) * (slotW + gap);
 
-		slotPanels_[i] = makeSolid(roomPanel, "playerSlot", x, slotsY, slotW, slotsH, slotFill);
-
+		// 슬롯의 반투명 배경(패널/이름표 scrim)은 제거 — 3D 캐릭터 위에 번호/이름만 표시한다.
 		slotNumberLabels_[i] = makeLabel(roomPanel, L"", x + 12.f, slotsY + 10.f, 13.f, 60.f, 20.f,
 			textMuted, UI::TextHAlign::Leading, 2);
 
-		// 모델 베이: B-2에서 3D 캐릭터를 투영할 화면 사각형(렌더 없음, rect만 사용).
+		// 모델 베이: 3D 캐릭터를 투영할 화면 사각형(렌더 없음, rect만 사용).
 		auto* bay = roomPanel->addChild(std::make_unique<UI::UIElement>());
 		bay->name = "slotBay";
 		applyRect(bay, UI::Anchors::TopLeft, UI::Pivots::TopLeft,
 			x + 8.f, slotsY + 8.f, slotW - 16.f, slotsH - nameH - 22.f);
 		slotBays_[i] = bay;
 
-		// 이름표(반투명 scrim + 이름 + 호스트 뱃지)
-		slotNameplateBgs_[i] = makeSolid(roomPanel, "nameplateBg",
-			x + 10.f, slotsY + slotsH - nameH - 8.f, slotW - 20.f, nameH, scrimBar);
+		// 이름표(배경 없이 이름 + 호스트 뱃지 텍스트만)
+		const float nameY = slotsY + slotsH - nameH - 4.f;
 		slotNameLabels_[i] = makeLabel(roomPanel, L"대기 중",
-			x + 10.f, slotsY + slotsH - nameH - 4.f, 18.f, slotW - 20.f, 28.f,
+			x + 10.f, nameY, 18.f, slotW - 20.f, 28.f,
 			textLight, UI::TextHAlign::Center, 2);
 		slotHostBadgeLabels_[i] = makeLabel(roomPanel, L"",
 			x + 10.f, slotsY + slotsH - 30.f, 12.f, slotW - 20.f, 22.f,
 			textMuted, UI::TextHAlign::Center, 2);
+
+		// 호스트 이름 사각 테두리(4변). 기본 숨김, refreshLobbyUI에서 호스트 슬롯만 표시.
+		const XMFLOAT4 borderCol = { 0.95f, 0.80f, 0.35f, 1.f };  // 골드(호스트 표식)
+		const float bpad = 4.f, bt = 2.f;
+		const float bx = x + 10.f - bpad, by = nameY - bpad;
+		const float bw = (slotW - 20.f) + 2.f * bpad, bh = 28.f + 2.f * bpad;
+		slotNameBorders_[i][0] = makeSolid(roomPanel, "nameBorderT", bx, by, bw, bt, borderCol, 1);
+		slotNameBorders_[i][1] = makeSolid(roomPanel, "nameBorderB", bx, by + bh - bt, bw, bt, borderCol, 1);
+		slotNameBorders_[i][2] = makeSolid(roomPanel, "nameBorderL", bx, by, bt, bh, borderCol, 1);
+		slotNameBorders_[i][3] = makeSolid(roomPanel, "nameBorderR", bx + bw - bt, by, bt, bh, borderCol, 1);
+		for (auto* edge : slotNameBorders_[i]) {
+			if (edge) edge->visible = false;
+		}
 	}
 
 	// 디버그 툴
@@ -3128,8 +3193,6 @@ void Game::refreshLobbyUI() {
 	// 대기실(반투명 스쿼드 스테이지) 색상
 	const XMFLOAT4 textLight   = { 0.95f, 0.97f, 1.00f, 1.f };
 	const XMFLOAT4 textMuted   = { 0.78f, 0.84f, 0.92f, 1.f };
-	const XMFLOAT4 slotFill    = { 0.10f, 0.14f, 0.20f, 0.26f };
-	const XMFLOAT4 slotFillEmp = { 0.10f, 0.14f, 0.20f, 0.14f };
 
 	lobbyRoot_->visible = (scene_ == Scene::Lobby);
 
@@ -3170,7 +3233,6 @@ void Game::refreshLobbyUI() {
 			const auto& player = lobbyPlayers_[i];
 			const bool isSlotHost = (player.id == hostId_);
 
-			if (slotPanels_[i]) slotPanels_[i]->bgColor = slotFill;
 			if (slotNameLabels_[i]) {
 				slotNameLabels_[i]->setText(player.name);
 				slotNameLabels_[i]->setTextColor(textLight.x, textLight.y, textLight.z, textLight.w);
@@ -3178,13 +3240,18 @@ void Game::refreshLobbyUI() {
 			if (slotHostBadgeLabels_[i]) {
 				slotHostBadgeLabels_[i]->setText(isSlotHost ? L"\U0001F451 호스트" : L"");
 			}
+			for (auto* edge : slotNameBorders_[i]) {
+				if (edge) edge->visible = isSlotHost;   // 호스트 이름에만 사각 테두리 표시
+			}
 		} else {
-			if (slotPanels_[i]) slotPanels_[i]->bgColor = slotFillEmp;
 			if (slotNameLabels_[i]) {
 				slotNameLabels_[i]->setText(L"대기 중");
 				slotNameLabels_[i]->setTextColor(textMuted.x, textMuted.y, textMuted.z, textMuted.w);
 			}
 			if (slotHostBadgeLabels_[i]) slotHostBadgeLabels_[i]->setText(L"");
+			for (auto* edge : slotNameBorders_[i]) {
+				if (edge) edge->visible = false;
+			}
 		}
 	}
 
@@ -3218,6 +3285,14 @@ void Game::LobbyScene(Milliseconds deltaTime) {
 		refreshLobbyUI();  // 게임 시작 버튼 활성 상태 갱신 (로그 재개는 워커가 수행)
 	}
 
+	// 로비 키보드 입력(전시 캐릭터 튜닝 키). processInput()은 player_ 없으면 조기 반환하므로
+	// 로비에선 여기서 직접 키보드 상태를 폴링하고 processInputLobby를 호출한다.
+	if (GetForegroundWindow() == ghWnd) {
+		keyboardStatePrev_ = keyboardStateCurr_;
+		GetKeyboardState(keyboardStateCurr_.data());
+		processInputLobby(deltaTime);
+	}
+
 	// 대기실: 에셋 로드 완료 후 3D 맵 배경을 띄운다(에셋 미완료 시 키아트 bg 폴백).
 	if (lobbyState_ == LobbyState::WaitingRoom && loaded) {
 		setupStageVisual();   // idempotent (지형/스카이박스/라이트 1회 init)
@@ -3232,13 +3307,24 @@ void Game::LobbyScene(Milliseconds deltaTime) {
 		// 대기실 카메라 연출: standalone에서 잡은 로비 쇼케이스 위치를 기준으로 약하게 좌우 패닝한다.
 		// 캐릭터 슬롯이 들어올 자리가 크게 흔들리지 않도록 eye 이동보다 at 이동을 작게 둔다.
 		lobbyCameraTime_ += std::chrono::duration<float>(deltaTime).count();
-		const float sway = std::sin(lobbyCameraTime_ * 0.25f) * 0.8f;
+		const float sway = std::sin(lobbyCameraTime_ * 0.25f) * 0.3f;
 		const mu::Vec3 baseEye(5126.42f, 57.0037f, 5170.04f);
 		const mu::Vec3 baseAt(5124.92f, 56.5513f, 5167.77f);
 		const mu::Vec3 eye = baseEye + mu::Vec3(sway, 0.f, 0.f);
 		const mu::Vec3 at  = baseAt  + mu::Vec3(sway * 0.25f, 0.f, 0.f);
 		lobbyCamera_.setView(eye, at);
 		chunkManager_.update(baseAt, deltaTime);
+
+		// 전시 캐릭터: 최초 진입 시 생성 후, 현재 카메라 기준으로 재배치해 화면 슬롯 위치를 고정한다.
+		// 매 프레임 update(idle 선택/월드 갱신) + 본 행렬 계산(animSystem).
+		if (lobbyChars_.empty()) {
+			setupLobbyCharacters();
+		}
+		updateLobbyCharacterTransforms();
+		for (auto& ch : lobbyChars_) {
+			ch->update(deltaTime, 1.f);
+		}
+		animSystem_.update(0.01s);
 	}
 
 	uiManager_.layout();
@@ -3264,22 +3350,20 @@ void Game::renderLobby() {
 }
 
 void Game::renderWaitingRoom() {
-	// [임시 진단] 렌더 경로 1회 확인.
-	if (!lobby3DDiagLogged_) {
-		lobby3DDiagLogged_ = true;
-		gSharedLog << "[Lobby3D] renderWaitingRoom: renderPath="
-		           << (gfx_.renderPath() == GFX::RenderPath::Deferred ? "Deferred" : "Forward")
-		           << " stageVisualReady=" << (stageVisualReady_ ? 1 : 0) << "\n";
-	}
-
-	// renderInGame()의 3D 부분 최소 복제: 스카이박스 + 지형 + 카메라 + 방향광.
-	// (플레이어/이펙트/HiZ/그림자 제외 — 캐릭터는 B-2, 그림자는 후속.)
+	// renderInGame()의 3D 부분 최소 복제: 스카이박스 + 지형 + 캐릭터 + 카메라 + 방향광.
+	// (이펙트/HiZ/그림자 제외 — 그림자는 후속.)
 	skybox_.render(gfx_);
 
 	if (!chunkManager_.empty()) {
 		chunkManager_.submitDrawEvents(gfx_);
 		gfx_.addFrameData(TerrainPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
 		gfx_.addFrameData(TerrainDeferredPipeline::FrameData{ .globalAmbient = mu::Vec3(0.16f, 0.16f, 0.16f) });
+	}
+
+	// 전시 캐릭터: 채워진 슬롯 수만큼만 렌더(빈 슬롯은 모델 없음).
+	const int filled = static_cast<int>(lobbyPlayers_.size());
+	for (int i = 0; i < filled && i < static_cast<int>(lobbyChars_.size()); ++i) {
+		if (lobbyChars_[i]) lobbyChars_[i]->render(gfx_);
 	}
 
 	lobbyCamera_.updateGFX(gfx_);
@@ -3306,6 +3390,9 @@ void Game::enterInGame() {
 
 	// 인게임은 Deferred 경로로 렌더한다(로비에서 Forward로 바꿔둔 것을 복원).
 	gfx_.setRenderPath(GFX::RenderPath::Deferred);
+
+	// 대기실 전시 캐릭터 정리: animSystem 트랙/shared_ptr를 제거해 인게임 씬으로 누수되지 않게 한다.
+	clearLobbyCharacters();
 
 	setupStage();
 	scene_ = Scene::InGame;
@@ -3374,6 +3461,9 @@ void Game::lobbyLeaveRoom() {
 	// 대기실 3D 배경 → 메인화면 복귀: Forward(UI-only) 경로 복원 + 키아트 bg 다시 표시.
 	gfx_.setRenderPath(GFX::RenderPath::Forward);
 	if (lobbyBgImage_) lobbyBgImage_->visible = true;
+
+	// 전시 캐릭터 정리(animSystem 트랙 해제 포함) — 재입장 시 다시 생성된다.
+	clearLobbyCharacters();
 
 	refreshLobbyUI();
 }
@@ -3561,17 +3651,48 @@ void Game::processInput(Milliseconds deltaTime) {
 // 방에 들어가지 않은 상태일 때
 // 방 입장 키 처리
 void Game::processInputLobby(Milliseconds deltaTime) {
-	if (keyboardStateCurr_['1'] & 0x80) {
-		//sendEnterRoomPacket(1);
+	// 대기실 전시 캐릭터 배치 런타임 튜닝(대기실에서만, 0.1f 단위 엣지 트리거).
+	//   1/2 : standDist  -/+   (카메라 거리; ↑일수록 작아짐)
+	//   3/4 : spacing    -/+   (좌우 간격)
+	//   5/6 : footOffset -/+   (발 높이; ↑/↓)
+	//   P   : 현재 값 + 캐릭터/카메라 위치 로그 출력
+	if (lobbyState_ != LobbyState::WaitingRoom) {
+		return;
 	}
-	if (keyboardStateCurr_['2'] & 0x80) {
-		//sendEnterRoomPacket(2);
+
+	auto pressed = [&](int vk) {
+		return (keyboardStateCurr_[vk] & 0x80) && !(keyboardStatePrev_[vk] & 0x80);
+	};
+	const float step = 0.1f;
+	bool changed = false;
+
+	if (pressed('1')) { lobbyCharStandDist_  = std::max(0.5f, lobbyCharStandDist_ - step); changed = true; }
+	if (pressed('2')) { lobbyCharStandDist_ += step; changed = true; }
+	if (pressed('3')) { lobbyCharSpacing_    = std::max(0.1f, lobbyCharSpacing_ - step); changed = true; }
+	if (pressed('4')) { lobbyCharSpacing_   += step; changed = true; }
+	if (pressed('5')) { lobbyCharFootOffset_ -= step; changed = true; }
+	if (pressed('6')) { lobbyCharFootOffset_ += step; changed = true; }
+
+	if (changed) {
+		gSharedLog << "[LobbyTune] standDist=" << lobbyCharStandDist_
+		           << " spacing=" << lobbyCharSpacing_
+		           << " footOffset=" << lobbyCharFootOffset_ << "\n";
 	}
-	if (keyboardStateCurr_['3'] & 0x80) {
-		//sendEnterRoomPacket(3);
-	}
-	if (keyboardStateCurr_['4'] & 0x80) {
-		//sendEnterRoomPacket(4);
+
+	if (pressed('P')) {
+		const mu::Vec3 eye = lobbyCamera_.eye();
+		const mu::Vec3 at  = lobbyCamera_.at();
+		gSharedLog << "[LobbyTune] standDist=" << lobbyCharStandDist_
+		           << " spacing=" << lobbyCharSpacing_
+		           << " footOffset=" << lobbyCharFootOffset_
+		           << " | eye=(" << eye.x() << "," << eye.y() << "," << eye.z() << ")"
+		           << " at=(" << at.x() << "," << at.y() << "," << at.z() << ")\n";
+		for (int i = 0; i < static_cast<int>(lobbyChars_.size()); ++i) {
+			if (!lobbyChars_[i]) continue;
+			const mu::Vec3 p = lobbyChars_[i]->pos();
+			gSharedLog << "[LobbyTune]   char" << i
+			           << " pos=(" << p.x() << "," << p.y() << "," << p.z() << ")\n";
+		}
 	}
 }
 
