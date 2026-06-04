@@ -51,6 +51,12 @@ public:
     // streaming latency so callers submit terrain frame data / height queries consistently.
     bool empty() const { return index_.chunks.empty(); }
 
+    // Zone (trigger volume) definitions parsed from chunks_index.bin.
+    const std::vector<ZoneDef>& zones() const { return index_.zones; }
+
+    // Generic placement markers parsed from chunks_index.bin.
+    const std::vector<MarkerDef>& markers() const { return index_.markers; }
+
     // Returns how much of the streamed chunk set around worldPos is fully activated.
     // Used by scene loading gates so the first visible frame is not missing terrain.
     float readyFractionAround(mu::Vec3 worldPos) const;

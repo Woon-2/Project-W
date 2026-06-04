@@ -92,6 +92,7 @@ void Room::init(const Level* levelData) {
 	cubes_ = levelData->cubes;
 	playerStarts_ = levelData->playerStarts;
 	worldTerrain_ = &levelData->terrainChunks;   // shared, read-only (height + stronghold defs)
+	assetManager_ = levelData->assetManager;     // backref: cube model for runtime barriers
 
 	for (auto& c : cubes_) {
 		c.body().setMotionType(MotionType::Static);
@@ -179,6 +180,70 @@ void Room::init(const Level* levelData) {
 		std::cout << "[Room::init] Loaded " << assets.size() << " skill(s)\n";
 		skillSystem_.registerAssets(std::move(assets));
 	}
+
+	// Trigger volumes (pure query volumes; not registered with PhysicsWorld).
+	zoneSystem_.build(worldTerrain_->zones());
+	bindZoneHandlers();
+}
+
+// Binds gameplay behavior to zone tags. Handlers run on the room thread each
+// tick; lambdas defined here have full access to Room internals.
+void Room::bindZoneHandlers() {
+	// Mid-boss arena: entering starts the encounter. Designers author a
+	// ZoneMarker tagged "Arena_Hobgoblin" (factionMask = Players).
+	zoneSystem_.on("Arena_Hobgoblin", ZoneEvent::Enter,
+		[](Room& room, Zone& zone, uint32 playerId, Object* /*obj*/) {
+			room.onArenaHobgoblinEnter(zone, playerId);
+		});
+}
+
+// Triggered once when a player first enters the mid-boss arena. Builds the rear
+// virtual walls from named markers, logs the boss spawn point, and tells clients
+// to build the walls locally (S_ZoneState). One-shot (zone is disarmed).
+void Room::onArenaHobgoblinEnter(Zone& zone, uint32 playerId) {
+	std::cout << "[Zone] '" << zone.tag() << "' ENTER by player " << playerId << '\n';
+
+	if (!worldTerrain_) return;
+
+	// Rear walls: build a Static collider from each named "Wall" marker.
+	for (const auto& m : worldTerrain_->markers()) {
+		if (m.type != "Wall") continue;
+		if (m.name != "WallHobgoblin_0" && m.name != "WallHobgoblin_1") continue;
+		spawnBarrierFromMarker(m);
+		std::cout << "[Zone] wall built: '" << m.name << "' at ("
+		          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
+	}
+
+	// Mid-boss spawn: debug log only (actual spawn TBD).
+	for (const auto& m : worldTerrain_->markers()) {
+		if (m.type != "BossSpawn") continue;
+		std::cout << "[Zone] Hobgoblin spawn point '" << m.name << "' at ("
+		          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
+	}
+
+	// Clients build the same walls locally so the predicted player collides.
+	broadcast(PacketManager::makeSZoneStatePacket(static_cast<uint16>(zone.id()), uint8(1)));
+
+	zone.setArmed(false);   // one-shot trigger
+}
+
+// Creates a Static cube collider matching a marker's world transform. Pure
+// collider: no object id, not registered in objectById_, not networked.
+void Room::spawnBarrierFromMarker(const MarkerDef& m) {
+	if (!assetManager_) return;
+
+	auto bar = std::make_unique<Cube>();
+	bar->setModel(assetManager_->modelCube());   // unit cube BVH -> scaled collision shape
+	bar->setFaction(Faction::Neutral);
+	bar->setScale(m.scale);
+	bar->setOrient(m.orient);
+	bar->setPos(m.pos);
+	bar->body().setMotionType(MotionType::Static);
+	bar->body().snapToCurrent();
+
+	Cube* p = bar.get();
+	physicsWorld_.registerBody(&p->body(), [p]() { p->rebuildBodyBVH(); });
+	barriers_.push_back(std::move(bar));
 }
 
 void Room::update() {
@@ -186,6 +251,7 @@ void Room::update() {
 	static constexpr Seconds dtSec   = 1s / 60.f;
 
 	physicsWorld_.step(dtSec);
+	zoneSystem_.update(*this, dtSec);
 	updateGoblinAI(dt);
 	updateTacticalAI(dt);
 

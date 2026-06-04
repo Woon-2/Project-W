@@ -1165,11 +1165,11 @@ static BVHNode makeBVHNode(const ImportedBVBox& box) {
 
     node.shape  = OBB{ center, size * 0.5f, eulerDegsToQuat(box.rotEuler) };
 
-    if (isZeroEuler(box.rotEuler)) {
+    /*if (isZeroEuler(box.rotEuler)) {
         node.shape  = AABB{ center, size };
     } else {
         node.shape  = OBB{ center, size * 0.5f, eulerDegsToQuat(box.rotEuler) };
-    }
+    }*/
     node.bounds = computeNodeBounds(node.shape);
     return node;
 }

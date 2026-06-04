@@ -2,6 +2,8 @@
 #define room_server_terrain_hpp
 
 #include "strongholdDef.hpp"
+#include "../common/zoneDef.hpp"
+#include "../common/markerDef.hpp"
 #include <filesystem>
 #include <vector>
 #include <string>
@@ -50,6 +52,8 @@ struct ChunkIndex {
     int version = 0;
     std::vector<ChunkIndexEntry> chunks;
     std::vector<StrongholdDef>   strongholds;   // gameplay: monster spawner bases
+    std::vector<ZoneDef>         zones;         // gameplay/cosmetic: trigger volumes
+    std::vector<MarkerDef>       markers;       // generic placements (type+name+transform)
     // NOTE: the client also carries a shared TerrainLayerPalette here; the
     // server omits it (no rendering) but still parses its tags in parseChunkIndex.
 };
@@ -89,6 +93,12 @@ public:
 
     // Stronghold definitions parsed from chunks_index.bin (gameplay data).
     const std::vector<StrongholdDef>& strongholds() const { return index_.strongholds; }
+
+    // Zone (trigger volume) definitions parsed from chunks_index.bin.
+    const std::vector<ZoneDef>& zones() const { return index_.zones; }
+
+    // Generic placement markers parsed from chunks_index.bin.
+    const std::vector<MarkerDef>& markers() const { return index_.markers; }
 
     // Invokes fn(col, row, worldOffset, const TerrainHeightField*) for every
     // loaded chunk. Used by Room to register per-chunk terrain colliders.

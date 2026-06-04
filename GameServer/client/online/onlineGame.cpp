@@ -115,6 +115,10 @@ void Game::setupStageVisual() {
 	// 지형 청크 스트리밍 매니저 초기화 (팔레트 + 인덱스 로드, 동기 baseline 로드).
 	chunkManager_.init(gfx_, physicsWorld_, &threadPool_, "../resources/terrains/");
 
+	// 트리거 존 빌드 (연출용 로컬 존). 게임플레이 존은 서버 권위라 클라는 핸들러 미바인딩.
+	clientZoneSystem_.build(chunkManager_.zones());
+	bindZoneHandlers();
+
 	skybox_.setModel( assetManager_.modelCube( ) );
 	skybox_.setSkyboxMaterial( assetManager_.skyboxMaterial( ) );
 
@@ -1914,6 +1918,48 @@ void Game::onStrongholdState( uint16 strongholdId, int32 hp, uint8 state ) {
 	}
 }
 
+// 연출 존 핸들러 바인딩. Unity에서 오서링한 태그를 키로 로컬 동작(BGM/카메라/포스트FX 등)을
+// 연결한다. 게임플레이 태그(예: "boss_arena_1")는 여기서 미바인딩 → 로컬 판정 시 no-op.
+void Game::bindZoneHandlers() {
+	// 예시: 특정 구역 진입 시 카메라/사운드 연출을 트리거하는 자리.
+	//   clientZoneSystem_.on("forest_bgm", ZoneEvent::Enter, [this](Zone&){ /* BGM 전환 */ });
+	//   clientZoneSystem_.on("forest_bgm", ZoneEvent::Leave, [this](Zone&){ /* BGM 복귀 */ });
+}
+
+// 서버 권위 존 상태 동기화(S_ZoneState). state==1이면 아레나 진입으로 간주해
+// "Wall" 마커(WallHobgoblin_0/1)로부터 로컬 충돌 벽을 생성하여 예측 플레이어가
+// 통과하지 못하게 한다. state==0이면 벽을 제거한다. 벽은 렌더링하지 않는다(가상의 벽).
+void Game::onZoneState( uint16 zoneId, uint8 state ) {
+	zoneStates_[zoneId] = state;
+	std::cout << "[Zone] onZoneState zoneId=" << zoneId << " state=" << (int)state << '\n';
+
+	if ( state == 1 ) {
+		if ( !barriers_.empty() ) return;   // already built (one-shot per arena)
+		for ( const auto& m : chunkManager_.markers() ) {
+			if ( m.type != "Wall" ) continue;
+			if ( m.name != "WallHobgoblin_0" && m.name != "WallHobgoblin_1" ) continue;
+
+			auto bar = std::make_shared<Cube>();
+			bar->setModel( assetManager_.modelCube() );   // unit cube BVH -> scaled collision shape
+			bar->setFaction( Faction::Neutral );
+			bar->setPos( m.pos );
+			bar->setOrient( m.orient );
+			bar->setScale( m.scale );
+			bar->body().setMotionType( MotionType::Static );
+			bar->body().snapToCurrent();
+			physicsWorld_.registerBody( &bar->body(), [p = bar.get()]() { p->rebuildBodyBVH(); } );
+			barriers_.push_back( std::move( bar ) );
+
+			std::cout << "[Zone] local wall built: '" << m.name << "' at ("
+			          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
+		}
+	}
+	else {
+		for ( auto& b : barriers_ ) physicsWorld_.unregisterBody( &b->body() );
+		barriers_.clear();
+	}
+}
+
 void Game::removePlayer( i32t playerId ) {
 	auto itPlayer = std::ranges::find_if(
 		otherPlayers_, [ playerId ]( const std::shared_ptr<Player>& obj ) {
@@ -2390,6 +2436,9 @@ void Game::InGameScene(Milliseconds deltaTime) {
 
 	// 지형 청크 스트리밍 틱 (카메라 갱신 전에 호출).
 	chunkManager_.update(player_->pos(), deltaTime);
+
+	// 연출 존 판정 (로컬 예측 플레이어 위치 기준, 패킷 없음).
+	clientZoneSystem_.update(player_->pos());
 
 	camera_.update(deltaTime);
 	dirLight_.update(deltaTime);

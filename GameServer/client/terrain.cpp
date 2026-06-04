@@ -368,10 +368,69 @@ ChunkIndex parseChunkIndex(const std::filesystem::path& terrainDir) {
         readTailTag(ifs, "Stronghold");
     }
 
+    // ---- zone records (trigger volumes) ----
+    // Unlike strongholds, the client parses these for real: it runs local
+    // cosmetic zones (e.g. BGM/camera) against the predicted player position.
+    const int Z = readInteger(ifs, "ZoneCount");
+    result.zones.resize(Z);
+    for (int z = 0; z < Z; ++z) {
+        auto& zone = result.zones[z];
+        readHeadTag(ifs, "Zone");
+        zone.id          = readInteger(ifs, "Id");
+        zone.tag         = readText(ifs, "Tag");
+        zone.factionMask = static_cast<std::uint32_t>(readInteger(ifs, "FactionMask"));
+        const int V = readInteger(ifs, "VolumeCount");
+        zone.volumes.resize(V);
+        for (int v = 0; v < V; ++v) {
+            auto& vol = zone.volumes[v];
+            vol.shape = static_cast<ZoneShape>(readInteger(ifs, "Shape"));
+            const float cx = readFloat(ifs, "CenterX");
+            const float cy = readFloat(ifs, "CenterY");
+            const float cz = readFloat(ifs, "CenterZ");
+            vol.center = mu::Vec3(cx, cy, cz);
+            const float ox = readFloat(ifs, "OrientX");
+            const float oy = readFloat(ifs, "OrientY");
+            const float oz = readFloat(ifs, "OrientZ");
+            const float ow = readFloat(ifs, "OrientW");
+            vol.orient = mu::NQuat(ox, oy, oz, ow);
+            const float hx = readFloat(ifs, "HalfX");
+            const float hy = readFloat(ifs, "HalfY");
+            const float hz = readFloat(ifs, "HalfZ");
+            vol.halfExtents = mu::Vec3(hx, hy, hz);
+            vol.radius = readFloat(ifs, "Radius");
+        }
+        readTailTag(ifs, "Zone");
+    }
+
+    // ---- generic markers (type + name + transform) ----
+    const int M = readInteger(ifs, "MarkerCount");
+    result.markers.resize(M);
+    for (int m = 0; m < M; ++m) {
+        auto& mk = result.markers[m];
+        readHeadTag(ifs, "Marker");
+        mk.type = readText(ifs, "Type");
+        mk.name = readText(ifs, "Name");
+        const float px = readFloat(ifs, "PosX");
+        const float py = readFloat(ifs, "PosY");
+        const float pz = readFloat(ifs, "PosZ");
+        mk.pos = mu::Vec3(px, py, pz);
+        const float ox = readFloat(ifs, "OrientX");
+        const float oy = readFloat(ifs, "OrientY");
+        const float oz = readFloat(ifs, "OrientZ");
+        const float ow = readFloat(ifs, "OrientW");
+        mk.orient = mu::NQuat(ox, oy, oz, ow);
+        const float sx = readFloat(ifs, "ScaleX");
+        const float sy = readFloat(ifs, "ScaleY");
+        const float sz = readFloat(ifs, "ScaleZ");
+        mk.scale = mu::Vec3(sx, sy, sz);
+        readTailTag(ifs, "Marker");
+    }
+
     readTailTag(ifs, "ChunkIndex");
 
     gSharedLog << "[Terrain] Chunk index parsed: " << C << " chunks, "
-               << L << " shared layers, " << S << " strongholds\n";
+               << L << " shared layers, " << S << " strongholds, " << Z << " zones, "
+               << M << " markers\n";
     return result;
 }
 

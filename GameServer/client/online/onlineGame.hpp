@@ -13,6 +13,7 @@
 #include "../AssetManager.hpp"
 #include "../physicsWorld.hpp"
 #include "../terrainChunkManager.hpp"
+#include "../zone.hpp"
 #include "../animation.hpp"
 #include "../event.hpp"
 #include "../ui/UIManager.hpp"
@@ -77,6 +78,7 @@ public:
 	void applyHit(uint16 targetId, int32 newHp);
 	void onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos );
 	void onStrongholdState( uint16 strongholdId, int32 hp, uint8 state );
+	void onZoneState( uint16 zoneId, uint8 state );
 	void onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs );
 	void onSkillHit( uint16 attackerId, uint16 targetId, int32 newHp, uint32 skillAssetId, DirectX::XMFLOAT3 targetVelocity );
 	void onDebugHitboxes( SDebugHitboxPacket* pkt );
@@ -218,6 +220,17 @@ private:
 	// Strongholds are server-authoritative structures; the client renders them as
 	// placeholder cubes and tracks HP/destroyed state from server packets.
 	std::vector<std::shared_ptr<Cube>> strongholds_{};
+
+	// Client-local cosmetic trigger zones (BGM/camera/post-fx). Built from
+	// chunks_index.bin after the terrain index loads; tested each frame against
+	// the predicted local player. zoneStates_ caches server-driven S_ZoneState.
+	ZoneSystem clientZoneSystem_{};
+	std::unordered_map<uint16, uint8> zoneStates_{};
+	void bindZoneHandlers();
+
+	// Virtual walls built locally on S_ZoneState (collision-only, not rendered) so
+	// the predicted local player cannot pass. Geometry comes from "Wall" markers.
+	std::vector<std::shared_ptr<Cube>> barriers_{};
 
 	std::shared_ptr<Player> player_{};
 	std::vector<std::shared_ptr<Player>> otherPlayers_{ };

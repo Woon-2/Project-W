@@ -22,6 +22,7 @@ public:
 	static void handleSSkillHitPacket( byte* buffer, int32 len );
 	static void handleSDebugHitboxPacket( byte* buffer, int32 len );
 	static void handleSStrongholdStatePacket( byte* buffer, int32 len );
+	static void handleSZoneStatePacket( byte* buffer, int32 len );
 
 	// 로비
 	static void handleSCreateRoomPacket( byte* buffer, int32 len );
