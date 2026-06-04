@@ -221,12 +221,13 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `holdEvent` macro | `event.hpp #41-46` | 풀 할당 + placement new |
 | `clearEvents` macro | `event.hpp #48-57` | 이벤트 리스트 전체 해제 |
 | `EventList` alias | `event.hpp #62` | `std::list<char*>` |
-| `EventType` enum | `event.hpp #67-73` | Hit, Blood, Death, Attack |
-| `BasicEvent` struct | `event.hpp #79-81` | 공통 base (type 필드) |
-| `EvHit` struct | `event.hpp #83-90` | targetId, hp |
-| `EvBlood` struct | `event.hpp #91-96` | victimId |
-| `EvDeath` struct | `event.hpp #97-102` | victimId |
-| `EvAttack` struct | `event.hpp #103-108` | attackerId |
+| `EventType` enum | `event.hpp #67-78` | Hit, Blood, Death, Attack, Respawn, SkillHit, CameraShake, VFXSpawn |
+| `BasicEvent` struct | `event.hpp #84-86` | 공통 base (type 필드) |
+| `EvHit` struct | `event.hpp #88-95` | targetId, hp |
+| `EvBlood` struct | `event.hpp #96-101` | victimId |
+| `EvDeath` struct | `event.hpp #102-107` | victimId |
+| `EvAttack` struct | `event.hpp #108-113` | attackerId |
+| `EvRespawn` struct | `event.hpp #114-119` | targetId (부활 애니메이션 트리거) |
 | `IEventBus` interface | `event.hpp #117-134` | `receive()` 순수 가상 |
 | `NullEventBus` | `event.hpp #136-139` | 아무것도 안 하는 기본 버스 |
 
@@ -259,8 +260,8 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 | 클래스 | 위치 |
 |--------|------|
-| `AnimBlenderPlayer` | `object.hpp #13-56` |
-| `AnimBlenderGoblin` | `object.hpp #58-98` |
+| `AnimBlenderPlayer` | `object.hpp #15-62` (애니메이션 트리거는 `EventBus::receive`에서; trigger* 함수 제거됨) |
+| `AnimBlenderGoblin` | `object.hpp #64-108` (애니메이션 트리거는 `EventBus::receive`에서; trigger* 함수 제거됨) |
 | `AnimBlenderAnubis` | `object.hpp #100-140` |
 | `AnimBlenderBat` | `object.hpp #142-182` |
 | `AnimBlenderBomber` | `object.hpp #184-???` |

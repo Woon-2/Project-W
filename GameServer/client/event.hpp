@@ -69,6 +69,7 @@ enum class EventType : u32t {
 	Blood,
 	Death,
 	Attack,
+	Respawn,
 	// Skill system events
 	SkillHit,      // skill-caused hit: carries targetId + damage (12B, fits gPool16)
 	CameraShake,   // camera shake request: magnitude + duration (12B, fits gPool16)
@@ -109,6 +110,12 @@ struct EvAttack : BasicEvent {
 	EvAttack(i32t attackerId) : BasicEvent{EventType::Attack}, attackerId{attackerId} {}
 
 	i32t attackerId{-1};
+};
+struct EvRespawn : BasicEvent {
+	EvRespawn() : BasicEvent{EventType::Respawn} {}
+	EvRespawn(i32t targetId) : BasicEvent{EventType::Respawn}, targetId{targetId} {}
+
+	i32t targetId{-1};
 };
 
 // Skill system events (all <= 16B, use gPool16)

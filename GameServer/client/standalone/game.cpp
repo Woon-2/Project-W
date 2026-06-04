@@ -2500,6 +2500,9 @@ void Game::update(Milliseconds deltaTime) {
 			if (attack->attackerId == goblin_->getId()) {
 				goblin_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, goblin_.get());
 			}
+			else if (attack->attackerId == player_->getId()) {
+				player_->eventBus()->receive(pEv, deltaTime, eventList_, *pTimer_, player_.get());
+			}
 
 			// 공격 발동 시 attack hitbox를 1500ms 동안 live 추적으로 렌더링
 			if (auto spec = combatSystem_.queryAttackSpec(attack->attackerId)) {

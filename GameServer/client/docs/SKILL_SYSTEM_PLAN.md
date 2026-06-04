@@ -270,7 +270,7 @@ update(Milliseconds deltaTime):
 
   3. [신규] skillSystem_.update(dt, skillCtx_)
      ├─ Pass 1: elapsed 전진
-     ├─ Pass 2: timeline 이벤트 발생 (PlayAnimation → triggerAttack() 등)
+     ├─ Pass 2: timeline 이벤트 발생 (PlayAnimation → holdEvent(EvAttack) 등)
      ├─ Pass 3: AttachedHitbox world transform 재계산
      ├─ Pass 4: collides(target->worldBVH(), hitbox.worldShape)
      └─ Pass 5: EvSkillHit 발생
@@ -372,7 +372,7 @@ struct SSkillStartPacket : PacketHeader {
 ### Phase 4 완료 목록
 모든 핵심 이벤트 타입 구현 (`skillSystem.cpp::dispatchEvent()`):
 - `SpawnHitbox` / `DestroyHitbox` ✅
-- `PlayAnimation` → `animBlender->triggerAttack()` ✅
+- `PlayAnimation` → `holdEvent(*ctx.evList, EvAttack)` (EventBus 일원화) ✅
 - `PlayVFX` → `ParticleEffect::play()` (bone attach + 방향 포함) ✅
 - `ApplyImpulse` → `body.applyImpulse()` ✅
 - `CameraShake` → `EvCameraShake` 이벤트 발생 ✅

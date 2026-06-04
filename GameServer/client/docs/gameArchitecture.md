@@ -48,6 +48,9 @@
    └─ otherPlayers_ + goblins_ rebuildBodyBVH()
 6. skillSystem_.update()   — clientPredictionOnly=true, 플레이어 생존 시만
                              데미지 이벤트 없음; VFX + 충격량만 클라이언트에서 처리
+6.5 이벤트 디스패치 루프   — eventList_ 순회 → 대상 객체 eventBus()->receive()로 분배
+                             (Hit/Attack/Death/Respawn 애니메이션 일원화; 객체 갱신 이전에 처리)
+                             패킷 핸들러(SleepEx)·스킬 시스템이 post한 이벤트를 처리한다.
 7. 이동 패킷 전송          — moveStateSendAcc_ >= moveStateSendInterval_(50ms)이면 sendMovePacket()
 8. Object::update()        — 플레이어(tPhysic 보간), 원격 플레이어(네트워크 보간 tNet), 고블린
 9. animSystem_.updatePriorities() / camera_ / dirLight_
@@ -64,7 +67,7 @@
 | 네트워크 처리 | 없음 | SleepEx (루프 최초) |
 | combatSystem_.update() | 있음 (몬스터 AI 근접 공격) | 없음 (서버 권위) |
 | skillSystem clientPredictionOnly | false (데미지 즉시) | true (VFX만) |
-| 이벤트 처리 위치 | 물리 이전 | 없음 (서버 이벤트는 패킷으로 수신) |
+| 이벤트 처리 위치 | 물리 이전 | skillSystem.update() 직후, Object.update() 이전 |
 | 물리 + 스킬 순서 | 스킬 → 이벤트 → 물리 | 물리 → 스킬 |
 | 이동 패킷 전송 | 없음 | 50ms 주기 |
 
@@ -206,10 +209,11 @@ skillSystem_.update()
 ```
 [Online] S_SkillHit(newHp<=0) → onSkillHit():
   → goblin->setRagdollInitVelocity(pkt->targetVelocity)  // 사망 시점 서버 속도 저장
-  → applyHit() → goblin->setDead(true) + setRagdollPendingActivation(true)
+  → applyHit() → holdEvent(eventList_, EvDeath)
+  → 디스패치 루프 → Goblin::EventBus(Death): isDead_=true + setRagdollPendingActivation(true) + 사망 애니메이션
 
-[Standalone] EvHit → hp <= 0:
-  → goblin->setDead(true) + setRagdollPendingActivation(true)
+[Standalone] EvHit → hp <= 0 → holdEvent(EvDeath):
+  → Goblin::EventBus(Death): isDead_=true + setRagdollPendingActivation(true) + 사망 애니메이션
   // initVel은 activate 직전 g.body().linearVel()에서 읽음
 
 같은 프레임 animSystem_.update() 후:

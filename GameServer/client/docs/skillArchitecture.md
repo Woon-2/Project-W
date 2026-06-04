@@ -126,8 +126,8 @@ skillCtx_.camera     = &camera_;
 
 ```cpp
 void Game::onSkillStart(uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs) {
-    // 원격 플레이어 공격 애니메이션 트리거
-    idPlayerMap_[ownerId]->animBlender()->triggerAttack();
+    // 원격 플레이어 공격 애니메이션 트리거 (EventBus 일원화: EvAttack를 eventList_에 post)
+    holdEvent(eventList_, EvAttack(ownerId));
     // 비주얼 전용으로 스킬 시작 (clientPredictionOnly=true)
     skillSystem_.startSkill(assetId, ownerId, ctx, Milliseconds{elapsedMs});
 }
