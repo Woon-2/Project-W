@@ -285,3 +285,43 @@ contact·마찰이 약한 측면 미끄러짐을 죽여 교착이 풀리지 않�
 - 대안: 충돌 유지 + 정면 시 전진 감속·강한 측면 회피, 또는 끼임 감지 후 리패스.
 
 > 버그 성격이므로 해결 시 `TroubleShooting.md`에도 기록 예정.
+
+---
+
+### 2026.06.04
+## [feat] 로비씬 ↔ LobbyServer 연동 (방 생성/참가/퇴장/게임시작 신호)
+
+**커밋:** `7f07d0d9` (ServerEngine 미사용 Listener 제거 `7dc902c0` 동반)
+**수정 파일:** `ServerEngine/protocol.hpp`, `LobbyServer/PacketManager`, `LobbyServer/GameSession`, `client/ServerSession.hpp`, `client/PacketManager`, `client/online/onlineGame`, `client/docs/lobbyScene.md`
+
+---
+
+### [1] 클라이언트 로비씬을 LobbyServer에 실제 연동
+
+기존엔 방 생성/참가/슬롯이 클라 로컬 mock이었고, 클라는 startup에서 곧장 RoomServer(9000)에 접속했다.
+이를 게임 시작 전 단계까지 LobbyServer(8000)와 실제 연동했다.
+
+**연결 / 펌핑:**
+
+- `client/ServerSession.hpp` 접속 포트 `roomServerPort`(9000) → `lobbyServerPort`(8000).
+- 클라 수신은 APC 완료 루틴 기반이라 alertable 대기가 필요하다. 기존엔 `InGameScene`의 `SleepEx(1,true)`에서만
+  처리됐는데, `LobbyScene()` 진입부에도 `SleepEx(1,true)` + `ClientApp::send()`를 추가해 로비에서도 패킷
+  송수신을 펌핑하도록 했다(단일 스레드 모델 → 핸들러가 메인 스레드에서 실행, 락 불필요).
+
+**자기 식별 (myId):**
+
+- 프로토콜상 클라가 자기 `sessionId`를 알 방법이 없어, `SCreateRoomPacket`/`SJoinRoomPacket`에 `uint16 myId`
+  추가. 본인 슬롯("나") 표시 + 호스트 판별/이양에 사용. 클라 `LobbyPlayer.id`(string)를 `sessionId`(uint16)로 변경.
+
+**요청 / 응답 흐름:**
+
+- 요청(C→S): `lobbyCreateRoom/JoinRoom/LeaveRoom/StartGame`이 상태를 직접 바꾸지 않고
+  `C_CreateRoom`/`C_JoinRoom`/`C_LeaveRoom`/`C_GameStart`만 전송.
+- 응답(S→C): `client/PacketManager`가 `S_CreateRoom`/`S_JoinRoom`/`S_LobbyRoomPlayerJoined`/
+  `S_LobbyRoomPlayerLeft`/`S_GameStart`를 받아 `Online::Game`의 핸들러(`onLobbyCreated`/`onLobbyJoined`/
+  `onLobbyPlayerJoined`/`onLobbyPlayerLeft`/`onGameStart`)로 룸 상태·슬롯·호스트를 갱신.
+- 호스트 이양은 남은 목록 front 기준(서버 `LobbyRoom` 규칙과 일치).
+
+**범위:** `S_GameStart` 수신 시 현재는 **로그만** 출력한다. RoomServer 접속·인게임 전환은 후속(별도 작업).
+RoomServer가 lobbyCode가 아닌 접속 순서(`totalSessions % 4`)로 방을 묶으므로, 핸드오프 시 lobbyCode 기반
+그룹화 설계가 함께 필요하다.

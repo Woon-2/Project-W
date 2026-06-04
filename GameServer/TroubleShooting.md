@@ -438,3 +438,72 @@ if (xzToSpawn2 < 0.6f * 0.6f) {
 }
 mu::Vec3 toSpawnXZ(toSpawn.x(), 0.f, toSpawn.z());
 mu::NVec3 nd(toSpawnXZ + sep * ...);  // Y 제거 후 정규화 → XZ 이동량 정확
+```
+
+---
+### 2026.06.04 / 목요일
+## [Bug Fix] GameSession 풀 미반환 누수 — shared_ptr 기반 세션 수명 관리 도입
+
+### 현상
+
+연결이 끊긴 `GameSession`이 `ObjectPool`로 반환되지 않아 누적된다(프로세스 종료까지 해제 안 됨,
+`~GameSession`도 실행되지 않음). 접속이 반복(churn)될수록 풀이 매번 새 청크를 할당해 메모리가 단조 증가.
+
+### 원인
+
+`Listener::registerAccept`가 `ObjectPool<GameSession>::pop()`으로 세션을 꺼내지만, 종료 시 어디서도
+`push`(반환)하지 않는다(`onDisconnected`는 방 leave / `IdPool::push`만 수행).
+
+단순히 `onDisconnected`에서 `push(this)`를 호출하면 안 된다 — 종료 시점에 IOCP에는 아직 완료되지 않은
+`WSARecv`/`WSASend`/`DisconnectEx`의 완료 통지가 남아 있을 수 있고, 그 `OVERLAPPED`(=`IoEvent`/세션 메모리)는
+완료가 dequeue될 때까지 살아 있어야 한다. `CancelIoEx`/`closesocket`로 취소해도 완료 패킷(`ERROR_OPERATION_ABORTED`)은
+여전히 IOCP에 올라오므로 "기다림" 자체는 없앨 수 없다. → 진행 중 I/O 완료를 추적해야 하며, 그 관용적 구현이
+shared_ptr 소유다.
+
+`IoEvent::owner_`가 raw 포인터였고(주석엔 "add/release reference"가 있었으나 실제 카운팅 미구현),
+`ObjectPool::makeShared`(deleter = `push`)는 이미 존재했으나 Listener가 raw `pop()`을 써서 **반쪽만 배선된**
+상태였다.
+
+### 수정
+
+- `IocpDispatchable`을 `enable_shared_from_this`로, `IoEvent::owner_`를 `shared_ptr<IocpDispatchable>`로 변경.
+- `Session::register{Recv,Send,Disconnect}`에서 `setOwner(shared_from_this())`로 ref 보유, `process*`에서
+  `setOwner(nullptr)`로 해제 → **진행 중 I/O가 세션을 살림**. `IocpReactor::dispatch`는 처리 동안 `owner`
+  shared_ptr 로컬 복사를 유지(process가 ref를 놓아도 dispatch가 끝날 때까지 객체 생존 보장).
+- `Listener::registerAccept`: `ObjectPool<GameSession>::pop()` → `makeShared()`. 모든 ref(매니저 + pending
+  I/O + dispatch 로컬) 소멸 시 deleter가 `~GameSession` 후 풀로 반환 → 다음 `makeShared`가 재사용.
+- LobbyServer: `GameSessionManager` 신설 — 접속 세션의 shared_ptr를 id별 보관(`onConnected` add /
+  `onDisconnected` remove). `Listener`도 `shared_ptr` 소유.
+- RoomServer: 코어 타입 변경에 맞춰 `Listener` makeShared/shared_ptr. 비동기
+  `myRoom_->doAsync([this]{ ... enter/leave(this); })` 잡이 raw `this` 대신 `shared_ptr self`를 캡처
+  (잡 실행 시점까지 세션 생존 — shared_ptr 도입으로 새로 생길 수 있는 UAF 차단).
+
+> 2026.04.17 `[Bug Fix] SendBufferChunk Use-After-Reset`과 동일한 `enable_shared_from_this` 수명 관리 패턴.
+
+---
+### 2026.06.04 / 목요일
+## [Bug Fix] LobbyRoom 수명 경쟁 — findRoom ↔ removeRoom Use-After-Free
+
+### 현상
+
+1인 방의 마지막 멤버가 나가는 순간(`leave` → 빈 방 → `removeRoom` → `delete`) 다른 클라가 동시에 같은 코드로
+참가(`findRoom` → `enter`)하면, 해제된 방에 접근(UAF)하거나 삭제 직전 방에 입장 성공 후 `session->myRoom_`가
+dangling 포인터가 된다.
+
+### 원인
+
+`LobbyManager::findRoom`이 raw `LobbyRoom*`를 **락 해제 후** 반환하고, `removeRoom`이 `delete it->second`로
+즉시 해제한다. 다중 IOCP 워커 환경에서 findRoom 반환과 동시 delete 사이에 경쟁 창이 존재한다. "비어서
+삭제될 방"에 입장을 막는 가드도 없었다.
+
+### 수정
+
+- `LobbyManager::rooms_`를 `unordered_map<string, shared_ptr<LobbyRoom>>`로, 방 생성을
+  `ObjectPool<LobbyRoom>::makeShared(code)`로 변경. `findRoom`이 shared_ptr 복사를 반환하므로, 동시
+  `removeRoom`(map에서 erase)이 일어나도 호출 측이 ref를 든 동안 방이 살아 있어 접근이 안전하다.
+  `removeRoom`은 `delete` 제거, `erase`만(deleter가 풀 반환 담당).
+- `LobbyRoom::closed_` 플래그 추가: `leave`가 방이 비는 순간 **락 안에서** `closed_ = true`로 표시하고,
+  `enter`는 락 안에서 `closed_`면 `false` 반환(참가 거부 → 클라는 "방을 찾을 수 없습니다"). → 삭제 예정 방
+  입장이 원천 차단되어 어떤 인터리빙에서도 dangling `myRoom_`가 생기지 않는다.
+- 부수: `LobbyRoom::players_`를 `vector<shared_ptr<GameSession>>`로(방이 멤버를 공동 소유). 참조 순환 없음
+  (세션→방은 raw `myRoom_`, 방→세션은 shared, 단방향).
