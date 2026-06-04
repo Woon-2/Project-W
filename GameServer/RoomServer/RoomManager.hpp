@@ -13,7 +13,8 @@ struct ServerAnimClip;
 */
 class RoomManager {
 public:
-	static Room* makeRoom();
+	// lobbyCode로 방을 찾고 없으면 생성한다(원자적). 같은 코드 파티가 같은 Room에 모인다.
+	static Room* findOrCreateRoomByCode(const std::string& code);
 	static Room* findRoom(int32 roomId);
 	static void removeRoom(int32 roomId);
 
@@ -28,6 +29,7 @@ private:
 	static std::mutex rmMtx_;
 	static std::vector<Room*> rooms_;
 	static std::unordered_map<int32, Room*> roomIdMap_;
+	static std::unordered_map<std::string, Room*> codeRoomMap_;
 
 	static const Level*  pLevel_;
 	static const Model*  pPlayerModel_;

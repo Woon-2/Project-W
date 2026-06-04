@@ -10,6 +10,10 @@ void PacketManager::handlePacket(GameSession* session, byte* buffer, int32 len) 
 	auto header = reinterpret_cast<PacketHeader*>(buffer);
 	
 	switch (header->type) {
+	case PacketType::C_Enter:
+		handleCEnterPacket(session, buffer, len);
+		break;
+
 	case PacketType::C_Move:
 		handleCMovePacket(session, buffer, len);
 		break;
@@ -30,6 +34,12 @@ void PacketManager::handlePacket(GameSession* session, byte* buffer, int32 len) 
 		std::cout << "Unknown packet type received. Type: " << static_cast<uint16>(header->type) << '\n';
 		break;
 	}
+}
+
+void PacketManager::handleCEnterPacket(GameSession* session, byte* buffer, int32 len) {
+	auto pkt = reinterpret_cast<CEnterPacket*>(buffer);
+	std::string code(pkt->lobbyCode, strnlen_s(pkt->lobbyCode, sizeof(pkt->lobbyCode)));
+	session->enterRoom(code);
 }
 
 void PacketManager::handleCMovePacket(GameSession* session, byte* buffer, int32 len) {

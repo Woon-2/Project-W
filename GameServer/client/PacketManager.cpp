@@ -312,6 +312,20 @@ std::shared_ptr<SendBuffer> PacketManager::makeCMouseMovePacket(float yawRad) {
 	return sendBuffer;
 }
 
+std::shared_ptr<SendBuffer> PacketManager::makeCEnterPacket(const std::string& lobbyCode) {
+	auto sendBuffer = SendBufferManager::open(sizeof(CEnterPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<CEnterPacket>();
+	strncpy_s(pkt->lobbyCode, lobbyCode.data(), _TRUNCATE);
+
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::C_Enter;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
 std::shared_ptr<SendBuffer> PacketManager::makeCCreateRoomPacket() {
 	auto sendBuffer = SendBufferManager::open(sizeof(PacketHeader));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());

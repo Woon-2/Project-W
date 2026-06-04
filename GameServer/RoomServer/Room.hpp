@@ -82,6 +82,8 @@ public:
 	void doTimer(Milliseconds delay, CallbackType&& callback);
 
 	int32 id() const { return id_; }
+	const std::string& code() const { return code_; }
+	void setCode(const std::string& c) { code_ = c; }
 
 	// ── NPC AI 쿼리 ──────────────────────────────────────────────────────────
 	const std::vector<GameSession*>& getLivingPlayers() const { return livingPlayersCache_; }
@@ -108,6 +110,7 @@ public:
 
 private:
 	int32 id_;
+	std::string code_;   // 이 방을 만든 로비 코드(lobbyCode). RoomManager::codeRoomMap_ 키와 동일.
 	std::vector<GameSession*> sessions_;
 	std::unordered_map<int32, GameSession*> idSessionMap_;
 	JobQueue jobQueue_;

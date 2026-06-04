@@ -35,6 +35,8 @@ public:
 	static std::shared_ptr<SendBuffer> makeCAttackPacket(uint64 clientMs);
 	static std::shared_ptr<SendBuffer> makeCSkillStartPacket(uint32 skillAssetId, uint64 clientMs);
 
+	static std::shared_ptr<SendBuffer> makeCEnterPacket(const std::string& lobbyCode);
+
 	// 로비
 	static std::shared_ptr<SendBuffer> makeCCreateRoomPacket();
 	static std::shared_ptr<SendBuffer> makeCJoinRoomPacket(const std::string& code);

@@ -3371,6 +3371,18 @@ void Game::LobbyScene(Milliseconds deltaTime) {
 	SleepEx(1, true);
 	INet::ClientApp::send();
 
+	// RoomServer 핸드오프: onGameStart가 적재한 요청을, APC 밖이며 인게임 에셋 로드가 끝난 뒤에만 실행한다.
+	// (비호스트는 로드 완료 전 S_GameStart를 받을 수 있다. 그 전엔 대기실에 머물고, RoomServer는
+	//  이 클라의 C_Enter가 늦게 와도 그때 입장 처리한다.)
+	if (pendingHandoff_ && inGameAssetsLoaded_.load(std::memory_order_acquire)) {
+		pendingHandoff_ = false;
+		INet::ClientApp::reconnectToRoomServer(handoffIp_, handoffPort_);
+		INet::ClientApp::addSendBuffer(PacketManager::makeCEnterPacket(handoffCode_));
+		INet::ClientApp::send();
+		enterInGame();   // scene_=InGame → 이후 InGameScene가 펌핑, RoomServer의 S_Enter로 플레이어 생성
+		return;
+	}
+
 	const bool loaded = inGameAssetsLoaded_.load(std::memory_order_acquire);
 	if (loaded && !inGameAssetsReady_) {
 		inGameAssetsReady_ = true;
@@ -3626,7 +3638,12 @@ void Game::onLobbyPlayerLeft(uint16 sessionId) {
 }
 
 void Game::onGameStart(const std::string& roomServerIp, uint16 roomServerPort, const std::string& lobbyCode) {
-	// 이번 범위에서는 게임 시작 신호 수신만 확인(RoomServer 접속/인게임 전환은 후속).
+	// 이 함수는 로비 recv APC 안에서 실행되므로 여기서 소켓을 건드리지 않고, 핸드오프 요청만 적재한다.
+	// 실제 재접속/씬 전환은 LobbyScene이 APC 밖(안전 지점)에서 에셋 로드 완료 후 수행한다.
+	handoffIp_     = roomServerIp;
+	handoffPort_   = roomServerPort;
+	handoffCode_   = lobbyCode;
+	pendingHandoff_ = true;
 	gSharedLog << "[Lobby] 게임 시작 신호 수신: RoomServer " << roomServerIp << ":" << roomServerPort
 		<< " (code=" << lobbyCode << ")\n";
 }

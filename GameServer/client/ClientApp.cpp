@@ -42,7 +42,22 @@ Online::Game* ClientApp::onlineGame() {
 	return static_cast<Online::Game*>(game_.get());
 }
 
+void ClientApp::reconnectToRoomServer(const std::string& ip, uint16 port) {
+	// 옛 로비 세션을 은퇴 보관(닫고 살려둠 → 잔여 APC가 유효한 owner로 드레인되게).
+	if (serverSession_) {
+		serverSession_->close();
+		retiredSession_ = std::move(serverSession_);
+	}
+
+	serverSession_ = std::make_unique<ServerSession>(ip, port);
+	serverSession_->setGame(onlineGame());
+	if (!serverSession_->connect()) {
+		std::cout << "[Handoff] RoomServer 연결 실패: " << ip << ":" << port << '\n';
+	}
+}
+
 std::unique_ptr<IGame> ClientApp::game_ = nullptr;
 std::unique_ptr<ServerSession> ClientApp::serverSession_ = nullptr;
+std::unique_ptr<ServerSession> ClientApp::retiredSession_ = nullptr;
 
 } // namespace INetwork

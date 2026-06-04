@@ -85,7 +85,7 @@ private:
 #pragma pack(push, 1)
 
 struct CEnterPacket : public PacketHeader {
-
+	char lobbyCode[7];   // 로비에서 받은 방 코드(6자리 영숫자 + null). RoomServer가 방 그룹화에 사용.
 };
 
 struct PlayerInfo {

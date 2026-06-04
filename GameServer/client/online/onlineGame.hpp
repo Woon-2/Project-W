@@ -344,6 +344,12 @@ private:
 	uint16                   myId_   = 0;
 	std::vector<LobbyPlayer> lobbyPlayers_{};
 
+	// S_GameStart 핸드오프 요청(onGameStart가 적재, LobbyScene이 에셋 로드 후 실행).
+	bool        pendingHandoff_ = false;
+	std::string handoffIp_{};
+	uint16      handoffPort_ = 0;
+	std::string handoffCode_{};
+
 	// 로비 UI 텍스처 (메인 스레드에서 즉시 로드, 인게임 백그라운드 로드와 분리)
 	std::unordered_map<std::string, Texture> lobbyTexHashMap_{};
 	Texture lobbyBgTex_{};

@@ -435,7 +435,9 @@ void Room::leave(GameSession* session) {
 	auto leavePkt = PacketManager::makeSLeavePacket(static_cast<uint16>(session->id()));
 	broadcast(leavePkt);
 
-	ObjectPool<GameSession>::push(session);
+	// 세션을 풀로 직접 반환하지 않는다. 세션은 shared_ptr(makeShared, deleter=push)로 소유되므로,
+	// 마지막 ref(이 leave 잡의 self 캡처 등)가 소멸할 때 자동으로 ~GameSession + 풀 반환된다.
+	// 여기서 push하면 deleter와 겹쳐 double-free가 된다.
 
 	if (sessions_.size() == 0) {
 		RoomManager::removeRoom(id_);
