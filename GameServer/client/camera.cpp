@@ -9,12 +9,47 @@ void Camera::update(Milliseconds deltaTime) {
 	}
 
 	const auto dt = Seconds(deltaTime).count();
+	const auto smoothingAlpha = [](float rate, float deltaSeconds) {
+		if (rate <= 0.f) {
+			return 1.f;
+		}
+		return 1.f - std::exp(-rate * deltaSeconds);
+	};
+
+	const mu::Vec3 targetForward = pTarget->orient().rotate(mu::Vec3(0.f, 0.f, 1.f));
+	const float targetForwardHLen2 = targetForward.x() * targetForward.x() + targetForward.z() * targetForward.z();
+	const mu::Radian targetYaw = targetForwardHLen2 > 1e-8f
+		? mu::Radian(std::atan2(targetForward.x(), targetForward.z()))
+		: mu::Radian(0.f);
+	const mu::Radian targetPitch = mu::Radian(std::atan2(
+		targetForward.y(),
+		std::sqrt(targetForwardHLen2)
+	));
+	if (!followFilterInitialized_) {
+		filteredTargetPitch_ = targetPitch;
+		followFilterInitialized_ = true;
+	}
+	else {
+		const float pitchAlpha = smoothingAlpha(targetPitchSmoothingRate_, dt);
+		filteredTargetPitch_ = mu::Radian(
+			static_cast<float>(filteredTargetPitch_)
+			+ (static_cast<float>(targetPitch) - static_cast<float>(filteredTargetPitch_)) * pitchAlpha
+		);
+	}
+
+	const mu::NQuat filteredTargetRotation(mu::Radian(0.f), filteredTargetPitch_, targetYaw);
 
 	auto rotatedOffsetFromTarget = offsetFromTargetPreRotation_.rotate(offsetFromTarget_);
-	rotatedOffsetFromTarget = pTarget->orient().rotate(rotatedOffsetFromTarget);
+	rotatedOffsetFromTarget = filteredTargetRotation.rotate(rotatedOffsetFromTarget);
 
-	auto rotatedTargetPivot = pTarget->orient().rotate(offsetTargetPivot_);
-	at_ = pTarget->renderState().pos + rotatedTargetPivot;
+	auto rotatedTargetPivot = filteredTargetRotation.rotate(offsetTargetPivot_);
+	const mu::Vec3 desiredAt = pTarget->renderState().pos + rotatedTargetPivot;
+	if (!springInitialized_) {
+		at_ = desiredAt;
+	}
+	else {
+		at_ += (desiredAt - at_) * smoothingAlpha(atSmoothingRate_, dt);
+	}
 
 	const mu::Vec3 desiredEye = pTarget->renderState().pos + rotatedOffsetFromTarget;
 
@@ -65,6 +100,7 @@ void Camera::update(Milliseconds deltaTime) {
 void MU_CALLCONV Camera::setView(mu::Vec3 eye, mu::Vec3 at) {
 	eye_ = eye;
 	at_  = at;
+	followFilterInitialized_ = false;
 	view_ = mu::lookAt(eye, at, mu::NVec3(0.f, 1.f, 0.f));
 }
 

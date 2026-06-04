@@ -4,8 +4,10 @@
 
 // 수직(y축) 공기 저항 계수. linearDamping은 수평 지면 마찰에 사용되므로
 // y축에는 별도의 작은 값을 적용한다.
-// 종단 속도 = gravity / kAirDamping (예: 9.8 / 0.5 ≈ 19.6 m/s)
-static constexpr float kAirDamping = 0.5f;
+// 종단 속도 = gravity / kAirDamping (예: 9.8 / 0.15 ≈ 65 m/s).
+// 값이 작을수록 종단 속도가 커지고 시상수(τ = 1/kAirDamping)도 길어져
+// 낙하 초반(체감 구간)이 현실의 자유낙하 g·t에 가까워진다.
+static constexpr float kAirDamping = 0.15f;
 
 PhysicsWorld::PhysicsWorld()
     : broadPhase_(std::make_unique<SAPBroadPhase>())
@@ -163,6 +165,20 @@ void PhysicsWorld::step(Seconds dt)
         generateContacts();
         solveConstraints(subDt);
         for (auto& e : entries_) e.body->applyPseudoVelocity(subDt);
+
+        // Static contacts get the final word on position: resolved after the
+        // dynamic-dynamic solver so a body squeezed against a wall still ends up
+        // outside it. resolveStaticPenetration() writes curr_.pos directly, so
+        // the BVH built during integrate() is stale for moved bodies; rebuild
+        // only those (dirty set) so the next sub-step's narrow phase sees the
+        // corrected pose.
+        movedByStaticDepen_.clear();
+        resolveStaticPenetration(staticContacts_, movedByStaticDepen_);
+        for (RigidBody* b : movedByStaticDepen_) {
+            auto it = std::ranges::find(entries_, b, &Entry::body);
+            if (it != entries_.end() && it->onRebuildBVH)
+                it->onRebuildBVH();
+        }
     }
 }
 
@@ -263,6 +279,7 @@ void PhysicsWorld::generateContacts()
 {
     // Discard contacts from the previous step.
     contactConstraints_.clear();
+    staticContacts_.clear();
 
     broadPhase_->update();
     const auto pairs = broadPhase_->queryPairs();
@@ -293,6 +310,46 @@ void PhysicsWorld::generateContacts()
         const CollisionResult res = collides(bvhA, bvhB);
         if (!res.hit) continue;
 
+        // Static-Dynamic / Static-Kinematic: route to the lightweight
+        // depenetration path instead of the ContactConstraint solver. Static's
+        // infinite mass makes the impulse solver wasteful and prone to spurious
+        // spin / launch; positional depenetration pushes the movable body out by
+        // the penetration amount only. (Static-Static is already filtered by the
+        // broad phase, so this branch sees exactly one static body.)
+        const bool aStatic = a->motionType() == MotionType::Static;
+        const bool bStatic = b->motionType() == MotionType::Static;
+        if (aStatic != bStatic) {
+            RigidBody* movable    = aStatic ? b : a;
+            RigidBody* staticBody = aStatic ? a : b;
+
+            // Normal points static -> movable (push-out). res.normal is B->A;
+            // it already points static->movable when movable==a, and must be
+            // flipped when movable==b. Fall back to center-to-center only when
+            // the narrow-phase normal is degenerate.
+            mu::NVec3 n = res.normal;
+            if (mu::Vec3(n).len2() < 0.5f) {
+                const mu::Vec3 sep = movable->pos() - staticBody->pos();
+                n = (sep.len2() > 1e-6f)
+                    ? mu::normalize(sep)
+                    : mu::NVec3(0.f, 1.f, 0.f, mu::NVec3::NoNormalize_t{});
+            } else if (movable == b) {
+                // Negate in place; already unit length, so skip re-normalization.
+                n = mu::NVec3(-mu::Vec3(n), mu::NVec3::NoNormalize_t{});
+            }
+
+            StaticContact sc;
+            sc.movable    = movable;
+            sc.staticBody = staticBody;
+            ContactPoint cp;
+            cp.worldPos = res.contactPoint;
+            cp.normal   = n;            // static -> movable
+            cp.depth    = res.depth;
+            cp.localA   = res.contactPoint - movable->pos();
+            sc.addContact(cp);
+            staticContacts_.push_back(std::move(sc));
+            continue;                   // do NOT build a ContactConstraint
+        }
+
         auto cc = std::make_unique<ContactConstraint>(a, b);
 
         // Contact normal: from narrow-phase geometry (B→A convention, fixed in collision.cpp).
@@ -306,10 +363,32 @@ void PhysicsWorld::generateContacts()
                 : mu::NVec3(0.f, 1.f, 0.f, mu::NVec3::NoNormalize_t{});
         }
 
+        // Character-character separation is horizontal-only. Baumgarte injects REAL
+        // separating velocity along the contact normal, so a +Y-tilted normal (two
+        // upright characters whose bone-boxes touch at different heights) launches
+        // them upward. Project the normal and penetration onto the horizontal plane
+        // for non-Static pairs (agents). Static obstacles (stronghold) keep their true
+        // normal so bodies are blocked by / rest on them. Terrain is a separate path.
+        float depth = res.depth;
+        if (a->motionType() != MotionType::Static && b->motionType() != MotionType::Static) {
+            const mu::Vec3 n3 = mu::Vec3(normal);
+            const mu::Vec3 horiz(n3.x(), 0.f, n3.z());
+            const float horizLen = horiz.len();
+            if (horizLen > 1e-3f) {
+                normal = mu::normalize(horiz);
+                depth *= horizLen;            // horizontal component of the MTV
+            } else {
+                // Near-vertical normal (rare): use horizontal center-to-center.
+                const mu::Vec3 sepXZ(a->pos().x() - b->pos().x(), 0.f, a->pos().z() - b->pos().z());
+                if (sepXZ.len2() > 1e-6f)
+                    normal = mu::normalize(sepXZ);
+            }
+        }
+
         ContactPoint cp;
         cp.worldPos = res.contactPoint;
         cp.normal   = normal;
-        cp.depth    = res.depth;
+        cp.depth    = depth;
         cp.localA   = res.contactPoint - a->pos();
         cp.localB   = res.contactPoint - b->pos();
         cc->addContact(cp);

@@ -3,7 +3,11 @@
 
 // Vertical air resistance coefficient (y-axis only).
 // linearDamping is used for horizontal ground friction.
-static constexpr float kAirDamping = 0.5f;
+// Terminal fall speed = gravity / kAirDamping (e.g. 9.8 / 0.15 ≈ 65 m/s).
+// A smaller value raises terminal speed and lengthens the time constant
+// (τ = 1/kAirDamping), so early fall closely tracks real free-fall g·t.
+// NOTE: must match the client value to keep prediction and authority in sync.
+static constexpr float kAirDamping = 0.15f;
 
 PhysicsWorld::PhysicsWorld()
     : broadPhase_(std::make_unique<SAPBroadPhase>())
@@ -187,10 +191,32 @@ void PhysicsWorld::generateContacts()
                 : mu::NVec3(0.f, 1.f, 0.f, mu::NVec3::NoNormalize_t{});
         }
 
+        // Character-character separation is horizontal-only. Baumgarte injects REAL
+        // separating velocity along the contact normal, so a +Y-tilted normal (two
+        // upright characters whose bone-boxes touch at different heights) launches
+        // them upward. Project the normal and penetration onto the horizontal plane
+        // for non-Static pairs (agents). Static obstacles (stronghold) keep their true
+        // normal so bodies are blocked by / rest on them. Terrain is a separate path.
+        float depth = res.depth;
+        if (a->motionType() != MotionType::Static && b->motionType() != MotionType::Static) {
+            const mu::Vec3 n3 = mu::Vec3(normal);
+            const mu::Vec3 horiz(n3.x(), 0.f, n3.z());
+            const float horizLen = horiz.len();
+            if (horizLen > 1e-3f) {
+                normal = mu::normalize(horiz);
+                depth *= horizLen;            // horizontal component of the MTV
+            } else {
+                // Near-vertical normal (rare): use horizontal center-to-center.
+                const mu::Vec3 sepXZ(a->pos().x() - b->pos().x(), 0.f, a->pos().z() - b->pos().z());
+                if (sepXZ.len2() > 1e-6f)
+                    normal = mu::normalize(sepXZ);
+            }
+        }
+
         ContactPoint cp;
         cp.worldPos = res.contactPoint;
         cp.normal   = normal;
-        cp.depth    = res.depth;
+        cp.depth    = depth;
         cp.localA   = res.contactPoint - a->pos();
         cp.localB   = res.contactPoint - b->pos();
         cc->addContact(cp);

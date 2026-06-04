@@ -70,6 +70,14 @@
 
 ---
 
+### Player Camera Follow / Right-Drag Orbit
+
+`Camera::update()`는 타겟 `orient()`를 그대로 쓰지 않는다. 타겟 forward를 XZ 평면에 투영해 yaw를 추출하고, pitch만 저역통과로 따라가며 roll은 제거한다. `at_`도 별도 저역통과를 적용해 평지 보행/물리 접촉의 고주파 흔들림이 시선 목표점에 바로 들어가지 않게 한다.
+
+`StandAlone::Game::processInput()`과 `Online::Game::processInputGame()`은 같은 조작 정책을 사용한다. 우클릭 드래그 중에는 마우스 X가 `cameraYaw_`에 누적되어 플레이어 orient와 카메라 회전 프레임이 분리된다. 우클릭을 놓은 뒤 이동 입력이 들어오면 누적된 `cameraYaw_`를 플레이어 yaw에 흡수하고 `cameraYaw_`를 0으로 되돌려, 이동 방향/공격 방향/애니메이션 블렌딩이 다시 플레이어 forward 기준으로 결합된다. Online 모드는 이 재결합 회전도 기존 `sendMouseMovePacket()` forward 비교 경로로 전파한다.
+
+---
+
 ### 온라인 플레이어 간 Soft Separation (Reciprocal Client-Prediction)
 
 다른 플레이어는 `Kinematic`(무한 질량)이므로, 로컬 `Dynamic` 플레이어가 `ContactConstraint`로 부딪치면 침투 해소량 100%가 로컬에게만 실려 "벽에 튕기는" 느낌이 난다. 이를 reciprocal soft separation으로 대체한다.

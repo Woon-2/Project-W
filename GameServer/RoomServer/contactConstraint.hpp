@@ -48,8 +48,20 @@ private:
     };
     Cache cache_[4];
 
+    // Penetration recovery split between two channels (tune the RATIO):
+    //   kBaumgarteBeta    (velocity-level): real separating velocity, bleeds penetration
+    //     out gradually -> smooth, no pop. Disabled for terrain (vibration).
+    //   kSplitImpulseBeta (position-level): energy-neutral pseudo-velocity to position;
+    //     high values snap out penetration in one step (poppy). Bullet erp2 = 0.8.
+    // Pure split-impulse was visibly poppy; pure Baumgarte leaves residual penetration.
+    // Must match the client values to keep prediction and authority in sync.
     static constexpr float kBaumgarteBeta    = 0.2f;
-    static constexpr float kSplitImpulseBeta = 0.8f;
+    static constexpr float kSplitImpulseBeta = 0.3f;
+    // External-force (gravity) compensation is shared across BOTH channels (velocity
+    // bias + split-impulse pseudoBias). The two shares must total exactly extComp;
+    // applying the full extComp on each double-compensates gravity and the body floats
+    // up. kExtCompVelFrac is the velocity-channel share (the split channel gets the rest).
+    static constexpr float kExtCompVelFrac   = 0.5f;
     static constexpr float kSlop             = 0.005f;
 
     bool     isTerrainContact_ = false;

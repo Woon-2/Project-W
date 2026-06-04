@@ -118,7 +118,7 @@ void Game::setupStageVisual() {
 	skybox_.setModel( assetManager_.modelCube( ) );
 	skybox_.setSkyboxMaterial( assetManager_.skyboxMaterial( ) );
 
-	dirLight_.setOrient( mu::NQuat( mu::Degree( 0.f ), mu::Degree( 160.f ), mu::Degree( 0.f ) ) );
+	dirLight_.setOrient( mu::NQuat( mu::Degree( 0.f ), mu::Degree( 132.f ), mu::Degree( 0.f ) ) );
 	dirLight_.color = mu::Vec3( 0.8f, 0.8f, 0.8f );
 	dirLight_.intensity = 2.f;
 	dirLight_.type = PBRPipeline::LightData::Type::DirectionalLight;
@@ -4004,24 +4004,43 @@ void Game::processInput(Milliseconds deltaTime) {
 }
 
 void Game::processInputGame(Milliseconds deltaTime) {
+	const auto prevForward = player_->forward();
+
 	// 이동 가속도만 담당. 감속은 PhysicsWorld의 linearDamping(마찰)이 처리한다.
 	// 속도 상한은 kPlayerMaxSpeed, 가속률은 kPlayerAccelRate (파일 상단 상수 참조).
 	const auto moveXSign = !playerDead_ * ( (keyboardStateCurr_['D'] & 0x80) - (keyboardStateCurr_['A'] & 0x80) );
 	const auto moveZSign = !playerDead_ * ( (keyboardStateCurr_['W'] & 0x80) - (keyboardStateCurr_['S'] & 0x80) );
+	const bool rightMouseDragging = !uiManager_.needsCursor() && (keyboardStateCurr_[VK_RBUTTON] & 0x80);
 
 	if (moveXSign || moveZSign) {
+		if (!rightMouseDragging && std::abs(static_cast<float>(cameraYaw_)) > 1e-5f) {
+			player_->setOrient(player_->orient() * mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), cameraYaw_));
+			cameraYaw_ = 0.f;
+		}
+
 		// 'W'/'S' 입력으로 판정된 Z 부호는 플레이어의 forward 벡터,
 		// 'D'/'A' 입력으로 판정된 X 부호는 플레이어의 right 벡터와 곱해 속도의 방향을 정한다.
 		const auto moveDirection = mu::NVec3(
 			static_cast<float>(moveXSign) * player_->right() + static_cast<float>(moveZSign) * player_->forward()
 		);
 
-		// 입력 방향으로 가속. 최대 속력 초과분은 클램프한다.
-		auto vel = player_->velocity() + mu::Vec3(moveDirection) * (kPlayerAccelRate * Seconds(deltaTime).count());
-		if (vel.len2() > kPlayerMaxSpeed * kPlayerMaxSpeed) {
-			vel = vel * (kPlayerMaxSpeed / vel.len());
+		// x/z 방향으로만 가속. y(중력)는 물리 엔진이 담당한다.
+		// (구버전은 전체 3D 속도를 kPlayerMaxSpeed로 클램프해, 이동 중 낙하 시
+		//  물리가 적분한 y속도까지 매 프레임 재스케일 → 물리 damping과 이중으로 감속됐다.
+		//  standalone Game::processInput과 동일하게 y를 보존한다.)
+		const auto fullVel = player_->velocity();
+		const auto accel   = mu::Vec3(moveDirection) * (kPlayerAccelRate * Seconds(deltaTime).count());
+		float newX = fullVel.x() + accel.x();
+		float newZ = fullVel.z() + accel.z();
+
+		// x/z 속도만 클램프 (y는 건드리지 않음).
+		const float hSpd2 = newX * newX + newZ * newZ;
+		if (hSpd2 > kPlayerMaxSpeed * kPlayerMaxSpeed) {
+			const float scale = kPlayerMaxSpeed / std::sqrt(hSpd2);
+			newX *= scale;
+			newZ *= scale;
 		}
-		player_->setVelocity(vel);
+		player_->setVelocity(mu::Vec3(newX, fullVel.y(), newZ));
 	}
 
 	currVelocity_ = player_->velocity();
@@ -4046,8 +4065,6 @@ void Game::processInputGame(Milliseconds deltaTime) {
 	// (pitch를 플레이어에 적용하게 되면, 플레이어가 고개를 들고 내리는 게 아니라 굴러버린다.)
 	const auto mouseSensitivity = mu::pi * 2.f;
 
-	const auto prevForward = player_->forward();
-
 	const auto yaw = mu::Radian(mouseDeltaX_ * mouseSensitivity / static_cast<float>(gClientRect.right - gClientRect.left));
 	auto yawRotation = mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), yaw);
 
@@ -4058,8 +4075,14 @@ void Game::processInputGame(Milliseconds deltaTime) {
 	);
 
 	if (!playerDead_) {
-		player_->setOrient(player_->orient() * yawRotation);
-		camera_.setOffsetFromTargetPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, mu::Radian(0.f)) );
+		if (rightMouseDragging) {
+			cameraYaw_ += yaw;
+		}
+		else if (std::abs(static_cast<float>(yaw)) > 1e-6f) {
+			player_->setOrient(player_->orient() * yawRotation);
+			cameraYaw_ = 0.f;
+		}
+		camera_.setOffsetFromTargetPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, cameraYaw_) );
 	}
 	else {
 		cameraYaw_ += yaw;

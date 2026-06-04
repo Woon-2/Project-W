@@ -261,6 +261,9 @@
     <ClCompile Include="contactConstraint.cpp">
       <Filter>게임%28공용%29\소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="staticDepenetration.cpp">
+      <Filter>게임%28공용%29\소스 파일</Filter>
+    </ClCompile>
     <ClCompile Include="physicsWorld.cpp">
       <Filter>게임%28공용%29\소스 파일</Filter>
     </ClCompile>
@@ -582,6 +585,9 @@
       <Filter>게임%28공용%29\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="contactConstraint.hpp">
+      <Filter>게임%28공용%29\헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="staticDepenetration.hpp">
       <Filter>게임%28공용%29\헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="physicsWorld.hpp">

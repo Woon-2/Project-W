@@ -61,17 +61,37 @@ private:
     };
     Cache cache_[4];
 
-    // Baumgarte beta (velocity-level): creates real separating velocity each step.
-    // This is ERP in Bullet Physics. Without it, the velocity solve only zeroes
-    // relative velocity, but never generates separating velocity to push bodies apart.
-    // Combined with split impulse (below), this is how Bullet Physics handles contacts.
+    // --- Penetration recovery: Baumgarte + Split Impulse blend ---
+    // The two betas split the penetration-recovery work between two channels.
+    // Tune their RATIO to trade smoothness against firmness:
+    //
+    //   kBaumgarteBeta    (velocity-level): injects REAL separating velocity that
+    //     bleeds the penetration out gradually over several frames -> smooth, no
+    //     visible "pop", but can slightly over-separate. Disabled for terrain
+    //     (see isTerrainContact_) where the injected upward velocity makes the
+    //     body briefly leave the ground (visible vibration).
+    //   kSplitImpulseBeta (position-level): corrects penetration via pseudo-velocity
+    //     applied directly to position. Energy-neutral (never touches real velocity),
+    //     but a high value resolves ~beta of the depth in a SINGLE step -> a hard
+    //     snap that looks "poppy" on deep penetration. Bullet's erp2 default is 0.8;
+    //     we use a lower value and let Baumgarte smooth the rest.
+    //
+    // Pure split-impulse (Baumgarte=0, beta=0.8) was visibly poppy; pure Baumgarte
+    // leaves residual penetration. The blend below is smooth yet firm.
     static constexpr float kBaumgarteBeta    = 0.2f;
-    // Split Impulse beta (position-level): corrects residual penetration via
-    // pseudo-velocity so it never injects energy into the real velocity solve.
-    // Bullet Physics uses erp2 = 0.8 for the same purpose.
-    static constexpr float kSplitImpulseBeta = 0.8f;
+    static constexpr float kSplitImpulseBeta = 0.3f;
     // Penetration slop: small overlaps below this threshold are ignored.
     static constexpr float kSlop             = 0.005f;
+
+    // External-force (gravity) compensation is shared across BOTH the velocity bias
+    // and the split-impulse pseudoBias (see prepare()). The two shares must total
+    // exactly extComp: applying the full extComp on each channel double-compensates
+    // gravity, so the integrate-step sink (applied once) is cancelled twice and the
+    // body slowly floats up. kExtCompVelFrac is the velocity-channel share; the split
+    // channel gets the rest. For any value the gravity terms still cancel (no creep,
+    // no float); the split only changes how much gravity comp is real velocity vs
+    // energy-neutral position correction.
+    static constexpr float kExtCompVelFrac   = 0.5f;
 
     bool     isTerrainContact_ = false;
     mu::Vec3 externalAccelA_{ 0.f, 0.f, 0.f };

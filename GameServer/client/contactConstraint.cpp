@@ -79,13 +79,20 @@ void ContactConstraint::prepare(Seconds dt)
         // Dual penetration correction (velocity-level Baumgarte + position-level split impulse).
         // Terrain contacts skip the Baumgarte term: it would inject a small upward velocity each
         // step that causes the body to briefly leave the terrain, producing visible vibration.
-        // Position correction for terrain is handled solely by Split Impulse.
+        // Terrain penetration is recovered solely by Split Impulse.
         const float penetration  = std::max(0.f, cp.depth - kSlop);
         const float extVelProj   = mu::dot((externalAccelA_ - externalAccelB_) * dtf, n);
         const float extComp      = std::max(0.f, -extVelProj);
         const float baumgarteBeta = isTerrainContact_ ? 0.f : kBaumgarteBeta;
-        c.bias             = baumgarteBeta * invDt * penetration + extComp;
-        c.pseudoBias       = kSplitImpulseBeta * invDt * penetration;
+        // External-force (gravity) compensation is split across BOTH channels so each
+        // is gravity-aware, while the total stays exactly extComp (no double-comp float).
+        // The velocity share is real separating velocity; the split share is energy-
+        // neutral position correction. The integrate-step sink and the combined push
+        // cancel, so a resting body neither creeps down nor floats up.
+        const float extCompVel   = kExtCompVelFrac * extComp;
+        const float extCompSplit = extComp - extCompVel;
+        c.bias             = baumgarteBeta * invDt * penetration + extCompVel;
+        c.pseudoBias       = kSplitImpulseBeta * invDt * penetration + extCompSplit;
         c.accNormalPseudo  = 0.f;
     }
 }

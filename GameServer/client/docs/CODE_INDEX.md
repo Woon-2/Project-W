@@ -58,6 +58,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 **파일:** `client/physicsWorld.hpp` / `client/physicsWorld.cpp`
 **파일:** `client/constraint.hpp`
 **파일:** `client/contactConstraint.hpp` / `client/contactConstraint.cpp`
+**파일:** `client/staticDepenetration.hpp` / `client/staticDepenetration.cpp`
 **파일:** `client/broadPhase.hpp` / `client/broadPhase.cpp`
 **파일:** `client/jointConstraint.hpp` / `client/jointConstraint.cpp`
 **파일:** `client/ragdollDef.hpp` / `client/ragdollDef.cpp`
@@ -84,6 +85,9 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `ContactPoint` struct | `collision.hpp` | worldPos, normal(B→A), depth, acc 누적값 |
 | `ContactConstraint` class | `contactConstraint.hpp` | PGS Normal + Coulomb 마찰 impulse solver; setExternalAccels()로 외력 보상 |
 | `ContactConstraint::setExternalAccels()` | `contactConstraint.hpp` | 외력 가속도 설정 (prepare() 전 호출); Baumgarte bias에 외력 보상항 추가 |
+| `StaticContact` struct | `staticDepenetration.hpp` | Static-Dynamic/Static-Kinematic 충돌 레코드; normal은 static→movable; ContactConstraint solver 우회 |
+| `resolveStaticPenetration()` | `staticDepenetration.hpp/cpp` | static 침투 positional depenetration(partial+slop+clamp) + inward normal-vel 클램프; 회전·분리속도 미주입; Kinematic도 직접 이동(invMass 무관); 이동 body는 outMoved로 반환(BVH 재빌드용) |
+| `staticdepen::kSlop/kCorrectFrac/kMaxCorrect` | `staticDepenetration.hpp` | 진동 방지 파라미터 0.005m / 0.8 / 0.2m |
 | `RigidBody::setUserData()` / `userData()` | `rigidBody.hpp` | void* 게임 레이어 연결 포인터 (Object* 역참조용) |
 | `PhysicsWorld::forEachContact()` | `physicsWorld.hpp` | step() 후 활성 ContactConstraint 순회 (템플릿) |
 | `PhysicsTestObject` struct | `physicsTestObject.hpp #51` | bodies/halfExtents/joints/ignoredPairs 소유; activate/deactivate/visualize/applyImpulseAll/freezeAll |
@@ -120,7 +124,9 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `PhysicsWorld::unregisterCameraObstacle()` | `physicsWorld.hpp #68` | 카메라 obstacle 등록 해제 |
 | `PhysicsWorld::queryCameraArm()` | `physicsWorld.hpp #73` | pivot→desiredEye arm 허용 길이 반환 (지형 N=6 샘플 + BVH raycast) |
 | `PhysicsWorld::cameraBroadPhase_` | `physicsWorld.hpp #140` | 카메라 전용 SAPBroadPhase 인스턴스 (일반 physicsWorld broadPhase와 독립) |
-| `PhysicsWorld::step()` | `physicsWorld.hpp #63` | integrate → generateContacts → solveConstraints |
+| `PhysicsWorld::step()` | `physicsWorld.hpp #63` | (substep) integrate → generateContacts → solveConstraints → applyPseudoVelocity → resolveStaticPenetration + moved body BVH 재빌드 |
+| `PhysicsWorld::staticContacts_` / `movedByStaticDepen_` | `physicsWorld.hpp` | step별 static 충돌 레코드 + depenetration으로 직접 이동된 body dirty set |
+| `PhysicsWorld::generateContacts()` static 분기 | `physicsWorld.cpp` | static 포함 쌍(aStatic != bStatic)은 StaticContact로 라우팅 후 continue(ContactConstraint 미생성); normal을 static→movable로 정규화 |
 | `PhysicsWorld::setGravity()` | `physicsWorld.hpp #67` | Dynamic body 중력 설정 |
 | `PhysicsWorld::setSolverIterations()` | `physicsWorld.hpp #70` | velocity PGS 반복 횟수 (기본 4, ragdoll 활성 시 16) |
 | `PhysicsWorld::setPositionSolveIterations()` | `physicsWorld.hpp #87` | split impulse position correction 반복 횟수 (기본 3, ragdoll 활성 시 4) |
@@ -714,12 +720,14 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
-| `Camera::update(float dt)` | `camera.cpp #5` | Spring Arm 충돌 회피: queryCameraArm → fast-in/slow-out arm 길이 제어 |
+| `Camera::update(float dt)` | `camera.cpp #5` | yaw-only + filtered pitch 타겟 회전, at_ 저역통과, Spring Arm 충돌 회피(queryCameraArm → fast-in/slow-out arm 길이 제어) |
 | `Camera::setView(eye, at)` | `camera.cpp` | 타겟 추종과 무관하게 view 직접 설정(로비 대기실 정적 카메라) |
 | `Camera::setPhysicsWorld()` | `camera.hpp #31` | PhysicsWorld 연결 (queryCameraArm 호출 경로) |
-| `Camera::currentArmLength_` | `camera.hpp #74` | 현재 arm 길이 (fast-in 즉시 단축 / slow-out dt 기반 복귀) |
-| `Camera::armReturnRate_` | `camera.hpp #75` | slow-out 복귀 속도 (units/sec, 기본 3.f) |
-| `Camera::cameraRadius_` | `camera.hpp #76` | BVH raycast spherePad (기본 0.2f) |
+| `Camera::atSmoothingRate_` | `camera.hpp` | 시선 목표점 at_ 저역통과 rate. 평지 보행/물리 고주파 흔들림 완화 |
+| `Camera::targetPitchSmoothingRate_` | `camera.hpp` | 타겟 orient에서 추출한 pitch 저역통과 rate. roll은 카메라 추종 회전에 사용하지 않음 |
+| `Camera::currentArmLength_` | `camera.hpp` | 현재 arm 길이 (fast-in 즉시 단축 / slow-out dt 기반 복귀) |
+| `Camera::armReturnRate_` | `camera.hpp` | slow-out 복귀 속도 (units/sec, 기본 3.f) |
+| `Camera::cameraRadius_` | `camera.hpp` | BVH raycast spherePad (기본 0.15f) |
 
 **AssetManager::loadGFXAssets (`AssetManager.hpp #12`):**
 - `loadGFXAssets(...)` — 의존성 기준 2단계 로드를 순차 호출하는 래퍼. 스탠드얼론 모드에서 사용.
