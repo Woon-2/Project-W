@@ -8,7 +8,11 @@ class PhysicsWorld;
 
 class Camera {
 public:
-	void setTargetObject(const std::shared_ptr<Object>& pObject) { pTargetObject_ = pObject; }
+	void setTargetObject(const std::shared_ptr<Object>& pObject) {
+		pTargetObject_ = pObject;
+		springInitialized_ = false;
+		followFilterInitialized_ = false;
+	}
 	std::shared_ptr<Object> pTargetObject() const { return pTargetObject_.lock(); }
 	// 타겟 오브젝트에 대한 카메라의 위치 오프셋을 설정한다.
 	void MU_CALLCONV setOffsetFromTarget(mu::Vec3 offset) { offsetFromTarget_ = offset; }
@@ -38,6 +42,10 @@ public:
 	float stiffness() const { return stiffness_; }
 	void setDamping(float damping) { damping_ = damping; }
 	float damping() const { return damping_; }
+	void setAtSmoothingRate(float rate) { atSmoothingRate_ = rate; }
+	float atSmoothingRate() const { return atSmoothingRate_; }
+	void setTargetPitchSmoothingRate(float rate) { targetPitchSmoothingRate_ = rate; }
+	float targetPitchSmoothingRate() const { return targetPitchSmoothingRate_; }
 
 	mu::Vec3 MU_CALLCONV eye() const { return eye_; }
 	mu::Vec3 MU_CALLCONV at() const { return at_; }
@@ -60,6 +68,10 @@ private:
 	float stiffness_ = 200.f;
 	float damping_ = 20.f;
 	bool springInitialized_ = false;
+	bool followFilterInitialized_ = false;
+	mu::Radian filteredTargetPitch_ = 0.f;
+	float atSmoothingRate_ = 18.f;
+	float targetPitchSmoothingRate_ = 8.f;
 
 	// perspective용
 	mu::Degree fovy_ = 90.f;

@@ -3022,8 +3022,14 @@ void Game::processInput(Milliseconds deltaTime) {
 	// 속도 상한은 kPlayerMaxSpeed, 가속률은 kPlayerAccelRate (파일 상단 상수 참조).
 	const auto moveXSign = !playerDead_ * ( (keyboardStateCurr_['D'] & 0x80) - (keyboardStateCurr_['A'] & 0x80) );
 	const auto moveZSign = !playerDead_ * ( (keyboardStateCurr_['W'] & 0x80) - (keyboardStateCurr_['S'] & 0x80) );
+	const bool rightMouseDragging = !uiManager_.needsCursor() && (keyboardStateCurr_[VK_RBUTTON] & 0x80);
 
 	if (moveXSign || moveZSign) {
+		if (!rightMouseDragging && std::abs(static_cast<float>(cameraYaw_)) > 1e-5f) {
+			player_->setOrient(player_->orient() * mu::NQuat(mu::Radian(0.f), mu::Radian(0.f), cameraYaw_));
+			cameraYaw_ = 0.f;
+		}
+
 		// 'W'/'S' 입력으로 판정된 Z 부호는 플레이어의 forward 벡터,
 		// 'D'/'A' 입력으로 판정된 X 부호는 플레이어의 right 벡터와 곱해 속도의 방향을 정한다.
 		const auto moveDirection = mu::NVec3(
@@ -3187,8 +3193,14 @@ void Game::processInput(Milliseconds deltaTime) {
 	);
 
 	if (!playerDead_) {
-		player_->setOrient(player_->orient() * yawRotation);
-		camera_.setOffsetFromTargetPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, mu::Radian(0.f)) );
+		if (rightMouseDragging) {
+			cameraYaw_ += yaw;
+		}
+		else if (std::abs(static_cast<float>(yaw)) > 1e-6f) {
+			player_->setOrient(player_->orient() * yawRotation);
+			cameraYaw_ = 0.f;
+		}
+		camera_.setOffsetFromTargetPreRotation( mu::NQuat(mu::Radian(0.f), cameraPitch_, cameraYaw_) );
 	}
 	else {
 		cameraYaw_ += yaw;

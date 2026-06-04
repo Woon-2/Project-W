@@ -719,12 +719,14 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 
 | 항목 | 위치 | 설명 |
 |------|------|------|
-| `Camera::update(float dt)` | `camera.cpp #5` | Spring Arm 충돌 회피: queryCameraArm → fast-in/slow-out arm 길이 제어 |
+| `Camera::update(float dt)` | `camera.cpp #5` | yaw-only + filtered pitch 타겟 회전, at_ 저역통과, Spring Arm 충돌 회피(queryCameraArm → fast-in/slow-out arm 길이 제어) |
 | `Camera::setView(eye, at)` | `camera.cpp` | 타겟 추종과 무관하게 view 직접 설정(로비 대기실 정적 카메라) |
 | `Camera::setPhysicsWorld()` | `camera.hpp #31` | PhysicsWorld 연결 (queryCameraArm 호출 경로) |
-| `Camera::currentArmLength_` | `camera.hpp #74` | 현재 arm 길이 (fast-in 즉시 단축 / slow-out dt 기반 복귀) |
-| `Camera::armReturnRate_` | `camera.hpp #75` | slow-out 복귀 속도 (units/sec, 기본 3.f) |
-| `Camera::cameraRadius_` | `camera.hpp #76` | BVH raycast spherePad (기본 0.2f) |
+| `Camera::atSmoothingRate_` | `camera.hpp` | 시선 목표점 at_ 저역통과 rate. 평지 보행/물리 고주파 흔들림 완화 |
+| `Camera::targetPitchSmoothingRate_` | `camera.hpp` | 타겟 orient에서 추출한 pitch 저역통과 rate. roll은 카메라 추종 회전에 사용하지 않음 |
+| `Camera::currentArmLength_` | `camera.hpp` | 현재 arm 길이 (fast-in 즉시 단축 / slow-out dt 기반 복귀) |
+| `Camera::armReturnRate_` | `camera.hpp` | slow-out 복귀 속도 (units/sec, 기본 3.f) |
+| `Camera::cameraRadius_` | `camera.hpp` | BVH raycast spherePad (기본 0.15f) |
 
 **AssetManager::loadGFXAssets (`AssetManager.hpp #9`):**
 - `loadGFXAssets(GFX& gfx, const GFX::AssetConfigs& configs = {})` — 요청 큐잉 후 `gfx.loadRequestedAssets()` 호출. 공용 리소스(`gfx.initSharedResources`)는 호출부에서 선행 초기화 필요. (Online 모드: 로비에서 ThreadPool로 백그라운드 호출)
