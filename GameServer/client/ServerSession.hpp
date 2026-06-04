@@ -25,7 +25,7 @@ class ServerSession {
 	};
 
 public:
-	ServerSession() : sock_(SocketUtils::createSocket()), netAddr_(serverIp, roomServerPort),
+	ServerSession() : sock_(SocketUtils::createSocket()), netAddr_(serverIp, lobbyServerPort),
 		connected_(false),recvBuf_(0x10000)/*64KB*/, sending_(false), pendingSendBuffers_(), game_(nullptr)
 	{
 		ZeroMemory(&recvOver_.over, sizeof(WSAOVERLAPPED));

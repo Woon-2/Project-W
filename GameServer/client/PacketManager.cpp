@@ -69,6 +69,26 @@ void PacketManager::handlePacket(byte* buffer, int32 len) {
 		handleSStrongholdStatePacket( buffer, len );
 		break;
 
+	case PacketType::S_CreateRoom:
+		handleSCreateRoomPacket( buffer, len );
+		break;
+
+	case PacketType::S_JoinRoom:
+		handleSJoinRoomPacket( buffer, len );
+		break;
+
+	case PacketType::S_LobbyRoomPlayerJoined:
+		handleSLobbyRoomPlayerJoinedPacket( buffer, len );
+		break;
+
+	case PacketType::S_LobbyRoomPlayerLeft:
+		handleSLobbyRoomPlayerLeftPacket( buffer, len );
+		break;
+
+	case PacketType::S_GameStart:
+		handleSGameStartPacket( buffer, len );
+		break;
+
 	default:
 		std::cout << "Unknown packet type received. Type: " << static_cast<uint16>(header->type) << '\n';
 		break;
@@ -197,6 +217,43 @@ void PacketManager::handleSStrongholdStatePacket( byte* buffer, int32 len ) {
 	INet::ClientApp::onlineGame()->onStrongholdState( pkt->strongholdId, pkt->hp, pkt->state );
 }
 
+void PacketManager::handleSCreateRoomPacket( byte* buffer, int32 len ) {
+	auto pkt = reinterpret_cast<SCreateRoomPacket*>(buffer);
+	std::string code( pkt->code, strnlen( pkt->code, sizeof( pkt->code ) ) );
+	INet::ClientApp::onlineGame()->onLobbyCreated( code, pkt->myId );
+}
+
+void PacketManager::handleSJoinRoomPacket( byte* buffer, int32 len ) {
+	auto pkt = reinterpret_cast<SJoinRoomPacket*>(buffer);
+	std::string code( pkt->code, strnlen( pkt->code, sizeof( pkt->code ) ) );
+
+	std::vector<uint16> playerIds;
+	auto list = pkt->getPlayerList();
+	playerIds.reserve( list.count() );
+	for ( uint16 i = 0; i < list.count(); ++i ) {
+		playerIds.push_back( list[i].sessionId );
+	}
+
+	INet::ClientApp::onlineGame()->onLobbyJoined( pkt->success, pkt->hostId, pkt->myId, code, playerIds );
+}
+
+void PacketManager::handleSLobbyRoomPlayerJoinedPacket( byte* buffer, int32 len ) {
+	auto pkt = reinterpret_cast<SLobbyRoomPlayerJoinedPacket*>(buffer);
+	INet::ClientApp::onlineGame()->onLobbyPlayerJoined( pkt->info.sessionId );
+}
+
+void PacketManager::handleSLobbyRoomPlayerLeftPacket( byte* buffer, int32 len ) {
+	auto pkt = reinterpret_cast<SLobbyRoomPlayerLeftPacket*>(buffer);
+	INet::ClientApp::onlineGame()->onLobbyPlayerLeft( pkt->sessionId );
+}
+
+void PacketManager::handleSGameStartPacket( byte* buffer, int32 len ) {
+	auto pkt = reinterpret_cast<SGameStartPacket*>(buffer);
+	std::string ip( pkt->roomServerIp, strnlen( pkt->roomServerIp, sizeof( pkt->roomServerIp ) ) );
+	std::string code( pkt->lobbyCode, strnlen( pkt->lobbyCode, sizeof( pkt->lobbyCode ) ) );
+	INet::ClientApp::onlineGame()->onGameStart( ip, pkt->roomServerPort, code );
+}
+
 std::shared_ptr<SendBuffer> PacketManager::makeCSkillStartPacket(uint32 skillAssetId, uint64 clientMs) {
 	auto sendBuffer = SendBufferManager::open(sizeof(CSkillStartPacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
@@ -250,6 +307,56 @@ std::shared_ptr<SendBuffer> PacketManager::makeCMouseMovePacket(float yawRad) {
 
 	cMouseMvPkt->size = bw.writeSize();
 	cMouseMvPkt->type = PacketType::C_MouseMove;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeCCreateRoomPacket() {
+	auto sendBuffer = SendBufferManager::open(sizeof(PacketHeader));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<PacketHeader>();
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::C_CreateRoom;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeCJoinRoomPacket(const std::string& code) {
+	auto sendBuffer = SendBufferManager::open(sizeof(CJoinRoomPacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<CJoinRoomPacket>();
+	strncpy_s(pkt->code, code.data(), _TRUNCATE);
+
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::C_JoinRoom;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeCLeaveRoomPacket() {
+	auto sendBuffer = SendBufferManager::open(sizeof(PacketHeader));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<PacketHeader>();
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::C_LeaveRoom;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
+std::shared_ptr<SendBuffer> PacketManager::makeCGameStartPacket() {
+	auto sendBuffer = SendBufferManager::open(sizeof(PacketHeader));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt = bw.reserve<PacketHeader>();
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::C_GameStart;
 
 	sendBuffer->close(bw.writeSize());
 	return sendBuffer;

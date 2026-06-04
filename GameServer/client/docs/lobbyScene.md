@@ -56,9 +56,28 @@ Online 클라이언트(`online/onlineGame`)를 **로비 씬 / 인게임 씬**으
 - ID3D12Device 리소스 생성, `cmdQ_->ExecuteCommandLists`는 free-threaded. 로드 전용 `LoadFence`는
   프레임 펜스와 분리.
 
-## 로비 네트워킹(현 범위)
-룸 프로토콜 미구현(`protocol.hpp`에 C_Enter/S_Enter만 존재)으로, 방 생성/참가/플레이어 슬롯은
-`script.js` 프로토타입을 이식한 **mock** 상태로 동작. 실제 LobbyServer/RoomServer 연동은 후속.
+## 로비 네트워킹(LobbyServer 연동)
+방 생성/참가/퇴장/플레이어 슬롯/게임시작 신호를 **실제 LobbyServer**(127.0.0.1:8000)와 연동한다.
+mock 상태(`script.js` 프로토타입 이식)는 제거됨.
+
+- **접속**: 클라이언트는 startup에서 `ServerSession`으로 `lobbyServerPort`(8000)에 접속한다(`ServerSession.hpp`
+  생성자). 접속 실패 시 기존대로 StandAlone 폴백.
+- **펌핑**: 로비 수신은 APC 완료 루틴(`ServerSession::completionCallback`) 기반이라 alertable 대기가 필요하다.
+  `LobbyScene()` 진입부에서 `SleepEx(1, true)`(수신 APC) + `INet::ClientApp::send()`(송신 flush)를 매 프레임 호출한다
+  (InGameScene와 동일 단일 스레드 모델 → 패킷 핸들러가 메인 스레드에서 실행되어 UI/상태 변경에 락 불필요).
+- **요청(C→S)**: `lobbyCreateRoom`→`C_CreateRoom`, `lobbyJoinRoom`(6자리 정규화 후)→`C_JoinRoom`,
+  `lobbyLeaveRoom`→`C_LeaveRoom`, `lobbyStartGame`(호스트 가드)→`C_GameStart`.
+  요청 함수는 상태를 직접 바꾸지 않고 패킷만 보낸다.
+- **응답(S→C)**: `PacketManager`가 `Online::Game`의 핸들러를 호출.
+  - `S_CreateRoom`→`onLobbyCreated(code, myId)`: 본인이 호스트, 슬롯1=본인, 대기실 전환.
+  - `S_JoinRoom`→`onLobbyJoined(success, hostId, myId, code, playerIds)`: 실패 시 "방을 찾을 수 없습니다",
+    성공 시 슬롯을 서버 목록으로 채우고 `isHost_=(myId==hostId)`.
+  - `S_LobbyRoomPlayerJoined`→`onLobbyPlayerJoined(sessionId)`: 슬롯 추가(중복 방지).
+  - `S_LobbyRoomPlayerLeft`→`onLobbyPlayerLeft(sessionId)`: 슬롯 제거. 떠난 자가 호스트면 남은 목록의 front를
+    새 호스트로(서버 규칙과 일치).
+  - `S_GameStart`→`onGameStart(ip, port, code)`: **현재 범위에선 로그만**. RoomServer 접속/인게임 전환은 후속.
+- **자기 식별**: `protocol.hpp`의 `S_CreateRoom`/`S_JoinRoom`에 `myId`(수신자 본인 sessionId)를 추가해
+  본인 슬롯 표시("나")와 호스트 판별/이양을 정확히 처리한다. `LobbyPlayer.id`(string)는 `sessionId`(uint16)로 변경.
 
 ## 방 코드 입력 (TextInput 위젯)
 프로토타입의 `joinRoomForm`(6자리 코드 입력 → 참가)을 위해 `TextInput` 위젯을 신설했다.
@@ -68,9 +87,9 @@ Online 클라이언트(`online/onlineGame`)를 **로비 씬 / 인게임 씬**으
 - 문자 입력 라우팅: `UIElement`에 `onChar(wchar_t)`/`onFocus()`/`onBlur()` 추가. `UIManager::onWndMsg`가
   `WM_CHAR`를 포커스 요소의 `onChar`로 전달하고, 클릭 시 포커스 변경에 맞춰 `onBlur`/`onFocus` 호출
   (빈 공간 클릭 시 포커스 해제). `WM_CHAR`는 메시지 루프의 `TranslateMessage`로 생성됨.
-- 메인메뉴: `방 만들기` + 방 코드 입력(`roomCodeInput_`) + `참가`(`lobbyJoinRoom`). 참가는 6자리 검증만
-  하고, 서버 미연동 상태라 실제 방 조회가 불가하므로 항상 "방을 찾을 수 없습니다" 로그/메시지를 출력한다
-  (대기실 전환 없음). `방 만들기`는 self-host mock으로 대기실 전환.
+- 메인메뉴: `방 만들기` + 방 코드 입력(`roomCodeInput_`) + `참가`(`lobbyJoinRoom`). 참가는 6자리 정규화/검증 후
+  `C_JoinRoom`을 전송하고, 서버의 `S_JoinRoom` 응답으로 성공 시 대기실 전환·실패 시 "방을 찾을 수 없습니다"를
+  표시한다(`onLobbyJoined`). `방 만들기`는 `C_CreateRoom` 전송 후 `S_CreateRoom`(`onLobbyCreated`)으로 대기실 전환.
 
 ## 메인화면 배경 이미지 & 로고 (이미지 에셋)
 메인화면(`LobbyState::MainMenu`)을 단색 UI에서 **배경 키 아트 + 게임 로고(OutLander)** 구성으로 전환.
@@ -151,5 +170,8 @@ hover/pressed는 엔진 틴트로 처리.
 - 후속(선택): 캐릭터 턴테이블 회전, CSM 그림자, 이름표를 캐릭터에 정확 정렬(`worldToScreen`).
 
 ## 후속(범위 밖)
-- 실제 룸 프로토콜 설계·연동 (현재 방 생성/참가/시작은 mock)
+- `S_GameStart` 수신 후 RoomServer 핸드오프: LobbyServer 연결 해제 → RoomServer(ip/port) 재접속 →
+  `enterInGame()`. ServerSession 재타게팅(소켓 재생성/recvBuf 리셋) 필요. RoomServer는 현재 lobbyCode가 아닌
+  접속 순서(`totalSessions % 4`)로 방을 묶으므로, lobbyCode 기반 그룹화도 함께 설계 필요.
+- 호스트 이양 시 비-퇴장 클라이언트가 새 호스트를 명시적으로 통보받는 패킷(현재는 left 패킷의 leaver id로 추론).
 - TextInput 캐럿 블링킹/텍스트 선택/클립보드 등 고급 편집

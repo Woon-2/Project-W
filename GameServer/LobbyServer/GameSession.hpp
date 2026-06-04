@@ -8,7 +8,7 @@ class LobbyRoom;
 class GameSession : public PacketSession {
 public:
 	GameSession() = default;
-	virtual ~GameSession() = default;
+	virtual ~GameSession();
 
 	LobbyRoom* myRoom_ = nullptr;
 

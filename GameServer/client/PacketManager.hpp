@@ -23,10 +23,23 @@ public:
 	static void handleSDebugHitboxPacket( byte* buffer, int32 len );
 	static void handleSStrongholdStatePacket( byte* buffer, int32 len );
 
+	// 로비
+	static void handleSCreateRoomPacket( byte* buffer, int32 len );
+	static void handleSJoinRoomPacket( byte* buffer, int32 len );
+	static void handleSLobbyRoomPlayerJoinedPacket( byte* buffer, int32 len );
+	static void handleSLobbyRoomPlayerLeftPacket( byte* buffer, int32 len );
+	static void handleSGameStartPacket( byte* buffer, int32 len );
+
 	static std::shared_ptr<SendBuffer> makeCMovePacket(DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 velocity);
 	static std::shared_ptr<SendBuffer> makeCMouseMovePacket(float yawRad);
 	static std::shared_ptr<SendBuffer> makeCAttackPacket(uint64 clientMs);
 	static std::shared_ptr<SendBuffer> makeCSkillStartPacket(uint32 skillAssetId, uint64 clientMs);
+
+	// 로비
+	static std::shared_ptr<SendBuffer> makeCCreateRoomPacket();
+	static std::shared_ptr<SendBuffer> makeCJoinRoomPacket(const std::string& code);
+	static std::shared_ptr<SendBuffer> makeCLeaveRoomPacket();
+	static std::shared_ptr<SendBuffer> makeCGameStartPacket();
 };
 
 #endif // client_packet_manager_hpp

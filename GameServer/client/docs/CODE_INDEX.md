@@ -643,6 +643,10 @@ Unity UberParticles `_EDGEFADE` 기능 포팅. 링 메시 파티클에 Fresnel �
 | 항목 | 위치 | 설명 |
 |------|------|------|
 | `Game::resolvePlayerSeparation()` | `onlineGame.cpp` (`removePlayer` 직후) | 플레이어 간 reciprocal soft separation. 매 물리 step 후 호출. 로컬 플레이어를 XZ 침투량의 절반만큼 `setCurrPos`로 밀어냄. Faction `Players` 게이팅, `getId` 결정론적 tie-break, 적용 시 `moveChange_=true`. 상수: `kPlayerSeparationRadius`/`kMaxSeparationSpeed`/`kSeparationStiffness`, 충돌 레이어 `kLayerPlayer`/`kPlayerCollisionMask` (파일 상단) |
+| `Game::lobbyCreateRoom/JoinRoom/LeaveRoom/StartGame()` | `onlineGame.cpp` (UI 버튼 콜백) | LobbyServer로 요청 패킷 전송(C_CreateRoom/C_JoinRoom/C_LeaveRoom/C_GameStart). 상태 변경은 응답 핸들러에서 수행 |
+| `Game::onLobbyCreated/onLobbyJoined/onLobbyPlayerJoined/onLobbyPlayerLeft/onGameStart()` | `onlineGame.cpp` (lobby 액션 직후, public) | LobbyServer 응답 처리. `PacketManager`가 `LobbyScene`의 `SleepEx(1,true)` alertable 대기에서 호출. 룸 상태/슬롯/호스트 갱신 후 `refreshLobbyUI()`. `onGameStart`는 현재 로그만(RoomServer 핸드오프 후속) |
+| `Game::lobbyDisplayName(uint16)` | `onlineGame.cpp` | sessionId → 표시 이름(본인 `myId_`=`"나"`, 그 외 `"Player_<id>"`) |
+| `Game::LobbyScene()` 진입부 | `onlineGame.cpp` | `SleepEx(1,true)` + `ClientApp::send()`로 로비 네트워크 펌핑(InGameScene와 동일 패턴) |
 
 **Game 멤버 변수 (game.hpp #81-135):**
 
