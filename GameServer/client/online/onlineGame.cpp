@@ -4181,6 +4181,7 @@ void Game::processInputGame(Milliseconds deltaTime) {
 	if ( (keyboardStateCurr_['H'] & 0x80) && !(keyboardStatePrev_['H'] & 0x80) ) {
 		gfx_.setHiZCullEnabled(!gfx_.isHiZCullEnabled());
 	}
+	gfx_.setHiZCullEnabled(false);
 
 	// G key: cycle GBuffer debug view (deferred path only)
 	if ( (keyboardStateCurr_['G'] & 0x80) && !(keyboardStatePrev_['G'] & 0x80) ) {
