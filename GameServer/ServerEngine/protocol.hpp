@@ -6,7 +6,7 @@
 #include "../common/mathUtil.hpp"
 
 constexpr const char* serverIp = "127.0.0.1";
-constexpr uint16 lobbyServerPort = 8000;
+constexpr uint16 lobbyServerPort = 8888;
 constexpr uint16 roomServerPort  = 9000;
 
 enum class PacketType : uint16 {
