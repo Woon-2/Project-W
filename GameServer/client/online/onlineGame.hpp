@@ -130,7 +130,7 @@ private:
 	// 로비 UI 텍스처(배경/로고)를 메인 스레드에서 즉시 로드한다.
 	void loadLobbyTextures();
 
-	// 로비 UI 구성/갱신 (mock 룸 상태 기반).
+	// 로비 UI 구성/갱신 (LobbyServer 룸 상태 기반).
 	void buildLobbyUI();
 	void refreshLobbyUI();
 
@@ -144,9 +144,18 @@ private:
 	void lobbyJoinRoom(const std::string& code);
 	void lobbyLeaveRoom();
 	void lobbyStartGame();
-	void lobbyAddDummy();
-	void lobbyRemoveDummy();
-	std::string makeRoomCode();
+
+public:
+	// LobbyServer 응답 패킷 핸들러 (PacketManager가 메인 스레드 alertable 대기에서 호출).
+	void onLobbyCreated(const std::string& code, uint16 myId);
+	void onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::string& code, const std::vector<uint16>& playerIds);
+	void onLobbyPlayerJoined(uint16 sessionId);
+	void onLobbyPlayerLeft(uint16 sessionId);
+	void onGameStart(const std::string& roomServerIp, uint16 roomServerPort, const std::string& lobbyCode);
+
+private:
+	// sessionId → 표시 이름(본인은 "나", 그 외 "Player_<id>").
+	std::wstring lobbyDisplayName(uint16 sessionId) const;
 
 	void cullObjects();
 	void applyHiZCulling();
@@ -335,16 +344,22 @@ private:
 	bool inGameAssetsReady_ = false;   // 메인 스레드에서 1회 처리용
 	bool uiBaseReady_       = false;   // UIManager 기본 리소스 초기화 여부
 
-	// mock 룸 상태 (script.js 프로토타입 이식)
+	// LobbyServer 룸 상태
 	struct LobbyPlayer {
-		std::string  id;
+		uint16       sessionId;
 		std::wstring name;
 	};
 	std::string              roomCode_{};
 	bool                     isHost_ = false;
-	std::string              hostId_{};
+	uint16                   hostId_ = 0;
+	uint16                   myId_   = 0;
 	std::vector<LobbyPlayer> lobbyPlayers_{};
-	int                      dummySeed_ = 1;
+
+	// S_GameStart 핸드오프 요청(onGameStart가 적재, LobbyScene이 에셋 로드 후 실행).
+	bool        pendingHandoff_ = false;
+	std::string handoffIp_{};
+	uint16      handoffPort_ = 0;
+	std::string handoffCode_{};
 
 	// 로비 UI 텍스처 (메인 스레드에서 즉시 로드, 인게임 백그라운드 로드와 분리)
 	std::unordered_map<std::string, Texture> lobbyTexHashMap_{};

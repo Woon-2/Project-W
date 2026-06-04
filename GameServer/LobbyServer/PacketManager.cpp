@@ -1,4 +1,4 @@
-#include "lspch.hpp"
+﻿#include "lspch.hpp"
 #include "PacketManager.hpp"
 #include "SendBuffer.hpp"
 #include "BufferWriter.hpp"
@@ -6,24 +6,24 @@
 #include "LobbyRoom.hpp"
 #include "LobbyManager.hpp"
 
-void PacketManager::handlePacket(GameSession* session, byte* buffer, int32 len) {
+void PacketManager::handlePacket( GameSession* session, byte* buffer, int32 len ) {
 	auto header = reinterpret_cast<PacketHeader*>(buffer);
 
-	switch (header->type) {
+	switch ( header->type ) {
 	case PacketType::C_CreateRoom:
-		handleCCreateRoomPacket(session, buffer, len);
+		handleCCreateRoomPacket( session, buffer, len );
 		break;
 
 	case PacketType::C_JoinRoom:
-		handleCJoinRoomPacket(session, buffer, len);
+		handleCJoinRoomPacket( session, buffer, len );
 		break;
 
 	case PacketType::C_LeaveRoom:
-		handleCLeaveRoomPacket(session, buffer, len);
+		handleCLeaveRoomPacket( session, buffer, len );
 		break;
 
 	case PacketType::C_GameStart:
-		handleCGameStartPacket(session, buffer, len);
+		handleCGameStartPacket( session, buffer, len );
 		break;
 
 	default:
@@ -38,10 +38,10 @@ void PacketManager::handleCCreateRoomPacket( GameSession* session, byte* buffer,
 		return;
 	}
 
-	auto* room = LobbyManager::createRoom();
-	room->enter( session );
-	session->myRoom_ = room;
-	session->send( makeSCreateRoomPacket( room->code() ) );
+	auto room = LobbyManager::createRoom();
+	room->enter( std::static_pointer_cast<GameSession>( session->shared_from_this() ) );
+	session->myRoom_ = room.get();
+	session->send( makeSCreateRoomPacket( static_cast<uint16>(session->id()), room->code() ) );
 }
 
 void PacketManager::handleCJoinRoomPacket( GameSession* session, byte* buffer, int32 len ) {
@@ -49,22 +49,24 @@ void PacketManager::handleCJoinRoomPacket( GameSession* session, byte* buffer, i
 		return;
 	}
 
-	auto* pkt = reinterpret_cast<CJoinRoomPacket*>(buffer);
+	auto pkt = reinterpret_cast<CJoinRoomPacket*>(buffer);
 	std::string code( pkt->code, strnlen_s( pkt->code, sizeof( pkt->code ) ) );
 
-	auto* room = LobbyManager::findRoom( code );
+	const uint16 myId = static_cast<uint16>( session->id() );
+
+	auto room = LobbyManager::findRoom( code );
 	if ( !room ) {
-		session->send( makeSJoinRoomPacket( false, 0, "", {} ) );
+		session->send( makeSJoinRoomPacket( false, myId, 0, "", {} ) );
 		return;
 	}
 
-	if ( !room->enter( session ) ) {
-		session->send( makeSJoinRoomPacket( false, 0, "", {} ) );
+	if ( !room->enter( std::static_pointer_cast<GameSession>( session->shared_from_this() ) ) ) {
+		session->send( makeSJoinRoomPacket( false, myId, 0, "", {} ) );
 		return;
 	}
 
-	session->myRoom_ = room;
-	session->send( makeSJoinRoomPacket( true, room->hostId(), room->code(), room->playerInfos() ) );
+	session->myRoom_ = room.get();
+	session->send( makeSJoinRoomPacket( true, myId, room->hostId(), room->code(), room->playerInfos() ) );
 }
 
 void PacketManager::handleCLeaveRoomPacket( GameSession* session, byte* buffer, int32 len ) {
@@ -88,11 +90,12 @@ void PacketManager::handleCGameStartPacket( GameSession* session, byte* buffer, 
 	session->myRoom_->startGame();
 }
 
-std::shared_ptr<SendBuffer> PacketManager::makeSCreateRoomPacket( const std::string& code ) {
+std::shared_ptr<SendBuffer> PacketManager::makeSCreateRoomPacket( uint16 myId, const std::string& code ) {
 	auto sendBuffer = SendBufferManager::open( sizeof( SCreateRoomPacket ) );
 	auto bw = BufferWriter( sendBuffer->data(), sendBuffer->allocSize() );
 
 	auto pkt = bw.reserve<SCreateRoomPacket>();
+	pkt->myId = myId;
 	strncpy_s( pkt->code, code.data(), _TRUNCATE );
 
 	pkt->size = bw.writeSize();
@@ -102,13 +105,14 @@ std::shared_ptr<SendBuffer> PacketManager::makeSCreateRoomPacket( const std::str
 	return sendBuffer;
 }
 
-std::shared_ptr<SendBuffer> PacketManager::makeSJoinRoomPacket( bool success, uint16 hostId, const std::string& code, const std::vector<LobbyPlayerInfo>& playerInfos ) {
+std::shared_ptr<SendBuffer> PacketManager::makeSJoinRoomPacket( bool success, uint16 myId, uint16 hostId, const std::string& code, const std::vector<LobbyPlayerInfo>& playerInfos ) {
 	const uint8 cnt = static_cast<uint8>(playerInfos.size());
 	auto sendBuffer = SendBufferManager::open( sizeof( SJoinRoomPacket ) + sizeof( LobbyPlayerInfo ) * cnt );
 	auto bw = BufferWriter( sendBuffer->data(), sendBuffer->allocSize() );
 
 	auto pkt = bw.reserve<SJoinRoomPacket>();
 	pkt->success = success;
+	pkt->myId = myId;
 	pkt->playerCnt = cnt;
 	pkt->hostId = hostId;
 	if ( !code.empty() ) {

@@ -14,6 +14,9 @@ public:
 	Room*   room()   const { return myRoom_;   }
 	Player* player() const { return myPlayer_; }
 
+	// C_Enter(lobbyCode) 수신 시 호출. 코드로 방을 find-or-create 하고 입장 잡을 건다.
+	void enterRoom(const std::string& lobbyCode);
+
 protected:
 	virtual void onConnected() override;
 	virtual void onDisconnected() override;

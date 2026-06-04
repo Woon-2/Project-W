@@ -6,7 +6,7 @@
 
 class RoomServer {
 public:
-	RoomServer() : reactor_(), listener_(reactor_.iocpHandle()),
+	RoomServer() : reactor_(), listener_(std::make_shared<Listener>(reactor_.iocpHandle())),
 		iocpThreads_(), jobTimerThread_(), jobThreads_()
 	{}
 
@@ -17,7 +17,7 @@ public:
 
 private:
 	IocpReactor reactor_;
-	Listener listener_;
+	std::shared_ptr<Listener> listener_;
 	std::vector<std::thread> iocpThreads_;
 	std::thread jobTimerThread_;
 	std::vector<std::thread> jobThreads_;

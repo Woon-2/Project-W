@@ -30,6 +30,9 @@
     <ClCompile Include="GameSession.cpp">
       <Filter>network\GameSession</Filter>
     </ClCompile>
+    <ClCompile Include="GameSessionManager.cpp">
+      <Filter>network\GameSession</Filter>
+    </ClCompile>
     <ClCompile Include="LobbyServer.cpp">
       <Filter>network\Server</Filter>
     </ClCompile>
@@ -54,6 +57,9 @@
       <Filter>network\Listener</Filter>
     </ClInclude>
     <ClInclude Include="GameSession.hpp">
+      <Filter>network\GameSession</Filter>
+    </ClInclude>
+    <ClInclude Include="GameSessionManager.hpp">
       <Filter>network\GameSession</Filter>
     </ClInclude>
     <ClInclude Include="LobbyServer.hpp">

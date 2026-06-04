@@ -27,8 +27,8 @@ void DoJob() {
 }
 
 void RoomServer::start() {
-	reactor_.registerHandle(listener_.getHandle());
-	listener_.startAccept();
+	reactor_.registerHandle(listener_->getHandle());
+	listener_->startAccept();
 
 	const int32 coreCnt			= static_cast<int32>(numberOfPhysicalCores());
 	const int32 iocpThreadCnt	= 2;

@@ -15,7 +15,7 @@ void Listener::startAccept() {
 
 	for ( int32 i = 0; i < count; ++i ) {
 		auto acceptEv = ObjectPool<AcceptEvent>::pop();
-		acceptEv->setOwner( this );
+		acceptEv->setOwner( shared_from_this() );
 		registerAccept( acceptEv );
 		acceptEvs_.emplace_back( acceptEv );
 	}
@@ -28,7 +28,7 @@ void Listener::dispatch( IoEvent* event, int32 numBytes ) {
 }
 
 void Listener::registerAccept( AcceptEvent* event ) {
-	auto session = ObjectPool<GameSession>::pop();
+	auto session = ObjectPool<GameSession>::makeShared();
 	CreateIoCompletionPort( session->getHandle(), iocpHandle_, 0, 0 );
 
 	event->clear();

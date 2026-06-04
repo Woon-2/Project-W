@@ -10,6 +10,7 @@ class GameSession;
 class PacketManager {
 public:
 	static void handlePacket(GameSession* session, byte* buffer, int32 len);
+	static void handleCEnterPacket(GameSession* session, byte* buffer, int32 len);
 	static void handleCMovePacket(GameSession* session, byte* buffer, int32 len);
 	static void handleCMouseMovePacket(GameSession* session, byte* buffer, int32 len);
 	static void handleCAttackPacket(GameSession* session, byte* buffer, int32 len);

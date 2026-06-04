@@ -6,13 +6,9 @@
 #include "ObjectPool.hpp"
 #include "object.hpp"
 
-// temporary --------------------------------
 #include "IdPool.hpp"
 #include "Room.hpp"
 #include "RoomManager.hpp"
-static std::atomic_int32_t totalSessions{0};
-static const int32 maxRoomSessions = 4;
-// ------------------------------------------
 
 GameSession::~GameSession() {
 	std::cout << "GameSession destroyed. ID: " << id() << '\n';
@@ -22,27 +18,30 @@ GameSession::~GameSession() {
 }
 
 void GameSession::onConnected() {
-	if (totalSessions.load() % maxRoomSessions == 0) {
-		myRoom_ = RoomManager::makeRoom();
-	}
-	else {
-		myRoom_ = RoomManager::findRoom(RoomIdPool::currId());
-	}
-	++totalSessions;
-
+	// 방 배정은 접속만으로 하지 않는다. 클라가 C_Enter(lobbyCode)를 보내면 enterRoom에서 코드 기반으로 배정.
 	myPlayer_ = ObjectPool<Player>::pop();
 	myPlayer_->setId(id());
+}
 
-	myRoom_->doAsync([this]() {
-		myRoom_->enter(this);
+void GameSession::enterRoom(const std::string& lobbyCode) {
+	myRoom_ = RoomManager::findOrCreateRoomByCode(lobbyCode);
+
+	// 비동기 잡이 실행될 때까지 세션이 살아 있어야 하므로 shared_ptr(self)를 캡처한다.
+	auto self = std::static_pointer_cast<GameSession>(shared_from_this());
+	myRoom_->doAsync([self]() {
+		self->myRoom_->enter(self.get());
 	});
 }
 
 void GameSession::onDisconnected() {
-	--totalSessions;
-	
-	myRoom_->doAsync([this]() {
-		myRoom_->leave(this);
+	// C_Enter 전에 끊기면 myRoom_가 없을 수 있다.
+	if (!myRoom_) {
+		return;
+	}
+
+	auto self = std::static_pointer_cast<GameSession>(shared_from_this());
+	myRoom_->doAsync([self]() {
+		self->myRoom_->leave(self.get());
 	});
 }
 

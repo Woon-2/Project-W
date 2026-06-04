@@ -3302,15 +3302,15 @@ void Game::buildLobbyUI() {
 		}
 	}
 
-	// 디버그 툴
-	const float debugY = roomPanelH - debugH + 2.f;
-	makeLabel(roomPanel, L"MOCK", pad, debugY, 12.f, 60.f, debugH, textMuted);
-	fadeBtn(styleSecondary(makeButton(roomPanel, L"더미 추가",
-		roomPanelW - pad - 218.f, debugY, 104.f, debugH - 4.f,
-		surface, primarySoft, primarySoft, 13.f, [this]() { lobbyAddDummy(); }, buttonInk)));
-	fadeBtn(styleSecondary(makeButton(roomPanel, L"더미 제거",
-		roomPanelW - pad - 104.f, debugY, 104.f, debugH - 4.f,
-		surface, primarySoft, primarySoft, 13.f, [this]() { lobbyRemoveDummy(); }, buttonInk)));
+	// // 디버그 툴
+	// const float debugY = roomPanelH - debugH + 2.f;
+	// makeLabel(roomPanel, L"MOCK", pad, debugY, 12.f, 60.f, debugH, textMuted);
+	// fadeBtn(styleSecondary(makeButton(roomPanel, L"더미 추가",
+	// 	roomPanelW - pad - 218.f, debugY, 104.f, debugH - 4.f,
+	// 	surface, primarySoft, primarySoft, 13.f, [this]() { lobbyAddDummy(); }, buttonInk)));
+	// fadeBtn(styleSecondary(makeButton(roomPanel, L"더미 제거",
+	// 	roomPanelW - pad - 104.f, debugY, 104.f, debugH - 4.f,
+	// 	surface, primarySoft, primarySoft, 13.f, [this]() { lobbyRemoveDummy(); }, buttonInk)));
 
 	// Full-screen loading overlay (built last so it sits on top by zOrder).
 	buildLoadingScreen();
@@ -3514,7 +3514,7 @@ void Game::refreshLobbyUI() {
 		const bool filled = (i < static_cast<int>(lobbyPlayers_.size()));
 		if (filled) {
 			const auto& player = lobbyPlayers_[i];
-			const bool isSlotHost = (player.id == hostId_);
+			const bool isSlotHost = (player.sessionId == hostId_);
 
 			if (slotNameLabels_[i]) {
 				slotNameLabels_[i]->setText(player.name);
@@ -3560,6 +3560,22 @@ void Game::refreshLobbyUI() {
 }
 
 void Game::LobbyScene(Milliseconds deltaTime) {
+	// 로비 네트워킹 펌핑: 수신 APC 처리 + 큐잉된 송신 flush (InGameScene와 동일한 단일 스레드 모델).
+	SleepEx(1, true);
+	INet::ClientApp::send();
+
+	// RoomServer 핸드오프: onGameStart가 적재한 요청을, APC 밖이며 인게임 에셋 로드가 끝난 뒤에만 실행한다.
+	// (비호스트는 로드 완료 전 S_GameStart를 받을 수 있다. 그 전엔 대기실에 머물고, RoomServer는
+	//  이 클라의 C_Enter가 늦게 와도 그때 입장 처리한다.)
+	if (pendingHandoff_ && inGameAssetsLoaded_.load(std::memory_order_acquire)) {
+		pendingHandoff_ = false;
+		INet::ClientApp::reconnectToRoomServer(handoffIp_, handoffPort_);
+		INet::ClientApp::addSendBuffer(PacketManager::makeCEnterPacket(handoffCode_));
+		INet::ClientApp::send();
+		enterInGame();   // scene_=InGame → 이후 InGameScene가 펌핑, RoomServer의 S_Enter로 플레이어 생성
+		return;
+	}
+
 	const bool loaded = inGameAssetsLoaded_.load(std::memory_order_acquire);
 
 	// Start was pressed while still loading → enter in-game once assets are ready (req 3).
@@ -3752,27 +3768,18 @@ void Game::enterInGame() {
 	// 이전 플레이어의 물리 바디가 물리월드에 dangling으로 남아 크래시한다.
 }
 
-std::string Game::makeRoomCode() {
-	static const char kAlphabet[] = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-	static std::mt19937 rng{ std::random_device{}() };
-	std::uniform_int_distribution<int> dist(0, static_cast<int>(sizeof(kAlphabet) - 2));
-	std::string code;
-	for (int i = 0; i < 6; ++i) {
-		code += kAlphabet[dist(rng)];
+std::wstring Game::lobbyDisplayName(uint16 sessionId) const {
+	if (sessionId == myId_) {
+		return L"나";
 	}
-	return code;
+	return L"Player_" + std::to_wstring(sessionId);
 }
 
 void Game::lobbyCreateRoom() {
-	roomCode_ = makeRoomCode();
-	isHost_   = true;
-	hostId_   = "local-player";
-	lobbyPlayers_.clear();
-	lobbyPlayers_.push_back({ "local-player", L"나" });
-	dummySeed_  = 1;
-	lobbyState_ = LobbyState::WaitingRoom;
-	refreshLobbyUI();
-	gSharedLog << "[Lobby] 방 생성: " << roomCode_ << "\n";
+	// 방 생성 요청만 보낸다. 대기실 전환은 S_CreateRoom 수신(onLobbyCreated) 시 수행.
+	INet::ClientApp::addSendBuffer(PacketManager::makeCCreateRoomPacket());
+	INet::ClientApp::send();
+	gSharedLog << "[Lobby] 방 생성 요청 전송\n";
 }
 
 void Game::lobbyJoinRoom(const std::string& code) {
@@ -3790,18 +3797,22 @@ void Game::lobbyJoinRoom(const std::string& code) {
 		return;
 	}
 
-	// 서버 미연동 상태에서는 실제 방을 조회할 수 없으므로 항상 "방 없음"으로 처리한다.
-	// (실제 룸 프로토콜 연동은 후속 작업)
-	if (mainMenuMsgLabel_) mainMenuMsgLabel_->setText(L"방을 찾을 수 없습니다");
-	gSharedLog << "[Lobby] 방 참가 실패: 방을 찾을 수 없습니다 (code=" << norm << ")\n";
+	// 참가 요청만 보낸다. 성공/실패 처리는 S_JoinRoom 수신(onLobbyJoined) 시 수행.
+	INet::ClientApp::addSendBuffer(PacketManager::makeCJoinRoomPacket(norm));
+	INet::ClientApp::send();
+	gSharedLog << "[Lobby] 방 참가 요청 전송 (code=" << norm << ")\n";
 }
 
 void Game::lobbyLeaveRoom() {
+	// 서버에 퇴장 통보 후 로컬 UI를 메인화면으로 되돌린다.
+	INet::ClientApp::addSendBuffer(PacketManager::makeCLeaveRoomPacket());
+	INet::ClientApp::send();
+
 	roomCode_.clear();
 	isHost_ = false;
-	hostId_.clear();
+	hostId_ = 0;
+	myId_   = 0;
 	lobbyPlayers_.clear();
-	dummySeed_  = 1;
 	lobbyState_ = LobbyState::MainMenu;
 	lobbyCameraTime_ = 0.f;
 	pendingStart_ = false;
@@ -3825,36 +3836,81 @@ void Game::lobbyStartGame() {
 		gSharedLog << "[Lobby] 호스트만 시작할 수 있습니다.\n";
 		return;
 	}
-	// Do not block start while loading (req 2). If ready, enter now; otherwise mark a
-	// pending start, show the loading screen, and enter from LobbyScene once ready (req 3).
-	if (inGameAssetsLoaded_.load(std::memory_order_acquire)) {
-		enterInGame();
-	} else {
-		pendingStart_ = true;
-		gSharedLog << "[Lobby] loading assets - showing loading screen before entering.\n";
-	}
+	
+	// 게임 시작 요청만 보낸다(C_GameStart). S_GameStart 수신 시 onGameStart에서 처리.
+	INet::ClientApp::addSendBuffer(PacketManager::makeCGameStartPacket());
+	INet::ClientApp::send();
+	gSharedLog << "[Lobby] 게임 시작 요청 전송\n";
 }
 
-void Game::lobbyAddDummy() {
-	if (static_cast<int>(lobbyPlayers_.size()) >= kMaxLobbyPlayers) {
+// --- LobbyServer 응답 핸들러 (메인 스레드 alertable 대기에서 호출) ---
+
+void Game::onLobbyCreated(const std::string& code, uint16 myId) {
+	roomCode_ = code;
+	myId_     = myId;
+	hostId_   = myId;       // 생성자가 곧 호스트
+	isHost_   = true;
+	lobbyPlayers_.clear();
+	lobbyPlayers_.push_back({ myId, lobbyDisplayName(myId) });
+	lobbyState_ = LobbyState::WaitingRoom;
+	refreshLobbyUI();
+	gSharedLog << "[Lobby] 방 생성됨: " << code << " (myId=" << myId << ")\n";
+}
+
+void Game::onLobbyJoined(bool success, uint16 hostId, uint16 myId, const std::string& code, const std::vector<uint16>& playerIds) {
+	if (!success) {
+		if (mainMenuMsgLabel_) mainMenuMsgLabel_->setText(L"방을 찾을 수 없습니다");
+		gSharedLog << "[Lobby] 방 참가 실패\n";
 		return;
 	}
-	++dummySeed_;
-	lobbyPlayers_.push_back({
-		"dummy-" + std::to_string(dummySeed_),
-		L"Player_" + std::to_wstring(dummySeed_)
-	});
+
+	myId_     = myId;
+	hostId_   = hostId;
+	roomCode_ = code;
+	isHost_   = (myId == hostId);
+
+	lobbyPlayers_.clear();
+	for (uint16 id : playerIds) {
+		lobbyPlayers_.push_back({ id, lobbyDisplayName(id) });
+	}
+
+	lobbyState_ = LobbyState::WaitingRoom;
 	refreshLobbyUI();
+	gSharedLog << "[Lobby] 방 참가 성공: " << code << " (myId=" << myId << ", host=" << hostId << ")\n";
 }
 
-void Game::lobbyRemoveDummy() {
-	for (int i = static_cast<int>(lobbyPlayers_.size()) - 1; i >= 0; --i) {
-		if (lobbyPlayers_[i].id != "local-player" && lobbyPlayers_[i].id != hostId_) {
-			lobbyPlayers_.erase(lobbyPlayers_.begin() + i);
-			refreshLobbyUI();
-			return;
-		}
+void Game::onLobbyPlayerJoined(uint16 sessionId) {
+	const bool exists = std::any_of(lobbyPlayers_.begin(), lobbyPlayers_.end(),
+		[sessionId](const LobbyPlayer& p) { return p.sessionId == sessionId; });
+	if (!exists) {
+		lobbyPlayers_.push_back({ sessionId, lobbyDisplayName(sessionId) });
 	}
+	refreshLobbyUI();
+	gSharedLog << "[Lobby] 플레이어 입장: " << sessionId << "\n";
+}
+
+void Game::onLobbyPlayerLeft(uint16 sessionId) {
+	std::erase_if(lobbyPlayers_, [sessionId](const LobbyPlayer& p) { return p.sessionId == sessionId; });
+
+	// 호스트가 떠났으면 서버 규칙과 동일하게 남은 목록의 front를 새 호스트로 본다.
+	if (sessionId == hostId_ && !lobbyPlayers_.empty()) {
+		hostId_ = lobbyPlayers_.front().sessionId;
+		isHost_ = (myId_ == hostId_);
+	}
+
+	refreshLobbyUI();
+	gSharedLog << "[Lobby] 플레이어 퇴장: " << sessionId << "\n";
+}
+
+void Game::onGameStart(const std::string& roomServerIp, uint16 roomServerPort, const std::string& lobbyCode) {
+	// 이 함수는 로비 recv APC 안에서 실행되므로 여기서 소켓을 건드리지 않고, 핸드오프 요청만 적재한다.
+	// 실제 재접속/씬 전환은 LobbyScene이 APC 밖(안전 지점)에서 에셋 로드 완료 후 수행한다.
+	handoffIp_     = roomServerIp;
+	handoffPort_   = roomServerPort;
+	handoffCode_   = lobbyCode;
+	pendingHandoff_ = true;
+	gSharedLog << "[Lobby] 게임 시작 신호 수신: RoomServer " << roomServerIp << ":" << roomServerPort
+		<< " (code=" << lobbyCode << ")\n";
 }
 
 // 윈도우 프로시저에서 특정한 메시지 처리를 위임받는다.
