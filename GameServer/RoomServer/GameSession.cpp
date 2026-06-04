@@ -33,16 +33,20 @@ void GameSession::onConnected() {
 	myPlayer_ = ObjectPool<Player>::pop();
 	myPlayer_->setId(id());
 
-	myRoom_->doAsync([this]() {
-		myRoom_->enter(this);
+	// 비동기 잡이 실행될 때까지 세션이 살아 있어야 하므로 shared_ptr(self)를 캡처한다.
+	// (shared_ptr 도입 후 raw this 캡처는 잡 실행 전 세션이 반환되면 use-after-free가 된다.)
+	auto self = std::static_pointer_cast<GameSession>(shared_from_this());
+	myRoom_->doAsync([self]() {
+		self->myRoom_->enter(self.get());
 	});
 }
 
 void GameSession::onDisconnected() {
 	--totalSessions;
-	
-	myRoom_->doAsync([this]() {
-		myRoom_->leave(this);
+
+	auto self = std::static_pointer_cast<GameSession>(shared_from_this());
+	myRoom_->doAsync([self]() {
+		self->myRoom_->leave(self.get());
 	});
 }
 

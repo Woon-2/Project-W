@@ -152,6 +152,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="GameSession.cpp" />
+    <ClCompile Include="GameSessionManager.cpp" />
     <ClCompile Include="Listener.cpp" />
     <ClCompile Include="LobbyRoom.cpp" />
     <ClCompile Include="LobbyServer.cpp" />
@@ -167,6 +168,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="GameSession.hpp" />
+    <ClInclude Include="GameSessionManager.hpp" />
     <ClInclude Include="Listener.hpp" />
     <ClInclude Include="LobbyManager.hpp" />
     <ClInclude Include="LobbyRoom.hpp" />

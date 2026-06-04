@@ -1,4 +1,4 @@
-#ifndef lobby_manager_hpp
+﻿#ifndef lobby_manager_hpp
 #define lobby_manager_hpp
 
 #include <shared_mutex>
@@ -8,8 +8,8 @@ class LobbyRoom;
 
 class LobbyManager {
 public:
-	static LobbyRoom* createRoom();
-	static LobbyRoom* findRoom( const std::string& code );
+	static std::shared_ptr<LobbyRoom> createRoom();
+	static std::shared_ptr<LobbyRoom> findRoom( const std::string& code );
 	static void removeRoom( const std::string& code );
 
 	static std::string generateCode() {
@@ -27,7 +27,7 @@ public:
 
 private:
 	static std::shared_mutex mutex_;
-	static std::unordered_map<std::string, LobbyRoom*> rooms_;
+	static std::unordered_map<std::string, std::shared_ptr<LobbyRoom>> rooms_;
 };
 
 #endif // lobby_manager_hpp

@@ -1,4 +1,4 @@
-#include "lspch.hpp"
+﻿#include "lspch.hpp"
 #include "PacketManager.hpp"
 #include "SendBuffer.hpp"
 #include "BufferWriter.hpp"
@@ -39,8 +39,8 @@ void PacketManager::handleCCreateRoomPacket( GameSession* session, byte* buffer,
 	}
 
 	auto room = LobbyManager::createRoom();
-	room->enter( session );
-	session->myRoom_ = room;
+	room->enter( std::static_pointer_cast<GameSession>( session->shared_from_this() ) );
+	session->myRoom_ = room.get();
 	session->send( makeSCreateRoomPacket( static_cast<uint16>(session->id()), room->code() ) );
 }
 
@@ -60,12 +60,12 @@ void PacketManager::handleCJoinRoomPacket( GameSession* session, byte* buffer, i
 		return;
 	}
 
-	if ( !room->enter( session ) ) {
+	if ( !room->enter( std::static_pointer_cast<GameSession>( session->shared_from_this() ) ) ) {
 		session->send( makeSJoinRoomPacket( false, myId, 0, "", {} ) );
 		return;
 	}
 
-	session->myRoom_ = room;
+	session->myRoom_ = room.get();
 	session->send( makeSJoinRoomPacket( true, myId, room->hostId(), room->code(), room->playerInfos() ) );
 }
 

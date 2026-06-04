@@ -49,7 +49,7 @@ void Session::send(const std::shared_ptr<SendBuffer>& sendBuffer) {
 
 void Session::registerDisconnect() {
 	disconnEv_.clear();
-	disconnEv_.setOwner(this);	// add reference
+	disconnEv_.setOwner(shared_from_this());	// add reference
 
 	if (false == SocketUtils::DisconnectEx(sock_,
 		reinterpret_cast<WSAOVERLAPPED*>(&disconnEv_), TF_REUSE_SOCKET, 0)
@@ -68,7 +68,7 @@ void Session::registerRecv() {
 	}
 
 	recvEv_.clear();
-	recvEv_.setOwner(this);	// add reference
+	recvEv_.setOwner(shared_from_this());	// add reference
 
 	auto wsaBuf = WSABUF{
 		.len = static_cast<ULONG>(recvBuf_.freeSize()),
@@ -94,7 +94,7 @@ void Session::registerSend() {
 	}
 
 	sendEv_.clear();
-	sendEv_.setOwner(this);	// add reference
+	sendEv_.setOwner(shared_from_this());	// add reference
 
 	const int32 bulkSize = 100;
 	sendEv_.sendBuffers_.resize(bulkSize);	// 개선 필요 : bulkSize를 고정하면 resize를 send할 때마다 해줄 필요가 없어지지 않을까

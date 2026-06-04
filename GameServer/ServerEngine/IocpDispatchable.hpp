@@ -3,10 +3,11 @@
 
 #include "simpleWindows.hpp"
 #include "types.hpp"
+#include <memory>
 
 class IoEvent;
 
-class IocpDispatchable {
+class IocpDispatchable : public std::enable_shared_from_this<IocpDispatchable> {
 public:
 	IocpDispatchable() = default;
 	virtual ~IocpDispatchable() = default;

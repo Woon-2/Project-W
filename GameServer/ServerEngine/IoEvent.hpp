@@ -1,8 +1,9 @@
-#ifndef io_event_hpp
+﻿#ifndef io_event_hpp
 #define io_event_hpp
 
 #include "simpleWindows.hpp"
 #include <vector>
+#include <memory>
 #include "types.hpp"
 
 enum class IoType : uint8 {
@@ -30,13 +31,15 @@ public:
 
 	void setType(IoType type) { type_ = type; }
 	IoType type() const { return type_; }
-	void setOwner(IocpDispatchable* owner) { owner_ = owner; }
-	IocpDispatchable* owner() const { return owner_; }
+	// owner_는 진행 중인 I/O가 완료될 때까지 대상 객체(주로 Session)를 살려두는 소유 참조다.
+	// register 시 setOwner(shared_from_this())로 잡고, 완료 처리 후 setOwner(nullptr)로 놓는다.
+	void setOwner(const std::shared_ptr<IocpDispatchable>& owner) { owner_ = owner; }
+	std::shared_ptr<IocpDispatchable> owner() const { return owner_; }
 
 private:
 	WSAOVERLAPPED over_;
 	IoType type_;
-	IocpDispatchable* owner_;
+	std::shared_ptr<IocpDispatchable> owner_;
 };
 
 /*-----------------------
@@ -58,11 +61,11 @@ class AcceptEvent : public IoEvent {
 public:
 	AcceptEvent() : IoEvent(IoType::accept), session_(nullptr) {}
 
-	void setSession(Session* session) { session_ = session; }
-	Session* session() { return session_; }
+	void setSession(const std::shared_ptr<Session>& session) { session_ = session; }
+	const std::shared_ptr<Session>& session() { return session_; }
 
 private:
-	Session* session_;
+	std::shared_ptr<Session> session_;
 };
 
 /*-----------------
