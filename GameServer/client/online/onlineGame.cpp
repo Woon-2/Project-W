@@ -115,6 +115,10 @@ void Game::setupStageVisual() {
 	// 지형 청크 스트리밍 매니저 초기화 (팔레트 + 인덱스 로드, 동기 baseline 로드).
 	chunkManager_.init(gfx_, physicsWorld_, &threadPool_, "../resources/terrains/");
 
+	// 트리거 존 빌드 (연출용 로컬 존). 게임플레이 존은 서버 권위라 클라는 핸들러 미바인딩.
+	clientZoneSystem_.build(chunkManager_.zones());
+	bindZoneHandlers();
+
 	skybox_.setModel( assetManager_.modelCube( ) );
 	skybox_.setSkyboxMaterial( assetManager_.skyboxMaterial( ) );
 
@@ -1914,6 +1918,48 @@ void Game::onStrongholdState( uint16 strongholdId, int32 hp, uint8 state ) {
 	}
 }
 
+// 연출 존 핸들러 바인딩. Unity에서 오서링한 태그를 키로 로컬 동작(BGM/카메라/포스트FX 등)을
+// 연결한다. 게임플레이 태그(예: "boss_arena_1")는 여기서 미바인딩 → 로컬 판정 시 no-op.
+void Game::bindZoneHandlers() {
+	// 예시: 특정 구역 진입 시 카메라/사운드 연출을 트리거하는 자리.
+	//   clientZoneSystem_.on("forest_bgm", ZoneEvent::Enter, [this](Zone&){ /* BGM 전환 */ });
+	//   clientZoneSystem_.on("forest_bgm", ZoneEvent::Leave, [this](Zone&){ /* BGM 복귀 */ });
+}
+
+// 서버 권위 존 상태 동기화(S_ZoneState). state==1이면 아레나 진입으로 간주해
+// "Wall" 마커(WallHobgoblin_0/1)로부터 로컬 충돌 벽을 생성하여 예측 플레이어가
+// 통과하지 못하게 한다. state==0이면 벽을 제거한다. 벽은 렌더링하지 않는다(가상의 벽).
+void Game::onZoneState( uint16 zoneId, uint8 state ) {
+	zoneStates_[zoneId] = state;
+	std::cout << "[Zone] onZoneState zoneId=" << zoneId << " state=" << (int)state << '\n';
+
+	if ( state == 1 ) {
+		if ( !barriers_.empty() ) return;   // already built (one-shot per arena)
+		for ( const auto& m : chunkManager_.markers() ) {
+			if ( m.type != "Wall" ) continue;
+			if ( m.name != "WallHobgoblin_0" && m.name != "WallHobgoblin_1" ) continue;
+
+			auto bar = std::make_shared<Cube>();
+			bar->setModel( assetManager_.modelCube() );   // unit cube BVH -> scaled collision shape
+			bar->setFaction( Faction::Neutral );
+			bar->setPos( m.pos );
+			bar->setOrient( m.orient );
+			bar->setScale( m.scale );
+			bar->body().setMotionType( MotionType::Static );
+			bar->body().snapToCurrent();
+			physicsWorld_.registerBody( &bar->body(), [p = bar.get()]() { p->rebuildBodyBVH(); } );
+			barriers_.push_back( std::move( bar ) );
+
+			std::cout << "[Zone] local wall built: '" << m.name << "' at ("
+			          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
+		}
+	}
+	else {
+		for ( auto& b : barriers_ ) physicsWorld_.unregisterBody( &b->body() );
+		barriers_.clear();
+	}
+}
+
 void Game::removePlayer( i32t playerId ) {
 	auto itPlayer = std::ranges::find_if(
 		otherPlayers_, [ playerId ]( const std::shared_ptr<Player>& obj ) {
@@ -2086,52 +2132,34 @@ void Game::onNpcAttack( uint16 npcId ) {
 		return;
 	}
 
-	if ( npc->animBlender() ) {
-		npc->animBlender()->triggerAttack();
-	}
+	holdEvent( eventList_, EvAttack( npcId ) );
 }
 
 void Game::onPlayerAttack( uint16 attackerId ) {
-	auto it = idPlayerMap_.find( attackerId );
-	if ( it != idPlayerMap_.end() && it->second->animBlender() ) {
-		it->second->animBlender()->triggerAttack();
-	}
+	holdEvent( eventList_, EvAttack( attackerId ) );
 }
 
 void Game::applyHit( uint16 targetId, int32 newHp ) {
-	if ( player_ && static_cast<uint16>(player_->getId()) == targetId ) {
-		player_->setHp( newHp );
-
-		if ( newHp <= 0 ) {
-			playerDead_ = true;
-			player_->setDead( true );
-		}
-		return;
-	}
-	if ( auto it = idPlayerMap_.find( targetId ); it != idPlayerMap_.end() ) {
-		it->second->setHp( newHp );
-		if ( newHp <= 0 && !it->second->isDead() ) {
-			it->second->setDead( true );
-		}
-		return;
-	}
-	if ( auto it = idGoblinMap_.find( targetId ); it != idGoblinMap_.end() ) {
-		it->second->setHp( newHp );
-		if ( newHp <= 0 && !it->second->isDead() ) {
-			it->second->setDead( true );
-			it->second->setRagdollPendingActivation( true );
-		}
-		if ( auto barIt = goblinHpBars_.find( targetId ); barIt != goblinHpBars_.end() )
-			barIt->second.hpBarVisibleSeconds = 5.f;
-		return;
-	}
+	// 거점(Stronghold)은 EventBus(animBlender)가 없으므로 인라인으로 직접 처리한다.
 	if ( auto it = strongholdHpBars_.find( targetId ); it != strongholdHpBars_.end() ) {
 		if ( it->second.obj ) {
 			if ( newHp > it->second.obj->maxHp() ) it->second.obj->setMaxHp( newHp );
 			it->second.obj->setHp( newHp );
 		}
 		it->second.hpBarVisibleSeconds = 5.f;   // show HP bar briefly after a hit (same as goblins)
+		return;
 	}
+
+	// 고블린 HP바 가시성은 EventBus가 다루지 않는 시각 상태이므로 여기서 갱신한다.
+	if ( auto barIt = goblinHpBars_.find( targetId ); barIt != goblinHpBars_.end() )
+		barIt->second.hpBarVisibleSeconds = 5.f;
+
+	// HP / isDead / 래그돌 / 피격·사망 애니메이션은 EvHit/EvDeath 핸들러(Object::EventBus)가 소유한다.
+	// 디스패치 루프(InGameScene)에서 대상 객체의 eventBus로 분배된다.
+	if ( newHp <= 0 )
+		holdEvent( eventList_, EvDeath( targetId ) );
+	else
+		holdEvent( eventList_, EvHit( targetId, newHp ) );
 }
 
 void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos ) {
@@ -2147,7 +2175,8 @@ void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos )
 	}
 
 	npc->setHp( newHp );
-	npc->setDead( false );
+	// isDead_ 리셋 및 사망/부활 애니메이션은 EvRespawn 핸들러(EventBus)가 소유한다.
+	holdEvent( eventList_, EvRespawn( npcId ) );
 	if (npc->ragdoll().isActive())
 		npc->ragdoll().deactivate(physicsWorld_);
 	npc->setPos( DirectX::XMLoadFloat3( &spawnPos ) );
@@ -2155,10 +2184,7 @@ void Game::onNpcRespawn( uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos )
 
 void Game::onSkillStart( uint16 ownerId, uint32 skillAssetId, uint16 elapsedMs ) {
 	// Trigger attack animation on the remote player that cast the skill.
-	if (auto it = idPlayerMap_.find(ownerId); it != idPlayerMap_.end()) {
-		if (it->second->animBlender())
-			it->second->animBlender()->triggerAttack();
-	}
+	holdEvent( eventList_, EvAttack( ownerId ) );
 
 	// Start skill visuals for the remote owner (clientPredictionOnly — no damage).
 	skillSystem_.startSkill(skillAssetId, static_cast<i32t>(ownerId), skillCtx_,
@@ -2319,6 +2345,48 @@ void Game::InGameScene(Milliseconds deltaTime) {
 	if (!playerDead_)
 		skillSystem_.update(deltaTime, skillCtx_);
 
+	// 이벤트 디스패치
+	//
+	// 애니메이션 트리거(피격/공격/사망/부활)는 trigger* 직접 호출 대신
+	// EventBus로 일원화한다. 패킷 핸들러(프레임 시작 SleepEx)와 스킬 시스템(update)이
+	// eventList_에 post한 이벤트를, 대상 객체의 eventBus로 분배한다.
+	// (서버 권위 게임이므로 데미지 적용은 applyHit이 이미 끝냈고, 여기서는 HP/연출/애니메이션만 다룬다.)
+	// 객체 갱신(아래) 이전에 처리해 같은 프레임에 애니메이션 상태가 반영되도록 한다.
+	{
+		const Seconds evDt = std::chrono::duration_cast<Seconds>(deltaTime);
+
+		auto resolveObject = [&](i32t id) -> Object* {
+			if (player_ && player_->getId() == id) return player_.get();
+			if (auto it = idPlayerMap_.find(static_cast<uint16>(id)); it != idPlayerMap_.end())
+				return it->second.get();
+			if (auto it = idGoblinMap_.find(static_cast<uint16>(id)); it != idGoblinMap_.end())
+				return it->second.get();
+			return nullptr;
+		};
+
+		for (auto pEvRaw : eventList_) {
+			auto pEv = reinterpret_cast<BasicEvent*>(pEvRaw);
+			i32t routeId = -1;
+			switch (pEv->type) {
+			case EventType::Hit:     routeId = static_cast<const EvHit*>(pEv)->targetId;       break;
+			case EventType::Attack:  routeId = static_cast<const EvAttack*>(pEv)->attackerId;  break;
+			case EventType::Death:   routeId = static_cast<const EvDeath*>(pEv)->victimId;     break;
+			case EventType::Respawn: routeId = static_cast<const EvRespawn*>(pEv)->targetId;   break;
+			default: break;
+			}
+			if (routeId < 0) continue;
+
+			Object* obj = resolveObject(routeId);
+			if (!obj) continue;
+
+			obj->eventBus()->receive(pEv, evDt, eventList_, *pTimer_, obj);
+
+			// 로컬 플레이어 사망 시 게임 레벨 플래그를 세운다. (standalone game.cpp의 playerDead_ 처리와 대응)
+			if (pEv->type == EventType::Death && player_ && player_->getId() == routeId)
+				playerDead_ = true;
+		}
+	}
+
 	if (moveStateSendAcc_ >= moveStateSendInterval_) {
 		moveStateSendAcc_ = 0s;
 
@@ -2368,6 +2436,9 @@ void Game::InGameScene(Milliseconds deltaTime) {
 
 	// 지형 청크 스트리밍 틱 (카메라 갱신 전에 호출).
 	chunkManager_.update(player_->pos(), deltaTime);
+
+	// 연출 존 판정 (로컬 예측 플레이어 위치 기준, 패킷 없음).
+	clientZoneSystem_.update(player_->pos());
 
 	camera_.update(deltaTime);
 	dirLight_.update(deltaTime);
@@ -4110,6 +4181,7 @@ void Game::processInputGame(Milliseconds deltaTime) {
 	if ( (keyboardStateCurr_['H'] & 0x80) && !(keyboardStatePrev_['H'] & 0x80) ) {
 		gfx_.setHiZCullEnabled(!gfx_.isHiZCullEnabled());
 	}
+	gfx_.setHiZCullEnabled(false);
 
 	// G key: cycle GBuffer debug view (deferred path only)
 	if ( (keyboardStateCurr_['G'] & 0x80) && !(keyboardStatePrev_['G'] & 0x80) ) {
@@ -4174,8 +4246,7 @@ void Game::processInputGame(Milliseconds deltaTime) {
 		&& !(keyboardStatePrev_[VK_LBUTTON] & 0x80))
 	{
 		sendAttackPacket();
-		if ( player_->animBlender() )
-			player_->animBlender()->triggerAttack();
+		holdEvent( eventList_, EvAttack( player_->getId() ) );
 
 		const auto slashPos = player_->renderState().pos
 		                    + player_->forward() * 1.f

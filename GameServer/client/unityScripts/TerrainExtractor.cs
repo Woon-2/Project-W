@@ -357,6 +357,72 @@ public class TerrainExtractor : EditorWindow
                 ExtractUtil.WriteTailTag(w, "Stronghold");
             }
 
+            // ---- zone records (trigger volumes; consumed by server + client) ----
+            var zoneMarks = Object.FindObjectsByType<ZoneMarker>(FindObjectsSortMode.InstanceID);
+            ExtractUtil.WriteInteger(w, "ZoneCount", zoneMarks.Length);
+            for (int z = 0; z < zoneMarks.Length; z++)
+            {
+                var zmk = zoneMarks[z];
+                var zt  = zmk.transform;
+                ExtractUtil.WriteHeadTag(w, "Zone");
+                ExtractUtil.WriteInteger(w, "Id", z);                  // id = export index (stable per export)
+                ExtractUtil.WriteText(w, "Tag", zmk.zoneTag);
+                ExtractUtil.WriteInteger(w, "FactionMask", (int)zmk.factions);
+                ExtractUtil.WriteInteger(w, "VolumeCount", zmk.volumes.Count);
+
+                Vector3 absScale = new Vector3(
+                    Mathf.Abs(zt.lossyScale.x),
+                    Mathf.Abs(zt.lossyScale.y),
+                    Mathf.Abs(zt.lossyScale.z));
+                float maxScale = Mathf.Max(absScale.x, Mathf.Max(absScale.y, absScale.z));
+
+                foreach (var v in zmk.volumes)
+                {
+                    // Bake each volume to world space (the engine has no transform hierarchy).
+                    Vector3    wc = zt.TransformPoint(v.localCenter);
+                    Quaternion wq = zt.rotation * Quaternion.Euler(v.rotationEuler);
+                    Vector3    half = Vector3.Scale(v.size, absScale) * 0.5f;
+
+                    ExtractUtil.WriteInteger(w, "Shape", (int)v.shape);
+                    ExtractUtil.WriteFloat(w, "CenterX", wc.x);
+                    ExtractUtil.WriteFloat(w, "CenterY", wc.y);
+                    ExtractUtil.WriteFloat(w, "CenterZ", wc.z);
+                    ExtractUtil.WriteFloat(w, "OrientX", wq.x);
+                    ExtractUtil.WriteFloat(w, "OrientY", wq.y);
+                    ExtractUtil.WriteFloat(w, "OrientZ", wq.z);
+                    ExtractUtil.WriteFloat(w, "OrientW", wq.w);
+                    ExtractUtil.WriteFloat(w, "HalfX", half.x);
+                    ExtractUtil.WriteFloat(w, "HalfY", half.y);
+                    ExtractUtil.WriteFloat(w, "HalfZ", half.z);
+                    ExtractUtil.WriteFloat(w, "Radius", v.radius * maxScale);
+                }
+                ExtractUtil.WriteTailTag(w, "Zone");
+            }
+
+            // ---- generic markers (type + name + transform; server + client) ----
+            var markerMarks = Object.FindObjectsByType<LevelMarker>(FindObjectsSortMode.InstanceID);
+            ExtractUtil.WriteInteger(w, "MarkerCount", markerMarks.Length);
+            for (int i = 0; i < markerMarks.Length; i++)
+            {
+                var mk = markerMarks[i];
+                var mt = mk.transform;
+                ExtractUtil.WriteHeadTag(w, "Marker");
+                ExtractUtil.WriteText(w, "Type", mk.markerType);
+                ExtractUtil.WriteText(w, "Name",
+                    string.IsNullOrEmpty(mk.markerName) ? mk.gameObject.name : mk.markerName);
+                ExtractUtil.WriteFloat(w, "PosX", mt.position.x);
+                ExtractUtil.WriteFloat(w, "PosY", mt.position.y);
+                ExtractUtil.WriteFloat(w, "PosZ", mt.position.z);
+                ExtractUtil.WriteFloat(w, "OrientX", mt.rotation.x);
+                ExtractUtil.WriteFloat(w, "OrientY", mt.rotation.y);
+                ExtractUtil.WriteFloat(w, "OrientZ", mt.rotation.z);
+                ExtractUtil.WriteFloat(w, "OrientW", mt.rotation.w);
+                ExtractUtil.WriteFloat(w, "ScaleX", mt.lossyScale.x);
+                ExtractUtil.WriteFloat(w, "ScaleY", mt.lossyScale.y);
+                ExtractUtil.WriteFloat(w, "ScaleZ", mt.lossyScale.z);
+                ExtractUtil.WriteTailTag(w, "Marker");
+            }
+
             ExtractUtil.WriteTailTag(w, "ChunkIndex");
         }
     }

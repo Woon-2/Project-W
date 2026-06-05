@@ -243,6 +243,8 @@ void AnimBlenderPlayer::EventBus::receive(const BasicEvent* event, Seconds delta
 	//	break;
 
 	case EventType::Hit:
+	// 플레이어는 전용 공격 클립이 없어 hit 오버레이를 공격 모션으로 재사용한다.
+	case EventType::Attack:
 		pOwner->animTimeHit_ = 0s;
 		pOwner->cooldownHit_ = 600ms;
 		break;
@@ -251,6 +253,13 @@ void AnimBlenderPlayer::EventBus::receive(const BasicEvent* event, Seconds delta
 		pOwner->animTimeDeath_ = 0s;
 		pOwner->cooldownDeath_ = 200ms;
 		pOwner->dead_ = true;
+		break;
+
+	case EventType::Respawn:
+		pOwner->dead_          = false;
+		pOwner->tDeath_        = 0.f;
+		pOwner->animTimeDeath_ = 0s;
+		pOwner->cooldownDeath_ = 0ms;
 		break;
 
 	default:
@@ -439,6 +448,13 @@ void AnimBlenderGoblin::EventBus::receive(const BasicEvent* event, Seconds delta
 	case EventType::Attack:
 		pOwner->animTimeAttack_ = 0s;
 		pOwner->cooldownAttack_ = 3000ms;
+		break;
+
+	case EventType::Respawn:
+		pOwner->dead_          = false;
+		pOwner->tDeath_        = 0.f;
+		pOwner->animTimeDeath_ = 0s;
+		pOwner->cooldownDeath_ = 0ms;
 		break;
 
 	default:
@@ -886,6 +902,28 @@ void Player::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Event
 	case EventType::Death:
 		if (pOwner) {
 			pOwner->hp_ = 0;
+			pOwner->isDead_ = true;
+			if (pOwner->renderState_.animBlender) {
+				pOwner->renderState_.animBlender->eventBus()->receive(
+					event, deltaTime, evList, timer,
+					pOwner->renderState_.animBlender.get()
+				);
+			}
+		}
+		break;
+
+	case EventType::Attack:
+		if (pOwner && pOwner->renderState_.animBlender) {
+			pOwner->renderState_.animBlender->eventBus()->receive(
+				event, deltaTime, evList, timer,
+				pOwner->renderState_.animBlender.get()
+			);
+		}
+		break;
+
+	case EventType::Respawn:
+		if (pOwner) {
+			pOwner->isDead_ = false;
 			if (pOwner->renderState_.animBlender) {
 				pOwner->renderState_.animBlender->eventBus()->receive(
 					event, deltaTime, evList, timer,
@@ -936,6 +974,18 @@ void Goblin::EventBus::receive(const BasicEvent* event, Seconds deltaTime, Event
 
 	case EventType::Attack:
 		if (pOwner) {
+			if (pOwner->renderState_.animBlender) {
+				pOwner->renderState_.animBlender->eventBus()->receive(
+					event, deltaTime, evList, timer,
+					pOwner->renderState_.animBlender.get()
+				);
+			}
+		}
+		break;
+
+	case EventType::Respawn:
+		if (pOwner) {
+			pOwner->isDead_ = false;
 			if (pOwner->renderState_.animBlender) {
 				pOwner->renderState_.animBlender->eventBus()->receive(
 					event, deltaTime, evList, timer,

@@ -221,14 +221,34 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `holdEvent` macro | `event.hpp #41-46` | 풀 할당 + placement new |
 | `clearEvents` macro | `event.hpp #48-57` | 이벤트 리스트 전체 해제 |
 | `EventList` alias | `event.hpp #62` | `std::list<char*>` |
-| `EventType` enum | `event.hpp #67-73` | Hit, Blood, Death, Attack |
-| `BasicEvent` struct | `event.hpp #79-81` | 공통 base (type 필드) |
-| `EvHit` struct | `event.hpp #83-90` | targetId, hp |
-| `EvBlood` struct | `event.hpp #91-96` | victimId |
-| `EvDeath` struct | `event.hpp #97-102` | victimId |
-| `EvAttack` struct | `event.hpp #103-108` | attackerId |
+| `EventType` enum | `event.hpp #67-78` | Hit, Blood, Death, Attack, Respawn, SkillHit, CameraShake, VFXSpawn |
+| `BasicEvent` struct | `event.hpp #84-86` | 공통 base (type 필드) |
+| `EvHit` struct | `event.hpp #88-95` | targetId, hp |
+| `EvBlood` struct | `event.hpp #96-101` | victimId |
+| `EvDeath` struct | `event.hpp #102-107` | victimId |
+| `EvAttack` struct | `event.hpp #108-113` | attackerId |
+| `EvRespawn` struct | `event.hpp #114-119` | targetId (부활 애니메이션 트리거) |
 | `IEventBus` interface | `event.hpp #117-134` | `receive()` 순수 가상 |
 | `NullEventBus` | `event.hpp #136-139` | 아무것도 안 하는 기본 버스 |
+
+### 트리거 존 (Zone)
+
+**파일:** `client/zone.hpp` / `client/zone.cpp` (클라 로컬 연출 존), `common/zoneDef.hpp` (서버·클라 공유 def)
+
+| 항목 | 위치 | 설명 |
+|------|------|------|
+| `ZoneShape` / `ZoneVolumeDef` / `ZoneDef` | `common/zoneDef.hpp` | Box(OBB)+Sphere 조합, factionMask(uint32), tag |
+| `ZoneEvent` enum | `client/zone.hpp` | Enter / Stay / Leave |
+| `Zone::contains()` | `client/zone.cpp` | volume union point-in-OBB / point-in-sphere |
+| `ZoneSystem` | `client/zone.hpp/cpp` | 태그 키 콜백; `update(playerPos)`로 로컬 플레이어만 판정(연출 존) |
+| `chunks_index.bin` Zone 섹션 | `client/terrain.cpp parseChunkIndex` | 실제 파싱 → `ChunkIndex::zones` → `TerrainChunkManager::zones()` |
+| `Online::Game::clientZoneSystem_` | `client/online/onlineGame.cpp` | `bindZoneHandlers()`(연출 태그), update 루프 틱, `onZoneState()`(S_ZoneState) |
+
+> 서버 권위 게임플레이 존(보스 트리거/아레나 락)은 `RoomServer/zone.{hpp,cpp}` + `Room::bindZoneHandlers()`. 신규 패킷 `S_ZoneState`(`protocol.hpp`).
+
+### 일반 마커 (Marker)
+
+`common/markerDef.hpp`(`MarkerDef{type,name,pos,orient,scale}`) — Zone/Stronghold가 과한 경량 배치(보스 스폰/벽 등). `chunks_index.bin` Marker 섹션 → 서버·클라 `ChunkIndex::markers` → `TerrainChunkManager::markers()`. Unity는 `LevelMarker.cs`(type+name+transform). 소비는 게임플레이 코드가 type/name 필터.
 
 ---
 
@@ -259,8 +279,8 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 
 | 클래스 | 위치 |
 |--------|------|
-| `AnimBlenderPlayer` | `object.hpp #13-56` |
-| `AnimBlenderGoblin` | `object.hpp #58-98` |
+| `AnimBlenderPlayer` | `object.hpp #15-62` (애니메이션 트리거는 `EventBus::receive`에서; trigger* 함수 제거됨) |
+| `AnimBlenderGoblin` | `object.hpp #64-108` (애니메이션 트리거는 `EventBus::receive`에서; trigger* 함수 제거됨) |
 | `AnimBlenderAnubis` | `object.hpp #100-140` |
 | `AnimBlenderBat` | `object.hpp #142-182` |
 | `AnimBlenderBomber` | `object.hpp #184-???` |

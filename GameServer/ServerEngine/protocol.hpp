@@ -6,7 +6,7 @@
 #include "../common/mathUtil.hpp"
 
 constexpr const char* serverIp = "127.0.0.1";
-constexpr uint16 lobbyServerPort = 8000;
+constexpr uint16 lobbyServerPort = 8888;
 constexpr uint16 roomServerPort  = 9000;
 
 enum class PacketType : uint16 {
@@ -39,7 +39,9 @@ enum class PacketType : uint16 {
 	S_DebugHitbox,
 
 	S_StrongholdState,
-	
+
+	S_ZoneState,
+
 	// Lobby
 	C_CreateRoom,
 	S_CreateRoom,
@@ -228,6 +230,15 @@ struct SStrongholdStatePacket : public PacketHeader {
 	uint16 strongholdId;
 	int32  hp;
 	uint8  state;   // 0 = Alive, 1 = Destroyed
+};
+
+// Zone trigger state sync. Server-authoritative gameplay zones broadcast this
+// when a zone-driven action needs the client to react cosmetically (e.g. arena
+// barrier lock, cutscene start). The meaning of `state` is defined per zone tag
+// by the bound handler. Boss spawns reuse the existing S_NpcRespawn packet.
+struct SZoneStatePacket : public PacketHeader {
+	uint16 zoneId;
+	uint8  state;
 };
 
 struct SDebugHitboxPacket : public PacketHeader {

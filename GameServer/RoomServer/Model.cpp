@@ -48,12 +48,14 @@ static BVHNode makeBVHNode(const ImportedBVBox& box) {
     const mu::Vec3 center = DirectX::XMLoadFloat3(&box.center);
     const mu::Vec3 size = DirectX::XMLoadFloat3(&box.size);
 
-    if (isZeroEuler(box.rotEuler)) {
+    node.shape = OBB{center, size * 0.5f, eulerDegsToQuat(box.rotEuler)};
+
+    /*if (isZeroEuler(box.rotEuler)) {
         node.shape = AABB{center, size};
     }
     else {
         node.shape = OBB{center, size * 0.5f, eulerDegsToQuat(box.rotEuler)};
-    }
+    }*/
     node.bounds      = computeNodeBounds(node.shape);
     node.damageCoeff = box.damageCoeff;
     return node;

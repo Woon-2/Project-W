@@ -7,6 +7,7 @@
 #include "object.hpp"
 #include "goblin.hpp"
 #include "stronghold.hpp"
+#include "zone.hpp"
 #include "NpcGroup.hpp"
 #include "physicsWorld.hpp"
 #include "skill/skillSystem.hpp"
@@ -19,6 +20,7 @@
 
 class SendBuffer;
 struct Level;
+class AssetManager;
 
 class Room {
 public:
@@ -50,6 +52,11 @@ public:
 
 		for (const auto& sh : strongholds_) {
 			IdPool::push(sh.getId());
+		}
+
+		// Barriers are pure colliders (no id); unregister their bodies before destroy.
+		for (const auto& b : barriers_) {
+			if (b) physicsWorld_.unregisterBody(&b->body());
 		}
 	}
 
@@ -87,6 +94,11 @@ public:
 
 	// ── NPC AI 쿼리 ──────────────────────────────────────────────────────────
 	const std::vector<GameSession*>& getLivingPlayers() const { return livingPlayersCache_; }
+
+	// Accessors used by ZoneSystem to gather faction-filtered candidates and to
+	// resolve object ids on Leave events.
+	std::vector<Goblin>& goblins() { return goblins_; }
+	Object* resolveObject(uint32 id) { return (id < objectById_.size()) ? objectById_[id] : nullptr; }
 	void MU_CALLCONV findNearbyNpcPositions( mu::Vec3 pos, float radius, uint32 excludeId, std::vector<mu::Vec3>& out ) const;
 	int32 countNpcsTargeting( int32 playerId ) const;
 	NpcGroup* getNpcGroup( int32 groupId );
@@ -120,6 +132,9 @@ private:
 
 	void setupGoblin(Goblin& g, const Level& level);
 	void setupStronghold(Stronghold& sh, const StrongholdDef& sd, const Level& level);
+	void bindZoneHandlers();   // binds gameplay behavior to zone tags (see Room.cpp)
+	void onArenaHobgoblinEnter(Zone& zone, uint32 playerId);
+	void spawnBarrierFromMarker(const MarkerDef& m);   // Static collider from a marker transform
 	mu::Vec3 MU_CALLCONV randomSpawnInDisc(mu::Vec3 center, float radius) const;
 
 	void updateGoblinAI(Milliseconds dt);
@@ -137,6 +152,9 @@ private:
 	PhysicsWorld      physicsWorld_;
 	std::vector<TerrainObject> terrainChunks_;  // one per chunk; height fields are shared (non-owning)
 	std::vector<Stronghold>    strongholds_;    // monster spawner bases (damageable structures)
+	ZoneSystem                 zoneSystem_;     // trigger volumes (not physics bodies)
+	std::vector<std::unique_ptr<Cube>> barriers_;  // virtual walls (Static colliders, no id, not networked as entities)
+	const AssetManager*        assetManager_ = nullptr;  // backref (cube model for barriers); owned by Level
 	const TerrainChunkManager* worldTerrain_ = nullptr;  // shared, owned by Level
 	SkillSystem skillSystem_;
 	EventList         skillEvList_;  // reused across frames (cleared, not reallocated)

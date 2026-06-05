@@ -4,6 +4,8 @@
 #include "gfxUtil.hpp"
 #include "mesh.hpp"
 #include "mathUtil.hpp"
+#include "../common/zoneDef.hpp"
+#include "../common/markerDef.hpp"
 
 #include <atomic>
 
@@ -91,6 +93,8 @@ struct ChunkIndex {
     int version = 0;
     TerrainLayerPalette palette;        // path/scalar info; textures loaded separately
     std::vector<ChunkIndexEntry> chunks;
+    std::vector<ZoneDef> zones;         // trigger volumes (client uses local cosmetic zones)
+    std::vector<MarkerDef> markers;     // generic placements (type+name+transform)
 };
 
 // CPU-only product of a chunk build job. Contains NO GPU resources, so it can be

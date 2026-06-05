@@ -27,25 +27,6 @@ public:
 
 	IEventBus* eventBus() override { return &eventBus_; }
 
-	void triggerDeath() override {
-		if (dead_) return;
-		animTimeDeath_ = 0s;
-		cooldownDeath_ = 200ms;
-		dead_ = true;
-	}
-
-	void triggerRespawn() override {
-		dead_         = false;
-		tDeath_       = 0.f;
-		animTimeDeath_ = 0s;
-		cooldownDeath_ = 0ms;
-	}
-
-	void triggerAttack() override {
-		animTimeHit_ = 0s;
-		cooldownHit_ = 600ms;
-	}
-
 	Seconds runAnimTime() const { return animTimeRun_; }
 	Seconds runDuration() const { return targetClip("Player_Run_Forward")->duration; }
 	bool isRunning() const { return (tRunForward_ + tRunBackward_ + tRunLeft_ + tRunRight_) > 0.f; }
@@ -94,25 +75,6 @@ public:
 	void onCalcLocal(PassKey<AnimSystem>) override;
 
 	IEventBus* eventBus() override { return &eventBus_; }
-
-	void triggerDeath() override {
-		if (dead_) return;
-		animTimeDeath_ = 0s;
-		cooldownDeath_ = 200ms;
-		dead_ = true;
-	}
-
-	void triggerRespawn() override {
-		dead_          = false;
-		tDeath_        = 0.f;
-		animTimeDeath_ = 0s;
-		cooldownDeath_ = 0ms;
-	}
-
-	void triggerAttack() override {
-		animTimeAttack_ = 0s;
-		cooldownAttack_ = 3000ms;
-	}
 
 private:
 	std::vector<AnimFrame> framesBlended_{};
@@ -275,13 +237,10 @@ public:
 	Faction faction() const { return faction_; }
 	void setFaction(Faction f) { faction_ = f; }
 
+	// 모델 상태(isDead_ 플래그)만 갱신한다.
+	// 사망/부활 애니메이션은 EvDeath/EvRespawn 이벤트가 EventBus를 통해 구동한다.
 	void setDead(bool dead) {
 		isDead_ = dead;
-		if (!renderState_.animBlender) return;
-		if (dead)
-			renderState_.animBlender->triggerDeath();
-		else
-			renderState_.animBlender->triggerRespawn();
 	}
 	bool isDead() const { return isDead_; }
 	void setMaxHp(i32t v) { maxHp_ = v; }

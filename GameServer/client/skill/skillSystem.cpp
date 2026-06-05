@@ -404,9 +404,9 @@ void SkillSystem::dispatchEvent(const TimelineEvent& ev, SkillInstance& inst,
     }
 
     case SkillEventType::PlayAnimation: {
-        Object* owner = lookupObject(ctx, inst.ownerObjectId);
-        if (!owner || !owner->animBlender()) break;
-        owner->animBlender()->triggerAttack();
+        // 공격 애니메이션은 trigger* 직접 호출 대신 EventBus로 일원화한다.
+        // (standalone/online 모두 ctx.evList == eventList_, 디스패치 루프가 처리)
+        holdEvent((*ctx.evList), EvAttack{ inst.ownerObjectId });
         break;
     }
 

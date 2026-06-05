@@ -318,6 +318,21 @@ std::shared_ptr<SendBuffer> PacketManager::makeSStrongholdStatePacket(uint16 str
 	return sendBuffer;
 }
 
+std::shared_ptr<SendBuffer> PacketManager::makeSZoneStatePacket(uint16 zoneId, uint8 state) {
+	auto sendBuffer = SendBufferManager::open(sizeof(SZoneStatePacket));
+	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
+
+	auto pkt     = bw.reserve<SZoneStatePacket>();
+	pkt->zoneId  = zoneId;
+	pkt->state   = state;
+
+	pkt->size = bw.writeSize();
+	pkt->type = PacketType::S_ZoneState;
+
+	sendBuffer->close(bw.writeSize());
+	return sendBuffer;
+}
+
 std::shared_ptr<SendBuffer> PacketManager::makeSNpcRespawnPacket(uint16 npcId, int32 newHp, DirectX::XMFLOAT3 spawnPos) {
 	auto sendBuffer = SendBufferManager::open(sizeof(SNpcRespawnPacket));
 	auto bw = BufferWriter(sendBuffer->data(), sendBuffer->allocSize());
