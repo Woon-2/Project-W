@@ -60,8 +60,8 @@ void SAPBroadPhase::update()
 
     for (RigidBody* body : bodies_) {
         const AABB aabb  = body->worldAABB();
-        const float minX = aabb.center.x() - aabb.size.x() * 0.5f;
-        const float maxX = aabb.center.x() + aabb.size.x() * 0.5f;
+        const float minX = aabb.center.x() - aabb.size.x() * 0.5f - fatMargin_;
+        const float maxX = aabb.center.x() + aabb.size.x() * 0.5f + fatMargin_;
         endpoints_.push_back({ minX, body, false });
         endpoints_.push_back({ maxX, body, true  });
     }
@@ -77,18 +77,20 @@ void SAPBroadPhase::update()
     }
 }
 
-bool SAPBroadPhase::overlapYZ(const AABB& a, const AABB& b)
+bool SAPBroadPhase::overlapYZ(const AABB& a, const AABB& b, float margin)
 {
-    const float aMinY = a.center.y() - a.size.y() * 0.5f;
-    const float aMaxY = a.center.y() + a.size.y() * 0.5f;
-    const float bMinY = b.center.y() - b.size.y() * 0.5f;
-    const float bMaxY = b.center.y() + b.size.y() * 0.5f;
+    // Each box is fattened by `margin` on every side (consistent with the X-axis
+    // fattening in update()), so bodies within ~margin are treated as overlapping.
+    const float aMinY = a.center.y() - a.size.y() * 0.5f - margin;
+    const float aMaxY = a.center.y() + a.size.y() * 0.5f + margin;
+    const float bMinY = b.center.y() - b.size.y() * 0.5f - margin;
+    const float bMaxY = b.center.y() + b.size.y() * 0.5f + margin;
     if (aMaxY < bMinY || bMaxY < aMinY) return false;
 
-    const float aMinZ = a.center.z() - a.size.z() * 0.5f;
-    const float aMaxZ = a.center.z() + a.size.z() * 0.5f;
-    const float bMinZ = b.center.z() - b.size.z() * 0.5f;
-    const float bMaxZ = b.center.z() + b.size.z() * 0.5f;
+    const float aMinZ = a.center.z() - a.size.z() * 0.5f - margin;
+    const float aMaxZ = a.center.z() + a.size.z() * 0.5f + margin;
+    const float bMinZ = b.center.z() - b.size.z() * 0.5f - margin;
+    const float bMaxZ = b.center.z() + b.size.z() * 0.5f + margin;
     if (aMaxZ < bMinZ || bMaxZ < aMinZ) return false;
 
     return true;
@@ -108,7 +110,7 @@ std::vector<BodyPair> SAPBroadPhase::queryPairs()
                 const bool bStatic = (other->motionType()   == MotionType::Static);
                 if (aStatic && bStatic) continue;
 
-                if (overlapYZ(ep.body->worldAABB(), other->worldAABB()))
+                if (overlapYZ(ep.body->worldAABB(), other->worldAABB(), fatMargin_))
                     pairs.push_back({ ep.body, other });
             }
             active.push_back(ep.body);

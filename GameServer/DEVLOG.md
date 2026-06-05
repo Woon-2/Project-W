@@ -325,3 +325,99 @@ contact·마찰이 약한 측면 미끄러짐을 죽여 교착이 풀리지 않�
 **범위:** `S_GameStart` 수신 시 현재는 **로그만** 출력한다. RoomServer 접속·인게임 전환은 후속(별도 작업).
 RoomServer가 lobbyCode가 아닌 접속 순서(`totalSessions % 4`)로 방을 묶으므로, 핸드오프 시 lobbyCode 기반
 그룹화 설계가 함께 필요하다.
+
+---
+
+### 2026.06.05
+## [perf] NPC 분리력 이웃 탐색 공간분할 최적화 (플레이어 근접 컬링 + SAPBroadPhase)
+
+**수정 파일:** `RoomServer/broadPhase.hpp/cpp`, `RoomServer/Room.hpp/cpp`
+
+---
+
+### [1] 문제 — 분리력 이웃 탐색이 O(N²)
+
+`Room::findNearbyNpcPositions`가 이동 상태 NPC(Patrol/Chase/Return/Reposition 등)마다
+살아있는 전체 NPC를 선형 스캔한 뒤 `calcSeparationForce`를 호출 → 매 프레임 O(N²).
+플레이어와 멀리 떨어져 화면에 보이지도 않는 NPC 무리끼리도 서로의 분리력을 계산하므로,
+NPC 수가 늘수록 프레임이 떨어졌다.
+
+> 분리력은 NPC ↔ NPC 사이에서만 계산된다(플레이어 미포함). 플레이어와의 밀침은 분리력이
+> 아니라 물리 충돌 제약(`physicsWorld`)이 담당한다.
+
+### [2] 설계 — 서로 다른 기준의 2단계 (중복 아님)
+
+브로드페이즈(공간적으로 가까운 후보 추리기)를 같은 기준으로 두 번 거는 것은 중복이다.
+그래서 두 단계가 **다른 기준**으로 거르도록 구성했다.
+
+1. **플레이어 근접 컬링** — 어느 살아있는 플레이어와도 먼 NPC는 계산 대상에서 제외.
+   "관련성" 기준. 플레이어 ≤4명이라 NPC당 최대 4번 거리 검사로 매우 싸다(O(N·P)).
+2. **SAPBroadPhase 공간분할** — 살아남은 NPC들 사이에서만 이웃쌍 산출. "공간 근접" 기준.
+
+> 클라이언트 개발자 권고대로 새 그리드 클래스를 만들지 않고, 물리에 쓰던 `SAPBroadPhase`
+> (Sort-and-Sweep) 클래스를 분리력 전용 인스턴스로 재사용했다. SAP를 쓰는 것 자체가
+> 공간분할이다.
+
+참고: 분리력은 플레이어별로 계산하지 않는다. NPC는 위치가 하나뿐이고 주변 모든 NPC를
+한꺼번에 피하므로, 플레이어 4명이어도 NPC를 플레이어에 "배정"하지 않는다. 비용은
+플레이어 수가 아니라 NPC 수·뭉침 정도에 비례한다.
+
+### [3] 구현
+
+**`broadPhase` — SAP에 fatten 마진 + clear 추가 (물리 동작 불변):**
+
+SAP는 AABB 겹침쌍을 주는데 분리 반경(~최대 6)은 바디 AABB보다 크다. 그래서 NPC AABB를
+분리 반경만큼 부풀려야(fatten) 분리 거리 내 NPC가 후보쌍으로 잡힌다. 마진 기본값 0이라
+물리용 인스턴스 동작은 동일.
+
+```cpp
+void setFatMargin(float m) { fatMargin_ = m; }   // 기본 0 → 물리 회귀 없음
+void clear() { bodies_.clear(); endpoints_.clear(); }  // 매 프레임 멤버십 재구성
+// update(): minX -= fatMargin_; maxX += fatMargin_;
+// overlapYZ(a, b, margin): 양쪽 박스를 margin만큼 부풀려 겹침 판정
+```
+
+**`Room` — 매 프레임 이웃 인접 리스트 구축:**
+
+```cpp
+void Room::rebuildNpcNeighbors() {
+    npcBroad_.clear();                                  // ① 플레이어 근접 컬링
+    auto consider = [&](Object* o) {
+        if (o && o->hp() > 0 && isNearAnyPlayer(o->pos()))
+            npcBroad_.add(&o->body());
+    };
+    for (auto& g : goblins_)      consider(&g);
+    for (auto& n : tacticalNpcs_) consider(n.get());
+    if (platoonLeader_)           consider(platoonLeader_.get());
+
+    npcBroad_.update();                                 // ② SAP 이웃쌍 → 인접 리스트
+    const auto pairs = npcBroad_.queryPairs();
+    for (auto& [id, v] : npcNeighbors_) v.clear();
+    for (const auto& [a, b] : pairs) {
+        Object* oa = npcBodyOwner_[a];   // RigidBody*→Object* 역참조(RigidBody에 id 없음)
+        Object* ob = npcBodyOwner_[b];
+        npcNeighbors_[oa->getId()].push_back(ob->pos());
+        npcNeighbors_[ob->getId()].push_back(oa->pos());
+    }
+}
+```
+
+- `findNearbyNpcPositions`는 **시그니처를 그대로 유지**하고 본문만 인접 리스트 조회로
+  교체 → 호출처(Npc/TacticalNpc의 모든 상태) 무수정. 각 호출의 실제 radius로 정밀 거리
+  필터만 한다(인접 리스트는 fatMargin 반경의 superset).
+- `Room::update()`에서 `rebuildLivingPlayersCache()`를 AI보다 앞으로 끌어올려(컬링이 최신
+  플레이어 위치 사용) `rebuildNpcNeighbors()`를 호출. `updateGoblinAI` 내부의 중복 호출은
+  제거.
+- 신규 멤버: `SAPBroadPhase npcBroad_`(fatMargin 7), `npcBodyOwner_`, `npcNeighbors_`.
+  상수 `NPC_SEPARATION_RELEVANCE_RADIUS=50`, `NPC_SEPARATION_FAT_MARGIN=7`.
+
+### [4] 거동 보존 / 비용
+
+- AI 틱은 모든 NPC에 대해 매 프레임 그대로 도므로 추격/순찰/그룹 협동 거동은 불변.
+  컬링은 분리력(이웃 탐색) 정련만 생략한다.
+- 컬링 반경 50 > 감지 사거리(10)·활동 구역(28~40)이라 교전 중 NPC가 컬링돼 분리력이
+  빠지는 일은 없다.
+- `fatMargin`은 `findNearbyNpcPositions` 최대 질의 반경(현재 ≈6: `CONFUSED_SEPARATION_RADIUS`,
+  `TACTICAL_PRESSURE_*`) 이상이어야 한다. 새 분리 반경/멀티플라이어 추가 시 7을 재검토.
+- 비용: O(N²) → 컬링 O(N·P) + SAP ~O(M + 쌍 수). 멀리 고립된 무리는 SAP 입력에서 빠져
+  비용이 사라진다.

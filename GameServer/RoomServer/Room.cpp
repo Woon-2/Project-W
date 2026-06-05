@@ -144,10 +144,12 @@ void Room::init(const Level* levelData) {
 	}
 
 	// Register all goblins after the pool is fully built (no reallocation risk).
+	npcBroad_.setFatMargin(NPC_SEPARATION_FAT_MARGIN);   // separation neighbor broad phase
 	for (auto& g : goblins_) {
 		g.body().snapToCurrent();
 		physicsWorld_.registerBody(&g.body(), [&g]() { g.rebuildBodyBVH(); });
 		registerObject(&g);
+		npcBodyOwner_[&g.body()] = &g;   // SAP 쌍(RigidBody*) → NPC 역참조
 	}
 
 	// Strongholds are damageable static structures (collidable obstacles).
@@ -251,6 +253,8 @@ void Room::update() {
 	static constexpr Seconds dtSec   = 1s / 60.f;
 
 	physicsWorld_.step(dtSec);
+	rebuildLivingPlayersCache();   // NPC 분리력 컬링이 최신 플레이어 위치를 쓰도록 AI보다 먼저
+	rebuildNpcNeighbors();         // ① 플레이어 근접 컬링 → ② SAP로 이웃 인접 리스트 구축
 	zoneSystem_.update(*this, dtSec);
 	updateGoblinAI(dt);
 	updateTacticalAI(dt);
@@ -273,7 +277,7 @@ void Room::updateGoblinAI(Milliseconds dt) {
 		grp->clearMemoryIfPlayerOutside(*this);
 	}
 
-	rebuildLivingPlayersCache();
+	// livingPlayersCache_는 Room::update()에서 이미 이번 프레임용으로 갱신됨.
 	rebuildAggroCount();
 
 	uint64 serverNow = static_cast<uint64>(
@@ -363,24 +367,50 @@ void Room::rebuildAggroCount() {
 	}
 }
 
+bool MU_CALLCONV Room::isNearAnyPlayer(mu::Vec3 p) const {
+	const float r2 = NPC_SEPARATION_RELEVANCE_RADIUS * NPC_SEPARATION_RELEVANCE_RADIUS;
+	for (auto* s : livingPlayersCache_)   // P ≤ 4
+		if ((s->player()->pos() - p).len2() < r2) return true;
+	return false;
+}
+
+// 매 프레임: ① 플레이어 근접 컬링으로 분리력 계산이 필요한 NPC만 추리고, ② 그들만 SAP에
+// 넣어 broad phase로 이웃쌍을 산출 → id별 이웃 위치 인접 리스트(npcNeighbors_) 구축.
+// findNearbyNpcPositions가 이 리스트를 조회한다. (호출 시점에 NPC 위치는 불변이므로
+// goblin/tactical 양쪽 AI 패스에서 동일 리스트를 안전하게 재사용.)
+void Room::rebuildNpcNeighbors() {
+	// ① 플레이어 근접 컬링: 관련 있는 살아있는 NPC만 SAP 입력에 넣는다.
+	npcBroad_.clear();
+	auto consider = [&](Object* o) {
+		if (o && o->hp() > 0 && isNearAnyPlayer(o->pos()))
+			npcBroad_.add(&o->body());
+	};
+	for (auto& g : goblins_)      consider(&g);
+	for (auto& n : tacticalNpcs_) consider(n.get());
+	if (platoonLeader_)           consider(platoonLeader_.get());
+
+	// ② SAP broad phase로 이웃쌍 산출 → 인접 리스트 구축 (capacity 재사용).
+	npcBroad_.update();
+	const auto pairs = npcBroad_.queryPairs();
+	for (auto& [id, v] : npcNeighbors_) v.clear();
+	for (const auto& [a, b] : pairs) {
+		Object* oa = npcBodyOwner_[a];
+		Object* ob = npcBodyOwner_[b];   // 컬링 통과분이라 둘 다 생존 보장
+		npcNeighbors_[oa->getId()].push_back(ob->pos());
+		npcNeighbors_[ob->getId()].push_back(oa->pos());
+	}
+}
+
 void MU_CALLCONV Room::findNearbyNpcPositions(mu::Vec3 from, float radius,
                                                uint32 excludeId,
                                                std::vector<mu::Vec3>& out) const {
-	float r2 = radius * radius;
-	for (const auto& g : goblins_) {
-		if (g.getId() == excludeId || g.hp() <= 0) continue;
-		if ((g.pos() - from).len2() < r2)
-			out.push_back(g.pos());
-	}
-	for (const auto& npc : tacticalNpcs_) {
-		if (!npc || npc->getId() == excludeId || npc->hp() <= 0) continue;
-		if ((npc->pos() - from).len2() < r2)
-			out.push_back(npc->pos());
-	}
-	if (platoonLeader_ && platoonLeader_->getId() != excludeId &&
-	    platoonLeader_->hp() > 0 &&
-	    (platoonLeader_->pos() - from).len2() < r2)
-		out.push_back(platoonLeader_->pos());
+	// 이웃 후보는 rebuildNpcNeighbors가 SAP로 미리 구축한 인접 리스트(fatMargin 반경의
+	// superset). 여기서는 각 호출의 실제 radius로 정밀 거리 필터만 한다(기존과 동일 검사).
+	auto it = npcNeighbors_.find(excludeId);
+	if (it == npcNeighbors_.end()) return;
+	const float r2 = radius * radius;
+	for (const mu::Vec3& p : it->second)
+		if ((p - from).len2() < r2) out.push_back(p);
 }
 
 int32 Room::countNpcsTargeting(int32 playerId) const {
@@ -824,6 +854,7 @@ void Room::spawnTacticalGoblinEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos,
 		obj.body().snapToCurrent();
 		Object* raw = &obj;
 		physicsWorld_.registerBody(&obj.body(), [raw]() { raw->rebuildBodyBVH(); });
+		npcBodyOwner_[&obj.body()] = raw;   // SAP 쌍(RigidBody*) → NPC 역참조
 	};
 
 	TacticalNpcConfig trooperCfg = TacticalGoblin::trooperConfig();
