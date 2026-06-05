@@ -1,5 +1,6 @@
 ﻿#include "rspch.hpp"
 #include "AssetManager.hpp"
+#include "skill/skillCompiler.hpp"
 
 void AssetManager::loadAssets() {
     modelCube_   = loadModelFromFile("../resources/models/cube/cubeServer.bin");
@@ -11,6 +12,20 @@ void AssetManager::loadAssets() {
 
     level_ = loadLevelFromFile("../resources/levels/level.bin", *this);
     level_.terrainChunks.init("../resources/terrains/");
+
+    // 스킬 asset은 사양이 방마다 달라지지 않으므로 부팅 시 1회만 컴파일하여
+    // 전 룸이 공유한다(각 Room::SkillSystem은 이 레지스트리를 참조만 한다).
+    {
+        ServerSkillCompiler compiler;
+        skillAssets_ = compiler.compileAll("../resources/skills");
+        skillAssets_.shrink_to_fit();
+        // id가 지정되지 않은(0) asset에 1부터 순번 부여. 공유 레지스트리가
+        // 바인딩 전에 id 확정 상태가 되도록 여기서 1회만 수행한다.
+        for (u32t i = 0; i < static_cast<u32t>(skillAssets_.size()); ++i)
+            if (skillAssets_[i].id == 0)
+                skillAssets_[i].id = i + 1;
+        std::cout << "[AssetManager] Loaded " << skillAssets_.size() << " skill(s)\n";
+    }
 }
 
 const ServerAnimClip* AssetManager::findClip(const std::vector<ServerAnimClip>& set,

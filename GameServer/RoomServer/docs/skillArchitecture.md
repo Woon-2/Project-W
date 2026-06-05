@@ -159,14 +159,34 @@ if (knockbackTimer_ > 0s) return {};  // AI setLinearVel() 차단
 
 ---
 
-## 스킬 에셋 로딩
+## 스킬 에셋 로딩 — 부팅 1회 컴파일·전 룸 공유 (2026-06-06)
+
+스킬 사양은 방마다 달라지지 않으므로, `SkillAsset` 레지스트리는 **부팅 시 단 한 번만
+컴파일하여 전 룸이 공유**한다. (이전에는 `Room::init()`이 방마다 `compileAll`로 Lua를
+재컴파일하고 asset vector를 방 개수만큼 복사 보관했다.)
 
 ```cpp
-// Room::init()
+// AssetManager::loadAssets() — 부팅 시 1회만 실행
 ServerSkillCompiler compiler;
-auto assets = compiler.compileAll("../resources/skills");
-skillSystem_.registerAssets(std::move(assets));
+skillAssets_ = compiler.compileAll("../resources/skills");
+skillAssets_.shrink_to_fit();
+for (u32t i = 0; i < skillAssets_.size(); ++i)   // id 미지정(0) → 1부터 순번 부여
+    if (skillAssets_[i].id == 0) skillAssets_[i].id = i + 1;
+
+// Room::init() — 공유 레지스트리를 참조로 바인딩(컴파일/복사 없음)
+skillSystem_.bindRegistry(&levelData->assetManager->skillAssets());
 ```
+
+- **소유**: `AssetManager`가 `std::vector<SkillAsset> skillAssets_`를 소유하고 `skillAssets()`로
+  노출한다. 프로그램 수명 동안 주소가 안정적이므로 `SkillInstance::asset`(`const SkillAsset*`)
+  포인터가 유효하다.
+- **참조**: `SkillSystem::assetRegistry_`는 `const std::vector<SkillAsset>*`(비소유)이며,
+  `bindRegistry()`로 공유 레지스트리를 가리킨다. (`registerAssets(&&)`는 제거됨.)
+- **공유 안전성**: 부팅 완료 후 레지스트리는 `findAsset`로만 읽히는 읽기 전용이고, 룸 스레드가
+  시작되기 전에 컴파일이 끝나므로 read-only 공유가 안전하다. 인스턴스/히트박스 풀 등 런타임
+  상태는 그대로 per-room으로 `SkillSystem`에 남는다.
+- 기존 공유 리소스 패턴(`Level::terrainChunks`, `Level::assetManager`를 `Room`이 non-owning
+  포인터로 참조)과 동일하다.
 
 `ServerSkillCompiler`는 클라이언트 `SkillCompiler`와 동일한 Lua 파일을 처리하지만, 뼈 이름 검증에 클라이언트 Skeleton 대신 `ServerSkeleton`을 사용한다.
 

@@ -8,7 +8,6 @@
 #include "AssetManager.hpp"
 #include "JobTimer.hpp"
 #include "collision.hpp"
-#include "skill/skillCompiler.hpp"
 #include "serverAnimation.hpp"
 #include "TacticalGoblin.hpp"
 
@@ -173,13 +172,9 @@ void Room::init(const Level* levelData) {
 			physicsWorld_.registerTerrain(&t.body(), hf);
 		});
 
-	// Compile skill assets from the shared Lua skill directory.
-	{
-		ServerSkillCompiler compiler;
-		auto assets = compiler.compileAll("../resources/skills");
-		std::cout << "[Room::init] Loaded " << assets.size() << " skill(s)\n";
-		skillSystem_.registerAssets(std::move(assets));
-	}
+	// 스킬 레지스트리는 부팅 시 AssetManager가 1회 컴파일하여 전 룸이 공유한다.
+	// (사양이 방마다 달라지지 않으므로 참조만 바인딩; 컴파일/복사 없음.)
+	skillSystem_.bindRegistry(&levelData->assetManager->skillAssets());
 
 	// Trigger volumes (pure query volumes; not registered with PhysicsWorld).
 	zoneSystem_.build(worldTerrain_->zones());

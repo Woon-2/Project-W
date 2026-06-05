@@ -178,7 +178,10 @@ struct SkillDispatchContext {
 
 class SkillSystem {
 public:
-    void registerAssets(std::vector<SkillAsset>&& assets);
+    // 부팅 시 1회 컴파일된 공유 레지스트리를 참조로 바인딩(소유하지 않음).
+    // 레지스트리는 AssetManager가 소유하며 프로그램 수명 동안 주소가 안정적이어야
+    // 한다(SkillInstance::asset이 그 원소를 가리킨다).
+    void bindRegistry(const std::vector<SkillAsset>* registry);
 
     const SkillAsset* findAsset(std::string_view name) const;
     const SkillAsset* findAsset(u32t id) const;
@@ -217,7 +220,7 @@ private:
     mu::Mat4x4 computeAttachTransform(const Object& owner, const AttachedHitbox& hb) const;
     Object*    lookupObject(const SkillDispatchContext& ctx, i32t id) const;
 
-    std::vector<SkillAsset>           assetRegistry_;
+    const std::vector<SkillAsset>*    assetRegistry_ = nullptr;   // 공유, 비소유
     SkillInstancePool                 instancePool_;
     std::vector<AttachedHitbox>       hitboxPool_;
     std::vector<int>                  hitboxFreeList_;

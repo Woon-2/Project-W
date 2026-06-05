@@ -150,22 +150,20 @@ void SkillBroadPhase::build(const std::vector<HitboxEntry>& hitboxes,
 // Asset management
 // ---------------------------------------------------------------------------
 
-void SkillSystem::registerAssets(std::vector<SkillAsset>&& assets) {
-    assetRegistry_ = std::move(assets);
-    assetRegistry_.shrink_to_fit();
-    for (u32t i = 0; i < static_cast<u32t>(assetRegistry_.size()); ++i)
-        if (assetRegistry_[i].id == 0)
-            assetRegistry_[i].id = i + 1;
+void SkillSystem::bindRegistry(const std::vector<SkillAsset>* registry) {
+    assetRegistry_ = registry;
 }
 
 const SkillAsset* SkillSystem::findAsset(std::string_view name) const {
-    for (const SkillAsset& a : assetRegistry_)
+    if (!assetRegistry_) return nullptr;
+    for (const SkillAsset& a : *assetRegistry_)
         if (a.name == name) return &a;
     return nullptr;
 }
 
 const SkillAsset* SkillSystem::findAsset(u32t id) const {
-    for (const SkillAsset& a : assetRegistry_)
+    if (!assetRegistry_) return nullptr;
+    for (const SkillAsset& a : *assetRegistry_)
         if (a.id == id) return &a;
     return nullptr;
 }
