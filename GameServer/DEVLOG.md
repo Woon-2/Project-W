@@ -421,3 +421,112 @@ void Room::rebuildNpcNeighbors() {
   `TACTICAL_PRESSURE_*`) 이상이어야 한다. 새 분리 반경/멀티플라이어 추가 시 7을 재검토.
 - 비용: O(N²) → 컬링 O(N·P) + SAP ~O(M + 쌍 수). 멀리 고립된 무리는 SAP 입력에서 빠져
   비용이 사라진다.
+
+---
+
+### 2026.06.06
+## [feat] 전술 전투(중간보스 고블린) 동적 스폰 트리거 연결
+
+**수정 파일:** `ServerEngine/protocol.hpp`, `RoomServer/PacketManager.hpp/cpp`,
+`RoomServer/Room.cpp`, `client/PacketManager.hpp/cpp`
+
+플레이어가 `Arena_Hobgoblin` 존에 진입하면 중간보스+분대가 동적으로 스폰되어 교전을 시작하도록,
+이미 구현돼 있던 전술 전투 인프라를 트리거에 연결했다. 임시 구현(보스는 일반 고블린 모델 사용).
+
+---
+
+### [1] 트리거 → 동적 스폰 연결
+
+기존 `Room::onArenaHobgoblinEnter`는 후방 벽만 생성하고 보스 스폰은 `actual spawn TBD` 로그만
+남겼다. 서버에는 동적 스폰 함수 `spawnTacticalGoblinEncounter`(`make_unique` + `IdPool::pop()` +
+`physicsWorld_.registerBody()`)와 매 틱 AI·`S_NpcMoveBatch`를 처리하는 `updateTacticalAI`,
+그리고 가장 가까운 플레이어를 자동 타겟·분대 명령하는 `PlatoonLeader` + `GoblinMidBossTactic`이
+이미 완비돼 있어, **트리거에서 호출만 하면** 됐다.
+
+- 보스도 일반 고블린 모델을 쓰므로 클라엔 `ObjectType::Goblin`으로 전송(클라 `createGoblin`이
+  항상 `modelGoblin()` 사용).
+- 별도 AI 게이트 플래그 불필요 — `updateTacticalAI`는 `tacticalNpcs_`가 비면 즉시 return하므로
+  스폰 전엔 자동 무동작, 스폰 직후부터 교전 시작.
+
+---
+
+### [2] 동적 스폰 통보용 신규 패킷 `S_NpcSpawnBatch`
+
+클라 `createGoblin`은 진입 스냅샷(`S_Enter`)에서만 호출되고, `moveGoblin`은 `idGoblinMap_`에 없는
+id를 무시한다. 즉 **런타임에 스폰된 NPC를 클라가 생성하는 경로가 없었다**(원래 설계 주석은
+`S_NpcRespawn` 재사용을 의도했으나 모델/타입 정보가 없어 새 객체 생성 불가).
+
+- `protocol.hpp`에 `PacketType::S_NpcSpawnBatch` + `SNpcSpawnBatchPacket` 추가. `S_Enter`의
+  `ObjectInfo` 리스트 가변길이 직렬화(`dataOffset` + `objCnt`)를 그대로 재사용.
+- 서버 `PacketManager::makeSNpcSpawnBatchPacket`, 클라 `handleSNpcSpawnBatchPacket`(각 `ObjectInfo`를
+  `S_Enter`와 동일하게 `ObjectType` 분기 → `createGoblin`). 클라 `onlineGame`은 무변경.
+- 늦은 접속자 대응: `Room::enter` 진입 스냅샷에도 `tacticalNpcs_`/`platoonLeader_`를 포함.
+
+```cpp
+struct SNpcSpawnBatchPacket : public PacketHeader {
+    uint16 dataOffset;   // ObjectInfo 배열 시작 위치 (this 기준)
+    uint16 objCnt;
+    using ObjectList = DataList<ObjectInfo>;
+    ObjectList getObjectList() { /* this + dataOffset */ }
+};
+```
+
+---
+
+### [3] trooper 랜덤 배치
+
+`spawnTacticalGoblinEncounter`의 기존 ring(동심원) 배치를 `randomSpawnInDisc(spawnCenter, 30m)`
+랜덤 배치로 교체(반경 30m, `groundHeightAtWorld`로 지형 높이 반영). 규모 3분대 × 20 = 60 + 보스.
+
+---
+
+### [4] BossSpawn 마커 부재 대응 — Wall 중점 fallback
+
+**증상:** 존 진입해도 NPC가 하나도 안 보임. 서버 로그상 `ENTER`·벽 생성은 되는데
+`[Zone] Hobgoblin spawn point` 로그가 없었다(일반 stronghold 고블린은 정상 → 클라 경로는 멀쩡).
+
+**원인:** 레벨에 `BossSpawn` 타입 마커가 배치돼 있지 않아 `if (m.type != "BossSpawn") continue;`에서
+전부 걸러져 `spawnTacticalGoblinEncounter`가 한 번도 호출되지 않음(스폰 0).
+
+**해결:** `onArenaHobgoblinEnter`에서 BossSpawn 마커를 우선 찾되, 없으면 벽 생성 루프에서 누적한
+`WallHobgoblin_0/1` 마커 중점(`wallSum / wallCount`)을 fallback 스폰 위치로 사용. 정석은 Unity
+레벨에 `BossSpawn` 마커를 배치하는 것(그 경우 코드 변경 없이 마커 위치가 우선됨).
+
+---
+
+### [5] 알려진 한계 (임시 수용)
+
+- 클라 `createGoblin`이 HP를 90으로 하드코딩 → 보스(서버 HP 2000)의 HP바 비율이 어긋남.
+- tactical NPC가 `registerObject`(objectById_)에 미등록 → 스킬 타겟 조회에서 누락 가능
+  (현재 분대→플레이어 공격 동작에는 영향 없음).
+- 무관 이슈: `DummyClient`는 사전부터 `../LobbyServer/protocol.hpp` 잘못된 include 경로로 빌드 실패
+  (실제 `protocol.hpp`는 `ServerEngine`에만 존재). 이번 작업과 무관.
+
+---
+
+### [6] 실행 후 수정 — tactical NPC 물리 셋업(Dynamic+motor 전환)
+
+존 진입 후 실제로 굴려보니 세 가지 문제가 드러남: ① 중간보스 y좌표가 공중에 떠 있음,
+② NPC들이 움직이지 않음, ③ 플레이어와 충돌 처리 안 됨.
+
+**원인:** `spawnTacticalGoblinEncounter`의 NPC 생성이 기존 `setupGoblin`(`Room.cpp:44`)을 거치지
+않아 **모델·물리·데미지 수신 설정이 전부 빠졌다.** `makeBase`(pos만) + `registerBody`(Kinematic)뿐.
+
+- ① tactical NPC가 `Kinematic`이라 중력을 안 받고(중력은 Dynamic 한정), 보스는 `spawnPos`
+  (Wall 마커 y≈53, 지형 위)를 그대로 써서 떠 있었다.
+- ③ (a) `setModel` 미호출로 충돌 BVH가 비어 감지 자체가 0. (b) 플레이어도 Kinematic인데 NPC도
+  Kinematic → 충돌 솔버가 서로 못 밀어냄(둘 다 질량 무한 취급).
+- ② 일반 `Npc`는 `Dynamic + enableMotor(true)` + `setDesiredVel`(motor)로 이동하지만,
+  `TacticalNpc`는 `setLinearVel`(직접 속도)로 이동 → 물리 모델 불일치.
+
+**수정 (일반 goblin과 동일한 물리 모델로 통일):**
+
+- `Room::spawnTacticalGoblinEncounter`의 `registerBody`를 `setupGoblin`과 동일하게 강화 —
+  `setModel(modelGoblin())`, 애니메이션 클립(Idle/Walk/Attack/Die), `setCanReceiveDamage(true)`,
+  `Dynamic + mass 70 + linearDamping 0.1 + angularDamping 25 + restitution 0 +
+  uprightStiffness 4000 + enableMotor(true)`. trooper·보스 동일 적용. `assetManager_` 가드 추가.
+- 보스 y 지형 보정: `bossPos.y = groundHeightAtWorld(x, z)` (trooper는 `randomSpawnInDisc`로 이미 보정됨).
+- 이동 방식 motor 전환: `TacticalNpc.cpp`의 모든 이동/정지 `setLinearVel` → `setDesiredVel`
+  (이동은 `(x, 0, z)`로 y는 중력이 담당, 정지는 `mu::Vec3{}`), `reviveAt`은 잔여 속도 제거 위해
+  `setLinearVel({})` + `setDesiredVel({})` 병행. `MidBossTactics.cpp` 보스 이동 2곳
+  (`TacticalRetreat`, `moveBossToward`)도 동일 전환.

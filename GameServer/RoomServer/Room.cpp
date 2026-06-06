@@ -208,19 +208,64 @@ void Room::onArenaHobgoblinEnter(Zone& zone, uint32 playerId) {
 	if (!worldTerrain_) return;
 
 	// Rear walls: build a Static collider from each named "Wall" marker.
+	// 동시에 Wall 위치를 누적해 BossSpawn 마커가 없을 때 fallback 스폰 중점으로 쓴다.
+	mu::Vec3 wallSum{};
+	int      wallCount = 0;
 	for (const auto& m : worldTerrain_->markers()) {
 		if (m.type != "Wall") continue;
 		if (m.name != "WallHobgoblin_0" && m.name != "WallHobgoblin_1") continue;
 		spawnBarrierFromMarker(m);
+		wallSum += m.pos;
+		++wallCount;
 		std::cout << "[Zone] wall built: '" << m.name << "' at ("
 		          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
 	}
 
-	// Mid-boss spawn: debug log only (actual spawn TBD).
-	for (const auto& m : worldTerrain_->markers()) {
-		if (m.type != "BossSpawn") continue;
-		std::cout << "[Zone] Hobgoblin spawn point '" << m.name << "' at ("
-		          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
+	// Mid-boss encounter: dynamically spawn the boss + squads, then notify clients
+	// (S_NpcSpawnBatch) so they instantiate the goblins. Guarded so a re-entry
+	// can't double-spawn (zone is one-shot anyway).
+	if (tacticalNpcs_.empty() && !platoonLeader_) {
+		// Spawn center: prefer a "BossSpawn" marker; fall back to the Wall midpoint
+		// when the level has no BossSpawn marker authored.
+		mu::Vec3 spawnPos{};
+		bool     haveSpawnPos = false;
+		for (const auto& m : worldTerrain_->markers()) {
+			if (m.type != "BossSpawn") continue;
+			spawnPos     = m.pos;
+			haveSpawnPos = true;
+			std::cout << "[Zone] Hobgoblin spawn point '" << m.name << "' at ("
+			          << m.pos.x() << ", " << m.pos.y() << ", " << m.pos.z() << ")\n";
+			break;   // 첫 BossSpawn 마커만 사용
+		}
+		if (!haveSpawnPos && wallCount > 0) {
+			spawnPos     = wallSum / static_cast<float>(wallCount);
+			haveSpawnPos = true;
+			std::cout << "[Zone] Hobgoblin spawn point (fallback: Wall 중점) at ("
+			          << spawnPos.x() << ", " << spawnPos.y() << ", " << spawnPos.z() << ")\n";
+		}
+
+		if (haveSpawnPos) {
+			// Boss reuses the regular goblin model: spawnCenter == bossPos.
+			spawnTacticalGoblinEncounter(spawnPos, spawnPos, /*numSquads*/3, /*troopersPerSquad*/20);
+
+			std::vector<ObjectInfo> spawnInfos;
+			spawnInfos.reserve(tacticalNpcs_.size() + 1);
+			auto appendInfo = [&](const Object& o) {
+				spawnInfos.push_back(ObjectInfo{
+					.type           = ObjectType::Goblin,
+					.objectId       = static_cast<uint16>(o.getId()),
+					.materialSetIdx = 0,
+					.pos            = o.pos().getXmf(),
+					.orient         = o.orient().getXmf(),
+					.scale          = o.scale().getXmf(),
+				});
+			};
+			for (const auto& npc : tacticalNpcs_)
+				if (npc) appendInfo(*npc);
+			if (platoonLeader_) appendInfo(*platoonLeader_);
+
+			broadcast(PacketManager::makeSNpcSpawnBatchPacket(spawnInfos));
+		}
 	}
 
 	// Clients build the same walls locally so the predicted player collides.
@@ -461,7 +506,7 @@ void Room::enter(GameSession* session) {
 
 	// 기존 플레이어들 및 기타 object들에 대한 snapshot 만들기
 	auto objInfos = std::vector<ObjectInfo>();
-	objInfos.reserve(sessions_.size() + cubes_.size());
+	objInfos.reserve(sessions_.size() + cubes_.size() + tacticalNpcs_.size() + 1);
 
 	for (auto session : sessions_) {
 		auto playerInfo = ObjectInfo{
@@ -494,6 +539,30 @@ void Room::enter(GameSession* session) {
 			.pos = sh.pos().getXmf(),
 			.orient = sh.orient().getXmf(),
 			.scale = sh.scale().getXmf(),
+		});
+	}
+
+	// 이미 전술 전투가 시작된 뒤 접속한 플레이어도 무리를 보도록 스냅샷에 포함.
+	// 보스도 일반 고블린 모델(ObjectType::Goblin)로 전송.
+	for (const auto& npc : tacticalNpcs_) {
+		if (!npc) continue;
+		objInfos.push_back(ObjectInfo{
+			.type = ObjectType::Goblin,
+			.objectId = static_cast<uint16>(npc->getId()),
+			.materialSetIdx = 0,
+			.pos = npc->pos().getXmf(),
+			.orient = npc->orient().getXmf(),
+			.scale = npc->scale().getXmf(),
+		});
+	}
+	if (platoonLeader_) {
+		objInfos.push_back(ObjectInfo{
+			.type = ObjectType::Goblin,
+			.objectId = static_cast<uint16>(platoonLeader_->getId()),
+			.materialSetIdx = 0,
+			.pos = platoonLeader_->pos().getXmf(),
+			.orient = platoonLeader_->orient().getXmf(),
+			.scale = platoonLeader_->scale().getXmf(),
 		});
 	}
 
@@ -843,15 +912,36 @@ int32 Room::tryApplyWedgeChargeHit(uint32_t chargeId, int32 playerId, float dama
 void Room::spawnTacticalGoblinEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos,
                                          int numSquads, int troopersPerSquad)
 {
+	if (!assetManager_) return;   // 모델 없이는 충돌 BVH를 만들 수 없음
+
 	auto makeBase = [](mu::Vec3 pos) {
 		Object base;
 		base.setPos(pos);
 		return base;
 	};
+	// 일반 goblin(setupGoblin)과 동일한 모델/물리 셋업: 충돌 BVH·중력·플레이어 충돌·
+	// motor 이동(setDesiredVel)에 필요. tactical NPC/보스 모두 동일하게 적용.
+	const auto& anims = assetManager_->goblinAnimations();
 	auto registerBody = [&](Object& obj) {
 		obj.setId(IdPool::pop());
-		obj.body().setMotionType(MotionType::Kinematic);
+
+		obj.setModel(assetManager_->modelGoblin());
+		obj.animController().registerClip("Idle",   findServerAnimClip(anims, "Goblin_Idle"));
+		obj.animController().registerClip("Walk",   findServerAnimClip(anims, "Goblin_Walk"));
+		obj.animController().registerClip("Attack", findServerAnimClip(anims, "Goblin_Attack"));
+		obj.animController().registerClip("Die",    findServerAnimClip(anims, "Goblin_Death"));
+		obj.animController().switchClip("Idle");
+		obj.setCanReceiveDamage(true);
+
+		obj.body().setMotionType(MotionType::Dynamic);
+		obj.body().setMass(70.f);
+		obj.body().setLinearDamping(0.1f);
+		obj.body().setAngularDamping(25.f);
+		obj.body().setRestitution(0.0f);
+		obj.body().setUprightStiffness(4000.f);
+		obj.body().enableMotor(true);
 		obj.body().snapToCurrent();
+
 		Object* raw = &obj;
 		physicsWorld_.registerBody(&obj.body(), [raw]() { raw->rebuildBodyBVH(); });
 		npcBodyOwner_[&obj.body()] = raw;   // SAP 쌍(RigidBody*) → NPC 역참조
@@ -860,22 +950,15 @@ void Room::spawnTacticalGoblinEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos,
 	TacticalNpcConfig trooperCfg = TacticalGoblin::trooperConfig();
 	TacticalNpcConfig bossCfg    = TacticalGoblin::bossConfig();
 
-	constexpr float TWO_PI = 2.f * 3.14159265f;
+	constexpr float TACTICAL_SPAWN_RADIUS = 30.f;   // BossSpawn 주변 trooper 산개 반경
 
 	for (int s = 0; s < numSquads; ++s) {
-		float squadAngleBase = TWO_PI * static_cast<float>(s) / static_cast<float>(numSquads);
-
 		auto squad = std::make_unique<TacticalSquad>(
 			s, trooperCfg.attackRange, trooperCfg.separationRadius);
 
 		for (int t = 0; t < troopersPerSquad; ++t) {
-			int   ring  = 1 + t / 5;
-			float angle = squadAngleBase + TWO_PI * static_cast<float>(t % 5) /
-			              5.f + static_cast<float>(ring) * 0.3f;
-			float r = 10.f + static_cast<float>(ring) * trooperCfg.separationRadius * 2.f;
-			mu::Vec3 trooperPos(spawnCenter.x() + r * std::cosf(angle),
-			                    spawnCenter.y(),
-			                    spawnCenter.z() + r * std::sinf(angle));
+			// 랜덤 배치: spawnCenter 주변 disc 내 무작위 위치(지형 높이 반영).
+			mu::Vec3 trooperPos = randomSpawnInDisc(spawnCenter, TACTICAL_SPAWN_RADIUS);
 
 			auto npc = std::make_unique<TacticalNpc>(makeBase(trooperPos), trooperCfg);
 			registerBody(*npc);
@@ -888,6 +971,8 @@ void Room::spawnTacticalGoblinEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos,
 		tacticalSquads_.push_back(std::move(squad));
 	}
 
+	// 보스는 spawnPos(Wall 마커 등 지형보다 높을 수 있음)를 그대로 받으므로 지형 높이로 보정.
+	bossPos = mu::Vec3(bossPos.x(), groundHeightAtWorld(bossPos.x(), bossPos.z()), bossPos.z());
 	platoonLeader_ = std::make_unique<PlatoonLeader>(makeBase(bossPos), bossCfg);
 	registerBody(*platoonLeader_);
 

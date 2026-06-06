@@ -405,8 +405,7 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
         if ( d > 1.f ) {
             mu::Vec3 dir = toRetreat * (1.f / d);
             float spd = leader.getLeaderMoveSpeed() * TACTICAL_SPEED_MULT;
-            float yVel = leader.body().linearVel().y();
-            leader.setLinearVel( mu::Vec3( dir.x() * spd, yVel, dir.z() * spd ) );
+            leader.setDesiredVel( mu::Vec3( dir.x() * spd, 0.f, dir.z() * spd ) );
             leader.setFacing( dir );
         }
         return;
@@ -1180,8 +1179,7 @@ void GoblinMidBossTactic::moveBossToward( PlatoonLeader& leader, mu::Vec3 target
     leader.setFacing( dir );
 
     float spd = leader.getLeaderMoveSpeed() * speedMult;
-    float yVel = leader.body().linearVel().y();
-    leader.setLinearVel( mu::Vec3( dir.x() * spd, yVel, dir.z() * spd ) );
+    leader.setDesiredVel( mu::Vec3( dir.x() * spd, 0.f, dir.z() * spd ) );
 }
 
 float GoblinMidBossTactic::evaluatePlayerScore( const GameSession* s, const PlatoonLeader& leader ) const {
