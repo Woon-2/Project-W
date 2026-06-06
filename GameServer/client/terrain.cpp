@@ -312,10 +312,12 @@ ChunkIndex parseChunkIndex(const std::filesystem::path& terrainDir) {
         auto& ly = result.palette.layers[i];
         result.palette.diffusePaths[i] = readText(ifs, "DiffusePath");
         result.palette.normalPaths[i]  = readText(ifs, "NormalPath");
-        ly.tileSizeX   = readFloat(ifs, "TileSizeX");
-        ly.tileSizeY   = readFloat(ifs, "TileSizeY");
-        ly.tileOffsetX = readFloat(ifs, "TileOffsetX");
-        ly.tileOffsetY = readFloat(ifs, "TileOffsetY");
+        const auto tileSize   = readVec2(ifs, "TileSize");
+        const auto tileOffset = readVec2(ifs, "TileOffset");
+        ly.tileSizeX   = tileSize.x;
+        ly.tileSizeY   = tileSize.y;
+        ly.tileOffsetX = tileOffset.x;
+        ly.tileOffsetY = tileOffset.y;
         ly.metallic    = readFloat(ifs, "Metallic");
         ly.roughness   = readFloat(ifs, "Roughness");
     }
@@ -328,9 +330,10 @@ ChunkIndex parseChunkIndex(const std::filesystem::path& terrainDir) {
         readHeadTag(ifs, "Chunk");
         e.col = readInteger(ifs, "Col");
         e.row = readInteger(ifs, "Row");
-        e.sizeX = readFloat(ifs, "SizeX");
-        e.sizeY = readFloat(ifs, "SizeY");
-        e.sizeZ = readFloat(ifs, "SizeZ");
+        const auto chunkSize = readVec3(ifs, "Size");
+        e.sizeX = chunkSize.x;
+        e.sizeY = chunkSize.y;
+        e.sizeZ = chunkSize.z;
         e.resolution         = readInteger(ifs, "Resolution");
         e.alphamapResolution = readInteger(ifs, "AlphamapResolution");
         const int K = readInteger(ifs, "NeighborCount");
@@ -352,9 +355,9 @@ ChunkIndex parseChunkIndex(const std::filesystem::path& terrainDir) {
     for (int s = 0; s < S; ++s) {
         readHeadTag(ifs, "Stronghold");
         readInteger(ifs, "Id");
-        readFloat(ifs, "CenterX"); readFloat(ifs, "CenterY"); readFloat(ifs, "CenterZ");
-        readFloat(ifs, "OrientX"); readFloat(ifs, "OrientY"); readFloat(ifs, "OrientZ"); readFloat(ifs, "OrientW");
-        readFloat(ifs, "ScaleX"); readFloat(ifs, "ScaleY"); readFloat(ifs, "ScaleZ");
+        readVec3(ifs, "Center");
+        readVec4(ifs, "Orient");
+        readVec3(ifs, "Scale");
         readFloat(ifs, "ActivityRadius"); readFloat(ifs, "SpawnRadius");
         readInteger(ifs, "MaxHp");
         readFloat(ifs, "RespawnDelaySec");
@@ -384,19 +387,12 @@ ChunkIndex parseChunkIndex(const std::filesystem::path& terrainDir) {
         for (int v = 0; v < V; ++v) {
             auto& vol = zone.volumes[v];
             vol.shape = static_cast<ZoneShape>(readInteger(ifs, "Shape"));
-            const float cx = readFloat(ifs, "CenterX");
-            const float cy = readFloat(ifs, "CenterY");
-            const float cz = readFloat(ifs, "CenterZ");
-            vol.center = mu::Vec3(cx, cy, cz);
-            const float ox = readFloat(ifs, "OrientX");
-            const float oy = readFloat(ifs, "OrientY");
-            const float oz = readFloat(ifs, "OrientZ");
-            const float ow = readFloat(ifs, "OrientW");
-            vol.orient = mu::NQuat(ox, oy, oz, ow);
-            const float hx = readFloat(ifs, "HalfX");
-            const float hy = readFloat(ifs, "HalfY");
-            const float hz = readFloat(ifs, "HalfZ");
-            vol.halfExtents = mu::Vec3(hx, hy, hz);
+            const auto c = readVec3(ifs, "Center");
+            vol.center = mu::Vec3(c.x, c.y, c.z);
+            const auto o = readVec4(ifs, "Orient");
+            vol.orient = mu::NQuat(o.x, o.y, o.z, o.w);
+            const auto h = readVec3(ifs, "Half");
+            vol.halfExtents = mu::Vec3(h.x, h.y, h.z);
             vol.radius = readFloat(ifs, "Radius");
         }
         readTailTag(ifs, "Zone");
@@ -410,19 +406,12 @@ ChunkIndex parseChunkIndex(const std::filesystem::path& terrainDir) {
         readHeadTag(ifs, "Marker");
         mk.type = readText(ifs, "Type");
         mk.name = readText(ifs, "Name");
-        const float px = readFloat(ifs, "PosX");
-        const float py = readFloat(ifs, "PosY");
-        const float pz = readFloat(ifs, "PosZ");
-        mk.pos = mu::Vec3(px, py, pz);
-        const float ox = readFloat(ifs, "OrientX");
-        const float oy = readFloat(ifs, "OrientY");
-        const float oz = readFloat(ifs, "OrientZ");
-        const float ow = readFloat(ifs, "OrientW");
-        mk.orient = mu::NQuat(ox, oy, oz, ow);
-        const float sx = readFloat(ifs, "ScaleX");
-        const float sy = readFloat(ifs, "ScaleY");
-        const float sz = readFloat(ifs, "ScaleZ");
-        mk.scale = mu::Vec3(sx, sy, sz);
+        const auto p = readVec3(ifs, "Pos");
+        mk.pos = mu::Vec3(p.x, p.y, p.z);
+        const auto o = readVec4(ifs, "Orient");
+        mk.orient = mu::NQuat(o.x, o.y, o.z, o.w);
+        const auto s = readVec3(ifs, "Scale");
+        mk.scale = mu::Vec3(s.x, s.y, s.z);
         readTailTag(ifs, "Marker");
     }
 

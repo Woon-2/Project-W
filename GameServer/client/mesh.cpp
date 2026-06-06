@@ -1126,6 +1126,7 @@ struct ImportedBVBox {
     DirectX::XMFLOAT3 center;
     DirectX::XMFLOAT3 size;      // full extents (width, height, depth)
     DirectX::XMFLOAT3 rotEuler;  // degrees
+    bool              isStatic = false;  // Unity GameObject static flag
 };
 
 static bool isZeroEuler(const DirectX::XMFLOAT3& e) {
@@ -1163,13 +1164,14 @@ static BVHNode makeBVHNode(const ImportedBVBox& box) {
     const mu::Vec3 center = DirectX::XMLoadFloat3(&box.center);
     const mu::Vec3 size   = DirectX::XMLoadFloat3(&box.size);
 
-    node.shape  = OBB{ center, size * 0.5f, eulerDegsToQuat(box.rotEuler) };
-
-    /*if (isZeroEuler(box.rotEuler)) {
-        node.shape  = AABB{ center, size };
+    // static이면서 AABB로 표현 가능(로컬 회전이 0)한 박스만 AABB로 로드한다.
+    // 그 외(애니메이션 본에 붙은 박스, 회전이 있는 박스, 동적 오브젝트)는 OBB로 로드해
+    // 월드 회전이 충돌 판정에 정확히 반영되도록 한다.
+    if (box.isStatic && isZeroEuler(box.rotEuler)) {
+        node.shape = AABB{ center, size };
     } else {
-        node.shape  = OBB{ center, size * 0.5f, eulerDegsToQuat(box.rotEuler) };
-    }*/
+        node.shape = OBB{ center, size * 0.5f, eulerDegsToQuat(box.rotEuler) };
+    }
     node.bounds = computeNodeBounds(node.shape);
     return node;
 }
@@ -1274,6 +1276,7 @@ void importBoundingVolumes(std::ifstream& ifs, Model& model) {
             box.center   = readVec3(ifs, "Center");
             box.size     = readVec3(ifs, "Size");
             box.rotEuler = readVec3(ifs, "Rotation");
+            box.isStatic = readInteger(ifs, "IsStatic") != 0;
             allLODs[target].push_back(box);
             readTailTag(ifs, "Box");
 
