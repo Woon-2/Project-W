@@ -84,6 +84,7 @@ struct TacticalNpcUpdateResult {
     };
 
     std::vector<HitInfo> hits;
+    bool justDied = false;   // 이번 틱에 사망 전이됨 → 시체 바디를 물리 충돌에서 제거하는 신호
 };
 
 /*---------------------
@@ -195,10 +196,16 @@ protected:
     std::vector<TacticalNpcUpdateResult::HitInfo> frameHits_;
 
     static constexpr float TACTICAL_SPEED_MULT                        = 3.0f;
+    // 슬롯(HoldSlot) 도착 감속: 이 반경 안에서 거리비례로 감속해 오버슈트 진동을 막고 안착시킨다.
+    static constexpr float TACTICAL_SLOT_ARRIVE_SLOW_RADIUS           = 3.0f;
+    static constexpr float TACTICAL_SLOT_ARRIVE_MIN_SCALE             = 0.15f;
+    // 슬롯 "도착" 판정 거리 배율(separationRadius_ 기준). 밀집 Dynamic 대형은 NPC끼리 물리적으로
+    // 막혀 슬롯 2~3.5m에서 멈추므로, 도착 판정을 그만큼 넓혀 대형 완성(allMembersArrived)이 성립하게 한다.
+    static constexpr float TACTICAL_SLOT_ARRIVE_MULT                  = 1.5f;
     static constexpr int   MAX_TACTICAL_ATTACKERS_PER_TARGET          = 5;
-    static constexpr float TACTICAL_ATTACK_RESERVATION_MAX_DIST       = 18.0f;
+    static constexpr float TACTICAL_ATTACK_RESERVATION_MAX_DIST       = 8.0f;
     static constexpr Seconds TACTICAL_ATTACK_RESERVATION_STALE_TIME{ 3.0f };
-    static constexpr float TACTICAL_PRESSURE_EXTRA_RADIUS             = 9.0f;
+    static constexpr float TACTICAL_PRESSURE_EXTRA_RADIUS             = 4.0f;
     static constexpr float TACTICAL_PRESSURE_SEPARATION_MULT          = 2.2f;
     static constexpr float TACTICAL_PRESSURE_SEPARATION_RADIUS_MULT   = 1.35f;
     static constexpr float TACTICAL_PRESSURE_SPEED_MULT               = 0.9f;
@@ -217,10 +224,10 @@ protected:
     static constexpr float TACTICAL_PRESSURE_OVERLAP_DRIFT_MULT       = 0.34f;
     static constexpr float TACTICAL_PRESSURE_FRONT_GAP_DEGREES        = 35.0f;
     static constexpr float TACTICAL_PRESSURE_RADIUS_OFFSET_MIN        = -1.0f;
-    static constexpr float TACTICAL_PRESSURE_RADIUS_OFFSET_SPAN       = 7.0f;
+    static constexpr float TACTICAL_PRESSURE_RADIUS_OFFSET_SPAN       = 3.0f;
     static constexpr float TACTICAL_RECOVER_SEPARATION_DRIFT_MULT     = 0.03f;
-    static constexpr float CONFUSED_WANDER_RADIUS                     = 100.0f;
-    static constexpr float CONFUSED_SEPARATION_RADIUS                 = 6.0f;
+    static constexpr float CONFUSED_WANDER_RADIUS                     = 15.0f;
+    static constexpr float CONFUSED_SEPARATION_RADIUS                 = 4.0f;
     static constexpr float CONFUSED_SEPARATION_WEIGHT                 = 0.55f;
     static constexpr float CONFUSED_SPEED_MULT                        = 1.f;
     static constexpr Seconds CONFUSED_RETARGET_MIN{ 0.35f };

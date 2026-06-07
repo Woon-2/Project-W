@@ -55,6 +55,7 @@ TacticalNpcUpdateResult PlatoonLeader::update( Seconds dt, Room& room ) {
     frameHits_.clear();
 
     if ( hp() <= 0 ) {
+        bool wasDead = deathReported_;
         if ( !deathReported_ ) {
             deathReported_ = true;
 
@@ -71,6 +72,7 @@ TacticalNpcUpdateResult PlatoonLeader::update( Seconds dt, Room& room ) {
         auto result = TacticalNpcUpdateResult{
             .hits = std::move( frameHits_ )
         };
+        result.justDied = !wasDead;   // 막 사망한 첫 틱
         return result;
     }
 

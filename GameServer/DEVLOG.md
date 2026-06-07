@@ -530,3 +530,126 @@ struct SNpcSpawnBatchPacket : public PacketHeader {
   (이동은 `(x, 0, z)`로 y는 중력이 담당, 정지는 `mu::Vec3{}`), `reviveAt`은 잔여 속도 제거 위해
   `setLinearVel({})` + `setDesiredVel({})` 병행. `MidBossTactics.cpp` 보스 이동 2곳
   (`TacticalRetreat`, `moveBossToward`)도 동일 전환.
+
+---
+
+### 2026.06.07
+## [fix] 전술 전투 실전 버그 일괄 수정 (이동/피격/공격모션/미끄러짐/교전전이)
+
+**수정 파일:** `ServerEngine/IdPool.hpp`, `RoomServer/Room.cpp`, `RoomServer/MidBossTactics.cpp/hpp`,
+`RoomServer/TacticalNpc.cpp/hpp`
+
+존 진입 후 실제 플레이로 드러난 전술 NPC 버그들을 순차 진단·수정. 각 증상의 근본 원인이 모두 달랐다.
+
+### [1] 전원 미이동 — 플레이어 id 0 vs 전술 `targetId==0` sentinel 충돌
+
+`IdPool::pop()`이 id를 0부터 발급 → 첫 세션/플레이어가 id 0을 받음(`Listener` `setId`,
+`GameSession` `myPlayer_->setId(id())`). 그런데 전술 시스템은 `targetId==0`을 "타깃 없음"
+sentinel로 쓴다(`TacticalNpc::resolveTarget` 등). 그래서 플레이어(id 0)를 타깃으로 잡아도
+`resolveTarget`이 null → 보스·trooper 전원 Idle. (일반 `Npc`는 `int32 targetId_=-1` sentinel이라
+id 0도 정상 타깃 → 영향 없었음.)
+
+**수정:** `IdPool::init()` 루프를 `i=1`부터 채워 **id 0을 전역 "무효" sentinel로 예약**.
+전술 코드는 무변경(0이 발급 안 되니 기존 `==0` 규약이 옳아짐). 진단으로는 `Room::updateTacticalAI`에
+임시 로그를 넣어 `tgt=0`을 확인 후 제거.
+
+### [2] 스킬 타깃 누락 — faction/registerObject 미설정
+
+`spawnTacticalGoblinEncounter`의 `registerBody` 람다가 일반 고블린 대비 두 가지 누락:
+`setFaction(Faction::Monsters)`(기본 Neutral → 플레이어 hostileMask에서 제외), `registerObject`
+(`objectById_` 미등록 → 스킬 `checkHitboxCollisions` 타깃 후보 수집에서 누락). 둘 다 람다에 추가.
+
+### [3] 스킬 피격 불가(근본) — 전술 NPC 애니메이션 본 미갱신 → hit BVH 손상
+
+faction/registerObject를 넣어도 스킬이 안 맞았다. 스킬 narrow phase(`skillSystem.cpp`)는 타깃의
+**`worldBVH()`에 직접** OBB 충돌을 거는데, 고블린 hit BVH는 **본 기반**이라 `rebuildBodyBVH`가
+`boneWorldXforms_`로 노드를 배치한다. 이 배열은 `updateAnimBones`에서만 채워지는데, 일반 고블린은
+`Npc::update`(`Npc.cpp:117`)에서 매 틱 호출하지만 **전술 NPC/보스는 아무도 호출 안 함** → 본이 비어
+hit BVH가 엉뚱하게 생성 → OBB 미충돌.
+
+**수정:** `Room::updateTacticalAI`에서 각 trooper·보스 `update()` 직후 `updateAnimBones(dtSec)` 호출.
+
+### [4] 평타 피격 불가 — `Room::attack`이 `goblins_`만 순회
+
+좌클릭 평타(`Room::attack`)는 스킬과 별개 경로로, `goblins_`만 AABB 판정했다. `tacticalNpcs_` +
+`platoonLeader_`를 판정 대상에 추가(되감기 없는 현재 위치 AABB). 스킬(Q)은 [3]으로 해결됨.
+
+### [5] 보스 공격 모션 없음 — `S_NpcAttack` 미전송
+
+일반 고블린은 히트 시 `S_NpcAttack`(애니메이션)+`S_Hit`를 함께 broadcast하지만 전술은 `S_Hit`만 보냄.
+`updateTacticalAI`에서 `result.hits` 비어있지 않으면 `makeSNpcAttackPacket(id)`도 broadcast.
+
+### [6] 보스 미끄러짐 — 공격 상태에서 motor desiredVel 미정지
+
+보스가 Chase로 접근 후 AttackWindup/AttackRecover/EvaluateTarget에서 `desiredVel`을 0으로 안 만들어
+Chase의 마지막 속도가 motor에 남아 계속 미끄러졌다. `updateBossPersonalCombat`의 사거리 진입 전이 +
+공격 윈드업/후딜 + 무타깃 Idle에서 `leader.setDesiredVel({})` 추가 → 공격 중 정지, 추격 시만 이동.
+
+### [7] 박스 대형 후 교전(Engage) 미전이 — 밀집 Dynamic 대형의 도착 게이트 교착
+
+`BoxAdvance→Engage`는 `allMembersArrived`(전 대원이 슬롯 `separationRadius_*0.25`=0.75m 이내)가
+조건. 진단 로그(`[BoxDBG]`) 결과 대원들이 슬롯 **2~3.5m에서 물리 contact로 막혀 정지**(motor
+desiredVel≠0인데 위치 불변) → "전원 0.75m"가 영구 미충족. (DEVLOG 2026.06.02 [2]의 미해결
+Dynamic-Dynamic 교착이 대형 단계에서 발현. 시도: 간격 축소·도착 감속 ramp 모두 실패.)
+
+**수정(물리엔진 불변):** 슬롯 "도착" 판정 거리를 jam 거리 이상으로 확대 —
+`isAtSlot` HoldSlot 임계값 `separationRadius_ * 0.25` → `* TACTICAL_SLOT_ARRIVE_MULT(1.5)`(=4.5m).
+대원이 슬롯 근처에 모인 시점에 게이트 충족 → Engage 전이(교전 단계는 separation으로 jam 자연 해소).
+`BOX_SQUAD_SPACING` 35→24(분대 그리드 폭 ~12m보다 충분히 커서 14에서 발생했던 분대 겹침 jam 회피).
+오버슈트 방지용 도착 감속 ramp(`TACTICAL_SLOT_ARRIVE_SLOW_RADIUS`/`MIN_SCALE`)도 `updateHoldSlot`에 유지.
+
+> **⚠ [7] 해석 정정 (후속 발견):** 박스 미전이의 실체는 "Dynamic 물리 jam"이 **아니라 지형 Y차**였다
+> (아래 [11]). 슬롯 도착거리 4.5m 완화는 그 Y차(~3.5m)를 우연히 흡수해 통과시킨 임시방편이었고,
+> 더 넓은 Encircle(반경 20m, Y차>4.5m)에선 통하지 않았다. 근본 수정은 [11]의 XZ 거리 전환.
+
+### [8] 시체가 산 NPC 이동을 막음 — 사망 시 물리 바디 미제거
+
+죽은 전술 NPC의 Dynamic 바디가 그대로 충돌체로 남고(motor가 `desiredVel=0`을 유지해 밀어도 안 밀리는
+**고정 벽**), 분리력 이웃 탐색은 `hp>0`만 보므로 산 NPC가 시체를 회피 대상으로 인식조차 못 함 →
+시체 쪽으로 직진하다 끼임. (일반 고블린도 동일 구조지만 대형 이동이 없어 안 드러남.)
+
+**수정:** `TacticalNpcUpdateResult.justDied` 신호 추가(사망 첫 틱). `Room::updateTacticalAI`에서
+`justDied`면 `physicsWorld_.unregisterBody(&body)` + `npcBodyOwner_.erase`. 시체는 클라 시각만 유지,
+충돌 제거. 전술 NPC는 부활이 없어 재등록 불요(엔진 불변).
+
+### [9] 후퇴 미완료 → 전원 정지/전술 미발동 — 보스 후퇴 도착 불안정
+
+`TacticalRetreat→BoxAdvance`는 `allMembersArrived && leaderAtRetreat(보스 ≤1.5m)` 필요. 보스가
+`leaderMoveSpeed*TACTICAL_SPEED_MULT=16.5 m/s`로 감속·정지 없이 후퇴 지점을 ~3.4m 오버슈트하며 진동 →
+`leaderAtRetreat` 거의 미충족 → 후퇴 미완료 → 대원은 후퇴 대형서 정지, 전술 미도달.
+
+**수정:** 후퇴 이동에 도착 감속(`d<5m` 거리비례) + `d≤1m` 정지, `leaderAtRetreat` 1.5→2.0.
+(공격 상태 정지 [6]과 동일 패턴.)
+
+### [10] 거리 상수 인게임 스케일 축소
+
+시뮬레이터 스케일로 포팅된 매크로 거리들이 인게임에서 과대(후퇴 70m 등). 인게임 검증값
+(트루퍼 `separationRadius≈3`/`attackRange≈2.8`) 기준으로 일괄 축소:
+`REGROUP_DIST` 70→25, `ENCIRCLE_RADIUS` 50→20, `ENCIRCLE_MIN_RADIUS` 18→7, `ENCIRCLE_SLOT_SPACING`
+7.5→3, `CLUSTER_RADIUS` 20→8, `VIGILANCE_GUARD_RADIUS` 20→8, `BOX_FRONT_OFFSET` 15→6,
+`BOX_ARC_DEPTH` 10→4, `BOX_SQUAD_SPACING` 35→15, `SCREEN_BLOCK_SPACING` 8→3.5,
+`WEDGE_EXIT_DISTANCE` 35→14, `WEDGE_PREP_APEX_DISTANCE` 10→4, `TACTICAL_ATTACK_RESERVATION_MAX_DIST`
+18→8, `TACTICAL_PRESSURE_EXTRA_RADIUS` 9→4, `TACTICAL_PRESSURE_RADIUS_OFFSET_SPAN` 7→3,
+`CONFUSED_WANDER_RADIUS` 100→15, `CONFUSED_SEPARATION_RADIUS` 6→4.
+(시간·비율·배율·각도·데미지·개수는 거리가 아니므로 불변.)
+
+### [11] 슬롯/후퇴 도착 판정 3D→XZ — 지형 높이차 근본 수정 (★ [7]의 진짜 원인)
+
+도착 판정이 **3D 거리**(`(pos-target).len()`)였는데, 대상 슬롯/후퇴 지점 Y는 평평(플레이어/리더 Y)이고
+NPC는 중력으로 **지형 높이**에 붙는다. 기복 지형에서 Y차가 3D거리를 부풀려 도착 게이트가 깨짐.
+진단 로그상 정착한 대원이 `maxXZ≈0.25m`(수평 정확 도착)인데 `max3D≈4.1m`(Y차 ~4m). Encircle(반경 20m)이
+Y차>4.5m로 영구 정체한 근본이며, 과거 박스 "jam 2~3.5m"의 실체이기도 함.
+
+**수정:** `lenXZ(v)=Vec3(v.x,0,v.z).len()` 헬퍼로 도착·슬롯 거리 판정을 **수평(XZ)** 으로 통일 —
+`TacticalNpc`의 `isAtSlot`(HoldSlot)·`updateHoldSlot`(2곳)·`updateFlank`·`updateChargeThrough`,
+`MidBossTactics`의 `leaderAtRetreat`·보스 후퇴 이동. (`moveTowardPressureWait`는 이미 Y를 빼고 있어 정상이었음.)
+NPC는 지형에 붙으므로 도착 판정에서 Y 무시가 옳음. 이후 Box→Engage→Retreat→Box→Encircle→Cooldown
+전체 순환 정상 동작 확인.
+
+### 설계 규약 메모
+- **id 0은 전역 무효(invalid) sentinel로 예약**(IdPool 1부터 발급). 엔티티/세션/플레이어 id는 1 이상.
+- 전술 NPC도 일반 고블린과 동일하게 **매 틱 `updateAnimBones` 호출 필수**(hit BVH 정확도).
+- **전술 슬롯/도착 거리 판정은 XZ(수평)** — NPC는 지형 높이에 붙으므로 Y를 무시해야 기복 지형에서 정상.
+- 전술 매크로 거리 상수는 **인게임 스케일**(트루퍼 separationRadius≈3 / attackRange≈2.8) 기준으로 잡을 것
+  (시뮬레이터 수치 직접 이식 금지).
+- 전술 NPC 사망 시 **물리 바디 unregister**(시체가 산 NPC 이동을 막지 않도록).

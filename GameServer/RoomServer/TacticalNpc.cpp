@@ -25,6 +25,12 @@ static mu::Vec3 norm3( mu::Vec3 v ) {
     return l > 0.0001f ? v * (1.f / l) : mu::Vec3( 0.f, 0.f, 0.f );
 }
 
+// 수평(XZ) 거리. NPC는 중력으로 지형 높이에 붙으므로 슬롯 도착 판정은 Y를 무시해야 한다
+// (슬롯 Y는 평평한 명목값이라 기복 지형에서 3D 거리가 부풀려져 도착 판정이 깨짐).
+static float lenXZ( mu::Vec3 v ) {
+    return mu::Vec3( v.x(), 0.f, v.z() ).len();
+}
+
 // XZ 방향벡터로 Y축 회전 설정
 static void setFacingDir( Object& obj, mu::Vec3 dir ) {
     if ( dir.len2() > 0.01f ) {
@@ -82,7 +88,7 @@ TacticalNpcConfig TacticalNpc::getConfig() const {
 bool TacticalNpc::isAtSlot() const {
     switch ( state_ ) {
     case TacticalNpcState::HoldSlot:
-        return (pos() - assignedSlot_).len() < separationRadius_ * 0.25f;
+        return lenXZ( pos() - assignedSlot_ ) < separationRadius_ * TACTICAL_SLOT_ARRIVE_MULT;
 
     case TacticalNpcState::ChargeThrough:
         return chargeComplete_;
@@ -298,9 +304,11 @@ TacticalNpcUpdateResult TacticalNpc::update( Seconds dt, Room& room ) {
     frameHits_.clear();
 
     if ( hp() <= 0 ) {
+        bool wasDead = ( state_ == TacticalNpcState::Dead );
         updateDead( room );
         TacticalNpcUpdateResult result;
         result.hits = std::move( frameHits_ );
+        result.justDied = !wasDead;   // Dead로 막 전이된 첫 틱
         return result;
     }
 
@@ -747,7 +755,7 @@ void TacticalNpc::updateFlank( Seconds dt, Room& room ) {
         return;
     }
 
-    float distToSlot = (pos() - assignedSlot_).len();
+    float distToSlot = lenXZ( pos() - assignedSlot_ );
 
     if ( distToSlot < 0.5f ) {
         float distToTarget = (pos() - target->player()->pos()).len();
@@ -813,7 +821,7 @@ void TacticalNpc::updateChargeThrough( Room& room ) {
         }
     }
 
-    if ( (pos() - assignedSlot_).len() < 0.75f ) {
+    if ( lenXZ( pos() - assignedSlot_ ) < 0.75f ) {
         chargeComplete_ = true;
         setFacingDir( *this, chargeDir_ );
         setDesiredVel( mu::Vec3{} );
@@ -896,7 +904,7 @@ void TacticalNpc::updateHoldSlot( Room& room ) {
 
     if ( !target ) {
         if ( useHoldFacing_ ) {
-            float distToSlot = (pos() - assignedSlot_).len();
+            float distToSlot = lenXZ( pos() - assignedSlot_ );
 
             if ( distToSlot < separationRadius_ * 0.25f ) {
                 setFacingDir( *this, holdFacing_ );
@@ -906,6 +914,8 @@ void TacticalNpc::updateHoldSlot( Room& room ) {
 
             mu::Vec3 slotDir = norm3( assignedSlot_ - pos() );
             float spd = moveSpeed_ * TACTICAL_SPEED_MULT * speedMult_;
+            if ( distToSlot < TACTICAL_SLOT_ARRIVE_SLOW_RADIUS )   // 도착 감속(오버슈트 진동 방지)
+                spd *= std::max( TACTICAL_SLOT_ARRIVE_MIN_SCALE, distToSlot / TACTICAL_SLOT_ARRIVE_SLOW_RADIUS );
             setFacingDir( *this, slotDir );
             setDesiredVel( mu::Vec3( slotDir.x() * spd, 0.f, slotDir.z() * spd ) );
             return;
@@ -917,7 +927,7 @@ void TacticalNpc::updateHoldSlot( Room& room ) {
         return;
     }
 
-    float distToSlot = (pos() - assignedSlot_).len();
+    float distToSlot = lenXZ( pos() - assignedSlot_ );
 
     if ( distToSlot < separationRadius_ * 0.25f ) {
         if ( useHoldFacing_ && holdFacing_.len2() > 0.01f ) {
@@ -933,6 +943,8 @@ void TacticalNpc::updateHoldSlot( Room& room ) {
 
     mu::Vec3 slotDir = norm3( assignedSlot_ - pos() );
     float spd = moveSpeed_ * TACTICAL_SPEED_MULT * speedMult_;
+    if ( distToSlot < TACTICAL_SLOT_ARRIVE_SLOW_RADIUS )   // 도착 감속(오버슈트 진동 방지)
+        spd *= std::max( TACTICAL_SLOT_ARRIVE_MIN_SCALE, distToSlot / TACTICAL_SLOT_ARRIVE_SLOW_RADIUS );
     setFacingDir( *this, slotDir );
     setDesiredVel( mu::Vec3( slotDir.x() * spd, 0.f, slotDir.z() * spd ) );
 }

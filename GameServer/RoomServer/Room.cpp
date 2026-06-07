@@ -799,6 +799,20 @@ void Room::attack(int32 sessionId, uint64 clientMs) {
 			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(goblin.getId()), newHp));
 		}
 	}
+
+	// 전술 전투 NPC(중간보스 + 분대)도 평타 대상에 포함(스킬과 달리 레거시 평타는 별도 경로).
+	// 되감기 미적용(전술 NPC는 posHistory 없음) — 현재 위치로 판정.
+	auto tryMeleeTactical = [&](Object* o) {
+		if (!o || o->hp() <= 0) return;
+		AABB aabb{ o->pos(), { 1.0f, 2.0f, 1.0f } };
+		if (collides(hitbox, aabb).hit) {
+			int32 newHp = std::max(o->hp() - kDamage, 0);
+			o->setHp(newHp);
+			broadcast(PacketManager::makeSHitPacket(static_cast<uint16>(o->getId()), newHp));
+		}
+	};
+	for (auto& npc : tacticalNpcs_) tryMeleeTactical(npc.get());
+	tryMeleeTactical(platoonLeader_.get());
 }
 
 void Room::broadcast(const std::shared_ptr<SendBuffer>& sendBuffer) {
@@ -835,6 +849,12 @@ void Room::updateTacticalAI(Milliseconds dt) {
 		if (!npc) continue;
 		npc->body().setOmega(mu::Vec3{});
 		auto result = npc->update(dtSec, *this);
+		npc->updateAnimBones(dtSec);   // 본 갱신 → 정확한 hit BVH(스킬 피격 판정에 필수)
+		if (result.justDied) {
+			// 시체가 산 NPC의 이동을 막지 않도록 물리 충돌에서 제거(시각적 시체는 클라가 유지).
+			physicsWorld_.unregisterBody(&npc->body());
+			npcBodyOwner_.erase(&npc->body());
+		}
 		if (npc->hp() > 0) {
 			moveInfos.push_back({
 				static_cast<uint16>(npc->getId()),
@@ -843,6 +863,8 @@ void Room::updateTacticalAI(Milliseconds dt) {
 				npc->linearVel().getXmf()
 			});
 		}
+		if (!result.hits.empty())
+			broadcast(PacketManager::makeSNpcAttackPacket(static_cast<uint16>(npc->getId())));
 		for (const auto& hit : result.hits)
 			broadcast(PacketManager::makeSHitPacket(hit.targetId, hit.newHp));
 	}
@@ -854,6 +876,11 @@ void Room::updateTacticalAI(Milliseconds dt) {
 	if (platoonLeader_) {
 		platoonLeader_->body().setOmega(mu::Vec3{});
 		auto result = platoonLeader_->update(dtSec, *this);
+		platoonLeader_->updateAnimBones(dtSec);   // 본 갱신 → 정확한 hit BVH(스킬 피격 판정에 필수)
+		if (result.justDied) {
+			physicsWorld_.unregisterBody(&platoonLeader_->body());
+			npcBodyOwner_.erase(&platoonLeader_->body());
+		}
 		if (platoonLeader_->hp() > 0) {
 			moveInfos.push_back({
 				static_cast<uint16>(platoonLeader_->getId()),
@@ -862,6 +889,8 @@ void Room::updateTacticalAI(Milliseconds dt) {
 				platoonLeader_->linearVel().getXmf()
 			});
 		}
+		if (!result.hits.empty())
+			broadcast(PacketManager::makeSNpcAttackPacket(static_cast<uint16>(platoonLeader_->getId())));
 		for (const auto& hit : result.hits)
 			broadcast(PacketManager::makeSHitPacket(hit.targetId, hit.newHp));
 	}
@@ -924,6 +953,7 @@ void Room::spawnTacticalGoblinEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos,
 	const auto& anims = assetManager_->goblinAnimations();
 	auto registerBody = [&](Object& obj) {
 		obj.setId(IdPool::pop());
+		obj.setFaction(Faction::Monsters);   // 플레이어 공격의 적대 대상이 되도록(미설정 시 Neutral → 스킬 필터 제외)
 
 		obj.setModel(assetManager_->modelGoblin());
 		obj.animController().registerClip("Idle",   findServerAnimClip(anims, "Goblin_Idle"));
@@ -944,6 +974,7 @@ void Room::spawnTacticalGoblinEncounter(mu::Vec3 spawnCenter, mu::Vec3 bossPos,
 
 		Object* raw = &obj;
 		physicsWorld_.registerBody(&obj.body(), [raw]() { raw->rebuildBodyBVH(); });
+		registerObject(raw);                // objectById_ 등록 → 스킬 히트 판정 타깃 후보에 포함
 		npcBodyOwner_[&obj.body()] = raw;   // SAP 쌍(RigidBody*) → NPC 역참조
 	};
 

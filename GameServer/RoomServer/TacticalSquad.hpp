@@ -57,8 +57,8 @@ struct SquadOrder {
 
 class TacticalSquad {
 public:
-    static constexpr float WEDGE_EXIT_DISTANCE      = 35.f;
-    static constexpr float WEDGE_PREP_APEX_DISTANCE = 10.f;
+    static constexpr float WEDGE_EXIT_DISTANCE      = 14.f;
+    static constexpr float WEDGE_PREP_APEX_DISTANCE = 4.f;
     static constexpr float WEDGE_PASS_DISTANCE      = 6.f;
     static constexpr float WEDGE_IMPACT_RADIUS      = 3.f;
     static constexpr float WEDGE_SPEED_MULT         = 1.35f;
