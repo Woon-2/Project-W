@@ -1,4 +1,4 @@
-#ifndef id_pool_hpp
+﻿#ifndef id_pool_hpp
 #define id_pool_hpp
 
 /**
