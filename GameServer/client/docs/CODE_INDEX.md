@@ -334,6 +334,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `Object::setRenderObjectId()/renderObjectId()` | `object.hpp` | GPU→CPU Hi-Z 역매핑용 정수 쿠키 |
 | `Object::body()` | `object.hpp` | 인라인 RigidBody 참조 (PhysicsWorld 등록 시 사용) |
 | `Object::worldBVH()` | `object.hpp` | `body_.worldBVH()` 위임 (CombatSystem 호환) |
+| `Object::worldCullBounds()` | `object.cpp` | Hi-Z cull용 월드 AABB = worldBVH 본 부착 노드 합집합(+15% 마진), 포즈/랙돌 추종. 비스킨이면 nullopt |
 | `Object::rebuildBodyBVH()` | `object.cpp` | BVH 월드 공간 재빌드 (setPos/setOrient 시 호출) |
 | `Object::setPos/setOrient` | `object.hpp` | body_ 위임 + rebuildBodyBVH() |
 | `Object::hp()` / `setHp()` | `object.hpp` | HP 접근자 |
@@ -374,7 +375,7 @@ bone.toDress  *  finalXformData()[boneIdx]  *  objWorld
 | `ShaderInputBuffer` class | `gfxUtil.hpp #186` | Upload Heap 기반 CPU→GPU 버퍼 베이스 클래스 (room 단위 다중 CommandList 지원) |
 | `ConstantBuffer` class | `gfxUtil.hpp #240` | ShaderInputBuffer 상속 — `SetGraphicsRootConstantBufferView` 바인딩 |
 | `StructuredBuffer` class | `gfxUtil.hpp #257` | ShaderInputBuffer 상속 — `SetGraphicsRootShaderResourceView` 바인딩 |
-| `RWStructuredBuffer` class | `gfxUtil.hpp #275` | Default Heap + UAV — `bindCompute` / `bindGraphics` / `bindComputeAsSRV` / `uavBarrier` / `clearUint` / `gpuAddress` / `resource` 제공. opt-in readback: `initReadback` / `copyToReadback` / `readbackPtr<T>(roomIdx)` / `hasReadback` |
+| `RWStructuredBuffer` class | `gfxUtil.hpp #283` | Default Heap + UAV — `bindCompute` / `bindGraphics` / `bindComputeAsSRV` / `uavBarrier` / `clearUint` / `gpuAddress` / `resource` 제공. opt-in readback: `initReadback` / `copyToReadback` / `readbackPtr<T>(roomIdx)` / `hasReadback`. **offset 오버로드**: `bindCompute(...,byteOffset)` / `copyToReadback(...,dstByteOffset,srcByteOffset)` / `readbackPtr<T>(roomIdx,byteOffset)` — 단일 리소스 내 다중 슬롯(Hi-Z visibility 2-slot ring) 표현용 |
 | `ConstantBufferArray` struct | `gfxUtil.hpp #356` | 큰 ConstantBuffer 여러 개를 단일 리소스에서 분할해 사용 |
 
 **파일:** `client/gfx.hpp` / `client/gfx.cpp`

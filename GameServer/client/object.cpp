@@ -573,6 +573,14 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 		const bool culled       = renderState_.viewFrustumCulled;
 		const bool shadowCulled = shadowLightFrustumCulled_;
 
+		// Hi-Z cull용 월드 공간 AABB(포즈/랙돌 추종). 스킨드 deferred 이벤트에만 전달한다.
+		const std::optional<AABB> cullBounds = worldCullBounds();
+		const bool     hasCullBounds = cullBounds.has_value();
+		const mu::Vec3 cullMin = hasCullBounds
+			? cullBounds->center - cullBounds->size * 0.5f : mu::Vec3{};
+		const mu::Vec3 cullMax = hasCullBounds
+			? cullBounds->center + cullBounds->size * 0.5f : mu::Vec3{};
+
 		for (auto& [mesh, meshXform] : pModel->meshWithDressXforms) {
 			const bool isSkinned = renderState_.animBlender
 				&& mesh.vbIdxMap.contains(mesh.name + "_VB_BoneIndices");
@@ -593,6 +601,9 @@ void MU_CALLCONV Object::render(GFX& gfx, mu::Mat4x4 offsetXform) {
 								? renderState_.animBlender->finalBakedClipFrame() : -1,
 							.viewFrustumCulled = culled,
 							.shadowCulled      = shadowCulled,
+							.worldCullMin       = cullMin,
+							.worldCullMax       = cullMax,
+							.hasWorldCullBounds = hasCullBounds,
 						});
 					}
 					else {
@@ -881,6 +892,46 @@ void Object::rebuildBodyBVH() {
 			else                                   return s;
 		}, dst.shape);
 	}
+}
+
+// Hi-Z occlusion용 월드 공간 cull AABB.
+// body_.worldBVH()의 본 부착 노드들은 bone.toDress * finalXformData * objWorld로
+// 현재 포즈(랙돌 포함)를 따라가므로, 그 합집합이 실제로 그려지는 변형 메시의
+// 월드 공간 범위를 보수적으로 감싼다. rebuildBodyBVH()가 컬링과 무관하게 매 프레임
+// 갱신하므로 이 값도 자기강화 컬링 없이 visibility 변화를 추종한다.
+std::optional<AABB> Object::worldCullBounds() const {
+	const auto& nodes = body_.worldBVH().nodes;
+	if (nodes.empty()) return std::nullopt;
+
+	constexpr float kBig = std::numeric_limits<float>::max();
+	mu::Vec3 mn( kBig,  kBig,  kBig);
+	mu::Vec3 mx(-kBig, -kBig, -kBig);
+	bool any = false;
+
+	auto accumulate = [&](const BVHNode& n) {
+		const mu::Vec3 c = n.bounds.center;
+		const mu::Vec3 h = n.bounds.size * 0.5f;
+		mn = mu::min(mn, c - h);
+		mx = mu::max(mx, c + h);
+		any = true;
+	};
+
+	// 본 부착 노드만 합집합한다. 비부착(boneIdx < 0) 노드는 물리 바디 변환만
+	// 반영해 랙돌 시 사망 시점 위치에 고정되므로, 추종성을 해치지 않도록 제외.
+	for (const auto& n : nodes)
+		if (n.boneIdx >= 0) accumulate(n);
+
+	// 본 부착 노드가 하나도 없으면(비스킨 모델) 전체 노드로 폴백.
+	if (!any)
+		for (const auto& n : nodes) accumulate(n);
+
+	if (!any) return std::nullopt;
+
+	// 충돌 프록시 박스가 시각 메시(옷/피부)보다 약간 작을 수 있으므로 여유를 둔다.
+	const mu::Vec3 margin = (mx - mn) * 0.15f;
+	mn = mn - margin;
+	mx = mx + margin;
+	return AABB{ (mn + mx) * 0.5f, mx - mn };
 }
 
 void Player::EventBus::receive(const BasicEvent* event, Seconds deltaTime, EventList& evList, Timer& timer, void* pVoidOwner) {

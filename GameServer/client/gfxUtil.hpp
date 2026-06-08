@@ -290,8 +290,10 @@ public:
 	);
 
 	// roomIdx의 리소스를 compute 루트 시그너처에 UAV로 연결한다.
+	// byteOffset != 0 이면 리소스 시작에서 그만큼 떨어진 지점을 버퍼 시작으로 바인딩한다
+	// (단일 리소스 내 여러 슬롯을 offset으로 표현할 때 사용; root UAV는 4/16B 정렬 요구).
 	void bindCompute( ID3D12GraphicsCommandList* cmdList,
-		UINT rootParamIdx, std::size_t roomIdx
+		UINT rootParamIdx, std::size_t roomIdx, UINT64 byteOffset = 0u
 	);
 	// roomIdx의 리소스를 graphics 루트 시그너처에 UAV로 연결한다.
 	void bindGraphics( ID3D12GraphicsCommandList* cmdList,
@@ -331,19 +333,22 @@ public:
 	// 다음 번 roomIdx=k 프레임의 CPU가 읽는다.
 	void initReadback( ID3D12Device* device, UINT64 byteWidth );
 
-	// roomIdx 리소스의 [0, byteWidth) 구간을 readbackResources_[roomIdx]에 복사하는
-	// GPU 명령을 cmdList에 기록한다.
+	// roomIdx 리소스의 [srcByteOffset, srcByteOffset+byteWidth) 구간을
+	// readbackResources_[roomIdx]의 [dstByteOffset, ...)에 복사하는 GPU 명령을 기록한다.
 	// prevState: 현재 roomIdx 리소스의 상태 (복사 전후로 복원된다)
+	// dst/srcByteOffset: 단일 리소스 내 슬롯 지정에 사용
 	void copyToReadback( ID3D12GraphicsCommandList* cmdList,
 		std::size_t roomIdx, UINT64 byteWidth,
-		D3D12_RESOURCE_STATES prevState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+		D3D12_RESOURCE_STATES prevState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+		UINT64 dstByteOffset = 0u, UINT64 srcByteOffset = 0u
 	);
 
-	// roomIdx readback 버퍼의 CPU 매핑 포인터를 T* 로 반환한다.
+	// roomIdx readback 버퍼의 CPU 매핑 포인터를 (byteOffset 만큼 떨어진) T* 로 반환한다.
 	// initReadback()을 호출하지 않은 경우 동작이 정의되지 않는다.
 	template <class T = void>
-	T* readbackPtr( std::size_t roomIdx ) const {
-		return static_cast<T*>(readbackMapped_.at(roomIdx));
+	T* readbackPtr( std::size_t roomIdx, UINT64 byteOffset = 0u ) const {
+		return reinterpret_cast<T*>(
+			static_cast<std::byte*>(readbackMapped_.at(roomIdx)) + byteOffset);
 	}
 
 	// readback 버퍼가 초기화됐는지 여부를 반환한다.

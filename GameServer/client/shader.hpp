@@ -1065,7 +1065,8 @@ struct PerInstanceData {
 	XMFLOAT3 aabbMax;
 	float padding1;
 	u32t instanceGroupId;
-	XMUINT3 padding2;
+	u32t instanceObjId;
+	XMUINT2 padding2;
 };
 
 struct PerFrameData {

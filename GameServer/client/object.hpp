@@ -208,6 +208,13 @@ public:
 	const RigidBody& body() const { return body_; }
 	// CombatSystem/DebugBVView 등 BVH 접근용 편의 accessor.
 	const BVH& worldBVH() const { return body_.worldBVH(); }
+
+	// Hi-Z occlusion culling용 월드 공간 cull AABB.
+	// rest-pose mesh->bounds × world는 스킨/랙돌 변형을 반영하지 못하므로,
+	// 현재 포즈(애니메이션·랙돌)를 따라가는 body_.worldBVH()의 본 부착 노드들의
+	// 합집합 AABB(여유 마진 포함)를 반환한다.
+	// 본 부착 노드가 없으면(비스킨 모델) nullopt → 호출부가 기존 경로로 폴백한다.
+	std::optional<AABB> worldCullBounds() const;
 	const RenderState& renderState() const { return renderState_; }
 	AnimBlender* animBlender() const { return renderState_.animBlender.get(); }
 

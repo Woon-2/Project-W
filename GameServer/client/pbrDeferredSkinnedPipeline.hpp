@@ -67,6 +67,12 @@ struct DrawEvent {
     i32t bakedClipFrame = -1;
     bool viewFrustumCulled = false;
     bool shadowCulled      = false;
+    // Hi-Z occlusion용 월드 공간 cull AABB(min/max). 스킨/랙돌 포즈를 따라가는 바운드로,
+    // 유효하면(hasWorldCullBounds) cull 패스가 rest-pose mesh->bounds × world 대신
+    // 이 값을 identity world로 투영한다. 정렬(operator<=>)에는 미포함.
+    mu::Vec3 worldCullMin{};
+    mu::Vec3 worldCullMax{};
+    bool     hasWorldCullBounds = false;
 
     auto operator<=>(const DrawEvent& rhs) const noexcept {
         auto e = mesh <=> rhs.mesh;
@@ -82,6 +88,9 @@ struct DrawEvent {
 
 struct Resources {
     struct HiZPass {
+        // visibility feedback ring buffer 슬롯당 최대 인스턴스 수 (= 다른 HiZ 버퍼 용량과 동일).
+        static constexpr u32t MAX_HIZ_INSTANCES = 200'000u;
+
         StructuredBuffer perInstanceDataCull;   // t0
         StructuredBuffer perInstanceDataCompact;   // t0
         ConstantBuffer perFrameDataClear;      // b1
@@ -95,13 +104,14 @@ struct Resources {
         RWStructuredBuffer visibleIndices;   // u1
         RWStructuredBuffer indirectCmd;   // u0, space1
 
-        u32t  lastGroupCnt      = 0u;
-        u32t  lastObjCnt        = 0u;
-        u32t  lastVisibleCount  = 0u;
+        // visibility feedback: 단일 리소스 2-slot ring (roomCnt=1, byteWidth=2*slotBytes).
+        // cull 패스가 u3에 슬롯 offset으로 바인딩되어 (objId<<1 | visBit)를 기록한다.
+        // 슬롯이 self-describing(objId 패킹)이라 프레임 간 instance 순서와 무관.
+        RWStructuredBuffer visibilityFeedback;
+        u32t slotEntryCount[2] = { 0u, 0u };   // CPU가 직접 추적하는 slot별 엔트리 수
+
+        u32t  lastVisibleCount  = 0u;   // getHiZStats()용 (직전 완성 슬롯 기준 per-instance)
         u32t  lastTotalCount    = 0u;
-        u32t  lastVisibilityObjCnt   = 0u;
-        std::vector<u32t> lastVisibilityFlags;      // CPU 복사본 (직전 프레임)
-        std::vector<u32t> lastDrawEventObjectIds;   // 직전 프레임 정렬된 DrawEvents의 renderObjectId
         std::vector<bool> objectVisibility;          // renderObjectId → visible?
     } hiZPass;
 
@@ -157,7 +167,7 @@ public:
         std::vector<LightData>&& lightData,
         const LightData& mainDirectionalLightData,
         const CameraData& cameraData, const FrameData& frameData,
-        std::size_t roomIdx
+        std::size_t roomIdx, u32t visibilitySlot
     );
 
     void sortDrawEvents();
@@ -249,6 +259,7 @@ private:
     CameraData cameraData_{};
     FrameData  frameData_{};
     std::size_t roomIdx_{};
+    u32t visibilitySlot_{};   // 이번 프레임이 쓸 visibility ring slot (0 또는 1)
 
     UINT rootParamIdxFirstInstOffset_{};
     UINT rootParamIdxPID_{};

@@ -5,7 +5,8 @@ struct PerInstanceData {
     float3 aabbMax;
     float padding1;
     uint instanceGroupId;
-    uint3 padding2;
+    uint instanceObjId;
+    uint2 padding2;
 };
 
 cbuffer PerFrameData : register(b1) {
@@ -84,13 +85,17 @@ bool OcclusionTest(float2 minUV, float2 maxUV, float depth)
     maxDepth = max(maxDepth, hiZMap.Load(int3(int2(minXY.x, maxXY.y), mip)));
     maxDepth = max(maxDepth, hiZMap.Load(int3(maxXY, mip)));
 
-    // ÇÙ½É ºñ±³
+    // ï¿½Ù½ï¿½ ï¿½ï¿½
     return depth <= maxDepth;
 }
 
 StructuredBuffer<PerInstanceData> gInstances : register(t0);
 RWStructuredBuffer<uint> gCntPerGroups : register(u1);
 RWStructuredBuffer<uint> gVisibleFlags : register(u2);
+// visibility feedback: packed (objId<<1 | visBit), one entry per instance.
+// The slot base is selected on the C++ side via a root-UAV byte offset,
+// so gVisibility[idx] is slot-relative here.
+RWStructuredBuffer<uint> gVisibility : register(u3);
 
 [numthreads(64, 1, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID)
@@ -108,13 +113,13 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     minUV = saturate(minUV);
     maxUV = saturate(maxUV);
 
-    if (OcclusionTest(minUV, maxUV, depth))
-    {
+    uint visBit = OcclusionTest(minUV, maxUV, depth) ? 1u : 0u;
+
+    if (visBit)
         InterlockedAdd(gCntPerGroups[gInstances[idx].instanceGroupId], 1);
-        gVisibleFlags[idx] = 1u;
-    }
-    else
-    {
-        gVisibleFlags[idx] = 0u;
-    }
+
+    gVisibleFlags[idx] = visBit;
+
+    // CPU feedback: self-describing entry, so slots stay frame-independent.
+    gVisibility[idx] = (gInstances[idx].instanceObjId << 1u) | visBit;
 }

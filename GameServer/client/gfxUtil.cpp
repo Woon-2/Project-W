@@ -494,10 +494,10 @@ void RWStructuredBuffer::init( ID3D12Device* device, UINT64 byteWidth,
 
 // roomIdx의 리소스를 compute 루트 시그너처에 UAV로 연결한다.
 void RWStructuredBuffer::bindCompute( ID3D12GraphicsCommandList* cmdList,
-	UINT rootParamIdx, std::size_t roomIdx
+	UINT rootParamIdx, std::size_t roomIdx, UINT64 byteOffset
 ) {
 	DISPLAY_ERROR_DX_VOID(
-		cmdList->SetComputeRootUnorderedAccessView(rootParamIdx, addresses_.at(roomIdx)),
+		cmdList->SetComputeRootUnorderedAccessView(rootParamIdx, addresses_.at(roomIdx) + byteOffset),
 		false
 	);
 }
@@ -576,14 +576,15 @@ void RWStructuredBuffer::initReadback( ID3D12Device* device, UINT64 byteWidth ) 
 }
 
 void RWStructuredBuffer::copyToReadback( ID3D12GraphicsCommandList* cmdList,
-	std::size_t roomIdx, UINT64 byteWidth, D3D12_RESOURCE_STATES prevState
+	std::size_t roomIdx, UINT64 byteWidth, D3D12_RESOURCE_STATES prevState,
+	UINT64 dstByteOffset, UINT64 srcByteOffset
 ) {
 	if (readbackResources_.empty()) return;
 	transitionResourceState(cmdList,
 		resources_.at(roomIdx).Get(), prevState, D3D12_RESOURCE_STATE_COPY_SOURCE);
 	cmdList->CopyBufferRegion(
-		readbackResources_.at(roomIdx).Get(), 0,
-		resources_.at(roomIdx).Get(), 0,
+		readbackResources_.at(roomIdx).Get(), dstByteOffset,
+		resources_.at(roomIdx).Get(), srcByteOffset,
 		byteWidth);
 	transitionResourceState(cmdList,
 		resources_.at(roomIdx).Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, prevState);

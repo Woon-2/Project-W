@@ -85,7 +85,7 @@ Dispatcher::Dispatcher(
     std::vector<LightData>&& lightData,
     const LightData& mainDirectionalLightData,
     const CameraData& cameraData, const FrameData& frameData,
-    std::size_t roomIdx
+    std::size_t roomIdx, u32t visibilitySlot
 ) : descriptorHeaps_(descriptorHeaps),
     pTexPool_(pTexPool), pTexArrayPool_(pTexArrayPool),
     pTexCubePool_(pTexCubePool), pSamPool_(pSamPool),
@@ -103,7 +103,7 @@ Dispatcher::Dispatcher(
     lightData_(std::move(lightData)),
     mainDirectionalLightData_(mainDirectionalLightData),
     cameraData_(cameraData), frameData_(frameData),
-    roomIdx_(roomIdx),
+    roomIdx_(roomIdx), visibilitySlot_(visibilitySlot),
     rootParamIdxFirstInstOffset_(rootSig->paramIdx("FirstInstanceOffset")),
     rootParamIdxPDD_(rootSig->paramIdx("PerDrawcallData")),
     rootParamIdxPID_(rootSig->paramIdx("PerInstanceData")),
@@ -159,49 +159,48 @@ void Dispatcher::gBufferPass()   { gBufferUpdate();   gBufferDraw();   }
 void Dispatcher::gBufferPassMT() { gBufferUpdateMT(); gBufferDrawMT(); }
 
 void Dispatcher::hiZPassUpdate() {
-    if (gBufferEvents_.empty()) return;
-
-    // 이전 프레임의 readback 결과 합산 (roomCnt-frame delay)
-    if (pResources_->hiZPass.perGroupCnt.hasReadback() && pResources_->hiZPass.lastGroupCnt > 0u) {
-        const auto* mapped = pResources_->hiZPass.perGroupCnt.readbackPtr<u32t>(roomIdx_);
-        u32t visible = 0u;
-        for (u32t g = 0u; g < pResources_->hiZPass.lastGroupCnt; ++g)
-            visible += mapped[g];
-        pResources_->hiZPass.lastVisibleCount = visible;
-        pResources_->hiZPass.lastTotalCount   = pResources_->hiZPass.lastObjCnt;
-    }
-
-    // 이전 프레임 visibleFlags readback → lastVisibilityFlags + objectVisibility 갱신
-    if (pResources_->hiZPass.visibleFlags.hasReadback()
-        && pResources_->hiZPass.lastVisibilityObjCnt > 0u
-        && !pResources_->hiZPass.lastDrawEventObjectIds.empty())
+    // visibility feedback populate:
+    // 직전 프레임들이 써둔 2-slot ring을 읽어 objectVisibility를 재구성한다.
+    // same-parity 슬롯(= 이번에 덮어쓸 슬롯 = N-2)은 전역 프레임 펜스(N-2 대기)로
+    // 완성·coherent 가 보장되고, 나머지 슬롯은 in-flight라 torn read 가능하나
+    // OR-only 합산 + objId bounds-check 덕분에 최악이 보수적(과다 visible)으로 안전하다.
+    // 슬롯 엔트리는 objId가 패킹돼 self-describing 하므로 프레임 간 instance 순서와 무관.
     {
-        const u32t cnt = pResources_->hiZPass.lastVisibilityObjCnt;
-        const auto* mapped = pResources_->hiZPass.visibleFlags.readbackPtr<u32t>(roomIdx_);
-        pResources_->hiZPass.lastVisibilityFlags.assign(mapped, mapped + cnt);
-
-        std::fill(pResources_->hiZPass.objectVisibility.begin(),
-                  pResources_->hiZPass.objectVisibility.end(), false);
-        const auto& ids = pResources_->hiZPass.lastDrawEventObjectIds;
-        for (u32t i = 0u; i < cnt && i < static_cast<u32t>(ids.size()); ++i) {
-            const u32t oid = ids[i];
-            if (oid < static_cast<u32t>(pResources_->hiZPass.objectVisibility.size())) {
-                pResources_->hiZPass.objectVisibility[oid] =
-                    pResources_->hiZPass.objectVisibility[oid]
-                    || (pResources_->hiZPass.lastVisibilityFlags[i] != 0u);
+        auto& hiZ = pResources_->hiZPass;
+        const u64t slotBytes = static_cast<u64t>(Resources::HiZPass::MAX_HIZ_INSTANCES) * sizeof(u32t);
+        if (hiZ.visibilityFeedback.hasReadback() && !hiZ.objectVisibility.empty()) {
+            if (hiZ.slotEntryCount[0] == 0u && hiZ.slotEntryCount[1] == 0u) {
+                // 아직 readback 데이터가 없음(시작 프레임 등) → 무엇이 가려졌는지 모르므로
+                // 보수적으로 전부 visible 처리(컬링 안 함).
+                std::fill(hiZ.objectVisibility.begin(), hiZ.objectVisibility.end(), true);
+                hiZ.lastVisibleCount = 0u;
+                hiZ.lastTotalCount   = 0u;
+            } else {
+                std::fill(hiZ.objectVisibility.begin(), hiZ.objectVisibility.end(), false);
+                for (u32t s = 0u; s < 2u; ++s) {
+                    const u32t cnt = hiZ.slotEntryCount[s];
+                    const auto* p = hiZ.visibilityFeedback.readbackPtr<u32t>(0u, s * slotBytes);
+                    for (u32t i = 0u; i < cnt; ++i) {
+                        const u32t v = p[i];
+                        const u32t oid = v >> 1u;
+                        if ((v & 1u) && oid < static_cast<u32t>(hiZ.objectVisibility.size()))
+                            hiZ.objectVisibility[oid] = true;
+                    }
+                }
+                // getHiZStats()용 per-instance 카운트: 완성이 보장된 same-parity 슬롯 기준.
+                const u32t total = hiZ.slotEntryCount[visibilitySlot_];
+                const auto* pc = hiZ.visibilityFeedback.readbackPtr<u32t>(0u, visibilitySlot_ * slotBytes);
+                u32t vis = 0u;
+                for (u32t i = 0u; i < total; ++i) vis += (pc[i] & 1u);
+                hiZ.lastVisibleCount = vis;
+                hiZ.lastTotalCount   = total;
             }
         }
     }
 
-    // 현재 프레임 gBufferEvents의 renderObjectId 저장 (다음 프레임에 사용)
-    {
-        auto& ids = pResources_->hiZPass.lastDrawEventObjectIds;
-        ids.resize(gBufferEvents_.size());
-        for (u32t i = 0u; i < static_cast<u32t>(gBufferEvents_.size()); ++i)
-            ids[i] = gBufferEvents_[i].renderObjectId;
-    }
+    if (gBufferEvents_.empty()) return;
 
-    // 1. Hi-Z Cull Pass
+    // 1. Hi-Z Cull Pass 입력 스테이징 (objId 패킹용 instanceObjId 포함)
     static auto perInstanceDataCull = std::vector<HiZCullShader::PerInstanceData>();
     perInstanceDataCull.resize(gBufferEvents_.size());
 
@@ -211,12 +210,26 @@ void Dispatcher::hiZPassUpdate() {
         }
         auto& e = gBufferEvents_[i];
 
-        perInstanceDataCull[i] = HiZCullShader::PerInstanceData{
-            .world = mu::transpose(e.world).getXmf(),
-            .aabbMin = (e.mesh->bounds.center - e.mesh->bounds.size * 0.5f).getXmf(),
-            .aabbMax = (e.mesh->bounds.center + e.mesh->bounds.size * 0.5f).getXmf(),
-            .instanceGroupId = gid
-        };
+        // 스킨/랙돌 포즈를 따라가는 월드 공간 cull AABB가 있으면 identity world로 투영한다.
+        // 없으면 rest-pose mesh->bounds × world로 폴백(정적/리지드 메시).
+        if (e.hasWorldCullBounds) {
+            perInstanceDataCull[i] = HiZCullShader::PerInstanceData{
+                .world = mu::transpose(mu::Mat4x4{}).getXmf(),   // identity
+                .aabbMin = e.worldCullMin.getXmf(),
+                .aabbMax = e.worldCullMax.getXmf(),
+                .instanceGroupId = gid,
+                .instanceObjId = e.renderObjectId
+            };
+        }
+        else {
+            perInstanceDataCull[i] = HiZCullShader::PerInstanceData{
+                .world = mu::transpose(e.world).getXmf(),
+                .aabbMin = (e.mesh->bounds.center - e.mesh->bounds.size * 0.5f).getXmf(),
+                .aabbMax = (e.mesh->bounds.center + e.mesh->bounds.size * 0.5f).getXmf(),
+                .instanceGroupId = gid,
+                .instanceObjId = e.renderObjectId
+            };
+        }
     }
 
     pResources_->hiZPass.perInstanceDataCull.stage(roomIdx_, perInstanceDataCull);
@@ -268,7 +281,12 @@ void Dispatcher::hiZPassUpdate() {
 }
 
 void Dispatcher::hiZPassCompute() {
-    if (gBufferEvents_.empty()) return;
+    if (gBufferEvents_.empty()) {
+        // 이번 프레임 슬롯엔 아무것도 기록하지 않으므로, 다음 read 시 stale 데이터를
+        // 읽지 않도록 CPU측 엔트리 수를 0으로 갱신한다.
+        pResources_->hiZPass.slotEntryCount[visibilitySlot_] = 0u;
+        return;
+    }
 
     CommandContext cmdCtx{};
     DISPLAY_ERROR_STR(cmdListPool_->allocOne(CommandListUsage::RenderingSlave, cmdCtx),
@@ -312,6 +330,13 @@ void Dispatcher::hiZPassCompute() {
     ), false );
     pResources_->hiZPass.perGroupCnt.bindCompute(cmdList, rootParamIdxDestCnts0_, roomIdx_);
     pResources_->hiZPass.visibleFlags.bindCompute(cmdList, rootParamIdxDestCnts1_, roomIdx_);
+    // visibility feedback: 단일 리소스 내 이번 프레임 슬롯을 offset으로 u3(OutPerGroupData)에 바인딩.
+    // cull 패스에서 OutPerGroupData(perGroupData)는 사용되지 않으므로 슬롯 재사용에 충돌 없음.
+    {
+        const u64t slotBytes = static_cast<u64t>(Resources::HiZPass::MAX_HIZ_INSTANCES) * sizeof(u32t);
+        pResources_->hiZPass.visibilityFeedback.bindCompute(
+            cmdList, rootParamIdxOutPerGroupData_, 0u, visibilitySlot_ * slotBytes);
+    }
 
     static constexpr auto cullDispatchUnit = 64u;
     DISPLAY_ERROR_DX_VOID( cmdList->Dispatch(
@@ -372,20 +397,19 @@ void Dispatcher::hiZPassCompute() {
         D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
         D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 
-    // readback: visibleFlags → CPU-readable buffer (Compact Pass 이후: SRV로 소비됐으므로 COPY_SOURCE 전환 안전)
-    if (!gBufferEvents_.empty()) {
-        pResources_->hiZPass.visibleFlags.copyToReadback(
-            cmdList, roomIdx_, gBufferEvents_.size() * sizeof(u32t)
+    // visibility feedback readback: cull이 기록한 이번 프레임 슬롯을 단일 readback 리소스의
+    // 같은 슬롯 offset으로 복사한다. cull(u3) 쓰기 이후 어떤 패스도 visibilityFeedback을
+    // 건드리지 않으므로(여전히 UAV 상태), copy의 UAV→COPY_SOURCE 전환이 곧 쓰기 완료 동기화점이다.
+    // 전용 fence는 걸지 않는다 — coherency는 전역 프레임 펜스(N-2 대기)가 제공한다.
+    {
+        const u64t slotBytes  = static_cast<u64t>(Resources::HiZPass::MAX_HIZ_INSTANCES) * sizeof(u32t);
+        const u64t slotOffset = visibilitySlot_ * slotBytes;
+        pResources_->hiZPass.visibilityFeedback.copyToReadback(
+            cmdList, 0u, gBufferEvents_.size() * sizeof(u32t),
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS, slotOffset, slotOffset
         );
-        pResources_->hiZPass.lastVisibilityObjCnt = static_cast<u32t>(gBufferEvents_.size());
+        pResources_->hiZPass.slotEntryCount[visibilitySlot_] = static_cast<u32t>(gBufferEvents_.size());
     }
-
-    // readback: perGroupCnt → CPU-readable buffer
-    pResources_->hiZPass.perGroupCnt.copyToReadback(
-        cmdList, roomIdx_, groupCnt * sizeof(u32t)
-    );
-    pResources_->hiZPass.lastGroupCnt = static_cast<u32t>(groupCnt);
-    pResources_->hiZPass.lastObjCnt   = static_cast<u32t>(gBufferEvents_.size());
 
     auto hrClose = cmdList->Close();
     DISPLAY_ERROR_DX_HR(hrClose, false);
