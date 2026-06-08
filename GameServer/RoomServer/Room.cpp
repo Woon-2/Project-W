@@ -845,6 +845,36 @@ void Room::updateTacticalAI(Milliseconds dt) {
 	std::vector<SNpcMoveInfo> moveInfos;
 	moveInfos.reserve(tacticalNpcs_.size() + (platoonLeader_ ? 1 : 0));
 
+	// 명령은 위→아래(리더 결정 → 분대 분배 → NPC 실행)로 흐르므로 같은 순서로 업데이트한다.
+	// (원본 NPCAI/sim/Room.cpp의 PlatoonLeader → TacticalSquad → TacticalNpc 순서.)
+	// 순서가 뒤집히면 order 발동→push→consume가 여러 틱으로 밀려 도착 게이트가 stale 슬롯으로
+	// 거짓 양성을 내고 대형(박스 등) 단계가 건너뛰어진다.
+	if (platoonLeader_) {
+		platoonLeader_->body().setOmega(mu::Vec3{});
+		auto result = platoonLeader_->update(dtSec, *this);
+		platoonLeader_->updateAnimBones(dtSec);   // 본 갱신 → 정확한 hit BVH(스킬 피격 판정에 필수)
+		if (result.justDied) {
+			physicsWorld_.unregisterBody(&platoonLeader_->body());
+			npcBodyOwner_.erase(&platoonLeader_->body());
+		}
+		if (platoonLeader_->hp() > 0) {
+			moveInfos.push_back({
+				static_cast<uint16>(platoonLeader_->getId()),
+				platoonLeader_->pos().getXmf(),
+				platoonLeader_->orient().getXmf(),
+				platoonLeader_->linearVel().getXmf()
+			});
+		}
+		if (!result.hits.empty())
+			broadcast(PacketManager::makeSNpcAttackPacket(static_cast<uint16>(platoonLeader_->getId())));
+		for (const auto& hit : result.hits)
+			broadcast(PacketManager::makeSHitPacket(hit.targetId, hit.newHp));
+	}
+
+	for (auto& squad : tacticalSquads_) {
+		if (squad) squad->update(dtSec, *this);
+	}
+
 	for (auto& npc : tacticalNpcs_) {
 		if (!npc) continue;
 		npc->body().setOmega(mu::Vec3{});
@@ -865,32 +895,6 @@ void Room::updateTacticalAI(Milliseconds dt) {
 		}
 		if (!result.hits.empty())
 			broadcast(PacketManager::makeSNpcAttackPacket(static_cast<uint16>(npc->getId())));
-		for (const auto& hit : result.hits)
-			broadcast(PacketManager::makeSHitPacket(hit.targetId, hit.newHp));
-	}
-
-	for (auto& squad : tacticalSquads_) {
-		if (squad) squad->update(dtSec, *this);
-	}
-
-	if (platoonLeader_) {
-		platoonLeader_->body().setOmega(mu::Vec3{});
-		auto result = platoonLeader_->update(dtSec, *this);
-		platoonLeader_->updateAnimBones(dtSec);   // 본 갱신 → 정확한 hit BVH(스킬 피격 판정에 필수)
-		if (result.justDied) {
-			physicsWorld_.unregisterBody(&platoonLeader_->body());
-			npcBodyOwner_.erase(&platoonLeader_->body());
-		}
-		if (platoonLeader_->hp() > 0) {
-			moveInfos.push_back({
-				static_cast<uint16>(platoonLeader_->getId()),
-				platoonLeader_->pos().getXmf(),
-				platoonLeader_->orient().getXmf(),
-				platoonLeader_->linearVel().getXmf()
-			});
-		}
-		if (!result.hits.empty())
-			broadcast(PacketManager::makeSNpcAttackPacket(static_cast<uint16>(platoonLeader_->getId())));
 		for (const auto& hit : result.hits)
 			broadcast(PacketManager::makeSHitPacket(hit.targetId, hit.newHp));
 	}

@@ -646,7 +646,42 @@ Y차>4.5m로 영구 정체한 근본이며, 과거 박스 "jam 2~3.5m"의 실체
 NPC는 지형에 붙으므로 도착 판정에서 Y 무시가 옳음. 이후 Box→Engage→Retreat→Box→Encircle→Cooldown
 전체 순환 정상 동작 확인.
 
+### [12] 후퇴→박스 전환 시 박스 대형 단계 생략 — 포팅 시 전술 업데이트 순서 역전
+
+의도된 흐름 `후퇴(TacticalRetreat)→박스(BoxAdvance)→전술(Encircle/Vigilance)` 중 인게임에서 박스
+단계가 생략되고 후퇴 직후 곧바로 전술로 점프.
+
+**(정정) 실제 원인은 `MidBossTactics`의 전환 로직이 아니라 `Room`의 업데이트 순서였다.** 전술 전투는
+`NPCAI` 시뮬레이터에서 포팅했는데, 원본 `NPCAI/sim/Room.cpp`는 명령 흐름과 같은
+**PlatoonLeader → TacticalSquad → TacticalNpc** 순서로 업데이트한다(주석으로 명시). 그래야 리더가 발동한
+order가 같은 틱에 분대 `pushCommandsToMembers` → NPC `consumePendingCommand`까지 전파돼 `assignedSlot_`이
+즉시 갱신된다. 그러나 포트 `RoomServer/Room.cpp::updateTacticalAI`는 이를 **정반대(NPC → Squad → Leader)**
+로 실행해, order 발동→push→consume가 2틱 지연됐다. 그 지연 틱에 리더가 `allMembersArrived`를 검사하면
+대원 `assignedSlot_`이 아직 **후퇴 슬롯(stale)** 이라 `isAtSlot==true` → 박스가 형성되기 전에 전술로 점프.
+
+원본은 박스 전환 조건(`if leaderPhase==BoxAdvance && primary && allMembersArrived`)에 `phaseOrderIssued_`
+가드가 **없는데도** 정상이다 — 올바른 순서면 stale 창 자체가 없기 때문. (1차 시도로 이 조건에 가드를
+추가했으나 원본에 없는 불필요한 변경이라 되돌림.)
+
+**수정:** `updateTacticalAI`의 세 블록을 원본대로 **Leader → Squad → NPC** 순으로 복원. 위치는 AI 전
+`physicsWorld_.step`에서 확정되고 NPC `update`는 위치를 직접 바꾸지 않으므로(모터 목표 속도/상태만)
+리더가 먼저 돌아도 `npc->pos()`는 동일 → 역전되는 건 명령/상태 전파뿐(원하는 방향).
+
+### [13] 대형 단계 연출 — 후퇴/박스 완성 후 체류(텀) 추가
+
+[12] 수정으로 박스 대형이 정상 표시되었으나, 전환이 `allMembersArrived` 즉시 일어나 대형이 순간적으로
+지나갔다. 후퇴/박스 대형을 잠시 과시하도록 단계 사이 체류를 추가.
+
+**구현:** 공용 `phaseHoldTimer_`(Seconds) + `FORMATION_HOLD_DURATION{1.5s}`. `enterPhase`에서 0으로 리셋,
+대형 완성(`allMembersArrived`, 후퇴는 추가로 `leaderAtRetreat`) 상태면 `dt` 누적·미완성이면 0 리셋 →
+대형이 안정적으로 갖춰진 시점부터 카운트. 누적이 `FORMATION_HOLD_DURATION` 이상이어야 다음 단계로 전환.
+후퇴→박스, 박스→전술 두 전환 모두 적용. 체류 중엔 기존 메커니즘이 대형 유지(후퇴=리더 정지+RetreatFormUp
+HoldSlot, 박스=`boxRefreshTimer_` 0.1s 갱신). HP 임계/BossSolo 등 비상 전이는 체류와 무관하게 우선 동작.
+
 ### 설계 규약 메모
+- **전술 시스템 업데이트는 반드시 Leader → Squad → NPC 순서** — 명령이 위에서 아래로 흐르므로 같은 순서로
+  돌려야 order가 한 틱에 끝까지 전파된다. 뒤집으면 도착 게이트가 stale 슬롯으로 거짓 양성을 내 대형
+  단계(박스 등)가 건너뛰어진다([12]). NPCAI 원본의 순서를 유지할 것.
 - **id 0은 전역 무효(invalid) sentinel로 예약**(IdPool 1부터 발급). 엔티티/세션/플레이어 id는 1 이상.
 - 전술 NPC도 일반 고블린과 동일하게 **매 틱 `updateAnimBones` 호출 필수**(hit BVH 정확도).
 - **전술 슬롯/도착 거리 판정은 XZ(수평)** — NPC는 지형 높이에 붙으므로 Y를 무시해야 기복 지형에서 정상.

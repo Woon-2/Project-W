@@ -121,6 +121,7 @@ private:
     std::vector<int32> initialSquadSizes_{};
     Seconds          tacticTimer_{};
     Seconds          tacticCooldown_{};
+    Seconds          phaseHoldTimer_{};   // 대형 완성 후 체류(과시) 시간 누적
     mu::Vec3         boxAdvanceTargetPos_{};
     mu::Vec3         retreatTargetPos_{};
     uint32           primaryTargetId_{ 0 };
@@ -132,6 +133,8 @@ private:
     uint32            bossPersonalTargetId_{ 0 };
 
     static constexpr Seconds TACTIC_INTERVAL{ 1.f };
+    static constexpr Seconds FORMATION_HOLD_DURATION{ 1.f };   // 후퇴/박스 대형 완성 후 다음 단계 전환 전 체류
+
     static constexpr float CLUSTER_RADIUS                = 8.f;
     static constexpr float ENCIRCLE_RADIUS               = 20.0f;
     static constexpr float ENCIRCLE_MIN_RADIUS           = 7.0f;

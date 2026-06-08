@@ -343,34 +343,43 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
         enterPhase( LeaderPhase::TacticalRetreat );
     }
 
-    if ( leaderPhase_ == LeaderPhase::BoxAdvance && primary && allMembersArrived( leader ) ) {
-        if ( !tacticsUnlocked_ ) {
-            enterPhase( LeaderPhase::Engage );
-
-            for ( auto* sq : squads ) {
-                if ( sq->isEmpty() ) {
-                    continue;
-                }
-
-                auto ord = SquadOrder{
-                    .type = SquadOrderType::Engage,
-                    .targetId = primaryTargetId_
-                };
-                sq->receiveOrder( ord );
-            }
+    if ( leaderPhase_ == LeaderPhase::BoxAdvance && primary ) {
+        if ( allMembersArrived( leader ) ) {
+            phaseHoldTimer_ += dt;   // 박스 대형 완성 → 잠시 유지(과시) 후 다음 단계
         }
         else {
-            auto clusters = buildPlayerClusters( room, leader );
-            auto liveSquads = collectLiveSquads( leader );
+            phaseHoldTimer_ = 0s;    // 아직 미집결 → 체류 타이머 리셋
+        }
 
-            if ( clusters.size() == 1 && canStartEncircle( liveSquads, clusters.front() ) ) {
-                enterPhase( LeaderPhase::Encircle );
-            }
-            else if ( clusters.size() == 1 ) {
-                enterTacticFailCooldown( room, leader );
+        if ( allMembersArrived( leader ) && phaseHoldTimer_ >= FORMATION_HOLD_DURATION ) {
+            if ( !tacticsUnlocked_ ) {
+                enterPhase( LeaderPhase::Engage );
+
+                for ( auto* sq : squads ) {
+                    if ( sq->isEmpty() ) {
+                        continue;
+                    }
+
+                    auto ord = SquadOrder{
+                        .type = SquadOrderType::Engage,
+                        .targetId = primaryTargetId_
+                    };
+                    sq->receiveOrder( ord );
+                }
             }
             else {
-                enterPhase( LeaderPhase::Vigilance );
+                auto clusters = buildPlayerClusters( room, leader );
+                auto liveSquads = collectLiveSquads( leader );
+
+                if ( clusters.size() == 1 && canStartEncircle( liveSquads, clusters.front() ) ) {
+                    enterPhase( LeaderPhase::Encircle );
+                }
+                else if ( clusters.size() == 1 ) {
+                    enterTacticFailCooldown( room, leader );
+                }
+                else {
+                    enterPhase( LeaderPhase::Vigilance );
+                }
             }
         }
     }
@@ -394,7 +403,13 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
     if ( leaderPhase_ == LeaderPhase::TacticalRetreat && phaseOrderIssued_
         && allMembersArrived( leader ) && leaderAtRetreat
     ) {
-        enterPhase( LeaderPhase::BoxAdvance );
+        phaseHoldTimer_ += dt;   // 후퇴 집결 완료 → 잠시 유지 후 박스 대형 전환
+        if ( phaseHoldTimer_ >= FORMATION_HOLD_DURATION ) {
+            enterPhase( LeaderPhase::BoxAdvance );
+        }
+    }
+    else if ( leaderPhase_ == LeaderPhase::TacticalRetreat ) {
+        phaseHoldTimer_ = 0s;    // 아직 집결 전 → 체류 타이머 리셋
     }
 
     tacticTimer_ -= dt;
@@ -428,6 +443,7 @@ void GoblinMidBossTactic::update(Seconds dt, Room& room, PlatoonLeader& leader) 
 void GoblinMidBossTactic::enterPhase( LeaderPhase next ) {
     leaderPhase_ = next;
     phaseOrderIssued_ = false;
+    phaseHoldTimer_ = 0s;
 
     if ( next != LeaderPhase::Encircle ) {
         encircleIssuedLiveMembers_ = 0;
